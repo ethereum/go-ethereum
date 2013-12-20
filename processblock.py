@@ -43,9 +43,25 @@ scriptcode_map = {
 fees = {
     'stepfee': 2**60 * 8192,
     'txfee': 2**60 * 524288,
-    'memoryfee': 2**60 * 262144,
-    'memory_adjust_fee': 2**60 * 65536
+    'memoryfee': 2**60 * 262144
 }
+
+def eval_tx(block):
+    tx = block.transactions[0]
+    oldbalance = block.get_balance(tx.from)
+    debit = tx.value + tx.fee
+    if tx.to == '':
+        debit += fees['memoryfee'] * len(filter(lambda x:x > 0,tx.data))
+    if oldbalance < debit:
+        return
+    block.update_balance(tx.from,oldbalance - debit)
+    if tx.to == '':
+        pass #todo: continue here        
+
+def mk_contract(block,tx):
+    cdata = tx.data
+    # todo: continue here
+
 
 def eval_contract(block,tx):
     address = tx.to
@@ -168,47 +184,43 @@ def eval_contract(block,tx):
         elif code == 'SET':
             reg[code[1]] = (code[2] + 256 * code[3] + 65536 * code[4] + 16777216 * code[5]) * 2**code[6] % 2**256
         elif code == 'JMP':
-            index = code[1]
-        elif code == 'JMPI':
-            if reg[code[1]]: index = code[2]
-        elif code == 'JMPX':
             index = reg[code[1]]
-        elif code == 'JMPIX':
+        elif code == 'JMPI':
             if reg[code[1]]: index = reg[code[2]]
         elif code == 'IND':
             reg[code[1]] = index
         elif code == 'EXTRO':
-            reg[code[3]] = ethdb.get(ethdb.get(state.contract,enc160(reg[code[1]])),enc256(reg[code[2]]))
+            address = encode(reg[code[1]] % 2**160,256,20)
+            field = encode(reg[code[2]]
+            reg[code[3]] = block.get_contract_state(address,field)
         elif code == 'BALANCE':
-            reg[code[2]] = ethdb.get(state.balance,enc160(reg[code[1]]))
+            address = encode(reg[code[1]] % 2**160,256,20)
+            reg[code[2]] = block.get_balance(address)
         elif code == 'MKTX':
-            ntx = {
-                "ins": [ tx["receiver"] ],
-                "oindex": 0,
-                "sender": tx["receiver"],
-                "receiver": reg[code[1]],
-                "value": reg[code[2]],
-                "fee": reg[code[3]],
-                "data": []
-            }
-            for i in range(reg[code[4]]):
-                ntx["data"].append(ethdb.get(contract,(reg[code[5]]+i) % 2**256))
-            fee += ntx["fee"]
-            if fee > contractbalance:
-                return state
-            state.txs.append(tx)
+            to = encode(reg[code[1]],256,32)
+            value = reg[code[2]]
+            fee = reg[code[3]]
+            if (value + fee) > block.get_balance(address):
+                pass
+            else:
+                datan = reg[code[4]]
+                data = []
+                for i in range(datan):
+                    ind = encode((reg[code[5]] + i) % 2**256,256,32)
+                    data.append(block.get_contract_state(address,ind))
+                tx = Transaction(to,value,fee,data)
+                tx.from = address
+                block.transactions.append(tx)
         elif code == 'DATA':
-            reg[code[2]] = tx["data"][code[1]]
-        elif code == 'DATAX':
-            reg[code[2]] = tx["data"][ethdb.get(contract,enc256(code[1]))]
+            reg[code[2]] = tx.data[reg[code[1]]]
         elif code == 'DATAN':
-            reg[code[2]] = len(tx["data"])
+            reg[code[1]] = len(tx.data)
         elif code == 'MYADDRESS':
-            reg[code[1]] = tx["receiver"]
+            reg[code[1]] = address
         elif code == 'SUICIDE':
-            sz = ethdb.size(contract)
-            fee -= sz * state.fees["MEMORYFEE"]
-            contract = None
-        state.balance = ethdb.set(state.balance,tx["receiver"],contractbalance - fee)
-        state.contract = contract
-    return state
+            sz = block.get_contract_size(address)
+            negfee = sz * fees["memoryfee"]
+            toaddress = encode(reg[code[1]],256,32)
+            block.update_balance(toaddress,block.get_balance(toaddress) + negfee)
+            block.update_contract(address,0)
+            break

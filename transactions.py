@@ -4,6 +4,14 @@ import re
 
 class Transaction():
     def __init__(*args):
+        if len(args) == 2:
+            self.parse(args[1])
+        else:
+            self.to = args[1]
+            self.value = args[2]
+            self.fee = args[3]
+            self.data = args[4]
+            if len(args) > 5: self.sig = args[5]
 
     def lpad(inp,L): return '\x00' * max(0,L - len(inp)) + inp
 
