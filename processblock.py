@@ -47,7 +47,7 @@ fees = {
 }
 
 def eval_tx(block):
-    tx = block.transactions[0]
+    tx = block.transactions.pop(0)
     oldbalance = block.get_balance(tx.from)
     debit = tx.value + tx.fee
     if tx.to == '':
@@ -56,7 +56,9 @@ def eval_tx(block):
         return
     block.update_balance(tx.from,oldbalance - debit)
     if tx.to == '':
-        pass #todo: continue here        
+        mk_contract(block,tx) #todo: continue here
+    else:
+        block.update_balance(tx.to,block.get_balance(tx.to) + tx.value)
 
 def mk_contract(block,tx):
     cdata = tx.data
