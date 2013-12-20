@@ -59,6 +59,8 @@ def eval_tx(block):
         mk_contract(block,tx) #todo: continue here
     else:
         block.update_balance(tx.to,block.get_balance(tx.to) + tx.value)
+        if block.get_contract(tx.to) != 0:
+            eval_contract(block,tx)
 
 def mk_contract(block,tx):
     cdata = tx.data
