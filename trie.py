@@ -32,11 +32,11 @@ class Trie():
         return o
         
     def __get_state(self,node,key):
-        if debug: print 'nk',node.encode('hex'),key
+        if self.debug: print 'nk',node.encode('hex'),key
         if len(key) == 0 or not node:
             return node
         curnode = rlp.decode(self.db.get(node))
-        if debug: print 'cn', curnode
+        if self.debug: print 'cn', curnode
         if not curnode:
             raise Exception("node not found in database")
         elif len(curnode) == 2:
@@ -60,7 +60,7 @@ class Trie():
         else: return self.__delete_state(node,key)
 
     def __insert_state(self,node,key,value):
-        if debug: print 'ink', node.encode('hex'), key
+        if self.debug: print 'ink', node.encode('hex'), key
         if len(key) == 0:
             return value
         else:
@@ -68,7 +68,7 @@ class Trie():
                 newnode = [ self.__encode_key(key), value ]
                 return self.__put(newnode)
             curnode = rlp.decode(self.db.get(node))
-            if debug: print 'icn', curnode
+            if self.debug: print 'icn', curnode
             if not curnode:
                 raise Exception("node not found in database")
             if len(curnode) == 2:
@@ -100,14 +100,14 @@ class Trie():
                 return self.__put(newnode)
     
     def __delete_state(self,node,key):
-        if debug: print 'dnk', node.encode('hex'), key
+        if self.debug: print 'dnk', node.encode('hex'), key
         if len(key) == 0 or not node:
             return ''
         else:
             curnode = rlp.decode(self.db.get(node))
             if not curnode:
                 raise Exception("node not found in database")
-            if debug: print 'dcn', curnode
+            if self.debug: print 'dcn', curnode
             if len(curnode) == 2:
                 (k2, v2) = curnode
                 k2 = self.__decode_key(k2)

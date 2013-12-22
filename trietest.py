@@ -22,4 +22,4 @@ def trie_test():
         print v1,v2
         if v1 != v2: raise Exception("incorrect!")
     
-    
+trie_test()    
