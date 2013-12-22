@@ -12,11 +12,15 @@ class DB():
     def put(self,key,value): return self.db.Put(key,value)
     def delete(self,key): return self.db.Delete(key)
 
+databases = {}
+
 class Trie():
-    def __init__(self,db,root='',debug=False):
+    def __init__(self,dbfile,root='',debug=False):
         self.root = root
-        self.db = DB(db)
         self.debug = debug
+        if dbfile not in databases:
+            databases[dbfile] = DB(dbfile)
+        self.db = databases[dbfile]
 
     def __encode_key(self,key):
         term = 1 if key[-1] == 16 else 0
@@ -144,9 +148,27 @@ class Trie():
                     newnode2 = newnode
                 return self.__put(newnode2)
 
+    def __get_size(self,node):
+        if not node: return 0
+        curnode = self.db.get(node)
+        if not curnode:
+            raise Exception("node not found in database")
+        if len(curnode) == 2:
+            key = self.__decode_key(curnode[0])
+            if key[-1] == 16: return 1
+            else: return self.__get_size(curnode[1])
+        elif len(curnode) == 17:
+            total = 0
+            for i in range(16):
+                total += self.__get_size(curnode[i])
+            if curnode[16]: total += 1
+            return total
+
     def get(self,key):
         key2 = ['0123456789abcdef'.find(x) for x in key.encode('hex')] + [16]
         return self.__get_state(self.root,key2)
+
+    def get_size(self): return self.__get_size(self.root)
 
     def update(self,key,value):
         if not isinstance(key,str) or not isinstance(value,str):

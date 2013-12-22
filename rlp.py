@@ -25,6 +25,7 @@ def num_to_var_int(n):
     return ''.join([chr(x) for x in s])
 
 def __decode(s):
+    if s == '': return None
     o = []
     index = [0]
     def read_var_int():

@@ -2,35 +2,38 @@ from pybitcointools import *
 import rlp
 import re
 from transactions import Transaction
+from trie import Trie
 
 class Block():
     def __init__(self,data=None):
+
         if not data:
             return
+
         if re.match('^[0-9a-fA-F]*$',data):
             data = data.decode('hex')
-        header, tree_node_list, transaction_list, sibling_list = rlp.decode(data)
-        h = rlp.decode(header)
-        self.prevhash = encode(h[0],16,64)
-        self.coinbase = encode(h[1],16,40)
-        self.balance_root = encode(h[2],256,32)
-        self.contract_root = encode(h[3],256,32)
-        self.difficulty = h[4]
-        self.timestamp = h[5]
-        transactions_root = encode(h[6],256,32)
-        siblings_root = encode(h[7],256,32)
-        self.nonce = h[8]
-        self.datastore = {}
-        for nd in rlp.decode(tree_node_list):
-            ndk = bin_sha256(nd)
-            self.datastore[ndk] = rlp.decode(nd)
-        self.transactions = [Transaction(x) for x in rlp.decode(transaction_list)]
-        self.siblings = [rlp.decode(x) for x in rlp.decode(sibling_list)]
+
+        header,  transaction_list, self.siblings = rlp.decode(data)
+        [ number,
+          self.prevhash,
+          self.siblings_root,
+          self.coinbase,
+          state_root,
+          self.transactions_root,
+          diff,
+          timestamp,
+          nonce,
+          self.extra ] = header
+        self.number = decode(number,256)
+        self.difficulty = decode(difficulty,256)
+        self.timestamp = decode(timestamp,256)
+        self.nonce = decode(nonce,256)
+        self.transactions = [Transaction(x) for x in transaction_list)]
+        self.state = Trie('statedb',state_root)
+
         # Verifications
-        if self.balance_root != '' and self.balance_root not in self.datastore:
-            raise Exception("Balance Merkle root not found!")
-        if self.contract_root != '' and self.contract_root not in self.datastore:
-            raise Exception("Contract Merkle root not found!")
+        if self.state.root != '' and self.state.__get_state(self.state.root,[]) == '':
+            raise Exception("State Merkle root not found in database!")
         if bin_sha256(transaction_list) != transactions_root:
             raise Exception("Transaction list root hash does not match!")
         if bin_sha256(sibling_list) != sibling_root:
@@ -38,148 +41,96 @@ class Block():
         for sibling in self.siblings:
             if sibling[0] != self.prevhash:
                 raise Exception("Sibling's parent is not my parent!")
+        # TODO: check POW
             
-
-    hexalpha = '0123456789abcdef'
-
-    def get_updated_state(self,node,key,value):
-        curnode = self.datastore.get(node,None)
-        # Insertion case
-        if value != 0 and value != '':
-            # Base case
-            if key == '':
-                return value
-            # Inserting into an empty trie
-            if not curnode:
-                newnode = [ key, value ]
-                k = sha256(rlp.encode(newnode))
-                self.datastore[k] = newnode
-                return k
-            elif len(curnode) == 2:
-                # Inserting into a (k,v), same key
-                if key == curnode[0]:
-                    newnode = [ key, value ]
-                    k = sha256(rlp.encode(newnode))
-                    self.datastore[k] = newnode
-                    return k
-                # Inserting into a (k,v), different key
-                else:
-                    i = 0
-                    while key[:i] == curnode[0][:i]: i += 1
-                    k1 = self.get_updated_state(None,curnode[0][i:],curnode[1])
-                    k2 = self.get_updated_state(None,key[i:],value)
-                    newnode3 = [ None ] * 16
-                    newnode3[ord(curnode[0][0])] = k1
-                    newnode3[ord(key[0])] = k2
-                    k3 = sha256(rlp.encode(newnode3))
-                    self.datastore[k3] = newnode3
-                    # No prefix sharing
-                    if i == 1:
-                        return k3
-                    # Prefix sharing
-                    else:
-                        newnode4 = [ key[:i-1], k3 ]
-                        k4 = sha256(rlp.encode(newnode4))
-                        self.datastore[k4] = newnode4
-                        return k4
-            else:
-                # inserting into a 16-array
-                newnode1 = self.get_updated_state(curnode[ord(key[0])],key[1:],value)
-                newnode2 = [ curnode[i] for i in range(16) ]
-                newnode2[ord(key[0])] = newnode1
-                return newnode2
-        # Deletion case
+    def send(self,tx):
+        # Subtract value and fee from sender account and increment nonce if applicable
+        sender_state = rlp.decode(self.state.get(tx.from))
+        if not sender_state:
+            return False
+        sender_value = decode(sender_state[1],256)
+        if value + fee > sender_value:
+            return False
+        sender_state[1] = encode(sender_value - value - fee,256)
+        # Nonce applies only to key-based addresses
+        if decode(sender_state[0],256) == 0:
+            if decode(sender_state[2],256) != tx.nonce:
+                return False
+            sender_state[2] = encode(tx.nonce + 1,256)
+        self.state.update(tx.from,sender_state)
+        # Add money to receiver
+        if tx.to > '':
+            receiver_state = rlp.decode(self.state.get(tx.to)) or ['', '', '']
+            receiver_state[1] = encode(decode(receiver_state[1],256) + value,256)
+            self.state.update(tx.to,receiver_state)
+        # Create a new contract
         else:
-            # Base case
-            if key == '':
-                return None
-            # Deleting from a (k,v); obvious
-            if len(curnode) == 2:
-                if key == curnode[0]: return None
-                else: return node
-            else:
-                k1 = self.get_updated_state(curnode[ord(key[0])],key[1:],value)
-                newnode = [ curnode[i] for i in range(16) ]
-                newnode[ord(key[0])] = k1
-                totalnodes = sum([ 1 if newnode2[i] else 0 for i in range(16) ])
-                if totalnodes == 0:
-                    raise Exception("Can't delete from two to zero! Error! Waahmbulance!")
-                elif totalnodes == 1:
-                    # If only have one node left, we revert to (key, value)
-                    node_index = [i for i in range(16) if newnode2[i]][0]
-                    node2 = self.datastore[curnode[node_index]]
-                    if len(node2) == 2:
-                        # If it's a (key, value), we just prepend to the key
-                        newnode = [ chr(node_index) + node2[0], node2[1] ]
-                    else:
-                        # Otherwise, we just make a single-char (key, value) pair
-                        newnode = [ chr(node_index), curnode[node_index] ]
-                k2 = sha256(rlp.encode(newnode))
-                self.datastore[k2] = newnode
-                return k2
+            addr = tx.hash()[:20]
+            contract = block.get_contract(addr)
+            if contract.root != '': return False
+            for i in range(len(tx.data)):
+                contract.update(encode(i,256,32),tx.data[i])
+            block.update_contract(addr)
+        # Pay fee to miner
+        miner_state = rlp_decode(self.state.get(self.coinbase)) or ['','','']
+        miner_state[1] = encode(decode(miner_state[1],256) + fee,256)
+        self.state.update(self.coinbase,miner_state)
+        return True
 
+    def pay_fee(self,address,fee,tominer=True):
+        # Subtract fee from sender
+        sender_state = rlp.decode(self.state.get(address))
+        if not sender_state:
+            return False
+        sender_value = decode(sender_state[1],256)
+        if sender_value < fee:
+            return False
+        sender_state[1] = encode(sender_value - fee,256)
+        self.state.update(address,sender_state)
+        # Pay fee to miner
+        if tominer:
+            miner_state = rlp.decode(self.state.get(self.coinbase)) or ['','','']
+            miner_state[1] = encode(decode(miner_state[1],256) + fee,256)
+            self.state.update(self.coinbase,miner_state)
+        return True
 
-    def update_balance(self,address,value):
-        # Use out internal representation for the key
-        key = ''.join([chr(hexalpha.find(x)) for x in address.encode('hex')])
-        self.balance_root = self.get_updated_state(self.balance_root,key,value)
-
-    def update_contract_state(self,address,index,value):
-        # Use out internal representation for the key
-        key = ''.join([chr(hexalpha.find(x)) for x in (address+index).encode('hex')])
-        self.contract_root = self.get_updated_state(self.contract_root,key,value)
-
-    def get_state_value(self,node,key):
-        if key == '':
-            return node
-        if not curnode:
-            return None
-        curnode = self.datastore.get(node,None)
-        return self.get_state_value(curnode[ord(key[0])],key[1:])
+    def get_nonce(self,address):
+        state = rlp.decode(self.state.get(address))
+        if not state or decode(state[0],256) == 0: return False
+        return decode(state[2],256)
 
     def get_balance(self,address):
-        # Use out internal representation for the key
-        key = ''.join([chr(hexalpha.find(x)) for x in (address).encode('hex')])
-        return self.get_state_value(self.balance_root,key)
+        state = rlp.decode(self.state.get(address))
+        return decode(state[1] || '',256)
 
-    def get_contract_state(self,address,index):
-        # Use out internal representation for the key
-        key = ''.join([chr(hexalpha.find(x)) for x in (address+index).encode('hex')])
-        return self.get_state_value(self.contract_root,key)
+    # Making updates to the object obtained from this method will do nothing. You need
+    # to call update_contract to finalize the changes.
+    def get_contract(self,address):
+        state = rlp.decode(self.state.get(address))
+        if not state or decode(state[0],256) == 0: return False
+        return Trie('statedb',state[2])
 
-    def get_state_size(self,node):
-        if node is None: return 0
-        curnode = self.datastore.get(node,None)
-        if not curnode: return 0
-        elif len(curnode) == 2:
-            return self.get_state_size(curnode[1])
-        else:
-            total = 0
-            for i in range(16): total += self.get_state_size(curnode[i])
-            return total
+    def update_contract(self,address,contract):
+        state = rlp.decode(self.state.get(address))
+        if not state or decode(state[0],256) == 0: return False
+        state[2] = contract.root
+        self.state.update(address,state)
 
-    def get_contract_size(self,address):
-        # Use out internal representation for the key
-        key = ''.join([chr(hexalpha.find(x)) for x in (address).encode('hex')])
-        return self.get_state_size(self.get_state_value(self.contract_root,key))
-        
+    # Serialization method; should act as perfect inverse function of the constructor
+    # assuming no verification failures
     def serialize(self):
-        nodes = {}
-        def process(node):
-            if node is None: return
-            curnode = self.datastore.get(node,None)
-            if curnode:
-                index = sha256(rlp.encode(curnode))
-                nodes[index] = curnode
-                if len(node) == 2:
-                    process(curnode[1])
-                elif len(node) == 16:
-                    for i in range(16): process(curnode[i])
-        process(self.balance_root)
-        process(self.contract_root)
-        tree_nodes = [nodes[x] for x in nodes]
-        nodelist = rlp.encode(tree_nodes)
-        txlist = rlp.encode([x.serialize() for x in self.transactions])
-        siblinglist = rlp.encode(self.siblings)
-        header = rlp.encode([self.prevhash, self.coinbase, self.balance_root, self.contract_root, self.difficulty, self.timestamp, bin_sha256(txlist), bin_sha256(siblinglist])
-        return rlp.encode([header, nodelist, txlist, siblinglist])
+        txlist = [x.serialize() for x in self.transactions]
+        header = [ encode(self.number,256),
+                   self.prevhash,
+                   bin_sha256(rlp.encode(self.siblings)),
+                   self.coinbase,
+                   self.state.root,
+                   bin_sha256(rlp.encode(self.txlist)),
+                   encode(self.difficulty,256),
+                   encode(self.timestamp,256),
+                   encode(self.nonce,256),
+                   self.extra ]
+        return rlp.encode([header, txlist, self.siblings ])
+
+    def hash(self):
+        return bin_sha256(self.serialize())

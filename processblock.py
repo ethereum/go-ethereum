@@ -1,5 +1,6 @@
 from transactions import Transaction
 from blocks import Block
+import time
 
 scriptcode_map = {
     0x00: 'STOP',   
@@ -22,11 +23,11 @@ scriptcode_map = {
     0x31: 'RIPEMD-160',
     0x32: 'ECMUL',
     0x33: 'ECADD',
-    0x34: 'SIGN',
-    0x35: 'RECOVER',
+    0x34: 'ECSIGN',
+    0x35: 'ECRECOVER',
     0x40: 'COPY',
     0x41: 'STORE',
-    0x42: 'LD',
+    0x42: 'LOAD',
     0x43: 'SET',
     0x50: 'JMP',
     0x51: 'JMPI',
@@ -37,73 +38,125 @@ scriptcode_map = {
     0x71: 'RAWTX',
     0x80: 'DATA',
     0x81: 'DATAN',
-    0x90: 'MYADDRESS'
+    0x90: 'MYADDRESS',
+    0x91: 'BLKHASH',
+    0xff: 'SUICIDE'
 }
 
-fees = {
-    'stepfee': 2**60 * 8192,
+params = {
+    'stepfee': 2**60 * 4096,
     'txfee': 2**60 * 524288,
-    'memoryfee': 2**60 * 262144
+    'memoryfee': 2**60 * 262144,
+    'datafee': 2**60 * 16384,
+    'cryptofee': 2**60 * 65536,
+    'extrofee': 2**60 * 65536,
+    'blocktime': 60,
+    'period_1_reward': 2**80 * 1024,
+    'period_1_duration': 57600,
+    'period_2_reward': 2**80 * 512,
+    'period_2_duration': 57600,
+    'period_3_reward': 2**80 * 256,
+    'period_3_duration': 57600,
+    'period_4_reward': 2**80 * 128
 }
 
-def eval_tx(block):
-    tx = block.transactions.pop(0)
-    oldbalance = block.get_balance(tx.from)
-    debit = tx.value + tx.fee
-    if tx.to == '':
-        debit += fees['memoryfee'] * len(filter(lambda x:x > 0,tx.data))
-    if oldbalance < debit:
-        return
-    block.update_balance(tx.from,oldbalance - debit)
-    if tx.to == '':
-        mk_contract(block,tx) #todo: continue here
+def eval(block,transactions,timestamp,coinbase):
+    h = block.hash()
+    # Process all transactions
+    while len(transactions) > 0:
+        tx = transactions.pop(0)
+        fee = params['txfee'] + len(tx.data) * params['datafee']
+        if tx.to = '\x00'*20:
+            fee += len(tx.data) * params['memoryfee']
+        # Insufficient fee, do nothing
+        if fee > tx.fee: continue
+        # Too much data, do nothing
+        if len(data) > 256: continue
+        # Try to send the tx
+        if not block.send(tx): continue
+        # Evaluate contract if applicable
+        eval_contract(block,transactions,tx)
+    # Pay miner fee
+    miner_state = rlp_decode(self.state.get(self.coinbase)) or ['','','']
+    miner_balance = decode(miner_state[1],256)
+    block.number += 1
+    reward = 0
+    if block.number < params['period_1_duration']:
+        reward = params['period_1_reward']
+    elif block.number < params['period_2_duration']:
+        reward = params['period_2_reward']
+    elif block.number < params['period_3_duration']:
+        reward = params['period_3_reward']
     else:
-        block.update_balance(tx.to,block.get_balance(tx.to) + tx.value)
-        if block.get_contract(tx.to) != 0:
-            eval_contract(block,tx)
+        reward = params['period_4_reward']
+    miner_balance += reward
+    for sibling in block.siblings:
+        sib_miner_state = rlp_decode(self.state.get(sibling[3]))
+        sib_miner_state[1] = encode(decode(sib_miner_state[1],256)+reward*7/8,256)
+        self.state.update(sibling[3],sib_miner_state)
+        miner_balance += reward/8
+    miner_state[1] = encode(miner_balance,256)
+    self.state.update(self.coinbase,miner_state)
+    # Check timestamp
+    if timestamp < block.timestamp or timestamp > int(time.time()) + 3600:
+        raise new Exception("timestamp not in valid range!")
+    # Update difficulty
+    if timestamp >= block.timestamp + 42:
+        block.difficulty += int(block.difficulty / 1024)
+    else:
+        block.difficulty -= int(block.difficulty / 1024)
+    block.prevhash = h
+    block.coinbase = coinbase
+    block.transactions = []
+    block.siblings = []
+    return block
 
-def mk_contract(block,tx):
-    cdata = tx.data
-    # todo: continue here
-
-
-def eval_contract(block,tx):
+def eval_contract(block,transaction_list,tx):
     address = tx.to
     # Initialize registers
     reg = [0] * 256
-    reg[0] = decode(tx.from,16)
-    reg[1] = decode(tx.to,16)
+    reg[0] = decode(tx.from,256)
+    reg[1] = decode(tx.to,256)
     reg[2] = tx.value
     reg[3] = tx.fee
     index = 0
     stepcounter = 0
-    def monop(code,f):
-        reg[code[2]] = f(reg[code[1]])
-    def binop(code,f):
-        reg[code[3]] = f(reg[code[1]],reg[code[2]])
+    contract = block.get_contract(address)
+    if not contract:
+        return
     while 1:
+        # Convert the data item into a code piece
+        val_at_index = decode(contract.get(encode(index,256,32)),256)
+        code = [ int(val_at_index / (256**i)) % 256 for i in range(6) ]
+        # Invalid code instruction or STOP code stops execution sans fee
+        if val_at_index >= 256**6 or code[0] == 'STOP':
+            break
         # Calculate fee
-        totalfee = 0
+        minerfee = 0
+        nullfee = 0
         stepcounter += 1
         if stepcounter > 16:
-            totalfee += fees.get("stepfee")
-        val_at_index = decode(block.get_contract_state(address,encode(index,256,32)),256)
-        code = [ int(val_at_index / 256**i) % 256 for i in range(6) ]
+            minerfee += params["stepfee"]
         c = scriptcode_map[code[0]]
+        if c in ['STORE','LOAD']:
+            minerfee += params["datafee"]
+        if c in ['EXTRO','BALANCE']:
+            minerfee += params["extrofee"]
+        if c in ['SHA256','RIPEMD-160','ECMUL','ECADD','ECSIGN','ECRECOVER']:
+            minerfee += params["cryptofee"]
         if c == 'STORE':
             existing = block.get_contract_state(address,code[2])
-            if reg[code[1]] != 0: fee += fees["MEMORYFEE"]
-            if existing: fee -= fees["MEMORYFEE"]
-        contractbalance = block.get_balance(address)
-        # If we can't pay the fee...
-        if fee > contractbalance:
-            return state
-        # Otherwise, pay it
-        block.set_balance(address,contractbalance - fee)
+            if reg[code[1]] != 0: nullfee += params["memoryfee"]
+            if existing: nullfee -= params["memoryfee"]
 
-        if c == 'STOP':
+        # If we can't pay the fee, break, otherwise pay it
+        if block.get_balance(address) < minerfee + nullfee:
             break
-        elif c == 'ADD':
+        block.pay_fee(address,nullfee,False)
+        block.pay_fee(address,minerfee,True)
+            
+        # Evaluate operations
+        if c == 'ADD':
             reg[code[3]] = (reg[code[1]] + reg[code[2]]) % 2**256
         elif c == 'MUL':
             reg[code[3]] = (reg[code[1]] * reg[code[2]]) % 2**256
@@ -166,25 +219,28 @@ def eval_contract(block,tx):
         elif code == 'ECADD':
             pt1 = (reg[code[1]],reg[code[2]])
             pt2 = (reg[code[3]],reg[code[4]])
+            # Invalid point 1
             if (pt1[0] ** 3 + 7 - pt1[1] ** 2) % N != 0:
                 reg[code[5]], reg[code[6]] = 0,0
+            # Invalid point 2
             elif (pt2[0] ** 3 + 7 - pt2[1] ** 2) % N != 0:
                 reg[code[5]], reg[code[6]] = 0,0
+            # Legitimate points
             else:
                 pt3 = base10_add(pt1,pt2)
                 reg[code[5]], reg[code[6]] = pt3[0], pt3[1]
-        elif code == 'SIGN':
+        elif code == 'ECSIGN':
             reg[code[3]], reg[code[4]], reg[code[5]] = ecdsa_raw_sign(reg[code[1]],reg[code[2]])
-        elif code == 'RECOVER':
+        elif code == 'ECRECOVER':
             pt = ecdsa_raw_recover((reg[code[2]],reg[code[3]],reg[code[4]]),reg[code[1]])
             reg[code[5]] = pt[0]
             reg[code[6]] = pt[1]
         elif code == 'COPY':
             reg[code[2]] = reg[code[1]]
         elif code == 'STORE':
-            block.update_contract_state(address,encode(reg[code[2]],256,32),reg[code[1]])
-        elif code == 'LD':
-            reg[code[2]] = block.get_contract_state(address,encode(reg[code[1]],256,32))
+            contract.update(encode(reg[code[2]],256,32),reg[code[1]])
+        elif code == 'LOAD':
+            reg[code[2]] = contract.get(encode(reg[code[1]],256,32))
         elif code == 'SET':
             reg[code[1]] = (code[2] + 256 * code[3] + 65536 * code[4] + 16777216 * code[5]) * 2**code[6] % 2**256
         elif code == 'JMP':
@@ -194,12 +250,18 @@ def eval_contract(block,tx):
         elif code == 'IND':
             reg[code[1]] = index
         elif code == 'EXTRO':
-            address = encode(reg[code[1]] % 2**160,256,20)
-            field = encode(reg[code[2]]
-            reg[code[3]] = block.get_contract_state(address,field)
+            if reg[code[1]] >= 2**160:
+                reg[code[3]] = 0
+            else:
+                address = encode(reg[code[1]],256,20)
+                field = encode(reg[code[2]])
+                reg[code[3]] = block.get_contract(address).get(field)
         elif code == 'BALANCE':
-            address = encode(reg[code[1]] % 2**160,256,20)
-            reg[code[2]] = block.get_balance(address)
+            if reg[code[1]] >= 2**160:
+                reg[code[2]] = 0
+            else:
+                address = encode(reg[code[1]],256,20)
+                reg[code[2]] = block.get_balance(address)
         elif code == 'MKTX':
             to = encode(reg[code[1]],256,32)
             value = reg[code[2]]
@@ -211,20 +273,23 @@ def eval_contract(block,tx):
                 data = []
                 for i in range(datan):
                     ind = encode((reg[code[5]] + i) % 2**256,256,32)
-                    data.append(block.get_contract_state(address,ind))
-                tx = Transaction(to,value,fee,data)
+                    data.append(contract.get(ind))
+                tx = Transaction(0,to,value,fee,data)
                 tx.from = address
-                block.transactions.append(tx)
+                transaction_list.insert(0,tx)
         elif code == 'DATA':
             reg[code[2]] = tx.data[reg[code[1]]]
         elif code == 'DATAN':
             reg[code[1]] = len(tx.data)
         elif code == 'MYADDRESS':
             reg[code[1]] = address
+        elif code == 'BLKHASH':
+            reg[code[1]] = decode(block.hash())
         elif code == 'SUICIDE':
-            sz = block.get_contract_size(address)
-            negfee = sz * fees["memoryfee"]
-            toaddress = encode(reg[code[1]],256,32)
-            block.update_balance(toaddress,block.get_balance(toaddress) + negfee)
-            block.update_contract(address,0)
+            sz = contract.get_size()
+            negfee = -sz * params["memoryfee"]
+            toaddress = encode(reg[code[1]],256,20)
+            block.pay_fee(roaddress,negfee,False)
+            contract.root = ''
             break
+    block.update_contract(address,contract)
