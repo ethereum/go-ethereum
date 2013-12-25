@@ -13,10 +13,10 @@ class Block():
         if re.match('^[0-9a-fA-F]*$',data):
             data = data.decode('hex')
 
-        header,  transaction_list, self.siblings = rlp.decode(data)
+        header,  transaction_list, self.uncles = rlp.decode(data)
         [ number,
           self.prevhash,
-          self.siblings_root,
+          self.uncles_root,
           self.coinbase,
           state_root,
           self.transactions_root,
@@ -36,11 +36,8 @@ class Block():
             raise Exception("State Merkle root not found in database!")
         if bin_sha256(transaction_list) != transactions_root:
             raise Exception("Transaction list root hash does not match!")
-        if bin_sha256(sibling_list) != sibling_root:
-            raise Exception("Transaction list root hash does not match!")
-        for sibling in self.siblings:
-            if sibling[0] != self.prevhash:
-                raise Exception("Sibling's parent is not my parent!")
+        if bin_sha256(uncle_list) != uncle_root:
+            raise Exception("Uncle root hash does not match!")
         # TODO: check POW
             
     def send(self,tx):
@@ -65,7 +62,7 @@ class Block():
             self.state.update(tx.to,receiver_state)
         # Create a new contract
         else:
-            addr = tx.hash()[:20]
+            addr = tx.hash()[-20:]
             contract = block.get_contract(addr)
             if contract.root != '': return False
             for i in range(len(tx.data)):
@@ -122,7 +119,7 @@ class Block():
         txlist = [x.serialize() for x in self.transactions]
         header = [ encode(self.number,256),
                    self.prevhash,
-                   bin_sha256(rlp.encode(self.siblings)),
+                   bin_sha256(rlp.encode(self.uncles)),
                    self.coinbase,
                    self.state.root,
                    bin_sha256(rlp.encode(self.txlist)),
@@ -130,7 +127,7 @@ class Block():
                    encode(self.timestamp,256),
                    encode(self.nonce,256),
                    self.extra ]
-        return rlp.encode([header, txlist, self.siblings ])
+        return rlp.encode([header, txlist, self.uncles ])
 
     def hash(self):
         return bin_sha256(self.serialize())

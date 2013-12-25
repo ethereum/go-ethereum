@@ -16,42 +16,69 @@ def from_binary(b):
     if len(b) == 0: return 0
     else: return from_binary(b[:-1]) * 256 + ord(b[-1])
 
-def num_to_var_int(n):
-    if n < 253:     s = [n]
-    elif n < 2**16: s = [253] + list(to_binary_array(n,2))
-    elif n < 2**32: s = [254] + list(to_binary_array(n,4))
-    elif n < 2**64: s = [255] + list(to_binary_array(n,8))
-    else:           raise Exception("number too big")
-    return ''.join([chr(x) for x in s])
-
-def __decode(s):
-    if s == '': return None
-    o = []
-    index = [0]
-    def read_var_int():
-        si = ord(s[index[0]])
-        index[0] += 1
-        if si < 253: return si
-        elif si == 253: read = 2
-        elif si == 254: read = 4
-        elif si == 255: read = 8
-        index[0] += read
-        return from_binary(s[index[0]-read:index[0]])
-    while index[0] < len(s):
-        tp = s[index[0]]
-        index[0] += 1
-        L = read_var_int()
-        item = s[index[0]:index[0]+L]
-        if tp == '\x00': o.append(item)
-        else: o.append(__decode(item))
-        index[0] += L
-    return o
+def __decode(s,pos=0):
+    if s == '':
+        return (None, 0)
+    else:
+        fchar = ord(s[pos])
+    if fchar <= 24:
+        return (ord(s[pos]), pos+1)
+    elif fchar < 56:
+        b = ord(s[pos]) - 24
+        return (from_binary(s[pos+1:pos+1+b]), pos+1+b)
+    elif fchar < 64:
+        b = ord(s[pos]) - 55
+        b2 = from_binary(s[pos+1:pos+1+b])
+        return (from_binary(s[pos+1+b:pos+1+b+b2]), pos+1+b+b2)
+    elif fchar < 120:
+        b = ord(s[pos]) - 64
+        return (s[pos+1:pos+1+b], pos+1+b)
+    elif fchar < 128:
+        b = ord(s[pos]) - 119
+        b2 = from_binary(s[pos+1:pos+1+b])
+        return (s[pos+1+b:pos+1+b+b2], pos+1+b+b2)
+    elif fchar < 184:
+        b = ord(s[pos]) - 128
+        o, pos = [], pos+1
+        for i in range(b):
+            obj, pos = __decode(s,pos)
+            o.append(obj)
+        return (o,pos)
+    elif fchar < 192:
+        b = ord(s[pos]) - 183
+        b2 = from_binary(s[pos+1:pos+1+b])
+        o, pos = [], pos+1+b
+        for i in range(b):
+            obj, pos = __decode(s,pos)
+            o.append(obj)
+        return (o,pos)
+    else:
+        raise Exception("byte not supported: "+fchar)
 
 def decode(s): return __decode(s)[0]
 
 def encode(s):
-    if isinstance(s,(int,long)): return encode(to_binary(s))
-    if isinstance(s,str): return '\x00'+num_to_var_int(len(s))+s
+    if isinstance(s,(int,long)):
+        if s <= 24:
+            return chr(s)
+        elif s <= 2**256:
+            b = to_binary(s)
+            return chr(len(b) + 24) + b
+        else:
+            b = to_binary(s)
+            b2 = to_binary(len(b))
+            return chr(len(b2) + 55) + b2 + b
+    elif isinstance(s,str):
+        if len(s) < 56:
+            return chr(len(s) + 64) + s
+        else:
+            b2 = to_binary(len(s))
+            return chr(len(b2) + 119) + b2 + s
+    elif isinstance(s,list):
+        if len(s) < 56:
+            return chr(len(s) + 128) + ''.join([encode(x) for x in s])
+        else:
+            b2 = to_binary(len(s))
+            return chr(len(b2) + 183) + b2 + ''.join([encode(x) for x in s])
     else:
-        x = ''.join([encode(x) for x in s])
-        return '\x01'+num_to_var_int(len(x))+x
+        raise Exception("Encoding for "+s+" not yet implemented")

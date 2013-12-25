@@ -44,12 +44,13 @@ scriptcode_map = {
 }
 
 params = {
-    'stepfee': 2**60 * 4096,
-    'txfee': 2**60 * 524288,
-    'memoryfee': 2**60 * 262144,
-    'datafee': 2**60 * 16384,
-    'cryptofee': 2**60 * 65536,
-    'extrofee': 2**60 * 65536,
+    'stepfee': 2**64 / 64,
+    'txfee': 2**64,
+    'newcontractfee': 2**64,
+    'memoryfee': 2**64 / 4,
+    'datafee': 2**64 / 16,
+    'cryptofee': 2**64 / 16,
+    'extrofee': 2**64 / 16,
     'blocktime': 60,
     'period_1_reward': 2**80 * 1024,
     'period_1_duration': 57600,
@@ -65,9 +66,11 @@ def eval(block,transactions,timestamp,coinbase):
     # Process all transactions
     while len(transactions) > 0:
         tx = transactions.pop(0)
-        fee = params['txfee'] + len(tx.data) * params['datafee']
+        fee = 0
         if tx.to = '\x00'*20:
-            fee += len(tx.data) * params['memoryfee']
+            fee += params['newcontractfee'] + len(tx.data) * params['memoryfee']
+        else:
+            fee += params['txfee']
         # Insufficient fee, do nothing
         if fee > tx.fee: continue
         # Too much data, do nothing
@@ -90,10 +93,10 @@ def eval(block,transactions,timestamp,coinbase):
     else:
         reward = params['period_4_reward']
     miner_balance += reward
-    for sibling in block.siblings:
-        sib_miner_state = rlp_decode(self.state.get(sibling[3]))
+    for uncle in block.uncles:
+        sib_miner_state = rlp_decode(self.state.get(uncle[3]))
         sib_miner_state[1] = encode(decode(sib_miner_state[1],256)+reward*7/8,256)
-        self.state.update(sibling[3],sib_miner_state)
+        self.state.update(uncle[3],sib_miner_state)
         miner_balance += reward/8
     miner_state[1] = encode(miner_balance,256)
     self.state.update(self.coinbase,miner_state)
@@ -108,7 +111,7 @@ def eval(block,transactions,timestamp,coinbase):
     block.prevhash = h
     block.coinbase = coinbase
     block.transactions = []
-    block.siblings = []
+    block.uncles = []
     return block
 
 def eval_contract(block,transaction_list,tx):
