@@ -1,0 +1,14 @@
+This is the Go implementation of the Ethereum protocol. It's for from being finished.
+
+The Python reference implementation can be found at https://github.com/vbuterin/pyethereum
+
+More information about the protocol:
+* http://vitalik.ca/ethereum.html
+* http://vitalik.ca/ethereum/spec.html
+* http://vitalik.ca/ethereum/patricia.html
+* http://vitalik.ca/ethereum/dagger.html
+* http://vitalik.ca/ethereum/rlp.html
+
+# TODO
+
+Fix this todo file!
