@@ -1,4 +1,4 @@
-This is the Go implementation of the Ethereum protocol. It's for from being finished.
+This is the Go implementation of the Ethereum protocol. It's far from being finished.
 
 The Python reference implementation can be found at https://github.com/vbuterin/pyethereum
 
