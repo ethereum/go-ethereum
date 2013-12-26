@@ -1,8 +1,8 @@
 This is the Go implementation of the Ethereum protocol. It's far from being finished.
 
-`go get https://github.com/obscuren/ethereum`
+    go get https://github.com/ethereum/go-ethereum
 
-The Python reference implementation can be found at https://github.com/vbuterin/pyethereum
+The Python reference implementation can be found at https://github.com/ethereum/pyethereum
 
 More information about the protocol:
 * http://vitalik.ca/ethereum.html
