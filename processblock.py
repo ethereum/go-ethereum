@@ -1,6 +1,8 @@
 from transactions import Transaction
 from blocks import Block
 import time
+import sys
+import rlp
 
 scriptcode_map = {
     0x00: 'STOP',   
@@ -61,27 +63,64 @@ params = {
     'period_4_reward': 2**80 * 128
 }
 
+def process_transactions(block,transactions):
+    while len(transactions) > 0:
+        tx = transactions.pop(0)
+        enc = (tx.value, tx.fee, tx.sender.encode('hex'), tx.to.encode('hex'))
+        sys.stderr.write("Attempting to send %d plus fee %d from %s to %s\n" % enc)
+        # Grab data about sender, recipient and miner
+        sdata = rlp.decode(block.state.get(tx.sender)) or [0,0,0]
+        tdata = rlp.decode(block.state.get(tx.to)) or [0,0,0]
+        # Calculate fee
+        if tx.to == '\x00'*20:
+            fee = params['newcontractfee'] + len(tx.data) * params['memoryfee']
+        else:
+            fee = params['txfee']
+        # Insufficient fee, do nothing
+        if fee > tx.fee:
+            sys.stderr.write("Insufficient fee\n")
+            continue
+        # Too much data, do nothing
+        if len(tx.data) > 256:
+            sys.stderr.write("Too many data items\n")
+            continue
+        if not sdata or sdata[1] < tx.value + tx.fee:
+            sys.stderr.write("Insufficient funds to send fee\n")
+            continue
+        elif tx.nonce != sdata[2] and sdata[0] == 0:
+            sys.stderr.write("Bad nonce\n")
+            continue
+        # Try to send the tx
+        if sdata[0] == 0: sdata[2] += 1
+        sdata[1] -= (tx.value + tx.fee)
+        block.reward += tx.fee
+        if tx.to != '':
+            tdata[1] += tx.value
+        else:
+            addr = tx.hash()[-20:]
+            adata = rlp.decode(block.state.get(addr))
+            if adata[2] != '':
+                sys.stderr.write("Contract already exists\n")
+                continue
+            block.state.update(addr,rlp.encode([1,tx.value,'']))
+            contract = block.get_contract(addr)
+            for i in range(len(tx.data)):
+                contract.update(encode(i,256,32),tx.data[i])
+            block.update_contract(addr)
+        print sdata, tdata
+        block.state.update(tx.sender,rlp.encode(sdata))
+        block.state.update(tx.to,rlp.encode(tdata))
+        # Evaluate contract if applicable
+        if tdata[0] == 1:
+            eval_contract(block,transactions,tx)
+        sys.stderr.write("tx processed\n")
+
 def eval(block,transactions,timestamp,coinbase):
     h = block.hash()
     # Process all transactions
-    while len(transactions) > 0:
-        tx = transactions.pop(0)
-        fee = 0
-        if tx.to = '\x00'*20:
-            fee += params['newcontractfee'] + len(tx.data) * params['memoryfee']
-        else:
-            fee += params['txfee']
-        # Insufficient fee, do nothing
-        if fee > tx.fee: continue
-        # Too much data, do nothing
-        if len(data) > 256: continue
-        # Try to send the tx
-        if not block.send(tx): continue
-        # Evaluate contract if applicable
-        eval_contract(block,transactions,tx)
+    process_transactions(block,transactions)
     # Pay miner fee
-    miner_state = rlp_decode(self.state.get(self.coinbase)) or ['','','']
-    miner_balance = decode(miner_state[1],256)
+    miner_state = rlp.decode(block.state.get(block.coinbase)) or [0,0,0]
     block.number += 1
     reward = 0
     if block.number < params['period_1_duration']:
@@ -92,17 +131,17 @@ def eval(block,transactions,timestamp,coinbase):
         reward = params['period_3_reward']
     else:
         reward = params['period_4_reward']
-    miner_balance += reward
+    print reward
+    miner_state[1] += reward + block.reward
     for uncle in block.uncles:
-        sib_miner_state = rlp_decode(self.state.get(uncle[3]))
+        sib_miner_state = rlp_decode(block.state.get(uncle[3]))
         sib_miner_state[1] = encode(decode(sib_miner_state[1],256)+reward*7/8,256)
-        self.state.update(uncle[3],sib_miner_state)
-        miner_balance += reward/8
-    miner_state[1] = encode(miner_balance,256)
-    self.state.update(self.coinbase,miner_state)
+        block.state.update(uncle[3],sib_miner_state)
+        miner_state[1] += reward/8
+    block.state.update(block.coinbase,rlp.encode(miner_state))
     # Check timestamp
     if timestamp < block.timestamp or timestamp > int(time.time()) + 3600:
-        raise new Exception("timestamp not in valid range!")
+        raise Exception("timestamp not in valid range!")
     # Update difficulty
     if timestamp >= block.timestamp + 42:
         block.difficulty += int(block.difficulty / 1024)
@@ -115,10 +154,11 @@ def eval(block,transactions,timestamp,coinbase):
     return block
 
 def eval_contract(block,transaction_list,tx):
+    sys.stderr.write("evaluating contract\n")
     address = tx.to
     # Initialize registers
     reg = [0] * 256
-    reg[0] = decode(tx.from,256)
+    reg[0] = decode(tx.sender,256)
     reg[1] = decode(tx.to,256)
     reg[2] = tx.value
     reg[3] = tx.fee
@@ -131,8 +171,11 @@ def eval_contract(block,transaction_list,tx):
         # Convert the data item into a code piece
         val_at_index = decode(contract.get(encode(index,256,32)),256)
         code = [ int(val_at_index / (256**i)) % 256 for i in range(6) ]
+        code[0] = scriptcode_map.get(code[0],'INVALID')
+        sys.stderr.write("Evaluating: "+ str(code)+"\n")
         # Invalid code instruction or STOP code stops execution sans fee
-        if val_at_index >= 256**6 or code[0] == 'STOP':
+        if val_at_index >= 256**6 or code[0] in ['STOP','INVALID']:
+            sys.stderr.write("stop code, exiting\n")
             break
         # Calculate fee
         minerfee = 0
@@ -154,10 +197,11 @@ def eval_contract(block,transaction_list,tx):
 
         # If we can't pay the fee, break, otherwise pay it
         if block.get_balance(address) < minerfee + nullfee:
+            sys.stderr.write("insufficient fee, exiting\n")
             break
-        block.pay_fee(address,nullfee,False)
-        block.pay_fee(address,minerfee,True)
-            
+        block.set_balance(address,block.get_balance(address) - nullfee - minerfee)
+        block.reward += minerfee
+        sys.stderr.write("evaluating operation\n") 
         # Evaluate operations
         if c == 'ADD':
             reg[code[3]] = (reg[code[1]] + reg[code[2]]) % 2**256
@@ -174,7 +218,7 @@ def eval_contract(block,transaction_list,tx):
             x = reg[code[1]] if reg[code[1]] < 2**255 else 2**256 - reg[code[1]]
             y = reg[code[2]] if reg[code[2]] < 2**255 else 2**256 - reg[code[2]]
             z = int(x/y)
-            reg[code[3]] = z if sign = 1 else 2**256 - z
+            reg[code[3]] = z if sign == 1 else 2**256 - z
         elif code == 'MOD':
             reg[code[3]] = reg[code[1]] % reg[code[2]]
         elif code == 'SMOD':
@@ -184,7 +228,7 @@ def eval_contract(block,transaction_list,tx):
             x = reg[code[1]] if reg[code[1]] < 2**255 else 2**256 - reg[code[1]]
             y = reg[code[2]] if reg[code[2]] < 2**255 else 2**256 - reg[code[2]]
             z = x%y
-            reg[code[3]] = z if sign = 1 else 2**256 - z
+            reg[code[3]] = z if sign == 1 else 2**256 - z
         elif code == 'EXP':
             reg[code[3]] = pow(reg[code[1]],reg[code[2]],2**256)
         elif code == 'NEG':
@@ -278,7 +322,7 @@ def eval_contract(block,transaction_list,tx):
                     ind = encode((reg[code[5]] + i) % 2**256,256,32)
                     data.append(contract.get(ind))
                 tx = Transaction(0,to,value,fee,data)
-                tx.from = address
+                tx.sender = address
                 transaction_list.insert(0,tx)
         elif code == 'DATA':
             reg[code[2]] = tx.data[reg[code[1]]]

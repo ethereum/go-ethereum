@@ -17,14 +17,14 @@ def from_binary(b):
     else: return from_binary(b[:-1]) * 256 + ord(b[-1])
 
 def __decode(s,pos=0):
-    if s == '':
+    if not s:
         return (None, 0)
     else:
         fchar = ord(s[pos])
-    if fchar <= 24:
+    if fchar < 24:
         return (ord(s[pos]), pos+1)
     elif fchar < 56:
-        b = ord(s[pos]) - 24
+        b = ord(s[pos]) - 23
         return (from_binary(s[pos+1:pos+1+b]), pos+1+b)
     elif fchar < 64:
         b = ord(s[pos]) - 55
@@ -59,11 +59,13 @@ def decode(s): return __decode(s)[0]
 
 def encode(s):
     if isinstance(s,(int,long)):
-        if s <= 24:
+        if s < 0:
+            raise Exception("can't handle negative ints")
+        elif s >= 0 and s < 24:
             return chr(s)
         elif s <= 2**256:
             b = to_binary(s)
-            return chr(len(b) + 24) + b
+            return chr(len(b) + 23) + b
         else:
             b = to_binary(s)
             b2 = to_binary(len(b))

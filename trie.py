@@ -164,6 +164,45 @@ class Trie():
             if curnode[16]: total += 1
             return total
 
+    def __to_dict(self,node):
+        if not node: return {}
+        curnode = rlp.decode(self.db.get(node))
+        if not curnode:
+            raise Exception("node not found in database")
+        if len(curnode) == 2:
+            lkey = self.__decode_key(curnode[0])
+            o = {}
+            if lkey[-1] == 16:
+                o[curnode[0]] = curnode[1]   
+            else:
+                d = self.__to_dict(curnode[1])
+                for v in d:
+                    subkey = self.__decode_key(v)
+                    totalkey = self.__encode_key(lkey+subkey)
+                    o[totalkey] = d[v]
+            return o
+        elif len(curnode) == 17:
+            o = {}
+            for i in range(16):
+                d = self.__to_dict(curnode[i])
+                for v in d:
+                    subkey = self.__decode_key(v)
+                    totalkey = self.__encode_key([i] + subkey)
+                    o[totalkey] = d[v]
+            if curnode[16]: o[chr(16)] = curnode[16]
+            return o
+        else:
+            raise Exception("bad curnode! "+curnode)
+
+    def to_dict(self,as_hex=False):
+        d = self.__to_dict(self.root)
+        o = {}
+        for v in d:
+            v2 = ''.join(['0123456789abcdef'[x] for x in self.__decode_key(v)[:-1]])
+            if not as_hex: v2 = v2.decode('hex')
+            o[v2] = d[v]
+        return o
+
     def get(self,key):
         key2 = ['0123456789abcdef'.find(x) for x in key.encode('hex')] + [16]
         return self.__get_state(self.root,key2)
