@@ -29,5 +29,7 @@ func main() {
 
   bm.ProcessBlock( blck )
 
-  fmt.Printf("rlp encoded Tx %q\n", tx.Serialize())
+  //fmt.Printf("rlp encoded Tx %q\n", tx.MarshalRlp())
+  fmt.Printf("block enc %q\n", blck.MarshalRlp())
+  fmt.Printf("block hash %q\n", blck.Hash())
 }
