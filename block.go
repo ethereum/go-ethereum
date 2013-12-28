@@ -1,7 +1,7 @@
 package main
 
 import (
-  _"fmt"
+  "fmt"
   "time"
 )
 
@@ -44,21 +44,28 @@ func (block *Block) MarshalRlp() []byte {
     encTx[i] = string(tx.MarshalRlp())
   }
 
-  enc := RlpEncode([]interface{}{
+  header := []interface{}{
     block.number,
-    block.prevHash,
+    //block.prevHash,
     // Sha of uncles
-    block.coinbase,
+    //block.coinbase,
     // root state
-    Sha256Bin([]byte(RlpEncode(encTx))),
-    block.difficulty,
-    block.time,
-    block.nonce,
+    //Sha256Bin([]byte(RlpEncode(encTx))),
+    //block.difficulty,
+    //block.time,
+    //block.nonce,
     // extra?
-  })
+  }
 
-  return []byte(enc)
+  return Encode([]interface{}{header, encTx})
 }
 
 func (block *Block) UnmarshalRlp(data []byte) {
+  fmt.Printf("%q\n", data)
+  t, _ := Decode(data,0)
+  if slice, ok := t.([]interface{}); ok {
+    if txes, ok := slice[1].([]interface{}); ok {
+      fmt.Println(txes[0])
+    }
+  }
 }
