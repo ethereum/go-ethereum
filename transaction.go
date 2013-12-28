@@ -37,20 +37,22 @@ type Transaction struct {
   RlpSerializer
 
   sender      string
-  recipient   uint32
+  recipient   string
   value       uint32
   fee         uint32
   data        []string
   memory      []int
+  lastTx      string
 
   // To be removed
   signature   string
   addr        string
 }
 
-func NewTransaction(to uint32, value uint32, data []string) *Transaction {
+func NewTransaction(to string, value uint32, data []string) *Transaction {
   tx := Transaction{sender: "1234567890", recipient: to, value: value}
   tx.fee = 0//uint32((ContractFee + MemoryFee * float32(len(tx.data))) * 1e8)
+  tx.lastTx = "0"
 
   // Serialize the data
   tx.data = make([]string, len(data))
@@ -73,16 +75,67 @@ func NewTransaction(to uint32, value uint32, data []string) *Transaction {
 func (tx *Transaction) MarshalRlp() []byte {
   // Prepare the transaction for serialization
   preEnc := []interface{}{
-    "0", // TODO last Tx
+    tx.lastTx,
     tx.sender,
-    // XXX In the future there's no need to cast to string because they'll end up being big numbers (strings)
-    Uitoa(tx.recipient),
-    Uitoa(tx.value),
-    Uitoa(tx.fee),
+    tx.recipient,
+    tx.value,
+    tx.fee,
     tx.data,
   }
 
-  return []byte(RlpEncode(preEnc))
+  return []byte(Encode(preEnc))
+}
+
+func (tx *Transaction) UnmarshalRlp(data []byte) {
+  t, _ := Decode(data,0)
+  if slice, ok := t.([]interface{}); ok {
+    if lastTx, ok := slice[0].([]byte); ok {
+      tx.lastTx = string(lastTx)
+    }
+
+    if sender, ok := slice[1].([]byte); ok {
+      tx.sender = string(sender)
+    }
+
+    if recipient, ok := slice[2].([]byte); ok {
+      tx.recipient = string(recipient)
+    }
+
+    // If only I knew of a better way.
+    if value, ok := slice[3].(uint8); ok {
+      tx.value = uint32(value)
+    }
+    if value, ok := slice[3].(uint16); ok {
+      tx.value = uint32(value)
+    }
+    if value, ok := slice[3].(uint32); ok {
+      tx.value = uint32(value)
+    }
+    if value, ok := slice[3].(uint64); ok {
+      tx.value = uint32(value)
+    }
+    if fee, ok := slice[4].(uint8); ok {
+      tx.fee = uint32(fee)
+    }
+    if fee, ok := slice[4].(uint16); ok {
+      tx.fee = uint32(fee)
+    }
+    if fee, ok := slice[4].(uint32); ok {
+      tx.fee = uint32(fee)
+    }
+    if fee, ok := slice[4].(uint64); ok {
+      tx.fee = uint32(fee)
+    }
+
+    if data, ok := slice[5].([]interface{}); ok {
+      tx.data = make([]string, len(data))
+      for i, d := range data {
+        if instr, ok := d.([]byte); ok {
+          tx.data[i] = string(instr)
+        }
+      }
+    }
+  }
 }
 
 func InitFees() {
