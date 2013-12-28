@@ -42,7 +42,7 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 }
 
 func (bm *BlockManager) ProcessTransaction(tx *Transaction, lockChan chan bool) {
-  if tx.recipient == 0x0 {
+  if tx.recipient == "\x00" {
     bm.vm.RunTransaction(tx, func(opType OpType) bool {
       // TODO calculate fees
 
