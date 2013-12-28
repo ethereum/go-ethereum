@@ -27,6 +27,27 @@ func TestEncode(t *testing.T) {
   fmt.Printf("raw: %v encoded: %q == %v\n", dec, slice, strs)
 }
 
+func TestMultiEncode(t *testing.T) {
+  inter := []interface{}{
+    []interface{}{
+      "1","2","3",
+    },
+    []string{
+      "string",
+      "string2",
+      "\x86A0J1234567890A\x00B20A0\x82F395843F657986",
+      "\x86A0J1234567890A\x00B20A0\x8cF395843F657986I335612448F524099H16716881A0H13114947G2039362G1507139H16719697G1048387E65360",
+    },
+    "test",
+  }
+
+  bytes := Encode(inter)
+  fmt.Printf("%q\n", bytes)
+
+  dec, _ := Decode(bytes, 0)
+  fmt.Println(dec)
+}
+
 func BenchmarkEncodeDecode(b *testing.B) {
   for i := 0; i < b.N; i++ {
     bytes := Encode([]string{"dog", "god", "cat"})
