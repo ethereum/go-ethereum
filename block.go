@@ -3,19 +3,18 @@ package main
 import (
   "fmt"
   "time"
+  _"bytes"
 )
 
 type Block struct {
-  RlpSerializer
-
   number        uint32
   prevHash      string
   uncles        []*Block
   coinbase      string
   // state xxx
-  difficulty    int
+  difficulty    uint32
   time          time.Time
-  nonce         int
+  nonce         uint32
   transactions  []*Transaction
 }
 
@@ -23,6 +22,11 @@ func NewBlock(/* TODO use raw data */transactions []*Transaction) *Block {
   block := &Block{
     // Slice of transactions to include in this block
     transactions: transactions,
+    number: 1,
+    prevHash: "1234",
+    coinbase: "me",
+    difficulty: 10,
+    nonce: 0,
 
     time: time.Now(),
   }
@@ -44,28 +48,77 @@ func (block *Block) MarshalRlp() []byte {
     encTx[i] = string(tx.MarshalRlp())
   }
 
+  /* I made up the block. It should probably contain different data or types. It sole purpose now is testing */
   header := []interface{}{
     block.number,
-    //block.prevHash,
+    block.prevHash,
     // Sha of uncles
-    //block.coinbase,
+    "",
+    block.coinbase,
     // root state
-    //Sha256Bin([]byte(RlpEncode(encTx))),
-    //block.difficulty,
-    //block.time,
-    //block.nonce,
+    "",
+    string(Sha256Bin([]byte(RlpEncode(encTx)))),
+    block.difficulty,
+    block.time.String(),
+    block.nonce,
     // extra?
   }
 
-  return Encode([]interface{}{header, encTx})
+  encoded := Encode([]interface{}{header, encTx})
+
+  return encoded
 }
 
 func (block *Block) UnmarshalRlp(data []byte) {
-  fmt.Printf("%q\n", data)
   t, _ := Decode(data,0)
   if slice, ok := t.([]interface{}); ok {
-    if txes, ok := slice[1].([]interface{}); ok {
-      fmt.Println(txes[0])
+    if header, ok := slice[0].([]interface{}); ok {
+      if number, ok := header[0].(uint8); ok {
+        block.number = uint32(number)
+      }
+
+      if prevHash, ok := header[1].([]byte); ok {
+        block.prevHash = string(prevHash)
+      }
+
+      // sha of uncles is header[2]
+
+      if coinbase, ok := header[3].([]byte); ok {
+        block.coinbase = string(coinbase)
+      }
+
+      // state is header[header[4]
+
+      // sha is header[5]
+
+      // It's either 8bit or 64
+      if difficulty, ok := header[6].(uint8); ok {
+        block.difficulty = uint32(difficulty)
+      }
+      if difficulty, ok := header[6].(uint64); ok {
+        block.difficulty = uint32(difficulty)
+      }
+
+      if time, ok := header[7].([]byte); ok {
+        fmt.Sprintf("Time is: ", string(time))
+      }
+
+      if nonce, ok := header[8].(uint8); ok {
+        block.nonce = uint32(nonce)
+      }
+    }
+
+    if txSlice, ok := slice[1].([]interface{}); ok {
+      block.transactions = make([]*Transaction, len(txSlice))
+
+      for i, tx := range txSlice {
+        if t, ok := tx.([]byte); ok {
+          tx := &Transaction{}
+          tx.UnmarshalRlp(t)
+
+          block.transactions[i] = tx
+        }
+      }
     }
   }
 }
