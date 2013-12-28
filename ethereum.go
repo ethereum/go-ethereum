@@ -4,6 +4,8 @@ import (
   "fmt"
 )
 
+const Debug = false
+
 func main() {
   InitFees()
 
@@ -35,6 +37,11 @@ func main() {
 
   bm.ProcessBlock( blck )
 
-  //t := blck.MarshalRlp()
-  //blck.UnmarshalRlp(t)
+
+  t := blck.MarshalRlp()
+  copyBlock := &Block{}
+  copyBlock.UnmarshalRlp(t)
+
+  fmt.Println(blck)
+  fmt.Println(copyBlock)
 }

@@ -64,10 +64,7 @@ type Vm struct {
 }
 
 func NewVm() *Vm {
-  fmt.Println("init Ethereum VM")
-
-  stackSize := uint(256)
-  fmt.Println("stack size =", stackSize)
+  //stackSize := uint(256)
 
   return &Vm{
     stack: make(map[string]string),
@@ -76,10 +73,12 @@ func NewVm() *Vm {
 }
 
 func (vm *Vm) RunTransaction(tx *Transaction, cb TxCallback) {
-  fmt.Printf(`
+  if Debug {
+    fmt.Printf(`
 # processing Tx (%v)
 # fee = %f, ops = %d, sender = %s, value = %d
-`, tx.addr, float32(tx.fee) / 1e8, len(tx.data), tx.sender, tx.value)
+  `, tx.addr, float32(tx.fee) / 1e8, len(tx.data), tx.sender, tx.value)
+  }
 
   vm.stack = make(map[string]string)
   vm.stack["0"] = tx.sender
@@ -102,7 +101,9 @@ out:
     // XXX Should Instr return big int slice instead of string slice?
     op, args, _ := Instr(tx.data[stPtr])
 
-    fmt.Printf("%-3d %d %v\n", stPtr, op, args)
+    if Debug {
+      fmt.Printf("%-3d %d %v\n", stPtr, op, args)
+    }
 
     opType     := OpType(tNorm)
     // Determine the op type (used for calculating fees by the block manager)
@@ -178,8 +179,7 @@ out:
       stPtr++
     } else {
       stPtr = nptr
-      fmt.Println("... JMP", nptr, "...")
+      if Debug { fmt.Println("... JMP", nptr, "...") }
     }
   }
-  fmt.Println("# finished processing Tx\n")
 }
