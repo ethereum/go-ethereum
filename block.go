@@ -7,17 +7,23 @@ import (
 )
 
 type Block struct {
+  // The number of this block
   number        uint32
+  // Hash to the previous block
   prevHash      string
+  // Uncles of this block
   uncles        []*Block
   coinbase      string
   // state xxx
   difficulty    uint32
+  // Creation time
   time          time.Time
   nonce         uint32
+  // List of transactions and/or contracts
   transactions  []*Transaction
 }
 
+// Creates a new block. This is currently for testing
 func NewBlock(/* TODO use raw data */transactions []*Transaction) *Block {
   block := &Block{
     // Slice of transactions to include in this block
@@ -37,14 +43,16 @@ func NewBlock(/* TODO use raw data */transactions []*Transaction) *Block {
 func (block *Block) Update() {
 }
 
+// Returns a hash of the block
 func (block *Block) Hash() string {
   return Sha256Hex(block.MarshalRlp())
 }
 
 func (block *Block) MarshalRlp() []byte {
-  // Encoding method requires []interface{} type. It's actual a slice of strings
+  // Marshal the transactions of this block
   encTx := make([]string, len(block.transactions))
   for i, tx := range block.transactions {
+    // Cast it to a string (safe)
     encTx[i] = string(tx.MarshalRlp())
   }
 
@@ -64,14 +72,16 @@ func (block *Block) MarshalRlp() []byte {
     // extra?
   }
 
-  encoded := Encode([]interface{}{header, encTx})
-
-  return encoded
+  // Encode a slice interface which contains the header and the list of transactions.
+  return Encode([]interface{}{header, encTx})
 }
 
 func (block *Block) UnmarshalRlp(data []byte) {
   t, _ := Decode(data,0)
+
+  // interface slice assertion
   if slice, ok := t.([]interface{}); ok {
+    // interface slice assertion
     if header, ok := slice[0].([]interface{}); ok {
       if number, ok := header[0].(uint8); ok {
         block.number = uint32(number)
@@ -109,11 +119,15 @@ func (block *Block) UnmarshalRlp(data []byte) {
     }
 
     if txSlice, ok := slice[1].([]interface{}); ok {
+      // Create transaction slice equal to decoded tx interface slice
       block.transactions = make([]*Transaction, len(txSlice))
 
+      // Unmarshal transactions
       for i, tx := range txSlice {
         if t, ok := tx.([]byte); ok {
           tx := &Transaction{}
+          // Use the unmarshaled data to unmarshal the transaction
+          // t is still decoded.
           tx.UnmarshalRlp(t)
 
           block.transactions[i] = tx

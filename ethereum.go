@@ -37,7 +37,6 @@ func main() {
 
   bm.ProcessBlock( blck )
 
-
   t := blck.MarshalRlp()
   copyBlock := &Block{}
   copyBlock.UnmarshalRlp(t)

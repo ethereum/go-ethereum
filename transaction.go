@@ -125,6 +125,7 @@ func (tx *Transaction) UnmarshalRlp(data []byte) {
       tx.fee = uint32(fee)
     }
 
+    // Encode the data/instructions
     if data, ok := slice[5].([]interface{}); ok {
       tx.data = make([]string, len(data))
       for i, d := range data {

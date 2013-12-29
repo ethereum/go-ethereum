@@ -26,9 +26,12 @@ func NewBlockManager() *BlockManager {
 
 // Process a block.
 func (bm *BlockManager) ProcessBlock(block *Block) error {
+  // Get the tx count. Used to create enough channels to 'join' the go routines
   txCount  := len(block.transactions)
+  // Locking channel. When it has been fully buffered this method will return
   lockChan := make(chan bool, txCount)
 
+  // Process each transaction/contract
   for _, tx := range block.transactions {
     go bm.ProcessTransaction(tx, lockChan)
   }
