@@ -1,7 +1,7 @@
 package main
 
 import (
-  "fmt"
+  _"fmt"
   "time"
   _"bytes"
 )
@@ -17,14 +17,24 @@ type Block struct {
   // state xxx
   difficulty    uint32
   // Creation time
-  time          time.Time
+  time          int64
   nonce         uint32
   // List of transactions and/or contracts
   transactions  []*Transaction
+
+  extra         string
+}
+
+// New block takes a raw encoded string
+func NewBlock(raw []byte) *Block {
+  block := &Block{}
+  block.UnmarshalRlp(raw)
+
+  return block
 }
 
 // Creates a new block. This is currently for testing
-func NewBlock(/* TODO use raw data */transactions []*Transaction) *Block {
+func CreateBlock(/* TODO use raw data */transactions []*Transaction) *Block {
   block := &Block{
     // Slice of transactions to include in this block
     transactions: transactions,
@@ -33,8 +43,7 @@ func NewBlock(/* TODO use raw data */transactions []*Transaction) *Block {
     coinbase: "me",
     difficulty: 10,
     nonce: 0,
-
-    time: time.Now(),
+    time: time.Now().Unix(),
   }
 
   return block
@@ -65,15 +74,18 @@ func (block *Block) MarshalRlp() []byte {
     block.coinbase,
     // root state
     "",
-    string(Sha256Bin([]byte(RlpEncode(encTx)))),
+    // Sha of tx
+    string(Sha256Bin([]byte(Encode(encTx)))),
     block.difficulty,
-    block.time.String(),
+    uint64(block.time),
     block.nonce,
-    // extra?
+    block.extra,
   }
 
+  // TODO
+  uncles := []interface{}{}
   // Encode a slice interface which contains the header and the list of transactions.
-  return Encode([]interface{}{header, encTx})
+  return Encode([]interface{}{header, encTx, uncles})
 }
 
 func (block *Block) UnmarshalRlp(data []byte) {
@@ -109,12 +121,20 @@ func (block *Block) UnmarshalRlp(data []byte) {
         block.difficulty = uint32(difficulty)
       }
 
-      if time, ok := header[7].([]byte); ok {
-        fmt.Sprintf("Time is: ", string(time))
+      // It's either 8bit or 64
+      if time, ok := header[7].(uint8); ok {
+        block.time = int64(time)
+      }
+      if time, ok := header[7].(uint64); ok {
+        block.time = int64(time)
       }
 
       if nonce, ok := header[8].(uint8); ok {
         block.nonce = uint32(nonce)
+      }
+
+      if extra, ok := header[9].([]byte); ok {
+        block.extra = string(extra)
       }
     }
 
