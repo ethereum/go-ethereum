@@ -2,9 +2,26 @@ package main
 
 import (
   "fmt"
+  "os"
+  "os/signal"
 )
 
 const Debug = false
+
+// Register interrupt handlers so we can stop the server
+func RegisterInterupts(s *Server) {
+  // Buffered chan of one is enough
+  c := make(chan os.Signal, 1)
+  // Notify about interrupts for now
+  signal.Notify(c, os.Interrupt)
+  go func() {
+    for sig := range c {
+      fmt.Println("Shutting down (%v) ... \n", sig)
+
+      s.Stop()
+    }
+  }()
+}
 
 func main() {
   InitFees()
@@ -30,17 +47,11 @@ func main() {
   copyTx := &Transaction{}
   copyTx.UnmarshalRlp(txData)
 
-
   tx2 := NewTransaction("\x00", 20, []string{"SET 10 6", "LD 10 10"})
 
-  blck := NewBlock([]*Transaction{tx2, tx})
+  blck := CreateBlock([]*Transaction{tx2, tx})
 
   bm.ProcessBlock( blck )
 
-  t := blck.MarshalRlp()
-  copyBlock := &Block{}
-  copyBlock.UnmarshalRlp(t)
-
-  fmt.Println(blck)
-  fmt.Println(copyBlock)
+  fmt.Println("GenesisBlock:", GenisisBlock, "hashed", GenisisBlock.Hash())
 }
