@@ -3,50 +3,62 @@ from blocks import Block
 import time
 import sys
 import rlp
+import math
 
 scriptcode_map = {
     0x00: 'STOP',   
-    0x10: 'ADD',
-    0x11: 'SUB',
-    0x12: 'MUL',
-    0x13: 'DIV',
-    0x14: 'SDIV',
-    0x15: 'MOD',
-    0x16: 'SMOD',
-    0x17: 'EXP',
-    0x18: 'NEG',
-    0x20: 'LT',
-    0x21: 'LE',
-    0x22: 'GT',
-    0x23: 'GE',
-    0x24: 'EQ',
-    0x25: 'NOT',
-    0x30: 'SHA256',
-    0x31: 'RIPEMD-160',
-    0x32: 'ECMUL',
-    0x33: 'ECADD',
-    0x34: 'ECSIGN',
-    0x35: 'ECRECOVER',
-    0x40: 'COPY',
-    0x41: 'STORE',
-    0x42: 'LOAD',
-    0x43: 'SET',
-    0x50: 'JMP',
-    0x51: 'JMPI',
-    0x52: 'IND',
-    0x60: 'EXTRO',
-    0x61: 'BALANCE',
-    0x70: 'MKTX',
-    0x71: 'RAWTX',
-    0x80: 'DATA',
-    0x81: 'DATAN',
-    0x90: 'MYADDRESS',
-    0x91: 'BLKHASH',
+    0x01: 'ADD',
+    0x02: 'SUB',
+    0x03: 'MUL',
+    0x04: 'DIV',
+    0x05: 'SDIV',
+    0x06: 'MOD',
+    0x07: 'SMOD',
+    0x08: 'EXP',
+    0x09: 'NEG',
+    0x0a: 'LT',
+    0x0b: 'LE',
+    0x0c: 'GT',
+    0x0d: 'GE',
+    0x0e: 'EQ',
+    0x0f: 'NOT',
+    0x10: 'MYADDRESS',
+    0x11: 'TXSENDER',
+    0x12: 'TXVALUE',
+    0x13: 'TXFEE',
+    0x14: 'TXDATAN',
+    0x15: 'TXDATA',
+    0x16: 'BLK_PREVHASH',
+    0x17: 'BLK_COINBASE',
+    0x18: 'BLK_TIMESTAMP',
+    0x19: 'BLK_NUMBER',
+    0x1a: 'BLK_DIFFICULTY',
+    0x20: 'SHA256',
+    0x21: 'RIPEMD160',
+    0x22: 'ECMUL',
+    0x23: 'ECADD',
+    0x24: 'ECSIGN',
+    0x25: 'ECRECOVER',
+    0x26: 'ECVALID',
+    0x30: 'PUSH',
+    0x31: 'POP',
+    0x32: 'DUP',
+    0x33: 'DUPN',
+    0x34: 'SWAP',
+    0x35: 'SWAPN',
+    0x36: 'LOAD',
+    0x37: 'STORE',
+    0x40: 'JMP',
+    0x41: 'JMPI',
+    0x42: 'IND',
+    0x50: 'EXTRO',
+    0x51: 'BALANCE',
+    0x60: 'MKTX',
     0xff: 'SUICIDE'
 }
 
 params = {
-    'stepfee': 2**64 / 64,
+    'stepfee': 10**16,
     'txfee': 2**64,
     'newcontractfee': 2**64,
     'memoryfee': 2**64 / 4,
@@ -156,12 +168,8 @@ def eval(block,transactions,timestamp,coinbase):
 def eval_contract(block,transaction_list,tx):
     sys.stderr.write("evaluating contract\n")
     address = tx.to
-    # Initialize registers
-    reg = [0] * 256
-    reg[0] = decode(tx.sender,256)
-    reg[1] = decode(tx.to,256)
-    reg[2] = tx.value
-    reg[3] = tx.fee
+    # Initialize stack
+    stack = []
     index = 0
     stepcounter = 0
     contract = block.get_contract(address)
@@ -174,7 +182,7 @@ def eval_contract(block,transaction_list,tx):
         code[0] = scriptcode_map.get(code[0],'INVALID')
         sys.stderr.write("Evaluating: "+ str(code)+"\n")
         # Invalid code instruction or STOP code stops execution sans fee
-        if val_at_index >= 256**6 or code[0] in ['STOP','INVALID']:
+        if val_at_index >= 256 or code[0] in ['STOP','INVALID']:
             sys.stderr.write("stop code, exiting\n")
             break
         # Calculate fee
@@ -202,141 +210,193 @@ def eval_contract(block,transaction_list,tx):
         block.set_balance(address,block.get_balance(address) - nullfee - minerfee)
         block.reward += minerfee
         sys.stderr.write("evaluating operation\n") 
+        exit = False
+        def stack_pop(n):
+            if len(stack) < n:
+                sys.stderr.write("Stack height insufficient, exiting")
+                exit = True
+                return [0] * n
+            o = stack[-n:]
+            stack = stack[:-n]
+            return o
         # Evaluate operations
         if c == 'ADD':
-            reg[code[3]] = (reg[code[1]] + reg[code[2]]) % 2**256
+            x,y = stack_pop(2)
+            stack.append((x + y) % 2**256)
         elif c == 'MUL':
-            reg[code[3]] = (reg[code[1]] * reg[code[2]]) % 2**256
+            x,y = stack_pop(2)
+            stack.append((x * y) % 2**256)
         elif c == 'SUB':
-            reg[code[3]] = (reg[code[1]] + 2**256 - reg[code[2]]) % 2**256
+            x,y = stack_pop(2)
+            stack.append((x - y) % 2**256)
         elif c == 'DIV':
-            reg[code[3]] = int(reg[code[1]] / reg[code[2]])
+            x,y = stack_pop(2)
+            if y == 0: break
+            stack.append(int(x / y))
         elif c == 'SDIV':
-            sign = 1
-            sign *= (1 if reg[code[1]] < 2**255 else -1)
-            sign *= (1 if reg[code[2]] < 2**255 else -1)
-            x = reg[code[1]] if reg[code[1]] < 2**255 else 2**256 - reg[code[1]]
-            y = reg[code[2]] if reg[code[2]] < 2**255 else 2**256 - reg[code[2]]
-            z = int(x/y)
-            reg[code[3]] = z if sign == 1 else 2**256 - z
+            x,y = stack_pop(2)
+            if y == 0: break
+            sign = (1 if x < 2**255 else -1) * (1 if y < 2**255 else -1)
+            xx = x if x < 2**255 else 2**256 - x
+            yy = y if y < 2**255 else 2**256 - y
+            z = int(xx/yy)
+            stack.append(z if sign == 1 else 2**256 - z)
         elif code == 'MOD':
-            reg[code[3]] = reg[code[1]] % reg[code[2]]
+            x,y = stack_pop(2)
+            if y == 0: break
+            stack.append(x % y)
         elif code == 'SMOD':
-            sign = 1
-            sign *= (1 if reg[code[1]] < 2**255 else -1)
-            sign *= (1 if reg[code[2]] < 2**255 else -1)
-            x = reg[code[1]] if reg[code[1]] < 2**255 else 2**256 - reg[code[1]]
-            y = reg[code[2]] if reg[code[2]] < 2**255 else 2**256 - reg[code[2]]
-            z = x%y
-            reg[code[3]] = z if sign == 1 else 2**256 - z
+            x,y = stack_pop(2)
+            if y == 0: break
+            sign = (1 if x < 2**255 else -1) * (1 if y < 2**255 else -1)
+            xx = x if x < 2**255 else 2**256 - x
+            yy = y if y < 2**255 else 2**256 - y
+            z = xx%yy
+            stack.append(z if sign == 1 else 2**256 - z)
         elif code == 'EXP':
-            reg[code[3]] = pow(reg[code[1]],reg[code[2]],2**256)
+            x,y = stack_pop(2)
+            stack.append(pow(x,y,2**256))
         elif code == 'NEG':
-            reg[code[2]] = 2**256 - reg[code[1]]
+            stack.append(2**256 - stack.pop(1)[0])
         elif code == 'LT':
-            reg[code[3]] = 1 if reg[code[1]] < reg[code[2]] else 0
+            x,y = stack_pop(2)
+            stack.append(1 if x < y else 0)
         elif code == 'LE':
-            reg[code[3]] = 1 if reg[code[1]] <= reg[code[2]] else 0
+            x,y = stack_pop(2)
+            stack.append(1 if x <= y else 0)
         elif code == 'GT':
-            reg[code[3]] = 1 if reg[code[1]] > reg[code[2]] else 0
+            x,y = stack_pop(2)
+            stack.append(1 if x > y else 0)
         elif code == 'GE':
-            reg[code[3]] = 1 if reg[code[1]] >= reg[code[2]] else 0
+            x,y = stack_pop(2)
+            stack.append(1 if x >= y else 0)
         elif code == 'EQ':
-            reg[code[3]] = 1 if reg[code[1]] == reg[code[2]] else 0
+            x,y = stack_pop(2)
+            stack.append(1 if x == y else 0)
         elif code == 'NOT':
-            reg[code[2]] = 1 if reg[code[1]] == 0 else 0
+            stack.append(1 if stack.pop(1)[0] == 0 else 0)
+        elif code == 'MYADDRESS':
+            stack.append(address)
+        elif code == 'TXSENDER':
+            stack.append(decode(tx.sender,256))
+        elif code == 'TXVALUE':
+            stack.append(tx.value)
+        elif code == 'TXFEE':
+            stack.append(tx.fee)
+        elif code == 'TXDATAN':
+            stack.append(len(tx.data))
+        elif code == 'TXDATA':
+            x, = stack_pop(1)
+            stack.append(0 if x >= len(tx.data) else tx.data[x])
+        elif code == 'BLK_PREVHASH':
+            stack.append(decode(block.prevhash,256))
+        elif code == 'BLK_COINBASE':
+            stack.append(decode(block.coinbase,160))
+        elif code == 'BLK_TIMESTAMP':
+            stack.append(block.timestamp)
+        elif code == 'BLK_NUMBER':
+            stack.append(block.number)
+        elif code == 'BLK_DIFFICULTY':
+            stack.append(block.difficulty)
         elif code == 'SHA256':
-            inp = encode(reg[code[1]],256,32)
-            reg[code[2]] = decode(hashlib.sha256(inp).digest(),256)
+            L = stack_pop(1)
+            hdataitems = stack_pop(math.ceil(L / 32.0))
+            hdata = ''.join([encode(x,256,32) for x in hdataitems])[:L]
+            stack.append(decode(hashlib.sha256(hdata).digest(),256))
         elif code == 'RIPEMD-160':
-            inp = encode(reg[code[1]],256,32)
-            reg[code[2]] = decode(hashlib.new('ripemd160',inp).digest(),256)
+            L = stack_pop(1)
+            hdataitems = stack_pop(math.ceil(L / 32.0))
+            hdata = ''.join([encode(x,256,32) for x in hdataitems])[:L]
+            stack.append(decode(hashlib.new('ripemd160',hdata).digest(),256))
         elif code == 'ECMUL':
-            pt = (reg[code[1]],reg[code[2]])
+            n,x,y = stack_pop(3)
             # Point at infinity
-            if pt[0] == 0 and pt[1] == 0:
-                reg[code[4]], reg[code[5]] = 0,0
+            if x == 0 and y == 0:
+                stack.extend([0,0])
             # Point not on curve, coerce to infinity
-            elif (pt[0] ** 3 + 7 - pt[1] ** 2) % N != 0:
-                reg[code[4]], reg[code[5]] = 0,0
+            elif x >= P or y >= P or (x ** 3 + 7 - y ** 2) % P != 0:
+                stack.extend([0,0])
             # Legitimate point
             else:
-                pt2 = base10_multiply(pt,reg[code[3]])
-                reg[code[4]], reg[code[5]] = pt2[0], pt2[1]
+                x2,y2 = base10_multiply((x,y),n)
+                stack.extend([x2,y2])
         elif code == 'ECADD':
-            pt1 = (reg[code[1]],reg[code[2]])
-            pt2 = (reg[code[3]],reg[code[4]])
+            x1,y1,x2,y2 = stack_pop(4)
             # Invalid point 1
-            if (pt1[0] ** 3 + 7 - pt1[1] ** 2) % N != 0:
-                reg[code[5]], reg[code[6]] = 0,0
+            if x1 >= P or y1 >= P or (x1 ** 3 + 7 - y1 ** 2) % P != 0:
+                stack.extend([0,0])
             # Invalid point 2
-            elif (pt2[0] ** 3 + 7 - pt2[1] ** 2) % N != 0:
-                reg[code[5]], reg[code[6]] = 0,0
+            elif x2 >= P or y2 >= P or (x2 ** 3 + 7 - y2 ** 2) % P != 0:
+                stack.extend([0,0])
             # Legitimate points
             else:
-                pt3 = base10_add(pt1,pt2)
-                reg[code[5]], reg[code[6]] = pt3[0], pt3[1]
+                x3,y3 = base10_add((x1,y1),(x2,y2))
+                stack.extend([x3,y3])
         elif code == 'ECSIGN':
-            reg[code[3]], reg[code[4]], reg[code[5]] = ecdsa_raw_sign(reg[code[1]],reg[code[2]])
+            k,h = stack_pop(2)
+            v,r,s = ecdsa_raw_sign(h,k)
+            stack.extend([v,r,s])
         elif code == 'ECRECOVER':
-            pt = ecdsa_raw_recover((reg[code[2]],reg[code[3]],reg[code[4]]),reg[code[1]])
-            reg[code[5]] = pt[0]
-            reg[code[6]] = pt[1]
-        elif code == 'COPY':
-            reg[code[2]] = reg[code[1]]
-        elif code == 'STORE':
-            contract.update(encode(reg[code[2]],256,32),reg[code[1]])
+            h,v,r,s = stack_pop(4)
+            x,y = ecdsa_raw_recover((v,r,s),h)
+            stack.extend([x,y])
+        elif code == 'PUSH':
+            stack.append(contract.get(encode(index + 1,256,32)))
+            index += 1
+        elif code == 'POP':
+            stack_pop(1)
+        elif code == 'DUP':
+            x, = stack_pop(1)
+            stack.extend([x,x])
+        elif code == 'DUPN':
+            arr = stack_pop(contract.get(encode(index + 1,256,32)))
+            arr.append(arr[0])
+            stack.extend(arr)
+            index += 1
+        elif code == 'SWAP':
+            x,y = stack_pop(2)
+            stack.extend([y,x])
+        elif code = 'SWAPN':
+            arr = stack_pop(contract.get(encode(index + 1,256,32)))
+            arr.append(arr[0])
+            arr.pop(0)
+            stack.extend(arr)
+            index += 1
         elif code == 'LOAD':
-            reg[code[2]] = contract.get(encode(reg[code[1]],256,32))
-        elif code == 'SET':
-            reg[code[1]] = (code[2] + 256 * code[3] + 65536 * code[4] + 16777216 * code[5]) * 2**code[6] % 2**256
+            stack.append(contract.get(encode(stack_pop(1)[0],256,32)))
+        elif code == 'STORE':
+            x,y = stack_pop(2)
+            if exit: break
+            contract.update(encode(x,256,32),y)
         elif code == 'JMP':
-            index = reg[code[1]]
+            index = stack_pop(1)[0]
         elif code == 'JMPI':
-            if reg[code[1]]: index = reg[code[2]]
+            newpos,c = stack_pop(2)
+            if c != 0: index = newpos
         elif code == 'IND':
-            reg[code[1]] = index
+            stack.append(index)
         elif code == 'EXTRO':
-            if reg[code[1]] >= 2**160:
-                reg[code[3]] = 0
-            else:
-                address = encode(reg[code[1]],256,20)
-                field = encode(reg[code[2]])
-                reg[code[3]] = block.get_contract(address).get(field)
+            ind,addr = stack_pop(2)
+            stack.push(block.get_contract(encode(addr,256,20)).get(encode(ind,256,32)))
         elif code == 'BALANCE':
-            if reg[code[1]] >= 2**160:
-                reg[code[2]] = 0
-            else:
-                address = encode(reg[code[1]],256,20)
-                reg[code[2]] = block.get_balance(address)
+            stack.push(block.get_balance(encode(stack_pop(1)[0],256,20)))
         elif code == 'MKTX':
-            to = encode(reg[code[1]],256,32)
-            value = reg[code[2]]
-            fee = reg[code[3]]
-            if (value + fee) > block.get_balance(address):
-                pass
+            datan,fee,value,to = stack_pop(4)
+            if exit:
+                break
+            elif (value + fee) > block.get_balance(address):
+                break
             else:
-                datan = reg[code[4]]
-                data = []
-                for i in range(datan):
-                    ind = encode((reg[code[5]] + i) % 2**256,256,32)
-                    data.append(contract.get(ind))
-                tx = Transaction(0,to,value,fee,data)
+                data = stack_pop(datan)
+                tx = Transaction(0,encode(to,256,20),value,fee,data)
                 tx.sender = address
                 transaction_list.insert(0,tx)
-        elif code == 'DATA':
-            reg[code[2]] = tx.data[reg[code[1]]]
-        elif code == 'DATAN':
-            reg[code[1]] = len(tx.data)
-        elif code == 'MYADDRESS':
-            reg[code[1]] = address
-        elif code == 'BLKHASH':
-            reg[code[1]] = decode(block.hash())
         elif code == 'SUICIDE':
             sz = contract.get_size()
             negfee = -sz * params["memoryfee"]
-            toaddress = encode(reg[code[1]],256,20)
-            block.pay_fee(roaddress,negfee,False)
+            toaddress = encode(stack_pop(1)[0],256,20)
+            block.pay_fee(toaddress,negfee,False)
             contract.root = ''
             break
+        if exit: break
     block.update_contract(address,contract)
