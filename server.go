@@ -9,13 +9,13 @@ type Server struct {
   // Channel for shutting down the server
   shutdownChan chan bool
   // DB interface
-  db          *Database
+  db          *LDBDatabase
   // Peers (NYI)
   peers       *list.List
 }
 
 func NewServer() (*Server, error) {
-  db, err := NewDatabase()
+  db, err := NewLDBDatabase()
   if err != nil {
     return nil, err
   }
