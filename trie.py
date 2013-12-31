@@ -120,14 +120,14 @@ class Trie():
             if self.debug: print 'dcn', curnode
             if len(curnode) == 2:
                 (k2, v2) = curnode
-                k2 = hexarraykey_to_bin(k2)
+                k2 = bin_to_hexarraykey(k2)
                 if key == k2:
                     return ''
                 elif key[:len(k2)] == k2:
                     newhash = self.__delete_state(v2,key[len(k2):])
                     childnode = rlp.decode(self.db.get(newhash))
                     if len(childnode) == 2:
-                        newkey = k2 + hexarraykey_to_bin(childnode[0])
+                        newkey = k2 + bin_to_hexarraykey(childnode[0])
                         newnode = [ hexarraykey_to_bin(newkey), childnode[1] ]
                     else:
                         newnode = [ curnode[0], newhash ]
@@ -148,7 +148,7 @@ class Trie():
                     if len(childnode) == 17:
                         newnode2 = [ key[0], newnode[onlynode] ]
                     elif len(childnode) == 2:
-                        newkey = [onlynode] + hexarraykey_to_bin(childnode[0])
+                        newkey = [onlynode] + bin_to_hexarraykey(childnode[0])
                         newnode2 = [ hexarraykey_to_bin(newkey), childnode[1] ]
                 else:
                     newnode2 = newnode
