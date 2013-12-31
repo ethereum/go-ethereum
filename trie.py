@@ -14,7 +14,7 @@ class DB():
 
 def hexarraykey_to_bin(key):
     term = 1 if key[-1] == 16 else 0
-    if term: key2 = key[:-1]
+    if term: key = key[:-1]
     oddlen = len(key) % 2
     flags = 2 * term + oddlen
     if oddlen: key = [flags] + key
@@ -25,7 +25,7 @@ def hexarraykey_to_bin(key):
     return o
 
 def bin_to_hexarraykey(bindata):
-    o = ['0123456789abcdef'.find(x) for x in key[1:].encode('hex')]
+    o = ['0123456789abcdef'.find(x) for x in bindata.encode('hex')]
     if o[0] >= 2: o.append(16)
     if o[0] % 2 == 1: o = o[1:]
     else: o = o[2:]
@@ -51,7 +51,7 @@ class Trie():
             raise Exception("node not found in database")
         elif len(curnode) == 2:
             (k2,v2) = curnode
-            k2 = hexarraykey_to_bin(k2)
+            k2 = bin_to_hexarraykey(k2)
             if len(key) >= len(k2) and k2 == key[:len(k2)]:
                 return self.__get_state(v2,key[len(k2):])
             else:
@@ -83,7 +83,7 @@ class Trie():
                 raise Exception("node not found in database")
             if len(curnode) == 2:
                 (k2, v2) = curnode
-                k2 = hexarraykey_to_bin(k2)
+                k2 = bin_to_hexarraykey(k2)
                 if key == k2:
                     newnode = [ hexarraykey_to_bin(key), value ]
                     return self.__put(newnode)
@@ -176,14 +176,14 @@ class Trie():
         if not curnode:
             raise Exception("node not found in database")
         if len(curnode) == 2:
-            lkey = hexarraykey_to_bin(curnode[0])
+            lkey = bin_to_hexarraykey(curnode[0])
             o = {}
             if lkey[-1] == 16:
                 o[curnode[0]] = curnode[1]   
             else:
                 d = self.__to_dict(curnode[1])
                 for v in d:
-                    subkey = hexarraykey_to_bin(v)
+                    subkey = bin_to_hexarraykey(v)
                     totalkey = hexarraykey_to_bin(lkey+subkey)
                     o[totalkey] = d[v]
             return o
@@ -192,7 +192,7 @@ class Trie():
             for i in range(16):
                 d = self.__to_dict(curnode[i])
                 for v in d:
-                    subkey = hexarraykey_to_bin(v)
+                    subkey = bin_to_hexarraykey(v)
                     totalkey = hexarraykey_to_bin([i] + subkey)
                     o[totalkey] = d[v]
             if curnode[16]: o[chr(16)] = curnode[16]
@@ -204,7 +204,7 @@ class Trie():
         d = self.__to_dict(self.root)
         o = {}
         for v in d:
-            v2 = ''.join(['0123456789abcdef'[x] for x in hexarraykey_to_bin(v)[:-1]])
+            v2 = ''.join(['0123456789abcdef'[x] for x in bin_to_hexarraykey(v)[:-1]])
             if not as_hex: v2 = v2.decode('hex')
             o[v2] = d[v]
         return o
