@@ -1,9 +1,11 @@
 [
-  {
-    "do": "verb", 
-    "horse": "stallion", 
-    "doge": "coin", 
-    "dog": "puppy"
-  }, 
-  "6529010d2a2f633bfe03e7a3a3503e5a5bccd1ca49989ac0fb195fd022c6cc93"
+  [
+    {
+      "do": "verb", 
+      "horse": "stallion", 
+      "doge": "coin", 
+      "dog": "puppy"
+    }, 
+    "6529010d2a2f633bfe03e7a3a3503e5a5bccd1ca49989ac0fb195fd022c6cc93"
+  ]
 ]
