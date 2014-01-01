@@ -10,6 +10,38 @@ type Database interface {
   Get(key []byte) ([]byte, error)
 }
 
+/*
+ * Trie helper functions
+ */
+// Helper function for printing out the raw contents of a slice
+func PrintSlice(slice []string) {
+  fmt.Printf("[")
+  for i, val := range slice {
+    fmt.Printf("%q", val)
+    if i != len(slice)-1 { fmt.Printf(",") }
+  }
+  fmt.Printf("]\n")
+}
+
+// RLP Decodes a node in to a [2] or [17] string slice
+func DecodeNode(data []byte) []string {
+  dec, _ := Decode(data, 0)
+  if slice, ok := dec.([]interface{}); ok {
+    strSlice := make([]string, len(slice))
+
+    for i, s := range slice {
+      if str, ok := s.([]byte); ok {
+        strSlice[i] = string(str)
+      }
+    }
+
+    return strSlice
+  }
+
+  return nil
+}
+
+// A (modified) Radix Trie implementation
 type Trie struct {
   root       string
   db         Database
@@ -19,18 +51,9 @@ func NewTrie(db Database, root string) *Trie {
   return &Trie{db: db, root: ""}
 }
 
-func (t *Trie) Put(node interface{}) []byte {
-  //if s, ok := node.([]string); ok {
-  //  PrintSlice(s)
-  //}
-  enc := Encode(node)
-  sha := Sha256Bin(enc)
-
-  t.db.Put([]byte(sha), enc)
-
-  return sha
-}
-
+/*
+ * Public (query) interface functions
+ */
 func (t *Trie) Update(key string, value string) {
   k := CompactHexDecode(key)
 
@@ -43,10 +66,29 @@ func (t *Trie) Get(key string) string {
   return t.GetState(t.root, k)
 }
 
+/*
+ * State functions (shouldn't be needed directly).
+ */
+
+// Wrapper around the regular db "Put" which generates a key and value
+func (t *Trie) Put(node interface{}) []byte {
+  enc := Encode(node)
+  sha := Sha256Bin(enc)
+
+  t.db.Put([]byte(sha), enc)
+
+  return sha
+}
+
+// Helper function for printing a node (using fetch, decode and slice printing)
+func (t *Trie) PrintNode(n string) {
+  data, _ := t.db.Get([]byte(n))
+  d := DecodeNode(data)
+  PrintSlice(d)
+}
+
 // Returns the state of an object
 func (t *Trie) GetState(node string, key []int) string {
-  //if Debug { fmt.Println("get =", key) }
-
   // Return the node if key is empty (= found)
   if len(key) == 0 || node == "" {
     return node
@@ -66,10 +108,6 @@ func (t *Trie) GetState(node string, key []int) string {
     k := CompactDecode(currentNode[0])
     v := currentNode[1]
 
-    //fmt.Println(k, key)
-    //fmt.Printf("k1:%v\nk2:%v\n", k, key[:len(k)-1])
-
-    //fmt.Println(len(key), ">=", len(k)-1, "&&", k, key[:len(k)])
     if len(key) >= len(k) && CompareIntSlice(k, key[:len(k)]) {
       return t.GetState(v, key[len(k):])
     } else {
@@ -95,47 +133,13 @@ func (t *Trie) UpdateState(node string, key []int, value string) string {
   return ""
 }
 
-func DecodeNode(data []byte) []string {
-  dec, _ := Decode(data, 0)
-  if slice, ok := dec.([]interface{}); ok {
-    strSlice := make([]string, len(slice))
-
-    for i, s := range slice {
-      if str, ok := s.([]byte); ok {
-        strSlice[i] = string(str)
-      }
-    }
-
-    return strSlice
-  }
-
-  return nil
-}
-
-func (t *Trie) PrintNode(n string) {
-  data, _ := t.db.Get([]byte(n))
-  d := DecodeNode(data)
-  PrintSlice(d)
-}
-
-func PrintSlice(slice []string) {
-  fmt.Printf("[")
-  for i, val := range slice {
-    fmt.Printf("%q", val)
-    if i != len(slice)-1 { fmt.Printf(",") }
-  }
-  fmt.Printf("]\n")
-}
 
 func (t *Trie) InsertState(node string, key []int, value string) string {
-  //if Debug { fmt.Println("insrt", key, value, "node:", node) }
-
   if len(key) == 0 {
     return value
   }
 
-  //fmt.Println(node)
-  // Root node!
+  // New node
   if node == "" {
     newNode := []string{ CompactEncode(key), value }
 
@@ -194,5 +198,4 @@ func (t *Trie) InsertState(node string, key []int, value string) string {
 
   return ""
 }
-
 
