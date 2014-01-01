@@ -68,12 +68,18 @@ func (i *DbInterface) ParseInput(input string) bool {
       fmt.Println(hex.EncodeToString([]byte(i.trie.root)))
     case "get":
       fmt.Println(i.trie.Get(tokens[1]))
+    case "root":
+      fmt.Println(hex.EncodeToString([]byte(i.trie.root)))
+    case "rawroot":
+      fmt.Println(i.trie.root)
     case "exit", "quit", "q":
       return false
     case "help":
-      fmt.Println(`query commands:
-update KEY VALUE
-get KEY
+      fmt.Printf(`QUERY COMMANDS:
+update KEY VALUE - Updates/Creates a new value for the given key
+get KEY - Retrieves the given key
+root - Prints the hex encoded merkle root
+rawroot - Prints the raw merkle root
 `)
     default:
       fmt.Println("Unknown command:", tokens[0])
