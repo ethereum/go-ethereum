@@ -6,7 +6,7 @@ import (
   "os/signal"
 )
 
-const Debug = false
+const Debug = true
 
 // Register interrupt handlers so we can stop the server
 func RegisterInterupts(s *Server) {

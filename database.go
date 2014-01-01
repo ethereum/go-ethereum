@@ -33,7 +33,7 @@ func NewLDBDatabase() (*LDBDatabase, error) {
 }
 
 func (db *LDBDatabase) Bootstrap() error {
-  db.trie = NewTrie(db)
+  //db.trie = NewTrie(db)
 
   return nil
 }
