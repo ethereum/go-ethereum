@@ -32,9 +32,6 @@ func (i *DbInterface) ValidateInput(action string, argumentLength int) error {
   case action == "get" && argumentLength != 1:
     err = true
     expArgCount = 1
-  case (action == "quit" || action == "exit") && argumentLength != 0:
-    err = true
-    expArgCount = 0
   }
 
   if err {
@@ -73,6 +70,11 @@ func (i *DbInterface) ParseInput(input string) bool {
       fmt.Println(i.trie.Get(tokens[1]))
     case "exit", "quit", "q":
       return false
+    case "help":
+      fmt.Println(`query commands:
+update KEY VALUE
+get KEY
+`)
     default:
       fmt.Println("Unknown command:", tokens[0])
     }
@@ -82,6 +84,7 @@ func (i *DbInterface) ParseInput(input string) bool {
 }
 
 func (i *DbInterface) Start() {
+  fmt.Printf("DB Query tool. Type (help) for help\n")
   reader := bufio.NewReader(os.Stdin)
   for {
     fmt.Printf("db >>> ")
