@@ -4,9 +4,17 @@ import (
   "fmt"
   "os"
   "os/signal"
+  "flag"
 )
 
 const Debug = true
+
+var StartDBQueryInterface bool
+func Init() {
+  flag.BoolVar(&StartDBQueryInterface, "db", false, "start db query interface")
+
+  flag.Parse()
+}
 
 // Register interrupt handlers so we can stop the server
 func RegisterInterupts(s *Server) {
@@ -26,32 +34,12 @@ func RegisterInterupts(s *Server) {
 func main() {
   InitFees()
 
-  bm := NewBlockManager()
+  Init()
 
-  tx := NewTransaction("\x00", 20, []string{
-    "SET 10 6",
-    "LD 10 10",
-    "LT 10 1 20",
-    "SET 255 7",
-    "JMPI 20 255",
-    "STOP",
-    "SET 30 200",
-    "LD 30 31",
-    "SET 255 22",
-    "JMPI 31 255",
-    "SET 255 15",
-    "JMP 255",
-  })
-  txData := tx.MarshalRlp()
-
-  copyTx := &Transaction{}
-  copyTx.UnmarshalRlp(txData)
-
-  tx2 := NewTransaction("\x00", 20, []string{"SET 10 6", "LD 10 10"})
-
-  blck := CreateBlock([]*Transaction{tx2, tx})
-
-  bm.ProcessBlock( blck )
-
-  fmt.Println("GenesisBlock:", GenisisBlock, "hashed", GenisisBlock.Hash())
+  if StartDBQueryInterface {
+    dbInterface := NewDBInterface()
+    dbInterface.Start()
+  } else {
+    Testing()
+  }
 }
