@@ -2,17 +2,15 @@ package main
 
 import (
   "testing"
+  "encoding/hex"
 )
 
 type MemDatabase struct {
   db      map[string][]byte
-  trie    *Trie
 }
 
 func NewMemDatabase() (*MemDatabase, error) {
   db := &MemDatabase{db: make(map[string][]byte)}
-
-  db.trie = NewTrie(db)
 
   return db, nil
 }
@@ -27,12 +25,13 @@ func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 
 func TestTriePut(t *testing.T) {
   db, err := NewMemDatabase()
+  trie := NewTrie(db, "")
 
   if err != nil {
     t.Error("Error starting db")
   }
 
-  key := db.trie.Put([]byte("testing node"))
+  key := trie.Put([]byte("testing node"))
 
   data, err := db.Get(key)
   if err != nil {
@@ -51,11 +50,20 @@ func TestTriePut(t *testing.T) {
 
 func TestTrieUpdate(t *testing.T) {
   db, err := NewMemDatabase()
+  trie := NewTrie(db, "")
 
   if err != nil {
     t.Error("Error starting db")
   }
 
-  db.trie.Update("test", "test")
+
+  trie.Update("doe", "reindeer")
+  trie.Update("dog", "puppy")
+  trie.Update("dogglesworth", "cat")
+  root := hex.EncodeToString([]byte(trie.root))
+  req := "e378927bfc1bd4f01a2e8d9f59bd18db8a208bb493ac0b00f93ce51d4d2af76c" 
+  if root != req {
+    t.Error("trie.root do not match, expected", req, "got", root)
+  }
 }
 
