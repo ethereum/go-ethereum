@@ -70,7 +70,7 @@ class Trie():
         else: return self.__delete_state(node,key)
 
     def __insert_state(self,node,key,value):
-        if self.debug: print 'ink', node.encode('hex'), key
+        if self.debug: print 'ins', node.encode('hex'), key
         if len(key) == 0:
             return value
         else:
@@ -141,12 +141,14 @@ class Trie():
                     if newnode[i]:
                         if onlynode == -1: onlynode = i
                         else: onlynode = -2
-                if onlynode >= 0:
+                if onlynode == 16:
+                    newnode2 = [ hexarraykey_to_bin([16]), newnode[onlynode] ]
+                elif onlynode >= 0:
                     childnode = rlp.decode(self.db.get(newnode[onlynode]))
                     if not childnode:
                         raise Exception("?????")
                     if len(childnode) == 17:
-                        newnode2 = [ key[0], newnode[onlynode] ]
+                        newnode2 = [ hexarraykey_to_bin([onlynode]), newnode[onlynode] ]
                     elif len(childnode) == 2:
                         newkey = [onlynode] + bin_to_hexarraykey(childnode[0])
                         newnode2 = [ hexarraykey_to_bin(newkey), childnode[1] ]
@@ -210,13 +212,13 @@ class Trie():
         return o
 
     def get(self,key):
-        key2 = ['0123456789abcdef'.find(x) for x in key.encode('hex')] + [16]
+        key2 = ['0123456789abcdef'.find(x) for x in str(key).encode('hex')] + [16]
         return self.__get_state(self.root,key2)
 
     def get_size(self): return self.__get_size(self.root)
 
     def update(self,key,value):
-        if not isinstance(key,str) or not isinstance(value,str):
+        if not isinstance(key,(str,unicode)) or not isinstance(value,(str,unicode)):
             raise Exception("Key and value must be strings")
-        key2 = ['0123456789abcdef'.find(x) for x in key.encode('hex')] + [16]
-        self.root = self.__update_state(self.root,key2,value)
+        key2 = ['0123456789abcdef'.find(x) for x in str(key).encode('hex')] + [16]
+        self.root = self.__update_state(self.root,key2,str(value))

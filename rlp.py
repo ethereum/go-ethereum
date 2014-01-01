@@ -63,19 +63,19 @@ def encode(s):
             raise Exception("can't handle negative ints")
         elif s >= 0 and s < 24:
             return chr(s)
-        elif s <= 2**256:
+        elif s < 2**256:
             b = to_binary(s)
             return chr(len(b) + 23) + b
         else:
             b = to_binary(s)
             b2 = to_binary(len(b))
             return chr(len(b2) + 55) + b2 + b
-    elif isinstance(s,str):
+    elif isinstance(s,(str,unicode)):
         if len(s) < 56:
-            return chr(len(s) + 64) + s
+            return chr(len(s) + 64) + str(s)
         else:
             b2 = to_binary(len(s))
-            return chr(len(b2) + 119) + b2 + s
+            return chr(len(b2) + 119) + b2 + str(s)
     elif isinstance(s,list):
         if len(s) < 56:
             return chr(len(s) + 128) + ''.join([encode(x) for x in s])
