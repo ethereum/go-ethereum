@@ -27,18 +27,6 @@ func TestCompactEncode(t *testing.T) {
   }
 }
 
-// Helper function for comparing slices
-func CompareIntSlice(a, b []int) bool {
-  if len(a) != len(b) {
-    return false
-  }
-  for i, v := range a {
-    if v != b[i] {
-      return false
-    }
-  }
-  return true
-}
 
 func TestCompactHexDecode(t *testing.T) {
   exp := []int{7, 6, 6, 5, 7, 2, 6, 2, 16}
