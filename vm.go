@@ -1,16 +1,18 @@
 package main
 
 import (
-  "math"
+  _"math"
   "math/big"
   "fmt"
-  "strconv"
+  _"strconv"
   _ "encoding/hex"
 )
 
 // Op codes
 const (
   oSTOP       int = 0x00
+  oPSH        int = 0x30
+  /*
   oADD        int = 0x10
   oSUB        int = 0x11
   oMUL        int = 0x12
@@ -46,6 +48,7 @@ const (
   oDATAN      int = 0x81
   oMYADDRESS  int = 0x90
   oSUICIDE    int = 0xff
+  */
 )
 
 type OpType int
@@ -57,6 +60,66 @@ const (
 )
 type TxCallback func(opType OpType) bool
 
+// Simple push/pop stack mechanism
+type Stack struct {
+  data []string
+}
+func NewStack() *Stack {
+  return &Stack{}
+}
+func (st *Stack) Pop() string {
+  s := len(st.data)
+
+  str := st.data[s]
+  st.data = st.data[:s-1]
+
+  return str
+}
+
+func (st *Stack) Push(d string) {
+  st.data = append(st.data, d)
+}
+
+type Vm struct {
+  // Stack
+  stack *Stack
+}
+
+func NewVm() *Vm {
+  return &Vm{
+    stack: NewStack(),
+  }
+}
+
+func (vm *Vm) RunTransaction(tx *Transaction, block *Block, cb TxCallback) {
+  // Instruction pointer
+  iptr := 0
+
+  // Index pointer for the memory
+  memIndex := 0
+
+  fmt.Printf("#   op   arg\n")
+  for iptr < len(tx.data) {
+    memIndex++
+    // The base big int for all calculations. Use this for any results.
+    base := new(big.Int)
+    base.SetString("0",0) // so it doesn't whine about it
+    // XXX Should Instr return big int slice instead of string slice?
+    op, args, _ := Instr(tx.data[iptr])
+
+    if Debug {
+      fmt.Printf("%-3d %-4d %v\n", iptr, op, args)
+    }
+
+    switch op {
+    case oPSH:
+    }
+    // Increment instruction pointer
+    iptr++
+  }
+}
+
+/*
 type Vm struct {
   // Memory stack
   stack map[string]string
@@ -183,3 +246,4 @@ out:
     }
   }
 }
+*/

@@ -3,6 +3,7 @@ package main
 import (
   "testing"
   "encoding/hex"
+  _"fmt"
 )
 
 func TestTriePut(t *testing.T) {
@@ -41,6 +42,13 @@ func TestTrieUpdate(t *testing.T) {
 
   trie.Update("doe", "reindeer")
   trie.Update("dog", "puppy")
+  /*
+  data, _ := db.Get([]byte(trie.root))
+  data, _ = db.Get([]byte(DecodeNode(data)[1]))
+  data, _ = db.Get([]byte(DecodeNode(data)[7]))
+  PrintSlice(DecodeNode(data))
+  */
+
   trie.Update("dogglesworth", "cat")
   root := hex.EncodeToString([]byte(trie.root))
   req := "e378927bfc1bd4f01a2e8d9f59bd18db8a208bb493ac0b00f93ce51d4d2af76c" 

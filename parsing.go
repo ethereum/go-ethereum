@@ -11,6 +11,8 @@ import (
 // Op codes
 var OpCodes = map[string]string{
   "STOP":       "0",
+  "PSH":        "30",  // 0x30
+  /*
   "ADD":        "16",  // 0x10
   "SUB":        "17",  // 0x11
   "MUL":        "18",  // 0x12
@@ -48,6 +50,7 @@ var OpCodes = map[string]string{
   "BLKHASH":    "145", // 0x91
   "COINBASE":   "146", // 0x92
   "SUICIDE":    "255", // 0xff
+  */
 }
 
 

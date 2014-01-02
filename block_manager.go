@@ -33,7 +33,7 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 
   // Process each transaction/contract
   for _, tx := range block.transactions {
-    go bm.ProcessTransaction(tx, lockChan)
+    go bm.ProcessTransaction(tx, block, lockChan)
   }
 
   // Wait for all Tx to finish processing
@@ -44,9 +44,9 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
   return nil
 }
 
-func (bm *BlockManager) ProcessTransaction(tx *Transaction, lockChan chan bool) {
+func (bm *BlockManager) ProcessTransaction(tx *Transaction, block *Block, lockChan chan bool) {
   if tx.recipient == "\x00" {
-    bm.vm.RunTransaction(tx, func(opType OpType) bool {
+    bm.vm.RunTransaction(tx, block, func(opType OpType) bool {
       // TODO calculate fees
 
       return true // Continue
