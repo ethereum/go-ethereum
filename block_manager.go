@@ -45,13 +45,11 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 }
 
 func (bm *BlockManager) ProcessTransaction(tx *Transaction, block *Block, lockChan chan bool) {
-  if tx.recipient == "\x00" {
-    bm.vm.RunTransaction(tx, block, func(opType OpType) bool {
-      // TODO calculate fees
+  bm.vm.RunTransaction(tx, block, func(opType OpType) bool {
+    // TODO calculate fees
 
-      return true // Continue
-    })
-  }
+    return true // Continue
+  })
 
   // Broadcast we're done
   lockChan <- true

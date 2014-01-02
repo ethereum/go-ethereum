@@ -3,8 +3,8 @@ package main
 import (
   "math/big"
   "fmt"
-  "encoding/hex"
-  "crypto/sha256"
+  _"encoding/hex"
+  _"crypto/sha256"
   _ "bytes"
 )
 
@@ -63,11 +63,12 @@ func NewTransaction(to string, value uint32, data []string) *Transaction {
     tx.data[i] = instr
   }
 
-  b:= []byte(tx.MarshalRlp())
-  hash := sha256.Sum256(b)
-  tx.addr = hex.EncodeToString(hash[0:19])
 
   return &tx
+}
+
+func (tx *Transaction) Hash() []byte {
+  return Sha256Bin(tx.MarshalRlp())
 }
 
 func (tx *Transaction) MarshalRlp() []byte {

@@ -48,7 +48,7 @@ type Trie struct {
 }
 
 func NewTrie(db Database, root string) *Trie {
-  return &Trie{db: db, root: ""}
+  return &Trie{db: db, root: root}
 }
 
 /*

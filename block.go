@@ -4,6 +4,7 @@ import (
   _"fmt"
   "time"
   _"bytes"
+  _"encoding/hex"
 )
 
 type Block struct {
@@ -63,11 +64,34 @@ func CreateBlock(root string, num int, prevHash string, base string, difficulty 
     extra: extra,
   }
   block.state = NewTrie(Db, root)
+
   for _, tx := range txes {
-    block.state.Update(tx.recipient, string(tx.MarshalRlp()))
+    // Create contract if there's no recipient
+    if tx.recipient == "" {
+      addr := tx.Hash()
+
+      contract := NewContract(tx.value, []byte(""))
+      block.state.Update(string(addr), string(contract.MarshalRlp()))
+      for i, val := range tx.data {
+        contract.state.Update(string(Encode(i)), val)
+      }
+      block.UpdateContract(addr, contract)
+    }
   }
 
   return block
+}
+
+func (block *Block) GetContract(addr []byte) *Contract {
+  data := block.state.Get(string(addr))
+  contract := &Contract{}
+  contract.UnmarshalRlp([]byte(data))
+
+  return contract
+}
+
+func (block *Block) UpdateContract(addr []byte, contract *Contract) {
+  block.state.Update(string(addr), string(contract.MarshalRlp()))
 }
 
 func (block *Block) Update() {
