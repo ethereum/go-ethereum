@@ -62,7 +62,10 @@ func (bm *BlockManager) ProcessContract(tx *Transaction, block *Block, lockChan 
 
   // Process contract
   bm.vm.ProcContract(tx, block, func(opType OpType) bool {
-    // TODO calculate fees
+    // TODO turn on once big ints are in place
+    //if !block.PayFee(tx.Hash(), StepFee.Uint64()) {
+    //  return false
+    //}
 
     return true // Continue
   })
