@@ -11,7 +11,7 @@
 package main
 
 import (
-  _"fmt"
+  "fmt"
 )
 
 type BlockManager struct {
@@ -33,7 +33,13 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 
   // Process each transaction/contract
   for _, tx := range block.transactions {
-    go bm.ProcessTransaction(tx, block, lockChan)
+    // If there's no recipient, it's a contract
+    if tx.recipient == "" {
+      go bm.ProcessContract(tx, block, lockChan)
+    } else {
+      // "finish" tx which isn't a contract
+      lockChan <- true
+    }
   }
 
   // Wait for all Tx to finish processing
@@ -44,8 +50,18 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
   return nil
 }
 
-func (bm *BlockManager) ProcessTransaction(tx *Transaction, block *Block, lockChan chan bool) {
-  bm.vm.RunTransaction(tx, block, func(opType OpType) bool {
+func (bm *BlockManager) ProcessContract(tx *Transaction, block *Block, lockChan chan bool) {
+  // Recovering function in case the VM had any errors
+  defer func() {
+    if r := recover(); r != nil {
+      fmt.Println("Recovered from VM execution with err =", r)
+      // Let the channel know where done even though it failed (so the execution may resume normally)
+      lockChan <- true
+    }
+  }()
+
+  // Process contract
+  bm.vm.ProcContract(tx, block, func(opType OpType) bool {
     // TODO calculate fees
 
     return true // Continue
