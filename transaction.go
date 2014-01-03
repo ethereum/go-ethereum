@@ -34,9 +34,10 @@ var Period3Reward *big.Int = new(big.Int)
 var Period4Reward *big.Int = new(big.Int)
 
 type Transaction struct {
+  nonce       string
   sender      string
   recipient   string
-  value       uint32
+  value       uint64
   fee         uint32
   data        []string
   memory      []int
@@ -47,8 +48,9 @@ type Transaction struct {
   addr        string
 }
 
-func NewTransaction(to string, value uint32, data []string) *Transaction {
+func NewTransaction(to string, value uint64, data []string) *Transaction {
   tx := Transaction{sender: "1234567890", recipient: to, value: value}
+  tx.nonce = "0"
   tx.fee = 0//uint32((ContractFee + MemoryFee * float32(len(tx.data))) * 1e8)
   tx.lastTx = "0"
 
@@ -102,16 +104,16 @@ func (tx *Transaction) UnmarshalRlp(data []byte) {
 
     // If only I knew of a better way.
     if value, ok := slice[3].(uint8); ok {
-      tx.value = uint32(value)
+      tx.value = uint64(value)
     }
     if value, ok := slice[3].(uint16); ok {
-      tx.value = uint32(value)
+      tx.value = uint64(value)
     }
     if value, ok := slice[3].(uint32); ok {
-      tx.value = uint32(value)
+      tx.value = uint64(value)
     }
     if value, ok := slice[3].(uint64); ok {
-      tx.value = uint32(value)
+      tx.value = uint64(value)
     }
     if fee, ok := slice[4].(uint8); ok {
       tx.fee = uint32(fee)
@@ -146,7 +148,8 @@ func InitFees() {
   b80 := new(big.Int)
   b80.Exp(big.NewInt(2), big.NewInt(80), big.NewInt(0))
 
-  StepFee.Div(b60, big.NewInt(64))
+  StepFee.Exp(big.NewInt(10), big.NewInt(16), big.NewInt(0))
+  //StepFee.Div(b60, big.NewInt(64))
   //fmt.Println("StepFee:", StepFee)
 
   TxFee.Exp(big.NewInt(2), big.NewInt(64), big.NewInt(0))
