@@ -57,7 +57,7 @@ func NewTransaction(to string, value uint32, data []string) *Transaction {
   for i, val := range data {
     instr, err := CompileInstr(val)
     if err != nil {
-      fmt.Printf("compile error:%d %v", i+1, err)
+      fmt.Printf("compile error:%d %v\n", i+1, err)
     }
 
     tx.data[i] = instr
