@@ -1,7 +1,7 @@
 package main
 
 import (
-  "fmt"
+  _"fmt"
   "testing"
 )
 
@@ -10,17 +10,23 @@ func TestVm(t *testing.T) {
   db, _ := NewMemDatabase()
   Db = db
 
-  tx := NewTransaction("", 20, []string{
-    "PSH 10",
+  ctrct := NewTransaction("", 20, []string{
+    "PUSH",
+    "1a2f2e",
+    "PUSH",
+    "hallo",
+    "POP",   // POP hallo
+    "PUSH",
+    "3",
+    "LOAD",  // Load hallo back on the stack
+    "STOP",
   })
+  tx := NewTransaction("1e8a42ea8cce13", 100, []string{})
 
-  block := CreateBlock("", 0, "", "", 0, 0, "", []*Transaction{tx})
+  block := CreateBlock("", 0, "", "", 0, 0, "", []*Transaction{ctrct, tx})
   db.Put(block.Hash(), block.MarshalRlp())
 
   bm := NewBlockManager()
   bm.ProcessBlock( block )
-  contract := block.GetContract(tx.Hash())
-  fmt.Println(contract)
-  fmt.Println("it is", contract.state.Get(string(Encode(0))))
 }
 

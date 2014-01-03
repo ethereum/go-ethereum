@@ -6,12 +6,15 @@ import (
   "fmt"
   _"strconv"
   _ "encoding/hex"
+  "strconv"
 )
 
 // Op codes
 const (
   oSTOP       int = 0x00
-  oPSH        int = 0x30
+  oPUSH       int = 0x30
+  oPOP        int = 0x31
+  oLOAD       int = 0x36
   /*
   oADD        int = 0x10
   oSUB        int = 0x11
@@ -70,7 +73,7 @@ func NewStack() *Stack {
 func (st *Stack) Pop() string {
   s := len(st.data)
 
-  str := st.data[s]
+  str := st.data[s-1]
   st.data = st.data[:s-1]
 
   return str
@@ -91,30 +94,45 @@ func NewVm() *Vm {
   }
 }
 
-func (vm *Vm) RunTransaction(tx *Transaction, block *Block, cb TxCallback) {
+func (vm *Vm) ProcContract(tx *Transaction, block *Block, cb TxCallback) {
   // Instruction pointer
   iptr := 0
 
-  // Index pointer for the memory
-  memIndex := 0
+  contract := block.GetContract(tx.Hash())
+  if contract == nil {
+    fmt.Println("Contract not found")
+    return
+  }
 
   fmt.Printf("#   op   arg\n")
-  for iptr < len(tx.data) {
-    memIndex++
+out:
+  for {
     // The base big int for all calculations. Use this for any results.
     base := new(big.Int)
     base.SetString("0",0) // so it doesn't whine about it
     // XXX Should Instr return big int slice instead of string slice?
-    op, args, _ := Instr(tx.data[iptr])
+    // Get the next instruction from the contract
+    op, args, _ := Instr(contract.state.Get(string(Encode(uint32(iptr)))))
 
     if Debug {
       fmt.Printf("%-3d %-4d %v\n", iptr, op, args)
     }
 
     switch op {
-    case oPSH:
+    case oPUSH:
+      // Get the next entry and pushes the value on the stack
+      iptr++
+      vm.stack.Push(contract.state.Get(string(Encode(uint32(iptr)))))
+    case oPOP:
+      // Pop current value of the stack
+      vm.stack.Pop()
+    case oLOAD:
+      // Load instruction X on the stack
+      i, _ := strconv.Atoi(vm.stack.Pop())
+      vm.stack.Push(contract.state.Get(string(Encode(uint32(i)))))
+    case oSTOP:
+      break out
     }
-    // Increment instruction pointer
     iptr++
   }
 }
