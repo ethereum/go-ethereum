@@ -34,7 +34,7 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
   // Process each transaction/contract
   for _, tx := range block.transactions {
     // If there's no recipient, it's a contract
-    if tx.recipient == "" {
+    if tx.IsContract() {
       go bm.ProcessContract(tx, block, lockChan)
     } else {
       // "finish" tx which isn't a contract
