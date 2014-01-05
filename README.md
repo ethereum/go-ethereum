@@ -1,3 +1,6 @@
+[![Build
+Status](https://travis-ci.org/ethereum/go-ethereum.png?branch=master)](https://travis-ci.org/ethereum/go-ethereum)
+
 This is the Go implementation of the Ethereum protocol. It's far from being finished.
 
 ```go get https://github.com/ethereum/go-ethereum```
