@@ -6,13 +6,13 @@ import (
 )
 
 func TestCompile(t *testing.T) {
-  instr, err := CompileInstr("SET 10 1")
+  instr, err := CompileInstr("PUSH")
 
   if err != nil {
     t.Error("Failed compiling instruction")
   }
 
-  calc := (67 + 10 * 256 + 1 * int64(math.Pow(256,2)))
+  calc := (48 + 0 * 256 + 0 * int64(math.Pow(256,2)))
   if Big(instr).Int64() != calc {
     t.Error("Expected", calc, ", got:", instr)
   }

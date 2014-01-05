@@ -2,7 +2,7 @@ package main
 
 import (
   "math/big"
-  "fmt"
+  _"fmt"
   "github.com/obscuren/secp256k1-go"
   _"encoding/hex"
   _"crypto/sha256"
@@ -140,7 +140,6 @@ func (tx *Transaction) MarshalRlp() []byte {
 func (tx *Transaction) UnmarshalRlp(data []byte) {
   t, _ := Decode(data,0)
   if slice, ok := t.([]interface{}); ok {
-    fmt.Printf("NONCE %T\n", slice[3])
     if nonce, ok := slice[0].(uint8); ok {
       tx.nonce = string(nonce)
     }
@@ -186,7 +185,6 @@ func (tx *Transaction) UnmarshalRlp(data []byte) {
     }
 
     // vrs
-    fmt.Printf("v %T\n", slice[5])
     if v, ok := slice[5].(uint8); ok {
       tx.v = uint32(v)
     }
