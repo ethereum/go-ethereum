@@ -3,6 +3,7 @@ package main
 import (
   "math/big"
   "fmt"
+  "github.com/obscuren/secp256k1-go"
   _"encoding/hex"
   _"crypto/sha256"
   _ "bytes"
@@ -71,6 +72,28 @@ func NewTransaction(to string, value uint64, data []string) *Transaction {
 
 func (tx *Transaction) Hash() []byte {
   return Sha256Bin(tx.MarshalRlp())
+}
+
+func (tx *Transaction) IsContract() bool {
+  return tx.recipient == ""
+}
+
+func (tx *Transaction) Signature() []byte {
+  hash := Sha256Bin(tx.MarshalRlp())
+  sec  := Sha256Bin([]byte("myprivkey"))
+
+  sig, _ := secp256k1.Sign(hash, sec)
+
+  return sig
+}
+
+func (tx *Transaction) PublicKey() []byte {
+  hash := Sha256Bin(tx.MarshalRlp())
+  sig  := tx.Signature()
+
+  pubkey, _ := secp256k1.RecoverPubkey(hash, sig)
+
+  return pubkey
 }
 
 func (tx *Transaction) MarshalRlp() []byte {
