@@ -5,7 +5,7 @@
       "dog": "puppy",
       "dogglesworth": "cat"
     },
-    "e378927bfc1bd4f01a2e8d9f59bd18db8a208bb493ac0b00f93ce51d4d2af76c"
+    "d85f9267d7ed5767fb1b48defa8eb20a1c007a87a07588135a74b40b55de2e67"
   ],
   [
     {
@@ -14,6 +14,6 @@
       "doge": "coin", 
       "dog": "puppy"
     }, 
-    "6529010d2a2f633bfe03e7a3a3503e5a5bccd1ca49989ac0fb195fd022c6cc93"
+    "e08ec6d775f63c5e30c2031aa9489ad6bc4aeb77eea6373ba69d028323a7e3b3"
   ]
 ]
