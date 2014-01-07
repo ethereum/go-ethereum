@@ -58,22 +58,26 @@ scriptcode_map = {
 }
 
 params = {
-    'stepfee': 10**16,
-    'txfee': 2**64,
-    'newcontractfee': 2**64,
-    'memoryfee': 2**64 / 4,
-    'datafee': 2**64 / 16,
-    'cryptofee': 2**64 / 16,
-    'extrofee': 2**64 / 16,
+    'stepfee': 1,
+    'txfee': 100,
+    'newcontractfee': 100,
+    'memoryfee': 20,
+    'datafee': 4,
+    'cryptofee': 10,
+    'extrofee': 10,
     'blocktime': 60,
-    'period_1_reward': 2**80 * 1024,
+    'period_1_reward': 10**18 * 800,
     'period_1_duration': 57600,
-    'period_2_reward': 2**80 * 512,
+    'period_2_reward': 10**18 * 400,
     'period_2_duration': 57600,
-    'period_3_reward': 2**80 * 256,
+    'period_3_reward': 10**18 * 100,
     'period_3_duration': 57600,
-    'period_4_reward': 2**80 * 128
+    'period_4_reward': 10**18 * 50
 }
+
+def getfee(block,t):
+    if t in ['stepfee','txfee','newcontractfee','memoryfee','datafee','cryptofee','extrofee']:
+        return int(10**24 / int(block.difficulty ** 0.5)) * params[t]
 
 def process_transactions(block,transactions):
     while len(transactions) > 0:
@@ -85,9 +89,9 @@ def process_transactions(block,transactions):
         tdata = rlp.decode(block.state.get(tx.to)) or [0,0,0]
         # Calculate fee
         if tx.to == '\x00'*20:
-            fee = params['newcontractfee'] + len(tx.data) * params['memoryfee']
+            fee = getfee('newcontractfee') + len(tx.data) * getfee('memoryfee')
         else:
-            fee = params['txfee']
+            fee = getfee('txfee')
         # Insufficient fee, do nothing
         if fee > tx.fee:
             sys.stderr.write("Insufficient fee\n")
@@ -143,11 +147,10 @@ def eval(block,transactions,timestamp,coinbase):
         reward = params['period_3_reward']
     else:
         reward = params['period_4_reward']
-    print reward
     miner_state[1] += reward + block.reward
     for uncle in block.uncles:
         sib_miner_state = rlp_decode(block.state.get(uncle[3]))
-        sib_miner_state[1] = encode(decode(sib_miner_state[1],256)+reward*7/8,256)
+        sib_miner_state[1] += reward*7/8
         block.state.update(uncle[3],sib_miner_state)
         miner_state[1] += reward/8
     block.state.update(block.coinbase,rlp.encode(miner_state))
@@ -190,18 +193,18 @@ def eval_contract(block,transaction_list,tx):
         nullfee = 0
         stepcounter += 1
         if stepcounter > 16:
-            minerfee += params["stepfee"]
+            minerfee += getfee("stepfee")
         c = scriptcode_map[code[0]]
         if c in ['STORE','LOAD']:
-            minerfee += params["datafee"]
+            minerfee += getfee("datafee")
         if c in ['EXTRO','BALANCE']:
-            minerfee += params["extrofee"]
+            minerfee += getfee("extrofee")
         if c in ['SHA256','RIPEMD-160','ECMUL','ECADD','ECSIGN','ECRECOVER']:
-            minerfee += params["cryptofee"]
+            minerfee += getfee("cryptofee")
         if c == 'STORE':
             existing = block.get_contract_state(address,code[2])
-            if reg[code[1]] != 0: nullfee += params["memoryfee"]
-            if existing: nullfee -= params["memoryfee"]
+            if reg[code[1]] != 0: nullfee += getfee("memoryfee")
+            if existing: nullfee -= getfee("memoryfee")
 
         # If we can't pay the fee, break, otherwise pay it
         if block.get_balance(address) < minerfee + nullfee:
@@ -356,7 +359,7 @@ def eval_contract(block,transaction_list,tx):
         elif code == 'SWAP':
             x,y = stack_pop(2)
             stack.extend([y,x])
-        elif code = 'SWAPN':
+        elif code == 'SWAPN':
             arr = stack_pop(contract.get(encode(index + 1,256,32)))
             arr.append(arr[0])
             arr.pop(0)
@@ -393,7 +396,7 @@ def eval_contract(block,transaction_list,tx):
                 transaction_list.insert(0,tx)
         elif code == 'SUICIDE':
             sz = contract.get_size()
-            negfee = -sz * params["memoryfee"]
+            negfee = -sz * getfee("memoryfee")
             toaddress = encode(stack_pop(1)[0],256,20)
             block.pay_fee(toaddress,negfee,False)
             contract.root = ''

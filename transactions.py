@@ -17,12 +17,12 @@ class Transaction():
     def parse(self,data):
         if re.match('^[0-9a-fA-F]*$',data):
             data = data.decode('hex')
-        o = rlp.unparse(data)
+        o = rlp.decode(data)
         self.nonce = o[0]
         self.to = o[1]
         self.value = o[2]
         self.fee = o[3]
-        self.data = rlp.decode(o[4])
+        self.data = o[4]
         self.v = o[5]
         self.r = o[6]
         self.s = o[7]
@@ -32,7 +32,7 @@ class Transaction():
         return self
 
     def sign(self,key):
-        rawhash = sha256(rlp.encode([self.to,self.value,self.fee,self.data]))
+        rawhash = sha256(rlp.encode([self.nonce,self.to,self.value,self.fee,self.data]))
         self.v,self.r,self.s = ecdsa_raw_sign(rawhash,key)
         self.sender = bin_sha256(privtopub(key)[1:])[-20:]
         return self
