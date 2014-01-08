@@ -1,21 +1,26 @@
-
-  // Blocks, blocks will have transactions.
-  // Transactions/contracts are updated in goroutines
-  // Each contract should send a message on a channel with usage statistics
-  // The statics can be used for fee calculation within the block update method
-  // Statistics{transaction, /* integers */ normal_ops, store_load, extro_balance, crypto, steps}
-  // The block updater will wait for all goroutines to be finished and update the block accordingly
-  // in one go and should use minimal IO overhead.
-  // The actual block updating will happen within a goroutine as well so normal operation may continue
-
 package main
 
 import (
   "fmt"
 )
 
+type BlockChain struct {
+  lastBlock *Block
+
+  genesisBlock *Block
+}
+
+func NewBlockChain() *BlockChain {
+  bc := &BlockChain{}
+  bc.genesisBlock = NewBlock( Encode(Genesis) )
+
+  return bc
+}
+
 type BlockManager struct {
   vm *Vm
+
+  blockChain *BlockChain
 }
 
 func NewBlockManager() *BlockManager {
@@ -26,6 +31,11 @@ func NewBlockManager() *BlockManager {
 
 // Process a block.
 func (bm *BlockManager) ProcessBlock(block *Block) error {
+  // TODO Validation (Or move to other part of the application)
+  if err := bm.ValidateBlock(block); err != nil {
+    return err
+  }
+
   // Get the tx count. Used to create enough channels to 'join' the go routines
   txCount  := len(block.transactions)
   // Locking channel. When it has been fully buffered this method will return
@@ -47,6 +57,10 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
     <- lockChan
   }
 
+  return nil
+}
+
+func (bm *BlockManager) ValidateBlock(block *Block) error {
   return nil
 }
 
