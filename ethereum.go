@@ -5,13 +5,16 @@ import (
   "os"
   "os/signal"
   "flag"
+  "runtime"
 )
 
 const Debug = true
 
 var StartDBQueryInterface bool
+var StartMining bool
 func Init() {
   flag.BoolVar(&StartDBQueryInterface, "db", false, "start db query interface")
+  flag.BoolVar(&StartMining, "mine", false, "start dagger mining")
 
   flag.Parse()
 }
@@ -24,7 +27,7 @@ func RegisterInterupts(s *Server) {
   signal.Notify(c, os.Interrupt)
   go func() {
     for sig := range c {
-      fmt.Println("Shutting down (%v) ... \n", sig)
+      fmt.Printf("Shutting down (%v) ... \n", sig)
 
       s.Stop()
     }
@@ -32,6 +35,8 @@ func RegisterInterupts(s *Server) {
 }
 
 func main() {
+  runtime.GOMAXPROCS(runtime.NumCPU())
+
   InitFees()
 
   Init()
@@ -39,7 +44,25 @@ func main() {
   if StartDBQueryInterface {
     dbInterface := NewDBInterface()
     dbInterface.Start()
+  } else if StartMining {
+    dagger := &Dagger{}
+    seed := dagger.Search(BigPow(2, 36))
+
+    fmt.Println("dagger res = ", seed)
   } else {
-    Testing()
+    fmt.Println("[DBUG]: Starting Ethereum")
+    server, err := NewServer()
+
+    if err != nil {
+      fmt.Println("error NewServer:", err)
+      return
+    }
+
+    RegisterInterupts(server)
+
+    server.Start()
+
+    // Wait for shutdown
+    server.WaitForShutdown()
   }
 }

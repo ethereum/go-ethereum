@@ -5,11 +5,15 @@ import (
   "time"
 )
 
+var Db *LDBDatabase
+
 type Server struct {
   // Channel for shutting down the server
   shutdownChan chan bool
   // DB interface
   db          *LDBDatabase
+  // Block manager for processing new blocks and managing the block chain
+  blockManager *BlockManager
   // Peers (NYI)
   peers       *list.List
 }
@@ -20,8 +24,11 @@ func NewServer() (*Server, error) {
     return nil, err
   }
 
+  Db = db
+
   server := &Server{
     shutdownChan:    make(chan bool),
+    blockManager:    NewBlockManager(),
     db:              db,
     peers:           list.New(),
   }
@@ -32,9 +39,11 @@ func NewServer() (*Server, error) {
 // Start the server
 func (s *Server) Start() {
   // For now this function just blocks the main thread
-  for {
-    time.Sleep( time.Second )
-  }
+  go func() {
+    for {
+      time.Sleep( time.Second )
+    }
+  }()
 }
 
 func (s *Server) Stop() {

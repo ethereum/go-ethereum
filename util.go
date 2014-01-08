@@ -6,6 +6,7 @@ import (
   "encoding/hex"
   _"fmt"
   _"math"
+  "github.com/obscuren/sha3"
 )
 
 func Uitoa(i uint32) string {
@@ -22,6 +23,14 @@ func Sha256Bin(data []byte) []byte {
   hash := sha256.Sum256(data)
 
   return hash[:]
+}
+
+func Sha3Bin(data []byte) []byte {
+  d := sha3.NewKeccak224()
+  d.Reset()
+  d.Write(data)
+
+  return d.Sum(nil)
 }
 
 // Helper function for comparing slices
@@ -47,4 +56,8 @@ func MatchingNibbleLength(a, b []int) int {
   //fmt.Println(a, b, i-1)
 
   return i
+}
+
+func Hex(d []byte) string {
+  return hex.EncodeToString(d)
 }

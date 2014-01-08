@@ -1,7 +1,8 @@
 package main
+/*
 
 import (
-  "fmt"
+  _"fmt"
 )
 
 // This will eventually go away
@@ -15,18 +16,17 @@ func Testing() {
 
   tx := NewTransaction("\x00", 20, []string{"PUSH"})
   txData := tx.MarshalRlp()
-  fmt.Printf("%q\n", txData)
+  //fmt.Printf("%q\n", txData)
 
   copyTx := &Transaction{}
   copyTx.UnmarshalRlp(txData)
-  fmt.Println(tx)
-  fmt.Println(copyTx)
+  //fmt.Println(tx)
+  //fmt.Println(copyTx)
 
   tx2 := NewTransaction("\x00", 20, []string{"SET 10 6", "LD 10 10"})
 
   blck := CreateTestBlock([]*Transaction{tx2, tx})
 
   bm.ProcessBlock( blck )
-
-  fmt.Println("GenesisBlock:", GenisisBlock, "hash", string(GenisisBlock.Hash()))
 }
+*/

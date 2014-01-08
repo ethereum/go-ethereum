@@ -11,29 +11,55 @@ import (
 
 // Op codes
 const (
-  oSTOP       int = 0x00
-  oADD        int = 0x01
-  oMUL        int = 0x02
-  oSUB        int = 0x03
-  oDIV        int = 0x04
-  oSDIV       int = 0x05
-  oMOD        int = 0x06
-  oSMOD       int = 0x07
-  oEXP        int = 0x08
-  oNEG        int = 0x09
-  oLT         int = 0x0a
-  oLE         int = 0x0b
-  oGT         int = 0x0c
-  oGE         int = 0x0d
-  oEQ         int = 0x0e
-  oNOT        int = 0x0f
-  oMYADDRESS  int = 0x10
-  oTXSENDER   int = 0x11
-
-
-  oPUSH       int = 0x30
-  oPOP        int = 0x31
-  oLOAD       int = 0x36
+  oSTOP             int = 0x00
+  oADD              int = 0x01
+  oMUL              int = 0x02
+  oSUB              int = 0x03
+  oDIV              int = 0x04
+  oSDIV             int = 0x05
+  oMOD              int = 0x06
+  oSMOD             int = 0x07
+  oEXP              int = 0x08
+  oNEG              int = 0x09
+  oLT               int = 0x0a
+  oLE               int = 0x0b
+  oGT               int = 0x0c
+  oGE               int = 0x0d
+  oEQ               int = 0x0e
+  oNOT              int = 0x0f
+  oMYADDRESS        int = 0x10
+  oTXSENDER         int = 0x11
+  oTXVALUE          int = 0x12
+  oTXFEE            int = 0x13
+  oTXDATAN          int = 0x14
+  oTXDATA           int = 0x15
+  oBLK_PREVHASH     int = 0x16
+  oBLK_COINBASE     int = 0x17
+  oBLK_TIMESTAMP    int = 0x18
+  oBLK_NUMBER       int = 0x19
+  oBLK_DIFFICULTY   int = 0x1a
+  oSHA256           int = 0x20
+  oRIPEMD160        int = 0x21
+  oECMUL            int = 0x22
+  oECADD            int = 0x23
+  oECSIGN           int = 0x24
+  oECRECOVER        int = 0x25
+  oECVALID          int = 0x26
+  oPUSH             int = 0x30
+  oPOP              int = 0x31
+  oDUP              int = 0x32
+  oDUPN             int = 0x33
+  oSWAP             int = 0x34
+  oSWAPN            int = 0x35
+  oLOAD             int = 0x36
+  oSTORE            int = 0x37
+  oJMP              int = 0x40
+  oJMPI             int = 0x41
+  oIND              int = 0x42
+  oEXTRO            int = 0x50
+  oBALANCE          int = 0x51
+  oMKTX             int = 0x60
+  oSUICIDE          int = 0xff
 )
 
 type OpType int

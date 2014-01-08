@@ -1,6 +1,7 @@
 package main
 
 import (
+  "fmt"
 )
 
 /*
@@ -22,4 +23,12 @@ func (db *MemDatabase) Put(key []byte, value []byte) {
 
 func (db *MemDatabase) Get(key []byte) ([]byte, error) {
   return db.db[string(key)], nil
+}
+
+func (db *MemDatabase) Print() {
+  for key, val := range db.db {
+    fmt.Printf("%x(%d):", key, len(key))
+    decoded := DecodeNode(val)
+    PrintSlice(decoded)
+  }
 }
