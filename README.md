@@ -1,13 +1,23 @@
-[![Build
-Status](https://travis-ci.org/ethereum/go-ethereum.png?branch=master)](https://travis-ci.org/ethereum/go-ethereum)
+Ethereum
+========
 
-This is the Go implementation of the Ethereum protocol. It's far from being finished.
+[![Build Status](https://travis-ci.org/ethereum/go-ethereum.png?branch=master)](https://travis-ci.org/ethereum/go-ethereum)
+
+Ethereum Go
+
+Deps
+====
+
+Ethereum Go makes use of a modified `secp256k1-go` and therefor GMP.
+
+Install
+=======
 
 ```go get https://github.com/ethereum/go-ethereum```
 
-** The Python reference implementation can be found at https://github.com/ethereum/pyethereum **
 
-## Command line options
+Command line options
+====================
 
 -db will launch the db query tool.
 
