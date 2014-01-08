@@ -45,7 +45,7 @@ class Trie():
         if self.debug: print 'nk',node.encode('hex'),key
         if len(key) == 0 or not node:
             return node
-        curnode = rlp.decode(self.__lookup(node))
+        curnode = self.lookup(node)
         if self.debug: print 'cn', curnode
         if not curnode:
             raise Exception("node not found in database")
@@ -59,18 +59,20 @@ class Trie():
         elif len(curnode) == 17:
             return self.__get_state(curnode[key[0]],key[1:])
 
-    def __put(self,node):
+    def __put(self,node,root=False):
         rlpnode = rlp.encode(node)
         if len(rlpnode) >= 32:
             h = sha3(rlpnode)
             self.db.put(h,rlpnode)
         else:
-            h = rlpnode
+            h = rlpnode if root else node
         return h
 
-    def __lookup(self,node):
-        if len(node) < 32: return node
-        else: return self.db.get(node)
+    def lookup(self,node):
+        if not isinstance(node,(str,unicode)): return node
+        elif len(node) == 0: return node
+        elif len(node) < 32: return rlp.decode(node)
+        else: return rlp.decode(self.db.get(node))
 
     def __update_state(self,node,key,value):
         if value != '': return self.__insert_state(node,key,value)
@@ -84,7 +86,7 @@ class Trie():
             if not node:
                 newnode = [ hexarraykey_to_bin(key), value ]
                 return self.__put(newnode)
-            curnode = rlp.decode(self.__lookup(node))
+            curnode = self.lookup(node)
             if self.debug: print 'icn', curnode
             if not curnode:
                 raise Exception("node not found in database")
@@ -121,7 +123,7 @@ class Trie():
         if len(key) == 0 or not node:
             return ''
         else:
-            curnode = rlp.decode(self.__lookup(node))
+            curnode = self.lookup(node)
             if not curnode:
                 raise Exception("node not found in database")
             if self.debug: print 'dcn', curnode
@@ -132,7 +134,7 @@ class Trie():
                     return ''
                 elif key[:len(k2)] == k2:
                     newhash = self.__delete_state(v2,key[len(k2):])
-                    childnode = rlp.decode(self.__lookup(newhash))
+                    childnode = self.lookup(newhash)
                     if len(childnode) == 2:
                         newkey = k2 + bin_to_hexarraykey(childnode[0])
                         newnode = [ hexarraykey_to_bin(newkey), childnode[1] ]
@@ -151,7 +153,7 @@ class Trie():
                 if onlynode == 16:
                     newnode2 = [ hexarraykey_to_bin([16]), newnode[onlynode] ]
                 elif onlynode >= 0:
-                    childnode = rlp.decode(self.__lookup(newnode[onlynode]))
+                    childnode = self.lookup(newnode[onlynode])
                     if not childnode:
                         raise Exception("?????")
                     if len(childnode) == 17:
@@ -165,7 +167,7 @@ class Trie():
 
     def __get_size(self,node):
         if not node: return 0
-        curnode = self.__lookup(node)
+        curnode = self.lookup(node)
         if not curnode:
             raise Exception("node not found in database")
         if len(curnode) == 2:
@@ -181,7 +183,7 @@ class Trie():
 
     def __to_dict(self,node):
         if not node: return {}
-        curnode = rlp.decode(self.__lookup(node))
+        curnode = self.lookup(node)
         if not curnode:
             raise Exception("node not found in database")
         if len(curnode) == 2:
