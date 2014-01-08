@@ -1,19 +1,19 @@
 [
-  [
-    {
+  {
+    "inputs": {
       "doe": "reindeer",
       "dog": "puppy",
       "dogglesworth": "cat"
     },
-    "d85f9267d7ed5767fb1b48defa8eb20a1c007a87a07588135a74b40b55de2e67"
-  ],
-  [
-    {
+    "expectation": "d85f9267d7ed5767fb1b48defa8eb20a1c007a87a07588135a74b40b55de2e67"
+  },
+  {
+    "inputs":{
       "do": "verb", 
       "horse": "stallion", 
       "doge": "coin", 
       "dog": "puppy"
     }, 
-    "e08ec6d775f63c5e30c2031aa9489ad6bc4aeb77eea6373ba69d028323a7e3b3"
-  ]
+    "expectation": "e08ec6d775f63c5e30c2031aa9489ad6bc4aeb77eea6373ba69d028323a7e3b3"
+  }
 ]
