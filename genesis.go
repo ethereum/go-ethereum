@@ -32,5 +32,3 @@ var GenisisHeader = []interface{}{
 }
 
 var Genesis = []interface{}{ GenisisHeader, []interface{}{}, []interface{}{} }
-
-var GenisisBlock = NewBlock( Encode(Genesis) )

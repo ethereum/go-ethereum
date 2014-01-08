@@ -2,7 +2,7 @@ package main
 
 import (
   "math/big"
-  _"fmt"
+  "fmt"
   "github.com/obscuren/secp256k1-go"
   _"encoding/hex"
   _"crypto/sha256"
@@ -64,7 +64,8 @@ func NewTransaction(to string, value uint64, data []string) *Transaction {
     tx.data[i] = instr
   }
 
-  tx.SetVRS()
+  tx.Sign([]byte("privkey"))
+  tx.Sender()
 
 
   return &tx
@@ -86,9 +87,9 @@ func (tx *Transaction) IsContract() bool {
   return tx.recipient == ""
 }
 
-func (tx *Transaction) Signature() []byte {
+func (tx *Transaction) Signature(key []byte) []byte {
   hash := tx.Hash()
-  sec  := Sha256Bin([]byte("myprivkey"))
+  sec  := Sha256Bin(key)
 
   sig, _ := secp256k1.Sign(hash, sec)
 
@@ -96,29 +97,33 @@ func (tx *Transaction) Signature() []byte {
 }
 
 func (tx *Transaction) PublicKey() []byte {
-  hash := Sha256Bin(tx.MarshalRlp())
-  sig  := tx.Signature()
+  hash := Sha256Bin(tx.Hash())
+  sig  := append(tx.r, tx.s...)
 
   pubkey, _ := secp256k1.RecoverPubkey(hash, sig)
 
   return pubkey
 }
 
-func (tx *Transaction) Address() []byte {
-  pubk := tx.PublicKey()
-  // 1 is the marker 04
-  key := pubk[1:65]
+func (tx *Transaction) Sender() []byte {
+  pubkey := tx.PublicKey()
 
-  return Sha256Bin(key)[12:]
+  // Validate the returned key.
+  // Return nil if public key isn't in full format (04 = full, 03 = compact)
+  if pubkey[0] != 4 {
+    return nil
+  }
+
+  return Sha256Bin(pubkey[1:65])[12:]
 }
 
-func (tx *Transaction) SetVRS() {
-  // Add 27 so we get either 27 or 28 (for positive and negative)
-  tx.v = uint32(tx.Signature()[64]) + 27
+func (tx *Transaction) Sign(privk []byte) {
+  sig  := tx.Signature(privk)
 
-  pubk := tx.PublicKey()[1:65]
-  tx.r = pubk[:32]
-  tx.s = pubk[32:64]
+  // Add 27 so we get either 27 or 28 (for positive and negative)
+  tx.v = uint32(sig[64]) + 27
+  tx.r = sig[:32]
+  tx.s = sig[32:65]
 }
 
 func (tx *Transaction) MarshalRlp() []byte {
@@ -138,72 +143,23 @@ func (tx *Transaction) MarshalRlp() []byte {
 }
 
 func (tx *Transaction) UnmarshalRlp(data []byte) {
-  t, _ := Decode(data,0)
-  if slice, ok := t.([]interface{}); ok {
-    if nonce, ok := slice[0].(uint8); ok {
-      tx.nonce = string(nonce)
-    }
+  decoder := NewRlpDecoder(data)
 
-    if recipient, ok := slice[1].([]byte); ok {
-      tx.recipient = string(recipient)
-    }
+  tx.nonce = decoder.Get(0).AsString()
+  tx.recipient = decoder.Get(0).AsString()
+  tx.value = decoder.Get(2).AsUint()
+  tx.fee = uint32(decoder.Get(3).AsUint())
 
-    // If only I knew of a better way.
-    if value, ok := slice[2].(uint8); ok {
-      tx.value = uint64(value)
-    }
-    if value, ok := slice[2].(uint16); ok {
-      tx.value = uint64(value)
-    }
-    if value, ok := slice[2].(uint32); ok {
-      tx.value = uint64(value)
-    }
-    if value, ok := slice[2].(uint64); ok {
-      tx.value = uint64(value)
-    }
-    if fee, ok := slice[3].(uint8); ok {
-      tx.fee = uint32(fee)
-    }
-    if fee, ok := slice[3].(uint16); ok {
-      tx.fee = uint32(fee)
-    }
-    if fee, ok := slice[3].(uint32); ok {
-      tx.fee = uint32(fee)
-    }
-    if fee, ok := slice[3].(uint64); ok {
-      tx.fee = uint32(fee)
-    }
-
-    // Encode the data/instructions
-    if data, ok := slice[4].([]interface{}); ok {
-      tx.data = make([]string, len(data))
-      for i, d := range data {
-        if instr, ok := d.([]byte); ok {
-          tx.data[i] = string(instr)
-        }
-      }
-    }
-
-    // vrs
-    if v, ok := slice[5].(uint8); ok {
-      tx.v = uint32(v)
-    }
-    if v, ok := slice[5].(uint16); ok {
-      tx.v = uint32(v)
-    }
-    if v, ok := slice[5].(uint32); ok {
-      tx.v = uint32(v)
-    }
-    if v, ok := slice[5].(uint64); ok {
-      tx.v = uint32(v)
-    }
-    if r, ok := slice[6].([]byte); ok {
-      tx.r = r
-    }
-    if s, ok := slice[7].([]byte); ok {
-      tx.s = s
-    }
+  d := decoder.Get(4)
+  tx.data = make([]string, d.Length())
+  fmt.Println(d.Get(0))
+  for i := 0; i < d.Length(); i++ {
+    tx.data[i] = d.Get(i).AsString()
   }
+
+  tx.v = uint32(decoder.Get(5).AsUint())
+  tx.r = decoder.Get(6).AsBytes()
+  tx.s = decoder.Get(7).AsBytes()
 }
 
 func InitFees() {

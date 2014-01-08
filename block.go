@@ -74,7 +74,6 @@ func CreateBlock(root string, num int, prevHash string, base string, difficulty 
       block.state.Update(string(addr), string(contract.MarshalRlp()))
       for i, val := range tx.data {
         contract.state.Update(string(NumberToBytes(uint64(i), 32)), val)
-        //contract.state.Update(string(Encode(uint32(i))), val)
       }
       block.UpdateContract(addr, contract)
     }
@@ -105,6 +104,7 @@ func (block *Block) PayFee(addr []byte, fee uint64) bool {
   // If we can't pay the fee return
   if contract == nil || contract.amount < fee {
     fmt.Println("Contract has insufficient funds", contract.amount, fee)
+
     return false
   }
 
@@ -112,7 +112,7 @@ func (block *Block) PayFee(addr []byte, fee uint64) bool {
   block.state.Update(string(addr), string(contract.MarshalRlp()))
 
   data := block.state.Get(string(block.coinbase))
-  println(data)
+
   // Get the ether (coinbase) and add the fee (gief fee to miner)
   ether := NewEtherFromData([]byte(data))
   ether.amount += fee
@@ -159,75 +159,24 @@ func (block *Block) MarshalRlp() []byte {
 }
 
 func (block *Block) UnmarshalRlp(data []byte) {
-  t, _ := Decode(data,0)
+  decoder := NewRlpDecoder(data)
 
-  // interface slice assertion
-  if slice, ok := t.([]interface{}); ok {
-    // interface slice assertion
-    if header, ok := slice[0].([]interface{}); ok {
-      if number, ok := header[0].(uint8); ok {
-        block.number = uint32(number)
-      }
+  header := decoder.Get(0)
+  block.number = uint32(header.Get(0).AsUint())
+  block.prevHash = header.Get(1).AsString()
+  // sha of uncles is header[2]
+  block.coinbase = header.Get(3).AsString()
+  block.state = NewTrie(Db, header.Get(4).AsString())
+  block.difficulty = uint32(header.Get(5).AsUint())
+  block.time = int64(header.Get(6).AsUint())
+  block.nonce = uint32(header.Get(7).AsUint())
+  block.extra = header.Get(8).AsString()
 
-      if prevHash, ok := header[1].([]uint8); ok {
-        block.prevHash = string(prevHash)
-      }
-
-      // sha of uncles is header[2]
-
-      if coinbase, ok := header[3].([]byte); ok {
-        block.coinbase = string(coinbase)
-      }
-
-      if state, ok := header[4].([]uint8); ok {
-        // XXX The database is currently a global variable defined in testing.go
-        // This will eventually go away and the database will grabbed from the public server
-        // interface
-        block.state = NewTrie(Db, string(state))
-      }
-
-      // sha is header[5]
-
-      // It's either 8bit or 64
-      if difficulty, ok := header[6].(uint8); ok {
-        block.difficulty = uint32(difficulty)
-      }
-      if difficulty, ok := header[6].(uint64); ok {
-        block.difficulty = uint32(difficulty)
-      }
-
-      // It's either 8bit or 64
-      if time, ok := header[7].(uint8); ok {
-        block.time = int64(time)
-      }
-      if time, ok := header[7].(uint64); ok {
-        block.time = int64(time)
-      }
-
-      if nonce, ok := header[8].(uint8); ok {
-        block.nonce = uint32(nonce)
-      }
-
-      if extra, ok := header[9].([]byte); ok {
-        block.extra = string(extra)
-      }
-    }
-
-    if txSlice, ok := slice[1].([]interface{}); ok {
-      // Create transaction slice equal to decoded tx interface slice
-      block.transactions = make([]*Transaction, len(txSlice))
-
-      // Unmarshal transactions
-      for i, tx := range txSlice {
-        if t, ok := tx.([]byte); ok {
-          tx := &Transaction{}
-          // Use the unmarshaled data to unmarshal the transaction
-          // t is still decoded.
-          tx.UnmarshalRlp(t)
-
-          block.transactions[i] = tx
-        }
-      }
-    }
+  txes := decoder.Get(1)
+  block.transactions = make([]*Transaction, txes.Length())
+  for i := 0; i < txes.Length(); i++ {
+    tx := &Transaction{}
+    tx.UnmarshalRlp(txes.Get(i).AsBytes())
+    block.transactions[i] = tx
   }
 }

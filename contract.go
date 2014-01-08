@@ -22,27 +22,11 @@ func (c *Contract) MarshalRlp() []byte {
 }
 
 func (c *Contract) UnmarshalRlp(data []byte) {
-  t, _ := Decode(data, 0)
+  decoder := NewRlpDecoder(data)
 
-  if slice, ok := t.([]interface{}); ok {
-    if t, ok := slice[0].(uint8); ok {
-      c.t = uint32(t)
-    }
-
-    if amount, ok := slice[1].(uint8); ok {
-      c.amount = uint64(amount)
-    } else if amount, ok := slice[1].(uint16); ok {
-      c.amount = uint64(amount)
-    } else if amount, ok := slice[1].(uint32); ok {
-      c.amount = uint64(amount)
-    } else if amount, ok := slice[1].(uint64); ok {
-      c.amount = amount
-    }
-
-    if root, ok := slice[2].([]uint8); ok {
-      c.state = NewTrie(Db, string(root))
-    }
-  }
+  c.t = uint32(decoder.Get(0).AsUint())
+  c.amount = decoder.Get(1).AsUint()
+  c.state = NewTrie(Db, decoder.Get(2).AsString())
 }
 
 type Ether struct {
