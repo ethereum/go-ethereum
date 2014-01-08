@@ -14,6 +14,6 @@
       "doge": "coin", 
       "dog": "puppy"
     }, 
-    "expectation": "e08ec6d775f63c5e30c2031aa9489ad6bc4aeb77eea6373ba69d028323a7e3b3"
+    "expectation": "cf7d318935b52db6e23d8c1f5e6b7e62f3606d4ed13783f4fdbd6e67a2085d04"
   }
 ]
