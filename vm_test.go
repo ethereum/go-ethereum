@@ -1,5 +1,6 @@
 package main
 
+/*
 import (
   _"fmt"
   "testing"
@@ -72,4 +73,4 @@ func TestVm(t *testing.T) {
   bm := NewBlockManager()
   bm.ProcessBlock( block )
 }
-
+*/

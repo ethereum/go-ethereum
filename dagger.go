@@ -14,7 +14,33 @@ type Dagger struct {
   xn *big.Int
 }
 
+var Found bool
+func (dag *Dagger) Find(obj *big.Int, resChan chan int64) {
+  r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+  for i := 0; i < 1000; i++ {
+    rnd := r.Int63()
+
+    if dag.Eval(big.NewInt(rnd)).Cmp(obj) < 0 {
+      // Post back result on the channel
+      resChan <- rnd
+      // Notify other threads we've found a valid nonce
+      Found = true
+    } else {
+      fmt.Printf(".")
+    }
+
+    // Break out if found
+    if Found { break }
+  }
+
+  resChan <- 0
+}
+
 func (dag *Dagger) Search(diff *big.Int) *big.Int {
+  // TODO fix multi threading. Somehow it results in the wrong nonce
+  amountOfRoutines := 1
+
   dag.hash = big.NewInt(0)
 
   obj := BigPow(2, 256)
@@ -22,23 +48,25 @@ func (dag *Dagger) Search(diff *big.Int) *big.Int {
 
   fmt.Println("diff", diff, "< objective", obj)
 
-  r := rand.New(rand.NewSource(time.Now().UnixNano()))
-  rnd := big.NewInt(r.Int63())
-  fmt.Println("init rnd =", rnd)
+  Found =  false
+  resChan := make(chan int64, 3)
+  var res int64
 
-  for i := 0; i < 1000; i++ {
-    if dag.Eval(rnd).Cmp(obj) < 0 {
-      fmt.Println("Found result! nonce = ", rnd)
-
-      return rnd
-    } else {
-      fmt.Println("Not found :( nonce = ", rnd)
-    }
-
-    rnd = rnd.Add(rnd, big.NewInt(1))
+  for k := 0; k < amountOfRoutines; k++ {
+    go dag.Find(obj, resChan)
   }
 
-  return big.NewInt(0)
+  // Wait for each go routine to finish
+  for k := 0; k < amountOfRoutines; k++ {
+    // Get the result from the channel. 0 = quit
+    if r := <- resChan; r != 0 {
+      res = r
+    }
+  }
+
+  fmt.Println("\n")
+
+  return big.NewInt(res)
 }
 
 func DaggerVerify(hash, diff, nonce *big.Int) bool {

@@ -11,10 +11,10 @@ import (
 
 const Debug = true
 
-var StartDBQueryInterface bool
+var StartConsole bool
 var StartMining bool
 func Init() {
-  flag.BoolVar(&StartDBQueryInterface, "c", false, "console interface")
+  flag.BoolVar(&StartConsole, "c", false, "debug and testing console")
   flag.BoolVar(&StartMining, "mine", false, "start dagger mining")
 
   flag.Parse()
@@ -42,12 +42,13 @@ func main() {
 
   Init()
 
-  if StartDBQueryInterface {
-    dbInterface := NewDBInterface()
-    dbInterface.Start()
+  if StartConsole {
+    console := NewConsole()
+    console.Start()
   } else if StartMining {
     dagger := &Dagger{}
-    dagger.Search(BigPow(2, 36))
+    res := dagger.Search(BigPow(2, 36))
+    fmt.Println("nonce =", res)
   } else {
     fmt.Println("[DBUG]: Starting Ethereum")
     server, err := NewServer()
