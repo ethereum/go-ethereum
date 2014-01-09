@@ -64,7 +64,7 @@ func main() {
       go func() {
         for {
           res := dagger.Search(Big("0"), BigPow(2, 36))
-          server.Broadcast("foundblock", res.Bytes())
+          server.Broadcast("block", Encode(res.String()))
         }
       }()
     }
