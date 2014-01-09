@@ -32,6 +32,9 @@ func (i *DbInterface) ValidateInput(action string, argumentLength int) error {
   case action == "get" && argumentLength != 1:
     err = true
     expArgCount = 1
+  case action == "dag" && argumentLength != 2:
+    err = true
+    expArgCount = 2
   }
 
   if err {
@@ -74,6 +77,8 @@ func (i *DbInterface) ParseInput(input string) bool {
       fmt.Println(i.trie.root)
     case "print":
       i.db.Print()
+    case "dag":
+      fmt.Println(DaggerVerify(Big(tokens[1]), BigPow(2, 36), Big(tokens[2])))
     case "exit", "quit", "q":
       return false
     case "help":

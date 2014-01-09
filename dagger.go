@@ -6,6 +6,7 @@ import (
   "math/rand"
   "time"
   "github.com/obscuren/sha3"
+  "hash"
 )
 
 type Dagger struct {
@@ -27,14 +28,27 @@ func (dag *Dagger) Search(diff *big.Int) *big.Int {
 
   for i := 0; i < 1000; i++ {
     if dag.Eval(rnd).Cmp(obj) < 0 {
-      fmt.Println("Found result! i = ", i)
+      fmt.Println("Found result! nonce = ", rnd)
+
       return rnd
+    } else {
+      fmt.Println("Not found :( nonce = ", rnd)
     }
 
     rnd = rnd.Add(rnd, big.NewInt(1))
   }
 
   return big.NewInt(0)
+}
+
+func DaggerVerify(hash, diff, nonce *big.Int) bool {
+  dagger := &Dagger{}
+  dagger.hash = hash
+
+  obj := BigPow(2, 256)
+  obj = obj.Div(obj, diff)
+
+  return dagger.Eval(nonce).Cmp(obj) < 0
 }
 
 func (dag *Dagger) Node(L uint64, i uint64) *big.Int {
@@ -63,14 +77,19 @@ func (dag *Dagger) Node(L uint64, i uint64) *big.Int {
     d.Write(big.NewInt(int64(i)).Bytes())
     d.Write(big.NewInt(int64(k)).Bytes())
 
-    b.SetBytes(d.Sum(nil))
+    b.SetBytes(Sum(d))
     pk := b.Uint64() & ((1 << ((L - 1) * 3)) - 1)
     sha.Write(dag.Node(L - 1, pk).Bytes())
   }
 
-  ret.SetBytes(sha.Sum(nil))
+  ret.SetBytes(Sum(sha))
 
   return ret
+}
+
+func Sum(sha hash.Hash) []byte {
+  in := make([]byte, 32)
+  return sha.Sum(in)
 }
 
 func (dag *Dagger) Eval(N *big.Int) *big.Int {
@@ -81,10 +100,11 @@ func (dag *Dagger) Eval(N *big.Int) *big.Int {
   sha.Reset()
   ret := new(big.Int)
 
-  doneChan := make(chan bool, 3)
+  //doneChan := make(chan bool, 3)
 
   for k := 0; k < 4; k++ {
-    go func(_k int) {
+    //go func(_k int) {
+    _k := k
       d := sha3.NewKeccak224()
       b := new(big.Int)
 
@@ -94,17 +114,18 @@ func (dag *Dagger) Eval(N *big.Int) *big.Int {
       d.Write(N.Bytes())
       d.Write(big.NewInt(int64(_k)).Bytes())
 
-      b.SetBytes(d.Sum(nil))
+      b.SetBytes(Sum(d))
       pk := (b.Uint64() & 0x1ffffff)
 
       sha.Write(dag.Node(9, pk).Bytes())
-      doneChan <- true
-    }(k)
+      //doneChan <- true
+    //}(k)
   }
 
-  for k := 0; k < 4; k++ {
-    <- doneChan
-  }
+  //for k := 0; k < 4; k++ {
+  //  <- doneChan
+  //}
 
-  return ret.SetBytes(sha.Sum(nil))
+
+  return ret.SetBytes(Sum(sha))
 }

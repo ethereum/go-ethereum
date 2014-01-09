@@ -6,6 +6,7 @@ import (
   "os/signal"
   "flag"
   "runtime"
+  _"math/big"
 )
 
 const Debug = true
@@ -13,7 +14,7 @@ const Debug = true
 var StartDBQueryInterface bool
 var StartMining bool
 func Init() {
-  flag.BoolVar(&StartDBQueryInterface, "db", false, "start db query interface")
+  flag.BoolVar(&StartDBQueryInterface, "c", false, "console interface")
   flag.BoolVar(&StartMining, "mine", false, "start dagger mining")
 
   flag.Parse()
@@ -46,9 +47,7 @@ func main() {
     dbInterface.Start()
   } else if StartMining {
     dagger := &Dagger{}
-    seed := dagger.Search(BigPow(2, 36))
-
-    fmt.Println("dagger res = ", seed)
+    dagger.Search(BigPow(2, 36))
   } else {
     fmt.Println("[DBUG]: Starting Ethereum")
     server, err := NewServer()
