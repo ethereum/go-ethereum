@@ -11,6 +11,11 @@ type InMsg struct {
   data      []byte  // RLP encoded data
 }
 
+type OutMsg struct {
+  msgType   string
+  data      []byte
+}
+
 func ReadMessage(conn net.Conn) (*InMsg, error) {
   buff := make([]byte, 4069)
 
@@ -23,6 +28,7 @@ func ReadMessage(conn net.Conn) (*InMsg, error) {
   }
 
   // Read the header (MAX n)
+  // XXX The data specification is made up. This will change once more details have been released on the specification of the format
   decoder := NewRlpDecoder(buff[:n])
   t := decoder.Get(0).AsString()
   if t == "" {
@@ -30,10 +36,6 @@ func ReadMessage(conn net.Conn) (*InMsg, error) {
   }
 
   return &InMsg{msgType: t, data: decoder.Get(1).AsBytes()}, nil
-}
-
-type OutMsg struct {
-  data      []byte
 }
 
 type Peer struct {
@@ -54,22 +56,34 @@ func NewPeer(conn net.Conn, server *Server) *Peer {
 }
 
 // Outputs any RLP encoded data to the peer
-func (p *Peer) QueueMessage(data []byte) {
-  p.outputQueue <- OutMsg{data: data}
+func (p *Peer) QueueMessage(msgType string, data []byte) {
+  p.outputQueue <- OutMsg{msgType: msgType, data: data}
 }
 
 func (p *Peer) HandleOutbound() {
 out:
   for {
-    switch {
+    select {
+    case msg := <-p.outputQueue:
+      p.WriteMessage(msg)
+
     case <- p.quit:
       break out
     }
   }
 }
 
+func (p *Peer) WriteMessage(msg OutMsg) {
+  encoded := Encode([]interface{}{ msg.msgType, msg.data })
+  _, err := p.conn.Write(encoded)
+  if err != nil {
+    log.Println(err)
+    p.Stop()
+  }
+}
+
 func (p *Peer) HandleInbound() {
-  defer p.conn.Close()
+  defer p.Stop()
 
 out:
   for {
@@ -80,7 +94,9 @@ out:
       break out
     }
 
-    log.Println(msg)
+    // TODO
+    data, _ := Decode(msg.data, 0)
+    log.Printf("%s, %s\n", msg.msgType, data)
   }
 
   // Notify the out handler we're quiting
@@ -90,4 +106,10 @@ out:
 func (p *Peer) Start() {
   go p.HandleOutbound()
   go p.HandleInbound()
+}
+
+func (p *Peer) Stop() {
+  defer p.conn.Close()
+
+  p.quit <- true
 }

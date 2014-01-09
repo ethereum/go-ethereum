@@ -6,6 +6,7 @@ import (
   "os/signal"
   "flag"
   "runtime"
+  "log"
   _"math/big"
 )
 
@@ -45,22 +46,38 @@ func main() {
   if StartConsole {
     console := NewConsole()
     console.Start()
-  } else if StartMining {
-    dagger := &Dagger{}
-    res := dagger.Search(BigPow(2, 36))
-    fmt.Println("nonce =", res)
-  } else {
-    fmt.Println("[DBUG]: Starting Ethereum")
+  } else{
+    log.Println("Starting Ethereum")
     server, err := NewServer()
 
     if err != nil {
-      fmt.Println("error NewServer:", err)
+      log.Println(err)
       return
     }
 
     RegisterInterupts(server)
 
+    if StartMining {
+      log.Println("Mining started")
+      dagger := &Dagger{}
+
+      go func() {
+        for {
+          res := dagger.Search(Big("0"), BigPow(2, 36))
+          server.Broadcast("foundblock", res.Bytes())
+        }
+      }()
+    }
+
     server.Start()
+
+    err = server.ConnectToPeer("localhost:12345")
+    if err != nil {
+      log.Println(err)
+      server.Stop()
+      return
+    }
+
 
     // Wait for shutdown
     server.WaitForShutdown()

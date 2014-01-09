@@ -4,6 +4,7 @@ import (
   "container/list"
   "net"
   "log"
+  _"time"
 )
 
 var Db *LDBDatabase
@@ -38,7 +39,36 @@ func NewServer() (*Server, error) {
 }
 
 func (s *Server) AddPeer(conn net.Conn) {
-  s.peers.PushBack(NewPeer(conn, s))
+  peer := NewPeer(conn, s)
+  s.peers.PushBack(peer)
+  peer.Start()
+
+  log.Println("Peer connected ::", conn.RemoteAddr())
+}
+
+func (s *Server) ConnectToPeer(addr string) error {
+  conn, err := net.Dial("tcp", addr)
+
+  if err != nil {
+    return err
+  }
+
+  peer := NewPeer(conn, s)
+  s.peers.PushBack(peer)
+  peer.Start()
+
+
+  log.Println("Connected to peer ::", conn.RemoteAddr())
+
+  return nil
+}
+
+func (s *Server) Broadcast(msgType string, data []byte) {
+  for e := s.peers.Front(); e != nil; e = e.Next() {
+    if peer, ok := e.Value.(*Peer); ok {
+      peer.QueueMessage(msgType, data)
+    }
+  }
 }
 
 // Start the server
@@ -60,6 +90,15 @@ func (s *Server) Start() {
       go s.AddPeer(conn)
     }
   }()
+
+  // TMP
+  //go func() {
+  //  for {
+  //    s.Broadcast("block", Encode("blockdata"))
+//
+//      time.Sleep(100 * time.Millisecond)
+//    }
+//  }()
 }
 
 func (s *Server) Stop() {
@@ -68,7 +107,9 @@ func (s *Server) Stop() {
 
   // Loop thru the peers and close them (if we had them)
   for e := s.peers.Front(); e != nil; e = e.Next() {
-    // peer close etc
+    if peer, ok := e.Value.(*Peer); ok {
+      peer.Stop()
+    }
   }
 
   s.shutdownChan <- true
