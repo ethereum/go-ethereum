@@ -9,19 +9,19 @@ import (
   "encoding/hex"
 )
 
-type DbInterface struct {
+type Console struct {
   db *MemDatabase
   trie *Trie
 }
 
-func NewDBInterface() *DbInterface {
+func NewConsole() *Console {
   db, _ := NewMemDatabase()
   trie := NewTrie(db, "")
 
-  return &DbInterface{db: db, trie: trie}
+  return &Console{db: db, trie: trie}
 }
 
-func (i *DbInterface) ValidateInput(action string, argumentLength int) error {
+func (i *Console) ValidateInput(action string, argumentLength int) error {
   err := false
   var expArgCount int
 
@@ -44,7 +44,7 @@ func (i *DbInterface) ValidateInput(action string, argumentLength int) error {
   }
 }
 
-func (i *DbInterface) ParseInput(input string) bool {
+func (i *Console) ParseInput(input string) bool {
   scanner := bufio.NewScanner(strings.NewReader(input))
   scanner.Split(bufio.ScanWords)
 
@@ -82,12 +82,14 @@ func (i *DbInterface) ParseInput(input string) bool {
     case "exit", "quit", "q":
       return false
     case "help":
-      fmt.Printf(`QUERY COMMANDS:
-update KEY VALUE - Updates/Creates a new value for the given key
-get KEY - Retrieves the given key
-root - Prints the hex encoded merkle root
-rawroot - Prints the raw merkle root
-`)
+      fmt.Printf( "COMMANDS:\n"+
+                  "\033[1m= DB =\033[0m\n"+
+                  "update KEY VALUE - Updates/Creates a new value for the given key\n"+
+                  "get KEY - Retrieves the given key\n"+
+                  "root - Prints the hex encoded merkle root\n"+
+                  "rawroot - Prints the raw merkle root\n"+
+                  "\033[1m= Dagger =\033[0m\n"+
+                  "dag HASH NONCE - Verifies a nonce with the given hash with dagger\n")
     default:
       fmt.Println("Unknown command:", tokens[0])
     }
@@ -96,11 +98,11 @@ rawroot - Prints the raw merkle root
   return true
 }
 
-func (i *DbInterface) Start() {
-  fmt.Printf("DB Query tool. Type (help) for help\n")
+func (i *Console) Start() {
+  fmt.Printf("Eth Console. Type (help) for help\n")
   reader := bufio.NewReader(os.Stdin)
   for {
-    fmt.Printf("db >>> ")
+    fmt.Printf("eth >>> ")
     str, _, err := reader.ReadLine()
     if err != nil {
       fmt.Println("Error reading input", err)
