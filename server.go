@@ -2,7 +2,8 @@ package main
 
 import (
   "container/list"
-  "time"
+  "net"
+  "log"
 )
 
 var Db *LDBDatabase
@@ -36,12 +37,27 @@ func NewServer() (*Server, error) {
   return server, nil
 }
 
+func (s *Server) AddPeer(conn net.Conn) {
+  s.peers.PushBack(NewPeer(conn, s))
+}
+
 // Start the server
 func (s *Server) Start() {
   // For now this function just blocks the main thread
+  ln, err := net.Listen("tcp", ":12345")
+  if err != nil {
+    log.Fatal(err)
+  }
+
   go func() {
     for {
-      time.Sleep( time.Second )
+      conn, err := ln.Accept()
+      if err != nil {
+        log.Println(err)
+        continue
+      }
+
+      go s.AddPeer(conn)
     }
   }()
 }
