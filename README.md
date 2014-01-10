@@ -19,6 +19,6 @@ Install
 Command line options
 ====================
 
--db will launch the db query tool.
+-c will launch the developer console
 
 Supported arguments `update` and `get`
