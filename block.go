@@ -51,7 +51,15 @@ func CreateTestBlock(/* TODO use raw data */transactions []*Transaction) *Block 
   return block
 }
 
-func CreateBlock(root string, num int, prevHash string, base string, difficulty int, nonce int, extra string, txes []*Transaction) *Block {
+func CreateBlock(root string,
+                  num int,
+                  prevHash string,
+                  base string,
+                  difficulty int,
+                  nonce int,
+                  extra string,
+                  txes []*Transaction) *Block {
+
   block := &Block{
     // Slice of transactions to include in this block
     transactions: txes,
@@ -134,8 +142,11 @@ func (block *Block) MarshalRlp() []byte {
     // Cast it to a string (safe)
     encTx[i] = string(tx.MarshalRlp())
   }
+  // TODO
+  uncles := []interface{}{}
 
-  /* I made up the block. It should probably contain different data or types. It sole purpose now is testing */
+  // I made up the block. It should probably contain different data or types.
+  // It sole purpose now is testing
   header := []interface{}{
     block.number,
     block.prevHash,
@@ -152,9 +163,8 @@ func (block *Block) MarshalRlp() []byte {
     block.extra,
   }
 
-  // TODO
-  uncles := []interface{}{}
-  // Encode a slice interface which contains the header and the list of transactions.
+  // Encode a slice interface which contains the header and the list of
+  // transactions.
   return Encode([]interface{}{header, encTx, uncles})
 }
 
