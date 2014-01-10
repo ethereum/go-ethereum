@@ -115,7 +115,7 @@ func Sum(sha hash.Hash) []byte {
 
 func (dag *Dagger) Eval(N *big.Int) *big.Int {
   pow := BigPow(2, 26)
-  dag.xn = N.Div(N, pow)
+  dag.xn = pow.Div(N, pow)
 
   sha := sha3.NewKeccak224()
   sha.Reset()
