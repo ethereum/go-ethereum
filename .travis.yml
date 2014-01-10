@@ -1,3 +1,4 @@
+before_install: udo apt-get install libgmp3-dev
 language: go
 go:
   - 1.2
