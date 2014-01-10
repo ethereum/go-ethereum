@@ -19,6 +19,5 @@ Install
 Command line options
 ====================
 
--c will launch the developer console
-
-Supported arguments `update` and `get`
+-c      launch the developer console
+-m      start mining fake blocks and broadcast fake messages to the net
