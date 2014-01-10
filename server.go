@@ -5,15 +5,15 @@ import (
   "net"
   "log"
   _"time"
+  "github.com/ethereum/ethdb-go"
+  "github.com/ethereum/ethutil-go"
 )
-
-var Db *LDBDatabase
 
 type Server struct {
   // Channel for shutting down the server
   shutdownChan chan bool
   // DB interface
-  db          *LDBDatabase
+  db          *ethdb.LDBDatabase
   // Block manager for processing new blocks and managing the block chain
   blockManager *BlockManager
   // Peers (NYI)
@@ -21,12 +21,12 @@ type Server struct {
 }
 
 func NewServer() (*Server, error) {
-  db, err := NewLDBDatabase()
+  db, err := ethdb.NewLDBDatabase()
   if err != nil {
     return nil, err
   }
 
-  Db = db
+  ethutil.SetConfig(db)
 
   server := &Server{
     shutdownChan:    make(chan bool),

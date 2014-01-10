@@ -2,17 +2,18 @@ package main
 
 import (
   "fmt"
+  "github.com/ethereum/ethutil-go"
 )
 
 type BlockChain struct {
-  lastBlock *Block
+  lastBlock *ethutil.Block
 
-  genesisBlock *Block
+  genesisBlock *ethutil.Block
 }
 
 func NewBlockChain() *BlockChain {
   bc := &BlockChain{}
-  bc.genesisBlock = NewBlock( Encode(Genesis) )
+  bc.genesisBlock = ethutil.NewBlock( ethutil.Encode(ethutil.Genesis) )
 
   return bc
 }
@@ -30,19 +31,19 @@ func NewBlockManager() *BlockManager {
 }
 
 // Process a block.
-func (bm *BlockManager) ProcessBlock(block *Block) error {
+func (bm *BlockManager) ProcessBlock(block *ethutil.Block) error {
   // TODO Validation (Or move to other part of the application)
   if err := bm.ValidateBlock(block); err != nil {
     return err
   }
 
   // Get the tx count. Used to create enough channels to 'join' the go routines
-  txCount  := len(block.transactions)
+  txCount  := len(block.Transactions())
   // Locking channel. When it has been fully buffered this method will return
   lockChan := make(chan bool, txCount)
 
   // Process each transaction/contract
-  for _, tx := range block.transactions {
+  for _, tx := range block.Transactions() {
     // If there's no recipient, it's a contract
     if tx.IsContract() {
       go bm.ProcessContract(tx, block, lockChan)
@@ -60,11 +61,11 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
   return nil
 }
 
-func (bm *BlockManager) ValidateBlock(block *Block) error {
+func (bm *BlockManager) ValidateBlock(block *ethutil.Block) error {
   return nil
 }
 
-func (bm *BlockManager) ProcessContract(tx *Transaction, block *Block, lockChan chan bool) {
+func (bm *BlockManager) ProcessContract(tx *ethutil.Transaction, block *ethutil.Block, lockChan chan bool) {
   // Recovering function in case the VM had any errors
   defer func() {
     if r := recover(); r != nil {

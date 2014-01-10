@@ -7,7 +7,7 @@ import (
   "flag"
   "runtime"
   "log"
-  _"math/big"
+  "github.com/ethereum/ethutil-go"
 )
 
 const Debug = true
@@ -39,7 +39,7 @@ func RegisterInterupts(s *Server) {
 func main() {
   runtime.GOMAXPROCS(runtime.NumCPU())
 
-  InitFees()
+  ethutil.InitFees()
 
   Init()
 
@@ -63,7 +63,7 @@ func main() {
 
       go func() {
         for {
-          res := dagger.Search(Big("0"), BigPow(2, 36))
+          res := dagger.Search(ethutil.Big("0"), ethutil.BigPow(2, 36))
           server.Broadcast("block", Encode(res.String()))
         }
       }()

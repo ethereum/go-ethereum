@@ -1,12 +1,10 @@
 package main
 
 import (
-  _"math"
   "math/big"
   "fmt"
-  _"strconv"
-  _ "encoding/hex"
   "strconv"
+  "github.com/ethereum/ethutil-go"
 )
 
 // Op codes
@@ -93,7 +91,7 @@ func (st *Stack) Popn() (*big.Int, *big.Int) {
   strs := st.data[s-2:]
   st.data = st.data[:s-2]
 
-  return Big(strs[0]), Big(strs[1])
+  return ethutil.Big(strs[0]), ethutil.Big(strs[1])
 }
 
 func (st *Stack) Push(d string) {
@@ -114,7 +112,8 @@ func NewVm() *Vm {
   }
 }
 
-func (vm *Vm) ProcContract(tx *Transaction, block *Block, cb TxCallback) {
+func (vm *Vm) ProcContract( tx *ethutil.Transaction,
+                            block *ethutil.Block, cb TxCallback) {
   // Instruction pointer
   pc := 0
 
@@ -124,7 +123,7 @@ func (vm *Vm) ProcContract(tx *Transaction, block *Block, cb TxCallback) {
     return
   }
 
-  Pow256 := BigPow(2, 256)
+  Pow256 := ethutil.BigPow(2, 256)
 
   //fmt.Printf("#   op   arg\n")
 out:
@@ -134,7 +133,8 @@ out:
     // XXX Should Instr return big int slice instead of string slice?
     // Get the next instruction from the contract
     //op, _, _ := Instr(contract.state.Get(string(Encode(uint32(pc)))))
-    op, _, _ := Instr(contract.state.Get(string(NumberToBytes(uint64(pc), 32))))
+    nb := ethutil.NumberToBytes(uint64(pc), 32)
+    op, _, _ := ethutil.Instr(contract.State().Get(string(nb)))
 
     if !cb(0) { break }
 
@@ -200,7 +200,7 @@ out:
 
       vm.stack.Push(base.String())
     case oNEG:
-      base.Sub(Pow256, Big(vm.stack.Pop()))
+      base.Sub(Pow256, ethutil.Big(vm.stack.Pop()))
       vm.stack.Push(base.String())
     case oLT:
       x, y := vm.stack.Popn()
@@ -245,18 +245,18 @@ out:
     case oMYADDRESS:
       vm.stack.Push(string(tx.Hash()))
     case oTXSENDER:
-      vm.stack.Push(tx.sender)
+      vm.stack.Push(string(tx.Sender()))
     case oPUSH:
       // Get the next entry and pushes the value on the stack
       pc++
-      vm.stack.Push(contract.state.Get(string(NumberToBytes(uint64(pc), 32))))
+      vm.stack.Push(contract.State().Get(string(ethutil.NumberToBytes(uint64(pc), 32))))
     case oPOP:
       // Pop current value of the stack
       vm.stack.Pop()
     case oLOAD:
       // Load instruction X on the stack
       i, _ := strconv.Atoi(vm.stack.Pop())
-      vm.stack.Push(contract.state.Get(string(NumberToBytes(uint64(i), 32))))
+      vm.stack.Push(contract.State().Get(string(ethutil.NumberToBytes(uint64(i), 32))))
     case oSTOP:
       break out
     }

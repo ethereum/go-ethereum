@@ -6,6 +6,7 @@ import (
   "time"
   "github.com/obscuren/sha3"
   "hash"
+  "github.com/ethereum/ethutil-go"
 )
 
 type Dagger struct {
@@ -40,7 +41,7 @@ func (dag *Dagger) Search(hash, diff *big.Int) *big.Int {
 
   dag.hash = hash
 
-  obj := BigPow(2, 256)
+  obj := ethutil.BigPow(2, 256)
   obj = obj.Div(obj, diff)
 
   Found =  false
@@ -66,7 +67,7 @@ func DaggerVerify(hash, diff, nonce *big.Int) bool {
   dagger := &Dagger{}
   dagger.hash = hash
 
-  obj := BigPow(2, 256)
+  obj := ethutil.BigPow(2, 256)
   obj = obj.Div(obj, diff)
 
   return dagger.Eval(nonce).Cmp(obj) < 0
@@ -114,7 +115,7 @@ func Sum(sha hash.Hash) []byte {
 }
 
 func (dag *Dagger) Eval(N *big.Int) *big.Int {
-  pow := BigPow(2, 26)
+  pow := ethutil.BigPow(2, 26)
   dag.xn = N.Div(N, pow)
 
   sha := sha3.NewKeccak256()

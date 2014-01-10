@@ -5,6 +5,7 @@ import (
   "bytes"
   "math"
   "math/big"
+  "github.com/ethereum/ethutil-go"
 )
 
 type RlpEncoder struct {
@@ -54,7 +55,7 @@ func (attr *RlpDataAttribute) AsUint() uint64 {
 
 func (attr *RlpDataAttribute) AsBigInt() *big.Int {
   if a, ok := attr.dataAttrib.([]byte); ok {
-    return Big(string(a))
+    return ethutil.Big(string(a))
   }
 
   return big.NewInt(0)

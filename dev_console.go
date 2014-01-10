@@ -7,16 +7,18 @@ import (
   "os"
   "errors"
   "encoding/hex"
+  "github.com/ethereum/ethdb-go"
+  "github.com/ethereum/ethutil-go"
 )
 
 type Console struct {
-  db *MemDatabase
-  trie *Trie
+  db *ethdb.MemDatabase
+  trie *ethutil.Trie
 }
 
 func NewConsole() *Console {
-  db, _ := NewMemDatabase()
-  trie := NewTrie(db, "")
+  db, _ := ethdb.NewMemDatabase()
+  trie := ethutil.NewTrie(db, "")
 
   return &Console{db: db, trie: trie}
 }
@@ -68,17 +70,19 @@ func (i *Console) ParseInput(input string) bool {
     case "update":
       i.trie.Update(tokens[1], tokens[2])
 
-      fmt.Println(hex.EncodeToString([]byte(i.trie.root)))
+      fmt.Println(hex.EncodeToString([]byte(i.trie.Root)))
     case "get":
       fmt.Println(i.trie.Get(tokens[1]))
     case "root":
-      fmt.Println(hex.EncodeToString([]byte(i.trie.root)))
+      fmt.Println(hex.EncodeToString([]byte(i.trie.Root)))
     case "rawroot":
-      fmt.Println(i.trie.root)
+      fmt.Println(i.trie.Root)
     case "print":
       i.db.Print()
     case "dag":
-      fmt.Println(DaggerVerify(Big(tokens[1]), BigPow(2, 36), Big(tokens[2])))
+      fmt.Println(DaggerVerify( ethutil.Big(tokens[1]), // hash
+                                ethutil.BigPow(2, 36),  // diff
+                                ethutil.Big(tokens[2])))// nonce
     case "exit", "quit", "q":
       return false
     case "help":
