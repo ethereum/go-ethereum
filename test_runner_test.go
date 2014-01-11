@@ -1,9 +1,9 @@
 package main
 
 import (
-  _"fmt"
-  "testing"
-  "encoding/hex"
+	"encoding/hex"
+	_ "fmt"
+	"testing"
 )
 
 var testsource = `{"Inputs":{
@@ -15,17 +15,17 @@ var testsource = `{"Inputs":{
 }`
 
 func TestTestRunner(t *testing.T) {
-  db, _ := NewMemDatabase()
-  trie := NewTrie(db, "")
+	db, _ := NewMemDatabase()
+	trie := NewTrie(db, "")
 
-  runner := NewTestRunner(t)
-  runner.RunFromString(testsource, func(source *TestSource) {
-    for key, value := range source.Inputs {
-      trie.Update(key, value)
-    }
+	runner := NewTestRunner(t)
+	runner.RunFromString(testsource, func(source *TestSource) {
+		for key, value := range source.Inputs {
+			trie.Update(key, value)
+		}
 
-    if hex.EncodeToString([]byte(trie.root)) != source.Expectation {
-      t.Error("trie root did not match")
-    }
-  })
+		if hex.EncodeToString([]byte(trie.root)) != source.Expectation {
+			t.Error("trie root did not match")
+		}
+	})
 }

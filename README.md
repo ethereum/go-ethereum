@@ -21,3 +21,8 @@ Command line options
 
 -c      launch the developer console
 -m      start mining fake blocks and broadcast fake messages to the net
+
+Contribution
+============
+
+See CONTRIB.md
