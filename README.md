@@ -3,7 +3,7 @@ Ethereum
 
 [![Build Status](https://travis-ci.org/ethereum/go-ethereum.png?branch=master)](https://travis-ci.org/ethereum/go-ethereum)
 
-Ethereum Go (c) 0255c78815d4f056f84c96de438ed9e38c69c0f8af24f5032248be5a79fe9071c3
+Ethereum Go (c) [0255c7881](https://github.com/ethereum/go-ethereum#copy)
 
 
 Ethereum Go is split up in several sub packages. Please refer to each
@@ -57,7 +57,6 @@ if x > y {
 }
 ```
 
-Copy
-====
+### Copy
 
 69bce990a619e747b4f57483724b0e8a1732bb3b44ccf70b0dd6abd272af94550fc9d8b21232d33ebf30d38a148612f68e936094b4daeb9ea7174088a439070401 0255c78815d4f056f84c96de438ed9e38c69c0f8af24f5032248be5a79fe9071c3
