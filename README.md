@@ -3,7 +3,14 @@ Ethereum
 
 [![Build Status](https://travis-ci.org/ethereum/go-ethereum.png?branch=master)](https://travis-ci.org/ethereum/go-ethereum)
 
-Ethereum Go
+Ethereum Go (c) 0255c78815d4f056f84c96de438ed9e38c69c0f8af24f5032248be5a79fe9071c3
+
+
+Ethereum Go is split up in several sub packages. Please refer to each
+individual package for more information.
+  1. [ethutil](https://github.com/ethereum/ethutil-go)
+  2. [ethdb](https://github.com/ethereum/ethdb-go)
+  3. [ethwire](https://github.com/ethereum/ethwire-go)
 
 Deps
 ====
@@ -13,7 +20,7 @@ Ethereum Go makes use of a modified `secp256k1-go` and therefor GMP.
 Install
 =======
 
-```go get https://github.com/ethereum/go-ethereum```
+```go get -u -t https://github.com/ethereum/go-ethereum```
 
 
 Command line options
@@ -49,3 +56,8 @@ if x > y {
     // It's greater!
 }
 ```
+
+Copy
+====
+
+69bce990a619e747b4f57483724b0e8a1732bb3b44ccf70b0dd6abd272af94550fc9d8b21232d33ebf30d38a148612f68e936094b4daeb9ea7174088a439070401 0255c78815d4f056f84c96de438ed9e38c69c0f8af24f5032248be5a79fe9071c3
