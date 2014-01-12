@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/ethereum/ethwire-go"
+	"github.com/ethereum/ethutil-go"
 	"log"
 	"net"
 )
@@ -12,24 +13,26 @@ type Peer struct {
 	// Net connection
 	conn net.Conn
 	// Output queue which is used to communicate and handle messages
-	outputQueue chan ethwire.InOutMsg
+	outputQueue chan *ethwire.InOutMsg
 	// Quit channel
 	quit chan bool
+
+	inbound bool // Determines whether it's an inbound or outbound peer
 }
 
-func NewPeer(conn net.Conn, server *Server) *Peer {
+func NewPeer(conn net.Conn, server *Server, inbound bool) *Peer {
 	return &Peer{
-		outputQueue: make(chan ethwire.InOutMsg, 1), // Buffered chan of 1 is enough
+		outputQueue: make(chan *ethwire.InOutMsg, 1), // Buffered chan of 1 is enough
 		quit:        make(chan bool),
-
 		server: server,
 		conn:   conn,
+		inbound: inbound,
 	}
 }
 
 // Outputs any RLP encoded data to the peer
-func (p *Peer) QueueMessage(msgType string, data []byte) {
-	p.outputQueue <- ethwire.InOutMsg{MsgType: msgType, Data: data}
+func (p *Peer) QueueMessage(msg *ethwire.InOutMsg) {
+	p.outputQueue <- msg//ethwire.InOutMsg{MsgType: msgType, Nonce: ethutil.RandomUint64(), Data: data}
 }
 
 // Outbound message handler. Outbound messages are handled here
@@ -69,9 +72,22 @@ out:
 			break out
 		}
 
-		// TODO
-		data, _ := Decode(msg.Data, 0)
-		log.Printf("%s, %s\n", msg.MsgType, data)
+		if Debug {
+			log.Printf("Received %s\n", msg.MsgType)
+		}
+
+		// TODO Hash data and check if for existence (= ignore)
+
+		switch msg.MsgType {
+		case "verack":
+			// Version message
+			p.handleVersionAck(msg)
+		case "block":
+			err := p.server.blockManager.ProcessBlock(ethutil.NewBlock(msg.Data))
+			if err != nil {
+				log.Println(err)
+			}
+		}
 	}
 
 	// Notify the out handler we're quiting
@@ -79,6 +95,15 @@ out:
 }
 
 func (p *Peer) Start() {
+	if !p.inbound {
+		err := p.pushVersionAck()
+		if err != nil {
+			log.Printf("Peer can't send outbound version ack", err)
+
+			p.Stop()
+		}
+	}
+
 	// Run the outbound handler in a new goroutine
 	go p.HandleOutbound()
 	// Run the inbound handler in a new goroutine
@@ -90,3 +115,34 @@ func (p *Peer) Stop() {
 
 	p.quit <- true
 }
+
+func (p *Peer) pushVersionAck() error {
+	msg := ethwire.NewMessage("verack", p.server.Nonce, []byte("01"))
+
+	p.QueueMessage(msg)
+
+	return nil
+}
+
+func (p *Peer) handleVersionAck(msg *ethwire.InOutMsg) {
+	// Detect self connect
+	if msg.Nonce == p.server.Nonce {
+		log.Println("Peer connected to self, disconnecting")
+
+		p.Stop()
+		return
+	}
+
+	log.Println("mnonce", msg.Nonce, "snonce", p.server.Nonce)
+
+	// If this is an inbound connection send an ack back
+	if p.inbound {
+		err := p.pushVersionAck()
+		if err != nil {
+			log.Println("Peer can't send ack back")
+
+			p.Stop()
+		}
+	}
+}
+
