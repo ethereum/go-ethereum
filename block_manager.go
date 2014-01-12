@@ -114,30 +114,34 @@ func (bm *BlockManager) CalculateTD(block *ethutil.Block) bool {
 }
 
 // Validates the current block. Returns an error if the block was invalid,
-// an uncle or anything that isn't on the current block chain
+// an uncle or anything that isn't on the current block chain.
+// Validation validates easy over difficult (dagger takes longer time = difficult)
 func (bm *BlockManager) ValidateBlock(block *ethutil.Block) error {
 	// TODO
-	// 1. Check if the nonce of the block is valid
 	// 2. Check if the difficulty is correct
 
 	// Check if we have the parent hash, if it isn't known we discard it
 	// Reasons might be catching up or simply an invalid block
-	if bm.bc.HasBlock(block.PrevHash) {
-		// Check each uncle's previous hash. In order for it to be valid
-		// is if it has the same block hash as the current
-		for _, uncle := range block.Uncles {
-			if uncle.PrevHash != block.PrevHash {
-				if Debug {
-					log.Printf("Uncle prvhash mismatch %x %x\n", block.PrevHash, uncle.PrevHash)
-				}
-
-				return errors.New("Mismatching Prvhash from uncle")
-			}
-		}
-	} else {
+	if !bm.bc.HasBlock(block.PrevHash) {
 		return errors.New("Block's parent unknown")
 	}
 
+	// Check each uncle's previous hash. In order for it to be valid
+	// is if it has the same block hash as the current
+	for _, uncle := range block.Uncles {
+		if uncle.PrevHash != block.PrevHash {
+			if Debug {
+				log.Printf("Uncle prvhash mismatch %x %x\n", block.PrevHash, uncle.PrevHash)
+			}
+
+			return errors.New("Mismatching Prvhash from uncle")
+		}
+	}
+
+	// Verify the nonce of the block. Return an error if it's not valid
+	if !DaggerVerify(block.Hash(), block.Nonce) {
+		return errors.New("Block's nonce is invalid")
+	}
 
 	return nil
 }
