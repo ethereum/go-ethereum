@@ -40,6 +40,7 @@ func (attr *RlpDataAttribute) Length() int {
 	return 0
 }
 
+
 func (attr *RlpDataAttribute) AsUint() uint64 {
 	if value, ok := attr.dataAttrib.(uint8); ok {
 		return uint64(value)
