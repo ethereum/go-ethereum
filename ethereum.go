@@ -65,7 +65,7 @@ func main() {
 			go func() {
 				for {
 					res := dagger.Search(ethutil.Big("0"), ethutil.BigPow(2, 36))
-					server.Broadcast("block", Encode(res.String()))
+					server.Broadcast("block", ethutil.Encode(res.String()))
 				}
 			}()
 		}
@@ -74,8 +74,10 @@ func main() {
 
 		err = server.ConnectToPeer("localhost:12345")
 		if err != nil {
-			log.Println(err)
+			log.Println("Error starting server", err)
+
 			server.Stop()
+
 			return
 		}
 

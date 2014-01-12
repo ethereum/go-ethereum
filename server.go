@@ -4,46 +4,56 @@ import (
 	"container/list"
 	"github.com/ethereum/ethdb-go"
 	"github.com/ethereum/ethutil-go"
+	"github.com/ethereum/ethwire-go"
 	"log"
 	"net"
-	_ "time"
+	"time"
 )
 
 type Server struct {
 	// Channel for shutting down the server
 	shutdownChan chan bool
 	// DB interface
-	db *ethdb.LDBDatabase
+	//db *ethdb.LDBDatabase
+	db *ethdb.MemDatabase
 	// Block manager for processing new blocks and managing the block chain
 	blockManager *BlockManager
 	// Peers (NYI)
 	peers *list.List
+	// Nonce
+	Nonce uint64
 }
 
 func NewServer() (*Server, error) {
-	db, err := ethdb.NewLDBDatabase()
+	//db, err := ethdb.NewLDBDatabase()
+	db, err := ethdb.NewMemDatabase()
 	if err != nil {
 		return nil, err
 	}
 
 	ethutil.SetConfig(db)
 
+	nonce, _ := ethutil.RandomUint64()
 	server := &Server{
 		shutdownChan: make(chan bool),
 		blockManager: NewBlockManager(),
 		db:           db,
 		peers:        list.New(),
+		Nonce:        nonce,
 	}
 
 	return server, nil
 }
 
 func (s *Server) AddPeer(conn net.Conn) {
-	peer := NewPeer(conn, s)
-	s.peers.PushBack(peer)
-	peer.Start()
+	peer := NewPeer(conn, s, true)
 
-	log.Println("Peer connected ::", conn.RemoteAddr())
+	if peer != nil {
+		s.peers.PushBack(peer)
+		peer.Start()
+
+		log.Println("Peer connected ::", conn.RemoteAddr())
+	}
 }
 
 func (s *Server) ConnectToPeer(addr string) error {
@@ -53,7 +63,7 @@ func (s *Server) ConnectToPeer(addr string) error {
 		return err
 	}
 
-	peer := NewPeer(conn, s)
+	peer := NewPeer(conn, s, false)
 	s.peers.PushBack(peer)
 	peer.Start()
 
@@ -65,7 +75,7 @@ func (s *Server) ConnectToPeer(addr string) error {
 func (s *Server) Broadcast(msgType string, data []byte) {
 	for e := s.peers.Front(); e != nil; e = e.Next() {
 		if peer, ok := e.Value.(*Peer); ok {
-			peer.QueueMessage(msgType, data)
+			peer.QueueMessage(ethwire.NewMessage(msgType, 0, data))
 		}
 	}
 }
@@ -83,6 +93,7 @@ func (s *Server) Start() {
 			conn, err := ln.Accept()
 			if err != nil {
 				log.Println(err)
+
 				continue
 			}
 
@@ -91,13 +102,13 @@ func (s *Server) Start() {
 	}()
 
 	// TMP
-	//go func() {
-	//  for {
-	//    s.Broadcast("block", Encode("blockdata"))
-	//
-	//      time.Sleep(100 * time.Millisecond)
-	//    }
-	//  }()
+	go func() {
+		for {
+			s.Broadcast("block", s.blockManager.bc.GenesisBlock().MarshalRlp())
+
+			time.Sleep(1000 * time.Millisecond)
+		}
+	}()
 }
 
 func (s *Server) Stop() {
