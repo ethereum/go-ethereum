@@ -24,11 +24,20 @@ func NewBlockChain() *BlockChain {
 	bc.TD = new(big.Int)
 	bc.TD.SetBytes(ethutil.Config.Db.LastKnownTD())
 
+
+	// TODO get last block from the database
+	//bc.LastBlock = bc.genesisBlock
+
 	return bc
 }
 
 func (bc *BlockChain) HasBlock(hash string) bool {
-	return bc.LastBlock.State().Get(hash) != ""
+	data, _ := ethutil.Config.Db.Get([]byte(hash))
+	return len(data) != 0
+}
+
+func (bc *BlockChain) GenesisBlock() *ethutil.Block {
+	return bc.genesisBlock
 }
 
 type BlockManager struct {
@@ -107,6 +116,10 @@ func (bm *BlockManager) CalculateTD(block *ethutil.Block) bool {
 		// Set the new total difficulty back to the block chain
 		bm.bc.TD = td
 
+		if Debug {
+			log.Println("TD(block) =", td)
+		}
+
 		return true
 	}
 
@@ -122,7 +135,8 @@ func (bm *BlockManager) ValidateBlock(block *ethutil.Block) error {
 
 	// Check if we have the parent hash, if it isn't known we discard it
 	// Reasons might be catching up or simply an invalid block
-	if !bm.bc.HasBlock(block.PrevHash) {
+	if bm.bc.LastBlock != nil && block.PrevHash == "" &&
+	   !bm.bc.HasBlock(block.PrevHash) {
 		return errors.New("Block's parent unknown")
 	}
 
@@ -139,9 +153,12 @@ func (bm *BlockManager) ValidateBlock(block *ethutil.Block) error {
 	}
 
 	// Verify the nonce of the block. Return an error if it's not valid
-	if !DaggerVerify(ethutil.BigD(block.Hash()), block.Difficulty, block.Nonce) {
+	if bm.bc.LastBlock != nil && block.PrevHash == "" &&
+	   !DaggerVerify(ethutil.BigD(block.Hash()), block.Difficulty, block.Nonce) {
 		return errors.New("Block's nonce is invalid")
 	}
+
+	log.Println("Block validation PASSED")
 
 	return nil
 }
