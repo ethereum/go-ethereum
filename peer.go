@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/ethereum/ethwire-go"
 	"github.com/ethereum/ethutil-go"
+	"github.com/ethereum/ethwire-go"
 	"log"
 	"net"
 )
@@ -24,15 +24,15 @@ func NewPeer(conn net.Conn, server *Server, inbound bool) *Peer {
 	return &Peer{
 		outputQueue: make(chan *ethwire.InOutMsg, 1), // Buffered chan of 1 is enough
 		quit:        make(chan bool),
-		server: server,
-		conn:   conn,
-		inbound: inbound,
+		server:      server,
+		conn:        conn,
+		inbound:     inbound,
 	}
 }
 
 // Outputs any RLP encoded data to the peer
 func (p *Peer) QueueMessage(msg *ethwire.InOutMsg) {
-	p.outputQueue <- msg//ethwire.InOutMsg{MsgType: msgType, Nonce: ethutil.RandomUint64(), Data: data}
+	p.outputQueue <- msg //ethwire.InOutMsg{MsgType: msgType, Nonce: ethutil.RandomUint64(), Data: data}
 }
 
 // Outbound message handler. Outbound messages are handled here
@@ -145,4 +145,3 @@ func (p *Peer) handleVersionAck(msg *ethwire.InOutMsg) {
 		}
 	}
 }
-

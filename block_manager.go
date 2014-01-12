@@ -1,9 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"github.com/ethereum/ethutil-go"
-	"errors"
 	"log"
 	"math/big"
 )
@@ -23,7 +23,6 @@ func NewBlockChain() *BlockChain {
 	// Set the last know difficulty (might be 0x0 as initial value, Genesis)
 	bc.TD = new(big.Int)
 	bc.TD.SetBytes(ethutil.Config.Db.LastKnownTD())
-
 
 	// TODO get last block from the database
 	//bc.LastBlock = bc.genesisBlock
@@ -136,7 +135,7 @@ func (bm *BlockManager) ValidateBlock(block *ethutil.Block) error {
 	// Check if we have the parent hash, if it isn't known we discard it
 	// Reasons might be catching up or simply an invalid block
 	if bm.bc.LastBlock != nil && block.PrevHash == "" &&
-	   !bm.bc.HasBlock(block.PrevHash) {
+		!bm.bc.HasBlock(block.PrevHash) {
 		return errors.New("Block's parent unknown")
 	}
 
@@ -154,7 +153,7 @@ func (bm *BlockManager) ValidateBlock(block *ethutil.Block) error {
 
 	// Verify the nonce of the block. Return an error if it's not valid
 	if bm.bc.LastBlock != nil && block.PrevHash == "" &&
-	   !DaggerVerify(ethutil.BigD(block.Hash()), block.Difficulty, block.Nonce) {
+		!DaggerVerify(ethutil.BigD(block.Hash()), block.Difficulty, block.Nonce) {
 		return errors.New("Block's nonce is invalid")
 	}
 
@@ -174,7 +173,6 @@ func (bm *BlockManager) AccumelateRewards(block *ethutil.Block) error {
 	block.State().Update(block.Coinbase, string(ether.MarshalRlp()))
 
 	// TODO Reward each uncle
-
 
 	return nil
 }
