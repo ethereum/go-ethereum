@@ -8,13 +8,14 @@ import (
 	"log"
 	"net"
 	"time"
+	"sync/atomic"
 )
 
-func eachPeer(peers *list.List, callback func(*Peer)) {
+func eachPeer(peers *list.List, callback func(*Peer, *list.Element)) {
 	// Loop thru the peers and close them (if we had them)
 	for e := peers.Front(); e != nil; e = e.Next() {
 		if peer, ok := e.Value.(*Peer); ok {
-			callback(peer)
+			callback(peer, e)
 		}
 	}
 }
@@ -75,9 +76,27 @@ func (s *Server) ConnectToPeer(addr string) error {
 }
 
 func (s *Server) Broadcast(msgType string, data []byte) {
-	eachPeer(s.peers, func(p *Peer) {
+	eachPeer(s.peers, func(p *Peer, e *list.Element) {
 		p.QueueMessage(ethwire.NewMessage(msgType, 0, data))
 	})
+}
+
+const (
+	processReapingTimeout            = 10 // TODO increase
+)
+
+func (s *Server) ReapDeadPeers() {
+	for {
+		eachPeer(s.peers, func(p *Peer, e *list.Element) {
+			if atomic.LoadInt32(&p.disconnect) == 1 {
+				log.Println("Dead peer found .. reaping")
+
+				s.peers.Remove(e)
+			}
+		})
+
+		time.Sleep(processReapingTimeout * time.Second)
+	}
 }
 
 // Start the server
@@ -85,8 +104,25 @@ func (s *Server) Start() {
 	// For now this function just blocks the main thread
 	ln, err := net.Listen("tcp", ":12345")
 	if err != nil {
-		log.Fatal(err)
+		// This is mainly for testing to create a "network"
+		if Debug {
+			log.Println("Connection listening disabled. Acting as client")
+
+			err = s.ConnectToPeer("localhost:12345")
+			if err != nil {
+				log.Println("Error starting server", err)
+
+				s.Stop()
+			}
+
+			return
+		} else {
+			log.Fatal(err)
+		}
 	}
+
+	// Start the reaping processes
+	go s.ReapDeadPeers()
 
 	go func() {
 		for {
@@ -117,7 +153,7 @@ func (s *Server) Stop() {
 	// Close the database
 	defer s.db.Close()
 
-	eachPeer(s.peers, func(p *Peer) {
+	eachPeer(s.peers, func(p *Peer, e *list.Element) {
 			p.Stop()
 	})
 

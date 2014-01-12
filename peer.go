@@ -28,7 +28,11 @@ type Peer struct {
 	// Flag for checking the peer's connectivity state
 	connected int32
 	disconnect int32
+	// Last known message send
 	lastSend time.Time
+	// Indicated whether a verack has been send or not
+	// This flag is used by writeMessage to check if messages are allowed
+	// to be send or not. If no version is known all messages are ignored.
 	versionKnown bool
 }
 

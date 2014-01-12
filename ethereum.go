@@ -72,14 +72,6 @@ func main() {
 
 		server.Start()
 
-		err = server.ConnectToPeer("localhost:12345")
-		if err != nil {
-			log.Println("Error starting server", err)
-
-			server.Stop()
-
-			return
-		}
 
 		// Wait for shutdown
 		server.WaitForShutdown()
