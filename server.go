@@ -10,6 +10,16 @@ import (
 	"time"
 )
 
+func eachPeer(peers *list.List, callback func(*Peer)) {
+	// Loop thru the peers and close them (if we had them)
+	for e := peers.Front(); e != nil; e = e.Next() {
+		if peer, ok := e.Value.(*Peer); ok {
+			callback(peer)
+		}
+	}
+}
+
+
 type Server struct {
 	// Channel for shutting down the server
 	shutdownChan chan bool
@@ -57,27 +67,20 @@ func (s *Server) AddPeer(conn net.Conn) {
 }
 
 func (s *Server) ConnectToPeer(addr string) error {
-	conn, err := net.Dial("tcp", addr)
+	peer := NewOutboundPeer(addr, s)
 
-	if err != nil {
-		return err
-	}
-
-	peer := NewPeer(conn, s, false)
 	s.peers.PushBack(peer)
+
 	peer.Start()
 
-	log.Println("Connected to peer ::", conn.RemoteAddr())
 
 	return nil
 }
 
 func (s *Server) Broadcast(msgType string, data []byte) {
-	for e := s.peers.Front(); e != nil; e = e.Next() {
-		if peer, ok := e.Value.(*Peer); ok {
-			peer.QueueMessage(ethwire.NewMessage(msgType, 0, data))
-		}
-	}
+	eachPeer(s.peers, func(p *Peer) {
+		p.QueueMessage(ethwire.NewMessage(msgType, 0, data))
+	})
 }
 
 // Start the server
@@ -115,12 +118,9 @@ func (s *Server) Stop() {
 	// Close the database
 	defer s.db.Close()
 
-	// Loop thru the peers and close them (if we had them)
-	for e := s.peers.Front(); e != nil; e = e.Next() {
-		if peer, ok := e.Value.(*Peer); ok {
-			peer.Stop()
-		}
-	}
+	eachPeer(s.peers, func(p *Peer) {
+			p.Stop()
+	})
 
 	s.shutdownChan <- true
 }
