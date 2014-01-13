@@ -162,6 +162,9 @@ out:
 			if err != nil {
 				log.Println(err)
 			}
+		case "blockmine":
+			d, _ := ethutil.Decode(msg.Data, 0)
+			log.Printf("block mined %s\n", d)
 		}
 	}
 

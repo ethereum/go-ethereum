@@ -138,15 +138,15 @@ func (s *Server) Start() {
 	}()
 
 	// TMP
+	/*
 	go func() {
-		//time.Sleep(500 * time.Millisecond)
-
 		for {
 			s.Broadcast("block", s.blockManager.bc.GenesisBlock().MarshalRlp())
 
 			time.Sleep(1000 * time.Millisecond)
 		}
 	}()
+	*/
 }
 
 func (s *Server) Stop() {

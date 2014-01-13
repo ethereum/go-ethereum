@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"math/rand"
 	"time"
+	"log"
 )
 
 type Dagger struct {
@@ -22,7 +23,9 @@ func (dag *Dagger) Find(obj *big.Int, resChan chan int64) {
 	for i := 0; i < 1000; i++ {
 		rnd := r.Int63()
 
-		if dag.Eval(big.NewInt(rnd)).Cmp(obj) < 0 {
+		res := dag.Eval(big.NewInt(rnd))
+		log.Printf("rnd %v\nres %v\nobj %v\n", rnd, res, obj)
+		if res.Cmp(obj) < 0 {
 			// Post back result on the channel
 			resChan <- rnd
 			// Notify other threads we've found a valid nonce
@@ -119,7 +122,7 @@ func Sum(sha hash.Hash) []byte {
 
 func (dag *Dagger) Eval(N *big.Int) *big.Int {
 	pow := ethutil.BigPow(2, 26)
-	dag.xn = N.Div(N, pow)
+	dag.xn = pow.Div(N, pow)
 
 	sha := sha3.NewKeccak256()
 	sha.Reset()

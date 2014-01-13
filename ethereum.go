@@ -64,8 +64,8 @@ func main() {
 
 			go func() {
 				for {
-					res := dagger.Search(ethutil.Big("0"), ethutil.BigPow(2, 36))
-					server.Broadcast("block", ethutil.Encode(res.String()))
+					res := dagger.Search(ethutil.Big("01001"), ethutil.BigPow(2, 26))
+					server.Broadcast("blockmine", ethutil.Encode(res.String()))
 				}
 			}()
 		}

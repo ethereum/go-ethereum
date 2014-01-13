@@ -154,6 +154,7 @@ func (bm *BlockManager) ValidateBlock(block *ethutil.Block) error {
 	// Verify the nonce of the block. Return an error if it's not valid
 	if bm.bc.LastBlock != nil && block.PrevHash == "" &&
 		!DaggerVerify(ethutil.BigD(block.Hash()), block.Difficulty, block.Nonce) {
+
 		return errors.New("Block's nonce is invalid")
 	}
 
