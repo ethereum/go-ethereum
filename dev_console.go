@@ -37,12 +37,27 @@ func (i *Console) ValidateInput(action string, argumentLength int) error {
 	case action == "dag" && argumentLength != 2:
 		err = true
 		expArgCount = 2
+	case action == "decode" && argumentLength != 1:
+		err = true
+		expArgCount = 1
+	case action == "encode" && argumentLength != 1:
+		err = true
+		expArgCount = 1
 	}
 
 	if err {
 		return errors.New(fmt.Sprintf("'%s' requires %d args, got %d", action, expArgCount, argumentLength))
 	} else {
 		return nil
+	}
+}
+
+func (i *Console) PrintRoot() {
+	root := ethutil.Conv(i.trie.RootT)
+	if len(root.AsBytes()) != 0 {
+		fmt.Println(hex.EncodeToString(root.AsBytes()))
+	} else {
+		fmt.Println(i.trie.RootT)
 	}
 }
 
@@ -70,21 +85,26 @@ func (i *Console) ParseInput(input string) bool {
 	} else {
 		switch tokens[0] {
 		case "update":
-			i.trie.Update(tokens[1], tokens[2])
+			i.trie.UpdateT(tokens[1], tokens[2])
 
-			fmt.Println(hex.EncodeToString([]byte(i.trie.Root)))
+			i.PrintRoot()
 		case "get":
-			fmt.Println(i.trie.Get(tokens[1]))
+			fmt.Println(i.trie.GetT(tokens[1]))
 		case "root":
-			fmt.Println(hex.EncodeToString([]byte(i.trie.Root)))
+			i.PrintRoot()
 		case "rawroot":
-			fmt.Println(i.trie.Root)
+			fmt.Println(i.trie.RootT)
 		case "print":
 			i.db.Print()
 		case "dag":
 			fmt.Println(DaggerVerify(ethutil.Big(tokens[1]), // hash
 				ethutil.BigPow(2, 36),   // diff
 				ethutil.Big(tokens[2]))) // nonce
+		case "decode":
+			d, _ := ethutil.Decode([]byte(tokens[1]), 0)
+			fmt.Printf("%q\n", d)
+		case "encode":
+			fmt.Printf("%q\n", ethutil.Encode(tokens[1]))
 		case "exit", "quit", "q":
 			return false
 		case "help":
@@ -95,7 +115,11 @@ func (i *Console) ParseInput(input string) bool {
 				"root - Prints the hex encoded merkle root\n" +
 				"rawroot - Prints the raw merkle root\n" +
 				"\033[1m= Dagger =\033[0m\n" +
-				"dag HASH NONCE - Verifies a nonce with the given hash with dagger\n")
+				"dag HASH NONCE - Verifies a nonce with the given hash with dagger\n" +
+				"\033[1m= Enroding =\033[0m\n" +
+				"decode STR\n" +
+				"encode STR\n")
+
 		default:
 			fmt.Println("Unknown command:", tokens[0])
 		}

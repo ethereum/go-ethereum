@@ -64,14 +64,13 @@ func main() {
 
 			go func() {
 				for {
-					res := dagger.Search(ethutil.Big("01001"), ethutil.BigPow(2, 26))
+					res := dagger.Search(ethutil.Big("01001"), ethutil.BigPow(2, 36))
 					server.Broadcast("blockmine", ethutil.Encode(res.String()))
 				}
 			}()
 		}
 
 		server.Start()
-
 
 		// Wait for shutdown
 		server.WaitForShutdown()

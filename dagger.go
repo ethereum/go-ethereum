@@ -116,8 +116,8 @@ func (dag *Dagger) Node(L uint64, i uint64) *big.Int {
 }
 
 func Sum(sha hash.Hash) []byte {
-	in := make([]byte, 32)
-	return sha.Sum(in)
+	//in := make([]byte, 32)
+	return sha.Sum(nil)
 }
 
 func (dag *Dagger) Eval(N *big.Int) *big.Int {
@@ -146,3 +146,4 @@ func (dag *Dagger) Eval(N *big.Int) *big.Int {
 
 	return ret.SetBytes(Sum(sha))
 }
+
