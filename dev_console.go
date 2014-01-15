@@ -116,7 +116,7 @@ func (i *Console) ParseInput(input string) bool {
 				"rawroot - Prints the raw merkle root\n" +
 				"\033[1m= Dagger =\033[0m\n" +
 				"dag HASH NONCE - Verifies a nonce with the given hash with dagger\n" +
-				"\033[1m= Enroding =\033[0m\n" +
+				"\033[1m= Encoding =\033[0m\n" +
 				"decode STR\n" +
 				"encode STR\n")
 
