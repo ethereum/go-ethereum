@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/hex"
 	_ "fmt"
+	"github.com/ethereum/ethdb-go"
+	"github.com/ethereum/ethutil-go"
 	"testing"
 )
 
@@ -15,8 +17,8 @@ var testsource = `{"Inputs":{
 }`
 
 func TestTestRunner(t *testing.T) {
-	db, _ := NewMemDatabase()
-	trie := NewTrie(db, "")
+	db, _ := ethdb.NewMemDatabase()
+	trie := ethutil.NewTrie(db, "")
 
 	runner := NewTestRunner(t)
 	runner.RunFromString(testsource, func(source *TestSource) {
@@ -24,7 +26,7 @@ func TestTestRunner(t *testing.T) {
 			trie.Update(key, value)
 		}
 
-		if hex.EncodeToString([]byte(trie.root)) != source.Expectation {
+		if hex.EncodeToString([]byte(trie.Root)) != source.Expectation {
 			t.Error("trie root did not match")
 		}
 	})
