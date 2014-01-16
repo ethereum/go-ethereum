@@ -6,59 +6,61 @@ import (
 	"math/big"
 )
 
-type OpCode byte
+type OpCode int
 
 // Op codes
 const (
-	oSTOP           OpCode = 0x00
-	oADD            OpCode = 0x01
-	oMUL            OpCode = 0x02
-	oSUB            OpCode = 0x03
-	oDIV            OpCode = 0x04
-	oSDIV           OpCode = 0x05
-	oMOD            OpCode = 0x06
-	oSMOD           OpCode = 0x07
-	oEXP            OpCode = 0x08
-	oNEG            OpCode = 0x09
-	oLT             OpCode = 0x0a
-	oLE             OpCode = 0x0b
-	oGT             OpCode = 0x0c
-	oGE             OpCode = 0x0d
-	oEQ             OpCode = 0x0e
-	oNOT            OpCode = 0x0f
-	oMYADDRESS      OpCode = 0x10
-	oTXSENDER       OpCode = 0x11
-	oTXVALUE        OpCode = 0x12
-	oTXFEE          OpCode = 0x13
-	oTXDATAN        OpCode = 0x14
-	oTXDATA         OpCode = 0x15
-	oBLK_PREVHASH   OpCode = 0x16
-	oBLK_COINBASE   OpCode = 0x17
-	oBLK_TIMESTAMP  OpCode = 0x18
-	oBLK_NUMBER     OpCode = 0x19
-	oBLK_DIFFICULTY OpCode = 0x1a
-	oSHA256         OpCode = 0x20
-	oRIPEMD160      OpCode = 0x21
-	oECMUL          OpCode = 0x22
-	oECADD          OpCode = 0x23
-	oECSIGN         OpCode = 0x24
-	oECRECOVER      OpCode = 0x25
-	oECVALID        OpCode = 0x26
-	oPUSH           OpCode = 0x30
-	oPOP            OpCode = 0x31
-	oDUP            OpCode = 0x32
-	oDUPN           OpCode = 0x33
-	oSWAP           OpCode = 0x34
-	oSWAPN          OpCode = 0x35
-	oLOAD           OpCode = 0x36
-	oSTORE          OpCode = 0x37
-	oJMP            OpCode = 0x40
-	oJMPI           OpCode = 0x41
-	oIND            OpCode = 0x42
-	oEXTRO          OpCode = 0x50
-	oBALANCE        OpCode = 0x51
-	oMKTX           OpCode = 0x60
-	oSUICIDE        OpCode = 0xff
+	oSTOP OpCode = iota
+	oADD
+	oMUL
+	oSUB
+	oDIV
+	oSDIV
+	oMOD
+	oSMOD
+	oEXP
+	oNEG
+	oLT
+	oLE
+	oGT
+	oGE
+	oEQ
+	oNOT
+	oMYADDRESS
+	oTXSENDER
+	oTXVALUE
+	oTXFEE
+	oTXDATAN
+	oTXDATA
+	oBLK_PREVHASH
+	oBLK_COINBASE
+	oBLK_TIMESTAMP
+	oBLK_NUMBER
+	oBLK_DIFFICULTY
+	oBASEFEE
+	oSHA256    OpCode = 32
+	oRIPEMD160 OpCode = 33
+	oECMUL     OpCode = 34
+	oECADD     OpCode = 35
+	oECSIGN    OpCode = 36
+	oECRECOVER OpCode = 37
+	oECVALID   OpCode = 38
+	oSHA3      OpCode = 39
+	oPUSH      OpCode = 48
+	oPOP       OpCode = 49
+	oDUP       OpCode = 50
+	oSWAP      OpCode = 51
+	oMLOAD     OpCode = 52
+	oMSTORE    OpCode = 53
+	oSLOAD     OpCode = 54
+	oSSTORE    OpCode = 55
+	oJMP       OpCode = 56
+	oJMPI      OpCode = 57
+	oIND       OpCode = 58
+	oEXTRO     OpCode = 59
+	oBALANCE   OpCode = 60
+	oMKTX      OpCode = 61
+	oSUICIDE   OpCode = 62
 )
 
 // Since the opcodes aren't all in order we can't use a regular slice
@@ -89,7 +91,8 @@ var opCodeToString = map[OpCode]string{
 	oBLK_COINBASE:   "BLK_COINBASE",
 	oBLK_TIMESTAMP:  "BLK_TIMESTAMP",
 	oBLK_NUMBER:     "BLK_NUMBER",
-	oBLK_DIFFICULTY: "BLK_DIFFIFULTY",
+	oBLK_DIFFICULTY: "BLK_DIFFICULTY",
+	oBASEFEE:        "BASEFEE",
 	oSHA256:         "SHA256",
 	oRIPEMD160:      "RIPEMD160",
 	oECMUL:          "ECMUL",
@@ -97,14 +100,15 @@ var opCodeToString = map[OpCode]string{
 	oECSIGN:         "ECSIGN",
 	oECRECOVER:      "ECRECOVER",
 	oECVALID:        "ECVALID",
+	oSHA3:           "SHA3",
 	oPUSH:           "PUSH",
 	oPOP:            "POP",
 	oDUP:            "DUP",
-	oDUPN:           "DUPN",
 	oSWAP:           "SWAP",
-	oSWAPN:          "SWAPN",
-	oLOAD:           "LOAD",
-	oSTORE:          "STORE",
+	oMLOAD:          "MLOAD",
+	oMSTORE:         "MSTORE",
+	oSLOAD:          "SLOAD",
+	oSSTORE:         "SSTORE",
 	oJMP:            "JMP",
 	oJMPI:           "JMPI",
 	oIND:            "IND",
