@@ -26,8 +26,10 @@ Install
 Command line options
 ====================
 
+```
 -c      launch the developer console
 -m      start mining fake blocks and broadcast fake messages to the net
+```
 
 Contribution
 ============
@@ -45,8 +47,8 @@ Style](http://golang.org/doc/effective_go.html#formatting).
 Unless structs fields are supposed to be directly accesible, provide
 Getters and hide the fields through Go's exporting facility.
 
-Don't "overcomment", meaning that your and my mom doesn't have to read
-the source code.
+When you comment put meaningfull comments. Describe in detail what you
+want to achieve.
 
 *wrong*
 
@@ -56,6 +58,15 @@ if x > y {
     // It's greater!
 }
 ```
+
+Everyone reading the source probably know what you wanted to achieve
+with above code. Those are **not** meaningful comments.
+
+While the project isn't 100% tested I want you to write tests non the
+less. I haven't got time to evaluate everyone's code in detail so I
+expect you to write tests for me so I don't have to test your code
+manually. (If you want to contribute by just writing tests that's fine
+too!)
 
 ### Copy
 
