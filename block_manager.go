@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/ethutil-go"
 	"log"
 	"math/big"
+	"strconv"
 )
 
 type BlockChain struct {
@@ -40,16 +41,17 @@ func (bc *BlockChain) GenesisBlock() *ethutil.Block {
 }
 
 type BlockManager struct {
-	// Ethereum virtual machine for processing contracts
-	vm *Vm
 	// The block chain :)
 	bc *BlockChain
+
+	// Stack for processing contracts
+	stack *Stack
 }
 
 func NewBlockManager() *BlockManager {
 	bm := &BlockManager{
-		vm: NewVm(),
-		bc: NewBlockChain(),
+		bc:    NewBlockChain(),
+		stack: NewStack(),
 	}
 
 	return bm
@@ -189,7 +191,7 @@ func (bm *BlockManager) ProcessContract(tx *ethutil.Transaction, block *ethutil.
 	}()
 
 	// Process contract
-	bm.vm.ProcContract(tx, block, func(opType OpType) bool {
+	bm.ProcContract(tx, block, func(opType OpType) bool {
 		// TODO turn on once big ints are in place
 		//if !block.PayFee(tx.Hash(), StepFee.Uint64()) {
 		//  return false
@@ -200,4 +202,199 @@ func (bm *BlockManager) ProcessContract(tx *ethutil.Transaction, block *ethutil.
 
 	// Broadcast we're done
 	lockChan <- true
+}
+
+func (bm *BlockManager) ProcContract(tx *ethutil.Transaction,
+	block *ethutil.Block, cb TxCallback) {
+	// Instruction pointer
+	pc := 0
+
+	contract := block.GetContract(tx.Hash())
+	if contract == nil {
+		fmt.Println("Contract not found")
+		return
+	}
+
+	Pow256 := ethutil.BigPow(2, 256)
+
+	//fmt.Printf("#   op   arg\n")
+out:
+	for {
+		// The base big int for all calculations. Use this for any results.
+		base := new(big.Int)
+		// XXX Should Instr return big int slice instead of string slice?
+		// Get the next instruction from the contract
+		//op, _, _ := Instr(contract.state.Get(string(Encode(uint32(pc)))))
+		nb := ethutil.NumberToBytes(uint64(pc), 32)
+		o, _, _ := ethutil.Instr(contract.State().Get(string(nb)))
+		op := OpCode(o)
+
+		if !cb(0) {
+			break
+		}
+
+		if Debug {
+			//fmt.Printf("%-3d %-4s\n", pc, op.String())
+		}
+
+		switch op {
+		case oADD:
+			x, y := bm.stack.Popn()
+			// (x + y) % 2 ** 256
+			base.Add(x, y)
+			base.Mod(base, Pow256)
+			// Pop result back on the stack
+			bm.stack.Push(base.String())
+		case oSUB:
+			x, y := bm.stack.Popn()
+			// (x - y) % 2 ** 256
+			base.Sub(x, y)
+			base.Mod(base, Pow256)
+			// Pop result back on the stack
+			bm.stack.Push(base.String())
+		case oMUL:
+			x, y := bm.stack.Popn()
+			// (x * y) % 2 ** 256
+			base.Mul(x, y)
+			base.Mod(base, Pow256)
+			// Pop result back on the stack
+			bm.stack.Push(base.String())
+		case oDIV:
+			x, y := bm.stack.Popn()
+			// floor(x / y)
+			base.Div(x, y)
+			// Pop result back on the stack
+			bm.stack.Push(base.String())
+		case oSDIV:
+			x, y := bm.stack.Popn()
+			// n > 2**255
+			if x.Cmp(Pow256) > 0 {
+				x.Sub(Pow256, x)
+			}
+			if y.Cmp(Pow256) > 0 {
+				y.Sub(Pow256, y)
+			}
+			z := new(big.Int)
+			z.Div(x, y)
+			if z.Cmp(Pow256) > 0 {
+				z.Sub(Pow256, z)
+			}
+			// Push result on to the stack
+			bm.stack.Push(z.String())
+		case oMOD:
+			x, y := bm.stack.Popn()
+			base.Mod(x, y)
+			bm.stack.Push(base.String())
+		case oSMOD:
+			x, y := bm.stack.Popn()
+			// n > 2**255
+			if x.Cmp(Pow256) > 0 {
+				x.Sub(Pow256, x)
+			}
+			if y.Cmp(Pow256) > 0 {
+				y.Sub(Pow256, y)
+			}
+			z := new(big.Int)
+			z.Mod(x, y)
+			if z.Cmp(Pow256) > 0 {
+				z.Sub(Pow256, z)
+			}
+			// Push result on to the stack
+			bm.stack.Push(z.String())
+		case oEXP:
+			x, y := bm.stack.Popn()
+			base.Exp(x, y, Pow256)
+
+			bm.stack.Push(base.String())
+		case oNEG:
+			base.Sub(Pow256, ethutil.Big(bm.stack.Pop()))
+			bm.stack.Push(base.String())
+		case oLT:
+			x, y := bm.stack.Popn()
+			// x < y
+			if x.Cmp(y) < 0 {
+				bm.stack.Push("1")
+			} else {
+				bm.stack.Push("0")
+			}
+		case oLE:
+			x, y := bm.stack.Popn()
+			// x <= y
+			if x.Cmp(y) < 1 {
+				bm.stack.Push("1")
+			} else {
+				bm.stack.Push("0")
+			}
+		case oGT:
+			x, y := bm.stack.Popn()
+			// x > y
+			if x.Cmp(y) > 0 {
+				bm.stack.Push("1")
+			} else {
+				bm.stack.Push("0")
+			}
+		case oGE:
+			x, y := bm.stack.Popn()
+			// x >= y
+			if x.Cmp(y) > -1 {
+				bm.stack.Push("1")
+			} else {
+				bm.stack.Push("0")
+			}
+		case oNOT:
+			x, y := bm.stack.Popn()
+			// x != y
+			if x.Cmp(y) != 0 {
+				bm.stack.Push("1")
+			} else {
+				bm.stack.Push("0")
+			}
+
+		// Please note  that the  following code contains some
+		// ugly string casting. This will have to change to big
+		// ints. TODO :)
+		case oMYADDRESS:
+			bm.stack.Push(string(tx.Hash()))
+		case oTXSENDER:
+			bm.stack.Push(string(tx.Sender()))
+		case oTXVALUE:
+			bm.stack.Push(tx.Value.String())
+		case oTXDATAN:
+			bm.stack.Push(big.NewInt(int64(len(tx.Data))).String())
+		case oTXDATA:
+			v := ethutil.Big(bm.stack.Pop())
+			// v >= len(data)
+			if v.Cmp(big.NewInt(int64(len(tx.Data)))) >= 0 {
+				//I know this will change. It makes no
+				//sense. Read comment above
+				bm.stack.Push(ethutil.Big("0").String())
+			} else {
+				bm.stack.Push(ethutil.Big(tx.Data[v.Uint64()]).String())
+			}
+		case oBLK_PREVHASH:
+			bm.stack.Push(string(block.PrevHash))
+		case oBLK_COINBASE:
+			bm.stack.Push(block.Coinbase)
+		case oBLK_TIMESTAMP:
+			bm.stack.Push(big.NewInt(block.Time).String())
+		case oBLK_NUMBER:
+
+		case oPUSH:
+			// Get the next entry and pushes the value on the stack
+			pc++
+			bm.stack.Push(contract.State().Get(string(ethutil.NumberToBytes(uint64(pc), 32))))
+		case oPOP:
+			// Pop current value of the stack
+			bm.stack.Pop()
+		case oLOAD:
+			// Load instruction X on the stack
+			i, _ := strconv.Atoi(bm.stack.Pop())
+			bm.stack.Push(contract.State().Get(string(ethutil.NumberToBytes(uint64(i), 32))))
+		case oSTOP:
+			break out
+		}
+		pc++
+	}
+
+	bm.stack.Print()
 }
