@@ -8,12 +8,14 @@ import (
 	"testing"
 )
 
-var testsource = `{"Inputs":{
-    "doe": "reindeer",
-    "dog": "puppy",
-    "dogglesworth": "cat"
-  },
-  "Expectation":"e378927bfc1bd4f01a2e8d9f59bd18db8a208bb493ac0b00f93ce51d4d2af76c"
+var testsource = `
+{
+	"inputs":{
+		"doe": "reindeer",
+		"dog": "puppy",
+		"dogglesworth": "cat"
+	},
+	"expectation":"e378927bfc1bd4f01a2e8d9f59bd18db8a208bb493ac0b00f93ce51d4d2af76c"
 }`
 
 func TestTestRunner(t *testing.T) {
