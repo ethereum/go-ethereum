@@ -6,7 +6,7 @@ Ethereum
 Ethereum Go (c) [0255c7881](https://github.com/ethereum/go-ethereum#copy)
 
 A fair warning; Ethereum is not yet to be used in production. There's no
-test-net and you aren't mining read blocks (just one which is the genesis block).
+test-net and you aren't mining real blocks (just one which is the genesis block).
 
 
 Ethereum Go is split up in several sub packages. Please refer to each
