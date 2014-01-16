@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"github.com/ethereum/ethutil-go"
+	"github.com/obscuren/secp256-go"
 	"log"
+	"math"
 	"math/big"
 )
 
@@ -421,9 +424,40 @@ out:
 
 			// x = floor(10^21 / floor(diff^0.5))
 			bm.stack.Push(x.String())
-		case oSHA256:
-		case oRIPEMD160:
+		case oSHA256, oRIPEMD160:
+			// This is probably save
+			// ceil(pop / 32)
+			length := int(math.Ceil(float64(ethutil.Big(bm.stack.Pop()).Uint64()) / 32.0))
+			// New buffer which will contain the concatenated popped items
+			data := new(bytes.Buffer)
+			for i := 0; i < length; i++ {
+				// Encode the number to bytes and have it 32bytes long
+				num := ethutil.NumberToBytes(ethutil.Big(bm.stack.Pop()).Bytes(), 256)
+				data.WriteString(string(num))
+			}
+
+			if op == oSHA256 {
+				bm.stack.Push(base.SetBytes(ethutil.Sha256Bin(data.Bytes())).String())
+			} else {
+				bm.stack.Push(base.SetBytes(ethutil.Ripemd160(data.Bytes())).String())
+			}
 		case oECMUL:
+			y := bm.stack.Pop()
+			x := bm.stack.Pop()
+			n := bm.stack.Pop()
+
+			if ethutil.Big(x).Cmp(ethutil.Big(y)) 
+			data := new(bytes.Buffer)
+			data.WriteString(x)
+			data.WriteString(y)
+			if secp256.VerifyPubkeyValidity(data.Bytes()) == 1 {
+				// TODO
+			} else {
+				// Invalid, push infinity
+				bm.stack.Push("0")
+				bm.stack.Push("0")
+			}
+
 		case oECADD:
 		case oECSIGN:
 		case oECRECOVER:
