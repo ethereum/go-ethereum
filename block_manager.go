@@ -6,14 +6,14 @@ import (
 	"github.com/ethereum/ethutil-go"
 	"log"
 	"math/big"
-	"strconv"
 )
 
 type BlockChain struct {
+	// Last block
 	LastBlock *ethutil.Block
-
+	// The famous, the fabulous Mister GENESIIIIIIS (block)
 	genesisBlock *ethutil.Block
-
+	// Last known total difficulty
 	TD *big.Int
 }
 
@@ -22,11 +22,10 @@ func NewBlockChain() *BlockChain {
 	bc.genesisBlock = ethutil.NewBlock(ethutil.Encode(ethutil.Genesis))
 
 	// Set the last know difficulty (might be 0x0 as initial value, Genesis)
-	bc.TD = new(big.Int)
-	bc.TD.SetBytes(ethutil.Config.Db.LastKnownTD())
+	bc.TD = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
 
 	// TODO get last block from the database
-	//bc.LastBlock = bc.genesisBlock
+	bc.LastBlock = bc.genesisBlock
 
 	return bc
 }
@@ -46,6 +45,9 @@ type BlockManager struct {
 
 	// Stack for processing contracts
 	stack *Stack
+
+	// Last known block number
+	LastBlockNumber *big.Int
 }
 
 func NewBlockManager() *BlockManager {
@@ -53,6 +55,10 @@ func NewBlockManager() *BlockManager {
 		bc:    NewBlockChain(),
 		stack: NewStack(),
 	}
+
+	// Set the last known block number based on the blockchains last
+	// block
+	bm.LastBlockNumber = bm.BlockInfo(bm.bc.LastBlock).Number
 
 	return bm
 }
@@ -97,6 +103,20 @@ func (bm *BlockManager) ProcessBlock(block *ethutil.Block) error {
 	}
 
 	return nil
+}
+
+func (bm *BlockManager) writeBlockInfo(block *ethutil.Block) {
+	bi := ethutil.BlockInfo{Number: bm.LastBlockNumber.Add(bm.LastBlockNumber, big.NewInt(1))}
+
+	ethutil.Config.Db.Put(append(block.Hash(), []byte("Info")...), bi.MarshalRlp())
+}
+
+func (bm *BlockManager) BlockInfo(block *ethutil.Block) ethutil.BlockInfo {
+	bi := ethutil.BlockInfo{}
+	data, _ := ethutil.Config.Db.Get(append(block.Hash(), []byte("Info")...))
+	bi.UnmarshalRlp(data)
+
+	return bi
 }
 
 func (bm *BlockManager) CalculateTD(block *ethutil.Block) bool {
@@ -204,10 +224,11 @@ func (bm *BlockManager) ProcessContract(tx *ethutil.Transaction, block *ethutil.
 	lockChan <- true
 }
 
-func (bm *BlockManager) ProcContract(tx *ethutil.Transaction,
-	block *ethutil.Block, cb TxCallback) {
+// Contract evaluation is done here.
+func (bm *BlockManager) ProcContract(tx *ethutil.Transaction, block *ethutil.Block, cb TxCallback) {
 	// Instruction pointer
 	pc := 0
+	blockInfo := bm.BlockInfo(block)
 
 	contract := block.GetContract(tx.Hash())
 	if contract == nil {
@@ -238,6 +259,8 @@ out:
 		}
 
 		switch op {
+		case oSTOP:
+			break out
 		case oADD:
 			x, y := bm.stack.Popn()
 			// (x + y) % 2 ** 256
@@ -378,7 +401,34 @@ out:
 		case oBLK_TIMESTAMP:
 			bm.stack.Push(big.NewInt(block.Time).String())
 		case oBLK_NUMBER:
+			bm.stack.Push(blockInfo.Number.String())
+		case oBLK_DIFFICULTY:
+			bm.stack.Push(block.Difficulty.String())
+		case oBASEFEE:
+			// e = 10^21
+			e := big.NewInt(0).Exp(big.NewInt(10), big.NewInt(21), big.NewInt(0))
+			d := new(big.Rat)
+			d.SetInt(block.Difficulty)
+			c := new(big.Rat)
+			c.SetFloat64(0.5)
+			// d = diff / 0.5
+			d.Quo(d, c)
+			// base = floor(d)
+			base.Div(d.Num(), d.Denom())
 
+			x := new(big.Int)
+			x.Div(e, base)
+
+			// x = floor(10^21 / floor(diff^0.5))
+			bm.stack.Push(x.String())
+		case oSHA256:
+		case oRIPEMD160:
+		case oECMUL:
+		case oECADD:
+		case oECSIGN:
+		case oECRECOVER:
+		case oECVALID:
+		case oSHA3:
 		case oPUSH:
 			// Get the next entry and pushes the value on the stack
 			pc++
@@ -386,12 +436,25 @@ out:
 		case oPOP:
 			// Pop current value of the stack
 			bm.stack.Pop()
-		case oLOAD:
-			// Load instruction X on the stack
-			i, _ := strconv.Atoi(bm.stack.Pop())
-			bm.stack.Push(contract.State().Get(string(ethutil.NumberToBytes(uint64(i), 32))))
-		case oSTOP:
-			break out
+		case oDUP:
+		case oSWAP:
+		case oMLOAD:
+		case oMSTORE:
+		case oSLOAD:
+		case oSSTORE:
+		case oJMP:
+		case oJMPI:
+		case oIND:
+		case oEXTRO:
+		case oBALANCE:
+		case oMKTX:
+		case oSUICIDE:
+			/*
+				case oLOAD:
+					// Load instruction X on the stack
+					i, _ := strconv.Atoi(bm.stack.Pop())
+					bm.stack.Push(contract.State().Get(string(ethutil.NumberToBytes(uint64(i), 32))))
+			*/
 		}
 		pc++
 	}
