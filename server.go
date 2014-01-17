@@ -81,13 +81,13 @@ func (s *Server) Broadcast(msgType ethwire.MsgType, data []byte) {
 }
 
 const (
-	processReapingTimeout = 10 // TODO increase
+	processReapingTimeout = 1 // TODO increase
 )
 
 func (s *Server) ReapDeadPeers() {
 	for {
 		eachPeer(s.peers, func(p *Peer, e *list.Element) {
-			if atomic.LoadInt32(&p.disconnect) == 1 {
+			if atomic.LoadInt32(&p.disconnect) == 1 || (p.inbound && (time.Now().Unix()-p.lastPong) > int64(5*time.Minute)) {
 				log.Println("Dead peer found .. reaping")
 
 				s.peers.Remove(e)

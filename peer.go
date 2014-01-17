@@ -34,6 +34,9 @@ type Peer struct {
 	// This flag is used by writeMessage to check if messages are allowed
 	// to be send or not. If no version is known all messages are ignored.
 	versionKnown bool
+
+	// Last received pong message
+	lastPong int64
 }
 
 func NewPeer(conn net.Conn, server *Server, inbound bool) *Peer {
@@ -109,7 +112,7 @@ func (p *Peer) writeMessage(msg *ethwire.InOutMsg) {
 // Outbound message handler. Outbound messages are handled here
 func (p *Peer) HandleOutbound() {
 	// The ping timer. Makes sure that every 2 minutes a ping is send to the peer
-	tickleTimer := time.NewTimer(2 * time.Minute)
+	tickleTimer := time.NewTicker(2 * time.Minute)
 out:
 	for {
 		select {
@@ -173,7 +176,10 @@ out:
 		case ethwire.MsgGetPeersTy:
 		case ethwire.MsgPeersTy:
 		case ethwire.MsgPingTy:
+			// Respond back with pong
+			p.writeMessage(&ethwire.InOutMsg{Type: ethwire.MsgPongTy})
 		case ethwire.MsgPongTy:
+			p.lastPong = time.Now().Unix()
 
 			/*
 				case "blockmine":
