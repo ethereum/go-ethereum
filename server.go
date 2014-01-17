@@ -20,6 +20,10 @@ func eachPeer(peers *list.List, callback func(*Peer, *list.Element)) {
 	}
 }
 
+const (
+	processReapingTimeout = 60 // TODO increase
+)
+
 type Server struct {
 	// Channel for shutting down the server
 	shutdownChan chan bool
@@ -66,6 +70,13 @@ func (s *Server) AddPeer(conn net.Conn) {
 	}
 }
 
+func (s *Server) ProcessPeerList(addrs []string) {
+	for _, addr := range addrs {
+		// TODO Probably requires some sanity checks
+		s.ConnectToPeer(addr)
+	}
+}
+
 func (s *Server) ConnectToPeer(addr string) error {
 	peer := NewOutboundPeer(addr, s)
 
@@ -74,15 +85,39 @@ func (s *Server) ConnectToPeer(addr string) error {
 	return nil
 }
 
+func (s *Server) OutboundPeers() []*Peer {
+	// Create a new peer slice with at least the length of the total peers
+	outboundPeers := make([]*Peer, s.peers.Len())
+	length := 0
+	eachPeer(s.peers, func(p *Peer, e *list.Element) {
+		if !p.inbound {
+			outboundPeers[length] = p
+			length++
+		}
+	})
+
+	return outboundPeers[:length]
+}
+
+func (s *Server) InboundPeers() []*Peer {
+	// Create a new peer slice with at least the length of the total peers
+	inboundPeers := make([]*Peer, s.peers.Len())
+	length := 0
+	eachPeer(s.peers, func(p *Peer, e *list.Element) {
+		if p.inbound {
+			inboundPeers[length] = p
+			length++
+		}
+	})
+
+	return inboundPeers[:length]
+}
+
 func (s *Server) Broadcast(msgType ethwire.MsgType, data []byte) {
 	eachPeer(s.peers, func(p *Peer, e *list.Element) {
 		p.QueueMessage(ethwire.NewMessage(msgType, data))
 	})
 }
-
-const (
-	processReapingTimeout = 1 // TODO increase
-)
 
 func (s *Server) ReapDeadPeers() {
 	for {
