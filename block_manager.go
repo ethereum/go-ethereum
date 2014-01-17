@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ethereum/ethutil-go"
-	"github.com/obscuren/secp256-go"
+	"github.com/obscuren/secp256k1-go"
 	"log"
 	"math"
 	"math/big"
@@ -46,17 +46,20 @@ type BlockManager struct {
 	// The block chain :)
 	bc *BlockChain
 
-	// Stack for processing contracts
-	stack *Stack
-
 	// Last known block number
 	LastBlockNumber *big.Int
+
+	// Stack for processing contracts
+	stack *Stack
+	// non-persistent key/value memory storage
+	mem map[string]string
 }
 
 func NewBlockManager() *BlockManager {
 	bm := &BlockManager{
 		bc:    NewBlockChain(),
 		stack: NewStack(),
+		mem:   make(map[string]string),
 	}
 
 	// Set the last known block number based on the blockchains last
@@ -100,24 +103,27 @@ func (bm *BlockManager) ProcessBlock(block *ethutil.Block) error {
 		<-lockChan
 	}
 
+	// Calculate the new total difficulty and sync back to the db
 	if bm.CalculateTD(block) {
-		ethutil.Config.Db.Put(block.Hash(), block.MarshalRlp())
+		ethutil.Config.Db.Put(block.Hash(), block.RlpEncode())
 		bm.bc.LastBlock = block
 	}
 
 	return nil
 }
 
+// Unexported method for writing extra non-essential block info to the db
 func (bm *BlockManager) writeBlockInfo(block *ethutil.Block) {
 	bi := ethutil.BlockInfo{Number: bm.LastBlockNumber.Add(bm.LastBlockNumber, big.NewInt(1))}
 
-	ethutil.Config.Db.Put(append(block.Hash(), []byte("Info")...), bi.MarshalRlp())
+	// For now we use the block hash with the words "info" appended as key
+	ethutil.Config.Db.Put(append(block.Hash(), []byte("Info")...), bi.RlpEncode())
 }
 
 func (bm *BlockManager) BlockInfo(block *ethutil.Block) ethutil.BlockInfo {
 	bi := ethutil.BlockInfo{}
 	data, _ := ethutil.Config.Db.Get(append(block.Hash(), []byte("Info")...))
-	bi.UnmarshalRlp(data)
+	bi.RlpDecode(data)
 
 	return bi
 }
@@ -196,7 +202,7 @@ func (bm *BlockManager) AccumelateRewards(block *ethutil.Block) error {
 
 	// Reward amount of ether to the coinbase address
 	ether.AddFee(ethutil.CalculateBlockReward(block, len(block.Uncles)))
-	block.State().Update(block.Coinbase, string(ether.MarshalRlp()))
+	block.State().Update(block.Coinbase, string(ether.RlpEncode()))
 
 	// TODO Reward each uncle
 
@@ -444,19 +450,24 @@ out:
 		case oECMUL:
 			y := bm.stack.Pop()
 			x := bm.stack.Pop()
-			n := bm.stack.Pop()
+			//n := bm.stack.Pop()
 
-			if ethutil.Big(x).Cmp(ethutil.Big(y)) 
+			//if ethutil.Big(x).Cmp(ethutil.Big(y)) {
 			data := new(bytes.Buffer)
 			data.WriteString(x)
 			data.WriteString(y)
-			if secp256.VerifyPubkeyValidity(data.Bytes()) == 1 {
+			if secp256k1.VerifyPubkeyValidity(data.Bytes()) == 1 {
 				// TODO
 			} else {
 				// Invalid, push infinity
 				bm.stack.Push("0")
 				bm.stack.Push("0")
 			}
+			//} else {
+			//	// Invalid, push infinity
+			//	bm.stack.Push("0")
+			//	bm.stack.Push("0")
+			//}
 
 		case oECADD:
 		case oECSIGN:

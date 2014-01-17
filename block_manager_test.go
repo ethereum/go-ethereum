@@ -69,7 +69,7 @@ func TestVm(t *testing.T) {
   tx := NewTransaction("1e8a42ea8cce13", 100, []string{})
 
   block := CreateBlock("", 0, "", "c014ba53", 0, 0, "", []*Transaction{ctrct, tx})
-  db.Put(block.Hash(), block.MarshalRlp())
+  db.Put(block.Hash(), block.RlpEncode())
 
   bm := NewBlockManager()
   bm.ProcessBlock( block )
