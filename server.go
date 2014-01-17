@@ -7,8 +7,8 @@ import (
 	"github.com/ethereum/ethwire-go"
 	"log"
 	"net"
-	"time"
 	"sync/atomic"
+	"time"
 )
 
 func eachPeer(peers *list.List, callback func(*Peer, *list.Element)) {
@@ -19,7 +19,6 @@ func eachPeer(peers *list.List, callback func(*Peer, *list.Element)) {
 		}
 	}
 }
-
 
 type Server struct {
 	// Channel for shutting down the server
@@ -75,14 +74,14 @@ func (s *Server) ConnectToPeer(addr string) error {
 	return nil
 }
 
-func (s *Server) Broadcast(msgType string, data []byte) {
+func (s *Server) Broadcast(msgType ethwire.MsgType, data []byte) {
 	eachPeer(s.peers, func(p *Peer, e *list.Element) {
-		p.QueueMessage(ethwire.NewMessage(msgType, 0, data))
+		p.QueueMessage(ethwire.NewMessage(msgType, data))
 	})
 }
 
 const (
-	processReapingTimeout            = 10 // TODO increase
+	processReapingTimeout = 10 // TODO increase
 )
 
 func (s *Server) ReapDeadPeers() {
@@ -139,13 +138,13 @@ func (s *Server) Start() {
 
 	// TMP
 	/*
-	go func() {
-		for {
-			s.Broadcast("block", s.blockManager.bc.GenesisBlock().MarshalRlp())
+		go func() {
+			for {
+				s.Broadcast("block", s.blockManager.bc.GenesisBlock().RlpEncode())
 
-			time.Sleep(1000 * time.Millisecond)
-		}
-	}()
+				time.Sleep(1000 * time.Millisecond)
+			}
+		}()
 	*/
 }
 
@@ -154,7 +153,7 @@ func (s *Server) Stop() {
 	defer s.db.Close()
 
 	eachPeer(s.peers, func(p *Peer, e *list.Element) {
-			p.Stop()
+		p.Stop()
 	})
 
 	s.shutdownChan <- true
