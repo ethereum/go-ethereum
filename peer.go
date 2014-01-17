@@ -20,7 +20,7 @@ type Peer struct {
 	// Net connection
 	conn net.Conn
 	// Output queue which is used to communicate and handle messages
-	outputQueue chan *ethwire.InOutMsg
+	outputQueue chan *ethwire.Msg
 	// Quit channel
 	quit chan bool
 	// Determines whether it's an inbound or outbound peer
@@ -41,7 +41,7 @@ type Peer struct {
 
 func NewPeer(conn net.Conn, server *Server, inbound bool) *Peer {
 	return &Peer{
-		outputQueue: make(chan *ethwire.InOutMsg, outputBufferSize),
+		outputQueue: make(chan *ethwire.Msg, outputBufferSize),
 		quit:        make(chan bool),
 		server:      server,
 		conn:        conn,
@@ -53,7 +53,7 @@ func NewPeer(conn net.Conn, server *Server, inbound bool) *Peer {
 
 func NewOutboundPeer(addr string, server *Server) *Peer {
 	p := &Peer{
-		outputQueue: make(chan *ethwire.InOutMsg, outputBufferSize),
+		outputQueue: make(chan *ethwire.Msg, outputBufferSize),
 		quit:        make(chan bool),
 		server:      server,
 		inbound:     false,
@@ -82,11 +82,11 @@ func NewOutboundPeer(addr string, server *Server) *Peer {
 }
 
 // Outputs any RLP encoded data to the peer
-func (p *Peer) QueueMessage(msg *ethwire.InOutMsg) {
+func (p *Peer) QueueMessage(msg *ethwire.Msg) {
 	p.outputQueue <- msg
 }
 
-func (p *Peer) writeMessage(msg *ethwire.InOutMsg) {
+func (p *Peer) writeMessage(msg *ethwire.Msg) {
 	// Ignore the write if we're not connected
 	if atomic.LoadInt32(&p.connected) != 1 {
 		return
@@ -123,7 +123,7 @@ out:
 			p.lastSend = time.Now()
 
 		case <-tickleTimer.C:
-			p.writeMessage(&ethwire.InOutMsg{Type: ethwire.MsgPingTy})
+			p.writeMessage(&ethwire.Msg{Type: ethwire.MsgPingTy})
 
 		// Break out of the for loop if a quit message is posted
 		case <-p.quit:
@@ -177,7 +177,7 @@ out:
 		case ethwire.MsgPeersTy:
 		case ethwire.MsgPingTy:
 			// Respond back with pong
-			p.writeMessage(&ethwire.InOutMsg{Type: ethwire.MsgPongTy})
+			p.writeMessage(&ethwire.Msg{Type: ethwire.MsgPongTy})
 		case ethwire.MsgPongTy:
 			p.lastPong = time.Now().Unix()
 
@@ -231,7 +231,7 @@ func (p *Peer) pushHandshake() error {
 	return nil
 }
 
-func (p *Peer) handleHandshake(msg *ethwire.InOutMsg) {
+func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	c := ethutil.Conv(msg.Data)
 	// [PROTOCOL_VERSION, NETWORK_ID, CLIENT_ID]
 	if c.Get(2).AsUint() == p.server.Nonce {
