@@ -9,6 +9,7 @@ import (
 	"log"
 	"math"
 	"math/big"
+	"strconv"
 )
 
 type BlockChain struct {
@@ -52,14 +53,14 @@ type BlockManager struct {
 	// Stack for processing contracts
 	stack *Stack
 	// non-persistent key/value memory storage
-	mem map[string]string
+	mem map[string]*big.Int
 }
 
 func NewBlockManager() *BlockManager {
 	bm := &BlockManager{
 		bc:    NewBlockChain(),
 		stack: NewStack(),
-		mem:   make(map[string]string),
+		mem:   make(map[string]*big.Int),
 	}
 
 	// Set the last known block number based on the blockchains last
@@ -276,27 +277,27 @@ out:
 			base.Add(x, y)
 			base.Mod(base, Pow256)
 			// Pop result back on the stack
-			bm.stack.Push(base.String())
+			bm.stack.Push(base)
 		case oSUB:
 			x, y := bm.stack.Popn()
 			// (x - y) % 2 ** 256
 			base.Sub(x, y)
 			base.Mod(base, Pow256)
 			// Pop result back on the stack
-			bm.stack.Push(base.String())
+			bm.stack.Push(base)
 		case oMUL:
 			x, y := bm.stack.Popn()
 			// (x * y) % 2 ** 256
 			base.Mul(x, y)
 			base.Mod(base, Pow256)
 			// Pop result back on the stack
-			bm.stack.Push(base.String())
+			bm.stack.Push(base)
 		case oDIV:
 			x, y := bm.stack.Popn()
 			// floor(x / y)
 			base.Div(x, y)
 			// Pop result back on the stack
-			bm.stack.Push(base.String())
+			bm.stack.Push(base)
 		case oSDIV:
 			x, y := bm.stack.Popn()
 			// n > 2**255
@@ -312,11 +313,11 @@ out:
 				z.Sub(Pow256, z)
 			}
 			// Push result on to the stack
-			bm.stack.Push(z.String())
+			bm.stack.Push(z)
 		case oMOD:
 			x, y := bm.stack.Popn()
 			base.Mod(x, y)
-			bm.stack.Push(base.String())
+			bm.stack.Push(base)
 		case oSMOD:
 			x, y := bm.stack.Popn()
 			// n > 2**255
@@ -332,87 +333,85 @@ out:
 				z.Sub(Pow256, z)
 			}
 			// Push result on to the stack
-			bm.stack.Push(z.String())
+			bm.stack.Push(z)
 		case oEXP:
 			x, y := bm.stack.Popn()
 			base.Exp(x, y, Pow256)
 
-			bm.stack.Push(base.String())
+			bm.stack.Push(base)
 		case oNEG:
-			base.Sub(Pow256, ethutil.Big(bm.stack.Pop()))
-			bm.stack.Push(base.String())
+			base.Sub(Pow256, bm.stack.Pop())
+			bm.stack.Push(base)
 		case oLT:
 			x, y := bm.stack.Popn()
 			// x < y
 			if x.Cmp(y) < 0 {
-				bm.stack.Push("1")
+				bm.stack.Push(ethutil.BigTrue)
 			} else {
-				bm.stack.Push("0")
+				bm.stack.Push(ethutil.BigFalse)
 			}
 		case oLE:
 			x, y := bm.stack.Popn()
 			// x <= y
 			if x.Cmp(y) < 1 {
-				bm.stack.Push("1")
+				bm.stack.Push(ethutil.BigTrue)
 			} else {
-				bm.stack.Push("0")
+				bm.stack.Push(ethutil.BigFalse)
 			}
 		case oGT:
 			x, y := bm.stack.Popn()
 			// x > y
 			if x.Cmp(y) > 0 {
-				bm.stack.Push("1")
+				bm.stack.Push(ethutil.BigTrue)
 			} else {
-				bm.stack.Push("0")
+				bm.stack.Push(ethutil.BigFalse)
 			}
 		case oGE:
 			x, y := bm.stack.Popn()
 			// x >= y
 			if x.Cmp(y) > -1 {
-				bm.stack.Push("1")
+				bm.stack.Push(ethutil.BigTrue)
 			} else {
-				bm.stack.Push("0")
+				bm.stack.Push(ethutil.BigFalse)
 			}
 		case oNOT:
 			x, y := bm.stack.Popn()
 			// x != y
 			if x.Cmp(y) != 0 {
-				bm.stack.Push("1")
+				bm.stack.Push(ethutil.BigTrue)
 			} else {
-				bm.stack.Push("0")
+				bm.stack.Push(ethutil.BigFalse)
 			}
 
 		// Please note  that the  following code contains some
 		// ugly string casting. This will have to change to big
 		// ints. TODO :)
 		case oMYADDRESS:
-			bm.stack.Push(string(tx.Hash()))
+			bm.stack.Push(ethutil.BigD(tx.Hash()))
 		case oTXSENDER:
-			bm.stack.Push(string(tx.Sender()))
+			bm.stack.Push(ethutil.BigD(tx.Sender()))
 		case oTXVALUE:
-			bm.stack.Push(tx.Value.String())
+			bm.stack.Push(tx.Value)
 		case oTXDATAN:
-			bm.stack.Push(big.NewInt(int64(len(tx.Data))).String())
+			bm.stack.Push(big.NewInt(int64(len(tx.Data))))
 		case oTXDATA:
-			v := ethutil.Big(bm.stack.Pop())
+			v := bm.stack.Pop()
 			// v >= len(data)
 			if v.Cmp(big.NewInt(int64(len(tx.Data)))) >= 0 {
-				//I know this will change. It makes no
-				//sense. Read comment above
-				bm.stack.Push(ethutil.Big("0").String())
+				bm.stack.Push(ethutil.Big("0"))
 			} else {
-				bm.stack.Push(ethutil.Big(tx.Data[v.Uint64()]).String())
+				bm.stack.Push(ethutil.Big(tx.Data[v.Uint64()]))
 			}
 		case oBLK_PREVHASH:
-			bm.stack.Push(string(block.PrevHash))
+			bm.stack.Push(ethutil.Big(block.PrevHash))
 		case oBLK_COINBASE:
-			bm.stack.Push(block.Coinbase)
+			bm.stack.Push(ethutil.Big(block.Coinbase))
 		case oBLK_TIMESTAMP:
-			bm.stack.Push(big.NewInt(block.Time).String())
+			bm.stack.Push(big.NewInt(block.Time))
 		case oBLK_NUMBER:
-			bm.stack.Push(blockInfo.Number.String())
+			bm.stack.Push(blockInfo.Number)
 		case oBLK_DIFFICULTY:
-			bm.stack.Push(block.Difficulty.String())
+			bm.stack.Push(block.Difficulty)
 		case oBASEFEE:
 			// e = 10^21
 			e := big.NewInt(0).Exp(big.NewInt(10), big.NewInt(21), big.NewInt(0))
@@ -429,23 +428,23 @@ out:
 			x.Div(e, base)
 
 			// x = floor(10^21 / floor(diff^0.5))
-			bm.stack.Push(x.String())
+			bm.stack.Push(x)
 		case oSHA256, oRIPEMD160:
 			// This is probably save
 			// ceil(pop / 32)
-			length := int(math.Ceil(float64(ethutil.Big(bm.stack.Pop()).Uint64()) / 32.0))
+			length := int(math.Ceil(float64(bm.stack.Pop().Uint64()) / 32.0))
 			// New buffer which will contain the concatenated popped items
 			data := new(bytes.Buffer)
 			for i := 0; i < length; i++ {
 				// Encode the number to bytes and have it 32bytes long
-				num := ethutil.NumberToBytes(ethutil.Big(bm.stack.Pop()).Bytes(), 256)
+				num := ethutil.NumberToBytes(bm.stack.Pop().Bytes(), 256)
 				data.WriteString(string(num))
 			}
 
 			if op == oSHA256 {
-				bm.stack.Push(base.SetBytes(ethutil.Sha256Bin(data.Bytes())).String())
+				bm.stack.Push(base.SetBytes(ethutil.Sha256Bin(data.Bytes())))
 			} else {
-				bm.stack.Push(base.SetBytes(ethutil.Ripemd160(data.Bytes())).String())
+				bm.stack.Push(base.SetBytes(ethutil.Ripemd160(data.Bytes())))
 			}
 		case oECMUL:
 			y := bm.stack.Pop()
@@ -454,14 +453,14 @@ out:
 
 			//if ethutil.Big(x).Cmp(ethutil.Big(y)) {
 			data := new(bytes.Buffer)
-			data.WriteString(x)
-			data.WriteString(y)
+			data.WriteString(x.String())
+			data.WriteString(y.String())
 			if secp256k1.VerifyPubkeyValidity(data.Bytes()) == 1 {
 				// TODO
 			} else {
 				// Invalid, push infinity
-				bm.stack.Push("0")
-				bm.stack.Push("0")
+				bm.stack.Push(ethutil.Big("0"))
+				bm.stack.Push(ethutil.Big("0"))
 			}
 			//} else {
 			//	// Invalid, push infinity
@@ -475,31 +474,59 @@ out:
 		case oECVALID:
 		case oSHA3:
 		case oPUSH:
-			// Get the next entry and pushes the value on the stack
 			pc++
-			bm.stack.Push(contract.State().Get(string(ethutil.NumberToBytes(uint64(pc), 32))))
+			bm.stack.Push(bm.mem[strconv.Itoa(pc)])
 		case oPOP:
 			// Pop current value of the stack
 			bm.stack.Pop()
 		case oDUP:
+			// Dup top stack
+			x := bm.stack.Pop()
+			bm.stack.Push(x)
+			bm.stack.Push(x)
 		case oSWAP:
+			// Swap two top most values
+			x, y := bm.stack.Popn()
+			bm.stack.Push(y)
+			bm.stack.Push(x)
 		case oMLOAD:
+			x := bm.stack.Pop()
+			bm.stack.Push(bm.mem[x.String()])
 		case oMSTORE:
+			x, y := bm.stack.Popn()
+			bm.mem[x.String()] = y
 		case oSLOAD:
+			// Load the value in storage and push it on the stack
+			x := bm.stack.Pop()
+			// decode the object as a big integer
+			decoder := ethutil.NewRlpDecoder([]byte(contract.State().Get(x.String())))
+			if !decoder.IsNil() {
+				bm.stack.Push(decoder.AsBigInt())
+			} else {
+				bm.stack.Push(ethutil.BigFalse)
+			}
 		case oSSTORE:
+			// Store Y at index X
+			x, y := bm.stack.Popn()
+			contract.State().Update(x.String(), string(ethutil.Encode(y)))
 		case oJMP:
+			x := int(bm.stack.Pop().Uint64())
+			// Set pc to x - 1 (minus one so the incrementing at the end won't effect it)
+			pc = x
+			pc--
 		case oJMPI:
+			x := bm.stack.Pop()
+			// Set pc to x if it's non zero
+			if x.Cmp(ethutil.BigFalse) != 0 {
+				pc = int(x.Uint64())
+				pc--
+			}
 		case oIND:
+			bm.stack.Push(big.NewInt(int64(pc)))
 		case oEXTRO:
 		case oBALANCE:
 		case oMKTX:
 		case oSUICIDE:
-			/*
-				case oLOAD:
-					// Load instruction X on the stack
-					i, _ := strconv.Atoi(bm.stack.Pop())
-					bm.stack.Push(contract.State().Get(string(ethutil.NumberToBytes(uint64(i), 32))))
-			*/
 		}
 		pc++
 	}

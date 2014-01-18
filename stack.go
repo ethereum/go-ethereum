@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/ethereum/ethutil-go"
 	"math/big"
 )
 
@@ -135,14 +134,14 @@ type TxCallback func(opType OpType) bool
 
 // Simple push/pop stack mechanism
 type Stack struct {
-	data []string
+	data []*big.Int
 }
 
 func NewStack() *Stack {
 	return &Stack{}
 }
 
-func (st *Stack) Pop() string {
+func (st *Stack) Pop() *big.Int {
 	s := len(st.data)
 
 	str := st.data[s-1]
@@ -154,13 +153,13 @@ func (st *Stack) Pop() string {
 func (st *Stack) Popn() (*big.Int, *big.Int) {
 	s := len(st.data)
 
-	strs := st.data[s-2:]
+	ints := st.data[s-2:]
 	st.data = st.data[:s-2]
 
-	return ethutil.Big(strs[0]), ethutil.Big(strs[1])
+	return ints[0], ints[1]
 }
 
-func (st *Stack) Push(d string) {
+func (st *Stack) Push(d *big.Int) {
 	st.data = append(st.data, d)
 }
 func (st *Stack) Print() {
