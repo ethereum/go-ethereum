@@ -524,7 +524,16 @@ out:
 		case oIND:
 			bm.stack.Push(big.NewInt(int64(pc)))
 		case oEXTRO:
+			memAddr := bm.stack.Pop()
+			contractAddr := bm.stack.Pop().Bytes()
+
+			// Push the contract's memory on to the stack
+			bm.stack.Push(getContractMemory(block, contractAddr, memAddr))
 		case oBALANCE:
+			// Pushes the balance of the popped value on to the stack
+			d := block.State().Get(bm.stack.Pop().String())
+			ether := ethutil.NewEtherFromData([]byte(d))
+			bm.stack.Push(ether.Amount)
 		case oMKTX:
 		case oSUICIDE:
 		}
@@ -532,4 +541,21 @@ out:
 	}
 
 	bm.stack.Print()
+}
+
+// Returns an address from the specified contract's address
+func getContractMemory(block *ethutil.Block, contractAddr []byte, memAddr *big.Int) *big.Int {
+	contract := block.GetContract(contractAddr)
+	if contract == nil {
+		log.Panicf("invalid contract addr %x", contractAddr)
+	}
+	val := contract.State().Get(memAddr.String())
+
+	// decode the object as a big integer
+	decoder := ethutil.NewRlpDecoder([]byte(val))
+	if decoder.IsNil() {
+		return ethutil.BigFalse
+	}
+
+	return decoder.AsBigInt()
 }
