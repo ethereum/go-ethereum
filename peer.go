@@ -174,7 +174,7 @@ out:
 				log.Println(err)
 			}
 		case ethwire.MsgTxTy:
-			//p.server.blockManager.AddToTransactionPool(ethutil.NewTransactionFromData(ethutil.Encode(msg.Data)))
+			p.server.txPool.QueueTransaction(ethutil.NewTransactionFromData(ethutil.Encode(msg.Data)))
 		case ethwire.MsgInvTy:
 		case ethwire.MsgGetPeersTy:
 			p.requestedPeerList = true

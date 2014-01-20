@@ -32,6 +32,9 @@ type Server struct {
 	db *ethdb.MemDatabase
 	// Block manager for processing new blocks and managing the block chain
 	blockManager *BlockManager
+	// The transaction pool. Transaction can be pushed on this pool
+	// for later including in the blocks
+	txPool *TxPool
 	// Peers (NYI)
 	peers *list.List
 	// Nonce
@@ -50,11 +53,12 @@ func NewServer() (*Server, error) {
 	nonce, _ := ethutil.RandomUint64()
 	server := &Server{
 		shutdownChan: make(chan bool),
-		blockManager: NewBlockManager(),
 		db:           db,
 		peers:        list.New(),
 		Nonce:        nonce,
 	}
+	server.txPool = NewTxPool(server)
+	server.blockManager = NewBlockManager(server)
 
 	return server, nil
 }

@@ -10,6 +10,7 @@ import (
 	"math"
 	"math/big"
 	"strconv"
+	"time"
 )
 
 type BlockChain struct {
@@ -44,6 +45,7 @@ func (bc *BlockChain) GenesisBlock() *ethutil.Block {
 }
 
 type BlockManager struct {
+	server *Server
 	// The block chain :)
 	bc *BlockChain
 
@@ -56,11 +58,12 @@ type BlockManager struct {
 	mem map[string]*big.Int
 }
 
-func NewBlockManager() *BlockManager {
+func NewBlockManager(s *Server) *BlockManager {
 	bm := &BlockManager{
-		bc:    NewBlockChain(),
-		stack: NewStack(),
-		mem:   make(map[string]*big.Int),
+		server: s,
+		bc:     NewBlockChain(),
+		stack:  NewStack(),
+		mem:    make(map[string]*big.Int),
 	}
 
 	// Set the last known block number based on the blockchains last
@@ -161,13 +164,16 @@ func (bm *BlockManager) CalculateTD(block *ethutil.Block) bool {
 // an uncle or anything that isn't on the current block chain.
 // Validation validates easy over difficult (dagger takes longer time = difficult)
 func (bm *BlockManager) ValidateBlock(block *ethutil.Block) error {
+	// Genesis block
+	if bm.bc.LastBlock == nil && block.PrevHash == "" {
+		return nil
+	}
 	// TODO
 	// 2. Check if the difficulty is correct
 
 	// Check if we have the parent hash, if it isn't known we discard it
 	// Reasons might be catching up or simply an invalid block
-	if bm.bc.LastBlock != nil && block.PrevHash == "" &&
-		!bm.bc.HasBlock(block.PrevHash) {
+	if !bm.bc.HasBlock(block.PrevHash) {
 		return errors.New("Block's parent unknown")
 	}
 
@@ -183,9 +189,18 @@ func (bm *BlockManager) ValidateBlock(block *ethutil.Block) error {
 		}
 	}
 
+	diff := block.Time - bm.bc.LastBlock.Time
+	if diff < 0 {
+		return fmt.Errorf("Block timestamp less then prev block %v", diff)
+	}
+
+	// New blocks must be within the 15 minute range of the last block.
+	if diff > int64(15*time.Minute) {
+		return errors.New("Block is too far in the future of last block (> 15 minutes)")
+	}
+
 	// Verify the nonce of the block. Return an error if it's not valid
-	if bm.bc.LastBlock != nil && block.PrevHash == "" &&
-		!DaggerVerify(ethutil.BigD(block.Hash()), block.Difficulty, block.Nonce) {
+	if !DaggerVerify(ethutil.BigD(block.Hash()), block.Difficulty, block.Nonce) {
 
 		return errors.New("Block's nonce is invalid")
 	}
@@ -429,7 +444,7 @@ out:
 
 			// x = floor(10^21 / floor(diff^0.5))
 			bm.stack.Push(x)
-		case oSHA256, oRIPEMD160:
+		case oSHA256, oSHA3, oRIPEMD160:
 			// This is probably save
 			// ceil(pop / 32)
 			length := int(math.Ceil(float64(bm.stack.Pop().Uint64()) / 32.0))
@@ -443,6 +458,8 @@ out:
 
 			if op == oSHA256 {
 				bm.stack.Push(base.SetBytes(ethutil.Sha256Bin(data.Bytes())))
+			} else if op == oSHA3 {
+				bm.stack.Push(base.SetBytes(ethutil.Sha3Bin(data.Bytes())))
 			} else {
 				bm.stack.Push(base.SetBytes(ethutil.Ripemd160(data.Bytes())))
 			}
@@ -472,7 +489,6 @@ out:
 		case oECSIGN:
 		case oECRECOVER:
 		case oECVALID:
-		case oSHA3:
 		case oPUSH:
 			pc++
 			bm.stack.Push(bm.mem[strconv.Itoa(pc)])
@@ -535,7 +551,21 @@ out:
 			ether := ethutil.NewEtherFromData([]byte(d))
 			bm.stack.Push(ether.Amount)
 		case oMKTX:
+			value, addr := bm.stack.Popn()
+			from, length := bm.stack.Popn()
+
+			j := 0
+			dataItems := make([]string, int(length.Uint64()))
+			for i := from.Uint64(); i < length.Uint64(); i++ {
+				dataItems[j] = string(bm.mem[strconv.Itoa(int(i))].Bytes())
+				j++
+			}
+			// TODO sign it?
+			tx := ethutil.NewTransaction(string(addr.Bytes()), value, dataItems)
+			// Add the transaction to the tx pool
+			bm.server.txPool.QueueTransaction(tx)
 		case oSUICIDE:
+			//addr := bm.stack.Pop()
 		}
 		pc++
 	}
