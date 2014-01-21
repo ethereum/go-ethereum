@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path"
 	"runtime"
 )
 
@@ -44,36 +45,54 @@ func main() {
 
 	Init()
 
-	if StartConsole {
-		console := NewConsole()
-		console.Start()
-	} else {
-		log.Println("Starting Ethereum")
-		server, err := NewServer()
+	ethutil.ReadConfig()
 
-		if err != nil {
-			log.Println(err)
-			return
-		}
+	server, err := NewServer()
 
-		RegisterInterupts(server)
-
-		if StartMining {
-			log.Println("Mining started")
-			dagger := &Dagger{}
-
-			go func() {
-				for {
-					res := dagger.Search(ethutil.Big("01001"), ethutil.BigPow(2, 36))
-					log.Println("Res dagger", res)
-					//server.Broadcast("blockmine", ethutil.Encode(res.String()))
-				}
-			}()
-		}
-
-		server.Start()
-
-		// Wait for shutdown
-		server.WaitForShutdown()
+	if err != nil {
+		log.Println(err)
+		return
 	}
+
+	if StartConsole {
+		err := os.Mkdir(ethutil.Config.ExecPath, os.ModePerm)
+		// Error is OK if the error is ErrExist
+		if err != nil && !os.IsExist(err) {
+			log.Panic("Unable to create EXECPATH. Exiting")
+		}
+
+		// TODO The logger will eventually be a non blocking logger. Logging is a expensive task
+		// Log to file only
+		file, err := os.OpenFile(path.Join(ethutil.Config.ExecPath, "debug.log"), os.O_RDWR|os.O_CREATE, os.ModePerm)
+		if err != nil {
+			log.Panic("Unable to set proper logger", err)
+		}
+
+		ethutil.Config.Log = log.New(file, "", 0)
+
+		console := NewConsole(server)
+		go console.Start()
+	}
+
+	log.Println("Starting Ethereum")
+
+	RegisterInterupts(server)
+
+	if StartMining {
+		log.Println("Mining started")
+		dagger := &Dagger{}
+
+		go func() {
+			for {
+				res := dagger.Search(ethutil.Big("01001"), ethutil.BigPow(2, 36))
+				log.Println("Res dagger", res)
+				//server.Broadcast("blockmine", ethutil.Encode(res.String()))
+			}
+		}()
+	}
+
+	server.Start()
+
+	// Wait for shutdown
+	server.WaitForShutdown()
 }

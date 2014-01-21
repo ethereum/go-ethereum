@@ -48,7 +48,7 @@ func NewServer() (*Server, error) {
 		return nil, err
 	}
 
-	ethutil.SetConfig(db)
+	ethutil.Config.Db = db
 
 	nonce, _ := ethutil.RandomUint64()
 	server := &Server{
@@ -152,28 +152,30 @@ func (s *Server) Start() {
 
 				s.Stop()
 			}
-
-			return
 		} else {
 			log.Fatal(err)
 		}
+	} else {
+		// Starting accepting connections
+		go func() {
+			for {
+				conn, err := ln.Accept()
+				if err != nil {
+					log.Println(err)
+
+					continue
+				}
+
+				go s.AddPeer(conn)
+			}
+		}()
 	}
 
 	// Start the reaping processes
 	go s.ReapDeadPeers()
 
-	go func() {
-		for {
-			conn, err := ln.Accept()
-			if err != nil {
-				log.Println(err)
-
-				continue
-			}
-
-			go s.AddPeer(conn)
-		}
-	}()
+	// Start the tx pool
+	s.txPool.Start()
 
 	// TMP
 	/*
@@ -196,6 +198,8 @@ func (s *Server) Stop() {
 	})
 
 	s.shutdownChan <- true
+
+	s.txPool.Stop()
 }
 
 // This function will wait for a shutdown and resumes main thread execution

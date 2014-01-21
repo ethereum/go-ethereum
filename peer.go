@@ -62,7 +62,7 @@ func NewOutboundPeer(addr string, server *Server) *Peer {
 		server:      server,
 		inbound:     false,
 		connected:   0,
-		disconnect:  1,
+		disconnect:  0,
 	}
 
 	// Set up the connection in another goroutine so we don't block the main thread
@@ -169,12 +169,12 @@ out:
 			// Version message
 			p.handleHandshake(msg)
 		case ethwire.MsgBlockTy:
-			err := p.server.blockManager.ProcessBlock(ethutil.NewBlock(ethutil.Encode(msg.Data)))
+			err := p.server.blockManager.ProcessBlock(ethutil.NewBlock(msg.Data))
 			if err != nil {
 				log.Println(err)
 			}
 		case ethwire.MsgTxTy:
-			p.server.txPool.QueueTransaction(ethutil.NewTransactionFromData(ethutil.Encode(msg.Data)))
+			p.server.txPool.QueueTransaction(ethutil.NewTransactionFromData(msg.Data))
 		case ethwire.MsgInvTy:
 		case ethwire.MsgGetPeersTy:
 			p.requestedPeerList = true

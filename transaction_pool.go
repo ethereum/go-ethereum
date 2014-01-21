@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"container/list"
 	"errors"
 	"github.com/ethereum/ethutil-go"
+	"github.com/ethereum/ethwire-go"
 	"log"
 	"math/big"
 	"sync"
@@ -56,9 +58,11 @@ func NewTxPool(s *Server) *TxPool {
 // Blocking function. Don't use directly. Use QueueTransaction instead
 func (pool *TxPool) addTransaction(tx *ethutil.Transaction) {
 	pool.mutex.Lock()
-	defer pool.mutex.Unlock()
-
 	pool.pool.PushBack(tx)
+	pool.mutex.Unlock()
+
+	// Broadcast the transaction to the rest of the peers
+	pool.server.Broadcast(ethwire.MsgTxTy, tx.RlpEncode())
 }
 
 // Process transaction validates the Tx and processes funds from the
@@ -89,7 +93,12 @@ func (pool *TxPool) processTransaction(tx *ethutil.Transaction) error {
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.
 	if sender.Amount.Cmp(tx.Value) < 0 {
-		return errors.New("Insufficient amount in sender's account")
+		if Debug {
+			log.Println("Insufficient amount in sender's account. Adding 1 ETH for debug")
+			sender.Amount = ethutil.BigPow(10, 18)
+		} else {
+			return errors.New("Insufficient amount in sender's account")
+		}
 	}
 
 	// Subtract the amount from the senders account
@@ -121,6 +130,15 @@ out:
 	for {
 		select {
 		case tx := <-pool.queueChan:
+			hash := tx.Hash()
+			foundTx := FindTx(pool.pool, func(tx *ethutil.Transaction, e *list.Element) bool {
+				return bytes.Compare(tx.Hash(), hash) == 0
+			})
+
+			if foundTx != nil {
+				break
+			}
+
 			// Process the transaction
 			err := pool.processTransaction(tx)
 			if err != nil {
@@ -144,8 +162,6 @@ func (pool *TxPool) Flush() {
 	pool.mutex.Lock()
 
 	defer pool.mutex.Unlock()
-
-	pool.mutex.Unlock()
 }
 
 func (pool *TxPool) Start() {

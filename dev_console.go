@@ -12,15 +12,16 @@ import (
 )
 
 type Console struct {
-	db   *ethdb.MemDatabase
-	trie *ethutil.Trie
+	db     *ethdb.MemDatabase
+	trie   *ethutil.Trie
+	server *Server
 }
 
-func NewConsole() *Console {
+func NewConsole(s *Server) *Console {
 	db, _ := ethdb.NewMemDatabase()
 	trie := ethutil.NewTrie(db, "")
 
-	return &Console{db: db, trie: trie}
+	return &Console{db: db, trie: trie, server: s}
 }
 
 func (i *Console) ValidateInput(action string, argumentLength int) error {
@@ -43,6 +44,9 @@ func (i *Console) ValidateInput(action string, argumentLength int) error {
 	case action == "encode" && argumentLength != 1:
 		err = true
 		expArgCount = 1
+	case action == "tx" && argumentLength != 2:
+		err = true
+		expArgCount = 2
 	}
 
 	if err {
@@ -105,6 +109,10 @@ func (i *Console) ParseInput(input string) bool {
 			fmt.Printf("%q\n", d)
 		case "encode":
 			fmt.Printf("%q\n", ethutil.Encode(tokens[1]))
+		case "tx":
+			tx := ethutil.NewTransaction(tokens[1], ethutil.Big(tokens[2]), []string{""})
+
+			i.server.txPool.QueueTransaction(tx)
 		case "exit", "quit", "q":
 			return false
 		case "help":
