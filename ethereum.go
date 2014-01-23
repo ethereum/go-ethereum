@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/ethereum/eth-go"
+	"github.com/ethereum/ethchain-go"
 	"github.com/ethereum/ethutil-go"
 	"log"
 	"os"
@@ -23,8 +25,8 @@ func Init() {
 	flag.Parse()
 }
 
-// Register interrupt handlers so we can stop the server
-func RegisterInterupts(s *Server) {
+// Register interrupt handlers so we can stop the ethereum
+func RegisterInterupts(s *eth.Ethereum) {
 	// Buffered chan of one is enough
 	c := make(chan os.Signal, 1)
 	// Notify about interrupts for now
@@ -40,15 +42,13 @@ func RegisterInterupts(s *Server) {
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-
-	ethutil.InitFees()
-
 	Init()
 
+	ethutil.InitFees()
 	ethutil.ReadConfig()
 
-	server, err := NewServer()
-
+	// Instantiated a eth stack
+	ethereum, err := eth.New()
 	if err != nil {
 		log.Println(err)
 		return
@@ -70,29 +70,29 @@ func main() {
 
 		ethutil.Config.Log = log.New(file, "", 0)
 
-		console := NewConsole(server)
+		console := NewConsole(ethereum)
 		go console.Start()
 	}
 
 	log.Println("Starting Ethereum")
 
-	RegisterInterupts(server)
+	RegisterInterupts(ethereum)
 
 	if StartMining {
 		log.Println("Mining started")
-		dagger := &Dagger{}
+		dagger := &ethchain.Dagger{}
 
 		go func() {
 			for {
 				res := dagger.Search(ethutil.Big("01001"), ethutil.BigPow(2, 36))
 				log.Println("Res dagger", res)
-				//server.Broadcast("blockmine", ethutil.Encode(res.String()))
+				//ethereum.Broadcast("blockmine", ethutil.Encode(res.String()))
 			}
 		}()
 	}
 
-	server.Start()
+	ethereum.Start()
 
 	// Wait for shutdown
-	server.WaitForShutdown()
+	ethereum.WaitForShutdown()
 }

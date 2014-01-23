@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/ethereum/eth-go"
+	"github.com/ethereum/ethchain-go"
 	"github.com/ethereum/ethdb-go"
 	"github.com/ethereum/ethutil-go"
 	"os"
@@ -12,16 +14,16 @@ import (
 )
 
 type Console struct {
-	db     *ethdb.MemDatabase
-	trie   *ethutil.Trie
-	server *Server
+	db       *ethdb.MemDatabase
+	trie     *ethutil.Trie
+	ethereum *eth.Ethereum
 }
 
-func NewConsole(s *Server) *Console {
+func NewConsole(s *eth.Ethereum) *Console {
 	db, _ := ethdb.NewMemDatabase()
 	trie := ethutil.NewTrie(db, "")
 
-	return &Console{db: db, trie: trie, server: s}
+	return &Console{db: db, trie: trie, ethereum: s}
 }
 
 func (i *Console) ValidateInput(action string, argumentLength int) error {
@@ -101,7 +103,7 @@ func (i *Console) ParseInput(input string) bool {
 		case "print":
 			i.db.Print()
 		case "dag":
-			fmt.Println(DaggerVerify(ethutil.Big(tokens[1]), // hash
+			fmt.Println(ethchain.DaggerVerify(ethutil.Big(tokens[1]), // hash
 				ethutil.BigPow(2, 36),   // diff
 				ethutil.Big(tokens[2]))) // nonce
 		case "decode":
@@ -112,7 +114,7 @@ func (i *Console) ParseInput(input string) bool {
 		case "tx":
 			tx := ethutil.NewTransaction(tokens[1], ethutil.Big(tokens[2]), []string{""})
 
-			i.server.txPool.QueueTransaction(tx)
+			i.ethereum.TxPool.QueueTransaction(tx)
 		case "exit", "quit", "q":
 			return false
 		case "help":
