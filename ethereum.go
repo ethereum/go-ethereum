@@ -44,7 +44,7 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	Init()
 
-	ethutil.InitFees()
+	ethchain.InitFees()
 	ethutil.ReadConfig()
 
 	// Instantiated a eth stack

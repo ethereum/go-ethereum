@@ -112,7 +112,7 @@ func (i *Console) ParseInput(input string) bool {
 		case "encode":
 			fmt.Printf("%q\n", ethutil.Encode(tokens[1]))
 		case "tx":
-			tx := ethutil.NewTransaction(tokens[1], ethutil.Big(tokens[2]), []string{""})
+			tx := ethchain.NewTransaction(tokens[1], ethutil.Big(tokens[2]), []string{""})
 
 			i.ethereum.TxPool.QueueTransaction(tx)
 		case "exit", "quit", "q":
