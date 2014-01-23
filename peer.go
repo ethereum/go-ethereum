@@ -1,6 +1,7 @@
 package eth
 
 import (
+	"github.com/ethereum/ethchain-go"
 	"github.com/ethereum/ethutil-go"
 	"github.com/ethereum/ethwire-go"
 	"log"
@@ -169,7 +170,7 @@ out:
 			// Version message
 			p.handleHandshake(msg)
 		case ethwire.MsgBlockTy:
-			err := p.ethereum.BlockManager.ProcessBlock(ethutil.NewBlock(msg.Data))
+			err := p.ethereum.BlockManager.ProcessBlock(ethchain.NewBlock(msg.Data))
 			if err != nil {
 				log.Println(err)
 			}
