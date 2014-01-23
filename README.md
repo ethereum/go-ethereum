@@ -9,11 +9,29 @@ A fair warning; Ethereum is not yet to be used in production. There's no
 test-net and you aren't mining real blocks (just one which is the genesis block).
 
 
-Ethereum Go is split up in several sub packages. Please refer to each
+Ethereum Go is split up in several sub packages Please refer to each
 individual package for more information.
-  1. [ethutil](https://github.com/ethereum/ethutil-go)
-  2. [ethdb](https://github.com/ethereum/ethdb-go)
+  1. [eth](https://github.com/ethereum/eth-go)
+  2. [ethchain](https://github.com/ethereum/ethchain-go)
   3. [ethwire](https://github.com/ethereum/ethwire-go)
+  4. [ethdb](https://github.com/ethereum/ethdb-go)
+  5. [ethutil](https://github.com/ethereum/ethutil-go)
+
+The [eth](https://github.com/ethereum/eth-go) is the top-level package
+of the Ethereum protocol. It functions as the Ethereum bootstrapping and
+peer communication layer. The [ethchain](https://github.com/ethereum/ethchain-go)
+contains the Ethereum blockchain, block manager, transaction and
+transaction handlers. The [ethwire](https://github.com/ethereum/ethwire-go) contains
+the Ethereum [wire protocol](http://wiki.ethereum.org/index.php/Wire_Protocol) which can be used
+to hook in to the Ethereum network. [ethutil](https://github.com/ethereum/ethutil-go) contains
+utility functions which are not Ethereum specific. The utility package
+contains the [patricia trie](http://wiki.ethereum.org/index.php/Patricia_Tree),
+[RLP Encoding](http://wiki.ethereum.org/index.php/RLP) and hex encoding
+helpers. The [ethdb](https://github.com/ethereum/ethdb-go) package
+contains the LevelDB interface and memory DB interface.
+
+This executable is the front-end (currently nothing but a dev console) for
+the Ethereum Go implementation.
 
 Deps
 ====
