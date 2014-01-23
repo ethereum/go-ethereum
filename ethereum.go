@@ -122,9 +122,10 @@ func (s *Ethereum) InboundPeers() []*Peer {
 	return inboundPeers[:length]
 }
 
-func (s *Ethereum) Broadcast(msgType ethwire.MsgType, data []byte) {
+func (s *Ethereum) Broadcast(msgType ethwire.MsgType, data interface{}) {
+	msg := ethwire.NewMessage(msgType, data)
 	eachPeer(s.peers, func(p *Peer, e *list.Element) {
-		p.QueueMessage(ethwire.NewMessage(msgType, data))
+		p.QueueMessage(msg)
 	})
 }
 

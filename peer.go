@@ -170,12 +170,15 @@ out:
 			// Version message
 			p.handleHandshake(msg)
 		case ethwire.MsgBlockTy:
-			err := p.ethereum.BlockManager.ProcessBlock(ethchain.NewBlock(msg.Data))
-			if err != nil {
-				log.Println(err)
-			}
+			/*
+				err := p.ethereum.BlockManager.ProcessBlock(ethchain.NewBlock(msg.Data))
+				if err != nil {
+					log.Println(err)
+				}
+			*/
 		case ethwire.MsgTxTy:
-			p.ethereum.TxPool.QueueTransaction(ethutil.NewTransactionFromData(msg.Data))
+			//p.ethereum.TxPool.QueueTransaction(ethchain.NewTransactionFromData(msg.Data))
+			p.ethereum.TxPool.QueueTransaction(ethchain.NewTransactionFromRlpValue(msg.Data.Get(0)))
 		case ethwire.MsgInvTy:
 		case ethwire.MsgGetPeersTy:
 			p.requestedPeerList = true
@@ -263,7 +266,7 @@ func (p *Peer) pushPeers() {
 }
 
 func (p *Peer) handleHandshake(msg *ethwire.Msg) {
-	c := ethutil.Conv(msg.Data)
+	c := msg.Data
 	// [PROTOCOL_VERSION, NETWORK_ID, CLIENT_ID]
 	if c.Get(2).AsUint() == p.ethereum.Nonce {
 		//if msg.Nonce == p.ethereum.Nonce {
