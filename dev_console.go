@@ -9,8 +9,8 @@ import (
 	"github.com/ethereum/ethchain-go"
 	"github.com/ethereum/ethdb-go"
 	"github.com/ethereum/ethutil-go"
-	"github.com/ethereum/ethwire-go"
-	"math/big"
+	_ "github.com/ethereum/ethwire-go"
+	_ "math/big"
 	"os"
 	"strings"
 )
@@ -46,6 +46,9 @@ func (i *Console) ValidateInput(action string, argumentLength int) error {
 		err = true
 		expArgCount = 1
 	case action == "encode" && argumentLength != 1:
+		err = true
+		expArgCount = 1
+	case action == "gettx" && argumentLength != 1:
 		err = true
 		expArgCount = 1
 	case action == "tx" && argumentLength != 2:
@@ -125,28 +128,39 @@ func (i *Console) ParseInput(input string) bool {
 			}
 		case "encode":
 			fmt.Printf("%q\n", ethutil.Encode(tokens[1]))
-		case "newblk":
-			block := ethchain.CreateBlock(
-				i.ethereum.BlockManager.BlockChain().LastBlock.State().Root,
-				i.ethereum.BlockManager.LastBlockHash,
-				"123",
-				big.NewInt(1),
-				big.NewInt(1),
-				"",
-				i.ethereum.TxPool.Flush(),
-			)
-			i.ethereum.Broadcast(ethwire.MsgBlockTy, block.RlpData())
-			//fmt.Println(ethutil.NewRlpValue(block.RlpData()).Get(0))
-			//err := i.ethereum.BlockManager.ProcessBlock(block)
-			//if err != nil {
-			//	fmt.Println(err)
-			//} else {
-
-			//			}
+			/*
+				case "newblk":
+					block := ethchain.CreateBlock(
+						i.ethereum.BlockManager.BlockChain().LastBlock.State().Root,
+						i.ethereum.BlockManager.LastBlockHash,
+						"123",
+						big.NewInt(1),
+						big.NewInt(1),
+						"",
+						i.ethereum.TxPool.Flush(),
+					)
+					err := i.ethereum.BlockManager.ProcessBlock(block)
+					if err != nil {
+						fmt.Println(err)
+					} else {
+						i.ethereum.Broadcast(ethwire.MsgBlockTy, block.RlpData())
+					}
+					//fmt.Println(ethutil.NewRlpValue(block.RlpData()).Get(0))
+			*/
 		case "tx":
 			tx := ethchain.NewTransaction(tokens[1], ethutil.Big(tokens[2]), []string{""})
+			fmt.Printf("tx: %x\n", tx.Hash())
 
 			i.ethereum.TxPool.QueueTransaction(tx)
+		case "gettx":
+			addr, _ := hex.DecodeString(tokens[1])
+			data, _ := ethutil.Config.Db.Get(addr)
+			if len(data) != 0 {
+				decoder := ethutil.NewRlpDecoder(data)
+				fmt.Println(decoder)
+			} else {
+				fmt.Println("gettx: tx not found")
+			}
 		case "exit", "quit", "q":
 			return false
 		case "help":

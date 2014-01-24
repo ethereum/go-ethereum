@@ -6,11 +6,14 @@ import (
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/ethchain-go"
 	"github.com/ethereum/ethutil-go"
+	"github.com/ethereum/ethwire-go"
 	"log"
+	"math/big"
 	"os"
 	"os/signal"
 	"path"
 	"runtime"
+	"time"
 )
 
 const Debug = true
@@ -78,20 +81,31 @@ func main() {
 
 	RegisterInterupts(ethereum)
 
-	if StartMining {
-		log.Println("Mining started")
-		dagger := &ethchain.Dagger{}
+	ethereum.Start()
 
+	if StartMining {
+		log.Println("Dev Test Mining started")
+
+		// Fake block mining. It broadcasts a new block every 5 seconds
 		go func() {
 			for {
-				res := dagger.Search(ethutil.Big("01001"), ethutil.BigPow(2, 36))
-				log.Println("Res dagger", res)
-				//ethereum.Broadcast("blockmine", ethutil.Encode(res.String()))
+				time.Sleep(5 * time.Second)
+
+				block := ethchain.CreateBlock(
+					ethereum.BlockManager.BlockChain().LastBlock.State().Root,
+					ethereum.BlockManager.LastBlockHash,
+					"123",
+					big.NewInt(1),
+					big.NewInt(1),
+					"",
+					ethereum.TxPool.Flush())
+
+				ethereum.BlockManager.ProcessBlockWithState(block, block.State())
+				ethereum.Broadcast(ethwire.MsgBlockTy, block.RlpData())
+				log.Println("\n", block.String())
 			}
 		}()
 	}
-
-	ethereum.Start()
 
 	// Wait for shutdown
 	ethereum.WaitForShutdown()
