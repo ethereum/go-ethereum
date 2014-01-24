@@ -128,7 +128,7 @@ out:
 			p.lastSend = time.Now()
 
 		case <-tickleTimer.C:
-			p.writeMessage(&ethwire.Msg{Type: ethwire.MsgPingTy})
+			p.writeMessage(ethwire.NewMessage(ethwire.MsgPingTy, ""))
 
 		// Break out of the for loop if a quit message is posted
 		case <-p.quit:
@@ -170,12 +170,12 @@ out:
 			// Version message
 			p.handleHandshake(msg)
 		case ethwire.MsgBlockTy:
-			/*
-				err := p.ethereum.BlockManager.ProcessBlock(ethchain.NewBlock(msg.Data))
-				if err != nil {
-					log.Println(err)
-				}
-			*/
+			block := ethchain.NewBlockFromRlpValue(msg.Data.Get(0))
+			block.MakeContracts()
+			err := p.ethereum.BlockManager.ProcessBlock(block)
+			if err != nil {
+				log.Println(err)
+			}
 		case ethwire.MsgTxTy:
 			//p.ethereum.TxPool.QueueTransaction(ethchain.NewTransactionFromData(msg.Data))
 			p.ethereum.TxPool.QueueTransaction(ethchain.NewTransactionFromRlpValue(msg.Data.Get(0)))
@@ -203,7 +203,7 @@ out:
 			}
 		case ethwire.MsgPingTy:
 			// Respond back with pong
-			p.QueueMessage(&ethwire.Msg{Type: ethwire.MsgPongTy})
+			p.QueueMessage(ethwire.NewMessage(ethwire.MsgPongTy, ""))
 		case ethwire.MsgPongTy:
 			p.lastPong = time.Now().Unix()
 		}

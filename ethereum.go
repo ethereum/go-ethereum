@@ -60,7 +60,7 @@ func New() (*Ethereum, error) {
 	}
 	ethereum.TxPool = ethchain.NewTxPool()
 	ethereum.TxPool.Speaker = ethereum
-	ethereum.BlockManager = ethchain.NewBlockManager()
+	ethereum.BlockManager = ethchain.NewBlockManager(ethereum)
 
 	ethereum.TxPool.BlockManager = ethereum.BlockManager
 	ethereum.BlockManager.TransactionPool = ethereum.TxPool
