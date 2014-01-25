@@ -169,17 +169,26 @@ out:
 		case ethwire.MsgHandshakeTy:
 			// Version message
 			p.handleHandshake(msg)
+		case ethwire.MsgDiscTy:
+			p.Stop()
+		case ethwire.MsgPingTy:
+			// Respond back with pong
+			p.QueueMessage(ethwire.NewMessage(ethwire.MsgPongTy, ""))
+		case ethwire.MsgPongTy:
+			p.lastPong = time.Now().Unix()
 		case ethwire.MsgBlockTy:
-			block := ethchain.NewBlockFromRlpValue(msg.Data.Get(0))
-			block.MakeContracts()
-			err := p.ethereum.BlockManager.ProcessBlock(block)
-			if err != nil {
-				log.Println(err)
+			for i := 0; i < msg.Data.Length(); i++ {
+				block := ethchain.NewBlockFromRlpValue(msg.Data.Get(i))
+				err := p.ethereum.BlockManager.ProcessBlock(block)
+
+				if err != nil {
+					log.Println(err)
+				}
 			}
 		case ethwire.MsgTxTy:
-			//p.ethereum.TxPool.QueueTransaction(ethchain.NewTransactionFromData(msg.Data))
-			p.ethereum.TxPool.QueueTransaction(ethchain.NewTransactionFromRlpValue(msg.Data.Get(0)))
-		case ethwire.MsgInvTy:
+			for i := 0; i < msg.Data.Length(); i++ {
+				p.ethereum.TxPool.QueueTransaction(ethchain.NewTransactionFromRlpValue(msg.Data.Get(i)))
+			}
 		case ethwire.MsgGetPeersTy:
 			p.requestedPeerList = true
 			// Peer asked for list of connected peers
@@ -201,11 +210,8 @@ out:
 				// Mark unrequested again
 				p.requestedPeerList = false
 			}
-		case ethwire.MsgPingTy:
-			// Respond back with pong
-			p.QueueMessage(ethwire.NewMessage(ethwire.MsgPongTy, ""))
-		case ethwire.MsgPongTy:
-			p.lastPong = time.Now().Unix()
+		case ethwire.MsgGetChainTy:
+
 		}
 	}
 
@@ -235,6 +241,7 @@ func (p *Peer) Stop() {
 
 	close(p.quit)
 	if atomic.LoadInt32(&p.connected) != 0 {
+		p.writeMessage(ethwire.NewMessage(ethwire.MsgDiscTy, ""))
 		p.conn.Close()
 	}
 
