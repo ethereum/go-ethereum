@@ -122,7 +122,7 @@ func (i *Console) ParseInput(input string) bool {
 			fmt.Printf("%q\n", d)
 		case "getaddr":
 			encoded, _ := hex.DecodeString(tokens[1])
-			d := i.ethereum.BlockManager.BlockChain().LastBlock.State().Get(string(encoded))
+			d := i.ethereum.BlockManager.CurrentBlock.State().Get(string(encoded))
 			if d != "" {
 				decoder := ethutil.NewRlpDecoder([]byte(d))
 				fmt.Println(decoder)

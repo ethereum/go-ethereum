@@ -95,7 +95,7 @@ func main() {
 				time.Sleep(blockTime * time.Second)
 
 				block := ethchain.CreateBlock(
-					ethereum.BlockManager.BlockChain().LastBlock.State().Root,
+					ethereum.BlockManager.CurrentBlock.State().Root,
 					ethereum.BlockManager.LastBlockHash,
 					"123",
 					big.NewInt(1),
