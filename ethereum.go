@@ -6,7 +6,7 @@ import (
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/ethchain-go"
 	"github.com/ethereum/ethutil-go"
-	"github.com/ethereum/ethwire-go"
+	_ "github.com/ethereum/ethwire-go"
 	"log"
 	"math/big"
 	"os"
@@ -84,12 +84,15 @@ func main() {
 	ethereum.Start()
 
 	if StartMining {
-		log.Println("Dev Test Mining started")
+		blockTime := time.Duration(15)
+		log.Printf("Dev Test Mining started. Blocks found each %d seconds\n", blockTime)
 
 		// Fake block mining. It broadcasts a new block every 5 seconds
 		go func() {
 			for {
-				time.Sleep(5 * time.Second)
+				txs := ethereum.TxPool.Flush()
+
+				time.Sleep(blockTime * time.Second)
 
 				block := ethchain.CreateBlock(
 					ethereum.BlockManager.BlockChain().LastBlock.State().Root,
@@ -98,11 +101,13 @@ func main() {
 					big.NewInt(1),
 					big.NewInt(1),
 					"",
-					ethereum.TxPool.Flush())
-
-				ethereum.BlockManager.ProcessBlockWithState(block, block.State())
-				ethereum.Broadcast(ethwire.MsgBlockTy, block.RlpData())
-				log.Println("\n", block.String())
+					txs)
+				err := ethereum.BlockManager.ProcessBlockWithState(block, block.State())
+				if err != nil {
+					log.Println(err)
+				} else {
+					log.Println("\n+++++++ MINED BLK +++++++\n", block.String())
+				}
 			}
 		}()
 	}
