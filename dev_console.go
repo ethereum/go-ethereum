@@ -57,6 +57,9 @@ func (i *Console) ValidateInput(action string, argumentLength int) error {
 	case action == "getaddr" && argumentLength != 1:
 		err = true
 		expArgCount = 1
+	case action == "contract" && argumentLength != 1:
+		err = true
+		expArgCount = 1
 	}
 
 	if err {
@@ -149,7 +152,7 @@ func (i *Console) ParseInput(input string) bool {
 			*/
 		case "tx":
 			tx := ethchain.NewTransaction(tokens[1], ethutil.Big(tokens[2]), []string{""})
-			fmt.Printf("tx: %x\n", tx.Hash())
+			fmt.Printf("%x\n", tx.Hash())
 
 			i.ethereum.TxPool.QueueTransaction(tx)
 		case "gettx":
@@ -161,6 +164,11 @@ func (i *Console) ParseInput(input string) bool {
 			} else {
 				fmt.Println("gettx: tx not found")
 			}
+		case "contract":
+			contract := ethchain.NewTransaction("", ethutil.Big(tokens[1]), []string{"PUSH", "1234"})
+			fmt.Printf("%x\n", contract.Hash())
+
+			i.ethereum.TxPool.QueueTransaction(contract)
 		case "exit", "quit", "q":
 			return false
 		case "help":
