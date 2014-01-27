@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/ethchain-go"
 	"github.com/ethereum/ethdb-go"
 	"github.com/ethereum/ethutil-go"
-	_ "github.com/ethereum/ethwire-go"
+	"github.com/ethereum/ethwire-go"
 	_ "math/big"
 	"os"
 	"strings"
@@ -58,6 +58,12 @@ func (i *Console) ValidateInput(action string, argumentLength int) error {
 		err = true
 		expArgCount = 1
 	case action == "contract" && argumentLength != 1:
+		err = true
+		expArgCount = 1
+	case action == "say" && argumentLength != 1:
+		err = true
+		expArgCount = 1
+	case action == "addp" && argumentLength != 1:
 		err = true
 		expArgCount = 1
 	}
@@ -129,6 +135,10 @@ func (i *Console) ParseInput(input string) bool {
 			} else {
 				fmt.Println("getaddr: address unknown")
 			}
+		case "say":
+			i.ethereum.Broadcast(ethwire.MsgTalkTy, tokens[1])
+		case "addp":
+			i.ethereum.ConnectToPeer(tokens[1])
 		case "encode":
 			fmt.Printf("%q\n", ethutil.Encode(tokens[1]))
 			/*

@@ -50,6 +50,8 @@ func main() {
 	ethchain.InitFees()
 	ethutil.ReadConfig()
 
+	log.Printf("Starting Ethereum v%s\n", ethutil.Config.Ver)
+
 	// Instantiated a eth stack
 	ethereum, err := eth.New()
 	if err != nil {
@@ -77,8 +79,6 @@ func main() {
 		go console.Start()
 	}
 
-	log.Println("Starting Ethereum")
-
 	RegisterInterupts(ethereum)
 
 	ethereum.Start()
@@ -90,9 +90,10 @@ func main() {
 		// Fake block mining. It broadcasts a new block every 5 seconds
 		go func() {
 			for {
-				txs := ethereum.TxPool.Flush()
 
 				time.Sleep(blockTime * time.Second)
+
+				txs := ethereum.TxPool.Flush()
 
 				block := ethchain.CreateBlock(
 					ethereum.BlockManager.CurrentBlock.State().Root,
