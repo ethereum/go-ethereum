@@ -133,8 +133,6 @@ func (s *Ethereum) ReapDeadPeers() {
 	for {
 		eachPeer(s.peers, func(p *Peer, e *list.Element) {
 			if atomic.LoadInt32(&p.disconnect) == 1 || (p.inbound && (time.Now().Unix()-p.lastPong) > int64(5*time.Minute)) {
-				log.Println("Dead peer found .. reaping")
-
 				s.peers.Remove(e)
 			}
 		})
@@ -145,8 +143,8 @@ func (s *Ethereum) ReapDeadPeers() {
 
 // Start the ethereum
 func (s *Ethereum) Start() {
-	// For now this function just blocks the main thread
-	ln, err := net.Listen("tcp", ":12345")
+	// Bind to addr and port
+	ln, err := net.Listen("tcp", ":30303")
 	if err != nil {
 		// This is mainly for testing to create a "network"
 		if ethutil.Config.Debug {
@@ -167,6 +165,7 @@ func (s *Ethereum) Start() {
 		// Starting accepting connections
 		go func() {
 			for {
+				log.Println("Ready and accepting connections")
 				conn, err := ln.Accept()
 				if err != nil {
 					log.Println(err)
@@ -184,17 +183,6 @@ func (s *Ethereum) Start() {
 
 	// Start the tx pool
 	s.TxPool.Start()
-
-	// TMP
-	/*
-		go func() {
-			for {
-				s.Broadcast("block", s.blockManager.bc.GenesisBlock().RlpEncode())
-
-				time.Sleep(1000 * time.Millisecond)
-			}
-		}()
-	*/
 }
 
 func (s *Ethereum) Stop() {
