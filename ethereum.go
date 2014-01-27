@@ -152,12 +152,14 @@ func (s *Ethereum) Start() {
 		if ethutil.Config.Debug {
 			log.Println("Connection listening disabled. Acting as client")
 
-			err = s.ConnectToPeer("localhost:12345")
-			if err != nil {
-				log.Println("Error starting ethereum", err)
+			/*
+				err = s.ConnectToPeer("localhost:12345")
+				if err != nil {
+					log.Println("Error starting ethereum", err)
 
-				s.Stop()
-			}
+					s.Stop()
+				}
+			*/
 		} else {
 			log.Fatal(err)
 		}

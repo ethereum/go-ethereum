@@ -68,9 +68,12 @@ func NewOutboundPeer(addr string, ethereum *Ethereum) *Peer {
 
 	// Set up the connection in another goroutine so we don't block the main thread
 	go func() {
-		conn, err := net.Dial("tcp", addr)
+		conn, err := net.DialTimeout("tcp", addr, 30*time.Second)
+
 		if err != nil {
+			log.Println("Connection to peer failed", err)
 			p.Stop()
+			return
 		}
 		p.conn = conn
 
@@ -211,7 +214,30 @@ out:
 				p.requestedPeerList = false
 			}
 		case ethwire.MsgGetChainTy:
+			blocksFound := 0
+			l := msg.Data.Length()
+			// Check each SHA block hash from the message and determine whether
+			// the SHA is in the database
+			for i := 0; i < l; i++ {
+				if p.ethereum.BlockManager.BlockChain().HasBlock(msg.Data.Get(i).AsString()) {
+					blocksFound++
+					// TODO send reply
+				}
+			}
 
+			// If no blocks are found we send back a reply with msg not in chain
+			// and the last hash from get chain
+			if blocksFound == 0 {
+				lastHash := msg.Data.Get(l - 1)
+				p.QueueMessage(ethwire.NewMessage(ethwire.MsgNotInChainTy, lastHash))
+			}
+		case ethwire.MsgNotInChainTy:
+			log.Println("Not in chain, not yet implemented")
+			// TODO
+
+		// Unofficial but fun nonetheless
+		case ethwire.MsgTalkTy:
+			log.Printf("%v says: %s\n", p.conn.RemoteAddr(), msg.Data.Get(0).AsString())
 		}
 	}
 
