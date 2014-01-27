@@ -192,7 +192,11 @@ func (i *Console) ParseInput(input string) bool {
 				"dag HASH NONCE - Verifies a nonce with the given hash with dagger\n" +
 				"\033[1m= Encoding =\033[0m\n" +
 				"decode STR\n" +
-				"encode STR\n")
+				"encode STR\n" +
+				"\033[1m= Other =\033[0m\n" +
+				"addp HOST:PORT\n" +
+				"tx TO AMOUNT\n" +
+				"contract AMOUNT\n")
 
 		default:
 			fmt.Println("Unknown command:", tokens[0])
