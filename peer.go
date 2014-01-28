@@ -178,9 +178,14 @@ out:
 			// Respond back with pong
 			p.QueueMessage(ethwire.NewMessage(ethwire.MsgPongTy, ""))
 		case ethwire.MsgPongTy:
+			// If we received a pong back from a peer we set the
+			// last pong so the peer handler knows this peer is still
+			// active.
 			p.lastPong = time.Now().Unix()
 		case ethwire.MsgBlockTy:
-			for i := 0; i < msg.Data.Length(); i++ {
+			// Get all blocks and process them (TODO reverse order?)
+			msg.Data = msg.Data.Get(0)
+			for i := msg.Data.Length() - 1; i >= 0; i-- {
 				block := ethchain.NewBlockFromRlpValue(msg.Data.Get(i))
 				err := p.ethereum.BlockManager.ProcessBlock(block)
 
@@ -189,10 +194,15 @@ out:
 				}
 			}
 		case ethwire.MsgTxTy:
+			// If the message was a transaction queue the transaction
+			// in the TxPool where it will undergo validation and
+			// processing when a new block is found
 			for i := 0; i < msg.Data.Length(); i++ {
 				p.ethereum.TxPool.QueueTransaction(ethchain.NewTransactionFromRlpValue(msg.Data.Get(i)))
 			}
 		case ethwire.MsgGetPeersTy:
+			// Flag this peer as a 'requested of new peers' this to
+			// prevent malicious peers being forced.
 			p.requestedPeerList = true
 			// Peer asked for list of connected peers
 			p.pushPeers()
@@ -214,22 +224,31 @@ out:
 				p.requestedPeerList = false
 			}
 		case ethwire.MsgGetChainTy:
-			blocksFound := 0
-			l := msg.Data.Length()
+			var parent *ethchain.Block
+			// FIXME
+			msg.Data = msg.Data.Get(0)
+			// Length minus one since the very last element in the array is a count
+			l := msg.Data.Length() - 1
+			// Amount of parents in the canonical chain
+			amountOfBlocks := msg.Data.Get(l).AsUint()
 			// Check each SHA block hash from the message and determine whether
 			// the SHA is in the database
 			for i := 0; i < l; i++ {
-				if p.ethereum.BlockManager.BlockChain().HasBlock(msg.Data.Get(i).AsString()) {
-					blocksFound++
-					// TODO send reply
+				if data := msg.Data.Get(i).AsBytes(); p.ethereum.BlockManager.BlockChain().HasBlock(data) {
+					parent = p.ethereum.BlockManager.BlockChain().GetBlock(data)
+					break
 				}
 			}
 
-			// If no blocks are found we send back a reply with msg not in chain
-			// and the last hash from get chain
-			if blocksFound == 0 {
-				lastHash := msg.Data.Get(l - 1)
-				p.QueueMessage(ethwire.NewMessage(ethwire.MsgNotInChainTy, lastHash))
+			// If a parent is found send back a reply
+			if parent != nil {
+				chain := p.ethereum.BlockManager.BlockChain().GetChainFromHash(parent.Hash(), amountOfBlocks)
+				p.QueueMessage(ethwire.NewMessage(ethwire.MsgBlockTy, chain))
+			} else {
+				// If no blocks are found we send back a reply with msg not in chain
+				// and the last hash from get chain
+				lastHash := msg.Data.Get(l)
+				p.QueueMessage(ethwire.NewMessage(ethwire.MsgNotInChainTy, lastHash.AsRaw()))
 			}
 		case ethwire.MsgNotInChainTy:
 			log.Println("Not in chain, not yet implemented")
@@ -320,6 +339,9 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 
 			p.Stop()
 		}
+	} else {
+		msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{p.ethereum.BlockManager.BlockChain().CurrentBlock.Hash(), uint64(100)})
+		p.QueueMessage(msg)
 	}
 }
 
