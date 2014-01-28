@@ -84,7 +84,7 @@ func main() {
 	ethereum.Start()
 
 	if StartMining {
-		blockTime := time.Duration(15)
+		blockTime := time.Duration(2)
 		log.Printf("Dev Test Mining started. Blocks found each %d seconds\n", blockTime)
 
 		// Fake block mining. It broadcasts a new block every 5 seconds
@@ -96,8 +96,8 @@ func main() {
 				txs := ethereum.TxPool.Flush()
 
 				block := ethchain.CreateBlock(
-					ethereum.BlockManager.CurrentBlock.State().Root,
-					ethereum.BlockManager.LastBlockHash,
+					ethereum.BlockManager.BlockChain().CurrentBlock.State().Root,
+					ethereum.BlockManager.BlockChain().LastBlockHash,
 					"123",
 					big.NewInt(1),
 					big.NewInt(1),
