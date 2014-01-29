@@ -41,7 +41,7 @@ Ethereum Go makes use of a modified `secp256k1-go` and therefor GMP.
 Install
 =======
 
-```go get -u -t https://github.com/ethereum/go-ethereum```
+```go get -u -t github.com/ethereum/go-ethereum```
 
 
 Command line options
