@@ -76,11 +76,11 @@ func (i *Console) ValidateInput(action string, argumentLength int) error {
 }
 
 func (i *Console) PrintRoot() {
-	root := ethutil.Conv(i.trie.RootT)
+	root := ethutil.Conv(i.trie.Root)
 	if len(root.AsBytes()) != 0 {
 		fmt.Println(hex.EncodeToString(root.AsBytes()))
 	} else {
-		fmt.Println(i.trie.RootT)
+		fmt.Println(i.trie.Root)
 	}
 }
 
@@ -108,15 +108,15 @@ func (i *Console) ParseInput(input string) bool {
 	} else {
 		switch tokens[0] {
 		case "update":
-			i.trie.UpdateT(tokens[1], tokens[2])
+			i.trie.Update(tokens[1], tokens[2])
 
 			i.PrintRoot()
 		case "get":
-			fmt.Println(i.trie.GetT(tokens[1]))
+			fmt.Println(i.trie.Get(tokens[1]))
 		case "root":
 			i.PrintRoot()
 		case "rawroot":
-			fmt.Println(i.trie.RootT)
+			fmt.Println(i.trie.Root)
 		case "print":
 			i.db.Print()
 		case "dag":

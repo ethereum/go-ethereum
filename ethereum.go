@@ -84,7 +84,7 @@ func main() {
 	ethereum.Start()
 
 	if StartMining {
-		blockTime := time.Duration(2)
+		blockTime := time.Duration(10)
 		log.Printf("Dev Test Mining started. Blocks found each %d seconds\n", blockTime)
 
 		// Fake block mining. It broadcasts a new block every 5 seconds
@@ -107,7 +107,7 @@ func main() {
 				if err != nil {
 					log.Println(err)
 				} else {
-					log.Println("\n+++++++ MINED BLK +++++++\n", block.String())
+					//log.Println("\n+++++++ MINED BLK +++++++\n", block.String())
 				}
 			}
 		}()
