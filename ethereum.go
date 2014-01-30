@@ -72,10 +72,13 @@ func (s *Ethereum) AddPeer(conn net.Conn) {
 	peer := NewPeer(conn, s, true)
 
 	if peer != nil {
-		s.peers.PushBack(peer)
-		peer.Start()
-
-		log.Println("Peer connected ::", conn.RemoteAddr())
+		if s.peers.Len() > -1 {
+			log.Println("SEED")
+			peer.Start(true)
+		} else {
+			s.peers.PushBack(peer)
+			peer.Start(false)
+		}
 	}
 }
 
@@ -164,8 +167,9 @@ func (s *Ethereum) Start() {
 	} else {
 		// Starting accepting connections
 		go func() {
+			log.Println("Ready and accepting connections")
+
 			for {
-				log.Println("Ready and accepting connections")
 				conn, err := ln.Accept()
 				if err != nil {
 					log.Println(err)
