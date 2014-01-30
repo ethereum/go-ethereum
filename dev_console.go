@@ -124,8 +124,8 @@ func (i *Console) ParseInput(input string) bool {
 				ethutil.BigPow(2, 36),   // diff
 				ethutil.Big(tokens[2]))) // nonce
 		case "decode":
-			d, _ := ethutil.Decode([]byte(tokens[1]), 0)
-			fmt.Printf("%q\n", d)
+			value := ethutil.NewRlpDecoder([]byte(tokens[1]))
+			fmt.Println(value)
 		case "getaddr":
 			encoded, _ := hex.DecodeString(tokens[1])
 			d := i.ethereum.BlockManager.BlockChain().CurrentBlock.State().Get(string(encoded))
