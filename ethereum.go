@@ -72,7 +72,7 @@ func (s *Ethereum) AddPeer(conn net.Conn) {
 	peer := NewPeer(conn, s, true)
 
 	if peer != nil {
-		if s.peers.Len() > -1 {
+		if s.peers.Len() > 25 {
 			log.Println("SEED")
 			peer.Start(true)
 		} else {

@@ -178,6 +178,8 @@ out:
 			case ethwire.MsgHandshakeTy:
 				// Version message
 				p.handleHandshake(msg)
+
+				p.QueueMessage(ethwire.NewMessage(ethwire.MsgGetPeersTy, ""))
 			case ethwire.MsgDiscTy:
 				p.Stop()
 			case ethwire.MsgPingTy:
@@ -216,12 +218,12 @@ out:
 				// Received a list of peers (probably because MsgGetPeersTy was send)
 				// Only act on message if we actually requested for a peers list
 				if p.requestedPeerList {
-					data := ethutil.Conv(msg.Data)
+					data := msg.Data
 					// Create new list of possible peers for the ethereum to process
 					peers := make([]string, data.Length())
 					// Parse each possible peer
 					for i := 0; i < data.Length(); i++ {
-						peers[i] = data.Get(i).AsString() + strconv.Itoa(int(data.Get(i).AsUint()))
+						peers[i] = data.Get(i).Get(0).AsString() + ":" + strconv.Itoa(int(data.Get(i).Get(1).AsUint()))
 					}
 
 					// Connect to the list of peers
@@ -278,14 +280,27 @@ out:
 func (p *Peer) Start(seed bool) {
 	p.seed = seed
 
-	if !p.inbound {
-		err := p.pushHandshake()
-		if err != nil {
-			log.Printf("Peer can't send outbound version ack", err)
+	peerHost, _, _ := net.SplitHostPort(p.conn.LocalAddr().String())
+	servHost, _, _ := net.SplitHostPort(p.conn.RemoteAddr().String())
+	log.Println(peerHost, servHost)
+	if peerHost == servHost {
+		log.Println("Connected to self")
 
-			p.Stop()
-		}
+		p.Stop()
+
+		return
 	}
+
+	//if !p.inbound {
+	err := p.pushHandshake()
+	if err != nil {
+		log.Printf("Peer can't send outbound version ack", err)
+
+		p.Stop()
+
+		return
+	}
+	//}
 
 	// Run the outbound handler in a new goroutine
 	go p.HandleOutbound()
@@ -320,11 +335,10 @@ func (p *Peer) pushHandshake() error {
 
 // Pushes the list of outbound peers to the client when requested
 func (p *Peer) pushPeers() {
-
 	outPeers := make([]interface{}, len(p.ethereum.OutboundPeers()))
 	// Serialise each peer
 	for i, peer := range p.ethereum.OutboundPeers() {
-		outPeers[i] = peer.RlpEncode()
+		outPeers[i] = peer.RlpData()
 	}
 
 	// Send message to the peer with the known list of connected clients
@@ -351,13 +365,29 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 		*/
 		istr = "inbound"
 	} else {
-		msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{p.ethereum.BlockManager.BlockChain().CurrentBlock.Hash(), uint64(100)})
-		p.QueueMessage(msg)
+		//msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{p.ethereum.BlockManager.BlockChain().CurrentBlock.Hash(), uint64(100)})
+		//p.QueueMessage(msg)
 
 		istr = "outbound"
 	}
 
 	log.Printf("peer connect (%s) %v %s\n", istr, p.conn.RemoteAddr(), c.Get(2).AsString())
+}
+
+func (p *Peer) RlpData() []interface{} {
+	host, prt, err := net.SplitHostPort(p.conn.RemoteAddr().String())
+	if err != nil {
+		return nil
+	}
+
+	port, err := strconv.Atoi(prt)
+	if err != nil {
+		return nil
+	}
+
+	//port := ethutil.NumberToBytes(uint16(i), 16)
+
+	return []interface{}{host, port}
 }
 
 func (p *Peer) RlpEncode() []byte {
