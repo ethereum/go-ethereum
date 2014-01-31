@@ -90,6 +90,22 @@ func (s *Ethereum) ProcessPeerList(addrs []string) {
 }
 
 func (s *Ethereum) ConnectToPeer(addr string) error {
+	var alreadyConnected bool
+
+	eachPeer(s.peers, func(p *Peer, v *list.Element) {
+		phost, _, _ := net.SplitHostPort(p.conn.RemoteAddr().String())
+		ahost, _, _ := net.SplitHostPort(addr)
+
+		if phost == ahost {
+			alreadyConnected = true
+			return
+		}
+	})
+
+	if alreadyConnected {
+		return nil
+	}
+
 	peer := NewOutboundPeer(addr, s)
 
 	s.peers.PushBack(peer)
