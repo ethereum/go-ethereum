@@ -27,8 +27,7 @@ func TestTestRunner(t *testing.T) {
 		for key, value := range source.Inputs {
 			trie.Update(key, value)
 		}
-
-		if hex.EncodeToString([]byte(trie.Root)) != source.Expectation {
+		if hex.EncodeToString(trie.Root.([]byte)) != source.Expectation {
 			t.Error("trie root did not match")
 		}
 	})
