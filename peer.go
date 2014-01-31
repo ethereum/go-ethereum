@@ -335,9 +335,9 @@ func (p *Peer) pushHandshake() error {
 
 // Pushes the list of outbound peers to the client when requested
 func (p *Peer) pushPeers() {
-	outPeers := make([]interface{}, len(p.ethereum.OutboundPeers()))
+	outPeers := make([]interface{}, len(p.ethereum.InOutPeers()))
 	// Serialise each peer
-	for i, peer := range p.ethereum.OutboundPeers() {
+	for i, peer := range p.ethereum.InOutPeers() {
 		outPeers[i] = peer.RlpData()
 	}
 

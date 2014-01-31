@@ -144,11 +144,27 @@ func (s *Ethereum) InboundPeers() []*Peer {
 	return inboundPeers[:length]
 }
 
+func (s *Ethereum) InOutPeers() []*Peer {
+	// Create a new peer slice with at least the length of the total peers
+	inboundPeers := make([]*Peer, s.peers.Len())
+	length := 0
+	eachPeer(s.peers, func(p *Peer, e *list.Element) {
+		inboundPeers[length] = p
+		length++
+	})
+
+	return inboundPeers[:length]
+}
+
 func (s *Ethereum) Broadcast(msgType ethwire.MsgType, data interface{}) {
 	msg := ethwire.NewMessage(msgType, data)
 	eachPeer(s.peers, func(p *Peer, e *list.Element) {
 		p.QueueMessage(msg)
 	})
+}
+
+func (s *Ethereum) Peers() *list.List {
+	return s.peers
 }
 
 func (s *Ethereum) ReapDeadPeers() {
