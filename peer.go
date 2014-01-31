@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -15,6 +16,36 @@ const (
 	// The size of the output buffer for writing messages
 	outputBufferSize = 50
 )
+
+// Peer capabillities
+type Caps byte
+
+const (
+	CapDiscoveryTy = 0x01
+	CapTxTy        = 0x02
+	CapChainTy     = 0x04
+)
+
+var capsToString = map[Caps]string{
+	CapDiscoveryTy: "Peer discovery",
+	CapTxTy:        "Transaction relaying",
+	CapChainTy:     "Block chain relaying",
+}
+
+func (c Caps) String() string {
+	var caps []string
+	if c&CapDiscoveryTy > 0 {
+		caps = append(caps, capsToString[CapDiscoveryTy])
+	}
+	if c&CapChainTy > 0 {
+		caps = append(caps, capsToString[CapChainTy])
+	}
+	if c&CapTxTy > 0 {
+		caps = append(caps, capsToString[CapTxTy])
+	}
+
+	return strings.Join(caps, " | ")
+}
 
 type Peer struct {
 	// Ethereum interface
@@ -45,6 +76,10 @@ type Peer struct {
 
 	// Determines whether this is a seed peer
 	seed bool
+
+	host []byte
+	port uint16
+	caps Caps
 }
 
 func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
@@ -56,6 +91,7 @@ func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
 		inbound:     inbound,
 		disconnect:  0,
 		connected:   1,
+		port:        30303,
 	}
 }
 
@@ -223,7 +259,8 @@ out:
 					peers := make([]string, data.Length())
 					// Parse each possible peer
 					for i := 0; i < data.Length(); i++ {
-						peers[i] = data.Get(i).Get(0).AsString() + ":" + strconv.Itoa(int(data.Get(i).Get(1).AsUint()))
+						peers[i] = unpackAddr(data.Get(i).Get(0).AsBytes(), data.Get(i).Get(1).AsUint())
+						log.Println(peers[i])
 					}
 
 					// Connect to the list of peers
@@ -277,20 +314,52 @@ out:
 	p.Stop()
 }
 
+func packAddr(address, port string) ([]byte, uint16) {
+	addr := strings.Split(address, ".")
+	a, _ := strconv.Atoi(addr[0])
+	b, _ := strconv.Atoi(addr[1])
+	c, _ := strconv.Atoi(addr[2])
+	d, _ := strconv.Atoi(addr[3])
+	host := []byte{byte(a), byte(b), byte(c), byte(d)}
+	prt, _ := strconv.Atoi(port)
+
+	return host, uint16(prt)
+}
+
+func unpackAddr(h []byte, p uint64) string {
+	if len(h) != 4 {
+		return ""
+	}
+
+	a := strconv.Itoa(int(h[0]))
+	b := strconv.Itoa(int(h[1]))
+	c := strconv.Itoa(int(h[2]))
+	d := strconv.Itoa(int(h[3]))
+	host := strings.Join([]string{a, b, c, d}, ".")
+	port := strconv.Itoa(int(p))
+
+	return net.JoinHostPort(host, port)
+}
+
 func (p *Peer) Start(seed bool) {
 	p.seed = seed
 
-	peerHost, _, _ := net.SplitHostPort(p.conn.LocalAddr().String())
-	servHost, _, _ := net.SplitHostPort(p.conn.RemoteAddr().String())
+	peerHost, peerPort, _ := net.SplitHostPort(p.conn.LocalAddr().String())
+	servHost, servPort, _ := net.SplitHostPort(p.conn.RemoteAddr().String())
 	if peerHost == servHost {
 		log.Println("Connected to self")
 
-		p.Stop()
+		//p.Stop()
 
-		return
+		//return
 	}
 
-	//if !p.inbound {
+	if p.inbound {
+		p.host, p.port = packAddr(peerHost, peerPort)
+	} else {
+		p.host, p.port = packAddr(servHost, servPort)
+	}
+
 	err := p.pushHandshake()
 	if err != nil {
 		log.Printf("Peer can't send outbound version ack", err)
@@ -299,7 +368,6 @@ func (p *Peer) Start(seed bool) {
 
 		return
 	}
-	//}
 
 	// Run the outbound handler in a new goroutine
 	go p.HandleOutbound()
@@ -324,7 +392,7 @@ func (p *Peer) Stop() {
 
 func (p *Peer) pushHandshake() error {
 	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-		uint32(0), uint32(0), "/Ethereum(G) v0.0.1/",
+		uint32(0), uint32(0), "/Ethereum(G) v0.0.1/", CapChainTy | CapTxTy | CapDiscoveryTy, p.port,
 	})
 
 	p.QueueMessage(msg)
@@ -354,41 +422,27 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	var istr string
 	// If this is an inbound connection send an ack back
 	if p.inbound {
-		/*
-			err := p.pushHandshake()
-			if err != nil {
-				log.Println("Peer can't send ack back")
+		if port := c.Get(4).AsUint(); port != 0 {
+			p.port = uint16(port)
+		}
 
-				p.Stop()
-			}
-		*/
 		istr = "inbound"
 	} else {
-		//msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{p.ethereum.BlockManager.BlockChain().CurrentBlock.Hash(), uint64(100)})
-		//p.QueueMessage(msg)
+		msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{p.ethereum.BlockManager.BlockChain().CurrentBlock.Hash(), uint64(100)})
+		p.QueueMessage(msg)
 
 		istr = "outbound"
 	}
 
-	log.Printf("peer connect (%s) %v %s\n", istr, p.conn.RemoteAddr(), c.Get(2).AsString())
+	if caps := Caps(c.Get(3).AsByte()); caps != 0 {
+		p.caps = caps
+	}
+
+	log.Printf("peer connect (%s) %v %s [%s]\n", istr, p.conn.RemoteAddr(), c.Get(2).AsString(), p.caps)
 }
 
 func (p *Peer) RlpData() []interface{} {
-	host, _, err := net.SplitHostPort(p.conn.RemoteAddr().String())
-	if err != nil {
-		return nil
-	}
-
-	/* FIXME
-	port, err := strconv.Atoi(prt)
-	if err != nil {
-		return nil
-	}
-	*/
-
-	//port := ethutil.NumberToBytes(uint16(i), 16)
-
-	return []interface{}{host, uint16(30303) /*port*/}
+	return []interface{}{p.host, p.port /*port*/}
 }
 
 func (p *Peer) RlpEncode() []byte {
