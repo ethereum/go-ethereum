@@ -374,19 +374,21 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 }
 
 func (p *Peer) RlpData() []interface{} {
-	host, prt, err := net.SplitHostPort(p.conn.RemoteAddr().String())
+	host, _, err := net.SplitHostPort(p.conn.RemoteAddr().String())
 	if err != nil {
 		return nil
 	}
 
+	/* FIXME
 	port, err := strconv.Atoi(prt)
 	if err != nil {
 		return nil
 	}
+	*/
 
 	//port := ethutil.NumberToBytes(uint16(i), 16)
 
-	return []interface{}{host, port}
+	return []interface{}{host, uint16(30303) /*port*/}
 }
 
 func (p *Peer) RlpEncode() []byte {
