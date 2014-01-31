@@ -93,6 +93,9 @@ func (s *Ethereum) ConnectToPeer(addr string) error {
 	var alreadyConnected bool
 
 	eachPeer(s.peers, func(p *Peer, v *list.Element) {
+		if p.conn == nil {
+			return
+		}
 		phost, _, _ := net.SplitHostPort(p.conn.RemoteAddr().String())
 		ahost, _, _ := net.SplitHostPort(addr)
 
@@ -118,7 +121,7 @@ func (s *Ethereum) OutboundPeers() []*Peer {
 	outboundPeers := make([]*Peer, s.peers.Len())
 	length := 0
 	eachPeer(s.peers, func(p *Peer, e *list.Element) {
-		if !p.inbound {
+		if !p.inbound && p.conn != nil {
 			outboundPeers[length] = p
 			length++
 		}
