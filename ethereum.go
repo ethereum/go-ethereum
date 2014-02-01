@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"github.com/ethereum/eth-go"
@@ -46,6 +47,8 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	Init()
 
+	//fmt.Printf("%x\n", ethutil.Encode([]interface{}{ethutil.BigPow(2, 36).Bytes()}))
+
 	ethchain.InitFees()
 	ethutil.ReadConfig()
 
@@ -89,17 +92,27 @@ func main() {
 		// Fake block mining. It broadcasts a new block every 5 seconds
 		go func() {
 			pow := &ethchain.EasyPow{}
+			addr, _ := hex.DecodeString("82c3b0b72cf62f1a9ce97c64da8072efa28225d8")
 
 			for {
+				time.Sleep(blockTime * time.Second)
+
 				txs := ethereum.TxPool.Flush()
-				block := ethereum.BlockManager.BlockChain().NewBlock("82c3b0b72cf62f1a9ce97c64da8072efa28225d8", txs)
+				block := ethereum.BlockManager.BlockChain().NewBlock(addr, txs)
 
 				nonce := pow.Search(block)
 				block.Nonce = nonce
 
-				log.Println("nonce found:", nonce)
+				err := ethereum.BlockManager.ProcessBlockWithState(block, block.State())
+				if err != nil {
+					log.Println(err)
+				} else {
+					//log.Println("nonce found:", nonce)
+					log.Println("\n+++++++ MINED BLK +++++++\n", block.String())
+				}
+				//os.Exit(1)
+
 				/*
-					time.Sleep(blockTime * time.Second)
 
 
 					block := ethchain.CreateBlock(

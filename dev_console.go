@@ -124,13 +124,13 @@ func (i *Console) ParseInput(input string) bool {
 				ethutil.BigPow(2, 36),   // diff
 				ethutil.Big(tokens[2]))) // nonce
 		case "decode":
-			value := ethutil.NewRlpDecoder([]byte(tokens[1]))
+			value := ethutil.NewRlpValueFromBytes([]byte(tokens[1]))
 			fmt.Println(value)
 		case "getaddr":
 			encoded, _ := hex.DecodeString(tokens[1])
 			d := i.ethereum.BlockManager.BlockChain().CurrentBlock.State().Get(string(encoded))
 			if d != "" {
-				decoder := ethutil.NewRlpDecoder([]byte(d))
+				decoder := ethutil.NewRlpValueFromBytes([]byte(d))
 				fmt.Println(decoder)
 			} else {
 				fmt.Println("getaddr: address unknown")
@@ -139,27 +139,10 @@ func (i *Console) ParseInput(input string) bool {
 			i.ethereum.Broadcast(ethwire.MsgTalkTy, tokens[1])
 		case "addp":
 			i.ethereum.ConnectToPeer(tokens[1])
+		case "pcount":
+			fmt.Println("peers:", i.ethereum.Peers().Len())
 		case "encode":
 			fmt.Printf("%q\n", ethutil.Encode(tokens[1]))
-			/*
-				case "newblk":
-					block := ethchain.CreateBlock(
-						i.ethereum.BlockManager.BlockChain().LastBlock.State().Root,
-						i.ethereum.BlockManager.LastBlockHash,
-						"123",
-						big.NewInt(1),
-						big.NewInt(1),
-						"",
-						i.ethereum.TxPool.Flush(),
-					)
-					err := i.ethereum.BlockManager.ProcessBlock(block)
-					if err != nil {
-						fmt.Println(err)
-					} else {
-						i.ethereum.Broadcast(ethwire.MsgBlockTy, block.RlpData())
-					}
-					//fmt.Println(ethutil.NewRlpValue(block.RlpData()).Get(0))
-			*/
 		case "tx":
 			tx := ethchain.NewTransaction(tokens[1], ethutil.Big(tokens[2]), []string{""})
 			fmt.Printf("%x\n", tx.Hash())
@@ -169,7 +152,7 @@ func (i *Console) ParseInput(input string) bool {
 			addr, _ := hex.DecodeString(tokens[1])
 			data, _ := ethutil.Config.Db.Get(addr)
 			if len(data) != 0 {
-				decoder := ethutil.NewRlpDecoder(data)
+				decoder := ethutil.NewRlpValueFromBytes(data)
 				fmt.Println(decoder)
 			} else {
 				fmt.Println("gettx: tx not found")
