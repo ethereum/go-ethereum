@@ -76,11 +76,11 @@ func (i *Console) ValidateInput(action string, argumentLength int) error {
 }
 
 func (i *Console) PrintRoot() {
-	root := ethutil.Conv(i.trie.RootT)
+	root := ethutil.Conv(i.trie.Root)
 	if len(root.AsBytes()) != 0 {
 		fmt.Println(hex.EncodeToString(root.AsBytes()))
 	} else {
-		fmt.Println(i.trie.RootT)
+		fmt.Println(i.trie.Root)
 	}
 }
 
@@ -108,15 +108,15 @@ func (i *Console) ParseInput(input string) bool {
 	} else {
 		switch tokens[0] {
 		case "update":
-			i.trie.UpdateT(tokens[1], tokens[2])
+			i.trie.Update(tokens[1], tokens[2])
 
 			i.PrintRoot()
 		case "get":
-			fmt.Println(i.trie.GetT(tokens[1]))
+			fmt.Println(i.trie.Get(tokens[1]))
 		case "root":
 			i.PrintRoot()
 		case "rawroot":
-			fmt.Println(i.trie.RootT)
+			fmt.Println(i.trie.Root)
 		case "print":
 			i.db.Print()
 		case "dag":
@@ -124,11 +124,11 @@ func (i *Console) ParseInput(input string) bool {
 				ethutil.BigPow(2, 36),   // diff
 				ethutil.Big(tokens[2]))) // nonce
 		case "decode":
-			d, _ := ethutil.Decode([]byte(tokens[1]), 0)
-			fmt.Printf("%q\n", d)
+			value := ethutil.NewRlpDecoder([]byte(tokens[1]))
+			fmt.Println(value)
 		case "getaddr":
 			encoded, _ := hex.DecodeString(tokens[1])
-			d := i.ethereum.BlockManager.CurrentBlock.State().Get(string(encoded))
+			d := i.ethereum.BlockManager.BlockChain().CurrentBlock.State().Get(string(encoded))
 			if d != "" {
 				decoder := ethutil.NewRlpDecoder([]byte(d))
 				fmt.Println(decoder)

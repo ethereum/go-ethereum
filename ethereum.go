@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/ethutil-go"
 	_ "github.com/ethereum/ethwire-go"
 	"log"
-	"math/big"
 	"os"
 	"os/signal"
 	"path"
@@ -84,31 +83,40 @@ func main() {
 	ethereum.Start()
 
 	if StartMining {
-		blockTime := time.Duration(15)
+		blockTime := time.Duration(10)
 		log.Printf("Dev Test Mining started. Blocks found each %d seconds\n", blockTime)
 
 		// Fake block mining. It broadcasts a new block every 5 seconds
 		go func() {
+			pow := &ethchain.EasyPow{}
+
 			for {
-
-				time.Sleep(blockTime * time.Second)
-
 				txs := ethereum.TxPool.Flush()
+				block := ethereum.BlockManager.BlockChain().NewBlock("82c3b0b72cf62f1a9ce97c64da8072efa28225d8", txs)
 
-				block := ethchain.CreateBlock(
-					ethereum.BlockManager.CurrentBlock.State().Root,
-					ethereum.BlockManager.LastBlockHash,
-					"123",
-					big.NewInt(1),
-					big.NewInt(1),
-					"",
-					txs)
-				err := ethereum.BlockManager.ProcessBlockWithState(block, block.State())
-				if err != nil {
-					log.Println(err)
-				} else {
-					log.Println("\n+++++++ MINED BLK +++++++\n", block.String())
-				}
+				nonce := pow.Search(block)
+				block.Nonce = nonce
+
+				log.Println("nonce found:", nonce)
+				/*
+					time.Sleep(blockTime * time.Second)
+
+
+					block := ethchain.CreateBlock(
+						ethereum.BlockManager.BlockChain().CurrentBlock.State().Root,
+						ethereum.BlockManager.BlockChain().LastBlockHash,
+						"123",
+						big.NewInt(1),
+						big.NewInt(1),
+						"",
+						txs)
+					err := ethereum.BlockManager.ProcessBlockWithState(block, block.State())
+					if err != nil {
+						log.Println(err)
+					} else {
+						//log.Println("\n+++++++ MINED BLK +++++++\n", block.String())
+					}
+				*/
 			}
 		}()
 	}
