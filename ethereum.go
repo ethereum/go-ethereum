@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/ethwire-go"
 	"log"
 	"net"
+	"strconv"
 	"sync/atomic"
 	"time"
 )
@@ -40,6 +41,10 @@ type Ethereum struct {
 	peers *list.List
 	// Nonce
 	Nonce uint64
+
+	Addr net.Addr
+
+	nat NAT
 }
 
 func New() (*Ethereum, error) {
@@ -51,12 +56,20 @@ func New() (*Ethereum, error) {
 
 	ethutil.Config.Db = db
 
+	/*
+		nat, err := Discover()
+		if err != nil {
+			log.Printf("Can'them discover upnp: %v", err)
+		}
+	*/
+
 	nonce, _ := ethutil.RandomUint64()
 	ethereum := &Ethereum{
 		shutdownChan: make(chan bool),
 		db:           db,
 		peers:        list.New(),
 		Nonce:        nonce,
+		//nat:          nat,
 	}
 	ethereum.TxPool = ethchain.NewTxPool()
 	ethereum.TxPool.Speaker = ethereum
@@ -179,18 +192,59 @@ func (s *Ethereum) ReapDeadPeers() {
 	}
 }
 
+// FIXME
+func (s *Ethereum) upnpUpdateThread() {
+	// Go off immediately to prevent code duplication, thereafter we renew
+	// lease every 15 minutes.
+	timer := time.NewTimer(0 * time.Second)
+	lport, _ := strconv.ParseInt("30303", 10, 16)
+	first := true
+out:
+	for {
+		select {
+		case <-timer.C:
+			listenPort, err := s.nat.AddPortMapping("TCP", int(lport), int(lport), "eth listen port", 20*60)
+			if err != nil {
+				log.Printf("can't add UPnP port mapping: %v\n", err)
+			}
+			if first && err == nil {
+				externalip, err := s.nat.GetExternalAddress()
+				if err != nil {
+					log.Printf("UPnP can't get external address: %v\n", err)
+					continue out
+				}
+				// externalip, listenport
+				log.Println("Successfully bound via UPnP to", externalip, listenPort)
+				first = false
+			}
+			timer.Reset(time.Minute * 15)
+		case <-s.shutdownChan:
+			break out
+		}
+	}
+
+	timer.Stop()
+
+	if err := s.nat.DeletePortMapping("tcp", int(lport), int(lport)); err != nil {
+		log.Printf("unable to remove UPnP port mapping: %v\n", err)
+	} else {
+		log.Printf("succesfully disestablished UPnP port mapping\n")
+	}
+}
+
 // Start the ethereum
 func (s *Ethereum) Start() {
 	// Bind to addr and port
 	ln, err := net.Listen("tcp", ":30303")
 	if err != nil {
 		// This is mainly for testing to create a "network"
-		if ethutil.Config.Debug {
-			log.Println("Connection listening disabled. Acting as client")
-		} else {
-			log.Fatal(err)
-		}
+		//if ethutil.Config.Debug {
+		//log.Println("Connection listening disabled. Acting as client")
+		//} else {
+		log.Fatal(err)
+		//}
 	} else {
+		s.Addr = ln.Addr()
 		// Starting accepting connections
 		go func() {
 			log.Println("Ready and accepting connections")

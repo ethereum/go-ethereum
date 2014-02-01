@@ -253,22 +253,21 @@ out:
 			case ethwire.MsgPeersTy:
 				// Received a list of peers (probably because MsgGetPeersTy was send)
 				// Only act on message if we actually requested for a peers list
-				if p.requestedPeerList {
-					data := msg.Data
-					// Create new list of possible peers for the ethereum to process
-					peers := make([]string, data.Length())
-					// Parse each possible peer
-					for i := 0; i < data.Length(); i++ {
-						peers[i] = unpackAddr(data.Get(i).Get(0).AsBytes(), data.Get(i).Get(1).AsUint())
-						log.Println(peers[i])
-					}
-
-					// Connect to the list of peers
-					p.ethereum.ProcessPeerList(peers)
-					// Mark unrequested again
-					p.requestedPeerList = false
-
+				//if p.requestedPeerList {
+				data := msg.Data
+				// Create new list of possible peers for the ethereum to process
+				peers := make([]string, data.Length())
+				// Parse each possible peer
+				for i := 0; i < data.Length(); i++ {
+					peers[i] = unpackAddr(data.Get(i).Get(0), data.Get(i).Get(1).AsUint())
 				}
+
+				// Connect to the list of peers
+				p.ethereum.ProcessPeerList(peers)
+				// Mark unrequested again
+				p.requestedPeerList = false
+
+				//}
 			case ethwire.MsgGetChainTy:
 				var parent *ethchain.Block
 				// Length minus one since the very last element in the array is a count
@@ -326,15 +325,11 @@ func packAddr(address, port string) ([]byte, uint16) {
 	return host, uint16(prt)
 }
 
-func unpackAddr(h []byte, p uint64) string {
-	if len(h) != 4 {
-		return ""
-	}
-
-	a := strconv.Itoa(int(h[0]))
-	b := strconv.Itoa(int(h[1]))
-	c := strconv.Itoa(int(h[2]))
-	d := strconv.Itoa(int(h[3]))
+func unpackAddr(value *ethutil.RlpValue, p uint64) string {
+	a := strconv.Itoa(int(value.Get(0).AsUint()))
+	b := strconv.Itoa(int(value.Get(1).AsUint()))
+	c := strconv.Itoa(int(value.Get(2).AsUint()))
+	d := strconv.Itoa(int(value.Get(3).AsUint()))
 	host := strings.Join([]string{a, b, c, d}, ".")
 	port := strconv.Itoa(int(p))
 
@@ -349,9 +344,9 @@ func (p *Peer) Start(seed bool) {
 	if peerHost == servHost {
 		log.Println("Connected to self")
 
-		//p.Stop()
+		p.Stop()
 
-		//return
+		return
 	}
 
 	if p.inbound {
