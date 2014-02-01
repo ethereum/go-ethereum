@@ -39,14 +39,10 @@ Deps
 Ethereum Go makes use of a modified `secp256k1-go` and therefor GMP.
 
 Ubuntu 12+
-* `apt-get install libgmp3-dev`
+* `apt-get install gmp-dev`
  
 OS X 10.9+: 
-* `brew install gmp4`
-* Symlink the headers and libs if necessary:
-  * `sudo ln -s /usr/local/opt/gmp4/include/gmp.h /usr/local/include/gmp.h`
-  * `sudo ln -s /usr/local/opt/gmp4/lib/libgmp.a /usr/local/lib/libgmp.a`
-  * `sudo ln -s /usr/local/opt/gmp4/lib/libgmpxx.a /usr/local/lib/libgmpxx.a`
+* `brew install gmp`
 
 Build
 =======
