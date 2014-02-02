@@ -184,7 +184,7 @@ func (p *Peer) writeMessage(msg *ethwire.Msg) {
 func (p *Peer) HandleOutbound() {
 	// The ping timer. Makes sure that every 2 minutes a ping is send to the peer
 	pingTimer := time.NewTicker(2 * time.Minute)
-	serviceTimer := time.NewTicker(5 * time.Second)
+	serviceTimer := time.NewTicker(5 * time.Minute)
 out:
 	for {
 		select {
@@ -412,7 +412,7 @@ func (p *Peer) Stop() {
 
 func (p *Peer) pushHandshake() error {
 	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-		uint32(0), uint32(0), "/Ethereum(G) v0.0.1/", p.caps, p.port,
+		uint32(0), uint32(0), "/Ethereum(G) v0.0.1/", byte(p.caps), p.port,
 	})
 
 	p.QueueMessage(msg)
