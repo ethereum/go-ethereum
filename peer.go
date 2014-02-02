@@ -369,8 +369,6 @@ func (p *Peer) Start() {
 	peerHost, peerPort, _ := net.SplitHostPort(p.conn.LocalAddr().String())
 	servHost, servPort, _ := net.SplitHostPort(p.conn.RemoteAddr().String())
 	if peerHost == servHost {
-		log.Println("Connected to self")
-
 		p.Stop()
 
 		return
