@@ -136,7 +136,7 @@ func (i *Console) ParseInput(input string) bool {
 				fmt.Println("getaddr: address unknown")
 			}
 		case "say":
-			i.ethereum.Broadcast(ethwire.MsgTalkTy, tokens[1])
+			i.ethereum.Broadcast(ethwire.MsgTalkTy, []interface{}{tokens[1]})
 		case "addp":
 			i.ethereum.ConnectToPeer(tokens[1])
 		case "pcount":

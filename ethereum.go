@@ -11,7 +11,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"path"
 	"runtime"
 	"time"
 )
@@ -65,17 +64,8 @@ func main() {
 		err := os.Mkdir(ethutil.Config.ExecPath, os.ModePerm)
 		// Error is OK if the error is ErrExist
 		if err != nil && !os.IsExist(err) {
-			log.Panic("Unable to create EXECPATH. Exiting")
+			log.Panic("Unable to create EXECPATH:", err)
 		}
-
-		// TODO The logger will eventually be a non blocking logger. Logging is a expensive task
-		// Log to file only
-		file, err := os.OpenFile(path.Join(ethutil.Config.ExecPath, "debug.log"), os.O_RDWR|os.O_CREATE, os.ModePerm)
-		if err != nil {
-			log.Panic("Unable to set proper logger", err)
-		}
-
-		ethutil.Config.Log = log.New(file, "", 0)
 
 		console := NewConsole(ethereum)
 		go console.Start()
