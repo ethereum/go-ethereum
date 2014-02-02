@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/ethwire-go"
 	"log"
 	"net"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,6 +30,7 @@ const (
 type Ethereum struct {
 	// Channel for shutting down the ethereum
 	shutdownChan chan bool
+	quit         chan bool
 	// DB interface
 	//db *ethdb.LDBDatabase
 	db *ethdb.MemDatabase
@@ -48,6 +50,8 @@ type Ethereum struct {
 
 	// Capabilities for outgoing peers
 	serverCaps Caps
+
+	nat NAT
 }
 
 func New(caps Caps) (*Ethereum, error) {
@@ -57,15 +61,30 @@ func New(caps Caps) (*Ethereum, error) {
 		return nil, err
 	}
 
+	/*
+		gateway := net.ParseIP("192.168.192.1")
+		nat := NewNatPMP(gateway)
+		port, err := nat.AddPortMapping("tcp", 30303, 30303, "", 60)
+		log.Println(port, err)
+	*/
+
+	nat, err := Discover()
+	if err != nil {
+		log.Println("UPnP failed", err)
+		return nil, err
+	}
+
 	ethutil.Config.Db = db
 
 	nonce, _ := ethutil.RandomUint64()
 	ethereum := &Ethereum{
 		shutdownChan: make(chan bool),
+		quit:         make(chan bool),
 		db:           db,
 		peers:        list.New(),
 		Nonce:        nonce,
 		serverCaps:   caps,
+		nat:          nat,
 	}
 	ethereum.TxPool = ethchain.NewTxPool()
 	ethereum.TxPool.Speaker = ethereum
@@ -217,6 +236,8 @@ func (s *Ethereum) Start() {
 		go s.peerHandler(ln)
 	}
 
+	go s.upnpUpdateThread()
+
 	// Start the reaping processes
 	go s.ReapDeadPeerHandler()
 
@@ -245,6 +266,8 @@ func (s *Ethereum) Stop() {
 		p.Stop()
 	})
 
+	close(s.quit)
+
 	s.shutdownChan <- true
 
 	s.TxPool.Stop()
@@ -253,4 +276,43 @@ func (s *Ethereum) Stop() {
 // This function will wait for a shutdown and resumes main thread execution
 func (s *Ethereum) WaitForShutdown() {
 	<-s.shutdownChan
+}
+
+func (s *Ethereum) upnpUpdateThread() {
+	// Go off immediately to prevent code duplication, thereafter we renew
+	// lease every 15 minutes.
+	timer := time.NewTimer(0 * time.Second)
+	lport, _ := strconv.ParseInt("30303", 10, 16)
+	first := true
+out:
+	for {
+		select {
+		case <-timer.C:
+			listenPort, err := s.nat.AddPortMapping("TCP", int(lport), int(lport), "eth listen port", 20*60)
+			if err != nil {
+				log.Println("can't add UPnP port mapping:", err)
+				break out
+			}
+			if first && err == nil {
+				externalip, err := s.nat.GetExternalAddress()
+				if err != nil {
+					log.Println("UPnP can't get external address:", err)
+					continue out
+				}
+				log.Println("Successfully bound via UPnP to", externalip, listenPort)
+				first = false
+			}
+			timer.Reset(time.Minute * 15)
+		case <-s.quit:
+			break out
+		}
+	}
+
+	timer.Stop()
+
+	if err := s.nat.DeletePortMapping("TCP", int(lport), int(lport)); err != nil {
+		log.Println("unable to remove UPnP port mapping:", err)
+	} else {
+		log.Println("succesfully disestablished UPnP port mapping")
+	}
 }
