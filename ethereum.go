@@ -96,7 +96,7 @@ func (s *Ethereum) AddPeer(conn net.Conn) {
 
 	if peer != nil {
 		s.peers.PushBack(peer)
-		peer.Start(false)
+		peer.Start()
 	}
 }
 

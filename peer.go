@@ -76,9 +76,6 @@ type Peer struct {
 	// this to prevent receiving false peers.
 	requestedPeerList bool
 
-	// Determines whether this is a seed peer
-	seed bool
-
 	host []byte
 	port uint16
 	caps Caps
@@ -123,7 +120,7 @@ func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 		atomic.StoreInt32(&p.connected, 1)
 		atomic.StoreInt32(&p.disconnect, 0)
 
-		p.Start(false)
+		p.Start()
 	}()
 
 	return p
@@ -154,14 +151,6 @@ func (p *Peer) writeMessage(msg *ethwire.Msg) {
 		// Stop the client if there was an error writing to it
 		p.Stop()
 		return
-	}
-
-	// XXX TMP CODE FOR TESTNET
-	switch msg.Type {
-	case ethwire.MsgPeersTy:
-		if p.seed {
-			p.Stop()
-		}
 	}
 }
 
@@ -349,9 +338,7 @@ func unpackAddr(value *ethutil.RlpValue, p uint64) string {
 	return net.JoinHostPort(host, port)
 }
 
-func (p *Peer) Start(seed bool) {
-	p.seed = seed
-
+func (p *Peer) Start() {
 	peerHost, peerPort, _ := net.SplitHostPort(p.conn.LocalAddr().String())
 	servHost, servPort, _ := net.SplitHostPort(p.conn.RemoteAddr().String())
 	if peerHost == servHost {
