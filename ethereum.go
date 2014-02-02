@@ -169,7 +169,7 @@ func (s *Ethereum) InOutPeers() []*Peer {
 	return inboundPeers[:length]
 }
 
-func (s *Ethereum) Broadcast(msgType ethwire.MsgType, data interface{}) {
+func (s *Ethereum) Broadcast(msgType ethwire.MsgType, data []interface{}) {
 	msg := ethwire.NewMessage(msgType, data)
 	eachPeer(s.peers, func(p *Peer, e *list.Element) {
 		p.QueueMessage(msg)
@@ -237,12 +237,7 @@ func (s *Ethereum) Start() {
 	// Bind to addr and port
 	ln, err := net.Listen("tcp", ":30303")
 	if err != nil {
-		// This is mainly for testing to create a "network"
-		//if ethutil.Config.Debug {
-		//log.Println("Connection listening disabled. Acting as client")
-		//} else {
-		log.Fatal(err)
-		//}
+		log.Println("Connection listening disabled. Acting as client")
 	} else {
 		s.Addr = ln.Addr()
 		// Starting accepting connections
