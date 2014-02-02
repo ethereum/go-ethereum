@@ -38,10 +38,18 @@ Deps
 
 Ethereum Go makes use of a modified `secp256k1-go` and therefor GMP.
 
-Install
+Ubuntu 12+
+* `apt-get install gmp-dev`
+ 
+OS X 10.9+: 
+* `brew install gmp`
+
+Build
 =======
 
-```go get -u -t github.com/ethereum/go-ethereum```
+* `go get -u -t github.com/ethereum/go-ethereum`
+* `cd $GOPATH/src/github.com/ethereum/go-etherum`
+* `go build`
 
 
 Command line options
