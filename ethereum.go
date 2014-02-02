@@ -54,24 +54,19 @@ type Ethereum struct {
 	nat NAT
 }
 
-func New(caps Caps) (*Ethereum, error) {
-	//db, err := ethdb.NewLDBDatabase()
+func New(caps Caps, usePnp bool) (*Ethereum, error) {
 	db, err := ethdb.NewMemDatabase()
 	if err != nil {
 		return nil, err
 	}
 
-	/*
-		gateway := net.ParseIP("192.168.192.1")
-		nat := NewNatPMP(gateway)
-		port, err := nat.AddPortMapping("tcp", 30303, 30303, "", 60)
-		log.Println(port, err)
-	*/
-
-	nat, err := Discover()
-	if err != nil {
-		log.Println("UPnP failed", err)
-		return nil, err
+	var nat NAT
+	if usePnp {
+		nat, err = Discover()
+		if err != nil {
+			log.Println("UPnP failed", err)
+			return nil, err
+		}
 	}
 
 	ethutil.Config.Db = db
@@ -229,14 +224,15 @@ func (s *Ethereum) Start() {
 	if err != nil {
 		log.Println("Connection listening disabled. Acting as client")
 	} else {
-		s.Addr = ln.Addr()
 		// Starting accepting connections
 		log.Println("Ready and accepting connections")
 		// Start the peer handler
 		go s.peerHandler(ln)
 	}
 
-	go s.upnpUpdateThread()
+	if s.nat != nil {
+		go s.upnpUpdateThread()
+	}
 
 	// Start the reaping processes
 	go s.ReapDeadPeerHandler()
@@ -288,18 +284,18 @@ out:
 	for {
 		select {
 		case <-timer.C:
-			listenPort, err := s.nat.AddPortMapping("TCP", int(lport), int(lport), "eth listen port", 20*60)
+			var err error
+			_, err = s.nat.AddPortMapping("TCP", int(lport), int(lport), "eth listen port", 20*60)
 			if err != nil {
 				log.Println("can't add UPnP port mapping:", err)
 				break out
 			}
 			if first && err == nil {
-				externalip, err := s.nat.GetExternalAddress()
+				_, err = s.nat.GetExternalAddress()
 				if err != nil {
 					log.Println("UPnP can't get external address:", err)
 					continue out
 				}
-				log.Println("Successfully bound via UPnP to", externalip, listenPort)
 				first = false
 			}
 			timer.Reset(time.Minute * 15)
