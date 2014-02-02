@@ -17,27 +17,53 @@ const (
 	outputBufferSize = 50
 )
 
-// Peer capabillities
+type DiscReason byte
+
+const (
+	DiscReRequested  = 0x00
+	DiscReTcpSysErr  = 0x01
+	DiscBadProto     = 0x02
+	DiscBadPeer      = 0x03
+	DiscTooManyPeers = 0x04
+)
+
+var discReasonToString = []string{
+	"Disconnect requested",
+	"Disconnect TCP sys error",
+	"Disconnect Bad protocol",
+	"Disconnect Useless peer",
+	"Disconnect Too many peers",
+}
+
+func (d DiscReason) String() string {
+	if len(discReasonToString) > int(d) {
+		return "Unknown"
+	}
+
+	return discReasonToString[d]
+}
+
+// Peer capabilities
 type Caps byte
 
 const (
-	CapDiscoveryTy = 0x01
-	CapTxTy        = 0x02
-	CapChainTy     = 0x04
+	CapPeerDiscTy = 0x01
+	CapTxTy       = 0x02
+	CapChainTy    = 0x04
 
-	CapDefault = CapChainTy | CapTxTy | CapDiscoveryTy
+	CapDefault = CapChainTy | CapTxTy | CapPeerDiscTy
 )
 
 var capsToString = map[Caps]string{
-	CapDiscoveryTy: "Peer discovery",
-	CapTxTy:        "Transaction relaying",
-	CapChainTy:     "Block chain relaying",
+	CapPeerDiscTy: "Peer discovery",
+	CapTxTy:       "Transaction relaying",
+	CapChainTy:    "Block chain relaying",
 }
 
 func (c Caps) String() string {
 	var caps []string
-	if c&CapDiscoveryTy > 0 {
-		caps = append(caps, capsToString[CapDiscoveryTy])
+	if c&CapPeerDiscTy > 0 {
+		caps = append(caps, capsToString[CapPeerDiscTy])
 	}
 	if c&CapChainTy > 0 {
 		caps = append(caps, capsToString[CapChainTy])
@@ -175,7 +201,7 @@ out:
 		// Service timer takes care of peer broadcasting, transaction
 		// posting or block posting
 		case <-serviceTimer.C:
-			if p.caps&CapDiscoveryTy > 0 {
+			if p.caps&CapPeerDiscTy > 0 {
 				msg := p.peersMessage()
 				p.ethereum.BroadcastMsg(msg)
 			}
@@ -220,6 +246,7 @@ out:
 				p.QueueMessage(ethwire.NewMessage(ethwire.MsgGetPeersTy, ""))
 			case ethwire.MsgDiscTy:
 				p.Stop()
+				log.Println("Disconnect peer:", DiscReason(msg.Data.Get(0).AsUint()))
 			case ethwire.MsgPingTy:
 				// Respond back with pong
 				p.QueueMessage(ethwire.NewMessage(ethwire.MsgPongTy, ""))
@@ -381,8 +408,6 @@ func (p *Peer) Stop() {
 		p.writeMessage(ethwire.NewMessage(ethwire.MsgDiscTy, ""))
 		p.conn.Close()
 	}
-
-	log.Println("Peer shutdown")
 }
 
 func (p *Peer) pushHandshake() error {
