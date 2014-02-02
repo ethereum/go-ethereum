@@ -46,15 +46,13 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	Init()
 
-	//fmt.Printf("%x\n", ethutil.Encode([]interface{}{ethutil.BigPow(2, 36).Bytes()}))
-
 	ethchain.InitFees()
 	ethutil.ReadConfig()
 
 	log.Printf("Starting Ethereum v%s\n", ethutil.Config.Ver)
 
 	// Instantiated a eth stack
-	ethereum, err := eth.New()
+	ethereum, err := eth.New(eth.CapDefault)
 	if err != nil {
 		log.Println(err)
 		return
