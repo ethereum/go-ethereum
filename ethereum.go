@@ -91,7 +91,7 @@ func main() {
 
 				block.Nonce = pow.Search(block)
 
-				err := ethereum.BlockManager.ProcessBlockWithState(block, block.State())
+				err := ethereum.BlockManager.ProcessBlock(block)
 				if err != nil {
 					log.Println(err)
 				} else {
