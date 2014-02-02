@@ -144,7 +144,8 @@ func (i *Console) ParseInput(input string) bool {
 		case "encode":
 			fmt.Printf("%q\n", ethutil.Encode(tokens[1]))
 		case "tx":
-			tx := ethchain.NewTransaction(tokens[1], ethutil.Big(tokens[2]), []string{""})
+			recipient, _ := hex.DecodeString(tokens[1])
+			tx := ethchain.NewTransaction(recipient, ethutil.Big(tokens[2]), []string{""})
 			fmt.Printf("%x\n", tx.Hash())
 
 			i.ethereum.TxPool.QueueTransaction(tx)
@@ -158,7 +159,7 @@ func (i *Console) ParseInput(input string) bool {
 				fmt.Println("gettx: tx not found")
 			}
 		case "contract":
-			contract := ethchain.NewTransaction("", ethutil.Big(tokens[1]), []string{"PUSH", "1234"})
+			contract := ethchain.NewTransaction([]byte{}, ethutil.Big(tokens[1]), []string{"PUSH", "1234"})
 			fmt.Printf("%x\n", contract.Hash())
 
 			i.ethereum.TxPool.QueueTransaction(contract)
