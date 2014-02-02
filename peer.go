@@ -24,6 +24,8 @@ const (
 	CapDiscoveryTy = 0x01
 	CapTxTy        = 0x02
 	CapChainTy     = 0x04
+
+	CapDefault = CapChainTy | CapTxTy | CapDiscoveryTy
 )
 
 var capsToString = map[Caps]string{
@@ -95,7 +97,7 @@ func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
 	}
 }
 
-func NewOutboundPeer(addr string, ethereum *Ethereum) *Peer {
+func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 	p := &Peer{
 		outputQueue: make(chan *ethwire.Msg, outputBufferSize),
 		quit:        make(chan bool),
@@ -103,6 +105,7 @@ func NewOutboundPeer(addr string, ethereum *Ethereum) *Peer {
 		inbound:     false,
 		connected:   0,
 		disconnect:  0,
+		caps:        caps,
 	}
 
 	// Set up the connection in another goroutine so we don't block the main thread
@@ -165,7 +168,8 @@ func (p *Peer) writeMessage(msg *ethwire.Msg) {
 // Outbound message handler. Outbound messages are handled here
 func (p *Peer) HandleOutbound() {
 	// The ping timer. Makes sure that every 2 minutes a ping is send to the peer
-	tickleTimer := time.NewTicker(2 * time.Minute)
+	pingTimer := time.NewTicker(2 * time.Minute)
+	serviceTimer := time.NewTicker(5 * time.Second)
 out:
 	for {
 		select {
@@ -175,11 +179,20 @@ out:
 
 			p.lastSend = time.Now()
 
-		case <-tickleTimer.C:
+		// Ping timer sends a ping to the peer each 2 minutes
+		case <-pingTimer.C:
 			p.writeMessage(ethwire.NewMessage(ethwire.MsgPingTy, ""))
 
-			// Break out of the for loop if a quit message is posted
+		// Service timer takes care of peer broadcasting, transaction
+		// posting or block posting
+		case <-serviceTimer.C:
+			if p.caps&CapDiscoveryTy > 0 {
+				msg := p.peersMessage()
+				p.ethereum.BroadcastMsg(msg)
+			}
+
 		case <-p.quit:
+			// Break out of the for loop if a quit message is posted
 			break out
 		}
 	}
@@ -387,7 +400,7 @@ func (p *Peer) Stop() {
 
 func (p *Peer) pushHandshake() error {
 	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-		uint32(0), uint32(0), "/Ethereum(G) v0.0.1/", CapChainTy | CapTxTy | CapDiscoveryTy, p.port,
+		uint32(0), uint32(0), "/Ethereum(G) v0.0.1/", p.caps, p.port,
 	})
 
 	p.QueueMessage(msg)
@@ -395,18 +408,20 @@ func (p *Peer) pushHandshake() error {
 	return nil
 }
 
-// Pushes the list of outbound peers to the client when requested
-func (p *Peer) pushPeers() {
+func (p *Peer) peersMessage() *ethwire.Msg {
 	outPeers := make([]interface{}, len(p.ethereum.InOutPeers()))
 	// Serialise each peer
 	for i, peer := range p.ethereum.InOutPeers() {
 		outPeers[i] = peer.RlpData()
 	}
 
-	// Send message to the peer with the known list of connected clients
-	msg := ethwire.NewMessage(ethwire.MsgPeersTy, outPeers)
+	// Return the message to the peer with the known list of connected clients
+	return ethwire.NewMessage(ethwire.MsgPeersTy, outPeers)
+}
 
-	p.QueueMessage(msg)
+// Pushes the list of outbound peers to the client when requested
+func (p *Peer) pushPeers() {
+	p.QueueMessage(p.peersMessage())
 }
 
 func (p *Peer) handleHandshake(msg *ethwire.Msg) {
