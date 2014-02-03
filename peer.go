@@ -271,7 +271,7 @@ out:
 				// in the TxPool where it will undergo validation and
 				// processing when a new block is found
 				for i := 0; i < msg.Data.Length(); i++ {
-					p.ethereum.TxPool.QueueTransaction(ethchain.NewTransactionFromRlpValue(msg.Data.Get(i)))
+					p.ethereum.TxPool.QueueTransaction(ethchain.NewTransactionFromData(ethutil.Encode(msg.Data.Get(i).AsRaw())))
 				}
 			case ethwire.MsgGetPeersTy:
 				// Flag this peer as a 'requested of new peers' this to
