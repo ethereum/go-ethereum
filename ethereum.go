@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/ethchain-go"
 	"github.com/ethereum/ethutil-go"
-	"github.com/ethereum/ethwire-go"
+	_ "github.com/ethereum/ethwire-go"
 	"log"
 	"os"
 	"os/signal"
@@ -92,7 +92,8 @@ func main() {
 				ethereum.BlockManager.ApplyTransactions(block, block.Transactions())
 				// Search the nonce
 				block.Nonce = pow.Search(block)
-				ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.RlpValue().Value})
+				ethereum.BlockManager.ProcessBlock(block)
+				//ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.RlpValue().Value})
 				log.Println("\n+++++++ MINED BLK +++++++\n", block.String())
 			}
 		}()
