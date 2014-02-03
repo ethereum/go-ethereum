@@ -144,11 +144,15 @@ func (i *Console) ParseInput(input string) bool {
 		case "encode":
 			fmt.Printf("%q\n", ethutil.Encode(tokens[1]))
 		case "tx":
-			recipient, _ := hex.DecodeString(tokens[1])
-			tx := ethchain.NewTransaction(recipient, ethutil.Big(tokens[2]), []string{""})
-			fmt.Printf("%x\n", tx.Hash())
+			recipient, err := hex.DecodeString(tokens[1])
+			if err != nil {
+				fmt.Println("recipient err:", err)
+			} else {
+				tx := ethchain.NewTransaction(recipient, ethutil.Big(tokens[2]), []string{""})
+				fmt.Printf("%x\n", tx.Hash())
+				i.ethereum.TxPool.QueueTransaction(tx)
+			}
 
-			i.ethereum.TxPool.QueueTransaction(tx)
 		case "gettx":
 			addr, _ := hex.DecodeString(tokens[1])
 			data, _ := ethutil.Config.Db.Get(addr)
