@@ -65,7 +65,6 @@ func New(caps Caps, usePnp bool) (*Ethereum, error) {
 		nat, err = Discover()
 		if err != nil {
 			log.Println("UPnP failed", err)
-			return nil, err
 		}
 	}
 
