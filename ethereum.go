@@ -84,40 +84,20 @@ func main() {
 			addr, _ := hex.DecodeString("82c3b0b72cf62f1a9ce97c64da8072efa28225d8")
 
 			for {
-				//time.Sleep(blockTime * time.Second)
-
 				txs := ethereum.TxPool.Flush()
+				// Create a new block which we're going to mine
 				block := ethereum.BlockManager.BlockChain().NewBlock(addr, txs)
-
+				// Apply all transactions to the block
+				ethereum.BlockManager.ApplyTransactions(block)
+				// Search the nonce
 				block.Nonce = pow.Search(block)
-
+				// Process the block and verify
 				err := ethereum.BlockManager.ProcessBlock(block)
 				if err != nil {
 					log.Println(err)
 				} else {
-					//log.Println("nonce found:", nonce)
 					log.Println("\n+++++++ MINED BLK +++++++\n", block.String())
 				}
-				//os.Exit(1)
-
-				/*
-
-
-					block := ethchain.CreateBlock(
-						ethereum.BlockManager.BlockChain().CurrentBlock.State().Root,
-						ethereum.BlockManager.BlockChain().LastBlockHash,
-						"123",
-						big.NewInt(1),
-						big.NewInt(1),
-						"",
-						txs)
-					err := ethereum.BlockManager.ProcessBlockWithState(block, block.State())
-					if err != nil {
-						log.Println(err)
-					} else {
-						//log.Println("\n+++++++ MINED BLK +++++++\n", block.String())
-					}
-				*/
 			}
 		}()
 	}
