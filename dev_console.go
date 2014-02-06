@@ -149,6 +149,7 @@ func (i *Console) ParseInput(input string) bool {
 				fmt.Println("recipient err:", err)
 			} else {
 				tx := ethchain.NewTransaction(recipient, ethutil.Big(tokens[2]), []string{""})
+				tx.Sign([]byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
 				fmt.Printf("%x\n", tx.Hash())
 				i.ethereum.TxPool.QueueTransaction(tx)
 			}
