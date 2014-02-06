@@ -92,9 +92,13 @@ func main() {
 				ethereum.BlockManager.ApplyTransactions(block, block.Transactions())
 				// Search the nonce
 				block.Nonce = pow.Search(block)
-				ethereum.BlockManager.ProcessBlock(block)
-				//ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.RlpValue().Value})
-				log.Println("\n+++++++ MINED BLK +++++++\n", block.String())
+				err := ethereum.BlockManager.ProcessBlock(block)
+				if err != nil {
+					log.Println(err)
+				} else {
+					//ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.RlpValue().Value})
+					log.Println("\n+++++++ MINED BLK +++++++\n", block.String())
+				}
 			}
 		}()
 	}

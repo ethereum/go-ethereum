@@ -47,9 +47,7 @@ OS X 10.9+:
 Build
 =======
 
-* `go get -u -t github.com/ethereum/go-ethereum`
-* `cd $GOPATH/src/github.com/ethereum/go-etherum`
-* `go build`
+`go get -u -t github.com/ethereum/go-ethereum`
 
 
 Command line options
