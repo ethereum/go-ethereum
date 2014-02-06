@@ -60,15 +60,19 @@ var capsToString = map[Caps]string{
 	CapChainTy:    "Block chain relaying",
 }
 
+func (c Caps) IsCap(cap Caps) bool {
+	return c&cap > 0
+}
+
 func (c Caps) String() string {
 	var caps []string
-	if c&CapPeerDiscTy > 0 {
+	if c.IsCap(CapPeerDiscTy) {
 		caps = append(caps, capsToString[CapPeerDiscTy])
 	}
-	if c&CapChainTy > 0 {
+	if c.IsCap(CapChainTy) {
 		caps = append(caps, capsToString[CapChainTy])
 	}
-	if c&CapTxTy > 0 {
+	if c.IsCap(CapTxTy) {
 		caps = append(caps, capsToString[CapTxTy])
 	}
 
@@ -243,7 +247,9 @@ out:
 				// Version message
 				p.handleHandshake(msg)
 
-				p.QueueMessage(ethwire.NewMessage(ethwire.MsgGetPeersTy, ""))
+				if p.caps.IsCap(CapPeerDiscTy) {
+					p.QueueMessage(ethwire.NewMessage(ethwire.MsgGetPeersTy, ""))
+				}
 			case ethwire.MsgDiscTy:
 				p.Stop()
 				log.Println("Disconnect peer:", DiscReason(msg.Data.Get(0).AsUint()))
@@ -259,7 +265,8 @@ out:
 				// Get all blocks and process them
 				msg.Data = msg.Data
 				for i := msg.Data.Length() - 1; i >= 0; i-- {
-					block := ethchain.NewBlockFromRlpValue(msg.Data.Get(i))
+					// FIXME
+					block := ethchain.NewBlockFromRlpValue(ethutil.NewValue(msg.Data.Get(i).AsRaw()))
 					err := p.ethereum.BlockManager.ProcessBlock(block)
 
 					if err != nil {
@@ -302,7 +309,7 @@ out:
 				// Length minus one since the very last element in the array is a count
 				l := msg.Data.Length() - 1
 				// Ignore empty get chains
-				if l <= 1 {
+				if l == 0 {
 					break
 				}
 
@@ -369,9 +376,9 @@ func (p *Peer) Start() {
 	peerHost, peerPort, _ := net.SplitHostPort(p.conn.LocalAddr().String())
 	servHost, servPort, _ := net.SplitHostPort(p.conn.RemoteAddr().String())
 	if peerHost == servHost {
-		p.Stop()
+		//p.Stop()
 
-		return
+		//return
 	}
 
 	if p.inbound {
@@ -462,21 +469,5 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 }
 
 func (p *Peer) RlpData() []interface{} {
-	return []interface{}{p.host, p.port /*port*/}
-}
-
-func (p *Peer) RlpEncode() []byte {
-	host, prt, err := net.SplitHostPort(p.conn.RemoteAddr().String())
-	if err != nil {
-		return nil
-	}
-
-	i, err := strconv.Atoi(prt)
-	if err != nil {
-		return nil
-	}
-
-	port := ethutil.NumberToBytes(uint16(i), 16)
-
-	return ethutil.Encode([]interface{}{host, port})
+	return []interface{}{p.host, p.port}
 }
