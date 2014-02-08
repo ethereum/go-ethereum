@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/ethchain-go"
