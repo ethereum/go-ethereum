@@ -5,9 +5,8 @@ Ethereum
 
 Ethereum Go developer client (c) Jeffrey Wilcke
 
-A fair warning; Ethereum is not yet to be used in production. There's no
-test-net and you aren't mining real blocks (just one which is the genesis block).
-
+Ethereum is currently in its testing phase. The current state is "Proof
+of Concept 1". For build instructions see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Edge).
 
 Ethereum Go is split up in several sub packages Please refer to each
 individual package for more information.
@@ -33,30 +32,34 @@ contains the LevelDB interface and memory DB interface.
 This executable is the front-end (currently nothing but a dev console) for
 the Ethereum Go implementation.
 
-Deps
-====
-
-Ethereum Go makes use of a modified `secp256k1-go` and therefor GMP.
-
-Ubuntu 12+
-* `apt-get install gmp-dev`
- 
-OS X 10.9+: 
-* `brew install gmp`
-
 Build
 =======
 
-`go get -u -t github.com/ethereum/go-ethereum`
+For build instruction please see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Edge)
 
 
 Command line options
 ====================
 
 ```
--c      launch the developer console
--m      start mining fake blocks and broadcast fake messages to the net
+-c       Launch the developer console
+-m       Start mining blocks
+-genaddr Generates a new address and private key (destructive action)
+-p       Port on which the server will accept incomming connections (= 30303)
+-upnp    Enable UPnP (= false)
+-x       Desired amount of peers (= 5)
+-h       This help
 ```
+
+Developer console commands
+==========================
+
+```
+addp <host>:<port>     Connect to the given host
+tx <addr> <amount>     Send <amount> Wei to the specified <addr>
+```
+
+See the "help" command for *developer* options.
 
 Contribution
 ============
