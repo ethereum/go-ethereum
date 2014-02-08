@@ -2,12 +2,11 @@ package main
 
 import (
 	"encoding/hex"
-	"flag"
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/ethchain-go"
 	"github.com/ethereum/ethutil-go"
-	_ "github.com/ethereum/ethwire-go"
+	"github.com/obscuren/secp256k1-go"
 	"log"
 	"os"
 	"os/signal"
@@ -15,22 +14,6 @@ import (
 )
 
 const Debug = true
-
-var StartConsole bool
-var StartMining bool
-var UseUPnP bool
-var OutboundPort string
-var ShowGenesis bool
-
-func Init() {
-	flag.BoolVar(&StartConsole, "c", false, "debug and testing console")
-	flag.BoolVar(&StartMining, "m", false, "start dagger mining")
-	flag.BoolVar(&ShowGenesis, "g", false, "prints genesis header and exits")
-	flag.BoolVar(&UseUPnP, "upnp", false, "enable UPnP support")
-	flag.StringVar(&OutboundPort, "port", "30303", "listening port")
-
-	flag.Parse()
-}
 
 // Register interrupt handlers so we can stop the ethereum
 func RegisterInterupts(s *eth.Ethereum) {
@@ -47,6 +30,17 @@ func RegisterInterupts(s *eth.Ethereum) {
 	}()
 }
 
+func CreateKeyPair(force bool) {
+	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
+	if len(data) == 0 || force {
+		log.Println("Generating new address and keypair")
+
+		pub, prv := secp256k1.GenerateKeyPair()
+
+		ethutil.Config.Db.Put([]byte("KeyRing"), prv)
+	}
+}
+
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	Init()
@@ -57,8 +51,29 @@ func main() {
 	// Instantiated a eth stack
 	ethereum, err := eth.New(eth.CapDefault, UseUPnP)
 	if err != nil {
-		log.Println(err)
+		log.Println("eth start err:", err)
 		return
+	}
+
+	if GenAddr {
+		fmt.Println("This action overwrites your old private key. Are you sure? (y/n)")
+
+		var r string
+		fmt.Scanln(&r)
+		for ; ; fmt.Scanln(&r) {
+			if r == "n" || r == "y" {
+				break
+			} else {
+				fmt.Println("Yes or no?", r)
+			}
+		}
+
+		if r == "y" {
+			CreateKeyPair(true)
+		}
+		os.Exit(0)
+	} else {
+		CreateKeyPair(false)
 	}
 
 	if ShowGenesis {
@@ -67,6 +82,9 @@ func main() {
 	}
 
 	log.Printf("Starting Ethereum v%s\n", ethutil.Config.Ver)
+
+	// Set the max peers
+	ethereum.MaxPeers = MaxPeer
 
 	if StartConsole {
 		err := os.Mkdir(ethutil.Config.ExecPath, os.ModePerm)
@@ -97,14 +115,16 @@ func main() {
 				block := ethereum.BlockManager.BlockChain().NewBlock(addr, txs)
 				// Apply all transactions to the block
 				ethereum.BlockManager.ApplyTransactions(block, block.Transactions())
+
+				ethereum.BlockManager.AccumelateRewards(block, block)
+
 				// Search the nonce
 				block.Nonce = pow.Search(block)
 				err := ethereum.BlockManager.ProcessBlock(block)
 				if err != nil {
 					log.Println(err)
 				} else {
-					//ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.RlpValue().Value})
-					log.Println("\n+++++++ MINED BLK +++++++\n", block.String())
+					log.Println("\n+++++++ MINED BLK +++++++\n", ethereum.BlockManager.BlockChain().CurrentBlock)
 				}
 			}
 		}()

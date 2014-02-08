@@ -3,7 +3,7 @@ Ethereum
 
 [![Build Status](https://travis-ci.org/ethereum/go-ethereum.png?branch=master)](https://travis-ci.org/ethereum/go-ethereum)
 
-Ethereum Go developer client (c) [0255c7881](https://github.com/ethereum/go-ethereum#copy)
+Ethereum Go developer client (c) Jeffrey Wilcke
 
 A fair warning; Ethereum is not yet to be used in production. There's no
 test-net and you aren't mining real blocks (just one which is the genesis block).
@@ -95,6 +95,3 @@ expect you to write tests for me so I don't have to test your code
 manually. (If you want to contribute by just writing tests that's fine
 too!)
 
-### Copy
-
-69bce990a619e747b4f57483724b0e8a1732bb3b44ccf70b0dd6abd272af94550fc9d8b21232d33ebf30d38a148612f68e936094b4daeb9ea7174088a439070401 0255c78815d4f056f84c96de438ed9e38c69c0f8af24f5032248be5a79fe9071c3
