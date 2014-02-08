@@ -33,7 +33,7 @@ type Ethereum struct {
 	quit         chan bool
 	// DB interface
 	//db *ethdb.LDBDatabase
-	db *ethdb.MemDatabase
+	db ethutil.Database
 	// Block manager for processing new blocks and managing the block chain
 	BlockManager *ethchain.BlockManager
 	// The transaction pool. Transaction can be pushed on this pool
@@ -52,10 +52,14 @@ type Ethereum struct {
 	serverCaps Caps
 
 	nat NAT
+
+	// Specifies the desired amount of maximum peers
+	MaxPeers int
 }
 
 func New(caps Caps, usePnp bool) (*Ethereum, error) {
-	db, err := ethdb.NewMemDatabase()
+	db, err := ethdb.NewLDBDatabase()
+	//db, err := ethdb.NewMemDatabase()
 	if err != nil {
 		return nil, err
 	}
@@ -79,6 +83,7 @@ func New(caps Caps, usePnp bool) (*Ethereum, error) {
 		Nonce:        nonce,
 		serverCaps:   caps,
 		nat:          nat,
+		MaxPeers:     5,
 	}
 	ethereum.TxPool = ethchain.NewTxPool()
 	ethereum.TxPool.Speaker = ethereum
@@ -93,7 +98,7 @@ func New(caps Caps, usePnp bool) (*Ethereum, error) {
 func (s *Ethereum) AddPeer(conn net.Conn) {
 	peer := NewPeer(conn, s, true)
 
-	if peer != nil {
+	if peer != nil && s.peers.Len() < s.MaxPeers {
 		s.peers.PushBack(peer)
 		peer.Start()
 	}
@@ -263,9 +268,10 @@ func (s *Ethereum) Stop() {
 
 	close(s.quit)
 
-	s.shutdownChan <- true
-
 	s.TxPool.Stop()
+	s.BlockManager.Stop()
+
+	s.shutdownChan <- true
 }
 
 // This function will wait for a shutdown and resumes main thread execution
