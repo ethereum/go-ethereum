@@ -38,7 +38,7 @@ func CreateKeyPair(force bool) {
 
 		log.Printf("Your new address is %x\n", pub[12:])
 
-		ethutil.Config.Db.Put([]byte("KeyRing"), prv)
+		ethutil.Config.Db.Put([]byte("KeyRing"), ethutil.Encode([]interface{}{prv, pub}))
 	}
 }
 
@@ -108,7 +108,9 @@ func main() {
 		// Fake block mining. It broadcasts a new block every 5 seconds
 		go func() {
 			pow := &ethchain.EasyPow{}
-			addr, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
+			data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
+			keyRing := ethutil.NewValueFromBytes(data)
+			addr := keyRing.Get(1).Bytes()
 
 			for {
 				txs := ethereum.TxPool.Flush()
