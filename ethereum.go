@@ -37,6 +37,8 @@ func CreateKeyPair(force bool) {
 
 		pub, prv := secp256k1.GenerateKeyPair()
 
+		log.Printf("Your new address is %x\n", pub[12:])
+
 		ethutil.Config.Db.Put([]byte("KeyRing"), prv)
 	}
 }
