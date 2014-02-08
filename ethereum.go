@@ -109,7 +109,7 @@ func main() {
 		// Fake block mining. It broadcasts a new block every 5 seconds
 		go func() {
 			pow := &ethchain.EasyPow{}
-			addr, _ := hex.DecodeString("82c3b0b72cf62f1a9ce97c64da8072efa28225d8")
+			addr, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
 
 			for {
 				txs := ethereum.TxPool.Flush()
