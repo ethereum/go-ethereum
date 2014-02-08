@@ -106,7 +106,7 @@ type Peer struct {
 	// this to prevent receiving false peers.
 	requestedPeerList bool
 
-	host []byte
+	host []interface{}
 	port uint16
 	caps Caps
 }
@@ -314,7 +314,8 @@ out:
 				}
 
 				// Amount of parents in the canonical chain
-				amountOfBlocks := msg.Data.Get(l).AsUint()
+				//amountOfBlocks := msg.Data.Get(l).AsUint()
+				amountOfBlocks := uint64(100)
 				// Check each SHA block hash from the message and determine whether
 				// the SHA is in the database
 				for i := 0; i < l; i++ {
@@ -326,8 +327,10 @@ out:
 
 				// If a parent is found send back a reply
 				if parent != nil {
+					log.Printf("HASH %x (len %d) Amount = %d)\n", parent.Hash(), l, amountOfBlocks)
 					chain := p.ethereum.BlockManager.BlockChain().GetChainFromHash(parent.Hash(), amountOfBlocks)
-					p.QueueMessage(ethwire.NewMessage(ethwire.MsgBlockTy, append(chain, amountOfBlocks)))
+					//log.Printf("%q\n", chain)
+					p.QueueMessage(ethwire.NewMessage(ethwire.MsgBlockTy, chain))
 				} else {
 					// If no blocks are found we send back a reply with msg not in chain
 					// and the last hash from get chain
@@ -349,13 +352,13 @@ out:
 	p.Stop()
 }
 
-func packAddr(address, port string) ([]byte, uint16) {
+func packAddr(address, port string) ([]interface{}, uint16) {
 	addr := strings.Split(address, ".")
 	a, _ := strconv.Atoi(addr[0])
 	b, _ := strconv.Atoi(addr[1])
 	c, _ := strconv.Atoi(addr[2])
 	d, _ := strconv.Atoi(addr[3])
-	host := []byte{byte(a), byte(b), byte(c), byte(d)}
+	host := []interface{}{byte(a), byte(b), byte(c), byte(d)}
 	prt, _ := strconv.Atoi(port)
 
 	return host, uint16(prt)
@@ -417,7 +420,7 @@ func (p *Peer) Stop() {
 
 func (p *Peer) pushHandshake() error {
 	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-		uint32(0), uint32(0), "/Ethereum(G) v0.0.1/", byte(p.caps), p.port,
+		uint32(1), uint32(0), "/Ethereum(G) v0.0.1/", byte(p.caps), p.port,
 	})
 
 	p.QueueMessage(msg)
