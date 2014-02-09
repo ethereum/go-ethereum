@@ -1,6 +1,7 @@
 package eth
 
 import (
+	"bytes"
 	"github.com/ethereum/ethchain-go"
 	"github.com/ethereum/ethutil-go"
 	"github.com/ethereum/ethwire-go"
@@ -109,6 +110,8 @@ type Peer struct {
 	host []interface{}
 	port uint16
 	caps Caps
+
+	pubkey []byte
 }
 
 func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
@@ -125,6 +128,8 @@ func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
 }
 
 func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
+	pubkey, _ := ethutil.Config.Db.Get([]byte("Pubkey"))
+
 	p := &Peer{
 		outputQueue: make(chan *ethwire.Msg, outputBufferSize),
 		quit:        make(chan bool),
@@ -133,6 +138,7 @@ func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 		connected:   0,
 		disconnect:  0,
 		caps:        caps,
+		pubkey:      pubkey,
 	}
 
 	// Set up the connection in another goroutine so we don't block the main thread
@@ -235,13 +241,12 @@ out:
 	for atomic.LoadInt32(&p.disconnect) == 0 {
 		// Wait for a message from the peer
 		msgs, err := ethwire.ReadMessages(p.conn)
+		if err != nil {
+			log.Println(err)
+
+			break out
+		}
 		for _, msg := range msgs {
-			if err != nil {
-				log.Println(err)
-
-				break out
-			}
-
 			switch msg.Type {
 			case ethwire.MsgHandshakeTy:
 				// Version message
@@ -327,9 +332,7 @@ out:
 
 				// If a parent is found send back a reply
 				if parent != nil {
-					log.Printf("HASH %x (len %d) Amount = %d)\n", parent.Hash(), l, amountOfBlocks)
 					chain := p.ethereum.BlockManager.BlockChain().GetChainFromHash(parent.Hash(), amountOfBlocks)
-					//log.Printf("%q\n", chain)
 					p.QueueMessage(ethwire.NewMessage(ethwire.MsgBlockTy, chain))
 				} else {
 					// If no blocks are found we send back a reply with msg not in chain
@@ -378,10 +381,13 @@ func unpackAddr(value *ethutil.RlpValue, p uint64) string {
 func (p *Peer) Start() {
 	peerHost, peerPort, _ := net.SplitHostPort(p.conn.LocalAddr().String())
 	servHost, servPort, _ := net.SplitHostPort(p.conn.RemoteAddr().String())
-	if peerHost == servHost {
-		//p.Stop()
 
-		//return
+	pubkey, _ := ethutil.Config.Db.Get([]byte("Pubkey"))
+	if bytes.Compare(pubkey, p.pubkey) == 0 {
+		log.Println("self connect")
+		p.Stop()
+
+		return
 	}
 
 	if p.inbound {
@@ -420,7 +426,7 @@ func (p *Peer) Stop() {
 
 func (p *Peer) pushHandshake() error {
 	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-		uint32(1), uint32(0), "/Ethereum(G) v0.0.1/", byte(p.caps), p.port,
+		uint32(2), uint32(0), "/Ethereum(G) v0.0.1/", p.pubkey, byte(p.caps), p.port,
 	})
 
 	p.QueueMessage(msg)
@@ -446,15 +452,21 @@ func (p *Peer) pushPeers() {
 
 func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	c := msg.Data
+
+	if c.Get(0).AsUint() != 2 {
+		log.Println("Invalid peer version. Require protocol v 2")
+		p.Stop()
+		return
+	}
+
 	// [PROTOCOL_VERSION, NETWORK_ID, CLIENT_ID]
 	p.versionKnown = true
 
 	var istr string
 	// If this is an inbound connection send an ack back
 	if p.inbound {
-		if port := c.Get(4).AsUint(); port != 0 {
-			p.port = uint16(port)
-		}
+		p.pubkey = c.Get(3).AsBytes()
+		p.port = uint16(c.Get(5).AsUint())
 
 		istr = "inbound"
 	} else {
@@ -464,13 +476,11 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 		istr = "outbound"
 	}
 
-	if caps := Caps(c.Get(3).AsByte()); caps != 0 {
-		p.caps = caps
-	}
+	p.caps = Caps(c.Get(4).AsByte())
 
 	log.Printf("peer connect (%s) %v %s [%s]\n", istr, p.conn.RemoteAddr(), c.Get(2).AsString(), p.caps)
 }
 
 func (p *Peer) RlpData() []interface{} {
-	return []interface{}{p.host, p.port}
+	return []interface{}{p.host, p.port, p.pubkey}
 }
