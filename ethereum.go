@@ -35,10 +35,13 @@ func CreateKeyPair(force bool) {
 		log.Println("Generating new address and keypair")
 
 		pub, prv := secp256k1.GenerateKeyPair()
+		addr := ethutil.Sha3Bin(pub)[12:]
 
-		log.Printf("Your new address is %x\n", ethutil.Sha3Bin(pub)[12:])
+		log.Printf("Your new address is %x\n", addr)
+		log.Printf("Your new pubkey is %x (%d)\n", pub, len(pub))
 
-		ethutil.Config.Db.Put([]byte("KeyRing"), ethutil.Encode([]interface{}{prv, ethutil.Sha3Bin(pub)[12:]}))
+		keyRing := ethutil.NewValue([]interface{}{prv, addr, pub})
+		ethutil.Config.Db.Put([]byte("KeyRing"), keyRing.Encode())
 	}
 }
 
@@ -103,7 +106,7 @@ func main() {
 	ethereum.Start()
 
 	if StartMining {
-		log.Printf("Dev Test Mining started...\n")
+		log.Printf("Miner started\n")
 
 		// Fake block mining. It broadcasts a new block every 5 seconds
 		go func() {
