@@ -128,7 +128,8 @@ func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
 }
 
 func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
-	pubkey, _ := ethutil.Config.Db.Get([]byte("Pubkey"))
+	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
+	pubkey := ethutil.NewValueFromBytes(data).Get(2).Bytes()
 
 	p := &Peer{
 		outputQueue: make(chan *ethwire.Msg, outputBufferSize),
@@ -382,14 +383,6 @@ func (p *Peer) Start() {
 	peerHost, peerPort, _ := net.SplitHostPort(p.conn.LocalAddr().String())
 	servHost, servPort, _ := net.SplitHostPort(p.conn.RemoteAddr().String())
 
-	pubkey, _ := ethutil.Config.Db.Get([]byte("Pubkey"))
-	if bytes.Compare(pubkey, p.pubkey) == 0 {
-		log.Println("self connect")
-		p.Stop()
-
-		return
-	}
-
 	if p.inbound {
 		p.host, p.port = packAddr(peerHost, peerPort)
 	} else {
@@ -467,6 +460,14 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	if p.inbound {
 		p.pubkey = c.Get(3).AsBytes()
 		p.port = uint16(c.Get(5).AsUint())
+
+		data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
+		pubkey := ethutil.NewValueFromBytes(data).Get(2).Bytes()
+		if bytes.Compare(pubkey, p.pubkey) == 0 {
+			p.Stop()
+
+			return
+		}
 
 		istr = "inbound"
 	} else {
