@@ -457,7 +457,7 @@ func (p *Peer) pushPeers() {
 func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	c := msg.Data
 
-	if c.Get(0).AsUint() != 2 {
+	if c.Get(0).AsUint() != 3 {
 		log.Println("Invalid peer version. Require protocol v 2")
 		p.Stop()
 		return
