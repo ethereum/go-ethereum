@@ -112,6 +112,9 @@ type Peer struct {
 	caps Caps
 
 	pubkey []byte
+
+	// Indicated whether the node is catching up or not
+	catchingUp bool
 }
 
 func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
@@ -240,6 +243,9 @@ func (p *Peer) HandleInbound() {
 
 out:
 	for atomic.LoadInt32(&p.disconnect) == 0 {
+		// HMM?
+		time.Sleep(500 * time.Millisecond)
+
 		// Wait for a message from the peer
 		msgs, err := ethwire.ReadMessages(p.conn)
 		if err != nil {
@@ -277,6 +283,11 @@ out:
 
 					if err != nil {
 						log.Println(err)
+					} else {
+						if p.catchingUp && msg.Data.Length() > 1 {
+							p.catchingUp = false
+							p.CatchupWithPeer()
+						}
 					}
 				}
 			case ethwire.MsgTxTy:
@@ -419,7 +430,7 @@ func (p *Peer) Stop() {
 
 func (p *Peer) pushHandshake() error {
 	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-		uint32(2), uint32(0), "/Ethereum(G) v0.0.1/", p.pubkey, byte(p.caps), p.port,
+		uint32(3), uint32(0), "/Ethereum(G) v0.0.1/", byte(p.caps), p.port, p.pubkey,
 	})
 
 	p.QueueMessage(msg)
@@ -452,15 +463,16 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 		return
 	}
 
-	// [PROTOCOL_VERSION, NETWORK_ID, CLIENT_ID]
+	// [PROTOCOL_VERSION, NETWORK_ID, CLIENT_ID, CAPS, PORT, PUBKEY]
 	p.versionKnown = true
 
 	var istr string
 	// If this is an inbound connection send an ack back
 	if p.inbound {
-		p.pubkey = c.Get(3).AsBytes()
-		p.port = uint16(c.Get(5).AsUint())
+		p.pubkey = c.Get(5).AsBytes()
+		p.port = uint16(c.Get(4).AsUint())
 
+		// Self connect detection
 		data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
 		pubkey := ethutil.NewValueFromBytes(data).Get(2).Bytes()
 		if bytes.Compare(pubkey, p.pubkey) == 0 {
@@ -471,15 +483,24 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 
 		istr = "inbound"
 	} else {
-		msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{p.ethereum.BlockManager.BlockChain().CurrentBlock.Hash(), uint64(100)})
-		p.QueueMessage(msg)
+		p.CatchupWithPeer()
 
 		istr = "outbound"
 	}
 
-	p.caps = Caps(c.Get(4).AsByte())
+	p.caps = Caps(c.Get(3).AsByte())
 
 	log.Printf("peer connect (%s) %v %s [%s]\n", istr, p.conn.RemoteAddr(), c.Get(2).AsString(), p.caps)
+}
+
+func (p *Peer) CatchupWithPeer() {
+	if !p.catchingUp {
+		p.catchingUp = true
+		msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{p.ethereum.BlockManager.BlockChain().CurrentBlock.Hash(), uint64(50)})
+		p.QueueMessage(msg)
+
+		log.Printf("Requesting blockchain up from %x\n", p.ethereum.BlockManager.BlockChain().CurrentBlock.Hash())
+	}
 }
 
 func (p *Peer) RlpData() []interface{} {
