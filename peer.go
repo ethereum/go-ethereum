@@ -2,11 +2,13 @@ package eth
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/ethereum/ethchain-go"
 	"github.com/ethereum/ethutil-go"
 	"github.com/ethereum/ethwire-go"
 	"log"
 	"net"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -438,8 +440,9 @@ func (p *Peer) Stop() {
 }
 
 func (p *Peer) pushHandshake() error {
+	clientId := fmt.Sprintf("/Ethereum(G) v%s/%s", ethutil.Config.Ver, runtime.GOOS)
 	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-		uint32(3), uint32(0), "/Ethereum(G) v0.0.1/", byte(p.caps), p.port, p.pubkey,
+		uint32(3), uint32(0), clientId, byte(p.caps), p.port, p.pubkey,
 	})
 
 	p.QueueMessage(msg)
