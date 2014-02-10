@@ -283,12 +283,13 @@ out:
 
 					if err != nil {
 						log.Println(err)
-					} else {
-						if p.catchingUp && msg.Data.Length() > 1 {
-							p.catchingUp = false
-							p.CatchupWithPeer()
-						}
 					}
+				}
+
+				// If we're catching up, try to catch up further.
+				if p.catchingUp && msg.Data.Length() > 1 {
+					p.catchingUp = false
+					p.CatchupWithPeer()
 				}
 			case ethwire.MsgTxTy:
 				// If the message was a transaction queue the transaction
@@ -458,7 +459,7 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	c := msg.Data
 
 	if c.Get(0).AsUint() != 3 {
-		log.Println("Invalid peer version. Require protocol v 2")
+		log.Println("Invalid peer version. Require protocol v3")
 		p.Stop()
 		return
 	}
