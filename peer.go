@@ -1,7 +1,7 @@
 package eth
 
 import (
-	"bytes"
+	_ "bytes"
 	"fmt"
 	"github.com/ethereum/ethchain-go"
 	"github.com/ethereum/ethutil-go"
@@ -139,8 +139,6 @@ func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
 }
 
 func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
-	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-	pubkey := ethutil.NewValueFromBytes(data).Get(2).Bytes()
 
 	p := &Peer{
 		outputQueue: make(chan *ethwire.Msg, outputBufferSize),
@@ -150,7 +148,6 @@ func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 		connected:   0,
 		disconnect:  0,
 		caps:        caps,
-		pubkey:      pubkey,
 	}
 
 	// Set up the connection in another goroutine so we don't block the main thread
@@ -283,7 +280,6 @@ func (p *Peer) HandleInbound() {
 				msg.Data = msg.Data
 				var block *ethchain.Block
 				for i := msg.Data.Length() - 1; i >= 0; i-- {
-					// FIXME
 					block = ethchain.NewBlockFromRlpValue(ethutil.NewValue(msg.Data.Get(i).AsRaw()))
 					err := p.ethereum.BlockManager.ProcessBlock(block)
 
@@ -440,9 +436,12 @@ func (p *Peer) Stop() {
 }
 
 func (p *Peer) pushHandshake() error {
+	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
+	pubkey := ethutil.NewValueFromBytes(data).Get(2).Bytes()
+
 	clientId := fmt.Sprintf("/Ethereum(G) v%s/%s", ethutil.Config.Ver, runtime.GOOS)
 	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-		uint32(3), uint32(0), clientId, byte(p.caps), p.port, p.pubkey,
+		uint32(3), uint32(0), clientId, byte(p.caps), p.port, pubkey,
 	})
 
 	p.QueueMessage(msg)
@@ -485,13 +484,15 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 		p.port = uint16(c.Get(4).AsUint())
 
 		// Self connect detection
-		data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-		pubkey := ethutil.NewValueFromBytes(data).Get(2).Bytes()
-		if bytes.Compare(pubkey, p.pubkey) == 0 {
-			p.Stop()
+		/*
+			data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
+			pubkey := ethutil.NewValueFromBytes(data).Get(2).Bytes()
+			if bytes.Compare(pubkey, p.pubkey) == 0 {
+				p.Stop()
 
-			return
-		}
+				return
+			}
+		*/
 
 		istr = "inbound"
 	} else {
