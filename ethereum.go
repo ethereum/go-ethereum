@@ -6,8 +6,10 @@ import (
 	"github.com/ethereum/ethdb-go"
 	"github.com/ethereum/ethutil-go"
 	"github.com/ethereum/ethwire-go"
+	"io/ioutil"
 	"log"
 	"net"
+	"net/http"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -243,6 +245,20 @@ func (s *Ethereum) Start() {
 
 	// Start the tx pool
 	s.TxPool.Start()
+
+	resp, err := http.Get("http://www.ethereum.org/servers.poc2.txt")
+	if err != nil {
+		log.Println("Fetching seed failed:", err)
+		return
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Println("Reading seed failed:", err)
+		return
+	}
+
+	s.ConnectToPeer(string(body))
 }
 
 func (s *Ethereum) peerHandler(listener net.Listener) {
