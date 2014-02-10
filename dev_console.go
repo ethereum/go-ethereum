@@ -66,6 +66,9 @@ func (i *Console) ValidateInput(action string, argumentLength int) error {
 	case action == "addp" && argumentLength != 1:
 		err = true
 		expArgCount = 1
+	case action == "block" && argumentLength != 1:
+		err = true
+		expArgCount = 1
 	}
 
 	if err {
@@ -128,13 +131,12 @@ func (i *Console) ParseInput(input string) bool {
 			fmt.Println(value)
 		case "getaddr":
 			encoded, _ := hex.DecodeString(tokens[1])
-			d := i.ethereum.BlockManager.BlockChain().CurrentBlock.State().Get(string(encoded))
-			if d != "" {
-				decoder := ethutil.NewRlpValueFromBytes([]byte(d))
-				fmt.Println(decoder)
-			} else {
-				fmt.Println("getaddr: address unknown")
-			}
+			addr := i.ethereum.BlockManager.BlockChain().CurrentBlock.GetAddr(encoded)
+			fmt.Println("addr:", addr)
+		case "block":
+			encoded, _ := hex.DecodeString(tokens[1])
+			block := i.ethereum.BlockManager.BlockChain().GetBlock(encoded)
+			fmt.Println(block)
 		case "say":
 			i.ethereum.Broadcast(ethwire.MsgTalkTy, []interface{}{tokens[1]})
 		case "addp":
@@ -179,6 +181,8 @@ func (i *Console) ParseInput(input string) bool {
 				"get KEY - Retrieves the given key\n" +
 				"root - Prints the hex encoded merkle root\n" +
 				"rawroot - Prints the raw merkle root\n" +
+				"block HASH - Prints the block\n" +
+				"getaddr ADDR - Prints the account associated with the address\n" +
 				"\033[1m= Dagger =\033[0m\n" +
 				"dag HASH NONCE - Verifies a nonce with the given hash with dagger\n" +
 				"\033[1m= Encoding =\033[0m\n" +
