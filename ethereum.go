@@ -38,9 +38,8 @@ func CreateKeyPair(force bool) {
 		addr := ethutil.Sha3Bin(pub)[12:]
 
 		log.Printf("Your new address is %x\n", addr)
-		log.Printf("Your new pubkey is %x (%d)\n", pub, len(pub))
 
-		keyRing := ethutil.NewValue([]interface{}{prv, addr, pub})
+		keyRing := ethutil.NewValue([]interface{}{prv, addr, pub[1:]})
 		ethutil.Config.Db.Put([]byte("KeyRing"), keyRing.Encode())
 	}
 }
