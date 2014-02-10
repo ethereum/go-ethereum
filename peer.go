@@ -26,14 +26,20 @@ const (
 	DiscBadProto     = 0x02
 	DiscBadPeer      = 0x03
 	DiscTooManyPeers = 0x04
+	DiscConnDup      = 0x05
+	DiscGenesisErr   = 0x06
+	DiscProtoErr     = 0x07
 )
 
 var discReasonToString = []string{
 	"Disconnect requested",
 	"Disconnect TCP sys error",
-	"Disconnect Bad protocol",
-	"Disconnect Useless peer",
-	"Disconnect Too many peers",
+	"Disconnect bad protocol",
+	"Disconnect useless peer",
+	"Disconnect too many peers",
+	"Disconnect already connected",
+	"Disconnect wrong genesis block",
+	"Disconnect incompatible network",
 }
 
 func (d DiscReason) String() string {
@@ -241,7 +247,6 @@ clean:
 // Inbound handler. Inbound messages are received here and passed to the appropriate methods
 func (p *Peer) HandleInbound() {
 
-out:
 	for atomic.LoadInt32(&p.disconnect) == 0 {
 		// HMM?
 		time.Sleep(500 * time.Millisecond)
@@ -250,8 +255,6 @@ out:
 		msgs, err := ethwire.ReadMessages(p.conn)
 		if err != nil {
 			log.Println(err)
-
-			break out
 		}
 		for _, msg := range msgs {
 			switch msg.Type {
@@ -276,9 +279,10 @@ out:
 			case ethwire.MsgBlockTy:
 				// Get all blocks and process them
 				msg.Data = msg.Data
+				var block *ethchain.Block
 				for i := msg.Data.Length() - 1; i >= 0; i-- {
 					// FIXME
-					block := ethchain.NewBlockFromRlpValue(ethutil.NewValue(msg.Data.Get(i).AsRaw()))
+					block = ethchain.NewBlockFromRlpValue(ethutil.NewValue(msg.Data.Get(i).AsRaw()))
 					err := p.ethereum.BlockManager.ProcessBlock(block)
 
 					if err != nil {
@@ -288,6 +292,10 @@ out:
 
 				// If we're catching up, try to catch up further.
 				if p.catchingUp && msg.Data.Length() > 1 {
+					if ethutil.Config.Debug {
+						blockInfo := p.ethereum.BlockManager.BlockChain().BlockInfo(block)
+						log.Printf("Synced to block height #%d\n", blockInfo.Number)
+					}
 					p.catchingUp = false
 					p.CatchupWithPeer()
 				}
@@ -500,7 +508,7 @@ func (p *Peer) CatchupWithPeer() {
 		msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{p.ethereum.BlockManager.BlockChain().CurrentBlock.Hash(), uint64(50)})
 		p.QueueMessage(msg)
 
-		log.Printf("Requesting blockchain up from %x\n", p.ethereum.BlockManager.BlockChain().CurrentBlock.Hash())
+		log.Printf("Requesting blockchain %x...\n", p.ethereum.BlockManager.BlockChain().CurrentBlock.Hash()[:4])
 	}
 }
 
