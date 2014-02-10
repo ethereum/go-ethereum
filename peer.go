@@ -319,7 +319,8 @@ func (p *Peer) HandleInbound() {
 				peers := make([]string, data.Length())
 				// Parse each possible peer
 				for i := 0; i < data.Length(); i++ {
-					peers[i] = unpackAddr(data.Get(i).Get(0), data.Get(i).Get(1).AsUint())
+					value := ethutil.NewValue(data.Get(i).AsRaw())
+					peers[i] = unpackAddr(value.Get(0), value.Get(1).Uint())
 				}
 
 				// Connect to the list of peers
@@ -380,17 +381,17 @@ func packAddr(address, port string) ([]interface{}, uint16) {
 	b, _ := strconv.Atoi(addr[1])
 	c, _ := strconv.Atoi(addr[2])
 	d, _ := strconv.Atoi(addr[3])
-	host := []interface{}{byte(a), byte(b), byte(c), byte(d)}
+	host := []interface{}{int32(a), int32(b), int32(c), int32(d)}
 	prt, _ := strconv.Atoi(port)
 
 	return host, uint16(prt)
 }
 
-func unpackAddr(value *ethutil.RlpValue, p uint64) string {
-	a := strconv.Itoa(int(value.Get(0).AsUint()))
-	b := strconv.Itoa(int(value.Get(1).AsUint()))
-	c := strconv.Itoa(int(value.Get(2).AsUint()))
-	d := strconv.Itoa(int(value.Get(3).AsUint()))
+func unpackAddr(value *ethutil.Value, p uint64) string {
+	a := strconv.Itoa(int(value.Get(0).Uint()))
+	b := strconv.Itoa(int(value.Get(1).Uint()))
+	c := strconv.Itoa(int(value.Get(2).Uint()))
+	d := strconv.Itoa(int(value.Get(3).Uint()))
 	host := strings.Join([]string{a, b, c, d}, ".")
 	port := strconv.Itoa(int(p))
 
