@@ -35,7 +35,7 @@ func CreateKeyPair(force bool) {
 		log.Println("Generating new address and keypair")
 
 		pub, prv := secp256k1.GenerateKeyPair()
-		addr := ethutil.Sha3Bin(pub)[12:]
+		addr := ethutil.Sha3Bin(pub[1:])[12:]
 
 		log.Printf("Your new address is %x\n", addr)
 
@@ -67,7 +67,7 @@ func main() {
 			if r == "n" || r == "y" {
 				break
 			} else {
-				fmt.Println("Yes or no?", r)
+				fmt.Printf("Yes or no?", r)
 			}
 		}
 
