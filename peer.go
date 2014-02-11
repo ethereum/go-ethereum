@@ -496,6 +496,8 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 			}
 		*/
 
+		p.CatchupWithPeer()
+
 		istr = "inbound"
 	} else {
 		p.CatchupWithPeer()
