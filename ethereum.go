@@ -60,8 +60,8 @@ type Ethereum struct {
 }
 
 func New(caps Caps, usePnp bool) (*Ethereum, error) {
-	db, err := ethdb.NewLDBDatabase()
-	//db, err := ethdb.NewMemDatabase()
+	//db, err := ethdb.NewLDBDatabase()
+	db, err := ethdb.NewMemDatabase()
 	if err != nil {
 		return nil, err
 	}
@@ -246,19 +246,22 @@ func (s *Ethereum) Start() {
 	// Start the tx pool
 	s.TxPool.Start()
 
-	resp, err := http.Get("http://www.ethereum.org/servers.poc2.txt")
-	if err != nil {
-		log.Println("Fetching seed failed:", err)
-		return
-	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Println("Reading seed failed:", err)
-		return
-	}
+	if ethutil.Config.Seed {
+		// Testnet seed bootstrapping
+		resp, err := http.Get("http://www.ethereum.org/servers.poc2.txt")
+		if err != nil {
+			log.Println("Fetching seed failed:", err)
+			return
+		}
+		defer resp.Body.Close()
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.Println("Reading seed failed:", err)
+			return
+		}
 
-	s.ConnectToPeer(string(body))
+		s.ConnectToPeer(string(body))
+	}
 }
 
 func (s *Ethereum) peerHandler(listener net.Listener) {

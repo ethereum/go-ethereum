@@ -204,6 +204,7 @@ func (p *Peer) HandleOutbound() {
 	// The ping timer. Makes sure that every 2 minutes a ping is send to the peer
 	pingTimer := time.NewTicker(2 * time.Minute)
 	serviceTimer := time.NewTicker(5 * time.Minute)
+
 out:
 	for {
 		select {
@@ -442,7 +443,7 @@ func (p *Peer) pushHandshake() error {
 
 	clientId := fmt.Sprintf("/Ethereum(G) v%s/%s", ethutil.Config.Ver, runtime.GOOS)
 	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-		uint32(3), uint32(0), clientId, byte(p.caps), p.port, pubkey,
+		uint32(4), uint32(0), clientId, byte(p.caps), p.port, pubkey,
 	})
 
 	p.QueueMessage(msg)
@@ -469,8 +470,8 @@ func (p *Peer) pushPeers() {
 func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	c := msg.Data
 
-	if c.Get(0).AsUint() != 3 {
-		log.Println("Invalid peer version. Require protocol v3")
+	if c.Get(0).AsUint() != 4 {
+		log.Println("Invalid peer version. Require protocol v4")
 		p.Stop()
 		return
 	}
