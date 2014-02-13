@@ -247,6 +247,7 @@ func (s *Ethereum) Start() {
 	s.TxPool.Start()
 
 	if ethutil.Config.Seed {
+		log.Println("Seeding")
 		// Testnet seed bootstrapping
 		resp, err := http.Get("http://www.ethereum.org/servers.poc2.txt")
 		if err != nil {
