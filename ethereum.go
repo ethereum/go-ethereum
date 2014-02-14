@@ -2,10 +2,10 @@ package eth
 
 import (
 	"container/list"
-	"github.com/ethereum/ethchain-go"
-	"github.com/ethereum/ethdb-go"
-	"github.com/ethereum/ethutil-go"
-	"github.com/ethereum/ethwire-go"
+	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethdb"
+	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ethwire"
 	"io/ioutil"
 	"log"
 	"net"
@@ -60,8 +60,8 @@ type Ethereum struct {
 }
 
 func New(caps Caps, usePnp bool) (*Ethereum, error) {
-	db, err := ethdb.NewLDBDatabase()
-	//db, err := ethdb.NewMemDatabase()
+	//db, err := ethdb.NewLDBDatabase()
+	db, err := ethdb.NewMemDatabase()
 	if err != nil {
 		return nil, err
 	}

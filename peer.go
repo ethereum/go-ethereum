@@ -3,9 +3,9 @@ package eth
 import (
 	"bytes"
 	"fmt"
-	"github.com/ethereum/ethchain-go"
-	"github.com/ethereum/ethutil-go"
-	"github.com/ethereum/ethwire-go"
+	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ethwire"
 	"log"
 	"net"
 	"runtime"
@@ -293,7 +293,7 @@ func (p *Peer) HandleInbound() {
 					err = p.ethereum.BlockManager.ProcessBlock(block)
 
 					if err != nil {
-						log.Println(err)
+						log.Println("bckmsg", err)
 						break
 					} else {
 						lastBlock = block
@@ -306,8 +306,7 @@ func (p *Peer) HandleInbound() {
 						log.Println("Attempting to catch up")
 						p.catchingUp = false
 						p.CatchupWithPeer()
-					}
-					if ethchain.IsValidationErr(err) {
+					} else if ethchain.IsValidationErr(err) {
 						// TODO
 					}
 				} else {
