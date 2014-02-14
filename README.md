@@ -6,7 +6,7 @@ Ethereum
 Ethereum Go developer client (c) Jeffrey Wilcke
 
 Ethereum is currently in its testing phase. The current state is "Proof
-of Concept 1". For build instructions see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Edge).
+of Concept 2". For build instructions see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Edge).
 
 Ethereum Go is split up in several sub packages Please refer to each
 individual package for more information.

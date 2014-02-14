@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	"github.com/ethereum/eth-go"
-	"github.com/ethereum/ethchain-go"
-	"github.com/ethereum/ethutil-go"
+	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/secp256k1-go"
 	"log"
 	"os"
