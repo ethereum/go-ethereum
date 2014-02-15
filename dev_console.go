@@ -79,9 +79,9 @@ func (i *Console) ValidateInput(action string, argumentLength int) error {
 }
 
 func (i *Console) PrintRoot() {
-	root := ethutil.Conv(i.trie.Root)
-	if len(root.AsBytes()) != 0 {
-		fmt.Println(hex.EncodeToString(root.AsBytes()))
+	root := ethutil.NewValue(i.trie.Root)
+	if len(root.Bytes()) != 0 {
+		fmt.Println(hex.EncodeToString(root.Bytes()))
 	} else {
 		fmt.Println(i.trie.Root)
 	}
@@ -127,7 +127,7 @@ func (i *Console) ParseInput(input string) bool {
 				ethutil.BigPow(2, 36),   // diff
 				ethutil.Big(tokens[2]))) // nonce
 		case "decode":
-			value := ethutil.NewRlpValueFromBytes([]byte(tokens[1]))
+			value := ethutil.NewValueFromBytes([]byte(tokens[1]))
 			fmt.Println(value)
 		case "getaddr":
 			encoded, _ := hex.DecodeString(tokens[1])
@@ -162,7 +162,7 @@ func (i *Console) ParseInput(input string) bool {
 			addr, _ := hex.DecodeString(tokens[1])
 			data, _ := ethutil.Config.Db.Get(addr)
 			if len(data) != 0 {
-				decoder := ethutil.NewRlpValueFromBytes(data)
+				decoder := ethutil.NewValueFromBytes(data)
 				fmt.Println(decoder)
 			} else {
 				fmt.Println("gettx: tx not found")
