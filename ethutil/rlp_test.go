@@ -2,8 +2,6 @@ package ethutil
 
 import (
 	"bytes"
-	"encoding/hex"
-	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
@@ -63,7 +61,7 @@ func TestEncode(t *testing.T) {
 
 	str := string(bytes)
 	if str != strRes {
-		t.Error(fmt.Sprintf("Expected %q, got %q", strRes, str))
+		t.Errorf("Expected %q, got %q", strRes, str)
 	}
 
 	sliceRes := "\xcc\x83dog\x83god\x83cat"
@@ -71,7 +69,7 @@ func TestEncode(t *testing.T) {
 	bytes = Encode(strs)
 	slice := string(bytes)
 	if slice != sliceRes {
-		t.Error(fmt.Sprintf("Expected %q, got %q", sliceRes, slice))
+		t.Error("Expected %q, got %q", sliceRes, slice)
 	}
 
 	intRes := "\x82\x04\x00"
@@ -108,13 +106,9 @@ func TestEncodeDecodeBigInt(t *testing.T) {
 	encoded := Encode(bigInt)
 
 	value := NewValueFromBytes(encoded)
-	fmt.Println(value.BigInt(), bigInt)
 	if value.BigInt().Cmp(bigInt) != 0 {
 		t.Errorf("Expected %v, got %v", bigInt, value.BigInt())
 	}
-
-	dec, _ := hex.DecodeString("52f4fc1e")
-	fmt.Println(NewValueFromBytes(dec).BigInt())
 }
 
 func TestEncodeDecodeBytes(t *testing.T) {
