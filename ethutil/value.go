@@ -60,6 +60,10 @@ func (val *Value) Uint() uint64 {
 		return uint64(Val)
 	} else if Val, ok := val.Val.(uint64); ok {
 		return Val
+	} else if Val, ok := val.Val.(int); ok {
+		return uint64(Val)
+	} else if Val, ok := val.Val.(uint); ok {
+		return uint64(Val)
 	} else if Val, ok := val.Val.([]byte); ok {
 		return ReadVarint(bytes.NewReader(Val))
 	}
