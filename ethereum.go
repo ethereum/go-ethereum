@@ -32,12 +32,22 @@ func RegisterInterupts(s *eth.Ethereum) {
 func CreateKeyPair(force bool) {
 	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
 	if len(data) == 0 || force {
-		log.Println("Generating new address and keypair")
-
 		pub, prv := secp256k1.GenerateKeyPair()
 		addr := ethutil.Sha3Bin(pub[1:])[12:]
 
-		log.Printf("Your new address is %x\n", addr)
+		fmt.Printf(`
+Generating new address and keypair.
+Please keep your keys somewhere save.
+Currently Ethereum(G) does not support
+exporting keys.
+
+++++++++++++++++ KeyRing +++++++++++++++++++
+addr: %x
+prvk: %x
+pubk: %x
+++++++++++++++++++++++++++++++++++++++++++++
+
+`, addr, prv, pub)
 
 		keyRing := ethutil.NewValue([]interface{}{prv, addr, pub[1:]})
 		ethutil.Config.Db.Put([]byte("KeyRing"), keyRing.Encode())
