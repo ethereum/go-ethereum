@@ -10,7 +10,7 @@ import (
 )
 
 func TestRlpValueEncoding(t *testing.T) {
-	val := EmptyRlpValue()
+	val := EmptyValue()
 	val.AppendList().Append(1).Append(2).Append(3)
 	val.Append("4").AppendList().Append(5)
 
