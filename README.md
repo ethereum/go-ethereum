@@ -32,6 +32,9 @@ contains the LevelDB interface and memory DB interface.
 This executable is the front-end (currently nothing but a dev console) for
 the Ethereum Go implementation.
 
+If you'd like to start developing your own tools please check out the
+[development](https://github.com/ethereum/eth-go) package.
+
 Build
 =======
 
