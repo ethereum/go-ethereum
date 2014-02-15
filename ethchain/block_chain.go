@@ -103,7 +103,7 @@ func (bc *BlockChain) GetChainFromHash(hash []byte, max uint64) []interface{} {
 		block := bc.GetBlock(currentHash)
 		currentHash = block.PrevHash
 
-		chain = append(chain, block.RlpValue().Value)
+		chain = append(chain, block.Value().Val)
 		//chain = append([]interface{}{block.RlpValue().Value}, chain...)
 
 		num--

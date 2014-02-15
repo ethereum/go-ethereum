@@ -553,9 +553,9 @@ out:
 			// Load the value in storage and push it on the stack
 			x := bm.stack.Pop()
 			// decode the object as a big integer
-			decoder := ethutil.NewRlpValueFromBytes([]byte(contract.State().Get(x.String())))
+			decoder := ethutil.NewValueFromBytes([]byte(contract.State().Get(x.String())))
 			if !decoder.IsNil() {
-				bm.stack.Push(decoder.AsBigInt())
+				bm.stack.Push(decoder.BigInt())
 			} else {
 				bm.stack.Push(ethutil.BigFalse)
 			}
@@ -618,10 +618,10 @@ func getContractMemory(block *Block, contractAddr []byte, memAddr *big.Int) *big
 	val := contract.State().Get(memAddr.String())
 
 	// decode the object as a big integer
-	decoder := ethutil.NewRlpValueFromBytes([]byte(val))
+	decoder := ethutil.NewValueFromBytes([]byte(val))
 	if decoder.IsNil() {
 		return ethutil.BigFalse
 	}
 
-	return decoder.AsBigInt()
+	return decoder.BigInt()
 }

@@ -7,18 +7,7 @@ import (
 	_ "log"
 	_ "math"
 	"math/big"
-	"reflect"
 )
-
-///////////////////////////////////////
-type EthEncoder interface {
-	EncodeData(rlpData interface{}) []byte
-}
-type EthDecoder interface {
-	Get(idx int) *RlpValue
-}
-
-//////////////////////////////////////
 
 type RlpEncoder struct {
 	rlpData []byte
@@ -31,180 +20,6 @@ func NewRlpEncoder() *RlpEncoder {
 }
 func (coder *RlpEncoder) EncodeData(rlpData interface{}) []byte {
 	return Encode(rlpData)
-}
-
-// Data rlpValueutes are returned by the rlp decoder. The data rlpValueutes represents
-// one item within the rlp data structure. It's responsible for all the casting
-// It always returns something rlpValueid
-type RlpValue struct {
-	Value interface{}
-	kind  reflect.Value
-}
-
-func (rlpValue *RlpValue) String() string {
-	return fmt.Sprintf("%q", rlpValue.Value)
-}
-
-func Conv(rlpValue interface{}) *RlpValue {
-	return &RlpValue{Value: rlpValue, kind: reflect.ValueOf(rlpValue)}
-}
-
-func NewRlpValue(rlpValue interface{}) *RlpValue {
-	return &RlpValue{Value: rlpValue}
-}
-
-func (rlpValue *RlpValue) Type() reflect.Kind {
-	return reflect.TypeOf(rlpValue.Value).Kind()
-}
-
-func (rlpValue *RlpValue) IsNil() bool {
-	return rlpValue.Value == nil
-}
-
-func (rlpValue *RlpValue) Length() int {
-	//return rlpValue.kind.Len()
-	if data, ok := rlpValue.Value.([]interface{}); ok {
-		return len(data)
-	}
-
-	return 0
-}
-
-func (rlpValue *RlpValue) AsRaw() interface{} {
-	return rlpValue.Value
-}
-
-func (rlpValue *RlpValue) AsUint() uint64 {
-	if Value, ok := rlpValue.Value.(uint8); ok {
-		return uint64(Value)
-	} else if Value, ok := rlpValue.Value.(uint16); ok {
-		return uint64(Value)
-	} else if Value, ok := rlpValue.Value.(uint32); ok {
-		return uint64(Value)
-	} else if Value, ok := rlpValue.Value.(uint64); ok {
-		return Value
-	}
-
-	return 0
-}
-
-func (rlpValue *RlpValue) AsByte() byte {
-	if Value, ok := rlpValue.Value.(byte); ok {
-		return Value
-	}
-
-	return 0x0
-}
-
-func (rlpValue *RlpValue) AsBigInt() *big.Int {
-	if a, ok := rlpValue.Value.([]byte); ok {
-		b := new(big.Int)
-		b.SetBytes(a)
-		return b
-	}
-
-	return big.NewInt(0)
-}
-
-func (rlpValue *RlpValue) AsString() string {
-	if a, ok := rlpValue.Value.([]byte); ok {
-		return string(a)
-	} else if a, ok := rlpValue.Value.(string); ok {
-		return a
-	} else {
-		//panic(fmt.Sprintf("not string %T: %v", rlpValue.Value, rlpValue.Value))
-	}
-
-	return ""
-}
-
-func (rlpValue *RlpValue) AsBytes() []byte {
-	if a, ok := rlpValue.Value.([]byte); ok {
-		return a
-	}
-
-	return make([]byte, 0)
-}
-
-func (rlpValue *RlpValue) AsSlice() []interface{} {
-	if d, ok := rlpValue.Value.([]interface{}); ok {
-		return d
-	}
-
-	return []interface{}{}
-}
-
-func (rlpValue *RlpValue) AsSliceFrom(from int) *RlpValue {
-	slice := rlpValue.AsSlice()
-
-	return NewRlpValue(slice[from:])
-}
-
-func (rlpValue *RlpValue) AsSliceTo(to int) *RlpValue {
-	slice := rlpValue.AsSlice()
-
-	return NewRlpValue(slice[:to])
-}
-
-func (rlpValue *RlpValue) AsSliceFromTo(from, to int) *RlpValue {
-	slice := rlpValue.AsSlice()
-
-	return NewRlpValue(slice[from:to])
-}
-
-// Threat the rlpValueute as a slice
-func (rlpValue *RlpValue) Get(idx int) *RlpValue {
-	if d, ok := rlpValue.Value.([]interface{}); ok {
-		// Guard for oob
-		if len(d) <= idx {
-			return NewRlpValue(nil)
-		}
-
-		if idx < 0 {
-			panic("negative idx for Rlp Get")
-		}
-
-		return NewRlpValue(d[idx])
-	}
-
-	// If this wasn't a slice you probably shouldn't be using this function
-	return NewRlpValue(nil)
-}
-
-func (rlpValue *RlpValue) Cmp(o *RlpValue) bool {
-	return reflect.DeepEqual(rlpValue.Value, o.Value)
-}
-
-func (rlpValue *RlpValue) Encode() []byte {
-	return Encode(rlpValue.Value)
-}
-
-func NewRlpValueFromBytes(rlpData []byte) *RlpValue {
-	if len(rlpData) != 0 {
-		data, _ := Decode(rlpData, 0)
-		return NewRlpValue(data)
-	}
-
-	return NewRlpValue(nil)
-}
-
-// RlpValue value setters
-// An empty rlp value is always a list
-func EmptyRlpValue() *RlpValue {
-	return NewRlpValue([]interface{}{})
-}
-
-func (rlpValue *RlpValue) AppendList() *RlpValue {
-	list := EmptyRlpValue()
-	rlpValue.Value = append(rlpValue.AsSlice(), list)
-
-	return list
-}
-
-func (rlpValue *RlpValue) Append(v interface{}) *RlpValue {
-	rlpValue.Value = append(rlpValue.AsSlice(), v)
-
-	return rlpValue
 }
 
 /*
@@ -351,8 +166,8 @@ func Encode(object interface{}) []byte {
 
 	if object != nil {
 		switch t := object.(type) {
-		case *RlpValue:
-			buff.Write(Encode(t.AsRaw()))
+		case *Value:
+			buff.Write(Encode(t.Raw()))
 		// Code dup :-/
 		case int:
 			buff.Write(Encode(big.NewInt(int64(t))))

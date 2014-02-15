@@ -102,7 +102,7 @@ func CreateBlock(root interface{},
 
 // Returns a hash of the block
 func (block *Block) Hash() []byte {
-	return ethutil.Sha3Bin(block.RlpValue().Encode())
+	return ethutil.Sha3Bin(block.Value().Encode())
 }
 
 func (block *Block) HashNoNonce() []byte {
@@ -261,14 +261,14 @@ func (block *Block) SetTransactions(txs []*Transaction) {
 	block.TxSha = ethutil.Sha3Bin(ethutil.Encode(block.rlpTxs()))
 }
 
-func (block *Block) RlpValue() *ethutil.RlpValue {
-	return ethutil.NewRlpValue([]interface{}{block.header(), block.rlpTxs(), block.rlpUncles()})
+func (block *Block) Value() *ethutil.Value {
+	return ethutil.NewValue([]interface{}{block.header(), block.rlpTxs(), block.rlpUncles()})
 }
 
 func (block *Block) RlpEncode() []byte {
 	// Encode a slice interface which contains the header and the list of
 	// transactions.
-	return block.RlpValue().Encode()
+	return block.Value().Encode()
 }
 
 func (block *Block) RlpDecode(data []byte) {

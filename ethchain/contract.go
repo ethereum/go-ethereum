@@ -23,11 +23,11 @@ func (c *Contract) RlpEncode() []byte {
 }
 
 func (c *Contract) RlpDecode(data []byte) {
-	decoder := ethutil.NewRlpValueFromBytes(data)
+	decoder := ethutil.NewValueFromBytes(data)
 
-	c.Amount = decoder.Get(0).AsBigInt()
-	c.Nonce = decoder.Get(1).AsUint()
-	c.state = ethutil.NewTrie(ethutil.Config.Db, decoder.Get(2).AsRaw())
+	c.Amount = decoder.Get(0).BigInt()
+	c.Nonce = decoder.Get(1).Uint()
+	c.state = ethutil.NewTrie(ethutil.Config.Db, decoder.Get(2).Interface())
 }
 
 func (c *Contract) State() *ethutil.Trie {
@@ -59,8 +59,8 @@ func (a *Address) RlpEncode() []byte {
 }
 
 func (a *Address) RlpDecode(data []byte) {
-	decoder := ethutil.NewRlpValueFromBytes(data)
+	decoder := ethutil.NewValueFromBytes(data)
 
-	a.Amount = decoder.Get(0).AsBigInt()
-	a.Nonce = decoder.Get(1).AsUint()
+	a.Amount = decoder.Get(0).BigInt()
+	a.Nonce = decoder.Get(1).Uint()
 }

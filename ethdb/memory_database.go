@@ -29,9 +29,8 @@ func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 func (db *MemDatabase) Print() {
 	for key, val := range db.db {
 		fmt.Printf("%x(%d): ", key, len(key))
-		dec, _ := ethutil.Decode(val, 0)
-		node := ethutil.Conv(dec)
-		fmt.Printf("%q\n", node.AsRaw())
+		node := ethutil.NewValueFromBytes(val)
+		fmt.Printf("%q\n", node.Interface())
 	}
 }
 

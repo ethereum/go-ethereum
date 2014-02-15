@@ -82,7 +82,12 @@ func (cache *Cache) Undo() {
 	}
 }
 
-// A (modified) Radix Trie implementation
+// A (modified) Radix Trie implementation. The Trie implements
+// a caching mechanism and will used cached values if they are
+// present. If a node is not present in the cache it will try to
+// fetch it from the database and store the cached value.
+// Please note that the data isn't persisted unless `Sync` is
+// explicitly called.
 type Trie struct {
 	Root interface{}
 	//db   Database
@@ -93,6 +98,7 @@ func NewTrie(db Database, Root interface{}) *Trie {
 	return &Trie{cache: NewCache(db), Root: Root}
 }
 
+// Save the cached value to the database.
 func (t *Trie) Sync() {
 	t.cache.Commit()
 }
@@ -157,20 +163,8 @@ func (t *Trie) GetNode(node interface{}) *Value {
 	} else if len(str) < 32 {
 		return NewValueFromBytes([]byte(str))
 	}
-	/*
-		else {
-			// Fetch the encoded node from the db
-			o, err := t.db.Get(n.Bytes())
-			if err != nil {
-				fmt.Println("Error InsertState", err)
-				return NewValue("")
-			}
 
-			return NewValueFromBytes(o)
-		}
-	*/
 	return t.cache.Get(n.Bytes())
-
 }
 
 func (t *Trie) UpdateState(node interface{}, key []int, value string) interface{} {
@@ -301,54 +295,4 @@ func (t *Trie) Copy() *Trie {
 	}
 
 	return trie
-}
-
-/*
- * Trie helper functions
- */
-// Helper function for printing out the raw contents of a slice
-func PrintSlice(slice []string) {
-	fmt.Printf("[")
-	for i, val := range slice {
-		fmt.Printf("%q", val)
-		if i != len(slice)-1 {
-			fmt.Printf(",")
-		}
-	}
-	fmt.Printf("]\n")
-}
-
-func PrintSliceT(slice interface{}) {
-	c := Conv(slice)
-	for i := 0; i < c.Length(); i++ {
-		val := c.Get(i)
-		if val.Type() == reflect.Slice {
-			PrintSliceT(val.AsRaw())
-		} else {
-			fmt.Printf("%q", val)
-			if i != c.Length()-1 {
-				fmt.Printf(",")
-			}
-		}
-	}
-}
-
-// RLP Decodes a node in to a [2] or [17] string slice
-func DecodeNode(data []byte) []string {
-	dec, _ := Decode(data, 0)
-	if slice, ok := dec.([]interface{}); ok {
-		strSlice := make([]string, len(slice))
-
-		for i, s := range slice {
-			if str, ok := s.([]byte); ok {
-				strSlice[i] = string(str)
-			}
-		}
-
-		return strSlice
-	} else {
-		fmt.Printf("It wasn't a []. It's a %T\n", dec)
-	}
-
-	return nil
 }
