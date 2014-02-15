@@ -43,9 +43,14 @@ This is the Developer package. For the development client please see
 Contribution
 ============
 
-If you'd like to contribute to Ethereum Go please fork, fix, commit and
+If you'd like to contribute to Eth please fork, fix, commit and
 send a pull request. Commits who do not comply with the coding standards
-are ignored.
+are ignored. If you send pull requests make absolute sure that you
+commit on the `develop` branch and that you do not merge to master.
+Commits that are directly based on master are simply ignored.
+
+To make life easier try [git flow](http://nvie.com/posts/a-successful-git-branching-model/) it sets
+this all up and streamlines your work flow.
 
 Coding standards
 ================
