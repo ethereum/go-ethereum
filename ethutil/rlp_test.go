@@ -119,43 +119,6 @@ func TestEncodeDecodeBytes(t *testing.T) {
 	}
 }
 
-/*
-var ZeroHash256 = make([]byte, 32)
-var ZeroHash160 = make([]byte, 20)
-var EmptyShaList = Sha3Bin(Encode([]interface{}{}))
-
-var GenisisHeader = []interface{}{
-	// Previous hash (none)
-	//"",
-	ZeroHash256,
-	// Sha of uncles
-	Sha3Bin(Encode([]interface{}{})),
-	// Coinbase
-	ZeroHash160,
-	// Root state
-	"",
-	// Sha of transactions
-	//EmptyShaList,
-	Sha3Bin(Encode([]interface{}{})),
-	// Difficulty
-	BigPow(2, 22),
-	// Time
-	//big.NewInt(0),
-	int64(0),
-	// extra
-	"",
-	// Nonce
-	big.NewInt(42),
-}
-
-func TestEnc(t *testing.T) {
-	//enc := Encode(GenisisHeader)
-	//fmt.Printf("%x (%d)\n", enc, len(enc))
-	h, _ := hex.DecodeString("f8a0a00000000000000000000000000000000000000000000000000000000000000000a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347940000000000000000000000000000000000000000a06d076baa9c4074fb2df222dd16a96b0155a1e6686b3e5748b4e9ca0a208a425ca01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d493478340000080802a")
-	fmt.Printf("%x\n", Sha3Bin(h))
-}
-*/
-
 func BenchmarkEncodeDecode(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		bytes := Encode([]interface{}{"dog", "god", "cat"})
