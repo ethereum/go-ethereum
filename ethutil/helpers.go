@@ -27,7 +27,6 @@ func Ripemd160(data []byte) []byte {
 
 func Sha3Bin(data []byte) []byte {
 	d := sha3.NewKeccak256()
-	d.Reset()
 	d.Write(data)
 
 	return d.Sum(nil)
