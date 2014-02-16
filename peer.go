@@ -293,7 +293,9 @@ func (p *Peer) HandleInbound() {
 					err = p.ethereum.BlockManager.ProcessBlock(block)
 
 					if err != nil {
-						log.Println("bckmsg", err)
+						if ethutil.Config.Debug {
+							log.Printf("[PEER] Block (%x) err %v", block.Hash()[:4], err)
+						}
 						break
 					} else {
 						lastBlock = block
