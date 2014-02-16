@@ -1,6 +1,8 @@
 package ethutil
 
 import (
+	"bytes"
+	"math/big"
 	"testing"
 )
 
@@ -22,6 +24,8 @@ func TestValueTypes(t *testing.T) {
 	str := NewValue("str")
 	num := NewValue(1)
 	inter := NewValue([]interface{}{1})
+	byt := NewValue([]byte{1, 2, 3, 4})
+	bigInt := NewValue(big.NewInt(10))
 
 	if str.Str() != "str" {
 		t.Errorf("expected Str to return 'str', got %s", str.Str())
@@ -31,8 +35,18 @@ func TestValueTypes(t *testing.T) {
 		t.Errorf("expected Uint to return '1', got %d", num.Uint())
 	}
 
-	exp := []interface{}{1}
-	if !NewValue(inter.Interface()).Cmp(NewValue(exp)) {
-		t.Errorf("expected Interface to return '%v', got %v", exp, num.Interface())
+	interExp := []interface{}{1}
+	if !NewValue(inter.Interface()).Cmp(NewValue(interExp)) {
+		t.Errorf("expected Interface to return '%v', got %v", interExp, num.Interface())
+	}
+
+	bytExp := []byte{1, 2, 3, 4}
+	if bytes.Compare(byt.Bytes(), bytExp) != 0 {
+		t.Errorf("expected Bytes to return '%v', got %v", bytExp, byt.Bytes())
+	}
+
+	bigExp := big.NewInt(10)
+	if bigInt.BigInt().Cmp(bigExp) != 0 {
+		t.Errorf("expected BigInt to return '%v', got %v", bigExp, bigInt.BigInt())
 	}
 }

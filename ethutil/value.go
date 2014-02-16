@@ -84,6 +84,8 @@ func (val *Value) BigInt() *big.Int {
 		b := new(big.Int).SetBytes(a)
 
 		return b
+	} else if a, ok := val.Val.(*big.Int); ok {
+		return a
 	} else {
 		return big.NewInt(int64(val.Uint()))
 	}
@@ -106,7 +108,7 @@ func (val *Value) Bytes() []byte {
 		return a
 	}
 
-	return make([]byte, 0)
+	return []byte{}
 }
 
 func (val *Value) Slice() []interface{} {
@@ -144,7 +146,7 @@ func (val *Value) Get(idx int) *Value {
 		}
 
 		if idx < 0 {
-			panic("negative idx for Rlp Get")
+			panic("negative idx for Value Get")
 		}
 
 		return NewValue(d[idx])
@@ -162,9 +164,9 @@ func (val *Value) Encode() []byte {
 	return Encode(val.Val)
 }
 
-func NewValueFromBytes(rlpData []byte) *Value {
-	if len(rlpData) != 0 {
-		data, _ := Decode(rlpData, 0)
+func NewValueFromBytes(data []byte) *Value {
+	if len(data) != 0 {
+		data, _ := Decode(data, 0)
 		return NewValue(data)
 	}
 
