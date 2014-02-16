@@ -103,6 +103,11 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 	// Processing a blocks may never happen simultaneously
 	bm.mutex.Lock()
 	defer bm.mutex.Unlock()
+	// Defer the Undo on the Trie. If the block processing happened
+	// we don't want to undo but since undo only happens on dirty
+	// nodes this won't happen because Commit would have been called
+	// before that.
+	defer bm.bc.CurrentBlock.State().Undo()
 
 	hash := block.Hash()
 
