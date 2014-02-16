@@ -45,6 +45,26 @@ func TestTrieSync(t *testing.T) {
 	}
 }
 
+func TestTrieDirtyTracking(t *testing.T) {
+	_, trie := New()
+	trie.Update("dog", LONG_WORD)
+	if !trie.cache.IsDirty {
+		t.Error("Expected trie to be dirty")
+	}
+
+	trie.Sync()
+	if trie.cache.IsDirty {
+		t.Error("Expected trie not to be dirty")
+	}
+
+	trie.Update("test", LONG_WORD)
+	trie.cache.Undo()
+	if trie.cache.IsDirty {
+		t.Error("Expected trie not to be dirty")
+	}
+
+}
+
 func TestTrieReset(t *testing.T) {
 	_, trie := New()
 

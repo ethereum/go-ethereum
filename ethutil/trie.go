@@ -20,8 +20,9 @@ func (n *Node) Copy() *Node {
 }
 
 type Cache struct {
-	nodes map[string]*Node
-	db    Database
+	nodes   map[string]*Node
+	db      Database
+	IsDirty bool
 }
 
 func NewCache(db Database) *Cache {
@@ -36,6 +37,7 @@ func (cache *Cache) Put(v interface{}) interface{} {
 		sha := Sha3Bin(enc)
 
 		cache.nodes[string(sha)] = NewNode(sha, value, true)
+		cache.IsDirty = true
 
 		return sha
 	}
@@ -60,12 +62,18 @@ func (cache *Cache) Get(key []byte) *Value {
 }
 
 func (cache *Cache) Commit() {
+	// Don't try to commit if it isn't dirty
+	if !cache.IsDirty {
+		return
+	}
+
 	for key, node := range cache.nodes {
 		if node.Dirty {
 			cache.db.Put([]byte(key), node.Value.Encode())
 			node.Dirty = false
 		}
 	}
+	cache.IsDirty = false
 
 	// If the nodes grows beyond the 200 entries we simple empty it
 	// FIXME come up with something better
@@ -80,6 +88,7 @@ func (cache *Cache) Undo() {
 			delete(cache.nodes, key)
 		}
 	}
+	cache.IsDirty = false
 }
 
 // A (modified) Radix Trie implementation. The Trie implements
@@ -101,6 +110,10 @@ func NewTrie(db Database, Root interface{}) *Trie {
 // Save the cached value to the database.
 func (t *Trie) Sync() {
 	t.cache.Commit()
+}
+
+func (t *Trie) Undo() {
+	t.cache.Undo()
 }
 
 /*
