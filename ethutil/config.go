@@ -38,7 +38,7 @@ func ReadConfig(base string) *config {
 		_, err := os.Stat(path)
 		if err != nil {
 			if os.IsNotExist(err) {
-				log.Printf("Debug logging directory %s doesn't exist, creating it", path)
+				log.Printf("Debug logging directory %s doesn't exist, creating it\n", path)
 				os.Mkdir(path, 0777)
 			}
 		}
