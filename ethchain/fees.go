@@ -13,7 +13,13 @@ var DataFee *big.Int = new(big.Int)
 var CryptoFee *big.Int = new(big.Int)
 var ExtroFee *big.Int = new(big.Int)
 
-var BlockReward *big.Int = big.NewInt(1500000000000000000)
+var BlockReward *big.Int = big.NewInt(1.5e+18)
+
+var UncleReward *big.Int = big.NewInt(1.125e+18)
+
+//var UncleReward *big.Int = big.NewInt(2e18)
+var UncleInclusionReward *big.Int = big.NewInt(1.875e+17)
+
 var Period1Reward *big.Int = new(big.Int)
 var Period2Reward *big.Int = new(big.Int)
 var Period3Reward *big.Int = new(big.Int)
