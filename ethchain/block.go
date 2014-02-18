@@ -135,7 +135,7 @@ func (block *Block) GetContract(addr []byte) *Contract {
 }
 func (block *Block) UpdateContract(addr []byte, contract *Contract) {
 	// Make sure the state is synced
-	contract.State().Sync()
+	//contract.State().Sync()
 
 	block.state.Update(string(addr), string(contract.RlpEncode()))
 }
@@ -298,12 +298,6 @@ func (block *Block) RlpValueDecode(decoder *ethutil.Value) {
 			tx := NewTransactionFromValue(txes.Get(i))
 
 			block.transactions[i] = tx
-
-			/*
-				if ethutil.Config.Debug {
-					ethutil.Config.Db.Put(tx.Hash(), ethutil.Encode(tx))
-				}
-			*/
 		}
 
 	}
@@ -335,7 +329,7 @@ func NewUncleBlockFromValue(header *ethutil.Value) *Block {
 }
 
 func (block *Block) String() string {
-	return fmt.Sprintf("Block(%x):\nPrevHash:%x\nUncleSha:%x\nCoinbase:%x\nRoot:%x\nTxSha:%x\nDiff:%v\nTime:%d\nNonce:%x", block.Hash(), block.PrevHash, block.UncleSha, block.Coinbase, block.state.Root, block.TxSha, block.Difficulty, block.Time, block.Nonce)
+	return fmt.Sprintf("Block(%x):\nPrevHash:%x\nUncleSha:%x\nCoinbase:%x\nRoot:%x\nTxSha:%x\nDiff:%v\nTime:%d\nNonce:%x\nTxs:%d\n", block.Hash(), block.PrevHash, block.UncleSha, block.Coinbase, block.state.Root, block.TxSha, block.Difficulty, block.Time, block.Nonce, len(block.transactions))
 }
 
 //////////// UNEXPORTED /////////////////
