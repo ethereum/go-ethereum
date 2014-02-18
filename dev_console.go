@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -76,6 +77,32 @@ func (i *Console) ValidateInput(action string, argumentLength int) error {
 	} else {
 		return nil
 	}
+}
+
+func (i *Console) Editor() []string {
+	var buff bytes.Buffer
+	for {
+		reader := bufio.NewReader(os.Stdin)
+		str, _, err := reader.ReadLine()
+		if len(str) > 0 {
+			buff.Write(str)
+			buff.WriteString("\n")
+		}
+
+		if err != nil && err.Error() == "EOF" {
+			break
+		}
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(buff.String()))
+	scanner.Split(bufio.ScanLines)
+
+	var lines []string
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+
+	return lines
 }
 
 func (i *Console) PrintRoot() {
@@ -169,10 +196,17 @@ func (i *Console) ParseInput(input string) bool {
 				fmt.Println("gettx: tx not found")
 			}
 		case "contract":
-			contract := ethchain.NewTransaction([]byte{}, ethutil.Big(tokens[1]), []string{"PUSH", "1234"})
-			fmt.Printf("%x\n", contract.Hash())
+			fmt.Println("Contract editor (Ctrl-D = done)")
+			code := i.Editor()
+
+			contract := ethchain.NewTransaction([]byte{}, ethutil.Big(tokens[1]), code)
+			data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
+			keyRing := ethutil.NewValueFromBytes(data)
+			contract.Sign(keyRing.Get(0).Bytes())
 
 			i.ethereum.TxPool.QueueTransaction(contract)
+
+			fmt.Printf("%x\n", contract.Hash())
 		case "exit", "quit", "q":
 			return false
 		case "help":
