@@ -294,7 +294,9 @@ func (p *Peer) HandleInbound() {
 
 					if err != nil {
 						if ethutil.Config.Debug {
-							log.Printf("[PEER] Block (%x) err %v", block.Hash()[:4], err)
+							log.Printf("[PEER] Block %x failed\n", block.Hash())
+							log.Printf("[PEER] %v\n", err)
+							log.Println(block)
 						}
 						break
 					} else {
@@ -467,7 +469,7 @@ func (p *Peer) pushHandshake() error {
 	pubkey := ethutil.NewValueFromBytes(data).Get(2).Bytes()
 
 	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-		uint32(4), uint32(0), p.Version, byte(p.caps), p.port, pubkey,
+		uint32(5), uint32(0), p.Version, byte(p.caps), p.port, pubkey,
 	})
 
 	p.QueueMessage(msg)
@@ -494,7 +496,7 @@ func (p *Peer) pushPeers() {
 func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	c := msg.Data
 
-	if c.Get(0).Uint() != 4 {
+	if c.Get(0).Uint() != 5 {
 		log.Println("Invalid peer version. Require protocol v4")
 		p.Stop()
 		return
@@ -527,7 +529,7 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	// Get a reference to the peers version
 	p.Version = c.Get(2).Str()
 
-	log.Println(p)
+	log.Println("[PEER]", p)
 }
 
 func (p *Peer) String() string {
@@ -544,7 +546,7 @@ func (p *Peer) String() string {
 		strConnectType = "disconnected"
 	}
 
-	return fmt.Sprintf("peer [%s] (%s) %v %s [%s]", strConnectType, strBoundType, p.conn.RemoteAddr(), p.Version, p.caps)
+	return fmt.Sprintf("[%s] (%s) %v %s [%s]", strConnectType, strBoundType, p.conn.RemoteAddr(), p.Version, p.caps)
 
 }
 
