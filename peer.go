@@ -56,9 +56,9 @@ func (d DiscReason) String() string {
 type Caps byte
 
 const (
-	CapPeerDiscTy = 0x01
-	CapTxTy       = 0x02
-	CapChainTy    = 0x04
+	CapPeerDiscTy = 1 << iota
+	CapTxTy
+	CapChainTy
 
 	CapDefault = CapChainTy | CapTxTy | CapPeerDiscTy
 )
