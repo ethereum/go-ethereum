@@ -3,7 +3,6 @@ package ethutil
 import (
 	"bytes"
 	"encoding/hex"
-	_ "fmt"
 	"strings"
 )
 
@@ -36,7 +35,7 @@ func CompactEncode(hexSlice []int) string {
 func CompactDecode(str string) []int {
 	base := CompactHexDecode(str)
 	base = base[:len(base)-1]
-	if base[0] >= 2 { // && base[len(base)-1] != 16 {
+	if base[0] >= 2 {
 		base = append(base, 16)
 	}
 	if base[0]%2 == 1 {

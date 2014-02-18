@@ -85,7 +85,6 @@ func New(caps Caps, usePnp bool) (*Ethereum, error) {
 		Nonce:        nonce,
 		serverCaps:   caps,
 		nat:          nat,
-		MaxPeers:     5,
 	}
 	ethereum.TxPool = ethchain.NewTxPool()
 	ethereum.TxPool.Speaker = ethereum
@@ -114,28 +113,32 @@ func (s *Ethereum) ProcessPeerList(addrs []string) {
 }
 
 func (s *Ethereum) ConnectToPeer(addr string) error {
-	var alreadyConnected bool
+	if s.peers.Len() < s.MaxPeers {
+		var alreadyConnected bool
 
-	eachPeer(s.peers, func(p *Peer, v *list.Element) {
-		if p.conn == nil {
-			return
+		eachPeer(s.peers, func(p *Peer, v *list.Element) {
+			if p.conn == nil {
+				return
+			}
+			phost, _, _ := net.SplitHostPort(p.conn.RemoteAddr().String())
+			ahost, _, _ := net.SplitHostPort(addr)
+
+			if phost == ahost {
+				alreadyConnected = true
+				return
+			}
+		})
+
+		if alreadyConnected {
+			return nil
 		}
-		phost, _, _ := net.SplitHostPort(p.conn.RemoteAddr().String())
-		ahost, _, _ := net.SplitHostPort(addr)
 
-		if phost == ahost {
-			alreadyConnected = true
-			return
-		}
-	})
+		peer := NewOutboundPeer(addr, s, s.serverCaps)
 
-	if alreadyConnected {
-		return nil
+		s.peers.PushBack(peer)
+
+		log.Printf("[SERV] Adding peer %d / %d\n", s.peers.Len(), s.MaxPeers)
 	}
-
-	peer := NewOutboundPeer(addr, s, s.serverCaps)
-
-	s.peers.PushBack(peer)
 
 	return nil
 }
