@@ -58,3 +58,7 @@ func MatchingNibbleLength(a, b []int) int {
 func Hex(d []byte) string {
 	return hex.EncodeToString(d)
 }
+func ToHex(str string) []byte {
+	h, _ := hex.DecodeString(str)
+	return h
+}
