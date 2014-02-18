@@ -35,3 +35,33 @@ func TestCompactHexDecode(t *testing.T) {
 		t.Error("Error compact hex decode. Expected", exp, "got", res)
 	}
 }
+
+func TestCompactDecode(t *testing.T) {
+	exp := []int{1, 2, 3, 4, 5}
+	res := CompactDecode("\x11\x23\x45")
+
+	if !CompareIntSlice(res, exp) {
+		t.Error("odd compact decode. Expected", exp, "got", res)
+	}
+
+	exp = []int{0, 1, 2, 3, 4, 5}
+	res = CompactDecode("\x00\x01\x23\x45")
+
+	if !CompareIntSlice(res, exp) {
+		t.Error("even compact decode. Expected", exp, "got", res)
+	}
+
+	exp = []int{0, 15, 1, 12, 11, 8 /*term*/, 16}
+	res = CompactDecode("\x20\x0f\x1c\xb8")
+
+	if !CompareIntSlice(res, exp) {
+		t.Error("even terminated compact decode. Expected", exp, "got", res)
+	}
+
+	exp = []int{15, 1, 12, 11, 8 /*term*/, 16}
+	res = CompactDecode("\x3f\x1c\xb8")
+
+	if !CompareIntSlice(res, exp) {
+		t.Error("even terminated compact decode. Expected", exp, "got", res)
+	}
+}
