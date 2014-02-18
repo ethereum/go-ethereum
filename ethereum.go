@@ -38,8 +38,6 @@ func CreateKeyPair(force bool) {
 		fmt.Printf(`
 Generating new address and keypair.
 Please keep your keys somewhere save.
-Currently Ethereum(G) does not support
-exporting keys.
 
 ++++++++++++++++ KeyRing +++++++++++++++++++
 addr: %x
@@ -52,6 +50,29 @@ pubk: %x
 		keyRing := ethutil.NewValue([]interface{}{prv, addr, pub[1:]})
 		ethutil.Config.Db.Put([]byte("KeyRing"), keyRing.Encode())
 	}
+}
+
+func ImportPrivateKey(prvKey string) {
+	key := ethutil.FromHex(prvKey)
+	msg := []byte("tmp")
+	// Couldn't think of a better way to get the pub key
+	sig, _ := secp256k1.Sign(msg, key)
+	pub, _ := secp256k1.RecoverPubkey(msg, sig)
+	addr := ethutil.Sha3Bin(pub[1:])[12:]
+
+	fmt.Printf(`
+Importing private key
+
+++++++++++++++++ KeyRing +++++++++++++++++++
+addr: %x
+prvk: %x
+pubk: %x
+++++++++++++++++++++++++++++++++++++++++++++
+
+`, addr, key, pub)
+
+	keyRing := ethutil.NewValue([]interface{}{key, addr, pub[1:]})
+	ethutil.Config.Db.Put([]byte("KeyRing"), keyRing.Encode())
 }
 
 func main() {
@@ -87,7 +108,31 @@ func main() {
 		}
 		os.Exit(0)
 	} else {
-		CreateKeyPair(false)
+		if len(ImportKey) > 0 {
+			fmt.Println("This action overwrites your old private key. Are you sure? (y/n)")
+			var r string
+			fmt.Scanln(&r)
+			for ; ; fmt.Scanln(&r) {
+				if r == "n" || r == "y" {
+					break
+				} else {
+					fmt.Printf("Yes or no?", r)
+				}
+			}
+
+			if r == "y" {
+				ImportPrivateKey(ImportKey)
+			}
+		} else {
+			CreateKeyPair(false)
+		}
+	}
+
+	if ExportKey {
+		data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
+		keyRing := ethutil.NewValueFromBytes(data)
+		fmt.Printf("%x\n", keyRing.Get(0).Bytes())
+		os.Exit(0)
 	}
 
 	if ShowGenesis {

@@ -13,6 +13,8 @@ var AddPeer string
 var MaxPeer int
 var GenAddr bool
 var UseSeed bool
+var ImportKey string
+var ExportKey bool
 
 func Init() {
 	flag.BoolVar(&StartConsole, "c", false, "debug and testing console")
@@ -21,7 +23,9 @@ func Init() {
 	flag.BoolVar(&UseUPnP, "upnp", false, "enable UPnP support")
 	flag.BoolVar(&UseSeed, "seed", true, "seed peers")
 	flag.BoolVar(&GenAddr, "genaddr", false, "create a new priv/pub key")
+	flag.BoolVar(&ExportKey, "export", false, "export private key")
 	flag.StringVar(&OutboundPort, "p", "30303", "listening port")
+	flag.StringVar(&ImportKey, "import", "", "imports the given private key (hex)")
 	flag.IntVar(&MaxPeer, "x", 5, "maximum desired peers")
 
 	flag.Parse()
