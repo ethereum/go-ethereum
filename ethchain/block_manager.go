@@ -43,7 +43,7 @@ type BlockManager struct {
 func AddTestNetFunds(block *Block) {
 	for _, addr := range []string{
 		"8a40bfaa73256b60764c1bf40675a99083efb075", // Gavin
-		"93658b04240e4bd4046fd2d6d417d20f146f4b43", // Jeffrey
+		"e6716f9544a56c530d868e4bfbacb172315bdead", // Jeffrey
 		"1e12515ce3e0f817a4ddef9ca55788a1d66bd2df", // Vit
 		"1a26338f0d905e295fccb71fa9ea849ffa12aaf4", // Alex
 	} {
