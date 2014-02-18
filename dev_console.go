@@ -136,7 +136,8 @@ func (i *Console) ParseInput(input string) bool {
 		case "block":
 			encoded, _ := hex.DecodeString(tokens[1])
 			block := i.ethereum.BlockManager.BlockChain().GetBlock(encoded)
-			fmt.Println(block)
+			info := block.BlockInfo()
+			fmt.Printf("++++++++++ #%d ++++++++++\n%v\n", info.Number, block)
 		case "say":
 			i.ethereum.Broadcast(ethwire.MsgTalkTy, []interface{}{tokens[1]})
 		case "addp":
