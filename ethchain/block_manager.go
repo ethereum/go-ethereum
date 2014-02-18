@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ethwire"
 	"github.com/obscuren/secp256k1-go"
 	"log"
 	"math"
@@ -16,10 +17,6 @@ import (
 
 type BlockProcessor interface {
 	ProcessBlock(block *Block)
-}
-
-func CalculateBlockReward(block *Block, uncleLength int) *big.Int {
-	return BlockReward
 }
 
 type BlockManager struct {
@@ -48,7 +45,7 @@ func AddTestNetFunds(block *Block) {
 		"8a40bfaa73256b60764c1bf40675a99083efb075", // Gavin
 		"93658b04240e4bd4046fd2d6d417d20f146f4b43", // Jeffrey
 		"1e12515ce3e0f817a4ddef9ca55788a1d66bd2df", // Vit
-		"80c01a26338f0d905e295fccb71fa9ea849ffa12", // Alex
+		"1a26338f0d905e295fccb71fa9ea849ffa12aaf4", // Alex
 	} {
 		//log.Println("2^200 Wei to", addr)
 		codedAddr, _ := hex.DecodeString(addr)
@@ -70,13 +67,16 @@ func NewBlockManager(speaker PublicSpeaker) *BlockManager {
 
 	if bm.bc.CurrentBlock == nil {
 		AddTestNetFunds(bm.bc.genesisBlock)
+
+		bm.bc.genesisBlock.State().Sync()
 		// Prepare the genesis block
 		bm.bc.Add(bm.bc.genesisBlock)
 
-		log.Printf("Genesis: %x\n", bm.bc.genesisBlock.Hash())
 		//log.Printf("root %x\n", bm.bc.genesisBlock.State().Root)
 		//bm.bc.genesisBlock.PrintHash()
 	}
+
+	log.Printf("Last block: %x\n", bm.bc.CurrentBlock.Hash())
 
 	return bm
 }
@@ -115,12 +115,6 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 		return nil
 	}
 
-	/*
-		if ethutil.Config.Debug {
-			log.Printf("[BMGR] Processing block(%x)\n", hash)
-		}
-	*/
-
 	// Check if we have the parent hash, if it isn't known we discard it
 	// Reasons might be catching up or simply an invalid block
 	if !bm.bc.HasBlock(block.PrevHash) && bm.bc.CurrentBlock != nil {
@@ -142,13 +136,12 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 	}
 
 	if !block.State().Cmp(bm.bc.CurrentBlock.State()) {
-		//if block.State().Root != state.Root {
 		return fmt.Errorf("Invalid merkle root. Expected %x, got %x", block.State().Root, bm.bc.CurrentBlock.State().Root)
 	}
 
 	// Calculate the new total difficulty and sync back to the db
 	if bm.CalculateTD(block) {
-		// Sync the current block's state to the database
+		// Sync the current block's state to the database and cancelling out the deferred Undo
 		bm.bc.CurrentBlock.State().Sync()
 		// Add the block to the chain
 		bm.bc.Add(block)
@@ -172,7 +165,7 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 		*/
 
 		// Broadcast the valid block back to the wire
-		//bm.Speaker.Broadcast(ethwire.MsgBlockTy, []interface{}{block.RlpValue().Value})
+		bm.Speaker.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
 
 		// If there's a block processor present, pass in the block for further
 		// processing
@@ -251,6 +244,18 @@ func (bm *BlockManager) ValidateBlock(block *Block) error {
 	return nil
 }
 
+func CalculateBlockReward(block *Block, uncleLength int) *big.Int {
+	base := new(big.Int)
+	for i := 0; i < uncleLength; i++ {
+		base.Add(base, UncleInclusionReward)
+	}
+	return base.Add(base, BlockReward)
+}
+
+func CalculateUncleReward(block *Block) *big.Int {
+	return UncleReward
+}
+
 func (bm *BlockManager) AccumelateRewards(processor *Block, block *Block) error {
 	// Get the coinbase rlp data
 	addr := processor.GetAddr(block.Coinbase)
@@ -259,7 +264,12 @@ func (bm *BlockManager) AccumelateRewards(processor *Block, block *Block) error 
 
 	processor.UpdateAddr(block.Coinbase, addr)
 
-	// TODO Reward each uncle
+	for _, uncle := range block.Uncles {
+		uncleAddr := processor.GetAddr(uncle.Coinbase)
+		uncleAddr.AddFee(CalculateUncleReward(uncle))
+
+		processor.UpdateAddr(uncle.Coinbase, uncleAddr)
+	}
 
 	return nil
 }
