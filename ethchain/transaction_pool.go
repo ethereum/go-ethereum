@@ -106,17 +106,25 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) (err error
 		}
 	}
 
-	// Subtract the amount from the senders account
-	sender.Amount.Sub(sender.Amount, totAmount)
-	sender.Nonce += 1
-
 	// Get the receiver
 	receiver := block.GetAddr(tx.Recipient)
-	// Add the amount to receivers account which should conclude this transaction
-	receiver.Amount.Add(receiver.Amount, tx.Value)
+	sender.Nonce += 1
+
+	// Send Tx to self
+	if bytes.Compare(tx.Recipient, tx.Sender()) == 0 {
+		// Subtract the fee
+		sender.Amount.Sub(sender.Amount, new(big.Int).Mul(TxFee, TxFeeRat))
+	} else {
+		// Subtract the amount from the senders account
+		sender.Amount.Sub(sender.Amount, totAmount)
+
+		// Add the amount to receivers account which should conclude this transaction
+		receiver.Amount.Add(receiver.Amount, tx.Value)
+
+		block.UpdateAddr(tx.Recipient, receiver)
+	}
 
 	block.UpdateAddr(tx.Sender(), sender)
-	block.UpdateAddr(tx.Recipient, receiver)
 
 	return
 }
