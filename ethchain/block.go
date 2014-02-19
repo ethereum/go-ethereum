@@ -46,6 +46,8 @@ type Block struct {
 	// List of transactions and/or contracts
 	transactions []*Transaction
 	TxSha        []byte
+
+	contractStates map[string]*ethutil.Trie
 }
 
 // New block takes a raw encoded string
@@ -79,14 +81,15 @@ func CreateBlock(root interface{},
 
 	block := &Block{
 		// Slice of transactions to include in this block
-		transactions: txes,
-		PrevHash:     prevHash,
-		Coinbase:     base,
-		Difficulty:   Difficulty,
-		Nonce:        Nonce,
-		Time:         time.Now().Unix(),
-		Extra:        extra,
-		UncleSha:     EmptyShaList,
+		transactions:   txes,
+		PrevHash:       prevHash,
+		Coinbase:       base,
+		Difficulty:     Difficulty,
+		Nonce:          Nonce,
+		Time:           time.Now().Unix(),
+		Extra:          extra,
+		UncleSha:       EmptyShaList,
+		contractStates: make(map[string]*ethutil.Trie),
 	}
 	block.SetTransactions(txes)
 	block.SetUncles([]*Block{})
@@ -130,6 +133,13 @@ func (block *Block) GetContract(addr []byte) *Contract {
 
 	contract := &Contract{}
 	contract.RlpDecode([]byte(data))
+
+	cachedState := block.contractStates[string(addr)]
+	if cachedState != nil {
+		contract.state = cachedState
+	} else {
+		block.contractStates[string(addr)] = contract.state
+	}
 
 	return contract
 }
@@ -190,6 +200,25 @@ func (block *Block) BlockInfo() BlockInfo {
 	return bi
 }
 
+// Sync the block's state and contract respectively
+func (block *Block) Sync() {
+	// Sync all contracts currently in cache
+	for _, val := range block.contractStates {
+		val.Sync()
+	}
+	// Sync the block state itself
+	block.state.Sync()
+}
+
+func (block *Block) Undo() {
+	// Sync all contracts currently in cache
+	for _, val := range block.contractStates {
+		val.Undo()
+	}
+	// Sync the block state itself
+	block.state.Undo()
+}
+
 func (block *Block) MakeContract(tx *Transaction) {
 	// Create contract if there's no recipient
 	if tx.IsContract() {
@@ -199,9 +228,14 @@ func (block *Block) MakeContract(tx *Transaction) {
 		contract := NewContract(value, []byte(""))
 		block.state.Update(string(addr), string(contract.RlpEncode()))
 		for i, val := range tx.Data {
-			contract.state.Update(string(ethutil.NumberToBytes(uint64(i), 32)), val)
+			if len(val) > 0 {
+				bytNum := ethutil.BigToBytes(big.NewInt(int64(i)), 256)
+				contract.state.Update(string(bytNum), val)
+			}
 		}
 		block.UpdateContract(addr, contract)
+
+		block.contractStates[string(addr)] = contract.state
 	}
 }
 
@@ -288,6 +322,7 @@ func (block *Block) RlpValueDecode(decoder *ethutil.Value) {
 	block.Time = int64(header.Get(6).BigInt().Uint64())
 	block.Extra = header.Get(7).Str()
 	block.Nonce = header.Get(8).Bytes()
+	block.contractStates = make(map[string]*ethutil.Trie)
 
 	// Tx list might be empty if this is an uncle. Uncles only have their
 	// header set.

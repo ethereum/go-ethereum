@@ -1,10 +1,13 @@
 package ethchain
 
 import (
+	"bytes"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/secp256k1-go"
 	"math/big"
 )
+
+var ContractAddr = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 
 type Transaction struct {
 	Nonce     uint64
@@ -65,7 +68,7 @@ func (tx *Transaction) Hash() []byte {
 }
 
 func (tx *Transaction) IsContract() bool {
-	return len(tx.Recipient) == 0
+	return bytes.Compare(tx.Recipient, ContractAddr) == 0
 }
 
 func (tx *Transaction) Signature(key []byte) []byte {

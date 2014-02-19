@@ -119,6 +119,10 @@ func (t *Trie) Undo() {
 	t.Root = t.prevRoot
 }
 
+func (t *Trie) Cache() *Cache {
+	return t.cache
+}
+
 /*
  * Public (query) interface functions
  */

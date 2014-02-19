@@ -107,7 +107,7 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 	// we don't want to undo but since undo only happens on dirty
 	// nodes this won't happen because Commit would have been called
 	// before that.
-	defer bm.bc.CurrentBlock.State().Undo()
+	defer bm.bc.CurrentBlock.Undo()
 
 	hash := block.Hash()
 
@@ -142,7 +142,7 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 	// Calculate the new total difficulty and sync back to the db
 	if bm.CalculateTD(block) {
 		// Sync the current block's state to the database and cancelling out the deferred Undo
-		bm.bc.CurrentBlock.State().Sync()
+		bm.bc.CurrentBlock.Sync()
 		// Add the block to the chain
 		bm.bc.Add(block)
 
@@ -280,11 +280,13 @@ func (bm *BlockManager) Stop() {
 
 func (bm *BlockManager) ProcessContract(tx *Transaction, block *Block) {
 	// Recovering function in case the VM had any errors
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("Recovered from VM execution with err =", r)
-		}
-	}()
+	/*
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Println("Recovered from VM execution with err =", r)
+			}
+		}()
+	*/
 
 	// Process contract
 	bm.ProcContract(tx, block, func(opType OpType) bool {
@@ -305,6 +307,7 @@ func (bm *BlockManager) ProcContract(tx *Transaction, block *Block, cb TxCallbac
 	blockInfo := bm.bc.BlockInfo(block)
 
 	contract := block.GetContract(tx.Hash())
+
 	if contract == nil {
 		fmt.Println("Contract not found")
 		return
@@ -313,7 +316,7 @@ func (bm *BlockManager) ProcContract(tx *Transaction, block *Block, cb TxCallbac
 	Pow256 := ethutil.BigPow(2, 256)
 
 	if ethutil.Config.Debug {
-		fmt.Printf("#   op   arg\n")
+		fmt.Printf("#   op\n")
 	}
 out:
 	for {
@@ -321,9 +324,11 @@ out:
 		base := new(big.Int)
 		// XXX Should Instr return big int slice instead of string slice?
 		// Get the next instruction from the contract
-		//op, _, _ := Instr(contract.state.Get(string(Encode(uint32(pc)))))
-		nb := ethutil.NumberToBytes(uint64(pc), 32)
-		o, _, _ := ethutil.Instr(contract.State().Get(string(nb)))
+		nb := ethutil.BigToBytes(big.NewInt(int64(pc)), 256)
+		r := contract.State().Get(string(nb))
+		v := ethutil.NewValueFromBytes([]byte(r))
+		//fmt.Printf("%x = %d, %v %x\n", r, len(r), v, nb)
+		o := v.Uint()
 		op := OpCode(o)
 
 		if !cb(0) {
@@ -575,7 +580,10 @@ out:
 		case oSSTORE:
 			// Store Y at index X
 			x, y := bm.stack.Popn()
-			contract.State().Update(x.String(), string(ethutil.Encode(y)))
+			idx := ethutil.BigToBytes(x, 256)
+			val := ethutil.NewValue(y)
+			//fmt.Printf("STORING VALUE: %v @ %v\n", val.BigInt(), ethutil.BigD(idx))
+			contract.State().Update(string(idx), string(val.Encode()))
 		case oJMP:
 			x := int(bm.stack.Pop().Uint64())
 			// Set pc to x - 1 (minus one so the incrementing at the end won't effect it)
@@ -617,7 +625,10 @@ out:
 			bm.TransactionPool.QueueTransaction(tx)
 		case oSUICIDE:
 			//addr := bm.stack.Pop()
+		default:
+			fmt.Println("Invalid OPCODE", op)
 		}
+		//bm.stack.Print()
 		pc++
 	}
 }

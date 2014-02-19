@@ -252,7 +252,7 @@ func (s *Ethereum) Start() {
 	if ethutil.Config.Seed {
 		log.Println("Seeding")
 		// Testnet seed bootstrapping
-		resp, err := http.Get("http://www.ethereum.org/servers.poc2.txt")
+		resp, err := http.Get("http://www.ethereum.org/servers.poc3.txt")
 		if err != nil {
 			log.Println("Fetching seed failed:", err)
 			return

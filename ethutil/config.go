@@ -34,12 +34,14 @@ func ReadConfig(base string) *config {
 		usr, _ := user.Current()
 		path := path.Join(usr.HomeDir, base)
 
-		//Check if the logging directory already exists, create it if not
-		_, err := os.Stat(path)
-		if err != nil {
-			if os.IsNotExist(err) {
-				log.Printf("Debug logging directory %s doesn't exist, creating it", path)
-				os.Mkdir(path, 0777)
+		if len(base) > 0 {
+			//Check if the logging directory already exists, create it if not
+			_, err := os.Stat(path)
+			if err != nil {
+				if os.IsNotExist(err) {
+					log.Printf("Debug logging directory %s doesn't exist, creating it", path)
+					os.Mkdir(path, 0777)
+				}
 			}
 		}
 
