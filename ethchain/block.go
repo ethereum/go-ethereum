@@ -222,7 +222,7 @@ func (block *Block) Undo() {
 func (block *Block) MakeContract(tx *Transaction) {
 	// Create contract if there's no recipient
 	if tx.IsContract() {
-		addr := tx.Hash()
+		addr := tx.Hash()[12:]
 
 		value := tx.Value
 		contract := NewContract(value, []byte(""))
