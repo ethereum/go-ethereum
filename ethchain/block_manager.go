@@ -301,12 +301,12 @@ func (bm *BlockManager) ProcessContract(tx *Transaction, block *Block) {
 
 // Contract evaluation is done here.
 func (bm *BlockManager) ProcContract(tx *Transaction, block *Block, cb TxCallback) {
-
+	addr := tx.Hash()[12:]
 	// Instruction pointer
 	pc := 0
 	blockInfo := bm.bc.BlockInfo(block)
 
-	contract := block.GetContract(tx.Hash())
+	contract := block.GetContract(addr)
 
 	if contract == nil {
 		fmt.Println("Contract not found")
@@ -318,8 +318,12 @@ func (bm *BlockManager) ProcContract(tx *Transaction, block *Block, cb TxCallbac
 	if ethutil.Config.Debug {
 		fmt.Printf("#   op\n")
 	}
+
+	stepcount := 0
+	totalFee := new(big.Int)
 out:
 	for {
+		stepcount++
 		// The base big int for all calculations. Use this for any results.
 		base := new(big.Int)
 		// XXX Should Instr return big int slice instead of string slice?
@@ -331,12 +335,40 @@ out:
 		o := v.Uint()
 		op := OpCode(o)
 
+		var fee *big.Int = new(big.Int)
+		if stepcount > 16 {
+			fee.Add(fee, StepFee)
+		}
+
+		// Calculate the fees
+		switch op {
+		/*
+				FIXME (testnet requires no funds yet)
+			case oSSTORE:
+				fee.Add(fee, StoreFee)
+			case oSLOAD:
+				fee.Add(fee, StoreFee)
+		*/
+		case oEXTRO, oBALANCE:
+			fee.Add(fee, ExtroFee)
+		case oSHA256, oRIPEMD160, oECMUL, oECADD, oECSIGN, oECRECOVER, oECVALID:
+			fee.Add(fee, CryptoFee)
+		case oMKTX:
+			fee.Add(fee, ContractFee)
+		}
+
+		if contract.Amount.Cmp(fee) < 0 {
+			break
+		}
+		// Add the fee to the total fee. It's subtracted when we're done looping
+		totalFee.Add(totalFee, fee)
+
 		if !cb(0) {
 			break
 		}
 
 		if ethutil.Config.Debug {
-			fmt.Printf("%-3d %-4s\n", pc, op.String())
+			fmt.Printf("%-3d %-4s", pc, op.String())
 		}
 
 		switch op {
@@ -453,10 +485,6 @@ out:
 			} else {
 				bm.stack.Push(ethutil.BigFalse)
 			}
-
-		// Please note  that the  following code contains some
-		// ugly string casting. This will have to change to big
-		// ints. TODO :)
 		case oMYADDRESS:
 			bm.stack.Push(ethutil.BigD(tx.Hash()))
 		case oTXSENDER:
@@ -579,11 +607,10 @@ out:
 			}
 		case oSSTORE:
 			// Store Y at index X
-			x, y := bm.stack.Popn()
+			y, x := bm.stack.Popn()
 			idx := ethutil.BigToBytes(x, 256)
-			val := ethutil.NewValue(y)
-			//fmt.Printf("STORING VALUE: %v @ %v\n", val.BigInt(), ethutil.BigD(idx))
-			contract.State().Update(string(idx), string(val.Encode()))
+			fmt.Printf(" => %x (%v) @ %v", y.Bytes(), y, ethutil.BigD(idx))
+			contract.State().Update(string(idx), string(y.Bytes()))
 		case oJMP:
 			x := int(bm.stack.Pop().Uint64())
 			// Set pc to x - 1 (minus one so the incrementing at the end won't effect it)
@@ -628,9 +655,12 @@ out:
 		default:
 			fmt.Println("Invalid OPCODE", op)
 		}
-		//bm.stack.Print()
+		fmt.Println("")
+		bm.stack.Print()
 		pc++
 	}
+
+	block.UpdateContract(addr, contract)
 }
 
 // Returns an address from the specified contract's address
