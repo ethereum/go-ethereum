@@ -163,7 +163,7 @@ func (st *Stack) Push(d *big.Int) {
 	st.data = append(st.data, d)
 }
 func (st *Stack) Print() {
-	fmt.Println("#   val (STACK)")
+	fmt.Println("### STACK ###")
 	if len(st.data) > 0 {
 		for i, val := range st.data {
 			fmt.Printf("%-3d  %v\n", i, val)
@@ -171,4 +171,5 @@ func (st *Stack) Print() {
 	} else {
 		fmt.Println("-- empty --")
 	}
+	fmt.Println("#############")
 }
