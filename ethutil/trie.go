@@ -5,6 +5,15 @@ import (
 	"reflect"
 )
 
+// TODO
+// A StateObject is an object that has a state root
+// This is goig to be the object for the second level caching (the caching of object which have a state such as contracts)
+type StateObject interface {
+	State() *Trie
+	Sync()
+	Undo()
+}
+
 type Node struct {
 	Key   []byte
 	Value *Value
