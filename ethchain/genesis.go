@@ -13,7 +13,7 @@ var ZeroHash256 = make([]byte, 32)
 var ZeroHash160 = make([]byte, 20)
 var EmptyShaList = ethutil.Sha3Bin(ethutil.Encode([]interface{}{}))
 
-var GenisisHeader = []interface{}{
+var GenesisHeader = []interface{}{
 	// Previous hash (none)
 	//"",
 	ZeroHash256,
@@ -36,4 +36,4 @@ var GenisisHeader = []interface{}{
 	ethutil.Sha3Bin(big.NewInt(42).Bytes()),
 }
 
-var Genesis = []interface{}{GenisisHeader, []interface{}{}, []interface{}{}}
+var Genesis = []interface{}{GenesisHeader, []interface{}{}, []interface{}{}}
