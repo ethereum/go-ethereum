@@ -46,7 +46,7 @@ func ReadConfig(base string) *config {
 		}
 
 		Config = &config{ExecPath: path, Debug: true, Ver: "0.2.3"}
-		Config.Log = NewLogger(LogFile|LogStd, 0)
+		Config.Log = NewLogger(LogFile|LogStd, LogLevelDebug)
 	}
 
 	return Config
@@ -67,7 +67,7 @@ type Logger struct {
 func NewLogger(flag LoggerType, level int) Logger {
 	var loggers []*log.Logger
 
-	flags := log.LstdFlags | log.Lshortfile
+	flags := log.LstdFlags
 
 	if flag&LogFile > 0 {
 		file, err := os.OpenFile(path.Join(Config.ExecPath, "debug.log"), os.O_RDWR|os.O_CREATE|os.O_APPEND, os.ModePerm)
@@ -75,20 +75,25 @@ func NewLogger(flag LoggerType, level int) Logger {
 			log.Panic("unable to create file logger", err)
 		}
 
-		log := log.New(file, "[ETH]", flags)
+		log := log.New(file, "", flags)
 
 		loggers = append(loggers, log)
 	}
 	if flag&LogStd > 0 {
-		log := log.New(os.Stdout, "[ETH]", flags)
+		log := log.New(os.Stdout, "", flags)
 		loggers = append(loggers, log)
 	}
 
 	return Logger{logSys: loggers, logLevel: level}
 }
 
+const (
+	LogLevelDebug = iota
+	LogLevelInfo
+)
+
 func (log Logger) Debugln(v ...interface{}) {
-	if log.logLevel != 0 {
+	if log.logLevel != LogLevelDebug {
 		return
 	}
 
@@ -98,7 +103,27 @@ func (log Logger) Debugln(v ...interface{}) {
 }
 
 func (log Logger) Debugf(format string, v ...interface{}) {
-	if log.logLevel != 0 {
+	if log.logLevel != LogLevelDebug {
+		return
+	}
+
+	for _, logger := range log.logSys {
+		logger.Printf(format, v...)
+	}
+}
+
+func (log Logger) Infoln(v ...interface{}) {
+	if log.logLevel > LogLevelInfo {
+		return
+	}
+
+	for _, logger := range log.logSys {
+		logger.Println(v...)
+	}
+}
+
+func (log Logger) Infof(format string, v ...interface{}) {
+	if log.logLevel > LogLevelInfo {
 		return
 	}
 
