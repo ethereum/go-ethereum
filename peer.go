@@ -23,6 +23,9 @@ const (
 type DiscReason byte
 
 const (
+	// Values are given explicitly instead of by iota because these values are
+	// defined by the wire protocol spec; it is easier for humans to ensure
+	// correctness when values are explicit.
 	DiscReRequested  = 0x00
 	DiscReTcpSysErr  = 0x01
 	DiscBadProto     = 0x02
@@ -56,9 +59,9 @@ func (d DiscReason) String() string {
 type Caps byte
 
 const (
-	CapPeerDiscTy = 0x01
-	CapTxTy       = 0x02
-	CapChainTy    = 0x04
+	CapPeerDiscTy = 1 << iota
+	CapTxTy
+	CapChainTy
 
 	CapDefault = CapChainTy | CapTxTy | CapPeerDiscTy
 )
