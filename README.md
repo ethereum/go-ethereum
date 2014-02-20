@@ -11,10 +11,10 @@ of Concept 2". For build instructions see the [Wiki](https://github.com/ethereum
 Ethereum Go is split up in several sub packages Please refer to each
 individual package for more information.
   1. [eth](https://github.com/ethereum/eth-go)
-  2. [ethchain](https://github.com/ethereum/ethchain-go)
-  3. [ethwire](https://github.com/ethereum/ethwire-go)
-  4. [ethdb](https://github.com/ethereum/ethdb-go)
-  5. [ethutil](https://github.com/ethereum/ethutil-go)
+  2. [ethchain](https://github.com/ethereum/eth-go/ethchain)
+  3. [ethwire](https://github.com/ethereum/eth-go/ethwire)
+  4. [ethdb](https://github.com/ethereum/eth-go/ethdb)
+  5. [ethutil](https://github.com/ethereum/eth-go/ethutil)
 
 The [eth](https://github.com/ethereum/eth-go) is the top-level package
 of the Ethereum protocol. It functions as the Ethereum bootstrapping and
