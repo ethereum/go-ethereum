@@ -36,7 +36,8 @@ func (val *Value) Len() int {
 	if data, ok := val.Val.([]interface{}); ok {
 		return len(data)
 	} else if data, ok := val.Val.([]byte); ok {
-		// FIXME
+		return len(data)
+	} else if data, ok := val.Val.(string); ok {
 		return len(data)
 	}
 
@@ -137,6 +138,19 @@ func (val *Value) SliceFromTo(from, to int) *Value {
 	slice := val.Slice()
 
 	return NewValue(slice[from:to])
+}
+
+// TODO More type checking methods
+func (val *Value) IsSlice() bool {
+	return val.Type() == reflect.Slice
+}
+
+func (val *Value) IsStr() bool {
+	return val.Type() == reflect.String
+}
+
+func (val *Value) IsEmpty() bool {
+	return (val.IsSlice() || val.IsStr()) && val.Len() == 0
 }
 
 // Threat the value as a slice
