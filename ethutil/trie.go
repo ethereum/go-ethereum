@@ -148,6 +148,10 @@ func (t *Trie) Get(key string) string {
 	return c.Str()
 }
 
+func (t *Trie) Delete(key string) {
+	t.Update(key, "")
+}
+
 func (t *Trie) GetState(node interface{}, key []int) interface{} {
 	n := NewValue(node)
 	// Return the node if key is empty (= found)
@@ -202,9 +206,10 @@ func (t *Trie) UpdateState(node interface{}, key []int, value string) interface{
 		return t.InsertState(node, key, value)
 	} else {
 		// delete it
+		return t.DeleteState(node, key)
 	}
 
-	return ""
+	return t.Root
 }
 
 func (t *Trie) Put(node interface{}) interface{} {
@@ -306,6 +311,87 @@ func (t *Trie) InsertState(node interface{}, key []int, value interface{}) inter
 		}
 
 		newNode[key[0]] = t.InsertState(currentNode.Get(key[0]).Raw(), key[1:], value)
+
+		return t.Put(newNode)
+	}
+
+	return ""
+}
+
+func (t *Trie) DeleteState(node interface{}, key []int) interface{} {
+	if len(key) == 0 {
+		return ""
+	}
+
+	// New node
+	n := NewValue(node)
+	if node == nil || (n.Type() == reflect.String && (n.Str() == "" || n.Get(0).IsNil())) || n.Len() == 0 {
+		return ""
+	}
+
+	currentNode := t.GetNode(node)
+	// Check for "special" 2 slice type node
+	if currentNode.Len() == 2 {
+		// Decode the key
+		k := CompactDecode(currentNode.Get(0).Str())
+		v := currentNode.Get(1).Raw()
+
+		// Matching key pair (ie. there's already an object with this key)
+		if CompareIntSlice(k, key) {
+			return ""
+		} else if CompareIntSlice(key[:len(k)], k) {
+			hash := t.DeleteState(v, key[len(k):])
+			child := t.GetNode(hash)
+
+			var newNode []interface{}
+			if child.Len() == 2 {
+				newKey := append(k, CompactDecode(child.Get(0).Str())...)
+				newNode = []interface{}{CompactEncode(newKey), child.Get(1).Raw()}
+			} else {
+				newNode = []interface{}{currentNode.Get(0).Str(), hash}
+			}
+
+			return t.Put(newNode)
+		} else {
+			return node
+		}
+	} else {
+		// Copy the current node over to the new node and replace the first nibble in the key
+		n := EmptyStringSlice(17)
+		var newNode []interface{}
+
+		for i := 0; i < 17; i++ {
+			cpy := currentNode.Get(i).Raw()
+			if cpy != nil {
+				n[i] = cpy
+			}
+		}
+
+		n[key[0]] = t.DeleteState(n[key[0]], key[1:])
+		amount := -1
+		for i := 0; i < 17; i++ {
+			if n[i] != "" {
+				if amount == -1 {
+					amount = i
+				} else {
+					amount = -2
+				}
+			}
+		}
+		if amount == 16 {
+			newNode = []interface{}{CompactEncode([]int{16}), n[amount]}
+		} else if amount >= 0 {
+			child := t.GetNode(n[amount])
+			if child.Len() == 17 {
+				newNode = []interface{}{CompactEncode([]int{amount}), n[amount]}
+			} else if child.Len() == 2 {
+				key := append([]int{amount}, CompactDecode(child.Get(0).Str())...)
+				newNode = []interface{}{CompactEncode(key), child.Get(1).Str()}
+			}
+
+		} else {
+			newNode = n
+		}
 
 		return t.Put(newNode)
 	}

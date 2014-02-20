@@ -1,8 +1,7 @@
 package ethutil
 
 import (
-	_ "encoding/hex"
-	_ "fmt"
+	"reflect"
 	"testing"
 )
 
@@ -115,4 +114,37 @@ func TestTrieCmp(t *testing.T) {
 	if trie1.Cmp(trie2) {
 		t.Errorf("Expected tries not to be equal %x %x", trie1.Root, trie2.Root)
 	}
+}
+
+func TestTrieDelete(t *testing.T) {
+	_, trie := New()
+	trie.Update("cat", LONG_WORD)
+	exp := trie.Root
+	trie.Update("dog", LONG_WORD)
+	trie.Delete("dog")
+	if !reflect.DeepEqual(exp, trie.Root) {
+		t.Errorf("Expected tries to be equal %x : %x", exp, trie.Root)
+	}
+
+	trie.Update("dog", LONG_WORD)
+	exp = trie.Root
+	trie.Update("dude", LONG_WORD)
+	trie.Delete("dude")
+	if !reflect.DeepEqual(exp, trie.Root) {
+		t.Errorf("Expected tries to be equal %x : %x", exp, trie.Root)
+	}
+}
+
+func TestTrieDeleteWithValue(t *testing.T) {
+	_, trie := New()
+	trie.Update("c", LONG_WORD)
+	exp := trie.Root
+	trie.Update("ca", LONG_WORD)
+	trie.Update("cat", LONG_WORD)
+	trie.Delete("ca")
+	trie.Delete("cat")
+	if !reflect.DeepEqual(exp, trie.Root) {
+		t.Errorf("Expected tries to be equal %x : %x", exp, trie.Root)
+	}
+
 }
