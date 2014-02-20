@@ -336,19 +336,23 @@ out:
 		op := OpCode(o)
 
 		var fee *big.Int = new(big.Int)
+		var fee2 *big.Int = new(big.Int)
 		if stepcount > 16 {
 			fee.Add(fee, StepFee)
 		}
 
 		// Calculate the fees
 		switch op {
-		/*
-				FIXME (testnet requires no funds yet)
-			case oSSTORE:
-				fee.Add(fee, StoreFee)
-			case oSLOAD:
-				fee.Add(fee, StoreFee)
-		*/
+		case oSSTORE:
+			y, x := bm.stack.Peekn()
+			val := contract.Addr(ethutil.BigToBytes(x, 256))
+			if val.IsEmpty() && len(y.Bytes()) > 0 {
+				fee2.Add(DataFee, StoreFee)
+			} else {
+				fee2.Sub(DataFee, StoreFee)
+			}
+		case oSLOAD:
+			fee.Add(fee, StoreFee)
 		case oEXTRO, oBALANCE:
 			fee.Add(fee, ExtroFee)
 		case oSHA256, oRIPEMD160, oECMUL, oECADD, oECSIGN, oECRECOVER, oECVALID:
@@ -357,11 +361,12 @@ out:
 			fee.Add(fee, ContractFee)
 		}
 
-		if contract.Amount.Cmp(fee) < 0 {
+		tf := new(big.Int).Add(fee, fee2)
+		if contract.Amount.Cmp(tf) < 0 {
 			break
 		}
 		// Add the fee to the total fee. It's subtracted when we're done looping
-		totalFee.Add(totalFee, fee)
+		totalFee.Add(totalFee, tf)
 
 		if !cb(0) {
 			break
@@ -608,9 +613,10 @@ out:
 		case oSSTORE:
 			// Store Y at index X
 			y, x := bm.stack.Popn()
-			idx := ethutil.BigToBytes(x, 256)
-			fmt.Printf(" => %x (%v) @ %v", y.Bytes(), y, ethutil.BigD(idx))
-			contract.State().Update(string(idx), string(y.Bytes()))
+			addr := ethutil.BigToBytes(x, 256)
+			fmt.Printf(" => %x (%v) @ %v", y.Bytes(), y, ethutil.BigD(addr))
+			contract.SetAddr(addr, y)
+			//contract.State().Update(string(idx), string(y))
 		case oJMP:
 			x := int(bm.stack.Pop().Uint64())
 			// Set pc to x - 1 (minus one so the incrementing at the end won't effect it)
