@@ -159,6 +159,22 @@ func (st *Stack) Popn() (*big.Int, *big.Int) {
 	return ints[0], ints[1]
 }
 
+func (st *Stack) Peek() *big.Int {
+	s := len(st.data)
+
+	str := st.data[s-1]
+
+	return str
+}
+
+func (st *Stack) Peekn() (*big.Int, *big.Int) {
+	s := len(st.data)
+
+	ints := st.data[s-2:]
+
+	return ints[0], ints[1]
+}
+
 func (st *Stack) Push(d *big.Int) {
 	st.data = append(st.data, d)
 }
