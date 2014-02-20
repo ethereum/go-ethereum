@@ -8,7 +8,7 @@ var TxFeeRat *big.Int = big.NewInt(100000000000000)
 
 var TxFee *big.Int = big.NewInt(100)
 var StepFee *big.Int = big.NewInt(1)
-var StoreFee *big.Int = big.NewInt(0)
+var StoreFee *big.Int = big.NewInt(5)
 var DataFee *big.Int = big.NewInt(20)
 var ExtroFee *big.Int = big.NewInt(40)
 var CryptoFee *big.Int = big.NewInt(20)
