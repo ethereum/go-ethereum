@@ -150,7 +150,7 @@ func (val *Value) IsStr() bool {
 }
 
 func (val *Value) IsEmpty() bool {
-	return (val.IsSlice() || val.IsStr()) && val.Len() == 0
+	return val.Val == nil || ((val.IsSlice() || val.IsStr()) && val.Len() == 0)
 }
 
 // Threat the value as a slice
