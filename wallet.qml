@@ -1,6 +1,7 @@
 import QtQuick 2.0
 import QtQuick.Controls 1.0;
 import QtQuick.Layouts 1.0;
+import QtQuick.Dialogs 1.0;
 import GoExtensions 1.0
 
 ApplicationWindow {
@@ -12,6 +13,7 @@ ApplicationWindow {
 
 	title: "Ethereal"
 
+
 	toolBar: ToolBar {
 		id: mainToolbar
 
@@ -19,7 +21,7 @@ ApplicationWindow {
 			width: parent.width
 			Button {
 			      text: "Send"
-			      onClicked: tester.compile(codeView)
+			      onClicked: console.log("SEND")
 			}
 
 			TextField {
@@ -66,35 +68,50 @@ ApplicationWindow {
 		TableViewColumn{ role: "hash" ; title: "Hash" ; width: 560 }
 
 		model: blockModel
+
+		onDoubleClicked: {
+			console.log(eth.getBlock(blockModel.get(row).hash))
+		}
 	}
 
+	FileDialog {
+		id: openAppDialog
+		title: "Open QML Application"
+		onAccepted: {
+			ui.open(openAppDialog.fileUrl.toString())
+		}
+	}
 
 	statusBar: StatusBar {
-			RowLayout {
-				anchors.fill: parent
-				Label { text: "0.0.1" }
-				Label {
-				      anchors.right: peerImage.left
-				      anchors.rightMargin: 5
-				      id: peerLabel
-				      font.pixelSize: 8
-				      text: "0 / 0"
-				}
-
-				Image {
-				      id: peerImage
-				      anchors.right: parent.right
-				      width: 10; height: 10
-				      source: "network.png"
-				}
+		RowLayout {
+			anchors.fill: parent
+			Button {
+				onClicked: openAppDialog.open()
+				text: "Import App"
 			}
+
+			Label { text: "0.0.1" }
+			Label {
+				anchors.right: peerImage.left
+				anchors.rightMargin: 5
+				id: peerLabel
+				font.pixelSize: 8
+				text: "0 / 0"
+			}
+			Image {
+				id: peerImage
+				anchors.right: parent.right
+				width: 10; height: 10
+				source: "network.png"
+			}
+		}
 	}
 
 	function addBlock(block) {
-			blockModel.insert(0, {number: block.number, hash: block.hash})
+		blockModel.insert(0, {number: block.number, hash: block.hash})
 	}
 
 	function setPeers(text) {
-			peerLabel.text = text
-        }
+		peerLabel.text = text
+	}
 }

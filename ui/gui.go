@@ -17,10 +17,15 @@ type Gui struct {
 	engine    *qml.Engine
 	component *qml.Common
 	eth       *eth.Ethereum
+
+	// The Ethereum library
+	lib *EthLib
 }
 
 func New(ethereum *eth.Ethereum) *Gui {
-	return &Gui{eth: ethereum}
+	lib := &EthLib{blockManager: ethereum.BlockManager, blockChain: ethereum.BlockManager.BlockChain(), txPool: ethereum.TxPool}
+
+	return &Gui{eth: ethereum, lib: lib}
 }
 
 type Block struct {
@@ -48,10 +53,10 @@ func (ui *Gui) Start() {
 	}
 
 	ui.win = component.CreateWindow(nil)
-	root := ui.win.Root()
 
 	context := ui.engine.Context()
-	context.SetVar("tester", &Tester{root: root})
+	context.SetVar("eth", ui.lib)
+	context.SetVar("ui", &UiLib{engine: ui.engine})
 
 	ui.eth.BlockManager.SecondaryBlockProcessor = ui
 
@@ -80,6 +85,23 @@ func (ui *Gui) updatePeers() {
 		ui.win.Root().Call("setPeers", fmt.Sprintf("%d / %d", ui.eth.Peers().Len(), ui.eth.MaxPeers))
 		time.Sleep(1 * time.Second)
 	}
+}
+
+type UiLib struct {
+	engine *qml.Engine
+}
+
+func (ui *UiLib) Open(path string) {
+	component, err := ui.engine.LoadFile(path[7:])
+	if err != nil {
+		ethutil.Config.Log.Debugln(err)
+	}
+	win := component.CreateWindow(nil)
+
+	go func() {
+		win.Show()
+		win.Wait()
+	}()
 }
 
 type Tester struct {
