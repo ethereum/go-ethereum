@@ -5,6 +5,8 @@ import (
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/go-ethereum/ui"
+	"github.com/niemeyer/qml"
 	"github.com/obscuren/secp256k1-go"
 	"log"
 	"os"
@@ -76,8 +78,15 @@ pubk: %x
 }
 
 func main() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
 	Init()
+
+	// Qt has to be initialized in the main thread or it will throw errors
+	// It has to be called BEFORE setting the maximum procs.
+	if UseGui {
+		qml.Init(nil)
+	}
+
+	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	ethchain.InitFees()
 	ethutil.ReadConfig(".ethereum")
@@ -156,41 +165,46 @@ func main() {
 		go console.Start()
 	}
 
-	RegisterInterupts(ethereum)
+	if UseGui {
+		gui := ethui.New(ethereum)
+		gui.Start()
+		//ethereum.Stop()
+	} else {
+		RegisterInterupts(ethereum)
+		ethereum.Start()
 
-	ethereum.Start()
+		if StartMining {
+			log.Printf("Miner started\n")
 
-	if StartMining {
-		log.Printf("Miner started\n")
+			// Fake block mining. It broadcasts a new block every 5 seconds
+			go func() {
+				pow := &ethchain.EasyPow{}
+				data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
+				keyRing := ethutil.NewValueFromBytes(data)
+				addr := keyRing.Get(1).Bytes()
 
-		// Fake block mining. It broadcasts a new block every 5 seconds
-		go func() {
-			pow := &ethchain.EasyPow{}
-			data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-			keyRing := ethutil.NewValueFromBytes(data)
-			addr := keyRing.Get(1).Bytes()
+				for {
+					txs := ethereum.TxPool.Flush()
+					// Create a new block which we're going to mine
+					block := ethereum.BlockManager.BlockChain().NewBlock(addr, txs)
+					// Apply all transactions to the block
+					ethereum.BlockManager.ApplyTransactions(block, block.Transactions())
 
-			for {
-				txs := ethereum.TxPool.Flush()
-				// Create a new block which we're going to mine
-				block := ethereum.BlockManager.BlockChain().NewBlock(addr, txs)
-				// Apply all transactions to the block
-				ethereum.BlockManager.ApplyTransactions(block, block.Transactions())
+					ethereum.BlockManager.AccumelateRewards(block, block)
 
-				ethereum.BlockManager.AccumelateRewards(block, block)
-
-				// Search the nonce
-				block.Nonce = pow.Search(block)
-				err := ethereum.BlockManager.ProcessBlock(block)
-				if err != nil {
-					log.Println(err)
-				} else {
-					log.Println("\n+++++++ MINED BLK +++++++\n", ethereum.BlockManager.BlockChain().CurrentBlock)
+					// Search the nonce
+					block.Nonce = pow.Search(block)
+					err := ethereum.BlockManager.ProcessBlock(block)
+					if err != nil {
+						log.Println(err)
+					} else {
+						log.Println("\n+++++++ MINED BLK +++++++\n", ethereum.BlockManager.BlockChain().CurrentBlock)
+					}
 				}
-			}
-		}()
-	}
+			}()
+		}
 
-	// Wait for shutdown
-	ethereum.WaitForShutdown()
+		// Wait for shutdown
+		ethereum.WaitForShutdown()
+	}
 }
