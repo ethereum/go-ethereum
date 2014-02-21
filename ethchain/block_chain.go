@@ -2,6 +2,7 @@ package ethchain
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	"log"
 	"math"
@@ -111,6 +112,25 @@ func (bc *BlockChain) GetChainFromHash(hash []byte, max uint64) []interface{} {
 	return chain
 }
 
+func (bc *BlockChain) GetChain(hash []byte, amount int) []*Block {
+	genHash := bc.genesisBlock.Hash()
+
+	block := bc.GetBlock(hash)
+	var blocks []*Block
+
+	for i := 0; i < amount && block != nil; block = bc.GetBlock(block.PrevHash) {
+		fmt.Println(block)
+		blocks = append([]*Block{block}, blocks...)
+
+		if bytes.Compare(genHash, block.Hash()) == 0 {
+			break
+		}
+		i++
+	}
+
+	return blocks
+}
+
 func (bc *BlockChain) setLastBlock() {
 	data, _ := ethutil.Config.Db.Get([]byte("LastBlock"))
 	if len(data) != 0 {
@@ -147,6 +167,9 @@ func (bc *BlockChain) Add(block *Block) {
 
 func (bc *BlockChain) GetBlock(hash []byte) *Block {
 	data, _ := ethutil.Config.Db.Get(hash)
+	if len(data) == 0 {
+		return nil
+	}
 
 	return NewBlockFromData(data)
 }
