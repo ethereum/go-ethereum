@@ -22,7 +22,6 @@ func TestVm(t *testing.T) {
 		"1",
 		"PUSH",
 		"2",
-
 		"STOP",
 	})
 	bm.ApplyTransactions(block, []*Transaction{ctrct})

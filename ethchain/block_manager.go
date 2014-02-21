@@ -321,19 +321,20 @@ func (bm *BlockManager) ProcContract(tx *Transaction, block *Block, cb TxCallbac
 
 	stepcount := 0
 	totalFee := new(big.Int)
+
+	// helper function for getting a contract's memory address
+	getMem := func(num int) *ethutil.Value {
+		nb := ethutil.BigToBytes(big.NewInt(int64(num)), 256)
+		return contract.Addr(nb)
+	}
 out:
 	for {
 		stepcount++
 		// The base big int for all calculations. Use this for any results.
 		base := new(big.Int)
-		// XXX Should Instr return big int slice instead of string slice?
-		// Get the next instruction from the contract
-		nb := ethutil.BigToBytes(big.NewInt(int64(pc)), 256)
-		r := contract.State().Get(string(nb))
-		v := ethutil.NewValueFromBytes([]byte(r))
+		val := getMem(pc)
 		//fmt.Printf("%x = %d, %v %x\n", r, len(r), v, nb)
-		o := v.Uint()
-		op := OpCode(o)
+		op := OpCode(val.Uint())
 
 		var fee *big.Int = new(big.Int)
 		var fee2 *big.Int = new(big.Int)
@@ -378,6 +379,7 @@ out:
 
 		switch op {
 		case oSTOP:
+			fmt.Println("")
 			break out
 		case oADD:
 			x, y := bm.stack.Popn()
@@ -580,7 +582,7 @@ out:
 		case oECVALID:
 		case oPUSH:
 			pc++
-			bm.stack.Push(bm.mem[strconv.Itoa(pc)])
+			bm.stack.Push(getMem(pc).BigInt())
 		case oPOP:
 			// Pop current value of the stack
 			bm.stack.Pop()
