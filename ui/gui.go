@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/niemeyer/qml"
 	"strings"
+	"time"
 )
 
 type Gui struct {
@@ -55,6 +56,7 @@ func (ui *Gui) Start() {
 	ui.eth.BlockManager.SecondaryBlockProcessor = ui
 
 	go ui.setInitialBlockChain()
+	go ui.updatePeers()
 
 	ui.win.Show()
 	ui.win.Wait()
@@ -71,6 +73,13 @@ func (ui *Gui) setInitialBlockChain() {
 
 func (ui *Gui) ProcessBlock(block *ethchain.Block) {
 	ui.win.Root().Call("addBlock", NewBlockFromBlock(block))
+}
+
+func (ui *Gui) updatePeers() {
+	for {
+		ui.win.Root().Call("setPeers", fmt.Sprintf("%d / %d", ui.eth.Peers().Len(), ui.eth.MaxPeers))
+		time.Sleep(1 * time.Second)
+	}
 }
 
 type Tester struct {

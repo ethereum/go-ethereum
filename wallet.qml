@@ -71,11 +71,30 @@ ApplicationWindow {
 
 	statusBar: StatusBar {
 			RowLayout {
+				anchors.fill: parent
 				Label { text: "0.0.1" }
+				Label {
+				      anchors.right: peerImage.left
+				      anchors.rightMargin: 5
+				      id: peerLabel
+				      font.pixelSize: 8
+				      text: "0 / 0"
+				}
+
+				Image {
+				      id: peerImage
+				      anchors.right: parent.right
+				      width: 10; height: 10
+				      source: "network.png"
+				}
 			}
 	}
 
 	function addBlock(block) {
 			blockModel.insert(0, {number: block.number, hash: block.hash})
 	}
+
+	function setPeers(text) {
+			peerLabel.text = text
+        }
 }
