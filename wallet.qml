@@ -76,6 +76,6 @@ ApplicationWindow {
 	}
 
 	function addBlock(block) {
-			blockModel.append({number: block.number, hash: block.hash})
+			blockModel.insert(0, {number: block.number, hash: block.hash})
 	}
 }

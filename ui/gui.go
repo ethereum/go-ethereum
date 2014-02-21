@@ -53,10 +53,20 @@ func (ui *Gui) Start() {
 	context.SetVar("tester", &Tester{root: root})
 
 	ui.eth.BlockManager.SecondaryBlockProcessor = ui
-	ui.eth.Start()
+
+	go ui.setInitialBlockChain()
 
 	ui.win.Show()
 	ui.win.Wait()
+}
+
+func (ui *Gui) setInitialBlockChain() {
+	chain := ui.eth.BlockManager.BlockChain().GetChain(ui.eth.BlockManager.BlockChain().CurrentBlock.Hash(), 10)
+	for _, block := range chain {
+		ui.ProcessBlock(block)
+	}
+
+	ui.eth.Start()
 }
 
 func (ui *Gui) ProcessBlock(block *ethchain.Block) {
