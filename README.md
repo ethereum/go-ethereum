@@ -11,22 +11,22 @@ of Concept 2". For build instructions see the [Wiki](https://github.com/ethereum
 Ethereum Go is split up in several sub packages Please refer to each
 individual package for more information.
   1. [eth](https://github.com/ethereum/eth-go)
-  2. [ethchain](https://github.com/ethereum/ethchain-go)
-  3. [ethwire](https://github.com/ethereum/ethwire-go)
-  4. [ethdb](https://github.com/ethereum/ethdb-go)
-  5. [ethutil](https://github.com/ethereum/ethutil-go)
+  2. [ethchain](https://github.com/ethereum/eth-go/tree/master/ethchain)
+  3. [ethwire](https://github.com/ethereum/eth-go/tree/master/ethwire)
+  4. [ethdb](https://github.com/ethereum/eth-go/tree/master/ethdb)
+  5. [ethutil](https://github.com/ethereum/eth-go/tree/master/ethutil)
 
 The [eth](https://github.com/ethereum/eth-go) is the top-level package
 of the Ethereum protocol. It functions as the Ethereum bootstrapping and
-peer communication layer. The [ethchain](https://github.com/ethereum/ethchain-go)
+peer communication layer. The [ethchain](https://github.com/ethereum/eth-go/tree/master/ethchain)
 contains the Ethereum blockchain, block manager, transaction and
-transaction handlers. The [ethwire](https://github.com/ethereum/ethwire-go) contains
+transaction handlers. The [ethwire](https://github.com/ethereum/eth-go/tree/master/ethwire) contains
 the Ethereum [wire protocol](http://wiki.ethereum.org/index.php/Wire_Protocol) which can be used
-to hook in to the Ethereum network. [ethutil](https://github.com/ethereum/ethutil-go) contains
+to hook in to the Ethereum network. [ethutil](https://github.com/ethereum/eth-go/tree/master/ethutil) contains
 utility functions which are not Ethereum specific. The utility package
 contains the [patricia trie](http://wiki.ethereum.org/index.php/Patricia_Tree),
 [RLP Encoding](http://wiki.ethereum.org/index.php/RLP) and hex encoding
-helpers. The [ethdb](https://github.com/ethereum/ethdb-go) package
+helpers. The [ethdb](https://github.com/ethereum/eth-go/tree/master/ethdb) package
 contains the LevelDB interface and memory DB interface.
 
 This executable is the front-end (currently nothing but a dev console) for
