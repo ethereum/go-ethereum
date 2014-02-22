@@ -2,7 +2,6 @@ package ethchain
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	"log"
 	"math"
@@ -119,7 +118,6 @@ func (bc *BlockChain) GetChain(hash []byte, amount int) []*Block {
 	var blocks []*Block
 
 	for i := 0; i < amount && block != nil; block = bc.GetBlock(block.PrevHash) {
-		fmt.Println(block)
 		blocks = append([]*Block{block}, blocks...)
 
 		if bytes.Compare(genHash, block.Hash()) == 0 {

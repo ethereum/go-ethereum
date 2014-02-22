@@ -70,7 +70,7 @@ func New(caps Caps, usePnp bool) (*Ethereum, error) {
 	if usePnp {
 		nat, err = Discover()
 		if err != nil {
-			log.Println("UPnP failed", err)
+			ethutil.Config.Log.Debugln("UPnP failed", err)
 		}
 	}
 
@@ -234,7 +234,7 @@ func (s *Ethereum) Start() {
 		log.Println("Connection listening disabled. Acting as client")
 	} else {
 		// Starting accepting connections
-		log.Println("Ready and accepting connections")
+		ethutil.Config.Log.Infoln("Ready and accepting connections")
 		// Start the peer handler
 		go s.peerHandler(ln)
 	}
@@ -250,7 +250,7 @@ func (s *Ethereum) Start() {
 	s.TxPool.Start()
 
 	if ethutil.Config.Seed {
-		log.Println("Seeding")
+		ethutil.Config.Log.Debugln("Seeding")
 		// Testnet seed bootstrapping
 		resp, err := http.Get("http://www.ethereum.org/servers.poc3.txt")
 		if err != nil {
@@ -272,7 +272,7 @@ func (s *Ethereum) peerHandler(listener net.Listener) {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Println(err)
+			ethutil.Config.Log.Debugln(err)
 
 			continue
 		}
@@ -315,13 +315,13 @@ out:
 			var err error
 			_, err = s.nat.AddPortMapping("TCP", int(lport), int(lport), "eth listen port", 20*60)
 			if err != nil {
-				log.Println("can't add UPnP port mapping:", err)
+				ethutil.Config.Log.Debugln("can't add UPnP port mapping:", err)
 				break out
 			}
 			if first && err == nil {
 				_, err = s.nat.GetExternalAddress()
 				if err != nil {
-					log.Println("UPnP can't get external address:", err)
+					ethutil.Config.Log.Debugln("UPnP can't get external address:", err)
 					continue out
 				}
 				first = false
@@ -335,8 +335,8 @@ out:
 	timer.Stop()
 
 	if err := s.nat.DeletePortMapping("TCP", int(lport), int(lport)); err != nil {
-		log.Println("unable to remove UPnP port mapping:", err)
+		ethutil.Config.Log.Debugln("unable to remove UPnP port mapping:", err)
 	} else {
-		log.Println("succesfully disestablished UPnP port mapping")
+		ethutil.Config.Log.Debugln("succesfully disestablished UPnP port mapping")
 	}
 }
