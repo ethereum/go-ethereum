@@ -3,7 +3,7 @@ import QtQuick.Controls 1.0;
 import QtQuick.Layouts 1.0;
 import QtQuick.Dialogs 1.0;
 import QtQuick.Window 2.1;
-import GoExtensions 1.0
+import Ethereum 1.0
 
 ApplicationWindow {
 	id: root
@@ -22,15 +22,19 @@ ApplicationWindow {
 			width: parent.width
 			Button {
 			      text: "Send"
-			      onClicked: console.log("SEND")
+			      onClicked: {
+				      console.log(eth.createTx(txReceiver.text, txAmount.text))
+			      }
 			}
 
 			TextField {
+			      id: txAmount
 			      width: 200
 			      placeholderText: "Amount"
 			}
 
 			TextField {
+			      id: txReceiver
 			      width: 300
 			      placeholderText: "Receiver Address (or empty for contract)"
 			      Layout.fillWidth: true
@@ -47,14 +51,42 @@ ApplicationWindow {
 		anchors.left: parent.left
 
 		TextArea {
-			      id: codeView
-			      width: parent.width /2 
+			id: codeView
+			width: parent.width /2 
 		}
 
 		TextArea {
-			      readOnly: true
+			readOnly: true
 		}
 	}
+
+	MenuBar {
+		Menu {
+			title: "File"
+			MenuItem {
+				text: "Import App"
+				shortcut: "Ctrl+o"
+				onTriggered: openAppDialog.open()
+			}
+		}
+
+		Menu {
+			title: "Network"
+			MenuItem {
+				text: "Add Peer"
+				shortcut: "Ctrl+p"
+				onTriggered: {
+					addPeerWin.visible = true
+				}
+			}
+
+			MenuItem {
+				text: "Start"
+				onTriggered: ui.connect()
+			}
+		}
+	}
+
 
 	property var blockModel: ListModel {
 		id: blockModel
@@ -141,6 +173,34 @@ ApplicationWindow {
 			anchors.verticalCenter: parent.verticalCenter
 		}
 	}
+
+	Window {
+		id: addPeerWin
+		visible: false
+		minimumWidth: 230
+		maximumWidth: 230
+		maximumHeight: 50
+		minimumHeight: 50
+
+		TextField {
+			id: addrField
+			anchors.verticalCenter: parent.verticalCenter
+			anchors.left: parent.left
+			anchors.leftMargin: 10
+			placeholderText: "address:port"
+		}
+		Button {
+			anchors.left: addrField.right
+			anchors.verticalCenter: parent.verticalCenter
+			anchors.leftMargin: 5
+			text: "Add"
+			onClicked: {
+				ui.connectToPeer(addrField.text)
+				addrPeerWin.visible = false
+			}
+		}
+	}
+
 
 	function addBlock(block) {
 		blockModel.insert(0, {number: block.number, hash: block.hash})

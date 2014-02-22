@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
-	"math/big"
 )
 
 type EthLib struct {
@@ -14,15 +13,18 @@ type EthLib struct {
 	txPool       *ethchain.TxPool
 }
 
-func (lib *EthLib) CreateTx(receiver string, amount uint64) string {
+func (lib *EthLib) CreateTx(receiver, a string) string {
 	hash, err := hex.DecodeString(receiver)
 	if err != nil {
 		return err.Error()
 	}
-
-	tx := ethchain.NewTransaction(hash, big.NewInt(int64(amount)), []string{""})
 	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
 	keyRing := ethutil.NewValueFromBytes(data)
+
+	amount := ethutil.Big(a)
+	tx := ethchain.NewTransaction(hash, amount, []string{""})
+	tx.Nonce = lib.blockManager.GetAddrState(keyRing.Get(1).Bytes()).Nonce
+
 	tx.Sign(keyRing.Get(0).Bytes())
 
 	lib.txPool.QueueTransaction(tx)

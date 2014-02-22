@@ -89,11 +89,12 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	ethchain.InitFees()
-	ethutil.ReadConfig(".ethereum")
+	ethutil.ReadConfig(DataDir)
 	ethutil.Config.Seed = UseSeed
 
 	// Instantiated a eth stack
 	ethereum, err := eth.New(eth.CapDefault, UseUPnP)
+	ethereum.Port = OutboundPort
 	if err != nil {
 		log.Println("eth start err:", err)
 		return

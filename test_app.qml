@@ -1,7 +1,7 @@
 import QtQuick 2.0
 import QtQuick.Controls 1.0;
 import QtQuick.Layouts 1.0;
-import GoExtensions 1.0
+import Ethereum 1.0
 
 ApplicationWindow {
 	minimumWidth: 500
@@ -29,7 +29,7 @@ ApplicationWindow {
 		anchors.topMargin: 5
 		text: "Place bet"
 		onClicked: {
-			txHash.text = eth.createTx("e6716f9544a56c530d868e4bfbacb172315bdead", parseInt(textField.text))
+			txHash.text = eth.createTx("e6716f9544a56c530d868e4bfbacb172315bdead", textField.text)
 		}
 	}
 }
