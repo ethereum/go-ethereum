@@ -1,6 +1,7 @@
 package ethutil
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/user"
@@ -18,7 +19,7 @@ const (
 type config struct {
 	Db Database
 
-	Log      Logger
+	Log      *Logger
 	ExecPath string
 	Debug    bool
 	Ver      string
@@ -45,7 +46,7 @@ func ReadConfig(base string) *config {
 			}
 		}
 
-		Config = &config{ExecPath: path, Debug: true, Ver: "0.2.3"}
+		Config = &config{ExecPath: path, Debug: true, Ver: "0.3.0"}
 		Config.Log = NewLogger(LogFile|LogStd, LogLevelDebug)
 	}
 
@@ -59,13 +60,18 @@ const (
 	LogStd  = 0x2
 )
 
+type LogSystem interface {
+	Println(v ...interface{})
+	Printf(format string, v ...interface{})
+}
+
 type Logger struct {
-	logSys   []*log.Logger
+	logSys   []LogSystem
 	logLevel int
 }
 
-func NewLogger(flag LoggerType, level int) Logger {
-	var loggers []*log.Logger
+func NewLogger(flag LoggerType, level int) *Logger {
+	var loggers []LogSystem
 
 	flags := log.LstdFlags
 
@@ -84,7 +90,11 @@ func NewLogger(flag LoggerType, level int) Logger {
 		loggers = append(loggers, log)
 	}
 
-	return Logger{logSys: loggers, logLevel: level}
+	return &Logger{logSys: loggers, logLevel: level}
+}
+
+func (log *Logger) AddLogSystem(logger LogSystem) {
+	log.logSys = append(log.logSys, logger)
 }
 
 const (
@@ -92,7 +102,7 @@ const (
 	LogLevelInfo
 )
 
-func (log Logger) Debugln(v ...interface{}) {
+func (log *Logger) Debugln(v ...interface{}) {
 	if log.logLevel != LogLevelDebug {
 		return
 	}
@@ -102,7 +112,7 @@ func (log Logger) Debugln(v ...interface{}) {
 	}
 }
 
-func (log Logger) Debugf(format string, v ...interface{}) {
+func (log *Logger) Debugf(format string, v ...interface{}) {
 	if log.logLevel != LogLevelDebug {
 		return
 	}
@@ -112,17 +122,18 @@ func (log Logger) Debugf(format string, v ...interface{}) {
 	}
 }
 
-func (log Logger) Infoln(v ...interface{}) {
+func (log *Logger) Infoln(v ...interface{}) {
 	if log.logLevel > LogLevelInfo {
 		return
 	}
 
+	fmt.Println(len(log.logSys))
 	for _, logger := range log.logSys {
 		logger.Println(v...)
 	}
 }
 
-func (log Logger) Infof(format string, v ...interface{}) {
+func (log *Logger) Infof(format string, v ...interface{}) {
 	if log.logLevel > LogLevelInfo {
 		return
 	}
