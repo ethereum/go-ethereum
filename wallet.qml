@@ -2,6 +2,7 @@ import QtQuick 2.0
 import QtQuick.Controls 1.0;
 import QtQuick.Layouts 1.0;
 import QtQuick.Dialogs 1.0;
+import QtQuick.Window 2.1;
 import GoExtensions 1.0
 
 ApplicationWindow {
@@ -60,18 +61,34 @@ ApplicationWindow {
 	}
 
 	TableView {
+		id: blockTable
 		width: parent.width
-		height: 100
-		anchors.bottom: parent.bottom
 		anchors.top: splitView.bottom
+		anchors.bottom: logView.top
 		TableViewColumn{ role: "number" ; title: "#" ; width: 100 }
 		TableViewColumn{ role: "hash" ; title: "Hash" ; width: 560 }
 
 		model: blockModel
 
 		onDoubleClicked: {
-			console.log(eth.getBlock(blockModel.get(row).hash))
+			popup.visible = true
+			popup.block = eth.getBlock(blockModel.get(row).hash)
+			popup.hashLabel.text = popup.block.hash
 		}
+	}
+
+	property var logModel: ListModel {
+		id: logModel
+	}
+
+	TableView {
+		id: logView
+		width: parent.width
+		height: 150
+		anchors.bottom: parent.bottom
+		TableViewColumn{ role: "description" ; title: "log" }
+
+		model: logModel
 	}
 
 	FileDialog {
@@ -86,6 +103,13 @@ ApplicationWindow {
 		RowLayout {
 			anchors.fill: parent
 			Button {
+				id: connectButton
+				onClicked: ui.connect()
+				text: "Connect"
+			}
+			Button {
+				anchors.left: connectButton.right
+				anchors.leftMargin: 5
 				onClicked: openAppDialog.open()
 				text: "Import App"
 			}
@@ -107,8 +131,24 @@ ApplicationWindow {
 		}
 	}
 
+	Window {
+		id: popup
+		visible: false
+		property var block
+		Label {
+			id: hashLabel
+			anchors.horizontalCenter: parent.horizontalCenter
+			anchors.verticalCenter: parent.verticalCenter
+		}
+	}
+
 	function addBlock(block) {
 		blockModel.insert(0, {number: block.number, hash: block.hash})
+	}
+
+	function addLog(str) {
+		console.log(str)
+		logModel.insert(0, {description: str})
 	}
 
 	function setPeers(text) {

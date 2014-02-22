@@ -21,7 +21,7 @@ func Init() {
 	flag.BoolVar(&StartConsole, "c", false, "debug and testing console")
 	flag.BoolVar(&StartMining, "m", false, "start dagger mining")
 	flag.BoolVar(&ShowGenesis, "g", false, "prints genesis header and exits")
-	flag.BoolVar(&UseGui, "gui", false, "use the gui")
+	flag.BoolVar(&UseGui, "gui", true, "use the gui")
 	flag.BoolVar(&UseUPnP, "upnp", false, "enable UPnP support")
 	flag.BoolVar(&UseSeed, "seed", true, "seed peers")
 	flag.BoolVar(&GenAddr, "genaddr", false, "create a new priv/pub key")

@@ -56,9 +56,11 @@ func (ui *Gui) Start() {
 
 	context := ui.engine.Context()
 	context.SetVar("eth", ui.lib)
-	context.SetVar("ui", &UiLib{engine: ui.engine})
+	context.SetVar("ui", &UiLib{engine: ui.engine, eth: ui.eth})
 
 	ui.eth.BlockManager.SecondaryBlockProcessor = ui
+
+	ethutil.Config.Log.AddLogSystem(ui)
 
 	go ui.setInitialBlockChain()
 	go ui.updatePeers()
@@ -73,11 +75,21 @@ func (ui *Gui) setInitialBlockChain() {
 		ui.ProcessBlock(block)
 	}
 
-	ui.eth.Start()
 }
 
 func (ui *Gui) ProcessBlock(block *ethchain.Block) {
 	ui.win.Root().Call("addBlock", NewBlockFromBlock(block))
+}
+
+func (ui *Gui) Println(v ...interface{}) {
+	str := fmt.Sprintln(v...)
+	// remove last \n
+	ui.win.Root().Call("addLog", str[:len(str)-1])
+}
+
+func (ui *Gui) Printf(format string, v ...interface{}) {
+	str := strings.TrimRight(fmt.Sprintf(format, v...), "\n")
+	ui.win.Root().Call("addLog", str)
 }
 
 func (ui *Gui) updatePeers() {
@@ -89,6 +101,7 @@ func (ui *Gui) updatePeers() {
 
 type UiLib struct {
 	engine *qml.Engine
+	eth    *eth.Ethereum
 }
 
 func (ui *UiLib) Open(path string) {
@@ -102,6 +115,10 @@ func (ui *UiLib) Open(path string) {
 		win.Show()
 		win.Wait()
 	}()
+}
+
+func (ui *UiLib) Connect() {
+	ui.eth.Start()
 }
 
 type Tester struct {
