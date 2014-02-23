@@ -47,6 +47,7 @@ type Ethereum struct {
 	Nonce uint64
 
 	Addr net.Addr
+	Port string
 
 	peerMut sync.Mutex
 
@@ -92,6 +93,9 @@ func New(caps Caps, usePnp bool) (*Ethereum, error) {
 
 	ethereum.TxPool.BlockManager = ethereum.BlockManager
 	ethereum.BlockManager.TransactionPool = ethereum.TxPool
+
+	// Start the tx pool
+	ethereum.TxPool.Start()
 
 	return ethereum, nil
 }
@@ -229,7 +233,7 @@ func (s *Ethereum) ReapDeadPeerHandler() {
 // Start the ethereum
 func (s *Ethereum) Start() {
 	// Bind to addr and port
-	ln, err := net.Listen("tcp", ":30303")
+	ln, err := net.Listen("tcp", ":"+s.Port)
 	if err != nil {
 		log.Println("Connection listening disabled. Acting as client")
 	} else {
@@ -245,9 +249,6 @@ func (s *Ethereum) Start() {
 
 	// Start the reaping processes
 	go s.ReapDeadPeerHandler()
-
-	// Start the tx pool
-	s.TxPool.Start()
 
 	if ethutil.Config.Seed {
 		ethutil.Config.Log.Debugln("Seeding")
@@ -306,7 +307,7 @@ func (s *Ethereum) upnpUpdateThread() {
 	// Go off immediately to prevent code duplication, thereafter we renew
 	// lease every 15 minutes.
 	timer := time.NewTimer(0 * time.Second)
-	lport, _ := strconv.ParseInt("30303", 10, 16)
+	lport, _ := strconv.ParseInt(s.Port, 10, 16)
 	first := true
 out:
 	for {
