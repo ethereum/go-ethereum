@@ -18,6 +18,17 @@ type Block struct {
 	Hash   string
 }
 
+type Tx struct {
+	Value, Hash, Address string
+}
+
+func NewTxFromTransaction(tx *ethchain.Transaction) *Tx {
+	hash := hex.EncodeToString(tx.Hash())
+	sender := hex.EncodeToString(tx.Recipient)
+
+	return &Tx{Hash: hash[:4], Value: tx.Value.String(), Address: sender}
+}
+
 // Creates a new QML Block from a chain block
 func NewBlockFromBlock(block *ethchain.Block) *Block {
 	info := block.BlockInfo()
@@ -56,6 +67,8 @@ func (ui *Gui) Start() {
 	// Register ethereum functions
 	qml.RegisterTypes("Ethereum", 1, 0, []qml.TypeSpec{{
 		Init: func(p *Block, obj qml.Object) { p.Number = 0; p.Hash = "" },
+	}, {
+		Init: func(p *Tx, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
 	}})
 
 	ethutil.Config.Log.Infoln("[GUI] Starting GUI")
@@ -66,6 +79,7 @@ func (ui *Gui) Start() {
 	if err != nil {
 		panic(err)
 	}
+	ui.engine.LoadFile("transactions.qml")
 
 	ui.win = component.CreateWindow(nil)
 
@@ -77,6 +91,7 @@ func (ui *Gui) Start() {
 
 	// Register the ui as a block processor
 	ui.eth.BlockManager.SecondaryBlockProcessor = ui
+	ui.eth.TxPool.SecondaryProcessor = ui
 
 	// Add the ui as a log system so we can log directly to the UGI
 	ethutil.Config.Log.AddLogSystem(ui)
@@ -100,6 +115,10 @@ func (ui *Gui) setInitialBlockChain() {
 
 func (ui *Gui) ProcessBlock(block *ethchain.Block) {
 	ui.win.Root().Call("addBlock", NewBlockFromBlock(block))
+}
+
+func (ui *Gui) ProcessTransaction(tx *ethchain.Transaction) {
+	ui.win.Root().Call("addTx", NewTxFromTransaction(tx))
 }
 
 // Logging functions that log directly to the GUI interface

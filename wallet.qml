@@ -3,17 +3,17 @@ import QtQuick.Controls 1.0;
 import QtQuick.Layouts 1.0;
 import QtQuick.Dialogs 1.0;
 import QtQuick.Window 2.1;
+import QtQuick.Controls.Styles 1.1
 import Ethereum 1.0
 
 ApplicationWindow {
 	id: root
 
-	width: 800
+	width: 900
 	height: 600
 	minimumHeight: 300
 
 	title: "Ethereal"
-
 
 	toolBar: ToolBar {
 		id: mainToolbar
@@ -43,22 +43,6 @@ ApplicationWindow {
 		}
 	}
 
-	SplitView {
-		id: splitView
-		height: 200
-		anchors.top: parent.top
-		anchors.right: parent.right
-		anchors.left: parent.left
-
-		TextArea {
-			id: codeView
-			width: parent.width /2 
-		}
-
-		TextArea {
-			readOnly: true
-		}
-	}
 
 	MenuBar {
 		Menu {
@@ -85,42 +69,133 @@ ApplicationWindow {
 				onTriggered: ui.connect()
 			}
 		}
+
+		Menu {
+			title: "Help"
+			MenuItem {
+				text: "About"
+				onTriggered: {
+					aboutWin.visible = true
+				}
+			}
+		}
+
 	}
 
 
 	property var blockModel: ListModel {
 		id: blockModel
 	}
-
-	TableView {
-		id: blockTable
-		width: parent.width
-		anchors.top: splitView.bottom
-		anchors.bottom: logView.top
-		TableViewColumn{ role: "number" ; title: "#" ; width: 100 }
-		TableViewColumn{ role: "hash" ; title: "Hash" ; width: 560 }
-
-		model: blockModel
-
-		onDoubleClicked: {
-			popup.visible = true
-			popup.block = eth.getBlock(blockModel.get(row).hash)
-			popup.hashLabel.text = popup.block.hash
+		function setView(view) {
+			mainView.visible = false
+			transactionView.visible = false
+			view.visible = true
 		}
-	}
 
-	property var logModel: ListModel {
-		id: logModel
-	}
+	SplitView {
+		anchors.fill: parent
 
-	TableView {
-		id: logView
-		width: parent.width
-		height: 150
-		anchors.bottom: parent.bottom
-		TableViewColumn{ role: "description" ; title: "log" }
 
-		model: logModel
+		Rectangle {
+			id: menu
+			width: 200
+			anchors.bottom: parent.bottom
+			anchors.top: parent.top
+			color: "#D9DDE7"
+
+			GridLayout {
+				columns: 1
+				Button {
+					text: "Main"
+					onClicked: {
+						setView(mainView)
+					}
+				}
+				Button {
+					text: "Transactions"
+					onClicked: {
+						setView(transactionView)
+					}
+				}
+			}
+						
+		}
+
+		property var txModel: ListModel {
+			id: txModel
+		}
+
+		Rectangle {
+			id: transactionView
+			visible: false
+			anchors.right: parent.right
+			anchors.left: menu.right
+			anchors.bottom: parent.bottom
+			anchors.top: parent.top
+			TableView {
+				id: txTableView
+				anchors.fill: parent
+				TableViewColumn{ role: "hash" ; title: "#" ; width: 150 }
+				TableViewColumn{ role: "value" ; title: "Value" ; width: 100 }
+				TableViewColumn{ role: "address" ; title: "Address" ; }
+
+				model: txModel
+			}
+		}
+
+		Rectangle {
+			id: mainView
+			anchors.right: parent.right
+			anchors.bottom: parent.bottom
+			anchors.top: parent.top
+			SplitView {
+				id: splitView
+				height: 200
+				anchors.top: parent.top
+				anchors.right: parent.right
+				anchors.left: parent.left
+
+				TextArea {
+					id: codeView
+					width: parent.width /2 
+				}
+
+				TextArea {
+					readOnly: true
+				}
+			}
+
+			TableView {
+				id: blockTable
+				width: parent.width
+				anchors.top: splitView.bottom
+				anchors.bottom: logView.top
+				TableViewColumn{ role: "number" ; title: "#" ; width: 100 }
+				TableViewColumn{ role: "hash" ; title: "Hash" ; width: 560 }
+
+				model: blockModel
+
+				onDoubleClicked: {
+					popup.visible = true
+					popup.block = eth.getBlock(blockModel.get(row).hash)
+					popup.hashLabel.text = popup.block.hash
+				}
+			}
+
+			property var logModel: ListModel {
+				id: logModel
+			}
+
+			TableView {
+				id: logView
+				width: parent.width
+				height: 150
+				anchors.bottom: parent.bottom
+				TableViewColumn{ role: "description" ; title: "log" }
+
+				model: logModel
+			}
+		}
 	}
 
 	FileDialog {
@@ -146,7 +221,6 @@ ApplicationWindow {
 				text: "Import App"
 			}
 
-			Label { text: "0.0.1" }
 			Label {
 				anchors.right: peerImage.left
 				anchors.rightMargin: 5
@@ -201,6 +275,25 @@ ApplicationWindow {
 		}
 	}
 
+	Window {
+		id: aboutWin
+		visible: false
+		title: "About"
+		minimumWidth: 300
+		maximumWidth: 300
+		maximumHeight: 200
+		minimumHeight: 200
+
+		Text {
+			font.pointSize: 18
+			text: "Eth Go"
+		}
+
+	}
+
+	function addTx(tx) {
+		txModel.insert(0, {hash: tx.hash, address: tx.address, value: tx.value})
+	}
 
 	function addBlock(block) {
 		blockModel.insert(0, {number: block.number, hash: block.hash})
