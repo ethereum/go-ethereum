@@ -34,6 +34,10 @@ type PublicSpeaker interface {
 	Broadcast(msgType ethwire.MsgType, data []interface{})
 }
 
+type TxProcessor interface {
+	ProcessTransaction(tx *Transaction)
+}
+
 // The tx pool a thread safe transaction pool handler. In order to
 // guarantee a non blocking pool we use a queue channel which can be
 // independently read without needing access to the actual pool. If the
@@ -54,7 +58,7 @@ type TxPool struct {
 
 	BlockManager *BlockManager
 
-	Hook TxPoolHook
+	SecondaryProcessor TxProcessor
 }
 
 func NewTxPool() *TxPool {
@@ -69,12 +73,14 @@ func NewTxPool() *TxPool {
 
 // Blocking function. Don't use directly. Use QueueTransaction instead
 func (pool *TxPool) addTransaction(tx *Transaction) {
+	log.Println("Adding tx to pool")
 	pool.mutex.Lock()
 	pool.pool.PushBack(tx)
 	pool.mutex.Unlock()
 
 	// Broadcast the transaction to the rest of the peers
 	pool.Speaker.Broadcast(ethwire.MsgTxTy, []interface{}{tx.RlpData()})
+	log.Println("broadcasting it")
 }
 
 // Process transaction validates the Tx and processes funds from the
@@ -179,8 +185,8 @@ out:
 				// doesn't matter since this is a goroutine
 				pool.addTransaction(tx)
 
-				if pool.Hook != nil {
-					pool.Hook <- tx
+				if pool.SecondaryProcessor != nil {
+					pool.SecondaryProcessor.ProcessTransaction(tx)
 				}
 			}
 		case <-pool.quit:
