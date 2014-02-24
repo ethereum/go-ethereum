@@ -221,8 +221,9 @@ func (block *Block) Undo() {
 
 func (block *Block) MakeContract(tx *Transaction) {
 	contract := MakeContract(tx, NewState(block.state))
-
-	block.contractStates[string(tx.Hash()[12:])] = contract.state
+	if contract != nil {
+		block.contractStates[string(tx.Hash()[12:])] = contract.state
+	}
 }
 
 /////// Block Encoding

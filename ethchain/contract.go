@@ -1,6 +1,7 @@
 package ethchain
 
 import (
+	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
 )
@@ -65,6 +66,8 @@ func MakeContract(tx *Transaction, state *State) *Contract {
 		state.trie.Update(string(addr), string(contract.RlpEncode()))
 
 		return contract
+	} else {
+		fmt.Println("NO CONTRACT")
 	}
 
 	return nil
