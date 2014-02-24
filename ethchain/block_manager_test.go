@@ -22,8 +22,12 @@ func TestVm(t *testing.T) {
 		"1",
 		"PUSH",
 		"2",
-		"STOP",
 	})
-	ctrct := NewTransaction(ContractAddr, big.NewInt(200000000), script)
-	bm.ApplyTransactions(block, []*Transaction{ctrct})
+	tx := NewTransaction(ContractAddr, big.NewInt(200000000), script)
+	addr := tx.Hash()[12:]
+	bm.ApplyTransactions(block, []*Transaction{tx})
+
+	tx2 := NewTransaction(addr, big.NewInt(1e17), nil)
+	tx2.Sign([]byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+	bm.ApplyTransactions(block, []*Transaction{tx2})
 }

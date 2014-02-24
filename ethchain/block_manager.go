@@ -6,11 +6,8 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	_ "github.com/ethereum/eth-go/ethwire"
-	"github.com/obscuren/secp256k1-go"
 	"log"
-	"math"
 	"math/big"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -113,9 +110,12 @@ func (bm *BlockManager) ApplyTransactions(block *Block, txs []*Transaction) {
 		// If there's no recipient, it's a contract
 		if tx.IsContract() {
 			block.MakeContract(tx)
-			bm.ProcessContract(tx, block)
 		} else {
-			bm.TransactionPool.ProcessTransaction(tx, block)
+			if contract := block.GetContract(tx.Recipient); contract != nil {
+				bm.ProcessContract(contract, tx, block)
+			} else {
+				bm.TransactionPool.ProcessTransaction(tx, block)
+			}
 		}
 	}
 }
@@ -300,7 +300,7 @@ func (bm *BlockManager) Stop() {
 	bm.bc.Stop()
 }
 
-func (bm *BlockManager) ProcessContract(tx *Transaction, block *Block) {
+func (bm *BlockManager) ProcessContract(contract *Contract, tx *Transaction, block *Block) {
 	// Recovering function in case the VM had any errors
 	/*
 		defer func() {
@@ -310,402 +310,16 @@ func (bm *BlockManager) ProcessContract(tx *Transaction, block *Block) {
 		}()
 	*/
 
-	// Process contract
-	bm.ProcContract(tx, block, func(opType OpType) bool {
-		// TODO turn on once big ints are in place
-		//if !block.PayFee(tx.Hash(), StepFee.Uint64()) {
-		//  return false
-		//}
-
-		return true // Continue
+	vm := &Vm{}
+	vm.Process(contract, NewState(block.state), RuntimeVars{
+		address:     tx.Hash()[12:],
+		blockNumber: block.BlockInfo().Number,
+		sender:      tx.Sender(),
+		prevHash:    block.PrevHash,
+		coinbase:    block.Coinbase,
+		time:        block.Time,
+		diff:        block.Difficulty,
+		txValue:     tx.Value,
+		txData:      tx.Data,
 	})
-}
-
-// Contract evaluation is done here.
-func (bm *BlockManager) ProcContract(tx *Transaction, block *Block, cb TxCallback) {
-	addr := tx.Hash()[12:]
-	// Instruction pointer
-	pc := 0
-	blockInfo := bm.bc.BlockInfo(block)
-
-	contract := block.GetContract(addr)
-
-	if contract == nil {
-		fmt.Println("Contract not found")
-		return
-	}
-
-	Pow256 := ethutil.BigPow(2, 256)
-
-	if ethutil.Config.Debug {
-		fmt.Printf("#   op\n")
-	}
-
-	stepcount := 0
-	totalFee := new(big.Int)
-
-	// helper function for getting a contract's memory address
-	getMem := func(num int) *ethutil.Value {
-		nb := ethutil.BigToBytes(big.NewInt(int64(num)), 256)
-		return contract.Addr(nb)
-	}
-out:
-	for {
-		stepcount++
-		// The base big int for all calculations. Use this for any results.
-		base := new(big.Int)
-		val := getMem(pc)
-		//fmt.Printf("%x = %d, %v %x\n", r, len(r), v, nb)
-		op := OpCode(val.Uint())
-
-		var fee *big.Int = new(big.Int)
-		var fee2 *big.Int = new(big.Int)
-		if stepcount > 16 {
-			fee.Add(fee, StepFee)
-		}
-
-		// Calculate the fees
-		switch op {
-		case oSSTORE:
-			y, x := bm.stack.Peekn()
-			val := contract.Addr(ethutil.BigToBytes(x, 256))
-			if val.IsEmpty() && len(y.Bytes()) > 0 {
-				fee2.Add(DataFee, StoreFee)
-			} else {
-				fee2.Sub(DataFee, StoreFee)
-			}
-		case oSLOAD:
-			fee.Add(fee, StoreFee)
-		case oEXTRO, oBALANCE:
-			fee.Add(fee, ExtroFee)
-		case oSHA256, oRIPEMD160, oECMUL, oECADD, oECSIGN, oECRECOVER, oECVALID:
-			fee.Add(fee, CryptoFee)
-		case oMKTX:
-			fee.Add(fee, ContractFee)
-		}
-
-		tf := new(big.Int).Add(fee, fee2)
-		if contract.Amount.Cmp(tf) < 0 {
-			break
-		}
-		// Add the fee to the total fee. It's subtracted when we're done looping
-		totalFee.Add(totalFee, tf)
-
-		if !cb(0) {
-			break
-		}
-
-		if ethutil.Config.Debug {
-			fmt.Printf("%-3d %-4s", pc, op.String())
-		}
-
-		switch op {
-		case oSTOP:
-			fmt.Println("")
-			break out
-		case oADD:
-			x, y := bm.stack.Popn()
-			// (x + y) % 2 ** 256
-			base.Add(x, y)
-			base.Mod(base, Pow256)
-			// Pop result back on the stack
-			bm.stack.Push(base)
-		case oSUB:
-			x, y := bm.stack.Popn()
-			// (x - y) % 2 ** 256
-			base.Sub(x, y)
-			base.Mod(base, Pow256)
-			// Pop result back on the stack
-			bm.stack.Push(base)
-		case oMUL:
-			x, y := bm.stack.Popn()
-			// (x * y) % 2 ** 256
-			base.Mul(x, y)
-			base.Mod(base, Pow256)
-			// Pop result back on the stack
-			bm.stack.Push(base)
-		case oDIV:
-			x, y := bm.stack.Popn()
-			// floor(x / y)
-			base.Div(x, y)
-			// Pop result back on the stack
-			bm.stack.Push(base)
-		case oSDIV:
-			x, y := bm.stack.Popn()
-			// n > 2**255
-			if x.Cmp(Pow256) > 0 {
-				x.Sub(Pow256, x)
-			}
-			if y.Cmp(Pow256) > 0 {
-				y.Sub(Pow256, y)
-			}
-			z := new(big.Int)
-			z.Div(x, y)
-			if z.Cmp(Pow256) > 0 {
-				z.Sub(Pow256, z)
-			}
-			// Push result on to the stack
-			bm.stack.Push(z)
-		case oMOD:
-			x, y := bm.stack.Popn()
-			base.Mod(x, y)
-			bm.stack.Push(base)
-		case oSMOD:
-			x, y := bm.stack.Popn()
-			// n > 2**255
-			if x.Cmp(Pow256) > 0 {
-				x.Sub(Pow256, x)
-			}
-			if y.Cmp(Pow256) > 0 {
-				y.Sub(Pow256, y)
-			}
-			z := new(big.Int)
-			z.Mod(x, y)
-			if z.Cmp(Pow256) > 0 {
-				z.Sub(Pow256, z)
-			}
-			// Push result on to the stack
-			bm.stack.Push(z)
-		case oEXP:
-			x, y := bm.stack.Popn()
-			base.Exp(x, y, Pow256)
-
-			bm.stack.Push(base)
-		case oNEG:
-			base.Sub(Pow256, bm.stack.Pop())
-			bm.stack.Push(base)
-		case oLT:
-			x, y := bm.stack.Popn()
-			// x < y
-			if x.Cmp(y) < 0 {
-				bm.stack.Push(ethutil.BigTrue)
-			} else {
-				bm.stack.Push(ethutil.BigFalse)
-			}
-		case oLE:
-			x, y := bm.stack.Popn()
-			// x <= y
-			if x.Cmp(y) < 1 {
-				bm.stack.Push(ethutil.BigTrue)
-			} else {
-				bm.stack.Push(ethutil.BigFalse)
-			}
-		case oGT:
-			x, y := bm.stack.Popn()
-			// x > y
-			if x.Cmp(y) > 0 {
-				bm.stack.Push(ethutil.BigTrue)
-			} else {
-				bm.stack.Push(ethutil.BigFalse)
-			}
-		case oGE:
-			x, y := bm.stack.Popn()
-			// x >= y
-			if x.Cmp(y) > -1 {
-				bm.stack.Push(ethutil.BigTrue)
-			} else {
-				bm.stack.Push(ethutil.BigFalse)
-			}
-		case oNOT:
-			x, y := bm.stack.Popn()
-			// x != y
-			if x.Cmp(y) != 0 {
-				bm.stack.Push(ethutil.BigTrue)
-			} else {
-				bm.stack.Push(ethutil.BigFalse)
-			}
-		case oMYADDRESS:
-			bm.stack.Push(ethutil.BigD(tx.Hash()))
-		case oTXSENDER:
-			bm.stack.Push(ethutil.BigD(tx.Sender()))
-		case oTXVALUE:
-			bm.stack.Push(tx.Value)
-		case oTXDATAN:
-			bm.stack.Push(big.NewInt(int64(len(tx.Data))))
-		case oTXDATA:
-			v := bm.stack.Pop()
-			// v >= len(data)
-			if v.Cmp(big.NewInt(int64(len(tx.Data)))) >= 0 {
-				bm.stack.Push(ethutil.Big("0"))
-			} else {
-				bm.stack.Push(ethutil.Big(tx.Data[v.Uint64()]))
-			}
-		case oBLK_PREVHASH:
-			bm.stack.Push(ethutil.BigD(block.PrevHash))
-		case oBLK_COINBASE:
-			bm.stack.Push(ethutil.BigD(block.Coinbase))
-		case oBLK_TIMESTAMP:
-			bm.stack.Push(big.NewInt(block.Time))
-		case oBLK_NUMBER:
-			bm.stack.Push(big.NewInt(int64(blockInfo.Number)))
-		case oBLK_DIFFICULTY:
-			bm.stack.Push(block.Difficulty)
-		case oBASEFEE:
-			// e = 10^21
-			e := big.NewInt(0).Exp(big.NewInt(10), big.NewInt(21), big.NewInt(0))
-			d := new(big.Rat)
-			d.SetInt(block.Difficulty)
-			c := new(big.Rat)
-			c.SetFloat64(0.5)
-			// d = diff / 0.5
-			d.Quo(d, c)
-			// base = floor(d)
-			base.Div(d.Num(), d.Denom())
-
-			x := new(big.Int)
-			x.Div(e, base)
-
-			// x = floor(10^21 / floor(diff^0.5))
-			bm.stack.Push(x)
-		case oSHA256, oSHA3, oRIPEMD160:
-			// This is probably save
-			// ceil(pop / 32)
-			length := int(math.Ceil(float64(bm.stack.Pop().Uint64()) / 32.0))
-			// New buffer which will contain the concatenated popped items
-			data := new(bytes.Buffer)
-			for i := 0; i < length; i++ {
-				// Encode the number to bytes and have it 32bytes long
-				num := ethutil.NumberToBytes(bm.stack.Pop().Bytes(), 256)
-				data.WriteString(string(num))
-			}
-
-			if op == oSHA256 {
-				bm.stack.Push(base.SetBytes(ethutil.Sha256Bin(data.Bytes())))
-			} else if op == oSHA3 {
-				bm.stack.Push(base.SetBytes(ethutil.Sha3Bin(data.Bytes())))
-			} else {
-				bm.stack.Push(base.SetBytes(ethutil.Ripemd160(data.Bytes())))
-			}
-		case oECMUL:
-			y := bm.stack.Pop()
-			x := bm.stack.Pop()
-			//n := bm.stack.Pop()
-
-			//if ethutil.Big(x).Cmp(ethutil.Big(y)) {
-			data := new(bytes.Buffer)
-			data.WriteString(x.String())
-			data.WriteString(y.String())
-			if secp256k1.VerifyPubkeyValidity(data.Bytes()) == 1 {
-				// TODO
-			} else {
-				// Invalid, push infinity
-				bm.stack.Push(ethutil.Big("0"))
-				bm.stack.Push(ethutil.Big("0"))
-			}
-			//} else {
-			//	// Invalid, push infinity
-			//	bm.stack.Push("0")
-			//	bm.stack.Push("0")
-			//}
-
-		case oECADD:
-		case oECSIGN:
-		case oECRECOVER:
-		case oECVALID:
-		case oPUSH:
-			pc++
-			bm.stack.Push(getMem(pc).BigInt())
-		case oPOP:
-			// Pop current value of the stack
-			bm.stack.Pop()
-		case oDUP:
-			// Dup top stack
-			x := bm.stack.Pop()
-			bm.stack.Push(x)
-			bm.stack.Push(x)
-		case oSWAP:
-			// Swap two top most values
-			x, y := bm.stack.Popn()
-			bm.stack.Push(y)
-			bm.stack.Push(x)
-		case oMLOAD:
-			x := bm.stack.Pop()
-			bm.stack.Push(bm.mem[x.String()])
-		case oMSTORE:
-			x, y := bm.stack.Popn()
-			bm.mem[x.String()] = y
-		case oSLOAD:
-			// Load the value in storage and push it on the stack
-			x := bm.stack.Pop()
-			// decode the object as a big integer
-			decoder := ethutil.NewValueFromBytes([]byte(contract.State().Get(x.String())))
-			if !decoder.IsNil() {
-				bm.stack.Push(decoder.BigInt())
-			} else {
-				bm.stack.Push(ethutil.BigFalse)
-			}
-		case oSSTORE:
-			// Store Y at index X
-			y, x := bm.stack.Popn()
-			addr := ethutil.BigToBytes(x, 256)
-			fmt.Printf(" => %x (%v) @ %v", y.Bytes(), y, ethutil.BigD(addr))
-			contract.SetAddr(addr, y)
-			//contract.State().Update(string(idx), string(y))
-		case oJMP:
-			x := int(bm.stack.Pop().Uint64())
-			// Set pc to x - 1 (minus one so the incrementing at the end won't effect it)
-			pc = x
-			pc--
-		case oJMPI:
-			x := bm.stack.Pop()
-			// Set pc to x if it's non zero
-			if x.Cmp(ethutil.BigFalse) != 0 {
-				pc = int(x.Uint64())
-				pc--
-			}
-		case oIND:
-			bm.stack.Push(big.NewInt(int64(pc)))
-		case oEXTRO:
-			memAddr := bm.stack.Pop()
-			contractAddr := bm.stack.Pop().Bytes()
-
-			// Push the contract's memory on to the stack
-			bm.stack.Push(getContractMemory(block, contractAddr, memAddr))
-		case oBALANCE:
-			// Pushes the balance of the popped value on to the stack
-			d := block.State().Get(bm.stack.Pop().String())
-			ether := NewAddressFromData([]byte(d))
-			bm.stack.Push(ether.Amount)
-		case oMKTX:
-			value, addr := bm.stack.Popn()
-			from, length := bm.stack.Popn()
-
-			j := 0
-			dataItems := make([]string, int(length.Uint64()))
-			for i := from.Uint64(); i < length.Uint64(); i++ {
-				dataItems[j] = string(bm.mem[strconv.Itoa(int(i))].Bytes())
-				j++
-			}
-			// TODO sign it?
-			tx := NewTransaction(addr.Bytes(), value, dataItems)
-			// Add the transaction to the tx pool
-			bm.TransactionPool.QueueTransaction(tx)
-		case oSUICIDE:
-			//addr := bm.stack.Pop()
-		default:
-			fmt.Println("Invalid OPCODE", op)
-		}
-		fmt.Println("")
-		bm.stack.Print()
-		pc++
-	}
-
-	block.UpdateContract(addr, contract)
-}
-
-// Returns an address from the specified contract's address
-func getContractMemory(block *Block, contractAddr []byte, memAddr *big.Int) *big.Int {
-	contract := block.GetContract(contractAddr)
-	if contract == nil {
-		log.Panicf("invalid contract addr %x", contractAddr)
-	}
-	val := contract.State().Get(memAddr.String())
-
-	// decode the object as a big integer
-	decoder := ethutil.NewValueFromBytes([]byte(val))
-	if decoder.IsNil() {
-		return ethutil.BigFalse
-	}
-
-	return decoder.BigInt()
 }
