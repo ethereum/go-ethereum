@@ -390,7 +390,7 @@ func (p *Peer) HandleInbound() {
 					p.QueueMessage(ethwire.NewMessage(ethwire.MsgNotInChainTy, []interface{}{lastHash.Raw()}))
 				}
 			case ethwire.MsgNotInChainTy:
-				ethutil.Config.Log.Infoln("Not in chain %x\n", msg.Data)
+				ethutil.Config.Log.Infof("Not in chain %x\n", msg.Data)
 				// TODO
 
 				// Unofficial but fun nonetheless
@@ -556,7 +556,7 @@ func (p *Peer) CatchupWithPeer() {
 		msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{p.ethereum.BlockManager.BlockChain().CurrentBlock.Hash(), uint64(50)})
 		p.QueueMessage(msg)
 
-		ethutil.Config.Log.Debugln("Requesting blockchain %x...\n", p.ethereum.BlockManager.BlockChain().CurrentBlock.Hash()[:4])
+		ethutil.Config.Log.Debugf("Requesting blockchain %x...\n", p.ethereum.BlockManager.BlockChain().CurrentBlock.Hash()[:4])
 	}
 }
 
