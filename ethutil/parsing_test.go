@@ -14,7 +14,7 @@ func TestCompile(t *testing.T) {
 	}
 
 	calc := (48 + 0*256 + 0*int64(math.Pow(256, 2)))
-	if Big(instr).Int64() != calc {
+	if BigD(instr).Int64() != calc {
 		t.Error("Expected", calc, ", got:", instr)
 	}
 }
