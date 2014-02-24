@@ -26,6 +26,12 @@ func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 	return db.db[string(key)], nil
 }
 
+func (db *MemDatabase) Delete(key []byte) error {
+	delete(db.db, string(key))
+
+	return nil
+}
+
 func (db *MemDatabase) Print() {
 	for key, val := range db.db {
 		fmt.Printf("%x(%d): ", key, len(key))

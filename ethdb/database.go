@@ -36,6 +36,10 @@ func (db *LDBDatabase) Get(key []byte) ([]byte, error) {
 	return db.db.Get(key, nil)
 }
 
+func (db *LDBDatabase) Delete(key []byte) error {
+	return db.db.Delete(key, nil)
+}
+
 func (db *LDBDatabase) LastKnownTD() []byte {
 	data, _ := db.db.Get([]byte("LastKnownTotalDifficulty"), nil)
 
