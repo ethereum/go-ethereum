@@ -1,6 +1,7 @@
 package ethutil
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -20,6 +21,10 @@ func (db *MemDatabase) Put(key []byte, value []byte) {
 }
 func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 	return db.db[string(key)], nil
+}
+func (db *MemDatabase) Delete(key []byte) error {
+	delete(db.db, string(key))
+	return nil
 }
 func (db *MemDatabase) Print()              {}
 func (db *MemDatabase) Close()              {}
@@ -147,4 +152,23 @@ func TestTrieDeleteWithValue(t *testing.T) {
 		t.Errorf("Expected tries to be equal %x : %x", exp, trie.Root)
 	}
 
+}
+
+func TestTrieIterator(t *testing.T) {
+	_, trie := New()
+	trie.Update("c", LONG_WORD)
+	trie.Update("ca", LONG_WORD)
+	trie.Update("cat", LONG_WORD)
+
+	it := trie.NewIterator()
+	fmt.Println("purging")
+	fmt.Println("len =", it.Purge())
+	/*
+		for it.Next() {
+			k := it.Key()
+			v := it.Value()
+
+			fmt.Println(k, v)
+		}
+	*/
 }
