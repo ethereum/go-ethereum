@@ -1,5 +1,6 @@
 package ethutil
 
+/*
 import (
 	"math"
 	"testing"
@@ -19,14 +20,13 @@ func TestCompile(t *testing.T) {
 }
 
 func TestValidInstr(t *testing.T) {
-	/*
 	  op, args, err := Instr("68163")
 	  if err != nil {
 	    t.Error("Error decoding instruction")
 	  }
-	*/
 
 }
 
 func TestInvalidInstr(t *testing.T) {
 }
+*/
