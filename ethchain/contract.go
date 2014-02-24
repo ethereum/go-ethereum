@@ -41,3 +41,31 @@ func (c *Contract) SetAddr(addr []byte, value interface{}) {
 func (c *Contract) State() *ethutil.Trie {
 	return c.state
 }
+
+func (c *Contract) GetMem(num int) *ethutil.Value {
+	nb := ethutil.BigToBytes(big.NewInt(int64(num)), 256)
+
+	return c.Addr(nb)
+}
+
+func MakeContract(tx *Transaction, state *State) *Contract {
+	// Create contract if there's no recipient
+	if tx.IsContract() {
+		addr := tx.Hash()[12:]
+
+		value := tx.Value
+		contract := NewContract(value, []byte(""))
+		state.trie.Update(string(addr), string(contract.RlpEncode()))
+		for i, val := range tx.Data {
+			if len(val) > 0 {
+				bytNum := ethutil.BigToBytes(big.NewInt(int64(i)), 256)
+				contract.state.Update(string(bytNum), string(ethutil.Encode(val)))
+			}
+		}
+		state.trie.Update(string(addr), string(contract.RlpEncode()))
+
+		return contract
+	}
+
+	return nil
+}
