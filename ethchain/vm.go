@@ -91,7 +91,6 @@ out:
 
 		tf := new(big.Int).Add(fee, fee2)
 		if contract.Amount.Cmp(tf) < 0 {
-			fmt.Println("Contract fee", ContractFee)
 			fmt.Println("Insufficient fees to continue running the contract", tf, contract.Amount)
 			break
 		}
@@ -392,7 +391,7 @@ out:
 			fmt.Printf("Invalid OPCODE: %x\n", op)
 		}
 		fmt.Println("")
-		vm.stack.Print()
+		//vm.stack.Print()
 		pc++
 	}
 
