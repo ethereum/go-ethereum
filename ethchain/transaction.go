@@ -24,12 +24,7 @@ func NewTransaction(to []byte, value *big.Int, data []string) *Transaction {
 	tx.Nonce = 0
 
 	// Serialize the data
-	tx.Data = make([]string, len(data))
-	for i, val := range data {
-		instr, _ := ethutil.CompileInstr(val)
-
-		tx.Data[i] = string(instr)
-	}
+	tx.Data = data
 
 	return &tx
 }
