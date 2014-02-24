@@ -197,16 +197,16 @@ func (i *Console) ParseInput(input string) bool {
 			}
 		case "contract":
 			fmt.Println("Contract editor (Ctrl-D = done)")
-			code := i.Editor()
+			code := ethchain.Compile(i.Editor())
 
-			contract := ethchain.NewTransaction([]byte{}, ethutil.Big(tokens[1]), code)
+			contract := ethchain.NewTransaction(ethchain.ContractAddr, ethutil.Big(tokens[1]), code)
 			data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
 			keyRing := ethutil.NewValueFromBytes(data)
 			contract.Sign(keyRing.Get(0).Bytes())
 
 			i.ethereum.TxPool.QueueTransaction(contract)
 
-			fmt.Printf("%x\n", contract.Hash())
+			fmt.Printf("%x\n", contract.Hash()[12:])
 		case "exit", "quit", "q":
 			return false
 		case "help":

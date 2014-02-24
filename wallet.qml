@@ -23,7 +23,7 @@ ApplicationWindow {
 			Button {
 			      text: "Send"
 			      onClicked: {
-				      console.log(eth.createTx(txReceiver.text, txAmount.text))
+				      console.log(eth.createTx(txReceiver.text, txAmount.text, codeView.text))
 			      }
 			}
 
@@ -300,8 +300,9 @@ ApplicationWindow {
 	}
 
 	function addLog(str) {
-		console.log(str)
-		logModel.insert(0, {description: str})
+		if(str.len != 0) {
+			logModel.append({description: str})
+		}
 	}
 
 	function setPeers(text) {

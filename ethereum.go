@@ -5,6 +5,7 @@ import (
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ethwire"
 	"github.com/ethereum/go-ethereum/ui"
 	"github.com/niemeyer/qml"
 	"github.com/obscuren/secp256k1-go"
@@ -195,6 +196,7 @@ func main() {
 
 					// Search the nonce
 					block.Nonce = pow.Search(block)
+					ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
 					err := ethereum.BlockManager.ProcessBlock(block)
 					if err != nil {
 						log.Println(err)
