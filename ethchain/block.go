@@ -220,23 +220,9 @@ func (block *Block) Undo() {
 }
 
 func (block *Block) MakeContract(tx *Transaction) {
-	// Create contract if there's no recipient
-	if tx.IsContract() {
-		addr := tx.Hash()[12:]
+	contract := MakeContract(tx, NewState(block.state))
 
-		value := tx.Value
-		contract := NewContract(value, []byte(""))
-		block.state.Update(string(addr), string(contract.RlpEncode()))
-		for i, val := range tx.Data {
-			if len(val) > 0 {
-				bytNum := ethutil.BigToBytes(big.NewInt(int64(i)), 256)
-				contract.state.Update(string(bytNum), val)
-			}
-		}
-		block.UpdateContract(addr, contract)
-
-		block.contractStates[string(addr)] = contract.state
-	}
+	block.contractStates[string(tx.Hash()[12:])] = contract.state
 }
 
 /////// Block Encoding
