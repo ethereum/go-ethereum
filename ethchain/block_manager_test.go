@@ -17,12 +17,13 @@ func TestVm(t *testing.T) {
 	bm := NewBlockManager(nil)
 
 	block := bm.bc.genesisBlock
-	ctrct := NewTransaction(ContractAddr, big.NewInt(200000000), []string{
+	script := Compile([]string{
 		"PUSH",
 		"1",
 		"PUSH",
 		"2",
 		"STOP",
 	})
+	ctrct := NewTransaction(ContractAddr, big.NewInt(200000000), script)
 	bm.ApplyTransactions(block, []*Transaction{ctrct})
 }
