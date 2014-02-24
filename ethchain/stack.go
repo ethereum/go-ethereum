@@ -9,57 +9,57 @@ type OpCode int
 
 // Op codes
 const (
-	oSTOP OpCode = iota
-	oADD
-	oMUL
-	oSUB
-	oDIV
-	oSDIV
-	oMOD
-	oSMOD
-	oEXP
-	oNEG
-	oLT
-	oLE
-	oGT
-	oGE
-	oEQ
-	oNOT
-	oMYADDRESS
-	oTXSENDER
-	oTXVALUE
-	oTXFEE
-	oTXDATAN
-	oTXDATA
-	oBLK_PREVHASH
-	oBLK_COINBASE
-	oBLK_TIMESTAMP
-	oBLK_NUMBER
-	oBLK_DIFFICULTY
-	oBASEFEE
-	oSHA256    OpCode = 32
-	oRIPEMD160 OpCode = 33
-	oECMUL     OpCode = 34
-	oECADD     OpCode = 35
-	oECSIGN    OpCode = 36
-	oECRECOVER OpCode = 37
-	oECVALID   OpCode = 38
-	oSHA3      OpCode = 39
-	oPUSH      OpCode = 48
-	oPOP       OpCode = 49
-	oDUP       OpCode = 50
-	oSWAP      OpCode = 51
-	oMLOAD     OpCode = 52
-	oMSTORE    OpCode = 53
-	oSLOAD     OpCode = 54
-	oSSTORE    OpCode = 55
-	oJMP       OpCode = 56
-	oJMPI      OpCode = 57
-	oIND       OpCode = 58
-	oEXTRO     OpCode = 59
-	oBALANCE   OpCode = 60
-	oMKTX      OpCode = 61
-	oSUICIDE   OpCode = 62
+	oSTOP           = 0x00
+	oADD            = 0x01
+	oMUL            = 0x02
+	oSUB            = 0x03
+	oDIV            = 0x04
+	oSDIV           = 0x05
+	oMOD            = 0x06
+	oSMOD           = 0x07
+	oEXP            = 0x08
+	oNEG            = 0x09
+	oLT             = 0x0a
+	oLE             = 0x0b
+	oGT             = 0x0c
+	oGE             = 0x0d
+	oEQ             = 0x0e
+	oNOT            = 0x0f
+	oMYADDRESS      = 0x10
+	oTXSENDER       = 0x11
+	oTXVALUE        = 0x12
+	oTXDATAN        = 0x13
+	oTXDATA         = 0x14
+	oBLK_PREVHASH   = 0x15
+	oBLK_COINBASE   = 0x16
+	oBLK_TIMESTAMP  = 0x17
+	oBLK_NUMBER     = 0x18
+	oBLK_DIFFICULTY = 0x19
+	oBLK_NONCE      = 0x1a
+	oBASEFEE        = 0x1b
+	oSHA256         = 0x20
+	oRIPEMD160      = 0x21
+	oECMUL          = 0x22
+	oECADD          = 0x23
+	oECSIGN         = 0x24
+	oECRECOVER      = 0x25
+	oECVALID        = 0x26
+	oSHA3           = 0x27
+	oPUSH           = 0x30
+	oPOP            = 0x31
+	oDUP            = 0x32
+	oSWAP           = 0x33
+	oMLOAD          = 0x34
+	oMSTORE         = 0x35
+	oSLOAD          = 0x36
+	oSSTORE         = 0x37
+	oJMP            = 0x38
+	oJMPI           = 0x39
+	oIND            = 0x3a
+	oEXTRO          = 0x3b
+	oBALANCE        = 0x3c
+	oMKTX           = 0x3d
+	oSUICIDE        = 0x3f
 )
 
 // Since the opcodes aren't all in order we can't use a regular slice
@@ -83,7 +83,6 @@ var opCodeToString = map[OpCode]string{
 	oMYADDRESS:      "MYADDRESS",
 	oTXSENDER:       "TXSENDER",
 	oTXVALUE:        "TXVALUE",
-	oTXFEE:          "TXFEE",
 	oTXDATAN:        "TXDATAN",
 	oTXDATA:         "TXDATA",
 	oBLK_PREVHASH:   "BLK_PREVHASH",
