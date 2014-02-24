@@ -48,7 +48,7 @@ func (vm *Vm) Process(contract *Contract, state *State, vars RuntimeVars) {
 	Pow256 := ethutil.BigPow(2, 256)
 
 	if ethutil.Config.Debug {
-		fmt.Printf("#   op\n")
+		ethutil.Config.Log.Debugf("#   op\n")
 	}
 
 	stepcount := 0
@@ -98,7 +98,7 @@ out:
 		totalFee.Add(totalFee, tf)
 
 		if ethutil.Config.Debug {
-			fmt.Printf("%-3d %-4s", pc, op.String())
+			ethutil.Config.Log.Debugf("%-3d %-4s", pc, op.String())
 		}
 
 		switch op {
@@ -385,12 +385,12 @@ out:
 			// Delete the contract
 			state.trie.Update(string(addr), "")
 
-			fmt.Printf("(%d) => %x\n", deletedMemory, recAddr)
+			ethutil.Config.Log.Debugf("(%d) => %x\n", deletedMemory, recAddr)
 			break out
 		default:
 			fmt.Printf("Invalid OPCODE: %x\n", op)
 		}
-		fmt.Println("")
+		ethutil.Config.Log.Debugln("")
 		//vm.stack.Print()
 		pc++
 	}
@@ -399,7 +399,7 @@ out:
 }
 
 func makeInlineTx(addr []byte, value, from, length *big.Int, contract *Contract, state *State) {
-	fmt.Printf(" => creating inline tx %x %v %v %v", addr, value, from, length)
+	ethutil.Config.Log.Debugf(" => creating inline tx %x %v %v %v", addr, value, from, length)
 	j := 0
 	dataItems := make([]string, int(length.Uint64()))
 	for i := from.Uint64(); i < length.Uint64(); i++ {
