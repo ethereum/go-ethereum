@@ -11,8 +11,8 @@ type LDBDatabase struct {
 	db *leveldb.DB
 }
 
-func NewLDBDatabase() (*LDBDatabase, error) {
-	dbPath := path.Join(ethutil.Config.ExecPath, "database")
+func NewLDBDatabase(name string) (*LDBDatabase, error) {
+	dbPath := path.Join(ethutil.Config.ExecPath, name)
 
 	// Open the db
 	db, err := leveldb.OpenFile(dbPath, nil)
@@ -38,6 +38,10 @@ func (db *LDBDatabase) Get(key []byte) ([]byte, error) {
 
 func (db *LDBDatabase) Delete(key []byte) error {
 	return db.db.Delete(key, nil)
+}
+
+func (db *LDBDatabase) Db() *leveldb.DB {
+	return db.db
 }
 
 func (db *LDBDatabase) LastKnownTD() []byte {

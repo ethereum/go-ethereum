@@ -61,7 +61,7 @@ type Ethereum struct {
 }
 
 func New(caps Caps, usePnp bool) (*Ethereum, error) {
-	db, err := ethdb.NewLDBDatabase()
+	db, err := ethdb.NewLDBDatabase("database")
 	//db, err := ethdb.NewMemDatabase()
 	if err != nil {
 		return nil, err
