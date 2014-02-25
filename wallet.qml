@@ -215,6 +215,7 @@ ApplicationWindow {
 				text: "Connect"
 			}
 			Button {
+				id: importAppButton
 				anchors.left: connectButton.right
 				anchors.leftMargin: 5
 				onClicked: openAppDialog.open()
@@ -222,6 +223,8 @@ ApplicationWindow {
 			}
 
 			Label {
+				anchors.left: importAppButton.right
+				anchors.leftMargin: 5
 				id: walletValueLabel
 			}
 

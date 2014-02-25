@@ -26,7 +26,7 @@ func NewTxFromTransaction(tx *ethchain.Transaction) *Tx {
 	hash := hex.EncodeToString(tx.Hash())
 	sender := hex.EncodeToString(tx.Recipient)
 
-	return &Tx{Hash: hash, Value: tx.Value.String(), Address: sender}
+	return &Tx{Hash: hash, Value: ethutil.CurrencyToString(tx.Value), Address: sender}
 }
 
 // Creates a new QML Block from a chain block
@@ -154,7 +154,7 @@ func (ui *Gui) update() {
 	ui.eth.TxPool.Subscribe(txChan)
 
 	account := ui.eth.BlockManager.GetAddrState(ui.addr).Account
-	ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", account.Amount))
+	ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(account.Amount)))
 	for {
 		select {
 		case txMsg := <-txChan:
@@ -162,22 +162,22 @@ func (ui *Gui) update() {
 			ui.txDb.Put(tx.Hash(), tx.RlpEncode())
 
 			ui.win.Root().Call("addTx", NewTxFromTransaction(tx))
-			// Yeah, yeah, stupid code. Refactor next week
+			// TODO FOR THE LOVE OF EVERYTHING GOOD IN THIS WORLD REFACTOR ME
 			if txMsg.Type == ethchain.TxPre {
 				if bytes.Compare(tx.Sender(), ui.addr) == 0 {
-					ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v (- %v)", account.Amount, tx.Value))
+					ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v (- %v)", ethutil.CurrencyToString(account.Amount), ethutil.CurrencyToString(tx.Value)))
 					ui.eth.BlockManager.GetAddrState(ui.addr).Nonce += 1
 					fmt.Println("Nonce", ui.eth.BlockManager.GetAddrState(ui.addr).Nonce)
 				} else if bytes.Compare(tx.Recipient, ui.addr) == 0 {
-					ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v (+ %v)", account.Amount, tx.Value))
+					ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v (+ %v)", ethutil.CurrencyToString(account.Amount), ethutil.CurrencyToString(tx.Value)))
 				}
 			} else {
 				if bytes.Compare(tx.Sender(), ui.addr) == 0 {
 					amount := account.Amount.Sub(account.Amount, tx.Value)
-					ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", amount))
+					ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(amount)))
 				} else if bytes.Compare(tx.Recipient, ui.addr) == 0 {
 					amount := account.Amount.Sub(account.Amount, tx.Value)
-					ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", amount))
+					ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(amount)))
 				}
 			}
 		}
