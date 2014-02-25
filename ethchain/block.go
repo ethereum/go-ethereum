@@ -131,6 +131,11 @@ func (block *Block) GetContract(addr []byte) *Contract {
 		return nil
 	}
 
+	value := ethutil.NewValueFromBytes([]byte(data))
+	if value.Len() == 2 {
+		return nil
+	}
+
 	contract := &Contract{}
 	contract.RlpDecode([]byte(data))
 
