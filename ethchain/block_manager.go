@@ -92,12 +92,13 @@ func (bm *BlockManager) WatchAddr(addr []byte) *AddressState {
 }
 
 func (bm *BlockManager) GetAddrState(addr []byte) *AddressState {
-	addrState := bm.addrStateStore.Get(addr)
-	if addrState == nil {
-		addrState = bm.WatchAddr(addr)
+	account := bm.addrStateStore.Get(addr)
+	if account == nil {
+		a := bm.bc.CurrentBlock.GetAddr(addr)
+		account = &AddressState{Nonce: a.Nonce, Account: a}
 	}
 
-	return addrState
+	return account
 }
 
 func (bm *BlockManager) BlockChain() *BlockChain {
@@ -114,7 +115,10 @@ func (bm *BlockManager) ApplyTransactions(block *Block, txs []*Transaction) {
 			if contract := block.GetContract(tx.Recipient); contract != nil {
 				bm.ProcessContract(contract, tx, block)
 			} else {
-				bm.TransactionPool.ProcessTransaction(tx, block)
+				err := bm.TransactionPool.ProcessTransaction(tx, block)
+				if err != nil {
+					ethutil.Config.Log.Infoln("[BMGR]", err)
+				}
 			}
 		}
 	}
