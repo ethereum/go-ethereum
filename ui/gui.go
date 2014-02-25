@@ -1,15 +1,15 @@
 package ethui
 
 import (
-	"bufio"
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/niemeyer/qml"
 	"strings"
-	"time"
 )
 
 // Block interface exposed to QML
@@ -26,7 +26,7 @@ func NewTxFromTransaction(tx *ethchain.Transaction) *Tx {
 	hash := hex.EncodeToString(tx.Hash())
 	sender := hex.EncodeToString(tx.Recipient)
 
-	return &Tx{Hash: hash[:4], Value: tx.Value.String(), Address: sender}
+	return &Tx{Hash: hash, Value: tx.Value.String(), Address: sender}
 }
 
 // Creates a new QML Block from a chain block
@@ -48,11 +48,19 @@ type Gui struct {
 
 	// The public Ethereum library
 	lib *EthLib
+
+	txDb *ethdb.LDBDatabase
+
+	addr []byte
 }
 
 // Create GUI, but doesn't start it
 func New(ethereum *eth.Ethereum) *Gui {
 	lib := &EthLib{blockManager: ethereum.BlockManager, blockChain: ethereum.BlockManager.BlockChain(), txPool: ethereum.TxPool}
+	db, err := ethdb.NewLDBDatabase("tx_database")
+	if err != nil {
+		panic(err)
+	}
 
 	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
 	keyRing := ethutil.NewValueFromBytes(data)
@@ -60,10 +68,12 @@ func New(ethereum *eth.Ethereum) *Gui {
 
 	ethereum.BlockManager.WatchAddr(addr)
 
-	return &Gui{eth: ethereum, lib: lib}
+	return &Gui{eth: ethereum, lib: lib, txDb: db, addr: addr}
 }
 
 func (ui *Gui) Start() {
+	defer ui.txDb.Close()
+
 	// Register ethereum functions
 	qml.RegisterTypes("Ethereum", 1, 0, []qml.TypeSpec{{
 		Init: func(p *Block, obj qml.Object) { p.Number = 0; p.Hash = "" },
@@ -91,17 +101,20 @@ func (ui *Gui) Start() {
 
 	// Register the ui as a block processor
 	ui.eth.BlockManager.SecondaryBlockProcessor = ui
-	ui.eth.TxPool.SecondaryProcessor = ui
+	//ui.eth.TxPool.SecondaryProcessor = ui
 
 	// Add the ui as a log system so we can log directly to the UGI
 	ethutil.Config.Log.AddLogSystem(ui)
 
 	// Loads previous blocks
 	go ui.setInitialBlockChain()
-	go ui.updatePeers()
+	go ui.readPreviousTransactions()
+	go ui.update()
 
 	ui.win.Show()
 	ui.win.Wait()
+
+	ui.eth.Stop()
 }
 
 func (ui *Gui) setInitialBlockChain() {
@@ -113,12 +126,72 @@ func (ui *Gui) setInitialBlockChain() {
 
 }
 
+func (ui *Gui) readPreviousTransactions() {
+	it := ui.txDb.Db().NewIterator(nil)
+	for it.Next() {
+		tx := ethchain.NewTransactionFromBytes(it.Value())
+
+		ui.win.Root().Call("addTx", NewTxFromTransaction(tx))
+	}
+	it.Release()
+}
+
 func (ui *Gui) ProcessBlock(block *ethchain.Block) {
 	ui.win.Root().Call("addBlock", NewBlockFromBlock(block))
 }
 
 func (ui *Gui) ProcessTransaction(tx *ethchain.Transaction) {
+	ui.txDb.Put(tx.Hash(), tx.RlpEncode())
+
 	ui.win.Root().Call("addTx", NewTxFromTransaction(tx))
+
+	// TODO replace with general subscribe model
+}
+
+// Simple go routine function that updates the list of peers in the GUI
+func (ui *Gui) update() {
+	txChan := make(chan ethchain.TxMsg)
+	ui.eth.TxPool.Subscribe(txChan)
+
+	account := ui.eth.BlockManager.GetAddrState(ui.addr).Account
+	ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", account.Amount))
+	for {
+		select {
+		case txMsg := <-txChan:
+			tx := txMsg.Tx
+			ui.txDb.Put(tx.Hash(), tx.RlpEncode())
+
+			ui.win.Root().Call("addTx", NewTxFromTransaction(tx))
+			// Yeah, yeah, stupid code. Refactor next week
+			if txMsg.Type == ethchain.TxPre {
+				if bytes.Compare(tx.Sender(), ui.addr) == 0 {
+					ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v (- %v)", account.Amount, tx.Value))
+					ui.eth.BlockManager.GetAddrState(ui.addr).Nonce += 1
+					fmt.Println("Nonce", ui.eth.BlockManager.GetAddrState(ui.addr).Nonce)
+				} else if bytes.Compare(tx.Recipient, ui.addr) == 0 {
+					ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v (+ %v)", account.Amount, tx.Value))
+				}
+			} else {
+				if bytes.Compare(tx.Sender(), ui.addr) == 0 {
+					amount := account.Amount.Sub(account.Amount, tx.Value)
+					ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", amount))
+				} else if bytes.Compare(tx.Recipient, ui.addr) == 0 {
+					amount := account.Amount.Sub(account.Amount, tx.Value)
+					ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", amount))
+				}
+			}
+		}
+
+		/*
+			accountAmount := ui.eth.BlockManager.GetAddrState(ui.addr).Account.Amount
+			ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", accountAmount))
+
+			ui.win.Root().Call("setPeers", fmt.Sprintf("%d / %d", ui.eth.Peers().Len(), ui.eth.MaxPeers))
+
+			time.Sleep(1 * time.Second)
+		*/
+
+	}
 }
 
 // Logging functions that log directly to the GUI interface
@@ -135,63 +208,5 @@ func (ui *Gui) Printf(format string, v ...interface{}) {
 	lines := strings.Split(str, "\n")
 	for _, line := range lines {
 		ui.win.Root().Call("addLog", line)
-	}
-}
-
-// Simple go routine function that updates the list of peers in the GUI
-func (ui *Gui) updatePeers() {
-	for {
-		ui.win.Root().Call("setPeers", fmt.Sprintf("%d / %d", ui.eth.Peers().Len(), ui.eth.MaxPeers))
-		time.Sleep(1 * time.Second)
-	}
-}
-
-// UI Library that has some basic functionality exposed
-type UiLib struct {
-	engine    *qml.Engine
-	eth       *eth.Ethereum
-	connected bool
-}
-
-// Opens a QML file (external application)
-func (ui *UiLib) Open(path string) {
-	component, err := ui.engine.LoadFile(path[7:])
-	if err != nil {
-		ethutil.Config.Log.Debugln(err)
-	}
-	win := component.CreateWindow(nil)
-
-	go func() {
-		win.Show()
-		win.Wait()
-	}()
-}
-
-func (ui *UiLib) Connect() {
-	if !ui.connected {
-		ui.eth.Start()
-	}
-}
-
-func (ui *UiLib) ConnectToPeer(addr string) {
-	ui.eth.ConnectToPeer(addr)
-}
-
-type Tester struct {
-	root qml.Object
-}
-
-func (t *Tester) Compile(area qml.Object) {
-	fmt.Println(area)
-	ethutil.Config.Log.Infoln("[TESTER] Compiling")
-
-	code := area.String("text")
-
-	scanner := bufio.NewScanner(strings.NewReader(code))
-	scanner.Split(bufio.ScanLines)
-
-	var lines []string
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
 	}
 }
