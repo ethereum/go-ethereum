@@ -439,7 +439,7 @@ func (it *TrieIterator) workNode(currentNode *Value) {
 	if currentNode.Len() == 2 {
 		k := CompactDecode(currentNode.Get(0).Str())
 
-		if currentNode.Get(1).IsSlice() {
+		if currentNode.Get(1).Str() == "" {
 			it.workNode(currentNode.Get(1))
 		} else {
 			if k[len(k)-1] == 16 {
@@ -454,7 +454,7 @@ func (it *TrieIterator) workNode(currentNode *Value) {
 			if i == 16 && currentNode.Get(i).Len() != 0 {
 				it.values = append(it.values, currentNode.Get(i).Str())
 			} else {
-				if currentNode.Get(i).IsSlice() {
+				if currentNode.Get(i).Str() == "" {
 					it.workNode(currentNode.Get(i))
 				} else {
 					val := currentNode.Get(i).Str()

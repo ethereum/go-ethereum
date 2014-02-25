@@ -1,7 +1,6 @@
 package ethutil
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 )
@@ -160,15 +159,13 @@ func TestTrieIterator(t *testing.T) {
 	trie.Update("ca", LONG_WORD)
 	trie.Update("cat", LONG_WORD)
 
+	lenBefore := len(trie.cache.nodes)
 	it := trie.NewIterator()
-	fmt.Println("purging")
-	fmt.Println("len =", it.Purge())
-	/*
-		for it.Next() {
-			k := it.Key()
-			v := it.Value()
+	if num := it.Purge(); num != 3 {
+		t.Errorf("Expected purge to return 3, got %d", num)
+	}
 
-			fmt.Println(k, v)
-		}
-	*/
+	if lenBefore == len(trie.cache.nodes) {
+		t.Errorf("Expected cached nodes to be deleted")
+	}
 }
