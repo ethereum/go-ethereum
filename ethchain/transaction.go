@@ -29,7 +29,12 @@ func NewTransaction(to []byte, value *big.Int, data []string) *Transaction {
 	return &tx
 }
 
+// XXX Deprecated
 func NewTransactionFromData(data []byte) *Transaction {
+	return NewTransactionFromBytes(data)
+}
+
+func NewTransactionFromBytes(data []byte) *Transaction {
 	tx := &Transaction{}
 	tx.RlpDecode(data)
 
