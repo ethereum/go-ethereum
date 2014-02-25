@@ -222,6 +222,10 @@ ApplicationWindow {
 			}
 
 			Label {
+				id: walletValueLabel
+			}
+
+			Label {
 				anchors.right: peerImage.left
 				anchors.rightMargin: 5
 				id: peerLabel
@@ -270,7 +274,7 @@ ApplicationWindow {
 			text: "Add"
 			onClicked: {
 				ui.connectToPeer(addrField.text)
-				addrPeerWin.visible = false
+				addPeerWin.visible = false
 			}
 		}
 	}
@@ -289,6 +293,10 @@ ApplicationWindow {
 			text: "Eth Go"
 		}
 
+	}
+
+	function setWalletValue(value) {
+		walletValueLabel.text = value
 	}
 
 	function addTx(tx) {

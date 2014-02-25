@@ -40,6 +40,8 @@ func (lib *EthLib) CreateTx(receiver, a, data string) string {
 
 	if len(receiver) == 0 {
 		ethutil.Config.Log.Infof("Contract addr %x", tx.Hash()[12:])
+	} else {
+		ethutil.Config.Log.Infof("Tx hash %x", tx.Hash())
 	}
 
 	return ethutil.Hex(tx.Hash())
