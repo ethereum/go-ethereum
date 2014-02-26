@@ -60,7 +60,7 @@ func (db *LDBDatabase) Close() {
 }
 
 func (db *LDBDatabase) Print() {
-	iter := db.db.NewIterator(nil)
+	iter := db.db.NewIterator(nil,nil)
 	for iter.Next() {
 		key := iter.Key()
 		value := iter.Value()
