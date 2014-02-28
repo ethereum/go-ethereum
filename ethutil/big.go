@@ -41,3 +41,12 @@ func BigToBytes(num *big.Int, base int) []byte {
 
 	return append(ret[:len(ret)-len(num.Bytes())], num.Bytes()...)
 }
+
+// Functions like the build in "copy" function
+// but works on big integers
+func BigCopy(src *big.Int) (ret *big.Int) {
+	ret = new(big.Int)
+	ret.Add(ret, src)
+
+	return
+}

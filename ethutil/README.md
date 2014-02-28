@@ -53,6 +53,8 @@ trie.Put("doge", "coin")
 // Look up the key "do" in the trie
 out := trie.Get("do")
 fmt.Println(out) // => verb
+
+trie.Delete("puppy")
 ```
 
 The patricia trie, in combination with RLP, provides a robust,
@@ -82,7 +84,7 @@ type (e.g. `Slice()` returns []interface{}, `Uint()` return 0, etc).
 `NewEmptyValue()` returns a new \*Value with it's initial value set to a
 `[]interface{}`
 
-`AppendLint()` appends a list to the current value.
+`AppendList()` appends a list to the current value.
 
 `Append(v)` appends the value (v) to the current value/list.
 
