@@ -321,14 +321,27 @@ ApplicationWindow {
 		id: aboutWin
 		visible: false
 		title: "About"
-		minimumWidth: 300
-		maximumWidth: 300
+		minimumWidth: 350
+		maximumWidth: 350
 		maximumHeight: 200
 		minimumHeight: 200
 
+		Image {
+			id: aboutIcon
+			height: 150
+			width: 150
+			fillMode: Image.PreserveAspectFit
+			smooth: true
+			source: "facet.png"
+			x: 10
+			y: 10
+		}
+
 		Text {
-			font.pointSize: 18
-			text: "Eth Go"
+			anchors.left: aboutIcon.right
+			anchors.leftMargin: 10
+			font.pointSize: 12
+			text: "<h2>Ethereum(Go)</h2><br><h3>Development</h3>Jeffrey Wilcke<br><h3>Binary Distribution</h3>Jarrad Hope<br>"
 		}
 
 	}
