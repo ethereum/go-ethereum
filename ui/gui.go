@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/niemeyer/qml"
+	"math/big"
 	"strings"
 )
 
@@ -62,9 +63,8 @@ func New(ethereum *eth.Ethereum) *Gui {
 		panic(err)
 	}
 
-	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-	keyRing := ethutil.NewValueFromBytes(data)
-	addr := keyRing.Get(1).Bytes()
+	key := ethutil.Config.Db.GetKeys()[0]
+	addr := key.Address()
 
 	ethereum.BlockManager.WatchAddr(addr)
 
@@ -127,7 +127,7 @@ func (ui *Gui) setInitialBlockChain() {
 }
 
 func (ui *Gui) readPreviousTransactions() {
-	it := ui.txDb.Db().NewIterator(nil)
+	it := ui.txDb.Db().NewIterator(nil, nil)
 	for it.Next() {
 		tx := ethchain.NewTransactionFromBytes(it.Value())
 
@@ -140,45 +140,50 @@ func (ui *Gui) ProcessBlock(block *ethchain.Block) {
 	ui.win.Root().Call("addBlock", NewBlockFromBlock(block))
 }
 
-func (ui *Gui) ProcessTransaction(tx *ethchain.Transaction) {
-	ui.txDb.Put(tx.Hash(), tx.RlpEncode())
-
-	ui.win.Root().Call("addTx", NewTxFromTransaction(tx))
-
-	// TODO replace with general subscribe model
-}
-
 // Simple go routine function that updates the list of peers in the GUI
 func (ui *Gui) update() {
-	txChan := make(chan ethchain.TxMsg)
+	txChan := make(chan ethchain.TxMsg, 1)
 	ui.eth.TxPool.Subscribe(txChan)
 
 	account := ui.eth.BlockManager.GetAddrState(ui.addr).Account
+	unconfirmedFunds := new(big.Int)
 	ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(account.Amount)))
 	for {
 		select {
 		case txMsg := <-txChan:
 			tx := txMsg.Tx
-			ui.txDb.Put(tx.Hash(), tx.RlpEncode())
 
-			ui.win.Root().Call("addTx", NewTxFromTransaction(tx))
-			// TODO FOR THE LOVE OF EVERYTHING GOOD IN THIS WORLD REFACTOR ME
 			if txMsg.Type == ethchain.TxPre {
 				if bytes.Compare(tx.Sender(), ui.addr) == 0 {
-					ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v (- %v)", ethutil.CurrencyToString(account.Amount), ethutil.CurrencyToString(tx.Value)))
+					ui.win.Root().Call("addTx", NewTxFromTransaction(tx))
+					ui.txDb.Put(tx.Hash(), tx.RlpEncode())
+
 					ui.eth.BlockManager.GetAddrState(ui.addr).Nonce += 1
-					fmt.Println("Nonce", ui.eth.BlockManager.GetAddrState(ui.addr).Nonce)
+					unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
 				} else if bytes.Compare(tx.Recipient, ui.addr) == 0 {
-					ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v (+ %v)", ethutil.CurrencyToString(account.Amount), ethutil.CurrencyToString(tx.Value)))
+					ui.win.Root().Call("addTx", NewTxFromTransaction(tx))
+					ui.txDb.Put(tx.Hash(), tx.RlpEncode())
+
+					unconfirmedFunds.Add(unconfirmedFunds, tx.Value)
 				}
+
+				pos := "+"
+				if unconfirmedFunds.Cmp(big.NewInt(0)) >= 0 {
+					pos = "-"
+				}
+				val := ethutil.CurrencyToString(new(big.Int).Abs(ethutil.BigCopy(unconfirmedFunds)))
+				str := fmt.Sprintf("%v (%s %v)", ethutil.CurrencyToString(account.Amount), pos, val)
+
+				ui.win.Root().Call("setWalletValue", str)
 			} else {
+				amount := account.Amount
 				if bytes.Compare(tx.Sender(), ui.addr) == 0 {
-					amount := account.Amount.Sub(account.Amount, tx.Value)
-					ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(amount)))
+					amount.Sub(account.Amount, tx.Value)
 				} else if bytes.Compare(tx.Recipient, ui.addr) == 0 {
-					amount := account.Amount.Sub(account.Amount, tx.Value)
-					ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(amount)))
+					amount.Add(account.Amount, tx.Value)
 				}
+
+				ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(amount)))
 			}
 		}
 

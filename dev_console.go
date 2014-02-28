@@ -179,13 +179,13 @@ func (i *Console) ParseInput(input string) bool {
 				fmt.Println("recipient err:", err)
 			} else {
 				tx := ethchain.NewTransaction(recipient, ethutil.Big(tokens[2]), []string{""})
-				data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-				keyRing := ethutil.NewValueFromBytes(data)
-				tx.Sign(keyRing.Get(0).Bytes())
-				fmt.Printf("%x\n", tx.Hash())
-				i.ethereum.TxPool.QueueTransaction(tx)
-			}
 
+				key := ethutil.Config.Db.GetKeys()[0]
+				tx.Sign(key.PrivateKey)
+				i.ethereum.TxPool.QueueTransaction(tx)
+
+				fmt.Printf("%x\n", tx.Hash())
+			}
 		case "gettx":
 			addr, _ := hex.DecodeString(tokens[1])
 			data, _ := ethutil.Config.Db.Get(addr)
@@ -200,9 +200,9 @@ func (i *Console) ParseInput(input string) bool {
 			code := ethchain.Compile(i.Editor())
 
 			contract := ethchain.NewTransaction(ethchain.ContractAddr, ethutil.Big(tokens[1]), code)
-			data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-			keyRing := ethutil.NewValueFromBytes(data)
-			contract.Sign(keyRing.Get(0).Bytes())
+
+			key := ethutil.Config.Db.GetKeys()[0]
+			contract.Sign(key.PrivateKey)
 
 			i.ethereum.TxPool.QueueTransaction(contract)
 

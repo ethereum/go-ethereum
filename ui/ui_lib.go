@@ -27,9 +27,11 @@ func (ui *UiLib) Open(path string) {
 	}()
 }
 
-func (ui *UiLib) Connect() {
+func (ui *UiLib) Connect(button qml.Object) {
 	if !ui.connected {
 		ui.eth.Start()
+		ui.connected = true
+		button.Set("enabled", false)
 	}
 }
 
