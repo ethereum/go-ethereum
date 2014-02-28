@@ -13,8 +13,7 @@ For the development Go Package please see [eth-go package](https://github.com/et
 Build
 =======
 
-For build instruction please see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Edge)
-
+For build instruction please see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum(Go)
 Command line options
 ====================
 
