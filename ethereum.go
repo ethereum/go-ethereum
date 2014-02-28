@@ -36,7 +36,8 @@ func CreateKeyPair(force bool) {
 	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
 	if len(data) == 0 || force {
 		pub, prv := secp256k1.GenerateKeyPair()
-		addr := ethutil.Sha3Bin(pub[1:])[12:]
+		pair := &ethutil.Key{PrivateKey: prv, PublicKey: pub}
+		ethutil.Config.Db.Put([]byte("KeyRing"), pair.RlpEncode())
 
 		fmt.Printf(`
 Generating new address and keypair.
@@ -48,10 +49,8 @@ prvk: %x
 pubk: %x
 ++++++++++++++++++++++++++++++++++++++++++++
 
-`, addr, prv, pub)
+`, pair.Address(), prv, pub)
 
-		keyRing := ethutil.NewValue([]interface{}{prv, addr, pub[1:]})
-		ethutil.Config.Db.Put([]byte("KeyRing"), keyRing.Encode())
 	}
 }
 
@@ -61,7 +60,8 @@ func ImportPrivateKey(prvKey string) {
 	// Couldn't think of a better way to get the pub key
 	sig, _ := secp256k1.Sign(msg, key)
 	pub, _ := secp256k1.RecoverPubkey(msg, sig)
-	addr := ethutil.Sha3Bin(pub[1:])[12:]
+	pair := &ethutil.Key{PrivateKey: key, PublicKey: pub}
+	ethutil.Config.Db.Put([]byte("KeyRing"), pair.RlpEncode())
 
 	fmt.Printf(`
 Importing private key
@@ -72,10 +72,7 @@ prvk: %x
 pubk: %x
 ++++++++++++++++++++++++++++++++++++++++++++
 
-`, addr, key, pub)
-
-	keyRing := ethutil.NewValue([]interface{}{key, addr, pub[1:]})
-	ethutil.Config.Db.Put([]byte("KeyRing"), keyRing.Encode())
+`, pair.Address(), key, pub)
 }
 
 func main() {
@@ -95,11 +92,11 @@ func main() {
 
 	// Instantiated a eth stack
 	ethereum, err := eth.New(eth.CapDefault, UseUPnP)
-	ethereum.Port = OutboundPort
 	if err != nil {
 		log.Println("eth start err:", err)
 		return
 	}
+	ethereum.Port = OutboundPort
 
 	if GenAddr {
 		fmt.Println("This action overwrites your old private key. Are you sure? (y/n)")
@@ -133,6 +130,7 @@ func main() {
 
 			if r == "y" {
 				ImportPrivateKey(ImportKey)
+				os.Exit(0)
 			}
 		} else {
 			CreateKeyPair(false)
@@ -140,9 +138,8 @@ func main() {
 	}
 
 	if ExportKey {
-		data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-		keyRing := ethutil.NewValueFromBytes(data)
-		fmt.Printf("%x\n", keyRing.Get(0).Bytes())
+		key := ethutil.Config.Db.GetKeys()[0]
+		fmt.Printf("%x\n", key.PrivateKey)
 		os.Exit(0)
 	}
 
