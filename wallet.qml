@@ -15,35 +15,6 @@ ApplicationWindow {
 
 	title: "Ethereal"
 
-	toolBar: ToolBar {
-		id: mainToolbar
-
-		RowLayout {
-			width: parent.width
-			Button {
-			      text: "Send"
-			      onClicked: {
-				      console.log(eth.createTx(txReceiver.text, txAmount.text, codeView.text))
-			      }
-			}
-
-			TextField {
-			      id: txAmount
-			      width: 200
-			      placeholderText: "Amount"
-			}
-
-			TextField {
-			      id: txReceiver
-			      width: 300
-			      placeholderText: "Receiver Address (or empty for contract)"
-			      Layout.fillWidth: true
-			}
-
-		}
-	}
-
-
 	MenuBar {
 		Menu {
 			title: "File"
@@ -86,35 +57,61 @@ ApplicationWindow {
 	property var blockModel: ListModel {
 		id: blockModel
 	}
-		function setView(view) {
-			mainView.visible = false
-			transactionView.visible = false
-			view.visible = true
-		}
+
+	function setView(view) {
+		networkView.visible = false
+		historyView.visible = false
+		newTxView.visible = false
+		view.visible = true
+		//root.title = "Ethereal - " = view.title
+	}
 
 	SplitView {
 		anchors.fill: parent
-
+		resizing: false
 
 		Rectangle {
 			id: menu
-			width: 200
+			Layout.minimumWidth: 80
+			Layout.maximumWidth: 80
 			anchors.bottom: parent.bottom
 			anchors.top: parent.top
-			color: "#D9DDE7"
+			//color: "#D9DDE7"
+			color: "#252525"
 
-			GridLayout {
-				columns: 1
-				Button {
-					text: "Main"
-					onClicked: {
-						setView(mainView)
+			ColumnLayout {
+				y: 50
+				anchors.left: parent.left
+				anchors.right: parent.right
+				height: 200
+				Image {
+					source: "tx.png"
+					anchors.horizontalCenter: parent.horizontalCenter
+					MouseArea {
+						anchors.fill: parent
+						onClicked: {
+							setView(historyView)
+						}
 					}
 				}
-				Button {
-					text: "Transactions"
-					onClicked: {
-						setView(transactionView)
+				Image {
+					source: "new.png"
+					anchors.horizontalCenter: parent.horizontalCenter
+					MouseArea {
+						anchors.fill: parent
+						onClicked: {
+							setView(newTxView)
+						}
+					}
+				}
+				Image {
+					source: "net.png"
+					anchors.horizontalCenter: parent.horizontalCenter
+					MouseArea {
+						anchors.fill: parent
+						onClicked: {
+							setView(networkView)
+						}
 					}
 				}
 			}
@@ -126,8 +123,8 @@ ApplicationWindow {
 		}
 
 		Rectangle {
-			id: transactionView
-			visible: false
+			id: historyView
+			property var title: "Transactions"
 			anchors.right: parent.right
 			anchors.left: menu.right
 			anchors.bottom: parent.bottom
@@ -135,40 +132,73 @@ ApplicationWindow {
 			TableView {
 				id: txTableView
 				anchors.fill: parent
-				TableViewColumn{ role: "hash" ; title: "#" ; width: 150 }
 				TableViewColumn{ role: "value" ; title: "Value" ; width: 100 }
-				TableViewColumn{ role: "address" ; title: "Address" ; }
+				TableViewColumn{ role: "address" ; title: "Address" ; width: 430 }
 
 				model: txModel
 			}
 		}
 
 		Rectangle {
-			id: mainView
+			id: newTxView
+			property var title: "New transaction"
+			visible: false
 			anchors.right: parent.right
+			anchors.left: menu.right
 			anchors.bottom: parent.bottom
 			anchors.top: parent.top
-			SplitView {
-				id: splitView
-				height: 200
-				anchors.top: parent.top
-				anchors.right: parent.right
-				anchors.left: parent.left
+			color: "#00000000"
 
+			ColumnLayout {
+				width: 400
+				anchors.left: parent.left
+				anchors.top: parent.top
+				anchors.leftMargin: 5
+				anchors.topMargin: 5
+				TextField {
+					id: txAmount
+					width: 200
+					placeholderText: "Amount"
+				}
+
+				TextField {
+					id: txReceiver
+					placeholderText: "Receiver Address (or empty for contract)"
+					Layout.fillWidth: true
+				}
+
+				Label {
+					text: "Transaction data"
+				}
 				TextArea {
 					id: codeView
+					anchors.topMargin: 5
+					Layout.fillWidth: true
 					width: parent.width /2 
 				}
 
-				TextArea {
-					readOnly: true
+				Button {
+					text: "Send"
+					onClicked: {
+						console.log(eth.createTx(txReceiver.text, txAmount.text, codeView.text))
+					}
 				}
 			}
+		}
+
+
+		Rectangle {
+			id: networkView
+			property var title: "Network"
+			visible: false
+			anchors.right: parent.right
+			anchors.bottom: parent.bottom
+			anchors.top: parent.top
 
 			TableView {
 				id: blockTable
 				width: parent.width
-				anchors.top: splitView.bottom
+				anchors.top: parent.top
 				anchors.bottom: logView.top
 				TableViewColumn{ role: "number" ; title: "#" ; width: 100 }
 				TableViewColumn{ role: "hash" ; title: "Hash" ; width: 560 }
@@ -210,8 +240,13 @@ ApplicationWindow {
 		RowLayout {
 			anchors.fill: parent
 			Button {
+				property var enabled: true
 				id: connectButton
-				onClicked: ui.connect()
+				onClicked: {
+					if(this.enabled) {
+						ui.connect(this)
+					}
+				}
 				text: "Connect"
 			}
 			Button {
