@@ -47,6 +47,7 @@ type Ethereum struct {
 	Nonce uint64
 
 	Addr net.Addr
+	Port string
 
 	peerMut sync.Mutex
 
@@ -60,7 +61,7 @@ type Ethereum struct {
 }
 
 func New(caps Caps, usePnp bool) (*Ethereum, error) {
-	db, err := ethdb.NewLDBDatabase()
+	db, err := ethdb.NewLDBDatabase("database")
 	//db, err := ethdb.NewMemDatabase()
 	if err != nil {
 		return nil, err
@@ -70,7 +71,7 @@ func New(caps Caps, usePnp bool) (*Ethereum, error) {
 	if usePnp {
 		nat, err = Discover()
 		if err != nil {
-			log.Println("UPnP failed", err)
+			ethutil.Config.Log.Debugln("UPnP failed", err)
 		}
 	}
 
@@ -85,7 +86,6 @@ func New(caps Caps, usePnp bool) (*Ethereum, error) {
 		Nonce:        nonce,
 		serverCaps:   caps,
 		nat:          nat,
-		MaxPeers:     5,
 	}
 	ethereum.TxPool = ethchain.NewTxPool()
 	ethereum.TxPool.Speaker = ethereum
@@ -93,6 +93,9 @@ func New(caps Caps, usePnp bool) (*Ethereum, error) {
 
 	ethereum.TxPool.BlockManager = ethereum.BlockManager
 	ethereum.BlockManager.TransactionPool = ethereum.TxPool
+
+	// Start the tx pool
+	ethereum.TxPool.Start()
 
 	return ethereum, nil
 }
@@ -114,28 +117,32 @@ func (s *Ethereum) ProcessPeerList(addrs []string) {
 }
 
 func (s *Ethereum) ConnectToPeer(addr string) error {
-	var alreadyConnected bool
+	if s.peers.Len() < s.MaxPeers {
+		var alreadyConnected bool
 
-	eachPeer(s.peers, func(p *Peer, v *list.Element) {
-		if p.conn == nil {
-			return
+		eachPeer(s.peers, func(p *Peer, v *list.Element) {
+			if p.conn == nil {
+				return
+			}
+			phost, _, _ := net.SplitHostPort(p.conn.RemoteAddr().String())
+			ahost, _, _ := net.SplitHostPort(addr)
+
+			if phost == ahost {
+				alreadyConnected = true
+				return
+			}
+		})
+
+		if alreadyConnected {
+			return nil
 		}
-		phost, _, _ := net.SplitHostPort(p.conn.RemoteAddr().String())
-		ahost, _, _ := net.SplitHostPort(addr)
 
-		if phost == ahost {
-			alreadyConnected = true
-			return
-		}
-	})
+		peer := NewOutboundPeer(addr, s, s.serverCaps)
 
-	if alreadyConnected {
-		return nil
+		s.peers.PushBack(peer)
+
+		log.Printf("[SERV] Adding peer %d / %d\n", s.peers.Len(), s.MaxPeers)
 	}
-
-	peer := NewOutboundPeer(addr, s, s.serverCaps)
-
-	s.peers.PushBack(peer)
 
 	return nil
 }
@@ -226,12 +233,12 @@ func (s *Ethereum) ReapDeadPeerHandler() {
 // Start the ethereum
 func (s *Ethereum) Start() {
 	// Bind to addr and port
-	ln, err := net.Listen("tcp", ":30303")
+	ln, err := net.Listen("tcp", ":"+s.Port)
 	if err != nil {
 		log.Println("Connection listening disabled. Acting as client")
 	} else {
 		// Starting accepting connections
-		log.Println("Ready and accepting connections")
+		ethutil.Config.Log.Infoln("Ready and accepting connections")
 		// Start the peer handler
 		go s.peerHandler(ln)
 	}
@@ -243,13 +250,10 @@ func (s *Ethereum) Start() {
 	// Start the reaping processes
 	go s.ReapDeadPeerHandler()
 
-	// Start the tx pool
-	s.TxPool.Start()
-
 	if ethutil.Config.Seed {
-		log.Println("Seeding")
+		ethutil.Config.Log.Debugln("Seeding")
 		// Testnet seed bootstrapping
-		resp, err := http.Get("http://www.ethereum.org/servers.poc2.txt")
+		resp, err := http.Get("http://www.ethereum.org/servers.poc3.txt")
 		if err != nil {
 			log.Println("Fetching seed failed:", err)
 			return
@@ -269,7 +273,7 @@ func (s *Ethereum) peerHandler(listener net.Listener) {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Println(err)
+			ethutil.Config.Log.Debugln(err)
 
 			continue
 		}
@@ -303,7 +307,7 @@ func (s *Ethereum) upnpUpdateThread() {
 	// Go off immediately to prevent code duplication, thereafter we renew
 	// lease every 15 minutes.
 	timer := time.NewTimer(0 * time.Second)
-	lport, _ := strconv.ParseInt("30303", 10, 16)
+	lport, _ := strconv.ParseInt(s.Port, 10, 16)
 	first := true
 out:
 	for {
@@ -312,13 +316,13 @@ out:
 			var err error
 			_, err = s.nat.AddPortMapping("TCP", int(lport), int(lport), "eth listen port", 20*60)
 			if err != nil {
-				log.Println("can't add UPnP port mapping:", err)
+				ethutil.Config.Log.Debugln("can't add UPnP port mapping:", err)
 				break out
 			}
 			if first && err == nil {
 				_, err = s.nat.GetExternalAddress()
 				if err != nil {
-					log.Println("UPnP can't get external address:", err)
+					ethutil.Config.Log.Debugln("UPnP can't get external address:", err)
 					continue out
 				}
 				first = false
@@ -332,8 +336,8 @@ out:
 	timer.Stop()
 
 	if err := s.nat.DeletePortMapping("TCP", int(lport), int(lport)); err != nil {
-		log.Println("unable to remove UPnP port mapping:", err)
+		ethutil.Config.Log.Debugln("unable to remove UPnP port mapping:", err)
 	} else {
-		log.Println("succesfully disestablished UPnP port mapping")
+		ethutil.Config.Log.Debugln("succesfully disestablished UPnP port mapping")
 	}
 }

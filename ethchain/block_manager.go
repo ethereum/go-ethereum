@@ -5,11 +5,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/obscuren/secp256k1-go"
+	_ "github.com/ethereum/eth-go/ethwire"
 	"log"
-	"math"
 	"math/big"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -18,16 +16,17 @@ type BlockProcessor interface {
 	ProcessBlock(block *Block)
 }
 
-func CalculateBlockReward(block *Block, uncleLength int) *big.Int {
-	return BlockReward
-}
-
+// TODO rename to state manager
 type BlockManager struct {
 	// Mutex for locking the block processor. Blocks can only be handled one at a time
 	mutex sync.Mutex
 
 	// The block chain :)
 	bc *BlockChain
+
+	// States for addresses. You can watch any address
+	// at any given time
+	addrStateStore *AddrStateStore
 
 	// Stack for processing contracts
 	stack *Stack
@@ -46,9 +45,9 @@ type BlockManager struct {
 func AddTestNetFunds(block *Block) {
 	for _, addr := range []string{
 		"8a40bfaa73256b60764c1bf40675a99083efb075", // Gavin
-		"93658b04240e4bd4046fd2d6d417d20f146f4b43", // Jeffrey
+		"e6716f9544a56c530d868e4bfbacb172315bdead", // Jeffrey
 		"1e12515ce3e0f817a4ddef9ca55788a1d66bd2df", // Vit
-		"80c01a26338f0d905e295fccb71fa9ea849ffa12", // Alex
+		"1a26338f0d905e295fccb71fa9ea849ffa12aaf4", // Alex
 	} {
 		//log.Println("2^200 Wei to", addr)
 		codedAddr, _ := hex.DecodeString(addr)
@@ -61,24 +60,45 @@ func AddTestNetFunds(block *Block) {
 func NewBlockManager(speaker PublicSpeaker) *BlockManager {
 	bm := &BlockManager{
 		//server: s,
-		bc:      NewBlockChain(),
-		stack:   NewStack(),
-		mem:     make(map[string]*big.Int),
-		Pow:     &EasyPow{},
-		Speaker: speaker,
+		bc:             NewBlockChain(),
+		stack:          NewStack(),
+		mem:            make(map[string]*big.Int),
+		Pow:            &EasyPow{},
+		Speaker:        speaker,
+		addrStateStore: NewAddrStateStore(),
 	}
 
 	if bm.bc.CurrentBlock == nil {
 		AddTestNetFunds(bm.bc.genesisBlock)
+
+		bm.bc.genesisBlock.State().Sync()
 		// Prepare the genesis block
 		bm.bc.Add(bm.bc.genesisBlock)
 
-		log.Printf("Genesis: %x\n", bm.bc.genesisBlock.Hash())
 		//log.Printf("root %x\n", bm.bc.genesisBlock.State().Root)
 		//bm.bc.genesisBlock.PrintHash()
 	}
 
+	log.Printf("Last block: %x\n", bm.bc.CurrentBlock.Hash())
+
 	return bm
+}
+
+// Watches any given address and puts it in the address state store
+func (bm *BlockManager) WatchAddr(addr []byte) *AddressState {
+	account := bm.bc.CurrentBlock.GetAddr(addr)
+
+	return bm.addrStateStore.Add(addr, account)
+}
+
+func (bm *BlockManager) GetAddrState(addr []byte) *AddressState {
+	account := bm.addrStateStore.Get(addr)
+	if account == nil {
+		a := bm.bc.CurrentBlock.GetAddr(addr)
+		account = &AddressState{Nonce: a.Nonce, Account: a}
+	}
+
+	return account
 }
 
 func (bm *BlockManager) BlockChain() *BlockChain {
@@ -91,9 +111,15 @@ func (bm *BlockManager) ApplyTransactions(block *Block, txs []*Transaction) {
 		// If there's no recipient, it's a contract
 		if tx.IsContract() {
 			block.MakeContract(tx)
-			bm.ProcessContract(tx, block)
 		} else {
-			bm.TransactionPool.ProcessTransaction(tx, block)
+			if contract := block.GetContract(tx.Recipient); contract != nil {
+				bm.ProcessContract(contract, tx, block)
+			} else {
+				err := bm.TransactionPool.ProcessTransaction(tx, block)
+				if err != nil {
+					ethutil.Config.Log.Infoln("[BMGR]", err)
+				}
+			}
 		}
 	}
 }
@@ -103,18 +129,17 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 	// Processing a blocks may never happen simultaneously
 	bm.mutex.Lock()
 	defer bm.mutex.Unlock()
+	// Defer the Undo on the Trie. If the block processing happened
+	// we don't want to undo but since undo only happens on dirty
+	// nodes this won't happen because Commit would have been called
+	// before that.
+	defer bm.bc.CurrentBlock.Undo()
 
 	hash := block.Hash()
 
 	if bm.bc.HasBlock(hash) {
 		return nil
 	}
-
-	/*
-		if ethutil.Config.Debug {
-			log.Printf("[BMGR] Processing block(%x)\n", hash)
-		}
-	*/
 
 	// Check if we have the parent hash, if it isn't known we discard it
 	// Reasons might be catching up or simply an invalid block
@@ -137,37 +162,19 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 	}
 
 	if !block.State().Cmp(bm.bc.CurrentBlock.State()) {
-		//if block.State().Root != state.Root {
 		return fmt.Errorf("Invalid merkle root. Expected %x, got %x", block.State().Root, bm.bc.CurrentBlock.State().Root)
 	}
 
 	// Calculate the new total difficulty and sync back to the db
 	if bm.CalculateTD(block) {
-		// Sync the current block's state to the database
-		bm.bc.CurrentBlock.State().Sync()
-		// Add the block to the chain
-		bm.bc.Add(block)
-
-		/*
-			ethutil.Config.Db.Put(block.Hash(), block.RlpEncode())
-			bm.bc.CurrentBlock = block
-			bm.LastBlockHash = block.Hash()
-			bm.writeBlockInfo(block)
-		*/
-
-		/*
-			txs := bm.TransactionPool.Flush()
-			var coded = []interface{}{}
-			for _, tx := range txs {
-				err := bm.TransactionPool.ValidateTransaction(tx)
-				if err == nil {
-					coded = append(coded, tx.RlpEncode())
-				}
-			}
-		*/
+		// Sync the current block's state to the database and cancelling out the deferred Undo
+		bm.bc.CurrentBlock.Sync()
 
 		// Broadcast the valid block back to the wire
-		//bm.Speaker.Broadcast(ethwire.MsgBlockTy, []interface{}{block.RlpValue().Value})
+		//bm.Speaker.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
+
+		// Add the block to the chain
+		bm.bc.Add(block)
 
 		// If there's a block processor present, pass in the block for further
 		// processing
@@ -175,7 +182,7 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 			bm.SecondaryBlockProcessor.ProcessBlock(block)
 		}
 
-		log.Printf("[BMGR] Added block #%d (%x)\n", block.BlockInfo().Number, block.Hash())
+		ethutil.Config.Log.Infof("[BMGR] Added block #%d (%x)\n", block.BlockInfo().Number, block.Hash())
 	} else {
 		fmt.Println("total diff failed")
 	}
@@ -246,6 +253,18 @@ func (bm *BlockManager) ValidateBlock(block *Block) error {
 	return nil
 }
 
+func CalculateBlockReward(block *Block, uncleLength int) *big.Int {
+	base := new(big.Int)
+	for i := 0; i < uncleLength; i++ {
+		base.Add(base, UncleInclusionReward)
+	}
+	return base.Add(base, BlockReward)
+}
+
+func CalculateUncleReward(block *Block) *big.Int {
+	return UncleReward
+}
+
 func (bm *BlockManager) AccumelateRewards(processor *Block, block *Block) error {
 	// Get the coinbase rlp data
 	addr := processor.GetAddr(block.Coinbase)
@@ -254,7 +273,12 @@ func (bm *BlockManager) AccumelateRewards(processor *Block, block *Block) error 
 
 	processor.UpdateAddr(block.Coinbase, addr)
 
-	// TODO Reward each uncle
+	for _, uncle := range block.Uncles {
+		uncleAddr := processor.GetAddr(uncle.Coinbase)
+		uncleAddr.AddFee(CalculateUncleReward(uncle))
+
+		processor.UpdateAddr(uncle.Coinbase, uncleAddr)
+	}
 
 	return nil
 }
@@ -263,363 +287,26 @@ func (bm *BlockManager) Stop() {
 	bm.bc.Stop()
 }
 
-func (bm *BlockManager) ProcessContract(tx *Transaction, block *Block) {
+func (bm *BlockManager) ProcessContract(contract *Contract, tx *Transaction, block *Block) {
 	// Recovering function in case the VM had any errors
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("Recovered from VM execution with err =", r)
-		}
-	}()
+	/*
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Println("Recovered from VM execution with err =", r)
+			}
+		}()
+	*/
 
-	// Process contract
-	bm.ProcContract(tx, block, func(opType OpType) bool {
-		// TODO turn on once big ints are in place
-		//if !block.PayFee(tx.Hash(), StepFee.Uint64()) {
-		//  return false
-		//}
-
-		return true // Continue
+	vm := &Vm{}
+	vm.Process(contract, NewState(block.state), RuntimeVars{
+		address:     tx.Hash()[12:],
+		blockNumber: block.BlockInfo().Number,
+		sender:      tx.Sender(),
+		prevHash:    block.PrevHash,
+		coinbase:    block.Coinbase,
+		time:        block.Time,
+		diff:        block.Difficulty,
+		txValue:     tx.Value,
+		txData:      tx.Data,
 	})
-}
-
-// Contract evaluation is done here.
-func (bm *BlockManager) ProcContract(tx *Transaction, block *Block, cb TxCallback) {
-
-	// Instruction pointer
-	pc := 0
-	blockInfo := bm.bc.BlockInfo(block)
-
-	contract := block.GetContract(tx.Hash())
-	if contract == nil {
-		fmt.Println("Contract not found")
-		return
-	}
-
-	Pow256 := ethutil.BigPow(2, 256)
-
-	if ethutil.Config.Debug {
-		fmt.Printf("#   op   arg\n")
-	}
-out:
-	for {
-		// The base big int for all calculations. Use this for any results.
-		base := new(big.Int)
-		// XXX Should Instr return big int slice instead of string slice?
-		// Get the next instruction from the contract
-		//op, _, _ := Instr(contract.state.Get(string(Encode(uint32(pc)))))
-		nb := ethutil.NumberToBytes(uint64(pc), 32)
-		o, _, _ := ethutil.Instr(contract.State().Get(string(nb)))
-		op := OpCode(o)
-
-		if !cb(0) {
-			break
-		}
-
-		if ethutil.Config.Debug {
-			fmt.Printf("%-3d %-4s\n", pc, op.String())
-		}
-
-		switch op {
-		case oSTOP:
-			break out
-		case oADD:
-			x, y := bm.stack.Popn()
-			// (x + y) % 2 ** 256
-			base.Add(x, y)
-			base.Mod(base, Pow256)
-			// Pop result back on the stack
-			bm.stack.Push(base)
-		case oSUB:
-			x, y := bm.stack.Popn()
-			// (x - y) % 2 ** 256
-			base.Sub(x, y)
-			base.Mod(base, Pow256)
-			// Pop result back on the stack
-			bm.stack.Push(base)
-		case oMUL:
-			x, y := bm.stack.Popn()
-			// (x * y) % 2 ** 256
-			base.Mul(x, y)
-			base.Mod(base, Pow256)
-			// Pop result back on the stack
-			bm.stack.Push(base)
-		case oDIV:
-			x, y := bm.stack.Popn()
-			// floor(x / y)
-			base.Div(x, y)
-			// Pop result back on the stack
-			bm.stack.Push(base)
-		case oSDIV:
-			x, y := bm.stack.Popn()
-			// n > 2**255
-			if x.Cmp(Pow256) > 0 {
-				x.Sub(Pow256, x)
-			}
-			if y.Cmp(Pow256) > 0 {
-				y.Sub(Pow256, y)
-			}
-			z := new(big.Int)
-			z.Div(x, y)
-			if z.Cmp(Pow256) > 0 {
-				z.Sub(Pow256, z)
-			}
-			// Push result on to the stack
-			bm.stack.Push(z)
-		case oMOD:
-			x, y := bm.stack.Popn()
-			base.Mod(x, y)
-			bm.stack.Push(base)
-		case oSMOD:
-			x, y := bm.stack.Popn()
-			// n > 2**255
-			if x.Cmp(Pow256) > 0 {
-				x.Sub(Pow256, x)
-			}
-			if y.Cmp(Pow256) > 0 {
-				y.Sub(Pow256, y)
-			}
-			z := new(big.Int)
-			z.Mod(x, y)
-			if z.Cmp(Pow256) > 0 {
-				z.Sub(Pow256, z)
-			}
-			// Push result on to the stack
-			bm.stack.Push(z)
-		case oEXP:
-			x, y := bm.stack.Popn()
-			base.Exp(x, y, Pow256)
-
-			bm.stack.Push(base)
-		case oNEG:
-			base.Sub(Pow256, bm.stack.Pop())
-			bm.stack.Push(base)
-		case oLT:
-			x, y := bm.stack.Popn()
-			// x < y
-			if x.Cmp(y) < 0 {
-				bm.stack.Push(ethutil.BigTrue)
-			} else {
-				bm.stack.Push(ethutil.BigFalse)
-			}
-		case oLE:
-			x, y := bm.stack.Popn()
-			// x <= y
-			if x.Cmp(y) < 1 {
-				bm.stack.Push(ethutil.BigTrue)
-			} else {
-				bm.stack.Push(ethutil.BigFalse)
-			}
-		case oGT:
-			x, y := bm.stack.Popn()
-			// x > y
-			if x.Cmp(y) > 0 {
-				bm.stack.Push(ethutil.BigTrue)
-			} else {
-				bm.stack.Push(ethutil.BigFalse)
-			}
-		case oGE:
-			x, y := bm.stack.Popn()
-			// x >= y
-			if x.Cmp(y) > -1 {
-				bm.stack.Push(ethutil.BigTrue)
-			} else {
-				bm.stack.Push(ethutil.BigFalse)
-			}
-		case oNOT:
-			x, y := bm.stack.Popn()
-			// x != y
-			if x.Cmp(y) != 0 {
-				bm.stack.Push(ethutil.BigTrue)
-			} else {
-				bm.stack.Push(ethutil.BigFalse)
-			}
-
-		// Please note  that the  following code contains some
-		// ugly string casting. This will have to change to big
-		// ints. TODO :)
-		case oMYADDRESS:
-			bm.stack.Push(ethutil.BigD(tx.Hash()))
-		case oTXSENDER:
-			bm.stack.Push(ethutil.BigD(tx.Sender()))
-		case oTXVALUE:
-			bm.stack.Push(tx.Value)
-		case oTXDATAN:
-			bm.stack.Push(big.NewInt(int64(len(tx.Data))))
-		case oTXDATA:
-			v := bm.stack.Pop()
-			// v >= len(data)
-			if v.Cmp(big.NewInt(int64(len(tx.Data)))) >= 0 {
-				bm.stack.Push(ethutil.Big("0"))
-			} else {
-				bm.stack.Push(ethutil.Big(tx.Data[v.Uint64()]))
-			}
-		case oBLK_PREVHASH:
-			bm.stack.Push(ethutil.BigD(block.PrevHash))
-		case oBLK_COINBASE:
-			bm.stack.Push(ethutil.BigD(block.Coinbase))
-		case oBLK_TIMESTAMP:
-			bm.stack.Push(big.NewInt(block.Time))
-		case oBLK_NUMBER:
-			bm.stack.Push(big.NewInt(int64(blockInfo.Number)))
-		case oBLK_DIFFICULTY:
-			bm.stack.Push(block.Difficulty)
-		case oBASEFEE:
-			// e = 10^21
-			e := big.NewInt(0).Exp(big.NewInt(10), big.NewInt(21), big.NewInt(0))
-			d := new(big.Rat)
-			d.SetInt(block.Difficulty)
-			c := new(big.Rat)
-			c.SetFloat64(0.5)
-			// d = diff / 0.5
-			d.Quo(d, c)
-			// base = floor(d)
-			base.Div(d.Num(), d.Denom())
-
-			x := new(big.Int)
-			x.Div(e, base)
-
-			// x = floor(10^21 / floor(diff^0.5))
-			bm.stack.Push(x)
-		case oSHA256, oSHA3, oRIPEMD160:
-			// This is probably save
-			// ceil(pop / 32)
-			length := int(math.Ceil(float64(bm.stack.Pop().Uint64()) / 32.0))
-			// New buffer which will contain the concatenated popped items
-			data := new(bytes.Buffer)
-			for i := 0; i < length; i++ {
-				// Encode the number to bytes and have it 32bytes long
-				num := ethutil.NumberToBytes(bm.stack.Pop().Bytes(), 256)
-				data.WriteString(string(num))
-			}
-
-			if op == oSHA256 {
-				bm.stack.Push(base.SetBytes(ethutil.Sha256Bin(data.Bytes())))
-			} else if op == oSHA3 {
-				bm.stack.Push(base.SetBytes(ethutil.Sha3Bin(data.Bytes())))
-			} else {
-				bm.stack.Push(base.SetBytes(ethutil.Ripemd160(data.Bytes())))
-			}
-		case oECMUL:
-			y := bm.stack.Pop()
-			x := bm.stack.Pop()
-			//n := bm.stack.Pop()
-
-			//if ethutil.Big(x).Cmp(ethutil.Big(y)) {
-			data := new(bytes.Buffer)
-			data.WriteString(x.String())
-			data.WriteString(y.String())
-			if secp256k1.VerifyPubkeyValidity(data.Bytes()) == 1 {
-				// TODO
-			} else {
-				// Invalid, push infinity
-				bm.stack.Push(ethutil.Big("0"))
-				bm.stack.Push(ethutil.Big("0"))
-			}
-			//} else {
-			//	// Invalid, push infinity
-			//	bm.stack.Push("0")
-			//	bm.stack.Push("0")
-			//}
-
-		case oECADD:
-		case oECSIGN:
-		case oECRECOVER:
-		case oECVALID:
-		case oPUSH:
-			pc++
-			bm.stack.Push(bm.mem[strconv.Itoa(pc)])
-		case oPOP:
-			// Pop current value of the stack
-			bm.stack.Pop()
-		case oDUP:
-			// Dup top stack
-			x := bm.stack.Pop()
-			bm.stack.Push(x)
-			bm.stack.Push(x)
-		case oSWAP:
-			// Swap two top most values
-			x, y := bm.stack.Popn()
-			bm.stack.Push(y)
-			bm.stack.Push(x)
-		case oMLOAD:
-			x := bm.stack.Pop()
-			bm.stack.Push(bm.mem[x.String()])
-		case oMSTORE:
-			x, y := bm.stack.Popn()
-			bm.mem[x.String()] = y
-		case oSLOAD:
-			// Load the value in storage and push it on the stack
-			x := bm.stack.Pop()
-			// decode the object as a big integer
-			decoder := ethutil.NewValueFromBytes([]byte(contract.State().Get(x.String())))
-			if !decoder.IsNil() {
-				bm.stack.Push(decoder.BigInt())
-			} else {
-				bm.stack.Push(ethutil.BigFalse)
-			}
-		case oSSTORE:
-			// Store Y at index X
-			x, y := bm.stack.Popn()
-			contract.State().Update(x.String(), string(ethutil.Encode(y)))
-		case oJMP:
-			x := int(bm.stack.Pop().Uint64())
-			// Set pc to x - 1 (minus one so the incrementing at the end won't effect it)
-			pc = x
-			pc--
-		case oJMPI:
-			x := bm.stack.Pop()
-			// Set pc to x if it's non zero
-			if x.Cmp(ethutil.BigFalse) != 0 {
-				pc = int(x.Uint64())
-				pc--
-			}
-		case oIND:
-			bm.stack.Push(big.NewInt(int64(pc)))
-		case oEXTRO:
-			memAddr := bm.stack.Pop()
-			contractAddr := bm.stack.Pop().Bytes()
-
-			// Push the contract's memory on to the stack
-			bm.stack.Push(getContractMemory(block, contractAddr, memAddr))
-		case oBALANCE:
-			// Pushes the balance of the popped value on to the stack
-			d := block.State().Get(bm.stack.Pop().String())
-			ether := NewAddressFromData([]byte(d))
-			bm.stack.Push(ether.Amount)
-		case oMKTX:
-			value, addr := bm.stack.Popn()
-			from, length := bm.stack.Popn()
-
-			j := 0
-			dataItems := make([]string, int(length.Uint64()))
-			for i := from.Uint64(); i < length.Uint64(); i++ {
-				dataItems[j] = string(bm.mem[strconv.Itoa(int(i))].Bytes())
-				j++
-			}
-			// TODO sign it?
-			tx := NewTransaction(addr.Bytes(), value, dataItems)
-			// Add the transaction to the tx pool
-			bm.TransactionPool.QueueTransaction(tx)
-		case oSUICIDE:
-			//addr := bm.stack.Pop()
-		}
-		pc++
-	}
-}
-
-// Returns an address from the specified contract's address
-func getContractMemory(block *Block, contractAddr []byte, memAddr *big.Int) *big.Int {
-	contract := block.GetContract(contractAddr)
-	if contract == nil {
-		log.Panicf("invalid contract addr %x", contractAddr)
-	}
-	val := contract.State().Get(memAddr.String())
-
-	// decode the object as a big integer
-	decoder := ethutil.NewValueFromBytes([]byte(val))
-	if decoder.IsNil() {
-		return ethutil.BigFalse
-	}
-
-	return decoder.BigInt()
 }

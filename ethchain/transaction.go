@@ -1,10 +1,13 @@
 package ethchain
 
 import (
+	"bytes"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/secp256k1-go"
 	"math/big"
 )
+
+var ContractAddr = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 
 type Transaction struct {
 	Nonce     uint64
@@ -21,20 +24,17 @@ func NewTransaction(to []byte, value *big.Int, data []string) *Transaction {
 	tx.Nonce = 0
 
 	// Serialize the data
-	tx.Data = make([]string, len(data))
-	for i, val := range data {
-		instr, err := ethutil.CompileInstr(val)
-		if err != nil {
-			//fmt.Printf("compile error:%d %v\n", i+1, err)
-		}
-
-		tx.Data[i] = instr
-	}
+	tx.Data = data
 
 	return &tx
 }
 
+// XXX Deprecated
 func NewTransactionFromData(data []byte) *Transaction {
+	return NewTransactionFromBytes(data)
+}
+
+func NewTransactionFromBytes(data []byte) *Transaction {
 	tx := &Transaction{}
 	tx.RlpDecode(data)
 
@@ -65,7 +65,7 @@ func (tx *Transaction) Hash() []byte {
 }
 
 func (tx *Transaction) IsContract() bool {
-	return len(tx.Recipient) == 0
+	return bytes.Compare(tx.Recipient, ContractAddr) == 0
 }
 
 func (tx *Transaction) Signature(key []byte) []byte {

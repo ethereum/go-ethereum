@@ -46,6 +46,8 @@ type Block struct {
 	// List of transactions and/or contracts
 	transactions []*Transaction
 	TxSha        []byte
+
+	contractStates map[string]*ethutil.Trie
 }
 
 // New block takes a raw encoded string
@@ -79,14 +81,15 @@ func CreateBlock(root interface{},
 
 	block := &Block{
 		// Slice of transactions to include in this block
-		transactions: txes,
-		PrevHash:     prevHash,
-		Coinbase:     base,
-		Difficulty:   Difficulty,
-		Nonce:        Nonce,
-		Time:         time.Now().Unix(),
-		Extra:        extra,
-		UncleSha:     EmptyShaList,
+		transactions:   txes,
+		PrevHash:       prevHash,
+		Coinbase:       base,
+		Difficulty:     Difficulty,
+		Nonce:          Nonce,
+		Time:           time.Now().Unix(),
+		Extra:          extra,
+		UncleSha:       EmptyShaList,
+		contractStates: make(map[string]*ethutil.Trie),
 	}
 	block.SetTransactions(txes)
 	block.SetUncles([]*Block{})
@@ -128,14 +131,26 @@ func (block *Block) GetContract(addr []byte) *Contract {
 		return nil
 	}
 
+	value := ethutil.NewValueFromBytes([]byte(data))
+	if value.Len() == 2 {
+		return nil
+	}
+
 	contract := &Contract{}
 	contract.RlpDecode([]byte(data))
+
+	cachedState := block.contractStates[string(addr)]
+	if cachedState != nil {
+		contract.state = cachedState
+	} else {
+		block.contractStates[string(addr)] = contract.state
+	}
 
 	return contract
 }
 func (block *Block) UpdateContract(addr []byte, contract *Contract) {
 	// Make sure the state is synced
-	contract.State().Sync()
+	//contract.State().Sync()
 
 	block.state.Update(string(addr), string(contract.RlpEncode()))
 }
@@ -190,18 +205,29 @@ func (block *Block) BlockInfo() BlockInfo {
 	return bi
 }
 
-func (block *Block) MakeContract(tx *Transaction) {
-	// Create contract if there's no recipient
-	if tx.IsContract() {
-		addr := tx.Hash()
+// Sync the block's state and contract respectively
+func (block *Block) Sync() {
+	// Sync all contracts currently in cache
+	for _, val := range block.contractStates {
+		val.Sync()
+	}
+	// Sync the block state itself
+	block.state.Sync()
+}
 
-		value := tx.Value
-		contract := NewContract(value, []byte(""))
-		block.state.Update(string(addr), string(contract.RlpEncode()))
-		for i, val := range tx.Data {
-			contract.state.Update(string(ethutil.NumberToBytes(uint64(i), 32)), val)
-		}
-		block.UpdateContract(addr, contract)
+func (block *Block) Undo() {
+	// Sync all contracts currently in cache
+	for _, val := range block.contractStates {
+		val.Undo()
+	}
+	// Sync the block state itself
+	block.state.Undo()
+}
+
+func (block *Block) MakeContract(tx *Transaction) {
+	contract := MakeContract(tx, NewState(block.state))
+	if contract != nil {
+		block.contractStates[string(tx.Hash()[12:])] = contract.state
 	}
 }
 
@@ -288,6 +314,7 @@ func (block *Block) RlpValueDecode(decoder *ethutil.Value) {
 	block.Time = int64(header.Get(6).BigInt().Uint64())
 	block.Extra = header.Get(7).Str()
 	block.Nonce = header.Get(8).Bytes()
+	block.contractStates = make(map[string]*ethutil.Trie)
 
 	// Tx list might be empty if this is an uncle. Uncles only have their
 	// header set.
@@ -298,12 +325,6 @@ func (block *Block) RlpValueDecode(decoder *ethutil.Value) {
 			tx := NewTransactionFromValue(txes.Get(i))
 
 			block.transactions[i] = tx
-
-			/*
-				if ethutil.Config.Debug {
-					ethutil.Config.Db.Put(tx.Hash(), ethutil.Encode(tx))
-				}
-			*/
 		}
 
 	}
@@ -335,7 +356,7 @@ func NewUncleBlockFromValue(header *ethutil.Value) *Block {
 }
 
 func (block *Block) String() string {
-	return fmt.Sprintf("Block(%x):\nPrevHash:%x\nUncleSha:%x\nCoinbase:%x\nRoot:%x\nTxSha:%x\nDiff:%v\nTime:%d\nNonce:%x", block.Hash(), block.PrevHash, block.UncleSha, block.Coinbase, block.state.Root, block.TxSha, block.Difficulty, block.Time, block.Nonce)
+	return fmt.Sprintf("Block(%x):\nPrevHash:%x\nUncleSha:%x\nCoinbase:%x\nRoot:%x\nTxSha:%x\nDiff:%v\nTime:%d\nNonce:%x\nTxs:%d\n", block.Hash(), block.PrevHash, block.UncleSha, block.Coinbase, block.state.Root, block.TxSha, block.Difficulty, block.Time, block.Nonce, len(block.transactions))
 }
 
 //////////// UNEXPORTED /////////////////

@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
-	"log"
 	"net"
 	"runtime"
 	"strconv"
@@ -23,6 +22,9 @@ const (
 type DiscReason byte
 
 const (
+	// Values are given explicitly instead of by iota because these values are
+	// defined by the wire protocol spec; it is easier for humans to ensure
+	// correctness when values are explicit.
 	DiscReRequested  = 0x00
 	DiscReTcpSysErr  = 0x01
 	DiscBadProto     = 0x02
@@ -56,9 +58,9 @@ func (d DiscReason) String() string {
 type Caps byte
 
 const (
-	CapPeerDiscTy = 0x01
-	CapTxTy       = 0x02
-	CapChainTy    = 0x04
+	CapPeerDiscTy = 1 << iota
+	CapTxTy
+	CapChainTy
 
 	CapDefault = CapChainTy | CapTxTy | CapPeerDiscTy
 )
@@ -162,7 +164,7 @@ func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 		conn, err := net.DialTimeout("tcp", addr, 30*time.Second)
 
 		if err != nil {
-			log.Println("Connection to peer failed", err)
+			ethutil.Config.Log.Debugln("Connection to peer failed", err)
 			p.Stop()
 			return
 		}
@@ -199,7 +201,7 @@ func (p *Peer) writeMessage(msg *ethwire.Msg) {
 
 	err := ethwire.WriteMessage(p.conn, msg)
 	if err != nil {
-		log.Println("Can't send message:", err)
+		ethutil.Config.Log.Debugln("Can't send message:", err)
 		// Stop the client if there was an error writing to it
 		p.Stop()
 		return
@@ -261,7 +263,7 @@ func (p *Peer) HandleInbound() {
 		// Wait for a message from the peer
 		msgs, err := ethwire.ReadMessages(p.conn)
 		if err != nil {
-			log.Println(err)
+			ethutil.Config.Log.Debugln(err)
 		}
 		for _, msg := range msgs {
 			switch msg.Type {
@@ -274,7 +276,7 @@ func (p *Peer) HandleInbound() {
 				}
 			case ethwire.MsgDiscTy:
 				p.Stop()
-				log.Println("Disconnect peer:", DiscReason(msg.Data.Get(0).Uint()))
+				ethutil.Config.Log.Infoln("Disconnect peer:", DiscReason(msg.Data.Get(0).Uint()))
 			case ethwire.MsgPingTy:
 				// Respond back with pong
 				p.QueueMessage(ethwire.NewMessage(ethwire.MsgPongTy, ""))
@@ -285,7 +287,6 @@ func (p *Peer) HandleInbound() {
 				p.lastPong = time.Now().Unix()
 			case ethwire.MsgBlockTy:
 				// Get all blocks and process them
-				msg.Data = msg.Data
 				var block, lastBlock *ethchain.Block
 				var err error
 				for i := msg.Data.Len() - 1; i >= 0; i-- {
@@ -293,7 +294,10 @@ func (p *Peer) HandleInbound() {
 					err = p.ethereum.BlockManager.ProcessBlock(block)
 
 					if err != nil {
-						log.Println("bckmsg", err)
+						if ethutil.Config.Debug {
+							ethutil.Config.Log.Infof("[PEER] Block %x failed\n", block.Hash())
+							ethutil.Config.Log.Infof("[PEER] %v\n", err)
+						}
 						break
 					} else {
 						lastBlock = block
@@ -303,7 +307,7 @@ func (p *Peer) HandleInbound() {
 				if err != nil {
 					// If the parent is unknown try to catch up with this peer
 					if ethchain.IsParentErr(err) {
-						log.Println("Attempting to catch up")
+						ethutil.Config.Log.Infoln("Attempting to catch up")
 						p.catchingUp = false
 						p.CatchupWithPeer()
 					} else if ethchain.IsValidationErr(err) {
@@ -315,7 +319,7 @@ func (p *Peer) HandleInbound() {
 					if p.catchingUp && msg.Data.Len() > 1 {
 						if ethutil.Config.Debug && lastBlock != nil {
 							blockInfo := lastBlock.BlockInfo()
-							log.Printf("Synced to block height #%d %x %x\n", blockInfo.Number, lastBlock.Hash(), blockInfo.Hash)
+							ethutil.Config.Log.Infof("Synced to block height #%d %x %x\n", blockInfo.Number, lastBlock.Hash(), blockInfo.Hash)
 						}
 						p.catchingUp = false
 						p.CatchupWithPeer()
@@ -386,12 +390,12 @@ func (p *Peer) HandleInbound() {
 					p.QueueMessage(ethwire.NewMessage(ethwire.MsgNotInChainTy, []interface{}{lastHash.Raw()}))
 				}
 			case ethwire.MsgNotInChainTy:
-				log.Printf("Not in chain %x\n", msg.Data)
+				ethutil.Config.Log.Infof("Not in chain %x\n", msg.Data)
 				// TODO
 
 				// Unofficial but fun nonetheless
 			case ethwire.MsgTalkTy:
-				log.Printf("%v says: %s\n", p.conn.RemoteAddr(), msg.Data.Str())
+				ethutil.Config.Log.Infoln("%v says: %s\n", p.conn.RemoteAddr(), msg.Data.Str())
 			}
 		}
 	}
@@ -434,7 +438,7 @@ func (p *Peer) Start() {
 
 	err := p.pushHandshake()
 	if err != nil {
-		log.Printf("Peer can't send outbound version ack", err)
+		ethutil.Config.Log.Debugln("Peer can't send outbound version ack", err)
 
 		p.Stop()
 
@@ -465,7 +469,7 @@ func (p *Peer) pushHandshake() error {
 	pubkey := ethutil.NewValueFromBytes(data).Get(2).Bytes()
 
 	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-		uint32(4), uint32(0), p.Version, byte(p.caps), p.port, pubkey,
+		uint32(5), uint32(0), p.Version, byte(p.caps), p.port, pubkey,
 	})
 
 	p.QueueMessage(msg)
@@ -492,8 +496,8 @@ func (p *Peer) pushPeers() {
 func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	c := msg.Data
 
-	if c.Get(0).Uint() != 4 {
-		log.Println("Invalid peer version. Require protocol v4")
+	if c.Get(0).Uint() != 5 {
+		ethutil.Config.Log.Debugln("Invalid peer version. Require protocol v5")
 		p.Stop()
 		return
 	}
@@ -525,7 +529,7 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	// Get a reference to the peers version
 	p.Version = c.Get(2).Str()
 
-	log.Println(p)
+	ethutil.Config.Log.Debugln("[PEER]", p)
 }
 
 func (p *Peer) String() string {
@@ -542,7 +546,7 @@ func (p *Peer) String() string {
 		strConnectType = "disconnected"
 	}
 
-	return fmt.Sprintf("peer [%s] (%s) %v %s [%s]", strConnectType, strBoundType, p.conn.RemoteAddr(), p.Version, p.caps)
+	return fmt.Sprintf("[%s] (%s) %v %s [%s]", strConnectType, strBoundType, p.conn.RemoteAddr(), p.Version, p.caps)
 
 }
 
@@ -552,7 +556,7 @@ func (p *Peer) CatchupWithPeer() {
 		msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{p.ethereum.BlockManager.BlockChain().CurrentBlock.Hash(), uint64(50)})
 		p.QueueMessage(msg)
 
-		log.Printf("Requesting blockchain %x...\n", p.ethereum.BlockManager.BlockChain().CurrentBlock.Hash()[:4])
+		ethutil.Config.Log.Debugf("Requesting blockchain %x...\n", p.ethereum.BlockManager.BlockChain().CurrentBlock.Hash()[:4])
 	}
 }
 

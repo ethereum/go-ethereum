@@ -27,7 +27,6 @@ func Ripemd160(data []byte) []byte {
 
 func Sha3Bin(data []byte) []byte {
 	d := sha3.NewKeccak256()
-	d.Reset()
 	d.Write(data)
 
 	return d.Sum(nil)
@@ -58,4 +57,8 @@ func MatchingNibbleLength(a, b []int) int {
 
 func Hex(d []byte) string {
 	return hex.EncodeToString(d)
+}
+func FromHex(str string) []byte {
+	h, _ := hex.DecodeString(str)
+	return h
 }

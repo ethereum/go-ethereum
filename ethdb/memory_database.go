@@ -26,6 +26,18 @@ func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 	return db.db[string(key)], nil
 }
 
+func (db *MemDatabase) GetKeys() []*ethutil.Key {
+	data, _ := db.Get([]byte("KeyRing"))
+
+	return []*ethutil.Key{ethutil.NewKeyFromBytes(data)}
+}
+
+func (db *MemDatabase) Delete(key []byte) error {
+	delete(db.db, string(key))
+
+	return nil
+}
+
 func (db *MemDatabase) Print() {
 	for key, val := range db.db {
 		fmt.Printf("%x(%d): ", key, len(key))

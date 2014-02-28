@@ -19,6 +19,9 @@ var MagicToken = []byte{34, 64, 8, 145}
 type MsgType byte
 
 const (
+	// Values are given explicitly instead of by iota because these values are
+	// defined by the wire protocol spec; it is easier for humans to ensure
+	// correctness when values are explicit.
 	MsgHandshakeTy  = 0x00
 	MsgDiscTy       = 0x01
 	MsgPingTy       = 0x02

@@ -104,12 +104,29 @@ func (bc *BlockChain) GetChainFromHash(hash []byte, max uint64) []interface{} {
 		currentHash = block.PrevHash
 
 		chain = append(chain, block.Value().Val)
-		//chain = append([]interface{}{block.RlpValue().Value}, chain...)
 
 		num--
 	}
 
 	return chain
+}
+
+func (bc *BlockChain) GetChain(hash []byte, amount int) []*Block {
+	genHash := bc.genesisBlock.Hash()
+
+	block := bc.GetBlock(hash)
+	var blocks []*Block
+
+	for i := 0; i < amount && block != nil; block = bc.GetBlock(block.PrevHash) {
+		blocks = append([]*Block{block}, blocks...)
+
+		if bytes.Compare(genHash, block.Hash()) == 0 {
+			break
+		}
+		i++
+	}
+
+	return blocks
 }
 
 func (bc *BlockChain) setLastBlock() {
@@ -141,11 +158,16 @@ func (bc *BlockChain) Add(block *Block) {
 	bc.CurrentBlock = block
 	bc.LastBlockHash = block.Hash()
 
-	ethutil.Config.Db.Put(block.Hash(), block.RlpEncode())
+	encodedBlock := block.RlpEncode()
+	ethutil.Config.Db.Put(block.Hash(), encodedBlock)
+	ethutil.Config.Db.Put([]byte("LastBlock"), encodedBlock)
 }
 
 func (bc *BlockChain) GetBlock(hash []byte) *Block {
 	data, _ := ethutil.Config.Db.Get(hash)
+	if len(data) == 0 {
+		return nil
+	}
 
 	return NewBlockFromData(data)
 }
@@ -177,8 +199,6 @@ func (bc *BlockChain) writeBlockInfo(block *Block) {
 
 func (bc *BlockChain) Stop() {
 	if bc.CurrentBlock != nil {
-		ethutil.Config.Db.Put([]byte("LastBlock"), bc.CurrentBlock.RlpEncode())
-
 		log.Println("[CHAIN] Stopped")
 	}
 }

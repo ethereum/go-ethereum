@@ -86,13 +86,6 @@ func DecodeWithReader(reader *bytes.Buffer) interface{} {
 // TODO Use a bytes.Buffer instead of a raw byte slice.
 // Cleaner code, and use draining instead of seeking the next bytes to read
 func Decode(data []byte, pos uint64) (interface{}, uint64) {
-	/*
-		if pos > uint64(len(data)-1) {
-			log.Println(data)
-			log.Panicf("index out of range %d for data %q, l = %d", pos, data, len(data))
-		}
-	*/
-
 	var slice []interface{}
 	char := int(data[pos])
 	switch {
@@ -131,7 +124,6 @@ func Decode(data []byte, pos uint64) (interface{}, uint64) {
 
 	case char <= 0xff:
 		l := uint64(data[pos]) - 0xf7
-		//b := BigD(data[pos+1 : pos+1+l]).Uint64()
 		b := ReadVarint(bytes.NewReader(data[pos+1 : pos+1+l]))
 
 		pos = pos + l + 1
