@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -78,6 +79,32 @@ func (i *Console) ValidateInput(action string, argumentLength int) error {
 	}
 }
 
+func (i *Console) Editor() []string {
+	var buff bytes.Buffer
+	for {
+		reader := bufio.NewReader(os.Stdin)
+		str, _, err := reader.ReadLine()
+		if len(str) > 0 {
+			buff.Write(str)
+			buff.WriteString("\n")
+		}
+
+		if err != nil && err.Error() == "EOF" {
+			break
+		}
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(buff.String()))
+	scanner.Split(bufio.ScanLines)
+
+	var lines []string
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+
+	return lines
+}
+
 func (i *Console) PrintRoot() {
 	root := ethutil.NewValue(i.trie.Root)
 	if len(root.Bytes()) != 0 {
@@ -136,7 +163,8 @@ func (i *Console) ParseInput(input string) bool {
 		case "block":
 			encoded, _ := hex.DecodeString(tokens[1])
 			block := i.ethereum.BlockManager.BlockChain().GetBlock(encoded)
-			fmt.Println(block)
+			info := block.BlockInfo()
+			fmt.Printf("++++++++++ #%d ++++++++++\n%v\n", info.Number, block)
 		case "say":
 			i.ethereum.Broadcast(ethwire.MsgTalkTy, []interface{}{tokens[1]})
 		case "addp":
@@ -151,13 +179,13 @@ func (i *Console) ParseInput(input string) bool {
 				fmt.Println("recipient err:", err)
 			} else {
 				tx := ethchain.NewTransaction(recipient, ethutil.Big(tokens[2]), []string{""})
-				data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-				keyRing := ethutil.NewValueFromBytes(data)
-				tx.Sign(keyRing.Get(0).Bytes())
-				fmt.Printf("%x\n", tx.Hash())
-				i.ethereum.TxPool.QueueTransaction(tx)
-			}
 
+				key := ethutil.Config.Db.GetKeys()[0]
+				tx.Sign(key.PrivateKey)
+				i.ethereum.TxPool.QueueTransaction(tx)
+
+				fmt.Printf("%x\n", tx.Hash())
+			}
 		case "gettx":
 			addr, _ := hex.DecodeString(tokens[1])
 			data, _ := ethutil.Config.Db.Get(addr)
@@ -168,10 +196,17 @@ func (i *Console) ParseInput(input string) bool {
 				fmt.Println("gettx: tx not found")
 			}
 		case "contract":
-			contract := ethchain.NewTransaction([]byte{}, ethutil.Big(tokens[1]), []string{"PUSH", "1234"})
-			fmt.Printf("%x\n", contract.Hash())
+			fmt.Println("Contract editor (Ctrl-D = done)")
+			code := ethchain.Compile(i.Editor())
+
+			contract := ethchain.NewTransaction(ethchain.ContractAddr, ethutil.Big(tokens[1]), code)
+
+			key := ethutil.Config.Db.GetKeys()[0]
+			contract.Sign(key.PrivateKey)
 
 			i.ethereum.TxPool.QueueTransaction(contract)
+
+			fmt.Printf("%x\n", contract.Hash()[12:])
 		case "exit", "quit", "q":
 			return false
 		case "help":

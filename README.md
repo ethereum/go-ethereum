@@ -3,43 +3,17 @@ Ethereum
 
 [![Build Status](https://travis-ci.org/ethereum/go-ethereum.png?branch=master)](https://travis-ci.org/ethereum/go-ethereum)
 
-Ethereum Go developer client (c) Jeffrey Wilcke
+Ethereum Go Client (c) Jeffrey Wilcke
 
-Ethereum is currently in its testing phase. The current state is "Proof
-of Concept 2". For build instructions see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Edge).
+The current state is "Proof of Concept 3". For build instructions see
+the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Edge).
 
-Ethereum Go is split up in several sub packages Please refer to each
-individual package for more information.
-  1. [eth](https://github.com/ethereum/eth-go)
-  2. [ethchain](https://github.com/ethereum/ethchain-go)
-  3. [ethwire](https://github.com/ethereum/ethwire-go)
-  4. [ethdb](https://github.com/ethereum/ethdb-go)
-  5. [ethutil](https://github.com/ethereum/ethutil-go)
-
-The [eth](https://github.com/ethereum/eth-go) is the top-level package
-of the Ethereum protocol. It functions as the Ethereum bootstrapping and
-peer communication layer. The [ethchain](https://github.com/ethereum/ethchain-go)
-contains the Ethereum blockchain, block manager, transaction and
-transaction handlers. The [ethwire](https://github.com/ethereum/ethwire-go) contains
-the Ethereum [wire protocol](http://wiki.ethereum.org/index.php/Wire_Protocol) which can be used
-to hook in to the Ethereum network. [ethutil](https://github.com/ethereum/ethutil-go) contains
-utility functions which are not Ethereum specific. The utility package
-contains the [patricia trie](http://wiki.ethereum.org/index.php/Patricia_Tree),
-[RLP Encoding](http://wiki.ethereum.org/index.php/RLP) and hex encoding
-helpers. The [ethdb](https://github.com/ethereum/ethdb-go) package
-contains the LevelDB interface and memory DB interface.
-
-This executable is the front-end (currently nothing but a dev console) for
-the Ethereum Go implementation.
-
-If you'd like to start developing your own tools please check out the
-[development](https://github.com/ethereum/eth-go) package.
+For the development Go Package please see [eth-go package](https://github.com/ethereum/eth-go).
 
 Build
 =======
 
 For build instruction please see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Edge)
-
 
 Command line options
 ====================
@@ -52,6 +26,9 @@ Command line options
 -upnp    Enable UPnP (= false)
 -x       Desired amount of peers (= 5)
 -h       This help
+-gui     Launch with GUI (= true)
+-dir     Data directory used to store configs and databases (=".ethereum")
+-import  Import a private key (hex)
 ```
 
 Developer console commands
