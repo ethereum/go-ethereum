@@ -295,7 +295,7 @@ func (s *Ethereum) Stop() {
 	s.TxPool.Stop()
 	s.BlockManager.Stop()
 
-	s.shutdownChan <- true
+	close(s.shutdownChan)
 }
 
 // This function will wait for a shutdown and resumes main thread execution
