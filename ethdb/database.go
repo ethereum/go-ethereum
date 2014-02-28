@@ -54,13 +54,19 @@ func (db *LDBDatabase) LastKnownTD() []byte {
 	return data
 }
 
+func (db *LDBDatabase) GetKeys() []*ethutil.Key {
+	data, _ := db.Get([]byte("KeyRing"))
+
+	return []*ethutil.Key{ethutil.NewKeyFromBytes(data)}
+}
+
 func (db *LDBDatabase) Close() {
 	// Close the leveldb database
 	db.db.Close()
 }
 
 func (db *LDBDatabase) Print() {
-	iter := db.db.NewIterator(nil)
+	iter := db.db.NewIterator(nil, nil)
 	for iter.Next() {
 		key := iter.Key()
 		value := iter.Value()
