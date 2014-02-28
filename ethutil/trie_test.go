@@ -25,6 +25,7 @@ func (db *MemDatabase) Delete(key []byte) error {
 	delete(db.db, string(key))
 	return nil
 }
+func (db *MemDatabase) GetKeys() []*Key     { return nil }
 func (db *MemDatabase) Print()              {}
 func (db *MemDatabase) Close()              {}
 func (db *MemDatabase) LastKnownTD() []byte { return nil }
