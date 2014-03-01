@@ -5,8 +5,7 @@ Ethereum
 
 Ethereum Go Client (c) Jeffrey Wilcke
 
-The current state is "Proof of Concept 3". For build instructions see
-the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Edge).
+The current state is "Proof of Concept 3".
 
 For the development Go Package please see [eth-go package](https://github.com/ethereum/eth-go).
 
