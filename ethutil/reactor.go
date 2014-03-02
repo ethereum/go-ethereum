@@ -13,6 +13,9 @@ type ReactorEvent struct {
 // Post the specified reactor resource on the channels
 // currently subscribed
 func (e *ReactorEvent) Post(react React) {
+	e.mut.Lock()
+	defer e.mut.Unlock()
+
 	for _, ch := range e.chans {
 		go func(ch chan React) {
 			ch <- react
@@ -22,11 +25,17 @@ func (e *ReactorEvent) Post(react React) {
 
 // Add a subscriber to this event
 func (e *ReactorEvent) Add(ch chan React) {
+	e.mut.Lock()
+	defer e.mut.Unlock()
+
 	e.chans = append(e.chans, ch)
 }
 
 // Remove a subscriber
 func (e *ReactorEvent) Remove(ch chan React) {
+	e.mut.Lock()
+	defer e.mut.Unlock()
+
 	for i, c := range e.chans {
 		if c == ch {
 			e.chans = append(e.chans[:i], e.chans[i+1:]...)
