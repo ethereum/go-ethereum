@@ -158,7 +158,7 @@ func (i *Console) ParseInput(input string) bool {
 			fmt.Println(value)
 		case "getaddr":
 			encoded, _ := hex.DecodeString(tokens[1])
-			addr := i.ethereum.BlockManager.BlockChain().CurrentBlock.GetAddr(encoded)
+			addr := i.ethereum.BlockManager.BlockChain().CurrentBlock.State().GetAccount(encoded)
 			fmt.Println("addr:", addr)
 		case "block":
 			encoded, _ := hex.DecodeString(tokens[1])
