@@ -34,7 +34,8 @@ type Block struct {
 	// The coin base address
 	Coinbase []byte
 	// Block Trie state
-	state *ethutil.Trie
+	//state *ethutil.Trie
+	state *State
 	// Difficulty for the current block
 	Difficulty *big.Int
 	// Creation time
@@ -94,7 +95,7 @@ func CreateBlock(root interface{},
 	block.SetTransactions(txes)
 	block.SetUncles([]*Block{})
 
-	block.state = ethutil.NewTrie(ethutil.Config.Db, root)
+	block.state = NewState(ethutil.NewTrie(ethutil.Config.Db, root))
 
 	for _, tx := range txes {
 		block.MakeContract(tx)
@@ -109,15 +110,15 @@ func (block *Block) Hash() []byte {
 }
 
 func (block *Block) HashNoNonce() []byte {
-	return ethutil.Sha3Bin(ethutil.Encode([]interface{}{block.PrevHash, block.UncleSha, block.Coinbase, block.state.Root, block.TxSha, block.Difficulty, block.Time, block.Extra}))
+	return ethutil.Sha3Bin(ethutil.Encode([]interface{}{block.PrevHash, block.UncleSha, block.Coinbase, block.state.trie.Root, block.TxSha, block.Difficulty, block.Time, block.Extra}))
 }
 
 func (block *Block) PrintHash() {
 	fmt.Println(block)
-	fmt.Println(ethutil.NewValue(ethutil.Encode([]interface{}{block.PrevHash, block.UncleSha, block.Coinbase, block.state.Root, block.TxSha, block.Difficulty, block.Time, block.Extra, block.Nonce})))
+	fmt.Println(ethutil.NewValue(ethutil.Encode([]interface{}{block.PrevHash, block.UncleSha, block.Coinbase, block.state.trie.Root, block.TxSha, block.Difficulty, block.Time, block.Extra, block.Nonce})))
 }
 
-func (block *Block) State() *ethutil.Trie {
+func (block *Block) State() *State {
 	return block.state
 }
 
@@ -125,6 +126,7 @@ func (block *Block) Transactions() []*Transaction {
 	return block.transactions
 }
 
+/*
 func (block *Block) GetContract(addr []byte) *Contract {
 	data := block.state.Get(string(addr))
 	if data == "" {
@@ -152,13 +154,13 @@ func (block *Block) UpdateContract(addr []byte, contract *Contract) {
 	// Make sure the state is synced
 	//contract.State().Sync()
 
-	block.state.Update(string(addr), string(contract.RlpEncode()))
+	block.state.trie.Update(string(addr), string(contract.RlpEncode()))
 }
 
 func (block *Block) GetAddr(addr []byte) *Address {
 	var address *Address
 
-	data := block.State().Get(string(addr))
+	data := block.state.trie.Get(string(addr))
 	if data == "" {
 		address = NewAddress(big.NewInt(0))
 	} else {
@@ -168,11 +170,12 @@ func (block *Block) GetAddr(addr []byte) *Address {
 	return address
 }
 func (block *Block) UpdateAddr(addr []byte, address *Address) {
-	block.state.Update(string(addr), string(address.RlpEncode()))
+	block.state.trie.Update(string(addr), string(address.RlpEncode()))
 }
+*/
 
 func (block *Block) PayFee(addr []byte, fee *big.Int) bool {
-	contract := block.GetContract(addr)
+	contract := block.state.GetContract(addr)
 	// If we can't pay the fee return
 	if contract == nil || contract.Amount.Cmp(fee) < 0 /* amount < fee */ {
 		fmt.Println("Contract has insufficient funds", contract.Amount, fee)
@@ -182,9 +185,9 @@ func (block *Block) PayFee(addr []byte, fee *big.Int) bool {
 
 	base := new(big.Int)
 	contract.Amount = base.Sub(contract.Amount, fee)
-	block.state.Update(string(addr), string(contract.RlpEncode()))
+	block.state.trie.Update(string(addr), string(contract.RlpEncode()))
 
-	data := block.state.Get(string(block.Coinbase))
+	data := block.state.trie.Get(string(block.Coinbase))
 
 	// Get the ether (Coinbase) and add the fee (gief fee to miner)
 	ether := NewAddressFromData([]byte(data))
@@ -192,7 +195,7 @@ func (block *Block) PayFee(addr []byte, fee *big.Int) bool {
 	base = new(big.Int)
 	ether.Amount = base.Add(ether.Amount, fee)
 
-	block.state.Update(string(block.Coinbase), string(ether.RlpEncode()))
+	block.state.trie.Update(string(block.Coinbase), string(ether.RlpEncode()))
 
 	return true
 }
@@ -207,25 +210,29 @@ func (block *Block) BlockInfo() BlockInfo {
 
 // Sync the block's state and contract respectively
 func (block *Block) Sync() {
-	// Sync all contracts currently in cache
-	for _, val := range block.contractStates {
-		val.Sync()
-	}
+	/*
+		// Sync all contracts currently in cache
+		for _, val := range block.contractStates {
+			val.Sync()
+		}
+	*/
 	// Sync the block state itself
-	block.state.Sync()
+	block.state.trie.Sync()
 }
 
 func (block *Block) Undo() {
-	// Sync all contracts currently in cache
-	for _, val := range block.contractStates {
-		val.Undo()
-	}
+	/*
+		// Sync all contracts currently in cache
+		for _, val := range block.contractStates {
+			val.Undo()
+		}
+	*/
 	// Sync the block state itself
-	block.state.Undo()
+	block.state.Reset()
 }
 
 func (block *Block) MakeContract(tx *Transaction) {
-	contract := MakeContract(tx, NewState(block.state))
+	contract := MakeContract(tx, block.state)
 	if contract != nil {
 		block.contractStates[string(tx.Hash()[12:])] = contract.state
 	}
@@ -308,7 +315,7 @@ func (block *Block) RlpValueDecode(decoder *ethutil.Value) {
 	block.PrevHash = header.Get(0).Bytes()
 	block.UncleSha = header.Get(1).Bytes()
 	block.Coinbase = header.Get(2).Bytes()
-	block.state = ethutil.NewTrie(ethutil.Config.Db, header.Get(3).Val)
+	block.state = NewState(ethutil.NewTrie(ethutil.Config.Db, header.Get(3).Val))
 	block.TxSha = header.Get(4).Bytes()
 	block.Difficulty = header.Get(5).BigInt()
 	block.Time = int64(header.Get(6).BigInt().Uint64())
@@ -345,7 +352,7 @@ func NewUncleBlockFromValue(header *ethutil.Value) *Block {
 	block.PrevHash = header.Get(0).Bytes()
 	block.UncleSha = header.Get(1).Bytes()
 	block.Coinbase = header.Get(2).Bytes()
-	block.state = ethutil.NewTrie(ethutil.Config.Db, header.Get(3).Val)
+	block.state = NewState(ethutil.NewTrie(ethutil.Config.Db, header.Get(3).Val))
 	block.TxSha = header.Get(4).Bytes()
 	block.Difficulty = header.Get(5).BigInt()
 	block.Time = int64(header.Get(6).BigInt().Uint64())
@@ -356,7 +363,7 @@ func NewUncleBlockFromValue(header *ethutil.Value) *Block {
 }
 
 func (block *Block) String() string {
-	return fmt.Sprintf("Block(%x):\nPrevHash:%x\nUncleSha:%x\nCoinbase:%x\nRoot:%x\nTxSha:%x\nDiff:%v\nTime:%d\nNonce:%x\nTxs:%d\n", block.Hash(), block.PrevHash, block.UncleSha, block.Coinbase, block.state.Root, block.TxSha, block.Difficulty, block.Time, block.Nonce, len(block.transactions))
+	return fmt.Sprintf("Block(%x):\nPrevHash:%x\nUncleSha:%x\nCoinbase:%x\nRoot:%x\nTxSha:%x\nDiff:%v\nTime:%d\nNonce:%x\nTxs:%d\n", block.Hash(), block.PrevHash, block.UncleSha, block.Coinbase, block.state.trie.Root, block.TxSha, block.Difficulty, block.Time, block.Nonce, len(block.transactions))
 }
 
 //////////// UNEXPORTED /////////////////
@@ -369,7 +376,7 @@ func (block *Block) header() []interface{} {
 		// Coinbase address
 		block.Coinbase,
 		// root state
-		block.state.Root,
+		block.state.trie.Root,
 		// Sha of tx
 		block.TxSha,
 		// Current block Difficulty

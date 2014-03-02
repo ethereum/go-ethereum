@@ -51,9 +51,9 @@ func AddTestNetFunds(block *Block) {
 	} {
 		//log.Println("2^200 Wei to", addr)
 		codedAddr, _ := hex.DecodeString(addr)
-		addr := block.GetAddr(codedAddr)
+		addr := block.state.GetAccount(codedAddr)
 		addr.Amount = ethutil.BigPow(2, 200)
-		block.UpdateAddr(codedAddr, addr)
+		block.state.UpdateAccount(codedAddr, addr)
 	}
 }
 
@@ -71,7 +71,7 @@ func NewBlockManager(speaker PublicSpeaker) *BlockManager {
 	if bm.bc.CurrentBlock == nil {
 		AddTestNetFunds(bm.bc.genesisBlock)
 
-		bm.bc.genesisBlock.State().Sync()
+		bm.bc.genesisBlock.state.trie.Sync()
 		// Prepare the genesis block
 		bm.bc.Add(bm.bc.genesisBlock)
 
@@ -86,7 +86,7 @@ func NewBlockManager(speaker PublicSpeaker) *BlockManager {
 
 // Watches any given address and puts it in the address state store
 func (bm *BlockManager) WatchAddr(addr []byte) *AddressState {
-	account := bm.bc.CurrentBlock.GetAddr(addr)
+	account := bm.bc.CurrentBlock.state.GetAccount(addr)
 
 	return bm.addrStateStore.Add(addr, account)
 }
@@ -94,7 +94,7 @@ func (bm *BlockManager) WatchAddr(addr []byte) *AddressState {
 func (bm *BlockManager) GetAddrState(addr []byte) *AddressState {
 	account := bm.addrStateStore.Get(addr)
 	if account == nil {
-		a := bm.bc.CurrentBlock.GetAddr(addr)
+		a := bm.bc.CurrentBlock.state.GetAccount(addr)
 		account = &AddressState{Nonce: a.Nonce, Account: a}
 	}
 
@@ -112,7 +112,7 @@ func (bm *BlockManager) ApplyTransactions(block *Block, txs []*Transaction) {
 		if tx.IsContract() {
 			block.MakeContract(tx)
 		} else {
-			if contract := block.GetContract(tx.Recipient); contract != nil {
+			if contract := block.state.GetContract(tx.Recipient); contract != nil {
 				bm.ProcessContract(contract, tx, block)
 			} else {
 				err := bm.TransactionPool.ProcessTransaction(tx, block)
@@ -161,8 +161,8 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 		return err
 	}
 
-	if !block.State().Cmp(bm.bc.CurrentBlock.State()) {
-		return fmt.Errorf("Invalid merkle root. Expected %x, got %x", block.State().Root, bm.bc.CurrentBlock.State().Root)
+	if !block.state.Cmp(bm.bc.CurrentBlock.state) {
+		return fmt.Errorf("Invalid merkle root. Expected %x, got %x", block.State().trie.Root, bm.bc.CurrentBlock.State().trie.Root)
 	}
 
 	// Calculate the new total difficulty and sync back to the db
@@ -267,17 +267,17 @@ func CalculateUncleReward(block *Block) *big.Int {
 
 func (bm *BlockManager) AccumelateRewards(processor *Block, block *Block) error {
 	// Get the coinbase rlp data
-	addr := processor.GetAddr(block.Coinbase)
+	addr := processor.state.GetAccount(block.Coinbase)
 	// Reward amount of ether to the coinbase address
 	addr.AddFee(CalculateBlockReward(block, len(block.Uncles)))
 
-	processor.UpdateAddr(block.Coinbase, addr)
+	processor.state.UpdateAccount(block.Coinbase, addr)
 
 	for _, uncle := range block.Uncles {
-		uncleAddr := processor.GetAddr(uncle.Coinbase)
+		uncleAddr := processor.state.GetAccount(uncle.Coinbase)
 		uncleAddr.AddFee(CalculateUncleReward(uncle))
 
-		processor.UpdateAddr(uncle.Coinbase, uncleAddr)
+		processor.state.UpdateAccount(uncle.Coinbase, uncleAddr)
 	}
 
 	return nil
@@ -298,7 +298,7 @@ func (bm *BlockManager) ProcessContract(contract *Contract, tx *Transaction, blo
 	*/
 
 	vm := &Vm{}
-	vm.Process(contract, NewState(block.state), RuntimeVars{
+	vm.Process(contract, block.state, RuntimeVars{
 		address:     tx.Hash()[12:],
 		blockNumber: block.BlockInfo().Number,
 		sender:      tx.Sender(),

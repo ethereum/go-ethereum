@@ -13,6 +13,10 @@ func NewState(trie *ethutil.Trie) *State {
 	return &State{trie: trie}
 }
 
+func (s *State) Reset() {
+	s.trie.Undo()
+}
+
 func (s *State) GetContract(addr []byte) *Contract {
 	data := s.trie.Get(string(addr))
 	if data == "" {
@@ -53,4 +57,8 @@ func (s *State) GetAccount(addr []byte) (account *Address) {
 
 func (s *State) UpdateAccount(addr []byte, account *Address) {
 	s.trie.Update(string(addr), string(account.RlpEncode()))
+}
+
+func (s *State) Cmp(other *State) bool {
+	return s.trie.Cmp(other.trie)
 }
