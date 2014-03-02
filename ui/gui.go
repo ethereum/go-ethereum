@@ -9,8 +9,6 @@ import (
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/niemeyer/qml"
-	"bitbucket.org/kardianos/osext"
-    "path/filepath"
 	"math/big"
 	"strings"
 )
@@ -87,15 +85,12 @@ func (ui *Gui) Start() {
 	// Create a new QML engine
 	ui.engine = qml.NewEngine()
 
-	// Get Binary Directory
-	exedir , _ := osext.ExecutableFolder()
-
 	// Load the main QML interface
-	component, err := ui.engine.LoadFile(filepath.Join(exedir, "wallet.qml"))
+	component, err := ui.engine.LoadFile(AssetPath("wallet.qml"))
 	if err != nil {
 		panic(err)
 	}
-	ui.engine.LoadFile(filepath.Join(exedir, "transactions.qml"))
+	ui.engine.LoadFile(AssetPath("transactions.qml"))
 
 	ui.win = component.CreateWindow(nil)
 

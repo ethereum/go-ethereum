@@ -115,116 +115,141 @@ ApplicationWindow {
 					}
 				}
 			}
-						
-		}
-
-		property var txModel: ListModel {
-			id: txModel
 		}
 
 		Rectangle {
-			id: historyView
-			property var title: "Transactions"
-			anchors.right: parent.right
-			anchors.left: menu.right
-			anchors.bottom: parent.bottom
-			anchors.top: parent.top
-			TableView {
-				id: txTableView
-				anchors.fill: parent
-				TableViewColumn{ role: "value" ; title: "Value" ; width: 100 }
-				TableViewColumn{ role: "address" ; title: "Address" ; width: 430 }
-
-				model: txModel
-			}
-		}
-
-		Rectangle {
-			id: newTxView
-			property var title: "New transaction"
-			visible: false
-			anchors.right: parent.right
-			anchors.left: menu.right
-			anchors.bottom: parent.bottom
-			anchors.top: parent.top
+			id: mainView
 			color: "#00000000"
+			anchors.right: parent.right
+			anchors.left: menu.right
+			anchors.bottom: parent.bottom
+			anchors.top: parent.top
 
-			ColumnLayout {
-				width: 400
-				anchors.left: parent.left
-				anchors.top: parent.top
-				anchors.leftMargin: 5
-				anchors.topMargin: 5
-				TextField {
-					id: txAmount
-					width: 200
-					placeholderText: "Amount"
-				}
+			property var txModel: ListModel {
+				id: txModel
+			}
 
-				TextField {
-					id: txReceiver
-					placeholderText: "Receiver Address (or empty for contract)"
-					Layout.fillWidth: true
-				}
+			Rectangle {
+				id: historyView
+				anchors.fill: parent
 
-				Label {
-					text: "Transaction data"
+				property var title: "Transactions"
+				TableView {
+					id: txTableView
+					anchors.fill: parent
+					TableViewColumn{ role: "value" ; title: "Value" ; width: 100 }
+					TableViewColumn{ role: "address" ; title: "Address" ; width: 430 }
+
+					model: txModel
 				}
-				TextArea {
-					id: codeView
+			}
+
+			Rectangle {
+				id: newTxView
+				property var title: "New transaction"
+				visible: false
+				anchors.fill: parent
+				color: "#00000000"
+
+				ColumnLayout {
+					width: 400
+					anchors.left: parent.left
+					anchors.top: parent.top
+					anchors.leftMargin: 5
 					anchors.topMargin: 5
-					Layout.fillWidth: true
-					width: parent.width /2 
-				}
+					TextField {
+						id: txAmount
+						width: 200
+						placeholderText: "Amount"
+					}
 
-				Button {
-					text: "Send"
-					onClicked: {
-						console.log(eth.createTx(txReceiver.text, txAmount.text, codeView.text))
+					TextField {
+						id: txReceiver
+						placeholderText: "Receiver Address (or empty for contract)"
+						Layout.fillWidth: true
+					}
+
+					Label {
+						text: "Transaction data"
+					}
+					TextArea {
+						id: codeView
+						anchors.topMargin: 5
+						Layout.fillWidth: true
+						width: parent.width /2 
+					}
+
+					Button {
+						text: "Send"
+						onClicked: {
+							console.log(eth.createTx(txReceiver.text, txAmount.text, codeView.text))
+						}
 					}
 				}
 			}
-		}
 
 
-		Rectangle {
-			id: networkView
-			property var title: "Network"
-			visible: false
-			anchors.right: parent.right
-			anchors.bottom: parent.bottom
-			anchors.top: parent.top
+			Rectangle {
+				id: networkView
+				property var title: "Network"
+				visible: false
+				anchors.fill: parent
 
-			TableView {
-				id: blockTable
-				width: parent.width
-				anchors.top: parent.top
-				anchors.bottom: logView.top
-				TableViewColumn{ role: "number" ; title: "#" ; width: 100 }
-				TableViewColumn{ role: "hash" ; title: "Hash" ; width: 560 }
+				TableView {
+					id: blockTable
+					width: parent.width
+					anchors.top: parent.top
+					anchors.bottom: logView.top
+					TableViewColumn{ role: "number" ; title: "#" ; width: 100 }
+					TableViewColumn{ role: "hash" ; title: "Hash" ; width: 560 }
 
-				model: blockModel
+					model: blockModel
 
-				onDoubleClicked: {
-					popup.visible = true
-					popup.block = eth.getBlock(blockModel.get(row).hash)
-					popup.hashLabel.text = popup.block.hash
+					/*
+					 onDoubleClicked: {
+						 popup.visible = true
+						 popup.block = eth.getBlock(blockModel.get(row).hash)
+						 popup.hashLabel.text = popup.block.hash
+					 }
+					 */
+				}
+
+				property var logModel: ListModel {
+					id: logModel
+				}
+
+				TableView {
+					id: logView
+					width: parent.width
+					height: 150
+					anchors.bottom: parent.bottom
+					TableViewColumn{ role: "description" ; title: "log" }
+
+					model: logModel
 				}
 			}
 
-			property var logModel: ListModel {
-				id: logModel
+			/*
+			signal addPlugin(string name)
+			Component {
+				id: pluginWindow
+				Rectangle {
+					anchors.fill: parent
+					Label {
+						id: pluginTitle
+						anchors.centerIn: parent
+						text: "Hello world"
+					}
+					Component.onCompleted: setView(this)
+				}
 			}
 
-			TableView {
-				id: logView
-				width: parent.width
-				height: 150
-				anchors.bottom: parent.bottom
-				TableViewColumn{ role: "description" ; title: "log" }
-
-				model: logModel
+			onAddPlugin: {
+				var pluginWin = pluginWindow.createObject(mainView)
+				console.log(pluginWin)
+				pluginWin.pluginTitle.text = "Test"
 			}
+			*/
 		}
 	}
 
@@ -249,6 +274,7 @@ ApplicationWindow {
 				}
 				text: "Connect"
 			}
+
 			Button {
 				id: importAppButton
 				anchors.left: connectButton.right
@@ -304,6 +330,10 @@ ApplicationWindow {
 			anchors.left: parent.left
 			anchors.leftMargin: 10
 			placeholderText: "address:port"
+			onAccepted: {
+				ui.connectToPeer(addrField.text)
+				addPeerWin.visible = false
+			}
 		}
 		Button {
 			anchors.left: addrField.right
@@ -314,6 +344,9 @@ ApplicationWindow {
 				ui.connectToPeer(addrField.text)
 				addPeerWin.visible = false
 			}
+		}
+		Component.onCompleted: {
+			addrField.focus = true
 		}
 	}
 
@@ -344,6 +377,11 @@ ApplicationWindow {
 			text: "<h2>Ethereum(Go)</h2><br><h3>Development</h3>Jeffrey Wilcke<br><h3>Binary Distribution</h3>Jarrad Hope<br>"
 		}
 
+	}
+
+	function loadPlugin(name) {
+		console.log("Loading plugin" + name)
+		mainView.addPlugin(name)
 	}
 
 	function setWalletValue(value) {
