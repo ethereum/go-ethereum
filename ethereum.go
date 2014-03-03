@@ -186,6 +186,7 @@ func main() {
 					txs := ethereum.TxPool.Flush()
 					// Create a new block which we're going to mine
 					block := ethereum.BlockManager.BlockChain().NewBlock(addr, txs)
+					log.Println("Mining on new block. Includes", len(block.Transactions()), "transactions")
 					// Apply all transactions to the block
 					ethereum.BlockManager.ApplyTransactions(block, block.Transactions())
 
