@@ -104,7 +104,7 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) (err error
 		}
 	}()
 	// Get the sender
-	sender := block.GetAddr(tx.Sender())
+	sender := block.state.GetAccount(tx.Sender())
 
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.
@@ -122,7 +122,7 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) (err error
 	}
 
 	// Get the receiver
-	receiver := block.GetAddr(tx.Recipient)
+	receiver := block.state.GetAccount(tx.Recipient)
 	sender.Nonce += 1
 
 	// Send Tx to self
@@ -136,10 +136,10 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) (err error
 		// Add the amount to receivers account which should conclude this transaction
 		receiver.Amount.Add(receiver.Amount, tx.Value)
 
-		block.UpdateAddr(tx.Recipient, receiver)
+		block.state.UpdateAccount(tx.Recipient, receiver)
 	}
 
-	block.UpdateAddr(tx.Sender(), sender)
+	block.state.UpdateAccount(tx.Sender(), sender)
 
 	log.Printf("[TXPL] Processed Tx %x\n", tx.Hash())
 

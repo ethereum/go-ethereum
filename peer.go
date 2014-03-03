@@ -17,6 +17,8 @@ import (
 const (
 	// The size of the output buffer for writing messages
 	outputBufferSize = 50
+	// Current protocol version
+	ProtocolVersion = 7
 )
 
 type DiscReason byte
@@ -469,7 +471,7 @@ func (p *Peer) pushHandshake() error {
 	pubkey := ethutil.NewValueFromBytes(data).Get(2).Bytes()
 
 	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-		uint32(5), uint32(0), p.Version, byte(p.caps), p.port, pubkey,
+		uint32(ProtocolVersion), uint32(0), p.Version, byte(p.caps), p.port, pubkey,
 	})
 
 	p.QueueMessage(msg)
@@ -496,7 +498,7 @@ func (p *Peer) pushPeers() {
 func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	c := msg.Data
 
-	if c.Get(0).Uint() != 5 {
+	if c.Get(0).Uint() != ProtocolVersion {
 		ethutil.Config.Log.Debugln("Invalid peer version. Require protocol v5")
 		p.Stop()
 		return

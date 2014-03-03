@@ -39,7 +39,7 @@ func (bc *BlockChain) NewBlock(coinbase []byte, txs []*Transaction) *Block {
 	hash := ZeroHash256
 
 	if bc.CurrentBlock != nil {
-		root = bc.CurrentBlock.State().Root
+		root = bc.CurrentBlock.state.trie.Root
 		hash = bc.LastBlockHash
 		lastBlockTime = bc.CurrentBlock.Time
 	}

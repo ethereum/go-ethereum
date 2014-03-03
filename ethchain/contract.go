@@ -8,18 +8,19 @@ import (
 type Contract struct {
 	Amount *big.Int
 	Nonce  uint64
-	state  *ethutil.Trie
+	//state  *ethutil.Trie
+	state *State
 }
 
 func NewContract(Amount *big.Int, root []byte) *Contract {
 	contract := &Contract{Amount: Amount, Nonce: 0}
-	contract.state = ethutil.NewTrie(ethutil.Config.Db, string(root))
+	contract.state = NewState(ethutil.NewTrie(ethutil.Config.Db, string(root)))
 
 	return contract
 }
 
 func (c *Contract) RlpEncode() []byte {
-	return ethutil.Encode([]interface{}{c.Amount, c.Nonce, c.state.Root})
+	return ethutil.Encode([]interface{}{c.Amount, c.Nonce, c.state.trie.Root})
 }
 
 func (c *Contract) RlpDecode(data []byte) {
@@ -27,18 +28,18 @@ func (c *Contract) RlpDecode(data []byte) {
 
 	c.Amount = decoder.Get(0).BigInt()
 	c.Nonce = decoder.Get(1).Uint()
-	c.state = ethutil.NewTrie(ethutil.Config.Db, decoder.Get(2).Interface())
+	c.state = NewState(ethutil.NewTrie(ethutil.Config.Db, decoder.Get(2).Interface()))
 }
 
 func (c *Contract) Addr(addr []byte) *ethutil.Value {
-	return ethutil.NewValueFromBytes([]byte(c.state.Get(string(addr))))
+	return ethutil.NewValueFromBytes([]byte(c.state.trie.Get(string(addr))))
 }
 
 func (c *Contract) SetAddr(addr []byte, value interface{}) {
-	c.state.Update(string(addr), string(ethutil.NewValue(value).Encode()))
+	c.state.trie.Update(string(addr), string(ethutil.NewValue(value).Encode()))
 }
 
-func (c *Contract) State() *ethutil.Trie {
+func (c *Contract) State() *State {
 	return c.state
 }
 
@@ -59,7 +60,7 @@ func MakeContract(tx *Transaction, state *State) *Contract {
 		for i, val := range tx.Data {
 			if len(val) > 0 {
 				bytNum := ethutil.BigToBytes(big.NewInt(int64(i)), 256)
-				contract.state.Update(string(bytNum), string(ethutil.Encode(val)))
+				contract.state.trie.Update(string(bytNum), string(ethutil.Encode(val)))
 			}
 		}
 		state.trie.Update(string(addr), string(contract.RlpEncode()))
