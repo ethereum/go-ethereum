@@ -126,54 +126,6 @@ func (block *Block) Transactions() []*Transaction {
 	return block.transactions
 }
 
-/*
-func (block *Block) GetContract(addr []byte) *Contract {
-	data := block.state.Get(string(addr))
-	if data == "" {
-		return nil
-	}
-
-	value := ethutil.NewValueFromBytes([]byte(data))
-	if value.Len() == 2 {
-		return nil
-	}
-
-	contract := &Contract{}
-	contract.RlpDecode([]byte(data))
-
-	cachedState := block.contractStates[string(addr)]
-	if cachedState != nil {
-		contract.state = cachedState
-	} else {
-		block.contractStates[string(addr)] = contract.state
-	}
-
-	return contract
-}
-func (block *Block) UpdateContract(addr []byte, contract *Contract) {
-	// Make sure the state is synced
-	//contract.State().Sync()
-
-	block.state.trie.Update(string(addr), string(contract.RlpEncode()))
-}
-
-func (block *Block) GetAddr(addr []byte) *Address {
-	var address *Address
-
-	data := block.state.trie.Get(string(addr))
-	if data == "" {
-		address = NewAddress(big.NewInt(0))
-	} else {
-		address = NewAddressFromData([]byte(data))
-	}
-
-	return address
-}
-func (block *Block) UpdateAddr(addr []byte, address *Address) {
-	block.state.trie.Update(string(addr), string(address.RlpEncode()))
-}
-*/
-
 func (block *Block) PayFee(addr []byte, fee *big.Int) bool {
 	contract := block.state.GetContract(addr)
 	// If we can't pay the fee return
@@ -210,23 +162,10 @@ func (block *Block) BlockInfo() BlockInfo {
 
 // Sync the block's state and contract respectively
 func (block *Block) Sync() {
-	/*
-		// Sync all contracts currently in cache
-		for _, val := range block.contractStates {
-			val.Sync()
-		}
-	*/
-	// Sync the block state itself
-	block.state.trie.Sync()
+	block.state.Sync()
 }
 
 func (block *Block) Undo() {
-	/*
-		// Sync all contracts currently in cache
-		for _, val := range block.contractStates {
-			val.Undo()
-		}
-	*/
 	// Sync the block state itself
 	block.state.Reset()
 }
@@ -234,7 +173,7 @@ func (block *Block) Undo() {
 func (block *Block) MakeContract(tx *Transaction) {
 	contract := MakeContract(tx, block.state)
 	if contract != nil {
-		block.contractStates[string(tx.Hash()[12:])] = contract.state
+		block.state.states[string(tx.Hash()[12:])] = contract.state
 	}
 }
 

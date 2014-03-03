@@ -330,7 +330,7 @@ out:
 			// Load the value in storage and push it on the stack
 			x := vm.stack.Pop()
 			// decode the object as a big integer
-			decoder := ethutil.NewValueFromBytes([]byte(contract.State().Get(x.String())))
+			decoder := contract.Addr(x.Bytes())
 			if !decoder.IsNil() {
 				vm.stack.Push(decoder.BigInt())
 			} else {
@@ -375,7 +375,7 @@ out:
 		case oSUICIDE:
 			recAddr := vm.stack.Pop().Bytes()
 			// Purge all memory
-			deletedMemory := contract.state.NewIterator().Purge()
+			deletedMemory := contract.state.Purge()
 			// Add refunds to the pop'ed address
 			refund := new(big.Int).Mul(StoreFee, big.NewInt(int64(deletedMemory)))
 			account := state.GetAccount(recAddr)
