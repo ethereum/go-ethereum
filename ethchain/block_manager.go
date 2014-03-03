@@ -85,17 +85,17 @@ func NewBlockManager(speaker PublicSpeaker) *BlockManager {
 }
 
 // Watches any given address and puts it in the address state store
-func (bm *BlockManager) WatchAddr(addr []byte) *AddressState {
+func (bm *BlockManager) WatchAddr(addr []byte) *AccountState {
 	account := bm.bc.CurrentBlock.state.GetAccount(addr)
 
 	return bm.addrStateStore.Add(addr, account)
 }
 
-func (bm *BlockManager) GetAddrState(addr []byte) *AddressState {
+func (bm *BlockManager) GetAddrState(addr []byte) *AccountState {
 	account := bm.addrStateStore.Get(addr)
 	if account == nil {
 		a := bm.bc.CurrentBlock.state.GetAccount(addr)
-		account = &AddressState{Nonce: a.Nonce, Account: a}
+		account = &AccountState{Nonce: a.Nonce, Account: a}
 	}
 
 	return account

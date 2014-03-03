@@ -93,18 +93,18 @@ func Compile(code []string) (script []string) {
 	return
 }
 
-func (s *State) GetAccount(addr []byte) (account *Address) {
+func (s *State) GetAccount(addr []byte) (account *Account) {
 	data := s.trie.Get(string(addr))
 	if data == "" {
-		account = NewAddress(big.NewInt(0))
+		account = NewAccount(big.NewInt(0))
 	} else {
-		account = NewAddressFromData([]byte(data))
+		account = NewAccountFromData([]byte(data))
 	}
 
 	return
 }
 
-func (s *State) UpdateAccount(addr []byte, account *Address) {
+func (s *State) UpdateAccount(addr []byte, account *Account) {
 	s.trie.Update(string(addr), string(account.RlpEncode()))
 }
 

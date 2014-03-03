@@ -142,7 +142,7 @@ func (block *Block) PayFee(addr []byte, fee *big.Int) bool {
 	data := block.state.trie.Get(string(block.Coinbase))
 
 	// Get the ether (Coinbase) and add the fee (gief fee to miner)
-	ether := NewAddressFromData([]byte(data))
+	ether := NewAccountFromData([]byte(data))
 
 	base = new(big.Int)
 	ether.Amount = base.Add(ether.Amount, fee)
