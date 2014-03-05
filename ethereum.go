@@ -36,8 +36,8 @@ type Ethereum struct {
 	// DB interface
 	//db *ethdb.LDBDatabase
 	db ethutil.Database
-	// Block manager for processing new blocks and managing the block chain
-	blockManager *ethchain.BlockManager
+	// State manager for processing new blocks and managing the over all states
+	stateManager *ethchain.StateManager
 	// The transaction pool. Transaction can be pushed on this pool
 	// for later including in the blocks
 	txPool *ethchain.TxPool
@@ -91,7 +91,7 @@ func New(caps Caps, usePnp bool) (*Ethereum, error) {
 	}
 	ethereum.txPool = ethchain.NewTxPool(ethereum)
 	ethereum.blockChain = ethchain.NewBlockChain(ethereum)
-	ethereum.blockManager = ethchain.NewBlockManager(ethereum)
+	ethereum.stateManager = ethchain.NewStateManager(ethereum)
 
 	// Start the tx pool
 	ethereum.txPool.Start()
@@ -103,8 +103,8 @@ func (s *Ethereum) BlockChain() *ethchain.BlockChain {
 	return s.blockChain
 }
 
-func (s *Ethereum) StateManager() *ethchain.BlockManager {
-	return s.blockManager
+func (s *Ethereum) StateManager() *ethchain.StateManager {
+	return s.stateManager
 }
 
 func (s *Ethereum) TxPool() *ethchain.TxPool {
@@ -304,7 +304,7 @@ func (s *Ethereum) Stop() {
 	close(s.quit)
 
 	s.txPool.Stop()
-	s.blockManager.Stop()
+	s.stateManager.Stop()
 
 	close(s.shutdownChan)
 }
