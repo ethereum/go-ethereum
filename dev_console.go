@@ -158,11 +158,11 @@ func (i *Console) ParseInput(input string) bool {
 			fmt.Println(value)
 		case "getaddr":
 			encoded, _ := hex.DecodeString(tokens[1])
-			addr := i.ethereum.BlockManager.BlockChain().CurrentBlock.State().GetAccount(encoded)
+			addr := i.ethereum.BlockChain().CurrentBlock.State().GetAccount(encoded)
 			fmt.Println("addr:", addr)
 		case "block":
 			encoded, _ := hex.DecodeString(tokens[1])
-			block := i.ethereum.BlockManager.BlockChain().GetBlock(encoded)
+			block := i.ethereum.BlockChain().GetBlock(encoded)
 			info := block.BlockInfo()
 			fmt.Printf("++++++++++ #%d ++++++++++\n%v\n", info.Number, block)
 		case "say":
@@ -182,7 +182,7 @@ func (i *Console) ParseInput(input string) bool {
 
 				key := ethutil.Config.Db.GetKeys()[0]
 				tx.Sign(key.PrivateKey)
-				i.ethereum.TxPool.QueueTransaction(tx)
+				i.ethereum.TxPool().QueueTransaction(tx)
 
 				fmt.Printf("%x\n", tx.Hash())
 			}
@@ -204,7 +204,7 @@ func (i *Console) ParseInput(input string) bool {
 			key := ethutil.Config.Db.GetKeys()[0]
 			contract.Sign(key.PrivateKey)
 
-			i.ethereum.TxPool.QueueTransaction(contract)
+			i.ethereum.TxPool().QueueTransaction(contract)
 
 			fmt.Printf("%x\n", contract.Hash()[12:])
 		case "exit", "quit", "q":
