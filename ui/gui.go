@@ -57,7 +57,7 @@ type Gui struct {
 
 // Create GUI, but doesn't start it
 func New(ethereum *eth.Ethereum) *Gui {
-	lib := &EthLib{blockManager: ethereum.StateManager(), blockChain: ethereum.BlockChain(), txPool: ethereum.TxPool()}
+	lib := &EthLib{stateManager: ethereum.StateManager(), blockChain: ethereum.BlockChain(), txPool: ethereum.TxPool()}
 	db, err := ethdb.NewLDBDatabase("tx_database")
 	if err != nil {
 		panic(err)
