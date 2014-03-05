@@ -37,10 +37,12 @@ type Ethereum struct {
 	//db *ethdb.LDBDatabase
 	db ethutil.Database
 	// Block manager for processing new blocks and managing the block chain
-	BlockManager *ethchain.BlockManager
+	blockManager *ethchain.BlockManager
 	// The transaction pool. Transaction can be pushed on this pool
 	// for later including in the blocks
-	TxPool *ethchain.TxPool
+	txPool *ethchain.TxPool
+	// The canonical chain
+	blockChain *ethchain.BlockChain
 	// Peers (NYI)
 	peers *list.List
 	// Nonce
@@ -87,17 +89,26 @@ func New(caps Caps, usePnp bool) (*Ethereum, error) {
 		serverCaps:   caps,
 		nat:          nat,
 	}
-	ethereum.TxPool = ethchain.NewTxPool()
-	ethereum.TxPool.Speaker = ethereum
-	ethereum.BlockManager = ethchain.NewBlockManager(ethereum)
-
-	ethereum.TxPool.BlockManager = ethereum.BlockManager
-	ethereum.BlockManager.TransactionPool = ethereum.TxPool
+	ethereum.txPool = ethchain.NewTxPool(ethereum)
+	ethereum.blockChain = ethchain.NewBlockChain(ethereum)
+	ethereum.blockManager = ethchain.NewBlockManager(ethereum)
 
 	// Start the tx pool
-	ethereum.TxPool.Start()
+	ethereum.txPool.Start()
 
 	return ethereum, nil
+}
+
+func (s *Ethereum) BlockChain() *ethchain.BlockChain {
+	return s.blockChain
+}
+
+func (s *Ethereum) StateManager() *ethchain.BlockManager {
+	return s.blockManager
+}
+
+func (s *Ethereum) TxPool() *ethchain.TxPool {
+	return s.txPool
 }
 
 func (s *Ethereum) AddPeer(conn net.Conn) {
@@ -253,7 +264,7 @@ func (s *Ethereum) Start() {
 	if ethutil.Config.Seed {
 		ethutil.Config.Log.Debugln("Seeding")
 		// Testnet seed bootstrapping
-		resp, err := http.Get("http://www.ethereum.org/servers.poc3.txt")
+		resp, err := http.Get("https://www.ethereum.org/servers.poc3.txt")
 		if err != nil {
 			log.Println("Fetching seed failed:", err)
 			return
@@ -292,8 +303,8 @@ func (s *Ethereum) Stop() {
 
 	close(s.quit)
 
-	s.TxPool.Stop()
-	s.BlockManager.Stop()
+	s.txPool.Stop()
+	s.blockManager.Stop()
 
 	close(s.shutdownChan)
 }

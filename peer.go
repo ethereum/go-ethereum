@@ -18,7 +18,7 @@ const (
 	// The size of the output buffer for writing messages
 	outputBufferSize = 50
 	// Current protocol version
-	ProtocolVersion = 7
+	ProtocolVersion = 8
 )
 
 type DiscReason byte
@@ -49,7 +49,7 @@ var discReasonToString = []string{
 }
 
 func (d DiscReason) String() string {
-	if len(discReasonToString) > int(d) {
+	if len(discReasonToString) < int(d) {
 		return "Unknown"
 	}
 
@@ -293,7 +293,8 @@ func (p *Peer) HandleInbound() {
 				var err error
 				for i := msg.Data.Len() - 1; i >= 0; i-- {
 					block = ethchain.NewBlockFromRlpValue(msg.Data.Get(i))
-					err = p.ethereum.BlockManager.ProcessBlock(block)
+					// FIXME p.ethereum.BlockManager.DefaultPrepare(block)
+					err = p.ethereum.StateManager().ProcessBlock(block)
 
 					if err != nil {
 						if ethutil.Config.Debug {
@@ -332,7 +333,7 @@ func (p *Peer) HandleInbound() {
 				// in the TxPool where it will undergo validation and
 				// processing when a new block is found
 				for i := 0; i < msg.Data.Len(); i++ {
-					p.ethereum.TxPool.QueueTransaction(ethchain.NewTransactionFromData(msg.Data.Get(i).Encode()))
+					p.ethereum.TxPool().QueueTransaction(ethchain.NewTransactionFromData(msg.Data.Get(i).Encode()))
 				}
 			case ethwire.MsgGetPeersTy:
 				// Flag this peer as a 'requested of new peers' this to
@@ -374,15 +375,16 @@ func (p *Peer) HandleInbound() {
 				// Check each SHA block hash from the message and determine whether
 				// the SHA is in the database
 				for i := 0; i < l; i++ {
-					if data := msg.Data.Get(i).Bytes(); p.ethereum.BlockManager.BlockChain().HasBlock(data) {
-						parent = p.ethereum.BlockManager.BlockChain().GetBlock(data)
+					if data :=
+						msg.Data.Get(i).Bytes(); p.ethereum.StateManager().BlockChain().HasBlock(data) {
+						parent = p.ethereum.BlockChain().GetBlock(data)
 						break
 					}
 				}
 
 				// If a parent is found send back a reply
 				if parent != nil {
-					chain := p.ethereum.BlockManager.BlockChain().GetChainFromHash(parent.Hash(), amountOfBlocks)
+					chain := p.ethereum.BlockChain().GetChainFromHash(parent.Hash(), amountOfBlocks)
 					p.QueueMessage(ethwire.NewMessage(ethwire.MsgBlockTy, chain))
 				} else {
 					// If no blocks are found we send back a reply with msg not in chain
@@ -554,10 +556,10 @@ func (p *Peer) String() string {
 func (p *Peer) CatchupWithPeer() {
 	if !p.catchingUp {
 		p.catchingUp = true
-		msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{p.ethereum.BlockManager.BlockChain().CurrentBlock.Hash(), uint64(50)})
+		msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{p.ethereum.BlockChain().CurrentBlock.Hash(), uint64(50)})
 		p.QueueMessage(msg)
 
-		ethutil.Config.Log.Debugf("Requesting blockchain %x...\n", p.ethereum.BlockManager.BlockChain().CurrentBlock.Hash()[:4])
+		ethutil.Config.Log.Debugf("Requesting blockchain %x...\n", p.ethereum.BlockChain().CurrentBlock.Hash()[:4])
 	}
 }
 

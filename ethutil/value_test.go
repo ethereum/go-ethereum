@@ -50,3 +50,16 @@ func TestValueTypes(t *testing.T) {
 		t.Errorf("expected BigInt to return '%v', got %v", bigExp, bigInt.BigInt())
 	}
 }
+
+func TestIterator(t *testing.T) {
+	value := NewValue([]interface{}{1, 2, 3})
+	it := value.NewIterator()
+	values := []uint64{1, 2, 3}
+	i := 0
+	for it.Next() {
+		if values[i] != it.Value().Uint() {
+			t.Errorf("Expected %d, got %d", values[i], it.Value().Uint())
+		}
+		i++
+	}
+}

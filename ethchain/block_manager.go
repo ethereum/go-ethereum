@@ -2,11 +2,9 @@ package ethchain
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
-	_ "github.com/ethereum/eth-go/ethwire"
-	"log"
+	"github.com/ethereum/eth-go/ethwire"
 	"math/big"
 	"sync"
 	"time"
@@ -16,14 +14,20 @@ type BlockProcessor interface {
 	ProcessBlock(block *Block)
 }
 
+type EthManager interface {
+	StateManager() *BlockManager
+	BlockChain() *BlockChain
+	TxPool() *TxPool
+	Broadcast(msgType ethwire.MsgType, data []interface{})
+}
+
 // TODO rename to state manager
 type BlockManager struct {
 	// Mutex for locking the block processor. Blocks can only be handled one at a time
 	mutex sync.Mutex
 
-	// The block chain :)
+	// Canonical block chain
 	bc *BlockChain
-
 	// States for addresses. You can watch any address
 	// at any given time
 	addrStateStore *AddrStateStore
@@ -33,59 +37,41 @@ type BlockManager struct {
 	// non-persistent key/value memory storage
 	mem map[string]*big.Int
 
-	TransactionPool *TxPool
-
 	Pow PoW
 
-	Speaker PublicSpeaker
+	Ethereum EthManager
 
 	SecondaryBlockProcessor BlockProcessor
+
+	// The managed states
+	// Processor state. Anything processed will be applied to this
+	// state
+	procState *State
+	// Comparative state it used for comparing and validating end
+	// results
+	compState *State
 }
 
-func AddTestNetFunds(block *Block) {
-	for _, addr := range []string{
-		"8a40bfaa73256b60764c1bf40675a99083efb075", // Gavin
-		"e6716f9544a56c530d868e4bfbacb172315bdead", // Jeffrey
-		"1e12515ce3e0f817a4ddef9ca55788a1d66bd2df", // Vit
-		"1a26338f0d905e295fccb71fa9ea849ffa12aaf4", // Alex
-	} {
-		//log.Println("2^200 Wei to", addr)
-		codedAddr, _ := hex.DecodeString(addr)
-		addr := block.state.GetAccount(codedAddr)
-		addr.Amount = ethutil.BigPow(2, 200)
-		block.state.UpdateAccount(codedAddr, addr)
-	}
-}
-
-func NewBlockManager(speaker PublicSpeaker) *BlockManager {
+func NewBlockManager(ethereum EthManager) *BlockManager {
 	bm := &BlockManager{
-		//server: s,
-		bc:             NewBlockChain(),
 		stack:          NewStack(),
 		mem:            make(map[string]*big.Int),
 		Pow:            &EasyPow{},
-		Speaker:        speaker,
+		Ethereum:       ethereum,
 		addrStateStore: NewAddrStateStore(),
+		bc:             ethereum.BlockChain(),
 	}
-
-	if bm.bc.CurrentBlock == nil {
-		AddTestNetFunds(bm.bc.genesisBlock)
-
-		bm.bc.genesisBlock.state.trie.Sync()
-		// Prepare the genesis block
-		bm.bc.Add(bm.bc.genesisBlock)
-
-		//log.Printf("root %x\n", bm.bc.genesisBlock.State().Root)
-		//bm.bc.genesisBlock.PrintHash()
-	}
-
-	log.Printf("Last block: %x\n", bm.bc.CurrentBlock.Hash())
 
 	return bm
 }
 
+func (bm *BlockManager) ProcState() *State {
+	return bm.procState
+}
+
 // Watches any given address and puts it in the address state store
 func (bm *BlockManager) WatchAddr(addr []byte) *AccountState {
+	//FIXME account := bm.procState.GetAccount(addr)
 	account := bm.bc.CurrentBlock.state.GetAccount(addr)
 
 	return bm.addrStateStore.Add(addr, account)
@@ -105,23 +91,44 @@ func (bm *BlockManager) BlockChain() *BlockChain {
 	return bm.bc
 }
 
+func (bm *BlockManager) MakeContract(tx *Transaction) {
+	contract := MakeContract(tx, bm.procState)
+	if contract != nil {
+		bm.procState.states[string(tx.Hash()[12:])] = contract.state
+	}
+}
+
 func (bm *BlockManager) ApplyTransactions(block *Block, txs []*Transaction) {
 	// Process each transaction/contract
 	for _, tx := range txs {
 		// If there's no recipient, it's a contract
 		if tx.IsContract() {
+			//FIXME bm.MakeContract(tx)
 			block.MakeContract(tx)
 		} else {
+			//FIXME if contract := procState.GetContract(tx.Recipient); contract != nil {
 			if contract := block.state.GetContract(tx.Recipient); contract != nil {
 				bm.ProcessContract(contract, tx, block)
 			} else {
-				err := bm.TransactionPool.ProcessTransaction(tx, block)
+				err := bm.Ethereum.TxPool().ProcessTransaction(tx, block)
 				if err != nil {
 					ethutil.Config.Log.Infoln("[BMGR]", err)
 				}
 			}
 		}
 	}
+}
+
+// The prepare function, prepares the state manager for the next
+// "ProcessBlock" action.
+func (bm *BlockManager) Prepare(processer *State, comparative *State) {
+	bm.compState = comparative
+	bm.procState = processer
+}
+
+// Default prepare function
+func (bm *BlockManager) PrepareDefault(block *Block) {
+	bm.Prepare(bm.BlockChain().CurrentBlock.State(), block.State())
 }
 
 // Block processing and validating with a given (temporarily) state
@@ -161,17 +168,20 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 		return err
 	}
 
+	// if !bm.compState.Cmp(bm.procState)
 	if !block.state.Cmp(bm.bc.CurrentBlock.state) {
 		return fmt.Errorf("Invalid merkle root. Expected %x, got %x", block.State().trie.Root, bm.bc.CurrentBlock.State().trie.Root)
+		//FIXME return fmt.Errorf("Invalid merkle root. Expected %x, got %x", bm.compState.trie.Root, bm.procState.trie.Root)
 	}
 
 	// Calculate the new total difficulty and sync back to the db
 	if bm.CalculateTD(block) {
 		// Sync the current block's state to the database and cancelling out the deferred Undo
 		bm.bc.CurrentBlock.Sync()
+		//FIXME bm.procState.Sync()
 
 		// Broadcast the valid block back to the wire
-		//bm.Speaker.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
+		//bm.Ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
 
 		// Add the block to the chain
 		bm.bc.Add(block)
@@ -206,12 +216,6 @@ func (bm *BlockManager) CalculateTD(block *Block) bool {
 	if td.Cmp(bm.bc.TD) > 0 {
 		// Set the new total difficulty back to the block chain
 		bm.bc.SetTotalDifficulty(td)
-
-		/*
-			if ethutil.Config.Debug {
-				log.Println("[BMGR] TD(block) =", td)
-			}
-		*/
 
 		return true
 	}
@@ -268,16 +272,19 @@ func CalculateUncleReward(block *Block) *big.Int {
 func (bm *BlockManager) AccumelateRewards(processor *Block, block *Block) error {
 	// Get the coinbase rlp data
 	addr := processor.state.GetAccount(block.Coinbase)
+	//FIXME addr := proc.GetAccount(block.Coinbase)
 	// Reward amount of ether to the coinbase address
 	addr.AddFee(CalculateBlockReward(block, len(block.Uncles)))
 
 	processor.state.UpdateAccount(block.Coinbase, addr)
+	//FIXME proc.UpdateAccount(block.Coinbase, addr)
 
 	for _, uncle := range block.Uncles {
 		uncleAddr := processor.state.GetAccount(uncle.Coinbase)
 		uncleAddr.AddFee(CalculateUncleReward(uncle))
 
 		processor.state.UpdateAccount(uncle.Coinbase, uncleAddr)
+		//FIXME proc.UpdateAccount(uncle.Coinbase, uncleAddr)
 	}
 
 	return nil
@@ -298,6 +305,7 @@ func (bm *BlockManager) ProcessContract(contract *Contract, tx *Transaction, blo
 	*/
 
 	vm := &Vm{}
+	//vm.Process(contract, bm.procState, RuntimeVars{
 	vm.Process(contract, block.state, RuntimeVars{
 		address:     tx.Hash()[12:],
 		blockNumber: block.BlockInfo().Number,

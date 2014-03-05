@@ -111,3 +111,41 @@ func (s *State) UpdateAccount(addr []byte, account *Account) {
 func (s *State) Cmp(other *State) bool {
 	return s.trie.Cmp(other.trie)
 }
+
+type ObjType byte
+
+const (
+	NilTy ObjType = iota
+	AccountTy
+	ContractTy
+
+	UnknownTy
+)
+
+// Returns the object stored at key and the type stored at key
+// Returns nil if nothing is stored
+func (s *State) Get(key []byte) (*ethutil.Value, ObjType) {
+	// Fetch data from the trie
+	data := s.trie.Get(string(key))
+	// Returns the nil type, indicating nothing could be retrieved.
+	// Anything using this function should check for this ret val
+	if data == "" {
+		return nil, NilTy
+	}
+
+	var typ ObjType
+	val := ethutil.NewValueFromBytes([]byte(data))
+	// Check the length of the retrieved value.
+	// Len 2 = Account
+	// Len 3 = Contract
+	// Other = invalid for now. If other types emerge, add them here
+	if val.Len() == 2 {
+		typ = AccountTy
+	} else if val.Len() == 3 {
+		typ = ContractTy
+	} else {
+		typ = UnknownTy
+	}
+
+	return val, typ
+}

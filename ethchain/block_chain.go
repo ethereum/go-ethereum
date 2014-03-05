@@ -9,6 +9,7 @@ import (
 )
 
 type BlockChain struct {
+	Ethereum EthManager
 	// The famous, the fabulous Mister GENESIIIIIIS (block)
 	genesisBlock *Block
 	// Last known total difficulty
@@ -20,7 +21,7 @@ type BlockChain struct {
 	LastBlockHash []byte
 }
 
-func NewBlockChain() *BlockChain {
+func NewBlockChain(ethereum EthManager) *BlockChain {
 	bc := &BlockChain{}
 	bc.genesisBlock = NewBlockFromData(ethutil.Encode(Genesis))
 
@@ -129,6 +130,21 @@ func (bc *BlockChain) GetChain(hash []byte, amount int) []*Block {
 	return blocks
 }
 
+func AddTestNetFunds(block *Block) {
+	for _, addr := range []string{
+		"8a40bfaa73256b60764c1bf40675a99083efb075", // Gavin
+		"e6716f9544a56c530d868e4bfbacb172315bdead", // Jeffrey
+		"1e12515ce3e0f817a4ddef9ca55788a1d66bd2df", // Vit
+		"1a26338f0d905e295fccb71fa9ea849ffa12aaf4", // Alex
+	} {
+		//log.Println("2^200 Wei to", addr)
+		codedAddr := ethutil.FromHex(addr)
+		addr := block.state.GetAccount(codedAddr)
+		addr.Amount = ethutil.BigPow(2, 200)
+		block.state.UpdateAccount(codedAddr, addr)
+	}
+}
+
 func (bc *BlockChain) setLastBlock() {
 	data, _ := ethutil.Config.Db.Get([]byte("LastBlock"))
 	if len(data) != 0 {
@@ -139,10 +155,21 @@ func (bc *BlockChain) setLastBlock() {
 		bc.LastBlockNumber = info.Number
 
 		log.Printf("[CHAIN] Last known block height #%d\n", bc.LastBlockNumber)
+	} else {
+		AddTestNetFunds(bc.genesisBlock)
+
+		bc.genesisBlock.state.trie.Sync()
+		// Prepare the genesis block
+		bc.Add(bc.genesisBlock)
+
+		//log.Printf("root %x\n", bm.bc.genesisBlock.State().Root)
+		//bm.bc.genesisBlock.PrintHash()
 	}
 
 	// Set the last know difficulty (might be 0x0 as initial value, Genesis)
 	bc.TD = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
+
+	log.Printf("Last block: %x\n", bc.CurrentBlock.Hash())
 }
 
 func (bc *BlockChain) SetTotalDifficulty(td *big.Int) {

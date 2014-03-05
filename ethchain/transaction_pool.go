@@ -41,10 +41,6 @@ func FindTx(pool *list.List, finder func(*Transaction, *list.Element) bool) *Tra
 	return nil
 }
 
-type PublicSpeaker interface {
-	Broadcast(msgType ethwire.MsgType, data []interface{})
-}
-
 type TxProcessor interface {
 	ProcessTransaction(tx *Transaction)
 }
@@ -55,8 +51,7 @@ type TxProcessor interface {
 // pool is being drained or synced for whatever reason the transactions
 // will simple queue up and handled when the mutex is freed.
 type TxPool struct {
-	//server *Server
-	Speaker PublicSpeaker
+	Ethereum EthManager
 	// The mutex for accessing the Tx pool.
 	mutex sync.Mutex
 	// Queueing channel for reading and writing incoming
@@ -67,20 +62,19 @@ type TxPool struct {
 	// The actual pool
 	pool *list.List
 
-	BlockManager *BlockManager
-
 	SecondaryProcessor TxProcessor
 
 	subscribers []chan TxMsg
 }
 
-func NewTxPool() *TxPool {
+func NewTxPool(ethereum EthManager) *TxPool {
 	return &TxPool{
 		//server:    s,
 		mutex:     sync.Mutex{},
 		pool:      list.New(),
 		queueChan: make(chan *Transaction, txPoolQueueSize),
 		quit:      make(chan bool),
+		Ethereum:  ethereum,
 	}
 }
 
@@ -91,7 +85,7 @@ func (pool *TxPool) addTransaction(tx *Transaction) {
 	pool.mutex.Unlock()
 
 	// Broadcast the transaction to the rest of the peers
-	pool.Speaker.Broadcast(ethwire.MsgTxTy, []interface{}{tx.RlpData()})
+	pool.Ethereum.Broadcast(ethwire.MsgTxTy, []interface{}{tx.RlpData()})
 }
 
 // Process transaction validates the Tx and processes funds from the
@@ -152,14 +146,14 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) (err error
 func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 	// Get the last block so we can retrieve the sender and receiver from
 	// the merkle trie
-	block := pool.BlockManager.BlockChain().CurrentBlock
+	block := pool.Ethereum.BlockChain().CurrentBlock
 	// Something has gone horribly wrong if this happens
 	if block == nil {
 		return errors.New("No last block on the block chain")
 	}
 
 	// Get the sender
-	accountState := pool.BlockManager.GetAddrState(tx.Sender())
+	accountState := pool.Ethereum.StateManager().GetAddrState(tx.Sender())
 	sender := accountState.Account
 
 	totAmount := new(big.Int).Add(tx.Value, new(big.Int).Mul(TxFee, TxFeeRat))
