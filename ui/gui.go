@@ -57,7 +57,7 @@ type Gui struct {
 
 // Create GUI, but doesn't start it
 func New(ethereum *eth.Ethereum) *Gui {
-	lib := &EthLib{blockManager: ethereum.BlockManager, blockChain: ethereum.BlockManager.BlockChain(), txPool: ethereum.TxPool}
+	lib := &EthLib{blockManager: ethereum.StateManager(), blockChain: ethereum.BlockChain(), txPool: ethereum.TxPool()}
 	db, err := ethdb.NewLDBDatabase("tx_database")
 	if err != nil {
 		panic(err)
@@ -66,7 +66,7 @@ func New(ethereum *eth.Ethereum) *Gui {
 	key := ethutil.Config.Db.GetKeys()[0]
 	addr := key.Address()
 
-	ethereum.BlockManager.WatchAddr(addr)
+	ethereum.StateManager().WatchAddr(addr)
 
 	return &Gui{eth: ethereum, lib: lib, txDb: db, addr: addr}
 }
@@ -84,24 +84,23 @@ func (ui *Gui) Start() {
 	ethutil.Config.Log.Infoln("[GUI] Starting GUI")
 	// Create a new QML engine
 	ui.engine = qml.NewEngine()
-
-	// Load the main QML interface
-	component, err := ui.engine.LoadFile(AssetPath("wallet.qml"))
-	if err != nil {
-		panic(err)
-	}
-	ui.engine.LoadFile(AssetPath("transactions.qml"))
-
-	ui.win = component.CreateWindow(nil)
-
 	context := ui.engine.Context()
 
 	// Expose the eth library and the ui library to QML
 	context.SetVar("eth", ui.lib)
 	context.SetVar("ui", &UiLib{engine: ui.engine, eth: ui.eth})
 
+	// Load the main QML interface
+	component, err := ui.engine.LoadFile(AssetPath("qml/wallet.qml"))
+	if err != nil {
+		panic(err)
+	}
+	ui.engine.LoadFile(AssetPath("qml/transactions.qml"))
+
+	ui.win = component.CreateWindow(nil)
+
 	// Register the ui as a block processor
-	ui.eth.BlockManager.SecondaryBlockProcessor = ui
+	//ui.eth.BlockManager.SecondaryBlockProcessor = ui
 	//ui.eth.TxPool.SecondaryProcessor = ui
 
 	// Add the ui as a log system so we can log directly to the UGI
@@ -120,7 +119,7 @@ func (ui *Gui) Start() {
 
 func (ui *Gui) setInitialBlockChain() {
 	// Load previous 10 blocks
-	chain := ui.eth.BlockManager.BlockChain().GetChain(ui.eth.BlockManager.BlockChain().CurrentBlock.Hash(), 10)
+	chain := ui.eth.BlockChain().GetChain(ui.eth.BlockChain().CurrentBlock.Hash(), 10)
 	for _, block := range chain {
 		ui.ProcessBlock(block)
 	}
@@ -144,9 +143,9 @@ func (ui *Gui) ProcessBlock(block *ethchain.Block) {
 // Simple go routine function that updates the list of peers in the GUI
 func (ui *Gui) update() {
 	txChan := make(chan ethchain.TxMsg, 1)
-	ui.eth.TxPool.Subscribe(txChan)
+	ui.eth.TxPool().Subscribe(txChan)
 
-	account := ui.eth.BlockManager.GetAddrState(ui.addr).Account
+	account := ui.eth.StateManager().GetAddrState(ui.addr).Account
 	unconfirmedFunds := new(big.Int)
 	ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(account.Amount)))
 	for {
@@ -159,7 +158,7 @@ func (ui *Gui) update() {
 					ui.win.Root().Call("addTx", NewTxFromTransaction(tx))
 					ui.txDb.Put(tx.Hash(), tx.RlpEncode())
 
-					ui.eth.BlockManager.GetAddrState(ui.addr).Nonce += 1
+					ui.eth.StateManager().GetAddrState(ui.addr).Nonce += 1
 					unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
 				} else if bytes.Compare(tx.Recipient, ui.addr) == 0 {
 					ui.win.Root().Call("addTx", NewTxFromTransaction(tx))

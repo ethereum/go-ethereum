@@ -144,7 +144,7 @@ func main() {
 	}
 
 	if ShowGenesis {
-		fmt.Println(ethereum.BlockManager.BlockChain().Genesis())
+		fmt.Println(ethereum.BlockChain().Genesis())
 		os.Exit(0)
 	}
 
@@ -183,23 +183,24 @@ func main() {
 				addr := keyRing.Get(1).Bytes()
 
 				for {
-					txs := ethereum.TxPool.Flush()
+					txs := ethereum.TxPool().Flush()
 					// Create a new block which we're going to mine
-					block := ethereum.BlockManager.BlockChain().NewBlock(addr, txs)
+					block := ethereum.BlockChain().NewBlock(addr, txs)
 					log.Println("Mining on new block. Includes", len(block.Transactions()), "transactions")
 					// Apply all transactions to the block
-					ethereum.BlockManager.ApplyTransactions(block, block.Transactions())
+					ethereum.StateManager().ApplyTransactions(block, block.Transactions())
 
-					ethereum.BlockManager.AccumelateRewards(block, block)
+					ethereum.StateManager().AccumelateRewards(block, block)
 
 					// Search the nonce
 					block.Nonce = pow.Search(block)
 					ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
-					err := ethereum.BlockManager.ProcessBlock(block)
+					err := ethereum.StateManager().ProcessBlock(block)
 					if err != nil {
 						log.Println(err)
 					} else {
-						log.Println("\n+++++++ MINED BLK +++++++\n", ethereum.BlockManager.BlockChain().CurrentBlock)
+						//log.Println("\n+++++++ MINED BLK +++++++\n", ethereum.BlockChain().CurrentBlock)
+						log.Printf("🔨  Mined block %x\n", block.Hash())
 					}
 				}
 			}()

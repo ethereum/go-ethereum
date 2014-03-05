@@ -85,7 +85,7 @@ ApplicationWindow {
 				anchors.right: parent.right
 				height: 200
 				Image {
-					source: "tx.png"
+					source: ui.assetPath("tx.png")
 					anchors.horizontalCenter: parent.horizontalCenter
 					MouseArea {
 						anchors.fill: parent
@@ -95,7 +95,7 @@ ApplicationWindow {
 					}
 				}
 				Image {
-					source: "new.png"
+					source: ui.assetPath("new.png")
 					anchors.horizontalCenter: parent.horizontalCenter
 					MouseArea {
 						anchors.fill: parent
@@ -105,7 +105,7 @@ ApplicationWindow {
 					}
 				}
 				Image {
-					source: "net.png"
+					source: ui.assetPath("net.png")
 					anchors.horizontalCenter: parent.horizontalCenter
 					MouseArea {
 						anchors.fill: parent
@@ -300,7 +300,7 @@ ApplicationWindow {
 				id: peerImage
 				anchors.right: parent.right
 				width: 10; height: 10
-				source: "network.png"
+				source: ui.assetPath("network.png")
 			}
 		}
 	}
@@ -365,7 +365,7 @@ ApplicationWindow {
 			width: 150
 			fillMode: Image.PreserveAspectFit
 			smooth: true
-			source: "facet.png"
+			source: ui.assetPath("facet.png")
 			x: 10
 			y: 10
 		}
