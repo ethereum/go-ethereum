@@ -270,13 +270,13 @@ func (s *Ethereum) Start() {
 			// Iterate SRV nodes
 			for _, n := range nodes {
 				target := n.Target
-				port := n.Port
+				port := strconv.Itoa(int(n.Port))
 				// Resolve target to ip (Go returns list, so may resolve to multiple ips?)
 				addr, err := net.LookupHost(target)
 				if(err == nil) {
 					for _, a := range addr {
 						// Build string out of SRV port and Resolved IP
-						peer := net.JoinHostPort(a, strconv.Itoa(int(port)))
+						peer := net.JoinHostPort(a, port)
 						log.Println("Found DNS Bootstrap Peer:", peer)
 						peers = append(peers, peer)
 					}
