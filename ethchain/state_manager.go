@@ -21,7 +21,6 @@ type EthManager interface {
 	Broadcast(msgType ethwire.MsgType, data []interface{})
 }
 
-// TODO rename to state manager
 type StateManager struct {
 	// Mutex for locking the block processor. Blocks can only be handled one at a time
 	mutex sync.Mutex
@@ -50,6 +49,8 @@ type StateManager struct {
 	// Comparative state it used for comparing and validating end
 	// results
 	compState *State
+
+	miningState *State
 }
 
 func NewStateManager(ethereum EthManager) *StateManager {
