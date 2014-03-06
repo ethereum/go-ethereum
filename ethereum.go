@@ -262,46 +262,46 @@ func (s *Ethereum) Start() {
 	go s.ReapDeadPeerHandler()
 
 	if ethutil.Config.Seed {
-			ethutil.Config.Log.Debugln("Seeding")
-			// DNS Bootstrapping
-			_, nodes,  err := net.LookupSRV("eth", "tcp", "ethereum.org")
-			if(err == nil) {
-				peers := []string{}
-				// Iterate SRV nodes
-				for _, n := range nodes {
-					target := n.Target
-					port := n.Port
-					// Resolve target to ip (Go returns list, so may resolve to multiple ips?)
-					addr, err := net.LookupHost(target)
-					if(err == nil) {
-						for _, a := range addr {
-							// Build string out of SRV port and Resolved IP
-							peer := net.JoinHostPort(a, strconv.Itoa(int(port)))
-							log.Println("Found DNS Bootstrap Peer:", peer)
-							peers = append(peers, peer)
-						}
-					} else {
-						log.Println("Couldn't resolve :", target)
+		ethutil.Config.Log.Debugln("Seeding")
+		// DNS Bootstrapping
+		_, nodes,  err := net.LookupSRV("eth", "tcp", "ethereum.org")
+		if(err == nil) {
+			peers := []string{}
+			// Iterate SRV nodes
+			for _, n := range nodes {
+				target := n.Target
+				port := n.Port
+				// Resolve target to ip (Go returns list, so may resolve to multiple ips?)
+				addr, err := net.LookupHost(target)
+				if(err == nil) {
+					for _, a := range addr {
+						// Build string out of SRV port and Resolved IP
+						peer := net.JoinHostPort(a, strconv.Itoa(int(port)))
+						log.Println("Found DNS Bootstrap Peer:", peer)
+						peers = append(peers, peer)
 					}
+				} else {
+					log.Println("Couldn't resolve :", target)
 				}
-				// Connect to Peer list
-				s.ProcessPeerList(peers)
-			} else {
-				// Fallback to servers.poc3.txt
-				resp, err := http.Get("http://www.ethereum.org/servers.poc3.txt")
-				if err != nil {
-					log.Println("Fetching seed failed:", err)
-					return
-				}
-				defer resp.Body.Close()
-				body, err := ioutil.ReadAll(resp.Body)
-				if err != nil {
-					log.Println("Reading seed failed:", err)
-					return
-				}
-
-				s.ConnectToPeer(string(body))
 			}
+			// Connect to Peer list
+			s.ProcessPeerList(peers)
+		} else {
+			// Fallback to servers.poc3.txt
+			resp, err := http.Get("http://www.ethereum.org/servers.poc3.txt")
+			if err != nil {
+				log.Println("Fetching seed failed:", err)
+				return
+			}
+			defer resp.Body.Close()
+			body, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				log.Println("Reading seed failed:", err)
+				return
+			}
+
+			s.ConnectToPeer(string(body))
+		}
 	}
 }
 
