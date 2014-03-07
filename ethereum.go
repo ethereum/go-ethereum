@@ -264,8 +264,8 @@ func (s *Ethereum) Start() {
 	if ethutil.Config.Seed {
 		ethutil.Config.Log.Debugln("Seeding")
 		// DNS Bootstrapping
-		_, nodes,  err := net.LookupSRV("eth", "tcp", "ethereum.org")
-		if(err == nil) {
+		_, nodes, err := net.LookupSRV("eth", "tcp", "ethereum.org")
+		if err == nil {
 			peers := []string{}
 			// Iterate SRV nodes
 			for _, n := range nodes {
@@ -273,7 +273,7 @@ func (s *Ethereum) Start() {
 				port := strconv.Itoa(int(n.Port))
 				// Resolve target to ip (Go returns list, so may resolve to multiple ips?)
 				addr, err := net.LookupHost(target)
-				if(err == nil) {
+				if err == nil {
 					for _, a := range addr {
 						// Build string out of SRV port and Resolved IP
 						peer := net.JoinHostPort(a, port)
