@@ -11,7 +11,7 @@ import (
 )
 
 type PoW interface {
-	Search(block *Block) []byte
+	Search(block *Block, breakChan chan bool) []byte
 	Verify(hash []byte, diff *big.Int, nonce []byte) bool
 }
 
@@ -19,15 +19,23 @@ type EasyPow struct {
 	hash *big.Int
 }
 
-func (pow *EasyPow) Search(block *Block) []byte {
+func (pow *EasyPow) Search(block *Block, breakChan chan bool) []byte {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
 	hash := block.HashNoNonce()
 	diff := block.Difficulty
+
 	for {
-		sha := ethutil.Sha3Bin(big.NewInt(r.Int63()).Bytes())
-		if pow.Verify(hash, diff, sha) {
-			return sha
+		select {
+		case shouldbreak := <-breakChan:
+			if shouldbreak {
+				log.Println("Got signal: Breaking out mining.")
+				return nil
+			}
+		default:
+			sha := ethutil.Sha3Bin(big.NewInt(r.Int63()).Bytes())
+			if pow.Verify(hash, diff, sha) {
+				return sha
+			}
 		}
 	}
 
@@ -98,9 +106,9 @@ func (dag *Dagger) Search(hash, diff *big.Int) *big.Int {
 
 	for k := 0; k < amountOfRoutines; k++ {
 		go dag.Find(obj, resChan)
-	}
 
-	// Wait for each go routine to finish
+		// Wait for each go routine to finish
+	}
 	for k := 0; k < amountOfRoutines; k++ {
 		// Get the result from the channel. 0 = quit
 		if r := <-resChan; r != 0 {

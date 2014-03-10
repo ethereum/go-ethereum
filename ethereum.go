@@ -60,6 +60,8 @@ type Ethereum struct {
 
 	// Specifies the desired amount of maximum peers
 	MaxPeers int
+
+	reactor *ethutil.ReactorEngine
 }
 
 func New(caps Caps, usePnp bool) (*Ethereum, error) {
@@ -89,6 +91,8 @@ func New(caps Caps, usePnp bool) (*Ethereum, error) {
 		serverCaps:   caps,
 		nat:          nat,
 	}
+	ethereum.reactor = ethutil.NewReactorEngine()
+
 	ethereum.txPool = ethchain.NewTxPool(ethereum)
 	ethereum.blockChain = ethchain.NewBlockChain(ethereum)
 	ethereum.stateManager = ethchain.NewStateManager(ethereum)
@@ -97,6 +101,10 @@ func New(caps Caps, usePnp bool) (*Ethereum, error) {
 	ethereum.txPool.Start()
 
 	return ethereum, nil
+}
+
+func (s *Ethereum) Reactor() *ethutil.ReactorEngine {
+	return s.reactor
 }
 
 func (s *Ethereum) BlockChain() *ethchain.BlockChain {

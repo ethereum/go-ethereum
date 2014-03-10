@@ -19,6 +19,7 @@ type EthManager interface {
 	BlockChain() *BlockChain
 	TxPool() *TxPool
 	Broadcast(msgType ethwire.MsgType, data []interface{})
+	Reactor() *ethutil.ReactorEngine
 }
 
 // TODO rename to state manager
@@ -50,6 +51,9 @@ type StateManager struct {
 	// Comparative state it used for comparing and validating end
 	// results
 	compState *State
+
+	// Mining state, solely used for mining
+	miningState *State
 }
 
 func NewStateManager(ethereum EthManager) *StateManager {
@@ -67,6 +71,10 @@ func NewStateManager(ethereum EthManager) *StateManager {
 
 func (sm *StateManager) ProcState() *State {
 	return sm.procState
+}
+
+func (sm *StateManager) MiningState() *State {
+	return sm.miningState
 }
 
 // Watches any given address and puts it in the address state store
@@ -97,6 +105,8 @@ func (sm *StateManager) MakeContract(tx *Transaction) {
 		sm.procState.states[string(tx.Hash()[12:])] = contract.state
 	}
 }
+func (sm *StateManager) ApplyTransaction(block *Block, tx *Transaction) {
+}
 
 func (sm *StateManager) ApplyTransactions(block *Block, txs []*Transaction) {
 	// Process each transaction/contract
@@ -124,6 +134,10 @@ func (sm *StateManager) ApplyTransactions(block *Block, txs []*Transaction) {
 func (sm *StateManager) Prepare(processer *State, comparative *State) {
 	sm.compState = comparative
 	sm.procState = processer
+}
+
+func (sm *StateManager) PrepareMiningState() {
+	sm.miningState = sm.BlockChain().CurrentBlock.State()
 }
 
 // Default prepare function
@@ -193,6 +207,7 @@ func (sm *StateManager) ProcessBlock(block *Block) error {
 		}
 
 		ethutil.Config.Log.Infof("[smGR] Added block #%d (%x)\n", block.BlockInfo().Number, block.Hash())
+		sm.Ethereum.Reactor().Post("newBlock", block)
 	} else {
 		fmt.Println("total diff failed")
 	}

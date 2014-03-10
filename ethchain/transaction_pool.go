@@ -91,6 +91,7 @@ func (pool *TxPool) addTransaction(tx *Transaction) {
 // Process transaction validates the Tx and processes funds from the
 // sender to the recipient.
 func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) (err error) {
+	log.Println("Processing TX")
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println(r)
@@ -137,7 +138,6 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) (err error
 
 	log.Printf("[TXPL] Processed Tx %x\n", tx.Hash())
 
-	// Notify the subscribers
 	pool.notifySubscribers(TxPost, tx)
 
 	return
@@ -174,6 +174,7 @@ out:
 	for {
 		select {
 		case tx := <-pool.queueChan:
+			log.Println("Received new Tx to queue")
 			hash := tx.Hash()
 			foundTx := FindTx(pool.pool, func(tx *Transaction, e *list.Element) bool {
 				return bytes.Compare(tx.Hash(), hash) == 0
@@ -190,9 +191,14 @@ out:
 					log.Println("Validating Tx failed", err)
 				}
 			} else {
+				log.Println("Transaction ok, adding")
 				// Call blocking version. At this point it
 				// doesn't matter since this is a goroutine
 				pool.addTransaction(tx)
+				log.Println("Added")
+
+				// Notify the subscribers
+				pool.Ethereum.Reactor().Post("newTx", tx)
 
 				// Notify the subscribers
 				pool.notifySubscribers(TxPre, tx)
