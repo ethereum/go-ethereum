@@ -54,7 +54,7 @@ func AssetPath(p string) string {
 		// Get Binary Directory
 		exedir, _ := osext.ExecutableFolder()
 		base = filepath.Join(exedir, "../Resources")
-		base = "/Users/jeffrey/go/src/github.com/ethereum/go-ethereum"
+		base = "/Users/maranhidskes/projects/go/src/github.com/ethereum/go-ethereum"
 	case "linux":
 		base = "/usr/share/ethereal"
 	case "window":
