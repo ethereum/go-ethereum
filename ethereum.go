@@ -173,11 +173,11 @@ func main() {
 		RegisterInterupts(ethereum)
 		ethereum.Start()
 
-		minerChan := make(chan ethutil.React, 5)
+		minerChan := make(chan ethutil.React, 1)
 		ethereum.Reactor().Subscribe("newBlock", minerChan)
 		ethereum.Reactor().Subscribe("newTx", minerChan)
 
-		minerChan2 := make(chan ethutil.React, 5)
+		minerChan2 := make(chan ethutil.React, 1)
 		ethereum.Reactor().Subscribe("newBlock", minerChan2)
 		ethereum.Reactor().Subscribe("newTx", minerChan2)
 
@@ -186,7 +186,6 @@ func main() {
 		if StartMining {
 			log.Printf("Miner started\n")
 
-			// Fake block mining. It broadcasts a new block every 5 seconds
 			go func() {
 				pow := &ethchain.EasyPow{}
 				data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
@@ -194,6 +193,7 @@ func main() {
 				addr := keyRing.Get(1).Bytes()
 				txs := ethereum.TxPool().Flush()
 				block := ethereum.BlockChain().NewBlock(addr, txs)
+				var uncles []*ethchain.Block
 
 				for {
 					select {
@@ -204,6 +204,7 @@ func main() {
 							if bytes.Compare(ethereum.BlockChain().CurrentBlock.Hash(), block.Hash()) == 0 {
 								// TODO: Perhaps continue mining to get some uncle rewards
 								log.Println("New top block found resetting state")
+								// TODO: We probably want to skip this if it's our own block
 								// Reapplies the latest block to the mining state, thus resetting
 								ethereum.StateManager().PrepareMiningState()
 								block = ethereum.BlockChain().NewBlock(addr, txs)
@@ -212,6 +213,7 @@ func main() {
 								if bytes.Compare(block.PrevHash, ethereum.BlockChain().CurrentBlock.PrevHash) == 0 {
 									log.Println("HELLO UNCLE")
 									// TODO: Add uncle to block
+									uncles = append(uncles, block)
 								}
 							}
 						}
@@ -227,7 +229,7 @@ func main() {
 							}
 							if found == false {
 								log.Println("We did not know about this transaction, adding")
-								txs = append(txs, tx)
+								txs = ethereum.TxPool().Flush()
 							} else {
 								log.Println("We already had this transaction, ignoring")
 							}
@@ -238,6 +240,11 @@ func main() {
 					default:
 						// Create a new block which we're going to mine
 						log.Println("Mining on block. Includes", len(txs), "transactions")
+
+						// Apply uncles
+						if len(uncles) > 0 {
+							block.SetUncles(uncles)
+						}
 
 						// Apply all transactions to the block
 						ethereum.StateManager().ApplyTransactions(block, txs)
@@ -253,7 +260,6 @@ func main() {
 							} else {
 								//log.Println("\n+++++++ MINED BLK +++++++\n", ethereum.BlockChain().CurrentBlock)
 								log.Printf("🔨  Mined block %x\n", block.Hash())
-								block = ethereum.BlockChain().NewBlock(addr, txs)
 							}
 						}
 					}

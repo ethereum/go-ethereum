@@ -35,6 +35,7 @@ func (lib *EthLib) CreateTx(receiver, a, data string) string {
 	tx.Nonce = lib.stateManager.GetAddrState(keyRing.Get(1).Bytes()).Nonce
 
 	tx.Sign(keyRing.Get(0).Bytes())
+	ethutil.Config.Log.Infof("nonce: %x", tx.Nonce)
 
 	lib.txPool.QueueTransaction(tx)
 
