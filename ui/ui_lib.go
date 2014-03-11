@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+  "os"
 )
 
 // UI Library that has some basic functionality exposed
@@ -54,7 +55,8 @@ func AssetPath(p string) string {
 		// Get Binary Directory
 		exedir, _ := osext.ExecutableFolder()
 		base = filepath.Join(exedir, "../Resources")
-		base = "/Users/jeffrey/go/src/github.com/ethereum/go-ethereum"
+    home := os.Getenv("HOME")
+    base = home + "go/src/github.com/ethereum/go-ethereum"
 	case "linux":
 		base = "/usr/share/ethereal"
 	case "window":
