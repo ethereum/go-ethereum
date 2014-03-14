@@ -9,7 +9,7 @@ import (
 )
 
 type EthLib struct {
-	blockManager *ethchain.BlockManager
+	stateManager *ethchain.StateManager
 	blockChain   *ethchain.BlockChain
 	txPool       *ethchain.TxPool
 }
@@ -32,7 +32,7 @@ func (lib *EthLib) CreateTx(receiver, a, data string) string {
 	amount := ethutil.Big(a)
 	code := ethchain.Compile(strings.Split(data, "\n"))
 	tx := ethchain.NewTransaction(hash, amount, code)
-	tx.Nonce = lib.blockManager.GetAddrState(keyRing.Get(1).Bytes()).Nonce
+	tx.Nonce = lib.stateManager.GetAddrState(keyRing.Get(1).Bytes()).Nonce
 
 	tx.Sign(keyRing.Get(0).Bytes())
 

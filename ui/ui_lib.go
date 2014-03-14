@@ -1,9 +1,13 @@
 package ethui
 
 import (
+	"bitbucket.org/kardianos/osext"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/niemeyer/qml"
+	"path"
+	"path/filepath"
+	"runtime"
 )
 
 // UI Library that has some basic functionality exposed
@@ -37,4 +41,27 @@ func (ui *UiLib) Connect(button qml.Object) {
 
 func (ui *UiLib) ConnectToPeer(addr string) {
 	ui.eth.ConnectToPeer(addr)
+}
+
+func (ui *UiLib) AssetPath(p string) string {
+	return AssetPath(p)
+}
+
+func AssetPath(p string) string {
+	var base string
+	switch runtime.GOOS {
+	case "darwin":
+		// Get Binary Directory
+		exedir, _ := osext.ExecutableFolder()
+		base = filepath.Join(exedir, "../Resources")
+		base = "/Users/jeffrey/go/src/github.com/ethereum/go-ethereum"
+	case "linux":
+		base = "/usr/share/ethereal"
+	case "window":
+		fallthrough
+	default:
+		base = "."
+	}
+
+	return path.Join(base, p)
 }
