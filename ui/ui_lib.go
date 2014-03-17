@@ -5,6 +5,7 @@ import (
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/niemeyer/qml"
+	"os"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -49,18 +50,25 @@ func (ui *UiLib) AssetPath(p string) string {
 
 func AssetPath(p string) string {
 	var base string
-	switch runtime.GOOS {
-	case "darwin":
-		// Get Binary Directory
-		exedir, _ := osext.ExecutableFolder()
-		base = filepath.Join(exedir, "../Resources")
-		base = "/Users/maranhidskes/projects/go/src/github.com/ethereum/go-ethereum"
-	case "linux":
-		base = "/usr/share/ethereal"
-	case "window":
-		fallthrough
-	default:
-		base = "."
+	// If the current working directory is the go-ethereum dir
+	// assume a debug build and use the source directory as
+	// asset directory.
+	pwd, _ := os.Getwd()
+	if pwd == path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum") {
+		base = pwd
+	} else {
+		switch runtime.GOOS {
+		case "darwin":
+			// Get Binary Directory
+			exedir, _ := osext.ExecutableFolder()
+			base = filepath.Join(exedir, "../Resources")
+		case "linux":
+			base = "/usr/share/ethereal"
+		case "window":
+			fallthrough
+		default:
+			base = "."
+		}
 	}
 
 	return path.Join(base, p)
