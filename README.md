@@ -6,7 +6,7 @@ Ethereum
 Ethereum Go Development package (C) Jeffrey Wilcke
 
 Ethereum is currently in its testing phase. The current state is "Proof
-of Concept 2". For build instructions see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Edge).
+of Concept 3". For build instructions see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum(Go)).
 
 Ethereum Go is split up in several sub packages Please refer to each
 individual package for more information.
@@ -35,7 +35,7 @@ get a node and connectivity going.
 Build
 =======
 
-This is the Developer package. For the development client please see
+This is the Developer package. For the Ethereal client please see
 [Ethereum(G)](https://github.com/ethereum/go-ethereum).
 
 `go get -u github.com/ethereum/eth-go`

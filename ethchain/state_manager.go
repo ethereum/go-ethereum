@@ -22,7 +22,6 @@ type EthManager interface {
 	Reactor() *ethutil.ReactorEngine
 }
 
-// TODO rename to state manager
 type StateManager struct {
 	// Mutex for locking the block processor. Blocks can only be handled one at a time
 	mutex sync.Mutex

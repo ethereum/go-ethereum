@@ -11,7 +11,7 @@ import (
 )
 
 type PoW interface {
-	Search(block *Block, breakChan chan bool) []byte
+	Search(block *Block, minerChan chan ethutil.React) []byte
 	Verify(hash []byte, diff *big.Int, nonce []byte) bool
 }
 
@@ -19,19 +19,32 @@ type EasyPow struct {
 	hash *big.Int
 }
 
-func (pow *EasyPow) Search(block *Block, breakChan chan bool) []byte {
+func (pow *EasyPow) Search(block *Block, minerChan chan ethutil.React) []byte {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	hash := block.HashNoNonce()
 	diff := block.Difficulty
+	i := int64(0)
+	start := time.Now().UnixNano()
 
 	for {
 		select {
-		case shouldbreak := <-breakChan:
-			if shouldbreak {
-				log.Println("Got signal: Breaking out mining.")
+		case chanMessage := <-minerChan:
+			if _, ok := chanMessage.Resource.(*Block); ok {
+				log.Println("BREAKING OUT: BLOCK")
+				return nil
+			}
+			if _, ok := chanMessage.Resource.(*Transaction); ok {
+				log.Println("BREAKING OUT: TX")
 				return nil
 			}
 		default:
+			i++
+			if i%1234567 == 0 {
+				elapsed := time.Now().UnixNano() - start
+				hashes := ((float64(1e9) / float64(elapsed)) * float64(i)) / 1000
+				log.Println("Hashing @", int64(hashes), "khash")
+			}
+
 			sha := ethutil.Sha3Bin(big.NewInt(r.Int63()).Bytes())
 			if pow.Verify(hash, diff, sha) {
 				return sha

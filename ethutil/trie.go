@@ -220,18 +220,6 @@ func (t *Trie) UpdateState(node interface{}, key []int, value string) interface{
 
 func (t *Trie) Put(node interface{}) interface{} {
 	/*
-		enc := Encode(node)
-		if len(enc) >= 32 {
-			var sha []byte
-			sha = Sha3Bin(enc)
-			//t.db.Put([]byte(sha), enc)
-
-			return sha
-		}
-		return node
-	*/
-
-	/*
 		TODO?
 			c := Conv(t.Root)
 			fmt.Println(c.Type(), c.Length())
