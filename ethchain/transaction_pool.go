@@ -235,11 +235,11 @@ func (pool *TxPool) Start() {
 }
 
 func (pool *TxPool) Stop() {
-	log.Println("[TXP] Stopping...")
-
 	close(pool.quit)
 
 	pool.Flush()
+
+	log.Println("[TXP] Stopped")
 }
 
 func (pool *TxPool) Subscribe(channel chan TxMsg) {

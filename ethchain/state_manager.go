@@ -64,6 +64,7 @@ func NewStateManager(ethereum EthManager) *StateManager {
 		addrStateStore: NewAddrStateStore(),
 		bc:             ethereum.BlockChain(),
 	}
+	sm.procState = ethereum.BlockChain().CurrentBlock.State()
 
 	return sm
 }
@@ -78,8 +79,8 @@ func (sm *StateManager) MiningState() *State {
 
 // Watches any given address and puts it in the address state store
 func (sm *StateManager) WatchAddr(addr []byte) *AccountState {
-	//FIXME account := sm.procState.GetAccount(addr)
-	account := sm.bc.CurrentBlock.state.GetAccount(addr)
+	//XXX account := sm.bc.CurrentBlock.state.GetAccount(addr)
+	account := sm.procState.GetAccount(addr)
 
 	return sm.addrStateStore.Add(addr, account)
 }
@@ -112,16 +113,16 @@ func (sm *StateManager) ApplyTransactions(block *Block, txs []*Transaction) {
 	for _, tx := range txs {
 		// If there's no recipient, it's a contract
 		if tx.IsContract() {
-			//FIXME sm.MakeContract(tx)
-			block.MakeContract(tx)
+			sm.MakeContract(tx)
+			//XXX block.MakeContract(tx)
 		} else {
-			//FIXME if contract := procState.GetContract(tx.Recipient); contract != nil {
-			if contract := block.state.GetContract(tx.Recipient); contract != nil {
+			if contract := sm.procState.GetContract(tx.Recipient); contract != nil {
+				//XXX if contract := block.state.GetContract(tx.Recipient); contract != nil {
 				sm.ProcessContract(contract, tx, block)
 			} else {
 				err := sm.Ethereum.TxPool().ProcessTransaction(tx, block)
 				if err != nil {
-					ethutil.Config.Log.Infoln("[smGR]", err)
+					ethutil.Config.Log.Infoln("[STATE]", err)
 				}
 			}
 		}
@@ -177,21 +178,21 @@ func (sm *StateManager) ProcessBlock(block *Block) error {
 
 	// I'm not sure, but I don't know if there should be thrown
 	// any errors at this time.
-	if err := sm.AccumelateRewards(sm.bc.CurrentBlock, block); err != nil {
+	if err := sm.AccumelateRewards(block); err != nil {
 		return err
 	}
 
 	// if !sm.compState.Cmp(sm.procState)
-	if !block.state.Cmp(sm.bc.CurrentBlock.state) {
-		return fmt.Errorf("Invalid merkle root. Expected %x, got %x", block.State().trie.Root, sm.bc.CurrentBlock.State().trie.Root)
-		//FIXME return fmt.Errorf("Invalid merkle root. Expected %x, got %x", sm.compState.trie.Root, sm.procState.trie.Root)
+	if !sm.compState.Cmp(sm.procState) {
+		//XXX return fmt.Errorf("Invalid merkle root. Expected %x, got %x", block.State().trie.Root, sm.bc.CurrentBlock.State().trie.Root)
+		return fmt.Errorf("Invalid merkle root. Expected %x, got %x", sm.compState.trie.Root, sm.procState.trie.Root)
 	}
 
 	// Calculate the new total difficulty and sync back to the db
 	if sm.CalculateTD(block) {
 		// Sync the current block's state to the database and cancelling out the deferred Undo
-		sm.bc.CurrentBlock.Sync()
-		//FIXME sm.procState.Sync()
+		//XXX sm.bc.CurrentBlock.Sync()
+		sm.procState.Sync()
 
 		// Broadcast the valid block back to the wire
 		//sm.Ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
@@ -205,7 +206,7 @@ func (sm *StateManager) ProcessBlock(block *Block) error {
 			sm.SecondaryBlockProcessor.ProcessBlock(block)
 		}
 
-		ethutil.Config.Log.Infof("[smGR] Added block #%d (%x)\n", block.BlockInfo().Number, block.Hash())
+		ethutil.Config.Log.Infof("[STATE] Added block #%d (%x)\n", block.BlockInfo().Number, block.Hash())
 		sm.Ethereum.Reactor().Post("newBlock", block)
 	} else {
 		fmt.Println("total diff failed")
@@ -283,22 +284,22 @@ func CalculateUncleReward(block *Block) *big.Int {
 	return UncleReward
 }
 
-func (sm *StateManager) AccumelateRewards(processor *Block, block *Block) error {
+func (sm *StateManager) AccumelateRewards(block *Block) error {
 	// Get the coinbase rlp data
-	addr := processor.state.GetAccount(block.Coinbase)
-	//FIXME addr := proc.GetAccount(block.Coinbase)
+	//XXX addr := processor.state.GetAccount(block.Coinbase)
+	addr := sm.procState.GetAccount(block.Coinbase)
 	// Reward amount of ether to the coinbase address
 	addr.AddFee(CalculateBlockReward(block, len(block.Uncles)))
 
-	processor.state.UpdateAccount(block.Coinbase, addr)
-	//FIXME proc.UpdateAccount(block.Coinbase, addr)
+	//XXX processor.state.UpdateAccount(block.Coinbase, addr)
+	sm.procState.UpdateAccount(block.Coinbase, addr)
 
 	for _, uncle := range block.Uncles {
-		uncleAddr := processor.state.GetAccount(uncle.Coinbase)
+		uncleAddr := sm.procState.GetAccount(uncle.Coinbase)
 		uncleAddr.AddFee(CalculateUncleReward(uncle))
 
-		processor.state.UpdateAccount(uncle.Coinbase, uncleAddr)
-		//FIXME proc.UpdateAccount(uncle.Coinbase, uncleAddr)
+		//processor.state.UpdateAccount(uncle.Coinbase, uncleAddr)
+		sm.procState.UpdateAccount(uncle.Coinbase, uncleAddr)
 	}
 
 	return nil
@@ -319,8 +320,8 @@ func (sm *StateManager) ProcessContract(contract *Contract, tx *Transaction, blo
 	*/
 
 	vm := &Vm{}
-	//vm.Process(contract, sm.procState, RuntimeVars{
-	vm.Process(contract, block.state, RuntimeVars{
+	//vm.Process(contract, block.state, RuntimeVars{
+	vm.Process(contract, sm.procState, RuntimeVars{
 		address:     tx.Hash()[12:],
 		blockNumber: block.BlockInfo().Number,
 		sender:      tx.Sender(),
