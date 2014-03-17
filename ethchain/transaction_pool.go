@@ -109,11 +109,7 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) (err error
 	}
 
 	if sender.Nonce != tx.Nonce {
-		if ethutil.Config.Debug {
-			return fmt.Errorf("Invalid nonce %d(%d) continueing anyway", tx.Nonce, sender.Nonce)
-		} else {
-			return fmt.Errorf("Invalid nonce %d(%d)", tx.Nonce, sender.Nonce)
-		}
+		return fmt.Errorf("Invalid nonce %d(%d)", tx.Nonce, sender.Nonce)
 	}
 
 	// Get the receiver
