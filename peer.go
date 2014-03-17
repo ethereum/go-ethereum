@@ -293,7 +293,8 @@ func (p *Peer) HandleInbound() {
 				var err error
 				for i := msg.Data.Len() - 1; i >= 0; i-- {
 					block = ethchain.NewBlockFromRlpValue(msg.Data.Get(i))
-					// FIXME p.ethereum.BlockManager.DefaultPrepare(block)
+
+					p.ethereum.StateManager().PrepareDefault(block)
 					err = p.ethereum.StateManager().ProcessBlock(block)
 
 					if err != nil {
