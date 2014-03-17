@@ -266,7 +266,7 @@ func (sm *StateManager) ValidateBlock(block *Block) error {
 
 	// Verify the nonce of the block. Return an error if it's not valid
 	if !sm.Pow.Verify(block.HashNoNonce(), block.Difficulty, block.Nonce) {
-		return ValidationError("Block's nonce is invalid (= %v)", block.Nonce)
+		return ValidationError("Block's nonce is invalid (= %v)", ethutil.Hex(block.Nonce))
 	}
 
 	return nil

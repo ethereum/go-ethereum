@@ -301,6 +301,7 @@ func (p *Peer) HandleInbound() {
 						if ethutil.Config.Debug {
 							ethutil.Config.Log.Infof("[PEER] Block %x failed\n", block.Hash())
 							ethutil.Config.Log.Infof("[PEER] %v\n", err)
+							ethutil.Config.Log.Infoln(block)
 						}
 						break
 					} else {

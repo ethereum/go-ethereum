@@ -112,6 +112,10 @@ func (s *State) Cmp(other *State) bool {
 	return s.trie.Cmp(other.trie)
 }
 
+func (s *State) Copy() *State {
+	return NewState(s.trie.Copy())
+}
+
 type ObjType byte
 
 const (
