@@ -305,19 +305,17 @@ func (sm *StateManager) ProcessContract(contract *Contract, tx *Transaction, blo
 			}
 		}()
 	*/
-
-	/*TODO to be fixed and replaced by the new vm
-	vm := &Vm{}
-	vm.Process(contract, sm.procState, RuntimeVars{
-		address:     tx.Hash()[12:],
+	caller := sm.procState.GetAccount(tx.Sender())
+	closure := NewClosure(caller, contract, sm.procState, tx.Gas, tx.Value)
+	vm := NewVm(sm.procState, RuntimeVars{
+		origin:      caller.Address,
 		blockNumber: block.BlockInfo().Number,
-		sender:      tx.Sender(),
 		prevHash:    block.PrevHash,
 		coinbase:    block.Coinbase,
 		time:        block.Time,
 		diff:        block.Difficulty,
-		txValue:     tx.Value,
-		txData:      tx.Data,
+		// XXX Tx data? Could be just an argument to the closure instead
+		txData: nil,
 	})
-	*/
+	closure.Call(vm, nil)
 }

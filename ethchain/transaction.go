@@ -13,20 +13,29 @@ type Transaction struct {
 	Nonce     uint64
 	Recipient []byte
 	Value     *big.Int
+	Gas       *big.Int
+	Gasprice  *big.Int
 	Data      []string
-	Memory    []int
 	v         byte
 	r, s      []byte
 }
 
 func NewTransaction(to []byte, value *big.Int, data []string) *Transaction {
-	tx := Transaction{Recipient: to, Value: value}
-	tx.Nonce = 0
-
-	// Serialize the data
-	tx.Data = data
+	tx := Transaction{Recipient: to, Value: value, Nonce: 0, Data: data}
 
 	return &tx
+}
+
+func NewContractCreationTx(value, gasprice *big.Int, data []string) *Transaction {
+	return &Transaction{Value: value, Gasprice: gasprice, Data: data}
+}
+
+func NewContractMessageTx(to []byte, value, gasprice, gas *big.Int, data []string) *Transaction {
+	return &Transaction{Recipient: to, Value: value, Gasprice: gasprice, Gas: gas, Data: data}
+}
+
+func NewTx(to []byte, value *big.Int, data []string) *Transaction {
+	return &Transaction{Recipient: to, Value: value, Gasprice: big.NewInt(0), Gas: big.NewInt(0), Nonce: 0, Data: data}
 }
 
 // XXX Deprecated
