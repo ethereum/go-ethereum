@@ -1,12 +1,12 @@
 package ethchain
 
 import (
-	"bytes"
+	_ "bytes"
 	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/obscuren/secp256k1-go"
+	_ "github.com/obscuren/secp256k1-go"
 	"log"
-	"math"
+	_ "math"
 	"math/big"
 )
 
@@ -45,7 +45,7 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 	}
 
 	// Memory for the current closure
-	var mem []byte
+	mem := &Memory{}
 	// New stack (should this be shared?)
 	stack := NewStack()
 	// Instruction pointer
@@ -86,19 +86,7 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 		case oMSTORE: // Store the value at stack top-1 in to memory at location stack top
 			// Pop value of the stack
 			val, mStart := stack.Popn()
-			// Ensure that memory is large enough to hold the data
-			// If it isn't resize the memory slice so that it may hold the value
-			bytesLen := big.NewInt(32)
-			totSize := new(big.Int).Add(mStart, bytesLen)
-			lenSize := big.NewInt(int64(len(mem)))
-			if totSize.Cmp(lenSize) > 0 {
-				// Calculate the diff between the sizes
-				diff := new(big.Int).Sub(totSize, lenSize)
-				// Create a new empty slice and append it
-				newSlice := make([]byte, diff.Int64()+1)
-				mem = append(mem, newSlice...)
-			}
-			copy(mem[mStart.Int64():mStart.Int64()+bytesLen.Int64()+1], ethutil.BigToBytes(val, 256))
+			mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(val, 256))
 		case oCALL:
 			// Pop return size and offset
 			retSize, retOffset := stack.Popn()
@@ -116,23 +104,10 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 			closure := NewClosure(closure, contract, vm.state, gas, value)
 			// Executer the closure and get the return value (if any)
 			ret := closure.Call(vm, nil)
-
-			// Ensure that memory is large enough to hold the returned data
-			// If it isn't resize the memory slice so that it may hold the value
-			totSize := new(big.Int).Add(retOffset, retSize)
-			lenSize := big.NewInt(int64(len(mem)))
-			if totSize.Cmp(lenSize) > 0 {
-				// Calculate the diff between the sizes
-				diff := new(big.Int).Sub(totSize, lenSize)
-				// Create a new empty slice and append it
-				newSlice := make([]byte, diff.Int64()+1)
-				mem = append(mem, newSlice...)
-			}
-			// Copy over the returned values to the memory given the offset and size
-			copy(mem[retOffset.Int64():retOffset.Int64()+retSize.Int64()+1], ret)
+			mem.Set(retOffset.Int64(), retSize.Int64(), ret)
 		case oRETURN:
 			size, offset := stack.Popn()
-			ret := mem[offset.Int64() : offset.Int64()+size.Int64()+1]
+			ret := mem.Get(offset.Int64(), size.Int64())
 
 			return closure.Return(ret)
 		}
@@ -141,6 +116,7 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 	}
 }
 
+/*
 // Old VM code
 func (vm *Vm) Process(contract *Contract, state *State, vars RuntimeVars) {
 	vm.mem = make(map[string]*big.Int)
@@ -507,6 +483,7 @@ out:
 
 	state.UpdateContract(addr, contract)
 }
+*/
 
 func makeInlineTx(addr []byte, value, from, length *big.Int, contract *Contract, state *State) {
 	ethutil.Config.Log.Debugf(" => creating inline tx %x %v %v %v", addr, value, from, length)

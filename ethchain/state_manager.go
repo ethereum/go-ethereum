@@ -306,8 +306,8 @@ func (sm *StateManager) ProcessContract(contract *Contract, tx *Transaction, blo
 		}()
 	*/
 
+	/*TODO to be fixed and replaced by the new vm
 	vm := &Vm{}
-	//vm.Process(contract, block.state, RuntimeVars{
 	vm.Process(contract, sm.procState, RuntimeVars{
 		address:     tx.Hash()[12:],
 		blockNumber: block.BlockInfo().Number,
@@ -319,4 +319,5 @@ func (sm *StateManager) ProcessContract(contract *Contract, tx *Transaction, blo
 		txValue:     tx.Value,
 		txData:      tx.Data,
 	})
+	*/
 }
