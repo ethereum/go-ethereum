@@ -63,8 +63,7 @@ func (s *State) GetContract(addr []byte) *Contract {
 	}
 
 	// build contract
-	contract := &Contract{}
-	contract.RlpDecode([]byte(data))
+	contract := NewContractFromBytes(addr, []byte(data))
 
 	// Check if there's a cached state for this contract
 	cachedState := s.states[string(addr)]
@@ -78,7 +77,9 @@ func (s *State) GetContract(addr []byte) *Contract {
 	return contract
 }
 
-func (s *State) UpdateContract(addr []byte, contract *Contract) {
+func (s *State) UpdateContract(contract *Contract) {
+	addr := contract.Address()
+
 	s.states[string(addr)] = contract.state
 	s.trie.Update(string(addr), string(contract.RlpEncode()))
 }

@@ -130,7 +130,7 @@ func TestRun3(t *testing.T) {
 	addr := tx.Hash()[12:]
 	fmt.Printf("addr contract %x\n", addr)
 	contract := MakeContract(tx, state)
-	state.UpdateContract(addr, contract)
+	state.UpdateContract(contract)
 
 	callerScript := Compile([]string{
 		"PUSH", "62", // ret size
@@ -143,21 +143,20 @@ func TestRun3(t *testing.T) {
 		"CALL",
 	})
 	callerTx := NewTransaction(ContractAddr, ethutil.Big("100000000000000000000000000000000000000000000000000"), callerScript)
-	callerAddr := callerTx.Hash()[12:]
 
+	// Contract addr as test address
 	account := NewAccount(ContractAddr, big.NewInt(10000000))
 	callerClosure := NewClosure(account, MakeContract(callerTx, state), state, big.NewInt(1000000000), new(big.Int))
 
 	vm := NewVm(state, RuntimeVars{
-		address:     callerAddr,
+		origin:      account.Address,
 		blockNumber: 1,
-		sender:      ethutil.FromHex("cd1722f3947def4cf144679da39c4c32bdc35681"),
 		prevHash:    ethutil.FromHex("5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"),
 		coinbase:    ethutil.FromHex("2adc25665018aa1fe0e6bc666dac8fc2697ff9ba"),
 		time:        1,
 		diff:        big.NewInt(256),
-		txValue:     big.NewInt(10000),
-		txData:      nil,
+		// XXX Tx data? Could be just an argument to the closure instead
+		txData: nil,
 	})
 	callerClosure.Call(vm, nil)
 }

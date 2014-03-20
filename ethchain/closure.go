@@ -15,6 +15,7 @@ type ClosureBody interface {
 	Callee
 	ethutil.RlpEncodable
 	GetMem(int64) *ethutil.Value
+	Address() []byte
 }
 
 // Basic inline closure object which implement the 'closure' interface

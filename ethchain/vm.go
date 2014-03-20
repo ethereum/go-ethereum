@@ -23,14 +23,12 @@ type Vm struct {
 }
 
 type RuntimeVars struct {
-	address     []byte
+	origin      []byte
 	blockNumber uint64
-	sender      []byte
 	prevHash    []byte
 	coinbase    []byte
 	time        int64
 	diff        *big.Int
-	txValue     *big.Int
 	txData      []string
 }
 
@@ -108,6 +106,7 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 			closure := NewClosure(closure, contract, vm.state, gas, value)
 			// Executer the closure and get the return value (if any)
 			ret := closure.Call(vm, nil)
+
 			mem.Set(retOffset.Int64(), retSize.Int64(), ret)
 		case oRETURN:
 			size, offset := stack.Popn()
@@ -501,7 +500,7 @@ func makeInlineTx(addr []byte, value, from, length *big.Int, contract *Contract,
 	tx := NewTransaction(addr, value, dataItems)
 	if tx.IsContract() {
 		contract := MakeContract(tx, state)
-		state.UpdateContract(tx.Hash()[12:], contract)
+		state.UpdateContract(contract)
 	} else {
 		account := state.GetAccount(tx.Recipient)
 		account.Amount.Add(account.Amount, tx.Value)
