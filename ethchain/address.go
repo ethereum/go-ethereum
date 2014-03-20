@@ -22,7 +22,11 @@ func NewAccountFromData(data []byte) *Account {
 }
 
 func (a *Account) AddFee(fee *big.Int) {
-	a.Amount.Add(a.Amount, fee)
+	a.AddFunds(fee)
+}
+
+func (a *Account) AddFunds(funds *big.Int) {
+	a.Amount.Add(a.Amount, funds)
 }
 
 func (a *Account) RlpEncode() []byte {
