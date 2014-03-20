@@ -1,12 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethminer"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/eth-go/ethwire"
 	"github.com/ethereum/go-ethereum/ui"
 	"github.com/niemeyer/qml"
 	"github.com/obscuren/secp256k1-go"
@@ -173,97 +172,17 @@ func main() {
 		RegisterInterupts(ethereum)
 		ethereum.Start()
 
-		minerChan := make(chan ethutil.React, 1)
-		ethereum.Reactor().Subscribe("newBlock", minerChan)
-		ethereum.Reactor().Subscribe("newTx", minerChan)
-
-		minerChan2 := make(chan ethutil.React, 1)
-		ethereum.Reactor().Subscribe("newBlock", minerChan2)
-		ethereum.Reactor().Subscribe("newTx", minerChan2)
-
-		ethereum.StateManager().PrepareMiningState()
-
 		if StartMining {
 			log.Printf("Miner started\n")
 
 			go func() {
-				pow := &ethchain.EasyPow{}
 				data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
 				keyRing := ethutil.NewValueFromBytes(data)
 				addr := keyRing.Get(1).Bytes()
-				txs := ethereum.TxPool().Flush()
-				block := ethereum.BlockChain().NewBlock(addr, txs)
-				var uncles []*ethchain.Block
 
-				for {
-					select {
-					case chanMessage := <-minerChan:
-						log.Println("REACTOR: Got new block")
+				miner := ethminer.NewDefaultMiner(addr, ethereum)
+				miner.Start()
 
-						if block, ok := chanMessage.Resource.(*ethchain.Block); ok {
-							if bytes.Compare(ethereum.BlockChain().CurrentBlock.Hash(), block.Hash()) == 0 {
-								// TODO: Perhaps continue mining to get some uncle rewards
-								log.Println("New top block found resetting state")
-								// TODO: We probably want to skip this if it's our own block
-								// Reapplies the latest block to the mining state, thus resetting
-								ethereum.StateManager().PrepareMiningState()
-								block = ethereum.BlockChain().NewBlock(addr, txs)
-								log.Println("Block set")
-							} else {
-								if bytes.Compare(block.PrevHash, ethereum.BlockChain().CurrentBlock.PrevHash) == 0 {
-									log.Println("HELLO UNCLE")
-									// TODO: Add uncle to block
-									uncles = append(uncles, block)
-								}
-							}
-						}
-
-						if tx, ok := chanMessage.Resource.(*ethchain.Transaction); ok {
-							log.Println("REACTOR: Got new transaction", tx)
-							found := false
-							for _, ctx := range txs {
-								if found = bytes.Compare(ctx.Hash(), tx.Hash()) == 0; found {
-									break
-								}
-
-							}
-							if found == false {
-								log.Println("We did not know about this transaction, adding")
-								txs = ethereum.TxPool().Flush()
-							} else {
-								log.Println("We already had this transaction, ignoring")
-							}
-						}
-						log.Println("Sending block reset")
-						// Start mining over
-						log.Println("Block reset done")
-					default:
-						// Create a new block which we're going to mine
-						log.Println("Mining on block. Includes", len(txs), "transactions")
-
-						// Apply uncles
-						if len(uncles) > 0 {
-							block.SetUncles(uncles)
-						}
-
-						// Apply all transactions to the block
-						ethereum.StateManager().ApplyTransactions(block, txs)
-						ethereum.StateManager().AccumelateRewards(block, block)
-
-						// Search the nonce
-						block.Nonce = pow.Search(block, minerChan2)
-						if block.Nonce != nil {
-							ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
-							err := ethereum.StateManager().ProcessBlock(block)
-							if err != nil {
-								log.Println(err)
-							} else {
-								//log.Println("\n+++++++ MINED BLK +++++++\n", ethereum.BlockChain().CurrentBlock)
-								log.Printf("🔨  Mined block %x\n", block.Hash())
-							}
-						}
-					}
-				}
 			}()
 		}
 
