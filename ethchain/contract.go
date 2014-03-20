@@ -43,10 +43,15 @@ func (c *Contract) State() *State {
 	return c.state
 }
 
-func (c *Contract) GetMem(num int) *ethutil.Value {
-	nb := ethutil.BigToBytes(big.NewInt(int64(num)), 256)
+func (c *Contract) GetMem(num int64) *ethutil.Value {
+	nb := ethutil.BigToBytes(big.NewInt(num), 256)
 
 	return c.Addr(nb)
+}
+
+// Return the gas back to the origin. Used by the Virtual machine or Closures
+func (c *Contract) ReturnGas(val *big.Int, state *State) {
+	c.Amount.Add(c.Amount, val)
 }
 
 func MakeContract(tx *Transaction, state *State) *Contract {
