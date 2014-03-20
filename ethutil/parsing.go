@@ -58,6 +58,10 @@ var OpCodes = map[string]byte{
 	"BALANCE":        0x3c,
 	"MKTX":           0x3d,
 	"SUICIDE":        0x3f,
+
+	// TODO FIX OPCODES
+	"CALL":   0x40,
+	"RETURN": 0x41,
 }
 
 func IsOpCode(s string) bool {
@@ -76,7 +80,11 @@ func CompileInstr(s string) ([]byte, error) {
 	}
 
 	num := new(big.Int)
-	num.SetString(s, 0)
+	_, success := num.SetString(s, 0)
+	// Assume regular bytes during compilation
+	if !success {
+		num.SetBytes([]byte(s))
+	}
 
 	return num.Bytes(), nil
 }

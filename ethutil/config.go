@@ -50,10 +50,14 @@ func ReadConfig(base string) *config {
 
 		Config = &config{ExecPath: path, Debug: true, Ver: "0.3.1"}
 		Config.Log = NewLogger(LogFile|LogStd, LogLevelDebug)
-		Config.ClientString = fmt.Sprintf("/Ethereum(G) v%s/%s", Config.Ver, runtime.GOOS)
+		Config.SetClientString("/Ethereum(G)")
 	}
 
 	return Config
+}
+
+func (c *config) SetClientString(str string) {
+	Config.ClientString = fmt.Sprintf("%s nv%s/%s", str, c.Ver, runtime.GOOS)
 }
 
 type LoggerType byte
