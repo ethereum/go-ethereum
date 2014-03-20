@@ -32,13 +32,101 @@ type RuntimeVars struct {
 	txData      []string
 }
 
+func (vm *Vm) RunClosure(closure *Closure, state *State, vars RuntimeVars) []byte {
+	// If the amount of gas supplied is less equal to 0
+	if closure.GetGas().Cmp(big.NewInt(0)) <= 0 {
+		// TODO Do something
+	}
+
+	// Memory for the current closure
+	var mem []byte
+	// New stack (should this be shared?)
+	stack := NewStack()
+	// Instruction pointer
+	pc := int64(0)
+	// Current address
+	//addr := vars.address
+	step := 0
+
+	if ethutil.Config.Debug {
+		ethutil.Config.Log.Debugf("#   op\n")
+	}
+
+	for {
+		step++
+		// Get the memory location of pc
+		val := closure.GetMem(pc)
+		// Get the opcode (it must be an opcode!)
+		op := OpCode(val.Uint())
+		if ethutil.Config.Debug {
+			ethutil.Config.Log.Debugf("%-3d %-4s", pc, op.String())
+		}
+
+		// TODO Get each instruction cost properly
+		fee := new(big.Int)
+		fee.Add(fee, big.NewInt(1000))
+
+		if closure.GetGas().Cmp(fee) < 0 {
+			return closure.Return(nil)
+		}
+
+		switch op {
+		case oSTOP:
+			return closure.Return(nil)
+		case oPUSH:
+			pc++
+			val := closure.GetMem(pc).BigInt()
+			stack.Push(val)
+		case oMSTORE:
+			// Pop value of the stack
+			val := stack.Pop()
+			// Set the bytes to the memory field
+			mem = append(mem, ethutil.BigToBytes(val, 256)...)
+		case oCALL:
+			// Pop return size and offset
+			retSize, retOffset := stack.Popn()
+			// Pop input size and offset
+			inSize, inOffset := stack.Popn()
+			// TODO remove me.
+			fmt.Sprintln(inSize, inOffset)
+			// Pop gas and value of the stack.
+			gas, value := stack.Popn()
+			// Closure addr
+			addr := stack.Pop()
+
+			contract := state.GetContract(addr.Bytes())
+			closure := NewClosure(closure, contract, state, gas, value)
+			ret := vm.RunClosure(closure, state, vars)
+
+			// Ensure that memory is large enough to hold the returned data
+			totSize := new(big.Int).Add(retOffset, retSize)
+			lenSize := big.NewInt(int64(len(mem)))
+			// Resize the current memory slice so that the return value may fit
+			if totSize.Cmp(lenSize) > 0 {
+				diff := new(big.Int).Sub(totSize, lenSize)
+				newSlice := make([]byte, diff.Int64()+1)
+				mem = append(mem, newSlice...)
+			}
+			copy(mem[retOffset.Int64():retOffset.Int64()+retSize.Int64()+1], ret)
+		case oRETURN:
+			size, offset := stack.Popn()
+			ret := mem[offset.Int64() : offset.Int64()+size.Int64()+1]
+
+			return closure.Return(ret)
+		}
+
+		pc++
+	}
+}
+
+// Old VM code
 func (vm *Vm) Process(contract *Contract, state *State, vars RuntimeVars) {
 	vm.mem = make(map[string]*big.Int)
 	vm.stack = NewStack()
 
 	addr := vars.address // tx.Hash()[12:]
 	// Instruction pointer
-	pc := 0
+	pc := int64(0)
 
 	if contract == nil {
 		fmt.Println("Contract not found")
@@ -344,7 +432,7 @@ out:
 			contract.SetAddr(addr, y)
 			//contract.State().Update(string(idx), string(y))
 		case oJMP:
-			x := int(vm.stack.Pop().Uint64())
+			x := vm.stack.Pop().Int64()
 			// Set pc to x - 1 (minus one so the incrementing at the end won't effect it)
 			pc = x
 			pc--
@@ -352,7 +440,7 @@ out:
 			x := vm.stack.Pop()
 			// Set pc to x if it's non zero
 			if x.Cmp(ethutil.BigFalse) != 0 {
-				pc = int(x.Uint64())
+				pc = x.Int64()
 				pc--
 			}
 		case oIND:
@@ -400,9 +488,9 @@ out:
 
 func makeInlineTx(addr []byte, value, from, length *big.Int, contract *Contract, state *State) {
 	ethutil.Config.Log.Debugf(" => creating inline tx %x %v %v %v", addr, value, from, length)
-	j := 0
+	j := int64(0)
 	dataItems := make([]string, int(length.Uint64()))
-	for i := from.Uint64(); i < length.Uint64(); i++ {
+	for i := from.Int64(); i < length.Int64(); i++ {
 		dataItems[j] = contract.GetMem(j).Str()
 		j++
 	}
