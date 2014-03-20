@@ -29,6 +29,15 @@ func NewTransaction(to []byte, value *big.Int, data []string) *Transaction {
 	return &tx
 }
 
+// Implements Callee
+func (tx *Transaction) ReturnGas(value *big.Int, state *State) {
+	// Return the value back to the sender
+	sender := tx.Sender()
+	account := state.GetAccount(sender)
+	account.AddFunds(value)
+	state.UpdateAccount(sender, account)
+}
+
 // XXX Deprecated
 func NewTransactionFromData(data []byte) *Transaction {
 	return NewTransactionFromBytes(data)
