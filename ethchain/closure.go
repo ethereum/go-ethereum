@@ -21,15 +21,17 @@ type ClosureBody interface {
 type Closure struct {
 	callee Callee
 	object ClosureBody
-	state  *State
+	State  *State
 
 	gas *big.Int
 	val *big.Int
+
+	args []byte
 }
 
 // Create a new closure for the given data items
 func NewClosure(callee Callee, object ClosureBody, state *State, gas, val *big.Int) *Closure {
-	return &Closure{callee, object, state, gas, val}
+	return &Closure{callee, object, state, gas, val, nil}
 }
 
 // Retuns the x element in data slice
@@ -42,14 +44,20 @@ func (c *Closure) GetMem(x int64) *ethutil.Value {
 	return m
 }
 
+func (c *Closure) Call(vm *Vm, args []byte) []byte {
+	c.args = args
+
+	return vm.RunClosure(c)
+}
+
 func (c *Closure) Return(ret []byte) []byte {
 	// Return the remaining gas to the callee
 	// If no callee is present return it to
 	// the origin (i.e. contract or tx)
 	if c.callee != nil {
-		c.callee.ReturnGas(c.gas, c.state)
+		c.callee.ReturnGas(c.gas, c.State)
 	} else {
-		c.object.ReturnGas(c.gas, c.state)
+		c.object.ReturnGas(c.gas, c.State)
 		// TODO incase it's a POST contract we gotta serialise the contract again.
 		// But it's not yet defined
 	}

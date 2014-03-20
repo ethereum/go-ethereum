@@ -235,6 +235,7 @@ func (st *ValueStack) Peekn() (*ethutil.Value, *ethutil.Value) {
 func (st *ValueStack) Push(d *ethutil.Value) {
 	st.data = append(st.data, d)
 }
+
 func (st *ValueStack) Print() {
 	fmt.Println("### STACK ###")
 	if len(st.data) > 0 {

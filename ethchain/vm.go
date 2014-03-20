@@ -18,6 +18,8 @@ type Vm struct {
 	mem map[string]*big.Int
 
 	vars RuntimeVars
+
+	state *State
 }
 
 type RuntimeVars struct {
@@ -32,7 +34,11 @@ type RuntimeVars struct {
 	txData      []string
 }
 
-func (vm *Vm) RunClosure(closure *Closure, state *State, vars RuntimeVars) []byte {
+func NewVm(state *State, vars RuntimeVars) *Vm {
+	return &Vm{vars: vars, state: state}
+}
+
+func (vm *Vm) RunClosure(closure *Closure) []byte {
 	// If the amount of gas supplied is less equal to 0
 	if closure.GetGas().Cmp(big.NewInt(0)) <= 0 {
 		// TODO Do something
@@ -71,17 +77,28 @@ func (vm *Vm) RunClosure(closure *Closure, state *State, vars RuntimeVars) []byt
 		}
 
 		switch op {
-		case oSTOP:
+		case oSTOP: // Stop the closure
 			return closure.Return(nil)
-		case oPUSH:
+		case oPUSH: // Push PC+1 on to the stack
 			pc++
 			val := closure.GetMem(pc).BigInt()
 			stack.Push(val)
-		case oMSTORE:
+		case oMSTORE: // Store the value at stack top-1 in to memory at location stack top
 			// Pop value of the stack
-			val := stack.Pop()
-			// Set the bytes to the memory field
-			mem = append(mem, ethutil.BigToBytes(val, 256)...)
+			val, mStart := stack.Popn()
+			// Ensure that memory is large enough to hold the data
+			// If it isn't resize the memory slice so that it may hold the value
+			bytesLen := big.NewInt(32)
+			totSize := new(big.Int).Add(mStart, bytesLen)
+			lenSize := big.NewInt(int64(len(mem)))
+			if totSize.Cmp(lenSize) > 0 {
+				// Calculate the diff between the sizes
+				diff := new(big.Int).Sub(totSize, lenSize)
+				// Create a new empty slice and append it
+				newSlice := make([]byte, diff.Int64()+1)
+				mem = append(mem, newSlice...)
+			}
+			copy(mem[mStart.Int64():mStart.Int64()+bytesLen.Int64()+1], ethutil.BigToBytes(val, 256))
 		case oCALL:
 			// Pop return size and offset
 			retSize, retOffset := stack.Popn()
@@ -93,20 +110,25 @@ func (vm *Vm) RunClosure(closure *Closure, state *State, vars RuntimeVars) []byt
 			gas, value := stack.Popn()
 			// Closure addr
 			addr := stack.Pop()
-
-			contract := state.GetContract(addr.Bytes())
-			closure := NewClosure(closure, contract, state, gas, value)
-			ret := vm.RunClosure(closure, state, vars)
+			// Fetch the contract which will serve as the closure body
+			contract := vm.state.GetContract(addr.Bytes())
+			// Create a new callable closure
+			closure := NewClosure(closure, contract, vm.state, gas, value)
+			// Executer the closure and get the return value (if any)
+			ret := closure.Call(vm, nil)
 
 			// Ensure that memory is large enough to hold the returned data
+			// If it isn't resize the memory slice so that it may hold the value
 			totSize := new(big.Int).Add(retOffset, retSize)
 			lenSize := big.NewInt(int64(len(mem)))
-			// Resize the current memory slice so that the return value may fit
 			if totSize.Cmp(lenSize) > 0 {
+				// Calculate the diff between the sizes
 				diff := new(big.Int).Sub(totSize, lenSize)
+				// Create a new empty slice and append it
 				newSlice := make([]byte, diff.Int64()+1)
 				mem = append(mem, newSlice...)
 			}
+			// Copy over the returned values to the memory given the offset and size
 			copy(mem[retOffset.Int64():retOffset.Int64()+retSize.Int64()+1], ret)
 		case oRETURN:
 			size, offset := stack.Popn()

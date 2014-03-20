@@ -117,8 +117,10 @@ func TestRun3(t *testing.T) {
 
 	script := Compile([]string{
 		"PUSH", "300",
+		"PUSH", "0",
 		"MSTORE",
 		"PUSH", "300",
+		"PUSH", "31",
 		"MSTORE",
 		"PUSH", "62",
 		"PUSH", "0",
@@ -147,8 +149,7 @@ func TestRun3(t *testing.T) {
 	executer.Sign([]byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
 	callerClosure := NewClosure(executer, MakeContract(callerTx, state), state, big.NewInt(1000000000), new(big.Int))
 
-	vm := &Vm{}
-	vm.RunClosure(callerClosure, state, RuntimeVars{
+	vm := NewVm(state, RuntimeVars{
 		address:     callerAddr,
 		blockNumber: 1,
 		sender:      ethutil.FromHex("cd1722f3947def4cf144679da39c4c32bdc35681"),
@@ -159,4 +160,5 @@ func TestRun3(t *testing.T) {
 		txValue:     big.NewInt(10000),
 		txData:      nil,
 	})
+	callerClosure.Call(vm, nil)
 }
