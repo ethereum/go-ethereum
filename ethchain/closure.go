@@ -26,7 +26,7 @@ type Closure struct {
 	gas *big.Int
 	val *big.Int
 
-	args []byte
+	Args []byte
 }
 
 // Create a new closure for the given data items
@@ -45,7 +45,7 @@ func (c *Closure) GetMem(x int64) *ethutil.Value {
 }
 
 func (c *Closure) Call(vm *Vm, args []byte) []byte {
-	c.args = args
+	c.Args = args
 
 	return vm.RunClosure(c)
 }

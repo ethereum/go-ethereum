@@ -86,9 +86,9 @@ func (s *State) UpdateContract(addr []byte, contract *Contract) {
 func (s *State) GetAccount(addr []byte) (account *Account) {
 	data := s.trie.Get(string(addr))
 	if data == "" {
-		account = NewAccount(big.NewInt(0))
+		account = NewAccount(addr, big.NewInt(0))
 	} else {
-		account = NewAccountFromData([]byte(data))
+		account = NewAccountFromData(addr, []byte(data))
 	}
 
 	return

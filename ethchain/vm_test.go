@@ -133,10 +133,10 @@ func TestRun3(t *testing.T) {
 	state.UpdateContract(addr, contract)
 
 	callerScript := Compile([]string{
-		"PUSH", "62", // REND
-		"PUSH", "0", // RSTART
-		"PUSH", "22", // MEND
-		"PUSH", "15", // MSTART
+		"PUSH", "62", // ret size
+		"PUSH", "0", // ret offset
+		"PUSH", "32", // arg size
+		"PUSH", "63", // arg offset
 		"PUSH", "1000", /// Gas
 		"PUSH", "0", /// value
 		"PUSH", string(addr), // Sender
@@ -144,10 +144,9 @@ func TestRun3(t *testing.T) {
 	})
 	callerTx := NewTransaction(ContractAddr, ethutil.Big("100000000000000000000000000000000000000000000000000"), callerScript)
 	callerAddr := callerTx.Hash()[12:]
-	executer := NewTransaction(ContractAddr, ethutil.Big("10000"), nil)
 
-	executer.Sign([]byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
-	callerClosure := NewClosure(executer, MakeContract(callerTx, state), state, big.NewInt(1000000000), new(big.Int))
+	account := NewAccount(ContractAddr, big.NewInt(10000000))
+	callerClosure := NewClosure(account, MakeContract(callerTx, state), state, big.NewInt(1000000000), new(big.Int))
 
 	vm := NewVm(state, RuntimeVars{
 		address:     callerAddr,

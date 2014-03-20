@@ -87,6 +87,10 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 			// Pop value of the stack
 			val, mStart := stack.Popn()
 			mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(val, 256))
+
+		case oCALLDATA:
+			offset := stack.Pop()
+			mem.Set(offset.Int64(), int64(len(closure.Args)), closure.Args)
 		case oCALL:
 			// Pop return size and offset
 			retSize, retOffset := stack.Popn()
