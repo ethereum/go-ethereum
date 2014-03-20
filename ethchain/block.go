@@ -304,6 +304,9 @@ func NewUncleBlockFromValue(header *ethutil.Value) *Block {
 func (block *Block) String() string {
 	return fmt.Sprintf("Block(%x):\nPrevHash:%x\nUncleSha:%x\nCoinbase:%x\nRoot:%x\nTxSha:%x\nDiff:%v\nTime:%d\nNonce:%x\nTxs:%d\n", block.Hash(), block.PrevHash, block.UncleSha, block.Coinbase, block.state.trie.Root, block.TxSha, block.Difficulty, block.Time, block.Nonce, len(block.transactions))
 }
+func (block *Block) GetRoot() interface{} {
+	return block.state.trie.Root
+}
 
 //////////// UNEXPORTED /////////////////
 func (block *Block) header() []interface{} {

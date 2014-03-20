@@ -91,7 +91,6 @@ func (pool *TxPool) addTransaction(tx *Transaction) {
 // Process transaction validates the Tx and processes funds from the
 // sender to the recipient.
 func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) (err error) {
-	log.Println("Processing TX")
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println(r)
@@ -105,11 +104,11 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) (err error
 	// funds won't invalidate this transaction but simple ignores it.
 	totAmount := new(big.Int).Add(tx.Value, new(big.Int).Mul(TxFee, TxFeeRat))
 	if sender.Amount.Cmp(totAmount) < 0 {
-		return errors.New("Insufficient amount in sender's account")
+		return errors.New("[TXPL] Insufficient amount in sender's account")
 	}
 
 	if sender.Nonce != tx.Nonce {
-		return fmt.Errorf("Invalid nonce %d(%d)", tx.Nonce, sender.Nonce)
+		return fmt.Errorf("[TXPL] Invalid account nonce, state nonce is %d transactoin nonce is %d instead", sender.Nonce, tx.Nonce)
 	}
 
 	// Get the receiver
@@ -145,7 +144,7 @@ func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 	block := pool.Ethereum.BlockChain().CurrentBlock
 	// Something has gone horribly wrong if this happens
 	if block == nil {
-		return errors.New("No last block on the block chain")
+		return errors.New("[TXPL] No last block on the block chain")
 	}
 
 	// Get the sender
@@ -156,7 +155,7 @@ func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.
 	if sender.Amount.Cmp(totAmount) < 0 {
-		return fmt.Errorf("Insufficient amount in sender's (%x) account", tx.Sender())
+		return fmt.Errorf("[TXPL] Insufficient amount in sender's (%x) account", tx.Sender())
 	}
 
 	// Increment the nonce making each tx valid only once to prevent replay

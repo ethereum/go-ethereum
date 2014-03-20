@@ -44,7 +44,6 @@ func (bc *BlockChain) NewBlock(coinbase []byte, txs []*Transaction) *Block {
 		hash = bc.LastBlockHash
 		lastBlockTime = bc.CurrentBlock.Time
 	}
-
 	block := CreateBlock(
 		root,
 		hash,
@@ -181,8 +180,8 @@ func (bc *BlockChain) SetTotalDifficulty(td *big.Int) {
 // Add a block to the chain and record addition information
 func (bc *BlockChain) Add(block *Block) {
 	bc.writeBlockInfo(block)
-
 	// Prepare the genesis block
+
 	bc.CurrentBlock = block
 	bc.LastBlockHash = block.Hash()
 

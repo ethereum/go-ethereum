@@ -295,7 +295,7 @@ func (p *Peer) HandleInbound() {
 					block = ethchain.NewBlockFromRlpValue(msg.Data.Get(i))
 
 					p.ethereum.StateManager().PrepareDefault(block)
-					err = p.ethereum.StateManager().ProcessBlock(block)
+					err = p.ethereum.StateManager().ProcessBlock(block, true)
 
 					if err != nil {
 						if ethutil.Config.Debug {

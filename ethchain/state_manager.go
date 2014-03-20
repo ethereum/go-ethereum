@@ -50,9 +50,6 @@ type StateManager struct {
 	// Comparative state it used for comparing and validating end
 	// results
 	compState *State
-
-	// Mining state, solely used for mining
-	miningState *State
 }
 
 func NewStateManager(ethereum EthManager) *StateManager {
@@ -65,16 +62,11 @@ func NewStateManager(ethereum EthManager) *StateManager {
 		bc:             ethereum.BlockChain(),
 	}
 	sm.procState = ethereum.BlockChain().CurrentBlock.State()
-
 	return sm
 }
 
 func (sm *StateManager) ProcState() *State {
 	return sm.procState
-}
-
-func (sm *StateManager) MiningState() *State {
-	return sm.miningState
 }
 
 // Watches any given address and puts it in the address state store
@@ -105,8 +97,6 @@ func (sm *StateManager) MakeContract(tx *Transaction) {
 		sm.procState.states[string(tx.Hash()[12:])] = contract.state
 	}
 }
-func (sm *StateManager) ApplyTransaction(block *Block, tx *Transaction) {
-}
 
 func (sm *StateManager) ApplyTransactions(block *Block, txs []*Transaction) {
 	// Process each transaction/contract
@@ -136,17 +126,13 @@ func (sm *StateManager) Prepare(processer *State, comparative *State) {
 	sm.procState = processer
 }
 
-func (sm *StateManager) PrepareMiningState() {
-	sm.miningState = sm.BlockChain().CurrentBlock.State()
-}
-
 // Default prepare function
 func (sm *StateManager) PrepareDefault(block *Block) {
 	sm.Prepare(sm.BlockChain().CurrentBlock.State(), block.State())
 }
 
 // Block processing and validating with a given (temporarily) state
-func (sm *StateManager) ProcessBlock(block *Block) error {
+func (sm *StateManager) ProcessBlock(block *Block, dontReact bool) error {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
@@ -155,7 +141,6 @@ func (sm *StateManager) ProcessBlock(block *Block) error {
 	// nodes this won't happen because Commit would have been called
 	// before that.
 	defer sm.bc.CurrentBlock.Undo()
-
 	hash := block.Hash()
 
 	if sm.bc.HasBlock(hash) {
@@ -207,7 +192,9 @@ func (sm *StateManager) ProcessBlock(block *Block) error {
 		}
 
 		ethutil.Config.Log.Infof("[STATE] Added block #%d (%x)\n", block.BlockInfo().Number, block.Hash())
-		sm.Ethereum.Reactor().Post("newBlock", block)
+		if dontReact == false {
+			sm.Ethereum.Reactor().Post("newBlock", block)
+		}
 	} else {
 		fmt.Println("total diff failed")
 	}
@@ -285,15 +272,16 @@ func CalculateUncleReward(block *Block) *big.Int {
 }
 
 func (sm *StateManager) AccumelateRewards(block *Block) error {
+
 	// Get the coinbase rlp data
 	//XXX addr := processor.state.GetAccount(block.Coinbase)
 	addr := sm.procState.GetAccount(block.Coinbase)
 	// Reward amount of ether to the coinbase address
 	addr.AddFee(CalculateBlockReward(block, len(block.Uncles)))
-
 	//XXX processor.state.UpdateAccount(block.Coinbase, addr)
-	sm.procState.UpdateAccount(block.Coinbase, addr)
-
+	var acc []byte
+	copy(acc, block.Coinbase)
+	sm.procState.UpdateAccount(acc, addr)
 	for _, uncle := range block.Uncles {
 		uncleAddr := sm.procState.GetAccount(uncle.Coinbase)
 		uncleAddr.AddFee(CalculateUncleReward(uncle))

@@ -11,7 +11,7 @@ import (
 )
 
 type PoW interface {
-	Search(block *Block, minerChan chan ethutil.React) []byte
+	Search(block *Block, reactChan chan ethutil.React) []byte
 	Verify(hash []byte, diff *big.Int, nonce []byte) bool
 }
 
@@ -19,7 +19,7 @@ type EasyPow struct {
 	hash *big.Int
 }
 
-func (pow *EasyPow) Search(block *Block, minerChan chan ethutil.React) []byte {
+func (pow *EasyPow) Search(block *Block, reactChan chan ethutil.React) []byte {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	hash := block.HashNoNonce()
 	diff := block.Difficulty
@@ -28,15 +28,9 @@ func (pow *EasyPow) Search(block *Block, minerChan chan ethutil.React) []byte {
 
 	for {
 		select {
-		case chanMessage := <-minerChan:
-			if _, ok := chanMessage.Resource.(*Block); ok {
-				log.Println("BREAKING OUT: BLOCK")
-				return nil
-			}
-			if _, ok := chanMessage.Resource.(*Transaction); ok {
-				log.Println("BREAKING OUT: TX")
-				return nil
-			}
+		case <-reactChan:
+			log.Println("[pow] Received reactor event; breaking out.")
+			return nil
 		default:
 			i++
 			if i%1234567 == 0 {
