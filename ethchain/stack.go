@@ -2,6 +2,7 @@ package ethchain
 
 import (
 	"fmt"
+	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
 )
 
@@ -60,6 +61,10 @@ const (
 	oBALANCE        = 0x3c
 	oMKTX           = 0x3d
 	oSUICIDE        = 0x3f
+
+	// TODO FIX OPCODES
+	oCALL   = 0x40
+	oRETURN = 0x41
 )
 
 // Since the opcodes aren't all in order we can't use a regular slice
@@ -114,6 +119,9 @@ var opCodeToString = map[OpCode]string{
 	oBALANCE:        "BALANCE",
 	oMKTX:           "MKTX",
 	oSUICIDE:        "SUICIDE",
+
+	oCALL:   "CALL",
+	oRETURN: "RETURN",
 }
 
 func (o OpCode) String() string {
@@ -141,35 +149,27 @@ func NewStack() *Stack {
 }
 
 func (st *Stack) Pop() *big.Int {
-	s := len(st.data)
-
-	str := st.data[s-1]
-	st.data = st.data[:s-1]
+	str := st.data[0]
+	st.data = st.data[1:]
 
 	return str
 }
 
 func (st *Stack) Popn() (*big.Int, *big.Int) {
-	s := len(st.data)
-
-	ints := st.data[s-2:]
-	st.data = st.data[:s-2]
+	ints := st.data[:2]
+	st.data = st.data[2:]
 
 	return ints[0], ints[1]
 }
 
 func (st *Stack) Peek() *big.Int {
-	s := len(st.data)
-
-	str := st.data[s-1]
+	str := st.data[0]
 
 	return str
 }
 
 func (st *Stack) Peekn() (*big.Int, *big.Int) {
-	s := len(st.data)
-
-	ints := st.data[s-2:]
+	ints := st.data[:2]
 
 	return ints[0], ints[1]
 }
@@ -178,6 +178,64 @@ func (st *Stack) Push(d *big.Int) {
 	st.data = append(st.data, d)
 }
 func (st *Stack) Print() {
+	fmt.Println("### STACK ###")
+	if len(st.data) > 0 {
+		for i, val := range st.data {
+			fmt.Printf("%-3d  %v\n", i, val)
+		}
+	} else {
+		fmt.Println("-- empty --")
+	}
+	fmt.Println("#############")
+}
+
+////////////// TODO this will eventually become the main stack once the big ints are removed from the VM
+type ValueStack struct {
+	data []*ethutil.Value
+}
+
+func NewValueStack() *ValueStack {
+	return &ValueStack{}
+}
+
+func (st *ValueStack) Pop() *ethutil.Value {
+	s := len(st.data)
+
+	str := st.data[s-1]
+	st.data = st.data[:s-1]
+
+	return str
+}
+
+func (st *ValueStack) Popn() (*ethutil.Value, *ethutil.Value) {
+	s := len(st.data)
+
+	ints := st.data[s-2:]
+	st.data = st.data[:s-2]
+
+	return ints[0], ints[1]
+}
+
+func (st *ValueStack) Peek() *ethutil.Value {
+	s := len(st.data)
+
+	str := st.data[s-1]
+
+	return str
+}
+
+func (st *ValueStack) Peekn() (*ethutil.Value, *ethutil.Value) {
+	s := len(st.data)
+
+	ints := st.data[s-2:]
+
+	return ints[0], ints[1]
+}
+
+func (st *ValueStack) Push(d *ethutil.Value) {
+	st.data = append(st.data, d)
+}
+func (st *ValueStack) Print() {
 	fmt.Println("### STACK ###")
 	if len(st.data) > 0 {
 		for i, val := range st.data {
