@@ -27,14 +27,14 @@ func (lib *EthLib) CreateTx(receiver, a, data string) string {
 	}
 
 	k, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-	keyRing := ethutil.NewValueFromBytes(k)
+	keyPair := ethutil.NewKeyFromBytes(k)
 
 	amount := ethutil.Big(a)
 	code := ethchain.Compile(strings.Split(data, "\n"))
 	tx := ethchain.NewTransaction(hash, amount, code)
-	tx.Nonce = lib.stateManager.GetAddrState(keyRing.Get(1).Bytes()).Nonce
+	tx.Nonce = lib.stateManager.GetAddrState(keyPair.Address()).Nonce
 
-	tx.Sign(keyRing.Get(0).Bytes())
+	tx.Sign(keyPair.PrivateKey)
 
 	lib.txPool.QueueTransaction(tx)
 

@@ -190,16 +190,19 @@ func main() {
 					// Apply all transactions to the block
 					ethereum.StateManager().ApplyTransactions(block, block.Transactions())
 
-					ethereum.StateManager().AccumelateRewards(block, block)
+					ethereum.StateManager().Prepare(block.State(), block.State())
+					ethereum.StateManager().AccumelateRewards(block)
 
 					// Search the nonce
 					block.Nonce = pow.Search(block)
 					ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
+
+					ethereum.StateManager().PrepareDefault(block)
 					err := ethereum.StateManager().ProcessBlock(block)
 					if err != nil {
 						log.Println(err)
 					} else {
-						//log.Println("\n+++++++ MINED BLK +++++++\n", ethereum.BlockChain().CurrentBlock)
+						log.Println("\n+++++++ MINED BLK +++++++\n", ethereum.BlockChain().CurrentBlock)
 						log.Printf("🔨  Mined block %x\n", block.Hash())
 					}
 				}
