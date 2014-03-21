@@ -126,7 +126,6 @@ func TestRun3(t *testing.T) {
 
 		"PUSH", "64",
 		"PUSH", "0",
-		"LOG",
 		"RETURN",
 	})
 	tx := NewTransaction(ContractAddr, ethutil.Big("100000000000000000000000000000000000000000000000000"), script)
@@ -159,7 +158,7 @@ func TestRun3(t *testing.T) {
 	callerClosure := NewClosure(account, MakeContract(callerTx, state), state, big.NewInt(1000000000), new(big.Int))
 
 	vm := NewVm(state, RuntimeVars{
-		origin:      account.Address,
+		origin:      account.Address(),
 		blockNumber: 1,
 		prevHash:    ethutil.FromHex("5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"),
 		coinbase:    ethutil.FromHex("2adc25665018aa1fe0e6bc666dac8fc2697ff9ba"),

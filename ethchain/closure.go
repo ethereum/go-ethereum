@@ -9,13 +9,13 @@ import (
 
 type Callee interface {
 	ReturnGas(*big.Int, *State)
+	Address() []byte
 }
 
 type ClosureBody interface {
 	Callee
 	ethutil.RlpEncodable
 	GetMem(int64) *ethutil.Value
-	Address() []byte
 }
 
 // Basic inline closure object which implement the 'closure' interface
@@ -24,8 +24,8 @@ type Closure struct {
 	object ClosureBody
 	State  *State
 
-	gas *big.Int
-	val *big.Int
+	Gas   *big.Int
+	Value *big.Int
 
 	Args []byte
 }
@@ -45,6 +45,10 @@ func (c *Closure) GetMem(x int64) *ethutil.Value {
 	return m
 }
 
+func (c *Closure) Address() []byte {
+	return c.object.Address()
+}
+
 func (c *Closure) Call(vm *Vm, args []byte) []byte {
 	c.Args = args
 
@@ -56,9 +60,9 @@ func (c *Closure) Return(ret []byte) []byte {
 	// If no callee is present return it to
 	// the origin (i.e. contract or tx)
 	if c.callee != nil {
-		c.callee.ReturnGas(c.gas, c.State)
+		c.callee.ReturnGas(c.Gas, c.State)
 	} else {
-		c.object.ReturnGas(c.gas, c.State)
+		c.object.ReturnGas(c.Gas, c.State)
 		// TODO incase it's a POST contract we gotta serialise the contract again.
 		// But it's not yet defined
 	}
@@ -69,9 +73,13 @@ func (c *Closure) Return(ret []byte) []byte {
 // Implement the Callee interface
 func (c *Closure) ReturnGas(gas *big.Int, state *State) {
 	// Return the gas to the closure
-	c.gas.Add(c.gas, gas)
+	c.Gas.Add(c.Gas, gas)
 }
 
-func (c *Closure) GetGas() *big.Int {
-	return c.gas
+func (c *Closure) Object() ClosureBody {
+	return c.object
+}
+
+func (c *Closure) Callee() Callee {
+	return c.callee
 }

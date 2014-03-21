@@ -40,7 +40,7 @@ var Pow256 = ethutil.BigPow(2, 256)
 
 func (vm *Vm) RunClosure(closure *Closure) []byte {
 	// If the amount of gas supplied is less equal to 0
-	if closure.GetGas().Cmp(big.NewInt(0)) <= 0 {
+	if closure.Gas.Cmp(big.NewInt(0)) <= 0 {
 		// TODO Do something
 	}
 
@@ -73,7 +73,7 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 		fee := new(big.Int)
 		fee.Add(fee, big.NewInt(1000))
 
-		if closure.GetGas().Cmp(fee) < 0 {
+		if closure.Gas.Cmp(fee) < 0 {
 			return closure.Return(nil)
 		}
 
@@ -192,25 +192,37 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 
 		// 0x30 range
 		case oADDRESS:
+			stack.Push(ethutil.BigD(closure.Object().Address()))
 		case oBALANCE:
+			stack.Push(closure.Value)
 		case oORIGIN:
+			stack.Push(ethutil.BigD(vm.vars.origin))
 		case oCALLER:
+			stack.Push(ethutil.BigD(closure.Callee().Address()))
 		case oCALLVALUE:
+			// FIXME: Original value of the call, not the current value
+			stack.Push(closure.Value)
 		case oCALLDATA:
 			offset := stack.Pop()
 			mem.Set(offset.Int64(), int64(len(closure.Args)), closure.Args)
 		case oCALLDATASIZE:
-		case oRETURNDATASIZE:
-		case oTXGASPRICE:
+			stack.Push(big.NewInt(int64(len(closure.Args))))
+		case oGASPRICE:
+			// TODO
 
 		// 0x40 range
 		case oPREVHASH:
-		case oPREVNONCE:
+			stack.Push(ethutil.BigD(vm.vars.prevHash))
 		case oCOINBASE:
+			stack.Push(ethutil.BigD(vm.vars.coinbase))
 		case oTIMESTAMP:
+			stack.Push(big.NewInt(vm.vars.time))
 		case oNUMBER:
+			stack.Push(big.NewInt(int64(vm.vars.blockNumber)))
 		case oDIFFICULTY:
+			stack.Push(vm.vars.diff)
 		case oGASLIMIT:
+			// TODO
 
 		// 0x50 range
 		case oPUSH: // Push PC+1 on to the stack
@@ -218,8 +230,13 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 			val := closure.GetMem(pc).BigInt()
 			stack.Push(val)
 		case oPOP:
+			stack.Pop()
 		case oDUP:
+			stack.Push(stack.Peek())
 		case oSWAP:
+			x, y := stack.Popn()
+			stack.Push(y)
+			stack.Push(x)
 		case oMLOAD:
 			offset := stack.Pop()
 			stack.Push(ethutil.BigD(mem.Get(offset.Int64(), 32)))
@@ -228,7 +245,13 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 			val, mStart := stack.Popn()
 			mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(val, 256))
 		case oMSTORE8:
+			val, mStart := stack.Popn()
+			base.And(val, new(big.Int).SetInt64(0xff))
+			mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(base, 256))
 		case oSLOAD:
+			loc := stack.Pop()
+			val := closure.GetMem(loc.Int64())
+			stack.Push(val.BigInt())
 		case oSSTORE:
 		case oJUMP:
 		case oJUMPI:

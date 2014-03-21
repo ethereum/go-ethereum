@@ -36,24 +36,22 @@ const (
 	oSHA3 = 0x20
 
 	// 0x30 range - closure state
-	oADDRESS        = 0x30
-	oBALANCE        = 0x31
-	oORIGIN         = 0x32
-	oCALLER         = 0x33
-	oCALLVALUE      = 0x34
-	oCALLDATA       = 0x35
-	oCALLDATASIZE   = 0x36
-	oRETURNDATASIZE = 0x37
-	oTXGASPRICE     = 0x38
+	oADDRESS      = 0x30
+	oBALANCE      = 0x31
+	oORIGIN       = 0x32
+	oCALLER       = 0x33
+	oCALLVALUE    = 0x34
+	oCALLDATA     = 0x35
+	oCALLDATASIZE = 0x36
+	oGASPRICE     = 0x37
 
 	// 0x40 range - block operations
 	oPREVHASH   = 0x40
-	oPREVNONCE  = 0x41
-	oCOINBASE   = 0x42
-	oTIMESTAMP  = 0x43
-	oNUMBER     = 0x44
-	oDIFFICULTY = 0x45
-	oGASLIMIT   = 0x46
+	oCOINBASE   = 0x41
+	oTIMESTAMP  = 0x42
+	oNUMBER     = 0x43
+	oDIFFICULTY = 0x44
+	oGASLIMIT   = 0x45
 
 	// 0x50 range - 'storage' and execution
 	oPUSH    = 0x50
@@ -108,19 +106,17 @@ var opCodeToString = map[OpCode]string{
 	oSHA3: "SHA3",
 
 	// 0x30 range - closure state
-	oADDRESS:        "ADDRESS",
-	oBALANCE:        "BALANCE",
-	oORIGIN:         "ORIGIN",
-	oCALLER:         "CALLER",
-	oCALLVALUE:      "CALLVALUE",
-	oCALLDATA:       "CALLDATA",
-	oCALLDATASIZE:   "CALLDATASIZE",
-	oRETURNDATASIZE: "RETURNDATASIZE",
-	oTXGASPRICE:     "TXGASPRICE",
+	oADDRESS:      "ADDRESS",
+	oBALANCE:      "BALANCE",
+	oORIGIN:       "ORIGIN",
+	oCALLER:       "CALLER",
+	oCALLVALUE:    "CALLVALUE",
+	oCALLDATA:     "CALLDATA",
+	oCALLDATASIZE: "CALLDATASIZE",
+	oGASPRICE:     "TXGASPRICE",
 
 	// 0x40 range - block operations
 	oPREVHASH:   "PREVHASH",
-	oPREVNONCE:  "PREVNONCE",
 	oCOINBASE:   "COINBASE",
 	oTIMESTAMP:  "TIMESTAMP",
 	oNUMBER:     "NUMBER",
@@ -244,7 +240,11 @@ func (m *Memory) Get(offset, size int64) []byte {
 func (m *Memory) Print() {
 	fmt.Println("### MEM ###")
 	if len(m.store) > 0 {
-		fmt.Println(m.store)
+		addr := 0
+		for i := 0; i+32 < len(m.store); i += 32 {
+			fmt.Printf("%03d %v\n", addr, m.store[i:i+32])
+			addr++
+		}
 	} else {
 		fmt.Println("-- empty --")
 	}

@@ -33,24 +33,22 @@ var OpCodes = map[string]byte{
 	"SHA3": 0x20,
 
 	// 0x30 range - closure state
-	"ADDRESS":        0x30,
-	"BALANCE":        0x31,
-	"ORIGIN":         0x32,
-	"CALLER":         0x33,
-	"CALLVALUE":      0x34,
-	"CALLDATA":       0x35,
-	"CALLDATASIZE":   0x36,
-	"RETURNDATASIZE": 0x37,
-	"TXGASPRICE":     0x38,
+	"ADDRESS":      0x30,
+	"BALANCE":      0x31,
+	"ORIGIN":       0x32,
+	"CALLER":       0x33,
+	"CALLVALUE":    0x34,
+	"CALLDATA":     0x35,
+	"CALLDATASIZE": 0x36,
+	"GASPRICE":     0x38,
 
 	// 0x40 range - block operations
 	"PREVHASH":   0x40,
-	"PREVNONCE":  0x41,
-	"COINBASE":   0x42,
-	"TIMESTAMP":  0x43,
-	"NUMBER":     0x44,
-	"DIFFICULTY": 0x45,
-	"GASLIMIT":   0x46,
+	"COINBASE":   0x41,
+	"TIMESTAMP":  0x42,
+	"NUMBER":     0x43,
+	"DIFFICULTY": 0x44,
+	"GASLIMIT":   0x45,
 
 	// 0x50 range - 'storage' and execution
 	"PUSH":    0x50,

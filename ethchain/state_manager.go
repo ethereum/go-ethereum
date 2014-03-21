@@ -308,7 +308,7 @@ func (sm *StateManager) ProcessContract(contract *Contract, tx *Transaction, blo
 	caller := sm.procState.GetAccount(tx.Sender())
 	closure := NewClosure(caller, contract, sm.procState, tx.Gas, tx.Value)
 	vm := NewVm(sm.procState, RuntimeVars{
-		origin:      caller.Address,
+		origin:      caller.Address(),
 		blockNumber: block.BlockInfo().Number,
 		prevHash:    block.PrevHash,
 		coinbase:    block.Coinbase,
