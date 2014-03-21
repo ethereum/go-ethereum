@@ -2,7 +2,7 @@ package ethchain
 
 import (
 	_ "bytes"
-	"fmt"
+	_ "fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	_ "github.com/obscuren/secp256k1-go"
 	"log"
@@ -36,6 +36,8 @@ func NewVm(state *State, vars RuntimeVars) *Vm {
 	return &Vm{vars: vars, state: state}
 }
 
+var Pow256 = ethutil.BigPow(2, 256)
+
 func (vm *Vm) RunClosure(closure *Closure) []byte {
 	// If the amount of gas supplied is less equal to 0
 	if closure.GetGas().Cmp(big.NewInt(0)) <= 0 {
@@ -48,9 +50,10 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 	stack := NewStack()
 	// Instruction pointer
 	pc := int64(0)
-	// Current address
-	//addr := vars.address
+	// Current step count
 	step := 0
+	// The base for all big integer arithmetic
+	base := new(big.Int)
 
 	if ethutil.Config.Debug {
 		ethutil.Config.Log.Debugf("#   op\n")
@@ -75,27 +78,171 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 		}
 
 		switch op {
+		case oLOG:
+			stack.Print()
+			mem.Print()
 		case oSTOP: // Stop the closure
 			return closure.Return(nil)
+
+		// 0x20 range
+		case oADD:
+			x, y := stack.Popn()
+			// (x + y) % 2 ** 256
+			base.Add(x, y)
+			base.Mod(base, Pow256)
+			// Pop result back on the stack
+			stack.Push(base)
+		case oSUB:
+			x, y := stack.Popn()
+			// (x - y) % 2 ** 256
+			base.Sub(x, y)
+			base.Mod(base, Pow256)
+			// Pop result back on the stack
+			stack.Push(base)
+		case oMUL:
+			x, y := stack.Popn()
+			// (x * y) % 2 ** 256
+			base.Mul(x, y)
+			base.Mod(base, Pow256)
+			// Pop result back on the stack
+			stack.Push(base)
+		case oDIV:
+			x, y := stack.Popn()
+			// floor(x / y)
+			base.Div(x, y)
+			// Pop result back on the stack
+			stack.Push(base)
+		case oSDIV:
+			x, y := stack.Popn()
+			// n > 2**255
+			if x.Cmp(Pow256) > 0 {
+				x.Sub(Pow256, x)
+			}
+			if y.Cmp(Pow256) > 0 {
+				y.Sub(Pow256, y)
+			}
+			z := new(big.Int)
+			z.Div(x, y)
+			if z.Cmp(Pow256) > 0 {
+				z.Sub(Pow256, z)
+			}
+			// Push result on to the stack
+			stack.Push(z)
+		case oMOD:
+			x, y := stack.Popn()
+			base.Mod(x, y)
+			stack.Push(base)
+		case oSMOD:
+			x, y := stack.Popn()
+			// n > 2**255
+			if x.Cmp(Pow256) > 0 {
+				x.Sub(Pow256, x)
+			}
+			if y.Cmp(Pow256) > 0 {
+				y.Sub(Pow256, y)
+			}
+			z := new(big.Int)
+			z.Mod(x, y)
+			if z.Cmp(Pow256) > 0 {
+				z.Sub(Pow256, z)
+			}
+			// Push result on to the stack
+			stack.Push(z)
+		case oEXP:
+			x, y := stack.Popn()
+			base.Exp(x, y, Pow256)
+
+			stack.Push(base)
+		case oNEG:
+			base.Sub(Pow256, stack.Pop())
+			stack.Push(base)
+		case oLT:
+			x, y := stack.Popn()
+			// x < y
+			if x.Cmp(y) < 0 {
+				stack.Push(ethutil.BigTrue)
+			} else {
+				stack.Push(ethutil.BigFalse)
+			}
+		case oGT:
+			x, y := stack.Popn()
+			// x > y
+			if x.Cmp(y) > 0 {
+				stack.Push(ethutil.BigTrue)
+			} else {
+				stack.Push(ethutil.BigFalse)
+			}
+		case oNOT:
+			x, y := stack.Popn()
+			// x != y
+			if x.Cmp(y) != 0 {
+				stack.Push(ethutil.BigTrue)
+			} else {
+				stack.Push(ethutil.BigFalse)
+			}
+
+		// 0x10 range
+		case oAND:
+		case oOR:
+		case oXOR:
+		case oBYTE:
+
+		// 0x20 range
+		case oSHA3:
+
+		// 0x30 range
+		case oADDRESS:
+		case oBALANCE:
+		case oORIGIN:
+		case oCALLER:
+		case oCALLVALUE:
+		case oCALLDATA:
+			offset := stack.Pop()
+			mem.Set(offset.Int64(), int64(len(closure.Args)), closure.Args)
+		case oCALLDATASIZE:
+		case oRETURNDATASIZE:
+		case oTXGASPRICE:
+
+		// 0x40 range
+		case oPREVHASH:
+		case oPREVNONCE:
+		case oCOINBASE:
+		case oTIMESTAMP:
+		case oNUMBER:
+		case oDIFFICULTY:
+		case oGASLIMIT:
+
+		// 0x50 range
 		case oPUSH: // Push PC+1 on to the stack
 			pc++
 			val := closure.GetMem(pc).BigInt()
 			stack.Push(val)
+		case oPOP:
+		case oDUP:
+		case oSWAP:
+		case oMLOAD:
+			offset := stack.Pop()
+			stack.Push(ethutil.BigD(mem.Get(offset.Int64(), 32)))
 		case oMSTORE: // Store the value at stack top-1 in to memory at location stack top
 			// Pop value of the stack
 			val, mStart := stack.Popn()
 			mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(val, 256))
+		case oMSTORE8:
+		case oSLOAD:
+		case oSSTORE:
+		case oJUMP:
+		case oJUMPI:
+		case oPC:
+		case oMSIZE:
 
-		case oCALLDATA:
-			offset := stack.Pop()
-			mem.Set(offset.Int64(), int64(len(closure.Args)), closure.Args)
+		// 0x60 range
 		case oCALL:
 			// Pop return size and offset
 			retSize, retOffset := stack.Popn()
 			// Pop input size and offset
 			inSize, inOffset := stack.Popn()
-			// TODO remove me.
-			fmt.Sprintln(inSize, inOffset)
+			// Get the arguments from the memory
+			args := mem.Get(inOffset.Int64(), inSize.Int64())
 			// Pop gas and value of the stack.
 			gas, value := stack.Popn()
 			// Closure addr
@@ -105,7 +252,7 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 			// Create a new callable closure
 			closure := NewClosure(closure, contract, vm.state, gas, value)
 			// Executer the closure and get the return value (if any)
-			ret := closure.Call(vm, nil)
+			ret := closure.Call(vm, args)
 
 			mem.Set(retOffset.Int64(), retSize.Int64(), ret)
 		case oRETURN:
@@ -113,6 +260,25 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 			ret := mem.Get(offset.Int64(), size.Int64())
 
 			return closure.Return(ret)
+		case oSUICIDE:
+			/*
+				recAddr := stack.Pop().Bytes()
+				// Purge all memory
+				deletedMemory := contract.state.Purge()
+				// Add refunds to the pop'ed address
+				refund := new(big.Int).Mul(StoreFee, big.NewInt(int64(deletedMemory)))
+				account := state.GetAccount(recAddr)
+				account.Amount.Add(account.Amount, refund)
+				// Update the refunding address
+				state.UpdateAccount(recAddr, account)
+				// Delete the contract
+				state.trie.Update(string(addr), "")
+
+				ethutil.Config.Log.Debugf("(%d) => %x\n", deletedMemory, recAddr)
+				break out
+			*/
+		default:
+			ethutil.Config.Log.Debugln("Invalid opcode", op)
 		}
 
 		pc++

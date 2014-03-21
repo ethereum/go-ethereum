@@ -1,6 +1,7 @@
 package ethchain
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethutil"
@@ -119,11 +120,13 @@ func TestRun3(t *testing.T) {
 		"PUSH", "300",
 		"PUSH", "0",
 		"MSTORE",
-		"PUSH", "300",
-		"PUSH", "31",
-		"MSTORE",
-		"PUSH", "62",
+
+		"PUSH", "32",
+		"CALLDATA",
+
+		"PUSH", "64",
 		"PUSH", "0",
+		"LOG",
 		"RETURN",
 	})
 	tx := NewTransaction(ContractAddr, ethutil.Big("100000000000000000000000000000000000000000000000000"), script)
@@ -133,14 +136,21 @@ func TestRun3(t *testing.T) {
 	state.UpdateContract(contract)
 
 	callerScript := Compile([]string{
-		"PUSH", "62", // ret size
+		"PUSH", "1337", // Argument
+		"PUSH", "65", // argument mem offset
+		"MSTORE",
+		"PUSH", "64", // ret size
 		"PUSH", "0", // ret offset
+
 		"PUSH", "32", // arg size
-		"PUSH", "63", // arg offset
+		"PUSH", "65", // arg offset
 		"PUSH", "1000", /// Gas
 		"PUSH", "0", /// value
 		"PUSH", string(addr), // Sender
 		"CALL",
+		"PUSH", "64",
+		"PUSH", "0",
+		"RETURN",
 	})
 	callerTx := NewTransaction(ContractAddr, ethutil.Big("100000000000000000000000000000000000000000000000000"), callerScript)
 
@@ -158,5 +168,10 @@ func TestRun3(t *testing.T) {
 		// XXX Tx data? Could be just an argument to the closure instead
 		txData: nil,
 	})
-	callerClosure.Call(vm, nil)
+	ret := callerClosure.Call(vm, nil)
+
+	exp := []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 57}
+	if bytes.Compare(ret, exp) != 0 {
+		t.Errorf("expected return value to be %v, got %v", exp, ret)
+	}
 }

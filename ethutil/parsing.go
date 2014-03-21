@@ -65,12 +65,16 @@ var OpCodes = map[string]byte{
 	"JUMP":    0x59,
 	"JUMPI":   0x5a,
 	"PC":      0x5b,
-	"MEMSIZE": 0x5c,
+	"MSIZE":   0x5c,
 
 	// 0x60 range - closures
 	"CREATE": 0x60,
 	"CALL":   0x61,
 	"RETURN": 0x62,
+
+	// 0x70 range - other
+	"LOG":     0x70,
+	"SUICIDE": 0x7f,
 }
 
 func IsOpCode(s string) bool {

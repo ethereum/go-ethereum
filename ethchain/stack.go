@@ -68,12 +68,16 @@ const (
 	oJUMP    = 0x59
 	oJUMPI   = 0x5a
 	oPC      = 0x5b
-	oMEMSIZE = 0x5c
+	oMSIZE   = 0x5c
 
 	// 0x60 range - closures
 	oCREATE = 0x60
 	oCALL   = 0x61
 	oRETURN = 0x62
+
+	// 0x70 range - other
+	oLOG     = 0x70 // XXX Unofficial
+	oSUICIDE = 0x7f
 )
 
 // Since the opcodes aren't all in order we can't use a regular slice
@@ -136,12 +140,16 @@ var opCodeToString = map[OpCode]string{
 	oJUMP:    "JUMP",
 	oJUMPI:   "JUMPI",
 	oPC:      "PC",
-	oMEMSIZE: "MEMSIZE",
+	oMSIZE:   "MSIZE",
 
 	// 0x60 range - closures
 	oCREATE: "CREATE",
 	oCALL:   "CALL",
 	oRETURN: "RETURN",
+
+	// 0x70 range - other
+	oLOG:     "LOG",
+	oSUICIDE: "SUICIDE",
 }
 
 func (o OpCode) String() string {
@@ -215,20 +223,30 @@ type Memory struct {
 
 func (m *Memory) Set(offset, size int64, value []byte) {
 	totSize := offset + size
-	lenSize := int64(len(m.store))
+	lenSize := int64(len(m.store) - 1)
 	if totSize > lenSize {
 		// Calculate the diff between the sizes
 		diff := totSize - lenSize
 		if diff > 0 {
 			// Create a new empty slice and append it
-			newSlice := make([]byte, diff+1)
+			newSlice := make([]byte, diff-1)
 			// Resize slice
 			m.store = append(m.store, newSlice...)
 		}
 	}
-	copy(m.store[offset:offset+size+1], value)
+	copy(m.store[offset:offset+size], value)
 }
 
 func (m *Memory) Get(offset, size int64) []byte {
 	return m.store[offset : offset+size]
+}
+
+func (m *Memory) Print() {
+	fmt.Println("### MEM ###")
+	if len(m.store) > 0 {
+		fmt.Println(m.store)
+	} else {
+		fmt.Println("-- empty --")
+	}
+	fmt.Println("###########")
 }
