@@ -49,7 +49,7 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 	// New stack (should this be shared?)
 	stack := NewStack()
 	// Instruction pointer
-	pc := int64(0)
+	pc := big.NewInt(0)
 	// Current step count
 	step := 0
 	// The base for all big integer arithmetic
@@ -226,7 +226,8 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 
 		// 0x50 range
 		case oPUSH: // Push PC+1 on to the stack
-			pc++
+			pc.Add(pc, ethutil.Big1)
+
 			val := closure.GetMem(pc).BigInt()
 			stack.Push(val)
 		case oPOP:
@@ -250,14 +251,22 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 			mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(base, 256))
 		case oSLOAD:
 			loc := stack.Pop()
-			val := closure.GetMem(loc.Int64())
+			val := closure.GetMem(loc)
 			stack.Push(val.BigInt())
 		case oSSTORE:
+			val, loc := stack.Popn()
+			closure.SetMem(loc, ethutil.NewValue(val))
 		case oJUMP:
+			pc = stack.Pop()
 		case oJUMPI:
+			pos, cond := stack.Popn()
+			if cond.Cmp(big.NewInt(0)) > 0 {
+				pc = pos
+			}
 		case oPC:
+			stack.Push(pc)
 		case oMSIZE:
-
+			stack.Push(big.NewInt(int64(mem.Len())))
 		// 0x60 range
 		case oCALL:
 			// Pop return size and offset
@@ -304,7 +313,7 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 			ethutil.Config.Log.Debugln("Invalid opcode", op)
 		}
 
-		pc++
+		pc.Add(pc, ethutil.Big1)
 	}
 }
 
@@ -682,7 +691,7 @@ func makeInlineTx(addr []byte, value, from, length *big.Int, contract *Contract,
 	j := int64(0)
 	dataItems := make([]string, int(length.Uint64()))
 	for i := from.Int64(); i < length.Int64(); i++ {
-		dataItems[j] = contract.GetMem(j).Str()
+		dataItems[j] = contract.GetMem(big.NewInt(j)).Str()
 		j++
 	}
 

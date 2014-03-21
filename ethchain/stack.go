@@ -237,6 +237,10 @@ func (m *Memory) Get(offset, size int64) []byte {
 	return m.store[offset : offset+size]
 }
 
+func (m *Memory) Len() int {
+	return len(m.store)
+}
+
 func (m *Memory) Print() {
 	fmt.Println("### MEM ###")
 	if len(m.store) > 0 {

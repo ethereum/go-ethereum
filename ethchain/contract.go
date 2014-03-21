@@ -39,10 +39,15 @@ func (c *Contract) State() *State {
 	return c.state
 }
 
-func (c *Contract) GetMem(num int64) *ethutil.Value {
-	nb := ethutil.BigToBytes(big.NewInt(num), 256)
+func (c *Contract) GetMem(num *big.Int) *ethutil.Value {
+	nb := ethutil.BigToBytes(num, 256)
 
 	return c.Addr(nb)
+}
+
+func (c *Contract) SetMem(num *big.Int, val *ethutil.Value) {
+	addr := ethutil.BigToBytes(num, 256)
+	c.state.trie.Update(string(addr), string(val.Encode()))
 }
 
 // Return the gas back to the origin. Used by the Virtual machine or Closures

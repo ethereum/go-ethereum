@@ -15,7 +15,8 @@ type Callee interface {
 type ClosureBody interface {
 	Callee
 	ethutil.RlpEncodable
-	GetMem(int64) *ethutil.Value
+	GetMem(*big.Int) *ethutil.Value
+	SetMem(*big.Int, *ethutil.Value)
 }
 
 // Basic inline closure object which implement the 'closure' interface
@@ -36,13 +37,17 @@ func NewClosure(callee Callee, object ClosureBody, state *State, gas, val *big.I
 }
 
 // Retuns the x element in data slice
-func (c *Closure) GetMem(x int64) *ethutil.Value {
+func (c *Closure) GetMem(x *big.Int) *ethutil.Value {
 	m := c.object.GetMem(x)
 	if m == nil {
 		return ethutil.EmptyValue()
 	}
 
 	return m
+}
+
+func (c *Closure) SetMem(x *big.Int, val *ethutil.Value) {
+	c.object.SetMem(x, val)
 }
 
 func (c *Closure) Address() []byte {
