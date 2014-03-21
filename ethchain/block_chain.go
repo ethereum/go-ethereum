@@ -3,6 +3,7 @@ package ethchain
 import (
 	"bytes"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ethwire"
 	"log"
 	"math"
 	"math/big"
@@ -24,6 +25,7 @@ type BlockChain struct {
 func NewBlockChain(ethereum EthManager) *BlockChain {
 	bc := &BlockChain{}
 	bc.genesisBlock = NewBlockFromData(ethutil.Encode(Genesis))
+	bc.Ethereum = ethereum
 
 	bc.setLastBlock()
 
@@ -75,6 +77,101 @@ func (bc *BlockChain) NewBlock(coinbase []byte, txs []*Transaction) *Block {
 func (bc *BlockChain) HasBlock(hash []byte) bool {
 	data, _ := ethutil.Config.Db.Get(hash)
 	return len(data) != 0
+}
+
+// TODO: At one point we might want to save a block by prevHash in the db to optimise this...
+func (bc *BlockChain) HasBlockWithPrevHash(hash []byte) bool {
+	block := bc.CurrentBlock
+
+	for ; block != nil; block = bc.GetBlock(block.PrevHash) {
+		if bytes.Compare(hash, block.PrevHash) == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (bc *BlockChain) CalculateBlockTD(block *Block) *big.Int {
+	blockDiff := new(big.Int)
+
+	for _, uncle := range block.Uncles {
+		blockDiff = blockDiff.Add(blockDiff, uncle.Difficulty)
+	}
+	blockDiff = blockDiff.Add(blockDiff, block.Difficulty)
+
+	return blockDiff
+}
+
+// Is tasked by finding the CanonicalChain and resetting the chain if we are not the Conical one
+func (bc *BlockChain) FindCanonicalChain(msg *ethwire.Msg, commonBlockHash []byte) {
+	// 1. Calculate TD of the current chain
+	// 2. Calculate TD of the new chain
+	// Reset state to the correct one
+
+	chainDifficulty := new(big.Int)
+
+	// Calculate the entire chain until the block we both have
+	// Start with the newest block we got, all the way back to the common block we both know
+	for i := 0; i < (msg.Data.Len() - 1); i++ {
+		block := NewBlockFromRlpValue(msg.Data.Get(i))
+		if bytes.Compare(block.Hash(), commonBlockHash) == 0 {
+			log.Println("[BCHAIN] We have found the common parent block, breaking")
+			break
+		}
+		chainDifficulty.Add(chainDifficulty, bc.CalculateBlockTD(block))
+	}
+
+	log.Println("[BCHAIN] Incoming chain difficulty:", chainDifficulty)
+
+	curChainDifficulty := new(big.Int)
+	block := bc.CurrentBlock
+
+	for ; block != nil; block = bc.GetBlock(block.PrevHash) {
+		if bytes.Compare(block.Hash(), commonBlockHash) == 0 {
+			log.Println("[BCHAIN] We have found the common parent block, breaking")
+			break
+		}
+		curChainDifficulty.Add(curChainDifficulty, bc.CalculateBlockTD(block))
+	}
+
+	log.Println("[BCHAIN] Current chain difficulty:", curChainDifficulty)
+	if chainDifficulty.Cmp(curChainDifficulty) == 1 {
+		log.Println("[BCHAIN] The incoming Chain beat our asses, resetting")
+		bc.ResetTillBlockHash(commonBlockHash)
+	} else {
+		log.Println("[BCHAIN] Our chain showed the incoming chain who is boss. Ignoring.")
+	}
+}
+func (bc *BlockChain) ResetTillBlockHash(hash []byte) error {
+	lastBlock := bc.CurrentBlock
+	returnTo := bc.GetBlock(hash)
+
+	// TODO: REFACTOR TO FUNCTION, Used multiple times
+	bc.CurrentBlock = returnTo
+	bc.LastBlockHash = returnTo.Hash()
+	info := bc.BlockInfo(returnTo)
+	bc.LastBlockNumber = info.Number
+	// END TODO
+
+	bc.Ethereum.StateManager().PrepareDefault(returnTo)
+	err := ethutil.Config.Db.Delete(lastBlock.Hash())
+	if err != nil {
+		return err
+	}
+
+	var block *Block
+	for ; block != nil; block = bc.GetBlock(block.PrevHash) {
+		if bytes.Compare(block.Hash(), hash) == 0 {
+			log.Println("[CHAIN] We have arrived at the the common parent block, breaking")
+			break
+		}
+		err = ethutil.Config.Db.Delete(block.Hash())
+		if err != nil {
+			return err
+		}
+	}
+	log.Println("[CHAIN] Split chain deleted and reverted to common parent block.")
+	return nil
 }
 
 func (bc *BlockChain) GenesisBlock() *Block {

@@ -126,7 +126,8 @@ type Peer struct {
 	pubkey []byte
 
 	// Indicated whether the node is catching up or not
-	catchingUp bool
+	catchingUp      bool
+	blocksRequested int
 
 	Version string
 }
@@ -136,15 +137,16 @@ func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
 	pubkey := ethutil.NewValueFromBytes(data).Get(2).Bytes()
 
 	return &Peer{
-		outputQueue: make(chan *ethwire.Msg, outputBufferSize),
-		quit:        make(chan bool),
-		ethereum:    ethereum,
-		conn:        conn,
-		inbound:     inbound,
-		disconnect:  0,
-		connected:   1,
-		port:        30303,
-		pubkey:      pubkey,
+		outputQueue:     make(chan *ethwire.Msg, outputBufferSize),
+		quit:            make(chan bool),
+		ethereum:        ethereum,
+		conn:            conn,
+		inbound:         inbound,
+		disconnect:      0,
+		connected:       1,
+		port:            30303,
+		pubkey:          pubkey,
+		blocksRequested: 10,
 	}
 }
 
@@ -291,11 +293,62 @@ func (p *Peer) HandleInbound() {
 				// Get all blocks and process them
 				var block, lastBlock *ethchain.Block
 				var err error
+
+				// 1. Compare the first block over the wire's prev-hash with the hash of your last block
+				// 2. If these two values are the same you can just link the chains together.
+				// [1:0,2:1,3:2] <- Current blocks (format block:previous_block)
+				// [1:0,2:1,3:2,4:3,5:4] <- incoming blocks
+				// == [1,2,3,4,5]
+				// 3. If the values are not the same we will have to go back and calculate the chain with the highest total difficulty
+				// [1:0,2:1,3:2,11:3,12:11,13:12]
+				// [1:0,2:1,3:2,4:3,5:4,6:5]
+
+				// [3:2,11:3,12:11,13:12]
+				// [3:2,4:3,5:4,6:5]
+				// Heb ik dit blok?
+				// Nee: heb ik een blok met PrevHash 3?
+				// Ja: DIVERSION
+				// Nee; Adding to chain
+
+				// See if we can find a common ancestor
+				// 1. Get the earliest block in the package.
+				// 2. Do we have this block?
+				//    3. Yes: Let's continue what we are doing
+				//    4. No: Let's request more blocks back.
+
+				if msg.Data.Len()-1 > 1 {
+					lastBlock = ethchain.NewBlockFromRlpValue(msg.Data.Get(msg.Data.Len() - 1))
+					if p.ethereum.StateManager().BlockChain().HasBlock(lastBlock.Hash()) {
+						fmt.Println("[PEER] We found a common ancestor, let's continue.")
+					} else {
+						fmt.Println("[PEER] No common ancestor found, requesting more blocks.")
+						p.blocksRequested = p.blocksRequested * 2
+						p.catchingUp = false
+						p.SyncWithBlocks()
+					}
+
+					for i := msg.Data.Len() - 1; i >= 0; i-- {
+						block = ethchain.NewBlockFromRlpValue(msg.Data.Get(i))
+						// Do we have this block on our chain?
+						if p.ethereum.StateManager().BlockChain().HasBlock(block.Hash()) {
+							fmt.Println("[PEER] Block found, checking next one.")
+						} else {
+							// We don't have this block, but we do have a block with the same prevHash, diversion time!
+							if p.ethereum.StateManager().BlockChain().HasBlockWithPrevHash(block.PrevHash) {
+								fmt.Printf("[PEER] Local and foreign chain have diverted after %x, we are going to get freaky with it!\n", block.PrevHash)
+								p.ethereum.StateManager().BlockChain().FindCanonicalChain(msg, block.PrevHash)
+							} else {
+								fmt.Println("[PEER] Both local and foreign chain have same parent. Continue normally")
+							}
+						}
+					}
+				}
+
 				for i := msg.Data.Len() - 1; i >= 0; i-- {
 					block = ethchain.NewBlockFromRlpValue(msg.Data.Get(i))
 
 					p.ethereum.StateManager().PrepareDefault(block)
-					err = p.ethereum.StateManager().ProcessBlock(block, true)
+					err = p.ethereum.StateManager().ProcessBlock(block, false)
 
 					if err != nil {
 						if ethutil.Config.Debug {
@@ -305,6 +358,7 @@ func (p *Peer) HandleInbound() {
 						}
 						break
 					} else {
+						ethutil.Config.Log.Infof("[PEER] Block %x added\n", block.Hash())
 						lastBlock = block
 					}
 				}
@@ -314,7 +368,7 @@ func (p *Peer) HandleInbound() {
 					if ethchain.IsParentErr(err) {
 						ethutil.Config.Log.Infoln("Attempting to catch up")
 						p.catchingUp = false
-						p.CatchupWithPeer()
+						p.CatchupWithPeer(p.ethereum.BlockChain().CurrentBlock.Hash())
 					} else if ethchain.IsValidationErr(err) {
 						// TODO
 					}
@@ -327,7 +381,7 @@ func (p *Peer) HandleInbound() {
 							ethutil.Config.Log.Infof("Synced to block height #%d %x %x\n", blockInfo.Number, lastBlock.Hash(), blockInfo.Hash)
 						}
 						p.catchingUp = false
-						p.CatchupWithPeer()
+						p.CatchupWithPeer(p.ethereum.BlockChain().CurrentBlock.Hash())
 					}
 				}
 			case ethwire.MsgTxTy:
@@ -374,11 +428,11 @@ func (p *Peer) HandleInbound() {
 				// Amount of parents in the canonical chain
 				//amountOfBlocks := msg.Data.Get(l).AsUint()
 				amountOfBlocks := uint64(100)
+
 				// Check each SHA block hash from the message and determine whether
 				// the SHA is in the database
 				for i := 0; i < l; i++ {
-					if data :=
-						msg.Data.Get(i).Bytes(); p.ethereum.StateManager().BlockChain().HasBlock(data) {
+					if data := msg.Data.Get(i).Bytes(); p.ethereum.StateManager().BlockChain().HasBlock(data) {
 						parent = p.ethereum.BlockChain().GetBlock(data)
 						break
 					}
@@ -386,9 +440,12 @@ func (p *Peer) HandleInbound() {
 
 				// If a parent is found send back a reply
 				if parent != nil {
+					ethutil.Config.Log.Infof("[PEER] Found conical block, returning chain from: %x ", parent.Hash())
 					chain := p.ethereum.BlockChain().GetChainFromHash(parent.Hash(), amountOfBlocks)
+					ethutil.Config.Log.Infof("[PEER] Returning %d blocks: %x ", len(chain), parent.Hash())
 					p.QueueMessage(ethwire.NewMessage(ethwire.MsgBlockTy, chain))
 				} else {
+					ethutil.Config.Log.Infof("[PEER] Could not find a similar block")
 					// If no blocks are found we send back a reply with msg not in chain
 					// and the last hash from get chain
 					lastHash := msg.Data.Get(l - 1)
@@ -527,7 +584,8 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	}
 
 	// Catch up with the connected peer
-	p.CatchupWithPeer()
+	// p.CatchupWithPeer(p.ethereum.BlockChain().CurrentBlock.Hash())
+	p.SyncWithBlocks()
 
 	// Set the peer's caps
 	p.caps = Caps(c.Get(3).Byte())
@@ -554,14 +612,37 @@ func (p *Peer) String() string {
 	return fmt.Sprintf("[%s] (%s) %v %s [%s]", strConnectType, strBoundType, p.conn.RemoteAddr(), p.Version, p.caps)
 
 }
-
-func (p *Peer) CatchupWithPeer() {
+func (p *Peer) SyncWithBlocks() {
 	if !p.catchingUp {
 		p.catchingUp = true
-		msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{p.ethereum.BlockChain().CurrentBlock.Hash(), uint64(50)})
+		// FIXME: THIS SHOULD NOT BE NEEDED
+		if p.blocksRequested == 0 {
+			p.blocksRequested = 10
+		}
+		fmt.Printf("Currenb lock %x\n", p.ethereum.BlockChain().CurrentBlock.Hash())
+		fmt.Println("Amount:", p.blocksRequested)
+		blocks := p.ethereum.BlockChain().GetChain(p.ethereum.BlockChain().CurrentBlock.Hash(), p.blocksRequested)
+
+		var hashes []interface{}
+		for _, block := range blocks {
+			hashes = append(hashes, block.Hash())
+		}
+		fmt.Printf("Requesting hashes from network: %x", hashes)
+
+		msgInfo := append(hashes, uint64(50))
+
+		msg := ethwire.NewMessage(ethwire.MsgGetChainTy, msgInfo)
+		p.QueueMessage(msg)
+	}
+}
+
+func (p *Peer) CatchupWithPeer(blockHash []byte) {
+	if !p.catchingUp {
+		p.catchingUp = true
+		msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{blockHash, uint64(50)})
 		p.QueueMessage(msg)
 
-		ethutil.Config.Log.Debugf("Requesting blockchain %x...\n", p.ethereum.BlockChain().CurrentBlock.Hash()[:4])
+		ethutil.Config.Log.Debugf("Requesting blockchain %x...\n", blockHash[:4])
 	}
 }
 
