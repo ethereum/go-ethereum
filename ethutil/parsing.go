@@ -84,20 +84,30 @@ func IsOpCode(s string) bool {
 	return false
 }
 
-func CompileInstr(s string) ([]byte, error) {
-	isOp := IsOpCode(s)
-	if isOp {
-		return []byte{OpCodes[s]}, nil
+func CompileInstr(s interface{}) ([]byte, error) {
+	switch s.(type) {
+	case string:
+		str := s.(string)
+		isOp := IsOpCode(str)
+		if isOp {
+			return []byte{OpCodes[str]}, nil
+		}
+
+		num := new(big.Int)
+		_, success := num.SetString(str, 0)
+		// Assume regular bytes during compilation
+		if !success {
+			num.SetBytes([]byte(str))
+		}
+
+		return num.Bytes(), nil
+	case int:
+		return big.NewInt(int64(s.(int))).Bytes(), nil
+	case []byte:
+		return BigD(s.([]byte)).Bytes(), nil
 	}
 
-	num := new(big.Int)
-	_, success := num.SetString(s, 0)
-	// Assume regular bytes during compilation
-	if !success {
-		num.SetBytes([]byte(s))
-	}
-
-	return num.Bytes(), nil
+	return nil, nil
 }
 
 func Instr(instr string) (int, []string, error) {
@@ -117,4 +127,18 @@ func Instr(instr string) (int, []string, error) {
 	op, _ := strconv.Atoi(args[0])
 
 	return op, args[1:7], nil
+}
+
+// Script compilation functions
+// Compiles strings to machine code
+func Compile(instructions ...interface{}) (script []string) {
+	script = make([]string, len(instructions))
+
+	for i, val := range instructions {
+		instr, _ := CompileInstr(val)
+
+		script[i] = string(instr)
+	}
+
+	return
 }

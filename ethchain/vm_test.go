@@ -2,7 +2,6 @@ package ethchain
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
@@ -130,27 +129,26 @@ func TestRun3(t *testing.T) {
 	})
 	tx := NewTransaction(ContractAddr, ethutil.Big("100000000000000000000000000000000000000000000000000"), script)
 	addr := tx.Hash()[12:]
-	fmt.Printf("addr contract %x\n", addr)
 	contract := MakeContract(tx, state)
 	state.UpdateContract(contract)
 
-	callerScript := Compile([]string{
-		"PUSH", "1337", // Argument
-		"PUSH", "65", // argument mem offset
+	callerScript := ethutil.Compile(
+		"PUSH", 1337, // Argument
+		"PUSH", 65, // argument mem offset
 		"MSTORE",
-		"PUSH", "64", // ret size
-		"PUSH", "0", // ret offset
+		"PUSH", 64, // ret size
+		"PUSH", 0, // ret offset
 
-		"PUSH", "32", // arg size
-		"PUSH", "65", // arg offset
-		"PUSH", "1000", /// Gas
-		"PUSH", "0", /// value
-		"PUSH", string(addr), // Sender
+		"PUSH", 32, // arg size
+		"PUSH", 65, // arg offset
+		"PUSH", 1000, /// Gas
+		"PUSH", 0, /// value
+		"PUSH", addr, // Sender
 		"CALL",
-		"PUSH", "64",
-		"PUSH", "0",
+		"PUSH", 64,
+		"PUSH", 0,
 		"RETURN",
-	})
+	)
 	callerTx := NewTransaction(ContractAddr, ethutil.Big("100000000000000000000000000000000000000000000000000"), callerScript)
 
 	// Contract addr as test address
