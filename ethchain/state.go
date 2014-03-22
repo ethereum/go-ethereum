@@ -149,6 +149,10 @@ func (s *State) Put(key, object []byte) {
 	s.trie.Update(string(key), string(object))
 }
 
+func (s *State) Root() interface{} {
+	return s.trie.Root
+}
+
 // Script compilation functions
 // Compiles strings to machine code
 func Compile(code []string) (script []string) {
