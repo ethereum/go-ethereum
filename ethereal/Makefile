@@ -1,19 +1,20 @@
 UNAME = $(shell uname)
+FILES=qml *.png
+GOPATH=$(PWD)
+
 
 # Default is building
 all:
-	go install
+	go get -d
+	cp *.go $(GOPATH)/src/github.com/ethereum/go-ethereum
+	cp -r ui $(GOPATH)/src/github.com/ethereum/go-ethereum
+	go build
 
 install:
 # Linux build
 ifeq ($(UNAME),Linux)
-	mkdir -p /usr/local/ethereal
-	files=(net.png network.png new.png tx.png)
-	for file in "${files[@]}"; do
-		cp $file /usr/share/ethereal
-	done
-	cp -r qml /usr/share/ethereal/qml
-	cp $GOPATH/bin/go-ethereum /usr/local/bin/ethereal
+	cp -r assets/* /usr/share/ethereal
+	cp go-ethereum /usr/local/bin/ethereal
 endif
 # OS X build
 ifeq ($(UNAME),Darwin)
