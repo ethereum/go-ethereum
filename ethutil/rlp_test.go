@@ -2,6 +2,7 @@ package ethutil
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
@@ -117,6 +118,11 @@ func TestEncodeDecodeBytes(t *testing.T) {
 	if !b.Cmp(val) {
 		t.Errorf("Expected %v, got %v", val, b)
 	}
+}
+
+func TestEncodeZero(t *testing.T) {
+	b := NewValue(0).Encode()
+	fmt.Println(b)
 }
 
 func BenchmarkEncodeDecode(b *testing.B) {

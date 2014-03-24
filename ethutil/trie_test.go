@@ -1,7 +1,7 @@
 package ethutil
 
 import (
-	"fmt"
+	_ "fmt"
 	"reflect"
 	"testing"
 )

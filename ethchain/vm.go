@@ -10,6 +10,17 @@ import (
 	"math/big"
 )
 
+var (
+	GasStep    = big.NewInt(1)
+	GasSha     = big.NewInt(20)
+	GasSLoad   = big.NewInt(20)
+	GasSStore  = big.NewInt(100)
+	GasBalance = big.NewInt(20)
+	GasCreate  = big.NewInt(100)
+	GasCall    = big.NewInt(20)
+	GasMemory  = big.NewInt(1)
+)
+
 type Vm struct {
 	txPool *TxPool
 	// Stack for processing contracts
@@ -70,10 +81,41 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 		}
 
 		// TODO Get each instruction cost properly
-		fee := new(big.Int)
-		fee.Add(fee, big.NewInt(1000))
+		gas := new(big.Int)
+		useGas := func(amount *big.Int) {
+			gas.Add(gas, amount)
+		}
 
-		if closure.Gas.Cmp(fee) < 0 {
+		switch op {
+		case oSHA3:
+			useGas(GasSha)
+		case oSLOAD:
+			useGas(GasSLoad)
+		case oSSTORE:
+			var mult *big.Int
+			y, x := stack.Peekn()
+			val := closure.GetMem(x)
+			if val.IsEmpty() && len(y.Bytes()) > 0 {
+				mult = ethutil.Big2
+			} else if !val.IsEmpty() && len(y.Bytes()) == 0 {
+				mult = ethutil.Big0
+			} else {
+				mult = ethutil.Big1
+			}
+			useGas(base.Mul(mult, GasSStore))
+		case oBALANCE:
+			useGas(GasBalance)
+		case oCREATE:
+			useGas(GasCreate)
+		case oCALL:
+			useGas(GasCall)
+		case oMLOAD, oMSIZE, oMSTORE8, oMSTORE:
+			useGas(GasMemory)
+		default:
+			useGas(GasStep)
+		}
+
+		if closure.Gas.Cmp(gas) < 0 {
 			return closure.Return(nil)
 		}
 
