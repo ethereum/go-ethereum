@@ -144,6 +144,7 @@ func (sm *StateManager) ProcessBlock(block *Block, dontReact bool) error {
 	hash := block.Hash()
 
 	if sm.bc.HasBlock(hash) {
+		fmt.Println("[SM] We already have this block, ignoring")
 		return nil
 	}
 
@@ -158,12 +159,14 @@ func (sm *StateManager) ProcessBlock(block *Block, dontReact bool) error {
 
 	// Block validation
 	if err := sm.ValidateBlock(block); err != nil {
+		fmt.Println("[SM] Error validating block:", err)
 		return err
 	}
 
 	// I'm not sure, but I don't know if there should be thrown
 	// any errors at this time.
 	if err := sm.AccumelateRewards(block); err != nil {
+		fmt.Println("[SM] Error accumulating reward", err)
 		return err
 	}
 

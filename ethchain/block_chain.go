@@ -24,7 +24,7 @@ type BlockChain struct {
 
 func NewBlockChain(ethereum EthManager) *BlockChain {
 	bc := &BlockChain{}
-	bc.genesisBlock = NewBlockFromData(ethutil.Encode(Genesis))
+	bc.genesisBlock = NewBlockFromBytes(ethutil.Encode(Genesis))
 	bc.Ethereum = ethereum
 
 	bc.setLastBlock()
@@ -101,10 +101,18 @@ func (bc *BlockChain) CalculateBlockTD(block *Block) *big.Int {
 
 	return blockDiff
 }
+func (bc *BlockChain) FindCanonicalChainFromMsg(msg *ethwire.Msg, commonBlockHash []byte) bool {
+	var blocks []*Block
+	for i := 0; i < (msg.Data.Len() - 1); i++ {
+		block := NewBlockFromRlpValue(msg.Data.Get(i))
+		blocks = append(blocks, block)
+	}
+	return bc.FindCanonicalChain(blocks, commonBlockHash)
+}
 
 // Is tasked by finding the CanonicalChain and resetting the chain if we are not the Conical one
 // Return true if we are the using the canonical chain false if not
-func (bc *BlockChain) FindCanonicalChain(msg *ethwire.Msg, commonBlockHash []byte) bool {
+func (bc *BlockChain) FindCanonicalChain(blocks []*Block, commonBlockHash []byte) bool {
 	// 1. Calculate TD of the current chain
 	// 2. Calculate TD of the new chain
 	// Reset state to the correct one
@@ -113,35 +121,35 @@ func (bc *BlockChain) FindCanonicalChain(msg *ethwire.Msg, commonBlockHash []byt
 
 	// Calculate the entire chain until the block we both have
 	// Start with the newest block we got, all the way back to the common block we both know
-	for i := 0; i < (msg.Data.Len() - 1); i++ {
-		block := NewBlockFromRlpValue(msg.Data.Get(i))
+	for _, block := range blocks {
 		if bytes.Compare(block.Hash(), commonBlockHash) == 0 {
-			log.Println("[BCHAIN] We have found the common parent block, breaking")
+			log.Println("[CHAIN] We have found the common parent block, breaking")
 			break
 		}
 		chainDifficulty.Add(chainDifficulty, bc.CalculateBlockTD(block))
 	}
 
-	log.Println("[BCHAIN] Incoming chain difficulty:", chainDifficulty)
+	log.Println("[CHAIN] Incoming chain difficulty:", chainDifficulty)
 
 	curChainDifficulty := new(big.Int)
 	block := bc.CurrentBlock
-
-	for ; block != nil; block = bc.GetBlock(block.PrevHash) {
+	for i := 0; block != nil; block = bc.GetBlock(block.PrevHash) {
+		i++
 		if bytes.Compare(block.Hash(), commonBlockHash) == 0 {
-			log.Println("[BCHAIN] We have found the common parent block, breaking")
+			log.Println("[CHAIN] We have found the common parent block, breaking")
 			break
 		}
+		log.Println("CHECKING BLOGK:", i)
 		curChainDifficulty.Add(curChainDifficulty, bc.CalculateBlockTD(block))
 	}
 
-	log.Println("[BCHAIN] Current chain difficulty:", curChainDifficulty)
+	log.Println("[CHAIN] Current chain difficulty:", curChainDifficulty)
 	if chainDifficulty.Cmp(curChainDifficulty) == 1 {
-		log.Println("[BCHAIN] The incoming Chain beat our asses, resetting")
+		log.Println("[CHAIN] The incoming Chain beat our asses, resetting")
 		bc.ResetTillBlockHash(commonBlockHash)
 		return false
 	} else {
-		log.Println("[BCHAIN] Our chain showed the incoming chain who is boss. Ignoring.")
+		log.Println("[CHAIN] Our chain showed the incoming chain who is boss. Ignoring.")
 		return true
 	}
 }
@@ -286,6 +294,7 @@ func (bc *BlockChain) Add(block *Block) {
 	bc.LastBlockHash = block.Hash()
 
 	encodedBlock := block.RlpEncode()
+	log.Println(encodedBlock)
 	ethutil.Config.Db.Put(block.Hash(), encodedBlock)
 	ethutil.Config.Db.Put([]byte("LastBlock"), encodedBlock)
 }
@@ -296,7 +305,7 @@ func (bc *BlockChain) GetBlock(hash []byte) *Block {
 		return nil
 	}
 
-	return NewBlockFromData(data)
+	return NewBlockFromBytes(data)
 }
 
 func (bc *BlockChain) BlockInfoByHash(hash []byte) BlockInfo {

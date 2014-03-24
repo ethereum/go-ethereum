@@ -342,7 +342,7 @@ func (p *Peer) HandleInbound() {
 							// We don't have this block, but we do have a block with the same prevHash, diversion time!
 							if p.ethereum.StateManager().BlockChain().HasBlockWithPrevHash(block.PrevHash) {
 								fmt.Printf("[PEER] Local and foreign chain have diverted after %x, we are going to get freaky with it!\n", block.PrevHash)
-								if p.ethereum.StateManager().BlockChain().FindCanonicalChain(msg, block.PrevHash) {
+								if p.ethereum.StateManager().BlockChain().FindCanonicalChainFromMsg(msg, block.PrevHash) {
 									return
 								}
 							} else {

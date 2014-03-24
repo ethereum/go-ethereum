@@ -138,6 +138,7 @@ func (miner *Miner) listener() {
 					}
 					miner.ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{miner.block.Value().Val})
 					log.Printf("[MINER] 🔨  Mined block %x\n", miner.block.Hash())
+					log.Println(miner.block)
 
 					miner.txs = []*ethchain.Transaction{} // Move this somewhere neat
 					miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)
