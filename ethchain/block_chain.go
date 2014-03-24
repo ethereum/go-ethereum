@@ -103,7 +103,8 @@ func (bc *BlockChain) CalculateBlockTD(block *Block) *big.Int {
 }
 
 // Is tasked by finding the CanonicalChain and resetting the chain if we are not the Conical one
-func (bc *BlockChain) FindCanonicalChain(msg *ethwire.Msg, commonBlockHash []byte) {
+// Return true if we are the using the canonical chain false if not
+func (bc *BlockChain) FindCanonicalChain(msg *ethwire.Msg, commonBlockHash []byte) bool {
 	// 1. Calculate TD of the current chain
 	// 2. Calculate TD of the new chain
 	// Reset state to the correct one
@@ -138,8 +139,10 @@ func (bc *BlockChain) FindCanonicalChain(msg *ethwire.Msg, commonBlockHash []byt
 	if chainDifficulty.Cmp(curChainDifficulty) == 1 {
 		log.Println("[BCHAIN] The incoming Chain beat our asses, resetting")
 		bc.ResetTillBlockHash(commonBlockHash)
+		return false
 	} else {
 		log.Println("[BCHAIN] Our chain showed the incoming chain who is boss. Ignoring.")
+		return true
 	}
 }
 func (bc *BlockChain) ResetTillBlockHash(hash []byte) error {
