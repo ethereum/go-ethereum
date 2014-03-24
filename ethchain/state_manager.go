@@ -214,9 +214,6 @@ func (sm *StateManager) CalculateTD(block *Block) bool {
 
 	// The new TD will only be accepted if the new difficulty is
 	// is greater than the previous.
-	fmt.Println("new block td:", td)
-	fmt.Println("cur block td:", sm.bc.TD)
-
 	if td.Cmp(sm.bc.TD) > 0 {
 		// Set the new total difficulty back to the block chain
 		sm.bc.SetTotalDifficulty(td)

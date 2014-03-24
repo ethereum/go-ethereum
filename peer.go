@@ -316,7 +316,7 @@ func (p *Peer) HandleInbound() {
 				//    4. No: Let's request more blocks back.
 
 				// Make sure we are actually receiving anything
-				if msg.Data.Len()-1 > 1 {
+				if msg.Data.Len()-1 > 1 && p.catchingUp {
 					// We requested blocks and now we need to make sure we have a common ancestor somewhere in these blocks so we can find
 					// common ground to start syncing from
 					lastBlock = ethchain.NewBlockFromRlpValue(msg.Data.Get(msg.Data.Len() - 1))

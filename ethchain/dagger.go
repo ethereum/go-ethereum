@@ -29,14 +29,14 @@ func (pow *EasyPow) Search(block *Block, reactChan chan ethutil.React) []byte {
 	for {
 		select {
 		case <-reactChan:
-			log.Println("[pow] Received reactor event; breaking out.")
+			log.Println("[POW] Received reactor event; breaking out.")
 			return nil
 		default:
 			i++
 			if i%1234567 == 0 {
 				elapsed := time.Now().UnixNano() - start
 				hashes := ((float64(1e9) / float64(elapsed)) * float64(i)) / 1000
-				log.Println("Hashing @", int64(hashes), "khash")
+				log.Println("[POW] Hashing @", int64(hashes), "khash")
 			}
 
 			sha := ethutil.Sha3Bin(big.NewInt(r.Int63()).Bytes())
