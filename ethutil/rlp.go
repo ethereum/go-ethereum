@@ -9,6 +9,10 @@ import (
 	"math/big"
 )
 
+type RlpEncodable interface {
+	RlpEncode() []byte
+}
+
 type RlpEncoder struct {
 	rlpData []byte
 }

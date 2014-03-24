@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/user"
 	"path"
+	"runtime"
 )
 
 type LogType byte
@@ -19,12 +20,13 @@ const (
 type config struct {
 	Db Database
 
-	Log      *Logger
-	ExecPath string
-	Debug    bool
-	Ver      string
-	Pubkey   []byte
-	Seed     bool
+	Log          *Logger
+	ExecPath     string
+	Debug        bool
+	Ver          string
+	ClientString string
+	Pubkey       []byte
+	Seed         bool
 }
 
 var Config *config
@@ -48,9 +50,14 @@ func ReadConfig(base string) *config {
 
 		Config = &config{ExecPath: path, Debug: true, Ver: "0.3.1"}
 		Config.Log = NewLogger(LogFile|LogStd, LogLevelDebug)
+		Config.SetClientString("/Ethereum(G)")
 	}
 
 	return Config
+}
+
+func (c *config) SetClientString(str string) {
+	Config.ClientString = fmt.Sprintf("%s nv%s/%s", str, c.Ver, runtime.GOOS)
 }
 
 type LoggerType byte

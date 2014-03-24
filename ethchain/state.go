@@ -63,8 +63,7 @@ func (s *State) GetContract(addr []byte) *Contract {
 	}
 
 	// build contract
-	contract := &Contract{}
-	contract.RlpDecode([]byte(data))
+	contract := NewContractFromBytes(addr, []byte(data))
 
 	// Check if there's a cached state for this contract
 	cachedState := s.states[string(addr)]
@@ -78,27 +77,19 @@ func (s *State) GetContract(addr []byte) *Contract {
 	return contract
 }
 
-func (s *State) UpdateContract(addr []byte, contract *Contract) {
+func (s *State) UpdateContract(contract *Contract) {
+	addr := contract.Address()
+
+	s.states[string(addr)] = contract.state
 	s.trie.Update(string(addr), string(contract.RlpEncode()))
-}
-
-func Compile(code []string) (script []string) {
-	script = make([]string, len(code))
-	for i, val := range code {
-		instr, _ := ethutil.CompileInstr(val)
-
-		script[i] = string(instr)
-	}
-
-	return
 }
 
 func (s *State) GetAccount(addr []byte) (account *Account) {
 	data := s.trie.Get(string(addr))
 	if data == "" {
-		account = NewAccount(big.NewInt(0))
+		account = NewAccount(addr, big.NewInt(0))
 	} else {
-		account = NewAccountFromData([]byte(data))
+		account = NewAccountFromData(addr, []byte(data))
 	}
 
 	return
@@ -152,4 +143,36 @@ func (s *State) Get(key []byte) (*ethutil.Value, ObjType) {
 	}
 
 	return val, typ
+}
+
+func (s *State) Put(key, object []byte) {
+	s.trie.Update(string(key), string(object))
+}
+
+func (s *State) Root() interface{} {
+	return s.trie.Root
+}
+
+// Script compilation functions
+// Compiles strings to machine code
+func Compile(code []string) (script []string) {
+	script = make([]string, len(code))
+	for i, val := range code {
+		instr, _ := ethutil.CompileInstr(val)
+
+		script[i] = string(instr)
+	}
+
+	return
+}
+
+func CompileToValues(code []string) (script []*ethutil.Value) {
+	script = make([]*ethutil.Value, len(code))
+	for i, val := range code {
+		instr, _ := ethutil.CompileInstr(val)
+
+		script[i] = ethutil.NewValue(instr)
+	}
+
+	return
 }

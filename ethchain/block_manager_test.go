@@ -1,5 +1,6 @@
 package ethchain
 
+/*
 import (
 	_ "fmt"
 	"github.com/ethereum/eth-go/ethdb"
@@ -14,9 +15,10 @@ func TestVm(t *testing.T) {
 
 	db, _ := ethdb.NewMemDatabase()
 	ethutil.Config.Db = db
-	bm := NewBlockManager(nil)
+	bm := NewStateManager(nil)
 
 	block := bm.bc.genesisBlock
+	bm.Prepare(block.State(), block.State())
 	script := Compile([]string{
 		"PUSH",
 		"1",
@@ -31,3 +33,4 @@ func TestVm(t *testing.T) {
 	tx2.Sign([]byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
 	bm.ApplyTransactions(block, []*Transaction{tx2})
 }
+*/

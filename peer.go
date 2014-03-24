@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
 	"net"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -160,7 +159,7 @@ func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 		connected:   0,
 		disconnect:  0,
 		caps:        caps,
-		Version:     fmt.Sprintf("/Ethereum(G) v%s/%s", ethutil.Config.Ver, runtime.GOOS),
+		Version:     ethutil.Config.ClientString,
 	}
 
 	// Set up the connection in another goroutine so we don't block the main thread

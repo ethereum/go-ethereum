@@ -6,23 +6,39 @@ import (
 )
 
 type Account struct {
-	Amount *big.Int
-	Nonce  uint64
+	address []byte
+	Amount  *big.Int
+	Nonce   uint64
 }
 
-func NewAccount(amount *big.Int) *Account {
-	return &Account{Amount: amount, Nonce: 0}
+func NewAccount(address []byte, amount *big.Int) *Account {
+	return &Account{address, amount, 0}
 }
 
-func NewAccountFromData(data []byte) *Account {
-	address := &Account{}
-	address.RlpDecode(data)
+func NewAccountFromData(address, data []byte) *Account {
+	account := &Account{address: address}
+	account.RlpDecode(data)
 
-	return address
+	return account
 }
 
 func (a *Account) AddFee(fee *big.Int) {
-	a.Amount.Add(a.Amount, fee)
+	a.AddFunds(fee)
+}
+
+func (a *Account) AddFunds(funds *big.Int) {
+	a.Amount.Add(a.Amount, funds)
+}
+
+func (a *Account) Address() []byte {
+	return a.address
+}
+
+// Implements Callee
+func (a *Account) ReturnGas(value *big.Int, state *State) {
+	// Return the value back to the sender
+	a.AddFunds(value)
+	state.UpdateAccount(a.address, a)
 }
 
 func (a *Account) RlpEncode() []byte {

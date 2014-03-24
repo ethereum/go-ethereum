@@ -7,57 +7,72 @@ import (
 
 // Op codes
 var OpCodes = map[string]byte{
-	"STOP":           0x00,
-	"ADD":            0x01,
-	"MUL":            0x02,
-	"SUB":            0x03,
-	"DIV":            0x04,
-	"SDIV":           0x05,
-	"MOD":            0x06,
-	"SMOD":           0x07,
-	"EXP":            0x08,
-	"NEG":            0x09,
-	"LT":             0x0a,
-	"LE":             0x0b,
-	"GT":             0x0c,
-	"GE":             0x0d,
-	"EQ":             0x0e,
-	"NOT":            0x0f,
-	"MYADDRESS":      0x10,
-	"TXSENDER":       0x11,
-	"TXVALUE":        0x12,
-	"TXDATAN":        0x13,
-	"TXDATA":         0x14,
-	"BLK_PREVHASH":   0x15,
-	"BLK_COINBASE":   0x16,
-	"BLK_TIMESTAMP":  0x17,
-	"BLK_NUMBER":     0x18,
-	"BLK_DIFFICULTY": 0x19,
-	"BLK_NONCE":      0x1a,
-	"BASEFEE":        0x1b,
-	"SHA256":         0x20,
-	"RIPEMD160":      0x21,
-	"ECMUL":          0x22,
-	"ECADD":          0x23,
-	"ECSIGN":         0x24,
-	"ECRECOVER":      0x25,
-	"ECVALID":        0x26,
-	"SHA3":           0x27,
-	"PUSH":           0x30,
-	"POP":            0x31,
-	"DUP":            0x32,
-	"SWAP":           0x33,
-	"MLOAD":          0x34,
-	"MSTORE":         0x35,
-	"SLOAD":          0x36,
-	"SSTORE":         0x37,
-	"JMP":            0x38,
-	"JMPI":           0x39,
-	"IND":            0x3a,
-	"EXTRO":          0x3b,
-	"BALANCE":        0x3c,
-	"MKTX":           0x3d,
-	"SUICIDE":        0x3f,
+	// 0x0 range - arithmetic ops
+	"STOP": 0x00,
+	"ADD":  0x01,
+	"MUL":  0x02,
+	"SUB":  0x03,
+	"DIV":  0x04,
+	"SDIV": 0x05,
+	"MOD":  0x06,
+	"SMOD": 0x07,
+	"EXP":  0x08,
+	"NEG":  0x09,
+	"LT":   0x0a,
+	"GT":   0x0b,
+	"EQ":   0x0c,
+	"NOT":  0x0d,
+
+	// 0x10 range - bit ops
+	"AND":  0x10,
+	"OR":   0x11,
+	"XOR":  0x12,
+	"BYTE": 0x13,
+
+	// 0x20 range - crypto
+	"SHA3": 0x20,
+
+	// 0x30 range - closure state
+	"ADDRESS":      0x30,
+	"BALANCE":      0x31,
+	"ORIGIN":       0x32,
+	"CALLER":       0x33,
+	"CALLVALUE":    0x34,
+	"CALLDATA":     0x35,
+	"CALLDATASIZE": 0x36,
+	"GASPRICE":     0x38,
+
+	// 0x40 range - block operations
+	"PREVHASH":   0x40,
+	"COINBASE":   0x41,
+	"TIMESTAMP":  0x42,
+	"NUMBER":     0x43,
+	"DIFFICULTY": 0x44,
+	"GASLIMIT":   0x45,
+
+	// 0x50 range - 'storage' and execution
+	"PUSH":    0x50,
+	"POP":     0x51,
+	"DUP":     0x52,
+	"SWAP":    0x53,
+	"MLOAD":   0x54,
+	"MSTORE":  0x55,
+	"MSTORE8": 0x56,
+	"SLOAD":   0x57,
+	"SSTORE":  0x58,
+	"JUMP":    0x59,
+	"JUMPI":   0x5a,
+	"PC":      0x5b,
+	"MSIZE":   0x5c,
+
+	// 0x60 range - closures
+	"CREATE": 0x60,
+	"CALL":   0x61,
+	"RETURN": 0x62,
+
+	// 0x70 range - other
+	"LOG":     0x70,
+	"SUICIDE": 0x7f,
 }
 
 func IsOpCode(s string) bool {
@@ -69,16 +84,30 @@ func IsOpCode(s string) bool {
 	return false
 }
 
-func CompileInstr(s string) ([]byte, error) {
-	isOp := IsOpCode(s)
-	if isOp {
-		return []byte{OpCodes[s]}, nil
+func CompileInstr(s interface{}) ([]byte, error) {
+	switch s.(type) {
+	case string:
+		str := s.(string)
+		isOp := IsOpCode(str)
+		if isOp {
+			return []byte{OpCodes[str]}, nil
+		}
+
+		num := new(big.Int)
+		_, success := num.SetString(str, 0)
+		// Assume regular bytes during compilation
+		if !success {
+			num.SetBytes([]byte(str))
+		}
+
+		return num.Bytes(), nil
+	case int:
+		return big.NewInt(int64(s.(int))).Bytes(), nil
+	case []byte:
+		return BigD(s.([]byte)).Bytes(), nil
 	}
 
-	num := new(big.Int)
-	num.SetString(s, 0)
-
-	return num.Bytes(), nil
+	return nil, nil
 }
 
 func Instr(instr string) (int, []string, error) {
@@ -98,4 +127,18 @@ func Instr(instr string) (int, []string, error) {
 	op, _ := strconv.Atoi(args[0])
 
 	return op, args[1:7], nil
+}
+
+// Script compilation functions
+// Compiles strings to machine code
+func Compile(instructions ...interface{}) (script []string) {
+	script = make([]string, len(instructions))
+
+	for i, val := range instructions {
+		instr, _ := CompileInstr(val)
+
+		script[i] = string(instr)
+	}
+
+	return
 }

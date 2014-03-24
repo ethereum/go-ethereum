@@ -33,3 +33,9 @@ func CurrencyToString(num *big.Int) string {
 
 	return fmt.Sprintf("%v Wei", num)
 }
+
+var (
+	Big1   = big.NewInt(1)
+	Big0   = big.NewInt(0)
+	Big256 = big.NewInt(0xff)
+)
