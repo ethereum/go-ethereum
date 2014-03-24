@@ -54,8 +54,8 @@ func AssetPath(p string) string {
 	// assume a debug build and use the source directory as
 	// asset directory.
 	pwd, _ := os.Getwd()
-	if pwd == path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum") {
-		base = pwd
+	if pwd == path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "ethereal") {
+		base = path.Join(pwd, "assets")
 	} else {
 		switch runtime.GOOS {
 		case "darwin":

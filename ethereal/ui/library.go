@@ -36,8 +36,6 @@ func (lib *EthLib) CreateTx(receiver, a, data string) string {
 
 	tx.Sign(keyPair.PrivateKey)
 
-	ethutil.Config.Log.Infof("nonce: %x", tx.Nonce)
-
 	lib.txPool.QueueTransaction(tx)
 
 	if len(receiver) == 0 {

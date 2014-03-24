@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
-	"github.com/ethereum/eth-go/ethminer"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/go-ethereum/ui"
-	"github.com/niemeyer/qml"
-	"github.com/obscuren/secp256k1-go"
+	"github.com/ethereum/eth-go/ethwire"
+	"github.com/ethereum/go-ethereum/utils"
 	"log"
 	"os"
 	"os/signal"
@@ -32,57 +30,8 @@ func RegisterInterupts(s *eth.Ethereum) {
 	}()
 }
 
-func CreateKeyPair(force bool) {
-	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-	if len(data) == 0 || force {
-		pub, prv := secp256k1.GenerateKeyPair()
-		pair := &ethutil.Key{PrivateKey: prv, PublicKey: pub}
-		ethutil.Config.Db.Put([]byte("KeyRing"), pair.RlpEncode())
-
-		fmt.Printf(`
-Generating new address and keypair.
-Please keep your keys somewhere save.
-
-++++++++++++++++ KeyRing +++++++++++++++++++
-addr: %x
-prvk: %x
-pubk: %x
-++++++++++++++++++++++++++++++++++++++++++++
-
-`, pair.Address(), prv, pub)
-
-	}
-}
-
-func ImportPrivateKey(prvKey string) {
-	key := ethutil.FromHex(prvKey)
-	msg := []byte("tmp")
-	// Couldn't think of a better way to get the pub key
-	sig, _ := secp256k1.Sign(msg, key)
-	pub, _ := secp256k1.RecoverPubkey(msg, sig)
-	pair := &ethutil.Key{PrivateKey: key, PublicKey: pub}
-	ethutil.Config.Db.Put([]byte("KeyRing"), pair.RlpEncode())
-
-	fmt.Printf(`
-Importing private key
-
-++++++++++++++++ KeyRing +++++++++++++++++++
-addr: %x
-prvk: %x
-pubk: %x
-++++++++++++++++++++++++++++++++++++++++++++
-
-`, pair.Address(), key, pub)
-}
-
 func main() {
 	Init()
-
-	// Qt has to be initialized in the main thread or it will throw errors
-	// It has to be called BEFORE setting the maximum procs.
-	if UseGui {
-		qml.Init(nil)
-	}
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
@@ -112,7 +61,7 @@ func main() {
 		}
 
 		if r == "y" {
-			CreateKeyPair(true)
+			utils.CreateKeyPair(true)
 		}
 		os.Exit(0)
 	} else {
@@ -129,11 +78,11 @@ func main() {
 			}
 
 			if r == "y" {
-				ImportPrivateKey(ImportKey)
+				utils.ImportPrivateKey(ImportKey)
 				os.Exit(0)
 			}
 		} else {
-			CreateKeyPair(false)
+			utils.CreateKeyPair(false)
 		}
 	}
 
@@ -164,29 +113,46 @@ func main() {
 		go console.Start()
 	}
 
-	if UseGui {
-		gui := ethui.New(ethereum)
-		gui.Start()
-		//ethereum.Stop()
-	} else {
-		RegisterInterupts(ethereum)
-		ethereum.Start()
+	RegisterInterupts(ethereum)
+	ethereum.Start()
 
-		if StartMining {
-			log.Printf("Miner started\n")
+	if StartMining {
+		log.Printf("Miner started\n")
 
-			go func() {
-				data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-				keyRing := ethutil.NewValueFromBytes(data)
-				addr := keyRing.Get(1).Bytes()
+		// Fake block mining. It broadcasts a new block every 5 seconds
+		go func() {
+			pow := &ethchain.EasyPow{}
+			data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
+			keyRing := ethutil.NewValueFromBytes(data)
+			addr := keyRing.Get(1).Bytes()
 
-				miner := ethminer.NewDefaultMiner(addr, ethereum)
-				miner.Start()
+			for {
+				txs := ethereum.TxPool().Flush()
+				// Create a new block which we're going to mine
+				block := ethereum.BlockChain().NewBlock(addr, txs)
+				log.Println("Mining on new block. Includes", len(block.Transactions()), "transactions")
+				// Apply all transactions to the block
+				ethereum.StateManager().ApplyTransactions(block, block.Transactions())
 
-			}()
-		}
+				ethereum.StateManager().Prepare(block.State(), block.State())
+				ethereum.StateManager().AccumelateRewards(block)
 
-		// Wait for shutdown
-		ethereum.WaitForShutdown()
+				// Search the nonce
+				block.Nonce = pow.Search(block)
+				ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
+
+				ethereum.StateManager().PrepareDefault(block)
+				err := ethereum.StateManager().ProcessBlock(block)
+				if err != nil {
+					log.Println(err)
+				} else {
+					log.Println("\n+++++++ MINED BLK +++++++\n", ethereum.BlockChain().CurrentBlock)
+					log.Printf("🔨  Mined block %x\n", block.Hash())
+				}
+			}
+		}()
 	}
+
+	// Wait for shutdown
+	ethereum.WaitForShutdown()
 }
