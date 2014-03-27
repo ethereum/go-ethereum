@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/obscuren/mutan"
 	"strings"
 )
 
@@ -14,6 +15,50 @@ type EthLib struct {
 	txPool       *ethchain.TxPool
 }
 
+func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data string) string {
+	var hash []byte
+	var contractCreation bool
+	if len(recipient) == 0 {
+		contractCreation = true
+	} else {
+		var err error
+		hash, err = hex.DecodeString(recipient)
+		if err != nil {
+			return err.Error()
+		}
+	}
+
+	keyPair := ethutil.Config.Db.GetKeys()[0]
+	value := ethutil.Big(valueStr)
+	gas := ethutil.Big(valueStr)
+	gasPrice := ethutil.Big(gasPriceStr)
+	var tx *ethchain.Transaction
+	// Compile and assemble the given data
+	if contractCreation {
+		asm, err := mutan.NewCompiler().Compile(strings.NewReader(data))
+		if err != nil {
+			return err.Error()
+		}
+
+		code := ethutil.Assemble(asm)
+		tx = ethchain.NewContractCreationTx(value, gasPrice, code)
+	} else {
+		tx = ethchain.NewTransactionMessage(hash, value, gasPrice, gas, []string{})
+	}
+	tx.Nonce = lib.stateManager.GetAddrState(keyPair.Address()).Nonce
+	tx.Sign(keyPair.PrivateKey)
+	lib.txPool.QueueTransaction(tx)
+
+	if contractCreation {
+		ethutil.Config.Log.Infof("Contract addr %x", tx.Hash()[12:])
+	} else {
+		ethutil.Config.Log.Infof("Tx hash %x", tx.Hash())
+	}
+
+	return ethutil.Hex(tx.Hash())
+}
+
+/*
 func (lib *EthLib) CreateTx(receiver, a, data string) string {
 	var hash []byte
 	if len(receiver) == 0 {
@@ -31,7 +76,7 @@ func (lib *EthLib) CreateTx(receiver, a, data string) string {
 
 	amount := ethutil.Big(a)
 	code := ethchain.Compile(strings.Split(data, "\n"))
-	tx := ethchain.NewTransaction(hash, amount, code)
+	tx := ethchain.NewTx(hash, amount, code)
 	tx.Nonce = lib.stateManager.GetAddrState(keyPair.Address()).Nonce
 
 	tx.Sign(keyPair.PrivateKey)
@@ -46,6 +91,7 @@ func (lib *EthLib) CreateTx(receiver, a, data string) string {
 
 	return ethutil.Hex(tx.Hash())
 }
+*/
 
 func (lib *EthLib) GetBlock(hexHash string) *Block {
 	hash, err := hex.DecodeString(hexHash)

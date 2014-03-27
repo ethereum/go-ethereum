@@ -158,20 +158,35 @@ ApplicationWindow {
 					anchors.leftMargin: 5
 					anchors.topMargin: 5
 					TextField {
-						id: txAmount
-						width: 200
-						placeholderText: "Amount"
+						id: txRecipient
+						placeholderText: "Recipient address (or empty for contract)"
+						Layout.fillWidth: true
 					}
 
 					TextField {
-						id: txReceiver
-						placeholderText: "Receiver Address (or empty for contract)"
-						Layout.fillWidth: true
+						id: txValue
+						width: 200
+						placeholderText: "Amount"
+					}
+					TextField {
+						id: txGas
+						width: 200
+						placeholderText: "Gas"
+						anchors.left: txValue
+						anchors.leftMargin: 5
+					}
+					TextField {
+						id: txGasPrice
+						width: 200
+						placeholderText: "Gas price"
+						anchors.left: txGas
+						anchors.leftMargin: 5
 					}
 
 					Label {
 						text: "Transaction data"
 					}
+
 					TextArea {
 						id: codeView
 						anchors.topMargin: 5
@@ -180,9 +195,11 @@ ApplicationWindow {
 					}
 
 					Button {
+						id: txButton
 						text: "Send"
 						onClicked: {
-							console.log(eth.createTx(txReceiver.text, txAmount.text, codeView.text))
+							this.enabled = false
+							console.log(eth.createTx(txRecipient.text, txValue.text, txGas.text, txGasPrice.text, codeView.text))
 						}
 					}
 				}
