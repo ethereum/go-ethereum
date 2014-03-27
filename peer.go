@@ -334,7 +334,8 @@ func (p *Peer) HandleInbound() {
 				// in the TxPool where it will undergo validation and
 				// processing when a new block is found
 				for i := 0; i < msg.Data.Len(); i++ {
-					p.ethereum.TxPool().QueueTransaction(ethchain.NewTransactionFromData(msg.Data.Get(i).Encode()))
+					//p.ethereum.TxPool().QueueTransaction(ethchain.NewTransactionFromData(msg.Data.Get(i).Encode()))
+					p.ethereum.TxPool().QueueTransaction(ethchain.NewTransactionFromValue(msg.Data.Get(i)))
 				}
 			case ethwire.MsgGetPeersTy:
 				// Flag this peer as a 'requested of new peers' this to

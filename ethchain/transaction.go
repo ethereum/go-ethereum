@@ -18,16 +18,21 @@ type Transaction struct {
 	Data      []string
 	v         byte
 	r, s      []byte
+
+	// Indicates whether this tx is a contract creation transaction
+	contractCreation bool
 }
 
+/*
 func NewTransaction(to []byte, value *big.Int, data []string) *Transaction {
 	tx := Transaction{Recipient: to, Value: value, Nonce: 0, Data: data}
 
 	return &tx
 }
+*/
 
 func NewContractCreationTx(value, gasprice *big.Int, data []string) *Transaction {
-	return &Transaction{Value: value, Gasprice: gasprice, Data: data}
+	return &Transaction{Value: value, Gasprice: gasprice, Data: data, contractCreation: true}
 }
 
 func NewContractMessageTx(to []byte, value, gasprice, gas *big.Int, data []string) *Transaction {
@@ -38,10 +43,12 @@ func NewTx(to []byte, value *big.Int, data []string) *Transaction {
 	return &Transaction{Recipient: to, Value: value, Gasprice: big.NewInt(0), Gas: big.NewInt(0), Nonce: 0, Data: data}
 }
 
+/*
 // XXX Deprecated
 func NewTransactionFromData(data []byte) *Transaction {
 	return NewTransactionFromBytes(data)
 }
+*/
 
 func NewTransactionFromBytes(data []byte) *Transaction {
 	tx := &Transaction{}
@@ -148,19 +155,52 @@ func (tx *Transaction) RlpDecode(data []byte) {
 	tx.RlpValueDecode(ethutil.NewValueFromBytes(data))
 }
 
+//   [ NONCE, VALUE, GASPRICE, TO, GAS, DATA, V, R, S ]
 func (tx *Transaction) RlpValueDecode(decoder *ethutil.Value) {
 	tx.Nonce = decoder.Get(0).Uint()
-	tx.Recipient = decoder.Get(1).Bytes()
-	tx.Value = decoder.Get(2).BigInt()
+	tx.Value = decoder.Get(1).BigInt()
+	tx.Gasprice = decoder.Get(2).BigInt()
 
-	d := decoder.Get(3)
-	tx.Data = make([]string, d.Len())
-	for i := 0; i < d.Len(); i++ {
-		tx.Data[i] = d.Get(i).Str()
+	// If the 4th item is a list(slice) this tx
+	// is a contract creation tx
+	if decoder.Get(3).IsSlice() {
+		d := decoder.Get(3)
+		tx.Data = make([]string, d.Len())
+		for i := 0; i < d.Len(); i++ {
+			tx.Data[i] = d.Get(i).Str()
+		}
+
+		tx.v = byte(decoder.Get(4).Uint())
+		tx.r = decoder.Get(5).Bytes()
+		tx.s = decoder.Get(6).Bytes()
+		tx.contractCreation = true
+	} else {
+		tx.Recipient = decoder.Get(3).Bytes()
+		tx.Gas = decoder.Get(4).BigInt()
+
+		d := decoder.Get(5)
+		tx.Data = make([]string, d.Len())
+		for i := 0; i < d.Len(); i++ {
+			tx.Data[i] = d.Get(i).Str()
+		}
+
+		tx.v = byte(decoder.Get(6).Uint())
+		tx.r = decoder.Get(7).Bytes()
+		tx.s = decoder.Get(8).Bytes()
 	}
+	/*
+		tx.Nonce = decoder.Get(0).Uint()
+		tx.Recipient = decoder.Get(1).Bytes()
+		tx.Value = decoder.Get(2).BigInt()
 
-	// TODO something going wrong here
-	tx.v = byte(decoder.Get(4).Uint())
-	tx.r = decoder.Get(5).Bytes()
-	tx.s = decoder.Get(6).Bytes()
+		d := decoder.Get(3)
+		tx.Data = make([]string, d.Len())
+		for i := 0; i < d.Len(); i++ {
+			tx.Data[i] = d.Get(i).Str()
+		}
+
+		tx.v = byte(decoder.Get(4).Uint())
+		tx.r = decoder.Get(5).Bytes()
+		tx.s = decoder.Get(6).Bytes()
+	*/
 }

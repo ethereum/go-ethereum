@@ -5,7 +5,6 @@ import (
 	_ "fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	_ "github.com/obscuren/secp256k1-go"
-	"log"
 	_ "math"
 	"math/big"
 )
@@ -359,6 +358,7 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 	}
 }
 
+/*
 func makeInlineTx(addr []byte, value, from, length *big.Int, contract *Contract, state *State) {
 	ethutil.Config.Log.Debugf(" => creating inline tx %x %v %v %v", addr, value, from, length)
 	j := int64(0)
@@ -395,3 +395,4 @@ func contractMemory(state *State, contractAddr []byte, memAddr *big.Int) *big.In
 
 	return decoder.BigInt()
 }
+*/
