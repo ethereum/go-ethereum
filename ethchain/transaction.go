@@ -2,7 +2,6 @@ package ethchain
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/secp256k1-go"
 	"math/big"
@@ -134,10 +133,7 @@ func (tx *Transaction) RlpDecode(data []byte) {
 	tx.RlpValueDecode(ethutil.NewValueFromBytes(data))
 }
 
-//   [ NONCE, VALUE, GASPRICE, TO, GAS, DATA, V, R, S ]
-//["" "\x03\xe8" "" "\xaa" "\x03\xe8" [] '\x1c' "\x10C\x15\xfc\xe5\xd0\t\xe4\r\xe7\xefa\xf5aE\xd6\x14\xaed\xb5.\xf5\x18\xa1S_j\xe0A\xdc5U" "dQ\nqy\xf8\x17+\xbf\xd7Jx\xda-\xcb\xd7\xcfQ\x1bI\xb8_9\b\x80\xea듎i|\x1f"]
 func (tx *Transaction) RlpValueDecode(decoder *ethutil.Value) {
-	fmt.Println(decoder)
 	tx.Nonce = decoder.Get(0).Uint()
 	tx.Value = decoder.Get(1).BigInt()
 	tx.Gasprice = decoder.Get(2).BigInt()
@@ -170,19 +166,4 @@ func (tx *Transaction) RlpValueDecode(decoder *ethutil.Value) {
 		tx.r = decoder.Get(7).Bytes()
 		tx.s = decoder.Get(8).Bytes()
 	}
-	/*
-		tx.Nonce = decoder.Get(0).Uint()
-		tx.Recipient = decoder.Get(1).Bytes()
-		tx.Value = decoder.Get(2).BigInt()
-
-		d := decoder.Get(3)
-		tx.Data = make([]string, d.Len())
-		for i := 0; i < d.Len(); i++ {
-			tx.Data[i] = d.Get(i).Str()
-		}
-
-		tx.v = byte(decoder.Get(4).Uint())
-		tx.r = decoder.Get(5).Bytes()
-		tx.s = decoder.Get(6).Bytes()
-	*/
 }
