@@ -16,6 +16,14 @@ type UiLib struct {
 	engine    *qml.Engine
 	eth       *eth.Ethereum
 	connected bool
+	assetPath string
+}
+
+func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
+	if assetPath == "" {
+		assetPath = DefaultAssetPath()
+	}
+	return &UiLib{engine: engine, eth: eth, assetPath: assetPath}
 }
 
 // Opens a QML file (external application)
@@ -45,10 +53,10 @@ func (ui *UiLib) ConnectToPeer(addr string) {
 }
 
 func (ui *UiLib) AssetPath(p string) string {
-	return AssetPath(p)
+	return path.Join(ui.assetPath, p)
 }
 
-func AssetPath(p string) string {
+func DefaultAssetPath() string {
 	var base string
 
 	// If the current working directory is the go-ethereum dir
@@ -72,5 +80,5 @@ func AssetPath(p string) string {
 		}
 	}
 
-	return path.Join(base, p)
+	return base
 }

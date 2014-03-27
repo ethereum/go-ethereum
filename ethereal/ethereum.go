@@ -100,11 +100,11 @@ func main() {
 		os.Exit(0)
 	}
 
-	log.Printf("Starting Ethereum v%s\n", ethutil.Config.Ver)
+	log.Printf("Starting Ethereum GUI v%s\n", ethutil.Config.Ver)
 
 	// Set the max peers
 	ethereum.MaxPeers = MaxPeer
 
 	gui := ethui.New(ethereum)
-	gui.Start()
+	gui.Start(AssetPath)
 }

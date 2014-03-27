@@ -16,6 +16,7 @@ var UseSeed bool
 var ImportKey string
 var ExportKey bool
 var DataDir string
+var AssetPath string
 
 func Init() {
 	flag.BoolVar(&StartConsole, "c", false, "debug and testing console")
@@ -29,6 +30,7 @@ func Init() {
 	flag.StringVar(&DataDir, "dir", ".ethereal", "ethereum data directory")
 	flag.StringVar(&ImportKey, "import", "", "imports the given private key (hex)")
 	flag.IntVar(&MaxPeer, "x", 5, "maximum desired peers")
+	flag.StringVar(&AssetPath, "asset_path", "", "absolute path to GUI assets directory")
 
 	flag.Parse()
 }

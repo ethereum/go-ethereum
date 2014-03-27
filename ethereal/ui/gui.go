@@ -53,6 +53,7 @@ type Gui struct {
 	txDb *ethdb.LDBDatabase
 
 	addr []byte
+
 }
 
 // Create GUI, but doesn't start it
@@ -71,7 +72,7 @@ func New(ethereum *eth.Ethereum) *Gui {
 	return &Gui{eth: ethereum, lib: lib, txDb: db, addr: addr}
 }
 
-func (ui *Gui) Start() {
+func (ui *Gui) Start(assetPath string) {
 	defer ui.txDb.Close()
 
 	// Register ethereum functions
@@ -89,14 +90,16 @@ func (ui *Gui) Start() {
 
 	// Expose the eth library and the ui library to QML
 	context.SetVar("eth", ui.lib)
-	context.SetVar("ui", &UiLib{engine: ui.engine, eth: ui.eth})
+	uiLib := NewUiLib(ui.engine, ui.eth, assetPath)
+	context.SetVar("ui", uiLib)
 
 	// Load the main QML interface
-	component, err := ui.engine.LoadFile(AssetPath("qml/wallet.qml"))
+	component, err := ui.engine.LoadFile(uiLib.AssetPath("qml/wallet.qml"))
 	if err != nil {
+   	ethutil.Config.Log.Infoln("FATAL: asset not found: you can set an alternative asset path on on the command line using option 'asset_path'")
 		panic(err)
 	}
-	ui.engine.LoadFile(AssetPath("qml/transactions.qml"))
+	ui.engine.LoadFile(uiLib.AssetPath("qml/transactions.qml"))
 
 	ui.win = component.CreateWindow(nil)
 
