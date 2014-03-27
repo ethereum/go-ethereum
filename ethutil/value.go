@@ -149,6 +149,15 @@ func (val *Value) IsStr() bool {
 	return val.Type() == reflect.String
 }
 
+// Special list checking function. Something is considered
+// a list if it's of type []interface{}. The list is usually
+// used in conjunction with rlp decoded streams.
+func (val *Value) IsList() bool {
+	_, ok := val.Val.([]interface{})
+
+	return ok
+}
+
 func (val *Value) IsEmpty() bool {
 	return val.Val == nil || ((val.IsSlice() || val.IsStr()) && val.Len() == 0)
 }
