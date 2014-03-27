@@ -1,7 +1,6 @@
 package ethchain
 
 import (
-	"bytes"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/secp256k1-go"
 	"math/big"
@@ -62,7 +61,7 @@ func (tx *Transaction) Hash() []byte {
 }
 
 func (tx *Transaction) IsContract() bool {
-	return bytes.Compare(tx.Recipient, ContractAddr) == 0
+	return tx.contractCreation
 }
 
 func (tx *Transaction) Signature(key []byte) []byte {
