@@ -29,7 +29,7 @@ func TestRun3(t *testing.T) {
 		"PUSH", "0",
 		"RETURN",
 	})
-	tx := NewTransaction(ContractAddr, ethutil.Big("100000000000000000000000000000000000000000000000000"), script)
+	tx := NewContractCreationTx(ethutil.Big("0"), ethutil.Big("1000"), script)
 	addr := tx.Hash()[12:]
 	contract := MakeContract(tx, state)
 	state.UpdateContract(contract)
@@ -51,7 +51,7 @@ func TestRun3(t *testing.T) {
 		"PUSH", 0,
 		"RETURN",
 	)
-	callerTx := NewTransaction(ContractAddr, ethutil.Big("100000000000000000000000000000000000000000000000000"), callerScript)
+	callerTx := NewContractCreationTx(ethutil.Big("0"), ethutil.Big("1000"), callerScript)
 
 	// Contract addr as test address
 	account := NewAccount(ContractAddr, big.NewInt(10000000))
@@ -84,20 +84,20 @@ func TestRun4(t *testing.T) {
 	mutan.NewCompiler().Compile(strings.NewReader(`
 a = 1337
 c = 1
-[0] = 50
-d = [0]
+store[0] = 50
+d = store[0]
 `))
 
-	asm := mutan.NewCompiler().Compile(strings.NewReader(`
+	asm, _ := mutan.NewCompiler().Compile(strings.NewReader(`
 	a = 3 + 3
-	[1000] = a
-	[1000]
+	stotre[1000] = a
+	store[1000]
 `))
 	asm = append(asm, "LOG")
 	fmt.Println(asm)
 
 	callerScript := ethutil.Assemble(asm...)
-	callerTx := NewTransaction(ContractAddr, ethutil.Big("100000000000000000000000000000000000000000000000000"), callerScript)
+	callerTx := NewContractCreationTx(ethutil.Big("0"), ethutil.Big("1000"), callerScript)
 
 	// Contract addr as test address
 	account := NewAccount(ContractAddr, big.NewInt(10000000))
