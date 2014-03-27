@@ -57,7 +57,7 @@ func DecodeWithReader(reader *bytes.Buffer) interface{} {
 	switch {
 	case char == 0:
 		return nil
-	case char <= 0x7c:
+	case char <= 0x7f:
 		return char
 
 	case char <= 0xb7:
