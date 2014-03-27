@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
+	"github.com/obscuren/mutan"
 	_ "math/big"
 	"os"
 	"strings"
@@ -58,9 +59,9 @@ func (i *Console) ValidateInput(action string, argumentLength int) error {
 	case action == "getaddr" && argumentLength != 1:
 		err = true
 		expArgCount = 1
-	case action == "contract" && argumentLength != 1:
+	case action == "contract" && argumentLength != 2:
 		err = true
-		expArgCount = 1
+		expArgCount = 2
 	case action == "say" && argumentLength != 1:
 		err = true
 		expArgCount = 1
@@ -79,7 +80,7 @@ func (i *Console) ValidateInput(action string, argumentLength int) error {
 	}
 }
 
-func (i *Console) Editor() []string {
+func (i *Console) Editor() string {
 	var buff bytes.Buffer
 	for {
 		reader := bufio.NewReader(os.Stdin)
@@ -94,15 +95,7 @@ func (i *Console) Editor() []string {
 		}
 	}
 
-	scanner := bufio.NewScanner(strings.NewReader(buff.String()))
-	scanner.Split(bufio.ScanLines)
-
-	var lines []string
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-
-	return lines
+	return buff.String()
 }
 
 func (i *Console) PrintRoot() {
@@ -178,7 +171,7 @@ func (i *Console) ParseInput(input string) bool {
 			if err != nil {
 				fmt.Println("recipient err:", err)
 			} else {
-				tx := ethchain.NewTransaction(recipient, ethutil.Big(tokens[2]), []string{""})
+				tx := ethchain.NewTx(recipient, ethutil.Big(tokens[2]), []string{""})
 
 				key := ethutil.Config.Db.GetKeys()[0]
 				tx.Sign(key.PrivateKey)
@@ -197,9 +190,11 @@ func (i *Console) ParseInput(input string) bool {
 			}
 		case "contract":
 			fmt.Println("Contract editor (Ctrl-D = done)")
-			code := ethchain.Compile(i.Editor())
+			asm := mutan.NewCompiler().Compile(strings.NewReader(i.Editor()))
 
-			contract := ethchain.NewTransaction(ethchain.ContractAddr, ethutil.Big(tokens[1]), code)
+			code := ethutil.Assemble(asm)
+
+			contract := ethchain.NewContractCreationTx(ethutil.Big(tokens[0]), ethutil.Big(tokens[1]), code)
 
 			key := ethutil.Config.Db.GetKeys()[0]
 			contract.Sign(key.PrivateKey)
