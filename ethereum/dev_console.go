@@ -53,9 +53,9 @@ func (i *Console) ValidateInput(action string, argumentLength int) error {
 	case action == "gettx" && argumentLength != 1:
 		err = true
 		expArgCount = 1
-	case action == "tx" && argumentLength != 2:
+	case action == "tx" && argumentLength != 4:
 		err = true
-		expArgCount = 2
+		expArgCount = 4
 	case action == "getaddr" && argumentLength != 1:
 		err = true
 		expArgCount = 1
@@ -171,7 +171,7 @@ func (i *Console) ParseInput(input string) bool {
 			if err != nil {
 				fmt.Println("recipient err:", err)
 			} else {
-				tx := ethchain.NewTx(recipient, ethutil.Big(tokens[2]), []string{""})
+				tx := ethchain.NewTransactionMessage(recipient, ethutil.Big(tokens[2]), ethutil.Big(tokens[3]), ethutil.Big(tokens[4]), []string{""})
 
 				key := ethutil.Config.Db.GetKeys()[0]
 				tx.Sign(key.PrivateKey)
