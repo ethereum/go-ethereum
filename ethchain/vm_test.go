@@ -90,7 +90,7 @@ d = store[0]
 
 	asm, _ := mutan.NewCompiler().Compile(strings.NewReader(`
 	a = 3 + 3
-	stotre[1000] = a
+	store[1000] = a
 	store[1000]
 `))
 	asm = append(asm, "LOG")
