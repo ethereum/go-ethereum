@@ -207,7 +207,7 @@ func (pool *TxPool) QueueTransaction(tx *Transaction) {
 	pool.queueChan <- tx
 }
 
-func (pool *TxPool) Flush() []*Transaction {
+func (pool *TxPool) CurrentTransactions() []*Transaction {
 	pool.mutex.Lock()
 	defer pool.mutex.Unlock()
 
@@ -220,6 +220,12 @@ func (pool *TxPool) Flush() []*Transaction {
 
 		i++
 	}
+
+	return txList
+}
+
+func (pool *TxPool) Flush() []*Transaction {
+	txList := pool.CurrentTransactions()
 
 	// Recreate a new list all together
 	// XXX Is this the fastest way?

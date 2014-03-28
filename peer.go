@@ -334,8 +334,8 @@ func (p *Peer) HandleInbound() {
 				// in the TxPool where it will undergo validation and
 				// processing when a new block is found
 				for i := 0; i < msg.Data.Len(); i++ {
-					//p.ethereum.TxPool().QueueTransaction(ethchain.NewTransactionFromData(msg.Data.Get(i).Encode()))
-					p.ethereum.TxPool().QueueTransaction(ethchain.NewTransactionFromValue(msg.Data.Get(i)))
+					tx := ethchain.NewTransactionFromValue(msg.Data.Get(i))
+					p.ethereum.TxPool().QueueTransaction(tx)
 				}
 			case ethwire.MsgGetPeersTy:
 				// Flag this peer as a 'requested of new peers' this to
@@ -398,6 +398,16 @@ func (p *Peer) HandleInbound() {
 			case ethwire.MsgNotInChainTy:
 				ethutil.Config.Log.Infof("Not in chain %x\n", msg.Data)
 				// TODO
+			case ethwire.MsgGetTxsTy:
+				// Get the current transactions of the pool
+				txs := p.ethereum.TxPool().CurrentTransactions()
+				// Get the RlpData values from the txs
+				txsInterface := make([]interface{}, len(txs))
+				for i, tx := range txs {
+					txsInterface[i] = tx.RlpData()
+				}
+				// Broadcast it back to the peer
+				p.QueueMessage(ethwire.NewMessage(ethwire.MsgTxTy, txsInterface))
 
 				// Unofficial but fun nonetheless
 			case ethwire.MsgTalkTy:
@@ -562,6 +572,10 @@ func (p *Peer) CatchupWithPeer() {
 		p.QueueMessage(msg)
 
 		ethutil.Config.Log.Debugf("Requesting blockchain %x...\n", p.ethereum.BlockChain().CurrentBlock.Hash()[:4])
+
+		msg = ethwire.NewMessage(ethwire.MsgGetTxsTy, []interface{}{})
+		p.QueueMessage(msg)
+		ethutil.Config.Log.Debugln("Requested transactions")
 	}
 }
 
