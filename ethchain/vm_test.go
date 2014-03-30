@@ -1,7 +1,7 @@
 package ethchain
 
 import (
-	"bytes"
+	_ "bytes"
 	"fmt"
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethutil"
@@ -11,6 +11,7 @@ import (
 	"testing"
 )
 
+/*
 func TestRun3(t *testing.T) {
 	ethutil.ReadConfig("")
 
@@ -73,7 +74,7 @@ func TestRun3(t *testing.T) {
 	if bytes.Compare(ret, exp) != 0 {
 		t.Errorf("expected return value to be %v, got %v", exp, ret)
 	}
-}
+}*/
 
 func TestRun4(t *testing.T) {
 	ethutil.ReadConfig("")
@@ -81,17 +82,13 @@ func TestRun4(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 	state := NewState(ethutil.NewTrie(db, ""))
 
-	mutan.Compile(strings.NewReader(`
-		a = 1337
-		c = 1
-		store[0] = 50
-		d = store[0]
-	`), false)
-
 	asm, err := mutan.Compile(strings.NewReader(`
-		a = 3 + 3
-		store[1000] = a
-		store[1000]
+		a = 10
+		b = 10
+		if a == b {
+			b = 1000
+			c = 10
+		}
 	`), false)
 	if err != nil {
 		fmt.Println(err)

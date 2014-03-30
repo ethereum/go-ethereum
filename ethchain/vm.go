@@ -2,7 +2,7 @@ package ethchain
 
 import (
 	_ "bytes"
-	_ "fmt"
+	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	_ "github.com/obscuren/secp256k1-go"
 	_ "math"
@@ -213,10 +213,17 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 			} else {
 				stack.Push(ethutil.BigFalse)
 			}
-		case oNOT:
+		case oEQ:
 			x, y := stack.Popn()
-			// x != y
-			if x.Cmp(y) != 0 {
+			// x == y
+			if x.Cmp(y) == 0 {
+				stack.Push(ethutil.BigTrue)
+			} else {
+				stack.Push(ethutil.BigFalse)
+			}
+		case oNOT:
+			x := stack.Pop()
+			if x.Cmp(ethutil.BigFalse) == 0 {
 				stack.Push(ethutil.BigTrue)
 			} else {
 				stack.Push(ethutil.BigFalse)
@@ -300,8 +307,8 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 		case oJUMP:
 			pc = stack.Pop()
 		case oJUMPI:
-			pos, cond := stack.Popn()
-			if cond.Cmp(big.NewInt(0)) > 0 {
+			cond, pos := stack.Popn()
+			if cond.Cmp(ethutil.BigTrue) == 0 {
 				pc = pos
 			}
 		case oPC:
@@ -314,6 +321,7 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 			retSize, retOffset := stack.Popn()
 			// Pop input size and offset
 			inSize, inOffset := stack.Popn()
+			fmt.Println(inSize, inOffset)
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 			// Pop gas and value of the stack.

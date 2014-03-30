@@ -173,21 +173,25 @@ func NewStack() *Stack {
 }
 
 func (st *Stack) Pop() *big.Int {
-	str := st.data[0]
-	st.data = st.data[1:]
+	str := st.data[len(st.data)-1]
+
+	copy(st.data[:len(st.data)-1], st.data[:len(st.data)-1])
+	st.data = st.data[:len(st.data)-1]
 
 	return str
 }
 
 func (st *Stack) Popn() (*big.Int, *big.Int) {
-	ints := st.data[:2]
-	st.data = st.data[2:]
+	ints := st.data[len(st.data)-2:]
+
+	copy(st.data[:len(st.data)-2], st.data[:len(st.data)-2])
+	st.data = st.data[:len(st.data)-2]
 
 	return ints[0], ints[1]
 }
 
 func (st *Stack) Peek() *big.Int {
-	str := st.data[0]
+	str := st.data[len(st.data)-1]
 
 	return str
 }
