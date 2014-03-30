@@ -198,7 +198,7 @@ ApplicationWindow {
 						id: txButton
 						text: "Send"
 						onClicked: {
-							this.enabled = false
+							//this.enabled = false
 							console.log(eth.createTx(txRecipient.text, txValue.text, txGas.text, txGasPrice.text, codeView.text))
 						}
 					}

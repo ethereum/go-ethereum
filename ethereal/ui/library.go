@@ -30,7 +30,7 @@ func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data strin
 
 	keyPair := ethutil.Config.Db.GetKeys()[0]
 	value := ethutil.Big(valueStr)
-	gas := ethutil.Big(valueStr)
+	gas := ethutil.Big(gasStr)
 	gasPrice := ethutil.Big(gasPriceStr)
 	var tx *ethchain.Transaction
 	// Compile and assemble the given data
@@ -40,7 +40,7 @@ func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data strin
 			return err.Error()
 		}
 
-		code := ethutil.Assemble(asm)
+		code := ethutil.Assemble(asm...)
 		tx = ethchain.NewContractCreationTx(value, gasPrice, code)
 	} else {
 		tx = ethchain.NewTransactionMessage(hash, value, gasPrice, gas, []string{})
