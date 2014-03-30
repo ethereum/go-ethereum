@@ -35,7 +35,7 @@ func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data strin
 	var tx *ethchain.Transaction
 	// Compile and assemble the given data
 	if contractCreation {
-		asm, err := mutan.NewCompiler().Compile(strings.NewReader(data))
+		asm, err := mutan.Compile(strings.NewReader(data), false)
 		if err != nil {
 			return err.Error()
 		}

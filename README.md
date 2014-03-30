@@ -13,18 +13,17 @@ Build
 =======
 
 For build instruction please see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum(Go))
-Command line options
+General command line options
 ====================
 
 ```
--c       Launch the developer console
+-c       Launch the developer console (node only)
 -m       Start mining blocks
 -genaddr Generates a new address and private key (destructive action)
 -p       Port on which the server will accept incomming connections (= 30303)
 -upnp    Enable UPnP (= false)
 -x       Desired amount of peers (= 5)
 -h       This help
--gui     Launch with GUI (= true)
 -dir     Data directory used to store configs and databases (=".ethereum")
 -import  Import a private key (hex)
 ```
@@ -33,8 +32,9 @@ Developer console commands
 ==========================
 
 ```
-addp <host>:<port>     Connect to the given host
-tx <addr> <amount>     Send <amount> Wei to the specified <addr>
+addp <host>:<port>	      Connect to the given host
+tx <addr> <amount>            Send <amount> Wei to the specified <addr>
+contract <value> <gasprice>   Creates a new contract and launches the editor
 ```
 
 See the "help" command for *developer* options.
@@ -57,7 +57,7 @@ Coding standards
 Sources should be formatted according to the [Go Formatting
 Style](http://golang.org/doc/effective_go.html#formatting).
 
-Unless structs fields are supposed to be directly accesible, provide
+Unless structs fields are supposed to be directly accessible, provide
 Getters and hide the fields through Go's exporting facility.
 
 When you comment put meaningfull comments. Describe in detail what you

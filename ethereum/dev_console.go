@@ -190,7 +190,7 @@ func (i *Console) ParseInput(input string) bool {
 			}
 		case "contract":
 			fmt.Println("Contract editor (Ctrl-D = done)")
-			asm, err := mutan.NewCompiler().Compile(strings.NewReader(i.Editor()))
+			asm, err := mutan.Compile(strings.NewReader(i.Editor()), false)
 			if err != nil {
 				fmt.Println(err)
 				break
