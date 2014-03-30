@@ -131,15 +131,14 @@ func main() {
 				// Create a new block which we're going to mine
 				block := ethereum.BlockChain().NewBlock(addr, txs)
 				log.Println("Mining on new block. Includes", len(block.Transactions()), "transactions")
-				// Apply all transactions to the block
-				ethereum.StateManager().ApplyTransactions(block, block.Transactions())
 
 				ethereum.StateManager().Prepare(block.State(), block.State())
+				// Apply all transactions to the block
+				ethereum.StateManager().ApplyTransactions(block, block.Transactions())
 				ethereum.StateManager().AccumelateRewards(block)
 
 				// Search the nonce
 				block.Nonce = pow.Search(block)
-				ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
 
 				ethereum.StateManager().PrepareDefault(block)
 				err := ethereum.StateManager().ProcessBlock(block)
@@ -148,6 +147,7 @@ func main() {
 				} else {
 					log.Println("\n+++++++ MINED BLK +++++++\n", ethereum.BlockChain().CurrentBlock)
 					log.Printf("🔨  Mined block %x\n", block.Hash())
+					ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
 				}
 			}
 		}()
