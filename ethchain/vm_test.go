@@ -86,14 +86,22 @@ func TestRun4(t *testing.T) {
 		a = 10
 		b = 10
 		if a == b {
-			b = 1000
 			c = 10
+			if c == 10 {
+				d = 1000
+				e = 10
+			}
 		}
+
+		store[0] = 20
+		test = store[0]
+		store[a] = 20
+		f = store[400]
 	`), false)
 	if err != nil {
 		fmt.Println(err)
 	}
-	asm = append(asm, "LOG")
+	//asm = append(asm, "LOG")
 	fmt.Println(asm)
 
 	callerScript := ethutil.Assemble(asm...)
