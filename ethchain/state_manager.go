@@ -100,16 +100,21 @@ func (sm *StateManager) MakeContract(tx *Transaction) {
 	}
 }
 
+// Apply transactions uses the transaction passed to it and applies them onto
+// the current processing state.
 func (sm *StateManager) ApplyTransactions(block *Block, txs []*Transaction) {
 	// Process each transaction/contract
 	for _, tx := range txs {
 		// If there's no recipient, it's a contract
+		// Check if this is a contract creation traction and if so
+		// create a contract of this tx.
 		if tx.IsContract() {
 			sm.MakeContract(tx)
-			//XXX block.MakeContract(tx)
 		} else {
+			// Figure out if the address this transaction was sent to is a
+			// contract or an actual account. In case of a contract, we process that
+			// contract instead of moving funds between accounts.
 			if contract := sm.procState.GetContract(tx.Recipient); contract != nil {
-				//XXX if contract := block.state.GetContract(tx.Recipient); contract != nil {
 				sm.ProcessContract(contract, tx, block)
 			} else {
 				err := sm.Ethereum.TxPool().ProcessTransaction(tx, block)
@@ -172,14 +177,12 @@ func (sm *StateManager) ProcessBlock(block *Block) error {
 
 	// if !sm.compState.Cmp(sm.procState)
 	if !sm.compState.Cmp(sm.procState) {
-		//XXX return fmt.Errorf("Invalid merkle root. Expected %x, got %x", block.State().trie.Root, sm.bc.CurrentBlock.State().trie.Root)
 		return fmt.Errorf("Invalid merkle root. Expected %x, got %x", sm.compState.trie.Root, sm.procState.trie.Root)
 	}
 
 	// Calculate the new total difficulty and sync back to the db
 	if sm.CalculateTD(block) {
 		// Sync the current block's state to the database and cancelling out the deferred Undo
-		//XXX sm.bc.CurrentBlock.Sync()
 		sm.procState.Sync()
 
 		// Broadcast the valid block back to the wire
@@ -273,12 +276,10 @@ func CalculateUncleReward(block *Block) *big.Int {
 
 func (sm *StateManager) AccumelateRewards(block *Block) error {
 	// Get the coinbase rlp data
-	//XXX addr := processor.state.GetAccount(block.Coinbase)
 	addr := sm.procState.GetAccount(block.Coinbase)
 	// Reward amount of ether to the coinbase address
 	addr.AddFee(CalculateBlockReward(block, len(block.Uncles)))
 
-	//XXX processor.state.UpdateAccount(block.Coinbase, addr)
 	sm.procState.UpdateAccount(block.Coinbase, addr)
 
 	for _, uncle := range block.Uncles {
@@ -298,13 +299,12 @@ func (sm *StateManager) Stop() {
 
 func (sm *StateManager) ProcessContract(contract *Contract, tx *Transaction, block *Block) {
 	// Recovering function in case the VM had any errors
-	/*
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Println("Recovered from VM execution with err =", r)
-			}
-		}()
-	*/
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered from VM execution with err =", r)
+		}
+	}()
+
 	caller := sm.procState.GetAccount(tx.Sender())
 	closure := NewClosure(caller, contract, sm.procState, tx.Gas, tx.Value)
 	vm := NewVm(sm.procState, RuntimeVars{

@@ -81,18 +81,21 @@ func TestRun4(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 	state := NewState(ethutil.NewTrie(db, ""))
 
-	mutan.NewCompiler().Compile(strings.NewReader(`
-a = 1337
-c = 1
-store[0] = 50
-d = store[0]
-`))
+	mutan.Compile(strings.NewReader(`
+		a = 1337
+		c = 1
+		store[0] = 50
+		d = store[0]
+	`), false)
 
-	asm, _ := mutan.NewCompiler().Compile(strings.NewReader(`
-	a = 3 + 3
-	store[1000] = a
-	store[1000]
-`))
+	asm, err := mutan.Compile(strings.NewReader(`
+		a = 3 + 3
+		store[1000] = a
+		store[1000]
+	`), false)
+	if err != nil {
+		fmt.Println(err)
+	}
 	asm = append(asm, "LOG")
 	fmt.Println(asm)
 
