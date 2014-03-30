@@ -115,6 +115,8 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 		}
 
 		if closure.Gas.Cmp(gas) < 0 {
+			ethutil.Config.Log.Debugln("Insufficient gas", closure.Gas, gas)
+
 			return closure.Return(nil)
 		}
 

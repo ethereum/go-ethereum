@@ -116,8 +116,9 @@ func (tx *Transaction) RlpData() interface{} {
 	if !tx.contractCreation {
 		data = append(data, tx.Recipient, tx.Gas)
 	}
+	d := ethutil.NewSliceValue(tx.Data).Slice()
 
-	return append(data, ethutil.NewSliceValue(tx.Data).Slice(), tx.v, tx.r, tx.s)
+	return append(data, d, tx.v, tx.r, tx.s)
 }
 
 func (tx *Transaction) RlpValue() *ethutil.Value {

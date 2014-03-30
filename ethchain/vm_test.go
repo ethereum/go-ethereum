@@ -94,9 +94,7 @@ func TestRun4(t *testing.T) {
 		}
 
 		store[0] = 20
-		test = store[0]
 		store[a] = 20
-		f = store[400]
 	`), false)
 	if err != nil {
 		fmt.Println(err)

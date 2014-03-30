@@ -82,7 +82,7 @@ func (sm *StateManager) WatchAddr(addr []byte) *AccountState {
 func (sm *StateManager) GetAddrState(addr []byte) *AccountState {
 	account := sm.addrStateStore.Get(addr)
 	if account == nil {
-		a := sm.bc.CurrentBlock.state.GetAccount(addr)
+		a := sm.procState.GetAccount(addr)
 		account = &AccountState{Nonce: a.Nonce, Account: a}
 	}
 
@@ -128,9 +128,9 @@ func (sm *StateManager) ApplyTransactions(block *Block, txs []*Transaction) {
 
 // The prepare function, prepares the state manager for the next
 // "ProcessBlock" action.
-func (sm *StateManager) Prepare(processer *State, comparative *State) {
+func (sm *StateManager) Prepare(processor *State, comparative *State) {
 	sm.compState = comparative
-	sm.procState = processer
+	sm.procState = processor
 }
 
 // Default prepare function
