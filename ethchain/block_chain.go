@@ -126,6 +126,7 @@ func (bc *BlockChain) FindCanonicalChain(blocks []*Block, commonBlockHash []byte
 			log.Println("[CHAIN] We have found the common parent block, breaking")
 			break
 		}
+		log.Println("Checking incoming blocks:")
 		chainDifficulty.Add(chainDifficulty, bc.CalculateBlockTD(block))
 	}
 
@@ -139,13 +140,20 @@ func (bc *BlockChain) FindCanonicalChain(blocks []*Block, commonBlockHash []byte
 			log.Println("[CHAIN] We have found the common parent block, breaking")
 			break
 		}
-		log.Println("CHECKING BLOGK:", i)
+		anOtherBlock := bc.GetBlock(block.PrevHash)
+		if anOtherBlock == nil {
+			// We do not want to count the genesis block for difficulty since that's not being sent
+			log.Println("[CHAIN] At genesis block, breaking")
+			break
+		}
+		log.Printf("CHECKING OUR OWN BLOCKS: %x", block.Hash())
+		log.Printf("%x", bc.GenesisBlock().Hash())
 		curChainDifficulty.Add(curChainDifficulty, bc.CalculateBlockTD(block))
 	}
 
 	log.Println("[CHAIN] Current chain difficulty:", curChainDifficulty)
 	if chainDifficulty.Cmp(curChainDifficulty) == 1 {
-		log.Println("[CHAIN] The incoming Chain beat our asses, resetting")
+		log.Printf("[CHAIN] The incoming Chain beat our asses, resetting to block: %x", commonBlockHash)
 		bc.ResetTillBlockHash(commonBlockHash)
 		return false
 	} else {
@@ -165,6 +173,7 @@ func (bc *BlockChain) ResetTillBlockHash(hash []byte) error {
 	// END TODO
 
 	bc.Ethereum.StateManager().PrepareDefault(returnTo)
+
 	err := ethutil.Config.Db.Delete(lastBlock.Hash())
 	if err != nil {
 		return err

@@ -78,15 +78,38 @@ func (tm *TestManager) CreateChain2() error {
 	return err
 }
 
-func TestBlockChainReorg(t *testing.T) {
-	testManager := NewTestManager()
-	testManager.CreateChain1()
+func TestNegativeBlockChainReorg(t *testing.T) {
+	// We are resetting the database between creation so we need to cache our information
 	testManager2 := NewTestManager()
 	testManager2.CreateChain2()
+	tm2Blocks := testManager2.Blocks
 
-	// This fails because we keep resetting the DB
-	block := testManager.BlockChain().GetBlock(testManager.BlockChain().CurrentBlock.PrevHash)
-	fmt.Println(block)
-	//testManager.BlockChain().FindCanonicalChain(testManager2.Blocks, testManager.BlockChain().GenesisBlock().Hash())
+	testManager := NewTestManager()
+	testManager.CreateChain1()
+	oldState := testManager.BlockChain().CurrentBlock.State()
 
+	if testManager.BlockChain().FindCanonicalChain(tm2Blocks, testManager.BlockChain().GenesisBlock().Hash()) != true {
+		t.Error("I expected TestManager to have the longest chain, but it was TestManager2 instead.")
+	}
+	if testManager.BlockChain().CurrentBlock.State() != oldState {
+		t.Error("I expected the top state to be the same as it was as before the reorg")
+	}
+
+}
+
+func TestPositiveBlockChainReorg(t *testing.T) {
+	testManager := NewTestManager()
+	testManager.CreateChain1()
+	tm1Blocks := testManager.Blocks
+
+	testManager2 := NewTestManager()
+	testManager2.CreateChain2()
+	oldState := testManager2.BlockChain().CurrentBlock.State()
+
+	if testManager2.BlockChain().FindCanonicalChain(tm1Blocks, testManager.BlockChain().GenesisBlock().Hash()) == true {
+		t.Error("I expected TestManager to have the longest chain, but it was TestManager2 instead.")
+	}
+	if testManager2.BlockChain().CurrentBlock.State() == oldState {
+		t.Error("I expected the top state to have been modified but it was not")
+	}
 }
