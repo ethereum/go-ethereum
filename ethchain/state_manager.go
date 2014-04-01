@@ -114,13 +114,18 @@ func (sm *StateManager) ApplyTransactions(block *Block, txs []*Transaction) {
 			// Figure out if the address this transaction was sent to is a
 			// contract or an actual account. In case of a contract, we process that
 			// contract instead of moving funds between accounts.
+			var err error
 			if contract := sm.procState.GetContract(tx.Recipient); contract != nil {
-				sm.ProcessContract(contract, tx, block)
-			} else {
-				err := sm.Ethereum.TxPool().ProcessTransaction(tx, block)
-				if err != nil {
-					ethutil.Config.Log.Infoln("[STATE]", err)
+				err = sm.Ethereum.TxPool().ProcessTransaction(tx, sm.procState, true)
+				if err == nil {
+					sm.ProcessContract(contract, tx, block)
 				}
+			} else {
+				err = sm.Ethereum.TxPool().ProcessTransaction(tx, sm.procState, false)
+			}
+
+			if err != nil {
+				ethutil.Config.Log.Infoln("[STATE]", err)
 			}
 		}
 	}
@@ -318,4 +323,7 @@ func (sm *StateManager) ProcessContract(contract *Contract, tx *Transaction, blo
 		txData: nil,
 	})
 	closure.Call(vm, nil)
+
+	// Update the account (refunds)
+	sm.procState.UpdateAccount(tx.Sender(), caller)
 }

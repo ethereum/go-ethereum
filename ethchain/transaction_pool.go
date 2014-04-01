@@ -90,7 +90,7 @@ func (pool *TxPool) addTransaction(tx *Transaction) {
 
 // Process transaction validates the Tx and processes funds from the
 // sender to the recipient.
-func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) (err error) {
+func (pool *TxPool) ProcessTransaction(tx *Transaction, state *State, toContract bool) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println(r)
@@ -98,7 +98,7 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) (err error
 		}
 	}()
 	// Get the sender
-	sender := block.state.GetAccount(tx.Sender())
+	sender := state.GetAccount(tx.Sender())
 
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.
@@ -116,12 +116,14 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) (err error
 	}
 
 	// Get the receiver
-	receiver := block.state.GetAccount(tx.Recipient)
+	receiver := state.GetAccount(tx.Recipient)
 	sender.Nonce += 1
 
 	// Send Tx to self
 	if bytes.Compare(tx.Recipient, tx.Sender()) == 0 {
 		// Subtract the fee
+		sender.Amount.Sub(sender.Amount, new(big.Int).Mul(TxFee, TxFeeRat))
+	} else if toContract {
 		sender.Amount.Sub(sender.Amount, new(big.Int).Mul(TxFee, TxFeeRat))
 	} else {
 		// Subtract the amount from the senders account
@@ -130,10 +132,10 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) (err error
 		// Add the amount to receivers account which should conclude this transaction
 		receiver.Amount.Add(receiver.Amount, tx.Value)
 
-		block.state.UpdateAccount(tx.Recipient, receiver)
+		state.UpdateAccount(tx.Recipient, receiver)
 	}
 
-	block.state.UpdateAccount(tx.Sender(), sender)
+	state.UpdateAccount(tx.Sender(), sender)
 
 	log.Printf("[TXPL] Processed Tx %x\n", tx.Hash())
 
