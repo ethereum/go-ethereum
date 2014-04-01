@@ -15,7 +15,7 @@ type EthLib struct {
 	txPool       *ethchain.TxPool
 }
 
-func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data string) string {
+func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data string) (string, error) {
 	var hash []byte
 	var contractCreation bool
 	if len(recipient) == 0 {
@@ -24,7 +24,7 @@ func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data strin
 		var err error
 		hash, err = hex.DecodeString(recipient)
 		if err != nil {
-			return err.Error()
+			return "", err
 		}
 	}
 
@@ -37,7 +37,7 @@ func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data strin
 	if contractCreation {
 		asm, err := mutan.Compile(strings.NewReader(data), false)
 		if err != nil {
-			return err.Error()
+			return "", err
 		}
 
 		code := ethutil.Assemble(asm...)
@@ -55,7 +55,7 @@ func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data strin
 		ethutil.Config.Log.Infof("Tx hash %x", tx.Hash())
 	}
 
-	return ethutil.Hex(tx.Hash())
+	return ethutil.Hex(tx.Hash()), nil
 }
 
 /*

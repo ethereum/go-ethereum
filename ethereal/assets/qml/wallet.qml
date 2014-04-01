@@ -199,8 +199,21 @@ ApplicationWindow {
 						text: "Send"
 						onClicked: {
 							//this.enabled = false
-							console.log(eth.createTx(txRecipient.text, txValue.text, txGas.text, txGasPrice.text, codeView.text))
+							var res = eth.createTx(txRecipient.text, txValue.text, txGas.text, txGasPrice.text, codeView.text)
+							if(res[1]) {
+								txOutput.text = "Output:\n" + res[1].error()
+							} else {
+								txOutput.text = "Output:\n" + res[0]
+							}
+							txOutput.visible = true
 						}
+					}
+					TextArea {
+						id: txOutput
+						visible: false
+						Layout.fillWidth: true
+						height: 40
+						anchors.bottom: parent.bottom
 					}
 				}
 			}
@@ -391,7 +404,7 @@ ApplicationWindow {
 			anchors.left: aboutIcon.right
 			anchors.leftMargin: 10
 			font.pointSize: 12
-			text: "<h2>Ethereum(Go)</h2><br><h3>Development</h3>Jeffrey Wilcke<br><h3>Binary Distribution</h3>Jarrad Hope<br>"
+			text: "<h2>Ethereal</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Maran Hidskes<br><h3>Binary Distribution</h3>Jarrad Hope<br>"
 		}
 
 	}
