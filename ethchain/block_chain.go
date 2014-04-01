@@ -163,14 +163,20 @@ func (bc *BlockChain) FindCanonicalChain(blocks []*Block, commonBlockHash []byte
 }
 func (bc *BlockChain) ResetTillBlockHash(hash []byte) error {
 	lastBlock := bc.CurrentBlock
-	returnTo := bc.GetBlock(hash)
-
-	// TODO: REFACTOR TO FUNCTION, Used multiple times
-	bc.CurrentBlock = returnTo
-	bc.LastBlockHash = returnTo.Hash()
-	info := bc.BlockInfo(returnTo)
-	bc.LastBlockNumber = info.Number
-	// END TODO
+	var returnTo *Block
+	// Reset to Genesis if that's all the origin there is.
+	if bytes.Compare(hash, bc.genesisBlock.Hash()) == 0 {
+		returnTo = bc.genesisBlock
+		bc.CurrentBlock = bc.genesisBlock
+		bc.LastBlockHash = bc.genesisBlock.Hash()
+		bc.LastBlockNumber = 1
+	} else {
+		returnTo = bc.GetBlock(hash)
+		bc.CurrentBlock = returnTo
+		bc.LastBlockHash = returnTo.Hash()
+		info := bc.BlockInfo(returnTo)
+		bc.LastBlockNumber = info.Number
+	}
 
 	bc.Ethereum.StateManager().PrepareDefault(returnTo)
 
