@@ -80,7 +80,7 @@ func (sm *StateManager) WatchAddr(addr []byte) *AccountState {
 func (sm *StateManager) GetAddrState(addr []byte) *AccountState {
 	account := sm.addrStateStore.Get(addr)
 	if account == nil {
-		a := sm.bc.CurrentBlock.state.GetAccount(addr)
+		a := sm.procState.GetAccount(addr)
 		account = &AccountState{Nonce: a.Nonce, Account: a}
 	}
 
@@ -98,16 +98,21 @@ func (sm *StateManager) MakeContract(tx *Transaction) {
 	}
 }
 
+// Apply transactions uses the transaction passed to it and applies them onto
+// the current processing state.
 func (sm *StateManager) ApplyTransactions(block *Block, txs []*Transaction) {
 	// Process each transaction/contract
 	for _, tx := range txs {
 		// If there's no recipient, it's a contract
+		// Check if this is a contract creation traction and if so
+		// create a contract of this tx.
 		if tx.IsContract() {
 			sm.MakeContract(tx)
-			//XXX block.MakeContract(tx)
 		} else {
+			// Figure out if the address this transaction was sent to is a
+			// contract or an actual account. In case of a contract, we process that
+			// contract instead of moving funds between accounts.
 			if contract := sm.procState.GetContract(tx.Recipient); contract != nil {
-				//XXX if contract := block.state.GetContract(tx.Recipient); contract != nil {
 				sm.ProcessContract(contract, tx, block)
 			} else {
 				err := sm.Ethereum.TxPool().ProcessTransaction(tx, block)
@@ -121,9 +126,9 @@ func (sm *StateManager) ApplyTransactions(block *Block, txs []*Transaction) {
 
 // The prepare function, prepares the state manager for the next
 // "ProcessBlock" action.
-func (sm *StateManager) Prepare(processer *State, comparative *State) {
+func (sm *StateManager) Prepare(processor *State, comparative *State) {
 	sm.compState = comparative
-	sm.procState = processer
+	sm.procState = processor
 }
 
 // Default prepare function
@@ -172,14 +177,12 @@ func (sm *StateManager) ProcessBlock(block *Block, dontReact bool) error {
 
 	// if !sm.compState.Cmp(sm.procState)
 	if !sm.compState.Cmp(sm.procState) {
-		//XXX return fmt.Errorf("Invalid merkle root. Expected %x, got %x", block.State().trie.Root, sm.bc.CurrentBlock.State().trie.Root)
 		return fmt.Errorf("Invalid merkle root. Expected %x, got %x", sm.compState.trie.Root, sm.procState.trie.Root)
 	}
 
 	// Calculate the new total difficulty and sync back to the db
 	if sm.CalculateTD(block) {
 		// Sync the current block's state to the database and cancelling out the deferred Undo
-		//XXX sm.bc.CurrentBlock.Sync()
 		sm.procState.Sync()
 
 		// Broadcast the valid block back to the wire
@@ -276,14 +279,14 @@ func CalculateUncleReward(block *Block) *big.Int {
 func (sm *StateManager) AccumelateRewards(block *Block) error {
 
 	// Get the coinbase rlp data
-	//XXX addr := processor.state.GetAccount(block.Coinbase)
 	addr := sm.procState.GetAccount(block.Coinbase)
 	// Reward amount of ether to the coinbase address
 	addr.AddFee(CalculateBlockReward(block, len(block.Uncles)))
-	//XXX processor.state.UpdateAccount(block.Coinbase, addr)
+
 	var acc []byte
 	copy(acc, block.Coinbase)
 	sm.procState.UpdateAccount(acc, addr)
+
 	for _, uncle := range block.Uncles {
 		uncleAddr := sm.procState.GetAccount(uncle.Coinbase)
 		uncleAddr.AddFee(CalculateUncleReward(uncle))
@@ -301,13 +304,12 @@ func (sm *StateManager) Stop() {
 
 func (sm *StateManager) ProcessContract(contract *Contract, tx *Transaction, block *Block) {
 	// Recovering function in case the VM had any errors
-	/*
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Println("Recovered from VM execution with err =", r)
-			}
-		}()
-	*/
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered from VM execution with err =", r)
+		}
+	}()
+
 	caller := sm.procState.GetAccount(tx.Sender())
 	closure := NewClosure(caller, contract, sm.procState, tx.Gas, tx.Value)
 	vm := NewVm(sm.procState, RuntimeVars{

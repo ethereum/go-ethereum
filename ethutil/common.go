@@ -36,6 +36,7 @@ func CurrencyToString(num *big.Int) string {
 
 var (
 	Big1   = big.NewInt(1)
+	Big2   = big.NewInt(1)
 	Big0   = big.NewInt(0)
 	Big256 = big.NewInt(0xff)
 )

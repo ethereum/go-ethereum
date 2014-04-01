@@ -32,6 +32,7 @@ const (
 	MsgBlockTy      = 0x13
 	MsgGetChainTy   = 0x14
 	MsgNotInChainTy = 0x15
+	MsgGetTxsTy     = 0x16
 
 	MsgTalkTy = 0xff
 )
@@ -46,6 +47,7 @@ var msgTypeToString = map[MsgType]string{
 	MsgTxTy:         "Transactions",
 	MsgBlockTy:      "Blocks",
 	MsgGetChainTy:   "Get chain",
+	MsgGetTxsTy:     "Get Txs",
 	MsgNotInChainTy: "Not in chain",
 }
 

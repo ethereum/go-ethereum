@@ -173,21 +173,25 @@ func NewStack() *Stack {
 }
 
 func (st *Stack) Pop() *big.Int {
-	str := st.data[0]
-	st.data = st.data[1:]
+	str := st.data[len(st.data)-1]
+
+	copy(st.data[:len(st.data)-1], st.data[:len(st.data)-1])
+	st.data = st.data[:len(st.data)-1]
 
 	return str
 }
 
 func (st *Stack) Popn() (*big.Int, *big.Int) {
-	ints := st.data[:2]
-	st.data = st.data[2:]
+	ints := st.data[len(st.data)-2:]
+
+	copy(st.data[:len(st.data)-2], st.data[:len(st.data)-2])
+	st.data = st.data[:len(st.data)-2]
 
 	return ints[0], ints[1]
 }
 
 func (st *Stack) Peek() *big.Int {
-	str := st.data[0]
+	str := st.data[len(st.data)-1]
 
 	return str
 }
@@ -202,7 +206,7 @@ func (st *Stack) Push(d *big.Int) {
 	st.data = append(st.data, d)
 }
 func (st *Stack) Print() {
-	fmt.Println("### STACK ###")
+	fmt.Println("### stack ###")
 	if len(st.data) > 0 {
 		for i, val := range st.data {
 			fmt.Printf("%-3d  %v\n", i, val)
@@ -242,15 +246,15 @@ func (m *Memory) Len() int {
 }
 
 func (m *Memory) Print() {
-	fmt.Println("### MEM ###")
+	fmt.Printf("### mem %d bytes ###\n", len(m.store))
 	if len(m.store) > 0 {
 		addr := 0
-		for i := 0; i+32 < len(m.store); i += 32 {
+		for i := 0; i+32 <= len(m.store); i += 32 {
 			fmt.Printf("%03d %v\n", addr, m.store[i:i+32])
 			addr++
 		}
 	} else {
 		fmt.Println("-- empty --")
 	}
-	fmt.Println("###########")
+	fmt.Println("####################")
 }

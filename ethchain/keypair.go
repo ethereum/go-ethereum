@@ -34,6 +34,7 @@ func (k *KeyPair) Account() *Account {
 
 // Create transaction, creates a new and signed transaction, ready for processing
 func (k *KeyPair) CreateTx(receiver []byte, value *big.Int, data []string) *Transaction {
+	/* TODO
 	tx := NewTransaction(receiver, value, data)
 	tx.Nonce = k.account.Nonce
 
@@ -41,6 +42,8 @@ func (k *KeyPair) CreateTx(receiver []byte, value *big.Int, data []string) *Tran
 	tx.Sign(k.PrivateKey)
 
 	return tx
+	*/
+	return nil
 }
 
 func (k *KeyPair) RlpEncode() []byte {

@@ -129,6 +129,11 @@ func TestEncodeDecodeBytes(t *testing.T) {
 	}
 }
 
+func TestEncodeZero(t *testing.T) {
+	b := NewValue(0).Encode()
+	fmt.Println(b)
+}
+
 func BenchmarkEncodeDecode(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		bytes := Encode([]interface{}{"dog", "god", "cat"})

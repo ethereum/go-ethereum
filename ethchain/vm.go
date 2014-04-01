@@ -2,12 +2,22 @@ package ethchain
 
 import (
 	_ "bytes"
-	_ "fmt"
+	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	_ "github.com/obscuren/secp256k1-go"
-	"log"
 	_ "math"
 	"math/big"
+)
+
+var (
+	GasStep    = big.NewInt(1)
+	GasSha     = big.NewInt(20)
+	GasSLoad   = big.NewInt(20)
+	GasSStore  = big.NewInt(100)
+	GasBalance = big.NewInt(20)
+	GasCreate  = big.NewInt(100)
+	GasCall    = big.NewInt(20)
+	GasMemory  = big.NewInt(1)
 )
 
 type Vm struct {
@@ -70,10 +80,43 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 		}
 
 		// TODO Get each instruction cost properly
-		fee := new(big.Int)
-		fee.Add(fee, big.NewInt(1000))
+		gas := new(big.Int)
+		useGas := func(amount *big.Int) {
+			gas.Add(gas, amount)
+		}
 
-		if closure.Gas.Cmp(fee) < 0 {
+		switch op {
+		case oSHA3:
+			useGas(GasSha)
+		case oSLOAD:
+			useGas(GasSLoad)
+		case oSSTORE:
+			var mult *big.Int
+			y, x := stack.Peekn()
+			val := closure.GetMem(x)
+			if val.IsEmpty() && len(y.Bytes()) > 0 {
+				mult = ethutil.Big2
+			} else if !val.IsEmpty() && len(y.Bytes()) == 0 {
+				mult = ethutil.Big0
+			} else {
+				mult = ethutil.Big1
+			}
+			useGas(base.Mul(mult, GasSStore))
+		case oBALANCE:
+			useGas(GasBalance)
+		case oCREATE:
+			useGas(GasCreate)
+		case oCALL:
+			useGas(GasCall)
+		case oMLOAD, oMSIZE, oMSTORE8, oMSTORE:
+			useGas(GasMemory)
+		default:
+			useGas(GasStep)
+		}
+
+		if closure.Gas.Cmp(gas) < 0 {
+			ethutil.Config.Log.Debugln("Insufficient gas", closure.Gas, gas)
+
 			return closure.Return(nil)
 		}
 
@@ -172,10 +215,17 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 			} else {
 				stack.Push(ethutil.BigFalse)
 			}
-		case oNOT:
+		case oEQ:
 			x, y := stack.Popn()
-			// x != y
-			if x.Cmp(y) != 0 {
+			// x == y
+			if x.Cmp(y) == 0 {
+				stack.Push(ethutil.BigTrue)
+			} else {
+				stack.Push(ethutil.BigFalse)
+			}
+		case oNOT:
+			x := stack.Pop()
+			if x.Cmp(ethutil.BigFalse) == 0 {
 				stack.Push(ethutil.BigTrue)
 			} else {
 				stack.Push(ethutil.BigFalse)
@@ -259,8 +309,8 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 		case oJUMP:
 			pc = stack.Pop()
 		case oJUMPI:
-			pos, cond := stack.Popn()
-			if cond.Cmp(big.NewInt(0)) > 0 {
+			cond, pos := stack.Popn()
+			if cond.Cmp(ethutil.BigTrue) == 0 {
 				pc = pos
 			}
 		case oPC:
@@ -273,6 +323,7 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 			retSize, retOffset := stack.Popn()
 			// Pop input size and offset
 			inSize, inOffset := stack.Popn()
+			fmt.Println(inSize, inOffset)
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 			// Pop gas and value of the stack.
@@ -317,6 +368,7 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 	}
 }
 
+/*
 func makeInlineTx(addr []byte, value, from, length *big.Int, contract *Contract, state *State) {
 	ethutil.Config.Log.Debugf(" => creating inline tx %x %v %v %v", addr, value, from, length)
 	j := int64(0)
@@ -353,3 +405,4 @@ func contractMemory(state *State, contractAddr []byte, memAddr *big.Int) *big.In
 
 	return decoder.BigInt()
 }
+*/
