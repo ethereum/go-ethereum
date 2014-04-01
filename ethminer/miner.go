@@ -130,7 +130,6 @@ func (miner *Miner) listener() {
 				err := miner.ethereum.StateManager().ProcessBlock(miner.block, true)
 				if err != nil {
 					log.Println("Error result from process block:", err)
-					log.Println(miner.block)
 				} else {
 
 					if !miner.ethereum.StateManager().Pow.Verify(miner.block.HashNoNonce(), miner.block.Difficulty, miner.block.Nonce) {
@@ -138,7 +137,6 @@ func (miner *Miner) listener() {
 					}
 					miner.ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{miner.block.Value().Val})
 					log.Printf("[MINER] 🔨  Mined block %x\n", miner.block.Hash())
-					log.Println(miner.block)
 
 					miner.txs = []*ethchain.Transaction{} // Move this somewhere neat
 					miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)

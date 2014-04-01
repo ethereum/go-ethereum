@@ -146,8 +146,6 @@ func (bc *BlockChain) FindCanonicalChain(blocks []*Block, commonBlockHash []byte
 			log.Println("[CHAIN] At genesis block, breaking")
 			break
 		}
-		log.Printf("CHECKING OUR OWN BLOCKS: %x", block.Hash())
-		log.Printf("%x", bc.GenesisBlock().Hash())
 		curChainDifficulty.Add(curChainDifficulty, bc.CalculateBlockTD(block))
 	}
 
@@ -309,7 +307,6 @@ func (bc *BlockChain) Add(block *Block) {
 	bc.LastBlockHash = block.Hash()
 
 	encodedBlock := block.RlpEncode()
-	log.Println(encodedBlock)
 	ethutil.Config.Db.Put(block.Hash(), encodedBlock)
 	ethutil.Config.Db.Put([]byte("LastBlock"), encodedBlock)
 }

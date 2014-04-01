@@ -337,16 +337,16 @@ func (p *Peer) HandleInbound() {
 						block = ethchain.NewBlockFromRlpValue(msg.Data.Get(i))
 						// Do we have this block on our chain? If so we can continue
 						if p.ethereum.StateManager().BlockChain().HasBlock(block.Hash()) {
-							fmt.Println("[PEER] Block found, checking next one.")
+							ethutil.Config.Log.Debugf("[PEER] Block found, checking next one.\n")
 						} else {
 							// We don't have this block, but we do have a block with the same prevHash, diversion time!
 							if p.ethereum.StateManager().BlockChain().HasBlockWithPrevHash(block.PrevHash) {
-								fmt.Printf("[PEER] Local and foreign chain have diverted after %x, we are going to get freaky with it!\n", block.PrevHash)
+								ethutil.Config.Log.Infof("[PEER] Local and foreign chain have diverted after %x, finding best chain!\n", block.PrevHash)
 								if p.ethereum.StateManager().BlockChain().FindCanonicalChainFromMsg(msg, block.PrevHash) {
 									return
 								}
 							} else {
-								fmt.Println("[PEER] Both local and foreign chain have same parent. Continue normally")
+								ethutil.Config.Log.Debugf("[PEER] Both local and foreign chain have same parent. Continue normally\n")
 							}
 						}
 					}
@@ -362,7 +362,6 @@ func (p *Peer) HandleInbound() {
 						if ethutil.Config.Debug {
 							ethutil.Config.Log.Infof("[PEER] Block %x failed\n", block.Hash())
 							ethutil.Config.Log.Infof("[PEER] %v\n", err)
-							ethutil.Config.Log.Infoln(block)
 						}
 						break
 					} else {
@@ -637,8 +636,6 @@ func (p *Peer) SyncWithBlocks() {
 		if p.blocksRequested == 0 {
 			p.blocksRequested = 10
 		}
-		fmt.Printf("Currenb lock %x\n", p.ethereum.BlockChain().CurrentBlock.Hash())
-		fmt.Println("Amount:", p.blocksRequested)
 		blocks := p.ethereum.BlockChain().GetChain(p.ethereum.BlockChain().CurrentBlock.Hash(), p.blocksRequested)
 
 		var hashes []interface{}
