@@ -83,18 +83,23 @@ func TestRun4(t *testing.T) {
 	state := NewState(ethutil.NewTrie(db, ""))
 
 	asm, err := mutan.Compile(strings.NewReader(`
-		a = 10
-		b = 10
+		int32 a = 10
+		int32 b = 10
 		if a == b {
-			c = 10
+			int32 c = 10
 			if c == 10 {
-				d = 1000
-				e = 10
+				int32 d = 1000
+				int32 e = 10
 			}
 		}
 
 		store[0] = 20
 		store[a] = 20
+		store[b] = this.caller()
+
+		int8[10] ret
+		int8[10] arg
+		call(1234, 0, 100000000, arg, ret)
 	`), false)
 	if err != nil {
 		fmt.Println(err)
