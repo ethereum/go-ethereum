@@ -17,6 +17,7 @@ type ClosureBody interface {
 	ethutil.RlpEncodable
 	GetMem(*big.Int) *ethutil.Value
 	SetMem(*big.Int, *ethutil.Value)
+	GetInstr(*big.Int) *ethutil.Value
 }
 
 // Basic inline closure object which implement the 'closure' interface
@@ -44,6 +45,10 @@ func (c *Closure) GetMem(x *big.Int) *ethutil.Value {
 	}
 
 	return m
+}
+
+func (c *Closure) GetInstr(x *big.Int) *ethutil.Value {
+	return c.object.GetInstr(x)
 }
 
 func (c *Closure) SetMem(x *big.Int, val *ethutil.Value) {

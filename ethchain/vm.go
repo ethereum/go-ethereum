@@ -72,7 +72,7 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 	for {
 		step++
 		// Get the memory location of pc
-		val := closure.GetMem(pc)
+		val := closure.GetInstr(pc)
 		// Get the opcode (it must be an opcode!)
 		op := OpCode(val.Uint())
 		if ethutil.Config.Debug {
@@ -233,13 +233,37 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 
 		// 0x10 range
 		case oAND:
+			x, y := stack.Popn()
+			if (x.Cmp(ethutil.BigTrue) >= 0) && (y.Cmp(ethutil.BigTrue) >= 0) {
+				stack.Push(ethutil.BigTrue)
+			} else {
+				stack.Push(ethutil.BigFalse)
+			}
+
 		case oOR:
+			x, y := stack.Popn()
+			if (x.Cmp(ethutil.BigInt0) >= 0) || (y.Cmp(ethutil.BigInt0) >= 0) {
+				stack.Push(ethutil.BigTrue)
+			} else {
+				stack.Push(ethutil.BigFalse)
+			}
 		case oXOR:
+			x, y := stack.Popn()
+			stack.Push(base.Xor(x, y))
 		case oBYTE:
+			val, th := stack.Popn()
+			if th.Cmp(big.NewInt(32)) < 0 {
+				stack.Push(big.NewInt(int64(len(val.Bytes())-1) - th.Int64()))
+			} else {
+				stack.Push(ethutil.BigFalse)
+			}
 
 		// 0x20 range
 		case oSHA3:
+			size, offset := stack.Popn()
+			data := mem.Get(offset.Int64(), size.Int64())
 
+			stack.Push(ethutil.BigD(data))
 		// 0x30 range
 		case oADDRESS:
 			stack.Push(ethutil.BigD(closure.Object().Address()))

@@ -11,6 +11,7 @@ type Contract struct {
 	//state  *ethutil.Trie
 	state   *State
 	address []byte
+	script  []byte
 }
 
 func NewContract(address []byte, Amount *big.Int, root []byte) *Contract {
@@ -43,6 +44,14 @@ func (c *Contract) GetMem(num *big.Int) *ethutil.Value {
 	nb := ethutil.BigToBytes(num, 256)
 
 	return c.Addr(nb)
+}
+
+func (c *Contract) GetInstr(pc *big.Int) *ethutil.Value {
+	if int64(len(c.script)-1) < pc.Int64() {
+		return ethutil.NewValue(0)
+	}
+
+	return ethutil.NewValueFromBytes([]byte{c.script[pc.Int64()]})
 }
 
 func (c *Contract) SetMem(num *big.Int, val *ethutil.Value) {
