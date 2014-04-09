@@ -14,7 +14,8 @@ type Transaction struct {
 	Value     *big.Int
 	Gas       *big.Int
 	Gasprice  *big.Int
-	Data      []string
+	Data      []byte
+	Init      []byte
 	v         byte
 	r, s      []byte
 
@@ -22,11 +23,11 @@ type Transaction struct {
 	contractCreation bool
 }
 
-func NewContractCreationTx(value, gasprice *big.Int, data []string) *Transaction {
+func NewContractCreationTx(value, gasprice *big.Int, data []byte) *Transaction {
 	return &Transaction{Value: value, Gasprice: gasprice, Data: data, contractCreation: true}
 }
 
-func NewTransactionMessage(to []byte, value, gasprice, gas *big.Int, data []string) *Transaction {
+func NewTransactionMessage(to []byte, value, gasprice, gas *big.Int, data []byte) *Transaction {
 	return &Transaction{Recipient: to, Value: value, Gasprice: gasprice, Gas: gas, Data: data}
 }
 
@@ -45,19 +46,12 @@ func NewTransactionFromValue(val *ethutil.Value) *Transaction {
 }
 
 func (tx *Transaction) Hash() []byte {
-	data := make([]interface{}, len(tx.Data))
-	for i, val := range tx.Data {
-		data[i] = val
+	data := []interface{}{tx.Nonce, tx.Value, tx.Gasprice, tx.Gas, tx.Recipient, string(tx.Data)}
+	if tx.contractCreation {
+		data = append(data, string(tx.Init))
 	}
 
-	preEnc := []interface{}{
-		tx.Nonce,
-		tx.Recipient,
-		tx.Value,
-		data,
-	}
-
-	return ethutil.Sha3Bin(ethutil.Encode(preEnc))
+	return ethutil.Sha3Bin(ethutil.NewValue(data).Encode())
 }
 
 func (tx *Transaction) IsContract() bool {
@@ -110,15 +104,17 @@ func (tx *Transaction) Sign(privk []byte) error {
 	return nil
 }
 
+// [ NONCE, VALUE, GASPRICE, GAS, TO, DATA, V, R, S ]
+// [ NONCE, VALUE, GASPRICE, GAS, 0, CODE, INIT, V, R, S ]
 func (tx *Transaction) RlpData() interface{} {
-	data := []interface{}{tx.Nonce, tx.Value, tx.Gasprice}
+	data := []interface{}{tx.Nonce, tx.Value, tx.Gasprice, tx.Gas, tx.Recipient, tx.Data}
 
-	if !tx.contractCreation {
-		data = append(data, tx.Recipient, tx.Gas)
+	if tx.contractCreation {
+		data = append(data, tx.Init)
 	}
-	d := ethutil.NewSliceValue(tx.Data).Slice()
+	//d := ethutil.NewSliceValue(tx.Data).Slice()
 
-	return append(data, d, tx.v, tx.r, tx.s)
+	return append(data, tx.v, tx.r, tx.s)
 }
 
 func (tx *Transaction) RlpValue() *ethutil.Value {
@@ -137,31 +133,19 @@ func (tx *Transaction) RlpValueDecode(decoder *ethutil.Value) {
 	tx.Nonce = decoder.Get(0).Uint()
 	tx.Value = decoder.Get(1).BigInt()
 	tx.Gasprice = decoder.Get(2).BigInt()
+	tx.Gas = decoder.Get(3).BigInt()
+	tx.Recipient = decoder.Get(4).Bytes()
+	tx.Data = decoder.Get(5).Bytes()
 
-	// If the 4th item is a list(slice) this tx
-	// is a contract creation tx
-	if decoder.Get(3).IsList() {
-		d := decoder.Get(3)
-		tx.Data = make([]string, d.Len())
-		for i := 0; i < d.Len(); i++ {
-			tx.Data[i] = d.Get(i).Str()
-		}
-
-		tx.v = byte(decoder.Get(4).Uint())
-		tx.r = decoder.Get(5).Bytes()
-		tx.s = decoder.Get(6).Bytes()
-
+	// If the list is of length 10 it's a contract creation tx
+	if decoder.Len() == 10 {
 		tx.contractCreation = true
+		tx.Init = decoder.Get(6).Bytes()
+
+		tx.v = byte(decoder.Get(7).Uint())
+		tx.r = decoder.Get(8).Bytes()
+		tx.s = decoder.Get(9).Bytes()
 	} else {
-		tx.Recipient = decoder.Get(3).Bytes()
-		tx.Gas = decoder.Get(4).BigInt()
-
-		d := decoder.Get(5)
-		tx.Data = make([]string, d.Len())
-		for i := 0; i < d.Len(); i++ {
-			tx.Data[i] = d.Get(i).Str()
-		}
-
 		tx.v = byte(decoder.Get(6).Uint())
 		tx.r = decoder.Get(7).Bytes()
 		tx.s = decoder.Get(8).Bytes()
