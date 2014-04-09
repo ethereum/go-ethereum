@@ -288,7 +288,7 @@ func (sm *StateManager) AccumelateRewards(block *Block) error {
 	// Reward amount of ether to the coinbase address
 	addr.AddFee(CalculateBlockReward(block, len(block.Uncles)))
 
-	var acc []byte
+	acc := make([]byte, len(block.Coinbase))
 	copy(acc, block.Coinbase)
 	sm.procState.UpdateAccount(acc, addr)
 
