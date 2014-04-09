@@ -108,7 +108,7 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, state *State, toContract
 	}
 
 	if sender.Nonce != tx.Nonce {
-		return fmt.Errorf("[TXPL] Invalid account nonce, state nonce is %d transactoin nonce is %d instead", sender.Nonce, tx.Nonce)
+		return fmt.Errorf("[TXPL] Invalid account nonce, state nonce is %d transaction nonce is %d instead", sender.Nonce, tx.Nonce)
 	}
 
 	// Get the receiver
