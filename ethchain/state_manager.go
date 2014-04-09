@@ -114,12 +114,12 @@ func (sm *StateManager) ApplyTransactions(block *Block, txs []*Transaction) {
 			// contract instead of moving funds between accounts.
 			var err error
 			if contract := sm.procState.GetContract(tx.Recipient); contract != nil {
-				err = sm.Ethereum.TxPool().ProcessTransaction(tx, sm.procState, true)
+				err = sm.Ethereum.TxPool().ProcessTransaction(tx, block, true)
 				if err == nil {
 					sm.ProcessContract(contract, tx, block)
 				}
 			} else {
-				err = sm.Ethereum.TxPool().ProcessTransaction(tx, sm.procState, false)
+				err = sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
 			}
 
 			if err != nil {
