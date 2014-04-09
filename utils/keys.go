@@ -12,6 +12,7 @@ func CreateKeyPair(force bool) {
 		pub, prv := secp256k1.GenerateKeyPair()
 		pair := &ethutil.Key{PrivateKey: prv, PublicKey: pub}
 		ethutil.Config.Db.Put([]byte("KeyRing"), pair.RlpEncode())
+		mne := ethutil.MnemonicEncode(ethutil.Hex(prv))
 
 		fmt.Printf(`
 Generating new address and keypair.
@@ -22,8 +23,8 @@ addr: %x
 prvk: %x
 pubk: %x
 ++++++++++++++++++++++++++++++++++++++++++++
-
-`, pair.Address(), prv, pub)
+save these words so you can restore your account later: %s
+`, pair.Address(), prv, pub, mne)
 
 	}
 }
