@@ -12,18 +12,18 @@ type Callee interface {
 	Address() []byte
 }
 
-type ClosureBody interface {
+type Reference interface {
 	Callee
 	ethutil.RlpEncodable
 	GetMem(*big.Int) *ethutil.Value
 	SetMem(*big.Int, *ethutil.Value)
-	GetInstr(*big.Int) *ethutil.Value
 }
 
 // Basic inline closure object which implement the 'closure' interface
 type Closure struct {
 	callee Callee
-	object ClosureBody
+	object Reference
+	Script []byte
 	State  *State
 
 	Gas   *big.Int
@@ -33,8 +33,8 @@ type Closure struct {
 }
 
 // Create a new closure for the given data items
-func NewClosure(callee Callee, object ClosureBody, state *State, gas, val *big.Int) *Closure {
-	return &Closure{callee, object, state, gas, val, nil}
+func NewClosure(callee Callee, object Reference, script []byte, state *State, gas, val *big.Int) *Closure {
+	return &Closure{callee, object, script, state, gas, val, nil}
 }
 
 // Retuns the x element in data slice
@@ -47,8 +47,14 @@ func (c *Closure) GetMem(x *big.Int) *ethutil.Value {
 	return m
 }
 
-func (c *Closure) GetInstr(x *big.Int) *ethutil.Value {
-	return c.object.GetInstr(x)
+func (c *Closure) Get(x *big.Int) *ethutil.Value {
+	return c.Gets(x, big.NewInt(1))
+}
+
+func (c *Closure) Gets(x, y *big.Int) *ethutil.Value {
+	partial := c.Script[x.Int64() : x.Int64()+y.Int64()]
+
+	return ethutil.NewValue(partial)
 }
 
 func (c *Closure) SetMem(x *big.Int, val *ethutil.Value) {
@@ -86,7 +92,7 @@ func (c *Closure) ReturnGas(gas *big.Int, state *State) {
 	c.Gas.Add(c.Gas, gas)
 }
 
-func (c *Closure) Object() ClosureBody {
+func (c *Closure) Object() Reference {
 	return c.object
 }
 

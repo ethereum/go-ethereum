@@ -9,9 +9,10 @@ type Contract struct {
 	Amount *big.Int
 	Nonce  uint64
 	//state  *ethutil.Trie
-	state   *State
-	address []byte
-	script  []byte
+	state      *State
+	address    []byte
+	script     []byte
+	initScript []byte
 }
 
 func NewContract(address []byte, Amount *big.Int, root []byte) *Contract {
@@ -88,12 +89,17 @@ func MakeContract(tx *Transaction, state *State) *Contract {
 		value := tx.Value
 		contract := NewContract(addr, value, []byte(""))
 		state.trie.Update(string(addr), string(contract.RlpEncode()))
-		for i, val := range tx.Data {
-			if len(val) > 0 {
-				bytNum := ethutil.BigToBytes(big.NewInt(int64(i)), 256)
-				contract.state.trie.Update(string(bytNum), string(ethutil.Encode(val)))
+		contract.script = tx.Data
+		contract.initScript = tx.Init
+
+		/*
+			for i, val := range tx.Data {
+					if len(val) > 0 {
+						bytNum := ethutil.BigToBytes(big.NewInt(int64(i)), 256)
+						contract.state.trie.Update(string(bytNum), string(ethutil.Encode(val)))
+					}
 			}
-		}
+		*/
 		state.trie.Update(string(addr), string(contract.RlpEncode()))
 
 		return contract

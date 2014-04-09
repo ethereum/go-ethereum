@@ -72,7 +72,7 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 	for {
 		step++
 		// Get the memory location of pc
-		val := closure.GetInstr(pc)
+		val := closure.Get(pc)
 		// Get the opcode (it must be an opcode!)
 		op := OpCode(val.Uint())
 		if ethutil.Config.Debug {
@@ -357,7 +357,7 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 			// Fetch the contract which will serve as the closure body
 			contract := vm.state.GetContract(addr.Bytes())
 			// Create a new callable closure
-			closure := NewClosure(closure, contract, vm.state, gas, value)
+			closure := NewClosure(closure, contract, contract.script, vm.state, gas, value)
 			// Executer the closure and get the return value (if any)
 			ret := closure.Call(vm, args)
 

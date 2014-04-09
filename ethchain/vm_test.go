@@ -112,7 +112,8 @@ func TestRun4(t *testing.T) {
 
 	// Contract addr as test address
 	account := NewAccount(ContractAddr, big.NewInt(10000000))
-	callerClosure := NewClosure(account, MakeContract(callerTx, state), state, big.NewInt(1000000000), new(big.Int))
+	c := MakeContract(callerTx, state)
+	callerClosure := NewClosure(account, c, c.script, state, big.NewInt(1000000000), new(big.Int))
 
 	vm := NewVm(state, RuntimeVars{
 		origin:      account.Address(),
