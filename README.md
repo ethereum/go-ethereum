@@ -3,16 +3,17 @@ Ethereum
 
 [![Build Status](https://travis-ci.org/ethereum/go-ethereum.png?branch=master)](https://travis-ci.org/ethereum/go-ethereum)
 
-Ethereum Go Client (c) Jeffrey Wilcke
+Ethereum Go Client © 2014 Jeffrey Wilcke.
 
-The current state is "Proof of Concept 3.5".
+Current state: Proof of Concept 3.5.
 
-For the development Go Package please see [eth-go package](https://github.com/ethereum/eth-go).
+For the development package please see the [eth-go package](https://github.com/ethereum/eth-go).
 
 Build
 =======
 
 For build instruction please see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum(Go))
+
 General command line options
 ====================
 
@@ -42,26 +43,24 @@ See the "help" command for *developer* options.
 Contribution
 ============
 
-If you'd like to contribute to Ethereum Go please fork, fix, commit and
-send a pull request. Commits who do not comply with the coding standards
-are ignored. If you send pull requests make absolute sure that you
-commit on the `develop` branch and that you do not merge to master.
-Commits that are directly based on master are simply ignored.
+If you would like to contribute to Ethereum Go, please fork, fix, commit and
+send a pull request to the main repository. Commits which do not comply with the coding standards explained below
+will be ignored. If you send a pull request, make sure that you
+commit to the `develop` branch and that you do not merge to `master`.
+Commits that are directly based off of the `master` branch instead of the `develop` branch will be ignored.
 
-To make life easier try [git flow](http://nvie.com/posts/a-successful-git-branching-model/) it sets
-this all up and streamlines your work flow.
+To make this process simpler try following the [git flow](http://nvie.com/posts/a-successful-git-branching-model/) branching model, as it sets this process up and streamlines work flow.
 
 Coding standards
 ================
 
-Sources should be formatted according to the [Go Formatting
+Code should be formatted according to the [Go Formatting
 Style](http://golang.org/doc/effective_go.html#formatting).
 
-Unless structs fields are supposed to be directly accessible, provide
-Getters and hide the fields through Go's exporting facility.
+Unless struct fields are supposed to be directly accessible, provide
+getters and hide the fields through Go's exporting facility.
 
-When you comment put meaningfull comments. Describe in detail what you
-want to achieve.
+Make comments in your code meaningful and only use them when necessary. Describe in detail what your code is trying to achieve. For example, this would be redundant and unnecessary commenting:
 
 *wrong*
 
@@ -72,12 +71,7 @@ if x > y {
 }
 ```
 
-Everyone reading the source probably know what you wanted to achieve
-with above code. Those are **not** meaningful comments.
+Everyone reading the source code should know what this code snippet was meant to achieve, and so those are **not** meaningful comments.
 
-While the project isn't 100% tested I want you to write tests non the
-less. I haven't got time to evaluate everyone's code in detail so I
-expect you to write tests for me so I don't have to test your code
-manually. (If you want to contribute by just writing tests that's fine
-too!)
+While this project is constantly tested and run, code tests should be written regardless. There is not time to evaluate every person's code specifically, so it is expected of you to write tests for the code so that it does not have to be tested manually. In fact, contributing by simply writing tests is perfectly fine!
 
