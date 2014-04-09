@@ -105,6 +105,7 @@ func (miner *Miner) listener() {
 				if found == false {
 					log.Println("[MINER] We did not know about this transaction, adding")
 					miner.txs = append(miner.txs, tx)
+					miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)
 					miner.block.SetTransactions(miner.txs)
 				} else {
 					log.Println("[MINER] We already had this transaction, ignoring")
