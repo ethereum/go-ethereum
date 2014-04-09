@@ -45,7 +45,9 @@ func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data strin
 	} else {
 		tx = ethchain.NewTransactionMessage(hash, value, gasPrice, gas, []string{})
 	}
-	tx.Nonce = lib.stateManager.GetAddrState(keyPair.Address()).Nonce
+	acc := lib.stateManager.GetAddrState(keyPair.Address())
+	tx.Nonce = acc.Nonce
+	//acc.Nonce++
 	tx.Sign(keyPair.PrivateKey)
 	lib.txPool.QueueTransaction(tx)
 
