@@ -90,7 +90,7 @@ func (pool *TxPool) addTransaction(tx *Transaction) {
 
 // Process transaction validates the Tx and processes funds from the
 // sender to the recipient.
-func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) (err error) {
+func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block, toContract bool) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println(r)
@@ -108,7 +108,7 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) (err error
 	}
 
 	if sender.Nonce != tx.Nonce {
-		return fmt.Errorf("[TXPL] Invalid account nonce, state nonce is %d transactoin nonce is %d instead", sender.Nonce, tx.Nonce)
+		return fmt.Errorf("[TXPL] Invalid account nonce, state nonce is %d transaction nonce is %d instead", sender.Nonce, tx.Nonce)
 	}
 
 	// Get the receiver
@@ -118,6 +118,8 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) (err error
 	// Send Tx to self
 	if bytes.Compare(tx.Recipient, tx.Sender()) == 0 {
 		// Subtract the fee
+		sender.Amount.Sub(sender.Amount, new(big.Int).Mul(TxFee, TxFeeRat))
+	} else if toContract {
 		sender.Amount.Sub(sender.Amount, new(big.Int).Mul(TxFee, TxFeeRat))
 	} else {
 		// Subtract the amount from the senders account
