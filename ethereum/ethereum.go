@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 )
 
 const Debug = true
@@ -78,7 +79,17 @@ func main() {
 			}
 
 			if r == "y" {
-				utils.ImportPrivateKey(ImportKey)
+				mnemonic := strings.Split(ImportKey, " ")
+				if len(mnemonic) == 24 {
+					fmt.Println("Got mnemonic key, importing.")
+					key := ethutil.MnemonicDecode(mnemonic)
+					utils.ImportPrivateKey(key)
+				} else if len(mnemonic) == 1 {
+					fmt.Println("Got hex key, importing.")
+					utils.ImportPrivateKey(ImportKey)
+				} else {
+					fmt.Println("Did not recognise format, exiting.")
+				}
 				os.Exit(0)
 			}
 		} else {
