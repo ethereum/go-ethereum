@@ -284,13 +284,13 @@ func CalculateUncleReward(block *Block) *big.Int {
 func (sm *StateManager) AccumelateRewards(block *Block) error {
 
 	// Get the coinbase rlp data
-	addr := sm.procState.GetAccount(block.Coinbase)
+	acc := sm.procState.GetAccount(block.Coinbase)
 	// Reward amount of ether to the coinbase address
-	addr.AddFee(CalculateBlockReward(block, len(block.Uncles)))
+	acc.AddFee(CalculateBlockReward(block, len(block.Uncles)))
 
-	acc := make([]byte, len(block.Coinbase))
-	copy(acc, block.Coinbase)
-	sm.procState.UpdateAccount(acc, addr)
+	addr := make([]byte, len(block.Coinbase))
+	copy(addr, block.Coinbase)
+	sm.procState.UpdateAccount(addr, acc)
 
 	for _, uncle := range block.Uncles {
 		uncleAddr := sm.procState.GetAccount(uncle.Coinbase)
