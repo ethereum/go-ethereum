@@ -169,6 +169,8 @@ func (bc *BlockChain) ResetTillBlockHash(hash []byte) error {
 		bc.LastBlockHash = bc.genesisBlock.Hash()
 		bc.LastBlockNumber = 1
 	} else {
+		// TODO: Somehow this doesn't really give the right numbers, double check.
+		// TODO: Change logs into debug lines
 		returnTo = bc.GetBlock(hash)
 		bc.CurrentBlock = returnTo
 		bc.LastBlockHash = returnTo.Hash()
