@@ -131,13 +131,14 @@ func Instr(instr string) (int, []string, error) {
 
 // Script compilation functions
 // Compiles strings to machine code
-func Assemble(instructions ...interface{}) (script []string) {
-	script = make([]string, len(instructions))
+func Assemble(instructions ...interface{}) (script []byte) {
+	//script = make([]string, len(instructions))
 
-	for i, val := range instructions {
+	for _, val := range instructions {
 		instr, _ := CompileInstr(val)
 
-		script[i] = string(instr)
+		//script[i] = string(instr)
+		script = append(script, instr...)
 	}
 
 	return
