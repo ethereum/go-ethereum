@@ -5,6 +5,7 @@ import (
 	"strconv"
 )
 
+// Electrum word list
 var words []string = []string{
 	"like",
 	"just",
@@ -1673,6 +1674,7 @@ func MnemonicDecode(wordsar []string) string {
 		z := (w3 - w2) % n
 
 		// Golang handles modulo with negative numbers different then most languages
+		// The modulo can be negative, we don't want that.
 		if z < 0 {
 			z += n
 		}
