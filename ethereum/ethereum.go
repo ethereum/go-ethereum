@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethminer"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/eth-go/ethwire"
 	"github.com/ethereum/go-ethereum/utils"
 	"log"
 	"os"
@@ -121,36 +121,22 @@ func main() {
 
 		// Fake block mining. It broadcasts a new block every 5 seconds
 		go func() {
-			pow := &ethchain.EasyPow{}
-			data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-			keyRing := ethutil.NewValueFromBytes(data)
-			addr := keyRing.Get(1).Bytes()
 
-			for {
-				txs := ethereum.TxPool().Flush()
-				// Create a new block which we're going to mine
-				block := ethereum.BlockChain().NewBlock(addr, txs)
-				log.Println("Mining on new block. Includes", len(block.Transactions()), "transactions")
+			if StartMining {
+				log.Printf("Miner started\n")
 
-				ethereum.StateManager().Prepare(block.State(), block.State())
-				// Apply all transactions to the block
-				ethereum.StateManager().ApplyTransactions(block, block.Transactions())
-				ethereum.StateManager().AccumelateRewards(block)
+				go func() {
+					data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
+					keyRing := ethutil.NewValueFromBytes(data)
+					addr := keyRing.Get(1).Bytes()
 
-				// Search the nonce
-				block.Nonce = pow.Search(block)
+					miner := ethminer.NewDefaultMiner(addr, ethereum)
+					miner.Start()
 
-				ethereum.StateManager().PrepareDefault(block)
-				err := ethereum.StateManager().ProcessBlock(block)
-				if err != nil {
-					log.Println(err)
-				} else {
-					log.Println("\n+++++++ MINED BLK +++++++\n", ethereum.BlockChain().CurrentBlock)
-					log.Printf("🔨  Mined block %x\n", block.Hash())
-					ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
-				}
+				}()
 			}
 		}()
+
 	}
 
 	// Wait for shutdown

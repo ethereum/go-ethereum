@@ -58,7 +58,6 @@ func (ui *UiLib) AssetPath(p string) string {
 
 func DefaultAssetPath() string {
 	var base string
-
 	// If the current working directory is the go-ethereum dir
 	// assume a debug build and use the source directory as
 	// asset directory.
