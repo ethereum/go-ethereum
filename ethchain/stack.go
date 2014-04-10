@@ -55,6 +55,7 @@ const (
 
 	// 0x50 range - 'storage' and execution
 	oPUSH    = 0x50
+	oPUSH20  = 0x80
 	oPOP     = 0x51
 	oDUP     = 0x52
 	oSWAP    = 0x53

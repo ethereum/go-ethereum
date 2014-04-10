@@ -114,12 +114,13 @@ func TestRun4(t *testing.T) {
 
 		int8 ret = 0
 		int8 arg = 10
-		call(938726394128221156290138488023434115948430767407, 0, 100000000, arg, ret)
+		addr address = "a46df28529eb8aa8b8c025b0b413c5f4b688352f"
+		call(address, 0, 100000000, arg, ret)
 	`), false)
 	if err != nil {
 		fmt.Println(err)
 	}
-	asm = append(asm, "LOG")
+	//asm = append(asm, "LOG")
 	fmt.Println(asm)
 
 	callerScript := ethutil.Assemble(asm...)

@@ -301,7 +301,6 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 		// 0x50 range
 		case oPUSH: // Push PC+1 on to the stack
 			pc.Add(pc, ethutil.Big1)
-			//val := closure.GetMem(pc).BigInt()
 			data := closure.Gets(pc, big.NewInt(32))
 			val := ethutil.BigD(data.Bytes())
 
@@ -309,6 +308,16 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 			stack.Push(val)
 
 			pc.Add(pc, big.NewInt(31))
+		case oPUSH20:
+			pc.Add(pc, ethutil.Big1)
+			data := closure.Gets(pc, big.NewInt(20))
+			val := ethutil.BigD(data.Bytes())
+
+			// Push value to stack
+			stack.Push(val)
+
+			pc.Add(pc, big.NewInt(19))
+
 		case oPOP:
 			stack.Pop()
 		case oDUP:

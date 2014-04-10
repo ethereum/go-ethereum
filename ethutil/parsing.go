@@ -51,7 +51,10 @@ var OpCodes = map[string]byte{
 	"GASLIMIT":   0x45,
 
 	// 0x50 range - 'storage' and execution
-	"PUSH":    0x50,
+	"PUSH": 0x50,
+
+	"PUSH20": 0x80,
+
 	"POP":     0x51,
 	"DUP":     0x52,
 	"SWAP":    0x53,
