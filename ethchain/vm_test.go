@@ -120,7 +120,7 @@ func TestRun4(t *testing.T) {
 	if err != nil {
 		fmt.Println(err)
 	}
-	//asm = append(asm, "LOG")
+	asm = append(asm, "LOG")
 	fmt.Println(asm)
 
 	callerScript := ethutil.Assemble(asm...)
