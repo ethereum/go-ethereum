@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/go-ethereum/utils"
 	"github.com/obscuren/mutan"
+	"github.com/obscuren/secp256k1-go"
 	"strings"
 )
 
@@ -13,6 +15,32 @@ type EthLib struct {
 	stateManager *ethchain.StateManager
 	blockChain   *ethchain.BlockChain
 	txPool       *ethchain.TxPool
+}
+
+func (lib *EthLib) ImportAndSetPrivKey(privKey string) bool {
+	fmt.Println(privKey)
+	mnemonic := strings.Split(privKey, " ")
+	if len(mnemonic) == 24 {
+		fmt.Println("Got mnemonic key, importing.")
+		key := ethutil.MnemonicDecode(mnemonic)
+		utils.ImportPrivateKey(key)
+	} else if len(mnemonic) == 1 {
+		fmt.Println("Got hex key, importing.")
+		utils.ImportPrivateKey(privKey)
+	} else {
+		fmt.Println("Did not recognise format, exiting.")
+		return false
+	}
+	return true
+}
+
+func (lib *EthLib) CreateAndSetPrivKey() (string, string, string, string) {
+	pub, prv := secp256k1.GenerateKeyPair()
+	pair := &ethutil.Key{PrivateKey: prv, PublicKey: pub}
+	ethutil.Config.Db.Put([]byte("KeyRing"), pair.RlpEncode())
+	mne := ethutil.MnemonicEncode(ethutil.Hex(prv))
+	mnemonicString := strings.Join(mne, " ")
+	return mnemonicString, fmt.Sprintf("%x", pair.Address()), fmt.Sprintf("%x", prv), fmt.Sprintf("%x", pub)
 }
 
 func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data string) (string, error) {

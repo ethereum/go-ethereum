@@ -84,8 +84,6 @@ func main() {
 				utils.ImportPrivateKey(ImportKey)
 				os.Exit(0)
 			}
-		} else {
-			utils.CreateKeyPair(false)
 		}
 	}
 
