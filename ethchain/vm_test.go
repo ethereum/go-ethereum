@@ -119,7 +119,7 @@ func TestRun4(t *testing.T) {
 	if err != nil {
 		fmt.Println(err)
 	}
-	//asm = append(asm, "LOG")
+	asm = append(asm, "LOG")
 	fmt.Println(asm)
 
 	callerScript := ethutil.Assemble(asm...)
@@ -128,8 +128,6 @@ func TestRun4(t *testing.T) {
 	// Contract addr as test address
 	account := NewAccount(ContractAddr, big.NewInt(10000000))
 	c := MakeContract(callerTx, state)
-	//fmt.Println(c.script[230:240])
-	//fmt.Println(c.script)
 	callerClosure := NewClosure(account, c, c.script, state, big.NewInt(1000000000), new(big.Int))
 
 	vm := NewVm(state, RuntimeVars{
