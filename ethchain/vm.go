@@ -2,7 +2,7 @@ package ethchain
 
 import (
 	_ "bytes"
-	"fmt"
+	_ "fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	_ "github.com/obscuren/secp256k1-go"
 	_ "math"
@@ -301,9 +301,14 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 		// 0x50 range
 		case oPUSH: // Push PC+1 on to the stack
 			pc.Add(pc, ethutil.Big1)
+			//val := closure.GetMem(pc).BigInt()
+			data := closure.Gets(pc, big.NewInt(32))
+			val := ethutil.BigD(data.Bytes())
 
-			val := closure.GetMem(pc).BigInt()
+			// Push value to stack
 			stack.Push(val)
+
+			pc.Add(pc, big.NewInt(31))
 		case oPOP:
 			stack.Pop()
 		case oDUP:
@@ -343,17 +348,16 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 			stack.Push(big.NewInt(int64(mem.Len())))
 		// 0x60 range
 		case oCALL:
-			// Pop return size and offset
-			retSize, retOffset := stack.Popn()
-			// Pop input size and offset
-			inSize, inOffset := stack.Popn()
-			fmt.Println(inSize, inOffset)
-			// Get the arguments from the memory
-			args := mem.Get(inOffset.Int64(), inSize.Int64())
-			// Pop gas and value of the stack.
-			gas, value := stack.Popn()
 			// Closure addr
 			addr := stack.Pop()
+			// Pop gas and value of the stack.
+			gas, value := stack.Popn()
+			// Pop input size and offset
+			inSize, inOffset := stack.Popn()
+			// Pop return size and offset
+			retSize, retOffset := stack.Popn()
+			// Get the arguments from the memory
+			args := mem.Get(inOffset.Int64(), inSize.Int64())
 			// Fetch the contract which will serve as the closure body
 			contract := vm.state.GetContract(addr.Bytes())
 			// Create a new callable closure
@@ -385,7 +389,9 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 				break out
 			*/
 		default:
-			ethutil.Config.Log.Debugln("Invalid opcode", op)
+			ethutil.Config.Log.Debugf("Invalid opcode %x\n", op)
+
+			return closure.Return(nil)
 		}
 
 		pc.Add(pc, ethutil.Big1)

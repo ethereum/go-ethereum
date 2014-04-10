@@ -70,7 +70,7 @@ func (c *Contract) Address() []byte {
 }
 
 func (c *Contract) RlpEncode() []byte {
-	return ethutil.Encode([]interface{}{c.Amount, c.Nonce, c.state.trie.Root})
+	return ethutil.Encode([]interface{}{c.Amount, c.Nonce, c.state.trie.Root, c.script, c.initScript})
 }
 
 func (c *Contract) RlpDecode(data []byte) {
@@ -79,6 +79,8 @@ func (c *Contract) RlpDecode(data []byte) {
 	c.Amount = decoder.Get(0).BigInt()
 	c.Nonce = decoder.Get(1).Uint()
 	c.state = NewState(ethutil.NewTrie(ethutil.Config.Db, decoder.Get(2).Interface()))
+	c.script = decoder.Get(3).Bytes()
+	c.initScript = decoder.Get(4).Bytes()
 }
 
 func MakeContract(tx *Transaction, state *State) *Contract {

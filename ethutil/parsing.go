@@ -1,8 +1,8 @@
 package ethutil
 
 import (
+	_ "fmt"
 	"math/big"
-	"strconv"
 )
 
 // Op codes
@@ -98,35 +98,21 @@ func CompileInstr(s interface{}) ([]byte, error) {
 		// Assume regular bytes during compilation
 		if !success {
 			num.SetBytes([]byte(str))
+		} else {
+			// tmp fix for 32 bytes
+			n := BigToBytes(num, 256)
+			return n, nil
 		}
 
 		return num.Bytes(), nil
 	case int:
-		return big.NewInt(int64(s.(int))).Bytes(), nil
+		num := BigToBytes(big.NewInt(int64(s.(int))), 256)
+		return num, nil
 	case []byte:
 		return BigD(s.([]byte)).Bytes(), nil
 	}
 
 	return nil, nil
-}
-
-func Instr(instr string) (int, []string, error) {
-
-	base := new(big.Int)
-	base.SetString(instr, 0)
-
-	args := make([]string, 7)
-	for i := 0; i < 7; i++ {
-		// int(int(val) / int(math.Pow(256,float64(i)))) % 256
-		exp := BigPow(256, i)
-		num := new(big.Int)
-		num.Div(base, exp)
-
-		args[i] = num.Mod(num, big.NewInt(256)).String()
-	}
-	op, _ := strconv.Atoi(args[0])
-
-	return op, args[1:7], nil
 }
 
 // Script compilation functions

@@ -84,6 +84,21 @@ func TestRun4(t *testing.T) {
 
 	asm, err := mutan.Compile(strings.NewReader(`
 		int32 a = 10
+		int32 b = 20
+		if a > b {
+			int32 c = this.caller()
+		}
+		exit()
+	`), false)
+	script := ethutil.Assemble(asm...)
+	tx := NewContractCreationTx(ethutil.Big("0"), ethutil.Big("1000"), script)
+	addr := tx.Hash()[12:]
+	contract := MakeContract(tx, state)
+	state.UpdateContract(contract)
+	fmt.Printf("%x\n", addr)
+
+	asm, err = mutan.Compile(strings.NewReader(`
+		int32 a = 10
 		int32 b = 10
 		if a == b {
 			int32 c = 10
@@ -97,9 +112,9 @@ func TestRun4(t *testing.T) {
 		store[a] = 20
 		store[b] = this.caller()
 
-		int8[10] ret
-		int8[10] arg
-		call(1234, 0, 100000000, arg, ret)
+		int8 ret = 0
+		int8 arg = 10
+		call(938726394128221156290138488023434115948430767407, 0, 100000000, arg, ret)
 	`), false)
 	if err != nil {
 		fmt.Println(err)
@@ -113,6 +128,8 @@ func TestRun4(t *testing.T) {
 	// Contract addr as test address
 	account := NewAccount(ContractAddr, big.NewInt(10000000))
 	c := MakeContract(callerTx, state)
+	//fmt.Println(c.script[230:240])
+	//fmt.Println(c.script)
 	callerClosure := NewClosure(account, c, c.script, state, big.NewInt(1000000000), new(big.Int))
 
 	vm := NewVm(state, RuntimeVars{
