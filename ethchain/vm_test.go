@@ -98,24 +98,22 @@ func TestRun4(t *testing.T) {
 	fmt.Printf("%x\n", addr)
 
 	asm, err = mutan.Compile(strings.NewReader(`
-		int32 a = 10
-		int32 b = 10
-		if a == b {
-			int32 c = 10
-			if c == 10 {
-				int32 d = 1000
-				int32 e = 10
-			}
+		// Check if there's any cash in the initial store
+		if store[1000] == 0 {
+			store[1000] = 10^20
 		}
 
-		store[0] = 20
-		store[a] = 20
-		store[b] = this.caller()
+		store[1001] = this.value() * 20
+		store[this.origin()] = store[this.origin()] + 1000
+
+		if store[1001] > 20 {
+			store[1001] = 10^50
+		}
 
 		int8 ret = 0
 		int8 arg = 10
-		addr address = "a46df28529eb8aa8b8c025b0b413c5f4b688352f"
-		call(address, 0, 100000000, arg, ret)
+		store[1002] = "a46df28529eb8aa8b8c025b0b413c5f4b688352f"
+		call(store[1002], 0, 100000000, arg, ret)
 	`), false)
 	if err != nil {
 		fmt.Println(err)
