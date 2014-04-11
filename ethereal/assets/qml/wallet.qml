@@ -179,70 +179,233 @@ ApplicationWindow {
 				visible: false
 				anchors.fill: parent
 				color: "#00000000"
-
-				ColumnLayout {
-					width: 400
-					anchors.left: parent.left
-					anchors.top: parent.top
+				TabView{
+					anchors.fill: parent
+					anchors.rightMargin: 5
 					anchors.leftMargin: 5
 					anchors.topMargin: 5
-					TextField {
-						id: txRecipient
-						placeholderText: "Recipient address (or empty for contract)"
-						Layout.fillWidth: true
+					anchors.bottomMargin: 5
+					id: newTransactionTab
+					Component.onCompleted:{
+						addTab("Send ether", newTransaction)
+						addTab("Create contract", newContract)
 					}
-
-					TextField {
-						id: txValue
-						width: 200
-						placeholderText: "Amount"
-					}
-					TextField {
-						id: txGas
-						width: 200
-						placeholderText: "Gas"
-						anchors.left: txValue
+				}
+				Component {
+					id: newTransaction
+					Column {
+						spacing: 5
 						anchors.leftMargin: 5
-					}
-					TextField {
-						id: txGasPrice
-						width: 200
-						placeholderText: "Gas price"
-						anchors.left: txGas
-						anchors.leftMargin: 5
-					}
-
-					Label {
-						text: "Transaction data"
-					}
-
-					TextArea {
-						id: codeView
 						anchors.topMargin: 5
-						Layout.fillWidth: true
-						width: parent.width /2 
-					}
-
-					Button {
-						id: txButton
-						text: "Send"
-						onClicked: {
-							//this.enabled = false
-							var res = eth.createTx(txRecipient.text, txValue.text, txGas.text, txGasPrice.text, codeView.text)
-							if(res[1]) {
-								txOutput.text = "Output:\n" + res[1].error()
-							} else {
-								txOutput.text = "Output:\n" + res[0]
+						anchors.top: parent.top
+						anchors.left: parent.left
+						TextField {
+							id: txSimpleRecipient
+							placeholderText: "Recipient address"
+							Layout.fillWidth: true
+              validator: RegExpValidator { regExp: /[a-f0-9]{40}/ }
+							width: 530
+						}
+						TextField {
+							id: txSimpleValue
+							placeholderText: "Amount"
+							anchors.rightMargin: 5
+							validator: IntValidator { }
+						}
+						Button {
+							id: txSimpleButton
+							text: "Send"
+							onClicked: {
+								//this.enabled = false
+								var res = eth.createTx(txSimpleRecipient.text, txSimpleValue.text,"","","")
+								if(res[1]) {
+									txSimpleResult.text = "There has been an error broadcasting your transaction:" + res[1].error()
+									txSimpleResult.visible = true
+								} else {
+									txSimpleResult.text = "Your transaction has been broadcasted over the network.\nYour transaction id is:"
+									txSimpleOutput.text = res[0]
+									txSimpleOutput.visible = true
+									txSimpleResult.visible = true
+                  txSimpleValue.visible = false
+                  txSimpleRecipient.visible = false
+									txSimpleValue.text = ""
+									txSimpleRecipient.text = ""
+                  txSimpleRecipient.focus = true
+                  newSimpleTxButton.visible = true
+                  this.visible = false
+								}
 							}
-							txOutput.visible = true
+						}
+						Text {
+							id: txSimpleResult
+							visible: false
+
+						}
+						TextField {
+							id: txSimpleOutput
+							visible: false
+							width: 530
+						}
+						Button {
+              id: newSimpleTxButton
+							visible: false
+							text: "Create an other transaction"
+							onClicked: {
+								this.visible = false
+                txSimpleResult.text = ""
+                txSimpleOutput.text = ""
+                txSimpleResult.visible = false
+                txSimpleOutput.visible = false
+                txSimpleValue.visible = true
+                txSimpleRecipient.visible = true
+                txSimpleButton.visible = true
+							}
 						}
 					}
-					TextArea {
-						id: txOutput
-						visible: false
-						Layout.fillWidth: true
-						height: 40
-						anchors.bottom: parent.bottom
+				}
+				Component {
+					id: newContract
+					Column {
+            id: mainContractColumn
+            function contractFormReady(){
+              if(codeView.text.length > 0 && txValue.text.length > 0 && txGas.text.length > 0 && txGasPrice.length > 0) {
+                txButton.state = "READY"
+              }else{
+                txButton.state = "NOTREADY"
+              }
+            }
+            states: [
+              State{
+                name: "ERROR"
+                PropertyChanges { target: txResult; visible:true}
+                PropertyChanges { target: codeView; visible:true}
+              },
+              State {
+                name: "DONE"
+                PropertyChanges { target: txValue; visible:false}
+                PropertyChanges { target: txGas; visible:false}
+                PropertyChanges { target: txGasPrice; visible:false}
+                PropertyChanges { target: codeView; visible:false}
+                PropertyChanges { target: txButton; visible:false}
+                PropertyChanges { target: txDataLabel; visible:false}
+
+                PropertyChanges { target: txResult; visible:true}
+                PropertyChanges { target: txOutput; visible:true}
+                PropertyChanges { target: newTxButton; visible:true}
+              },
+              State {
+                name: "SETUP"
+                PropertyChanges { target: txValue; visible:true; text: ""}
+                PropertyChanges { target: txGas; visible:true; text: ""}
+                PropertyChanges { target: txGasPrice; visible:true; text: ""}
+                PropertyChanges { target: codeView; visible:true; text: ""}
+                PropertyChanges { target: txButton; visible:true}
+                PropertyChanges { target: txDataLabel; visible:true}
+
+                PropertyChanges { target: txResult; visible:false}
+                PropertyChanges { target: txOutput; visible:false}
+                PropertyChanges { target: newTxButton; visible:false}
+              }
+            ]
+						width: 400
+            spacing: 5
+						anchors.left: parent.left
+						anchors.top: parent.top
+						anchors.leftMargin: 5
+						anchors.topMargin: 5
+
+						TextField {
+							id: txValue
+							width: 200
+							placeholderText: "Amount"
+							validator: IntValidator { }
+              onTextChanged: {
+                contractFormReady()
+              }
+						}
+						TextField {
+							id: txGas
+							width: 200
+							validator: IntValidator { }
+							placeholderText: "Gas"
+              onTextChanged: {
+                contractFormReady()
+              }
+						}
+						TextField {
+							id: txGasPrice
+							width: 200
+							placeholderText: "Gas price"
+							validator: IntValidator { }
+              onTextChanged: {
+                contractFormReady()
+              }
+						}
+
+						Label {
+              id: txDataLabel
+							text: "Transaction data"
+						}
+
+						TextArea {
+							id: codeView
+							anchors.topMargin: 5
+							Layout.fillWidth: true
+							width: parent.width /2
+              onTextChanged: {
+                contractFormReady()
+              }
+						}
+
+						Button {
+							id: txButton
+              states: [
+                State {
+                  name: "READY"
+                  PropertyChanges { target: txButton; enabled: true}
+                },
+                State {
+                  name: "NOTREADY"
+                  PropertyChanges { target: txButton; enabled:false}
+                }
+              ]
+							text: "Send"
+              enabled: false
+							onClicked: {
+								//this.enabled = false
+								var res = eth.createTx("", txValue.text, txGas.text, txGasPrice.text, codeView.text)
+								if(res[1]) {
+                  txResult.text = "Your contract <b>could not</b> be send over the network:\n<b>"
+                  txResult.text += res[1].error()
+                  txResult.text += "</b>"
+                  mainContractColumn.state = "ERROR"
+								} else {
+                  txResult.text = "Your contract has been submitted:\n"
+                  txOutput.text = res[0]
+                  mainContractColumn.state = "DONE"
+								}
+							}
+						}
+            Text {
+              id: txResult
+              visible: false
+            }
+						TextField {
+							id: txOutput
+							visible: false
+							width: 530
+						}
+						Button {
+              id: newTxButton
+							visible: false
+							text: "Create an other contract"
+							onClicked: {
+								this.visible = false
+                txResult.text = ""
+                txOutput.text = ""
+                mainContractColumn.state = "SETUP"
+							}
+						}
 					}
 				}
 			}

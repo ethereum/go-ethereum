@@ -63,15 +63,21 @@ func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data strin
 	var tx *ethchain.Transaction
 	// Compile and assemble the given data
 	if contractCreation {
-		asm, err := mutan.Compile(strings.NewReader(data), false)
-		if err != nil {
-			return "", err
+		asm, errors := mutan.Compile(strings.NewReader(data), false)
+		if len(errors) > 0 {
+			var errs string
+			for _, er := range errors {
+				if er != nil {
+					errs += er.Error()
+				}
+			}
+			return "", fmt.Errorf(errs)
 		}
 
 		code := ethutil.Assemble(asm...)
 		tx = ethchain.NewContractCreationTx(value, gasPrice, code)
 	} else {
-		tx = ethchain.NewTransactionMessage(hash, value, gasPrice, gas, []string{})
+		tx = ethchain.NewTransactionMessage(hash, value, gasPrice, gas, nil)
 	}
 	acc := lib.stateManager.GetAddrState(keyPair.Address())
 	tx.Nonce = acc.Nonce
