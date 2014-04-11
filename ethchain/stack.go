@@ -173,6 +173,10 @@ func NewStack() *Stack {
 	return &Stack{}
 }
 
+func (st *Stack) Data() []*big.Int {
+	return st.data
+}
+
 func (st *Stack) Pop() *big.Int {
 	str := st.data[len(st.data)-1]
 
@@ -244,6 +248,10 @@ func (m *Memory) Get(offset, size int64) []byte {
 
 func (m *Memory) Len() int {
 	return len(m.store)
+}
+
+func (m *Memory) Data() []byte {
+	return m.store
 }
 
 func (m *Memory) Print() {

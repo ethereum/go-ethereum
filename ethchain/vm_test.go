@@ -130,14 +130,29 @@ func TestRun4(t *testing.T) {
 	callerClosure := NewClosure(account, c, c.script, state, big.NewInt(1000000000), new(big.Int))
 
 	vm := NewVm(state, RuntimeVars{
-		origin:      account.Address(),
-		blockNumber: 1,
-		prevHash:    ethutil.FromHex("5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"),
-		coinbase:    ethutil.FromHex("2adc25665018aa1fe0e6bc666dac8fc2697ff9ba"),
-		time:        1,
-		diff:        big.NewInt(256),
+		Origin:      account.Address(),
+		BlockNumber: 1,
+		PrevHash:    ethutil.FromHex("5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"),
+		Coinbase:    ethutil.FromHex("2adc25665018aa1fe0e6bc666dac8fc2697ff9ba"),
+		Time:        1,
+		Diff:        big.NewInt(256),
 		// XXX Tx data? Could be just an argument to the closure instead
-		txData: nil,
+		TxData: nil,
 	})
 	callerClosure.Call(vm, nil, nil)
+}
+
+func TestRun5(t *testing.T) {
+	ethutil.ReadConfig("")
+
+	asm, _ := mutan.Compile(strings.NewReader(`
+		int32 a = 10
+		int32 b = 20
+		if a > b {
+			int32 c = this.caller()
+		}
+		exit()
+	`), false)
+	script := ethutil.Assemble(asm...)
+	fmt.Println(Disassemble(script))
 }

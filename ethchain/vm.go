@@ -2,7 +2,7 @@ package ethchain
 
 import (
 	_ "bytes"
-	_ "fmt"
+	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	_ "github.com/obscuren/secp256k1-go"
 	_ "math"
@@ -33,13 +33,13 @@ type Vm struct {
 }
 
 type RuntimeVars struct {
-	origin      []byte
-	blockNumber uint64
-	prevHash    []byte
-	coinbase    []byte
-	time        int64
-	diff        *big.Int
-	txData      []string
+	Origin      []byte
+	BlockNumber uint64
+	PrevHash    []byte
+	Coinbase    []byte
+	Time        int64
+	Diff        *big.Int
+	TxData      []string
 }
 
 func NewVm(state *State, vars RuntimeVars) *Vm {
@@ -65,9 +65,11 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 	// The base for all big integer arithmetic
 	base := new(big.Int)
 
-	if ethutil.Config.Debug {
-		ethutil.Config.Log.Debugf("#   op\n")
-	}
+	/*
+		if ethutil.Config.Debug {
+			ethutil.Config.Log.Debugf("#   op\n")
+		}
+	*/
 
 	for {
 		step++
@@ -75,9 +77,11 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 		val := closure.Get(pc)
 		// Get the opcode (it must be an opcode!)
 		op := OpCode(val.Uint())
-		if ethutil.Config.Debug {
-			ethutil.Config.Log.Debugf("%-3d %-4s", pc, op.String())
-		}
+		/*
+			if ethutil.Config.Debug {
+				ethutil.Config.Log.Debugf("%-3d %-4s", pc, op.String())
+			}
+		*/
 
 		// TODO Get each instruction cost properly
 		gas := new(big.Int)
@@ -270,7 +274,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 		case oBALANCE:
 			stack.Push(closure.Value)
 		case oORIGIN:
-			stack.Push(ethutil.BigD(vm.vars.origin))
+			stack.Push(ethutil.BigD(vm.vars.Origin))
 		case oCALLER:
 			stack.Push(ethutil.BigD(closure.Callee().Address()))
 		case oCALLVALUE:
@@ -286,15 +290,15 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 
 		// 0x40 range
 		case oPREVHASH:
-			stack.Push(ethutil.BigD(vm.vars.prevHash))
+			stack.Push(ethutil.BigD(vm.vars.PrevHash))
 		case oCOINBASE:
-			stack.Push(ethutil.BigD(vm.vars.coinbase))
+			stack.Push(ethutil.BigD(vm.vars.Coinbase))
 		case oTIMESTAMP:
-			stack.Push(big.NewInt(vm.vars.time))
+			stack.Push(big.NewInt(vm.vars.Time))
 		case oNUMBER:
-			stack.Push(big.NewInt(int64(vm.vars.blockNumber)))
+			stack.Push(big.NewInt(int64(vm.vars.BlockNumber)))
 		case oDIFFICULTY:
-			stack.Push(vm.vars.diff)
+			stack.Push(vm.vars.Diff)
 		case oGASLIMIT:
 			// TODO
 
@@ -406,7 +410,59 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 		pc.Add(pc, ethutil.Big1)
 
 		if hook != nil {
-			hook(op)
+			hook(op, mem, stack)
 		}
 	}
+}
+
+func Disassemble(script []byte) (asm []string) {
+	pc := new(big.Int)
+	for {
+		if pc.Cmp(big.NewInt(int64(len(script)))) >= 0 {
+			return
+		}
+
+		// Get the memory location of pc
+		val := script[pc.Int64()]
+		// Get the opcode (it must be an opcode!)
+		op := OpCode(val)
+
+		asm = append(asm, fmt.Sprintf("%v", op))
+
+		switch op {
+		case oPUSH: // Push PC+1 on to the stack
+			pc.Add(pc, ethutil.Big1)
+			data := script[pc.Int64() : pc.Int64()+32]
+			val := ethutil.BigD(data)
+
+			var b []byte
+			if val.Int64() == 0 {
+				b = []byte{0}
+			} else {
+				b = val.Bytes()
+			}
+
+			asm = append(asm, fmt.Sprintf("0x%x", b))
+
+			pc.Add(pc, big.NewInt(31))
+		case oPUSH20:
+			pc.Add(pc, ethutil.Big1)
+			data := script[pc.Int64() : pc.Int64()+20]
+			val := ethutil.BigD(data)
+			var b []byte
+			if val.Int64() == 0 {
+				b = []byte{0}
+			} else {
+				b = val.Bytes()
+			}
+
+			asm = append(asm, fmt.Sprintf("0x%x", b))
+
+			pc.Add(pc, big.NewInt(19))
+		}
+
+		pc.Add(pc, ethutil.Big1)
+	}
+
+	return
 }

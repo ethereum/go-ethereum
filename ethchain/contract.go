@@ -69,6 +69,14 @@ func (c *Contract) Address() []byte {
 	return c.address
 }
 
+func (c *Contract) Script() []byte {
+	return c.script
+}
+
+func (c *Contract) Init() []byte {
+	return c.initScript
+}
+
 func (c *Contract) RlpEncode() []byte {
 	return ethutil.Encode([]interface{}{c.Amount, c.Nonce, c.state.trie.Root, c.script, c.initScript})
 }

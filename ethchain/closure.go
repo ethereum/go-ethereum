@@ -52,7 +52,7 @@ func (c *Closure) Get(x *big.Int) *ethutil.Value {
 }
 
 func (c *Closure) Gets(x, y *big.Int) *ethutil.Value {
-	if x.Int64() > int64(len(c.Script)) || y.Int64() > int64(len(c.Script)) {
+	if x.Int64() >= int64(len(c.Script)) || y.Int64() >= int64(len(c.Script)) {
 		return ethutil.NewValue(0)
 	}
 
@@ -69,7 +69,7 @@ func (c *Closure) Address() []byte {
 	return c.object.Address()
 }
 
-type DebugHook func(op OpCode)
+type DebugHook func(op OpCode, mem *Memory, stack *Stack)
 
 func (c *Closure) Call(vm *Vm, args []byte, hook DebugHook) []byte {
 	c.Args = args
