@@ -53,7 +53,6 @@ type Gui struct {
 	txDb *ethdb.LDBDatabase
 
 	addr []byte
-
 }
 
 // Create GUI, but doesn't start it
@@ -96,12 +95,13 @@ func (ui *Gui) Start(assetPath string) {
 	// Load the main QML interface
 	component, err := ui.engine.LoadFile(uiLib.AssetPath("qml/wallet.qml"))
 	if err != nil {
-   	ethutil.Config.Log.Infoln("FATAL: asset not found: you can set an alternative asset path on on the command line using option 'asset_path'")
+		ethutil.Config.Log.Infoln("FATAL: asset not found: you can set an alternative asset path on on the command line using option 'asset_path'")
 		panic(err)
 	}
 	ui.engine.LoadFile(uiLib.AssetPath("qml/transactions.qml"))
 
 	ui.win = component.CreateWindow(nil)
+	uiLib.win = ui.win
 
 	// Register the ui as a block processor
 	//ui.eth.BlockManager.SecondaryBlockProcessor = ui
