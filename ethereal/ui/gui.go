@@ -116,6 +116,7 @@ func (ui *Gui) Start(assetPath string) {
 	ui.engine.LoadFile(uiLib.AssetPath("qml/transactions.qml"))
 
 	ui.win = component.CreateWindow(nil)
+	uiLib.win = ui.win
 
 	// Register the ui as a block processor
 	//ui.eth.BlockManager.SecondaryBlockProcessor = ui

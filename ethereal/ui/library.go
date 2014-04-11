@@ -94,41 +94,6 @@ func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data strin
 	return ethutil.Hex(tx.Hash()), nil
 }
 
-/*
-func (lib *EthLib) CreateTx(receiver, a, data string) string {
-	var hash []byte
-	if len(receiver) == 0 {
-		hash = ethchain.ContractAddr
-	} else {
-		var err error
-		hash, err = hex.DecodeString(receiver)
-		if err != nil {
-			return err.Error()
-		}
-	}
-
-	k, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-	keyPair := ethutil.NewKeyFromBytes(k)
-
-	amount := ethutil.Big(a)
-	code := ethchain.Compile(strings.Split(data, "\n"))
-	tx := ethchain.NewTx(hash, amount, code)
-	tx.Nonce = lib.stateManager.GetAddrState(keyPair.Address()).Nonce
-
-	tx.Sign(keyPair.PrivateKey)
-
-	lib.txPool.QueueTransaction(tx)
-
-	if len(receiver) == 0 {
-		ethutil.Config.Log.Infof("Contract addr %x", tx.Hash()[12:])
-	} else {
-		ethutil.Config.Log.Infof("Tx hash %x", tx.Hash())
-	}
-
-	return ethutil.Hex(tx.Hash())
-}
-*/
-
 func (lib *EthLib) GetBlock(hexHash string) *Block {
 	hash, err := hex.DecodeString(hexHash)
 	if err != nil {

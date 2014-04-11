@@ -406,6 +406,15 @@ ApplicationWindow {
                 mainContractColumn.state = "SETUP"
 							}
 						}
+
+						Button {
+							id: debugButton
+							text: "Debug"
+							onClicked: {
+								var res = ui.debugTx("", txValue.text, txGas.text, txGasPrice.text, codeView.text)
+								debugWindow.visible = true
+							}
+						}
 					}
 				}
 			}
@@ -599,6 +608,83 @@ ApplicationWindow {
 			text: "<h2>Ethereal</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Maran Hidskes<br><h3>Binary Distribution</h3>Jarrad Hope<br>"
 		}
 
+	}
+
+	Window {
+		id: debugWindow
+		visible: false
+		title: "Debugger"
+		minimumWidth: 600
+		minimumHeight: 600
+		width: 800
+		height: 600
+
+		SplitView {
+			anchors.fill: parent
+			property var asmModel: ListModel {
+				id: asmModel
+			}
+			TableView {
+				id: asmTableView
+				width: 200
+				TableViewColumn{ role: "value" ; title: "" ; width: 100 }
+				model: asmModel
+			}
+
+			Rectangle {
+				anchors.left: asmTableView.right
+				anchors.right: parent.right
+				SplitView {
+					orientation: Qt.Vertical
+					anchors.fill: parent
+
+					TableView {
+						property var memModel: ListModel {
+							id: memModel
+						}
+						height: parent.height/2
+						width: parent.width
+						TableViewColumn{ id:mnumColmn ; role: "num" ; title: "#" ; width: 50}
+						TableViewColumn{ role: "value" ; title: "Memory" ; width: 750}
+						model: memModel
+					}
+
+					TableView {
+						property var stackModel: ListModel {
+							id: stackModel
+						}
+						height: parent.height/2
+						width: parent.width
+						TableViewColumn{ role: "value" ; title: "Stack" ; width: parent.width }
+						model: stackModel
+					}
+				}
+			}
+		}
+	}
+
+	function setAsm(asm) {
+		//for(var i = 0; i < asm.length; i++) {
+		asmModel.append({asm: asm})
+		//}
+	}
+	function clearAsm() {
+		asmModel.clear()
+	}
+
+	function setMem(mem) {
+		memModel.append({num: mem.num, value: mem.value})
+	}
+	function clearMem(){
+		memModel.clear()
+	}
+
+	function setStack(stack) {
+		stackModel.append({value: stack})
+	}
+
+	function clearStack() {
+		stackModel.clear()
 	}
 
 	function loadPlugin(name) {
