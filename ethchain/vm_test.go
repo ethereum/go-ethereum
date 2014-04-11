@@ -139,5 +139,5 @@ func TestRun4(t *testing.T) {
 		// XXX Tx data? Could be just an argument to the closure instead
 		txData: nil,
 	})
-	callerClosure.Call(vm, nil)
+	callerClosure.Call(vm, nil, nil)
 }

@@ -69,10 +69,12 @@ func (c *Closure) Address() []byte {
 	return c.object.Address()
 }
 
-func (c *Closure) Call(vm *Vm, args []byte) []byte {
+type DebugHook func(op OpCode)
+
+func (c *Closure) Call(vm *Vm, args []byte, hook DebugHook) []byte {
 	c.Args = args
 
-	return vm.RunClosure(c)
+	return vm.RunClosure(c, hook)
 }
 
 func (c *Closure) Return(ret []byte) []byte {

@@ -48,7 +48,7 @@ func NewVm(state *State, vars RuntimeVars) *Vm {
 
 var Pow256 = ethutil.BigPow(2, 256)
 
-func (vm *Vm) RunClosure(closure *Closure) []byte {
+func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 	// If the amount of gas supplied is less equal to 0
 	if closure.Gas.Cmp(big.NewInt(0)) <= 0 {
 		// TODO Do something
@@ -372,7 +372,7 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 			// Create a new callable closure
 			closure := NewClosure(closure, contract, contract.script, vm.state, gas, value)
 			// Executer the closure and get the return value (if any)
-			ret := closure.Call(vm, args)
+			ret := closure.Call(vm, args, hook)
 
 			mem.Set(retOffset.Int64(), retSize.Int64(), ret)
 		case oRETURN:
@@ -404,44 +404,9 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 		}
 
 		pc.Add(pc, ethutil.Big1)
+
+		if hook != nil {
+			hook(op)
+		}
 	}
 }
-
-/*
-func makeInlineTx(addr []byte, value, from, length *big.Int, contract *Contract, state *State) {
-	ethutil.Config.Log.Debugf(" => creating inline tx %x %v %v %v", addr, value, from, length)
-	j := int64(0)
-	dataItems := make([]string, int(length.Uint64()))
-	for i := from.Int64(); i < length.Int64(); i++ {
-		dataItems[j] = contract.GetMem(big.NewInt(j)).Str()
-		j++
-	}
-
-	tx := NewTransaction(addr, value, dataItems)
-	if tx.IsContract() {
-		contract := MakeContract(tx, state)
-		state.UpdateContract(contract)
-	} else {
-		account := state.GetAccount(tx.Recipient)
-		account.Amount.Add(account.Amount, tx.Value)
-		state.UpdateAccount(tx.Recipient, account)
-	}
-}
-
-// Returns an address from the specified contract's address
-func contractMemory(state *State, contractAddr []byte, memAddr *big.Int) *big.Int {
-	contract := state.GetContract(contractAddr)
-	if contract == nil {
-		log.Panicf("invalid contract addr %x", contractAddr)
-	}
-	val := state.trie.Get(memAddr.String())
-
-	// decode the object as a big integer
-	decoder := ethutil.NewValueFromBytes([]byte(val))
-	if decoder.IsNil() {
-		return ethutil.BigFalse
-	}
-
-	return decoder.BigInt()
-}
-*/

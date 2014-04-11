@@ -327,7 +327,7 @@ func (sm *StateManager) ProcessContract(contract *Contract, tx *Transaction, blo
 		// XXX Tx data? Could be just an argument to the closure instead
 		txData: nil,
 	})
-	closure.Call(vm, nil)
+	closure.Call(vm, nil, nil)
 
 	// Update the account (refunds)
 	sm.procState.UpdateAccount(tx.Sender(), caller)
