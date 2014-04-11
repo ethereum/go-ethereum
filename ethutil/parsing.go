@@ -1,8 +1,8 @@
 package ethutil
 
 import (
+	_ "fmt"
 	"math/big"
-	"strconv"
 )
 
 // Op codes
@@ -51,7 +51,10 @@ var OpCodes = map[string]byte{
 	"GASLIMIT":   0x45,
 
 	// 0x50 range - 'storage' and execution
-	"PUSH":    0x50,
+	"PUSH": 0x50,
+
+	"PUSH20": 0x80,
+
 	"POP":     0x51,
 	"DUP":     0x52,
 	"SWAP":    0x53,
@@ -98,11 +101,16 @@ func CompileInstr(s interface{}) ([]byte, error) {
 		// Assume regular bytes during compilation
 		if !success {
 			num.SetBytes([]byte(str))
+		} else {
+			// tmp fix for 32 bytes
+			n := BigToBytes(num, 256)
+			return n, nil
 		}
 
 		return num.Bytes(), nil
 	case int:
-		return big.NewInt(int64(s.(int))).Bytes(), nil
+		num := BigToBytes(big.NewInt(int64(s.(int))), 256)
+		return num, nil
 	case []byte:
 		return BigD(s.([]byte)).Bytes(), nil
 	}
@@ -110,34 +118,16 @@ func CompileInstr(s interface{}) ([]byte, error) {
 	return nil, nil
 }
 
-func Instr(instr string) (int, []string, error) {
-
-	base := new(big.Int)
-	base.SetString(instr, 0)
-
-	args := make([]string, 7)
-	for i := 0; i < 7; i++ {
-		// int(int(val) / int(math.Pow(256,float64(i)))) % 256
-		exp := BigPow(256, i)
-		num := new(big.Int)
-		num.Div(base, exp)
-
-		args[i] = num.Mod(num, big.NewInt(256)).String()
-	}
-	op, _ := strconv.Atoi(args[0])
-
-	return op, args[1:7], nil
-}
-
 // Script compilation functions
 // Compiles strings to machine code
-func Assemble(instructions ...interface{}) (script []string) {
-	script = make([]string, len(instructions))
+func Assemble(instructions ...interface{}) (script []byte) {
+	//script = make([]string, len(instructions))
 
-	for i, val := range instructions {
+	for _, val := range instructions {
 		instr, _ := CompileInstr(val)
 
-		script[i] = string(instr)
+		//script[i] = string(instr)
+		script = append(script, instr...)
 	}
 
 	return

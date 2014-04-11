@@ -2,7 +2,7 @@ package ethchain
 
 import (
 	_ "bytes"
-	"fmt"
+	_ "fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	_ "github.com/obscuren/secp256k1-go"
 	_ "math"
@@ -72,7 +72,7 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 	for {
 		step++
 		// Get the memory location of pc
-		val := closure.GetMem(pc)
+		val := closure.Get(pc)
 		// Get the opcode (it must be an opcode!)
 		op := OpCode(val.Uint())
 		if ethutil.Config.Debug {
@@ -233,13 +233,37 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 
 		// 0x10 range
 		case oAND:
+			x, y := stack.Popn()
+			if (x.Cmp(ethutil.BigTrue) >= 0) && (y.Cmp(ethutil.BigTrue) >= 0) {
+				stack.Push(ethutil.BigTrue)
+			} else {
+				stack.Push(ethutil.BigFalse)
+			}
+
 		case oOR:
+			x, y := stack.Popn()
+			if (x.Cmp(ethutil.BigInt0) >= 0) || (y.Cmp(ethutil.BigInt0) >= 0) {
+				stack.Push(ethutil.BigTrue)
+			} else {
+				stack.Push(ethutil.BigFalse)
+			}
 		case oXOR:
+			x, y := stack.Popn()
+			stack.Push(base.Xor(x, y))
 		case oBYTE:
+			val, th := stack.Popn()
+			if th.Cmp(big.NewInt(32)) < 0 {
+				stack.Push(big.NewInt(int64(len(val.Bytes())-1) - th.Int64()))
+			} else {
+				stack.Push(ethutil.BigFalse)
+			}
 
 		// 0x20 range
 		case oSHA3:
+			size, offset := stack.Popn()
+			data := mem.Get(offset.Int64(), size.Int64())
 
+			stack.Push(ethutil.BigD(data))
 		// 0x30 range
 		case oADDRESS:
 			stack.Push(ethutil.BigD(closure.Object().Address()))
@@ -277,9 +301,23 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 		// 0x50 range
 		case oPUSH: // Push PC+1 on to the stack
 			pc.Add(pc, ethutil.Big1)
+			data := closure.Gets(pc, big.NewInt(32))
+			val := ethutil.BigD(data.Bytes())
 
-			val := closure.GetMem(pc).BigInt()
+			// Push value to stack
 			stack.Push(val)
+
+			pc.Add(pc, big.NewInt(31))
+		case oPUSH20:
+			pc.Add(pc, ethutil.Big1)
+			data := closure.Gets(pc, big.NewInt(20))
+			val := ethutil.BigD(data.Bytes())
+
+			// Push value to stack
+			stack.Push(val)
+
+			pc.Add(pc, big.NewInt(19))
+
 		case oPOP:
 			stack.Pop()
 		case oDUP:
@@ -319,21 +357,20 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 			stack.Push(big.NewInt(int64(mem.Len())))
 		// 0x60 range
 		case oCALL:
-			// Pop return size and offset
-			retSize, retOffset := stack.Popn()
-			// Pop input size and offset
-			inSize, inOffset := stack.Popn()
-			fmt.Println(inSize, inOffset)
-			// Get the arguments from the memory
-			args := mem.Get(inOffset.Int64(), inSize.Int64())
-			// Pop gas and value of the stack.
-			gas, value := stack.Popn()
 			// Closure addr
 			addr := stack.Pop()
+			// Pop gas and value of the stack.
+			gas, value := stack.Popn()
+			// Pop input size and offset
+			inSize, inOffset := stack.Popn()
+			// Pop return size and offset
+			retSize, retOffset := stack.Popn()
+			// Get the arguments from the memory
+			args := mem.Get(inOffset.Int64(), inSize.Int64())
 			// Fetch the contract which will serve as the closure body
 			contract := vm.state.GetContract(addr.Bytes())
 			// Create a new callable closure
-			closure := NewClosure(closure, contract, vm.state, gas, value)
+			closure := NewClosure(closure, contract, contract.script, vm.state, gas, value)
 			// Executer the closure and get the return value (if any)
 			ret := closure.Call(vm, args)
 
@@ -361,7 +398,9 @@ func (vm *Vm) RunClosure(closure *Closure) []byte {
 				break out
 			*/
 		default:
-			ethutil.Config.Log.Debugln("Invalid opcode", op)
+			ethutil.Config.Log.Debugf("Invalid opcode %x\n", op)
+
+			return closure.Return(nil)
 		}
 
 		pc.Add(pc, ethutil.Big1)

@@ -186,7 +186,12 @@ func Encode(object interface{}) []byte {
 		case byte:
 			buff.Write(Encode(big.NewInt(int64(t))))
 		case *big.Int:
-			buff.Write(Encode(t.Bytes()))
+			// Not sure how this is possible while we check for
+			if t == nil {
+				buff.WriteByte(0xc0)
+			} else {
+				buff.Write(Encode(t.Bytes()))
+			}
 		case []byte:
 			if len(t) == 1 && t[0] <= 0x7f {
 				buff.Write(t)

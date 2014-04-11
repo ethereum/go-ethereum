@@ -84,27 +84,41 @@ func TestRun4(t *testing.T) {
 
 	asm, err := mutan.Compile(strings.NewReader(`
 		int32 a = 10
-		int32 b = 10
-		if a == b {
-			int32 c = 10
-			if c == 10 {
-				int32 d = 1000
-				int32 e = 10
-			}
+		int32 b = 20
+		if a > b {
+			int32 c = this.caller()
+		}
+		exit()
+	`), false)
+	script := ethutil.Assemble(asm...)
+	tx := NewContractCreationTx(ethutil.Big("0"), ethutil.Big("1000"), script)
+	addr := tx.Hash()[12:]
+	contract := MakeContract(tx, state)
+	state.UpdateContract(contract)
+	fmt.Printf("%x\n", addr)
+
+	asm, err = mutan.Compile(strings.NewReader(`
+		// Check if there's any cash in the initial store
+		if store[1000] == 0 {
+			store[1000] = 10^20
 		}
 
-		store[0] = 20
-		store[a] = 20
-		store[b] = this.caller()
+		store[1001] = this.value() * 20
+		store[this.origin()] = store[this.origin()] + 1000
 
-		int8[10] ret
-		int8[10] arg
-		call(1234, 0, 100000000, arg, ret)
+		if store[1001] > 20 {
+			store[1001] = 10^50
+		}
+
+		int8 ret = 0
+		int8 arg = 10
+		store[1002] = "a46df28529eb8aa8b8c025b0b413c5f4b688352f"
+		call(store[1002], 0, 100000000, arg, ret)
 	`), false)
 	if err != nil {
 		fmt.Println(err)
 	}
-	//asm = append(asm, "LOG")
+	asm = append(asm, "LOG")
 	fmt.Println(asm)
 
 	callerScript := ethutil.Assemble(asm...)
@@ -112,7 +126,8 @@ func TestRun4(t *testing.T) {
 
 	// Contract addr as test address
 	account := NewAccount(ContractAddr, big.NewInt(10000000))
-	callerClosure := NewClosure(account, MakeContract(callerTx, state), state, big.NewInt(1000000000), new(big.Int))
+	c := MakeContract(callerTx, state)
+	callerClosure := NewClosure(account, c, c.script, state, big.NewInt(1000000000), new(big.Int))
 
 	vm := NewVm(state, RuntimeVars{
 		origin:      account.Address(),

@@ -9,8 +9,10 @@ type Contract struct {
 	Amount *big.Int
 	Nonce  uint64
 	//state  *ethutil.Trie
-	state   *State
-	address []byte
+	state      *State
+	address    []byte
+	script     []byte
+	initScript []byte
 }
 
 func NewContract(address []byte, Amount *big.Int, root []byte) *Contract {
@@ -45,6 +47,14 @@ func (c *Contract) GetMem(num *big.Int) *ethutil.Value {
 	return c.Addr(nb)
 }
 
+func (c *Contract) GetInstr(pc *big.Int) *ethutil.Value {
+	if int64(len(c.script)-1) < pc.Int64() {
+		return ethutil.NewValue(0)
+	}
+
+	return ethutil.NewValueFromBytes([]byte{c.script[pc.Int64()]})
+}
+
 func (c *Contract) SetMem(num *big.Int, val *ethutil.Value) {
 	addr := ethutil.BigToBytes(num, 256)
 	c.state.trie.Update(string(addr), string(val.Encode()))
@@ -60,7 +70,7 @@ func (c *Contract) Address() []byte {
 }
 
 func (c *Contract) RlpEncode() []byte {
-	return ethutil.Encode([]interface{}{c.Amount, c.Nonce, c.state.trie.Root})
+	return ethutil.Encode([]interface{}{c.Amount, c.Nonce, c.state.trie.Root, c.script, c.initScript})
 }
 
 func (c *Contract) RlpDecode(data []byte) {
@@ -69,6 +79,8 @@ func (c *Contract) RlpDecode(data []byte) {
 	c.Amount = decoder.Get(0).BigInt()
 	c.Nonce = decoder.Get(1).Uint()
 	c.state = NewState(ethutil.NewTrie(ethutil.Config.Db, decoder.Get(2).Interface()))
+	c.script = decoder.Get(3).Bytes()
+	c.initScript = decoder.Get(4).Bytes()
 }
 
 func MakeContract(tx *Transaction, state *State) *Contract {
@@ -79,12 +91,17 @@ func MakeContract(tx *Transaction, state *State) *Contract {
 		value := tx.Value
 		contract := NewContract(addr, value, []byte(""))
 		state.trie.Update(string(addr), string(contract.RlpEncode()))
-		for i, val := range tx.Data {
-			if len(val) > 0 {
-				bytNum := ethutil.BigToBytes(big.NewInt(int64(i)), 256)
-				contract.state.trie.Update(string(bytNum), string(ethutil.Encode(val)))
+		contract.script = tx.Data
+		contract.initScript = tx.Init
+
+		/*
+			for i, val := range tx.Data {
+					if len(val) > 0 {
+						bytNum := ethutil.BigToBytes(big.NewInt(int64(i)), 256)
+						contract.state.trie.Update(string(bytNum), string(ethutil.Encode(val)))
+					}
 			}
-		}
+		*/
 		state.trie.Update(string(addr), string(contract.RlpEncode()))
 
 		return contract
