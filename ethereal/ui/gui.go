@@ -21,13 +21,15 @@ type Block struct {
 
 type Tx struct {
 	Value, Hash, Address string
+	Contract             bool
 }
 
 func NewTxFromTransaction(tx *ethchain.Transaction) *Tx {
 	hash := hex.EncodeToString(tx.Hash())
 	sender := hex.EncodeToString(tx.Recipient)
+	isContract := len(tx.Data) > 0
 
-	return &Tx{Hash: hash, Value: ethutil.CurrencyToString(tx.Value), Address: sender}
+	return &Tx{Hash: hash, Value: ethutil.CurrencyToString(tx.Value), Address: sender, Contract: isContract}
 }
 
 // Creates a new QML Block from a chain block

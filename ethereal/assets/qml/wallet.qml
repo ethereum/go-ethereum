@@ -140,6 +140,7 @@ ApplicationWindow {
 					anchors.fill: parent
 					TableViewColumn{ role: "value" ; title: "Value" ; width: 100 }
 					TableViewColumn{ role: "address" ; title: "Address" ; width: 430 }
+					TableViewColumn{ role: "contract" ; title: "Contract" ; width: 100 }
 
 					model: txModel
 				}
@@ -448,7 +449,13 @@ ApplicationWindow {
 		}
 
 		function addTx(tx) {
-			txModel.insert(0, {hash: tx.hash, address: tx.address, value: tx.value})
+			var isContract
+			if (tx.contract == true){
+				isContract = "Yes"
+			}else{
+				isContract = "No"
+			}
+			txModel.insert(0, {hash: tx.hash, address: tx.address, value: tx.value, contract: isContract})
 		}
 
 		function addBlock(block) {
