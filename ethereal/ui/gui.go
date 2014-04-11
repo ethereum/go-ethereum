@@ -63,10 +63,16 @@ func New(ethereum *eth.Ethereum) *Gui {
 		panic(err)
 	}
 
-	key := ethutil.Config.Db.GetKeys()[0]
-	addr := key.Address()
+	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
+	// On first run we won't have any keys yet, so this would crash.
+	// Therefor we check if we are ready to actually start this process
+	var addr []byte
+	if len(data) > 0 {
+		key := ethutil.Config.Db.GetKeys()[0]
+		addr = key.Address()
 
-	ethereum.StateManager().WatchAddr(addr)
+		ethereum.StateManager().WatchAddr(addr)
+	}
 
 	return &Gui{eth: ethereum, lib: lib, txDb: db, addr: addr}
 }
@@ -93,7 +99,16 @@ func (ui *Gui) Start(assetPath string) {
 	context.SetVar("ui", uiLib)
 
 	// Load the main QML interface
-	component, err := ui.engine.LoadFile(uiLib.AssetPath("qml/wallet.qml"))
+	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
+	var err error
+	var component qml.Object
+	firstRun := len(data) == 0
+
+	if firstRun {
+		component, err = ui.engine.LoadFile(uiLib.AssetPath("qml/first_run.qml"))
+	} else {
+		component, err = ui.engine.LoadFile(uiLib.AssetPath("qml/wallet.qml"))
+	}
 	if err != nil {
 		ethutil.Config.Log.Infoln("FATAL: asset not found: you can set an alternative asset path on on the command line using option 'asset_path'")
 		panic(err)
@@ -111,9 +126,11 @@ func (ui *Gui) Start(assetPath string) {
 	ethutil.Config.Log.AddLogSystem(ui)
 
 	// Loads previous blocks
-	go ui.setInitialBlockChain()
-	go ui.readPreviousTransactions()
-	go ui.update()
+	if firstRun == false {
+		go ui.setInitialBlockChain()
+		go ui.readPreviousTransactions()
+		go ui.update()
+	}
 
 	ui.win.Show()
 	ui.win.Wait()
