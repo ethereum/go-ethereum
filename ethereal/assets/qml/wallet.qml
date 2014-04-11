@@ -26,35 +26,6 @@ ApplicationWindow {
 		}
 
 		Menu {
-			title: "Test"
-			MenuItem {
-				text: "Test test"
-				shortcut: "Ctrl+t"
-				onTriggered: {
-					var win
-					function finishedLoading(){
-						console.log("Trigged")
-						win = wizard.createObject(root)
-					}
-					console.log("Loading wizard")
-
-					var wizard = Qt.createComponent("first_run.qml")
-					if(wizard.status== Component.Ready){
-						console.log("Component is ready")
-						finishedLoading()
-					}else if( wizard.status == Component.Error){
-						console.log("Error loading component:", wizard.errorString())
-					}
-					else{
-						wizard.statusChanged.connect(finishedLoading)
-						console.log("Component is NOT ready")
-						win = wizard.createObject(root)
-					}
-				}
-			}
-		}
-
-		Menu {
 			title: "Network"
 			MenuItem {
 				text: "Add Peer"
