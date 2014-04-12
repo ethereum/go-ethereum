@@ -619,7 +619,18 @@ ApplicationWindow {
 		width: 800
 		height: 600
 
+
+		Item {
+			id: keyHandler
+			focus: true
+			Keys.onPressed: {
+				if (event.key == Qt.Key_Space) {
+					ui.next()
+				}
+			}
+		}
 		SplitView {
+
 			anchors.fill: parent
 			property var asmModel: ListModel {
 				id: asmModel
@@ -664,10 +675,14 @@ ApplicationWindow {
 	}
 
 	function setAsm(asm) {
-		//for(var i = 0; i < asm.length; i++) {
 		asmModel.append({asm: asm})
-		//}
 	}
+
+	function setInstruction(num) {
+		asmTableView.selection.clear()
+		asmTableView.selection.select(num-1)
+	}
+
 	function clearAsm() {
 		asmModel.clear()
 	}

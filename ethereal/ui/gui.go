@@ -113,10 +113,12 @@ func (ui *Gui) Start(assetPath string) {
 		ethutil.Config.Log.Infoln("FATAL: asset not found: you can set an alternative asset path on on the command line using option 'asset_path'")
 		panic(err)
 	}
-	ui.engine.LoadFile(uiLib.AssetPath("qml/transactions.qml"))
 
 	ui.win = component.CreateWindow(nil)
 	uiLib.win = ui.win
+	db := &Debugger{ui.win, make(chan bool)}
+	ui.lib.Db = db
+	uiLib.Db = db
 
 	// Register the ui as a block processor
 	//ui.eth.BlockManager.SecondaryBlockProcessor = ui
