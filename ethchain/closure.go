@@ -69,7 +69,7 @@ func (c *Closure) Address() []byte {
 	return c.object.Address()
 }
 
-type DebugHook func(op OpCode, mem *Memory, stack *Stack)
+type DebugHook func(step int, op OpCode, mem *Memory, stack *Stack)
 
 func (c *Closure) Call(vm *Vm, args []byte, hook DebugHook) []byte {
 	c.Args = args

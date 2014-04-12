@@ -3,6 +3,7 @@ package ethutil
 import (
 	_ "fmt"
 	"math/big"
+	"regexp"
 )
 
 // Op codes
@@ -128,6 +129,36 @@ func Assemble(instructions ...interface{}) (script []byte) {
 
 		//script[i] = string(instr)
 		script = append(script, instr...)
+	}
+
+	return
+}
+
+/*
+Prepocessing function that takes init and main apart:
+init() {
+	// something
+}
+
+main() {
+	// main something
+}
+*/
+func PreProcess(data string) (mainInput, initInput string) {
+	reg := "\\(\\)\\s*{([\\d\\w\\W\\n\\s]+?)}"
+	mainReg := regexp.MustCompile("main" + reg)
+	initReg := regexp.MustCompile("init" + reg)
+
+	main := mainReg.FindStringSubmatch(data)
+	if len(main) > 0 {
+		mainInput = main[1]
+	} else {
+		mainInput = data
+	}
+
+	init := initReg.FindStringSubmatch(data)
+	if len(init) > 0 {
+		initInput = init[1]
 	}
 
 	return

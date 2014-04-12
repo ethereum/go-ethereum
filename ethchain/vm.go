@@ -312,6 +312,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 			stack.Push(val)
 
 			pc.Add(pc, big.NewInt(31))
+			step++
 		case oPUSH20:
 			pc.Add(pc, ethutil.Big1)
 			data := closure.Gets(pc, big.NewInt(20))
@@ -321,7 +322,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 			stack.Push(val)
 
 			pc.Add(pc, big.NewInt(19))
-
+			step++
 		case oPOP:
 			stack.Pop()
 		case oDUP:
@@ -410,7 +411,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 		pc.Add(pc, ethutil.Big1)
 
 		if hook != nil {
-			hook(op, mem, stack)
+			hook(step-1, op, mem, stack)
 		}
 	}
 }
