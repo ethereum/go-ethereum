@@ -167,7 +167,7 @@ ApplicationWindow {
 						var newContract = component.createObject("newContract")
 
 						addTab("Simple send", newTransaction)
-						addTab("Create contract", newContract)
+						addTab("Contracts", newContract)
 					}
 				}
 			}

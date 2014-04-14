@@ -85,9 +85,34 @@ Component {
 			}
 		}
 
+		Row {
+			id: rowContract
+			ExclusiveGroup { id: contractTypeGroup }
+			RadioButton {
+				id: createContractRadio
+				text: "Create contract"
+				checked: true
+				exclusiveGroup: contractTypeGroup
+				onClicked: {
+					txFuelRecipient.visible = false
+					txDataLabel.text = "Contract code"
+				}
+			}
+			RadioButton {
+				id: runContractRadio
+				text: "Run contract"
+				exclusiveGroup: contractTypeGroup
+				onClicked: {
+					txFuelRecipient.visible = true
+					txDataLabel.text = "Contract arguments"
+				}
+			}
+		}
+
+
 		Label {
 			id: txDataLabel
-			text: "Transaction data"
+			text: "Contract code"
 		}
 
 		TextArea {
@@ -98,6 +123,14 @@ Component {
 			onTextChanged: {
 				contractFormReady()
 			}
+		}
+
+		TextField {
+			id: txFuelRecipient
+			placeholderText: "Contract address"
+			validator: RegExpValidator { regExp: /[a-f0-9]{40}/ }
+			visible: false
+			width: 530
 		}
 
 		Button {
@@ -116,14 +149,14 @@ Component {
 			enabled: false
 			onClicked: {
 				//this.enabled = false
-				var res = eth.createTx("", txValue.text, txGas.text, txGasPrice.text, codeView.text)
+				var res = eth.createTx(txFuelRecipient.text, txValue.text, txGas.text, txGasPrice.text, codeView.text)
 				if(res[1]) {
 					txResult.text = "Your contract <b>could not</b> be send over the network:\n<b>"
 					txResult.text += res[1].error()
 					txResult.text += "</b>"
 					mainContractColumn.state = "ERROR"
 				} else {
-					txResult.text = "Your contract has been submitted:\n"
+					txResult.text = "Your transaction has been submitted:\n"
 					txOutput.text = res[0]
 					mainContractColumn.state = "DONE"
 				}
