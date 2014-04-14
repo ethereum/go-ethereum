@@ -412,6 +412,17 @@ ApplicationWindow {
 						model: memModel
 					}
 
+					SplitView {
+						orientation: Qt.Vertical
+						anchors.fill: parent
+						TableView {
+							property var debuggerLog: ListModel {
+								id: debuggerLog
+							}
+							TableViewColumn{ role: "value"; title: "Debug messages" }
+							model: debuggerLog
+						}
+					}
 					TableView {
 						property var stackModel: ListModel {
 							id: stackModel
@@ -448,6 +459,10 @@ ApplicationWindow {
 
 	function setStack(stack) {
 		stackModel.append({value: stack})
+	}
+	function addDebugMessage(message){
+		console.log("WOOP:")
+		debuggerLog.append({value: message})
 	}
 
 	function clearStack() {
