@@ -401,37 +401,36 @@ ApplicationWindow {
 					orientation: Qt.Vertical
 					anchors.fill: parent
 
-					TableView {
-						property var memModel: ListModel {
-							id: memModel
-						}
-						height: parent.height/2
-						width: parent.width
-						TableViewColumn{ id:mnumColmn ; role: "num" ; title: "#" ; width: 50}
-						TableViewColumn{ role: "value" ; title: "Memory" ; width: 750}
-						model: memModel
-					}
+          TableView {
+            property var memModel: ListModel {
+              id: memModel
+            }
+            height: parent.height/2
+            width: parent.width
+            TableViewColumn{ id:mnumColmn ; role: "num" ; title: "#" ; width: 50}
+            TableViewColumn{ role: "value" ; title: "Memory" ; width: 750}
+            model: memModel
+          }
 
-					SplitView {
-						orientation: Qt.Vertical
-						anchors.fill: parent
-						TableView {
-							property var debuggerLog: ListModel {
-								id: debuggerLog
-							}
-							TableViewColumn{ role: "value"; title: "Debug messages" }
-							model: debuggerLog
-						}
-					}
-					TableView {
-						property var stackModel: ListModel {
-							id: stackModel
-						}
-						height: parent.height/2
-						width: parent.width
-						TableViewColumn{ role: "value" ; title: "Stack" ; width: parent.width }
-						model: stackModel
-					}
+          SplitView {
+            orientation: Qt.Horizontal
+            TableView {
+              property var debuggerLog: ListModel {
+                id: debuggerLog
+              }
+              TableViewColumn{ role: "value"; title: "Debug messages" }
+              model: debuggerLog
+            }
+            TableView {
+              property var stackModel: ListModel {
+                id: stackModel
+              }
+              height: parent.height/2
+              width: parent.width
+              TableViewColumn{ role: "value" ; title: "Stack" ; width: parent.width }
+              model: stackModel
+            }
+          }
 				}
 			}
 		}
