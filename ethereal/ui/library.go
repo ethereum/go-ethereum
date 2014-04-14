@@ -15,6 +15,7 @@ type EthLib struct {
 	stateManager *ethchain.StateManager
 	blockChain   *ethchain.BlockChain
 	txPool       *ethchain.TxPool
+	Db           *Debugger
 }
 
 func (lib *EthLib) ImportAndSetPrivKey(privKey string) bool {

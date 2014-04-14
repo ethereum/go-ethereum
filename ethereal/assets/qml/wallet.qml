@@ -371,7 +371,18 @@ ApplicationWindow {
 		width: 800
 		height: 600
 
+
+		Item {
+			id: keyHandler
+			focus: true
+			Keys.onPressed: {
+				if (event.key == Qt.Key_Space) {
+					ui.next()
+				}
+			}
+		}
 		SplitView {
+
 			anchors.fill: parent
 			property var asmModel: ListModel {
 				id: asmModel
@@ -416,59 +427,63 @@ ApplicationWindow {
 	}
 
 	function setAsm(asm) {
-		//for(var i = 0; i < asm.length; i++) {
-			asmModel.append({asm: asm})
-			//}
-		}
-		function clearAsm() {
-			asmModel.clear()
-		}
+		asmModel.append({asm: asm})
+	}
 
-		function setMem(mem) {
-			memModel.append({num: mem.num, value: mem.value})
-		}
-		function clearMem(){
-			memModel.clear()
-		}
+	function setInstruction(num) {
+		asmTableView.selection.clear()
+		asmTableView.selection.select(num-1)
+	}
 
-		function setStack(stack) {
-			stackModel.append({value: stack})
-		}
+	function clearAsm() {
+		asmModel.clear()
+	}
 
-		function clearStack() {
-			stackModel.clear()
-		}
+	function setMem(mem) {
+		memModel.append({num: mem.num, value: mem.value})
+	}
+	function clearMem(){
+		memModel.clear()
+	}
 
-		function loadPlugin(name) {
-			console.log("Loading plugin" + name)
-			mainView.addPlugin(name)
-		}
+	function setStack(stack) {
+		stackModel.append({value: stack})
+	}
 
-		function setWalletValue(value) {
-			walletValueLabel.text = value
-		}
+	function clearStack() {
+		stackModel.clear()
+	}
 
-		function addTx(tx) {
-			var isContract
-			if (tx.contract == true){
-				isContract = "Yes"
-			}else{
-				isContract = "No"
-			}
-			txModel.insert(0, {hash: tx.hash, address: tx.address, value: tx.value, contract: isContract})
-		}
+	function loadPlugin(name) {
+		console.log("Loading plugin" + name)
+		mainView.addPlugin(name)
+	}
 
-		function addBlock(block) {
-			blockModel.insert(0, {number: block.number, hash: block.hash})
-		}
+	function setWalletValue(value) {
+		walletValueLabel.text = value
+	}
 
-		function addLog(str) {
-			if(str.len != 0) {
-				logModel.append({description: str})
-			}
+	function addTx(tx) {
+		var isContract
+		if (tx.contract == true){
+			isContract = "Yes"
+		}else{
+			isContract = "No"
 		}
+		txModel.insert(0, {hash: tx.hash, address: tx.address, value: tx.value, contract: isContract})
+	}
 
-		function setPeers(text) {
-			peerLabel.text = text
+	function addBlock(block) {
+		blockModel.insert(0, {number: block.number, hash: block.hash})
+	}
+
+	function addLog(str) {
+		if(str.len != 0) {
+			logModel.append({description: str})
 		}
 	}
+
+	function setPeers(text) {
+		peerLabel.text = text
+	}
+}
