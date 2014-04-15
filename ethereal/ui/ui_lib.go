@@ -102,6 +102,9 @@ func (ui *UiLib) DebugTx(recipient, valueStr, gasStr, gasPriceStr, data string) 
 	asm, err := mutan.Compile(strings.NewReader(mainInput), false)
 	if err != nil {
 		fmt.Println(err)
+		for _, e := range err {
+			ui.win.Root().Call("addDebugMessage", e.Error())
+		}
 	}
 
 	callerScript := ethutil.Assemble(asm...)
