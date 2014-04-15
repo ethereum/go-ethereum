@@ -44,6 +44,22 @@ func (lib *EthLib) CreateAndSetPrivKey() (string, string, string, string) {
 	return mnemonicString, fmt.Sprintf("%x", pair.Address()), fmt.Sprintf("%x", prv), fmt.Sprintf("%x", pub)
 }
 
+// General compiler and preprocessor function
+func compile(script string) ([]byte, error) {
+	asm, errors := mutan.Compile(strings.NewReader(script), false)
+	if len(errors) > 0 {
+		var errs string
+		for _, er := range errors {
+			if er != nil {
+				errs += er.Error()
+			}
+		}
+		return nil, fmt.Errorf("%v", errs)
+	}
+
+	return ethutil.Assemble(asm...), nil
+}
+
 func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data string) (string, error) {
 	var hash []byte
 	var contractCreation bool
@@ -64,19 +80,19 @@ func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data strin
 	var tx *ethchain.Transaction
 	// Compile and assemble the given data
 	if contractCreation {
-		asm, errors := mutan.Compile(strings.NewReader(data), false)
-		if len(errors) > 0 {
-			var errs string
-			for _, er := range errors {
-				if er != nil {
-					errs += er.Error()
-				}
-			}
-			return "", fmt.Errorf(errs)
+		mainInput, initInput := ethutil.PreProcess(data)
+		mainScript, err := compile(mainInput)
+		if err != nil {
+			return "", err
+		}
+		initScript, err := compile(initInput)
+		if err != nil {
+			return "", err
 		}
 
-		code := ethutil.Assemble(asm...)
-		tx = ethchain.NewContractCreationTx(value, gasPrice, code)
+		// TODO
+		fmt.Println(initScript)
+		tx = ethchain.NewContractCreationTx(value, gasPrice, mainScript)
 	} else {
 		tx = ethchain.NewTransactionMessage(hash, value, gasPrice, gas, nil)
 	}
