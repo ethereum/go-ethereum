@@ -48,7 +48,19 @@ func NewVm(state *State, vars RuntimeVars) *Vm {
 
 var Pow256 = ethutil.BigPow(2, 256)
 
-func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
+var isRequireError = false
+
+func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err error) {
+	// Recover from any require exception
+	defer func() {
+		if r := recover(); r != nil && isRequireError {
+			fmt.Println(r)
+
+			ret = closure.Return(nil)
+			err = fmt.Errorf("%v", r)
+		}
+	}()
+
 	// If the amount of gas supplied is less equal to 0
 	if closure.Gas.Cmp(big.NewInt(0)) <= 0 {
 		// TODO Do something
@@ -58,6 +70,13 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 	mem := &Memory{}
 	// New stack (should this be shared?)
 	stack := NewStack()
+	require := func(m int) {
+		if stack.Len()-1 > m {
+			isRequireError = true
+			panic(fmt.Sprintf("stack = %d, req = %d", stack.Len(), m))
+		}
+	}
+
 	// Instruction pointer
 	pc := big.NewInt(0)
 	// Current step count
@@ -121,7 +140,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 		if closure.Gas.Cmp(gas) < 0 {
 			ethutil.Config.Log.Debugln("Insufficient gas", closure.Gas, gas)
 
-			return closure.Return(nil)
+			return closure.Return(nil), fmt.Errorf("insufficient gas %v %v", closure.Gas, gas)
 		}
 
 		switch op {
@@ -129,10 +148,11 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 			stack.Print()
 			mem.Print()
 		case oSTOP: // Stop the closure
-			return closure.Return(nil)
+			return closure.Return(nil), nil
 
-		// 0x20 range
+			// 0x20 range
 		case oADD:
+			require(2)
 			x, y := stack.Popn()
 			// (x + y) % 2 ** 256
 			base.Add(x, y)
@@ -140,6 +160,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 			// Pop result back on the stack
 			stack.Push(base)
 		case oSUB:
+			require(2)
 			x, y := stack.Popn()
 			// (x - y) % 2 ** 256
 			base.Sub(x, y)
@@ -147,6 +168,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 			// Pop result back on the stack
 			stack.Push(base)
 		case oMUL:
+			require(2)
 			x, y := stack.Popn()
 			// (x * y) % 2 ** 256
 			base.Mul(x, y)
@@ -154,12 +176,14 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 			// Pop result back on the stack
 			stack.Push(base)
 		case oDIV:
+			require(2)
 			x, y := stack.Popn()
 			// floor(x / y)
 			base.Div(x, y)
 			// Pop result back on the stack
 			stack.Push(base)
 		case oSDIV:
+			require(2)
 			x, y := stack.Popn()
 			// n > 2**255
 			if x.Cmp(Pow256) > 0 {
@@ -176,10 +200,12 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 			// Push result on to the stack
 			stack.Push(z)
 		case oMOD:
+			require(2)
 			x, y := stack.Popn()
 			base.Mod(x, y)
 			stack.Push(base)
 		case oSMOD:
+			require(2)
 			x, y := stack.Popn()
 			// n > 2**255
 			if x.Cmp(Pow256) > 0 {
@@ -196,14 +222,17 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 			// Push result on to the stack
 			stack.Push(z)
 		case oEXP:
+			require(2)
 			x, y := stack.Popn()
 			base.Exp(x, y, Pow256)
 
 			stack.Push(base)
 		case oNEG:
+			require(1)
 			base.Sub(Pow256, stack.Pop())
 			stack.Push(base)
 		case oLT:
+			require(2)
 			x, y := stack.Popn()
 			// x < y
 			if x.Cmp(y) < 0 {
@@ -212,6 +241,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 				stack.Push(ethutil.BigFalse)
 			}
 		case oGT:
+			require(2)
 			x, y := stack.Popn()
 			// x > y
 			if x.Cmp(y) > 0 {
@@ -220,6 +250,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 				stack.Push(ethutil.BigFalse)
 			}
 		case oEQ:
+			require(2)
 			x, y := stack.Popn()
 			// x == y
 			if x.Cmp(y) == 0 {
@@ -228,6 +259,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 				stack.Push(ethutil.BigFalse)
 			}
 		case oNOT:
+			require(1)
 			x := stack.Pop()
 			if x.Cmp(ethutil.BigFalse) == 0 {
 				stack.Push(ethutil.BigTrue)
@@ -235,8 +267,9 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 				stack.Push(ethutil.BigFalse)
 			}
 
-		// 0x10 range
+			// 0x10 range
 		case oAND:
+			require(2)
 			x, y := stack.Popn()
 			if (x.Cmp(ethutil.BigTrue) >= 0) && (y.Cmp(ethutil.BigTrue) >= 0) {
 				stack.Push(ethutil.BigTrue)
@@ -245,6 +278,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 			}
 
 		case oOR:
+			require(2)
 			x, y := stack.Popn()
 			if (x.Cmp(ethutil.BigInt0) >= 0) || (y.Cmp(ethutil.BigInt0) >= 0) {
 				stack.Push(ethutil.BigTrue)
@@ -252,9 +286,11 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 				stack.Push(ethutil.BigFalse)
 			}
 		case oXOR:
+			require(2)
 			x, y := stack.Popn()
 			stack.Push(base.Xor(x, y))
 		case oBYTE:
+			require(2)
 			val, th := stack.Popn()
 			if th.Cmp(big.NewInt(32)) < 0 {
 				stack.Push(big.NewInt(int64(len(val.Bytes())-1) - th.Int64()))
@@ -262,13 +298,14 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 				stack.Push(ethutil.BigFalse)
 			}
 
-		// 0x20 range
+			// 0x20 range
 		case oSHA3:
+			require(2)
 			size, offset := stack.Popn()
 			data := mem.Get(offset.Int64(), size.Int64())
 
 			stack.Push(ethutil.BigD(data))
-		// 0x30 range
+			// 0x30 range
 		case oADDRESS:
 			stack.Push(ethutil.BigD(closure.Object().Address()))
 		case oBALANCE:
@@ -281,6 +318,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 			// FIXME: Original value of the call, not the current value
 			stack.Push(closure.Value)
 		case oCALLDATA:
+			require(1)
 			offset := stack.Pop()
 			mem.Set(offset.Int64(), int64(len(closure.Args)), closure.Args)
 		case oCALLDATASIZE:
@@ -288,7 +326,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 		case oGASPRICE:
 			// TODO
 
-		// 0x40 range
+			// 0x40 range
 		case oPREVHASH:
 			stack.Push(ethutil.BigD(vm.vars.PrevHash))
 		case oCOINBASE:
@@ -300,7 +338,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 		case oDIFFICULTY:
 			stack.Push(vm.vars.Diff)
 		case oGASLIMIT:
-			// TODO
+		// TODO
 
 		// 0x50 range
 		case oPUSH: // Push PC+1 on to the stack
@@ -324,34 +362,44 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 			pc.Add(pc, big.NewInt(19))
 			step++
 		case oPOP:
+			require(1)
 			stack.Pop()
 		case oDUP:
+			require(1)
 			stack.Push(stack.Peek())
 		case oSWAP:
+			require(2)
 			x, y := stack.Popn()
 			stack.Push(y)
 			stack.Push(x)
 		case oMLOAD:
+			require(1)
 			offset := stack.Pop()
 			stack.Push(ethutil.BigD(mem.Get(offset.Int64(), 32)))
 		case oMSTORE: // Store the value at stack top-1 in to memory at location stack top
+			require(2)
 			// Pop value of the stack
 			val, mStart := stack.Popn()
 			mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(val, 256))
 		case oMSTORE8:
+			require(2)
 			val, mStart := stack.Popn()
 			base.And(val, new(big.Int).SetInt64(0xff))
 			mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(base, 256))
 		case oSLOAD:
+			require(1)
 			loc := stack.Pop()
 			val := closure.GetMem(loc)
 			stack.Push(val.BigInt())
 		case oSSTORE:
+			require(2)
 			val, loc := stack.Popn()
 			closure.SetMem(loc, ethutil.NewValue(val))
 		case oJUMP:
+			require(1)
 			pc = stack.Pop()
 		case oJUMPI:
+			require(2)
 			cond, pos := stack.Popn()
 			if cond.Cmp(ethutil.BigTrue) == 0 {
 				pc = pos
@@ -360,8 +408,10 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 			stack.Push(pc)
 		case oMSIZE:
 			stack.Push(big.NewInt(int64(mem.Len())))
-		// 0x60 range
+			// 0x60 range
+		case oCREATE:
 		case oCALL:
+			require(8)
 			// Closure addr
 			addr := stack.Pop()
 			// Pop gas and value of the stack.
@@ -377,14 +427,20 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 			// Create a new callable closure
 			closure := NewClosure(closure, contract, contract.script, vm.state, gas, value)
 			// Executer the closure and get the return value (if any)
-			ret := closure.Call(vm, args, hook)
+			ret, err := closure.Call(vm, args, hook)
+			if err != nil {
+				stack.Push(ethutil.BigFalse)
+			} else {
+				stack.Push(ethutil.BigTrue)
+			}
 
 			mem.Set(retOffset.Int64(), retSize.Int64(), ret)
 		case oRETURN:
+			require(2)
 			size, offset := stack.Popn()
 			ret := mem.Get(offset.Int64(), size.Int64())
 
-			return closure.Return(ret)
+			return closure.Return(ret), nil
 		case oSUICIDE:
 			/*
 				recAddr := stack.Pop().Bytes()
@@ -405,7 +461,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 		default:
 			ethutil.Config.Log.Debugf("Invalid opcode %x\n", op)
 
-			return closure.Return(nil)
+			return closure.Return(nil), fmt.Errorf("Invalid opcode %x", op)
 		}
 
 		pc.Add(pc, ethutil.Big1)
@@ -414,56 +470,4 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) []byte {
 			hook(step-1, op, mem, stack)
 		}
 	}
-}
-
-func Disassemble(script []byte) (asm []string) {
-	pc := new(big.Int)
-	for {
-		if pc.Cmp(big.NewInt(int64(len(script)))) >= 0 {
-			return
-		}
-
-		// Get the memory location of pc
-		val := script[pc.Int64()]
-		// Get the opcode (it must be an opcode!)
-		op := OpCode(val)
-
-		asm = append(asm, fmt.Sprintf("%v", op))
-
-		switch op {
-		case oPUSH: // Push PC+1 on to the stack
-			pc.Add(pc, ethutil.Big1)
-			data := script[pc.Int64() : pc.Int64()+32]
-			val := ethutil.BigD(data)
-
-			var b []byte
-			if val.Int64() == 0 {
-				b = []byte{0}
-			} else {
-				b = val.Bytes()
-			}
-
-			asm = append(asm, fmt.Sprintf("0x%x", b))
-
-			pc.Add(pc, big.NewInt(31))
-		case oPUSH20:
-			pc.Add(pc, ethutil.Big1)
-			data := script[pc.Int64() : pc.Int64()+20]
-			val := ethutil.BigD(data)
-			var b []byte
-			if val.Int64() == 0 {
-				b = []byte{0}
-			} else {
-				b = val.Bytes()
-			}
-
-			asm = append(asm, fmt.Sprintf("0x%x", b))
-
-			pc.Add(pc, big.NewInt(19))
-		}
-
-		pc.Add(pc, ethutil.Big1)
-	}
-
-	return
 }

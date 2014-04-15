@@ -71,7 +71,7 @@ func (c *Closure) Address() []byte {
 
 type DebugHook func(step int, op OpCode, mem *Memory, stack *Stack)
 
-func (c *Closure) Call(vm *Vm, args []byte, hook DebugHook) []byte {
+func (c *Closure) Call(vm *Vm, args []byte, hook DebugHook) ([]byte, error) {
 	c.Args = args
 
 	return vm.RunClosure(c, hook)
