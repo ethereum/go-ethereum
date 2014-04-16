@@ -170,7 +170,7 @@ func (ui *Gui) update() {
 	txChan := make(chan ethchain.TxMsg, 1)
 	ui.eth.TxPool().Subscribe(txChan)
 
-	account := ui.eth.StateManager().GetAddrState(ui.addr).Account
+	account := ui.eth.StateManager().GetAddrState(ui.addr).Object
 	unconfirmedFunds := new(big.Int)
 	ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(account.Amount)))
 	for {

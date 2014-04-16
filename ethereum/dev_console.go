@@ -11,8 +11,7 @@ import (
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
-	"github.com/obscuren/mutan"
-	_ "math/big"
+	"github.com/ethereum/go-ethereum/utils"
 	"os"
 	"strings"
 )
@@ -171,7 +170,7 @@ func (i *Console) ParseInput(input string) bool {
 			if err != nil {
 				fmt.Println("recipient err:", err)
 			} else {
-				tx := ethchain.NewTransactionMessage(recipient, ethutil.Big(tokens[2]), ethutil.Big(tokens[3]), ethutil.Big(tokens[4]), []string{""})
+				tx := ethchain.NewTransactionMessage(recipient, ethutil.Big(tokens[2]), ethutil.Big(tokens[3]), ethutil.Big(tokens[4]), nil)
 
 				key := ethutil.Config.Db.GetKeys()[0]
 				tx.Sign(key.PrivateKey)
@@ -190,15 +189,22 @@ func (i *Console) ParseInput(input string) bool {
 			}
 		case "contract":
 			fmt.Println("Contract editor (Ctrl-D = done)")
-			asm, err := mutan.Compile(strings.NewReader(i.Editor()), false)
+
+			mainInput, initInput := ethutil.PreProcess(i.Editor())
+			mainScript, err := utils.Compile(mainInput)
 			if err != nil {
 				fmt.Println(err)
+
+				break
+			}
+			initScript, err := utils.Compile(initInput)
+			if err != nil {
+				fmt.Println(err)
+
 				break
 			}
 
-			code := ethutil.Assemble(asm)
-
-			contract := ethchain.NewContractCreationTx(ethutil.Big(tokens[0]), ethutil.Big(tokens[1]), code)
+			contract := ethchain.NewContractCreationTx(ethutil.Big(tokens[0]), ethutil.Big(tokens[1]), mainScript, initScript)
 
 			key := ethutil.Config.Db.GetKeys()[0]
 			contract.Sign(key.PrivateKey)

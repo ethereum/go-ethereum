@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/utils"
-	"github.com/obscuren/mutan"
 	"github.com/obscuren/secp256k1-go"
 	"strings"
 )
@@ -44,22 +43,6 @@ func (lib *EthLib) CreateAndSetPrivKey() (string, string, string, string) {
 	return mnemonicString, fmt.Sprintf("%x", pair.Address()), fmt.Sprintf("%x", prv), fmt.Sprintf("%x", pub)
 }
 
-// General compiler and preprocessor function
-func compile(script string) ([]byte, error) {
-	asm, errors := mutan.Compile(strings.NewReader(script), false)
-	if len(errors) > 0 {
-		var errs string
-		for _, er := range errors {
-			if er != nil {
-				errs += er.Error()
-			}
-		}
-		return nil, fmt.Errorf("%v", errs)
-	}
-
-	return ethutil.Assemble(asm...), nil
-}
-
 func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data string) (string, error) {
 	var hash []byte
 	var contractCreation bool
@@ -81,18 +64,16 @@ func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data strin
 	// Compile and assemble the given data
 	if contractCreation {
 		mainInput, initInput := ethutil.PreProcess(data)
-		mainScript, err := compile(mainInput)
+		mainScript, err := utils.Compile(mainInput)
 		if err != nil {
 			return "", err
 		}
-		initScript, err := compile(initInput)
+		initScript, err := utils.Compile(initInput)
 		if err != nil {
 			return "", err
 		}
 
-		// TODO
-		fmt.Println(initScript)
-		tx = ethchain.NewContractCreationTx(value, gasPrice, mainScript)
+		tx = ethchain.NewContractCreationTx(value, gasPrice, mainScript, initScript)
 	} else {
 		tx = ethchain.NewTransactionMessage(hash, value, gasPrice, gas, nil)
 	}

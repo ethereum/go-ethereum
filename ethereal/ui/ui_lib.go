@@ -6,14 +6,13 @@ import (
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/go-ethereum/utils"
 	"github.com/niemeyer/qml"
-	"github.com/obscuren/mutan"
 	"math/big"
 	"os"
 	"path"
 	"path/filepath"
 	"runtime"
-	"strings"
 )
 
 type memAddr struct {
@@ -99,25 +98,24 @@ func (ui *UiLib) DebugTx(recipient, valueStr, gasStr, gasPriceStr, data string) 
 	state := ui.eth.BlockChain().CurrentBlock.State()
 
 	mainInput, _ := ethutil.PreProcess(data)
-	asm, err := mutan.Compile(strings.NewReader(mainInput), false)
+	callerScript, err := utils.Compile(mainInput)
 	if err != nil {
-		fmt.Println(err)
-		for _, e := range err {
-			ui.win.Root().Call("addDebugMessage", e.Error())
-		}
+		ethutil.Config.Log.Debugln(err)
+
+		return
 	}
 
-	callerScript := ethutil.Assemble(asm...)
 	dis := ethchain.Disassemble(callerScript)
 	ui.win.Root().Call("clearAsm")
+
 	for _, str := range dis {
 		ui.win.Root().Call("setAsm", str)
 	}
-	callerTx := ethchain.NewContractCreationTx(ethutil.Big(valueStr), ethutil.Big(gasPriceStr), callerScript)
+	callerTx := ethchain.NewContractCreationTx(ethutil.Big(valueStr), ethutil.Big(gasPriceStr), callerScript, nil)
 
 	// Contract addr as test address
 	keyPair := ethutil.Config.Db.GetKeys()[0]
-	account := ui.eth.StateManager().GetAddrState(keyPair.Address()).Account
+	account := ui.eth.StateManager().GetAddrState(keyPair.Address()).Object
 	c := ethchain.MakeContract(callerTx, state)
 	callerClosure := ethchain.NewClosure(account, c, c.Script(), state, ethutil.Big(gasStr), new(big.Int))
 
