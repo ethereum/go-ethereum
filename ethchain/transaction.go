@@ -23,8 +23,8 @@ type Transaction struct {
 	contractCreation bool
 }
 
-func NewContractCreationTx(value, gasprice *big.Int, data []byte) *Transaction {
-	return &Transaction{Value: value, Gasprice: gasprice, Data: data, contractCreation: true}
+func NewContractCreationTx(value, gasprice *big.Int, script []byte, init []byte) *Transaction {
+	return &Transaction{Value: value, Gasprice: gasprice, Data: script, Init: init, contractCreation: true}
 }
 
 func NewTransactionMessage(to []byte, value, gasprice, gas *big.Int, data []byte) *Transaction {

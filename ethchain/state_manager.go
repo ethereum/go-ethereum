@@ -30,7 +30,7 @@ type StateManager struct {
 	bc *BlockChain
 	// States for addresses. You can watch any address
 	// at any given time
-	addrStateStore *AddrStateStore
+	stateObjectCache *StateObjectCache
 
 	// Stack for processing contracts
 	stack *Stack
@@ -54,12 +54,12 @@ type StateManager struct {
 
 func NewStateManager(ethereum EthManager) *StateManager {
 	sm := &StateManager{
-		stack:          NewStack(),
-		mem:            make(map[string]*big.Int),
-		Pow:            &EasyPow{},
-		Ethereum:       ethereum,
-		addrStateStore: NewAddrStateStore(),
-		bc:             ethereum.BlockChain(),
+		stack:            NewStack(),
+		mem:              make(map[string]*big.Int),
+		Pow:              &EasyPow{},
+		Ethereum:         ethereum,
+		stateObjectCache: NewStateObjectCache(),
+		bc:               ethereum.BlockChain(),
 	}
 	sm.procState = ethereum.BlockChain().CurrentBlock.State()
 	return sm
@@ -70,18 +70,18 @@ func (sm *StateManager) ProcState() *State {
 }
 
 // Watches any given address and puts it in the address state store
-func (sm *StateManager) WatchAddr(addr []byte) *AccountState {
+func (sm *StateManager) WatchAddr(addr []byte) *CachedStateObject {
 	//XXX account := sm.bc.CurrentBlock.state.GetAccount(addr)
 	account := sm.procState.GetAccount(addr)
 
-	return sm.addrStateStore.Add(addr, account)
+	return sm.stateObjectCache.Add(addr, account)
 }
 
-func (sm *StateManager) GetAddrState(addr []byte) *AccountState {
-	account := sm.addrStateStore.Get(addr)
+func (sm *StateManager) GetAddrState(addr []byte) *CachedStateObject {
+	account := sm.stateObjectCache.Get(addr)
 	if account == nil {
 		a := sm.procState.GetAccount(addr)
-		account = &AccountState{Nonce: a.Nonce, Account: a}
+		account = &CachedStateObject{Nonce: a.Nonce, Object: a}
 	}
 
 	return account
@@ -116,7 +116,7 @@ func (sm *StateManager) ApplyTransactions(block *Block, txs []*Transaction) {
 			if contract := sm.procState.GetContract(tx.Recipient); contract != nil {
 				err = sm.Ethereum.TxPool().ProcessTransaction(tx, block, true)
 				if err == nil {
-					sm.ProcessContract(contract, tx, block)
+					sm.EvalScript(contract.Script(), contract, tx, block)
 				}
 			} else {
 				err = sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
@@ -180,7 +180,6 @@ func (sm *StateManager) ProcessBlock(block *Block, dontReact bool) error {
 		return err
 	}
 
-	// if !sm.compState.Cmp(sm.procState)
 	if !sm.compState.Cmp(sm.procState) {
 		return fmt.Errorf("Invalid merkle root. Expected %x, got %x", sm.compState.trie.Root, sm.procState.trie.Root)
 	}
@@ -189,9 +188,6 @@ func (sm *StateManager) ProcessBlock(block *Block, dontReact bool) error {
 	if sm.CalculateTD(block) {
 		// Sync the current block's state to the database and cancelling out the deferred Undo
 		sm.procState.Sync()
-
-		// Broadcast the valid block back to the wire
-		//sm.Ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
 
 		// Add the block to the chain
 		sm.bc.Add(block)
@@ -282,22 +278,20 @@ func CalculateUncleReward(block *Block) *big.Int {
 }
 
 func (sm *StateManager) AccumelateRewards(block *Block) error {
-
-	// Get the coinbase rlp data
-	acc := sm.procState.GetAccount(block.Coinbase)
+	// Get the account associated with the coinbase
+	account := sm.procState.GetAccount(block.Coinbase)
 	// Reward amount of ether to the coinbase address
-	acc.AddFee(CalculateBlockReward(block, len(block.Uncles)))
+	account.AddAmount(CalculateBlockReward(block, len(block.Uncles)))
 
 	addr := make([]byte, len(block.Coinbase))
 	copy(addr, block.Coinbase)
-	sm.procState.UpdateAccount(addr, acc)
+	sm.procState.UpdateStateObject(account)
 
 	for _, uncle := range block.Uncles {
-		uncleAddr := sm.procState.GetAccount(uncle.Coinbase)
-		uncleAddr.AddFee(CalculateUncleReward(uncle))
+		uncleAccount := sm.procState.GetAccount(uncle.Coinbase)
+		uncleAccount.AddAmount(CalculateUncleReward(uncle))
 
-		//processor.state.UpdateAccount(uncle.Coinbase, uncleAddr)
-		sm.procState.UpdateAccount(uncle.Coinbase, uncleAddr)
+		sm.procState.UpdateStateObject(uncleAccount)
 	}
 
 	return nil
@@ -307,7 +301,7 @@ func (sm *StateManager) Stop() {
 	sm.bc.Stop()
 }
 
-func (sm *StateManager) ProcessContract(contract *Contract, tx *Transaction, block *Block) {
+func (sm *StateManager) EvalScript(script []byte, object *StateObject, tx *Transaction, block *Block) {
 	// Recovering function in case the VM had any errors
 	defer func() {
 		if r := recover(); r != nil {
@@ -316,7 +310,7 @@ func (sm *StateManager) ProcessContract(contract *Contract, tx *Transaction, blo
 	}()
 
 	caller := sm.procState.GetAccount(tx.Sender())
-	closure := NewClosure(caller, contract, contract.script, sm.procState, tx.Gas, tx.Value)
+	closure := NewClosure(caller, object, script, sm.procState, tx.Gas, tx.Value)
 	vm := NewVm(sm.procState, RuntimeVars{
 		Origin:      caller.Address(),
 		BlockNumber: block.BlockInfo().Number,
@@ -324,11 +318,9 @@ func (sm *StateManager) ProcessContract(contract *Contract, tx *Transaction, blo
 		Coinbase:    block.Coinbase,
 		Time:        block.Time,
 		Diff:        block.Difficulty,
-		// XXX Tx data? Could be just an argument to the closure instead
-		TxData: nil,
 	})
 	closure.Call(vm, nil, nil)
 
 	// Update the account (refunds)
-	sm.procState.UpdateAccount(tx.Sender(), caller)
+	sm.procState.UpdateStateObject(caller)
 }

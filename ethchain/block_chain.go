@@ -262,9 +262,9 @@ func AddTestNetFunds(block *Block) {
 	} {
 		//log.Println("2^200 Wei to", addr)
 		codedAddr := ethutil.FromHex(addr)
-		addr := block.state.GetAccount(codedAddr)
-		addr.Amount = ethutil.BigPow(2, 200)
-		block.state.UpdateAccount(codedAddr, addr)
+		account := block.state.GetAccount(codedAddr)
+		account.Amount = ethutil.BigPow(2, 200)
+		block.state.UpdateStateObject(account)
 	}
 }
 

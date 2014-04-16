@@ -118,20 +118,20 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block, toContract
 	// Send Tx to self
 	if bytes.Compare(tx.Recipient, tx.Sender()) == 0 {
 		// Subtract the fee
-		sender.Amount.Sub(sender.Amount, new(big.Int).Mul(TxFee, TxFeeRat))
+		sender.SubAmount(new(big.Int).Mul(TxFee, TxFeeRat))
 	} else if toContract {
-		sender.Amount.Sub(sender.Amount, new(big.Int).Mul(TxFee, TxFeeRat))
+		sender.SubAmount(new(big.Int).Mul(TxFee, TxFeeRat))
 	} else {
 		// Subtract the amount from the senders account
-		sender.Amount.Sub(sender.Amount, totAmount)
+		sender.SubAmount(totAmount)
 
 		// Add the amount to receivers account which should conclude this transaction
-		receiver.Amount.Add(receiver.Amount, tx.Value)
+		receiver.AddAmount(tx.Value)
 
-		block.state.UpdateAccount(tx.Recipient, receiver)
+		block.state.UpdateStateObject(receiver)
 	}
 
-	block.state.UpdateAccount(tx.Sender(), sender)
+	block.state.UpdateStateObject(sender)
 
 	log.Printf("[TXPL] Processed Tx %x\n", tx.Hash())
 
@@ -151,7 +151,7 @@ func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 
 	// Get the sender
 	accountState := pool.Ethereum.StateManager().GetAddrState(tx.Sender())
-	sender := accountState.Account
+	sender := accountState.Object
 
 	totAmount := new(big.Int).Add(tx.Value, new(big.Int).Mul(TxFee, TxFeeRat))
 	// Make sure there's enough in the sender's account. Having insufficient

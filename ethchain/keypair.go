@@ -10,7 +10,7 @@ type KeyPair struct {
 	PublicKey  []byte
 
 	// The associated account
-	account *Account
+	account *StateObject
 	state   *State
 }
 
@@ -24,7 +24,7 @@ func (k *KeyPair) Address() []byte {
 	return ethutil.Sha3Bin(k.PublicKey[1:])[12:]
 }
 
-func (k *KeyPair) Account() *Account {
+func (k *KeyPair) Account() *StateObject {
 	if k.account == nil {
 		k.account = k.state.GetAccount(k.Address())
 	}
