@@ -17,7 +17,7 @@ import (
 const Debug = true
 
 // Register interrupt handlers so we can stop the ethereum
-func RegisterInterupts(s *eth.Ethereum) {
+func RegisterInterrupts(s *eth.Ethereum) {
 	// Buffered chan of one is enough
 	c := make(chan os.Signal, 1)
 	// Notify about interrupts for now
@@ -130,7 +130,7 @@ func main() {
 		go console.Start()
 	}
 
-	RegisterInterupts(ethereum)
+	RegisterInterrupts(ethereum)
 	ethereum.Start()
 
 	if StartMining {
