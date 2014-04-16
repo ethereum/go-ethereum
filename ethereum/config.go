@@ -15,8 +15,7 @@ var GenAddr bool
 var UseSeed bool
 var ImportKey string
 var ExportKey bool
-
-//var UseGui bool
+var LogFile string
 var DataDir string
 
 func Init() {
@@ -29,6 +28,7 @@ func Init() {
 	flag.BoolVar(&GenAddr, "genaddr", false, "create a new priv/pub key")
 	flag.BoolVar(&ExportKey, "export", false, "export private key")
 	flag.StringVar(&OutboundPort, "p", "30303", "listening port")
+	flag.StringVar(&LogFile, "logfile", "", "log file (defaults to standard output)")
 	flag.StringVar(&DataDir, "dir", ".ethereum", "ethereum data directory")
 	flag.StringVar(&ImportKey, "import", "", "imports the given private key (hex)")
 	flag.IntVar(&MaxPeer, "x", 5, "maximum desired peers")

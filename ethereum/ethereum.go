@@ -25,7 +25,6 @@ func RegisterInterupts(s *eth.Ethereum) {
 	go func() {
 		for sig := range c {
 			fmt.Printf("Shutting down (%v) ... \n", sig)
-
 			s.Stop()
 		}
 	}()
@@ -36,8 +35,25 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	ethchain.InitFees()
+	// set logger
+	var logger *log.Logger
+	flags := log.LstdFlags
+
+	if LogFile != "" {
+		logfile, err := os.OpenFile(LogFile, os.O_RDWR | os.O_CREATE | os.O_APPEND, 0666)
+    if err != nil {
+      panic(fmt.Sprintf("error opening log file '%s': %v", LogFile, err))
+    }
+    defer logfile.Close()
+		log.SetOutput(logfile)
+		logger = log.New(logfile, "", flags)
+  } else {
+  	logger = log.New(os.Stdout, "", flags)
+  }
 	ethutil.ReadConfig(DataDir)
+	ethutil.Config.Log.AddLogSystem(logger)
+
+  ethchain.InitFees()
 	ethutil.Config.Seed = UseSeed
 
 	// Instantiated a eth stack
@@ -108,7 +124,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	log.Printf("Starting Ethereum v%s\n", ethutil.Config.Ver)
+	ethutil.Config.Log.Infoln(fmt.Sprintf("Starting Ethereum v%s", ethutil.Config.Ver))
 
 	// Set the max peers
 	ethereum.MaxPeers = MaxPeer
@@ -128,13 +144,13 @@ func main() {
 	ethereum.Start()
 
 	if StartMining {
-		log.Printf("Miner started\n")
+		ethutil.Config.Log.Infoln("Miner started")
 
 		// Fake block mining. It broadcasts a new block every 5 seconds
 		go func() {
 
 			if StartMining {
-				log.Printf("Miner started\n")
+				ethutil.Config.Log.Infoln("Miner started")
 
 				go func() {
 					data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
