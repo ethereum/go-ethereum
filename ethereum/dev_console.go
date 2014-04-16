@@ -171,7 +171,7 @@ func (i *Console) ParseInput(input string) bool {
 			if err != nil {
 				fmt.Println("recipient err:", err)
 			} else {
-				tx := ethchain.NewTransactionMessage(recipient, ethutil.Big(tokens[2]), ethutil.Big(tokens[3]), ethutil.Big(tokens[4]), []string{""})
+				tx := ethchain.NewTransactionMessage(recipient, ethutil.Big(tokens[2]), ethutil.Big(tokens[3]), ethutil.Big(tokens[4]), []byte{})
 
 				key := ethutil.Config.Db.GetKeys()[0]
 				tx.Sign(key.PrivateKey)
