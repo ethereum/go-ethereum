@@ -119,6 +119,9 @@ func (miner *Miner) listener() {
 				miner.block.SetUncles(miner.uncles)
 			}
 
+			// FIXME @ maranh, first block doesn't need this. Everything after the first block does.
+			// Please check and fix
+			miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
 			// Apply all transactions to the block
 			miner.ethereum.StateManager().ApplyTransactions(miner.block, miner.block.Transactions())
 			miner.ethereum.StateManager().AccumelateRewards(miner.block)
