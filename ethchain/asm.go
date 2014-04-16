@@ -106,6 +106,7 @@ func Disassemble(script []byte) (asm []string) {
 }
 
 func PreProcess(data string) (mainInput, initInput string) {
+	// Regexp for parsing anything between brackets
 	reg := "\\(\\)\\s*{([\\d\\w\\W\\n\\s]+?)}"
 	mainReg := regexp.MustCompile("main" + reg)
 	initReg := regexp.MustCompile("init" + reg)
