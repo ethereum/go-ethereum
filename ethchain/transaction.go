@@ -13,7 +13,7 @@ type Transaction struct {
 	Recipient []byte
 	Value     *big.Int
 	Gas       *big.Int
-	Gasprice  *big.Int
+	GasPrice  *big.Int
 	Data      []byte
 	Init      []byte
 	v         byte
@@ -24,11 +24,11 @@ type Transaction struct {
 }
 
 func NewContractCreationTx(value, gasprice *big.Int, script []byte, init []byte) *Transaction {
-	return &Transaction{Value: value, Gasprice: gasprice, Data: script, Init: init, contractCreation: true}
+	return &Transaction{Value: value, GasPrice: gasprice, Data: script, Init: init, contractCreation: true}
 }
 
 func NewTransactionMessage(to []byte, value, gasprice, gas *big.Int, data []byte) *Transaction {
-	return &Transaction{Recipient: to, Value: value, Gasprice: gasprice, Gas: gas, Data: data}
+	return &Transaction{Recipient: to, Value: value, GasPrice: gasprice, Gas: gas, Data: data}
 }
 
 func NewTransactionFromBytes(data []byte) *Transaction {
@@ -46,7 +46,7 @@ func NewTransactionFromValue(val *ethutil.Value) *Transaction {
 }
 
 func (tx *Transaction) Hash() []byte {
-	data := []interface{}{tx.Nonce, tx.Value, tx.Gasprice, tx.Gas, tx.Recipient, string(tx.Data)}
+	data := []interface{}{tx.Nonce, tx.Value, tx.GasPrice, tx.Gas, tx.Recipient, string(tx.Data)}
 	if tx.contractCreation {
 		data = append(data, string(tx.Init))
 	}
@@ -107,7 +107,7 @@ func (tx *Transaction) Sign(privk []byte) error {
 // [ NONCE, VALUE, GASPRICE, GAS, TO, DATA, V, R, S ]
 // [ NONCE, VALUE, GASPRICE, GAS, 0, CODE, INIT, V, R, S ]
 func (tx *Transaction) RlpData() interface{} {
-	data := []interface{}{tx.Nonce, tx.Value, tx.Gasprice, tx.Gas, tx.Recipient, tx.Data}
+	data := []interface{}{tx.Nonce, tx.Value, tx.GasPrice, tx.Gas, tx.Recipient, tx.Data}
 
 	if tx.contractCreation {
 		data = append(data, tx.Init)
@@ -132,7 +132,7 @@ func (tx *Transaction) RlpDecode(data []byte) {
 func (tx *Transaction) RlpValueDecode(decoder *ethutil.Value) {
 	tx.Nonce = decoder.Get(0).Uint()
 	tx.Value = decoder.Get(1).BigInt()
-	tx.Gasprice = decoder.Get(2).BigInt()
+	tx.GasPrice = decoder.Get(2).BigInt()
 	tx.Gas = decoder.Get(3).BigInt()
 	tx.Recipient = decoder.Get(4).Bytes()
 	tx.Data = decoder.Get(5).Bytes()

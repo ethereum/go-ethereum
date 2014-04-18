@@ -310,7 +310,7 @@ func (sm *StateManager) EvalScript(script []byte, object *StateObject, tx *Trans
 	}()
 
 	caller := sm.procState.GetAccount(tx.Sender())
-	closure := NewClosure(caller, object, script, sm.procState, tx.Gas, tx.Value)
+	closure := NewClosure(caller, object, script, sm.procState, tx.Gas, tx.GasPrice, tx.Value)
 	vm := NewVm(sm.procState, RuntimeVars{
 		Origin:      caller.Address(),
 		BlockNumber: block.BlockInfo().Number,
@@ -318,6 +318,7 @@ func (sm *StateManager) EvalScript(script []byte, object *StateObject, tx *Trans
 		Coinbase:    block.Coinbase,
 		Time:        block.Time,
 		Diff:        block.Difficulty,
+		//Price:       tx.GasPrice,
 	})
 	closure.Call(vm, nil, nil)
 

@@ -71,7 +71,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 	// New stack (should this be shared?)
 	stack := NewStack()
 	require := func(m int) {
-		if stack.Len()-1 > m {
+		if stack.Len() < m {
 			isRequireError = true
 			panic(fmt.Sprintf("stack = %d, req = %d", stack.Len(), m))
 		}
@@ -105,7 +105,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		// TODO Get each instruction cost properly
 		gas := new(big.Int)
 		useGas := func(amount *big.Int) {
-			gas.Add(gas, amount)
+			gas.Add(gas, new(big.Int).Mul(amount, closure.Price))
 		}
 
 		switch op {
@@ -142,6 +142,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			return closure.Return(nil), fmt.Errorf("insufficient gas %v %v", closure.Gas, gas)
 		}
+		closure.Gas.Sub(closure.Gas, gas)
 
 		switch op {
 		case oLOG:
@@ -411,7 +412,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			// 0x60 range
 		case oCREATE:
 		case oCALL:
-			require(8)
+			require(7)
 			// Closure addr
 			addr := stack.Pop()
 			// Pop gas and value of the stack.
@@ -425,7 +426,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			// Fetch the contract which will serve as the closure body
 			contract := vm.state.GetContract(addr.Bytes())
 			// Create a new callable closure
-			closure := NewClosure(closure, contract, contract.script, vm.state, gas, value)
+			closure := NewClosure(closure, contract, contract.script, vm.state, gas, closure.Price, value)
 			// Executer the closure and get the return value (if any)
 			ret, err := closure.Call(vm, args, hook)
 			if err != nil {

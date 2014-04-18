@@ -91,10 +91,10 @@ func TestRun4(t *testing.T) {
 		exit()
 	`), false)
 	script := ethutil.Assemble(asm...)
-	tx := NewContractCreationTx(ethutil.Big("0"), ethutil.Big("1000"), script)
+	tx := NewContractCreationTx(ethutil.Big("0"), ethutil.Big("1000"), script, nil)
 	addr := tx.Hash()[12:]
 	contract := MakeContract(tx, state)
-	state.UpdateContract(contract)
+	state.UpdateStateObject(contract)
 	fmt.Printf("%x\n", addr)
 
 	asm, err = mutan.Compile(strings.NewReader(`
@@ -122,12 +122,13 @@ func TestRun4(t *testing.T) {
 	fmt.Println(asm)
 
 	callerScript := ethutil.Assemble(asm...)
-	callerTx := NewContractCreationTx(ethutil.Big("0"), ethutil.Big("1000"), callerScript)
+	callerTx := NewContractCreationTx(ethutil.Big("0"), ethutil.Big("1000"), callerScript, nil)
 
 	// Contract addr as test address
 	account := NewAccount(ContractAddr, big.NewInt(10000000))
+	fmt.Println(account)
 	c := MakeContract(callerTx, state)
-	callerClosure := NewClosure(account, c, c.script, state, big.NewInt(1000000000), new(big.Int))
+	callerClosure := NewClosure(account, c, c.script, state, big.NewInt(1000000000), big.NewInt(10), big.NewInt(0))
 
 	vm := NewVm(state, RuntimeVars{
 		Origin:      account.Address(),
@@ -136,10 +137,12 @@ func TestRun4(t *testing.T) {
 		Coinbase:    ethutil.FromHex("2adc25665018aa1fe0e6bc666dac8fc2697ff9ba"),
 		Time:        1,
 		Diff:        big.NewInt(256),
-		// XXX Tx data? Could be just an argument to the closure instead
-		TxData: nil,
 	})
-	callerClosure.Call(vm, nil, nil)
+	_, e := callerClosure.Call(vm, nil, nil)
+	if e != nil {
+		fmt.Println("error", e)
+	}
+	fmt.Println(account)
 }
 
 func TestRun5(t *testing.T) {

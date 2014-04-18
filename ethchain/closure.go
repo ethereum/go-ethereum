@@ -27,14 +27,15 @@ type Closure struct {
 	State  *State
 
 	Gas   *big.Int
+	Price *big.Int
 	Value *big.Int
 
 	Args []byte
 }
 
 // Create a new closure for the given data items
-func NewClosure(callee Callee, object Reference, script []byte, state *State, gas, val *big.Int) *Closure {
-	return &Closure{callee, object, script, state, gas, val, nil}
+func NewClosure(callee Callee, object Reference, script []byte, state *State, gas, price, val *big.Int) *Closure {
+	return &Closure{callee, object, script, state, gas, price, val, nil}
 }
 
 // Retuns the x element in data slice
