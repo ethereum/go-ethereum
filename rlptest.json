@@ -1,42 +1,42 @@
 {
-    "emptystring": {
-        "in": "", 
-        "out": "80"
-    },
-    "shortstring": {
-        "in": "dog", 
+	"emptystring": {
+		"in": "", 
+		"out": "80"
+	},
+	"shortstring": {
+		"in": "dog", 
 		"out": "83646f67"
-    },
-    "longstring": {
-        "in": "Lorem ipsum dolor sit amet, consectetur adipisicing elit", 
+	},
+	"longstring": {
+		"in": "Lorem ipsum dolor sit amet, consectetur adipisicing elit", 
 		"out": "b8384c6f72656d20697073756d20646f6c6f722073697420616d65742c20636f6e7365637465747572206164697069736963696e6720656c6974"
-    },
-    "zero": {
-        "in": 0, 
-        "out": "80"
-    },
-    "smallint": {
-        "in": 1, 
-        "out": "01"
-    },
-    "mediumint": {
-        "in": 1000, 
-        "out": "8203e8"
-    },
+	},
+	"zero": {
+		"in": 0, 
+		"out": "80"
+	},
+	"smallint": {
+		"in": 1, 
+		"out": "01"
+	},
+	"mediumint": {
+ 		"in": 1000, 
+ 		"out": "8203e8"
+	},
 	"emptylist": {
-        "in": [], 
-        "out": "c0"
-    },
-    "stringlist": {
-        "in": [ "dog", "god", "cat" ],
+		"in": [], 
+  	"out": "c0"
+	},
+	"stringlist": {
+		"in": [ "dog", "god", "cat" ],
 		"out": "cc83646f6783676f6483636174"
     },
-    "multilist": {
-        "in": [ "zw", [ 4 ], 1 ], 
+	"multilist": {
+		"in": [ "zw", [ 4 ], 1 ], 
 		"out": "c6827a77c10401"
-    },
-    "listsoflists": {
-        "in": [ [ [], [] ], [] ], 
+	},
+	"listsoflists": {
+		"in": [ [ [], [] ], [] ], 
 		"out": "c4c2c0c0c0"
 	},
 	"bigint": {
