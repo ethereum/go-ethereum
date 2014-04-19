@@ -86,9 +86,9 @@ func TestRun4(t *testing.T) {
 		int32 a = 10
 		int32 b = 20
 		if a > b {
-			int32 c = this.caller()
+			int32 c = this.Caller()
 		}
-		exit()
+		Exit()
 	`), false)
 	script := ethutil.Assemble(asm...)
 	tx := NewContractCreationTx(ethutil.Big("0"), ethutil.Big("1000"), script, nil)
@@ -103,8 +103,9 @@ func TestRun4(t *testing.T) {
 			store[1000] = 10^20
 		}
 
-		store[1001] = this.value() * 20
-		store[this.origin()] = store[this.origin()] + 1000
+
+		store[1001] = this.Value() * 20
+		store[this.Origin()] = store[this.Origin()] + 1000
 
 		if store[1001] > 20 {
 			store[1001] = 10^50
@@ -112,8 +113,18 @@ func TestRun4(t *testing.T) {
 
 		int8 ret = 0
 		int8 arg = 10
-		store[1002] = "a46df28529eb8aa8b8c025b0b413c5f4b688352f"
-		call(store[1002], 0, 100000000, arg, ret)
+		Call(0xe6a12555fad1fb6eaaaed69001a87313d1fd7b54, 0, 100, arg, ret)
+
+		big t
+		for int8 i = 0; i < 10; i++ {
+			t = i
+		}
+
+		if 10 > 20 {
+			int8 shouldnt = 2
+		} else {
+			int8 should = 1
+		}
 	`), false)
 	if err != nil {
 		fmt.Println(err)
@@ -125,10 +136,17 @@ func TestRun4(t *testing.T) {
 	callerTx := NewContractCreationTx(ethutil.Big("0"), ethutil.Big("1000"), callerScript, nil)
 
 	// Contract addr as test address
+	gas := big.NewInt(1000)
+	gasPrice := big.NewInt(10)
 	account := NewAccount(ContractAddr, big.NewInt(10000000))
-	fmt.Println(account)
+	fmt.Println("account.Amount =", account.Amount)
 	c := MakeContract(callerTx, state)
-	callerClosure := NewClosure(account, c, c.script, state, big.NewInt(1000000000), big.NewInt(10), big.NewInt(0))
+	e := account.ConvertGas(gas, gasPrice)
+	if e != nil {
+		fmt.Println(err)
+	}
+	fmt.Println("account.Amount =", account.Amount)
+	callerClosure := NewClosure(account, c, c.script, state, gas, gasPrice, big.NewInt(0))
 
 	vm := NewVm(state, RuntimeVars{
 		Origin:      account.Address(),
@@ -138,11 +156,11 @@ func TestRun4(t *testing.T) {
 		Time:        1,
 		Diff:        big.NewInt(256),
 	})
-	_, e := callerClosure.Call(vm, nil, nil)
+	_, e = callerClosure.Call(vm, nil, nil)
 	if e != nil {
 		fmt.Println("error", e)
 	}
-	fmt.Println(account)
+	fmt.Println("account.Amount =", account.Amount)
 }
 
 func TestRun5(t *testing.T) {
@@ -156,6 +174,5 @@ func TestRun5(t *testing.T) {
 		}
 		exit()
 	`), false)
-	script := ethutil.Assemble(asm...)
-	fmt.Println(Disassemble(script))
+	ethutil.Assemble(asm...)
 }

@@ -8,7 +8,7 @@ import (
 )
 
 type Callee interface {
-	ReturnGas(*big.Int, *State)
+	ReturnGas(*big.Int, *big.Int, *State)
 	Address() []byte
 }
 
@@ -83,18 +83,16 @@ func (c *Closure) Return(ret []byte) []byte {
 	// If no callee is present return it to
 	// the origin (i.e. contract or tx)
 	if c.callee != nil {
-		c.callee.ReturnGas(c.Gas, c.State)
+		c.callee.ReturnGas(c.Gas, c.Price, c.State)
 	} else {
-		c.object.ReturnGas(c.Gas, c.State)
-		// TODO incase it's a POST contract we gotta serialise the contract again.
-		// But it's not yet defined
+		c.object.ReturnGas(c.Gas, c.Price, c.State)
 	}
 
 	return ret
 }
 
 // Implement the Callee interface
-func (c *Closure) ReturnGas(gas *big.Int, state *State) {
+func (c *Closure) ReturnGas(gas, price *big.Int, state *State) {
 	// Return the gas to the closure
 	c.Gas.Add(c.Gas, gas)
 }

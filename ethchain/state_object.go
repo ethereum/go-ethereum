@@ -1,6 +1,7 @@
 package ethchain
 
 import (
+	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
 )
@@ -70,8 +71,9 @@ func (c *StateObject) SetMem(num *big.Int, val *ethutil.Value) {
 }
 
 // Return the gas back to the origin. Used by the Virtual machine or Closures
-func (c *StateObject) ReturnGas(val *big.Int, state *State) {
-	c.AddAmount(val)
+func (c *StateObject) ReturnGas(gas, price *big.Int, state *State) {
+	remainder := new(big.Int).Mul(gas, price)
+	c.AddAmount(remainder)
 }
 
 func (c *StateObject) AddAmount(amount *big.Int) {
@@ -82,18 +84,33 @@ func (c *StateObject) SubAmount(amount *big.Int) {
 	c.Amount.Sub(c.Amount, amount)
 }
 
+func (c *StateObject) ConvertGas(gas, price *big.Int) error {
+	total := new(big.Int).Mul(gas, price)
+	if total.Cmp(c.Amount) > 0 {
+		return fmt.Errorf("insufficient amount: %v, %v", c.Amount, total)
+	}
+
+	c.SubAmount(total)
+
+	return nil
+}
+
+// Returns the address of the contract/account
 func (c *StateObject) Address() []byte {
 	return c.address
 }
 
+// Returns the main script body
 func (c *StateObject) Script() []byte {
 	return c.script
 }
 
+// Returns the initialization script
 func (c *StateObject) Init() []byte {
 	return c.initScript
 }
 
+// State object encoding methods
 func (c *StateObject) RlpEncode() []byte {
 	var root interface{}
 	if c.state != nil {
@@ -113,6 +130,7 @@ func (c *StateObject) RlpDecode(data []byte) {
 	c.script = decoder.Get(3).Bytes()
 }
 
+// Converts an transaction in to a state object
 func MakeContract(tx *Transaction, state *State) *StateObject {
 	// Create contract if there's no recipient
 	if tx.IsContract() {

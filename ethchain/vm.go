@@ -102,10 +102,9 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			}
 		*/
 
-		// TODO Get each instruction cost properly
 		gas := new(big.Int)
 		useGas := func(amount *big.Int) {
-			gas.Add(gas, new(big.Int).Mul(amount, closure.Price))
+			gas.Add(gas, amount)
 		}
 
 		switch op {
@@ -142,6 +141,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			return closure.Return(nil), fmt.Errorf("insufficient gas %v %v", closure.Gas, gas)
 		}
+
+		// Sub the amount of gas from the remaining
 		closure.Gas.Sub(closure.Gas, gas)
 
 		switch op {
@@ -157,7 +158,6 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			x, y := stack.Popn()
 			// (x + y) % 2 ** 256
 			base.Add(x, y)
-			base.Mod(base, Pow256)
 			// Pop result back on the stack
 			stack.Push(base)
 		case oSUB:
@@ -165,7 +165,6 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			x, y := stack.Popn()
 			// (x - y) % 2 ** 256
 			base.Sub(x, y)
-			base.Mod(base, Pow256)
 			// Pop result back on the stack
 			stack.Push(base)
 		case oMUL:
@@ -173,7 +172,6 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			x, y := stack.Popn()
 			// (x * y) % 2 ** 256
 			base.Mul(x, y)
-			base.Mod(base, Pow256)
 			// Pop result back on the stack
 			stack.Push(base)
 		case oDIV:
@@ -325,7 +323,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case oCALLDATASIZE:
 			stack.Push(big.NewInt(int64(len(closure.Args))))
 		case oGASPRICE:
-			// TODO
+			stack.Push(closure.Price)
 
 			// 0x40 range
 		case oPREVHASH:
@@ -339,7 +337,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case oDIFFICULTY:
 			stack.Push(vm.vars.Diff)
 		case oGASLIMIT:
-		// TODO
+			// TODO
+			stack.Push(big.NewInt(0))
 
 		// 0x50 range
 		case oPUSH: // Push PC+1 on to the stack
@@ -399,11 +398,14 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case oJUMP:
 			require(1)
 			pc = stack.Pop()
+			// Reduce pc by one because of the increment that's at the end of this for loop
+			pc.Sub(pc, ethutil.Big1)
 		case oJUMPI:
 			require(2)
 			cond, pos := stack.Popn()
 			if cond.Cmp(ethutil.BigTrue) == 0 {
 				pc = pos
+				pc.Sub(pc, ethutil.Big1)
 			}
 		case oPC:
 			stack.Push(pc)
@@ -421,21 +423,39 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			inSize, inOffset := stack.Popn()
 			// Pop return size and offset
 			retSize, retOffset := stack.Popn()
+			// Make sure there's enough gas
+			if closure.Gas.Cmp(gas) < 0 {
+				stack.Push(ethutil.BigFalse)
+
+				break
+			}
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 			// Fetch the contract which will serve as the closure body
 			contract := vm.state.GetContract(addr.Bytes())
-			// Create a new callable closure
-			closure := NewClosure(closure, contract, contract.script, vm.state, gas, closure.Price, value)
-			// Executer the closure and get the return value (if any)
-			ret, err := closure.Call(vm, args, hook)
-			if err != nil {
-				stack.Push(ethutil.BigFalse)
-			} else {
-				stack.Push(ethutil.BigTrue)
-			}
 
-			mem.Set(retOffset.Int64(), retSize.Int64(), ret)
+			if contract != nil {
+				// Prepay for the gas
+				// If gas is set to 0 use all remaining gas for the next call
+				if gas.Cmp(big.NewInt(0)) == 0 {
+					gas = closure.Gas
+				}
+				closure.Gas.Sub(closure.Gas, gas)
+				// Create a new callable closure
+				closure := NewClosure(closure, contract, contract.script, vm.state, gas, closure.Price, value)
+				// Executer the closure and get the return value (if any)
+				ret, err := closure.Call(vm, args, hook)
+				if err != nil {
+					stack.Push(ethutil.BigFalse)
+				} else {
+					stack.Push(ethutil.BigTrue)
+				}
+
+				mem.Set(retOffset.Int64(), retSize.Int64(), ret)
+			} else {
+				ethutil.Config.Log.Debugf("Contract %x not found\n", addr.Bytes())
+				stack.Push(ethutil.BigFalse)
+			}
 		case oRETURN:
 			require(2)
 			size, offset := stack.Popn()
