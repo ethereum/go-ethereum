@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/niemeyer/qml"
-	"math/big"
 	"os"
 	"path"
 	"path/filepath"
@@ -117,7 +116,7 @@ func (ui *UiLib) DebugTx(recipient, valueStr, gasStr, gasPriceStr, data string) 
 	keyPair := ethutil.Config.Db.GetKeys()[0]
 	account := ui.eth.StateManager().GetAddrState(keyPair.Address()).Object
 	c := ethchain.MakeContract(callerTx, state)
-	callerClosure := ethchain.NewClosure(account, c, c.Script(), state, ethutil.Big(gasStr), new(big.Int))
+	callerClosure := ethchain.NewClosure(account, c, c.Script(), state, ethutil.Big(gasStr), ethutil.Big(gasPriceStr), ethutil.Big(valueStr))
 
 	block := ui.eth.BlockChain().CurrentBlock
 	vm := ethchain.NewVm(state, ethchain.RuntimeVars{
