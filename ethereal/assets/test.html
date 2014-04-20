@@ -1,0 +1,27 @@
+<html>
+<head>
+<title>Epic Works (TM)</title>
+<body>
+<h1>It just works!</h1>
+
+<p>Play with me...</p>
+
+<button onclick="test();">test</button>
+<div id="out"></div>
+<div id="in"></div>
+<div id="debug"></div>
+
+<script type="text/javascript">
+function test() {
+	eth.send(function(data) {
+			debug(data)
+			document.getElementById("in").innerHTML ="and the other way around " + data.message;
+	})
+}
+
+
+</script>
+
+</body>
+</html>
+
