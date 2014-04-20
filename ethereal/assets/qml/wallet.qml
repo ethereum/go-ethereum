@@ -18,11 +18,13 @@ ApplicationWindow {
 	MenuBar {
 		Menu {
 			title: "File"
+			/*
 			MenuItem {
 				text: "Import App"
 				shortcut: "Ctrl+o"
 				onTriggered: openAppDialog.open()
 			}
+			*/
 		}
 
 		Menu {
@@ -240,7 +242,10 @@ ApplicationWindow {
 		id: openAppDialog
 		title: "Open QML Application"
 		onAccepted: {
-			ui.open(openAppDialog.fileUrl.toString())
+			//ui.open(openAppDialog.fileUrl.toString())
+      //ui.openHtml(Qt.resolvedUrl(ui.assetPath("test.html")))
+      ui.openHtml(openAppDialog.fileUrl.toString())
+
 		}
 	}
 

@@ -51,6 +51,22 @@ func (ui *UiLib) Open(path string) {
 	}()
 }
 
+func (ui *UiLib) OpenHtml(path string) {
+	component, err := ui.engine.LoadFile(ui.AssetPath("qml/webapp.qml"))
+	if err != nil {
+		ethutil.Config.Log.Debugln(err)
+
+		return
+	}
+	win := component.CreateWindow(nil)
+	win.Set("url", path)
+
+	go func() {
+		win.Show()
+		win.Wait()
+	}()
+}
+
 func (ui *UiLib) Connect(button qml.Object) {
 	if !ui.connected {
 		ui.eth.Start()
