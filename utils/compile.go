@@ -22,3 +22,21 @@ func Compile(script string) ([]byte, error) {
 
 	return ethutil.Assemble(asm...), nil
 }
+
+func CompileScript(script string) ([]byte, []byte, error) {
+	// Preprocess
+	mainInput, initInput := ethutil.PreProcess(script)
+	// Compile main script
+	mainScript, err := Compile(mainInput)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Compile init script
+	initScript, err := Compile(initInput)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return mainScript, initScript, nil
+}

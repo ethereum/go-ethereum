@@ -43,8 +43,7 @@ func (lib *EthLib) CreateAndSetPrivKey() (string, string, string, string) {
 	return mnemonicString, fmt.Sprintf("%x", pair.Address()), fmt.Sprintf("%x", prv), fmt.Sprintf("%x", pub)
 }
 
-func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data string) (string, error) {
-	fmt.Println("Create tx")
+func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
 	var hash []byte
 	var contractCreation bool
 	if len(recipient) == 0 {
@@ -64,26 +63,24 @@ func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data strin
 	var tx *ethchain.Transaction
 	// Compile and assemble the given data
 	if contractCreation {
-		mainInput, initInput := ethutil.PreProcess(data)
-		fmt.Println("Precompile done")
-		fmt.Println("main", mainInput)
-		mainScript, err := utils.Compile(mainInput)
-		if err != nil {
-			return "", err
-		}
-		fmt.Println("init", initInput)
-		initScript, err := utils.Compile(initInput)
+		// Compile script
+		mainScript, initScript, err := utils.CompileScript(dataStr)
 		if err != nil {
 			return "", err
 		}
 
 		tx = ethchain.NewContractCreationTx(value, gas, gasPrice, mainScript, initScript)
 	} else {
-		tx = ethchain.NewTransactionMessage(hash, value, gas, gasPrice, nil)
+		lines := strings.Split(dataStr, "\n")
+		var data []byte
+		for _, line := range lines {
+			data = append(data, ethutil.BigToBytes(ethutil.Big(line), 256)...)
+		}
+
+		tx = ethchain.NewTransactionMessage(hash, value, gas, gasPrice, data)
 	}
 	acc := lib.stateManager.GetAddrState(keyPair.Address())
 	tx.Nonce = acc.Nonce
-	//acc.Nonce++
 	tx.Sign(keyPair.PrivateKey)
 	lib.txPool.QueueTransaction(tx)
 
