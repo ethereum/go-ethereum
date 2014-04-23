@@ -10,6 +10,20 @@ import (
 	"strings"
 )
 
+type Contract struct {
+	object *ethchain.StateObject
+}
+
+func NewContract(object *ethchain.StateObject) *Contract {
+	return &Contract{object: object}
+}
+
+func (c *Contract) GetStorage(address string) string {
+	val := c.object.GetMem(ethutil.Big("0x" + address))
+
+	return val.BigInt().String()
+}
+
 type EthLib struct {
 	stateManager *ethchain.StateManager
 	blockChain   *ethchain.BlockChain
@@ -41,6 +55,16 @@ func (lib *EthLib) CreateAndSetPrivKey() (string, string, string, string) {
 	mne := ethutil.MnemonicEncode(ethutil.Hex(prv))
 	mnemonicString := strings.Join(mne, " ")
 	return mnemonicString, fmt.Sprintf("%x", pair.Address()), fmt.Sprintf("%x", prv), fmt.Sprintf("%x", pub)
+}
+
+func (lib *EthLib) GetKey() string {
+	return ethutil.Hex(ethutil.Config.Db.GetKeys()[0].Address())
+}
+
+func (lib *EthLib) GetStateObject(address string) *Contract {
+	stateObject := lib.stateManager.ProcState().GetContract(ethutil.FromHex(address))
+
+	return NewContract(stateObject)
 }
 
 func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {

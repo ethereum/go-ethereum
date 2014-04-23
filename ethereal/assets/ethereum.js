@@ -5,6 +5,10 @@ function postData(data, cb) {
 		eth._callbacks[data._seed] = cb;
 	}
 
+	if(data.args === undefined) {
+		data.args = []
+	}
+
 	navigator.qt.postMessage(JSON.stringify(data));
 }
 
@@ -33,6 +37,14 @@ window.eth = {
 	// If no recipient is set, the Ethereum API will see it as a contract creation
 	createTx: function(recipient, value, gas, gasPrice, data, cb) {
 		postData({call: "createTx", args: [recipient, value, gas, gasPrice, data]}, cb)
+	},
+
+	getStorage: function(address, storageAddress, cb) {
+		postData({call: "getStorage", args: [address, storageAddress]}, cb)
+	},
+
+	getKey: function(cb) {
+		postData({call: "getKey"}, cb)
 	},
 }
 window.eth._callbacks = {}

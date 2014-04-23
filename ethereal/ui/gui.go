@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/niemeyer/qml"
+	"github.com/go-qml/qml"
 	"math/big"
 	"strings"
 )
@@ -22,6 +22,18 @@ type Block struct {
 type Tx struct {
 	Value, Hash, Address string
 	Contract             bool
+}
+
+type Key struct {
+	Address string
+}
+
+type KeyRing struct {
+	Keys []interface{}
+}
+
+func NewKeyRing(keys []interface{}) *KeyRing {
+	return &KeyRing{Keys: keys}
 }
 
 func NewTxFromTransaction(tx *ethchain.Transaction) *Tx {

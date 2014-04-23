@@ -25,12 +25,15 @@ ApplicationWindow {
                 WebView {
                         objectName: "webView"
                         id: webview
+			anchors.fill: parent
+			/*
                         anchors {
                                 left: parent.left
                                 right: parent.right
                                 bottom: sizeGrip.top
                                 top: parent.top
                         }
+			*/
 
                         onTitleChanged: { window.title = title }
                         experimental.preferences.javascriptEnabled: true
@@ -38,7 +41,7 @@ ApplicationWindow {
                         experimental.preferences.developerExtrasEnabled: true
                         experimental.userScripts: [ui.assetPath("ethereum.js")]
                         experimental.onMessageReceived: {
-                                console.log("[onMessageReceived]: ", message.data)
+                                //console.log("[onMessageReceived]: ", message.data)
                                 var data = JSON.parse(message.data)
 
 				switch(data.call) {
@@ -57,6 +60,20 @@ ApplicationWindow {
 						var tx = eth.createTx(data.args[0], data.args[1],data.args[2],data.args[3],data.args[4])
 						postData(data._seed, tx)
 					}
+					break
+				case "getStorage":
+					if(data.args.length < 2) {
+						postData(data._seed, null)
+					} else {
+						var stateObject = eth.getStateObject(data.args[0])
+						var storage = stateObject.getStorage(data.args[1])
+						postData(data._seed, storage)
+					}
+					break
+				case "getKey":
+					var keys = eth.getKey()
+					postData(data._seed, keys)
+					break
 				}
                         }
 			function postData(seed, data) {
@@ -67,7 +84,7 @@ ApplicationWindow {
                 Rectangle {
                         id: sizeGrip
                         color: "gray"
-                        visible: true
+                        visible: false
                         height: 10
                         anchors {
                                 left: root.left
@@ -86,7 +103,7 @@ ApplicationWindow {
 
                 WebView {
                         id: inspector
-                        visible: true
+                        visible: false
                         url: webview.experimental.remoteInspectorUrl
                         anchors {
                                 left: root.left

@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/ethereal/ui"
 	"github.com/ethereum/go-ethereum/utils"
-	"github.com/niemeyer/qml"
+	"github.com/go-qml/qml"
 	"log"
 	"os"
 	"os/signal"

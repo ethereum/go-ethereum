@@ -1,10 +1,48 @@
 <html>
 <head>
 <title>jeffcoin</title>
-<body>
+<script type="text/javascript">
+var jefcoinAddr = "3dff537f51350239abc95c76a5864aa605259e7d"
+
+function createTransaction() {
+	var addr = document.querySelector("#addr").value;
+	var amount = document.querySelector("#amount").value;
+
+	var data = "0x" + addr + "\n" + amount
+	eth.createTx(jefcoinAddr, 0, "10000000", "250", data, function(tx) {
+		debug("received tx hash:", tx)
+	})
+}
+
+// Any test related actions here please
+function tests() {
+	eth.getKey(function(keys) {
+		debug(keys)
+	})
+}
+
+function init() {
+	eth.getKey(function(key) {
+			eth.getStorage(jefcoinAddr, key, function(storage) {
+				debug("Currently in storage: ", storage);
+				document.querySelector("#currentAmount").innerHTML = "Amount: " + storage;
+			})
+	})
+}
+
+</script>
+<style type="text/css">
+input[type="text"] {
+	width: 300px;
+}
+</style>
+</head>
+
+<body onload="init();">
 <h1>Jeff Coin</h1>
 
-<img src="file:///Users/jeffrey/Desktop/iconnew.png">
+<img src="icon.png">
+<div id="currentAmount"></div>
 
 <div id="transactions">
 	<input id="addr" type="text" placeholder="Receiver address"></input><br>
@@ -12,26 +50,8 @@
 	<button onclick="createTransaction();">Send Tx</button>
 </div>
 
-<div><button onclick="test();">Tests</button></div>
+<div><button onclick="tests();">Tests</button></div>
 
-<script type="text/javascript">
-function createTransaction() {
-	debug("test")
-	var addr = document.querySelector("#addr").value;
-	var amount = document.querySelector("#amount").value;
-
-	eth.createTx(addr, amount, "100", "250", "", function(tx) {
-		debug("received tx hash:", tx)
-	})
-}
-
-// Any test related actions here please
-function tests() {
-	eth.getBlock(1, function(block) {
-		debug("queried block:", block)				
-	})
-}
-</script>
 
 <div id="debug" style="border: 1px solid block"></div>
 
