@@ -134,14 +134,18 @@ func (miner *Miner) listener() {
 				err := miner.ethereum.StateManager().ProcessBlock(miner.block, true)
 				if err != nil {
 					log.Println("Error result from process block:", err)
+					miner.block.State().Reset()
 				} else {
 
-					// XXX @maranh This is already done in the state manager, why a 2nd time?
-					if !miner.ethereum.StateManager().Pow.Verify(miner.block.HashNoNonce(), miner.block.Difficulty, miner.block.Nonce) {
-						log.Printf("Second stage verification error: Block's nonce is invalid (= %v)\n", ethutil.Hex(miner.block.Nonce))
-					}
+					/*
+						// XXX @maranh This is already done in the state manager, why a 2nd time?
+						if !miner.ethereum.StateManager().Pow.Verify(miner.block.HashNoNonce(), miner.block.Difficulty, miner.block.Nonce) {
+							log.Printf("Second stage verification error: Block's nonce is invalid (= %v)\n", ethutil.Hex(miner.block.Nonce))
+						}
+					*/
 					miner.ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{miner.block.Value().Val})
 					log.Printf("[MINER] 🔨  Mined block %x\n", miner.block.Hash())
+					log.Println(miner.block)
 
 					miner.txs = []*ethchain.Transaction{} // Move this somewhere neat
 					miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)
