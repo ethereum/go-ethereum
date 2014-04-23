@@ -44,6 +44,7 @@ func (lib *EthLib) CreateAndSetPrivKey() (string, string, string, string) {
 }
 
 func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data string) (string, error) {
+	fmt.Println("Create tx")
 	var hash []byte
 	var contractCreation bool
 	if len(recipient) == 0 {
@@ -64,18 +65,21 @@ func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, data strin
 	// Compile and assemble the given data
 	if contractCreation {
 		mainInput, initInput := ethutil.PreProcess(data)
+		fmt.Println("Precompile done")
+		fmt.Println("main", mainInput)
 		mainScript, err := utils.Compile(mainInput)
 		if err != nil {
 			return "", err
 		}
+		fmt.Println("init", initInput)
 		initScript, err := utils.Compile(initInput)
 		if err != nil {
 			return "", err
 		}
 
-		tx = ethchain.NewContractCreationTx(value, gasPrice, mainScript, initScript)
+		tx = ethchain.NewContractCreationTx(value, gas, gasPrice, mainScript, initScript)
 	} else {
-		tx = ethchain.NewTransactionMessage(hash, value, gasPrice, gas, nil)
+		tx = ethchain.NewTransactionMessage(hash, value, gas, gasPrice, nil)
 	}
 	acc := lib.stateManager.GetAddrState(keyPair.Address())
 	tx.Nonce = acc.Nonce
@@ -99,7 +103,6 @@ func (lib *EthLib) GetBlock(hexHash string) *Block {
 	}
 
 	block := lib.blockChain.GetBlock(hash)
-	fmt.Println(block)
 
 	return &Block{Number: int(block.BlockInfo().Number), Hash: ethutil.Hex(block.Hash())}
 }

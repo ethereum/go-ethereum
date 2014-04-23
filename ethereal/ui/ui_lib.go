@@ -59,6 +59,14 @@ func (ui *UiLib) OpenHtml(path string) {
 		return
 	}
 	win := component.CreateWindow(nil)
+	if filepath.Ext(path) == "eth" {
+		fmt.Println("Ethereum package not yet supported")
+
+		return
+
+		// TODO
+		ethutil.OpenPackage(path)
+	}
 	win.Set("url", path)
 
 	go func() {
@@ -126,7 +134,7 @@ func (ui *UiLib) DebugTx(recipient, valueStr, gasStr, gasPriceStr, data string) 
 	for _, str := range dis {
 		ui.win.Root().Call("setAsm", str)
 	}
-	callerTx := ethchain.NewContractCreationTx(ethutil.Big(valueStr), ethutil.Big(gasPriceStr), callerScript, nil)
+	callerTx := ethchain.NewContractCreationTx(ethutil.Big(valueStr), ethutil.Big(gasStr), ethutil.Big(gasPriceStr), callerScript, nil)
 
 	// Contract addr as test address
 	keyPair := ethutil.Config.Db.GetKeys()[0]

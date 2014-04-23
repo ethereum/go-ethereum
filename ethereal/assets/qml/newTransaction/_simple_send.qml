@@ -63,18 +63,18 @@ Component {
 		}
 		Button {
 			id: txSimpleButton
+			/*enabled: false*/
 			states: [
 				State {
 					name: "READY"
-					PropertyChanges { target: txSimpleButton; enabled: true}
+					PropertyChanges { target: txSimpleButton; /*enabled: true*/}
 				},
 				State {
 					name: "NOTREADY"
-					PropertyChanges { target: txSimpleButton; enabled: false}
+					PropertyChanges { target: txSimpleButton; /*enabled: false*/}
 				}
 			]
 			text: "Send"
-			enabled: false
 			onClicked: {
 				//this.enabled = false
 				var res = eth.createTx(txSimpleRecipient.text, txSimpleValue.text,"","","")

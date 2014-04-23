@@ -204,7 +204,7 @@ func (i *Console) ParseInput(input string) bool {
 				break
 			}
 
-			contract := ethchain.NewContractCreationTx(ethutil.Big(tokens[0]), ethutil.Big(tokens[1]), mainScript, initScript)
+			contract := ethchain.NewContractCreationTx(ethutil.Big(tokens[0]), ethutil.Big(tokens[1]), ethutil.Big(tokens[1]), mainScript, initScript)
 
 			key := ethutil.Config.Db.GetKeys()[0]
 			contract.Sign(key.PrivateKey)

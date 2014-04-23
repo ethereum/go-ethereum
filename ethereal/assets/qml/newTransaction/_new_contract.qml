@@ -135,18 +135,18 @@ Component {
 
 		Button {
 			id: txButton
+			/* enabled: false */
 			states: [
 				State {
 					name: "READY"
-					PropertyChanges { target: txButton; enabled: true}
+					PropertyChanges { target: txButton; /*enabled: true*/}
 				},
 				State {
 					name: "NOTREADY"
-					PropertyChanges { target: txButton; enabled:false}
+					PropertyChanges { target: txButton; /*enabled:false*/}
 				}
 			]
 			text: "Send"
-			enabled: false
 			onClicked: {
 				//this.enabled = false
 				var res = eth.createTx(txFuelRecipient.text, txValue.text, txGas.text, txGasPrice.text, codeView.text)
