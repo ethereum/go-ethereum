@@ -3,7 +3,7 @@ package ethutil
 import (
 	_ "fmt"
 	"math/big"
-	"regexp"
+	_ "regexp"
 )
 
 // Op codes
@@ -143,7 +143,6 @@ init() {
 main() {
 	// main something
 }
-*/
 func PreProcess(data string) (mainInput, initInput string) {
 	reg := "\\(\\)\\s*{([\\d\\w\\W\\n\\s]+?)}"
 	mainReg := regexp.MustCompile("main" + reg)
@@ -160,6 +159,52 @@ func PreProcess(data string) (mainInput, initInput string) {
 	if len(init) > 0 {
 		initInput = init[1]
 	}
+
+	return
+}
+*/
+
+// Very, very dumb parser. Heed no attention :-)
+func FindFor(blockMatcher, input string) string {
+	curCount := -1
+	length := len(blockMatcher)
+	matchfst := rune(blockMatcher[0])
+	var currStr string
+
+	for i, run := range input {
+		// Find init
+		if curCount == -1 && run == matchfst && input[i:i+length] == blockMatcher {
+			curCount = 0
+		} else if curCount > -1 {
+			if run == '{' {
+				curCount++
+				if curCount == 1 {
+					continue
+				}
+			} else if run == '}' {
+				curCount--
+				if curCount == 0 {
+					// we are done
+					curCount = -1
+					break
+				}
+			}
+
+			if curCount > 0 {
+				currStr += string(run)
+			}
+		}
+	}
+
+	return currStr
+}
+
+func PreProcess(data string) (mainInput, initInput string) {
+	mainInput = FindFor("main", data)
+	if mainInput == "" {
+		mainInput = data
+	}
+	initInput = FindFor("init", data)
 
 	return
 }

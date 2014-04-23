@@ -23,12 +23,12 @@ type Transaction struct {
 	contractCreation bool
 }
 
-func NewContractCreationTx(value, gasprice *big.Int, script []byte, init []byte) *Transaction {
-	return &Transaction{Value: value, GasPrice: gasprice, Data: script, Init: init, contractCreation: true}
+func NewContractCreationTx(value, gas, gasPrice *big.Int, script []byte, init []byte) *Transaction {
+	return &Transaction{Value: value, Gas: gas, GasPrice: gasPrice, Data: script, Init: init, contractCreation: true}
 }
 
-func NewTransactionMessage(to []byte, value, gasprice, gas *big.Int, data []byte) *Transaction {
-	return &Transaction{Recipient: to, Value: value, GasPrice: gasprice, Gas: gas, Data: data}
+func NewTransactionMessage(to []byte, value, gas, gasPrice *big.Int, data []byte) *Transaction {
+	return &Transaction{Recipient: to, Value: value, GasPrice: gasPrice, Gas: gas, Data: data}
 }
 
 func NewTransactionFromBytes(data []byte) *Transaction {
@@ -46,9 +46,10 @@ func NewTransactionFromValue(val *ethutil.Value) *Transaction {
 }
 
 func (tx *Transaction) Hash() []byte {
-	data := []interface{}{tx.Nonce, tx.Value, tx.GasPrice, tx.Gas, tx.Recipient, string(tx.Data)}
+	data := []interface{}{tx.Nonce, tx.Value, tx.GasPrice, tx.Gas, tx.Recipient, tx.Data}
+
 	if tx.contractCreation {
-		data = append(data, string(tx.Init))
+		data = append(data, tx.Init)
 	}
 
 	return ethutil.Sha3Bin(ethutil.NewValue(data).Encode())
@@ -112,7 +113,6 @@ func (tx *Transaction) RlpData() interface{} {
 	if tx.contractCreation {
 		data = append(data, tx.Init)
 	}
-	//d := ethutil.NewSliceValue(tx.Data).Slice()
 
 	return append(data, tx.v, tx.r, tx.s)
 }

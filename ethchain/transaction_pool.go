@@ -104,7 +104,7 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block, toContract
 	// funds won't invalidate this transaction but simple ignores it.
 	totAmount := new(big.Int).Add(tx.Value, new(big.Int).Mul(TxFee, TxFeeRat))
 	if sender.Amount.Cmp(totAmount) < 0 {
-		return errors.New("[TXPL] Insufficient amount in sender's account")
+		return fmt.Errorf("[TXPL] Insufficient amount in sender's (%x) account", tx.Sender())
 	}
 
 	if sender.Nonce != tx.Nonce {
@@ -118,8 +118,6 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block, toContract
 	// Send Tx to self
 	if bytes.Compare(tx.Recipient, tx.Sender()) == 0 {
 		// Subtract the fee
-		sender.SubAmount(new(big.Int).Mul(TxFee, TxFeeRat))
-	} else if toContract {
 		sender.SubAmount(new(big.Int).Mul(TxFee, TxFeeRat))
 	} else {
 		// Subtract the amount from the senders account

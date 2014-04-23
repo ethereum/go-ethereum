@@ -91,11 +91,15 @@ func (sm *StateManager) BlockChain() *BlockChain {
 	return sm.bc
 }
 
-func (sm *StateManager) MakeContract(tx *Transaction) {
+func (sm *StateManager) MakeContract(tx *Transaction) *StateObject {
 	contract := MakeContract(tx, sm.procState)
 	if contract != nil {
 		sm.procState.states[string(tx.Hash()[12:])] = contract.state
+
+		return contract
 	}
+
+	return nil
 }
 
 // Apply transactions uses the transaction passed to it and applies them onto
@@ -103,11 +107,44 @@ func (sm *StateManager) MakeContract(tx *Transaction) {
 func (sm *StateManager) ApplyTransactions(block *Block, txs []*Transaction) {
 	// Process each transaction/contract
 	for _, tx := range txs {
+		fmt.Printf("Processing Tx: %x\n", tx.Hash())
 		// If there's no recipient, it's a contract
 		// Check if this is a contract creation traction and if so
 		// create a contract of this tx.
 		if tx.IsContract() {
-			sm.MakeContract(tx)
+			err := sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
+			if err == nil {
+				contract := sm.MakeContract(tx)
+				if contract != nil {
+					sm.EvalScript(contract.Init(), contract, tx, block)
+				} else {
+					ethutil.Config.Log.Infoln("[STATE] Unable to create contract")
+				}
+			} else {
+				ethutil.Config.Log.Infoln("[STATE] contract create:", err)
+			}
+		} else {
+			err := sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
+			contract := sm.procState.GetContract(tx.Recipient)
+			if err == nil && len(contract.Script()) > 0 {
+				sm.EvalScript(contract.Script(), contract, tx, block)
+			} else if err != nil {
+				ethutil.Config.Log.Infoln("[STATE] process:", err)
+			}
+		}
+	}
+	// Process each transaction/contract
+	for _, tx := range txs {
+		// If there's no recipient, it's a contract
+		// Check if this is a contract creation traction and if so
+		// create a contract of this tx.
+		if tx.IsContract() {
+			contract := sm.MakeContract(tx)
+			if contract != nil {
+				sm.EvalScript(contract.Init(), contract, tx, block)
+			} else {
+				ethutil.Config.Log.Infoln("[STATE] Unable to create contract")
+			}
 		} else {
 			// Figure out if the address this transaction was sent to is a
 			// contract or an actual account. In case of a contract, we process that
@@ -303,11 +340,13 @@ func (sm *StateManager) Stop() {
 
 func (sm *StateManager) EvalScript(script []byte, object *StateObject, tx *Transaction, block *Block) {
 	// Recovering function in case the VM had any errors
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("Recovered from VM execution with err =", r)
-		}
-	}()
+	/*
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Println("Recovered from VM execution with err =", r)
+			}
+		}()
+	*/
 
 	caller := sm.procState.GetAccount(tx.Sender())
 	closure := NewClosure(caller, object, script, sm.procState, tx.Gas, tx.GasPrice, tx.Value)

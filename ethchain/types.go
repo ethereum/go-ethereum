@@ -35,7 +35,7 @@ const (
 	oORIGIN       = 0x32
 	oCALLER       = 0x33
 	oCALLVALUE    = 0x34
-	oCALLDATA     = 0x35
+	oCALLDATALOAD = 0x35
 	oCALLDATASIZE = 0x36
 	oGASPRICE     = 0x37
 
@@ -106,7 +106,7 @@ var opCodeToString = map[OpCode]string{
 	oORIGIN:       "ORIGIN",
 	oCALLER:       "CALLER",
 	oCALLVALUE:    "CALLVALUE",
-	oCALLDATA:     "CALLDATA",
+	oCALLDATALOAD: "CALLDATALOAD",
 	oCALLDATASIZE: "CALLDATASIZE",
 	oGASPRICE:     "TXGASPRICE",
 
@@ -180,7 +180,7 @@ var OpCodes = map[string]byte{
 	"ORIGIN":       0x32,
 	"CALLER":       0x33,
 	"CALLVALUE":    0x34,
-	"CALLDATA":     0x35,
+	"CALLDATALOAD": 0x35,
 	"CALLDATASIZE": 0x36,
 	"GASPRICE":     0x38,
 

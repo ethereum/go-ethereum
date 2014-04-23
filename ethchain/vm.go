@@ -84,11 +84,9 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 	// The base for all big integer arithmetic
 	base := new(big.Int)
 
-	/*
-		if ethutil.Config.Debug {
-			ethutil.Config.Log.Debugf("#   op\n")
-		}
-	*/
+	if ethutil.Config.Debug {
+		ethutil.Config.Log.Debugf("#   op\n")
+	}
 
 	for {
 		step++
@@ -96,11 +94,9 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		val := closure.Get(pc)
 		// Get the opcode (it must be an opcode!)
 		op := OpCode(val.Uint())
-		/*
-			if ethutil.Config.Debug {
-				ethutil.Config.Log.Debugf("%-3d %-4s", pc, op.String())
-			}
-		*/
+		if ethutil.Config.Debug {
+			ethutil.Config.Log.Debugf("%-3d %-4s", pc, op.String())
+		}
 
 		gas := new(big.Int)
 		useGas := func(amount *big.Int) {
@@ -316,10 +312,12 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case oCALLVALUE:
 			// FIXME: Original value of the call, not the current value
 			stack.Push(closure.Value)
-		case oCALLDATA:
+		case oCALLDATALOAD:
 			require(1)
-			offset := stack.Pop()
-			mem.Set(offset.Int64(), int64(len(closure.Args)), closure.Args)
+			offset := stack.Pop().Int64()
+			val := closure.Args[offset : offset+31]
+
+			stack.Push(ethutil.BigD(val))
 		case oCALLDATASIZE:
 			stack.Push(big.NewInt(int64(len(closure.Args))))
 		case oGASPRICE:
