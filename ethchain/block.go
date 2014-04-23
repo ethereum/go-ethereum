@@ -80,6 +80,9 @@ func CreateBlock(root interface{},
 	extra string,
 	txes []*Transaction) *Block {
 
+	// Copy over the bytes
+	copiedRoot := ethutil.NewValue(root).Bytes()
+
 	block := &Block{
 		// Slice of transactions to include in this block
 		transactions:   txes,
@@ -95,7 +98,7 @@ func CreateBlock(root interface{},
 	block.SetTransactions(txes)
 	block.SetUncles([]*Block{})
 
-	block.state = NewState(ethutil.NewTrie(ethutil.Config.Db, root))
+	block.state = NewState(ethutil.NewTrie(ethutil.Config.Db, copiedRoot))
 
 	for _, tx := range txes {
 		block.MakeContract(tx)
