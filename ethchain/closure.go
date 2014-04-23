@@ -35,7 +35,15 @@ type Closure struct {
 
 // Create a new closure for the given data items
 func NewClosure(callee Callee, object Reference, script []byte, state *State, gas, price, val *big.Int) *Closure {
-	return &Closure{callee, object, script, state, gas, price, val, nil}
+	c := &Closure{callee: callee, object: object, Script: script, State: state, Args: nil}
+
+	// In most cases gas, price and value are pointers to transaction objects
+	// and we don't want the transaction's values to change.
+	c.Gas = new(big.Int).Set(gas)
+	c.Price = new(big.Int).Set(price)
+	c.Value = new(big.Int).Set(val)
+
+	return c
 }
 
 // Retuns the x element in data slice
