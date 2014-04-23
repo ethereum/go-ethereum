@@ -34,12 +34,12 @@ func (s *State) Reset() {
 
 // Syncs the trie and all siblings
 func (s *State) Sync() {
-	s.trie.Sync()
-
 	// Sync all nested states
 	for _, state := range s.states {
 		state.Sync()
 	}
+
+	s.trie.Sync()
 }
 
 // Purges the current trie.

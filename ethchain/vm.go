@@ -82,14 +82,15 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 	pc := big.NewInt(0)
 	// Current step count
 	step := 0
-	// The base for all big integer arithmetic
-	base := new(big.Int)
 
 	if ethutil.Config.Debug {
 		ethutil.Config.Log.Debugf("#   op\n")
 	}
 
 	for {
+		// The base for all big integer arithmetic
+		base := new(big.Int)
+
 		step++
 		// Get the memory location of pc
 		val := closure.Get(pc)
@@ -390,6 +391,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			require(1)
 			loc := stack.Pop()
 			val := closure.GetMem(loc)
+			fmt.Printf("load %x = %v\n", loc.Bytes(), val.BigInt())
 			stack.Push(val.BigInt())
 		case oSSTORE:
 			require(2)

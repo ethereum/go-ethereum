@@ -100,15 +100,15 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block, toContract
 	// Get the sender
 	sender := block.state.GetAccount(tx.Sender())
 
+	if sender.Nonce != tx.Nonce {
+		return fmt.Errorf("[TXPL] Invalid account nonce, state nonce is %d transaction nonce is %d instead", sender.Nonce, tx.Nonce)
+	}
+
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.
 	totAmount := new(big.Int).Add(tx.Value, new(big.Int).Mul(TxFee, TxFeeRat))
 	if sender.Amount.Cmp(totAmount) < 0 {
 		return fmt.Errorf("[TXPL] Insufficient amount in sender's (%x) account", tx.Sender())
-	}
-
-	if sender.Nonce != tx.Nonce {
-		return fmt.Errorf("[TXPL] Invalid account nonce, state nonce is %d transaction nonce is %d instead", sender.Nonce, tx.Nonce)
 	}
 
 	// Get the receiver

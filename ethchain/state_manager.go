@@ -117,6 +117,7 @@ func (sm *StateManager) ApplyTransactions(block *Block, txs []*Transaction) {
 				contract := sm.MakeContract(tx)
 				if contract != nil {
 					sm.EvalScript(contract.Init(), contract, tx, block)
+					fmt.Printf("state root of contract %x\n", contract.State().Root())
 				} else {
 					ethutil.Config.Log.Infoln("[STATE] Unable to create contract")
 				}
@@ -332,4 +333,5 @@ func (sm *StateManager) EvalScript(script []byte, object *StateObject, tx *Trans
 
 	// Update the account (refunds)
 	sm.procState.UpdateStateObject(caller)
+	sm.procState.UpdateStateObject(object)
 }
