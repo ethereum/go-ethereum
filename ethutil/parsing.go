@@ -39,7 +39,7 @@ var OpCodes = map[string]byte{
 	"ORIGIN":       0x32,
 	"CALLER":       0x33,
 	"CALLVALUE":    0x34,
-	"CALLDATA":     0x35,
+	"CALLDATALOAD": 0x35,
 	"CALLDATASIZE": 0x36,
 	"GASPRICE":     0x38,
 
