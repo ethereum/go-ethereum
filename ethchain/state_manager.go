@@ -133,37 +133,6 @@ func (sm *StateManager) ApplyTransactions(block *Block, txs []*Transaction) {
 			}
 		}
 	}
-	// Process each transaction/contract
-	for _, tx := range txs {
-		// If there's no recipient, it's a contract
-		// Check if this is a contract creation traction and if so
-		// create a contract of this tx.
-		if tx.IsContract() {
-			contract := sm.MakeContract(tx)
-			if contract != nil {
-				sm.EvalScript(contract.Init(), contract, tx, block)
-			} else {
-				ethutil.Config.Log.Infoln("[STATE] Unable to create contract")
-			}
-		} else {
-			// Figure out if the address this transaction was sent to is a
-			// contract or an actual account. In case of a contract, we process that
-			// contract instead of moving funds between accounts.
-			var err error
-			if contract := sm.procState.GetContract(tx.Recipient); contract != nil {
-				err = sm.Ethereum.TxPool().ProcessTransaction(tx, block, true)
-				if err == nil {
-					sm.EvalScript(contract.Script(), contract, tx, block)
-				}
-			} else {
-				err = sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
-			}
-
-			if err != nil {
-				ethutil.Config.Log.Infoln("[STATE]", err)
-			}
-		}
-	}
 }
 
 // The prepare function, prepares the state manager for the next
@@ -359,7 +328,7 @@ func (sm *StateManager) EvalScript(script []byte, object *StateObject, tx *Trans
 		Diff:        block.Difficulty,
 		//Price:       tx.GasPrice,
 	})
-	closure.Call(vm, nil, nil)
+	closure.Call(vm, tx.Data, nil)
 
 	// Update the account (refunds)
 	sm.procState.UpdateStateObject(caller)

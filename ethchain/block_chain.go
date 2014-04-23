@@ -46,6 +46,7 @@ func (bc *BlockChain) NewBlock(coinbase []byte, txs []*Transaction) *Block {
 		hash = bc.LastBlockHash
 		lastBlockTime = bc.CurrentBlock.Time
 	}
+
 	block := CreateBlock(
 		root,
 		hash,

@@ -53,11 +53,12 @@ var isRequireError = false
 func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err error) {
 	// Recover from any require exception
 	defer func() {
-		if r := recover(); r != nil && isRequireError {
+		if r := recover(); r != nil /*&& isRequireError*/ {
 			fmt.Println(r)
 
 			ret = closure.Return(nil)
 			err = fmt.Errorf("%v", r)
+			fmt.Println("vm err", err)
 		}
 	}()
 
@@ -315,6 +316,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case oCALLDATALOAD:
 			require(1)
 			offset := stack.Pop().Int64()
+			fmt.Println(closure.Args)
 			val := closure.Args[offset : offset+31]
 
 			stack.Push(ethutil.BigD(val))
