@@ -12,17 +12,35 @@ function postData(data, cb) {
 window.eth = {
 	prototype: Object(),
 
-	send: function(cb) {
-		document.getElementById("out").innerHTML = "clicked";
-		postData({message: "Hello world"}, cb);
-	}
+	// Retrieve block
+	//
+	// Either supply a number or a string. Type is determent for the lookup method
+	// string - Retrieves the block by looking up the hash
+	// number - Retrieves the block by looking up the block number
+        getBlock: function(numberOrHash, cb) {
+                var func;
+                if(typeof numberOrHash == "string") {
+                        func =  "getBlockByHash"
+                } else {
+                        func =  "getBlockByNumber"
+                }
+                postData({call: func, args: [numberOrHash]}, cb)
+        },
+
+	// Create transaction
+	//
+	// Creates a transaction with the current account
+	// If no recipient is set, the Ethereum API will see it as a contract creation
+	createTx: function(recipient, value, gas, gasPrice, data, cb) {
+		postData({call: "createTx", args: [recipient, value, gas, gasPrice, data]}, cb)
+	},
 }
 window.eth._callbacks = {}
 
 function debug(/**/) {
 	var args = arguments;
 	var msg = ""
-	for(var i=0; i<args.length; i++){
+	for(var i = 0; i < args.length; i++){
 		if(typeof args[i] == "object") {
 			msg += " " + JSON.stringify(args[i])
 		} else {

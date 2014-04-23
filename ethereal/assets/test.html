@@ -1,26 +1,39 @@
 <html>
 <head>
-<title>Epic Works (TM)</title>
+<title>jeffcoin</title>
 <body>
-<h1>It just works!</h1>
+<h1>Jeff Coin</h1>
 
-<p>Play with me...</p>
+<img src="file:///Users/jeffrey/Desktop/iconnew.png">
 
-<button onclick="test();">test</button>
-<div id="out"></div>
-<div id="in"></div>
-<div id="debug"></div>
+<div id="transactions">
+	<input id="addr" type="text" placeholder="Receiver address"></input><br>
+	<input id="amount" type="text" placeholder="Amount"></input><br>
+	<button onclick="createTransaction();">Send Tx</button>
+</div>
+
+<div><button onclick="test();">Tests</button></div>
 
 <script type="text/javascript">
-function test() {
-	eth.send(function(data) {
-			debug(data)
-			document.getElementById("in").innerHTML ="and the other way around " + data.message;
+function createTransaction() {
+	debug("test")
+	var addr = document.querySelector("#addr").value;
+	var amount = document.querySelector("#amount").value;
+
+	eth.createTx(addr, amount, "100", "250", "", function(tx) {
+		debug("received tx hash:", tx)
 	})
 }
 
-
+// Any test related actions here please
+function tests() {
+	eth.getBlock(1, function(block) {
+		debug("queried block:", block)				
+	})
+}
 </script>
+
+<div id="debug" style="border: 1px solid block"></div>
 
 </body>
 </html>
