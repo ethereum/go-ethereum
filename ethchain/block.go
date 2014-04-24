@@ -116,11 +116,6 @@ func (block *Block) HashNoNonce() []byte {
 	return ethutil.Sha3Bin(ethutil.Encode([]interface{}{block.PrevHash, block.UncleSha, block.Coinbase, block.state.trie.Root, block.TxSha, block.Difficulty, block.Time, block.Extra}))
 }
 
-func (block *Block) PrintHash() {
-	fmt.Println(block)
-	fmt.Println(ethutil.NewValue(ethutil.Encode([]interface{}{block.PrevHash, block.UncleSha, block.Coinbase, block.state.trie.Root, block.TxSha, block.Difficulty, block.Time, block.Extra, block.Nonce})))
-}
-
 func (block *Block) State() *State {
 	return block.state
 }
@@ -182,26 +177,6 @@ func (block *Block) MakeContract(tx *Transaction) {
 }
 
 /////// Block Encoding
-func (block *Block) encodedUncles() interface{} {
-	uncles := make([]interface{}, len(block.Uncles))
-	for i, uncle := range block.Uncles {
-		uncles[i] = uncle.RlpEncode()
-	}
-
-	return uncles
-}
-
-func (block *Block) encodedTxs() interface{} {
-	// Marshal the transactions of this block
-	encTx := make([]interface{}, len(block.transactions))
-	for i, tx := range block.transactions {
-		// Cast it to a string (safe)
-		encTx[i] = tx.RlpData()
-	}
-
-	return encTx
-}
-
 func (block *Block) rlpTxs() interface{} {
 	// Marshal the transactions of this block
 	encTx := make([]interface{}, len(block.transactions))
