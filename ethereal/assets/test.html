@@ -23,11 +23,16 @@ function tests() {
 
 function init() {
 	eth.getKey(function(key) {
+		eth.getStorage(jefcoinAddr, key, function(storage) {
+			document.querySelector("#currentAmount").innerHTML = "Amount: " + storage;
+		});
+
+		eth.on("block:new", function() {
 			eth.getStorage(jefcoinAddr, key, function(storage) {
-				debug("Currently in storage: ", storage);
 				document.querySelector("#currentAmount").innerHTML = "Amount: " + storage;
-			})
-	})
+			});
+		});
+	});
 }
 
 </script>

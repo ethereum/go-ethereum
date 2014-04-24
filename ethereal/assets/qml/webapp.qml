@@ -79,6 +79,10 @@ ApplicationWindow {
 			function postData(seed, data) {
 				webview.experimental.postMessage(JSON.stringify({data: data, _seed: seed}))
 			}
+
+			function onNewBlockCb(block) {
+				webview.experimental.postMessage(JSON.stringify({data: block, _event: "block:new"}))
+			}
                 }
 
                 Rectangle {

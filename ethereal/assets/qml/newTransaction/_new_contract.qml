@@ -117,6 +117,7 @@ Component {
 
 		TextArea {
 			id: codeView
+			height: 300
 			anchors.topMargin: 5
 			Layout.fillWidth: true
 			width: parent.width /2

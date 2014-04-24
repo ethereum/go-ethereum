@@ -18,13 +18,11 @@ ApplicationWindow {
 	MenuBar {
 		Menu {
 			title: "File"
-			/*
 			MenuItem {
 				text: "Import App"
 				shortcut: "Ctrl+o"
 				onTriggered: openAppDialog.open()
 			}
-			*/
 		}
 
 		Menu {
