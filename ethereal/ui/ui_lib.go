@@ -70,8 +70,34 @@ func (ui *UiLib) OpenHtml(path string) {
 	win.Set("url", path)
 
 	go func() {
+		blockChan := make(chan ethutil.React, 1)
+		quitChan := make(chan bool)
+
+		go func() {
+		out:
+			for {
+				select {
+				case <-quitChan:
+					ui.eth.Reactor().Unsubscribe("newBlock", blockChan)
+					break out
+				case block := <-blockChan:
+					if block, ok := block.Resource.(*ethchain.Block); ok {
+						b := &Block{Number: int(block.BlockInfo().Number), Hash: ethutil.Hex(block.Hash())}
+						win.ObjectByName("webView").Call("onNewBlockCb", b)
+					}
+				}
+			}
+
+			// Clean up
+			close(blockChan)
+			close(quitChan)
+		}()
+		ui.eth.Reactor().Subscribe("newBlock", blockChan)
+
 		win.Show()
 		win.Wait()
+
+		quitChan <- true
 	}()
 }
 
