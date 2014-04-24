@@ -121,7 +121,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			} else {
 				mult = ethutil.Big1
 			}
-			useGas(base.Mul(mult, GasSStore))
+			useGas(new(big.Int).Mul(mult, GasSStore))
 		case oBALANCE:
 			useGas(GasBalance)
 		case oCREATE:
@@ -156,6 +156,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			x, y := stack.Popn()
 			// (x + y) % 2 ** 256
 			base.Add(x, y)
+			fmt.Println(x, y, base)
 			// Pop result back on the stack
 			stack.Push(base)
 		case oSUB:
@@ -317,8 +318,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case oCALLDATALOAD:
 			require(1)
 			offset := stack.Pop().Int64()
-			fmt.Println(closure.Args)
-			val := closure.Args[offset : offset+31]
+			val := closure.Args[offset : offset+32]
+			fmt.Println(ethutil.BigD(val))
 
 			stack.Push(ethutil.BigD(val))
 		case oCALLDATASIZE:
