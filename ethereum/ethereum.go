@@ -17,7 +17,7 @@ import (
 const Debug = true
 
 // Register interrupt handlers so we can stop the ethereum
-func RegisterInterupts(s *eth.Ethereum) {
+func RegisterInterrupts(s *eth.Ethereum) {
 	// Buffered chan of one is enough
 	c := make(chan os.Signal, 1)
 	// Notify about interrupts for now
@@ -25,10 +25,23 @@ func RegisterInterupts(s *eth.Ethereum) {
 	go func() {
 		for sig := range c {
 			fmt.Printf("Shutting down (%v) ... \n", sig)
-
 			s.Stop()
 		}
 	}()
+}
+
+func confirm(message string) bool {
+	fmt.Println(message, "Are you sure? (y/n)")
+	var r string
+	fmt.Scanln(&r)
+	for ; ; fmt.Scanln(&r) {
+		if r == "n" || r == "y" {
+			break
+		} else {
+			fmt.Printf("Yes or no?", r)
+		}
+	}
+	return r == "y"
 }
 
 func main() {
@@ -36,8 +49,26 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	ethchain.InitFees()
+	// set logger
+	var logSys *log.Logger
+	flags := log.LstdFlags
+
+	if LogFile != "" {
+		logfile, err := os.OpenFile(LogFile, os.O_RDWR | os.O_CREATE | os.O_APPEND, 0666)
+    if err != nil {
+      panic(fmt.Sprintf("error opening log file '%s': %v", LogFile, err))
+    }
+    defer logfile.Close()
+		log.SetOutput(logfile)
+		logSys = log.New(logfile, "", flags)
+  } else {
+  	logSys = log.New(os.Stdout, "", flags)
+  }
 	ethutil.ReadConfig(DataDir)
+	logger := ethutil.Config.Log
+	logger.AddLogSystem(logSys)
+
+  ethchain.InitFees()
 	ethutil.Config.Seed = UseSeed
 
 	// Instantiated a eth stack
@@ -48,67 +79,42 @@ func main() {
 	}
 	ethereum.Port = OutboundPort
 
-	if GenAddr {
-		fmt.Println("This action overwrites your old private key. Are you sure? (y/n)")
-
-		var r string
-		fmt.Scanln(&r)
-		for ; ; fmt.Scanln(&r) {
-			if r == "n" || r == "y" {
-				break
-			} else {
-				fmt.Printf("Yes or no?", r)
-			}
-		}
-
-		if r == "y" {
+	// bookkeeping tasks
+	switch {
+	case GenAddr:
+		if NonInteractive || confirm("This action overwrites your old private key.") {
 			utils.CreateKeyPair(true)
 		}
 		os.Exit(0)
-	} else {
-		if len(ImportKey) > 0 {
-			fmt.Println("This action overwrites your old private key. Are you sure? (y/n)")
-			var r string
-			fmt.Scanln(&r)
-			for ; ; fmt.Scanln(&r) {
-				if r == "n" || r == "y" {
-					break
-				} else {
-					fmt.Printf("Yes or no?", r)
-				}
+	case len(ImportKey) > 0:
+		if NonInteractive || confirm("This action overwrites your old private key.") {
+			mnemonic := strings.Split(ImportKey, " ")
+			if len(mnemonic) == 24 {
+				logSys.Println("Got mnemonic key, importing.")
+				key := ethutil.MnemonicDecode(mnemonic)
+				utils.ImportPrivateKey(key)
+			} else if len(mnemonic) == 1 {
+				logSys.Println("Got hex key, importing.")
+				utils.ImportPrivateKey(ImportKey)
+			} else {
+				logSys.Println("Did not recognise format, exiting.")
 			}
-
-			if r == "y" {
-				mnemonic := strings.Split(ImportKey, " ")
-				if len(mnemonic) == 24 {
-					fmt.Println("Got mnemonic key, importing.")
-					key := ethutil.MnemonicDecode(mnemonic)
-					utils.ImportPrivateKey(key)
-				} else if len(mnemonic) == 1 {
-					fmt.Println("Got hex key, importing.")
-					utils.ImportPrivateKey(ImportKey)
-				} else {
-					fmt.Println("Did not recognise format, exiting.")
-				}
-				os.Exit(0)
-			}
-		} else {
-			utils.CreateKeyPair(false)
 		}
-	}
-
-	if ExportKey {
+		os.Exit(0)
+	case len(ImportKey) == 0:
+		utils.CreateKeyPair(false)
+		fallthrough
+	case ExportKey:
 		key := ethutil.Config.Db.GetKeys()[0]
-		fmt.Printf("%x\n", key.PrivateKey)
+		logSys.Println(fmt.Sprintf("prvk: %x\n", key.PrivateKey))
+		os.Exit(0)
+	case ShowGenesis:
+		logSys.Println(ethereum.BlockChain().Genesis())
 		os.Exit(0)
 	}
 
-	if ShowGenesis {
-		fmt.Println(ethereum.BlockChain().Genesis())
-		os.Exit(0)
-	}
-
-	log.Printf("Starting Ethereum v%s\n", ethutil.Config.Ver)
+	// client
+	logger.Infoln(fmt.Sprintf("Starting Ethereum v%s", ethutil.Config.Ver))
 
 	// Set the max peers
 	ethereum.MaxPeers = MaxPeer
@@ -124,17 +130,17 @@ func main() {
 		go console.Start()
 	}
 
-	RegisterInterupts(ethereum)
+	RegisterInterrupts(ethereum)
 	ethereum.Start()
 
 	if StartMining {
-		log.Printf("Miner started\n")
+		logger.Infoln("Miner started")
 
 		// Fake block mining. It broadcasts a new block every 5 seconds
 		go func() {
 
 			if StartMining {
-				log.Printf("Miner started\n")
+				logger.Infoln("Miner started")
 
 				go func() {
 					data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))

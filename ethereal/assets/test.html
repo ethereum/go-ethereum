@@ -14,13 +14,6 @@ function createTransaction() {
 	})
 }
 
-// Any test related actions here please
-function tests() {
-	eth.getKey(function(keys) {
-		debug(keys)
-	})
-}
-
 function init() {
 	eth.getKey(function(key) {
 		eth.getStorage(jefcoinAddr, key, function(storage) {
@@ -54,9 +47,6 @@ input[type="text"] {
 	<input id="amount" type="text" placeholder="Amount"></input><br>
 	<button onclick="createTransaction();">Send Tx</button>
 </div>
-
-<div><button onclick="tests();">Tests</button></div>
-
 
 <div id="debug" style="border: 1px solid block"></div>
 
