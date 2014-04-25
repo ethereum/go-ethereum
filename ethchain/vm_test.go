@@ -91,7 +91,7 @@ func TestRun4(t *testing.T) {
 		Exit()
 	`), false)
 	script := ethutil.Assemble(asm...)
-	tx := NewContractCreationTx(ethutil.Big("0"), ethutil.Big("1000"), script, nil)
+	tx := NewContractCreationTx(ethutil.Big("0"), ethutil.Big("1000"), ethutil.Big("100"), script, nil)
 	addr := tx.Hash()[12:]
 	contract := MakeContract(tx, state)
 	state.UpdateStateObject(contract)
@@ -133,7 +133,7 @@ func TestRun4(t *testing.T) {
 	fmt.Println(asm)
 
 	callerScript := ethutil.Assemble(asm...)
-	callerTx := NewContractCreationTx(ethutil.Big("0"), ethutil.Big("1000"), callerScript, nil)
+	callerTx := NewContractCreationTx(ethutil.Big("0"), ethutil.Big("1000"), ethutil.Big("100"), callerScript, nil)
 
 	// Contract addr as test address
 	gas := big.NewInt(1000)
@@ -148,7 +148,7 @@ func TestRun4(t *testing.T) {
 	fmt.Println("account.Amount =", account.Amount)
 	callerClosure := NewClosure(account, c, c.script, state, gas, gasPrice, big.NewInt(0))
 
-	vm := NewVm(state, RuntimeVars{
+	vm := NewVm(state, nil, RuntimeVars{
 		Origin:      account.Address(),
 		BlockNumber: 1,
 		PrevHash:    ethutil.FromHex("5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"),
