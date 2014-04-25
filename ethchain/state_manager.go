@@ -50,6 +50,10 @@ type StateManager struct {
 	// Comparative state it used for comparing and validating end
 	// results
 	compState *State
+
+	// It's generally know that a map is faster for small lookups than arrays
+	// we'll eventually have to make a decision if the map grows too large
+	watchedAddresses map[string]bool
 }
 
 func NewStateManager(ethereum EthManager) *StateManager {
@@ -60,6 +64,7 @@ func NewStateManager(ethereum EthManager) *StateManager {
 		Ethereum:         ethereum,
 		stateObjectCache: NewStateObjectCache(),
 		bc:               ethereum.BlockChain(),
+		watchedAddresses: make(map[string]bool),
 	}
 	sm.procState = ethereum.BlockChain().CurrentBlock.State()
 	return sm
@@ -309,18 +314,9 @@ func (sm *StateManager) Stop() {
 }
 
 func (sm *StateManager) EvalScript(script []byte, object *StateObject, tx *Transaction, block *Block) {
-	// Recovering function in case the VM had any errors
-	/*
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Println("Recovered from VM execution with err =", r)
-			}
-		}()
-	*/
-
 	caller := sm.procState.GetAccount(tx.Sender())
 	closure := NewClosure(caller, object, script, sm.procState, tx.Gas, tx.GasPrice, tx.Value)
-	vm := NewVm(sm.procState, RuntimeVars{
+	vm := NewVm(sm.procState, sm, RuntimeVars{
 		Origin:      caller.Address(),
 		BlockNumber: block.BlockInfo().Number,
 		PrevHash:    block.PrevHash,
@@ -333,5 +329,22 @@ func (sm *StateManager) EvalScript(script []byte, object *StateObject, tx *Trans
 
 	// Update the account (refunds)
 	sm.procState.UpdateStateObject(caller)
+	sm.Changed(caller)
 	sm.procState.UpdateStateObject(object)
+	sm.Changed(object)
+}
+
+// Watch a specific address
+func (sm *StateManager) Watch(addr []byte) {
+	if !sm.watchedAddresses[string(addr)] {
+		sm.watchedAddresses[string(addr)] = true
+	}
+}
+
+// The following objects are used when changing a value and using the "watched" attribute
+// to determine whether the reactor should be used to notify any subscribers on the address
+func (sm *StateManager) Changed(stateObject *StateObject) {
+	if sm.watchedAddresses[string(stateObject.Address())] {
+		sm.Ethereum.Reactor().Post("addressChanged", stateObject)
+	}
 }

@@ -20,7 +20,12 @@ func (val *Value) String() string {
 }
 
 func NewValue(val interface{}) *Value {
-	return &Value{Val: val}
+	t := val
+	if v, ok := val.(*Value); ok {
+		t = v.Val
+	}
+
+	return &Value{Val: t}
 }
 
 func (val *Value) Type() reflect.Kind {

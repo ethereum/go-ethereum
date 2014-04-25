@@ -30,6 +30,8 @@ type Vm struct {
 	vars RuntimeVars
 
 	state *State
+
+	stateManager *StateManager
 }
 
 type RuntimeVars struct {
@@ -42,8 +44,8 @@ type RuntimeVars struct {
 	TxData      []string
 }
 
-func NewVm(state *State, vars RuntimeVars) *Vm {
-	return &Vm{vars: vars, state: state}
+func NewVm(state *State, stateManager *StateManager, vars RuntimeVars) *Vm {
+	return &Vm{vars: vars, state: state, stateManager: stateManager}
 }
 
 var Pow256 = ethutil.BigPow(2, 256)

@@ -18,6 +18,28 @@ type StateObject struct {
 	initScript []byte
 }
 
+// Converts an transaction in to a state object
+func MakeContract(tx *Transaction, state *State) *StateObject {
+	// Create contract if there's no recipient
+	if tx.IsContract() {
+		// FIXME
+		addr := tx.Hash()[12:]
+
+		value := tx.Value
+		contract := NewContract(addr, value, []byte(""))
+		state.UpdateStateObject(contract)
+
+		contract.script = tx.Data
+		contract.initScript = tx.Init
+
+		state.UpdateStateObject(contract)
+
+		return contract
+	}
+
+	return nil
+}
+
 func NewContract(address []byte, Amount *big.Int, root []byte) *StateObject {
 	contract := &StateObject{address: address, Amount: Amount, Nonce: 0}
 	contract.state = NewState(ethutil.NewTrie(ethutil.Config.Db, string(root)))
@@ -39,6 +61,10 @@ func NewStateObjectFromBytes(address, data []byte) *StateObject {
 	return object
 }
 
+func (c *StateObject) State() *State {
+	return c.state
+}
+
 func (c *StateObject) Addr(addr []byte) *ethutil.Value {
 	return ethutil.NewValueFromBytes([]byte(c.state.trie.Get(string(addr))))
 }
@@ -47,8 +73,10 @@ func (c *StateObject) SetAddr(addr []byte, value interface{}) {
 	c.state.trie.Update(string(addr), string(ethutil.NewValue(value).Encode()))
 }
 
-func (c *StateObject) State() *State {
-	return c.state
+func (c *StateObject) SetMem(num *big.Int, val *ethutil.Value) {
+	addr := ethutil.BigToBytes(num, 256)
+	c.SetAddr(addr, val)
+	//c.state.trie.Update(string(addr), string(val.Encode()))
 }
 
 func (c *StateObject) GetMem(num *big.Int) *ethutil.Value {
@@ -65,11 +93,6 @@ func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
 	return ethutil.NewValueFromBytes([]byte{c.script[pc.Int64()]})
 }
 
-func (c *StateObject) SetMem(num *big.Int, val *ethutil.Value) {
-	addr := ethutil.BigToBytes(num, 256)
-	c.state.trie.Update(string(addr), string(val.Encode()))
-}
-
 // Return the gas back to the origin. Used by the Virtual machine or Closures
 func (c *StateObject) ReturnGas(gas, price *big.Int, state *State) {
 	remainder := new(big.Int).Mul(gas, price)
@@ -77,11 +100,15 @@ func (c *StateObject) ReturnGas(gas, price *big.Int, state *State) {
 }
 
 func (c *StateObject) AddAmount(amount *big.Int) {
-	c.Amount.Add(c.Amount, amount)
+	c.SetAmount(new(big.Int).Add(c.Amount, amount))
 }
 
 func (c *StateObject) SubAmount(amount *big.Int) {
-	c.Amount.Sub(c.Amount, amount)
+	c.SetAmount(new(big.Int).Sub(c.Amount, amount))
+}
+
+func (c *StateObject) SetAmount(amount *big.Int) {
+	c.Amount = amount
 }
 
 func (c *StateObject) ConvertGas(gas, price *big.Int) error {
@@ -128,28 +155,6 @@ func (c *StateObject) RlpDecode(data []byte) {
 	c.Nonce = decoder.Get(1).Uint()
 	c.state = NewState(ethutil.NewTrie(ethutil.Config.Db, decoder.Get(2).Interface()))
 	c.script = decoder.Get(3).Bytes()
-}
-
-// Converts an transaction in to a state object
-func MakeContract(tx *Transaction, state *State) *StateObject {
-	// Create contract if there's no recipient
-	if tx.IsContract() {
-		// FIXME
-		addr := tx.Hash()[12:]
-
-		value := tx.Value
-		contract := NewContract(addr, value, []byte(""))
-		state.UpdateStateObject(contract)
-
-		contract.script = tx.Data
-		contract.initScript = tx.Init
-
-		state.UpdateStateObject(contract)
-
-		return contract
-	}
-
-	return nil
 }
 
 // The cached state and state object cache are helpers which will give you somewhat
