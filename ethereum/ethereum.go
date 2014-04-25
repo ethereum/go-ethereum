@@ -53,22 +53,24 @@ func main() {
 	var logSys *log.Logger
 	flags := log.LstdFlags
 
-	if LogFile != "" {
-		logfile, err := os.OpenFile(LogFile, os.O_RDWR | os.O_CREATE | os.O_APPEND, 0666)
-    if err != nil {
-      panic(fmt.Sprintf("error opening log file '%s': %v", LogFile, err))
-    }
-    defer logfile.Close()
-		log.SetOutput(logfile)
-		logSys = log.New(logfile, "", flags)
-  } else {
-  	logSys = log.New(os.Stdout, "", flags)
-  }
 	ethutil.ReadConfig(DataDir)
 	logger := ethutil.Config.Log
-	logger.AddLogSystem(logSys)
 
-  ethchain.InitFees()
+	if LogFile != "" {
+		logfile, err := os.OpenFile(LogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		if err != nil {
+			panic(fmt.Sprintf("error opening log file '%s': %v", LogFile, err))
+		}
+		defer logfile.Close()
+		log.SetOutput(logfile)
+		logSys = log.New(logfile, "", flags)
+		logger.AddLogSystem(logSys)
+	}
+	/*else {
+		logSys = log.New(os.Stdout, "", flags)
+	}*/
+
+	ethchain.InitFees()
 	ethutil.Config.Seed = UseSeed
 
 	// Instantiated a eth stack
@@ -101,9 +103,6 @@ func main() {
 			}
 		}
 		os.Exit(0)
-	case len(ImportKey) == 0:
-		utils.CreateKeyPair(false)
-		fallthrough
 	case ExportKey:
 		key := ethutil.Config.Db.GetKeys()[0]
 		logSys.Println(fmt.Sprintf("prvk: %x\n", key.PrivateKey))
@@ -111,6 +110,9 @@ func main() {
 	case ShowGenesis:
 		logSys.Println(ethereum.BlockChain().Genesis())
 		os.Exit(0)
+	default:
+		// Creates a keypair if non exists
+		utils.CreateKeyPair(false)
 	}
 
 	// client

@@ -67,6 +67,10 @@ func (lib *EthLib) GetStateObject(address string) *Contract {
 	return NewContract(stateObject)
 }
 
+func (lib *EthLib) Watch(addr string) {
+	lib.stateManager.Watch(ethutil.FromHex(addr))
+}
+
 func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
 	var hash []byte
 	var contractCreation bool
@@ -117,7 +121,7 @@ func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, dataStr st
 	return ethutil.Hex(tx.Hash()), nil
 }
 
-func (lib *EthLib) GetBlock(hexHash string) *Block {
+func (lib *EthLib) GetBlock(hexHash string) *QBlock {
 	hash, err := hex.DecodeString(hexHash)
 	if err != nil {
 		return nil
@@ -125,5 +129,5 @@ func (lib *EthLib) GetBlock(hexHash string) *Block {
 
 	block := lib.blockChain.GetBlock(hash)
 
-	return &Block{Number: int(block.BlockInfo().Number), Hash: ethutil.Hex(block.Hash())}
+	return &QBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Hex(block.Hash())}
 }

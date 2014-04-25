@@ -22,12 +22,15 @@ function tests() {
 }
 
 function init() {
+	eth.watch(jefcoinAddr);
+
 	eth.getKey(function(key) {
 		eth.getStorage(jefcoinAddr, key, function(storage) {
 			document.querySelector("#currentAmount").innerHTML = "Amount: " + storage;
 		});
 
-		eth.on("block:new", function() {
+		eth.on("object:change", function(stateObject) {
+			debug(stateObject);
 			eth.getStorage(jefcoinAddr, key, function(storage) {
 				document.querySelector("#currentAmount").innerHTML = "Amount: " + storage;
 			});

@@ -69,8 +69,10 @@ func (ui *UiLib) OpenHtml(path string) {
 	}
 	win.Set("url", path)
 
+	webView := win.ObjectByName("webView")
 	go func() {
 		blockChan := make(chan ethutil.React, 1)
+		addrChan := make(chan ethutil.React, 1)
 		quitChan := make(chan bool)
 
 		go func() {
@@ -82,8 +84,12 @@ func (ui *UiLib) OpenHtml(path string) {
 					break out
 				case block := <-blockChan:
 					if block, ok := block.Resource.(*ethchain.Block); ok {
-						b := &Block{Number: int(block.BlockInfo().Number), Hash: ethutil.Hex(block.Hash())}
-						win.ObjectByName("webView").Call("onNewBlockCb", b)
+						b := &QBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Hex(block.Hash())}
+						webView.Call("onNewBlockCb", b)
+					}
+				case stateObject := <-addrChan:
+					if stateObject, ok := stateObject.Resource.(*ethchain.StateObject); ok {
+						webView.Call("onObjectChangeCb", NewQStateObject(stateObject))
 					}
 				}
 			}
@@ -93,6 +99,7 @@ func (ui *UiLib) OpenHtml(path string) {
 			close(quitChan)
 		}()
 		ui.eth.Reactor().Subscribe("newBlock", blockChan)
+		ui.eth.Reactor().Subscribe("addressChanged", addrChan)
 
 		win.Show()
 		win.Wait()
@@ -169,7 +176,7 @@ func (ui *UiLib) DebugTx(recipient, valueStr, gasStr, gasPriceStr, data string) 
 	callerClosure := ethchain.NewClosure(account, c, c.Script(), state, ethutil.Big(gasStr), ethutil.Big(gasPriceStr), ethutil.Big(valueStr))
 
 	block := ui.eth.BlockChain().CurrentBlock
-	vm := ethchain.NewVm(state, ethchain.RuntimeVars{
+	vm := ethchain.NewVm(state, ui.eth.StateManager(), ethchain.RuntimeVars{
 		Origin:      account.Address(),
 		BlockNumber: block.BlockInfo().Number,
 		PrevHash:    block.PrevHash,

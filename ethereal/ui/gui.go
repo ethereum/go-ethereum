@@ -2,7 +2,6 @@ package ethui
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
@@ -12,45 +11,6 @@ import (
 	"math/big"
 	"strings"
 )
-
-// Block interface exposed to QML
-type Block struct {
-	Number int
-	Hash   string
-}
-
-type Tx struct {
-	Value, Hash, Address string
-	Contract             bool
-}
-
-type Key struct {
-	Address string
-}
-
-type KeyRing struct {
-	Keys []interface{}
-}
-
-func NewKeyRing(keys []interface{}) *KeyRing {
-	return &KeyRing{Keys: keys}
-}
-
-func NewTxFromTransaction(tx *ethchain.Transaction) *Tx {
-	hash := hex.EncodeToString(tx.Hash())
-	sender := hex.EncodeToString(tx.Recipient)
-	isContract := len(tx.Data) > 0
-
-	return &Tx{Hash: hash, Value: ethutil.CurrencyToString(tx.Value), Address: sender, Contract: isContract}
-}
-
-// Creates a new QML Block from a chain block
-func NewBlockFromBlock(block *ethchain.Block) *Block {
-	info := block.BlockInfo()
-	hash := hex.EncodeToString(block.Hash())
-
-	return &Block{Number: int(info.Number), Hash: hash}
-}
 
 type Gui struct {
 	// The main application window
@@ -96,9 +56,9 @@ func (ui *Gui) Start(assetPath string) {
 
 	// Register ethereum functions
 	qml.RegisterTypes("Ethereum", 1, 0, []qml.TypeSpec{{
-		Init: func(p *Block, obj qml.Object) { p.Number = 0; p.Hash = "" },
+		Init: func(p *QBlock, obj qml.Object) { p.Number = 0; p.Hash = "" },
 	}, {
-		Init: func(p *Tx, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
+		Init: func(p *QTx, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
 	}})
 
 	ethutil.Config.SetClientString(fmt.Sprintf("/Ethereal v%s", "0.1"))
@@ -169,13 +129,13 @@ func (ui *Gui) readPreviousTransactions() {
 	for it.Next() {
 		tx := ethchain.NewTransactionFromBytes(it.Value())
 
-		ui.win.Root().Call("addTx", NewTxFromTransaction(tx))
+		ui.win.Root().Call("addTx", NewQTx(tx))
 	}
 	it.Release()
 }
 
 func (ui *Gui) ProcessBlock(block *ethchain.Block) {
-	ui.win.Root().Call("addBlock", NewBlockFromBlock(block))
+	ui.win.Root().Call("addBlock", NewQBlock(block))
 }
 
 // Simple go routine function that updates the list of peers in the GUI
@@ -193,13 +153,13 @@ func (ui *Gui) update() {
 
 			if txMsg.Type == ethchain.TxPre {
 				if bytes.Compare(tx.Sender(), ui.addr) == 0 {
-					ui.win.Root().Call("addTx", NewTxFromTransaction(tx))
+					ui.win.Root().Call("addTx", NewQTx(tx))
 					ui.txDb.Put(tx.Hash(), tx.RlpEncode())
 
 					ui.eth.StateManager().GetAddrState(ui.addr).Nonce += 1
 					unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
 				} else if bytes.Compare(tx.Recipient, ui.addr) == 0 {
-					ui.win.Root().Call("addTx", NewTxFromTransaction(tx))
+					ui.win.Root().Call("addTx", NewQTx(tx))
 					ui.txDb.Put(tx.Hash(), tx.RlpEncode())
 
 					unconfirmedFunds.Add(unconfirmedFunds, tx.Value)

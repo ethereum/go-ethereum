@@ -74,14 +74,24 @@ ApplicationWindow {
 					var keys = eth.getKey()
 					postData(data._seed, keys)
 					break
+				case "watch":
+					if(data.args.length > 0) {
+						eth.watch(data.args[0]);
+					}
 				}
                         }
 			function postData(seed, data) {
 				webview.experimental.postMessage(JSON.stringify({data: data, _seed: seed}))
 			}
+			function postEvent(event, data) {
+				webview.experimental.postMessage(JSON.stringify({data: data, _event: event}))
+			}
 
 			function onNewBlockCb(block) {
-				webview.experimental.postMessage(JSON.stringify({data: block, _event: "block:new"}))
+				postEvent("block:new", block)
+			}
+			function onObjectChangeCb(stateObject) {
+				postEvent("object:change", stateObject)
 			}
                 }
 

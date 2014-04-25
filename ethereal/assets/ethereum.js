@@ -47,6 +47,10 @@ window.eth = {
 		postData({call: "getKey"}, cb);
 	},
 
+	watch: function(address) {
+		postData({call: "watch", args: [address]});
+	},
+
 
 	on: function(event, cb) {
 		if(eth._onCallbacks[event] === undefined) {
