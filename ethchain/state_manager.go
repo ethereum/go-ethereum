@@ -314,10 +314,17 @@ func (sm *StateManager) Stop() {
 }
 
 func (sm *StateManager) EvalScript(script []byte, object *StateObject, tx *Transaction, block *Block) {
-	caller := sm.procState.GetAccount(tx.Sender())
-	closure := NewClosure(caller, object, script, sm.procState, tx.Gas, tx.GasPrice, tx.Value)
+	account := sm.procState.GetAccount(tx.Sender())
+
+	err := account.ConvertGas(tx.Gas, tx.GasPrice)
+	if err != nil {
+		ethutil.Config.Log.Debugln(err)
+		return
+	}
+
+	closure := NewClosure(account, object, script, sm.procState, tx.Gas, tx.GasPrice, tx.Value)
 	vm := NewVm(sm.procState, sm, RuntimeVars{
-		Origin:      caller.Address(),
+		Origin:      account.Address(),
 		BlockNumber: block.BlockInfo().Number,
 		PrevHash:    block.PrevHash,
 		Coinbase:    block.Coinbase,
@@ -328,8 +335,8 @@ func (sm *StateManager) EvalScript(script []byte, object *StateObject, tx *Trans
 	closure.Call(vm, tx.Data, nil)
 
 	// Update the account (refunds)
-	sm.procState.UpdateStateObject(caller)
-	sm.Changed(caller)
+	sm.procState.UpdateStateObject(account)
+	sm.Changed(account)
 	sm.procState.UpdateStateObject(object)
 	sm.Changed(object)
 }
