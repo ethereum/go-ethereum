@@ -56,8 +56,6 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 	// Recover from any require exception
 	defer func() {
 		if r := recover(); r != nil /*&& isRequireError*/ {
-			fmt.Println(r)
-
 			ret = closure.Return(nil)
 			err = fmt.Errorf("%v", r)
 			fmt.Println("vm err", err)
@@ -158,7 +156,6 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			x, y := stack.Popn()
 			// (x + y) % 2 ** 256
 			base.Add(x, y)
-			fmt.Println(x, y, base)
 			// Pop result back on the stack
 			stack.Push(base)
 		case oSUB:
@@ -321,7 +318,6 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			require(1)
 			offset := stack.Pop().Int64()
 			val := closure.Args[offset : offset+32]
-			fmt.Println(ethutil.BigD(val))
 
 			stack.Push(ethutil.BigD(val))
 		case oCALLDATASIZE:
@@ -394,7 +390,6 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			require(1)
 			loc := stack.Pop()
 			val := closure.GetMem(loc)
-			fmt.Printf("load %x = %v\n", loc.Bytes(), val.BigInt())
 			stack.Push(val.BigInt())
 		case oSSTORE:
 			require(2)
@@ -452,8 +447,12 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 				ret, err := closure.Call(vm, args, hook)
 				if err != nil {
 					stack.Push(ethutil.BigFalse)
+					// Reset the changes applied this object
+					//contract.State().Reset()
 				} else {
 					stack.Push(ethutil.BigTrue)
+					// Notify of the changes
+					vm.stateManager.Changed(contract)
 				}
 
 				mem.Set(retOffset.Int64(), retSize.Int64(), ret)
