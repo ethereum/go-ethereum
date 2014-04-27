@@ -26,16 +26,6 @@ func (coder *RlpEncoder) EncodeData(rlpData interface{}) []byte {
 	return Encode(rlpData)
 }
 
-/*
-func FromBin(data []byte) uint64 {
-	if len(data) == 0 {
-		return 0
-	}
-
-	return FromBin(data[:len(data)-1])*256 + uint64(data[len(data)-1])
-}
-*/
-
 const (
 	RlpEmptyList = 0x80
 	RlpEmptyStr  = 0x40

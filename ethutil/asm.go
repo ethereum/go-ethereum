@@ -79,6 +79,10 @@ var OpCodes = map[string]byte{
 	"SUICIDE": 0x7f,
 }
 
+// Is op code
+//
+// Check whether the given string matches anything in
+// the OpCode list
 func IsOpCode(s string) bool {
 	for key, _ := range OpCodes {
 		if key == s {
@@ -88,6 +92,10 @@ func IsOpCode(s string) bool {
 	return false
 }
 
+// Compile instruction
+//
+// Attempts to compile and parse the given instruction in "s"
+// and returns the byte sequence
 func CompileInstr(s interface{}) ([]byte, error) {
 	switch s.(type) {
 	case string:
@@ -119,8 +127,9 @@ func CompileInstr(s interface{}) ([]byte, error) {
 	return nil, nil
 }
 
-// Script compilation functions
-// Compiles strings to machine code
+// Assemble
+//
+// Assembles the given instructions and returns EVM byte code
 func Assemble(instructions ...interface{}) (script []byte) {
 	//script = make([]string, len(instructions))
 
@@ -134,38 +143,22 @@ func Assemble(instructions ...interface{}) (script []byte) {
 	return
 }
 
-/*
-Prepocessing function that takes init and main apart:
-init() {
-	// something
-}
-
-main() {
-	// main something
-}
+// Pre process script
+//
+// Take data apart and attempt to find the "init" section and
+// "main" section. `main { } init { }`
 func PreProcess(data string) (mainInput, initInput string) {
-	reg := "\\(\\)\\s*{([\\d\\w\\W\\n\\s]+?)}"
-	mainReg := regexp.MustCompile("main" + reg)
-	initReg := regexp.MustCompile("init" + reg)
-
-	main := mainReg.FindStringSubmatch(data)
-	if len(main) > 0 {
-		mainInput = main[1]
-	} else {
+	mainInput = getCodeSectionFor("main", data)
+	if mainInput == "" {
 		mainInput = data
 	}
-
-	init := initReg.FindStringSubmatch(data)
-	if len(init) > 0 {
-		initInput = init[1]
-	}
+	initInput = getCodeSectionFor("init", data)
 
 	return
 }
-*/
 
 // Very, very dumb parser. Heed no attention :-)
-func FindFor(blockMatcher, input string) string {
+func getCodeSectionFor(blockMatcher, input string) string {
 	curCount := -1
 	length := len(blockMatcher)
 	matchfst := rune(blockMatcher[0])
@@ -197,14 +190,4 @@ func FindFor(blockMatcher, input string) string {
 	}
 
 	return currStr
-}
-
-func PreProcess(data string) (mainInput, initInput string) {
-	mainInput = FindFor("main", data)
-	if mainInput == "" {
-		mainInput = data
-	}
-	initInput = FindFor("init", data)
-
-	return
 }

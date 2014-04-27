@@ -9,6 +9,7 @@ import (
 	"runtime"
 )
 
+// Log types available
 type LogType byte
 
 const (
@@ -16,7 +17,7 @@ const (
 	LogTypeFile  = 2
 )
 
-// Config struct isn't exposed
+// Config struct
 type config struct {
 	Db Database
 
@@ -31,7 +32,9 @@ type config struct {
 
 var Config *config
 
-// Read config doesn't read anything yet.
+// Read config
+//
+// Initialize the global Config variable with default settings
 func ReadConfig(base string) *config {
 	if Config == nil {
 		usr, _ := user.Current()
@@ -56,6 +59,8 @@ func ReadConfig(base string) *config {
 	return Config
 }
 
+// Set client string
+//
 func (c *config) SetClientString(str string) {
 	Config.ClientString = fmt.Sprintf("%s nv%s/%s", str, c.Ver, runtime.GOOS)
 }

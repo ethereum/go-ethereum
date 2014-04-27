@@ -6,6 +6,9 @@ import (
 	"fmt"
 )
 
+// Number to bytes
+//
+// Returns the number in bytes with the specified base
 func NumberToBytes(num interface{}, bits int) []byte {
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.BigEndian, num)
@@ -16,6 +19,9 @@ func NumberToBytes(num interface{}, bits int) []byte {
 	return buf.Bytes()[buf.Len()-(bits/8):]
 }
 
+// Bytes to number
+//
+// Attempts to cast a byte slice to a unsigned integer
 func BytesToNumber(b []byte) uint64 {
 	var number uint64
 
@@ -32,7 +38,9 @@ func BytesToNumber(b []byte) uint64 {
 	return number
 }
 
-// Read variable integer in big endian
+// Read variable int
+//
+// Read a variable length number in big endian byte order
 func ReadVarint(reader *bytes.Reader) (ret uint64) {
 	if reader.Len() == 8 {
 		var num uint64
@@ -55,6 +63,9 @@ func ReadVarint(reader *bytes.Reader) (ret uint64) {
 	return ret
 }
 
+// Binary length
+//
+// Returns the true binary length of the given number
 func BinaryLength(num int) int {
 	if num == 0 {
 		return 0
