@@ -9,7 +9,7 @@ import (
 
 // General compile function
 func Compile(script string) ([]byte, error) {
-	asm, errors := mutan.Compile(strings.NewReader(script), false)
+	byteCode, errors := mutan.Compile(strings.NewReader(script), false)
 	if len(errors) > 0 {
 		var errs string
 		for _, er := range errors {
@@ -20,7 +20,7 @@ func Compile(script string) ([]byte, error) {
 		return nil, fmt.Errorf("%v", errs)
 	}
 
-	return ethutil.Assemble(asm...), nil
+	return byteCode, nil
 }
 
 func CompileScript(script string) ([]byte, []byte, error) {
