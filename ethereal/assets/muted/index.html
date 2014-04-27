@@ -1,0 +1,38 @@
+<!doctype>
+<html>
+<head>
+<title>Mutan Editor</title>
+<link rel="stylesheet" href="codemirror.css">
+<link rel="stylesheet" href="eclipse.css">
+<script src="lib/codemirror.js"></script>
+<script src="lib/matchbrackets.js"></script>
+<script src="lib/go.js"></script>
+
+<style type="text/css">
+    html, body {
+        margin: 0; padding: 0;
+    }
+
+    .CodeMirror {
+        height: 100%;
+    }
+</style>
+</head>
+
+<body>
+<textarea id="editor"></textarea>
+<script>
+    var textArea = document.querySelector("#editor")
+    var editor = CodeMirror.fromTextArea(textArea, {
+        theme: "eclipse",
+        mode: "text/html",
+        lineNumbers: true,
+        mode: "text/x-go",
+        indentUnit: 8,
+        tabSize: 8,
+        indentWithTabs: true,
+    });
+</script>
+
+</body>
+</html>

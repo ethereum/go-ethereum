@@ -108,6 +108,25 @@ func (ui *UiLib) OpenHtml(path string) {
 	}()
 }
 
+func (ui *UiLib) Muted(content string) {
+	component, err := ui.engine.LoadFile(ui.AssetPath("qml/muted.qml"))
+	if err != nil {
+		ethutil.Config.Log.Debugln(err)
+
+		return
+	}
+	win := component.CreateWindow(nil)
+	go func() {
+		path := "file://" + ui.AssetPath("muted/index.html")
+		win.Set("url", path)
+		debuggerPath := "file://" + ui.AssetPath("muted/debugger.html")
+		win.Set("debugUrl", debuggerPath)
+
+		win.Show()
+		win.Wait()
+	}()
+}
+
 func (ui *UiLib) Connect(button qml.Object) {
 	if !ui.connected {
 		ui.eth.Start()

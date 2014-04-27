@@ -23,6 +23,11 @@ ApplicationWindow {
 				shortcut: "Ctrl+o"
 				onTriggered: openAppDialog.open()
 			}
+			MenuItem {
+				text: "Muted"
+				shortcut: "Ctrl+e"
+				onTriggered: ui.muted("")
+			}
 		}
 
 		Menu {
