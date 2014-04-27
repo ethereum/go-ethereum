@@ -82,7 +82,7 @@ func TestRun4(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 	state := NewState(ethutil.NewTrie(db, ""))
 
-	asm, err := mutan.Compile(strings.NewReader(`
+	script, err := mutan.Compile(strings.NewReader(`
 		int32 a = 10
 		int32 b = 20
 		if a > b {
@@ -90,14 +90,13 @@ func TestRun4(t *testing.T) {
 		}
 		Exit()
 	`), false)
-	script := ethutil.Assemble(asm...)
 	tx := NewContractCreationTx(ethutil.Big("0"), ethutil.Big("1000"), ethutil.Big("100"), script, nil)
 	addr := tx.Hash()[12:]
 	contract := MakeContract(tx, state)
 	state.UpdateStateObject(contract)
 	fmt.Printf("%x\n", addr)
 
-	asm, err = mutan.Compile(strings.NewReader(`
+	callerScript, err := mutan.Compile(strings.NewReader(`
 		// Check if there's any cash in the initial store
 		if store[1000] == 0 {
 			store[1000] = 10^20
@@ -129,10 +128,7 @@ func TestRun4(t *testing.T) {
 	if err != nil {
 		fmt.Println(err)
 	}
-	asm = append(asm, "LOG")
-	fmt.Println(asm)
 
-	callerScript := ethutil.Assemble(asm...)
 	callerTx := NewContractCreationTx(ethutil.Big("0"), ethutil.Big("1000"), ethutil.Big("100"), callerScript, nil)
 
 	// Contract addr as test address
@@ -161,18 +157,4 @@ func TestRun4(t *testing.T) {
 		fmt.Println("error", e)
 	}
 	fmt.Println("account.Amount =", account.Amount)
-}
-
-func TestRun5(t *testing.T) {
-	ethutil.ReadConfig("")
-
-	asm, _ := mutan.Compile(strings.NewReader(`
-		int32 a = 10
-		int32 b = 20
-		if a > b {
-			int32 c = this.caller()
-		}
-		exit()
-	`), false)
-	ethutil.Assemble(asm...)
 }
