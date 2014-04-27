@@ -65,6 +65,10 @@ func (c *StateObject) State() *State {
 	return c.state
 }
 
+func (c *StateObject) N() *big.Int {
+	return big.NewInt(int64(c.Nonce))
+}
+
 func (c *StateObject) Addr(addr []byte) *ethutil.Value {
 	return ethutil.NewValueFromBytes([]byte(c.state.trie.Get(string(addr))))
 }

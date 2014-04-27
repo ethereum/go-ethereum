@@ -8,21 +8,24 @@ import (
 )
 
 type Callee interface {
-	ReturnGas(*big.Int, *big.Int, *State)
-	Address() []byte
 }
 
 type Reference interface {
 	Callee
-	ethutil.RlpEncodable
+}
+
+type ClosureRef interface {
+	ReturnGas(*big.Int, *big.Int, *State)
+	Address() []byte
 	GetMem(*big.Int) *ethutil.Value
 	SetMem(*big.Int, *ethutil.Value)
+	N() *big.Int
 }
 
 // Basic inline closure object which implement the 'closure' interface
 type Closure struct {
-	callee Callee
-	object Reference
+	callee ClosureRef
+	object ClosureRef
 	Script []byte
 	State  *State
 
@@ -34,7 +37,7 @@ type Closure struct {
 }
 
 // Create a new closure for the given data items
-func NewClosure(callee Callee, object Reference, script []byte, state *State, gas, price, val *big.Int) *Closure {
+func NewClosure(callee, object ClosureRef, script []byte, state *State, gas, price, val *big.Int) *Closure {
 	c := &Closure{callee: callee, object: object, Script: script, State: state, Args: nil}
 
 	// In most cases gas, price and value are pointers to transaction objects
@@ -105,10 +108,14 @@ func (c *Closure) ReturnGas(gas, price *big.Int, state *State) {
 	c.Gas.Add(c.Gas, gas)
 }
 
-func (c *Closure) Object() Reference {
+func (c *Closure) Object() ClosureRef {
 	return c.object
 }
 
-func (c *Closure) Callee() Callee {
+func (c *Closure) Callee() ClosureRef {
 	return c.callee
+}
+
+func (c *Closure) N() *big.Int {
+	return c.object.N()
 }

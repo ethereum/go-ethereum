@@ -67,6 +67,18 @@ func (st *Stack) Peekn() (*big.Int, *big.Int) {
 func (st *Stack) Push(d *big.Int) {
 	st.data = append(st.data, d)
 }
+
+func (st *Stack) Get(amount *big.Int) []*big.Int {
+	// offset + size <= len(data)
+	length := big.NewInt(int64(len(st.data)))
+	if amount.Cmp(length) <= 0 {
+		start := new(big.Int).Sub(length, amount)
+		return st.data[start.Int64():length.Int64()]
+	}
+
+	return nil
+}
+
 func (st *Stack) Print() {
 	fmt.Println("### stack ###")
 	if len(st.data) > 0 {

@@ -38,5 +38,12 @@ var (
 	Big1   = big.NewInt(1)
 	Big2   = big.NewInt(1)
 	Big0   = big.NewInt(0)
+	Big32  = big.NewInt(32)
 	Big256 = big.NewInt(0xff)
 )
+
+func CreateAddress(b []byte, nonce *big.Int) []byte {
+	addrBytes := append(b, nonce.Bytes()...)
+
+	return Sha3Bin(addrBytes)[12:]
+}

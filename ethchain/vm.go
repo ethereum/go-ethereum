@@ -20,6 +20,17 @@ var (
 	GasMemory  = big.NewInt(1)
 )
 
+func CalculateTxGas(initSize, scriptSize *big.Int) *big.Int {
+	totalGas := new(big.Int)
+	totalGas.Add(totalGas, GasCreate)
+
+	txTotalBytes := new(big.Int).Add(initSize, scriptSize)
+	txTotalBytes.Div(txTotalBytes, ethutil.Big32)
+	totalGas.Add(totalGas, new(big.Int).Mul(txTotalBytes, GasSStore))
+
+	return totalGas
+}
+
 type Vm struct {
 	txPool *TxPool
 	// Stack for processing contracts
@@ -125,7 +136,12 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case oBALANCE:
 			useGas(GasBalance)
 		case oCREATE:
-			useGas(GasCreate)
+			require(3)
+
+			args := stack.Get(big.NewInt(3))
+			initSize := new(big.Int).Add(args[1], args[0])
+
+			useGas(CalculateTxGas(initSize, ethutil.Big0))
 		case oCALL:
 			useGas(GasCall)
 		case oMLOAD, oMSIZE, oMSTORE8, oMSTORE:
@@ -413,6 +429,39 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			stack.Push(big.NewInt(int64(mem.Len())))
 			// 0x60 range
 		case oCREATE:
+			require(3)
+
+			value := stack.Pop()
+			size, offset := stack.Popn()
+
+			// Generate a new address
+			addr := ethutil.CreateAddress(closure.callee.Address(), closure.callee.N())
+			// Create a new contract
+			contract := NewContract(addr, value, []byte(""))
+			// Set the init script
+			contract.initScript = mem.Get(offset.Int64(), size.Int64())
+			// Transfer all remaining gas to the new
+			// contract so it may run the init script
+			gas := new(big.Int).Set(closure.Gas)
+			closure.Gas.Sub(closure.Gas, gas)
+			// Create the closure
+			closure := NewClosure(closure.callee,
+				closure.Object(),
+				contract.initScript,
+				vm.state,
+				gas,
+				closure.Price,
+				value)
+			// Call the closure and set the return value as
+			// main script.
+			closure.Script, err = closure.Call(vm, nil, hook)
+			if err != nil {
+				stack.Push(ethutil.BigFalse)
+			} else {
+				stack.Push(ethutil.BigD(addr))
+
+				vm.state.SetStateObject(contract)
+			}
 		case oCALL:
 			require(7)
 			// Closure addr
@@ -438,7 +487,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 				// Prepay for the gas
 				// If gas is set to 0 use all remaining gas for the next call
 				if gas.Cmp(big.NewInt(0)) == 0 {
-					gas = closure.Gas
+					// Copy
+					gas = new(big.Int).Set(closure.Gas)
 				}
 				closure.Gas.Sub(closure.Gas, gas)
 				// Create a new callable closure

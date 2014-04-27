@@ -50,3 +50,11 @@ func BigCopy(src *big.Int) (ret *big.Int) {
 
 	return
 }
+
+func BigMax(x, y *big.Int) *big.Int {
+	if x.Cmp(y) <= 0 {
+		return x
+	}
+
+	return y
+}

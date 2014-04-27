@@ -47,6 +47,7 @@ func (s *State) Purge() int {
 	return s.trie.NewIterator().Purge()
 }
 
+// XXX Deprecated
 func (s *State) GetContract(addr []byte) *StateObject {
 	data := s.trie.Get(string(addr))
 	if data == "" {
@@ -66,6 +67,32 @@ func (s *State) GetContract(addr []byte) *StateObject {
 	}
 
 	return contract
+}
+
+func (s *State) GetStateObject(addr []byte) *StateObject {
+	data := s.trie.Get(string(addr))
+	if data == "" {
+		return nil
+	}
+
+	stateObject := NewStateObjectFromBytes(addr, []byte(data))
+
+	// Check if there's a cached state for this contract
+	cachedStateObject := s.states[string(addr)]
+	if cachedStateObject != nil {
+		stateObject.state = cachedStateObject
+	} else {
+		// If it isn't cached, cache the state
+		s.states[string(addr)] = stateObject.state
+	}
+
+	return stateObject
+}
+
+func (s *State) SetStateObject(stateObject *StateObject) {
+	s.states[string(stateObject.address)] = stateObject.state
+
+	s.UpdateStateObject(stateObject)
 }
 
 func (s *State) GetAccount(addr []byte) (account *StateObject) {
@@ -97,6 +124,7 @@ const (
 	UnknownTy
 )
 
+/*
 // Returns the object stored at key and the type stored at key
 // Returns nil if nothing is stored
 func (s *State) GetStateObject(key []byte) (*ethutil.Value, ObjType) {
@@ -124,6 +152,7 @@ func (s *State) GetStateObject(key []byte) (*ethutil.Value, ObjType) {
 
 	return val, typ
 }
+*/
 
 // Updates any given state object
 func (s *State) UpdateStateObject(object *StateObject) {
