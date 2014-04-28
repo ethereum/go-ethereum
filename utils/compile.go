@@ -2,7 +2,6 @@ package utils
 
 import (
 	"fmt"
-	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/mutan"
 	"strings"
 )
@@ -25,7 +24,7 @@ func Compile(script string) ([]byte, error) {
 
 func CompileScript(script string) ([]byte, []byte, error) {
 	// Preprocess
-	mainInput, initInput := ethutil.PreProcess(script)
+	mainInput, initInput := mutan.PreProcess(script)
 	// Compile main script
 	mainScript, err := Compile(mainInput)
 	if err != nil {

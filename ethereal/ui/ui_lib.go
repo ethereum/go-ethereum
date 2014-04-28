@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/obscuren/mutan"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
 	"os"
@@ -172,7 +173,7 @@ func DefaultAssetPath() string {
 func (ui *UiLib) DebugTx(recipient, valueStr, gasStr, gasPriceStr, data string) {
 	state := ui.eth.BlockChain().CurrentBlock.State()
 
-	mainInput, _ := ethutil.PreProcess(data)
+	mainInput, _ := mutan.PreProcess(data)
 	callerScript, err := utils.Compile(mainInput)
 	if err != nil {
 		ethutil.Config.Log.Debugln(err)
