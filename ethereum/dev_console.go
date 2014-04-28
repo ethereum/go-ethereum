@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
 	"github.com/ethereum/go-ethereum/utils"
+	"github.com/obscuren/mutan"
 	"os"
 	"strings"
 )
@@ -190,7 +191,7 @@ func (i *Console) ParseInput(input string) bool {
 		case "contract":
 			fmt.Println("Contract editor (Ctrl-D = done)")
 
-			mainInput, initInput := ethutil.PreProcess(i.Editor())
+			mainInput, initInput := mutan.PreProcess(i.Editor())
 			mainScript, err := utils.Compile(mainInput)
 			if err != nil {
 				fmt.Println(err)

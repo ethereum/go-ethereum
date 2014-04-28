@@ -120,8 +120,8 @@ func (ui *UiLib) Muted(content string) {
 	go func() {
 		path := "file://" + ui.AssetPath("muted/index.html")
 		win.Set("url", path)
-		debuggerPath := "file://" + ui.AssetPath("muted/debugger.html")
-		win.Set("debugUrl", debuggerPath)
+		//debuggerPath := "file://" + ui.AssetPath("muted/debugger.html")
+		//win.Set("debugUrl", debuggerPath)
 
 		win.Show()
 		win.Wait()
