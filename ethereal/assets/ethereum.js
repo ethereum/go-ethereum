@@ -1,17 +1,3 @@
-// Helper function for generating pseudo callbacks and sending data to the QML part of the application
-function postData(data, cb) {
-	data._seed = Math.floor(Math.random() * 1000000)
-	if(cb) {
-		eth._callbacks[data._seed] = cb;
-	}
-
-	if(data.args === undefined) {
-		data.args = [];
-	}
-
-	navigator.qt.postMessage(JSON.stringify(data));
-}
-
 // Main Ethereum library
 window.eth = {
 	prototype: Object(),
@@ -35,8 +21,12 @@ window.eth = {
 	//
 	// Creates a transaction with the current account
 	// If no recipient is set, the Ethereum API will see it as a contract creation
-	createTx: function(recipient, value, gas, gasPrice, data, cb) {
-		postData({call: "createTx", args: [recipient, value, gas, gasPrice, data]}, cb);
+	transact: function(sec, recipient, value, gas, gasPrice, data, cb) {
+		postData({call: "transact", args: [sec, recipient, value, gas, gasPrice, data]}, cb);
+	},
+
+	create: function(sec, value, gas, gasPrice, init, body, cb) {
+		postData({call: "create", args: [sec, value, gas, gasPrice, init, body]}, cb);
 	},
 
 	getStorage: function(address, storageAddress, cb) {
@@ -47,10 +37,39 @@ window.eth = {
 		postData({call: "getKey"}, cb);
 	},
 
-	watch: function(address) {
-		postData({call: "watch", args: [address]});
+	getBalance: function(address, cb) {
+		postData({call: "getBalance", args: [address]}, cb);
 	},
 
+	watch: function(address, storageAddrOrCb, cb) {
+		var ev = "changed:"+address;
+
+		if(cb === undefined) {
+			cb = storageAddrOrCb;
+			storageAddrOrCb = "";
+		} else {
+			ev += ":"+storageAddrOrCb;
+		}
+
+		eth.on(ev, cb)
+
+		postData({call: "watch", args: [address, storageAddrOrCb]});
+	},
+
+	disconnect: function(address, storageAddrOrCb, cb) {
+		var ev = "changed:"+address;
+
+		if(cb === undefined) {
+			cb = storageAddrOrCb;
+			storageAddrOrCb = null;
+		} else {
+			ev += ":"+storageAddrOrCb;
+		}
+
+		eth.off(ev, cb)
+
+		postData({call: "disconnect", args: [address, storageAddrOrCb]});
+	},
 
 	on: function(event, cb) {
 		if(eth._onCallbacks[event] === undefined) {
@@ -61,6 +80,7 @@ window.eth = {
 
 		return this
 	},
+
 	off: function(event, cb) {
 		if(eth._onCallbacks[event] !== undefined) {
 			var callbacks = eth._onCallbacks[event];
@@ -98,6 +118,20 @@ function debug(/**/) {
 	}
 
 	document.getElementById("debug").innerHTML += "<br>" + msg
+}
+
+// Helper function for generating pseudo callbacks and sending data to the QML part of the application
+function postData(data, cb) {
+	data._seed = Math.floor(Math.random() * 1000000)
+	if(cb) {
+		eth._callbacks[data._seed] = cb;
+	}
+
+	if(data.args === undefined) {
+		data.args = [];
+	}
+
+	navigator.qt.postMessage(JSON.stringify(data));
 }
 
 navigator.qt.onmessage = function(ev) {
