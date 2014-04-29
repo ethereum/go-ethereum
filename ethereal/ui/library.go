@@ -19,9 +19,24 @@ func NewContract(object *ethchain.StateObject) *Contract {
 }
 
 func (c *Contract) GetStorage(address string) string {
-	val := c.object.GetMem(ethutil.Big("0x" + address))
+	// Because somehow, even if you return nil to QML it
+	// still has some magical object so we can't rely on
+	// undefined or null at the QML side
+	if c.object != nil {
+		val := c.object.GetMem(ethutil.Big("0x" + address))
 
-	return val.BigInt().String()
+		return val.BigInt().String()
+	}
+
+	return ""
+}
+
+func (c *Contract) Value() string {
+	if c.object != nil {
+		return c.object.Amount.String()
+	}
+
+	return ""
 }
 
 type EthLib struct {
@@ -63,15 +78,23 @@ func (lib *EthLib) GetKey() string {
 
 func (lib *EthLib) GetStateObject(address string) *Contract {
 	stateObject := lib.stateManager.ProcState().GetContract(ethutil.FromHex(address))
+	if stateObject != nil {
+		return NewContract(stateObject)
+	}
 
-	return NewContract(stateObject)
+	// See GetStorage for explanation on "nil"
+	return NewContract(nil)
 }
 
-func (lib *EthLib) Watch(addr string) {
-	lib.stateManager.Watch(ethutil.FromHex(addr))
+func (lib *EthLib) Watch(addr, storageAddr string) {
+	//	lib.stateManager.Watch(ethutil.FromHex(addr), ethutil.FromHex(storageAddr))
 }
 
 func (lib *EthLib) CreateTx(recipient, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
+	return lib.Transact(recipient, valueStr, gasStr, gasPriceStr, dataStr)
+}
+
+func (lib *EthLib) Transact(recipient, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
 	var hash []byte
 	var contractCreation bool
 	if len(recipient) == 0 {

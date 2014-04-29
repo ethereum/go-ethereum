@@ -6,9 +6,9 @@ import (
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/obscuren/mutan"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
+	"github.com/obscuren/mutan"
 	"os"
 	"path"
 	"path/filepath"
@@ -53,60 +53,18 @@ func (ui *UiLib) Open(path string) {
 }
 
 func (ui *UiLib) OpenHtml(path string) {
-	component, err := ui.engine.LoadFile(ui.AssetPath("qml/webapp.qml"))
-	if err != nil {
-		ethutil.Config.Log.Debugln(err)
+	container := NewHtmlApplication(path, ui)
+	app := NewExtApplication(container, ui)
 
-		return
+	go app.run()
+}
+
+func (ui *UiLib) Watch(addr, storageAddr string) {
+	if len(storageAddr) == 0 {
+		ui.eth.Reactor().Subscribe("storage:"+string(ethutil.FromHex(addr))+":"+string(ethutil.FromHex(storageAddr)), nil)
+	} else {
+		ui.eth.Reactor().Subscribe("object:"+string(ethutil.FromHex(addr)), nil)
 	}
-	win := component.CreateWindow(nil)
-	if filepath.Ext(path) == "eth" {
-		fmt.Println("Ethereum package not yet supported")
-
-		return
-
-		// TODO
-		ethutil.OpenPackage(path)
-	}
-	win.Set("url", path)
-
-	webView := win.ObjectByName("webView")
-	go func() {
-		blockChan := make(chan ethutil.React, 1)
-		addrChan := make(chan ethutil.React, 1)
-		quitChan := make(chan bool)
-
-		go func() {
-		out:
-			for {
-				select {
-				case <-quitChan:
-					ui.eth.Reactor().Unsubscribe("newBlock", blockChan)
-					break out
-				case block := <-blockChan:
-					if block, ok := block.Resource.(*ethchain.Block); ok {
-						b := &QBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Hex(block.Hash())}
-						webView.Call("onNewBlockCb", b)
-					}
-				case stateObject := <-addrChan:
-					if stateObject, ok := stateObject.Resource.(*ethchain.StateObject); ok {
-						webView.Call("onObjectChangeCb", NewQStateObject(stateObject))
-					}
-				}
-			}
-
-			// Clean up
-			close(blockChan)
-			close(quitChan)
-		}()
-		ui.eth.Reactor().Subscribe("newBlock", blockChan)
-		ui.eth.Reactor().Subscribe("addressChanged", addrChan)
-
-		win.Show()
-		win.Wait()
-
-		quitChan <- true
-	}()
 }
 
 func (ui *UiLib) Muted(content string) {
