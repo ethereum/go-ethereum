@@ -449,8 +449,10 @@ func (p *Peer) HandleInbound() {
 				if parent != nil {
 					ethutil.Config.Log.Infof("[PEER] Found conical block, returning chain from: %x ", parent.Hash())
 					chain := p.ethereum.BlockChain().GetChainFromHash(parent.Hash(), amountOfBlocks)
-					ethutil.Config.Log.Infof("[PEER] Returning %d blocks: %x ", len(chain), parent.Hash())
-					p.QueueMessage(ethwire.NewMessage(ethwire.MsgBlockTy, chain))
+					if len(chain) > 0 {
+						ethutil.Config.Log.Infof("[PEER] Returning %d blocks: %x ", len(chain), parent.Hash())
+						p.QueueMessage(ethwire.NewMessage(ethwire.MsgBlockTy, chain))
+					}
 				} else {
 					ethutil.Config.Log.Infof("[PEER] Could not find a similar block")
 					// If no blocks are found we send back a reply with msg not in chain

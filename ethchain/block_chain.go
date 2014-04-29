@@ -179,7 +179,8 @@ func (bc *BlockChain) ResetTillBlockHash(hash []byte) error {
 		bc.LastBlockNumber = info.Number
 	}
 
-	bc.Ethereum.StateManager().PrepareDefault(returnTo)
+	// XXX Why are we resetting? This is the block chain, it has nothing to do with states
+	//bc.Ethereum.StateManager().PrepareDefault(returnTo)
 
 	err := ethutil.Config.Db.Delete(lastBlock.Hash())
 	if err != nil {

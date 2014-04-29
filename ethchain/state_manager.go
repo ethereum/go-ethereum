@@ -158,17 +158,18 @@ func (sm *StateManager) ProcessBlock(block *Block, dontReact bool) error {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
+	hash := block.Hash()
+
+	if sm.bc.HasBlock(hash) {
+		fmt.Println("[STATE] We already have this block, ignoring")
+		return nil
+	}
+
 	// Defer the Undo on the Trie. If the block processing happened
 	// we don't want to undo but since undo only happens on dirty
 	// nodes this won't happen because Commit would have been called
 	// before that.
 	defer sm.bc.CurrentBlock.Undo()
-	hash := block.Hash()
-
-	if sm.bc.HasBlock(hash) {
-		fmt.Println("[SM] We already have this block, ignoring")
-		return nil
-	}
 
 	// Check if we have the parent hash, if it isn't known we discard it
 	// Reasons might be catching up or simply an invalid block

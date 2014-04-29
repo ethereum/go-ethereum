@@ -2,6 +2,7 @@ package ethminer
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
@@ -61,10 +62,10 @@ func (miner *Miner) listener() {
 		select {
 		case chanMessage := <-miner.reactChan:
 			if block, ok := chanMessage.Resource.(*ethchain.Block); ok {
-				//log.Println("[MINER] Got new block via Reactor")
+				log.Println("[MINER] Got new block via Reactor")
 				if bytes.Compare(miner.ethereum.BlockChain().CurrentBlock.Hash(), block.Hash()) == 0 {
 					// TODO: Perhaps continue mining to get some uncle rewards
-					//log.Println("[MINER] New top block found resetting state")
+					log.Println("[MINER] New top block found resetting state")
 
 					// Filter out which Transactions we have that were not in this block
 					var newtxs []*ethchain.Transaction
@@ -86,7 +87,7 @@ func (miner *Miner) listener() {
 
 				} else {
 					if bytes.Compare(block.PrevHash, miner.ethereum.BlockChain().CurrentBlock.PrevHash) == 0 {
-						//log.Println("[MINER] Adding uncle block")
+						log.Println("[MINER] Adding uncle block")
 						miner.uncles = append(miner.uncles, block)
 						miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
 					}
@@ -133,8 +134,9 @@ func (miner *Miner) listener() {
 				miner.ethereum.StateManager().PrepareDefault(miner.block)
 				err := miner.ethereum.StateManager().ProcessBlock(miner.block, true)
 				if err != nil {
-					log.Println("Error result from process block:", err)
-					miner.block.State().Reset()
+					log.Println(err)
+					miner.txs = []*ethchain.Transaction{} // Move this somewhere neat
+					miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)
 				} else {
 
 					/*

@@ -73,3 +73,13 @@ func BinaryLength(num int) int {
 
 	return 1 + BinaryLength(num>>8)
 }
+
+// Copy bytes
+//
+// Returns an exact copy of the provided bytes
+func CopyBytes(b []byte) (copiedBytes []byte) {
+	copiedBytes = make([]byte, len(b))
+	copy(copiedBytes, b)
+
+	return
+}
