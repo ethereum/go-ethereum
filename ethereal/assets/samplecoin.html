@@ -9,7 +9,7 @@ function createTransaction() {
 	var amount = document.querySelector("#amount").value;
 
 	var data = "0x" + addr + "\n" + amount
-	eth.createTx(jefcoinAddr, 0, "10000000", "250", data, function(tx) {
+	eth.transact("", jefcoinAddr, 0, "10000000", "250", data, function(tx) {
 		debug("received tx hash:", tx)
 	})
 }
@@ -28,7 +28,6 @@ function init() {
 		});
 
 		eth.watch(jefcoinAddr, function(stateObject) {
-			debug(stateObject);
 			eth.getStorage(jefcoinAddr, key, function(storage) {
 				document.querySelector("#currentAmount").innerHTML = "Amount: " + storage;
 			});

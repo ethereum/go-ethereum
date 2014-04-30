@@ -58,8 +58,7 @@ ApplicationWindow {
 					case "transact":
 						require(5)
 
-						// TODO this will change to 6 soon with sec being teh  first argument
-						var tx = eth.transact(data.args[0], data.args[1],data.args[2],data.args[3],data.args[4])
+						var tx = eth.transact(data.args[0], data.args[1], data.args[2],data.args[3],data.args[4],data.args[5])
 						postData(data._seed, tx)
 						break
 					case "create":
@@ -116,7 +115,7 @@ ApplicationWindow {
 				postEvent("block:new", block)
 			}
 			function onObjectChangeCb(stateObject) {
-				postEvent("object:change", stateObject)
+				postEvent("object:"+stateObject.address(), stateObject)
 			}
 		}
 

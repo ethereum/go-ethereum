@@ -10,35 +10,6 @@ import (
 	"strings"
 )
 
-type Contract struct {
-	object *ethchain.StateObject
-}
-
-func NewContract(object *ethchain.StateObject) *Contract {
-	return &Contract{object: object}
-}
-
-func (c *Contract) GetStorage(address string) string {
-	// Because somehow, even if you return nil to QML it
-	// still has some magical object so we can't rely on
-	// undefined or null at the QML side
-	if c.object != nil {
-		val := c.object.GetMem(ethutil.Big("0x" + address))
-
-		return val.BigInt().String()
-	}
-
-	return ""
-}
-
-func (c *Contract) Value() string {
-	if c.object != nil {
-		return c.object.Amount.String()
-	}
-
-	return ""
-}
-
 type EthLib struct {
 	stateManager *ethchain.StateManager
 	blockChain   *ethchain.BlockChain
@@ -76,14 +47,14 @@ func (lib *EthLib) GetKey() string {
 	return ethutil.Hex(ethutil.Config.Db.GetKeys()[0].Address())
 }
 
-func (lib *EthLib) GetStateObject(address string) *Contract {
+func (lib *EthLib) GetStateObject(address string) *QStateObject {
 	stateObject := lib.stateManager.ProcState().GetContract(ethutil.FromHex(address))
 	if stateObject != nil {
-		return NewContract(stateObject)
+		return NewQStateObject(stateObject)
 	}
 
 	// See GetStorage for explanation on "nil"
-	return NewContract(nil)
+	return NewQStateObject(nil)
 }
 
 func (lib *EthLib) Watch(addr, storageAddr string) {

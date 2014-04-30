@@ -42,13 +42,13 @@ window.eth = {
 	},
 
 	watch: function(address, storageAddrOrCb, cb) {
-		var ev = "changed:"+address;
-
+		var ev;
 		if(cb === undefined) {
 			cb = storageAddrOrCb;
 			storageAddrOrCb = "";
+			ev = "object:"+address;
 		} else {
-			ev += ":"+storageAddrOrCb;
+			ev = "storage:"+address+":"+storageAddrOrCb;
 		}
 
 		eth.on(ev, cb)
@@ -57,13 +57,13 @@ window.eth = {
 	},
 
 	disconnect: function(address, storageAddrOrCb, cb) {
-		var ev = "changed:"+address;
-
+		var ev;
 		if(cb === undefined) {
 			cb = storageAddrOrCb;
-			storageAddrOrCb = null;
+			storageAddrOrCb = "";
+			ev = "object:"+address;
 		} else {
-			ev += ":"+storageAddrOrCb;
+			ev = "storage:"+address+":"+storageAddrOrCb;
 		}
 
 		eth.off(ev, cb)
