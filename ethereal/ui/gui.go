@@ -146,17 +146,20 @@ func (ui *Gui) update() {
 	account := ui.eth.StateManager().GetAddrState(ui.addr).Object
 	unconfirmedFunds := new(big.Int)
 	ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(account.Amount)))
+
+	addrState := ui.eth.StateManager().GetAddrState(ui.addr)
+
 	for {
 		select {
 		case txMsg := <-txChan:
 			tx := txMsg.Tx
 
 			if txMsg.Type == ethchain.TxPre {
-				if bytes.Compare(tx.Sender(), ui.addr) == 0 {
+				if bytes.Compare(tx.Sender(), ui.addr) == 0 && addrState.Nonce <= tx.Nonce {
 					ui.win.Root().Call("addTx", NewQTx(tx))
 					ui.txDb.Put(tx.Hash(), tx.RlpEncode())
 
-					ui.eth.StateManager().GetAddrState(ui.addr).Nonce += 1
+					addrState.Nonce += 1
 					unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
 				} else if bytes.Compare(tx.Recipient, ui.addr) == 0 {
 					ui.win.Root().Call("addTx", NewQTx(tx))
