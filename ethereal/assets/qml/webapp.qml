@@ -76,7 +76,7 @@ ApplicationWindow {
 					case "getBalance":
 						require(1);
 
-						postData(data._seed, eth.getStateObject(data.args[0]).Value());					
+						postData(data._seed, eth.getStateObject(data.args[0]).value());
 
 						break
 					case "getKey":

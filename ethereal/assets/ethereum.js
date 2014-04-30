@@ -29,7 +29,7 @@ window.eth = {
 		postData({call: "create", args: [sec, value, gas, gasPrice, init, body]}, cb);
 	},
 
-	getStorage: function(address, storageAddress, cb) {
+	getStorageAt: function(address, storageAddress, cb) {
 		postData({call: "getStorage", args: [address, storageAddress]}, cb);
 	},
 
@@ -37,7 +37,7 @@ window.eth = {
 		postData({call: "getKey"}, cb);
 	},
 
-	getBalance: function(address, cb) {
+	getBalanceAt: function(address, cb) {
 		postData({call: "getBalance", args: [address]}, cb);
 	},
 

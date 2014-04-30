@@ -23,15 +23,19 @@ function tests() {
 
 function init() {
 	eth.getKey(function(key) {
-		eth.getStorage(jefcoinAddr, key, function(storage) {
+		eth.getStorageAt(jefcoinAddr, key, function(storage) {
 			document.querySelector("#currentAmount").innerHTML = "Amount: " + storage;
 		});
 
 		eth.watch(jefcoinAddr, function(stateObject) {
-			eth.getStorage(jefcoinAddr, key, function(storage) {
+			eth.getStorageAt(jefcoinAddr, key, function(storage) {
 				document.querySelector("#currentAmount").innerHTML = "Amount: " + storage;
 			});
 		});
+
+		eth.getBalanceAt(key, function(balance) {
+			debug("balance", balance);
+		})
 	});
 }
 
