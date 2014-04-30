@@ -157,7 +157,7 @@ func (sm *StateManager) ProcessBlock(block *Block, dontReact bool) error {
 	hash := block.Hash()
 
 	if sm.bc.HasBlock(hash) {
-		fmt.Println("[STATE] We already have this block, ignoring")
+		//fmt.Println("[STATE] We already have this block, ignoring")
 		return nil
 	}
 

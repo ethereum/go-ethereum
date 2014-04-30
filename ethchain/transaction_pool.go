@@ -98,7 +98,7 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block, toContract
 		}
 	}()
 	// Get the sender
-	sender := block.state.GetAccount(tx.Sender())
+	sender := block.state.GetStateObject(tx.Sender())
 
 	if sender.Nonce != tx.Nonce {
 		return fmt.Errorf("[TXPL] Invalid account nonce, state nonce is %d transaction nonce is %d instead", sender.Nonce, tx.Nonce)
@@ -112,7 +112,7 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block, toContract
 	}
 
 	// Get the receiver
-	receiver := block.state.GetAccount(tx.Recipient)
+	receiver := block.state.GetStateObject(tx.Recipient)
 	sender.Nonce += 1
 
 	// Send Tx to self
@@ -169,7 +169,6 @@ out:
 	for {
 		select {
 		case tx := <-pool.queueChan:
-			log.Println("Received new Tx to queue")
 			hash := tx.Hash()
 			foundTx := FindTx(pool.pool, func(tx *Transaction, e *list.Element) bool {
 				return bytes.Compare(tx.Hash(), hash) == 0
@@ -186,11 +185,8 @@ out:
 					log.Println("Validating Tx failed", err)
 				}
 			} else {
-				log.Println("Transaction ok, adding")
-				// Call blocking version. At this point it
-				// doesn't matter since this is a goroutine
+				// Call blocking version.
 				pool.addTransaction(tx)
-				log.Println("Added")
 
 				// Notify the subscribers
 				pool.Ethereum.Reactor().Post("newTx", tx)
