@@ -91,14 +91,16 @@ func (pool *TxPool) addTransaction(tx *Transaction) {
 // Process transaction validates the Tx and processes funds from the
 // sender to the recipient.
 func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block, toContract bool) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Println(r)
-			err = fmt.Errorf("%v", r)
-		}
-	}()
+	/*
+		defer func() {
+			if r := recover(); r != nil {
+				log.Println(r)
+				err = fmt.Errorf("%v", r)
+			}
+		}()
+	*/
 	// Get the sender
-	sender := block.state.GetStateObject(tx.Sender())
+	sender := block.state.GetAccount(tx.Sender())
 
 	if sender.Nonce != tx.Nonce {
 		return fmt.Errorf("[TXPL] Invalid account nonce, state nonce is %d transaction nonce is %d instead", sender.Nonce, tx.Nonce)
@@ -112,7 +114,7 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block, toContract
 	}
 
 	// Get the receiver
-	receiver := block.state.GetStateObject(tx.Recipient)
+	receiver := block.state.GetAccount(tx.Recipient)
 	sender.Nonce += 1
 
 	// Send Tx to self

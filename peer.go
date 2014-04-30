@@ -320,14 +320,11 @@ func (p *Peer) HandleInbound() {
 					// We requested blocks and now we need to make sure we have a common ancestor somewhere in these blocks so we can find
 					// common ground to start syncing from
 					lastBlock = ethchain.NewBlockFromRlpValue(msg.Data.Get(msg.Data.Len() - 1))
-					if p.ethereum.StateManager().BlockChain().HasBlock(lastBlock.Hash()) {
-						fmt.Println("[PEER] We found a common ancestor, let's continue.")
-					} else {
-
+					if !p.ethereum.StateManager().BlockChain().HasBlock(lastBlock.Hash()) {
 						// If we can't find a common ancenstor we need to request more blocks.
 						// FIXME: At one point this won't scale anymore since we are not asking for an offset
 						// we just keep increasing the amount of blocks.
-						fmt.Println("[PEER] No common ancestor found, requesting more blocks.")
+						//fmt.Println("[PEER] No common ancestor found, requesting more blocks.")
 						p.blocksRequested = p.blocksRequested * 2
 						p.catchingUp = false
 						p.SyncWithBlocks()
@@ -336,17 +333,13 @@ func (p *Peer) HandleInbound() {
 					for i := msg.Data.Len() - 1; i >= 0; i-- {
 						block = ethchain.NewBlockFromRlpValue(msg.Data.Get(i))
 						// Do we have this block on our chain? If so we can continue
-						if p.ethereum.StateManager().BlockChain().HasBlock(block.Hash()) {
-							ethutil.Config.Log.Debugf("[PEER] Block found, checking next one.\n")
-						} else {
+						if !p.ethereum.StateManager().BlockChain().HasBlock(block.Hash()) {
 							// We don't have this block, but we do have a block with the same prevHash, diversion time!
 							if p.ethereum.StateManager().BlockChain().HasBlockWithPrevHash(block.PrevHash) {
-								ethutil.Config.Log.Infof("[PEER] Local and foreign chain have diverted after %x, finding best chain!\n", block.PrevHash)
+								//ethutil.Config.Log.Infof("[PEER] Local and foreign chain have diverted after %x, finding best chain!\n", block.PrevHash)
 								if p.ethereum.StateManager().BlockChain().FindCanonicalChainFromMsg(msg, block.PrevHash) {
 									return
 								}
-							} else {
-								ethutil.Config.Log.Debugf("[PEER] Both local and foreign chain have same parent. Continue normally\n")
 							}
 						}
 					}
@@ -644,7 +637,6 @@ func (p *Peer) SyncWithBlocks() {
 		for _, block := range blocks {
 			hashes = append(hashes, block.Hash())
 		}
-		fmt.Printf("Requesting hashes from network: %x", hashes)
 
 		msgInfo := append(hashes, uint64(50))
 
