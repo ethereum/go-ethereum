@@ -411,6 +411,9 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			require(2)
 			val, loc := stack.Popn()
 			closure.SetMem(loc, ethutil.NewValue(val))
+
+			// Add the change to manifest
+			vm.stateManager.manifest.AddStorageChange(closure.Object(), loc.Bytes(), val)
 		case oJUMP:
 			require(1)
 			pc = stack.Pop()
@@ -492,7 +495,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 				}
 				closure.Gas.Sub(closure.Gas, gas)
 				// Create a new callable closure
-				closure := NewClosure(closure, contract, contract.script, vm.state, gas, closure.Price, value)
+				closure := NewClosure(closure.Object(), contract, contract.script, vm.state, gas, closure.Price, value)
 				// Executer the closure and get the return value (if any)
 				ret, err := closure.Call(vm, args, hook)
 				if err != nil {
@@ -502,7 +505,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 				} else {
 					stack.Push(ethutil.BigTrue)
 					// Notify of the changes
-					vm.stateManager.Changed(contract)
+					vm.stateManager.manifest.AddObjectChange(contract)
 				}
 
 				mem.Set(retOffset.Int64(), retSize.Int64(), ret)

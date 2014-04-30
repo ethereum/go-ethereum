@@ -7,13 +7,6 @@ import (
 	"math/big"
 )
 
-type Callee interface {
-}
-
-type Reference interface {
-	Callee
-}
-
 type ClosureRef interface {
 	ReturnGas(*big.Int, *big.Int, *State)
 	Address() []byte
@@ -24,8 +17,8 @@ type ClosureRef interface {
 
 // Basic inline closure object which implement the 'closure' interface
 type Closure struct {
-	callee ClosureRef
-	object ClosureRef
+	callee *StateObject
+	object *StateObject
 	Script []byte
 	State  *State
 
@@ -37,7 +30,7 @@ type Closure struct {
 }
 
 // Create a new closure for the given data items
-func NewClosure(callee, object ClosureRef, script []byte, state *State, gas, price, val *big.Int) *Closure {
+func NewClosure(callee, object *StateObject, script []byte, state *State, gas, price, val *big.Int) *Closure {
 	c := &Closure{callee: callee, object: object, Script: script, State: state, Args: nil}
 
 	// In most cases gas, price and value are pointers to transaction objects
@@ -108,11 +101,11 @@ func (c *Closure) ReturnGas(gas, price *big.Int, state *State) {
 	c.Gas.Add(c.Gas, gas)
 }
 
-func (c *Closure) Object() ClosureRef {
+func (c *Closure) Object() *StateObject {
 	return c.object
 }
 
-func (c *Closure) Callee() ClosureRef {
+func (c *Closure) Callee() *StateObject {
 	return c.callee
 }
 

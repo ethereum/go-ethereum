@@ -51,9 +51,7 @@ type StateManager struct {
 	// results
 	compState *State
 
-	// It's generally know that a map is faster for small lookups than arrays
-	// we'll eventually have to make a decision if the map grows too large
-	watchedAddresses map[string]bool
+	manifest *Manifest
 }
 
 func NewStateManager(ethereum EthManager) *StateManager {
@@ -64,7 +62,7 @@ func NewStateManager(ethereum EthManager) *StateManager {
 		Ethereum:         ethereum,
 		stateObjectCache: NewStateObjectCache(),
 		bc:               ethereum.BlockChain(),
-		watchedAddresses: make(map[string]bool),
+		manifest:         NewManifest(),
 	}
 	sm.procState = ethereum.BlockChain().CurrentBlock.State()
 	return sm
@@ -112,7 +110,6 @@ func (sm *StateManager) MakeContract(tx *Transaction) *StateObject {
 func (sm *StateManager) ApplyTransactions(block *Block, txs []*Transaction) {
 	// Process each transaction/contract
 	for _, tx := range txs {
-		fmt.Printf("Processing Tx: %x\n", tx.Hash())
 		// If there's no recipient, it's a contract
 		// Check if this is a contract creation traction and if so
 		// create a contract of this tx.
@@ -122,7 +119,6 @@ func (sm *StateManager) ApplyTransactions(block *Block, txs []*Transaction) {
 				contract := sm.MakeContract(tx)
 				if contract != nil {
 					sm.EvalScript(contract.Init(), contract, tx, block)
-					fmt.Printf("state root of contract %x\n", contract.State().Root())
 				} else {
 					ethutil.Config.Log.Infoln("[STATE] Unable to create contract")
 				}
@@ -214,6 +210,10 @@ func (sm *StateManager) ProcessBlock(block *Block, dontReact bool) error {
 		ethutil.Config.Log.Infof("[STATE] Added block #%d (%x)\n", block.BlockInfo().Number, block.Hash())
 		if dontReact == false {
 			sm.Ethereum.Reactor().Post("newBlock", block)
+
+			sm.notifyChanges()
+
+			sm.manifest.Reset()
 		}
 	} else {
 		fmt.Println("total diff failed")
@@ -337,22 +337,53 @@ func (sm *StateManager) EvalScript(script []byte, object *StateObject, tx *Trans
 
 	// Update the account (refunds)
 	sm.procState.UpdateStateObject(account)
-	sm.Changed(account)
+	sm.manifest.AddObjectChange(account)
+
 	sm.procState.UpdateStateObject(object)
-	sm.Changed(object)
+	sm.manifest.AddObjectChange(object)
 }
 
-// Watch a specific address
-func (sm *StateManager) Watch(addr []byte) {
-	if !sm.watchedAddresses[string(addr)] {
-		sm.watchedAddresses[string(addr)] = true
+func (sm *StateManager) notifyChanges() {
+	for addr, stateObject := range sm.manifest.objectChanges {
+		sm.Ethereum.Reactor().Post("object:"+addr, stateObject)
+	}
+
+	for stateObjectAddr, mappedObjects := range sm.manifest.storageChanges {
+		for addr, value := range mappedObjects {
+			sm.Ethereum.Reactor().Post("storage:"+stateObjectAddr+":"+addr, value.String())
+		}
 	}
 }
 
-// The following objects are used when changing a value and using the "watched" attribute
-// to determine whether the reactor should be used to notify any subscribers on the address
-func (sm *StateManager) Changed(stateObject *StateObject) {
-	if sm.watchedAddresses[string(stateObject.Address())] {
-		sm.Ethereum.Reactor().Post("addressChanged", stateObject)
+type Manifest struct {
+	// XXX These will be handy in the future. Not important for now.
+	objectAddresses  map[string]bool
+	storageAddresses map[string]map[string]bool
+
+	objectChanges  map[string]*StateObject
+	storageChanges map[string]map[string]*big.Int
+}
+
+func NewManifest() *Manifest {
+	m := &Manifest{objectAddresses: make(map[string]bool), storageAddresses: make(map[string]map[string]bool)}
+	m.Reset()
+
+	return m
+}
+
+func (m *Manifest) Reset() {
+	m.objectChanges = make(map[string]*StateObject)
+	m.storageChanges = make(map[string]map[string]*big.Int)
+}
+
+func (m *Manifest) AddObjectChange(stateObject *StateObject) {
+	m.objectChanges[string(stateObject.Address())] = stateObject
+}
+
+func (m *Manifest) AddStorageChange(stateObject *StateObject, storageAddr []byte, storage *big.Int) {
+	if m.storageChanges[string(stateObject.Address())] == nil {
+		m.storageChanges[string(stateObject.Address())] = make(map[string]*big.Int)
 	}
+
+	m.storageChanges[string(stateObject.Address())][string(storageAddr)] = storage
 }

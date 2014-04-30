@@ -2,7 +2,6 @@ package ethminer
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
