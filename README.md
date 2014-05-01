@@ -12,7 +12,15 @@ For the development package please see the [eth-go package](https://github.com/e
 Build
 =======
 
-For build instruction please see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum(Go))
+To build Ethereal (GUI):
+
+`go get github.com/ethereum/go-ethereum/ethereal`
+
+To build the node (CLI):
+
+`go get github.com/ethereum/go-ethereum/ethereum`
+
+For further, detailed, build instruction please see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum(Go))
 
 General command line options
 ====================
