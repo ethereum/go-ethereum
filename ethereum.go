@@ -350,7 +350,7 @@ func (s *Ethereum) WaitForShutdown() {
 func (s *Ethereum) upnpUpdateThread() {
 	// Go off immediately to prevent code duplication, thereafter we renew
 	// lease every 15 minutes.
-	timer := time.NewTimer(0 * time.Second)
+	timer := time.NewTimer(5 * time.Minute)
 	lport, _ := strconv.ParseInt(s.Port, 10, 16)
 	first := true
 out:
