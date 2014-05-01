@@ -440,14 +440,14 @@ func (p *Peer) HandleInbound() {
 
 				// If a parent is found send back a reply
 				if parent != nil {
-					ethutil.Config.Log.Infof("[PEER] Found conical block, returning chain from: %x ", parent.Hash())
+					ethutil.Config.Log.Debugf("[PEER] Found conical block, returning chain from: %x ", parent.Hash())
 					chain := p.ethereum.BlockChain().GetChainFromHash(parent.Hash(), amountOfBlocks)
 					if len(chain) > 0 {
-						ethutil.Config.Log.Infof("[PEER] Returning %d blocks: %x ", len(chain), parent.Hash())
+						ethutil.Config.Log.Debugf("[PEER] Returning %d blocks: %x ", len(chain), parent.Hash())
 						p.QueueMessage(ethwire.NewMessage(ethwire.MsgBlockTy, chain))
 					}
 				} else {
-					ethutil.Config.Log.Infof("[PEER] Could not find a similar block")
+					ethutil.Config.Log.Debugf("[PEER] Could not find a similar block")
 					// If no blocks are found we send back a reply with msg not in chain
 					// and the last hash from get chain
 					lastHash := msg.Data.Get(l - 1)
@@ -455,7 +455,7 @@ func (p *Peer) HandleInbound() {
 					p.QueueMessage(ethwire.NewMessage(ethwire.MsgNotInChainTy, []interface{}{lastHash.Raw()}))
 				}
 			case ethwire.MsgNotInChainTy:
-				ethutil.Config.Log.Infof("Not in chain %x\n", msg.Data)
+				ethutil.Config.Log.Debugf("Not in chain %x\n", msg.Data)
 				// TODO
 			case ethwire.MsgGetTxsTy:
 				// Get the current transactions of the pool
@@ -476,29 +476,6 @@ func (p *Peer) HandleInbound() {
 	}
 
 	p.Stop()
-}
-
-func packAddr(address, port string) ([]interface{}, uint16) {
-	addr := strings.Split(address, ".")
-	a, _ := strconv.Atoi(addr[0])
-	b, _ := strconv.Atoi(addr[1])
-	c, _ := strconv.Atoi(addr[2])
-	d, _ := strconv.Atoi(addr[3])
-	host := []interface{}{int32(a), int32(b), int32(c), int32(d)}
-	prt, _ := strconv.Atoi(port)
-
-	return host, uint16(prt)
-}
-
-func unpackAddr(value *ethutil.Value, p uint64) string {
-	a := strconv.Itoa(int(value.Get(0).Uint()))
-	b := strconv.Itoa(int(value.Get(1).Uint()))
-	c := strconv.Itoa(int(value.Get(2).Uint()))
-	d := strconv.Itoa(int(value.Get(3).Uint()))
-	host := strings.Join([]string{a, b, c, d}, ".")
-	port := strconv.Itoa(int(p))
-
-	return net.JoinHostPort(host, port)
 }
 
 func (p *Peer) Start() {
@@ -661,4 +638,27 @@ func (p *Peer) CatchupWithPeer(blockHash []byte) {
 
 func (p *Peer) RlpData() []interface{} {
 	return []interface{}{p.host, p.port, p.pubkey}
+}
+
+func packAddr(address, port string) ([]interface{}, uint16) {
+	addr := strings.Split(address, ".")
+	a, _ := strconv.Atoi(addr[0])
+	b, _ := strconv.Atoi(addr[1])
+	c, _ := strconv.Atoi(addr[2])
+	d, _ := strconv.Atoi(addr[3])
+	host := []interface{}{int32(a), int32(b), int32(c), int32(d)}
+	prt, _ := strconv.Atoi(port)
+
+	return host, uint16(prt)
+}
+
+func unpackAddr(value *ethutil.Value, p uint64) string {
+	a := strconv.Itoa(int(value.Get(0).Uint()))
+	b := strconv.Itoa(int(value.Get(1).Uint()))
+	c := strconv.Itoa(int(value.Get(2).Uint()))
+	d := strconv.Itoa(int(value.Get(3).Uint()))
+	host := strings.Join([]string{a, b, c, d}, ".")
+	port := strconv.Itoa(int(p))
+
+	return net.JoinHostPort(host, port)
 }

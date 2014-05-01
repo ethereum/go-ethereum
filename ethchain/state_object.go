@@ -80,7 +80,6 @@ func (c *StateObject) SetAddr(addr []byte, value interface{}) {
 func (c *StateObject) SetMem(num *big.Int, val *ethutil.Value) {
 	addr := ethutil.BigToBytes(num, 256)
 	c.SetAddr(addr, val)
-	//c.state.trie.Update(string(addr), string(val.Encode()))
 }
 
 func (c *StateObject) GetMem(num *big.Int) *ethutil.Value {
