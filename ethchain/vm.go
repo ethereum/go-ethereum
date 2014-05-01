@@ -73,10 +73,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		}
 	}()
 
-	// If the amount of gas supplied is less equal to 0
-	if closure.Gas.Cmp(big.NewInt(0)) <= 0 {
-		// TODO Do something
-	}
+	ethutil.Config.Log.Debugf("[VM] Running closure %x\n", closure.object.Address())
 
 	// Memory for the current closure
 	mem := &Memory{}
@@ -107,9 +104,11 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		val := closure.Get(pc)
 		// Get the opcode (it must be an opcode!)
 		op := OpCode(val.Uint())
-		if ethutil.Config.Debug {
-			ethutil.Config.Log.Debugf("%-3d %-4s", pc, op.String())
-		}
+		/*
+			if ethutil.Config.Debug {
+				ethutil.Config.Log.Debugf("%-3d %-4s", pc, op.String())
+			}
+		*/
 
 		gas := new(big.Int)
 		useGas := func(amount *big.Int) {
@@ -163,9 +162,6 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case oLOG:
 			stack.Print()
 			mem.Print()
-		case oSTOP: // Stop the closure
-			return closure.Return(nil), nil
-
 			// 0x20 range
 		case oADD:
 			require(2)
@@ -520,22 +516,18 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			return closure.Return(ret), nil
 		case oSUICIDE:
-			/*
-				recAddr := stack.Pop().Bytes()
-				// Purge all memory
-				deletedMemory := contract.state.Purge()
-				// Add refunds to the pop'ed address
-				refund := new(big.Int).Mul(StoreFee, big.NewInt(int64(deletedMemory)))
-				account := state.GetAccount(recAddr)
-				account.Amount.Add(account.Amount, refund)
-				// Update the refunding address
-				state.UpdateAccount(recAddr, account)
-				// Delete the contract
-				state.trie.Update(string(addr), "")
+			require(1)
 
-				ethutil.Config.Log.Debugf("(%d) => %x\n", deletedMemory, recAddr)
-				break out
-			*/
+			receiver := vm.state.GetAccount(stack.Pop().Bytes())
+			receiver.AddAmount(closure.object.Amount)
+
+			vm.stateManager.manifest.AddObjectChange(receiver)
+
+			closure.object.state.Purge()
+
+			fallthrough
+		case oSTOP: // Stop the closure
+			return closure.Return(nil), nil
 		default:
 			ethutil.Config.Log.Debugf("Invalid opcode %x\n", op)
 
