@@ -91,6 +91,12 @@ ApplicationWindow {
 						require(1)
 						postData(data._seed, null)
 						break;
+					case "set":
+						for(var key in data.args) {
+							if(webview.hasOwnProperty(key)) {
+								window[key] = data.args[key];
+							}
+						}
 					}
 				} catch(e) {
 					console.log(data.call + ": " + e)

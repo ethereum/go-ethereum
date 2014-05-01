@@ -71,6 +71,10 @@ window.eth = {
 		postData({call: "disconnect", args: [address, storageAddrOrCb]});
 	},
 
+	set: function(props) {
+		postData({call: "set", args: props});
+	},
+
 	on: function(event, cb) {
 		if(eth._onCallbacks[event] === undefined) {
 			eth._onCallbacks[event] = [];
