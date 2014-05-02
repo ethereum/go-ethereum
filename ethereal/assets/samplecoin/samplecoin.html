@@ -21,7 +21,7 @@ function createTransaction() {
 }
 
 function init() {
-	eth.set({width: 500, title: "Hello world"})
+	eth.set({width: 500})
 
 	eth.getKey(function(key) {
 		eth.getStorageAt(jefcoinAddr, key, function(storage) {

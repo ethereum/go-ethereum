@@ -123,6 +123,8 @@ ApplicationWindow {
 			function onObjectChangeCb(stateObject) {
 				postEvent("object:"+stateObject.address(), stateObject)
 			}
+			function onStorageChangeCb() {
+			}
 		}
 
 		Rectangle {
