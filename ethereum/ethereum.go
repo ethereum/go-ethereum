@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/etherpc"
 	"github.com/ethereum/eth-go/ethminer"
+	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/utils"
 	"log"
@@ -133,8 +134,10 @@ func main() {
 		go console.Start()
 	}
 	if StartRpc {
-		ethereum.RpcServer = etherpc.NewJsonRpcServer()
-		go ethereum.RpcServer.Start()
+		// TODO: Can we make this work again?
+		//ethereum.RpcServer = etherpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum))
+		rpc := etherpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum))
+		go rpc.Start()
 	}
 
 	RegisterInterrupts(ethereum)
