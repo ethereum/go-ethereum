@@ -19,8 +19,7 @@ window.eth = {
 
 	// Create transaction
 	//
-	// Creates a transaction with the current account
-	// If no recipient is set, the Ethereum API will see it as a contract creation
+	// Transact between two state objects
 	transact: function(sec, recipient, value, gas, gasPrice, data, cb) {
 		postData({call: "transact", args: [sec, recipient, value, gas, gasPrice, data]}, cb);
 	},
@@ -202,7 +201,7 @@ String.prototype.unbin = function() {
 String.prototype.hex2bin = function() {
     bytes = []
 
-    for(var i=2; i< this.length-1; i+=2){
+    for(var i=2; i< this.length-1; i+=2) {
         bytes.push(parseInt(this.substr(i, 2), 16));
     }
 

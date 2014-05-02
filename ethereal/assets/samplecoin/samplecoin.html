@@ -9,13 +9,14 @@
 
 <script type="text/javascript">
 var jefcoinAddr = "3dff537f51350239abc95c76a5864aa605259e7d"
+var mAddr = ""
 
 function createTransaction() {
 	var addr = document.querySelector("#addr").value;
 	var amount = document.querySelector("#amount").value;
 
-	var data = "0x" + addr + "\n" + amount
-	eth.transact("", jefcoinAddr, 0, "10000000", "250", data, function(tx) {
+	var data = (("0x"+addr).pad(32) + amount.pad(32)).unbin()
+	eth.transact(mAddr, jefcoinAddr, 0, "10000000", "250", data, function(tx) {
 		debug("received tx hash:", tx)
 	})
 }
@@ -23,13 +24,15 @@ function createTransaction() {
 function init() {
 	eth.set({width: 500})
 
-	eth.getKey(function(key) {
-		eth.getStorageAt(jefcoinAddr, key, function(storage) {
+	eth.getKey(function(keyPair) {
+		mAddr = keyPair.privateKey;
+
+		eth.getStorageAt(jefcoinAddr, keyPair.address, function(storage) {
 			document.querySelector("#current-amount").innerHTML = storage;
 		});
 
 		eth.watch(jefcoinAddr, function(stateObject) {
-			eth.getStorageAt(jefcoinAddr, key, function(storage) {
+			eth.getStorageAt(jefcoinAddr, keyPair.address, function(storage) {
 				document.querySelector("#current-amount").innerHTML = storage;
 			});
 		});
@@ -50,18 +53,17 @@ function init() {
 		<div>Amount: <strong id="current-amount"></strong></div>
 
 		<div id="transactions">
-			<form role="form">
-				<div class="form-group">
-					<input id="addr" class="form-control" type="text" placeholder="Receiver address"></input><br>
-					<input id="amount" class="form-control" type="text" placeholder="Amount"></input><br>
-				</div>
+			<div class="form-group">
+				<input id="addr" class="form-control" type="text" placeholder="Receiver address"></input><br>
+				<input id="amount" class="form-control" type="text" placeholder="Amount"></input><br>
+			</div>
 
-				<button class="btn btn-default" onclick="createTransaction();">Send Tx</button>
+			<button class="btn btn-default" onclick="createTransaction();">Send Tx</button>
 		</div>
 	</div>
-
-	<div id="debug" style="border: 1px solid block"></div>
 </div>
+
+<div id="debug" style="border: 1px solid black; min-height: 30px;"></div>
 
 </body>
 </html>

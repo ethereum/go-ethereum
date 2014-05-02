@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
@@ -28,8 +29,13 @@ func (lib *PEthereum) GetBlock(hexHash string) *PBlock {
 	return &PBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Hex(block.Hash())}
 }
 
-func (lib *PEthereum) GetKey() string {
-	return ethutil.Hex(ethutil.Config.Db.GetKeys()[0].Address())
+func (lib *PEthereum) GetKey() *PKey {
+	keyPair, err := ethchain.NewKeyPairFromSec(ethutil.Config.Db.GetKeys()[0].PrivateKey)
+	if err != nil {
+		return nil
+	}
+
+	return NewPKey(keyPair)
 }
 
 func (lib *PEthereum) GetStateObject(address string) *PStateObject {
@@ -59,7 +65,7 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, in
 		hash = ethutil.FromHex(recipient)
 	}
 
-	keyPair, err := ethchain.NewKeyPairFromSec([]byte(key))
+	keyPair, err := ethchain.NewKeyPairFromSec([]byte(ethutil.FromHex(key)))
 	if err != nil {
 		return "", err
 	}
@@ -81,15 +87,12 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, in
 
 		tx = ethchain.NewContractCreationTx(value, gas, gasPrice, mainScript, initScript)
 	} else {
-		/*
-			lines := strings.Split(dataStr, "\n")
-			var data []byte
-			for _, line := range lines {
-				data = append(data, ethutil.BigToBytes(ethutil.Big(line), 256)...)
-			}
-		*/
-
-		tx = ethchain.NewTransactionMessage(hash, value, gas, gasPrice, []byte(initStr))
+		// Just in case it was submitted as a 0x prefixed string
+		if initStr[0:2] == "0x" {
+			initStr = initStr[2:len(initStr)]
+		}
+		fmt.Println("DATA:", initStr)
+		tx = ethchain.NewTransactionMessage(hash, value, gas, gasPrice, ethutil.FromHex(initStr))
 	}
 
 	acc := lib.stateManager.GetAddrState(keyPair.Address())

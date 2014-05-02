@@ -34,9 +34,16 @@ func NewPTx(tx *ethchain.Transaction) *PTx {
 }
 
 type PKey struct {
-	Address string
+	Address    string
+	PrivateKey string
+	PublicKey  string
 }
 
+func NewPKey(key *ethchain.KeyPair) *PKey {
+	return &PKey{ethutil.Hex(key.Address()), ethutil.Hex(key.PrivateKey), ethutil.Hex(key.PublicKey)}
+}
+
+/*
 type PKeyRing struct {
 	Keys []interface{}
 }
@@ -44,6 +51,7 @@ type PKeyRing struct {
 func NewPKeyRing(keys []interface{}) *PKeyRing {
 	return &PKeyRing{Keys: keys}
 }
+*/
 
 type PStateObject struct {
 	object *ethchain.StateObject
