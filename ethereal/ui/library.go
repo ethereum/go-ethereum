@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/obscuren/secp256k1-go"
@@ -47,14 +48,14 @@ func (lib *EthLib) GetKey() string {
 	return ethutil.Hex(ethutil.Config.Db.GetKeys()[0].Address())
 }
 
-func (lib *EthLib) GetStateObject(address string) *utils.PStateObject {
+func (lib *EthLib) GetStateObject(address string) *ethpub.PStateObject {
 	stateObject := lib.stateManager.ProcState().GetContract(ethutil.FromHex(address))
 	if stateObject != nil {
-		return utils.NewPStateObject(stateObject)
+		return ethpub.NewPStateObject(stateObject)
 	}
 
 	// See GetStorage for explanation on "nil"
-	return utils.NewPStateObject(nil)
+	return ethpub.NewPStateObject(nil)
 }
 
 func (lib *EthLib) Watch(addr, storageAddr string) {
@@ -115,7 +116,7 @@ func (lib *EthLib) Transact(recipient, valueStr, gasStr, gasPriceStr, dataStr st
 	return ethutil.Hex(tx.Hash()), nil
 }
 
-func (lib *EthLib) GetBlock(hexHash string) *utils.PBlock {
+func (lib *EthLib) GetBlock(hexHash string) *ethpub.PBlock {
 	hash, err := hex.DecodeString(hexHash)
 	if err != nil {
 		return nil
@@ -123,5 +124,5 @@ func (lib *EthLib) GetBlock(hexHash string) *utils.PBlock {
 
 	block := lib.blockChain.GetBlock(hash)
 
-	return &utils.PBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Hex(block.Hash())}
+	return &ethpub.PBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Hex(block.Hash())}
 }

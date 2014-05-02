@@ -6,8 +6,8 @@ import (
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethdb"
+	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
 	"math/big"
 	"strings"
@@ -57,9 +57,9 @@ func (ui *Gui) Start(assetPath string) {
 
 	// Register ethereum functions
 	qml.RegisterTypes("Ethereum", 1, 0, []qml.TypeSpec{{
-		Init: func(p *utils.PBlock, obj qml.Object) { p.Number = 0; p.Hash = "" },
+		Init: func(p *ethpub.PBlock, obj qml.Object) { p.Number = 0; p.Hash = "" },
 	}, {
-		Init: func(p *utils.PTx, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
+		Init: func(p *ethpub.PTx, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
 	}})
 
 	ethutil.Config.SetClientString(fmt.Sprintf("/Ethereal v%s", "0.2"))
@@ -130,13 +130,13 @@ func (ui *Gui) readPreviousTransactions() {
 	for it.Next() {
 		tx := ethchain.NewTransactionFromBytes(it.Value())
 
-		ui.win.Root().Call("addTx", utils.NewPTx(tx))
+		ui.win.Root().Call("addTx", ethpub.NewPTx(tx))
 	}
 	it.Release()
 }
 
 func (ui *Gui) ProcessBlock(block *ethchain.Block) {
-	ui.win.Root().Call("addBlock", utils.NewPBlock(block))
+	ui.win.Root().Call("addBlock", ethpub.NewPBlock(block))
 }
 
 // Simple go routine function that updates the list of peers in the GUI
@@ -157,13 +157,13 @@ func (ui *Gui) update() {
 
 			if txMsg.Type == ethchain.TxPre {
 				if bytes.Compare(tx.Sender(), ui.addr) == 0 && addrState.Nonce <= tx.Nonce {
-					ui.win.Root().Call("addTx", utils.NewPTx(tx))
+					ui.win.Root().Call("addTx", ethpub.NewPTx(tx))
 					ui.txDb.Put(tx.Hash(), tx.RlpEncode())
 
 					addrState.Nonce += 1
 					unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
 				} else if bytes.Compare(tx.Recipient, ui.addr) == 0 {
-					ui.win.Root().Call("addTx", utils.NewPTx(tx))
+					ui.win.Root().Call("addTx", ethpub.NewPTx(tx))
 					ui.txDb.Put(tx.Hash(), tx.RlpEncode())
 
 					unconfirmedFunds.Add(unconfirmedFunds, tx.Value)
