@@ -3,8 +3,8 @@ package ethui
 import (
 	"errors"
 	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
 	"math/big"
 	"path/filepath"
@@ -57,12 +57,12 @@ func (app *HtmlApplication) Window() *qml.Window {
 }
 
 func (app *HtmlApplication) NewBlock(block *ethchain.Block) {
-	b := &utils.PBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Hex(block.Hash())}
+	b := &ethpub.PBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Hex(block.Hash())}
 	app.webView.Call("onNewBlockCb", b)
 }
 
 func (app *HtmlApplication) ObjectChanged(stateObject *ethchain.StateObject) {
-	app.webView.Call("onObjectChangeCb", utils.NewPStateObject(stateObject))
+	app.webView.Call("onObjectChangeCb", ethpub.NewPStateObject(stateObject))
 }
 
 func (app *HtmlApplication) StorageChanged(stateObject *ethchain.StateObject, addr []byte, value *big.Int) {

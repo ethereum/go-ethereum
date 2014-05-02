@@ -3,8 +3,8 @@ package ethui
 import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
 	"math/big"
 )
@@ -22,7 +22,7 @@ type AppContainer interface {
 }
 
 type ExtApplication struct {
-	*utils.PEthereum
+	*ethpub.PEthereum
 
 	blockChan  chan ethutil.React
 	changeChan chan ethutil.React
@@ -35,7 +35,7 @@ type ExtApplication struct {
 
 func NewExtApplication(container AppContainer, lib *UiLib) *ExtApplication {
 	app := &ExtApplication{
-		utils.NewPEthereum(lib.eth),
+		ethpub.NewPEthereum(lib.eth),
 		make(chan ethutil.React, 1),
 		make(chan ethutil.React, 1),
 		make(chan bool),
