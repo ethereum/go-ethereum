@@ -1,6 +1,7 @@
 package etherpc
 
 import (
+	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
 	"net"
 	"net/rpc"
@@ -10,6 +11,7 @@ import (
 type JsonRpcServer struct {
 	quit     chan bool
 	listener net.Listener
+	ethp     *ethpub.PEthereum
 }
 
 func (s *JsonRpcServer) exitHandler() {
@@ -32,7 +34,7 @@ func (s *JsonRpcServer) Stop() {
 func (s *JsonRpcServer) Start() {
 	ethutil.Config.Log.Infoln("[JSON] Starting JSON-RPC server")
 	go s.exitHandler()
-	rpc.Register(new(MainPackage))
+	rpc.Register(&MainPackage{ethp: s.ethp})
 	rpc.HandleHTTP()
 
 	for {
@@ -46,7 +48,7 @@ func (s *JsonRpcServer) Start() {
 	}
 }
 
-func NewJsonRpcServer() *JsonRpcServer {
+func NewJsonRpcServer(ethp *ethpub.PEthereum) *JsonRpcServer {
 	l, err := net.Listen("tcp", ":30304")
 	if err != nil {
 		ethutil.Config.Log.Infoln("Error starting JSON-RPC")
@@ -55,5 +57,6 @@ func NewJsonRpcServer() *JsonRpcServer {
 	return &JsonRpcServer{
 		listener: l,
 		quit:     make(chan bool),
+		ethp:     ethp,
 	}
 }

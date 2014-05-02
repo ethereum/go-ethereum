@@ -87,7 +87,7 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, in
 		tx = ethchain.NewContractCreationTx(value, gas, gasPrice, mainScript, initScript)
 	} else {
 		// Just in case it was submitted as a 0x prefixed string
-		if initStr[0:2] == "0x" {
+		if len(initStr) > 0 && initStr[0:2] == "0x" {
 			initStr = initStr[2:len(initStr)]
 		}
 		tx = ethchain.NewTransactionMessage(hash, value, gas, gasPrice, ethutil.FromHex(initStr))

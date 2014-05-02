@@ -3,18 +3,20 @@ package etherpc
 import (
 	"encoding/json"
 	"errors"
-	"math/big"
+	"github.com/ethereum/eth-go/ethpub"
+	_ "log"
 )
 
-type MainPackage struct{}
+type MainPackage struct {
+	ethp *ethpub.PEthereum
+}
 
 type JsonArgs interface {
 	requirements() error
 }
 
 type BlockResponse struct {
-	Name string
-	Id   int
+	JsonResponse
 }
 type GetBlockArgs struct {
 	BlockNumber int
@@ -63,22 +65,23 @@ func (b *GetBlockArgs) requirements() error {
 	return nil
 }
 
-func (p *MainPackage) GetBlock(args *GetBlockArgs, reply *BlockResponse) error {
+func (p *MainPackage) GetBlock(args *GetBlockArgs, reply *string) error {
 	err := args.requirements()
 	if err != nil {
 		return err
 	}
 	// Do something
-
+	block := p.ethp.GetBlock(args.Hash)
+	*reply = NewSuccessRes(block)
 	return nil
 }
 
 type NewTxArgs struct {
 	Sec       string
 	Recipient string
-	Value     *big.Int
-	Gas       *big.Int
-	GasPrice  *big.Int
+	Value     string
+	Gas       string
+	GasPrice  string
 	Init      string
 	Body      string
 }
@@ -90,26 +93,26 @@ func (a *NewTxArgs) requirements() error {
 	if a.Recipient == "" {
 		return NewErrorResponse("Transact requires a 'recipient' address as argument")
 	}
-	if a.Value == nil {
+	if a.Value == "" {
 		return NewErrorResponse("Transact requires a 'value' as argument")
 	}
-	if a.Gas == nil {
+	if a.Gas == "" {
 		return NewErrorResponse("Transact requires a 'gas' value as argument")
 	}
-	if a.GasPrice == nil {
+	if a.GasPrice == "" {
 		return NewErrorResponse("Transact requires a 'gasprice' value as argument")
 	}
 	return nil
 }
 
 func (a *NewTxArgs) requirementsContract() error {
-	if a.Value == nil {
+	if a.Value == "" {
 		return NewErrorResponse("Create requires a 'value' as argument")
 	}
-	if a.Gas == nil {
+	if a.Gas == "" {
 		return NewErrorResponse("Create requires a 'gas' value as argument")
 	}
-	if a.GasPrice == nil {
+	if a.GasPrice == "" {
 		return NewErrorResponse("Create requires a 'gasprice' value as argument")
 	}
 	if a.Init == "" {
@@ -121,11 +124,13 @@ func (a *NewTxArgs) requirementsContract() error {
 	return nil
 }
 
-func (p *MainPackage) Transact(args *NewTxArgs, reply *TxResponse) error {
+func (p *MainPackage) Transact(args *NewTxArgs, reply *string) error {
 	err := args.requirements()
 	if err != nil {
 		return err
 	}
+	result, _ := p.ethp.Transact(p.ethp.GetKey().PrivateKey, args.Recipient, args.Value, args.Gas, args.GasPrice, args.Body)
+	*reply = NewSuccessRes(result)
 	return nil
 }
 
@@ -134,6 +139,8 @@ func (p *MainPackage) Create(args *NewTxArgs, reply *string) error {
 	if err != nil {
 		return err
 	}
+	result, _ := p.ethp.Create(p.ethp.GetKey().PrivateKey, args.Value, args.Gas, args.GasPrice, args.Init, args.Body)
+	*reply = NewSuccessRes(result)
 	return nil
 }
 

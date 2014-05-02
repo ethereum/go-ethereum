@@ -8,8 +8,8 @@ import (
 
 // Block interface exposed to QML
 type PBlock struct {
-	Number int
-	Hash   string
+	Number int    `json:"number"`
+	Hash   string `json:"hash"`
 }
 
 // Creates a new QML Block from a chain block
@@ -44,10 +44,10 @@ func NewPKey(key *ethchain.KeyPair) *PKey {
 }
 
 type PReceipt struct {
-	CreatedContract bool
-	Address         string
-	Hash            string
-	Sender          string
+	CreatedContract bool   `json:"createdContract"`
+	Address         string `json:"address"`
+	Hash            string `json:"hash"`
+	Sender          string `json:"sender"`
 }
 
 func NewPReciept(contractCreation bool, creationAddress, hash, address []byte) *PReceipt {
