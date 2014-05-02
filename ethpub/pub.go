@@ -47,15 +47,15 @@ func (lib *PEthereum) GetStateObject(address string) *PStateObject {
 	return NewPStateObject(nil)
 }
 
-func (lib *PEthereum) Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
+func (lib *PEthereum) Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr string) (*PReceipt, error) {
 	return lib.createTx(key, recipient, valueStr, gasStr, gasPriceStr, dataStr, "")
 }
 
-func (lib *PEthereum) Create(key, valueStr, gasStr, gasPriceStr, initStr, bodyStr string) (string, error) {
+func (lib *PEthereum) Create(key, valueStr, gasStr, gasPriceStr, initStr, bodyStr string) (*PReceipt, error) {
 	return lib.createTx(key, "", valueStr, gasStr, gasPriceStr, initStr, bodyStr)
 }
 
-func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, initStr, scriptStr string) (string, error) {
+func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, initStr, scriptStr string) (*PReceipt, error) {
 	var hash []byte
 	var contractCreation bool
 	if len(recipient) == 0 {
@@ -66,7 +66,7 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, in
 
 	keyPair, err := ethchain.NewKeyPairFromSec([]byte(ethutil.FromHex(key)))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	value := ethutil.Big(valueStr)
@@ -77,11 +77,11 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, in
 	if contractCreation {
 		initScript, err := ethutil.Compile(initStr)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		mainScript, err := ethutil.Compile(scriptStr)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		tx = ethchain.NewContractCreationTx(value, gas, gasPrice, mainScript, initScript)
@@ -99,10 +99,10 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, in
 	lib.txPool.QueueTransaction(tx)
 
 	if contractCreation {
-		ethutil.Config.Log.Infof("Contract addr %x", tx.Hash()[12:])
+		ethutil.Config.Log.Infof("Contract addr %x", tx.CreationAddress())
 	} else {
 		ethutil.Config.Log.Infof("Tx hash %x", tx.Hash())
 	}
 
-	return ethutil.Hex(tx.Hash()), nil
+	return NewPReciept(contractCreation, tx.CreationAddress(), tx.Hash(), keyPair.Address()), nil
 }

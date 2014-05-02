@@ -59,6 +59,10 @@ func (tx *Transaction) IsContract() bool {
 	return tx.contractCreation
 }
 
+func (tx *Transaction) CreationAddress() []byte {
+	return tx.Hash()[12:]
+}
+
 func (tx *Transaction) Signature(key []byte) []byte {
 	hash := tx.Hash()
 

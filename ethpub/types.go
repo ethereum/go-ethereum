@@ -43,6 +43,22 @@ func NewPKey(key *ethchain.KeyPair) *PKey {
 	return &PKey{ethutil.Hex(key.Address()), ethutil.Hex(key.PrivateKey), ethutil.Hex(key.PublicKey)}
 }
 
+type PReceipt struct {
+	CreatedContract bool
+	Address         string
+	Hash            string
+	Sender          string
+}
+
+func NewPReciept(contractCreation bool, creationAddress, hash, address []byte) *PReceipt {
+	return &PReceipt{
+		contractCreation,
+		ethutil.Hex(creationAddress),
+		ethutil.Hex(hash),
+		ethutil.Hex(address),
+	}
+}
+
 /*
 type PKeyRing struct {
 	Keys []interface{}
