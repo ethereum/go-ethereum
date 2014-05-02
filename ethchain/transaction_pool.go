@@ -91,14 +91,12 @@ func (pool *TxPool) addTransaction(tx *Transaction) {
 // Process transaction validates the Tx and processes funds from the
 // sender to the recipient.
 func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block, toContract bool) (err error) {
-	/*
-		defer func() {
-			if r := recover(); r != nil {
-				log.Println(r)
-				err = fmt.Errorf("%v", r)
-			}
-		}()
-	*/
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println(r)
+			err = fmt.Errorf("%v", r)
+		}
+	}()
 	// Get the sender
 	sender := block.state.GetAccount(tx.Sender())
 

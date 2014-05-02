@@ -2,6 +2,7 @@ package ethchain
 
 import (
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/obscuren/secp256k1-go"
 	"math/big"
 )
 
@@ -12,6 +13,15 @@ type KeyPair struct {
 	// The associated account
 	account *StateObject
 	state   *State
+}
+
+func NewKeyPairFromSec(seckey []byte) (*KeyPair, error) {
+	pubkey, err := secp256k1.GeneratePubKey(seckey)
+	if err != nil {
+		return nil, err
+	}
+
+	return &KeyPair{PrivateKey: seckey, PublicKey: pubkey}, nil
 }
 
 func NewKeyPairFromValue(val *ethutil.Value) *KeyPair {
