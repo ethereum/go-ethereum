@@ -6,6 +6,7 @@ import (
 
 var StartConsole bool
 var StartMining bool
+var StartRpc bool
 var UseUPnP bool
 var OutboundPort string
 var ShowGenesis bool
@@ -24,6 +25,7 @@ func Init() {
 	flag.BoolVar(&StartMining, "m", false, "start dagger mining")
 	flag.BoolVar(&ShowGenesis, "g", false, "prints genesis header and exits")
 	//flag.BoolVar(&UseGui, "gui", true, "use the gui")
+	flag.BoolVar(&StartRpc, "r", false, "start rpc server")
 	flag.BoolVar(&NonInteractive, "y", false, "non-interactive mode (say yes to confirmations)")
 	flag.BoolVar(&UseUPnP, "upnp", false, "enable UPnP support")
 	flag.BoolVar(&UseSeed, "seed", true, "seed peers")
