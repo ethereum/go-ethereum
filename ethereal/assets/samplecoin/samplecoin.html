@@ -16,8 +16,8 @@ function createTransaction() {
 	var amount = document.querySelector("#amount").value;
 
 	var data = (("0x"+addr).pad(32) + amount.pad(32)).unbin()
-	eth.transact(mAddr, jefcoinAddr, 0, "10000000", "250", data, function(tx) {
-		debug("received tx hash:", tx)
+	eth.transact(mAddr, jefcoinAddr, 0, "10000000", "250", data, function(receipt) {
+		debug("received tx hash:", receipt)
 	})
 }
 
