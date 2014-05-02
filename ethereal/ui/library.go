@@ -47,14 +47,14 @@ func (lib *EthLib) GetKey() string {
 	return ethutil.Hex(ethutil.Config.Db.GetKeys()[0].Address())
 }
 
-func (lib *EthLib) GetStateObject(address string) *QStateObject {
+func (lib *EthLib) GetStateObject(address string) *utils.PStateObject {
 	stateObject := lib.stateManager.ProcState().GetContract(ethutil.FromHex(address))
 	if stateObject != nil {
-		return NewQStateObject(stateObject)
+		return utils.NewPStateObject(stateObject)
 	}
 
 	// See GetStorage for explanation on "nil"
-	return NewQStateObject(nil)
+	return utils.NewPStateObject(nil)
 }
 
 func (lib *EthLib) Watch(addr, storageAddr string) {
@@ -115,7 +115,7 @@ func (lib *EthLib) Transact(recipient, valueStr, gasStr, gasPriceStr, dataStr st
 	return ethutil.Hex(tx.Hash()), nil
 }
 
-func (lib *EthLib) GetBlock(hexHash string) *QBlock {
+func (lib *EthLib) GetBlock(hexHash string) *utils.PBlock {
 	hash, err := hex.DecodeString(hexHash)
 	if err != nil {
 		return nil
@@ -123,5 +123,5 @@ func (lib *EthLib) GetBlock(hexHash string) *QBlock {
 
 	block := lib.blockChain.GetBlock(hash)
 
-	return &QBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Hex(block.Hash())}
+	return &utils.PBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Hex(block.Hash())}
 }

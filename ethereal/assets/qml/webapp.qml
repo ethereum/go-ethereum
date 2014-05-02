@@ -60,6 +60,7 @@ ApplicationWindow {
 
 						var tx = eth.transact(data.args[0], data.args[1], data.args[2],data.args[3],data.args[4],data.args[5])
 						postData(data._seed, tx)
+
 						break
 					case "create":
 						postData(data._seed, null)
@@ -91,6 +92,12 @@ ApplicationWindow {
 						require(1)
 						postData(data._seed, null)
 						break;
+					case "set":
+						for(var key in data.args) {
+							if(webview.hasOwnProperty(key)) {
+								window[key] = data.args[key];
+							}
+						}
 					}
 				} catch(e) {
 					console.log(data.call + ": " + e)
@@ -116,6 +123,8 @@ ApplicationWindow {
 			}
 			function onObjectChangeCb(stateObject) {
 				postEvent("object:"+stateObject.address(), stateObject)
+			}
+			function onStorageChangeCb() {
 			}
 		}
 

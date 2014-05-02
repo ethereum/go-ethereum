@@ -1,4 +1,4 @@
-package ethui
+package utils
 
 import (
 	"encoding/hex"
@@ -7,53 +7,61 @@ import (
 )
 
 // Block interface exposed to QML
-type QBlock struct {
+type PBlock struct {
 	Number int
 	Hash   string
 }
 
 // Creates a new QML Block from a chain block
-func NewQBlock(block *ethchain.Block) *QBlock {
+func NewPBlock(block *ethchain.Block) *PBlock {
 	info := block.BlockInfo()
 	hash := hex.EncodeToString(block.Hash())
 
-	return &QBlock{Number: int(info.Number), Hash: hash}
+	return &PBlock{Number: int(info.Number), Hash: hash}
 }
 
-type QTx struct {
+type PTx struct {
 	Value, Hash, Address string
 	Contract             bool
 }
 
-func NewQTx(tx *ethchain.Transaction) *QTx {
+func NewPTx(tx *ethchain.Transaction) *PTx {
 	hash := hex.EncodeToString(tx.Hash())
 	sender := hex.EncodeToString(tx.Recipient)
 	isContract := len(tx.Data) > 0
 
-	return &QTx{Hash: hash, Value: ethutil.CurrencyToString(tx.Value), Address: sender, Contract: isContract}
+	return &PTx{Hash: hash, Value: ethutil.CurrencyToString(tx.Value), Address: sender, Contract: isContract}
 }
 
-type QKey struct {
-	Address string
+type PKey struct {
+	Address    string
+	PrivateKey string
+	PublicKey  string
 }
 
-type QKeyRing struct {
+func NewPKey(key *ethchain.KeyPair) *PKey {
+	return &PKey{ethutil.Hex(key.Address()), ethutil.Hex(key.PrivateKey), ethutil.Hex(key.PublicKey)}
+}
+
+/*
+type PKeyRing struct {
 	Keys []interface{}
 }
 
-func NewQKeyRing(keys []interface{}) *QKeyRing {
-	return &QKeyRing{Keys: keys}
+func NewPKeyRing(keys []interface{}) *PKeyRing {
+	return &PKeyRing{Keys: keys}
 }
+*/
 
-type QStateObject struct {
+type PStateObject struct {
 	object *ethchain.StateObject
 }
 
-func NewQStateObject(object *ethchain.StateObject) *QStateObject {
-	return &QStateObject{object: object}
+func NewPStateObject(object *ethchain.StateObject) *PStateObject {
+	return &PStateObject{object: object}
 }
 
-func (c *QStateObject) GetStorage(address string) string {
+func (c *PStateObject) GetStorage(address string) string {
 	// Because somehow, even if you return nil to QML it
 	// still has some magical object so we can't rely on
 	// undefined or null at the QML side
@@ -66,7 +74,7 @@ func (c *QStateObject) GetStorage(address string) string {
 	return ""
 }
 
-func (c *QStateObject) Value() string {
+func (c *PStateObject) Value() string {
 	if c.object != nil {
 		return c.object.Amount.String()
 	}
@@ -74,7 +82,7 @@ func (c *QStateObject) Value() string {
 	return ""
 }
 
-func (c *QStateObject) Address() string {
+func (c *PStateObject) Address() string {
 	if c.object != nil {
 		return ethutil.Hex(c.object.Address())
 	}
