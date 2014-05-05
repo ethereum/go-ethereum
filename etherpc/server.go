@@ -34,7 +34,7 @@ func (s *JsonRpcServer) Stop() {
 func (s *JsonRpcServer) Start() {
 	ethutil.Config.Log.Infoln("[JSON] Starting JSON-RPC server")
 	go s.exitHandler()
-	rpc.Register(&MainPackage{ethp: s.ethp})
+	rpc.Register(&EthereumApi{ethp: s.ethp})
 	rpc.HandleHTTP()
 
 	for {

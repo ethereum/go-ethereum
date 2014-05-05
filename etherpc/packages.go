@@ -7,7 +7,7 @@ import (
 	_ "log"
 )
 
-type MainPackage struct {
+type EthereumApi struct {
 	ethp *ethpub.PEthereum
 }
 
@@ -65,7 +65,7 @@ func (b *GetBlockArgs) requirements() error {
 	return nil
 }
 
-func (p *MainPackage) GetBlock(args *GetBlockArgs, reply *string) error {
+func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *string) error {
 	err := args.requirements()
 	if err != nil {
 		return err
@@ -121,7 +121,7 @@ func (a *NewTxArgs) requirementsContract() error {
 	return nil
 }
 
-func (p *MainPackage) Transact(args *NewTxArgs, reply *string) error {
+func (p *EthereumApi) Transact(args *NewTxArgs, reply *string) error {
 	err := args.requirements()
 	if err != nil {
 		return err
@@ -131,7 +131,7 @@ func (p *MainPackage) Transact(args *NewTxArgs, reply *string) error {
 	return nil
 }
 
-func (p *MainPackage) Create(args *NewTxArgs, reply *string) error {
+func (p *EthereumApi) Create(args *NewTxArgs, reply *string) error {
 	err := args.requirementsContract()
 	if err != nil {
 		return err
@@ -141,7 +141,7 @@ func (p *MainPackage) Create(args *NewTxArgs, reply *string) error {
 	return nil
 }
 
-func (p *MainPackage) GetKey(args interface{}, reply *string) error {
+func (p *EthereumApi) GetKey(args interface{}, reply *string) error {
 	*reply = NewSuccessRes(p.ethp.GetKey())
 	return nil
 }
@@ -167,14 +167,14 @@ type GetStorageAtRes struct {
 	Address string `json:"address"`
 }
 
-func (p *MainPackage) GetStorageAt(args *GetStorageArgs, reply *string) error {
+func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *string) error {
 	err := args.requirements()
 	if err != nil {
 		return err
 	}
 	state := p.ethp.GetStateObject(args.Address)
 	value := state.GetStorage(args.Key)
-	*reply = NewSuccessRes(&GetStorageAtRes{Address: args.Address, Key: args.Key, Value: value})
+	*reply = NewSuccessRes(GetStorageAtRes{Address: args.Address, Key: args.Key, Value: value})
 	return nil
 }
 
@@ -189,11 +189,18 @@ func (a *GetBalanceArgs) requirements() error {
 	return nil
 }
 
-func (p *MainPackage) GetBalanceAt(args *GetBalanceArgs, reply *string) error {
+type BalanceRes struct {
+	Balance string `json:"balance"`
+	Address string `json:"address"`
+}
+
+func (p *EthereumApi) GetBalanceAt(args *GetBalanceArgs, reply *string) error {
 	err := args.requirements()
 	if err != nil {
 		return err
 	}
+	state := p.ethp.GetStateObject(args.Address)
+	*reply = NewSuccessRes(BalanceRes{Balance: state.Value(), Address: args.Address})
 	return nil
 }
 
@@ -202,7 +209,7 @@ type TestRes struct {
 	Answer       int `json:"answer"`
 }
 
-func (p *MainPackage) Test(args *GetBlockArgs, reply *string) error {
+func (p *EthereumApi) Test(args *GetBlockArgs, reply *string) error {
 	*reply = NewSuccessRes(TestRes{Answer: 15})
 	return nil
 }
