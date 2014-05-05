@@ -139,7 +139,7 @@ func (log *Logger) Infoln(v ...interface{}) {
 		return
 	}
 
-	fmt.Println(len(log.logSys))
+	//fmt.Println(len(log.logSys))
 	for _, logger := range log.logSys {
 		logger.Println(v...)
 	}
