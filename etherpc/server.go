@@ -41,7 +41,7 @@ func (s *JsonRpcServer) Start() {
 		conn, err := s.listener.Accept()
 		if err != nil {
 			ethutil.Config.Log.Infoln("[JSON] Error starting JSON-RPC:", err)
-			continue
+			break
 		}
 		ethutil.Config.Log.Debugln("[JSON] Incoming request.")
 		go jsonrpc.ServeConn(conn)

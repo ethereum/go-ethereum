@@ -1,7 +1,6 @@
 package ethpub
 
 import (
-	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 )
@@ -12,11 +11,11 @@ type PEthereum struct {
 	txPool       *ethchain.TxPool
 }
 
-func NewPEthereum(eth *eth.Ethereum) *PEthereum {
+func NewPEthereum(sm *ethchain.StateManager, bc *ethchain.BlockChain, txp *ethchain.TxPool) *PEthereum {
 	return &PEthereum{
-		eth.StateManager(),
-		eth.BlockChain(),
-		eth.TxPool(),
+		sm,
+		bc,
+		txp,
 	}
 }
 
