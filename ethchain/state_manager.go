@@ -350,7 +350,7 @@ func (sm *StateManager) notifyChanges() {
 
 	for stateObjectAddr, mappedObjects := range sm.manifest.storageChanges {
 		for addr, value := range mappedObjects {
-			sm.Ethereum.Reactor().Post("storage:"+stateObjectAddr+":"+addr, value.String())
+			sm.Ethereum.Reactor().Post("storage:"+stateObjectAddr+":"+addr, &StorageState{[]byte(stateObjectAddr), []byte(addr), value})
 		}
 	}
 }

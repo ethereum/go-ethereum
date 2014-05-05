@@ -54,6 +54,27 @@ func (lib *PEthereum) GetStateObject(address string) *PStateObject {
 	return NewPStateObject(nil)
 }
 
+func (lib *PEthereum) GetStorage(address, storageAddress string) string {
+	return lib.GetStateObject(address).GetStorage(storageAddress)
+}
+
+func (lib *PEthereum) GetTxCount(address string) int {
+	return lib.GetStateObject(address).Nonce()
+}
+
+func (lib *PEthereum) IsContract(address string) bool {
+	return lib.GetStateObject(address).IsContract()
+}
+
+func (lib *PEthereum) SecretToAddress(key string) string {
+	pair, err := ethchain.NewKeyPairFromSec(ethutil.FromHex(key))
+	if err != nil {
+		return ""
+	}
+
+	return ethutil.Hex(pair.Address())
+}
+
 func (lib *PEthereum) Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr string) (*PReceipt, error) {
 	return lib.createTx(key, recipient, valueStr, gasStr, gasPriceStr, dataStr, "")
 }

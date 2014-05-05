@@ -186,3 +186,9 @@ type CachedStateObject struct {
 	Nonce  uint64
 	Object *StateObject
 }
+
+type StorageState struct {
+	StateAddress []byte
+	Address      []byte
+	Value        *big.Int
+}

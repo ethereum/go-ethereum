@@ -59,16 +59,6 @@ func NewPReciept(contractCreation bool, creationAddress, hash, address []byte) *
 	}
 }
 
-/*
-type PKeyRing struct {
-	Keys []interface{}
-}
-
-func NewPKeyRing(keys []interface{}) *PKeyRing {
-	return &PKeyRing{Keys: keys}
-}
-*/
-
 type PStateObject struct {
 	object *ethchain.StateObject
 }
@@ -104,4 +94,30 @@ func (c *PStateObject) Address() string {
 	}
 
 	return ""
+}
+
+func (c *PStateObject) Nonce() int {
+	if c.object != nil {
+		return int(c.object.Nonce)
+	}
+
+	return 0
+}
+
+func (c *PStateObject) IsContract() bool {
+	if c.object != nil {
+		return len(c.object.Script()) > 0
+	}
+
+	return false
+}
+
+type PStorageState struct {
+	StateAddress string
+	Address      string
+	Value        string
+}
+
+func NewPStorageState(storageObject *ethchain.StorageState) *PStorageState {
+	return &PStorageState{ethutil.Hex(storageObject.StateAddress), ethutil.Hex(storageObject.Address), storageObject.Value.String()}
 }
