@@ -34,9 +34,9 @@ func NewPTx(tx *ethchain.Transaction) *PTx {
 }
 
 type PKey struct {
-	Address    string
-	PrivateKey string
-	PublicKey  string
+	Address    string `json:"address"`
+	PrivateKey string `json:"privateKey"`
+	PublicKey  string `json:"publicKey"`
 }
 
 func NewPKey(key *ethchain.KeyPair) *PKey {
