@@ -119,14 +119,29 @@ type Trie struct {
 	cache *Cache
 }
 
+func copyRoot(root interface{}) interface{} {
+	var prevRootCopy interface{}
+	if b, ok := root.([]byte); ok {
+		prevRootCopy = CopyBytes(b)
+	} else {
+		prevRootCopy = root
+	}
+
+	return prevRootCopy
+}
+
 func NewTrie(db Database, Root interface{}) *Trie {
-	return &Trie{cache: NewCache(db), Root: Root, prevRoot: Root}
+	// Make absolute sure the root is copied
+	r := copyRoot(Root)
+	p := copyRoot(Root)
+
+	return &Trie{cache: NewCache(db), Root: r, prevRoot: p}
 }
 
 // Save the cached value to the database.
 func (t *Trie) Sync() {
 	t.cache.Commit()
-	t.prevRoot = t.Root
+	t.prevRoot = copyRoot(t.Root)
 }
 
 func (t *Trie) Undo() {

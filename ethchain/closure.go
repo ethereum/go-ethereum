@@ -7,33 +7,39 @@ import (
 	"math/big"
 )
 
-type Callee interface {
-	ReturnGas(*big.Int, *State)
+type ClosureRef interface {
+	ReturnGas(*big.Int, *big.Int, *State)
 	Address() []byte
-}
-
-type ClosureBody interface {
-	Callee
-	ethutil.RlpEncodable
 	GetMem(*big.Int) *ethutil.Value
 	SetMem(*big.Int, *ethutil.Value)
+	N() *big.Int
 }
 
 // Basic inline closure object which implement the 'closure' interface
 type Closure struct {
-	callee Callee
-	object ClosureBody
+	callee *StateObject
+	object *StateObject
+	Script []byte
 	State  *State
 
 	Gas   *big.Int
+	Price *big.Int
 	Value *big.Int
 
 	Args []byte
 }
 
 // Create a new closure for the given data items
-func NewClosure(callee Callee, object ClosureBody, state *State, gas, val *big.Int) *Closure {
-	return &Closure{callee, object, state, gas, val, nil}
+func NewClosure(callee, object *StateObject, script []byte, state *State, gas, price, val *big.Int) *Closure {
+	c := &Closure{callee: callee, object: object, Script: script, State: state, Args: nil}
+
+	// In most cases gas, price and value are pointers to transaction objects
+	// and we don't want the transaction's values to change.
+	c.Gas = new(big.Int).Set(gas)
+	c.Price = new(big.Int).Set(price)
+	c.Value = new(big.Int).Set(val)
+
+	return c
 }
 
 // Retuns the x element in data slice
@@ -46,6 +52,20 @@ func (c *Closure) GetMem(x *big.Int) *ethutil.Value {
 	return m
 }
 
+func (c *Closure) Get(x *big.Int) *ethutil.Value {
+	return c.Gets(x, big.NewInt(1))
+}
+
+func (c *Closure) Gets(x, y *big.Int) *ethutil.Value {
+	if x.Int64() >= int64(len(c.Script)) || y.Int64() >= int64(len(c.Script)) {
+		return ethutil.NewValue(0)
+	}
+
+	partial := c.Script[x.Int64() : x.Int64()+y.Int64()]
+
+	return ethutil.NewValue(partial)
+}
+
 func (c *Closure) SetMem(x *big.Int, val *ethutil.Value) {
 	c.object.SetMem(x, val)
 }
@@ -54,10 +74,12 @@ func (c *Closure) Address() []byte {
 	return c.object.Address()
 }
 
-func (c *Closure) Call(vm *Vm, args []byte) []byte {
+type DebugHook func(step int, op OpCode, mem *Memory, stack *Stack)
+
+func (c *Closure) Call(vm *Vm, args []byte, hook DebugHook) ([]byte, error) {
 	c.Args = args
 
-	return vm.RunClosure(c)
+	return vm.RunClosure(c, hook)
 }
 
 func (c *Closure) Return(ret []byte) []byte {
@@ -65,26 +87,28 @@ func (c *Closure) Return(ret []byte) []byte {
 	// If no callee is present return it to
 	// the origin (i.e. contract or tx)
 	if c.callee != nil {
-		c.callee.ReturnGas(c.Gas, c.State)
+		c.callee.ReturnGas(c.Gas, c.Price, c.State)
 	} else {
-		c.object.ReturnGas(c.Gas, c.State)
-		// TODO incase it's a POST contract we gotta serialise the contract again.
-		// But it's not yet defined
+		c.object.ReturnGas(c.Gas, c.Price, c.State)
 	}
 
 	return ret
 }
 
 // Implement the Callee interface
-func (c *Closure) ReturnGas(gas *big.Int, state *State) {
+func (c *Closure) ReturnGas(gas, price *big.Int, state *State) {
 	// Return the gas to the closure
 	c.Gas.Add(c.Gas, gas)
 }
 
-func (c *Closure) Object() ClosureBody {
+func (c *Closure) Object() *StateObject {
 	return c.object
 }
 
-func (c *Closure) Callee() Callee {
+func (c *Closure) Callee() *StateObject {
 	return c.callee
+}
+
+func (c *Closure) N() *big.Int {
+	return c.object.N()
 }

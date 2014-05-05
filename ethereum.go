@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethdb"
+	"github.com/ethereum/eth-go/ethrpc"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
 	"io/ioutil"
@@ -60,6 +61,10 @@ type Ethereum struct {
 
 	// Specifies the desired amount of maximum peers
 	MaxPeers int
+
+	reactor *ethutil.ReactorEngine
+
+	RpcServer *ethrpc.JsonRpcServer
 }
 
 func New(caps Caps, usePnp bool) (*Ethereum, error) {
@@ -89,6 +94,8 @@ func New(caps Caps, usePnp bool) (*Ethereum, error) {
 		serverCaps:   caps,
 		nat:          nat,
 	}
+	ethereum.reactor = ethutil.NewReactorEngine()
+
 	ethereum.txPool = ethchain.NewTxPool(ethereum)
 	ethereum.blockChain = ethchain.NewBlockChain(ethereum)
 	ethereum.stateManager = ethchain.NewStateManager(ethereum)
@@ -97,6 +104,10 @@ func New(caps Caps, usePnp bool) (*Ethereum, error) {
 	ethereum.txPool.Start()
 
 	return ethereum, nil
+}
+
+func (s *Ethereum) Reactor() *ethutil.ReactorEngine {
+	return s.reactor
 }
 
 func (s *Ethereum) BlockChain() *ethchain.BlockChain {
@@ -328,6 +339,7 @@ func (s *Ethereum) Stop() {
 
 	close(s.quit)
 
+	s.RpcServer.Stop()
 	s.txPool.Stop()
 	s.stateManager.Stop()
 
@@ -342,7 +354,7 @@ func (s *Ethereum) WaitForShutdown() {
 func (s *Ethereum) upnpUpdateThread() {
 	// Go off immediately to prevent code duplication, thereafter we renew
 	// lease every 15 minutes.
-	timer := time.NewTimer(0 * time.Second)
+	timer := time.NewTimer(5 * time.Minute)
 	lport, _ := strconv.ParseInt(s.Port, 10, 16)
 	first := true
 out:

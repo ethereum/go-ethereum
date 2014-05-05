@@ -2,6 +2,7 @@ package ethchain
 
 import (
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/obscuren/secp256k1-go"
 	"math/big"
 )
 
@@ -10,8 +11,17 @@ type KeyPair struct {
 	PublicKey  []byte
 
 	// The associated account
-	account *Account
+	account *StateObject
 	state   *State
+}
+
+func NewKeyPairFromSec(seckey []byte) (*KeyPair, error) {
+	pubkey, err := secp256k1.GeneratePubKey(seckey)
+	if err != nil {
+		return nil, err
+	}
+
+	return &KeyPair{PrivateKey: seckey, PublicKey: pubkey}, nil
 }
 
 func NewKeyPairFromValue(val *ethutil.Value) *KeyPair {
@@ -24,7 +34,7 @@ func (k *KeyPair) Address() []byte {
 	return ethutil.Sha3Bin(k.PublicKey[1:])[12:]
 }
 
-func (k *KeyPair) Account() *Account {
+func (k *KeyPair) Account() *StateObject {
 	if k.account == nil {
 		k.account = k.state.GetAccount(k.Address())
 	}
@@ -34,6 +44,7 @@ func (k *KeyPair) Account() *Account {
 
 // Create transaction, creates a new and signed transaction, ready for processing
 func (k *KeyPair) CreateTx(receiver []byte, value *big.Int, data []string) *Transaction {
+	/* TODO
 	tx := NewTransaction(receiver, value, data)
 	tx.Nonce = k.account.Nonce
 
@@ -41,6 +52,8 @@ func (k *KeyPair) CreateTx(receiver []byte, value *big.Int, data []string) *Tran
 	tx.Sign(k.PrivateKey)
 
 	return tx
+	*/
+	return nil
 }
 
 func (k *KeyPair) RlpEncode() []byte {

@@ -113,11 +113,6 @@ func (block *Block) HashNoNonce() []byte {
 	return ethutil.Sha3Bin(ethutil.Encode([]interface{}{block.PrevHash, block.UncleSha, block.Coinbase, block.state.trie.Root, block.TxSha, block.Difficulty, block.Time, block.Extra}))
 }
 
-func (block *Block) PrintHash() {
-	fmt.Println(block)
-	fmt.Println(ethutil.NewValue(ethutil.Encode([]interface{}{block.PrevHash, block.UncleSha, block.Coinbase, block.state.trie.Root, block.TxSha, block.Difficulty, block.Time, block.Extra, block.Nonce})))
-}
-
 func (block *Block) State() *State {
 	return block.state
 }
@@ -142,12 +137,13 @@ func (block *Block) PayFee(addr []byte, fee *big.Int) bool {
 	data := block.state.trie.Get(string(block.Coinbase))
 
 	// Get the ether (Coinbase) and add the fee (gief fee to miner)
-	ether := NewAccountFromData(block.Coinbase, []byte(data))
+	account := NewStateObjectFromBytes(block.Coinbase, []byte(data))
 
 	base = new(big.Int)
-	ether.Amount = base.Add(ether.Amount, fee)
+	account.Amount = base.Add(account.Amount, fee)
 
-	block.state.trie.Update(string(block.Coinbase), string(ether.RlpEncode()))
+	//block.state.trie.Update(string(block.Coinbase), string(ether.RlpEncode()))
+	block.state.UpdateStateObject(account)
 
 	return true
 }
@@ -178,26 +174,6 @@ func (block *Block) MakeContract(tx *Transaction) {
 }
 
 /////// Block Encoding
-func (block *Block) encodedUncles() interface{} {
-	uncles := make([]interface{}, len(block.Uncles))
-	for i, uncle := range block.Uncles {
-		uncles[i] = uncle.RlpEncode()
-	}
-
-	return uncles
-}
-
-func (block *Block) encodedTxs() interface{} {
-	// Marshal the transactions of this block
-	encTx := make([]interface{}, len(block.transactions))
-	for i, tx := range block.transactions {
-		// Cast it to a string (safe)
-		encTx[i] = tx.RlpData()
-	}
-
-	return encTx
-}
-
 func (block *Block) rlpTxs() interface{} {
 	// Marshal the transactions of this block
 	encTx := make([]interface{}, len(block.transactions))
@@ -303,6 +279,9 @@ func NewUncleBlockFromValue(header *ethutil.Value) *Block {
 
 func (block *Block) String() string {
 	return fmt.Sprintf("Block(%x):\nPrevHash:%x\nUncleSha:%x\nCoinbase:%x\nRoot:%x\nTxSha:%x\nDiff:%v\nTime:%d\nNonce:%x\nTxs:%d\n", block.Hash(), block.PrevHash, block.UncleSha, block.Coinbase, block.state.trie.Root, block.TxSha, block.Difficulty, block.Time, block.Nonce, len(block.transactions))
+}
+func (block *Block) GetRoot() interface{} {
+	return block.state.trie.Root
 }
 
 //////////// UNEXPORTED /////////////////

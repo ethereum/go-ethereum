@@ -11,7 +11,7 @@ import (
 )
 
 type PoW interface {
-	Search(block *Block) []byte
+	Search(block *Block, reactChan chan ethutil.React) []byte
 	Verify(hash []byte, diff *big.Int, nonce []byte) bool
 }
 
@@ -19,15 +19,30 @@ type EasyPow struct {
 	hash *big.Int
 }
 
-func (pow *EasyPow) Search(block *Block) []byte {
+func (pow *EasyPow) Search(block *Block, reactChan chan ethutil.React) []byte {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
 	hash := block.HashNoNonce()
 	diff := block.Difficulty
+	i := int64(0)
+	start := time.Now().UnixNano()
+
 	for {
-		sha := ethutil.Sha3Bin(big.NewInt(r.Int63()).Bytes())
-		if pow.Verify(hash, diff, sha) {
-			return sha
+		select {
+		case <-reactChan:
+			log.Println("[POW] Received reactor event; breaking out.")
+			return nil
+		default:
+			i++
+			if i%1234567 == 0 {
+				elapsed := time.Now().UnixNano() - start
+				hashes := ((float64(1e9) / float64(elapsed)) * float64(i)) / 1000
+				log.Println("[POW] Hashing @", int64(hashes), "khash")
+			}
+
+			sha := ethutil.Sha3Bin(big.NewInt(r.Int63()).Bytes())
+			if pow.Verify(hash, diff, sha) {
+				return sha
+			}
 		}
 	}
 
@@ -98,9 +113,9 @@ func (dag *Dagger) Search(hash, diff *big.Int) *big.Int {
 
 	for k := 0; k < amountOfRoutines; k++ {
 		go dag.Find(obj, resChan)
-	}
 
-	// Wait for each go routine to finish
+		// Wait for each go routine to finish
+	}
 	for k := 0; k < amountOfRoutines; k++ {
 		// Get the result from the channel. 0 = quit
 		if r := <-resChan; r != 0 {

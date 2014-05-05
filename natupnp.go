@@ -246,6 +246,10 @@ func soapRequest(url, function, message string) (r *http.Response, err error) {
 	//fmt.Println(fullMessage)
 
 	r, err = http.DefaultClient.Do(req)
+	if err != nil {
+		return
+	}
+
 	if r.Body != nil {
 		defer r.Body.Close()
 	}

@@ -12,7 +12,9 @@ var BigTrue *big.Int = big.NewInt(1)
 // False
 var BigFalse *big.Int = big.NewInt(0)
 
-// Returns the power of two integers
+// Big pow
+//
+// Returns the power of two big integers
 func BigPow(a, b int) *big.Int {
 	c := new(big.Int)
 	c.Exp(big.NewInt(int64(a)), big.NewInt(int64(b)), big.NewInt(0))
@@ -20,7 +22,9 @@ func BigPow(a, b int) *big.Int {
 	return c
 }
 
-// Like big.NewInt(uint64); this takes a string instead.
+// Big
+//
+// Shortcut for new(big.Int).SetString(..., 0)
 func Big(num string) *big.Int {
 	n := new(big.Int)
 	n.SetString(num, 0)
@@ -28,7 +32,9 @@ func Big(num string) *big.Int {
 	return n
 }
 
-// Like big.NewInt(uint64); this takes a byte buffer instead.
+// BigD
+//
+// Shortcut for new(big.Int).SetBytes(...)
 func BigD(data []byte) *big.Int {
 	n := new(big.Int)
 	n.SetBytes(data)
@@ -36,17 +42,30 @@ func BigD(data []byte) *big.Int {
 	return n
 }
 
+// Big to bytes
+//
+// Returns the bytes of a big integer with the size specified by **base**
+// Attempts to pad the byte array with zeros.
 func BigToBytes(num *big.Int, base int) []byte {
 	ret := make([]byte, base/8)
 
 	return append(ret[:len(ret)-len(num.Bytes())], num.Bytes()...)
 }
 
-// Functions like the build in "copy" function
-// but works on big integers
-func BigCopy(src *big.Int) (ret *big.Int) {
-	ret = new(big.Int)
-	ret.Add(ret, src)
+// Big copy
+//
+// Creates a copy of the given big integer
+func BigCopy(src *big.Int) *big.Int {
+	return new(big.Int).Set(src)
+}
 
-	return
+// Big max
+//
+// Returns the maximum size big integer
+func BigMax(x, y *big.Int) *big.Int {
+	if x.Cmp(y) <= 0 {
+		return x
+	}
+
+	return y
 }

@@ -2,6 +2,7 @@ package ethutil
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
@@ -53,6 +54,15 @@ func TestValue(t *testing.T) {
 	if value.Get(3).Uint() != 1 {
 		t.Errorf("expected '%v', got '%v'", value.Get(3).Uint(), 1)
 	}
+}
+
+func TestEncodeDecodeMaran(t *testing.T) {
+	b := NewValue([]interface{}{"dog", 15, []interface{}{"cat", "cat", []interface{}{}}, 1024, "tachikoma"})
+	a := b.Encode()
+	fmt.Println("voor maran", a)
+	f, i := Decode(a, 0)
+	fmt.Println("voor maran 2", f)
+	fmt.Println(i)
 }
 
 func TestEncode(t *testing.T) {
@@ -117,6 +127,11 @@ func TestEncodeDecodeBytes(t *testing.T) {
 	if !b.Cmp(val) {
 		t.Errorf("Expected %v, got %v", val, b)
 	}
+}
+
+func TestEncodeZero(t *testing.T) {
+	b := NewValue(0).Encode()
+	fmt.Println(b)
 }
 
 func BenchmarkEncodeDecode(b *testing.B) {

@@ -34,12 +34,12 @@ func (s *State) Reset() {
 
 // Syncs the trie and all siblings
 func (s *State) Sync() {
-	s.trie.Sync()
-
 	// Sync all nested states
 	for _, state := range s.states {
 		state.Sync()
 	}
+
+	s.trie.Sync()
 }
 
 // Purges the current trie.
@@ -47,23 +47,15 @@ func (s *State) Purge() int {
 	return s.trie.NewIterator().Purge()
 }
 
-func (s *State) GetContract(addr []byte) *Contract {
+// XXX Deprecated
+func (s *State) GetContract(addr []byte) *StateObject {
 	data := s.trie.Get(string(addr))
 	if data == "" {
 		return nil
 	}
 
-	// Whet get contract is called the retrieved value might
-	// be an account. The StateManager uses this to check
-	// to see if the address a tx was sent to is a contract
-	// or an account
-	value := ethutil.NewValueFromBytes([]byte(data))
-	if value.Len() == 2 {
-		return nil
-	}
-
 	// build contract
-	contract := NewContractFromBytes(addr, []byte(data))
+	contract := NewStateObjectFromBytes(addr, []byte(data))
 
 	// Check if there's a cached state for this contract
 	cachedState := s.states[string(addr)]
@@ -77,26 +69,41 @@ func (s *State) GetContract(addr []byte) *Contract {
 	return contract
 }
 
-func (s *State) UpdateContract(contract *Contract) {
-	addr := contract.Address()
+func (s *State) GetStateObject(addr []byte) *StateObject {
+	data := s.trie.Get(string(addr))
+	if data == "" {
+		return nil
+	}
 
-	s.states[string(addr)] = contract.state
-	s.trie.Update(string(addr), string(contract.RlpEncode()))
+	stateObject := NewStateObjectFromBytes(addr, []byte(data))
+
+	// Check if there's a cached state for this contract
+	cachedStateObject := s.states[string(addr)]
+	if cachedStateObject != nil {
+		stateObject.state = cachedStateObject
+	} else {
+		// If it isn't cached, cache the state
+		s.states[string(addr)] = stateObject.state
+	}
+
+	return stateObject
 }
 
-func (s *State) GetAccount(addr []byte) (account *Account) {
+func (s *State) SetStateObject(stateObject *StateObject) {
+	s.states[string(stateObject.address)] = stateObject.state
+
+	s.UpdateStateObject(stateObject)
+}
+
+func (s *State) GetAccount(addr []byte) (account *StateObject) {
 	data := s.trie.Get(string(addr))
 	if data == "" {
 		account = NewAccount(addr, big.NewInt(0))
 	} else {
-		account = NewAccountFromData(addr, []byte(data))
+		account = NewStateObjectFromBytes(addr, []byte(data))
 	}
 
 	return
-}
-
-func (s *State) UpdateAccount(addr []byte, account *Account) {
-	s.trie.Update(string(addr), string(account.RlpEncode()))
 }
 
 func (s *State) Cmp(other *State) bool {
@@ -117,9 +124,10 @@ const (
 	UnknownTy
 )
 
+/*
 // Returns the object stored at key and the type stored at key
 // Returns nil if nothing is stored
-func (s *State) Get(key []byte) (*ethutil.Value, ObjType) {
+func (s *State) GetStateObject(key []byte) (*ethutil.Value, ObjType) {
 	// Fetch data from the trie
 	data := s.trie.Get(string(key))
 	// Returns the nil type, indicating nothing could be retrieved.
@@ -144,6 +152,18 @@ func (s *State) Get(key []byte) (*ethutil.Value, ObjType) {
 
 	return val, typ
 }
+*/
+
+// Updates any given state object
+func (s *State) UpdateStateObject(object *StateObject) {
+	addr := object.Address()
+
+	if object.state != nil {
+		s.states[string(addr)] = object.state
+	}
+
+	s.trie.Update(string(addr), string(object.RlpEncode()))
+}
 
 func (s *State) Put(key, object []byte) {
 	s.trie.Update(string(key), string(object))
@@ -151,28 +171,4 @@ func (s *State) Put(key, object []byte) {
 
 func (s *State) Root() interface{} {
 	return s.trie.Root
-}
-
-// Script compilation functions
-// Compiles strings to machine code
-func Compile(code []string) (script []string) {
-	script = make([]string, len(code))
-	for i, val := range code {
-		instr, _ := ethutil.CompileInstr(val)
-
-		script[i] = string(instr)
-	}
-
-	return
-}
-
-func CompileToValues(code []string) (script []*ethutil.Value) {
-	script = make([]*ethutil.Value, len(code))
-	for i, val := range code {
-		instr, _ := ethutil.CompileInstr(val)
-
-		script[i] = ethutil.NewValue(instr)
-	}
-
-	return
 }

@@ -26,16 +26,6 @@ func (coder *RlpEncoder) EncodeData(rlpData interface{}) []byte {
 	return Encode(rlpData)
 }
 
-/*
-func FromBin(data []byte) uint64 {
-	if len(data) == 0 {
-		return 0
-	}
-
-	return FromBin(data[:len(data)-1])*256 + uint64(data[len(data)-1])
-}
-*/
-
 const (
 	RlpEmptyList = 0x80
 	RlpEmptyStr  = 0x40
@@ -57,7 +47,7 @@ func DecodeWithReader(reader *bytes.Buffer) interface{} {
 	switch {
 	case char == 0:
 		return nil
-	case char <= 0x7c:
+	case char <= 0x7f:
 		return char
 
 	case char <= 0xb7:
@@ -186,7 +176,12 @@ func Encode(object interface{}) []byte {
 		case byte:
 			buff.Write(Encode(big.NewInt(int64(t))))
 		case *big.Int:
-			buff.Write(Encode(t.Bytes()))
+			// Not sure how this is possible while we check for
+			if t == nil {
+				buff.WriteByte(0xc0)
+			} else {
+				buff.Write(Encode(t.Bytes()))
+			}
 		case []byte:
 			if len(t) == 1 && t[0] <= 0x7f {
 				buff.Write(t)
