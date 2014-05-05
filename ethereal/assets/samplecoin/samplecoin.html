@@ -5,9 +5,11 @@
 <link rel="stylesheet" href="bootstrap.min.css">
 <link rel="stylesheet" href="bootstrap-theme.min.css">
 <link rel="stylesheet" href="samplecoin.css">
+<script src="promise.min.js"></script>
 <meta name="viewport" content="minimum-scale=1; maximum-scale=1; initial-scale=1;">
 
 <script type="text/javascript">
+
 var jefcoinAddr = "3dff537f51350239abc95c76a5864aa605259e7d"
 var mAddr = ""
 
@@ -17,12 +19,12 @@ function createTransaction() {
 
 	var data = (("0x"+addr).pad(32) + amount.pad(32)).unbin()
 	eth.transact(mAddr, jefcoinAddr, 0, "10000000", "250", data, function(receipt) {
-		debug("received tx hash:", receipt)
+		debug("received tx hash:", reciept.address)
 	})
 }
 
 function init() {
-	eth.set({width: 500})
+	eth.set({width: 500});
 
 	eth.getKey(function(keyPair) {
 		mAddr = keyPair.privateKey;
@@ -31,10 +33,8 @@ function init() {
 			document.querySelector("#current-amount").innerHTML = storage;
 		});
 
-		eth.watch(jefcoinAddr, function(stateObject) {
-			eth.getStorageAt(jefcoinAddr, keyPair.address, function(storage) {
-				document.querySelector("#current-amount").innerHTML = storage;
-			});
+		eth.watch(jefcoinAddr, keyPair.address, function(addr, value) {
+			document.querySelector("#current-amount").innerHTML = value
 		});
 	});
 }

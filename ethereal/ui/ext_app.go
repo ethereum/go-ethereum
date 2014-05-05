@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/go-qml/qml"
-	"math/big"
 )
 
 type AppContainer interface {
@@ -18,7 +17,7 @@ type AppContainer interface {
 
 	NewBlock(*ethchain.Block)
 	ObjectChanged(*ethchain.StateObject)
-	StorageChanged(*ethchain.StateObject, []byte, *big.Int)
+	StorageChanged(*ethchain.StorageState)
 }
 
 type ExtApplication struct {
@@ -105,8 +104,8 @@ out:
 		case object := <-app.changeChan:
 			if stateObject, ok := object.Resource.(*ethchain.StateObject); ok {
 				app.container.ObjectChanged(stateObject)
-			} else if _, ok := object.Resource.(*big.Int); ok {
-				//
+			} else if storageObject, ok := object.Resource.(*ethchain.StorageState); ok {
+				app.container.StorageChanged(storageObject)
 			}
 		}
 	}

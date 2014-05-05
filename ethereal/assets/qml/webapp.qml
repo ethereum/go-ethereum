@@ -41,7 +41,7 @@ ApplicationWindow {
 			experimental.preferences.developerExtrasEnabled: true
 			experimental.userScripts: [ui.assetPath("ethereum.js")]
 			experimental.onMessageReceived: {
-				//console.log("[onMessageReceived]: ", message.data)
+				console.log("[onMessageReceived]: ", message.data)
 				// TODO move to messaging.js
 				var data = JSON.parse(message.data)
 
@@ -98,6 +98,15 @@ ApplicationWindow {
 								window[key] = data.args[key];
 							}
 						}
+						break;
+					case "debug":
+						console.log(data.args[0]);
+						break;
+					case "test":
+						console.log("in")
+						webview.experimental.evaluateJavaScript("hello()")
+						console.log("out")
+						break;
 					}
 				} catch(e) {
 					console.log(data.call + ": " + e)
@@ -124,7 +133,10 @@ ApplicationWindow {
 			function onObjectChangeCb(stateObject) {
 				postEvent("object:"+stateObject.address(), stateObject)
 			}
-			function onStorageChangeCb() {
+			function onStorageChangeCb(storageObject) {
+				console.log("storage object cb", storageObject)
+				var ev = ["storage", storageObject.stateAddress, storageObject.address].join(":");
+				postEvent(ev, [storageObject.address, storageObject.value])
 			}
 		}
 

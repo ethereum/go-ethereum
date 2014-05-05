@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/go-qml/qml"
-	"math/big"
 	"path/filepath"
 )
 
@@ -65,8 +64,8 @@ func (app *HtmlApplication) ObjectChanged(stateObject *ethchain.StateObject) {
 	app.webView.Call("onObjectChangeCb", ethpub.NewPStateObject(stateObject))
 }
 
-func (app *HtmlApplication) StorageChanged(stateObject *ethchain.StateObject, addr []byte, value *big.Int) {
-	app.webView.Call("onStorageChangeCb", nil)
+func (app *HtmlApplication) StorageChanged(storageObject *ethchain.StorageState) {
+	app.webView.Call("onStorageChangeCb", ethpub.NewPStorageState(storageObject))
 }
 
 func (app *HtmlApplication) Destroy() {
