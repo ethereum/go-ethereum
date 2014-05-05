@@ -5,7 +5,7 @@ Ethereum
 
 Ethereum Go Client © 2014 Jeffrey Wilcke.
 
-Current state: Proof of Concept 5.0.
+Current state: Proof of Concept 5.0 RC1.
 
 For the development package please see the [eth-go package](https://github.com/ethereum/eth-go).
 
@@ -33,6 +33,7 @@ General command line options
 -upnp    Enable UPnP (= false)
 -x       Desired amount of peers (= 5)
 -h       This help
+-r       Start JSON RPC
 -dir     Data directory used to store configs and databases (=".ethereum")
 -import  Import a private key (hex)
 ```
