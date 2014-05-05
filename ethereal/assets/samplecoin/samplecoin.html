@@ -26,15 +26,17 @@ function createTransaction() {
 function init() {
 	eth.set({width: 500});
 
-	eth.getKey(function(keyPair) {
-		mAddr = keyPair.privateKey;
+	eth.getKey(function(sec) {
+		eth.getSecretToAddress(sec, function(addr) {
+			mAddr = addr;
 
-		eth.getStorageAt(jefcoinAddr, keyPair.address, function(storage) {
-			document.querySelector("#current-amount").innerHTML = storage;
-		});
+			eth.getStorageAt(jefcoinAddr, addr, function(storage) {
+				document.querySelector("#current-amount").innerHTML = storage;
+			});
 
-		eth.watch(jefcoinAddr, keyPair.address, function(addr, value) {
-			document.querySelector("#current-amount").innerHTML = value
+			eth.watch(jefcoinAddr, addr, function(addr, value) {
+				document.querySelector("#current-amount").innerHTML = value
+			});
 		});
 	});
 }

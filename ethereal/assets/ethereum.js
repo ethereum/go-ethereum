@@ -36,9 +36,12 @@ window.eth = {
 		postData({call: "getKey"}, cb);
 	},
 
-
 	getBalanceAt: function(address, cb) {
 		postData({call: "getBalance", args: [address]}, cb);
+	},
+
+	getSecretToAddress: function(sec, cb) {
+		postData({call: "getSecretToAddress", args: [sec]}, cb);
 	},
 
 	watch: function(address, storageAddrOrCb, cb) {

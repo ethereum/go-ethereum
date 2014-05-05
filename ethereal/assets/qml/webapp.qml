@@ -81,8 +81,9 @@ ApplicationWindow {
 
 						break
 					case "getKey":
-						var keys = eth.getKey()
-						postData(data._seed, keys)
+						var key = eth.getKey().privateKey;
+
+						postData(data._seed, key)
 						break
 					case "watch":
 						require(1)
@@ -99,13 +100,12 @@ ApplicationWindow {
 							}
 						}
 						break;
+					case "getSecretToAddress":
+						require(1)
+						postData(data._seed, eth.secretToAddress(data.args[0]))
+						break;
 					case "debug":
 						console.log(data.args[0]);
-						break;
-					case "test":
-						console.log("in")
-						webview.experimental.evaluateJavaScript("hello()")
-						console.log("out")
 						break;
 					}
 				} catch(e) {
@@ -134,7 +134,6 @@ ApplicationWindow {
 				postEvent("object:"+stateObject.address(), stateObject)
 			}
 			function onStorageChangeCb(storageObject) {
-				console.log("storage object cb", storageObject)
 				var ev = ["storage", storageObject.stateAddress, storageObject.address].join(":");
 				postEvent(ev, [storageObject.address, storageObject.value])
 			}
