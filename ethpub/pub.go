@@ -106,9 +106,9 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, in
 		var initScript, mainScript []byte
 		var err error
 		if ethutil.IsHex(initStr) {
-			initScript = ethutil.FromHex(initStr)
+			initScript = ethutil.FromHex(initStr[2:])
 		} else {
-			initScript, err = ethutil.Compile(initStr[2:])
+			initScript, err = ethutil.Compile(initStr)
 			if err != nil {
 				return nil, err
 			}
