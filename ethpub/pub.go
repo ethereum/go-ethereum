@@ -24,7 +24,15 @@ func (lib *PEthereum) GetBlock(hexHash string) *PBlock {
 
 	block := lib.blockChain.GetBlock(hash)
 
-	return &PBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Hex(block.Hash())}
+	var blockInfo *PBlock
+
+	if block != nil {
+		blockInfo = &PBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Hex(block.Hash())}
+	} else {
+		blockInfo = &PBlock{Number: -1, Hash: ""}
+	}
+
+	return blockInfo
 }
 
 func (lib *PEthereum) GetKey() *PKey {
