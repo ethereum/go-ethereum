@@ -59,6 +59,15 @@ func (lib *PEthereum) IsContract(address string) bool {
 	return lib.GetStateObject(address).IsContract()
 }
 
+func (lib *PEthereum) SecretToAddress(key string) string {
+	pair, err := ethchain.NewKeyPairFromSec(ethutil.FromHex(key))
+	if err != nil {
+		return ""
+	}
+
+	return ethutil.Hex(pair.Address())
+}
+
 func (lib *PEthereum) Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr string) (*PReceipt, error) {
 	return lib.createTx(key, recipient, valueStr, gasStr, gasPriceStr, dataStr, "")
 }
