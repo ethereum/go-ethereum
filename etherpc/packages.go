@@ -115,9 +115,6 @@ func (a *NewTxArgs) requirementsContract() error {
 	if a.GasPrice == "" {
 		return NewErrorResponse("Create requires a 'gasprice' value as argument")
 	}
-	if a.Init == "" {
-		return NewErrorResponse("Create requires a 'init' value as argument")
-	}
 	if a.Body == "" {
 		return NewErrorResponse("Create requires a 'body' value as argument")
 	}
@@ -144,7 +141,8 @@ func (p *MainPackage) Create(args *NewTxArgs, reply *string) error {
 	return nil
 }
 
-func (p *MainPackage) getKey(args interface{}, reply *string) error {
+func (p *MainPackage) GetKey(args interface{}, reply *string) error {
+	*reply = NewSuccessRes(p.ethp.GetKey())
 	return nil
 }
 
@@ -163,11 +161,20 @@ func (a *GetStorageArgs) requirements() error {
 	return nil
 }
 
-func (p *MainPackage) getStorageAt(args *GetStorageArgs, reply *string) error {
+type GetStorageAtRes struct {
+	Key     string `json:"key"`
+	Value   string `json:"value"`
+	Address string `json:"address"`
+}
+
+func (p *MainPackage) GetStorageAt(args *GetStorageArgs, reply *string) error {
 	err := args.requirements()
 	if err != nil {
 		return err
 	}
+	state := p.ethp.GetStateObject(args.Address)
+	value := state.GetStorage(args.Key)
+	*reply = NewSuccessRes(&GetStorageAtRes{Address: args.Address, Key: args.Key, Value: value})
 	return nil
 }
 
