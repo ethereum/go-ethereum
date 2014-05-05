@@ -35,7 +35,7 @@ type ExtApplication struct {
 
 func NewExtApplication(container AppContainer, lib *UiLib) *ExtApplication {
 	app := &ExtApplication{
-		ethpub.NewPEthereum(lib.eth),
+		ethpub.NewPEthereum(lib.eth.StateManager(), lib.eth.BlockChain(), lib.eth.TxPool()),
 		make(chan ethutil.React, 1),
 		make(chan ethutil.React, 1),
 		make(chan bool),

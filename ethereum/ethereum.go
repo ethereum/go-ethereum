@@ -134,10 +134,8 @@ func main() {
 		go console.Start()
 	}
 	if StartRpc {
-		// TODO: Can we make this work again?
-		//ethereum.RpcServer = etherpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum))
-		rpc := etherpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum))
-		go rpc.Start()
+		ethereum.RpcServer = etherpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum.StateManager(), ethereum.BlockChain(), ethereum.TxPool()))
+		go ethereum.RpcServer.Start()
 	}
 
 	RegisterInterrupts(ethereum)

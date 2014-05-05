@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/etherpc"
+	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/ethereal/ui"
 	"github.com/ethereum/go-ethereum/utils"
@@ -96,6 +98,11 @@ func main() {
 	if ShowGenesis {
 		fmt.Println(ethereum.BlockChain().Genesis())
 		os.Exit(0)
+	}
+
+	if StartRpc {
+		ethereum.RpcServer = etherpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum.StateManager(), ethereum.BlockChain(), ethereum.TxPool()))
+		go ethereum.RpcServer.Start()
 	}
 
 	log.Printf("Starting Ethereum GUI v%s\n", ethutil.Config.Ver)
