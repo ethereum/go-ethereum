@@ -41,7 +41,7 @@ ApplicationWindow {
 			experimental.preferences.developerExtrasEnabled: true
 			experimental.userScripts: [ui.assetPath("ethereum.js")]
 			experimental.onMessageReceived: {
-				//console.log("[onMessageReceived]: ", message.data)
+				console.log("[onMessageReceived]: ", message.data)
 				// TODO move to messaging.js
 				var data = JSON.parse(message.data)
 
@@ -81,8 +81,9 @@ ApplicationWindow {
 
 						break
 					case "getKey":
-						var keys = eth.getKey()
-						postData(data._seed, keys)
+						var key = eth.getKey().privateKey;
+
+						postData(data._seed, key)
 						break
 					case "watch":
 						require(1)
@@ -98,6 +99,14 @@ ApplicationWindow {
 								window[key] = data.args[key];
 							}
 						}
+						break;
+					case "getSecretToAddress":
+						require(1)
+						postData(data._seed, eth.secretToAddress(data.args[0]))
+						break;
+					case "debug":
+						console.log(data.args[0]);
+						break;
 					}
 				} catch(e) {
 					console.log(data.call + ": " + e)
@@ -124,7 +133,9 @@ ApplicationWindow {
 			function onObjectChangeCb(stateObject) {
 				postEvent("object:"+stateObject.address(), stateObject)
 			}
-			function onStorageChangeCb() {
+			function onStorageChangeCb(storageObject) {
+				var ev = ["storage", storageObject.stateAddress, storageObject.address].join(":");
+				postEvent(ev, [storageObject.address, storageObject.value])
 			}
 		}
 

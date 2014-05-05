@@ -40,6 +40,10 @@ window.eth = {
 		postData({call: "getBalance", args: [address]}, cb);
 	},
 
+	getSecretToAddress: function(sec, cb) {
+		postData({call: "getSecretToAddress", args: [sec]}, cb);
+	},
+
 	watch: function(address, storageAddrOrCb, cb) {
 		var ev;
 		if(cb === undefined) {
@@ -101,13 +105,24 @@ window.eth = {
 		var callbacks = eth._onCallbacks[event];
 		if(callbacks !== undefined) {
 			for(var i = 0; i < callbacks.length; i++) {
-				callbacks[i](data);
+				// Figure out whether the returned data was an array
+				// array means multiple return arguments (multiple params)
+				if(data instanceof Array) {
+					callbacks[i].apply(this, data);
+				} else {
+					callbacks[i].call(this, data);
+				}
 			}
 		}
 	},
 }
 window.eth._callbacks = {}
 window.eth._onCallbacks = {}
+
+function hello() {
+	debug("hello")
+	window.dataTest = true;
+}
 
 function debug(/**/) {
 	var args = arguments;
@@ -120,6 +135,7 @@ function debug(/**/) {
 		}
 	}
 
+	postData({call:"debug", args:[msg]})
 	document.getElementById("debug").innerHTML += "<br>" + msg
 }
 
@@ -146,8 +162,14 @@ navigator.qt.onmessage = function(ev) {
 		if(data._seed) {
 			var cb = eth._callbacks[data._seed];
 			if(cb) {
-				// Call the callback
-				cb(data.data);
+				// Figure out whether the returned data was an array
+				// array means multiple return arguments (multiple params)
+				if(data.data instanceof Array) {
+					cb.apply(this, data.data)
+				} else {
+					cb.call(this, data.data)
+				}
+
 				// Remove the "trigger" callback
 				delete eth._callbacks[ev._seed];
 			}
@@ -211,3 +233,4 @@ String.prototype.hex2bin = function() {
 String.prototype.num2bin = function() {
     return ("0x"+parseInt(this).toString(16)).bin()
 }
+
