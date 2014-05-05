@@ -23,6 +23,11 @@ ApplicationWindow {
 				shortcut: "Ctrl+o"
 				onTriggered: openAppDialog.open()
 			}
+			MenuItem {
+				text: "Muted"
+				shortcut: "Ctrl+e"
+				onTriggered: ui.muted("")
+			}
 		}
 
 		Menu {
@@ -78,6 +83,7 @@ ApplicationWindow {
 			anchors.top: parent.top
 			//color: "#D9DDE7"
 			color: "#252525"
+
 
 			ColumnLayout {
 				y: 50
@@ -139,6 +145,7 @@ ApplicationWindow {
 					anchors.fill: parent
 					TableViewColumn{ role: "value" ; title: "Value" ; width: 100 }
 					TableViewColumn{ role: "address" ; title: "Address" ; width: 430 }
+					TableViewColumn{ role: "contract" ; title: "Contract" ; width: 100 }
 
 					model: txModel
 				}
@@ -150,44 +157,25 @@ ApplicationWindow {
 				visible: false
 				anchors.fill: parent
 				color: "#00000000"
-
-				ColumnLayout {
-					width: 400
-					anchors.left: parent.left
-					anchors.top: parent.top
+				TabView{
+					anchors.fill: parent
+					anchors.rightMargin: 5
 					anchors.leftMargin: 5
 					anchors.topMargin: 5
-					TextField {
-						id: txAmount
-						width: 200
-						placeholderText: "Amount"
-					}
+					anchors.bottomMargin: 5
+					id: newTransactionTab
+					Component.onCompleted:{
+						var component = Qt.createComponent("newTransaction/_simple_send.qml")
+						var newTransaction = component.createObject("newTransaction")
 
-					TextField {
-						id: txReceiver
-						placeholderText: "Receiver Address (or empty for contract)"
-						Layout.fillWidth: true
-					}
+						component = Qt.createComponent("newTransaction/_new_contract.qml")
+						var newContract = component.createObject("newContract")
 
-					Label {
-						text: "Transaction data"
-					}
-					TextArea {
-						id: codeView
-						anchors.topMargin: 5
-						Layout.fillWidth: true
-						width: parent.width /2 
-					}
-
-					Button {
-						text: "Send"
-						onClicked: {
-							console.log(eth.createTx(txReceiver.text, txAmount.text, codeView.text))
-						}
+						addTab("Simple send", newTransaction)
+						addTab("Contracts", newContract)
 					}
 				}
 			}
-
 
 			Rectangle {
 				id: networkView
@@ -230,26 +218,26 @@ ApplicationWindow {
 			}
 
 			/*
-			signal addPlugin(string name)
-			Component {
-				id: pluginWindow
-				Rectangle {
-					anchors.fill: parent
-					Label {
-						id: pluginTitle
-						anchors.centerIn: parent
-						text: "Hello world"
-					}
-					Component.onCompleted: setView(this)
-				}
-			}
+			 signal addPlugin(string name)
+			 Component {
+				 id: pluginWindow
+				 Rectangle {
+					 anchors.fill: parent
+					 Label {
+						 id: pluginTitle
+						 anchors.centerIn: parent
+						 text: "Hello world"
+					 }
+					 Component.onCompleted: setView(this)
+				 }
+			 }
 
-			onAddPlugin: {
-				var pluginWin = pluginWindow.createObject(mainView)
-				console.log(pluginWin)
-				pluginWin.pluginTitle.text = "Test"
-			}
-			*/
+			 onAddPlugin: {
+				 var pluginWin = pluginWindow.createObject(mainView)
+				 console.log(pluginWin)
+				 pluginWin.pluginTitle.text = "Test"
+			 }
+			 */
 		}
 	}
 
@@ -257,7 +245,10 @@ ApplicationWindow {
 		id: openAppDialog
 		title: "Open QML Application"
 		onAccepted: {
-			ui.open(openAppDialog.fileUrl.toString())
+			//ui.open(openAppDialog.fileUrl.toString())
+      //ui.openHtml(Qt.resolvedUrl(ui.assetPath("test.html")))
+      ui.openHtml(openAppDialog.fileUrl.toString())
+
 		}
 	}
 
@@ -374,9 +365,115 @@ ApplicationWindow {
 			anchors.left: aboutIcon.right
 			anchors.leftMargin: 10
 			font.pointSize: 12
-			text: "<h2>Ethereum(Go)</h2><br><h3>Development</h3>Jeffrey Wilcke<br><h3>Binary Distribution</h3>Jarrad Hope<br>"
+			text: "<h2>Ethereal</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Maran Hidskes<br><h3>Binary Distribution</h3>Jarrad Hope<br>"
 		}
 
+	}
+
+	Window {
+		id: debugWindow
+		visible: false
+		title: "Debugger"
+		minimumWidth: 600
+		minimumHeight: 600
+		width: 800
+		height: 600
+
+
+		Item {
+			id: keyHandler
+			focus: true
+			Keys.onPressed: {
+				if (event.key == Qt.Key_Space) {
+					ui.next()
+				}
+			}
+		}
+		SplitView {
+
+			anchors.fill: parent
+			property var asmModel: ListModel {
+				id: asmModel
+			}
+			TableView {
+				id: asmTableView
+				width: 200
+				TableViewColumn{ role: "value" ; title: "" ; width: 100 }
+				model: asmModel
+			}
+
+			Rectangle {
+				anchors.left: asmTableView.right
+				anchors.right: parent.right
+				SplitView {
+					orientation: Qt.Vertical
+					anchors.fill: parent
+
+          TableView {
+            property var memModel: ListModel {
+              id: memModel
+            }
+            height: parent.height/2
+            width: parent.width
+            TableViewColumn{ id:mnumColmn ; role: "num" ; title: "#" ; width: 50}
+            TableViewColumn{ role: "value" ; title: "Memory" ; width: 750}
+            model: memModel
+          }
+
+          SplitView {
+            orientation: Qt.Horizontal
+            TableView {
+              property var debuggerLog: ListModel {
+                id: debuggerLog
+              }
+              TableViewColumn{ role: "value"; title: "Debug messages" }
+              model: debuggerLog
+            }
+            TableView {
+              property var stackModel: ListModel {
+                id: stackModel
+              }
+              height: parent.height/2
+              width: parent.width
+              TableViewColumn{ role: "value" ; title: "Stack" ; width: parent.width }
+              model: stackModel
+            }
+          }
+				}
+			}
+		}
+	}
+
+	function setAsm(asm) {
+		asmModel.append({asm: asm})
+	}
+
+	function setInstruction(num) {
+		asmTableView.selection.clear()
+		asmTableView.selection.select(num-1)
+	}
+
+	function clearAsm() {
+		asmModel.clear()
+	}
+
+	function setMem(mem) {
+		memModel.append({num: mem.num, value: mem.value})
+	}
+	function clearMem(){
+		memModel.clear()
+	}
+
+	function setStack(stack) {
+		stackModel.append({value: stack})
+	}
+	function addDebugMessage(message){
+		console.log("WOOP:")
+		debuggerLog.append({value: message})
+	}
+
+	function clearStack() {
+		stackModel.clear()
 	}
 
 	function loadPlugin(name) {
@@ -389,7 +486,13 @@ ApplicationWindow {
 	}
 
 	function addTx(tx) {
-		txModel.insert(0, {hash: tx.hash, address: tx.address, value: tx.value})
+		var isContract
+		if (tx.contract == true){
+			isContract = "Yes"
+		}else{
+			isContract = "No"
+		}
+		txModel.insert(0, {hash: tx.hash, address: tx.address, value: tx.value, contract: isContract})
 	}
 
 	function addBlock(block) {

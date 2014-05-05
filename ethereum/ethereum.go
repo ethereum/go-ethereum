@@ -4,19 +4,22 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethminer"
+	"github.com/ethereum/eth-go/ethpub"
+	"github.com/ethereum/eth-go/ethrpc"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/eth-go/ethwire"
 	"github.com/ethereum/go-ethereum/utils"
 	"log"
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 )
 
 const Debug = true
 
 // Register interrupt handlers so we can stop the ethereum
-func RegisterInterupts(s *eth.Ethereum) {
+func RegisterInterrupts(s *eth.Ethereum) {
 	// Buffered chan of one is enough
 	c := make(chan os.Signal, 1)
 	// Notify about interrupts for now
@@ -24,10 +27,23 @@ func RegisterInterupts(s *eth.Ethereum) {
 	go func() {
 		for sig := range c {
 			fmt.Printf("Shutting down (%v) ... \n", sig)
-
 			s.Stop()
 		}
 	}()
+}
+
+func confirm(message string) bool {
+	fmt.Println(message, "Are you sure? (y/n)")
+	var r string
+	fmt.Scanln(&r)
+	for ; ; fmt.Scanln(&r) {
+		if r == "n" || r == "y" {
+			break
+		} else {
+			fmt.Printf("Yes or no?", r)
+		}
+	}
+	return r == "y"
 }
 
 func main() {
@@ -35,8 +51,28 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	ethchain.InitFees()
+	// set logger
+	var logSys *log.Logger
+	flags := log.LstdFlags
+
 	ethutil.ReadConfig(DataDir)
+	logger := ethutil.Config.Log
+
+	if LogFile != "" {
+		logfile, err := os.OpenFile(LogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		if err != nil {
+			panic(fmt.Sprintf("error opening log file '%s': %v", LogFile, err))
+		}
+		defer logfile.Close()
+		log.SetOutput(logfile)
+		logSys = log.New(logfile, "", flags)
+		logger.AddLogSystem(logSys)
+	}
+	/*else {
+		logSys = log.New(os.Stdout, "", flags)
+	}*/
+
+	ethchain.InitFees()
 	ethutil.Config.Seed = UseSeed
 
 	// Instantiated a eth stack
@@ -47,57 +83,42 @@ func main() {
 	}
 	ethereum.Port = OutboundPort
 
-	if GenAddr {
-		fmt.Println("This action overwrites your old private key. Are you sure? (y/n)")
-
-		var r string
-		fmt.Scanln(&r)
-		for ; ; fmt.Scanln(&r) {
-			if r == "n" || r == "y" {
-				break
-			} else {
-				fmt.Printf("Yes or no?", r)
-			}
-		}
-
-		if r == "y" {
+	// bookkeeping tasks
+	switch {
+	case GenAddr:
+		if NonInteractive || confirm("This action overwrites your old private key.") {
 			utils.CreateKeyPair(true)
 		}
 		os.Exit(0)
-	} else {
-		if len(ImportKey) > 0 {
-			fmt.Println("This action overwrites your old private key. Are you sure? (y/n)")
-			var r string
-			fmt.Scanln(&r)
-			for ; ; fmt.Scanln(&r) {
-				if r == "n" || r == "y" {
-					break
-				} else {
-					fmt.Printf("Yes or no?", r)
-				}
-			}
-
-			if r == "y" {
+	case len(ImportKey) > 0:
+		if NonInteractive || confirm("This action overwrites your old private key.") {
+			mnemonic := strings.Split(ImportKey, " ")
+			if len(mnemonic) == 24 {
+				logSys.Println("Got mnemonic key, importing.")
+				key := ethutil.MnemonicDecode(mnemonic)
+				utils.ImportPrivateKey(key)
+			} else if len(mnemonic) == 1 {
+				logSys.Println("Got hex key, importing.")
 				utils.ImportPrivateKey(ImportKey)
-				os.Exit(0)
+			} else {
+				logSys.Println("Did not recognise format, exiting.")
 			}
-		} else {
-			utils.CreateKeyPair(false)
 		}
-	}
-
-	if ExportKey {
+		os.Exit(0)
+	case ExportKey:
 		key := ethutil.Config.Db.GetKeys()[0]
-		fmt.Printf("%x\n", key.PrivateKey)
+		logSys.Println(fmt.Sprintf("prvk: %x\n", key.PrivateKey))
 		os.Exit(0)
+	case ShowGenesis:
+		logSys.Println(ethereum.BlockChain().Genesis())
+		os.Exit(0)
+	default:
+		// Creates a keypair if non exists
+		utils.CreateKeyPair(false)
 	}
 
-	if ShowGenesis {
-		fmt.Println(ethereum.BlockChain().Genesis())
-		os.Exit(0)
-	}
-
-	log.Printf("Starting Ethereum v%s\n", ethutil.Config.Ver)
+	// client
+	logger.Infoln(fmt.Sprintf("Starting Ethereum v%s", ethutil.Config.Ver))
 
 	// Set the max peers
 	ethereum.MaxPeers = MaxPeer
@@ -112,45 +133,35 @@ func main() {
 		console := NewConsole(ethereum)
 		go console.Start()
 	}
+	if StartRpc {
+		ethereum.RpcServer = ethrpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum.StateManager(), ethereum.BlockChain(), ethereum.TxPool()))
+		go ethereum.RpcServer.Start()
+	}
 
-	RegisterInterupts(ethereum)
+	RegisterInterrupts(ethereum)
 	ethereum.Start()
 
 	if StartMining {
-		log.Printf("Miner started\n")
+		logger.Infoln("Miner started")
 
 		// Fake block mining. It broadcasts a new block every 5 seconds
 		go func() {
-			pow := &ethchain.EasyPow{}
-			data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-			keyRing := ethutil.NewValueFromBytes(data)
-			addr := keyRing.Get(1).Bytes()
 
-			for {
-				txs := ethereum.TxPool().Flush()
-				// Create a new block which we're going to mine
-				block := ethereum.BlockChain().NewBlock(addr, txs)
-				log.Println("Mining on new block. Includes", len(block.Transactions()), "transactions")
-				// Apply all transactions to the block
-				ethereum.StateManager().ApplyTransactions(block, block.Transactions())
+			if StartMining {
+				logger.Infoln("Miner started")
 
-				ethereum.StateManager().Prepare(block.State(), block.State())
-				ethereum.StateManager().AccumelateRewards(block)
+				go func() {
+					data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
+					keyRing := ethutil.NewValueFromBytes(data)
+					addr := keyRing.Get(1).Bytes()
 
-				// Search the nonce
-				block.Nonce = pow.Search(block)
-				ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
+					miner := ethminer.NewDefaultMiner(addr, ethereum)
+					miner.Start()
 
-				ethereum.StateManager().PrepareDefault(block)
-				err := ethereum.StateManager().ProcessBlock(block)
-				if err != nil {
-					log.Println(err)
-				} else {
-					log.Println("\n+++++++ MINED BLK +++++++\n", ethereum.BlockChain().CurrentBlock)
-					log.Printf("🔨  Mined block %x\n", block.Hash())
-				}
+				}()
 			}
 		}()
+
 	}
 
 	// Wait for shutdown

@@ -2,41 +2,16 @@ package ethui
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethdb"
+	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/niemeyer/qml"
+	"github.com/go-qml/qml"
 	"math/big"
 	"strings"
 )
-
-// Block interface exposed to QML
-type Block struct {
-	Number int
-	Hash   string
-}
-
-type Tx struct {
-	Value, Hash, Address string
-}
-
-func NewTxFromTransaction(tx *ethchain.Transaction) *Tx {
-	hash := hex.EncodeToString(tx.Hash())
-	sender := hex.EncodeToString(tx.Recipient)
-
-	return &Tx{Hash: hash, Value: ethutil.CurrencyToString(tx.Value), Address: sender}
-}
-
-// Creates a new QML Block from a chain block
-func NewBlockFromBlock(block *ethchain.Block) *Block {
-	info := block.BlockInfo()
-	hash := hex.EncodeToString(block.Hash())
-
-	return &Block{Number: int(info.Number), Hash: hash}
-}
 
 type Gui struct {
 	// The main application window
@@ -53,7 +28,6 @@ type Gui struct {
 	txDb *ethdb.LDBDatabase
 
 	addr []byte
-
 }
 
 // Create GUI, but doesn't start it
@@ -64,10 +38,16 @@ func New(ethereum *eth.Ethereum) *Gui {
 		panic(err)
 	}
 
-	key := ethutil.Config.Db.GetKeys()[0]
-	addr := key.Address()
+	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
+	// On first run we won't have any keys yet, so this would crash.
+	// Therefor we check if we are ready to actually start this process
+	var addr []byte
+	if len(data) > 0 {
+		key := ethutil.Config.Db.GetKeys()[0]
+		addr = key.Address()
 
-	ethereum.StateManager().WatchAddr(addr)
+		ethereum.StateManager().WatchAddr(addr)
+	}
 
 	return &Gui{eth: ethereum, lib: lib, txDb: db, addr: addr}
 }
@@ -77,12 +57,12 @@ func (ui *Gui) Start(assetPath string) {
 
 	// Register ethereum functions
 	qml.RegisterTypes("Ethereum", 1, 0, []qml.TypeSpec{{
-		Init: func(p *Block, obj qml.Object) { p.Number = 0; p.Hash = "" },
+		Init: func(p *ethpub.PBlock, obj qml.Object) { p.Number = 0; p.Hash = "" },
 	}, {
-		Init: func(p *Tx, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
+		Init: func(p *ethpub.PTx, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
 	}})
 
-	ethutil.Config.SetClientString(fmt.Sprintf("/Ethereal v%s", "0.1"))
+	ethutil.Config.SetClientString(fmt.Sprintf("/Ethereal v%s", "0.2"))
 	ethutil.Config.Log.Infoln("[GUI] Starting GUI")
 	// Create a new QML engine
 	ui.engine = qml.NewEngine()
@@ -94,14 +74,27 @@ func (ui *Gui) Start(assetPath string) {
 	context.SetVar("ui", uiLib)
 
 	// Load the main QML interface
-	component, err := ui.engine.LoadFile(uiLib.AssetPath("qml/wallet.qml"))
+	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
+	var err error
+	var component qml.Object
+	firstRun := len(data) == 0
+
+	if firstRun {
+		component, err = ui.engine.LoadFile(uiLib.AssetPath("qml/first_run.qml"))
+	} else {
+		component, err = ui.engine.LoadFile(uiLib.AssetPath("qml/wallet.qml"))
+	}
 	if err != nil {
-   	ethutil.Config.Log.Infoln("FATAL: asset not found: you can set an alternative asset path on on the command line using option 'asset_path'")
+		ethutil.Config.Log.Infoln("FATAL: asset not found: you can set an alternative asset path on on the command line using option 'asset_path'")
+
 		panic(err)
 	}
-	ui.engine.LoadFile(uiLib.AssetPath("qml/transactions.qml"))
 
 	ui.win = component.CreateWindow(nil)
+	uiLib.win = ui.win
+	db := &Debugger{ui.win, make(chan bool)}
+	ui.lib.Db = db
+	uiLib.Db = db
 
 	// Register the ui as a block processor
 	//ui.eth.BlockManager.SecondaryBlockProcessor = ui
@@ -111,9 +104,11 @@ func (ui *Gui) Start(assetPath string) {
 	ethutil.Config.Log.AddLogSystem(ui)
 
 	// Loads previous blocks
-	go ui.setInitialBlockChain()
-	go ui.readPreviousTransactions()
-	go ui.update()
+	if firstRun == false {
+		go ui.setInitialBlockChain()
+		go ui.readPreviousTransactions()
+		go ui.update()
+	}
 
 	ui.win.Show()
 	ui.win.Wait()
@@ -135,13 +130,13 @@ func (ui *Gui) readPreviousTransactions() {
 	for it.Next() {
 		tx := ethchain.NewTransactionFromBytes(it.Value())
 
-		ui.win.Root().Call("addTx", NewTxFromTransaction(tx))
+		ui.win.Root().Call("addTx", ethpub.NewPTx(tx))
 	}
 	it.Release()
 }
 
 func (ui *Gui) ProcessBlock(block *ethchain.Block) {
-	ui.win.Root().Call("addBlock", NewBlockFromBlock(block))
+	ui.win.Root().Call("addBlock", ethpub.NewPBlock(block))
 }
 
 // Simple go routine function that updates the list of peers in the GUI
@@ -149,23 +144,26 @@ func (ui *Gui) update() {
 	txChan := make(chan ethchain.TxMsg, 1)
 	ui.eth.TxPool().Subscribe(txChan)
 
-	account := ui.eth.StateManager().GetAddrState(ui.addr).Account
+	account := ui.eth.StateManager().GetAddrState(ui.addr).Object
 	unconfirmedFunds := new(big.Int)
 	ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(account.Amount)))
+
+	addrState := ui.eth.StateManager().GetAddrState(ui.addr)
+
 	for {
 		select {
 		case txMsg := <-txChan:
 			tx := txMsg.Tx
 
 			if txMsg.Type == ethchain.TxPre {
-				if bytes.Compare(tx.Sender(), ui.addr) == 0 {
-					ui.win.Root().Call("addTx", NewTxFromTransaction(tx))
+				if bytes.Compare(tx.Sender(), ui.addr) == 0 && addrState.Nonce <= tx.Nonce {
+					ui.win.Root().Call("addTx", ethpub.NewPTx(tx))
 					ui.txDb.Put(tx.Hash(), tx.RlpEncode())
 
-					ui.eth.StateManager().GetAddrState(ui.addr).Nonce += 1
+					addrState.Nonce += 1
 					unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
 				} else if bytes.Compare(tx.Recipient, ui.addr) == 0 {
-					ui.win.Root().Call("addTx", NewTxFromTransaction(tx))
+					ui.win.Root().Call("addTx", ethpub.NewPTx(tx))
 					ui.txDb.Put(tx.Hash(), tx.RlpEncode())
 
 					unconfirmedFunds.Add(unconfirmedFunds, tx.Value)

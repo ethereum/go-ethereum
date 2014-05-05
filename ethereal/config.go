@@ -6,6 +6,7 @@ import (
 
 var StartConsole bool
 var StartMining bool
+var StartRpc bool
 var UseUPnP bool
 var OutboundPort string
 var ShowGenesis bool
@@ -21,6 +22,7 @@ var AssetPath string
 func Init() {
 	flag.BoolVar(&StartConsole, "c", false, "debug and testing console")
 	flag.BoolVar(&StartMining, "m", false, "start dagger mining")
+	flag.BoolVar(&StartRpc, "r", false, "start rpc server")
 	flag.BoolVar(&ShowGenesis, "g", false, "prints genesis header and exits")
 	flag.BoolVar(&UseUPnP, "upnp", false, "enable UPnP support")
 	flag.BoolVar(&UseSeed, "seed", true, "seed peers")

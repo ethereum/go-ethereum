@@ -11,7 +11,8 @@ import (
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
-	_ "math/big"
+	"github.com/ethereum/go-ethereum/utils"
+	"github.com/obscuren/mutan"
 	"os"
 	"strings"
 )
@@ -52,15 +53,15 @@ func (i *Console) ValidateInput(action string, argumentLength int) error {
 	case action == "gettx" && argumentLength != 1:
 		err = true
 		expArgCount = 1
-	case action == "tx" && argumentLength != 2:
+	case action == "tx" && argumentLength != 4:
 		err = true
-		expArgCount = 2
+		expArgCount = 4
 	case action == "getaddr" && argumentLength != 1:
 		err = true
 		expArgCount = 1
-	case action == "contract" && argumentLength != 1:
+	case action == "contract" && argumentLength != 2:
 		err = true
-		expArgCount = 1
+		expArgCount = 2
 	case action == "say" && argumentLength != 1:
 		err = true
 		expArgCount = 1
@@ -79,7 +80,7 @@ func (i *Console) ValidateInput(action string, argumentLength int) error {
 	}
 }
 
-func (i *Console) Editor() []string {
+func (i *Console) Editor() string {
 	var buff bytes.Buffer
 	for {
 		reader := bufio.NewReader(os.Stdin)
@@ -94,15 +95,7 @@ func (i *Console) Editor() []string {
 		}
 	}
 
-	scanner := bufio.NewScanner(strings.NewReader(buff.String()))
-	scanner.Split(bufio.ScanLines)
-
-	var lines []string
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-
-	return lines
+	return buff.String()
 }
 
 func (i *Console) PrintRoot() {
@@ -178,7 +171,7 @@ func (i *Console) ParseInput(input string) bool {
 			if err != nil {
 				fmt.Println("recipient err:", err)
 			} else {
-				tx := ethchain.NewTransaction(recipient, ethutil.Big(tokens[2]), []string{""})
+				tx := ethchain.NewTransactionMessage(recipient, ethutil.Big(tokens[2]), ethutil.Big(tokens[3]), ethutil.Big(tokens[4]), nil)
 
 				key := ethutil.Config.Db.GetKeys()[0]
 				tx.Sign(key.PrivateKey)
@@ -197,9 +190,22 @@ func (i *Console) ParseInput(input string) bool {
 			}
 		case "contract":
 			fmt.Println("Contract editor (Ctrl-D = done)")
-			code := ethchain.Compile(i.Editor())
 
-			contract := ethchain.NewTransaction(ethchain.ContractAddr, ethutil.Big(tokens[1]), code)
+			mainInput, initInput := mutan.PreProcess(i.Editor())
+			mainScript, err := utils.Compile(mainInput)
+			if err != nil {
+				fmt.Println(err)
+
+				break
+			}
+			initScript, err := utils.Compile(initInput)
+			if err != nil {
+				fmt.Println(err)
+
+				break
+			}
+
+			contract := ethchain.NewContractCreationTx(ethutil.Big(tokens[0]), ethutil.Big(tokens[1]), ethutil.Big(tokens[1]), mainScript, initScript)
 
 			key := ethutil.Config.Db.GetKeys()[0]
 			contract.Sign(key.PrivateKey)
