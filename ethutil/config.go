@@ -51,7 +51,7 @@ func ReadConfig(base string) *config {
 			}
 		}
 
-		Config = &config{ExecPath: path, Debug: true, Ver: "0.5"}
+		Config = &config{ExecPath: path, Debug: true, Ver: "0.5 RC1"}
 		Config.Log = NewLogger(LogFile|LogStd, LogLevelDebug)
 		Config.SetClientString("/Ethereum(G)")
 	}
