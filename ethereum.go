@@ -4,7 +4,7 @@ import (
 	"container/list"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethdb"
-	"github.com/ethereum/eth-go/etherpc"
+	"github.com/ethereum/eth-go/ethrpc"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
 	"io/ioutil"
@@ -64,7 +64,7 @@ type Ethereum struct {
 
 	reactor *ethutil.ReactorEngine
 
-	RpcServer *etherpc.JsonRpcServer
+	RpcServer *ethrpc.JsonRpcServer
 }
 
 func New(caps Caps, usePnp bool) (*Ethereum, error) {
