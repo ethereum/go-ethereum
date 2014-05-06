@@ -339,7 +339,9 @@ func (s *Ethereum) Stop() {
 
 	close(s.quit)
 
-	s.RpcServer.Stop()
+	if s.RpcServer != nil {
+		s.RpcServer.Stop()
+	}
 	s.txPool.Stop()
 	s.stateManager.Stop()
 
