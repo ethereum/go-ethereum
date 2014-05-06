@@ -21,7 +21,7 @@ func Disassemble(script []byte) (asm []string) {
 		asm = append(asm, fmt.Sprintf("%v", op))
 
 		switch op {
-		case oPUSH: // Push PC+1 on to the stack
+		case oPUSH32: // Push PC+1 on to the stack
 			pc.Add(pc, ethutil.Big1)
 			data := script[pc.Int64() : pc.Int64()+32]
 			val := ethutil.BigD(data)
@@ -36,20 +36,6 @@ func Disassemble(script []byte) (asm []string) {
 			asm = append(asm, fmt.Sprintf("0x%x", b))
 
 			pc.Add(pc, big.NewInt(31))
-		case oPUSH20:
-			pc.Add(pc, ethutil.Big1)
-			data := script[pc.Int64() : pc.Int64()+20]
-			val := ethutil.BigD(data)
-			var b []byte
-			if val.Int64() == 0 {
-				b = []byte{0}
-			} else {
-				b = val.Bytes()
-			}
-
-			asm = append(asm, fmt.Sprintf("0x%x", b))
-
-			pc.Add(pc, big.NewInt(19))
 		}
 
 		pc.Add(pc, ethutil.Big1)
