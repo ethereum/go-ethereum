@@ -1,19 +1,55 @@
 [
   {
-    "inputs": {
-      "doe": "reindeer",
-      "dog": "puppy",
-      "dogglesworth": "cat"
-    },
-    "expectation": "d85f9267d7ed5767fb1b48defa8eb20a1c007a87a07588135a74b40b55de2e67"
+    "inputs": [
+      ["doe", "reindeer"],
+      ["dog", "puppy"],
+      ["dogglesworth", "cat"]
+    ],
+    "expectation": "8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3"
   },
   {
-    "inputs":{
-      "do": "verb", 
-      "horse": "stallion", 
-      "doge": "coin", 
-      "dog": "puppy"
-    }, 
-    "expectation": "cf7d318935b52db6e23d8c1f5e6b7e62f3606d4ed13783f4fdbd6e67a2085d04"
-  }
+    "inputs":[
+      ["do", "verb"], 
+      ["horse", "stallion"], 
+      ["doge", "coin"], 
+      ["dog", "puppy"]
+    ], 
+    "expectation": "5991bb8c6514148a29db676a14ac506cd2cd5775ace63c30a4fe457715e9ac84"
+  },
+  {
+    "inputs":[
+      ["do", "verb"], 
+      ["ether", "wookiedoo"], 
+      ["horse", "stallion"], 
+      ["shaman", "horse"], 
+      ["doge", "coin"], 
+      ["ether", ""],
+      ["dog", "puppy"],
+      ["shaman", ""]
+    ], 
+    "expectation": "5991bb8c6514148a29db676a14ac506cd2cd5775ace63c30a4fe457715e9ac84"
+  },
+  {
+    "inputs":[
+      ["foo", "bar"], 
+      ["food", "bat"], 
+      ["food", "bass"]
+    ], 
+    "expectation": "17beaa1648bafa633cda809c90c04af50fc8aed3cb40d16efbddee6fdf63c4c3"
+  },   
+  {
+    "inputs":[
+      ["be", "e"], 
+      ["dog", "puppy"], 
+      ["bed", "d"]
+    ], 
+    "expectation": "3f67c7a47520f79faa29255d2d3c084a7a6df0453116ed7232ff10277a8be68b"
+  },   
+  {
+    "inputs":[
+      ["test", "test"], 
+      ["te", "testy"], 
+    ], 
+    "expectation": "8452568af70d8d140f58d941338542f645fcca50094b20f3c3d8c3df49337928"
+  }   
 ]
