@@ -86,7 +86,7 @@ func TestRun4(t *testing.T) {
 		int32 a = 10
 		int32 b = 20
 		if a > b {
-			int32 c = this.Caller()
+			int32 c = this.caller()
 		}
 		Exit()
 	`), false)
@@ -98,21 +98,21 @@ func TestRun4(t *testing.T) {
 
 	callerScript, err := mutan.Compile(strings.NewReader(`
 		// Check if there's any cash in the initial store
-		if store[1000] == 0 {
-			store[1000] = 10^20
+		if this.store[1000] == 0 {
+			this.store[1000] = 10^20
 		}
 
 
-		store[1001] = this.Value() * 20
-		store[this.Origin()] = store[this.Origin()] + 1000
+		this.store[1001] = this.value() * 20
+		this.store[this.origin()] = this.store[this.origin()] + 1000
 
-		if store[1001] > 20 {
-			store[1001] = 10^50
+		if this.store[1001] > 20 {
+			this.store[1001] = 10^50
 		}
 
 		int8 ret = 0
 		int8 arg = 10
-		Call(0xe6a12555fad1fb6eaaaed69001a87313d1fd7b54, 0, 100, arg, ret)
+		call(0xe6a12555fad1fb6eaaaed69001a87313d1fd7b54, 0, 100, arg, ret)
 
 		big t
 		for int8 i = 0; i < 10; i++ {

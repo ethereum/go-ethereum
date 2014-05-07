@@ -48,8 +48,6 @@ const (
 	oGASLIMIT   = 0x45
 
 	// 0x50 range - 'storage' and execution
-	oPUSH    = 0x50
-	oPUSH20  = 0x80
 	oPOP     = 0x51
 	oDUP     = 0x52
 	oSWAP    = 0x53
@@ -63,14 +61,48 @@ const (
 	oPC      = 0x5b
 	oMSIZE   = 0x5c
 
-	// 0x60 range - closures
-	oCREATE = 0x60
-	oCALL   = 0x61
-	oRETURN = 0x62
+	// 0x60 range
+	oPUSH1  = 0x60
+	oPUSH2  = 0x61
+	oPUSH3  = 0x62
+	oPUSH4  = 0x63
+	oPUSH5  = 0x64
+	oPUSH6  = 0x65
+	oPUSH7  = 0x66
+	oPUSH8  = 0x67
+	oPUSH9  = 0x68
+	oPUSH10 = 0x69
+	oPUSH11 = 0x6a
+	oPUSH12 = 0x6b
+	oPUSH13 = 0x6c
+	oPUSH14 = 0x6d
+	oPUSH15 = 0x6e
+	oPUSH16 = 0x6f
+	oPUSH17 = 0x70
+	oPUSH18 = 0x71
+	oPUSH19 = 0x72
+	oPUSH20 = 0x73
+	oPUSH21 = 0x74
+	oPUSH22 = 0x75
+	oPUSH23 = 0x76
+	oPUSH24 = 0x77
+	oPUSH25 = 0x78
+	oPUSH26 = 0x79
+	oPUSH27 = 0x7a
+	oPUSH28 = 0x7b
+	oPUSH29 = 0x7c
+	oPUSH30 = 0x7d
+	oPUSH31 = 0x7e
+	oPUSH32 = 0x7f
+
+	// 0xf0 range - closures
+	oCREATE = 0xf0
+	oCALL   = 0xf2
+	oRETURN = 0xf3
 
 	// 0x70 range - other
-	oLOG     = 0x70 // XXX Unofficial
-	oSUICIDE = 0x7f
+	oLOG     = 0xfe // XXX Unofficial
+	oSUICIDE = 0xff
 )
 
 // Since the opcodes aren't all in order we can't use a regular slice
@@ -119,8 +151,6 @@ var opCodeToString = map[OpCode]string{
 	oGASLIMIT:   "GASLIMIT",
 
 	// 0x50 range - 'storage' and execution
-	oPUSH:    "PUSH",
-	oPOP:     "POP",
 	oDUP:     "DUP",
 	oSWAP:    "SWAP",
 	oMLOAD:   "MLOAD",
@@ -133,7 +163,41 @@ var opCodeToString = map[OpCode]string{
 	oPC:      "PC",
 	oMSIZE:   "MSIZE",
 
-	// 0x60 range - closures
+	// 0x60 range - push
+	oPUSH1:  "PUSH1",
+	oPUSH2:  "PUSH2",
+	oPUSH3:  "PUSH3",
+	oPUSH4:  "PUSH4",
+	oPUSH5:  "PUSH5",
+	oPUSH6:  "PUSH6",
+	oPUSH7:  "PUSH7",
+	oPUSH8:  "PUSH8",
+	oPUSH9:  "PUSH9",
+	oPUSH10: "PUSH10",
+	oPUSH11: "PUSH11",
+	oPUSH12: "PUSH12",
+	oPUSH13: "PUSH13",
+	oPUSH14: "PUSH14",
+	oPUSH15: "PUSH15",
+	oPUSH16: "PUSH16",
+	oPUSH17: "PUSH17",
+	oPUSH18: "PUSH18",
+	oPUSH19: "PUSH19",
+	oPUSH20: "PUSH20",
+	oPUSH21: "PUSH21",
+	oPUSH22: "PUSH22",
+	oPUSH23: "PUSH23",
+	oPUSH24: "PUSH24",
+	oPUSH25: "PUSH25",
+	oPUSH26: "PUSH26",
+	oPUSH27: "PUSH27",
+	oPUSH28: "PUSH28",
+	oPUSH29: "PUSH29",
+	oPUSH30: "PUSH30",
+	oPUSH31: "PUSH31",
+	oPUSH32: "PUSH32",
+
+	// 0xf0 range
 	oCREATE: "CREATE",
 	oCALL:   "CALL",
 	oRETURN: "RETURN",
@@ -193,10 +257,6 @@ var OpCodes = map[string]byte{
 	"GASLIMIT":   0x45,
 
 	// 0x50 range - 'storage' and execution
-	"PUSH": 0x50,
-
-	"PUSH20": 0x80,
-
 	"POP":     0x51,
 	"DUP":     0x52,
 	"SWAP":    0x53,
@@ -210,13 +270,47 @@ var OpCodes = map[string]byte{
 	"PC":      0x5b,
 	"MSIZE":   0x5c,
 
-	// 0x60 range - closures
-	"CREATE": 0x60,
-	"CALL":   0x61,
-	"RETURN": 0x62,
+	// 0x70 range - 'push'
+	"PUSH1":  0x60,
+	"PUSH2":  0x61,
+	"PUSH3":  0x62,
+	"PUSH4":  0x63,
+	"PUSH5":  0x64,
+	"PUSH6":  0x65,
+	"PUSH7":  0x66,
+	"PUSH8":  0x67,
+	"PUSH9":  0x68,
+	"PUSH10": 0x69,
+	"PUSH11": 0x6a,
+	"PUSH12": 0x6b,
+	"PUSH13": 0x6c,
+	"PUSH14": 0x6d,
+	"PUSH15": 0x6e,
+	"PUSH16": 0x6f,
+	"PUSH17": 0x70,
+	"PUSH18": 0x71,
+	"PUSH19": 0x72,
+	"PUSH20": 0x73,
+	"PUSH21": 0x74,
+	"PUSH22": 0x75,
+	"PUSH23": 0x76,
+	"PUSH24": 0x77,
+	"PUSH25": 0x78,
+	"PUSH26": 0x70,
+	"PUSH27": 0x7a,
+	"PUSH28": 0x7b,
+	"PUSH29": 0x7c,
+	"PUSH30": 0x7d,
+	"PUSH31": 0x7e,
+	"PUSH32": 0x7f,
+
+	// 0xf0 range - closures
+	"CREATE": 0xf0,
+	"CALL":   0xf1,
+	"RETURN": 0xf2,
 
 	// 0x70 range - other
-	"LOG":     0x70,
+	"LOG":     0xfe,
 	"SUICIDE": 0x7f,
 }
 

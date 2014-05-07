@@ -97,6 +97,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		ethutil.Config.Log.Debugf("#   op\n")
 	}
 
+	fmt.Println(closure.Script)
+
 	for {
 		// The base for all big integer arithmetic
 		base := new(big.Int)
@@ -106,11 +108,9 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		val := closure.Get(pc)
 		// Get the opcode (it must be an opcode!)
 		op := OpCode(val.Uint())
-		/*
-			if ethutil.Config.Debug {
-				ethutil.Config.Log.Debugf("%-3d %-4s", pc, op.String())
-			}
-		*/
+		if ethutil.Config.Debug {
+			ethutil.Config.Log.Debugf("%-3d %-4s", pc, op.String())
+		}
 
 		gas := new(big.Int)
 		useGas := func(amount *big.Int) {
@@ -354,27 +354,17 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			// TODO
 			stack.Push(big.NewInt(0))
 
-		// 0x50 range
-		case oPUSH: // Push PC+1 on to the stack
+			// 0x50 range
+		case oPUSH1, oPUSH2, oPUSH3, oPUSH4, oPUSH5, oPUSH6, oPUSH7, oPUSH8, oPUSH9, oPUSH10, oPUSH11, oPUSH12, oPUSH13, oPUSH14, oPUSH15, oPUSH16, oPUSH17, oPUSH18, oPUSH19, oPUSH20, oPUSH21, oPUSH22, oPUSH23, oPUSH24, oPUSH25, oPUSH26, oPUSH27, oPUSH28, oPUSH29, oPUSH30, oPUSH31, oPUSH32:
+			a := big.NewInt(int64(op) - int64(oPUSH1) + 1)
 			pc.Add(pc, ethutil.Big1)
-			data := closure.Gets(pc, big.NewInt(32))
+			data := closure.Gets(pc, a)
 			val := ethutil.BigD(data.Bytes())
-
 			// Push value to stack
 			stack.Push(val)
-
-			pc.Add(pc, big.NewInt(31))
+			pc.Add(pc, a.Sub(a, big.NewInt(1)))
 			step++
-		case oPUSH20:
-			pc.Add(pc, ethutil.Big1)
-			data := closure.Gets(pc, big.NewInt(20))
-			val := ethutil.BigD(data.Bytes())
 
-			// Push value to stack
-			stack.Push(val)
-
-			pc.Add(pc, big.NewInt(19))
-			step++
 		case oPOP:
 			require(1)
 			stack.Pop()
