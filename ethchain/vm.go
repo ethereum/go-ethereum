@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	_ "github.com/obscuren/secp256k1-go"
+	"log"
 	_ "math"
 	"math/big"
 )
@@ -53,6 +54,7 @@ type RuntimeVars struct {
 	Time        int64
 	Diff        *big.Int
 	TxData      []string
+	Value       *big.Int
 }
 
 func NewVm(state *State, stateManager *StateManager, vars RuntimeVars) *Vm {
@@ -324,8 +326,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case oCALLER:
 			stack.Push(ethutil.BigD(closure.Callee().Address()))
 		case oCALLVALUE:
-			// FIXME: Original value of the call, not the current value
-			stack.Push(closure.Value)
+			log.Println("Value:", vm.vars.Value)
+			stack.Push(vm.vars.Value)
 		case oCALLDATALOAD:
 			require(1)
 			offset := stack.Pop().Int64()

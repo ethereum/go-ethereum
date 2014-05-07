@@ -331,6 +331,7 @@ func (sm *StateManager) EvalScript(script []byte, object *StateObject, tx *Trans
 		Coinbase:    block.Coinbase,
 		Time:        block.Time,
 		Diff:        block.Difficulty,
+		Value:       tx.Value,
 		//Price:       tx.GasPrice,
 	})
 	closure.Call(vm, tx.Data, nil)
