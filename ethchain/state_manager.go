@@ -25,24 +25,16 @@ type EthManager interface {
 type StateManager struct {
 	// Mutex for locking the block processor. Blocks can only be handled one at a time
 	mutex sync.Mutex
-
 	// Canonical block chain
 	bc *BlockChain
-	// States for addresses. You can watch any address
-	// at any given time
-	stateObjectCache *StateObjectCache
-
 	// Stack for processing contracts
 	stack *Stack
 	// non-persistent key/value memory storage
 	mem map[string]*big.Int
-
+	// Proof of work used for validating
 	Pow PoW
-
+	// The ethereum manager interface
 	Ethereum EthManager
-
-	SecondaryBlockProcessor BlockProcessor
-
 	// The managed states
 	// Processor state. Anything processed will be applied to this
 	// state
@@ -54,19 +46,18 @@ type StateManager struct {
 	// it could be used for setting account nonces without effecting
 	// the main states.
 	transState *State
-
+	// Manifest for keeping changes regarding state objects. See `notify`
 	manifest *Manifest
 }
 
 func NewStateManager(ethereum EthManager) *StateManager {
 	sm := &StateManager{
-		stack:            NewStack(),
-		mem:              make(map[string]*big.Int),
-		Pow:              &EasyPow{},
-		Ethereum:         ethereum,
-		stateObjectCache: NewStateObjectCache(),
-		bc:               ethereum.BlockChain(),
-		manifest:         NewManifest(),
+		stack:    NewStack(),
+		mem:      make(map[string]*big.Int),
+		Pow:      &EasyPow{},
+		Ethereum: ethereum,
+		bc:       ethereum.BlockChain(),
+		manifest: NewManifest(),
 	}
 	sm.procState = ethereum.BlockChain().CurrentBlock.State()
 	sm.transState = sm.procState.Copy()
@@ -192,12 +183,6 @@ func (sm *StateManager) ProcessBlock(block *Block, dontReact bool) error {
 
 		// Add the block to the chain
 		sm.bc.Add(block)
-
-		// If there's a block processor present, pass in the block for further
-		// processing
-		if sm.SecondaryBlockProcessor != nil {
-			sm.SecondaryBlockProcessor.ProcessBlock(block)
-		}
 
 		ethutil.Config.Log.Infof("[STATE] Added block #%d (%x)\n", block.BlockInfo().Number, block.Hash())
 		if dontReact == false {
