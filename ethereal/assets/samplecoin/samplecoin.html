@@ -10,7 +10,7 @@
 
 <script type="text/javascript">
 
-var jefcoinAddr = "3dff537f51350239abc95c76a5864aa605259e7d"
+var jefcoinAddr = "136060151ebf11cd82456de1ab9406cc2a762b36"
 var mAddr = ""
 
 function createTransaction() {
@@ -27,9 +27,8 @@ function init() {
 	eth.set({width: 500});
 
 	eth.getKey(function(sec) {
+		mAddr = sec;
 		eth.getSecretToAddress(sec, function(addr) {
-			mAddr = addr;
-
 			eth.getStorageAt(jefcoinAddr, addr, function(storage) {
 				document.querySelector("#current-amount").innerHTML = storage;
 			});
