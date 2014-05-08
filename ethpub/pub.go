@@ -92,7 +92,14 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, in
 		hash = ethutil.FromHex(recipient)
 	}
 
-	keyPair, err := ethchain.NewKeyPairFromSec([]byte(ethutil.FromHex(key)))
+	var keyPair *ethchain.KeyPair
+	var err error
+	if key[0:2] == "0x" {
+		keyPair, err = ethchain.NewKeyPairFromSec([]byte(ethutil.FromHex(key[0:2])))
+	} else {
+		keyPair, err = ethchain.NewKeyPairFromSec([]byte(ethutil.FromHex(key)))
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -132,8 +139,11 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, in
 		tx = ethchain.NewTransactionMessage(hash, value, gas, gasPrice, ethutil.FromHex(initStr))
 	}
 
-	acc := lib.stateManager.GetAddrState(keyPair.Address())
+	acc := lib.stateManager.TransState().GetStateObject(keyPair.Address())
+	//acc := lib.stateManager.GetAddrState(keyPair.Address())
 	tx.Nonce = acc.Nonce
+	lib.stateManager.TransState().SetStateObject(acc)
+
 	tx.Sign(keyPair.PrivateKey)
 	lib.txPool.QueueTransaction(tx)
 

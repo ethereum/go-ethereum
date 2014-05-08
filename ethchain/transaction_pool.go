@@ -148,8 +148,7 @@ func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 	}
 
 	// Get the sender
-	accountState := pool.Ethereum.StateManager().GetAddrState(tx.Sender())
-	sender := accountState.Object
+	sender := pool.Ethereum.StateManager().procState.GetAccount(tx.Sender())
 
 	totAmount := new(big.Int).Add(tx.Value, new(big.Int).Mul(TxFee, TxFeeRat))
 	// Make sure there's enough in the sender's account. Having insufficient

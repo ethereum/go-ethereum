@@ -50,6 +50,10 @@ type StateManager struct {
 	// Comparative state it used for comparing and validating end
 	// results
 	compState *State
+	// Transiently state. The trans state isn't ever saved, validated and
+	// it could be used for setting account nonces without effecting
+	// the main states.
+	transState *State
 
 	manifest *Manifest
 }
@@ -65,6 +69,8 @@ func NewStateManager(ethereum EthManager) *StateManager {
 		manifest:         NewManifest(),
 	}
 	sm.procState = ethereum.BlockChain().CurrentBlock.State()
+	sm.transState = sm.procState.Copy()
+
 	return sm
 }
 
@@ -72,22 +78,8 @@ func (sm *StateManager) ProcState() *State {
 	return sm.procState
 }
 
-// Watches any given address and puts it in the address state store
-func (sm *StateManager) WatchAddr(addr []byte) *CachedStateObject {
-	//XXX account := sm.bc.CurrentBlock.state.GetAccount(addr)
-	account := sm.procState.GetAccount(addr)
-
-	return sm.stateObjectCache.Add(addr, account)
-}
-
-func (sm *StateManager) GetAddrState(addr []byte) *CachedStateObject {
-	account := sm.stateObjectCache.Get(addr)
-	if account == nil {
-		a := sm.procState.GetAccount(addr)
-		account = &CachedStateObject{Nonce: a.Nonce, Object: a}
-	}
-
-	return account
+func (sm *StateManager) TransState() *State {
+	return sm.transState
 }
 
 func (sm *StateManager) BlockChain() *BlockChain {
