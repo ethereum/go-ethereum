@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	_ "github.com/obscuren/secp256k1-go"
-	"log"
 	_ "math"
 	"math/big"
 )
@@ -96,7 +95,6 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 	if ethutil.Config.Debug {
 		ethutil.Config.Log.Debugf("#   op\n")
 	}
-
 	fmt.Println(closure.Script)
 
 	for {
@@ -320,13 +318,12 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case oADDRESS:
 			stack.Push(ethutil.BigD(closure.Object().Address()))
 		case oBALANCE:
-			stack.Push(closure.Value)
+			stack.Push(closure.object.Amount)
 		case oORIGIN:
 			stack.Push(ethutil.BigD(vm.vars.Origin))
 		case oCALLER:
 			stack.Push(ethutil.BigD(closure.Callee().Address()))
 		case oCALLVALUE:
-			log.Println("Value:", vm.vars.Value)
 			stack.Push(vm.vars.Value)
 		case oCALLDATALOAD:
 			require(1)
@@ -406,13 +403,15 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			require(1)
 			pc = stack.Pop()
 			// Reduce pc by one because of the increment that's at the end of this for loop
-			pc.Sub(pc, ethutil.Big1)
+			//pc.Sub(pc, ethutil.Big1)
+			continue
 		case oJUMPI:
 			require(2)
 			cond, pos := stack.Popn()
 			if cond.Cmp(ethutil.BigTrue) == 0 {
 				pc = pos
-				pc.Sub(pc, ethutil.Big1)
+				//pc.Sub(pc, ethutil.Big1)
+				continue
 			}
 		case oPC:
 			stack.Push(pc)
@@ -441,8 +440,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 				contract.initScript,
 				vm.state,
 				gas,
-				closure.Price,
-				value)
+				closure.Price)
 			// Call the closure and set the return value as
 			// main script.
 			closure.Script, err = closure.Call(vm, nil, hook)
@@ -469,10 +467,13 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 				break
 			}
+
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
+
 			// Fetch the contract which will serve as the closure body
 			contract := vm.state.GetContract(addr.Bytes())
+			fmt.Println("before", contract.Amount)
 
 			if contract != nil {
 				// Prepay for the gas
@@ -482,8 +483,12 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 					gas = new(big.Int).Set(closure.Gas)
 				}
 				closure.Gas.Sub(closure.Gas, gas)
+
+				// Add the value to the state object
+				contract.AddAmount(value)
+
 				// Create a new callable closure
-				closure := NewClosure(closure.Object(), contract, contract.script, vm.state, gas, closure.Price, value)
+				closure := NewClosure(closure.Object(), contract, contract.script, vm.state, gas, closure.Price)
 				// Executer the closure and get the return value (if any)
 				ret, err := closure.Call(vm, args, hook)
 				if err != nil {
@@ -495,6 +500,9 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 					// Notify of the changes
 					vm.stateManager.manifest.AddObjectChange(contract)
 				}
+
+				vm.state.SetStateObject(contract)
+				fmt.Println("after", contract.Amount)
 
 				mem.Set(retOffset.Int64(), retSize.Int64(), ret)
 			} else {

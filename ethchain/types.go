@@ -97,8 +97,8 @@ const (
 
 	// 0xf0 range - closures
 	oCREATE = 0xf0
-	oCALL   = 0xf2
-	oRETURN = 0xf3
+	oCALL   = 0xf1
+	oRETURN = 0xf2
 
 	// 0x70 range - other
 	oLOG     = 0xfe // XXX Unofficial

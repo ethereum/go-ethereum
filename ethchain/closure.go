@@ -24,20 +24,18 @@ type Closure struct {
 
 	Gas   *big.Int
 	Price *big.Int
-	Value *big.Int
 
 	Args []byte
 }
 
 // Create a new closure for the given data items
-func NewClosure(callee, object *StateObject, script []byte, state *State, gas, price, val *big.Int) *Closure {
+func NewClosure(callee, object *StateObject, script []byte, state *State, gas, price *big.Int) *Closure {
 	c := &Closure{callee: callee, object: object, Script: script, State: state, Args: nil}
 
 	// In most cases gas, price and value are pointers to transaction objects
 	// and we don't want the transaction's values to change.
 	c.Gas = new(big.Int).Set(gas)
 	c.Price = new(big.Int).Set(price)
-	c.Value = new(big.Int).Set(val)
 
 	return c
 }

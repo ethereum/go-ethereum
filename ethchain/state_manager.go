@@ -323,7 +323,7 @@ func (sm *StateManager) EvalScript(script []byte, object *StateObject, tx *Trans
 		return
 	}
 
-	closure := NewClosure(account, object, script, sm.procState, tx.Gas, tx.GasPrice, tx.Value)
+	closure := NewClosure(account, object, script, sm.procState, tx.Gas, tx.GasPrice)
 	vm := NewVm(sm.procState, sm, RuntimeVars{
 		Origin:      account.Address(),
 		BlockNumber: block.BlockInfo().Number,
