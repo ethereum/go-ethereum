@@ -47,7 +47,9 @@ type StateManager struct {
 	// the main states.
 	transState *State
 	// Manifest for keeping changes regarding state objects. See `notify`
-	manifest *Manifest
+	// XXX Should we move the manifest to the State object. Benefit:
+	// * All states can keep their own local changes
+	//manifest *Manifest
 }
 
 func NewStateManager(ethereum EthManager) *StateManager {
@@ -57,7 +59,7 @@ func NewStateManager(ethereum EthManager) *StateManager {
 		Pow:      &EasyPow{},
 		Ethereum: ethereum,
 		bc:       ethereum.BlockChain(),
-		manifest: NewManifest(),
+		//manifest: NewManifest(),
 	}
 	sm.procState = ethereum.BlockChain().CurrentBlock.State()
 	sm.transState = sm.procState.Copy()
@@ -190,7 +192,7 @@ func (sm *StateManager) ProcessBlock(block *Block, dontReact bool) error {
 
 			sm.notifyChanges()
 
-			sm.manifest.Reset()
+			sm.procState.manifest.Reset()
 		}
 	} else {
 		fmt.Println("total diff failed")
@@ -315,18 +317,15 @@ func (sm *StateManager) EvalScript(script []byte, object *StateObject, tx *Trans
 
 	// Update the account (refunds)
 	sm.procState.UpdateStateObject(account)
-	sm.manifest.AddObjectChange(account)
-
 	sm.procState.UpdateStateObject(object)
-	sm.manifest.AddObjectChange(object)
 }
 
 func (sm *StateManager) notifyChanges() {
-	for addr, stateObject := range sm.manifest.objectChanges {
+	for addr, stateObject := range sm.procState.manifest.objectChanges {
 		sm.Ethereum.Reactor().Post("object:"+addr, stateObject)
 	}
 
-	for stateObjectAddr, mappedObjects := range sm.manifest.storageChanges {
+	for stateObjectAddr, mappedObjects := range sm.procState.manifest.storageChanges {
 		for addr, value := range mappedObjects {
 			sm.Ethereum.Reactor().Post("storage:"+stateObjectAddr+":"+addr, &StorageState{[]byte(stateObjectAddr), []byte(addr), value})
 		}

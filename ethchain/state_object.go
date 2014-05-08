@@ -77,7 +77,7 @@ func (c *StateObject) SetAddr(addr []byte, value interface{}) {
 	c.state.trie.Update(string(addr), string(ethutil.NewValue(value).Encode()))
 }
 
-func (c *StateObject) SetMem(num *big.Int, val *ethutil.Value) {
+func (c *StateObject) SetStorage(num *big.Int, val *ethutil.Value) {
 	addr := ethutil.BigToBytes(num, 256)
 	c.SetAddr(addr, val)
 }

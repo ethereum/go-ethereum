@@ -15,11 +15,13 @@ type State struct {
 	trie *ethutil.Trie
 	// Nested states
 	states map[string]*State
+
+	manifest *Manifest
 }
 
 // Create a new state from a given trie
 func NewState(trie *ethutil.Trie) *State {
-	return &State{trie: trie, states: make(map[string]*State)}
+	return &State{trie: trie, states: make(map[string]*State), manifest: NewManifest()}
 }
 
 // Resets the trie and all siblings
@@ -124,36 +126,6 @@ const (
 	UnknownTy
 )
 
-/*
-// Returns the object stored at key and the type stored at key
-// Returns nil if nothing is stored
-func (s *State) GetStateObject(key []byte) (*ethutil.Value, ObjType) {
-	// Fetch data from the trie
-	data := s.trie.Get(string(key))
-	// Returns the nil type, indicating nothing could be retrieved.
-	// Anything using this function should check for this ret val
-	if data == "" {
-		return nil, NilTy
-	}
-
-	var typ ObjType
-	val := ethutil.NewValueFromBytes([]byte(data))
-	// Check the length of the retrieved value.
-	// Len 2 = Account
-	// Len 3 = Contract
-	// Other = invalid for now. If other types emerge, add them here
-	if val.Len() == 2 {
-		typ = AccountTy
-	} else if val.Len() == 3 {
-		typ = ContractTy
-	} else {
-		typ = UnknownTy
-	}
-
-	return val, typ
-}
-*/
-
 // Updates any given state object
 func (s *State) UpdateStateObject(object *StateObject) {
 	addr := object.Address()
@@ -163,6 +135,7 @@ func (s *State) UpdateStateObject(object *StateObject) {
 	}
 
 	s.trie.Update(string(addr), string(object.RlpEncode()))
+	s.manifest.AddObjectChange(object)
 }
 
 func (s *State) Put(key, object []byte) {

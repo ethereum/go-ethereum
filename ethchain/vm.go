@@ -395,10 +395,10 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case oSSTORE:
 			require(2)
 			val, loc := stack.Popn()
-			closure.SetMem(loc, ethutil.NewValue(val))
+			closure.SetStorage(loc, ethutil.NewValue(val))
 
 			// Add the change to manifest
-			vm.stateManager.manifest.AddStorageChange(closure.Object(), loc.Bytes(), val)
+			vm.state.manifest.AddStorageChange(closure.Object(), loc.Bytes(), val)
 		case oJUMP:
 			require(1)
 			pc = stack.Pop()
@@ -473,7 +473,6 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			// Fetch the contract which will serve as the closure body
 			contract := vm.state.GetContract(addr.Bytes())
-			fmt.Println("before", contract.Amount)
 
 			if contract != nil {
 				// Prepay for the gas
@@ -497,12 +496,9 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 					//contract.State().Reset()
 				} else {
 					stack.Push(ethutil.BigTrue)
-					// Notify of the changes
-					vm.stateManager.manifest.AddObjectChange(contract)
 				}
 
 				vm.state.SetStateObject(contract)
-				fmt.Println("after", contract.Amount)
 
 				mem.Set(retOffset.Int64(), retSize.Int64(), ret)
 			} else {
@@ -520,8 +516,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			receiver := vm.state.GetAccount(stack.Pop().Bytes())
 			receiver.AddAmount(closure.object.Amount)
-
-			vm.stateManager.manifest.AddObjectChange(receiver)
+			vm.state.SetStateObject(receiver)
 
 			closure.object.state.Purge()
 

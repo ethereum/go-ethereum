@@ -11,7 +11,7 @@ type ClosureRef interface {
 	ReturnGas(*big.Int, *big.Int, *State)
 	Address() []byte
 	GetMem(*big.Int) *ethutil.Value
-	SetMem(*big.Int, *ethutil.Value)
+	SetStore(*big.Int, *ethutil.Value)
 	N() *big.Int
 }
 
@@ -64,8 +64,8 @@ func (c *Closure) Gets(x, y *big.Int) *ethutil.Value {
 	return ethutil.NewValue(partial)
 }
 
-func (c *Closure) SetMem(x *big.Int, val *ethutil.Value) {
-	c.object.SetMem(x, val)
+func (c *Closure) SetStorage(x *big.Int, val *ethutil.Value) {
+	c.object.SetStorage(x, val)
 }
 
 func (c *Closure) Address() []byte {
