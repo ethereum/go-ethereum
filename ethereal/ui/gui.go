@@ -28,6 +28,8 @@ type Gui struct {
 	txDb *ethdb.LDBDatabase
 
 	addr []byte
+
+	pub *ethpub.PEthereum
 }
 
 // Create GUI, but doesn't start it
@@ -46,14 +48,16 @@ func New(ethereum *eth.Ethereum) *Gui {
 		key := ethutil.Config.Db.GetKeys()[0]
 		addr = key.Address()
 
-		ethereum.StateManager().WatchAddr(addr)
+		//ethereum.StateManager().WatchAddr(addr)
 	}
 
-	return &Gui{eth: ethereum, lib: lib, txDb: db, addr: addr}
+	pub := ethpub.NewPEthereum(ethereum.StateManager(), ethereum.BlockChain(), ethereum.TxPool())
+
+	return &Gui{eth: ethereum, lib: lib, txDb: db, addr: addr, pub: pub}
 }
 
-func (ui *Gui) Start(assetPath string) {
-	defer ui.txDb.Close()
+func (gui *Gui) Start(assetPath string) {
+	defer gui.txDb.Close()
 
 	// Register ethereum functions
 	qml.RegisterTypes("Ethereum", 1, 0, []qml.TypeSpec{{
@@ -65,12 +69,12 @@ func (ui *Gui) Start(assetPath string) {
 	ethutil.Config.SetClientString(fmt.Sprintf("/Ethereal v%s", "0.2"))
 	ethutil.Config.Log.Infoln("[GUI] Starting GUI")
 	// Create a new QML engine
-	ui.engine = qml.NewEngine()
-	context := ui.engine.Context()
+	gui.engine = qml.NewEngine()
+	context := gui.engine.Context()
 
 	// Expose the eth library and the ui library to QML
-	context.SetVar("eth", ui.lib)
-	uiLib := NewUiLib(ui.engine, ui.eth, assetPath)
+	context.SetVar("eth", gui)
+	uiLib := NewUiLib(gui.engine, gui.eth, assetPath)
 	context.SetVar("ui", uiLib)
 
 	// Load the main QML interface
@@ -80,9 +84,9 @@ func (ui *Gui) Start(assetPath string) {
 	firstRun := len(data) == 0
 
 	if firstRun {
-		component, err = ui.engine.LoadFile(uiLib.AssetPath("qml/first_run.qml"))
+		component, err = gui.engine.LoadFile(uiLib.AssetPath("qml/first_run.qml"))
 	} else {
-		component, err = ui.engine.LoadFile(uiLib.AssetPath("qml/wallet.qml"))
+		component, err = gui.engine.LoadFile(uiLib.AssetPath("qml/wallet.qml"))
 	}
 	if err != nil {
 		ethutil.Config.Log.Infoln("FATAL: asset not found: you can set an alternative asset path on on the command line using option 'asset_path'")
@@ -90,65 +94,60 @@ func (ui *Gui) Start(assetPath string) {
 		panic(err)
 	}
 
-	ui.win = component.CreateWindow(nil)
-	uiLib.win = ui.win
-	db := &Debugger{ui.win, make(chan bool)}
-	ui.lib.Db = db
+	gui.win = component.CreateWindow(nil)
+	uiLib.win = gui.win
+	db := &Debugger{gui.win, make(chan bool)}
+	gui.lib.Db = db
 	uiLib.Db = db
 
-	// Register the ui as a block processor
-	//ui.eth.BlockManager.SecondaryBlockProcessor = ui
-	//ui.eth.TxPool.SecondaryProcessor = ui
-
 	// Add the ui as a log system so we can log directly to the UGI
-	ethutil.Config.Log.AddLogSystem(ui)
+	ethutil.Config.Log.AddLogSystem(gui)
 
 	// Loads previous blocks
 	if firstRun == false {
-		go ui.setInitialBlockChain()
-		go ui.readPreviousTransactions()
-		go ui.update()
+		go gui.setInitialBlockChain()
+		go gui.readPreviousTransactions()
+		go gui.update()
 	}
 
-	ui.win.Show()
-	ui.win.Wait()
+	gui.win.Show()
+	gui.win.Wait()
 
-	ui.eth.Stop()
+	gui.eth.Stop()
 }
 
-func (ui *Gui) setInitialBlockChain() {
+func (gui *Gui) setInitialBlockChain() {
 	// Load previous 10 blocks
-	chain := ui.eth.BlockChain().GetChain(ui.eth.BlockChain().CurrentBlock.Hash(), 10)
+	chain := gui.eth.BlockChain().GetChain(gui.eth.BlockChain().CurrentBlock.Hash(), 10)
 	for _, block := range chain {
-		ui.ProcessBlock(block)
+		gui.processBlock(block)
 	}
 
 }
 
-func (ui *Gui) readPreviousTransactions() {
-	it := ui.txDb.Db().NewIterator(nil, nil)
+func (gui *Gui) readPreviousTransactions() {
+	it := gui.txDb.Db().NewIterator(nil, nil)
 	for it.Next() {
 		tx := ethchain.NewTransactionFromBytes(it.Value())
 
-		ui.win.Root().Call("addTx", ethpub.NewPTx(tx))
+		gui.win.Root().Call("addTx", ethpub.NewPTx(tx))
 	}
 	it.Release()
 }
 
-func (ui *Gui) ProcessBlock(block *ethchain.Block) {
-	ui.win.Root().Call("addBlock", ethpub.NewPBlock(block))
+func (gui *Gui) processBlock(block *ethchain.Block) {
+	gui.win.Root().Call("addBlock", ethpub.NewPBlock(block))
 }
 
 // Simple go routine function that updates the list of peers in the GUI
-func (ui *Gui) update() {
+func (gui *Gui) update() {
 	txChan := make(chan ethchain.TxMsg, 1)
-	ui.eth.TxPool().Subscribe(txChan)
+	gui.eth.TxPool().Subscribe(txChan)
 
-	account := ui.eth.StateManager().GetAddrState(ui.addr).Object
+	state := gui.eth.StateManager().TransState()
+
 	unconfirmedFunds := new(big.Int)
-	ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(account.Amount)))
-
-	addrState := ui.eth.StateManager().GetAddrState(ui.addr)
+	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetStateObject(gui.addr).Amount)))
 
 	for {
 		select {
@@ -156,15 +155,19 @@ func (ui *Gui) update() {
 			tx := txMsg.Tx
 
 			if txMsg.Type == ethchain.TxPre {
-				if bytes.Compare(tx.Sender(), ui.addr) == 0 && addrState.Nonce <= tx.Nonce {
-					ui.win.Root().Call("addTx", ethpub.NewPTx(tx))
-					ui.txDb.Put(tx.Hash(), tx.RlpEncode())
+				object := state.GetStateObject(gui.addr)
 
-					addrState.Nonce += 1
+				if bytes.Compare(tx.Sender(), gui.addr) == 0 && object.Nonce <= tx.Nonce {
+					gui.win.Root().Call("addTx", ethpub.NewPTx(tx))
+					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
+
+					object.Nonce += 1
+					state.SetStateObject(object)
+
 					unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
-				} else if bytes.Compare(tx.Recipient, ui.addr) == 0 {
-					ui.win.Root().Call("addTx", ethpub.NewPTx(tx))
-					ui.txDb.Put(tx.Hash(), tx.RlpEncode())
+				} else if bytes.Compare(tx.Recipient, gui.addr) == 0 {
+					gui.win.Root().Call("addTx", ethpub.NewPTx(tx))
+					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 
 					unconfirmedFunds.Add(unconfirmedFunds, tx.Value)
 				}
@@ -174,46 +177,48 @@ func (ui *Gui) update() {
 					pos = "-"
 				}
 				val := ethutil.CurrencyToString(new(big.Int).Abs(ethutil.BigCopy(unconfirmedFunds)))
-				str := fmt.Sprintf("%v (%s %v)", ethutil.CurrencyToString(account.Amount), pos, val)
+				str := fmt.Sprintf("%v (%s %v)", ethutil.CurrencyToString(object.Amount), pos, val)
 
-				ui.win.Root().Call("setWalletValue", str)
+				gui.win.Root().Call("setWalletValue", str)
 			} else {
-				amount := account.Amount
-				if bytes.Compare(tx.Sender(), ui.addr) == 0 {
-					amount.Sub(account.Amount, tx.Value)
-				} else if bytes.Compare(tx.Recipient, ui.addr) == 0 {
-					amount.Add(account.Amount, tx.Value)
+				object := state.GetStateObject(gui.addr)
+				if bytes.Compare(tx.Sender(), gui.addr) == 0 {
+					object.SubAmount(tx.Value)
+				} else if bytes.Compare(tx.Recipient, gui.addr) == 0 {
+					object.AddAmount(tx.Value)
 				}
 
-				ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(amount)))
+				gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(object.Amount)))
+
+				state.SetStateObject(object)
 			}
 		}
-
-		/*
-			accountAmount := ui.eth.BlockManager.GetAddrState(ui.addr).Account.Amount
-			ui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", accountAmount))
-
-			ui.win.Root().Call("setPeers", fmt.Sprintf("%d / %d", ui.eth.Peers().Len(), ui.eth.MaxPeers))
-
-			time.Sleep(1 * time.Second)
-		*/
-
 	}
 }
 
 // Logging functions that log directly to the GUI interface
-func (ui *Gui) Println(v ...interface{}) {
+func (gui *Gui) Println(v ...interface{}) {
 	str := strings.TrimRight(fmt.Sprintln(v...), "\n")
 	lines := strings.Split(str, "\n")
 	for _, line := range lines {
-		ui.win.Root().Call("addLog", line)
+		gui.win.Root().Call("addLog", line)
 	}
 }
 
-func (ui *Gui) Printf(format string, v ...interface{}) {
+func (gui *Gui) Printf(format string, v ...interface{}) {
 	str := strings.TrimRight(fmt.Sprintf(format, v...), "\n")
 	lines := strings.Split(str, "\n")
 	for _, line := range lines {
-		ui.win.Root().Call("addLog", line)
+		gui.win.Root().Call("addLog", line)
 	}
+}
+
+func (gui *Gui) Transact(recipient, value, gas, gasPrice, data string) (*ethpub.PReceipt, error) {
+	keyPair := ethutil.Config.Db.GetKeys()[0]
+
+	return gui.pub.Transact(ethutil.Hex(keyPair.PrivateKey), recipient, value, gas, gasPrice, data)
+}
+
+func (gui *Gui) Create(recipient, value, gas, gasPrice, data string) (*ethpub.PReceipt, error) {
+	return gui.Transact(recipient, value, gas, gasPrice, data)
 }

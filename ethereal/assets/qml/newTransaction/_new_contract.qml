@@ -150,7 +150,7 @@ Component {
 			text: "Send"
 			onClicked: {
 				//this.enabled = false
-				var res = eth.createTx(txFuelRecipient.text, txValue.text, txGas.text, txGasPrice.text, codeView.text)
+				var res = eth.create(txFuelRecipient.text, txValue.text, txGas.text, txGasPrice.text, codeView.text)
 				if(res[1]) {
 					txResult.text = "Your contract <b>could not</b> be send over the network:\n<b>"
 					txResult.text += res[1].error()
