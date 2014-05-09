@@ -73,7 +73,6 @@ func main() {
 	}*/
 
 	ethchain.InitFees()
-	ethutil.Config.Seed = UseSeed
 
 	// Instantiated a eth stack
 	ethereum, err := eth.New(eth.CapDefault, UseUPnP)
@@ -139,7 +138,8 @@ func main() {
 	}
 
 	RegisterInterrupts(ethereum)
-	ethereum.Start()
+
+	ethereum.Start(UseSeed)
 
 	if StartMining {
 		logger.Infoln("Miner started")

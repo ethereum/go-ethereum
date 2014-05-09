@@ -42,7 +42,6 @@ func main() {
 
 	ethchain.InitFees()
 	ethutil.ReadConfig(DataDir)
-	ethutil.Config.Seed = UseSeed
 
 	// Instantiated a eth stack
 	ethereum, err := eth.New(eth.CapDefault, UseUPnP)
