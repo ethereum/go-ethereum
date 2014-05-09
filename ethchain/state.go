@@ -116,16 +116,6 @@ func (s *State) Copy() *State {
 	return NewState(s.trie.Copy())
 }
 
-type ObjType byte
-
-const (
-	NilTy ObjType = iota
-	AccountTy
-	ContractTy
-
-	UnknownTy
-)
-
 // Updates any given state object
 func (s *State) UpdateStateObject(object *StateObject) {
 	addr := object.Address()
@@ -144,4 +134,41 @@ func (s *State) Put(key, object []byte) {
 
 func (s *State) Root() interface{} {
 	return s.trie.Root
+}
+
+// Object manifest
+//
+// The object manifest is used to keep changes to the state so we can keep track of the changes
+// that occurred during a state transitioning phase.
+type Manifest struct {
+	// XXX These will be handy in the future. Not important for now.
+	objectAddresses  map[string]bool
+	storageAddresses map[string]map[string]bool
+
+	objectChanges  map[string]*StateObject
+	storageChanges map[string]map[string]*big.Int
+}
+
+func NewManifest() *Manifest {
+	m := &Manifest{objectAddresses: make(map[string]bool), storageAddresses: make(map[string]map[string]bool)}
+	m.Reset()
+
+	return m
+}
+
+func (m *Manifest) Reset() {
+	m.objectChanges = make(map[string]*StateObject)
+	m.storageChanges = make(map[string]map[string]*big.Int)
+}
+
+func (m *Manifest) AddObjectChange(stateObject *StateObject) {
+	m.objectChanges[string(stateObject.Address())] = stateObject
+}
+
+func (m *Manifest) AddStorageChange(stateObject *StateObject, storageAddr []byte, storage *big.Int) {
+	if m.storageChanges[string(stateObject.Address())] == nil {
+		m.storageChanges[string(stateObject.Address())] = make(map[string]*big.Int)
+	}
+
+	m.storageChanges[string(stateObject.Address())][string(storageAddr)] = storage
 }

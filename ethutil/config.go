@@ -27,7 +27,6 @@ type config struct {
 	Ver          string
 	ClientString string
 	Pubkey       []byte
-	Seed         bool
 }
 
 var Config *config
