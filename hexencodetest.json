@@ -1,0 +1,62 @@
+{
+	"zz,odd,open": {
+		"seq": [ 0, 0, 1, 2, 3, 4, 5 ],
+		"term": false,
+		"out": "10012345"
+	},
+	"z,even,open": {
+	  "seq": [ 0, 1, 2, 3, 4, 5 ],
+	  "term": false,
+	  "out": "00012345"
+	},
+	"nz,odd,open": {
+		"seq": [ 1, 2, 3, 4, 5 ],
+		"term": false,
+		"out": "112345"
+	},
+	"zz,even,open": {
+		"seq": [ 0, 0, 1, 2, 3, 4 ],
+		"term": false,
+		"out": "00001234"
+	},
+	"z,odd,open": {
+	  "seq": [ 0, 1, 2, 3, 4 ],
+	  "term": false,
+	  "out": "101234"
+	},
+	"nz,even,open": {
+		"seq": [ 1, 2, 3, 4 ],
+		"term": false,
+		"out": "001234"
+	},
+	"zz,odd,term": {
+		"seq": [ 0, 0, 1, 2, 3, 4, 5 ],
+		"term": true,
+		"out": "30012345"
+	},
+	"z,even,term": {
+	  "seq": [ 0, 1, 2, 3, 4, 5 ],
+	  "term": true,
+	  "out": "20012345"
+	},
+	"nz,odd,term": {
+		"seq": [ 1, 2, 3, 4, 5 ],
+		"term": true,
+		"out": "312345"
+	},
+	"zz,even,term": {
+		"seq": [ 0, 0, 1, 2, 3, 4 ],
+		"term": true,
+		"out": "20001234"
+	},
+	"z,odd,term": {
+	  "seq": [ 0, 1, 2, 3, 4 ],
+	  "term": true,
+	  "out": "301234"
+	},
+	"nz,even,term": {
+		"seq": [ 1, 2, 3, 4 ],
+		"term": true,
+		"out": "201234"
+	}
+}

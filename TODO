@@ -1,11 +1,7 @@
-tests
-=====
-
-Common tests for all clients to test against.
+- Move over to standard & clear JSON format:
 
 All files should be of the form:
 
-```
 {
 	"test1name":
 	{
@@ -20,7 +16,6 @@ All files should be of the form:
 		...
 	}
 }
-```
 
 Arrays are allowed, but don't use them for sets of properties - only use them for data that is clearly a continuous contiguous sequence of values.
 
