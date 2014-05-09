@@ -5,19 +5,20 @@
 <link rel="stylesheet" href="bootstrap.min.css">
 <link rel="stylesheet" href="bootstrap-theme.min.css">
 <link rel="stylesheet" href="samplecoin.css">
-<script src="promise.min.js"></script>
 <meta name="viewport" content="minimum-scale=1; maximum-scale=1; initial-scale=1;">
 
 <script type="text/javascript">
 
-var jefcoinAddr = "136060151ebf11cd82456de1ab9406cc2a762b36"
+var jefcoinAddr = "b7cb72c47ec4f31751d0d628b5a33fd6671bbba0"
 var mAddr = ""
 
 function createTransaction() {
 	var addr = document.querySelector("#addr").value;
 	var amount = document.querySelector("#amount").value;
 
-	var data = (("0x"+addr).pad(32) + amount.pad(32)).unbin()
+	addr = ("0x"+addr).pad(32)
+	amount = amount.pad(32)
+	var data = (addr + amount).unbin();
 	eth.transact(mAddr, jefcoinAddr, 0, "10000000", "250", data, function(receipt) {
 		debug("received tx hash:", reciept.address)
 	})

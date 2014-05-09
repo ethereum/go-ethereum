@@ -158,7 +158,7 @@ Component {
 					mainContractColumn.state = "ERROR"
 				} else {
 					txResult.text = "Your transaction has been submitted:\n"
-					txOutput.text = res[0]
+					txOutput.text = res[0].address
 					mainContractColumn.state = "DONE"
 				}
 			}
