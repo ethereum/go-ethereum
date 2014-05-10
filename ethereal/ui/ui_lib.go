@@ -121,7 +121,7 @@ func DefaultAssetPath() string {
 func (ui *UiLib) DebugTx(recipient, valueStr, gasStr, gasPriceStr, data string) {
 	state := ui.eth.BlockChain().CurrentBlock.State()
 
-	mainInput, _ := mutan.PreProcess(data)
+	mainInput, _ := mutan.PreParse(data)
 	callerScript, err := utils.Compile(mainInput)
 	if err != nil {
 		ethutil.Config.Log.Debugln(err)
