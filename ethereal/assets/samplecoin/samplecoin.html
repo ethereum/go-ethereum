@@ -13,11 +13,9 @@ var jefcoinAddr = "b7cb72c47ec4f31751d0d628b5a33fd6671bbba0"
 var mAddr = ""
 
 function createTransaction() {
-	var addr = document.querySelector("#addr").value;
-	var amount = document.querySelector("#amount").value;
+	var addr = ("0x" + document.querySelector("#addr").value).pad(32);
+	var amount = document.querySelector("#amount").value.pad(32);
 
-	addr = ("0x"+addr).pad(32)
-	amount = amount.pad(32)
 	var data = (addr + amount).unbin();
 	eth.transact(mAddr, jefcoinAddr, 0, "10000000", "250", data, function(receipt) {
 		debug("received tx hash:", reciept.address)
