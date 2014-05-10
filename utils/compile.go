@@ -24,7 +24,7 @@ func Compile(script string) ([]byte, error) {
 
 func CompileScript(script string) ([]byte, []byte, error) {
 	// Preprocess
-	mainInput, initInput := mutan.PreProcess(script)
+	mainInput, initInput := mutan.PreParse(script)
 	// Compile main script
 	mainScript, err := Compile(mainInput)
 	if err != nil {

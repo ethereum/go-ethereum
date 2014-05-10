@@ -67,7 +67,7 @@ func (gui *Gui) Start(assetPath string) {
 		Init: func(p *ethpub.PTx, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
 	}})
 
-	ethutil.Config.SetClientString(fmt.Sprintf("/Ethereal v%s", "0.5.0 RC2"))
+	ethutil.Config.SetClientString(fmt.Sprintf("/Ethereal v%s", "0.5.0 RC3"))
 	ethutil.Config.Log.Infoln("[GUI] Starting GUI")
 	// Create a new QML engine
 	gui.engine = qml.NewEngine()
@@ -223,7 +223,7 @@ func (gui *Gui) Transact(recipient, value, gas, gasPrice, data string) (*ethpub.
 func (gui *Gui) Create(recipient, value, gas, gasPrice, data string) (*ethpub.PReceipt, error) {
 	keyPair := ethutil.Config.Db.GetKeys()[0]
 
-	mainInput, initInput := mutan.PreProcess(data)
+	mainInput, initInput := mutan.PreParse(data)
 
 	return gui.pub.Create(ethutil.Hex(keyPair.PrivateKey), value, gas, gasPrice, initInput, mainInput)
 }
