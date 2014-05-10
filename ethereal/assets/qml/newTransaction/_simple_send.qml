@@ -77,12 +77,12 @@ Component {
 			text: "Send"
 			onClicked: {
 				//this.enabled = false
-				var res = eth.createTx(txSimpleRecipient.text, txSimpleValue.text,"","","")
+				var res = eth.transact(txSimpleRecipient.text, txSimpleValue.text,"","","")
 				if(res[1]) {
 					txSimpleResult.text = "There has been an error broadcasting your transaction:" + res[1].error()
 				} else {
 					txSimpleResult.text = "Your transaction has been broadcasted over the network.\nYour transaction id is:"
-					txSimpleOutput.text = res[0]
+					txSimpleOutput.text = res[0].hash
 					this.visible = false
 					simpleSendColumn.state = "DONE"
 				}

@@ -59,14 +59,6 @@ func (ui *UiLib) OpenHtml(path string) {
 	go app.run()
 }
 
-func (ui *UiLib) Watch(addr, storageAddr string) {
-	if len(storageAddr) == 0 {
-		ui.eth.Reactor().Subscribe("storage:"+string(ethutil.FromHex(addr))+":"+string(ethutil.FromHex(storageAddr)), nil)
-	} else {
-		ui.eth.Reactor().Subscribe("object:"+string(ethutil.FromHex(addr)), nil)
-	}
-}
-
 func (ui *UiLib) Muted(content string) {
 	component, err := ui.engine.LoadFile(ui.AssetPath("qml/muted.qml"))
 	if err != nil {
@@ -78,8 +70,6 @@ func (ui *UiLib) Muted(content string) {
 	go func() {
 		path := "file://" + ui.AssetPath("muted/index.html")
 		win.Set("url", path)
-		//debuggerPath := "file://" + ui.AssetPath("muted/debugger.html")
-		//win.Set("debugUrl", debuggerPath)
 
 		win.Show()
 		win.Wait()
@@ -88,7 +78,7 @@ func (ui *UiLib) Muted(content string) {
 
 func (ui *UiLib) Connect(button qml.Object) {
 	if !ui.connected {
-		ui.eth.Start()
+		ui.eth.Start(true)
 		ui.connected = true
 		button.Set("enabled", false)
 	}
@@ -149,9 +139,9 @@ func (ui *UiLib) DebugTx(recipient, valueStr, gasStr, gasPriceStr, data string) 
 
 	// Contract addr as test address
 	keyPair := ethutil.Config.Db.GetKeys()[0]
-	account := ui.eth.StateManager().GetAddrState(keyPair.Address()).Object
+	account := ui.eth.StateManager().TransState().GetStateObject(keyPair.Address())
 	c := ethchain.MakeContract(callerTx, state)
-	callerClosure := ethchain.NewClosure(account, c, c.Script(), state, ethutil.Big(gasStr), ethutil.Big(gasPriceStr), ethutil.Big(valueStr))
+	callerClosure := ethchain.NewClosure(account, c, c.Script(), state, ethutil.Big(gasStr), ethutil.Big(gasPriceStr))
 
 	block := ui.eth.BlockChain().CurrentBlock
 	vm := ethchain.NewVm(state, ui.eth.StateManager(), ethchain.RuntimeVars{

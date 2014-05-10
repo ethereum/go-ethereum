@@ -5,19 +5,18 @@
 <link rel="stylesheet" href="bootstrap.min.css">
 <link rel="stylesheet" href="bootstrap-theme.min.css">
 <link rel="stylesheet" href="samplecoin.css">
-<script src="promise.min.js"></script>
 <meta name="viewport" content="minimum-scale=1; maximum-scale=1; initial-scale=1;">
 
 <script type="text/javascript">
 
-var jefcoinAddr = "3dff537f51350239abc95c76a5864aa605259e7d"
+var jefcoinAddr = "b7cb72c47ec4f31751d0d628b5a33fd6671bbba0"
 var mAddr = ""
 
 function createTransaction() {
-	var addr = document.querySelector("#addr").value;
-	var amount = document.querySelector("#amount").value;
+	var addr = ("0x" + document.querySelector("#addr").value).pad(32);
+	var amount = document.querySelector("#amount").value.pad(32);
 
-	var data = (("0x"+addr).pad(32) + amount.pad(32)).unbin()
+	var data = (addr + amount).unbin();
 	eth.transact(mAddr, jefcoinAddr, 0, "10000000", "250", data, function(receipt) {
 		debug("received tx hash:", reciept.address)
 	})
@@ -27,9 +26,8 @@ function init() {
 	eth.set({width: 500});
 
 	eth.getKey(function(sec) {
+		mAddr = sec;
 		eth.getSecretToAddress(sec, function(addr) {
-			mAddr = addr;
-
 			eth.getStorageAt(jefcoinAddr, addr, function(storage) {
 				document.querySelector("#current-amount").innerHTML = storage;
 			});
