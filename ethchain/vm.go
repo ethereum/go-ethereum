@@ -53,6 +53,7 @@ type RuntimeVars struct {
 	Time        int64
 	Diff        *big.Int
 	TxData      []string
+	Value       *big.Int
 }
 
 func NewVm(state *State, stateManager *StateManager, vars RuntimeVars) *Vm {
@@ -94,6 +95,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 	if ethutil.Config.Debug {
 		ethutil.Config.Log.Debugf("#   op\n")
 	}
+	fmt.Println(closure.Script)
 
 	for {
 		// The base for all big integer arithmetic
@@ -104,11 +106,9 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		val := closure.Get(pc)
 		// Get the opcode (it must be an opcode!)
 		op := OpCode(val.Uint())
-		/*
-			if ethutil.Config.Debug {
-				ethutil.Config.Log.Debugf("%-3d %-4s", pc, op.String())
-			}
-		*/
+		if ethutil.Config.Debug {
+			ethutil.Config.Log.Debugf("%-3d %-4s", pc, op.String())
+		}
 
 		gas := new(big.Int)
 		useGas := func(amount *big.Int) {
@@ -318,14 +318,13 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case oADDRESS:
 			stack.Push(ethutil.BigD(closure.Object().Address()))
 		case oBALANCE:
-			stack.Push(closure.Value)
+			stack.Push(closure.object.Amount)
 		case oORIGIN:
 			stack.Push(ethutil.BigD(vm.vars.Origin))
 		case oCALLER:
 			stack.Push(ethutil.BigD(closure.Callee().Address()))
 		case oCALLVALUE:
-			// FIXME: Original value of the call, not the current value
-			stack.Push(closure.Value)
+			stack.Push(vm.vars.Value)
 		case oCALLDATALOAD:
 			require(1)
 			offset := stack.Pop().Int64()
@@ -352,27 +351,17 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			// TODO
 			stack.Push(big.NewInt(0))
 
-		// 0x50 range
-		case oPUSH: // Push PC+1 on to the stack
+			// 0x50 range
+		case oPUSH1, oPUSH2, oPUSH3, oPUSH4, oPUSH5, oPUSH6, oPUSH7, oPUSH8, oPUSH9, oPUSH10, oPUSH11, oPUSH12, oPUSH13, oPUSH14, oPUSH15, oPUSH16, oPUSH17, oPUSH18, oPUSH19, oPUSH20, oPUSH21, oPUSH22, oPUSH23, oPUSH24, oPUSH25, oPUSH26, oPUSH27, oPUSH28, oPUSH29, oPUSH30, oPUSH31, oPUSH32:
+			a := big.NewInt(int64(op) - int64(oPUSH1) + 1)
 			pc.Add(pc, ethutil.Big1)
-			data := closure.Gets(pc, big.NewInt(32))
+			data := closure.Gets(pc, a)
 			val := ethutil.BigD(data.Bytes())
-
 			// Push value to stack
 			stack.Push(val)
-
-			pc.Add(pc, big.NewInt(31))
+			pc.Add(pc, a.Sub(a, big.NewInt(1)))
 			step++
-		case oPUSH20:
-			pc.Add(pc, ethutil.Big1)
-			data := closure.Gets(pc, big.NewInt(20))
-			val := ethutil.BigD(data.Bytes())
 
-			// Push value to stack
-			stack.Push(val)
-
-			pc.Add(pc, big.NewInt(19))
-			step++
 		case oPOP:
 			require(1)
 			stack.Pop()
@@ -406,21 +395,23 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case oSSTORE:
 			require(2)
 			val, loc := stack.Popn()
-			closure.SetMem(loc, ethutil.NewValue(val))
+			closure.SetStorage(loc, ethutil.NewValue(val))
 
 			// Add the change to manifest
-			vm.stateManager.manifest.AddStorageChange(closure.Object(), loc.Bytes(), val)
+			vm.state.manifest.AddStorageChange(closure.Object(), loc.Bytes(), val)
 		case oJUMP:
 			require(1)
 			pc = stack.Pop()
 			// Reduce pc by one because of the increment that's at the end of this for loop
-			pc.Sub(pc, ethutil.Big1)
+			//pc.Sub(pc, ethutil.Big1)
+			continue
 		case oJUMPI:
 			require(2)
 			cond, pos := stack.Popn()
 			if cond.Cmp(ethutil.BigTrue) == 0 {
 				pc = pos
-				pc.Sub(pc, ethutil.Big1)
+				//pc.Sub(pc, ethutil.Big1)
+				continue
 			}
 		case oPC:
 			stack.Push(pc)
@@ -449,8 +440,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 				contract.initScript,
 				vm.state,
 				gas,
-				closure.Price,
-				value)
+				closure.Price)
 			// Call the closure and set the return value as
 			// main script.
 			closure.Script, err = closure.Call(vm, nil, hook)
@@ -477,8 +467,10 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 				break
 			}
+
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
+
 			// Fetch the contract which will serve as the closure body
 			contract := vm.state.GetContract(addr.Bytes())
 
@@ -490,8 +482,12 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 					gas = new(big.Int).Set(closure.Gas)
 				}
 				closure.Gas.Sub(closure.Gas, gas)
+
+				// Add the value to the state object
+				contract.AddAmount(value)
+
 				// Create a new callable closure
-				closure := NewClosure(closure.Object(), contract, contract.script, vm.state, gas, closure.Price, value)
+				closure := NewClosure(closure.Object(), contract, contract.script, vm.state, gas, closure.Price)
 				// Executer the closure and get the return value (if any)
 				ret, err := closure.Call(vm, args, hook)
 				if err != nil {
@@ -500,9 +496,9 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 					//contract.State().Reset()
 				} else {
 					stack.Push(ethutil.BigTrue)
-					// Notify of the changes
-					vm.stateManager.manifest.AddObjectChange(contract)
 				}
+
+				vm.state.SetStateObject(contract)
 
 				mem.Set(retOffset.Int64(), retSize.Int64(), ret)
 			} else {
@@ -520,8 +516,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			receiver := vm.state.GetAccount(stack.Pop().Bytes())
 			receiver.AddAmount(closure.object.Amount)
-
-			vm.stateManager.manifest.AddObjectChange(receiver)
+			vm.state.SetStateObject(receiver)
 
 			closure.object.state.Purge()
 

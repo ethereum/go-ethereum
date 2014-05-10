@@ -77,7 +77,7 @@ func (c *StateObject) SetAddr(addr []byte, value interface{}) {
 	c.state.trie.Update(string(addr), string(ethutil.NewValue(value).Encode()))
 }
 
-func (c *StateObject) SetMem(num *big.Int, val *ethutil.Value) {
+func (c *StateObject) SetStorage(num *big.Int, val *ethutil.Value) {
 	addr := ethutil.BigToBytes(num, 256)
 	c.SetAddr(addr, val)
 }
@@ -160,33 +160,8 @@ func (c *StateObject) RlpDecode(data []byte) {
 	c.script = decoder.Get(3).Bytes()
 }
 
-// The cached state and state object cache are helpers which will give you somewhat
-// control over the nonce. When creating new transactions you're interested in the 'next'
-// nonce rather than the current nonce. This to avoid creating invalid-nonce transactions.
-type StateObjectCache struct {
-	cachedObjects map[string]*CachedStateObject
-}
-
-func NewStateObjectCache() *StateObjectCache {
-	return &StateObjectCache{cachedObjects: make(map[string]*CachedStateObject)}
-}
-
-func (s *StateObjectCache) Add(addr []byte, object *StateObject) *CachedStateObject {
-	state := &CachedStateObject{Nonce: object.Nonce, Object: object}
-	s.cachedObjects[string(addr)] = state
-
-	return state
-}
-
-func (s *StateObjectCache) Get(addr []byte) *CachedStateObject {
-	return s.cachedObjects[string(addr)]
-}
-
-type CachedStateObject struct {
-	Nonce  uint64
-	Object *StateObject
-}
-
+// Storage change object. Used by the manifest for notifying changes to
+// the sub channels.
 type StorageState struct {
 	StateAddress []byte
 	Address      []byte

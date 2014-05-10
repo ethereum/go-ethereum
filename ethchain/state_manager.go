@@ -25,24 +25,16 @@ type EthManager interface {
 type StateManager struct {
 	// Mutex for locking the block processor. Blocks can only be handled one at a time
 	mutex sync.Mutex
-
 	// Canonical block chain
 	bc *BlockChain
-	// States for addresses. You can watch any address
-	// at any given time
-	stateObjectCache *StateObjectCache
-
 	// Stack for processing contracts
 	stack *Stack
 	// non-persistent key/value memory storage
 	mem map[string]*big.Int
-
+	// Proof of work used for validating
 	Pow PoW
-
+	// The ethereum manager interface
 	Ethereum EthManager
-
-	SecondaryBlockProcessor BlockProcessor
-
 	// The managed states
 	// Processor state. Anything processed will be applied to this
 	// state
@@ -50,21 +42,28 @@ type StateManager struct {
 	// Comparative state it used for comparing and validating end
 	// results
 	compState *State
-
-	manifest *Manifest
+	// Transiently state. The trans state isn't ever saved, validated and
+	// it could be used for setting account nonces without effecting
+	// the main states.
+	transState *State
+	// Manifest for keeping changes regarding state objects. See `notify`
+	// XXX Should we move the manifest to the State object. Benefit:
+	// * All states can keep their own local changes
+	//manifest *Manifest
 }
 
 func NewStateManager(ethereum EthManager) *StateManager {
 	sm := &StateManager{
-		stack:            NewStack(),
-		mem:              make(map[string]*big.Int),
-		Pow:              &EasyPow{},
-		Ethereum:         ethereum,
-		stateObjectCache: NewStateObjectCache(),
-		bc:               ethereum.BlockChain(),
-		manifest:         NewManifest(),
+		stack:    NewStack(),
+		mem:      make(map[string]*big.Int),
+		Pow:      &EasyPow{},
+		Ethereum: ethereum,
+		bc:       ethereum.BlockChain(),
+		//manifest: NewManifest(),
 	}
 	sm.procState = ethereum.BlockChain().CurrentBlock.State()
+	sm.transState = sm.procState.Copy()
+
 	return sm
 }
 
@@ -72,22 +71,8 @@ func (sm *StateManager) ProcState() *State {
 	return sm.procState
 }
 
-// Watches any given address and puts it in the address state store
-func (sm *StateManager) WatchAddr(addr []byte) *CachedStateObject {
-	//XXX account := sm.bc.CurrentBlock.state.GetAccount(addr)
-	account := sm.procState.GetAccount(addr)
-
-	return sm.stateObjectCache.Add(addr, account)
-}
-
-func (sm *StateManager) GetAddrState(addr []byte) *CachedStateObject {
-	account := sm.stateObjectCache.Get(addr)
-	if account == nil {
-		a := sm.procState.GetAccount(addr)
-		account = &CachedStateObject{Nonce: a.Nonce, Object: a}
-	}
-
-	return account
+func (sm *StateManager) TransState() *State {
+	return sm.transState
 }
 
 func (sm *StateManager) BlockChain() *BlockChain {
@@ -201,19 +186,13 @@ func (sm *StateManager) ProcessBlock(block *Block, dontReact bool) error {
 		// Add the block to the chain
 		sm.bc.Add(block)
 
-		// If there's a block processor present, pass in the block for further
-		// processing
-		if sm.SecondaryBlockProcessor != nil {
-			sm.SecondaryBlockProcessor.ProcessBlock(block)
-		}
-
 		ethutil.Config.Log.Infof("[STATE] Added block #%d (%x)\n", block.BlockInfo().Number, block.Hash())
 		if dontReact == false {
 			sm.Ethereum.Reactor().Post("newBlock", block)
 
 			sm.notifyChanges()
 
-			sm.manifest.Reset()
+			sm.procState.manifest.Reset()
 		}
 	} else {
 		fmt.Println("total diff failed")
@@ -323,7 +302,7 @@ func (sm *StateManager) EvalScript(script []byte, object *StateObject, tx *Trans
 		return
 	}
 
-	closure := NewClosure(account, object, script, sm.procState, tx.Gas, tx.GasPrice, tx.Value)
+	closure := NewClosure(account, object, script, sm.procState, tx.Gas, tx.GasPrice)
 	vm := NewVm(sm.procState, sm, RuntimeVars{
 		Origin:      account.Address(),
 		BlockNumber: block.BlockInfo().Number,
@@ -331,59 +310,24 @@ func (sm *StateManager) EvalScript(script []byte, object *StateObject, tx *Trans
 		Coinbase:    block.Coinbase,
 		Time:        block.Time,
 		Diff:        block.Difficulty,
+		Value:       tx.Value,
 		//Price:       tx.GasPrice,
 	})
 	closure.Call(vm, tx.Data, nil)
 
 	// Update the account (refunds)
 	sm.procState.UpdateStateObject(account)
-	sm.manifest.AddObjectChange(account)
-
 	sm.procState.UpdateStateObject(object)
-	sm.manifest.AddObjectChange(object)
 }
 
 func (sm *StateManager) notifyChanges() {
-	for addr, stateObject := range sm.manifest.objectChanges {
+	for addr, stateObject := range sm.procState.manifest.objectChanges {
 		sm.Ethereum.Reactor().Post("object:"+addr, stateObject)
 	}
 
-	for stateObjectAddr, mappedObjects := range sm.manifest.storageChanges {
+	for stateObjectAddr, mappedObjects := range sm.procState.manifest.storageChanges {
 		for addr, value := range mappedObjects {
 			sm.Ethereum.Reactor().Post("storage:"+stateObjectAddr+":"+addr, &StorageState{[]byte(stateObjectAddr), []byte(addr), value})
 		}
 	}
-}
-
-type Manifest struct {
-	// XXX These will be handy in the future. Not important for now.
-	objectAddresses  map[string]bool
-	storageAddresses map[string]map[string]bool
-
-	objectChanges  map[string]*StateObject
-	storageChanges map[string]map[string]*big.Int
-}
-
-func NewManifest() *Manifest {
-	m := &Manifest{objectAddresses: make(map[string]bool), storageAddresses: make(map[string]map[string]bool)}
-	m.Reset()
-
-	return m
-}
-
-func (m *Manifest) Reset() {
-	m.objectChanges = make(map[string]*StateObject)
-	m.storageChanges = make(map[string]map[string]*big.Int)
-}
-
-func (m *Manifest) AddObjectChange(stateObject *StateObject) {
-	m.objectChanges[string(stateObject.Address())] = stateObject
-}
-
-func (m *Manifest) AddStorageChange(stateObject *StateObject, storageAddr []byte, storage *big.Int) {
-	if m.storageChanges[string(stateObject.Address())] == nil {
-		m.storageChanges[string(stateObject.Address())] = make(map[string]*big.Int)
-	}
-
-	m.storageChanges[string(stateObject.Address())][string(storageAddr)] = storage
 }

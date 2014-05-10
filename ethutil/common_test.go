@@ -26,7 +26,7 @@ func TestCommon(t *testing.T) {
 		t.Error("Got", szabo)
 	}
 
-	if vito != "10 Vito" {
+	if vito != "10 Vita" {
 		t.Error("Got", vito)
 	}
 

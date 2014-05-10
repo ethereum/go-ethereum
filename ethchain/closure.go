@@ -11,7 +11,7 @@ type ClosureRef interface {
 	ReturnGas(*big.Int, *big.Int, *State)
 	Address() []byte
 	GetMem(*big.Int) *ethutil.Value
-	SetMem(*big.Int, *ethutil.Value)
+	SetStore(*big.Int, *ethutil.Value)
 	N() *big.Int
 }
 
@@ -24,20 +24,18 @@ type Closure struct {
 
 	Gas   *big.Int
 	Price *big.Int
-	Value *big.Int
 
 	Args []byte
 }
 
 // Create a new closure for the given data items
-func NewClosure(callee, object *StateObject, script []byte, state *State, gas, price, val *big.Int) *Closure {
+func NewClosure(callee, object *StateObject, script []byte, state *State, gas, price *big.Int) *Closure {
 	c := &Closure{callee: callee, object: object, Script: script, State: state, Args: nil}
 
 	// In most cases gas, price and value are pointers to transaction objects
 	// and we don't want the transaction's values to change.
 	c.Gas = new(big.Int).Set(gas)
 	c.Price = new(big.Int).Set(price)
-	c.Value = new(big.Int).Set(val)
 
 	return c
 }
@@ -66,8 +64,8 @@ func (c *Closure) Gets(x, y *big.Int) *ethutil.Value {
 	return ethutil.NewValue(partial)
 }
 
-func (c *Closure) SetMem(x *big.Int, val *ethutil.Value) {
-	c.object.SetMem(x, val)
+func (c *Closure) SetStorage(x *big.Int, val *ethutil.Value) {
+	c.object.SetStorage(x, val)
 }
 
 func (c *Closure) Address() []byte {

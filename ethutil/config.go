@@ -27,7 +27,6 @@ type config struct {
 	Ver          string
 	ClientString string
 	Pubkey       []byte
-	Seed         bool
 }
 
 var Config *config
@@ -51,7 +50,7 @@ func ReadConfig(base string) *config {
 			}
 		}
 
-		Config = &config{ExecPath: path, Debug: true, Ver: "0.5 RC1"}
+		Config = &config{ExecPath: path, Debug: true, Ver: "0.5.0 RC2"}
 		Config.Log = NewLogger(LogFile|LogStd, LogLevelDebug)
 		Config.SetClientString("/Ethereum(G)")
 	}

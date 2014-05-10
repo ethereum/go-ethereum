@@ -15,11 +15,13 @@ type State struct {
 	trie *ethutil.Trie
 	// Nested states
 	states map[string]*State
+
+	manifest *Manifest
 }
 
 // Create a new state from a given trie
 func NewState(trie *ethutil.Trie) *State {
-	return &State{trie: trie, states: make(map[string]*State)}
+	return &State{trie: trie, states: make(map[string]*State), manifest: NewManifest()}
 }
 
 // Resets the trie and all siblings
@@ -114,46 +116,6 @@ func (s *State) Copy() *State {
 	return NewState(s.trie.Copy())
 }
 
-type ObjType byte
-
-const (
-	NilTy ObjType = iota
-	AccountTy
-	ContractTy
-
-	UnknownTy
-)
-
-/*
-// Returns the object stored at key and the type stored at key
-// Returns nil if nothing is stored
-func (s *State) GetStateObject(key []byte) (*ethutil.Value, ObjType) {
-	// Fetch data from the trie
-	data := s.trie.Get(string(key))
-	// Returns the nil type, indicating nothing could be retrieved.
-	// Anything using this function should check for this ret val
-	if data == "" {
-		return nil, NilTy
-	}
-
-	var typ ObjType
-	val := ethutil.NewValueFromBytes([]byte(data))
-	// Check the length of the retrieved value.
-	// Len 2 = Account
-	// Len 3 = Contract
-	// Other = invalid for now. If other types emerge, add them here
-	if val.Len() == 2 {
-		typ = AccountTy
-	} else if val.Len() == 3 {
-		typ = ContractTy
-	} else {
-		typ = UnknownTy
-	}
-
-	return val, typ
-}
-*/
-
 // Updates any given state object
 func (s *State) UpdateStateObject(object *StateObject) {
 	addr := object.Address()
@@ -163,6 +125,7 @@ func (s *State) UpdateStateObject(object *StateObject) {
 	}
 
 	s.trie.Update(string(addr), string(object.RlpEncode()))
+	s.manifest.AddObjectChange(object)
 }
 
 func (s *State) Put(key, object []byte) {
@@ -171,4 +134,41 @@ func (s *State) Put(key, object []byte) {
 
 func (s *State) Root() interface{} {
 	return s.trie.Root
+}
+
+// Object manifest
+//
+// The object manifest is used to keep changes to the state so we can keep track of the changes
+// that occurred during a state transitioning phase.
+type Manifest struct {
+	// XXX These will be handy in the future. Not important for now.
+	objectAddresses  map[string]bool
+	storageAddresses map[string]map[string]bool
+
+	objectChanges  map[string]*StateObject
+	storageChanges map[string]map[string]*big.Int
+}
+
+func NewManifest() *Manifest {
+	m := &Manifest{objectAddresses: make(map[string]bool), storageAddresses: make(map[string]map[string]bool)}
+	m.Reset()
+
+	return m
+}
+
+func (m *Manifest) Reset() {
+	m.objectChanges = make(map[string]*StateObject)
+	m.storageChanges = make(map[string]map[string]*big.Int)
+}
+
+func (m *Manifest) AddObjectChange(stateObject *StateObject) {
+	m.objectChanges[string(stateObject.Address())] = stateObject
+}
+
+func (m *Manifest) AddStorageChange(stateObject *StateObject, storageAddr []byte, storage *big.Int) {
+	if m.storageChanges[string(stateObject.Address())] == nil {
+		m.storageChanges[string(stateObject.Address())] = make(map[string]*big.Int)
+	}
+
+	m.storageChanges[string(stateObject.Address())][string(storageAddr)] = storage
 }
