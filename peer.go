@@ -146,6 +146,7 @@ func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
 		port:            30303,
 		pubkey:          pubkey,
 		blocksRequested: 10,
+		caps:            ethereum.ServerCaps(),
 	}
 }
 
@@ -573,7 +574,6 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	}
 
 	// Catch up with the connected peer
-	// p.CatchupWithPeer(p.ethereum.BlockChain().CurrentBlock.Hash())
 	p.SyncWithBlocks()
 
 	// Set the peer's caps

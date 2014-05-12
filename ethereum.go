@@ -122,6 +122,10 @@ func (s *Ethereum) TxPool() *ethchain.TxPool {
 	return s.txPool
 }
 
+func (s *Ethereum) ServerCaps() Caps {
+	return s.serverCaps
+}
+
 func (s *Ethereum) AddPeer(conn net.Conn) {
 	peer := NewPeer(conn, s, true)
 
