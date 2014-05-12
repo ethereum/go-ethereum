@@ -132,9 +132,13 @@ func (s *Ethereum) ServerCaps() Caps {
 func (s *Ethereum) AddPeer(conn net.Conn) {
 	peer := NewPeer(conn, s, true)
 
-	if peer != nil && s.peers.Len() < s.MaxPeers {
-		s.peers.PushBack(peer)
-		peer.Start()
+	if peer != nil {
+		if s.peers.Len() < s.MaxPeers {
+			s.peers.PushBack(peer)
+			peer.Start()
+		} else {
+			ethutil.Config.Log.Debugf("[SERV] Max connected peers reached. Not adding incoming peer.")
+		}
 	}
 }
 
