@@ -2,6 +2,7 @@ package eth
 
 import (
 	"container/list"
+	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethrpc"
@@ -9,9 +10,11 @@ import (
 	"github.com/ethereum/eth-go/ethwire"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -146,15 +149,51 @@ func (s *Ethereum) ConnectToPeer(addr string) error {
 	if s.peers.Len() < s.MaxPeers {
 		var alreadyConnected bool
 
+		ahost, _, _ := net.SplitHostPort(addr)
+		var chost string
+
+		ips, err := net.LookupIP(ahost)
+
+		if err != nil {
+			return err
+		} else {
+			// If more then one ip is available try stripping away the ipv6 ones
+			if len(ips) > 1 {
+				var ipsv4 []net.IP
+				// For now remove the ipv6 addresses
+				for _, ip := range ips {
+					if strings.Contains(ip.String(), "::") {
+						continue
+					} else {
+						ipsv4 = append(ipsv4, ip)
+					}
+				}
+				if len(ipsv4) == 0 {
+					return fmt.Errorf("[SERV] No IPV4 addresses available for hostname")
+				}
+
+				// Pick a random ipv4 address, simulating round-robin DNS.
+				rand.Seed(time.Now().UTC().UnixNano())
+				i := rand.Intn(len(ipsv4))
+				chost = ipsv4[i].String()
+			} else {
+				if len(ips) == 0 {
+					return fmt.Errorf("[SERV] No IPs resolved for the given hostname")
+					return nil
+				}
+				chost = ips[0].String()
+			}
+		}
+
 		eachPeer(s.peers, func(p *Peer, v *list.Element) {
 			if p.conn == nil {
 				return
 			}
 			phost, _, _ := net.SplitHostPort(p.conn.RemoteAddr().String())
-			ahost, _, _ := net.SplitHostPort(addr)
 
-			if phost == ahost {
+			if phost == chost {
 				alreadyConnected = true
+				ethutil.Config.Log.Debugf("[SERV] Peer %s already added.\n", chost)
 				return
 			}
 		})
