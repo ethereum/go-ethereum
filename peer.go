@@ -549,7 +549,7 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	c := msg.Data
 
 	if c.Get(0).Uint() != ProtocolVersion {
-		ethutil.Config.Log.Debugln("Invalid peer version. Require protocol v5")
+		ethutil.Config.Log.Debugln("Invalid peer version. Require protocol:", ProtocolVersion)
 		p.Stop()
 		return
 	}
