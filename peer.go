@@ -534,7 +534,10 @@ func (p *Peer) peersMessage() *ethwire.Msg {
 	outPeers := make([]interface{}, len(p.ethereum.InOutPeers()))
 	// Serialise each peer
 	for i, peer := range p.ethereum.InOutPeers() {
-		outPeers[i] = peer.RlpData()
+		// Don't return localhost as valid peer
+		if !net.ParseIP(peer.conn.RemoteAddr().String()).IsLoopback() {
+			outPeers[i] = peer.RlpData()
+		}
 	}
 
 	// Return the message to the peer with the known list of connected clients
