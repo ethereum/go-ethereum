@@ -110,5 +110,11 @@ func main() {
 	ethereum.MaxPeers = MaxPeer
 
 	gui := ethui.New(ethereum)
+
+	ethereum.Start(UseSeed)
+
 	gui.Start(AssetPath)
+
+	// Wait for shutdown
+	ethereum.WaitForShutdown()
 }
