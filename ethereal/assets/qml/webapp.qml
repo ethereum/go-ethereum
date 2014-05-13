@@ -47,13 +47,37 @@ ApplicationWindow {
 
 				try {
 					switch(data.call) {
+					case "getCoinBase":
+					      postData(data._seed, eth.getCoinBase())
+
+					      break
+					case "getIsListening":
+					      postData(data._seed, eth.getIsListening())
+
+					      break
+					case "getIsMining":
+					      postData(data._seed, eth.getIsMining())
+
+					      break
+					case "getPeerCount":
+					      postData(data._seed, eth.getPeerCount())
+
+					      break
+
+					case "getTxCountAt":
+					      require(1)
+					      postData(data._seed, eth.getTxCountAt(data.args[0]))
+
+					      break
 					case "getBlockByNumber":
 						var block = eth.getBlock("b9b56cf6f907fbee21db0cd7cbc0e6fea2fe29503a3943e275c5e467d649cb06")
 						postData(data._seed, block)
+
 						break
 					case "getBlockByHash":
 						var block = eth.getBlock("b9b56cf6f907fbee21db0cd7cbc0e6fea2fe29503a3943e275c5e467d649cb06")
 						postData(data._seed, block)
+
 						break
 					case "transact":
 						require(5)

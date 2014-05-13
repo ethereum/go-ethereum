@@ -122,28 +122,8 @@ func main() {
 	// Set the max peers
 	ethereum.MaxPeers = MaxPeer
 
-	if StartConsole {
-		err := os.Mkdir(ethutil.Config.ExecPath, os.ModePerm)
-		// Error is OK if the error is ErrExist
-		if err != nil && !os.IsExist(err) {
-			log.Panic("Unable to create EXECPATH:", err)
-		}
-
-		console := NewConsole(ethereum)
-		go console.Start()
-	}
-	if StartRpc {
-		ethereum.RpcServer, err = ethrpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum), RpcPort)
-		if err != nil {
-			logger.Infoln("Could not start RPC interface:", err)
-		} else {
-			go ethereum.RpcServer.Start()
-		}
-	}
-
-	RegisterInterrupts(ethereum)
-
-	ethereum.Start(UseSeed)
+	// Set Mining status
+	ethereum.Mining = StartMining
 
 	if StartMining {
 		logger.Infoln("Miner started")
@@ -167,6 +147,29 @@ func main() {
 		}()
 
 	}
+
+	if StartConsole {
+		err := os.Mkdir(ethutil.Config.ExecPath, os.ModePerm)
+		// Error is OK if the error is ErrExist
+		if err != nil && !os.IsExist(err) {
+			log.Panic("Unable to create EXECPATH:", err)
+		}
+
+		console := NewConsole(ethereum)
+		go console.Start()
+	}
+	if StartRpc {
+		ethereum.RpcServer, err = ethrpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum), RpcPort)
+		if err != nil {
+			logger.Infoln("Could not start RPC interface:", err)
+		} else {
+			go ethereum.RpcServer.Start()
+		}
+	}
+
+	RegisterInterrupts(ethereum)
+
+	ethereum.Start(UseSeed)
 
 	// Wait for shutdown
 	ethereum.WaitForShutdown()

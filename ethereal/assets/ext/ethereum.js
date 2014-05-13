@@ -36,6 +36,21 @@ window.eth = {
 		postData({call: "getKey"}, cb);
 	},
 
+	getTxCountAt: function(address, cb) {
+		postData({call: "getTxCountAt", args: [address]}, cb);
+	},
+	getIsMining: function(cb){
+		postData({call: "getIsMining"}, cb)
+	},
+	getIsListening: function(cb){
+		postData({call: "getIsListening"}, cb)
+	},
+	getCoinBase: function(cb){
+		postData({call: "getCoinBase"}, cb);
+	},
+	getPeerCount: function(cb){
+		postData({call: "getPeerCount"}, cb);
+	},
 	getBalanceAt: function(address, cb) {
 		postData({call: "getBalance", args: [address]}, cb);
 	},
@@ -115,6 +130,8 @@ window.eth = {
 			}
 		}
 	},
+
+
 }
 window.eth._callbacks = {}
 window.eth._onCallbacks = {}
