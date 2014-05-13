@@ -48,15 +48,15 @@ func (s *JsonRpcServer) Start() {
 	}
 }
 
-func NewJsonRpcServer(ethp *ethpub.PEthereum) *JsonRpcServer {
-	l, err := net.Listen("tcp", ":30304")
+func NewJsonRpcServer(ethp *ethpub.PEthereum) (*JsonRpcServer, error) {
+	l, err := net.Listen("tcp", ":8080")
 	if err != nil {
-		ethutil.Config.Log.Infoln("Error starting JSON-RPC")
+		return nil, err
 	}
 
 	return &JsonRpcServer{
 		listener: l,
 		quit:     make(chan bool),
 		ethp:     ethp,
-	}
+	}, nil
 }
