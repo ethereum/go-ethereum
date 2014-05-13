@@ -6,16 +6,18 @@ import (
 )
 
 type PEthereum struct {
+	manager      ethchain.EthManager
 	stateManager *ethchain.StateManager
 	blockChain   *ethchain.BlockChain
 	txPool       *ethchain.TxPool
 }
 
-func NewPEthereum(sm *ethchain.StateManager, bc *ethchain.BlockChain, txp *ethchain.TxPool) *PEthereum {
+func NewPEthereum(manager ethchain.EthManager) *PEthereum {
 	return &PEthereum{
-		sm,
-		bc,
-		txp,
+		manager,
+		manager.StateManager(),
+		manager.BlockChain(),
+		manager.TxPool(),
 	}
 }
 
