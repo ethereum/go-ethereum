@@ -70,12 +70,12 @@ ApplicationWindow {
 
 					      break
 					case "getBlockByNumber":
-						var block = eth.getBlock("b9b56cf6f907fbee21db0cd7cbc0e6fea2fe29503a3943e275c5e467d649cb06")
+						var block = eth.getBlock(data.args[0])
 						postData(data._seed, block)
 
 						break
 					case "getBlockByHash":
-						var block = eth.getBlock("b9b56cf6f907fbee21db0cd7cbc0e6fea2fe29503a3943e275c5e467d649cb06")
+						var block = eth.getBlock(data.args[0])
 						postData(data._seed, block)
 
 						break
