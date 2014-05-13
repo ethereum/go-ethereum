@@ -197,6 +197,9 @@ func (sm *StateManager) ProcessBlock(block *Block, dontReact bool) error {
 
 			sm.procState.manifest.Reset()
 		}
+
+		sm.Ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
+
 	} else {
 		fmt.Println("total diff failed")
 	}
