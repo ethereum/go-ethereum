@@ -133,7 +133,7 @@ func main() {
 		go console.Start()
 	}
 	if StartRpc {
-		ethereum.RpcServer, err = ethrpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum))
+		ethereum.RpcServer, err = ethrpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum), RpcPort)
 		if err != nil {
 			logger.Infoln("Could not start RPC interface:", err)
 		} else {

@@ -7,6 +7,7 @@ import (
 var StartConsole bool
 var StartMining bool
 var StartRpc bool
+var RpcPort int
 var UseUPnP bool
 var OutboundPort string
 var ShowGenesis bool
@@ -28,6 +29,7 @@ func Init() {
 	flag.BoolVar(&UseSeed, "seed", true, "seed peers")
 	flag.BoolVar(&GenAddr, "genaddr", false, "create a new priv/pub key")
 	flag.BoolVar(&ExportKey, "export", false, "export private key")
+	flag.IntVar(&RpcPort, "rpcport", 8080, "port to start json-rpc server on")
 	flag.StringVar(&OutboundPort, "p", "30303", "listening port")
 	flag.StringVar(&DataDir, "dir", ".ethereal", "ethereum data directory")
 	flag.StringVar(&ImportKey, "import", "", "imports the given private key (hex)")
