@@ -118,11 +118,14 @@ ApplicationWindow {
 						postData(data._seed, null)
 						break;
 					case "set":
+            console.log("'Set' has been depcrecated")
+          /*
 						for(var key in data.args) {
 							if(webview.hasOwnProperty(key)) {
 								window[key] = data.args[key];
 							}
 						}
+            */
 						break;
 					case "getSecretToAddress":
 						require(1)
