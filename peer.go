@@ -2,6 +2,7 @@ package eth
 
 import (
 	"bytes"
+	"container/list"
 	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
@@ -146,6 +147,7 @@ func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
 		port:            30303,
 		pubkey:          pubkey,
 		blocksRequested: 10,
+		caps:            ethereum.ServerCaps(),
 	}
 }
 
@@ -400,22 +402,22 @@ func (p *Peer) HandleInbound() {
 			case ethwire.MsgPeersTy:
 				// Received a list of peers (probably because MsgGetPeersTy was send)
 				// Only act on message if we actually requested for a peers list
-				//if p.requestedPeerList {
-				data := msg.Data
-				// Create new list of possible peers for the ethereum to process
-				peers := make([]string, data.Len())
-				// Parse each possible peer
-				for i := 0; i < data.Len(); i++ {
-					value := data.Get(i)
-					peers[i] = unpackAddr(value.Get(0), value.Get(1).Uint())
+				if p.requestedPeerList {
+					data := msg.Data
+					// Create new list of possible peers for the ethereum to process
+					peers := make([]string, data.Len())
+					// Parse each possible peer
+					for i := 0; i < data.Len(); i++ {
+						value := data.Get(i)
+						peers[i] = unpackAddr(value.Get(0), value.Get(1).Uint())
+					}
+
+					// Connect to the list of peers
+					p.ethereum.ProcessPeerList(peers)
+					// Mark unrequested again
+					p.requestedPeerList = false
+
 				}
-
-				// Connect to the list of peers
-				p.ethereum.ProcessPeerList(peers)
-				// Mark unrequested again
-				p.requestedPeerList = false
-
-				//}
 			case ethwire.MsgGetChainTy:
 				var parent *ethchain.Block
 				// Length minus one since the very last element in the array is a count
@@ -514,6 +516,15 @@ func (p *Peer) Stop() {
 		p.writeMessage(ethwire.NewMessage(ethwire.MsgDiscTy, ""))
 		p.conn.Close()
 	}
+
+	// Pre-emptively remove the peer; don't wait for reaping. We already know it's dead if we are here
+	p.ethereum.peerMut.Lock()
+	defer p.ethereum.peerMut.Unlock()
+	eachPeer(p.ethereum.peers, func(peer *Peer, e *list.Element) {
+		if peer == p {
+			p.ethereum.peers.Remove(e)
+		}
+	})
 }
 
 func (p *Peer) pushHandshake() error {
@@ -533,7 +544,10 @@ func (p *Peer) peersMessage() *ethwire.Msg {
 	outPeers := make([]interface{}, len(p.ethereum.InOutPeers()))
 	// Serialise each peer
 	for i, peer := range p.ethereum.InOutPeers() {
-		outPeers[i] = peer.RlpData()
+		// Don't return localhost as valid peer
+		if !net.ParseIP(peer.conn.RemoteAddr().String()).IsLoopback() {
+			outPeers[i] = peer.RlpData()
+		}
 	}
 
 	// Return the message to the peer with the known list of connected clients
@@ -549,7 +563,7 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	c := msg.Data
 
 	if c.Get(0).Uint() != ProtocolVersion {
-		ethutil.Config.Log.Debugln("Invalid peer version. Require protocol v5")
+		ethutil.Config.Log.Debugln("Invalid peer version. Require protocol:", ProtocolVersion)
 		p.Stop()
 		return
 	}
@@ -573,7 +587,6 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	}
 
 	// Catch up with the connected peer
-	// p.CatchupWithPeer(p.ethereum.BlockChain().CurrentBlock.Hash())
 	p.SyncWithBlocks()
 
 	// Set the peer's caps

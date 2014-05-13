@@ -6,7 +6,7 @@ Ethereum
 Ethereum Go Development package (C) Jeffrey Wilcke
 
 Ethereum is currently in its testing phase. The current state is "Proof
-of Concept 5.0 RC3". For build instructions see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum(Go)).
+of Concept 5.0 RC4". For build instructions see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum(Go)).
 
 Ethereum Go is split up in several sub packages Please refer to each
 individual package for more information.
