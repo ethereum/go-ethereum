@@ -25,7 +25,7 @@ func Init() {
 	flag.BoolVar(&StartRpc, "r", false, "start rpc server")
 	flag.BoolVar(&ShowGenesis, "g", false, "prints genesis header and exits")
 	flag.BoolVar(&UseUPnP, "upnp", false, "enable UPnP support")
-	flag.BoolVar(&UseSeed, "seed", false, "seed peers")
+	flag.BoolVar(&UseSeed, "seed", true, "seed peers")
 	flag.BoolVar(&GenAddr, "genaddr", false, "create a new priv/pub key")
 	flag.BoolVar(&ExportKey, "export", false, "export private key")
 	flag.StringVar(&OutboundPort, "p", "30303", "listening port")
