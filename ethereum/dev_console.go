@@ -191,7 +191,7 @@ func (i *Console) ParseInput(input string) bool {
 		case "contract":
 			fmt.Println("Contract editor (Ctrl-D = done)")
 
-			mainInput, initInput := mutan.PreProcess(i.Editor())
+			mainInput, initInput := mutan.PreParse(i.Editor())
 			mainScript, err := utils.Compile(mainInput)
 			if err != nil {
 				fmt.Println(err)

@@ -24,7 +24,8 @@ type Gui struct {
 	eth *eth.Ethereum
 
 	// The public Ethereum library
-	lib *EthLib
+	lib   *EthLib
+	uiLib *UiLib
 
 	txDb *ethdb.LDBDatabase
 
@@ -52,7 +53,7 @@ func New(ethereum *eth.Ethereum) *Gui {
 		//ethereum.StateManager().WatchAddr(addr)
 	}
 
-	pub := ethpub.NewPEthereum(ethereum.StateManager(), ethereum.BlockChain(), ethereum.TxPool())
+	pub := ethpub.NewPEthereum(ethereum)
 
 	return &Gui{eth: ethereum, lib: lib, txDb: db, addr: addr, pub: pub}
 }
@@ -67,7 +68,7 @@ func (gui *Gui) Start(assetPath string) {
 		Init: func(p *ethpub.PTx, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
 	}})
 
-	ethutil.Config.SetClientString(fmt.Sprintf("/Ethereal v%s", "0.5.0 RC3"))
+	ethutil.Config.SetClientString(fmt.Sprintf("/Ethereal v%s", "0.5.0 RC4"))
 	ethutil.Config.Log.Infoln("[GUI] Starting GUI")
 	// Create a new QML engine
 	gui.engine = qml.NewEngine()
@@ -75,19 +76,55 @@ func (gui *Gui) Start(assetPath string) {
 
 	// Expose the eth library and the ui library to QML
 	context.SetVar("eth", gui)
-	uiLib := NewUiLib(gui.engine, gui.eth, assetPath)
-	context.SetVar("ui", uiLib)
+	gui.uiLib = NewUiLib(gui.engine, gui.eth, assetPath)
+	context.SetVar("ui", gui.uiLib)
 
 	// Load the main QML interface
 	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-	var err error
-	var component qml.Object
-	firstRun := len(data) == 0
+	/*
+		var err error
+		var component qml.Object
+		firstRun := len(data) == 0
 
-	if firstRun {
-		component, err = gui.engine.LoadFile(uiLib.AssetPath("qml/first_run.qml"))
+		if firstRun {
+			component, err = gui.engine.LoadFile(uiLib.AssetPath("qml/first_run.qml"))
+		} else {
+			component, err = gui.engine.LoadFile(uiLib.AssetPath("qml/wallet.qml"))
+		}
+		if err != nil {
+			ethutil.Config.Log.Infoln("FATAL: asset not found: you can set an alternative asset path on on the command line using option 'asset_path'")
+
+			panic(err)
+		}
+
+		gui.win = component.CreateWindow(nil)
+		uiLib.win = gui.win
+		db := &Debugger{gui.win, make(chan bool)}
+		gui.lib.Db = db
+		uiLib.Db = db
+
+		// Add the ui as a log system so we can log directly to the UGI
+		ethutil.Config.Log.AddLogSystem(gui)
+
+		// Loads previous blocks
+		if firstRun == false {
+			go gui.setInitialBlockChain()
+			go gui.readPreviousTransactions()
+			go gui.update()
+		}
+
+		gui.win.Show()
+		gui.win.Wait()
+
+		gui.eth.Stop()
+	*/
+
+	var win *qml.Window
+	var err error
+	if len(data) == 0 {
+		win, err = gui.showKeyImport(context)
 	} else {
-		component, err = gui.engine.LoadFile(uiLib.AssetPath("qml/wallet.qml"))
+		win, err = gui.showWallet(context)
 	}
 	if err != nil {
 		ethutil.Config.Log.Infoln("FATAL: asset not found: you can set an alternative asset path on on the command line using option 'asset_path'")
@@ -95,26 +132,48 @@ func (gui *Gui) Start(assetPath string) {
 		panic(err)
 	}
 
-	gui.win = component.CreateWindow(nil)
-	uiLib.win = gui.win
-	db := &Debugger{gui.win, make(chan bool)}
-	gui.lib.Db = db
-	uiLib.Db = db
-
-	// Add the ui as a log system so we can log directly to the UGI
-	ethutil.Config.Log.AddLogSystem(gui)
-
-	// Loads previous blocks
-	if firstRun == false {
-		go gui.setInitialBlockChain()
-		go gui.readPreviousTransactions()
-		go gui.update()
-	}
-
-	gui.win.Show()
-	gui.win.Wait()
+	win.Show()
+	win.Wait()
 
 	gui.eth.Stop()
+}
+
+func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
+	component, err := gui.engine.LoadFile(gui.uiLib.AssetPath("qml/wallet.qml"))
+	if err != nil {
+		return nil, err
+	}
+
+	win := gui.createWindow(component)
+
+	go gui.setInitialBlockChain()
+	go gui.readPreviousTransactions()
+	go gui.update()
+
+	return win, nil
+}
+
+func (gui *Gui) showKeyImport(context *qml.Context) (*qml.Window, error) {
+	context.SetVar("lib", gui.lib)
+	component, err := gui.engine.LoadFile(gui.uiLib.AssetPath("qml/first_run.qml"))
+	if err != nil {
+		return nil, err
+	}
+
+	return gui.createWindow(component), nil
+}
+
+func (gui *Gui) createWindow(comp qml.Object) *qml.Window {
+	win := comp.CreateWindow(nil)
+
+	gui.win = win
+	gui.uiLib.win = win
+
+	db := &Debugger{gui.win, make(chan bool)}
+	gui.lib.Db = db
+	gui.uiLib.Db = db
+
+	return gui.win
 }
 
 func (gui *Gui) setInitialBlockChain() {
@@ -148,7 +207,7 @@ func (gui *Gui) update() {
 	state := gui.eth.StateManager().TransState()
 
 	unconfirmedFunds := new(big.Int)
-	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetStateObject(gui.addr).Amount)))
+	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetAccount(gui.addr).Amount)))
 
 	for {
 		select {
@@ -156,7 +215,7 @@ func (gui *Gui) update() {
 			tx := txMsg.Tx
 
 			if txMsg.Type == ethchain.TxPre {
-				object := state.GetStateObject(gui.addr)
+				object := state.GetAccount(gui.addr)
 
 				if bytes.Compare(tx.Sender(), gui.addr) == 0 && object.Nonce <= tx.Nonce {
 					gui.win.Root().Call("addTx", ethpub.NewPTx(tx))
@@ -182,7 +241,7 @@ func (gui *Gui) update() {
 
 				gui.win.Root().Call("setWalletValue", str)
 			} else {
-				object := state.GetStateObject(gui.addr)
+				object := state.GetAccount(gui.addr)
 				if bytes.Compare(tx.Sender(), gui.addr) == 0 {
 					object.SubAmount(tx.Value)
 				} else if bytes.Compare(tx.Recipient, gui.addr) == 0 {

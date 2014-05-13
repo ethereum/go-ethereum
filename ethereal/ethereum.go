@@ -100,8 +100,12 @@ func main() {
 	}
 
 	if StartRpc {
-		ethereum.RpcServer = ethrpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum.StateManager(), ethereum.BlockChain(), ethereum.TxPool()))
-		go ethereum.RpcServer.Start()
+		ethereum.RpcServer, err = ethrpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum), RpcPort)
+		if err != nil {
+			log.Println("Could not start RPC interface:", err)
+		} else {
+			go ethereum.RpcServer.Start()
+		}
 	}
 
 	log.Printf("Starting Ethereum GUI v%s\n", ethutil.Config.Ver)
@@ -110,5 +114,11 @@ func main() {
 	ethereum.MaxPeers = MaxPeer
 
 	gui := ethui.New(ethereum)
+
+	ethereum.Start(UseSeed)
+
 	gui.Start(AssetPath)
+
+	// Wait for shutdown
+	ethereum.WaitForShutdown()
 }
