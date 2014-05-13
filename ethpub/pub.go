@@ -2,7 +2,6 @@ package ethpub
 
 import (
 	"encoding/hex"
-	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 )
@@ -83,7 +82,6 @@ func (lib *PEthereum) GetStorage(address, storageAddress string) string {
 }
 
 func (lib *PEthereum) GetTxCountAt(address string) int {
-	fmt.Println("GO")
 	return lib.GetStateObject(address).Nonce()
 }
 
