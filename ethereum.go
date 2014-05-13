@@ -325,8 +325,21 @@ func (s *Ethereum) Start(seed bool) {
 }
 
 func (s *Ethereum) Seed() {
-	ethutil.Config.Log.Debugln("Seeding")
-	// DNS Bootstrapping
+	ethutil.Config.Log.Debugln("[SERV] Retrieving seed nodes")
+
+	// Eth-Go Bootstrapping
+	ips, er := net.LookupIP("seed.bysh.me")
+	if er == nil {
+		peers := []string{}
+		for _, ip := range ips {
+			node := fmt.Sprintf("%s:%d", ip.String(), 30303)
+			ethutil.Config.Log.Debugln("[SERV] Found DNS Go Peer:", node)
+			peers = append(peers, node)
+		}
+		s.ProcessPeerList(peers)
+	}
+
+	// Official DNS Bootstrapping
 	_, nodes, err := net.LookupSRV("eth", "tcp", "ethereum.org")
 	if err == nil {
 		peers := []string{}
@@ -340,11 +353,11 @@ func (s *Ethereum) Seed() {
 				for _, a := range addr {
 					// Build string out of SRV port and Resolved IP
 					peer := net.JoinHostPort(a, port)
-					log.Println("Found DNS Bootstrap Peer:", peer)
+					ethutil.Config.Log.Debugln("[SERV] Found DNS Bootstrap Peer:", peer)
 					peers = append(peers, peer)
 				}
 			} else {
-				log.Println("Couldn't resolve :", target)
+				ethutil.Config.Log.Debugln("[SERV} Couldn't resolve :", target)
 			}
 		}
 		// Connect to Peer list
