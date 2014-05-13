@@ -65,6 +65,10 @@ type Ethereum struct {
 	// Specifies the desired amount of maximum peers
 	MaxPeers int
 
+	Mining bool
+
+	listening bool
+
 	reactor *ethutil.ReactorEngine
 
 	RpcServer *ethrpc.JsonRpcServer
@@ -127,6 +131,15 @@ func (s *Ethereum) TxPool() *ethchain.TxPool {
 
 func (s *Ethereum) ServerCaps() Caps {
 	return s.serverCaps
+}
+func (s *Ethereum) IsMining() bool {
+	return s.Mining
+}
+func (s *Ethereum) PeerCount() int {
+	return s.peers.Len()
+}
+func (s *Ethereum) IsListening() bool {
+	return s.listening
 }
 
 func (s *Ethereum) AddPeer(conn net.Conn) {
@@ -305,7 +318,9 @@ func (s *Ethereum) Start(seed bool) {
 	ln, err := net.Listen("tcp", ":"+s.Port)
 	if err != nil {
 		log.Println("Connection listening disabled. Acting as client")
+		s.listening = false
 	} else {
+		s.listening = true
 		// Starting accepting connections
 		ethutil.Config.Log.Infoln("Ready and accepting connections")
 		// Start the peer handler

@@ -1,6 +1,8 @@
 package ethpub
 
 import (
+	"encoding/hex"
+	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 )
@@ -56,11 +58,32 @@ func (lib *PEthereum) GetStateObject(address string) *PStateObject {
 	return NewPStateObject(nil)
 }
 
+func (lib *PEthereum) GetPeerCount() int {
+	return lib.manager.PeerCount()
+}
+
+func (lib *PEthereum) GetIsMining() bool {
+	return lib.manager.IsMining()
+}
+
+func (lib *PEthereum) GetIsListening() bool {
+	return lib.manager.IsListening()
+}
+
+func (lib *PEthereum) GetCoinBase() string {
+	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
+	keyRing := ethutil.NewValueFromBytes(data)
+	key := keyRing.Get(0).Bytes()
+
+	return lib.SecretToAddress(hex.EncodeToString(key))
+}
+
 func (lib *PEthereum) GetStorage(address, storageAddress string) string {
 	return lib.GetStateObject(address).GetStorage(storageAddress)
 }
 
-func (lib *PEthereum) GetTxCount(address string) int {
+func (lib *PEthereum) GetTxCountAt(address string) int {
+	fmt.Println("GO")
 	return lib.GetStateObject(address).Nonce()
 }
 

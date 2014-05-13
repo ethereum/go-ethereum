@@ -20,6 +20,9 @@ type EthManager interface {
 	TxPool() *TxPool
 	Broadcast(msgType ethwire.MsgType, data []interface{})
 	Reactor() *ethutil.ReactorEngine
+	PeerCount() int
+	IsMining() bool
+	IsListening() bool
 }
 
 type StateManager struct {
