@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
@@ -139,7 +140,9 @@ func main() {
 					keyRing := ethutil.NewValueFromBytes(data)
 					addr := keyRing.Get(1).Bytes()
 
-					miner := ethminer.NewDefaultMiner(addr, ethereum)
+					pair, _ := ethchain.NewKeyPairFromSec(ethutil.FromHex(hex.EncodeToString(addr)))
+
+					miner := ethminer.NewDefaultMiner(pair.Address(), ethereum)
 					miner.Start()
 
 				}()
