@@ -53,7 +53,7 @@ func New(ethereum *eth.Ethereum) *Gui {
 		//ethereum.StateManager().WatchAddr(addr)
 	}
 
-	pub := ethpub.NewPEthereum(ethereum.StateManager(), ethereum.BlockChain(), ethereum.TxPool())
+	pub := ethpub.NewPEthereum(ethereum)
 
 	return &Gui{eth: ethereum, lib: lib, txDb: db, addr: addr, pub: pub}
 }

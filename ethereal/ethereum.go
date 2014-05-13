@@ -100,7 +100,7 @@ func main() {
 	}
 
 	if StartRpc {
-		ethereum.RpcServer, err = ethrpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum.StateManager(), ethereum.BlockChain(), ethereum.TxPool()))
+		ethereum.RpcServer = ethrpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum))
 		if err != nil {
 			log.Println("Could not start RPC interface:", err)
 		} else {
