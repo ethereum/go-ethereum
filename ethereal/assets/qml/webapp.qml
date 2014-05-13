@@ -75,7 +75,7 @@ ApplicationWindow {
 
 						break
 					case "getBlockByHash":
-						var block = eth.getBlock((data.args[0])
+						var block = eth.getBlock(data.args[0])
 						postData(data._seed, block)
 
 						break
