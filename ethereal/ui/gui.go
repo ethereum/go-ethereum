@@ -68,7 +68,7 @@ func (gui *Gui) Start(assetPath string) {
 		Init: func(p *ethpub.PTx, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
 	}})
 
-	ethutil.Config.SetClientString(fmt.Sprintf("/Ethereal v%s", "0.5.0 RC3"))
+	ethutil.Config.SetClientString(fmt.Sprintf("/Ethereal v%s", "0.5.0 RC4"))
 	ethutil.Config.Log.Infoln("[GUI] Starting GUI")
 	// Create a new QML engine
 	gui.engine = qml.NewEngine()
