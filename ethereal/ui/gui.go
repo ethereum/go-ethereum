@@ -207,7 +207,7 @@ func (gui *Gui) update() {
 	state := gui.eth.StateManager().TransState()
 
 	unconfirmedFunds := new(big.Int)
-	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetStateObject(gui.addr).Amount)))
+	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetAccount(gui.addr).Amount)))
 
 	for {
 		select {
@@ -215,7 +215,7 @@ func (gui *Gui) update() {
 			tx := txMsg.Tx
 
 			if txMsg.Type == ethchain.TxPre {
-				object := state.GetStateObject(gui.addr)
+				object := state.GetAccount(gui.addr)
 
 				if bytes.Compare(tx.Sender(), gui.addr) == 0 && object.Nonce <= tx.Nonce {
 					gui.win.Root().Call("addTx", ethpub.NewPTx(tx))
@@ -241,7 +241,7 @@ func (gui *Gui) update() {
 
 				gui.win.Root().Call("setWalletValue", str)
 			} else {
-				object := state.GetStateObject(gui.addr)
+				object := state.GetAccount(gui.addr)
 				if bytes.Compare(tx.Sender(), gui.addr) == 0 {
 					object.SubAmount(tx.Value)
 				} else if bytes.Compare(tx.Recipient, gui.addr) == 0 {
