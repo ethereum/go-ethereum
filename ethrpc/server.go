@@ -1,6 +1,7 @@
 package ethrpc
 
 import (
+	"fmt"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
 	"net"
@@ -48,8 +49,9 @@ func (s *JsonRpcServer) Start() {
 	}
 }
 
-func NewJsonRpcServer(ethp *ethpub.PEthereum) (*JsonRpcServer, error) {
-	l, err := net.Listen("tcp", ":8080")
+func NewJsonRpcServer(ethp *ethpub.PEthereum, port int) (*JsonRpcServer, error) {
+	sport := fmt.Sprintf(":%d", port)
+	l, err := net.Listen("tcp", sport)
 	if err != nil {
 		return nil, err
 	}
