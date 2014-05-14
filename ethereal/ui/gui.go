@@ -55,6 +55,8 @@ func New(ethereum *eth.Ethereum) *Gui {
 }
 
 func (gui *Gui) Start(assetPath string) {
+	const version = "0.5.0 RC6"
+
 	defer gui.txDb.Close()
 
 	// Register ethereum functions
@@ -64,7 +66,7 @@ func (gui *Gui) Start(assetPath string) {
 		Init: func(p *ethpub.PTx, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
 	}})
 
-	ethutil.Config.SetClientString(fmt.Sprintf("/Ethereal v%s", "0.5.0 RC4"))
+	ethutil.Config.SetClientString(fmt.Sprintf("/Ethereal v%s", version))
 	ethutil.Config.Log.Infoln("[GUI] Starting GUI")
 	// Create a new QML engine
 	gui.engine = qml.NewEngine()
