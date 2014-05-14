@@ -26,6 +26,16 @@ func DoMining(ethereum *eth.Ethereum) {
 	// Set Mining status
 	ethereum.Mining = true
 
+	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
+	if len(data) == 0 {
+		log.Println("No address found, can't start mining")
+		return
+	}
+
+	keyRing := ethutil.NewValueFromBytes(data)
+	addr := keyRing.Get(0).Bytes()
+	pair, _ := ethchain.NewKeyPairFromSec(ethutil.FromHex(hex.EncodeToString(addr)))
+
 	go func() {
 		// Give it some time to connect with peers
 		time.Sleep(3 * time.Second)
@@ -35,10 +45,6 @@ func DoMining(ethereum *eth.Ethereum) {
 		}
 		log.Println("Miner started")
 
-		data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-		keyRing := ethutil.NewValueFromBytes(data)
-		addr := keyRing.Get(0).Bytes()
-		pair, _ := ethchain.NewKeyPairFromSec(ethutil.FromHex(hex.EncodeToString(addr)))
 		miner := ethminer.NewDefaultMiner(pair.Address(), ethereum)
 		miner.Start()
 	}()
