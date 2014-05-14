@@ -442,7 +442,7 @@ func (p *Peer) HandleInbound() {
 						ethutil.Config.Log.Debugf("[PEER] Returning %d blocks: %x ", len(chain), parent.Hash())
 						p.QueueMessage(ethwire.NewMessage(ethwire.MsgBlockTy, chain))
 					} else {
-						p.QueueMessage(ethwire.NewMessage(ethwire.MsgBlockTy, []interface{}))
+						p.QueueMessage(ethwire.NewMessage(ethwire.MsgBlockTy, []interface{}{}))
 					}
 
 				} else {
