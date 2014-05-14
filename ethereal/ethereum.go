@@ -99,6 +99,10 @@ func main() {
 		os.Exit(0)
 	}
 
+	if StartMining {
+		utils.DoMining(ethereum)
+	}
+
 	if StartRpc {
 		ethereum.RpcServer, err = ethrpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum), RpcPort)
 		if err != nil {

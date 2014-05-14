@@ -1,11 +1,9 @@
 package main
 
 import (
-	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
-	"github.com/ethereum/eth-go/ethminer"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethrpc"
 	"github.com/ethereum/eth-go/ethutil"
@@ -127,28 +125,7 @@ func main() {
 	ethereum.Mining = StartMining
 
 	if StartMining {
-		logger.Infoln("Miner started")
-
-		// Fake block mining. It broadcasts a new block every 5 seconds
-		go func() {
-
-			if StartMining {
-				logger.Infoln("Miner started")
-
-				go func() {
-					data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-					keyRing := ethutil.NewValueFromBytes(data)
-					addr := keyRing.Get(0).Bytes()
-
-					pair, _ := ethchain.NewKeyPairFromSec(ethutil.FromHex(hex.EncodeToString(addr)))
-
-					miner := ethminer.NewDefaultMiner(pair.Address(), ethereum)
-					miner.Start()
-
-				}()
-			}
-		}()
-
+		utils.DoMining(ethereum)
 	}
 
 	if StartConsole {
