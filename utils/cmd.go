@@ -1,9 +1,7 @@
 package utils
 
 import (
-	"encoding/hex"
 	"github.com/ethereum/eth-go"
-	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethminer"
 	_ "github.com/ethereum/eth-go/ethrpc"
 	"github.com/ethereum/eth-go/ethutil"
@@ -18,13 +16,10 @@ func DoMining(ethereum *eth.Ethereum) {
 
 	// Fake block mining. It broadcasts a new block every 5 seconds
 	go func() {
-		data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-		keyRing := ethutil.NewValueFromBytes(data)
-		addr := keyRing.Get(0).Bytes()
+		keyPair := ethutil.GetKeyRing().Get(0)
+		addr := keyPair.Address()
 
-		pair, _ := ethchain.NewKeyPairFromSec(ethutil.FromHex(hex.EncodeToString(addr)))
-
-		miner := ethminer.NewDefaultMiner(pair.Address(), ethereum)
+		miner := ethminer.NewDefaultMiner(addr, ethereum)
 		miner.Start()
 
 	}()

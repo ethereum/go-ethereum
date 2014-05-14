@@ -34,10 +34,13 @@ func (lib *EthLib) ImportAndSetPrivKey(privKey string) bool {
 }
 
 func (lib *EthLib) CreateAndSetPrivKey() (string, string, string, string) {
-	pub, prv := secp256k1.GenerateKeyPair()
-	pair := &ethutil.Key{PrivateKey: prv, PublicKey: pub}
-	ethutil.Config.Db.Put([]byte("KeyRing"), pair.RlpEncode())
-	mne := ethutil.MnemonicEncode(ethutil.Hex(prv))
+	_, prv := secp256k1.GenerateKeyPair()
+	keyPair, err := ethutil.GetKeyRing().NewKeyPair(prv)
+	if err != nil {
+		panic(err)
+	}
+
+	mne := ethutil.MnemonicEncode(ethutil.Hex(keyPair.PrivateKey))
 	mnemonicString := strings.Join(mne, " ")
-	return mnemonicString, fmt.Sprintf("%x", pair.Address()), fmt.Sprintf("%x", prv), fmt.Sprintf("%x", pub)
+	return mnemonicString, fmt.Sprintf("%x", keyPair.Address()), ethutil.Hex(keyPair.PrivateKey), ethutil.Hex(keyPair.PublicKey)
 }

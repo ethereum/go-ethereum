@@ -89,8 +89,19 @@ func main() {
 	}
 
 	if ExportKey {
-		key := ethutil.Config.Db.GetKeys()[0]
-		fmt.Printf("%x\n", key.PrivateKey)
+		keyPair := ethutil.GetKeyRing().Get(0)
+		fmt.Printf(`
+Generating new address and keypair.
+Please keep your keys somewhere save.
+
+++++++++++++++++ KeyRing +++++++++++++++++++
+addr: %x
+prvk: %x
+pubk: %x
+++++++++++++++++++++++++++++++++++++++++++++
+save these words so you can restore your account later: %s
+`, keyPair.Address(), keyPair.PrivateKey, keyPair.PublicKey)
+
 		os.Exit(0)
 	}
 
