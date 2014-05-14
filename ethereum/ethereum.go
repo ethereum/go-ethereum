@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
-	"github.com/ethereum/eth-go/ethpub"
-	"github.com/ethereum/eth-go/ethrpc"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/utils"
 	"log"
@@ -139,12 +137,7 @@ func main() {
 		go console.Start()
 	}
 	if StartRpc {
-		ethereum.RpcServer, err = ethrpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum), RpcPort)
-		if err != nil {
-			logger.Infoln("Could not start RPC interface:", err)
-		} else {
-			go ethereum.RpcServer.Start()
-		}
+		utils.DoRpc(ethereum, RpcPort)
 	}
 
 	RegisterInterrupts(ethereum)
