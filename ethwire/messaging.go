@@ -69,12 +69,6 @@ func NewMessage(msgType MsgType, data interface{}) *Msg {
 }
 
 func ReadMessage(data []byte) (msg *Msg, remaining []byte, done bool, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			panic(fmt.Sprintf("message error %d %v", len(data), data))
-		}
-	}()
-
 	if len(data) == 0 {
 		return nil, nil, true, nil
 	}
