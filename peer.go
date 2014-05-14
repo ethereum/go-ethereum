@@ -187,6 +187,10 @@ func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 
 // Outputs any RLP encoded data to the peer
 func (p *Peer) QueueMessage(msg *ethwire.Msg) {
+	if atomic.LoadInt32(&p.connected) != 1 {
+		return
+	}
+
 	p.outputQueue <- msg
 }
 
