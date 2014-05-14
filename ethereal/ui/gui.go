@@ -42,15 +42,11 @@ func New(ethereum *eth.Ethereum) *Gui {
 		panic(err)
 	}
 
-	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
 	// On first run we won't have any keys yet, so this would crash.
 	// Therefor we check if we are ready to actually start this process
 	var addr []byte
-	if len(data) > 0 {
-		key := ethutil.Config.Db.GetKeys()[0]
-		addr = key.Address()
-
-		//ethereum.StateManager().WatchAddr(addr)
+	if ethutil.GetKeyRing().Len() != 0 {
+		addr = ethutil.GetKeyRing().Get(0).Address()
 	}
 
 	pub := ethpub.NewPEthereum(ethereum)
@@ -81,43 +77,6 @@ func (gui *Gui) Start(assetPath string) {
 
 	// Load the main QML interface
 	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-	/*
-		var err error
-		var component qml.Object
-		firstRun := len(data) == 0
-
-		if firstRun {
-			component, err = gui.engine.LoadFile(uiLib.AssetPath("qml/first_run.qml"))
-		} else {
-			component, err = gui.engine.LoadFile(uiLib.AssetPath("qml/wallet.qml"))
-		}
-		if err != nil {
-			ethutil.Config.Log.Infoln("FATAL: asset not found: you can set an alternative asset path on on the command line using option 'asset_path'")
-
-			panic(err)
-		}
-
-		gui.win = component.CreateWindow(nil)
-		uiLib.win = gui.win
-		db := &Debugger{gui.win, make(chan bool)}
-		gui.lib.Db = db
-		uiLib.Db = db
-
-		// Add the ui as a log system so we can log directly to the UGI
-		ethutil.Config.Log.AddLogSystem(gui)
-
-		// Loads previous blocks
-		if firstRun == false {
-			go gui.setInitialBlockChain()
-			go gui.readPreviousTransactions()
-			go gui.update()
-		}
-
-		gui.win.Show()
-		gui.win.Wait()
-
-		gui.eth.Stop()
-	*/
 
 	var win *qml.Window
 	var err error
@@ -274,13 +233,13 @@ func (gui *Gui) Printf(format string, v ...interface{}) {
 }
 
 func (gui *Gui) Transact(recipient, value, gas, gasPrice, data string) (*ethpub.PReceipt, error) {
-	keyPair := ethutil.Config.Db.GetKeys()[0]
+	keyPair := ethutil.GetKeyRing().Get(0)
 
 	return gui.pub.Transact(ethutil.Hex(keyPair.PrivateKey), recipient, value, gas, gasPrice, data)
 }
 
 func (gui *Gui) Create(recipient, value, gas, gasPrice, data string) (*ethpub.PReceipt, error) {
-	keyPair := ethutil.Config.Db.GetKeys()[0]
+	keyPair := ethutil.GetKeyRing().Get(0)
 
 	mainInput, initInput := mutan.PreParse(data)
 

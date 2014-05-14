@@ -9,7 +9,7 @@
 
 <script type="text/javascript">
 
-var jefcoinAddr = "b7cb72c47ec4f31751d0d628b5a33fd6671bbba0"
+var jefcoinAddr = "681fd48ffa236549fbcd16bdf9f98bb541a7f742"
 var mAddr = ""
 
 function createTransaction() {
@@ -23,8 +23,6 @@ function createTransaction() {
 }
 
 function init() {
-	eth.set({width: 500});
-
 	eth.getKey(function(sec) {
 		mAddr = sec;
 		eth.getSecretToAddress(sec, function(addr) {
