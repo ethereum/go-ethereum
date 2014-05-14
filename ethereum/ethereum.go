@@ -138,7 +138,7 @@ func main() {
 				go func() {
 					data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
 					keyRing := ethutil.NewValueFromBytes(data)
-					addr := keyRing.Get(1).Bytes()
+					addr := keyRing.Get(0).Bytes()
 
 					pair, _ := ethchain.NewKeyPairFromSec(ethutil.FromHex(hex.EncodeToString(addr)))
 
