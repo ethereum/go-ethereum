@@ -389,6 +389,8 @@ func (p *Peer) HandleInbound() {
 						p.CatchupWithPeer(p.ethereum.BlockChain().CurrentBlock.Hash())
 					}
 				}
+
+				p.catchingUp = false
 			case ethwire.MsgTxTy:
 				// If the message was a transaction queue the transaction
 				// in the TxPool where it will undergo validation and

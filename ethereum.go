@@ -138,6 +138,18 @@ func (s *Ethereum) IsMining() bool {
 func (s *Ethereum) PeerCount() int {
 	return s.peers.Len()
 }
+func (s *Ethereum) IsUpToDate() bool {
+	upToDate := true
+	eachPeer(s.peers, func(peer *Peer, e *list.Element) {
+		if atomic.LoadInt32(&peer.connected) == 1 {
+			if peer.catchingUp == true {
+				upToDate = false
+			}
+		}
+	})
+	return upToDate
+}
+
 func (s *Ethereum) IsListening() bool {
 	return s.listening
 }
