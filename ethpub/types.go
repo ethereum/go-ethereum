@@ -39,7 +39,7 @@ type PKey struct {
 	PublicKey  string `json:"publicKey"`
 }
 
-func NewPKey(key *ethchain.KeyPair) *PKey {
+func NewPKey(key *ethutil.KeyPair) *PKey {
 	return &PKey{ethutil.Hex(key.Address()), ethutil.Hex(key.PrivateKey), ethutil.Hex(key.PublicKey)}
 }
 

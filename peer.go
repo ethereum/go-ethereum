@@ -583,8 +583,8 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 		p.port = uint16(c.Get(4).Uint())
 
 		// Self connect detection
-		key := ethutil.Config.Db.GetKeys()[0]
-		if bytes.Compare(key.PublicKey, p.pubkey) == 0 {
+		keyPair := ethutil.GetKeyRing().Get(0)
+		if bytes.Compare(keyPair.PublicKey, p.pubkey) == 0 {
 			p.Stop()
 
 			return
