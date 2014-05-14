@@ -210,14 +210,25 @@ func (pool *TxPool) CurrentTransactions() []*Transaction {
 	txList := make([]*Transaction, pool.pool.Len())
 	i := 0
 	for e := pool.pool.Front(); e != nil; e = e.Next() {
-		if tx, ok := e.Value.(*Transaction); ok {
-			txList[i] = tx
-		}
+		tx := e.Value.(*Transaction)
+
+		txList[i] = tx
 
 		i++
 	}
 
 	return txList
+}
+
+func (pool *TxPool) RemoveInvalid(state *State) {
+	for e := pool.pool.Front(); e != nil; e = e.Next() {
+		tx := e.Value.(*Transaction)
+		sender := state.GetAccount(tx.Sender())
+		err := pool.ValidateTransaction(tx)
+		if err != nil || sender.Nonce != tx.Nonce {
+			pool.pool.Remove(e)
+		}
+	}
 }
 
 func (pool *TxPool) Flush() []*Transaction {
