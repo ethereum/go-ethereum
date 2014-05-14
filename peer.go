@@ -321,8 +321,6 @@ func (p *Peer) HandleInbound() {
 							// We don't have this block, but we do have a block with the same prevHash, diversion time!
 							if p.ethereum.StateManager().BlockChain().HasBlockWithPrevHash(block.PrevHash) {
 								if p.ethereum.StateManager().BlockChain().FindCanonicalChainFromMsg(msg, block.PrevHash) {
-									p.catchingUp = false
-
 									return
 								}
 							}
@@ -373,12 +371,11 @@ func (p *Peer) HandleInbound() {
 					}
 				}
 
-				if lastBlock != nil && err == nil {
-					fmt.Println("Did proc. no err")
-				} else {
-					fmt.Println("other")
+				if msg.Data.Len() == 0 {
+					// Set catching up to false if
+					// the peer has nothing left to give
+					p.catchingUp = false
 				}
-				fmt.Println("length of chain", msg.Data.Len())
 			case ethwire.MsgTxTy:
 				// If the message was a transaction queue the transaction
 				// in the TxPool where it will undergo validation and
