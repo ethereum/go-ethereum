@@ -1,13 +1,9 @@
 package main
 
 import (
-	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
-	"github.com/ethereum/eth-go/ethminer"
-	"github.com/ethereum/eth-go/ethpub"
-	"github.com/ethereum/eth-go/ethrpc"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/utils"
 	"log"
@@ -68,10 +64,9 @@ func main() {
 		log.SetOutput(logfile)
 		logSys = log.New(logfile, "", flags)
 		logger.AddLogSystem(logSys)
-	}
-	/*else {
+	} else {
 		logSys = log.New(os.Stdout, "", flags)
-	}*/
+	}
 
 	ethchain.InitFees()
 
@@ -106,8 +101,19 @@ func main() {
 		}
 		os.Exit(0)
 	case ExportKey:
-		key := ethutil.Config.Db.GetKeys()[0]
-		logSys.Println(fmt.Sprintf("prvk: %x\n", key.PrivateKey))
+		keyPair := ethutil.GetKeyRing().Get(0)
+		fmt.Printf(`
+Generating new address and keypair.
+Please keep your keys somewhere save.
+
+++++++++++++++++ KeyRing +++++++++++++++++++
+addr: %x
+prvk: %x
+pubk: %x
+++++++++++++++++++++++++++++++++++++++++++++
+save these words so you can restore your account later: %s
+`, keyPair.Address(), keyPair.PrivateKey, keyPair.PublicKey)
+
 		os.Exit(0)
 	case ShowGenesis:
 		logSys.Println(ethereum.BlockChain().Genesis())
@@ -127,28 +133,7 @@ func main() {
 	ethereum.Mining = StartMining
 
 	if StartMining {
-		logger.Infoln("Miner started")
-
-		// Fake block mining. It broadcasts a new block every 5 seconds
-		go func() {
-
-			if StartMining {
-				logger.Infoln("Miner started")
-
-				go func() {
-					data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-					keyRing := ethutil.NewValueFromBytes(data)
-					addr := keyRing.Get(1).Bytes()
-
-					pair, _ := ethchain.NewKeyPairFromSec(ethutil.FromHex(hex.EncodeToString(addr)))
-
-					miner := ethminer.NewDefaultMiner(pair.Address(), ethereum)
-					miner.Start()
-
-				}()
-			}
-		}()
-
+		utils.DoMining(ethereum)
 	}
 
 	if StartConsole {
@@ -162,12 +147,7 @@ func main() {
 		go console.Start()
 	}
 	if StartRpc {
-		ethereum.RpcServer, err = ethrpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum), RpcPort)
-		if err != nil {
-			logger.Infoln("Could not start RPC interface:", err)
-		} else {
-			go ethereum.RpcServer.Start()
-		}
+		utils.DoRpc(ethereum, RpcPort)
 	}
 
 	RegisterInterrupts(ethereum)

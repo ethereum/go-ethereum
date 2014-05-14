@@ -56,9 +56,10 @@ Component {
 		}
 		TextField {
 			id: txSimpleValue
+			width: 200
 			placeholderText: "Amount"
 			anchors.rightMargin: 5
-			validator: IntValidator { }
+			validator: RegExpValidator { regExp: /\d*/ }
 			onTextChanged: { checkFormState() }
 		}
 		Button {

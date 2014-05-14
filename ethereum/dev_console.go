@@ -173,8 +173,8 @@ func (i *Console) ParseInput(input string) bool {
 			} else {
 				tx := ethchain.NewTransactionMessage(recipient, ethutil.Big(tokens[2]), ethutil.Big(tokens[3]), ethutil.Big(tokens[4]), nil)
 
-				key := ethutil.Config.Db.GetKeys()[0]
-				tx.Sign(key.PrivateKey)
+				keyPair := ethutil.GetKeyRing().Get(0)
+				tx.Sign(keyPair.PrivateKey)
 				i.ethereum.TxPool().QueueTransaction(tx)
 
 				fmt.Printf("%x\n", tx.Hash())
@@ -207,8 +207,8 @@ func (i *Console) ParseInput(input string) bool {
 
 			contract := ethchain.NewContractCreationTx(ethutil.Big(tokens[0]), ethutil.Big(tokens[1]), ethutil.Big(tokens[1]), mainScript, initScript)
 
-			key := ethutil.Config.Db.GetKeys()[0]
-			contract.Sign(key.PrivateKey)
+			keyPair := ethutil.GetKeyRing().Get(0)
+			contract.Sign(keyPair.PrivateKey)
 
 			i.ethereum.TxPool().QueueTransaction(contract)
 

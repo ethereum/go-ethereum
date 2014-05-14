@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
-	"github.com/ethereum/eth-go/ethpub"
-	"github.com/ethereum/eth-go/ethrpc"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/ethereal/ui"
 	"github.com/ethereum/go-ethereum/utils"
@@ -89,8 +87,19 @@ func main() {
 	}
 
 	if ExportKey {
-		key := ethutil.Config.Db.GetKeys()[0]
-		fmt.Printf("%x\n", key.PrivateKey)
+		keyPair := ethutil.GetKeyRing().Get(0)
+		fmt.Printf(`
+Generating new address and keypair.
+Please keep your keys somewhere save.
+
+++++++++++++++++ KeyRing +++++++++++++++++++
+addr: %x
+prvk: %x
+pubk: %x
+++++++++++++++++++++++++++++++++++++++++++++
+save these words so you can restore your account later: %s
+`, keyPair.Address(), keyPair.PrivateKey, keyPair.PublicKey)
+
 		os.Exit(0)
 	}
 
@@ -99,13 +108,12 @@ func main() {
 		os.Exit(0)
 	}
 
+	if StartMining {
+		utils.DoMining(ethereum)
+	}
+
 	if StartRpc {
-		ethereum.RpcServer, err = ethrpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum), RpcPort)
-		if err != nil {
-			log.Println("Could not start RPC interface:", err)
-		} else {
-			go ethereum.RpcServer.Start()
-		}
+		utils.DoRpc(ethereum, RpcPort)
 	}
 
 	log.Printf("Starting Ethereum GUI v%s\n", ethutil.Config.Ver)

@@ -61,7 +61,7 @@ Component {
 			id: txValue
 			width: 200
 			placeholderText: "Amount"
-			validator: IntValidator { }
+			validator: RegExpValidator { regExp: /\d*/ }
 			onTextChanged: {
 				contractFormReady()
 			}
@@ -69,7 +69,7 @@ Component {
 		TextField {
 			id: txGas
 			width: 200
-			validator: IntValidator { }
+			validator: RegExpValidator { regExp: /\d*/ }
 			placeholderText: "Gas"
 			onTextChanged: {
 				contractFormReady()
@@ -79,7 +79,7 @@ Component {
 			id: txGasPrice
 			width: 200
 			placeholderText: "Gas price"
-			validator: IntValidator { }
+			validator: RegExpValidator { regExp: /\d*/ }
 			onTextChanged: {
 				contractFormReady()
 			}

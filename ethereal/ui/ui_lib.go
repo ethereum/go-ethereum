@@ -138,7 +138,7 @@ func (ui *UiLib) DebugTx(recipient, valueStr, gasStr, gasPriceStr, data string) 
 	callerTx := ethchain.NewContractCreationTx(ethutil.Big(valueStr), ethutil.Big(gasStr), ethutil.Big(gasPriceStr), callerScript, nil)
 
 	// Contract addr as test address
-	keyPair := ethutil.Config.Db.GetKeys()[0]
+	keyPair := ethutil.GetKeyRing().Get(0)
 	account := ui.eth.StateManager().TransState().GetStateObject(keyPair.Address())
 	c := ethchain.MakeContract(callerTx, state)
 	callerClosure := ethchain.NewClosure(account, c, c.Script(), state, ethutil.Big(gasStr), ethutil.Big(gasPriceStr))
