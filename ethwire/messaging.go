@@ -69,6 +69,12 @@ func NewMessage(msgType MsgType, data interface{}) *Msg {
 }
 
 func ReadMessage(data []byte) (msg *Msg, remaining []byte, done bool, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			panic(fmt.Sprintf("message error %d %v", len(data), data))
+		}
+	}()
+
 	if len(data) == 0 {
 		return nil, nil, true, nil
 	}
@@ -124,7 +130,7 @@ func ReadMessages(conn net.Conn) (msgs []*Msg, err error) {
 	var totalBytes int
 	for {
 		// Give buffering some time
-		conn.SetReadDeadline(time.Now().Add(20 * time.Millisecond))
+		conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 		// Create a new temporarily buffer
 		b := make([]byte, 1440)
 		// Wait for a message from this peer
@@ -134,7 +140,6 @@ func ReadMessages(conn net.Conn) (msgs []*Msg, err error) {
 				fmt.Println("err now", err)
 				return nil, err
 			} else {
-				fmt.Println("IOF NOW")
 				break
 			}
 
