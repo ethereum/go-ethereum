@@ -158,8 +158,29 @@ func (gui *Gui) processBlock(block *ethchain.Block) {
 	gui.win.Root().Call("addBlock", ethpub.NewPBlock(block))
 }
 
+func (gui *Gui) setWalletValue(amount, unconfirmedFunds *big.Int) {
+	var str string
+	if unconfirmedFunds != nil {
+		pos := "+"
+		if unconfirmedFunds.Cmp(big.NewInt(0)) >= 0 {
+			pos = "-"
+		}
+		val := ethutil.CurrencyToString(new(big.Int).Abs(ethutil.BigCopy(unconfirmedFunds)))
+		str = fmt.Sprintf("%v (%s %v)", ethutil.CurrencyToString(amount), pos, val)
+	} else {
+		str = fmt.Sprintf("%v", ethutil.CurrencyToString(amount))
+	}
+
+	gui.win.Root().Call("setWalletValue", str)
+}
+
 // Simple go routine function that updates the list of peers in the GUI
 func (gui *Gui) update() {
+	blockChan := make(chan ethutil.React, 1)
+	reactor := gui.eth.Reactor()
+
+	reactor.Subscribe("newBlock", blockChan)
+
 	txChan := make(chan ethchain.TxMsg, 1)
 	gui.eth.TxPool().Subscribe(txChan)
 
@@ -170,6 +191,12 @@ func (gui *Gui) update() {
 
 	for {
 		select {
+		case b := <-blockChan:
+			block := b.Resource.(*ethchain.Block)
+			if bytes.Compare(block.Coinbase, gui.addr) == 0 {
+				gui.setWalletValue(gui.eth.StateManager().ProcState().GetAccount(gui.addr).Amount, nil)
+			}
+
 		case txMsg := <-txChan:
 			tx := txMsg.Tx
 
@@ -191,14 +218,7 @@ func (gui *Gui) update() {
 					unconfirmedFunds.Add(unconfirmedFunds, tx.Value)
 				}
 
-				pos := "+"
-				if unconfirmedFunds.Cmp(big.NewInt(0)) >= 0 {
-					pos = "-"
-				}
-				val := ethutil.CurrencyToString(new(big.Int).Abs(ethutil.BigCopy(unconfirmedFunds)))
-				str := fmt.Sprintf("%v (%s %v)", ethutil.CurrencyToString(object.Amount), pos, val)
-
-				gui.win.Root().Call("setWalletValue", str)
+				gui.setWalletValue(object.Amount, unconfirmedFunds)
 			} else {
 				object := state.GetAccount(gui.addr)
 				if bytes.Compare(tx.Sender(), gui.addr) == 0 {
@@ -207,7 +227,7 @@ func (gui *Gui) update() {
 					object.AddAmount(tx.Value)
 				}
 
-				gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(object.Amount)))
+				gui.setWalletValue(object.Amount, nil)
 
 				state.SetStateObject(object)
 			}

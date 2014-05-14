@@ -66,10 +66,9 @@ func main() {
 		log.SetOutput(logfile)
 		logSys = log.New(logfile, "", flags)
 		logger.AddLogSystem(logSys)
-	}
-	/*else {
+	} else {
 		logSys = log.New(os.Stdout, "", flags)
-	}*/
+	}
 
 	ethchain.InitFees()
 
