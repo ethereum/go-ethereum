@@ -39,10 +39,7 @@ func (lib *PEthereum) GetBlock(hexHash string) *PBlock {
 }
 
 func (lib *PEthereum) GetKey() *PKey {
-	keyPair, err := ethchain.NewKeyPairFromSec(ethutil.Config.Db.GetKeys()[0].PrivateKey)
-	if err != nil {
-		return nil
-	}
+	keyPair := ethutil.GetKeyRing().Get(0)
 
 	return NewPKey(keyPair)
 }
@@ -90,7 +87,7 @@ func (lib *PEthereum) IsContract(address string) bool {
 }
 
 func (lib *PEthereum) SecretToAddress(key string) string {
-	pair, err := ethchain.NewKeyPairFromSec(ethutil.FromHex(key))
+	pair, err := ethutil.NewKeyPairFromSec(ethutil.FromHex(key))
 	if err != nil {
 		return ""
 	}
@@ -115,12 +112,12 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, in
 		hash = ethutil.FromHex(recipient)
 	}
 
-	var keyPair *ethchain.KeyPair
+	var keyPair *ethutil.KeyPair
 	var err error
 	if key[0:2] == "0x" {
-		keyPair, err = ethchain.NewKeyPairFromSec([]byte(ethutil.FromHex(key[0:2])))
+		keyPair, err = ethutil.NewKeyPairFromSec([]byte(ethutil.FromHex(key[0:2])))
 	} else {
-		keyPair, err = ethchain.NewKeyPairFromSec([]byte(ethutil.FromHex(key)))
+		keyPair, err = ethutil.NewKeyPairFromSec([]byte(ethutil.FromHex(key)))
 	}
 
 	if err != nil {
