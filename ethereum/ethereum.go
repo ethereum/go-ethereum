@@ -52,7 +52,12 @@ func main() {
 	var logSys *log.Logger
 	flags := log.LstdFlags
 
-	ethutil.ReadConfig(DataDir)
+	if StartJsConsole {
+		ethutil.ReadConfig(DataDir, ethutil.LogFile)
+	} else {
+		ethutil.ReadConfig(DataDir, ethutil.LogFile|ethutil.LogStd)
+	}
+
 	logger := ethutil.Config.Log
 
 	if LogFile != "" {
@@ -145,9 +150,7 @@ save these words so you can restore your account later: %s
 
 		console := NewConsole(ethereum)
 		go console.Start()
-	}
-
-	if StartExp {
+	} else if StartJsConsole {
 		c := NewJSConsole(ethereum)
 
 		go c.Start()
