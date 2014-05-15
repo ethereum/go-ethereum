@@ -20,7 +20,7 @@ var ExportKey bool
 var LogFile string
 var DataDir string
 var NonInteractive bool
-var StartExp bool
+var StartJsConsole bool
 
 func Init() {
 	flag.BoolVar(&StartConsole, "c", false, "debug and testing console")
@@ -39,7 +39,7 @@ func Init() {
 	flag.StringVar(&DataDir, "dir", ".ethereum", "ethereum data directory")
 	flag.StringVar(&ImportKey, "import", "", "imports the given private key (hex)")
 	flag.IntVar(&MaxPeer, "x", 5, "maximum desired peers")
-	flag.BoolVar(&StartExp, "ex", false, "exp")
+	flag.BoolVar(&StartJsConsole, "js", false, "exp")
 
 	flag.Parse()
 }
