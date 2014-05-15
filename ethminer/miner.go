@@ -26,7 +26,7 @@ func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) Miner {
 	quitChan := make(chan ethutil.React, 1)  // This is the channel that can exit the miner thread
 
 	ethereum.Reactor().Subscribe("newBlock", reactChan)
-	ethereum.Reactor().Subscribe("newTx", reactChan)
+	ethereum.Reactor().Subscribe("newTx:post", reactChan)
 
 	// We need the quit chan to be a Reactor event.
 	// The POW search method is actually blocking and if we don't
@@ -34,7 +34,7 @@ func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) Miner {
 	// The miner overseer will never get the reactor events themselves
 	// Only after the miner will find the sha
 	ethereum.Reactor().Subscribe("newBlock", quitChan)
-	ethereum.Reactor().Subscribe("newTx", quitChan)
+	ethereum.Reactor().Subscribe("newTx:post", quitChan)
 
 	miner := Miner{
 		pow:       &ethchain.EasyPow{},

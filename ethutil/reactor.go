@@ -46,6 +46,7 @@ func (e *ReactorEvent) Remove(ch chan React) {
 // Basic reactor resource
 type React struct {
 	Resource interface{}
+	Event    string
 }
 
 // The reactor basic engine. Acts as bridge
@@ -81,6 +82,6 @@ func (reactor *ReactorEngine) Unsubscribe(event string, ch chan React) {
 func (reactor *ReactorEngine) Post(event string, resource interface{}) {
 	ev := reactor.patterns[event]
 	if ev != nil {
-		ev.Post(React{Resource: resource})
+		ev.Post(React{Resource: resource, Event: event})
 	}
 }

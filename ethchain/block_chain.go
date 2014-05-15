@@ -260,7 +260,7 @@ func AddTestNetFunds(block *Block) {
 		"e6716f9544a56c530d868e4bfbacb172315bdead", // Jeffrey
 		"1e12515ce3e0f817a4ddef9ca55788a1d66bd2df", // Vit
 		"1a26338f0d905e295fccb71fa9ea849ffa12aaf4", // Alex
-		"2ef47100e0787b915105fd5e3f4ff6752079d5cb", // Maran
+		//"2ef47100e0787b915105fd5e3f4ff6752079d5cb", // Maran
 	} {
 		//log.Println("2^200 Wei to", addr)
 		codedAddr := ethutil.FromHex(addr)
@@ -268,6 +268,7 @@ func AddTestNetFunds(block *Block) {
 		account.Amount = ethutil.BigPow(2, 200)
 		block.state.UpdateStateObject(account)
 	}
+	log.Printf("%x\n", block.RlpEncode())
 }
 
 func (bc *BlockChain) setLastBlock() {

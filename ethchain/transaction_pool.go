@@ -133,7 +133,8 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block, toContract
 
 	log.Printf("[TXPL] Processed Tx %x\n", tx.Hash())
 
-	pool.notifySubscribers(TxPost, tx)
+	// Notify all subscribers
+	pool.Ethereum.Reactor().Post("newTx:post", tx)
 
 	return
 }
@@ -188,10 +189,7 @@ out:
 				pool.addTransaction(tx)
 
 				// Notify the subscribers
-				pool.Ethereum.Reactor().Post("newTx", tx)
-
-				// Notify the subscribers
-				pool.notifySubscribers(TxPre, tx)
+				pool.Ethereum.Reactor().Post("newTx:pre", tx)
 			}
 		case <-pool.quit:
 			break out
@@ -251,15 +249,4 @@ func (pool *TxPool) Stop() {
 	pool.Flush()
 
 	log.Println("[TXP] Stopped")
-}
-
-func (pool *TxPool) Subscribe(channel chan TxMsg) {
-	pool.subscribers = append(pool.subscribers, channel)
-}
-
-func (pool *TxPool) notifySubscribers(ty TxMsgTy, tx *Transaction) {
-	msg := TxMsg{Type: ty, Tx: tx}
-	for _, subscriber := range pool.subscribers {
-		subscriber <- msg
-	}
 }
