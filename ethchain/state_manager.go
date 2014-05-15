@@ -193,10 +193,10 @@ func (sm *StateManager) ProcessBlock(block *Block, dontReact bool) error {
 		if dontReact == false {
 			sm.Ethereum.Reactor().Post("newBlock", block)
 
-			sm.notifyChanges()
-
 			sm.procState.manifest.Reset()
 		}
+
+		sm.notifyChanges()
 
 		sm.Ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
 
