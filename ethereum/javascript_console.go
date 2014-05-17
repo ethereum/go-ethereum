@@ -1,47 +1,58 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/robertkrimen/otto"
-	"os"
 )
 
-type JSConsole struct {
+type Repl interface {
+	Start()
+}
+
+type JSRE struct {
 	vm  *otto.Otto
 	lib *ethpub.PEthereum
 }
 
-func NewJSConsole(ethereum *eth.Ethereum) *JSConsole {
-	return &JSConsole{vm: otto.New(), lib: ethpub.NewPEthereum(ethereum)}
+func NewJSRE(ethereum *eth.Ethereum) *JSRE {
+	re := &JSRE{vm: otto.New(), lib: ethpub.NewPEthereum(ethereum)}
+
+	re.Bind("eth", &JSEthereum{re.lib, re.vm})
+
+	return re
 }
 
-func (self *JSConsole) Start() {
-	self.initBindings()
+func (self *JSRE) Bind(name string, v interface{}) {
+	self.vm.Set(name, v)
+}
 
+func (self *JSRE) Run(code string) (otto.Value, error) {
+	return self.vm.Run(code)
+}
+
+type JSRepl struct {
+	re *JSRE
+}
+
+func NewJSRepl(ethereum *eth.Ethereum) *JSRepl {
+	return &JSRepl{re: NewJSRE(ethereum)}
+}
+
+func (self *JSRepl) Start() {
 	fmt.Println("Eth JavaScript console")
-	reader := bufio.NewReader(os.Stdin)
-	for {
-		fmt.Printf("eth >>> ")
-		str, _, err := reader.ReadLine()
-		if err != nil {
-			fmt.Println("Error reading input", err)
-		} else {
-			self.ParseInput(string(str))
-		}
-	}
+	self.read()
 }
 
-func (self *JSConsole) ParseInput(code string) {
+func (self *JSRepl) parseInput(code string) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println("[native] error", r)
 		}
 	}()
 
-	value, err := self.vm.Run(code)
+	value, err := self.re.Run(code)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -50,28 +61,22 @@ func (self *JSConsole) ParseInput(code string) {
 	fmt.Println(value)
 }
 
-func (self *JSConsole) initBindings() {
-	t := &JSWrapper{self.lib, self.vm}
-
-	self.vm.Set("eth", t)
-}
-
-// The JS wrapper attempts to wrap the PEthereum object and returns
-// proper javascript objects
-type JSWrapper struct {
+// The JSEthereum object attempts to wrap the PEthereum object and returns
+// meaningful javascript objects
+type JSEthereum struct {
 	*ethpub.PEthereum
 	vm *otto.Otto
 }
 
-func (self *JSWrapper) GetKey() otto.Value {
+func (self *JSEthereum) GetKey() otto.Value {
 	return self.toVal(self.PEthereum.GetKey())
 }
 
-func (self *JSWrapper) GetStateObject(addr string) otto.Value {
+func (self *JSEthereum) GetStateObject(addr string) otto.Value {
 	return self.toVal(self.PEthereum.GetStateObject(addr))
 }
 
-func (self *JSWrapper) Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr string) otto.Value {
+func (self *JSEthereum) Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr string) otto.Value {
 	r, err := self.PEthereum.Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr)
 	if err != nil {
 		fmt.Println(err)
@@ -82,7 +87,7 @@ func (self *JSWrapper) Transact(key, recipient, valueStr, gasStr, gasPriceStr, d
 	return self.toVal(r)
 }
 
-func (self *JSWrapper) Create(key, valueStr, gasStr, gasPriceStr, initStr, bodyStr string) otto.Value {
+func (self *JSEthereum) Create(key, valueStr, gasStr, gasPriceStr, initStr, bodyStr string) otto.Value {
 	r, err := self.PEthereum.Create(key, valueStr, gasStr, gasPriceStr, initStr, bodyStr)
 
 	if err != nil {
@@ -95,7 +100,7 @@ func (self *JSWrapper) Create(key, valueStr, gasStr, gasPriceStr, initStr, bodyS
 }
 
 // Wrapper function
-func (self *JSWrapper) toVal(v interface{}) otto.Value {
+func (self *JSEthereum) toVal(v interface{}) otto.Value {
 	result, err := self.vm.ToValue(v)
 
 	if err != nil {

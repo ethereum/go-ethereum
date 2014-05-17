@@ -151,9 +151,9 @@ save these words so you can restore your account later: %s
 		console := NewConsole(ethereum)
 		go console.Start()
 	} else if StartJsConsole {
-		c := NewJSConsole(ethereum)
+		repl := NewJSRepl(ethereum)
 
-		go c.Start()
+		go repl.Start()
 	}
 
 	if StartRpc {

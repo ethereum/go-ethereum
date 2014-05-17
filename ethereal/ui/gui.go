@@ -197,7 +197,7 @@ func (gui *Gui) update() {
 		case b := <-blockChan:
 			block := b.Resource.(*ethchain.Block)
 			if bytes.Compare(block.Coinbase, gui.addr) == 0 {
-				gui.setWalletValue(gui.eth.StateManager().ProcState().GetAccount(gui.addr).Amount, nil)
+				gui.setWalletValue(gui.eth.StateManager().CurrentState().GetAccount(gui.addr).Amount, nil)
 			}
 
 		case txMsg := <-txChan:

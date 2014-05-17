@@ -35,9 +35,11 @@ func DoMining(ethereum *eth.Ethereum) {
 		// Give it some time to connect with peers
 		time.Sleep(3 * time.Second)
 
-		for ethereum.IsUpToDate() == false {
-			time.Sleep(5 * time.Second)
-		}
+		/*
+			for ethereum.IsUpToDate() == false {
+				time.Sleep(5 * time.Second)
+			}
+		*/
 		log.Println("Miner started")
 
 		miner := ethminer.NewDefaultMiner(addr, ethereum)
