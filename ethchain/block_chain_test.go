@@ -18,6 +18,18 @@ type TestManager struct {
 	Blocks     []*Block
 }
 
+func (s *TestManager) IsListening() bool {
+	return false
+}
+
+func (s *TestManager) IsMining() bool {
+	return false
+}
+
+func (s *TestManager) PeerCount() int {
+	return 0
+}
+
 func (s *TestManager) BlockChain() *BlockChain {
 	return s.blockChain
 }
@@ -38,7 +50,7 @@ func (tm *TestManager) Broadcast(msgType ethwire.MsgType, data []interface{}) {
 }
 
 func NewTestManager() *TestManager {
-	ethutil.ReadConfig(".ethtest")
+	ethutil.ReadConfig(".ethtest", ethutil.LogStd)
 
 	db, err := ethdb.NewMemDatabase()
 	if err != nil {
@@ -62,8 +74,7 @@ func NewTestManager() *TestManager {
 func (tm *TestManager) AddFakeBlock(blk []byte) error {
 	block := NewBlockFromBytes(blk)
 	tm.Blocks = append(tm.Blocks, block)
-	tm.StateManager().PrepareDefault(block)
-	err := tm.StateManager().ProcessBlock(block, false)
+	err := tm.StateManager().ProcessBlock(tm.StateManager().CurrentState(), block, false)
 	return err
 }
 func (tm *TestManager) CreateChain1() error {

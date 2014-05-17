@@ -39,20 +39,13 @@ type StateManager struct {
 	// The ethereum manager interface
 	Ethereum EthManager
 	// The managed states
-	// Processor state. Anything processed will be applied to this
-	// state
-	procState *State
-	// Comparative state it used for comparing and validating end
-	// results
-	compState *State
 	// Transiently state. The trans state isn't ever saved, validated and
 	// it could be used for setting account nonces without effecting
 	// the main states.
 	transState *State
-	// Manifest for keeping changes regarding state objects. See `notify`
-	// XXX Should we move the manifest to the State object. Benefit:
-	// * All states can keep their own local changes
-	//manifest *Manifest
+	// Mining state. The mining state is used purely and solely by the mining
+	// operation.
+	miningState *State
 }
 
 func NewStateManager(ethereum EthManager) *StateManager {
@@ -62,30 +55,39 @@ func NewStateManager(ethereum EthManager) *StateManager {
 		Pow:      &EasyPow{},
 		Ethereum: ethereum,
 		bc:       ethereum.BlockChain(),
-		//manifest: NewManifest(),
 	}
-	sm.procState = ethereum.BlockChain().CurrentBlock.State()
-	sm.transState = sm.procState.Copy()
+	sm.transState = ethereum.BlockChain().CurrentBlock.State().Copy()
+	sm.miningState = ethereum.BlockChain().CurrentBlock.State().Copy()
 
 	return sm
 }
 
-func (sm *StateManager) ProcState() *State {
-	return sm.procState
+func (sm *StateManager) CurrentState() *State {
+	return sm.Ethereum.BlockChain().CurrentBlock.State()
 }
 
 func (sm *StateManager) TransState() *State {
 	return sm.transState
 }
 
+func (sm *StateManager) MiningState() *State {
+	return sm.miningState
+}
+
+func (sm *StateManager) NewMiningState() *State {
+	sm.miningState = sm.Ethereum.BlockChain().CurrentBlock.State().Copy()
+
+	return sm.miningState
+}
+
 func (sm *StateManager) BlockChain() *BlockChain {
 	return sm.bc
 }
 
-func (sm *StateManager) MakeContract(tx *Transaction) *StateObject {
-	contract := MakeContract(tx, sm.procState)
+func (sm *StateManager) MakeContract(state *State, tx *Transaction) *StateObject {
+	contract := MakeContract(tx, state)
 	if contract != nil {
-		sm.procState.states[string(tx.Hash()[12:])] = contract.state
+		state.states[string(tx.Hash()[12:])] = contract.state
 
 		return contract
 	}
@@ -95,7 +97,7 @@ func (sm *StateManager) MakeContract(tx *Transaction) *StateObject {
 
 // Apply transactions uses the transaction passed to it and applies them onto
 // the current processing state.
-func (sm *StateManager) ApplyTransactions(block *Block, txs []*Transaction) {
+func (sm *StateManager) ApplyTransactions(state *State, block *Block, txs []*Transaction) {
 	// Process each transaction/contract
 	for _, tx := range txs {
 		// If there's no recipient, it's a contract
@@ -104,9 +106,9 @@ func (sm *StateManager) ApplyTransactions(block *Block, txs []*Transaction) {
 		if tx.IsContract() {
 			err := sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
 			if err == nil {
-				contract := sm.MakeContract(tx)
+				contract := sm.MakeContract(state, tx)
 				if contract != nil {
-					sm.EvalScript(contract.Init(), contract, tx, block)
+					sm.EvalScript(state, contract.Init(), contract, tx, block)
 				} else {
 					ethutil.Config.Log.Infoln("[STATE] Unable to create contract")
 				}
@@ -115,9 +117,9 @@ func (sm *StateManager) ApplyTransactions(block *Block, txs []*Transaction) {
 			}
 		} else {
 			err := sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
-			contract := sm.procState.GetContract(tx.Recipient)
+			contract := state.GetContract(tx.Recipient)
 			if err == nil && len(contract.Script()) > 0 {
-				sm.EvalScript(contract.Script(), contract, tx, block)
+				sm.EvalScript(state, contract.Script(), contract, tx, block)
 			} else if err != nil {
 				ethutil.Config.Log.Infoln("[STATE] process:", err)
 			}
@@ -125,20 +127,8 @@ func (sm *StateManager) ApplyTransactions(block *Block, txs []*Transaction) {
 	}
 }
 
-// The prepare function, prepares the state manager for the next
-// "ProcessBlock" action.
-func (sm *StateManager) Prepare(processor *State, comparative *State) {
-	sm.compState = comparative
-	sm.procState = processor
-}
-
-// Default prepare function
-func (sm *StateManager) PrepareDefault(block *Block) {
-	sm.Prepare(sm.BlockChain().CurrentBlock.State(), block.State())
-}
-
 // Block processing and validating with a given (temporarily) state
-func (sm *StateManager) ProcessBlock(block *Block, dontReact bool) error {
+func (sm *StateManager) ProcessBlock(state *State, block *Block, dontReact bool) error {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
@@ -153,7 +143,7 @@ func (sm *StateManager) ProcessBlock(block *Block, dontReact bool) error {
 	// we don't want to undo but since undo only happens on dirty
 	// nodes this won't happen because Commit would have been called
 	// before that.
-	defer sm.bc.CurrentBlock.Undo()
+	defer state.Reset()
 
 	// Check if we have the parent hash, if it isn't known we discard it
 	// Reasons might be catching up or simply an invalid block
@@ -162,7 +152,7 @@ func (sm *StateManager) ProcessBlock(block *Block, dontReact bool) error {
 	}
 
 	// Process the transactions on to current block
-	sm.ApplyTransactions(sm.bc.CurrentBlock, block.Transactions())
+	sm.ApplyTransactions(state, sm.bc.CurrentBlock, block.Transactions())
 
 	// Block validation
 	if err := sm.ValidateBlock(block); err != nil {
@@ -172,19 +162,20 @@ func (sm *StateManager) ProcessBlock(block *Block, dontReact bool) error {
 
 	// I'm not sure, but I don't know if there should be thrown
 	// any errors at this time.
-	if err := sm.AccumelateRewards(block); err != nil {
+	if err := sm.AccumelateRewards(state, block); err != nil {
 		fmt.Println("[SM] Error accumulating reward", err)
 		return err
 	}
 
-	if !sm.compState.Cmp(sm.procState) {
-		return fmt.Errorf("Invalid merkle root. Expected %x, got %x", sm.compState.trie.Root, sm.procState.trie.Root)
+	//if !sm.compState.Cmp(state) {
+	if !block.State().Cmp(state) {
+		return fmt.Errorf("Invalid merkle root. Expected %x, got %x", block.State().trie.Root, state.trie.Root)
 	}
 
 	// Calculate the new total difficulty and sync back to the db
 	if sm.CalculateTD(block) {
 		// Sync the current block's state to the database and cancelling out the deferred Undo
-		sm.procState.Sync()
+		state.Sync()
 
 		// Add the block to the chain
 		sm.bc.Add(block)
@@ -193,14 +184,14 @@ func (sm *StateManager) ProcessBlock(block *Block, dontReact bool) error {
 		if dontReact == false {
 			sm.Ethereum.Reactor().Post("newBlock", block)
 
-			sm.procState.manifest.Reset()
+			state.manifest.Reset()
 		}
 
-		sm.notifyChanges()
+		sm.notifyChanges(state)
 
 		sm.Ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
 
-		sm.Ethereum.TxPool().RemoveInvalid(sm.procState)
+		sm.Ethereum.TxPool().RemoveInvalid(state)
 	} else {
 		fmt.Println("total diff failed")
 	}
@@ -276,21 +267,21 @@ func CalculateUncleReward(block *Block) *big.Int {
 	return UncleReward
 }
 
-func (sm *StateManager) AccumelateRewards(block *Block) error {
+func (sm *StateManager) AccumelateRewards(state *State, block *Block) error {
 	// Get the account associated with the coinbase
-	account := sm.procState.GetAccount(block.Coinbase)
+	account := state.GetAccount(block.Coinbase)
 	// Reward amount of ether to the coinbase address
 	account.AddAmount(CalculateBlockReward(block, len(block.Uncles)))
 
 	addr := make([]byte, len(block.Coinbase))
 	copy(addr, block.Coinbase)
-	sm.procState.UpdateStateObject(account)
+	state.UpdateStateObject(account)
 
 	for _, uncle := range block.Uncles {
-		uncleAccount := sm.procState.GetAccount(uncle.Coinbase)
+		uncleAccount := state.GetAccount(uncle.Coinbase)
 		uncleAccount.AddAmount(CalculateUncleReward(uncle))
 
-		sm.procState.UpdateStateObject(uncleAccount)
+		state.UpdateStateObject(uncleAccount)
 	}
 
 	return nil
@@ -300,8 +291,8 @@ func (sm *StateManager) Stop() {
 	sm.bc.Stop()
 }
 
-func (sm *StateManager) EvalScript(script []byte, object *StateObject, tx *Transaction, block *Block) {
-	account := sm.procState.GetAccount(tx.Sender())
+func (sm *StateManager) EvalScript(state *State, script []byte, object *StateObject, tx *Transaction, block *Block) {
+	account := state.GetAccount(tx.Sender())
 
 	err := account.ConvertGas(tx.Gas, tx.GasPrice)
 	if err != nil {
@@ -309,8 +300,8 @@ func (sm *StateManager) EvalScript(script []byte, object *StateObject, tx *Trans
 		return
 	}
 
-	closure := NewClosure(account, object, script, sm.procState, tx.Gas, tx.GasPrice)
-	vm := NewVm(sm.procState, sm, RuntimeVars{
+	closure := NewClosure(account, object, script, state, tx.Gas, tx.GasPrice)
+	vm := NewVm(state, sm, RuntimeVars{
 		Origin:      account.Address(),
 		BlockNumber: block.BlockInfo().Number,
 		PrevHash:    block.PrevHash,
@@ -323,16 +314,16 @@ func (sm *StateManager) EvalScript(script []byte, object *StateObject, tx *Trans
 	closure.Call(vm, tx.Data, nil)
 
 	// Update the account (refunds)
-	sm.procState.UpdateStateObject(account)
-	sm.procState.UpdateStateObject(object)
+	state.UpdateStateObject(account)
+	state.UpdateStateObject(object)
 }
 
-func (sm *StateManager) notifyChanges() {
-	for addr, stateObject := range sm.procState.manifest.objectChanges {
+func (sm *StateManager) notifyChanges(state *State) {
+	for addr, stateObject := range state.manifest.objectChanges {
 		sm.Ethereum.Reactor().Post("object:"+addr, stateObject)
 	}
 
-	for stateObjectAddr, mappedObjects := range sm.procState.manifest.storageChanges {
+	for stateObjectAddr, mappedObjects := range state.manifest.storageChanges {
 		for addr, value := range mappedObjects {
 			sm.Ethereum.Reactor().Post("storage:"+stateObjectAddr+":"+addr, &StorageState{[]byte(stateObjectAddr), []byte(addr), value})
 		}

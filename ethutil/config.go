@@ -9,14 +9,6 @@ import (
 	"runtime"
 )
 
-// Log types available
-type LogType byte
-
-const (
-	LogTypeStdIn = 1
-	LogTypeFile  = 2
-)
-
 // Config struct
 type config struct {
 	Db Database
@@ -34,7 +26,7 @@ var Config *config
 // Read config
 //
 // Initialize the global Config variable with default settings
-func ReadConfig(base string) *config {
+func ReadConfig(base string, logTypes LoggerType) *config {
 	if Config == nil {
 		usr, _ := user.Current()
 		path := path.Join(usr.HomeDir, base)
@@ -51,7 +43,7 @@ func ReadConfig(base string) *config {
 		}
 
 		Config = &config{ExecPath: path, Debug: true, Ver: "0.5.0 RC6"}
-		Config.Log = NewLogger(LogFile|LogStd, LogLevelDebug)
+		Config.Log = NewLogger(logTypes, LogLevelDebug)
 		Config.SetClientString("/Ethereum(G)")
 	}
 

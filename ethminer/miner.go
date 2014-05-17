@@ -53,8 +53,8 @@ func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) Miner {
 }
 func (miner *Miner) Start() {
 	// Prepare inital block
-	miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
-	go func() { miner.listener() }()
+	//miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
+	go miner.listener()
 }
 func (miner *Miner) listener() {
 	for {
@@ -88,7 +88,7 @@ func (miner *Miner) listener() {
 					if bytes.Compare(block.PrevHash, miner.ethereum.BlockChain().CurrentBlock.PrevHash) == 0 {
 						log.Println("[MINER] Adding uncle block")
 						miner.uncles = append(miner.uncles, block)
-						miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
+						//miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
 					}
 				}
 			}
@@ -119,31 +119,19 @@ func (miner *Miner) listener() {
 				miner.block.SetUncles(miner.uncles)
 			}
 
-			// FIXME @ maranh, first block doesn't need this. Everything after the first block does.
-			// Please check and fix
-			miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
 			// Apply all transactions to the block
-			miner.ethereum.StateManager().ApplyTransactions(miner.block, miner.block.Transactions())
-			miner.ethereum.StateManager().AccumelateRewards(miner.block)
+			miner.ethereum.StateManager().ApplyTransactions(miner.block.State(), miner.block, miner.block.Transactions())
+			miner.ethereum.StateManager().AccumelateRewards(miner.block.State(), miner.block)
 
 			// Search the nonce
-			//log.Println("[MINER] Initialision complete, starting mining")
 			miner.block.Nonce = miner.pow.Search(miner.block, miner.quitChan)
 			if miner.block.Nonce != nil {
-				miner.ethereum.StateManager().PrepareDefault(miner.block)
-				err := miner.ethereum.StateManager().ProcessBlock(miner.block, true)
+				err := miner.ethereum.StateManager().ProcessBlock(miner.ethereum.StateManager().CurrentState(), miner.block, true)
 				if err != nil {
 					log.Println(err)
 					miner.txs = []*ethchain.Transaction{} // Move this somewhere neat
 					miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)
 				} else {
-
-					/*
-						// XXX @maranh This is already done in the state manager, why a 2nd time?
-						if !miner.ethereum.StateManager().Pow.Verify(miner.block.HashNoNonce(), miner.block.Difficulty, miner.block.Nonce) {
-							log.Printf("Second stage verification error: Block's nonce is invalid (= %v)\n", ethutil.Hex(miner.block.Nonce))
-						}
-					*/
 					miner.ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{miner.block.Value().Val})
 					log.Printf("[MINER] 🔨  Mined block %x\n", miner.block.Hash())
 

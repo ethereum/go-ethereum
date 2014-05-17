@@ -45,7 +45,7 @@ func (lib *PEthereum) GetKey() *PKey {
 }
 
 func (lib *PEthereum) GetStateObject(address string) *PStateObject {
-	stateObject := lib.stateManager.ProcState().GetContract(ethutil.FromHex(address))
+	stateObject := lib.stateManager.CurrentState().GetContract(ethutil.FromHex(address))
 	if stateObject != nil {
 		return NewPStateObject(stateObject)
 	}
