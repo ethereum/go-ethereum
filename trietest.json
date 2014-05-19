@@ -54,7 +54,7 @@
   {
     "inputs":[
       ["test", "test"],
-      ["te", "testy"],
+      ["te", "testy"]
     ],
     "expectation": "8452568af70d8d140f58d941338542f645fcca50094b20f3c3d8c3df49337928"
   }
