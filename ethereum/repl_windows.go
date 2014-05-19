@@ -18,3 +18,7 @@ func (self *JSRepl) read() {
 		}
 	}
 }
+
+func (self *JSRepl) PrintValue(value otto.Value) {
+	fmt.Println(value)
+}

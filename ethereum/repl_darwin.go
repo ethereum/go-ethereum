@@ -8,6 +8,7 @@ package main
 import "C"
 
 import (
+	"github.com/robertkrimen/otto"
 	"strings"
 	"unsafe"
 )
@@ -63,18 +64,30 @@ L:
 	for {
 		switch result := readLine(&self.prompt); true {
 		case result == nil:
-			break L //exit loop
+			break L
 
-		case *result != "": //ignore blank lines
+		case *result != "":
 			str += *result + "\n"
 
 			self.setIndent()
 
 			if indentCount <= 0 {
+				if *result == "exit" {
+					self.Stop()
+					break L
+				}
+
 				addHistory(str) //allow user to recall this line
 
 				self.parseInput(str)
+
+				str = ""
 			}
 		}
 	}
+}
+
+func (self *JSRepl) PrintValue(value otto.Value) {
+	method, _ := self.re.vm.Get("prettyPrint")
+	method.Call(method, value)
 }

@@ -11,6 +11,7 @@ import (
 
 type Repl interface {
 	Start()
+	Stop()
 }
 
 type JSRE struct {
@@ -35,6 +36,9 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 		make(chan bool),
 		make(map[string][]otto.Value),
 	}
+
+	// Init the JS lib
+	re.vm.Run(jsLib)
 
 	// We have to make sure that, whoever calls this, calls "Stop"
 	go re.mainLoop()
@@ -113,6 +117,10 @@ func (self *JSRepl) Start() {
 	self.read()
 }
 
+func (self *JSRepl) Stop() {
+	self.re.Stop()
+}
+
 func (self *JSRepl) parseInput(code string) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -126,7 +134,7 @@ func (self *JSRepl) parseInput(code string) {
 		return
 	}
 
-	fmt.Println(value)
+	self.PrintValue(value)
 }
 
 // The JSEthereum object attempts to wrap the PEthereum object and returns

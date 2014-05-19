@@ -15,16 +15,15 @@ import (
 
 const Debug = true
 
-// Register interrupt handlers so we can stop the ethereum
-func RegisterInterrupts(s *eth.Ethereum) {
-	// Buffered chan of one is enough
-	c := make(chan os.Signal, 1)
-	// Notify about interrupts for now
-	signal.Notify(c, os.Interrupt)
+func RegisterInterrupt(cb func(os.Signal)) {
 	go func() {
+		// Buffered chan of one is enough
+		c := make(chan os.Signal, 1)
+		// Notify about interrupts for now
+		signal.Notify(c, os.Interrupt)
+
 		for sig := range c {
-			fmt.Printf("Shutting down (%v) ... \n", sig)
-			s.Stop()
+			cb(sig)
 		}
 	}()
 }
@@ -154,13 +153,20 @@ save these words so you can restore your account later: %s
 		repl := NewJSRepl(ethereum)
 
 		go repl.Start()
+
+		RegisterInterrupt(func(os.Signal) {
+			repl.Stop()
+		})
 	}
 
 	if StartRpc {
 		utils.DoRpc(ethereum, RpcPort)
 	}
 
-	RegisterInterrupts(ethereum)
+	RegisterInterrupt(func(sig os.Signal) {
+		fmt.Printf("Shutting down (%v) ... \n", sig)
+		ethereum.Stop()
+	})
 
 	ethereum.Start(UseSeed)
 
