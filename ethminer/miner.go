@@ -5,7 +5,6 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
-	"log"
 )
 
 type Miner struct {
@@ -61,10 +60,10 @@ func (miner *Miner) listener() {
 		select {
 		case chanMessage := <-miner.reactChan:
 			if block, ok := chanMessage.Resource.(*ethchain.Block); ok {
-				log.Println("[MINER] Got new block via Reactor")
+				ethutil.Config.Log.Infoln("[MINER] Got new block via Reactor")
 				if bytes.Compare(miner.ethereum.BlockChain().CurrentBlock.Hash(), block.Hash()) == 0 {
 					// TODO: Perhaps continue mining to get some uncle rewards
-					log.Println("[MINER] New top block found resetting state")
+					ethutil.Config.Log.Infoln("[MINER] New top block found resetting state")
 
 					// Filter out which Transactions we have that were not in this block
 					var newtxs []*ethchain.Transaction
@@ -86,7 +85,7 @@ func (miner *Miner) listener() {
 
 				} else {
 					if bytes.Compare(block.PrevHash, miner.ethereum.BlockChain().CurrentBlock.PrevHash) == 0 {
-						log.Println("[MINER] Adding uncle block")
+						ethutil.Config.Log.Infoln("[MINER] Adding uncle block")
 						miner.uncles = append(miner.uncles, block)
 						//miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
 					}
@@ -94,7 +93,7 @@ func (miner *Miner) listener() {
 			}
 
 			if tx, ok := chanMessage.Resource.(*ethchain.Transaction); ok {
-				//log.Println("[MINER] Got new transaction from Reactor", tx)
+				//log.Infoln("[MINER] Got new transaction from Reactor", tx)
 				found := false
 				for _, ctx := range miner.txs {
 					if found = bytes.Compare(ctx.Hash(), tx.Hash()) == 0; found {
@@ -103,16 +102,16 @@ func (miner *Miner) listener() {
 
 				}
 				if found == false {
-					//log.Println("[MINER] We did not know about this transaction, adding")
+					//log.Infoln("[MINER] We did not know about this transaction, adding")
 					miner.txs = append(miner.txs, tx)
 					miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)
 					miner.block.SetTransactions(miner.txs)
 				} else {
-					//log.Println("[MINER] We already had this transaction, ignoring")
+					//log.Infoln("[MINER] We already had this transaction, ignoring")
 				}
 			}
 		default:
-			log.Println("[MINER] Mining on block. Includes", len(miner.txs), "transactions")
+			ethutil.Config.Log.Infoln("[MINER] Mining on block. Includes", len(miner.txs), "transactions")
 
 			// Apply uncles
 			if len(miner.uncles) > 0 {
@@ -128,12 +127,12 @@ func (miner *Miner) listener() {
 			if miner.block.Nonce != nil {
 				err := miner.ethereum.StateManager().ProcessBlock(miner.ethereum.StateManager().CurrentState(), miner.block, true)
 				if err != nil {
-					log.Println(err)
+					ethutil.Config.Log.Infoln(err)
 					miner.txs = []*ethchain.Transaction{} // Move this somewhere neat
 					miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)
 				} else {
 					miner.ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{miner.block.Value().Val})
-					log.Printf("[MINER] 🔨  Mined block %x\n", miner.block.Hash())
+					ethutil.Config.Log.Infof("[MINER] 🔨  Mined block %x\n", miner.block.Hash())
 
 					miner.txs = []*ethchain.Transaction{} // Move this somewhere neat
 					miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)

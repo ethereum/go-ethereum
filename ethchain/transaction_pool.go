@@ -131,7 +131,7 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block, toContract
 
 	block.state.UpdateStateObject(sender)
 
-	log.Printf("[TXPL] Processed Tx %x\n", tx.Hash())
+	ethutil.Config.Log.Infof("[TXPL] Processed Tx %x\n", tx.Hash())
 
 	// Notify all subscribers
 	pool.Ethereum.Reactor().Post("newTx:post", tx)
