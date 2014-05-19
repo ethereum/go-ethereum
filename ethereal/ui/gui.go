@@ -210,8 +210,10 @@ func (gui *Gui) update() {
 					gui.win.Root().Call("addTx", ethpub.NewPTx(tx))
 					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 
-					object.Nonce += 1
-					state.SetStateObject(object)
+					/*
+						object.Nonce += 1
+						state.SetStateObject(object)
+					*/
 
 					unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
 				} else if bytes.Compare(tx.Recipient, gui.addr) == 0 {
