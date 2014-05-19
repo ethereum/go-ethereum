@@ -95,7 +95,6 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 	if ethutil.Config.Debug {
 		ethutil.Config.Log.Debugf("#   op\n")
 	}
-	fmt.Println(closure.Script)
 
 	for {
 		// The base for all big integer arithmetic
