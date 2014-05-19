@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/utils"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -51,7 +52,7 @@ func main() {
 	var logSys *log.Logger
 	flags := log.LstdFlags
 
-	if StartJsConsole {
+	if StartJsConsole || len(InputFile) > 0 {
 		ethutil.ReadConfig(DataDir, ethutil.LogFile)
 	} else {
 		ethutil.ReadConfig(DataDir, ethutil.LogFile|ethutil.LogStd)
@@ -157,6 +158,22 @@ save these words so you can restore your account later: %s
 		RegisterInterrupt(func(os.Signal) {
 			repl.Stop()
 		})
+	} else if len(InputFile) > 0 {
+		file, err := os.Open(InputFile)
+		if err != nil {
+			ethutil.Config.Log.Fatal(err)
+		}
+
+		content, err := ioutil.ReadAll(file)
+		if err != nil {
+			ethutil.Config.Log.Fatal(err)
+		}
+
+		re := NewJSRE(ethereum)
+		RegisterInterrupt(func(os.Signal) {
+			re.Stop()
+		})
+		re.Run(string(content))
 	}
 
 	if StartRpc {

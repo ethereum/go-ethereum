@@ -21,6 +21,7 @@ var LogFile string
 var DataDir string
 var NonInteractive bool
 var StartJsConsole bool
+var InputFile string
 
 func Init() {
 	flag.BoolVar(&StartConsole, "c", false, "debug and testing console")
@@ -40,6 +41,7 @@ func Init() {
 	flag.StringVar(&ImportKey, "import", "", "imports the given private key (hex)")
 	flag.IntVar(&MaxPeer, "x", 5, "maximum desired peers")
 	flag.BoolVar(&StartJsConsole, "js", false, "exp")
+	flag.StringVar(&InputFile, "e", "", "Run javascript file")
 
 	flag.Parse()
 }

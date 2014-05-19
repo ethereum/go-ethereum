@@ -31,6 +31,8 @@ function pp(object) {
         str += "\033[1m\033[30m" + object;
     } else if(typeof(object) === "number") {
         str += "\033[31m" + object;
+    } else if(typeof(object) === "function") {
+	str += "\033[35m[Function]";
     } else {
         str += object;                    
     }
@@ -40,7 +42,12 @@ function pp(object) {
     return str;
 }
 
-function prettyPrint(object) {
-    console.log(pp(object))
+function prettyPrint(/* */) {
+    var args = arguments;
+    for(var i = 0, l = args.length; i < l; i++) {
+	    console.log(pp(args[i]))
+    }
 }
+
+var print = prettyPrint;
 `
