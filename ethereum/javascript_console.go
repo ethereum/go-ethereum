@@ -101,14 +101,15 @@ func (self *JSRE) Run(code string) (otto.Value, error) {
 
 type JSRepl struct {
 	re *JSRE
+
+	prompt string
 }
 
 func NewJSRepl(ethereum *eth.Ethereum) *JSRepl {
-	return &JSRepl{re: NewJSRE(ethereum)}
+	return &JSRepl{re: NewJSRE(ethereum), prompt: "> "}
 }
 
 func (self *JSRepl) Start() {
-	fmt.Println("Eth JavaScript console")
 	self.read()
 }
 

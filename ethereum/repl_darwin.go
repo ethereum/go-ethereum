@@ -6,7 +6,11 @@ package main
 // #include <readline/readline.h>
 // #include <readline/history.h>
 import "C"
-import "unsafe"
+
+import (
+	"strings"
+	"unsafe"
+)
 
 func readLine(prompt *string) *string {
 	var p *C.char
@@ -37,19 +41,40 @@ func addHistory(s string) {
 	C.free(unsafe.Pointer(p))
 }
 
-func (self *JSRepl) read() {
-	prompt := "eth >>> "
+var indentCount = 0
+var str = ""
 
+func (self *JSRepl) setIndent() {
+	open := strings.Count(str, "{")
+	open += strings.Count(str, "(")
+	closed := strings.Count(str, "}")
+	closed += strings.Count(str, ")")
+	indentCount = open - closed
+	if indentCount <= 0 {
+		self.prompt = "> "
+	} else {
+		self.prompt = strings.Join(make([]string, indentCount*2), "..")
+		self.prompt += " "
+	}
+}
+
+func (self *JSRepl) read() {
 L:
 	for {
-		switch result := readLine(&prompt); true {
+		switch result := readLine(&self.prompt); true {
 		case result == nil:
 			break L //exit loop
 
 		case *result != "": //ignore blank lines
-			addHistory(*result) //allow user to recall this line
+			str += *result + "\n"
 
-			self.parseInput(*result)
+			self.setIndent()
+
+			if indentCount <= 0 {
+				addHistory(str) //allow user to recall this line
+
+				self.parseInput(str)
+			}
 		}
 	}
 }
