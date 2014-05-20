@@ -45,7 +45,7 @@ func (lib *PEthereum) GetKey() *PKey {
 }
 
 func (lib *PEthereum) GetStateObject(address string) *PStateObject {
-	stateObject := lib.stateManager.CurrentState().GetContract(ethutil.FromHex(address))
+	stateObject := lib.stateManager.CurrentState().GetStateObject(ethutil.FromHex(address))
 	if stateObject != nil {
 		return NewPStateObject(stateObject)
 	}
@@ -160,7 +160,6 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, in
 	}
 
 	acc := lib.stateManager.TransState().GetStateObject(keyPair.Address())
-	//acc := lib.stateManager.GetAddrState(keyPair.Address())
 	tx.Nonce = acc.Nonce
 	acc.Nonce += 1
 	lib.stateManager.TransState().SetStateObject(acc)

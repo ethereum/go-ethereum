@@ -60,7 +60,7 @@ func (tx *Transaction) IsContract() bool {
 }
 
 func (tx *Transaction) CreationAddress() []byte {
-	return tx.Hash()[12:]
+	return ethutil.Sha3Bin(ethutil.NewValue([]interface{}{tx.Sender(), tx.Nonce}).Encode())[12:]
 }
 
 func (tx *Transaction) Signature(key []byte) []byte {

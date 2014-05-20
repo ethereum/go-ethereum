@@ -87,7 +87,7 @@ func (sm *StateManager) BlockChain() *BlockChain {
 func (sm *StateManager) MakeContract(state *State, tx *Transaction) *StateObject {
 	contract := MakeContract(tx, state)
 	if contract != nil {
-		state.states[string(tx.Hash()[12:])] = contract.state
+		state.states[string(tx.CreationAddress())] = contract.state
 
 		return contract
 	}
@@ -117,7 +117,8 @@ func (sm *StateManager) ApplyTransactions(state *State, block *Block, txs []*Tra
 			}
 		} else {
 			err := sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
-			contract := state.GetContract(tx.Recipient)
+			contract := state.GetStateObject(tx.Recipient)
+			ethutil.Config.Log.Debugf("contract recip %x\n", tx.Recipient)
 			if err == nil && len(contract.Script()) > 0 {
 				sm.EvalScript(state, contract.Script(), contract, tx, block)
 			} else if err != nil {

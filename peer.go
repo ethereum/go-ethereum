@@ -18,7 +18,7 @@ const (
 	// The size of the output buffer for writing messages
 	outputBufferSize = 50
 	// Current protocol version
-	ProtocolVersion = 8
+	ProtocolVersion = 9
 )
 
 type DiscReason byte

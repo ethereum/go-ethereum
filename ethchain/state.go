@@ -49,28 +49,6 @@ func (s *State) Purge() int {
 	return s.trie.NewIterator().Purge()
 }
 
-// XXX Deprecated
-func (s *State) GetContract(addr []byte) *StateObject {
-	data := s.trie.Get(string(addr))
-	if data == "" {
-		return nil
-	}
-
-	// build contract
-	contract := NewStateObjectFromBytes(addr, []byte(data))
-
-	// Check if there's a cached state for this contract
-	cachedState := s.states[string(addr)]
-	if cachedState != nil {
-		contract.state = cachedState
-	} else {
-		// If it isn't cached, cache the state
-		s.states[string(addr)] = contract.state
-	}
-
-	return contract
-}
-
 func (s *State) GetStateObject(addr []byte) *StateObject {
 	data := s.trie.Get(string(addr))
 	if data == "" {
@@ -89,6 +67,21 @@ func (s *State) GetStateObject(addr []byte) *StateObject {
 	}
 
 	return stateObject
+}
+
+// Updates any given state object
+func (s *State) UpdateStateObject(object *StateObject) {
+	addr := object.Address()
+
+	if object.state != nil {
+		s.states[string(addr)] = object.state
+	}
+
+	ethutil.Config.Db.Put(ethutil.Sha3Bin(object.Script()), object.Script())
+
+	s.trie.Update(string(addr), string(object.RlpEncode()))
+
+	s.manifest.AddObjectChange(object)
 }
 
 func (s *State) SetStateObject(stateObject *StateObject) {
@@ -114,18 +107,6 @@ func (s *State) Cmp(other *State) bool {
 
 func (s *State) Copy() *State {
 	return NewState(s.trie.Copy())
-}
-
-// Updates any given state object
-func (s *State) UpdateStateObject(object *StateObject) {
-	addr := object.Address()
-
-	if object.state != nil {
-		s.states[string(addr)] = object.state
-	}
-
-	s.trie.Update(string(addr), string(object.RlpEncode()))
-	s.manifest.AddObjectChange(object)
 }
 
 func (s *State) Put(key, object []byte) {

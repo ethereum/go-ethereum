@@ -122,7 +122,7 @@ func (block *Block) Transactions() []*Transaction {
 }
 
 func (block *Block) PayFee(addr []byte, fee *big.Int) bool {
-	contract := block.state.GetContract(addr)
+	contract := block.state.GetStateObject(addr)
 	// If we can't pay the fee return
 	if contract == nil || contract.Amount.Cmp(fee) < 0 /* amount < fee */ {
 		fmt.Println("Contract has insufficient funds", contract.Amount, fee)

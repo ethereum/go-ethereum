@@ -2,6 +2,7 @@ package ethpub
 
 import (
 	"encoding/hex"
+	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 )
@@ -110,6 +111,14 @@ func (c *PStateObject) IsContract() bool {
 	}
 
 	return false
+}
+
+func (c *PStateObject) Script() string {
+	if c.object != nil {
+		return ethutil.Hex(c.object.Script())
+	}
+
+	return ""
 }
 
 type PStorageState struct {
