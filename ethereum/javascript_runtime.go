@@ -7,6 +7,9 @@ import (
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/otto"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 )
 
 type JSRE struct {
@@ -53,6 +56,22 @@ func (self *JSRE) Run(code string) (otto.Value, error) {
 	return self.vm.Run(code)
 }
 
+func (self *JSRE) Require(file string) error {
+	if len(filepath.Ext(file)) == 0 {
+		file += ".js"
+	}
+
+	fh, err := os.Open(file)
+	if err != nil {
+		return err
+	}
+
+	content, _ := ioutil.ReadAll(fh)
+	self.Run("exports = {};(function() {" + string(content) + "})();")
+
+	return nil
+}
+
 func (self *JSRE) Stop() {
 	// Kill the main loop
 	self.quitChan <- true
@@ -82,7 +101,10 @@ out:
 					cb.Call(cb, val)
 				}
 			} else if storageObject, ok := object.Resource.(*ethchain.StorageState); ok {
-				fmt.Println(storageObject)
+				for _, cb := range self.objectCb[ethutil.Hex(storageObject.Address)+ethutil.Hex(storageObject.StateAddress)] {
+					val, _ := self.vm.ToValue(ethpub.NewPStorageState(storageObject))
+					cb.Call(cb, val)
+				}
 			}
 		}
 	}
@@ -91,24 +113,65 @@ out:
 func (self *JSRE) initStdFuncs() {
 	t, _ := self.vm.Get("eth")
 	eth := t.Object()
-	eth.Set("watch", func(call otto.FunctionCall) otto.Value {
-		addr, _ := call.Argument(0).ToString()
-		cb := call.Argument(1)
+	eth.Set("watch", self.watch)
+	eth.Set("addPeer", self.addPeer)
+	self.Set("require", self.require)
+}
 
+/*
+ * The following methods are natively implemented javascript functions
+ */
+
+// eth.watch
+func (self JSRE) watch(call otto.FunctionCall) otto.Value {
+	addr, _ := call.Argument(0).ToString()
+	var storageAddr string
+	var cb otto.Value
+	var storageCallback bool
+	if len(call.ArgumentList) > 2 {
+		storageCallback = true
+		storageAddr, _ = call.Argument(1).ToString()
+		cb = call.Argument(2)
+	} else {
+		cb = call.Argument(1)
+	}
+
+	if storageCallback {
+		self.objectCb[addr+storageAddr] = append(self.objectCb[addr+storageAddr], cb)
+
+		event := "storage:" + string(ethutil.FromHex(addr)) + ":" + string(ethutil.FromHex(storageAddr))
+		self.ethereum.Reactor().Subscribe(event, self.changeChan)
+	} else {
 		self.objectCb[addr] = append(self.objectCb[addr], cb)
 
 		event := "object:" + string(ethutil.FromHex(addr))
 		self.ethereum.Reactor().Subscribe(event, self.changeChan)
+	}
 
+	return otto.UndefinedValue()
+}
+
+func (self *JSRE) addPeer(call otto.FunctionCall) otto.Value {
+	host, err := call.Argument(0).ToString()
+	if err != nil {
+		return otto.FalseValue()
+	}
+	self.ethereum.ConnectToPeer(host)
+
+	return otto.TrueValue()
+}
+
+func (self *JSRE) require(call otto.FunctionCall) otto.Value {
+	file, err := call.Argument(0).ToString()
+	if err != nil {
 		return otto.UndefinedValue()
-	})
-	eth.Set("addPeer", func(call otto.FunctionCall) otto.Value {
-		host, err := call.Argument(0).ToString()
-		if err != nil {
-			return otto.FalseValue()
-		}
-		self.ethereum.ConnectToPeer(host)
+	}
+	if err := self.Require(file); err != nil {
+		fmt.Println("err:", err)
+		return otto.UndefinedValue()
+	}
 
-		return otto.TrueValue()
-	})
+	t, _ := self.vm.Get("exports")
+
+	return t
 }

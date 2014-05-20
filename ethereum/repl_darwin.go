@@ -8,7 +8,6 @@ package main
 import "C"
 
 import (
-	"github.com/obscuren/otto"
 	"strings"
 	"unsafe"
 )
@@ -87,7 +86,10 @@ L:
 	}
 }
 
-func (self *JSRepl) PrintValue(value otto.Value) {
+func (self *JSRepl) PrintValue(v interface{}) {
 	method, _ := self.re.vm.Get("prettyPrint")
-	method.Call(method, value)
+	v, err := self.re.vm.ToValue(v)
+	if err == nil {
+		method.Call(method, v)
+	}
 }
