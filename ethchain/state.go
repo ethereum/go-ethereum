@@ -61,9 +61,6 @@ func (s *State) GetStateObject(addr []byte) *StateObject {
 	cachedStateObject := s.states[string(addr)]
 	if cachedStateObject != nil {
 		stateObject.state = cachedStateObject
-	} else {
-		// If it isn't cached, cache the state
-		s.states[string(addr)] = stateObject.state
 	}
 
 	return stateObject
