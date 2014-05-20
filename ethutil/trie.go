@@ -6,6 +6,10 @@ import (
 	"sync"
 )
 
+func (s *Cache) Len() int {
+	return len(s.nodes)
+}
+
 // TODO
 // A StateObject is an object that has a state root
 // This is goig to be the object for the second level caching (the caching of object which have a state such as contracts)

@@ -450,7 +450,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			} else {
 				stack.Push(ethutil.BigD(addr))
 
-				vm.state.SetStateObject(contract)
+				vm.state.UpdateStateObject(contract)
 			}
 		case oCALL:
 			require(7)
@@ -499,7 +499,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 					stack.Push(ethutil.BigTrue)
 				}
 
-				vm.state.SetStateObject(contract)
+				vm.state.UpdateStateObject(contract)
 
 				mem.Set(retOffset.Int64(), retSize.Int64(), ret)
 			} else {
@@ -517,7 +517,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			receiver := vm.state.GetAccount(stack.Pop().Bytes())
 			receiver.AddAmount(closure.object.Amount)
-			vm.state.SetStateObject(receiver)
+			vm.state.UpdateStateObject(receiver)
 
 			closure.object.state.Purge()
 

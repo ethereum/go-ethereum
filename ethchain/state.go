@@ -60,6 +60,7 @@ func (s *State) GetStateObject(addr []byte) *StateObject {
 	// Check if there's a cached state for this contract
 	cachedStateObject := s.states[string(addr)]
 	if cachedStateObject != nil {
+		//fmt.Printf("get cached #%d %x addr: %x\n", cachedStateObject.trie.Cache().Len(), cachedStateObject.Root(), addr[0:4])
 		stateObject.state = cachedStateObject
 	}
 
@@ -70,8 +71,9 @@ func (s *State) GetStateObject(addr []byte) *StateObject {
 func (s *State) UpdateStateObject(object *StateObject) {
 	addr := object.Address()
 
-	if object.state != nil {
+	if object.state != nil && s.states[string(addr)] == nil {
 		s.states[string(addr)] = object.state
+		//fmt.Printf("update cached #%d %x addr: %x\n", object.state.trie.Cache().Len(), object.state.Root(), addr[0:4])
 	}
 
 	ethutil.Config.Db.Put(ethutil.Sha3Bin(object.Script()), object.Script())
@@ -79,12 +81,6 @@ func (s *State) UpdateStateObject(object *StateObject) {
 	s.trie.Update(string(addr), string(object.RlpEncode()))
 
 	s.manifest.AddObjectChange(object)
-}
-
-func (s *State) SetStateObject(stateObject *StateObject) {
-	s.states[string(stateObject.address)] = stateObject.state
-
-	s.UpdateStateObject(stateObject)
 }
 
 func (s *State) GetAccount(addr []byte) (account *StateObject) {
