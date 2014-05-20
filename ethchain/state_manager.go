@@ -100,30 +100,34 @@ func (sm *StateManager) MakeContract(state *State, tx *Transaction) *StateObject
 func (sm *StateManager) ApplyTransactions(state *State, block *Block, txs []*Transaction) {
 	// Process each transaction/contract
 	for _, tx := range txs {
-		// If there's no recipient, it's a contract
-		// Check if this is a contract creation traction and if so
-		// create a contract of this tx.
-		if tx.IsContract() {
-			err := sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
-			if err == nil {
-				contract := sm.MakeContract(state, tx)
-				if contract != nil {
-					sm.EvalScript(state, contract.Init(), contract, tx, block)
-				} else {
-					ethutil.Config.Log.Infoln("[STATE] Unable to create contract")
-				}
+		sm.ApplyTransaction(state, block, tx)
+	}
+}
+
+func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transaction) {
+	// If there's no recipient, it's a contract
+	// Check if this is a contract creation traction and if so
+	// create a contract of this tx.
+	if tx.IsContract() {
+		err := sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
+		if err == nil {
+			contract := sm.MakeContract(state, tx)
+			if contract != nil {
+				sm.EvalScript(state, contract.Init(), contract, tx, block)
 			} else {
-				ethutil.Config.Log.Infoln("[STATE] contract create:", err)
+				ethutil.Config.Log.Infoln("[STATE] Unable to create contract")
 			}
 		} else {
-			err := sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
-			contract := state.GetStateObject(tx.Recipient)
-			ethutil.Config.Log.Debugf("contract recip %x\n", tx.Recipient)
-			if err == nil && len(contract.Script()) > 0 {
-				sm.EvalScript(state, contract.Script(), contract, tx, block)
-			} else if err != nil {
-				ethutil.Config.Log.Infoln("[STATE] process:", err)
-			}
+			ethutil.Config.Log.Infoln("[STATE] contract create:", err)
+		}
+	} else {
+		err := sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
+		contract := state.GetStateObject(tx.Recipient)
+		ethutil.Config.Log.Debugf("contract recip %x\n", tx.Recipient)
+		if err == nil && len(contract.Script()) > 0 {
+			sm.EvalScript(state, contract.Script(), contract, tx, block)
+		} else if err != nil {
+			ethutil.Config.Log.Infoln("[STATE] process:", err)
 		}
 	}
 }
