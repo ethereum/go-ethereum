@@ -26,15 +26,15 @@ func TestCommon(t *testing.T) {
 		t.Error("Got", szabo)
 	}
 
-	if vito != "10 Vita" {
+	if vito != "10 Shannon" {
 		t.Error("Got", vito)
 	}
 
-	if turing != "10 Turing" {
+	if turing != "10 Babbage" {
 		t.Error("Got", turing)
 	}
 
-	if eins != "10 Eins" {
+	if eins != "10 Ada" {
 		t.Error("Got", eins)
 	}
 
