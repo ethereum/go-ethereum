@@ -109,11 +109,6 @@ func (tx *Transaction) Sign(privk []byte) error {
 	return nil
 }
 
-<<<<<<< HEAD
-=======
-// [ NONCE, GASPRICE, GAS, TO, VALUE, DATA, V, R, S ]
-// [ NONCE, GASPRICE, GAS, 0, VALUE, CODE, INIT, V, R, S ]
->>>>>>> 38b4dc2cdf23380532a25240760273dd07b9dff6
 func (tx *Transaction) RlpData() interface{} {
 	data := []interface{}{tx.Nonce, tx.GasPrice, tx.Gas, tx.Recipient, tx.Value, tx.Data}
 
