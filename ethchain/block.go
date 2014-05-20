@@ -223,7 +223,15 @@ func (block *Block) SetTransactions(txs []*Transaction) {
 		trie.Update(strconv.Itoa(i), string(tx.RlpEncode()))
 	}
 
-	block.TxSha = []byte(trie.Root.(string))
+	switch trie.Root.(type) {
+	case string:
+		block.TxSha = []byte(trie.Root.(string))
+	case []byte:
+		block.TxSha = trie.Root.([]byte)
+	default:
+		panic(fmt.Sprintf("invalid root type %T", trie.Root))
+	}
+
 }
 
 func (block *Block) Value() *ethutil.Value {
