@@ -18,14 +18,16 @@ type AppContainer interface {
 	NewBlock(*ethchain.Block)
 	ObjectChanged(*ethchain.StateObject)
 	StorageChanged(*ethchain.StorageState)
+	NewWatcher(chan bool)
 }
 
 type ExtApplication struct {
 	*ethpub.PEthereum
 
-	blockChan  chan ethutil.React
-	changeChan chan ethutil.React
-	quitChan   chan bool
+	blockChan       chan ethutil.React
+	changeChan      chan ethutil.React
+	quitChan        chan bool
+	watcherQuitChan chan bool
 
 	container        AppContainer
 	lib              *UiLib
@@ -37,6 +39,7 @@ func NewExtApplication(container AppContainer, lib *UiLib) *ExtApplication {
 		ethpub.NewPEthereum(lib.eth),
 		make(chan ethutil.React, 1),
 		make(chan ethutil.React, 1),
+		make(chan bool),
 		make(chan bool),
 		container,
 		lib,
@@ -66,6 +69,8 @@ func (app *ExtApplication) run() {
 	reactor := app.lib.eth.Reactor()
 	reactor.Subscribe("newBlock", app.blockChan)
 
+	app.container.NewWatcher(app.watcherQuitChan)
+
 	win := app.container.Window()
 	win.Show()
 	win.Wait()
@@ -83,6 +88,7 @@ func (app *ExtApplication) stop() {
 
 	// Kill the main loop
 	app.quitChan <- true
+	app.watcherQuitChan <- true
 
 	close(app.blockChan)
 	close(app.quitChan)

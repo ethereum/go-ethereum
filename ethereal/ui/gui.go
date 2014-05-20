@@ -55,7 +55,7 @@ func New(ethereum *eth.Ethereum) *Gui {
 }
 
 func (gui *Gui) Start(assetPath string) {
-	const version = "0.5.0 RC6"
+	const version = "0.5.0 RC7"
 
 	defer gui.txDb.Close()
 
@@ -178,13 +178,14 @@ func (gui *Gui) setWalletValue(amount, unconfirmedFunds *big.Int) {
 
 // Simple go routine function that updates the list of peers in the GUI
 func (gui *Gui) update() {
-	blockChan := make(chan ethutil.React, 1)
 	reactor := gui.eth.Reactor()
 
-	reactor.Subscribe("newBlock", blockChan)
+	blockChan := make(chan ethutil.React, 1)
+	txChan := make(chan ethutil.React, 1)
 
-	txChan := make(chan ethchain.TxMsg, 1)
-	gui.eth.TxPool().Subscribe(txChan)
+	reactor.Subscribe("newBlock", blockChan)
+	reactor.Subscribe("newTx:pre", txChan)
+	reactor.Subscribe("newTx:post", txChan)
 
 	state := gui.eth.StateManager().TransState()
 
@@ -196,21 +197,23 @@ func (gui *Gui) update() {
 		case b := <-blockChan:
 			block := b.Resource.(*ethchain.Block)
 			if bytes.Compare(block.Coinbase, gui.addr) == 0 {
-				gui.setWalletValue(gui.eth.StateManager().ProcState().GetAccount(gui.addr).Amount, nil)
+				gui.setWalletValue(gui.eth.StateManager().CurrentState().GetAccount(gui.addr).Amount, nil)
 			}
 
 		case txMsg := <-txChan:
-			tx := txMsg.Tx
+			tx := txMsg.Resource.(*ethchain.Transaction)
 
-			if txMsg.Type == ethchain.TxPre {
+			if txMsg.Event == "newTx:pre" {
 				object := state.GetAccount(gui.addr)
 
 				if bytes.Compare(tx.Sender(), gui.addr) == 0 && object.Nonce <= tx.Nonce {
 					gui.win.Root().Call("addTx", ethpub.NewPTx(tx))
 					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 
-					object.Nonce += 1
-					state.SetStateObject(object)
+					/*
+						object.Nonce += 1
+						state.SetStateObject(object)
+					*/
 
 					unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
 				} else if bytes.Compare(tx.Recipient, gui.addr) == 0 {

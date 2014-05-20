@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/utils"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -15,16 +16,15 @@ import (
 
 const Debug = true
 
-// Register interrupt handlers so we can stop the ethereum
-func RegisterInterrupts(s *eth.Ethereum) {
-	// Buffered chan of one is enough
-	c := make(chan os.Signal, 1)
-	// Notify about interrupts for now
-	signal.Notify(c, os.Interrupt)
+func RegisterInterrupt(cb func(os.Signal)) {
 	go func() {
+		// Buffered chan of one is enough
+		c := make(chan os.Signal, 1)
+		// Notify about interrupts for now
+		signal.Notify(c, os.Interrupt)
+
 		for sig := range c {
-			fmt.Printf("Shutting down (%v) ... \n", sig)
-			s.Stop()
+			cb(sig)
 		}
 	}()
 }
@@ -52,7 +52,12 @@ func main() {
 	var logSys *log.Logger
 	flags := log.LstdFlags
 
-	ethutil.ReadConfig(DataDir)
+	if StartJsConsole || len(InputFile) > 0 {
+		ethutil.ReadConfig(DataDir, ethutil.LogFile)
+	} else {
+		ethutil.ReadConfig(DataDir, ethutil.LogFile|ethutil.LogStd)
+	}
+
 	logger := ethutil.Config.Log
 
 	if LogFile != "" {
@@ -136,21 +141,40 @@ save these words so you can restore your account later: %s
 		utils.DoMining(ethereum)
 	}
 
-	if StartConsole {
-		err := os.Mkdir(ethutil.Config.ExecPath, os.ModePerm)
-		// Error is OK if the error is ErrExist
-		if err != nil && !os.IsExist(err) {
-			log.Panic("Unable to create EXECPATH:", err)
+	if StartJsConsole {
+		repl := NewJSRepl(ethereum)
+
+		go repl.Start()
+
+		RegisterInterrupt(func(os.Signal) {
+			repl.Stop()
+		})
+	} else if len(InputFile) > 0 {
+		file, err := os.Open(InputFile)
+		if err != nil {
+			ethutil.Config.Log.Fatal(err)
 		}
 
-		console := NewConsole(ethereum)
-		go console.Start()
+		content, err := ioutil.ReadAll(file)
+		if err != nil {
+			ethutil.Config.Log.Fatal(err)
+		}
+
+		re := NewJSRE(ethereum)
+		RegisterInterrupt(func(os.Signal) {
+			re.Stop()
+		})
+		re.Run(string(content))
 	}
+
 	if StartRpc {
 		utils.DoRpc(ethereum, RpcPort)
 	}
 
-	RegisterInterrupts(ethereum)
+	RegisterInterrupt(func(sig os.Signal) {
+		fmt.Printf("Shutting down (%v) ... \n", sig)
+		ethereum.Stop()
+	})
 
 	ethereum.Start(UseSeed)
 

@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethrpc"
 	"github.com/ethereum/eth-go/ethutil"
-	"log"
 	"time"
 )
 
@@ -14,7 +13,7 @@ func DoRpc(ethereum *eth.Ethereum, RpcPort int) {
 	var err error
 	ethereum.RpcServer, err = ethrpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum), RpcPort)
 	if err != nil {
-		log.Println("Could not start RPC interface:", err)
+		ethutil.Config.Log.Infoln("Could not start RPC interface:", err)
 	} else {
 		go ethereum.RpcServer.Start()
 	}
@@ -25,7 +24,7 @@ func DoMining(ethereum *eth.Ethereum) {
 	ethereum.Mining = true
 
 	if ethutil.GetKeyRing().Len() == 0 {
-		log.Println("No address found, can't start mining")
+		ethutil.Config.Log.Infoln("No address found, can't start mining")
 		return
 	}
 	keyPair := ethutil.GetKeyRing().Get(0)
@@ -35,10 +34,12 @@ func DoMining(ethereum *eth.Ethereum) {
 		// Give it some time to connect with peers
 		time.Sleep(3 * time.Second)
 
-		for ethereum.IsUpToDate() == false {
-			time.Sleep(5 * time.Second)
-		}
-		log.Println("Miner started")
+		/*
+			for ethereum.IsUpToDate() == false {
+				time.Sleep(5 * time.Second)
+			}
+		*/
+		ethutil.Config.Log.Infoln("Miner started")
 
 		miner := ethminer.NewDefaultMiner(addr, ethereum)
 		miner.Start()
