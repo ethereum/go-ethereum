@@ -180,6 +180,7 @@ func (sm *StateManager) ProcessBlock(state *State, block *Block, dontReact bool)
 
 		// Add the block to the chain
 		sm.bc.Add(block)
+		sm.notifyChanges(state)
 
 		ethutil.Config.Log.Infof("[STATE] Added block #%d (%x)\n", block.BlockInfo().Number, block.Hash())
 		if dontReact == false {
@@ -187,8 +188,6 @@ func (sm *StateManager) ProcessBlock(state *State, block *Block, dontReact bool)
 
 			state.manifest.Reset()
 		}
-
-		sm.notifyChanges(state)
 
 		sm.Ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
 
