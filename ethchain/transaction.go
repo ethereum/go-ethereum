@@ -60,7 +60,7 @@ func (tx *Transaction) IsContract() bool {
 }
 
 func (tx *Transaction) CreationAddress() []byte {
-	return tx.Hash()[12:]
+	return ethutil.Sha3Bin(ethutil.NewValue([]interface{}{tx.Sender(), tx.Nonce}).Encode())[12:]
 }
 
 func (tx *Transaction) Signature(key []byte) []byte {
@@ -109,10 +109,8 @@ func (tx *Transaction) Sign(privk []byte) error {
 	return nil
 }
 
-// [ NONCE, VALUE, GASPRICE, GAS, TO, DATA, V, R, S ]
-// [ NONCE, VALUE, GASPRICE, GAS, 0, CODE, INIT, V, R, S ]
 func (tx *Transaction) RlpData() interface{} {
-	data := []interface{}{tx.Nonce, tx.Value, tx.GasPrice, tx.Gas, tx.Recipient, tx.Data}
+	data := []interface{}{tx.Nonce, tx.GasPrice, tx.Gas, tx.Recipient, tx.Value, tx.Data}
 
 	if tx.contractCreation {
 		data = append(data, tx.Init)
@@ -135,10 +133,10 @@ func (tx *Transaction) RlpDecode(data []byte) {
 
 func (tx *Transaction) RlpValueDecode(decoder *ethutil.Value) {
 	tx.Nonce = decoder.Get(0).Uint()
-	tx.Value = decoder.Get(1).BigInt()
-	tx.GasPrice = decoder.Get(2).BigInt()
-	tx.Gas = decoder.Get(3).BigInt()
-	tx.Recipient = decoder.Get(4).Bytes()
+	tx.GasPrice = decoder.Get(1).BigInt()
+	tx.Gas = decoder.Get(2).BigInt()
+	tx.Recipient = decoder.Get(3).Bytes()
+	tx.Value = decoder.Get(4).BigInt()
 	tx.Data = decoder.Get(5).Bytes()
 
 	// If the list is of length 10 it's a contract creation tx

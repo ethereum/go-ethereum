@@ -95,7 +95,6 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 	if ethutil.Config.Debug {
 		ethutil.Config.Log.Debugf("#   op\n")
 	}
-	fmt.Println(closure.Script)
 
 	for {
 		// The base for all big integer arithmetic
@@ -472,7 +471,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 
 			// Fetch the contract which will serve as the closure body
-			contract := vm.state.GetContract(addr.Bytes())
+			contract := vm.state.GetStateObject(addr.Bytes())
 
 			if contract != nil {
 				// Prepay for the gas

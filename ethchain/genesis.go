@@ -15,7 +15,6 @@ var EmptyShaList = ethutil.Sha3Bin(ethutil.Encode([]interface{}{}))
 
 var GenesisHeader = []interface{}{
 	// Previous hash (none)
-	//"",
 	ZeroHash256,
 	// Sha of uncles
 	ethutil.Sha3Bin(ethutil.Encode([]interface{}{})),
@@ -23,15 +22,22 @@ var GenesisHeader = []interface{}{
 	ZeroHash160,
 	// Root state
 	"",
-	// Sha of transactions
-	//EmptyShaList,
-	ethutil.Sha3Bin(ethutil.Encode([]interface{}{})),
+	// tx sha
+	ZeroHash256,
 	// Difficulty
 	ethutil.BigPow(2, 22),
+	// Number
+	ethutil.Big0,
+	// Block minimum gas price
+	ethutil.Big0,
+	// Block upper gas bound
+	big.NewInt(1000000),
+	// Block gas used
+	ethutil.Big0,
 	// Time
-	int64(0),
+	ethutil.Big0,
 	// Extra
-	"",
+	nil,
 	// Nonce
 	ethutil.Sha3Bin(big.NewInt(42).Bytes()),
 }

@@ -12,7 +12,7 @@ import (
 )
 
 func TestRun4(t *testing.T) {
-	ethutil.ReadConfig("")
+	ethutil.ReadConfig("", ethutil.LogStd)
 
 	db, _ := ethdb.NewMemDatabase()
 	state := NewState(ethutil.NewTrie(db, ""))

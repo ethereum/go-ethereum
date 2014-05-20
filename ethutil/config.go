@@ -9,14 +9,6 @@ import (
 	"runtime"
 )
 
-// Log types available
-type LogType byte
-
-const (
-	LogTypeStdIn = 1
-	LogTypeFile  = 2
-)
-
 // Config struct
 type config struct {
 	Db Database
@@ -34,7 +26,7 @@ var Config *config
 // Read config
 //
 // Initialize the global Config variable with default settings
-func ReadConfig(base string) *config {
+func ReadConfig(base string, logTypes LoggerType) *config {
 	if Config == nil {
 		usr, _ := user.Current()
 		path := path.Join(usr.HomeDir, base)
@@ -50,8 +42,8 @@ func ReadConfig(base string) *config {
 			}
 		}
 
-		Config = &config{ExecPath: path, Debug: true, Ver: "0.5.0 RC6"}
-		Config.Log = NewLogger(LogFile|LogStd, LogLevelDebug)
+		Config = &config{ExecPath: path, Debug: true, Ver: "0.5.0 RC7"}
+		Config.Log = NewLogger(logTypes, LogLevelDebug)
 		Config.SetClientString("/Ethereum(G)")
 	}
 
@@ -138,7 +130,6 @@ func (log *Logger) Infoln(v ...interface{}) {
 		return
 	}
 
-	//fmt.Println(len(log.logSys))
 	for _, logger := range log.logSys {
 		logger.Println(v...)
 	}
@@ -152,4 +143,16 @@ func (log *Logger) Infof(format string, v ...interface{}) {
 	for _, logger := range log.logSys {
 		logger.Printf(format, v...)
 	}
+}
+
+func (log *Logger) Fatal(v ...interface{}) {
+	if log.logLevel > LogLevelInfo {
+		return
+	}
+
+	for _, logger := range log.logSys {
+		logger.Println(v...)
+	}
+
+	os.Exit(1)
 }

@@ -5,7 +5,6 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
-	"log"
 )
 
 type Miner struct {
@@ -26,7 +25,7 @@ func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) Miner {
 	quitChan := make(chan ethutil.React, 1)  // This is the channel that can exit the miner thread
 
 	ethereum.Reactor().Subscribe("newBlock", reactChan)
-	ethereum.Reactor().Subscribe("newTx", reactChan)
+	ethereum.Reactor().Subscribe("newTx:pre", reactChan)
 
 	// We need the quit chan to be a Reactor event.
 	// The POW search method is actually blocking and if we don't
@@ -34,7 +33,7 @@ func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) Miner {
 	// The miner overseer will never get the reactor events themselves
 	// Only after the miner will find the sha
 	ethereum.Reactor().Subscribe("newBlock", quitChan)
-	ethereum.Reactor().Subscribe("newTx", quitChan)
+	ethereum.Reactor().Subscribe("newTx:pre", quitChan)
 
 	miner := Miner{
 		pow:       &ethchain.EasyPow{},
@@ -53,18 +52,18 @@ func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) Miner {
 }
 func (miner *Miner) Start() {
 	// Prepare inital block
-	miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
-	go func() { miner.listener() }()
+	//miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
+	go miner.listener()
 }
 func (miner *Miner) listener() {
 	for {
 		select {
 		case chanMessage := <-miner.reactChan:
 			if block, ok := chanMessage.Resource.(*ethchain.Block); ok {
-				log.Println("[MINER] Got new block via Reactor")
+				ethutil.Config.Log.Infoln("[MINER] Got new block via Reactor")
 				if bytes.Compare(miner.ethereum.BlockChain().CurrentBlock.Hash(), block.Hash()) == 0 {
 					// TODO: Perhaps continue mining to get some uncle rewards
-					log.Println("[MINER] New top block found resetting state")
+					ethutil.Config.Log.Infoln("[MINER] New top block found resetting state")
 
 					// Filter out which Transactions we have that were not in this block
 					var newtxs []*ethchain.Transaction
@@ -86,15 +85,15 @@ func (miner *Miner) listener() {
 
 				} else {
 					if bytes.Compare(block.PrevHash, miner.ethereum.BlockChain().CurrentBlock.PrevHash) == 0 {
-						log.Println("[MINER] Adding uncle block")
+						ethutil.Config.Log.Infoln("[MINER] Adding uncle block")
 						miner.uncles = append(miner.uncles, block)
-						miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
+						//miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
 					}
 				}
 			}
 
 			if tx, ok := chanMessage.Resource.(*ethchain.Transaction); ok {
-				//log.Println("[MINER] Got new transaction from Reactor", tx)
+				//log.Infoln("[MINER] Got new transaction from Reactor", tx)
 				found := false
 				for _, ctx := range miner.txs {
 					if found = bytes.Compare(ctx.Hash(), tx.Hash()) == 0; found {
@@ -103,49 +102,37 @@ func (miner *Miner) listener() {
 
 				}
 				if found == false {
-					//log.Println("[MINER] We did not know about this transaction, adding")
+					//log.Infoln("[MINER] We did not know about this transaction, adding")
 					miner.txs = append(miner.txs, tx)
 					miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)
 					miner.block.SetTransactions(miner.txs)
 				} else {
-					//log.Println("[MINER] We already had this transaction, ignoring")
+					//log.Infoln("[MINER] We already had this transaction, ignoring")
 				}
 			}
 		default:
-			log.Println("[MINER] Mining on block. Includes", len(miner.txs), "transactions")
+			ethutil.Config.Log.Infoln("[MINER] Mining on block. Includes", len(miner.txs), "transactions")
 
 			// Apply uncles
 			if len(miner.uncles) > 0 {
 				miner.block.SetUncles(miner.uncles)
 			}
 
-			// FIXME @ maranh, first block doesn't need this. Everything after the first block does.
-			// Please check and fix
-			miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
 			// Apply all transactions to the block
-			miner.ethereum.StateManager().ApplyTransactions(miner.block, miner.block.Transactions())
-			miner.ethereum.StateManager().AccumelateRewards(miner.block)
+			miner.ethereum.StateManager().ApplyTransactions(miner.block.State(), miner.block, miner.block.Transactions())
+			miner.ethereum.StateManager().AccumelateRewards(miner.block.State(), miner.block)
 
 			// Search the nonce
-			//log.Println("[MINER] Initialision complete, starting mining")
 			miner.block.Nonce = miner.pow.Search(miner.block, miner.quitChan)
 			if miner.block.Nonce != nil {
-				miner.ethereum.StateManager().PrepareDefault(miner.block)
-				err := miner.ethereum.StateManager().ProcessBlock(miner.block, true)
+				err := miner.ethereum.StateManager().ProcessBlock(miner.ethereum.StateManager().CurrentState(), miner.block, true)
 				if err != nil {
-					log.Println(err)
+					ethutil.Config.Log.Infoln(err)
 					miner.txs = []*ethchain.Transaction{} // Move this somewhere neat
 					miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)
 				} else {
-
-					/*
-						// XXX @maranh This is already done in the state manager, why a 2nd time?
-						if !miner.ethereum.StateManager().Pow.Verify(miner.block.HashNoNonce(), miner.block.Difficulty, miner.block.Nonce) {
-							log.Printf("Second stage verification error: Block's nonce is invalid (= %v)\n", ethutil.Hex(miner.block.Nonce))
-						}
-					*/
 					miner.ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{miner.block.Value().Val})
-					log.Printf("[MINER] 🔨  Mined block %x\n", miner.block.Hash())
+					ethutil.Config.Log.Infof("[MINER] 🔨  Mined block %x\n", miner.block.Hash())
 
 					miner.txs = []*ethchain.Transaction{} // Move this somewhere neat
 					miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)

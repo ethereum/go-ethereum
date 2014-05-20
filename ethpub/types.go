@@ -112,6 +112,14 @@ func (c *PStateObject) IsContract() bool {
 	return false
 }
 
+func (c *PStateObject) Script() string {
+	if c.object != nil {
+		return ethutil.Hex(c.object.Script())
+	}
+
+	return ""
+}
+
 type PStorageState struct {
 	StateAddress string
 	Address      string

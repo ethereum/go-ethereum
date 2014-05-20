@@ -10,8 +10,9 @@ type StateObject struct {
 	// Address of the object
 	address []byte
 	// Shared attributes
-	Amount *big.Int
-	Nonce  uint64
+	Amount     *big.Int
+	ScriptHash []byte
+	Nonce      uint64
 	// Contract related attributes
 	state      *State
 	script     []byte
@@ -22,12 +23,10 @@ type StateObject struct {
 func MakeContract(tx *Transaction, state *State) *StateObject {
 	// Create contract if there's no recipient
 	if tx.IsContract() {
-		// FIXME
-		addr := tx.Hash()[12:]
+		addr := tx.CreationAddress()
 
 		value := tx.Value
-		contract := NewContract(addr, value, []byte(""))
-		state.UpdateStateObject(contract)
+		contract := NewContract(addr, value, ZeroHash256)
 
 		contract.script = tx.Data
 		contract.initScript = tx.Init
@@ -146,9 +145,10 @@ func (c *StateObject) RlpEncode() []byte {
 	if c.state != nil {
 		root = c.state.trie.Root
 	} else {
-		root = nil
+		root = ZeroHash256
 	}
-	return ethutil.Encode([]interface{}{c.Amount, c.Nonce, root, c.script})
+
+	return ethutil.Encode([]interface{}{c.Amount, c.Nonce, root, ethutil.Sha3Bin(c.script)})
 }
 
 func (c *StateObject) RlpDecode(data []byte) {
@@ -157,7 +157,10 @@ func (c *StateObject) RlpDecode(data []byte) {
 	c.Amount = decoder.Get(0).BigInt()
 	c.Nonce = decoder.Get(1).Uint()
 	c.state = NewState(ethutil.NewTrie(ethutil.Config.Db, decoder.Get(2).Interface()))
-	c.script = decoder.Get(3).Bytes()
+
+	c.ScriptHash = decoder.Get(3).Bytes()
+
+	c.script, _ = ethutil.Config.Db.Get(c.ScriptHash)
 }
 
 // Storage change object. Used by the manifest for notifying changes to

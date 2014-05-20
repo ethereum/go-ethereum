@@ -7,13 +7,13 @@ import (
 
 // The different number of units
 var (
-	Ether  = BigPow(10, 18)
-	Finney = BigPow(10, 15)
-	Szabo  = BigPow(10, 12)
-	Vita   = BigPow(10, 9)
-	Turing = BigPow(10, 6)
-	Eins   = BigPow(10, 3)
-	Wei    = big.NewInt(1)
+	Ether   = BigPow(10, 18)
+	Finney  = BigPow(10, 15)
+	Szabo   = BigPow(10, 12)
+	Shannon = BigPow(10, 9)
+	Babbage = BigPow(10, 6)
+	Ada     = BigPow(10, 3)
+	Wei     = big.NewInt(1)
 )
 
 // Currency to string
@@ -27,12 +27,12 @@ func CurrencyToString(num *big.Int) string {
 		return fmt.Sprintf("%v Finney", new(big.Int).Div(num, Finney))
 	case num.Cmp(Szabo) >= 0:
 		return fmt.Sprintf("%v Szabo", new(big.Int).Div(num, Szabo))
-	case num.Cmp(Vita) >= 0:
-		return fmt.Sprintf("%v Vita", new(big.Int).Div(num, Vita))
-	case num.Cmp(Turing) >= 0:
-		return fmt.Sprintf("%v Turing", new(big.Int).Div(num, Turing))
-	case num.Cmp(Eins) >= 0:
-		return fmt.Sprintf("%v Eins", new(big.Int).Div(num, Eins))
+	case num.Cmp(Shannon) >= 0:
+		return fmt.Sprintf("%v Shannon", new(big.Int).Div(num, Shannon))
+	case num.Cmp(Babbage) >= 0:
+		return fmt.Sprintf("%v Babbage", new(big.Int).Div(num, Babbage))
+	case num.Cmp(Ada) >= 0:
+		return fmt.Sprintf("%v Ada", new(big.Int).Div(num, Ada))
 	}
 
 	return fmt.Sprintf("%v Wei", num)
