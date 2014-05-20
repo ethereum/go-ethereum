@@ -22,9 +22,8 @@ var GenesisHeader = []interface{}{
 	ZeroHash160,
 	// Root state
 	"",
-	//EmptyShaList,
+	// tx sha
 	ZeroHash256,
-	//ethutil.Sha3Bin(ethutil.Encode(ZeroHash256)),
 	// Difficulty
 	ethutil.BigPow(2, 22),
 	// Number

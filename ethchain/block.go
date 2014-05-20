@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
+	"strconv"
 	"time"
 )
 
@@ -214,7 +215,12 @@ func (block *Block) SetUncles(uncles []*Block) {
 func (block *Block) SetTransactions(txs []*Transaction) {
 	block.transactions = txs
 
-	block.TxSha = ethutil.Sha3Bin(ethutil.Encode(block.rlpTxs()))
+	trie := ethutil.NewTrie(ethutil.Config.Db, "")
+	for i, tx := range txs {
+		trie.Update(strconv.Itoa(i), string(tx.RlpEncode()))
+	}
+
+	block.TxSha = trie.Root.([]byte)
 }
 
 func (block *Block) Value() *ethutil.Value {
@@ -293,45 +299,10 @@ func NewUncleBlockFromValue(header *ethutil.Value) *Block {
 	return block
 }
 
-func (block *Block) String() string {
-	//return fmt.Sprintf("Block(%x):\nPrevHash:%x\nUncleSha:%x\nCoinbase:%x\nRoot:%x\nTxSha:%x\nDiff:%v\nNonce:%x\nTxs:%d\n", block.Hash(), block.PrevHash, block.UncleSha, block.Coinbase, block.state.trie.Root, block.TxSha, block.Difficulty, block.Time, block.Nonce, len(block.transactions))
-	return fmt.Sprintf(`
-	Block(%x):
-	PrevHash:   %x
-	UncleSha:   %x
-	Coinbase:   %x
-	Root:       %x
-	TxSha:      %x
-	Difficulty: %v
-	Number:     %v
-	MinGas:     %v
-	MaxLimit:   %v
-	GasUsed:    %v
-	Time:       %v
-	Extra:      %v
-	Nonce:      %x
-`,
-		block.Hash(),
-		block.PrevHash,
-		block.UncleSha,
-		block.Coinbase,
-		block.state.trie.Root,
-		block.TxSha,
-		block.Difficulty,
-		block.Number,
-		block.MinGasPrice,
-		block.GasLimit,
-		block.GasUsed,
-		block.Time,
-		block.Extra,
-		block.Nonce)
-}
-
 func (block *Block) GetRoot() interface{} {
 	return block.state.trie.Root
 }
 
-//////////// UNEXPORTED /////////////////
 func (block *Block) header() []interface{} {
 	return []interface{}{
 		// Sha of the previous block
@@ -361,4 +332,37 @@ func (block *Block) header() []interface{} {
 		// Block's Nonce for validation
 		block.Nonce,
 	}
+}
+
+func (block *Block) String() string {
+	return fmt.Sprintf(`
+	BLOCK(%x):
+	PrevHash:   %x
+	UncleSha:   %x
+	Coinbase:   %x
+	Root:       %x
+	TxSha:      %x
+	Difficulty: %v
+	Number:     %v
+	MinGas:     %v
+	MaxLimit:   %v
+	GasUsed:    %v
+	Time:       %v
+	Extra:      %v
+	Nonce:      %x
+`,
+		block.Hash(),
+		block.PrevHash,
+		block.UncleSha,
+		block.Coinbase,
+		block.state.trie.Root,
+		block.TxSha,
+		block.Difficulty,
+		block.Number,
+		block.MinGasPrice,
+		block.GasLimit,
+		block.GasUsed,
+		block.Time,
+		block.Extra,
+		block.Nonce)
 }
