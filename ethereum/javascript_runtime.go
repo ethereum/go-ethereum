@@ -101,7 +101,7 @@ out:
 					cb.Call(cb, val)
 				}
 			} else if storageObject, ok := object.Resource.(*ethchain.StorageState); ok {
-				for _, cb := range self.objectCb[ethutil.Hex(storageObject.Address)+ethutil.Hex(storageObject.StateAddress)] {
+				for _, cb := range self.objectCb[ethutil.Hex(storageObject.StateAddress)+ethutil.Hex(storageObject.Address)] {
 					val, _ := self.vm.ToValue(ethpub.NewPStorageState(storageObject))
 					cb.Call(cb, val)
 				}
@@ -115,7 +115,7 @@ func (self *JSRE) initStdFuncs() {
 	eth := t.Object()
 	eth.Set("watch", self.watch)
 	eth.Set("addPeer", self.addPeer)
-	self.Set("require", self.require)
+	eth.Set("require", self.require)
 }
 
 /*
