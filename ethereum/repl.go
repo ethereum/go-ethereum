@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethpub"
-	"github.com/robertkrimen/otto"
+	"github.com/obscuren/otto"
 )
 
 type Repl interface {

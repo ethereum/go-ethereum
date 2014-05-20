@@ -6,7 +6,7 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/robertkrimen/otto"
+	"github.com/obscuren/otto"
 )
 
 type JSRE struct {

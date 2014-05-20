@@ -8,7 +8,7 @@ package main
 import "C"
 
 import (
-	"github.com/robertkrimen/otto"
+	"github.com/obscuren/otto"
 	"strings"
 	"unsafe"
 )
