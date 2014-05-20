@@ -78,6 +78,7 @@ func (c *StateObject) SetAddr(addr []byte, value interface{}) {
 
 func (c *StateObject) SetStorage(num *big.Int, val *ethutil.Value) {
 	addr := ethutil.BigToBytes(num, 256)
+	//fmt.Println("storing", val.BigInt(), "@", num)
 	c.SetAddr(addr, val)
 }
 

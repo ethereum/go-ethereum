@@ -3,7 +3,12 @@ package ethutil
 import (
 	"fmt"
 	"reflect"
+	"sync"
 )
+
+func (s *Cache) Len() int {
+	return len(s.nodes)
+}
 
 // TODO
 // A StateObject is an object that has a state root
@@ -113,6 +118,7 @@ func (cache *Cache) Undo() {
 // Please note that the data isn't persisted unless `Sync` is
 // explicitly called.
 type Trie struct {
+	mut      sync.RWMutex
 	prevRoot interface{}
 	Root     interface{}
 	//db   Database
@@ -157,12 +163,18 @@ func (t *Trie) Cache() *Cache {
  * Public (query) interface functions
  */
 func (t *Trie) Update(key string, value string) {
+	t.mut.Lock()
+	defer t.mut.Unlock()
+
 	k := CompactHexDecode(key)
 
 	t.Root = t.UpdateState(t.Root, k, value)
 }
 
 func (t *Trie) Get(key string) string {
+	t.mut.RLock()
+	defer t.mut.RUnlock()
+
 	k := CompactHexDecode(key)
 	c := NewValue(t.GetState(t.Root, k))
 
