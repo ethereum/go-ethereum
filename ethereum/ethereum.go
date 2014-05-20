@@ -141,16 +141,7 @@ save these words so you can restore your account later: %s
 		utils.DoMining(ethereum)
 	}
 
-	if StartConsole {
-		err := os.Mkdir(ethutil.Config.ExecPath, os.ModePerm)
-		// Error is OK if the error is ErrExist
-		if err != nil && !os.IsExist(err) {
-			log.Panic("Unable to create EXECPATH:", err)
-		}
-
-		console := NewConsole(ethereum)
-		go console.Start()
-	} else if StartJsConsole {
+	if StartJsConsole {
 		repl := NewJSRepl(ethereum)
 
 		go repl.Start()

@@ -4,7 +4,6 @@ import (
 	"flag"
 )
 
-var StartConsole bool
 var StartMining bool
 var StartRpc bool
 var RpcPort int
@@ -24,10 +23,8 @@ var StartJsConsole bool
 var InputFile string
 
 func Init() {
-	flag.BoolVar(&StartConsole, "c", false, "debug and testing console")
 	flag.BoolVar(&StartMining, "m", false, "start dagger mining")
 	flag.BoolVar(&ShowGenesis, "g", false, "prints genesis header and exits")
-	//flag.BoolVar(&UseGui, "gui", true, "use the gui")
 	flag.BoolVar(&StartRpc, "r", false, "start rpc server")
 	flag.IntVar(&RpcPort, "rpcport", 8080, "port to start json-rpc server on")
 	flag.BoolVar(&NonInteractive, "y", false, "non-interactive mode (say yes to confirmations)")
