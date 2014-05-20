@@ -2,7 +2,6 @@ package ethpub
 
 import (
 	"encoding/hex"
-	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 )
