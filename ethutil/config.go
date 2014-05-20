@@ -130,7 +130,6 @@ func (log *Logger) Infoln(v ...interface{}) {
 		return
 	}
 
-	//fmt.Println(len(log.logSys))
 	for _, logger := range log.logSys {
 		logger.Println(v...)
 	}
@@ -144,4 +143,16 @@ func (log *Logger) Infof(format string, v ...interface{}) {
 	for _, logger := range log.logSys {
 		logger.Printf(format, v...)
 	}
+}
+
+func (log *Logger) Fatal(v ...interface{}) {
+	if log.logLevel > LogLevelInfo {
+		return
+	}
+
+	for _, logger := range log.logSys {
+		logger.Println(v...)
+	}
+
+	os.Exit(1)
 }
