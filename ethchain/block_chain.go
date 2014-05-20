@@ -127,7 +127,6 @@ func (bc *BlockChain) FindCanonicalChain(blocks []*Block, commonBlockHash []byte
 			log.Println("[CHAIN] We have found the common parent block, breaking")
 			break
 		}
-		log.Println("Checking incoming blocks:")
 		chainDifficulty.Add(chainDifficulty, bc.CalculateBlockTD(block))
 	}
 
@@ -182,6 +181,7 @@ func (bc *BlockChain) ResetTillBlockHash(hash []byte) error {
 	// XXX Why are we resetting? This is the block chain, it has nothing to do with states
 	//bc.Ethereum.StateManager().PrepareDefault(returnTo)
 
+	// Manually reset the last sync block
 	err := ethutil.Config.Db.Delete(lastBlock.Hash())
 	if err != nil {
 		return err
