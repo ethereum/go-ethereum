@@ -104,6 +104,14 @@ func (c *PStateObject) Nonce() int {
 	return 0
 }
 
+func (c *PStateObject) Root() string {
+	if c.object != nil {
+		return ethutil.Hex(ethutil.NewValue(c.object.State().Root()).Bytes())
+	}
+
+	return "<err>"
+}
+
 func (c *PStateObject) IsContract() bool {
 	if c.object != nil {
 		return len(c.object.Script()) > 0
