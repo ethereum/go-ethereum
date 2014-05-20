@@ -40,6 +40,14 @@ type Block struct {
 	Difficulty *big.Int
 	// Creation time
 	Time int64
+	// The block number
+	Number *big.Int
+	// Minimum Gas Price
+	MinGasPrice *big.Int
+	// Gas limit
+	GasLimit *big.Int
+	// Gas used
+	GasUsed *big.Int
 	// Extra data
 	Extra string
 	// Block Nonce for verification
@@ -233,9 +241,13 @@ func (block *Block) RlpValueDecode(decoder *ethutil.Value) {
 	block.state = NewState(ethutil.NewTrie(ethutil.Config.Db, header.Get(3).Val))
 	block.TxSha = header.Get(4).Bytes()
 	block.Difficulty = header.Get(5).BigInt()
-	block.Time = int64(header.Get(6).BigInt().Uint64())
-	block.Extra = header.Get(7).Str()
-	block.Nonce = header.Get(8).Bytes()
+	block.Number = header.Get(6).BigInt()
+	block.MinGasPrice = header.Get(7).BigInt()
+	block.GasLimit = header.Get(8).BigInt()
+	block.GasUsed = header.Get(9).BigInt()
+	block.Time = int64(header.Get(10).BigInt().Uint64())
+	block.Extra = header.Get(11).Str()
+	block.Nonce = header.Get(12).Bytes()
 	block.contractStates = make(map[string]*ethutil.Trie)
 
 	// Tx list might be empty if this is an uncle. Uncles only have their
@@ -270,16 +282,51 @@ func NewUncleBlockFromValue(header *ethutil.Value) *Block {
 	block.state = NewState(ethutil.NewTrie(ethutil.Config.Db, header.Get(3).Val))
 	block.TxSha = header.Get(4).Bytes()
 	block.Difficulty = header.Get(5).BigInt()
-	block.Time = int64(header.Get(6).BigInt().Uint64())
-	block.Extra = header.Get(7).Str()
-	block.Nonce = header.Get(8).Bytes()
+	block.Number = header.Get(6).BigInt()
+	block.MinGasPrice = header.Get(7).BigInt()
+	block.GasLimit = header.Get(8).BigInt()
+	block.GasUsed = header.Get(9).BigInt()
+	block.Time = int64(header.Get(10).BigInt().Uint64())
+	block.Extra = header.Get(11).Str()
+	block.Nonce = header.Get(12).Bytes()
 
 	return block
 }
 
 func (block *Block) String() string {
-	return fmt.Sprintf("Block(%x):\nPrevHash:%x\nUncleSha:%x\nCoinbase:%x\nRoot:%x\nTxSha:%x\nDiff:%v\nTime:%d\nNonce:%x\nTxs:%d\n", block.Hash(), block.PrevHash, block.UncleSha, block.Coinbase, block.state.trie.Root, block.TxSha, block.Difficulty, block.Time, block.Nonce, len(block.transactions))
+	//return fmt.Sprintf("Block(%x):\nPrevHash:%x\nUncleSha:%x\nCoinbase:%x\nRoot:%x\nTxSha:%x\nDiff:%v\nNonce:%x\nTxs:%d\n", block.Hash(), block.PrevHash, block.UncleSha, block.Coinbase, block.state.trie.Root, block.TxSha, block.Difficulty, block.Time, block.Nonce, len(block.transactions))
+	return fmt.Sprintf(`
+	Block(%x):
+	PrevHash:   %x
+	UncleSha:   %x
+	Coinbase:   %x
+	Root:       %x
+	TxSha:      %x
+	Difficulty: %v
+	Number:     %v
+	MinGas:     %v
+	MaxLimit:   %v
+	GasUsed:    %v
+	Time:       %v
+	Extra:      %v
+	Nonce:      %x
+`,
+		block.Hash(),
+		block.PrevHash,
+		block.UncleSha,
+		block.Coinbase,
+		block.state.trie.Root,
+		block.TxSha,
+		block.Difficulty,
+		block.Number,
+		block.MinGasPrice,
+		block.GasLimit,
+		block.GasUsed,
+		block.Time,
+		block.Extra,
+		block.Nonce)
 }
+
 func (block *Block) GetRoot() interface{} {
 	return block.state.trie.Root
 }
@@ -299,6 +346,14 @@ func (block *Block) header() []interface{} {
 		block.TxSha,
 		// Current block Difficulty
 		block.Difficulty,
+		// The block number
+		block.Number,
+		// Block minimum gas price
+		block.MinGasPrice,
+		// Block upper gas bound
+		block.GasLimit,
+		// Block gas used
+		block.GasUsed,
 		// Time the block was found?
 		block.Time,
 		// Extra data
