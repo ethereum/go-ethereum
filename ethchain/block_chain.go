@@ -261,6 +261,7 @@ func AddTestNetFunds(block *Block) {
 		"1e12515ce3e0f817a4ddef9ca55788a1d66bd2df", // Vit
 		"1a26338f0d905e295fccb71fa9ea849ffa12aaf4", // Alex
 		"2ef47100e0787b915105fd5e3f4ff6752079d5cb", // Maran
+		"cd2a3d9f938e13cd947ec05abc7fe734df8dd826", // Roman
 	} {
 		codedAddr := ethutil.FromHex(addr)
 		account := block.state.GetAccount(codedAddr)
