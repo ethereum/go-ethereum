@@ -222,7 +222,7 @@ func (s *Ethereum) ConnectToPeer(addr string) error {
 
 			if phost == chost {
 				alreadyConnected = true
-				ethutil.Config.Log.Debugf("[SERV] Peer %s already added.\n", chost)
+				//ethutil.Config.Log.Debugf("[SERV] Peer %s already added.\n", chost)
 				return
 			}
 		})
@@ -235,7 +235,7 @@ func (s *Ethereum) ConnectToPeer(addr string) error {
 
 		s.peers.PushBack(peer)
 
-		ethutil.Config.Log.Infof("[SERV] Adding peer %d / %d\n", s.peers.Len(), s.MaxPeers)
+		ethutil.Config.Log.Infof("[SERV] Adding peer (%s) %d / %d\n", addr, s.peers.Len(), s.MaxPeers)
 	}
 
 	return nil
