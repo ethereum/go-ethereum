@@ -99,6 +99,9 @@ func CreateBlock(root interface{},
 		Time:           time.Now().Unix(),
 		Extra:          extra,
 		UncleSha:       EmptyShaList,
+		GasUsed:        new(big.Int),
+		MinGasPrice:    new(big.Int),
+		GasLimit:       new(big.Int),
 		contractStates: make(map[string]*ethutil.Trie),
 	}
 	block.SetTransactions(txes)
@@ -220,7 +223,7 @@ func (block *Block) SetTransactions(txs []*Transaction) {
 		trie.Update(strconv.Itoa(i), string(tx.RlpEncode()))
 	}
 
-	block.TxSha = trie.Root.([]byte)
+	block.TxSha = []byte(trie.Root.(string))
 }
 
 func (block *Block) Value() *ethutil.Value {
