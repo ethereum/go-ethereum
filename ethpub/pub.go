@@ -162,7 +162,7 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, in
 	acc := lib.stateManager.TransState().GetStateObject(keyPair.Address())
 	tx.Nonce = acc.Nonce
 	acc.Nonce += 1
-	lib.stateManager.TransState().SetStateObject(acc)
+	lib.stateManager.TransState().UpdateStateObject(acc)
 
 	tx.Sign(keyPair.PrivateKey)
 	lib.txPool.QueueTransaction(tx)
