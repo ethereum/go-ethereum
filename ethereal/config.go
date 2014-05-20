@@ -33,7 +33,7 @@ func Init() {
 	flag.StringVar(&OutboundPort, "p", "30303", "listening port")
 	flag.StringVar(&DataDir, "dir", ".ethereal", "ethereum data directory")
 	flag.StringVar(&ImportKey, "import", "", "imports the given private key (hex)")
-	flag.IntVar(&MaxPeer, "x", 5, "maximum desired peers")
+	flag.IntVar(&MaxPeer, "x", 10, "maximum desired peers")
 	flag.StringVar(&AssetPath, "asset_path", "", "absolute path to GUI assets directory")
 
 	flag.Parse()
