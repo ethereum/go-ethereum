@@ -74,6 +74,7 @@ func (gui *Gui) Start(assetPath string) {
 
 	// Expose the eth library and the ui library to QML
 	context.SetVar("eth", gui)
+	context.SetVar("pub", gui.pub)
 	gui.uiLib = NewUiLib(gui.engine, gui.eth, assetPath)
 	context.SetVar("ui", gui.uiLib)
 
