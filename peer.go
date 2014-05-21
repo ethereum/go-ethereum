@@ -381,6 +381,7 @@ func (p *Peer) HandleInbound() {
 				}
 
 			case ethwire.MsgTxTy:
+				fmt.Println("received tx")
 				// If the message was a transaction queue the transaction
 				// in the TxPool where it will undergo validation and
 				// processing when a new block is found
@@ -658,10 +659,8 @@ func (p *Peer) CatchupWithPeer(blockHash []byte) {
 
 		ethutil.Config.Log.Debugf("Requesting blockchain %x... from peer %s\n", p.ethereum.BlockChain().CurrentBlock.Hash()[:4], p.conn.RemoteAddr())
 
-		/*
-			msg = ethwire.NewMessage(ethwire.MsgGetTxsTy, []interface{}{})
-			p.QueueMessage(msg)
-		*/
+		msg = ethwire.NewMessage(ethwire.MsgGetTxsTy, []interface{}{})
+		p.QueueMessage(msg)
 	}
 }
 
