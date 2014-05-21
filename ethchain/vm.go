@@ -390,10 +390,12 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			require(1)
 			loc := stack.Pop()
 			val := closure.GetMem(loc)
+			//fmt.Println("get", val.BigInt(), "@", loc)
 			stack.Push(val.BigInt())
 		case oSSTORE:
 			require(2)
 			val, loc := stack.Popn()
+			//fmt.Println("storing", val, "@", loc)
 			closure.SetStorage(loc, ethutil.NewValue(val))
 
 			// Add the change to manifest

@@ -24,18 +24,9 @@ func NewPEthereum(manager ethchain.EthManager) *PEthereum {
 
 func (lib *PEthereum) GetBlock(hexHash string) *PBlock {
 	hash := ethutil.FromHex(hexHash)
-
 	block := lib.blockChain.GetBlock(hash)
 
-	var blockInfo *PBlock
-
-	if block != nil {
-		blockInfo = &PBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Hex(block.Hash())}
-	} else {
-		blockInfo = &PBlock{Number: -1, Hash: ""}
-	}
-
-	return blockInfo
+	return NewPBlock(block)
 }
 
 func (lib *PEthereum) GetKey() *PKey {

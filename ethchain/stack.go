@@ -65,7 +65,7 @@ func (st *Stack) Peekn() (*big.Int, *big.Int) {
 }
 
 func (st *Stack) Push(d *big.Int) {
-	st.data = append(st.data, d)
+	st.data = append(st.data, new(big.Int).Set(d))
 }
 
 func (st *Stack) Get(amount *big.Int) []*big.Int {

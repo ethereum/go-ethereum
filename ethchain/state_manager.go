@@ -100,36 +100,52 @@ func (sm *StateManager) MakeContract(state *State, tx *Transaction) *StateObject
 func (sm *StateManager) ApplyTransactions(state *State, block *Block, txs []*Transaction) {
 	// Process each transaction/contract
 	for _, tx := range txs {
-		// If there's no recipient, it's a contract
-		// Check if this is a contract creation traction and if so
-		// create a contract of this tx.
-		if tx.IsContract() {
-			err := sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
-			if err == nil {
-				contract := sm.MakeContract(state, tx)
-				if contract != nil {
-					sm.EvalScript(state, contract.Init(), contract, tx, block)
-				} else {
-					ethutil.Config.Log.Infoln("[STATE] Unable to create contract")
-				}
-			} else {
-				ethutil.Config.Log.Infoln("[STATE] contract create:", err)
-			}
-		} else {
-			err := sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
-			contract := state.GetStateObject(tx.Recipient)
-			ethutil.Config.Log.Debugf("contract recip %x\n", tx.Recipient)
-			if err == nil && len(contract.Script()) > 0 {
-				sm.EvalScript(state, contract.Script(), contract, tx, block)
-			} else if err != nil {
-				ethutil.Config.Log.Infoln("[STATE] process:", err)
-			}
-		}
+		sm.ApplyTransaction(state, block, tx)
 	}
 }
 
+func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transaction) error {
+	// If there's no recipient, it's a contract
+	// Check if this is a contract creation traction and if so
+	// create a contract of this tx.
+	if tx.IsContract() {
+		err := sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
+		if err == nil {
+			contract := sm.MakeContract(state, tx)
+			if contract != nil {
+				sm.EvalScript(state, contract.Init(), contract, tx, block)
+			} else {
+				return fmt.Errorf("[STATE] Unable to create contract")
+			}
+		} else {
+			return fmt.Errorf("[STATE] contract create:", err)
+		}
+	} else {
+		err := sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
+		contract := state.GetStateObject(tx.Recipient)
+		if err == nil && contract != nil && len(contract.Script()) > 0 {
+			sm.EvalScript(state, contract.Script(), contract, tx, block)
+		} else if err != nil {
+			return fmt.Errorf("[STATE] process:", err)
+		}
+	}
+
+	return nil
+}
+
+func (sm *StateManager) Process(block *Block, dontReact bool) error {
+	if !sm.bc.HasBlock(block.PrevHash) {
+		return ParentError(block.PrevHash)
+	}
+
+	parent := sm.bc.GetBlock(block.PrevHash)
+
+	return sm.ProcessBlock(parent.State(), parent, block, dontReact)
+
+}
+
 // Block processing and validating with a given (temporarily) state
-func (sm *StateManager) ProcessBlock(state *State, block *Block, dontReact bool) error {
+func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontReact bool) error {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
@@ -153,7 +169,7 @@ func (sm *StateManager) ProcessBlock(state *State, block *Block, dontReact bool)
 	}
 
 	// Process the transactions on to current block
-	sm.ApplyTransactions(state, sm.bc.CurrentBlock, block.Transactions())
+	sm.ApplyTransactions(state, parent, block.Transactions())
 
 	// Block validation
 	if err := sm.ValidateBlock(block); err != nil {
@@ -170,7 +186,7 @@ func (sm *StateManager) ProcessBlock(state *State, block *Block, dontReact bool)
 
 	//if !sm.compState.Cmp(state) {
 	if !block.State().Cmp(state) {
-		return fmt.Errorf("Invalid merkle root. Expected %x, got %x", block.State().trie.Root, state.trie.Root)
+		return fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().trie.Root, state.trie.Root)
 	}
 
 	// Calculate the new total difficulty and sync back to the db
@@ -182,7 +198,7 @@ func (sm *StateManager) ProcessBlock(state *State, block *Block, dontReact bool)
 		sm.bc.Add(block)
 		sm.notifyChanges(state)
 
-		ethutil.Config.Log.Infof("[STATE] Added block #%d (%x)\n", block.BlockInfo().Number, block.Hash())
+		ethutil.Config.Log.Infof("[STATE] Added block #%d (%x)\n", block.Number, block.Hash())
 		if dontReact == false {
 			sm.Ethereum.Reactor().Post("newBlock", block)
 

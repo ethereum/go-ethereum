@@ -335,8 +335,8 @@ func (p *Peer) HandleInbound() {
 					block = ethchain.NewBlockFromRlpValue(msg.Data.Get(i))
 
 					//p.ethereum.StateManager().PrepareDefault(block)
-					state := p.ethereum.StateManager().CurrentState()
-					err = p.ethereum.StateManager().ProcessBlock(state, block, false)
+					//state := p.ethereum.StateManager().CurrentState()
+					err = p.ethereum.StateManager().Process(block, false)
 
 					if err != nil {
 						if ethutil.Config.Debug {
@@ -658,10 +658,8 @@ func (p *Peer) CatchupWithPeer(blockHash []byte) {
 
 		ethutil.Config.Log.Debugf("Requesting blockchain %x... from peer %s\n", p.ethereum.BlockChain().CurrentBlock.Hash()[:4], p.conn.RemoteAddr())
 
-		/*
-			msg = ethwire.NewMessage(ethwire.MsgGetTxsTy, []interface{}{})
-			p.QueueMessage(msg)
-		*/
+		msg = ethwire.NewMessage(ethwire.MsgGetTxsTy, []interface{}{})
+		p.QueueMessage(msg)
 	}
 }
 

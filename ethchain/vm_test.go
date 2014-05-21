@@ -1,5 +1,6 @@
 package ethchain
 
+/*
 import (
 	_ "bytes"
 	"fmt"
@@ -23,10 +24,11 @@ func TestRun4(t *testing.T) {
 		if a > b {
 			int32 c = this.caller()
 		}
-		Exit()
+		exit()
 	`), false)
 	tx := NewContractCreationTx(ethutil.Big("0"), ethutil.Big("1000"), ethutil.Big("100"), script, nil)
-	addr := tx.Hash()[12:]
+	tx.Sign(ContractAddr)
+	addr := tx.CreationAddress()
 	contract := MakeContract(tx, state)
 	state.UpdateStateObject(contract)
 	fmt.Printf("%x\n", addr)
@@ -34,7 +36,7 @@ func TestRun4(t *testing.T) {
 	callerScript, err := mutan.Compile(strings.NewReader(`
 		// Check if there's any cash in the initial store
 		if this.store[1000] == 0 {
-			this.store[1000] = 10^20
+			this.store[1000] = 10**20
 		}
 
 
@@ -93,3 +95,4 @@ func TestRun4(t *testing.T) {
 	}
 	fmt.Println("account.Amount =", account.Amount)
 }
+*/
