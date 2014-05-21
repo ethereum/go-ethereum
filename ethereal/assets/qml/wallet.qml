@@ -67,6 +67,7 @@ ApplicationWindow {
 		networkView.visible = false
 		historyView.visible = false
 		newTxView.visible = false
+		infoView.visible = false
 		view.visible = true
 		//root.title = "Ethereal - " = view.title
 	}
@@ -117,6 +118,17 @@ ApplicationWindow {
 						anchors.fill: parent
 						onClicked: {
 							setView(networkView)
+						}
+					}
+				}
+
+				Image {
+					source: ui.assetPath("net.png")
+					anchors.horizontalCenter: parent.horizontalCenter
+					MouseArea {
+						anchors.fill: parent
+						onClicked: {
+							setView(infoView)
 						}
 					}
 				}
@@ -214,6 +226,33 @@ ApplicationWindow {
 					TableViewColumn{ role: "description" ; title: "log" }
 
 					model: logModel
+				}
+			}
+
+			Rectangle {
+				id: infoView
+				property var title: "Information"
+				visible: false
+				color: "#00000000"
+				anchors.fill: parent
+
+				Label {
+					id: addressLabel
+					text: "Address"
+					anchors {
+						margins: 5
+						top: parent.top
+						left: parent.left
+					}
+				}
+				TextField {
+					anchors {
+						margins: 5
+						left: addressLabel.right
+						top: parent.top
+					}
+					text: pub.getKey().address
+					width: 500
 				}
 			}
 

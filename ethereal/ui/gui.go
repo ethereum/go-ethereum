@@ -55,7 +55,7 @@ func New(ethereum *eth.Ethereum) *Gui {
 }
 
 func (gui *Gui) Start(assetPath string) {
-	const version = "0.5.0 RC7"
+	const version = "0.5.0 RC8"
 
 	defer gui.txDb.Close()
 
@@ -74,6 +74,7 @@ func (gui *Gui) Start(assetPath string) {
 
 	// Expose the eth library and the ui library to QML
 	context.SetVar("eth", gui)
+	context.SetVar("pub", gui.pub)
 	gui.uiLib = NewUiLib(gui.engine, gui.eth, assetPath)
 	context.SetVar("ui", gui.uiLib)
 
@@ -164,7 +165,7 @@ func (gui *Gui) setWalletValue(amount, unconfirmedFunds *big.Int) {
 	var str string
 	if unconfirmedFunds != nil {
 		pos := "+"
-		if unconfirmedFunds.Cmp(big.NewInt(0)) >= 0 {
+		if unconfirmedFunds.Cmp(big.NewInt(0)) < 0 {
 			pos = "-"
 		}
 		val := ethutil.CurrencyToString(new(big.Int).Abs(ethutil.BigCopy(unconfirmedFunds)))
@@ -206,14 +207,9 @@ func (gui *Gui) update() {
 			if txMsg.Event == "newTx:pre" {
 				object := state.GetAccount(gui.addr)
 
-				if bytes.Compare(tx.Sender(), gui.addr) == 0 && object.Nonce <= tx.Nonce {
+				if bytes.Compare(tx.Sender(), gui.addr) == 0 {
 					gui.win.Root().Call("addTx", ethpub.NewPTx(tx))
 					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-
-					/*
-						object.Nonce += 1
-						state.SetStateObject(object)
-					*/
 
 					unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
 				} else if bytes.Compare(tx.Recipient, gui.addr) == 0 {
@@ -234,7 +230,7 @@ func (gui *Gui) update() {
 
 				gui.setWalletValue(object.Amount, nil)
 
-				state.SetStateObject(object)
+				state.UpdateStateObject(object)
 			}
 		}
 	}

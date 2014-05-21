@@ -5,7 +5,7 @@ Ethereum
 
 Ethereum Go Client © 2014 Jeffrey Wilcke.
 
-Current state: Proof of Concept 5.0 RC7.
+Current state: Proof of Concept 5.0 RC8.
 
 For the development package please see the [eth-go package](https://github.com/ethereum/eth-go).
 
@@ -26,28 +26,25 @@ General command line options
 ====================
 
 ```
--c       Launch the developer console (node only)
+Shared between ethereum and ethereal
 -m       Start mining blocks
 -genaddr Generates a new address and private key (destructive action)
--p       Port on which the server will accept incomming connections (= 30303)
--upnp    Enable UPnP (= false)
--x       Desired amount of peers (= 5)
--h       This help
+-p       Port on which the server will accept incomming connections
+-upnp    Enable UPnP
+-x       Desired amount of peers
 -r       Start JSON RPC
--dir     Data directory used to store configs and databases (=".ethereum")
--import  Import a private key (hex)
-```
+-dir     Data directory used to store configs and databases
+-import  Import a private key
+-h       This
 
-Developer console commands
-==========================
+Ethereum only
+ethereum [options] [filename]
+-js        Start the JavaScript REPL
+filename   Load the given file and interpret as JavaScript
 
+Etheral only
+-asset_path    absolute path to GUI assets directory
 ```
-addp <host>:<port>	      Connect to the given host
-tx <addr> <amount>            Send <amount> Wei to the specified <addr>
-contract <value> <gasprice>   Creates a new contract and launches the editor
-```
-
-See the "help" command for *developer* options.
 
 Contribution
 ============

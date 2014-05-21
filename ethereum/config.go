@@ -2,6 +2,8 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"os"
 )
 
 var StartMining bool
@@ -23,6 +25,11 @@ var StartJsConsole bool
 var InputFile string
 
 func Init() {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "%s [options] [filename]:\n", os.Args[0])
+		flag.PrintDefaults()
+	}
+
 	flag.BoolVar(&StartMining, "m", false, "start dagger mining")
 	flag.BoolVar(&ShowGenesis, "g", false, "prints genesis header and exits")
 	flag.BoolVar(&StartRpc, "r", false, "start rpc server")
@@ -38,7 +45,9 @@ func Init() {
 	flag.StringVar(&ImportKey, "import", "", "imports the given private key (hex)")
 	flag.IntVar(&MaxPeer, "x", 10, "maximum desired peers")
 	flag.BoolVar(&StartJsConsole, "js", false, "exp")
-	flag.StringVar(&InputFile, "e", "", "Run javascript file")
+	//flag.StringVar(&InputFile, "e", "", "Run javascript file")
 
 	flag.Parse()
+
+	InputFile = flag.Arg(0)
 }

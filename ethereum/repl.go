@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethpub"
-	"github.com/robertkrimen/otto"
+	"github.com/obscuren/otto"
 )
 
 type Repl interface {
@@ -51,6 +51,10 @@ func (self *JSRepl) parseInput(code string) {
 type JSEthereum struct {
 	*ethpub.PEthereum
 	vm *otto.Otto
+}
+
+func (self *JSEthereum) GetBlock(hash string) otto.Value {
+	return self.toVal(self.PEthereum.GetBlock(hash))
 }
 
 func (self *JSEthereum) GetKey() otto.Value {
