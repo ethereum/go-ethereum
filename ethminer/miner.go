@@ -126,7 +126,7 @@ func (miner *Miner) listener() {
 			// Search the nonce
 			miner.block.Nonce = miner.pow.Search(miner.block, miner.quitChan)
 			if miner.block.Nonce != nil {
-				err := miner.ethereum.StateManager().ProcessBlock(miner.ethereum.StateManager().CurrentState(), miner.block, true)
+				err := miner.ethereum.StateManager().Process(miner.block, true)
 				if err != nil {
 					ethutil.Config.Log.Infoln(err)
 					miner.txs = []*ethchain.Transaction{} // Move this somewhere neat

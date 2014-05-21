@@ -132,8 +132,19 @@ func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transac
 	}
 }
 
+func (sm *StateManager) Process(block *Block, dontReact bool) error {
+	if !sm.bc.HasBlock(block.PrevHash) {
+		return ParentError(block.PrevHash)
+	}
+
+	parent := sm.bc.GetBlock(block.PrevHash)
+
+	return sm.ProcessBlock(parent.State(), parent, block, dontReact)
+
+}
+
 // Block processing and validating with a given (temporarily) state
-func (sm *StateManager) ProcessBlock(state *State, block *Block, dontReact bool) error {
+func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontReact bool) error {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
@@ -186,7 +197,7 @@ func (sm *StateManager) ProcessBlock(state *State, block *Block, dontReact bool)
 		sm.bc.Add(block)
 		sm.notifyChanges(state)
 
-		ethutil.Config.Log.Infof("[STATE] Added block #%d (%x)\n", block.BlockInfo().Number, block.Hash())
+		ethutil.Config.Log.Infof("[STATE] Added block #%d (%x)\n", block.Number, block.Hash())
 		if dontReact == false {
 			sm.Ethereum.Reactor().Post("newBlock", block)
 
