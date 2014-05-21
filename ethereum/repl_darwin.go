@@ -18,13 +18,18 @@ import (
 
 func initReadLine() {
 	C.rl_catch_sigwinch = 0
+	C.rl_catch_signals = 0
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGWINCH)
+	signal.Notify(c, os.Interrupt)
 	go func() {
 		for sig := range c {
 			switch sig {
 			case syscall.SIGWINCH:
 				C.rl_resize_terminal()
+
+			case os.Interrupt:
+				C.rl_cleanup_after_signal()
 			default:
 
 			}
