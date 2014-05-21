@@ -190,8 +190,8 @@ func (bc *BlockChain) ResetTillBlockHash(hash []byte) error {
 		returnTo = bc.GetBlock(hash)
 		bc.CurrentBlock = returnTo
 		bc.LastBlockHash = returnTo.Hash()
-		info := bc.BlockInfo(returnTo)
-		bc.LastBlockNumber = info.Number
+		//info := bc.BlockInfo(returnTo)
+		bc.LastBlockNumber = returnTo.Number.Uint64()
 	}
 
 	// XXX Why are we resetting? This is the block chain, it has nothing to do with states
@@ -228,9 +228,9 @@ func (bc *BlockChain) GetChainFromHash(hash []byte, max uint64) []interface{} {
 	// Get the current hash to start with
 	currentHash := bc.CurrentBlock.Hash()
 	// Get the last number on the block chain
-	lastNumber := bc.BlockInfo(bc.CurrentBlock).Number
+	lastNumber := bc.CurrentBlock.Number.Uint64()
 	// Get the parents number
-	parentNumber := bc.BlockInfoByHash(hash).Number
+	parentNumber := bc.GetBlock(hash).Number.Uint64()
 	// Get the min amount. We might not have max amount of blocks
 	count := uint64(math.Min(float64(lastNumber-parentNumber), float64(max)))
 	startNumber := parentNumber + count
@@ -291,10 +291,10 @@ func (bc *BlockChain) setLastBlock() {
 	data, _ := ethutil.Config.Db.Get([]byte("LastBlock"))
 	if len(data) != 0 {
 		block := NewBlockFromBytes(data)
-		info := bc.BlockInfo(block)
+		//info := bc.BlockInfo(block)
 		bc.CurrentBlock = block
 		bc.LastBlockHash = block.Hash()
-		bc.LastBlockNumber = info.Number
+		bc.LastBlockNumber = block.Number.Uint64()
 
 		ethutil.Config.Log.Infof("[CHAIN] Last known block height #%d\n", bc.LastBlockNumber)
 	} else {
