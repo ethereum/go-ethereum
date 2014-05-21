@@ -5,7 +5,7 @@ Ethereum
 
 Ethereum Go Client © 2014 Jeffrey Wilcke.
 
-Current state: Proof of Concept 5.0 RC7.
+Current state: Proof of Concept 5.0 RC8.
 
 For the development package please see the [eth-go package](https://github.com/ethereum/eth-go).
 
@@ -39,7 +39,8 @@ Shared between ethereum and ethereal
 
 Ethereum only
 ethereum [options] [filename]
--js      Start the JavaScript REPL
+-js        Start the JavaScript REPL
+filename   Load the given file and interpret as JavaScript
 
 Etheral only
 -asset_path    absolute path to GUI assets directory
