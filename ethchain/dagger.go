@@ -29,7 +29,7 @@ func (pow *EasyPow) Search(block *Block, reactChan chan ethutil.React) []byte {
 	for {
 		select {
 		case <-reactChan:
-			ethutil.Config.Log.Infoln("[POW] Received reactor event; breaking out.")
+			//ethutil.Config.Log.Infoln("[POW] Received reactor event; breaking out.")
 			return nil
 		default:
 			i++

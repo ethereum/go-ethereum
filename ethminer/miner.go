@@ -60,10 +60,10 @@ func (miner *Miner) listener() {
 		select {
 		case chanMessage := <-miner.reactChan:
 			if block, ok := chanMessage.Resource.(*ethchain.Block); ok {
-				ethutil.Config.Log.Infoln("[MINER] Got new block via Reactor")
+				//ethutil.Config.Log.Infoln("[MINER] Got new block via Reactor")
 				if bytes.Compare(miner.ethereum.BlockChain().CurrentBlock.Hash(), block.Hash()) == 0 {
 					// TODO: Perhaps continue mining to get some uncle rewards
-					ethutil.Config.Log.Infoln("[MINER] New top block found resetting state")
+					//ethutil.Config.Log.Infoln("[MINER] New top block found resetting state")
 
 					// Filter out which Transactions we have that were not in this block
 					var newtxs []*ethchain.Transaction
@@ -87,13 +87,11 @@ func (miner *Miner) listener() {
 					if bytes.Compare(block.PrevHash, miner.ethereum.BlockChain().CurrentBlock.PrevHash) == 0 {
 						ethutil.Config.Log.Infoln("[MINER] Adding uncle block")
 						miner.uncles = append(miner.uncles, block)
-						//miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
 					}
 				}
 			}
 
 			if tx, ok := chanMessage.Resource.(*ethchain.Transaction); ok {
-				//log.Infoln("[MINER] Got new transaction from Reactor", tx)
 				found := false
 				for _, ctx := range miner.txs {
 					if found = bytes.Compare(ctx.Hash(), tx.Hash()) == 0; found {
@@ -102,54 +100,54 @@ func (miner *Miner) listener() {
 
 				}
 				if found == false {
+					// Undo all previous commits
 					miner.block.Undo()
-					//log.Infoln("[MINER] We did not know about this transaction, adding")
+					// Apply new transactions
 					miner.txs = append(miner.txs, tx)
-				} else {
-					//log.Infoln("[MINER] We already had this transaction, ignoring")
 				}
 			}
 		default:
-			stateManager := miner.ethereum.StateManager()
+			miner.mineNewBlock()
+		}
+	}
+}
 
-			miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)
+func (self *Miner) mineNewBlock() {
+	stateManager := self.ethereum.StateManager()
 
-			// Apply uncles
-			if len(miner.uncles) > 0 {
-				miner.block.SetUncles(miner.uncles)
-			}
+	self.block = self.ethereum.BlockChain().NewBlock(self.coinbase, self.txs)
 
-			// Apply all transactions to the block
-			txs := miner.txs
-			miner.txs = nil
-			for _, tx := range txs {
-				if err := stateManager.ApplyTransaction(miner.block.State(), miner.block, tx); err == nil {
-					miner.txs = append(miner.txs, tx)
-				}
-			}
-			miner.block.SetTransactions(miner.txs)
-			stateManager.AccumelateRewards(miner.block.State(), miner.block)
+	// Apply uncles
+	if len(self.uncles) > 0 {
+		self.block.SetUncles(self.uncles)
+	}
 
-			ethutil.Config.Log.Infoln("[MINER] Mining on block. Includes", len(miner.txs), "transactions")
+	// Accumulate all valid transaction and apply them to the new state
+	var txs []*ethchain.Transaction
+	for _, tx := range self.txs {
+		if err := stateManager.ApplyTransaction(self.block.State(), self.block, tx); err == nil {
+			txs = append(txs, tx)
+		}
+	}
+	self.txs = txs
+	// Set the transactions to the block so the new SHA3 can be calculated
+	self.block.SetTransactions(self.txs)
+	// Accumulate the rewards included for this block
+	stateManager.AccumelateRewards(self.block.State(), self.block)
 
-			//miner.ethereum.StateManager().ApplyTransactions(miner.block.State(), miner.block, miner.block.Transactions())
+	ethutil.Config.Log.Infoln("[MINER] Mining on block. Includes", len(self.txs), "transactions")
 
-			// Search the nonce
-			miner.block.Nonce = miner.pow.Search(miner.block, miner.quitChan)
-			if miner.block.Nonce != nil {
-				err := miner.ethereum.StateManager().Process(miner.block, true)
-				if err != nil {
-					ethutil.Config.Log.Infoln(err)
-					miner.txs = []*ethchain.Transaction{} // Move this somewhere neat
-					miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)
-				} else {
-					miner.ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{miner.block.Value().Val})
-					ethutil.Config.Log.Infof("[MINER] 🔨  Mined block %x\n", miner.block.Hash())
-
-					miner.txs = []*ethchain.Transaction{} // Move this somewhere neat
-					miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)
-				}
-			}
+	// Find a valid nonce
+	self.block.Nonce = self.pow.Search(self.block, self.quitChan)
+	if self.block.Nonce != nil {
+		err := self.ethereum.StateManager().Process(self.block, true)
+		if err != nil {
+			ethutil.Config.Log.Infoln(err)
+		} else {
+			self.ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{self.block.Value().Val})
+			ethutil.Config.Log.Infof("[MINER] 🔨  Mined block %x\n", self.block.Hash())
+			// Gather the new batch of transactions currently in the tx pool
+			self.txs = self.ethereum.TxPool().CurrentTransactions()
 		}
 	}
 }
