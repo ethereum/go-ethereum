@@ -234,7 +234,7 @@ func (gui *Gui) update() {
 
 				gui.setWalletValue(object.Amount, nil)
 
-				state.SetStateObject(object)
+				state.UpdateStateObject(object)
 			}
 		}
 	}
