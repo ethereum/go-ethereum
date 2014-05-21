@@ -104,7 +104,7 @@ func (sm *StateManager) ApplyTransactions(state *State, block *Block, txs []*Tra
 	}
 }
 
-func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transaction) {
+func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transaction) error {
 	// If there's no recipient, it's a contract
 	// Check if this is a contract creation traction and if so
 	// create a contract of this tx.
@@ -115,10 +115,10 @@ func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transac
 			if contract != nil {
 				sm.EvalScript(state, contract.Init(), contract, tx, block)
 			} else {
-				ethutil.Config.Log.Infoln("[STATE] Unable to create contract")
+				return fmt.Errorf("[STATE] Unable to create contract")
 			}
 		} else {
-			ethutil.Config.Log.Infoln("[STATE] contract create:", err)
+			return fmt.Errorf("[STATE] contract create:", err)
 		}
 	} else {
 		err := sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
@@ -126,9 +126,11 @@ func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transac
 		if err == nil && contract != nil && len(contract.Script()) > 0 {
 			sm.EvalScript(state, contract.Script(), contract, tx, block)
 		} else if err != nil {
-			ethutil.Config.Log.Infoln("[STATE] process:", err)
+			return fmt.Errorf("[STATE] process:", err)
 		}
 	}
+
+	return nil
 }
 
 func (sm *StateManager) Process(block *Block, dontReact bool) error {
@@ -184,7 +186,7 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 
 	//if !sm.compState.Cmp(state) {
 	if !block.State().Cmp(state) {
-		return fmt.Errorf("Invalid merkle root. Expected %x, got %x", block.State().trie.Root, state.trie.Root)
+		return fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().trie.Root, state.trie.Root)
 	}
 
 	// Calculate the new total difficulty and sync back to the db

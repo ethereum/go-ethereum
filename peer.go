@@ -381,7 +381,6 @@ func (p *Peer) HandleInbound() {
 				}
 
 			case ethwire.MsgTxTy:
-				fmt.Println("received tx")
 				// If the message was a transaction queue the transaction
 				// in the TxPool where it will undergo validation and
 				// processing when a new block is found
