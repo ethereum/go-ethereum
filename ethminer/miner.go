@@ -8,21 +8,22 @@ import (
 )
 
 type Miner struct {
-	pow       ethchain.PoW
-	ethereum  ethchain.EthManager
-	coinbase  []byte
-	reactChan chan ethutil.React
-	txs       []*ethchain.Transaction
-	uncles    []*ethchain.Block
-	block     *ethchain.Block
-	powChan   chan []byte
-	quitChan  chan ethutil.React
+	pow         ethchain.PoW
+	ethereum    ethchain.EthManager
+	coinbase    []byte
+	reactChan   chan ethutil.React
+	txs         []*ethchain.Transaction
+	uncles      []*ethchain.Block
+	block       *ethchain.Block
+	powChan     chan []byte
+	powQuitChan chan ethutil.React
+	quitChan    chan bool
 }
 
 func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) Miner {
-	reactChan := make(chan ethutil.React, 1) // This is the channel that receives 'updates' when ever a new transaction or block comes in
-	powChan := make(chan []byte, 1)          // This is the channel that receives valid sha hases for a given block
-	quitChan := make(chan ethutil.React, 1)  // This is the channel that can exit the miner thread
+	reactChan := make(chan ethutil.React, 1)   // This is the channel that receives 'updates' when ever a new transaction or block comes in
+	powChan := make(chan []byte, 1)            // This is the channel that receives valid sha hases for a given block
+	powQuitChan := make(chan ethutil.React, 1) // This is the channel that can exit the miner thread
 
 	ethereum.Reactor().Subscribe("newBlock", reactChan)
 	ethereum.Reactor().Subscribe("newTx:pre", reactChan)
@@ -32,16 +33,17 @@ func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) Miner {
 	// listen to the reactor events inside of the pow itself
 	// The miner overseer will never get the reactor events themselves
 	// Only after the miner will find the sha
-	ethereum.Reactor().Subscribe("newBlock", quitChan)
-	ethereum.Reactor().Subscribe("newTx:pre", quitChan)
+	ethereum.Reactor().Subscribe("newBlock", powQuitChan)
+	ethereum.Reactor().Subscribe("newTx:pre", powQuitChan)
 
 	miner := Miner{
-		pow:       &ethchain.EasyPow{},
-		ethereum:  ethereum,
-		coinbase:  coinbase,
-		reactChan: reactChan,
-		powChan:   powChan,
-		quitChan:  quitChan,
+		pow:         &ethchain.EasyPow{},
+		ethereum:    ethereum,
+		coinbase:    coinbase,
+		reactChan:   reactChan,
+		powChan:     powChan,
+		powQuitChan: powQuitChan,
+		quitChan:    make(chan bool),
 	}
 
 	// Insert initial TXs in our little miner 'pool'
@@ -56,8 +58,11 @@ func (miner *Miner) Start() {
 	go miner.listener()
 }
 func (miner *Miner) listener() {
+out:
 	for {
 		select {
+		case <-miner.quitChan:
+			break out
 		case chanMessage := <-miner.reactChan:
 			if block, ok := chanMessage.Resource.(*ethchain.Block); ok {
 				//ethutil.Config.Log.Infoln("[MINER] Got new block via Reactor")
@@ -112,6 +117,11 @@ func (miner *Miner) listener() {
 	}
 }
 
+func (self *Miner) Stop() {
+	self.powQuitChan <- ethutil.React{}
+	self.quitChan <- true
+}
+
 func (self *Miner) mineNewBlock() {
 	stateManager := self.ethereum.StateManager()
 
@@ -138,7 +148,7 @@ func (self *Miner) mineNewBlock() {
 	ethutil.Config.Log.Infoln("[MINER] Mining on block. Includes", len(self.txs), "transactions")
 
 	// Find a valid nonce
-	self.block.Nonce = self.pow.Search(self.block, self.quitChan)
+	self.block.Nonce = self.pow.Search(self.block, self.powQuitChan)
 	if self.block.Nonce != nil {
 		err := self.ethereum.StateManager().Process(self.block, true)
 		if err != nil {
