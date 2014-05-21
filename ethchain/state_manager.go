@@ -123,8 +123,7 @@ func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transac
 	} else {
 		err := sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
 		contract := state.GetStateObject(tx.Recipient)
-		ethutil.Config.Log.Debugf("contract recip %x\n", tx.Recipient)
-		if err == nil && len(contract.Script()) > 0 {
+		if err == nil && contract != nil && len(contract.Script()) > 0 {
 			sm.EvalScript(state, contract.Script(), contract, tx, block)
 		} else if err != nil {
 			ethutil.Config.Log.Infoln("[STATE] process:", err)
@@ -168,7 +167,7 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 	}
 
 	// Process the transactions on to current block
-	sm.ApplyTransactions(state, sm.bc.CurrentBlock, block.Transactions())
+	sm.ApplyTransactions(state, parent, block.Transactions())
 
 	// Block validation
 	if err := sm.ValidateBlock(block); err != nil {
