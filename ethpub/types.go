@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
+	"strings"
 )
 
 // Block interface exposed to QML
@@ -132,7 +133,7 @@ func (c *PStateObject) IsContract() bool {
 
 func (c *PStateObject) Script() string {
 	if c.object != nil {
-		return ethutil.Hex(c.object.Script())
+		return strings.Join(ethchain.Disassemble(c.object.Script()), " ")
 	}
 
 	return ""
