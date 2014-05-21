@@ -8,16 +8,26 @@ import (
 
 // Block interface exposed to QML
 type PBlock struct {
+	ref    *ethchain.Block
 	Number int    `json:"number"`
 	Hash   string `json:"hash"`
 }
 
 // Creates a new QML Block from a chain block
 func NewPBlock(block *ethchain.Block) *PBlock {
-	info := block.BlockInfo()
-	hash := hex.EncodeToString(block.Hash())
+	if block == nil {
+		return nil
+	}
 
-	return &PBlock{Number: int(info.Number), Hash: hash}
+	return &PBlock{ref: block, Number: int(block.Number.Uint64()), Hash: ethutil.Hex(block.Hash())}
+}
+
+func (self *PBlock) ToString() string {
+	if self.ref != nil {
+		return self.ref.String()
+	}
+
+	return ""
 }
 
 type PTx struct {
