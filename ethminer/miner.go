@@ -105,14 +105,14 @@ func (miner *Miner) listener() {
 					miner.block.Undo()
 					//log.Infoln("[MINER] We did not know about this transaction, adding")
 					miner.txs = append(miner.txs, tx)
-					miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)
-					miner.block.SetTransactions(miner.txs)
 				} else {
 					//log.Infoln("[MINER] We already had this transaction, ignoring")
 				}
 			}
 		default:
-			ethutil.Config.Log.Infoln("[MINER] Mining on block. Includes", len(miner.txs), "transactions")
+			stateManager := miner.ethereum.StateManager()
+
+			miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)
 
 			// Apply uncles
 			if len(miner.uncles) > 0 {
@@ -120,8 +120,19 @@ func (miner *Miner) listener() {
 			}
 
 			// Apply all transactions to the block
-			miner.ethereum.StateManager().ApplyTransactions(miner.block.State(), miner.block, miner.block.Transactions())
-			miner.ethereum.StateManager().AccumelateRewards(miner.block.State(), miner.block)
+			txs := miner.txs
+			miner.txs = nil
+			for _, tx := range txs {
+				if err := stateManager.ApplyTransaction(miner.block.State(), miner.block, tx); err == nil {
+					miner.txs = append(miner.txs, tx)
+				}
+			}
+			miner.block.SetTransactions(miner.txs)
+			stateManager.AccumelateRewards(miner.block.State(), miner.block)
+
+			ethutil.Config.Log.Infoln("[MINER] Mining on block. Includes", len(miner.txs), "transactions")
+
+			//miner.ethereum.StateManager().ApplyTransactions(miner.block.State(), miner.block, miner.block.Transactions())
 
 			// Search the nonce
 			miner.block.Nonce = miner.pow.Search(miner.block, miner.quitChan)
