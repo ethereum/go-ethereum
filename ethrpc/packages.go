@@ -182,6 +182,66 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *string) error {
 	return nil
 }
 
+type GetTxCountArgs struct {
+	Address string `json:"address"`
+}
+type GetTxCountRes struct {
+	Nonce int `json:"nonce"`
+}
+
+func (a *GetTxCountArgs) requirements() error {
+	if a.Address == "" {
+		return NewErrorResponse("GetTxCountAt requires an 'address' value as argument")
+	}
+	return nil
+}
+
+type GetPeerCountRes struct {
+	PeerCount int `json:"peerCount"`
+}
+
+func (p *EthereumApi) GetPeerCount(args *interface{}, reply *string) error {
+	*reply = NewSuccessRes(GetPeerCountRes{PeerCount: p.ethp.GetPeerCount()})
+	return nil
+}
+
+type GetListeningRes struct {
+	IsListening bool `json:"isListening"`
+}
+
+func (p *EthereumApi) GetIsListening(args *interface{}, reply *string) error {
+	*reply = NewSuccessRes(GetListeningRes{IsListening: p.ethp.GetIsListening()})
+	return nil
+}
+
+type GetCoinbaseRes struct {
+	Coinbase string `json:"coinbase"`
+}
+
+func (p *EthereumApi) GetCoinbase(args *interface{}, reply *string) error {
+	*reply = NewSuccessRes(GetCoinbaseRes{Coinbase: p.ethp.GetCoinBase()})
+	return nil
+}
+
+type GetMiningRes struct {
+	IsMining bool `json:"isMining"`
+}
+
+func (p *EthereumApi) GetIsMining(args *interface{}, reply *string) error {
+	*reply = NewSuccessRes(GetMiningRes{IsMining: p.ethp.GetIsMining()})
+	return nil
+}
+
+func (p *EthereumApi) GetTxCountAt(args *GetTxCountArgs, reply *string) error {
+	err := args.requirements()
+	if err != nil {
+		return err
+	}
+	state := p.ethp.GetTxCountAt(args.Address)
+	*reply = NewSuccessRes(GetTxCountRes{Nonce: state})
+	return nil
+}
+
 type GetBalanceArgs struct {
 	Address string
 }
