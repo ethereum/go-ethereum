@@ -81,8 +81,9 @@ func NewTxPool(ethereum EthManager) *TxPool {
 // Blocking function. Don't use directly. Use QueueTransaction instead
 func (pool *TxPool) addTransaction(tx *Transaction) {
 	pool.mutex.Lock()
+	defer pool.mutex.Unlock()
+
 	pool.pool.PushBack(tx)
-	pool.mutex.Unlock()
 
 	// Broadcast the transaction to the rest of the peers
 	pool.Ethereum.Broadcast(ethwire.MsgTxTy, []interface{}{tx.RlpData()})
@@ -182,9 +183,7 @@ out:
 			// Validate the transaction
 			err := pool.ValidateTransaction(tx)
 			if err != nil {
-				if ethutil.Config.Debug {
-					log.Println("Validating Tx failed", err)
-				}
+				ethutil.Config.Log.Debugln("Validating Tx failed", err)
 			} else {
 				// Call blocking version.
 				pool.addTransaction(tx)
