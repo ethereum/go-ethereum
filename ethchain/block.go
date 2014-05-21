@@ -56,8 +56,6 @@ type Block struct {
 	// List of transactions and/or contracts
 	transactions []*Transaction
 	TxSha        []byte
-
-	contractStates map[string]*ethutil.Trie
 }
 
 // New block takes a raw encoded string
@@ -91,27 +89,22 @@ func CreateBlock(root interface{},
 
 	block := &Block{
 		// Slice of transactions to include in this block
-		transactions:   txes,
-		PrevHash:       prevHash,
-		Coinbase:       base,
-		Difficulty:     Difficulty,
-		Nonce:          Nonce,
-		Time:           time.Now().Unix(),
-		Extra:          extra,
-		UncleSha:       EmptyShaList,
-		GasUsed:        new(big.Int),
-		MinGasPrice:    new(big.Int),
-		GasLimit:       new(big.Int),
-		contractStates: make(map[string]*ethutil.Trie),
+		transactions: txes,
+		PrevHash:     prevHash,
+		Coinbase:     base,
+		Difficulty:   Difficulty,
+		Nonce:        Nonce,
+		Time:         time.Now().Unix(),
+		Extra:        extra,
+		UncleSha:     EmptyShaList,
+		GasUsed:      new(big.Int),
+		MinGasPrice:  new(big.Int),
+		GasLimit:     new(big.Int),
 	}
 	block.SetTransactions(txes)
 	block.SetUncles([]*Block{})
 
 	block.state = NewState(ethutil.NewTrie(ethutil.Config.Db, root))
-
-	for _, tx := range txes {
-		block.MakeContract(tx)
-	}
 
 	return block
 }
@@ -176,13 +169,6 @@ func (block *Block) Sync() {
 func (block *Block) Undo() {
 	// Sync the block state itself
 	block.state.Reset()
-}
-
-func (block *Block) MakeContract(tx *Transaction) {
-	contract := MakeContract(tx, block.state)
-	if contract != nil {
-		block.state.states[string(tx.Hash()[12:])] = contract.state
-	}
 }
 
 /////// Block Encoding
@@ -265,7 +251,6 @@ func (block *Block) RlpValueDecode(decoder *ethutil.Value) {
 	block.Time = int64(header.Get(10).BigInt().Uint64())
 	block.Extra = header.Get(11).Str()
 	block.Nonce = header.Get(12).Bytes()
-	block.contractStates = make(map[string]*ethutil.Trie)
 
 	// Tx list might be empty if this is an uncle. Uncles only have their
 	// header set.
