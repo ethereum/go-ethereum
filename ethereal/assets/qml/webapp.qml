@@ -188,7 +188,7 @@ ApplicationWindow {
 
 		WebView {
 			id: inspector
-			visible:true
+			visible: false
 			url: webview.experimental.remoteInspectorUrl
 			anchors {
 				left: root.left
