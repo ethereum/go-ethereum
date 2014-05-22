@@ -97,40 +97,56 @@ func (sm *StateManager) MakeContract(state *State, tx *Transaction) *StateObject
 
 // Apply transactions uses the transaction passed to it and applies them onto
 // the current processing state.
-func (sm *StateManager) ApplyTransactions(state *State, block *Block, txs []*Transaction) {
+func (sm *StateManager) ApplyTransactions(state *State, block *Block, txs []*Transaction) ([]*Receipt, []*Transaction) {
 	// Process each transaction/contract
+	var receipts []*Receipt
+	var validTxs []*Transaction
+	totalUsedGas := big.NewInt(0)
 	for _, tx := range txs {
-		sm.ApplyTransaction(state, block, tx)
+		usedGas, err := sm.ApplyTransaction(state, block, tx)
+		if err != nil {
+			ethutil.Config.Log.Infoln(err)
+			continue
+		}
+
+		accumelative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, usedGas))
+		receipt := &Receipt{tx, ethutil.CopyBytes(state.Root().([]byte)), accumelative}
+
+		receipts = append(receipts, receipt)
+		validTxs = append(validTxs, tx)
 	}
+
+	return receipts, txs
 }
 
-func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transaction) error {
+func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transaction) (*big.Int, error) {
 	// If there's no recipient, it's a contract
 	// Check if this is a contract creation traction and if so
 	// create a contract of this tx.
+	totalGasUsed := big.NewInt(0)
 	if tx.IsContract() {
-		err := sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
+		err := sm.Ethereum.TxPool().ProcessTransaction(tx, state, false)
 		if err == nil {
 			contract := sm.MakeContract(state, tx)
 			if contract != nil {
 				sm.EvalScript(state, contract.Init(), contract, tx, block)
 			} else {
-				return fmt.Errorf("[STATE] Unable to create contract")
+				return nil, fmt.Errorf("[STATE] Unable to create contract")
 			}
 		} else {
-			return fmt.Errorf("[STATE] contract create:", err)
+			return nil, fmt.Errorf("[STATE] contract create:", err)
 		}
 	} else {
-		err := sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
+		err := sm.Ethereum.TxPool().ProcessTransaction(tx, state, false)
 		contract := state.GetStateObject(tx.Recipient)
 		if err == nil && contract != nil && len(contract.Script()) > 0 {
 			sm.EvalScript(state, contract.Script(), contract, tx, block)
 		} else if err != nil {
-			return fmt.Errorf("[STATE] process:", err)
+			return nil, fmt.Errorf("[STATE] process:", err)
 		}
 	}
 
-	return nil
+	return totalGasUsed, nil
 }
 
 func (sm *StateManager) Process(block *Block, dontReact bool) error {
@@ -276,6 +292,14 @@ func CalculateBlockReward(block *Block, uncleLength int) *big.Int {
 	for i := 0; i < uncleLength; i++ {
 		base.Add(base, UncleInclusionReward)
 	}
+
+	lastCumulGasUsed := big.NewInt(0)
+	for _, r := range block.Receipts() {
+		usedGas := new(big.Int).Sub(r.CumulativeGasUsed, lastCumulGasUsed)
+		usedGas.Add(usedGas, r.Tx.GasPrice)
+		base.Add(base, usedGas)
+	}
+
 	return base.Add(base, BlockReward)
 }
 

@@ -91,15 +91,15 @@ func (pool *TxPool) addTransaction(tx *Transaction) {
 
 // Process transaction validates the Tx and processes funds from the
 // sender to the recipient.
-func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block, toContract bool) (err error) {
+func (pool *TxPool) ProcessTransaction(tx *Transaction, state *State, toContract bool) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Println(r)
+			ethutil.Config.Log.Infoln(r)
 			err = fmt.Errorf("%v", r)
 		}
 	}()
 	// Get the sender
-	sender := block.state.GetAccount(tx.Sender())
+	sender := state.GetAccount(tx.Sender())
 
 	if sender.Nonce != tx.Nonce {
 		return fmt.Errorf("[TXPL] Invalid account nonce, state nonce is %d transaction nonce is %d instead", sender.Nonce, tx.Nonce)
@@ -107,19 +107,21 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block, toContract
 
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.
-	totAmount := new(big.Int).Add(tx.Value, new(big.Int).Mul(TxFee, TxFeeRat))
+	//totAmount := new(big.Int).Add(tx.Value, new(big.Int).Mul(TxFee, TxFeeRat))
+	totAmount := new(big.Int).Add(tx.Value, new(big.Int).Mul(tx.Gas, tx.GasPrice))
 	if sender.Amount.Cmp(totAmount) < 0 {
 		return fmt.Errorf("[TXPL] Insufficient amount in sender's (%x) account", tx.Sender())
 	}
+	//fmt.Println(tx)
 
 	// Get the receiver
-	receiver := block.state.GetAccount(tx.Recipient)
+	receiver := state.GetAccount(tx.Recipient)
 	sender.Nonce += 1
 
 	// Send Tx to self
 	if bytes.Compare(tx.Recipient, tx.Sender()) == 0 {
 		// Subtract the fee
-		sender.SubAmount(new(big.Int).Mul(TxFee, TxFeeRat))
+		sender.SubAmount(new(big.Int).Mul(GasTx, tx.GasPrice))
 	} else {
 		// Subtract the amount from the senders account
 		sender.SubAmount(totAmount)
@@ -127,10 +129,10 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block, toContract
 		// Add the amount to receivers account which should conclude this transaction
 		receiver.AddAmount(tx.Value)
 
-		block.state.UpdateStateObject(receiver)
+		state.UpdateStateObject(receiver)
 	}
 
-	block.state.UpdateStateObject(sender)
+	state.UpdateStateObject(sender)
 
 	ethutil.Config.Log.Infof("[TXPL] Processed Tx %x\n", tx.Hash())
 

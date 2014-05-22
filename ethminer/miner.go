@@ -48,7 +48,7 @@ func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) Miner {
 
 	// Insert initial TXs in our little miner 'pool'
 	miner.txs = ethereum.TxPool().Flush()
-	miner.block = ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)
+	miner.block = ethereum.BlockChain().NewBlock(miner.coinbase)
 
 	return miner
 }
@@ -86,7 +86,7 @@ out:
 					miner.txs = newtxs
 
 					// Setup a fresh state to mine on
-					miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)
+					//miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)
 
 				} else {
 					if bytes.Compare(block.PrevHash, miner.ethereum.BlockChain().CurrentBlock.PrevHash) == 0 {
@@ -125,7 +125,7 @@ func (self *Miner) Stop() {
 func (self *Miner) mineNewBlock() {
 	stateManager := self.ethereum.StateManager()
 
-	self.block = self.ethereum.BlockChain().NewBlock(self.coinbase, self.txs)
+	self.block = self.ethereum.BlockChain().NewBlock(self.coinbase)
 
 	// Apply uncles
 	if len(self.uncles) > 0 {
@@ -133,15 +133,10 @@ func (self *Miner) mineNewBlock() {
 	}
 
 	// Accumulate all valid transaction and apply them to the new state
-	var txs []*ethchain.Transaction
-	for _, tx := range self.txs {
-		if err := stateManager.ApplyTransaction(self.block.State(), self.block, tx); err == nil {
-			txs = append(txs, tx)
-		}
-	}
+	receipts, txs := stateManager.ApplyTransactions(self.block.State(), self.block, self.txs)
 	self.txs = txs
 	// Set the transactions to the block so the new SHA3 can be calculated
-	self.block.SetTransactions(self.txs)
+	self.block.SetReceipts(receipts, txs)
 	// Accumulate the rewards included for this block
 	stateManager.AccumelateRewards(self.block.State(), self.block)
 

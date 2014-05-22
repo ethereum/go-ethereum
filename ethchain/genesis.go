@@ -23,7 +23,7 @@ var GenesisHeader = []interface{}{
 	// Root state
 	"",
 	// tx sha
-	ZeroHash256,
+	"",
 	// Difficulty
 	ethutil.BigPow(2, 22),
 	// Number

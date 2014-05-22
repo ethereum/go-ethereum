@@ -19,6 +19,7 @@ type config struct {
 	Ver          string
 	ClientString string
 	Pubkey       []byte
+	Identifier   string
 }
 
 var Config *config
@@ -26,7 +27,7 @@ var Config *config
 // Read config
 //
 // Initialize the global Config variable with default settings
-func ReadConfig(base string, logTypes LoggerType) *config {
+func ReadConfig(base string, logTypes LoggerType, id string) *config {
 	if Config == nil {
 		usr, _ := user.Current()
 		path := path.Join(usr.HomeDir, base)
@@ -43,6 +44,7 @@ func ReadConfig(base string, logTypes LoggerType) *config {
 		}
 
 		Config = &config{ExecPath: path, Debug: true, Ver: "0.5.0 RC8"}
+		Config.Identifier = id
 		Config.Log = NewLogger(logTypes, LogLevelDebug)
 		Config.SetClientString("/Ethereum(G)")
 	}
@@ -53,7 +55,11 @@ func ReadConfig(base string, logTypes LoggerType) *config {
 // Set client string
 //
 func (c *config) SetClientString(str string) {
-	Config.ClientString = fmt.Sprintf("%s nv%s/%s", str, c.Ver, runtime.GOOS)
+	id := runtime.GOOS
+	if len(c.Identifier) > 0 {
+		id = c.Identifier
+	}
+	Config.ClientString = fmt.Sprintf("%s nv%s/%s", str, c.Ver, id)
 }
 
 type LoggerType byte

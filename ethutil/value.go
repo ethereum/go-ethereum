@@ -16,7 +16,7 @@ type Value struct {
 }
 
 func (val *Value) String() string {
-	return fmt.Sprintf("%q", val.Val)
+	return fmt.Sprintf("%x", val.Val)
 }
 
 func NewValue(val interface{}) *Value {

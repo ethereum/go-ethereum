@@ -18,6 +18,7 @@ var (
 	GasCreate  = big.NewInt(100)
 	GasCall    = big.NewInt(20)
 	GasMemory  = big.NewInt(1)
+	GasTx      = big.NewInt(500)
 )
 
 func CalculateTxGas(initSize, scriptSize *big.Int) *big.Int {

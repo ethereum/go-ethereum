@@ -146,7 +146,7 @@ func (c *StateObject) RlpEncode() []byte {
 	if c.state != nil {
 		root = c.state.trie.Root
 	} else {
-		root = ZeroHash256
+		root = ""
 	}
 
 	return ethutil.Encode([]interface{}{c.Amount, c.Nonce, root, ethutil.Sha3Bin(c.script)})

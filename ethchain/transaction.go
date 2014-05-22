@@ -1,6 +1,7 @@
 package ethchain
 
 import (
+	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/secp256k1-go"
 	"math/big"
@@ -46,11 +47,13 @@ func NewTransactionFromValue(val *ethutil.Value) *Transaction {
 }
 
 func (tx *Transaction) Hash() []byte {
-	data := []interface{}{tx.Nonce, tx.Value, tx.GasPrice, tx.Gas, tx.Recipient, tx.Data}
+	data := []interface{}{tx.Nonce, tx.GasPrice, tx.Gas, tx.Recipient, tx.Value, tx.Data}
 
-	if tx.contractCreation {
-		data = append(data, tx.Init)
-	}
+	/*
+		if tx.contractCreation {
+			data = append(data, tx.Init)
+		}
+	*/
 
 	return ethutil.Sha3Bin(ethutil.NewValue(data).Encode())
 }
@@ -138,18 +141,87 @@ func (tx *Transaction) RlpValueDecode(decoder *ethutil.Value) {
 	tx.Recipient = decoder.Get(3).Bytes()
 	tx.Value = decoder.Get(4).BigInt()
 	tx.Data = decoder.Get(5).Bytes()
+	tx.v = byte(decoder.Get(6).Uint())
+	tx.r = decoder.Get(7).Bytes()
+	tx.s = decoder.Get(8).Bytes()
 
-	// If the list is of length 10 it's a contract creation tx
-	if decoder.Len() == 10 {
-		tx.contractCreation = true
-		tx.Init = decoder.Get(6).Bytes()
+	/*
+		// If the list is of length 10 it's a contract creation tx
+		if decoder.Len() == 10 {
+			tx.contractCreation = true
+			tx.Init = decoder.Get(6).Bytes()
 
-		tx.v = byte(decoder.Get(7).Uint())
-		tx.r = decoder.Get(8).Bytes()
-		tx.s = decoder.Get(9).Bytes()
-	} else {
-		tx.v = byte(decoder.Get(6).Uint())
-		tx.r = decoder.Get(7).Bytes()
-		tx.s = decoder.Get(8).Bytes()
-	}
+			tx.v = byte(decoder.Get(7).Uint())
+			tx.r = decoder.Get(8).Bytes()
+			tx.s = decoder.Get(9).Bytes()
+		} else {
+			tx.v = byte(decoder.Get(6).Uint())
+			tx.r = decoder.Get(7).Bytes()
+			tx.s = decoder.Get(8).Bytes()
+		}
+	*/
+}
+
+func (tx *Transaction) String() string {
+	return fmt.Sprintf(`
+	TX(%x)
+	Contract: %v
+	From:     %x
+	Nonce:    %v
+	GasPrice: %v
+	Gas:      %v
+	To:       %x
+	Value:    %v
+	Data:     0x%x
+	V:        0x%x
+	R:        0x%x
+	S:        0x%x
+	`,
+		tx.Hash(),
+		len(tx.Recipient) > 1,
+		tx.Sender(),
+		tx.Nonce,
+		tx.GasPrice,
+		tx.Gas,
+		tx.Recipient,
+		tx.Value,
+		tx.Data,
+		tx.v,
+		tx.r,
+		tx.s)
+}
+
+type Receipt struct {
+	Tx                *Transaction
+	PostState         []byte
+	CumulativeGasUsed *big.Int
+}
+
+func NewRecieptFromValue(val *ethutil.Value) *Receipt {
+	r := &Receipt{}
+	r.RlpValueDecode(val)
+
+	return r
+}
+
+func (self *Receipt) RlpValueDecode(decoder *ethutil.Value) {
+	self.Tx = NewTransactionFromValue(decoder.Get(0))
+	self.PostState = decoder.Get(1).Bytes()
+	self.CumulativeGasUsed = decoder.Get(2).BigInt()
+}
+
+func (self *Receipt) RlpData() interface{} {
+	return []interface{}{self.Tx.RlpData(), self.PostState, self.CumulativeGasUsed}
+}
+
+func (self *Receipt) String() string {
+	return fmt.Sprintf(`
+	R
+	Tx:[                 %v]
+	PostState:           0x%x
+	CumulativeGasUsed:   %v
+	`,
+		self.Tx,
+		self.PostState,
+		self.CumulativeGasUsed)
 }
