@@ -18,7 +18,7 @@ const (
 	// The size of the output buffer for writing messages
 	outputBufferSize = 50
 	// Current protocol version
-	ProtocolVersion = 12
+	ProtocolVersion = 17
 )
 
 type DiscReason byte
@@ -119,7 +119,7 @@ type Peer struct {
 	// this to prevent receiving false peers.
 	requestedPeerList bool
 
-	host []interface{}
+	host []byte
 	port uint16
 	caps Caps
 
@@ -134,8 +134,7 @@ type Peer struct {
 }
 
 func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
-	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-	pubkey := ethutil.NewValueFromBytes(data).Get(2).Bytes()
+	pubkey := ethutil.GetKeyRing().Get(0).PublicKey[1:]
 
 	return &Peer{
 		outputQueue:     make(chan *ethwire.Msg, outputBufferSize),
@@ -342,6 +341,7 @@ func (p *Peer) HandleInbound() {
 						if ethutil.Config.Debug {
 							ethutil.Config.Log.Infof("[PEER] Block %x failed\n", block.Hash())
 							ethutil.Config.Log.Infof("[PEER] %v\n", err)
+							ethutil.Config.Log.Debugln(block)
 						}
 						break
 					} else {
@@ -437,7 +437,7 @@ func (p *Peer) HandleInbound() {
 
 				// If a parent is found send back a reply
 				if parent != nil {
-					ethutil.Config.Log.Debugf("[PEER] Found conical block, returning chain from: %x ", parent.Hash())
+					ethutil.Config.Log.Debugf("[PEER] Found canonical block, returning chain from: %x ", parent.Hash())
 					chain := p.ethereum.BlockChain().GetChainFromHash(parent.Hash(), amountOfBlocks)
 					if len(chain) > 0 {
 						ethutil.Config.Log.Debugf("[PEER] Returning %d blocks: %x ", len(chain), parent.Hash())
@@ -531,11 +531,10 @@ func (p *Peer) Stop() {
 }
 
 func (p *Peer) pushHandshake() error {
-	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-	pubkey := ethutil.NewValueFromBytes(data).Get(2).Bytes()
+	pubkey := ethutil.GetKeyRing().Get(0).PublicKey
 
 	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-		uint32(ProtocolVersion), uint32(0), p.Version, byte(p.caps), p.port, pubkey,
+		uint32(ProtocolVersion), uint32(0), p.Version, byte(p.caps), p.port, pubkey[1:],
 	})
 
 	p.QueueMessage(msg)
@@ -667,23 +666,24 @@ func (p *Peer) RlpData() []interface{} {
 	return []interface{}{p.host, p.port, p.pubkey}
 }
 
-func packAddr(address, port string) ([]interface{}, uint16) {
+func packAddr(address, port string) ([]byte, uint16) {
 	addr := strings.Split(address, ".")
 	a, _ := strconv.Atoi(addr[0])
 	b, _ := strconv.Atoi(addr[1])
 	c, _ := strconv.Atoi(addr[2])
 	d, _ := strconv.Atoi(addr[3])
-	host := []interface{}{int32(a), int32(b), int32(c), int32(d)}
+	host := []byte{byte(a), byte(b), byte(c), byte(d)}
 	prt, _ := strconv.Atoi(port)
 
 	return host, uint16(prt)
 }
 
 func unpackAddr(value *ethutil.Value, p uint64) string {
-	a := strconv.Itoa(int(value.Get(0).Uint()))
-	b := strconv.Itoa(int(value.Get(1).Uint()))
-	c := strconv.Itoa(int(value.Get(2).Uint()))
-	d := strconv.Itoa(int(value.Get(3).Uint()))
+	byts := value.Bytes()
+	a := strconv.Itoa(int(byts[0]))
+	b := strconv.Itoa(int(byts[1]))
+	c := strconv.Itoa(int(byts[2]))
+	d := strconv.Itoa(int(byts[3]))
 	host := strings.Join([]string{a, b, c, d}, ".")
 	port := strconv.Itoa(int(p))
 
