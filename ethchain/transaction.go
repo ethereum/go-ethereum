@@ -16,7 +16,6 @@ type Transaction struct {
 	Gas       *big.Int
 	GasPrice  *big.Int
 	Data      []byte
-	Init      []byte
 	v         byte
 	r, s      []byte
 
@@ -24,8 +23,8 @@ type Transaction struct {
 	contractCreation bool
 }
 
-func NewContractCreationTx(value, gas, gasPrice *big.Int, script []byte, init []byte) *Transaction {
-	return &Transaction{Value: value, Gas: gas, GasPrice: gasPrice, Data: script, Init: init, contractCreation: true}
+func NewContractCreationTx(value, gas, gasPrice *big.Int, script []byte) *Transaction {
+	return &Transaction{Value: value, Gas: gas, GasPrice: gasPrice, Data: script, contractCreation: true}
 }
 
 func NewTransactionMessage(to []byte, value, gas, gasPrice *big.Int, data []byte) *Transaction {
@@ -114,10 +113,6 @@ func (tx *Transaction) Sign(privk []byte) error {
 
 func (tx *Transaction) RlpData() interface{} {
 	data := []interface{}{tx.Nonce, tx.GasPrice, tx.Gas, tx.Recipient, tx.Value, tx.Data}
-
-	if tx.contractCreation {
-		data = append(data, tx.Init)
-	}
 
 	return append(data, tx.v, tx.r, tx.s)
 }

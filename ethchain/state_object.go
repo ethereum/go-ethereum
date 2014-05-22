@@ -28,8 +28,7 @@ func MakeContract(tx *Transaction, state *State) *StateObject {
 		value := tx.Value
 		contract := NewContract(addr, value, ZeroHash256)
 
-		contract.script = tx.Data
-		contract.initScript = tx.Init
+		contract.initScript = tx.Data
 
 		state.UpdateStateObject(contract)
 

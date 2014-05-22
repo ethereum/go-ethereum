@@ -84,7 +84,7 @@ func (sm *StateManager) BlockChain() *BlockChain {
 	return sm.bc
 }
 
-func (sm *StateManager) MakeContract(state *State, tx *Transaction) *StateObject {
+func (sm *StateManager) MakeStateObject(state *State, tx *Transaction) *StateObject {
 	contract := MakeContract(tx, state)
 	if contract != nil {
 		state.states[string(tx.CreationAddress())] = contract.state
@@ -123,18 +123,24 @@ func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transac
 	// If there's no recipient, it's a contract
 	// Check if this is a contract creation traction and if so
 	// create a contract of this tx.
+	// TODO COMMENT THIS SECTION
 	totalGasUsed := big.NewInt(0)
 	if tx.IsContract() {
 		err := sm.Ethereum.TxPool().ProcessTransaction(tx, state, false)
 		if err == nil {
-			contract := sm.MakeContract(state, tx)
+			contract := sm.MakeStateObject(state, tx)
 			if contract != nil {
-				sm.EvalScript(state, contract.Init(), contract, tx, block)
+				script, err := sm.EvalScript(state, contract.Init(), contract, tx, block)
+				if err != nil {
+					return nil, fmt.Errorf("[STATE] Error during init script run %v", err)
+				}
+				contract.script = script
+				state.UpdateStateObject(contract)
 			} else {
 				return nil, fmt.Errorf("[STATE] Unable to create contract")
 			}
 		} else {
-			return nil, fmt.Errorf("[STATE] contract create:", err)
+			return nil, fmt.Errorf("[STATE] contract creation tx:", err)
 		}
 	} else {
 		err := sm.Ethereum.TxPool().ProcessTransaction(tx, state, false)
@@ -331,10 +337,10 @@ func (sm *StateManager) Stop() {
 	sm.bc.Stop()
 }
 
-func (sm *StateManager) EvalScript(state *State, script []byte, object *StateObject, tx *Transaction, block *Block) {
+func (sm *StateManager) EvalScript(state *State, script []byte, object *StateObject, tx *Transaction, block *Block) (ret []byte, err error) {
 	account := state.GetAccount(tx.Sender())
 
-	err := account.ConvertGas(tx.Gas, tx.GasPrice)
+	err = account.ConvertGas(tx.Gas, tx.GasPrice)
 	if err != nil {
 		ethutil.Config.Log.Debugln(err)
 		return
@@ -351,11 +357,13 @@ func (sm *StateManager) EvalScript(state *State, script []byte, object *StateObj
 		Value:       tx.Value,
 		//Price:       tx.GasPrice,
 	})
-	closure.Call(vm, tx.Data, nil)
+	ret, err = closure.Call(vm, tx.Data, nil)
 
 	// Update the account (refunds)
 	state.UpdateStateObject(account)
 	state.UpdateStateObject(object)
+
+	return
 }
 
 func (sm *StateManager) notifyChanges(state *State) {
