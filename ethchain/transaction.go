@@ -167,10 +167,10 @@ func (tx *Transaction) String() string {
 	TX(%x)
 	Contract: %v
 	From:     %x
+	To:       %x
 	Nonce:    %v
 	GasPrice: %v
 	Gas:      %v
-	To:       %x
 	Value:    %v
 	Data:     0x%x
 	V:        0x%x
@@ -178,12 +178,12 @@ func (tx *Transaction) String() string {
 	S:        0x%x
 	`,
 		tx.Hash(),
-		len(tx.Recipient) > 1,
+		len(tx.Recipient) == 1,
 		tx.Sender(),
+		tx.Recipient,
 		tx.Nonce,
 		tx.GasPrice,
 		tx.Gas,
-		tx.Recipient,
 		tx.Value,
 		tx.Data,
 		tx.v,

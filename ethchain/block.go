@@ -1,6 +1,7 @@
 package ethchain
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
@@ -159,6 +160,16 @@ func (block *Block) BlockInfo() BlockInfo {
 	bi.RlpDecode(data)
 
 	return bi
+}
+
+func (self *Block) GetTransaction(hash []byte) *Transaction {
+	for _, receipt := range self.receipts {
+		if bytes.Compare(receipt.Tx.Hash(), hash) == 0 {
+			return receipt.Tx
+		}
+	}
+
+	return nil
 }
 
 // Sync the block's state and contract respectively
