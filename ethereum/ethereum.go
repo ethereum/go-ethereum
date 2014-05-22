@@ -52,11 +52,14 @@ func main() {
 	var logSys *log.Logger
 	flags := log.LstdFlags
 
+	var lt ethutil.LoggerType
 	if StartJsConsole || len(InputFile) > 0 {
-		ethutil.ReadConfig(DataDir, ethutil.LogFile)
+		lt = ethutil.LogFile
 	} else {
-		ethutil.ReadConfig(DataDir, ethutil.LogFile|ethutil.LogStd)
+		lt = ethutil.LogFile | ethutil.LogStd
 	}
+
+	ethutil.ReadConfig(DataDir, lt, Identifier)
 
 	logger := ethutil.Config.Log
 

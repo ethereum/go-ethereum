@@ -4,6 +4,7 @@ import (
 	"flag"
 )
 
+var Identifier string
 var StartConsole bool
 var StartMining bool
 var StartRpc bool
@@ -21,6 +22,7 @@ var DataDir string
 var AssetPath string
 
 func Init() {
+	flag.StringVar(&Identifier, "i", "", "Custom client identifier")
 	flag.BoolVar(&StartConsole, "c", false, "debug and testing console")
 	flag.BoolVar(&StartMining, "m", false, "start dagger mining")
 	flag.BoolVar(&StartRpc, "r", false, "start rpc server")

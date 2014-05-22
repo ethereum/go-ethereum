@@ -6,6 +6,7 @@ import (
 	"os"
 )
 
+var Identifier string
 var StartMining bool
 var StartRpc bool
 var RpcPort int
@@ -30,6 +31,7 @@ func Init() {
 		flag.PrintDefaults()
 	}
 
+	flag.StringVar(&Identifier, "i", "", "Custom client identifier")
 	flag.BoolVar(&StartMining, "m", false, "start dagger mining")
 	flag.BoolVar(&ShowGenesis, "g", false, "prints genesis header and exits")
 	flag.BoolVar(&StartRpc, "r", false, "start rpc server")
