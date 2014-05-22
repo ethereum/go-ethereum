@@ -6,6 +6,7 @@ import QtQuick.Window 2.1;
 import QtQuick.Controls.Styles 1.1
 import Ethereum 1.0
 
+
 ApplicationWindow {
 	id: root
 
