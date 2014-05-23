@@ -9,7 +9,6 @@ import (
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/go-qml/qml"
-	"github.com/obscuren/mutan"
 	"math/big"
 	"strings"
 )
@@ -262,7 +261,7 @@ func (gui *Gui) Transact(recipient, value, gas, gasPrice, data string) (*ethpub.
 func (gui *Gui) Create(recipient, value, gas, gasPrice, data string) (*ethpub.PReceipt, error) {
 	keyPair := ethutil.GetKeyRing().Get(0)
 
-	mainInput, initInput := mutan.PreParse(data)
+	//mainInput, initInput := mutan.PreParse(data)
 
-	return gui.pub.Create(ethutil.Hex(keyPair.PrivateKey), value, gas, gasPrice, initInput, mainInput)
+	return gui.pub.Create(ethutil.Hex(keyPair.PrivateKey), value, gas, gasPrice, data)
 }

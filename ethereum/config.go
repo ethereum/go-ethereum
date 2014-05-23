@@ -6,6 +6,7 @@ import (
 	"os"
 )
 
+var Identifier string
 var StartMining bool
 var StartRpc bool
 var RpcPort int
@@ -30,6 +31,7 @@ func Init() {
 		flag.PrintDefaults()
 	}
 
+	flag.StringVar(&Identifier, "i", "", "custom client identifier")
 	flag.BoolVar(&StartMining, "m", false, "start dagger mining")
 	flag.BoolVar(&ShowGenesis, "g", false, "prints genesis header and exits")
 	flag.BoolVar(&StartRpc, "r", false, "start rpc server")
@@ -45,7 +47,6 @@ func Init() {
 	flag.StringVar(&ImportKey, "import", "", "imports the given private key (hex)")
 	flag.IntVar(&MaxPeer, "x", 10, "maximum desired peers")
 	flag.BoolVar(&StartJsConsole, "js", false, "exp")
-	//flag.StringVar(&InputFile, "e", "", "Run javascript file")
 
 	flag.Parse()
 
