@@ -39,7 +39,7 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	ethchain.InitFees()
-	ethutil.ReadConfig(DataDir, ethutil.LogFile|ethutil.LogStd)
+	ethutil.ReadConfig(DataDir, ethutil.LogFile|ethutil.LogStd, Identifier)
 
 	// Instantiated a eth stack
 	ethereum, err := eth.New(eth.CapDefault, UseUPnP)
