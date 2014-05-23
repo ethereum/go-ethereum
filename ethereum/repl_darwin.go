@@ -102,7 +102,7 @@ L:
 					break L
 				}
 
-				addHistory(str) //allow user to recall this line
+				addHistory(str[:len(str)-1]) //allow user to recall this line
 
 				self.parseInput(str)
 
