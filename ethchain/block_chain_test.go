@@ -50,7 +50,7 @@ func (tm *TestManager) Broadcast(msgType ethwire.MsgType, data []interface{}) {
 }
 
 func NewTestManager() *TestManager {
-	ethutil.ReadConfig(".ethtest", ethutil.LogStd)
+	ethutil.ReadConfig(".ethtest", ethutil.LogStd, "")
 
 	db, err := ethdb.NewMemDatabase()
 	if err != nil {
@@ -74,7 +74,7 @@ func NewTestManager() *TestManager {
 func (tm *TestManager) AddFakeBlock(blk []byte) error {
 	block := NewBlockFromBytes(blk)
 	tm.Blocks = append(tm.Blocks, block)
-	err := tm.StateManager().ProcessBlock(tm.StateManager().CurrentState(), block, false)
+	err := tm.StateManager().Process(block, false)
 	return err
 }
 func (tm *TestManager) CreateChain1() error {
