@@ -18,6 +18,7 @@ var (
 	GasCreate  = big.NewInt(100)
 	GasCall    = big.NewInt(20)
 	GasMemory  = big.NewInt(1)
+	GasTx      = big.NewInt(500)
 )
 
 func CalculateTxGas(initSize, scriptSize *big.Int) *big.Int {
@@ -425,6 +426,10 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			value := stack.Pop()
 			size, offset := stack.Popn()
 
+			// Snapshot the current stack so we are able to
+			// revert back to it later.
+			snapshot := vm.state.Snapshot()
+
 			// Generate a new address
 			addr := ethutil.CreateAddress(closure.callee.Address(), closure.callee.N())
 			// Create a new contract
@@ -447,6 +452,9 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			closure.Script, err = closure.Call(vm, nil, hook)
 			if err != nil {
 				stack.Push(ethutil.BigFalse)
+
+				// Revert the state as it was before.
+				vm.state.Revert(snapshot)
 			} else {
 				stack.Push(ethutil.BigD(addr))
 
@@ -472,6 +480,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 
+			snapshot := vm.state.Snapshot()
+
 			// Fetch the contract which will serve as the closure body
 			contract := vm.state.GetStateObject(addr.Bytes())
 
@@ -494,14 +504,14 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 				if err != nil {
 					stack.Push(ethutil.BigFalse)
 					// Reset the changes applied this object
-					//contract.State().Reset()
+					vm.state.Revert(snapshot)
 				} else {
 					stack.Push(ethutil.BigTrue)
+
+					vm.state.UpdateStateObject(contract)
+
+					mem.Set(retOffset.Int64(), retSize.Int64(), ret)
 				}
-
-				vm.state.UpdateStateObject(contract)
-
-				mem.Set(retOffset.Int64(), retSize.Int64(), ret)
 			} else {
 				ethutil.Config.Log.Debugf("Contract %x not found\n", addr.Bytes())
 				stack.Push(ethutil.BigFalse)

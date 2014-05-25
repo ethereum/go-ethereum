@@ -31,7 +31,18 @@ func (self *PBlock) ToString() string {
 	return ""
 }
 
+func (self *PBlock) GetTransaction(hash string) *PTx {
+	tx := self.ref.GetTransaction(ethutil.FromHex(hash))
+	if tx == nil {
+		return nil
+	}
+
+	return NewPTx(tx)
+}
+
 type PTx struct {
+	ref *ethchain.Transaction
+
 	Value, Hash, Address string
 	Contract             bool
 }
@@ -41,7 +52,11 @@ func NewPTx(tx *ethchain.Transaction) *PTx {
 	sender := hex.EncodeToString(tx.Recipient)
 	isContract := len(tx.Data) > 0
 
-	return &PTx{Hash: hash, Value: ethutil.CurrencyToString(tx.Value), Address: sender, Contract: isContract}
+	return &PTx{ref: tx, Hash: hash, Value: ethutil.CurrencyToString(tx.Value), Address: sender, Contract: isContract}
+}
+
+func (self *PTx) ToString() string {
+	return self.ref.String()
 }
 
 type PKey struct {

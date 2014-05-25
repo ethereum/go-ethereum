@@ -84,7 +84,7 @@ func (sm *StateManager) BlockChain() *BlockChain {
 	return sm.bc
 }
 
-func (sm *StateManager) MakeContract(state *State, tx *Transaction) *StateObject {
+func (sm *StateManager) MakeStateObject(state *State, tx *Transaction) *StateObject {
 	contract := MakeContract(tx, state)
 	if contract != nil {
 		state.states[string(tx.CreationAddress())] = contract.state
@@ -97,40 +97,74 @@ func (sm *StateManager) MakeContract(state *State, tx *Transaction) *StateObject
 
 // Apply transactions uses the transaction passed to it and applies them onto
 // the current processing state.
-func (sm *StateManager) ApplyTransactions(state *State, block *Block, txs []*Transaction) {
+func (sm *StateManager) ApplyTransactions(state *State, block *Block, txs []*Transaction) ([]*Receipt, []*Transaction) {
 	// Process each transaction/contract
+	var receipts []*Receipt
+	var validTxs []*Transaction
+	totalUsedGas := big.NewInt(0)
 	for _, tx := range txs {
-		sm.ApplyTransaction(state, block, tx)
+		usedGas, err := sm.ApplyTransaction(state, block, tx)
+		if err != nil {
+			ethutil.Config.Log.Infoln(err)
+			continue
+		}
+
+		accumelative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, usedGas))
+		receipt := &Receipt{tx, ethutil.CopyBytes(state.Root().([]byte)), accumelative}
+
+		receipts = append(receipts, receipt)
+		validTxs = append(validTxs, tx)
 	}
+
+	return receipts, txs
 }
 
-func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transaction) error {
-	// If there's no recipient, it's a contract
-	// Check if this is a contract creation traction and if so
-	// create a contract of this tx.
-	if tx.IsContract() {
-		err := sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
+func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transaction) (*big.Int, error) {
+	/*
+		Applies transactions to the given state and creates new
+		state objects where needed.
+
+		If said objects needs to be created
+		run the initialization script provided by the transaction and
+		assume there's a return value. The return value will be set to
+		the script section of the state object.
+	*/
+	totalGasUsed := big.NewInt(0)
+	// Apply the transaction to the current state
+	err := sm.Ethereum.TxPool().ProcessTransaction(tx, state, false)
+	if tx.CreatesContract() {
 		if err == nil {
-			contract := sm.MakeContract(state, tx)
+			// Create a new state object and the transaction
+			// as it's data provider.
+			contract := sm.MakeStateObject(state, tx)
 			if contract != nil {
-				sm.EvalScript(state, contract.Init(), contract, tx, block)
+				// Evaluate the initialization script
+				// and use the return value as the
+				// script section for the state object.
+				script, err := sm.EvalScript(state, contract.Init(), contract, tx, block)
+				if err != nil {
+					return nil, fmt.Errorf("[STATE] Error during init script run %v", err)
+				}
+				contract.script = script
+				state.UpdateStateObject(contract)
 			} else {
-				return fmt.Errorf("[STATE] Unable to create contract")
+				return nil, fmt.Errorf("[STATE] Unable to create contract")
 			}
 		} else {
-			return fmt.Errorf("[STATE] contract create:", err)
+			return nil, fmt.Errorf("[STATE] contract creation tx:", err)
 		}
 	} else {
-		err := sm.Ethereum.TxPool().ProcessTransaction(tx, block, false)
-		contract := state.GetStateObject(tx.Recipient)
-		if err == nil && contract != nil && len(contract.Script()) > 0 {
-			sm.EvalScript(state, contract.Script(), contract, tx, block)
+		// Find the state object at the "recipient" address. If
+		// there's an object attempt to run the script.
+		stateObject := state.GetStateObject(tx.Recipient)
+		if err == nil && stateObject != nil && len(stateObject.Script()) > 0 {
+			sm.EvalScript(state, stateObject.Script(), stateObject, tx, block)
 		} else if err != nil {
-			return fmt.Errorf("[STATE] process:", err)
+			return nil, fmt.Errorf("[STATE] process:", err)
 		}
 	}
 
-	return nil
+	return totalGasUsed, nil
 }
 
 func (sm *StateManager) Process(block *Block, dontReact bool) error {
@@ -276,6 +310,14 @@ func CalculateBlockReward(block *Block, uncleLength int) *big.Int {
 	for i := 0; i < uncleLength; i++ {
 		base.Add(base, UncleInclusionReward)
 	}
+
+	lastCumulGasUsed := big.NewInt(0)
+	for _, r := range block.Receipts() {
+		usedGas := new(big.Int).Sub(r.CumulativeGasUsed, lastCumulGasUsed)
+		usedGas.Add(usedGas, r.Tx.GasPrice)
+		base.Add(base, usedGas)
+	}
+
 	return base.Add(base, BlockReward)
 }
 
@@ -307,10 +349,10 @@ func (sm *StateManager) Stop() {
 	sm.bc.Stop()
 }
 
-func (sm *StateManager) EvalScript(state *State, script []byte, object *StateObject, tx *Transaction, block *Block) {
+func (sm *StateManager) EvalScript(state *State, script []byte, object *StateObject, tx *Transaction, block *Block) (ret []byte, err error) {
 	account := state.GetAccount(tx.Sender())
 
-	err := account.ConvertGas(tx.Gas, tx.GasPrice)
+	err = account.ConvertGas(tx.Gas, tx.GasPrice)
 	if err != nil {
 		ethutil.Config.Log.Debugln(err)
 		return
@@ -327,11 +369,13 @@ func (sm *StateManager) EvalScript(state *State, script []byte, object *StateObj
 		Value:       tx.Value,
 		//Price:       tx.GasPrice,
 	})
-	closure.Call(vm, tx.Data, nil)
+	ret, err = closure.Call(vm, tx.Data, nil)
 
 	// Update the account (refunds)
 	state.UpdateStateObject(account)
 	state.UpdateStateObject(object)
+
+	return
 }
 
 func (sm *StateManager) notifyChanges(state *State) {

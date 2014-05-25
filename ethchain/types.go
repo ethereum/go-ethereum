@@ -322,3 +322,10 @@ func IsOpCode(s string) bool {
 	}
 	return false
 }
+
+func AppendScript(init, script []byte) []byte {
+	s := append(init, byte(oRETURN))
+	s = append(s, script...)
+
+	return s
+}

@@ -1,7 +1,7 @@
 package ethutil
 
 import (
-	_ "fmt"
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -26,7 +26,6 @@ func (db *MemDatabase) Delete(key []byte) error {
 	delete(db.db, string(key))
 	return nil
 }
-func (db *MemDatabase) GetKeys() []*Key     { return nil }
 func (db *MemDatabase) Print()              {}
 func (db *MemDatabase) Close()              {}
 func (db *MemDatabase) LastKnownTD() []byte { return nil }
@@ -170,4 +169,18 @@ func TestTrieIterator(t *testing.T) {
 	if lenBefore == len(trie.cache.nodes) {
 		t.Errorf("Expected cached nodes to be deleted")
 	}
+}
+
+func TestHashes(t *testing.T) {
+	_, trie := New()
+	trie.Update("cat", "dog")
+	trie.Update("ca", "dude")
+	trie.Update("doge", "1234567890abcdefghijklmnopqrstuvwxxzABCEFGHIJKLMNOPQRSTUVWXYZ")
+	trie.Update("dog", "test")
+	trie.Update("test", "1234567890abcdefghijklmnopqrstuvwxxzABCEFGHIJKLMNOPQRSTUVWXYZ")
+	fmt.Printf("%x\n", trie.Root)
+	trie.Delete("dog")
+	fmt.Printf("%x\n", trie.Root)
+	trie.Delete("test")
+	fmt.Printf("%x\n", trie.Root)
 }

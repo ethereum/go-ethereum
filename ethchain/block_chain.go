@@ -36,7 +36,7 @@ func (bc *BlockChain) Genesis() *Block {
 	return bc.genesisBlock
 }
 
-func (bc *BlockChain) NewBlock(coinbase []byte, txs []*Transaction) *Block {
+func (bc *BlockChain) NewBlock(coinbase []byte) *Block {
 	var root interface{}
 	var lastBlockTime int64
 	hash := ZeroHash256
@@ -53,8 +53,7 @@ func (bc *BlockChain) NewBlock(coinbase []byte, txs []*Transaction) *Block {
 		coinbase,
 		ethutil.BigPow(2, 32),
 		nil,
-		"",
-		txs)
+		"")
 
 	if bc.CurrentBlock != nil {
 		var mul *big.Int
@@ -272,16 +271,18 @@ func (bc *BlockChain) GetChain(hash []byte, amount int) []*Block {
 
 func AddTestNetFunds(block *Block) {
 	for _, addr := range []string{
-		"8a40bfaa73256b60764c1bf40675a99083efb075", // Gavin
-		"e6716f9544a56c530d868e4bfbacb172315bdead", // Jeffrey
-		"1e12515ce3e0f817a4ddef9ca55788a1d66bd2df", // Vit
-		"1a26338f0d905e295fccb71fa9ea849ffa12aaf4", // Alex
-		"2ef47100e0787b915105fd5e3f4ff6752079d5cb", // Maran
-		"cd2a3d9f938e13cd947ec05abc7fe734df8dd826", // Roman
+		"8a40bfaa73256b60764c1bf40675a99083efb075",
+		"e4157b34ea9615cfbde6b4fda419828124b70c78",
+		"1e12515ce3e0f817a4ddef9ca55788a1d66bd2df",
+		"6c386a4b26f73c802f34673f7248bb118f97424a",
+		"cd2a3d9f938e13cd947ec05abc7fe734df8dd826",
+		"2ef47100e0787b915105fd5e3f4ff6752079d5cb",
+		"e6716f9544a56c530d868e4bfbacb172315bdead",
+		"1a26338f0d905e295fccb71fa9ea849ffa12aaf4",
 	} {
 		codedAddr := ethutil.FromHex(addr)
 		account := block.state.GetAccount(codedAddr)
-		account.Amount = ethutil.BigPow(2, 200)
+		account.Amount = ethutil.Big("1606938044258990275541962092341162602522202993782792835301376") //ethutil.BigPow(2, 200)
 		block.state.UpdateStateObject(account)
 	}
 	log.Printf("%x\n", block.RlpEncode())

@@ -28,8 +28,7 @@ func MakeContract(tx *Transaction, state *State) *StateObject {
 		value := tx.Value
 		contract := NewContract(addr, value, ZeroHash256)
 
-		contract.script = tx.Data
-		contract.initScript = tx.Init
+		contract.initScript = tx.Data
 
 		state.UpdateStateObject(contract)
 
@@ -82,10 +81,15 @@ func (c *StateObject) SetStorage(num *big.Int, val *ethutil.Value) {
 	c.SetAddr(addr, val)
 }
 
-func (c *StateObject) GetMem(num *big.Int) *ethutil.Value {
+func (c *StateObject) GetStorage(num *big.Int) *ethutil.Value {
 	nb := ethutil.BigToBytes(num, 256)
 
 	return c.Addr(nb)
+}
+
+/* DEPRECATED */
+func (c *StateObject) GetMem(num *big.Int) *ethutil.Value {
+	return c.GetStorage(num)
 }
 
 func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
@@ -146,7 +150,7 @@ func (c *StateObject) RlpEncode() []byte {
 	if c.state != nil {
 		root = c.state.trie.Root
 	} else {
-		root = ZeroHash256
+		root = ""
 	}
 
 	return ethutil.Encode([]interface{}{c.Amount, c.Nonce, root, ethutil.Sha3Bin(c.script)})
