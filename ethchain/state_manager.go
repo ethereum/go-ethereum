@@ -120,16 +120,27 @@ func (sm *StateManager) ApplyTransactions(state *State, block *Block, txs []*Tra
 }
 
 func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transaction) (*big.Int, error) {
-	// If there's no recipient, it's a contract
-	// Check if this is a contract creation traction and if so
-	// create a contract of this tx.
-	// TODO COMMENT THIS SECTION
+	/*
+		Applies transactions to the given state and creates new
+		state objects where needed.
+
+		If said objects needs to be created
+		run the initialization script provided by the transaction and
+		assume there's a return value. The return value will be set to
+		the script section of the state object.
+	*/
 	totalGasUsed := big.NewInt(0)
-	if tx.IsContract() {
-		err := sm.Ethereum.TxPool().ProcessTransaction(tx, state, false)
+	// Apply the transaction to the current state
+	err := sm.Ethereum.TxPool().ProcessTransaction(tx, state, false)
+	if tx.CreatesContract() {
 		if err == nil {
+			// Create a new state object and the transaction
+			// as it's data provider.
 			contract := sm.MakeStateObject(state, tx)
 			if contract != nil {
+				// Evaluate the initialization script
+				// and use the return value as the
+				// script section for the state object.
 				script, err := sm.EvalScript(state, contract.Init(), contract, tx, block)
 				if err != nil {
 					return nil, fmt.Errorf("[STATE] Error during init script run %v", err)
@@ -143,10 +154,11 @@ func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transac
 			return nil, fmt.Errorf("[STATE] contract creation tx:", err)
 		}
 	} else {
-		err := sm.Ethereum.TxPool().ProcessTransaction(tx, state, false)
-		contract := state.GetStateObject(tx.Recipient)
-		if err == nil && contract != nil && len(contract.Script()) > 0 {
-			sm.EvalScript(state, contract.Script(), contract, tx, block)
+		// Find the state object at the "recipient" address. If
+		// there's an object attempt to run the script.
+		stateObject := state.GetStateObject(tx.Recipient)
+		if err == nil && stateObject != nil && len(stateObject.Script()) > 0 {
+			sm.EvalScript(state, stateObject.Script(), stateObject, tx, block)
 		} else if err != nil {
 			return nil, fmt.Errorf("[STATE] process:", err)
 		}

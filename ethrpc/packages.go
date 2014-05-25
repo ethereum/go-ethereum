@@ -137,7 +137,7 @@ func (p *EthereumApi) Create(args *NewTxArgs, reply *string) error {
 	if err != nil {
 		return err
 	}
-	result, _ := p.ethp.Create(p.ethp.GetKey().PrivateKey, args.Value, args.Gas, args.GasPrice, args.Init, args.Body)
+	result, _ := p.ethp.Create(p.ethp.GetKey().PrivateKey, args.Value, args.Gas, args.GasPrice, args.Body)
 	*reply = NewSuccessRes(result)
 	return nil
 }

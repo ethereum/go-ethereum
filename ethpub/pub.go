@@ -87,14 +87,14 @@ func (lib *PEthereum) SecretToAddress(key string) string {
 }
 
 func (lib *PEthereum) Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr string) (*PReceipt, error) {
-	return lib.createTx(key, recipient, valueStr, gasStr, gasPriceStr, dataStr, "")
+	return lib.createTx(key, recipient, valueStr, gasStr, gasPriceStr, dataStr)
 }
 
-func (lib *PEthereum) Create(key, valueStr, gasStr, gasPriceStr, initStr, bodyStr string) (*PReceipt, error) {
-	return lib.createTx(key, "", valueStr, gasStr, gasPriceStr, initStr, bodyStr)
+func (lib *PEthereum) Create(key, valueStr, gasStr, gasPriceStr, script string) (*PReceipt, error) {
+	return lib.createTx(key, "", valueStr, gasStr, gasPriceStr, script)
 }
 
-func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, initStr, scriptStr string) (*PReceipt, error) {
+func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, scriptStr string) (*PReceipt, error) {
 	var hash []byte
 	var contractCreation bool
 	if len(recipient) == 0 {
@@ -121,35 +121,47 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, in
 	var tx *ethchain.Transaction
 	// Compile and assemble the given data
 	if contractCreation {
-		var initScript, mainScript []byte
+		/*
+			var initScript, mainScript []byte
+			var err error
+			if ethutil.IsHex(initStr) {
+				initScript = ethutil.FromHex(initStr[2:])
+			} else {
+				initScript, err = ethutil.Compile(initStr)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			if ethutil.IsHex(scriptStr) {
+				mainScript = ethutil.FromHex(scriptStr[2:])
+			} else {
+				mainScript, err = ethutil.Compile(scriptStr)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			script := ethchain.AppendScript(initScript, mainScript)
+		*/
+		var script []byte
 		var err error
-		if ethutil.IsHex(initStr) {
-			initScript = ethutil.FromHex(initStr[2:])
-		} else {
-			initScript, err = ethutil.Compile(initStr)
-			if err != nil {
-				return nil, err
-			}
-		}
-
 		if ethutil.IsHex(scriptStr) {
-			mainScript = ethutil.FromHex(scriptStr[2:])
+			script = ethutil.FromHex(scriptStr)
 		} else {
-			mainScript, err = ethutil.Compile(scriptStr)
+			script, err = ethutil.Compile(scriptStr)
 			if err != nil {
 				return nil, err
 			}
 		}
-
-		script := ethchain.AppendScript(initScript, mainScript)
 
 		tx = ethchain.NewContractCreationTx(value, gas, gasPrice, script)
 	} else {
 		// Just in case it was submitted as a 0x prefixed string
-		if len(initStr) > 0 && initStr[0:2] == "0x" {
-			initStr = initStr[2:len(initStr)]
+		if len(scriptStr) > 0 && scriptStr[0:2] == "0x" {
+			scriptStr = scriptStr[2:len(scriptStr)]
 		}
-		tx = ethchain.NewTransactionMessage(hash, value, gas, gasPrice, ethutil.FromHex(initStr))
+		tx = ethchain.NewTransactionMessage(hash, value, gas, gasPrice, ethutil.FromHex(scriptStr))
 	}
 
 	acc := lib.stateManager.TransState().GetStateObject(keyPair.Address())

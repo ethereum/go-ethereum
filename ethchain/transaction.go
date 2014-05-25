@@ -57,8 +57,13 @@ func (tx *Transaction) Hash() []byte {
 	return ethutil.Sha3Bin(ethutil.NewValue(data).Encode())
 }
 
-func (tx *Transaction) IsContract() bool {
+func (tx *Transaction) CreatesContract() bool {
 	return tx.contractCreation
+}
+
+/* Depricated */
+func (tx *Transaction) IsContract() bool {
+	return tx.CreatesContract()
 }
 
 func (tx *Transaction) CreationAddress() []byte {
@@ -139,6 +144,9 @@ func (tx *Transaction) RlpValueDecode(decoder *ethutil.Value) {
 	tx.v = byte(decoder.Get(6).Uint())
 	tx.r = decoder.Get(7).Bytes()
 	tx.s = decoder.Get(8).Bytes()
+	if len(tx.Recipient) == 0 {
+		tx.contractCreation = true
+	}
 
 	/*
 		// If the list is of length 10 it's a contract creation tx
@@ -173,7 +181,7 @@ func (tx *Transaction) String() string {
 	S:        0x%x
 	`,
 		tx.Hash(),
-		len(tx.Recipient) == 1,
+		len(tx.Recipient) == 0,
 		tx.Sender(),
 		tx.Recipient,
 		tx.Nonce,
