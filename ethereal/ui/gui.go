@@ -151,7 +151,15 @@ func (gui *Gui) readPreviousTransactions() {
 	for it.Next() {
 		tx := ethchain.NewTransactionFromBytes(it.Value())
 
-		gui.win.Root().Call("addTx", ethpub.NewPTx(tx))
+		var inout string
+		if bytes.Compare(tx.Sender(), gui.addr) == 0 {
+			inout = "send"
+		} else {
+			inout = "recv"
+		}
+
+		gui.win.Root().Call("addTx", ethpub.NewPTx(tx), inout)
+
 	}
 	it.Release()
 }
@@ -207,12 +215,12 @@ func (gui *Gui) update() {
 				object := state.GetAccount(gui.addr)
 
 				if bytes.Compare(tx.Sender(), gui.addr) == 0 {
-					gui.win.Root().Call("addTx", ethpub.NewPTx(tx))
+					gui.win.Root().Call("addTx", ethpub.NewPTx(tx), "send")
 					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 
 					unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
 				} else if bytes.Compare(tx.Recipient, gui.addr) == 0 {
-					gui.win.Root().Call("addTx", ethpub.NewPTx(tx))
+					gui.win.Root().Call("addTx", ethpub.NewPTx(tx), "recv")
 					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 
 					unconfirmedFunds.Add(unconfirmedFunds, tx.Value)
@@ -260,8 +268,6 @@ func (gui *Gui) Transact(recipient, value, gas, gasPrice, data string) (*ethpub.
 
 func (gui *Gui) Create(recipient, value, gas, gasPrice, data string) (*ethpub.PReceipt, error) {
 	keyPair := ethutil.GetKeyRing().Get(0)
-
-	//mainInput, initInput := mutan.PreParse(data)
 
 	return gui.pub.Create(ethutil.Hex(keyPair.PrivateKey), value, gas, gasPrice, data)
 }
