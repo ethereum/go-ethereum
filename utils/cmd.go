@@ -19,6 +19,8 @@ func DoRpc(ethereum *eth.Ethereum, RpcPort int) {
 	}
 }
 
+var miner ethminer.Miner
+
 func DoMining(ethereum *eth.Ethereum) {
 	// Set Mining status
 	ethereum.Mining = true
@@ -31,17 +33,37 @@ func DoMining(ethereum *eth.Ethereum) {
 	addr := keyPair.Address()
 
 	go func() {
+		ethutil.Config.Log.Infoln("Miner started")
+
+		miner = ethminer.NewDefaultMiner(addr, ethereum)
+
 		// Give it some time to connect with peers
 		time.Sleep(3 * time.Second)
 
-		/*
-			for ethereum.IsUpToDate() == false {
-				time.Sleep(5 * time.Second)
-			}
-		*/
-		ethutil.Config.Log.Infoln("Miner started")
-
-		miner := ethminer.NewDefaultMiner(addr, ethereum)
 		miner.Start()
 	}()
+}
+
+func StopMining(ethereum *eth.Ethereum) bool {
+	if ethereum.Mining {
+		miner.Stop()
+
+		ethutil.Config.Log.Infoln("Miner stopped")
+
+		ethereum.Mining = false
+
+		return true
+	}
+
+	return false
+}
+
+func StartMining(ethereum *eth.Ethereum) bool {
+	if !ethereum.Mining {
+		DoMining(ethereum)
+
+		return true
+	}
+
+	return false
 }

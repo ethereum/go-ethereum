@@ -135,7 +135,7 @@ func (ui *UiLib) DebugTx(recipient, valueStr, gasStr, gasPriceStr, data string) 
 	for _, str := range dis {
 		ui.win.Root().Call("setAsm", str)
 	}
-	callerTx := ethchain.NewContractCreationTx(ethutil.Big(valueStr), ethutil.Big(gasStr), ethutil.Big(gasPriceStr), callerScript, nil)
+	callerTx := ethchain.NewContractCreationTx(ethutil.Big(valueStr), ethutil.Big(gasStr), ethutil.Big(gasPriceStr), nil)
 
 	// Contract addr as test address
 	keyPair := ethutil.GetKeyRing().Get(0)

@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/go-ethereum/utils"
 	"github.com/obscuren/otto"
 	"io/ioutil"
 	"os"
@@ -116,14 +117,26 @@ func (self *JSRE) initStdFuncs() {
 	eth.Set("watch", self.watch)
 	eth.Set("addPeer", self.addPeer)
 	eth.Set("require", self.require)
+	eth.Set("stopMining", self.stopMining)
+	eth.Set("startMining", self.startMining)
 }
 
 /*
  * The following methods are natively implemented javascript functions
  */
 
+func (self *JSRE) stopMining(call otto.FunctionCall) otto.Value {
+	v, _ := self.vm.ToValue(utils.StopMining(self.ethereum))
+	return v
+}
+
+func (self *JSRE) startMining(call otto.FunctionCall) otto.Value {
+	v, _ := self.vm.ToValue(utils.StartMining(self.ethereum))
+	return v
+}
+
 // eth.watch
-func (self JSRE) watch(call otto.FunctionCall) otto.Value {
+func (self *JSRE) watch(call otto.FunctionCall) otto.Value {
 	addr, _ := call.Argument(0).ToString()
 	var storageAddr string
 	var cb otto.Value

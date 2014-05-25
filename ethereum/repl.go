@@ -48,13 +48,22 @@ func (self *JSRepl) parseInput(code string) {
 
 // The JSEthereum object attempts to wrap the PEthereum object and returns
 // meaningful javascript objects
+type JSBlock struct {
+	*ethpub.PBlock
+	eth *JSEthereum
+}
+
+func (self *JSBlock) GetTransaction(hash string) otto.Value {
+	return self.eth.toVal(self.PBlock.GetTransaction(hash))
+}
+
 type JSEthereum struct {
 	*ethpub.PEthereum
 	vm *otto.Otto
 }
 
 func (self *JSEthereum) GetBlock(hash string) otto.Value {
-	return self.toVal(self.PEthereum.GetBlock(hash))
+	return self.toVal(&JSBlock{self.PEthereum.GetBlock(hash), self})
 }
 
 func (self *JSEthereum) GetKey() otto.Value {
@@ -76,8 +85,8 @@ func (self *JSEthereum) Transact(key, recipient, valueStr, gasStr, gasPriceStr, 
 	return self.toVal(r)
 }
 
-func (self *JSEthereum) Create(key, valueStr, gasStr, gasPriceStr, initStr, bodyStr string) otto.Value {
-	r, err := self.PEthereum.Create(key, valueStr, gasStr, gasPriceStr, initStr, bodyStr)
+func (self *JSEthereum) Create(key, valueStr, gasStr, gasPriceStr, scriptStr string) otto.Value {
+	r, err := self.PEthereum.Create(key, valueStr, gasStr, gasPriceStr, scriptStr)
 
 	if err != nil {
 		fmt.Println(err)
