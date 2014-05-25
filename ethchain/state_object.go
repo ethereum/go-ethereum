@@ -81,10 +81,15 @@ func (c *StateObject) SetStorage(num *big.Int, val *ethutil.Value) {
 	c.SetAddr(addr, val)
 }
 
-func (c *StateObject) GetMem(num *big.Int) *ethutil.Value {
+func (c *StateObject) GetStorage(num *big.Int) *ethutil.Value {
 	nb := ethutil.BigToBytes(num, 256)
 
 	return c.Addr(nb)
+}
+
+/* DEPRECATED */
+func (c *StateObject) GetMem(num *big.Int) *ethutil.Value {
+	return c.GetStorage(num)
 }
 
 func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {

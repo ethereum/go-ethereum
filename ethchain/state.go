@@ -99,7 +99,21 @@ func (s *State) Cmp(other *State) bool {
 }
 
 func (s *State) Copy() *State {
-	return NewState(s.trie.Copy())
+	state := NewState(s.trie.Copy())
+	for k, subState := range s.states {
+		state.states[k] = subState.Copy()
+	}
+
+	return state
+}
+
+func (s *State) Snapshot() *State {
+	return s.Copy()
+}
+
+func (s *State) Revert(snapshot *State) {
+	s.trie = snapshot.trie
+	s.states = snapshot.states
 }
 
 func (s *State) Put(key, object []byte) {
