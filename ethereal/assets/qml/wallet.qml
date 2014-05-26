@@ -65,6 +65,7 @@ ApplicationWindow {
 	}
 
 	function setView(view) {
+		console.log("Setting view")
 		networkView.visible = false
 		historyView.visible = false
 		newTxView.visible = false
@@ -203,16 +204,14 @@ ApplicationWindow {
 					anchors.bottom: logView.top
 					TableViewColumn{ role: "number" ; title: "#" ; width: 100 }
 					TableViewColumn{ role: "hash" ; title: "Hash" ; width: 560 }
+					TableViewColumn{ role: "txAmount" ; title: "Tx amount" ; width: 100 }
 
 					model: blockModel
 
-					/*
-					 onDoubleClicked: {
-						 popup.visible = true
-						 popup.block = eth.getBlock(blockModel.get(row).hash)
-						 popup.hashLabel.text = popup.block.hash
-					 }
-					 */
+					onDoubleClicked: {
+						popup.visible = true
+						popup.setDetails(blockModel.get(row))
+					}
 				}
 
 				property var logModel: ListModel {
@@ -340,10 +339,107 @@ ApplicationWindow {
 		id: popup
 		visible: false
 		property var block
-		Label {
-			id: hashLabel
-			anchors.horizontalCenter: parent.horizontalCenter
-			anchors.verticalCenter: parent.verticalCenter
+		width: 800
+		height: 230
+		x: root.x
+		y: root.y + root.height
+		Component{
+			id: blockDetailsDelegate
+			Rectangle {
+				color: "#252525"
+				width: popup.width
+				height: 200
+				Column {
+					anchors.leftMargin: 10
+					anchors.topMargin: 5
+					anchors.top: parent.top
+					anchors.left: parent.left
+					Text { text: '<h3>Block details</h3>'; color: "#F2F2F2"}
+					Text { text: '<b>Block number:</b> ' + number; color: "#F2F2F2"}
+					Text { text: '<b>Hash:</b> ' + hash; color: "#F2F2F2"}
+					Text { text: '<b>Block found at:</b> ' + prettyTime; color: "#F2F2F2"}
+				}
+		}
+	}
+		ListView {
+			model: singleBlock
+			delegate: blockDetailsDelegate
+			anchors.top: parent.top
+			height: 70
+			anchors.leftMargin: 20
+			id: listViewThing
+			Layout.maximumHeight: 40
+		}
+		TableView {
+			id: txView
+			anchors.top: listViewThing.bottom
+			anchors.topMargin: 50
+			width: parent.width
+
+			TableViewColumn{width: 90; role: "value" ; title: "Value" }
+			TableViewColumn{width: 200; role: "hash" ; title: "Hash" }
+			TableViewColumn{width: 200; role: "sender" ; title: "Sender" }
+			TableViewColumn{width: 200;role: "address" ; title: "Receiver" }
+			TableViewColumn{width: 60; role: "gas" ; title: "Gas" }
+			TableViewColumn{width: 60; role: "gasPrice" ; title: "Gas Price" }
+			TableViewColumn{width: 60; role: "isContract" ; title: "Contract" }
+
+			model: transactionModel
+			onClicked: {
+				var tx = transactionModel.get(row)
+				if(tx.data) {
+					popup.showContractData(tx.data)
+				}else{
+					popup.height = 230
+				}
+			}
+		}
+		function showContractData(data) {
+			contractData.text = data
+			popup.height = 400
+		}
+		Rectangle {
+			width: popup.width
+			height: 200
+			anchors.left: listViewThing.left
+			anchors.top: txView.bottom
+			Label {
+				text: "<h4>Contract data</h4>"
+				anchors.top: parent.top
+				anchors.left: parent.left
+				id: contractLabel
+				anchors.leftMargin: 10
+			}
+			TextArea {
+				id: contractData
+				text: "Contract"
+				anchors.top: contractLabel.bottom
+				anchors.left: parent.left
+				wrapMode: Text.Wrap
+				width: parent.width - 30
+				height: 80
+				anchors.leftMargin: 10
+			}
+		}
+		property var transactionModel: ListModel {
+			id: transactionModel
+		}
+		property var singleBlock: ListModel {
+			id: singleBlock
+		}
+		function setDetails(block){
+			singleBlock.set(0,block)
+			popup.height = 230
+			transactionModel.clear()
+			if(block.txs != undefined){
+				for(var i = 0; i < block.txs.count; ++i) {
+					transactionModel.insert(0, block.txs.get(i))
+				}
+				if(block.txs.get(0).data){
+					popup.showContractData(block.txs.get(0).data)
+				}
+			}
+			txView.forceActiveFocus()
 		}
 	}
 
@@ -474,7 +570,7 @@ ApplicationWindow {
               }
               height: parent.height/2
               width: parent.width
-              TableViewColumn{ role: "value" ; title: "Stack" ; width: parent.width }
+              TableViewColumn{ role: "value" ; title: "Stack"}
               model: stackModel
             }
           }
@@ -535,7 +631,12 @@ ApplicationWindow {
 	}
 
 	function addBlock(block) {
-		blockModel.insert(0, {number: block.number, hash: block.hash})
+		var objtt = JSON.parse(block.transactions);
+		var amount = 0
+		if(objtt != null){
+			amount = objtt.length
+		}
+		blockModel.insert(0, {number: block.number, hash: block.hash, txs: objtt, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
 	}
 
 	function addLog(str) {
@@ -546,5 +647,17 @@ ApplicationWindow {
 
 	function setPeers(text) {
 		peerLabel.text = text
+	}
+	function convertToPretty(unixTs){
+		var a = new Date(unixTs*1000);
+		var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+		var year = a.getFullYear();
+		var month = months[a.getMonth()];
+		var date = a.getDate();
+		var hour = a.getHours();
+		var min = a.getMinutes();
+		var sec = a.getSeconds();
+		var time = date+' '+month+' '+year+' '+hour+':'+min+':'+sec ;
+		return time;
 	}
 }

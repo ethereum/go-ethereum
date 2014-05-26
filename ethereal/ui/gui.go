@@ -136,14 +136,20 @@ func (gui *Gui) createWindow(comp qml.Object) *qml.Window {
 
 	return gui.win
 }
-
-func (gui *Gui) setInitialBlockChain() {
-	// Load previous 10 blocks
-	chain := gui.eth.BlockChain().GetChain(gui.eth.BlockChain().CurrentBlock.Hash(), 10)
-	for _, block := range chain {
-		gui.processBlock(block)
+func (gui *Gui) recursiveAdd(sBlk []byte) {
+	blk := gui.eth.BlockChain().GetBlock(sBlk)
+	if blk != nil {
+		//ethutil.Config.Log.Infoln("Adding block", blk)
+		gui.processBlock(blk)
+		gui.recursiveAdd(blk.PrevHash)
+		return
+	} else {
+		//ethutil.Config.Log.Debugln("At Genesis, added all blocks to GUI")
 	}
-
+	return
+}
+func (gui *Gui) setInitialBlockChain() {
+	gui.recursiveAdd(gui.eth.BlockChain().LastBlockHash)
 }
 
 func (gui *Gui) readPreviousTransactions() {
