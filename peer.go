@@ -531,13 +531,16 @@ func (p *Peer) Stop() {
 }
 
 func (p *Peer) pushHandshake() error {
-	pubkey := ethutil.GetKeyRing().Get(0).PublicKey
+	keyRing := ethutil.GetKeyRing().Get(0)
+	if keyRing != nil {
+		pubkey := keyRing.PublicKey
 
-	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-		uint32(ProtocolVersion), uint32(0), p.Version, byte(p.caps), p.port, pubkey[1:],
-	})
+		msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
+			uint32(ProtocolVersion), uint32(0), p.Version, byte(p.caps), p.port, pubkey[1:],
+		})
 
-	p.QueueMessage(msg)
+		p.QueueMessage(msg)
+	}
 
 	return nil
 }
