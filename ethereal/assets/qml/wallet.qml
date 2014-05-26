@@ -86,7 +86,6 @@ ApplicationWindow {
 			//color: "#D9DDE7"
 			color: "#252525"
 
-
 			ColumnLayout {
 				y: 50
 				anchors.left: parent.left
@@ -156,6 +155,7 @@ ApplicationWindow {
 				TableView {
 					id: txTableView
 					anchors.fill: parent
+					TableViewColumn{ role: "inout" ; title: "" ; width: 40 }
 					TableViewColumn{ role: "value" ; title: "Value" ; width: 100 }
 					TableViewColumn{ role: "address" ; title: "Address" ; width: 430 }
 					TableViewColumn{ role: "contract" ; title: "Contract" ; width: 100 }
@@ -405,7 +405,7 @@ ApplicationWindow {
 			anchors.left: aboutIcon.right
 			anchors.leftMargin: 10
 			font.pointSize: 12
-			text: "<h2>Ethereal</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Maran Hidskes<br><h3>Binary Distribution</h3>Jarrad Hope<br>"
+			text: "<h2>Ethereal</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Maran Hidskes<br>"
 		}
 
 	}
@@ -430,7 +430,6 @@ ApplicationWindow {
 			}
 		}
 		SplitView {
-
 			anchors.fill: parent
 			property var asmModel: ListModel {
 				id: asmModel
@@ -525,14 +524,14 @@ ApplicationWindow {
 		walletValueLabel.text = value
 	}
 
-	function addTx(tx) {
+	function addTx(tx, inout) {
 		var isContract
 		if (tx.contract == true){
 			isContract = "Yes"
 		}else{
 			isContract = "No"
 		}
-		txModel.insert(0, {hash: tx.hash, address: tx.address, value: tx.value, contract: isContract})
+		txModel.insert(0, {inout: inout, hash: tx.hash, address: tx.address, value: tx.value, contract: isContract})
 	}
 
 	function addBlock(block) {
