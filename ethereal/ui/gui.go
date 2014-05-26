@@ -130,7 +130,7 @@ func (gui *Gui) createWindow(comp qml.Object) *qml.Window {
 	gui.win = win
 	gui.uiLib.win = win
 
-	db := &Debugger{gui.win, make(chan bool)}
+	db := &Debugger{gui.win, make(chan bool), true}
 	gui.lib.Db = db
 	gui.uiLib.Db = db
 

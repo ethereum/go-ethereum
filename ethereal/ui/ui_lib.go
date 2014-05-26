@@ -6,9 +6,7 @@ import (
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
-	"github.com/obscuren/mutan"
 	"os"
 	"path"
 	"path/filepath"
@@ -121,27 +119,28 @@ func DefaultAssetPath() string {
 func (ui *UiLib) DebugTx(recipient, valueStr, gasStr, gasPriceStr, data string) {
 	state := ui.eth.BlockChain().CurrentBlock.State()
 
-	mainInput, _ := mutan.PreParse(data)
-	callerScript, err := utils.Compile(mainInput)
+	script, err := ethutil.Compile(data)
 	if err != nil {
 		ethutil.Config.Log.Debugln(err)
 
 		return
 	}
 
-	dis := ethchain.Disassemble(callerScript)
+	dis := ethchain.Disassemble(script)
 	ui.win.Root().Call("clearAsm")
 
 	for _, str := range dis {
 		ui.win.Root().Call("setAsm", str)
 	}
-	callerTx := ethchain.NewContractCreationTx(ethutil.Big(valueStr), ethutil.Big(gasStr), ethutil.Big(gasPriceStr), nil)
-
 	// Contract addr as test address
 	keyPair := ethutil.GetKeyRing().Get(0)
+	callerTx :=
+		ethchain.NewContractCreationTx(ethutil.Big(valueStr), ethutil.Big(gasStr), ethutil.Big(gasPriceStr), script)
+	callerTx.Sign(keyPair.PrivateKey)
+
 	account := ui.eth.StateManager().TransState().GetStateObject(keyPair.Address())
-	c := ethchain.MakeContract(callerTx, state)
-	callerClosure := ethchain.NewClosure(account, c, c.Script(), state, ethutil.Big(gasStr), ethutil.Big(gasPriceStr))
+	contract := ethchain.MakeContract(callerTx, state)
+	callerClosure := ethchain.NewClosure(account, contract, contract.Init(), state, ethutil.Big(gasStr), ethutil.Big(gasPriceStr))
 
 	block := ui.eth.BlockChain().CurrentBlock
 	vm := ethchain.NewVm(state, ui.eth.StateManager(), ethchain.RuntimeVars{
@@ -151,23 +150,28 @@ func (ui *UiLib) DebugTx(recipient, valueStr, gasStr, gasPriceStr, data string) 
 		Coinbase:    block.Coinbase,
 		Time:        block.Time,
 		Diff:        block.Difficulty,
-		TxData:      nil,
 	})
 
+	ui.Db.done = false
 	go func() {
-		callerClosure.Call(vm, nil, ui.Db.halting)
+		callerClosure.Call(vm, contract.Init(), ui.Db.halting)
 
 		state.Reset()
+
+		ui.Db.done = true
 	}()
 }
 
 func (ui *UiLib) Next() {
-	ui.Db.Next()
+	if !ui.Db.done {
+		ui.Db.Next()
+	}
 }
 
 type Debugger struct {
-	win *qml.Window
-	N   chan bool
+	win  *qml.Window
+	N    chan bool
+	done bool
 }
 
 func (d *Debugger) halting(pc int, op ethchain.OpCode, mem *ethchain.Memory, stack *ethchain.Stack) {
