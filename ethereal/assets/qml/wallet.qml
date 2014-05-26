@@ -65,7 +65,6 @@ ApplicationWindow {
 	}
 
 	function setView(view) {
-		console.log("Setting view")
 		networkView.visible = false
 		historyView.visible = false
 		newTxView.visible = false
