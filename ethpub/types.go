@@ -23,17 +23,18 @@ func NewPBlock(block *ethchain.Block) *PBlock {
 	if block == nil {
 		return nil
 	}
+
 	var ptxs []PTx
 	for _, tx := range block.Transactions() {
 		ptxs = append(ptxs, *NewPTx(tx))
 	}
 
-	b, err := json.Marshal(ptxs)
+	txJson, err := json.Marshal(ptxs)
 	if err != nil {
 		return nil
 	}
 
-	return &PBlock{ref: block, Number: int(block.Number.Uint64()), Hash: ethutil.Hex(block.Hash()), Transactions: string(b), Time: block.Time}
+	return &PBlock{ref: block, Number: int(block.Number.Uint64()), Hash: ethutil.Hex(block.Hash()), Transactions: string(txJson), Time: block.Time}
 }
 
 func (self *PBlock) ToString() string {
