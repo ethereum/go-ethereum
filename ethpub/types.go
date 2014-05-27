@@ -71,9 +71,11 @@ func NewPTx(tx *ethchain.Transaction) *PTx {
 	hash := hex.EncodeToString(tx.Hash())
 	receiver := hex.EncodeToString(tx.Recipient)
 	sender := hex.EncodeToString(tx.Sender())
+	data := strings.Join(ethchain.Disassemble(tx.Data), "\n")
+
 	isContract := len(tx.Data) > 0
 
-	return &PTx{ref: tx, Hash: hash, Value: ethutil.CurrencyToString(tx.Value), Address: receiver, Contract: isContract, Gas: tx.Gas.String(), GasPrice: tx.GasPrice.String(), Data: hex.EncodeToString(tx.Data), Sender: sender}
+	return &PTx{ref: tx, Hash: hash, Value: ethutil.CurrencyToString(tx.Value), Address: receiver, Contract: isContract, Gas: tx.Gas.String(), GasPrice: tx.GasPrice.String(), Data: data, Sender: sender}
 }
 
 func (self *PTx) ToString() string {
