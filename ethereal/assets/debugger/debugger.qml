@@ -8,7 +8,7 @@ import Ethereum 1.0
 
 ApplicationWindow {
     visible: false
-    title: "Debugger"
+    title: "IceCream"
     minimumWidth: 1280
     minimumHeight: 900
     width: 1290
@@ -58,9 +58,10 @@ ApplicationWindow {
                         anchors.bottom: parent.bottom
 
                         Label {
-                            text: "Data"
+                            text: "Arbitrary data"
                         }
                         TextArea {
+                            id: rawDataField
                             anchors.left: parent.left
                             anchors.right: parent.right
                             height: 150
@@ -105,7 +106,7 @@ ApplicationWindow {
 
                     SplitView {
                         orientation: Qt.Horizontal
-                        height: 300
+                        height: 250
 
                         TableView {
                             id: stackTableView
@@ -149,16 +150,15 @@ ApplicationWindow {
             }
         }
     }
-    statusBar: StatusBar {
+    toolBar: ToolBar {
         RowLayout {
             spacing: 5
-            anchors.fill: parent
 
             Button {
                 property var enabled: true
                 id: debugStart
                 onClicked: {
-                    dbg.debug(txValue.text, txGas.text, txGasPrice.text, codeEditor.text)
+                    dbg.debug(txValue.text, txGas.text, txGasPrice.text, codeEditor.text, rawDataField.text)
                 }
                 text: "Debug"
             }

@@ -5,6 +5,8 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/go-qml/qml"
+	"math/big"
+	"strings"
 )
 
 type DebuggerWindow struct {
@@ -39,9 +41,33 @@ func (self *DebuggerWindow) Show() {
 	}()
 }
 
-func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, data string) {
+func formatData(data string) []byte {
+	if len(data) == 0 {
+		return nil
+	}
+	// Simple stupid
+	d := new(big.Int)
+	if data[0:1] == "\"" && data[len(data)-1:] == "\"" {
+		d.SetBytes([]byte(data[1 : len(data)-1]))
+	} else if data[:2] == "0x" {
+		d.SetBytes(ethutil.FromHex(data[2:]))
+	} else {
+		d.SetString(data, 0)
+	}
+
+	return ethutil.BigToBytes(d, 256)
+}
+
+func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, dataStr string) {
 	if !self.Db.done {
 		self.Db.Q <- true
+	}
+
+	dataSlice := strings.Split(dataStr, "\n")
+	var data []byte
+	for _, dataItem := range dataSlice {
+		d := formatData(dataItem)
+		data = append(data, d...)
 	}
 
 	state := self.lib.eth.BlockChain().CurrentBlock.State()
@@ -52,7 +78,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, data string) {
 		}
 	}()
 
-	script, err := ethutil.Compile(data)
+	script, err := ethutil.Compile(scriptStr)
 	if err != nil {
 		ethutil.Config.Log.Debugln(err)
 
@@ -72,7 +98,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, data string) {
 
 	account := self.lib.eth.StateManager().TransState().GetAccount(keyPair.Address())
 	contract := ethchain.MakeContract(callerTx, state)
-	callerClosure := ethchain.NewClosure(account, contract, contract.Init(), state, ethutil.Big(gasStr), ethutil.Big(gasPriceStr))
+	callerClosure := ethchain.NewClosure(account, contract, script, state, ethutil.Big(gasStr), ethutil.Big(gasPriceStr))
 
 	block := self.lib.eth.BlockChain().CurrentBlock
 	vm := ethchain.NewVm(state, self.lib.eth.StateManager(), ethchain.RuntimeVars{
@@ -86,7 +112,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, data string) {
 
 	self.Db.done = false
 	go func() {
-		callerClosure.Call(vm, contract.Init(), self.Db.halting)
+		callerClosure.Call(vm, data, self.Db.halting)
 
 		state.Reset()
 

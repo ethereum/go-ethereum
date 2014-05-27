@@ -123,7 +123,7 @@ ApplicationWindow {
 				}
 
 				Image {
-					source: ui.assetPath("net.png")
+					source: ui.assetPath("heart.png")
 					anchors.horizontalCenter: parent.horizontalCenter
 					MouseArea {
 						anchors.fill: parent
@@ -284,27 +284,14 @@ ApplicationWindow {
 		title: "Open QML Application"
 		onAccepted: {
 			//ui.open(openAppDialog.fileUrl.toString())
-      //ui.openHtml(Qt.resolvedUrl(ui.assetPath("test.html")))
-      ui.openHtml(openAppDialog.fileUrl.toString())
-
+			//ui.openHtml(Qt.resolvedUrl(ui.assetPath("test.html")))
+			ui.openHtml(openAppDialog.fileUrl.toString())
 		}
 	}
 
 	statusBar: StatusBar {
 		RowLayout {
 			anchors.fill: parent
-			/*
-			Button {
-				property var enabled: true
-				id: connectButton
-				onClicked: {
-					if(this.enabled) {
-						ui.connect(this)
-					}
-				}
-				text: "Connect"
-			}
-			*/
 
 			Button {
 				property var enabled: true
@@ -369,8 +356,8 @@ ApplicationWindow {
 					Text { text: '<b>Hash:</b> ' + hash; color: "#F2F2F2"}
 					Text { text: '<b>Block found at:</b> ' + prettyTime; color: "#F2F2F2"}
 				}
+			}
 		}
-	}
 		ListView {
 			model: singleBlock
 			delegate: blockDetailsDelegate
