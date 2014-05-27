@@ -14,6 +14,23 @@ ApplicationWindow {
     width: 1290
     height: 900
 
+	MenuBar {
+		Menu {
+			title: "Debugger"
+			MenuItem {
+				text: "Run"
+				shortcut: "Ctrl+r"
+				onTriggered: debugCurrent()
+			}
+
+			MenuItem {
+				text: "Next"
+				shortcut: "Ctrl+n"
+				onTriggered: dbg.next()
+			}
+		}
+    }
+
     SplitView {
         anchors.fill: parent
         property var asmModel: ListModel {
@@ -158,7 +175,7 @@ ApplicationWindow {
                 property var enabled: true
                 id: debugStart
                 onClicked: {
-                    dbg.debug(txValue.text, txGas.text, txGasPrice.text, codeEditor.text, rawDataField.text)
+                    debugCurrent()
                 }
                 text: "Debug"
             }
@@ -172,6 +189,10 @@ ApplicationWindow {
                 text: "Next"
             }
         }
+    }
+
+    function debugCurrent() {
+        dbg.debug(txValue.text, txGas.text, txGasPrice.text, codeEditor.text, rawDataField.text)
     }
 
     function setAsm(asm) {
