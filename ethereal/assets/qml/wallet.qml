@@ -643,12 +643,12 @@ ApplicationWindow {
 	}
 
 	function addBlock(block) {
-		var objtt = JSON.parse(block.transactions);
+		var txs = JSON.parse(block.transactions);
 		var amount = 0
-		if(objtt != null){
-			amount = objtt.length
+		if(txs != null){
+			amount = txs.length
 		}
-		blockModel.insert(0, {number: block.number, hash: block.hash, txs: objtt, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
+		blockModel.insert(0, {number: block.number, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
 	}
 
 	function addLog(str) {
