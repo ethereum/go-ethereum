@@ -543,7 +543,9 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		pc.Add(pc, ethutil.Big1)
 
 		if hook != nil {
-			hook(step-1, op, mem, stack, closure.Object())
+			if !hook(step-1, op, mem, stack, closure.Object()) {
+				return nil, nil
+			}
 		}
 	}
 }
