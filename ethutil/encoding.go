@@ -59,3 +59,18 @@ func CompactHexDecode(str string) []int {
 
 	return hexSlice
 }
+
+func DecodeCompact(key []int) string {
+	base := "0123456789abcdef"
+	var str string
+
+	for _, v := range key {
+		if v < 16 {
+			str += string(base[v])
+		}
+	}
+
+	res, _ := hex.DecodeString(str)
+
+	return string(res)
+}
