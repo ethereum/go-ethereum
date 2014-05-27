@@ -30,13 +30,16 @@ func NewDebuggerWindow(lib *UiLib) *DebuggerWindow {
 }
 
 func (self *DebuggerWindow) Show() {
+	context := self.engine.Context()
+	context.SetVar("dbg", self)
+
 	go func() {
 		self.win.Show()
 		self.win.Wait()
 	}()
 }
 
-func (self *DebuggerWindow) DebugTx(recipient, valueStr, gasStr, gasPriceStr, data string) {
+func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, data string) {
 	state := self.lib.eth.BlockChain().CurrentBlock.State()
 
 	script, err := ethutil.Compile(data)
@@ -50,14 +53,14 @@ func (self *DebuggerWindow) DebugTx(recipient, valueStr, gasStr, gasPriceStr, da
 	self.lib.win.Root().Call("clearAsm")
 
 	for _, str := range dis {
-		self.lib.win.Root().Call("setAsm", str)
+		self.win.Root().Call("setAsm", str)
 	}
 	// Contract addr as test address
 	keyPair := ethutil.GetKeyRing().Get(0)
 	callerTx := ethchain.NewContractCreationTx(ethutil.Big(valueStr), ethutil.Big(gasStr), ethutil.Big(gasPriceStr), script)
 	callerTx.Sign(keyPair.PrivateKey)
 
-	account := self.lib.eth.StateManager().TransState().GetStateObject(keyPair.Address())
+	account := self.lib.eth.StateManager().TransState().GetAccount(keyPair.Address())
 	contract := ethchain.MakeContract(callerTx, state)
 	callerClosure := ethchain.NewClosure(account, contract, contract.Init(), state, ethutil.Big(gasStr), ethutil.Big(gasPriceStr))
 
@@ -83,4 +86,50 @@ func (self *DebuggerWindow) DebugTx(recipient, valueStr, gasStr, gasPriceStr, da
 
 func (self *DebuggerWindow) Next() {
 	self.Db.Next()
+}
+
+type Debugger struct {
+	win  *qml.Window
+	N    chan bool
+	done bool
+}
+
+type storeVal struct {
+	Key, Value string
+}
+
+func (d *Debugger) halting(pc int, op ethchain.OpCode, mem *ethchain.Memory, stack *ethchain.Stack, stateObject *ethchain.StateObject) {
+	d.win.Root().Call("setInstruction", pc)
+	d.win.Root().Call("clearMem")
+	d.win.Root().Call("clearStack")
+	d.win.Root().Call("clearStorage")
+
+	addr := 0
+	for i := 0; i+32 <= mem.Len(); i += 32 {
+		d.win.Root().Call("setMem", memAddr{fmt.Sprintf("%03d", addr), fmt.Sprintf("% x", mem.Data()[i:i+32])})
+		addr++
+	}
+
+	for _, val := range stack.Data() {
+		d.win.Root().Call("setStack", val.String())
+	}
+
+	stateObject.State().EachStorage(func(key string, node *ethutil.Value) {
+		d.win.Root().Call("setStorage", storeVal{fmt.Sprintf("% x", key), fmt.Sprintf("% x", node.Str())})
+	})
+
+out:
+	for {
+		select {
+		case <-d.N:
+			break out
+		default:
+		}
+	}
+}
+
+func (d *Debugger) Next() {
+	if !d.done {
+		d.N <- true
+	}
 }

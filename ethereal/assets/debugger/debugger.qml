@@ -7,108 +7,210 @@ import QtQuick.Controls.Styles 1.1
 import Ethereum 1.0
 
 ApplicationWindow {
-	id: debugWindow
-	visible: false
-	title: "Debugger"
-	minimumWidth: 600
-	minimumHeight: 600
-	width: 800
-	height: 600
+    visible: false
+    title: "Debugger"
+    minimumWidth: 1280
+    minimumHeight: 900
+    width: 1290
+    height: 900
 
-	SplitView {
-		anchors.fill: parent
-		property var asmModel: ListModel {
-			id: asmModel
-		}
-		TableView {
-			id: asmTableView
-			width: 200
-			TableViewColumn{ role: "value" ; title: "" ; width: 100 }
-			model: asmModel
-		}
+    SplitView {
+        anchors.fill: parent
+        property var asmModel: ListModel {
+            id: asmModel
+        }
+        TableView {
+            id: asmTableView
+            width: 200
+            TableViewColumn{ role: "value" ; title: "" ; width: 100 }
+            model: asmModel
+        }
 
-		Rectangle {
-			anchors.left: asmTableView.right
-			anchors.right: parent.right
-			SplitView {
-				orientation: Qt.Vertical
-				anchors.fill: parent
+        Rectangle {
+            color: "#00000000"
+            anchors.left: asmTableView.right
+            anchors.right: parent.right
+            SplitView {
+                orientation: Qt.Vertical
+                anchors.fill: parent
 
-				TableView {
-					property var memModel: ListModel {
-						id: memModel
-					}
-					height: parent.height/2
-					width: parent.width
-					TableViewColumn{ id:mnumColmn ; role: "num" ; title: "#" ; width: 50}
-					TableViewColumn{ role: "value" ; title: "Memory" ; width: 750}
-					model: memModel
-				}
+                Rectangle {
+                    color: "#00000000"
+                    height: 500
+                    anchors.left: parent.left
+                    anchors.right: parent.right
 
-				SplitView {
-					orientation: Qt.Horizontal
-					TableView {
-						property var debuggerLog: ListModel {
-							id: debuggerLog
-						}
-						TableViewColumn{ role: "value"; title: "Debug messages" }
-						model: debuggerLog
-					}
-					TableView {
-						property var stackModel: ListModel {
-							id: stackModel
-						}
-						height: parent.height/2
-						width: parent.width
-						TableViewColumn{ role: "value" ; title: "Stack" ; width: 200 }
-						model: stackModel
-					}
-				}
-			}
-		}
-	}
-	statusBar: StatusBar {
-		RowLayout {
-			anchors.fill: parent
-			Button {
-				property var enabled: true
-				id: debugNextButton
-				onClicked: {
-					//db.next()
-				}
-				text: "Next"
-			}
-		}
-	}
+                    TextArea {
+                        id: codeEditor
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        anchors.left: parent.left
+                        anchors.right: settings.left
+                    }
 
-	function setAsm(asm) {
-		asmModel.append({asm: asm})
-	}
+                    Column {
+                        id: settings
+                        spacing: 5
+                        width: 300
+                        height: parent.height
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
 
-	function setInstruction(num) {
-		asmTableView.selection.clear()
-		asmTableView.selection.select(num-1)
-	}
+                        Label {
+                            text: "Data"
+                        }
+                        TextArea {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            height: 150
+                        }
 
-	function clearAsm() {
-		asmModel.clear()
-	}
+                        Label {
+                            text: "Amount"
+                        }
+                        TextField {
+                            id: txValue
+                            width: 200
+                            placeholderText: "Amount"
+                            validator: RegExpValidator { regExp: /\d*/ }
+                        }
+                        Label {
+                            text: "Amount of gas"
+                        }
+                        TextField {
+                            id: txGas
+                            width: 200
+                            validator: RegExpValidator { regExp: /\d*/ }
+                            text: "10000"
+                            placeholderText: "Gas"
+                        }
+                        Label {
+                            text: "Gas price"
+                        }
+                        TextField {
+                            id: txGasPrice
+                            width: 200
+                            placeholderText: "Gas price"
+                            text: "1000000000000"
+                            validator: RegExpValidator { regExp: /\d*/ }
+                        }
+                    }
+                }
 
-	function setMem(mem) {
-		memModel.append({num: mem.num, value: mem.value})
-	}
-	function clearMem(){
-		memModel.clear()
-	}
+                SplitView {
+                    orientation: Qt.Vertical
+                    id: inspectorPane
+                    height: 500
 
-	function setStack(stack) {
-		stackModel.append({value: stack})
-	}
-	function addDebugMessage(message){
-		debuggerLog.append({value: message})
-	}
+                    SplitView {
+                        orientation: Qt.Horizontal
+                        height: 300
 
-	function clearStack() {
-		stackModel.clear()
-	}
+                        TableView {
+                            id: stackTableView
+                            property var stackModel: ListModel {
+                                id: stackModel
+                            }
+                            height: parent.height
+                            width: 300
+                            TableViewColumn{ role: "value" ; title: "Stack" ; width: 200 }
+                            model: stackModel
+                        }
+
+                        TableView {
+                            id: memoryTableView
+                            property var memModel: ListModel {
+                                id: memModel
+                            }
+                            height: parent.height
+                            width: parent.width - stackTableView.width
+                            TableViewColumn{ id:mnumColmn ; role: "num" ; title: "#" ; width: 50}
+                            TableViewColumn{ role: "value" ; title: "Memory" ; width: 750}
+                            model: memModel
+                        }
+                    }
+
+                    SplitView {
+                        height: 300
+                        TableView {
+                            id: storageTableView
+                            property var memModel: ListModel {
+                                id: storageModel
+                            }
+                            height: parent.height
+                            width: parent.width - stackTableView.width
+                            TableViewColumn{ id: key ; role: "key" ; title: "#" ; width: storageTableView.width / 2}
+                            TableViewColumn{ role: "value" ; title: "value" ; width:  storageTableView.width / 2}
+                            model: storageModel
+                        }
+                    }
+                }
+            }
+        }
+    }
+    statusBar: StatusBar {
+        RowLayout {
+            spacing: 5
+            anchors.fill: parent
+
+            Button {
+                property var enabled: true
+                id: debugStart
+                onClicked: {
+                    dbg.debug(txValue.text, txGas.text, txGasPrice.text, codeEditor.text)
+                }
+                text: "Debug"
+            }
+
+            Button {
+                property var enabled: true
+                id: debugNextButton
+                onClicked: {
+                    dbg.next()
+                }
+                text: "Next"
+            }
+        }
+    }
+
+    function setAsm(asm) {
+        console.log("set asm", asm)
+        asmModel.append({asm: asm})
+    }
+
+    function setInstruction(num) {
+        asmTableView.selection.clear()
+        asmTableView.selection.select(num-1)
+    }
+
+    function clearAsm() {
+        asmModel.clear()
+    }
+
+    function setMem(mem) {
+        memModel.append({num: mem.num, value: mem.value})
+    }
+    function clearMem(){
+        memModel.clear()
+    }
+
+    function setStack(stack) {
+        stackModel.append({value: stack})
+    }
+    function addDebugMessage(message){
+        debuggerLog.append({value: message})
+    }
+
+    function clearStack() {
+        stackModel.clear()
+    }
+
+    function clearStorage() {
+        storageModel.clear()
+    }
+
+    function setStorage(storage) {
+        storageModel.append({key: storage.key, value: storage.value})
+    }
 }
