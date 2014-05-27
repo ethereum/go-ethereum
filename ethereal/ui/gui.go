@@ -141,7 +141,7 @@ func (gui *Gui) setInitialBlockChain() {
 	blk := gui.eth.BlockChain().GetBlock(sBlk)
 	for ; blk != nil; blk = gui.eth.BlockChain().GetBlock(sBlk) {
 		sBlk = blk.PrevHash
-		gui.processBlock(blk)
+		gui.processBlock(blk, true)
 	}
 }
 
@@ -163,8 +163,8 @@ func (gui *Gui) readPreviousTransactions() {
 	it.Release()
 }
 
-func (gui *Gui) processBlock(block *ethchain.Block) {
-	gui.win.Root().Call("addBlock", ethpub.NewPBlock(block))
+func (gui *Gui) processBlock(block *ethchain.Block, initial bool) {
+	gui.win.Root().Call("addBlock", ethpub.NewPBlock(block), initial)
 }
 
 func (gui *Gui) setWalletValue(amount, unconfirmedFunds *big.Int) {
@@ -203,6 +203,7 @@ func (gui *Gui) update() {
 		select {
 		case b := <-blockChan:
 			block := b.Resource.(*ethchain.Block)
+			gui.processBlock(block, false)
 			if bytes.Compare(block.Coinbase, gui.addr) == 0 {
 				gui.setWalletValue(gui.eth.StateManager().CurrentState().GetAccount(gui.addr).Amount, nil)
 			}

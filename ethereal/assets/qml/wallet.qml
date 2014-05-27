@@ -642,13 +642,22 @@ ApplicationWindow {
 		txModel.insert(0, {inout: inout, hash: tx.hash, address: tx.address, value: tx.value, contract: isContract})
 	}
 
-	function addBlock(block) {
+	function addBlock(block, initial) {
 		var txs = JSON.parse(block.transactions);
 		var amount = 0
+		if(initial == undefined){
+			initial = false
+		}
+
 		if(txs != null){
 			amount = txs.length
 		}
-		blockModel.insert(0, {number: block.number, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
+
+		if(initial){
+			blockModel.append({number: block.number, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
+		}else{
+			blockModel.insert(0, {number: block.number, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
+		}
 	}
 
 	function addLog(str) {
