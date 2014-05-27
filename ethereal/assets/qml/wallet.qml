@@ -339,7 +339,7 @@ ApplicationWindow {
 		visible: false
 		property var block
 		width: 800
-		height: 230
+		height: 280
 		x: root.x
 		y: root.y + root.height
 		Component{
@@ -399,7 +399,7 @@ ApplicationWindow {
 		}
 		Rectangle {
 			width: popup.width
-			height: 200
+			height: 300
 			anchors.left: listViewThing.left
 			anchors.top: txView.bottom
 			Label {
