@@ -306,14 +306,6 @@ ApplicationWindow {
 				text: "Connect"
 			}
 			*/
-			Button {
-				property var enabled: true
-				id: debuggerWindow
-				onClicked: {
-					ui.startDebugger()
-				}
-				text: "Debugger"
-			}
 
 			Button {
 				id: importAppButton

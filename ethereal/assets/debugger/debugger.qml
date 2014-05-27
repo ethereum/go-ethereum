@@ -175,17 +175,16 @@ ApplicationWindow {
     }
 
     function setAsm(asm) {
-        console.log("set asm", asm)
         asmModel.append({asm: asm})
+    }
+
+    function clearAsm() {
+        asmModel.clear()
     }
 
     function setInstruction(num) {
         asmTableView.selection.clear()
         asmTableView.selection.select(num-1)
-    }
-
-    function clearAsm() {
-        asmModel.clear()
     }
 
     function setMem(mem) {

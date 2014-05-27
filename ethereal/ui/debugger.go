@@ -24,7 +24,7 @@ func NewDebuggerWindow(lib *UiLib) *DebuggerWindow {
 	}
 
 	win := component.CreateWindow(nil)
-	db := &Debugger{win, make(chan bool), true}
+	db := &Debugger{win, make(chan bool), make(chan bool), true}
 
 	return &DebuggerWindow{engine: engine, win: win, lib: lib, Db: db}
 }
@@ -40,7 +40,17 @@ func (self *DebuggerWindow) Show() {
 }
 
 func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, data string) {
+	if !self.Db.done {
+		self.Db.Q <- true
+	}
+
 	state := self.lib.eth.BlockChain().CurrentBlock.State()
+
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println(r)
+		}
+	}()
 
 	script, err := ethutil.Compile(data)
 	if err != nil {
@@ -50,7 +60,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, data string) {
 	}
 
 	dis := ethchain.Disassemble(script)
-	self.lib.win.Root().Call("clearAsm")
+	self.win.Root().Call("clearAsm")
 
 	for _, str := range dis {
 		self.win.Root().Call("setAsm", str)
@@ -91,6 +101,7 @@ func (self *DebuggerWindow) Next() {
 type Debugger struct {
 	win  *qml.Window
 	N    chan bool
+	Q    chan bool
 	done bool
 }
 
@@ -98,7 +109,7 @@ type storeVal struct {
 	Key, Value string
 }
 
-func (d *Debugger) halting(pc int, op ethchain.OpCode, mem *ethchain.Memory, stack *ethchain.Stack, stateObject *ethchain.StateObject) {
+func (d *Debugger) halting(pc int, op ethchain.OpCode, mem *ethchain.Memory, stack *ethchain.Stack, stateObject *ethchain.StateObject) bool {
 	d.win.Root().Call("setInstruction", pc)
 	d.win.Root().Call("clearMem")
 	d.win.Root().Call("clearStack")
@@ -123,9 +134,14 @@ out:
 		select {
 		case <-d.N:
 			break out
-		default:
+		case <-d.Q:
+			d.done = true
+
+			return false
 		}
 	}
+
+	return true
 }
 
 func (d *Debugger) Next() {
