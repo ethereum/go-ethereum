@@ -556,6 +556,7 @@ ApplicationWindow {
 
 					SplitView {
 						orientation: Qt.Horizontal
+						id: debugSplitView
 						TableView {
 							property var debuggerLog: ListModel {
 								id: debuggerLog
@@ -569,7 +570,7 @@ ApplicationWindow {
 							}
 							height: parent.height/2
 							width: parent.width
-							TableViewColumn{ role: "value" ; title: "Stack" ; width: parent.width }
+							TableViewColumn{ role: "value" ; title: "Stack" ; width: debugSplitView.width }
 							model: stackModel
 						}
 					}
