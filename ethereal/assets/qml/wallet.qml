@@ -294,6 +294,7 @@ ApplicationWindow {
 	statusBar: StatusBar {
 		RowLayout {
 			anchors.fill: parent
+			/*
 			Button {
 				property var enabled: true
 				id: connectButton
@@ -304,10 +305,19 @@ ApplicationWindow {
 				}
 				text: "Connect"
 			}
+			*/
+			Button {
+				property var enabled: true
+				id: debuggerWindow
+				onClicked: {
+					ui.startDebugger()
+				}
+				text: "Debugger"
+			}
 
 			Button {
 				id: importAppButton
-				anchors.left: connectButton.right
+				anchors.left: debuggerWindow.right
 				anchors.leftMargin: 5
 				onClicked: openAppDialog.open()
 				text: "Import App"
@@ -473,7 +483,7 @@ ApplicationWindow {
 							}
 							height: parent.height/2
 							width: parent.width
-							TableViewColumn{ role: "value" ; title: "Stack" ; width: parent.width }
+							TableViewColumn{ role: "value" ; title: "Stack" ; width: 300 }
 							model: stackModel
 						}
 					}

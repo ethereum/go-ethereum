@@ -90,6 +90,12 @@ func (ui *UiLib) AssetPath(p string) string {
 	return path.Join(ui.assetPath, p)
 }
 
+func (self *UiLib) StartDebugger() {
+	dbWindow := NewDebuggerWindow(self)
+
+	dbWindow.Show()
+}
+
 func DefaultAssetPath() string {
 	var base string
 	// If the current working directory is the go-ethereum dir
@@ -163,9 +169,7 @@ func (ui *UiLib) DebugTx(recipient, valueStr, gasStr, gasPriceStr, data string) 
 }
 
 func (ui *UiLib) Next() {
-	if !ui.Db.done {
-		ui.Db.Next()
-	}
+	ui.Db.Next()
 }
 
 type Debugger struct {
@@ -200,5 +204,7 @@ out:
 }
 
 func (d *Debugger) Next() {
-	d.N <- true
+	if !d.done {
+		d.N <- true
+	}
 }
