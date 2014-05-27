@@ -24,10 +24,20 @@ ApplicationWindow {
 				shortcut: "Ctrl+o"
 				onTriggered: openAppDialog.open()
 			}
+		}
+
+		Menu {
+			title: "Tools"
 			MenuItem {
 				text: "Muted"
 				shortcut: "Ctrl+e"
 				onTriggered: ui.muted("")
+			}
+
+			MenuItem {
+				text: "Debugger"
+				shortcut: "Ctrl+d"
+				onTriggered: ui.startDebugger()
 			}
 		}
 
