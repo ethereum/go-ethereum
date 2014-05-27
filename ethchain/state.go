@@ -49,6 +49,11 @@ func (s *State) Purge() int {
 	return s.trie.NewIterator().Purge()
 }
 
+func (s *State) EachStorage(cb ethutil.EachCallback) {
+	it := s.trie.NewIterator()
+	it.Each(cb)
+}
+
 func (s *State) GetStateObject(addr []byte) *StateObject {
 	data := s.trie.Get(string(addr))
 	if data == "" {

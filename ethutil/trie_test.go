@@ -154,7 +154,7 @@ func TestTrieDeleteWithValue(t *testing.T) {
 
 }
 
-func TestTrieIterator(t *testing.T) {
+func TestTriePurge(t *testing.T) {
 	_, trie := New()
 	trie.Update("c", LONG_WORD)
 	trie.Update("ca", LONG_WORD)
@@ -171,16 +171,14 @@ func TestTrieIterator(t *testing.T) {
 	}
 }
 
-func TestHashes(t *testing.T) {
+func TestTrieIt(t *testing.T) {
 	_, trie := New()
-	trie.Update("cat", "dog")
-	trie.Update("ca", "dude")
-	trie.Update("doge", "1234567890abcdefghijklmnopqrstuvwxxzABCEFGHIJKLMNOPQRSTUVWXYZ")
-	trie.Update("dog", "test")
-	trie.Update("test", "1234567890abcdefghijklmnopqrstuvwxxzABCEFGHIJKLMNOPQRSTUVWXYZ")
-	fmt.Printf("%x\n", trie.Root)
-	trie.Delete("dog")
-	fmt.Printf("%x\n", trie.Root)
-	trie.Delete("test")
-	fmt.Printf("%x\n", trie.Root)
+	trie.Update("c", LONG_WORD)
+	trie.Update("ca", LONG_WORD)
+	trie.Update("cat", LONG_WORD)
+
+	it := trie.NewIterator()
+	it.Each(func(key string, node *Value) {
+		fmt.Println(key, ":", node.Str())
+	})
 }
