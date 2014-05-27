@@ -2,13 +2,10 @@ package ethui
 
 import (
 	"bitbucket.org/kardianos/osext"
-	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
-	"github.com/obscuren/mutan"
 	"os"
 	"path"
 	"path/filepath"
@@ -92,6 +89,12 @@ func (ui *UiLib) AssetPath(p string) string {
 	return path.Join(ui.assetPath, p)
 }
 
+func (self *UiLib) StartDebugger() {
+	dbWindow := NewDebuggerWindow(self)
+
+	dbWindow.Show()
+}
+
 func DefaultAssetPath() string {
 	var base string
 	// If the current working directory is the go-ethereum dir
@@ -121,27 +124,28 @@ func DefaultAssetPath() string {
 func (ui *UiLib) DebugTx(recipient, valueStr, gasStr, gasPriceStr, data string) {
 	state := ui.eth.BlockChain().CurrentBlock.State()
 
-	mainInput, _ := mutan.PreParse(data)
-	callerScript, err := utils.Compile(mainInput)
+	script, err := ethutil.Compile(data)
 	if err != nil {
 		ethutil.Config.Log.Debugln(err)
 
 		return
 	}
 
-	dis := ethchain.Disassemble(callerScript)
+	dis := ethchain.Disassemble(script)
 	ui.win.Root().Call("clearAsm")
 
 	for _, str := range dis {
 		ui.win.Root().Call("setAsm", str)
 	}
-	callerTx := ethchain.NewContractCreationTx(ethutil.Big(valueStr), ethutil.Big(gasStr), ethutil.Big(gasPriceStr), nil)
-
 	// Contract addr as test address
 	keyPair := ethutil.GetKeyRing().Get(0)
+	callerTx :=
+		ethchain.NewContractCreationTx(ethutil.Big(valueStr), ethutil.Big(gasStr), ethutil.Big(gasPriceStr), script)
+	callerTx.Sign(keyPair.PrivateKey)
+
 	account := ui.eth.StateManager().TransState().GetStateObject(keyPair.Address())
-	c := ethchain.MakeContract(callerTx, state)
-	callerClosure := ethchain.NewClosure(account, c, c.Script(), state, ethutil.Big(gasStr), ethutil.Big(gasPriceStr))
+	contract := ethchain.MakeContract(callerTx, state)
+	callerClosure := ethchain.NewClosure(account, contract, contract.Init(), state, ethutil.Big(gasStr), ethutil.Big(gasPriceStr))
 
 	block := ui.eth.BlockChain().CurrentBlock
 	vm := ethchain.NewVm(state, ui.eth.StateManager(), ethchain.RuntimeVars{
@@ -151,50 +155,18 @@ func (ui *UiLib) DebugTx(recipient, valueStr, gasStr, gasPriceStr, data string) 
 		Coinbase:    block.Coinbase,
 		Time:        block.Time,
 		Diff:        block.Difficulty,
-		TxData:      nil,
 	})
 
+	ui.Db.done = false
 	go func() {
-		callerClosure.Call(vm, nil, ui.Db.halting)
+		callerClosure.Call(vm, contract.Init(), ui.Db.halting)
 
 		state.Reset()
+
+		ui.Db.done = true
 	}()
 }
 
 func (ui *UiLib) Next() {
 	ui.Db.Next()
-}
-
-type Debugger struct {
-	win *qml.Window
-	N   chan bool
-}
-
-func (d *Debugger) halting(pc int, op ethchain.OpCode, mem *ethchain.Memory, stack *ethchain.Stack) {
-	d.win.Root().Call("setInstruction", pc)
-	d.win.Root().Call("clearMem")
-	d.win.Root().Call("clearStack")
-
-	addr := 0
-	for i := 0; i+32 <= mem.Len(); i += 32 {
-		d.win.Root().Call("setMem", memAddr{fmt.Sprintf("%03d", addr), fmt.Sprintf("% x", mem.Data()[i:i+32])})
-		addr++
-	}
-
-	for _, val := range stack.Data() {
-		d.win.Root().Call("setStack", val.String())
-	}
-
-out:
-	for {
-		select {
-		case <-d.N:
-			break out
-		default:
-		}
-	}
-}
-
-func (d *Debugger) Next() {
-	d.N <- true
 }

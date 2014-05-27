@@ -6,6 +6,7 @@ import QtQuick.Window 2.1;
 import QtQuick.Controls.Styles 1.1
 import Ethereum 1.0
 
+
 ApplicationWindow {
 	id: root
 
@@ -122,7 +123,7 @@ ApplicationWindow {
 				}
 
 				Image {
-					source: ui.assetPath("net.png")
+					source: ui.assetPath("heart.png")
 					anchors.horizontalCenter: parent.horizontalCenter
 					MouseArea {
 						anchors.fill: parent
@@ -202,16 +203,14 @@ ApplicationWindow {
 					anchors.bottom: logView.top
 					TableViewColumn{ role: "number" ; title: "#" ; width: 100 }
 					TableViewColumn{ role: "hash" ; title: "Hash" ; width: 560 }
+					TableViewColumn{ role: "txAmount" ; title: "Tx amount" ; width: 100 }
 
 					model: blockModel
 
-					/*
-					 onDoubleClicked: {
-						 popup.visible = true
-						 popup.block = eth.getBlock(blockModel.get(row).hash)
-						 popup.hashLabel.text = popup.block.hash
-					 }
-					 */
+					onDoubleClicked: {
+						popup.visible = true
+						popup.setDetails(blockModel.get(row))
+					}
 				}
 
 				property var logModel: ListModel {
@@ -285,29 +284,27 @@ ApplicationWindow {
 		title: "Open QML Application"
 		onAccepted: {
 			//ui.open(openAppDialog.fileUrl.toString())
-      //ui.openHtml(Qt.resolvedUrl(ui.assetPath("test.html")))
-      ui.openHtml(openAppDialog.fileUrl.toString())
-
+			//ui.openHtml(Qt.resolvedUrl(ui.assetPath("test.html")))
+			ui.openHtml(openAppDialog.fileUrl.toString())
 		}
 	}
 
 	statusBar: StatusBar {
 		RowLayout {
 			anchors.fill: parent
+
 			Button {
 				property var enabled: true
-				id: connectButton
+				id: debuggerWindow
 				onClicked: {
-					if(this.enabled) {
-						ui.connect(this)
-					}
+					ui.startDebugger()
 				}
-				text: "Connect"
+				text: "Debugger"
 			}
 
 			Button {
 				id: importAppButton
-				anchors.left: connectButton.right
+				anchors.left: debuggerWindow.right
 				anchors.leftMargin: 5
 				onClicked: openAppDialog.open()
 				text: "Import App"
@@ -339,10 +336,107 @@ ApplicationWindow {
 		id: popup
 		visible: false
 		property var block
-		Label {
-			id: hashLabel
-			anchors.horizontalCenter: parent.horizontalCenter
-			anchors.verticalCenter: parent.verticalCenter
+		width: 800
+		height: 280
+		x: root.x
+		y: root.y + root.height
+		Component{
+			id: blockDetailsDelegate
+			Rectangle {
+				color: "#252525"
+				width: popup.width
+				height: 200
+				Column {
+					anchors.leftMargin: 10
+					anchors.topMargin: 5
+					anchors.top: parent.top
+					anchors.left: parent.left
+					Text { text: '<h3>Block details</h3>'; color: "#F2F2F2"}
+					Text { text: '<b>Block number:</b> ' + number; color: "#F2F2F2"}
+					Text { text: '<b>Hash:</b> ' + hash; color: "#F2F2F2"}
+					Text { text: '<b>Block found at:</b> ' + prettyTime; color: "#F2F2F2"}
+				}
+			}
+		}
+		ListView {
+			model: singleBlock
+			delegate: blockDetailsDelegate
+			anchors.top: parent.top
+			height: 70
+			anchors.leftMargin: 20
+			id: listViewThing
+			Layout.maximumHeight: 40
+		}
+		TableView {
+			id: txView
+			anchors.top: listViewThing.bottom
+			anchors.topMargin: 50
+			width: parent.width
+
+			TableViewColumn{width: 90; role: "value" ; title: "Value" }
+			TableViewColumn{width: 200; role: "hash" ; title: "Hash" }
+			TableViewColumn{width: 200; role: "sender" ; title: "Sender" }
+			TableViewColumn{width: 200;role: "address" ; title: "Receiver" }
+			TableViewColumn{width: 60; role: "gas" ; title: "Gas" }
+			TableViewColumn{width: 60; role: "gasPrice" ; title: "Gas Price" }
+			TableViewColumn{width: 60; role: "isContract" ; title: "Contract" }
+
+			model: transactionModel
+			onClicked: {
+				var tx = transactionModel.get(row)
+				if(tx.data) {
+					popup.showContractData(tx.data)
+				}else{
+					popup.height = 230
+				}
+			}
+		}
+		function showContractData(data) {
+			contractData.text = data
+			popup.height = 400
+		}
+		Rectangle {
+			width: popup.width
+			height: 300
+			anchors.left: listViewThing.left
+			anchors.top: txView.bottom
+			Label {
+				text: "<h4>Contract data</h4>"
+				anchors.top: parent.top
+				anchors.left: parent.left
+				id: contractLabel
+				anchors.leftMargin: 10
+			}
+			TextArea {
+				id: contractData
+				text: "Contract"
+				anchors.top: contractLabel.bottom
+				anchors.left: parent.left
+				wrapMode: Text.Wrap
+				width: parent.width - 30
+				height: 80
+				anchors.leftMargin: 10
+			}
+		}
+		property var transactionModel: ListModel {
+			id: transactionModel
+		}
+		property var singleBlock: ListModel {
+			id: singleBlock
+		}
+		function setDetails(block){
+			singleBlock.set(0,block)
+			popup.height = 230
+			transactionModel.clear()
+			if(block.txs != undefined){
+				for(var i = 0; i < block.txs.count; ++i) {
+					transactionModel.insert(0, block.txs.get(i))
+				}
+				if(block.txs.get(0).data){
+					popup.showContractData(block.txs.get(0).data)
+				}
+			}
+			txView.forceActiveFocus()
 		}
 	}
 
@@ -409,7 +503,7 @@ ApplicationWindow {
 
 	}
 
-	Window {
+	ApplicationWindow {
 		id: debugWindow
 		visible: false
 		title: "Debugger"
@@ -447,36 +541,50 @@ ApplicationWindow {
 					orientation: Qt.Vertical
 					anchors.fill: parent
 
-          TableView {
-            property var memModel: ListModel {
-              id: memModel
-            }
-            height: parent.height/2
-            width: parent.width
-            TableViewColumn{ id:mnumColmn ; role: "num" ; title: "#" ; width: 50}
-            TableViewColumn{ role: "value" ; title: "Memory" ; width: 750}
-            model: memModel
-          }
+					TableView {
+						property var memModel: ListModel {
+							id: memModel
+						}
+						height: parent.height/2
+						width: parent.width
+						TableViewColumn{ id:mnumColmn ; role: "num" ; title: "#" ; width: 50}
+						TableViewColumn{ role: "value" ; title: "Memory" ; width: 750}
+						model: memModel
+					}
 
-          SplitView {
-            orientation: Qt.Horizontal
-            TableView {
-              property var debuggerLog: ListModel {
-                id: debuggerLog
-              }
-              TableViewColumn{ role: "value"; title: "Debug messages" }
-              model: debuggerLog
-            }
-            TableView {
-              property var stackModel: ListModel {
-                id: stackModel
-              }
-              height: parent.height/2
-              width: parent.width
-              TableViewColumn{ role: "value" ; title: "Stack" ; width: parent.width }
-              model: stackModel
-            }
-          }
+					SplitView {
+						orientation: Qt.Horizontal
+						id: debugSplitView
+						TableView {
+							property var debuggerLog: ListModel {
+								id: debuggerLog
+							}
+							TableViewColumn{ role: "value"; title: "Debug messages" }
+							model: debuggerLog
+						}
+						TableView {
+							property var stackModel: ListModel {
+								id: stackModel
+							}
+							height: parent.height/2
+							width: parent.width
+							TableViewColumn{ role: "value" ; title: "Stack" ; width: debugSplitView.width }
+							model: stackModel
+						}
+					}
+				}
+			}
+		}
+		statusBar: StatusBar {
+			RowLayout {
+				anchors.fill: parent
+				Button {
+					property var enabled: true
+					id: debugNextButton
+					onClicked: {
+						ui.next()
+					}
+					text: "Next"
 				}
 			}
 		}
@@ -533,8 +641,22 @@ ApplicationWindow {
 		txModel.insert(0, {inout: inout, hash: tx.hash, address: tx.address, value: tx.value, contract: isContract})
 	}
 
-	function addBlock(block) {
-		blockModel.insert(0, {number: block.number, hash: block.hash})
+	function addBlock(block, initial) {
+		var txs = JSON.parse(block.transactions);
+		var amount = 0
+		if(initial == undefined){
+			initial = false
+		}
+
+		if(txs != null){
+			amount = txs.length
+		}
+
+		if(initial){
+			blockModel.append({number: block.number, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
+		}else{
+			blockModel.insert(0, {number: block.number, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
+		}
 	}
 
 	function addLog(str) {
@@ -545,5 +667,17 @@ ApplicationWindow {
 
 	function setPeers(text) {
 		peerLabel.text = text
+	}
+	function convertToPretty(unixTs){
+		var a = new Date(unixTs*1000);
+		var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+		var year = a.getFullYear();
+		var month = months[a.getMonth()];
+		var date = a.getDate();
+		var hour = a.getHours();
+		var min = a.getMinutes();
+		var sec = a.getSeconds();
+		var time = date+' '+month+' '+year+' '+hour+':'+min+':'+sec ;
+		return time;
 	}
 }
