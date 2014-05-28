@@ -448,7 +448,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 				closure.Price)
 			// Call the closure and set the return value as
 			// main script.
-			c.Script, _, err = c.Call(vm, nil, hook)
+			c.Script, gas, err = c.Call(vm, nil, hook)
 
 			if err != nil {
 				stack.Push(ethutil.BigFalse)
