@@ -5,26 +5,8 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/go-qml/qml"
-	"math/big"
 	"strings"
 )
-
-func formatData(data string) []byte {
-	if len(data) == 0 {
-		return nil
-	}
-	// Simple stupid
-	d := new(big.Int)
-	if data[0:1] == "\"" && data[len(data)-1:] == "\"" {
-		d.SetBytes([]byte(data[1 : len(data)-1]))
-	} else if data[:2] == "0x" {
-		d.SetBytes(ethutil.FromHex(data[2:]))
-	} else {
-		d.SetString(data, 0)
-	}
-
-	return ethutil.BigToBytes(d, 256)
-}
 
 type DebuggerWindow struct {
 	win    *qml.Window
@@ -77,17 +59,10 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 		self.Db.Q <- true
 	}
 
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println(r)
-			self.Db.done = true
-		}
-	}()
-
 	data := ethutil.StringToByteFunc(dataStr, func(s string) (ret []byte) {
 		slice := strings.Split(dataStr, "\n")
 		for _, dataItem := range slice {
-			d := formatData(dataItem)
+			d := ethutil.FormatData(dataItem)
 			ret = append(ret, d...)
 		}
 		return
@@ -100,7 +75,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 	})
 
 	if err != nil {
-		ethutil.Config.Log.Debugln(err)
+		self.Logln(err)
 
 		return
 	}
@@ -130,16 +105,31 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 		Coinbase:    block.Coinbase,
 		Time:        block.Time,
 		Diff:        block.Difficulty,
+		Value:       ethutil.Big(valueStr),
 	})
 
 	self.Db.done = false
 	go func() {
-		callerClosure.Call(vm, data, self.Db.halting)
+		ret, _, err := callerClosure.Call(vm, data, self.Db.halting)
+		if err != nil {
+			self.Logln("exited with errors:", err)
+		} else {
+			self.Logf("exited: %v", ret)
+		}
 
 		state.Reset()
 
 		self.Db.done = true
 	}()
+}
+
+func (self *DebuggerWindow) Logf(format string, v ...interface{}) {
+	self.win.Root().Call("setLog", fmt.Sprintf(format, v...))
+}
+
+func (self *DebuggerWindow) Logln(v ...interface{}) {
+	str := fmt.Sprintln(v...)
+	self.Logf("%s", str[:len(str)-1])
 }
 
 func (self *DebuggerWindow) Next() {
