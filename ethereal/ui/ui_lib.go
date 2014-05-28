@@ -95,7 +95,7 @@ func (self *UiLib) StartDbWithContractAndData(contractHash, data string) {
 	if len(object.Script()) > 0 {
 		dbWindow.SetCode("0x" + ethutil.Hex(object.Script()))
 	}
-	dbWindow.SetData(data)
+	dbWindow.SetData("0x" + data)
 
 	dbWindow.Show()
 }

@@ -269,5 +269,5 @@ func (gui *Gui) Transact(recipient, value, gas, gasPrice, data string) (*ethpub.
 func (gui *Gui) Create(recipient, value, gas, gasPrice, data string) (*ethpub.PReceipt, error) {
 	keyPair := ethutil.GetKeyRing().Get(0)
 
-	return gui.pub.Create(ethutil.Hex(keyPair.PrivateKey), value, gas, gasPrice, data)
+	return gui.pub.Transact(ethutil.Hex(keyPair.PrivateKey), recipient, value, gas, gasPrice, data)
 }

@@ -1008,5 +1008,4 @@ ApplicationWindow {
       }
     }
   }
-
 }
