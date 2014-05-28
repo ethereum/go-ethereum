@@ -106,7 +106,7 @@ func (sm *StateManager) ApplyTransactions(state *State, block *Block, txs []*Tra
 		usedGas, err := sm.ApplyTransaction(state, block, tx)
 		if err != nil {
 			ethutil.Config.Log.Infoln(err)
-			continue
+			//continue
 		}
 
 		accumelative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, usedGas))
@@ -119,7 +119,7 @@ func (sm *StateManager) ApplyTransactions(state *State, block *Block, txs []*Tra
 	return receipts, txs
 }
 
-func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transaction) (*big.Int, error) {
+func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transaction) (totalGasUsed *big.Int, err error) {
 	/*
 		Applies transactions to the given state and creates new
 		state objects where needed.
@@ -129,9 +129,17 @@ func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transac
 		assume there's a return value. The return value will be set to
 		the script section of the state object.
 	*/
-	totalGasUsed := big.NewInt(0)
+	var (
+		addTotalGas = func(gas *big.Int) { totalGasUsed.Add(totalGasUsed, gas) }
+		gas         = new(big.Int)
+		script      []byte
+	)
+	totalGasUsed = big.NewInt(0)
+
 	// Apply the transaction to the current state
-	err := sm.Ethereum.TxPool().ProcessTransaction(tx, state, false)
+	gas, err = sm.Ethereum.TxPool().ProcessTransaction(tx, state, false)
+	addTotalGas(gas)
+
 	if tx.CreatesContract() {
 		if err == nil {
 			// Create a new state object and the transaction
@@ -141,30 +149,32 @@ func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transac
 				// Evaluate the initialization script
 				// and use the return value as the
 				// script section for the state object.
-				script, err := sm.EvalScript(state, contract.Init(), contract, tx, block)
+				script, gas, err = sm.EvalScript(state, contract.Init(), contract, tx, block)
+				addTotalGas(gas)
+
 				if err != nil {
-					return nil, fmt.Errorf("[STATE] Error during init script run %v", err)
+					err = fmt.Errorf("[STATE] Error during init script run %v", err)
+					return
 				}
 				contract.script = script
 				state.UpdateStateObject(contract)
 			} else {
-				return nil, fmt.Errorf("[STATE] Unable to create contract")
+				err = fmt.Errorf("[STATE] Unable to create contract")
 			}
 		} else {
-			return nil, fmt.Errorf("[STATE] contract creation tx:", err)
+			err = fmt.Errorf("[STATE] contract creation tx: %v", err)
 		}
 	} else {
 		// Find the state object at the "recipient" address. If
 		// there's an object attempt to run the script.
 		stateObject := state.GetStateObject(tx.Recipient)
 		if err == nil && stateObject != nil && len(stateObject.Script()) > 0 {
-			sm.EvalScript(state, stateObject.Script(), stateObject, tx, block)
-		} else if err != nil {
-			return nil, fmt.Errorf("[STATE] process:", err)
+			_, gas, err = sm.EvalScript(state, stateObject.Script(), stateObject, tx, block)
+			addTotalGas(gas)
 		}
 	}
 
-	return totalGasUsed, nil
+	return
 }
 
 func (sm *StateManager) Process(block *Block, dontReact bool) error {
@@ -349,7 +359,7 @@ func (sm *StateManager) Stop() {
 	sm.bc.Stop()
 }
 
-func (sm *StateManager) EvalScript(state *State, script []byte, object *StateObject, tx *Transaction, block *Block) (ret []byte, err error) {
+func (sm *StateManager) EvalScript(state *State, script []byte, object *StateObject, tx *Transaction, block *Block) (ret []byte, gas *big.Int, err error) {
 	account := state.GetAccount(tx.Sender())
 
 	err = account.ConvertGas(tx.Gas, tx.GasPrice)
@@ -369,7 +379,7 @@ func (sm *StateManager) EvalScript(state *State, script []byte, object *StateObj
 		Value:       tx.Value,
 		//Price:       tx.GasPrice,
 	})
-	ret, err = closure.Call(vm, tx.Data, nil)
+	ret, gas, err = closure.Call(vm, tx.Data, nil)
 
 	// Update the account (refunds)
 	state.UpdateStateObject(account)
