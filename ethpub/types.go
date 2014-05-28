@@ -57,14 +57,16 @@ func (self *PBlock) GetTransaction(hash string) *PTx {
 type PTx struct {
 	ref *ethchain.Transaction
 
-	Value    string `json:"value"`
-	Gas      string `json:"gas"`
-	GasPrice string `json:"gasPrice"`
-	Hash     string `json:"hash"`
-	Address  string `json:"address"`
-	Sender   string `json:"sender"`
-	Data     string `json:"data"`
-	Contract bool   `json:"isContract"`
+	Value           string `json:"value"`
+	Gas             string `json:"gas"`
+	GasPrice        string `json:"gasPrice"`
+	Hash            string `json:"hash"`
+	Address         string `json:"address"`
+	Sender          string `json:"sender"`
+	RawData         string `json:"rawData"`
+	Data            string `json:"data"`
+	Contract        bool   `json:"isContract"`
+	CreatesContract bool   `json:"createsContract"`
 }
 
 func NewPTx(tx *ethchain.Transaction) *PTx {
@@ -75,11 +77,13 @@ func NewPTx(tx *ethchain.Transaction) *PTx {
 		receiver = hex.EncodeToString(tx.CreationAddress())
 	}
 	sender := hex.EncodeToString(tx.Sender())
+	createsContract := tx.CreatesContract()
+
 	data := strings.Join(ethchain.Disassemble(tx.Data), "\n")
 
 	isContract := len(tx.Data) > 0
 
-	return &PTx{ref: tx, Hash: hash, Value: ethutil.CurrencyToString(tx.Value), Address: receiver, Contract: isContract, Gas: tx.Gas.String(), GasPrice: tx.GasPrice.String(), Data: data, Sender: sender}
+	return &PTx{ref: tx, Hash: hash, Value: ethutil.CurrencyToString(tx.Value), Address: receiver, Contract: isContract, Gas: tx.Gas.String(), GasPrice: tx.GasPrice.String(), Data: data, Sender: sender, CreatesContract: createsContract, RawData: hex.EncodeToString(tx.Data)}
 }
 
 func (self *PTx) ToString() string {
