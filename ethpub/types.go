@@ -70,6 +70,10 @@ type PTx struct {
 func NewPTx(tx *ethchain.Transaction) *PTx {
 	hash := hex.EncodeToString(tx.Hash())
 	receiver := hex.EncodeToString(tx.Recipient)
+
+	if receiver == "" {
+		receiver = hex.EncodeToString(tx.CreationAddress())
+	}
 	sender := hex.EncodeToString(tx.Sender())
 	data := strings.Join(ethchain.Disassemble(tx.Data), "\n")
 
