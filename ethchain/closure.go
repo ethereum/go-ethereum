@@ -35,6 +35,7 @@ func NewClosure(callee, object *StateObject, script []byte, state *State, gas, p
 	// and we don't want the transaction's values to change.
 	c.Gas = new(big.Int).Set(gas)
 	c.Price = new(big.Int).Set(price)
+	c.UsedGas = new(big.Int)
 
 	return c
 }
