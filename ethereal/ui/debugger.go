@@ -9,6 +9,23 @@ import (
 	"strings"
 )
 
+func formatData(data string) []byte {
+	if len(data) == 0 {
+		return nil
+	}
+	// Simple stupid
+	d := new(big.Int)
+	if data[0:1] == "\"" && data[len(data)-1:] == "\"" {
+		d.SetBytes([]byte(data[1 : len(data)-1]))
+	} else if data[:2] == "0x" {
+		d.SetBytes(ethutil.FromHex(data[2:]))
+	} else {
+		d.SetString(data, 0)
+	}
+
+	return ethutil.BigToBytes(d, 256)
+}
+
 type DebuggerWindow struct {
 	win    *qml.Window
 	engine *qml.Engine
@@ -41,21 +58,18 @@ func (self *DebuggerWindow) Show() {
 	}()
 }
 
-func formatData(data string) []byte {
-	if len(data) == 0 {
-		return nil
-	}
-	// Simple stupid
-	d := new(big.Int)
-	if data[0:1] == "\"" && data[len(data)-1:] == "\"" {
-		d.SetBytes([]byte(data[1 : len(data)-1]))
-	} else if data[:2] == "0x" {
-		d.SetBytes(ethutil.FromHex(data[2:]))
-	} else {
-		d.SetString(data, 0)
-	}
+func (self *DebuggerWindow) SetCode(code string) {
+	self.win.Set("codeText", code)
+}
 
-	return ethutil.BigToBytes(d, 256)
+func (self *DebuggerWindow) SetData(data string) {
+	self.win.Set("dataText", data)
+}
+func (self *DebuggerWindow) SetAsm(data string) {
+	dis := ethchain.Disassemble(ethutil.FromHex(data))
+	for _, str := range dis {
+		self.win.Root().Call("setAsm", str)
+	}
 }
 
 func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, dataStr string) {
@@ -63,22 +77,28 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 		self.Db.Q <- true
 	}
 
-	dataSlice := strings.Split(dataStr, "\n")
-	var data []byte
-	for _, dataItem := range dataSlice {
-		d := formatData(dataItem)
-		data = append(data, d...)
-	}
-
-	state := self.lib.eth.BlockChain().CurrentBlock.State()
-
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println(r)
+			self.Db.done = true
 		}
 	}()
 
-	script, err := ethutil.Compile(scriptStr)
+	data := ethutil.StringToByteFunc(dataStr, func(s string) (ret []byte) {
+		slice := strings.Split(dataStr, "\n")
+		for _, dataItem := range slice {
+			d := formatData(dataItem)
+			ret = append(ret, d...)
+		}
+		return
+	})
+
+	var err error
+	script := ethutil.StringToByteFunc(scriptStr, func(s string) (ret []byte) {
+		ret, err = ethutil.Compile(s)
+		return
+	})
+
 	if err != nil {
 		ethutil.Config.Log.Debugln(err)
 
@@ -91,11 +111,13 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 	for _, str := range dis {
 		self.win.Root().Call("setAsm", str)
 	}
+
 	// Contract addr as test address
 	keyPair := ethutil.GetKeyRing().Get(0)
 	callerTx := ethchain.NewContractCreationTx(ethutil.Big(valueStr), ethutil.Big(gasStr), ethutil.Big(gasPriceStr), script)
 	callerTx.Sign(keyPair.PrivateKey)
 
+	state := self.lib.eth.BlockChain().CurrentBlock.State()
 	account := self.lib.eth.StateManager().TransState().GetAccount(keyPair.Address())
 	contract := ethchain.MakeContract(callerTx, state)
 	callerClosure := ethchain.NewClosure(account, contract, script, state, ethutil.Big(gasStr), ethutil.Big(gasPriceStr))

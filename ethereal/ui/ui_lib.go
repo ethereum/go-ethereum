@@ -24,8 +24,9 @@ type UiLib struct {
 	connected bool
 	assetPath string
 	// The main application window
-	win *qml.Window
-	Db  *Debugger
+	win      *qml.Window
+	Db       *Debugger
+	DbWindow *DebuggerWindow
 }
 
 func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
@@ -88,9 +89,26 @@ func (ui *UiLib) ConnectToPeer(addr string) {
 func (ui *UiLib) AssetPath(p string) string {
 	return path.Join(ui.assetPath, p)
 }
+func (self *UiLib) StartDbWithContractAndData(contractHash, data string) {
+	dbWindow := NewDebuggerWindow(self)
+	object := self.eth.StateManager().CurrentState().GetStateObject(ethutil.FromHex(contractHash))
+	if len(object.Script()) > 0 {
+		dbWindow.SetCode("0x" + ethutil.Hex(object.Script()))
+	}
+	dbWindow.SetData(data)
+
+	dbWindow.Show()
+}
+
+func (self *UiLib) StartDbWithCode(code string) {
+	dbWindow := NewDebuggerWindow(self)
+	dbWindow.SetCode("0x" + code)
+	dbWindow.Show()
+}
 
 func (self *UiLib) StartDebugger() {
 	dbWindow := NewDebuggerWindow(self)
+	//self.DbWindow = dbWindow
 
 	dbWindow.Show()
 }

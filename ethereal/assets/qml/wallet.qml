@@ -340,10 +340,8 @@ ApplicationWindow {
     id: popup
     visible: false
     property var block
-    width: 800
-    height: 280
-    x: root.x
-    y: root.y + root.height
+    width: root.width
+    height: 240
     Component{
       id: blockDetailsDelegate
       Rectangle {
@@ -389,17 +387,27 @@ ApplicationWindow {
       onClicked: {
         var tx = transactionModel.get(row)
         if(tx.data) {
-          popup.showContractData(tx.data)
+          popup.showContractData(tx)
         }else{
           popup.height = 230
         }
       }
     }
-    function showContractData(data) {
-      contractData.text = data
+
+    function showContractData(tx) {
+       txDetailsDebugButton.tx = tx
+      if(tx.createsContract) {
+	      contractData.text = tx.data
+	      contractLabel.text = "<h4> Transaction created contract " + tx.address + "</h4>"
+      }else{
+	      contractLabel.text = "<h4> Transaction ran contract " + tx.address + "</h4>"
+	      contractData.text = tx.rawData
+      }
       popup.height = 400
     }
+
     Rectangle {
+      id: txDetails
       width: popup.width
       height: 300
       anchors.left: listViewThing.left
@@ -411,11 +419,28 @@ ApplicationWindow {
         id: contractLabel
         anchors.leftMargin: 10
       }
+      Button {
+	      property var tx
+	      id: txDetailsDebugButton
+	      anchors.right: parent.right
+	      anchors.rightMargin: 10
+	      anchors.top: parent.top
+	      anchors.topMargin: 10
+	      text: "Debug contract"
+	      onClicked: {
+		      if(tx.createsContract){
+			      ui.startDbWithCode(tx.rawData)
+		      }else {
+			      ui.startDbWithContractAndData(tx.address, tx.rawData)
+		      }
+	      }
+      }
       TextArea {
         id: contractData
         text: "Contract"
         anchors.top: contractLabel.bottom
         anchors.left: parent.left
+	anchors.bottom: popup.bottom
         wrapMode: Text.Wrap
         width: parent.width - 30
         height: 80
@@ -437,7 +462,7 @@ ApplicationWindow {
           transactionModel.insert(0, block.txs.get(i))
         }
         if(block.txs.get(0).data){
-          popup.showContractData(block.txs.get(0).data)
+          popup.showContractData(block.txs.get(0))
         }
       }
       txView.forceActiveFocus()

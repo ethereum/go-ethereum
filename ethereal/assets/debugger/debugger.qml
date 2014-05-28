@@ -14,6 +14,9 @@ ApplicationWindow {
     width: 1290
     height: 900
 
+	property alias codeText: codeEditor.text
+	property alias dataText: rawDataField.text
+
 	MenuBar {
 		Menu {
 			title: "Debugger"
@@ -167,6 +170,7 @@ ApplicationWindow {
             }
         }
     }
+
     toolBar: ToolBar {
         RowLayout {
             spacing: 5
@@ -205,7 +209,7 @@ ApplicationWindow {
 
     function setInstruction(num) {
         asmTableView.selection.clear()
-        asmTableView.selection.select(num-1)
+        asmTableView.selection.select(num)
     }
 
     function setMem(mem) {
