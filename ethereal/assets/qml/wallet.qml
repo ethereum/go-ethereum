@@ -342,8 +342,6 @@ ApplicationWindow {
     property var block
     width: root.width
     height: 240
-    x: root.x
-    y: root.y + root.height
     Component{
       id: blockDetailsDelegate
       Rectangle {
@@ -442,6 +440,7 @@ ApplicationWindow {
         text: "Contract"
         anchors.top: contractLabel.bottom
         anchors.left: parent.left
+	anchors.bottom: popup.bottom
         wrapMode: Text.Wrap
         width: parent.width - 30
         height: 80
