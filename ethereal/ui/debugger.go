@@ -65,6 +65,12 @@ func (self *DebuggerWindow) SetCode(code string) {
 func (self *DebuggerWindow) SetData(data string) {
 	self.win.Set("dataText", data)
 }
+func (self *DebuggerWindow) SetAsm(data string) {
+	dis := ethchain.Disassemble(ethutil.FromHex(data))
+	for _, str := range dis {
+		self.win.Root().Call("setAsm", str)
+	}
+}
 
 func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, dataStr string) {
 	if !self.Db.done {
