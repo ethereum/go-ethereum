@@ -2,7 +2,6 @@ package ethui
 
 import (
 	"bitbucket.org/kardianos/osext"
-	"encoding/hex"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
@@ -94,9 +93,9 @@ func (self *UiLib) StartDbWithContractAndData(contractHash, data string) {
 	dbWindow := NewDebuggerWindow(self)
 	object := self.eth.StateManager().CurrentState().GetStateObject(ethutil.FromHex(contractHash))
 	if len(object.Script()) > 0 {
-		dbWindow.SetCode("0x" + hex.EncodeToString(object.Script()))
+		dbWindow.SetCode("0x" + ethutil.Hex(object.Script()))
 	}
-	dbWindow.SetData(data)
+	dbWindow.SetData("0x" + data)
 
 	dbWindow.Show()
 }
