@@ -22,8 +22,7 @@ type Closure struct {
 	Script []byte
 	State  *State
 
-	Gas   *big.Int
-	Price *big.Int
+	Gas, UsedGas, Price *big.Int
 
 	Args []byte
 }
@@ -74,10 +73,12 @@ func (c *Closure) Address() []byte {
 
 type DebugHook func(step int, op OpCode, mem *Memory, stack *Stack, stateObject *StateObject) bool
 
-func (c *Closure) Call(vm *Vm, args []byte, hook DebugHook) ([]byte, error) {
+func (c *Closure) Call(vm *Vm, args []byte, hook DebugHook) ([]byte, *big.Int, error) {
 	c.Args = args
 
-	return vm.RunClosure(c, hook)
+	ret, err := vm.RunClosure(c, hook)
+
+	return ret, c.UsedGas, err
 }
 
 func (c *Closure) Return(ret []byte) []byte {
@@ -93,10 +94,23 @@ func (c *Closure) Return(ret []byte) []byte {
 	return ret
 }
 
+func (c *Closure) UseGas(gas *big.Int) bool {
+	if c.Gas.Cmp(gas) < 0 {
+		return false
+	}
+
+	// Sub the amount of gas from the remaining
+	c.Gas.Sub(c.Gas, gas)
+	c.UsedGas.Add(c.UsedGas, gas)
+
+	return true
+}
+
 // Implement the Callee interface
 func (c *Closure) ReturnGas(gas, price *big.Int, state *State) {
 	// Return the gas to the closure
 	c.Gas.Add(c.Gas, gas)
+	c.UsedGas.Sub(c.UsedGas, gas)
 }
 
 func (c *Closure) Object() *StateObject {

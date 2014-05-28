@@ -21,9 +21,9 @@ func Disassemble(script []byte) (asm []string) {
 		asm = append(asm, fmt.Sprintf("%v", op))
 
 		switch op {
-		case oPUSH1, oPUSH2, oPUSH3, oPUSH4, oPUSH5, oPUSH6, oPUSH7, oPUSH8, oPUSH9, oPUSH10, oPUSH11, oPUSH12, oPUSH13, oPUSH14, oPUSH15, oPUSH16, oPUSH17, oPUSH18, oPUSH19, oPUSH20, oPUSH21, oPUSH22, oPUSH23, oPUSH24, oPUSH25, oPUSH26, oPUSH27, oPUSH28, oPUSH29, oPUSH30, oPUSH31, oPUSH32:
+		case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
 			pc.Add(pc, ethutil.Big1)
-			a := int64(op) - int64(oPUSH1) + 1
+			a := int64(op) - int64(PUSH1) + 1
 			data := script[pc.Int64() : pc.Int64()+a]
 			val := ethutil.BigD(data)
 
