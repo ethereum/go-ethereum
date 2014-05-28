@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"math/big"
 )
 
 // Number to bytes
@@ -97,4 +98,21 @@ func StringToByteFunc(str string, cb func(str string) []byte) (ret []byte) {
 	}
 
 	return
+}
+
+func FormatData(data string) []byte {
+	if len(data) == 0 {
+		return nil
+	}
+	// Simple stupid
+	d := new(big.Int)
+	if data[0:1] == "\"" && data[len(data)-1:] == "\"" {
+		d.SetBytes([]byte(data[1 : len(data)-1]))
+	} else if len(data) > 1 && data[:2] == "0x" {
+		d.SetBytes(FromHex(data[2:]))
+	} else {
+		d.SetString(data, 0)
+	}
+
+	return BigToBytes(d, 256)
 }

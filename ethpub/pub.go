@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
+	"strings"
 )
 
 type PEthereum struct {
@@ -161,7 +162,17 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, sc
 		if len(scriptStr) > 0 && scriptStr[0:2] == "0x" {
 			scriptStr = scriptStr[2:len(scriptStr)]
 		}
-		tx = ethchain.NewTransactionMessage(hash, value, gas, gasPrice, ethutil.FromHex(scriptStr))
+
+		data := ethutil.StringToByteFunc(scriptStr, func(s string) (ret []byte) {
+			slice := strings.Split(s, "\n")
+			for _, dataItem := range slice {
+				d := ethutil.FormatData(dataItem)
+				ret = append(ret, d...)
+			}
+			return
+		})
+
+		tx = ethchain.NewTransactionMessage(hash, value, gas, gasPrice, data)
 	}
 
 	acc := lib.stateManager.TransState().GetStateObject(keyPair.Address())
