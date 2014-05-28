@@ -105,8 +105,11 @@ func (sm *StateManager) ApplyTransactions(state *State, block *Block, txs []*Tra
 	for _, tx := range txs {
 		usedGas, err := sm.ApplyTransaction(state, block, tx)
 		if err != nil {
+			if IsNonceErr(err) {
+				continue
+			}
+
 			ethutil.Config.Log.Infoln(err)
-			//continue
 		}
 
 		accumelative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, usedGas))
@@ -116,7 +119,7 @@ func (sm *StateManager) ApplyTransactions(state *State, block *Block, txs []*Tra
 		validTxs = append(validTxs, tx)
 	}
 
-	return receipts, txs
+	return receipts, validTxs
 }
 
 func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transaction) (totalGasUsed *big.Int, err error) {

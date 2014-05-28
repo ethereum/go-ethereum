@@ -106,7 +106,7 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, state *State, toContract
 	sender := state.GetAccount(tx.Sender())
 
 	if sender.Nonce != tx.Nonce {
-		err = fmt.Errorf("[TXPL] Invalid account nonce, state nonce is %d transaction nonce is %d instead", sender.Nonce, tx.Nonce)
+		err = NonceError(tx.Nonce, sender.Nonce)
 		return
 	}
 
@@ -235,7 +235,7 @@ func (pool *TxPool) RemoveInvalid(state *State) {
 		tx := e.Value.(*Transaction)
 		sender := state.GetAccount(tx.Sender())
 		err := pool.ValidateTransaction(tx)
-		if err != nil || sender.Nonce != tx.Nonce {
+		if err != nil || sender.Nonce >= tx.Nonce {
 			pool.pool.Remove(e)
 		}
 	}
