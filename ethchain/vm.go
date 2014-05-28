@@ -326,9 +326,15 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case CALLDATALOAD:
 			require(1)
 			offset := stack.Pop().Int64()
-			val := closure.Args[offset : offset+32]
 
-			stack.Push(ethutil.BigD(val))
+			var data []byte
+			if len(closure.Args) >= int(offset+32) {
+				data = closure.Args[offset : offset+32]
+			} else {
+				data = []byte{0}
+			}
+
+			stack.Push(ethutil.BigD(data))
 		case CALLDATASIZE:
 			stack.Push(big.NewInt(int64(len(closure.Args))))
 		case GASPRICE:
@@ -498,7 +504,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 				contract.AddAmount(value)
 
 				// Create a new callable closure
-				closure := NewClosure(closure.Object(), contract, contract.script, vm.state, gas, closure.Price)
+				closure := NewClosure(closure, contract, contract.script, vm.state, gas, closure.Price)
 				// Executer the closure and get the return value (if any)
 				ret, _, err := closure.Call(vm, args, hook)
 				if err != nil {

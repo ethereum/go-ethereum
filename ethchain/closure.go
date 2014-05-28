@@ -11,13 +11,13 @@ type ClosureRef interface {
 	ReturnGas(*big.Int, *big.Int, *State)
 	Address() []byte
 	GetMem(*big.Int) *ethutil.Value
-	SetStore(*big.Int, *ethutil.Value)
+	SetStorage(*big.Int, *ethutil.Value)
 	N() *big.Int
 }
 
 // Basic inline closure object which implement the 'closure' interface
 type Closure struct {
-	callee *StateObject
+	callee ClosureRef
 	object *StateObject
 	Script []byte
 	State  *State
@@ -28,7 +28,7 @@ type Closure struct {
 }
 
 // Create a new closure for the given data items
-func NewClosure(callee, object *StateObject, script []byte, state *State, gas, price *big.Int) *Closure {
+func NewClosure(callee ClosureRef, object *StateObject, script []byte, state *State, gas, price *big.Int) *Closure {
 	c := &Closure{callee: callee, object: object, Script: script, State: state, Args: nil}
 
 	// In most cases gas, price and value are pointers to transaction objects
@@ -118,7 +118,7 @@ func (c *Closure) Object() *StateObject {
 	return c.object
 }
 
-func (c *Closure) Callee() *StateObject {
+func (c *Closure) Callee() ClosureRef {
 	return c.callee
 }
 
