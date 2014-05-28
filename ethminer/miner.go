@@ -5,6 +5,7 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
+	"sort"
 )
 
 type Miner struct {
@@ -12,7 +13,7 @@ type Miner struct {
 	ethereum    ethchain.EthManager
 	coinbase    []byte
 	reactChan   chan ethutil.React
-	txs         []*ethchain.Transaction
+	txs         ethchain.Transactions
 	uncles      []*ethchain.Block
 	block       *ethchain.Block
 	powChan     chan []byte
@@ -132,6 +133,8 @@ func (self *Miner) mineNewBlock() {
 		self.block.SetUncles(self.uncles)
 	}
 
+	// Sort the transactions by nonce in case of odd network propagation
+	sort.Sort(ethchain.TxByNonce{self.txs})
 	// Accumulate all valid transaction and apply them to the new state
 	receipts, txs := stateManager.ApplyTransactions(self.block.State(), self.block, self.txs)
 	self.txs = txs

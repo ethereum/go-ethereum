@@ -88,3 +88,13 @@ func IsHex(str string) bool {
 	l := len(str)
 	return l >= 4 && l%2 == 0 && str[0:2] == "0x"
 }
+
+func StringToByteFunc(str string, cb func(str string) []byte) (ret []byte) {
+	if len(str) > 1 && str[0:2] == "0x" {
+		ret = FromHex(str[2:])
+	} else {
+		ret = cb(str)
+	}
+
+	return
+}

@@ -91,28 +91,37 @@ func (pool *TxPool) addTransaction(tx *Transaction) {
 
 // Process transaction validates the Tx and processes funds from the
 // sender to the recipient.
-func (pool *TxPool) ProcessTransaction(tx *Transaction, state *State, toContract bool) (err error) {
+func (pool *TxPool) ProcessTransaction(tx *Transaction, state *State, toContract bool) (gas *big.Int, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			ethutil.Config.Log.Infoln(r)
 			err = fmt.Errorf("%v", r)
 		}
 	}()
+
+	gas = new(big.Int)
+	addGas := func(g *big.Int) { gas.Add(gas, g) }
+
 	// Get the sender
 	sender := state.GetAccount(tx.Sender())
 
 	if sender.Nonce != tx.Nonce {
-		return fmt.Errorf("[TXPL] Invalid account nonce, state nonce is %d transaction nonce is %d instead", sender.Nonce, tx.Nonce)
+		err = NonceError(tx.Nonce, sender.Nonce)
+		return
 	}
+
+	txTotalBytes := big.NewInt(int64(len(tx.Data)))
+	txTotalBytes.Div(txTotalBytes, ethutil.Big32)
+	addGas(new(big.Int).Mul(txTotalBytes, GasSStore))
 
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.
 	//totAmount := new(big.Int).Add(tx.Value, new(big.Int).Mul(TxFee, TxFeeRat))
 	totAmount := new(big.Int).Add(tx.Value, new(big.Int).Mul(tx.Gas, tx.GasPrice))
 	if sender.Amount.Cmp(totAmount) < 0 {
-		return fmt.Errorf("[TXPL] Insufficient amount in sender's (%x) account", tx.Sender())
+		err = fmt.Errorf("[TXPL] Insufficient amount in sender's (%x) account", tx.Sender())
+		return
 	}
-	//fmt.Println(tx)
 
 	// Get the receiver
 	receiver := state.GetAccount(tx.Recipient)
@@ -120,6 +129,7 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, state *State, toContract
 
 	// Send Tx to self
 	if bytes.Compare(tx.Recipient, tx.Sender()) == 0 {
+		addGas(GasTx)
 		// Subtract the fee
 		sender.SubAmount(new(big.Int).Mul(GasTx, tx.GasPrice))
 	} else {
@@ -225,7 +235,7 @@ func (pool *TxPool) RemoveInvalid(state *State) {
 		tx := e.Value.(*Transaction)
 		sender := state.GetAccount(tx.Sender())
 		err := pool.ValidateTransaction(tx)
-		if err != nil || sender.Nonce != tx.Nonce {
+		if err != nil || sender.Nonce >= tx.Nonce {
 			pool.pool.Remove(e)
 		}
 	}

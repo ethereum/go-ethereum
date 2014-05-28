@@ -147,22 +147,6 @@ func (tx *Transaction) RlpValueDecode(decoder *ethutil.Value) {
 	if len(tx.Recipient) == 0 {
 		tx.contractCreation = true
 	}
-
-	/*
-		// If the list is of length 10 it's a contract creation tx
-		if decoder.Len() == 10 {
-			tx.contractCreation = true
-			tx.Init = decoder.Get(6).Bytes()
-
-			tx.v = byte(decoder.Get(7).Uint())
-			tx.r = decoder.Get(8).Bytes()
-			tx.s = decoder.Get(9).Bytes()
-		} else {
-			tx.v = byte(decoder.Get(6).Uint())
-			tx.r = decoder.Get(7).Bytes()
-			tx.s = decoder.Get(8).Bytes()
-		}
-	*/
 }
 
 func (tx *Transaction) String() string {
@@ -227,4 +211,16 @@ func (self *Receipt) String() string {
 		self.Tx,
 		self.PostState,
 		self.CumulativeGasUsed)
+}
+
+// Transaction slice type for basic sorting
+type Transactions []*Transaction
+
+func (s Transactions) Len() int      { return len(s) }
+func (s Transactions) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+
+type TxByNonce struct{ Transactions }
+
+func (s TxByNonce) Less(i, j int) bool {
+	return s.Transactions[i].Nonce < s.Transactions[j].Nonce
 }
