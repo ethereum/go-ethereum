@@ -224,8 +224,8 @@ ApplicationWindow {
 	}
 
 	function setInstruction(num) {
-		asmTableView.selection.clear()
-		asmTableView.selection.select(num)
+		//asmTableView.selection.clear()
+		//asmTableView.selection.select(num)
 	}
 
 	function setMem(mem) {
