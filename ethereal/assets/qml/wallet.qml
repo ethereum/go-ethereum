@@ -204,7 +204,7 @@ ApplicationWindow {
           id: blockTable
           width: parent.width
           anchors.top: parent.top
-          anchors.bottom: logView.top
+          anchors.bottom: parent.bottom
           TableViewColumn{ role: "number" ; title: "#" ; width: 100 }
           TableViewColumn{ role: "hash" ; title: "Hash" ; width: 560 }
           TableViewColumn{ role: "txAmount" ; title: "Tx amount" ; width: 100 }
@@ -217,19 +217,6 @@ ApplicationWindow {
           }
         }
 
-        property var logModel: ListModel {
-          id: logModel
-        }
-
-        TableView {
-          id: logView
-          width: parent.width
-          height: 150
-          anchors.bottom: parent.bottom
-          TableViewColumn{ role: "description" ; title: "log" }
-
-          model: logModel
-        }
       }
 
       Rectangle {
@@ -256,6 +243,20 @@ ApplicationWindow {
           }
           text: pub.getKey().address
           width: 500
+        }
+
+        property var logModel: ListModel {
+          id: logModel
+        }
+
+        TableView {
+          id: logView
+          width: parent.width
+          height: 200
+          anchors.bottom: parent.bottom
+          TableViewColumn{ role: "description" ; title: "log" }
+
+          model: logModel
         }
       }
 
@@ -690,7 +691,7 @@ ApplicationWindow {
 
   function addLog(str) {
     if(str.len != 0) {
-      logModel.append({description: str})
+      logModel.insert(0, {description: str})
     }
   }
 

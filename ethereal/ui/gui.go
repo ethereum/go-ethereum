@@ -66,7 +66,6 @@ func (gui *Gui) Start(assetPath string) {
 	}})
 
 	ethutil.Config.SetClientString(fmt.Sprintf("/Ethereal v%s", version))
-	ethutil.Config.Log.Infoln("[GUI] Starting GUI")
 	// Create a new QML engine
 	gui.engine = qml.NewEngine()
 	context := gui.engine.Context()
@@ -92,6 +91,9 @@ func (gui *Gui) Start(assetPath string) {
 
 		panic(err)
 	}
+
+	ethutil.Config.Log.AddLogSystem(gui)
+	ethutil.Config.Log.Infoln("[GUI] Starting GUI")
 
 	win.Show()
 	win.Wait()

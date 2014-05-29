@@ -255,6 +255,10 @@ ApplicationWindow {
 	}
 
 	function setLog(msg) {
-		logModel.append({message: msg})
+		logModel.insert(0, {message: msg})
+	}
+
+	function clearLog() {
+		logModel.clear()
 	}
 }
