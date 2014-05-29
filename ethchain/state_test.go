@@ -1,7 +1,6 @@
 package ethchain
 
 import (
-	"fmt"
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethutil"
 	"testing"

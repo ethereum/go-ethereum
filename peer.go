@@ -440,7 +440,7 @@ func (p *Peer) HandleInbound() {
 					ethutil.Config.Log.Debugf("[PEER] Found canonical block, returning chain from: %x ", parent.Hash())
 					chain := p.ethereum.BlockChain().GetChainFromHash(parent.Hash(), amountOfBlocks)
 					if len(chain) > 0 {
-						ethutil.Config.Log.Debugf("[PEER] Returning %d blocks: %x ", len(chain), parent.Hash())
+						//ethutil.Config.Log.Debugf("[PEER] Returning %d blocks: %x ", len(chain), parent.Hash())
 						p.QueueMessage(ethwire.NewMessage(ethwire.MsgBlockTy, chain))
 					} else {
 						p.QueueMessage(ethwire.NewMessage(ethwire.MsgBlockTy, []interface{}{}))
