@@ -837,7 +837,7 @@ ApplicationWindow {
       TextField {
         id: txFuelRecipient
         placeholderText: "Contract address"
-        validator: RegExpValidator { regExp: /[a-f0-9]{40}/ }
+        //validator: RegExpValidator { regExp: /[a-f0-9]{40}/ }
         visible: false
         width: 530
       }
@@ -948,7 +948,7 @@ ApplicationWindow {
         id: txSimpleRecipient
         placeholderText: "Recipient address"
         Layout.fillWidth: true
-        validator: RegExpValidator { regExp: /[a-f0-9]{40}/ }
+        //validator: RegExpValidator { regExp: /[a-f0-9]{40}/ }
         width: 530
         onTextChanged: { checkFormState() }
       }
