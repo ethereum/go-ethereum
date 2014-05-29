@@ -122,29 +122,6 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, sc
 	var tx *ethchain.Transaction
 	// Compile and assemble the given data
 	if contractCreation {
-		/*
-			var initScript, mainScript []byte
-			var err error
-			if ethutil.IsHex(initStr) {
-				initScript = ethutil.FromHex(initStr[2:])
-			} else {
-				initScript, err = ethutil.Compile(initStr)
-				if err != nil {
-					return nil, err
-				}
-			}
-
-			if ethutil.IsHex(scriptStr) {
-				mainScript = ethutil.FromHex(scriptStr[2:])
-			} else {
-				mainScript, err = ethutil.Compile(scriptStr)
-				if err != nil {
-					return nil, err
-				}
-			}
-
-			script := ethchain.AppendScript(initScript, mainScript)
-		*/
 		var script []byte
 		var err error
 		if ethutil.IsHex(scriptStr) {
