@@ -976,7 +976,7 @@ ApplicationWindow {
         text: "Send"
         onClicked: {
           //this.enabled = false
-          var res = eth.transact(txSimpleRecipient.text, txSimpleValue.text,"","","")
+          var res = eth.transact(txSimpleRecipient.text, txSimpleValue.text, "500", "1000000", "")
           if(res[1]) {
             txSimpleResult.text = "There has been an error broadcasting your transaction:" + res[1].error()
           } else {
