@@ -245,10 +245,25 @@ ApplicationWindow {
 					width: 500
 				}
 
+
+				property var addressModel: ListModel {
+					id: addressModel
+				}
+				TableView {
+					id: addressView
+					width: parent.width
+					height: 200
+					anchors.bottom: logView.top
+					TableViewColumn{ role: "name"; title: "name" }
+					TableViewColumn{ role: "address"; title: "address"; width: 300}
+
+					model: addressModel
+				}
+
+
 				property var logModel: ListModel {
 					id: logModel
 				}
-
 				TableView {
 					id: logView
 					width: parent.width
@@ -342,13 +357,13 @@ ApplicationWindow {
 		visible: false
 		property var block
 		width: root.width
-		height: 240
+		height: 300
 		Component{
 			id: blockDetailsDelegate
 			Rectangle {
 				color: "#252525"
 				width: popup.width
-				height: 200
+				height: 150
 				Column {
 					anchors.leftMargin: 10
 					anchors.topMargin: 5
@@ -357,6 +372,7 @@ ApplicationWindow {
 					Text { text: '<h3>Block details</h3>'; color: "#F2F2F2"}
 					Text { text: '<b>Block number:</b> ' + number; color: "#F2F2F2"}
 					Text { text: '<b>Hash:</b> ' + hash; color: "#F2F2F2"}
+					Text { text: '<b>Coinbase:</b> ' + coinbase; color: "#F2F2F2"}
 					Text { text: '<b>Block found at:</b> ' + prettyTime; color: "#F2F2F2"}
 				}
 			}
@@ -365,7 +381,7 @@ ApplicationWindow {
 			model: singleBlock
 			delegate: blockDetailsDelegate
 			anchors.top: parent.top
-			height: 70
+			height: 100
 			anchors.leftMargin: 20
 			id: listViewThing
 			Layout.maximumHeight: 40
@@ -390,7 +406,7 @@ ApplicationWindow {
 				if(tx.data) {
 					popup.showContractData(tx)
 				}else{
-					popup.height = 230
+					popup.height = 440
 				}
 			}
 		}
@@ -404,7 +420,7 @@ ApplicationWindow {
 				contractLabel.text = "<h4> Transaction ran contract " + tx.address + "</h4>"
 				contractData.text = tx.rawData
 			}
-			popup.height = 400
+			popup.height = 540
 		}
 
 		Rectangle {
@@ -456,7 +472,7 @@ ApplicationWindow {
 		}
 		function setDetails(block){
 			singleBlock.set(0,block)
-			popup.height = 230
+			popup.height = 300
 			transactionModel.clear()
 			if(block.txs != undefined){
 				for(var i = 0; i < block.txs.count; ++i) {
@@ -620,36 +636,15 @@ ApplicationWindow {
 		}
 	}
 
-	function setAsm(asm) {
-		asmModel.append({asm: asm})
-	}
-
-	function setInstruction(num) {
-		asmTableView.selection.clear()
-		asmTableView.selection.select(num-1)
-	}
-
-	function clearAsm() {
-		asmModel.clear()
-	}
-
-	function setMem(mem) {
-		memModel.append({num: mem.num, value: mem.value})
-	}
-	function clearMem(){
-		memModel.clear()
-	}
-
-	function setStack(stack) {
-		stackModel.append({value: stack})
-	}
 	function addDebugMessage(message){
-		console.log("WOOP:")
 		debuggerLog.append({value: message})
 	}
 
-	function clearStack() {
-		stackModel.clear()
+	function addAddress(address) {
+		addressModel.append({name: address.name, address: address.address})
+	}
+	function clearAddress() {
+		addressModel.clear()
 	}
 
 	function loadPlugin(name) {
@@ -683,9 +678,9 @@ ApplicationWindow {
 		}
 
 		if(initial){
-			blockModel.append({number: block.number, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
+			blockModel.append({number: block.number, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
 		}else{
-			blockModel.insert(0, {number: block.number, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
+			blockModel.insert(0, {number: block.number, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
 		}
 	}
 

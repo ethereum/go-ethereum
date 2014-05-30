@@ -110,6 +110,7 @@ func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
 	win := gui.createWindow(component)
 
 	go gui.setInitialBlockChain()
+	go gui.loadAddressBook()
 	go gui.readPreviousTransactions()
 	go gui.update()
 
@@ -145,6 +146,19 @@ func (gui *Gui) setInitialBlockChain() {
 		sBlk = blk.PrevHash
 		gui.processBlock(blk, true)
 	}
+}
+
+type address struct {
+	Name, Address string
+}
+
+var namereg = ethutil.FromHex("bb5f186604d057c1c5240ca2ae0f6430138ac010")
+
+func (gui *Gui) loadAddressBook() {
+	gui.win.Root().Call("clearAddress")
+	gui.eth.StateManager().CurrentState().GetStateObject(namereg).State().EachStorage(func(name string, value *ethutil.Value) {
+		gui.win.Root().Call("addAddress", struct{ Name, Address string }{name, ethutil.Hex(value.Bytes())})
+	})
 }
 
 func (gui *Gui) readPreviousTransactions() {
@@ -191,10 +205,12 @@ func (gui *Gui) update() {
 
 	blockChan := make(chan ethutil.React, 1)
 	txChan := make(chan ethutil.React, 1)
+	objectChan := make(chan ethutil.React, 1)
 
 	reactor.Subscribe("newBlock", blockChan)
 	reactor.Subscribe("newTx:pre", txChan)
 	reactor.Subscribe("newTx:post", txChan)
+	reactor.Subscribe("object:"+string(namereg), objectChan)
 
 	state := gui.eth.StateManager().TransState()
 
@@ -241,6 +257,8 @@ func (gui *Gui) update() {
 
 				state.UpdateStateObject(object)
 			}
+		case <-objectChan:
+			gui.loadAddressBook()
 		}
 	}
 }
