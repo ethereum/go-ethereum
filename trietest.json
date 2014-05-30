@@ -1,47 +1,61 @@
 {
-	"basic": {
-		"in": {
-			"a": "A",
-			"b": "B"
-		},
-		"root": "300eab197a9d9e437aaeb9b0d7bd77d57e8d4e3eeca0b1e6a3fe28a84e2cd70c"
-	},
-	"basic1": {
-		"in": {
-			"test": "test"
-		},
-		"root": "85d106d4edff3b7a4889e91251d0a87d7c17a1dda648ebdba8c6060825be23b8"
-	},
-	"basic2": {
-		"in": {
-			"test": "test",
-			"te": "testy"
-		},
-		"root": "8452568af70d8d140f58d941338542f645fcca50094b20f3c3d8c3df49337928"
-	},
-	"beprefix": {
-		"in": {
-			"be": "e",
-			"bed": "d",
-			"dog": "puppy"
-		},
-		"root": "3f67c7a47520f79faa29255d2d3c084a7a6df0453116ed7232ff10277a8be68b"
-	},
-	"doprefix": {
-		"in": {
-			"doe": "reindeer",
-			"dog": "puppy",
-			"dogglesworth": "cat"
-		},
-		"root": "8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3"
-	},
-	"multiprefix": {
-		"in": {
-			"do": "verb",
-			"horse": "stallion",
-			"doge": "coin",
-			"dog": "puppy"
-		},
-		"root": "5991bb8c6514148a29db676a14ac506cd2cd5775ace63c30a4fe457715e9ac84"
-	}
+  "singleItem": {
+    "inputs": [
+      ["A", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
+    ],
+    "expectation": "d23786fb4a010da3ce639d66d5e904a11dbc02746d1ce25029e53290cabf28ab"
+  },
+  "dogs": {
+    "inputs": [
+      ["doe", "reindeer"],
+      ["dog", "puppy"],
+      ["dogglesworth", "cat"]
+    ],
+    "expectation": "8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3"
+  },
+  "puppy": {
+    "inputs":[
+      ["do", "verb"],
+      ["horse", "stallion"],
+      ["doge", "coin"],
+      ["dog", "puppy"]
+    ],
+    "expectation": "5991bb8c6514148a29db676a14ac506cd2cd5775ace63c30a4fe457715e9ac84"
+  },
+  "emptyValues": {
+    "inputs":[
+      ["do", "verb"],
+      ["ether", "wookiedoo"],
+      ["horse", "stallion"],
+      ["shaman", "horse"],
+      ["doge", "coin"],
+      ["ether", ""],
+      ["dog", "puppy"],
+      ["shaman", ""]
+    ],
+    "expectation": "5991bb8c6514148a29db676a14ac506cd2cd5775ace63c30a4fe457715e9ac84"
+  },
+  "foo": {
+    "inputs":[
+      ["foo", "bar"],
+      ["food", "bat"],
+      ["food", "bass"]
+    ],
+    "expectation": "17beaa1648bafa633cda809c90c04af50fc8aed3cb40d16efbddee6fdf63c4c3"
+  },
+  "smallValues": {
+    "inputs":[
+      ["be", "e"],
+      ["dog", "puppy"],
+      ["bed", "d"]
+    ],
+    "expectation": "3f67c7a47520f79faa29255d2d3c084a7a6df0453116ed7232ff10277a8be68b"
+  },
+  "testy": {
+    "inputs":[
+      ["test", "test"],
+      ["te", "testy"]
+    ],
+    "expectation": "8452568af70d8d140f58d941338542f645fcca50094b20f3c3d8c3df49337928"
+  }
 }
