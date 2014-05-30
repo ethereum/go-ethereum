@@ -25,6 +25,7 @@ func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) Miner {
 	reactChan := make(chan ethutil.React, 1)   // This is the channel that receives 'updates' when ever a new transaction or block comes in
 	powChan := make(chan []byte, 1)            // This is the channel that receives valid sha hases for a given block
 	powQuitChan := make(chan ethutil.React, 1) // This is the channel that can exit the miner thread
+	quitChan := make(chan bool, 1)
 
 	ethereum.Reactor().Subscribe("newBlock", reactChan)
 	ethereum.Reactor().Subscribe("newTx:pre", reactChan)
@@ -44,7 +45,7 @@ func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) Miner {
 		reactChan:   reactChan,
 		powChan:     powChan,
 		powQuitChan: powQuitChan,
-		quitChan:    make(chan bool),
+		quitChan:    quitChan,
 	}
 
 	// Insert initial TXs in our little miner 'pool'
