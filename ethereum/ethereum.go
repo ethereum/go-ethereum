@@ -6,10 +6,12 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/utils"
+	"github.com/rakyll/globalconf"
 	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
+	"path"
 	"runtime"
 	"strings"
 )
@@ -59,7 +61,15 @@ func main() {
 		lt = ethutil.LogFile | ethutil.LogStd
 	}
 
-	ethutil.ReadConfig(".ethereum", lt, Identifier)
+	g, err := globalconf.NewWithOptions(&globalconf.Options{
+		Filename: path.Join(ethutil.ApplicationFolder(".ethereal"), "conf.ini"),
+	})
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		g.ParseAll()
+	}
+	ethutil.ReadConfig(".ethereum", lt, g, Identifier)
 
 	logger := ethutil.Config.Log
 

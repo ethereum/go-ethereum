@@ -50,7 +50,7 @@ func main() {
 	} else {
 		g.ParseAll()
 	}
-	ethutil.ReadConfig(".ethereal", ethutil.LogFile|ethutil.LogStd, Identifier)
+	ethutil.ReadConfig(".ethereal", ethutil.LogFile|ethutil.LogStd, g, Identifier)
 
 	// Instantiated a eth stack
 	ethereum, err := eth.New(eth.CapDefault, UseUPnP)
