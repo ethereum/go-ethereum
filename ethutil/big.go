@@ -49,6 +49,10 @@ func BigD(data []byte) *big.Int {
 func BigToBytes(num *big.Int, base int) []byte {
 	ret := make([]byte, base/8)
 
+	if len(num.Bytes()) > base/8 {
+		return num.Bytes()
+	}
+
 	return append(ret[:len(ret)-len(num.Bytes())], num.Bytes()...)
 }
 
