@@ -27,7 +27,6 @@ General command line options
 
 ```
 Shared between ethereum and ethereal
--m       Start mining blocks
 -genaddr Generates a new address and private key (destructive action)
 -p       Port on which the server will accept incomming connections
 -upnp    Enable UPnP
@@ -41,6 +40,7 @@ Ethereum only
 ethereum [options] [filename]
 -js        Start the JavaScript REPL
 filename   Load the given file and interpret as JavaScript
+-m       Start mining blocks
 
 Etheral only
 -asset_path    absolute path to GUI assets directory

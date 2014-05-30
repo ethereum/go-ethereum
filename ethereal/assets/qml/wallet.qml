@@ -170,6 +170,7 @@ ApplicationWindow {
 				visible: false
 				anchors.fill: parent
 				color: "#00000000"
+				/*
 				TabView{
 					anchors.fill: parent
 					anchors.rightMargin: 5
@@ -181,6 +182,10 @@ ApplicationWindow {
 						addTab("Simple send", newTransaction)
 						addTab("Contracts", newContract)
 					}
+				}
+				*/
+				Component.onCompleted: {
+					newContract.createObject(newTxView)
 				}
 			}
 
@@ -574,7 +579,14 @@ ApplicationWindow {
 		}else{
 			isContract = "No"
 		}
-		txModel.insert(0, {inout: inout, hash: tx.hash, address: tx.address, value: tx.value, contract: isContract})
+
+		var address;
+		if(inout == "recv") {
+			address = tx.sender;
+		} else {
+			address = tx.address;
+		}
+		txModel.insert(0, {inout: inout, hash: tx.hash, address: address, value: tx.value, contract: isContract})
 	}
 
 	function addBlock(block, initial) {
@@ -625,6 +637,7 @@ ApplicationWindow {
 		id: newContract
 		Column {
 			id: mainContractColumn
+			anchors.fill: parent
 			function contractFormReady(){
 				if(codeView.text.length > 0 && txValue.text.length > 0 && txGas.text.length > 0 && txGasPrice.length > 0) {
 					txButton.state = "READY"
@@ -646,6 +659,8 @@ ApplicationWindow {
 					PropertyChanges { target: codeView; visible:false}
 					PropertyChanges { target: txButton; visible:false}
 					PropertyChanges { target: txDataLabel; visible:false}
+					PropertyChanges { target: atLabel; visible:false}
+					PropertyChanges { target: txFuelRecipient; visible:false}
 
 					PropertyChanges { target: txResult; visible:true}
 					PropertyChanges { target: txOutput; visible:true}
@@ -673,81 +688,69 @@ ApplicationWindow {
 			anchors.topMargin: 5
 
 			TextField {
+				id: txFuelRecipient
+				placeholderText: "Address / Name or empty for contract"
+				//validator: RegExpValidator { regExp: /[a-f0-9]{40}/ }
+				width: 400
+			}
+
+			TextField {
 				id: txValue
-				width: 200
+				width: 222
 				placeholderText: "Amount"
 				validator: RegExpValidator { regExp: /\d*/ }
 				onTextChanged: {
 					contractFormReady()
 				}
 			}
-			TextField {
-				id: txGas
-				width: 200
-				validator: RegExpValidator { regExp: /\d*/ }
-				placeholderText: "Gas"
-				onTextChanged: {
-					contractFormReady()
-				}
-			}
-			TextField {
-				id: txGasPrice
-				width: 200
-				placeholderText: "Gas price"
-				validator: RegExpValidator { regExp: /\d*/ }
-				onTextChanged: {
-					contractFormReady()
-				}
-			}
 
-			Row {
-				id: rowContract
-				ExclusiveGroup { id: contractTypeGroup }
-				RadioButton {
-					id: createContractRadio
-					text: "Create contract"
-					checked: true
-					exclusiveGroup: contractTypeGroup
-					onClicked: {
-						txFuelRecipient.visible = false
-						txDataLabel.text = "Contract code"
+			RowLayout {
+				TextField {
+					id: txGas
+					width: 50
+					validator: RegExpValidator { regExp: /\d*/ }
+					placeholderText: "Gas"
+					text: "500"
+					/*
+					onTextChanged: {
+						contractFormReady()
 					}
+					*/
 				}
-				RadioButton {
-					id: runContractRadio
-					text: "Run contract"
-					exclusiveGroup: contractTypeGroup
-					onClicked: {
-						txFuelRecipient.visible = true
-						txDataLabel.text = "Contract arguments"
+				Label {
+					id: atLabel
+					text: "@"
+				}
+
+				TextField {
+					id: txGasPrice
+					width: 200
+					placeholderText: "Gas price"
+					text: "1000000"
+					validator: RegExpValidator { regExp: /\d*/ }
+					/*
+					onTextChanged: {
+						contractFormReady()
 					}
+					*/
 				}
 			}
-
 
 			Label {
 				id: txDataLabel
-				text: "Contract code"
+				text: "Data"
 			}
 
 			TextArea {
 				id: codeView
 				height: 300
 				anchors.topMargin: 5
-				Layout.fillWidth: true
-				width: parent.width /2
+				width: 400
 				onTextChanged: {
 					contractFormReady()
 				}
 			}
 
-			TextField {
-				id: txFuelRecipient
-				placeholderText: "Contract address"
-				//validator: RegExpValidator { regExp: /[a-f0-9]{40}/ }
-				visible: false
-				width: 530
-			}
 
 			Button {
 				id: txButton
@@ -790,7 +793,7 @@ ApplicationWindow {
 			Button {
 				id: newTxButton
 				visible: false
-				text: "Create an other contract"
+				text: "Create a new transaction"
 				onClicked: {
 					this.visible = false
 					txResult.text = ""
