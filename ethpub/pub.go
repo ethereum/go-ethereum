@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
+	"math/big"
 	"strings"
 )
 
@@ -95,13 +96,29 @@ func (lib *PEthereum) Create(key, valueStr, gasStr, gasPriceStr, script string) 
 	return lib.createTx(key, "", valueStr, gasStr, gasPriceStr, script)
 }
 
+var namereg = ethutil.FromHex("bb5f186604d057c1c5240ca2ae0f6430138ac010")
+
+func GetAddressFromNameReg(stateManager *ethchain.StateManager, name string) []byte {
+	recp := new(big.Int).SetBytes([]byte(name))
+	object := stateManager.CurrentState().GetStateObject(namereg)
+	reg := object.GetStorage(recp)
+
+	return reg.Bytes()
+}
+
 func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, scriptStr string) (*PReceipt, error) {
 	var hash []byte
 	var contractCreation bool
 	if len(recipient) == 0 {
 		contractCreation = true
 	} else {
-		hash = ethutil.FromHex(recipient)
+		// Check if an address is stored by this address
+		addr := GetAddressFromNameReg(lib.stateManager, recipient)
+		if len(addr) > 0 {
+			hash = addr
+		} else {
+			hash = ethutil.FromHex(recipient)
+		}
 	}
 
 	var keyPair *ethutil.KeyPair
@@ -122,29 +139,6 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, sc
 	var tx *ethchain.Transaction
 	// Compile and assemble the given data
 	if contractCreation {
-		/*
-			var initScript, mainScript []byte
-			var err error
-			if ethutil.IsHex(initStr) {
-				initScript = ethutil.FromHex(initStr[2:])
-			} else {
-				initScript, err = ethutil.Compile(initStr)
-				if err != nil {
-					return nil, err
-				}
-			}
-
-			if ethutil.IsHex(scriptStr) {
-				mainScript = ethutil.FromHex(scriptStr[2:])
-			} else {
-				mainScript, err = ethutil.Compile(scriptStr)
-				if err != nil {
-					return nil, err
-				}
-			}
-
-			script := ethchain.AppendScript(initScript, mainScript)
-		*/
 		var script []byte
 		var err error
 		if ethutil.IsHex(scriptStr) {

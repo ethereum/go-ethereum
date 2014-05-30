@@ -165,6 +165,8 @@ func (s *Ethereum) AddPeer(conn net.Conn) {
 			ethutil.Config.Log.Debugf("[SERV] Max connected peers reached. Not adding incoming peer.")
 		}
 	}
+
+	s.reactor.Post("peerList", s.peers)
 }
 
 func (s *Ethereum) ProcessPeerList(addrs []string) {
@@ -236,6 +238,7 @@ func (s *Ethereum) ConnectToPeer(addr string) error {
 		s.peers.PushBack(peer)
 
 		ethutil.Config.Log.Infof("[SERV] Adding peer (%s) %d / %d\n", addr, s.peers.Len(), s.MaxPeers)
+		s.reactor.Post("peerList", s.peers)
 	}
 
 	return nil
@@ -303,12 +306,26 @@ func (s *Ethereum) Peers() *list.List {
 }
 
 func (s *Ethereum) reapPeers() {
+	eachPeer(s.peers, func(p *Peer, e *list.Element) {
+		if atomic.LoadInt32(&p.disconnect) == 1 || (p.inbound && (time.Now().Unix()-p.lastPong) > int64(5*time.Minute)) {
+			s.removePeerElement(e)
+		}
+	})
+}
+
+func (s *Ethereum) removePeerElement(e *list.Element) {
 	s.peerMut.Lock()
 	defer s.peerMut.Unlock()
 
-	eachPeer(s.peers, func(p *Peer, e *list.Element) {
-		if atomic.LoadInt32(&p.disconnect) == 1 || (p.inbound && (time.Now().Unix()-p.lastPong) > int64(5*time.Minute)) {
-			s.peers.Remove(e)
+	s.peers.Remove(e)
+
+	s.reactor.Post("peerList", s.peers)
+}
+
+func (s *Ethereum) RemovePeer(p *Peer) {
+	eachPeer(s.peers, func(peer *Peer, e *list.Element) {
+		if peer == p {
+			s.removePeerElement(e)
 		}
 	})
 }

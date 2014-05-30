@@ -176,7 +176,7 @@ func (val *Value) Get(idx int) *Value {
 		}
 
 		if idx < 0 {
-			panic("negative idx for Value Get")
+			return NewValue(nil)
 		}
 
 		return NewValue(d[idx])

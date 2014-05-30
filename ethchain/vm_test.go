@@ -62,7 +62,7 @@ func TestRun4(t *testing.T) {
 		Diff:        big.NewInt(256),
 	})
 	var ret []byte
-	ret, e = callerClosure.Call(vm, nil, nil)
+	ret, _, e = callerClosure.Call(vm, nil, nil)
 	if e != nil {
 		fmt.Println("error", e)
 	}
