@@ -1,7 +1,9 @@
 package ethutil
 
 import (
+	"flag"
 	"fmt"
+	"github.com/rakyll/globalconf"
 	"log"
 	"os"
 	"os/user"
@@ -20,6 +22,8 @@ type config struct {
 	ClientString string
 	Pubkey       []byte
 	Identifier   string
+
+	conf *globalconf.GlobalConf
 }
 
 const defaultConf = `
@@ -67,11 +71,12 @@ func ApplicationFolder(base string) string {
 // Read config
 //
 // Initialize the global Config variable with default settings
-func ReadConfig(base string, logTypes LoggerType, id string) *config {
+func ReadConfig(base string, logTypes LoggerType, g *globalconf.GlobalConf, id string) *config {
 	if Config == nil {
 		path := ApplicationFolder(base)
 
 		Config = &config{ExecPath: path, Debug: true, Ver: "0.5.0 RC11"}
+		Config.conf = g
 		Config.Identifier = id
 		Config.Log = NewLogger(logTypes, LogLevelDebug)
 		Config.SetClientString("/Ethereum(G)")
@@ -88,6 +93,16 @@ func (c *config) SetClientString(str string) {
 		id = c.Identifier
 	}
 	Config.ClientString = fmt.Sprintf("%s nv%s/%s", str, c.Ver, id)
+}
+
+func (c *config) SetIdentifier(id string) {
+	c.Identifier = id
+	c.Set("id", id)
+}
+
+func (c *config) Set(key, value string) {
+	f := &flag.Flag{Name: key, Value: &confValue{value}}
+	c.conf.Set("", f)
 }
 
 type LoggerType byte
@@ -190,3 +205,10 @@ func (log *Logger) Fatal(v ...interface{}) {
 
 	os.Exit(1)
 }
+
+type confValue struct {
+	value string
+}
+
+func (self confValue) String() string     { return self.value }
+func (self confValue) Set(s string) error { self.value = s; return nil }
