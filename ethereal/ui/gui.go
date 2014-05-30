@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
 	"math/big"
 	"strings"
@@ -66,7 +67,6 @@ func (gui *Gui) Start(assetPath string) {
 	}})
 
 	ethutil.Config.SetClientString(fmt.Sprintf("/Ethereal v%s", version))
-	ethutil.Config.Log.Infoln("[GUI] Starting GUI")
 	// Create a new QML engine
 	gui.engine = qml.NewEngine()
 	context := gui.engine.Context()
@@ -93,10 +93,26 @@ func (gui *Gui) Start(assetPath string) {
 		panic(err)
 	}
 
+	ethutil.Config.Log.AddLogSystem(gui)
+	ethutil.Config.Log.Infoln("[GUI] Starting GUI")
+
 	win.Show()
 	win.Wait()
 
 	gui.eth.Stop()
+}
+
+func (gui *Gui) ToggleMining() {
+	var txt string
+	if gui.eth.Mining {
+		utils.StopMining(gui.eth)
+		txt = "Start mining"
+	} else {
+		utils.StartMining(gui.eth)
+		txt = "Stop mining"
+	}
+
+	gui.win.Root().Set("miningButtonText", txt)
 }
 
 func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
@@ -107,8 +123,11 @@ func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
 
 	win := gui.createWindow(component)
 
-	go gui.setInitialBlockChain()
-	go gui.readPreviousTransactions()
+	gui.setInitialBlockChain()
+	gui.loadAddressBook()
+	gui.readPreviousTransactions()
+	gui.setPeerInfo()
+
 	go gui.update()
 
 	return win, nil
@@ -143,6 +162,19 @@ func (gui *Gui) setInitialBlockChain() {
 		sBlk = blk.PrevHash
 		gui.processBlock(blk, true)
 	}
+}
+
+type address struct {
+	Name, Address string
+}
+
+var namereg = ethutil.FromHex("bb5f186604d057c1c5240ca2ae0f6430138ac010")
+
+func (gui *Gui) loadAddressBook() {
+	gui.win.Root().Call("clearAddress")
+	gui.eth.StateManager().CurrentState().GetStateObject(namereg).State().EachStorage(func(name string, value *ethutil.Value) {
+		gui.win.Root().Call("addAddress", struct{ Name, Address string }{name, ethutil.Hex(value.Bytes())})
+	})
 }
 
 func (gui *Gui) readPreviousTransactions() {
@@ -189,10 +221,14 @@ func (gui *Gui) update() {
 
 	blockChan := make(chan ethutil.React, 1)
 	txChan := make(chan ethutil.React, 1)
+	objectChan := make(chan ethutil.React, 1)
+	peerChan := make(chan ethutil.React, 1)
 
 	reactor.Subscribe("newBlock", blockChan)
 	reactor.Subscribe("newTx:pre", txChan)
 	reactor.Subscribe("newTx:post", txChan)
+	reactor.Subscribe("object:"+string(namereg), objectChan)
+	reactor.Subscribe("peerList", peerChan)
 
 	state := gui.eth.StateManager().TransState()
 
@@ -239,8 +275,16 @@ func (gui *Gui) update() {
 
 				state.UpdateStateObject(object)
 			}
+		case <-objectChan:
+			gui.loadAddressBook()
+		case <-peerChan:
+			gui.setPeerInfo()
 		}
 	}
+}
+
+func (gui *Gui) setPeerInfo() {
+	gui.win.Root().Call("setPeers", fmt.Sprintf("%d / %d", gui.eth.PeerCount(), gui.eth.MaxPeers))
 }
 
 // Logging functions that log directly to the GUI interface

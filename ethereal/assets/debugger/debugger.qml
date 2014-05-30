@@ -8,7 +8,7 @@ import Ethereum 1.0
 
 ApplicationWindow {
 	visible: false
-	title: "IceCream"
+	title: "IceCREAM"
 	minimumWidth: 1280
 	minimumHeight: 900
 	width: 1290
@@ -224,8 +224,8 @@ ApplicationWindow {
 	}
 
 	function setInstruction(num) {
-		asmTableView.selection.clear()
-		asmTableView.selection.select(num)
+		//asmTableView.selection.clear()
+		//asmTableView.selection.select(num)
 	}
 
 	function setMem(mem) {
@@ -255,6 +255,10 @@ ApplicationWindow {
 	}
 
 	function setLog(msg) {
-		logModel.append({message: msg})
+		logModel.insert(0, {message: msg})
+	}
+
+	function clearLog() {
+		logModel.clear()
 	}
 }

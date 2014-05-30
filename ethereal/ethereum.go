@@ -8,9 +8,11 @@ import (
 	"github.com/ethereum/go-ethereum/ethereal/ui"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
+	"github.com/rakyll/globalconf"
 	"log"
 	"os"
 	"os/signal"
+	"path"
 	"runtime"
 )
 
@@ -39,7 +41,16 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	ethchain.InitFees()
-	ethutil.ReadConfig(DataDir, ethutil.LogFile|ethutil.LogStd, Identifier)
+
+	g, err := globalconf.NewWithOptions(&globalconf.Options{
+		Filename: path.Join(ethutil.ApplicationFolder(".ethereal"), "conf.ini"),
+	})
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		g.ParseAll()
+	}
+	ethutil.ReadConfig(".ethereal", ethutil.LogFile|ethutil.LogStd, Identifier)
 
 	// Instantiated a eth stack
 	ethereum, err := eth.New(eth.CapDefault, UseUPnP)
@@ -108,9 +119,11 @@ save these words so you can restore your account later: %s
 		os.Exit(0)
 	}
 
-	if StartMining {
-		utils.DoMining(ethereum)
-	}
+	/*
+		if StartMining {
+			utils.DoMining(ethereum)
+		}
+	*/
 
 	if StartRpc {
 		utils.DoRpc(ethereum, RpcPort)

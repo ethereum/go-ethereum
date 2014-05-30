@@ -71,6 +71,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 	var err error
 	script := ethutil.StringToByteFunc(scriptStr, func(s string) (ret []byte) {
 		ret, err = ethutil.Compile(s)
+		fmt.Printf("%x\n", ret)
 		return
 	})
 
@@ -82,6 +83,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 
 	dis := ethchain.Disassemble(script)
 	self.win.Root().Call("clearAsm")
+	self.win.Root().Call("clearLog")
 
 	for _, str := range dis {
 		self.win.Root().Call("setAsm", str)
