@@ -450,9 +450,11 @@ func (p *Peer) HandleInbound() {
 					//ethutil.Config.Log.Debugf("[PEER] Could not find a similar block")
 					// If no blocks are found we send back a reply with msg not in chain
 					// and the last hash from get chain
-					lastHash := msg.Data.Get(l - 1)
-					//log.Printf("Sending not in chain with hash %x\n", lastHash.AsRaw())
-					p.QueueMessage(ethwire.NewMessage(ethwire.MsgNotInChainTy, []interface{}{lastHash.Raw()}))
+					if l > 0 {
+						lastHash := msg.Data.Get(l - 1)
+						//log.Printf("Sending not in chain with hash %x\n", lastHash.AsRaw())
+						p.QueueMessage(ethwire.NewMessage(ethwire.MsgNotInChainTy, []interface{}{lastHash.Raw()}))
+					}
 				}
 			case ethwire.MsgNotInChainTy:
 				ethutil.Config.Log.Debugf("Not in chain: %x\n", msg.Data.Get(0).Bytes())
