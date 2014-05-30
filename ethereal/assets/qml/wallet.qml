@@ -221,23 +221,30 @@ ApplicationWindow {
 				color: "#00000000"
 				anchors.fill: parent
 
-				Label {
-					id: addressLabel
-					text: "Address"
-					anchors {
-						margins: 5
-						top: parent.top
-						left: parent.left
+				Column {
+					spacing: 3
+					anchors.fill: parent
+					anchors.topMargin: 5
+					anchors.leftMargin: 5
+
+					Label {
+						id: addressLabel
+						text: "Address"
 					}
-				}
-				TextField {
-					anchors {
-						margins: 5
-						left: addressLabel.right
-						top: parent.top
+					TextField {
+						text: pub.getKey().address
+						width: 500
 					}
-					text: pub.getKey().address
-					width: 500
+
+					Label {
+						text: "Client ID"
+					}
+					TextField {
+						text: eth.clientId()
+						onTextChanged: {
+							eth.changeClientId(text)
+						}
+					}
 				}
 
 

@@ -67,6 +67,7 @@ func (gui *Gui) Start(assetPath string) {
 	}})
 
 	ethutil.Config.SetClientString(fmt.Sprintf("/Ethereal v%s", version))
+
 	// Create a new QML engine
 	gui.engine = qml.NewEngine()
 	context := gui.engine.Context()
@@ -314,4 +315,12 @@ func (gui *Gui) Create(recipient, value, gas, gasPrice, data string) (*ethpub.PR
 	keyPair := ethutil.GetKeyRing().Get(0)
 
 	return gui.pub.Transact(ethutil.Hex(keyPair.PrivateKey), recipient, value, gas, gasPrice, data)
+}
+
+func (gui *Gui) ChangeClientId(id string) {
+	ethutil.Config.SetIdentifier(id)
+}
+
+func (gui *Gui) ClientId() string {
+	return ethutil.Config.Identifier
 }
