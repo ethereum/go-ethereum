@@ -109,9 +109,11 @@ func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
 
 	win := gui.createWindow(component)
 
-	go gui.setInitialBlockChain()
-	go gui.loadAddressBook()
-	go gui.readPreviousTransactions()
+	gui.setInitialBlockChain()
+	gui.loadAddressBook()
+	gui.readPreviousTransactions()
+	gui.setPeerInfo()
+
 	go gui.update()
 
 	return win, nil
@@ -206,11 +208,13 @@ func (gui *Gui) update() {
 	blockChan := make(chan ethutil.React, 1)
 	txChan := make(chan ethutil.React, 1)
 	objectChan := make(chan ethutil.React, 1)
+	peerChan := make(chan ethutil.React, 1)
 
 	reactor.Subscribe("newBlock", blockChan)
 	reactor.Subscribe("newTx:pre", txChan)
 	reactor.Subscribe("newTx:post", txChan)
 	reactor.Subscribe("object:"+string(namereg), objectChan)
+	reactor.Subscribe("peerList", peerChan)
 
 	state := gui.eth.StateManager().TransState()
 
@@ -259,8 +263,14 @@ func (gui *Gui) update() {
 			}
 		case <-objectChan:
 			gui.loadAddressBook()
+		case <-peerChan:
+			gui.setPeerInfo()
 		}
 	}
+}
+
+func (gui *Gui) setPeerInfo() {
+	gui.win.Root().Call("setPeers", fmt.Sprintf("%d / %d", gui.eth.PeerCount(), gui.eth.MaxPeers))
 }
 
 // Logging functions that log directly to the GUI interface
