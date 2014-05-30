@@ -27,13 +27,15 @@ General command line options
 
 ```
 Shared between ethereum and ethereal
--genaddr Generates a new address and private key (destructive action)
--p       Port on which the server will accept incomming connections
+-id      Set the custom identifier of the client (shows up on other clients)
+-port    Port on which the server will accept incomming connections
 -upnp    Enable UPnP
--x       Desired amount of peers
--r       Start JSON RPC
+-maxpeer Desired amount of peers
+-rpc     Start JSON RPC
+
 -dir     Data directory used to store configs and databases
 -import  Import a private key
+-genaddr Generates a new address and private key (destructive action)
 -h       This
 
 Ethereum only

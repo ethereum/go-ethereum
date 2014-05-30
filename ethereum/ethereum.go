@@ -59,7 +59,7 @@ func main() {
 		lt = ethutil.LogFile | ethutil.LogStd
 	}
 
-	ethutil.ReadConfig(DataDir, lt, Identifier)
+	ethutil.ReadConfig(".ethereum", lt, Identifier)
 
 	logger := ethutil.Config.Log
 
