@@ -108,9 +108,11 @@ save these words so you can restore your account later: %s
 		os.Exit(0)
 	}
 
-	if StartMining {
-		utils.DoMining(ethereum)
-	}
+	/*
+		if StartMining {
+			utils.DoMining(ethereum)
+		}
+	*/
 
 	if StartRpc {
 		utils.DoRpc(ethereum, RpcPort)

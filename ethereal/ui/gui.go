@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
 	"math/big"
 	"strings"
@@ -99,6 +100,19 @@ func (gui *Gui) Start(assetPath string) {
 	win.Wait()
 
 	gui.eth.Stop()
+}
+
+func (gui *Gui) ToggleMining() {
+	var txt string
+	if gui.eth.Mining {
+		utils.StopMining(gui.eth)
+		txt = "Start mining"
+	} else {
+		utils.StartMining(gui.eth)
+		txt = "Stop mining"
+	}
+
+	gui.win.Root().Set("miningButtonText", txt)
 }
 
 func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {

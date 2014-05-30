@@ -10,6 +10,8 @@ import Ethereum 1.0
 ApplicationWindow {
 	id: root
 
+	property alias miningButtonText: miningButton.text
+
 	width: 900
 	height: 600
 	minimumHeight: 300
@@ -27,13 +29,6 @@ ApplicationWindow {
 		}
 
 		Menu {
-			title: "Tools"
-			MenuItem {
-				text: "Muted"
-				shortcut: "Ctrl+e"
-				onTriggered: ui.muted("")
-			}
-
 			MenuItem {
 				text: "Debugger"
 				shortcut: "Ctrl+d"
@@ -49,11 +44,6 @@ ApplicationWindow {
 				onTriggered: {
 					addPeerWin.visible = true
 				}
-			}
-
-			MenuItem {
-				text: "Start"
-				onTriggered: ui.connect()
 			}
 		}
 
@@ -310,8 +300,15 @@ ApplicationWindow {
 	}
 
 	statusBar: StatusBar {
+		height: 30
 		RowLayout {
-			anchors.fill: parent
+			Button {
+				id: miningButton
+				onClicked: {
+					eth.toggleMining()
+				}
+				text: "Start Mining"
+			}
 
 			Button {
 				property var enabled: true
@@ -335,20 +332,22 @@ ApplicationWindow {
 				anchors.leftMargin: 5
 				id: walletValueLabel
 			}
+		}
 
-			Label {
-				anchors.right: peerImage.left
-				anchors.rightMargin: 5
-				id: peerLabel
-				font.pixelSize: 8
-				text: "0 / 0"
-			}
-			Image {
-				id: peerImage
-				anchors.right: parent.right
-				width: 10; height: 10
-				source: ui.assetPath("network.png")
-			}
+		Label {
+			y: 7
+			anchors.right: peerImage.left
+			anchors.rightMargin: 5
+			id: peerLabel
+			font.pixelSize: 8
+			text: "0 / 0"
+		}
+		Image {
+			y: 7
+			id: peerImage
+			anchors.right: parent.right
+			width: 10; height: 10
+			source: ui.assetPath("network.png")
 		}
 	}
 
@@ -545,94 +544,6 @@ ApplicationWindow {
 			anchors.leftMargin: 10
 			font.pointSize: 12
 			text: "<h2>Ethereal</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Maran Hidskes<br>"
-		}
-
-	}
-
-	ApplicationWindow {
-		id: debugWindow
-		visible: false
-		title: "Debugger"
-		minimumWidth: 600
-		minimumHeight: 600
-		width: 800
-		height: 600
-
-
-		Item {
-			id: keyHandler
-			focus: true
-			Keys.onPressed: {
-				if (event.key == Qt.Key_Space) {
-					ui.next()
-				}
-			}
-		}
-		SplitView {
-			anchors.fill: parent
-			property var asmModel: ListModel {
-				id: asmModel
-			}
-			TableView {
-				id: asmTableView
-				width: 200
-				TableViewColumn{ role: "value" ; title: "" ; width: 100 }
-				model: asmModel
-			}
-
-			Rectangle {
-				anchors.left: asmTableView.right
-				anchors.right: parent.right
-				SplitView {
-					orientation: Qt.Vertical
-					anchors.fill: parent
-
-					TableView {
-						property var memModel: ListModel {
-							id: memModel
-						}
-						height: parent.height/2
-						width: parent.width
-						TableViewColumn{ id:mnumColmn ; role: "num" ; title: "#" ; width: 50}
-						TableViewColumn{ role: "value" ; title: "Memory" ; width: 750}
-						model: memModel
-					}
-
-					SplitView {
-						orientation: Qt.Horizontal
-						id: debugSplitView
-						TableView {
-							property var debuggerLog: ListModel {
-								id: debuggerLog
-							}
-							TableViewColumn{ role: "value"; title: "Debug messages" }
-							model: debuggerLog
-						}
-						TableView {
-							property var stackModel: ListModel {
-								id: stackModel
-							}
-							height: parent.height/2
-							width: parent.width
-							TableViewColumn{ role: "value" ; title: "Stack" ; width: debugSplitView.width }
-							model: stackModel
-						}
-					}
-				}
-			}
-		}
-		statusBar: StatusBar {
-			RowLayout {
-				anchors.fill: parent
-				Button {
-					property var enabled: true
-					id: debugNextButton
-					onClicked: {
-						ui.next()
-					}
-					text: "Next"
-				}
-			}
 		}
 	}
 
@@ -885,15 +796,6 @@ ApplicationWindow {
 					txResult.text = ""
 					txOutput.text = ""
 					mainContractColumn.state = "SETUP"
-				}
-			}
-
-			Button {
-				id: debugButton
-				text: "Debug"
-				onClicked: {
-					var res = ui.debugTx("", txValue.text, txGas.text, txGasPrice.text, codeView.text)
-					debugWindow.visible = true
 				}
 			}
 		}
