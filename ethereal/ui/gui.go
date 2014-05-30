@@ -94,10 +94,11 @@ func (gui *Gui) Start(assetPath string) {
 		panic(err)
 	}
 
+	win.Show()
+
 	ethutil.Config.Log.AddLogSystem(gui)
 	ethutil.Config.Log.Infoln("[GUI] Starting GUI")
 
-	win.Show()
 	win.Wait()
 
 	gui.eth.Stop()
