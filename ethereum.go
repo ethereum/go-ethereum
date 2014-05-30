@@ -238,6 +238,7 @@ func (s *Ethereum) ConnectToPeer(addr string) error {
 		s.peers.PushBack(peer)
 
 		ethutil.Config.Log.Infof("[SERV] Adding peer (%s) %d / %d\n", addr, s.peers.Len(), s.MaxPeers)
+		s.reactor.Post("peerList", s.peers)
 	}
 
 	return nil

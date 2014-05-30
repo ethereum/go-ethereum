@@ -149,7 +149,7 @@ func (self *Miner) mineNewBlock() {
 	// Find a valid nonce
 	self.block.Nonce = self.pow.Search(self.block, self.powQuitChan)
 	if self.block.Nonce != nil {
-		err := self.ethereum.StateManager().Process(self.block, true)
+		err := self.ethereum.StateManager().Process(self.block, false)
 		if err != nil {
 			ethutil.Config.Log.Infoln(err)
 		} else {

@@ -22,26 +22,54 @@ type config struct {
 	Identifier   string
 }
 
+const defaultConf = `
+id = ""
+port = 30303
+upnp = true
+maxpeer = 10
+rpc = false
+rpcport = 8080
+`
+
 var Config *config
+
+func ApplicationFolder(base string) string {
+	usr, _ := user.Current()
+	p := path.Join(usr.HomeDir, base)
+
+	if len(base) > 0 {
+		//Check if the logging directory already exists, create it if not
+		_, err := os.Stat(p)
+		if err != nil {
+			if os.IsNotExist(err) {
+				log.Printf("Debug logging directory %s doesn't exist, creating it\n", p)
+				os.Mkdir(p, 0777)
+
+			}
+		}
+
+		iniFilePath := path.Join(p, "conf.ini")
+		_, err = os.Stat(iniFilePath)
+		if err != nil && os.IsNotExist(err) {
+			file, err := os.Create(iniFilePath)
+			if err != nil {
+				fmt.Println(err)
+			} else {
+				assetPath := path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "ethereal", "assets")
+				file.Write([]byte(defaultConf + "\nasset_path = " + assetPath))
+			}
+		}
+	}
+
+	return p
+}
 
 // Read config
 //
 // Initialize the global Config variable with default settings
 func ReadConfig(base string, logTypes LoggerType, id string) *config {
 	if Config == nil {
-		usr, _ := user.Current()
-		path := path.Join(usr.HomeDir, base)
-
-		if len(base) > 0 {
-			//Check if the logging directory already exists, create it if not
-			_, err := os.Stat(path)
-			if err != nil {
-				if os.IsNotExist(err) {
-					log.Printf("Debug logging directory %s doesn't exist, creating it\n", path)
-					os.Mkdir(path, 0777)
-				}
-			}
-		}
+		path := ApplicationFolder(base)
 
 		Config = &config{ExecPath: path, Debug: true, Ver: "0.5.0 RC11"}
 		Config.Identifier = id
