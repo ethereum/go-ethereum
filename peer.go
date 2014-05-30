@@ -2,7 +2,6 @@ package eth
 
 import (
 	"bytes"
-	"container/list"
 	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
@@ -523,13 +522,7 @@ func (p *Peer) Stop() {
 	}
 
 	// Pre-emptively remove the peer; don't wait for reaping. We already know it's dead if we are here
-	p.ethereum.peerMut.Lock()
-	defer p.ethereum.peerMut.Unlock()
-	eachPeer(p.ethereum.peers, func(peer *Peer, e *list.Element) {
-		if peer == p {
-			p.ethereum.peers.Remove(e)
-		}
-	})
+	p.ethereum.RemovePeer(p)
 }
 
 func (p *Peer) pushHandshake() error {
