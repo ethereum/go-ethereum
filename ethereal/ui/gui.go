@@ -87,6 +87,8 @@ func (gui *Gui) Start(assetPath string) {
 		win, err = gui.showKeyImport(context)
 	} else {
 		win, err = gui.showWallet(context)
+
+		ethutil.Config.Log.AddLogSystem(gui)
 	}
 	if err != nil {
 		ethutil.Config.Log.Infoln("FATAL: asset not found: you can set an alternative asset path on on the command line using option 'asset_path'")
@@ -94,11 +96,9 @@ func (gui *Gui) Start(assetPath string) {
 		panic(err)
 	}
 
-	win.Show()
-
-	ethutil.Config.Log.AddLogSystem(gui)
 	ethutil.Config.Log.Infoln("[GUI] Starting GUI")
 
+	win.Show()
 	win.Wait()
 
 	gui.eth.Stop()
@@ -174,9 +174,12 @@ var namereg = ethutil.FromHex("bb5f186604d057c1c5240ca2ae0f6430138ac010")
 
 func (gui *Gui) loadAddressBook() {
 	gui.win.Root().Call("clearAddress")
-	gui.eth.StateManager().CurrentState().GetStateObject(namereg).State().EachStorage(func(name string, value *ethutil.Value) {
-		gui.win.Root().Call("addAddress", struct{ Name, Address string }{name, ethutil.Hex(value.Bytes())})
-	})
+	stateObject := gui.eth.StateManager().CurrentState().GetStateObject(namereg)
+	if stateObject != nil {
+		stateObject.State().EachStorage(func(name string, value *ethutil.Value) {
+			gui.win.Root().Call("addAddress", struct{ Name, Address string }{name, ethutil.Hex(value.Bytes())})
+		})
+	}
 }
 
 func (gui *Gui) readPreviousTransactions() {
