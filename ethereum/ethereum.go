@@ -62,7 +62,7 @@ func main() {
 	}
 
 	g, err := globalconf.NewWithOptions(&globalconf.Options{
-		Filename: path.Join(ethutil.ApplicationFolder(".ethereal"), "conf.ini"),
+		Filename: path.Join(ethutil.ApplicationFolder(".ethereum"), "conf.ini"),
 	})
 	if err != nil {
 		fmt.Println(err)
