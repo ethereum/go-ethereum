@@ -66,6 +66,10 @@ func (self *JSEthereum) GetBlock(hash string) otto.Value {
 	return self.toVal(&JSBlock{self.PEthereum.GetBlock(hash), self})
 }
 
+func (self *JSEthereum) GetPeers() otto.Value {
+	return self.toVal(self.PEthereum.GetPeers())
+}
+
 func (self *JSEthereum) GetKey() otto.Value {
 	return self.toVal(self.PEthereum.GetKey())
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/go-qml/qml"
 	"math/big"
 	"strings"
+	"time"
 )
 
 type Gui struct {
@@ -91,7 +92,7 @@ func (gui *Gui) Start(assetPath string) {
 		ethutil.Config.Log.AddLogSystem(gui)
 	}
 	if err != nil {
-		ethutil.Config.Log.Infoln("FATAL: asset not found: you can set an alternative asset path on on the command line using option 'asset_path'")
+		ethutil.Config.Log.Infoln("FATAL: asset not found: you can set an alternative asset path on on the command line using option 'asset_path'", err)
 
 		panic(err)
 	}
@@ -235,6 +236,8 @@ func (gui *Gui) update() {
 	reactor.Subscribe("object:"+string(namereg), objectChan)
 	reactor.Subscribe("peerList", peerChan)
 
+	ticker := time.NewTicker(5 * time.Second)
+
 	state := gui.eth.StateManager().TransState()
 
 	unconfirmedFunds := new(big.Int)
@@ -284,12 +287,19 @@ func (gui *Gui) update() {
 			gui.loadAddressBook()
 		case <-peerChan:
 			gui.setPeerInfo()
+		case <-ticker.C:
+			gui.setPeerInfo()
 		}
 	}
 }
 
 func (gui *Gui) setPeerInfo() {
 	gui.win.Root().Call("setPeers", fmt.Sprintf("%d / %d", gui.eth.PeerCount(), gui.eth.MaxPeers))
+
+	gui.win.Root().Call("resetPeers")
+	for _, peer := range gui.pub.GetPeers() {
+		gui.win.Root().Call("addPeer", peer)
+	}
 }
 
 // Logging functions that log directly to the GUI interface
