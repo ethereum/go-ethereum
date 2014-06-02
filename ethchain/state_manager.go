@@ -2,6 +2,7 @@ package ethchain
 
 import (
 	"bytes"
+	"container/list"
 	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
@@ -14,6 +15,16 @@ type BlockProcessor interface {
 	ProcessBlock(block *Block)
 }
 
+type Peer interface {
+	Inbound() bool
+	LastSend() time.Time
+	LastPong() int64
+	Host() []byte
+	Port() uint16
+	Version() string
+	Connected() *int32
+}
+
 type EthManager interface {
 	StateManager() *StateManager
 	BlockChain() *BlockChain
@@ -23,6 +34,7 @@ type EthManager interface {
 	PeerCount() int
 	IsMining() bool
 	IsListening() bool
+	Peers() *list.List
 }
 
 type StateManager struct {

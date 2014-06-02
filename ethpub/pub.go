@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
 	"strings"
+	"sync/atomic"
 )
 
 type PEthereum struct {
@@ -49,6 +50,18 @@ func (lib *PEthereum) GetStateObject(address string) *PStateObject {
 
 func (lib *PEthereum) GetPeerCount() int {
 	return lib.manager.PeerCount()
+}
+
+func (lib *PEthereum) GetPeers() []PPeer {
+	var peers []PPeer
+	for peer := lib.manager.Peers().Front(); peer != nil; peer = peer.Next() {
+		p := peer.Value.(ethchain.Peer)
+		if atomic.LoadInt32(p.Connected()) != 0 {
+			peers = append(peers, *NewPPeer(p))
+		}
+	}
+
+	return peers
 }
 
 func (lib *PEthereum) GetIsMining() bool {

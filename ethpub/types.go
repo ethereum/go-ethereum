@@ -3,11 +3,39 @@ package ethpub
 import (
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
-	_ "log"
 	"strings"
 )
+
+// Peer interface exposed to QML
+
+type PPeer struct {
+	ref          *ethchain.Peer
+	Inbound      bool   `json:"isInbound"`
+	LastSend     int64  `json:"lastSend"`
+	LastPong     int64  `json:"lastPong"`
+	Ip           string `json:"ip"`
+	Port         int    `json:"port"`
+	Version      string `json:"version"`
+	LastResponse string `json:"lastResponse"`
+}
+
+func NewPPeer(peer ethchain.Peer) *PPeer {
+	if peer == nil {
+		return nil
+	}
+
+	// TODO: There must be something build in to do this?
+	var ip []string
+	for _, i := range peer.Host() {
+		ip = append(ip, fmt.Sprintf("%d", i))
+	}
+	ipAddress := strings.Join(ip, ".")
+
+	return &PPeer{ref: &peer, Inbound: peer.Inbound(), LastSend: peer.LastSend().Unix(), LastPong: peer.LastPong(), Version: peer.Version(), Ip: ipAddress, Port: int(peer.Port())}
+}
 
 // Block interface exposed to QML
 type PBlock struct {

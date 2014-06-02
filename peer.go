@@ -129,7 +129,7 @@ type Peer struct {
 	diverted        bool
 	blocksRequested int
 
-	Version string
+	version string
 }
 
 func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
@@ -160,7 +160,7 @@ func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 		connected:   0,
 		disconnect:  0,
 		caps:        caps,
-		Version:     ethutil.Config.ClientString,
+		version:     ethutil.Config.ClientString,
 	}
 
 	// Set up the connection in another goroutine so we don't block the main thread
@@ -182,6 +182,34 @@ func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 	}()
 
 	return p
+}
+
+// Getters
+func (p *Peer) Inbound() bool {
+	return p.inbound
+}
+func (p *Peer) LastSend() time.Time {
+	return p.lastSend
+}
+func (p *Peer) LastPong() int64 {
+	return p.lastPong
+}
+func (p *Peer) Host() []byte {
+	return p.host
+}
+func (p *Peer) Port() uint16 {
+	return p.port
+}
+func (p *Peer) Version() string {
+	return p.version
+}
+func (p *Peer) Connected() *int32 {
+	return &p.connected
+}
+
+// Setters
+func (p *Peer) SetVersion(version string) {
+	p.version = version
 }
 
 // Outputs any RLP encoded data to the peer
@@ -531,7 +559,7 @@ func (p *Peer) pushHandshake() error {
 		pubkey := keyRing.PublicKey
 
 		msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-			uint32(ProtocolVersion), uint32(0), p.Version, byte(p.caps), p.port, pubkey[1:],
+			uint32(ProtocolVersion), uint32(0), p.version, byte(p.caps), p.port, pubkey[1:],
 		})
 
 		p.QueueMessage(msg)
@@ -588,8 +616,12 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 
 	// Set the peer's caps
 	p.caps = Caps(c.Get(3).Byte())
+
 	// Get a reference to the peers version
-	p.Version = c.Get(2).Str()
+	versionString := c.Get(2).Str()
+	if len(versionString) > 0 {
+		p.SetVersion(c.Get(2).Str())
+	}
 
 	// Catch up with the connected peer
 	if !p.ethereum.IsUpToDate() {
@@ -615,7 +647,7 @@ func (p *Peer) String() string {
 		strConnectType = "disconnected"
 	}
 
-	return fmt.Sprintf("[%s] (%s) %v %s [%s]", strConnectType, strBoundType, p.conn.RemoteAddr(), p.Version, p.caps)
+	return fmt.Sprintf("[%s] (%s) %v %s [%s]", strConnectType, strBoundType, p.conn.RemoteAddr(), p.version, p.caps)
 
 }
 func (p *Peer) SyncWithPeerToLastKnown() {
