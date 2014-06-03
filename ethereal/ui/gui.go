@@ -163,6 +163,17 @@ func (gui *Gui) setInitialBlockChain() {
 	blk := gui.eth.BlockChain().GetBlock(sBlk)
 	for ; blk != nil; blk = gui.eth.BlockChain().GetBlock(sBlk) {
 		sBlk = blk.PrevHash
+
+		// Loop through all transactions to see if we missed any while being offline
+		for _, tx := range blk.Transactions() {
+			if bytes.Compare(tx.Sender(), gui.addr) == 0 || bytes.Compare(tx.Recipient, gui.addr) == 0 {
+				if ok, _ := gui.txDb.Get(tx.Hash()); ok == nil {
+					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
+				}
+
+			}
+		}
+
 		gui.processBlock(blk, true)
 	}
 }
