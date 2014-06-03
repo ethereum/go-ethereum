@@ -254,19 +254,42 @@ ApplicationWindow {
 					}
 				}
 
-
 				property var addressModel: ListModel {
 					id: addressModel
 				}
 				TableView {
 					id: addressView
-					width: parent.width
+					width: parent.width - 200
 					height: 200
 					anchors.bottom: logView.top
 					TableViewColumn{ role: "name"; title: "name" }
 					TableViewColumn{ role: "address"; title: "address"; width: 300}
 
 					model: addressModel
+				}
+
+				Rectangle {
+					anchors.top: addressView.top
+					anchors.left: addressView.right
+					anchors.leftMargin: 20
+
+					TextField {
+						placeholderText: "Name to register"
+						id: nameToReg
+						width: 150
+					}
+
+					Button {
+						anchors.top: nameToReg.bottom
+						text: "Register"
+						MouseArea{
+							anchors.fill: parent
+							onClicked: {
+								eth.registerName(nameToReg.text)
+								nameToReg.text = ""
+							}
+						}
+					}
 				}
 
 

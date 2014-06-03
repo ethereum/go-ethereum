@@ -329,6 +329,11 @@ func (gui *Gui) Printf(format string, v ...interface{}) {
 		gui.win.Root().Call("addLog", line)
 	}
 }
+func (gui *Gui) RegisterName(name string) {
+	keyPair := ethutil.GetKeyRing().Get(0)
+	name = fmt.Sprintf("\"%s\"\n1", name)
+	gui.pub.Transact(ethutil.Hex(keyPair.PrivateKey), "namereg", "1000", "1000000", "150", name)
+}
 
 func (gui *Gui) Transact(recipient, value, gas, gasPrice, data string) (*ethpub.PReceipt, error) {
 	keyPair := ethutil.GetKeyRing().Get(0)
