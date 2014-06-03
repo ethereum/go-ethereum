@@ -22,6 +22,7 @@ type Peer interface {
 	Host() []byte
 	Port() uint16
 	Version() string
+	PingTime() string
 	Connected() *int32
 }
 

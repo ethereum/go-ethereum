@@ -20,6 +20,7 @@ type PPeer struct {
 	Port         int    `json:"port"`
 	Version      string `json:"version"`
 	LastResponse string `json:"lastResponse"`
+	Latency      string `json:"latency"`
 }
 
 func NewPPeer(peer ethchain.Peer) *PPeer {
@@ -34,7 +35,7 @@ func NewPPeer(peer ethchain.Peer) *PPeer {
 	}
 	ipAddress := strings.Join(ip, ".")
 
-	return &PPeer{ref: &peer, Inbound: peer.Inbound(), LastSend: peer.LastSend().Unix(), LastPong: peer.LastPong(), Version: peer.Version(), Ip: ipAddress, Port: int(peer.Port())}
+	return &PPeer{ref: &peer, Inbound: peer.Inbound(), LastSend: peer.LastSend().Unix(), LastPong: peer.LastPong(), Version: peer.Version(), Ip: ipAddress, Port: int(peer.Port()), Latency: peer.PingTime()}
 }
 
 // Block interface exposed to QML
