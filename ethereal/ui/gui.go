@@ -65,6 +65,8 @@ func (gui *Gui) Start(assetPath string) {
 		Init: func(p *ethpub.PBlock, obj qml.Object) { p.Number = 0; p.Hash = "" },
 	}, {
 		Init: func(p *ethpub.PTx, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
+	}, {
+		Init: func(p *ethpub.KeyVal, obj qml.Object) { p.Key = ""; p.Value = "" },
 	}})
 
 	ethutil.Config.SetClientString(fmt.Sprintf("/Ethereal v%s", version))
