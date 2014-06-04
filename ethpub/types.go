@@ -207,6 +207,31 @@ func (c *PStateObject) IsContract() bool {
 	return false
 }
 
+type KeyVal struct {
+	Key   string
+	Value string
+}
+
+func (c *PStateObject) StateKeyVal(asJson bool) interface{} {
+	var values []KeyVal
+	if c.object != nil {
+		c.object.State().EachStorage(func(name string, value *ethutil.Value) {
+			values = append(values, KeyVal{name, ethutil.Hex(value.Bytes())})
+		})
+	}
+
+	if asJson {
+		valuesJson, err := json.Marshal(values)
+		if err != nil {
+			return nil
+		}
+		fmt.Println(string(valuesJson))
+		return string(valuesJson)
+	}
+
+	return values
+}
+
 func (c *PStateObject) Script() string {
 	if c.object != nil {
 		return strings.Join(ethchain.Disassemble(c.object.Script()), " ")
