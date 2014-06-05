@@ -5,6 +5,7 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/go-qml/qml"
+	"math/big"
 	"strings"
 )
 
@@ -89,15 +90,17 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 		self.win.Root().Call("setAsm", str)
 	}
 
+	gas := ethutil.Big(gasStr)
+	gasPrice := ethutil.Big(gasPriceStr)
 	// Contract addr as test address
 	keyPair := ethutil.GetKeyRing().Get(0)
-	callerTx := ethchain.NewContractCreationTx(ethutil.Big(valueStr), ethutil.Big(gasStr), ethutil.Big(gasPriceStr), script)
+	callerTx := ethchain.NewContractCreationTx(ethutil.Big(valueStr), gas, gasPrice, script)
 	callerTx.Sign(keyPair.PrivateKey)
 
 	state := self.lib.eth.BlockChain().CurrentBlock.State()
 	account := self.lib.eth.StateManager().TransState().GetAccount(keyPair.Address())
 	contract := ethchain.MakeContract(callerTx, state)
-	callerClosure := ethchain.NewClosure(account, contract, script, state, ethutil.Big(gasStr), ethutil.Big(gasPriceStr))
+	callerClosure := ethchain.NewClosure(account, contract, script, state, gas, gasPrice)
 
 	block := self.lib.eth.BlockChain().CurrentBlock
 	vm := ethchain.NewVm(state, self.lib.eth.StateManager(), ethchain.RuntimeVars{
@@ -111,12 +114,18 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 	})
 
 	self.Db.done = false
+	self.Logf("callsize %d", len(script))
 	go func() {
-		ret, _, err := callerClosure.Call(vm, data, self.Db.halting)
+		ret, g, err := callerClosure.Call(vm, data, self.Db.halting)
+		self.Logln("gas usage", g, "total price =", new(big.Int).Mul(g, gasPrice))
 		if err != nil {
 			self.Logln("exited with errors:", err)
 		} else {
-			self.Logf("exited: %v", ret)
+			if len(ret) > 0 {
+				self.Logf("exited: % x", ret)
+			} else {
+				self.Logf("exited: nil")
+			}
 		}
 
 		state.Reset()
