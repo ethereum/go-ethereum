@@ -32,6 +32,10 @@ window.eth = {
 		postData({call: "getStorage", args: [address, storageAddress]}, cb);
 	},
 
+	getStateKeyVals: function(address, cb){
+		postData({call: "getStateKeyVals", args: [address]}, cb);
+	},
+
 	getKey: function(cb) {
 		postData({call: "getKey"}, cb);
 	},

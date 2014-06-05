@@ -34,7 +34,6 @@ ApplicationWindow {
 				 top: parent.top
 			 }
 			 */
-
 			onTitleChanged: { window.title = title }
 			experimental.preferences.javascriptEnabled: true
 			experimental.preferences.navigatorQtObjectEnabled: true
@@ -96,6 +95,12 @@ ApplicationWindow {
 						var stateObject = eth.getStateObject(data.args[0])
 						var storage = stateObject.getStorage(data.args[1])
 						postData(data._seed, storage)
+
+						break
+					case "getStateKeyVals":
+					      require(1);
+					      var stateObject = eth.getStateObject(data.args[0]).stateKeyVal(true)
+					      postData(data._seed,stateObject)
 
 						break
 					case "getBalance":
@@ -188,7 +193,7 @@ ApplicationWindow {
 
 		WebView {
 			id: inspector
-			visible: false
+			visible: true
 			url: webview.experimental.remoteInspectorUrl
 			anchors {
 				left: root.left
