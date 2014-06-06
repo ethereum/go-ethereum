@@ -117,7 +117,8 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 	self.Logf("callsize %d", len(script))
 	go func() {
 		ret, g, err := callerClosure.Call(vm, data, self.Db.halting)
-		self.Logln("gas usage", g, "total price =", new(big.Int).Mul(g, gasPrice))
+		tot := new(big.Int).Mul(g, gasPrice)
+		self.Logf("gas usage %v total price = %v (%v)", g, tot, ethutil.CurrencyToString(tot))
 		if err != nil {
 			self.Logln("exited with errors:", err)
 		} else {
