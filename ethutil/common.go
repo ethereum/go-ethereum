@@ -7,13 +7,15 @@ import (
 
 // The different number of units
 var (
-	Ether   = BigPow(10, 18)
-	Finney  = BigPow(10, 15)
-	Szabo   = BigPow(10, 12)
-	Shannon = BigPow(10, 9)
-	Babbage = BigPow(10, 6)
-	Ada     = BigPow(10, 3)
-	Wei     = big.NewInt(1)
+	Douglas  = BigPow(10, 42)
+	Einstein = BigPow(10, 21)
+	Ether    = BigPow(10, 18)
+	Finney   = BigPow(10, 15)
+	Szabo    = BigPow(10, 12)
+	Shannon  = BigPow(10, 9)
+	Babbage  = BigPow(10, 6)
+	Ada      = BigPow(10, 3)
+	Wei      = big.NewInt(1)
 )
 
 // Currency to string
@@ -21,6 +23,10 @@ var (
 // Returns a string representing a human readable format
 func CurrencyToString(num *big.Int) string {
 	switch {
+	case num.Cmp(Douglas) >= 0:
+		return fmt.Sprintf("%v Douglas", new(big.Int).Div(num, Douglas))
+	case num.Cmp(Einstein) >= 0:
+		return fmt.Sprintf("%v Einstein", new(big.Int).Div(num, Einstein))
 	case num.Cmp(Ether) >= 0:
 		return fmt.Sprintf("%v Ether", new(big.Int).Div(num, Ether))
 	case num.Cmp(Finney) >= 0:
