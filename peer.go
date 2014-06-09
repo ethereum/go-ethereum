@@ -130,6 +130,10 @@ type Peer struct {
 	blocksRequested int
 
 	version string
+
+	// We use this to give some kind of pingtime to a node, not very accurate, could be improved.
+	pingTime      time.Duration
+	pingStartTime time.Time
 }
 
 func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
@@ -185,6 +189,9 @@ func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 }
 
 // Getters
+func (p *Peer) PingTime() string {
+	return p.pingTime.String()
+}
 func (p *Peer) Inbound() bool {
 	return p.inbound
 }
@@ -246,7 +253,7 @@ func (p *Peer) writeMessage(msg *ethwire.Msg) {
 // Outbound message handler. Outbound messages are handled here
 func (p *Peer) HandleOutbound() {
 	// The ping timer. Makes sure that every 2 minutes a ping is send to the peer
-	pingTimer := time.NewTicker(2 * time.Minute)
+	pingTimer := time.NewTicker(30 * time.Second)
 	serviceTimer := time.NewTicker(5 * time.Minute)
 
 out:
@@ -255,12 +262,12 @@ out:
 		// Main message queue. All outbound messages are processed through here
 		case msg := <-p.outputQueue:
 			p.writeMessage(msg)
-
 			p.lastSend = time.Now()
 
 		// Ping timer sends a ping to the peer each 2 minutes
 		case <-pingTimer.C:
 			p.writeMessage(ethwire.NewMessage(ethwire.MsgPingTy, ""))
+			p.pingStartTime = time.Now()
 
 		// Service timer takes care of peer broadcasting, transaction
 		// posting or block posting
@@ -290,8 +297,8 @@ clean:
 
 // Inbound handler. Inbound messages are received here and passed to the appropriate methods
 func (p *Peer) HandleInbound() {
-
 	for atomic.LoadInt32(&p.disconnect) == 0 {
+
 		// HMM?
 		time.Sleep(500 * time.Millisecond)
 		// Wait for a message from the peer
@@ -319,6 +326,7 @@ func (p *Peer) HandleInbound() {
 				// last pong so the peer handler knows this peer is still
 				// active.
 				p.lastPong = time.Now().Unix()
+				p.pingTime = time.Now().Sub(p.pingStartTime)
 			case ethwire.MsgBlockTy:
 				// Get all blocks and process them
 				var block, lastBlock *ethchain.Block
@@ -531,10 +539,14 @@ func (p *Peer) Start() {
 		return
 	}
 
-	// Run the outbound handler in a new goroutine
 	go p.HandleOutbound()
 	// Run the inbound handler in a new goroutine
 	go p.HandleInbound()
+
+	// Wait a few seconds for startup and then ask for an initial ping
+	time.Sleep(2 * time.Second)
+	p.writeMessage(ethwire.NewMessage(ethwire.MsgPingTy, ""))
+	p.pingStartTime = time.Now()
 
 }
 

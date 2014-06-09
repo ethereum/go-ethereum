@@ -56,6 +56,7 @@ func (lib *PEthereum) GetPeers() []PPeer {
 	var peers []PPeer
 	for peer := lib.manager.Peers().Front(); peer != nil; peer = peer.Next() {
 		p := peer.Value.(ethchain.Peer)
+		// we only want connected peers
 		if atomic.LoadInt32(p.Connected()) != 0 {
 			peers = append(peers, *NewPPeer(p))
 		}

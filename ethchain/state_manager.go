@@ -22,6 +22,7 @@ type Peer interface {
 	Host() []byte
 	Port() uint16
 	Version() string
+	PingTime() string
 	Connected() *int32
 }
 
@@ -177,7 +178,7 @@ func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transac
 				err = fmt.Errorf("[STATE] Unable to create contract")
 			}
 		} else {
-			err = fmt.Errorf("[STATE] contract creation tx: %v", err)
+			err = fmt.Errorf("[STATE] contract creation tx: %v for sender %x", err, tx.Sender())
 		}
 	} else {
 		// Find the state object at the "recipient" address. If

@@ -309,7 +309,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case SHA3:
 			require(2)
 			size, offset := stack.Popn()
-			data := mem.Get(offset.Int64(), size.Int64())
+			data := ethutil.Sha3Bin(mem.Get(offset.Int64(), size.Int64()))
 
 			stack.Push(ethutil.BigD(data))
 			// 0x30 range
