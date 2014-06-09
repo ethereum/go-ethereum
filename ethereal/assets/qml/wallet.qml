@@ -45,6 +45,13 @@ ApplicationWindow {
 					addPeerWin.visible = true
 				}
 			}
+			MenuItem {
+				text: "Show Peers"
+				shortcut: "Ctrl+e"
+				onTriggered: {
+					peerWindow.visible = true
+				}
+			}
 		}
 
 		Menu {
@@ -247,19 +254,42 @@ ApplicationWindow {
 					}
 				}
 
-
 				property var addressModel: ListModel {
 					id: addressModel
 				}
 				TableView {
 					id: addressView
-					width: parent.width
+					width: parent.width - 200
 					height: 200
 					anchors.bottom: logView.top
 					TableViewColumn{ role: "name"; title: "name" }
 					TableViewColumn{ role: "address"; title: "address"; width: 300}
 
 					model: addressModel
+				}
+
+				Rectangle {
+					anchors.top: addressView.top
+					anchors.left: addressView.right
+					anchors.leftMargin: 20
+
+					TextField {
+						placeholderText: "Name to register"
+						id: nameToReg
+						width: 150
+					}
+
+					Button {
+						anchors.top: nameToReg.bottom
+						text: "Register"
+						MouseArea{
+							anchors.fill: parent
+							onClicked: {
+								eth.registerName(nameToReg.text)
+								nameToReg.text = ""
+							}
+						}
+					}
 				}
 
 
@@ -359,6 +389,10 @@ ApplicationWindow {
 			id: peerImage
 			anchors.right: parent.right
 			width: 10; height: 10
+			MouseArea {
+				onDoubleClicked:  peerWindow.visible = true
+				anchors.fill: parent
+			}
 			source: ui.assetPath("network.png")
 		}
 	}
@@ -623,6 +657,20 @@ ApplicationWindow {
 	function setPeers(text) {
 		peerLabel.text = text
 	}
+
+	function addPeer(peer) {
+		// We could just append the whole peer object but it cries if you try to alter them
+		peerModel.append({ip: peer.ip, port: peer.port, lastResponse:timeAgo(peer.lastSend), latency: peer.latency, version: peer.version})
+	}
+
+	function resetPeers(){
+		peerModel.clear()
+	}
+
+	function timeAgo(unixTs){
+		var lapsed = (Date.now() - new Date(unixTs*1000)) / 1000
+		return  (lapsed + " seconds ago")
+	}
 	function convertToPretty(unixTs){
 		var a = new Date(unixTs*1000);
 		var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -635,6 +683,31 @@ ApplicationWindow {
 		var time = date+' '+month+' '+year+' '+hour+':'+min+':'+sec ;
 		return time;
 	}
+	// ******************************************
+	// Windows
+	// ******************************************
+	Window {
+		id: peerWindow
+		height: 200
+		width: 700
+		Rectangle {
+			anchors.fill: parent
+			property var peerModel: ListModel {
+				id: peerModel
+			}
+			TableView {
+				anchors.fill: parent
+				id: peerTable
+				model: peerModel
+				TableViewColumn{width: 100; role: "ip" ; title: "IP" }
+				TableViewColumn{width: 60; role: "port" ; title: "Port" }
+				TableViewColumn{width: 140; role: "lastResponse"; title: "Last event" }
+				TableViewColumn{width: 100; role: "latency"; title: "Latency" }
+				TableViewColumn{width: 260; role: "version" ; title: "Version" }
+			}
+		}
+	}
+
 	// *******************************************
 	// Components
 	// *******************************************
@@ -810,7 +883,6 @@ ApplicationWindow {
 			}
 		}
 	}
-
 	// New Transaction component
 	Component {
 		id: newTransaction

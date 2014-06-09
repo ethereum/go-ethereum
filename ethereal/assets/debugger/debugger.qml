@@ -163,7 +163,7 @@ ApplicationWindow {
 							height: parent.height
 							width: parent.width
 							TableViewColumn{ id: key ; role: "key" ; title: "#" ; width: storageTableView.width / 2}
-							TableViewColumn{ role: "value" ; title: "value" ; width:  storageTableView.width / 2}
+							TableViewColumn{ role: "value" ; title: "Storage" ; width:  storageTableView.width / 2}
 							model: storageModel
 						}
 					}

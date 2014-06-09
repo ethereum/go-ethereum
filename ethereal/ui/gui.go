@@ -12,6 +12,7 @@ import (
 	"github.com/go-qml/qml"
 	"math/big"
 	"strings"
+	"time"
 )
 
 type Gui struct {
@@ -55,7 +56,7 @@ func New(ethereum *eth.Ethereum) *Gui {
 }
 
 func (gui *Gui) Start(assetPath string) {
-	const version = "0.5.0 RC11"
+	const version = "0.5.0 RC12"
 
 	defer gui.txDb.Close()
 
@@ -64,6 +65,8 @@ func (gui *Gui) Start(assetPath string) {
 		Init: func(p *ethpub.PBlock, obj qml.Object) { p.Number = 0; p.Hash = "" },
 	}, {
 		Init: func(p *ethpub.PTx, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
+	}, {
+		Init: func(p *ethpub.KeyVal, obj qml.Object) { p.Key = ""; p.Value = "" },
 	}})
 
 	ethutil.Config.SetClientString(fmt.Sprintf("/Ethereal v%s", version))
@@ -91,7 +94,7 @@ func (gui *Gui) Start(assetPath string) {
 		ethutil.Config.Log.AddLogSystem(gui)
 	}
 	if err != nil {
-		ethutil.Config.Log.Infoln("FATAL: asset not found: you can set an alternative asset path on on the command line using option 'asset_path'")
+		ethutil.Config.Log.Infoln("FATAL: asset not found: you can set an alternative asset path on on the command line using option 'asset_path'", err)
 
 		panic(err)
 	}
@@ -151,7 +154,7 @@ func (gui *Gui) createWindow(comp qml.Object) *qml.Window {
 	gui.win = win
 	gui.uiLib.win = win
 
-	db := &Debugger{gui.win, make(chan bool), make(chan bool), true}
+	db := &Debugger{gui.win, make(chan bool), make(chan bool), true, false}
 	gui.lib.Db = db
 	gui.uiLib.Db = db
 
@@ -162,6 +165,17 @@ func (gui *Gui) setInitialBlockChain() {
 	blk := gui.eth.BlockChain().GetBlock(sBlk)
 	for ; blk != nil; blk = gui.eth.BlockChain().GetBlock(sBlk) {
 		sBlk = blk.PrevHash
+
+		// Loop through all transactions to see if we missed any while being offline
+		for _, tx := range blk.Transactions() {
+			if bytes.Compare(tx.Sender(), gui.addr) == 0 || bytes.Compare(tx.Recipient, gui.addr) == 0 {
+				if ok, _ := gui.txDb.Get(tx.Hash()); ok == nil {
+					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
+				}
+
+			}
+		}
+
 		gui.processBlock(blk, true)
 	}
 }
@@ -235,6 +249,8 @@ func (gui *Gui) update() {
 	reactor.Subscribe("object:"+string(namereg), objectChan)
 	reactor.Subscribe("peerList", peerChan)
 
+	ticker := time.NewTicker(5 * time.Second)
+
 	state := gui.eth.StateManager().TransState()
 
 	unconfirmedFunds := new(big.Int)
@@ -284,12 +300,19 @@ func (gui *Gui) update() {
 			gui.loadAddressBook()
 		case <-peerChan:
 			gui.setPeerInfo()
+		case <-ticker.C:
+			gui.setPeerInfo()
 		}
 	}
 }
 
 func (gui *Gui) setPeerInfo() {
 	gui.win.Root().Call("setPeers", fmt.Sprintf("%d / %d", gui.eth.PeerCount(), gui.eth.MaxPeers))
+
+	gui.win.Root().Call("resetPeers")
+	for _, peer := range gui.pub.GetPeers() {
+		gui.win.Root().Call("addPeer", peer)
+	}
 }
 
 // Logging functions that log directly to the GUI interface
@@ -307,6 +330,11 @@ func (gui *Gui) Printf(format string, v ...interface{}) {
 	for _, line := range lines {
 		gui.win.Root().Call("addLog", line)
 	}
+}
+func (gui *Gui) RegisterName(name string) {
+	keyPair := ethutil.GetKeyRing().Get(0)
+	name = fmt.Sprintf("\"%s\"\n1", name)
+	gui.pub.Transact(ethutil.Hex(keyPair.PrivateKey), "namereg", "1000", "1000000", "150", name)
 }
 
 func (gui *Gui) Transact(recipient, value, gas, gasPrice, data string) (*ethpub.PReceipt, error) {

@@ -5,6 +5,7 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/go-qml/qml"
+	"math/big"
 	"strings"
 )
 
@@ -25,7 +26,7 @@ func NewDebuggerWindow(lib *UiLib) *DebuggerWindow {
 	}
 
 	win := component.CreateWindow(nil)
-	db := &Debugger{win, make(chan bool), make(chan bool), true}
+	db := &Debugger{win, make(chan bool), make(chan bool), true, false}
 
 	return &DebuggerWindow{engine: engine, win: win, lib: lib, Db: db}
 }
@@ -59,6 +60,12 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 		self.Db.Q <- true
 	}
 
+	defer func() {
+		if r := recover(); r != nil {
+			self.Logf("compile FAULT: %v", r)
+		}
+	}()
+
 	data := ethutil.StringToByteFunc(dataStr, func(s string) (ret []byte) {
 		slice := strings.Split(dataStr, "\n")
 		for _, dataItem := range slice {
@@ -89,15 +96,17 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 		self.win.Root().Call("setAsm", str)
 	}
 
+	gas := ethutil.Big(gasStr)
+	gasPrice := ethutil.Big(gasPriceStr)
 	// Contract addr as test address
 	keyPair := ethutil.GetKeyRing().Get(0)
-	callerTx := ethchain.NewContractCreationTx(ethutil.Big(valueStr), ethutil.Big(gasStr), ethutil.Big(gasPriceStr), script)
+	callerTx := ethchain.NewContractCreationTx(ethutil.Big(valueStr), gas, gasPrice, script)
 	callerTx.Sign(keyPair.PrivateKey)
 
 	state := self.lib.eth.BlockChain().CurrentBlock.State()
 	account := self.lib.eth.StateManager().TransState().GetAccount(keyPair.Address())
 	contract := ethchain.MakeContract(callerTx, state)
-	callerClosure := ethchain.NewClosure(account, contract, script, state, ethutil.Big(gasStr), ethutil.Big(gasPriceStr))
+	callerClosure := ethchain.NewClosure(account, contract, script, state, gas, gasPrice)
 
 	block := self.lib.eth.BlockChain().CurrentBlock
 	vm := ethchain.NewVm(state, self.lib.eth.StateManager(), ethchain.RuntimeVars{
@@ -111,17 +120,28 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 	})
 
 	self.Db.done = false
+	self.Logf("callsize %d", len(script))
 	go func() {
-		ret, _, err := callerClosure.Call(vm, data, self.Db.halting)
+		ret, g, err := callerClosure.Call(vm, data, self.Db.halting)
+		tot := new(big.Int).Mul(g, gasPrice)
+		self.Logf("gas usage %v total price = %v (%v)", g, tot, ethutil.CurrencyToString(tot))
 		if err != nil {
 			self.Logln("exited with errors:", err)
 		} else {
-			self.Logf("exited: %v", ret)
+			if len(ret) > 0 {
+				self.Logf("exited: % x", ret)
+			} else {
+				self.Logf("exited: nil")
+			}
 		}
 
 		state.Reset()
 
-		self.Db.done = true
+		if !self.Db.interrupt {
+			self.Db.done = true
+		} else {
+			self.Db.interrupt = false
+		}
 	}()
 }
 
@@ -139,10 +159,10 @@ func (self *DebuggerWindow) Next() {
 }
 
 type Debugger struct {
-	win  *qml.Window
-	N    chan bool
-	Q    chan bool
-	done bool
+	win             *qml.Window
+	N               chan bool
+	Q               chan bool
+	done, interrupt bool
 }
 
 type storeVal struct {
@@ -175,13 +195,27 @@ out:
 		case <-d.N:
 			break out
 		case <-d.Q:
-			d.done = true
+			d.interrupt = true
+			d.clearBuffers()
 
 			return false
 		}
 	}
 
 	return true
+}
+
+func (d *Debugger) clearBuffers() {
+out:
+	// drain
+	for {
+		select {
+		case <-d.N:
+		case <-d.Q:
+		default:
+			break out
+		}
+	}
 }
 
 func (d *Debugger) Next() {

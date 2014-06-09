@@ -66,12 +66,20 @@ func (self *JSEthereum) GetBlock(hash string) otto.Value {
 	return self.toVal(&JSBlock{self.PEthereum.GetBlock(hash), self})
 }
 
+func (self *JSEthereum) GetPeers() otto.Value {
+	return self.toVal(self.PEthereum.GetPeers())
+}
+
 func (self *JSEthereum) GetKey() otto.Value {
 	return self.toVal(self.PEthereum.GetKey())
 }
 
 func (self *JSEthereum) GetStateObject(addr string) otto.Value {
 	return self.toVal(self.PEthereum.GetStateObject(addr))
+}
+
+func (self *JSEthereum) GetStateKeyVals(addr string) otto.Value {
+	return self.toVal(self.PEthereum.GetStateObject(addr).StateKeyVal(false))
 }
 
 func (self *JSEthereum) Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr string) otto.Value {
@@ -101,7 +109,7 @@ func (self *JSEthereum) toVal(v interface{}) otto.Value {
 	result, err := self.vm.ToValue(v)
 
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Value unknown:", err)
 
 		return otto.UndefinedValue()
 	}
