@@ -26,7 +26,7 @@ func NewDebuggerWindow(lib *UiLib) *DebuggerWindow {
 	}
 
 	win := component.CreateWindow(nil)
-	db := &Debugger{win, make(chan bool), make(chan bool), true}
+	db := &Debugger{win, make(chan bool), make(chan bool), true, false}
 
 	return &DebuggerWindow{engine: engine, win: win, lib: lib, Db: db}
 }
@@ -59,6 +59,12 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 	if !self.Db.done {
 		self.Db.Q <- true
 	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			self.Logf("compile FAULT: %v", r)
+		}
+	}()
 
 	data := ethutil.StringToByteFunc(dataStr, func(s string) (ret []byte) {
 		slice := strings.Split(dataStr, "\n")
@@ -131,7 +137,11 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 
 		state.Reset()
 
-		self.Db.done = true
+		if !self.Db.interrupt {
+			self.Db.done = true
+		} else {
+			self.Db.interrupt = false
+		}
 	}()
 }
 
@@ -149,10 +159,10 @@ func (self *DebuggerWindow) Next() {
 }
 
 type Debugger struct {
-	win  *qml.Window
-	N    chan bool
-	Q    chan bool
-	done bool
+	win             *qml.Window
+	N               chan bool
+	Q               chan bool
+	done, interrupt bool
 }
 
 type storeVal struct {
@@ -185,13 +195,27 @@ out:
 		case <-d.N:
 			break out
 		case <-d.Q:
-			d.done = true
+			d.interrupt = true
+			d.clearBuffers()
 
 			return false
 		}
 	}
 
 	return true
+}
+
+func (d *Debugger) clearBuffers() {
+out:
+	// drain
+	for {
+		select {
+		case <-d.N:
+		case <-d.Q:
+		default:
+			break out
+		}
+	}
 }
 
 func (d *Debugger) Next() {
