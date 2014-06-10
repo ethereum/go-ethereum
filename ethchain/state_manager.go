@@ -114,11 +114,19 @@ func (sm *StateManager) ApplyTransactions(state *State, block *Block, txs []*Tra
 	// Process each transaction/contract
 	var receipts []*Receipt
 	var validTxs []*Transaction
+	var ignoredTxs []*Transaction // Transactions which go over the gasLimit
+
 	totalUsedGas := big.NewInt(0)
 	for _, tx := range txs {
 		usedGas, err := sm.ApplyTransaction(state, block, tx)
 		if err != nil {
 			if IsNonceErr(err) {
+				continue
+			}
+			if IsGasLimitErr(err) {
+				ignoredTxs = append(ignoredTxs, tx)
+				// We need to figure out if we want to do something with thse txes
+				ethutil.Config.Log.Debugln("Gastlimit:", err)
 				continue
 			}
 
@@ -151,6 +159,7 @@ func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transac
 		script      []byte
 	)
 	totalGasUsed = big.NewInt(0)
+	snapshot := state.Snapshot()
 
 	// Apply the transaction to the current state
 	gas, err = sm.Ethereum.TxPool().ProcessTransaction(tx, state, false)
@@ -188,6 +197,14 @@ func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transac
 			_, gas, err = sm.EvalScript(state, stateObject.Script(), stateObject, tx, block)
 			addTotalGas(gas)
 		}
+	}
+
+	parent := sm.bc.GetBlock(block.PrevHash)
+	total := new(big.Int).Add(block.GasUsed, totalGasUsed)
+	limit := block.CalcGasLimit(parent)
+	if total.Cmp(limit) > 0 {
+		state.Revert(snapshot)
+		err = GasLimitError(total, limit)
 	}
 
 	return
