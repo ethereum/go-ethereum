@@ -68,8 +68,8 @@ func BigCopy(src *big.Int) *big.Int {
 // Returns the maximum size big integer
 func BigMax(x, y *big.Int) *big.Int {
 	if x.Cmp(y) <= 0 {
-		return x
+		return y
 	}
 
-	return y
+	return x
 }
