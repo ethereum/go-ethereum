@@ -571,7 +571,6 @@ func (p *Peer) Stop() {
 
 	// Pre-emptively remove the peer; don't wait for reaping. We already know it's dead if we are here
 	p.ethereum.RemovePeer(p)
-	ethutil.Config.Log.Debugln("[PEER] Stopped peer:", p.conn.RemoteAddr())
 }
 
 func (p *Peer) pushHandshake() error {
