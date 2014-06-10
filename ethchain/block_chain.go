@@ -72,19 +72,7 @@ func (bc *BlockChain) NewBlock(coinbase []byte) *Block {
 
 		block.Number = new(big.Int).Add(bc.CurrentBlock.Number, ethutil.Big1)
 
-		// max(10000, (parent gas limit * (1024 - 1) + (parent gas used * 6 / 5)) / 1024)
-		base := new(big.Int)
-		base2 := new(big.Int)
-		parentGL := bc.CurrentBlock.GasLimit
-		parentUsed := bc.CurrentBlock.GasUsed
-
-		base.Mul(parentGL, big.NewInt(1024-1))
-		base2.Mul(parentUsed, big.NewInt(6))
-		base2.Div(base2, big.NewInt(5))
-		base.Add(base, base2)
-		base.Div(base, big.NewInt(1024))
-
-		block.GasLimit = ethutil.BigMax(big.NewInt(10000), base)
+		block.GasLimit = block.CalcGasLimit(bc.CurrentBlock)
 	}
 
 	return block
