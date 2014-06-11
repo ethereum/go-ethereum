@@ -18,6 +18,8 @@ const (
 	outputBufferSize = 50
 	// Current protocol version
 	ProtocolVersion = 20
+	// Interval for ping/pong message
+	pingPongTimer = 30 * time.Second
 )
 
 type DiscReason byte
@@ -243,7 +245,7 @@ func (p *Peer) writeMessage(msg *ethwire.Msg) {
 
 	err := ethwire.WriteMessage(p.conn, msg)
 	if err != nil {
-		ethutil.Config.Log.Debugln("Can't send message:", err)
+		ethutil.Config.Log.Debugln("[PEER] Can't send message:", err)
 		// Stop the client if there was an error writing to it
 		p.Stop()
 		return
@@ -253,7 +255,7 @@ func (p *Peer) writeMessage(msg *ethwire.Msg) {
 // Outbound message handler. Outbound messages are handled here
 func (p *Peer) HandleOutbound() {
 	// The ping timer. Makes sure that every 2 minutes a ping is send to the peer
-	pingTimer := time.NewTicker(30 * time.Second)
+	pingTimer := time.NewTicker(pingPongTimer)
 	serviceTimer := time.NewTicker(5 * time.Minute)
 
 out:
@@ -264,8 +266,14 @@ out:
 			p.writeMessage(msg)
 			p.lastSend = time.Now()
 
-		// Ping timer sends a ping to the peer each 2 minutes
+		// Ping timer
 		case <-pingTimer.C:
+			timeSince := time.Since(time.Unix(p.lastPong, 0))
+			if p.pingStartTime.IsZero() == false && timeSince > (pingPongTimer+10*time.Second) {
+				ethutil.Config.Log.Infof("[PEER] Peer did not respond to latest pong fast enough, it took %s, disconnecting.\n", timeSince)
+				p.Stop()
+				return
+			}
 			p.writeMessage(ethwire.NewMessage(ethwire.MsgPingTy, ""))
 			p.pingStartTime = time.Now()
 

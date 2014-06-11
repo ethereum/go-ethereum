@@ -22,6 +22,7 @@ type TxMsgTy byte
 const (
 	TxPre = iota
 	TxPost
+	minGasPrice = 1000000
 )
 
 type TxMsg struct {
@@ -179,6 +180,12 @@ func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 	// funds won't invalidate this transaction but simple ignores it.
 	if sender.Amount.Cmp(totAmount) < 0 {
 		return fmt.Errorf("[TXPL] Insufficient amount in sender's (%x) account", tx.Sender())
+	}
+
+	if tx.IsContract() {
+		if tx.GasPrice.Cmp(big.NewInt(minGasPrice)) < 0 {
+			return fmt.Errorf("[TXPL] Gasprice to low, %s given should be at least %d.", tx.GasPrice, minGasPrice)
+		}
 	}
 
 	// Increment the nonce making each tx valid only once to prevent replay
