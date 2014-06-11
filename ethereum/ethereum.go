@@ -62,14 +62,14 @@ func main() {
 	}
 
 	g, err := globalconf.NewWithOptions(&globalconf.Options{
-		Filename: path.Join(ethutil.ApplicationFolder(".ethereum"), "conf.ini"),
+		Filename: path.Join(ethutil.ApplicationFolder(Datadir), "conf.ini"),
 	})
 	if err != nil {
 		fmt.Println(err)
 	} else {
 		g.ParseAll()
 	}
-	ethutil.ReadConfig(".ethereum", lt, g, Identifier)
+	ethutil.ReadConfig(Datadir, lt, g, Identifier)
 
 	logger := ethutil.Config.Log
 

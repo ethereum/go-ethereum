@@ -24,6 +24,8 @@ var NonInteractive bool
 var StartJsConsole bool
 var InputFile string
 
+var Datadir string
+
 func Init() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "%s [options] [filename]:\n", os.Args[0])
@@ -45,6 +47,8 @@ func Init() {
 	flag.BoolVar(&ExportKey, "export", false, "export private key")
 	flag.StringVar(&LogFile, "logfile", "", "log file (defaults to standard output)")
 	flag.StringVar(&ImportKey, "import", "", "imports the given private key (hex)")
+
+	flag.StringVar(&Datadir, "datadir", ".ethereum", "specifies the datadir to use. Takes precedence over config file.")
 
 	flag.Parse()
 

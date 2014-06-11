@@ -20,6 +20,8 @@ var ImportKey string
 var ExportKey bool
 var AssetPath string
 
+var Datadir string
+
 func Init() {
 	flag.StringVar(&Identifier, "id", "", "Custom client identifier")
 	flag.StringVar(&OutboundPort, "port", "30303", "listening port")
@@ -34,6 +36,8 @@ func Init() {
 	flag.BoolVar(&GenAddr, "genaddr", false, "create a new priv/pub key")
 	flag.BoolVar(&ExportKey, "export", false, "export private key")
 	flag.StringVar(&ImportKey, "import", "", "imports the given private key (hex)")
+
+	flag.StringVar(&Datadir, "datadir", ".ethereal", "specifies the datadir to use. Takes precedence over config file.")
 
 	flag.Parse()
 }
