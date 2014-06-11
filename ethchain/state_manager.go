@@ -108,15 +108,90 @@ func (sm *StateManager) MakeStateObject(state *State, tx *Transaction) *StateObj
 	return nil
 }
 
+func (self *StateManager) ProcessTransaction(tx *Transaction, coinbase *StateObject, state *State, toContract bool) (gas *big.Int, err error) {
+	fmt.Printf("state root before update %x\n", state.Root())
+	defer func() {
+		if r := recover(); r != nil {
+			ethutil.Config.Log.Infoln(r)
+			err = fmt.Errorf("%v", r)
+		}
+	}()
+
+	gas = new(big.Int)
+	addGas := func(g *big.Int) { gas.Add(gas, g) }
+	addGas(GasTx)
+
+	// Get the sender
+	sender := state.GetAccount(tx.Sender())
+
+	if sender.Nonce != tx.Nonce {
+		err = NonceError(tx.Nonce, sender.Nonce)
+		return
+	}
+
+	sender.Nonce += 1
+	defer func() {
+		//state.UpdateStateObject(sender)
+		// Notify all subscribers
+		self.Ethereum.Reactor().Post("newTx:post", tx)
+	}()
+
+	txTotalBytes := big.NewInt(int64(len(tx.Data)))
+	txTotalBytes.Div(txTotalBytes, ethutil.Big32)
+	addGas(new(big.Int).Mul(txTotalBytes, GasSStore))
+
+	rGas := new(big.Int).Set(gas)
+	rGas.Mul(gas, tx.GasPrice)
+
+	// Make sure there's enough in the sender's account. Having insufficient
+	// funds won't invalidate this transaction but simple ignores it.
+	totAmount := new(big.Int).Add(tx.Value, rGas)
+	if sender.Amount.Cmp(totAmount) < 0 {
+		state.UpdateStateObject(sender)
+		err = fmt.Errorf("[TXPL] Insufficient amount in sender's (%x) account", tx.Sender())
+		return
+	}
+
+	coinbase.BuyGas(gas, tx.GasPrice)
+	state.UpdateStateObject(coinbase)
+
+	// Get the receiver
+	receiver := state.GetAccount(tx.Recipient)
+
+	// Send Tx to self
+	if bytes.Compare(tx.Recipient, tx.Sender()) == 0 {
+		// Subtract the fee
+		sender.SubAmount(rGas)
+	} else {
+		// Subtract the amount from the senders account
+		sender.SubAmount(totAmount)
+
+		fmt.Printf("state root after sender update %x\n", state.Root())
+
+		// Add the amount to receivers account which should conclude this transaction
+		receiver.AddAmount(tx.Value)
+		state.UpdateStateObject(receiver)
+
+		fmt.Printf("state root after receiver update %x\n", state.Root())
+	}
+
+	state.UpdateStateObject(sender)
+
+	ethutil.Config.Log.Infof("[TXPL] Processed Tx %x\n", tx.Hash())
+
+	return
+}
+
 // Apply transactions uses the transaction passed to it and applies them onto
 // the current processing state.
-func (sm *StateManager) ApplyTransactions(state *State, block *Block, txs []*Transaction) ([]*Receipt, []*Transaction) {
+func (sm *StateManager) ApplyTransactions(coinbase []byte, state *State, block *Block, txs []*Transaction) ([]*Receipt, []*Transaction) {
 	// Process each transaction/contract
 	var receipts []*Receipt
 	var validTxs []*Transaction
 	totalUsedGas := big.NewInt(0)
+
 	for _, tx := range txs {
-		usedGas, err := sm.ApplyTransaction(state, block, tx)
+		usedGas, err := sm.ApplyTransaction(coinbase, state, block, tx)
 		if err != nil {
 			if IsNonceErr(err) {
 				continue
@@ -135,7 +210,7 @@ func (sm *StateManager) ApplyTransactions(state *State, block *Block, txs []*Tra
 	return receipts, validTxs
 }
 
-func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transaction) (totalGasUsed *big.Int, err error) {
+func (sm *StateManager) ApplyTransaction(coinbase []byte, state *State, block *Block, tx *Transaction) (totalGasUsed *big.Int, err error) {
 	/*
 		Applies transactions to the given state and creates new
 		state objects where needed.
@@ -152,8 +227,9 @@ func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transac
 	)
 	totalGasUsed = big.NewInt(0)
 
+	ca := state.GetAccount(coinbase)
 	// Apply the transaction to the current state
-	gas, err = sm.Ethereum.TxPool().ProcessTransaction(tx, state, false)
+	gas, err = sm.ProcessTransaction(tx, ca, state, false)
 	addTotalGas(gas)
 
 	if tx.CreatesContract() {
@@ -229,7 +305,7 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 	}
 
 	// Process the transactions on to current block
-	sm.ApplyTransactions(state, parent, block.Transactions())
+	sm.ApplyTransactions(block.Coinbase, state, parent, block.Transactions())
 
 	// Block validation
 	if err := sm.ValidateBlock(block); err != nil {
@@ -335,13 +411,6 @@ func CalculateBlockReward(block *Block, uncleLength int) *big.Int {
 	base := new(big.Int)
 	for i := 0; i < uncleLength; i++ {
 		base.Add(base, UncleInclusionReward)
-	}
-
-	lastCumulGasUsed := big.NewInt(0)
-	for _, r := range block.Receipts() {
-		usedGas := new(big.Int).Sub(r.CumulativeGasUsed, lastCumulGasUsed)
-		usedGas.Add(usedGas, r.Tx.GasPrice)
-		base.Add(base, usedGas)
 	}
 
 	return base.Add(base, BlockReward)

@@ -89,9 +89,11 @@ func (pool *TxPool) addTransaction(tx *Transaction) {
 	pool.Ethereum.Broadcast(ethwire.MsgTxTy, []interface{}{tx.RlpData()})
 }
 
+/*
 // Process transaction validates the Tx and processes funds from the
 // sender to the recipient.
 func (pool *TxPool) ProcessTransaction(tx *Transaction, state *State, toContract bool) (gas *big.Int, err error) {
+	fmt.Printf("state root before update %x\n", state.Root())
 	defer func() {
 		if r := recover(); r != nil {
 			ethutil.Config.Log.Infoln(r)
@@ -101,6 +103,7 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, state *State, toContract
 
 	gas = new(big.Int)
 	addGas := func(g *big.Int) { gas.Add(gas, g) }
+	addGas(GasTx)
 
 	// Get the sender
 	sender := state.GetAccount(tx.Sender())
@@ -110,28 +113,37 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, state *State, toContract
 		return
 	}
 
+	sender.Nonce += 1
+	defer func() {
+		//state.UpdateStateObject(sender)
+		// Notify all subscribers
+		pool.Ethereum.Reactor().Post("newTx:post", tx)
+	}()
+
 	txTotalBytes := big.NewInt(int64(len(tx.Data)))
 	txTotalBytes.Div(txTotalBytes, ethutil.Big32)
 	addGas(new(big.Int).Mul(txTotalBytes, GasSStore))
 
+	rGas := new(big.Int).Set(gas)
+	rGas.Mul(gas, tx.GasPrice)
+
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.
-	//totAmount := new(big.Int).Add(tx.Value, new(big.Int).Mul(TxFee, TxFeeRat))
-	totAmount := new(big.Int).Add(tx.Value, new(big.Int).Mul(tx.Gas, tx.GasPrice))
+	totAmount := new(big.Int).Add(tx.Value, rGas)
 	if sender.Amount.Cmp(totAmount) < 0 {
 		err = fmt.Errorf("[TXPL] Insufficient amount in sender's (%x) account", tx.Sender())
 		return
 	}
+	state.UpdateStateObject(sender)
+	fmt.Printf("state root after sender update %x\n", state.Root())
 
 	// Get the receiver
 	receiver := state.GetAccount(tx.Recipient)
-	sender.Nonce += 1
 
 	// Send Tx to self
 	if bytes.Compare(tx.Recipient, tx.Sender()) == 0 {
-		addGas(GasTx)
 		// Subtract the fee
-		sender.SubAmount(new(big.Int).Mul(GasTx, tx.GasPrice))
+		sender.SubAmount(rGas)
 	} else {
 		// Subtract the amount from the senders account
 		sender.SubAmount(totAmount)
@@ -140,17 +152,14 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, state *State, toContract
 		receiver.AddAmount(tx.Value)
 
 		state.UpdateStateObject(receiver)
+		fmt.Printf("state root after receiver update %x\n", state.Root())
 	}
-
-	state.UpdateStateObject(sender)
 
 	ethutil.Config.Log.Infof("[TXPL] Processed Tx %x\n", tx.Hash())
 
-	// Notify all subscribers
-	pool.Ethereum.Reactor().Post("newTx:post", tx)
-
 	return
 }
+*/
 
 func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 	// Get the last block so we can retrieve the sender and receiver from
