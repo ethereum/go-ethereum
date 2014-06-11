@@ -108,10 +108,14 @@ func (c *StateObject) ReturnGas(gas, price *big.Int, state *State) {
 
 func (c *StateObject) AddAmount(amount *big.Int) {
 	c.SetAmount(new(big.Int).Add(c.Amount, amount))
+
+	ethutil.Config.Log.Debugf("%x: #%d %v (+ %v)", c.Address(), c.Nonce, c.Amount, amount)
 }
 
 func (c *StateObject) SubAmount(amount *big.Int) {
 	c.SetAmount(new(big.Int).Sub(c.Amount, amount))
+
+	ethutil.Config.Log.Debugf("%x: #%d %v (- %v)", c.Address(), c.Nonce, c.Amount, amount)
 }
 
 func (c *StateObject) SetAmount(amount *big.Int) {
@@ -126,6 +130,17 @@ func (c *StateObject) ConvertGas(gas, price *big.Int) error {
 
 	c.SubAmount(total)
 
+	return nil
+}
+
+func (self *StateObject) BuyGas(gas, price *big.Int) error {
+	rGas := new(big.Int).Set(gas)
+	rGas.Mul(gas, price)
+
+	self.AddAmount(rGas)
+
+	// TODO Do sub from TotalGasPool
+	// and check if enough left
 	return nil
 }
 
@@ -153,14 +168,14 @@ func (c *StateObject) RlpEncode() []byte {
 		root = ""
 	}
 
-	return ethutil.Encode([]interface{}{c.Amount, c.Nonce, root, ethutil.Sha3Bin(c.script)})
+	return ethutil.Encode([]interface{}{c.Nonce, c.Amount, root, ethutil.Sha3Bin(c.script)})
 }
 
 func (c *StateObject) RlpDecode(data []byte) {
 	decoder := ethutil.NewValueFromBytes(data)
 
-	c.Amount = decoder.Get(0).BigInt()
-	c.Nonce = decoder.Get(1).Uint()
+	c.Nonce = decoder.Get(0).Uint()
+	c.Amount = decoder.Get(1).BigInt()
 	c.state = NewState(ethutil.NewTrie(ethutil.Config.Db, decoder.Get(2).Interface()))
 
 	c.ScriptHash = decoder.Get(3).Bytes()
