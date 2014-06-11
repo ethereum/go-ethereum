@@ -170,6 +170,30 @@ ApplicationWindow {
 				postEvent(ev, [storageObject.address, storageObject.value])
 			}
 		}
+		Rectangle {
+			id: toggleInspector
+			color: "#bcbcbc"
+			visible: true
+			height: 12
+			width: 12
+			anchors {
+				right: root.right
+			}
+			MouseArea {
+				onClicked: {
+					if(inspector.visible == true){
+						inspector.visible = false
+					}else{
+						inspector.visible = true
+					}
+				}
+				onDoubleClicked: {
+				  console.log('refreshing')
+				  webView.reload()
+				}
+				anchors.fill: parent
+			}
+		}
 
 		Rectangle {
 			id: sizeGrip
@@ -193,7 +217,7 @@ ApplicationWindow {
 
 		WebView {
 			id: inspector
-			visible: true
+			visible: false
 			url: webview.experimental.remoteInspectorUrl
 			anchors {
 				left: root.left
