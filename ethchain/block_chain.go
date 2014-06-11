@@ -271,7 +271,7 @@ func (bc *BlockChain) GetChain(hash []byte, amount int) []*Block {
 
 func AddTestNetFunds(block *Block) {
 	for _, addr := range []string{
-		"8a40bfaa73256b60764c1bf40675a99083efb075",
+		"51ba59315b3a95761d0863b05ccc7a7f54703d99",
 		"e4157b34ea9615cfbde6b4fda419828124b70c78",
 		"1e12515ce3e0f817a4ddef9ca55788a1d66bd2df",
 		"6c386a4b26f73c802f34673f7248bb118f97424a",
@@ -285,7 +285,6 @@ func AddTestNetFunds(block *Block) {
 		account.Amount = ethutil.Big("1606938044258990275541962092341162602522202993782792835301376") //ethutil.BigPow(2, 200)
 		block.state.UpdateStateObject(account)
 	}
-	log.Printf("%x\n", block.RlpEncode())
 }
 
 func (bc *BlockChain) setLastBlock() {
