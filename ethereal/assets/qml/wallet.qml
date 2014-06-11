@@ -419,7 +419,7 @@ ApplicationWindow {
 					Text { text: '<b>Hash:</b> ' + hash; color: "#F2F2F2"}
 					Text { text: '<b>Coinbase:</b> ' + coinbase; color: "#F2F2F2"}
 					Text { text: '<b>Block found at:</b> ' + prettyTime; color: "#F2F2F2"}
-					Text { text: '<b>Gas Limit:</b> ' + gasLimit; color: "#F2F2F2"}
+					Text { text: '<b>Gas used:</b> ' + gasUsed + " / " + gasLimit; color: "#F2F2F2"}
 				}
 			}
 		}
@@ -643,9 +643,9 @@ ApplicationWindow {
 		}
 
 		if(initial){
-			blockModel.append({number: block.number, gasLimit: block.gasLimit, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
+			blockModel.append({number: block.number, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
 		}else{
-			blockModel.insert(0, {number: block.number, gasLimit: block.gasLimit, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
+			blockModel.insert(0, {number: block.number, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
 		}
 	}
 
