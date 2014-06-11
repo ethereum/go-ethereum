@@ -47,6 +47,7 @@ type PBlock struct {
 	Time         int64  `json:"time"`
 	Coinbase     string `json:"coinbase"`
 	GasLimit     string `json:"gasLimit"`
+	GasUsed      string `json:"gasUsed"`
 }
 
 // Creates a new QML Block from a chain block
@@ -65,7 +66,7 @@ func NewPBlock(block *ethchain.Block) *PBlock {
 		return nil
 	}
 
-	return &PBlock{ref: block, Number: int(block.Number.Uint64()), GasLimit: block.GasLimit.String(), Hash: ethutil.Hex(block.Hash()), Transactions: string(txJson), Time: block.Time, Coinbase: ethutil.Hex(block.Coinbase)}
+	return &PBlock{ref: block, Number: int(block.Number.Uint64()), GasUsed: block.GasUsed.String(), GasLimit: block.GasLimit.String(), Hash: ethutil.Hex(block.Hash()), Transactions: string(txJson), Time: block.Time, Coinbase: ethutil.Hex(block.Coinbase)}
 }
 
 func (self *PBlock) ToString() string {
