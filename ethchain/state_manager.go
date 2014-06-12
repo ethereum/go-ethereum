@@ -166,13 +166,9 @@ func (self *StateManager) ProcessTransaction(tx *Transaction, coinbase *StateObj
 		// Subtract the amount from the senders account
 		sender.SubAmount(totAmount)
 
-		fmt.Printf("state root after sender update %x\n", state.Root())
-
 		// Add the amount to receivers account which should conclude this transaction
 		receiver.AddAmount(tx.Value)
 		state.UpdateStateObject(receiver)
-
-		fmt.Printf("state root after receiver update %x\n", state.Root())
 	}
 
 	state.UpdateStateObject(sender)
@@ -215,6 +211,8 @@ func (sm *StateManager) ApplyTransactions(coinbase []byte, state *State, block *
 		validTxs = append(validTxs, tx)
 	}
 
+	fmt.Println("################# MADE\n", receipts, "\n############################")
+
 	// Update the total gas used for the block (to be mined)
 	block.GasUsed = totalUsedGas
 
@@ -250,6 +248,7 @@ func (sm *StateManager) ApplyTransaction(coinbase []byte, state *State, block *B
 			// as it's data provider.
 			contract := sm.MakeStateObject(state, tx)
 			if contract != nil {
+				fmt.Println(Disassemble(contract.Init()))
 				// Evaluate the initialization script
 				// and use the return value as the
 				// script section for the state object.
@@ -323,6 +322,7 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 	if !sm.bc.HasBlock(block.PrevHash) && sm.bc.CurrentBlock != nil {
 		return ParentError(block.PrevHash)
 	}
+	fmt.Println(block.Receipts())
 
 	// Process the transactions on to current block
 	sm.ApplyTransactions(block.Coinbase, state, parent, block.Transactions())

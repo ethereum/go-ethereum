@@ -1,6 +1,7 @@
 package ethchain
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/secp256k1-go"
@@ -144,7 +145,8 @@ func (tx *Transaction) RlpValueDecode(decoder *ethutil.Value) {
 	tx.v = byte(decoder.Get(6).Uint())
 	tx.r = decoder.Get(7).Bytes()
 	tx.s = decoder.Get(8).Bytes()
-	if len(tx.Recipient) == 0 {
+
+	if bytes.Compare(tx.Recipient, ContractAddr) == 0 {
 		tx.contractCreation = true
 	}
 }

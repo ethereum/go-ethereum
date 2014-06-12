@@ -1,5 +1,9 @@
 package ethchain
 
+import (
+	"fmt"
+)
+
 type OpCode int
 
 // Op codes
@@ -37,7 +41,10 @@ const (
 	CALLVALUE    = 0x34
 	CALLDATALOAD = 0x35
 	CALLDATASIZE = 0x36
-	GASPRICE     = 0x37
+	CALLDATACOPY = 0x37
+	CODESIZE     = 0x38
+	CODECOPY     = 0x39
+	GASPRICE     = 0x3a
 
 	// 0x40 range - block operations
 	PREVHASH   = 0x40
@@ -48,18 +55,19 @@ const (
 	GASLIMIT   = 0x45
 
 	// 0x50 range - 'storage' and execution
-	POP     = 0x51
-	DUP     = 0x52
-	SWAP    = 0x53
-	MLOAD   = 0x54
-	MSTORE  = 0x55
-	MSTORE8 = 0x56
-	SLOAD   = 0x57
-	SSTORE  = 0x58
-	JUMP    = 0x59
-	JUMPI   = 0x5a
-	PC      = 0x5b
-	MSIZE   = 0x5c
+	POP     = 0x50
+	DUP     = 0x51
+	SWAP    = 0x52
+	MLOAD   = 0x53
+	MSTORE  = 0x54
+	MSTORE8 = 0x55
+	SLOAD   = 0x56
+	SSTORE  = 0x57
+	JUMP    = 0x58
+	JUMPI   = 0x59
+	PC      = 0x5a
+	MSIZE   = 0x5b
+	GAS     = 0x5c
 
 	// 0x60 range
 	PUSH1  = 0x60
@@ -140,6 +148,9 @@ var opCodeToString = map[OpCode]string{
 	CALLVALUE:    "CALLVALUE",
 	CALLDATALOAD: "CALLDATALOAD",
 	CALLDATASIZE: "CALLDATASIZE",
+	CALLDATACOPY: "CALLDATACOPY",
+	CODESIZE:     "CODESIZE",
+	CODECOPY:     "CODECOPY",
 	GASPRICE:     "TXGASPRICE",
 
 	// 0x40 range - block operations
@@ -162,6 +173,7 @@ var opCodeToString = map[OpCode]string{
 	JUMPI:   "JUMPI",
 	PC:      "PC",
 	MSIZE:   "MSIZE",
+	GAS:     "GAS",
 
 	// 0x60 range - push
 	PUSH1:  "PUSH1",
@@ -208,7 +220,12 @@ var opCodeToString = map[OpCode]string{
 }
 
 func (o OpCode) String() string {
-	return opCodeToString[o]
+	str := opCodeToString[o]
+	if len(str) == 0 {
+		return fmt.Sprintf("Missing opcode 0x%x", int(o))
+	}
+
+	return str
 }
 
 // Op codes for assembling

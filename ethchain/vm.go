@@ -337,6 +337,9 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			stack.Push(ethutil.BigD(data))
 		case CALLDATASIZE:
 			stack.Push(big.NewInt(int64(len(closure.Args))))
+		case CALLDATACOPY:
+		case CODESIZE:
+		case CODECOPY:
 		case GASPRICE:
 			stack.Push(closure.Price)
 
@@ -423,6 +426,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			stack.Push(pc)
 		case MSIZE:
 			stack.Push(big.NewInt(int64(mem.Len())))
+		case GAS:
+			stack.Push(closure.Gas)
 			// 0x60 range
 		case CREATE:
 			require(3)
