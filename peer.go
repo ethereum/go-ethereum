@@ -153,6 +153,7 @@ func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
 		pubkey:          pubkey,
 		blocksRequested: 10,
 		caps:            ethereum.ServerCaps(),
+		version:         ethutil.Config.ClientString,
 	}
 }
 
@@ -579,7 +580,7 @@ func (p *Peer) pushHandshake() error {
 		pubkey := keyRing.PublicKey
 
 		msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-			uint32(ProtocolVersion), uint32(0), p.version, byte(p.caps), p.port, pubkey[1:],
+			uint32(ProtocolVersion), uint32(0), []byte(p.version), byte(p.caps), p.port, pubkey[1:],
 		})
 
 		p.QueueMessage(msg)

@@ -197,8 +197,6 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, sc
 
 	if contractCreation {
 		ethutil.Config.Log.Infof("Contract addr %x", tx.CreationAddress())
-	} else {
-		ethutil.Config.Log.Infof("Tx hash %x", tx.Hash())
 	}
 
 	return NewPReciept(contractCreation, tx.CreationAddress(), tx.Hash(), keyPair.Address()), nil
