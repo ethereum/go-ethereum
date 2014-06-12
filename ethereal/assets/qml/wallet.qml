@@ -768,6 +768,20 @@ ApplicationWindow {
 			anchors.leftMargin: 5
 			anchors.topMargin: 5
 
+			ListModel {
+				id: denomModel
+				ListElement { text: "Wei" ;     zeros: "" }
+				ListElement { text: "Ada" ;     zeros: "000" }
+				ListElement { text: "Babbage" ; zeros: "000000" }
+				ListElement { text: "Shannon" ; zeros: "000000000" }
+				ListElement { text: "Szabo" ;   zeros: "000000000000" }
+				ListElement { text: "Finney" ;  zeros: "000000000000000" }
+				ListElement { text: "Ether" ;   zeros: "000000000000000000" }
+				ListElement { text: "Einstein" ;zeros: "000000000000000000000" }
+				ListElement { text: "Douglas" ; zeros: "000000000000000000000000000000000000000000" }
+			}
+
+
 			TextField {
 				id: txFuelRecipient
 				placeholderText: "Address / Name or empty for contract"
@@ -775,13 +789,21 @@ ApplicationWindow {
 				width: 400
 			}
 
-			TextField {
-				id: txValue
-				width: 222
-				placeholderText: "Amount"
-				validator: RegExpValidator { regExp: /\d*/ }
-				onTextChanged: {
-					contractFormReady()
+			RowLayout {
+				TextField {
+					id: txValue
+					width: 222
+					placeholderText: "Amount"
+					validator: RegExpValidator { regExp: /\d*/ }
+					onTextChanged: {
+						contractFormReady()
+					}
+				}
+
+				ComboBox {
+					id: valueDenom
+					currentIndex: 6
+					model: denomModel
 				}
 			}
 
@@ -807,13 +829,19 @@ ApplicationWindow {
 					id: txGasPrice
 					width: 200
 					placeholderText: "Gas price"
-					text: "1000000"
+					text: "10"
 					validator: RegExpValidator { regExp: /\d*/ }
 					/*
 					onTextChanged: {
 						contractFormReady()
 					}
 					*/
+				}
+
+				ComboBox {
+					id: gasDenom
+					currentIndex: 4
+					model: denomModel
 				}
 			}
 
@@ -848,8 +876,9 @@ ApplicationWindow {
 				]
 				text: "Send"
 				onClicked: {
-					//this.enabled = false
-					var res = eth.create(txFuelRecipient.text, txValue.text, txGas.text, txGasPrice.text, codeView.text)
+					var value = txValue.text + denomModel.get(valueDenom.currentIndex).zeros;
+					var gasPrice = txGasPrice.text + denomModel.get(gasDenom.currentIndex).zeros;
+					var res = eth.create(txFuelRecipient.text, value, txGas.text, gasPrice, codeView.text)
 					if(res[1]) {
 						txResult.text = "Your contract <b>could not</b> be send over the network:\n<b>"
 						txResult.text += res[1].error()
