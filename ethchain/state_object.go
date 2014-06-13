@@ -77,7 +77,7 @@ func (c *StateObject) SetAddr(addr []byte, value interface{}) {
 
 func (c *StateObject) SetStorage(num *big.Int, val *ethutil.Value) {
 	addr := ethutil.BigToBytes(num, 256)
-	//fmt.Println("storing", val.BigInt(), "@", num)
+	//fmt.Printf("sstore %x => %v\n", addr, val)
 	c.SetAddr(addr, val)
 }
 
@@ -102,8 +102,10 @@ func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
 
 // Return the gas back to the origin. Used by the Virtual machine or Closures
 func (c *StateObject) ReturnGas(gas, price *big.Int, state *State) {
-	remainder := new(big.Int).Mul(gas, price)
-	c.AddAmount(remainder)
+	/*
+		remainder := new(big.Int).Mul(gas, price)
+		c.AddAmount(remainder)
+	*/
 }
 
 func (c *StateObject) AddAmount(amount *big.Int) {

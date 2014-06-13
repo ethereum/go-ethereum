@@ -116,7 +116,7 @@ func (self *StateTransition) TransitionState() (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			ethutil.Config.Log.Infoln(r)
-			err = fmt.Errorf("%v", r)
+			err = fmt.Errorf("state transition err %v", r)
 		}
 	}()
 
@@ -126,41 +126,51 @@ func (self *StateTransition) TransitionState() (err error) {
 		receiver *StateObject
 	)
 
+	// Make sure this transaction's nonce is correct
 	if sender.Nonce != tx.Nonce {
 		return NonceError(tx.Nonce, sender.Nonce)
 	}
 
+	// Increment the nonce for the next transaction
 	sender.Nonce += 1
 
+	// Pre-pay gas / Buy gas of the coinbase account
 	if err = self.BuyGas(); err != nil {
 		return err
 	}
 
+	// Get the receiver (TODO fix this, if coinbase is the receiver we need to save/retrieve)
 	receiver = self.Receiver()
 
+	// Transaction gas
 	if err = self.UseGas(GasTx); err != nil {
 		return err
 	}
 
+	// Pay data gas
 	dataPrice := big.NewInt(int64(len(tx.Data)))
 	dataPrice.Mul(dataPrice, GasData)
 	if err = self.UseGas(dataPrice); err != nil {
 		return err
 	}
 
-	if receiver == nil { // Contract
+	// If the receiver is nil it's a contract (\0*32).
+	if receiver == nil {
+		// Create a new state object for the contract
 		receiver = self.MakeStateObject(self.state, tx)
 		if receiver == nil {
 			return fmt.Errorf("ERR. Unable to create contract with transaction %v", tx)
 		}
 	}
 
+	// Transfer value from sender to receiver
 	if err = self.transferValue(sender, receiver); err != nil {
 		return err
 	}
 
+	// Process the init code and create 'valid' contract
 	if tx.CreatesContract() {
-		fmt.Println(Disassemble(receiver.Init()))
+		//fmt.Println(Disassemble(receiver.Init()))
 		// Evaluate the initialization script
 		// and use the return value as the
 		// script section for the state object.
@@ -173,6 +183,10 @@ func (self *StateTransition) TransitionState() (err error) {
 		receiver.script = code
 	}
 
+	// Return remaining gas
+	remaining := new(big.Int).Mul(self.gas, tx.GasPrice)
+	sender.AddAmount(remaining)
+
 	self.state.UpdateStateObject(sender)
 	self.state.UpdateStateObject(receiver)
 
@@ -184,12 +198,14 @@ func (self *StateTransition) transferValue(sender, receiver *StateObject) error 
 		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.tx.Value, sender.Amount)
 	}
 
-	// Subtract the amount from the senders account
-	sender.SubAmount(self.tx.Value)
-	// Add the amount to receivers account which should conclude this transaction
-	receiver.AddAmount(self.tx.Value)
+	if self.tx.Value.Cmp(ethutil.Big0) > 0 {
+		// Subtract the amount from the senders account
+		sender.SubAmount(self.tx.Value)
+		// Add the amount to receivers account which should conclude this transaction
+		receiver.AddAmount(self.tx.Value)
 
-	ethutil.Config.Log.Debugf("%x => %x (%v) %x\n", sender.Address()[:4], receiver.Address()[:4], self.tx.Value, self.tx.Hash())
+		ethutil.Config.Log.Debugf("%x => %x (%v) %x\n", sender.Address()[:4], receiver.Address()[:4], self.tx.Value, self.tx.Hash())
+	}
 
 	return nil
 }

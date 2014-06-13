@@ -402,7 +402,7 @@ func (p *Peer) HandleInbound() {
 				if err != nil {
 					// If the parent is unknown try to catch up with this peer
 					if ethchain.IsParentErr(err) {
-						ethutil.Config.Log.Infoln("Attempting to catch up since we don't know the parent")
+						ethutil.Config.Log.Infoln("Attempting to catch. Parent known")
 						p.catchingUp = false
 						p.CatchupWithPeer(p.ethereum.BlockChain().CurrentBlock.Hash())
 					} else if ethchain.IsValidationErr(err) {
@@ -414,7 +414,7 @@ func (p *Peer) HandleInbound() {
 					if p.catchingUp && msg.Data.Len() > 1 {
 						if lastBlock != nil {
 							blockInfo := lastBlock.BlockInfo()
-							ethutil.Config.Log.Debugf("Synced to block height #%d %x %x\n", blockInfo.Number, lastBlock.Hash(), blockInfo.Hash)
+							ethutil.Config.Log.Debugf("Synced chain to #%d %x %x\n", blockInfo.Number, lastBlock.Hash(), blockInfo.Hash)
 						}
 
 						p.catchingUp = false

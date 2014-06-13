@@ -114,14 +114,18 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		}
 
 		gas := new(big.Int)
-		setStepGasUsage := func(amount *big.Int) {
+		addStepGasUsage := func(amount *big.Int) {
 			gas.Add(gas, amount)
 		}
 
+		addStepGasUsage(GasStep)
+
 		var newMemSize uint64 = 0
 		switch op {
+		case STOP:
+		case SUICIDE:
 		case SLOAD:
-			setStepGasUsage(GasSLoad)
+			gas.Set(GasSLoad)
 		case SSTORE:
 			var mult *big.Int
 			y, x := stack.Peekn()
@@ -133,12 +137,14 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			} else {
 				mult = ethutil.Big1
 			}
-			setStepGasUsage(new(big.Int).Mul(mult, GasSStore))
+			gas = new(big.Int).Mul(mult, GasSStore)
 		case BALANCE:
-			setStepGasUsage(GasBalance)
+			gas.Set(GasBalance)
 		case MSTORE:
 			require(2)
 			newMemSize = stack.Peek().Uint64() + 32
+		case MLOAD:
+
 		case MSTORE8:
 			require(2)
 			newMemSize = stack.Peek().Uint64() + 1
@@ -149,7 +155,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case SHA3:
 			require(2)
 
-			setStepGasUsage(GasSha)
+			gas.Set(GasSha)
 
 			newMemSize = stack.Peek().Uint64() + stack.data[stack.Len()-2].Uint64()
 		case CALLDATACOPY:
@@ -162,7 +168,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			newMemSize = stack.Peek().Uint64() + stack.data[stack.Len()-3].Uint64()
 		case CALL:
 			require(7)
-			setStepGasUsage(GasCall)
+			gas.Set(GasCall)
+			addStepGasUsage(stack.data[stack.Len()-1])
 
 			x := stack.data[stack.Len()-6].Uint64() + stack.data[stack.Len()-7].Uint64()
 			y := stack.data[stack.Len()-4].Uint64() + stack.data[stack.Len()-5].Uint64()
@@ -170,17 +177,15 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			newMemSize = uint64(math.Max(float64(x), float64(y)))
 		case CREATE:
 			require(3)
-			setStepGasUsage(GasCreate)
+			gas.Set(GasCreate)
 
 			newMemSize = stack.data[stack.Len()-2].Uint64() + stack.data[stack.Len()-3].Uint64()
-		default:
-			setStepGasUsage(GasStep)
 		}
 
 		newMemSize = (newMemSize + 31) / 32 * 32
 		if newMemSize > uint64(mem.Len()) {
 			m := GasMemory.Uint64() * (newMemSize - uint64(mem.Len())) / 32
-			setStepGasUsage(big.NewInt(int64(m)))
+			addStepGasUsage(big.NewInt(int64(m)))
 		}
 
 		if !closure.UseGas(gas) {
@@ -355,7 +360,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case ORIGIN:
 			stack.Push(ethutil.BigD(vm.vars.Origin))
 		case CALLER:
-			stack.Push(ethutil.BigD(closure.Callee().Address()))
+			stack.Push(ethutil.BigD(closure.caller.Address()))
 		case CALLVALUE:
 			stack.Push(vm.vars.Value)
 		case CALLDATALOAD:
@@ -492,7 +497,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			snapshot := vm.state.Snapshot()
 
 			// Generate a new address
-			addr := ethutil.CreateAddress(closure.callee.Address(), closure.callee.N())
+			addr := ethutil.CreateAddress(closure.caller.Address(), closure.caller.N())
 			// Create a new contract
 			contract := NewContract(addr, value, []byte(""))
 			// Set the init script
@@ -503,7 +508,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			//closure.UseGas(gas)
 
 			// Create the closure
-			c := NewClosure(closure.callee,
+			c := NewClosure(closure.caller,
 				closure.Object(),
 				contract.initScript,
 				vm.state,

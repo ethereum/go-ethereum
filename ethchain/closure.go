@@ -17,7 +17,7 @@ type ClosureRef interface {
 
 // Basic inline closure object which implement the 'closure' interface
 type Closure struct {
-	callee ClosureRef
+	caller ClosureRef
 	object *StateObject
 	Script []byte
 	State  *State
@@ -28,12 +28,14 @@ type Closure struct {
 }
 
 // Create a new closure for the given data items
-func NewClosure(callee ClosureRef, object *StateObject, script []byte, state *State, gas, price *big.Int) *Closure {
-	c := &Closure{callee: callee, object: object, Script: script, State: state, Args: nil}
+func NewClosure(caller ClosureRef, object *StateObject, script []byte, state *State, gas, price *big.Int) *Closure {
+	c := &Closure{caller: caller, object: object, Script: script, State: state, Args: nil}
 
-	// In most cases gas, price and value are pointers to transaction objects
+	// Gas should be a pointer so it can safely be reduced through the run
+	// This pointer will be off the state transition
+	c.Gas = gas //new(big.Int).Set(gas)
+	// In most cases price and value are pointers to transaction objects
 	// and we don't want the transaction's values to change.
-	c.Gas = new(big.Int).Set(gas)
 	c.Price = new(big.Int).Set(price)
 	c.UsedGas = new(big.Int)
 
@@ -83,11 +85,11 @@ func (c *Closure) Call(vm *Vm, args []byte, hook DebugHook) ([]byte, *big.Int, e
 }
 
 func (c *Closure) Return(ret []byte) []byte {
-	// Return the remaining gas to the callee
-	// If no callee is present return it to
+	// Return the remaining gas to the caller
+	// If no caller is present return it to
 	// the origin (i.e. contract or tx)
-	if c.callee != nil {
-		c.callee.ReturnGas(c.Gas, c.Price, c.State)
+	if c.caller != nil {
+		c.caller.ReturnGas(c.Gas, c.Price, c.State)
 	} else {
 		c.object.ReturnGas(c.Gas, c.Price, c.State)
 	}
@@ -107,7 +109,7 @@ func (c *Closure) UseGas(gas *big.Int) bool {
 	return true
 }
 
-// Implement the Callee interface
+// Implement the caller interface
 func (c *Closure) ReturnGas(gas, price *big.Int, state *State) {
 	// Return the gas to the closure
 	c.Gas.Add(c.Gas, gas)
@@ -118,8 +120,8 @@ func (c *Closure) Object() *StateObject {
 	return c.object
 }
 
-func (c *Closure) Callee() ClosureRef {
-	return c.callee
+func (c *Closure) Caller() ClosureRef {
+	return c.caller
 }
 
 func (c *Closure) N() *big.Int {
