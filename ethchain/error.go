@@ -79,3 +79,20 @@ func IsNonceErr(err error) bool {
 
 	return ok
 }
+
+type OutOfGasErr struct {
+	Message string
+}
+
+func OutOfGasError() *OutOfGasErr {
+	return &OutOfGasErr{Message: "Out of gas"}
+}
+func (self *OutOfGasErr) Error() string {
+	return self.Message
+}
+
+func IsOutOfGasErr(err error) bool {
+	_, ok := err.(*OutOfGasErr)
+
+	return ok
+}

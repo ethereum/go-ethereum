@@ -220,7 +220,7 @@ out:
 				// Call blocking version.
 				pool.addTransaction(tx)
 
-				ethutil.Config.Log.Debugf("%x => %x (%v) %x\n", tx.Sender()[:4], tx.Recipient[:4], tx.Value, tx.Hash())
+				ethutil.Config.Log.Debugf("(t) %x => %x (%v) %x\n", tx.Sender()[:4], tx.Recipient[:4], tx.Value, tx.Hash())
 
 				// Notify the subscribers
 				pool.Ethereum.Reactor().Post("newTx:pre", tx)

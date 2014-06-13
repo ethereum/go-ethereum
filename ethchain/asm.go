@@ -25,16 +25,10 @@ func Disassemble(script []byte) (asm []string) {
 			pc.Add(pc, ethutil.Big1)
 			a := int64(op) - int64(PUSH1) + 1
 			data := script[pc.Int64() : pc.Int64()+a]
-			val := ethutil.BigD(data)
-
-			var b []byte
-			if val.Int64() == 0 {
-				b = []byte{0}
-			} else {
-				b = val.Bytes()
+			if len(data) == 0 {
+				data = []byte{0}
 			}
-
-			asm = append(asm, fmt.Sprintf("0x%x", b))
+			asm = append(asm, fmt.Sprintf("0x%x", data))
 
 			pc.Add(pc, big.NewInt(a-1))
 		}

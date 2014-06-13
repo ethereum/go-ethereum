@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	_ "github.com/obscuren/secp256k1-go"
+	"math"
 	_ "math"
 	"math/big"
 )
@@ -18,6 +19,7 @@ var (
 	GasCreate  = big.NewInt(100)
 	GasCall    = big.NewInt(20)
 	GasMemory  = big.NewInt(1)
+	GasData    = big.NewInt(5)
 	GasTx      = big.NewInt(500)
 )
 
@@ -116,9 +118,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			gas.Add(gas, amount)
 		}
 
+		var newMemSize uint64 = 0
 		switch op {
-		case SHA3:
-			setStepGasUsage(GasSha)
 		case SLOAD:
 			setStepGasUsage(GasSLoad)
 		case SSTORE:
@@ -135,19 +136,51 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			setStepGasUsage(new(big.Int).Mul(mult, GasSStore))
 		case BALANCE:
 			setStepGasUsage(GasBalance)
-		case CREATE:
+		case MSTORE:
+			require(2)
+			newMemSize = stack.Peek().Uint64() + 32
+		case MSTORE8:
+			require(2)
+			newMemSize = stack.Peek().Uint64() + 1
+		case RETURN:
+			require(2)
+
+			newMemSize = stack.Peek().Uint64() + stack.data[stack.Len()-2].Uint64()
+		case SHA3:
+			require(2)
+
+			setStepGasUsage(GasSha)
+
+			newMemSize = stack.Peek().Uint64() + stack.data[stack.Len()-2].Uint64()
+		case CALLDATACOPY:
 			require(3)
 
-			args := stack.Get(big.NewInt(3))
-			initSize := new(big.Int).Add(args[1], args[0])
+			newMemSize = stack.Peek().Uint64() + stack.data[stack.Len()-3].Uint64()
+		case CODECOPY:
+			require(3)
 
-			setStepGasUsage(CalculateTxGas(initSize))
+			newMemSize = stack.Peek().Uint64() + stack.data[stack.Len()-3].Uint64()
 		case CALL:
+			require(7)
 			setStepGasUsage(GasCall)
-		case MLOAD, MSIZE, MSTORE8, MSTORE:
-			setStepGasUsage(GasMemory)
+
+			x := stack.data[stack.Len()-6].Uint64() + stack.data[stack.Len()-7].Uint64()
+			y := stack.data[stack.Len()-4].Uint64() + stack.data[stack.Len()-5].Uint64()
+
+			newMemSize = uint64(math.Max(float64(x), float64(y)))
+		case CREATE:
+			require(3)
+			setStepGasUsage(GasCreate)
+
+			newMemSize = stack.data[stack.Len()-2].Uint64() + stack.data[stack.Len()-3].Uint64()
 		default:
 			setStepGasUsage(GasStep)
+		}
+
+		newMemSize = (newMemSize + 31) / 32 * 32
+		if newMemSize > uint64(mem.Len()) {
+			m := GasMemory.Uint64() * (newMemSize - uint64(mem.Len())) / 32
+			setStepGasUsage(big.NewInt(int64(m)))
 		}
 
 		if !closure.UseGas(gas) {
@@ -155,6 +188,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			return closure.Return(nil), fmt.Errorf("insufficient gas %v %v", closure.Gas, gas)
 		}
+
+		mem.Resize(newMemSize)
 
 		switch op {
 		case LOG:
@@ -340,6 +375,23 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case CALLDATACOPY:
 		case CODESIZE:
 		case CODECOPY:
+			var (
+				size = int64(len(closure.Script))
+				mOff = stack.Pop().Int64()
+				cOff = stack.Pop().Int64()
+				l    = stack.Pop().Int64()
+			)
+
+			if cOff > size {
+				cOff = 0
+				l = 0
+			} else if cOff+l > size {
+				l = 0
+			}
+
+			code := closure.Script[cOff : cOff+l]
+
+			mem.Set(mOff, l, code)
 		case GASPRICE:
 			stack.Push(closure.Price)
 
@@ -448,7 +500,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			// Transfer all remaining gas to the new
 			// contract so it may run the init script
 			gas := new(big.Int).Set(closure.Gas)
-			closure.UseGas(gas)
+			//closure.UseGas(gas)
 
 			// Create the closure
 			c := NewClosure(closure.callee,
@@ -498,12 +550,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			if contract != nil {
 				// Prepay for the gas
-				// If gas is set to 0 use all remaining gas for the next call
-				if gas.Cmp(big.NewInt(0)) == 0 {
-					// Copy
-					gas = new(big.Int).Set(closure.Gas)
-				}
-				closure.UseGas(gas)
+				//closure.UseGas(gas)
 
 				// Add the value to the state object
 				contract.AddAmount(value)

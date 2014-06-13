@@ -111,6 +111,12 @@ func (m *Memory) Set(offset, size int64, value []byte) {
 	copy(m.store[offset:offset+size], value)
 }
 
+func (m *Memory) Resize(size uint64) {
+	if uint64(m.Len()) < size {
+		m.store = append(m.store, make([]byte, size-uint64(m.Len()))...)
+	}
+}
+
 func (m *Memory) Get(offset, size int64) []byte {
 	return m.store[offset : offset+size]
 }

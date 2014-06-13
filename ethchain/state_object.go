@@ -135,7 +135,7 @@ func (c *StateObject) ConvertGas(gas, price *big.Int) error {
 
 func (self *StateObject) BuyGas(gas, price *big.Int) error {
 	rGas := new(big.Int).Set(gas)
-	rGas.Mul(gas, price)
+	rGas.Mul(rGas, price)
 
 	self.AddAmount(rGas)
 

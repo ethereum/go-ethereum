@@ -46,14 +46,17 @@ func NewTransactionFromValue(val *ethutil.Value) *Transaction {
 	return tx
 }
 
+func (self *Transaction) GasValue() *big.Int {
+	return new(big.Int).Mul(self.Gas, self.GasPrice)
+}
+
+func (self *Transaction) TotalValue() *big.Int {
+	v := self.GasValue()
+	return v.Add(v, self.Value)
+}
+
 func (tx *Transaction) Hash() []byte {
 	data := []interface{}{tx.Nonce, tx.GasPrice, tx.Gas, tx.Recipient, tx.Value, tx.Data}
-
-	/*
-		if tx.contractCreation {
-			data = append(data, tx.Init)
-		}
-	*/
 
 	return ethutil.Sha3Bin(ethutil.NewValue(data).Encode())
 }
@@ -185,6 +188,7 @@ type Receipt struct {
 	PostState         []byte
 	CumulativeGasUsed *big.Int
 }
+type Receipts []*Receipt
 
 func NewRecieptFromValue(val *ethutil.Value) *Receipt {
 	r := &Receipt{}

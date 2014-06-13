@@ -21,8 +21,10 @@ const (
 	NEG  = 0x09
 	LT   = 0x0a
 	GT   = 0x0b
-	EQ   = 0x0c
-	NOT  = 0x0d
+	SLT  = 0x0c
+	SGT  = 0x0d
+	EQ   = 0x0e
+	NOT  = 0x0f
 
 	// 0x10 range - bit ops
 	AND  = 0x10
@@ -128,6 +130,8 @@ var opCodeToString = map[OpCode]string{
 	NEG:  "NEG",
 	LT:   "LT",
 	GT:   "GT",
+	SLT:  "SLT",
+	SGT:  "SGT",
 	EQ:   "EQ",
 	NOT:  "NOT",
 
