@@ -6,6 +6,22 @@ import (
 	"math/big"
 )
 
+/*
+ * The State transitioning model
+ *
+ * A state transition is a change made when a transaction is applied to the current world state
+ * The state transitioning model does all all the necessary work to work out a valid new state root.
+ * 1) Nonce handling
+ * 2) Pre pay / buy gas of the coinbase (miner)
+ * 3) Create a new state object if the recipient is \0*32
+ * 4) Value transfer
+ * == If contract creation ==
+ * 4a) Attempt to run transaction data
+ * 4b) If valid, use result as code for the new state object
+ * == end ==
+ * 5) Run Script section
+ * 6) Derive new state root
+ */
 type StateTransition struct {
 	coinbase []byte
 	tx       *Transaction
@@ -115,10 +131,6 @@ func (self *StateTransition) TransitionState() (err error) {
 	}
 
 	sender.Nonce += 1
-	defer func() {
-		// Notify all subscribers
-		//self.Ethereum.Reactor().Post("newTx:post", tx)
-	}()
 
 	if err = self.BuyGas(); err != nil {
 		return err

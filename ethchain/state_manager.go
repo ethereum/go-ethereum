@@ -124,6 +124,9 @@ done:
 			}
 		}
 
+		// Notify all subscribers
+		self.Ethereum.Reactor().Post("newTx:post", tx)
+
 		txGas.Sub(txGas, st.gas)
 		accumelative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, txGas))
 		receipt := &Receipt{tx, ethutil.CopyBytes(state.Root().([]byte)), accumelative}
@@ -158,7 +161,6 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 	hash := block.Hash()
 
 	if sm.bc.HasBlock(hash) {
-		//fmt.Println("[STATE] We already have this block, ignoring")
 		return nil
 	}
 
