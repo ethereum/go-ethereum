@@ -97,182 +97,6 @@ func (sm *StateManager) BlockChain() *BlockChain {
 	return sm.bc
 }
 
-func (sm *StateManager) MakeStateObject(state *State, tx *Transaction) *StateObject {
-	contract := MakeContract(tx, state)
-	if contract != nil {
-		state.states[string(tx.CreationAddress())] = contract.state
-
-		return contract
-	}
-
-	return nil
-}
-
-type StateTransition struct {
-	coinbase []byte
-	tx       *Transaction
-	gas      *big.Int
-	state    *State
-	block    *Block
-
-	cb, rec, sen *StateObject
-}
-
-func NewStateTransition(coinbase []byte, gas *big.Int, tx *Transaction, state *State, block *Block) *StateTransition {
-	return &StateTransition{coinbase, tx, new(big.Int), state, block, nil, nil, nil}
-}
-
-func (self *StateTransition) Coinbase() *StateObject {
-	if self.cb != nil {
-		return self.cb
-	}
-
-	self.cb = self.state.GetAccount(self.coinbase)
-	return self.cb
-}
-func (self *StateTransition) Sender() *StateObject {
-	if self.sen != nil {
-		return self.sen
-	}
-
-	self.sen = self.state.GetAccount(self.tx.Sender())
-	return self.sen
-}
-func (self *StateTransition) Receiver() *StateObject {
-	if self.tx.CreatesContract() {
-		return nil
-	}
-
-	if self.rec != nil {
-		return self.rec
-	}
-
-	self.rec = self.state.GetAccount(self.tx.Recipient)
-	return self.rec
-}
-
-func (self *StateTransition) UseGas(amount *big.Int) error {
-	if self.gas.Cmp(amount) < 0 {
-		return OutOfGasError()
-	}
-	self.gas.Sub(self.gas, amount)
-
-	return nil
-}
-
-func (self *StateTransition) AddGas(amount *big.Int) {
-	self.gas.Add(self.gas, amount)
-}
-
-func (self *StateTransition) BuyGas() error {
-	var err error
-
-	sender := self.Sender()
-	if sender.Amount.Cmp(self.tx.GasValue()) < 0 {
-		return fmt.Errorf("Insufficient funds to pre-pay gas. Req %v, has %v", self.tx.GasValue(), self.tx.Value)
-	}
-
-	coinbase := self.Coinbase()
-	err = coinbase.BuyGas(self.tx.Gas, self.tx.GasPrice)
-	if err != nil {
-		return err
-	}
-	self.state.UpdateStateObject(coinbase)
-
-	self.AddGas(self.tx.Gas)
-	sender.SubAmount(self.tx.GasValue())
-
-	return nil
-}
-
-func (self *StateManager) TransitionState(st *StateTransition) (err error) {
-	//snapshot := st.state.Snapshot()
-
-	defer func() {
-		if r := recover(); r != nil {
-			ethutil.Config.Log.Infoln(r)
-			err = fmt.Errorf("%v", r)
-		}
-	}()
-
-	var (
-		tx       = st.tx
-		sender   = st.Sender()
-		receiver *StateObject
-	)
-
-	if sender.Nonce != tx.Nonce {
-		return NonceError(tx.Nonce, sender.Nonce)
-	}
-
-	sender.Nonce += 1
-	defer func() {
-		// Notify all subscribers
-		self.Ethereum.Reactor().Post("newTx:post", tx)
-	}()
-
-	if err = st.BuyGas(); err != nil {
-		return err
-	}
-
-	receiver = st.Receiver()
-
-	if err = st.UseGas(GasTx); err != nil {
-		return err
-	}
-
-	dataPrice := big.NewInt(int64(len(tx.Data)))
-	dataPrice.Mul(dataPrice, GasData)
-	if err = st.UseGas(dataPrice); err != nil {
-		return err
-	}
-
-	if receiver == nil { // Contract
-		receiver = self.MakeStateObject(st.state, tx)
-		if receiver == nil {
-			return fmt.Errorf("ERR. Unable to create contract with transaction %v", tx)
-		}
-	}
-
-	if err = self.transferValue(st, sender, receiver); err != nil {
-		return err
-	}
-
-	if tx.CreatesContract() {
-		fmt.Println(Disassemble(receiver.Init()))
-		// Evaluate the initialization script
-		// and use the return value as the
-		// script section for the state object.
-		//script, gas, err = sm.Eval(state, contract.Init(), contract, tx, block)
-		code, err := self.Eval(st, receiver.Init(), receiver)
-		if err != nil {
-			return fmt.Errorf("Error during init script run %v", err)
-		}
-
-		receiver.script = code
-	}
-
-	st.state.UpdateStateObject(sender)
-	st.state.UpdateStateObject(receiver)
-
-	return nil
-}
-
-func (self *StateManager) transferValue(st *StateTransition, sender, receiver *StateObject) error {
-	if sender.Amount.Cmp(st.tx.Value) < 0 {
-		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", st.tx.Value, sender.Amount)
-	}
-
-	// Subtract the amount from the senders account
-	sender.SubAmount(st.tx.Value)
-	// Add the amount to receivers account which should conclude this transaction
-	receiver.AddAmount(st.tx.Value)
-
-	ethutil.Config.Log.Debugf("%x => %x (%v) %x\n", sender.Address()[:4], receiver.Address()[:4], st.tx.Value, st.tx.Hash())
-
-	return nil
-}
-
 func (self *StateManager) ProcessTransactions(coinbase []byte, state *State, block, parent *Block, txs Transactions) (Receipts, Transactions, Transactions, error) {
 	var (
 		receipts           Receipts
@@ -284,8 +108,8 @@ func (self *StateManager) ProcessTransactions(coinbase []byte, state *State, blo
 done:
 	for i, tx := range txs {
 		txGas := new(big.Int).Set(tx.Gas)
-		st := NewStateTransition(coinbase, tx.Gas, tx, state, block)
-		err = self.TransitionState(st)
+		st := NewStateTransition(coinbase, tx, state, block)
+		err = st.TransitionState()
 		if err != nil {
 			switch {
 			case IsNonceErr(err):
@@ -313,28 +137,6 @@ done:
 	parent.GasUsed = totalUsedGas
 
 	return receipts, handled, unhandled, err
-}
-
-func (self *StateManager) Eval(st *StateTransition, script []byte, context *StateObject) (ret []byte, err error) {
-	var (
-		tx        = st.tx
-		block     = st.block
-		initiator = st.Sender()
-	)
-
-	closure := NewClosure(initiator, context, script, st.state, st.gas, tx.GasPrice)
-	vm := NewVm(st.state, self, RuntimeVars{
-		Origin:      initiator.Address(),
-		BlockNumber: block.BlockInfo().Number,
-		PrevHash:    block.PrevHash,
-		Coinbase:    block.Coinbase,
-		Time:        block.Time,
-		Diff:        block.Difficulty,
-		Value:       tx.Value,
-	})
-	ret, _, err = closure.Call(vm, tx.Data, nil)
-
-	return
 }
 
 func (sm *StateManager) Process(block *Block, dontReact bool) error {

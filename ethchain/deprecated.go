@@ -7,6 +7,17 @@ import (
 	"math/big"
 )
 
+func (sm *StateManager) MakeStateObject(state *State, tx *Transaction) *StateObject {
+	contract := MakeContract(tx, state)
+	if contract != nil {
+		state.states[string(tx.CreationAddress())] = contract.state
+
+		return contract
+	}
+
+	return nil
+}
+
 func (sm *StateManager) EvalScript(state *State, script []byte, object *StateObject, tx *Transaction, block *Block) (ret []byte, gas *big.Int, err error) {
 	account := state.GetAccount(tx.Sender())
 
