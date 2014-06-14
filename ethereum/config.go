@@ -20,10 +20,11 @@ var UseSeed bool
 var ImportKey string
 var ExportKey bool
 var LogFile string
-var DataDir string
 var NonInteractive bool
 var StartJsConsole bool
 var InputFile string
+
+var Datadir string
 
 func Init() {
 	flag.Usage = func() {
@@ -31,22 +32,23 @@ func Init() {
 		flag.PrintDefaults()
 	}
 
-	flag.StringVar(&Identifier, "i", "", "custom client identifier")
-	flag.BoolVar(&StartMining, "m", false, "start dagger mining")
-	flag.BoolVar(&ShowGenesis, "g", false, "prints genesis header and exits")
-	flag.BoolVar(&StartRpc, "r", false, "start rpc server")
-	flag.IntVar(&RpcPort, "rpcport", 8080, "port to start json-rpc server on")
-	flag.BoolVar(&NonInteractive, "y", false, "non-interactive mode (say yes to confirmations)")
+	flag.StringVar(&Identifier, "id", "", "Custom client identifier")
+	flag.StringVar(&OutboundPort, "port", "30303", "listening port")
 	flag.BoolVar(&UseUPnP, "upnp", false, "enable UPnP support")
+	flag.IntVar(&MaxPeer, "maxpeer", 10, "maximum desired peers")
+	flag.IntVar(&RpcPort, "rpcport", 8080, "port to start json-rpc server on")
+	flag.BoolVar(&StartRpc, "rpc", false, "start rpc server")
+	flag.BoolVar(&StartJsConsole, "js", false, "exp")
+
+	flag.BoolVar(&StartMining, "mine", false, "start dagger mining")
+	flag.BoolVar(&NonInteractive, "y", false, "non-interactive mode (say yes to confirmations)")
 	flag.BoolVar(&UseSeed, "seed", true, "seed peers")
 	flag.BoolVar(&GenAddr, "genaddr", false, "create a new priv/pub key")
 	flag.BoolVar(&ExportKey, "export", false, "export private key")
-	flag.StringVar(&OutboundPort, "p", "30303", "listening port")
 	flag.StringVar(&LogFile, "logfile", "", "log file (defaults to standard output)")
-	flag.StringVar(&DataDir, "dir", ".ethereum", "ethereum data directory")
 	flag.StringVar(&ImportKey, "import", "", "imports the given private key (hex)")
-	flag.IntVar(&MaxPeer, "x", 10, "maximum desired peers")
-	flag.BoolVar(&StartJsConsole, "js", false, "exp")
+
+	flag.StringVar(&Datadir, "datadir", ".ethereum", "specifies the datadir to use. Takes precedence over config file.")
 
 	flag.Parse()
 

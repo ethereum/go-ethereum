@@ -10,6 +10,7 @@ import (
 	"github.com/obscuren/otto"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 )
 
@@ -25,6 +26,20 @@ type JSRE struct {
 	objectCb map[string][]otto.Value
 }
 
+func (jsre *JSRE) LoadExtFile(path string) {
+	result, err := ioutil.ReadFile(path)
+	if err == nil {
+		jsre.vm.Run(result)
+	} else {
+		ethutil.Config.Log.Debugln("Could not load file:", path)
+	}
+}
+
+func (jsre *JSRE) LoadIntFile(file string) {
+	assetPath := path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "ethereal", "assets", "ext")
+	jsre.LoadExtFile(path.Join(assetPath, file))
+}
+
 func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	re := &JSRE{
 		ethereum,
@@ -38,6 +53,10 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 
 	// Init the JS lib
 	re.vm.Run(jsLib)
+
+	// Load extra javascript files
+	re.LoadIntFile("string.js")
+	re.LoadIntFile("big.js")
 
 	// We have to make sure that, whoever calls this, calls "Stop"
 	go re.mainLoop()

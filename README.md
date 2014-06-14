@@ -5,7 +5,7 @@ Ethereum
 
 Ethereum Go Client © 2014 Jeffrey Wilcke.
 
-Current state: Proof of Concept 5.0 RC8.
+Current state: Proof of Concept 5.0 RC12.
 
 For the development package please see the [eth-go package](https://github.com/ethereum/eth-go).
 
@@ -27,20 +27,22 @@ General command line options
 
 ```
 Shared between ethereum and ethereal
--m       Start mining blocks
--genaddr Generates a new address and private key (destructive action)
--p       Port on which the server will accept incomming connections
+-id      Set the custom identifier of the client (shows up on other clients)
+-port    Port on which the server will accept incomming connections
 -upnp    Enable UPnP
--x       Desired amount of peers
--r       Start JSON RPC
+-maxpeer Desired amount of peers
+-rpc     Start JSON RPC
+
 -dir     Data directory used to store configs and databases
 -import  Import a private key
+-genaddr Generates a new address and private key (destructive action)
 -h       This
 
 Ethereum only
 ethereum [options] [filename]
 -js        Start the JavaScript REPL
 filename   Load the given file and interpret as JavaScript
+-m       Start mining blocks
 
 Etheral only
 -asset_path    absolute path to GUI assets directory

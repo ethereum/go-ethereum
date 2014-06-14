@@ -33,13 +33,18 @@ func DoMining(ethereum *eth.Ethereum) {
 	addr := keyPair.Address()
 
 	go func() {
-		ethutil.Config.Log.Infoln("Miner started")
-
 		miner = ethminer.NewDefaultMiner(addr, ethereum)
 
 		// Give it some time to connect with peers
 		time.Sleep(3 * time.Second)
 
+		for ethereum.IsUpToDate() == false {
+			time.Sleep(5 * time.Second)
+		}
+
+		ethutil.Config.Log.Infoln("Miner started")
+
+		miner := ethminer.NewDefaultMiner(addr, ethereum)
 		miner.Start()
 	}()
 }

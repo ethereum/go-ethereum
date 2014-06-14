@@ -34,7 +34,6 @@ ApplicationWindow {
 				 top: parent.top
 			 }
 			 */
-
 			onTitleChanged: { window.title = title }
 			experimental.preferences.javascriptEnabled: true
 			experimental.preferences.navigatorQtObjectEnabled: true
@@ -96,6 +95,12 @@ ApplicationWindow {
 						var stateObject = eth.getStateObject(data.args[0])
 						var storage = stateObject.getStorage(data.args[1])
 						postData(data._seed, storage)
+
+						break
+					case "getStateKeyVals":
+					      require(1);
+					      var stateObject = eth.getStateObject(data.args[0]).stateKeyVal(true)
+					      postData(data._seed,stateObject)
 
 						break
 					case "getBalance":
@@ -163,6 +168,30 @@ ApplicationWindow {
 			function onStorageChangeCb(storageObject) {
 				var ev = ["storage", storageObject.stateAddress, storageObject.address].join(":");
 				postEvent(ev, [storageObject.address, storageObject.value])
+			}
+		}
+		Rectangle {
+			id: toggleInspector
+			color: "#bcbcbc"
+			visible: true
+			height: 12
+			width: 12
+			anchors {
+				right: root.right
+			}
+			MouseArea {
+				onClicked: {
+					if(inspector.visible == true){
+						inspector.visible = false
+					}else{
+						inspector.visible = true
+					}
+				}
+				onDoubleClicked: {
+				  console.log('refreshing')
+				  webView.reload()
+				}
+				anchors.fill: parent
 			}
 		}
 

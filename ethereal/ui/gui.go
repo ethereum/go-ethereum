@@ -8,9 +8,11 @@ import (
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
 	"math/big"
 	"strings"
+	"time"
 )
 
 type Gui struct {
@@ -54,7 +56,7 @@ func New(ethereum *eth.Ethereum) *Gui {
 }
 
 func (gui *Gui) Start(assetPath string) {
-	const version = "0.5.0 RC8"
+	const version = "0.5.0 RC12"
 
 	defer gui.txDb.Close()
 
@@ -63,10 +65,12 @@ func (gui *Gui) Start(assetPath string) {
 		Init: func(p *ethpub.PBlock, obj qml.Object) { p.Number = 0; p.Hash = "" },
 	}, {
 		Init: func(p *ethpub.PTx, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
+	}, {
+		Init: func(p *ethpub.KeyVal, obj qml.Object) { p.Key = ""; p.Value = "" },
 	}})
 
 	ethutil.Config.SetClientString(fmt.Sprintf("/Ethereal v%s", version))
-	ethutil.Config.Log.Infoln("[GUI] Starting GUI")
+
 	// Create a new QML engine
 	gui.engine = qml.NewEngine()
 	context := gui.engine.Context()
@@ -86,17 +90,34 @@ func (gui *Gui) Start(assetPath string) {
 		win, err = gui.showKeyImport(context)
 	} else {
 		win, err = gui.showWallet(context)
+
+		ethutil.Config.Log.AddLogSystem(gui)
 	}
 	if err != nil {
-		ethutil.Config.Log.Infoln("FATAL: asset not found: you can set an alternative asset path on on the command line using option 'asset_path'")
+		ethutil.Config.Log.Infoln("FATAL: asset not found: you can set an alternative asset path on on the command line using option 'asset_path'", err)
 
 		panic(err)
 	}
+
+	ethutil.Config.Log.Infoln("[GUI] Starting GUI")
 
 	win.Show()
 	win.Wait()
 
 	gui.eth.Stop()
+}
+
+func (gui *Gui) ToggleMining() {
+	var txt string
+	if gui.eth.Mining {
+		utils.StopMining(gui.eth)
+		txt = "Start mining"
+	} else {
+		utils.StartMining(gui.eth)
+		txt = "Stop mining"
+	}
+
+	gui.win.Root().Set("miningButtonText", txt)
 }
 
 func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
@@ -107,8 +128,11 @@ func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
 
 	win := gui.createWindow(component)
 
-	go gui.setInitialBlockChain()
-	go gui.readPreviousTransactions()
+	gui.setInitialBlockChain()
+	gui.loadAddressBook()
+	gui.readPreviousTransactions()
+	gui.setPeerInfo()
+
 	go gui.update()
 
 	return win, nil
@@ -130,20 +154,46 @@ func (gui *Gui) createWindow(comp qml.Object) *qml.Window {
 	gui.win = win
 	gui.uiLib.win = win
 
-	db := &Debugger{gui.win, make(chan bool)}
+	db := &Debugger{gui.win, make(chan bool), make(chan bool), true, false}
 	gui.lib.Db = db
 	gui.uiLib.Db = db
 
 	return gui.win
 }
-
 func (gui *Gui) setInitialBlockChain() {
-	// Load previous 10 blocks
-	chain := gui.eth.BlockChain().GetChain(gui.eth.BlockChain().CurrentBlock.Hash(), 10)
-	for _, block := range chain {
-		gui.processBlock(block)
-	}
+	sBlk := gui.eth.BlockChain().LastBlockHash
+	blk := gui.eth.BlockChain().GetBlock(sBlk)
+	for ; blk != nil; blk = gui.eth.BlockChain().GetBlock(sBlk) {
+		sBlk = blk.PrevHash
 
+		// Loop through all transactions to see if we missed any while being offline
+		for _, tx := range blk.Transactions() {
+			if bytes.Compare(tx.Sender(), gui.addr) == 0 || bytes.Compare(tx.Recipient, gui.addr) == 0 {
+				if ok, _ := gui.txDb.Get(tx.Hash()); ok == nil {
+					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
+				}
+
+			}
+		}
+
+		gui.processBlock(blk, true)
+	}
+}
+
+type address struct {
+	Name, Address string
+}
+
+var namereg = ethutil.FromHex("bb5f186604d057c1c5240ca2ae0f6430138ac010")
+
+func (gui *Gui) loadAddressBook() {
+	gui.win.Root().Call("clearAddress")
+	stateObject := gui.eth.StateManager().CurrentState().GetStateObject(namereg)
+	if stateObject != nil {
+		stateObject.State().EachStorage(func(name string, value *ethutil.Value) {
+			gui.win.Root().Call("addAddress", struct{ Name, Address string }{name, ethutil.Hex(value.Bytes())})
+		})
+	}
 }
 
 func (gui *Gui) readPreviousTransactions() {
@@ -151,13 +201,21 @@ func (gui *Gui) readPreviousTransactions() {
 	for it.Next() {
 		tx := ethchain.NewTransactionFromBytes(it.Value())
 
-		gui.win.Root().Call("addTx", ethpub.NewPTx(tx))
+		var inout string
+		if bytes.Compare(tx.Sender(), gui.addr) == 0 {
+			inout = "send"
+		} else {
+			inout = "recv"
+		}
+
+		gui.win.Root().Call("addTx", ethpub.NewPTx(tx), inout)
+
 	}
 	it.Release()
 }
 
-func (gui *Gui) processBlock(block *ethchain.Block) {
-	gui.win.Root().Call("addBlock", ethpub.NewPBlock(block))
+func (gui *Gui) processBlock(block *ethchain.Block, initial bool) {
+	gui.win.Root().Call("addBlock", ethpub.NewPBlock(block), initial)
 }
 
 func (gui *Gui) setWalletValue(amount, unconfirmedFunds *big.Int) {
@@ -182,10 +240,16 @@ func (gui *Gui) update() {
 
 	blockChan := make(chan ethutil.React, 1)
 	txChan := make(chan ethutil.React, 1)
+	objectChan := make(chan ethutil.React, 1)
+	peerChan := make(chan ethutil.React, 1)
 
 	reactor.Subscribe("newBlock", blockChan)
 	reactor.Subscribe("newTx:pre", txChan)
 	reactor.Subscribe("newTx:post", txChan)
+	reactor.Subscribe("object:"+string(namereg), objectChan)
+	reactor.Subscribe("peerList", peerChan)
+
+	ticker := time.NewTicker(5 * time.Second)
 
 	state := gui.eth.StateManager().TransState()
 
@@ -196,6 +260,7 @@ func (gui *Gui) update() {
 		select {
 		case b := <-blockChan:
 			block := b.Resource.(*ethchain.Block)
+			gui.processBlock(block, false)
 			if bytes.Compare(block.Coinbase, gui.addr) == 0 {
 				gui.setWalletValue(gui.eth.StateManager().CurrentState().GetAccount(gui.addr).Amount, nil)
 			}
@@ -207,12 +272,12 @@ func (gui *Gui) update() {
 				object := state.GetAccount(gui.addr)
 
 				if bytes.Compare(tx.Sender(), gui.addr) == 0 {
-					gui.win.Root().Call("addTx", ethpub.NewPTx(tx))
+					gui.win.Root().Call("addTx", ethpub.NewPTx(tx), "send")
 					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 
 					unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
 				} else if bytes.Compare(tx.Recipient, gui.addr) == 0 {
-					gui.win.Root().Call("addTx", ethpub.NewPTx(tx))
+					gui.win.Root().Call("addTx", ethpub.NewPTx(tx), "recv")
 					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 
 					unconfirmedFunds.Add(unconfirmedFunds, tx.Value)
@@ -231,7 +296,22 @@ func (gui *Gui) update() {
 
 				state.UpdateStateObject(object)
 			}
+		case <-objectChan:
+			gui.loadAddressBook()
+		case <-peerChan:
+			gui.setPeerInfo()
+		case <-ticker.C:
+			gui.setPeerInfo()
 		}
+	}
+}
+
+func (gui *Gui) setPeerInfo() {
+	gui.win.Root().Call("setPeers", fmt.Sprintf("%d / %d", gui.eth.PeerCount(), gui.eth.MaxPeers))
+
+	gui.win.Root().Call("resetPeers")
+	for _, peer := range gui.pub.GetPeers() {
+		gui.win.Root().Call("addPeer", peer)
 	}
 }
 
@@ -251,6 +331,11 @@ func (gui *Gui) Printf(format string, v ...interface{}) {
 		gui.win.Root().Call("addLog", line)
 	}
 }
+func (gui *Gui) RegisterName(name string) {
+	keyPair := ethutil.GetKeyRing().Get(0)
+	name = fmt.Sprintf("\"%s\"\n1", name)
+	gui.pub.Transact(ethutil.Hex(keyPair.PrivateKey), "namereg", "1000", "1000000", "150", name)
+}
 
 func (gui *Gui) Transact(recipient, value, gas, gasPrice, data string) (*ethpub.PReceipt, error) {
 	keyPair := ethutil.GetKeyRing().Get(0)
@@ -261,7 +346,13 @@ func (gui *Gui) Transact(recipient, value, gas, gasPrice, data string) (*ethpub.
 func (gui *Gui) Create(recipient, value, gas, gasPrice, data string) (*ethpub.PReceipt, error) {
 	keyPair := ethutil.GetKeyRing().Get(0)
 
-	//mainInput, initInput := mutan.PreParse(data)
+	return gui.pub.Transact(ethutil.Hex(keyPair.PrivateKey), recipient, value, gas, gasPrice, data)
+}
 
-	return gui.pub.Create(ethutil.Hex(keyPair.PrivateKey), value, gas, gasPrice, data)
+func (gui *Gui) ChangeClientId(id string) {
+	ethutil.Config.SetIdentifier(id)
+}
+
+func (gui *Gui) ClientId() string {
+	return ethutil.Config.Identifier
 }
