@@ -19,7 +19,7 @@ const (
 	// Current protocol version
 	ProtocolVersion = 20
 	// Interval for ping/pong message
-	pingPongTimer = 30 * time.Second
+	pingPongTimer = 1 * time.Second
 )
 
 type DiscReason byte
@@ -270,7 +270,7 @@ out:
 		// Ping timer
 		case <-pingTimer.C:
 			timeSince := time.Since(time.Unix(p.lastPong, 0))
-			if p.pingStartTime.IsZero() == false && timeSince > (pingPongTimer+10*time.Second) {
+			if !p.pingStartTime.IsZero() && p.lastPong != 0 && timeSince > (pingPongTimer+10*time.Second) {
 				ethutil.Config.Log.Infof("[PEER] Peer did not respond to latest pong fast enough, it took %s, disconnecting.\n", timeSince)
 				p.Stop()
 				return

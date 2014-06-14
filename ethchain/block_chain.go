@@ -55,6 +55,8 @@ func (bc *BlockChain) NewBlock(coinbase []byte) *Block {
 		nil,
 		"")
 
+	block.MinGasPrice = big.NewInt(10000000000000)
+
 	if bc.CurrentBlock != nil {
 		var mul *big.Int
 		if block.Time < lastBlockTime+42 {

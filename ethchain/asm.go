@@ -28,7 +28,7 @@ func Disassemble(script []byte) (asm []string) {
 			if len(data) == 0 {
 				data = []byte{0}
 			}
-			asm = append(asm, fmt.Sprintf("0x%x", data))
+			asm = append(asm, fmt.Sprintf("%#x", data))
 
 			pc.Add(pc, big.NewInt(a-1))
 		}

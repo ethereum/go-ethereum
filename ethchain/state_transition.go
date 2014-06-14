@@ -131,13 +131,20 @@ func (self *StateTransition) TransitionState() (err error) {
 		return NonceError(tx.Nonce, sender.Nonce)
 	}
 
-	// Increment the nonce for the next transaction
-	sender.Nonce += 1
-
 	// Pre-pay gas / Buy gas of the coinbase account
 	if err = self.BuyGas(); err != nil {
 		return err
 	}
+
+	// XXX Transactions after this point are considered valid.
+
+	defer func() {
+		self.state.UpdateStateObject(sender)
+		self.state.UpdateStateObject(receiver)
+	}()
+
+	// Increment the nonce for the next transaction
+	sender.Nonce += 1
 
 	// Get the receiver (TODO fix this, if coinbase is the receiver we need to save/retrieve)
 	receiver = self.Receiver()
@@ -186,9 +193,6 @@ func (self *StateTransition) TransitionState() (err error) {
 	// Return remaining gas
 	remaining := new(big.Int).Mul(self.gas, tx.GasPrice)
 	sender.AddAmount(remaining)
-
-	self.state.UpdateStateObject(sender)
-	self.state.UpdateStateObject(receiver)
 
 	return nil
 }

@@ -136,11 +136,18 @@ func (self *Miner) mineNewBlock() {
 
 	// Sort the transactions by nonce in case of odd network propagation
 	sort.Sort(ethchain.TxByNonce{self.txs})
+
 	// Accumulate all valid transaction and apply them to the new state
-	receipts, txs := stateManager.ApplyTransactions(self.block.Coinbase, self.block.State(), self.block, self.txs)
-	self.txs = txs
+	// Error may be ignored. It's not important during mining
+	receipts, txs, unhandledTxs, err := stateManager.ProcessTransactions(self.block.Coinbase, self.block.State(), self.block, self.block, self.txs)
+	if err != nil {
+		ethutil.Config.Log.Debugln("[MINER]", err)
+	}
+	self.txs = append(txs, unhandledTxs...)
+
 	// Set the transactions to the block so the new SHA3 can be calculated
 	self.block.SetReceipts(receipts, txs)
+
 	// Accumulate the rewards included for this block
 	stateManager.AccumelateRewards(self.block.State(), self.block)
 
