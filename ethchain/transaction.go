@@ -25,7 +25,7 @@ type Transaction struct {
 }
 
 func NewContractCreationTx(value, gas, gasPrice *big.Int, script []byte) *Transaction {
-	return &Transaction{Value: value, Gas: gas, GasPrice: gasPrice, Data: script, contractCreation: true}
+	return &Transaction{Recipient: ContractAddr, Value: value, Gas: gas, GasPrice: gasPrice, Data: script, contractCreation: true}
 }
 
 func NewTransactionMessage(to []byte, value, gas, gasPrice *big.Int, data []byte) *Transaction {
