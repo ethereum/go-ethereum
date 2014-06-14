@@ -188,6 +188,13 @@ func (self *StateTransition) TransitionState() (err error) {
 		}
 
 		receiver.script = code
+	} else {
+		if len(receiver.Script()) > 0 {
+			_, err := self.Eval(receiver.Script(), receiver)
+			if err != nil {
+				return fmt.Errorf("Error during code execution %v", err)
+			}
+		}
 	}
 
 	// Return remaining gas
