@@ -143,12 +143,17 @@ func NewLogger(flag LoggerType, level int) *Logger {
 	return &Logger{logSys: loggers, logLevel: level}
 }
 
+func (self *Logger) SetLevel(level int) {
+	self.logLevel = level
+}
+
 func (log *Logger) AddLogSystem(logger LogSystem) {
 	log.logSys = append(log.logSys, logger)
 }
 
 const (
-	LogLevelDebug = iota
+	LogLevelSystem = iota
+	LogLevelDebug
 	LogLevelInfo
 )
 
@@ -202,6 +207,26 @@ func (log *Logger) Fatal(v ...interface{}) {
 	}
 
 	os.Exit(1)
+}
+
+func (log *Logger) Println(level int, v ...interface{}) {
+	if log.logLevel > level {
+		return
+	}
+
+	for _, logger := range log.logSys {
+		logger.Println(v...)
+	}
+}
+
+func (log *Logger) Printf(level int, format string, v ...interface{}) {
+	if log.logLevel > level {
+		return
+	}
+
+	for _, logger := range log.logSys {
+		logger.Printf(format, v...)
+	}
 }
 
 type confValue struct {

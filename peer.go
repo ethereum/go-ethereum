@@ -244,6 +244,8 @@ func (p *Peer) writeMessage(msg *ethwire.Msg) {
 		}
 	}
 
+	ethutil.Config.Log.Println(ethutil.LogLevelSystem, "<=", msg.Type, msg.Data)
+
 	err := ethwire.WriteMessage(p.conn, msg)
 	if err != nil {
 		ethutil.Config.Log.Debugln("[PEER] Can't send message:", err)
@@ -264,6 +266,7 @@ out:
 		select {
 		// Main message queue. All outbound messages are processed through here
 		case msg := <-p.outputQueue:
+
 			p.writeMessage(msg)
 			p.lastSend = time.Now()
 
@@ -316,6 +319,8 @@ func (p *Peer) HandleInbound() {
 			ethutil.Config.Log.Debugln(err)
 		}
 		for _, msg := range msgs {
+			ethutil.Config.Log.Println(ethutil.LogLevelSystem, "=>", msg.Type, msg.Data)
+
 			switch msg.Type {
 			case ethwire.MsgHandshakeTy:
 				// Version message
