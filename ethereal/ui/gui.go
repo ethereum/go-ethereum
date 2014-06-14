@@ -356,3 +356,7 @@ func (gui *Gui) ChangeClientId(id string) {
 func (gui *Gui) ClientId() string {
 	return ethutil.Config.Identifier
 }
+
+func (gui *Gui) SetLogLevel(level int) {
+	ethutil.Config.Log.SetLevel(level)
+}

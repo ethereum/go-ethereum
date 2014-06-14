@@ -29,6 +29,7 @@ ApplicationWindow {
 		}
 
 		Menu {
+			title: "Developer"
 			MenuItem {
 				text: "Debugger"
 				shortcut: "Ctrl+d"
@@ -261,7 +262,7 @@ ApplicationWindow {
 					id: addressView
 					width: parent.width - 200
 					height: 200
-					anchors.bottom: logView.top
+					anchors.bottom: logLayout.top
 					TableViewColumn{ role: "name"; title: "name" }
 					TableViewColumn{ role: "address"; title: "address"; width: 300}
 
@@ -296,14 +297,48 @@ ApplicationWindow {
 				property var logModel: ListModel {
 					id: logModel
 				}
-				TableView {
-					id: logView
+				RowLayout {
+					id: logLayout
 					width: parent.width
 					height: 200
 					anchors.bottom: parent.bottom
-					TableViewColumn{ role: "description" ; title: "log" }
+					TableView {
+						id: logView
+						headerVisible: false
+						anchors {
+							right: logLevelSlider.left
+							left: parent.left
+							bottom: parent.bottom
+							top: parent.top
+						}
 
-					model: logModel
+						TableViewColumn{ role: "description" ; title: "log" }
+
+						model: logModel
+					}
+
+					Slider {
+						id: logLevelSlider
+						value: 2
+						anchors {
+							right: parent.right
+							top: parent.top
+							bottom: parent.bottom
+
+							rightMargin: 5
+							leftMargin: 5
+							topMargin: 5
+							bottomMargin: 5
+						}
+
+						orientation: Qt.Vertical
+						maximumValue: 3
+						stepSize: 1
+
+						onValueChanged: {
+							eth.setLogLevel(value)
+						}
+					}
 				}
 			}
 
@@ -651,7 +686,12 @@ ApplicationWindow {
 
 	function addLog(str) {
 		if(str.len != 0) {
-			logModel.insert(0, {description: str})
+			if(logView.flickableItem.atYEnd) {
+				logModel.append({description: str})
+				logView.positionViewAtRow(logView.rowCount - 1, ListView.Contain)
+			} else {
+				logModel.append({description: str})
+			}
 		}
 	}
 
