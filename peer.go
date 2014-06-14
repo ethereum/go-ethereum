@@ -19,7 +19,7 @@ const (
 	// Current protocol version
 	ProtocolVersion = 20
 	// Interval for ping/pong message
-	pingPongTimer = 1 * time.Second
+	pingPongTimer = 2 * time.Second
 )
 
 type DiscReason byte
@@ -266,14 +266,13 @@ out:
 		select {
 		// Main message queue. All outbound messages are processed through here
 		case msg := <-p.outputQueue:
-
 			p.writeMessage(msg)
 			p.lastSend = time.Now()
 
 		// Ping timer
 		case <-pingTimer.C:
 			timeSince := time.Since(time.Unix(p.lastPong, 0))
-			if !p.pingStartTime.IsZero() && p.lastPong != 0 && timeSince > (pingPongTimer+10*time.Second) {
+			if !p.pingStartTime.IsZero() && p.lastPong != 0 && timeSince > (pingPongTimer+30*time.Second) {
 				ethutil.Config.Log.Infof("[PEER] Peer did not respond to latest pong fast enough, it took %s, disconnecting.\n", timeSince)
 				p.Stop()
 				return
