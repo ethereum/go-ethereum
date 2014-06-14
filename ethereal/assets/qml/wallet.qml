@@ -319,7 +319,7 @@ ApplicationWindow {
 
 					Slider {
 						id: logLevelSlider
-						value: 2
+						value: 1
 						anchors {
 							right: parent.right
 							top: parent.top
@@ -685,6 +685,11 @@ ApplicationWindow {
 	}
 
 	function addLog(str) {
+		// Remove first item once we've reached max log items
+		if(logModel.count > 250) {
+			logModel.remove(0)
+		}
+
 		if(str.len != 0) {
 			if(logView.flickableItem.atYEnd) {
 				logModel.append({description: str})
@@ -693,6 +698,7 @@ ApplicationWindow {
 				logModel.append({description: str})
 			}
 		}
+
 	}
 
 	function setPeers(text) {
