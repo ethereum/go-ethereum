@@ -11,6 +11,7 @@ import (
 
 type RlpEncodable interface {
 	RlpEncode() []byte
+	RlpValue() []interface{}
 }
 
 type RlpEncoder struct {
