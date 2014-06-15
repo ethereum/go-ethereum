@@ -12,6 +12,12 @@ type KeyPair struct {
 	account *StateObject
 }
 
+func GenerateNewKeyPair() (*KeyPair, error) {
+	_, prv := secp256k1.GenerateKeyPair()
+
+	return NewKeyPairFromSec(prv)
+}
+
 func NewKeyPairFromSec(seckey []byte) (*KeyPair, error) {
 	pubkey, err := secp256k1.GeneratePubKey(seckey)
 	if err != nil {
