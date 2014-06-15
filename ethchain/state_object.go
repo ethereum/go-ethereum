@@ -38,6 +38,10 @@ func MakeContract(tx *Transaction, state *State) *StateObject {
 	return nil
 }
 
+func NewStateObject(addr []byte) *StateObject {
+	return &StateObject{address: addr, Amount: new(big.Int)}
+}
+
 func NewContract(address []byte, Amount *big.Int, root []byte) *StateObject {
 	contract := &StateObject{address: address, Amount: Amount, Nonce: 0}
 	contract.state = NewState(ethutil.NewTrie(ethutil.Config.Db, string(root)))
@@ -144,6 +148,23 @@ func (self *StateObject) BuyGas(gas, price *big.Int) error {
 	// TODO Do sub from TotalGasPool
 	// and check if enough left
 	return nil
+}
+
+func (self *StateObject) Copy() *StateObject {
+	stCopy := &StateObject{}
+	stCopy.address = make([]byte, len(self.address))
+	copy(stCopy.address, self.address)
+	stCopy.Amount = new(big.Int).Set(self.Amount)
+	stCopy.ScriptHash = make([]byte, len(self.ScriptHash))
+	copy(stCopy.ScriptHash, self.ScriptHash)
+	stCopy.Nonce = self.Nonce
+	stCopy.state = self.state.Copy()
+	stCopy.script = make([]byte, len(self.script))
+	copy(stCopy.script, self.script)
+	stCopy.initScript = make([]byte, len(self.initScript))
+	copy(stCopy.initScript, self.initScript)
+
+	return stCopy
 }
 
 // Returns the address of the contract/account
