@@ -139,7 +139,8 @@ func (self *Miner) mineNewBlock() {
 
 	// Accumulate all valid transaction and apply them to the new state
 	// Error may be ignored. It's not important during mining
-	receipts, txs, unhandledTxs, err := stateManager.ProcessTransactions(self.block.Coinbase, self.block.State(), self.block, self.block, self.txs)
+	coinbase := self.block.State().GetOrNewStateObject(self.block.Coinbase)
+	receipts, txs, unhandledTxs, err := stateManager.ProcessTransactions(coinbase, self.block.State(), self.block, self.block, self.txs)
 	if err != nil {
 		ethutil.Config.Log.Debugln("[MINER]", err)
 	}

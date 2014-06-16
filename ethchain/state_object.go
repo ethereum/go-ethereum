@@ -17,6 +17,11 @@ type StateObject struct {
 	state      *State
 	script     []byte
 	initScript []byte
+
+	// Total gas pool is the total amount of gas currently
+	// left if this object is the coinbase. Gas is directly
+	// purchased of the coinbase.
+	gasPool *big.Int
 }
 
 // Converts an transaction in to a state object
@@ -139,14 +144,22 @@ func (c *StateObject) ConvertGas(gas, price *big.Int) error {
 	return nil
 }
 
+func (self *StateObject) SetGasPool(gasLimit *big.Int) {
+	self.gasPool = new(big.Int).Set(gasLimit)
+
+	ethutil.Config.Log.Printf(ethutil.LogLevelSystem, "%x fuel (+ %v)", self.Address(), self.gasPool)
+}
+
 func (self *StateObject) BuyGas(gas, price *big.Int) error {
+	if self.gasPool.Cmp(gas) < 0 {
+		return GasLimitError(self.gasPool, gas)
+	}
+
 	rGas := new(big.Int).Set(gas)
 	rGas.Mul(rGas, price)
 
 	self.AddAmount(rGas)
 
-	// TODO Do sub from TotalGasPool
-	// and check if enough left
 	return nil
 }
 
@@ -158,7 +171,9 @@ func (self *StateObject) Copy() *StateObject {
 	stCopy.ScriptHash = make([]byte, len(self.ScriptHash))
 	copy(stCopy.ScriptHash, self.ScriptHash)
 	stCopy.Nonce = self.Nonce
-	stCopy.state = self.state.Copy()
+	if self.state != nil {
+		stCopy.state = self.state.Copy()
+	}
 	stCopy.script = make([]byte, len(self.script))
 	copy(stCopy.script, self.script)
 	stCopy.initScript = make([]byte, len(self.initScript))

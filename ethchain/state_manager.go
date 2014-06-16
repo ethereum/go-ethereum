@@ -97,7 +97,7 @@ func (sm *StateManager) BlockChain() *BlockChain {
 	return sm.bc
 }
 
-func (self *StateManager) ProcessTransactions(coinbase []byte, state *State, block, parent *Block, txs Transactions) (Receipts, Transactions, Transactions, error) {
+func (self *StateManager) ProcessTransactions(coinbase *StateObject, state *State, block, parent *Block, txs Transactions) (Receipts, Transactions, Transactions, error) {
 	var (
 		receipts           Receipts
 		handled, unhandled Transactions
@@ -177,9 +177,12 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 	}
 	fmt.Println(block.Receipts())
 
+	coinbase := state.GetOrNewStateObject(block.Coinbase)
+	coinbase.gasPool = block.CalcGasLimit(parent)
+
 	// Process the transactions on to current block
 	//sm.ApplyTransactions(block.Coinbase, state, parent, block.Transactions())
-	sm.ProcessTransactions(block.Coinbase, state, block, parent, block.Transactions())
+	sm.ProcessTransactions(coinbase, state, block, parent, block.Transactions())
 
 	// Block validation
 	if err := sm.ValidateBlock(block); err != nil {
@@ -194,7 +197,6 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 		return err
 	}
 
-	//if !sm.compState.Cmp(state) {
 	if !block.State().Cmp(state) {
 		return fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().trie.Root, state.trie.Root)
 	}

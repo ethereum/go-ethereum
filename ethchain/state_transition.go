@@ -32,8 +32,8 @@ type StateTransition struct {
 	cb, rec, sen *StateObject
 }
 
-func NewStateTransition(coinbase []byte, tx *Transaction, state *State, block *Block) *StateTransition {
-	return &StateTransition{coinbase, tx, new(big.Int), state, block, nil, nil, nil}
+func NewStateTransition(coinbase *StateObject, tx *Transaction, state *State, block *Block) *StateTransition {
+	return &StateTransition{coinbase.Address(), tx, new(big.Int), state, block, coinbase, nil, nil}
 }
 
 func (self *StateTransition) Coinbase() *StateObject {

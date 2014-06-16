@@ -169,7 +169,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case CALL:
 			require(7)
 			gas.Set(GasCall)
-			addStepGasUsage(stack.data[stack.Len()-1])
+			addStepGasUsage(stack.data[stack.Len()-2])
 
 			x := stack.data[stack.Len()-6].Uint64() + stack.data[stack.Len()-7].Uint64()
 			y := stack.data[stack.Len()-4].Uint64() + stack.data[stack.Len()-5].Uint64()
@@ -529,6 +529,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 				vm.state.UpdateStateObject(contract)
 			}
 		case CALL:
+			// TODO RE-WRITE
 			require(7)
 			// Closure addr
 			addr := stack.Pop()
@@ -538,46 +539,44 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			inSize, inOffset := stack.Popn()
 			// Pop return size and offset
 			retSize, retOffset := stack.Popn()
-			// Make sure there's enough gas
-			if closure.Gas.Cmp(gas) < 0 {
-				stack.Push(ethutil.BigFalse)
-
-				break
-			}
 
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 
 			snapshot := vm.state.Snapshot()
 
-			// Fetch the contract which will serve as the closure body
-			contract := vm.state.GetStateObject(addr.Bytes())
+			closure.object.Nonce += 1
+			if closure.object.Amount.Cmp(value) < 0 {
+				ethutil.Config.Log.Debugf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Amount)
 
-			if contract != nil {
-				// Prepay for the gas
-				//closure.UseGas(gas)
-
-				// Add the value to the state object
-				contract.AddAmount(value)
-
-				// Create a new callable closure
-				closure := NewClosure(closure, contract, contract.script, vm.state, gas, closure.Price)
-				// Executer the closure and get the return value (if any)
-				ret, _, err := closure.Call(vm, args, hook)
-				if err != nil {
-					stack.Push(ethutil.BigFalse)
-					// Reset the changes applied this object
-					vm.state.Revert(snapshot)
-				} else {
-					stack.Push(ethutil.BigTrue)
-
-					vm.state.UpdateStateObject(contract)
-
-					mem.Set(retOffset.Int64(), retSize.Int64(), ret)
-				}
-			} else {
-				ethutil.Config.Log.Debugf("Contract %x not found\n", addr.Bytes())
 				stack.Push(ethutil.BigFalse)
+			} else {
+				// Fetch the contract which will serve as the closure body
+				contract := vm.state.GetStateObject(addr.Bytes())
+
+				if contract != nil {
+					// Add the value to the state object
+					contract.AddAmount(value)
+
+					// Create a new callable closure
+					closure := NewClosure(closure, contract, contract.script, vm.state, gas, closure.Price)
+					// Executer the closure and get the return value (if any)
+					ret, _, err := closure.Call(vm, args, hook)
+					if err != nil {
+						stack.Push(ethutil.BigFalse)
+						// Reset the changes applied this object
+						vm.state.Revert(snapshot)
+					} else {
+						stack.Push(ethutil.BigTrue)
+
+						vm.state.UpdateStateObject(contract)
+
+						mem.Set(retOffset.Int64(), retSize.Int64(), ret)
+					}
+				} else {
+					ethutil.Config.Log.Debugf("Contract %x not found\n", addr.Bytes())
+					stack.Push(ethutil.BigFalse)
+				}
 			}
 		case RETURN:
 			require(2)
