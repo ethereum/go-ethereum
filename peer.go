@@ -158,7 +158,6 @@ func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
 }
 
 func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
-
 	p := &Peer{
 		outputQueue: make(chan *ethwire.Msg, outputBufferSize),
 		quit:        make(chan bool),
