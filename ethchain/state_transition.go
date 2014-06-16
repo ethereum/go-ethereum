@@ -141,8 +141,13 @@ func (self *StateTransition) TransitionState() (err error) {
 	// XXX Transactions after this point are considered valid.
 
 	defer func() {
-		self.state.UpdateStateObject(sender)
-		self.state.UpdateStateObject(receiver)
+		if sender != nil {
+			self.state.UpdateStateObject(sender)
+		}
+
+		if receiver != nil {
+			self.state.UpdateStateObject(receiver)
+		}
 	}()
 
 	// Increment the nonce for the next transaction
