@@ -120,13 +120,13 @@ func (c *StateObject) ReturnGas(gas, price *big.Int, state *State) {
 func (c *StateObject) AddAmount(amount *big.Int) {
 	c.SetAmount(new(big.Int).Add(c.Amount, amount))
 
-	ethutil.Config.Log.Debugf("%x: #%d %v (+ %v)", c.Address(), c.Nonce, c.Amount, amount)
+	ethutil.Config.Log.Printf(ethutil.LogLevelSystem, "%x: #%d %v (+ %v)\n", c.Address(), c.Nonce, c.Amount, amount)
 }
 
 func (c *StateObject) SubAmount(amount *big.Int) {
 	c.SetAmount(new(big.Int).Sub(c.Amount, amount))
 
-	ethutil.Config.Log.Debugf("%x: #%d %v (- %v)", c.Address(), c.Nonce, c.Amount, amount)
+	ethutil.Config.Log.Printf(ethutil.LogLevelSystem, "%x: #%d %v (- %v)\n", c.Address(), c.Nonce, c.Amount, amount)
 }
 
 func (c *StateObject) SetAmount(amount *big.Int) {

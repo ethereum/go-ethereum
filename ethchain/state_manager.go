@@ -178,7 +178,7 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 	fmt.Println(block.Receipts())
 
 	coinbase := state.GetOrNewStateObject(block.Coinbase)
-	coinbase.gasPool = block.CalcGasLimit(parent)
+	coinbase.SetGasPool(block.CalcGasLimit(parent))
 
 	// Process the transactions on to current block
 	//sm.ApplyTransactions(block.Coinbase, state, parent, block.Transactions())

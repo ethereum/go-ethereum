@@ -113,12 +113,14 @@ func (self *StateTransition) BuyGas() error {
 func (self *StateTransition) TransitionState() (err error) {
 	//snapshot := st.state.Snapshot()
 
-	defer func() {
-		if r := recover(); r != nil {
-			ethutil.Config.Log.Infoln(r)
-			err = fmt.Errorf("state transition err %v", r)
-		}
-	}()
+	/*
+		defer func() {
+			if r := recover(); r != nil {
+				ethutil.Config.Log.Infoln(r)
+				err = fmt.Errorf("state transition err %v", r)
+			}
+		}()
+	*/
 
 	var (
 		tx       = self.tx

@@ -139,7 +139,9 @@ func (self *Miner) mineNewBlock() {
 
 	// Accumulate all valid transaction and apply them to the new state
 	// Error may be ignored. It's not important during mining
+	parent := self.ethereum.BlockChain().GetBlock(self.block.PrevHash)
 	coinbase := self.block.State().GetOrNewStateObject(self.block.Coinbase)
+	coinbase.SetGasPool(self.block.CalcGasLimit(parent))
 	receipts, txs, unhandledTxs, err := stateManager.ProcessTransactions(coinbase, self.block.State(), self.block, self.block, self.txs)
 	if err != nil {
 		ethutil.Config.Log.Debugln("[MINER]", err)
