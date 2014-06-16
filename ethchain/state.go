@@ -26,28 +26,6 @@ func NewState(trie *ethutil.Trie) *State {
 	return &State{trie: trie, states: make(map[string]*State), stateObjects: make(map[string]*StateObject), manifest: NewManifest()}
 }
 
-/*
-// Resets the trie and all siblings
-func (s *State) Reset() {
-	s.trie.Undo()
-
-	// Reset all nested states
-	for _, state := range s.states {
-		state.Reset()
-	}
-}
-
-// Syncs the trie and all siblings
-func (s *State) Sync() {
-	// Sync all nested states
-	for _, state := range s.states {
-		state.Sync()
-	}
-
-	s.trie.Sync()
-}
-*/
-
 // Resets the trie and all siblings
 func (s *State) Reset() {
 	s.trie.Undo()
@@ -85,58 +63,6 @@ func (s *State) EachStorage(cb ethutil.EachCallback) {
 	it := s.trie.NewIterator()
 	it.Each(cb)
 }
-
-/*
-func (s *State) GetStateObject(addr []byte) *StateObject {
-	data := s.trie.Get(string(addr))
-	if data == "" {
-		return nil
-	}
-
-	stateObject := NewStateObjectFromBytes(addr, []byte(data))
-
-	// Check if there's a cached state for this contract
-	cachedStateObject := s.states[string(addr)]
-	if cachedStateObject != nil {
-		//fmt.Printf("get cached #%d %x addr: %x\n", cachedStateObject.trie.Cache().Len(), cachedStateObject.Root(), addr[0:4])
-		stateObject.state = cachedStateObject
-	}
-
-	return stateObject
-}
-
-// Updates any given state object
-func (s *State) UpdateStateObject(object *StateObject) {
-	addr := object.Address()
-
-	if object.state != nil && s.states[string(addr)] == nil {
-		s.states[string(addr)] = object.state
-	}
-
-	ethutil.Config.Db.Put(ethutil.Sha3Bin(object.Script()), object.Script())
-
-	s.trie.Update(string(addr), string(object.RlpEncode()))
-
-	s.manifest.AddObjectChange(object)
-}
-
-func (s *State) GetAccount(addr []byte) (account *StateObject) {
-	data := s.trie.Get(string(addr))
-	if data == "" {
-		account = NewAccount(addr, big.NewInt(0))
-	} else {
-		account = NewStateObjectFromBytes(addr, []byte(data))
-	}
-
-	// Check if there's a cached state for this contract
-	cachedStateObject := s.states[string(addr)]
-	if cachedStateObject != nil {
-		account.state = cachedStateObject
-	}
-
-	return
-}
-*/
 
 func (self *State) UpdateStateObject(stateObject *StateObject) {
 	addr := stateObject.Address()
@@ -187,23 +113,17 @@ func (s *State) Cmp(other *State) bool {
 	return s.trie.Cmp(other.trie)
 }
 
-/*
-func (s *State) Copy() *State {
-	state := NewState(s.trie.Copy())
-	for k, subState := range s.states {
-		state.states[k] = subState.Copy()
-	}
-
-	return state
-}
-*/
 func (self *State) Copy() *State {
-	state := NewState(self.trie.Copy())
-	for k, stateObject := range self.stateObjects {
-		state.stateObjects[k] = stateObject.Copy()
+	if self.trie != nil {
+		state := NewState(self.trie.Copy())
+		for k, stateObject := range self.stateObjects {
+			state.stateObjects[k] = stateObject.Copy()
+		}
+
+		return state
 	}
 
-	return state
+	return nil
 }
 
 func (s *State) Snapshot() *State {
@@ -259,3 +179,84 @@ func (m *Manifest) AddStorageChange(stateObject *StateObject, storageAddr []byte
 
 	m.storageChanges[string(stateObject.Address())][string(storageAddr)] = storage
 }
+
+/*
+
+// Resets the trie and all siblings
+func (s *State) Reset() {
+	s.trie.Undo()
+
+	// Reset all nested states
+	for _, state := range s.states {
+		state.Reset()
+	}
+}
+
+// Syncs the trie and all siblings
+func (s *State) Sync() {
+	// Sync all nested states
+	for _, state := range s.states {
+		state.Sync()
+	}
+
+	s.trie.Sync()
+}
+func (s *State) GetStateObject(addr []byte) *StateObject {
+	data := s.trie.Get(string(addr))
+	if data == "" {
+		return nil
+	}
+
+	stateObject := NewStateObjectFromBytes(addr, []byte(data))
+
+	// Check if there's a cached state for this contract
+	cachedStateObject := s.states[string(addr)]
+	if cachedStateObject != nil {
+		//fmt.Printf("get cached #%d %x addr: %x\n", cachedStateObject.trie.Cache().Len(), cachedStateObject.Root(), addr[0:4])
+		stateObject.state = cachedStateObject
+	}
+
+	return stateObject
+}
+
+// Updates any given state object
+func (s *State) UpdateStateObject(object *StateObject) {
+	addr := object.Address()
+
+	if object.state != nil && s.states[string(addr)] == nil {
+		s.states[string(addr)] = object.state
+	}
+
+	ethutil.Config.Db.Put(ethutil.Sha3Bin(object.Script()), object.Script())
+
+	s.trie.Update(string(addr), string(object.RlpEncode()))
+
+	s.manifest.AddObjectChange(object)
+}
+
+func (s *State) GetAccount(addr []byte) (account *StateObject) {
+	data := s.trie.Get(string(addr))
+	if data == "" {
+		account = NewAccount(addr, big.NewInt(0))
+	} else {
+		account = NewStateObjectFromBytes(addr, []byte(data))
+	}
+
+	// Check if there's a cached state for this contract
+	cachedStateObject := s.states[string(addr)]
+	if cachedStateObject != nil {
+		account.state = cachedStateObject
+	}
+
+	return
+}
+
+func (s *State) Copy() *State {
+	state := NewState(s.trie.Copy())
+	for k, subState := range s.states {
+		state.states[k] = subState.Copy()
+	}
+
+	return state
+}
+*/
