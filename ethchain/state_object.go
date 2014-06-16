@@ -163,6 +163,15 @@ func (self *StateObject) BuyGas(gas, price *big.Int) error {
 	return nil
 }
 
+func (self *StateObject) RefundGas(gas, price *big.Int) {
+	self.gasPool.Add(self.gasPool, gas)
+
+	rGas := new(big.Int).Set(gas)
+	rGas.Mul(rGas, price)
+
+	self.Amount.Sub(self.Amount, rGas)
+}
+
 func (self *StateObject) Copy() *StateObject {
 	stCopy := &StateObject{}
 	stCopy.address = make([]byte, len(self.address))

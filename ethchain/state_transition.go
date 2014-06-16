@@ -110,6 +110,15 @@ func (self *StateTransition) BuyGas() error {
 	return nil
 }
 
+func (self *StateTransition) RefundGas() {
+	coinbase, sender := self.Coinbase(), self.Sender()
+	coinbase.RefundGas(self.gas, self.tx.GasPrice)
+
+	// Return remaining gas
+	remaining := new(big.Int).Mul(self.gas, self.tx.GasPrice)
+	sender.AddAmount(remaining)
+}
+
 func (self *StateTransition) TransitionState() (err error) {
 	//snapshot := st.state.Snapshot()
 
@@ -141,6 +150,8 @@ func (self *StateTransition) TransitionState() (err error) {
 	// XXX Transactions after this point are considered valid.
 
 	defer func() {
+		self.RefundGas()
+
 		if sender != nil {
 			self.state.UpdateStateObject(sender)
 		}
@@ -148,6 +159,8 @@ func (self *StateTransition) TransitionState() (err error) {
 		if receiver != nil {
 			self.state.UpdateStateObject(receiver)
 		}
+
+		self.state.UpdateStateObject(self.Coinbase())
 	}()
 
 	// Increment the nonce for the next transaction
@@ -202,10 +215,6 @@ func (self *StateTransition) TransitionState() (err error) {
 			}
 		}
 	}
-
-	// Return remaining gas
-	remaining := new(big.Int).Mul(self.gas, tx.GasPrice)
-	sender.AddAmount(remaining)
 
 	return nil
 }
