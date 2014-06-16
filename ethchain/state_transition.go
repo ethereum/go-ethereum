@@ -102,7 +102,7 @@ func (self *StateTransition) BuyGas() error {
 	if err != nil {
 		return err
 	}
-	self.state.UpdateStateObject(coinbase)
+	//self.state.UpdateStateObject(coinbase)
 
 	self.AddGas(self.tx.Gas)
 	sender.SubAmount(self.tx.GasValue())
@@ -177,7 +177,6 @@ func (self *StateTransition) TransitionState() (err error) {
 
 	// Process the init code and create 'valid' contract
 	if tx.CreatesContract() {
-		//fmt.Println(Disassemble(receiver.Init()))
 		// Evaluate the initialization script
 		// and use the return value as the
 		// script section for the state object.
