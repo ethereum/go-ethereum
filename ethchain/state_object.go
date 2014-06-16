@@ -17,6 +17,11 @@ type StateObject struct {
 	state      *State
 	script     []byte
 	initScript []byte
+
+	// Total gas pool is the total amount of gas currently
+	// left if this object is the coinbase. Gas is directly
+	// purchased of the coinbase.
+	gasPool *big.Int
 }
 
 // Converts an transaction in to a state object
@@ -36,6 +41,10 @@ func MakeContract(tx *Transaction, state *State) *StateObject {
 	}
 
 	return nil
+}
+
+func NewStateObject(addr []byte) *StateObject {
+	return &StateObject{address: addr, Amount: new(big.Int)}
 }
 
 func NewContract(address []byte, Amount *big.Int, root []byte) *StateObject {
@@ -77,7 +86,7 @@ func (c *StateObject) SetAddr(addr []byte, value interface{}) {
 
 func (c *StateObject) SetStorage(num *big.Int, val *ethutil.Value) {
 	addr := ethutil.BigToBytes(num, 256)
-	//fmt.Println("storing", val.BigInt(), "@", num)
+	//fmt.Printf("sstore %x => %v\n", addr, val)
 	c.SetAddr(addr, val)
 }
 
@@ -102,16 +111,22 @@ func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
 
 // Return the gas back to the origin. Used by the Virtual machine or Closures
 func (c *StateObject) ReturnGas(gas, price *big.Int, state *State) {
-	remainder := new(big.Int).Mul(gas, price)
-	c.AddAmount(remainder)
+	/*
+		remainder := new(big.Int).Mul(gas, price)
+		c.AddAmount(remainder)
+	*/
 }
 
 func (c *StateObject) AddAmount(amount *big.Int) {
 	c.SetAmount(new(big.Int).Add(c.Amount, amount))
+
+	ethutil.Config.Log.Printf(ethutil.LogLevelSystem, "%x: #%d %v (+ %v)\n", c.Address(), c.Nonce, c.Amount, amount)
 }
 
 func (c *StateObject) SubAmount(amount *big.Int) {
 	c.SetAmount(new(big.Int).Sub(c.Amount, amount))
+
+	ethutil.Config.Log.Printf(ethutil.LogLevelSystem, "%x: #%d %v (- %v)\n", c.Address(), c.Nonce, c.Amount, amount)
 }
 
 func (c *StateObject) SetAmount(amount *big.Int) {
@@ -127,6 +142,53 @@ func (c *StateObject) ConvertGas(gas, price *big.Int) error {
 	c.SubAmount(total)
 
 	return nil
+}
+
+func (self *StateObject) SetGasPool(gasLimit *big.Int) {
+	self.gasPool = new(big.Int).Set(gasLimit)
+
+	ethutil.Config.Log.Printf(ethutil.LogLevelSystem, "%x: fuel (+ %v)", self.Address(), self.gasPool)
+}
+
+func (self *StateObject) BuyGas(gas, price *big.Int) error {
+	if self.gasPool.Cmp(gas) < 0 {
+		return GasLimitError(self.gasPool, gas)
+	}
+
+	rGas := new(big.Int).Set(gas)
+	rGas.Mul(rGas, price)
+
+	self.AddAmount(rGas)
+
+	return nil
+}
+
+func (self *StateObject) RefundGas(gas, price *big.Int) {
+	self.gasPool.Add(self.gasPool, gas)
+
+	rGas := new(big.Int).Set(gas)
+	rGas.Mul(rGas, price)
+
+	self.Amount.Sub(self.Amount, rGas)
+}
+
+func (self *StateObject) Copy() *StateObject {
+	stCopy := &StateObject{}
+	stCopy.address = make([]byte, len(self.address))
+	copy(stCopy.address, self.address)
+	stCopy.Amount = new(big.Int).Set(self.Amount)
+	stCopy.ScriptHash = make([]byte, len(self.ScriptHash))
+	copy(stCopy.ScriptHash, self.ScriptHash)
+	stCopy.Nonce = self.Nonce
+	if self.state != nil {
+		stCopy.state = self.state.Copy()
+	}
+	stCopy.script = make([]byte, len(self.script))
+	copy(stCopy.script, self.script)
+	stCopy.initScript = make([]byte, len(self.initScript))
+	copy(stCopy.initScript, self.initScript)
+
+	return stCopy
 }
 
 // Returns the address of the contract/account
@@ -153,14 +215,14 @@ func (c *StateObject) RlpEncode() []byte {
 		root = ""
 	}
 
-	return ethutil.Encode([]interface{}{c.Amount, c.Nonce, root, ethutil.Sha3Bin(c.script)})
+	return ethutil.Encode([]interface{}{c.Nonce, c.Amount, root, ethutil.Sha3Bin(c.script)})
 }
 
 func (c *StateObject) RlpDecode(data []byte) {
 	decoder := ethutil.NewValueFromBytes(data)
 
-	c.Amount = decoder.Get(0).BigInt()
-	c.Nonce = decoder.Get(1).Uint()
+	c.Nonce = decoder.Get(0).Uint()
+	c.Amount = decoder.Get(1).BigInt()
 	c.state = NewState(ethutil.NewTrie(ethutil.Config.Db, decoder.Get(2).Interface()))
 
 	c.ScriptHash = decoder.Get(3).Bytes()

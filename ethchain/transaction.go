@@ -1,6 +1,7 @@
 package ethchain
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/secp256k1-go"
@@ -24,7 +25,7 @@ type Transaction struct {
 }
 
 func NewContractCreationTx(value, gas, gasPrice *big.Int, script []byte) *Transaction {
-	return &Transaction{Value: value, Gas: gas, GasPrice: gasPrice, Data: script, contractCreation: true}
+	return &Transaction{Recipient: ContractAddr, Value: value, Gas: gas, GasPrice: gasPrice, Data: script, contractCreation: true}
 }
 
 func NewTransactionMessage(to []byte, value, gas, gasPrice *big.Int, data []byte) *Transaction {
@@ -45,14 +46,17 @@ func NewTransactionFromValue(val *ethutil.Value) *Transaction {
 	return tx
 }
 
+func (self *Transaction) GasValue() *big.Int {
+	return new(big.Int).Mul(self.Gas, self.GasPrice)
+}
+
+func (self *Transaction) TotalValue() *big.Int {
+	v := self.GasValue()
+	return v.Add(v, self.Value)
+}
+
 func (tx *Transaction) Hash() []byte {
 	data := []interface{}{tx.Nonce, tx.GasPrice, tx.Gas, tx.Recipient, tx.Value, tx.Data}
-
-	/*
-		if tx.contractCreation {
-			data = append(data, tx.Init)
-		}
-	*/
 
 	return ethutil.Sha3Bin(ethutil.NewValue(data).Encode())
 }
@@ -144,7 +148,8 @@ func (tx *Transaction) RlpValueDecode(decoder *ethutil.Value) {
 	tx.v = byte(decoder.Get(6).Uint())
 	tx.r = decoder.Get(7).Bytes()
 	tx.s = decoder.Get(8).Bytes()
-	if len(tx.Recipient) == 0 {
+
+	if bytes.Compare(tx.Recipient, ContractAddr) == 0 {
 		tx.contractCreation = true
 	}
 }
@@ -183,6 +188,7 @@ type Receipt struct {
 	PostState         []byte
 	CumulativeGasUsed *big.Int
 }
+type Receipts []*Receipt
 
 func NewRecieptFromValue(val *ethutil.Value) *Receipt {
 	r := &Receipt{}

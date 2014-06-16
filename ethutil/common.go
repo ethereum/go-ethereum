@@ -18,8 +18,8 @@ var (
 	Wei      = big.NewInt(1)
 )
 
-// Currency to string
 //
+// Currency to string
 // Returns a string representing a human readable format
 func CurrencyToString(num *big.Int) string {
 	switch {
@@ -47,7 +47,7 @@ func CurrencyToString(num *big.Int) string {
 // Common big integers often used
 var (
 	Big1   = big.NewInt(1)
-	Big2   = big.NewInt(1)
+	Big2   = big.NewInt(2)
 	Big0   = big.NewInt(0)
 	Big32  = big.NewInt(32)
 	Big256 = big.NewInt(0xff)

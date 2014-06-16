@@ -75,11 +75,11 @@ func ReadConfig(base string, logTypes LoggerType, g *globalconf.GlobalConf, id s
 	if Config == nil {
 		path := ApplicationFolder(base)
 
-		Config = &config{ExecPath: path, Debug: true, Ver: "0.5.0 RC12"}
+		Config = &config{ExecPath: path, Debug: true, Ver: "0.5.13"}
 		Config.conf = g
 		Config.Identifier = id
 		Config.Log = NewLogger(logTypes, LogLevelDebug)
-		Config.SetClientString("/Ethereum(G)")
+		Config.SetClientString("Ethereum(G)")
 	}
 
 	return Config
@@ -88,11 +88,9 @@ func ReadConfig(base string, logTypes LoggerType, g *globalconf.GlobalConf, id s
 // Set client string
 //
 func (c *config) SetClientString(str string) {
-	id := runtime.GOOS
-	if len(c.Identifier) > 0 {
-		id = c.Identifier
-	}
-	Config.ClientString = fmt.Sprintf("%s nv%s/%s", str, c.Ver, id)
+	os := runtime.GOOS
+	cust := c.Identifier
+	Config.ClientString = fmt.Sprintf("%s/v%s/%s/%s/Go", str, c.Ver, cust, os)
 }
 
 func (c *config) SetIdentifier(id string) {
@@ -145,12 +143,17 @@ func NewLogger(flag LoggerType, level int) *Logger {
 	return &Logger{logSys: loggers, logLevel: level}
 }
 
+func (self *Logger) SetLevel(level int) {
+	self.logLevel = level
+}
+
 func (log *Logger) AddLogSystem(logger LogSystem) {
 	log.logSys = append(log.logSys, logger)
 }
 
 const (
-	LogLevelDebug = iota
+	LogLevelSystem = iota
+	LogLevelDebug
 	LogLevelInfo
 )
 
@@ -204,6 +207,26 @@ func (log *Logger) Fatal(v ...interface{}) {
 	}
 
 	os.Exit(1)
+}
+
+func (log *Logger) Println(level int, v ...interface{}) {
+	if log.logLevel > level {
+		return
+	}
+
+	for _, logger := range log.logSys {
+		logger.Println(v...)
+	}
+}
+
+func (log *Logger) Printf(level int, format string, v ...interface{}) {
+	if log.logLevel > level {
+		return
+	}
+
+	for _, logger := range log.logSys {
+		logger.Printf(format, v...)
+	}
 }
 
 type confValue struct {

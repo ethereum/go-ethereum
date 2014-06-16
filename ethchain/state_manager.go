@@ -97,100 +97,49 @@ func (sm *StateManager) BlockChain() *BlockChain {
 	return sm.bc
 }
 
-func (sm *StateManager) MakeStateObject(state *State, tx *Transaction) *StateObject {
-	contract := MakeContract(tx, state)
-	if contract != nil {
-		state.states[string(tx.CreationAddress())] = contract.state
+func (self *StateManager) ProcessTransactions(coinbase *StateObject, state *State, block, parent *Block, txs Transactions) (Receipts, Transactions, Transactions, error) {
+	var (
+		receipts           Receipts
+		handled, unhandled Transactions
+		totalUsedGas       = big.NewInt(0)
+		err                error
+	)
 
-		return contract
-	}
-
-	return nil
-}
-
-// Apply transactions uses the transaction passed to it and applies them onto
-// the current processing state.
-func (sm *StateManager) ApplyTransactions(state *State, block *Block, txs []*Transaction) ([]*Receipt, []*Transaction) {
-	// Process each transaction/contract
-	var receipts []*Receipt
-	var validTxs []*Transaction
-	totalUsedGas := big.NewInt(0)
-	for _, tx := range txs {
-		usedGas, err := sm.ApplyTransaction(state, block, tx)
+done:
+	for i, tx := range txs {
+		txGas := new(big.Int).Set(tx.Gas)
+		st := NewStateTransition(coinbase, tx, state, block)
+		err = st.TransitionState()
 		if err != nil {
-			if IsNonceErr(err) {
+			switch {
+			case IsNonceErr(err):
+				err = nil // ignore error
 				continue
-			}
+			case IsGasLimitErr(err):
+				unhandled = txs[i:]
 
-			ethutil.Config.Log.Infoln(err)
+				break done
+			default:
+				ethutil.Config.Log.Infoln(err)
+			}
 		}
 
-		accumelative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, usedGas))
+		// Notify all subscribers
+		self.Ethereum.Reactor().Post("newTx:post", tx)
+
+		txGas.Sub(txGas, st.gas)
+		accumelative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, txGas))
 		receipt := &Receipt{tx, ethutil.CopyBytes(state.Root().([]byte)), accumelative}
 
 		receipts = append(receipts, receipt)
-		validTxs = append(validTxs, tx)
+		handled = append(handled, tx)
 	}
 
-	return receipts, validTxs
-}
+	fmt.Println("################# MADE\n", receipts, "\n############################")
 
-func (sm *StateManager) ApplyTransaction(state *State, block *Block, tx *Transaction) (totalGasUsed *big.Int, err error) {
-	/*
-		Applies transactions to the given state and creates new
-		state objects where needed.
+	parent.GasUsed = totalUsedGas
 
-		If said objects needs to be created
-		run the initialization script provided by the transaction and
-		assume there's a return value. The return value will be set to
-		the script section of the state object.
-	*/
-	var (
-		addTotalGas = func(gas *big.Int) { totalGasUsed.Add(totalGasUsed, gas) }
-		gas         = new(big.Int)
-		script      []byte
-	)
-	totalGasUsed = big.NewInt(0)
-
-	// Apply the transaction to the current state
-	gas, err = sm.Ethereum.TxPool().ProcessTransaction(tx, state, false)
-	addTotalGas(gas)
-
-	if tx.CreatesContract() {
-		if err == nil {
-			// Create a new state object and the transaction
-			// as it's data provider.
-			contract := sm.MakeStateObject(state, tx)
-			if contract != nil {
-				// Evaluate the initialization script
-				// and use the return value as the
-				// script section for the state object.
-				script, gas, err = sm.EvalScript(state, contract.Init(), contract, tx, block)
-				addTotalGas(gas)
-
-				if err != nil {
-					err = fmt.Errorf("[STATE] Error during init script run %v", err)
-					return
-				}
-				contract.script = script
-				state.UpdateStateObject(contract)
-			} else {
-				err = fmt.Errorf("[STATE] Unable to create contract")
-			}
-		} else {
-			err = fmt.Errorf("[STATE] contract creation tx: %v for sender %x", err, tx.Sender())
-		}
-	} else {
-		// Find the state object at the "recipient" address. If
-		// there's an object attempt to run the script.
-		stateObject := state.GetStateObject(tx.Recipient)
-		if err == nil && stateObject != nil && len(stateObject.Script()) > 0 {
-			_, gas, err = sm.EvalScript(state, stateObject.Script(), stateObject, tx, block)
-			addTotalGas(gas)
-		}
-	}
-
-	return
+	return receipts, handled, unhandled, err
 }
 
 func (sm *StateManager) Process(block *Block, dontReact bool) error {
@@ -212,7 +161,6 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 	hash := block.Hash()
 
 	if sm.bc.HasBlock(hash) {
-		//fmt.Println("[STATE] We already have this block, ignoring")
 		return nil
 	}
 
@@ -227,9 +175,14 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 	if !sm.bc.HasBlock(block.PrevHash) && sm.bc.CurrentBlock != nil {
 		return ParentError(block.PrevHash)
 	}
+	fmt.Println(block.Receipts())
+
+	coinbase := state.GetOrNewStateObject(block.Coinbase)
+	coinbase.SetGasPool(block.CalcGasLimit(parent))
 
 	// Process the transactions on to current block
-	sm.ApplyTransactions(state, parent, block.Transactions())
+	//sm.ApplyTransactions(block.Coinbase, state, parent, block.Transactions())
+	sm.ProcessTransactions(coinbase, state, block, parent, block.Transactions())
 
 	// Block validation
 	if err := sm.ValidateBlock(block); err != nil {
@@ -244,7 +197,6 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 		return err
 	}
 
-	//if !sm.compState.Cmp(state) {
 	if !block.State().Cmp(state) {
 		return fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().trie.Root, state.trie.Root)
 	}
@@ -337,13 +289,6 @@ func CalculateBlockReward(block *Block, uncleLength int) *big.Int {
 		base.Add(base, UncleInclusionReward)
 	}
 
-	lastCumulGasUsed := big.NewInt(0)
-	for _, r := range block.Receipts() {
-		usedGas := new(big.Int).Sub(r.CumulativeGasUsed, lastCumulGasUsed)
-		usedGas.Add(usedGas, r.Tx.GasPrice)
-		base.Add(base, usedGas)
-	}
-
 	return base.Add(base, BlockReward)
 }
 
@@ -373,35 +318,6 @@ func (sm *StateManager) AccumelateRewards(state *State, block *Block) error {
 
 func (sm *StateManager) Stop() {
 	sm.bc.Stop()
-}
-
-func (sm *StateManager) EvalScript(state *State, script []byte, object *StateObject, tx *Transaction, block *Block) (ret []byte, gas *big.Int, err error) {
-	account := state.GetAccount(tx.Sender())
-
-	err = account.ConvertGas(tx.Gas, tx.GasPrice)
-	if err != nil {
-		ethutil.Config.Log.Debugln(err)
-		return
-	}
-
-	closure := NewClosure(account, object, script, state, tx.Gas, tx.GasPrice)
-	vm := NewVm(state, sm, RuntimeVars{
-		Origin:      account.Address(),
-		BlockNumber: block.BlockInfo().Number,
-		PrevHash:    block.PrevHash,
-		Coinbase:    block.Coinbase,
-		Time:        block.Time,
-		Diff:        block.Difficulty,
-		Value:       tx.Value,
-		//Price:       tx.GasPrice,
-	})
-	ret, gas, err = closure.Call(vm, tx.Data, nil)
-
-	// Update the account (refunds)
-	state.UpdateStateObject(account)
-	state.UpdateStateObject(object)
-
-	return
 }
 
 func (sm *StateManager) notifyChanges(state *State) {

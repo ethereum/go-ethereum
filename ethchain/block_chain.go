@@ -55,6 +55,8 @@ func (bc *BlockChain) NewBlock(coinbase []byte) *Block {
 		nil,
 		"")
 
+	block.MinGasPrice = big.NewInt(10000000000000)
+
 	if bc.CurrentBlock != nil {
 		var mul *big.Int
 		if block.Time < lastBlockTime+42 {
@@ -72,19 +74,7 @@ func (bc *BlockChain) NewBlock(coinbase []byte) *Block {
 
 		block.Number = new(big.Int).Add(bc.CurrentBlock.Number, ethutil.Big1)
 
-		// max(10000, (parent gas limit * (1024 - 1) + (parent gas used * 6 / 5)) / 1024)
-		base := new(big.Int)
-		base2 := new(big.Int)
-		parentGL := bc.CurrentBlock.GasLimit
-		parentUsed := bc.CurrentBlock.GasUsed
-
-		base.Mul(parentGL, big.NewInt(1024-1))
-		base2.Mul(parentUsed, big.NewInt(6))
-		base2.Div(base2, big.NewInt(5))
-		base.Add(base, base2)
-		base.Div(base, big.NewInt(1024))
-
-		block.GasLimit = ethutil.BigMax(big.NewInt(10000), base)
+		block.GasLimit = block.CalcGasLimit(bc.CurrentBlock)
 	}
 
 	return block
@@ -271,7 +261,7 @@ func (bc *BlockChain) GetChain(hash []byte, amount int) []*Block {
 
 func AddTestNetFunds(block *Block) {
 	for _, addr := range []string{
-		"8a40bfaa73256b60764c1bf40675a99083efb075",
+		"51ba59315b3a95761d0863b05ccc7a7f54703d99",
 		"e4157b34ea9615cfbde6b4fda419828124b70c78",
 		"1e12515ce3e0f817a4ddef9ca55788a1d66bd2df",
 		"6c386a4b26f73c802f34673f7248bb118f97424a",
@@ -285,7 +275,6 @@ func AddTestNetFunds(block *Block) {
 		account.Amount = ethutil.Big("1606938044258990275541962092341162602522202993782792835301376") //ethutil.BigPow(2, 200)
 		block.state.UpdateStateObject(account)
 	}
-	log.Printf("%x\n", block.RlpEncode())
 }
 
 func (bc *BlockChain) setLastBlock() {

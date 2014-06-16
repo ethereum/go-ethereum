@@ -136,11 +136,21 @@ func (self *Miner) mineNewBlock() {
 
 	// Sort the transactions by nonce in case of odd network propagation
 	sort.Sort(ethchain.TxByNonce{self.txs})
+
 	// Accumulate all valid transaction and apply them to the new state
-	receipts, txs := stateManager.ApplyTransactions(self.block.State(), self.block, self.txs)
-	self.txs = txs
+	// Error may be ignored. It's not important during mining
+	parent := self.ethereum.BlockChain().GetBlock(self.block.PrevHash)
+	coinbase := self.block.State().GetOrNewStateObject(self.block.Coinbase)
+	coinbase.SetGasPool(self.block.CalcGasLimit(parent))
+	receipts, txs, unhandledTxs, err := stateManager.ProcessTransactions(coinbase, self.block.State(), self.block, self.block, self.txs)
+	if err != nil {
+		ethutil.Config.Log.Debugln("[MINER]", err)
+	}
+	self.txs = append(txs, unhandledTxs...)
+
 	// Set the transactions to the block so the new SHA3 can be calculated
 	self.block.SetReceipts(receipts, txs)
+
 	// Accumulate the rewards included for this block
 	stateManager.AccumelateRewards(self.block.State(), self.block)
 
@@ -155,6 +165,7 @@ func (self *Miner) mineNewBlock() {
 		} else {
 			self.ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{self.block.Value().Val})
 			ethutil.Config.Log.Infof("[MINER] 🔨  Mined block %x\n", self.block.Hash())
+			ethutil.Config.Log.Infoln(self.block)
 			// Gather the new batch of transactions currently in the tx pool
 			self.txs = self.ethereum.TxPool().CurrentTransactions()
 		}

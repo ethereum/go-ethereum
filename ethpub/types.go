@@ -46,6 +46,8 @@ type PBlock struct {
 	Transactions string `json:"transactions"`
 	Time         int64  `json:"time"`
 	Coinbase     string `json:"coinbase"`
+	GasLimit     string `json:"gasLimit"`
+	GasUsed      string `json:"gasUsed"`
 }
 
 // Creates a new QML Block from a chain block
@@ -64,7 +66,7 @@ func NewPBlock(block *ethchain.Block) *PBlock {
 		return nil
 	}
 
-	return &PBlock{ref: block, Number: int(block.Number.Uint64()), Hash: ethutil.Hex(block.Hash()), Transactions: string(txJson), Time: block.Time, Coinbase: ethutil.Hex(block.Coinbase)}
+	return &PBlock{ref: block, Number: int(block.Number.Uint64()), GasUsed: block.GasUsed.String(), GasLimit: block.GasLimit.String(), Hash: ethutil.Hex(block.Hash()), Transactions: string(txJson), Time: block.Time, Coinbase: ethutil.Hex(block.Coinbase)}
 }
 
 func (self *PBlock) ToString() string {
@@ -109,11 +111,12 @@ func NewPTx(tx *ethchain.Transaction) *PTx {
 	sender := hex.EncodeToString(tx.Sender())
 	createsContract := tx.CreatesContract()
 
-	data := strings.Join(ethchain.Disassemble(tx.Data), "\n")
+	data := string(tx.Data)
+	if tx.CreatesContract() {
+		data = strings.Join(ethchain.Disassemble(tx.Data), "\n")
+	}
 
-	isContract := len(tx.Data) > 0
-
-	return &PTx{ref: tx, Hash: hash, Value: ethutil.CurrencyToString(tx.Value), Address: receiver, Contract: isContract, Gas: tx.Gas.String(), GasPrice: tx.GasPrice.String(), Data: data, Sender: sender, CreatesContract: createsContract, RawData: hex.EncodeToString(tx.Data)}
+	return &PTx{ref: tx, Hash: hash, Value: ethutil.CurrencyToString(tx.Value), Address: receiver, Contract: tx.CreatesContract(), Gas: tx.Gas.String(), GasPrice: tx.GasPrice.String(), Data: data, Sender: sender, CreatesContract: createsContract, RawData: hex.EncodeToString(tx.Data)}
 }
 
 func (self *PTx) ToString() string {

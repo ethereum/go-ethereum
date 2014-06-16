@@ -2,6 +2,7 @@ package ethchain
 
 import (
 	"fmt"
+	"math/big"
 )
 
 // Parent error. In case a parent is unknown this error will be thrown
@@ -43,6 +44,23 @@ func IsValidationErr(err error) bool {
 	return ok
 }
 
+type GasLimitErr struct {
+	Message string
+	Is, Max *big.Int
+}
+
+func IsGasLimitErr(err error) bool {
+	_, ok := err.(*GasLimitErr)
+
+	return ok
+}
+func (err *GasLimitErr) Error() string {
+	return err.Message
+}
+func GasLimitError(is, max *big.Int) *GasLimitErr {
+	return &GasLimitErr{Message: fmt.Sprintf("GasLimit error. Max %s, transaction would take it to %s", max, is), Is: is, Max: max}
+}
+
 type NonceErr struct {
 	Message string
 	Is, Exp uint64
@@ -58,6 +76,23 @@ func NonceError(is, exp uint64) *NonceErr {
 
 func IsNonceErr(err error) bool {
 	_, ok := err.(*NonceErr)
+
+	return ok
+}
+
+type OutOfGasErr struct {
+	Message string
+}
+
+func OutOfGasError() *OutOfGasErr {
+	return &OutOfGasErr{Message: "Out of gas"}
+}
+func (self *OutOfGasErr) Error() string {
+	return self.Message
+}
+
+func IsOutOfGasErr(err error) bool {
+	_, ok := err.(*OutOfGasErr)
 
 	return ok
 }

@@ -115,9 +115,13 @@ var namereg = ethutil.FromHex("bb5f186604d057c1c5240ca2ae0f6430138ac010")
 func GetAddressFromNameReg(stateManager *ethchain.StateManager, name string) []byte {
 	recp := new(big.Int).SetBytes([]byte(name))
 	object := stateManager.CurrentState().GetStateObject(namereg)
-	reg := object.GetStorage(recp)
+	if object != nil {
+		reg := object.GetStorage(recp)
 
-	return reg.Bytes()
+		return reg.Bytes()
+	}
+
+	return nil
 }
 
 func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, scriptStr string) (*PReceipt, error) {
@@ -193,8 +197,6 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, sc
 
 	if contractCreation {
 		ethutil.Config.Log.Infof("Contract addr %x", tx.CreationAddress())
-	} else {
-		ethutil.Config.Log.Infof("Tx hash %x", tx.Hash())
 	}
 
 	return NewPReciept(contractCreation, tx.CreationAddress(), tx.Hash(), keyPair.Address()), nil

@@ -17,7 +17,9 @@ const (
 	// The size of the output buffer for writing messages
 	outputBufferSize = 50
 	// Current protocol version
-	ProtocolVersion = 17
+	ProtocolVersion = 20
+	// Interval for ping/pong message
+	pingPongTimer = 2 * time.Second
 )
 
 type DiscReason byte
@@ -151,11 +153,11 @@ func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
 		pubkey:          pubkey,
 		blocksRequested: 10,
 		caps:            ethereum.ServerCaps(),
+		version:         ethutil.Config.ClientString,
 	}
 }
 
 func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
-
 	p := &Peer{
 		outputQueue: make(chan *ethwire.Msg, outputBufferSize),
 		quit:        make(chan bool),
@@ -241,9 +243,11 @@ func (p *Peer) writeMessage(msg *ethwire.Msg) {
 		}
 	}
 
+	ethutil.Config.Log.Println(ethutil.LogLevelSystem, "<=", msg.Type, msg.Data)
+
 	err := ethwire.WriteMessage(p.conn, msg)
 	if err != nil {
-		ethutil.Config.Log.Debugln("Can't send message:", err)
+		ethutil.Config.Log.Debugln("[PEER] Can't send message:", err)
 		// Stop the client if there was an error writing to it
 		p.Stop()
 		return
@@ -253,7 +257,7 @@ func (p *Peer) writeMessage(msg *ethwire.Msg) {
 // Outbound message handler. Outbound messages are handled here
 func (p *Peer) HandleOutbound() {
 	// The ping timer. Makes sure that every 2 minutes a ping is send to the peer
-	pingTimer := time.NewTicker(30 * time.Second)
+	pingTimer := time.NewTicker(pingPongTimer)
 	serviceTimer := time.NewTicker(5 * time.Minute)
 
 out:
@@ -264,8 +268,14 @@ out:
 			p.writeMessage(msg)
 			p.lastSend = time.Now()
 
-		// Ping timer sends a ping to the peer each 2 minutes
+		// Ping timer
 		case <-pingTimer.C:
+			timeSince := time.Since(time.Unix(p.lastPong, 0))
+			if !p.pingStartTime.IsZero() && p.lastPong != 0 && timeSince > (pingPongTimer+30*time.Second) {
+				ethutil.Config.Log.Infof("[PEER] Peer did not respond to latest pong fast enough, it took %s, disconnecting.\n", timeSince)
+				p.Stop()
+				return
+			}
 			p.writeMessage(ethwire.NewMessage(ethwire.MsgPingTy, ""))
 			p.pingStartTime = time.Now()
 
@@ -307,6 +317,8 @@ func (p *Peer) HandleInbound() {
 			ethutil.Config.Log.Debugln(err)
 		}
 		for _, msg := range msgs {
+			ethutil.Config.Log.Println(ethutil.LogLevelSystem, "=>", msg.Type, msg.Data)
+
 			switch msg.Type {
 			case ethwire.MsgHandshakeTy:
 				// Version message
@@ -393,7 +405,7 @@ func (p *Peer) HandleInbound() {
 				if err != nil {
 					// If the parent is unknown try to catch up with this peer
 					if ethchain.IsParentErr(err) {
-						ethutil.Config.Log.Infoln("Attempting to catch up since we don't know the parent")
+						ethutil.Config.Log.Infoln("Attempting to catch. Parent known")
 						p.catchingUp = false
 						p.CatchupWithPeer(p.ethereum.BlockChain().CurrentBlock.Hash())
 					} else if ethchain.IsValidationErr(err) {
@@ -405,7 +417,7 @@ func (p *Peer) HandleInbound() {
 					if p.catchingUp && msg.Data.Len() > 1 {
 						if lastBlock != nil {
 							blockInfo := lastBlock.BlockInfo()
-							ethutil.Config.Log.Debugf("Synced to block height #%d %x %x\n", blockInfo.Number, lastBlock.Hash(), blockInfo.Hash)
+							ethutil.Config.Log.Debugf("Synced chain to #%d %x %x\n", blockInfo.Number, lastBlock.Hash(), blockInfo.Hash)
 						}
 
 						p.catchingUp = false
@@ -571,7 +583,7 @@ func (p *Peer) pushHandshake() error {
 		pubkey := keyRing.PublicKey
 
 		msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-			uint32(ProtocolVersion), uint32(0), p.version, byte(p.caps), p.port, pubkey[1:],
+			uint32(ProtocolVersion), uint32(0), []byte(p.version), byte(p.caps), p.port, pubkey[1:],
 		})
 
 		p.QueueMessage(msg)
@@ -603,7 +615,7 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	c := msg.Data
 
 	if c.Get(0).Uint() != ProtocolVersion {
-		ethutil.Config.Log.Debugln("Invalid peer version. Require protocol:", ProtocolVersion)
+		ethutil.Config.Log.Debugf("Invalid peer version. Require protocol: %d. Received: %d\n", ProtocolVersion, c.Get(0).Uint())
 		p.Stop()
 		return
 	}
