@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/ethereum/eth-go"
-	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/ethereal/ui"
 	"github.com/ethereum/go-ethereum/utils"
@@ -40,17 +39,15 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	ethchain.InitFees()
-
 	g, err := globalconf.NewWithOptions(&globalconf.Options{
-		Filename: path.Join(ethutil.ApplicationFolder(".ethereal"), "conf.ini"),
+		Filename: path.Join(ethutil.ApplicationFolder(Datadir), "conf.ini"),
 	})
 	if err != nil {
 		fmt.Println(err)
 	} else {
 		g.ParseAll()
 	}
-	ethutil.ReadConfig(".ethereal", ethutil.LogFile|ethutil.LogStd, g, Identifier)
+	ethutil.ReadConfig(Datadir, ethutil.LogFile|ethutil.LogStd, g, Identifier)
 
 	// Instantiated a eth stack
 	ethereum, err := eth.New(eth.CapDefault, UseUPnP)

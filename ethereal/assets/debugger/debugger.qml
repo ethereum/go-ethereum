@@ -135,7 +135,7 @@ ApplicationWindow {
 							}
 							height: parent.height
 							width: 300
-							TableViewColumn{ role: "value" ; title: "Stack" ; width: 200 }
+							TableViewColumn{ role: "value" ; title: "Temp" ; width: 200 }
 							model: stackModel
 						}
 
@@ -224,8 +224,8 @@ ApplicationWindow {
 	}
 
 	function setInstruction(num) {
-		//asmTableView.selection.clear()
-		//asmTableView.selection.select(num)
+		asmTableView.selection.clear()
+		asmTableView.selection.select(num)
 	}
 
 	function setMem(mem) {
