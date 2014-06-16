@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/ethereum/eth-go"
-	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/rakyll/globalconf"
@@ -85,8 +84,6 @@ func main() {
 	} else {
 		logSys = log.New(os.Stdout, "", flags)
 	}
-
-	ethchain.InitFees()
 
 	// Instantiated a eth stack
 	ethereum, err := eth.New(eth.CapDefault, UseUPnP)
