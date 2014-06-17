@@ -13,8 +13,6 @@ import (
 type State struct {
 	// The trie for this structure
 	trie *ethutil.Trie
-	// Nested states
-	states map[string]*State
 
 	stateObjects map[string]*StateObject
 
@@ -23,7 +21,7 @@ type State struct {
 
 // Create a new state from a given trie
 func NewState(trie *ethutil.Trie) *State {
-	return &State{trie: trie, states: make(map[string]*State), stateObjects: make(map[string]*StateObject), manifest: NewManifest()}
+	return &State{trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest()}
 }
 
 // Resets the trie and all siblings
@@ -155,7 +153,7 @@ func (s *State) Snapshot() *State {
 
 func (s *State) Revert(snapshot *State) {
 	s.trie = snapshot.trie
-	s.states = snapshot.states
+	s.stateObjects = snapshot.stateObjects
 }
 
 func (s *State) Put(key, object []byte) {
