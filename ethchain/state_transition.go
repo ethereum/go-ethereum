@@ -236,6 +236,7 @@ func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []by
 		Diff:        block.Difficulty,
 		Value:       tx.Value,
 	})
+	vm.Verbose = true
 	ret, _, err = closure.Call(vm, tx.Data, nil)
 
 	return

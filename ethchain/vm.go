@@ -45,6 +45,10 @@ type Vm struct {
 	state *State
 
 	stateManager *StateManager
+
+	Verbose bool
+
+	logStr string
 }
 
 type RuntimeVars struct {
@@ -56,6 +60,23 @@ type RuntimeVars struct {
 	Diff        *big.Int
 	TxData      []string
 	Value       *big.Int
+}
+
+func (self *Vm) Printf(format string, v ...interface{}) *Vm {
+	if self.Verbose {
+		self.logStr += fmt.Sprintf(format, v...)
+	}
+
+	return self
+}
+
+func (self *Vm) Endl() *Vm {
+	if self.Verbose {
+		ethutil.Config.Log.Infoln(self.logStr)
+		self.logStr = ""
+	}
+
+	return self
 }
 
 func NewVm(state *State, stateManager *StateManager, vars RuntimeVars) *Vm {
@@ -95,8 +116,6 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 	step := 0
 	prevStep := 0
 
-	ethutil.Config.Log.Debugf("#   op\n")
-
 	for {
 		prevStep = step
 		// The base for all big integer arithmetic
@@ -108,7 +127,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		// Get the opcode (it must be an opcode!)
 		op := OpCode(val.Uint())
 
-		ethutil.Config.Log.Debugf("%-3d %-4s", pc, op.String())
+		vm.Printf("(pc) %-3d -o- %-14s", pc, op.String())
+		//ethutil.Config.Log.Debugf("%-3d %-4s", pc, op.String())
 
 		gas := new(big.Int)
 		addStepGasUsage := func(amount *big.Int) {
@@ -192,6 +212,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			return closure.Return(nil), fmt.Errorf("insufficient gas %v %v", closure.Gas, gas)
 		}
+
+		vm.Printf(" (g) %-3v (%v)", gas, closure.Gas)
 
 		mem.Resize(newMemSize)
 
@@ -428,6 +450,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			pc.Add(pc, a.Sub(a, big.NewInt(1)))
 
 			step += int(op) - int(PUSH1) + 1
+
+			vm.Printf(" => %#x", data.Bytes())
 		case POP:
 			require(1)
 			stack.Pop()
@@ -448,11 +472,15 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			// Pop value of the stack
 			val, mStart := stack.Popn()
 			mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(val, 256))
+
+			vm.Printf(" => %#x", val)
 		case MSTORE8:
 			require(2)
 			val, mStart := stack.Popn()
 			base.And(val, new(big.Int).SetInt64(0xff))
 			mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(base, 256))
+
+			vm.Printf(" => %#x", val)
 		case SLOAD:
 			require(1)
 			loc := stack.Pop()
@@ -466,18 +494,23 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			// Add the change to manifest
 			vm.state.manifest.AddStorageChange(closure.Object(), loc.Bytes(), val)
+
+			vm.Printf(" => %#x", val)
 		case JUMP:
 			require(1)
 			pc = stack.Pop()
 			// Reduce pc by one because of the increment that's at the end of this for loop
-			//pc.Sub(pc, ethutil.Big1)
+			vm.Printf(" ~> %v", pc).Endl()
+
 			continue
 		case JUMPI:
 			require(2)
 			cond, pos := stack.Popn()
 			if cond.Cmp(ethutil.BigTrue) >= 0 {
 				pc = pos
-				//pc.Sub(pc, ethutil.Big1)
+
+				vm.Printf(" ~> %v", pc).Endl()
+
 				continue
 			}
 		case PC:
@@ -602,6 +635,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		}
 
 		pc.Add(pc, ethutil.Big1)
+
+		vm.Endl()
 
 		if hook != nil {
 			if !hook(prevStep, op, mem, stack, closure.Object()) {
