@@ -67,13 +67,8 @@ func (self *StateTransition) Receiver() *StateObject {
 
 func (self *StateTransition) MakeStateObject(state *State, tx *Transaction) *StateObject {
 	contract := MakeContract(tx, state)
-	if contract != nil {
-		state.states[string(tx.CreationAddress())] = contract.state
 
-		return contract
-	}
-
-	return nil
+	return contract
 }
 
 func (self *StateTransition) UseGas(amount *big.Int) error {
@@ -137,6 +132,8 @@ func (self *StateTransition) TransitionState() (err error) {
 		receiver *StateObject
 	)
 
+	ethutil.Config.Log.Printf(ethutil.LogLevelInfo, "(~) %x\n", tx.Hash())
+
 	// Make sure this transaction's nonce is correct
 	if sender.Nonce != tx.Nonce {
 		return NonceError(tx.Nonce, sender.Nonce)
@@ -152,15 +149,17 @@ func (self *StateTransition) TransitionState() (err error) {
 	defer func() {
 		self.RefundGas()
 
-		if sender != nil {
-			self.state.UpdateStateObject(sender)
-		}
+		/*
+			if sender != nil {
+				self.state.UpdateStateObject(sender)
+			}
 
-		if receiver != nil {
-			self.state.UpdateStateObject(receiver)
-		}
+			if receiver != nil {
+				self.state.UpdateStateObject(receiver)
+			}
 
-		self.state.UpdateStateObject(self.Coinbase())
+			self.state.UpdateStateObject(self.Coinbase())
+		*/
 	}()
 
 	// Increment the nonce for the next transaction
@@ -209,6 +208,7 @@ func (self *StateTransition) TransitionState() (err error) {
 		receiver.script = code
 	} else {
 		if len(receiver.Script()) > 0 {
+			fmt.Println(receiver.Script())
 			_, err := self.Eval(receiver.Script(), receiver)
 			if err != nil {
 				return fmt.Errorf("Error during code execution %v", err)

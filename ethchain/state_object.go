@@ -4,7 +4,14 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
+	"strings"
 )
+
+type Code []byte
+
+func (self Code) String() string {
+	return strings.Join(Disassemble(self), " ")
+}
 
 type StateObject struct {
 	// Address of the object
@@ -15,8 +22,8 @@ type StateObject struct {
 	Nonce      uint64
 	// Contract related attributes
 	state      *State
-	script     []byte
-	initScript []byte
+	script     Code
+	initScript Code
 
 	// Total gas pool is the total amount of gas currently
 	// left if this object is the coinbase. Gas is directly
@@ -30,12 +37,9 @@ func MakeContract(tx *Transaction, state *State) *StateObject {
 	if tx.IsContract() {
 		addr := tx.CreationAddress()
 
-		value := tx.Value
-		contract := NewContract(addr, value, ZeroHash256)
-
+		contract := state.NewStateObject(addr)
 		contract.initScript = tx.Data
-
-		state.UpdateStateObject(contract)
+		contract.state = NewState(ethutil.NewTrie(ethutil.Config.Db, ""))
 
 		return contract
 	}
@@ -120,13 +124,13 @@ func (c *StateObject) ReturnGas(gas, price *big.Int, state *State) {
 func (c *StateObject) AddAmount(amount *big.Int) {
 	c.SetAmount(new(big.Int).Add(c.Amount, amount))
 
-	ethutil.Config.Log.Printf(ethutil.LogLevelSystem, "%x: #%d %v (+ %v)\n", c.Address(), c.Nonce, c.Amount, amount)
+	ethutil.Config.Log.Printf(ethutil.LogLevelInfo, "%x: #%d %v (+ %v)\n", c.Address(), c.Nonce, c.Amount, amount)
 }
 
 func (c *StateObject) SubAmount(amount *big.Int) {
 	c.SetAmount(new(big.Int).Sub(c.Amount, amount))
 
-	ethutil.Config.Log.Printf(ethutil.LogLevelSystem, "%x: #%d %v (- %v)\n", c.Address(), c.Nonce, c.Amount, amount)
+	ethutil.Config.Log.Printf(ethutil.LogLevelInfo, "%x: #%d %v (- %v)\n", c.Address(), c.Nonce, c.Amount, amount)
 }
 
 func (c *StateObject) SetAmount(amount *big.Int) {
@@ -197,12 +201,12 @@ func (c *StateObject) Address() []byte {
 }
 
 // Returns the main script body
-func (c *StateObject) Script() []byte {
+func (c *StateObject) Script() Code {
 	return c.script
 }
 
 // Returns the initialization script
-func (c *StateObject) Init() []byte {
+func (c *StateObject) Init() Code {
 	return c.initScript
 }
 

@@ -154,6 +154,8 @@ func (self *Miner) mineNewBlock() {
 	// Accumulate the rewards included for this block
 	stateManager.AccumelateRewards(self.block.State(), self.block)
 
+	self.block.State().Update()
+
 	ethutil.Config.Log.Infoln("[MINER] Mining on block. Includes", len(self.txs), "transactions")
 
 	// Find a valid nonce
