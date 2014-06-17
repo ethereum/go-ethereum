@@ -181,7 +181,6 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 	coinbase.SetGasPool(block.CalcGasLimit(parent))
 
 	// Process the transactions on to current block
-	//sm.ApplyTransactions(block.Coinbase, state, parent, block.Transactions())
 	sm.ProcessTransactions(coinbase, state, block, parent, block.Transactions())
 
 	// Block validation
@@ -196,6 +195,9 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 		fmt.Println("[SM] Error accumulating reward", err)
 		return err
 	}
+
+	// Update the state with pending changes
+	state.Update()
 
 	if !block.State().Cmp(state) {
 		return fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().trie.Root, state.trie.Root)

@@ -95,9 +95,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 	step := 0
 	prevStep := 0
 
-	if ethutil.Config.Debug {
-		ethutil.Config.Log.Debugf("#   op\n")
-	}
+	ethutil.Config.Log.Debugf("#   op\n")
 
 	for {
 		prevStep = step
@@ -109,9 +107,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		val := closure.Get(pc)
 		// Get the opcode (it must be an opcode!)
 		op := OpCode(val.Uint())
-		if ethutil.Config.Debug {
-			ethutil.Config.Log.Debugf("%-3d %-4s", pc, op.String())
-		}
+
+		ethutil.Config.Log.Debugf("%-3d %-4s", pc, op.String())
 
 		gas := new(big.Int)
 		addStepGasUsage := func(amount *big.Int) {
@@ -525,8 +522,6 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 				vm.state.Revert(snapshot)
 			} else {
 				stack.Push(ethutil.BigD(addr))
-
-				vm.state.UpdateStateObject(contract)
 			}
 		case CALL:
 			// TODO RE-WRITE
@@ -569,8 +564,6 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 					} else {
 						stack.Push(ethutil.BigTrue)
 
-						vm.state.UpdateStateObject(contract)
-
 						mem.Set(retOffset.Int64(), retSize.Int64(), ret)
 					}
 				} else {
@@ -589,9 +582,11 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			receiver := vm.state.GetAccount(stack.Pop().Bytes())
 			receiver.AddAmount(closure.object.Amount)
-			vm.state.UpdateStateObject(receiver)
 
-			closure.object.state.Purge()
+			trie := closure.object.state.trie
+			trie.NewIterator().Each(func(key string, v *ethutil.Value) {
+				trie.Delete(key)
+			})
 
 			fallthrough
 		case STOP: // Stop the closure
