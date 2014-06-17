@@ -323,7 +323,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case EQ:
 			require(2)
 			x, y := stack.Popn()
-			fmt.Printf("%x == %x\n", x, y)
+			vm.Printf(" %v == %v", y, x)
+
 			// x == y
 			if x.Cmp(y) == 0 {
 				stack.Push(ethutil.BigTrue)
@@ -343,15 +344,21 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case AND:
 			require(2)
 			x, y := stack.Popn()
+			vm.Printf(" %v & %v", y, x)
+
 			stack.Push(base.And(y, x))
 		case OR:
 			require(2)
 			x, y := stack.Popn()
+			vm.Printf(" %v | %v", y, x)
+
 			stack.Push(base.Or(y, x))
 		case XOR:
 			require(2)
 			x, y := stack.Popn()
-			stack.Push(base.Xor(x, y))
+			vm.Printf(" %v ^ %v", y, x)
+
+			stack.Push(base.Xor(y, x))
 		case BYTE:
 			require(2)
 			val, th := stack.Popn()
