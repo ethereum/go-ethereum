@@ -97,7 +97,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		}
 	}()
 
-	ethutil.Config.Log.Debugf("[VM] Running closure %x\n", closure.object.Address())
+	ethutil.Config.Log.Debugf("[VM] Running %x\n", closure.object.Address())
 
 	// Memory for the current closure
 	mem := &Memory{}
@@ -301,7 +301,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			stack.Push(base)
 		case LT:
 			require(2)
-			x, y := stack.Popn()
+			y, x := stack.Popn()
 			// x < y
 			if x.Cmp(y) < 0 {
 				stack.Push(ethutil.BigTrue)
@@ -310,7 +310,9 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			}
 		case GT:
 			require(2)
-			x, y := stack.Popn()
+			y, x := stack.Popn()
+			vm.Printf(" %v > %v", x, y)
+
 			// x > y
 			if x.Cmp(y) > 0 {
 				stack.Push(ethutil.BigTrue)
@@ -382,7 +384,10 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case ORIGIN:
 			stack.Push(ethutil.BigD(vm.vars.Origin))
 		case CALLER:
-			stack.Push(ethutil.BigD(closure.caller.Address()))
+			caller := closure.caller.Address()
+			stack.Push(ethutil.BigD(caller))
+
+			vm.Printf(" => %x", caller)
 		case CALLVALUE:
 			stack.Push(vm.vars.Value)
 		case CALLDATALOAD:
@@ -397,10 +402,14 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 				data = []byte{0}
 			}
 
-			fmt.Println("CALLDATALOAD", string(data), len(data), "==", len(closure.Args))
+			vm.Printf(" => 0x%x", data)
+
 			stack.Push(ethutil.BigD(data))
 		case CALLDATASIZE:
-			stack.Push(big.NewInt(int64(len(closure.Args))))
+			l := int64(len(closure.Args))
+			stack.Push(big.NewInt(l))
+
+			vm.Printf(" => %d", l)
 		case CALLDATACOPY:
 		case CODESIZE:
 		case CODECOPY:
@@ -451,7 +460,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			step += int(op) - int(PUSH1) + 1
 
-			vm.Printf(" => %#x", data.Bytes())
+			vm.Printf(" => 0x%x", data.Bytes())
 		case POP:
 			require(1)
 			stack.Pop()
@@ -473,19 +482,21 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			val, mStart := stack.Popn()
 			mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(val, 256))
 
-			vm.Printf(" => %#x", val)
+			vm.Printf(" => 0x%x", val)
 		case MSTORE8:
 			require(2)
 			val, mStart := stack.Popn()
 			base.And(val, new(big.Int).SetInt64(0xff))
 			mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(base, 256))
 
-			vm.Printf(" => %#x", val)
+			vm.Printf(" => 0x%x", val)
 		case SLOAD:
 			require(1)
 			loc := stack.Pop()
 			val := closure.GetMem(loc)
 			stack.Push(val.BigInt())
+
+			vm.Printf(" {} 0x%x", val)
 		case SSTORE:
 			require(2)
 			val, loc := stack.Popn()
@@ -495,7 +506,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			// Add the change to manifest
 			vm.state.manifest.AddStorageChange(closure.Object(), loc.Bytes(), val)
 
-			vm.Printf(" => %#x", val)
+			vm.Printf(" => 0x%x", val)
 		case JUMP:
 			require(1)
 			pc = stack.Pop()
@@ -509,9 +520,11 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			if cond.Cmp(ethutil.BigTrue) >= 0 {
 				pc = pos
 
-				vm.Printf(" ~> %v", pc).Endl()
+				vm.Printf(" (t) ~> %v", pc).Endl()
 
 				continue
+			} else {
+				vm.Printf(" (f)")
 			}
 		case PC:
 			stack.Push(pc)
