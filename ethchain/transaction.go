@@ -65,7 +65,7 @@ func (tx *Transaction) CreatesContract() bool {
 	return tx.contractCreation
 }
 
-/* Depricated */
+/* Deprecated */
 func (tx *Transaction) IsContract() bool {
 	return tx.CreatesContract()
 }

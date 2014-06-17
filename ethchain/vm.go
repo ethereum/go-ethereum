@@ -120,7 +120,9 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		var newMemSize uint64 = 0
 		switch op {
 		case STOP:
+			gas.Set(ethutil.Big0)
 		case SUICIDE:
+			gas.Set(ethutil.Big0)
 		case SLOAD:
 			gas.Set(GasSLoad)
 		case SSTORE:
@@ -296,6 +298,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case EQ:
 			require(2)
 			x, y := stack.Popn()
+			fmt.Printf("%x == %x\n", x, y)
 			// x == y
 			if x.Cmp(y) == 0 {
 				stack.Push(ethutil.BigTrue)
@@ -365,12 +368,14 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			offset := stack.Pop().Int64()
 
 			var data []byte
-			if len(closure.Args) >= int(offset+32) {
-				data = closure.Args[offset : offset+32]
+			if len(closure.Args) >= int(offset) {
+				l := int64(math.Min(float64(offset+32), float64(len(closure.Args))))
+				data = closure.Args[offset : offset+l]
 			} else {
 				data = []byte{0}
 			}
 
+			fmt.Println("CALLDATALOAD", string(data), len(data), "==", len(closure.Args))
 			stack.Push(ethutil.BigD(data))
 		case CALLDATASIZE:
 			stack.Push(big.NewInt(int64(len(closure.Args))))
@@ -452,12 +457,11 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			require(1)
 			loc := stack.Pop()
 			val := closure.GetMem(loc)
-			//fmt.Println("get", val.BigInt(), "@", loc)
 			stack.Push(val.BigInt())
 		case SSTORE:
 			require(2)
 			val, loc := stack.Popn()
-			//fmt.Println("storing", val, "@", loc)
+			fmt.Println("storing", string(val.Bytes()), "@", string(loc.Bytes()))
 			closure.SetStorage(loc, ethutil.NewValue(val))
 
 			// Add the change to manifest
@@ -471,7 +475,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case JUMPI:
 			require(2)
 			cond, pos := stack.Popn()
-			if cond.Cmp(ethutil.BigTrue) == 0 {
+			if cond.Cmp(ethutil.BigTrue) >= 0 {
 				pc = pos
 				//pc.Sub(pc, ethutil.Big1)
 				continue
