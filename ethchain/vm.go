@@ -226,28 +226,28 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			require(2)
 			x, y := stack.Popn()
 			// (x + y) % 2 ** 256
-			base.Add(x, y)
+			base.Add(y, x)
 			// Pop result back on the stack
 			stack.Push(base)
 		case SUB:
 			require(2)
 			x, y := stack.Popn()
 			// (x - y) % 2 ** 256
-			base.Sub(x, y)
+			base.Sub(y, x)
 			// Pop result back on the stack
 			stack.Push(base)
 		case MUL:
 			require(2)
 			x, y := stack.Popn()
 			// (x * y) % 2 ** 256
-			base.Mul(x, y)
+			base.Mul(y, x)
 			// Pop result back on the stack
 			stack.Push(base)
 		case DIV:
 			require(2)
 			x, y := stack.Popn()
 			// floor(x / y)
-			base.Div(x, y)
+			base.Div(y, x)
 			// Pop result back on the stack
 			stack.Push(base)
 		case SDIV:
@@ -270,7 +270,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case MOD:
 			require(2)
 			x, y := stack.Popn()
-			base.Mod(x, y)
+			base.Mod(y, x)
 			stack.Push(base)
 		case SMOD:
 			require(2)
@@ -292,7 +292,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case EXP:
 			require(2)
 			x, y := stack.Popn()
-			base.Exp(x, y, Pow256)
+			base.Exp(y, x, Pow256)
 
 			stack.Push(base)
 		case NEG:
@@ -302,6 +302,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case LT:
 			require(2)
 			y, x := stack.Popn()
+			vm.Printf(" %v < %v", x, y)
 			// x < y
 			if x.Cmp(y) < 0 {
 				stack.Push(ethutil.BigTrue)
@@ -342,20 +343,11 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case AND:
 			require(2)
 			x, y := stack.Popn()
-			if (x.Cmp(ethutil.BigTrue) >= 0) && (y.Cmp(ethutil.BigTrue) >= 0) {
-				stack.Push(ethutil.BigTrue)
-			} else {
-				stack.Push(ethutil.BigFalse)
-			}
-
+			stack.Push(base.And(y, x))
 		case OR:
 			require(2)
 			x, y := stack.Popn()
-			if (x.Cmp(ethutil.BigInt0) >= 0) || (y.Cmp(ethutil.BigInt0) >= 0) {
-				stack.Push(ethutil.BigTrue)
-			} else {
-				stack.Push(ethutil.BigFalse)
-			}
+			stack.Push(base.Or(y, x))
 		case XOR:
 			require(2)
 			x, y := stack.Popn()
