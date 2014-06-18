@@ -97,7 +97,6 @@ func (self *StateTransition) BuyGas() error {
 	if err != nil {
 		return err
 	}
-	//self.state.UpdateStateObject(coinbase)
 
 	self.AddGas(self.tx.Gas)
 	sender.SubAmount(self.tx.GasValue())
@@ -115,7 +114,7 @@ func (self *StateTransition) RefundGas() {
 }
 
 func (self *StateTransition) TransitionState() (err error) {
-	//snapshot := st.state.Snapshot()
+	ethutil.Config.Log.Printf(ethutil.LogLevelInfo, "(~) %x\n", self.tx.Hash())
 
 	/*
 		defer func() {
@@ -132,8 +131,6 @@ func (self *StateTransition) TransitionState() (err error) {
 		receiver *StateObject
 	)
 
-	ethutil.Config.Log.Printf(ethutil.LogLevelInfo, "(~) %x\n", tx.Hash())
-
 	// Make sure this transaction's nonce is correct
 	if sender.Nonce != tx.Nonce {
 		return NonceError(tx.Nonce, sender.Nonce)
@@ -146,26 +143,11 @@ func (self *StateTransition) TransitionState() (err error) {
 
 	// XXX Transactions after this point are considered valid.
 
-	defer func() {
-		self.RefundGas()
-
-		/*
-			if sender != nil {
-				self.state.UpdateStateObject(sender)
-			}
-
-			if receiver != nil {
-				self.state.UpdateStateObject(receiver)
-			}
-
-			self.state.UpdateStateObject(self.Coinbase())
-		*/
-	}()
+	defer self.RefundGas()
 
 	// Increment the nonce for the next transaction
 	sender.Nonce += 1
 
-	// Get the receiver (TODO fix this, if coinbase is the receiver we need to save/retrieve)
 	receiver = self.Receiver()
 
 	// Transaction gas
@@ -254,6 +236,7 @@ func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []by
 		Diff:        block.Difficulty,
 		Value:       tx.Value,
 	})
+	vm.Verbose = true
 	ret, _, err = closure.Call(vm, tx.Data, nil)
 
 	return
