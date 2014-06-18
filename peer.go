@@ -124,6 +124,7 @@ type Peer struct {
 	port uint16
 	caps Caps
 
+	// This peer's public key
 	pubkey []byte
 
 	// Indicated whether the node is catching up or not
@@ -171,7 +172,7 @@ func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 
 	// Set up the connection in another goroutine so we don't block the main thread
 	go func() {
-		conn, err := net.DialTimeout("tcp", addr, 30*time.Second)
+		conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
 
 		if err != nil {
 			ethutil.Config.Log.Debugln("Connection to peer failed", err)
