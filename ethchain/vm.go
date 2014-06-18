@@ -225,29 +225,41 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case ADD:
 			require(2)
 			x, y := stack.Popn()
-			// (x + y) % 2 ** 256
+			vm.Printf(" %v + %v", y, x)
+
 			base.Add(y, x)
+
+			vm.Printf(" = %v", base)
 			// Pop result back on the stack
 			stack.Push(base)
 		case SUB:
 			require(2)
 			x, y := stack.Popn()
-			// (x - y) % 2 ** 256
+			vm.Printf(" %v - %v", y, x)
+
 			base.Sub(y, x)
+
+			vm.Printf(" = %v", base)
 			// Pop result back on the stack
 			stack.Push(base)
 		case MUL:
 			require(2)
 			x, y := stack.Popn()
-			// (x * y) % 2 ** 256
+			vm.Printf(" %v * %v", y, x)
+
 			base.Mul(y, x)
+
+			vm.Printf(" = %v", base)
 			// Pop result back on the stack
 			stack.Push(base)
 		case DIV:
 			require(2)
 			x, y := stack.Popn()
-			// floor(x / y)
+			vm.Printf(" %v / %v", y, x)
+
 			base.Div(y, x)
+
+			vm.Printf(" = %v", base)
 			// Pop result back on the stack
 			stack.Push(base)
 		case SDIV:
@@ -270,7 +282,12 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case MOD:
 			require(2)
 			x, y := stack.Popn()
+
+			vm.Printf(" %v %% %v", y, x)
+
 			base.Mod(y, x)
+
+			vm.Printf(" = %v", base)
 			stack.Push(base)
 		case SMOD:
 			require(2)
@@ -292,7 +309,12 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case EXP:
 			require(2)
 			x, y := stack.Popn()
+
+			vm.Printf(" %v ** %v", y, x)
+
 			base.Exp(y, x, Pow256)
+
+			vm.Printf(" = %v", base)
 
 			stack.Push(base)
 		case NEG:
@@ -393,12 +415,11 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			require(1)
 			offset := stack.Pop().Int64()
 
-			var data []byte
+			data := make([]byte, 32)
 			if len(closure.Args) >= int(offset) {
 				l := int64(math.Min(float64(offset+32), float64(len(closure.Args))))
-				data = closure.Args[offset : offset+l]
-			} else {
-				data = []byte{0}
+
+				copy(data, closure.Args[offset:l])
 			}
 
 			vm.Printf(" => 0x%x", data)
@@ -499,13 +520,12 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case SSTORE:
 			require(2)
 			val, loc := stack.Popn()
-			fmt.Println("storing", string(val.Bytes()), "@", string(loc.Bytes()))
 			closure.SetStorage(loc, ethutil.NewValue(val))
 
 			// Add the change to manifest
 			vm.state.manifest.AddStorageChange(closure.Object(), loc.Bytes(), val)
 
-			vm.Printf(" => 0x%x", val)
+			vm.Printf(" {0x%x} 0x%x", loc, val)
 		case JUMP:
 			require(1)
 			pc = stack.Pop()
@@ -519,7 +539,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			if cond.Cmp(ethutil.BigTrue) >= 0 {
 				pc = pos
 
-				vm.Printf(" (t) ~> %v", pc).Endl()
+				vm.Printf(" ~> %v (t)", pc).Endl()
 
 				continue
 			} else {
