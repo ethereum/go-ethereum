@@ -89,7 +89,7 @@ func (self *StateTransition) BuyGas() error {
 
 	sender := self.Sender()
 	if sender.Amount.Cmp(self.tx.GasValue()) < 0 {
-		return fmt.Errorf("Insufficient funds to pre-pay gas. Req %v, has %v", self.tx.GasValue(), self.tx.Value)
+		return fmt.Errorf("Insufficient funds to pre-pay gas. Req %v, has %v", self.tx.GasValue(), sender.Amount)
 	}
 
 	coinbase := self.Coinbase()
@@ -181,7 +181,8 @@ func (self *StateTransition) TransitionState() (err error) {
 		// Evaluate the initialization script
 		// and use the return value as the
 		// script section for the state object.
-		//script, gas, err = sm.Eval(state, contract.Init(), contract, tx, block)
+		ethutil.Config.Log.Println(ethutil.LogLevelSystem, receiver.Init())
+
 		code, err := self.Eval(receiver.Init(), receiver)
 		if err != nil {
 			return fmt.Errorf("Error during init script run %v", err)
@@ -190,7 +191,8 @@ func (self *StateTransition) TransitionState() (err error) {
 		receiver.script = code
 	} else {
 		if len(receiver.Script()) > 0 {
-			fmt.Println(receiver.Script())
+			ethutil.Config.Log.Println(ethutil.LogLevelSystem, receiver.Script())
+
 			_, err := self.Eval(receiver.Script(), receiver)
 			if err != nil {
 				return fmt.Errorf("Error during code execution %v", err)
