@@ -2,6 +2,7 @@ package eth
 
 import (
 	"bytes"
+	"container/list"
 	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
@@ -615,6 +616,30 @@ func (p *Peer) pushPeers() {
 func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	c := msg.Data
 
+	// Set pubkey
+	p.pubkey = c.Get(5).Bytes()
+
+	if p.pubkey == nil {
+		//ethutil.Config.Log.Debugln("Pubkey required, not supplied in handshake.")
+		p.Stop()
+		return
+	}
+
+	usedPub := 0
+	// This peer is already added to the peerlist so we expect to find a double pubkey at least once
+
+	eachPeer(p.ethereum.Peers(), func(peer *Peer, e *list.Element) {
+		if bytes.Compare(p.pubkey, peer.pubkey) == 0 {
+			usedPub++
+		}
+	})
+
+	if usedPub > 0 {
+		//ethutil.Config.Log.Debugf("Pubkey %x found more then once. Already connected to client.", p.pubkey)
+		p.Stop()
+		return
+	}
+
 	if c.Get(0).Uint() != ProtocolVersion {
 		ethutil.Config.Log.Debugf("Invalid peer version. Require protocol: %d. Received: %d\n", ProtocolVersion, c.Get(0).Uint())
 		p.Stop()
@@ -626,7 +651,6 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 
 	// If this is an inbound connection send an ack back
 	if p.inbound {
-		p.pubkey = c.Get(5).Bytes()
 		p.port = uint16(c.Get(4).Uint())
 
 		// Self connect detection
@@ -647,6 +671,11 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	if len(versionString) > 0 {
 		p.SetVersion(c.Get(2).Str())
 	}
+
+	p.ethereum.PushPeer(p)
+	p.ethereum.reactor.Post("peerList", p.ethereum.Peers())
+
+	ethutil.Config.Log.Infof("[SERV] Added peer (%s) %d / %d\n", p.conn.RemoteAddr(), p.ethereum.Peers().Len(), p.ethereum.MaxPeers)
 
 	// Catch up with the connected peer
 	if !p.ethereum.IsUpToDate() {

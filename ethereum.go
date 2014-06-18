@@ -149,7 +149,9 @@ func (s *Ethereum) IsUpToDate() bool {
 	})
 	return upToDate
 }
-
+func (s *Ethereum) PushPeer(peer *Peer) {
+	s.peers.PushBack(peer)
+}
 func (s *Ethereum) IsListening() bool {
 	return s.listening
 }
@@ -159,14 +161,11 @@ func (s *Ethereum) AddPeer(conn net.Conn) {
 
 	if peer != nil {
 		if s.peers.Len() < s.MaxPeers {
-			s.peers.PushBack(peer)
 			peer.Start()
 		} else {
 			ethutil.Config.Log.Debugf("[SERV] Max connected peers reached. Not adding incoming peer.")
 		}
 	}
-
-	s.reactor.Post("peerList", s.peers)
 }
 
 func (s *Ethereum) ProcessPeerList(addrs []string) {
@@ -233,12 +232,7 @@ func (s *Ethereum) ConnectToPeer(addr string) error {
 			return nil
 		}
 
-		peer := NewOutboundPeer(addr, s, s.serverCaps)
-
-		s.peers.PushBack(peer)
-
-		ethutil.Config.Log.Infof("[SERV] Adding peer (%s) %d / %d\n", addr, s.peers.Len(), s.MaxPeers)
-		s.reactor.Post("peerList", s.peers)
+		NewOutboundPeer(addr, s, s.serverCaps)
 	}
 
 	return nil
