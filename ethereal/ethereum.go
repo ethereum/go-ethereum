@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/ethereum/eth-go"
-	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/ethereal/ui"
 	"github.com/ethereum/go-ethereum/utils"
@@ -39,8 +38,6 @@ func main() {
 	qml.Init(nil)
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
-
-	ethchain.InitFees()
 
 	g, err := globalconf.NewWithOptions(&globalconf.Options{
 		Filename: path.Join(ethutil.ApplicationFolder(Datadir), "conf.ini"),

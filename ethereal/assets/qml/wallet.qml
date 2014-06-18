@@ -29,6 +29,7 @@ ApplicationWindow {
 		}
 
 		Menu {
+			title: "Developer"
 			MenuItem {
 				text: "Debugger"
 				shortcut: "Ctrl+d"
@@ -261,7 +262,7 @@ ApplicationWindow {
 					id: addressView
 					width: parent.width - 200
 					height: 200
-					anchors.bottom: logView.top
+					anchors.bottom: logLayout.top
 					TableViewColumn{ role: "name"; title: "name" }
 					TableViewColumn{ role: "address"; title: "address"; width: 300}
 
@@ -296,14 +297,48 @@ ApplicationWindow {
 				property var logModel: ListModel {
 					id: logModel
 				}
-				TableView {
-					id: logView
+				RowLayout {
+					id: logLayout
 					width: parent.width
 					height: 200
 					anchors.bottom: parent.bottom
-					TableViewColumn{ role: "description" ; title: "log" }
+					TableView {
+						id: logView
+						headerVisible: false
+						anchors {
+							right: logLevelSlider.left
+							left: parent.left
+							bottom: parent.bottom
+							top: parent.top
+						}
 
-					model: logModel
+						TableViewColumn{ role: "description" ; title: "log" }
+
+						model: logModel
+					}
+
+					Slider {
+						id: logLevelSlider
+						value: 1
+						anchors {
+							right: parent.right
+							top: parent.top
+							bottom: parent.bottom
+
+							rightMargin: 5
+							leftMargin: 5
+							topMargin: 5
+							bottomMargin: 5
+						}
+
+						orientation: Qt.Vertical
+						maximumValue: 3
+						stepSize: 1
+
+						onValueChanged: {
+							eth.setLogLevel(value)
+						}
+					}
 				}
 			}
 
@@ -650,9 +685,20 @@ ApplicationWindow {
 	}
 
 	function addLog(str) {
-		if(str.len != 0) {
-			logModel.insert(0, {description: str})
+		// Remove first item once we've reached max log items
+		if(logModel.count > 250) {
+			logModel.remove(0)
 		}
+
+		if(str.len != 0) {
+			if(logView.flickableItem.atYEnd) {
+				logModel.append({description: str})
+				logView.positionViewAtRow(logView.rowCount - 1, ListView.Contain)
+			} else {
+				logModel.append({description: str})
+			}
+		}
+
 	}
 
 	function setPeers(text) {
@@ -768,6 +814,20 @@ ApplicationWindow {
 			anchors.leftMargin: 5
 			anchors.topMargin: 5
 
+			ListModel {
+				id: denomModel
+				ListElement { text: "Wei" ;     zeros: "" }
+				ListElement { text: "Ada" ;     zeros: "000" }
+				ListElement { text: "Babbage" ; zeros: "000000" }
+				ListElement { text: "Shannon" ; zeros: "000000000" }
+				ListElement { text: "Szabo" ;   zeros: "000000000000" }
+				ListElement { text: "Finney" ;  zeros: "000000000000000" }
+				ListElement { text: "Ether" ;   zeros: "000000000000000000" }
+				ListElement { text: "Einstein" ;zeros: "000000000000000000000" }
+				ListElement { text: "Douglas" ; zeros: "000000000000000000000000000000000000000000" }
+			}
+
+
 			TextField {
 				id: txFuelRecipient
 				placeholderText: "Address / Name or empty for contract"
@@ -775,13 +835,21 @@ ApplicationWindow {
 				width: 400
 			}
 
-			TextField {
-				id: txValue
-				width: 222
-				placeholderText: "Amount"
-				validator: RegExpValidator { regExp: /\d*/ }
-				onTextChanged: {
-					contractFormReady()
+			RowLayout {
+				TextField {
+					id: txValue
+					width: 222
+					placeholderText: "Amount"
+					validator: RegExpValidator { regExp: /\d*/ }
+					onTextChanged: {
+						contractFormReady()
+					}
+				}
+
+				ComboBox {
+					id: valueDenom
+					currentIndex: 6
+					model: denomModel
 				}
 			}
 
@@ -807,13 +875,19 @@ ApplicationWindow {
 					id: txGasPrice
 					width: 200
 					placeholderText: "Gas price"
-					text: "1000000"
+					text: "10"
 					validator: RegExpValidator { regExp: /\d*/ }
 					/*
 					onTextChanged: {
 						contractFormReady()
 					}
 					*/
+				}
+
+				ComboBox {
+					id: gasDenom
+					currentIndex: 4
+					model: denomModel
 				}
 			}
 
@@ -848,8 +922,9 @@ ApplicationWindow {
 				]
 				text: "Send"
 				onClicked: {
-					//this.enabled = false
-					var res = eth.create(txFuelRecipient.text, txValue.text, txGas.text, txGasPrice.text, codeView.text)
+					var value = txValue.text + denomModel.get(valueDenom.currentIndex).zeros;
+					var gasPrice = txGasPrice.text + denomModel.get(gasDenom.currentIndex).zeros;
+					var res = eth.create(txFuelRecipient.text, value, txGas.text, gasPrice, codeView.text)
 					if(res[1]) {
 						txResult.text = "Your contract <b>could not</b> be send over the network:\n<b>"
 						txResult.text += res[1].error()

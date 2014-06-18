@@ -56,7 +56,7 @@ func New(ethereum *eth.Ethereum) *Gui {
 }
 
 func (gui *Gui) Start(assetPath string) {
-	const version = "0.5.0 RC12"
+	const version = "0.5.0 RC13"
 
 	defer gui.txDb.Close()
 
@@ -69,7 +69,7 @@ func (gui *Gui) Start(assetPath string) {
 		Init: func(p *ethpub.KeyVal, obj qml.Object) { p.Key = ""; p.Value = "" },
 	}})
 
-	ethutil.Config.SetClientString(fmt.Sprintf("/Ethereal v%s", version))
+	ethutil.Config.SetClientString("Ethereal")
 
 	// Create a new QML engine
 	gui.engine = qml.NewEngine()
@@ -355,4 +355,8 @@ func (gui *Gui) ChangeClientId(id string) {
 
 func (gui *Gui) ClientId() string {
 	return ethutil.Config.Identifier
+}
+
+func (gui *Gui) SetLogLevel(level int) {
+	ethutil.Config.Log.SetLevel(level)
 }
