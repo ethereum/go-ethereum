@@ -1,12 +1,7 @@
 package ethutil
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
-	"io/ioutil"
-	"net/http"
 	"reflect"
 	"testing"
 )
@@ -176,34 +171,23 @@ func TestTriePurge(t *testing.T) {
 	}
 }
 
-type TestItem struct {
-	Name         string
-	Inputs       [][]string
-	Expectations string
-}
-
 func TestTrieIt(t *testing.T) {
-	//_, trie := New()
-	resp, err := http.Get("https://raw.githubusercontent.com/ethereum/tests/master/trietest.json")
-	if err != nil {
-		t.Fail()
+	_, trie := New()
+
+	data := [][]string{
+		{"do", "verb"},
+		{"ether", "wookiedoo"},
+		{"horse", "stallion"},
+		{"shaman", "horse"},
+		{"doge", "coin"},
+		{"ether", ""},
+		{"dog", "puppy"},
+		{"shaman", ""},
 	}
 
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fail()
+	for _, item := range data {
+		trie.Update(item[0], item[1])
 	}
 
-	dec := json.NewDecoder(bytes.NewReader(body))
-	for {
-		var test TestItem
-		if err := dec.Decode(&test); err == io.EOF {
-			break
-		} else if err != nil {
-			t.Error("Fail something", err)
-			break
-		}
-		fmt.Println(test)
-	}
+	fmt.Printf("root %x", trie.Root)
 }
