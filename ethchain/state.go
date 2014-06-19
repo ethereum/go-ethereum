@@ -79,9 +79,9 @@ func (s *State) EachStorage(cb ethutil.EachCallback) {
 }
 
 func (self *State) ResetStateObject(stateObject *StateObject) {
-	stateObject.state.Reset()
-
 	delete(self.stateObjects, string(stateObject.Address()))
+
+	stateObject.state.Reset()
 }
 
 func (self *State) UpdateStateObject(stateObject *StateObject) {
@@ -154,13 +154,10 @@ func (self *State) Copy() *State {
 	return nil
 }
 
-func (s *State) Snapshot() *State {
-	return s.Copy()
-}
-
-func (s *State) Revert(snapshot *State) {
-	s.trie = snapshot.trie
-	s.stateObjects = snapshot.stateObjects
+func (self *State) Set(state *State) {
+	//s.trie = snapshot.trie
+	//s.stateObjects = snapshot.stateObjects
+	self = state
 }
 
 func (s *State) Put(key, object []byte) {

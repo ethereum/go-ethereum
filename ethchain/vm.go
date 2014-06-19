@@ -1,12 +1,9 @@
 package ethchain
 
 import (
-	_ "bytes"
 	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
-	_ "github.com/obscuren/secp256k1-go"
 	"math"
-	_ "math"
 	"math/big"
 )
 
@@ -49,6 +46,8 @@ type Vm struct {
 	Verbose bool
 
 	logStr string
+
+	err error
 }
 
 type RuntimeVars struct {
@@ -128,11 +127,11 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		// Get the opcode (it must be an opcode!)
 		op := OpCode(val.Uint())
 
-		vm.Printf("(pc) %-3d -o- %-14s", pc, op.String())
-
 		gas := new(big.Int)
 		addStepGasUsage := func(amount *big.Int) {
-			gas.Add(gas, amount)
+			if amount.Cmp(ethutil.Big0) >= 0 {
+				gas.Add(gas, amount)
+			}
 		}
 
 		addStepGasUsage(GasStep)
@@ -215,6 +214,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			return closure.Return(nil), err
 		}
 
+		vm.Printf("(pc) %-3d -o- %-14s", pc, op.String())
 		vm.Printf(" (g) %-3v (%v)", gas, closure.Gas)
 
 		mem.Resize(newMemSize)
@@ -491,6 +491,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case DUP:
 			require(1)
 			stack.Push(stack.Peek())
+
+			vm.Printf(" => 0x%x", stack.Peek().Bytes())
 		case SWAP:
 			require(2)
 			x, y := stack.Popn()
@@ -524,7 +526,11 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case SSTORE:
 			require(2)
 			val, loc := stack.Popn()
-			closure.SetStorage(loc, ethutil.NewValue(val))
+
+			// FIXME This should be handled in the Trie it self
+			if val.Cmp(big.NewInt(0)) != 0 {
+				closure.SetStorage(loc, ethutil.NewValue(val))
+			}
 
 			// Add the change to manifest
 			vm.state.manifest.AddStorageChange(closure.Object(), loc.Bytes(), val)
@@ -564,7 +570,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			// Snapshot the current stack so we are able to
 			// revert back to it later.
-			snapshot := vm.state.Snapshot()
+			snapshot := vm.state.Copy()
 
 			// Generate a new address
 			addr := ethutil.CreateAddress(closure.caller.Address(), closure.caller.N())
@@ -592,12 +598,11 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 				stack.Push(ethutil.BigFalse)
 
 				// Revert the state as it was before.
-				vm.state.Revert(snapshot)
+				vm.state.Set(snapshot)
 			} else {
 				stack.Push(ethutil.BigD(addr))
 			}
 		case CALL:
-			// TODO RE-WRITE
 			require(7)
 
 			vm.Endl()
@@ -613,13 +618,13 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 
-			//snapshot := vm.state.Snapshot()
-
 			if closure.object.Amount.Cmp(value) < 0 {
 				ethutil.Config.Log.Debugf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Amount)
 
 				stack.Push(ethutil.BigFalse)
 			} else {
+				snapshot := vm.state.Copy()
+
 				stateObject := vm.state.GetOrNewStateObject(addr.Bytes())
 
 				closure.object.SubAmount(value)
@@ -633,10 +638,10 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 				if err != nil {
 					stack.Push(ethutil.BigFalse)
 
-					// Reset the changes applied this object
-					vm.state.ResetStateObject(stateObject)
-
 					ethutil.Config.Log.Debugf("Closure execution failed. %v\n", err)
+
+					vm.err = err
+					vm.state.Set(snapshot)
 				} else {
 					stack.Push(ethutil.BigTrue)
 
@@ -648,7 +653,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			size, offset := stack.Popn()
 			ret := mem.Get(offset.Int64(), size.Int64())
 
-			vm.Printf(" => 0x%x", ret).Endl()
+			vm.Printf(" => (%d) 0x%x", len(ret), ret).Endl()
 
 			return closure.Return(ret), nil
 		case SUICIDE:
@@ -664,7 +669,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			fallthrough
 		case STOP: // Stop the closure
-			vm.Endl()
+			vm.Printf(" (g) %v", closure.Gas).Endl()
 
 			return closure.Return(nil), nil
 		default:
