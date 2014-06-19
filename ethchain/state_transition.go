@@ -34,23 +34,6 @@ type StateTransition struct {
 	cb, rec, sen *StateObject
 }
 
-func Transition(coinbase, sender, receiver, data []byte, gas, gasPrice, value *big.Int, state *State, block *Block) (ret []byte, err error) {
-	stateTransition := &StateTransition{
-		coinbase: coinbase,
-		receiver: receiver,
-		cb:       state.GetOrNewStateObject(coinbase),
-		rec:      state.GetOrNewStateObject(receiver),
-		sen:      state.GetOrNewStateObject(sender),
-		gas:      gas,
-		gasPrice: gasPrice,
-		value:    value,
-		state:    state,
-		block:    block,
-	}
-
-	return stateTransition.Transition()
-}
-
 func NewStateTransition(coinbase *StateObject, tx *Transaction, state *State, block *Block) *StateTransition {
 	return &StateTransition{coinbase.Address(), tx.Recipient, tx, new(big.Int), new(big.Int).Set(tx.GasPrice), tx.Value, tx.Data, state, block, coinbase, nil, nil}
 }
@@ -168,19 +151,13 @@ func (self *StateTransition) TransitionState() (err error) {
 		return
 	}
 
-	defer self.RefundGas()
-
-	_, err = self.Transition()
-
-	return
-}
-
-func (self *StateTransition) Transition() (ret []byte, err error) {
 	var (
 		tx       = self.tx
 		sender   = self.Sender()
 		receiver *StateObject
 	)
+
+	defer self.RefundGas()
 
 	// Increment the nonce for the next transaction
 	sender.Nonce += 1
@@ -204,7 +181,7 @@ func (self *StateTransition) Transition() (ret []byte, err error) {
 		// Create a new state object for the contract
 		receiver = self.MakeStateObject(self.state, tx)
 		if receiver == nil {
-			return nil, fmt.Errorf("Unable to create contract")
+			return fmt.Errorf("Unable to create contract")
 		}
 	}
 
@@ -224,18 +201,18 @@ func (self *StateTransition) Transition() (ret []byte, err error) {
 		if err != nil || deepErr {
 			self.state.ResetStateObject(receiver)
 
-			return nil, fmt.Errorf("Error during init script run %v (deepErr = %v)", err, deepErr)
+			return fmt.Errorf("Error during init script run %v (deepErr = %v)", err, deepErr)
 		}
 
 		receiver.script = code
 	} else {
 		if len(receiver.Script()) > 0 {
 			var deepErr bool
-			ret, err, deepErr = self.Eval(receiver.Script(), receiver)
+			_, err, deepErr = self.Eval(receiver.Script(), receiver)
 			if err != nil {
 				self.state.ResetStateObject(receiver)
 
-				return nil, fmt.Errorf("Error during code execution %v (deepErr = %v)", err, deepErr)
+				return fmt.Errorf("Error during code execution %v (deepErr = %v)", err, deepErr)
 			}
 		}
 	}
