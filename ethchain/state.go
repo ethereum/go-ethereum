@@ -78,11 +78,16 @@ func (s *State) EachStorage(cb ethutil.EachCallback) {
 	it.Each(cb)
 }
 
+func (self *State) ResetStateObject(stateObject *StateObject) {
+	stateObject.state.Reset()
+
+	delete(self.stateObjects, string(stateObject.Address()))
+}
+
 func (self *State) UpdateStateObject(stateObject *StateObject) {
 	addr := stateObject.Address()
 
 	if self.stateObjects[string(addr)] == nil {
-		panic("?")
 		self.stateObjects[string(addr)] = stateObject
 	}
 
