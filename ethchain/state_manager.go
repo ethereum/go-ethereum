@@ -127,6 +127,9 @@ done:
 		// Notify all subscribers
 		self.Ethereum.Reactor().Post("newTx:post", tx)
 
+		// Update the state with pending changes
+		state.Update()
+
 		txGas.Sub(txGas, st.gas)
 		accumelative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, txGas))
 		receipt := &Receipt{tx, ethutil.CopyBytes(state.Root().([]byte)), accumelative}
@@ -134,8 +137,6 @@ done:
 		receipts = append(receipts, receipt)
 		handled = append(handled, tx)
 	}
-
-	fmt.Println("################# MADE\n", receipts, "\n############################")
 
 	parent.GasUsed = totalUsedGas
 
@@ -154,7 +155,7 @@ func (sm *StateManager) Process(block *Block, dontReact bool) error {
 }
 
 // Block processing and validating with a given (temporarily) state
-func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontReact bool) error {
+func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontReact bool) (err error) {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
@@ -175,32 +176,42 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 	if !sm.bc.HasBlock(block.PrevHash) && sm.bc.CurrentBlock != nil {
 		return ParentError(block.PrevHash)
 	}
-	fmt.Println(block.Receipts())
 
 	coinbase := state.GetOrNewStateObject(block.Coinbase)
 	coinbase.SetGasPool(block.CalcGasLimit(parent))
 
+	fmt.Println(block.Receipts())
+
 	// Process the transactions on to current block
-	sm.ProcessTransactions(coinbase, state, block, parent, block.Transactions())
+	receipts, _, _, _ := sm.ProcessTransactions(coinbase, state, block, parent, block.Transactions())
+	defer func() {
+		if err != nil {
+			if len(receipts) == len(block.Receipts()) {
+				for i, receipt := range block.Receipts() {
+					ethutil.Config.Log.Debugf("diff (r) %v ~ %x  <=>  (c) %v ~ %x (%x)\n", receipt.CumulativeGasUsed, receipt.PostState[0:4], receipts[i].CumulativeGasUsed, receipts[i].PostState[0:4], receipt.Tx.Hash())
+				}
+			} else {
+				ethutil.Config.Log.Debugln("Unable to print receipt diff. Length didn't match", len(receipts), "for", len(block.Receipts()))
+			}
+		}
+	}()
 
 	// Block validation
-	if err := sm.ValidateBlock(block); err != nil {
+	if err = sm.ValidateBlock(block); err != nil {
 		fmt.Println("[SM] Error validating block:", err)
 		return err
 	}
 
 	// I'm not sure, but I don't know if there should be thrown
 	// any errors at this time.
-	if err := sm.AccumelateRewards(state, block); err != nil {
+	if err = sm.AccumelateRewards(state, block); err != nil {
 		fmt.Println("[SM] Error accumulating reward", err)
 		return err
 	}
 
-	// Update the state with pending changes
-	state.Update()
-
 	if !block.State().Cmp(state) {
-		return fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().trie.Root, state.trie.Root)
+		err = fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().trie.Root, state.trie.Root)
+		return
 	}
 
 	// Calculate the new total difficulty and sync back to the db
