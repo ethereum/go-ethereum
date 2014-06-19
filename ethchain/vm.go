@@ -53,7 +53,8 @@ type Vm struct {
 
 type RuntimeVars struct {
 	Origin      []byte
-	BlockNumber uint64
+	Block       *Block
+	BlockNumber *big.Int
 	PrevHash    []byte
 	Coinbase    []byte
 	Time        int64
@@ -90,14 +91,14 @@ var isRequireError = false
 func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err error) {
 	// Recover from any require exception
 	defer func() {
-		if r := recover(); r != nil /*&& isRequireError*/ {
+		if r := recover(); r != nil {
 			ret = closure.Return(nil)
 			err = fmt.Errorf("%v", r)
 			fmt.Println("vm err", err)
 		}
 	}()
 
-	ethutil.Config.Log.Debugf("[VM] Running %x\n", closure.object.Address())
+	ethutil.Config.Log.Debugf("[VM] (~) %x gas: %v (d) %x\n", closure.object.Address(), closure.Gas, closure.Args)
 
 	// Memory for the current closure
 	mem := &Memory{}
@@ -128,7 +129,6 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		op := OpCode(val.Uint())
 
 		vm.Printf("(pc) %-3d -o- %-14s", pc, op.String())
-		//ethutil.Config.Log.Debugf("%-3d %-4s", pc, op.String())
 
 		gas := new(big.Int)
 		addStepGasUsage := func(amount *big.Int) {
@@ -188,7 +188,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case CALL:
 			require(7)
 			gas.Set(GasCall)
-			addStepGasUsage(stack.data[stack.Len()-2])
+			addStepGasUsage(stack.data[stack.Len()-1])
 
 			x := stack.data[stack.Len()-6].Uint64() + stack.data[stack.Len()-7].Uint64()
 			y := stack.data[stack.Len()-4].Uint64() + stack.data[stack.Len()-5].Uint64()
@@ -208,9 +208,11 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		}
 
 		if !closure.UseGas(gas) {
-			ethutil.Config.Log.Debugln("Insufficient gas", closure.Gas, gas)
+			err := fmt.Errorf("Insufficient gas for %v. req %v has %v", op, gas, closure.Gas)
 
-			return closure.Return(nil), fmt.Errorf("insufficient gas %v %v", closure.Gas, gas)
+			closure.UseGas(closure.Gas)
+
+			return closure.Return(nil), err
 		}
 
 		vm.Printf(" (g) %-3v (%v)", gas, closure.Gas)
@@ -431,7 +433,9 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			vm.Printf(" => %d", l)
 		case CALLDATACOPY:
+			panic("not implemented")
 		case CODESIZE:
+			stack.Push(big.NewInt(int64(len(closure.Script))))
 		case CODECOPY:
 			var (
 				size = int64(len(closure.Script))
@@ -461,7 +465,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case TIMESTAMP:
 			stack.Push(big.NewInt(vm.vars.Time))
 		case NUMBER:
-			stack.Push(big.NewInt(int64(vm.vars.BlockNumber)))
+			stack.Push(vm.vars.BlockNumber)
 		case DIFFICULTY:
 			stack.Push(vm.vars.Diff)
 		case GASLIMIT:
@@ -595,10 +599,12 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case CALL:
 			// TODO RE-WRITE
 			require(7)
-			// Closure addr
-			addr := stack.Pop()
+
+			vm.Endl()
+
+			gas := stack.Pop()
 			// Pop gas and value of the stack.
-			gas, value := stack.Popn()
+			value, addr := stack.Popn()
 			// Pop input size and offset
 			inSize, inOffset := stack.Popn()
 			// Pop return size and offset
@@ -607,43 +613,42 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 
-			snapshot := vm.state.Snapshot()
+			//snapshot := vm.state.Snapshot()
 
-			closure.object.Nonce += 1
 			if closure.object.Amount.Cmp(value) < 0 {
 				ethutil.Config.Log.Debugf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Amount)
 
 				stack.Push(ethutil.BigFalse)
 			} else {
-				// Fetch the contract which will serve as the closure body
-				contract := vm.state.GetStateObject(addr.Bytes())
+				stateObject := vm.state.GetOrNewStateObject(addr.Bytes())
 
-				if contract != nil {
-					// Add the value to the state object
-					contract.AddAmount(value)
+				closure.object.SubAmount(value)
+				// Add the value to the state object
+				stateObject.AddAmount(value)
 
-					// Create a new callable closure
-					closure := NewClosure(closure, contract, contract.script, vm.state, gas, closure.Price)
-					// Executer the closure and get the return value (if any)
-					ret, _, err := closure.Call(vm, args, hook)
-					if err != nil {
-						stack.Push(ethutil.BigFalse)
-						// Reset the changes applied this object
-						vm.state.Revert(snapshot)
-					} else {
-						stack.Push(ethutil.BigTrue)
-
-						mem.Set(retOffset.Int64(), retSize.Int64(), ret)
-					}
-				} else {
-					ethutil.Config.Log.Debugf("Contract %x not found\n", addr.Bytes())
+				// Create a new callable closure
+				closure := NewClosure(closure, stateObject, stateObject.script, vm.state, gas, closure.Price)
+				// Executer the closure and get the return value (if any)
+				ret, _, err := closure.Call(vm, args, hook)
+				if err != nil {
 					stack.Push(ethutil.BigFalse)
+
+					// Reset the changes applied this object
+					vm.state.ResetStateObject(stateObject)
+
+					ethutil.Config.Log.Debugf("Closure execution failed. %v\n", err)
+				} else {
+					stack.Push(ethutil.BigTrue)
+
+					mem.Set(retOffset.Int64(), retSize.Int64(), ret)
 				}
 			}
 		case RETURN:
 			require(2)
 			size, offset := stack.Popn()
 			ret := mem.Get(offset.Int64(), size.Int64())
+
+			vm.Printf(" => 0x%x", ret).Endl()
 
 			return closure.Return(ret), nil
 		case SUICIDE:
@@ -659,6 +664,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			fallthrough
 		case STOP: // Stop the closure
+			vm.Endl()
+
 			return closure.Return(nil), nil
 		default:
 			ethutil.Config.Log.Debugf("Invalid opcode %x\n", op)
