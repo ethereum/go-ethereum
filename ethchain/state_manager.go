@@ -281,10 +281,12 @@ func (sm *StateManager) ValidateBlock(block *Block) error {
 		return ValidationError("Block timestamp less then prev block %v", diff)
 	}
 
+	/* XXX
 	// New blocks must be within the 15 minute range of the last block.
 	if diff > int64(15*time.Minute) {
 		return ValidationError("Block is too far in the future of last block (> 15 minutes)")
 	}
+	*/
 
 	// Verify the nonce of the block. Return an error if it's not valid
 	if !sm.Pow.Verify(block.HashNoNonce(), block.Difficulty, block.Nonce) {

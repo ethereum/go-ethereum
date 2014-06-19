@@ -219,25 +219,23 @@ func (self *StateTransition) Transition() (ret []byte, err error) {
 		// and use the return value as the
 		// script section for the state object.
 		self.data = nil
-		ethutil.Config.Log.Println(ethutil.LogLevelSystem, receiver.Init())
 
-		code, err := self.Eval(receiver.Init(), receiver)
-		if err != nil {
+		code, err, deepErr := self.Eval(receiver.Init(), receiver)
+		if err != nil || deepErr {
 			self.state.ResetStateObject(receiver)
 
-			return nil, fmt.Errorf("Error during init script run %v", err)
+			return nil, fmt.Errorf("Error during init script run %v (deepErr = %v)", err, deepErr)
 		}
 
 		receiver.script = code
 	} else {
 		if len(receiver.Script()) > 0 {
-			ethutil.Config.Log.Println(ethutil.LogLevelSystem, receiver.Script())
-
-			ret, err = self.Eval(receiver.Script(), receiver)
+			var deepErr bool
+			ret, err, deepErr = self.Eval(receiver.Script(), receiver)
 			if err != nil {
 				self.state.ResetStateObject(receiver)
 
-				return nil, fmt.Errorf("Error during code execution %v", err)
+				return nil, fmt.Errorf("Error during code execution %v (deepErr = %v)", err, deepErr)
 			}
 		}
 	}
@@ -262,7 +260,7 @@ func (self *StateTransition) transferValue(sender, receiver *StateObject) error 
 	return nil
 }
 
-func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []byte, err error) {
+func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []byte, err error, deepErr bool) {
 	var (
 		block     = self.block
 		initiator = self.Sender()
@@ -282,6 +280,7 @@ func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []by
 	})
 	vm.Verbose = true
 	ret, _, err = closure.Call(vm, self.data, nil)
+	deepErr = vm.err != nil
 
 	return
 }
