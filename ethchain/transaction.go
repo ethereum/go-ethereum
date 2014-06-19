@@ -10,6 +10,10 @@ import (
 
 var ContractAddr = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 
+func IsContractAddr(addr []byte) bool {
+	return bytes.Compare(addr, ContractAddr) == 0
+}
+
 type Transaction struct {
 	Nonce     uint64
 	Recipient []byte
@@ -149,7 +153,7 @@ func (tx *Transaction) RlpValueDecode(decoder *ethutil.Value) {
 	tx.r = decoder.Get(7).Bytes()
 	tx.s = decoder.Get(8).Bytes()
 
-	if bytes.Compare(tx.Recipient, ContractAddr) == 0 {
+	if IsContractAddr(tx.Recipient) {
 		tx.contractCreation = true
 	}
 }
