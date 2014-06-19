@@ -9,7 +9,7 @@
 
 <script type="text/javascript">
 
-var jefcoinAddr = "de0bd4ea1947deabf1749d7ed633f289358c9f6c"
+var jefcoinAddr = "22fa3ebce6ef9ca661a960104d3087eec040011e"
 var mAddr = ""
 
 function createTransaction() {
@@ -17,7 +17,7 @@ function createTransaction() {
 	var amount = document.querySelector("#amount").value.pad(32);
 
 	var data = (addr + amount).unbin();
-	eth.transact(mAddr, jefcoinAddr, 0, "10000000", "250", data, function(receipt) {
+	eth.transact(mAddr, jefcoinAddr, 0, "50000", "1000000", data, function(receipt) {
 		debug("received tx hash:", reciept.address)
 	})
 }

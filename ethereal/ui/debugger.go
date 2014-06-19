@@ -78,7 +78,6 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 	var err error
 	script := ethutil.StringToByteFunc(scriptStr, func(s string) (ret []byte) {
 		ret, err = ethutil.Compile(s)
-		fmt.Printf("%x\n", ret)
 		return
 	})
 
@@ -110,14 +109,16 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 
 	block := self.lib.eth.BlockChain().CurrentBlock
 	vm := ethchain.NewVm(state, self.lib.eth.StateManager(), ethchain.RuntimeVars{
+		Block:       block,
 		Origin:      account.Address(),
-		BlockNumber: block.BlockInfo().Number,
+		BlockNumber: block.Number,
 		PrevHash:    block.PrevHash,
 		Coinbase:    block.Coinbase,
 		Time:        block.Time,
 		Diff:        block.Difficulty,
 		Value:       ethutil.Big(valueStr),
 	})
+	vm.Verbose = true
 
 	self.Db.done = false
 	self.Logf("callsize %d", len(script))
