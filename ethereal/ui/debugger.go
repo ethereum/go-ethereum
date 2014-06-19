@@ -109,8 +109,9 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 
 	block := self.lib.eth.BlockChain().CurrentBlock
 	vm := ethchain.NewVm(state, self.lib.eth.StateManager(), ethchain.RuntimeVars{
+		Block:       block,
 		Origin:      account.Address(),
-		BlockNumber: block.BlockInfo().Number,
+		BlockNumber: block.Number,
 		PrevHash:    block.PrevHash,
 		Coinbase:    block.Coinbase,
 		Time:        block.Time,
