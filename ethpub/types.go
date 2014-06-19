@@ -104,16 +104,17 @@ type PTx struct {
 func NewPTx(tx *ethchain.Transaction) *PTx {
 	hash := hex.EncodeToString(tx.Hash())
 	receiver := hex.EncodeToString(tx.Recipient)
-
-	if receiver == "" {
+	if receiver == "0000000000000000000000000000000000000000" {
 		receiver = hex.EncodeToString(tx.CreationAddress())
 	}
 	sender := hex.EncodeToString(tx.Sender())
 	createsContract := tx.CreatesContract()
 
-	data := string(tx.Data)
+	var data string
 	if tx.CreatesContract() {
 		data = strings.Join(ethchain.Disassemble(tx.Data), "\n")
+	} else {
+		data = hex.EncodeToString(tx.Data)
 	}
 
 	return &PTx{ref: tx, Hash: hash, Value: ethutil.CurrencyToString(tx.Value), Address: receiver, Contract: tx.CreatesContract(), Gas: tx.Gas.String(), GasPrice: tx.GasPrice.String(), Data: data, Sender: sender, CreatesContract: createsContract, RawData: hex.EncodeToString(tx.Data)}

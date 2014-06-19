@@ -1,12 +1,9 @@
 package ethchain
 
 import (
-	_ "bytes"
 	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
-	_ "github.com/obscuren/secp256k1-go"
 	"math"
-	_ "math"
 	"math/big"
 )
 
@@ -45,17 +42,41 @@ type Vm struct {
 	state *State
 
 	stateManager *StateManager
+
+	Verbose bool
+
+	logStr string
+
+	err error
 }
 
 type RuntimeVars struct {
 	Origin      []byte
-	BlockNumber uint64
+	Block       *Block
+	BlockNumber *big.Int
 	PrevHash    []byte
 	Coinbase    []byte
 	Time        int64
 	Diff        *big.Int
 	TxData      []string
 	Value       *big.Int
+}
+
+func (self *Vm) Printf(format string, v ...interface{}) *Vm {
+	if self.Verbose {
+		self.logStr += fmt.Sprintf(format, v...)
+	}
+
+	return self
+}
+
+func (self *Vm) Endl() *Vm {
+	if self.Verbose {
+		ethutil.Config.Log.Infoln(self.logStr)
+		self.logStr = ""
+	}
+
+	return self
 }
 
 func NewVm(state *State, stateManager *StateManager, vars RuntimeVars) *Vm {
@@ -69,14 +90,14 @@ var isRequireError = false
 func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err error) {
 	// Recover from any require exception
 	defer func() {
-		if r := recover(); r != nil /*&& isRequireError*/ {
+		if r := recover(); r != nil {
 			ret = closure.Return(nil)
 			err = fmt.Errorf("%v", r)
 			fmt.Println("vm err", err)
 		}
 	}()
 
-	ethutil.Config.Log.Debugf("[VM] Running closure %x\n", closure.object.Address())
+	ethutil.Config.Log.Debugf("[VM] (~) %x gas: %v (d) %x\n", closure.object.Address(), closure.Gas, closure.Args)
 
 	// Memory for the current closure
 	mem := &Memory{}
@@ -95,10 +116,6 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 	step := 0
 	prevStep := 0
 
-	if ethutil.Config.Debug {
-		ethutil.Config.Log.Debugf("#   op\n")
-	}
-
 	for {
 		prevStep = step
 		// The base for all big integer arithmetic
@@ -109,13 +126,12 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		val := closure.Get(pc)
 		// Get the opcode (it must be an opcode!)
 		op := OpCode(val.Uint())
-		if ethutil.Config.Debug {
-			ethutil.Config.Log.Debugf("%-3d %-4s", pc, op.String())
-		}
 
 		gas := new(big.Int)
 		addStepGasUsage := func(amount *big.Int) {
-			gas.Add(gas, amount)
+			if amount.Cmp(ethutil.Big0) >= 0 {
+				gas.Add(gas, amount)
+			}
 		}
 
 		addStepGasUsage(GasStep)
@@ -123,7 +139,9 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		var newMemSize uint64 = 0
 		switch op {
 		case STOP:
+			gas.Set(ethutil.Big0)
 		case SUICIDE:
+			gas.Set(ethutil.Big0)
 		case SLOAD:
 			gas.Set(GasSLoad)
 		case SSTORE:
@@ -169,7 +187,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case CALL:
 			require(7)
 			gas.Set(GasCall)
-			addStepGasUsage(stack.data[stack.Len()-2])
+			addStepGasUsage(stack.data[stack.Len()-1])
 
 			x := stack.data[stack.Len()-6].Uint64() + stack.data[stack.Len()-7].Uint64()
 			y := stack.data[stack.Len()-4].Uint64() + stack.data[stack.Len()-5].Uint64()
@@ -189,10 +207,15 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		}
 
 		if !closure.UseGas(gas) {
-			ethutil.Config.Log.Debugln("Insufficient gas", closure.Gas, gas)
+			err := fmt.Errorf("Insufficient gas for %v. req %v has %v", op, gas, closure.Gas)
 
-			return closure.Return(nil), fmt.Errorf("insufficient gas %v %v", closure.Gas, gas)
+			closure.UseGas(closure.Gas)
+
+			return closure.Return(nil), err
 		}
+
+		vm.Printf("(pc) %-3d -o- %-14s", pc, op.String())
+		vm.Printf(" (g) %-3v (%v)", gas, closure.Gas)
 
 		mem.Resize(newMemSize)
 
@@ -204,29 +227,41 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case ADD:
 			require(2)
 			x, y := stack.Popn()
-			// (x + y) % 2 ** 256
-			base.Add(x, y)
+			vm.Printf(" %v + %v", y, x)
+
+			base.Add(y, x)
+
+			vm.Printf(" = %v", base)
 			// Pop result back on the stack
 			stack.Push(base)
 		case SUB:
 			require(2)
 			x, y := stack.Popn()
-			// (x - y) % 2 ** 256
-			base.Sub(x, y)
+			vm.Printf(" %v - %v", y, x)
+
+			base.Sub(y, x)
+
+			vm.Printf(" = %v", base)
 			// Pop result back on the stack
 			stack.Push(base)
 		case MUL:
 			require(2)
 			x, y := stack.Popn()
-			// (x * y) % 2 ** 256
-			base.Mul(x, y)
+			vm.Printf(" %v * %v", y, x)
+
+			base.Mul(y, x)
+
+			vm.Printf(" = %v", base)
 			// Pop result back on the stack
 			stack.Push(base)
 		case DIV:
 			require(2)
 			x, y := stack.Popn()
-			// floor(x / y)
-			base.Div(x, y)
+			vm.Printf(" %v / %v", y, x)
+
+			base.Div(y, x)
+
+			vm.Printf(" = %v", base)
 			// Pop result back on the stack
 			stack.Push(base)
 		case SDIV:
@@ -249,7 +284,12 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case MOD:
 			require(2)
 			x, y := stack.Popn()
-			base.Mod(x, y)
+
+			vm.Printf(" %v %% %v", y, x)
+
+			base.Mod(y, x)
+
+			vm.Printf(" = %v", base)
 			stack.Push(base)
 		case SMOD:
 			require(2)
@@ -271,7 +311,12 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case EXP:
 			require(2)
 			x, y := stack.Popn()
-			base.Exp(x, y, Pow256)
+
+			vm.Printf(" %v ** %v", y, x)
+
+			base.Exp(y, x, Pow256)
+
+			vm.Printf(" = %v", base)
 
 			stack.Push(base)
 		case NEG:
@@ -280,7 +325,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			stack.Push(base)
 		case LT:
 			require(2)
-			x, y := stack.Popn()
+			y, x := stack.Popn()
+			vm.Printf(" %v < %v", x, y)
 			// x < y
 			if x.Cmp(y) < 0 {
 				stack.Push(ethutil.BigTrue)
@@ -289,7 +335,9 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			}
 		case GT:
 			require(2)
-			x, y := stack.Popn()
+			y, x := stack.Popn()
+			vm.Printf(" %v > %v", x, y)
+
 			// x > y
 			if x.Cmp(y) > 0 {
 				stack.Push(ethutil.BigTrue)
@@ -299,6 +347,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case EQ:
 			require(2)
 			x, y := stack.Popn()
+			vm.Printf(" %v == %v", y, x)
+
 			// x == y
 			if x.Cmp(y) == 0 {
 				stack.Push(ethutil.BigTrue)
@@ -318,24 +368,21 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case AND:
 			require(2)
 			x, y := stack.Popn()
-			if (x.Cmp(ethutil.BigTrue) >= 0) && (y.Cmp(ethutil.BigTrue) >= 0) {
-				stack.Push(ethutil.BigTrue)
-			} else {
-				stack.Push(ethutil.BigFalse)
-			}
+			vm.Printf(" %v & %v", y, x)
 
+			stack.Push(base.And(y, x))
 		case OR:
 			require(2)
 			x, y := stack.Popn()
-			if (x.Cmp(ethutil.BigInt0) >= 0) || (y.Cmp(ethutil.BigInt0) >= 0) {
-				stack.Push(ethutil.BigTrue)
-			} else {
-				stack.Push(ethutil.BigFalse)
-			}
+			vm.Printf(" %v | %v", y, x)
+
+			stack.Push(base.Or(y, x))
 		case XOR:
 			require(2)
 			x, y := stack.Popn()
-			stack.Push(base.Xor(x, y))
+			vm.Printf(" %v ^ %v", y, x)
+
+			stack.Push(base.Xor(y, x))
 		case BYTE:
 			require(2)
 			val, th := stack.Popn()
@@ -360,25 +407,35 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case ORIGIN:
 			stack.Push(ethutil.BigD(vm.vars.Origin))
 		case CALLER:
-			stack.Push(ethutil.BigD(closure.caller.Address()))
+			caller := closure.caller.Address()
+			stack.Push(ethutil.BigD(caller))
+
+			vm.Printf(" => %x", caller)
 		case CALLVALUE:
 			stack.Push(vm.vars.Value)
 		case CALLDATALOAD:
 			require(1)
 			offset := stack.Pop().Int64()
 
-			var data []byte
-			if len(closure.Args) >= int(offset+32) {
-				data = closure.Args[offset : offset+32]
-			} else {
-				data = []byte{0}
+			data := make([]byte, 32)
+			if len(closure.Args) >= int(offset) {
+				l := int64(math.Min(float64(offset+32), float64(len(closure.Args))))
+
+				copy(data, closure.Args[offset:l])
 			}
+
+			vm.Printf(" => 0x%x", data)
 
 			stack.Push(ethutil.BigD(data))
 		case CALLDATASIZE:
-			stack.Push(big.NewInt(int64(len(closure.Args))))
+			l := int64(len(closure.Args))
+			stack.Push(big.NewInt(l))
+
+			vm.Printf(" => %d", l)
 		case CALLDATACOPY:
+			panic("not implemented")
 		case CODESIZE:
+			stack.Push(big.NewInt(int64(len(closure.Script))))
 		case CODECOPY:
 			var (
 				size = int64(len(closure.Script))
@@ -408,7 +465,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case TIMESTAMP:
 			stack.Push(big.NewInt(vm.vars.Time))
 		case NUMBER:
-			stack.Push(big.NewInt(int64(vm.vars.BlockNumber)))
+			stack.Push(vm.vars.BlockNumber)
 		case DIFFICULTY:
 			stack.Push(vm.vars.Diff)
 		case GASLIMIT:
@@ -426,12 +483,16 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			pc.Add(pc, a.Sub(a, big.NewInt(1)))
 
 			step += int(op) - int(PUSH1) + 1
+
+			vm.Printf(" => 0x%x", data.Bytes())
 		case POP:
 			require(1)
 			stack.Pop()
 		case DUP:
 			require(1)
 			stack.Push(stack.Peek())
+
+			vm.Printf(" => 0x%x", stack.Peek().Bytes())
 		case SWAP:
 			require(2)
 			x, y := stack.Popn()
@@ -446,38 +507,53 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			// Pop value of the stack
 			val, mStart := stack.Popn()
 			mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(val, 256))
+
+			vm.Printf(" => 0x%x", val)
 		case MSTORE8:
 			require(2)
 			val, mStart := stack.Popn()
 			base.And(val, new(big.Int).SetInt64(0xff))
 			mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(base, 256))
+
+			vm.Printf(" => 0x%x", val)
 		case SLOAD:
 			require(1)
 			loc := stack.Pop()
 			val := closure.GetMem(loc)
-			//fmt.Println("get", val.BigInt(), "@", loc)
 			stack.Push(val.BigInt())
+
+			vm.Printf(" {} 0x%x", val)
 		case SSTORE:
 			require(2)
 			val, loc := stack.Popn()
-			//fmt.Println("storing", val, "@", loc)
-			closure.SetStorage(loc, ethutil.NewValue(val))
+
+			// FIXME This should be handled in the Trie it self
+			if val.Cmp(big.NewInt(0)) != 0 {
+				closure.SetStorage(loc, ethutil.NewValue(val))
+			}
 
 			// Add the change to manifest
 			vm.state.manifest.AddStorageChange(closure.Object(), loc.Bytes(), val)
+
+			vm.Printf(" {0x%x} 0x%x", loc, val)
 		case JUMP:
 			require(1)
 			pc = stack.Pop()
 			// Reduce pc by one because of the increment that's at the end of this for loop
-			//pc.Sub(pc, ethutil.Big1)
+			vm.Printf(" ~> %v", pc).Endl()
+
 			continue
 		case JUMPI:
 			require(2)
 			cond, pos := stack.Popn()
-			if cond.Cmp(ethutil.BigTrue) == 0 {
+			if cond.Cmp(ethutil.BigTrue) >= 0 {
 				pc = pos
-				//pc.Sub(pc, ethutil.Big1)
+
+				vm.Printf(" ~> %v (t)", pc).Endl()
+
 				continue
+			} else {
+				vm.Printf(" (f)")
 			}
 		case PC:
 			stack.Push(pc)
@@ -494,7 +570,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			// Snapshot the current stack so we are able to
 			// revert back to it later.
-			snapshot := vm.state.Snapshot()
+			snapshot := vm.state.Copy()
 
 			// Generate a new address
 			addr := ethutil.CreateAddress(closure.caller.Address(), closure.caller.N())
@@ -522,19 +598,18 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 				stack.Push(ethutil.BigFalse)
 
 				// Revert the state as it was before.
-				vm.state.Revert(snapshot)
+				vm.state.Set(snapshot)
 			} else {
 				stack.Push(ethutil.BigD(addr))
-
-				vm.state.UpdateStateObject(contract)
 			}
 		case CALL:
-			// TODO RE-WRITE
 			require(7)
-			// Closure addr
-			addr := stack.Pop()
+
+			vm.Endl()
+
+			gas := stack.Pop()
 			// Pop gas and value of the stack.
-			gas, value := stack.Popn()
+			value, addr := stack.Popn()
 			// Pop input size and offset
 			inSize, inOffset := stack.Popn()
 			// Pop return size and offset
@@ -543,39 +618,34 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 
-			snapshot := vm.state.Snapshot()
-
-			closure.object.Nonce += 1
 			if closure.object.Amount.Cmp(value) < 0 {
 				ethutil.Config.Log.Debugf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Amount)
 
 				stack.Push(ethutil.BigFalse)
 			} else {
-				// Fetch the contract which will serve as the closure body
-				contract := vm.state.GetStateObject(addr.Bytes())
+				snapshot := vm.state.Copy()
 
-				if contract != nil {
-					// Add the value to the state object
-					contract.AddAmount(value)
+				stateObject := vm.state.GetOrNewStateObject(addr.Bytes())
 
-					// Create a new callable closure
-					closure := NewClosure(closure, contract, contract.script, vm.state, gas, closure.Price)
-					// Executer the closure and get the return value (if any)
-					ret, _, err := closure.Call(vm, args, hook)
-					if err != nil {
-						stack.Push(ethutil.BigFalse)
-						// Reset the changes applied this object
-						vm.state.Revert(snapshot)
-					} else {
-						stack.Push(ethutil.BigTrue)
+				closure.object.SubAmount(value)
+				// Add the value to the state object
+				stateObject.AddAmount(value)
 
-						vm.state.UpdateStateObject(contract)
-
-						mem.Set(retOffset.Int64(), retSize.Int64(), ret)
-					}
-				} else {
-					ethutil.Config.Log.Debugf("Contract %x not found\n", addr.Bytes())
+				// Create a new callable closure
+				closure := NewClosure(closure, stateObject, stateObject.script, vm.state, gas, closure.Price)
+				// Executer the closure and get the return value (if any)
+				ret, _, err := closure.Call(vm, args, hook)
+				if err != nil {
 					stack.Push(ethutil.BigFalse)
+
+					ethutil.Config.Log.Debugf("Closure execution failed. %v\n", err)
+
+					vm.err = err
+					vm.state.Set(snapshot)
+				} else {
+					stack.Push(ethutil.BigTrue)
+
+					mem.Set(retOffset.Int64(), retSize.Int64(), ret)
 				}
 			}
 		case RETURN:
@@ -583,18 +653,24 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			size, offset := stack.Popn()
 			ret := mem.Get(offset.Int64(), size.Int64())
 
+			vm.Printf(" => (%d) 0x%x", len(ret), ret).Endl()
+
 			return closure.Return(ret), nil
 		case SUICIDE:
 			require(1)
 
 			receiver := vm.state.GetAccount(stack.Pop().Bytes())
 			receiver.AddAmount(closure.object.Amount)
-			vm.state.UpdateStateObject(receiver)
 
-			closure.object.state.Purge()
+			trie := closure.object.state.trie
+			trie.NewIterator().Each(func(key string, v *ethutil.Value) {
+				trie.Delete(key)
+			})
 
 			fallthrough
 		case STOP: // Stop the closure
+			vm.Printf(" (g) %v", closure.Gas).Endl()
+
 			return closure.Return(nil), nil
 		default:
 			ethutil.Config.Log.Debugf("Invalid opcode %x\n", op)
@@ -603,6 +679,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		}
 
 		pc.Add(pc, ethutil.Big1)
+
+		vm.Endl()
 
 		if hook != nil {
 			if !hook(prevStep, op, mem, stack, closure.Object()) {

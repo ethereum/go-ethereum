@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"strings"
 )
 
 // Number to bytes
@@ -91,7 +92,7 @@ func IsHex(str string) bool {
 }
 
 func StringToByteFunc(str string, cb func(str string) []byte) (ret []byte) {
-	if len(str) > 1 && str[0:2] == "0x" {
+	if len(str) > 1 && str[0:2] == "0x" && !strings.Contains(str, "\n") {
 		ret = FromHex(str[2:])
 	} else {
 		ret = cb(str)

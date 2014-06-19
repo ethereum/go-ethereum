@@ -2,7 +2,7 @@ package ethchain
 
 import (
 	"fmt"
-	_ "github.com/ethereum/eth-go/ethutil"
+	"math"
 	"math/big"
 )
 
@@ -118,7 +118,13 @@ func (m *Memory) Resize(size uint64) {
 }
 
 func (m *Memory) Get(offset, size int64) []byte {
-	return m.store[offset : offset+size]
+	if len(m.store) > int(offset) {
+		end := int(math.Min(float64(len(m.store)), float64(offset+size)))
+
+		return m.store[offset:end]
+	}
+
+	return nil
 }
 
 func (m *Memory) Len() int {

@@ -166,6 +166,7 @@ var opCodeToString = map[OpCode]string{
 	GASLIMIT:   "GASLIMIT",
 
 	// 0x50 range - 'storage' and execution
+	POP:     "POP",
 	DUP:     "DUP",
 	SWAP:    "SWAP",
 	MLOAD:   "MLOAD",
@@ -226,7 +227,7 @@ var opCodeToString = map[OpCode]string{
 func (o OpCode) String() string {
 	str := opCodeToString[o]
 	if len(str) == 0 {
-		return fmt.Sprintf("Missing opcode %#x", int(o))
+		return fmt.Sprintf("Missing opcode 0x%x", int(o))
 	}
 
 	return str

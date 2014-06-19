@@ -23,17 +23,19 @@ import (
  * 6) Derive new state root
  */
 type StateTransition struct {
-	coinbase []byte
-	tx       *Transaction
-	gas      *big.Int
-	state    *State
-	block    *Block
+	coinbase, receiver []byte
+	tx                 *Transaction
+	gas, gasPrice      *big.Int
+	value              *big.Int
+	data               []byte
+	state              *State
+	block              *Block
 
 	cb, rec, sen *StateObject
 }
 
 func NewStateTransition(coinbase *StateObject, tx *Transaction, state *State, block *Block) *StateTransition {
-	return &StateTransition{coinbase.Address(), tx, new(big.Int), state, block, coinbase, nil, nil}
+	return &StateTransition{coinbase.Address(), tx.Recipient, tx, new(big.Int), new(big.Int).Set(tx.GasPrice), tx.Value, tx.Data, state, block, coinbase, nil, nil}
 }
 
 func (self *StateTransition) Coinbase() *StateObject {
@@ -53,7 +55,7 @@ func (self *StateTransition) Sender() *StateObject {
 	return self.sen
 }
 func (self *StateTransition) Receiver() *StateObject {
-	if self.tx.CreatesContract() {
+	if self.tx != nil && self.tx.CreatesContract() {
 		return nil
 	}
 
@@ -67,13 +69,8 @@ func (self *StateTransition) Receiver() *StateObject {
 
 func (self *StateTransition) MakeStateObject(state *State, tx *Transaction) *StateObject {
 	contract := MakeContract(tx, state)
-	if contract != nil {
-		state.states[string(tx.CreationAddress())] = contract.state
 
-		return contract
-	}
-
-	return nil
+	return contract
 }
 
 func (self *StateTransition) UseGas(amount *big.Int) error {
@@ -94,7 +91,7 @@ func (self *StateTransition) BuyGas() error {
 
 	sender := self.Sender()
 	if sender.Amount.Cmp(self.tx.GasValue()) < 0 {
-		return fmt.Errorf("Insufficient funds to pre-pay gas. Req %v, has %v", self.tx.GasValue(), self.tx.Value)
+		return fmt.Errorf("Insufficient funds to pre-pay gas. Req %v, has %v", self.tx.GasValue(), sender.Amount)
 	}
 
 	coinbase := self.Coinbase()
@@ -102,7 +99,6 @@ func (self *StateTransition) BuyGas() error {
 	if err != nil {
 		return err
 	}
-	//self.state.UpdateStateObject(coinbase)
 
 	self.AddGas(self.tx.Gas)
 	sender.SubAmount(self.tx.GasValue())
@@ -119,22 +115,10 @@ func (self *StateTransition) RefundGas() {
 	sender.AddAmount(remaining)
 }
 
-func (self *StateTransition) TransitionState() (err error) {
-	//snapshot := st.state.Snapshot()
-
-	/*
-		defer func() {
-			if r := recover(); r != nil {
-				ethutil.Config.Log.Infoln(r)
-				err = fmt.Errorf("state transition err %v", r)
-			}
-		}()
-	*/
-
+func (self *StateTransition) preCheck() (err error) {
 	var (
-		tx       = self.tx
-		sender   = self.Sender()
-		receiver *StateObject
+		tx     = self.tx
+		sender = self.Sender()
 	)
 
 	// Make sure this transaction's nonce is correct
@@ -147,38 +131,49 @@ func (self *StateTransition) TransitionState() (err error) {
 		return err
 	}
 
+	return nil
+}
+
+func (self *StateTransition) TransitionState() (err error) {
+	ethutil.Config.Log.Printf(ethutil.LogLevelInfo, "(~) %x\n", self.tx.Hash())
+
+	/*
+		defer func() {
+			if r := recover(); r != nil {
+				ethutil.Config.Log.Infoln(r)
+				err = fmt.Errorf("state transition err %v", r)
+			}
+		}()
+	*/
+
 	// XXX Transactions after this point are considered valid.
+	if err = self.preCheck(); err != nil {
+		return
+	}
 
-	defer func() {
-		self.RefundGas()
+	var (
+		tx       = self.tx
+		sender   = self.Sender()
+		receiver *StateObject
+	)
 
-		if sender != nil {
-			self.state.UpdateStateObject(sender)
-		}
-
-		if receiver != nil {
-			self.state.UpdateStateObject(receiver)
-		}
-
-		self.state.UpdateStateObject(self.Coinbase())
-	}()
+	defer self.RefundGas()
 
 	// Increment the nonce for the next transaction
 	sender.Nonce += 1
 
-	// Get the receiver (TODO fix this, if coinbase is the receiver we need to save/retrieve)
 	receiver = self.Receiver()
 
 	// Transaction gas
 	if err = self.UseGas(GasTx); err != nil {
-		return err
+		return
 	}
 
 	// Pay data gas
-	dataPrice := big.NewInt(int64(len(tx.Data)))
+	dataPrice := big.NewInt(int64(len(self.data)))
 	dataPrice.Mul(dataPrice, GasData)
 	if err = self.UseGas(dataPrice); err != nil {
-		return err
+		return
 	}
 
 	// If the receiver is nil it's a contract (\0*32).
@@ -186,75 +181,83 @@ func (self *StateTransition) TransitionState() (err error) {
 		// Create a new state object for the contract
 		receiver = self.MakeStateObject(self.state, tx)
 		if receiver == nil {
-			return fmt.Errorf("ERR. Unable to create contract with transaction %v", tx)
+			return fmt.Errorf("Unable to create contract")
 		}
 	}
 
 	// Transfer value from sender to receiver
 	if err = self.transferValue(sender, receiver); err != nil {
-		return err
+		return
 	}
 
 	// Process the init code and create 'valid' contract
-	if tx.CreatesContract() {
+	if IsContractAddr(self.receiver) {
 		// Evaluate the initialization script
 		// and use the return value as the
 		// script section for the state object.
-		//script, gas, err = sm.Eval(state, contract.Init(), contract, tx, block)
-		code, err := self.Eval(receiver.Init(), receiver)
-		if err != nil {
-			return fmt.Errorf("Error during init script run %v", err)
+		self.data = nil
+
+		code, err, deepErr := self.Eval(receiver.Init(), receiver)
+		if err != nil || deepErr {
+			self.state.ResetStateObject(receiver)
+
+			return fmt.Errorf("Error during init script run %v (deepErr = %v)", err, deepErr)
 		}
 
 		receiver.script = code
 	} else {
 		if len(receiver.Script()) > 0 {
-			_, err := self.Eval(receiver.Script(), receiver)
+			var deepErr bool
+			_, err, deepErr = self.Eval(receiver.Script(), receiver)
 			if err != nil {
-				return fmt.Errorf("Error during code execution %v", err)
+				self.state.ResetStateObject(receiver)
+
+				return fmt.Errorf("Error during code execution %v (deepErr = %v)", err, deepErr)
 			}
 		}
 	}
 
-	return nil
+	return
 }
 
 func (self *StateTransition) transferValue(sender, receiver *StateObject) error {
-	if sender.Amount.Cmp(self.tx.Value) < 0 {
-		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.tx.Value, sender.Amount)
+	if sender.Amount.Cmp(self.value) < 0 {
+		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Amount)
 	}
 
-	if self.tx.Value.Cmp(ethutil.Big0) > 0 {
-		// Subtract the amount from the senders account
-		sender.SubAmount(self.tx.Value)
-		// Add the amount to receivers account which should conclude this transaction
-		receiver.AddAmount(self.tx.Value)
+	//if self.value.Cmp(ethutil.Big0) > 0 {
+	// Subtract the amount from the senders account
+	sender.SubAmount(self.value)
+	// Add the amount to receivers account which should conclude this transaction
+	receiver.AddAmount(self.value)
 
-		ethutil.Config.Log.Debugf("%x => %x (%v) %x\n", sender.Address()[:4], receiver.Address()[:4], self.tx.Value, self.tx.Hash())
-	}
+	//ethutil.Config.Log.Debugf("%x => %x (%v)\n", sender.Address()[:4], receiver.Address()[:4], self.value)
+	//}
 
 	return nil
 }
 
-func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []byte, err error) {
+func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []byte, err error, deepErr bool) {
 	var (
-		tx        = self.tx
 		block     = self.block
 		initiator = self.Sender()
 		state     = self.state
 	)
 
-	closure := NewClosure(initiator, context, script, state, self.gas, tx.GasPrice)
+	closure := NewClosure(initiator, context, script, state, self.gas, self.gasPrice)
 	vm := NewVm(state, nil, RuntimeVars{
 		Origin:      initiator.Address(),
-		BlockNumber: block.BlockInfo().Number,
+		Block:       block,
+		BlockNumber: block.Number,
 		PrevHash:    block.PrevHash,
 		Coinbase:    block.Coinbase,
 		Time:        block.Time,
 		Diff:        block.Difficulty,
-		Value:       tx.Value,
+		Value:       self.value,
 	})
-	ret, _, err = closure.Call(vm, tx.Data, nil)
+	vm.Verbose = true
+	ret, _, err = closure.Call(vm, self.data, nil)
+	deepErr = vm.err != nil
 
 	return
 }

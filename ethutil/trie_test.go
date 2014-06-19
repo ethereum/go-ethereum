@@ -173,12 +173,21 @@ func TestTriePurge(t *testing.T) {
 
 func TestTrieIt(t *testing.T) {
 	_, trie := New()
-	trie.Update("c", LONG_WORD)
-	trie.Update("ca", LONG_WORD)
-	trie.Update("cat", LONG_WORD)
 
-	it := trie.NewIterator()
-	it.Each(func(key string, node *Value) {
-		fmt.Println(key, ":", node.Str())
-	})
+	data := [][]string{
+		{"do", "verb"},
+		{"ether", "wookiedoo"},
+		{"horse", "stallion"},
+		{"shaman", "horse"},
+		{"doge", "coin"},
+		{"ether", ""},
+		{"dog", "puppy"},
+		{"shaman", ""},
+	}
+
+	for _, item := range data {
+		trie.Update(item[0], item[1])
+	}
+
+	fmt.Printf("root %x", trie.Root)
 }

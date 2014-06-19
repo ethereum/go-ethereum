@@ -114,6 +114,8 @@ func (val *Value) Str() string {
 func (val *Value) Bytes() []byte {
 	if a, ok := val.Val.([]byte); ok {
 		return a
+	} else if s, ok := val.Val.(byte); ok {
+		return []byte{s}
 	}
 
 	return []byte{}

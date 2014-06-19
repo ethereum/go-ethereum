@@ -170,11 +170,6 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, sc
 
 		tx = ethchain.NewContractCreationTx(value, gas, gasPrice, script)
 	} else {
-		// Just in case it was submitted as a 0x prefixed string
-		if len(scriptStr) > 0 && scriptStr[0:2] == "0x" {
-			scriptStr = scriptStr[2:len(scriptStr)]
-		}
-
 		data := ethutil.StringToByteFunc(scriptStr, func(s string) (ret []byte) {
 			slice := strings.Split(s, "\n")
 			for _, dataItem := range slice {

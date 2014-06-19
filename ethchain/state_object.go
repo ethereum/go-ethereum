@@ -4,7 +4,14 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
+	"strings"
 )
+
+type Code []byte
+
+func (self Code) String() string {
+	return strings.Join(Disassemble(self), " ")
+}
 
 type StateObject struct {
 	// Address of the object
@@ -15,8 +22,8 @@ type StateObject struct {
 	Nonce      uint64
 	// Contract related attributes
 	state      *State
-	script     []byte
-	initScript []byte
+	script     Code
+	initScript Code
 
 	// Total gas pool is the total amount of gas currently
 	// left if this object is the coinbase. Gas is directly
@@ -30,12 +37,9 @@ func MakeContract(tx *Transaction, state *State) *StateObject {
 	if tx.IsContract() {
 		addr := tx.CreationAddress()
 
-		value := tx.Value
-		contract := NewContract(addr, value, ZeroHash256)
-
+		contract := state.NewStateObject(addr)
 		contract.initScript = tx.Data
-
-		state.UpdateStateObject(contract)
+		contract.state = NewState(ethutil.NewTrie(ethutil.Config.Db, ""))
 
 		return contract
 	}
@@ -44,7 +48,7 @@ func MakeContract(tx *Transaction, state *State) *StateObject {
 }
 
 func NewStateObject(addr []byte) *StateObject {
-	return &StateObject{address: addr, Amount: new(big.Int)}
+	return &StateObject{address: addr, Amount: new(big.Int), gasPool: new(big.Int)}
 }
 
 func NewContract(address []byte, Amount *big.Int, root []byte) *StateObject {
@@ -120,13 +124,13 @@ func (c *StateObject) ReturnGas(gas, price *big.Int, state *State) {
 func (c *StateObject) AddAmount(amount *big.Int) {
 	c.SetAmount(new(big.Int).Add(c.Amount, amount))
 
-	ethutil.Config.Log.Printf(ethutil.LogLevelSystem, "%x: #%d %v (+ %v)\n", c.Address(), c.Nonce, c.Amount, amount)
+	ethutil.Config.Log.Printf(ethutil.LogLevelInfo, "%x: #%d %v (+ %v)\n", c.Address(), c.Nonce, c.Amount, amount)
 }
 
 func (c *StateObject) SubAmount(amount *big.Int) {
 	c.SetAmount(new(big.Int).Sub(c.Amount, amount))
 
-	ethutil.Config.Log.Printf(ethutil.LogLevelSystem, "%x: #%d %v (- %v)\n", c.Address(), c.Nonce, c.Amount, amount)
+	ethutil.Config.Log.Printf(ethutil.LogLevelInfo, "%x: #%d %v (- %v)\n", c.Address(), c.Nonce, c.Amount, amount)
 }
 
 func (c *StateObject) SetAmount(amount *big.Int) {
@@ -173,6 +177,26 @@ func (self *StateObject) RefundGas(gas, price *big.Int) {
 }
 
 func (self *StateObject) Copy() *StateObject {
+	stateObject := NewStateObject(self.Address())
+	stateObject.Amount.Set(self.Amount)
+	stateObject.ScriptHash = ethutil.CopyBytes(self.ScriptHash)
+	stateObject.Nonce = self.Nonce
+	if self.state != nil {
+		stateObject.state = self.state.Copy()
+	}
+	stateObject.script = ethutil.CopyBytes(self.script)
+	stateObject.initScript = ethutil.CopyBytes(self.initScript)
+	//stateObject.gasPool.Set(self.gasPool)
+
+	return self
+}
+
+func (self *StateObject) Set(stateObject *StateObject) {
+	self = stateObject
+}
+
+/*
+func (self *StateObject) Copy() *StateObject {
 	stCopy := &StateObject{}
 	stCopy.address = make([]byte, len(self.address))
 	copy(stCopy.address, self.address)
@@ -190,6 +214,7 @@ func (self *StateObject) Copy() *StateObject {
 
 	return stCopy
 }
+*/
 
 // Returns the address of the contract/account
 func (c *StateObject) Address() []byte {
@@ -197,12 +222,12 @@ func (c *StateObject) Address() []byte {
 }
 
 // Returns the main script body
-func (c *StateObject) Script() []byte {
+func (c *StateObject) Script() Code {
 	return c.script
 }
 
 // Returns the initialization script
-func (c *StateObject) Init() []byte {
+func (c *StateObject) Init() Code {
 	return c.initScript
 }
 

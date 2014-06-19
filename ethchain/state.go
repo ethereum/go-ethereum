@@ -13,8 +13,6 @@ import (
 type State struct {
 	// The trie for this structure
 	trie *ethutil.Trie
-	// Nested states
-	states map[string]*State
 
 	stateObjects map[string]*StateObject
 
@@ -23,7 +21,7 @@ type State struct {
 
 // Create a new state from a given trie
 func NewState(trie *ethutil.Trie) *State {
-	return &State{trie: trie, states: make(map[string]*State), stateObjects: make(map[string]*StateObject), manifest: NewManifest()}
+	return &State{trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest()}
 }
 
 // Resets the trie and all siblings
@@ -38,12 +36,16 @@ func (s *State) Reset() {
 
 		stateObject.state.Reset()
 	}
+
+	s.Empty()
 }
 
 // Syncs the trie and all siblings
 func (s *State) Sync() {
 	// Sync all nested states
 	for _, stateObject := range s.stateObjects {
+		s.UpdateStateObject(stateObject)
+
 		if stateObject.state == nil {
 			continue
 		}
@@ -52,6 +54,18 @@ func (s *State) Sync() {
 	}
 
 	s.trie.Sync()
+
+	s.Empty()
+}
+
+func (self *State) Empty() {
+	self.stateObjects = make(map[string]*StateObject)
+}
+
+func (self *State) Update() {
+	for _, stateObject := range self.stateObjects {
+		self.UpdateStateObject(stateObject)
+	}
 }
 
 // Purges the current trie.
@@ -62,6 +76,12 @@ func (s *State) Purge() int {
 func (s *State) EachStorage(cb ethutil.EachCallback) {
 	it := s.trie.NewIterator()
 	it.Each(cb)
+}
+
+func (self *State) ResetStateObject(stateObject *StateObject) {
+	delete(self.stateObjects, string(stateObject.Address()))
+
+	stateObject.state.Reset()
 }
 
 func (self *State) UpdateStateObject(stateObject *StateObject) {
@@ -98,9 +118,17 @@ func (self *State) GetStateObject(addr []byte) *StateObject {
 func (self *State) GetOrNewStateObject(addr []byte) *StateObject {
 	stateObject := self.GetStateObject(addr)
 	if stateObject == nil {
-		stateObject = NewStateObject(addr)
-		self.stateObjects[string(addr)] = stateObject
+		stateObject = self.NewStateObject(addr)
 	}
+
+	return stateObject
+}
+
+func (self *State) NewStateObject(addr []byte) *StateObject {
+	ethutil.Config.Log.Printf(ethutil.LogLevelInfo, "(+) %x\n", addr)
+
+	stateObject := NewStateObject(addr)
+	self.stateObjects[string(addr)] = stateObject
 
 	return stateObject
 }
@@ -126,13 +154,10 @@ func (self *State) Copy() *State {
 	return nil
 }
 
-func (s *State) Snapshot() *State {
-	return s.Copy()
-}
-
-func (s *State) Revert(snapshot *State) {
-	s.trie = snapshot.trie
-	s.states = snapshot.states
+func (self *State) Set(state *State) {
+	//s.trie = snapshot.trie
+	//s.stateObjects = snapshot.stateObjects
+	self = state
 }
 
 func (s *State) Put(key, object []byte) {
