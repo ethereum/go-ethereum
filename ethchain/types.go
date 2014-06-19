@@ -166,6 +166,7 @@ var opCodeToString = map[OpCode]string{
 	GASLIMIT:   "GASLIMIT",
 
 	// 0x50 range - 'storage' and execution
+	POP:     "POP",
 	DUP:     "DUP",
 	SWAP:    "SWAP",
 	MLOAD:   "MLOAD",
