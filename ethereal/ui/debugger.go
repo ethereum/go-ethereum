@@ -78,7 +78,6 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 	var err error
 	script := ethutil.StringToByteFunc(scriptStr, func(s string) (ret []byte) {
 		ret, err = ethutil.Compile(s)
-		fmt.Printf("%x\n", ret)
 		return
 	})
 
@@ -118,6 +117,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 		Diff:        block.Difficulty,
 		Value:       ethutil.Big(valueStr),
 	})
+	vm.Verbose = true
 
 	self.Db.done = false
 	self.Logf("callsize %d", len(script))
