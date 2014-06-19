@@ -48,7 +48,7 @@ func MakeContract(tx *Transaction, state *State) *StateObject {
 }
 
 func NewStateObject(addr []byte) *StateObject {
-	return &StateObject{address: addr, Amount: new(big.Int)}
+	return &StateObject{address: addr, Amount: new(big.Int), gasPool: new(big.Int)}
 }
 
 func NewContract(address []byte, Amount *big.Int, root []byte) *StateObject {
@@ -177,6 +177,26 @@ func (self *StateObject) RefundGas(gas, price *big.Int) {
 }
 
 func (self *StateObject) Copy() *StateObject {
+	stateObject := NewStateObject(self.Address())
+	stateObject.Amount.Set(self.Amount)
+	stateObject.ScriptHash = ethutil.CopyBytes(self.ScriptHash)
+	stateObject.Nonce = self.Nonce
+	if self.state != nil {
+		stateObject.state = self.state.Copy()
+	}
+	stateObject.script = ethutil.CopyBytes(self.script)
+	stateObject.initScript = ethutil.CopyBytes(self.initScript)
+	//stateObject.gasPool.Set(self.gasPool)
+
+	return self
+}
+
+func (self *StateObject) Set(stateObject *StateObject) {
+	self = stateObject
+}
+
+/*
+func (self *StateObject) Copy() *StateObject {
 	stCopy := &StateObject{}
 	stCopy.address = make([]byte, len(self.address))
 	copy(stCopy.address, self.address)
@@ -194,6 +214,7 @@ func (self *StateObject) Copy() *StateObject {
 
 	return stCopy
 }
+*/
 
 // Returns the address of the contract/account
 func (c *StateObject) Address() []byte {
