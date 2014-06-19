@@ -180,8 +180,6 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 	coinbase := state.GetOrNewStateObject(block.Coinbase)
 	coinbase.SetGasPool(block.CalcGasLimit(parent))
 
-	fmt.Println(block.Receipts())
-
 	// Process the transactions on to current block
 	receipts, _, _, _ := sm.ProcessTransactions(coinbase, state, block, parent, block.Transactions())
 	defer func() {
