@@ -75,7 +75,7 @@ func ReadConfig(base string, logTypes LoggerType, g *globalconf.GlobalConf, id s
 	if Config == nil {
 		path := ApplicationFolder(base)
 
-		Config = &config{ExecPath: path, Debug: true, Ver: "0.5.13"}
+		Config = &config{ExecPath: path, Debug: true, Ver: "0.5.14"}
 		Config.conf = g
 		Config.Identifier = id
 		Config.Log = NewLogger(logTypes, LogLevelDebug)
