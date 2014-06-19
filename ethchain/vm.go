@@ -433,9 +433,28 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			vm.Printf(" => %d", l)
 		case CALLDATACOPY:
-			panic("not implemented")
+			var (
+				size = int64(len(closure.Args))
+				mOff = stack.Pop().Int64()
+				cOff = stack.Pop().Int64()
+				l    = stack.Pop().Int64()
+			)
+
+			if cOff > size {
+				cOff = 0
+				l = 0
+			} else if cOff+l > size {
+				l = 0
+			}
+
+			code := closure.Args[cOff : cOff+l]
+
+			mem.Set(mOff, l, code)
 		case CODESIZE:
-			stack.Push(big.NewInt(int64(len(closure.Script))))
+			l := big.NewInt(int64(len(closure.Script)))
+			stack.Push(l)
+
+			vm.Printf(" => %d", l)
 		case CODECOPY:
 			var (
 				size = int64(len(closure.Script))
