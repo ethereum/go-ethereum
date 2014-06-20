@@ -150,8 +150,11 @@ func (tx *Transaction) RlpValueDecode(decoder *ethutil.Value) {
 	tx.Value = decoder.Get(4).BigInt()
 	tx.Data = decoder.Get(5).Bytes()
 	tx.v = byte(decoder.Get(6).Uint())
-	tx.r = decoder.Get(7).Bytes()
-	tx.s = decoder.Get(8).Bytes()
+
+	r := make([]byte, 32-len(decoder.Get(7).Bytes()))
+	s := make([]byte, 32-len(decoder.Get(8).Bytes()))
+	tx.r = append(r, decoder.Get(7).Bytes()...)
+	tx.s = append(s, decoder.Get(8).Bytes()...)
 
 	if IsContractAddr(tx.Recipient) {
 		tx.contractCreation = true
@@ -175,7 +178,8 @@ func (tx *Transaction) String() string {
 	`,
 		tx.Hash(),
 		len(tx.Recipient) == 0,
-		tx.Sender(),
+		//tx.Sender(),
+		nil,
 		tx.Recipient,
 		tx.Nonce,
 		tx.GasPrice,
