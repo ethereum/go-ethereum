@@ -94,10 +94,10 @@ func (c *StateObject) SetStorage(num *big.Int, val *ethutil.Value) {
 	// FIXME This should be handled in the Trie it self
 	if val.BigInt().Cmp(ethutil.Big0) == 0 {
 		c.state.trie.Delete(string(addr))
+
 		return
 	}
 
-	//fmt.Printf("sstore %x => %v\n", addr, val)
 	c.SetAddr(addr, val)
 }
 
