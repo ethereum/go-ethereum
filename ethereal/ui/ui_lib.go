@@ -3,7 +3,6 @@ package ethui
 import (
 	"bitbucket.org/kardianos/osext"
 	"github.com/ethereum/eth-go"
-	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/go-qml/qml"
 	"os"
@@ -137,54 +136,4 @@ func DefaultAssetPath() string {
 	}
 
 	return base
-}
-
-func (ui *UiLib) DebugTx(recipient, valueStr, gasStr, gasPriceStr, data string) {
-	state := ui.eth.BlockChain().CurrentBlock.State()
-
-	script, err := ethutil.Compile(data)
-	if err != nil {
-		logger.Debugln(err)
-
-		return
-	}
-
-	dis := ethchain.Disassemble(script)
-	ui.win.Root().Call("clearAsm")
-
-	for _, str := range dis {
-		ui.win.Root().Call("setAsm", str)
-	}
-	// Contract addr as test address
-	keyPair := ethutil.GetKeyRing().Get(0)
-	callerTx :=
-		ethchain.NewContractCreationTx(ethutil.Big(valueStr), ethutil.Big(gasStr), ethutil.Big(gasPriceStr), script)
-	callerTx.Sign(keyPair.PrivateKey)
-
-	account := ui.eth.StateManager().TransState().GetStateObject(keyPair.Address())
-	contract := ethchain.MakeContract(callerTx, state)
-	callerClosure := ethchain.NewClosure(account, contract, contract.Init(), state, ethutil.Big(gasStr), ethutil.Big(gasPriceStr))
-
-	block := ui.eth.BlockChain().CurrentBlock
-	vm := ethchain.NewVm(state, ui.eth.StateManager(), ethchain.RuntimeVars{
-		Origin:      account.Address(),
-		BlockNumber: block.BlockInfo().Number,
-		PrevHash:    block.PrevHash,
-		Coinbase:    block.Coinbase,
-		Time:        block.Time,
-		Diff:        block.Difficulty,
-	})
-
-	ui.Db.done = false
-	go func() {
-		callerClosure.Call(vm, contract.Init(), ui.Db.halting)
-
-		state.Reset()
-
-		ui.Db.done = true
-	}()
-}
-
-func (ui *UiLib) Next() {
-	ui.Db.Next()
 }
