@@ -138,6 +138,8 @@ type Peer struct {
 	// We use this to give some kind of pingtime to a node, not very accurate, could be improved.
 	pingTime      time.Duration
 	pingStartTime time.Time
+
+	lastRequestedBlock *ethchain.Block
 }
 
 func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
@@ -351,6 +353,12 @@ func (p *Peer) HandleInbound() {
 					// We requested blocks and now we need to make sure we have a common ancestor somewhere in these blocks so we can find
 					// common ground to start syncing from
 					lastBlock = ethchain.NewBlockFromRlpValue(msg.Data.Get(msg.Data.Len() - 1))
+					if p.lastRequestedBlock != nil && bytes.Compare(lastBlock.Hash(), p.lastRequestedBlock.Hash()) == 0 {
+						p.catchingUp = false
+						continue
+					}
+					p.lastRequestedBlock = lastBlock
+
 					ethutil.Config.Log.Infof("[PEER] Last block: %x. Checking if we have it locally.\n", lastBlock.Hash())
 					for i := msg.Data.Len() - 1; i >= 0; i-- {
 						block = ethchain.NewBlockFromRlpValue(msg.Data.Get(i))
