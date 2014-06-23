@@ -1,4 +1,4 @@
-package main
+	package main
 
 import (
 	"fmt"
@@ -144,6 +144,7 @@ func (self *JSRE) initStdFuncs() {
 	eth.Set("require", self.require)
 	eth.Set("stopMining", self.stopMining)
 	eth.Set("startMining", self.startMining)
+	eth.Set("blockDo", self.execBlock)
 }
 
 /*
@@ -212,4 +213,19 @@ func (self *JSRE) require(call otto.FunctionCall) otto.Value {
 	t, _ := self.vm.Get("exports")
 
 	return t
+}
+
+func (self *JSRE) execBlock(call otto.FunctionCall) otto.Value {
+	hash, err := call.Argument(0).ToString()
+	if err != nil {
+		return otto.UndefinedValue()
+	}
+
+	err = self.ethereum.BlockDo(ethutil.FromHex(hash))
+	if err != nil {
+		fmt.Println(err)
+		return otto.FalseValue()
+	}
+
+	return otto.TrueValue()
 }
