@@ -89,11 +89,12 @@ func (tx *Transaction) Signature(key []byte) []byte {
 func (tx *Transaction) PublicKey() []byte {
 	hash := tx.Hash()
 
-	// If we don't make a copy we will overwrite the existing underlying array
-	dst := make([]byte, len(tx.r))
-	copy(dst, tx.r)
+	r := make([]byte, 32-len(tx.r))
+	s := make([]byte, 32-len(tx.s))
+	r = append(r, ethutil.CopyBytes(tx.r)...)
+	s = append(s, ethutil.CopyBytes(tx.s)...)
 
-	sig := append(dst, tx.s...)
+	sig := append(r, s...)
 	sig = append(sig, tx.v-27)
 
 	pubkey, _ := secp256k1.RecoverPubkey(hash, sig)
@@ -127,6 +128,8 @@ func (tx *Transaction) Sign(privk []byte) error {
 func (tx *Transaction) RlpData() interface{} {
 	data := []interface{}{tx.Nonce, tx.GasPrice, tx.Gas, tx.Recipient, tx.Value, tx.Data}
 
+	// TODO Remove prefixing zero's
+
 	return append(data, tx.v, tx.r, tx.s)
 }
 
@@ -150,6 +153,7 @@ func (tx *Transaction) RlpValueDecode(decoder *ethutil.Value) {
 	tx.Value = decoder.Get(4).BigInt()
 	tx.Data = decoder.Get(5).Bytes()
 	tx.v = byte(decoder.Get(6).Uint())
+
 	tx.r = decoder.Get(7).Bytes()
 	tx.s = decoder.Get(8).Bytes()
 

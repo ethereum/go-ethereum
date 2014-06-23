@@ -90,7 +90,14 @@ func (c *StateObject) SetAddr(addr []byte, value interface{}) {
 
 func (c *StateObject) SetStorage(num *big.Int, val *ethutil.Value) {
 	addr := ethutil.BigToBytes(num, 256)
-	//fmt.Printf("sstore %x => %v\n", addr, val)
+
+	// FIXME This should be handled in the Trie it self
+	if val.BigInt().Cmp(ethutil.Big0) == 0 {
+		c.state.trie.Delete(string(addr))
+
+		return
+	}
+
 	c.SetAddr(addr, val)
 }
 

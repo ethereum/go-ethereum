@@ -115,6 +115,24 @@ func New(caps Caps, usePnp bool) (*Ethereum, error) {
 	return ethereum, nil
 }
 
+// Replay block
+func (self *Ethereum) BlockDo(hash []byte) error {
+	block := self.blockChain.GetBlock(hash)
+	if block == nil {
+		return fmt.Errorf("unknown block %x", hash)
+	}
+
+	parent := self.blockChain.GetBlock(block.PrevHash)
+
+	_, err := self.stateManager.ApplyDiff(parent.State(), parent, block)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
 func (s *Ethereum) Reactor() *ethutil.ReactorEngine {
 	return s.reactor
 }

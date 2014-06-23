@@ -328,21 +328,21 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			stack.Push(base)
 		case LT:
 			require(2)
-			y, x := stack.Popn()
-			vm.Printf(" %v < %v", x, y)
+			x, y := stack.Popn()
+			vm.Printf(" %v < %v", y, x)
 			// x < y
-			if x.Cmp(y) < 0 {
+			if y.Cmp(x) < 0 {
 				stack.Push(ethutil.BigTrue)
 			} else {
 				stack.Push(ethutil.BigFalse)
 			}
 		case GT:
 			require(2)
-			y, x := stack.Popn()
-			vm.Printf(" %v > %v", x, y)
+			x, y := stack.Popn()
+			vm.Printf(" %v > %v", y, x)
 
 			// x > y
-			if x.Cmp(y) > 0 {
+			if y.Cmp(x) > 0 {
 				stack.Push(ethutil.BigTrue)
 			} else {
 				stack.Push(ethutil.BigFalse)
@@ -361,10 +361,10 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case NOT:
 			require(1)
 			x := stack.Pop()
-			if x.Cmp(ethutil.BigFalse) == 0 {
-				stack.Push(ethutil.BigTrue)
-			} else {
+			if x.Cmp(ethutil.BigFalse) > 0 {
 				stack.Push(ethutil.BigFalse)
+			} else {
+				stack.Push(ethutil.BigTrue)
 			}
 
 			// 0x10 range
@@ -523,7 +523,10 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case MLOAD:
 			require(1)
 			offset := stack.Pop()
-			stack.Push(ethutil.BigD(mem.Get(offset.Int64(), 32)))
+			val := ethutil.BigD(mem.Get(offset.Int64(), 32))
+			stack.Push(val)
+
+			vm.Printf(" => 0x%x", val.Bytes())
 		case MSTORE: // Store the value at stack top-1 in to memory at location stack top
 			require(2)
 			// Pop value of the stack
@@ -542,17 +545,14 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			require(1)
 			loc := stack.Pop()
 			val := closure.GetMem(loc)
+
 			stack.Push(val.BigInt())
 
-			vm.Printf(" {} 0x%x", val)
+			vm.Printf(" {0x%x} 0x%x", loc.Bytes(), val.Bytes())
 		case SSTORE:
 			require(2)
 			val, loc := stack.Popn()
-
-			// FIXME This should be handled in the Trie it self
-			if val.Cmp(big.NewInt(0)) != 0 {
-				closure.SetStorage(loc, ethutil.NewValue(val))
-			}
+			closure.SetStorage(loc, ethutil.NewValue(val))
 
 			// Add the change to manifest
 			vm.state.manifest.AddStorageChange(closure.Object(), loc.Bytes(), val)
@@ -691,7 +691,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			fallthrough
 		case STOP: // Stop the closure
-			vm.Printf(" (g) %v", closure.Gas).Endl()
+			vm.Endl()
 
 			return closure.Return(nil), nil
 		default:
