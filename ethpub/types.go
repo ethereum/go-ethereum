@@ -244,6 +244,14 @@ func (c *PStateObject) Script() string {
 	return ""
 }
 
+func (c *PStateObject) HexScript() string {
+	if c.object != nil {
+		return ethutil.Hex(c.object.Script())
+	}
+
+	return ""
+}
+
 type PStorageState struct {
 	StateAddress string
 	Address      string
