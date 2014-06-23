@@ -1,14 +1,10 @@
 package ethui
 
 import (
-	"bitbucket.org/kardianos/osext"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/go-qml/qml"
-	"os"
 	"path"
-	"path/filepath"
-	"runtime"
 )
 
 type memAddr struct {

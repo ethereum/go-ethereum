@@ -1,7 +1,15 @@
 package main
 
 import (
+	"fmt"
+	"os"
+  "os/user"
+  "path"
+  "github.com/ethereum/eth-go/ethlog"
 	"flag"
+	"bitbucket.org/kardianos/osext"
+	"path/filepath"
+	"runtime"
 )
 
 var Identifier string
@@ -59,6 +67,11 @@ func defaultDataDir() string {
 var defaultConfigFile = path.Join(defaultDataDir(), "conf.ini")
 
 func Init() {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "%s [options] [filename]:\noptions precedence: default < config file < environment variables < command line", os.Args[0])
+		flag.PrintDefaults()
+	}
+
 	flag.StringVar(&Identifier, "id", "", "Custom client identifier")
 	flag.StringVar(&OutboundPort, "port", "30303", "listening port")
 	flag.BoolVar(&UseUPnP, "upnp", false, "enable UPnP support")
@@ -75,7 +88,7 @@ func Init() {
 	flag.StringVar(&ConfigFile, "conf", defaultConfigFile, "config file")
 	flag.StringVar(&DebugFile, "debug", "", "debug file (no debugging if not set)")
 	flag.IntVar(&LogLevel, "loglevel", int(ethlog.InfoLevel), "loglevel: 0-4: silent,error,warn,info,debug)")
-	flag.StringVar(&AssetPath, "asset_path", defaultAssetPath, "absolute path to GUI assets directory")
+	flag.StringVar(&AssetPath, "asset_path", defaultAssetPath(), "absolute path to GUI assets directory")
 
 	flag.Parse()
 }

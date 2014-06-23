@@ -40,7 +40,7 @@ type Gui struct {
 }
 
 // Create GUI, but doesn't start it
-func New(ethereum *eth.Ethereum, logLevel ethlog.LogLevel) *Gui {
+func New(ethereum *eth.Ethereum, logLevel int) *Gui {
 	lib := &EthLib{stateManager: ethereum.StateManager(), blockChain: ethereum.BlockChain(), txPool: ethereum.TxPool()}
 	db, err := ethdb.NewLDBDatabase("tx_database")
 	if err != nil {
@@ -56,7 +56,7 @@ func New(ethereum *eth.Ethereum, logLevel ethlog.LogLevel) *Gui {
 
 	pub := ethpub.NewPEthereum(ethereum)
 
-	return &Gui{eth: ethereum, lib: lib, txDb: db, addr: addr, pub: pub, logLevel: logLevel}
+	return &Gui{eth: ethereum, lib: lib, txDb: db, addr: addr, pub: pub, logLevel: ethlog.LogLevel(logLevel)}
 }
 
 func (gui *Gui) Start(assetPath string) {
