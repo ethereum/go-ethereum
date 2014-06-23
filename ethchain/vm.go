@@ -358,10 +358,10 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case NOT:
 			require(1)
 			x := stack.Pop()
-			if x.Cmp(ethutil.BigFalse) == 0 {
-				stack.Push(ethutil.BigTrue)
-			} else {
+			if x.Cmp(ethutil.BigFalse) > 0 {
 				stack.Push(ethutil.BigFalse)
+			} else {
+				stack.Push(ethutil.BigTrue)
 			}
 
 			// 0x10 range
@@ -542,16 +542,14 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			require(1)
 			loc := stack.Pop()
 			val := closure.GetMem(loc)
+
 			stack.Push(val.BigInt())
 
-			vm.Printf(" {0x%x} 0x%x", loc.Bytes(), val)
+			vm.Printf(" {0x%x} 0x%x", loc.Bytes(), val.Bytes())
 		case SSTORE:
 			require(2)
 			val, loc := stack.Popn()
-
-			//if val.Cmp(big.NewInt(0)) != 0 {
 			closure.SetStorage(loc, ethutil.NewValue(val))
-			//}
 
 			// Add the change to manifest
 			vm.state.manifest.AddStorageChange(closure.Object(), loc.Bytes(), val)
@@ -690,7 +688,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			fallthrough
 		case STOP: // Stop the closure
-			vm.Printf(" (g) %v", closure.Gas).Endl()
+			vm.Endl()
 
 			return closure.Return(nil), nil
 		default:
