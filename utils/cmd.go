@@ -1,74 +1,224 @@
 package utils
 
 import (
-	"github.com/ethereum/eth-go"
-	"github.com/ethereum/eth-go/ethminer"
-	"github.com/ethereum/eth-go/ethpub"
-	"github.com/ethereum/eth-go/ethrpc"
-	"github.com/ethereum/eth-go/ethutil"
-	"time"
+  "github.com/ethereum/eth-go"
+  "github.com/ethereum/eth-go/ethminer"
+  "github.com/ethereum/eth-go/ethpub"
+  "github.com/ethereum/eth-go/ethrpc"
+  "github.com/ethereum/eth-go/ethutil"
+  "github.com/ethereum/eth-go/ethlog"
+  "log"
+  "io"
+  "path"
+  "os"
+  "os/signal"
+  "fmt"
+  "time"
+  "strings"
 )
 
-func DoRpc(ethereum *eth.Ethereum, RpcPort int) {
-	var err error
-	ethereum.RpcServer, err = ethrpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum), RpcPort)
-	if err != nil {
-		ethutil.Config.Log.Infoln("Could not start RPC interface:", err)
-	} else {
-		go ethereum.RpcServer.Start()
-	}
+var logger = ethlog.NewLogger("CLI")
+
+// Register interrupt handlers
+func RegisterInterrupt(cb func(os.Signal)) {
+  go func() {
+    // Buffered chan of one is enough
+    c := make(chan os.Signal, 1)
+    // Notify about interrupts for now
+    signal.Notify(c, os.Interrupt)
+    for sig := range c {
+      cb(sig)
+    }
+  }()
+}
+
+func AbsolutePath(Datadir string, filename string) string {
+  if path.IsAbs(filename) {
+    return filename
+  }
+  return path.Join(Datadir, filename)
+}
+
+func openLogFile (Datadir string, filename string) *os.File {
+  path := AbsolutePath(Datadir, filename)
+  file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+  if err != nil {
+    panic(fmt.Sprintf("error opening log file '%s': %v", filename, err))
+  }
+  return file
+}
+
+func confirm (message string) bool {
+  fmt.Println(message, "Are you sure? (y/n)")
+  var r string
+  fmt.Scanln(&r)
+  for ; ; fmt.Scanln(&r) {
+    if r == "n" || r == "y" {
+      break
+    } else {
+      fmt.Printf("Yes or no?", r)
+    }
+  }
+  return r == "y"
+}
+
+func InitDataDir(Datadir string) {
+  _, err := os.Stat(Datadir)
+  if err != nil {
+    if os.IsNotExist(err) {
+      fmt.Printf("Debug logging directory '%s' doesn't exist, creating it\n", Datadir)
+      os.Mkdir(Datadir, 0777)
+    }
+  }
+}
+
+func InitLogging (Datadir string, LogFile string, LogLevel int, DebugFile string) {
+  var writer io.Writer
+  if LogFile == "" {
+    writer = os.Stdout
+  } else {
+    writer = openLogFile(Datadir, LogFile)
+  }
+  ethlog.AddLogSystem(ethlog.NewStdLogSystem(writer, log.LstdFlags, ethlog.LogLevel(LogLevel)))
+  if DebugFile != "" {
+    writer = openLogFile(Datadir, DebugFile)
+    ethlog.AddLogSystem(ethlog.NewStdLogSystem(writer, log.LstdFlags, ethlog.DebugLevel))
+  }
+}
+
+func InitConfig(ConfigFile string, Datadir string, Identifier string, EnvPrefix string) {
+  ethutil.ReadConfig(ConfigFile, Datadir, Identifier, EnvPrefix)
+  ethutil.Config.Set("rpcport", "700")
+}
+
+func exit(status int) {
+  ethlog.Flush()
+  os.Exit(status)
+}
+
+func NewEthereum(UseUPnP bool, OutboundPort string, MaxPeer int) *eth.Ethereum {
+  ethereum, err := eth.New(eth.CapDefault, UseUPnP)
+  if err != nil {
+    logger.Fatalln("eth start err:", err)
+  }
+  ethereum.Port = OutboundPort
+  ethereum.MaxPeers = MaxPeer
+  return ethereum
+}
+
+func StartEthereum(ethereum *eth.Ethereum, UseSeed bool) {
+  logger.Infof("Starting Ethereum v%s", ethutil.Config.Ver)
+  ethereum.Start(UseSeed)
+  // Wait for shutdown
+  ethereum.WaitForShutdown()
+  RegisterInterrupt(func(sig os.Signal) {
+    logger.Errorf("Shutting down (%v) ... \n", sig)
+    ethereum.Stop()
+    ethlog.Flush()
+  })
+}
+
+func ShowGenesis(ethereum *eth.Ethereum) {
+  logger.Infoln(ethereum.BlockChain().Genesis())
+  exit(0)
+}
+
+func KeyTasks(GenAddr bool, ImportKey string, ExportKey bool, NonInteractive bool) {
+  switch {
+  case GenAddr:
+    if NonInteractive || confirm("This action overwrites your old private key.") {
+      CreateKeyPair(true)
+    }
+    exit(0)
+  case len(ImportKey) > 0:
+    if NonInteractive || confirm("This action overwrites your old private key.") {
+      // import should be from file
+      mnemonic := strings.Split(ImportKey, " ")
+      if len(mnemonic) == 24 {
+        logger.Infoln("Got mnemonic key, importing.")
+        key := ethutil.MnemonicDecode(mnemonic)
+        ImportPrivateKey(key)
+      } else if len(mnemonic) == 1 {
+        logger.Infoln("Got hex key, importing.")
+        ImportPrivateKey(ImportKey)
+      } else {
+        logger.Errorln("Did not recognise format, exiting.")
+      }
+    }
+    exit(0)
+  case ExportKey: // this should be exporting to a filename
+    keyPair := ethutil.GetKeyRing().Get(0)
+    fmt.Printf(`
+Generating new address and keypair.
+Please keep your keys somewhere save.
+
+++++++++++++++++ KeyRing +++++++++++++++++++
+addr: %x
+prvk: %x
+pubk: %x
+++++++++++++++++++++++++++++++++++++++++++++
+save these words so you can restore your account later: %s
+`, keyPair.Address(), keyPair.PrivateKey, keyPair.PublicKey)
+
+    exit(0)
+  default:
+    // Creates a keypair if none exists
+    CreateKeyPair(false)
+  }
+}
+
+func StartRpc(ethereum *eth.Ethereum, RpcPort int) {
+  var err error
+  ethereum.RpcServer, err = ethrpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum), RpcPort)
+  if err != nil {
+    logger.Errorf("Could not start RPC interface (port %v): %v", RpcPort, err)
+  } else {
+    go ethereum.RpcServer.Start()
+    RegisterInterrupt(func(os.Signal) {
+      ethereum.RpcServer.Stop()
+    })
+  }
 }
 
 var miner ethminer.Miner
 
-func DoMining(ethereum *eth.Ethereum) {
-	// Set Mining status
-	ethereum.Mining = true
+func StartMining(ethereum *eth.Ethereum) bool {
+  if !ethereum.Mining {
+    ethereum.Mining = true
 
-	if ethutil.GetKeyRing().Len() == 0 {
-		ethutil.Config.Log.Infoln("No address found, can't start mining")
-		return
-	}
-	keyPair := ethutil.GetKeyRing().Get(0)
-	addr := keyPair.Address()
+    if ethutil.GetKeyRing().Len() == 0 {
+      logger.Errorln("No address found, can't start mining")
+      ethereum.Mining = false
+      return true //????
+    }
+    keyPair := ethutil.GetKeyRing().Get(0)
+    addr := keyPair.Address()
 
-	go func() {
-		miner = ethminer.NewDefaultMiner(addr, ethereum)
-
-		// Give it some time to connect with peers
-		time.Sleep(3 * time.Second)
-
-		for ethereum.IsUpToDate() == false {
-			time.Sleep(5 * time.Second)
-		}
-
-		ethutil.Config.Log.Infoln("Miner started")
-
-		miner := ethminer.NewDefaultMiner(addr, ethereum)
-		miner.Start()
-	}()
+    go func() {
+      miner = ethminer.NewDefaultMiner(addr, ethereum)
+      // Give it some time to connect with peers
+      time.Sleep(3 * time.Second)
+      for ethereum.IsUpToDate() == false {
+        time.Sleep(5 * time.Second)
+      }
+      logger.Infoln("Miner started")
+      miner := ethminer.NewDefaultMiner(addr, ethereum)
+      miner.Start()
+    }()
+    RegisterInterrupt(func(os.Signal) {
+      StopMining(ethereum)
+    })
+    return true
+  }
+  return false
 }
 
 func StopMining(ethereum *eth.Ethereum) bool {
-	if ethereum.Mining {
-		miner.Stop()
-
-		ethutil.Config.Log.Infoln("Miner stopped")
-
-		ethereum.Mining = false
-
-		return true
-	}
-
-	return false
-}
-
-func StartMining(ethereum *eth.Ethereum) bool {
-	if !ethereum.Mining {
-		DoMining(ethereum)
-
-		return true
-	}
-
-	return false
+  if ethereum.Mining {
+    miner.Stop()
+    logger.Infoln("Miner stopped")
+    ethereum.Mining = false
+    return true
+  }
+  return false
 }
