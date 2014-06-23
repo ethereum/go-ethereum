@@ -124,13 +124,13 @@ func (c *StateObject) ReturnGas(gas, price *big.Int, state *State) {
 func (c *StateObject) AddAmount(amount *big.Int) {
 	c.SetAmount(new(big.Int).Add(c.Amount, amount))
 
-	ethutil.Config.Log.Printf(ethutil.LogLevelInfo, "%x: #%d %v (+ %v)\n", c.Address(), c.Nonce, c.Amount, amount)
+	statelogger.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce, c.Amount, amount)
 }
 
 func (c *StateObject) SubAmount(amount *big.Int) {
 	c.SetAmount(new(big.Int).Sub(c.Amount, amount))
 
-	ethutil.Config.Log.Printf(ethutil.LogLevelInfo, "%x: #%d %v (- %v)\n", c.Address(), c.Nonce, c.Amount, amount)
+	statelogger.Infof("%x: #%d %v (- %v)\n", c.Address(), c.Nonce, c.Amount, amount)
 }
 
 func (c *StateObject) SetAmount(amount *big.Int) {
@@ -151,7 +151,7 @@ func (c *StateObject) ConvertGas(gas, price *big.Int) error {
 func (self *StateObject) SetGasPool(gasLimit *big.Int) {
 	self.gasPool = new(big.Int).Set(gasLimit)
 
-	ethutil.Config.Log.Printf(ethutil.LogLevelSystem, "%x: fuel (+ %v)", self.Address(), self.gasPool)
+	statelogger.Infof("%x: fuel (+ %v)", self.Address(), self.gasPool)
 }
 
 func (self *StateObject) BuyGas(gas, price *big.Int) error {

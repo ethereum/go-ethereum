@@ -2,13 +2,15 @@ package ethchain
 
 import (
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ethlog"
 	"github.com/obscuren/sha3"
 	"hash"
-	"log"
 	"math/big"
 	"math/rand"
 	"time"
 )
+
+var powlogger = ethlog.NewLogger("POW")
 
 type PoW interface {
 	Search(block *Block, reactChan chan ethutil.React) []byte
@@ -29,14 +31,14 @@ func (pow *EasyPow) Search(block *Block, reactChan chan ethutil.React) []byte {
 	for {
 		select {
 		case <-reactChan:
-			//ethutil.Config.Log.Infoln("[POW] Received reactor event; breaking out.")
+			//powlogger.Infoln("Received reactor event; breaking out.")
 			return nil
 		default:
 			i++
 			if i%1234567 == 0 {
 				elapsed := time.Now().UnixNano() - start
 				hashes := ((float64(1e9) / float64(elapsed)) * float64(i)) / 1000
-				ethutil.Config.Log.Infoln("[POW] Hashing @", int64(hashes), "khash")
+				powlogger.Infoln("Hashing @", int64(hashes), "khash")
 			}
 
 			sha := ethutil.Sha3Bin(big.NewInt(r.Int63()).Bytes())
@@ -81,7 +83,7 @@ func (dag *Dagger) Find(obj *big.Int, resChan chan int64) {
 		rnd := r.Int63()
 
 		res := dag.Eval(big.NewInt(rnd))
-		log.Printf("rnd %v\nres %v\nobj %v\n", rnd, res, obj)
+		powlogger.Infof("rnd %v\nres %v\nobj %v\n", rnd, res, obj)
 		if res.Cmp(obj) < 0 {
 			// Post back result on the channel
 			resChan <- rnd

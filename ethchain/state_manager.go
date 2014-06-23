@@ -3,13 +3,15 @@ package ethchain
 import (
 	"bytes"
 	"container/list"
-	"fmt"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
+	"github.com/ethereum/eth-go/ethlog"
 	"math/big"
 	"sync"
 	"time"
 )
+
+var statelogger = ethlog.NewLogger("STATE")
 
 type BlockProcessor interface {
 	ProcessBlock(block *Block)
@@ -120,7 +122,7 @@ done:
 
 				break done
 			default:
-				ethutil.Config.Log.Infoln(err)
+				statelogger.Infoln(err)
 			}
 		}
 
@@ -186,29 +188,29 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 		if err != nil {
 			if len(receipts) == len(block.Receipts()) {
 				for i, receipt := range block.Receipts() {
-					ethutil.Config.Log.Debugf("diff (r) %v ~ %x  <=>  (c) %v ~ %x (%x)\n", receipt.CumulativeGasUsed, receipt.PostState[0:4], receipts[i].CumulativeGasUsed, receipts[i].PostState[0:4], receipt.Tx.Hash())
+					statelogger.Debugf("diff (r) %v ~ %x  <=>  (c) %v ~ %x (%x)\n", receipt.CumulativeGasUsed, receipt.PostState[0:4], receipts[i].CumulativeGasUsed, receipts[i].PostState[0:4], receipt.Tx.Hash())
 				}
 			} else {
-				ethutil.Config.Log.Debugln("Unable to print receipt diff. Length didn't match", len(receipts), "for", len(block.Receipts()))
+				statelogger.Warnln("Unable to print receipt diff. Length didn't match", len(receipts), "for", len(block.Receipts()))
 			}
 		}
 	}()
 
 	// Block validation
 	if err = sm.ValidateBlock(block); err != nil {
-		fmt.Println("[SM] Error validating block:", err)
+		statelogger.Errorln("Error validating block:", err)
 		return err
 	}
 
 	// I'm not sure, but I don't know if there should be thrown
 	// any errors at this time.
 	if err = sm.AccumelateRewards(state, block); err != nil {
-		fmt.Println("[SM] Error accumulating reward", err)
+		statelogger.Errorln("Error accumulating reward", err)
 		return err
 	}
 
 	if !block.State().Cmp(state) {
-		err = fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().trie.Root, state.trie.Root)
+		statelogger.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().trie.Root, state.trie.Root)
 		return
 	}
 
@@ -221,7 +223,7 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 		sm.bc.Add(block)
 		sm.notifyChanges(state)
 
-		ethutil.Config.Log.Infof("[STATE] Added block #%d (%x)\n", block.Number, block.Hash())
+		statelogger.Infof("Added block #%d (%x)\n", block.Number, block.Hash())
 		if dontReact == false {
 			sm.Ethereum.Reactor().Post("newBlock", block)
 
@@ -232,7 +234,7 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 
 		sm.Ethereum.TxPool().RemoveInvalid(state)
 	} else {
-		fmt.Println("total diff failed")
+		statelogger.Errorln("total diff failed")
 	}
 
 	return nil

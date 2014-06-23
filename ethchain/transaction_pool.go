@@ -3,14 +3,14 @@ package ethchain
 import (
 	"bytes"
 	"container/list"
-	"errors"
 	"fmt"
-	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
-	"log"
+	"github.com/ethereum/eth-go/ethlog"
 	"math/big"
 	"sync"
 )
+
+var txplogger = ethlog.NewLogger("TXP")
 
 const (
 	txPoolQueueSize = 50
@@ -97,7 +97,7 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, state *State, toContract
 	fmt.Printf("state root before update %x\n", state.Root())
 	defer func() {
 		if r := recover(); r != nil {
-			ethutil.Config.Log.Infoln(r)
+			txplogger.Infoln(r)
 			err = fmt.Errorf("%v", r)
 		}
 	}()
@@ -156,7 +156,7 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, state *State, toContract
 		fmt.Printf("state root after receiver update %x\n", state.Root())
 	}
 
-	ethutil.Config.Log.Infof("[TXPL] Processed Tx %x\n", tx.Hash())
+	txplogger.Infof("[TXPL] Processed Tx %x\n", tx.Hash())
 
 	return
 }
@@ -168,7 +168,7 @@ func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 	block := pool.Ethereum.BlockChain().CurrentBlock
 	// Something has gone horribly wrong if this happens
 	if block == nil {
-		return errors.New("[TXPL] No last block on the block chain")
+		return fmt.Errorf("[TXPL] No last block on the block chain")
 	}
 
 	if len(tx.Recipient) != 20 {
@@ -188,7 +188,7 @@ func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 
 	if tx.IsContract() {
 		if tx.GasPrice.Cmp(big.NewInt(minGasPrice)) < 0 {
-			return fmt.Errorf("[TXPL] Gasprice to low, %s given should be at least %d.", tx.GasPrice, minGasPrice)
+			return fmt.Errorf("[TXPL] Gasprice too low, %s given should be at least %d.", tx.GasPrice, minGasPrice)
 		}
 	}
 
@@ -215,12 +215,12 @@ out:
 			// Validate the transaction
 			err := pool.ValidateTransaction(tx)
 			if err != nil {
-				ethutil.Config.Log.Debugln("Validating Tx failed", err)
+				txplogger.Debugln("Validating Tx failed", err)
 			} else {
 				// Call blocking version.
 				pool.addTransaction(tx)
 
-				ethutil.Config.Log.Debugf("(t) %x => %x (%v) %x\n", tx.Sender()[:4], tx.Recipient[:4], tx.Value, tx.Hash())
+				txplogger.Debugf("(t) %x => %x (%v) %x\n", tx.Sender()[:4], tx.Recipient[:4], tx.Value, tx.Hash())
 
 				// Notify the subscribers
 				pool.Ethereum.Reactor().Post("newTx:pre", tx)
@@ -282,5 +282,5 @@ func (pool *TxPool) Stop() {
 
 	pool.Flush()
 
-	log.Println("[TXP] Stopped")
+	txplogger.Infoln("Stopped")
 }

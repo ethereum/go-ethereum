@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
-	"log"
+	"github.com/ethereum/eth-go/ethlog"
 	"math"
 	"math/big"
 )
+
+var chainlogger = ethlog.NewLogger("CHAIN")
 
 type BlockChain struct {
 	Ethereum EthManager
@@ -129,38 +131,38 @@ func (bc *BlockChain) FindCanonicalChain(blocks []*Block, commonBlockHash []byte
 	// Start with the newest block we got, all the way back to the common block we both know
 	for _, block := range blocks {
 		if bytes.Compare(block.Hash(), commonBlockHash) == 0 {
-			log.Println("[CHAIN] We have found the common parent block, breaking")
+			chainlogger.Infoln("[CHAIN] We have found the common parent block, breaking")
 			break
 		}
 		chainDifficulty.Add(chainDifficulty, bc.CalculateBlockTD(block))
 	}
 
-	log.Println("[CHAIN] Incoming chain difficulty:", chainDifficulty)
+	chainlogger.Infoln("Incoming chain difficulty:", chainDifficulty)
 
 	curChainDifficulty := new(big.Int)
 	block := bc.CurrentBlock
 	for i := 0; block != nil; block = bc.GetBlock(block.PrevHash) {
 		i++
 		if bytes.Compare(block.Hash(), commonBlockHash) == 0 {
-			log.Println("[CHAIN] We have found the common parent block, breaking")
+			chainlogger.Infoln("We have found the common parent block, breaking")
 			break
 		}
 		anOtherBlock := bc.GetBlock(block.PrevHash)
 		if anOtherBlock == nil {
 			// We do not want to count the genesis block for difficulty since that's not being sent
-			log.Println("[CHAIN] At genesis block, breaking")
+			chainlogger.Infoln("At genesis block, breaking")
 			break
 		}
 		curChainDifficulty.Add(curChainDifficulty, bc.CalculateBlockTD(block))
 	}
 
-	log.Println("[CHAIN] Current chain difficulty:", curChainDifficulty)
+	chainlogger.Infoln("Current chain difficulty:", curChainDifficulty)
 	if chainDifficulty.Cmp(curChainDifficulty) == 1 {
-		log.Printf("[CHAIN] The incoming Chain beat our asses, resetting to block: %x", commonBlockHash)
+		chainlogger.Infof("The incoming Chain beat our asses, resetting to block: %x", commonBlockHash)
 		bc.ResetTillBlockHash(commonBlockHash)
 		return false
 	} else {
-		log.Println("[CHAIN] Our chain showed the incoming chain who is boss. Ignoring.")
+		chainlogger.Infoln("Our chain showed the incoming chain who is boss. Ignoring.")
 		return true
 	}
 }
@@ -195,7 +197,7 @@ func (bc *BlockChain) ResetTillBlockHash(hash []byte) error {
 	var block *Block
 	for ; block != nil; block = bc.GetBlock(block.PrevHash) {
 		if bytes.Compare(block.Hash(), hash) == 0 {
-			log.Println("[CHAIN] We have arrived at the the common parent block, breaking")
+			chainlogger.Infoln("We have arrived at the the common parent block, breaking")
 			break
 		}
 		err = ethutil.Config.Db.Delete(block.Hash())
@@ -203,7 +205,7 @@ func (bc *BlockChain) ResetTillBlockHash(hash []byte) error {
 			return err
 		}
 	}
-	log.Println("[CHAIN] Split chain deleted and reverted to common parent block.")
+	chainlogger.Infoln("Split chain deleted and reverted to common parent block.")
 	return nil
 }
 
@@ -286,7 +288,7 @@ func (bc *BlockChain) setLastBlock() {
 		bc.LastBlockHash = block.Hash()
 		bc.LastBlockNumber = block.Number.Uint64()
 
-		ethutil.Config.Log.Infof("[CHAIN] Last known block height #%d\n", bc.LastBlockNumber)
+		chainlogger.Infof("Last known block height #%d\n", bc.LastBlockNumber)
 	} else {
 		AddTestNetFunds(bc.genesisBlock)
 
@@ -294,14 +296,14 @@ func (bc *BlockChain) setLastBlock() {
 		// Prepare the genesis block
 		bc.Add(bc.genesisBlock)
 
-		//log.Printf("root %x\n", bm.bc.genesisBlock.State().Root)
+		//chainlogger.Infof("root %x\n", bm.bc.genesisBlock.State().Root)
 		//bm.bc.genesisBlock.PrintHash()
 	}
 
 	// Set the last know difficulty (might be 0x0 as initial value, Genesis)
 	bc.TD = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
 
-	ethutil.Config.Log.Infof("Last block: %x\n", bc.CurrentBlock.Hash())
+	chainlogger.Infof("Last block: %x\n", bc.CurrentBlock.Hash())
 }
 
 func (bc *BlockChain) SetTotalDifficulty(td *big.Int) {
@@ -358,6 +360,6 @@ func (bc *BlockChain) writeBlockInfo(block *Block) {
 
 func (bc *BlockChain) Stop() {
 	if bc.CurrentBlock != nil {
-		log.Println("[CHAIN] Stopped")
+		chainlogger.Infoln("Stopped")
 	}
 }

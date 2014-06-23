@@ -4,10 +4,13 @@ import (
 	"encoding/hex"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ethlog"
 	"math/big"
 	"strings"
 	"sync/atomic"
 )
+
+var logger = ethlog.NewLogger("PUB")
 
 type PEthereum struct {
 	manager      ethchain.EthManager
@@ -191,7 +194,7 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, sc
 	lib.txPool.QueueTransaction(tx)
 
 	if contractCreation {
-		ethutil.Config.Log.Infof("Contract addr %x", tx.CreationAddress())
+		logger.Infof("Contract addr %x", tx.CreationAddress())
 	}
 
 	return NewPReciept(contractCreation, tx.CreationAddress(), tx.Hash(), keyPair.Address()), nil
