@@ -23,11 +23,13 @@ func NewJSRepl(ethereum *eth.Ethereum) *JSRepl {
 }
 
 func (self *JSRepl) Start() {
+	logger.Infoln("init JS Console")
 	self.read()
 }
 
 func (self *JSRepl) Stop() {
 	self.re.Stop()
+	logger.Infoln("exit JS Console")
 }
 
 func (self *JSRepl) parseInput(code string) {
