@@ -8,12 +8,15 @@ import (
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
 	"math/big"
 	"strings"
 	"time"
 )
+
+var logger = ethlog.NewLogger("GUI")
 
 type Gui struct {
 	// The main application window
@@ -33,10 +36,11 @@ type Gui struct {
 	addr []byte
 
 	pub *ethpub.PEthereum
+	logLevel ethlog.LogLevel
 }
 
 // Create GUI, but doesn't start it
-func New(ethereum *eth.Ethereum) *Gui {
+func New(ethereum *eth.Ethereum, logLevel ethlog.LogLevel) *Gui {
 	lib := &EthLib{stateManager: ethereum.StateManager(), blockChain: ethereum.BlockChain(), txPool: ethereum.TxPool()}
 	db, err := ethdb.NewLDBDatabase("tx_database")
 	if err != nil {
@@ -52,7 +56,7 @@ func New(ethereum *eth.Ethereum) *Gui {
 
 	pub := ethpub.NewPEthereum(ethereum)
 
-	return &Gui{eth: ethereum, lib: lib, txDb: db, addr: addr, pub: pub}
+	return &Gui{eth: ethereum, lib: lib, txDb: db, addr: addr, pub: pub, logLevel: logLevel}
 }
 
 func (gui *Gui) Start(assetPath string) {
@@ -90,16 +94,15 @@ func (gui *Gui) Start(assetPath string) {
 		win, err = gui.showKeyImport(context)
 	} else {
 		win, err = gui.showWallet(context)
-
-		ethutil.Config.Log.AddLogSystem(gui)
+		ethlog.AddLogSystem(gui)
 	}
 	if err != nil {
-		ethutil.Config.Log.Infoln("FATAL: asset not found: you can set an alternative asset path on on the command line using option 'asset_path'", err)
+		logger.Errorln("asset not found: you can set an alternative asset path on the command line using option 'asset_path'", err)
 
 		panic(err)
 	}
 
-	ethutil.Config.Log.Infoln("[GUI] Starting GUI")
+	logger.Infoln("Starting GUI")
 
 	win.Show()
 	win.Wait()
@@ -315,22 +318,6 @@ func (gui *Gui) setPeerInfo() {
 	}
 }
 
-// Logging functions that log directly to the GUI interface
-func (gui *Gui) Println(v ...interface{}) {
-	str := strings.TrimRight(fmt.Sprintln(v...), "\n")
-	lines := strings.Split(str, "\n")
-	for _, line := range lines {
-		gui.win.Root().Call("addLog", line)
-	}
-}
-
-func (gui *Gui) Printf(format string, v ...interface{}) {
-	str := strings.TrimRight(fmt.Sprintf(format, v...), "\n")
-	lines := strings.Split(str, "\n")
-	for _, line := range lines {
-		gui.win.Root().Call("addLog", line)
-	}
-}
 func (gui *Gui) RegisterName(name string) {
 	keyPair := ethutil.GetKeyRing().Get(0)
 	name = fmt.Sprintf("\"%s\"\n1", name)
@@ -357,6 +344,28 @@ func (gui *Gui) ClientId() string {
 	return ethutil.Config.Identifier
 }
 
-func (gui *Gui) SetLogLevel(level int) {
-	ethutil.Config.Log.SetLevel(level)
+// functions that allow Gui to implement interface ethlog.LogSystem
+func (gui *Gui) SetLogLevel(level ethlog.LogLevel) {
+	gui.logLevel = level
+}
+
+func (gui *Gui) GetLogLevel() ethlog.LogLevel {
+	return gui.logLevel
+}
+
+func (gui *Gui) Println(v ...interface{}) {
+	gui.printLog(fmt.Sprintln(v...))
+}
+
+func (gui *Gui) Printf(format string, v ...interface{}) {
+	gui.printLog(fmt.Sprintf(format, v...))
+}
+
+// Print function that logs directly to the GUI
+func (gui *Gui) printLog(s string) {
+	str := strings.TrimRight(s, "\n")
+	lines := strings.Split(str, "\n")
+	for _, line := range lines {
+		gui.win.Root().Call("addLog", line)
+	}
 }

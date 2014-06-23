@@ -40,7 +40,7 @@ func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
 func (ui *UiLib) Open(path string) {
 	component, err := ui.engine.LoadFile(path[7:])
 	if err != nil {
-		ethutil.Config.Log.Debugln(err)
+		logger.Debugln(err)
 	}
 	win := component.CreateWindow(nil)
 
@@ -60,7 +60,7 @@ func (ui *UiLib) OpenHtml(path string) {
 func (ui *UiLib) Muted(content string) {
 	component, err := ui.engine.LoadFile(ui.AssetPath("qml/muted.qml"))
 	if err != nil {
-		ethutil.Config.Log.Debugln(err)
+		logger.Debugln(err)
 
 		return
 	}
@@ -144,7 +144,7 @@ func (ui *UiLib) DebugTx(recipient, valueStr, gasStr, gasPriceStr, data string) 
 
 	script, err := ethutil.Compile(data)
 	if err != nil {
-		ethutil.Config.Log.Debugln(err)
+		logger.Debugln(err)
 
 		return
 	}
