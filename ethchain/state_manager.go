@@ -143,27 +143,23 @@ done:
 	return receipts, handled, unhandled, err
 }
 
-func (sm *StateManager) Process(block *Block, dontReact bool) error {
+func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
+	// Processing a blocks may never happen simultaneously
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+
+	if sm.bc.HasBlock(block.Hash()) {
+		return nil
+	}
+
 	if !sm.bc.HasBlock(block.PrevHash) {
 		return ParentError(block.PrevHash)
 	}
 
-	parent := sm.bc.GetBlock(block.PrevHash)
-
-	return sm.ProcessBlock(parent.State(), parent, block, dontReact)
-
-}
-
-// Block processing and validating with a given (temporarily) state
-func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontReact bool) (err error) {
-	// Processing a blocks may never happen simultaneously
-	sm.mutex.Lock()
-	defer sm.mutex.Unlock()
-	hash := block.Hash()
-
-	if sm.bc.HasBlock(hash) {
-		return nil
-	}
+	var (
+		parent = sm.bc.GetBlock(block.PrevHash)
+		state  = parent.State()
+	)
 
 	// Defer the Undo on the Trie. If the block processing happened
 	// we don't want to undo but since undo only happens on dirty
@@ -171,17 +167,7 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 	// before that.
 	defer state.Reset()
 
-	// Check if we have the parent hash, if it isn't known we discard it
-	// Reasons might be catching up or simply an invalid block
-	if !sm.bc.HasBlock(block.PrevHash) && sm.bc.CurrentBlock != nil {
-		return ParentError(block.PrevHash)
-	}
-
-	coinbase := state.GetOrNewStateObject(block.Coinbase)
-	coinbase.SetGasPool(block.CalcGasLimit(parent))
-
-	// Process the transactions on to current block
-	receipts, _, _, _ := sm.ProcessTransactions(coinbase, state, block, parent, block.Transactions())
+	receipts, err := sm.ApplyDiff(state, parent, block)
 	defer func() {
 		if err != nil {
 			if len(receipts) == len(block.Receipts()) {
@@ -193,6 +179,10 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 			}
 		}
 	}()
+
+	if err != nil {
+		return err
+	}
 
 	// Block validation
 	if err = sm.ValidateBlock(block); err != nil {
@@ -237,6 +227,17 @@ func (sm *StateManager) ProcessBlock(state *State, parent, block *Block, dontRea
 
 	return nil
 }
+
+func (sm *StateManager) ApplyDiff(state *State, parent, block *Block) (receipts Receipts, err error) {
+	coinbase := state.GetOrNewStateObject(block.Coinbase)
+	coinbase.SetGasPool(block.CalcGasLimit(parent))
+
+	// Process the transactions on to current block
+	receipts, _, _, _ = sm.ProcessTransactions(coinbase, state, block, parent, block.Transactions())
+
+	return receipts, nil
+}
+
 func (sm *StateManager) CalculateTD(block *Block) bool {
 	uncleDiff := new(big.Int)
 	for _, uncle := range block.Uncles {
