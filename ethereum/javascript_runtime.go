@@ -138,7 +138,7 @@ func (self *JSRE) initStdFuncs() {
 	eth.Set("require", self.require)
 	eth.Set("stopMining", self.stopMining)
 	eth.Set("startMining", self.startMining)
-	eth.Set("blockDo", self.execBlock)
+	eth.Set("execBlock", self.execBlock)
 }
 
 /*
