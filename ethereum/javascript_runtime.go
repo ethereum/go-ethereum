@@ -215,7 +215,7 @@ func (self *JSRE) execBlock(call otto.FunctionCall) otto.Value {
 		return otto.UndefinedValue()
 	}
 
-	err = self.ethereum.BlockDo(ethutil.FromHex(hash))
+	err = utils.BlockDo(self.ethereum, ethutil.FromHex(hash))
 	if err != nil {
 		fmt.Println(err)
 		return otto.FalseValue()

@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethminer"
 	"github.com/ethereum/eth-go/ethpub"
@@ -73,4 +74,22 @@ func StartMining(ethereum *eth.Ethereum) bool {
 	}
 
 	return false
+}
+
+// Replay block
+func BlockDo(ethereum *eth.Ethereum, hash []byte) error {
+	block := ethereum.BlockChain().GetBlock(hash)
+	if block == nil {
+		return fmt.Errorf("unknown block %x", hash)
+	}
+
+	parent := ethereum.BlockChain().GetBlock(block.PrevHash)
+
+	_, err := ethereum.StateManager().ApplyDiff(parent.State(), parent, block)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
 }
