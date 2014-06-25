@@ -142,7 +142,7 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, sc
 	var keyPair *ethutil.KeyPair
 	var err error
 	if key[0:2] == "0x" {
-		keyPair, err = ethutil.NewKeyPairFromSec([]byte(ethutil.FromHex(key[0:2])))
+		keyPair, err = ethutil.NewKeyPairFromSec([]byte(ethutil.FromHex(key[2:])))
 	} else {
 		keyPair, err = ethutil.NewKeyPairFromSec([]byte(ethutil.FromHex(key)))
 	}
