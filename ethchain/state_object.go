@@ -158,7 +158,7 @@ func (c *StateObject) ConvertGas(gas, price *big.Int) error {
 func (self *StateObject) SetGasPool(gasLimit *big.Int) {
 	self.gasPool = new(big.Int).Set(gasLimit)
 
-	statelogger.Infof("%x: fuel (+ %v)", self.Address(), self.gasPool)
+	statelogger.DebugDetailf("%x: fuel (+ %v)", self.Address(), self.gasPool)
 }
 
 func (self *StateObject) BuyGas(gas, price *big.Int) error {

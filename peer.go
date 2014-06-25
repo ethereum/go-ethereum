@@ -250,7 +250,7 @@ func (p *Peer) writeMessage(msg *ethwire.Msg) {
 		}
 	}
 
-	peerlogger.Infoln("<=", msg.Type, msg.Data)
+	peerlogger.DebugDetailln("<=", msg.Type, msg.Data)
 
 	err := ethwire.WriteMessage(p.conn, msg)
 	if err != nil {
@@ -324,7 +324,7 @@ func (p *Peer) HandleInbound() {
 			peerlogger.Debugln(err)
 		}
 		for _, msg := range msgs {
-			peerlogger.Infoln("=>", msg.Type, msg.Data)
+			peerlogger.DebugDetailln("=>", msg.Type, msg.Data)
 
 			switch msg.Type {
 			case ethwire.MsgHandshakeTy:
@@ -429,7 +429,7 @@ func (p *Peer) HandleInbound() {
 					if p.catchingUp && msg.Data.Len() > 1 {
 						if lastBlock != nil {
 							blockInfo := lastBlock.BlockInfo()
-							peerlogger.Infof("Synced chain to #%d %x %x\n", blockInfo.Number, lastBlock.Hash(), blockInfo.Hash)
+							peerlogger.DebugDetailf("Synced chain to #%d %x %x\n", blockInfo.Number, lastBlock.Hash(), blockInfo.Hash)
 						}
 
 						p.catchingUp = false
@@ -496,7 +496,7 @@ func (p *Peer) HandleInbound() {
 
 				// If a parent is found send back a reply
 				if parent != nil {
-					peerlogger.Infof("Found canonical block, returning chain from: %x ", parent.Hash())
+					peerlogger.DebugDetailf("Found canonical block, returning chain from: %x ", parent.Hash())
 					chain := p.ethereum.BlockChain().GetChainFromHash(parent.Hash(), amountOfBlocks)
 					if len(chain) > 0 {
 						//peerlogger.Debugf("Returning %d blocks: %x ", len(chain), parent.Hash())
@@ -516,7 +516,7 @@ func (p *Peer) HandleInbound() {
 					}
 				}
 			case ethwire.MsgNotInChainTy:
-				peerlogger.Infof("Not in chain: %x\n", msg.Data.Get(0).Bytes())
+				peerlogger.DebugDetailf("Not in chain: %x\n", msg.Data.Get(0).Bytes())
 				if p.diverted == true {
 					// If were already looking for a common parent and we get here again we need to go deeper
 					p.blocksRequested = p.blocksRequested * 2
@@ -737,7 +737,7 @@ func (p *Peer) FindCommonParentBlock() {
 
 	msgInfo := append(hashes, uint64(len(hashes)))
 
-	peerlogger.Infof("Asking for block from %x (%d total) from %s\n", p.ethereum.BlockChain().CurrentBlock.Hash(), len(hashes), p.conn.RemoteAddr().String())
+	peerlogger.DebugDetailf("Asking for block from %x (%d total) from %s\n", p.ethereum.BlockChain().CurrentBlock.Hash(), len(hashes), p.conn.RemoteAddr().String())
 
 	msg := ethwire.NewMessage(ethwire.MsgGetChainTy, msgInfo)
 	p.QueueMessage(msg)
@@ -749,7 +749,7 @@ func (p *Peer) CatchupWithPeer(blockHash []byte) {
 		msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{blockHash, uint64(50)})
 		p.QueueMessage(msg)
 
-		peerlogger.Infof("Requesting blockchain %x... from peer %s\n", p.ethereum.BlockChain().CurrentBlock.Hash()[:4], p.conn.RemoteAddr())
+		peerlogger.DebugDetailf("Requesting blockchain %x... from peer %s\n", p.ethereum.BlockChain().CurrentBlock.Hash()[:4], p.conn.RemoteAddr())
 
 		msg = ethwire.NewMessage(ethwire.MsgGetTxsTy, []interface{}{})
 		p.QueueMessage(msg)
