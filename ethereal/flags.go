@@ -61,7 +61,7 @@ func defaultAssetPath() string {
 
 func defaultDataDir() string {
   usr, _ := user.Current()
-  return path.Join(usr.HomeDir, ".ethereum")
+  return path.Join(usr.HomeDir, ".ethereal")
 }
 
 var defaultConfigFile = path.Join(defaultDataDir(), "conf.ini")
@@ -87,7 +87,8 @@ func Init() {
 	flag.StringVar(&Datadir, "datadir", defaultDataDir(), "specifies the datadir to use")
 	flag.StringVar(&ConfigFile, "conf", defaultConfigFile, "config file")
 	flag.StringVar(&DebugFile, "debug", "", "debug file (no debugging if not set)")
-	flag.IntVar(&LogLevel, "loglevel", int(ethlog.InfoLevel), "loglevel: 0-4: silent,error,warn,info,debug)")
+	flag.IntVar(&LogLevel, "loglevel", int(ethlog.InfoLevel), "loglevel: 0-5: silent,error,warn,info,debug,debug detail)")
+
 	flag.StringVar(&AssetPath, "asset_path", defaultAssetPath(), "absolute path to GUI assets directory")
 
 	flag.Parse()
