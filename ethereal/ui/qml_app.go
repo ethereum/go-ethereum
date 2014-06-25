@@ -22,7 +22,7 @@ func NewQmlApplication(path string, lib *UiLib) *QmlApplication {
 func (app *QmlApplication) Create() error {
 	component, err := app.engine.LoadFile(app.path)
 	if err != nil {
-		ethutil.Config.Log.Debugln(err)
+		logger.Warnln(err)
 	}
 	app.win = component.CreateWindow(nil)
 
