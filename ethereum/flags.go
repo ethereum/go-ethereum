@@ -42,7 +42,7 @@ var defaultConfigFile = path.Join(defaultDataDir(), "conf.ini")
 
 func Init() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "%s [options] [filename]:\noptions precedence: default < config file < environment variables < command line", os.Args[0])
+		fmt.Fprintf(os.Stderr, "%s [options] [filename]:\noptions precedence: default < config file < environment variables < command line\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 
