@@ -49,6 +49,7 @@ const (
   WarnLevel
   InfoLevel
   DebugLevel
+  DebugDetailLevel
 )
 
 // log messages are dispatched to log writers
@@ -123,6 +124,10 @@ func (logger *Logger) Debugln(v...interface{}) {
   logger.sendln(DebugLevel, v...)
 }
 
+func (logger *Logger) DebugDetailln(v...interface{}) {
+  logger.sendln(DebugDetailLevel, v...)
+}
+
 func (logger *Logger) Errorf(format string, v...interface{}) {
   logger.sendf(ErrorLevel, format, v...)
 }
@@ -137,6 +142,10 @@ func (logger *Logger) Infof(format string, v...interface{}) {
 
 func (logger *Logger) Debugf(format string, v...interface{}) {
   logger.sendf(DebugLevel, format, v...)
+}
+
+func (logger *Logger) DebugDetailf(format string, v...interface{}) {
+  logger.sendf(DebugDetailLevel, format, v...)
 }
 
 func (logger *Logger) Fatalln (v...interface{}) {
