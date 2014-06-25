@@ -3,6 +3,7 @@ package ethutil
 import (
 	"fmt"
 	"github.com/obscuren/mutan"
+	"github.com/obscuren/mutan/backends"
 	"github.com/obscuren/serpent-go"
 	"strings"
 )
@@ -19,7 +20,9 @@ func Compile(script string) (ret []byte, err error) {
 
 		return byteCode, nil
 	} else {
-		byteCode, errors := mutan.Compile(strings.NewReader(script), false)
+		compiler := mutan.NewCompiler(backend.NewEthereumBackend())
+		byteCode, errors := compiler.Compile(strings.NewReader(script))
+		//byteCode, errors := mutan.Compile(strings.NewReader(script), false)
 		if len(errors) > 0 {
 			var errs string
 			for _, er := range errors {
@@ -32,22 +35,4 @@ func Compile(script string) (ret []byte, err error) {
 
 		return byteCode, nil
 	}
-}
-
-func CompileScript(script string) ([]byte, []byte, error) {
-	// Preprocess
-	mainInput, initInput := mutan.PreParse(script)
-	// Compile main script
-	mainScript, err := Compile(mainInput)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Compile init script
-	initScript, err := Compile(initInput)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return mainScript, initScript, nil
 }

@@ -109,11 +109,11 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 	require := func(m int) {
 		if stack.Len() < m {
 			isRequireError = true
-			panic(fmt.Sprintf("stack = %d, req = %d", stack.Len(), m))
+			panic(fmt.Sprintf("stack err = %d, req = %d", stack.Len(), m))
 		}
 	}
 
-	// Instruction pointer
+	// Program counter
 	pc := big.NewInt(0)
 	// Current step count
 	step := 0
@@ -596,16 +596,18 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			// Generate a new address
 			addr := ethutil.CreateAddress(closure.caller.Address(), closure.caller.N())
+
+			vm.Printf(" (*) %x", addr).Endl()
+
 			// Create a new contract
 			contract := vm.state.NewStateObject(addr)
 			contract.Amount = value
 
 			// Set the init script
-			contract.initScript = mem.Get(offset.Int64(), size.Int64())
+			contract.initScript = ethutil.BigD(mem.Get(offset.Int64(), size.Int64())).Bytes()
 			// Transfer all remaining gas to the new
 			// contract so it may run the init script
 			gas := new(big.Int).Set(closure.Gas)
-			//closure.UseGas(gas)
 
 			// Create the closure
 			c := NewClosure(closure.caller,
@@ -616,6 +618,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 				closure.Price)
 			// Call the closure and set the return value as
 			// main script.
+			var err error
 			c.Script, gas, err = c.Call(vm, nil, hook)
 
 			if err != nil {
