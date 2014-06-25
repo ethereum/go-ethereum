@@ -597,7 +597,9 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			// Generate a new address
 			addr := ethutil.CreateAddress(closure.caller.Address(), closure.caller.N())
 			// Create a new contract
-			contract := NewContract(addr, value, []byte(""))
+			contract := vm.state.NewStateObject(addr)
+			contract.Amount = value
+
 			// Set the init script
 			contract.initScript = mem.Get(offset.Int64(), size.Int64())
 			// Transfer all remaining gas to the new

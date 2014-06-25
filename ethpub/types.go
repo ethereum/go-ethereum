@@ -99,6 +99,7 @@ type PTx struct {
 	Data            string `json:"data"`
 	Contract        bool   `json:"isContract"`
 	CreatesContract bool   `json:"createsContract"`
+	Confirmations   int    `json:"confirmations"`
 }
 
 func NewPTx(tx *ethchain.Transaction) *PTx {
