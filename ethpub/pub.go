@@ -96,8 +96,10 @@ func (lib *PEthereum) GetTransactionsFor(address string, asJson bool) interface{
 		// Loop through all transactions to see if we missed any while being offline
 		for _, tx := range blk.Transactions() {
 			if bytes.Compare(tx.Sender(), addr) == 0 || bytes.Compare(tx.Recipient, addr) == 0 {
-				ethutil.Config.Log.Debugf("FOund tx: %x\n", tx)
-				txs = append(txs, NewPTx(tx))
+				ptx := NewPTx(tx)
+				//TODO: somehow move this to NewPTx
+				ptx.Confirmations = int(lib.manager.BlockChain().LastBlockNumber - blk.BlockInfo().Number)
+				txs = append(txs, ptx)
 			}
 		}
 	}
