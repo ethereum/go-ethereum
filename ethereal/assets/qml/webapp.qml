@@ -103,6 +103,12 @@ ApplicationWindow {
 					      postData(data._seed,stateObject)
 
 						break
+					case "getTransactionsFor":
+					      require(1);
+					      var txs = eth.getTransactionsFor(data.args[0], true)
+					      postData(data._seed, txs)
+
+					      break
 					case "getBalance":
 						require(1);
 

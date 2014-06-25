@@ -28,18 +28,11 @@ func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
 	return &UiLib{engine: engine, eth: eth, assetPath: assetPath}
 }
 
-// Opens a QML file (external application)
-func (ui *UiLib) Open(path string) {
-	component, err := ui.engine.LoadFile(path[7:])
-	if err != nil {
-		logger.Debugln(err)
-	}
-	win := component.CreateWindow(nil)
+func (ui *UiLib) OpenQml(path string) {
+	container := NewQmlApplication(path[7:], ui)
+	app := NewExtApplication(container, ui)
 
-	go func() {
-		win.Show()
-		win.Wait()
-	}()
+	go app.run()
 }
 
 func (ui *UiLib) OpenHtml(path string) {

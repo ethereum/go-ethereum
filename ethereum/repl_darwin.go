@@ -102,7 +102,9 @@ L:
 					break L
 				}
 
-				addHistory(str[:len(str)-1]) //allow user to recall this line
+				hist := str[:len(str)-1]
+				addHistory(hist) //allow user to recall this line
+				self.history.WriteString(str)
 
 				self.parseInput(str)
 
