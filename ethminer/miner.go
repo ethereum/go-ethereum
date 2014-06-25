@@ -159,7 +159,7 @@ func (self *Miner) mineNewBlock() {
 
 	self.block.State().Update()
 
-	logger.Infoln("Mining on block. Includes", len(self.txs), "transactions")
+	logger.Infof("Mining on block. Includes %v transactions", len(self.txs))
 
 	// Find a valid nonce
 	self.block.Nonce = self.pow.Search(self.block, self.powQuitChan)
