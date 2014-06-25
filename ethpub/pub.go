@@ -1,7 +1,9 @@
 package ethpub
 
 import (
+	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
@@ -81,6 +83,36 @@ func (lib *PEthereum) GetCoinBase() string {
 	return lib.SecretToAddress(hex.EncodeToString(key))
 }
 
+func (lib *PEthereum) GetTransactionsFor(address string, asJson bool) interface{} {
+	sBlk := lib.manager.BlockChain().LastBlockHash
+	blk := lib.manager.BlockChain().GetBlock(sBlk)
+	addr := []byte(ethutil.FromHex(address))
+
+	var txs []*PTx
+
+	for ; blk != nil; blk = lib.manager.BlockChain().GetBlock(sBlk) {
+		sBlk = blk.PrevHash
+
+		// Loop through all transactions to see if we missed any while being offline
+		for _, tx := range blk.Transactions() {
+			if bytes.Compare(tx.Sender(), addr) == 0 || bytes.Compare(tx.Recipient, addr) == 0 {
+				ptx := NewPTx(tx)
+				//TODO: somehow move this to NewPTx
+				ptx.Confirmations = int(lib.manager.BlockChain().LastBlockNumber - blk.BlockInfo().Number)
+				txs = append(txs, ptx)
+			}
+		}
+	}
+	if asJson {
+		txJson, err := json.Marshal(txs)
+		if err != nil {
+			return nil
+		}
+		return string(txJson)
+	}
+	return txs
+}
+
 func (lib *PEthereum) GetStorage(address, storageAddress string) string {
 	return lib.GetStateObject(address).GetStorage(storageAddress)
 }
@@ -123,7 +155,6 @@ func GetAddressFromNameReg(stateManager *ethchain.StateManager, name string) []b
 
 	return nil
 }
-
 func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, scriptStr string) (*PReceipt, error) {
 	var hash []byte
 	var contractCreation bool
@@ -142,7 +173,7 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, sc
 	var keyPair *ethutil.KeyPair
 	var err error
 	if key[0:2] == "0x" {
-		keyPair, err = ethutil.NewKeyPairFromSec([]byte(ethutil.FromHex(key[0:2])))
+		keyPair, err = ethutil.NewKeyPairFromSec([]byte(ethutil.FromHex(key[2:])))
 	} else {
 		keyPair, err = ethutil.NewKeyPairFromSec([]byte(ethutil.FromHex(key)))
 	}
