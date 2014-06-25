@@ -6,6 +6,7 @@
 - log level can be set separately per log system
 - async logging thread: logging IO does not block main thread 
 - log messages are synchronously stringified to avoid incorrectly logging of changed states 
+- log level enum: ethlog.LogLevel:   Silence, ErrorLevel, WarnLevel, InfoLevel, DebugLevel, DebugDetailLevel
 
 ## Usage
 
@@ -16,7 +17,10 @@ In an ethereum component package:
     // package-wide logger using tag
     var logger = ethlog.NewLogger("TAG")
 
+Logger provides named Printf and Println style methods for all loglevels
+
     logger.Infoln("this is info") # > [TAG] This is info
+    logger.Infof("this %v is info", object) # > [TAG] This object is info
 
 Ethereum wrappers should register log systems conforming to ethlog.LogSystem
 
