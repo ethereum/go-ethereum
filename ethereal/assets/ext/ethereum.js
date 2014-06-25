@@ -58,6 +58,9 @@ window.eth = {
 	getBalanceAt: function(address, cb) {
 		postData({call: "getBalance", args: [address]}, cb);
 	},
+	getTransactionsFor: function(address, cb) {
+		postData({call: "getTransactionsFor", args: [address]}, cb);
+	},
 
 	getSecretToAddress: function(sec, cb) {
 		postData({call: "getSecretToAddress", args: [sec]}, cb);
