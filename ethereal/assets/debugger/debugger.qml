@@ -208,6 +208,12 @@ ApplicationWindow {
 				}
 				text: "Next"
 			}
+			CheckBox {
+				id: breakEachLine
+				objectName: "breakEachLine"
+				text: "Break each instruction"
+				checked: true
+			}
 		}
 	}
 
