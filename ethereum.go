@@ -362,6 +362,7 @@ func (s *Ethereum) Start(seed bool) {
 	if seed {
 		s.Seed()
 	}
+	ethlogger.Infoln("Server started")
 }
 
 func (s *Ethereum) Seed() {
@@ -449,6 +450,7 @@ func (s *Ethereum) Stop() {
 	s.txPool.Stop()
 	s.stateManager.Stop()
 
+	ethlogger.Infoln("Server stopped")
 	close(s.shutdownChan)
 }
 
