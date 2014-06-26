@@ -1,14 +1,10 @@
 package ethui
 
 import (
-	"bitbucket.org/kardianos/osext"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/go-qml/qml"
-	"os"
 	"path"
-	"path/filepath"
-	"runtime"
 )
 
 type memAddr struct {
@@ -29,9 +25,6 @@ type UiLib struct {
 }
 
 func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
-	if assetPath == "" {
-		assetPath = DefaultAssetPath()
-	}
 	return &UiLib{engine: engine, eth: eth, assetPath: assetPath}
 }
 
@@ -52,7 +45,7 @@ func (ui *UiLib) OpenHtml(path string) {
 func (ui *UiLib) Muted(content string) {
 	component, err := ui.engine.LoadFile(ui.AssetPath("qml/muted.qml"))
 	if err != nil {
-		ethutil.Config.Log.Debugln(err)
+		logger.Debugln(err)
 
 		return
 	}
@@ -81,6 +74,7 @@ func (ui *UiLib) ConnectToPeer(addr string) {
 func (ui *UiLib) AssetPath(p string) string {
 	return path.Join(ui.assetPath, p)
 }
+
 func (self *UiLib) StartDbWithContractAndData(contractHash, data string) {
 	dbWindow := NewDebuggerWindow(self)
 	object := self.eth.StateManager().CurrentState().GetStateObject(ethutil.FromHex(contractHash))
@@ -103,30 +97,4 @@ func (self *UiLib) StartDebugger() {
 	//self.DbWindow = dbWindow
 
 	dbWindow.Show()
-}
-
-func DefaultAssetPath() string {
-	var base string
-	// If the current working directory is the go-ethereum dir
-	// assume a debug build and use the source directory as
-	// asset directory.
-	pwd, _ := os.Getwd()
-	if pwd == path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "ethereal") {
-		base = path.Join(pwd, "assets")
-	} else {
-		switch runtime.GOOS {
-		case "darwin":
-			// Get Binary Directory
-			exedir, _ := osext.ExecutableFolder()
-			base = filepath.Join(exedir, "../Resources")
-		case "linux":
-			base = "/usr/share/ethereal"
-		case "window":
-			fallthrough
-		default:
-			base = "."
-		}
-	}
-
-	return base
 }

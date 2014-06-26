@@ -23,6 +23,8 @@ type JSRepl struct {
 	prompt string
 
 	history *os.File
+
+	running bool
 }
 
 func NewJSRepl(ethereum *eth.Ethereum) *JSRepl {
@@ -35,24 +37,32 @@ func NewJSRepl(ethereum *eth.Ethereum) *JSRepl {
 }
 
 func (self *JSRepl) Start() {
-	reader := bufio.NewReader(self.history)
-	for {
-		line, err := reader.ReadString('\n')
-		if err != nil && err == io.EOF {
-			break
-		} else if err != nil {
-			fmt.Println("error reading history", err)
-			break
-		}
+	if !self.running {
+		self.running = true
+		logger.Infoln("init JS Console")
+		reader := bufio.NewReader(self.history)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil && err == io.EOF {
+				break
+			} else if err != nil {
+				fmt.Println("error reading history", err)
+				break
+			}
 
-		addHistory(line[:len(line)-1])
+			addHistory(line[:len(line)-1])
+		}
+		self.read()
 	}
-	self.read()
 }
 
 func (self *JSRepl) Stop() {
-	self.re.Stop()
-	self.history.Close()
+	if self.running {
+		self.running = false
+		self.re.Stop()
+		logger.Infoln("exit JS Console")
+		self.history.Close()
+	}
 }
 
 func (self *JSRepl) parseInput(code string) {

@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethdb"
+	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/utils"
@@ -14,6 +15,8 @@ import (
 	"strings"
 	"time"
 )
+
+var logger = ethlog.NewLogger("GUI")
 
 type Gui struct {
 	// The main application window
@@ -32,11 +35,13 @@ type Gui struct {
 
 	addr []byte
 
-	pub *ethpub.PEthereum
+	pub      *ethpub.PEthereum
+	logLevel ethlog.LogLevel
+	open     bool
 }
 
 // Create GUI, but doesn't start it
-func New(ethereum *eth.Ethereum) *Gui {
+func New(ethereum *eth.Ethereum, logLevel int) *Gui {
 	lib := &EthLib{stateManager: ethereum.StateManager(), blockChain: ethereum.BlockChain(), txPool: ethereum.TxPool()}
 	db, err := ethdb.NewLDBDatabase("tx_database")
 	if err != nil {
@@ -52,7 +57,7 @@ func New(ethereum *eth.Ethereum) *Gui {
 
 	pub := ethpub.NewPEthereum(ethereum)
 
-	return &Gui{eth: ethereum, lib: lib, txDb: db, addr: addr, pub: pub}
+	return &Gui{eth: ethereum, lib: lib, txDb: db, addr: addr, pub: pub, logLevel: ethlog.LogLevel(logLevel), open: false}
 }
 
 func (gui *Gui) Start(assetPath string) {
@@ -86,25 +91,39 @@ func (gui *Gui) Start(assetPath string) {
 
 	var win *qml.Window
 	var err error
+	var addlog = false
 	if len(data) == 0 {
 		win, err = gui.showKeyImport(context)
 	} else {
 		win, err = gui.showWallet(context)
-
-		ethutil.Config.Log.AddLogSystem(gui)
+		addlog = true
 	}
 	if err != nil {
-		ethutil.Config.Log.Infoln("FATAL: asset not found: you can set an alternative asset path on on the command line using option 'asset_path'", err)
+		logger.Errorln("asset not found: you can set an alternative asset path on the command line using option 'asset_path'", err)
 
 		panic(err)
 	}
 
-	ethutil.Config.Log.Infoln("[GUI] Starting GUI")
-
+	logger.Infoln("Starting GUI")
+	gui.open = true
 	win.Show()
+	// only add the gui logger after window is shown otherwise slider wont be shown
+	if addlog {
+		ethlog.AddLogSystem(gui)
+	}
 	win.Wait()
+	// need to silence gui logger after window closed otherwise logsystem hangs
+	gui.SetLogLevel(ethlog.Silence)
+	gui.open = false
+}
 
-	gui.eth.Stop()
+func (gui *Gui) Stop() {
+	if gui.open {
+		gui.SetLogLevel(ethlog.Silence)
+		gui.open = false
+		gui.win.Hide()
+	}
+	logger.Infoln("Stopped")
 }
 
 func (gui *Gui) ToggleMining() {
@@ -311,22 +330,6 @@ func (gui *Gui) setPeerInfo() {
 	}
 }
 
-// Logging functions that log directly to the GUI interface
-func (gui *Gui) Println(v ...interface{}) {
-	str := strings.TrimRight(fmt.Sprintln(v...), "\n")
-	lines := strings.Split(str, "\n")
-	for _, line := range lines {
-		gui.win.Root().Call("addLog", line)
-	}
-}
-
-func (gui *Gui) Printf(format string, v ...interface{}) {
-	str := strings.TrimRight(fmt.Sprintf(format, v...), "\n")
-	lines := strings.Split(str, "\n")
-	for _, line := range lines {
-		gui.win.Root().Call("addLog", line)
-	}
-}
 func (gui *Gui) RegisterName(name string) {
 	keyPair := ethutil.GetKeyRing().Get(0)
 	name = fmt.Sprintf("\"%s\"\n1", name)
@@ -353,6 +356,34 @@ func (gui *Gui) ClientId() string {
 	return ethutil.Config.Identifier
 }
 
-func (gui *Gui) SetLogLevel(level int) {
-	ethutil.Config.Log.SetLevel(level)
+// functions that allow Gui to implement interface ethlog.LogSystem
+func (gui *Gui) SetLogLevel(level ethlog.LogLevel) {
+	gui.logLevel = level
+}
+
+func (gui *Gui) GetLogLevel() ethlog.LogLevel {
+	return gui.logLevel
+}
+
+// this extra function needed to give int typecast value to gui widget
+// that sets initial loglevel to default
+func (gui *Gui) GetLogLevelInt() int {
+	return int(gui.logLevel)
+}
+
+func (gui *Gui) Println(v ...interface{}) {
+	gui.printLog(fmt.Sprintln(v...))
+}
+
+func (gui *Gui) Printf(format string, v ...interface{}) {
+	gui.printLog(fmt.Sprintf(format, v...))
+}
+
+// Print function that logs directly to the GUI
+func (gui *Gui) printLog(s string) {
+	str := strings.TrimRight(s, "\n")
+	lines := strings.Split(str, "\n")
+	for _, line := range lines {
+		gui.win.Root().Call("addLog", line)
+	}
 }

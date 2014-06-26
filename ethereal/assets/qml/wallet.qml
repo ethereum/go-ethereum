@@ -319,7 +319,7 @@ ApplicationWindow {
 
 					Slider {
 						id: logLevelSlider
-						value: 1
+						value: eth.getLogLevelInt()
 						anchors {
 							right: parent.right
 							top: parent.top
@@ -332,7 +332,7 @@ ApplicationWindow {
 						}
 
 						orientation: Qt.Vertical
-						maximumValue: 3
+						maximumValue: 5
 						stepSize: 1
 
 						onValueChanged: {
