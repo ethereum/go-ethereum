@@ -102,22 +102,21 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 	vmlogger.Debugf("(~) %x gas: %v (d) %x\n", closure.object.Address(), closure.Gas, closure.Args)
 
-	// Memory for the current closure
-	mem := &Memory{}
-	// New stack (should this be shared?)
-	stack := NewStack()
-	require := func(m int) {
-		if stack.Len() < m {
-			isRequireError = true
-			panic(fmt.Sprintf("stack err = %d, req = %d", stack.Len(), m))
-		}
-	}
+	var (
+		op OpCode
 
-	// Program counter
-	pc := big.NewInt(0)
-	// Current step count
-	step := 0
-	prevStep := 0
+		mem      = &Memory{}
+		stack    = NewStack()
+		pc       = big.NewInt(0)
+		step     = 0
+		prevStep = 0
+		require  = func(m int) {
+			if stack.Len() < m {
+				isRequireError = true
+				panic(fmt.Sprintf("%04v (%v) stack err size = %d, required = %d", pc, op, stack.Len(), m))
+			}
+		}
+	)
 
 	for {
 		prevStep = step
@@ -128,7 +127,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		// Get the memory location of pc
 		val := closure.Get(pc)
 		// Get the opcode (it must be an opcode!)
-		op := OpCode(val.Uint())
+		op = OpCode(val.Uint())
 
 		gas := new(big.Int)
 		addStepGasUsage := func(amount *big.Int) {

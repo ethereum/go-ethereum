@@ -342,7 +342,7 @@ func (s *Ethereum) Start(seed bool) {
 	// Bind to addr and port
 	ln, err := net.Listen("tcp", ":"+s.Port)
 	if err != nil {
-		ethlogger.Warnln("Connection listening disabled. Acting as client")
+		ethlogger.Warnf("Port %s in use. Connection listening disabled. Acting as client", s.Port)
 		s.listening = false
 	} else {
 		s.listening = true
