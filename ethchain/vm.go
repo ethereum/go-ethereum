@@ -2,10 +2,13 @@ package ethchain
 
 import (
 	"fmt"
+	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethutil"
 	"math"
 	"math/big"
 )
+
+var vmlogger = ethlog.NewLogger("VM")
 
 var (
 	GasStep    = big.NewInt(1)
@@ -72,7 +75,7 @@ func (self *Vm) Printf(format string, v ...interface{}) *Vm {
 
 func (self *Vm) Endl() *Vm {
 	if self.Verbose {
-		ethutil.Config.Log.Infoln(self.logStr)
+		vmlogger.Infoln(self.logStr)
 		self.logStr = ""
 	}
 
@@ -93,11 +96,11 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		if r := recover(); r != nil {
 			ret = closure.Return(nil)
 			err = fmt.Errorf("%v", r)
-			fmt.Println(err)
+			vmlogger.Errorln("vm err", err)
 		}
 	}()
 
-	ethutil.Config.Log.Debugf("[VM] (~) %x gas: %v (d) %x\n", closure.object.Address(), closure.Gas, closure.Args)
+	vmlogger.Debugf("(~) %x gas: %v (d) %x\n", closure.object.Address(), closure.Gas, closure.Args)
 
 	var (
 		op OpCode
@@ -642,7 +645,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 
 			if closure.object.Amount.Cmp(value) < 0 {
-				ethutil.Config.Log.Debugf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Amount)
+				vmlogger.Debugf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Amount)
 
 				stack.Push(ethutil.BigFalse)
 			} else {
@@ -661,7 +664,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 				if err != nil {
 					stack.Push(ethutil.BigFalse)
 
-					ethutil.Config.Log.Debugf("Closure execution failed. %v\n", err)
+					vmlogger.Debugf("Closure execution failed. %v\n", err)
 
 					vm.err = err
 					vm.state.Set(snapshot)
@@ -696,7 +699,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			return closure.Return(nil), nil
 		default:
-			ethutil.Config.Log.Debugf("Invalid opcode %x\n", op)
+			vmlogger.Debugf("Invalid opcode %x\n", op)
 
 			return closure.Return(nil), fmt.Errorf("Invalid opcode %x", op)
 		}
