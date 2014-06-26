@@ -26,13 +26,18 @@ if [ $? != 0 ]; then
 	exit
 fi
 
+echo "serpent-go"
 cd $GOPATH/src/github.com/obscuren/mutan
-git submodule init
-git sumbodule update
 
+echo "init submodule"
+git submodule init
+git submodule update
+
+echo "eth-go"
 cd $GOPATH/src/github.com/ethereum/eth-go
 git checkout $branch
 
+echo "go-ethereum"
 cd $GOPATH/src/github.com/ethereum/go-ethereum/$exe
 git checkout $branch
 
@@ -40,9 +45,9 @@ if [ "$exe" == "ethereal" ]; then
 	echo "Building ethereal GUI. Assuming Qt is installed. If this step"
 	echo "fails; please refer to: https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum(Go)"
 else
-	echo "Building ethereum CLI.
+	echo "Building ethereum CLI."
 fi
 
 go install
 
-echo "done..."
+echo "done. Please run $exe :-)"
