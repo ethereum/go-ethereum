@@ -6,9 +6,9 @@ import (
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethdb"
+	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
 	"math/big"
@@ -35,9 +35,9 @@ type Gui struct {
 
 	addr []byte
 
-	pub *ethpub.PEthereum
+	pub      *ethpub.PEthereum
 	logLevel ethlog.LogLevel
-	open bool
+	open     bool
 }
 
 // Create GUI, but doesn't start it

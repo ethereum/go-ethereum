@@ -1,12 +1,12 @@
 package main
 
 import (
+	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/go-ethereum/ethereal/ui"
 	"github.com/ethereum/go-ethereum/utils"
-  "github.com/ethereum/eth-go/ethlog"
 	"github.com/go-qml/qml"
-	"runtime"
 	"os"
+	"runtime"
 )
 
 func main() {
@@ -32,11 +32,11 @@ func main() {
 	ethereum := utils.NewEthereum(UseUPnP, OutboundPort, MaxPeer)
 
 	// create, import, export keys
-  utils.KeyTasks(GenAddr, ImportKey, ExportKey, NonInteractive)
+	utils.KeyTasks(GenAddr, ImportKey, ExportKey, NonInteractive)
 
-  if ShowGenesis {
-    utils.ShowGenesis(ethereum)
-  }
+	if ShowGenesis {
+		utils.ShowGenesis(ethereum)
+	}
 
 	if StartRpc {
 		utils.StartRpc(ethereum, RpcPort)
@@ -45,17 +45,17 @@ func main() {
 	gui := ethui.New(ethereum, LogLevel)
 
 	utils.RegisterInterrupt(func(os.Signal) {
-    gui.Stop()
-  })
+		gui.Stop()
+	})
 	utils.StartEthereum(ethereum, UseSeed)
-  // gui blocks the main thread
-  gui.Start(AssetPath)
-  // we need to run the interrupt callbacks in case gui is closed
-  // this skips if we got here by actual interrupt stopping the GUI
+	// gui blocks the main thread
+	gui.Start(AssetPath)
+	// we need to run the interrupt callbacks in case gui is closed
+	// this skips if we got here by actual interrupt stopping the GUI
 	if !interrupted {
 		utils.RunInterruptCallbacks(os.Interrupt)
-  }
-  // this blocks the thread
-  ethereum.WaitForShutdown()
-  ethlog.Flush()
+	}
+	// this blocks the thread
+	ethereum.WaitForShutdown()
+	ethlog.Flush()
 }

@@ -3,10 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/ethereum/eth-go/ethlog"
 	"os"
-  "os/user"
-  "path"
-  "github.com/ethereum/eth-go/ethlog"
+	"os/user"
+	"path"
 )
 
 var Identifier string
@@ -34,8 +34,8 @@ var StartJsConsole bool
 var InputFile string
 
 func defaultDataDir() string {
-  usr, _ := user.Current()
-  return path.Join(usr.HomeDir, ".ethereum")
+	usr, _ := user.Current()
+	return path.Join(usr.HomeDir, ".ethereum")
 }
 
 var defaultConfigFile = path.Join(defaultDataDir(), "conf.ini")

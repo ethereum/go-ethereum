@@ -1,12 +1,12 @@
-	package main
+package main
 
 import (
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/obscuren/otto"
 	"io/ioutil"

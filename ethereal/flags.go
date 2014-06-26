@@ -1,13 +1,13 @@
 package main
 
 import (
-	"fmt"
-	"os"
-  "os/user"
-  "path"
-  "github.com/ethereum/eth-go/ethlog"
-	"flag"
 	"bitbucket.org/kardianos/osext"
+	"flag"
+	"fmt"
+	"github.com/ethereum/eth-go/ethlog"
+	"os"
+	"os/user"
+	"path"
 	"path/filepath"
 	"runtime"
 )
@@ -60,8 +60,8 @@ func defaultAssetPath() string {
 }
 
 func defaultDataDir() string {
-  usr, _ := user.Current()
-  return path.Join(usr.HomeDir, ".ethereal")
+	usr, _ := user.Current()
+	return path.Join(usr.HomeDir, ".ethereal")
 }
 
 var defaultConfigFile = path.Join(defaultDataDir(), "conf.ini")

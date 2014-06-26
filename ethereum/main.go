@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/ethereum/go-ethereum/utils"
 	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/go-ethereum/utils"
 	"runtime"
 )
 
@@ -24,11 +24,11 @@ func main() {
 	ethereum := utils.NewEthereum(UseUPnP, OutboundPort, MaxPeer)
 
 	// create, import, export keys
-  utils.KeyTasks(GenAddr, ImportKey, ExportKey, NonInteractive)
+	utils.KeyTasks(GenAddr, ImportKey, ExportKey, NonInteractive)
 
-  if ShowGenesis {
-    utils.ShowGenesis(ethereum)
-  }
+	if ShowGenesis {
+		utils.ShowGenesis(ethereum)
+	}
 
 	if StartMining {
 		utils.StartMining(ethereum)
@@ -48,6 +48,6 @@ func main() {
 	utils.StartEthereum(ethereum, UseSeed)
 
 	// this blocks the thread
-  ethereum.WaitForShutdown()
-  ethlog.Flush()
+	ethereum.WaitForShutdown()
+	ethlog.Flush()
 }
