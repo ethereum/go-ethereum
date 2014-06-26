@@ -174,17 +174,11 @@ func (bc *BlockChain) ResetTillBlockHash(hash []byte) error {
 		bc.LastBlockHash = bc.genesisBlock.Hash()
 		bc.LastBlockNumber = 1
 	} else {
-		// TODO: Somehow this doesn't really give the right numbers, double check.
-		// TODO: Change logs into debug lines
 		returnTo = bc.GetBlock(hash)
 		bc.CurrentBlock = returnTo
 		bc.LastBlockHash = returnTo.Hash()
-		//info := bc.BlockInfo(returnTo)
 		bc.LastBlockNumber = returnTo.Number.Uint64()
 	}
-
-	// XXX Why are we resetting? This is the block chain, it has nothing to do with states
-	//bc.Ethereum.StateManager().PrepareDefault(returnTo)
 
 	// Manually reset the last sync block
 	err := ethutil.Config.Db.Delete(lastBlock.Hash())
@@ -231,6 +225,11 @@ func (bc *BlockChain) GetChainFromHash(hash []byte, max uint64) []interface{} {
 	for i := uint64(0); bytes.Compare(currentHash, hash) != 0 && num >= parentNumber && i < count; i++ {
 		// Get the block of the chain
 		block := bc.GetBlock(currentHash)
+		if block == nil {
+			ethutil.Config.Log.Debugf("Unexpected error during GetChainFromHash: Unable to find %x\n", currentHash)
+			break
+		}
+
 		currentHash = block.PrevHash
 
 		chain = append(chain, block.Value().Val)

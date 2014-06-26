@@ -22,7 +22,6 @@ func Compile(script string) (ret []byte, err error) {
 	} else {
 		compiler := mutan.NewCompiler(backend.NewEthereumBackend())
 		byteCode, errors := compiler.Compile(strings.NewReader(script))
-		//byteCode, errors := mutan.Compile(strings.NewReader(script), false)
 		if len(errors) > 0 {
 			var errs string
 			for _, er := range errors {

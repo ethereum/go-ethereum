@@ -340,7 +340,7 @@ func (s *Ethereum) Start(seed bool) {
 	// Bind to addr and port
 	ln, err := net.Listen("tcp", ":"+s.Port)
 	if err != nil {
-		log.Println("Connection listening disabled. Acting as client")
+		ethutil.Config.Log.Infof("port=%s in use. Connection listening disabled.")
 		s.listening = false
 	} else {
 		s.listening = true
@@ -395,7 +395,7 @@ func (s *Ethereum) Seed() {
 					peers = append(peers, peer)
 				}
 			} else {
-				ethutil.Config.Log.Debugln("[SERV} Couldn't resolve :", target)
+				ethutil.Config.Log.Debugln("[SERV] Couldn't resolve :", target)
 			}
 		}
 		// Connect to Peer list
