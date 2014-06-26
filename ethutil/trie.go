@@ -47,7 +47,7 @@ func (cache *Cache) Put(v interface{}) interface{} {
 	value := NewValue(v)
 
 	enc := value.Encode()
-	if len(enc) < 32 {
+	if len(enc) >= 32 {
 		sha := Sha3Bin(enc)
 
 		cache.nodes[string(sha)] = NewNode(sha, value, true)
