@@ -90,11 +90,12 @@ func (gui *Gui) Start(assetPath string) {
 
 	var win *qml.Window
 	var err error
+	var addlog = false
 	if len(data) == 0 {
 		win, err = gui.showKeyImport(context)
 	} else {
 		win, err = gui.showWallet(context)
-		ethlog.AddLogSystem(gui)
+		addlog = true
 	}
 	if err != nil {
 		logger.Errorln("asset not found: you can set an alternative asset path on the command line using option 'asset_path'", err)
@@ -105,8 +106,13 @@ func (gui *Gui) Start(assetPath string) {
 	logger.Infoln("Starting GUI")
 
 	win.Show()
+	// only add the gui logger after window is shown otherwise slider wont be shown
+	if addlog {
+		ethlog.AddLogSystem(gui)
+	}
 	win.Wait()
-
+	// need to silence gui logger after window closed otherwise logsystem hangs
+	gui.SetLogLevel(ethlog.Silence)
 	gui.eth.Stop()
 }
 
@@ -351,6 +357,12 @@ func (gui *Gui) SetLogLevel(level ethlog.LogLevel) {
 
 func (gui *Gui) GetLogLevel() ethlog.LogLevel {
 	return gui.logLevel
+}
+
+// this extra function needed to give int typecast value to gui widget
+// that sets initial loglevel to default
+func (gui *Gui) GetLogLevelInt() int {
+	return int(gui.logLevel)
 }
 
 func (gui *Gui) Println(v ...interface{}) {

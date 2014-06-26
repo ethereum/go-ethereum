@@ -319,7 +319,7 @@ ApplicationWindow {
 
 					Slider {
 						id: logLevelSlider
-						value: eth.getLogLevel()
+						value: eth.getLogLevelInt()
 						anchors {
 							right: parent.right
 							top: parent.top
