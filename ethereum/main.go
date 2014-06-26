@@ -11,6 +11,8 @@ var logger = ethlog.NewLogger("CLI")
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
+	utils.HandleInterrupt()
+
 	// precedence: code-internal flag default < config file < environment variables < command line
 	Init() // parsing command line
 	utils.InitConfig(ConfigFile, Datadir, Identifier, "ETH")

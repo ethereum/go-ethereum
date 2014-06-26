@@ -12,7 +12,6 @@ func InitJsConsole(ethereum *eth.Ethereum) {
   go repl.Start()
   utils.RegisterInterrupt(func(os.Signal) {
     repl.Stop()
-    ethereum.Stop()
   })
 }
 

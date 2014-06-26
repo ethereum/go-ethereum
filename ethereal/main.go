@@ -8,9 +8,11 @@ import (
 )
 
 func main() {
-	qml.Init(nil)
-
 	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	utils.HandleInterrupt()
+
+	qml.Init(nil)
 
 	// precedence: code-internal flag default < config file < environment variables < command line
 	Init() // parsing command line
@@ -33,8 +35,10 @@ func main() {
 		utils.StartRpc(ethereum, RpcPort)
 	}
 
-	utils.StartEthereum(ethereum, UseSeed)
-
 	gui := ethui.New(ethereum, LogLevel)
 	gui.Start(AssetPath)
+
+	utils.StartEthereum(ethereum, UseSeed)
+
+
 }

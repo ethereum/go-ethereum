@@ -18,16 +18,23 @@ import (
 )
 
 var logger = ethlog.NewLogger("CLI")
+var interruptCallbacks = []func(os.Signal){}
 
-// Register interrupt handlers
+// Register interrupt handlers callbacks
 func RegisterInterrupt(cb func(os.Signal)) {
+  interruptCallbacks = append(interruptCallbacks, cb)
+}
+
+// go routine that call interrupt handlers in order of registering
+func HandleInterrupt() {
+  c := make(chan os.Signal, 1)
   go func() {
-    // Buffered chan of one is enough
-    c := make(chan os.Signal, 1)
-    // Notify about interrupts for now
     signal.Notify(c, os.Interrupt)
     for sig := range c {
-      cb(sig)
+      logger.Errorf("Shutting down (%v) ... \n", sig)
+      for _, cb := range interruptCallbacks {
+        cb(sig)
+      }
     }
   }()
 }
@@ -109,13 +116,12 @@ func NewEthereum(UseUPnP bool, OutboundPort string, MaxPeer int) *eth.Ethereum {
 func StartEthereum(ethereum *eth.Ethereum, UseSeed bool) {
   logger.Infof("Starting Ethereum v%s", ethutil.Config.Ver)
   ethereum.Start(UseSeed)
-  // Wait for shutdown
-  ethereum.WaitForShutdown()
   RegisterInterrupt(func(sig os.Signal) {
-    logger.Errorf("Shutting down (%v) ... \n", sig)
     ethereum.Stop()
     ethlog.Flush()
   })
+  // this blocks the thread
+  ethereum.WaitForShutdown()
 }
 
 func ShowGenesis(ethereum *eth.Ethereum) {
@@ -174,9 +180,6 @@ func StartRpc(ethereum *eth.Ethereum, RpcPort int) {
     logger.Errorf("Could not start RPC interface (port %v): %v", RpcPort, err)
   } else {
     go ethereum.RpcServer.Start()
-    RegisterInterrupt(func(os.Signal) {
-      ethereum.RpcServer.Stop()
-    })
   }
 }
 
