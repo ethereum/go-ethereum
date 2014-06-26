@@ -49,5 +49,9 @@ else
 fi
 
 go install
+if [ $? == 0 ]; then
+	echo "go install failed"
+	exit
+fi
 
 echo "done. Please run $exe :-)"
