@@ -61,7 +61,7 @@ func New(ethereum *eth.Ethereum, logLevel int) *Gui {
 }
 
 func (gui *Gui) Start(assetPath string) {
-	const version = "0.5.0 RC14"
+	const version = "0.5.0 RC15"
 
 	defer gui.txDb.Close()
 
