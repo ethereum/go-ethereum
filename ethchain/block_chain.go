@@ -221,9 +221,16 @@ func (bc *BlockChain) GetChainFromHash(hash []byte, max uint64) []interface{} {
 	startNumber := parentNumber + count
 
 	num := lastNumber
-	for ; num > startNumber; currentHash = bc.GetBlock(currentHash).PrevHash {
+	for num > startNumber {
 		num--
+
+		block := bc.GetBlock(currentHash)
+		if block == nil {
+			break
+		}
+		currentHash = block.PrevHash
 	}
+
 	for i := uint64(0); bytes.Compare(currentHash, hash) != 0 && num >= parentNumber && i < count; i++ {
 		// Get the block of the chain
 		block := bc.GetBlock(currentHash)
