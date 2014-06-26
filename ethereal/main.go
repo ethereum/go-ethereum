@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	// Leave QT on top at ALL times.
+	// Leave QT on top at ALL times. Qt Needs to be initialized from the main thread
 	qml.Init(nil)
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
