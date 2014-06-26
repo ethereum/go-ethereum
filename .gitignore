@@ -9,5 +9,6 @@
 *un~
 .DS_Store
 */**/.DS_Store
-./ethereum/ethereum
+ethereum/ethereum
+ethereal/ethereal
 

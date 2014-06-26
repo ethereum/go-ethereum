@@ -319,7 +319,7 @@ ApplicationWindow {
 
 					Slider {
 						id: logLevelSlider
-						value: 1
+						value: eth.getLogLevelInt()
 						anchors {
 							right: parent.right
 							top: parent.top
@@ -332,7 +332,7 @@ ApplicationWindow {
 						}
 
 						orientation: Qt.Vertical
-						maximumValue: 3
+						maximumValue: 5
 						stepSize: 1
 
 						onValueChanged: {
@@ -372,7 +372,15 @@ ApplicationWindow {
 		onAccepted: {
 			//ui.open(openAppDialog.fileUrl.toString())
 			//ui.openHtml(Qt.resolvedUrl(ui.assetPath("test.html")))
-			ui.openHtml(openAppDialog.fileUrl.toString())
+			var path = openAppDialog.fileUrl.toString()
+			console.log(path)
+			var ext = path.split('.').pop()
+			console.log(ext)
+			if(ext == "html" || ext == "htm") {
+				ui.openHtml(path)
+			}else if(ext == "qml"){
+				ui.openQml(path)
+			}
 		}
 	}
 

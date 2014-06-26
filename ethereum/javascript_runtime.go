@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/utils"
@@ -13,6 +14,8 @@ import (
 	"path"
 	"path/filepath"
 )
+
+var jsrelogger = ethlog.NewLogger("JSRE")
 
 type JSRE struct {
 	ethereum *eth.Ethereum
@@ -31,7 +34,7 @@ func (jsre *JSRE) LoadExtFile(path string) {
 	if err == nil {
 		jsre.vm.Run(result)
 	} else {
-		ethutil.Config.Log.Debugln("Could not load file:", path)
+		jsrelogger.Debugln("Could not load file:", path)
 	}
 }
 
@@ -64,6 +67,8 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	re.Bind("eth", &JSEthereum{re.lib, re.vm})
 
 	re.initStdFuncs()
+
+	jsrelogger.Infoln("started")
 
 	return re
 }
@@ -99,6 +104,7 @@ func (self *JSRE) Stop() {
 	close(self.blockChan)
 	close(self.quitChan)
 	close(self.changeChan)
+	jsrelogger.Infoln("stopped")
 }
 
 func (self *JSRE) mainLoop() {
@@ -138,6 +144,7 @@ func (self *JSRE) initStdFuncs() {
 	eth.Set("require", self.require)
 	eth.Set("stopMining", self.stopMining)
 	eth.Set("startMining", self.startMining)
+	eth.Set("execBlock", self.execBlock)
 }
 
 /*
@@ -206,4 +213,19 @@ func (self *JSRE) require(call otto.FunctionCall) otto.Value {
 	t, _ := self.vm.Get("exports")
 
 	return t
+}
+
+func (self *JSRE) execBlock(call otto.FunctionCall) otto.Value {
+	hash, err := call.Argument(0).ToString()
+	if err != nil {
+		return otto.UndefinedValue()
+	}
+
+	err = utils.BlockDo(self.ethereum, ethutil.FromHex(hash))
+	if err != nil {
+		fmt.Println(err)
+		return otto.FalseValue()
+	}
+
+	return otto.TrueValue()
 }

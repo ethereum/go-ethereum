@@ -96,11 +96,11 @@ func (app *HtmlApplication) NewWatcher(quitChan chan bool) {
 				app.watcher.Close()
 				break out
 			case <-app.watcher.Event:
-				//ethutil.Config.Log.Debugln("Got event:", ev)
+				//logger.Debugln("Got event:", ev)
 				app.webView.Call("reload")
 			case err := <-app.watcher.Error:
 				// TODO: Do something here
-				ethutil.Config.Log.Infoln("Watcher error:", err)
+				logger.Infoln("Watcher error:", err)
 			}
 		}
 	}()

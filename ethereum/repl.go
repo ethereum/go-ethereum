@@ -1,10 +1,15 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethpub"
+	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/otto"
+	"io"
+	"os"
+	"path"
 )
 
 type Repl interface {
@@ -16,18 +21,48 @@ type JSRepl struct {
 	re *JSRE
 
 	prompt string
+
+	history *os.File
+
+	running bool
 }
 
 func NewJSRepl(ethereum *eth.Ethereum) *JSRepl {
-	return &JSRepl{re: NewJSRE(ethereum), prompt: "> "}
+	hist, err := os.OpenFile(path.Join(ethutil.Config.ExecPath, "history"), os.O_RDWR|os.O_CREATE, os.ModePerm)
+	if err != nil {
+		panic(err)
+	}
+
+	return &JSRepl{re: NewJSRE(ethereum), prompt: "> ", history: hist}
 }
 
 func (self *JSRepl) Start() {
-	self.read()
+	if !self.running {
+		self.running = true
+		logger.Infoln("init JS Console")
+		reader := bufio.NewReader(self.history)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil && err == io.EOF {
+				break
+			} else if err != nil {
+				fmt.Println("error reading history", err)
+				break
+			}
+
+			addHistory(line[:len(line)-1])
+		}
+		self.read()
+	}
 }
 
 func (self *JSRepl) Stop() {
-	self.re.Stop()
+	if self.running {
+		self.running = false
+		self.re.Stop()
+		logger.Infoln("exit JS Console")
+		self.history.Close()
+	}
 }
 
 func (self *JSRepl) parseInput(code string) {
