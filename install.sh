@@ -26,14 +26,18 @@ if [ $? != 0 ]; then
 	exit
 fi
 
+echo "serpent-go"
 cd $GOPATH/src/github.com/obscuren/mutan
+
+echo "init submodule"
 git submodule init
 git submodule update
 
-echo "git checkout $branch"
+echo "eth-go"
 cd $GOPATH/src/github.com/ethereum/eth-go
 git checkout $branch
 
+echo "go-ethereum"
 cd $GOPATH/src/github.com/ethereum/go-ethereum/$exe
 git checkout $branch
 
