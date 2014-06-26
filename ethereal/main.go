@@ -10,9 +10,10 @@ import (
 )
 
 func main() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
-
+	// Leave QT on top at ALL times.
 	qml.Init(nil)
+
+	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	var interrupted = false
 	utils.RegisterInterrupt(func(os.Signal) {
