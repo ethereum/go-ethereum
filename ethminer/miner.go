@@ -3,10 +3,13 @@ package ethminer
 import (
 	"bytes"
 	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
 	"sort"
 )
+
+var logger = ethlog.NewLogger("MINER")
 
 type Miner struct {
 	pow         ethchain.PoW
@@ -54,23 +57,28 @@ func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) Miner {
 
 	return miner
 }
+
 func (miner *Miner) Start() {
 	// Prepare inital block
 	//miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
 	go miner.listener()
+	logger.Infoln("Started")
 }
+
 func (miner *Miner) listener() {
 out:
 	for {
 		select {
 		case <-miner.quitChan:
+			logger.Infoln("Stopped")
 			break out
 		case chanMessage := <-miner.reactChan:
+
 			if block, ok := chanMessage.Resource.(*ethchain.Block); ok {
-				//ethutil.Config.Log.Infoln("[MINER] Got new block via Reactor")
+				//logger.Infoln("Got new block via Reactor")
 				if bytes.Compare(miner.ethereum.BlockChain().CurrentBlock.Hash(), block.Hash()) == 0 {
 					// TODO: Perhaps continue mining to get some uncle rewards
-					//ethutil.Config.Log.Infoln("[MINER] New top block found resetting state")
+					//logger.Infoln("New top block found resetting state")
 
 					// Filter out which Transactions we have that were not in this block
 					var newtxs []*ethchain.Transaction
@@ -92,7 +100,7 @@ out:
 
 				} else {
 					if bytes.Compare(block.PrevHash, miner.ethereum.BlockChain().CurrentBlock.PrevHash) == 0 {
-						ethutil.Config.Log.Infoln("[MINER] Adding uncle block")
+						logger.Infoln("Adding uncle block")
 						miner.uncles = append(miner.uncles, block)
 					}
 				}
@@ -120,8 +128,9 @@ out:
 }
 
 func (self *Miner) Stop() {
-	self.powQuitChan <- ethutil.React{}
+	logger.Infoln("Stopping...")
 	self.quitChan <- true
+	self.powQuitChan <- ethutil.React{}
 }
 
 func (self *Miner) mineNewBlock() {
@@ -137,14 +146,14 @@ func (self *Miner) mineNewBlock() {
 	// Sort the transactions by nonce in case of odd network propagation
 	sort.Sort(ethchain.TxByNonce{self.txs})
 
-	// Accumulate all valid transaction and apply them to the new state
+	// Accumulate all valid transactions and apply them to the new state
 	// Error may be ignored. It's not important during mining
 	parent := self.ethereum.BlockChain().GetBlock(self.block.PrevHash)
 	coinbase := self.block.State().GetOrNewStateObject(self.block.Coinbase)
 	coinbase.SetGasPool(self.block.CalcGasLimit(parent))
 	receipts, txs, unhandledTxs, err := stateManager.ProcessTransactions(coinbase, self.block.State(), self.block, self.block, self.txs)
 	if err != nil {
-		ethutil.Config.Log.Debugln("[MINER]", err)
+		logger.Debugln(err)
 	}
 	self.txs = append(txs, unhandledTxs...)
 
@@ -156,18 +165,18 @@ func (self *Miner) mineNewBlock() {
 
 	self.block.State().Update()
 
-	ethutil.Config.Log.Infoln("[MINER] Mining on block. Includes", len(self.txs), "transactions")
+	logger.Infof("Mining on block. Includes %v transactions", len(self.txs))
 
 	// Find a valid nonce
 	self.block.Nonce = self.pow.Search(self.block, self.powQuitChan)
 	if self.block.Nonce != nil {
 		err := self.ethereum.StateManager().Process(self.block, false)
 		if err != nil {
-			ethutil.Config.Log.Infoln(err)
+			logger.Infoln(err)
 		} else {
 			self.ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{self.block.Value().Val})
-			ethutil.Config.Log.Infof("[MINER] 🔨  Mined block %x\n", self.block.Hash())
-			ethutil.Config.Log.Infoln(self.block)
+			logger.Infof("🔨  Mined block %x\n", self.block.Hash())
+			logger.Infoln(self.block)
 			// Gather the new batch of transactions currently in the tx pool
 			self.txs = self.ethereum.TxPool().CurrentTransactions()
 		}
