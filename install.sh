@@ -46,4 +46,4 @@ fi
 
 go install
 
-echo "done..."
+echo "done. Please run $exe :-)"
