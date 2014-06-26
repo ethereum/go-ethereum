@@ -2,7 +2,6 @@ package ethchain
 
 import (
 	"fmt"
-	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
 )
 
@@ -135,12 +134,12 @@ func (self *StateTransition) preCheck() (err error) {
 }
 
 func (self *StateTransition) TransitionState() (err error) {
-	ethutil.Config.Log.Printf(ethutil.LogLevelInfo, "(~) %x\n", self.tx.Hash())
+	statelogger.Infof("(~) %x\n", self.tx.Hash())
 
 	/*
 		defer func() {
 			if r := recover(); r != nil {
-				ethutil.Config.Log.Infoln(r)
+				logger.Infoln(r)
 				err = fmt.Errorf("state transition err %v", r)
 			}
 		}()
@@ -231,7 +230,7 @@ func (self *StateTransition) transferValue(sender, receiver *StateObject) error 
 	// Add the amount to receivers account which should conclude this transaction
 	receiver.AddAmount(self.value)
 
-	//ethutil.Config.Log.Debugf("%x => %x (%v)\n", sender.Address()[:4], receiver.Address()[:4], self.value)
+	//statelogger.Debugf("%x => %x (%v)\n", sender.Address()[:4], receiver.Address()[:4], self.value)
 	//}
 
 	return nil

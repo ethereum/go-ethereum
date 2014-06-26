@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
+	"strings"
 )
 
 type EthereumApi struct {
@@ -174,9 +175,16 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *string) error {
 		return err
 	}
 	state := p.ethp.GetStateObject(args.Address)
-	// Convert the incoming string (which is a bigint) into hex
-	i, _ := new(big.Int).SetString(args.Key, 10)
-	hx := ethutil.Hex(i.Bytes())
+
+	var hx string
+	if strings.Index(args.Key, "0x") == 0 {
+		hx = string([]byte(args.Key)[2:])
+	} else {
+		// Convert the incoming string (which is a bigint) into hex
+		i, _ := new(big.Int).SetString(args.Key, 10)
+		hx = ethutil.Hex(i.Bytes())
+	}
+	logger.Debugf("GetStorageAt(%s, %s)\n", args.Address, hx)
 	value := state.GetStorage(hx)
 	*reply = NewSuccessRes(GetStorageAtRes{Address: args.Address, Key: args.Key, Value: value})
 	return nil

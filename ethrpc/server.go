@@ -2,12 +2,14 @@ package ethrpc
 
 import (
 	"fmt"
+	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethpub"
-	"github.com/ethereum/eth-go/ethutil"
 	"net"
 	"net/rpc"
 	"net/rpc/jsonrpc"
 )
+
+var logger = ethlog.NewLogger("JSON")
 
 type JsonRpcServer struct {
 	quit     chan bool
@@ -25,7 +27,7 @@ out:
 		}
 	}
 
-	ethutil.Config.Log.Infoln("[JSON] Shutdown JSON-RPC server")
+	logger.Infoln("Shutdown JSON-RPC server")
 }
 
 func (s *JsonRpcServer) Stop() {
@@ -33,7 +35,7 @@ func (s *JsonRpcServer) Stop() {
 }
 
 func (s *JsonRpcServer) Start() {
-	ethutil.Config.Log.Infoln("[JSON] Starting JSON-RPC server")
+	logger.Infoln("Starting JSON-RPC server")
 	go s.exitHandler()
 	rpc.Register(&EthereumApi{ethp: s.ethp})
 	rpc.HandleHTTP()
@@ -41,10 +43,10 @@ func (s *JsonRpcServer) Start() {
 	for {
 		conn, err := s.listener.Accept()
 		if err != nil {
-			ethutil.Config.Log.Infoln("[JSON] Error starting JSON-RPC:", err)
+			logger.Infoln("Error starting JSON-RPC:", err)
 			break
 		}
-		ethutil.Config.Log.Debugln("[JSON] Incoming request.")
+		logger.Debugln("Incoming request.")
 		go jsonrpc.ServeConn(conn)
 	}
 }

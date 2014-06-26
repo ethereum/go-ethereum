@@ -18,7 +18,7 @@ func Disassemble(script []byte) (asm []string) {
 		// Get the opcode (it must be an opcode!)
 		op := OpCode(val)
 
-		asm = append(asm, fmt.Sprintf("%v", op))
+		asm = append(asm, fmt.Sprintf("%04v: %v", pc, op))
 
 		switch op {
 		case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
@@ -28,7 +28,7 @@ func Disassemble(script []byte) (asm []string) {
 			if len(data) == 0 {
 				data = []byte{0}
 			}
-			asm = append(asm, fmt.Sprintf("0x%x", data))
+			asm = append(asm, fmt.Sprintf("%04v: 0x%x", pc, data))
 
 			pc.Add(pc, big.NewInt(a-1))
 		}

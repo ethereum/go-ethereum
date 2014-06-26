@@ -5,6 +5,7 @@ import (
 	"container/list"
 	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
 	"net"
@@ -13,6 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 )
+
+var peerlogger = ethlog.NewLogger("PEER")
 
 const (
 	// The size of the output buffer for writing messages
@@ -138,6 +141,8 @@ type Peer struct {
 	// We use this to give some kind of pingtime to a node, not very accurate, could be improved.
 	pingTime      time.Duration
 	pingStartTime time.Time
+
+	lastRequestedBlock *ethchain.Block
 }
 
 func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
@@ -176,7 +181,7 @@ func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 		conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
 
 		if err != nil {
-			ethutil.Config.Log.Debugln("Connection to peer failed", err)
+			peerlogger.Debugln("Connection to peer failed", err)
 			p.Stop()
 			return
 		}
@@ -245,11 +250,11 @@ func (p *Peer) writeMessage(msg *ethwire.Msg) {
 		}
 	}
 
-	ethutil.Config.Log.Println(ethutil.LogLevelSystem, "<=", msg.Type, msg.Data)
+	peerlogger.DebugDetailln("<=", msg.Type, msg.Data)
 
 	err := ethwire.WriteMessage(p.conn, msg)
 	if err != nil {
-		ethutil.Config.Log.Debugln("[PEER] Can't send message:", err)
+		peerlogger.Debugln(" Can't send message:", err)
 		// Stop the client if there was an error writing to it
 		p.Stop()
 		return
@@ -274,7 +279,7 @@ out:
 		case <-pingTimer.C:
 			timeSince := time.Since(time.Unix(p.lastPong, 0))
 			if !p.pingStartTime.IsZero() && p.lastPong != 0 && timeSince > (pingPongTimer+30*time.Second) {
-				ethutil.Config.Log.Infof("[PEER] Peer did not respond to latest pong fast enough, it took %s, disconnecting.\n", timeSince)
+				peerlogger.Infof("Peer did not respond to latest pong fast enough, it took %s, disconnecting.\n", timeSince)
 				p.Stop()
 				return
 			}
@@ -316,10 +321,10 @@ func (p *Peer) HandleInbound() {
 		// Wait for a message from the peer
 		msgs, err := ethwire.ReadMessages(p.conn)
 		if err != nil {
-			ethutil.Config.Log.Debugln(err)
+			peerlogger.Debugln(err)
 		}
 		for _, msg := range msgs {
-			ethutil.Config.Log.Println(ethutil.LogLevelSystem, "=>", msg.Type, msg.Data)
+			peerlogger.DebugDetailln("=>", msg.Type, msg.Data)
 
 			switch msg.Type {
 			case ethwire.MsgHandshakeTy:
@@ -331,7 +336,7 @@ func (p *Peer) HandleInbound() {
 				}
 			case ethwire.MsgDiscTy:
 				p.Stop()
-				ethutil.Config.Log.Infoln("Disconnect peer:", DiscReason(msg.Data.Get(0).Uint()))
+				peerlogger.Infoln("Disconnect peer:", DiscReason(msg.Data.Get(0).Uint()))
 			case ethwire.MsgPingTy:
 				// Respond back with pong
 				p.QueueMessage(ethwire.NewMessage(ethwire.MsgPongTy, ""))
@@ -351,7 +356,12 @@ func (p *Peer) HandleInbound() {
 					// We requested blocks and now we need to make sure we have a common ancestor somewhere in these blocks so we can find
 					// common ground to start syncing from
 					lastBlock = ethchain.NewBlockFromRlpValue(msg.Data.Get(msg.Data.Len() - 1))
-					ethutil.Config.Log.Infof("[PEER] Last block: %x. Checking if we have it locally.\n", lastBlock.Hash())
+					if p.lastRequestedBlock != nil && bytes.Compare(lastBlock.Hash(), p.lastRequestedBlock.Hash()) == 0 {
+						p.catchingUp = false
+						continue
+					}
+					p.lastRequestedBlock = lastBlock
+					peerlogger.Infof("Last block: %x. Checking if we have it locally.\n", lastBlock.Hash())
 					for i := msg.Data.Len() - 1; i >= 0; i-- {
 						block = ethchain.NewBlockFromRlpValue(msg.Data.Get(i))
 						// Do we have this block on our chain? If so we can continue
@@ -372,7 +382,7 @@ func (p *Peer) HandleInbound() {
 						// we just keep increasing the amount of blocks.
 						p.blocksRequested = p.blocksRequested * 2
 
-						ethutil.Config.Log.Infof("[PEER] No common ancestor found, requesting %d more blocks.\n", p.blocksRequested)
+						peerlogger.Infof("No common ancestor found, requesting %d more blocks.\n", p.blocksRequested)
 						p.catchingUp = false
 						p.FindCommonParentBlock()
 						break
@@ -388,9 +398,9 @@ func (p *Peer) HandleInbound() {
 
 					if err != nil {
 						if ethutil.Config.Debug {
-							ethutil.Config.Log.Infof("[PEER] Block %x failed\n", block.Hash())
-							ethutil.Config.Log.Infof("[PEER] %v\n", err)
-							ethutil.Config.Log.Debugln(block)
+							peerlogger.Infof("Block %x failed\n", block.Hash())
+							peerlogger.Infof("%v\n", err)
+							peerlogger.Debugln(block)
 						}
 						break
 					} else {
@@ -407,7 +417,7 @@ func (p *Peer) HandleInbound() {
 				if err != nil {
 					// If the parent is unknown try to catch up with this peer
 					if ethchain.IsParentErr(err) {
-						ethutil.Config.Log.Infoln("Attempting to catch. Parent known")
+						peerlogger.Infoln("Attempting to catch. Parent known")
 						p.catchingUp = false
 						p.CatchupWithPeer(p.ethereum.BlockChain().CurrentBlock.Hash())
 					} else if ethchain.IsValidationErr(err) {
@@ -419,7 +429,7 @@ func (p *Peer) HandleInbound() {
 					if p.catchingUp && msg.Data.Len() > 1 {
 						if lastBlock != nil {
 							blockInfo := lastBlock.BlockInfo()
-							ethutil.Config.Log.Debugf("Synced chain to #%d %x %x\n", blockInfo.Number, lastBlock.Hash(), blockInfo.Hash)
+							peerlogger.DebugDetailf("Synced chain to #%d %x %x\n", blockInfo.Number, lastBlock.Hash(), blockInfo.Hash)
 						}
 
 						p.catchingUp = false
@@ -486,17 +496,17 @@ func (p *Peer) HandleInbound() {
 
 				// If a parent is found send back a reply
 				if parent != nil {
-					ethutil.Config.Log.Debugf("[PEER] Found canonical block, returning chain from: %x ", parent.Hash())
+					peerlogger.DebugDetailf("Found canonical block, returning chain from: %x ", parent.Hash())
 					chain := p.ethereum.BlockChain().GetChainFromHash(parent.Hash(), amountOfBlocks)
 					if len(chain) > 0 {
-						//ethutil.Config.Log.Debugf("[PEER] Returning %d blocks: %x ", len(chain), parent.Hash())
+						//peerlogger.Debugf("Returning %d blocks: %x ", len(chain), parent.Hash())
 						p.QueueMessage(ethwire.NewMessage(ethwire.MsgBlockTy, chain))
 					} else {
 						p.QueueMessage(ethwire.NewMessage(ethwire.MsgBlockTy, []interface{}{}))
 					}
 
 				} else {
-					//ethutil.Config.Log.Debugf("[PEER] Could not find a similar block")
+					//peerlogger.Debugf("Could not find a similar block")
 					// If no blocks are found we send back a reply with msg not in chain
 					// and the last hash from get chain
 					if l > 0 {
@@ -506,7 +516,7 @@ func (p *Peer) HandleInbound() {
 					}
 				}
 			case ethwire.MsgNotInChainTy:
-				ethutil.Config.Log.Debugf("Not in chain: %x\n", msg.Data.Get(0).Bytes())
+				peerlogger.DebugDetailf("Not in chain: %x\n", msg.Data.Get(0).Bytes())
 				if p.diverted == true {
 					// If were already looking for a common parent and we get here again we need to go deeper
 					p.blocksRequested = p.blocksRequested * 2
@@ -527,7 +537,7 @@ func (p *Peer) HandleInbound() {
 
 				// Unofficial but fun nonetheless
 			case ethwire.MsgTalkTy:
-				ethutil.Config.Log.Infoln("%v says: %s\n", p.conn.RemoteAddr(), msg.Data.Str())
+				peerlogger.Infoln("%v says: %s\n", p.conn.RemoteAddr(), msg.Data.Str())
 			}
 		}
 	}
@@ -546,7 +556,7 @@ func (p *Peer) Start() {
 
 	err := p.pushHandshake()
 	if err != nil {
-		ethutil.Config.Log.Debugln("Peer can't send outbound version ack", err)
+		peerlogger.Debugln("Peer can't send outbound version ack", err)
 
 		p.Stop()
 
@@ -620,7 +630,7 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	p.pubkey = c.Get(5).Bytes()
 
 	if p.pubkey == nil {
-		//ethutil.Config.Log.Debugln("Pubkey required, not supplied in handshake.")
+		peerlogger.Warnln("Pubkey required, not supplied in handshake.")
 		p.Stop()
 		return
 	}
@@ -635,13 +645,13 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	})
 
 	if usedPub > 0 {
-		//ethutil.Config.Log.Debugf("Pubkey %x found more then once. Already connected to client.", p.pubkey)
+		peerlogger.Debugf("Pubkey %x found more then once. Already connected to client.", p.pubkey)
 		p.Stop()
 		return
 	}
 
 	if c.Get(0).Uint() != ProtocolVersion {
-		ethutil.Config.Log.Debugf("Invalid peer version. Require protocol: %d. Received: %d\n", ProtocolVersion, c.Get(0).Uint())
+		peerlogger.Debugf("Invalid peer version. Require protocol: %d. Received: %d\n", ProtocolVersion, c.Get(0).Uint())
 		p.Stop()
 		return
 	}
@@ -675,16 +685,16 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	p.ethereum.PushPeer(p)
 	p.ethereum.reactor.Post("peerList", p.ethereum.Peers())
 
-	ethutil.Config.Log.Infof("[SERV] Added peer (%s) %d / %d\n", p.conn.RemoteAddr(), p.ethereum.Peers().Len(), p.ethereum.MaxPeers)
+	ethlogger.Infof("Added peer (%s) %d / %d\n", p.conn.RemoteAddr(), p.ethereum.Peers().Len(), p.ethereum.MaxPeers)
 
 	// Catch up with the connected peer
 	if !p.ethereum.IsUpToDate() {
-		ethutil.Config.Log.Debugln("Already syncing up with a peer; sleeping")
+		peerlogger.Debugln("Already syncing up with a peer; sleeping")
 		time.Sleep(10 * time.Second)
 	}
 	p.SyncWithPeerToLastKnown()
 
-	ethutil.Config.Log.Debugln("[PEER]", p)
+	peerlogger.Debugln(p)
 }
 
 func (p *Peer) String() string {
@@ -727,7 +737,7 @@ func (p *Peer) FindCommonParentBlock() {
 
 	msgInfo := append(hashes, uint64(len(hashes)))
 
-	ethutil.Config.Log.Infof("Asking for block from %x (%d total) from %s\n", p.ethereum.BlockChain().CurrentBlock.Hash(), len(hashes), p.conn.RemoteAddr().String())
+	peerlogger.DebugDetailf("Asking for block from %x (%d total) from %s\n", p.ethereum.BlockChain().CurrentBlock.Hash(), len(hashes), p.conn.RemoteAddr().String())
 
 	msg := ethwire.NewMessage(ethwire.MsgGetChainTy, msgInfo)
 	p.QueueMessage(msg)
@@ -739,7 +749,7 @@ func (p *Peer) CatchupWithPeer(blockHash []byte) {
 		msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{blockHash, uint64(50)})
 		p.QueueMessage(msg)
 
-		ethutil.Config.Log.Debugf("Requesting blockchain %x... from peer %s\n", p.ethereum.BlockChain().CurrentBlock.Hash()[:4], p.conn.RemoteAddr())
+		peerlogger.DebugDetailf("Requesting blockchain %x... from peer %s\n", p.ethereum.BlockChain().CurrentBlock.Hash()[:4], p.conn.RemoteAddr())
 
 		msg = ethwire.NewMessage(ethwire.MsgGetTxsTy, []interface{}{})
 		p.QueueMessage(msg)

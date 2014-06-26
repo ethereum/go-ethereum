@@ -99,6 +99,7 @@ type PTx struct {
 	Data            string `json:"data"`
 	Contract        bool   `json:"isContract"`
 	CreatesContract bool   `json:"createsContract"`
+	Confirmations   int    `json:"confirmations"`
 }
 
 func NewPTx(tx *ethchain.Transaction) *PTx {
@@ -239,6 +240,14 @@ func (c *PStateObject) StateKeyVal(asJson bool) interface{} {
 func (c *PStateObject) Script() string {
 	if c.object != nil {
 		return strings.Join(ethchain.Disassemble(c.object.Script()), " ")
+	}
+
+	return ""
+}
+
+func (c *PStateObject) HexScript() string {
+	if c.object != nil {
+		return ethutil.Hex(c.object.Script())
 	}
 
 	return ""
