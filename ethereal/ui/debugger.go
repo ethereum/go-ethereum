@@ -26,7 +26,7 @@ func NewDebuggerWindow(lib *UiLib) *DebuggerWindow {
 	}
 
 	win := component.CreateWindow(nil)
-	db := &Debugger{win, make(chan bool), make(chan bool), true, false}
+	db := &Debugger{win, make(chan bool), make(chan bool), true, false, true}
 
 	return &DebuggerWindow{engine: engine, win: win, lib: lib, Db: db}
 }
@@ -59,6 +59,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 	if !self.Db.done {
 		self.Db.Q <- true
 	}
+	self.Db.breakOnInstr = self.win.Root().ObjectByName("breakEachLine").Bool("checked")
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -95,16 +96,20 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 		self.win.Root().Call("setAsm", str)
 	}
 
-	gas := ethutil.Big(gasStr)
-	gasPrice := ethutil.Big(gasPriceStr)
-	// Contract addr as test address
-	keyPair := ethutil.GetKeyRing().Get(0)
-	callerTx := ethchain.NewContractCreationTx(ethutil.Big(valueStr), gas, gasPrice, script)
+	var (
+		gas      = ethutil.Big(gasStr)
+		gasPrice = ethutil.Big(gasPriceStr)
+		value    = ethutil.Big(valueStr)
+		// Contract addr as test address
+		keyPair  = ethutil.GetKeyRing().Get(0)
+		callerTx = ethchain.NewContractCreationTx(ethutil.Big(valueStr), gas, gasPrice, script)
+	)
 	callerTx.Sign(keyPair.PrivateKey)
 
 	state := self.lib.eth.BlockChain().CurrentBlock.State()
 	account := self.lib.eth.StateManager().TransState().GetAccount(keyPair.Address())
 	contract := ethchain.MakeContract(callerTx, state)
+	contract.Amount = value
 	callerClosure := ethchain.NewClosure(account, contract, script, state, gas, gasPrice)
 
 	block := self.lib.eth.BlockChain().CurrentBlock
@@ -164,6 +169,7 @@ type Debugger struct {
 	N               chan bool
 	Q               chan bool
 	done, interrupt bool
+	breakOnInstr    bool
 }
 
 type storeVal struct {
@@ -190,16 +196,18 @@ func (d *Debugger) halting(pc int, op ethchain.OpCode, mem *ethchain.Memory, sta
 		d.win.Root().Call("setStorage", storeVal{fmt.Sprintf("% x", key), fmt.Sprintf("% x", node.Str())})
 	})
 
-out:
-	for {
-		select {
-		case <-d.N:
-			break out
-		case <-d.Q:
-			d.interrupt = true
-			d.clearBuffers()
+	if d.breakOnInstr {
+	out:
+		for {
+			select {
+			case <-d.N:
+				break out
+			case <-d.Q:
+				d.interrupt = true
+				d.clearBuffers()
 
-			return false
+				return false
+			}
 		}
 	}
 

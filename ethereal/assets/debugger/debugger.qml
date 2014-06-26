@@ -10,9 +10,9 @@ ApplicationWindow {
 	visible: false
 	title: "IceCREAM"
 	minimumWidth: 1280
-	minimumHeight: 900
+	minimumHeight: 700
 	width: 1290
-	height: 900
+	height: 700
 
 	property alias codeText: codeEditor.text
 	property alias dataText: rawDataField.text
@@ -56,7 +56,7 @@ ApplicationWindow {
 
 				Rectangle {
 					color: "#00000000"
-					height: 500
+					height: 330
 					anchors.left: parent.left
 					anchors.right: parent.right
 
@@ -207,6 +207,12 @@ ApplicationWindow {
 					dbg.next()
 				}
 				text: "Next"
+			}
+			CheckBox {
+				id: breakEachLine
+				objectName: "breakEachLine"
+				text: "Break each instruction"
+				checked: true
 			}
 		}
 	}
