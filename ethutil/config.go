@@ -44,7 +44,7 @@ func ReadConfig(ConfigFile string, Datadir string, Identifier string, EnvPrefix 
 		} else {
 			g.ParseAll()
 		}
-		Config = &config{ExecPath: Datadir, Debug: true, Ver: "0.5.14", conf: g, Identifier: Identifier}
+		Config = &config{ExecPath: Datadir, Debug: true, Ver: "0.5.15", conf: g, Identifier: Identifier}
 		Config.SetClientString("Ethereum(G)")
 	}
 	return Config
