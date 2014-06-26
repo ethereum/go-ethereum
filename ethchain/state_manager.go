@@ -3,9 +3,9 @@ package ethchain
 import (
 	"bytes"
 	"container/list"
+	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
-	"github.com/ethereum/eth-go/ethlog"
 	"math/big"
 	"sync"
 	"time"

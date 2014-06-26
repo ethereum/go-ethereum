@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"container/list"
 	"fmt"
-	"github.com/ethereum/eth-go/ethwire"
 	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethwire"
 	"math/big"
 	"sync"
 )

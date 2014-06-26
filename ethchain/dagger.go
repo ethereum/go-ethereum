@@ -1,8 +1,8 @@
 package ethchain
 
 import (
-	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/sha3"
 	"hash"
 	"math/big"
@@ -31,7 +31,6 @@ func (pow *EasyPow) Search(block *Block, reactChan chan ethutil.React) []byte {
 	for {
 		select {
 		case <-reactChan:
-			//powlogger.Infoln("Received reactor event; breaking out.")
 			return nil
 		default:
 			i++

@@ -4,8 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"github.com/rakyll/globalconf"
-	"runtime"
 	"os"
+	"runtime"
 )
 
 // Config struct
@@ -29,21 +29,21 @@ var Config *config
 // Initialize Config from Config File
 func ReadConfig(ConfigFile string, Datadir string, Identifier string, EnvPrefix string) *config {
 	if Config == nil {
-	 	// create ConfigFile if does not exist, otherwise globalconf panic when trying to persist flags
-    _, err := os.Stat(ConfigFile)
-    if err != nil && os.IsNotExist(err) {
+		// create ConfigFile if does not exist, otherwise globalconf panic when trying to persist flags
+		_, err := os.Stat(ConfigFile)
+		if err != nil && os.IsNotExist(err) {
 			fmt.Printf("config file '%s' doesn't exist, creating it\n", ConfigFile)
-      os.Create(ConfigFile)
-    }
-    g, err := globalconf.NewWithOptions(&globalconf.Options{
- 			Filename: ConfigFile,
- 			EnvPrefix: EnvPrefix,
+			os.Create(ConfigFile)
+		}
+		g, err := globalconf.NewWithOptions(&globalconf.Options{
+			Filename:  ConfigFile,
+			EnvPrefix: EnvPrefix,
 		})
 		if err != nil {
- 			fmt.Println(err)
-	  } else {
-	   g.ParseAll()
-	  }
+			fmt.Println(err)
+		} else {
+			g.ParseAll()
+		}
 		Config = &config{ExecPath: Datadir, Debug: true, Ver: "0.5.14", conf: g, Identifier: Identifier}
 		Config.SetClientString("Ethereum(G)")
 	}

@@ -3,9 +3,9 @@ package ethminer
 import (
 	"bytes"
 	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
-	"github.com/ethereum/eth-go/ethlog"
 	"sort"
 )
 
@@ -57,18 +57,23 @@ func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) Miner {
 
 	return miner
 }
+
 func (miner *Miner) Start() {
 	// Prepare inital block
 	//miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
 	go miner.listener()
+	logger.Infoln("Started")
 }
+
 func (miner *Miner) listener() {
 out:
 	for {
 		select {
 		case <-miner.quitChan:
+			logger.Infoln("Stopped")
 			break out
 		case chanMessage := <-miner.reactChan:
+
 			if block, ok := chanMessage.Resource.(*ethchain.Block); ok {
 				//logger.Infoln("Got new block via Reactor")
 				if bytes.Compare(miner.ethereum.BlockChain().CurrentBlock.Hash(), block.Hash()) == 0 {
@@ -123,8 +128,9 @@ out:
 }
 
 func (self *Miner) Stop() {
-	self.powQuitChan <- ethutil.React{}
+	logger.Infoln("Stopping...")
 	self.quitChan <- true
+	self.powQuitChan <- ethutil.React{}
 }
 
 func (self *Miner) mineNewBlock() {

@@ -2,8 +2,8 @@ package ethchain
 
 import (
 	"fmt"
-	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethutil"
 	"math"
 	"math/big"
 )

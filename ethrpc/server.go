@@ -2,8 +2,8 @@ package ethrpc
 
 import (
 	"fmt"
-	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethpub"
 	"net"
 	"net/rpc"
 	"net/rpc/jsonrpc"

@@ -2,9 +2,9 @@ package ethchain
 
 import (
 	"bytes"
+	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
-	"github.com/ethereum/eth-go/ethlog"
 	"math"
 	"math/big"
 )
