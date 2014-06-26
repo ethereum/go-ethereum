@@ -32,11 +32,15 @@ func HandleInterrupt() {
     signal.Notify(c, os.Interrupt)
     for sig := range c {
       logger.Errorf("Shutting down (%v) ... \n", sig)
-      for _, cb := range interruptCallbacks {
-        cb(sig)
-      }
+      RunInterruptCallbacks(sig)
     }
   }()
+}
+
+func RunInterruptCallbacks(sig os.Signal) {
+  for _, cb := range interruptCallbacks {
+    cb(sig)
+  }
 }
 
 func AbsolutePath(Datadir string, filename string) string {
@@ -94,6 +98,7 @@ func InitLogging (Datadir string, LogFile string, LogLevel int, DebugFile string
 }
 
 func InitConfig(ConfigFile string, Datadir string, Identifier string, EnvPrefix string) {
+  InitDataDir(Datadir)
   ethutil.ReadConfig(ConfigFile, Datadir, Identifier, EnvPrefix)
   ethutil.Config.Set("rpcport", "700")
 }
@@ -120,8 +125,6 @@ func StartEthereum(ethereum *eth.Ethereum, UseSeed bool) {
     ethereum.Stop()
     ethlog.Flush()
   })
-  // this blocks the thread
-  ethereum.WaitForShutdown()
 }
 
 func ShowGenesis(ethereum *eth.Ethereum) {

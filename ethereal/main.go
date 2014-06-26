@@ -3,16 +3,23 @@ package main
 import (
 	"github.com/ethereum/go-ethereum/ethereal/ui"
 	"github.com/ethereum/go-ethereum/utils"
+  "github.com/ethereum/eth-go/ethlog"
 	"github.com/go-qml/qml"
 	"runtime"
+	"os"
 )
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	utils.HandleInterrupt()
-
 	qml.Init(nil)
+
+	var interrupted = false
+	utils.RegisterInterrupt(func(os.Signal) {
+		interrupted = true
+	})
+
+	utils.HandleInterrupt()
 
 	// precedence: code-internal flag default < config file < environment variables < command line
 	Init() // parsing command line
@@ -36,9 +43,19 @@ func main() {
 	}
 
 	gui := ethui.New(ethereum, LogLevel)
-	gui.Start(AssetPath)
 
+	utils.RegisterInterrupt(func(os.Signal) {
+    gui.Stop()
+  })
 	utils.StartEthereum(ethereum, UseSeed)
-
-
+  // gui blocks the main thread
+  gui.Start(AssetPath)
+  // we need to run the interrupt callbacks in case gui is closed
+  // this skips if we got here by actual interrupt stopping the GUI
+	if !interrupted {
+		utils.RunInterruptCallbacks(os.Interrupt)
+  }
+  // this blocks the thread
+  ethereum.WaitForShutdown()
+  ethlog.Flush()
 }

@@ -37,6 +37,7 @@ type Gui struct {
 
 	pub *ethpub.PEthereum
 	logLevel ethlog.LogLevel
+	open bool
 }
 
 // Create GUI, but doesn't start it
@@ -56,7 +57,7 @@ func New(ethereum *eth.Ethereum, logLevel int) *Gui {
 
 	pub := ethpub.NewPEthereum(ethereum)
 
-	return &Gui{eth: ethereum, lib: lib, txDb: db, addr: addr, pub: pub, logLevel: ethlog.LogLevel(logLevel)}
+	return &Gui{eth: ethereum, lib: lib, txDb: db, addr: addr, pub: pub, logLevel: ethlog.LogLevel(logLevel), open: false}
 }
 
 func (gui *Gui) Start(assetPath string) {
@@ -104,7 +105,7 @@ func (gui *Gui) Start(assetPath string) {
 	}
 
 	logger.Infoln("Starting GUI")
-
+	gui.open = true
 	win.Show()
 	// only add the gui logger after window is shown otherwise slider wont be shown
 	if addlog {
@@ -113,7 +114,16 @@ func (gui *Gui) Start(assetPath string) {
 	win.Wait()
 	// need to silence gui logger after window closed otherwise logsystem hangs
 	gui.SetLogLevel(ethlog.Silence)
-	gui.eth.Stop()
+	gui.open = false
+}
+
+func (gui *Gui) Stop() {
+	if gui.open {
+		gui.SetLogLevel(ethlog.Silence)
+		gui.open = false
+		gui.win.Hide()
+	}
+	logger.Infoln("Stopped")
 }
 
 func (gui *Gui) ToggleMining() {

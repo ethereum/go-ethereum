@@ -46,4 +46,8 @@ func main() {
 	}
 
 	utils.StartEthereum(ethereum, UseSeed)
+
+	// this blocks the thread
+  ethereum.WaitForShutdown()
+  ethlog.Flush()
 }
