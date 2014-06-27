@@ -10,7 +10,6 @@
             }
         ],
         "env" : {
-            "code" : "{ (call (- (gas) 200) (caller) (+ 2 2 (* 4 4 4) (/ 2 2) (% 3 2) (- 8 2 2)) 0 0 0 0) }",
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "256",
             "currentGasLimit" : "1000000",
@@ -125,7 +124,6 @@
             }
         ],
         "env" : {
-            "code" : "(seq (when (and 1 1) (call (- (gas) 200) (caller) 2 0 0 0 0)) (when (and 1 0) (call (- (gas) 200) (caller) 3 0 0 0 0)) (when (and 0 1) (call (- (gas) 200) (caller) 4 0 0 0 0)) (when (and 0 0) (call (- (gas) 200) (caller) 5 0 0 0 0)) (when (or 1 1) (call (- (gas) 200) (caller) 12 0 0 0 0)) (when (or 1 0) (call (- (gas) 200) (caller) 13 0 0 0 0)) (when (or 0 1) (call (- (gas) 200) (caller) 14 0 0 0 0)) (when (or 0 0) (call (- (gas) 200) (caller) 15 0 0 0 0)) )",
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "256",
             "currentGasLimit" : "1000000",
@@ -603,7 +601,6 @@
             }
         ],
         "env" : {
-            "code" : "(call (- (gas) 200) (caller) 500000000000000000 0 0 0 0)",
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "256",
             "currentGasLimit" : "1000000",
@@ -704,7 +701,6 @@
         "callcreates" : [
         ],
         "env" : {
-            "code" : "(suicide (caller))",
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "256",
             "currentGasLimit" : "1000000",
