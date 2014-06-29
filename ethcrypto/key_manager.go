@@ -115,6 +115,14 @@ func (k *KeyManager) InitFromSecretsFile(session string, cursor int, secretsfile
 	return k.reset(session, cursor, keyRing)
 }
 
+func (k *KeyManager) InitFromString(session string, cursor int, secrets string) error {
+	keyRing, err := NewKeyRingFromString(secrets)
+	if err != nil {
+		return err
+	}
+	return k.reset(session, cursor, keyRing)
+}
+
 func (k *KeyManager) Export(dir string) error {
 	fileKeyStore := FileKeyStore{dir}
 	return fileKeyStore.Save(k.session, k.keyRing)
