@@ -3,6 +3,7 @@ package ethutil
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"strings"
@@ -91,9 +92,18 @@ func IsHex(str string) bool {
 	return l >= 4 && l%2 == 0 && str[0:2] == "0x"
 }
 
+func Bytes2Hex(d []byte) string {
+	return hex.EncodeToString(d)
+}
+
+func Hex2Bytes(str string) []byte {
+	h, _ := hex.DecodeString(str)
+	return h
+}
+
 func StringToByteFunc(str string, cb func(str string) []byte) (ret []byte) {
 	if len(str) > 1 && str[0:2] == "0x" && !strings.Contains(str, "\n") {
-		ret = FromHex(str[2:])
+		ret = Hex2Bytes(str[2:])
 	} else {
 		ret = cb(str)
 	}
@@ -110,7 +120,7 @@ func FormatData(data string) []byte {
 	if data[0:1] == "\"" && data[len(data)-1:] == "\"" {
 		d.SetBytes([]byte(data[1 : len(data)-1]))
 	} else if len(data) > 1 && data[:2] == "0x" {
-		d.SetBytes(FromHex(data[2:]))
+		d.SetBytes(Hex2Bytes(data[2:]))
 	} else {
 		d.SetString(data, 0)
 	}
