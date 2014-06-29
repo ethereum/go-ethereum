@@ -77,7 +77,7 @@ func InitDataDir(Datadir string) {
 	_, err := os.Stat(Datadir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			fmt.Printf("Debug logging directory '%s' doesn't exist, creating it\n", Datadir)
+			fmt.Printf("Data directory '%s' doesn't exist, creating it\n", Datadir)
 			os.Mkdir(Datadir, 0777)
 		}
 	}
