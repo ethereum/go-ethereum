@@ -1,6 +1,7 @@
 package ethchain
 
 import (
+	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
@@ -74,7 +75,7 @@ func (s *State) Purge() int {
 	return s.trie.NewIterator().Purge()
 }
 
-func (s *State) EachStorage(cb ethutil.EachCallback) {
+func (s *State) EachStorage(cb ethtrie.EachCallback) {
 	it := s.trie.NewIterator()
 	it.Each(cb)
 }
@@ -92,7 +93,7 @@ func (self *State) UpdateStateObject(stateObject *StateObject) {
 		self.stateObjects[string(addr)] = stateObject
 	}
 
-	ethutil.Config.Db.Put(ethutil.Sha3Bin(stateObject.Script()), stateObject.Script())
+	ethutil.Config.Db.Put(ethcrypto.Sha3Bin(stateObject.Script()), stateObject.Script())
 
 	self.trie.Update(string(addr), string(stateObject.RlpEncode()))
 

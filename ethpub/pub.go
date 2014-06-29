@@ -2,9 +2,9 @@ package ethpub
 
 import (
 	"bytes"
-	"encoding/hex"
 	"encoding/json"
 	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
@@ -19,6 +19,7 @@ type PEthereum struct {
 	stateManager *ethchain.StateManager
 	blockChain   *ethchain.BlockChain
 	txPool       *ethchain.TxPool
+	keyManager   *ethcrypto.KeyManager
 }
 
 func NewPEthereum(manager ethchain.EthManager) *PEthereum {
@@ -27,24 +28,23 @@ func NewPEthereum(manager ethchain.EthManager) *PEthereum {
 		manager.StateManager(),
 		manager.BlockChain(),
 		manager.TxPool(),
+		manager.KeyManager(),
 	}
 }
 
 func (lib *PEthereum) GetBlock(hexHash string) *PBlock {
-	hash := ethutil.FromHex(hexHash)
+	hash := ethutil.Hex2Bytes(hexHash)
 	block := lib.blockChain.GetBlock(hash)
 
 	return NewPBlock(block)
 }
 
 func (lib *PEthereum) GetKey() *PKey {
-	keyPair := ethutil.GetKeyRing().Get(0)
-
-	return NewPKey(keyPair)
+	return NewPKey(lib.keyManager.KeyPair())
 }
 
 func (lib *PEthereum) GetStateObject(address string) *PStateObject {
-	stateObject := lib.stateManager.CurrentState().GetStateObject(ethutil.FromHex(address))
+	stateObject := lib.stateManager.CurrentState().GetStateObject(ethutil.Hex2Bytes(address))
 	if stateObject != nil {
 		return NewPStateObject(stateObject)
 	}
@@ -79,17 +79,13 @@ func (lib *PEthereum) GetIsListening() bool {
 }
 
 func (lib *PEthereum) GetCoinBase() string {
-	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-	keyRing := ethutil.NewValueFromBytes(data)
-	key := keyRing.Get(0).Bytes()
-
-	return lib.SecretToAddress(hex.EncodeToString(key))
+	return ethutil.Bytes2Hex(lib.keyManager.Address())
 }
 
 func (lib *PEthereum) GetTransactionsFor(address string, asJson bool) interface{} {
 	sBlk := lib.manager.BlockChain().LastBlockHash
 	blk := lib.manager.BlockChain().GetBlock(sBlk)
-	addr := []byte(ethutil.FromHex(address))
+	addr := []byte(ethutil.Hex2Bytes(address))
 
 	var txs []*PTx
 
@@ -129,12 +125,12 @@ func (lib *PEthereum) IsContract(address string) bool {
 }
 
 func (lib *PEthereum) SecretToAddress(key string) string {
-	pair, err := ethutil.NewKeyPairFromSec(ethutil.FromHex(key))
+	pair, err := ethcrypto.NewKeyPairFromSec(ethutil.Hex2Bytes(key))
 	if err != nil {
 		return ""
 	}
 
-	return ethutil.Hex(pair.Address())
+	return ethutil.Bytes2Hex(pair.Address())
 }
 
 func (lib *PEthereum) Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr string) (*PReceipt, error) {
@@ -145,7 +141,7 @@ func (lib *PEthereum) Create(key, valueStr, gasStr, gasPriceStr, script string) 
 	return lib.createTx(key, "", valueStr, gasStr, gasPriceStr, script)
 }
 
-var namereg = ethutil.FromHex("bb5f186604d057c1c5240ca2ae0f6430138ac010")
+var namereg = ethutil.Hex2Bytes("bb5f186604d057c1c5240ca2ae0f6430138ac010")
 
 func GetAddressFromNameReg(stateManager *ethchain.StateManager, name string) []byte {
 	recp := new(big.Int).SetBytes([]byte(name))
@@ -169,16 +165,16 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, sc
 		if len(addr) > 0 {
 			hash = addr
 		} else {
-			hash = ethutil.FromHex(recipient)
+			hash = ethutil.Hex2Bytes(recipient)
 		}
 	}
 
-	var keyPair *ethutil.KeyPair
+	var keyPair *ethcrypto.KeyPair
 	var err error
 	if key[0:2] == "0x" {
-		keyPair, err = ethutil.NewKeyPairFromSec([]byte(ethutil.FromHex(key[2:])))
+		keyPair, err = ethcrypto.NewKeyPairFromSec([]byte(ethutil.Hex2Bytes(key[2:])))
 	} else {
-		keyPair, err = ethutil.NewKeyPairFromSec([]byte(ethutil.FromHex(key)))
+		keyPair, err = ethcrypto.NewKeyPairFromSec([]byte(ethutil.Hex2Bytes(key)))
 	}
 
 	if err != nil {
@@ -194,7 +190,7 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, sc
 		var script []byte
 		var err error
 		if ethutil.IsHex(scriptStr) {
-			script = ethutil.FromHex(scriptStr)
+			script = ethutil.Hex2Bytes(scriptStr[2:])
 		} else {
 			script, err = ethutil.Compile(scriptStr)
 			if err != nil {

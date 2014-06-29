@@ -3,6 +3,8 @@ package ethchain
 import (
 	"bytes"
 	"fmt"
+	"github.com/ethereum/eth-go/ethcrypto"
+	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
 	"strconv"
@@ -102,18 +104,18 @@ func CreateBlock(root interface{},
 	}
 	block.SetUncles([]*Block{})
 
-	block.state = NewState(ethutil.NewTrie(ethutil.Config.Db, root))
+	block.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, root))
 
 	return block
 }
 
 // Returns a hash of the block
 func (block *Block) Hash() []byte {
-	return ethutil.Sha3Bin(block.Value().Encode())
+	return ethcrypto.Sha3Bin(block.Value().Encode())
 }
 
 func (block *Block) HashNoNonce() []byte {
-	return ethutil.Sha3Bin(ethutil.Encode([]interface{}{block.PrevHash,
+	return ethcrypto.Sha3Bin(ethutil.Encode([]interface{}{block.PrevHash,
 		block.UncleSha, block.Coinbase, block.state.trie.Root,
 		block.TxSha, block.Difficulty, block.Number, block.MinGasPrice,
 		block.GasLimit, block.GasUsed, block.Time, block.Extra}))
@@ -239,7 +241,7 @@ func (block *Block) SetUncles(uncles []*Block) {
 	block.Uncles = uncles
 
 	// Sha of the concatenated uncles
-	block.UncleSha = ethutil.Sha3Bin(ethutil.Encode(block.rlpUncles()))
+	block.UncleSha = ethcrypto.Sha3Bin(ethutil.Encode(block.rlpUncles()))
 }
 
 func (self *Block) SetReceipts(receipts []*Receipt, txs []*Transaction) {
@@ -250,7 +252,7 @@ func (self *Block) SetReceipts(receipts []*Receipt, txs []*Transaction) {
 func (block *Block) setTransactions(txs []*Transaction) {
 	block.transactions = txs
 
-	trie := ethutil.NewTrie(ethutil.Config.Db, "")
+	trie := ethtrie.NewTrie(ethutil.Config.Db, "")
 	for i, tx := range txs {
 		trie.Update(strconv.Itoa(i), string(tx.RlpEncode()))
 	}
@@ -287,7 +289,7 @@ func (block *Block) RlpValueDecode(decoder *ethutil.Value) {
 	block.PrevHash = header.Get(0).Bytes()
 	block.UncleSha = header.Get(1).Bytes()
 	block.Coinbase = header.Get(2).Bytes()
-	block.state = NewState(ethutil.NewTrie(ethutil.Config.Db, header.Get(3).Val))
+	block.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, header.Get(3).Val))
 	block.TxSha = header.Get(4).Bytes()
 	block.Difficulty = header.Get(5).BigInt()
 	block.Number = header.Get(6).BigInt()
@@ -329,7 +331,7 @@ func NewUncleBlockFromValue(header *ethutil.Value) *Block {
 	block.PrevHash = header.Get(0).Bytes()
 	block.UncleSha = header.Get(1).Bytes()
 	block.Coinbase = header.Get(2).Bytes()
-	block.state = NewState(ethutil.NewTrie(ethutil.Config.Db, header.Get(3).Val))
+	block.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, header.Get(3).Val))
 	block.TxSha = header.Get(4).Bytes()
 	block.Difficulty = header.Get(5).BigInt()
 	block.Number = header.Get(6).BigInt()

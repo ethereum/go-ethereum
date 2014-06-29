@@ -1,10 +1,10 @@
 package ethpub
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethutil"
 	"strings"
 )
@@ -66,7 +66,7 @@ func NewPBlock(block *ethchain.Block) *PBlock {
 		return nil
 	}
 
-	return &PBlock{ref: block, Number: int(block.Number.Uint64()), GasUsed: block.GasUsed.String(), GasLimit: block.GasLimit.String(), Hash: ethutil.Hex(block.Hash()), Transactions: string(txJson), Time: block.Time, Coinbase: ethutil.Hex(block.Coinbase)}
+	return &PBlock{ref: block, Number: int(block.Number.Uint64()), GasUsed: block.GasUsed.String(), GasLimit: block.GasLimit.String(), Hash: ethutil.Bytes2Hex(block.Hash()), Transactions: string(txJson), Time: block.Time, Coinbase: ethutil.Bytes2Hex(block.Coinbase)}
 }
 
 func (self *PBlock) ToString() string {
@@ -78,7 +78,7 @@ func (self *PBlock) ToString() string {
 }
 
 func (self *PBlock) GetTransaction(hash string) *PTx {
-	tx := self.ref.GetTransaction(ethutil.FromHex(hash))
+	tx := self.ref.GetTransaction(ethutil.Hex2Bytes(hash))
 	if tx == nil {
 		return nil
 	}
@@ -103,22 +103,22 @@ type PTx struct {
 }
 
 func NewPTx(tx *ethchain.Transaction) *PTx {
-	hash := hex.EncodeToString(tx.Hash())
-	receiver := hex.EncodeToString(tx.Recipient)
+	hash := ethutil.Bytes2Hex(tx.Hash())
+	receiver := ethutil.Bytes2Hex(tx.Recipient)
 	if receiver == "0000000000000000000000000000000000000000" {
-		receiver = hex.EncodeToString(tx.CreationAddress())
+		receiver = ethutil.Bytes2Hex(tx.CreationAddress())
 	}
-	sender := hex.EncodeToString(tx.Sender())
+	sender := ethutil.Bytes2Hex(tx.Sender())
 	createsContract := tx.CreatesContract()
 
 	var data string
 	if tx.CreatesContract() {
 		data = strings.Join(ethchain.Disassemble(tx.Data), "\n")
 	} else {
-		data = hex.EncodeToString(tx.Data)
+		data = ethutil.Bytes2Hex(tx.Data)
 	}
 
-	return &PTx{ref: tx, Hash: hash, Value: ethutil.CurrencyToString(tx.Value), Address: receiver, Contract: tx.CreatesContract(), Gas: tx.Gas.String(), GasPrice: tx.GasPrice.String(), Data: data, Sender: sender, CreatesContract: createsContract, RawData: hex.EncodeToString(tx.Data)}
+	return &PTx{ref: tx, Hash: hash, Value: ethutil.CurrencyToString(tx.Value), Address: receiver, Contract: tx.CreatesContract(), Gas: tx.Gas.String(), GasPrice: tx.GasPrice.String(), Data: data, Sender: sender, CreatesContract: createsContract, RawData: ethutil.Bytes2Hex(tx.Data)}
 }
 
 func (self *PTx) ToString() string {
@@ -131,8 +131,8 @@ type PKey struct {
 	PublicKey  string `json:"publicKey"`
 }
 
-func NewPKey(key *ethutil.KeyPair) *PKey {
-	return &PKey{ethutil.Hex(key.Address()), ethutil.Hex(key.PrivateKey), ethutil.Hex(key.PublicKey)}
+func NewPKey(key *ethcrypto.KeyPair) *PKey {
+	return &PKey{ethutil.Bytes2Hex(key.Address()), ethutil.Bytes2Hex(key.PrivateKey), ethutil.Bytes2Hex(key.PublicKey)}
 }
 
 type PReceipt struct {
@@ -145,9 +145,9 @@ type PReceipt struct {
 func NewPReciept(contractCreation bool, creationAddress, hash, address []byte) *PReceipt {
 	return &PReceipt{
 		contractCreation,
-		ethutil.Hex(creationAddress),
-		ethutil.Hex(hash),
-		ethutil.Hex(address),
+		ethutil.Bytes2Hex(creationAddress),
+		ethutil.Bytes2Hex(hash),
+		ethutil.Bytes2Hex(address),
 	}
 }
 
@@ -182,7 +182,7 @@ func (c *PStateObject) Value() string {
 
 func (c *PStateObject) Address() string {
 	if c.object != nil {
-		return ethutil.Hex(c.object.Address())
+		return ethutil.Bytes2Hex(c.object.Address())
 	}
 
 	return ""
@@ -198,7 +198,7 @@ func (c *PStateObject) Nonce() int {
 
 func (c *PStateObject) Root() string {
 	if c.object != nil {
-		return ethutil.Hex(ethutil.NewValue(c.object.State().Root()).Bytes())
+		return ethutil.Bytes2Hex(ethutil.NewValue(c.object.State().Root()).Bytes())
 	}
 
 	return "<err>"
@@ -221,7 +221,7 @@ func (c *PStateObject) StateKeyVal(asJson bool) interface{} {
 	var values []KeyVal
 	if c.object != nil {
 		c.object.State().EachStorage(func(name string, value *ethutil.Value) {
-			values = append(values, KeyVal{name, ethutil.Hex(value.Bytes())})
+			values = append(values, KeyVal{name, ethutil.Bytes2Hex(value.Bytes())})
 		})
 	}
 
@@ -247,7 +247,7 @@ func (c *PStateObject) Script() string {
 
 func (c *PStateObject) HexScript() string {
 	if c.object != nil {
-		return ethutil.Hex(c.object.Script())
+		return ethutil.Bytes2Hex(c.object.Script())
 	}
 
 	return ""
@@ -260,5 +260,5 @@ type PStorageState struct {
 }
 
 func NewPStorageState(storageObject *ethchain.StorageState) *PStorageState {
-	return &PStorageState{ethutil.Hex(storageObject.StateAddress), ethutil.Hex(storageObject.Address), storageObject.Value.String()}
+	return &PStorageState{ethutil.Bytes2Hex(storageObject.StateAddress), ethutil.Bytes2Hex(storageObject.Address), storageObject.Value.String()}
 }

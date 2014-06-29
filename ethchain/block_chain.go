@@ -278,7 +278,7 @@ func AddTestNetFunds(block *Block) {
 		"e6716f9544a56c530d868e4bfbacb172315bdead",
 		"1a26338f0d905e295fccb71fa9ea849ffa12aaf4",
 	} {
-		codedAddr := ethutil.FromHex(addr)
+		codedAddr := ethutil.Hex2Bytes(addr)
 		account := block.state.GetAccount(codedAddr)
 		account.Amount = ethutil.Big("1606938044258990275541962092341162602522202993782792835301376") //ethutil.BigPow(2, 200)
 		block.state.UpdateStateObject(account)

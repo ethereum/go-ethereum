@@ -2,6 +2,8 @@ package ethchain
 
 import (
 	"fmt"
+	"github.com/ethereum/eth-go/ethcrypto"
+	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
 	"strings"
@@ -39,7 +41,7 @@ func MakeContract(tx *Transaction, state *State) *StateObject {
 
 		contract := state.NewStateObject(addr)
 		contract.initScript = tx.Data
-		contract.state = NewState(ethutil.NewTrie(ethutil.Config.Db, ""))
+		contract.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, ""))
 
 		return contract
 	}
@@ -53,7 +55,7 @@ func NewStateObject(addr []byte) *StateObject {
 
 func NewContract(address []byte, Amount *big.Int, root []byte) *StateObject {
 	contract := &StateObject{address: address, Amount: Amount, Nonce: 0}
-	contract.state = NewState(ethutil.NewTrie(ethutil.Config.Db, string(root)))
+	contract.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, string(root)))
 
 	return contract
 }
@@ -246,7 +248,7 @@ func (c *StateObject) RlpEncode() []byte {
 		root = ""
 	}
 
-	return ethutil.Encode([]interface{}{c.Nonce, c.Amount, root, ethutil.Sha3Bin(c.script)})
+	return ethutil.Encode([]interface{}{c.Nonce, c.Amount, root, ethcrypto.Sha3Bin(c.script)})
 }
 
 func (c *StateObject) RlpDecode(data []byte) {
@@ -254,7 +256,8 @@ func (c *StateObject) RlpDecode(data []byte) {
 
 	c.Nonce = decoder.Get(0).Uint()
 	c.Amount = decoder.Get(1).BigInt()
-	c.state = NewState(ethutil.NewTrie(ethutil.Config.Db, decoder.Get(2).Interface()))
+	c.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, decoder.Get(2).Interface()))
+	c.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, decoder.Get(2).Interface()))
 
 	c.ScriptHash = decoder.Get(3).Bytes()
 

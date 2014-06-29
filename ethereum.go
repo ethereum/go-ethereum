@@ -4,7 +4,7 @@ import (
 	"container/list"
 	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
-	"github.com/ethereum/eth-go/ethdb"
+	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethrpc"
 	"github.com/ethereum/eth-go/ethutil"
@@ -74,16 +74,15 @@ type Ethereum struct {
 	reactor *ethutil.ReactorEngine
 
 	RpcServer *ethrpc.JsonRpcServer
+
+	keyManager *ethcrypto.KeyManager
 }
 
-func New(caps Caps, usePnp bool) (*Ethereum, error) {
-	db, err := ethdb.NewLDBDatabase("database")
-	//db, err := ethdb.NewMemDatabase()
-	if err != nil {
-		return nil, err
-	}
+func New(db ethutil.Database, keyManager *ethcrypto.KeyManager, caps Caps, usePnp bool) (*Ethereum, error) {
 
+	var err error
 	var nat NAT
+
 	if usePnp {
 		nat, err = Discover()
 		if err != nil {
@@ -102,6 +101,7 @@ func New(caps Caps, usePnp bool) (*Ethereum, error) {
 		Nonce:        nonce,
 		serverCaps:   caps,
 		nat:          nat,
+		keyManager:   keyManager,
 	}
 	ethereum.reactor = ethutil.NewReactorEngine()
 
@@ -117,6 +117,10 @@ func New(caps Caps, usePnp bool) (*Ethereum, error) {
 
 func (s *Ethereum) Reactor() *ethutil.ReactorEngine {
 	return s.reactor
+}
+
+func (s *Ethereum) KeyManager() *ethcrypto.KeyManager {
+	return s.keyManager
 }
 
 func (s *Ethereum) BlockChain() *ethchain.BlockChain {
