@@ -21,10 +21,14 @@ func main() {
 
 	utils.InitLogging(Datadir, LogFile, LogLevel, DebugFile)
 
-	ethereum := utils.NewEthereum(UseUPnP, OutboundPort, MaxPeer)
+	db := utils.NewDatabase()
+
+	keyManager := utils.NewKeyManager(KeyStore, Datadir, db)
 
 	// create, import, export keys
-	utils.KeyTasks(GenAddr, ImportKey, ExportKey, NonInteractive)
+	utils.KeyTasks(keyManager, KeyRing, GenAddr, SecretFile, ExportDir, NonInteractive)
+
+	ethereum := utils.NewEthereum(db, keyManager, UseUPnP, OutboundPort, MaxPeer)
 
 	if ShowGenesis {
 		utils.ShowGenesis(ethereum)
