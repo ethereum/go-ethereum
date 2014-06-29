@@ -61,7 +61,7 @@ func (k *FileKeyStore) Save(session string, keyRing *KeyRing) error {
 		privateKeys = append(privateKeys, ethutil.Bytes2Hex(keyPair.PrivateKey))
 		publicKeys = append(publicKeys, ethutil.Bytes2Hex(keyPair.PublicKey))
 		addresses = append(addresses, ethutil.Bytes2Hex(keyPair.Address()))
-		mnemonics = append(mnemonics, strings.Join(MnemonicEncode(ethutil.Bytes2Hex(keyPair.PrivateKey)), " "))
+		mnemonics = append(mnemonics, keyPair.Mnemonic())
 	})
 
 	basename := session
