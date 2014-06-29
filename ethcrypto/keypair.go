@@ -3,12 +3,14 @@ package ethcrypto
 import (
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/secp256k1-go"
+	"strings"
 )
 
 type KeyPair struct {
 	PrivateKey []byte
 	PublicKey  []byte
-
+	address    []byte
+	mnemonic   string
 	// The associated account
 	// account *StateObject
 }
@@ -29,7 +31,21 @@ func NewKeyPairFromSec(seckey []byte) (*KeyPair, error) {
 }
 
 func (k *KeyPair) Address() []byte {
-	return Sha3Bin(k.PublicKey[1:])[12:]
+	if k.address == nil {
+		k.address = Sha3Bin(k.PublicKey[1:])[12:]
+	}
+	return k.address
+}
+
+func (k *KeyPair) Mnemonic() string {
+	if k.mnemonic == "" {
+		k.mnemonic = strings.Join(MnemonicEncode(ethutil.Bytes2Hex(k.PrivateKey)), " ")
+	}
+	return k.mnemonic
+}
+
+func (k *KeyPair) AsStrings() (string, string, string, string) {
+	return k.Mnemonic(), ethutil.Bytes2Hex(k.Address()), ethutil.Bytes2Hex(k.PrivateKey), ethutil.Bytes2Hex(k.PublicKey)
 }
 
 func (k *KeyPair) RlpEncode() []byte {
