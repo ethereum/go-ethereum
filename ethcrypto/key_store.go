@@ -32,7 +32,7 @@ func (k *DBKeyStore) Save(session string, keyRing *KeyRing) error {
 func (k *DBKeyStore) Load(session string) (*KeyRing, error) {
 	data, err := k.db.Get(k.dbKey(session))
 	if err != nil {
-		return nil, err
+		return nil, nil
 	}
 	var keyRing *KeyRing
 	keyRing, err = NewKeyRingFromBytes(data)
