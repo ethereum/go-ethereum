@@ -1,8 +1,6 @@
 package ethutil
 
-import (
-	"strconv"
-)
+import ()
 
 // Helper function for comparing slices
 func CompareIntSlice(a, b []int) bool {
