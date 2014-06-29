@@ -4,6 +4,7 @@ import (
 	"code.google.com/p/go.crypto/ripemd160"
 	"crypto/sha256"
 	"github.com/obscuren/sha3"
+	"math/big"
 )
 
 func Sha256Bin(data []byte) []byte {
