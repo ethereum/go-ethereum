@@ -52,10 +52,3 @@ var (
 	Big32  = big.NewInt(32)
 	Big256 = big.NewInt(0xff)
 )
-
-// Creates an ethereum address given the bytes and the nonce
-func CreateAddress(b []byte, nonce *big.Int) []byte {
-	addrBytes := append(b, nonce.Bytes()...)
-
-	return Sha3Bin(addrBytes)[12:]
-}

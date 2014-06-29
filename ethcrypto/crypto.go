@@ -25,3 +25,10 @@ func Sha3Bin(data []byte) []byte {
 
 	return d.Sum(nil)
 }
+
+// Creates an ethereum address given the bytes and the nonce
+func CreateAddress(b []byte, nonce *big.Int) []byte {
+	addrBytes := append(b, nonce.Bytes()...)
+
+	return Sha3Bin(addrBytes)[12:]
+}
