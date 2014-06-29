@@ -121,10 +121,10 @@ out:
 func (app *ExtApplication) Watch(addr, storageAddr string) {
 	var event string
 	if len(storageAddr) == 0 {
-		event = "object:" + string(ethutil.FromHex(addr))
+		event = "object:" + string(ethutil.Hex2Bytes(addr))
 		app.lib.eth.Reactor().Subscribe(event, app.changeChan)
 	} else {
-		event = "storage:" + string(ethutil.FromHex(addr)) + ":" + string(ethutil.FromHex(storageAddr))
+		event = "storage:" + string(ethutil.Hex2Bytes(addr)) + ":" + string(ethutil.Hex2Bytes(storageAddr))
 		app.lib.eth.Reactor().Subscribe(event, app.changeChan)
 	}
 

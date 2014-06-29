@@ -49,7 +49,7 @@ func (self *DebuggerWindow) SetData(data string) {
 	self.win.Set("dataText", data)
 }
 func (self *DebuggerWindow) SetAsm(data string) {
-	dis := ethchain.Disassemble(ethutil.FromHex(data))
+	dis := ethchain.Disassemble(ethutil.Hex2Bytes(data))
 	for _, str := range dis {
 		self.win.Root().Call("setAsm", str)
 	}
@@ -101,7 +101,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 		gasPrice = ethutil.Big(gasPriceStr)
 		value    = ethutil.Big(valueStr)
 		// Contract addr as test address
-		keyPair  = ethutil.GetKeyRing().Get(0)
+		keyPair  = self.lib.eth.KeyManager().KeyPair()
 		callerTx = ethchain.NewContractCreationTx(ethutil.Big(valueStr), gas, gasPrice, script)
 	)
 	callerTx.Sign(keyPair.PrivateKey)
