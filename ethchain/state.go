@@ -1,6 +1,7 @@
 package ethchain
 
 import (
+	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
 )
@@ -12,7 +13,7 @@ import (
 // * Accounts
 type State struct {
 	// The trie for this structure
-	trie *ethutil.Trie
+	trie *ethtrie.Trie
 
 	stateObjects map[string]*StateObject
 
@@ -20,7 +21,7 @@ type State struct {
 }
 
 // Create a new state from a given trie
-func NewState(trie *ethutil.Trie) *State {
+func NewState(trie *ethtrie.Trie) *State {
 	return &State{trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest()}
 }
 
