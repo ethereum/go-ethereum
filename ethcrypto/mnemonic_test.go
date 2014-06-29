@@ -1,4 +1,4 @@
-package ethutil
+package ethcrypto
 
 import (
 	"testing"
