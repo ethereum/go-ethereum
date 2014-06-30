@@ -1,7 +1,9 @@
 package ethchain
 
 import (
+	"bytes"
 	"fmt"
+	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
 )
 
@@ -236,6 +238,8 @@ func (self *StateTransition) transferValue(sender, receiver *StateObject) error 
 	return nil
 }
 
+var testAddr = ethutil.FromHex("ec4f34c97e43fbb2816cfd95e388353c7181dab1")
+
 func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []byte, err error, deepErr bool) {
 	var (
 		block     = self.block
@@ -257,6 +261,47 @@ func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []by
 	vm.Verbose = true
 	ret, _, err = closure.Call(vm, self.data, nil)
 	deepErr = vm.err != nil
+
+	/*
+		if bytes.Compare(testAddr, context.Address()) == 0 {
+			trie := context.state.trie
+			trie.NewIterator().Each(func(key string, v *ethutil.Value) {
+				v.Decode()
+				fmt.Printf("%x : %x\n", key, v.Str())
+			})
+			fmt.Println("\n\n")
+		}
+	*/
+
+	Paranoia := true
+	if Paranoia {
+		var (
+			trie  = context.state.trie
+			trie2 = ethutil.NewTrie(ethutil.Config.Db, "")
+		)
+
+		trie.NewIterator().Each(func(key string, v *ethutil.Value) {
+			trie2.Update(key, v.Str())
+		})
+
+		a := ethutil.NewValue(trie2.Root).Bytes()
+		b := ethutil.NewValue(context.state.trie.Root).Bytes()
+		if bytes.Compare(a, b) != 0 {
+			fmt.Printf("original: %x\n", trie.Root)
+			trie.NewIterator().Each(func(key string, v *ethutil.Value) {
+				v.Decode()
+				fmt.Printf("%x : %x\n", key, v.Str())
+			})
+
+			fmt.Printf("new: %x\n", trie2.Root)
+			trie2.NewIterator().Each(func(key string, v *ethutil.Value) {
+				v.Decode()
+				fmt.Printf("%x : %x\n", key, v.Str())
+			})
+
+			return nil, fmt.Errorf("PARANOIA: Different state object roots during copy"), false
+		}
+	}
 
 	return
 }

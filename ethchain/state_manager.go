@@ -3,6 +3,7 @@ package ethchain
 import (
 	"bytes"
 	"container/list"
+	"fmt"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
@@ -200,7 +201,7 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 	}
 
 	if !block.State().Cmp(state) {
-		statelogger.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().trie.Root, state.trie.Root)
+		err = fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().trie.Root, state.trie.Root)
 		return
 	}
 

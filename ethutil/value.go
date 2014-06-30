@@ -116,6 +116,8 @@ func (val *Value) Bytes() []byte {
 		return a
 	} else if s, ok := val.Val.(byte); ok {
 		return []byte{s}
+	} else if s, ok := val.Val.(string); ok {
+		return []byte(s)
 	}
 
 	return []byte{}
@@ -194,6 +196,12 @@ func (val *Value) Cmp(o *Value) bool {
 
 func (val *Value) Encode() []byte {
 	return Encode(val.Val)
+}
+
+// Assume that the data we have is encoded
+func (self *Value) Decode() {
+	v, _ := Decode(self.Bytes(), 0)
+	self.Val = v
 }
 
 func NewValueFromBytes(data []byte) *Value {

@@ -48,7 +48,10 @@ func MakeContract(tx *Transaction, state *State) *StateObject {
 }
 
 func NewStateObject(addr []byte) *StateObject {
-	return &StateObject{address: addr, Amount: new(big.Int), gasPool: new(big.Int)}
+	object := &StateObject{address: addr, Amount: new(big.Int), gasPool: new(big.Int)}
+	object.state = NewState(ethutil.NewTrie(ethutil.Config.Db, ""))
+
+	return object
 }
 
 func NewContract(address []byte, Amount *big.Int, root []byte) *StateObject {
