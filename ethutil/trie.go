@@ -191,7 +191,17 @@ func (t *Trie) Get(key string) string {
 }
 
 func (t *Trie) Delete(key string) {
-	t.Update(key, "")
+	t.mut.Lock()
+	defer t.mut.Unlock()
+
+	k := CompactHexDecode(key)
+
+	root := t.DeleteState(t.Root, k)
+	if _, ok := root.([]byte); !ok {
+		t.Root = t.cache.PutValue(root, true)
+	} else {
+		t.Root = root
+	}
 }
 
 func (t *Trie) GetState(node interface{}, key []int) interface{} {
@@ -243,15 +253,7 @@ func (t *Trie) GetNode(node interface{}) *Value {
 }
 
 func (t *Trie) UpdateState(node interface{}, key []int, value string) interface{} {
-
-	if value != "" {
-		return t.InsertState(node, key, value)
-	} else {
-		// delete it
-		return t.DeleteState(node, key)
-	}
-
-	return t.Root
+	return t.InsertState(node, key, value)
 }
 
 func (t *Trie) Put(node interface{}) interface{} {
