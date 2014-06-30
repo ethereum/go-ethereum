@@ -538,15 +538,13 @@ func (it *TrieIterator) fetchNode(key []int, node []byte, cb EachCallback) {
 }
 
 func (it *TrieIterator) iterateNode(key []int, currentNode *Value, cb EachCallback) {
-	//fmt.Println("node", currentNode)
-
 	if currentNode.Len() == 2 {
 		k := CompactDecode(currentNode.Get(0).Str())
 
-		if currentNode.Get(1).Str() == "" {
-			it.iterateNode(key, currentNode.Get(1), cb)
+		pk := append(key, k...)
+		if currentNode.Get(1).Len() != 0 && currentNode.Get(1).Str() == "" {
+			it.iterateNode(pk, currentNode.Get(1), cb)
 		} else {
-			pk := append(key, k...)
 
 			if k[len(k)-1] == 16 {
 				cb(DecodeCompact(pk), currentNode.Get(1))
@@ -560,7 +558,7 @@ func (it *TrieIterator) iterateNode(key []int, currentNode *Value, cb EachCallba
 			if i == 16 && currentNode.Get(i).Len() != 0 {
 				cb(DecodeCompact(pk), currentNode.Get(i))
 			} else {
-				if currentNode.Get(i).Str() == "" {
+				if currentNode.Get(i).Len() != 0 && currentNode.Get(i).Str() == "" {
 					it.iterateNode(pk, currentNode.Get(i), cb)
 				} else {
 					val := currentNode.Get(i).Str()

@@ -261,13 +261,13 @@ func TestTrieReplay(t *testing.T) {
 
 		_, trie2 := New()
 		trie.NewIterator().Each(func(key string, v *Value) {
-			trie2.Update(key, string(v.Str()))
+			trie2.Update(key, v.Str())
 		})
 
 		a := NewValue(trie.Root).Bytes()
 		b := NewValue(trie2.Root).Bytes()
 		if bytes.Compare(a, b) != 0 {
-			t.Errorf("root %x %x\n", trie.Root, trie2.Root)
+			t.Errorf("%s %x %x\n", test.Name, trie.Root, trie2.Root)
 		}
 	})
 }
