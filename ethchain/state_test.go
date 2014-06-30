@@ -7,7 +7,7 @@ import (
 )
 
 func TestSnapshot(t *testing.T) {
-	ethutil.ReadConfig("", ethutil.LogStd, "")
+	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "", "ETH")
 
 	db, _ := ethdb.NewMemDatabase()
 	state := NewState(ethutil.NewTrie(db, ""))
