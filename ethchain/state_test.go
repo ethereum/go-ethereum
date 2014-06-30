@@ -16,12 +16,12 @@ func TestSnapshot(t *testing.T) {
 	state.UpdateStateObject(stateObject)
 	stateObject.SetStorage(ethutil.Big("0"), ethutil.NewValue(42))
 
-	snapshot := state.Snapshot()
+	snapshot := state.Copy()
 
 	stateObject = state.GetStateObject([]byte("aa"))
 	stateObject.SetStorage(ethutil.Big("0"), ethutil.NewValue(43))
 
-	state.Revert(snapshot)
+	state.Set(snapshot)
 
 	stateObject = state.GetStateObject([]byte("aa"))
 	if !stateObject.GetStorage(ethutil.Big("0")).Cmp(ethutil.NewValue(42)) {

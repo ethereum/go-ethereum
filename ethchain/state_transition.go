@@ -226,19 +226,13 @@ func (self *StateTransition) transferValue(sender, receiver *StateObject) error 
 		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Amount)
 	}
 
-	//if self.value.Cmp(ethutil.Big0) > 0 {
 	// Subtract the amount from the senders account
 	sender.SubAmount(self.value)
 	// Add the amount to receivers account which should conclude this transaction
 	receiver.AddAmount(self.value)
 
-	//statelogger.Debugf("%x => %x (%v)\n", sender.Address()[:4], receiver.Address()[:4], self.value)
-	//}
-
 	return nil
 }
-
-var testAddr = ethutil.FromHex("ec4f34c97e43fbb2816cfd95e388353c7181dab1")
 
 func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []byte, err error, deepErr bool) {
 	var (
@@ -263,6 +257,7 @@ func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []by
 	deepErr = vm.err != nil
 
 	/*
+		var testAddr = ethutil.FromHex("ec4f34c97e43fbb2816cfd95e388353c7181dab1")
 		if bytes.Compare(testAddr, context.Address()) == 0 {
 			trie := context.state.trie
 			trie.NewIterator().Each(func(key string, v *ethutil.Value) {
@@ -273,7 +268,7 @@ func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []by
 		}
 	*/
 
-	Paranoia := true
+	Paranoia := true // TODO Create a flag for this
 	if Paranoia {
 		var (
 			trie  = context.state.trie
@@ -287,17 +282,19 @@ func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []by
 		a := ethutil.NewValue(trie2.Root).Bytes()
 		b := ethutil.NewValue(context.state.trie.Root).Bytes()
 		if bytes.Compare(a, b) != 0 {
-			fmt.Printf("original: %x\n", trie.Root)
-			trie.NewIterator().Each(func(key string, v *ethutil.Value) {
-				v.Decode()
-				fmt.Printf("%x : %x\n", key, v.Str())
-			})
+			/*
+				statelogger.Debugf("(o): %x\n", trie.Root)
+				trie.NewIterator().Each(func(key string, v *ethutil.Value) {
+					v.Decode()
+					statelogger.Debugf("%x : %x\n", key, v.Str())
+				})
 
-			fmt.Printf("new: %x\n", trie2.Root)
-			trie2.NewIterator().Each(func(key string, v *ethutil.Value) {
-				v.Decode()
-				fmt.Printf("%x : %x\n", key, v.Str())
-			})
+				statelogger.Debugf("(c): %x\n", trie2.Root)
+				trie2.NewIterator().Each(func(key string, v *ethutil.Value) {
+					v.Decode()
+					statelogger.Debugf("%x : %x\n", key, v.Str())
+				})
+			*/
 
 			return nil, fmt.Errorf("PARANOIA: Different state object roots during copy"), false
 		}

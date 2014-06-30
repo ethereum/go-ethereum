@@ -123,7 +123,8 @@ done:
 
 				break done
 			default:
-				statelogger.Infoln(err)
+				//statelogger.Infoln(err)
+				return nil, nil, nil, err
 			}
 		}
 
@@ -236,7 +237,10 @@ func (sm *StateManager) ApplyDiff(state *State, parent, block *Block) (receipts 
 	coinbase.SetGasPool(block.CalcGasLimit(parent))
 
 	// Process the transactions on to current block
-	receipts, _, _, _ = sm.ProcessTransactions(coinbase, state, block, parent, block.Transactions())
+	receipts, _, _, err = sm.ProcessTransactions(coinbase, state, block, parent, block.Transactions())
+	if err != nil {
+		return nil, err
+	}
 
 	return receipts, nil
 }

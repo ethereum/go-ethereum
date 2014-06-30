@@ -173,10 +173,13 @@ func (t *Trie) Update(key string, value string) {
 	k := CompactHexDecode(key)
 
 	root := t.UpdateState(t.Root, k, value)
-	if _, ok := root.([]byte); !ok {
-		t.Root = t.cache.PutValue(root, true)
-	} else {
+	switch root.(type) {
+	case string:
 		t.Root = root
+	case []byte:
+		t.Root = root
+	default:
+		t.Root = t.cache.PutValue(root, true)
 	}
 }
 
@@ -197,10 +200,13 @@ func (t *Trie) Delete(key string) {
 	k := CompactHexDecode(key)
 
 	root := t.DeleteState(t.Root, k)
-	if _, ok := root.([]byte); !ok {
-		t.Root = t.cache.PutValue(root, true)
-	} else {
+	switch root.(type) {
+	case string:
 		t.Root = root
+	case []byte:
+		t.Root = root
+	default:
+		t.Root = t.cache.PutValue(root, true)
 	}
 }
 
