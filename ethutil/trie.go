@@ -43,11 +43,11 @@ func NewCache(db Database) *Cache {
 	return &Cache{db: db, nodes: make(map[string]*Node)}
 }
 
-func (cache *Cache) Put(v interface{}) interface{} {
+func (cache *Cache) PutValue(v interface{}, force bool) interface{} {
 	value := NewValue(v)
 
 	enc := value.Encode()
-	if len(enc) >= 32 {
+	if len(enc) >= 32 || force {
 		sha := Sha3Bin(enc)
 
 		cache.nodes[string(sha)] = NewNode(sha, value, true)
@@ -57,6 +57,10 @@ func (cache *Cache) Put(v interface{}) interface{} {
 	}
 
 	return v
+}
+
+func (cache *Cache) Put(v interface{}) interface{} {
+	return cache.PutValue(v, false)
 }
 
 func (cache *Cache) Get(key []byte) *Value {
@@ -168,7 +172,12 @@ func (t *Trie) Update(key string, value string) {
 
 	k := CompactHexDecode(key)
 
-	t.Root = t.UpdateState(t.Root, k, value)
+	root := t.UpdateState(t.Root, k, value)
+	if _, ok := root.([]byte); !ok {
+		t.Root = t.cache.PutValue(root, true)
+	} else {
+		t.Root = root
+	}
 }
 
 func (t *Trie) Get(key string) string {
@@ -527,6 +536,8 @@ func (it *TrieIterator) fetchNode(key []int, node []byte, cb EachCallback) {
 }
 
 func (it *TrieIterator) iterateNode(key []int, currentNode *Value, cb EachCallback) {
+	//fmt.Println("node", currentNode)
+
 	if currentNode.Len() == 2 {
 		k := CompactDecode(currentNode.Get(0).Str())
 

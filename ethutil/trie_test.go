@@ -1,7 +1,12 @@
 package ethutil
 
 import (
+	"bytes"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"reflect"
 	"testing"
 )
@@ -171,23 +176,98 @@ func TestTriePurge(t *testing.T) {
 	}
 }
 
-func TestTrieIt(t *testing.T) {
-	_, trie := New()
-
-	data := [][]string{
-		{"do", "verb"},
-		{"ether", "wookiedoo"},
-		{"horse", "stallion"},
-		{"shaman", "horse"},
-		{"doge", "coin"},
-		{"ether", ""},
-		{"dog", "puppy"},
-		{"shaman", ""},
+func h(str string) string {
+	d, err := hex.DecodeString(str)
+	if err != nil {
+		panic(err)
 	}
 
-	for _, item := range data {
-		trie.Update(item[0], item[1])
+	return string(d)
+}
+
+func get(in string) (out string) {
+	if len(in) > 2 && in[:2] == "0x" {
+		out = h(in[2:])
+	} else {
+		out = in
 	}
 
-	fmt.Printf("root %x", trie.Root)
+	return
+}
+
+type Test struct {
+	Name string
+	In   map[string]string
+	Root string
+}
+
+func CreateTest(name string, data []byte) (Test, error) {
+	t := Test{Name: name}
+	err := json.Unmarshal(data, &t)
+	if err != nil {
+		return Test{}, fmt.Errorf("%v", err)
+	}
+
+	return t, nil
+}
+
+func CreateTests(uri string, cb func(Test)) {
+	resp, err := http.Get(uri)
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+
+	data, err := ioutil.ReadAll(resp.Body)
+
+	var objmap map[string]*json.RawMessage
+	err = json.Unmarshal(data, &objmap)
+	if err != nil {
+		panic(err)
+	}
+
+	for name, testData := range objmap {
+		test, err := CreateTest(name, *testData)
+		if err != nil {
+			panic(err)
+		}
+
+		cb(test)
+	}
+}
+
+func TestRemote(t *testing.T) {
+	CreateTests("https://raw.githubusercontent.com/ethereum/tests/develop/trietest.json", func(test Test) {
+		_, trie := New()
+		for key, value := range test.In {
+			trie.Update(get(key), get(value))
+		}
+		fmt.Printf("%-15s: %x\n", test.Name, trie.Root)
+
+		a := NewValue(h(test.Root)).Bytes()
+		b := NewValue(trie.Root).Bytes()
+		if bytes.Compare(a, b) != 0 {
+			t.Errorf("%-10s: %x %x", test.Name, a, b)
+		}
+	})
+}
+
+func TestTrieReplay(t *testing.T) {
+	CreateTests("https://raw.githubusercontent.com/ethereum/tests/develop/trietest.json", func(test Test) {
+		_, trie := New()
+		for key, value := range test.In {
+			trie.Update(get(key), get(value))
+		}
+
+		_, trie2 := New()
+		trie.NewIterator().Each(func(key string, v *Value) {
+			trie2.Update(key, string(v.Str()))
+		})
+
+		a := NewValue(trie.Root).Bytes()
+		b := NewValue(trie2.Root).Bytes()
+		if bytes.Compare(a, b) != 0 {
+			t.Errorf("root %x %x\n", trie.Root, trie2.Root)
+		}
+	})
 }
