@@ -1,4 +1,4 @@
-package ethui
+package main
 
 import (
 	"bytes"
@@ -40,7 +40,7 @@ type Gui struct {
 }
 
 // Create GUI, but doesn't start it
-func New(ethereum *eth.Ethereum, session string, logLevel int) *Gui {
+func NewWindow(ethereum *eth.Ethereum, session string, logLevel int) *Gui {
 
 	db, err := ethdb.NewLDBDatabase("tx_database")
 	if err != nil {
