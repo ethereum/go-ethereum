@@ -14,6 +14,31 @@ import (
 
 var logger = ethlog.NewLogger("PUB")
 
+// TODO this has to move elsewhere
+var cnfCtr = ethutil.Hex2Bytes("661005d2720d855f1d9976f88bb10c1a3398c77f")
+
+type helper struct {
+	sm *ethchain.StateManager
+}
+
+func EthereumConfig(stateManager *ethchain.StateManager) helper {
+	return helper{stateManager}
+}
+func (self helper) obj() *ethchain.StateObject {
+	return self.sm.CurrentState().GetStateObject(cnfCtr)
+}
+
+func (self helper) NameReg() *ethchain.StateObject {
+	if self.obj() != nil {
+		addr := self.obj().GetStorage(big.NewInt(0))
+		if len(addr.Bytes()) > 0 {
+			return self.sm.CurrentState().GetStateObject(addr.Bytes())
+		}
+	}
+
+	return nil
+}
+
 type PEthereum struct {
 	manager      ethchain.EthManager
 	stateManager *ethchain.StateManager
@@ -141,19 +166,31 @@ func (lib *PEthereum) Create(key, valueStr, gasStr, gasPriceStr, script string) 
 	return lib.createTx(key, "", valueStr, gasStr, gasPriceStr, script)
 }
 
-var namereg = ethutil.Hex2Bytes("bb5f186604d057c1c5240ca2ae0f6430138ac010")
-
 func GetAddressFromNameReg(stateManager *ethchain.StateManager, name string) []byte {
-	recp := new(big.Int).SetBytes([]byte(name))
-	object := stateManager.CurrentState().GetStateObject(namereg)
-	if object != nil {
-		reg := object.GetStorage(recp)
+	nameReg := EthereumConfig(stateManager).NameReg()
+	if nameReg != nil {
+		addr := ethutil.RightPadBytes([]byte(name), 32)
+
+		reg := nameReg.GetStorage(ethutil.BigD(addr))
 
 		return reg.Bytes()
 	}
 
 	return nil
+
+	/*
+		recp := new(big.Int).SetBytes([]byte(name))
+		object := stateManager.CurrentState().GetStateObject(namereg)
+		if object != nil {
+			reg := object.GetStorage(recp)
+
+			return reg.Bytes()
+		}
+
+		return nil
+	*/
 }
+
 func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, scriptStr string) (*PReceipt, error) {
 	var hash []byte
 	var contractCreation bool
@@ -171,7 +208,7 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, sc
 
 	var keyPair *ethcrypto.KeyPair
 	var err error
-	if key[0:2] == "0x" {
+	if ethutil.IsHex(key) {
 		keyPair, err = ethcrypto.NewKeyPairFromSec([]byte(ethutil.Hex2Bytes(key[2:])))
 	} else {
 		keyPair, err = ethcrypto.NewKeyPairFromSec([]byte(ethutil.Hex2Bytes(key)))
