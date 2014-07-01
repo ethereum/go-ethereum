@@ -177,18 +177,6 @@ func GetAddressFromNameReg(stateManager *ethchain.StateManager, name string) []b
 	}
 
 	return nil
-
-	/*
-		recp := new(big.Int).SetBytes([]byte(name))
-		object := stateManager.CurrentState().GetStateObject(namereg)
-		if object != nil {
-			reg := object.GetStorage(recp)
-
-			return reg.Bytes()
-		}
-
-		return nil
-	*/
 }
 
 func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, scriptStr string) (*PReceipt, error) {
