@@ -129,7 +129,7 @@ func FormatData(data string) []byte {
 }
 
 func RightPadBytes(slice []byte, l int) []byte {
-	if l <= len(slice) {
+	if l < len(slice) {
 		return slice
 	}
 
@@ -140,7 +140,7 @@ func RightPadBytes(slice []byte, l int) []byte {
 }
 
 func LeftPadBytes(slice []byte, l int) []byte {
-	if l <= len(slice) {
+	if l < len(slice) {
 		return slice
 	}
 

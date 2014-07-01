@@ -150,7 +150,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case SSTORE:
 			var mult *big.Int
 			y, x := stack.Peekn()
-			val := closure.GetMem(x)
+			val := closure.GetStorage(x)
 			if val.IsEmpty() && len(y.Bytes()) > 0 {
 				mult = ethutil.Big2
 			} else if !val.IsEmpty() && len(y.Bytes()) == 0 {
@@ -567,7 +567,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case SLOAD:
 			require(1)
 			loc := stack.Pop()
-			val := closure.GetMem(loc)
+			val := closure.GetStorage(loc)
 
 			stack.Push(val.BigInt())
 
@@ -713,10 +713,14 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			receiver := vm.state.GetAccount(stack.Pop().Bytes())
 			receiver.AddAmount(closure.object.Amount)
 
-			trie := closure.object.state.trie
-			trie.NewIterator().Each(func(key string, v *ethutil.Value) {
-				trie.Delete(key)
-			})
+			closure.object.MarkForDeletion()
+
+			/*
+				trie := closure.object.state.trie
+				trie.NewIterator().Each(func(key string, v *ethutil.Value) {
+					trie.Delete(key)
+				})
+			*/
 
 			fallthrough
 		case STOP: // Stop the closure
