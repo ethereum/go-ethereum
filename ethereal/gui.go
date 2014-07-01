@@ -41,7 +41,6 @@ type Gui struct {
 
 // Create GUI, but doesn't start it
 func NewWindow(ethereum *eth.Ethereum, session string, logLevel int) *Gui {
-
 	db, err := ethdb.NewLDBDatabase("tx_database")
 	if err != nil {
 		panic(err)
@@ -273,7 +272,11 @@ func (gui *Gui) update() {
 	reactor.Subscribe("newBlock", blockChan)
 	reactor.Subscribe("newTx:pre", txChan)
 	reactor.Subscribe("newTx:post", txChan)
-	//reactor.Subscribe("object:"+string(namereg), objectChan)
+
+	nameReg := ethpub.EthereumConfig(gui.eth.StateManager()).NameReg()
+	if nameReg != nil {
+		reactor.Subscribe("object:"+string(nameReg.Address()), objectChan)
+	}
 	reactor.Subscribe("peerList", peerChan)
 
 	ticker := time.NewTicker(5 * time.Second)
