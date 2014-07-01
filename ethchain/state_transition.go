@@ -1,7 +1,9 @@
 package ethchain
 
 import (
+	"bytes"
 	"fmt"
+	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
 )
 
@@ -224,14 +226,10 @@ func (self *StateTransition) transferValue(sender, receiver *StateObject) error 
 		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Amount)
 	}
 
-	//if self.value.Cmp(ethutil.Big0) > 0 {
 	// Subtract the amount from the senders account
 	sender.SubAmount(self.value)
 	// Add the amount to receivers account which should conclude this transaction
 	receiver.AddAmount(self.value)
-
-	//statelogger.Debugf("%x => %x (%v)\n", sender.Address()[:4], receiver.Address()[:4], self.value)
-	//}
 
 	return nil
 }
@@ -255,8 +253,50 @@ func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []by
 		Value:       self.value,
 	})
 	vm.Verbose = true
-	ret, _, err = closure.Call(vm, self.data, nil)
+
+	ret, err, deepErr = Call(vm, closure, self.data)
+
+	return
+}
+
+func Call(vm *Vm, closure *Closure, data []byte) (ret []byte, err error, deepErr bool) {
+	ret, _, err = closure.Call(vm, data, nil)
 	deepErr = vm.err != nil
+
+	Paranoia := ethutil.Config.Paranoia
+	if Paranoia {
+		var (
+			context = closure.object
+			trie    = context.state.trie
+			trie2   = ethutil.NewTrie(ethutil.Config.Db, "")
+		)
+
+		trie.NewIterator().Each(func(key string, v *ethutil.Value) {
+			trie2.Update(key, v.Str())
+		})
+
+		a := ethutil.NewValue(trie2.Root).Bytes()
+		b := ethutil.NewValue(context.state.trie.Root).Bytes()
+		if bytes.Compare(a, b) != 0 {
+			// TODO FIXME ASAP
+			context.state.trie = trie2
+			/*
+				statelogger.Debugf("(o): %x\n", trie.Root)
+				trie.NewIterator().Each(func(key string, v *ethutil.Value) {
+					v.Decode()
+					statelogger.Debugf("%x : %x\n", key, v.Str())
+				})
+
+				statelogger.Debugf("(c): %x\n", trie2.Root)
+				trie2.NewIterator().Each(func(key string, v *ethutil.Value) {
+					v.Decode()
+					statelogger.Debugf("%x : %x\n", key, v.Str())
+				})
+			*/
+
+			//return nil, fmt.Errorf("PARANOIA: Different state object roots during copy"), false
+		}
+	}
 
 	return
 }

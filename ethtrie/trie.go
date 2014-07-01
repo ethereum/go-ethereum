@@ -45,11 +45,11 @@ func NewCache(db ethutil.Database) *Cache {
 	return &Cache{db: db, nodes: make(map[string]*Node)}
 }
 
-func (cache *Cache) Put(v interface{}) interface{} {
+func (cache *Cache) PutValue(v interface{}, force bool) interface{} {
 	value := ethutil.NewValue(v)
 
 	enc := value.Encode()
-	if len(enc) >= 32 {
+	if len(enc) >= 32 || force {
 		sha := ethcrypto.Sha3Bin(enc)
 
 		cache.nodes[string(sha)] = NewNode(sha, value, true)
@@ -59,6 +59,10 @@ func (cache *Cache) Put(v interface{}) interface{} {
 	}
 
 	return v
+}
+
+func (cache *Cache) Put(v interface{}) interface{} {
+	return cache.PutValue(v, false)
 }
 
 func (cache *Cache) Get(key []byte) *ethutil.Value {
@@ -170,7 +174,15 @@ func (t *Trie) Update(key string, value string) {
 
 	k := CompactHexDecode(key)
 
-	t.Root = t.UpdateState(t.Root, k, value)
+	root := t.UpdateState(t.Root, k, value)
+	switch root.(type) {
+	case string:
+		t.Root = root
+	case []byte:
+		t.Root = root
+	default:
+		t.Root = t.cache.PutValue(root, true)
+	}
 }
 
 func (t *Trie) Get(key string) string {
@@ -184,7 +196,20 @@ func (t *Trie) Get(key string) string {
 }
 
 func (t *Trie) Delete(key string) {
-	t.Update(key, "")
+	t.mut.Lock()
+	defer t.mut.Unlock()
+
+	k := CompactHexDecode(key)
+
+	root := t.DeleteState(t.Root, k)
+	switch root.(type) {
+	case string:
+		t.Root = root
+	case []byte:
+		t.Root = root
+	default:
+		t.Root = t.cache.PutValue(root, true)
+	}
 }
 
 func (t *Trie) GetState(node interface{}, key []int) interface{} {
@@ -236,15 +261,7 @@ func (t *Trie) GetNode(node interface{}) *ethutil.Value {
 }
 
 func (t *Trie) UpdateState(node interface{}, key []int, value string) interface{} {
-
-	if value != "" {
-		return t.InsertState(node, key, value)
-	} else {
-		// delete it
-		return t.DeleteState(node, key)
-	}
-
-	return t.Root
+	return t.InsertState(node, key, value)
 }
 
 func (t *Trie) Put(node interface{}) interface{} {
@@ -532,10 +549,10 @@ func (it *TrieIterator) iterateNode(key []int, currentNode *ethutil.Value, cb Ea
 	if currentNode.Len() == 2 {
 		k := CompactDecode(currentNode.Get(0).Str())
 
-		if currentNode.Get(1).Str() == "" {
-			it.iterateNode(key, currentNode.Get(1), cb)
+		pk := append(key, k...)
+		if currentNode.Get(1).Len() != 0 && currentNode.Get(1).Str() == "" {
+			it.iterateNode(pk, currentNode.Get(1), cb)
 		} else {
-			pk := append(key, k...)
 
 			if k[len(k)-1] == 16 {
 				cb(DecodeCompact(pk), currentNode.Get(1))
@@ -549,7 +566,7 @@ func (it *TrieIterator) iterateNode(key []int, currentNode *ethutil.Value, cb Ea
 			if i == 16 && currentNode.Get(i).Len() != 0 {
 				cb(DecodeCompact(pk), currentNode.Get(i))
 			} else {
-				if currentNode.Get(i).Str() == "" {
+				if currentNode.Get(i).Len() != 0 && currentNode.Get(i).Str() == "" {
 					it.iterateNode(pk, currentNode.Get(i), cb)
 				} else {
 					val := currentNode.Get(i).Str()

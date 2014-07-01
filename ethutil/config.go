@@ -14,6 +14,7 @@ type config struct {
 
 	ExecPath     string
 	Debug        bool
+	Paranoia     bool
 	Ver          string
 	ClientString string
 	Identifier   string
@@ -43,7 +44,7 @@ func ReadConfig(ConfigFile string, Datadir string, Identifier string, EnvPrefix 
 		} else {
 			g.ParseAll()
 		}
-		Config = &config{ExecPath: Datadir, Debug: true, Ver: "0.5.15", conf: g, Identifier: Identifier}
+		Config = &config{ExecPath: Datadir, Debug: true, Ver: "0.5.15", conf: g, Identifier: Identifier, Paranoia: true}
 		Config.SetClientString("Ethereum(G)")
 	}
 	return Config

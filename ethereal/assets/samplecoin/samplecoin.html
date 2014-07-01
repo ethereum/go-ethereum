@@ -1,0 +1,68 @@
+<html>
+<head>
+<title>jeffcoin</title>
+
+<link rel="stylesheet" href="bootstrap.min.css">
+<link rel="stylesheet" href="bootstrap-theme.min.css">
+<link rel="stylesheet" href="samplecoin.css">
+<meta name="viewport" content="minimum-scale=1; maximum-scale=1; initial-scale=1;">
+
+<script type="text/javascript">
+
+var jefcoinAddr = "22fa3ebce6ef9ca661a960104d3087eec040011e"
+var mAddr = ""
+
+function createTransaction() {
+	var addr = ("0x" + document.querySelector("#addr").value).pad(32);
+	var amount = document.querySelector("#amount").value.pad(32);
+
+	var data = (addr + amount).unbin();
+	eth.transact(mAddr, jefcoinAddr, 0, "50000", "1000000", data, function(receipt) {
+		debug("received tx hash:", reciept.address)
+	})
+}
+
+function init() {
+	eth.getKey(function(sec) {
+		mAddr = sec;
+		eth.getSecretToAddress(sec, function(addr) {
+			eth.getStorageAt(jefcoinAddr, addr, function(storage) {
+				document.querySelector("#current-amount").innerHTML = storage;
+			});
+
+			eth.watch(jefcoinAddr, addr, function(addr, value) {
+				document.querySelector("#current-amount").innerHTML = value
+			});
+		});
+	});
+}
+
+</script>
+</head>
+
+<body onload="init();">
+<div class="container">
+	<div class="header">
+		<h3 class="text-muted">JeffCoin</h3>
+	</div>
+
+	<div class="jumbotron ">
+		<img src="icon.png">
+		<div>Amount: <strong id="current-amount"></strong></div>
+
+		<div id="transactions">
+			<div class="form-group">
+				<input id="addr" class="form-control" type="text" placeholder="Receiver address"></input><br>
+				<input id="amount" class="form-control" type="text" placeholder="Amount"></input><br>
+			</div>
+
+			<button class="btn btn-default" onclick="createTransaction();">Send Tx</button>
+		</div>
+	</div>
+</div>
+
+<div id="debug" style="border: 1px solid black; min-height: 30px;"></div>
+
+</body>
+</html>
+

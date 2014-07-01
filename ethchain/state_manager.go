@@ -3,6 +3,7 @@ package ethchain
 import (
 	"bytes"
 	"container/list"
+	"fmt"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethutil"
@@ -125,6 +126,8 @@ done:
 				break done
 			default:
 				statelogger.Infoln(err)
+				err = nil
+				//return nil, nil, nil, err
 			}
 		}
 
@@ -202,7 +205,7 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 	}
 
 	if !block.State().Cmp(state) {
-		statelogger.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().trie.Root, state.trie.Root)
+		err = fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().trie.Root, state.trie.Root)
 		return
 	}
 
@@ -237,7 +240,10 @@ func (sm *StateManager) ApplyDiff(state *State, parent, block *Block) (receipts 
 	coinbase.SetGasPool(block.CalcGasLimit(parent))
 
 	// Process the transactions on to current block
-	receipts, _, _, _ = sm.ProcessTransactions(coinbase, state, block, parent, block.Transactions())
+	receipts, _, _, err = sm.ProcessTransactions(coinbase, state, block, parent, block.Transactions())
+	if err != nil {
+		return nil, err
+	}
 
 	return receipts, nil
 }

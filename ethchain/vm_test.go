@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/obscuren/mutan"
 	"math/big"
-	"strings"
 	"testing"
 )
 
@@ -17,7 +15,7 @@ func TestRun4(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 	state := NewState(ethutil.NewTrie(db, ""))
 
-	callerScript, err := mutan.Compile(strings.NewReader(`
+	callerScript, err := ethutil.Compile(`
 	this.store[this.origin()] = 10**20
 	hello := "world"
 
@@ -31,7 +29,7 @@ func TestRun4(t *testing.T) {
 			this.store[to] = this.store[to] + value
 		}
 	}
-	`), false)
+	`)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -55,7 +53,7 @@ func TestRun4(t *testing.T) {
 
 	vm := NewVm(state, nil, RuntimeVars{
 		Origin:      account.Address(),
-		BlockNumber: 1,
+		BlockNumber: big.NewInt(1),
 		PrevHash:    ethutil.FromHex("5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"),
 		Coinbase:    ethutil.FromHex("2adc25665018aa1fe0e6bc666dac8fc2697ff9ba"),
 		Time:        1,

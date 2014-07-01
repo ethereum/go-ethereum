@@ -130,7 +130,9 @@ out:
 func (self *Miner) Stop() {
 	logger.Infoln("Stopping...")
 	self.quitChan <- true
-	self.powQuitChan <- ethutil.React{}
+
+	close(self.powQuitChan)
+	close(self.quitChan)
 }
 
 func (self *Miner) mineNewBlock() {
