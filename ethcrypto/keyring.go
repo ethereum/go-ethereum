@@ -74,8 +74,12 @@ func NewKeyRingFromString(content string) (*KeyRing, error) {
 		} else if len(words) != 1 {
 			return nil, fmt.Errorf("Unrecognised key format")
 		}
-		secrets = append(secrets, ethutil.Hex2Bytes(secret))
+
+		if len(secret) != 0 {
+			secrets = append(secrets, ethutil.Hex2Bytes(secret))
+		}
 	}
+
 	return NewKeyRingFromSecrets(secrets)
 }
 
