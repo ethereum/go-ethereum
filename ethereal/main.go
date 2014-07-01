@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	// Leave QT on top at ALL times.
+	// Leave QT on top at ALL times. Qt Needs to be initialized from the main thread
 	qml.Init(nil)
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
@@ -30,10 +30,14 @@ func main() {
 
 	utils.InitLogging(Datadir, LogFile, LogLevel, DebugFile)
 
-	ethereum := utils.NewEthereum(UseUPnP, OutboundPort, MaxPeer)
+	db := utils.NewDatabase()
+
+	keyManager := utils.NewKeyManager(KeyStore, Datadir, db)
 
 	// create, import, export keys
-	utils.KeyTasks(GenAddr, ImportKey, ExportKey, NonInteractive)
+	utils.KeyTasks(keyManager, KeyRing, GenAddr, SecretFile, ExportDir, NonInteractive)
+
+	ethereum := utils.NewEthereum(db, keyManager, UseUPnP, OutboundPort, MaxPeer)
 
 	if ShowGenesis {
 		utils.ShowGenesis(ethereum)
@@ -43,7 +47,7 @@ func main() {
 		utils.StartRpc(ethereum, RpcPort)
 	}
 
-	gui := ethui.New(ethereum, LogLevel)
+	gui := ethui.New(ethereum, KeyRing, LogLevel)
 
 	utils.RegisterInterrupt(func(os.Signal) {
 		gui.Stop()

@@ -122,12 +122,12 @@ out:
 			}
 		case object := <-self.changeChan:
 			if stateObject, ok := object.Resource.(*ethchain.StateObject); ok {
-				for _, cb := range self.objectCb[ethutil.Hex(stateObject.Address())] {
+				for _, cb := range self.objectCb[ethutil.Bytes2Hex(stateObject.Address())] {
 					val, _ := self.vm.ToValue(ethpub.NewPStateObject(stateObject))
 					cb.Call(cb, val)
 				}
 			} else if storageObject, ok := object.Resource.(*ethchain.StorageState); ok {
-				for _, cb := range self.objectCb[ethutil.Hex(storageObject.StateAddress)+ethutil.Hex(storageObject.Address)] {
+				for _, cb := range self.objectCb[ethutil.Bytes2Hex(storageObject.StateAddress)+ethutil.Bytes2Hex(storageObject.Address)] {
 					val, _ := self.vm.ToValue(ethpub.NewPStorageState(storageObject))
 					cb.Call(cb, val)
 				}
@@ -178,12 +178,12 @@ func (self *JSRE) watch(call otto.FunctionCall) otto.Value {
 	if storageCallback {
 		self.objectCb[addr+storageAddr] = append(self.objectCb[addr+storageAddr], cb)
 
-		event := "storage:" + string(ethutil.FromHex(addr)) + ":" + string(ethutil.FromHex(storageAddr))
+		event := "storage:" + string(ethutil.Hex2Bytes(addr)) + ":" + string(ethutil.Hex2Bytes(storageAddr))
 		self.ethereum.Reactor().Subscribe(event, self.changeChan)
 	} else {
 		self.objectCb[addr] = append(self.objectCb[addr], cb)
 
-		event := "object:" + string(ethutil.FromHex(addr))
+		event := "object:" + string(ethutil.Hex2Bytes(addr))
 		self.ethereum.Reactor().Subscribe(event, self.changeChan)
 	}
 
@@ -221,7 +221,7 @@ func (self *JSRE) execBlock(call otto.FunctionCall) otto.Value {
 		return otto.UndefinedValue()
 	}
 
-	err = utils.BlockDo(self.ethereum, ethutil.FromHex(hash))
+	err = utils.BlockDo(self.ethereum, ethutil.Hex2Bytes(hash))
 	if err != nil {
 		fmt.Println(err)
 		return otto.FalseValue()

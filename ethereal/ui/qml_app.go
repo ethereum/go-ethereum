@@ -38,7 +38,7 @@ func (app *QmlApplication) NewWatcher(quitChan chan bool) {
 
 // Events
 func (app *QmlApplication) NewBlock(block *ethchain.Block) {
-	pblock := &ethpub.PBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Hex(block.Hash())}
+	pblock := &ethpub.PBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Bytes2Hex(block.Hash())}
 	app.win.Call("onNewBlockCb", pblock)
 }
 

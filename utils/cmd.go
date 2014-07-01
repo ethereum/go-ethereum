@@ -3,6 +3,8 @@ package utils
 import (
 	"fmt"
 	"github.com/ethereum/eth-go"
+	"github.com/ethereum/eth-go/ethcrypto"
+	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethminer"
 	"github.com/ethereum/eth-go/ethpub"
@@ -13,7 +15,6 @@ import (
 	"os"
 	"os/signal"
 	"path"
-	"strings"
 	"time"
 )
 
@@ -77,7 +78,7 @@ func InitDataDir(Datadir string) {
 	_, err := os.Stat(Datadir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			fmt.Printf("Debug logging directory '%s' doesn't exist, creating it\n", Datadir)
+			fmt.Printf("Data directory '%s' doesn't exist, creating it\n", Datadir)
 			os.Mkdir(Datadir, 0777)
 		}
 	}
@@ -100,16 +101,28 @@ func InitLogging(Datadir string, LogFile string, LogLevel int, DebugFile string)
 func InitConfig(ConfigFile string, Datadir string, Identifier string, EnvPrefix string) {
 	InitDataDir(Datadir)
 	ethutil.ReadConfig(ConfigFile, Datadir, Identifier, EnvPrefix)
-	ethutil.Config.Set("rpcport", "700")
 }
 
-func exit(status int) {
+func exit(err error) {
+	status := 0
+	if err != nil {
+		logger.Errorln("Fatal: ", err)
+		status = 1
+	}
 	ethlog.Flush()
 	os.Exit(status)
 }
 
-func NewEthereum(UseUPnP bool, OutboundPort string, MaxPeer int) *eth.Ethereum {
-	ethereum, err := eth.New(eth.CapDefault, UseUPnP)
+func NewDatabase() ethutil.Database {
+	db, err := ethdb.NewLDBDatabase("database")
+	if err != nil {
+		exit(err)
+	}
+	return db
+}
+
+func NewEthereum(db ethutil.Database, keyManager *ethcrypto.KeyManager, usePnp bool, OutboundPort string, MaxPeer int) *eth.Ethereum {
+	ethereum, err := eth.New(db, keyManager, eth.CapDefault, usePnp)
 	if err != nil {
 		logger.Fatalln("eth start err:", err)
 	}
@@ -129,50 +142,47 @@ func StartEthereum(ethereum *eth.Ethereum, UseSeed bool) {
 
 func ShowGenesis(ethereum *eth.Ethereum) {
 	logger.Infoln(ethereum.BlockChain().Genesis())
-	exit(0)
+	exit(nil)
 }
 
-func KeyTasks(GenAddr bool, ImportKey string, ExportKey bool, NonInteractive bool) {
+func NewKeyManager(KeyStore string, Datadir string, db ethutil.Database) *ethcrypto.KeyManager {
+	var keyManager *ethcrypto.KeyManager
+	switch {
+	case KeyStore == "db":
+		keyManager = ethcrypto.NewDBKeyManager(db)
+	case KeyStore == "file":
+		keyManager = ethcrypto.NewFileKeyManager(Datadir)
+	default:
+		exit(fmt.Errorf("unknown keystore type: %s", KeyStore))
+	}
+	return keyManager
+}
+
+func KeyTasks(keyManager *ethcrypto.KeyManager, KeyRing string, GenAddr bool, SecretFile string, ExportDir string, NonInteractive bool) {
+	var err error
 	switch {
 	case GenAddr:
 		if NonInteractive || confirm("This action overwrites your old private key.") {
-			CreateKeyPair(true)
+			err = keyManager.Init(KeyRing, 0, true)
 		}
-		exit(0)
-	case len(ImportKey) > 0:
+		exit(err)
+	case len(SecretFile) > 0:
 		if NonInteractive || confirm("This action overwrites your old private key.") {
-			// import should be from file
-			mnemonic := strings.Split(ImportKey, " ")
-			if len(mnemonic) == 24 {
-				logger.Infoln("Got mnemonic key, importing.")
-				key := ethutil.MnemonicDecode(mnemonic)
-				ImportPrivateKey(key)
-			} else if len(mnemonic) == 1 {
-				logger.Infoln("Got hex key, importing.")
-				ImportPrivateKey(ImportKey)
-			} else {
-				logger.Errorln("Did not recognise format, exiting.")
-			}
+			err = keyManager.InitFromSecretsFile(KeyRing, 0, SecretFile)
 		}
-		exit(0)
-	case ExportKey: // this should be exporting to a filename
-		keyPair := ethutil.GetKeyRing().Get(0)
-		fmt.Printf(`
-Generating new address and keypair.
-Please keep your keys somewhere save.
-
-++++++++++++++++ KeyRing +++++++++++++++++++
-addr: %x
-prvk: %x
-pubk: %x
-++++++++++++++++++++++++++++++++++++++++++++
-save these words so you can restore your account later: %s
-`, keyPair.Address(), keyPair.PrivateKey, keyPair.PublicKey)
-
-		exit(0)
+		exit(err)
+	case len(ExportDir) > 0:
+		err = keyManager.Init(KeyRing, 0, false)
+		if err == nil {
+			err = keyManager.Export(ExportDir)
+		}
+		exit(err)
 	default:
 		// Creates a keypair if none exists
-		CreateKeyPair(false)
+		err = keyManager.Init(KeyRing, 0, false)
+		if err != nil {
+			exit(err)
+		}
 	}
 }
 
@@ -192,19 +202,13 @@ func StartMining(ethereum *eth.Ethereum) bool {
 	if !ethereum.Mining {
 		ethereum.Mining = true
 
-		if ethutil.GetKeyRing().Len() == 0 {
-			logger.Errorln("No address found, can't start mining")
-			ethereum.Mining = false
-			return true //????
-		}
-		keyPair := ethutil.GetKeyRing().Get(0)
-		addr := keyPair.Address()
+		addr := ethereum.KeyManager().Address()
 
 		go func() {
 			miner = ethminer.NewDefaultMiner(addr, ethereum)
 			// Give it some time to connect with peers
 			time.Sleep(3 * time.Second)
-			for !ethereum.IsUpToDate() == false {
+			for !ethereum.IsUpToDate() {
 				time.Sleep(5 * time.Second)
 			}
 

@@ -116,7 +116,7 @@ func (app *HtmlApplication) Window() *qml.Window {
 }
 
 func (app *HtmlApplication) NewBlock(block *ethchain.Block) {
-	b := &ethpub.PBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Hex(block.Hash())}
+	b := &ethpub.PBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Bytes2Hex(block.Hash())}
 	app.webView.Call("onNewBlockCb", b)
 }
 

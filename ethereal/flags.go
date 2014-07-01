@@ -13,6 +13,8 @@ import (
 )
 
 var Identifier string
+var KeyRing string
+var KeyStore string
 var StartRpc bool
 var RpcPort int
 var UseUPnP bool
@@ -22,8 +24,8 @@ var AddPeer string
 var MaxPeer int
 var GenAddr bool
 var UseSeed bool
-var ImportKey string
-var ExportKey bool
+var SecretFile string
+var ExportDir string
 var NonInteractive bool
 var Datadir string
 var LogFile string
@@ -73,6 +75,8 @@ func Init() {
 	}
 
 	flag.StringVar(&Identifier, "id", "", "Custom client identifier")
+	flag.StringVar(&KeyRing, "keyring", "", "identifier for keyring to use")
+	flag.StringVar(&KeyStore, "keystore", "db", "system to store keyrings: db|file (db)")
 	flag.StringVar(&OutboundPort, "port", "30303", "listening port")
 	flag.BoolVar(&UseUPnP, "upnp", false, "enable UPnP support")
 	flag.IntVar(&MaxPeer, "maxpeer", 10, "maximum desired peers")
@@ -81,9 +85,9 @@ func Init() {
 	flag.BoolVar(&NonInteractive, "y", false, "non-interactive mode (say yes to confirmations)")
 	flag.BoolVar(&UseSeed, "seed", true, "seed peers")
 	flag.BoolVar(&GenAddr, "genaddr", false, "create a new priv/pub key")
-	flag.BoolVar(&ExportKey, "export", false, "export private key")
+	flag.StringVar(&SecretFile, "import", "", "imports the file given (hex or mnemonic formats)")
+	flag.StringVar(&ExportDir, "export", "", "exports the session keyring to files in the directory given")
 	flag.StringVar(&LogFile, "logfile", "", "log file (defaults to standard output)")
-	flag.StringVar(&ImportKey, "import", "", "imports the given private key (hex)")
 	flag.StringVar(&Datadir, "datadir", defaultDataDir(), "specifies the datadir to use")
 	flag.StringVar(&ConfigFile, "conf", defaultConfigFile, "config file")
 	flag.StringVar(&DebugFile, "debug", "", "debug file (no debugging if not set)")
