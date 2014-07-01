@@ -216,7 +216,7 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, sc
 		tx = ethchain.NewTransactionMessage(hash, value, gas, gasPrice, data)
 	}
 
-	acc := lib.stateManager.TransState().GetStateObject(keyPair.Address())
+	acc := lib.stateManager.TransState().GetOrNewStateObject(keyPair.Address())
 	tx.Nonce = acc.Nonce
 	acc.Nonce += 1
 	lib.stateManager.TransState().UpdateStateObject(acc)
