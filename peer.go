@@ -40,17 +40,19 @@ const (
 	DiscConnDup      = 0x05
 	DiscGenesisErr   = 0x06
 	DiscProtoErr     = 0x07
+	DiscQuitting     = 0x08
 )
 
 var discReasonToString = []string{
-	"Disconnect requested",
-	"Disconnect TCP sys error",
-	"Disconnect bad protocol",
-	"Disconnect useless peer",
-	"Disconnect too many peers",
-	"Disconnect already connected",
-	"Disconnect wrong genesis block",
-	"Disconnect incompatible network",
+	"requested",
+	"TCP sys error",
+	"bad protocol",
+	"useless peer",
+	"too many peers",
+	"already connected",
+	"wrong genesis block",
+	"incompatible network",
+	"quitting",
 }
 
 func (d DiscReason) String() string {
