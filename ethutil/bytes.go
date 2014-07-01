@@ -118,7 +118,8 @@ func FormatData(data string) []byte {
 	// Simple stupid
 	d := new(big.Int)
 	if data[0:1] == "\"" && data[len(data)-1:] == "\"" {
-		d.SetBytes([]byte(data[1 : len(data)-1]))
+		return RightPadBytes([]byte(data), 32)
+		//d.SetBytes([]byte(data[1 : len(data)-1]))
 	} else if len(data) > 1 && data[:2] == "0x" {
 		d.SetBytes(Hex2Bytes(data[2:]))
 	} else {
@@ -126,4 +127,26 @@ func FormatData(data string) []byte {
 	}
 
 	return BigToBytes(d, 256)
+}
+
+func LeftPadBytes(slice []byte, l int) []byte {
+	if l <= len(slice) {
+		return slice
+	}
+
+	padded := make([]byte, l)
+	copy(padded[0:len(slice)], slice)
+
+	return padded
+}
+
+func RightPadBytes(slice []byte, l int) []byte {
+	if l <= len(slice) {
+		return slice
+	}
+
+	padded := make([]byte, l)
+	copy(padded[l-len(slice):], slice)
+
+	return padded
 }
