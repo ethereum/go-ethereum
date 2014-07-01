@@ -208,7 +208,7 @@ func StartMining(ethereum *eth.Ethereum) bool {
 			miner = ethminer.NewDefaultMiner(addr, ethereum)
 			// Give it some time to connect with peers
 			time.Sleep(3 * time.Second)
-			for !ethereum.IsUpToDate() == false {
+			for !ethereum.IsUpToDate() {
 				time.Sleep(5 * time.Second)
 			}
 
