@@ -3,6 +3,7 @@ package ethchain
 import (
 	"bytes"
 	"fmt"
+	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
 )
@@ -268,7 +269,7 @@ func Call(vm *Vm, closure *Closure, data []byte) (ret []byte, err error, deepErr
 		var (
 			context = closure.object
 			trie    = context.state.trie
-			trie2   = ethutil.NewTrie(ethutil.Config.Db, "")
+			trie2   = ethtrie.NewTrie(ethutil.Config.Db, "")
 		)
 
 		trie.NewIterator().Each(func(key string, v *ethutil.Value) {
