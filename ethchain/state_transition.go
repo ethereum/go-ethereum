@@ -261,7 +261,7 @@ func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []by
 }
 
 func Call(vm *Vm, closure *Closure, data []byte) (ret []byte, err error, deepErr bool) {
-	ret, _, err = closure.Call(vm, data, nil)
+	ret, _, err = closure.Call(vm, data)
 	deepErr = vm.err != nil
 
 	Paranoia := ethutil.Config.Paranoia

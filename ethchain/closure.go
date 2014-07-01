@@ -74,12 +74,10 @@ func (c *Closure) Address() []byte {
 	return c.object.Address()
 }
 
-type DebugHook func(step int, op OpCode, mem *Memory, stack *Stack, stateObject *StateObject) bool
-
-func (c *Closure) Call(vm *Vm, args []byte, hook DebugHook) ([]byte, *big.Int, error) {
+func (c *Closure) Call(vm *Vm, args []byte) ([]byte, *big.Int, error) {
 	c.Args = args
 
-	ret, err := vm.RunClosure(c, hook)
+	ret, err := vm.RunClosure(c)
 
 	return ret, c.UsedGas, err
 }

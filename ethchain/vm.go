@@ -52,7 +52,11 @@ type Vm struct {
 	logStr string
 
 	err error
+
+	Hook DebugHook
 }
+
+type DebugHook func(step int, op OpCode, mem *Memory, stack *Stack, stateObject *StateObject) bool
 
 type RuntimeVars struct {
 	Origin      []byte
@@ -91,7 +95,7 @@ var Pow256 = ethutil.BigPow(2, 256)
 
 var isRequireError = false
 
-func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err error) {
+func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 	// Recover from any require exception
 	defer func() {
 		if r := recover(); r != nil {
@@ -642,7 +646,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			// Call the closure and set the return value as
 			// main script.
 			var err error
-			c.Script, gas, err = c.Call(vm, nil, hook)
+			c.Script, gas, err = c.Call(vm, nil)
 
 			if err != nil {
 				stack.Push(ethutil.BigFalse)
@@ -738,8 +742,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 		vm.Endl()
 
-		if hook != nil {
-			if !hook(prevStep, op, mem, stack, closure.Object()) {
+		if vm.Hook != nil {
+			if !vm.Hook(prevStep, op, mem, stack, closure.Object()) {
 				return nil, nil
 			}
 		}
