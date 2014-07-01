@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"container/list"
 	"fmt"
+	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
@@ -39,6 +40,7 @@ type EthManager interface {
 	IsMining() bool
 	IsListening() bool
 	Peers() *list.List
+	KeyManager() *ethcrypto.KeyManager
 }
 
 type StateManager struct {
@@ -299,7 +301,7 @@ func (sm *StateManager) ValidateBlock(block *Block) error {
 
 	// Verify the nonce of the block. Return an error if it's not valid
 	if !sm.Pow.Verify(block.HashNoNonce(), block.Difficulty, block.Nonce) {
-		return ValidationError("Block's nonce is invalid (= %v)", ethutil.Hex(block.Nonce))
+		return ValidationError("Block's nonce is invalid (= %v)", ethutil.Bytes2Hex(block.Nonce))
 	}
 
 	return nil

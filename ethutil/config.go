@@ -17,7 +17,6 @@ type config struct {
 	Paranoia     bool
 	Ver          string
 	ClientString string
-	Pubkey       []byte
 	Identifier   string
 
 	conf *globalconf.GlobalConf

@@ -1,7 +1,9 @@
-package ethutil
+package ethtrie
 
 import (
 	"fmt"
+	"github.com/ethereum/eth-go/ethcrypto"
+	"github.com/ethereum/eth-go/ethutil"
 	"reflect"
 	"sync"
 )
@@ -21,11 +23,11 @@ type StateObject interface {
 
 type Node struct {
 	Key   []byte
-	Value *Value
+	Value *ethutil.Value
 	Dirty bool
 }
 
-func NewNode(key []byte, val *Value, dirty bool) *Node {
+func NewNode(key []byte, val *ethutil.Value, dirty bool) *Node {
 	return &Node{Key: key, Value: val, Dirty: dirty}
 }
 
@@ -35,20 +37,20 @@ func (n *Node) Copy() *Node {
 
 type Cache struct {
 	nodes   map[string]*Node
-	db      Database
+	db      ethutil.Database
 	IsDirty bool
 }
 
-func NewCache(db Database) *Cache {
+func NewCache(db ethutil.Database) *Cache {
 	return &Cache{db: db, nodes: make(map[string]*Node)}
 }
 
 func (cache *Cache) PutValue(v interface{}, force bool) interface{} {
-	value := NewValue(v)
+	value := ethutil.NewValue(v)
 
 	enc := value.Encode()
 	if len(enc) >= 32 || force {
-		sha := Sha3Bin(enc)
+		sha := ethcrypto.Sha3Bin(enc)
 
 		cache.nodes[string(sha)] = NewNode(sha, value, true)
 		cache.IsDirty = true
@@ -63,7 +65,7 @@ func (cache *Cache) Put(v interface{}) interface{} {
 	return cache.PutValue(v, false)
 }
 
-func (cache *Cache) Get(key []byte) *Value {
+func (cache *Cache) Get(key []byte) *ethutil.Value {
 	// First check if the key is the cache
 	if cache.nodes[string(key)] != nil {
 		return cache.nodes[string(key)].Value
@@ -72,7 +74,7 @@ func (cache *Cache) Get(key []byte) *Value {
 	// Get the key of the database instead and cache it
 	data, _ := cache.db.Get(key)
 	// Create the cached value
-	value := NewValueFromBytes(data)
+	value := ethutil.NewValueFromBytes(data)
 	// Create caching node
 	cache.nodes[string(key)] = NewNode(key, value, false)
 
@@ -132,7 +134,7 @@ type Trie struct {
 func copyRoot(root interface{}) interface{} {
 	var prevRootCopy interface{}
 	if b, ok := root.([]byte); ok {
-		prevRootCopy = CopyBytes(b)
+		prevRootCopy = ethutil.CopyBytes(b)
 	} else {
 		prevRootCopy = root
 	}
@@ -140,7 +142,7 @@ func copyRoot(root interface{}) interface{} {
 	return prevRootCopy
 }
 
-func NewTrie(db Database, Root interface{}) *Trie {
+func NewTrie(db ethutil.Database, Root interface{}) *Trie {
 	// Make absolute sure the root is copied
 	r := copyRoot(Root)
 	p := copyRoot(Root)
@@ -188,7 +190,7 @@ func (t *Trie) Get(key string) string {
 	defer t.mut.RUnlock()
 
 	k := CompactHexDecode(key)
-	c := NewValue(t.GetState(t.Root, k))
+	c := ethutil.NewValue(t.GetState(t.Root, k))
 
 	return c.Str()
 }
@@ -211,7 +213,7 @@ func (t *Trie) Delete(key string) {
 }
 
 func (t *Trie) GetState(node interface{}, key []int) interface{} {
-	n := NewValue(node)
+	n := ethutil.NewValue(node)
 	// Return the node if key is empty (= found)
 	if len(key) == 0 || n.IsNil() || n.Len() == 0 {
 		return node
@@ -241,8 +243,8 @@ func (t *Trie) GetState(node interface{}, key []int) interface{} {
 	return ""
 }
 
-func (t *Trie) GetNode(node interface{}) *Value {
-	n := NewValue(node)
+func (t *Trie) GetNode(node interface{}) *ethutil.Value {
+	n := ethutil.NewValue(node)
 
 	if !n.Get(0).IsNil() {
 		return n
@@ -252,7 +254,7 @@ func (t *Trie) GetNode(node interface{}) *Value {
 	if len(str) == 0 {
 		return n
 	} else if len(str) < 32 {
-		return NewValueFromBytes([]byte(str))
+		return ethutil.NewValueFromBytes([]byte(str))
 	}
 
 	return t.cache.Get(n.Bytes())
@@ -290,7 +292,7 @@ func (t *Trie) InsertState(node interface{}, key []int, value interface{}) inter
 	}
 
 	// New node
-	n := NewValue(node)
+	n := ethutil.NewValue(node)
 	if node == nil || (n.Type() == reflect.String && (n.Str() == "" || n.Get(0).IsNil())) || n.Len() == 0 {
 		newNode := []interface{}{CompactEncode(key), value}
 
@@ -362,7 +364,7 @@ func (t *Trie) DeleteState(node interface{}, key []int) interface{} {
 	}
 
 	// New node
-	n := NewValue(node)
+	n := ethutil.NewValue(node)
 	if node == nil || (n.Type() == reflect.String && (n.Str() == "" || n.Get(0).IsNil())) || n.Len() == 0 {
 		return ""
 	}
@@ -439,7 +441,7 @@ func (t *Trie) DeleteState(node interface{}, key []int) interface{} {
 
 // Simple compare function which creates a rlp value out of the evaluated objects
 func (t *Trie) Cmp(trie *Trie) bool {
-	return NewValue(t.Root).Cmp(NewValue(trie.Root))
+	return ethutil.NewValue(t.Root).Cmp(ethutil.NewValue(trie.Root))
 }
 
 // Returns a copy of this trie
@@ -469,7 +471,7 @@ func (t *Trie) NewIterator() *TrieIterator {
 
 // Some time in the near future this will need refactoring :-)
 // XXX Note to self, IsSlice == inline node. Str == sha3 to node
-func (it *TrieIterator) workNode(currentNode *Value) {
+func (it *TrieIterator) workNode(currentNode *ethutil.Value) {
 	if currentNode.Len() == 2 {
 		k := CompactDecode(currentNode.Get(0).Str())
 
@@ -512,7 +514,7 @@ func (it *TrieIterator) Collect() [][]byte {
 		return nil
 	}
 
-	it.getNode(NewValue(it.trie.Root).Bytes())
+	it.getNode(ethutil.NewValue(it.trie.Root).Bytes())
 
 	return it.shas
 }
@@ -533,17 +535,17 @@ func (it *TrieIterator) Value() string {
 	return ""
 }
 
-type EachCallback func(key string, node *Value)
+type EachCallback func(key string, node *ethutil.Value)
 
 func (it *TrieIterator) Each(cb EachCallback) {
-	it.fetchNode(nil, NewValue(it.trie.Root).Bytes(), cb)
+	it.fetchNode(nil, ethutil.NewValue(it.trie.Root).Bytes(), cb)
 }
 
 func (it *TrieIterator) fetchNode(key []int, node []byte, cb EachCallback) {
 	it.iterateNode(key, it.trie.cache.Get(node), cb)
 }
 
-func (it *TrieIterator) iterateNode(key []int, currentNode *Value, cb EachCallback) {
+func (it *TrieIterator) iterateNode(key []int, currentNode *ethutil.Value, cb EachCallback) {
 	if currentNode.Len() == 2 {
 		k := CompactDecode(currentNode.Get(0).Str())
 

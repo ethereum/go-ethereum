@@ -1,6 +1,7 @@
 package ethchain
 
 import (
+	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/sha3"
@@ -41,7 +42,7 @@ func (pow *EasyPow) Search(block *Block, reactChan chan ethutil.React) []byte {
 				powlogger.Infoln("Hashing @", int64(hashes), "khash")
 			}
 
-			sha := ethutil.Sha3Bin(big.NewInt(r.Int63()).Bytes())
+			sha := ethcrypto.Sha3Bin(big.NewInt(r.Int63()).Bytes())
 			if pow.Verify(hash, diff, sha) {
 				return sha
 			}

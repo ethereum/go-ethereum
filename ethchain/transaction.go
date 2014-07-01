@@ -3,6 +3,7 @@ package ethchain
 import (
 	"bytes"
 	"fmt"
+	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/secp256k1-go"
 	"math/big"
@@ -62,7 +63,7 @@ func (self *Transaction) TotalValue() *big.Int {
 func (tx *Transaction) Hash() []byte {
 	data := []interface{}{tx.Nonce, tx.GasPrice, tx.Gas, tx.Recipient, tx.Value, tx.Data}
 
-	return ethutil.Sha3Bin(ethutil.NewValue(data).Encode())
+	return ethcrypto.Sha3Bin(ethutil.NewValue(data).Encode())
 }
 
 func (tx *Transaction) CreatesContract() bool {
@@ -75,7 +76,7 @@ func (tx *Transaction) IsContract() bool {
 }
 
 func (tx *Transaction) CreationAddress() []byte {
-	return ethutil.Sha3Bin(ethutil.NewValue([]interface{}{tx.Sender(), tx.Nonce}).Encode())[12:]
+	return ethcrypto.Sha3Bin(ethutil.NewValue([]interface{}{tx.Sender(), tx.Nonce}).Encode())[12:]
 }
 
 func (tx *Transaction) Signature(key []byte) []byte {
@@ -111,7 +112,7 @@ func (tx *Transaction) Sender() []byte {
 		return nil
 	}
 
-	return ethutil.Sha3Bin(pubkey[1:])[12:]
+	return ethcrypto.Sha3Bin(pubkey[1:])[12:]
 }
 
 func (tx *Transaction) Sign(privk []byte) error {

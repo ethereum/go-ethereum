@@ -182,7 +182,7 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *string) error {
 	} else {
 		// Convert the incoming string (which is a bigint) into hex
 		i, _ := new(big.Int).SetString(args.Key, 10)
-		hx = ethutil.Hex(i.Bytes())
+		hx = ethutil.Bytes2Hex(i.Bytes())
 	}
 	logger.Debugf("GetStorageAt(%s, %s)\n", args.Address, hx)
 	value := state.GetStorage(hx)

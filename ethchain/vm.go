@@ -2,6 +2,7 @@ package ethchain
 
 import (
 	"fmt"
+	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethutil"
 	"math"
@@ -421,7 +422,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 		case SHA3:
 			require(2)
 			size, offset := stack.Popn()
-			data := ethutil.Sha3Bin(mem.Get(offset.Int64(), size.Int64()))
+			data := ethcrypto.Sha3Bin(mem.Get(offset.Int64(), size.Int64()))
 
 			stack.Push(ethutil.BigD(data))
 			// 0x30 range
@@ -617,7 +618,7 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			snapshot := vm.state.Copy()
 
 			// Generate a new address
-			addr := ethutil.CreateAddress(closure.caller.Address(), closure.caller.N())
+			addr := ethcrypto.CreateAddress(closure.caller.Address(), closure.caller.N())
 
 			vm.Printf(" (*) %x", addr).Endl()
 

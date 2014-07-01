@@ -146,7 +146,7 @@ type Peer struct {
 }
 
 func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
-	pubkey := ethutil.GetKeyRing().Get(0).PublicKey[1:]
+	pubkey := ethereum.KeyManager().PublicKey()[1:]
 
 	return &Peer{
 		outputQueue:     make(chan *ethwire.Msg, outputBufferSize),
@@ -590,16 +590,12 @@ func (p *Peer) Stop() {
 }
 
 func (p *Peer) pushHandshake() error {
-	keyRing := ethutil.GetKeyRing().Get(0)
-	if keyRing != nil {
-		pubkey := keyRing.PublicKey
+	pubkey := p.ethereum.KeyManager().PublicKey()
+	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
+		uint32(ProtocolVersion), uint32(0), []byte(p.version), byte(p.caps), p.port, pubkey[1:],
+	})
 
-		msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-			uint32(ProtocolVersion), uint32(0), []byte(p.version), byte(p.caps), p.port, pubkey[1:],
-		})
-
-		p.QueueMessage(msg)
-	}
+	p.QueueMessage(msg)
 
 	return nil
 }
@@ -664,8 +660,8 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 		p.port = uint16(c.Get(4).Uint())
 
 		// Self connect detection
-		keyPair := ethutil.GetKeyRing().Get(0)
-		if bytes.Compare(keyPair.PublicKey, p.pubkey) == 0 {
+		pubkey := p.ethereum.KeyManager().PublicKey()
+		if bytes.Compare(pubkey, p.pubkey) == 0 {
 			p.Stop()
 
 			return
