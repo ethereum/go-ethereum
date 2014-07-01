@@ -90,10 +90,9 @@ func (tx *Transaction) Signature(key []byte) []byte {
 func (tx *Transaction) PublicKey() []byte {
 	hash := tx.Hash()
 
-	r := make([]byte, 32-len(tx.r))
-	s := make([]byte, 32-len(tx.s))
-	r = append(r, ethutil.CopyBytes(tx.r)...)
-	s = append(s, ethutil.CopyBytes(tx.s)...)
+	// TODO
+	r := ethutil.LeftPadBytes(tx.r, 32)
+	s := ethutil.LeftPadBytes(tx.s, 32)
 
 	sig := append(r, s...)
 	sig = append(sig, tx.v-27)
