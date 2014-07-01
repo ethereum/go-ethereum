@@ -346,6 +346,29 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 			} else {
 				stack.Push(ethutil.BigFalse)
 			}
+
+		case SLT:
+			require(2)
+			x, y := stack.Popn()
+			vm.Printf(" %v < %v", y, x)
+			// x < y
+			if y.Cmp(x) < 0 {
+				stack.Push(ethutil.BigTrue)
+			} else {
+				stack.Push(ethutil.BigFalse)
+			}
+		case SGT:
+			require(2)
+			x, y := stack.Popn()
+			vm.Printf(" %v > %v", y, x)
+
+			// x > y
+			if y.Cmp(x) > 0 {
+				stack.Push(ethutil.BigTrue)
+			} else {
+				stack.Push(ethutil.BigFalse)
+			}
+
 		case EQ:
 			require(2)
 			x, y := stack.Popn()
@@ -660,7 +683,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 				// Create a new callable closure
 				closure := NewClosure(closure, stateObject, stateObject.script, vm.state, gas, closure.Price)
 				// Executer the closure and get the return value (if any)
-				ret, _, err := closure.Call(vm, args, hook)
+				//ret, _, err := closure.Call(vm, args, hook)
+				ret, err, _ := Call(vm, closure, args)
 				if err != nil {
 					stack.Push(ethutil.BigFalse)
 
@@ -699,7 +723,8 @@ func (vm *Vm) RunClosure(closure *Closure, hook DebugHook) (ret []byte, err erro
 
 			return closure.Return(nil), nil
 		default:
-			vmlogger.Debugf("Invalid opcode %x\n", op)
+			vmlogger.Debugf("(pc) %-3v Invalid opcode %x\n", pc, op)
+			fmt.Println(Code(closure.Script))
 
 			return closure.Return(nil), fmt.Errorf("Invalid opcode %x", op)
 		}

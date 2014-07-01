@@ -318,6 +318,7 @@ func TestRegression(t *testing.T) {
 		for _, test := range data {
 			trie.Update(test[0], test[1])
 		}
+		trie.Delete("0x4e616d6552656700000000000000000000000000000000000000000000000000")
 
 		roots[string(trie.Root.([]byte))] += 1
 	}

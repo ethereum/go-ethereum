@@ -123,8 +123,9 @@ done:
 
 				break done
 			default:
-				//statelogger.Infoln(err)
-				return nil, nil, nil, err
+				statelogger.Infoln(err)
+				err = nil
+				//return nil, nil, nil, err
 			}
 		}
 
