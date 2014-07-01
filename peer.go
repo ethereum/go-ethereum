@@ -21,7 +21,7 @@ const (
 	// The size of the output buffer for writing messages
 	outputBufferSize = 50
 	// Current protocol version
-	ProtocolVersion = 20
+	ProtocolVersion = 21
 	// Interval for ping/pong message
 	pingPongTimer = 2 * time.Second
 )

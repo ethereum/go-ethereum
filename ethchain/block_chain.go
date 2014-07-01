@@ -271,7 +271,7 @@ func AddTestNetFunds(block *Block) {
 	for _, addr := range []string{
 		"51ba59315b3a95761d0863b05ccc7a7f54703d99",
 		"e4157b34ea9615cfbde6b4fda419828124b70c78",
-		"1e12515ce3e0f817a4ddef9ca55788a1d66bd2df",
+		"b9c015918bdaba24b4ff057a92a3873d6eb201be",
 		"6c386a4b26f73c802f34673f7248bb118f97424a",
 		"cd2a3d9f938e13cd947ec05abc7fe734df8dd826",
 		"2ef47100e0787b915105fd5e3f4ff6752079d5cb",
