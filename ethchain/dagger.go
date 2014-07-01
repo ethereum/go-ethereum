@@ -31,6 +31,7 @@ func (pow *EasyPow) Search(block *Block, reactChan chan ethutil.React) []byte {
 	for {
 		select {
 		case <-reactChan:
+			powlogger.Infoln("Breaking from mining")
 			return nil
 		default:
 			i++
