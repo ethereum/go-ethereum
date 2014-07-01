@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"reflect"
 	"testing"
+	"time"
 )
 
 const LONG_WORD = "1234567890abcdefghijklmnopqrstuvwxxzABCEFGHIJKLMNOPQRSTUVWXYZ"
@@ -211,7 +213,7 @@ func CreateTest(name string, data []byte) (Test, error) {
 	return t, nil
 }
 
-func CreateTests(uri string, cb func(Test)) {
+func CreateTests(uri string, cb func(Test)) map[string]Test {
 	resp, err := http.Get(uri)
 	if err != nil {
 		panic(err)
@@ -226,14 +228,20 @@ func CreateTests(uri string, cb func(Test)) {
 		panic(err)
 	}
 
+	tests := make(map[string]Test)
 	for name, testData := range objmap {
 		test, err := CreateTest(name, *testData)
 		if err != nil {
 			panic(err)
 		}
 
-		cb(test)
+		if cb != nil {
+			cb(test)
+		}
+		tests[name] = test
 	}
+
+	return tests
 }
 
 func TestRemote(t *testing.T) {
@@ -271,22 +279,52 @@ func TestTrieReplay(t *testing.T) {
 	})
 }
 
-func TestIt(t *testing.T) {
-	_, trie := New()
-
-	test := map[string]string{
-		"0x000000000000000000000000ec4f34c97e43fbb2816cfd95e388353c7181dab1": "0x4e616d6552656700000000000000000000000000000000000000000000000000",
-		"0x0000000000000000000000000000000000000000000000000000000000000045": "0x22b224a1420a802ab51d326e29fa98e34c4f24ea",
-		"0x0000000000000000000000000000000000000000000000000000000000000046": "0x67706c2076330000000000000000000000000000000000000000000000000000",
-		"0x000000000000000000000000697c7b8c961b56f675d570498424ac8de1a918f6": "0x6f6f6f6820736f2067726561742c207265616c6c6c793f000000000000000000",
-		"0x0000000000000000000000007ef9e639e2733cb34e4dfc576d4b23f72db776b2": "0x4655474156000000000000000000000000000000000000000000000000000000",
-		"0x6f6f6f6820736f2067726561742c207265616c6c6c793f000000000000000000": "0x697c7b8c961b56f675d570498424ac8de1a918f6",
-		"0x4655474156000000000000000000000000000000000000000000000000000000": "0x7ef9e639e2733cb34e4dfc576d4b23f72db776b2",
-		"0x4e616d6552656700000000000000000000000000000000000000000000000000": "0xec4f34c97e43fbb2816cfd95e388353c7181dab1",
+func RandomData() [][]string {
+	data := [][]string{
+		{"0x000000000000000000000000ec4f34c97e43fbb2816cfd95e388353c7181dab1", "0x4e616d6552656700000000000000000000000000000000000000000000000000"},
+		{"0x0000000000000000000000000000000000000000000000000000000000000045", "0x22b224a1420a802ab51d326e29fa98e34c4f24ea"},
+		{"0x0000000000000000000000000000000000000000000000000000000000000046", "0x67706c2076330000000000000000000000000000000000000000000000000000"},
+		{"0x000000000000000000000000697c7b8c961b56f675d570498424ac8de1a918f6", "0x6f6f6f6820736f2067726561742c207265616c6c6c793f000000000000000000"},
+		{"0x0000000000000000000000007ef9e639e2733cb34e4dfc576d4b23f72db776b2", "0x4655474156000000000000000000000000000000000000000000000000000000"},
+		{"0x6f6f6f6820736f2067726561742c207265616c6c6c793f000000000000000000", "0x697c7b8c961b56f675d570498424ac8de1a918f6"},
+		{"0x4655474156000000000000000000000000000000000000000000000000000000", "0x7ef9e639e2733cb34e4dfc576d4b23f72db776b2"},
+		{"0x4e616d6552656700000000000000000000000000000000000000000000000000", "0xec4f34c97e43fbb2816cfd95e388353c7181dab1"},
 	}
 
-	for k, v := range test {
-		trie.Update(k, v)
+	var c [][]string
+	for len(data) != 0 {
+		e := rand.Intn(len(data))
+		c = append(c, data[e])
+
+		copy(data[e:], data[e+1:])
+		data[len(data)-1] = nil
+		data = data[:len(data)-1]
 	}
-	fmt.Printf("root : %x\n", trie.Root)
+
+	return c
+}
+
+const MaxTest = 1000
+
+// This test insert data in random order and seeks to find indifferences between the different tries
+func TestRegression(t *testing.T) {
+	rand.Seed(time.Now().Unix())
+
+	roots := make(map[string]int)
+	for i := 0; i < MaxTest; i++ {
+		_, trie := New()
+		data := RandomData()
+
+		for _, test := range data {
+			trie.Update(test[0], test[1])
+		}
+
+		roots[string(trie.Root.([]byte))] += 1
+	}
+
+	if len(roots) > 1 {
+		for root, num := range roots {
+			t.Errorf("%x => %d\n", root, num)
+		}
+	}
 }
