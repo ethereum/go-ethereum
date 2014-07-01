@@ -268,7 +268,7 @@ func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []by
 		}
 	*/
 
-	Paranoia := true // TODO Create a flag for this
+	Paranoia := ethutil.Config.Paranoia
 	if Paranoia {
 		var (
 			trie  = context.state.trie
