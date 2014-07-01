@@ -166,7 +166,7 @@ func (block *Block) CalcGasLimit(parent *Block) *big.Int {
 	result := new(big.Int).Add(previous, curInt)
 	result.Div(result, big.NewInt(1024))
 
-	min := ethutil.BigPow(10, 4)
+	min := big.NewInt(125000)
 
 	return ethutil.BigMax(min, result)
 	/*
