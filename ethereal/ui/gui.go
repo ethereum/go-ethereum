@@ -211,13 +211,12 @@ type address struct {
 	Name, Address string
 }
 
-var namereg = ethutil.Hex2Bytes("bb5f186604d057c1c5240ca2ae0f6430138ac010")
-
 func (gui *Gui) loadAddressBook() {
 	gui.win.Root().Call("clearAddress")
-	stateObject := gui.eth.StateManager().CurrentState().GetStateObject(namereg)
-	if stateObject != nil {
-		stateObject.State().EachStorage(func(name string, value *ethutil.Value) {
+
+	nameReg := ethpub.EthereumConfig(gui.eth.StateManager()).NameReg()
+	if nameReg != nil {
+		nameReg.State().EachStorage(func(name string, value *ethutil.Value) {
 			gui.win.Root().Call("addAddress", struct{ Name, Address string }{name, ethutil.Bytes2Hex(value.Bytes())})
 		})
 	}
@@ -274,7 +273,7 @@ func (gui *Gui) update() {
 	reactor.Subscribe("newBlock", blockChan)
 	reactor.Subscribe("newTx:pre", txChan)
 	reactor.Subscribe("newTx:post", txChan)
-	reactor.Subscribe("object:"+string(namereg), objectChan)
+	//reactor.Subscribe("object:"+string(namereg), objectChan)
 	reactor.Subscribe("peerList", peerChan)
 
 	ticker := time.NewTicker(5 * time.Second)
@@ -352,8 +351,9 @@ func (gui *Gui) address() []byte {
 }
 
 func (gui *Gui) RegisterName(name string) {
-	name = fmt.Sprintf("\"%s\"\n1", name)
-	gui.pub.Transact(gui.privateKey(), "namereg", "1000", "1000000", "150", name)
+	name = fmt.Sprintf("\"%s\"", name)
+
+	gui.pub.Transact(gui.privateKey(), "NameReg", "", "10000", "10000000000000", name)
 }
 
 func (gui *Gui) Transact(recipient, value, gas, gasPrice, data string) (*ethpub.PReceipt, error) {
