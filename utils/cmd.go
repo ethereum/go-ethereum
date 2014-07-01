@@ -106,6 +106,7 @@ func InitConfig(ConfigFile string, Datadir string, Identifier string, EnvPrefix 
 func exit(err error) {
 	status := 0
 	if err != nil {
+		fmt.Println(err)
 		logger.Errorln("Fatal: ", err)
 		status = 1
 	}
@@ -167,6 +168,8 @@ func KeyTasks(keyManager *ethcrypto.KeyManager, KeyRing string, GenAddr bool, Se
 		}
 		exit(err)
 	case len(SecretFile) > 0:
+		SecretFile = ethutil.ExpandHomePath(SecretFile)
+
 		if NonInteractive || confirm("This action overwrites your old private key.") {
 			err = keyManager.InitFromSecretsFile(KeyRing, 0, SecretFile)
 		}
