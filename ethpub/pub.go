@@ -166,7 +166,7 @@ func (lib *PEthereum) Create(key, valueStr, gasStr, gasPriceStr, script string) 
 	return lib.createTx(key, "", valueStr, gasStr, gasPriceStr, script)
 }
 
-func GetAddressFromNameReg(stateManager *ethchain.StateManager, name string) []byte {
+func FindAddressInNameReg(stateManager *ethchain.StateManager, name string) []byte {
 	nameReg := EthereumConfig(stateManager).NameReg()
 	if nameReg != nil {
 		addr := ethutil.RightPadBytes([]byte(name), 32)
@@ -186,7 +186,7 @@ func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, sc
 		contractCreation = true
 	} else {
 		// Check if an address is stored by this address
-		addr := GetAddressFromNameReg(lib.stateManager, recipient)
+		addr := FindAddressInNameReg(lib.stateManager, recipient)
 		if len(addr) > 0 {
 			hash = addr
 		} else {

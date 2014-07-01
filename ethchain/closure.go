@@ -10,7 +10,7 @@ import (
 type ClosureRef interface {
 	ReturnGas(*big.Int, *big.Int, *State)
 	Address() []byte
-	GetMem(*big.Int) *ethutil.Value
+	GetStorage(*big.Int) *ethutil.Value
 	SetStorage(*big.Int, *ethutil.Value)
 	N() *big.Int
 }
@@ -43,8 +43,8 @@ func NewClosure(caller ClosureRef, object *StateObject, script []byte, state *St
 }
 
 // Retuns the x element in data slice
-func (c *Closure) GetMem(x *big.Int) *ethutil.Value {
-	m := c.object.GetMem(x)
+func (c *Closure) GetStorage(x *big.Int) *ethutil.Value {
+	m := c.object.GetStorage(x)
 	if m == nil {
 		return ethutil.EmptyValue()
 	}

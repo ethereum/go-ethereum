@@ -66,7 +66,11 @@ func (self *State) Empty() {
 
 func (self *State) Update() {
 	for _, stateObject := range self.stateObjects {
-		self.UpdateStateObject(stateObject)
+		if stateObject.remove {
+			self.trie.Delete(string(stateObject.Address()))
+		} else {
+			self.UpdateStateObject(stateObject)
+		}
 	}
 }
 

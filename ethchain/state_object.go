@@ -31,6 +31,11 @@ type StateObject struct {
 	// left if this object is the coinbase. Gas is directly
 	// purchased of the coinbase.
 	gasPool *big.Int
+
+	// Mark for deletion
+	// When an object is marked for deletion it will be delete from the trie
+	// during the "update" phase of the state transition
+	remove bool
 }
 
 // Converts an transaction in to a state object
@@ -77,15 +82,11 @@ func NewStateObjectFromBytes(address, data []byte) *StateObject {
 	return object
 }
 
-func (c *StateObject) State() *State {
-	return c.state
+func (self *StateObject) MarkForDeletion() {
+	self.remove = true
 }
 
-func (c *StateObject) N() *big.Int {
-	return big.NewInt(int64(c.Nonce))
-}
-
-func (c *StateObject) Addr(addr []byte) *ethutil.Value {
+func (c *StateObject) GetAddr(addr []byte) *ethutil.Value {
 	return ethutil.NewValueFromBytes([]byte(c.state.trie.Get(string(addr))))
 }
 
@@ -108,12 +109,7 @@ func (c *StateObject) SetStorage(num *big.Int, val *ethutil.Value) {
 func (c *StateObject) GetStorage(num *big.Int) *ethutil.Value {
 	nb := ethutil.BigToBytes(num, 256)
 
-	return c.Addr(nb)
-}
-
-/* DEPRECATED */
-func (c *StateObject) GetMem(num *big.Int) *ethutil.Value {
-	return c.GetStorage(num)
+	return c.GetAddr(nb)
 }
 
 func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
@@ -122,14 +118,6 @@ func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
 	}
 
 	return ethutil.NewValueFromBytes([]byte{c.script[pc.Int64()]})
-}
-
-// Return the gas back to the origin. Used by the Virtual machine or Closures
-func (c *StateObject) ReturnGas(gas, price *big.Int, state *State) {
-	/*
-		remainder := new(big.Int).Mul(gas, price)
-		c.AddAmount(remainder)
-	*/
 }
 
 func (c *StateObject) AddAmount(amount *big.Int) {
@@ -148,6 +136,12 @@ func (c *StateObject) SetAmount(amount *big.Int) {
 	c.Amount = amount
 }
 
+//
+// Gas setters and getters
+//
+
+// Return the gas back to the origin. Used by the Virtual machine or Closures
+func (c *StateObject) ReturnGas(gas, price *big.Int, state *State) {}
 func (c *StateObject) ConvertGas(gas, price *big.Int) error {
 	total := new(big.Int).Mul(gas, price)
 	if total.Cmp(c.Amount) > 0 {
@@ -206,26 +200,17 @@ func (self *StateObject) Set(stateObject *StateObject) {
 	self = stateObject
 }
 
-/*
-func (self *StateObject) Copy() *StateObject {
-	stCopy := &StateObject{}
-	stCopy.address = make([]byte, len(self.address))
-	copy(stCopy.address, self.address)
-	stCopy.Amount = new(big.Int).Set(self.Amount)
-	stCopy.ScriptHash = make([]byte, len(self.ScriptHash))
-	copy(stCopy.ScriptHash, self.ScriptHash)
-	stCopy.Nonce = self.Nonce
-	if self.state != nil {
-		stCopy.state = self.state.Copy()
-	}
-	stCopy.script = make([]byte, len(self.script))
-	copy(stCopy.script, self.script)
-	stCopy.initScript = make([]byte, len(self.initScript))
-	copy(stCopy.initScript, self.initScript)
+//
+// Attribute accessors
+//
 
-	return stCopy
+func (c *StateObject) State() *State {
+	return c.state
 }
-*/
+
+func (c *StateObject) N() *big.Int {
+	return big.NewInt(int64(c.Nonce))
+}
 
 // Returns the address of the contract/account
 func (c *StateObject) Address() []byte {
@@ -241,6 +226,10 @@ func (c *StateObject) Script() Code {
 func (c *StateObject) Init() Code {
 	return c.initScript
 }
+
+//
+// Encoding
+//
 
 // State object encoding methods
 func (c *StateObject) RlpEncode() []byte {

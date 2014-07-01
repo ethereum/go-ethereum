@@ -164,7 +164,7 @@ func (c *PStateObject) GetStorage(address string) string {
 	// still has some magical object so we can't rely on
 	// undefined or null at the QML side
 	if c.object != nil {
-		val := c.object.GetMem(ethutil.Big("0x" + address))
+		val := c.object.GetStorage(ethutil.Big("0x" + address))
 
 		return val.BigInt().String()
 	}
