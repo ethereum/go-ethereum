@@ -216,7 +216,9 @@ func (gui *Gui) loadAddressBook() {
 	nameReg := ethpub.EthereumConfig(gui.eth.StateManager()).NameReg()
 	if nameReg != nil {
 		nameReg.State().EachStorage(func(name string, value *ethutil.Value) {
-			gui.win.Root().Call("addAddress", struct{ Name, Address string }{name, ethutil.Bytes2Hex(value.Bytes())})
+			if name[0] != 0 {
+				gui.win.Root().Call("addAddress", struct{ Name, Address string }{name, ethutil.Bytes2Hex(value.Bytes())})
+			}
 		})
 	}
 }
