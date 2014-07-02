@@ -50,7 +50,7 @@
         ],
         "post" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
-                "balance" : 999999999999999852,
+                "balance" : 999999999999999926,
                 "code" : [
                     96,
                     0,
@@ -68,14 +68,6 @@
                     92,
                     3,
                     241
-                ],
-                "nonce" : 1,
-                "storage" : {
-                }
-            },
-            "cd1722f3947def4cf144679da39c4c32bdc35681" : {
-                "balance" : 74,
-                "code" : [
                 ],
                 "nonce" : 0,
                 "storage" : {
@@ -373,7 +365,7 @@
         ],
         "post" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
-                "balance" : 999999999999999918,
+                "balance" : 999999999999999959,
                 "code" : [
                     96,
                     1,
@@ -583,14 +575,6 @@
                     3,
                     241,
                     80
-                ],
-                "nonce" : 4,
-                "storage" : {
-                }
-            },
-            "cd1722f3947def4cf144679da39c4c32bdc35681" : {
-                "balance" : 41,
-                "code" : [
                 ],
                 "nonce" : 0,
                 "storage" : {
@@ -874,7 +858,7 @@
         ],
         "post" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
-                "balance" : 0,
+                "balance" : 500000000000000000,
                 "code" : [
                     96,
                     0,
@@ -899,14 +883,6 @@
                     92,
                     3,
                     241
-                ],
-                "nonce" : 1,
-                "storage" : {
-                }
-            },
-            "cd1722f3947def4cf144679da39c4c32bdc35681" : {
-                "balance" : 500000000000000000,
-                "code" : [
                 ],
                 "nonce" : 0,
                 "storage" : {
@@ -962,8 +938,8 @@
             "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
             "caller" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "code" : [
-                128,
-                191
+                144,
+                37
             ],
             "data" : [
             ],
