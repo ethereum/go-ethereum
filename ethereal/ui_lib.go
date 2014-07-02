@@ -1,4 +1,4 @@
-package ethui
+package main
 
 import (
 	"github.com/ethereum/eth-go"
