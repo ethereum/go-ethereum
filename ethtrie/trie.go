@@ -150,25 +150,11 @@ func NewTrie(db ethutil.Database, Root interface{}) *Trie {
 	return &Trie{cache: NewCache(db), Root: r, prevRoot: p}
 }
 
-// Save the cached value to the database.
-func (t *Trie) Sync() {
-	t.cache.Commit()
-	t.prevRoot = copyRoot(t.Root)
-}
-
-func (t *Trie) Undo() {
-	t.cache.Undo()
-	t.Root = t.prevRoot
-}
-
-func (t *Trie) Cache() *Cache {
-	return t.cache
-}
-
 /*
  * Public (query) interface functions
  */
-func (t *Trie) Update(key string, value string) {
+
+func (t *Trie) Update(key, value string) {
 	t.mut.Lock()
 	defer t.mut.Unlock()
 
@@ -190,7 +176,7 @@ func (t *Trie) Get(key string) string {
 	defer t.mut.RUnlock()
 
 	k := CompactHexDecode(key)
-	c := ethutil.NewValue(t.GetState(t.Root, k))
+	c := ethutil.NewValue(t.getState(t.Root, k))
 
 	return c.Str()
 }
@@ -201,7 +187,7 @@ func (t *Trie) Delete(key string) {
 
 	k := CompactHexDecode(key)
 
-	root := t.DeleteState(t.Root, k)
+	root := t.deleteState(t.Root, k)
 	switch root.(type) {
 	case string:
 		t.Root = root
@@ -212,14 +198,44 @@ func (t *Trie) Delete(key string) {
 	}
 }
 
-func (t *Trie) GetState(node interface{}, key []int) interface{} {
+// Simple compare function which creates a rlp value out of the evaluated objects
+func (t *Trie) Cmp(trie *Trie) bool {
+	return ethutil.NewValue(t.Root).Cmp(ethutil.NewValue(trie.Root))
+}
+
+// Returns a copy of this trie
+func (t *Trie) Copy() *Trie {
+	trie := NewTrie(t.cache.db, t.Root)
+	for key, node := range t.cache.nodes {
+		trie.cache.nodes[key] = node.Copy()
+	}
+
+	return trie
+}
+
+// Save the cached value to the database.
+func (t *Trie) Sync() {
+	t.cache.Commit()
+	t.prevRoot = copyRoot(t.Root)
+}
+
+func (t *Trie) Undo() {
+	t.cache.Undo()
+	t.Root = t.prevRoot
+}
+
+func (t *Trie) Cache() *Cache {
+	return t.cache
+}
+
+func (t *Trie) getState(node interface{}, key []int) interface{} {
 	n := ethutil.NewValue(node)
 	// Return the node if key is empty (= found)
 	if len(key) == 0 || n.IsNil() || n.Len() == 0 {
 		return node
 	}
 
-	currentNode := t.GetNode(node)
+	currentNode := t.getNode(node)
 	length := currentNode.Len()
 
 	if length == 0 {
@@ -230,20 +246,20 @@ func (t *Trie) GetState(node interface{}, key []int) interface{} {
 		v := currentNode.Get(1).Raw()
 
 		if len(key) >= len(k) && CompareIntSlice(k, key[:len(k)]) {
-			return t.GetState(v, key[len(k):])
+			return t.getState(v, key[len(k):])
 		} else {
 			return ""
 		}
 	} else if length == 17 {
-		return t.GetState(currentNode.Get(key[0]).Raw(), key[1:])
+		return t.getState(currentNode.Get(key[0]).Raw(), key[1:])
 	}
 
 	// It shouldn't come this far
-	fmt.Println("GetState unexpected return")
+	fmt.Println("getState unexpected return")
 	return ""
 }
 
-func (t *Trie) GetNode(node interface{}) *ethutil.Value {
+func (t *Trie) getNode(node interface{}) *ethutil.Value {
 	n := ethutil.NewValue(node)
 
 	if !n.Get(0).IsNil() {
@@ -299,7 +315,7 @@ func (t *Trie) InsertState(node interface{}, key []int, value interface{}) inter
 		return t.Put(newNode)
 	}
 
-	currentNode := t.GetNode(node)
+	currentNode := t.getNode(node)
 	// Check for "special" 2 slice type node
 	if currentNode.Len() == 2 {
 		// Decode the key
@@ -358,7 +374,7 @@ func (t *Trie) InsertState(node interface{}, key []int, value interface{}) inter
 	return ""
 }
 
-func (t *Trie) DeleteState(node interface{}, key []int) interface{} {
+func (t *Trie) deleteState(node interface{}, key []int) interface{} {
 	if len(key) == 0 {
 		return ""
 	}
@@ -369,7 +385,7 @@ func (t *Trie) DeleteState(node interface{}, key []int) interface{} {
 		return ""
 	}
 
-	currentNode := t.GetNode(node)
+	currentNode := t.getNode(node)
 	// Check for "special" 2 slice type node
 	if currentNode.Len() == 2 {
 		// Decode the key
@@ -380,8 +396,8 @@ func (t *Trie) DeleteState(node interface{}, key []int) interface{} {
 		if CompareIntSlice(k, key) {
 			return ""
 		} else if CompareIntSlice(key[:len(k)], k) {
-			hash := t.DeleteState(v, key[len(k):])
-			child := t.GetNode(hash)
+			hash := t.deleteState(v, key[len(k):])
+			child := t.getNode(hash)
 
 			var newNode []interface{}
 			if child.Len() == 2 {
@@ -407,7 +423,7 @@ func (t *Trie) DeleteState(node interface{}, key []int) interface{} {
 			}
 		}
 
-		n[key[0]] = t.DeleteState(n[key[0]], key[1:])
+		n[key[0]] = t.deleteState(n[key[0]], key[1:])
 		amount := -1
 		for i := 0; i < 17; i++ {
 			if n[i] != "" {
@@ -421,7 +437,7 @@ func (t *Trie) DeleteState(node interface{}, key []int) interface{} {
 		if amount == 16 {
 			newNode = []interface{}{CompactEncode([]int{16}), n[amount]}
 		} else if amount >= 0 {
-			child := t.GetNode(n[amount])
+			child := t.getNode(n[amount])
 			if child.Len() == 17 {
 				newNode = []interface{}{CompactEncode([]int{amount}), n[amount]}
 			} else if child.Len() == 2 {
@@ -437,21 +453,6 @@ func (t *Trie) DeleteState(node interface{}, key []int) interface{} {
 	}
 
 	return ""
-}
-
-// Simple compare function which creates a rlp value out of the evaluated objects
-func (t *Trie) Cmp(trie *Trie) bool {
-	return ethutil.NewValue(t.Root).Cmp(ethutil.NewValue(trie.Root))
-}
-
-// Returns a copy of this trie
-func (t *Trie) Copy() *Trie {
-	trie := NewTrie(t.cache.db, t.Root)
-	for key, node := range t.cache.nodes {
-		trie.cache.nodes[key] = node.Copy()
-	}
-
-	return trie
 }
 
 type TrieIterator struct {
