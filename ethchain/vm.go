@@ -53,7 +53,10 @@ type Vm struct {
 
 	err error
 
-	Hook DebugHook
+	// Debugging
+	Hook        DebugHook
+	BreakPoints []int64
+	Stepping    bool
 }
 
 type DebugHook func(step int, op OpCode, mem *Memory, stack *Stack, stateObject *StateObject) bool
@@ -742,9 +745,16 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		vm.Endl()
 
 		if vm.Hook != nil {
-			if !vm.Hook(prevStep, op, mem, stack, closure.Object()) {
-				return nil, nil
+			for _, instrNo := range vm.BreakPoints {
+				if pc.Cmp(big.NewInt(instrNo)) == 0 || vm.Stepping {
+					vm.Stepping = true
+
+					if !vm.Hook(prevStep, op, mem, stack, closure.Object()) {
+						return nil, nil
+					}
+				}
 			}
 		}
+
 	}
 }
