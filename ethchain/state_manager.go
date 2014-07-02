@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
 	"math/big"
@@ -204,7 +205,15 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 		return err
 	}
 
+	if ethutil.Config.Paranoia {
+		valid, _ := ethtrie.ParanoiaCheck(state.trie)
+		if !valid {
+			err = fmt.Errorf("PARANOIA: World state trie comparison failed")
+		}
+	}
+
 	if !block.State().Cmp(state) {
+
 		err = fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().trie.Root, state.trie.Root)
 		return
 	}
