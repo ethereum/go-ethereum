@@ -12,7 +12,7 @@ ApplicationWindow {
 	minimumWidth: 1280
 	minimumHeight: 700
 	width: 1290
-	height: 700
+	height: 750
 
 	property alias codeText: codeEditor.text
 	property alias dataText: rawDataField.text
@@ -31,6 +31,12 @@ ApplicationWindow {
 				shortcut: "Ctrl+n"
 				onTriggered: dbg.next()
 			}
+
+			MenuItem {
+				text: "Continue"
+				shortcut: "Ctrl+c"
+				onTriggered: dbg.continue()
+			}
 		}
 	}
 
@@ -39,6 +45,7 @@ ApplicationWindow {
 		property var asmModel: ListModel {
 			id: asmModel
 		}
+
 		TableView {
 			id: asmTableView
 			width: 200
@@ -187,6 +194,36 @@ ApplicationWindow {
 		}
 	}
 
+		function exec() {
+			dbg.execCommand(dbgCommand.text);
+			dbgCommand.text = "";
+		}
+	statusBar: StatusBar {
+		height: 30
+
+
+		TextField {
+			id: dbgCommand
+			y: 1
+			x: asmTableView.width
+			width: 500
+			placeholderText: "Debugger command (help for help)"
+			Keys.onReturnPressed: {
+				exec()
+			}
+		}
+
+		Button {
+			anchors {
+				left: dbgCommand.right
+			}
+			text: "Exec"
+			onClicked: {
+				exec()
+			}
+		}
+	}
+
 	toolBar: ToolBar {
 		RowLayout {
 			spacing: 5
@@ -208,11 +245,13 @@ ApplicationWindow {
 				}
 				text: "Next"
 			}
-			CheckBox {
-				id: breakEachLine
-				objectName: "breakEachLine"
-				text: "Break each instruction"
-				checked: true
+
+			Button {
+				id: debugContinueButton
+				onClicked: {
+					dbg.continue()
+				}
+				text: "Continue"
 			}
 		}
 	}
@@ -261,7 +300,19 @@ ApplicationWindow {
 	}
 
 	function setLog(msg) {
-		logModel.insert(0, {message: msg})
+		// Remove first item once we've reached max log items
+		if(logModel.count > 250) {
+			logModel.remove(0)
+		}
+
+		if(msg.len != 0) {
+			if(logTableView.flickableItem.atYEnd) {
+				logModel.append({message: msg})
+				logTableView.positionViewAtRow(logTableView.rowCount - 1, ListView.Contain)
+			} else {
+				logModel.append({message: msg})
+			}
+		}
 	}
 
 	function clearLog() {

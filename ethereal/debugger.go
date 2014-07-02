@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/go-qml/qml"
 	"math/big"
+	"strconv"
 	"strings"
 )
 
@@ -13,7 +14,10 @@ type DebuggerWindow struct {
 	win    *qml.Window
 	engine *qml.Engine
 	lib    *UiLib
-	Db     *Debugger
+
+	vm          *ethchain.Vm
+	Db          *Debugger
+	breakPoints []int64
 }
 
 func NewDebuggerWindow(lib *UiLib) *DebuggerWindow {
@@ -26,9 +30,9 @@ func NewDebuggerWindow(lib *UiLib) *DebuggerWindow {
 	}
 
 	win := component.CreateWindow(nil)
-	db := &Debugger{win, make(chan bool), make(chan bool), true, false, true}
+	db := &Debugger{win, make(chan bool), make(chan bool), true, false}
 
-	return &DebuggerWindow{engine: engine, win: win, lib: lib, Db: db}
+	return &DebuggerWindow{engine: engine, win: win, lib: lib, Db: db, vm: &ethchain.Vm{}}
 }
 
 func (self *DebuggerWindow) Show() {
@@ -59,7 +63,6 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 	if !self.Db.done {
 		self.Db.Q <- true
 	}
-	self.Db.breakOnInstr = self.win.Root().ObjectByName("breakEachLine").Bool("checked")
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -90,7 +93,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 
 	dis := ethchain.Disassemble(script)
 	self.win.Root().Call("clearAsm")
-	self.win.Root().Call("clearLog")
+	//self.win.Root().Call("clearLog")
 
 	for _, str := range dis {
 		self.win.Root().Call("setAsm", str)
@@ -125,7 +128,9 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 	})
 	vm.Verbose = true
 	vm.Hook = self.Db.halting
+	vm.BreakPoints = self.breakPoints
 
+	self.vm = vm
 	self.Db.done = false
 	self.Logf("callsize %d", len(script))
 	go func() {
@@ -165,12 +170,57 @@ func (self *DebuggerWindow) Next() {
 	self.Db.Next()
 }
 
+func (self *DebuggerWindow) Continue() {
+	self.vm.Stepping = false
+	self.Next()
+}
+
+func (self *DebuggerWindow) ExecCommand(command string) {
+	if len(command) > 0 {
+		cmd := strings.Split(command, " ")
+		switch cmd[0] {
+		case "help":
+			self.Logln("Debgger commands:")
+			self.Logln("break, bp      Set breakpoint")
+		case "break", "bp":
+			if len(cmd) > 1 {
+				lineNo, err := strconv.Atoi(cmd[1])
+				if err != nil {
+					self.Logln(err)
+					break
+				}
+				self.breakPoints = append(self.breakPoints, int64(lineNo))
+				self.vm.BreakPoints = self.breakPoints
+				self.Logf("break point set on instruction %d", lineNo)
+			} else {
+				self.Logf("'%s' requires line number", cmd[0])
+			}
+		case "clear":
+			if len(cmd) > 1 {
+				switch cmd[1] {
+				case "break", "bp":
+					self.breakPoints = nil
+					self.vm.BreakPoints = nil
+
+					self.Logln("Breakpoints cleared")
+				default:
+					self.Logf("clear '%s' is not valid", cmd[1])
+				}
+			} else {
+				self.Logln("'clear' requires sub command")
+			}
+
+		default:
+			self.Logf("Unknown command %s", cmd[0])
+		}
+	}
+}
+
 type Debugger struct {
 	win             *qml.Window
 	N               chan bool
 	Q               chan bool
 	done, interrupt bool
-	breakOnInstr    bool
 }
 
 type storeVal struct {
@@ -197,18 +247,16 @@ func (d *Debugger) halting(pc int, op ethchain.OpCode, mem *ethchain.Memory, sta
 		d.win.Root().Call("setStorage", storeVal{fmt.Sprintf("% x", key), fmt.Sprintf("% x", node.Str())})
 	})
 
-	if d.breakOnInstr {
-	out:
-		for {
-			select {
-			case <-d.N:
-				break out
-			case <-d.Q:
-				d.interrupt = true
-				d.clearBuffers()
+out:
+	for {
+		select {
+		case <-d.N:
+			break out
+		case <-d.Q:
+			d.interrupt = true
+			d.clearBuffers()
 
-				return false
-			}
+			return false
 		}
 	}
 
