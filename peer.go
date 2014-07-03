@@ -162,7 +162,7 @@ func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
 		pubkey:          pubkey,
 		blocksRequested: 10,
 		caps:            ethereum.ServerCaps(),
-		version:         ethutil.Config.ClientString,
+		version:         ethereum.ClientIdentity().String(),
 	}
 }
 
@@ -175,7 +175,7 @@ func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 		connected:   0,
 		disconnect:  0,
 		caps:        caps,
-		version:     ethutil.Config.ClientString,
+		version:     ethereum.ClientIdentity().String(),
 	}
 
 	// Set up the connection in another goroutine so we don't block the main thread
