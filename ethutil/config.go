@@ -5,29 +5,25 @@ import (
 	"fmt"
 	"github.com/rakyll/globalconf"
 	"os"
-	"runtime"
 )
 
 // Config struct
-type config struct {
+type ConfigManager struct {
 	Db Database
 
-	ExecPath     string
-	Debug        bool
-	Paranoia     bool
-	Ver          string
-	ClientString string
-	Identifier   string
+	ExecPath string
+	Debug    bool
+	Paranoia bool
 
 	conf *globalconf.GlobalConf
 }
 
-var Config *config
+var Config *ConfigManager
 
 // Read config
 //
 // Initialize Config from Config File
-func ReadConfig(ConfigFile string, Datadir string, Identifier string, EnvPrefix string) *config {
+func ReadConfig(ConfigFile string, Datadir string, EnvPrefix string) *ConfigManager {
 	if Config == nil {
 		// create ConfigFile if does not exist, otherwise globalconf panic when trying to persist flags
 		_, err := os.Stat(ConfigFile)
@@ -44,33 +40,29 @@ func ReadConfig(ConfigFile string, Datadir string, Identifier string, EnvPrefix 
 		} else {
 			g.ParseAll()
 		}
-		Config = &config{ExecPath: Datadir, Debug: true, Ver: "0.5.16", conf: g, Identifier: Identifier, Paranoia: true}
-		Config.SetClientString("Ethereum(G)")
+		Config = &ConfigManager{ExecPath: Datadir, Debug: true, conf: g, Paranoia: true}
 	}
 	return Config
 }
 
-// Set client string
-//
-func (c *config) SetClientString(str string) {
-	os := runtime.GOOS
-	cust := c.Identifier
-	Config.ClientString = fmt.Sprintf("%s/v%s/%s/%s/Go", str, c.Ver, cust, os)
-}
-
-func (c *config) SetIdentifier(id string) {
-	c.Identifier = id
-	c.Set("id", id)
-}
-
 // provides persistence for flags
-func (c *config) Set(key, value string) {
-	f := &flag.Flag{Name: key, Value: &confValue{value}}
+func (c *ConfigManager) Save(key string, value interface{}) {
+	f := &flag.Flag{Name: key, Value: newConfValue(value)}
 	c.conf.Set("", f)
 }
 
+func (c *ConfigManager) Delete(key string) {
+	c.conf.Delete("", key)
+}
+
+// private type implementing flag.Value
 type confValue struct {
 	value string
+}
+
+// generic constructor to allow persising non-string values directly
+func newConfValue(value interface{}) *confValue {
+	return &confValue{fmt.Sprintf("%v", value)}
 }
 
 func (self confValue) String() string     { return self.value }
