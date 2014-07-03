@@ -248,7 +248,6 @@ func (c *StateObject) RlpDecode(data []byte) {
 	c.Nonce = decoder.Get(0).Uint()
 	c.Amount = decoder.Get(1).BigInt()
 	c.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, decoder.Get(2).Interface()))
-	c.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, decoder.Get(2).Interface()))
 
 	c.ScriptHash = decoder.Get(3).Bytes()
 
