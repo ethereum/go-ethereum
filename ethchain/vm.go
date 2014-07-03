@@ -698,9 +698,9 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				stateObject.AddAmount(value)
 
 				// Create a new callable closure
-				closure := NewClosure(closure, stateObject, stateObject.script, vm.state, gas, closure.Price)
+				c := NewClosure(closure, stateObject, stateObject.script, vm.state, gas, closure.Price)
 				// Executer the closure and get the return value (if any)
-				ret, err := Call(vm, closure, args)
+				ret, err := Call(vm, c, args)
 				if err != nil {
 					stack.Push(ethutil.BigFalse)
 
