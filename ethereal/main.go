@@ -8,6 +8,11 @@ import (
 	"runtime"
 )
 
+const (
+	ClientIdentifier = "Ethereal"
+	Version          = "0.5.16"
+)
+
 func main() {
 	// Leave QT on top at ALL times. Qt Needs to be initialized from the main thread
 	qml.Init(nil)
@@ -23,7 +28,8 @@ func main() {
 
 	// precedence: code-internal flag default < config file < environment variables < command line
 	Init() // parsing command line
-	utils.InitConfig(ConfigFile, Datadir, Identifier, "ETH")
+
+	config := utils.InitConfig(ConfigFile, Datadir, "ETH")
 
 	utils.InitDataDir(Datadir)
 
@@ -36,7 +42,9 @@ func main() {
 	// create, import, export keys
 	utils.KeyTasks(keyManager, KeyRing, GenAddr, SecretFile, ExportDir, NonInteractive)
 
-	ethereum := utils.NewEthereum(db, keyManager, UseUPnP, OutboundPort, MaxPeer)
+	clientIdentity := utils.NewClientIdentity(ClientIdentifier, Version, Identifier)
+
+	ethereum := utils.NewEthereum(db, clientIdentity, keyManager, UseUPnP, OutboundPort, MaxPeer)
 
 	if ShowGenesis {
 		utils.ShowGenesis(ethereum)
@@ -46,7 +54,7 @@ func main() {
 		utils.StartRpc(ethereum, RpcPort)
 	}
 
-	gui := NewWindow(ethereum, KeyRing, LogLevel)
+	gui := NewWindow(ethereum, config, clientIdentity, KeyRing, LogLevel)
 
 	utils.RegisterInterrupt(func(os.Signal) {
 		gui.Stop()

@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethrpc"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ethwire"
 	"io"
 	"log"
 	"os"
@@ -98,9 +99,9 @@ func InitLogging(Datadir string, LogFile string, LogLevel int, DebugFile string)
 	}
 }
 
-func InitConfig(ConfigFile string, Datadir string, Identifier string, EnvPrefix string) {
+func InitConfig(ConfigFile string, Datadir string, EnvPrefix string) *ethutil.ConfigManager {
 	InitDataDir(Datadir)
-	ethutil.ReadConfig(ConfigFile, Datadir, Identifier, EnvPrefix)
+	return ethutil.ReadConfig(ConfigFile, Datadir, EnvPrefix)
 }
 
 func exit(err error) {
@@ -122,8 +123,12 @@ func NewDatabase() ethutil.Database {
 	return db
 }
 
-func NewEthereum(db ethutil.Database, keyManager *ethcrypto.KeyManager, usePnp bool, OutboundPort string, MaxPeer int) *eth.Ethereum {
-	ethereum, err := eth.New(db, keyManager, eth.CapDefault, usePnp)
+func NewClientIdentity(clientIdentifier, version, customIdentifier string) *ethwire.SimpleClientIdentity {
+	return ethwire.NewSimpleClientIdentity(clientIdentifier, version, customIdentifier)
+}
+
+func NewEthereum(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager *ethcrypto.KeyManager, usePnp bool, OutboundPort string, MaxPeer int) *eth.Ethereum {
+	ethereum, err := eth.New(db, clientIdentity, keyManager, eth.CapDefault, usePnp)
 	if err != nil {
 		logger.Fatalln("eth start err:", err)
 	}
@@ -133,7 +138,7 @@ func NewEthereum(db ethutil.Database, keyManager *ethcrypto.KeyManager, usePnp b
 }
 
 func StartEthereum(ethereum *eth.Ethereum, UseSeed bool) {
-	logger.Infof("Starting Ethereum v%s", ethutil.Config.Ver)
+	logger.Infof("Starting %s", ethereum.ClientIdentity())
 	ethereum.Start(UseSeed)
 	RegisterInterrupt(func(sig os.Signal) {
 		ethereum.Stop()
