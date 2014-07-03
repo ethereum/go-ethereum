@@ -192,6 +192,8 @@ func (self *StateTransition) TransitionState() (err error) {
 		return
 	}
 
+	//snapshot := self.state.Copy()
+
 	// Process the init code and create 'valid' contract
 	if IsContractAddr(self.receiver) {
 		// Evaluate the initialization script
@@ -199,22 +201,25 @@ func (self *StateTransition) TransitionState() (err error) {
 		// script section for the state object.
 		self.data = nil
 
-		code, err, deepErr := self.Eval(receiver.Init(), receiver)
-		if err != nil || deepErr {
+		statelogger.Debugln("~> init")
+		code, err := self.Eval(receiver.Init(), receiver)
+		if err != nil {
+			//self.state.Set(snapshot)
 			self.state.ResetStateObject(receiver)
 
-			return fmt.Errorf("Error during init script run %v (deepErr = %v)", err, deepErr)
+			return fmt.Errorf("Error during init execution %v", err)
 		}
 
 		receiver.script = code
 	} else {
 		if len(receiver.Script()) > 0 {
-			var deepErr bool
-			_, err, deepErr = self.Eval(receiver.Script(), receiver)
+			statelogger.Debugln("~> code")
+			_, err = self.Eval(receiver.Script(), receiver)
 			if err != nil {
+				//self.state.Set(snapshot)
 				self.state.ResetStateObject(receiver)
 
-				return fmt.Errorf("Error during code execution %v (deepErr = %v)", err, deepErr)
+				return fmt.Errorf("Error during code execution %v", err)
 			}
 		}
 	}
@@ -235,7 +240,7 @@ func (self *StateTransition) transferValue(sender, receiver *StateObject) error 
 	return nil
 }
 
-func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []byte, err error, deepErr bool) {
+func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []byte, err error) {
 	var (
 		block     = self.block
 		initiator = self.Sender()
@@ -255,14 +260,13 @@ func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []by
 	})
 	vm.Verbose = true
 
-	ret, err, deepErr = Call(vm, closure, self.data)
+	ret, err = Call(vm, closure, self.data)
 
 	return
 }
 
-func Call(vm *Vm, closure *Closure, data []byte) (ret []byte, err error, deepErr bool) {
+func Call(vm *Vm, closure *Closure, data []byte) (ret []byte, err error) {
 	ret, _, err = closure.Call(vm, data)
-	deepErr = vm.err != nil
 
 	if ethutil.Config.Paranoia {
 		var (
@@ -274,21 +278,8 @@ func Call(vm *Vm, closure *Closure, data []byte) (ret []byte, err error, deepErr
 		if !valid {
 			// TODO FIXME ASAP
 			context.state.trie = t2
-			/*
-				statelogger.Debugf("(o): %x\n", trie.Root)
-				trie.NewIterator().Each(func(key string, v *ethutil.Value) {
-					v.Decode()
-					statelogger.Debugf("%x : %x\n", key, v.Str())
-				})
 
-				statelogger.Debugf("(c): %x\n", trie2.Root)
-				trie2.NewIterator().Each(func(key string, v *ethutil.Value) {
-					v.Decode()
-					statelogger.Debugf("%x : %x\n", key, v.Str())
-				})
-			*/
-
-			//return nil, fmt.Errorf("PARANOIA: Different state object roots during copy"), false
+			statelogger.Debugln("Warn: PARANOIA: Different state object roots during copy")
 		}
 	}
 

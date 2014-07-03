@@ -82,7 +82,7 @@ func (self *Vm) Printf(format string, v ...interface{}) *Vm {
 
 func (self *Vm) Endl() *Vm {
 	if self.Verbose {
-		vmlogger.Infoln(self.logStr)
+		vmlogger.Debugln(self.logStr)
 		self.logStr = ""
 	}
 
@@ -652,7 +652,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				c := NewClosure(closure, contract, contract.initScript, vm.state, gas, closure.Price)
 				// Call the closure and set the return value as
 				// main script.
-				contract.script, err, _ = Call(vm, c, nil)
+				contract.script, err = Call(vm, c, nil)
 			} else {
 				err = fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Amount)
 			}
@@ -690,25 +690,24 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 				stack.Push(ethutil.BigFalse)
 			} else {
-				snapshot := vm.state.Copy()
+				//snapshot := vm.state.Copy()
 
 				stateObject := vm.state.GetOrNewStateObject(addr.Bytes())
 
 				closure.object.SubAmount(value)
-				// Add the value to the state object
 				stateObject.AddAmount(value)
 
 				// Create a new callable closure
 				closure := NewClosure(closure, stateObject, stateObject.script, vm.state, gas, closure.Price)
 				// Executer the closure and get the return value (if any)
-				ret, err, _ := Call(vm, closure, args)
+				ret, err := Call(vm, closure, args)
 				if err != nil {
 					stack.Push(ethutil.BigFalse)
 
 					vmlogger.Debugf("Closure execution failed. %v\n", err)
 
-					vm.err = err
-					vm.state.Set(snapshot)
+					//vm.state.Set(snapshot)
+					vm.state.ResetStateObject(stateObject)
 				} else {
 					stack.Push(ethutil.BigTrue)
 

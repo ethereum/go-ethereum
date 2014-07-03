@@ -157,9 +157,11 @@ func (self *State) Copy() *State {
 }
 
 func (self *State) Set(state *State) {
-	//s.trie = snapshot.trie
-	//s.stateObjects = snapshot.stateObjects
-	self = state
+	if state == nil {
+		panic("Tried setting 'state' to nil through 'Set'")
+	}
+
+	*self = *state
 }
 
 func (s *State) Put(key, object []byte) {

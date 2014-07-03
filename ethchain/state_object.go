@@ -191,13 +191,12 @@ func (self *StateObject) Copy() *StateObject {
 	}
 	stateObject.script = ethutil.CopyBytes(self.script)
 	stateObject.initScript = ethutil.CopyBytes(self.initScript)
-	//stateObject.gasPool.Set(self.gasPool)
 
-	return self
+	return stateObject
 }
 
 func (self *StateObject) Set(stateObject *StateObject) {
-	self = stateObject
+	*self = *stateObject
 }
 
 //
