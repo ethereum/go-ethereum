@@ -208,7 +208,7 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 	if ethutil.Config.Paranoia {
 		valid, _ := ethtrie.ParanoiaCheck(state.trie)
 		if !valid {
-			err = fmt.Errorf("PARANOIA: World state trie comparison failed")
+			err = fmt.Errorf("PARANOIA: World state trie corruption")
 		}
 	}
 

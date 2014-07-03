@@ -53,6 +53,7 @@ func (self *StateTransition) Sender() *StateObject {
 	}
 
 	self.sen = self.state.GetAccount(self.tx.Sender())
+
 	return self.sen
 }
 func (self *StateTransition) Receiver() *StateObject {
