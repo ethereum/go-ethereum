@@ -3,8 +3,8 @@ package ethcrypto
 import (
 	"code.google.com/p/go.crypto/ripemd160"
 	"crypto/sha256"
+	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/sha3"
-	"math/big"
 )
 
 func Sha256Bin(data []byte) []byte {
@@ -28,8 +28,6 @@ func Sha3Bin(data []byte) []byte {
 }
 
 // Creates an ethereum address given the bytes and the nonce
-func CreateAddress(b []byte, nonce *big.Int) []byte {
-	addrBytes := append(b, nonce.Bytes()...)
-
-	return Sha3Bin(addrBytes)[12:]
+func CreateAddress(b []byte, nonce uint64) []byte {
+	return Sha3Bin(ethutil.NewValue([]interface{}{b, nonce}).Encode())[12:]
 }

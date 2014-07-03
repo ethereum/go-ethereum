@@ -35,7 +35,6 @@ func CalculateTxGas(initSize *big.Int) *big.Int {
 }
 
 type Vm struct {
-	txPool *TxPool
 	// Stack for processing contracts
 	stack *Stack
 	// non-persistent key/value memory storage
@@ -617,48 +616,59 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case CREATE:
 			require(3)
 
-			value := stack.Pop()
-			size, offset := stack.Popn()
+			var (
+				err          error
+				value        = stack.Pop()
+				size, offset = stack.Popn()
 
-			// Snapshot the current stack so we are able to
-			// revert back to it later.
-			snapshot := vm.state.Copy()
+				// Snapshot the current stack so we are able to
+				// revert back to it later.
+				snapshot = vm.state.Copy()
+			)
 
 			// Generate a new address
-			addr := ethcrypto.CreateAddress(closure.caller.Address(), closure.caller.N())
+			addr := ethcrypto.CreateAddress(closure.object.Address(), closure.object.Nonce)
+			for i := uint64(0); vm.state.GetStateObject(addr) != nil; i++ {
+				ethcrypto.CreateAddress(closure.object.Address(), closure.object.Nonce+i)
+			}
+			closure.object.Nonce++
 
 			vm.Printf(" (*) %x", addr).Endl()
 
 			// Create a new contract
 			contract := vm.state.NewStateObject(addr)
-			contract.Amount = value
+			if contract.Amount.Cmp(value) >= 0 {
+				closure.object.SubAmount(value)
+				contract.AddAmount(value)
 
-			// Set the init script
-			contract.initScript = ethutil.BigD(mem.Get(offset.Int64(), size.Int64())).Bytes()
-			// Transfer all remaining gas to the new
-			// contract so it may run the init script
-			gas := new(big.Int).Set(closure.Gas)
+				// Set the init script
+				contract.initScript = mem.Get(offset.Int64(), size.Int64())
+				// Transfer all remaining gas to the new
+				// contract so it may run the init script
+				gas := new(big.Int).Set(closure.Gas)
+				closure.UseGas(closure.Gas)
 
-			// Create the closure
-			c := NewClosure(closure.caller,
-				closure.Object(),
-				contract.initScript,
-				vm.state,
-				gas,
-				closure.Price)
-			// Call the closure and set the return value as
-			// main script.
-			var err error
-			c.Script, gas, err = c.Call(vm, nil)
+				// Create the closure
+				c := NewClosure(closure, contract, contract.initScript, vm.state, gas, closure.Price)
+				// Call the closure and set the return value as
+				// main script.
+				contract.script, err, _ = Call(vm, c, nil)
+			} else {
+				err = fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Amount)
+			}
 
 			if err != nil {
 				stack.Push(ethutil.BigFalse)
 
 				// Revert the state as it was before.
 				vm.state.Set(snapshot)
+
+				vm.Printf("CREATE err %v", err)
 			} else {
 				stack.Push(ethutil.BigD(addr))
+				vm.Printf("CREATE success")
 			}
+			vm.Endl()
 		case CALL:
 			require(7)
 

@@ -93,10 +93,6 @@ func (self *State) ResetStateObject(stateObject *StateObject) {
 func (self *State) UpdateStateObject(stateObject *StateObject) {
 	addr := stateObject.Address()
 
-	if self.stateObjects[string(addr)] == nil {
-		self.stateObjects[string(addr)] = stateObject
-	}
-
 	ethutil.Config.Db.Put(ethcrypto.Sha3Bin(stateObject.Script()), stateObject.Script())
 
 	self.trie.Update(string(addr), string(stateObject.RlpEncode()))
@@ -131,7 +127,7 @@ func (self *State) GetOrNewStateObject(addr []byte) *StateObject {
 }
 
 func (self *State) NewStateObject(addr []byte) *StateObject {
-	//statelogger.Infof("(+) %x\n", addr)
+	statelogger.Infof("(+) %x\n", addr)
 
 	stateObject := NewStateObject(addr)
 	self.stateObjects[string(addr)] = stateObject

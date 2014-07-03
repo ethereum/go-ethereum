@@ -1,12 +1,26 @@
 package ethtrie
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethutil"
 	"reflect"
 	"sync"
 )
+
+func ParanoiaCheck(t1 *Trie) (bool, *Trie) {
+	t2 := NewTrie(ethutil.Config.Db, "")
+
+	t1.NewIterator().Each(func(key string, v *ethutil.Value) {
+		t2.Update(key, v.Str())
+	})
+
+	a := ethutil.NewValue(t2.Root).Bytes()
+	b := ethutil.NewValue(t1.Root).Bytes()
+
+	return bytes.Compare(a, b) == 0, t2
+}
 
 func (s *Cache) Len() int {
 	return len(s.nodes)

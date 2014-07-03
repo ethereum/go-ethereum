@@ -1,7 +1,6 @@
 package ethchain
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
@@ -54,6 +53,7 @@ func (self *StateTransition) Sender() *StateObject {
 	}
 
 	self.sen = self.state.GetAccount(self.tx.Sender())
+
 	return self.sen
 }
 func (self *StateTransition) Receiver() *StateObject {
@@ -264,23 +264,16 @@ func Call(vm *Vm, closure *Closure, data []byte) (ret []byte, err error, deepErr
 	ret, _, err = closure.Call(vm, data)
 	deepErr = vm.err != nil
 
-	Paranoia := ethutil.Config.Paranoia
-	if Paranoia {
+	if ethutil.Config.Paranoia {
 		var (
 			context = closure.object
 			trie    = context.state.trie
-			trie2   = ethtrie.NewTrie(ethutil.Config.Db, "")
 		)
 
-		trie.NewIterator().Each(func(key string, v *ethutil.Value) {
-			trie2.Update(key, v.Str())
-		})
-
-		a := ethutil.NewValue(trie2.Root).Bytes()
-		b := ethutil.NewValue(context.state.trie.Root).Bytes()
-		if bytes.Compare(a, b) != 0 {
+		valid, t2 := ethtrie.ParanoiaCheck(trie)
+		if !valid {
 			// TODO FIXME ASAP
-			context.state.trie = trie2
+			context.state.trie = t2
 			/*
 				statelogger.Debugf("(o): %x\n", trie.Root)
 				trie.NewIterator().Each(func(key string, v *ethutil.Value) {
