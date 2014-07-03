@@ -76,9 +76,11 @@ type Ethereum struct {
 	RpcServer *ethrpc.JsonRpcServer
 
 	keyManager *ethcrypto.KeyManager
+
+	clientIdentity ethwire.ClientIdentity
 }
 
-func New(db ethutil.Database, keyManager *ethcrypto.KeyManager, caps Caps, usePnp bool) (*Ethereum, error) {
+func New(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager *ethcrypto.KeyManager, caps Caps, usePnp bool) (*Ethereum, error) {
 
 	var err error
 	var nat NAT
@@ -94,14 +96,15 @@ func New(db ethutil.Database, keyManager *ethcrypto.KeyManager, caps Caps, usePn
 
 	nonce, _ := ethutil.RandomUint64()
 	ethereum := &Ethereum{
-		shutdownChan: make(chan bool),
-		quit:         make(chan bool),
-		db:           db,
-		peers:        list.New(),
-		Nonce:        nonce,
-		serverCaps:   caps,
-		nat:          nat,
-		keyManager:   keyManager,
+		shutdownChan:   make(chan bool),
+		quit:           make(chan bool),
+		db:             db,
+		peers:          list.New(),
+		Nonce:          nonce,
+		serverCaps:     caps,
+		nat:            nat,
+		keyManager:     keyManager,
+		clientIdentity: clientIdentity,
 	}
 	ethereum.reactor = ethutil.NewReactorEngine()
 
@@ -121,6 +124,10 @@ func (s *Ethereum) Reactor() *ethutil.ReactorEngine {
 
 func (s *Ethereum) KeyManager() *ethcrypto.KeyManager {
 	return s.keyManager
+}
+
+func (s *Ethereum) ClientIdentity() ethwire.ClientIdentity {
+	return s.clientIdentity
 }
 
 func (s *Ethereum) BlockChain() *ethchain.BlockChain {
