@@ -35,7 +35,6 @@ func CalculateTxGas(initSize *big.Int) *big.Int {
 }
 
 type Vm struct {
-	txPool *TxPool
 	// Stack for processing contracts
 	stack *Stack
 	// non-persistent key/value memory storage
@@ -628,11 +627,11 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			)
 
 			// Generate a new address
-			addr := ethcrypto.CreateAddress(closure.caller.Address(), closure.caller.N())
-			for i := int64(0); vm.state.GetStateObject(addr) != nil; i++ {
-				t := new(big.Int).Set(closure.caller.N())
-				addr = ethcrypto.CreateAddress(closure.caller.Address(), t.Add(t, big.NewInt(i)))
+			addr := ethcrypto.CreateAddress(closure.object.Address(), closure.object.Nonce)
+			for i := uint64(0); vm.state.GetStateObject(addr) != nil; i++ {
+				ethcrypto.CreateAddress(closure.object.Address(), closure.object.Nonce+i)
 			}
+			closure.object.Nonce++
 
 			vm.Printf(" (*) %x", addr).Endl()
 
@@ -643,7 +642,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				contract.AddAmount(value)
 
 				// Set the init script
-				contract.initScript = ethutil.BigD(mem.Get(offset.Int64(), size.Int64())).Bytes()
+				contract.initScript = mem.Get(offset.Int64(), size.Int64())
 				// Transfer all remaining gas to the new
 				// contract so it may run the init script
 				gas := new(big.Int).Set(closure.Gas)
@@ -653,7 +652,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				c := NewClosure(closure, contract, contract.initScript, vm.state, gas, closure.Price)
 				// Call the closure and set the return value as
 				// main script.
-				c.Script, err, _ = Call(vm, c, nil)
+				contract.script, err, _ = Call(vm, c, nil)
 			} else {
 				err = fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Amount)
 			}
