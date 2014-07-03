@@ -41,6 +41,7 @@ type EthManager interface {
 	IsListening() bool
 	Peers() *list.List
 	KeyManager() *ethcrypto.KeyManager
+	ClientIdentity() ethwire.ClientIdentity
 }
 
 type StateManager struct {
