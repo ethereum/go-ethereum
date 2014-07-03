@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ethwire"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
 	"math/big"
@@ -36,11 +37,13 @@ type Gui struct {
 	logLevel ethlog.LogLevel
 	open     bool
 
-	Session string
+	Session        string
+	clientIdentity *ethwire.SimpleClientIdentity
+	config         *ethutil.ConfigManager
 }
 
 // Create GUI, but doesn't start it
-func NewWindow(ethereum *eth.Ethereum, session string, logLevel int) *Gui {
+func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIdentity *ethwire.SimpleClientIdentity, session string, logLevel int) *Gui {
 	db, err := ethdb.NewLDBDatabase("tx_database")
 	if err != nil {
 		panic(err)
@@ -48,11 +51,10 @@ func NewWindow(ethereum *eth.Ethereum, session string, logLevel int) *Gui {
 
 	pub := ethpub.NewPEthereum(ethereum)
 
-	return &Gui{eth: ethereum, txDb: db, pub: pub, logLevel: ethlog.LogLevel(logLevel), Session: session, open: false}
+	return &Gui{eth: ethereum, txDb: db, pub: pub, logLevel: ethlog.LogLevel(logLevel), Session: session, open: false, clientIdentity: clientIdentity, config: config}
 }
 
 func (gui *Gui) Start(assetPath string) {
-	const version = "0.5.16"
 
 	defer gui.txDb.Close()
 
@@ -64,8 +66,6 @@ func (gui *Gui) Start(assetPath string) {
 	}, {
 		Init: func(p *ethpub.KeyVal, obj qml.Object) { p.Key = ""; p.Value = "" },
 	}})
-
-	ethutil.Config.SetClientString("Ethereal")
 
 	// Create a new QML engine
 	gui.engine = qml.NewEngine()
@@ -103,14 +103,14 @@ func (gui *Gui) Start(assetPath string) {
 		ethlog.AddLogSystem(gui)
 	}
 	win.Wait()
-	// need to silence gui logger after window closed otherwise logsystem hangs
-	gui.SetLogLevel(ethlog.Silence)
+	// need to silence gui logger after window closed otherwise logsystem hangs (but do not save loglevel)
+	gui.logLevel = ethlog.Silence
 	gui.open = false
 }
 
 func (gui *Gui) Stop() {
 	if gui.open {
-		gui.SetLogLevel(ethlog.Silence)
+		gui.logLevel = ethlog.Silence
 		gui.open = false
 		gui.win.Hide()
 	}
@@ -369,17 +369,19 @@ func (gui *Gui) Create(recipient, value, gas, gasPrice, data string) (*ethpub.PR
 	return gui.pub.Transact(gui.privateKey(), recipient, value, gas, gasPrice, data)
 }
 
-func (gui *Gui) ChangeClientId(id string) {
-	ethutil.Config.SetIdentifier(id)
+func (gui *Gui) SetCustomIdentifier(customIdentifier string) {
+	gui.clientIdentity.SetCustomIdentifier(customIdentifier)
+	gui.config.Save("id", customIdentifier)
 }
 
-func (gui *Gui) ClientId() string {
-	return ethutil.Config.Identifier
+func (gui *Gui) GetCustomIdentifier() string {
+	return gui.clientIdentity.GetCustomIdentifier()
 }
 
 // functions that allow Gui to implement interface ethlog.LogSystem
 func (gui *Gui) SetLogLevel(level ethlog.LogLevel) {
 	gui.logLevel = level
+	gui.config.Save("loglevel", level)
 }
 
 func (gui *Gui) GetLogLevel() ethlog.LogLevel {

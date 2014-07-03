@@ -248,9 +248,9 @@ ApplicationWindow {
 						text: "Client ID"
 					}
 					TextField {
-						text: eth.clientId()
+						text: eth.getCustomIdentifier()
 						onTextChanged: {
-							eth.changeClientId(text)
+							eth.setCustomIdentifier(text)
 						}
 					}
 				}

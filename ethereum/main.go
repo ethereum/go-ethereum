@@ -6,6 +6,11 @@ import (
 	"runtime"
 )
 
+const (
+	ClientIdentifier = "Ethereum(G)"
+	Version          = "0.5.16"
+)
+
 var logger = ethlog.NewLogger("CLI")
 
 func main() {
@@ -15,7 +20,7 @@ func main() {
 
 	// precedence: code-internal flag default < config file < environment variables < command line
 	Init() // parsing command line
-	utils.InitConfig(ConfigFile, Datadir, Identifier, "ETH")
+	utils.InitConfig(ConfigFile, Datadir, "ETH")
 
 	utils.InitDataDir(Datadir)
 
@@ -28,7 +33,9 @@ func main() {
 	// create, import, export keys
 	utils.KeyTasks(keyManager, KeyRing, GenAddr, SecretFile, ExportDir, NonInteractive)
 
-	ethereum := utils.NewEthereum(db, keyManager, UseUPnP, OutboundPort, MaxPeer)
+	clientIdentity := utils.NewClientIdentity(ClientIdentifier, Version, Identifier)
+
+	ethereum := utils.NewEthereum(db, clientIdentity, keyManager, UseUPnP, OutboundPort, MaxPeer)
 
 	if ShowGenesis {
 		utils.ShowGenesis(ethereum)
