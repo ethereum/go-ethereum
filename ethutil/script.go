@@ -13,7 +13,7 @@ func Compile(script string) (ret []byte, err error) {
 	if len(script) > 2 {
 		line := strings.Split(script, "\n")[0]
 
-		if line[0:2] == "#!" {
+		if len(line) > 1 && line[0:2] == "#!" {
 			switch line {
 			case "#!serpent":
 				byteCode, err := serpent.Compile(script)
