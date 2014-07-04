@@ -10,28 +10,36 @@ import (
 
 // General compile function
 func Compile(script string) (ret []byte, err error) {
-	c := strings.Split(script, "\n")[0]
+	if len(script) > 2 {
+		line := strings.Split(script, "\n")[0]
 
-	if c == "#!serpent" {
-		byteCode, err := serpent.Compile(script)
-		if err != nil {
-			return nil, err
-		}
-
-		return byteCode, nil
-	} else {
-		compiler := mutan.NewCompiler(backend.NewEthereumBackend())
-		byteCode, errors := compiler.Compile(strings.NewReader(script))
-		if len(errors) > 0 {
-			var errs string
-			for _, er := range errors {
-				if er != nil {
-					errs += er.Error()
+		if line[0:2] == "#!" {
+			switch line {
+			case "#!serpent":
+				byteCode, err := serpent.Compile(script)
+				if err != nil {
+					return nil, err
 				}
-			}
-			return nil, fmt.Errorf("%v", errs)
-		}
 
-		return byteCode, nil
+				return byteCode, nil
+			}
+		} else {
+
+			compiler := mutan.NewCompiler(backend.NewEthereumBackend())
+			byteCode, errors := compiler.Compile(strings.NewReader(script))
+			if len(errors) > 0 {
+				var errs string
+				for _, er := range errors {
+					if er != nil {
+						errs += er.Error()
+					}
+				}
+				return nil, fmt.Errorf("%v", errs)
+			}
+
+			return byteCode, nil
+		}
 	}
+
+	return nil, nil
 }
