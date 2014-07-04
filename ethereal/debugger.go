@@ -64,7 +64,7 @@ func (self *DebuggerWindow) SetAsm(data []byte) {
 func (self *DebuggerWindow) Compile(code string) {
 	var err error
 	script := ethutil.StringToByteFunc(code, func(s string) (ret []byte) {
-		ret, err = ethutil.Compile(s)
+		ret, err = ethutil.Compile(s, true)
 		return
 	})
 
@@ -95,7 +95,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 
 	var err error
 	script := ethutil.StringToByteFunc(scriptStr, func(s string) (ret []byte) {
-		ret, err = ethutil.Compile(s)
+		ret, err = ethutil.Compile(s, false)
 		return
 	})
 
