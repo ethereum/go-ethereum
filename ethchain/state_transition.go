@@ -201,8 +201,7 @@ func (self *StateTransition) TransitionState() (err error) {
 		// script section for the state object.
 		self.data = nil
 
-		statelogger.Debugln("~> init")
-		code, err := self.Eval(receiver.Init(), receiver)
+		code, err := self.Eval(receiver.Init(), receiver, "init")
 		if err != nil {
 			//self.state.Set(snapshot)
 			self.state.ResetStateObject(receiver)
@@ -213,8 +212,7 @@ func (self *StateTransition) TransitionState() (err error) {
 		receiver.script = code
 	} else {
 		if len(receiver.Script()) > 0 {
-			statelogger.Debugln("~> code")
-			_, err = self.Eval(receiver.Script(), receiver)
+			_, err = self.Eval(receiver.Script(), receiver, "code")
 			if err != nil {
 				//self.state.Set(snapshot)
 				self.state.ResetStateObject(receiver)
@@ -240,7 +238,7 @@ func (self *StateTransition) transferValue(sender, receiver *StateObject) error 
 	return nil
 }
 
-func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []byte, err error) {
+func (self *StateTransition) Eval(script []byte, context *StateObject, typ string) (ret []byte, err error) {
 	var (
 		block     = self.block
 		initiator = self.Sender()
@@ -259,6 +257,7 @@ func (self *StateTransition) Eval(script []byte, context *StateObject) (ret []by
 		Value:       self.value,
 	})
 	vm.Verbose = true
+	vm.Fn = typ
 
 	ret, err = Call(vm, closure, self.data)
 
@@ -279,7 +278,7 @@ func Call(vm *Vm, closure *Closure, data []byte) (ret []byte, err error) {
 			// TODO FIXME ASAP
 			context.state.trie = t2
 
-			statelogger.Debugln("Warn: PARANOIA: Different state object roots during copy")
+			statelogger.Infoln("Warn: PARANOIA: Different state object roots during copy")
 		}
 	}
 
