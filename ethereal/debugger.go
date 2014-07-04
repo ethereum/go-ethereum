@@ -52,11 +52,29 @@ func (self *DebuggerWindow) SetCode(code string) {
 func (self *DebuggerWindow) SetData(data string) {
 	self.win.Set("dataText", data)
 }
-func (self *DebuggerWindow) SetAsm(data string) {
-	dis := ethchain.Disassemble(ethutil.Hex2Bytes(data))
+func (self *DebuggerWindow) SetAsm(data []byte) {
+	self.win.Root().Call("clearAsm")
+
+	dis := ethchain.Disassemble(data)
 	for _, str := range dis {
 		self.win.Root().Call("setAsm", str)
 	}
+}
+
+func (self *DebuggerWindow) Compile(code string) {
+	var err error
+	script := ethutil.StringToByteFunc(code, func(s string) (ret []byte) {
+		ret, err = ethutil.Compile(s, true)
+		return
+	})
+
+	if err == nil {
+		self.SetAsm(script)
+	}
+}
+
+func (self *DebuggerWindow) ClearLog() {
+	self.win.Root().Call("clearLog")
 }
 
 func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, dataStr string) {
@@ -81,7 +99,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 
 	var err error
 	script := ethutil.StringToByteFunc(scriptStr, func(s string) (ret []byte) {
-		ret, err = ethutil.Compile(s)
+		ret, err = ethutil.Compile(s, false)
 		return
 	})
 
@@ -91,27 +109,21 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 		return
 	}
 
-	dis := ethchain.Disassemble(script)
-	self.win.Root().Call("clearAsm")
-
-	for _, str := range dis {
-		self.win.Root().Call("setAsm", str)
-	}
+	self.SetAsm(script)
 
 	var (
 		gas      = ethutil.Big(gasStr)
 		gasPrice = ethutil.Big(gasPriceStr)
 		value    = ethutil.Big(valueStr)
 		// Contract addr as test address
-		keyPair  = self.lib.eth.KeyManager().KeyPair()
-		callerTx = ethchain.NewContractCreationTx(ethutil.Big(valueStr), gas, gasPrice, script)
+		keyPair = self.lib.eth.KeyManager().KeyPair()
 	)
-	callerTx.Sign(keyPair.PrivateKey)
 
-	state := self.lib.eth.BlockChain().CurrentBlock.State()
+	state := self.lib.eth.StateManager().TransState()
 	account := self.lib.eth.StateManager().TransState().GetAccount(keyPair.Address())
-	contract := ethchain.MakeContract(callerTx, state)
+	contract := ethchain.NewStateObject([]byte{0})
 	contract.Amount = value
+
 	callerClosure := ethchain.NewClosure(account, contract, script, state, gas, gasPrice)
 
 	block := self.lib.eth.BlockChain().CurrentBlock
@@ -179,8 +191,9 @@ func (self *DebuggerWindow) ExecCommand(command string) {
 		cmd := strings.Split(command, " ")
 		switch cmd[0] {
 		case "help":
-			self.Logln("Debgger commands:")
-			self.Logln("break, bp      Set breakpoint")
+			self.Logln("Debugger commands:")
+			self.Logln("break, bp                 Set breakpoint on instruction")
+			self.Logln("clear [log, break, bp]    Clears previous set sub-command(s)")
 		case "break", "bp":
 			if len(cmd) > 1 {
 				lineNo, err := strconv.Atoi(cmd[1])
@@ -202,6 +215,8 @@ func (self *DebuggerWindow) ExecCommand(command string) {
 					self.vm.BreakPoints = nil
 
 					self.Logln("Breakpoints cleared")
+				case "log":
+					self.ClearLog()
 				default:
 					self.Logf("clear '%s' is not valid", cmd[1])
 				}
