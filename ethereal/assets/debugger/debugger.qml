@@ -231,7 +231,7 @@ ApplicationWindow {
 							}
 							height: parent.height
 							width: parent.width
-							TableViewColumn{ id: message ; role: "message" ; title: "log" ; width: logTableView.width -1 }
+							TableViewColumn{ id: message ; role: "message" ; title: "log" ; width: logTableView.width - 2 }
 							model: logModel
 						}
 					}
@@ -255,16 +255,6 @@ ApplicationWindow {
 			width: 500
 			placeholderText: "Debugger (type 'help')"
 			Keys.onReturnPressed: {
-				exec()
-			}
-		}
-
-		Button {
-			anchors {
-				left: dbgCommand.right
-			}
-			text: "Exec"
-			onClicked: {
 				exec()
 			}
 		}

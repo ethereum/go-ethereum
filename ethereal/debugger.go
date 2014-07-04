@@ -73,6 +73,10 @@ func (self *DebuggerWindow) Compile(code string) {
 	}
 }
 
+func (self *DebuggerWindow) ClearLog() {
+	self.win.Root().Call("clearLog")
+}
+
 func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, dataStr string) {
 	if !self.Db.done {
 		self.Db.Q <- true
@@ -188,8 +192,8 @@ func (self *DebuggerWindow) ExecCommand(command string) {
 		switch cmd[0] {
 		case "help":
 			self.Logln("Debugger commands:")
-			self.Logln("break, bp            Set breakpoint on instruction")
-			self.Logln("clear [break, bp]    Clears previous set sub-command(s)")
+			self.Logln("break, bp                 Set breakpoint on instruction")
+			self.Logln("clear [log, break, bp]    Clears previous set sub-command(s)")
 		case "break", "bp":
 			if len(cmd) > 1 {
 				lineNo, err := strconv.Atoi(cmd[1])
@@ -211,6 +215,8 @@ func (self *DebuggerWindow) ExecCommand(command string) {
 					self.vm.BreakPoints = nil
 
 					self.Logln("Breakpoints cleared")
+				case "log":
+					self.ClearLog()
 				default:
 					self.Logf("clear '%s' is not valid", cmd[1])
 				}
