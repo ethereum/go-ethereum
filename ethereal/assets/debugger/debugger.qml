@@ -7,6 +7,7 @@ import QtQuick.Controls.Styles 1.1
 import Ethereum 1.0
 
 ApplicationWindow {
+	id: win
 	visible: false
 	title: "IceCREAM"
 	minimumWidth: 1280
@@ -16,6 +17,10 @@ ApplicationWindow {
 
 	property alias codeText: codeEditor.text
 	property alias dataText: rawDataField.text
+
+	onClosing: {
+		compileTimer.stop()
+	}
 
 	MenuBar {
 		Menu {
@@ -34,11 +39,43 @@ ApplicationWindow {
 
 			MenuItem {
 				text: "Continue"
-				shortcut: "Ctrl+c"
+				shortcut: "Ctrl+g"
 				onTriggered: dbg.continue()
 			}
+			MenuItem {
+				text: "Command"
+				shortcut: "Ctrl+l"
+				onTriggered: {
+					dbgCommand.focus = true
+				}
+			}
+			MenuItem {
+				text: "Focus code"
+				shortcut: "Ctrl+1"
+				onTriggered: {
+					codeEditor.focus = true
+				}
+			}
+			MenuItem {
+				text: "Focus data"
+				shortcut: "Ctrl+2"
+				onTriggered: {
+					rawDataField.focus = true
+				}
+			}
+
+			/*
+			MenuItem {
+				text: "Close window"
+				shortcut: "Ctrl+w"
+				onTriggered: {
+					win.close()
+				}
+			}
+			*/
 		}
 	}
+
 
 	SplitView {
 		anchors.fill: parent
@@ -73,6 +110,15 @@ ApplicationWindow {
 						anchors.bottom: parent.bottom
 						anchors.left: parent.left
 						anchors.right: settings.left
+						focus: true
+
+						Timer {
+							id: compileTimer
+							interval: 500 ; running: true ;  repeat: true
+							onTriggered: {
+								dbg.compile(codeEditor.text)
+							}
+						}
 					}
 
 					Column {
@@ -185,7 +231,7 @@ ApplicationWindow {
 							}
 							height: parent.height
 							width: parent.width
-							TableViewColumn{ id: message ; role: "message" ; title: "log" ; width: logTableView.width }
+							TableViewColumn{ id: message ; role: "message" ; title: "log" ; width: logTableView.width -1 }
 							model: logModel
 						}
 					}
@@ -207,7 +253,7 @@ ApplicationWindow {
 			y: 1
 			x: asmTableView.width
 			width: 500
-			placeholderText: "Debugger command (help for help)"
+			placeholderText: "Debugger (type 'help')"
 			Keys.onReturnPressed: {
 				exec()
 			}
@@ -225,6 +271,7 @@ ApplicationWindow {
 	}
 
 	toolBar: ToolBar {
+		height: 30
 		RowLayout {
 			spacing: 5
 
@@ -254,6 +301,23 @@ ApplicationWindow {
 				text: "Continue"
 			}
 		}
+
+
+		ComboBox {
+			id: snippets
+			anchors.right: parent.right
+			model: ListModel {
+				ListElement { text: "Snippets" ; value: "" }
+				ListElement { text: "Call Contract" ; value: "var[2] in;\nvar ret;\n\nin[0] = \"arg1\"\nin[1] = 0xdeadbeef\n\nvar success = call(0x0c542ddea93dae0c2fcb2cf175f03ad80d6be9a0, 0, 7000, in, ret)\n\nreturn ret" }
+			}
+			onCurrentIndexChanged: {
+				if(currentIndex != 0) {
+					var code = snippets.model.get(currentIndex).value;
+					codeEditor.insert(codeEditor.cursorPosition, code)
+				}
+			}
+		}
+
 	}
 
 	function debugCurrent() {
