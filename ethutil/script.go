@@ -9,7 +9,7 @@ import (
 )
 
 // General compile function
-func Compile(script string) (ret []byte, err error) {
+func Compile(script string, silent bool) (ret []byte, err error) {
 	if len(script) > 2 {
 		line := strings.Split(script, "\n")[0]
 
@@ -26,6 +26,7 @@ func Compile(script string) (ret []byte, err error) {
 		} else {
 
 			compiler := mutan.NewCompiler(backend.NewEthereumBackend())
+			compiler.Silent = silent
 			byteCode, errors := compiler.Compile(strings.NewReader(script))
 			if len(errors) > 0 {
 				var errs string

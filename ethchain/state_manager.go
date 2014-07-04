@@ -181,11 +181,24 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 		if err != nil {
 			if len(receipts) == len(block.Receipts()) {
 				for i, receipt := range block.Receipts() {
-					statelogger.Debugf("diff (r) %v ~ %x  <=>  (c) %v ~ %x (%x)\n", receipt.CumulativeGasUsed, receipt.PostState[0:4], receipts[i].CumulativeGasUsed, receipts[i].PostState[0:4], receipt.Tx.Hash())
+					statelogger.Infof("diff (r) %v ~ %x  <=>  (c) %v ~ %x (%x)\n", receipt.CumulativeGasUsed, receipt.PostState[0:4], receipts[i].CumulativeGasUsed, receipts[i].PostState[0:4], receipt.Tx.Hash())
 				}
 			} else {
 				statelogger.Warnln("Unable to print receipt diff. Length didn't match", len(receipts), "for", len(block.Receipts()))
 			}
+		} else {
+			/*
+				for i, receipt := range receipts {
+					gu := new(big.Int)
+					if i != 0 {
+						gu.Sub(receipt.CumulativeGasUsed, receipts[i-1].CumulativeGasUsed)
+					} else {
+						gu.Set(receipt.CumulativeGasUsed)
+					}
+
+					statelogger.Infof("[r] %v ~ %x (%x)\n", gu, receipt.PostState[0:4], receipt.Tx.Hash())
+				}
+			*/
 		}
 	}()
 

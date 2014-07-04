@@ -56,6 +56,7 @@ type Vm struct {
 	Hook        DebugHook
 	BreakPoints []int64
 	Stepping    bool
+	Fn          string
 }
 
 type DebugHook func(step int, op OpCode, mem *Memory, stack *Stack, stateObject *StateObject) bool
@@ -107,7 +108,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		}
 	}()
 
-	vmlogger.Debugf("(~) %x gas: %v (d) %x\n", closure.object.Address(), closure.Gas, closure.Args)
+	vmlogger.Debugf("(%s) %x gas: %v (d) %x\n", vm.Fn, closure.object.Address(), closure.Gas, closure.Args)
 
 	var (
 		op OpCode
@@ -577,7 +578,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			stack.Push(val.BigInt())
 
-			vm.Printf(" {0x%x} 0x%x", loc.Bytes(), val.Bytes())
+			vm.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case SSTORE:
 			require(2)
 			val, loc := stack.Popn()
@@ -586,7 +587,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			// Add the change to manifest
 			vm.state.manifest.AddStorageChange(closure.Object(), loc.Bytes(), val)
 
-			vm.Printf(" {0x%x} 0x%x", loc, val)
+			vm.Printf(" {0x%x : 0x%x}", loc, val)
 		case JUMP:
 			require(1)
 			pc = stack.Pop()
