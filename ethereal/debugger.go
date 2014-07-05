@@ -15,9 +15,8 @@ type DebuggerWindow struct {
 	engine *qml.Engine
 	lib    *UiLib
 
-	vm          *ethchain.Vm
-	Db          *Debugger
-	breakPoints []int64
+	vm *ethchain.Vm
+	Db *Debugger
 }
 
 func NewDebuggerWindow(lib *UiLib) *DebuggerWindow {
@@ -30,9 +29,11 @@ func NewDebuggerWindow(lib *UiLib) *DebuggerWindow {
 	}
 
 	win := component.CreateWindow(nil)
-	db := &Debugger{win, make(chan bool), make(chan bool), true, false}
 
-	return &DebuggerWindow{engine: engine, win: win, lib: lib, Db: db, vm: &ethchain.Vm{}}
+	w := &DebuggerWindow{engine: engine, win: win, lib: lib, vm: &ethchain.Vm{}}
+	w.Db = NewDebugger(w)
+
+	return w
 }
 
 func (self *DebuggerWindow) Show() {
@@ -138,8 +139,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 		Value:       ethutil.Big(valueStr),
 	})
 	vm.Verbose = true
-	vm.Hook = self.Db.halting
-	vm.BreakPoints = self.breakPoints
+	vm.Dbg = self.Db
 
 	self.vm = vm
 	self.Db.done = false
@@ -201,8 +201,7 @@ func (self *DebuggerWindow) ExecCommand(command string) {
 					self.Logln(err)
 					break
 				}
-				self.breakPoints = append(self.breakPoints, int64(lineNo))
-				self.vm.BreakPoints = self.breakPoints
+				self.Db.breakPoints = append(self.Db.breakPoints, int64(lineNo))
 				self.Logf("break point set on instruction %d", lineNo)
 			} else {
 				self.Logf("'%s' requires line number", cmd[0])
@@ -211,8 +210,7 @@ func (self *DebuggerWindow) ExecCommand(command string) {
 			if len(cmd) > 1 {
 				switch cmd[1] {
 				case "break", "bp":
-					self.breakPoints = nil
-					self.vm.BreakPoints = nil
+					self.Db.breakPoints = nil
 
 					self.Logln("Breakpoints cleared")
 				case "log":
@@ -231,14 +229,36 @@ func (self *DebuggerWindow) ExecCommand(command string) {
 }
 
 type Debugger struct {
-	win             *qml.Window
 	N               chan bool
 	Q               chan bool
 	done, interrupt bool
+	breakPoints     []int64
+	main            *DebuggerWindow
+	win             *qml.Window
+}
+
+func NewDebugger(main *DebuggerWindow) *Debugger {
+	db := &Debugger{make(chan bool), make(chan bool), true, false, nil, main, main.win}
+
+	return db
 }
 
 type storeVal struct {
 	Key, Value string
+}
+
+func (self *Debugger) BreakHook(pc int, op ethchain.OpCode, mem *ethchain.Memory, stack *ethchain.Stack, stateObject *ethchain.StateObject) bool {
+	self.main.Logln("break on instr:", pc)
+
+	return self.halting(pc, op, mem, stack, stateObject)
+}
+
+func (self *Debugger) StepHook(pc int, op ethchain.OpCode, mem *ethchain.Memory, stack *ethchain.Stack, stateObject *ethchain.StateObject) bool {
+	return self.halting(pc, op, mem, stack, stateObject)
+}
+
+func (self *Debugger) BreakPoints() []int64 {
+	return self.breakPoints
 }
 
 func (d *Debugger) halting(pc int, op ethchain.OpCode, mem *ethchain.Memory, stack *ethchain.Stack, stateObject *ethchain.StateObject) bool {
