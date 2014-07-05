@@ -39,7 +39,7 @@ func (msg *logMessage) send(logger LogSystem) {
 
 var logMessages chan (*logMessage)
 var logSystems []LogSystem
-var drained = true
+var quit chan bool
 
 type LogLevel uint8
 
@@ -54,6 +54,7 @@ const (
 
 // log messages are dispatched to log writers
 func start() {
+out:
 	for {
 		select {
 		case msg := <-logMessages:
@@ -62,15 +63,23 @@ func start() {
 					msg.send(logSystem)
 				}
 			}
-		default:
-			drained = true
+		case <-quit:
+			break out
 		}
 	}
 }
 
 // waits until log messages are drained (dispatched to log writers)
 func Flush() {
-	for !drained {
+	quit <- true
+
+done:
+	for {
+		select {
+		case <-logMessages:
+		default:
+			break done
+		}
 	}
 }
 
@@ -88,6 +97,7 @@ func AddLogSystem(logSystem LogSystem) {
 	defer mutex.Unlock()
 	if logSystems == nil {
 		logMessages = make(chan *logMessage)
+		quit = make(chan bool)
 		go start()
 	}
 	logSystems = append(logSystems, logSystem)
@@ -96,7 +106,6 @@ func AddLogSystem(logSystem LogSystem) {
 func (logger *Logger) sendln(level LogLevel, v ...interface{}) {
 	if logMessages != nil {
 		msg := newPrintlnLogMessage(level, logger.tag, v...)
-		drained = false
 		logMessages <- msg
 	}
 }
@@ -104,7 +113,6 @@ func (logger *Logger) sendln(level LogLevel, v ...interface{}) {
 func (logger *Logger) sendf(level LogLevel, format string, v ...interface{}) {
 	if logMessages != nil {
 		msg := newPrintfLogMessage(level, logger.tag, format, v...)
-		drained = false
 		logMessages <- msg
 	}
 }
