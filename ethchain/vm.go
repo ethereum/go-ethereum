@@ -24,14 +24,10 @@ var (
 	GasTx      = big.NewInt(500)
 )
 
-func CalculateTxGas(initSize *big.Int) *big.Int {
-	totalGas := new(big.Int)
-
-	txTotalBytes := new(big.Int).Set(initSize)
-	txTotalBytes.Div(txTotalBytes, ethutil.Big32)
-	totalGas.Add(totalGas, new(big.Int).Mul(txTotalBytes, GasSStore))
-
-	return totalGas
+type Debugger interface {
+	BreakHook(step int, op OpCode, mem *Memory, stack *Stack, stateObject *StateObject) bool
+	StepHook(step int, op OpCode, mem *Memory, stack *Stack, stateObject *StateObject) bool
+	BreakPoints() []int64
 }
 
 type Vm struct {
@@ -53,13 +49,12 @@ type Vm struct {
 	err error
 
 	// Debugging
-	Hook        DebugHook
+	Dbg Debugger
+
 	BreakPoints []int64
 	Stepping    bool
 	Fn          string
 }
-
-type DebugHook func(step int, op OpCode, mem *Memory, stack *Stack, stateObject *StateObject) bool
 
 type RuntimeVars struct {
 	Origin      []byte
@@ -754,12 +749,14 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 		vm.Endl()
 
-		if vm.Hook != nil {
-			for _, instrNo := range vm.BreakPoints {
-				if pc.Cmp(big.NewInt(instrNo)) == 0 || vm.Stepping {
-					vm.Stepping = true
-
-					if !vm.Hook(prevStep, op, mem, stack, closure.Object()) {
+		if vm.Dbg != nil {
+			for _, instrNo := range vm.Dbg.BreakPoints() {
+				if pc.Cmp(big.NewInt(instrNo)) == 0 {
+					if !vm.Dbg.BreakHook(prevStep, op, mem, stack, closure.Object()) {
+						return nil, nil
+					}
+				} else if vm.Stepping {
+					if !vm.Dbg.StepHook(prevStep, op, mem, stack, closure.Object()) {
 						return nil, nil
 					}
 				}
