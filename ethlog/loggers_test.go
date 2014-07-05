@@ -28,10 +28,6 @@ func (t *TestLogSystem) GetLogLevel() LogLevel {
 	return t.level
 }
 
-func quote(s string) string {
-	return fmt.Sprintf("'%s'", s)
-}
-
 func TestLoggerPrintln(t *testing.T) {
 	logger := NewLogger("TEST")
 	testLogSystem := &TestLogSystem{level: WarnLevel}
@@ -41,10 +37,10 @@ func TestLoggerPrintln(t *testing.T) {
 	logger.Infoln("info")
 	logger.Debugln("debug")
 	Flush()
+	Reset()
 	output := testLogSystem.Output
-	fmt.Println(quote(output))
 	if output != "[TEST] error\n[TEST] warn\n" {
-		t.Error("Expected logger output '[TEST] error\\n[TEST] warn\\n', got ", quote(testLogSystem.Output))
+		t.Error("Expected logger output '[TEST] error\\n[TEST] warn\\n', got ", testLogSystem.Output)
 	}
 }
 
@@ -57,10 +53,10 @@ func TestLoggerPrintf(t *testing.T) {
 	logger.Infof("info")
 	logger.Debugf("debug")
 	Flush()
+	Reset()
 	output := testLogSystem.Output
-	fmt.Println(quote(output))
 	if output != "[TEST] error to { 2}\n[TEST] warn" {
-		t.Error("Expected logger output '[TEST] error to { 2}\\n[TEST] warn', got ", quote(testLogSystem.Output))
+		t.Error("Expected logger output '[TEST] error to { 2}\\n[TEST] warn', got ", testLogSystem.Output)
 	}
 }
 
@@ -73,13 +69,14 @@ func TestMultipleLogSystems(t *testing.T) {
 	logger.Errorln("error")
 	logger.Warnln("warn")
 	Flush()
+	Reset()
 	output0 := testLogSystem0.Output
 	output1 := testLogSystem1.Output
 	if output0 != "[TEST] error\n" {
-		t.Error("Expected logger 0 output '[TEST] error\\n', got ", quote(testLogSystem0.Output))
+		t.Error("Expected logger 0 output '[TEST] error\\n', got ", testLogSystem0.Output)
 	}
 	if output1 != "[TEST] error\n[TEST] warn\n" {
-		t.Error("Expected logger 1 output '[TEST] error\\n[TEST] warn\\n', got ", quote(testLogSystem1.Output))
+		t.Error("Expected logger 1 output '[TEST] error\\n[TEST] warn\\n', got ", testLogSystem1.Output)
 	}
 }
 
@@ -92,11 +89,11 @@ func TestFileLogSystem(t *testing.T) {
 	logger.Errorf("error to %s\n", filename)
 	logger.Warnln("warn")
 	Flush()
+	Reset()
 	contents, _ := ioutil.ReadFile(filename)
 	output := string(contents)
-	fmt.Println(quote(output))
 	if output != "[TEST] error to test.log\n[TEST] warn\n" {
-		t.Error("Expected contents of file 'test.log': '[TEST] error to test.log\\n[TEST] warn\\n', got ", quote(output))
+		t.Error("Expected contents of file 'test.log': '[TEST] error to test.log\\n[TEST] warn\\n', got ", output)
 	} else {
 		os.Remove(filename)
 	}
@@ -105,5 +102,7 @@ func TestFileLogSystem(t *testing.T) {
 func TestNoLogSystem(t *testing.T) {
 	logger := NewLogger("TEST")
 	logger.Warnln("warn")
+	fmt.Println("1")
 	Flush()
+	Reset()
 }
