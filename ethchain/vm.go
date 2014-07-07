@@ -721,17 +721,11 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case SUICIDE:
 			require(1)
 
-			receiver := vm.state.GetAccount(stack.Pop().Bytes())
+			receiver := vm.state.GetOrNewStateObject(stack.Pop().Bytes())
+
 			receiver.AddAmount(closure.object.Amount)
 
 			closure.object.MarkForDeletion()
-
-			/*
-				trie := closure.object.state.trie
-				trie.NewIterator().Each(func(key string, v *ethutil.Value) {
-					trie.Delete(key)
-				})
-			*/
 
 			fallthrough
 		case STOP: // Stop the closure
