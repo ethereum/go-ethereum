@@ -84,13 +84,7 @@ func (c *Closure) Call(vm *Vm, args []byte) ([]byte, *big.Int, error) {
 
 func (c *Closure) Return(ret []byte) []byte {
 	// Return the remaining gas to the caller
-	// If no caller is present return it to
-	// the origin (i.e. contract or tx)
-	if c.caller != nil {
-		c.caller.ReturnGas(c.Gas, c.Price, c.State)
-	} else {
-		c.object.ReturnGas(c.Gas, c.Price, c.State)
-	}
+	c.caller.ReturnGas(c.Gas, c.Price, c.State)
 
 	return ret
 }
