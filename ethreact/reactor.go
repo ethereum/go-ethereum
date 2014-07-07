@@ -95,7 +95,7 @@ func (reactor *ReactorEngine) Start() {
 				case event := <-reactor.eventChannel:
 					// needs to be called syncronously to keep order of events
 					reactor.dispatch(event)
-				case reactor.drained <- true:
+				// case reactor.drained <- true:
 				default:
 					reactor.drained <- true // blocking till message is coming in
 				}
