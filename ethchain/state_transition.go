@@ -176,8 +176,6 @@ func (self *StateTransition) TransitionState() (err error) {
 		return
 	}
 
-	snapshot := self.state.Copy()
-
 	receiver = self.Receiver()
 
 	// If the receiver is nil it's a contract (\0*32).
@@ -193,6 +191,8 @@ func (self *StateTransition) TransitionState() (err error) {
 	if err = self.transferValue(sender, receiver); err != nil {
 		return
 	}
+
+	snapshot := self.state.Copy()
 
 	// Process the init code and create 'valid' contract
 	if IsContractAddr(self.receiver) {
