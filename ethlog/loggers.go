@@ -97,7 +97,7 @@ func AddLogSystem(logSystem LogSystem) {
 	defer mutex.Unlock()
 	if logSystems == nil {
 		logMessages = make(chan *logMessage)
-		quit = make(chan bool)
+		quit = make(chan bool, 1)
 		go start()
 	}
 	logSystems = append(logSystems, logSystem)
