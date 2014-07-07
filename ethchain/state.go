@@ -67,11 +67,19 @@ func (self *State) Empty() {
 func (self *State) Update() {
 	for _, stateObject := range self.stateObjects {
 		if stateObject.remove {
-			self.trie.Delete(string(stateObject.Address()))
+			self.DeleteStateObject(stateObject)
 		} else {
+			println(ethutil.Bytes2Hex(stateObject.Address()))
 			self.UpdateStateObject(stateObject)
 		}
 	}
+
+	// FIXME trie delete is broken
+	valid, t2 := ethtrie.ParanoiaCheck(self.trie)
+	if !valid {
+		self.trie = t2
+	}
+
 }
 
 // Purges the current trie.
@@ -98,6 +106,12 @@ func (self *State) UpdateStateObject(stateObject *StateObject) {
 	self.trie.Update(string(addr), string(stateObject.RlpEncode()))
 
 	self.manifest.AddObjectChange(stateObject)
+}
+
+func (self *State) DeleteStateObject(stateObject *StateObject) {
+	self.trie.Delete(string(stateObject.Address()))
+
+	delete(self.stateObjects, string(stateObject.Address()))
 }
 
 func (self *State) GetStateObject(addr []byte) *StateObject {

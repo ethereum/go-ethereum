@@ -84,6 +84,7 @@ func NewStateObjectFromBytes(address, data []byte) *StateObject {
 
 func (self *StateObject) MarkForDeletion() {
 	self.remove = true
+	statelogger.Infof("%x: #%d %v (deletion)\n", self.Address(), self.Nonce, self.Amount)
 }
 
 func (c *StateObject) GetAddr(addr []byte) *ethutil.Value {

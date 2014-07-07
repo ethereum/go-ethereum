@@ -176,15 +176,23 @@ func (self *StateTransition) TransitionState() (err error) {
 		return
 	}
 
-	receiver = self.Receiver()
+	/* FIXME
+	 * If tx goes TO "0", goes OOG during init, reverse changes, but initial endowment should happen. The ether is lost forever
+	 */
+	var snapshot *State
 
 	// If the receiver is nil it's a contract (\0*32).
-	if receiver == nil {
+	if tx.CreatesContract() {
+		snapshot = self.state.Copy()
+
 		// Create a new state object for the contract
 		receiver = self.MakeStateObject(self.state, tx)
+		self.rec = receiver
 		if receiver == nil {
 			return fmt.Errorf("Unable to create contract")
 		}
+	} else {
+		receiver = self.Receiver()
 	}
 
 	// Transfer value from sender to receiver
@@ -192,7 +200,9 @@ func (self *StateTransition) TransitionState() (err error) {
 		return
 	}
 
-	snapshot := self.state.Copy()
+	if snapshot == nil {
+		snapshot = self.state.Copy()
+	}
 
 	// Process the init code and create 'valid' contract
 	if IsContractAddr(self.receiver) {
