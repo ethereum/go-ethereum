@@ -69,7 +69,6 @@ func (self *State) Update() {
 		if stateObject.remove {
 			self.DeleteStateObject(stateObject)
 		} else {
-			println(ethutil.Bytes2Hex(stateObject.Address()))
 			self.UpdateStateObject(stateObject)
 		}
 	}
