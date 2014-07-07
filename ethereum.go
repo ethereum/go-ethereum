@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethrpc"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
@@ -72,7 +71,7 @@ type Ethereum struct {
 
 	listening bool
 
-	reactor *ethreact.ReactorEngine
+	reactor *ethutil.ReactorEngine
 
 	RpcServer *ethrpc.JsonRpcServer
 
@@ -107,7 +106,7 @@ func New(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager 
 		keyManager:     keyManager,
 		clientIdentity: clientIdentity,
 	}
-	ethereum.reactor = ethreact.New()
+	ethereum.reactor = ethutil.NewReactorEngine()
 
 	ethereum.txPool = ethchain.NewTxPool(ethereum)
 	ethereum.blockChain = ethchain.NewBlockChain(ethereum)
@@ -119,7 +118,7 @@ func New(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager 
 	return ethereum, nil
 }
 
-func (s *Ethereum) Reactor() *ethreact.ReactorEngine {
+func (s *Ethereum) Reactor() *ethutil.ReactorEngine {
 	return s.reactor
 }
 
@@ -351,7 +350,6 @@ func (s *Ethereum) ReapDeadPeerHandler() {
 
 // Start the ethereum
 func (s *Ethereum) Start(seed bool) {
-	s.reactor.Start()
 	// Bind to addr and port
 	ln, err := net.Listen("tcp", ":"+s.Port)
 	if err != nil {
@@ -464,9 +462,6 @@ func (s *Ethereum) Stop() {
 	}
 	s.txPool.Stop()
 	s.stateManager.Stop()
-
-	s.reactor.Flush()
-	s.reactor.Stop()
 
 	ethlogger.Infoln("Server stopped")
 	close(s.shutdownChan)

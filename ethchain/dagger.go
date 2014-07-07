@@ -3,7 +3,6 @@ package ethchain
 import (
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/sha3"
 	"hash"
@@ -15,7 +14,7 @@ import (
 var powlogger = ethlog.NewLogger("POW")
 
 type PoW interface {
-	Search(block *Block, reactChan chan ethreact.Event) []byte
+	Search(block *Block, reactChan chan ethutil.React) []byte
 	Verify(hash []byte, diff *big.Int, nonce []byte) bool
 }
 
@@ -23,7 +22,7 @@ type EasyPow struct {
 	hash *big.Int
 }
 
-func (pow *EasyPow) Search(block *Block, reactChan chan ethreact.Event) []byte {
+func (pow *EasyPow) Search(block *Block, reactChan chan ethutil.React) []byte {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	hash := block.HashNoNonce()
 	diff := block.Difficulty
