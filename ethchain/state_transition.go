@@ -164,8 +164,6 @@ func (self *StateTransition) TransitionState() (err error) {
 	// Increment the nonce for the next transaction
 	sender.Nonce += 1
 
-	receiver = self.Receiver()
-
 	// Transaction gas
 	if err = self.UseGas(GasTx); err != nil {
 		return
@@ -177,6 +175,10 @@ func (self *StateTransition) TransitionState() (err error) {
 	if err = self.UseGas(dataPrice); err != nil {
 		return
 	}
+
+	snapshot := self.state.Copy()
+
+	receiver = self.Receiver()
 
 	// If the receiver is nil it's a contract (\0*32).
 	if receiver == nil {
@@ -192,8 +194,6 @@ func (self *StateTransition) TransitionState() (err error) {
 		return
 	}
 
-	//snapshot := self.state.Copy()
-
 	// Process the init code and create 'valid' contract
 	if IsContractAddr(self.receiver) {
 		// Evaluate the initialization script
@@ -203,8 +203,7 @@ func (self *StateTransition) TransitionState() (err error) {
 
 		code, err := self.Eval(receiver.Init(), receiver, "init")
 		if err != nil {
-			//self.state.Set(snapshot)
-			self.state.ResetStateObject(receiver)
+			self.state.Set(snapshot)
 
 			return fmt.Errorf("Error during init execution %v", err)
 		}
@@ -214,8 +213,7 @@ func (self *StateTransition) TransitionState() (err error) {
 		if len(receiver.Script()) > 0 {
 			_, err = self.Eval(receiver.Script(), receiver, "code")
 			if err != nil {
-				//self.state.Set(snapshot)
-				self.state.ResetStateObject(receiver)
+				self.state.Set(snapshot)
 
 				return fmt.Errorf("Error during code execution %v", err)
 			}

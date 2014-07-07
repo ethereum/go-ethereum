@@ -161,7 +161,9 @@ func (self *State) Set(state *State) {
 		panic("Tried setting 'state' to nil through 'Set'")
 	}
 
-	*self = *state
+	self.trie = state.trie
+	self.stateObjects = state.stateObjects
+	//*self = *state
 }
 
 func (s *State) Put(key, object []byte) {
