@@ -40,6 +40,9 @@ func (msg *logMessage) send(logger LogSystem) {
 var logMessages chan (*logMessage)
 var logSystems []LogSystem
 var quit chan bool
+var drained chan bool
+var shutdown chan bool
+var mutex = sync.Mutex{}
 
 type LogLevel uint8
 
@@ -57,29 +60,41 @@ func start() {
 out:
 	for {
 		select {
+		case <-quit:
+			break out
 		case msg := <-logMessages:
 			for _, logSystem := range logSystems {
 				if logSystem.GetLogLevel() >= msg.LogLevel {
 					msg.send(logSystem)
 				}
 			}
-		case <-quit:
-			break out
+		case drained <- true:
+		default:
+			drained <- true // this blocks until a message is sent to the queu
 		}
 	}
+	close(shutdown)
+}
+
+func Reset() {
+	mutex.Lock()
+	defer mutex.Unlock()
+	if logSystems != nil {
+		quit <- true
+		select {
+		case <-drained:
+		}
+		<-shutdown
+	}
+	logSystems = nil
 }
 
 // waits until log messages are drained (dispatched to log writers)
 func Flush() {
-	quit <- true
-
-done:
-	for {
-		select {
-		case <-logMessages:
-		default:
-			break done
-		}
+	mutex.Lock()
+	defer mutex.Unlock()
+	if logSystems != nil {
+		<-drained
 	}
 }
 
@@ -92,28 +107,34 @@ func NewLogger(tag string) *Logger {
 }
 
 func AddLogSystem(logSystem LogSystem) {
-	var mutex = &sync.Mutex{}
 	mutex.Lock()
 	defer mutex.Unlock()
 	if logSystems == nil {
 		logMessages = make(chan *logMessage)
 		quit = make(chan bool)
+		drained = make(chan bool, 1)
+		shutdown = make(chan bool, 1)
 		go start()
 	}
 	logSystems = append(logSystems, logSystem)
 }
 
+func send(msg *logMessage) {
+	select {
+	case <-drained:
+	}
+	logMessages <- msg
+}
+
 func (logger *Logger) sendln(level LogLevel, v ...interface{}) {
-	if logMessages != nil {
-		msg := newPrintlnLogMessage(level, logger.tag, v...)
-		logMessages <- msg
+	if logSystems != nil {
+		send(newPrintlnLogMessage(level, logger.tag, v...))
 	}
 }
 
 func (logger *Logger) sendf(level LogLevel, format string, v ...interface{}) {
-	if logMessages != nil {
-		msg := newPrintfLogMessage(level, logger.tag, format, v...)
-		logMessages <- msg
+	if logSystems != nil {
+		send(newPrintfLogMessage(level, logger.tag, format, v...))
 	}
 }
 
