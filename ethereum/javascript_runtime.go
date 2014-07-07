@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethpub"
-	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/obscuren/otto"
@@ -23,8 +22,8 @@ type JSRE struct {
 	vm       *otto.Otto
 	lib      *ethpub.PEthereum
 
-	blockChan  chan ethreact.Event
-	changeChan chan ethreact.Event
+	blockChan  chan ethutil.React
+	changeChan chan ethutil.React
 	quitChan   chan bool
 
 	objectCb map[string][]otto.Value
@@ -49,8 +48,8 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 		ethereum,
 		otto.New(),
 		ethpub.NewPEthereum(ethereum),
-		make(chan ethreact.Event),
-		make(chan ethreact.Event),
+		make(chan ethutil.React, 1),
+		make(chan ethutil.React, 1),
 		make(chan bool),
 		make(map[string][]otto.Value),
 	}
@@ -64,9 +63,6 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 
 	// We have to make sure that, whoever calls this, calls "Stop"
 	go re.mainLoop()
-	// Subscribe to events
-	reactor := ethereum.Reactor()
-	reactor.Subscribe("newBlock", re.blockChan)
 
 	re.Bind("eth", &JSEthereum{re.lib, re.vm})
 
@@ -112,6 +108,10 @@ func (self *JSRE) Stop() {
 }
 
 func (self *JSRE) mainLoop() {
+	// Subscribe to events
+	reactor := self.ethereum.Reactor()
+	reactor.Subscribe("newBlock", self.blockChan)
+
 out:
 	for {
 		select {
