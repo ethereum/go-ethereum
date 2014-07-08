@@ -100,7 +100,7 @@ ApplicationWindow {
 				anchors.right: parent.right
 				height: 200
 				Image {
-					source: ui.assetPath("tx.png")
+					source: "../tx.png"
 					anchors.horizontalCenter: parent.horizontalCenter
 					MouseArea {
 						anchors.fill: parent
@@ -110,7 +110,7 @@ ApplicationWindow {
 					}
 				}
 				Image {
-					source: ui.assetPath("new.png")
+					source: "../new.png"
 					anchors.horizontalCenter: parent.horizontalCenter
 					MouseArea {
 						anchors.fill: parent
@@ -120,7 +120,7 @@ ApplicationWindow {
 					}
 				}
 				Image {
-					source: ui.assetPath("net.png")
+					source: "../net.png"
 					anchors.horizontalCenter: parent.horizontalCenter
 					MouseArea {
 						anchors.fill: parent
@@ -131,7 +131,7 @@ ApplicationWindow {
 				}
 
 				Image {
-					source: ui.assetPath("heart.png")
+					source: "../heart.png"
 					anchors.horizontalCenter: parent.horizontalCenter
 					MouseArea {
 						anchors.fill: parent
