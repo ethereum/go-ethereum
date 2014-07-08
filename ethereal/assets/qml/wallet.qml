@@ -436,7 +436,7 @@ ApplicationWindow {
 				onDoubleClicked:  peerWindow.visible = true
 				anchors.fill: parent
 			}
-			source: ui.assetPath("network.png")
+			source: "../network.png"
 		}
 	}
 
@@ -624,7 +624,7 @@ ApplicationWindow {
 			width: 150
 			fillMode: Image.PreserveAspectFit
 			smooth: true
-			source: ui.assetPath("facet.png")
+			source: "../facet.png"
 			x: 10
 			y: 10
 		}
