@@ -53,7 +53,7 @@ func defaultAssetPath() string {
 		case "linux":
 			assetPath = "/usr/share/ethereal"
 		case "window":
-			fallthrough
+			assetPath = "./assets"
 		default:
 			assetPath = "."
 		}
