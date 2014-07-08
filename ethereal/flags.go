@@ -52,7 +52,7 @@ func defaultAssetPath() string {
 			assetPath = filepath.Join(exedir, "../Resources")
 		case "linux":
 			assetPath = "/usr/share/ethereal"
-		case "window":
+		case "windows":
 			assetPath = "./assets"
 		default:
 			assetPath = "."
