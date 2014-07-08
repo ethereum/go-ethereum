@@ -38,7 +38,7 @@ ApplicationWindow {
 			experimental.preferences.javascriptEnabled: true
 			experimental.preferences.navigatorQtObjectEnabled: true
 			experimental.preferences.developerExtrasEnabled: true
-			experimental.userScripts: [ui.assetPath("ext/pre.js"), ui.assetPath("ext/big.js"), ui.assetPath("ext/string.js"), ui.assetPath("ext/ethereum.js")]
+			experimental.userScripts: ["../ext/pre.js", "../ext/big.js", "../ext/string.js", "../ext/ethereum.js"]
 			experimental.onMessageReceived: {
 				console.log("[onMessageReceived]: ", message.data)
 				// TODO move to messaging.js
