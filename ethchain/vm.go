@@ -107,6 +107,11 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		}
 	}()
 
+	// Don't bother with the execution if there's no code.
+	if len(closure.Script) == 0 {
+		return closure.Return(nil), nil
+	}
+
 	vmlogger.Debugf("(%s) %x gas: %v (d) %x\n", vm.Fn, closure.object.Address(), closure.Gas, closure.Args)
 
 	var (
