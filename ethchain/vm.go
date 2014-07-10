@@ -452,13 +452,26 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			data := ethcrypto.Sha3Bin(mem.Get(offset.Int64(), size.Int64()))
 
 			stack.Push(ethutil.BigD(data))
+
+			vm.Printf(" => %x", data)
 			// 0x30 range
 		case ADDRESS:
 			stack.Push(ethutil.BigD(closure.Object().Address()))
+
+			vm.Printf(" => %x", closure.Object().Address())
 		case BALANCE:
-			stack.Push(closure.object.Amount)
+			require(1)
+
+			addr := stack.Pop().Bytes()
+			balance := vm.state.GetBalance(addr)
+
+			stack.Push(balance)
+
+			vm.Printf(" => %v (%x)", balance, addr)
 		case ORIGIN:
 			stack.Push(ethutil.BigD(vm.vars.Origin))
+
+			vm.Printf(" => %v", vm.vars.Origin)
 		case CALLER:
 			caller := closure.caller.Address()
 			stack.Push(ethutil.BigD(caller))
@@ -712,7 +725,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 				stack.Push(ethutil.BigFalse)
 			} else {
-				//snapshot := vm.state.Copy()
+				snapshot := vm.state.Copy()
 
 				stateObject := vm.state.GetOrNewStateObject(addr.Bytes())
 
@@ -728,8 +741,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 					vmlogger.Debugf("Closure execution failed. %v\n", err)
 
-					//vm.state.Set(snapshot)
-					vm.state.ResetStateObject(stateObject)
+					vm.state.Set(snapshot)
 				} else {
 					stack.Push(ethutil.BigTrue)
 
