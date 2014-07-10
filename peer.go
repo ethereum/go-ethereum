@@ -252,7 +252,7 @@ func (p *Peer) writeMessage(msg *ethwire.Msg) {
 		}
 	}
 
-	peerlogger.DebugDetailln("<=", msg.Type, msg.Data)
+	peerlogger.DebugDetailf("(%v) <= %v %v\n", p.conn.RemoteAddr(), msg.Type, msg.Data)
 
 	err := ethwire.WriteMessage(p.conn, msg)
 	if err != nil {
@@ -326,7 +326,7 @@ func (p *Peer) HandleInbound() {
 			peerlogger.Debugln(err)
 		}
 		for _, msg := range msgs {
-			peerlogger.DebugDetailln("=>", msg.Type, msg.Data)
+			peerlogger.DebugDetailf("(%v) => %v %v\n", p.conn.RemoteAddr(), msg.Type, msg.Data)
 
 			switch msg.Type {
 			case ethwire.MsgHandshakeTy:
