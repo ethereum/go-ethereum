@@ -430,8 +430,6 @@ func (s *Ethereum) Seed() {
 
 		s.ConnectToPeer(string(body))
 	}
-
-	s.ConnectToPeer("54.72.69.180:30303")
 }
 
 func (s *Ethereum) peerHandler(listener net.Listener) {
