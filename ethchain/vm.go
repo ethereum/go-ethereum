@@ -479,6 +479,8 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			vm.Printf(" => %x", caller)
 		case CALLVALUE:
 			stack.Push(vm.vars.Value)
+
+			vm.Printf(" => %v", vm.vars.Value)
 		case CALLDATALOAD:
 			require(1)
 			offset := stack.Pop().Int64()
