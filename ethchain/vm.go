@@ -22,6 +22,9 @@ var (
 	GasMemory  = big.NewInt(1)
 	GasData    = big.NewInt(5)
 	GasTx      = big.NewInt(500)
+
+	LogTyPretty byte = 0x1
+	LogTyDiff   byte = 0x2
 )
 
 type Debugger interface {
@@ -44,6 +47,7 @@ type Vm struct {
 
 	Verbose bool
 
+	logTy  byte
 	logStr string
 
 	err error
@@ -69,7 +73,7 @@ type RuntimeVars struct {
 }
 
 func (self *Vm) Printf(format string, v ...interface{}) *Vm {
-	if self.Verbose {
+	if self.Verbose && self.logTy == LogTyPretty {
 		self.logStr += fmt.Sprintf(format, v...)
 	}
 
@@ -77,7 +81,7 @@ func (self *Vm) Printf(format string, v ...interface{}) *Vm {
 }
 
 func (self *Vm) Endl() *Vm {
-	if self.Verbose {
+	if self.Verbose && self.logTy == LogTyPretty {
 		vmlogger.Debugln(self.logStr)
 		self.logStr = ""
 	}
@@ -86,7 +90,7 @@ func (self *Vm) Endl() *Vm {
 }
 
 func NewVm(state *State, stateManager *StateManager, vars RuntimeVars) *Vm {
-	return &Vm{vars: vars, state: state, stateManager: stateManager}
+	return &Vm{vars: vars, state: state, stateManager: stateManager, logTy: LogTyPretty}
 }
 
 var Pow256 = ethutil.BigPow(2, 256)
@@ -131,6 +135,17 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		val := closure.Get(pc)
 		// Get the opcode (it must be an opcode!)
 		op = OpCode(val.Uint())
+
+		// XXX Leave this Println intact. Don't change this to the log system.
+		// Used for creating diffs between implementations
+		if vm.logTy == LogTyDiff {
+			b := pc.Bytes()
+			if len(b) == 0 {
+				b = []byte{0}
+			}
+
+			fmt.Printf("%x %x %x %x\n", closure.object.Address(), b, []byte{byte(op)}, closure.Gas.Bytes())
+		}
 
 		gas := new(big.Int)
 		addStepGasUsage := func(amount *big.Int) {
@@ -415,7 +430,10 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			require(2)
 			val, th := stack.Popn()
 			if th.Cmp(big.NewInt(32)) < 0 {
-				stack.Push(big.NewInt(int64(len(val.Bytes())-1) - th.Int64()))
+				byt := big.NewInt(int64(val.Bytes()[th.Int64()]))
+				stack.Push(byt)
+
+				vm.Printf(" => 0x%x", byt.Bytes())
 			} else {
 				stack.Push(ethutil.BigFalse)
 			}
@@ -562,8 +580,9 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case MSTORE8:
 			require(2)
 			val, mStart := stack.Popn()
-			base.And(val, new(big.Int).SetInt64(0xff))
-			mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(base, 256))
+			//base.And(val, new(big.Int).SetInt64(0xff))
+			//mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(base, 256))
+			mem.store[mStart.Int64()] = byte(val.Int64() & 0xff)
 
 			vm.Printf(" => 0x%x", val)
 		case SLOAD:
