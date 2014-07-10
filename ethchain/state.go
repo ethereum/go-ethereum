@@ -1,7 +1,6 @@
 package ethchain
 
 import (
-	"fmt"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
@@ -72,8 +71,6 @@ func (self *State) Update() {
 			self.DeleteStateObject(stateObject)
 		} else {
 			stateObject.Sync()
-
-			fmt.Printf("%x %x\n", stateObject.Address(), stateObject.state.Root())
 
 			self.UpdateStateObject(stateObject)
 		}
