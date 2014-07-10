@@ -66,6 +66,11 @@ type StateManager struct {
 	// Mining state. The mining state is used purely and solely by the mining
 	// operation.
 	miningState *State
+
+	// The last attempted block is mainly used for debugging purposes
+	// This does not have to be a valid block and will be set during
+	// 'Process' & canonical validation.
+	lastAttemptedBlock *Block
 }
 
 func NewStateManager(ethereum EthManager) *StateManager {
@@ -164,6 +169,8 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 	if !sm.bc.HasBlock(block.PrevHash) {
 		return ParentError(block.PrevHash)
 	}
+
+	sm.lastAttemptedBlock = block
 
 	var (
 		parent = sm.bc.GetBlock(block.PrevHash)

@@ -27,6 +27,8 @@ type StateObject struct {
 	script     Code
 	initScript Code
 
+	storage map[string]*ethutil.Value
+
 	// Total gas pool is the total amount of gas currently
 	// left if this object is the coinbase. Gas is directly
 	// purchased of the coinbase.
@@ -36,6 +38,10 @@ type StateObject struct {
 	// When an object is marked for deletion it will be delete from the trie
 	// during the "update" phase of the state transition
 	remove bool
+}
+
+func (self *StateObject) Reset() {
+	self.storage = make(map[string]*ethutil.Value)
 }
 
 // Converts an transaction in to a state object
@@ -55,14 +61,19 @@ func MakeContract(tx *Transaction, state *State) *StateObject {
 }
 
 func NewStateObject(addr []byte) *StateObject {
-	object := &StateObject{address: addr, Amount: new(big.Int), gasPool: new(big.Int)}
+	// This to ensure that it has 20 bytes (and not 0 bytes), thus left or right pad doesn't matter.
+	address := ethutil.LeftPadBytes(addr, 20)
+
+	object := &StateObject{address: address, Amount: new(big.Int), gasPool: new(big.Int)}
 	object.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, ""))
+	object.storage = make(map[string]*ethutil.Value)
 
 	return object
 }
 
 func NewContract(address []byte, Amount *big.Int, root []byte) *StateObject {
-	contract := &StateObject{address: address, Amount: Amount, Nonce: 0}
+	contract := NewStateObject(address)
+	contract.Amount = Amount
 	contract.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, string(root)))
 
 	return contract
@@ -95,24 +106,43 @@ func (c *StateObject) SetAddr(addr []byte, value interface{}) {
 	c.state.trie.Update(string(addr), string(ethutil.NewValue(value).Encode()))
 }
 
-func (c *StateObject) SetStorage(num *big.Int, val *ethutil.Value) {
-	addr := ethutil.BigToBytes(num, 256)
+func (self *StateObject) GetStorage(key *big.Int) *ethutil.Value {
+	return self.getStorage(key.Bytes())
+}
+func (self *StateObject) SetStorage(key *big.Int, value *ethutil.Value) {
+	self.setStorage(key.Bytes(), value)
+}
 
-	if val.BigInt().Cmp(ethutil.Big0) == 0 {
-		c.state.trie.Delete(string(addr))
+func (self *StateObject) getStorage(key []byte) *ethutil.Value {
+	k := ethutil.LeftPadBytes(key, 32)
 
-		return
+	value := self.storage[string(k)]
+	if value == nil {
+		value = self.GetAddr(k)
+
+		self.storage[string(k)] = value
 	}
 
-	c.SetAddr(addr, val)
+	return value
 }
 
-func (c *StateObject) GetStorage(num *big.Int) *ethutil.Value {
-	nb := ethutil.BigToBytes(num, 256)
+func (self *StateObject) setStorage(key []byte, value *ethutil.Value) {
+	k := ethutil.LeftPadBytes(key, 32)
 
-	return c.GetAddr(nb)
+	self.storage[string(k)] = value
 }
 
+func (self *StateObject) Sync() {
+	for key, value := range self.storage {
+		if value.BigInt().Cmp(ethutil.Big0) == 0 {
+			self.state.trie.Delete(string(key))
+			continue
+		}
+
+		self.SetAddr([]byte(key), value)
+
+	}
+}
 func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
 	if int64(len(c.script)-1) < pc.Int64() {
 		return ethutil.NewValue(0)
@@ -249,6 +279,7 @@ func (c *StateObject) RlpDecode(data []byte) {
 	c.Nonce = decoder.Get(0).Uint()
 	c.Amount = decoder.Get(1).BigInt()
 	c.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, decoder.Get(2).Interface()))
+	c.storage = make(map[string]*ethutil.Value)
 
 	c.ScriptHash = decoder.Get(3).Bytes()
 

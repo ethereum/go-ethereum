@@ -182,7 +182,9 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			require(2)
 			newMemSize = stack.Peek().Uint64() + 32
 		case MLOAD:
+			require(1)
 
+			newMemSize = stack.Peek().Uint64() + 32
 		case MSTORE8:
 			require(2)
 			newMemSize = stack.Peek().Uint64() + 1

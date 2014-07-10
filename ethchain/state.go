@@ -1,6 +1,7 @@
 package ethchain
 
 import (
+	"fmt"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
@@ -36,7 +37,8 @@ func (s *State) Reset() {
 			continue
 		}
 
-		stateObject.state.Reset()
+		//stateObject.state.Reset()
+		stateObject.Reset()
 	}
 
 	s.Empty()
@@ -69,6 +71,10 @@ func (self *State) Update() {
 		if stateObject.remove {
 			self.DeleteStateObject(stateObject)
 		} else {
+			stateObject.Sync()
+
+			fmt.Printf("%x %x\n", stateObject.Address(), stateObject.state.Root())
+
 			self.UpdateStateObject(stateObject)
 		}
 	}
@@ -78,7 +84,6 @@ func (self *State) Update() {
 	if !valid {
 		self.trie = t2
 	}
-
 }
 
 // Purges the current trie.
