@@ -11,6 +11,7 @@ import (
 
 var Identifier string
 var KeyRing string
+var DiffTool bool
 var KeyStore string
 var StartRpc bool
 var RpcPort int
@@ -66,6 +67,7 @@ func Init() {
 	flag.StringVar(&ConfigFile, "conf", defaultConfigFile, "config file")
 	flag.StringVar(&DebugFile, "debug", "", "debug file (no debugging if not set)")
 	flag.IntVar(&LogLevel, "loglevel", int(ethlog.InfoLevel), "loglevel: 0-5: silent,error,warn,info,debug,debug detail)")
+	flag.BoolVar(&DiffTool, "difftool", false, "creates output for diff'ing. Sets LogLevel=0")
 
 	flag.BoolVar(&StartMining, "mine", false, "start dagger mining")
 	flag.BoolVar(&StartJsConsole, "js", false, "launches javascript console")

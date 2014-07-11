@@ -116,7 +116,7 @@ ApplicationWindow {
 							id: compileTimer
 							interval: 500 ; running: true ;  repeat: true
 							onTriggered: {
-								dbg.compile(codeEditor.text)
+								dbg.autoComp(codeEditor.text)
 							}
 						}
 					}
