@@ -150,6 +150,10 @@ done:
 
 		receipts = append(receipts, receipt)
 		handled = append(handled, tx)
+
+		if ethutil.Config.Diff {
+			state.CreateOutputForDiff()
+		}
 	}
 
 	parent.GasUsed = totalUsedGas
@@ -182,6 +186,10 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 	// nodes this won't happen because Commit would have been called
 	// before that.
 	defer state.Reset()
+
+	if ethutil.Config.Diff {
+		fmt.Printf("## 0x%x 0x%x ##\n", block.Hash(), block.Number)
+	}
 
 	receipts, err := sm.ApplyDiff(state, parent, block)
 	defer func() {

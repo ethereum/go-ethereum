@@ -13,6 +13,7 @@ type ConfigManager struct {
 
 	ExecPath string
 	Debug    bool
+	Diff     bool
 	Paranoia bool
 
 	conf *globalconf.GlobalConf

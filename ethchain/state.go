@@ -1,6 +1,7 @@
 package ethchain
 
 import (
+	"fmt"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
@@ -205,6 +206,16 @@ func (self *State) Update() {
 	valid, t2 := ethtrie.ParanoiaCheck(self.trie)
 	if !valid {
 		self.trie = t2
+	}
+}
+
+// Debug stuff
+func (self *State) CreateOutputForDiff() {
+	for addr, stateObject := range self.stateObjects {
+		fmt.Printf("0x%x 0x%x 0x%x 0x%x\n", addr, stateObject.state.Root(), stateObject.Amount.Bytes(), stateObject.Nonce)
+		stateObject.state.EachStorage(func(addr string, value *ethutil.Value) {
+			fmt.Printf("0x%x 0x%x\n", addr, value.Bytes())
+		})
 	}
 }
 

@@ -20,6 +20,8 @@ import (
 	"time"
 )
 
+const seedTextFileUri string = "http://www.ethereum.org/servers.poc3.txt"
+
 var ethlogger = ethlog.NewLogger("SERV")
 
 func eachPeer(peers *list.List, callback func(*Peer, *list.Element)) {
@@ -416,7 +418,7 @@ func (s *Ethereum) Seed() {
 		s.ProcessPeerList(peers)
 	} else {
 		// Fallback to servers.poc3.txt
-		resp, err := http.Get("http://www.ethereum.org/servers.poc3.txt")
+		resp, err := http.Get(seedTextFileUri)
 		if err != nil {
 			ethlogger.Warnln("Fetching seed failed:", err)
 			return
