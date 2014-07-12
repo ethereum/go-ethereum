@@ -690,14 +690,15 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				contract.AddAmount(value)
 
 				// Set the init script
-				contract.initScript = mem.Get(offset.Int64(), size.Int64())
+				initCode := mem.Get(offset.Int64(), size.Int64())
+				//fmt.Printf("%x\n", initCode)
 				// Transfer all remaining gas to the new
 				// contract so it may run the init script
 				gas := new(big.Int).Set(closure.Gas)
 				closure.UseGas(closure.Gas)
 
 				// Create the closure
-				c := NewClosure(closure, contract, contract.initScript, vm.state, gas, closure.Price)
+				c := NewClosure(closure, contract, initCode, vm.state, gas, closure.Price)
 				// Call the closure and set the return value as
 				// main script.
 				contract.script, err = Call(vm, c, nil)

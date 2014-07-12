@@ -2,9 +2,9 @@ package ethcrypto
 
 import (
 	"code.google.com/p/go.crypto/ripemd160"
+	"code.google.com/p/go.crypto/sha3"
 	"crypto/sha256"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/obscuren/sha3"
 )
 
 func Sha256Bin(data []byte) []byte {
