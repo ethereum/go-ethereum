@@ -19,7 +19,7 @@ ApplicationWindow {
 	property alias dataText: rawDataField.text
 
 	onClosing: {
-		compileTimer.stop()
+		//compileTimer.stop()
 	}
 
 	MenuBar {
@@ -112,6 +112,7 @@ ApplicationWindow {
 						anchors.right: settings.left
 						focus: true
 
+						/*
 						Timer {
 							id: compileTimer
 							interval: 500 ; running: true ;  repeat: true
@@ -119,6 +120,7 @@ ApplicationWindow {
 								dbg.autoComp(codeEditor.text)
 							}
 						}
+						*/
 					}
 
 					Column {
