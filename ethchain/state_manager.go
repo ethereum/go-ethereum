@@ -151,7 +151,7 @@ done:
 		receipts = append(receipts, receipt)
 		handled = append(handled, tx)
 
-		if ethutil.Config.Diff {
+		if ethutil.Config.Diff && ethutil.Config.DiffType == "all" {
 			state.CreateOutputForDiff()
 		}
 	}
@@ -187,8 +187,8 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 	// before that.
 	defer state.Reset()
 
-	if ethutil.Config.Diff {
-		fmt.Printf("## 0x%x 0x%x ##\n", block.Hash(), block.Number)
+	if ethutil.Config.Diff && ethutil.Config.DiffType == "all" {
+		fmt.Printf("## %x %x ##\n", block.Hash(), block.Number)
 	}
 
 	receipts, err := sm.ApplyDiff(state, parent, block)
