@@ -550,8 +550,10 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			}
 
 			code := closure.Script[cOff : cOff+l]
+			fmt.Println("len:", l, "code off:", cOff, "mem off:", mOff)
 
 			mem.Set(mOff, l, code)
+			fmt.Println(Code(mem.Get(mOff, l)))
 		case GASPRICE:
 			stack.Push(closure.Price)
 
@@ -741,6 +743,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			if closure.object.Amount.Cmp(value) < 0 {
 				vmlogger.Debugf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Amount)
+				closure.ReturnGas(gas, nil, nil)
 
 				stack.Push(ethutil.BigFalse)
 			} else {
