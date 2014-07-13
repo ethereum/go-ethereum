@@ -15,6 +15,18 @@ func (self Code) String() string {
 	return strings.Join(Disassemble(self), " ")
 }
 
+type Storage map[string]*ethutil.Value
+
+func (self Storage) Copy() Storage {
+	cpy := make(Storage)
+	for key, value := range self {
+		// XXX Do we need a 'value' copy or is this sufficient?
+		cpy[key] = value
+	}
+
+	return cpy
+}
+
 type StateObject struct {
 	// Address of the object
 	address []byte
@@ -27,7 +39,7 @@ type StateObject struct {
 	script     Code
 	initScript Code
 
-	storage map[string]*ethutil.Value
+	storage Storage
 
 	// Total gas pool is the total amount of gas currently
 	// left if this object is the coinbase. Gas is directly
@@ -41,7 +53,7 @@ type StateObject struct {
 }
 
 func (self *StateObject) Reset() {
-	self.storage = make(map[string]*ethutil.Value)
+	self.storage = make(Storage)
 }
 
 // Converts an transaction in to a state object
@@ -95,7 +107,7 @@ func NewStateObjectFromBytes(address, data []byte) *StateObject {
 
 func (self *StateObject) MarkForDeletion() {
 	self.remove = true
-	statelogger.Infof("%x: #%d %v (deletion)\n", self.Address(), self.Nonce, self.Amount)
+	statelogger.DebugDetailf("%x: #%d %v (deletion)\n", self.Address(), self.Nonce, self.Amount)
 }
 
 func (c *StateObject) GetAddr(addr []byte) *ethutil.Value {
@@ -154,13 +166,13 @@ func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
 func (c *StateObject) AddAmount(amount *big.Int) {
 	c.SetAmount(new(big.Int).Add(c.Amount, amount))
 
-	statelogger.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce, c.Amount, amount)
+	statelogger.DebugDetailf("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce, c.Amount, amount)
 }
 
 func (c *StateObject) SubAmount(amount *big.Int) {
 	c.SetAmount(new(big.Int).Sub(c.Amount, amount))
 
-	statelogger.Infof("%x: #%d %v (- %v)\n", c.Address(), c.Nonce, c.Amount, amount)
+	statelogger.DebugDetailf("%x: #%d %v (- %v)\n", c.Address(), c.Nonce, c.Amount, amount)
 }
 
 func (c *StateObject) SetAmount(amount *big.Int) {
@@ -222,6 +234,7 @@ func (self *StateObject) Copy() *StateObject {
 	}
 	stateObject.script = ethutil.CopyBytes(self.script)
 	stateObject.initScript = ethutil.CopyBytes(self.initScript)
+	stateObject.storage = self.storage.Copy()
 
 	return stateObject
 }
