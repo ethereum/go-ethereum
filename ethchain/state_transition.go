@@ -2,8 +2,6 @@ package ethchain
 
 import (
 	"fmt"
-	"github.com/ethereum/eth-go/ethtrie"
-	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
 )
 
@@ -274,21 +272,6 @@ func (self *StateTransition) Eval(script []byte, context *StateObject, typ strin
 
 func Call(vm *Vm, closure *Closure, data []byte) (ret []byte, err error) {
 	ret, _, err = closure.Call(vm, data)
-
-	if ethutil.Config.Paranoia {
-		var (
-			context = closure.object
-			trie    = context.state.trie
-		)
-
-		valid, t2 := ethtrie.ParanoiaCheck(trie)
-		if !valid {
-			// TODO FIXME ASAP
-			context.state.trie = t2
-
-			statelogger.Infoln("Warn: PARANOIA: Different state object roots during copy")
-		}
-	}
 
 	return
 }
