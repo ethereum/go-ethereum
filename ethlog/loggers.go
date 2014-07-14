@@ -39,9 +39,8 @@ func (msg *logMessage) send(logger LogSystem) {
 
 var logMessages chan (*logMessage)
 var logSystems []LogSystem
-var quit chan bool
+var quit chan chan error
 var drained chan bool
-var shutdown chan bool
 var mutex = sync.Mutex{}
 
 type LogLevel uint8
@@ -55,44 +54,54 @@ const (
 	DebugDetailLevel
 )
 
-// log messages are dispatched to log writers
-func start() {
-out:
-	for {
-		select {
-		case <-quit:
-			break out
-		case msg := <-logMessages:
-			for _, logSystem := range logSystems {
-				if logSystem.GetLogLevel() >= msg.LogLevel {
-					msg.send(logSystem)
-				}
-			}
-		case drained <- true:
-		default:
-			drained <- true // this blocks until a message is sent to the queu
+func dispatch(msg *logMessage) {
+	for _, logSystem := range logSystems {
+		if logSystem.GetLogLevel() >= msg.LogLevel {
+			msg.send(logSystem)
 		}
 	}
-	close(shutdown)
+}
+
+// log messages are dispatched to log writers
+func start() {
+	for {
+		select {
+		case status := <-quit:
+			status <- nil
+			return
+		case msg := <-logMessages:
+			dispatch(msg)
+		default:
+			drained <- true // this blocks until a message is sent to the queue
+		}
+	}
+}
+
+func send(msg *logMessage) {
+	logMessages <- msg
+	select {
+	case <-drained:
+	default:
+	}
 }
 
 func Reset() {
 	mutex.Lock()
 	defer mutex.Unlock()
 	if logSystems != nil {
-		quit <- true
+		status := make(chan error)
+		quit <- status
 		select {
 		case <-drained:
+		default:
 		}
-		<-shutdown
+		<-status
 	}
 	logSystems = nil
 }
 
 // waits until log messages are drained (dispatched to log writers)
 func Flush() {
-	mutex.Lock()
-	defer mutex.Unlock()
 	if logSystems != nil {
 		<-drained
 	}
@@ -110,20 +119,12 @@ func AddLogSystem(logSystem LogSystem) {
 	mutex.Lock()
 	defer mutex.Unlock()
 	if logSystems == nil {
-		logMessages = make(chan *logMessage)
-		quit = make(chan bool)
+		logMessages = make(chan *logMessage, 5)
+		quit = make(chan chan error, 1)
 		drained = make(chan bool, 1)
-		shutdown = make(chan bool, 1)
 		go start()
 	}
 	logSystems = append(logSystems, logSystem)
-}
-
-func send(msg *logMessage) {
-	select {
-	case <-drained:
-	}
-	logMessages <- msg
 }
 
 func (logger *Logger) sendln(level LogLevel, v ...interface{}) {

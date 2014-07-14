@@ -28,6 +28,21 @@ func (t *TestLogSystem) GetLogLevel() LogLevel {
 	return t.level
 }
 
+func TestLoggerFlush(t *testing.T) {
+	logger := NewLogger("TEST")
+	testLogSystem := &TestLogSystem{level: WarnLevel}
+	AddLogSystem(testLogSystem)
+	for i := 0; i < 5; i++ {
+		logger.Errorf(".")
+	}
+	Flush()
+	Reset()
+	output := testLogSystem.Output
+	if output != "[TEST] .[TEST] .[TEST] .[TEST] .[TEST] ." {
+		t.Error("Expected complete logger output '[TEST] .[TEST] .[TEST] .[TEST] .[TEST] .', got ", output)
+	}
+}
+
 func TestLoggerPrintln(t *testing.T) {
 	logger := NewLogger("TEST")
 	testLogSystem := &TestLogSystem{level: WarnLevel}
