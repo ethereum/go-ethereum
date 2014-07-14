@@ -3,7 +3,19 @@ package ethutil
 import (
 	"fmt"
 	"math/big"
+	"runtime"
 )
+
+func IsWindows() bool {
+	return runtime.GOOS == "windows"
+}
+
+func WindonizePath(path string) string {
+	if string(path[0]) == "/" && IsWindows() {
+		path = path[1:]
+	}
+	return path
+}
 
 // The different number of units
 var (
