@@ -124,6 +124,7 @@ func NewDatabase() ethutil.Database {
 }
 
 func NewClientIdentity(clientIdentifier, version, customIdentifier string) *ethwire.SimpleClientIdentity {
+	logger.Infoln("identity created")
 	return ethwire.NewSimpleClientIdentity(clientIdentifier, version, customIdentifier)
 }
 
@@ -209,10 +210,10 @@ var miner ethminer.Miner
 func StartMining(ethereum *eth.Ethereum) bool {
 	if !ethereum.Mining {
 		ethereum.Mining = true
-
 		addr := ethereum.KeyManager().Address()
 
 		go func() {
+			logger.Infoln("Start mining")
 			miner = ethminer.NewDefaultMiner(addr, ethereum)
 			// Give it some time to connect with peers
 			time.Sleep(3 * time.Second)
@@ -220,8 +221,6 @@ func StartMining(ethereum *eth.Ethereum) bool {
 				time.Sleep(5 * time.Second)
 			}
 
-			logger.Infoln("Miner started")
-			miner := ethminer.NewDefaultMiner(addr, ethereum)
 			miner.Start()
 		}()
 		RegisterInterrupt(func(os.Signal) {
@@ -235,7 +234,7 @@ func StartMining(ethereum *eth.Ethereum) bool {
 func StopMining(ethereum *eth.Ethereum) bool {
 	if ethereum.Mining {
 		miner.Stop()
-		logger.Infoln("Miner stopped")
+		logger.Infoln("Stopped mining")
 		ethereum.Mining = false
 		return true
 	}
