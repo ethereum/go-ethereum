@@ -54,6 +54,7 @@ type StateObject struct {
 
 func (self *StateObject) Reset() {
 	self.storage = make(Storage)
+	self.state.Reset()
 }
 
 // Converts an transaction in to a state object
@@ -78,7 +79,7 @@ func NewStateObject(addr []byte) *StateObject {
 
 	object := &StateObject{address: address, Amount: new(big.Int), gasPool: new(big.Int)}
 	object.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, ""))
-	object.storage = make(map[string]*ethutil.Value)
+	object.storage = make(Storage)
 
 	return object
 }
@@ -125,23 +126,24 @@ func (self *StateObject) SetStorage(key *big.Int, value *ethutil.Value) {
 	self.setStorage(key.Bytes(), value)
 }
 
-func (self *StateObject) getStorage(key []byte) *ethutil.Value {
-	k := ethutil.LeftPadBytes(key, 32)
+func (self *StateObject) getStorage(k []byte) *ethutil.Value {
+	key := ethutil.LeftPadBytes(k, 32)
 
-	value := self.storage[string(k)]
+	value := self.storage[string(key)]
 	if value == nil {
-		value = self.GetAddr(k)
+		value = self.GetAddr(key)
 
-		self.storage[string(k)] = value
+		if !value.IsNil() {
+			self.storage[string(key)] = value
+		}
 	}
 
 	return value
 }
 
-func (self *StateObject) setStorage(key []byte, value *ethutil.Value) {
-	k := ethutil.LeftPadBytes(key, 32)
-
-	self.storage[string(k)] = value
+func (self *StateObject) setStorage(k []byte, value *ethutil.Value) {
+	key := ethutil.LeftPadBytes(k, 32)
+	self.storage[string(key)] = value.Copy()
 }
 
 func (self *StateObject) Sync() {
@@ -152,9 +154,16 @@ func (self *StateObject) Sync() {
 		}
 
 		self.SetAddr([]byte(key), value)
+	}
 
+	valid, t2 := ethtrie.ParanoiaCheck(self.state.trie)
+	if !valid {
+		self.state.trie = t2
+
+		statelogger.Infoln("Warn: PARANOIA: Different state storage root during copy")
 	}
 }
+
 func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
 	if int64(len(c.script)-1) < pc.Int64() {
 		return ethutil.NewValue(0)

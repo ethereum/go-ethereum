@@ -145,7 +145,6 @@ func (self *State) Set(state *State) {
 
 	self.trie = state.trie
 	self.stateObjects = state.stateObjects
-	//*self = *state
 }
 
 func (s *State) Root() interface{} {
