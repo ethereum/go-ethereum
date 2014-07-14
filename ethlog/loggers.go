@@ -130,14 +130,14 @@ func AddLogSystem(logSystem LogSystem) {
 func (logger *Logger) sendln(level LogLevel, v ...interface{}) {
 	if logMessages != nil {
 		msg := newPrintlnLogMessage(level, logger.tag, v...)
-		logMessages <- msg
+		send(msg)
 	}
 }
 
 func (logger *Logger) sendf(level LogLevel, format string, v ...interface{}) {
 	if logMessages != nil {
 		msg := newPrintfLogMessage(level, logger.tag, format, v...)
-		logMessages <- msg
+		send(msg)
 	}
 }
 
