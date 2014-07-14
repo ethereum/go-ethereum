@@ -164,8 +164,6 @@ func (self *StateTransition) TransitionState() (err error) {
 	// Increment the nonce for the next transaction
 	sender.Nonce += 1
 
-	receiver = self.Receiver()
-
 	// Transaction gas
 	if err = self.UseGas(GasTx); err != nil {
 		return
@@ -178,13 +176,23 @@ func (self *StateTransition) TransitionState() (err error) {
 		return
 	}
 
+	/* FIXME
+	 * If tx goes TO "0", goes OOG during init, reverse changes, but initial endowment should happen. The ether is lost forever
+	 */
+	var snapshot *State
+
 	// If the receiver is nil it's a contract (\0*32).
-	if receiver == nil {
+	if tx.CreatesContract() {
+		snapshot = self.state.Copy()
+
 		// Create a new state object for the contract
 		receiver = self.MakeStateObject(self.state, tx)
+		self.rec = receiver
 		if receiver == nil {
 			return fmt.Errorf("Unable to create contract")
 		}
+	} else {
+		receiver = self.Receiver()
 	}
 
 	// Transfer value from sender to receiver
@@ -192,7 +200,9 @@ func (self *StateTransition) TransitionState() (err error) {
 		return
 	}
 
-	//snapshot := self.state.Copy()
+	if snapshot == nil {
+		snapshot = self.state.Copy()
+	}
 
 	// Process the init code and create 'valid' contract
 	if IsContractAddr(self.receiver) {
@@ -203,8 +213,7 @@ func (self *StateTransition) TransitionState() (err error) {
 
 		code, err := self.Eval(receiver.Init(), receiver, "init")
 		if err != nil {
-			//self.state.Set(snapshot)
-			self.state.ResetStateObject(receiver)
+			self.state.Set(snapshot)
 
 			return fmt.Errorf("Error during init execution %v", err)
 		}
@@ -214,8 +223,7 @@ func (self *StateTransition) TransitionState() (err error) {
 		if len(receiver.Script()) > 0 {
 			_, err = self.Eval(receiver.Script(), receiver, "code")
 			if err != nil {
-				//self.state.Set(snapshot)
-				self.state.ResetStateObject(receiver)
+				self.state.Set(snapshot)
 
 				return fmt.Errorf("Error during code execution %v", err)
 			}

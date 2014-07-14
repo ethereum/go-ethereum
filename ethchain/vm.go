@@ -22,12 +22,16 @@ var (
 	GasMemory  = big.NewInt(1)
 	GasData    = big.NewInt(5)
 	GasTx      = big.NewInt(500)
+
+	LogTyPretty byte = 0x1
+	LogTyDiff   byte = 0x2
 )
 
 type Debugger interface {
 	BreakHook(step int, op OpCode, mem *Memory, stack *Stack, stateObject *StateObject) bool
 	StepHook(step int, op OpCode, mem *Memory, stack *Stack, stateObject *StateObject) bool
 	BreakPoints() []int64
+	SetCode(byteCode []byte)
 }
 
 type Vm struct {
@@ -44,6 +48,7 @@ type Vm struct {
 
 	Verbose bool
 
+	logTy  byte
 	logStr string
 
 	err error
@@ -69,7 +74,7 @@ type RuntimeVars struct {
 }
 
 func (self *Vm) Printf(format string, v ...interface{}) *Vm {
-	if self.Verbose {
+	if self.Verbose && self.logTy == LogTyPretty {
 		self.logStr += fmt.Sprintf(format, v...)
 	}
 
@@ -77,7 +82,7 @@ func (self *Vm) Printf(format string, v ...interface{}) *Vm {
 }
 
 func (self *Vm) Endl() *Vm {
-	if self.Verbose {
+	if self.Verbose && self.logTy == LogTyPretty {
 		vmlogger.Debugln(self.logStr)
 		self.logStr = ""
 	}
@@ -86,7 +91,12 @@ func (self *Vm) Endl() *Vm {
 }
 
 func NewVm(state *State, stateManager *StateManager, vars RuntimeVars) *Vm {
-	return &Vm{vars: vars, state: state, stateManager: stateManager}
+	lt := LogTyPretty
+	if ethutil.Config.Diff {
+		lt = LogTyDiff
+	}
+
+	return &Vm{vars: vars, state: state, stateManager: stateManager, logTy: lt}
 }
 
 var Pow256 = ethutil.BigPow(2, 256)
@@ -103,7 +113,17 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		}
 	}()
 
-	vmlogger.Debugf("(%s) %x gas: %v (d) %x\n", vm.Fn, closure.object.Address(), closure.Gas, closure.Args)
+	// Debug hook
+	if vm.Dbg != nil {
+		vm.Dbg.SetCode(closure.Script)
+	}
+
+	// Don't bother with the execution if there's no code.
+	if len(closure.Script) == 0 {
+		return closure.Return(nil), nil
+	}
+
+	vmlogger.Debugf("(%s) %x gas: %v (d) %x\n", vm.Fn, closure.Address(), closure.Gas, closure.Args)
 
 	var (
 		op OpCode
@@ -131,6 +151,17 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		val := closure.Get(pc)
 		// Get the opcode (it must be an opcode!)
 		op = OpCode(val.Uint())
+
+		// XXX Leave this Println intact. Don't change this to the log system.
+		// Used for creating diffs between implementations
+		if vm.logTy == LogTyDiff {
+			b := pc.Bytes()
+			if len(b) == 0 {
+				b = []byte{0}
+			}
+
+			fmt.Printf("%x %x %x %x\n", closure.Address(), b, []byte{byte(op)}, closure.Gas.Bytes())
+		}
 
 		gas := new(big.Int)
 		addStepGasUsage := func(amount *big.Int) {
@@ -167,7 +198,9 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			require(2)
 			newMemSize = stack.Peek().Uint64() + 32
 		case MLOAD:
+			require(1)
 
+			newMemSize = stack.Peek().Uint64() + 32
 		case MSTORE8:
 			require(2)
 			newMemSize = stack.Peek().Uint64() + 1
@@ -415,7 +448,10 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			require(2)
 			val, th := stack.Popn()
 			if th.Cmp(big.NewInt(32)) < 0 {
-				stack.Push(big.NewInt(int64(len(val.Bytes())-1) - th.Int64()))
+				byt := big.NewInt(int64(val.Bytes()[th.Int64()]))
+				stack.Push(byt)
+
+				vm.Printf(" => 0x%x", byt.Bytes())
 			} else {
 				stack.Push(ethutil.BigFalse)
 			}
@@ -427,13 +463,26 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			data := ethcrypto.Sha3Bin(mem.Get(offset.Int64(), size.Int64()))
 
 			stack.Push(ethutil.BigD(data))
+
+			vm.Printf(" => %x", data)
 			// 0x30 range
 		case ADDRESS:
-			stack.Push(ethutil.BigD(closure.Object().Address()))
+			stack.Push(ethutil.BigD(closure.Address()))
+
+			vm.Printf(" => %x", closure.Address())
 		case BALANCE:
-			stack.Push(closure.object.Amount)
+			require(1)
+
+			addr := stack.Pop().Bytes()
+			balance := vm.state.GetBalance(addr)
+
+			stack.Push(balance)
+
+			vm.Printf(" => %v (%x)", balance, addr)
 		case ORIGIN:
 			stack.Push(ethutil.BigD(vm.vars.Origin))
+
+			vm.Printf(" => %v", vm.vars.Origin)
 		case CALLER:
 			caller := closure.caller.Address()
 			stack.Push(ethutil.BigD(caller))
@@ -441,6 +490,8 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			vm.Printf(" => %x", caller)
 		case CALLVALUE:
 			stack.Push(vm.vars.Value)
+
+			vm.Printf(" => %v", vm.vars.Value)
 		case CALLDATALOAD:
 			require(1)
 			offset := stack.Pop().Int64()
@@ -499,8 +550,10 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			}
 
 			code := closure.Script[cOff : cOff+l]
+			fmt.Println("len:", l, "code off:", cOff, "mem off:", mOff)
 
 			mem.Set(mOff, l, code)
+			fmt.Println(Code(mem.Get(mOff, l)))
 		case GASPRICE:
 			stack.Push(closure.Price)
 
@@ -562,8 +615,9 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case MSTORE8:
 			require(2)
 			val, mStart := stack.Popn()
-			base.And(val, new(big.Int).SetInt64(0xff))
-			mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(base, 256))
+			//base.And(val, new(big.Int).SetInt64(0xff))
+			//mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(base, 256))
+			mem.store[mStart.Int64()] = byte(val.Int64() & 0xff)
 
 			vm.Printf(" => 0x%x", val)
 		case SLOAD:
@@ -623,9 +677,9 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			)
 
 			// Generate a new address
-			addr := ethcrypto.CreateAddress(closure.object.Address(), closure.object.Nonce)
+			addr := ethcrypto.CreateAddress(closure.Address(), closure.N().Uint64())
 			for i := uint64(0); vm.state.GetStateObject(addr) != nil; i++ {
-				ethcrypto.CreateAddress(closure.object.Address(), closure.object.Nonce+i)
+				ethcrypto.CreateAddress(closure.Address(), closure.N().Uint64()+i)
 			}
 			closure.object.Nonce++
 
@@ -638,14 +692,15 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				contract.AddAmount(value)
 
 				// Set the init script
-				contract.initScript = mem.Get(offset.Int64(), size.Int64())
+				initCode := mem.Get(offset.Int64(), size.Int64())
+				//fmt.Printf("%x\n", initCode)
 				// Transfer all remaining gas to the new
 				// contract so it may run the init script
 				gas := new(big.Int).Set(closure.Gas)
 				closure.UseGas(closure.Gas)
 
 				// Create the closure
-				c := NewClosure(closure, contract, contract.initScript, vm.state, gas, closure.Price)
+				c := NewClosure(closure, contract, initCode, vm.state, gas, closure.Price)
 				// Call the closure and set the return value as
 				// main script.
 				contract.script, err = Call(vm, c, nil)
@@ -665,6 +720,11 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				vm.Printf("CREATE success")
 			}
 			vm.Endl()
+
+			// Debug hook
+			if vm.Dbg != nil {
+				vm.Dbg.SetCode(closure.Script)
+			}
 		case CALL:
 			require(7)
 
@@ -683,10 +743,11 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			if closure.object.Amount.Cmp(value) < 0 {
 				vmlogger.Debugf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Amount)
+				closure.ReturnGas(gas, nil, nil)
 
 				stack.Push(ethutil.BigFalse)
 			} else {
-				//snapshot := vm.state.Copy()
+				snapshot := vm.state.Copy()
 
 				stateObject := vm.state.GetOrNewStateObject(addr.Bytes())
 
@@ -702,12 +763,16 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 					vmlogger.Debugf("Closure execution failed. %v\n", err)
 
-					//vm.state.Set(snapshot)
-					vm.state.ResetStateObject(stateObject)
+					vm.state.Set(snapshot)
 				} else {
 					stack.Push(ethutil.BigTrue)
 
 					mem.Set(retOffset.Int64(), retSize.Int64(), ret)
+				}
+
+				// Debug hook
+				if vm.Dbg != nil {
+					vm.Dbg.SetCode(closure.Script)
 				}
 			}
 		case RETURN:
@@ -721,17 +786,11 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case SUICIDE:
 			require(1)
 
-			receiver := vm.state.GetAccount(stack.Pop().Bytes())
+			receiver := vm.state.GetOrNewStateObject(stack.Pop().Bytes())
+
 			receiver.AddAmount(closure.object.Amount)
 
 			closure.object.MarkForDeletion()
-
-			/*
-				trie := closure.object.state.trie
-				trie.NewIterator().Each(func(key string, v *ethutil.Value) {
-					trie.Delete(key)
-				})
-			*/
 
 			fallthrough
 		case STOP: // Stop the closure
@@ -752,6 +811,8 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		if vm.Dbg != nil {
 			for _, instrNo := range vm.Dbg.BreakPoints() {
 				if pc.Cmp(big.NewInt(instrNo)) == 0 {
+					vm.Stepping = true
+
 					if !vm.Dbg.BreakHook(prevStep, op, mem, stack, closure.Object()) {
 						return nil, nil
 					}

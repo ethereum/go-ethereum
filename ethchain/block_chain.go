@@ -294,7 +294,6 @@ func (bc *BlockChain) setLastBlock() {
 		bc.LastBlockHash = block.Hash()
 		bc.LastBlockNumber = block.Number.Uint64()
 
-		chainlogger.Infof("Last known block height #%d\n", bc.LastBlockNumber)
 	} else {
 		AddTestNetFunds(bc.genesisBlock)
 
@@ -309,7 +308,7 @@ func (bc *BlockChain) setLastBlock() {
 	// Set the last know difficulty (might be 0x0 as initial value, Genesis)
 	bc.TD = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
 
-	chainlogger.Infof("Last block: %x\n", bc.CurrentBlock.Hash())
+	chainlogger.Infof("Last block (#%d) %x\n", bc.LastBlockNumber, bc.CurrentBlock.Hash())
 }
 
 func (bc *BlockChain) SetTotalDifficulty(td *big.Int) {

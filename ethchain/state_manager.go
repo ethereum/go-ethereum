@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
@@ -37,7 +36,7 @@ type EthManager interface {
 	BlockChain() *BlockChain
 	TxPool() *TxPool
 	Broadcast(msgType ethwire.MsgType, data []interface{})
-	Reactor() *ethreact.ReactorEngine
+	Reactor() *ethutil.ReactorEngine
 	PeerCount() int
 	IsMining() bool
 	IsListening() bool
@@ -67,6 +66,11 @@ type StateManager struct {
 	// Mining state. The mining state is used purely and solely by the mining
 	// operation.
 	miningState *State
+
+	// The last attempted block is mainly used for debugging purposes
+	// This does not have to be a valid block and will be set during
+	// 'Process' & canonical validation.
+	lastAttemptedBlock *Block
 }
 
 func NewStateManager(ethereum EthManager) *StateManager {
@@ -146,6 +150,10 @@ done:
 
 		receipts = append(receipts, receipt)
 		handled = append(handled, tx)
+
+		if ethutil.Config.Diff {
+			state.CreateOutputForDiff()
+		}
 	}
 
 	parent.GasUsed = totalUsedGas
@@ -166,6 +174,8 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 		return ParentError(block.PrevHash)
 	}
 
+	sm.lastAttemptedBlock = block
+
 	var (
 		parent = sm.bc.GetBlock(block.PrevHash)
 		state  = parent.State()
@@ -176,6 +186,10 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 	// nodes this won't happen because Commit would have been called
 	// before that.
 	defer state.Reset()
+
+	if ethutil.Config.Diff {
+		fmt.Printf("## 0x%x 0x%x ##\n", block.Hash(), block.Number)
+	}
 
 	receipts, err := sm.ApplyDiff(state, parent, block)
 	defer func() {

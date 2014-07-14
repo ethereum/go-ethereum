@@ -1,6 +1,7 @@
 package ethchain
 
 import (
+	"fmt"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
@@ -26,6 +27,131 @@ func NewState(trie *ethtrie.Trie) *State {
 	return &State{trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest()}
 }
 
+// Iterate over each storage address and yield callback
+func (s *State) EachStorage(cb ethtrie.EachCallback) {
+	it := s.trie.NewIterator()
+	it.Each(cb)
+}
+
+// Retrieve the balance from the given address or 0 if object not found
+func (self *State) GetBalance(addr []byte) *big.Int {
+	stateObject := self.GetStateObject(addr)
+	if stateObject != nil {
+		return stateObject.Amount
+	}
+
+	return ethutil.Big0
+}
+
+func (self *State) GetNonce(addr []byte) uint64 {
+	stateObject := self.GetStateObject(addr)
+	if stateObject != nil {
+		return stateObject.Nonce
+	}
+
+	return 0
+}
+
+//
+// Setting, updating & deleting state object methods
+//
+
+// Update the given state object and apply it to state trie
+func (self *State) UpdateStateObject(stateObject *StateObject) {
+	addr := stateObject.Address()
+
+	ethutil.Config.Db.Put(ethcrypto.Sha3Bin(stateObject.Script()), stateObject.Script())
+
+	self.trie.Update(string(addr), string(stateObject.RlpEncode()))
+
+	self.manifest.AddObjectChange(stateObject)
+}
+
+// Delete the given state object and delete it from the state trie
+func (self *State) DeleteStateObject(stateObject *StateObject) {
+	self.trie.Delete(string(stateObject.Address()))
+
+	delete(self.stateObjects, string(stateObject.Address()))
+}
+
+// Retrieve a state object given my the address. Nil if not found
+func (self *State) GetStateObject(addr []byte) *StateObject {
+	stateObject := self.stateObjects[string(addr)]
+	if stateObject != nil {
+		return stateObject
+	}
+
+	data := self.trie.Get(string(addr))
+	if len(data) == 0 {
+		return nil
+	}
+
+	stateObject = NewStateObjectFromBytes(addr, []byte(data))
+	self.stateObjects[string(addr)] = stateObject
+
+	return stateObject
+}
+
+// Retrieve a state object or create a new state object if nil
+func (self *State) GetOrNewStateObject(addr []byte) *StateObject {
+	stateObject := self.GetStateObject(addr)
+	if stateObject == nil {
+		stateObject = self.NewStateObject(addr)
+	}
+
+	return stateObject
+}
+
+// Create a state object whether it exist in the trie or not
+func (self *State) NewStateObject(addr []byte) *StateObject {
+	statelogger.Infof("(+) %x\n", addr)
+
+	stateObject := NewStateObject(addr)
+	self.stateObjects[string(addr)] = stateObject
+
+	return stateObject
+}
+
+// Deprecated
+func (self *State) GetAccount(addr []byte) *StateObject {
+	return self.GetOrNewStateObject(addr)
+}
+
+//
+// Setting, copying of the state methods
+//
+
+func (s *State) Cmp(other *State) bool {
+	return s.trie.Cmp(other.trie)
+}
+
+func (self *State) Copy() *State {
+	if self.trie != nil {
+		state := NewState(self.trie.Copy())
+		for k, stateObject := range self.stateObjects {
+			state.stateObjects[k] = stateObject.Copy()
+		}
+
+		return state
+	}
+
+	return nil
+}
+
+func (self *State) Set(state *State) {
+	if state == nil {
+		panic("Tried setting 'state' to nil through 'Set'")
+	}
+
+	self.trie = state.trie
+	self.stateObjects = state.stateObjects
+	//*self = *state
+}
+
+func (s *State) Root() interface{} {
+	return s.trie.Root
+}
+
 // Resets the trie and all siblings
 func (s *State) Reset() {
 	s.trie.Undo()
@@ -36,7 +162,8 @@ func (s *State) Reset() {
 			continue
 		}
 
-		stateObject.state.Reset()
+		//stateObject.state.Reset()
+		stateObject.Reset()
 	}
 
 	s.Empty()
@@ -67,109 +194,29 @@ func (self *State) Empty() {
 func (self *State) Update() {
 	for _, stateObject := range self.stateObjects {
 		if stateObject.remove {
-			self.trie.Delete(string(stateObject.Address()))
+			self.DeleteStateObject(stateObject)
 		} else {
+			stateObject.Sync()
+
 			self.UpdateStateObject(stateObject)
 		}
 	}
-}
 
-// Purges the current trie.
-func (s *State) Purge() int {
-	return s.trie.NewIterator().Purge()
-}
-
-func (s *State) EachStorage(cb ethtrie.EachCallback) {
-	it := s.trie.NewIterator()
-	it.Each(cb)
-}
-
-func (self *State) ResetStateObject(stateObject *StateObject) {
-	delete(self.stateObjects, string(stateObject.Address()))
-
-	stateObject.state.Reset()
-}
-
-func (self *State) UpdateStateObject(stateObject *StateObject) {
-	addr := stateObject.Address()
-
-	ethutil.Config.Db.Put(ethcrypto.Sha3Bin(stateObject.Script()), stateObject.Script())
-
-	self.trie.Update(string(addr), string(stateObject.RlpEncode()))
-
-	self.manifest.AddObjectChange(stateObject)
-}
-
-func (self *State) GetStateObject(addr []byte) *StateObject {
-	stateObject := self.stateObjects[string(addr)]
-	if stateObject != nil {
-		return stateObject
+	// FIXME trie delete is broken
+	valid, t2 := ethtrie.ParanoiaCheck(self.trie)
+	if !valid {
+		self.trie = t2
 	}
+}
 
-	data := self.trie.Get(string(addr))
-	if len(data) == 0 {
-		return nil
+// Debug stuff
+func (self *State) CreateOutputForDiff() {
+	for addr, stateObject := range self.stateObjects {
+		fmt.Printf("0x%x 0x%x 0x%x 0x%x\n", addr, stateObject.state.Root(), stateObject.Amount.Bytes(), stateObject.Nonce)
+		stateObject.state.EachStorage(func(addr string, value *ethutil.Value) {
+			fmt.Printf("0x%x 0x%x\n", addr, value.Bytes())
+		})
 	}
-
-	stateObject = NewStateObjectFromBytes(addr, []byte(data))
-	self.stateObjects[string(addr)] = stateObject
-
-	return stateObject
-}
-
-func (self *State) GetOrNewStateObject(addr []byte) *StateObject {
-	stateObject := self.GetStateObject(addr)
-	if stateObject == nil {
-		stateObject = self.NewStateObject(addr)
-	}
-
-	return stateObject
-}
-
-func (self *State) NewStateObject(addr []byte) *StateObject {
-	statelogger.Infof("(+) %x\n", addr)
-
-	stateObject := NewStateObject(addr)
-	self.stateObjects[string(addr)] = stateObject
-
-	return stateObject
-}
-
-func (self *State) GetAccount(addr []byte) *StateObject {
-	return self.GetOrNewStateObject(addr)
-}
-
-func (s *State) Cmp(other *State) bool {
-	return s.trie.Cmp(other.trie)
-}
-
-func (self *State) Copy() *State {
-	if self.trie != nil {
-		state := NewState(self.trie.Copy())
-		for k, stateObject := range self.stateObjects {
-			state.stateObjects[k] = stateObject.Copy()
-		}
-
-		return state
-	}
-
-	return nil
-}
-
-func (self *State) Set(state *State) {
-	if state == nil {
-		panic("Tried setting 'state' to nil through 'Set'")
-	}
-
-	*self = *state
-}
-
-func (s *State) Put(key, object []byte) {
-	s.trie.Update(string(key), string(object))
-}
-
-func (s *State) Root() interface{} {
-	return s.trie.Root
 }
 
 // Object manifest

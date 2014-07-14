@@ -97,7 +97,6 @@ func Reset() {
 		}
 		<-status
 	}
-	logSystems = nil
 }
 
 // waits until log messages are drained (dispatched to log writers)
@@ -116,6 +115,7 @@ func NewLogger(tag string) *Logger {
 }
 
 func AddLogSystem(logSystem LogSystem) {
+	var mutex = &sync.Mutex{}
 	mutex.Lock()
 	defer mutex.Unlock()
 	if logSystems == nil {
@@ -128,14 +128,16 @@ func AddLogSystem(logSystem LogSystem) {
 }
 
 func (logger *Logger) sendln(level LogLevel, v ...interface{}) {
-	if logSystems != nil {
-		send(newPrintlnLogMessage(level, logger.tag, v...))
+	if logMessages != nil {
+		msg := newPrintlnLogMessage(level, logger.tag, v...)
+		logMessages <- msg
 	}
 }
 
 func (logger *Logger) sendf(level LogLevel, format string, v ...interface{}) {
-	if logSystems != nil {
-		send(newPrintfLogMessage(level, logger.tag, format, v...))
+	if logMessages != nil {
+		msg := newPrintfLogMessage(level, logger.tag, format, v...)
+		logMessages <- msg
 	}
 }
 

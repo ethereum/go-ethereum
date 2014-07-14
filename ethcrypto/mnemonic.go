@@ -3,7 +3,9 @@ package ethcrypto
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -12,6 +14,14 @@ import (
 func InitWords() []string {
 	_, thisfile, _, _ := runtime.Caller(1)
 	filename := path.Join(path.Dir(thisfile), "mnemonic.words.lst")
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		fmt.Printf("reading mnemonic word list file 'mnemonic.words.lst' from source folder failed, looking in current folder.")
+		dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+		if err != nil {
+			panic(fmt.Errorf("problem getting current folder: ", err))
+		}
+		filename = path.Join(dir, "mnemonic.words.lst")
+	}
 	content, err := ioutil.ReadFile(filename)
 	if err != nil {
 		panic(fmt.Errorf("reading mnemonic word list file 'mnemonic.words.lst' failed: ", err))

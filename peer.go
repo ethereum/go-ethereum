@@ -21,7 +21,7 @@ const (
 	// The size of the output buffer for writing messages
 	outputBufferSize = 50
 	// Current protocol version
-	ProtocolVersion = 21
+	ProtocolVersion = 23
 	// Interval for ping/pong message
 	pingPongTimer = 2 * time.Second
 )
@@ -252,7 +252,7 @@ func (p *Peer) writeMessage(msg *ethwire.Msg) {
 		}
 	}
 
-	peerlogger.DebugDetailln("<=", msg.Type, msg.Data)
+	peerlogger.DebugDetailf("(%v) <= %v %v\n", p.conn.RemoteAddr(), msg.Type, msg.Data)
 
 	err := ethwire.WriteMessage(p.conn, msg)
 	if err != nil {
@@ -326,7 +326,7 @@ func (p *Peer) HandleInbound() {
 			peerlogger.Debugln(err)
 		}
 		for _, msg := range msgs {
-			peerlogger.DebugDetailln("=>", msg.Type, msg.Data)
+			peerlogger.DebugDetailf("(%v) => %v %v\n", p.conn.RemoteAddr(), msg.Type, msg.Data)
 
 			switch msg.Type {
 			case ethwire.MsgHandshakeTy:
@@ -419,6 +419,16 @@ func (p *Peer) HandleInbound() {
 				if err != nil {
 					// If the parent is unknown try to catch up with this peer
 					if ethchain.IsParentErr(err) {
+						/*
+							b := ethchain.NewBlockFromRlpValue(msg.Data.Get(0))
+
+							peerlogger.Infof("Attempting to catch (%x). Parent known\n", b.Hash())
+							p.catchingUp = false
+
+							p.CatchupWithPeer(b.Hash())
+
+							peerlogger.Infoln(b)
+						*/
 						peerlogger.Infoln("Attempting to catch. Parent known")
 						p.catchingUp = false
 						p.CatchupWithPeer(p.ethereum.BlockChain().CurrentBlock.Hash())
@@ -744,7 +754,7 @@ func (p *Peer) CatchupWithPeer(blockHash []byte) {
 	if !p.catchingUp {
 		// Make sure nobody else is catching up when you want to do this
 		p.catchingUp = true
-		msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{blockHash, uint64(50)})
+		msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{blockHash, uint64(10)})
 		p.QueueMessage(msg)
 
 		peerlogger.DebugDetailf("Requesting blockchain %x... from peer %s\n", p.ethereum.BlockChain().CurrentBlock.Hash()[:4], p.conn.RemoteAddr())
