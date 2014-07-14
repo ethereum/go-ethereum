@@ -148,6 +148,11 @@ done:
 		accumelative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, txGas))
 		receipt := &Receipt{tx, ethutil.CopyBytes(state.Root().([]byte)), accumelative}
 
+		original := block.Receipts()[i]
+		if !original.Cmp(receipt) {
+			return nil, nil, nil, fmt.Errorf("err diff #%d (r) %v ~ %x  <=>  (c) %v ~ %x (%x)\n", i+1, original.CumulativeGasUsed, original.PostState[0:4], receipt.CumulativeGasUsed, receipt.PostState[0:4], receipt.Tx.Hash())
+		}
+
 		receipts = append(receipts, receipt)
 		handled = append(handled, tx)
 
@@ -192,31 +197,6 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 	}
 
 	receipts, err := sm.ApplyDiff(state, parent, block)
-	defer func() {
-		if err != nil {
-			if len(receipts) == len(block.Receipts()) {
-				for i, receipt := range block.Receipts() {
-					statelogger.Infof("diff (r) %v ~ %x  <=>  (c) %v ~ %x (%x)\n", receipt.CumulativeGasUsed, receipt.PostState[0:4], receipts[i].CumulativeGasUsed, receipts[i].PostState[0:4], receipt.Tx.Hash())
-				}
-			} else {
-				statelogger.Warnln("Unable to print receipt diff. Length didn't match", len(receipts), "for", len(block.Receipts()))
-			}
-		} else {
-			/*
-				for i, receipt := range receipts {
-					gu := new(big.Int)
-					if i != 0 {
-						gu.Sub(receipt.CumulativeGasUsed, receipts[i-1].CumulativeGasUsed)
-					} else {
-						gu.Set(receipt.CumulativeGasUsed)
-					}
-
-					statelogger.Infof("[r] %v ~ %x (%x)\n", gu, receipt.PostState[0:4], receipt.Tx.Hash())
-				}
-			*/
-		}
-	}()
-
 	if err != nil {
 		return err
 	}
