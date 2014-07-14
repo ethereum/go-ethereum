@@ -196,7 +196,7 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 		fmt.Printf("## %x %x ##\n", block.Hash(), block.Number)
 	}
 
-	receipts, err := sm.ApplyDiff(state, parent, block)
+	_, err = sm.ApplyDiff(state, parent, block)
 	if err != nil {
 		return err
 	}

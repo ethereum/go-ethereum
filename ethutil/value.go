@@ -190,6 +190,19 @@ func (val *Value) Get(idx int) *Value {
 	return NewValue(nil)
 }
 
+func (self *Value) Copy() *Value {
+	switch val := self.Val.(type) {
+	case *big.Int:
+		return NewValue(new(big.Int).Set(val))
+	case []byte:
+		return NewValue(CopyBytes(val))
+	default:
+		return NewValue(self.Val)
+	}
+
+	return nil
+}
+
 func (val *Value) Cmp(o *Value) bool {
 	return reflect.DeepEqual(val.Val, o.Val)
 }

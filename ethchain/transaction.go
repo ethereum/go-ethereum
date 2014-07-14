@@ -232,10 +232,6 @@ func (self *Receipt) Cmp(other *Receipt) bool {
 		return false
 	}
 
-	if self.CumulativeGasUsed.Cmp(other.CumulativeGasUsed) != 0 {
-		return false
-	}
-
 	return true
 }
 
