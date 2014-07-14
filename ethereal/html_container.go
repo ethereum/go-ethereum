@@ -59,7 +59,7 @@ func (app *HtmlApplication) RootFolder() string {
 	if err != nil {
 		return ""
 	}
-	return path.Dir(folder.RequestURI())
+	return path.Dir(ethutil.WindonizePath(folder.RequestURI()))
 }
 func (app *HtmlApplication) RecursiveFolders() []os.FileInfo {
 	files, _ := ioutil.ReadDir(app.RootFolder())
