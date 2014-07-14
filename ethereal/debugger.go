@@ -74,6 +74,13 @@ func (self *DebuggerWindow) Compile(code string) {
 	}
 }
 
+// Used by QML
+func (self *DebuggerWindow) AutoComp(code string) {
+	if self.Db.done {
+		self.Compile(code)
+	}
+}
+
 func (self *DebuggerWindow) ClearLog() {
 	self.win.Root().Call("clearLog")
 }
@@ -109,8 +116,6 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 
 		return
 	}
-
-	self.SetAsm(script)
 
 	var (
 		gas      = ethutil.Big(gasStr)
@@ -255,6 +260,10 @@ func (self *Debugger) BreakHook(pc int, op ethchain.OpCode, mem *ethchain.Memory
 
 func (self *Debugger) StepHook(pc int, op ethchain.OpCode, mem *ethchain.Memory, stack *ethchain.Stack, stateObject *ethchain.StateObject) bool {
 	return self.halting(pc, op, mem, stack, stateObject)
+}
+
+func (self *Debugger) SetCode(byteCode []byte) {
+	self.main.SetAsm(byteCode)
 }
 
 func (self *Debugger) BreakPoints() []int64 {

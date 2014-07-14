@@ -100,7 +100,7 @@ ApplicationWindow {
 				anchors.right: parent.right
 				height: 200
 				Image {
-					source: ui.assetPath("tx.png")
+					source: "../tx.png"
 					anchors.horizontalCenter: parent.horizontalCenter
 					MouseArea {
 						anchors.fill: parent
@@ -110,7 +110,7 @@ ApplicationWindow {
 					}
 				}
 				Image {
-					source: ui.assetPath("new.png")
+					source: "../new.png"
 					anchors.horizontalCenter: parent.horizontalCenter
 					MouseArea {
 						anchors.fill: parent
@@ -120,7 +120,7 @@ ApplicationWindow {
 					}
 				}
 				Image {
-					source: ui.assetPath("net.png")
+					source: "../net.png"
 					anchors.horizontalCenter: parent.horizontalCenter
 					MouseArea {
 						anchors.fill: parent
@@ -131,7 +131,7 @@ ApplicationWindow {
 				}
 
 				Image {
-					source: ui.assetPath("heart.png")
+					source: "../heart.png"
 					anchors.horizontalCenter: parent.horizontalCenter
 					MouseArea {
 						anchors.fill: parent
@@ -436,7 +436,7 @@ ApplicationWindow {
 				onDoubleClicked:  peerWindow.visible = true
 				anchors.fill: parent
 			}
-			source: ui.assetPath("network.png")
+			source: "../network.png"
 		}
 	}
 
@@ -624,7 +624,7 @@ ApplicationWindow {
 			width: 150
 			fillMode: Image.PreserveAspectFit
 			smooth: true
-			source: ui.assetPath("facet.png")
+			source: "../facet.png"
 			x: 10
 			y: 10
 		}

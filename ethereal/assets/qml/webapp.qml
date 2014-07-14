@@ -38,7 +38,7 @@ ApplicationWindow {
 			experimental.preferences.javascriptEnabled: true
 			experimental.preferences.navigatorQtObjectEnabled: true
 			experimental.preferences.developerExtrasEnabled: true
-			experimental.userScripts: [ui.assetPath("ext/pre.js"), ui.assetPath("ext/big.js"), ui.assetPath("ext/string.js"), ui.assetPath("ext/ethereum.js")]
+			experimental.userScripts: ["../ext/pre.js", "../ext/big.js", "../ext/string.js", "../ext/ethereum.js"]
 			experimental.onMessageReceived: {
 				console.log("[onMessageReceived]: ", message.data)
 				// TODO move to messaging.js
@@ -191,6 +191,7 @@ ApplicationWindow {
 						inspector.visible = false
 					}else{
 						inspector.visible = true
+            inspector.url = webview.experimental.remoteInspectorUrl
 					}
 				}
 				onDoubleClicked: {
@@ -224,7 +225,6 @@ ApplicationWindow {
 		WebView {
 			id: inspector
 			visible: false
-			url: webview.experimental.remoteInspectorUrl
 			anchors {
 				left: root.left
 				right: root.right
@@ -238,7 +238,6 @@ ApplicationWindow {
 				name: "inspectorShown"
 				PropertyChanges {
 					target: inspector
-					url: webview.experimental.remoteInspectorUrl
 				}
 			}
 		]
