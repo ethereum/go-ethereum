@@ -9,6 +9,8 @@ import (
 	"sync"
 )
 
+func __ignore() { fmt.Println("") }
+
 func ParanoiaCheck(t1 *Trie) (bool, *Trie) {
 	t2 := NewTrie(ethutil.Config.Db, "")
 
@@ -269,8 +271,7 @@ func (t *Trie) getState(node interface{}, key []int) interface{} {
 	}
 
 	// It shouldn't come this far
-	fmt.Println("getState unexpected return")
-	return ""
+	panic("unexpected return")
 }
 
 func (t *Trie) getNode(node interface{}) *ethutil.Value {
@@ -287,7 +288,9 @@ func (t *Trie) getNode(node interface{}) *ethutil.Value {
 		return ethutil.NewValueFromBytes([]byte(str))
 	}
 
-	return t.cache.Get(n.Bytes())
+	data := t.cache.Get(n.Bytes())
+
+	return data
 }
 
 func (t *Trie) UpdateState(node interface{}, key []int, value string) interface{} {
@@ -385,7 +388,7 @@ func (t *Trie) InsertState(node interface{}, key []int, value interface{}) inter
 		return t.Put(newNode)
 	}
 
-	return ""
+	panic("unexpected end")
 }
 
 func (t *Trie) deleteState(node interface{}, key []int) interface{} {
@@ -396,6 +399,7 @@ func (t *Trie) deleteState(node interface{}, key []int) interface{} {
 	// New node
 	n := ethutil.NewValue(node)
 	if node == nil || (n.Type() == reflect.String && (n.Str() == "" || n.Get(0).IsNil())) || n.Len() == 0 {
+		//return nil
 		return ""
 	}
 
@@ -406,12 +410,17 @@ func (t *Trie) deleteState(node interface{}, key []int) interface{} {
 		k := CompactDecode(currentNode.Get(0).Str())
 		v := currentNode.Get(1).Raw()
 
+		matchingLength := MatchingNibbleLength(key, k)
+
 		// Matching key pair (ie. there's already an object with this key)
 		if CompareIntSlice(k, key) {
 			return ""
-		} else if CompareIntSlice(key[:len(k)], k) {
+		} else if CompareIntSlice(key[:matchingLength], k) {
 			hash := t.deleteState(v, key[len(k):])
 			child := t.getNode(hash)
+			if child.IsNil() {
+				return node
+			}
 
 			var newNode []interface{}
 			if child.Len() == 2 {

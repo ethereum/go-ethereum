@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/eth-go/ethutil"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -251,8 +252,8 @@ func TestRemote(t *testing.T) {
 			trie.Update(get(key), get(value))
 		}
 
-		a := NewValue(h(test.Root)).Bytes()
-		b := NewValue(trie.Root).Bytes()
+		a := ethutil.NewValue(h(test.Root)).Bytes()
+		b := ethutil.NewValue(trie.Root).Bytes()
 		if bytes.Compare(a, b) != 0 {
 			t.Errorf("%-10s: %x %x", test.Name, a, b)
 		}
@@ -267,12 +268,12 @@ func TestTrieReplay(t *testing.T) {
 		}
 
 		_, trie2 := New()
-		trie.NewIterator().Each(func(key string, v *Value) {
+		trie.NewIterator().Each(func(key string, v *ethutil.Value) {
 			trie2.Update(key, v.Str())
 		})
 
-		a := NewValue(trie.Root).Bytes()
-		b := NewValue(trie2.Root).Bytes()
+		a := ethutil.NewValue(trie.Root).Bytes()
+		b := ethutil.NewValue(trie2.Root).Bytes()
 		if bytes.Compare(a, b) != 0 {
 			t.Errorf("%s %x %x\n", test.Name, trie.Root, trie2.Root)
 		}
@@ -328,4 +329,39 @@ func TestRegression(t *testing.T) {
 			t.Errorf("%x => %d\n", root, num)
 		}
 	}
+}
+
+func TestDelete(t *testing.T) {
+	_, trie := New()
+
+	trie.Update("a", "jeffreytestlongstring")
+	trie.Update("aa", "otherstring")
+	trie.Update("aaa", "othermorestring")
+	trie.Update("aabbbbccc", "hithere")
+	trie.Update("abbcccdd", "hstanoehutnaheoustnh")
+	trie.Update("rnthaoeuabbcccdd", "hstanoehutnaheoustnh")
+	trie.Update("rneuabbcccdd", "hstanoehutnaheoustnh")
+	trie.Update("rneuabboeusntahoeucccdd", "hstanoehutnaheoustnh")
+	trie.Update("rnxabboeusntahoeucccdd", "hstanoehutnaheoustnh")
+	trie.Delete("aaboaestnuhbccc")
+	trie.Delete("a")
+	trie.Update("a", "nthaonethaosentuh")
+	trie.Update("c", "shtaosntehua")
+	trie.Delete("a")
+	trie.Update("aaaa", "testmegood")
+
+	fmt.Println("aa =>", trie.Get("aa"))
+	_, t2 := New()
+	trie.NewIterator().Each(func(key string, v *ethutil.Value) {
+		if key == "aaaa" {
+			t2.Update(key, v.Str())
+		} else {
+			t2.Update(key, v.Str())
+		}
+	})
+
+	a := ethutil.NewValue(trie.Root).Bytes()
+	b := ethutil.NewValue(t2.Root).Bytes()
+
+	fmt.Printf("o: %x\nc: %x\n", a, b)
 }
