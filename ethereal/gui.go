@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethpub"
+	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
 	"github.com/ethereum/go-ethereum/utils"
@@ -143,7 +144,7 @@ func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
 	gui.readPreviousTransactions()
 	gui.setPeerInfo()
 
-	go gui.update()
+	gui.update()
 
 	return win, nil
 }
@@ -266,11 +267,67 @@ func (gui *Gui) setWalletValue(amount, unconfirmedFunds *big.Int) {
 func (gui *Gui) update() {
 	reactor := gui.eth.Reactor()
 
-	blockChan := make(chan ethutil.React, 1)
-	txChan := make(chan ethutil.React, 1)
-	objectChan := make(chan ethutil.React, 1)
-	peerChan := make(chan ethutil.React, 1)
+	blockChan := make(chan ethreact.Event, 1)
+	txChan := make(chan ethreact.Event, 1)
+	objectChan := make(chan ethreact.Event, 1)
+	peerChan := make(chan ethreact.Event, 1)
+	ticker := time.NewTicker(5 * time.Second)
 
+	state := gui.eth.StateManager().TransState()
+
+	unconfirmedFunds := new(big.Int)
+	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetAccount(gui.address()).Amount)))
+
+	go func() {
+		for {
+			select {
+			case b := <-blockChan:
+				block := b.Resource.(*ethchain.Block)
+				gui.processBlock(block, false)
+				if bytes.Compare(block.Coinbase, gui.address()) == 0 {
+					gui.setWalletValue(gui.eth.StateManager().CurrentState().GetAccount(gui.address()).Amount, nil)
+				}
+
+			case txMsg := <-txChan:
+				tx := txMsg.Resource.(*ethchain.Transaction)
+
+				if txMsg.Name == "newTx:pre" {
+					object := state.GetAccount(gui.address())
+
+					if bytes.Compare(tx.Sender(), gui.address()) == 0 {
+						gui.win.Root().Call("addTx", ethpub.NewPTx(tx), "send")
+						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
+
+						unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
+					} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
+						gui.win.Root().Call("addTx", ethpub.NewPTx(tx), "recv")
+						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
+
+						unconfirmedFunds.Add(unconfirmedFunds, tx.Value)
+					}
+
+					gui.setWalletValue(object.Amount, unconfirmedFunds)
+				} else {
+					object := state.GetAccount(gui.address())
+					if bytes.Compare(tx.Sender(), gui.address()) == 0 {
+						object.SubAmount(tx.Value)
+					} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
+						object.AddAmount(tx.Value)
+					}
+
+					gui.setWalletValue(object.Amount, nil)
+
+					state.UpdateStateObject(object)
+				}
+			case <-objectChan:
+				gui.loadAddressBook()
+			case <-peerChan:
+				gui.setPeerInfo()
+			case <-ticker.C:
+				gui.setPeerInfo()
+			}
+		}
+	}()
 	reactor.Subscribe("newBlock", blockChan)
 	reactor.Subscribe("newTx:pre", txChan)
 	reactor.Subscribe("newTx:post", txChan)
@@ -280,62 +337,6 @@ func (gui *Gui) update() {
 		reactor.Subscribe("object:"+string(nameReg.Address()), objectChan)
 	}
 	reactor.Subscribe("peerList", peerChan)
-
-	ticker := time.NewTicker(5 * time.Second)
-
-	state := gui.eth.StateManager().TransState()
-
-	unconfirmedFunds := new(big.Int)
-	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetAccount(gui.address()).Amount)))
-
-	for {
-		select {
-		case b := <-blockChan:
-			block := b.Resource.(*ethchain.Block)
-			gui.processBlock(block, false)
-			if bytes.Compare(block.Coinbase, gui.address()) == 0 {
-				gui.setWalletValue(gui.eth.StateManager().CurrentState().GetAccount(gui.address()).Amount, nil)
-			}
-
-		case txMsg := <-txChan:
-			tx := txMsg.Resource.(*ethchain.Transaction)
-
-			if txMsg.Event == "newTx:pre" {
-				object := state.GetAccount(gui.address())
-
-				if bytes.Compare(tx.Sender(), gui.address()) == 0 {
-					gui.win.Root().Call("addTx", ethpub.NewPTx(tx), "send")
-					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-
-					unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
-				} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
-					gui.win.Root().Call("addTx", ethpub.NewPTx(tx), "recv")
-					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-
-					unconfirmedFunds.Add(unconfirmedFunds, tx.Value)
-				}
-
-				gui.setWalletValue(object.Amount, unconfirmedFunds)
-			} else {
-				object := state.GetAccount(gui.address())
-				if bytes.Compare(tx.Sender(), gui.address()) == 0 {
-					object.SubAmount(tx.Value)
-				} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
-					object.AddAmount(tx.Value)
-				}
-
-				gui.setWalletValue(object.Amount, nil)
-
-				state.UpdateStateObject(object)
-			}
-		case <-objectChan:
-			gui.loadAddressBook()
-		case <-peerChan:
-			gui.setPeerInfo()
-		case <-ticker.C:
-			gui.setPeerInfo()
-		}
-	}
 }
 
 func (gui *Gui) setPeerInfo() {
