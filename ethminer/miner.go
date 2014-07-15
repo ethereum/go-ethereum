@@ -25,30 +25,10 @@ type Miner struct {
 }
 
 func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) Miner {
-	reactChan := make(chan ethreact.Event, 1)   // This is the channel that receives 'updates' when ever a new transaction or block comes in
-	powChan := make(chan []byte, 1)             // This is the channel that receives valid sha hases for a given block
-	powQuitChan := make(chan ethreact.Event, 1) // This is the channel that can exit the miner thread
-	quitChan := make(chan bool, 1)
-
-	ethereum.Reactor().Subscribe("newBlock", reactChan)
-	ethereum.Reactor().Subscribe("newTx:pre", reactChan)
-
-	// We need the quit chan to be a Reactor event.
-	// The POW search method is actually blocking and if we don't
-	// listen to the reactor events inside of the pow itself
-	// The miner overseer will never get the reactor events themselves
-	// Only after the miner will find the sha
-	ethereum.Reactor().Subscribe("newBlock", powQuitChan)
-	ethereum.Reactor().Subscribe("newTx:pre", powQuitChan)
-
 	miner := Miner{
-		pow:         &ethchain.EasyPow{},
-		ethereum:    ethereum,
-		coinbase:    coinbase,
-		reactChan:   reactChan,
-		powChan:     powChan,
-		powQuitChan: powQuitChan,
-		quitChan:    quitChan,
+		pow:      &ethchain.EasyPow{},
+		ethereum: ethereum,
+		coinbase: coinbase,
 	}
 
 	// Insert initial TXs in our little miner 'pool'
@@ -59,9 +39,27 @@ func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) Miner {
 }
 
 func (miner *Miner) Start() {
+	miner.reactChan = make(chan ethreact.Event, 1)   // This is the channel that receives 'updates' when ever a new transaction or block comes in
+	miner.powChan = make(chan []byte, 1)             // This is the channel that receives valid sha hashes for a given block
+	miner.powQuitChan = make(chan ethreact.Event, 1) // This is the channel that can exit the miner thread
+	miner.quitChan = make(chan bool, 1)
+
 	// Prepare inital block
 	//miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
 	go miner.listener()
+
+	reactor := miner.ethereum.Reactor()
+	reactor.Subscribe("newBlock", miner.reactChan)
+	reactor.Subscribe("newTx:pre", miner.reactChan)
+
+	// We need the quit chan to be a Reactor event.
+	// The POW search method is actually blocking and if we don't
+	// listen to the reactor events inside of the pow itself
+	// The miner overseer will never get the reactor events themselves
+	// Only after the miner will find the sha
+	reactor.Subscribe("newBlock", miner.powQuitChan)
+	reactor.Subscribe("newTx:pre", miner.powQuitChan)
+
 	logger.Infoln("Started")
 }
 
@@ -127,12 +125,18 @@ out:
 	}
 }
 
-func (self *Miner) Stop() {
+func (miner *Miner) Stop() {
 	logger.Infoln("Stopping...")
-	self.quitChan <- true
+	miner.quitChan <- true
 
-	close(self.powQuitChan)
-	close(self.quitChan)
+	reactor := miner.ethereum.Reactor()
+	reactor.Unsubscribe("newBlock", miner.powQuitChan)
+	reactor.Unsubscribe("newTx:pre", miner.powQuitChan)
+	reactor.Unsubscribe("newBlock", miner.reactChan)
+	reactor.Unsubscribe("newTx:pre", miner.reactChan)
+
+	close(miner.powQuitChan)
+	close(miner.quitChan)
 }
 
 func (self *Miner) mineNewBlock() {
