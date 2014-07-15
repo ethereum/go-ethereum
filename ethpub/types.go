@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethcrypto"
+	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
 	"strings"
 )
@@ -210,6 +211,10 @@ func (c *PStateObject) IsContract() bool {
 	}
 
 	return false
+}
+
+func (self *PStateObject) EachStorage(cb ethtrie.EachCallback) {
+	self.object.State().EachStorage(cb)
 }
 
 type KeyVal struct {
