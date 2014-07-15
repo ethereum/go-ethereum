@@ -155,6 +155,15 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		// XXX Leave this Println intact. Don't change this to the log system.
 		// Used for creating diffs between implementations
 		if vm.logTy == LogTyDiff {
+			switch op {
+			case STOP, RETURN, SUICIDE:
+				closure.object.Sync()
+				closure.object.state.EachStorage(func(key string, value *ethutil.Value) {
+					value.Decode()
+					fmt.Printf("%x %x\n", new(big.Int).SetBytes([]byte(key)).Bytes(), value.Bytes())
+				})
+			}
+
 			b := pc.Bytes()
 			if len(b) == 0 {
 				b = []byte{0}
@@ -184,7 +193,6 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			var mult *big.Int
 			y, x := stack.Peekn()
 			val := closure.GetStorage(x)
-			//if val.IsEmpty() && len(y.Bytes()) > 0 {
 			if val.BigInt().Cmp(ethutil.Big0) == 0 && len(y.Bytes()) > 0 {
 				mult = ethutil.Big2
 			} else if !val.IsEmpty() && len(y.Bytes()) == 0 {

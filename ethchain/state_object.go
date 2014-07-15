@@ -143,6 +143,7 @@ func (self *StateObject) getStorage(k []byte) *ethutil.Value {
 
 func (self *StateObject) setStorage(k []byte, value *ethutil.Value) {
 	key := ethutil.LeftPadBytes(k, 32)
+	//fmt.Printf("%x %v\n", key, value)
 	self.storage[string(key)] = value.Copy()
 }
 
@@ -158,9 +159,9 @@ func (self *StateObject) Sync() {
 
 	valid, t2 := ethtrie.ParanoiaCheck(self.state.trie)
 	if !valid {
-		self.state.trie = t2
+		statelogger.Infof("Warn: PARANOIA: Different state storage root during copy %x vs %x\n", self.state.trie.Root, t2.Root)
 
-		statelogger.Infoln("Warn: PARANOIA: Different state storage root during copy")
+		self.state.trie = t2
 	}
 }
 
