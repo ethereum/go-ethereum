@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethwire"
 	"sort"
 )
@@ -15,19 +15,19 @@ type Miner struct {
 	pow         ethchain.PoW
 	ethereum    ethchain.EthManager
 	coinbase    []byte
-	reactChan   chan ethutil.React
+	reactChan   chan ethreact.Event
 	txs         ethchain.Transactions
 	uncles      []*ethchain.Block
 	block       *ethchain.Block
 	powChan     chan []byte
-	powQuitChan chan ethutil.React
+	powQuitChan chan ethreact.Event
 	quitChan    chan bool
 }
 
 func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) Miner {
-	reactChan := make(chan ethutil.React, 1)   // This is the channel that receives 'updates' when ever a new transaction or block comes in
-	powChan := make(chan []byte, 1)            // This is the channel that receives valid sha hases for a given block
-	powQuitChan := make(chan ethutil.React, 1) // This is the channel that can exit the miner thread
+	reactChan := make(chan ethreact.Event, 1)   // This is the channel that receives 'updates' when ever a new transaction or block comes in
+	powChan := make(chan []byte, 1)             // This is the channel that receives valid sha hases for a given block
+	powQuitChan := make(chan ethreact.Event, 1) // This is the channel that can exit the miner thread
 	quitChan := make(chan bool, 1)
 
 	ethereum.Reactor().Subscribe("newBlock", reactChan)
