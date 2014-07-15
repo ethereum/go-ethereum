@@ -29,6 +29,7 @@ func main() {
 
 	utils.InitConfig(ConfigFile, Datadir, "ETH")
 	ethutil.Config.Diff = DiffTool
+	ethutil.Config.DiffType = DiffType
 
 	utils.InitDataDir(Datadir)
 

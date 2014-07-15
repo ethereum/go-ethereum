@@ -2,13 +2,14 @@ package main
 
 import (
 	"github.com/ethereum/eth-go"
+	"github.com/ethereum/go-ethereum/ethereum/repl"
 	"github.com/ethereum/go-ethereum/utils"
 	"io/ioutil"
 	"os"
 )
 
 func InitJsConsole(ethereum *eth.Ethereum) {
-	repl := NewJSRepl(ethereum)
+	repl := ethrepl.NewJSRepl(ethereum)
 	go repl.Start()
 	utils.RegisterInterrupt(func(os.Signal) {
 		repl.Stop()
@@ -24,7 +25,7 @@ func ExecJsFile(ethereum *eth.Ethereum, InputFile string) {
 	if err != nil {
 		logger.Fatalln(err)
 	}
-	re := NewJSRE(ethereum)
+	re := ethrepl.NewJSRE(ethereum)
 	utils.RegisterInterrupt(func(os.Signal) {
 		re.Stop()
 	})
