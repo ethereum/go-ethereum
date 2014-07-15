@@ -319,7 +319,7 @@ func (p *Peer) HandleInbound() {
 	for atomic.LoadInt32(&p.disconnect) == 0 {
 
 		// HMM?
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 		// Wait for a message from the peer
 		msgs, err := ethwire.ReadMessages(p.conn)
 		if err != nil {
