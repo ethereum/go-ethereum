@@ -149,3 +149,13 @@ func LeftPadBytes(slice []byte, l int) []byte {
 
 	return padded
 }
+
+func Address(slice []byte) []byte {
+	if len(slice) < 20 {
+		slice = LeftPadBytes(slice, 20)
+	} else if len(slice) > 20 {
+		slice = slice[len(slice)-20:]
+	}
+
+	return slice
+}
