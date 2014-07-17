@@ -61,6 +61,7 @@ func (self *State) UpdateStateObject(stateObject *StateObject) {
 	addr := stateObject.Address()
 
 	ethutil.Config.Db.Put(ethcrypto.Sha3Bin(stateObject.Script()), stateObject.Script())
+	fmt.Printf("balance %v %p\n", stateObject.Amount, stateObject)
 
 	self.trie.Update(string(addr), string(stateObject.RlpEncode()))
 
@@ -174,7 +175,7 @@ func (s *State) Reset() {
 func (s *State) Sync() {
 	// Sync all nested states
 	for _, stateObject := range s.stateObjects {
-		s.UpdateStateObject(stateObject)
+		//s.UpdateStateObject(stateObject)
 
 		if stateObject.state == nil {
 			continue

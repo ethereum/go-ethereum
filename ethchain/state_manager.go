@@ -120,7 +120,9 @@ func (self *StateManager) ProcessTransactions(coinbase *StateObject, state *Stat
 done:
 	for i, tx := range txs {
 		txGas := new(big.Int).Set(tx.Gas)
-		st := NewStateTransition(coinbase, tx, state, block)
+
+		cb := state.GetStateObject(coinbase.Address())
+		st := NewStateTransition(cb, tx, state, block)
 		//fmt.Printf("#%d\n", i+1)
 		err = st.TransitionState()
 		if err != nil {

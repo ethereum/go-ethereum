@@ -456,7 +456,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case BYTE:
 			require(2)
 			val, th := stack.Popn()
-			if th.Cmp(big.NewInt(32)) < 0 {
+			if th.Cmp(big.NewInt(32)) < 0 && th.Cmp(big.NewInt(int64(len(val.Bytes())))) < 0 {
 				byt := big.NewInt(int64(val.Bytes()[th.Int64()]))
 				stack.Push(byt)
 

@@ -80,6 +80,7 @@ func NewStateObject(addr []byte) *StateObject {
 	object := &StateObject{address: address, Amount: new(big.Int), gasPool: new(big.Int)}
 	object.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, ""))
 	object.storage = make(Storage)
+	object.gasPool = new(big.Int)
 
 	return object
 }
@@ -183,7 +184,7 @@ func (self *StateObject) Sync() {
 			fmt.Printf("%x %x %x\n", self.Address(), []byte(key), value.Bytes())
 		})
 	*/
-	//fmt.Printf("%x @:%x\n", self.Address(), self.state.Root())
+	fmt.Printf("%x @:%x\n", self.Address(), self.state.Root())
 }
 
 func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
@@ -197,13 +198,13 @@ func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
 func (c *StateObject) AddAmount(amount *big.Int) {
 	c.SetAmount(new(big.Int).Add(c.Amount, amount))
 
-	statelogger.DebugDetailf("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce, c.Amount, amount)
+	statelogger.Debugf("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce, c.Amount, amount)
 }
 
 func (c *StateObject) SubAmount(amount *big.Int) {
 	c.SetAmount(new(big.Int).Sub(c.Amount, amount))
 
-	statelogger.DebugDetailf("%x: #%d %v (- %v)\n", c.Address(), c.Nonce, c.Amount, amount)
+	statelogger.Debugf("%x: #%d %v (- %v)\n", c.Address(), c.Nonce, c.Amount, amount)
 }
 
 func (c *StateObject) SetAmount(amount *big.Int) {
@@ -266,6 +267,7 @@ func (self *StateObject) Copy() *StateObject {
 	stateObject.script = ethutil.CopyBytes(self.script)
 	stateObject.initScript = ethutil.CopyBytes(self.initScript)
 	stateObject.storage = self.storage.Copy()
+	stateObject.gasPool.Set(self.gasPool)
 
 	return stateObject
 }
@@ -324,6 +326,7 @@ func (c *StateObject) RlpDecode(data []byte) {
 	c.Amount = decoder.Get(1).BigInt()
 	c.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, decoder.Get(2).Interface()))
 	c.storage = make(map[string]*ethutil.Value)
+	c.gasPool = new(big.Int)
 
 	c.ScriptHash = decoder.Get(3).Bytes()
 
