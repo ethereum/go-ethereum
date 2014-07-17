@@ -61,7 +61,6 @@ func (self *State) UpdateStateObject(stateObject *StateObject) {
 	addr := stateObject.Address()
 
 	ethutil.Config.Db.Put(ethcrypto.Sha3Bin(stateObject.Script()), stateObject.Script())
-	fmt.Printf("balance %v %p\n", stateObject.Amount, stateObject)
 
 	self.trie.Update(string(addr), string(stateObject.RlpEncode()))
 
