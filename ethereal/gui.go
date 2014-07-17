@@ -356,7 +356,7 @@ func (gui *Gui) address() []byte {
 }
 
 func (gui *Gui) RegisterName(name string) {
-	name = fmt.Sprintf("\"%s\"", name)
+	name = fmt.Sprintf("\"register\"\n\"%s\"", name)
 
 	gui.pub.Transact(gui.privateKey(), "NameReg", "", "10000", "10000000000000", name)
 }
