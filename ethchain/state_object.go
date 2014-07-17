@@ -184,7 +184,7 @@ func (self *StateObject) Sync() {
 			fmt.Printf("%x %x %x\n", self.Address(), []byte(key), value.Bytes())
 		})
 	*/
-	fmt.Printf("%x @:%x\n", self.Address(), self.state.Root())
+	//fmt.Printf("%x @:%x\n", self.Address(), self.state.Root())
 }
 
 func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
