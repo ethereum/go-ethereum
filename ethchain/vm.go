@@ -195,7 +195,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			val := closure.GetStorage(x)
 			if val.BigInt().Cmp(ethutil.Big0) == 0 && len(y.Bytes()) > 0 {
 				mult = ethutil.Big2
-			} else if !val.IsEmpty() && len(y.Bytes()) == 0 {
+			} else if val.BigInt().Cmp(ethutil.Big0) != 0 && len(y.Bytes()) == 0 {
 				mult = ethutil.Big0
 			} else {
 				mult = ethutil.Big1

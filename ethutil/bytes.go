@@ -150,12 +150,16 @@ func LeftPadBytes(slice []byte, l int) []byte {
 	return padded
 }
 
-func Address(slice []byte) []byte {
+func Address(slice []byte) (addr []byte) {
 	if len(slice) < 20 {
-		slice = LeftPadBytes(slice, 20)
+		addr = LeftPadBytes(slice, 20)
 	} else if len(slice) > 20 {
-		slice = slice[len(slice)-20:]
+		addr = slice[len(slice)-20:]
+	} else {
+		addr = slice
 	}
 
-	return slice
+	addr = CopyBytes(addr)
+
+	return
 }

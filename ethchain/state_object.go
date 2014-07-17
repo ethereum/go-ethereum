@@ -75,7 +75,7 @@ func MakeContract(tx *Transaction, state *State) *StateObject {
 
 func NewStateObject(addr []byte) *StateObject {
 	// This to ensure that it has 20 bytes (and not 0 bytes), thus left or right pad doesn't matter.
-	address := ethutil.LeftPadBytes(addr, 20)
+	address := ethutil.Address(addr)
 
 	object := &StateObject{address: address, Amount: new(big.Int), gasPool: new(big.Int)}
 	object.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, ""))
@@ -90,13 +90,6 @@ func NewContract(address []byte, Amount *big.Int, root []byte) *StateObject {
 	contract.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, string(root)))
 
 	return contract
-}
-
-// Returns a newly created account
-func NewAccount(address []byte, amount *big.Int) *StateObject {
-	account := &StateObject{address: address, Amount: amount, Nonce: 0}
-
-	return account
 }
 
 func NewStateObjectFromBytes(address, data []byte) *StateObject {
@@ -139,17 +132,37 @@ func (self *StateObject) getStorage(k []byte) *ethutil.Value {
 	}
 
 	return value
+
+	//return self.GetAddr(key)
 }
 
 func (self *StateObject) setStorage(k []byte, value *ethutil.Value) {
 	key := ethutil.LeftPadBytes(k, 32)
-	//fmt.Printf("%x %v\n", key, value)
 	self.storage[string(key)] = value.Copy()
+
+	/*
+		if value.BigInt().Cmp(ethutil.Big0) == 0 {
+			self.state.trie.Delete(string(key))
+			return
+		}
+
+		self.SetAddr(key, value)
+	*/
 }
 
 func (self *StateObject) Sync() {
+	/*
+		fmt.Println("############# BEFORE ################")
+		self.state.EachStorage(func(key string, value *ethutil.Value) {
+			fmt.Printf("%x %x %x\n", self.Address(), []byte(key), value.Bytes())
+		})
+		fmt.Printf("%x @:%x\n", self.Address(), self.state.Root())
+		fmt.Println("#####################################")
+	*/
 	for key, value := range self.storage {
-		if value.BigInt().Cmp(ethutil.Big0) == 0 {
+		if value.Len() == 0 { // value.BigInt().Cmp(ethutil.Big0) == 0 {
+			//data := self.getStorage([]byte(key))
+			//fmt.Printf("deleting %x %x 0x%x\n", self.Address(), []byte(key), data)
 			self.state.trie.Delete(string(key))
 			continue
 		}
@@ -163,6 +176,14 @@ func (self *StateObject) Sync() {
 
 		self.state.trie = t2
 	}
+
+	/*
+		fmt.Println("############# AFTER ################")
+		self.state.EachStorage(func(key string, value *ethutil.Value) {
+			fmt.Printf("%x %x %x\n", self.Address(), []byte(key), value.Bytes())
+		})
+	*/
+	//fmt.Printf("%x @:%x\n", self.Address(), self.state.Root())
 }
 
 func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {

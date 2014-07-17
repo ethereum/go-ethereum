@@ -121,6 +121,7 @@ done:
 	for i, tx := range txs {
 		txGas := new(big.Int).Set(tx.Gas)
 		st := NewStateTransition(coinbase, tx, state, block)
+		//fmt.Printf("#%d\n", i+1)
 		err = st.TransitionState()
 		if err != nil {
 			switch {

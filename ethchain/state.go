@@ -76,6 +76,8 @@ func (self *State) DeleteStateObject(stateObject *StateObject) {
 
 // Retrieve a state object given my the address. Nil if not found
 func (self *State) GetStateObject(addr []byte) *StateObject {
+	addr = ethutil.Address(addr)
+
 	stateObject := self.stateObjects[string(addr)]
 	if stateObject != nil {
 		return stateObject
@@ -204,6 +206,8 @@ func (self *State) Update() {
 	// FIXME trie delete is broken
 	valid, t2 := ethtrie.ParanoiaCheck(self.trie)
 	if !valid {
+		statelogger.Infof("Warn: PARANOIA: Different state root during copy %x vs %x\n", self.trie.Root, t2.Root)
+
 		self.trie = t2
 	}
 }

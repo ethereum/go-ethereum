@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethutil"
-	"reflect"
+	_ "reflect"
 	"sync"
 )
 
@@ -326,7 +326,8 @@ func (t *Trie) InsertState(node interface{}, key []int, value interface{}) inter
 
 	// New node
 	n := ethutil.NewValue(node)
-	if node == nil || (n.Type() == reflect.String && (n.Str() == "" || n.Get(0).IsNil())) || n.Len() == 0 {
+	if node == nil || n.Len() == 0 {
+		//if node == nil || (n.Type() == reflect.String && (n.Str() == "" || n.Get(0).IsNil())) || n.Len() == 0 {
 		newNode := []interface{}{CompactEncode(key), value}
 
 		return t.Put(newNode)
@@ -393,13 +394,17 @@ func (t *Trie) InsertState(node interface{}, key []int, value interface{}) inter
 
 func (t *Trie) deleteState(node interface{}, key []int) interface{} {
 	if len(key) == 0 {
+		println("<empty ret>")
 		return ""
 	}
 
 	// New node
 	n := ethutil.NewValue(node)
-	if node == nil || (n.Type() == reflect.String && (n.Str() == "" || n.Get(0).IsNil())) || n.Len() == 0 {
+	//if node == nil || (n.Type() == reflect.String && (n.Str() == "" || n.Get(0).IsNil())) || n.Len() == 0 {
+	if node == nil || n.Len() == 0 {
 		//return nil
+		//fmt.Printf("<empty ret> %x %d\n", n, len(n.Bytes()))
+
 		return ""
 	}
 
@@ -410,17 +415,19 @@ func (t *Trie) deleteState(node interface{}, key []int) interface{} {
 		k := CompactDecode(currentNode.Get(0).Str())
 		v := currentNode.Get(1).Raw()
 
-		matchingLength := MatchingNibbleLength(key, k)
-
 		// Matching key pair (ie. there's already an object with this key)
 		if CompareIntSlice(k, key) {
+			//fmt.Printf("<delete ret> %x\n", v)
+
 			return ""
-		} else if CompareIntSlice(key[:matchingLength], k) {
+		} else if CompareIntSlice(key[:len(k)], k) {
 			hash := t.deleteState(v, key[len(k):])
 			child := t.getNode(hash)
-			if child.IsNil() {
-				return node
-			}
+			/*
+				if child.IsNil() {
+					return node
+				}
+			*/
 
 			var newNode []interface{}
 			if child.Len() == 2 {
@@ -429,6 +436,8 @@ func (t *Trie) deleteState(node interface{}, key []int) interface{} {
 			} else {
 				newNode = []interface{}{currentNode.Get(0).Str(), hash}
 			}
+
+			//fmt.Printf("%x\n", newNode)
 
 			return t.Put(newNode)
 		} else {
@@ -472,10 +481,11 @@ func (t *Trie) deleteState(node interface{}, key []int) interface{} {
 			newNode = n
 		}
 
+		//fmt.Printf("%x\n", newNode)
 		return t.Put(newNode)
 	}
 
-	return ""
+	panic("unexpected return")
 }
 
 type TrieIterator struct {
