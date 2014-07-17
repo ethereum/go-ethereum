@@ -419,6 +419,17 @@ ApplicationWindow {
 			}
 		}
 
+        ProgressBar {
+            id: syncProgressIndicator
+            visible: false
+            objectName: "syncProgressIndicator"
+            y: 3
+            width: 140
+            indeterminate: true
+            anchors.right: peerLabel.left
+            anchors.rightMargin: 5
+        }
+
 		Label {
 			y: 7
 			anchors.right: peerImage.left
@@ -443,6 +454,7 @@ ApplicationWindow {
 	Window {
 		id: popup
 		visible: false
+        flags: Qt.CustomizeWindowHint | Qt.Tool | Qt.WindowCloseButtonHint
 		property var block
 		width: root.width
 		height: 300
@@ -577,6 +589,7 @@ ApplicationWindow {
 
 	Window {
 		id: addPeerWin
+        flags: Qt.CustomizeWindowHint | Qt.Tool | Qt.WindowCloseButtonHint
 		visible: false
 		minimumWidth: 230
 		maximumWidth: 230
@@ -743,6 +756,7 @@ ApplicationWindow {
 	// ******************************************
 	Window {
 		id: peerWindow
+        flags: Qt.CustomizeWindowHint | Qt.Tool | Qt.WindowCloseButtonHint
 		height: 200
 		width: 700
 		Rectangle {

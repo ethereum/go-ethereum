@@ -266,14 +266,18 @@ func (gui *Gui) setWalletValue(amount, unconfirmedFunds *big.Int) {
 func (gui *Gui) update() {
 	reactor := gui.eth.Reactor()
 
-	blockChan := make(chan ethutil.React, 1)
-	txChan := make(chan ethutil.React, 1)
-	objectChan := make(chan ethutil.React, 1)
-	peerChan := make(chan ethutil.React, 1)
+	var (
+		blockChan     = make(chan ethutil.React, 1)
+		txChan        = make(chan ethutil.React, 1)
+		objectChan    = make(chan ethutil.React, 1)
+		peerChan      = make(chan ethutil.React, 1)
+		chainSyncChan = make(chan ethutil.React, 1)
+	)
 
 	reactor.Subscribe("newBlock", blockChan)
 	reactor.Subscribe("newTx:pre", txChan)
 	reactor.Subscribe("newTx:post", txChan)
+	reactor.Subscribe("chainSync", chainSyncChan)
 
 	nameReg := ethpub.EthereumConfig(gui.eth.StateManager()).NameReg()
 	if nameReg != nil {
@@ -287,6 +291,7 @@ func (gui *Gui) update() {
 
 	unconfirmedFunds := new(big.Int)
 	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetAccount(gui.address()).Amount)))
+	gui.win.Root().ObjectByName("syncProgressIndicator").Set("visible", !gui.eth.IsUpToDate())
 
 	for {
 		select {
@@ -328,6 +333,10 @@ func (gui *Gui) update() {
 
 				state.UpdateStateObject(object)
 			}
+		case msg := <-chainSyncChan:
+			sync := msg.Resource.(bool)
+			gui.win.Root().ObjectByName("syncProgressIndicator").Set("visible", sync)
+
 		case <-objectChan:
 			gui.loadAddressBook()
 		case <-peerChan:
