@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/utils"
 	"runtime"
 )
@@ -20,7 +21,15 @@ func main() {
 
 	// precedence: code-internal flag default < config file < environment variables < command line
 	Init() // parsing command line
+
+	// If the difftool option is selected ignore all other log output
+	if DiffTool {
+		LogLevel = 0
+	}
+
 	utils.InitConfig(ConfigFile, Datadir, "ETH")
+	ethutil.Config.Diff = DiffTool
+	ethutil.Config.DiffType = DiffType
 
 	utils.InitDataDir(Datadir)
 

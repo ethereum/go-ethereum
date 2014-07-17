@@ -19,7 +19,7 @@ ApplicationWindow {
 	property alias dataText: rawDataField.text
 
 	onClosing: {
-		compileTimer.stop()
+		//compileTimer.stop()
 	}
 
 	MenuBar {
@@ -86,7 +86,7 @@ ApplicationWindow {
 		TableView {
 			id: asmTableView
 			width: 200
-			TableViewColumn{ role: "value" ; title: "" ; width: 200 }
+			TableViewColumn{ role: "value" ; title: "" ; width: asmTableView.width - 2 }
 			model: asmModel
 		}
 
@@ -112,13 +112,15 @@ ApplicationWindow {
 						anchors.right: settings.left
 						focus: true
 
+						/*
 						Timer {
 							id: compileTimer
 							interval: 500 ; running: true ;  repeat: true
 							onTriggered: {
-								dbg.compile(codeEditor.text)
+								dbg.autoComp(codeEditor.text)
 							}
 						}
+						*/
 					}
 
 					Column {

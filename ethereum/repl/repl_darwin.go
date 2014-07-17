@@ -1,4 +1,4 @@
-package main
+package ethrepl
 
 // #cgo darwin CFLAGS: -I/usr/local/opt/readline/include
 // #cgo darwin LDFLAGS: -L/usr/local/opt/readline/lib

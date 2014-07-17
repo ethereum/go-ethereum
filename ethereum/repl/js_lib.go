@@ -1,4 +1,4 @@
-package main
+package ethrepl
 
 const jsLib = `
 function pp(object) {

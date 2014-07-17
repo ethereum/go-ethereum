@@ -8,7 +8,6 @@ import (
 	"github.com/go-qml/qml"
 	"github.com/howeyc/fsnotify"
 	"io/ioutil"
-	"log"
 	"net/url"
 	"os"
 	"path"
@@ -59,7 +58,7 @@ func (app *HtmlApplication) RootFolder() string {
 	if err != nil {
 		return ""
 	}
-	return path.Dir(folder.RequestURI())
+	return path.Dir(ethutil.WindonizePath(folder.RequestURI()))
 }
 func (app *HtmlApplication) RecursiveFolders() []os.FileInfo {
 	files, _ := ioutil.ReadDir(app.RootFolder())
@@ -77,11 +76,13 @@ func (app *HtmlApplication) NewWatcher(quitChan chan bool) {
 
 	app.watcher, err = fsnotify.NewWatcher()
 	if err != nil {
+		logger.Infoln("Could not create new auto-reload watcher:", err)
 		return
 	}
 	err = app.watcher.Watch(app.RootFolder())
 	if err != nil {
-		log.Fatal(err)
+		logger.Infoln("Could not start auto-reload watcher:", err)
+		return
 	}
 	for _, folder := range app.RecursiveFolders() {
 		fullPath := app.RootFolder() + "/" + folder.Name()

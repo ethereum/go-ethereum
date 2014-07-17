@@ -191,6 +191,7 @@ ApplicationWindow {
 						inspector.visible = false
 					}else{
 						inspector.visible = true
+            inspector.url = webview.experimental.remoteInspectorUrl
 					}
 				}
 				onDoubleClicked: {
@@ -224,7 +225,6 @@ ApplicationWindow {
 		WebView {
 			id: inspector
 			visible: false
-			url: webview.experimental.remoteInspectorUrl
 			anchors {
 				left: root.left
 				right: root.right
@@ -238,7 +238,6 @@ ApplicationWindow {
 				name: "inspectorShown"
 				PropertyChanges {
 					target: inspector
-					url: webview.experimental.remoteInspectorUrl
 				}
 			}
 		]
