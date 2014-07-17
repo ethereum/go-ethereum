@@ -243,7 +243,11 @@ func (gui *Gui) readPreviousTransactions() {
 }
 
 func (gui *Gui) processBlock(block *ethchain.Block, initial bool) {
-	gui.win.Root().Call("addBlock", ethpub.NewPBlock(block), initial)
+	name := ethpub.FindNameInNameReg(gui.eth.StateManager(), block.Coinbase)
+	b := ethpub.NewPBlock(block)
+	b.Name = name
+
+	gui.win.Root().Call("addBlock", b, initial)
 }
 
 func (gui *Gui) setWalletValue(amount, unconfirmedFunds *big.Int) {
