@@ -10,7 +10,7 @@ import (
 
 const (
 	ClientIdentifier = "Ethereal"
-	Version          = "0.5.16"
+	Version          = "0.5.17"
 )
 
 func main() {

@@ -5,7 +5,7 @@ Ethereum
 
 Ethereum Go Client © 2014 Jeffrey Wilcke.
 
-Current state: Proof of Concept 0.5.16.
+Current state: Proof of Concept 0.5.17.
 
 For the development package please see the [eth-go package](https://github.com/ethereum/eth-go).
 
