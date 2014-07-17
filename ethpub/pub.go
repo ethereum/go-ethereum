@@ -179,6 +179,19 @@ func FindAddressInNameReg(stateManager *ethchain.StateManager, name string) []by
 	return nil
 }
 
+func FindNameInNameReg(stateManager *ethchain.StateManager, addr []byte) string {
+	nameReg := EthereumConfig(stateManager).NameReg()
+	if nameReg != nil {
+		addr = ethutil.LeftPadBytes(addr, 32)
+
+		reg := nameReg.GetStorage(ethutil.BigD(addr))
+
+		return strings.TrimRight(reg.Str(), "\x00")
+	}
+
+	return ""
+}
+
 func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, scriptStr string) (*PReceipt, error) {
 	var hash []byte
 	var contractCreation bool

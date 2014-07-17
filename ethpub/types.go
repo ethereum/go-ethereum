@@ -47,6 +47,7 @@ type PBlock struct {
 	Transactions string `json:"transactions"`
 	Time         int64  `json:"time"`
 	Coinbase     string `json:"coinbase"`
+	Name         string `json:"name"`
 	GasLimit     string `json:"gasLimit"`
 	GasUsed      string `json:"gasUsed"`
 }
