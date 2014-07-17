@@ -472,7 +472,7 @@ ApplicationWindow {
 					Text { text: '<h3>Block details</h3>'; color: "#F2F2F2"}
 					Text { text: '<b>Block number:</b> ' + number; color: "#F2F2F2"}
 					Text { text: '<b>Hash:</b> ' + hash; color: "#F2F2F2"}
-					Text { text: '<b>Coinbase:</b> <' + name + '> ' + coinbase; color: "#F2F2F2"}
+					Text { text: '<b>Coinbase:</b> &lt;' + name + '&gt; ' + coinbase; color: "#F2F2F2"}
 					Text { text: '<b>Block found at:</b> ' + prettyTime; color: "#F2F2F2"}
 					Text { text: '<b>Gas used:</b> ' + gasUsed + " / " + gasLimit; color: "#F2F2F2"}
 				}
