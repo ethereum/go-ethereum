@@ -266,6 +266,10 @@ func (gui *Gui) setWalletValue(amount, unconfirmedFunds *big.Int) {
 	gui.win.Root().Call("setWalletValue", str)
 }
 
+func (self *Gui) getObjectByName(objectName string) qml.Object {
+	return self.win.Root().ObjectByName(objectName)
+}
+
 // Simple go routine function that updates the list of peers in the GUI
 func (gui *Gui) update() {
 	reactor := gui.eth.Reactor()
@@ -289,13 +293,16 @@ func (gui *Gui) update() {
 	}
 	reactor.Subscribe("peerList", peerChan)
 
-	ticker := time.NewTicker(5 * time.Second)
+	peerUpdateTicker := time.NewTicker(5 * time.Second)
+	generalUpdateTicker := time.NewTicker(1 * time.Second)
 
 	state := gui.eth.StateManager().TransState()
 
 	unconfirmedFunds := new(big.Int)
 	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetAccount(gui.address()).Amount)))
-	gui.win.Root().ObjectByName("syncProgressIndicator").Set("visible", !gui.eth.IsUpToDate())
+	gui.getObjectByName("syncProgressIndicator").Set("visible", !gui.eth.IsUpToDate())
+
+	lastBlockLabel := gui.getObjectByName("lastBlockLabel")
 
 	for {
 		select {
@@ -345,8 +352,10 @@ func (gui *Gui) update() {
 			gui.loadAddressBook()
 		case <-peerChan:
 			gui.setPeerInfo()
-		case <-ticker.C:
+		case <-peerUpdateTicker.C:
 			gui.setPeerInfo()
+		case <-generalUpdateTicker.C:
+			lastBlockLabel.Set("text", "#"+gui.eth.BlockChain().CurrentBlock.Number.String())
 		}
 	}
 }

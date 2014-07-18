@@ -419,6 +419,17 @@ ApplicationWindow {
 			}
 		}
 
+        Label {
+            y: 6
+            id: lastBlockLabel
+            objectName: "lastBlockLabel"
+            visible: true
+            text: ""
+			font.pixelSize: 10
+            anchors.right: peerGroup.left
+            anchors.rightMargin: 5
+        }
+
         ProgressBar {
             id: syncProgressIndicator
             visible: false
@@ -426,29 +437,30 @@ ApplicationWindow {
             y: 3
             width: 140
             indeterminate: true
-            anchors.right: peerLabel.left
+            anchors.right: peerGroup.left
             anchors.rightMargin: 5
         }
 
-		Label {
-			y: 7
-			anchors.right: peerImage.left
-			anchors.rightMargin: 5
-			id: peerLabel
-			font.pixelSize: 8
-			text: "0 / 0"
-		}
-		Image {
-			y: 7
-			id: peerImage
-			anchors.right: parent.right
-			width: 10; height: 10
-			MouseArea {
-				onDoubleClicked:  peerWindow.visible = true
-				anchors.fill: parent
-			}
-			source: "../network.png"
-		}
+        RowLayout {
+            id: peerGroup
+            y: 7
+            anchors.right: parent.right
+            MouseArea {
+                onDoubleClicked:  peerWindow.visible = true
+                anchors.fill: parent
+            }
+
+            Label {
+                id: peerLabel
+                font.pixelSize: 8
+                text: "0 / 0"
+            }
+            Image {
+                id: peerImage
+                width: 10; height: 10
+                source: "../network.png"
+            }
+        }
 	}
 
 	Window {
