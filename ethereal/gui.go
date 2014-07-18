@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
 	"math/big"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -369,11 +370,14 @@ func (gui *Gui) update() {
 			}
 
 		case <-generalUpdateTicker.C:
+			statusText := "#" + gui.eth.BlockChain().CurrentBlock.Number.String()
 			if gui.miner != nil {
 				pow := gui.miner.GetPow()
-				fmt.Println("HashRate from miner", pow.GetHashrate())
+				if pow.GetHashrate() != 0 {
+					statusText = "Mining @ " + strconv.FormatInt(pow.GetHashrate(), 10) + "Khash - " + statusText
+				}
 			}
-			lastBlockLabel.Set("text", "#"+gui.eth.BlockChain().CurrentBlock.Number.String())
+			lastBlockLabel.Set("text", statusText)
 		}
 	}
 }
