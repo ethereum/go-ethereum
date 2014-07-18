@@ -234,10 +234,10 @@ func StartRpc(ethereum *eth.Ethereum, RpcPort int) {
 	}
 }
 
-var miner ethminer.Miner
+var miner *ethminer.Miner
 
 func GetMiner() *ethminer.Miner {
-	return &miner
+	return miner
 }
 
 func StartMining(ethereum *eth.Ethereum) bool {
@@ -267,7 +267,7 @@ func StartMining(ethereum *eth.Ethereum) bool {
 }
 
 func StopMining(ethereum *eth.Ethereum) bool {
-	if ethereum.Mining {
+	if ethereum.Mining && miner != nil {
 		miner.Stop()
 		logger.Infoln("Miner stopped")
 		ethereum.Mining = false

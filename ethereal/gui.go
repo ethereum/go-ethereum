@@ -270,6 +270,10 @@ func (gui *Gui) setWalletValue(amount, unconfirmedFunds *big.Int) {
 	gui.win.Root().Call("setWalletValue", str)
 }
 
+func (self *Gui) getObjectByName(objectName string) qml.Object {
+	return self.win.Root().ObjectByName(objectName)
+}
+
 // Simple go routine function that updates the list of peers in the GUI
 func (gui *Gui) update() {
 	reactor := gui.eth.Reactor()
@@ -280,12 +284,15 @@ func (gui *Gui) update() {
 		objectChan    = make(chan ethutil.React, 1)
 		peerChan      = make(chan ethutil.React, 1)
 		chainSyncChan = make(chan ethutil.React, 1)
+		miningChan    = make(chan ethutil.React, 1)
 	)
 
 	reactor.Subscribe("newBlock", blockChan)
 	reactor.Subscribe("newTx:pre", txChan)
 	reactor.Subscribe("newTx:post", txChan)
 	reactor.Subscribe("chainSync", chainSyncChan)
+	reactor.Subscribe("miner:start", miningChan)
+	reactor.Subscribe("miner:stop", miningChan)
 
 	nameReg := ethpub.EthereumConfig(gui.eth.StateManager()).NameReg()
 	if nameReg != nil {
@@ -293,13 +300,16 @@ func (gui *Gui) update() {
 	}
 	reactor.Subscribe("peerList", peerChan)
 
-	ticker := time.NewTicker(5 * time.Second)
+	peerUpdateTicker := time.NewTicker(5 * time.Second)
+	generalUpdateTicker := time.NewTicker(1 * time.Second)
 
 	state := gui.eth.StateManager().TransState()
 
 	unconfirmedFunds := new(big.Int)
 	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetAccount(gui.address()).Amount)))
-	gui.win.Root().ObjectByName("syncProgressIndicator").Set("visible", !gui.eth.IsUpToDate())
+	gui.getObjectByName("syncProgressIndicator").Set("visible", !gui.eth.IsUpToDate())
+
+	lastBlockLabel := gui.getObjectByName("lastBlockLabel")
 
 	for {
 		select {
@@ -349,12 +359,21 @@ func (gui *Gui) update() {
 			gui.loadAddressBook()
 		case <-peerChan:
 			gui.setPeerInfo()
-		case <-ticker.C:
+		case <-peerUpdateTicker.C:
+			gui.setPeerInfo()
+		case msg := <-miningChan:
+			if msg.Event == "miner:start" {
+				gui.miner = msg.Resource.(*ethminer.Miner)
+			} else {
+				gui.miner = nil
+			}
+
+		case <-generalUpdateTicker.C:
 			if gui.miner != nil {
 				pow := gui.miner.GetPow()
 				fmt.Println("HashRate from miner", pow.GetHashrate())
 			}
-			gui.setPeerInfo()
+			lastBlockLabel.Set("text", "#"+gui.eth.BlockChain().CurrentBlock.Number.String())
 		}
 	}
 }

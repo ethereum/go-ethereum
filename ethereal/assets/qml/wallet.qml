@@ -419,6 +419,17 @@ ApplicationWindow {
 			}
 		}
 
+        Label {
+            y: 6
+            id: lastBlockLabel
+            objectName: "lastBlockLabel"
+            visible: true
+            text: ""
+			font.pixelSize: 10
+            anchors.right: peerGroup.left
+            anchors.rightMargin: 5
+        }
+
         ProgressBar {
             id: syncProgressIndicator
             visible: false
@@ -426,35 +437,36 @@ ApplicationWindow {
             y: 3
             width: 140
             indeterminate: true
-            anchors.right: peerLabel.left
+            anchors.right: peerGroup.left
             anchors.rightMargin: 5
         }
 
-		Label {
-			y: 7
-			anchors.right: peerImage.left
-			anchors.rightMargin: 5
-			id: peerLabel
-			font.pixelSize: 8
-			text: "0 / 0"
-		}
-		Image {
-			y: 7
-			id: peerImage
-			anchors.right: parent.right
-			width: 10; height: 10
-			MouseArea {
-				onDoubleClicked:  peerWindow.visible = true
-				anchors.fill: parent
-			}
-			source: "../network.png"
-		}
+        RowLayout {
+            id: peerGroup
+            y: 7
+            anchors.right: parent.right
+            MouseArea {
+                onDoubleClicked:  peerWindow.visible = true
+                anchors.fill: parent
+            }
+
+            Label {
+                id: peerLabel
+                font.pixelSize: 8
+                text: "0 / 0"
+            }
+            Image {
+                id: peerImage
+                width: 10; height: 10
+                source: "../network.png"
+            }
+        }
 	}
 
 	Window {
 		id: popup
 		visible: false
-        flags: Qt.CustomizeWindowHint | Qt.Tool | Qt.WindowCloseButtonHint
+        //flags: Qt.CustomizeWindowHint | Qt.Tool | Qt.WindowCloseButtonHint
 		property var block
 		width: root.width
 		height: 300
@@ -589,7 +601,7 @@ ApplicationWindow {
 
 	Window {
 		id: addPeerWin
-        flags: Qt.CustomizeWindowHint | Qt.Tool | Qt.WindowCloseButtonHint
+        //flags: Qt.CustomizeWindowHint | Qt.Tool | Qt.WindowCloseButtonHint
 		visible: false
 		minimumWidth: 230
 		maximumWidth: 230
@@ -756,7 +768,7 @@ ApplicationWindow {
 	// ******************************************
 	Window {
 		id: peerWindow
-        flags: Qt.CustomizeWindowHint | Qt.Tool | Qt.WindowCloseButtonHint
+        //flags: Qt.CustomizeWindowHint | Qt.Tool | Qt.WindowCloseButtonHint
 		height: 200
 		width: 700
 		Rectangle {
