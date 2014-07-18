@@ -151,9 +151,11 @@ done:
 		accumelative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, txGas))
 		receipt := &Receipt{tx, ethutil.CopyBytes(state.Root().([]byte)), accumelative}
 
-		original := block.Receipts()[i]
-		if !original.Cmp(receipt) {
-			return nil, nil, nil, fmt.Errorf("err diff #%d (r) %v ~ %x  <=>  (c) %v ~ %x (%x)\n", i+1, original.CumulativeGasUsed, original.PostState[0:4], receipt.CumulativeGasUsed, receipt.PostState[0:4], receipt.Tx.Hash())
+		if i < len(block.Receipts()) {
+			original := block.Receipts()[i]
+			if !original.Cmp(receipt) {
+				return nil, nil, nil, fmt.Errorf("err diff #%d (r) %v ~ %x  <=>  (c) %v ~ %x (%x)\n", i+1, original.CumulativeGasUsed, original.PostState[0:4], receipt.CumulativeGasUsed, receipt.PostState[0:4], receipt.Tx.Hash())
+			}
 		}
 
 		receipts = append(receipts, receipt)
