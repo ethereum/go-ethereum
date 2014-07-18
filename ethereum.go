@@ -160,7 +160,7 @@ func (s *Ethereum) IsUpToDate() bool {
 	upToDate := true
 	eachPeer(s.peers, func(peer *Peer, e *list.Element) {
 		if atomic.LoadInt32(&peer.connected) == 1 {
-			if peer.catchingUp == true {
+			if peer.catchingUp == true && peer.versionKnown {
 				upToDate = false
 			}
 		}
