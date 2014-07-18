@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethminer"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
@@ -40,6 +41,8 @@ type Gui struct {
 	Session        string
 	clientIdentity *ethwire.SimpleClientIdentity
 	config         *ethutil.ConfigManager
+
+	miner *ethminer.Miner
 }
 
 // Create GUI, but doesn't start it
@@ -124,6 +127,7 @@ func (gui *Gui) ToggleMining() {
 		txt = "Start mining"
 	} else {
 		utils.StartMining(gui.eth)
+		gui.miner = utils.GetMiner()
 		txt = "Stop mining"
 	}
 
@@ -346,6 +350,10 @@ func (gui *Gui) update() {
 		case <-peerChan:
 			gui.setPeerInfo()
 		case <-ticker.C:
+			if gui.miner != nil {
+				pow := gui.miner.GetPow()
+				fmt.Println("HashRate from miner", pow.GetHashrate())
+			}
 			gui.setPeerInfo()
 		}
 	}
