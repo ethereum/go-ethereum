@@ -328,6 +328,7 @@ func (p *Peer) HandleInbound() {
 		for _, msg := range msgs {
 			peerlogger.DebugDetailf("(%v) => %v %v\n", p.conn.RemoteAddr(), msg.Type, msg.Data)
 
+		nextMsg:
 			switch msg.Type {
 			case ethwire.MsgHandshakeTy:
 				// Version message
@@ -373,6 +374,7 @@ func (p *Peer) HandleInbound() {
 								p.diverted = false
 								if !p.ethereum.StateManager().BlockChain().FindCanonicalChainFromMsg(msg, block.PrevHash) {
 									p.SyncWithPeerToLastKnown()
+									break nextMsg
 								}
 								break
 							}
@@ -385,10 +387,11 @@ func (p *Peer) HandleInbound() {
 						p.blocksRequested = p.blocksRequested * 2
 
 						peerlogger.Infof("No common ancestor found, requesting %d more blocks.\n", p.blocksRequested)
-						p.catchingUp = false
 						p.FindCommonParentBlock()
-						break
+						break nextMsg
 					}
+
+					p.catchingUp = false
 				}
 
 				for i := msg.Data.Len() - 1; i >= 0; i-- {
