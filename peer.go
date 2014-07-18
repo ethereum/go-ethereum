@@ -413,7 +413,7 @@ func (p *Peer) HandleInbound() {
 					}
 				}
 
-				if msg.Data.Len() == 0 {
+				if msg.Data.Len() <= 1 {
 					// Set catching up to false if
 					// the peer has nothing left to give
 					p.catchingUp = false
