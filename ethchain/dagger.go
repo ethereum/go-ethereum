@@ -16,10 +16,16 @@ var powlogger = ethlog.NewLogger("POW")
 type PoW interface {
 	Search(block *Block, reactChan chan ethutil.React) []byte
 	Verify(hash []byte, diff *big.Int, nonce []byte) bool
+	GetHashrate() int64
 }
 
 type EasyPow struct {
-	hash *big.Int
+	hash     *big.Int
+	HashRate int64
+}
+
+func (pow *EasyPow) GetHashrate() int64 {
+	return pow.HashRate
 }
 
 func (pow *EasyPow) Search(block *Block, reactChan chan ethutil.React) []byte {
@@ -39,7 +45,8 @@ func (pow *EasyPow) Search(block *Block, reactChan chan ethutil.React) []byte {
 			if i%1234567 == 0 {
 				elapsed := time.Now().UnixNano() - start
 				hashes := ((float64(1e9) / float64(elapsed)) * float64(i)) / 1000
-				powlogger.Infoln("Hashing @", int64(hashes), "khash")
+				pow.HashRate = int64(hashes)
+				powlogger.Infoln("Hashing @", int64(pow.HashRate), "khash")
 			}
 
 			sha := ethcrypto.Sha3Bin(big.NewInt(r.Int63()).Bytes())

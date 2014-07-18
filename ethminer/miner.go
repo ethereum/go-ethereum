@@ -24,6 +24,10 @@ type Miner struct {
 	quitChan    chan bool
 }
 
+func (self Miner) GetPow() *ethchain.PoW {
+	return &self.pow
+}
+
 func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) Miner {
 	reactChan := make(chan ethutil.React, 1)   // This is the channel that receives 'updates' when ever a new transaction or block comes in
 	powChan := make(chan []byte, 1)            // This is the channel that receives valid sha hases for a given block
