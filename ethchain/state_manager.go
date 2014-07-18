@@ -312,9 +312,9 @@ func (sm *StateManager) ValidateBlock(block *Block) error {
 		}
 	}
 
-	diff := block.Time - sm.bc.CurrentBlock.Time
+	diff := block.Time - previousBlock.Time
 	if diff < 0 {
-		return ValidationError("Block timestamp less then prev block %v", diff)
+		return ValidationError("Block timestamp less then prev block %v (%v - %v)", diff, block.Time, sm.bc.CurrentBlock.Time)
 	}
 
 	/* XXX
