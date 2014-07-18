@@ -135,10 +135,9 @@ out:
 
 func (self *Miner) Stop() {
 	logger.Infoln("Stopping...")
-	self.quitChan <- true
 
-	close(self.powQuitChan)
-	close(self.quitChan)
+	self.quitChan <- true
+	self.powQuitChan <- ethutil.React{}
 
 	self.ethereum.Reactor().Post("miner:stop", self)
 }
