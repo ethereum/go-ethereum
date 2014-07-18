@@ -24,11 +24,11 @@ type Miner struct {
 	quitChan    chan bool
 }
 
-func (self Miner) GetPow() *ethchain.PoW {
-	return &self.pow
+func (self *Miner) GetPow() ethchain.PoW {
+	return self.pow
 }
 
-func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) Miner {
+func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) *Miner {
 	reactChan := make(chan ethutil.React, 1)   // This is the channel that receives 'updates' when ever a new transaction or block comes in
 	powChan := make(chan []byte, 1)            // This is the channel that receives valid sha hases for a given block
 	powQuitChan := make(chan ethutil.React, 1) // This is the channel that can exit the miner thread
@@ -59,7 +59,7 @@ func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) Miner {
 	miner.txs = ethereum.TxPool().Flush()
 	miner.block = ethereum.BlockChain().NewBlock(miner.coinbase)
 
-	return miner
+	return &miner
 }
 
 func (miner *Miner) Start() {
@@ -67,6 +67,8 @@ func (miner *Miner) Start() {
 	//miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
 	go miner.listener()
 	logger.Infoln("Started")
+
+	miner.ethereum.Reactor().Post("miner:start", miner)
 }
 
 func (miner *Miner) listener() {
@@ -137,6 +139,8 @@ func (self *Miner) Stop() {
 
 	close(self.powQuitChan)
 	close(self.quitChan)
+
+	self.ethereum.Reactor().Post("miner:stop", self)
 }
 
 func (self *Miner) mineNewBlock() {
