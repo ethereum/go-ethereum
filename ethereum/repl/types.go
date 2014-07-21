@@ -1,84 +1,26 @@
-package main
+package ethrepl
 
 import (
-	"bufio"
 	"fmt"
-	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/otto"
-	"io"
-	"os"
-	"path"
 )
 
-type Repl interface {
-	Start()
-	Stop()
+type JSStateObject struct {
+	*ethpub.PStateObject
+	eth *JSEthereum
 }
 
-type JSRepl struct {
-	re *JSRE
+func (self *JSStateObject) EachStorage(call otto.FunctionCall) otto.Value {
+	cb := call.Argument(0)
+	self.PStateObject.EachStorage(func(key string, value *ethutil.Value) {
+		value.Decode()
 
-	prompt string
+		cb.Call(self.eth.toVal(self), self.eth.toVal(key), self.eth.toVal(ethutil.Bytes2Hex(value.Bytes())))
+	})
 
-	history *os.File
-
-	running bool
-}
-
-func NewJSRepl(ethereum *eth.Ethereum) *JSRepl {
-	hist, err := os.OpenFile(path.Join(ethutil.Config.ExecPath, "history"), os.O_RDWR|os.O_CREATE, os.ModePerm)
-	if err != nil {
-		panic(err)
-	}
-
-	return &JSRepl{re: NewJSRE(ethereum), prompt: "> ", history: hist}
-}
-
-func (self *JSRepl) Start() {
-	if !self.running {
-		self.running = true
-		logger.Infoln("init JS Console")
-		reader := bufio.NewReader(self.history)
-		for {
-			line, err := reader.ReadString('\n')
-			if err != nil && err == io.EOF {
-				break
-			} else if err != nil {
-				fmt.Println("error reading history", err)
-				break
-			}
-
-			addHistory(line[:len(line)-1])
-		}
-		self.read()
-	}
-}
-
-func (self *JSRepl) Stop() {
-	if self.running {
-		self.running = false
-		self.re.Stop()
-		logger.Infoln("exit JS Console")
-		self.history.Close()
-	}
-}
-
-func (self *JSRepl) parseInput(code string) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("[native] error", r)
-		}
-	}()
-
-	value, err := self.re.Run(code)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	self.PrintValue(value)
+	return otto.UndefinedValue()
 }
 
 // The JSEthereum object attempts to wrap the PEthereum object and returns
@@ -110,7 +52,7 @@ func (self *JSEthereum) GetKey() otto.Value {
 }
 
 func (self *JSEthereum) GetStateObject(addr string) otto.Value {
-	return self.toVal(self.PEthereum.GetStateObject(addr))
+	return self.toVal(&JSStateObject{self.PEthereum.GetStateObject(addr), self})
 }
 
 func (self *JSEthereum) GetStateKeyVals(addr string) otto.Value {

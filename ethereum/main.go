@@ -9,7 +9,7 @@ import (
 
 const (
 	ClientIdentifier = "Ethereum(G)"
-	Version          = "0.5.16"
+	Version          = "0.5.17"
 )
 
 var logger = ethlog.NewLogger("CLI")
@@ -29,6 +29,7 @@ func main() {
 
 	utils.InitConfig(ConfigFile, Datadir, "ETH")
 	ethutil.Config.Diff = DiffTool
+	ethutil.Config.DiffType = DiffType
 
 	utils.InitDataDir(Datadir)
 

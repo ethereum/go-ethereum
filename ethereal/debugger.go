@@ -17,6 +17,8 @@ type DebuggerWindow struct {
 
 	vm *ethchain.Vm
 	Db *Debugger
+
+	state *ethchain.State
 }
 
 func NewDebuggerWindow(lib *UiLib) *DebuggerWindow {
@@ -53,6 +55,7 @@ func (self *DebuggerWindow) SetCode(code string) {
 func (self *DebuggerWindow) SetData(data string) {
 	self.win.Set("dataText", data)
 }
+
 func (self *DebuggerWindow) SetAsm(data []byte) {
 	self.win.Root().Call("clearAsm")
 

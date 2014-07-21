@@ -419,30 +419,54 @@ ApplicationWindow {
 			}
 		}
 
-		Label {
-			y: 7
-			anchors.right: peerImage.left
-			anchors.rightMargin: 5
-			id: peerLabel
-			font.pixelSize: 8
-			text: "0 / 0"
-		}
-		Image {
-			y: 7
-			id: peerImage
-			anchors.right: parent.right
-			width: 10; height: 10
-			MouseArea {
-				onDoubleClicked:  peerWindow.visible = true
-				anchors.fill: parent
-			}
-			source: "../network.png"
-		}
+        Label {
+            y: 6
+            id: lastBlockLabel
+            objectName: "lastBlockLabel"
+            visible: true
+            text: ""
+			font.pixelSize: 10
+            anchors.right: peerGroup.left
+            anchors.rightMargin: 5
+        }
+
+        ProgressBar {
+            id: syncProgressIndicator
+            visible: false
+            objectName: "syncProgressIndicator"
+            y: 3
+            width: 140
+            indeterminate: true
+            anchors.right: peerGroup.left
+            anchors.rightMargin: 5
+        }
+
+        RowLayout {
+            id: peerGroup
+            y: 7
+            anchors.right: parent.right
+            MouseArea {
+                onDoubleClicked:  peerWindow.visible = true
+                anchors.fill: parent
+            }
+
+            Label {
+                id: peerLabel
+                font.pixelSize: 8
+                text: "0 / 0"
+            }
+            Image {
+                id: peerImage
+                width: 10; height: 10
+                source: "../network.png"
+            }
+        }
 	}
 
 	Window {
 		id: popup
 		visible: false
+        //flags: Qt.CustomizeWindowHint | Qt.Tool | Qt.WindowCloseButtonHint
 		property var block
 		width: root.width
 		height: 300
@@ -460,7 +484,7 @@ ApplicationWindow {
 					Text { text: '<h3>Block details</h3>'; color: "#F2F2F2"}
 					Text { text: '<b>Block number:</b> ' + number; color: "#F2F2F2"}
 					Text { text: '<b>Hash:</b> ' + hash; color: "#F2F2F2"}
-					Text { text: '<b>Coinbase:</b> ' + coinbase; color: "#F2F2F2"}
+					Text { text: '<b>Coinbase:</b> &lt;' + name + '&gt; ' + coinbase; color: "#F2F2F2"}
 					Text { text: '<b>Block found at:</b> ' + prettyTime; color: "#F2F2F2"}
 					Text { text: '<b>Gas used:</b> ' + gasUsed + " / " + gasLimit; color: "#F2F2F2"}
 				}
@@ -577,6 +601,7 @@ ApplicationWindow {
 
 	Window {
 		id: addPeerWin
+        //flags: Qt.CustomizeWindowHint | Qt.Tool | Qt.WindowCloseButtonHint
 		visible: false
 		minimumWidth: 230
 		maximumWidth: 230
@@ -686,9 +711,9 @@ ApplicationWindow {
 		}
 
 		if(initial){
-			blockModel.append({number: block.number, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
+			blockModel.append({number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
 		}else{
-			blockModel.insert(0, {number: block.number, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
+			blockModel.insert(0, {number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
 		}
 	}
 
@@ -743,6 +768,7 @@ ApplicationWindow {
 	// ******************************************
 	Window {
 		id: peerWindow
+        //flags: Qt.CustomizeWindowHint | Qt.Tool | Qt.WindowCloseButtonHint
 		height: 200
 		width: 700
 		Rectangle {

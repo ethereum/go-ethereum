@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethminer"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethutil"
@@ -14,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
 	"math/big"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -41,6 +43,8 @@ type Gui struct {
 	Session        string
 	clientIdentity *ethwire.SimpleClientIdentity
 	config         *ethutil.ConfigManager
+
+	miner *ethminer.Miner
 }
 
 // Create GUI, but doesn't start it
@@ -125,6 +129,7 @@ func (gui *Gui) ToggleMining() {
 		txt = "Start mining"
 	} else {
 		utils.StartMining(gui.eth)
+		gui.miner = utils.GetMiner()
 		txt = "Stop mining"
 	}
 
@@ -244,7 +249,11 @@ func (gui *Gui) readPreviousTransactions() {
 }
 
 func (gui *Gui) processBlock(block *ethchain.Block, initial bool) {
-	gui.win.Root().Call("addBlock", ethpub.NewPBlock(block), initial)
+	name := ethpub.FindNameInNameReg(gui.eth.StateManager(), block.Coinbase)
+	b := ethpub.NewPBlock(block)
+	b.Name = name
+
+	gui.win.Root().Call("addBlock", b, initial)
 }
 
 func (gui *Gui) setWalletValue(amount, unconfirmedFunds *big.Int) {
@@ -263,20 +272,32 @@ func (gui *Gui) setWalletValue(amount, unconfirmedFunds *big.Int) {
 	gui.win.Root().Call("setWalletValue", str)
 }
 
+func (self *Gui) getObjectByName(objectName string) qml.Object {
+	return self.win.Root().ObjectByName(objectName)
+}
+
 // Simple go routine function that updates the list of peers in the GUI
 func (gui *Gui) update() {
-	reactor := gui.eth.Reactor()
 
-	blockChan := make(chan ethreact.Event, 1)
-	txChan := make(chan ethreact.Event, 1)
-	objectChan := make(chan ethreact.Event, 1)
-	peerChan := make(chan ethreact.Event, 1)
-	ticker := time.NewTicker(5 * time.Second)
+	var (
+		blockChan     = make(chan ethreact.Event, 1)
+		txChan        = make(chan ethreact.Event, 1)
+		objectChan    = make(chan ethreact.Event, 1)
+		peerChan      = make(chan ethreact.Event, 1)
+		chainSyncChan = make(chan ethreact.Event, 1)
+		miningChan    = make(chan ethreact.Event, 1)
+	)
+
+	peerUpdateTicker := time.NewTicker(5 * time.Second)
+	generalUpdateTicker := time.NewTicker(1 * time.Second)
 
 	state := gui.eth.StateManager().TransState()
 
 	unconfirmedFunds := new(big.Int)
 	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetAccount(gui.address()).Amount)))
+	gui.getObjectByName("syncProgressIndicator").Set("visible", !gui.eth.IsUpToDate())
+
+	lastBlockLabel := gui.getObjectByName("lastBlockLabel")
 
 	go func() {
 		for {
@@ -319,18 +340,43 @@ func (gui *Gui) update() {
 
 					state.UpdateStateObject(object)
 				}
+			case msg := <-chainSyncChan:
+				sync := msg.Resource.(bool)
+				gui.win.Root().ObjectByName("syncProgressIndicator").Set("visible", sync)
+
 			case <-objectChan:
 				gui.loadAddressBook()
 			case <-peerChan:
 				gui.setPeerInfo()
-			case <-ticker.C:
+			case <-peerUpdateTicker.C:
 				gui.setPeerInfo()
+			case msg := <-miningChan:
+				if msg.Name == "miner:start" {
+					gui.miner = msg.Resource.(*ethminer.Miner)
+				} else {
+					gui.miner = nil
+				}
+			case <-generalUpdateTicker.C:
+				statusText := "#" + gui.eth.BlockChain().CurrentBlock.Number.String()
+				if gui.miner != nil {
+					pow := gui.miner.GetPow()
+					if pow.GetHashrate() != 0 {
+						statusText = "Mining @ " + strconv.FormatInt(pow.GetHashrate(), 10) + "Khash - " + statusText
+					}
+				}
+				lastBlockLabel.Set("text", statusText)
 			}
 		}
 	}()
+
+	reactor := gui.eth.Reactor()
+
 	reactor.Subscribe("newBlock", blockChan)
 	reactor.Subscribe("newTx:pre", txChan)
 	reactor.Subscribe("newTx:post", txChan)
+	reactor.Subscribe("chainSync", chainSyncChan)
+	reactor.Subscribe("miner:start", miningChan)
+	reactor.Subscribe("miner:stop", miningChan)
 
 	nameReg := ethpub.EthereumConfig(gui.eth.StateManager()).NameReg()
 	if nameReg != nil {
@@ -357,7 +403,7 @@ func (gui *Gui) address() []byte {
 }
 
 func (gui *Gui) RegisterName(name string) {
-	name = fmt.Sprintf("\"%s\"", name)
+	name = fmt.Sprintf("\"register\"\n\"%s\"", name)
 
 	gui.pub.Transact(gui.privateKey(), "NameReg", "", "10000", "10000000000000", name)
 }

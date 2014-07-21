@@ -86,7 +86,7 @@ ApplicationWindow {
 		TableView {
 			id: asmTableView
 			width: 200
-			TableViewColumn{ role: "value" ; title: "" ; width: 200 }
+			TableViewColumn{ role: "value" ; title: "" ; width: asmTableView.width - 2 }
 			model: asmModel
 		}
 

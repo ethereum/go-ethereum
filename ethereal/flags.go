@@ -36,6 +36,7 @@ var LogLevel int
 // flags specific to gui client
 var AssetPath string
 
+//TODO: If we re-use the one defined in cmd.go the binary osx image crashes. If somebody finds out why we can dry this up.
 func defaultAssetPath() string {
 	var assetPath string
 	// If the current working directory is the go-ethereum dir
@@ -60,7 +61,6 @@ func defaultAssetPath() string {
 	}
 	return assetPath
 }
-
 func defaultDataDir() string {
 	usr, _ := user.Current()
 	return path.Join(usr.HomeDir, ".ethereal")

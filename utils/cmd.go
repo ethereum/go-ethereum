@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bitbucket.org/kardianos/osext"
 	"fmt"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethcrypto"
@@ -16,6 +17,8 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"path/filepath"
+	"runtime"
 	"time"
 )
 
@@ -165,7 +168,34 @@ func NewKeyManager(KeyStore string, Datadir string, db ethutil.Database) *ethcry
 	return keyManager
 }
 
+func DefaultAssetPath() string {
+	var assetPath string
+	// If the current working directory is the go-ethereum dir
+	// assume a debug build and use the source directory as
+	// asset directory.
+	pwd, _ := os.Getwd()
+	if pwd == path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "ethereal") {
+		assetPath = path.Join(pwd, "assets")
+	} else {
+		switch runtime.GOOS {
+		case "darwin":
+			// Get Binary Directory
+			exedir, _ := osext.ExecutableFolder()
+			assetPath = filepath.Join(exedir, "../Resources")
+		case "linux":
+			assetPath = "/usr/share/ethereal"
+		case "windows":
+			assetPath = "./assets"
+		default:
+			assetPath = "."
+		}
+	}
+	return assetPath
+}
+
 func KeyTasks(keyManager *ethcrypto.KeyManager, KeyRing string, GenAddr bool, SecretFile string, ExportDir string, NonInteractive bool) {
+	ethcrypto.InitWords(DefaultAssetPath()) // Init mnemonic word list
+
 	var err error
 	switch {
 	case GenAddr:
@@ -205,7 +235,11 @@ func StartRpc(ethereum *eth.Ethereum, RpcPort int) {
 	}
 }
 
-var miner ethminer.Miner
+var miner *ethminer.Miner
+
+func GetMiner() *ethminer.Miner {
+	return miner
+}
 
 func StartMining(ethereum *eth.Ethereum) bool {
 	if !ethereum.Mining {
@@ -214,13 +248,14 @@ func StartMining(ethereum *eth.Ethereum) bool {
 
 		go func() {
 			logger.Infoln("Start mining")
-			miner = ethminer.NewDefaultMiner(addr, ethereum)
+			if miner == nil {
+				miner = ethminer.NewDefaultMiner(addr, ethereum)
+			}
 			// Give it some time to connect with peers
 			time.Sleep(3 * time.Second)
 			for !ethereum.IsUpToDate() {
 				time.Sleep(5 * time.Second)
 			}
-
 			miner.Start()
 		}()
 		RegisterInterrupt(func(os.Signal) {
@@ -232,12 +267,14 @@ func StartMining(ethereum *eth.Ethereum) bool {
 }
 
 func StopMining(ethereum *eth.Ethereum) bool {
-	if ethereum.Mining {
+	if ethereum.Mining && miner != nil {
 		miner.Stop()
 		logger.Infoln("Stopped mining")
 		ethereum.Mining = false
+
 		return true
 	}
+
 	return false
 }
 
