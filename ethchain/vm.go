@@ -506,7 +506,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			offset := stack.Pop().Int64()
 
 			data := make([]byte, 32)
-			if len(closure.Args) >= int(offset) {
+			if big.NewInt(int64(len(closure.Args))).Cmp(big.NewInt(offset)) >= 0 {
 				l := int64(math.Min(float64(offset+32), float64(len(closure.Args))))
 
 				copy(data, closure.Args[offset:l])
