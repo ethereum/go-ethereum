@@ -58,7 +58,7 @@ func (e *EventHandler) Remove(ch chan Event) int {
 	return len(e.chans)
 }
 
-// Basic reactor resource
+// Basic reactor event
 type Event struct {
 	Resource interface{}
 	Name     string
