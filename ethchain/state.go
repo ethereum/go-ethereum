@@ -76,6 +76,8 @@ func (self *State) DeleteStateObject(stateObject *StateObject) {
 
 // Retrieve a state object given my the address. Nil if not found
 func (self *State) GetStateObject(addr []byte) *StateObject {
+	addr = ethutil.Address(addr)
+
 	stateObject := self.stateObjects[string(addr)]
 	if stateObject != nil {
 		return stateObject
@@ -145,7 +147,6 @@ func (self *State) Set(state *State) {
 
 	self.trie = state.trie
 	self.stateObjects = state.stateObjects
-	//*self = *state
 }
 
 func (s *State) Root() interface{} {
@@ -173,7 +174,7 @@ func (s *State) Reset() {
 func (s *State) Sync() {
 	// Sync all nested states
 	for _, stateObject := range s.stateObjects {
-		s.UpdateStateObject(stateObject)
+		//s.UpdateStateObject(stateObject)
 
 		if stateObject.state == nil {
 			continue
@@ -205,6 +206,8 @@ func (self *State) Update() {
 	// FIXME trie delete is broken
 	valid, t2 := ethtrie.ParanoiaCheck(self.trie)
 	if !valid {
+		statelogger.Infof("Warn: PARANOIA: Different state root during copy %x vs %x\n", self.trie.Root, t2.Root)
+
 		self.trie = t2
 	}
 }
@@ -212,9 +215,9 @@ func (self *State) Update() {
 // Debug stuff
 func (self *State) CreateOutputForDiff() {
 	for addr, stateObject := range self.stateObjects {
-		fmt.Printf("0x%x 0x%x 0x%x 0x%x\n", addr, stateObject.state.Root(), stateObject.Amount.Bytes(), stateObject.Nonce)
+		fmt.Printf("%x %x %x %x\n", addr, stateObject.state.Root(), stateObject.Amount.Bytes(), stateObject.Nonce)
 		stateObject.state.EachStorage(func(addr string, value *ethutil.Value) {
-			fmt.Printf("0x%x 0x%x\n", addr, value.Bytes())
+			fmt.Printf("%x %x\n", addr, value.Bytes())
 		})
 	}
 }

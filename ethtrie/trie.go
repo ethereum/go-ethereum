@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethutil"
-	"reflect"
+	_ "reflect"
 	"sync"
 )
+
+func __ignore() { fmt.Println("") }
 
 func ParanoiaCheck(t1 *Trie) (bool, *Trie) {
 	t2 := NewTrie(ethutil.Config.Db, "")
@@ -269,8 +271,7 @@ func (t *Trie) getState(node interface{}, key []int) interface{} {
 	}
 
 	// It shouldn't come this far
-	fmt.Println("getState unexpected return")
-	return ""
+	panic("unexpected return")
 }
 
 func (t *Trie) getNode(node interface{}) *ethutil.Value {
@@ -287,7 +288,9 @@ func (t *Trie) getNode(node interface{}) *ethutil.Value {
 		return ethutil.NewValueFromBytes([]byte(str))
 	}
 
-	return t.cache.Get(n.Bytes())
+	data := t.cache.Get(n.Bytes())
+
+	return data
 }
 
 func (t *Trie) UpdateState(node interface{}, key []int, value string) interface{} {
@@ -323,7 +326,8 @@ func (t *Trie) InsertState(node interface{}, key []int, value interface{}) inter
 
 	// New node
 	n := ethutil.NewValue(node)
-	if node == nil || (n.Type() == reflect.String && (n.Str() == "" || n.Get(0).IsNil())) || n.Len() == 0 {
+	if node == nil || n.Len() == 0 {
+		//if node == nil || (n.Type() == reflect.String && (n.Str() == "" || n.Get(0).IsNil())) || n.Len() == 0 {
 		newNode := []interface{}{CompactEncode(key), value}
 
 		return t.Put(newNode)
@@ -385,17 +389,22 @@ func (t *Trie) InsertState(node interface{}, key []int, value interface{}) inter
 		return t.Put(newNode)
 	}
 
-	return ""
+	panic("unexpected end")
 }
 
 func (t *Trie) deleteState(node interface{}, key []int) interface{} {
 	if len(key) == 0 {
+		println("<empty ret>")
 		return ""
 	}
 
 	// New node
 	n := ethutil.NewValue(node)
-	if node == nil || (n.Type() == reflect.String && (n.Str() == "" || n.Get(0).IsNil())) || n.Len() == 0 {
+	//if node == nil || (n.Type() == reflect.String && (n.Str() == "" || n.Get(0).IsNil())) || n.Len() == 0 {
+	if node == nil || n.Len() == 0 {
+		//return nil
+		//fmt.Printf("<empty ret> %x %d\n", n, len(n.Bytes()))
+
 		return ""
 	}
 
@@ -408,10 +417,17 @@ func (t *Trie) deleteState(node interface{}, key []int) interface{} {
 
 		// Matching key pair (ie. there's already an object with this key)
 		if CompareIntSlice(k, key) {
+			//fmt.Printf("<delete ret> %x\n", v)
+
 			return ""
 		} else if CompareIntSlice(key[:len(k)], k) {
 			hash := t.deleteState(v, key[len(k):])
 			child := t.getNode(hash)
+			/*
+				if child.IsNil() {
+					return node
+				}
+			*/
 
 			var newNode []interface{}
 			if child.Len() == 2 {
@@ -420,6 +436,8 @@ func (t *Trie) deleteState(node interface{}, key []int) interface{} {
 			} else {
 				newNode = []interface{}{currentNode.Get(0).Str(), hash}
 			}
+
+			//fmt.Printf("%x\n", newNode)
 
 			return t.Put(newNode)
 		} else {
@@ -463,10 +481,11 @@ func (t *Trie) deleteState(node interface{}, key []int) interface{} {
 			newNode = n
 		}
 
+		//fmt.Printf("%x\n", newNode)
 		return t.Put(newNode)
 	}
 
-	return ""
+	panic("unexpected return")
 }
 
 type TrieIterator struct {

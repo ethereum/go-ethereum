@@ -2,8 +2,6 @@ package ethchain
 
 import (
 	"fmt"
-	"github.com/ethereum/eth-go/ethtrie"
-	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
 )
 
@@ -44,7 +42,7 @@ func (self *StateTransition) Coinbase() *StateObject {
 		return self.cb
 	}
 
-	self.cb = self.state.GetAccount(self.coinbase)
+	self.cb = self.state.GetOrNewStateObject(self.coinbase)
 	return self.cb
 }
 func (self *StateTransition) Sender() *StateObject {
@@ -52,7 +50,7 @@ func (self *StateTransition) Sender() *StateObject {
 		return self.sen
 	}
 
-	self.sen = self.state.GetAccount(self.tx.Sender())
+	self.sen = self.state.GetOrNewStateObject(self.tx.Sender())
 
 	return self.sen
 }
@@ -65,7 +63,7 @@ func (self *StateTransition) Receiver() *StateObject {
 		return self.rec
 	}
 
-	self.rec = self.state.GetAccount(self.tx.Recipient)
+	self.rec = self.state.GetOrNewStateObject(self.tx.Recipient)
 	return self.rec
 }
 
@@ -176,13 +174,16 @@ func (self *StateTransition) TransitionState() (err error) {
 		return
 	}
 
-	/* FIXME
-	 * If tx goes TO "0", goes OOG during init, reverse changes, but initial endowment should happen. The ether is lost forever
-	 */
-	var snapshot *State
+	if sender.Amount.Cmp(self.value) < 0 {
+		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Amount)
+	}
 
+	var snapshot *State
 	// If the receiver is nil it's a contract (\0*32).
 	if tx.CreatesContract() {
+		// Subtract the (irreversible) amount from the senders account
+		sender.SubAmount(self.value)
+
 		snapshot = self.state.Copy()
 
 		// Create a new state object for the contract
@@ -191,16 +192,17 @@ func (self *StateTransition) TransitionState() (err error) {
 		if receiver == nil {
 			return fmt.Errorf("Unable to create contract")
 		}
+
+		// Add the amount to receivers account which should conclude this transaction
+		receiver.AddAmount(self.value)
 	} else {
 		receiver = self.Receiver()
-	}
 
-	// Transfer value from sender to receiver
-	if err = self.transferValue(sender, receiver); err != nil {
-		return
-	}
+		// Subtract the amount from the senders account
+		sender.SubAmount(self.value)
+		// Add the amount to receivers account which should conclude this transaction
+		receiver.AddAmount(self.value)
 
-	if snapshot == nil {
 		snapshot = self.state.Copy()
 	}
 
@@ -274,21 +276,6 @@ func (self *StateTransition) Eval(script []byte, context *StateObject, typ strin
 
 func Call(vm *Vm, closure *Closure, data []byte) (ret []byte, err error) {
 	ret, _, err = closure.Call(vm, data)
-
-	if ethutil.Config.Paranoia {
-		var (
-			context = closure.object
-			trie    = context.state.trie
-		)
-
-		valid, t2 := ethtrie.ParanoiaCheck(trie)
-		if !valid {
-			// TODO FIXME ASAP
-			context.state.trie = t2
-
-			statelogger.Infoln("Warn: PARANOIA: Different state object roots during copy")
-		}
-	}
 
 	return
 }

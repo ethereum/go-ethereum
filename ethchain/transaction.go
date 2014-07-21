@@ -227,6 +227,14 @@ func (self *Receipt) String() string {
 		self.CumulativeGasUsed)
 }
 
+func (self *Receipt) Cmp(other *Receipt) bool {
+	if bytes.Compare(self.PostState, other.PostState) != 0 {
+		return false
+	}
+
+	return true
+}
+
 // Transaction slice type for basic sorting
 type Transactions []*Transaction
 

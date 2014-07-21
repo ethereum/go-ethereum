@@ -40,13 +40,9 @@ func (val *Value) Len() int {
 	//return val.kind.Len()
 	if data, ok := val.Val.([]interface{}); ok {
 		return len(data)
-	} else if data, ok := val.Val.([]byte); ok {
-		return len(data)
-	} else if data, ok := val.Val.(string); ok {
-		return len(data)
 	}
 
-	return 0
+	return len(val.Bytes())
 }
 
 func (val *Value) Raw() interface{} {
@@ -118,6 +114,8 @@ func (val *Value) Bytes() []byte {
 		return []byte{s}
 	} else if s, ok := val.Val.(string); ok {
 		return []byte(s)
+	} else if s, ok := val.Val.(*big.Int); ok {
+		return s.Bytes()
 	}
 
 	return []byte{}
@@ -188,6 +186,19 @@ func (val *Value) Get(idx int) *Value {
 
 	// If this wasn't a slice you probably shouldn't be using this function
 	return NewValue(nil)
+}
+
+func (self *Value) Copy() *Value {
+	switch val := self.Val.(type) {
+	case *big.Int:
+		return NewValue(new(big.Int).Set(val))
+	case []byte:
+		return NewValue(CopyBytes(val))
+	default:
+		return NewValue(self.Val)
+	}
+
+	return nil
 }
 
 func (val *Value) Cmp(o *Value) bool {

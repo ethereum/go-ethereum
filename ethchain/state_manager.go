@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethreact"
-	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
 	"math/big"
@@ -121,7 +120,10 @@ func (self *StateManager) ProcessTransactions(coinbase *StateObject, state *Stat
 done:
 	for i, tx := range txs {
 		txGas := new(big.Int).Set(tx.Gas)
-		st := NewStateTransition(coinbase, tx, state, block)
+
+		cb := state.GetStateObject(coinbase.Address())
+		st := NewStateTransition(cb, tx, state, block)
+		//fmt.Printf("#%d\n", i+1)
 		err = st.TransitionState()
 		if err != nil {
 			switch {
@@ -149,10 +151,17 @@ done:
 		accumelative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, txGas))
 		receipt := &Receipt{tx, ethutil.CopyBytes(state.Root().([]byte)), accumelative}
 
+		if i < len(block.Receipts()) {
+			original := block.Receipts()[i]
+			if !original.Cmp(receipt) {
+				return nil, nil, nil, fmt.Errorf("err diff #%d (r) %v ~ %x  <=>  (c) %v ~ %x (%x)\n", i+1, original.CumulativeGasUsed, original.PostState[0:4], receipt.CumulativeGasUsed, receipt.PostState[0:4], receipt.Tx.Hash())
+			}
+		}
+
 		receipts = append(receipts, receipt)
 		handled = append(handled, tx)
 
-		if ethutil.Config.Diff {
+		if ethutil.Config.Diff && ethutil.Config.DiffType == "all" {
 			state.CreateOutputForDiff()
 		}
 	}
@@ -188,36 +197,11 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 	// before that.
 	defer state.Reset()
 
-	if ethutil.Config.Diff {
-		fmt.Printf("## 0x%x 0x%x ##\n", block.Hash(), block.Number)
+	if ethutil.Config.Diff && ethutil.Config.DiffType == "all" {
+		fmt.Printf("## %x %x ##\n", block.Hash(), block.Number)
 	}
 
-	receipts, err := sm.ApplyDiff(state, parent, block)
-	defer func() {
-		if err != nil {
-			if len(receipts) == len(block.Receipts()) {
-				for i, receipt := range block.Receipts() {
-					statelogger.Infof("diff (r) %v ~ %x  <=>  (c) %v ~ %x (%x)\n", receipt.CumulativeGasUsed, receipt.PostState[0:4], receipts[i].CumulativeGasUsed, receipts[i].PostState[0:4], receipt.Tx.Hash())
-				}
-			} else {
-				statelogger.Warnln("Unable to print receipt diff. Length didn't match", len(receipts), "for", len(block.Receipts()))
-			}
-		} else {
-			/*
-				for i, receipt := range receipts {
-					gu := new(big.Int)
-					if i != 0 {
-						gu.Sub(receipt.CumulativeGasUsed, receipts[i-1].CumulativeGasUsed)
-					} else {
-						gu.Set(receipt.CumulativeGasUsed)
-					}
-
-					statelogger.Infof("[r] %v ~ %x (%x)\n", gu, receipt.PostState[0:4], receipt.Tx.Hash())
-				}
-			*/
-		}
-	}()
-
+	_, err = sm.ApplyDiff(state, parent, block)
 	if err != nil {
 		return err
 	}
@@ -235,12 +219,14 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 		return err
 	}
 
-	if ethutil.Config.Paranoia {
-		valid, _ := ethtrie.ParanoiaCheck(state.trie)
-		if !valid {
-			err = fmt.Errorf("PARANOIA: World state trie corruption")
+	/*
+		if ethutil.Config.Paranoia {
+			valid, _ := ethtrie.ParanoiaCheck(state.trie)
+			if !valid {
+				err = fmt.Errorf("PARANOIA: World state trie corruption")
+			}
 		}
-	}
+	*/
 
 	if !block.State().Cmp(state) {
 

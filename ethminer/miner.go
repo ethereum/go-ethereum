@@ -21,28 +21,32 @@ type Miner struct {
 	block       *ethchain.Block
 	powChan     chan []byte
 	powQuitChan chan ethreact.Event
-	quitChan    chan bool
+	quitChan    chan chan error
 }
 
-func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) Miner {
+func (self *Miner) GetPow() ethchain.PoW {
+	return self.pow
+}
+
+func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) *Miner {
 	miner := Miner{
 		pow:      &ethchain.EasyPow{},
 		ethereum: ethereum,
 		coinbase: coinbase,
 	}
 
-	// Insert initial TXs in our little miner 'pool'
-	miner.txs = ethereum.TxPool().Flush()
-	miner.block = ethereum.BlockChain().NewBlock(miner.coinbase)
-
-	return miner
+	return &miner
 }
 
 func (miner *Miner) Start() {
 	miner.reactChan = make(chan ethreact.Event, 1)   // This is the channel that receives 'updates' when ever a new transaction or block comes in
 	miner.powChan = make(chan []byte, 1)             // This is the channel that receives valid sha hashes for a given block
 	miner.powQuitChan = make(chan ethreact.Event, 1) // This is the channel that can exit the miner thread
-	miner.quitChan = make(chan bool, 1)
+	miner.quitChan = make(chan chan error, 1)
+
+	// Insert initial TXs in our little miner 'pool'
+	miner.txs = miner.ethereum.TxPool().Flush()
+	miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase)
 
 	// Prepare inital block
 	//miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
@@ -61,15 +65,17 @@ func (miner *Miner) Start() {
 	reactor.Subscribe("newTx:pre", miner.powQuitChan)
 
 	logger.Infoln("Started")
+
+	reactor.Post("miner:start", miner)
 }
 
 func (miner *Miner) listener() {
-out:
 	for {
 		select {
-		case <-miner.quitChan:
+		case status := <-miner.quitChan:
 			logger.Infoln("Stopped")
-			break out
+			status <- nil
+			return
 		case chanMessage := <-miner.reactChan:
 
 			if block, ok := chanMessage.Resource.(*ethchain.Block); ok {
@@ -127,7 +133,9 @@ out:
 
 func (miner *Miner) Stop() {
 	logger.Infoln("Stopping...")
-	miner.quitChan <- true
+	status := make(chan error)
+	miner.quitChan <- status
+	<-status
 
 	reactor := miner.ethereum.Reactor()
 	reactor.Unsubscribe("newBlock", miner.powQuitChan)
@@ -137,6 +145,8 @@ func (miner *Miner) Stop() {
 
 	close(miner.powQuitChan)
 	close(miner.quitChan)
+
+	reactor.Post("miner:stop", miner)
 }
 
 func (self *Miner) mineNewBlock() {

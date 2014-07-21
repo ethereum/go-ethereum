@@ -319,7 +319,7 @@ func (p *Peer) HandleInbound() {
 	for atomic.LoadInt32(&p.disconnect) == 0 {
 
 		// HMM?
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 		// Wait for a message from the peer
 		msgs, err := ethwire.ReadMessages(p.conn)
 		if err != nil {
@@ -328,6 +328,7 @@ func (p *Peer) HandleInbound() {
 		for _, msg := range msgs {
 			peerlogger.DebugDetailf("(%v) => %v %v\n", p.conn.RemoteAddr(), msg.Type, msg.Data)
 
+		nextMsg:
 			switch msg.Type {
 			case ethwire.MsgHandshakeTy:
 				// Version message
@@ -373,6 +374,7 @@ func (p *Peer) HandleInbound() {
 								p.diverted = false
 								if !p.ethereum.StateManager().BlockChain().FindCanonicalChainFromMsg(msg, block.PrevHash) {
 									p.SyncWithPeerToLastKnown()
+									break nextMsg
 								}
 								break
 							}
@@ -385,10 +387,11 @@ func (p *Peer) HandleInbound() {
 						p.blocksRequested = p.blocksRequested * 2
 
 						peerlogger.Infof("No common ancestor found, requesting %d more blocks.\n", p.blocksRequested)
-						p.catchingUp = false
 						p.FindCommonParentBlock()
-						break
+						break nextMsg
 					}
+
+					p.catchingUp = false
 				}
 
 				for i := msg.Data.Len() - 1; i >= 0; i-- {
@@ -410,7 +413,7 @@ func (p *Peer) HandleInbound() {
 					}
 				}
 
-				if msg.Data.Len() == 0 {
+				if msg.Data.Len() <= 1 {
 					// Set catching up to false if
 					// the peer has nothing left to give
 					p.catchingUp = false
@@ -754,7 +757,7 @@ func (p *Peer) CatchupWithPeer(blockHash []byte) {
 	if !p.catchingUp {
 		// Make sure nobody else is catching up when you want to do this
 		p.catchingUp = true
-		msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{blockHash, uint64(10)})
+		msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{blockHash, uint64(30)})
 		p.QueueMessage(msg)
 
 		peerlogger.DebugDetailf("Requesting blockchain %x... from peer %s\n", p.ethereum.BlockChain().CurrentBlock.Hash()[:4], p.conn.RemoteAddr())

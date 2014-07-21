@@ -155,6 +155,15 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		// XXX Leave this Println intact. Don't change this to the log system.
 		// Used for creating diffs between implementations
 		if vm.logTy == LogTyDiff {
+			switch op {
+			case STOP, RETURN, SUICIDE:
+				closure.object.Sync()
+				closure.object.state.EachStorage(func(key string, value *ethutil.Value) {
+					value.Decode()
+					fmt.Printf("%x %x\n", new(big.Int).SetBytes([]byte(key)).Bytes(), value.Bytes())
+				})
+			}
+
 			b := pc.Bytes()
 			if len(b) == 0 {
 				b = []byte{0}
@@ -184,9 +193,9 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			var mult *big.Int
 			y, x := stack.Peekn()
 			val := closure.GetStorage(x)
-			if val.IsEmpty() && len(y.Bytes()) > 0 {
+			if val.BigInt().Cmp(ethutil.Big0) == 0 && len(y.Bytes()) > 0 {
 				mult = ethutil.Big2
-			} else if !val.IsEmpty() && len(y.Bytes()) == 0 {
+			} else if val.BigInt().Cmp(ethutil.Big0) != 0 && len(y.Bytes()) == 0 {
 				mult = ethutil.Big0
 			} else {
 				mult = ethutil.Big1
@@ -447,7 +456,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case BYTE:
 			require(2)
 			val, th := stack.Popn()
-			if th.Cmp(big.NewInt(32)) < 0 {
+			if th.Cmp(big.NewInt(32)) < 0 && th.Cmp(big.NewInt(int64(len(val.Bytes())))) < 0 {
 				byt := big.NewInt(int64(val.Bytes()[th.Int64()]))
 				stack.Push(byt)
 
@@ -482,7 +491,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case ORIGIN:
 			stack.Push(ethutil.BigD(vm.vars.Origin))
 
-			vm.Printf(" => %v", vm.vars.Origin)
+			vm.Printf(" => %x", vm.vars.Origin)
 		case CALLER:
 			caller := closure.caller.Address()
 			stack.Push(ethutil.BigD(caller))
@@ -550,10 +559,10 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			}
 
 			code := closure.Script[cOff : cOff+l]
-			fmt.Println("len:", l, "code off:", cOff, "mem off:", mOff)
+			//fmt.Println("len:", l, "code off:", cOff, "mem off:", mOff)
 
 			mem.Set(mOff, l, code)
-			fmt.Println(Code(mem.Get(mOff, l)))
+			//fmt.Println(Code(mem.Get(mOff, l)))
 		case GASPRICE:
 			stack.Push(closure.Price)
 
@@ -743,6 +752,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			if closure.object.Amount.Cmp(value) < 0 {
 				vmlogger.Debugf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Amount)
+
 				closure.ReturnGas(gas, nil, nil)
 
 				stack.Push(ethutil.BigFalse)

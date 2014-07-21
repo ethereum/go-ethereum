@@ -15,6 +15,18 @@ func (self Code) String() string {
 	return strings.Join(Disassemble(self), " ")
 }
 
+type Storage map[string]*ethutil.Value
+
+func (self Storage) Copy() Storage {
+	cpy := make(Storage)
+	for key, value := range self {
+		// XXX Do we need a 'value' copy or is this sufficient?
+		cpy[key] = value
+	}
+
+	return cpy
+}
+
 type StateObject struct {
 	// Address of the object
 	address []byte
@@ -27,7 +39,7 @@ type StateObject struct {
 	script     Code
 	initScript Code
 
-	storage map[string]*ethutil.Value
+	storage Storage
 
 	// Total gas pool is the total amount of gas currently
 	// left if this object is the coinbase. Gas is directly
@@ -41,7 +53,8 @@ type StateObject struct {
 }
 
 func (self *StateObject) Reset() {
-	self.storage = make(map[string]*ethutil.Value)
+	self.storage = make(Storage)
+	self.state.Reset()
 }
 
 // Converts an transaction in to a state object
@@ -62,11 +75,12 @@ func MakeContract(tx *Transaction, state *State) *StateObject {
 
 func NewStateObject(addr []byte) *StateObject {
 	// This to ensure that it has 20 bytes (and not 0 bytes), thus left or right pad doesn't matter.
-	address := ethutil.LeftPadBytes(addr, 20)
+	address := ethutil.Address(addr)
 
 	object := &StateObject{address: address, Amount: new(big.Int), gasPool: new(big.Int)}
 	object.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, ""))
-	object.storage = make(map[string]*ethutil.Value)
+	object.storage = make(Storage)
+	object.gasPool = new(big.Int)
 
 	return object
 }
@@ -79,13 +93,6 @@ func NewContract(address []byte, Amount *big.Int, root []byte) *StateObject {
 	return contract
 }
 
-// Returns a newly created account
-func NewAccount(address []byte, amount *big.Int) *StateObject {
-	account := &StateObject{address: address, Amount: amount, Nonce: 0}
-
-	return account
-}
-
 func NewStateObjectFromBytes(address, data []byte) *StateObject {
 	object := &StateObject{address: address}
 	object.RlpDecode(data)
@@ -95,7 +102,7 @@ func NewStateObjectFromBytes(address, data []byte) *StateObject {
 
 func (self *StateObject) MarkForDeletion() {
 	self.remove = true
-	statelogger.Infof("%x: #%d %v (deletion)\n", self.Address(), self.Nonce, self.Amount)
+	statelogger.DebugDetailf("%x: #%d %v (deletion)\n", self.Address(), self.Nonce, self.Amount)
 }
 
 func (c *StateObject) GetAddr(addr []byte) *ethutil.Value {
@@ -113,36 +120,73 @@ func (self *StateObject) SetStorage(key *big.Int, value *ethutil.Value) {
 	self.setStorage(key.Bytes(), value)
 }
 
-func (self *StateObject) getStorage(key []byte) *ethutil.Value {
-	k := ethutil.LeftPadBytes(key, 32)
+func (self *StateObject) getStorage(k []byte) *ethutil.Value {
+	key := ethutil.LeftPadBytes(k, 32)
 
-	value := self.storage[string(k)]
+	value := self.storage[string(key)]
 	if value == nil {
-		value = self.GetAddr(k)
+		value = self.GetAddr(key)
 
-		self.storage[string(k)] = value
+		if !value.IsNil() {
+			self.storage[string(key)] = value
+		}
 	}
 
 	return value
+
+	//return self.GetAddr(key)
 }
 
-func (self *StateObject) setStorage(key []byte, value *ethutil.Value) {
-	k := ethutil.LeftPadBytes(key, 32)
+func (self *StateObject) setStorage(k []byte, value *ethutil.Value) {
+	key := ethutil.LeftPadBytes(k, 32)
+	self.storage[string(key)] = value.Copy()
 
-	self.storage[string(k)] = value
+	/*
+		if value.BigInt().Cmp(ethutil.Big0) == 0 {
+			self.state.trie.Delete(string(key))
+			return
+		}
+
+		self.SetAddr(key, value)
+	*/
 }
 
 func (self *StateObject) Sync() {
+	/*
+		fmt.Println("############# BEFORE ################")
+		self.state.EachStorage(func(key string, value *ethutil.Value) {
+			fmt.Printf("%x %x %x\n", self.Address(), []byte(key), value.Bytes())
+		})
+		fmt.Printf("%x @:%x\n", self.Address(), self.state.Root())
+		fmt.Println("#####################################")
+	*/
 	for key, value := range self.storage {
-		if value.BigInt().Cmp(ethutil.Big0) == 0 {
+		if value.Len() == 0 { // value.BigInt().Cmp(ethutil.Big0) == 0 {
+			//data := self.getStorage([]byte(key))
+			//fmt.Printf("deleting %x %x 0x%x\n", self.Address(), []byte(key), data)
 			self.state.trie.Delete(string(key))
 			continue
 		}
 
 		self.SetAddr([]byte(key), value)
-
 	}
+
+	valid, t2 := ethtrie.ParanoiaCheck(self.state.trie)
+	if !valid {
+		statelogger.Infof("Warn: PARANOIA: Different state storage root during copy %x vs %x\n", self.state.trie.Root, t2.Root)
+
+		self.state.trie = t2
+	}
+
+	/*
+		fmt.Println("############# AFTER ################")
+		self.state.EachStorage(func(key string, value *ethutil.Value) {
+			fmt.Printf("%x %x %x\n", self.Address(), []byte(key), value.Bytes())
+		})
+	*/
+	//fmt.Printf("%x @:%x\n", self.Address(), self.state.Root())
 }
+
 func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
 	if int64(len(c.script)-1) < pc.Int64() {
 		return ethutil.NewValue(0)
@@ -154,13 +198,13 @@ func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
 func (c *StateObject) AddAmount(amount *big.Int) {
 	c.SetAmount(new(big.Int).Add(c.Amount, amount))
 
-	statelogger.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce, c.Amount, amount)
+	statelogger.Debugf("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce, c.Amount, amount)
 }
 
 func (c *StateObject) SubAmount(amount *big.Int) {
 	c.SetAmount(new(big.Int).Sub(c.Amount, amount))
 
-	statelogger.Infof("%x: #%d %v (- %v)\n", c.Address(), c.Nonce, c.Amount, amount)
+	statelogger.Debugf("%x: #%d %v (- %v)\n", c.Address(), c.Nonce, c.Amount, amount)
 }
 
 func (c *StateObject) SetAmount(amount *big.Int) {
@@ -222,6 +266,8 @@ func (self *StateObject) Copy() *StateObject {
 	}
 	stateObject.script = ethutil.CopyBytes(self.script)
 	stateObject.initScript = ethutil.CopyBytes(self.initScript)
+	stateObject.storage = self.storage.Copy()
+	stateObject.gasPool.Set(self.gasPool)
 
 	return stateObject
 }
@@ -280,6 +326,7 @@ func (c *StateObject) RlpDecode(data []byte) {
 	c.Amount = decoder.Get(1).BigInt()
 	c.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, decoder.Get(2).Interface()))
 	c.storage = make(map[string]*ethutil.Value)
+	c.gasPool = new(big.Int)
 
 	c.ScriptHash = decoder.Get(3).Bytes()
 

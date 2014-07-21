@@ -1,16 +1,17 @@
 package ethtrie
 
 import (
-	"bytes"
-	"encoding/hex"
-	"encoding/json"
+	_ "bytes"
+	_ "encoding/hex"
+	_ "encoding/json"
 	"fmt"
-	"io/ioutil"
-	"math/rand"
-	"net/http"
-	"reflect"
+	"github.com/ethereum/eth-go/ethutil"
+	_ "io/ioutil"
+	_ "math/rand"
+	_ "net/http"
+	_ "reflect"
 	"testing"
-	"time"
+	_ "time"
 )
 
 const LONG_WORD = "1234567890abcdefghijklmnopqrstuvwxxzABCEFGHIJKLMNOPQRSTUVWXYZ"
@@ -42,6 +43,7 @@ func New() (*MemDatabase, *Trie) {
 	return db, NewTrie(db, "")
 }
 
+/*
 func TestTrieSync(t *testing.T) {
 	db, trie := New()
 
@@ -251,8 +253,8 @@ func TestRemote(t *testing.T) {
 			trie.Update(get(key), get(value))
 		}
 
-		a := NewValue(h(test.Root)).Bytes()
-		b := NewValue(trie.Root).Bytes()
+		a := ethutil.NewValue(h(test.Root)).Bytes()
+		b := ethutil.NewValue(trie.Root).Bytes()
 		if bytes.Compare(a, b) != 0 {
 			t.Errorf("%-10s: %x %x", test.Name, a, b)
 		}
@@ -267,12 +269,12 @@ func TestTrieReplay(t *testing.T) {
 		}
 
 		_, trie2 := New()
-		trie.NewIterator().Each(func(key string, v *Value) {
+		trie.NewIterator().Each(func(key string, v *ethutil.Value) {
 			trie2.Update(key, v.Str())
 		})
 
-		a := NewValue(trie.Root).Bytes()
-		b := NewValue(trie2.Root).Bytes()
+		a := ethutil.NewValue(trie.Root).Bytes()
+		b := ethutil.NewValue(trie2.Root).Bytes()
 		if bytes.Compare(a, b) != 0 {
 			t.Errorf("%s %x %x\n", test.Name, trie.Root, trie2.Root)
 		}
@@ -328,4 +330,91 @@ func TestRegression(t *testing.T) {
 			t.Errorf("%x => %d\n", root, num)
 		}
 	}
+}
+
+func TestDelete(t *testing.T) {
+	_, trie := New()
+
+	trie.Update("a", "jeffreytestlongstring")
+	trie.Update("aa", "otherstring")
+	trie.Update("aaa", "othermorestring")
+	trie.Update("aabbbbccc", "hithere")
+	trie.Update("abbcccdd", "hstanoehutnaheoustnh")
+	trie.Update("rnthaoeuabbcccdd", "hstanoehutnaheoustnh")
+	trie.Update("rneuabbcccdd", "hstanoehutnaheoustnh")
+	trie.Update("rneuabboeusntahoeucccdd", "hstanoehutnaheoustnh")
+	trie.Update("rnxabboeusntahoeucccdd", "hstanoehutnaheoustnh")
+	trie.Delete("aaboaestnuhbccc")
+	trie.Delete("a")
+	trie.Update("a", "nthaonethaosentuh")
+	trie.Update("c", "shtaosntehua")
+	trie.Delete("a")
+	trie.Update("aaaa", "testmegood")
+
+	fmt.Println("aa =>", trie.Get("aa"))
+	_, t2 := New()
+	trie.NewIterator().Each(func(key string, v *ethutil.Value) {
+		if key == "aaaa" {
+			t2.Update(key, v.Str())
+		} else {
+			t2.Update(key, v.Str())
+		}
+	})
+
+	a := ethutil.NewValue(trie.Root).Bytes()
+	b := ethutil.NewValue(t2.Root).Bytes()
+
+	fmt.Printf("o: %x\nc: %x\n", a, b)
+}
+*/
+
+func TestRndCase(t *testing.T) {
+	_, trie := New()
+
+	data := []struct{ k, v string }{
+		{"0000000000000000000000000000000000000000000000000000000000000001", "a07573657264617461000000000000000000000000000000000000000000000000"},
+		{"0000000000000000000000000000000000000000000000000000000000000003", "8453bb5b31"},
+		{"0000000000000000000000000000000000000000000000000000000000000004", "850218711a00"},
+		{"0000000000000000000000000000000000000000000000000000000000000005", "9462d7705bd0b3ecbc51a8026a25597cb28a650c79"},
+		{"0000000000000000000000000000000000000000000000000000000000000010", "947e70f9460402290a3e487dae01f610a1a8218fda"},
+		{"0000000000000000000000000000000000000000000000000000000000000111", "01"},
+		{"0000000000000000000000000000000000000000000000000000000000000112", "a053656e6174650000000000000000000000000000000000000000000000000000"},
+		{"0000000000000000000000000000000000000000000000000000000000000113", "a053656e6174650000000000000000000000000000000000000000000000000000"},
+		{"53656e6174650000000000000000000000000000000000000000000000000000", "94977e3f62f5e1ed7953697430303a3cfa2b5b736e"},
+	}
+	for _, e := range data {
+		trie.Update(string(ethutil.Hex2Bytes(e.k)), string(ethutil.Hex2Bytes(e.v)))
+	}
+
+	fmt.Printf("root after update %x\n", trie.Root)
+	trie.NewIterator().Each(func(k string, v *ethutil.Value) {
+		fmt.Printf("%x %x\n", k, v.Bytes())
+	})
+
+	data = []struct{ k, v string }{
+		{"0000000000000000000000000000000000000000000000000000000000000112", ""},
+		{"436974697a656e73000000000000000000000000000000000000000000000001", ""},
+		{"436f757274000000000000000000000000000000000000000000000000000002", ""},
+		{"53656e6174650000000000000000000000000000000000000000000000000000", ""},
+		{"436f757274000000000000000000000000000000000000000000000000000000", ""},
+		{"53656e6174650000000000000000000000000000000000000000000000000001", ""},
+		{"0000000000000000000000000000000000000000000000000000000000000113", ""},
+		{"436974697a656e73000000000000000000000000000000000000000000000000", ""},
+		{"436974697a656e73000000000000000000000000000000000000000000000002", ""},
+		{"436f757274000000000000000000000000000000000000000000000000000001", ""},
+		{"0000000000000000000000000000000000000000000000000000000000000111", ""},
+		{"53656e6174650000000000000000000000000000000000000000000000000002", ""},
+	}
+
+	for _, e := range data {
+		trie.Delete(string(ethutil.Hex2Bytes(e.k)))
+	}
+
+	fmt.Printf("root after delete %x\n", trie.Root)
+
+	trie.NewIterator().Each(func(k string, v *ethutil.Value) {
+		fmt.Printf("%x %x\n", k, v.Bytes())
+	})
+
+	fmt.Printf("%x\n", trie.Get(string(ethutil.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"))))
 }

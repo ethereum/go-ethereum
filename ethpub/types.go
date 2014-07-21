@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethcrypto"
+	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
 	"strings"
 )
@@ -46,6 +47,7 @@ type PBlock struct {
 	Transactions string `json:"transactions"`
 	Time         int64  `json:"time"`
 	Coinbase     string `json:"coinbase"`
+	Name         string `json:"name"`
 	GasLimit     string `json:"gasLimit"`
 	GasUsed      string `json:"gasUsed"`
 }
@@ -210,6 +212,10 @@ func (c *PStateObject) IsContract() bool {
 	}
 
 	return false
+}
+
+func (self *PStateObject) EachStorage(cb ethtrie.EachCallback) {
+	self.object.State().EachStorage(cb)
 }
 
 type KeyVal struct {

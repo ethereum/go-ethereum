@@ -81,6 +81,8 @@ type Ethereum struct {
 	keyManager *ethcrypto.KeyManager
 
 	clientIdentity ethwire.ClientIdentity
+
+	isUpToDate bool
 }
 
 func New(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager *ethcrypto.KeyManager, caps Caps, usePnp bool) (*Ethereum, error) {
@@ -108,6 +110,7 @@ func New(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager 
 		nat:            nat,
 		keyManager:     keyManager,
 		clientIdentity: clientIdentity,
+		isUpToDate:     true,
 	}
 	ethereum.reactor = ethreact.New()
 
@@ -158,7 +161,7 @@ func (s *Ethereum) IsUpToDate() bool {
 	upToDate := true
 	eachPeer(s.peers, func(peer *Peer, e *list.Element) {
 		if atomic.LoadInt32(&peer.connected) == 1 {
-			if peer.catchingUp == true {
+			if peer.catchingUp == true && peer.versionKnown {
 				upToDate = false
 			}
 		}
@@ -373,6 +376,7 @@ func (s *Ethereum) Start(seed bool) {
 
 	// Start the reaping processes
 	go s.ReapDeadPeerHandler()
+	go s.update()
 
 	if seed {
 		s.Seed()
@@ -512,5 +516,25 @@ out:
 		ethlogger.Debugln("unable to remove UPnP port mapping:", err)
 	} else {
 		ethlogger.Debugln("succesfully disestablished UPnP port mapping")
+	}
+}
+
+func (self *Ethereum) update() {
+	upToDateTimer := time.NewTicker(1 * time.Second)
+
+out:
+	for {
+		select {
+		case <-upToDateTimer.C:
+			if self.IsUpToDate() && !self.isUpToDate {
+				self.reactor.Post("chainSync", false)
+				self.isUpToDate = true
+			} else if !self.IsUpToDate() && self.isUpToDate {
+				self.reactor.Post("chainSync", true)
+				self.isUpToDate = false
+			}
+		case <-self.quit:
+			break out
+		}
 	}
 }
