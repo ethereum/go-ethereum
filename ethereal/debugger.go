@@ -289,7 +289,7 @@ func (d *Debugger) halting(pc int, op ethchain.OpCode, mem *ethchain.Memory, sta
 		d.win.Root().Call("setStack", val.String())
 	}
 
-	stateObject.State().EachStorage(func(key string, node *ethutil.Value) {
+	stateObject.EachStorage(func(key string, node *ethutil.Value) {
 		d.win.Root().Call("setStorage", storeVal{fmt.Sprintf("% x", key), fmt.Sprintf("% x", node.Str())})
 	})
 
