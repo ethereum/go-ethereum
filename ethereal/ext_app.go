@@ -38,8 +38,8 @@ type ExtApplication struct {
 func NewExtApplication(container AppContainer, lib *UiLib) *ExtApplication {
 	app := &ExtApplication{
 		ethpub.NewPEthereum(lib.eth),
-		make(chan ethreact.Event, 10),
-		make(chan ethreact.Event, 10),
+		make(chan ethreact.Event, 100),
+		make(chan ethreact.Event, 100),
 		make(chan bool),
 		make(chan bool),
 		container,

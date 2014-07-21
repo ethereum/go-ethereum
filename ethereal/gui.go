@@ -281,12 +281,12 @@ func (self *Gui) getObjectByName(objectName string) qml.Object {
 func (gui *Gui) update() {
 
 	var (
-		blockChan     = make(chan ethreact.Event, 1)
-		txChan        = make(chan ethreact.Event, 1)
-		objectChan    = make(chan ethreact.Event, 1)
-		peerChan      = make(chan ethreact.Event, 1)
-		chainSyncChan = make(chan ethreact.Event, 1)
-		miningChan    = make(chan ethreact.Event, 1)
+		blockChan     = make(chan ethreact.Event, 100)
+		txChan        = make(chan ethreact.Event, 100)
+		objectChan    = make(chan ethreact.Event, 100)
+		peerChan      = make(chan ethreact.Event, 100)
+		chainSyncChan = make(chan ethreact.Event, 100)
+		miningChan    = make(chan ethreact.Event, 100)
 	)
 
 	peerUpdateTicker := time.NewTicker(5 * time.Second)
