@@ -1,7 +1,6 @@
 package ethchain
 
 import (
-	"fmt"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
@@ -25,12 +24,6 @@ type State struct {
 // Create a new state from a given trie
 func NewState(trie *ethtrie.Trie) *State {
 	return &State{trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest()}
-}
-
-// Iterate over each storage address and yield callback
-func (s *State) EachStorage(cb ethtrie.EachCallback) {
-	it := s.trie.NewIterator()
-	it.Each(cb)
 }
 
 // Retrieve the balance from the given address or 0 if object not found
@@ -214,11 +207,8 @@ func (self *State) Update() {
 
 // Debug stuff
 func (self *State) CreateOutputForDiff() {
-	for addr, stateObject := range self.stateObjects {
-		fmt.Printf("%x %x %x %x\n", addr, stateObject.state.Root(), stateObject.Amount.Bytes(), stateObject.Nonce)
-		stateObject.state.EachStorage(func(addr string, value *ethutil.Value) {
-			fmt.Printf("%x %x\n", addr, value.Bytes())
-		})
+	for _, stateObject := range self.stateObjects {
+		stateObject.CreateOutputForDiff()
 	}
 }
 
