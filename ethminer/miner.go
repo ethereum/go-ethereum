@@ -133,6 +133,9 @@ func (miner *Miner) listener() {
 
 func (miner *Miner) Stop() {
 	logger.Infoln("Stopping...")
+
+	miner.powQuitChan <- ethreact.Event{}
+
 	status := make(chan error)
 	miner.quitChan <- status
 	<-status
@@ -142,9 +145,6 @@ func (miner *Miner) Stop() {
 	reactor.Unsubscribe("newTx:pre", miner.powQuitChan)
 	reactor.Unsubscribe("newBlock", miner.reactChan)
 	reactor.Unsubscribe("newTx:pre", miner.reactChan)
-
-	close(miner.powQuitChan)
-	close(miner.quitChan)
 
 	reactor.Post("miner:stop", miner)
 }
