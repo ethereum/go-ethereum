@@ -172,6 +172,7 @@ func (self *Miner) mineNewBlock() {
 		logger.Debugln(err)
 	}
 	self.txs = append(txs, unhandledTxs...)
+	self.block.SetTxHash(receipts)
 
 	// Set the transactions to the block so the new SHA3 can be calculated
 	self.block.SetReceipts(receipts, txs)

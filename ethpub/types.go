@@ -215,7 +215,7 @@ func (c *PStateObject) IsContract() bool {
 }
 
 func (self *PStateObject) EachStorage(cb ethtrie.EachCallback) {
-	self.object.State().EachStorage(cb)
+	self.object.EachStorage(cb)
 }
 
 type KeyVal struct {
@@ -226,7 +226,7 @@ type KeyVal struct {
 func (c *PStateObject) StateKeyVal(asJson bool) interface{} {
 	var values []KeyVal
 	if c.object != nil {
-		c.object.State().EachStorage(func(name string, value *ethutil.Value) {
+		c.object.EachStorage(func(name string, value *ethutil.Value) {
 			values = append(values, KeyVal{name, ethutil.Bytes2Hex(value.Bytes())})
 		})
 	}

@@ -151,6 +151,24 @@ func (self *StateObject) setStorage(k []byte, value *ethutil.Value) {
 	*/
 }
 
+// Iterate over each storage address and yield callback
+func (self *StateObject) EachStorage(cb ethtrie.EachCallback) {
+	// First loop over the uncommit/cached values in storage
+	for key, value := range self.storage {
+		// XXX Most iterators Fns as it stands require encoded values
+		encoded := ethutil.NewValue(value.Encode())
+		cb(key, encoded)
+	}
+
+	it := self.state.trie.NewIterator()
+	it.Each(func(key string, value *ethutil.Value) {
+		// If it's cached don't call the callback.
+		if self.storage[key] == nil {
+			cb(key, value)
+		}
+	})
+}
+
 func (self *StateObject) Sync() {
 	/*
 		fmt.Println("############# BEFORE ################")
@@ -301,6 +319,14 @@ func (c *StateObject) Script() Code {
 // Returns the initialization script
 func (c *StateObject) Init() Code {
 	return c.initScript
+}
+
+// Debug stuff
+func (self *StateObject) CreateOutputForDiff() {
+	fmt.Printf("%x %x %x %x\n", self.Address(), self.state.Root(), self.Amount.Bytes(), self.Nonce)
+	self.EachStorage(func(addr string, value *ethutil.Value) {
+		fmt.Printf("%x %x\n", addr, value.Bytes())
+	})
 }
 
 //

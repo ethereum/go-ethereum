@@ -201,9 +201,14 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 		fmt.Printf("## %x %x ##\n", block.Hash(), block.Number)
 	}
 
-	_, err = sm.ApplyDiff(state, parent, block)
+	receipts, err := sm.ApplyDiff(state, parent, block)
 	if err != nil {
 		return err
+	}
+
+	txSha := CreateTxSha(receipts)
+	if bytes.Compare(txSha, block.TxSha) != 0 {
+		return fmt.Errorf("Error validating tx sha. Received %x, got %x", block.TxSha, txSha)
 	}
 
 	// Block validation
@@ -219,17 +224,7 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 		return err
 	}
 
-	/*
-		if ethutil.Config.Paranoia {
-			valid, _ := ethtrie.ParanoiaCheck(state.trie)
-			if !valid {
-				err = fmt.Errorf("PARANOIA: World state trie corruption")
-			}
-		}
-	*/
-
 	if !block.State().Cmp(state) {
-
 		err = fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().trie.Root, state.trie.Root)
 		return
 	}
@@ -312,9 +307,9 @@ func (sm *StateManager) ValidateBlock(block *Block) error {
 		}
 	}
 
-	diff := block.Time - sm.bc.CurrentBlock.Time
+	diff := block.Time - previousBlock.Time
 	if diff < 0 {
-		return ValidationError("Block timestamp less then prev block %v", diff)
+		return ValidationError("Block timestamp less then prev block %v (%v - %v)", diff, block.Time, sm.bc.CurrentBlock.Time)
 	}
 
 	/* XXX

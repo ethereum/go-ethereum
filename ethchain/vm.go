@@ -158,7 +158,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			switch op {
 			case STOP, RETURN, SUICIDE:
 				closure.object.Sync()
-				closure.object.state.EachStorage(func(key string, value *ethutil.Value) {
+				closure.object.EachStorage(func(key string, value *ethutil.Value) {
 					value.Decode()
 					fmt.Printf("%x %x\n", new(big.Int).SetBytes([]byte(key)).Bytes(), value.Bytes())
 				})
