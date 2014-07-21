@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
-	"strconv"
+	_ "strconv"
 	"time"
 )
 
@@ -252,20 +252,43 @@ func (self *Block) SetReceipts(receipts []*Receipt, txs []*Transaction) {
 func (block *Block) setTransactions(txs []*Transaction) {
 	block.transactions = txs
 
+	/*
+		trie := ethtrie.NewTrie(ethutil.Config.Db, "")
+		for i, tx := range txs {
+			trie.Update(strconv.Itoa(i), string(tx.RlpEncode()))
+		}
+
+		switch trie.Root.(type) {
+		case string:
+			block.TxSha = []byte(trie.Root.(string))
+		case []byte:
+			block.TxSha = trie.Root.([]byte)
+		default:
+			panic(fmt.Sprintf("invalid root type %T", trie.Root))
+		}
+	*/
+}
+
+func CreateTxSha(receipts Receipts) (sha []byte) {
 	trie := ethtrie.NewTrie(ethutil.Config.Db, "")
-	for i, tx := range txs {
-		trie.Update(strconv.Itoa(i), string(tx.RlpEncode()))
+	for i, receipt := range receipts {
+		trie.Update(string(ethutil.NewValue(i).Encode()), string(ethutil.NewValue(receipt.RlpData()).Encode()))
 	}
 
 	switch trie.Root.(type) {
 	case string:
-		block.TxSha = []byte(trie.Root.(string))
+		sha = []byte(trie.Root.(string))
 	case []byte:
-		block.TxSha = trie.Root.([]byte)
+		sha = trie.Root.([]byte)
 	default:
 		panic(fmt.Sprintf("invalid root type %T", trie.Root))
 	}
 
+	return sha
+}
+
+func (self *Block) SetTxHash(receipts Receipts) {
+	self.TxSha = CreateTxSha(receipts)
 }
 
 func (block *Block) Value() *ethutil.Value {
