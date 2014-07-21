@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethreact"
@@ -58,8 +57,7 @@ func (app *ExtApplication) run() {
 
 	err := app.container.Create()
 	if err != nil {
-		fmt.Println(err)
-
+		logger.Errorln(err)
 		return
 	}
 
