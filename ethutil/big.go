@@ -4,14 +4,6 @@ import (
 	"math/big"
 )
 
-var BigInt0 *big.Int = big.NewInt(0)
-
-// True
-var BigTrue *big.Int = big.NewInt(1)
-
-// False
-var BigFalse *big.Int = big.NewInt(0)
-
 // Big pow
 //
 // Returns the power of two big integers
@@ -68,6 +60,17 @@ func BigCopy(src *big.Int) *big.Int {
 // Returns the maximum size big integer
 func BigMax(x, y *big.Int) *big.Int {
 	if x.Cmp(y) <= 0 {
+		return y
+	}
+
+	return x
+}
+
+// Big min
+//
+// Returns the minimum size big integer
+func BigMin(x, y *big.Int) *big.Int {
+	if x.Cmp(y) >= 0 {
 		return y
 	}
 

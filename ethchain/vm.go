@@ -503,13 +503,17 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			vm.Printf(" => %v", vm.vars.Value)
 		case CALLDATALOAD:
 			require(1)
-			offset := stack.Pop().Int64()
+			var (
+				offset  = stack.Pop()
+				data    = make([]byte, 32)
+				lenData = big.NewInt(int64(len(closure.Args)))
+			)
 
-			data := make([]byte, 32)
-			if big.NewInt(int64(len(closure.Args))).Cmp(big.NewInt(offset)) >= 0 {
-				l := int64(math.Min(float64(offset+32), float64(len(closure.Args))))
+			if lenData.Cmp(offset) >= 0 {
+				length := new(big.Int).Add(offset, ethutil.Big32)
+				length = ethutil.BigMin(length, lenData)
 
-				copy(data, closure.Args[offset:l])
+				copy(data, closure.Args[offset.Int64():length.Int64()])
 			}
 
 			vm.Printf(" => 0x%x", data)
