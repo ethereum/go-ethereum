@@ -123,9 +123,9 @@ done:
 
 		cb := state.GetStateObject(coinbase.Address())
 		st := NewStateTransition(cb, tx, state, block)
-		//fmt.Printf("#%d\n", i+1)
 		err = st.TransitionState()
 		if err != nil {
+			statelogger.Infoln(err)
 			switch {
 			case IsNonceErr(err):
 				err = nil // ignore error

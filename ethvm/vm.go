@@ -1,0 +1,848 @@
+package ethvm
+
+import (
+	"fmt"
+	"github.com/ethereum/eth-go/ethcrypto"
+	"github.com/ethereum/eth-go/ethstate"
+	"github.com/ethereum/eth-go/ethutil"
+	"math"
+	"math/big"
+)
+
+type Debugger interface {
+	BreakHook(step int, op OpCode, mem *Memory, stack *Stack, object *ethstate.StateObject) bool
+	StepHook(step int, op OpCode, mem *Memory, stack *Stack, object *ethstate.StateObject) bool
+	BreakPoints() []int64
+	SetCode(byteCode []byte)
+}
+
+type Vm struct {
+	// Stack for processing contracts
+	stack *Stack
+	// non-persistent key/value memory storage
+	mem map[string]*big.Int
+
+	env Environment
+
+	Verbose bool
+
+	logTy  byte
+	logStr string
+
+	err error
+
+	// Debugging
+	Dbg Debugger
+
+	BreakPoints []int64
+	Stepping    bool
+	Fn          string
+}
+
+type Environment interface {
+	State() *ethstate.State
+
+	Origin() []byte
+	BlockNumber() *big.Int
+	PrevHash() []byte
+	Coinbase() []byte
+	Time() int64
+	Difficulty() *big.Int
+	Data() []string
+	Value() *big.Int
+}
+
+type Object interface {
+	GetStorage(key *big.Int) *ethutil.Value
+	SetStorage(key *big.Int, value *ethutil.Value)
+}
+
+func New(env Environment) *Vm {
+	lt := LogTyPretty
+	if ethutil.Config.Diff {
+		lt = LogTyDiff
+	}
+
+	return &Vm{env: env, logTy: lt}
+}
+
+func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
+	// Recover from any require exception
+	defer func() {
+		if r := recover(); r != nil {
+			ret = closure.Return(nil)
+			err = fmt.Errorf("%v", r)
+			vmlogger.Errorln("vm err", err)
+		}
+	}()
+
+	// Debug hook
+	if self.Dbg != nil {
+		self.Dbg.SetCode(closure.Code)
+	}
+
+	// Don't bother with the execution if there's no code.
+	if len(closure.Code) == 0 {
+		return closure.Return(nil), nil
+	}
+
+	vmlogger.Debugf("(%s) %x gas: %v (d) %x\n", self.Fn, closure.Address(), closure.Gas, closure.Args)
+
+	var (
+		op OpCode
+
+		mem      = &Memory{}
+		stack    = NewStack()
+		pc       = big.NewInt(0)
+		step     = 0
+		prevStep = 0
+		require  = func(m int) {
+			if stack.Len() < m {
+				panic(fmt.Sprintf("%04v (%v) stack err size = %d, required = %d", pc, op, stack.Len(), m))
+			}
+		}
+	)
+
+	for {
+		prevStep = step
+		// The base for all big integer arithmetic
+		base := new(big.Int)
+
+		step++
+		// Get the memory location of pc
+		val := closure.Get(pc)
+		// Get the opcode (it must be an opcode!)
+		op = OpCode(val.Uint())
+
+		// XXX Leave this Println intact. Don't change this to the log system.
+		// Used for creating diffs between implementations
+		if self.logTy == LogTyDiff {
+			/*
+				switch op {
+				case STOP, RETURN, SUICIDE:
+					closure.object.EachStorage(func(key string, value *ethutil.Value) {
+						value.Decode()
+						fmt.Printf("%x %x\n", new(big.Int).SetBytes([]byte(key)).Bytes(), value.Bytes())
+					})
+				}
+
+				b := pc.Bytes()
+				if len(b) == 0 {
+					b = []byte{0}
+				}
+
+				fmt.Printf("%x %x %x %x\n", closure.Address(), b, []byte{byte(op)}, closure.Gas.Bytes())
+			*/
+		}
+
+		gas := new(big.Int)
+		addStepGasUsage := func(amount *big.Int) {
+			if amount.Cmp(ethutil.Big0) >= 0 {
+				gas.Add(gas, amount)
+			}
+		}
+
+		addStepGasUsage(GasStep)
+
+		var newMemSize uint64 = 0
+		switch op {
+		case STOP:
+			gas.Set(ethutil.Big0)
+		case SUICIDE:
+			gas.Set(ethutil.Big0)
+		case SLOAD:
+			gas.Set(GasSLoad)
+		case SSTORE:
+			var mult *big.Int
+			y, x := stack.Peekn()
+			val := closure.GetStorage(x)
+			if val.BigInt().Cmp(ethutil.Big0) == 0 && len(y.Bytes()) > 0 {
+				mult = ethutil.Big2
+			} else if val.BigInt().Cmp(ethutil.Big0) != 0 && len(y.Bytes()) == 0 {
+				mult = ethutil.Big0
+			} else {
+				mult = ethutil.Big1
+			}
+			gas = new(big.Int).Mul(mult, GasSStore)
+		case BALANCE:
+			gas.Set(GasBalance)
+		case MSTORE:
+			require(2)
+			newMemSize = stack.Peek().Uint64() + 32
+		case MLOAD:
+			require(1)
+
+			newMemSize = stack.Peek().Uint64() + 32
+		case MSTORE8:
+			require(2)
+			newMemSize = stack.Peek().Uint64() + 1
+		case RETURN:
+			require(2)
+
+			newMemSize = stack.Peek().Uint64() + stack.data[stack.Len()-2].Uint64()
+		case SHA3:
+			require(2)
+
+			gas.Set(GasSha)
+
+			newMemSize = stack.Peek().Uint64() + stack.data[stack.Len()-2].Uint64()
+		case CALLDATACOPY:
+			require(3)
+
+			newMemSize = stack.Peek().Uint64() + stack.data[stack.Len()-3].Uint64()
+		case CODECOPY:
+			require(3)
+
+			newMemSize = stack.Peek().Uint64() + stack.data[stack.Len()-3].Uint64()
+		case CALL:
+			require(7)
+			gas.Set(GasCall)
+			addStepGasUsage(stack.data[stack.Len()-1])
+
+			x := stack.data[stack.Len()-6].Uint64() + stack.data[stack.Len()-7].Uint64()
+			y := stack.data[stack.Len()-4].Uint64() + stack.data[stack.Len()-5].Uint64()
+
+			newMemSize = uint64(math.Max(float64(x), float64(y)))
+		case CREATE:
+			require(3)
+			gas.Set(GasCreate)
+
+			newMemSize = stack.data[stack.Len()-2].Uint64() + stack.data[stack.Len()-3].Uint64()
+		}
+
+		newMemSize = (newMemSize + 31) / 32 * 32
+		if newMemSize > uint64(mem.Len()) {
+			m := GasMemory.Uint64() * (newMemSize - uint64(mem.Len())) / 32
+			addStepGasUsage(big.NewInt(int64(m)))
+		}
+
+		if !closure.UseGas(gas) {
+			err := fmt.Errorf("Insufficient gas for %v. req %v has %v", op, gas, closure.Gas)
+
+			closure.UseGas(closure.Gas)
+
+			return closure.Return(nil), err
+		}
+
+		self.Printf("(pc) %-3d -o- %-14s", pc, op.String())
+		self.Printf(" (g) %-3v (%v)", gas, closure.Gas)
+
+		mem.Resize(newMemSize)
+
+		switch op {
+		case LOG:
+			stack.Print()
+			mem.Print()
+			// 0x20 range
+		case ADD:
+			require(2)
+			x, y := stack.Popn()
+			self.Printf(" %v + %v", y, x)
+
+			base.Add(y, x)
+
+			self.Printf(" = %v", base)
+			// Pop result back on the stack
+			stack.Push(base)
+		case SUB:
+			require(2)
+			x, y := stack.Popn()
+			self.Printf(" %v - %v", y, x)
+
+			base.Sub(y, x)
+
+			self.Printf(" = %v", base)
+			// Pop result back on the stack
+			stack.Push(base)
+		case MUL:
+			require(2)
+			x, y := stack.Popn()
+			self.Printf(" %v * %v", y, x)
+
+			base.Mul(y, x)
+
+			self.Printf(" = %v", base)
+			// Pop result back on the stack
+			stack.Push(base)
+		case DIV:
+			require(2)
+			x, y := stack.Popn()
+			self.Printf(" %v / %v", y, x)
+
+			base.Div(y, x)
+
+			self.Printf(" = %v", base)
+			// Pop result back on the stack
+			stack.Push(base)
+		case SDIV:
+			require(2)
+			x, y := stack.Popn()
+			// n > 2**255
+			if x.Cmp(Pow256) > 0 {
+				x.Sub(Pow256, x)
+			}
+			if y.Cmp(Pow256) > 0 {
+				y.Sub(Pow256, y)
+			}
+			z := new(big.Int)
+			z.Div(x, y)
+			if z.Cmp(Pow256) > 0 {
+				z.Sub(Pow256, z)
+			}
+			// Push result on to the stack
+			stack.Push(z)
+		case MOD:
+			require(2)
+			x, y := stack.Popn()
+
+			self.Printf(" %v %% %v", y, x)
+
+			base.Mod(y, x)
+
+			self.Printf(" = %v", base)
+			stack.Push(base)
+		case SMOD:
+			require(2)
+			x, y := stack.Popn()
+			// n > 2**255
+			if x.Cmp(Pow256) > 0 {
+				x.Sub(Pow256, x)
+			}
+			if y.Cmp(Pow256) > 0 {
+				y.Sub(Pow256, y)
+			}
+			z := new(big.Int)
+			z.Mod(x, y)
+			if z.Cmp(Pow256) > 0 {
+				z.Sub(Pow256, z)
+			}
+			// Push result on to the stack
+			stack.Push(z)
+		case EXP:
+			require(2)
+			x, y := stack.Popn()
+
+			self.Printf(" %v ** %v", y, x)
+
+			base.Exp(y, x, Pow256)
+
+			self.Printf(" = %v", base)
+
+			stack.Push(base)
+		case NEG:
+			require(1)
+			base.Sub(Pow256, stack.Pop())
+			stack.Push(base)
+		case LT:
+			require(2)
+			x, y := stack.Popn()
+			self.Printf(" %v < %v", y, x)
+			// x < y
+			if y.Cmp(x) < 0 {
+				stack.Push(ethutil.BigTrue)
+			} else {
+				stack.Push(ethutil.BigFalse)
+			}
+		case GT:
+			require(2)
+			x, y := stack.Popn()
+			self.Printf(" %v > %v", y, x)
+
+			// x > y
+			if y.Cmp(x) > 0 {
+				stack.Push(ethutil.BigTrue)
+			} else {
+				stack.Push(ethutil.BigFalse)
+			}
+
+		case SLT:
+			require(2)
+			x, y := stack.Popn()
+			self.Printf(" %v < %v", y, x)
+			// x < y
+			if y.Cmp(x) < 0 {
+				stack.Push(ethutil.BigTrue)
+			} else {
+				stack.Push(ethutil.BigFalse)
+			}
+		case SGT:
+			require(2)
+			x, y := stack.Popn()
+			self.Printf(" %v > %v", y, x)
+
+			// x > y
+			if y.Cmp(x) > 0 {
+				stack.Push(ethutil.BigTrue)
+			} else {
+				stack.Push(ethutil.BigFalse)
+			}
+
+		case EQ:
+			require(2)
+			x, y := stack.Popn()
+			self.Printf(" %v == %v", y, x)
+
+			// x == y
+			if x.Cmp(y) == 0 {
+				stack.Push(ethutil.BigTrue)
+			} else {
+				stack.Push(ethutil.BigFalse)
+			}
+		case NOT:
+			require(1)
+			x := stack.Pop()
+			if x.Cmp(ethutil.BigFalse) > 0 {
+				stack.Push(ethutil.BigFalse)
+			} else {
+				stack.Push(ethutil.BigTrue)
+			}
+
+			// 0x10 range
+		case AND:
+			require(2)
+			x, y := stack.Popn()
+			self.Printf(" %v & %v", y, x)
+
+			stack.Push(base.And(y, x))
+		case OR:
+			require(2)
+			x, y := stack.Popn()
+			self.Printf(" %v | %v", y, x)
+
+			stack.Push(base.Or(y, x))
+		case XOR:
+			require(2)
+			x, y := stack.Popn()
+			self.Printf(" %v ^ %v", y, x)
+
+			stack.Push(base.Xor(y, x))
+		case BYTE:
+			require(2)
+			val, th := stack.Popn()
+			if th.Cmp(big.NewInt(32)) < 0 && th.Cmp(big.NewInt(int64(len(val.Bytes())))) < 0 {
+				byt := big.NewInt(int64(val.Bytes()[th.Int64()]))
+				stack.Push(byt)
+
+				self.Printf(" => 0x%x", byt.Bytes())
+			} else {
+				stack.Push(ethutil.BigFalse)
+			}
+
+			// 0x20 range
+		case SHA3:
+			require(2)
+			size, offset := stack.Popn()
+			data := ethcrypto.Sha3Bin(mem.Get(offset.Int64(), size.Int64()))
+
+			stack.Push(ethutil.BigD(data))
+
+			self.Printf(" => %x", data)
+			// 0x30 range
+		case ADDRESS:
+			stack.Push(ethutil.BigD(closure.Address()))
+
+			self.Printf(" => %x", closure.Address())
+		case BALANCE:
+			require(1)
+
+			addr := stack.Pop().Bytes()
+			balance := self.env.State().GetBalance(addr)
+
+			stack.Push(balance)
+
+			self.Printf(" => %v (%x)", balance, addr)
+		case ORIGIN:
+			origin := self.env.Origin()
+
+			stack.Push(ethutil.BigD(origin))
+
+			self.Printf(" => %x", origin)
+		case CALLER:
+			caller := closure.caller.Address()
+			stack.Push(ethutil.BigD(caller))
+
+			self.Printf(" => %x", caller)
+		case CALLVALUE:
+			value := self.env.Value()
+
+			stack.Push(value)
+
+			self.Printf(" => %v", value)
+		case CALLDATALOAD:
+			require(1)
+			var (
+				offset  = stack.Pop()
+				data    = make([]byte, 32)
+				lenData = big.NewInt(int64(len(closure.Args)))
+			)
+
+			if lenData.Cmp(offset) >= 0 {
+				length := new(big.Int).Add(offset, ethutil.Big32)
+				length = ethutil.BigMin(length, lenData)
+
+				copy(data, closure.Args[offset.Int64():length.Int64()])
+			}
+
+			self.Printf(" => 0x%x", data)
+
+			stack.Push(ethutil.BigD(data))
+		case CALLDATASIZE:
+			l := int64(len(closure.Args))
+			stack.Push(big.NewInt(l))
+
+			self.Printf(" => %d", l)
+		case CALLDATACOPY:
+			var (
+				size = int64(len(closure.Args))
+				mOff = stack.Pop().Int64()
+				cOff = stack.Pop().Int64()
+				l    = stack.Pop().Int64()
+			)
+
+			if cOff > size {
+				cOff = 0
+				l = 0
+			} else if cOff+l > size {
+				l = 0
+			}
+
+			code := closure.Args[cOff : cOff+l]
+
+			mem.Set(mOff, l, code)
+		case CODESIZE:
+			l := big.NewInt(int64(len(closure.Code)))
+			stack.Push(l)
+
+			self.Printf(" => %d", l)
+		case CODECOPY:
+			var (
+				size = int64(len(closure.Code))
+				mOff = stack.Pop().Int64()
+				cOff = stack.Pop().Int64()
+				l    = stack.Pop().Int64()
+			)
+
+			if cOff > size {
+				cOff = 0
+				l = 0
+			} else if cOff+l > size {
+				l = 0
+			}
+
+			code := closure.Code[cOff : cOff+l]
+			//fmt.Println("len:", l, "code off:", cOff, "mem off:", mOff)
+
+			mem.Set(mOff, l, code)
+			//fmt.Println(Code(mem.Get(mOff, l)))
+		case GASPRICE:
+			stack.Push(closure.Price)
+
+			self.Printf(" => %v", closure.Price)
+
+			// 0x40 range
+		case PREVHASH:
+			prevHash := self.env.PrevHash()
+
+			stack.Push(ethutil.BigD(prevHash))
+
+			self.Printf(" => 0x%x", prevHash)
+		case COINBASE:
+			coinbase := self.env.Coinbase()
+
+			stack.Push(ethutil.BigD(coinbase))
+
+			self.Printf(" => 0x%x", coinbase)
+		case TIMESTAMP:
+			time := self.env.Time()
+
+			stack.Push(big.NewInt(time))
+
+			self.Printf(" => 0x%x", time)
+		case NUMBER:
+			number := self.env.BlockNumber()
+
+			stack.Push(number)
+
+			self.Printf(" => 0x%x", number.Bytes())
+		case DIFFICULTY:
+			difficulty := self.env.Difficulty()
+
+			stack.Push(difficulty)
+
+			self.Printf(" => 0x%x", difficulty.Bytes())
+		case GASLIMIT:
+			// TODO
+			stack.Push(big.NewInt(0))
+
+			// 0x50 range
+		case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
+			a := big.NewInt(int64(op) - int64(PUSH1) + 1)
+			pc.Add(pc, ethutil.Big1)
+			data := closure.Gets(pc, a)
+			val := ethutil.BigD(data.Bytes())
+			// Push value to stack
+			stack.Push(val)
+			pc.Add(pc, a.Sub(a, big.NewInt(1)))
+
+			step += int(op) - int(PUSH1) + 1
+
+			self.Printf(" => 0x%x", data.Bytes())
+		case POP:
+			require(1)
+			stack.Pop()
+		case DUP:
+			require(1)
+			stack.Push(stack.Peek())
+
+			self.Printf(" => 0x%x", stack.Peek().Bytes())
+		case SWAP:
+			require(2)
+			x, y := stack.Popn()
+			stack.Push(y)
+			stack.Push(x)
+		case MLOAD:
+			require(1)
+			offset := stack.Pop()
+			val := ethutil.BigD(mem.Get(offset.Int64(), 32))
+			stack.Push(val)
+
+			self.Printf(" => 0x%x", val.Bytes())
+		case MSTORE: // Store the value at stack top-1 in to memory at location stack top
+			require(2)
+			// Pop value of the stack
+			val, mStart := stack.Popn()
+			mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(val, 256))
+
+			self.Printf(" => 0x%x", val)
+		case MSTORE8:
+			require(2)
+			val, mStart := stack.Popn()
+			//base.And(val, new(big.Int).SetInt64(0xff))
+			//mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(base, 256))
+			mem.store[mStart.Int64()] = byte(val.Int64() & 0xff)
+
+			self.Printf(" => 0x%x", val)
+		case SLOAD:
+			require(1)
+			loc := stack.Pop()
+			val := closure.GetStorage(loc)
+
+			stack.Push(val.BigInt())
+
+			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
+		case SSTORE:
+			require(2)
+			val, loc := stack.Popn()
+			closure.SetStorage(loc, ethutil.NewValue(val))
+
+			// Add the change to manifest
+			self.env.State().Manifest().AddStorageChange(closure.Object(), loc.Bytes(), val)
+
+			self.Printf(" {0x%x : 0x%x}", loc, val)
+		case JUMP:
+			require(1)
+			pc = stack.Pop()
+			// Reduce pc by one because of the increment that's at the end of this for loop
+			self.Printf(" ~> %v", pc).Endl()
+
+			continue
+		case JUMPI:
+			require(2)
+			cond, pos := stack.Popn()
+			if cond.Cmp(ethutil.BigTrue) >= 0 {
+				pc = pos
+
+				self.Printf(" ~> %v (t)", pc).Endl()
+
+				continue
+			} else {
+				self.Printf(" (f)")
+			}
+		case PC:
+			stack.Push(pc)
+		case MSIZE:
+			stack.Push(big.NewInt(int64(mem.Len())))
+		case GAS:
+			stack.Push(closure.Gas)
+			// 0x60 range
+		case CREATE:
+			require(3)
+
+			var (
+				err          error
+				value        = stack.Pop()
+				size, offset = stack.Popn()
+
+				// Snapshot the current stack so we are able to
+				// revert back to it later.
+				snapshot = self.env.State().Copy()
+			)
+
+			// Generate a new address
+			addr := ethcrypto.CreateAddress(closure.Address(), closure.object.Nonce)
+			for i := uint64(0); self.env.State().GetStateObject(addr) != nil; i++ {
+				ethcrypto.CreateAddress(closure.Address(), closure.object.Nonce+i)
+			}
+			closure.object.Nonce++
+
+			self.Printf(" (*) %x", addr).Endl()
+
+			// Create a new contract
+			contract := self.env.State().NewStateObject(addr)
+			if contract.Amount.Cmp(value) >= 0 {
+				closure.object.SubAmount(value)
+				contract.AddAmount(value)
+
+				// Set the init script
+				initCode := mem.Get(offset.Int64(), size.Int64())
+				//fmt.Printf("%x\n", initCode)
+				// Transfer all remaining gas to the new
+				// contract so it may run the init script
+				gas := new(big.Int).Set(closure.Gas)
+				closure.UseGas(closure.Gas)
+
+				// Create the closure
+				c := NewClosure(closure, contract, initCode, gas, closure.Price)
+				// Call the closure and set the return value as
+				// main script.
+				contract.Code, _, err = c.Call(self, nil)
+			} else {
+				err = fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Amount)
+			}
+
+			if err != nil {
+				stack.Push(ethutil.BigFalse)
+
+				// Revert the state as it was before.
+				self.env.State().Set(snapshot)
+
+				self.Printf("CREATE err %v", err)
+			} else {
+				stack.Push(ethutil.BigD(addr))
+				self.Printf("CREATE success")
+			}
+			self.Endl()
+
+			// Debug hook
+			if self.Dbg != nil {
+				self.Dbg.SetCode(closure.Code)
+			}
+		case CALL:
+			require(7)
+
+			self.Endl()
+
+			gas := stack.Pop()
+			// Pop gas and value of the stack.
+			value, addr := stack.Popn()
+			// Pop input size and offset
+			inSize, inOffset := stack.Popn()
+			// Pop return size and offset
+			retSize, retOffset := stack.Popn()
+
+			// Get the arguments from the memory
+			args := mem.Get(inOffset.Int64(), inSize.Int64())
+
+			if closure.object.Amount.Cmp(value) < 0 {
+				vmlogger.Debugf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Amount)
+
+				closure.ReturnGas(gas, nil)
+
+				stack.Push(ethutil.BigFalse)
+			} else {
+				snapshot := self.env.State().Copy()
+
+				stateObject := self.env.State().GetOrNewStateObject(addr.Bytes())
+
+				closure.object.SubAmount(value)
+				stateObject.AddAmount(value)
+
+				// Create a new callable closure
+				c := NewClosure(closure, stateObject, stateObject.Code, gas, closure.Price)
+				// Executer the closure and get the return value (if any)
+				ret, _, err := c.Call(self, args)
+				if err != nil {
+					stack.Push(ethutil.BigFalse)
+
+					vmlogger.Debugf("Closure execution failed. %v\n", err)
+
+					self.env.State().Set(snapshot)
+				} else {
+					stack.Push(ethutil.BigTrue)
+
+					mem.Set(retOffset.Int64(), retSize.Int64(), ret)
+				}
+
+				// Debug hook
+				if self.Dbg != nil {
+					self.Dbg.SetCode(closure.Code)
+				}
+			}
+		case RETURN:
+			require(2)
+			size, offset := stack.Popn()
+			ret := mem.Get(offset.Int64(), size.Int64())
+
+			self.Printf(" => (%d) 0x%x", len(ret), ret).Endl()
+
+			return closure.Return(ret), nil
+		case SUICIDE:
+			require(1)
+
+			receiver := self.env.State().GetOrNewStateObject(stack.Pop().Bytes())
+
+			receiver.AddAmount(closure.object.Amount)
+
+			closure.object.MarkForDeletion()
+
+			fallthrough
+		case STOP: // Stop the closure
+			self.Endl()
+
+			return closure.Return(nil), nil
+		default:
+			vmlogger.Debugf("(pc) %-3v Invalid opcode %x\n", pc, op)
+			fmt.Println(ethstate.Code(closure.Code))
+
+			return closure.Return(nil), fmt.Errorf("Invalid opcode %x", op)
+		}
+
+		pc.Add(pc, ethutil.Big1)
+
+		self.Endl()
+
+		if self.Dbg != nil {
+			for _, instrNo := range self.Dbg.BreakPoints() {
+				if pc.Cmp(big.NewInt(instrNo)) == 0 {
+					self.Stepping = true
+
+					if !self.Dbg.BreakHook(prevStep, op, mem, stack, closure.Object()) {
+						return nil, nil
+					}
+				} else if self.Stepping {
+					if !self.Dbg.StepHook(prevStep, op, mem, stack, closure.Object()) {
+						return nil, nil
+					}
+				}
+			}
+		}
+
+	}
+}
+
+func (self *Vm) Printf(format string, v ...interface{}) *Vm {
+	if self.Verbose && self.logTy == LogTyPretty {
+		self.logStr += fmt.Sprintf(format, v...)
+	}
+
+	return self
+}
+
+func (self *Vm) Endl() *Vm {
+	if self.Verbose && self.logTy == LogTyPretty {
+		vmlogger.Debugln(self.logStr)
+		self.logStr = ""
+	}
+
+	return self
+}

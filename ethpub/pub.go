@@ -48,6 +48,12 @@ type PEthereum struct {
 }
 
 func NewPEthereum(manager ethchain.EthManager) *PEthereum {
+	logger.Warnln("DEPRECATED: ethpub.New should be used in favour of ethpub.NewPEthereum")
+
+	return New(manager)
+}
+
+func New(manager ethchain.EthManager) *PEthereum {
 	return &PEthereum{
 		manager,
 		manager.StateManager(),
