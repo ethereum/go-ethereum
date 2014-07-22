@@ -133,6 +133,8 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 	contract := ethchain.NewStateObject([]byte{0})
 	contract.Amount = value
 
+	self.SetAsm(script)
+
 	callerClosure := ethchain.NewClosure(account, contract, script, state, gas, gasPrice)
 
 	block := self.lib.eth.BlockChain().CurrentBlock
