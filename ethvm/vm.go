@@ -48,7 +48,6 @@ type Environment interface {
 	Coinbase() []byte
 	Time() int64
 	Difficulty() *big.Int
-	Data() []string
 	Value() *big.Int
 }
 
@@ -420,7 +419,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			require(2)
 			val, th := stack.Popn()
 			if th.Cmp(big.NewInt(32)) < 0 && th.Cmp(big.NewInt(int64(len(val.Bytes())))) < 0 {
-				byt := big.NewInt(int64(val.Bytes()[th.Int64()]))
+				byt := big.NewInt(int64(ethutil.LeftPadBytes(val.Bytes(), 32)[th.Int64()]))
 				stack.Push(byt)
 
 				self.Printf(" => 0x%x", byt.Bytes())
@@ -530,10 +529,8 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			}
 
 			code := closure.Code[cOff : cOff+l]
-			//fmt.Println("len:", l, "code off:", cOff, "mem off:", mOff)
 
 			mem.Set(mOff, l, code)
-			//fmt.Println(Code(mem.Get(mOff, l)))
 		case GASPRICE:
 			stack.Push(closure.Price)
 
@@ -638,7 +635,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			// Add the change to manifest
 			self.env.State().Manifest().AddStorageChange(closure.Object(), loc.Bytes(), val)
 
-			self.Printf(" {0x%x : 0x%x}", loc, val)
+			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case JUMP:
 			require(1)
 			pc = stack.Pop()
@@ -802,7 +799,6 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			return closure.Return(nil), nil
 		default:
 			vmlogger.Debugf("(pc) %-3v Invalid opcode %x\n", pc, op)
-			fmt.Println(ethstate.Code(closure.Code))
 
 			return closure.Return(nil), fmt.Errorf("Invalid opcode %x", op)
 		}

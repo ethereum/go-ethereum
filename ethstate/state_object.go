@@ -11,7 +11,7 @@ import (
 type Code []byte
 
 func (self Code) String() string {
-	return "" //strings.Join(Disassemble(self), " ")
+	return string(self) //strings.Join(Disassemble(self), " ")
 }
 
 type Storage map[string]*ethutil.Value

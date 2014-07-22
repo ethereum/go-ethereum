@@ -15,17 +15,14 @@ import (
 type TestEnv struct {
 }
 
-func (self TestEnv) GetObject() Object               { return nil }
-func (self TestEnv) Origin() []byte                  { return nil }
-func (self TestEnv) BlockNumber() *big.Int           { return nil }
-func (self TestEnv) PrevHash() []byte                { return nil }
-func (self TestEnv) Coinbase() []byte                { return nil }
-func (self TestEnv) Time() int64                     { return 0 }
-func (self TestEnv) Difficulty() *big.Int            { return nil }
-func (self TestEnv) Data() []string                  { return nil }
-func (self TestEnv) Value() *big.Int                 { return nil }
-func (self TestEnv) GetBalance(addr []byte) *big.Int { return nil }
-func (self TestEnv) State() *ethstate.State          { return nil }
+func (self TestEnv) Origin() []byte         { return nil }
+func (self TestEnv) BlockNumber() *big.Int  { return nil }
+func (self TestEnv) PrevHash() []byte       { return nil }
+func (self TestEnv) Coinbase() []byte       { return nil }
+func (self TestEnv) Time() int64            { return 0 }
+func (self TestEnv) Difficulty() *big.Int   { return nil }
+func (self TestEnv) Value() *big.Int        { return nil }
+func (self TestEnv) State() *ethstate.State { return nil }
 
 func TestVm(t *testing.T) {
 	ethlog.AddLogSystem(ethlog.NewStdLogSystem(os.Stdout, log.LstdFlags, ethlog.LogLevel(4)))

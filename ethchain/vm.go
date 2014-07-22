@@ -563,10 +563,9 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			}
 
 			code := closure.Script[cOff : cOff+l]
-			//fmt.Println("len:", l, "code off:", cOff, "mem off:", mOff)
+			fmt.Println("len:", l, "code off:", cOff, "mem off:", mOff)
 
 			mem.Set(mOff, l, code)
-			//fmt.Println(Code(mem.Get(mOff, l)))
 		case GASPRICE:
 			stack.Push(closure.Price)
 
@@ -673,6 +672,8 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			stack.Push(pc)
 		case MSIZE:
 			stack.Push(big.NewInt(int64(mem.Len())))
+
+			vm.Printf(" => %v", mem.Len()).Endl()
 		case GAS:
 			stack.Push(closure.Gas)
 			// 0x60 range

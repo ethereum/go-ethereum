@@ -25,7 +25,7 @@ func Disassemble(script []byte) (asm []string) {
 			pc.Add(pc, ethutil.Big1)
 			a := int64(op) - int64(PUSH1) + 1
 			if int(pc.Int64()+a) > len(script) {
-				return nil
+				return
 			}
 
 			data := script[pc.Int64() : pc.Int64()+a]
@@ -40,5 +40,5 @@ func Disassemble(script []byte) (asm []string) {
 		pc.Add(pc, ethutil.Big1)
 	}
 
-	return
+	return asm
 }
