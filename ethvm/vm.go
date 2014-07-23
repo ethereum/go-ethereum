@@ -268,7 +268,9 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			x, y := stack.Popn()
 			self.Printf(" %v / %v", y, x)
 
-			base.Div(y, x)
+			if x.Cmp(ethutil.Big0) != 0 {
+				base.Div(y, x)
+			}
 
 			self.Printf(" = %v", base)
 			// Pop result back on the stack
