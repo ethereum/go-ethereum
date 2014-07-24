@@ -470,23 +470,20 @@ func (p *Peer) HandleInbound() {
 				p.pushPeers()
 			case ethwire.MsgPeersTy:
 				// Received a list of peers (probably because MsgGetPeersTy was send)
-				// Only act on message if we actually requested for a peers list
-				if p.requestedPeerList {
-					data := msg.Data
-					// Create new list of possible peers for the ethereum to process
-					peers := make([]string, data.Len())
-					// Parse each possible peer
-					for i := 0; i < data.Len(); i++ {
-						value := data.Get(i)
-						peers[i] = unpackAddr(value.Get(0), value.Get(1).Uint())
-					}
-
-					// Connect to the list of peers
-					p.ethereum.ProcessPeerList(peers)
-					// Mark unrequested again
-					p.requestedPeerList = false
-
+				data := msg.Data
+				// Create new list of possible peers for the ethereum to process
+				peers := make([]string, data.Len())
+				// Parse each possible peer
+				for i := 0; i < data.Len(); i++ {
+					value := data.Get(i)
+					peers[i] = unpackAddr(value.Get(0), value.Get(1).Uint())
 				}
+
+				// Connect to the list of peers
+				p.ethereum.ProcessPeerList(peers)
+				// Mark unrequested again
+				p.requestedPeerList = false
+
 			case ethwire.MsgGetChainTy:
 				var parent *ethchain.Block
 				// Length minus one since the very last element in the array is a count

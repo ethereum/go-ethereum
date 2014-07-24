@@ -44,7 +44,7 @@ func (bc *BlockChain) NewBlock(coinbase []byte) *Block {
 	hash := ZeroHash256
 
 	if bc.CurrentBlock != nil {
-		root = bc.CurrentBlock.state.trie.Root
+		root = bc.CurrentBlock.state.Trie.Root
 		hash = bc.LastBlockHash
 		lastBlockTime = bc.CurrentBlock.Time
 	}
@@ -297,7 +297,7 @@ func (bc *BlockChain) setLastBlock() {
 	} else {
 		AddTestNetFunds(bc.genesisBlock)
 
-		bc.genesisBlock.state.trie.Sync()
+		bc.genesisBlock.state.Trie.Sync()
 		// Prepare the genesis block
 		bc.Add(bc.genesisBlock)
 

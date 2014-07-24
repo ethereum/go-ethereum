@@ -5,6 +5,7 @@ import (
 	"container/list"
 	"fmt"
 	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethwire"
 	"math/big"
 	"sync"
@@ -252,7 +253,7 @@ func (pool *TxPool) CurrentTransactions() []*Transaction {
 	return txList
 }
 
-func (pool *TxPool) RemoveInvalid(state *State) {
+func (pool *TxPool) RemoveInvalid(state *ethstate.State) {
 	for e := pool.pool.Front(); e != nil; e = e.Next() {
 		tx := e.Value.(*Transaction)
 		sender := state.GetAccount(tx.Sender())

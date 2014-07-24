@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
-	_ "github.com/ethereum/eth-go/ethtrie"
+	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
 	"math/big"
@@ -50,8 +50,6 @@ type StateManager struct {
 	mutex sync.Mutex
 	// Canonical block chain
 	bc *BlockChain
-	// Stack for processing contracts
-	stack *Stack
 	// non-persistent key/value memory storage
 	mem map[string]*big.Int
 	// Proof of work used for validating
@@ -62,10 +60,10 @@ type StateManager struct {
 	// Transiently state. The trans state isn't ever saved, validated and
 	// it could be used for setting account nonces without effecting
 	// the main states.
-	transState *State
+	transState *ethstate.State
 	// Mining state. The mining state is used purely and solely by the mining
 	// operation.
-	miningState *State
+	miningState *ethstate.State
 
 	// The last attempted block is mainly used for debugging purposes
 	// This does not have to be a valid block and will be set during
@@ -75,7 +73,6 @@ type StateManager struct {
 
 func NewStateManager(ethereum EthManager) *StateManager {
 	sm := &StateManager{
-		stack:    NewStack(),
 		mem:      make(map[string]*big.Int),
 		Pow:      &EasyPow{},
 		Ethereum: ethereum,
@@ -87,19 +84,19 @@ func NewStateManager(ethereum EthManager) *StateManager {
 	return sm
 }
 
-func (sm *StateManager) CurrentState() *State {
+func (sm *StateManager) CurrentState() *ethstate.State {
 	return sm.Ethereum.BlockChain().CurrentBlock.State()
 }
 
-func (sm *StateManager) TransState() *State {
+func (sm *StateManager) TransState() *ethstate.State {
 	return sm.transState
 }
 
-func (sm *StateManager) MiningState() *State {
+func (sm *StateManager) MiningState() *ethstate.State {
 	return sm.miningState
 }
 
-func (sm *StateManager) NewMiningState() *State {
+func (sm *StateManager) NewMiningState() *ethstate.State {
 	sm.miningState = sm.Ethereum.BlockChain().CurrentBlock.State().Copy()
 
 	return sm.miningState
@@ -109,7 +106,7 @@ func (sm *StateManager) BlockChain() *BlockChain {
 	return sm.bc
 }
 
-func (self *StateManager) ProcessTransactions(coinbase *StateObject, state *State, block, parent *Block, txs Transactions) (Receipts, Transactions, Transactions, error) {
+func (self *StateManager) ProcessTransactions(coinbase *ethstate.StateObject, state *ethstate.State, block, parent *Block, txs Transactions) (Receipts, Transactions, Transactions, error) {
 	var (
 		receipts           Receipts
 		handled, unhandled Transactions
@@ -225,7 +222,7 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 	}
 
 	if !block.State().Cmp(state) {
-		err = fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().trie.Root, state.trie.Root)
+		err = fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().Trie.Root, state.Trie.Root)
 		return
 	}
 
@@ -242,7 +239,7 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 		if dontReact == false {
 			sm.Ethereum.Reactor().Post("newBlock", block)
 
-			state.manifest.Reset()
+			state.Manifest().Reset()
 		}
 
 		sm.Ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
@@ -255,7 +252,7 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 	return nil
 }
 
-func (sm *StateManager) ApplyDiff(state *State, parent, block *Block) (receipts Receipts, err error) {
+func (sm *StateManager) ApplyDiff(state *ethstate.State, parent, block *Block) (receipts Receipts, err error) {
 	coinbase := state.GetOrNewStateObject(block.Coinbase)
 	coinbase.SetGasPool(block.CalcGasLimit(parent))
 
@@ -340,7 +337,7 @@ func CalculateUncleReward(block *Block) *big.Int {
 	return UncleReward
 }
 
-func (sm *StateManager) AccumelateRewards(state *State, block *Block) error {
+func (sm *StateManager) AccumelateRewards(state *ethstate.State, block *Block) error {
 	// Get the account associated with the coinbase
 	account := state.GetAccount(block.Coinbase)
 	// Reward amount of ether to the coinbase address
@@ -364,14 +361,14 @@ func (sm *StateManager) Stop() {
 	sm.bc.Stop()
 }
 
-func (sm *StateManager) notifyChanges(state *State) {
-	for addr, stateObject := range state.manifest.objectChanges {
+func (sm *StateManager) notifyChanges(state *ethstate.State) {
+	for addr, stateObject := range state.Manifest().ObjectChanges {
 		sm.Ethereum.Reactor().Post("object:"+addr, stateObject)
 	}
 
-	for stateObjectAddr, mappedObjects := range state.manifest.storageChanges {
+	for stateObjectAddr, mappedObjects := range state.Manifest().StorageChanges {
 		for addr, value := range mappedObjects {
-			sm.Ethereum.Reactor().Post("storage:"+stateObjectAddr+":"+addr, &StorageState{[]byte(stateObjectAddr), []byte(addr), value})
+			sm.Ethereum.Reactor().Post("storage:"+stateObjectAddr+":"+addr, &ethstate.StorageState{[]byte(stateObjectAddr), []byte(addr), value})
 		}
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
 	"strings"
@@ -24,11 +25,11 @@ type helper struct {
 func EthereumConfig(stateManager *ethchain.StateManager) helper {
 	return helper{stateManager}
 }
-func (self helper) obj() *ethchain.StateObject {
+func (self helper) obj() *ethstate.StateObject {
 	return self.sm.CurrentState().GetStateObject(cnfCtr)
 }
 
-func (self helper) NameReg() *ethchain.StateObject {
+func (self helper) NameReg() *ethstate.StateObject {
 	if self.obj() != nil {
 		addr := self.obj().GetStorage(big.NewInt(0))
 		if len(addr.Bytes()) > 0 {

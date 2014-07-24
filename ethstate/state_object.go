@@ -34,9 +34,9 @@ type StateObject struct {
 	CodeHash []byte
 	Nonce    uint64
 	// Contract related attributes
-	state    *State
+	State    *State
 	Code     Code
-	initCode Code
+	InitCode Code
 
 	storage Storage
 
@@ -53,7 +53,7 @@ type StateObject struct {
 
 func (self *StateObject) Reset() {
 	self.storage = make(Storage)
-	self.state.Reset()
+	self.State.Reset()
 }
 
 /*
@@ -79,7 +79,7 @@ func NewStateObject(addr []byte) *StateObject {
 	address := ethutil.Address(addr)
 
 	object := &StateObject{address: address, Amount: new(big.Int), gasPool: new(big.Int)}
-	object.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, ""))
+	object.State = NewState(ethtrie.NewTrie(ethutil.Config.Db, ""))
 	object.storage = make(Storage)
 	object.gasPool = new(big.Int)
 
@@ -89,7 +89,7 @@ func NewStateObject(addr []byte) *StateObject {
 func NewContract(address []byte, Amount *big.Int, root []byte) *StateObject {
 	contract := NewStateObject(address)
 	contract.Amount = Amount
-	contract.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, string(root)))
+	contract.State = NewState(ethtrie.NewTrie(ethutil.Config.Db, string(root)))
 
 	return contract
 }
@@ -107,11 +107,11 @@ func (self *StateObject) MarkForDeletion() {
 }
 
 func (c *StateObject) GetAddr(addr []byte) *ethutil.Value {
-	return ethutil.NewValueFromBytes([]byte(c.state.trie.Get(string(addr))))
+	return ethutil.NewValueFromBytes([]byte(c.State.Trie.Get(string(addr))))
 }
 
 func (c *StateObject) SetAddr(addr []byte, value interface{}) {
-	c.state.trie.Update(string(addr), string(ethutil.NewValue(value).Encode()))
+	c.State.Trie.Update(string(addr), string(ethutil.NewValue(value).Encode()))
 }
 
 func (self *StateObject) GetStorage(key *big.Int) *ethutil.Value {
@@ -152,7 +152,7 @@ func (self *StateObject) EachStorage(cb ethtrie.EachCallback) {
 		cb(key, encoded)
 	}
 
-	it := self.state.trie.NewIterator()
+	it := self.State.Trie.NewIterator()
 	it.Each(func(key string, value *ethutil.Value) {
 		// If it's cached don't call the callback.
 		if self.storage[key] == nil {
@@ -166,18 +166,18 @@ func (self *StateObject) Sync() {
 		if value.Len() == 0 { // value.BigInt().Cmp(ethutil.Big0) == 0 {
 			//data := self.getStorage([]byte(key))
 			//fmt.Printf("deleting %x %x 0x%x\n", self.Address(), []byte(key), data)
-			self.state.trie.Delete(string(key))
+			self.State.Trie.Delete(string(key))
 			continue
 		}
 
 		self.SetAddr([]byte(key), value)
 	}
 
-	valid, t2 := ethtrie.ParanoiaCheck(self.state.trie)
+	valid, t2 := ethtrie.ParanoiaCheck(self.State.Trie)
 	if !valid {
-		statelogger.Infof("Warn: PARANOIA: Different state storage root during copy %x vs %x\n", self.state.trie.Root, t2.Root)
+		statelogger.Infof("Warn: PARANOIA: Different state storage root during copy %x vs %x\n", self.State.Trie.Root, t2.Root)
 
-		self.state.trie = t2
+		self.State.Trie = t2
 	}
 }
 
@@ -255,11 +255,11 @@ func (self *StateObject) Copy() *StateObject {
 	stateObject.Amount.Set(self.Amount)
 	stateObject.CodeHash = ethutil.CopyBytes(self.CodeHash)
 	stateObject.Nonce = self.Nonce
-	if self.state != nil {
-		stateObject.state = self.state.Copy()
+	if self.State != nil {
+		stateObject.State = self.State.Copy()
 	}
 	stateObject.Code = ethutil.CopyBytes(self.Code)
-	stateObject.initCode = ethutil.CopyBytes(self.initCode)
+	stateObject.InitCode = ethutil.CopyBytes(self.InitCode)
 	stateObject.storage = self.storage.Copy()
 	stateObject.gasPool.Set(self.gasPool)
 
@@ -274,10 +274,6 @@ func (self *StateObject) Set(stateObject *StateObject) {
 // Attribute accessors
 //
 
-func (c *StateObject) State() *State {
-	return c.state
-}
-
 func (c *StateObject) N() *big.Int {
 	return big.NewInt(int64(c.Nonce))
 }
@@ -289,12 +285,12 @@ func (c *StateObject) Address() []byte {
 
 // Returns the initialization Code
 func (c *StateObject) Init() Code {
-	return c.initCode
+	return c.InitCode
 }
 
 // Debug stuff
 func (self *StateObject) CreateOutputForDiff() {
-	fmt.Printf("%x %x %x %x\n", self.Address(), self.state.Root(), self.Amount.Bytes(), self.Nonce)
+	fmt.Printf("%x %x %x %x\n", self.Address(), self.State.Root(), self.Amount.Bytes(), self.Nonce)
 	self.EachStorage(func(addr string, value *ethutil.Value) {
 		fmt.Printf("%x %x\n", addr, value.Bytes())
 	})
@@ -307,8 +303,8 @@ func (self *StateObject) CreateOutputForDiff() {
 // State object encoding methods
 func (c *StateObject) RlpEncode() []byte {
 	var root interface{}
-	if c.state != nil {
-		root = c.state.trie.Root
+	if c.State != nil {
+		root = c.State.Trie.Root
 	} else {
 		root = ""
 	}
@@ -321,7 +317,7 @@ func (c *StateObject) RlpDecode(data []byte) {
 
 	c.Nonce = decoder.Get(0).Uint()
 	c.Amount = decoder.Get(1).BigInt()
-	c.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, decoder.Get(2).Interface()))
+	c.State = NewState(ethtrie.NewTrie(ethutil.Config.Db, decoder.Get(2).Interface()))
 	c.storage = make(map[string]*ethutil.Value)
 	c.gasPool = new(big.Int)
 

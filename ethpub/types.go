@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethcrypto"
+	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
 	"strings"
@@ -154,10 +155,10 @@ func NewPReciept(contractCreation bool, creationAddress, hash, address []byte) *
 }
 
 type PStateObject struct {
-	object *ethchain.StateObject
+	object *ethstate.StateObject
 }
 
-func NewPStateObject(object *ethchain.StateObject) *PStateObject {
+func NewPStateObject(object *ethstate.StateObject) *PStateObject {
 	return &PStateObject{object: object}
 }
 
@@ -200,7 +201,7 @@ func (c *PStateObject) Nonce() int {
 
 func (c *PStateObject) Root() string {
 	if c.object != nil {
-		return ethutil.Bytes2Hex(ethutil.NewValue(c.object.State().Root()).Bytes())
+		return ethutil.Bytes2Hex(ethutil.NewValue(c.object.State.Root()).Bytes())
 	}
 
 	return "<err>"
@@ -208,7 +209,7 @@ func (c *PStateObject) Root() string {
 
 func (c *PStateObject) IsContract() bool {
 	if c.object != nil {
-		return len(c.object.Script()) > 0
+		return len(c.object.Code) > 0
 	}
 
 	return false
@@ -245,7 +246,7 @@ func (c *PStateObject) StateKeyVal(asJson bool) interface{} {
 
 func (c *PStateObject) Script() string {
 	if c.object != nil {
-		return strings.Join(ethchain.Disassemble(c.object.Script()), " ")
+		return strings.Join(ethchain.Disassemble(c.object.Code), " ")
 	}
 
 	return ""
@@ -253,7 +254,7 @@ func (c *PStateObject) Script() string {
 
 func (c *PStateObject) HexScript() string {
 	if c.object != nil {
-		return ethutil.Bytes2Hex(c.object.Script())
+		return ethutil.Bytes2Hex(c.object.Code)
 	}
 
 	return ""
@@ -265,6 +266,6 @@ type PStorageState struct {
 	Value        string
 }
 
-func NewPStorageState(storageObject *ethchain.StorageState) *PStorageState {
+func NewPStorageState(storageObject *ethstate.StorageState) *PStorageState {
 	return &PStorageState{ethutil.Bytes2Hex(storageObject.StateAddress), ethutil.Bytes2Hex(storageObject.Address), storageObject.Value.String()}
 }
