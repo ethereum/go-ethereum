@@ -266,34 +266,8 @@ func (self *StateTransition) Eval(script []byte, context *ethstate.StateObject, 
 
 	ret, _, err = callerClosure.Call(vm, self.tx.Data)
 
-	/*
-		closure := NewClosure(initiator, context, script, state, self.gas, self.gasPrice)
-		vm := NewVm(state, nil, RuntimeVars{
-			Origin:      initiator.Address(),
-			Block:       block,
-			BlockNumber: block.Number,
-			PrevHash:    block.PrevHash,
-			Coinbase:    block.Coinbase,
-			Time:        block.Time,
-			Diff:        block.Difficulty,
-			Value:       self.value,
-		})
-		vm.Verbose = true
-		vm.Fn = typ
-
-		ret, err = Call(vm, closure, self.data)
-	*/
-
 	return
 }
-
-/*
-func Call(vm *eth.Vm, closure *Closure, data []byte) (ret []byte, err error) {
-	ret, _, err = closure.Call(vm, data)
-
-	return
-}
-*/
 
 // Converts an transaction in to a state object
 func MakeContract(tx *Transaction, state *ethstate.State) *ethstate.StateObject {
