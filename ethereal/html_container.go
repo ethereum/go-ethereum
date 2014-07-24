@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethpub"
+	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/go-qml/qml"
 	"github.com/howeyc/fsnotify"
@@ -121,11 +122,11 @@ func (app *HtmlApplication) NewBlock(block *ethchain.Block) {
 	app.webView.Call("onNewBlockCb", b)
 }
 
-func (app *HtmlApplication) ObjectChanged(stateObject *ethchain.StateObject) {
+func (app *HtmlApplication) ObjectChanged(stateObject *ethstate.StateObject) {
 	app.webView.Call("onObjectChangeCb", ethpub.NewPStateObject(stateObject))
 }
 
-func (app *HtmlApplication) StorageChanged(storageObject *ethchain.StorageState) {
+func (app *HtmlApplication) StorageChanged(storageObject *ethstate.StorageState) {
 	app.webView.Call("onStorageChangeCb", ethpub.NewPStorageState(storageObject))
 }
 

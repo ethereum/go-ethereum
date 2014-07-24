@@ -9,7 +9,7 @@ import (
 
 const (
 	ClientIdentifier = "Ethereum(G)"
-	Version          = "0.5.17"
+	Version          = "0.6.0"
 )
 
 var logger = ethlog.NewLogger("CLI")
