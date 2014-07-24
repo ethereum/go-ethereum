@@ -177,10 +177,20 @@ func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 
 	// Set up the connection in another goroutine so we don't block the main thread
 	go func() {
-		conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
+		var (
+			err  error
+			conn net.Conn
+		)
+
+		for attempts := 0; attempts < 5; attempts++ {
+			conn, err = net.DialTimeout("tcp", addr, 10*time.Second)
+			if err != nil {
+				peerlogger.Debugf("Peer connection failed. Retrying (%d/5)\n", attempts+1)
+			}
+		}
 
 		if err != nil {
-			peerlogger.Debugln("Connection to peer failed", err)
+			peerlogger.Debugln("Connection to peer failed. Giving up.", err)
 			p.Stop()
 			return
 		}
