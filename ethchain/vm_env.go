@@ -15,6 +15,7 @@ func NewEnv(state *ethstate.State, tx *Transaction, block *Block) *VMEnv {
 	return &VMEnv{
 		state: state,
 		block: block,
+		tx:    tx,
 	}
 }
 
