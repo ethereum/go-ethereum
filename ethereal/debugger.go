@@ -3,7 +3,10 @@ package main
 import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ethvm"
+	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
 	"math/big"
 	"strconv"
@@ -15,10 +18,10 @@ type DebuggerWindow struct {
 	engine *qml.Engine
 	lib    *UiLib
 
-	vm *ethchain.Vm
+	vm *ethvm.Vm
 	Db *Debugger
 
-	state *ethchain.State
+	state *ethstate.State
 }
 
 func NewDebuggerWindow(lib *UiLib) *DebuggerWindow {
@@ -32,7 +35,7 @@ func NewDebuggerWindow(lib *UiLib) *DebuggerWindow {
 
 	win := component.CreateWindow(nil)
 
-	w := &DebuggerWindow{engine: engine, win: win, lib: lib, vm: &ethchain.Vm{}}
+	w := &DebuggerWindow{engine: engine, win: win, lib: lib, vm: &ethvm.Vm{}}
 	w.Db = NewDebugger(w)
 
 	return w
@@ -130,24 +133,29 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 
 	state := self.lib.eth.StateManager().TransState()
 	account := self.lib.eth.StateManager().TransState().GetAccount(keyPair.Address())
-	contract := ethchain.NewStateObject([]byte{0})
+	contract := ethstate.NewStateObject([]byte{0})
 	contract.Amount = value
 
 	self.SetAsm(script)
 
-	callerClosure := ethchain.NewClosure(account, contract, script, state, gas, gasPrice)
+	callerClosure := ethvm.NewClosure(account, contract, script, gas, gasPrice)
 
 	block := self.lib.eth.BlockChain().CurrentBlock
-	vm := ethchain.NewVm(state, self.lib.eth.StateManager(), ethchain.RuntimeVars{
-		Block:       block,
-		Origin:      account.Address(),
-		BlockNumber: block.Number,
-		PrevHash:    block.PrevHash,
-		Coinbase:    block.Coinbase,
-		Time:        block.Time,
-		Diff:        block.Difficulty,
-		Value:       ethutil.Big(valueStr),
-	})
+
+	/*
+		vm := ethchain.NewVm(state, self.lib.eth.StateManager(), ethchain.RuntimeVars{
+			Block:       block,
+			Origin:      account.Address(),
+			BlockNumber: block.Number,
+			PrevHash:    block.PrevHash,
+			Coinbase:    block.Coinbase,
+			Time:        block.Time,
+			Diff:        block.Difficulty,
+			Value:       ethutil.Big(valueStr),
+		})
+	*/
+	env := utils.NewEnv(state, block, account.Address(), value)
+	vm := ethvm.New(env)
 	vm.Verbose = true
 	vm.Dbg = self.Db
 
@@ -257,13 +265,13 @@ type storeVal struct {
 	Key, Value string
 }
 
-func (self *Debugger) BreakHook(pc int, op ethchain.OpCode, mem *ethchain.Memory, stack *ethchain.Stack, stateObject *ethchain.StateObject) bool {
+func (self *Debugger) BreakHook(pc int, op ethvm.OpCode, mem *ethvm.Memory, stack *ethvm.Stack, stateObject *ethstate.StateObject) bool {
 	self.main.Logln("break on instr:", pc)
 
 	return self.halting(pc, op, mem, stack, stateObject)
 }
 
-func (self *Debugger) StepHook(pc int, op ethchain.OpCode, mem *ethchain.Memory, stack *ethchain.Stack, stateObject *ethchain.StateObject) bool {
+func (self *Debugger) StepHook(pc int, op ethvm.OpCode, mem *ethvm.Memory, stack *ethvm.Stack, stateObject *ethstate.StateObject) bool {
 	return self.halting(pc, op, mem, stack, stateObject)
 }
 
@@ -275,7 +283,7 @@ func (self *Debugger) BreakPoints() []int64 {
 	return self.breakPoints
 }
 
-func (d *Debugger) halting(pc int, op ethchain.OpCode, mem *ethchain.Memory, stack *ethchain.Stack, stateObject *ethchain.StateObject) bool {
+func (d *Debugger) halting(pc int, op ethvm.OpCode, mem *ethvm.Memory, stack *ethvm.Stack, stateObject *ethstate.StateObject) bool {
 	d.win.Root().Call("setInstruction", pc)
 	d.win.Root().Call("clearMem")
 	d.win.Root().Call("clearStack")
