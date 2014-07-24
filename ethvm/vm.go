@@ -37,6 +37,8 @@ type Vm struct {
 	BreakPoints []int64
 	Stepping    bool
 	Fn          string
+
+	Recoverable bool
 }
 
 type Environment interface {
@@ -62,18 +64,20 @@ func New(env Environment) *Vm {
 		lt = LogTyDiff
 	}
 
-	return &Vm{env: env, logTy: lt}
+	return &Vm{env: env, logTy: lt, Recoverable: true}
 }
 
 func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
-	// Recover from any require exception
-	defer func() {
-		if r := recover(); r != nil {
-			ret = closure.Return(nil)
-			err = fmt.Errorf("%v", r)
-			vmlogger.Errorln("vm err", err)
-		}
-	}()
+	if self.Recoverable {
+		// Recover from any require exception
+		defer func() {
+			if r := recover(); r != nil {
+				ret = closure.Return(nil)
+				err = fmt.Errorf("%v", r)
+				vmlogger.Errorln("vm err", err)
+			}
+		}()
+	}
 
 	// Debug hook
 	if self.Dbg != nil {
