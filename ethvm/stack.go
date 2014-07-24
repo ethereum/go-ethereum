@@ -1,4 +1,4 @@
-package ethchain
+package ethvm
 
 import (
 	"fmt"

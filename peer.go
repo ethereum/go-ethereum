@@ -122,9 +122,6 @@ type Peer struct {
 
 	// Last received pong message
 	lastPong int64
-	// Indicates whether a MsgGetPeersTy was requested of the peer
-	// this to prevent receiving false peers.
-	requestedPeerList bool
 
 	host []byte
 	port uint16
@@ -180,10 +177,9 @@ func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 
 	// Set up the connection in another goroutine so we don't block the main thread
 	go func() {
-		conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
-
+		conn, err := p.Connect(addr)
 		if err != nil {
-			peerlogger.Debugln("Connection to peer failed", err)
+			peerlogger.Debugln("Connection to peer failed. Giving up.", err)
 			p.Stop()
 			return
 		}
@@ -197,6 +193,21 @@ func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 	}()
 
 	return p
+}
+
+func (self *Peer) Connect(addr string) (conn net.Conn, err error) {
+	for attempts := 0; attempts < 5; attempts++ {
+		conn, err = net.DialTimeout("tcp", addr, 10*time.Second)
+		if err != nil {
+			peerlogger.Debugf("Peer connection failed. Retrying (%d/5)\n", attempts+1)
+			continue
+		}
+
+		// Success
+		return
+	}
+
+	return
 }
 
 // Getters
@@ -463,30 +474,21 @@ func (p *Peer) HandleInbound() {
 					p.ethereum.TxPool().QueueTransaction(tx)
 				}
 			case ethwire.MsgGetPeersTy:
-				// Flag this peer as a 'requested of new peers' this to
-				// prevent malicious peers being forced.
-				p.requestedPeerList = true
 				// Peer asked for list of connected peers
 				p.pushPeers()
 			case ethwire.MsgPeersTy:
 				// Received a list of peers (probably because MsgGetPeersTy was send)
-				// Only act on message if we actually requested for a peers list
-				if p.requestedPeerList {
-					data := msg.Data
-					// Create new list of possible peers for the ethereum to process
-					peers := make([]string, data.Len())
-					// Parse each possible peer
-					for i := 0; i < data.Len(); i++ {
-						value := data.Get(i)
-						peers[i] = unpackAddr(value.Get(0), value.Get(1).Uint())
-					}
-
-					// Connect to the list of peers
-					p.ethereum.ProcessPeerList(peers)
-					// Mark unrequested again
-					p.requestedPeerList = false
-
+				data := msg.Data
+				// Create new list of possible peers for the ethereum to process
+				peers := make([]string, data.Len())
+				// Parse each possible peer
+				for i := 0; i < data.Len(); i++ {
+					value := data.Get(i)
+					peers[i] = unpackAddr(value.Get(0), value.Get(1).Uint())
 				}
+
+				// Connect to the list of peers
+				p.ethereum.ProcessPeerList(peers)
 			case ethwire.MsgGetChainTy:
 				var parent *ethchain.Block
 				// Length minus one since the very last element in the array is a count
@@ -698,11 +700,13 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 
 	ethlogger.Infof("Added peer (%s) %d / %d\n", p.conn.RemoteAddr(), p.ethereum.Peers().Len(), p.ethereum.MaxPeers)
 
-	// Catch up with the connected peer
-	if !p.ethereum.IsUpToDate() {
-		peerlogger.Debugln("Already syncing up with a peer; sleeping")
-		time.Sleep(10 * time.Second)
-	}
+	/*
+		// Catch up with the connected peer
+		if !p.ethereum.IsUpToDate() {
+			peerlogger.Debugln("Already syncing up with a peer; sleeping")
+			time.Sleep(10 * time.Second)
+		}
+	*/
 	p.SyncWithPeerToLastKnown()
 
 	peerlogger.Debugln(p)

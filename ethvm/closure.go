@@ -1,26 +1,25 @@
-package ethchain
+package ethvm
 
 // TODO Re write VM to use values instead of big integers?
 
 import (
+	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
 )
 
 type ClosureRef interface {
-	ReturnGas(*big.Int, *big.Int, *State)
+	ReturnGas(*big.Int, *big.Int)
 	Address() []byte
 	GetStorage(*big.Int) *ethutil.Value
 	SetStorage(*big.Int, *ethutil.Value)
-	N() *big.Int
 }
 
 // Basic inline closure object which implement the 'closure' interface
 type Closure struct {
 	caller ClosureRef
-	object *StateObject
-	Script []byte
-	State  *State
+	object *ethstate.StateObject
+	Code   []byte
 
 	Gas, UsedGas, Price *big.Int
 
@@ -28,8 +27,8 @@ type Closure struct {
 }
 
 // Create a new closure for the given data items
-func NewClosure(caller ClosureRef, object *StateObject, script []byte, state *State, gas, price *big.Int) *Closure {
-	c := &Closure{caller: caller, object: object, Script: script, State: state, Args: nil}
+func NewClosure(caller ClosureRef, object *ethstate.StateObject, code []byte, gas, price *big.Int) *Closure {
+	c := &Closure{caller: caller, object: object, Code: code, Args: nil}
 
 	// Gas should be a pointer so it can safely be reduced through the run
 	// This pointer will be off the state transition
@@ -57,11 +56,11 @@ func (c *Closure) Get(x *big.Int) *ethutil.Value {
 }
 
 func (c *Closure) Gets(x, y *big.Int) *ethutil.Value {
-	if x.Int64() >= int64(len(c.Script)) || y.Int64() >= int64(len(c.Script)) {
+	if x.Int64() >= int64(len(c.Code)) || y.Int64() >= int64(len(c.Code)) {
 		return ethutil.NewValue(0)
 	}
 
-	partial := c.Script[x.Int64() : x.Int64()+y.Int64()]
+	partial := c.Code[x.Int64() : x.Int64()+y.Int64()]
 
 	return ethutil.NewValue(partial)
 }
@@ -84,7 +83,7 @@ func (c *Closure) Call(vm *Vm, args []byte) ([]byte, *big.Int, error) {
 
 func (c *Closure) Return(ret []byte) []byte {
 	// Return the remaining gas to the caller
-	c.caller.ReturnGas(c.Gas, c.Price, c.State)
+	c.caller.ReturnGas(c.Gas, c.Price)
 
 	return ret
 }
@@ -102,20 +101,16 @@ func (c *Closure) UseGas(gas *big.Int) bool {
 }
 
 // Implement the caller interface
-func (c *Closure) ReturnGas(gas, price *big.Int, state *State) {
+func (c *Closure) ReturnGas(gas, price *big.Int) {
 	// Return the gas to the closure
 	c.Gas.Add(c.Gas, gas)
 	c.UsedGas.Sub(c.UsedGas, gas)
 }
 
-func (c *Closure) Object() *StateObject {
+func (c *Closure) Object() *ethstate.StateObject {
 	return c.object
 }
 
 func (c *Closure) Caller() ClosureRef {
 	return c.caller
-}
-
-func (c *Closure) N() *big.Int {
-	return c.object.N()
 }
