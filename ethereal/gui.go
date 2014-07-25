@@ -155,6 +155,9 @@ func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
 	return win, nil
 }
 
+func (gui *Gui) ImportKey(filePath string) {
+}
+
 func (gui *Gui) showKeyImport(context *qml.Context) (*qml.Window, error) {
 	context.SetVar("lib", gui)
 	component, err := gui.engine.LoadFile(gui.uiLib.AssetPath("qml/first_run.qml"))

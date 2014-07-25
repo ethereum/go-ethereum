@@ -26,6 +26,22 @@ ApplicationWindow {
 				shortcut: "Ctrl+o"
 				onTriggered: openAppDialog.open()
 			}
+
+			MenuSeparator {}
+
+			MenuItem {
+				text: "Import key"
+				shortcut: "Ctrl+i"
+				onTriggered: importDialog.open()
+			}
+
+			MenuItem {
+				text: "Export keys"
+				shortcut: "Ctrl+e"
+				onTriggered: exportDialog.open()
+			}
+
+			//MenuSeparator {}
 		}
 
 		Menu {
@@ -375,14 +391,28 @@ ApplicationWindow {
 			//ui.open(openAppDialog.fileUrl.toString())
 			//ui.openHtml(Qt.resolvedUrl(ui.assetPath("test.html")))
 			var path = openAppDialog.fileUrl.toString()
-			console.log(path)
 			var ext = path.split('.').pop()
-			console.log(ext)
 			if(ext == "html" || ext == "htm") {
 				ui.openHtml(path)
 			}else if(ext == "qml"){
 				ui.openQml(path)
 			}
+		}
+	}
+
+	FileDialog {
+		id: exportDialog
+		title: "Export keys"
+		onAccepted: {
+		}
+	}
+
+	FileDialog {
+		id: importDialog
+		title: "Import key"
+		onAccepted: {
+			var path = this.fileUrl.toString()
+			ui.importKey(path)
 		}
 	}
 
