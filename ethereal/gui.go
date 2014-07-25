@@ -143,10 +143,12 @@ func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
 
 	win := gui.createWindow(component)
 
-	gui.setInitialBlockChain()
-	gui.loadAddressBook()
-	gui.readPreviousTransactions()
-	gui.setPeerInfo()
+	go func() {
+		gui.setInitialBlockChain()
+		gui.loadAddressBook()
+		gui.readPreviousTransactions()
+		gui.setPeerInfo()
+	}()
 
 	go gui.update()
 
@@ -220,8 +222,9 @@ func (gui *Gui) loadAddressBook() {
 
 	nameReg := ethpub.EthereumConfig(gui.eth.StateManager()).NameReg()
 	if nameReg != nil {
-		nameReg.State().EachStorage(func(name string, value *ethutil.Value) {
+		nameReg.EachStorage(func(name string, value *ethutil.Value) {
 			if name[0] != 0 {
+				value.Decode()
 				gui.win.Root().Call("addAddress", struct{ Name, Address string }{name, ethutil.Bytes2Hex(value.Bytes())})
 			}
 		})

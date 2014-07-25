@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethpub"
+	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/go-qml/qml"
 	"runtime"
@@ -50,11 +51,11 @@ func (app *QmlApplication) NewBlock(block *ethchain.Block) {
 	app.win.Call("onNewBlockCb", pblock)
 }
 
-func (app *QmlApplication) ObjectChanged(stateObject *ethchain.StateObject) {
+func (app *QmlApplication) ObjectChanged(stateObject *ethstate.StateObject) {
 	app.win.Call("onObjectChangeCb", ethpub.NewPStateObject(stateObject))
 }
 
-func (app *QmlApplication) StorageChanged(storageObject *ethchain.StorageState) {
+func (app *QmlApplication) StorageChanged(storageObject *ethstate.StorageState) {
 	app.win.Call("onStorageChangeCb", ethpub.NewPStorageState(storageObject))
 }
 

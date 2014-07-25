@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethpub"
+	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/obscuren/otto"
@@ -121,12 +122,12 @@ out:
 			if _, ok := block.Resource.(*ethchain.Block); ok {
 			}
 		case object := <-self.changeChan:
-			if stateObject, ok := object.Resource.(*ethchain.StateObject); ok {
+			if stateObject, ok := object.Resource.(*ethstate.StateObject); ok {
 				for _, cb := range self.objectCb[ethutil.Bytes2Hex(stateObject.Address())] {
 					val, _ := self.vm.ToValue(ethpub.NewPStateObject(stateObject))
 					cb.Call(cb, val)
 				}
-			} else if storageObject, ok := object.Resource.(*ethchain.StorageState); ok {
+			} else if storageObject, ok := object.Resource.(*ethstate.StorageState); ok {
 				for _, cb := range self.objectCb[ethutil.Bytes2Hex(storageObject.StateAddress)+ethutil.Bytes2Hex(storageObject.Address)] {
 					val, _ := self.vm.ToValue(ethpub.NewPStorageState(storageObject))
 					cb.Call(cb, val)

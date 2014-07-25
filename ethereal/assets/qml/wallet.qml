@@ -249,6 +249,8 @@ ApplicationWindow {
 					}
 					TextField {
 						text: eth.getCustomIdentifier()
+						width: 500
+						placeholderText: "Anonymous"
 						onTextChanged: {
 							eth.setCustomIdentifier(text)
 						}

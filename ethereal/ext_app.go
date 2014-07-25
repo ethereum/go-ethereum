@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethpub"
+	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/go-qml/qml"
 )
@@ -16,8 +17,8 @@ type AppContainer interface {
 	Engine() *qml.Engine
 
 	NewBlock(*ethchain.Block)
-	ObjectChanged(*ethchain.StateObject)
-	StorageChanged(*ethchain.StorageState)
+	ObjectChanged(*ethstate.StateObject)
+	StorageChanged(*ethstate.StorageState)
 	NewWatcher(chan bool)
 }
 
@@ -108,9 +109,9 @@ out:
 				app.container.NewBlock(block)
 			}
 		case object := <-app.changeChan:
-			if stateObject, ok := object.Resource.(*ethchain.StateObject); ok {
+			if stateObject, ok := object.Resource.(*ethstate.StateObject); ok {
 				app.container.ObjectChanged(stateObject)
-			} else if storageObject, ok := object.Resource.(*ethchain.StorageState); ok {
+			} else if storageObject, ok := object.Resource.(*ethstate.StorageState); ok {
 				app.container.StorageChanged(storageObject)
 			}
 		}
