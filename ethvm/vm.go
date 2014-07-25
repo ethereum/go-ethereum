@@ -282,20 +282,15 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case SDIV:
 			require(2)
 			x, y := stack.Popn()
-			// n > 2**255
-			if x.Cmp(Pow256) > 0 {
-				x.Sub(Pow256, x)
+			self.Printf(" %v / %v", y, x)
+
+			if x.Cmp(ethutil.Big0) != 0 {
+				base.Div(y, x)
 			}
-			if y.Cmp(Pow256) > 0 {
-				y.Sub(Pow256, y)
-			}
-			z := new(big.Int)
-			z.Div(x, y)
-			if z.Cmp(Pow256) > 0 {
-				z.Sub(Pow256, z)
-			}
-			// Push result on to the stack
-			stack.Push(z)
+
+			self.Printf(" = %v", base)
+			// Pop result back on the stack
+			stack.Push(base)
 		case MOD:
 			require(2)
 			x, y := stack.Popn()
@@ -309,20 +304,14 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case SMOD:
 			require(2)
 			x, y := stack.Popn()
-			// n > 2**255
-			if x.Cmp(Pow256) > 0 {
-				x.Sub(Pow256, x)
-			}
-			if y.Cmp(Pow256) > 0 {
-				y.Sub(Pow256, y)
-			}
-			z := new(big.Int)
-			z.Mod(x, y)
-			if z.Cmp(Pow256) > 0 {
-				z.Sub(Pow256, z)
-			}
-			// Push result on to the stack
-			stack.Push(z)
+
+			self.Printf(" %v %% %v", y, x)
+
+			base.Mod(y, x)
+
+			self.Printf(" = %v", base)
+			stack.Push(base)
+
 		case EXP:
 			require(2)
 			x, y := stack.Popn()

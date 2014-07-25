@@ -121,7 +121,8 @@ type Peer struct {
 	versionKnown bool
 
 	// Last received pong message
-	lastPong int64
+	lastPong          int64
+	lastBlockReceived time.Time
 
 	host []byte
 	port uint16
@@ -408,10 +409,7 @@ func (p *Peer) HandleInbound() {
 				for i := msg.Data.Len() - 1; i >= 0; i-- {
 					block = ethchain.NewBlockFromRlpValue(msg.Data.Get(i))
 
-					//p.ethereum.StateManager().PrepareDefault(block)
-					//state := p.ethereum.StateManager().CurrentState()
 					err = p.ethereum.StateManager().Process(block, false)
-
 					if err != nil {
 						if ethutil.Config.Debug {
 							peerlogger.Infof("Block %x failed\n", block.Hash())
@@ -422,6 +420,8 @@ func (p *Peer) HandleInbound() {
 					} else {
 						lastBlock = block
 					}
+
+					p.lastBlockReceived = time.Now()
 				}
 
 				if msg.Data.Len() <= 1 {
@@ -561,6 +561,25 @@ func (p *Peer) HandleInbound() {
 	p.Stop()
 }
 
+// General update method
+func (self *Peer) update() {
+	serviceTimer := time.NewTicker(5 * time.Second)
+
+out:
+	for {
+		select {
+		case <-serviceTimer.C:
+			if time.Since(self.lastBlockReceived) > 10*time.Second {
+				self.catchingUp = false
+			}
+		case <-self.quit:
+			break out
+		}
+	}
+
+	serviceTimer.Stop()
+}
+
 func (p *Peer) Start() {
 	peerHost, peerPort, _ := net.SplitHostPort(p.conn.LocalAddr().String())
 	servHost, servPort, _ := net.SplitHostPort(p.conn.RemoteAddr().String())
@@ -583,6 +602,8 @@ func (p *Peer) Start() {
 	go p.HandleOutbound()
 	// Run the inbound handler in a new goroutine
 	go p.HandleInbound()
+	// Run the general update handler
+	go p.update()
 
 	// Wait a few seconds for startup and then ask for an initial ping
 	time.Sleep(2 * time.Second)
