@@ -4,15 +4,16 @@ import (
 	"bytes"
 	"container/list"
 	"fmt"
-	"github.com/ethereum/eth-go/ethchain"
-	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/eth-go/ethwire"
 	"net"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ethwire"
 )
 
 var peerlogger = ethlog.NewLogger("PEER")
@@ -197,10 +198,12 @@ func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 }
 
 func (self *Peer) Connect(addr string) (conn net.Conn, err error) {
-	for attempts := 0; attempts < 5; attempts++ {
+	const maxTries = 3
+	for attempts := 0; attempts < maxTries; attempts++ {
 		conn, err = net.DialTimeout("tcp", addr, 10*time.Second)
 		if err != nil {
-			peerlogger.Debugf("Peer connection failed. Retrying (%d/5)\n", attempts+1)
+			//peerlogger.Debugf("Peer connection failed. Retrying (%d/%d) (%s)\n", attempts+1, maxTries, addr)
+			time.Sleep(time.Duration(attempts*20) * time.Second)
 			continue
 		}
 

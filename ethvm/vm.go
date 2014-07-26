@@ -2,11 +2,12 @@ package ethvm
 
 import (
 	"fmt"
+	"math"
+	"math/big"
+
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
-	"math"
-	"math/big"
 )
 
 type Debugger interface {

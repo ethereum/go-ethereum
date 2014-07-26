@@ -3,13 +3,14 @@ package ethchain
 import (
 	"bytes"
 	"fmt"
+	"math/big"
+	_ "strconv"
+	"time"
+
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
-	"math/big"
-	_ "strconv"
-	"time"
 )
 
 type BlockInfo struct {
@@ -61,12 +62,6 @@ type Block struct {
 	transactions []*Transaction
 	receipts     []*Receipt
 	TxSha        []byte
-}
-
-// New block takes a raw encoded string
-// XXX DEPRICATED
-func NewBlockFromData(raw []byte) *Block {
-	return NewBlockFromBytes(raw)
 }
 
 func NewBlockFromBytes(raw []byte) *Block {

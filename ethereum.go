@@ -3,12 +3,6 @@ package eth
 import (
 	"container/list"
 	"fmt"
-	"github.com/ethereum/eth-go/ethchain"
-	"github.com/ethereum/eth-go/ethcrypto"
-	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethrpc"
-	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/eth-go/ethwire"
 	"io/ioutil"
 	"math/rand"
 	"net"
@@ -18,6 +12,13 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethcrypto"
+	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethrpc"
+	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ethwire"
 )
 
 const seedTextFileUri string = "http://www.ethereum.org/servers.poc3.txt"
