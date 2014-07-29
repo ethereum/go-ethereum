@@ -55,8 +55,7 @@ func DecodeWithReader(reader *bytes.Buffer) interface{} {
 		return reader.Next(int(char - 0x80))
 
 	case char <= 0xbf:
-		buff := bytes.NewReader(reader.Next(int(char - 0xb8)))
-		length := ReadVarint(buff)
+		length := ReadVarInt(reader.Next(int(char - 0xb7)))
 
 		return reader.Next(int(length))
 
@@ -72,74 +71,20 @@ func DecodeWithReader(reader *bytes.Buffer) interface{} {
 		}
 
 		return slice
-
+	case char <= 0xff:
+		length := ReadVarInt(reader.Next(int(char - 0xf7)))
+		for i := uint64(0); i < length; i++ {
+			obj := DecodeWithReader(reader)
+			if obj != nil {
+				slice = append(slice, obj)
+			} else {
+				break
+			}
+		}
+	default:
 	}
 
 	return slice
-}
-
-// TODO Use a bytes.Buffer instead of a raw byte slice.
-// Cleaner code, and use draining instead of seeking the next bytes to read
-func Decode(data []byte, pos uint64) (interface{}, uint64) {
-	var slice []interface{}
-	char := int(data[pos])
-	switch {
-	case char <= 0x7f:
-		return data[pos], pos + 1
-
-	case char <= 0xb7:
-		b := uint64(data[pos]) - 0x80
-
-		return data[pos+1 : pos+1+b], pos + 1 + b
-
-	case char <= 0xbf:
-		b := uint64(data[pos]) - 0xb7
-
-		b2 := ReadVarint(bytes.NewReader(data[pos+1 : pos+1+b]))
-
-		return data[pos+1+b : pos+1+b+b2], pos + 1 + b + b2
-
-	case char <= 0xf7:
-		b := uint64(data[pos]) - 0xc0
-		prevPos := pos
-		pos++
-		for i := uint64(0); i < b; {
-			var obj interface{}
-
-			// Get the next item in the data list and append it
-			obj, prevPos = Decode(data, pos)
-			slice = append(slice, obj)
-
-			// Increment i by the amount bytes read in the previous
-			// read
-			i += (prevPos - pos)
-			pos = prevPos
-		}
-		return slice, pos
-
-	case char <= 0xff:
-		l := uint64(data[pos]) - 0xf7
-		b := ReadVarint(bytes.NewReader(data[pos+1 : pos+1+l]))
-
-		pos = pos + l + 1
-
-		prevPos := b
-		for i := uint64(0); i < uint64(b); {
-			var obj interface{}
-
-			obj, prevPos = Decode(data, pos)
-			slice = append(slice, obj)
-
-			i += (prevPos - pos)
-			pos = prevPos
-		}
-		return slice, pos
-
-	default:
-		panic(fmt.Sprintf("byte not supported: %q", char))
-	}
-
-	return slice, 0
 }
 
 var (
@@ -222,4 +167,68 @@ func Encode(object interface{}) []byte {
 	}
 
 	return buff.Bytes()
+}
+
+// TODO Use a bytes.Buffer instead of a raw byte slice.
+// Cleaner code, and use draining instead of seeking the next bytes to read
+func Decode(data []byte, pos uint64) (interface{}, uint64) {
+	var slice []interface{}
+	char := int(data[pos])
+	switch {
+	case char <= 0x7f:
+		return data[pos], pos + 1
+
+	case char <= 0xb7:
+		b := uint64(data[pos]) - 0x80
+
+		return data[pos+1 : pos+1+b], pos + 1 + b
+
+	case char <= 0xbf:
+		b := uint64(data[pos]) - 0xb7
+
+		b2 := ReadVarInt(data[pos+1 : pos+1+b])
+
+		return data[pos+1+b : pos+1+b+b2], pos + 1 + b + b2
+
+	case char <= 0xf7:
+		b := uint64(data[pos]) - 0xc0
+		prevPos := pos
+		pos++
+		for i := uint64(0); i < b; {
+			var obj interface{}
+
+			// Get the next item in the data list and append it
+			obj, prevPos = Decode(data, pos)
+			slice = append(slice, obj)
+
+			// Increment i by the amount bytes read in the previous
+			// read
+			i += (prevPos - pos)
+			pos = prevPos
+		}
+		return slice, pos
+
+	case char <= 0xff:
+		l := uint64(data[pos]) - 0xf7
+		b := ReadVarInt(data[pos+1 : pos+1+l])
+
+		pos = pos + l + 1
+
+		prevPos := b
+		for i := uint64(0); i < uint64(b); {
+			var obj interface{}
+
+			obj, prevPos = Decode(data, pos)
+			slice = append(slice, obj)
+
+			i += (prevPos - pos)
+			pos = prevPos
+		}
+		return slice, pos
+
+	default:
+		panic(fmt.Sprintf("byte not supported: %q", char))
+	}
+
+	return slice, 0
 }
