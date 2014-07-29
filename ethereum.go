@@ -3,10 +3,8 @@ package eth
 import (
 	"container/list"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net"
-	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,7 +19,10 @@ import (
 	"github.com/ethereum/eth-go/ethwire"
 )
 
-const seedTextFileUri string = "http://www.ethereum.org/servers.poc3.txt"
+const (
+	seedTextFileUri string = "http://www.ethereum.org/servers.poc3.txt"
+	seedNodeAddress        = "54.76.56.74:30303"
+)
 
 var ethlogger = ethlog.NewLogger("SERV")
 
@@ -421,22 +422,10 @@ func (s *Ethereum) Seed() {
 		}
 		// Connect to Peer list
 		s.ProcessPeerList(peers)
-	} else {
-		// Fallback to servers.poc3.txt
-		resp, err := http.Get(seedTextFileUri)
-		if err != nil {
-			ethlogger.Warnln("Fetching seed failed:", err)
-			return
-		}
-		defer resp.Body.Close()
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			ethlogger.Warnln("Reading seed failed:", err)
-			return
-		}
-
-		s.ConnectToPeer(string(body))
 	}
+
+	// XXX tmp
+	s.ConnectToPeer(seedNodeAddress)
 }
 
 func (s *Ethereum) peerHandler(listener net.Listener) {
