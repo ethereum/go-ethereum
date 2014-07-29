@@ -682,7 +682,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			// Create a new contract
 			contract := self.env.State().NewStateObject(addr)
-			if contract.Amount.Cmp(value) >= 0 {
+			if contract.Balance.Cmp(value) >= 0 {
 				closure.object.SubAmount(value)
 				contract.AddAmount(value)
 
@@ -700,7 +700,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				// main script.
 				contract.Code, _, err = c.Call(self, nil)
 			} else {
-				err = fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Amount)
+				err = fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Balance)
 			}
 
 			if err != nil {
@@ -736,8 +736,8 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 
-			if closure.object.Amount.Cmp(value) < 0 {
-				vmlogger.Debugf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Amount)
+			if closure.object.Balance.Cmp(value) < 0 {
+				vmlogger.Debugf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Balance)
 
 				closure.ReturnGas(gas, nil)
 
@@ -784,7 +784,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			receiver := self.env.State().GetOrNewStateObject(stack.Pop().Bytes())
 
-			receiver.AddAmount(closure.object.Amount)
+			receiver.AddAmount(closure.object.Balance)
 
 			closure.object.MarkForDeletion()
 

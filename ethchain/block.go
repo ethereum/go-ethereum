@@ -125,33 +125,6 @@ func (block *Block) Transactions() []*Transaction {
 	return block.transactions
 }
 
-func (block *Block) PayFee(addr []byte, fee *big.Int) bool {
-	contract := block.state.GetStateObject(addr)
-	// If we can't pay the fee return
-	if contract == nil || contract.Amount.Cmp(fee) < 0 /* amount < fee */ {
-		fmt.Println("Contract has insufficient funds", contract.Amount, fee)
-
-		return false
-	}
-
-	base := new(big.Int)
-	contract.Amount = base.Sub(contract.Amount, fee)
-	block.state.Trie.Update(string(addr), string(contract.RlpEncode()))
-
-	data := block.state.Trie.Get(string(block.Coinbase))
-
-	// Get the ether (Coinbase) and add the fee (gief fee to miner)
-	account := ethstate.NewStateObjectFromBytes(block.Coinbase, []byte(data))
-
-	base = new(big.Int)
-	account.Amount = base.Add(account.Amount, fee)
-
-	//block.state.Trie.Update(string(block.Coinbase), string(ether.RlpEncode()))
-	block.state.UpdateStateObject(account)
-
-	return true
-}
-
 func (block *Block) CalcGasLimit(parent *Block) *big.Int {
 	if block.Number.Cmp(big.NewInt(0)) == 0 {
 		return ethutil.BigPow(10, 6)

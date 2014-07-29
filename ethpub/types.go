@@ -3,12 +3,13 @@ package ethpub
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
-	"strings"
 )
 
 // Peer interface exposed to QML
@@ -175,9 +176,9 @@ func (c *PStateObject) GetStorage(address string) string {
 	return ""
 }
 
-func (c *PStateObject) Value() string {
+func (c *PStateObject) Balance() string {
 	if c.object != nil {
-		return c.object.Amount.String()
+		return c.object.Balance.String()
 	}
 
 	return ""

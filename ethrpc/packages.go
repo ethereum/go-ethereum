@@ -3,10 +3,11 @@ package ethrpc
 import (
 	"encoding/json"
 	"errors"
-	"github.com/ethereum/eth-go/ethpub"
-	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
 	"strings"
+
+	"github.com/ethereum/eth-go/ethpub"
+	"github.com/ethereum/eth-go/ethutil"
 )
 
 type EthereumApi struct {
@@ -272,7 +273,7 @@ func (p *EthereumApi) GetBalanceAt(args *GetBalanceArgs, reply *string) error {
 		return err
 	}
 	state := p.ethp.GetStateObject(args.Address)
-	*reply = NewSuccessRes(BalanceRes{Balance: state.Value(), Address: args.Address})
+	*reply = NewSuccessRes(BalanceRes{Balance: state.Balance(), Address: args.Address})
 	return nil
 }
 

@@ -1,11 +1,12 @@
 package ethstate
 
 import (
+	"math/big"
+
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
-	"math/big"
 )
 
 var statelogger = ethlog.NewLogger("STATE")
@@ -33,7 +34,7 @@ func NewState(trie *ethtrie.Trie) *State {
 func (self *State) GetBalance(addr []byte) *big.Int {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
-		return stateObject.Amount
+		return stateObject.Balance
 	}
 
 	return ethutil.Big0

@@ -2,11 +2,12 @@ package ethchain
 
 import (
 	"fmt"
+	"math/big"
+
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethvm"
-	"math/big"
 )
 
 /*
@@ -94,8 +95,8 @@ func (self *StateTransition) BuyGas() error {
 	var err error
 
 	sender := self.Sender()
-	if sender.Amount.Cmp(self.tx.GasValue()) < 0 {
-		return fmt.Errorf("Insufficient funds to pre-pay gas. Req %v, has %v", self.tx.GasValue(), sender.Amount)
+	if sender.Balance.Cmp(self.tx.GasValue()) < 0 {
+		return fmt.Errorf("Insufficient funds to pre-pay gas. Req %v, has %v", self.tx.GasValue(), sender.Balance)
 	}
 
 	coinbase := self.Coinbase()
@@ -178,8 +179,8 @@ func (self *StateTransition) TransitionState() (err error) {
 		return
 	}
 
-	if sender.Amount.Cmp(self.value) < 0 {
-		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Amount)
+	if sender.Balance.Cmp(self.value) < 0 {
+		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Balance)
 	}
 
 	var snapshot *ethstate.State
@@ -240,8 +241,8 @@ func (self *StateTransition) TransitionState() (err error) {
 }
 
 func (self *StateTransition) transferValue(sender, receiver *ethstate.StateObject) error {
-	if sender.Amount.Cmp(self.value) < 0 {
-		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Amount)
+	if sender.Balance.Cmp(self.value) < 0 {
+		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Balance)
 	}
 
 	// Subtract the amount from the senders account
