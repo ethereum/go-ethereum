@@ -3,6 +3,11 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"math/big"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethdb"
@@ -13,10 +18,6 @@ import (
 	"github.com/ethereum/eth-go/ethwire"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
-	"math/big"
-	"strconv"
-	"strings"
-	"time"
 )
 
 var logger = ethlog.NewLogger("GUI")
@@ -313,7 +314,7 @@ func (gui *Gui) update() {
 	state := gui.eth.StateManager().TransState()
 
 	unconfirmedFunds := new(big.Int)
-	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetAccount(gui.address()).Amount)))
+	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetAccount(gui.address()).Balance)))
 	gui.getObjectByName("syncProgressIndicator").Set("visible", !gui.eth.IsUpToDate())
 
 	lastBlockLabel := gui.getObjectByName("lastBlockLabel")
@@ -324,7 +325,7 @@ func (gui *Gui) update() {
 			block := b.Resource.(*ethchain.Block)
 			gui.processBlock(block, false)
 			if bytes.Compare(block.Coinbase, gui.address()) == 0 {
-				gui.setWalletValue(gui.eth.StateManager().CurrentState().GetAccount(gui.address()).Amount, nil)
+				gui.setWalletValue(gui.eth.StateManager().CurrentState().GetAccount(gui.address()).Balance, nil)
 			}
 
 		case txMsg := <-txChan:
@@ -345,7 +346,7 @@ func (gui *Gui) update() {
 					unconfirmedFunds.Add(unconfirmedFunds, tx.Value)
 				}
 
-				gui.setWalletValue(object.Amount, unconfirmedFunds)
+				gui.setWalletValue(object.Balance, unconfirmedFunds)
 			} else {
 				object := state.GetAccount(gui.address())
 				if bytes.Compare(tx.Sender(), gui.address()) == 0 {
@@ -354,7 +355,7 @@ func (gui *Gui) update() {
 					object.AddAmount(tx.Value)
 				}
 
-				gui.setWalletValue(object.Amount, nil)
+				gui.setWalletValue(object.Balance, nil)
 
 				state.UpdateStateObject(object)
 			}
