@@ -25,7 +25,7 @@ func (app *QmlApplication) Create() error {
 	path := string(app.path)
 
 	// For some reason for windows we get /c:/path/to/something, windows doesn't like the first slash but is fine with the others so we are removing it
-	if string(app.path[0]) == "/" && runtime.GOOS == "windows" {
+	if app.path[0] == '/' && runtime.GOOS == "windows" {
 		path = app.path[1:]
 	}
 

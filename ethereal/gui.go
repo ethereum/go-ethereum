@@ -144,10 +144,10 @@ func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
 	win := gui.createWindow(component)
 
 	go func() {
-		gui.setInitialBlockChain()
+		go gui.setInitialBlockChain()
 		gui.loadAddressBook()
-		gui.readPreviousTransactions()
 		gui.setPeerInfo()
+		gui.readPreviousTransactions()
 	}()
 
 	go gui.update()
