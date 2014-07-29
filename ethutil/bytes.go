@@ -45,15 +45,15 @@ func BytesToNumber(b []byte) uint64 {
 //
 // Read a variable length number in big endian byte order
 func ReadVarint(reader *bytes.Reader) (ret uint64) {
-	if reader.Len() == 8 {
+	if reader.Len() > 4 {
 		var num uint64
 		binary.Read(reader, binary.BigEndian, &num)
 		ret = uint64(num)
-	} else if reader.Len() == 4 {
+	} else if reader.Len() > 2 {
 		var num uint32
 		binary.Read(reader, binary.BigEndian, &num)
 		ret = uint64(num)
-	} else if reader.Len() == 2 {
+	} else if reader.Len() > 0 {
 		var num uint16
 		binary.Read(reader, binary.BigEndian, &num)
 		ret = uint64(num)
@@ -64,6 +64,30 @@ func ReadVarint(reader *bytes.Reader) (ret uint64) {
 	}
 
 	return ret
+}
+
+func ReadVarInt(buff []byte) (ret uint64) {
+	switch l := len(buff); {
+	case l > 4:
+		d := LeftPadBytes(buff, 8)
+		binary.Read(bytes.NewReader(d), binary.BigEndian, &ret)
+	case l > 2:
+		var num uint32
+		d := LeftPadBytes(buff, 4)
+		binary.Read(bytes.NewReader(d), binary.BigEndian, &num)
+		ret = uint64(num)
+	case l > 1:
+		var num uint16
+		d := LeftPadBytes(buff, 2)
+		binary.Read(bytes.NewReader(d), binary.BigEndian, &num)
+		ret = uint64(num)
+	default:
+		var num uint8
+		binary.Read(bytes.NewReader(buff), binary.BigEndian, &num)
+		ret = uint64(num)
+	}
+
+	return
 }
 
 // Binary length

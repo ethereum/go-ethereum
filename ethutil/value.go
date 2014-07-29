@@ -67,7 +67,6 @@ func (val *Value) Uint() uint64 {
 		return uint64(Val)
 	} else if Val, ok := val.Val.([]byte); ok {
 		return new(big.Int).SetBytes(Val).Uint64()
-		//return ReadVarint(bytes.NewReader(Val))
 	} else if Val, ok := val.Val.(*big.Int); ok {
 		return Val.Uint64()
 	}
