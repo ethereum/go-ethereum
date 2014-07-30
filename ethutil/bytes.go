@@ -131,6 +131,26 @@ func FormatData(data string) []byte {
 	return BigToBytes(d, 256)
 }
 
+func ParseData(data ...interface{}) (ret []byte) {
+	for _, item := range data {
+		switch t := item.(type) {
+		case string:
+			var str []byte
+			if IsHex(t) {
+				str = Hex2Bytes(t[2:])
+			} else {
+				str = []byte(t)
+			}
+
+			ret = append(ret, RightPadBytes(str, 32)...)
+		case []byte:
+			ret = append(ret, LeftPadBytes(t, 32)...)
+		}
+	}
+
+	return
+}
+
 func RightPadBytes(slice []byte, l int) []byte {
 	if l < len(slice) {
 		return slice
