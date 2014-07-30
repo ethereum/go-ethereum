@@ -1,23 +1,23 @@
 package main
 
 import (
+	"os"
+	"runtime"
+
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
-	"os"
-	"runtime"
 )
 
 const (
 	ClientIdentifier = "Ethereal"
-	Version          = "0.5.17"
+	Version          = "0.6.1"
 )
 
 func main() {
-	// Leave QT on top at ALL times. Qt Needs to be initialized from the main thread
-	qml.Init(nil)
-
 	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	qml.Init(nil)
 
 	var interrupted = false
 	utils.RegisterInterrupt(func(os.Signal) {

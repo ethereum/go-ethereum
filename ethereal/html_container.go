@@ -2,16 +2,18 @@ package main
 
 import (
 	"errors"
-	"github.com/ethereum/eth-go/ethchain"
-	"github.com/ethereum/eth-go/ethpub"
-	"github.com/ethereum/eth-go/ethutil"
-	"github.com/go-qml/qml"
-	"github.com/howeyc/fsnotify"
 	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
+
+	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethpub"
+	"github.com/ethereum/eth-go/ethstate"
+	"github.com/ethereum/eth-go/ethutil"
+	"github.com/go-qml/qml"
+	"github.com/howeyc/fsnotify"
 )
 
 type HtmlApplication struct {
@@ -40,7 +42,7 @@ func (app *HtmlApplication) Create() error {
 		return errors.New("Ethereum package not yet supported")
 
 		// TODO
-		ethutil.OpenPackage(app.path)
+		//ethutil.OpenPackage(app.path)
 	}
 
 	win := component.CreateWindow(nil)
@@ -121,11 +123,11 @@ func (app *HtmlApplication) NewBlock(block *ethchain.Block) {
 	app.webView.Call("onNewBlockCb", b)
 }
 
-func (app *HtmlApplication) ObjectChanged(stateObject *ethchain.StateObject) {
+func (app *HtmlApplication) ObjectChanged(stateObject *ethstate.StateObject) {
 	app.webView.Call("onObjectChangeCb", ethpub.NewPStateObject(stateObject))
 }
 
-func (app *HtmlApplication) StorageChanged(storageObject *ethchain.StorageState) {
+func (app *HtmlApplication) StorageChanged(storageObject *ethstate.StorageState) {
 	app.webView.Call("onStorageChangeCb", ethpub.NewPStorageState(storageObject))
 }
 

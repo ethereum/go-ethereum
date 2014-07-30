@@ -1,15 +1,16 @@
 package main
 
 import (
+	"runtime"
+
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/utils"
-	"runtime"
 )
 
 const (
 	ClientIdentifier = "Ethereum(G)"
-	Version          = "0.5.17"
+	Version          = "0.6.1"
 )
 
 var logger = ethlog.NewLogger("CLI")

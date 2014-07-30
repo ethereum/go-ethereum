@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethreact"
+	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/obscuren/otto"
@@ -67,7 +68,7 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 
 	// Subscribe to events
 	reactor := ethereum.Reactor()
-	reactor.Subscribe("newBlock", self.blockChan)
+	reactor.Subscribe("newBlock", re.blockChan)
 
 	re.Bind("eth", &JSEthereum{re.lib, re.vm})
 
@@ -122,12 +123,12 @@ out:
 			if _, ok := block.Resource.(*ethchain.Block); ok {
 			}
 		case object := <-self.changeChan:
-			if stateObject, ok := object.Resource.(*ethchain.StateObject); ok {
+			if stateObject, ok := object.Resource.(*ethstate.StateObject); ok {
 				for _, cb := range self.objectCb[ethutil.Bytes2Hex(stateObject.Address())] {
 					val, _ := self.vm.ToValue(ethpub.NewPStateObject(stateObject))
 					cb.Call(cb, val)
 				}
-			} else if storageObject, ok := object.Resource.(*ethchain.StorageState); ok {
+			} else if storageObject, ok := object.Resource.(*ethstate.StorageState); ok {
 				for _, cb := range self.objectCb[ethutil.Bytes2Hex(storageObject.StateAddress)+ethutil.Bytes2Hex(storageObject.Address)] {
 					val, _ := self.vm.ToValue(ethpub.NewPStorageState(storageObject))
 					cb.Call(cb, val)
