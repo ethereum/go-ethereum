@@ -294,12 +294,14 @@ out:
 
 		// Ping timer
 		case <-pingTimer.C:
-			timeSince := time.Since(time.Unix(p.lastPong, 0))
-			if !p.pingStartTime.IsZero() && p.lastPong != 0 && timeSince > (pingPongTimer+30*time.Second) {
-				peerlogger.Infof("Peer did not respond to latest pong fast enough, it took %s, disconnecting.\n", timeSince)
-				p.Stop()
-				return
-			}
+			/*
+				timeSince := time.Since(time.Unix(p.lastPong, 0))
+				if !p.pingStartTime.IsZero() && p.lastPong != 0 && timeSince > (pingPongTimer+30*time.Second) {
+					peerlogger.Infof("Peer did not respond to latest pong fast enough, it took %s, disconnecting.\n", timeSince)
+					p.Stop()
+					return
+				}
+			*/
 			p.writeMessage(ethwire.NewMessage(ethwire.MsgPingTy, ""))
 			p.pingStartTime = time.Now()
 
@@ -354,7 +356,7 @@ func (p *Peer) HandleInbound() {
 				}
 			case ethwire.MsgDiscTy:
 				p.Stop()
-				peerlogger.Infoln("Disconnect peer:", DiscReason(msg.Data.Get(0).Uint()))
+				peerlogger.Infoln("Disconnect peer: ", DiscReason(msg.Data.Get(0).Uint()))
 			case ethwire.MsgPingTy:
 				// Respond back with pong
 				p.QueueMessage(ethwire.NewMessage(ethwire.MsgPongTy, ""))
@@ -363,11 +365,17 @@ func (p *Peer) HandleInbound() {
 				// last pong so the peer handler knows this peer is still
 				// active.
 				p.lastPong = time.Now().Unix()
-				p.pingTime = time.Now().Sub(p.pingStartTime)
+				p.pingTime = time.Since(p.pingStartTime)
 			case ethwire.MsgBlockTy:
 				// Get all blocks and process them
-				var block, lastBlock *ethchain.Block
-				var err error
+				//var block, lastBlock *ethchain.Block
+				//var err error
+
+				var (
+					block, lastBlock *ethchain.Block
+					blockChain       = p.ethereum.BlockChain()
+					err              error
+				)
 
 				// Make sure we are actually receiving anything
 				if msg.Data.Len()-1 > 1 && p.diverted {
@@ -383,11 +391,11 @@ func (p *Peer) HandleInbound() {
 					for i := msg.Data.Len() - 1; i >= 0; i-- {
 						block = ethchain.NewBlockFromRlpValue(msg.Data.Get(i))
 						// Do we have this block on our chain? If so we can continue
-						if !p.ethereum.StateManager().BlockChain().HasBlock(block.Hash()) {
+						if !blockChain.HasBlock(block.Hash()) {
 							// We don't have this block, but we do have a block with the same prevHash, diversion time!
-							if p.ethereum.StateManager().BlockChain().HasBlockWithPrevHash(block.PrevHash) {
+							if blockChain.HasBlockWithPrevHash(block.PrevHash) {
 								p.diverted = false
-								if !p.ethereum.StateManager().BlockChain().FindCanonicalChainFromMsg(msg, block.PrevHash) {
+								if !blockChain.FindCanonicalChainFromMsg(msg, block.PrevHash) {
 									p.SyncWithPeerToLastKnown()
 									break nextMsg
 								}
