@@ -1,35 +1,18 @@
-package ethchain
+package ethvm
 
 import (
 	"fmt"
-	"github.com/ethereum/eth-go/ethcrypto"
-	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethutil"
 	"math"
 	"math/big"
-)
 
-var vmlogger = ethlog.NewLogger("VM")
-
-var (
-	GasStep    = big.NewInt(1)
-	GasSha     = big.NewInt(20)
-	GasSLoad   = big.NewInt(20)
-	GasSStore  = big.NewInt(100)
-	GasBalance = big.NewInt(20)
-	GasCreate  = big.NewInt(100)
-	GasCall    = big.NewInt(20)
-	GasMemory  = big.NewInt(1)
-	GasData    = big.NewInt(5)
-	GasTx      = big.NewInt(500)
-
-	LogTyPretty byte = 0x1
-	LogTyDiff   byte = 0x2
+	"github.com/ethereum/eth-go/ethcrypto"
+	"github.com/ethereum/eth-go/ethstate"
+	"github.com/ethereum/eth-go/ethutil"
 )
 
 type Debugger interface {
-	BreakHook(step int, op OpCode, mem *Memory, stack *Stack, stateObject *StateObject) bool
-	StepHook(step int, op OpCode, mem *Memory, stack *Stack, stateObject *StateObject) bool
+	BreakHook(step int, op OpCode, mem *Memory, stack *Stack, object *ethstate.StateObject) bool
+	StepHook(step int, op OpCode, mem *Memory, stack *Stack, object *ethstate.StateObject) bool
 	BreakPoints() []int64
 	SetCode(byteCode []byte)
 }
@@ -40,11 +23,7 @@ type Vm struct {
 	// non-persistent key/value memory storage
 	mem map[string]*big.Int
 
-	vars RuntimeVars
-
-	state *State
-
-	stateManager *StateManager
+	env Environment
 
 	Verbose bool
 
@@ -59,71 +38,59 @@ type Vm struct {
 	BreakPoints []int64
 	Stepping    bool
 	Fn          string
+
+	Recoverable bool
 }
 
-type RuntimeVars struct {
-	Origin      []byte
-	Block       *Block
-	BlockNumber *big.Int
-	PrevHash    []byte
-	Coinbase    []byte
-	Time        int64
-	Diff        *big.Int
-	TxData      []string
-	Value       *big.Int
+type Environment interface {
+	State() *ethstate.State
+
+	Origin() []byte
+	BlockNumber() *big.Int
+	PrevHash() []byte
+	Coinbase() []byte
+	Time() int64
+	Difficulty() *big.Int
+	Value() *big.Int
 }
 
-func (self *Vm) Printf(format string, v ...interface{}) *Vm {
-	if self.Verbose && self.logTy == LogTyPretty {
-		self.logStr += fmt.Sprintf(format, v...)
-	}
-
-	return self
+type Object interface {
+	GetStorage(key *big.Int) *ethutil.Value
+	SetStorage(key *big.Int, value *ethutil.Value)
 }
 
-func (self *Vm) Endl() *Vm {
-	if self.Verbose && self.logTy == LogTyPretty {
-		vmlogger.Debugln(self.logStr)
-		self.logStr = ""
-	}
-
-	return self
-}
-
-func NewVm(state *State, stateManager *StateManager, vars RuntimeVars) *Vm {
+func New(env Environment) *Vm {
 	lt := LogTyPretty
 	if ethutil.Config.Diff {
 		lt = LogTyDiff
 	}
 
-	return &Vm{vars: vars, state: state, stateManager: stateManager, logTy: lt}
+	return &Vm{env: env, logTy: lt, Recoverable: true}
 }
 
-var Pow256 = ethutil.BigPow(2, 256)
-
-var isRequireError = false
-
-func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
-	// Recover from any require exception
-	defer func() {
-		if r := recover(); r != nil {
-			ret = closure.Return(nil)
-			err = fmt.Errorf("%v", r)
-			vmlogger.Errorln("vm err", err)
-		}
-	}()
+func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
+	if self.Recoverable {
+		// Recover from any require exception
+		defer func() {
+			if r := recover(); r != nil {
+				ret = closure.Return(nil)
+				err = fmt.Errorf("%v", r)
+				vmlogger.Errorln("vm err", err)
+			}
+		}()
+	}
 
 	// Debug hook
-	if vm.Dbg != nil {
-		vm.Dbg.SetCode(closure.Script)
+	if self.Dbg != nil {
+		self.Dbg.SetCode(closure.Code)
 	}
 
 	// Don't bother with the execution if there's no code.
-	if len(closure.Script) == 0 {
+	if len(closure.Code) == 0 {
 		return closure.Return(nil), nil
 	}
 
-	vmlogger.Debugf("(%s) %x gas: %v (d) %x\n", vm.Fn, closure.Address(), closure.Gas, closure.Args)
+	vmlogger.Debugf("(%s) %x gas: %v (d) %x\n", self.Fn, closure.Address(), closure.Gas, closure.Args)
 
 	var (
 		op OpCode
@@ -135,7 +102,6 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		prevStep = 0
 		require  = func(m int) {
 			if stack.Len() < m {
-				isRequireError = true
 				panic(fmt.Sprintf("%04v (%v) stack err size = %d, required = %d", pc, op, stack.Len(), m))
 			}
 		}
@@ -154,22 +120,23 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 		// XXX Leave this Println intact. Don't change this to the log system.
 		// Used for creating diffs between implementations
-		if vm.logTy == LogTyDiff {
-			switch op {
-			case STOP, RETURN, SUICIDE:
-				closure.object.Sync()
-				closure.object.EachStorage(func(key string, value *ethutil.Value) {
-					value.Decode()
-					fmt.Printf("%x %x\n", new(big.Int).SetBytes([]byte(key)).Bytes(), value.Bytes())
-				})
-			}
+		if self.logTy == LogTyDiff {
+			/*
+				switch op {
+				case STOP, RETURN, SUICIDE:
+					closure.object.EachStorage(func(key string, value *ethutil.Value) {
+						value.Decode()
+						fmt.Printf("%x %x\n", new(big.Int).SetBytes([]byte(key)).Bytes(), value.Bytes())
+					})
+				}
 
-			b := pc.Bytes()
-			if len(b) == 0 {
-				b = []byte{0}
-			}
+				b := pc.Bytes()
+				if len(b) == 0 {
+					b = []byte{0}
+				}
 
-			fmt.Printf("%x %x %x %x\n", closure.Address(), b, []byte{byte(op)}, closure.Gas.Bytes())
+				fmt.Printf("%x %x %x %x\n", closure.Address(), b, []byte{byte(op)}, closure.Gas.Bytes())
+			*/
 		}
 
 		gas := new(big.Int)
@@ -261,8 +228,8 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			return closure.Return(nil), err
 		}
 
-		vm.Printf("(pc) %-3d -o- %-14s", pc, op.String())
-		vm.Printf(" (g) %-3v (%v)", gas, closure.Gas)
+		self.Printf("(pc) %-3d -o- %-14s", pc, op.String())
+		self.Printf(" (g) %-3v (%v)", gas, closure.Gas)
 
 		mem.Resize(newMemSize)
 
@@ -274,96 +241,87 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case ADD:
 			require(2)
 			x, y := stack.Popn()
-			vm.Printf(" %v + %v", y, x)
+			self.Printf(" %v + %v", y, x)
 
 			base.Add(y, x)
 
-			vm.Printf(" = %v", base)
+			self.Printf(" = %v", base)
 			// Pop result back on the stack
 			stack.Push(base)
 		case SUB:
 			require(2)
 			x, y := stack.Popn()
-			vm.Printf(" %v - %v", y, x)
+			self.Printf(" %v - %v", y, x)
 
 			base.Sub(y, x)
 
-			vm.Printf(" = %v", base)
+			self.Printf(" = %v", base)
 			// Pop result back on the stack
 			stack.Push(base)
 		case MUL:
 			require(2)
 			x, y := stack.Popn()
-			vm.Printf(" %v * %v", y, x)
+			self.Printf(" %v * %v", y, x)
 
 			base.Mul(y, x)
 
-			vm.Printf(" = %v", base)
+			self.Printf(" = %v", base)
 			// Pop result back on the stack
 			stack.Push(base)
 		case DIV:
 			require(2)
 			x, y := stack.Popn()
-			vm.Printf(" %v / %v", y, x)
+			self.Printf(" %v / %v", y, x)
 
-			base.Div(y, x)
+			if x.Cmp(ethutil.Big0) != 0 {
+				base.Div(y, x)
+			}
 
-			vm.Printf(" = %v", base)
+			self.Printf(" = %v", base)
 			// Pop result back on the stack
 			stack.Push(base)
 		case SDIV:
 			require(2)
 			x, y := stack.Popn()
-			// n > 2**255
-			if x.Cmp(Pow256) > 0 {
-				x.Sub(Pow256, x)
+			self.Printf(" %v / %v", y, x)
+
+			if x.Cmp(ethutil.Big0) != 0 {
+				base.Div(y, x)
 			}
-			if y.Cmp(Pow256) > 0 {
-				y.Sub(Pow256, y)
-			}
-			z := new(big.Int)
-			z.Div(x, y)
-			if z.Cmp(Pow256) > 0 {
-				z.Sub(Pow256, z)
-			}
-			// Push result on to the stack
-			stack.Push(z)
+
+			self.Printf(" = %v", base)
+			// Pop result back on the stack
+			stack.Push(base)
 		case MOD:
 			require(2)
 			x, y := stack.Popn()
 
-			vm.Printf(" %v %% %v", y, x)
+			self.Printf(" %v %% %v", y, x)
 
 			base.Mod(y, x)
 
-			vm.Printf(" = %v", base)
+			self.Printf(" = %v", base)
 			stack.Push(base)
 		case SMOD:
 			require(2)
 			x, y := stack.Popn()
-			// n > 2**255
-			if x.Cmp(Pow256) > 0 {
-				x.Sub(Pow256, x)
-			}
-			if y.Cmp(Pow256) > 0 {
-				y.Sub(Pow256, y)
-			}
-			z := new(big.Int)
-			z.Mod(x, y)
-			if z.Cmp(Pow256) > 0 {
-				z.Sub(Pow256, z)
-			}
-			// Push result on to the stack
-			stack.Push(z)
+
+			self.Printf(" %v %% %v", y, x)
+
+			base.Mod(y, x)
+
+			self.Printf(" = %v", base)
+			stack.Push(base)
+
 		case EXP:
 			require(2)
 			x, y := stack.Popn()
 
-			vm.Printf(" %v ** %v", y, x)
+			self.Printf(" %v ** %v", y, x)
 
 			base.Exp(y, x, Pow256)
 
-			vm.Printf(" = %v", base)
+			self.Printf(" = %v", base)
 
 			stack.Push(base)
 		case NEG:
@@ -373,7 +331,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case LT:
 			require(2)
 			x, y := stack.Popn()
-			vm.Printf(" %v < %v", y, x)
+			self.Printf(" %v < %v", y, x)
 			// x < y
 			if y.Cmp(x) < 0 {
 				stack.Push(ethutil.BigTrue)
@@ -383,7 +341,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case GT:
 			require(2)
 			x, y := stack.Popn()
-			vm.Printf(" %v > %v", y, x)
+			self.Printf(" %v > %v", y, x)
 
 			// x > y
 			if y.Cmp(x) > 0 {
@@ -395,7 +353,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case SLT:
 			require(2)
 			x, y := stack.Popn()
-			vm.Printf(" %v < %v", y, x)
+			self.Printf(" %v < %v", y, x)
 			// x < y
 			if y.Cmp(x) < 0 {
 				stack.Push(ethutil.BigTrue)
@@ -405,7 +363,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case SGT:
 			require(2)
 			x, y := stack.Popn()
-			vm.Printf(" %v > %v", y, x)
+			self.Printf(" %v > %v", y, x)
 
 			// x > y
 			if y.Cmp(x) > 0 {
@@ -417,7 +375,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case EQ:
 			require(2)
 			x, y := stack.Popn()
-			vm.Printf(" %v == %v", y, x)
+			self.Printf(" %v == %v", y, x)
 
 			// x == y
 			if x.Cmp(y) == 0 {
@@ -438,29 +396,29 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case AND:
 			require(2)
 			x, y := stack.Popn()
-			vm.Printf(" %v & %v", y, x)
+			self.Printf(" %v & %v", y, x)
 
 			stack.Push(base.And(y, x))
 		case OR:
 			require(2)
 			x, y := stack.Popn()
-			vm.Printf(" %v | %v", y, x)
+			self.Printf(" %v | %v", y, x)
 
 			stack.Push(base.Or(y, x))
 		case XOR:
 			require(2)
 			x, y := stack.Popn()
-			vm.Printf(" %v ^ %v", y, x)
+			self.Printf(" %v ^ %v", y, x)
 
 			stack.Push(base.Xor(y, x))
 		case BYTE:
 			require(2)
 			val, th := stack.Popn()
 			if th.Cmp(big.NewInt(32)) < 0 && th.Cmp(big.NewInt(int64(len(val.Bytes())))) < 0 {
-				byt := big.NewInt(int64(val.Bytes()[th.Int64()]))
+				byt := big.NewInt(int64(ethutil.LeftPadBytes(val.Bytes(), 32)[th.Int64()]))
 				stack.Push(byt)
 
-				vm.Printf(" => 0x%x", byt.Bytes())
+				self.Printf(" => 0x%x", byt.Bytes())
 			} else {
 				stack.Push(ethutil.BigFalse)
 			}
@@ -473,53 +431,61 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			stack.Push(ethutil.BigD(data))
 
-			vm.Printf(" => %x", data)
+			self.Printf(" => %x", data)
 			// 0x30 range
 		case ADDRESS:
 			stack.Push(ethutil.BigD(closure.Address()))
 
-			vm.Printf(" => %x", closure.Address())
+			self.Printf(" => %x", closure.Address())
 		case BALANCE:
 			require(1)
 
 			addr := stack.Pop().Bytes()
-			balance := vm.state.GetBalance(addr)
+			balance := self.env.State().GetBalance(addr)
 
 			stack.Push(balance)
 
-			vm.Printf(" => %v (%x)", balance, addr)
+			self.Printf(" => %v (%x)", balance, addr)
 		case ORIGIN:
-			stack.Push(ethutil.BigD(vm.vars.Origin))
+			origin := self.env.Origin()
 
-			vm.Printf(" => %x", vm.vars.Origin)
+			stack.Push(ethutil.BigD(origin))
+
+			self.Printf(" => %x", origin)
 		case CALLER:
 			caller := closure.caller.Address()
 			stack.Push(ethutil.BigD(caller))
 
-			vm.Printf(" => %x", caller)
+			self.Printf(" => %x", caller)
 		case CALLVALUE:
-			stack.Push(vm.vars.Value)
+			value := self.env.Value()
 
-			vm.Printf(" => %v", vm.vars.Value)
+			stack.Push(value)
+
+			self.Printf(" => %v", value)
 		case CALLDATALOAD:
 			require(1)
-			offset := stack.Pop().Int64()
+			var (
+				offset  = stack.Pop()
+				data    = make([]byte, 32)
+				lenData = big.NewInt(int64(len(closure.Args)))
+			)
 
-			data := make([]byte, 32)
-			if len(closure.Args) >= int(offset) {
-				l := int64(math.Min(float64(offset+32), float64(len(closure.Args))))
+			if lenData.Cmp(offset) >= 0 {
+				length := new(big.Int).Add(offset, ethutil.Big32)
+				length = ethutil.BigMin(length, lenData)
 
-				copy(data, closure.Args[offset:l])
+				copy(data, closure.Args[offset.Int64():length.Int64()])
 			}
 
-			vm.Printf(" => 0x%x", data)
+			self.Printf(" => 0x%x", data)
 
 			stack.Push(ethutil.BigD(data))
 		case CALLDATASIZE:
 			l := int64(len(closure.Args))
 			stack.Push(big.NewInt(l))
 
-			vm.Printf(" => %d", l)
+			self.Printf(" => %d", l)
 		case CALLDATACOPY:
 			var (
 				size = int64(len(closure.Args))
@@ -539,13 +505,13 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			mem.Set(mOff, l, code)
 		case CODESIZE:
-			l := big.NewInt(int64(len(closure.Script)))
+			l := big.NewInt(int64(len(closure.Code)))
 			stack.Push(l)
 
-			vm.Printf(" => %d", l)
+			self.Printf(" => %d", l)
 		case CODECOPY:
 			var (
-				size = int64(len(closure.Script))
+				size = int64(len(closure.Code))
 				mOff = stack.Pop().Int64()
 				cOff = stack.Pop().Int64()
 				l    = stack.Pop().Int64()
@@ -558,25 +524,45 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				l = 0
 			}
 
-			code := closure.Script[cOff : cOff+l]
-			//fmt.Println("len:", l, "code off:", cOff, "mem off:", mOff)
+			code := closure.Code[cOff : cOff+l]
 
 			mem.Set(mOff, l, code)
-			//fmt.Println(Code(mem.Get(mOff, l)))
 		case GASPRICE:
 			stack.Push(closure.Price)
 
+			self.Printf(" => %v", closure.Price)
+
 			// 0x40 range
 		case PREVHASH:
-			stack.Push(ethutil.BigD(vm.vars.PrevHash))
+			prevHash := self.env.PrevHash()
+
+			stack.Push(ethutil.BigD(prevHash))
+
+			self.Printf(" => 0x%x", prevHash)
 		case COINBASE:
-			stack.Push(ethutil.BigD(vm.vars.Coinbase))
+			coinbase := self.env.Coinbase()
+
+			stack.Push(ethutil.BigD(coinbase))
+
+			self.Printf(" => 0x%x", coinbase)
 		case TIMESTAMP:
-			stack.Push(big.NewInt(vm.vars.Time))
+			time := self.env.Time()
+
+			stack.Push(big.NewInt(time))
+
+			self.Printf(" => 0x%x", time)
 		case NUMBER:
-			stack.Push(vm.vars.BlockNumber)
+			number := self.env.BlockNumber()
+
+			stack.Push(number)
+
+			self.Printf(" => 0x%x", number.Bytes())
 		case DIFFICULTY:
-			stack.Push(vm.vars.Diff)
+			difficulty := self.env.Difficulty()
+
+			stack.Push(difficulty)
+
+			self.Printf(" => 0x%x", difficulty.Bytes())
 		case GASLIMIT:
 			// TODO
 			stack.Push(big.NewInt(0))
@@ -593,7 +579,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			step += int(op) - int(PUSH1) + 1
 
-			vm.Printf(" => 0x%x", data.Bytes())
+			self.Printf(" => 0x%x", data.Bytes())
 		case POP:
 			require(1)
 			stack.Pop()
@@ -601,7 +587,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			require(1)
 			stack.Push(stack.Peek())
 
-			vm.Printf(" => 0x%x", stack.Peek().Bytes())
+			self.Printf(" => 0x%x", stack.Peek().Bytes())
 		case SWAP:
 			require(2)
 			x, y := stack.Popn()
@@ -613,14 +599,14 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			val := ethutil.BigD(mem.Get(offset.Int64(), 32))
 			stack.Push(val)
 
-			vm.Printf(" => 0x%x", val.Bytes())
+			self.Printf(" => 0x%x", val.Bytes())
 		case MSTORE: // Store the value at stack top-1 in to memory at location stack top
 			require(2)
 			// Pop value of the stack
 			val, mStart := stack.Popn()
 			mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(val, 256))
 
-			vm.Printf(" => 0x%x", val)
+			self.Printf(" => 0x%x", val)
 		case MSTORE8:
 			require(2)
 			val, mStart := stack.Popn()
@@ -628,7 +614,7 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			//mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(base, 256))
 			mem.store[mStart.Int64()] = byte(val.Int64() & 0xff)
 
-			vm.Printf(" => 0x%x", val)
+			self.Printf(" => 0x%x", val)
 		case SLOAD:
 			require(1)
 			loc := stack.Pop()
@@ -636,21 +622,21 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			stack.Push(val.BigInt())
 
-			vm.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
+			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case SSTORE:
 			require(2)
 			val, loc := stack.Popn()
 			closure.SetStorage(loc, ethutil.NewValue(val))
 
 			// Add the change to manifest
-			vm.state.manifest.AddStorageChange(closure.Object(), loc.Bytes(), val)
+			self.env.State().Manifest().AddStorageChange(closure.Object(), loc.Bytes(), val)
 
-			vm.Printf(" {0x%x : 0x%x}", loc, val)
+			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case JUMP:
 			require(1)
 			pc = stack.Pop()
 			// Reduce pc by one because of the increment that's at the end of this for loop
-			vm.Printf(" ~> %v", pc).Endl()
+			self.Printf(" ~> %v", pc).Endl()
 
 			continue
 		case JUMPI:
@@ -659,11 +645,11 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			if cond.Cmp(ethutil.BigTrue) >= 0 {
 				pc = pos
 
-				vm.Printf(" ~> %v (t)", pc).Endl()
+				self.Printf(" ~> %v (t)", pc).Endl()
 
 				continue
 			} else {
-				vm.Printf(" (f)")
+				self.Printf(" (f)")
 			}
 		case PC:
 			stack.Push(pc)
@@ -682,21 +668,21 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 				// Snapshot the current stack so we are able to
 				// revert back to it later.
-				snapshot = vm.state.Copy()
+				snapshot = self.env.State().Copy()
 			)
 
 			// Generate a new address
-			addr := ethcrypto.CreateAddress(closure.Address(), closure.N().Uint64())
-			for i := uint64(0); vm.state.GetStateObject(addr) != nil; i++ {
-				ethcrypto.CreateAddress(closure.Address(), closure.N().Uint64()+i)
+			addr := ethcrypto.CreateAddress(closure.Address(), closure.object.Nonce)
+			for i := uint64(0); self.env.State().GetStateObject(addr) != nil; i++ {
+				ethcrypto.CreateAddress(closure.Address(), closure.object.Nonce+i)
 			}
 			closure.object.Nonce++
 
-			vm.Printf(" (*) %x", addr).Endl()
+			self.Printf(" (*) %x", addr).Endl()
 
 			// Create a new contract
-			contract := vm.state.NewStateObject(addr)
-			if contract.Amount.Cmp(value) >= 0 {
+			contract := self.env.State().NewStateObject(addr)
+			if contract.Balance.Cmp(value) >= 0 {
 				closure.object.SubAmount(value)
 				contract.AddAmount(value)
 
@@ -709,35 +695,35 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				closure.UseGas(closure.Gas)
 
 				// Create the closure
-				c := NewClosure(closure, contract, initCode, vm.state, gas, closure.Price)
+				c := NewClosure(closure, contract, initCode, gas, closure.Price)
 				// Call the closure and set the return value as
 				// main script.
-				contract.script, err = Call(vm, c, nil)
+				contract.Code, _, err = c.Call(self, nil)
 			} else {
-				err = fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Amount)
+				err = fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Balance)
 			}
 
 			if err != nil {
 				stack.Push(ethutil.BigFalse)
 
 				// Revert the state as it was before.
-				vm.state.Set(snapshot)
+				self.env.State().Set(snapshot)
 
-				vm.Printf("CREATE err %v", err)
+				self.Printf("CREATE err %v", err)
 			} else {
 				stack.Push(ethutil.BigD(addr))
-				vm.Printf("CREATE success")
+				self.Printf("CREATE success")
 			}
-			vm.Endl()
+			self.Endl()
 
 			// Debug hook
-			if vm.Dbg != nil {
-				vm.Dbg.SetCode(closure.Script)
+			if self.Dbg != nil {
+				self.Dbg.SetCode(closure.Code)
 			}
 		case CALL:
 			require(7)
 
-			vm.Endl()
+			self.Endl()
 
 			gas := stack.Pop()
 			// Pop gas and value of the stack.
@@ -750,30 +736,30 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 
-			if closure.object.Amount.Cmp(value) < 0 {
-				vmlogger.Debugf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Amount)
+			if closure.object.Balance.Cmp(value) < 0 {
+				vmlogger.Debugf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Balance)
 
-				closure.ReturnGas(gas, nil, nil)
+				closure.ReturnGas(gas, nil)
 
 				stack.Push(ethutil.BigFalse)
 			} else {
-				snapshot := vm.state.Copy()
+				snapshot := self.env.State().Copy()
 
-				stateObject := vm.state.GetOrNewStateObject(addr.Bytes())
+				stateObject := self.env.State().GetOrNewStateObject(addr.Bytes())
 
 				closure.object.SubAmount(value)
 				stateObject.AddAmount(value)
 
 				// Create a new callable closure
-				c := NewClosure(closure, stateObject, stateObject.script, vm.state, gas, closure.Price)
+				c := NewClosure(closure, stateObject, stateObject.Code, gas, closure.Price)
 				// Executer the closure and get the return value (if any)
-				ret, err := Call(vm, c, args)
+				ret, _, err := c.Call(self, args)
 				if err != nil {
 					stack.Push(ethutil.BigFalse)
 
 					vmlogger.Debugf("Closure execution failed. %v\n", err)
 
-					vm.state.Set(snapshot)
+					self.env.State().Set(snapshot)
 				} else {
 					stack.Push(ethutil.BigTrue)
 
@@ -781,8 +767,8 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				}
 
 				// Debug hook
-				if vm.Dbg != nil {
-					vm.Dbg.SetCode(closure.Script)
+				if self.Dbg != nil {
+					self.Dbg.SetCode(closure.Code)
 				}
 			}
 		case RETURN:
@@ -790,44 +776,43 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			size, offset := stack.Popn()
 			ret := mem.Get(offset.Int64(), size.Int64())
 
-			vm.Printf(" => (%d) 0x%x", len(ret), ret).Endl()
+			self.Printf(" => (%d) 0x%x", len(ret), ret).Endl()
 
 			return closure.Return(ret), nil
 		case SUICIDE:
 			require(1)
 
-			receiver := vm.state.GetOrNewStateObject(stack.Pop().Bytes())
+			receiver := self.env.State().GetOrNewStateObject(stack.Pop().Bytes())
 
-			receiver.AddAmount(closure.object.Amount)
+			receiver.AddAmount(closure.object.Balance)
 
 			closure.object.MarkForDeletion()
 
 			fallthrough
 		case STOP: // Stop the closure
-			vm.Endl()
+			self.Endl()
 
 			return closure.Return(nil), nil
 		default:
 			vmlogger.Debugf("(pc) %-3v Invalid opcode %x\n", pc, op)
-			fmt.Println(Code(closure.Script))
 
 			return closure.Return(nil), fmt.Errorf("Invalid opcode %x", op)
 		}
 
 		pc.Add(pc, ethutil.Big1)
 
-		vm.Endl()
+		self.Endl()
 
-		if vm.Dbg != nil {
-			for _, instrNo := range vm.Dbg.BreakPoints() {
+		if self.Dbg != nil {
+			for _, instrNo := range self.Dbg.BreakPoints() {
 				if pc.Cmp(big.NewInt(instrNo)) == 0 {
-					vm.Stepping = true
+					self.Stepping = true
 
-					if !vm.Dbg.BreakHook(prevStep, op, mem, stack, closure.Object()) {
+					if !self.Dbg.BreakHook(prevStep, op, mem, stack, closure.Object()) {
 						return nil, nil
 					}
-				} else if vm.Stepping {
-					if !vm.Dbg.StepHook(prevStep, op, mem, stack, closure.Object()) {
+				} else if self.Stepping {
+					if !self.Dbg.StepHook(prevStep, op, mem, stack, closure.Object()) {
 						return nil, nil
 					}
 				}
@@ -835,4 +820,21 @@ func (vm *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		}
 
 	}
+}
+
+func (self *Vm) Printf(format string, v ...interface{}) *Vm {
+	if self.Verbose && self.logTy == LogTyPretty {
+		self.logStr += fmt.Sprintf(format, v...)
+	}
+
+	return self
+}
+
+func (self *Vm) Endl() *Vm {
+	if self.Verbose && self.logTy == LogTyPretty {
+		vmlogger.Debugln(self.logStr)
+		self.logStr = ""
+	}
+
+	return self
 }

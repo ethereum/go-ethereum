@@ -44,6 +44,17 @@ func TestValueSlice(t *testing.T) {
 	}
 }
 
+func TestLargeData(t *testing.T) {
+	data := make([]byte, 100000)
+	enc := Encode(data)
+	value := NewValue(enc)
+	value.Decode()
+
+	if value.Len() != len(data) {
+		t.Error("Expected data to be", len(data), "got", value.Len())
+	}
+}
+
 func TestValue(t *testing.T) {
 	value := NewValueFromBytes([]byte("\xcd\x83dog\x83god\x83cat\x01"))
 	if value.Get(0).Str() != "dog" {

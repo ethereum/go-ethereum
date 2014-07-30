@@ -3,6 +3,11 @@ package ethchain
 import (
 	"fmt"
 	"math/big"
+
+	"github.com/ethereum/eth-go/ethstate"
+	"github.com/ethereum/eth-go/ethtrie"
+	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ethvm"
 )
 
 /*
@@ -27,17 +32,17 @@ type StateTransition struct {
 	gas, gasPrice      *big.Int
 	value              *big.Int
 	data               []byte
-	state              *State
+	state              *ethstate.State
 	block              *Block
 
-	cb, rec, sen *StateObject
+	cb, rec, sen *ethstate.StateObject
 }
 
-func NewStateTransition(coinbase *StateObject, tx *Transaction, state *State, block *Block) *StateTransition {
+func NewStateTransition(coinbase *ethstate.StateObject, tx *Transaction, state *ethstate.State, block *Block) *StateTransition {
 	return &StateTransition{coinbase.Address(), tx.Recipient, tx, new(big.Int), new(big.Int).Set(tx.GasPrice), tx.Value, tx.Data, state, block, coinbase, nil, nil}
 }
 
-func (self *StateTransition) Coinbase() *StateObject {
+func (self *StateTransition) Coinbase() *ethstate.StateObject {
 	if self.cb != nil {
 		return self.cb
 	}
@@ -45,7 +50,7 @@ func (self *StateTransition) Coinbase() *StateObject {
 	self.cb = self.state.GetOrNewStateObject(self.coinbase)
 	return self.cb
 }
-func (self *StateTransition) Sender() *StateObject {
+func (self *StateTransition) Sender() *ethstate.StateObject {
 	if self.sen != nil {
 		return self.sen
 	}
@@ -54,7 +59,7 @@ func (self *StateTransition) Sender() *StateObject {
 
 	return self.sen
 }
-func (self *StateTransition) Receiver() *StateObject {
+func (self *StateTransition) Receiver() *ethstate.StateObject {
 	if self.tx != nil && self.tx.CreatesContract() {
 		return nil
 	}
@@ -67,7 +72,7 @@ func (self *StateTransition) Receiver() *StateObject {
 	return self.rec
 }
 
-func (self *StateTransition) MakeStateObject(state *State, tx *Transaction) *StateObject {
+func (self *StateTransition) MakeStateObject(state *ethstate.State, tx *Transaction) *ethstate.StateObject {
 	contract := MakeContract(tx, state)
 
 	return contract
@@ -90,8 +95,8 @@ func (self *StateTransition) BuyGas() error {
 	var err error
 
 	sender := self.Sender()
-	if sender.Amount.Cmp(self.tx.GasValue()) < 0 {
-		return fmt.Errorf("Insufficient funds to pre-pay gas. Req %v, has %v", self.tx.GasValue(), sender.Amount)
+	if sender.Balance.Cmp(self.tx.GasValue()) < 0 {
+		return fmt.Errorf("Insufficient funds to pre-pay gas. Req %v, has %v", self.tx.GasValue(), sender.Balance)
 	}
 
 	coinbase := self.Coinbase()
@@ -154,7 +159,7 @@ func (self *StateTransition) TransitionState() (err error) {
 	var (
 		tx       = self.tx
 		sender   = self.Sender()
-		receiver *StateObject
+		receiver *ethstate.StateObject
 	)
 
 	defer self.RefundGas()
@@ -163,22 +168,22 @@ func (self *StateTransition) TransitionState() (err error) {
 	sender.Nonce += 1
 
 	// Transaction gas
-	if err = self.UseGas(GasTx); err != nil {
+	if err = self.UseGas(ethvm.GasTx); err != nil {
 		return
 	}
 
 	// Pay data gas
 	dataPrice := big.NewInt(int64(len(self.data)))
-	dataPrice.Mul(dataPrice, GasData)
+	dataPrice.Mul(dataPrice, ethvm.GasData)
 	if err = self.UseGas(dataPrice); err != nil {
 		return
 	}
 
-	if sender.Amount.Cmp(self.value) < 0 {
-		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Amount)
+	if sender.Balance.Cmp(self.value) < 0 {
+		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Balance)
 	}
 
-	var snapshot *State
+	var snapshot *ethstate.State
 	// If the receiver is nil it's a contract (\0*32).
 	if tx.CreatesContract() {
 		// Subtract the (irreversible) amount from the senders account
@@ -220,10 +225,10 @@ func (self *StateTransition) TransitionState() (err error) {
 			return fmt.Errorf("Error during init execution %v", err)
 		}
 
-		receiver.script = code
+		receiver.Code = code
 	} else {
-		if len(receiver.Script()) > 0 {
-			_, err = self.Eval(receiver.Script(), receiver, "code")
+		if len(receiver.Code) > 0 {
+			_, err = self.Eval(receiver.Code, receiver, "code")
 			if err != nil {
 				self.state.Set(snapshot)
 
@@ -235,9 +240,9 @@ func (self *StateTransition) TransitionState() (err error) {
 	return
 }
 
-func (self *StateTransition) transferValue(sender, receiver *StateObject) error {
-	if sender.Amount.Cmp(self.value) < 0 {
-		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Amount)
+func (self *StateTransition) transferValue(sender, receiver *ethstate.StateObject) error {
+	if sender.Balance.Cmp(self.value) < 0 {
+		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Balance)
 	}
 
 	// Subtract the amount from the senders account
@@ -248,34 +253,35 @@ func (self *StateTransition) transferValue(sender, receiver *StateObject) error 
 	return nil
 }
 
-func (self *StateTransition) Eval(script []byte, context *StateObject, typ string) (ret []byte, err error) {
+func (self *StateTransition) Eval(script []byte, context *ethstate.StateObject, typ string) (ret []byte, err error) {
 	var (
-		block     = self.block
-		initiator = self.Sender()
-		state     = self.state
+		transactor    = self.Sender()
+		state         = self.state
+		env           = NewEnv(state, self.tx, self.block)
+		callerClosure = ethvm.NewClosure(transactor, context, script, self.gas, self.gasPrice)
 	)
 
-	closure := NewClosure(initiator, context, script, state, self.gas, self.gasPrice)
-	vm := NewVm(state, nil, RuntimeVars{
-		Origin:      initiator.Address(),
-		Block:       block,
-		BlockNumber: block.Number,
-		PrevHash:    block.PrevHash,
-		Coinbase:    block.Coinbase,
-		Time:        block.Time,
-		Diff:        block.Difficulty,
-		Value:       self.value,
-	})
+	vm := ethvm.New(env)
 	vm.Verbose = true
 	vm.Fn = typ
 
-	ret, err = Call(vm, closure, self.data)
+	ret, _, err = callerClosure.Call(vm, self.tx.Data)
 
 	return
 }
 
-func Call(vm *Vm, closure *Closure, data []byte) (ret []byte, err error) {
-	ret, _, err = closure.Call(vm, data)
+// Converts an transaction in to a state object
+func MakeContract(tx *Transaction, state *ethstate.State) *ethstate.StateObject {
+	// Create contract if there's no recipient
+	if tx.IsContract() {
+		addr := tx.CreationAddress()
 
-	return
+		contract := state.NewStateObject(addr)
+		contract.InitCode = tx.Data
+		contract.State = ethstate.NewState(ethtrie.NewTrie(ethutil.Config.Db, ""))
+
+		return contract
+	}
+
+	return nil
 }

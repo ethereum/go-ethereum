@@ -3,8 +3,9 @@ package ethutil
 import (
 	"flag"
 	"fmt"
-	"github.com/rakyll/globalconf"
 	"os"
+
+	"github.com/rakyll/globalconf"
 )
 
 // Config struct
@@ -28,8 +29,7 @@ var Config *ConfigManager
 func ReadConfig(ConfigFile string, Datadir string, EnvPrefix string) *ConfigManager {
 	if Config == nil {
 		// create ConfigFile if does not exist, otherwise globalconf panic when trying to persist flags
-		_, err := os.Stat(ConfigFile)
-		if err != nil && os.IsNotExist(err) {
+		if !FileExist(ConfigFile) {
 			fmt.Printf("config file '%s' doesn't exist, creating it\n", ConfigFile)
 			os.Create(ConfigFile)
 		}

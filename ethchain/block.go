@@ -3,12 +3,14 @@ package ethchain
 import (
 	"bytes"
 	"fmt"
-	"github.com/ethereum/eth-go/ethcrypto"
-	"github.com/ethereum/eth-go/ethtrie"
-	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
 	_ "strconv"
 	"time"
+
+	"github.com/ethereum/eth-go/ethcrypto"
+	"github.com/ethereum/eth-go/ethstate"
+	"github.com/ethereum/eth-go/ethtrie"
+	"github.com/ethereum/eth-go/ethutil"
 )
 
 type BlockInfo struct {
@@ -39,7 +41,7 @@ type Block struct {
 	Coinbase []byte
 	// Block Trie state
 	//state *ethutil.Trie
-	state *State
+	state *ethstate.State
 	// Difficulty for the current block
 	Difficulty *big.Int
 	// Creation time
@@ -60,12 +62,6 @@ type Block struct {
 	transactions []*Transaction
 	receipts     []*Receipt
 	TxSha        []byte
-}
-
-// New block takes a raw encoded string
-// XXX DEPRICATED
-func NewBlockFromData(raw []byte) *Block {
-	return NewBlockFromBytes(raw)
 }
 
 func NewBlockFromBytes(raw []byte) *Block {
@@ -104,7 +100,7 @@ func CreateBlock(root interface{},
 	}
 	block.SetUncles([]*Block{})
 
-	block.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, root))
+	block.state = ethstate.NewState(ethtrie.NewTrie(ethutil.Config.Db, root))
 
 	return block
 }
@@ -116,44 +112,17 @@ func (block *Block) Hash() []byte {
 
 func (block *Block) HashNoNonce() []byte {
 	return ethcrypto.Sha3Bin(ethutil.Encode([]interface{}{block.PrevHash,
-		block.UncleSha, block.Coinbase, block.state.trie.Root,
+		block.UncleSha, block.Coinbase, block.state.Trie.Root,
 		block.TxSha, block.Difficulty, block.Number, block.MinGasPrice,
 		block.GasLimit, block.GasUsed, block.Time, block.Extra}))
 }
 
-func (block *Block) State() *State {
+func (block *Block) State() *ethstate.State {
 	return block.state
 }
 
 func (block *Block) Transactions() []*Transaction {
 	return block.transactions
-}
-
-func (block *Block) PayFee(addr []byte, fee *big.Int) bool {
-	contract := block.state.GetStateObject(addr)
-	// If we can't pay the fee return
-	if contract == nil || contract.Amount.Cmp(fee) < 0 /* amount < fee */ {
-		fmt.Println("Contract has insufficient funds", contract.Amount, fee)
-
-		return false
-	}
-
-	base := new(big.Int)
-	contract.Amount = base.Sub(contract.Amount, fee)
-	block.state.trie.Update(string(addr), string(contract.RlpEncode()))
-
-	data := block.state.trie.Get(string(block.Coinbase))
-
-	// Get the ether (Coinbase) and add the fee (gief fee to miner)
-	account := NewStateObjectFromBytes(block.Coinbase, []byte(data))
-
-	base = new(big.Int)
-	account.Amount = base.Add(account.Amount, fee)
-
-	//block.state.trie.Update(string(block.Coinbase), string(ether.RlpEncode()))
-	block.state.UpdateStateObject(account)
-
-	return true
 }
 
 func (block *Block) CalcGasLimit(parent *Block) *big.Int {
@@ -312,7 +281,7 @@ func (block *Block) RlpValueDecode(decoder *ethutil.Value) {
 	block.PrevHash = header.Get(0).Bytes()
 	block.UncleSha = header.Get(1).Bytes()
 	block.Coinbase = header.Get(2).Bytes()
-	block.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, header.Get(3).Val))
+	block.state = ethstate.NewState(ethtrie.NewTrie(ethutil.Config.Db, header.Get(3).Val))
 	block.TxSha = header.Get(4).Bytes()
 	block.Difficulty = header.Get(5).BigInt()
 	block.Number = header.Get(6).BigInt()
@@ -354,7 +323,7 @@ func NewUncleBlockFromValue(header *ethutil.Value) *Block {
 	block.PrevHash = header.Get(0).Bytes()
 	block.UncleSha = header.Get(1).Bytes()
 	block.Coinbase = header.Get(2).Bytes()
-	block.state = NewState(ethtrie.NewTrie(ethutil.Config.Db, header.Get(3).Val))
+	block.state = ethstate.NewState(ethtrie.NewTrie(ethutil.Config.Db, header.Get(3).Val))
 	block.TxSha = header.Get(4).Bytes()
 	block.Difficulty = header.Get(5).BigInt()
 	block.Number = header.Get(6).BigInt()
@@ -369,7 +338,7 @@ func NewUncleBlockFromValue(header *ethutil.Value) *Block {
 }
 
 func (block *Block) GetRoot() interface{} {
-	return block.state.trie.Root
+	return block.state.Trie.Root
 }
 
 func (self *Block) Receipts() []*Receipt {
@@ -385,7 +354,7 @@ func (block *Block) header() []interface{} {
 		// Coinbase address
 		block.Coinbase,
 		// root state
-		block.state.trie.Root,
+		block.state.Trie.Root,
 		// Sha of tx
 		block.TxSha,
 		// Current block Difficulty
@@ -429,7 +398,7 @@ func (block *Block) String() string {
 		block.PrevHash,
 		block.UncleSha,
 		block.Coinbase,
-		block.state.trie.Root,
+		block.state.Trie.Root,
 		block.TxSha,
 		block.Difficulty,
 		block.Number,

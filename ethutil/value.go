@@ -1,7 +1,6 @@
 package ethutil
 
 import (
-	"bytes"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -67,7 +66,9 @@ func (val *Value) Uint() uint64 {
 	} else if Val, ok := val.Val.(uint); ok {
 		return uint64(Val)
 	} else if Val, ok := val.Val.([]byte); ok {
-		return ReadVarint(bytes.NewReader(Val))
+		return new(big.Int).SetBytes(Val).Uint64()
+	} else if Val, ok := val.Val.(*big.Int); ok {
+		return Val.Uint64()
 	}
 
 	return 0
@@ -205,6 +206,13 @@ func (val *Value) Cmp(o *Value) bool {
 	return reflect.DeepEqual(val.Val, o.Val)
 }
 
+func (self *Value) DeepCmp(o *Value) bool {
+	a := NewValue(self.BigInt())
+	b := NewValue(o.BigInt())
+
+	return a.Cmp(b)
+}
+
 func (val *Value) Encode() []byte {
 	return Encode(val.Val)
 }
@@ -258,6 +266,55 @@ func (val *Value) Append(v interface{}) *Value {
 	val.Val = append(val.Slice(), v)
 
 	return val
+}
+
+const (
+	valOpAdd = iota
+	valOpDiv
+	valOpMul
+	valOpPow
+	valOpSub
+)
+
+// Math stuff
+func (self *Value) doOp(op int, other interface{}) *Value {
+	left := self.BigInt()
+	right := NewValue(other).BigInt()
+
+	switch op {
+	case valOpAdd:
+		self.Val = left.Add(left, right)
+	case valOpDiv:
+		self.Val = left.Div(left, right)
+	case valOpMul:
+		self.Val = left.Mul(left, right)
+	case valOpPow:
+		self.Val = left.Exp(left, right, Big0)
+	case valOpSub:
+		self.Val = left.Sub(left, right)
+	}
+
+	return self
+}
+
+func (self *Value) Add(other interface{}) *Value {
+	return self.doOp(valOpAdd, other)
+}
+
+func (self *Value) Sub(other interface{}) *Value {
+	return self.doOp(valOpSub, other)
+}
+
+func (self *Value) Div(other interface{}) *Value {
+	return self.doOp(valOpDiv, other)
+}
+
+func (self *Value) Mul(other interface{}) *Value {
+	return self.doOp(valOpMul, other)
+}
+
+func (self *Value) Pow(other interface{}) *Value {
+	return self.doOp(valOpPow, other)
 }
 
 type ValueIterator struct {

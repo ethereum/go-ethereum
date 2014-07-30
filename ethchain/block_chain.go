@@ -2,11 +2,12 @@ package ethchain
 
 import (
 	"bytes"
+	"math"
+	"math/big"
+
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
-	"math"
-	"math/big"
 )
 
 var chainlogger = ethlog.NewLogger("CHAIN")
@@ -44,7 +45,7 @@ func (bc *BlockChain) NewBlock(coinbase []byte) *Block {
 	hash := ZeroHash256
 
 	if bc.CurrentBlock != nil {
-		root = bc.CurrentBlock.state.trie.Root
+		root = bc.CurrentBlock.state.Trie.Root
 		hash = bc.LastBlockHash
 		lastBlockTime = bc.CurrentBlock.Time
 	}
@@ -280,7 +281,7 @@ func AddTestNetFunds(block *Block) {
 	} {
 		codedAddr := ethutil.Hex2Bytes(addr)
 		account := block.state.GetAccount(codedAddr)
-		account.Amount = ethutil.Big("1606938044258990275541962092341162602522202993782792835301376") //ethutil.BigPow(2, 200)
+		account.Balance = ethutil.Big("1606938044258990275541962092341162602522202993782792835301376") //ethutil.BigPow(2, 200)
 		block.state.UpdateStateObject(account)
 	}
 }
@@ -297,7 +298,7 @@ func (bc *BlockChain) setLastBlock() {
 	} else {
 		AddTestNetFunds(bc.genesisBlock)
 
-		bc.genesisBlock.state.trie.Sync()
+		bc.genesisBlock.state.Trie.Sync()
 		// Prepare the genesis block
 		bc.Add(bc.genesisBlock)
 
