@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
@@ -36,7 +37,7 @@ type EthManager interface {
 	BlockChain() *BlockChain
 	TxPool() *TxPool
 	Broadcast(msgType ethwire.MsgType, data []interface{})
-	Reactor() *ethutil.ReactorEngine
+	Reactor() *ethreact.ReactorEngine
 	PeerCount() int
 	IsMining() bool
 	IsListening() bool
