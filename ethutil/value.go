@@ -221,12 +221,15 @@ func (val *Value) Encode() []byte {
 func (self *Value) Decode() {
 	v, _ := Decode(self.Bytes(), 0)
 	self.Val = v
+	//self.Val = DecodeWithReader(bytes.NewBuffer(self.Bytes()))
 }
 
 func NewValueFromBytes(data []byte) *Value {
 	if len(data) != 0 {
-		data, _ := Decode(data, 0)
-		return NewValue(data)
+		value := NewValue(data)
+		value.Decode()
+
+		return value
 	}
 
 	return NewValue(nil)

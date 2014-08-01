@@ -403,7 +403,7 @@ func (p *Peer) HandleInbound() {
 							}
 						}
 					}
-					if !p.ethereum.StateManager().BlockChain().HasBlock(lastBlock.Hash()) {
+					if !blockChain.HasBlock(lastBlock.Hash()) {
 						// If we can't find a common ancenstor we need to request more blocks.
 						// FIXME: At one point this won't scale anymore since we are not asking for an offset
 						// we just keep increasing the amount of blocks.

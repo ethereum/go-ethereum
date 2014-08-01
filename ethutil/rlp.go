@@ -32,12 +32,14 @@ const (
 	RlpEmptyStr  = 0x40
 )
 
+const rlpEof = -1
+
 func Char(c []byte) int {
 	if len(c) > 0 {
 		return int(c[0])
 	}
 
-	return 0
+	return rlpEof
 }
 
 func DecodeWithReader(reader *bytes.Buffer) interface{} {
@@ -46,8 +48,6 @@ func DecodeWithReader(reader *bytes.Buffer) interface{} {
 	// Read the next byte
 	char := Char(reader.Next(1))
 	switch {
-	case char == 0:
-		return nil
 	case char <= 0x7f:
 		return char
 
@@ -63,11 +63,7 @@ func DecodeWithReader(reader *bytes.Buffer) interface{} {
 		length := int(char - 0xc0)
 		for i := 0; i < length; i++ {
 			obj := DecodeWithReader(reader)
-			if obj != nil {
-				slice = append(slice, obj)
-			} else {
-				break
-			}
+			slice = append(slice, obj)
 		}
 
 		return slice
@@ -75,13 +71,12 @@ func DecodeWithReader(reader *bytes.Buffer) interface{} {
 		length := ReadVarInt(reader.Next(int(char - 0xf7)))
 		for i := uint64(0); i < length; i++ {
 			obj := DecodeWithReader(reader)
-			if obj != nil {
-				slice = append(slice, obj)
-			} else {
-				break
-			}
+			slice = append(slice, obj)
 		}
+
+		return slice
 	default:
+		panic(fmt.Sprintf("byte not supported: %q", char))
 	}
 
 	return slice
