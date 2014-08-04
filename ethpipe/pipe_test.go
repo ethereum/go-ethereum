@@ -34,6 +34,7 @@ func TestNew(t *testing.T) {
 	pipe.Block(addr)
 	pipe.Storage(addr, addr)
 	pipe.ToAddress(privy)
+	pipe.Exists(addr)
 	// Doesn't change state
 	pipe.Execute(addr, nil, Val(0), Val(1000000), Val(10))
 	// Doesn't change state

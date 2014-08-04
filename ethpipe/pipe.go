@@ -75,6 +75,10 @@ func (self *Pipe) ToAddress(priv []byte) []byte {
 	return pair.Address()
 }
 
+func (self *Pipe) Exists(addr []byte) bool {
+	return self.World().Get(addr) != nil
+}
+
 func (self *Pipe) TransactString(key *ethcrypto.KeyPair, rec string, value, gas, price *ethutil.Value, data []byte) error {
 	// Check if an address is stored by this address
 	var hash []byte
