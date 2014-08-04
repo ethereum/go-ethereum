@@ -100,7 +100,7 @@ func CreateBlock(root interface{},
 	}
 	block.SetUncles([]*Block{})
 
-	block.state = ethstate.NewState(ethtrie.New(ethutil.Config.Db, root))
+	block.state = ethstate.New(ethtrie.New(ethutil.Config.Db, root))
 
 	return block
 }
@@ -265,7 +265,7 @@ func (block *Block) RlpValueDecode(decoder *ethutil.Value) {
 	block.PrevHash = header.Get(0).Bytes()
 	block.UncleSha = header.Get(1).Bytes()
 	block.Coinbase = header.Get(2).Bytes()
-	block.state = ethstate.NewState(ethtrie.New(ethutil.Config.Db, header.Get(3).Val))
+	block.state = ethstate.New(ethtrie.New(ethutil.Config.Db, header.Get(3).Val))
 	block.TxSha = header.Get(4).Bytes()
 	block.Difficulty = header.Get(5).BigInt()
 	block.Number = header.Get(6).BigInt()
@@ -307,7 +307,7 @@ func NewUncleBlockFromValue(header *ethutil.Value) *Block {
 	block.PrevHash = header.Get(0).Bytes()
 	block.UncleSha = header.Get(1).Bytes()
 	block.Coinbase = header.Get(2).Bytes()
-	block.state = ethstate.NewState(ethtrie.New(ethutil.Config.Db, header.Get(3).Val))
+	block.state = ethstate.New(ethtrie.New(ethutil.Config.Db, header.Get(3).Val))
 	block.TxSha = header.Get(4).Bytes()
 	block.Difficulty = header.Get(5).BigInt()
 	block.Number = header.Get(6).BigInt()

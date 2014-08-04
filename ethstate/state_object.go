@@ -62,7 +62,7 @@ func NewStateObject(addr []byte) *StateObject {
 	address := ethutil.Address(addr)
 
 	object := &StateObject{address: address, Balance: new(big.Int), gasPool: new(big.Int)}
-	object.State = NewState(ethtrie.New(ethutil.Config.Db, ""))
+	object.State = New(ethtrie.New(ethutil.Config.Db, ""))
 	object.storage = make(Storage)
 	object.gasPool = new(big.Int)
 
@@ -72,7 +72,7 @@ func NewStateObject(addr []byte) *StateObject {
 func NewContract(address []byte, balance *big.Int, root []byte) *StateObject {
 	contract := NewStateObject(address)
 	contract.Balance = balance
-	contract.State = NewState(ethtrie.New(ethutil.Config.Db, string(root)))
+	contract.State = New(ethtrie.New(ethutil.Config.Db, string(root)))
 
 	return contract
 }
@@ -300,7 +300,7 @@ func (c *StateObject) RlpDecode(data []byte) {
 
 	c.Nonce = decoder.Get(0).Uint()
 	c.Balance = decoder.Get(1).BigInt()
-	c.State = NewState(ethtrie.New(ethutil.Config.Db, decoder.Get(2).Interface()))
+	c.State = New(ethtrie.New(ethutil.Config.Db, decoder.Get(2).Interface()))
 	c.storage = make(map[string]*ethutil.Value)
 	c.gasPool = new(big.Int)
 

@@ -26,7 +26,7 @@ type State struct {
 }
 
 // Create a new state from a given trie
-func NewState(trie *ethtrie.Trie) *State {
+func New(trie *ethtrie.Trie) *State {
 	return &State{Trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest()}
 }
 
@@ -128,7 +128,7 @@ func (s *State) Cmp(other *State) bool {
 
 func (self *State) Copy() *State {
 	if self.Trie != nil {
-		state := NewState(self.Trie.Copy())
+		state := New(self.Trie.Copy())
 		for k, stateObject := range self.stateObjects {
 			state.stateObjects[k] = stateObject.Copy()
 		}

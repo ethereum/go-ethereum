@@ -1,10 +1,11 @@
 package ethstate
 
 import (
+	"testing"
+
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
-	"testing"
 )
 
 var ZeroHash256 = make([]byte, 32)
@@ -14,7 +15,7 @@ func TestSnapshot(t *testing.T) {
 	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")
 	ethutil.Config.Db = db
 
-	state := NewState(ethtrie.NewTrie(db, ""))
+	state := New(ethtrie.New(db, ""))
 
 	stateObject := state.GetOrNewStateObject([]byte("aa"))
 
