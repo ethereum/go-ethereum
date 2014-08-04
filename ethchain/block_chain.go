@@ -132,7 +132,7 @@ func (bc *BlockChain) FindCanonicalChain(blocks []*Block, commonBlockHash []byte
 	// Start with the newest block we got, all the way back to the common block we both know
 	for _, block := range blocks {
 		if bytes.Compare(block.Hash(), commonBlockHash) == 0 {
-			chainlogger.Infoln("[CHAIN] We have found the common parent block, breaking")
+			chainlogger.Infoln("We have found the common parent block, breaking")
 			break
 		}
 		chainDifficulty.Add(chainDifficulty, bc.CalculateBlockTD(block))
@@ -145,13 +145,13 @@ func (bc *BlockChain) FindCanonicalChain(blocks []*Block, commonBlockHash []byte
 	for i := 0; block != nil; block = bc.GetBlock(block.PrevHash) {
 		i++
 		if bytes.Compare(block.Hash(), commonBlockHash) == 0 {
-			chainlogger.Infoln("We have found the common parent block, breaking")
+			chainlogger.Infoln("Found the common parent block")
 			break
 		}
 		anOtherBlock := bc.GetBlock(block.PrevHash)
 		if anOtherBlock == nil {
 			// We do not want to count the genesis block for difficulty since that's not being sent
-			chainlogger.Infoln("At genesis block, breaking")
+			chainlogger.Infoln("Found genesis block. Stop")
 			break
 		}
 		curChainDifficulty.Add(curChainDifficulty, bc.CalculateBlockTD(block))
@@ -159,11 +159,11 @@ func (bc *BlockChain) FindCanonicalChain(blocks []*Block, commonBlockHash []byte
 
 	chainlogger.Infoln("Current chain difficulty:", curChainDifficulty)
 	if chainDifficulty.Cmp(curChainDifficulty) == 1 {
-		chainlogger.Infof("The incoming Chain beat our asses, resetting to block: %x", commonBlockHash)
+		chainlogger.Infof("Resetting to block %x. Changing chain.")
 		bc.ResetTillBlockHash(commonBlockHash)
 		return false
 	} else {
-		chainlogger.Infoln("Our chain showed the incoming chain who is boss. Ignoring.")
+		chainlogger.Infoln("Current chain is longest chain. Ignoring incoming chain.")
 		return true
 	}
 }

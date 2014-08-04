@@ -2,14 +2,14 @@ package ethvm
 
 import (
 	"fmt"
-	"github.com/ethereum/eth-go/ethdb"
-	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethstate"
-	"github.com/ethereum/eth-go/ethutil"
 	"log"
 	"math/big"
 	"os"
 	"testing"
+
+	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethstate"
+	"github.com/ethereum/eth-go/ethutil"
 )
 
 type TestEnv struct {
@@ -27,9 +27,7 @@ func (self TestEnv) State() *ethstate.State { return nil }
 func TestVm(t *testing.T) {
 	ethlog.AddLogSystem(ethlog.NewStdLogSystem(os.Stdout, log.LstdFlags, ethlog.LogLevel(4)))
 
-	db, _ := ethdb.NewMemDatabase()
 	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")
-	ethutil.Config.Db = db
 
 	stateObject := ethstate.NewStateObject([]byte{'j', 'e', 'f', 'f'})
 	callerClosure := NewClosure(stateObject, stateObject, []byte{0x60, 0x01}, big.NewInt(1000000), big.NewInt(0))

@@ -278,7 +278,7 @@ func MakeContract(tx *Transaction, state *ethstate.State) *ethstate.StateObject 
 
 		contract := state.NewStateObject(addr)
 		contract.InitCode = tx.Data
-		contract.State = ethstate.NewState(ethtrie.NewTrie(ethutil.Config.Db, ""))
+		contract.State = ethstate.NewState(ethtrie.New(ethutil.Config.Db, ""))
 
 		return contract
 	}

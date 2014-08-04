@@ -5,13 +5,14 @@ import (
 	_ "encoding/hex"
 	_ "encoding/json"
 	"fmt"
-	"github.com/ethereum/eth-go/ethutil"
 	_ "io/ioutil"
 	_ "math/rand"
 	_ "net/http"
 	_ "reflect"
 	"testing"
 	_ "time"
+
+	"github.com/ethereum/eth-go/ethutil"
 )
 
 const LONG_WORD = "1234567890abcdefghijklmnopqrstuvwxxzABCEFGHIJKLMNOPQRSTUVWXYZ"
@@ -38,14 +39,14 @@ func (db *MemDatabase) Print()              {}
 func (db *MemDatabase) Close()              {}
 func (db *MemDatabase) LastKnownTD() []byte { return nil }
 
-func New() (*MemDatabase, *Trie) {
+func NewTrie() (*MemDatabase, *Trie) {
 	db, _ := NewMemDatabase()
-	return db, NewTrie(db, "")
+	return db, New(db, "")
 }
 
 /*
 func TestTrieSync(t *testing.T) {
-	db, trie := New()
+	db, trie := NewTrie()
 
 	trie.Update("dog", LONG_WORD)
 	if len(db.db) != 0 {
@@ -59,7 +60,7 @@ func TestTrieSync(t *testing.T) {
 }
 
 func TestTrieDirtyTracking(t *testing.T) {
-	_, trie := New()
+	_, trie := NewTrie()
 	trie.Update("dog", LONG_WORD)
 	if !trie.cache.IsDirty {
 		t.Error("Expected trie to be dirty")
@@ -79,7 +80,7 @@ func TestTrieDirtyTracking(t *testing.T) {
 }
 
 func TestTrieReset(t *testing.T) {
-	_, trie := New()
+	_, trie := NewTrie()
 
 	trie.Update("cat", LONG_WORD)
 	if len(trie.cache.nodes) == 0 {
@@ -94,7 +95,7 @@ func TestTrieReset(t *testing.T) {
 }
 
 func TestTrieGet(t *testing.T) {
-	_, trie := New()
+	_, trie := NewTrie()
 
 	trie.Update("cat", LONG_WORD)
 	x := trie.Get("cat")
@@ -104,7 +105,7 @@ func TestTrieGet(t *testing.T) {
 }
 
 func TestTrieUpdating(t *testing.T) {
-	_, trie := New()
+	_, trie := NewTrie()
 	trie.Update("cat", LONG_WORD)
 	trie.Update("cat", LONG_WORD+"1")
 	x := trie.Get("cat")
@@ -114,8 +115,8 @@ func TestTrieUpdating(t *testing.T) {
 }
 
 func TestTrieCmp(t *testing.T) {
-	_, trie1 := New()
-	_, trie2 := New()
+	_, trie1 := NewTrie()
+	_, trie2 := NewTrie()
 
 	trie1.Update("doge", LONG_WORD)
 	trie2.Update("doge", LONG_WORD)
@@ -131,7 +132,7 @@ func TestTrieCmp(t *testing.T) {
 }
 
 func TestTrieDelete(t *testing.T) {
-	_, trie := New()
+	_, trie := NewTrie()
 	trie.Update("cat", LONG_WORD)
 	exp := trie.Root
 	trie.Update("dog", LONG_WORD)
@@ -150,7 +151,7 @@ func TestTrieDelete(t *testing.T) {
 }
 
 func TestTrieDeleteWithValue(t *testing.T) {
-	_, trie := New()
+	_, trie := NewTrie()
 	trie.Update("c", LONG_WORD)
 	exp := trie.Root
 	trie.Update("ca", LONG_WORD)
@@ -164,7 +165,7 @@ func TestTrieDeleteWithValue(t *testing.T) {
 }
 
 func TestTriePurge(t *testing.T) {
-	_, trie := New()
+	_, trie := NewTrie()
 	trie.Update("c", LONG_WORD)
 	trie.Update("ca", LONG_WORD)
 	trie.Update("cat", LONG_WORD)
@@ -248,7 +249,7 @@ func CreateTests(uri string, cb func(Test)) map[string]Test {
 
 func TestRemote(t *testing.T) {
 	CreateTests("https://raw.githubusercontent.com/ethereum/tests/develop/trietest.json", func(test Test) {
-		_, trie := New()
+		_, trie := NewTrie()
 		for key, value := range test.In {
 			trie.Update(get(key), get(value))
 		}
@@ -263,12 +264,12 @@ func TestRemote(t *testing.T) {
 
 func TestTrieReplay(t *testing.T) {
 	CreateTests("https://raw.githubusercontent.com/ethereum/tests/develop/trietest.json", func(test Test) {
-		_, trie := New()
+		_, trie := NewTrie()
 		for key, value := range test.In {
 			trie.Update(get(key), get(value))
 		}
 
-		_, trie2 := New()
+		_, trie2 := NewTrie()
 		trie.NewIterator().Each(func(key string, v *ethutil.Value) {
 			trie2.Update(key, v.Str())
 		})
@@ -314,7 +315,7 @@ func TestRegression(t *testing.T) {
 
 	roots := make(map[string]int)
 	for i := 0; i < MaxTest; i++ {
-		_, trie := New()
+		_, trie := NewTrie()
 		data := RandomData()
 
 		for _, test := range data {
@@ -333,7 +334,7 @@ func TestRegression(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	_, trie := New()
+	_, trie := NewTrie()
 
 	trie.Update("a", "jeffreytestlongstring")
 	trie.Update("aa", "otherstring")
@@ -352,7 +353,7 @@ func TestDelete(t *testing.T) {
 	trie.Update("aaaa", "testmegood")
 
 	fmt.Println("aa =>", trie.Get("aa"))
-	_, t2 := New()
+	_, t2 := NewTrie()
 	trie.NewIterator().Each(func(key string, v *ethutil.Value) {
 		if key == "aaaa" {
 			t2.Update(key, v.Str())
@@ -369,7 +370,7 @@ func TestDelete(t *testing.T) {
 */
 
 func TestRndCase(t *testing.T) {
-	_, trie := New()
+	_, trie := NewTrie()
 
 	data := []struct{ k, v string }{
 		{"0000000000000000000000000000000000000000000000000000000000000001", "a07573657264617461000000000000000000000000000000000000000000000000"},

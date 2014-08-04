@@ -3,16 +3,17 @@ package ethtrie
 import (
 	"bytes"
 	"fmt"
-	"github.com/ethereum/eth-go/ethcrypto"
-	"github.com/ethereum/eth-go/ethutil"
 	_ "reflect"
 	"sync"
+
+	"github.com/ethereum/eth-go/ethcrypto"
+	"github.com/ethereum/eth-go/ethutil"
 )
 
 func __ignore() { fmt.Println("") }
 
 func ParanoiaCheck(t1 *Trie) (bool, *Trie) {
-	t2 := NewTrie(ethutil.Config.Db, "")
+	t2 := New(ethutil.Config.Db, "")
 
 	t1.NewIterator().Each(func(key string, v *ethutil.Value) {
 		t2.Update(key, v.Str())
@@ -158,7 +159,7 @@ func copyRoot(root interface{}) interface{} {
 	return prevRootCopy
 }
 
-func NewTrie(db ethutil.Database, Root interface{}) *Trie {
+func New(db ethutil.Database, Root interface{}) *Trie {
 	// Make absolute sure the root is copied
 	r := copyRoot(Root)
 	p := copyRoot(Root)
@@ -221,7 +222,7 @@ func (t *Trie) Cmp(trie *Trie) bool {
 
 // Returns a copy of this trie
 func (t *Trie) Copy() *Trie {
-	trie := NewTrie(t.cache.db, t.Root)
+	trie := New(t.cache.db, t.Root)
 	for key, node := range t.cache.nodes {
 		trie.cache.nodes[key] = node.Copy()
 	}
