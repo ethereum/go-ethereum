@@ -122,6 +122,14 @@ func (val *Value) Bytes() []byte {
 	return []byte{}
 }
 
+func (val *Value) Err() error {
+	if err, ok := val.Val.(error); ok {
+		return err
+	}
+
+	return nil
+}
+
 func (val *Value) Slice() []interface{} {
 	if d, ok := val.Val.([]interface{}); ok {
 		return d
@@ -155,6 +163,11 @@ func (val *Value) IsSlice() bool {
 
 func (val *Value) IsStr() bool {
 	return val.Type() == reflect.String
+}
+
+func (self *Value) IsErr() bool {
+	_, ok := self.Val.(error)
+	return ok
 }
 
 // Special list checking function. Something is considered
