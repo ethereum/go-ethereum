@@ -8,7 +8,7 @@ type config struct {
 	pipe *Pipe
 }
 
-func (self *config) Get(name string) *object {
+func (self *config) Get(name string) *Object {
 	configCtrl := self.pipe.World().safeGet(cnfCtr)
 	var addr []byte
 
@@ -21,7 +21,7 @@ func (self *config) Get(name string) *object {
 
 	objectAddr := configCtrl.GetStorage(ethutil.BigD(addr))
 
-	return &object{self.pipe.World().safeGet(objectAddr.Bytes())}
+	return &Object{self.pipe.World().safeGet(objectAddr.Bytes())}
 }
 
 func (self *config) Exist() bool {

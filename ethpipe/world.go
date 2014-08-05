@@ -26,8 +26,8 @@ func (self *world) State() *ethstate.State {
 	return self.pipe.stateManager.CurrentState()
 }
 
-func (self *world) Get(addr []byte) *object {
-	return &object{self.State().GetStateObject(addr)}
+func (self *world) Get(addr []byte) *Object {
+	return &Object{self.State().GetStateObject(addr)}
 }
 
 func (self *world) safeGet(addr []byte) *ethstate.StateObject {

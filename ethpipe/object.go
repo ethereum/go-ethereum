@@ -5,11 +5,11 @@ import (
 	"github.com/ethereum/eth-go/ethutil"
 )
 
-type object struct {
+type Object struct {
 	*ethstate.StateObject
 }
 
-func (self *object) StorageString(str string) *ethutil.Value {
+func (self *Object) StorageString(str string) *ethutil.Value {
 	if ethutil.IsHex(str) {
 		return self.Storage(ethutil.Hex2Bytes(str[2:]))
 	} else {
@@ -17,10 +17,10 @@ func (self *object) StorageString(str string) *ethutil.Value {
 	}
 }
 
-func (self *object) StorageValue(addr *ethutil.Value) *ethutil.Value {
+func (self *Object) StorageValue(addr *ethutil.Value) *ethutil.Value {
 	return self.Storage(addr.Bytes())
 }
 
-func (self *object) Storage(addr []byte) *ethutil.Value {
+func (self *Object) Storage(addr []byte) *ethutil.Value {
 	return self.StateObject.GetStorage(ethutil.BigD(addr))
 }

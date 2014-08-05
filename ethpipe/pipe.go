@@ -46,10 +46,10 @@ func (self *Pipe) Nonce(addr []byte) uint64 {
 }
 
 func (self *Pipe) Execute(addr []byte, data []byte, value, gas, price *ethutil.Value) ([]byte, error) {
-	return self.ExecuteObject(&object{self.World().safeGet(addr)}, data, value, gas, price)
+	return self.ExecuteObject(&Object{self.World().safeGet(addr)}, data, value, gas, price)
 }
 
-func (self *Pipe) ExecuteObject(object *object, data []byte, value, gas, price *ethutil.Value) ([]byte, error) {
+func (self *Pipe) ExecuteObject(object *Object, data []byte, value, gas, price *ethutil.Value) ([]byte, error) {
 	var (
 		initiator   = ethstate.NewStateObject([]byte{0})
 		block       = self.blockChain.CurrentBlock
