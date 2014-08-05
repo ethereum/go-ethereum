@@ -26,17 +26,17 @@ func (self *world) State() *ethstate.State {
 	return self.pipe.stateManager.CurrentState()
 }
 
-func (self *world) Get(addr []byte) *ethstate.StateObject {
-	return self.State().GetStateObject(addr)
+func (self *world) Get(addr []byte) *object {
+	return &object{self.State().GetStateObject(addr)}
 }
 
 func (self *world) safeGet(addr []byte) *ethstate.StateObject {
-	object := self.Get(addr)
-	if object != nil {
-		return object
+	object := self.State().GetStateObject(addr)
+	if object == nil {
+		object = ethstate.NewStateObject(addr)
 	}
 
-	return ethstate.NewStateObject(addr)
+	return object
 }
 
 func (self *world) Coinbase() *ethstate.StateObject {

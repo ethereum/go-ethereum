@@ -13,11 +13,17 @@ import (
 
 var logger = ethlog.NewLogger("PIPE")
 
+type VmVars struct {
+	State *ethstate.State
+}
+
 type Pipe struct {
 	obj          ethchain.EthManager
 	stateManager *ethchain.StateManager
 	blockChain   *ethchain.BlockChain
 	world        *world
+
+	Vm VmVars
 }
 
 func New(obj ethchain.EthManager) *Pipe {
@@ -40,19 +46,22 @@ func (self *Pipe) Nonce(addr []byte) uint64 {
 }
 
 func (self *Pipe) Execute(addr []byte, data []byte, value, gas, price *ethutil.Value) ([]byte, error) {
-	return self.ExecuteObject(self.World().safeGet(addr), data, value, gas, price)
+	return self.ExecuteObject(&object{self.World().safeGet(addr)}, data, value, gas, price)
 }
 
-func (self *Pipe) ExecuteObject(object *ethstate.StateObject, data []byte, value, gas, price *ethutil.Value) ([]byte, error) {
+func (self *Pipe) ExecuteObject(object *object, data []byte, value, gas, price *ethutil.Value) ([]byte, error) {
 	var (
-		initiator = ethstate.NewStateObject([]byte{0})
-		state     = self.World().State().Copy()
-		block     = self.blockChain.CurrentBlock
+		initiator   = ethstate.NewStateObject([]byte{0})
+		block       = self.blockChain.CurrentBlock
+		stateObject = object.StateObject
 	)
+	if self.Vm.State == nil {
+		self.Vm.State = self.World().State().Copy()
+	}
 
-	vm := ethvm.New(NewEnv(state, block, value.BigInt(), initiator.Address()))
+	vm := ethvm.New(NewEnv(self.Vm.State, block, value.BigInt(), initiator.Address()))
 
-	closure := ethvm.NewClosure(initiator, object, object.Code, gas.BigInt(), price.BigInt())
+	closure := ethvm.NewClosure(initiator, stateObject, object.Code, gas.BigInt(), price.BigInt())
 	ret, _, err := closure.Call(vm, data)
 
 	return ret, err
@@ -79,7 +88,7 @@ func (self *Pipe) Exists(addr []byte) bool {
 	return self.World().Get(addr) != nil
 }
 
-func (self *Pipe) TransactString(key *ethcrypto.KeyPair, rec string, value, gas, price *ethutil.Value, data []byte) error {
+func (self *Pipe) TransactString(key *ethcrypto.KeyPair, rec string, value, gas, price *ethutil.Value, data []byte) ([]byte, error) {
 	// Check if an address is stored by this address
 	var hash []byte
 	addr := self.World().Config().Get("NameReg").StorageString(rec).Bytes()
@@ -94,7 +103,7 @@ func (self *Pipe) TransactString(key *ethcrypto.KeyPair, rec string, value, gas,
 	return self.Transact(key, hash, value, gas, price, data)
 }
 
-func (self *Pipe) Transact(key *ethcrypto.KeyPair, rec []byte, value, gas, price *ethutil.Value, data []byte) error {
+func (self *Pipe) Transact(key *ethcrypto.KeyPair, rec []byte, value, gas, price *ethutil.Value, data []byte) ([]byte, error) {
 	var hash []byte
 	var contractCreation bool
 	if rec == nil {
@@ -106,7 +115,7 @@ func (self *Pipe) Transact(key *ethcrypto.KeyPair, rec []byte, value, gas, price
 	if contractCreation {
 		script, err := ethutil.Compile(string(data), false)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		tx = ethchain.NewContractCreationTx(value.BigInt(), gas.BigInt(), price.BigInt(), script)
@@ -133,7 +142,9 @@ func (self *Pipe) Transact(key *ethcrypto.KeyPair, rec []byte, value, gas, price
 
 	if contractCreation {
 		logger.Infof("Contract addr %x", tx.CreationAddress())
+
+		return tx.CreationAddress(), nil
 	}
 
-	return nil
+	return tx.Hash(), nil
 }
