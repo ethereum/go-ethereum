@@ -6,31 +6,31 @@ import (
 	"github.com/ethereum/eth-go/ethstate"
 )
 
-type world struct {
+type World struct {
 	pipe *Pipe
 	cfg  *config
 }
 
-func NewWorld(pipe *Pipe) *world {
-	world := &world{pipe, nil}
+func NewWorld(pipe *Pipe) *World {
+	world := &World{pipe, nil}
 	world.cfg = &config{pipe}
 
 	return world
 }
 
-func (self *Pipe) World() *world {
+func (self *Pipe) World() *World {
 	return self.world
 }
 
-func (self *world) State() *ethstate.State {
+func (self *World) State() *ethstate.State {
 	return self.pipe.stateManager.CurrentState()
 }
 
-func (self *world) Get(addr []byte) *Object {
+func (self *World) Get(addr []byte) *Object {
 	return &Object{self.State().GetStateObject(addr)}
 }
 
-func (self *world) safeGet(addr []byte) *ethstate.StateObject {
+func (self *World) safeGet(addr []byte) *ethstate.StateObject {
 	object := self.State().GetStateObject(addr)
 	if object == nil {
 		object = ethstate.NewStateObject(addr)
@@ -39,22 +39,22 @@ func (self *world) safeGet(addr []byte) *ethstate.StateObject {
 	return object
 }
 
-func (self *world) Coinbase() *ethstate.StateObject {
+func (self *World) Coinbase() *ethstate.StateObject {
 	return nil
 }
 
-func (self *world) IsMining() bool {
+func (self *World) IsMining() bool {
 	return self.pipe.obj.IsMining()
 }
 
-func (self *world) IsListening() bool {
+func (self *World) IsListening() bool {
 	return self.pipe.obj.IsListening()
 }
 
-func (self *world) Peers() *list.List {
+func (self *World) Peers() *list.List {
 	return self.pipe.obj.Peers()
 }
 
-func (self *world) Config() *config {
+func (self *World) Config() *config {
 	return self.cfg
 }

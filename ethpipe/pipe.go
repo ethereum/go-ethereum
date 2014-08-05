@@ -21,7 +21,7 @@ type Pipe struct {
 	obj          ethchain.EthManager
 	stateManager *ethchain.StateManager
 	blockChain   *ethchain.BlockChain
-	world        *world
+	world        *World
 
 	Vm VmVars
 }
