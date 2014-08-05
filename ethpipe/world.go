@@ -8,12 +8,12 @@ import (
 
 type World struct {
 	pipe *Pipe
-	cfg  *config
+	cfg  *Config
 }
 
 func NewWorld(pipe *Pipe) *World {
 	world := &World{pipe, nil}
-	world.cfg = &config{pipe}
+	world.cfg = &Config{pipe}
 
 	return world
 }
@@ -55,6 +55,6 @@ func (self *World) Peers() *list.List {
 	return self.pipe.obj.Peers()
 }
 
-func (self *World) Config() *config {
+func (self *World) Config() *Config {
 	return self.cfg
 }

@@ -4,11 +4,11 @@ import "github.com/ethereum/eth-go/ethutil"
 
 var cnfCtr = ethutil.Hex2Bytes("661005d2720d855f1d9976f88bb10c1a3398c77f")
 
-type config struct {
+type Config struct {
 	pipe *Pipe
 }
 
-func (self *config) Get(name string) *Object {
+func (self *Config) Get(name string) *Object {
 	configCtrl := self.pipe.World().safeGet(cnfCtr)
 	var addr []byte
 
@@ -24,6 +24,6 @@ func (self *config) Get(name string) *Object {
 	return &Object{self.pipe.World().safeGet(objectAddr.Bytes())}
 }
 
-func (self *config) Exist() bool {
+func (self *Config) Exist() bool {
 	return self.pipe.World().Get(cnfCtr) != nil
 }
