@@ -52,7 +52,7 @@ func (self *world) IsListening() bool {
 }
 
 func (self *world) Peers() *list.List {
-	return self.obj.Peers()
+	return self.pipe.obj.Peers()
 }
 
 func (self *world) Config() *config {
