@@ -2,6 +2,11 @@ package ethrepl
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path"
+	"path/filepath"
+
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethlog"
@@ -11,10 +16,6 @@ import (
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/obscuren/otto"
-	"io/ioutil"
-	"os"
-	"path"
-	"path/filepath"
 )
 
 var jsrelogger = ethlog.NewLogger("JSRE")
@@ -147,11 +148,43 @@ func (self *JSRE) initStdFuncs() {
 	eth.Set("stopMining", self.stopMining)
 	eth.Set("startMining", self.startMining)
 	eth.Set("execBlock", self.execBlock)
+	eth.Set("dump", self.dump)
 }
 
 /*
  * The following methods are natively implemented javascript functions
  */
+
+func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
+	var state *ethstate.State
+
+	if len(call.ArgumentList) > 0 {
+		var block *ethchain.Block
+		if call.Argument(0).IsNumber() {
+			num, _ := call.Argument(0).ToInteger()
+			block = self.ethereum.BlockChain().GetBlockByNumber(uint64(num))
+		} else if call.Argument(0).IsString() {
+			hash, _ := call.Argument(0).ToString()
+			block = self.ethereum.BlockChain().GetBlock(ethutil.Hex2Bytes(hash))
+		} else {
+			fmt.Println("invalid argument for dump. Either hex string or number")
+		}
+
+		if block == nil {
+			fmt.Println("block not found")
+
+			return otto.UndefinedValue()
+		}
+
+		state = block.State()
+	} else {
+		state = self.ethereum.StateManager().CurrentState()
+	}
+
+	fmt.Println(state.Dump())
+
+	return otto.UndefinedValue()
+}
 
 func (self *JSRE) stopMining(call otto.FunctionCall) otto.Value {
 	v, _ := self.vm.ToValue(utils.StopMining(self.ethereum))

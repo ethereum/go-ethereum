@@ -1,8 +1,11 @@
 package main
 
 import (
+	"fmt"
+	"os"
 	"runtime"
 
+	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/utils"
@@ -24,7 +27,7 @@ func main() {
 	Init() // parsing command line
 
 	// If the difftool option is selected ignore all other log output
-	if DiffTool {
+	if DiffTool || Dump {
 		LogLevel = 0
 	}
 
@@ -46,6 +49,32 @@ func main() {
 	clientIdentity := utils.NewClientIdentity(ClientIdentifier, Version, Identifier)
 
 	ethereum := utils.NewEthereum(db, clientIdentity, keyManager, UseUPnP, OutboundPort, MaxPeer)
+
+	if Dump {
+		var block *ethchain.Block
+
+		if len(DumpHash) == 0 && DumpNumber == -1 {
+			block = ethereum.BlockChain().CurrentBlock
+		} else if len(DumpHash) > 0 {
+			block = ethereum.BlockChain().GetBlock(ethutil.Hex2Bytes(DumpHash))
+		} else {
+			block = ethereum.BlockChain().GetBlockByNumber(uint64(DumpNumber))
+		}
+
+		if block == nil {
+			fmt.Fprintln(os.Stderr, "block not found")
+
+			// We want to output valid JSON
+			fmt.Println("{}")
+
+			os.Exit(1)
+		}
+
+		// Leave the Println. This needs clean output for piping
+		fmt.Println(block.State().Dump())
+
+		os.Exit(0)
+	}
 
 	if ShowGenesis {
 		utils.ShowGenesis(ethereum)
