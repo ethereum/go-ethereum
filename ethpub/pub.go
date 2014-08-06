@@ -3,14 +3,15 @@ package ethpub
 import (
 	"bytes"
 	"encoding/json"
+	"math/big"
+	"strings"
+	"sync/atomic"
+
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
-	"math/big"
-	"strings"
-	"sync/atomic"
 )
 
 var logger = ethlog.NewLogger("PUB")
@@ -165,14 +166,6 @@ func (lib *PEthereum) SecretToAddress(key string) string {
 	return ethutil.Bytes2Hex(pair.Address())
 }
 
-func (lib *PEthereum) Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr string) (*PReceipt, error) {
-	return lib.createTx(key, recipient, valueStr, gasStr, gasPriceStr, dataStr)
-}
-
-func (lib *PEthereum) Create(key, valueStr, gasStr, gasPriceStr, script string) (*PReceipt, error) {
-	return lib.createTx(key, "", valueStr, gasStr, gasPriceStr, script)
-}
-
 func FindAddressInNameReg(stateManager *ethchain.StateManager, name string) []byte {
 	nameReg := EthereumConfig(stateManager).NameReg()
 	if nameReg != nil {
@@ -197,6 +190,14 @@ func FindNameInNameReg(stateManager *ethchain.StateManager, addr []byte) string 
 	}
 
 	return ""
+}
+
+func (lib *PEthereum) Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr string) (*PReceipt, error) {
+	return lib.createTx(key, recipient, valueStr, gasStr, gasPriceStr, dataStr)
+}
+
+func (lib *PEthereum) Create(key, valueStr, gasStr, gasPriceStr, script string) (*PReceipt, error) {
+	return lib.createTx(key, "", valueStr, gasStr, gasPriceStr, script)
 }
 
 func (lib *PEthereum) createTx(key, recipient, valueStr, gasStr, gasPriceStr, scriptStr string) (*PReceipt, error) {

@@ -13,12 +13,9 @@ import (
 func InitWords(wordsPath string) {
 	filename := path.Join(wordsPath, "mnemonic.words.lst")
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		fmt.Printf("reading mnemonic word list file from supplied path not found. Looked in %s. Trying next option.\n", filename)
-
 		dir := path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "eth-go", "ethcrypto")
 		filename = path.Join(dir, "mnemonic.words.lst")
 		if _, err := os.Stat(filename); os.IsNotExist(err) {
-			fmt.Printf("reading mnemonic word list file 'mnemonic.words.lst' from source folder failed: %s.\n", filename)
 			dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
 			if err != nil {
 				panic(fmt.Errorf("problem getting current folder: ", err))

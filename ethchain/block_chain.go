@@ -290,7 +290,6 @@ func (bc *BlockChain) setLastBlock() {
 	data, _ := ethutil.Config.Db.Get([]byte("LastBlock"))
 	if len(data) != 0 {
 		block := NewBlockFromBytes(data)
-		//info := bc.BlockInfo(block)
 		bc.CurrentBlock = block
 		bc.LastBlockHash = block.Hash()
 		bc.LastBlockNumber = block.Number.Uint64()
@@ -301,9 +300,6 @@ func (bc *BlockChain) setLastBlock() {
 		bc.genesisBlock.state.Trie.Sync()
 		// Prepare the genesis block
 		bc.Add(bc.genesisBlock)
-
-		//chainlogger.Infof("root %x\n", bm.bc.genesisBlock.State().Root)
-		//bm.bc.genesisBlock.PrintHash()
 	}
 
 	// Set the last know difficulty (might be 0x0 as initial value, Genesis)
@@ -337,6 +333,18 @@ func (bc *BlockChain) GetBlock(hash []byte) *Block {
 	}
 
 	return NewBlockFromBytes(data)
+}
+
+func (self *BlockChain) GetBlockByNumber(num uint64) *Block {
+	block := self.CurrentBlock
+	for ; block.Number.Uint64() != num; block = self.GetBlock(block.PrevHash) {
+	}
+
+	if block.Number.Uint64() == 0 && num != 0 {
+		return nil
+	}
+
+	return block
 }
 
 func (bc *BlockChain) BlockInfoByHash(hash []byte) BlockInfo {
