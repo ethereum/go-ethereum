@@ -181,9 +181,9 @@ func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
 		state = self.ethereum.StateManager().CurrentState()
 	}
 
-	fmt.Println(state.Dump())
+	v, _ := self.vm.ToValue(state.Dump())
 
-	return otto.UndefinedValue()
+	return v
 }
 
 func (self *JSRE) stopMining(call otto.FunctionCall) otto.Value {
