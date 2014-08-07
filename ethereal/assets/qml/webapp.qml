@@ -21,19 +21,54 @@ ApplicationWindow {
 		id: root
 		anchors.fill: parent
 		state: "inspectorShown"
+		TextField {
+			anchors {
+				top: parent.top
+				left: parent.left
+				right: parent.right
+			}
+			id: uriNav
+			//text: webview.url
+
+			Keys.onReturnPressed: {
+				var reg = /(^https?\:\/\/(?:www\.)?)([a-zA-Z0-9_\-]*\.eth)(.*)/
+
+				var uri = this.text;
+				if(reg.test(uri)) {
+					this.text.replace(reg, function(match, pre, domain, path) {
+						uri = pre;
+
+						var lookup = eth.lookupDomain(domain.substring(0, domain.length - 4));
+						var ip = [];
+						for(var i = 0, l = lookup.length; i < l; i++) {
+							ip.push(lookup.charCodeAt(i))
+						}
+
+						if(ip.length != 0) {
+							uri += ip.join(".");
+						} else {
+							uri += domain;
+						}
+
+						uri += path;
+					});
+				}
+
+				console.log("connecting to ...", uri)
+
+				webview.url = uri;
+			}
+		}
 
 		WebView {
 			objectName: "webView"
 			id: webview
-			anchors.fill: parent
-			/*
-			 anchors {
-				 left: parent.left
-				 right: parent.right
-				 bottom: sizeGrip.top
-				 top: parent.top
-			 }
-			 */
+			anchors {
+				left: parent.left
+				right: parent.right
+				bottom: parent.bottom
+				top: uriNav.bottom
+			}
 			onTitleChanged: { window.title = title }
 			experimental.preferences.javascriptEnabled: true
 			experimental.preferences.navigatorQtObjectEnabled: true
@@ -46,50 +81,50 @@ ApplicationWindow {
 
 				try {
 					switch(data.call) {
-					case "getCoinBase":
-					      postData(data._seed, eth.getCoinBase())
+						case "getCoinBase":
+						postData(data._seed, eth.getCoinBase())
 
-					      break
-					case "getIsListening":
-					      postData(data._seed, eth.getIsListening())
+						break
+						case "getIsListening":
+						postData(data._seed, eth.getIsListening())
 
-					      break
-					case "getIsMining":
-					      postData(data._seed, eth.getIsMining())
+						break
+						case "getIsMining":
+						postData(data._seed, eth.getIsMining())
 
-					      break
-					case "getPeerCount":
-					      postData(data._seed, eth.getPeerCount())
+						break
+						case "getPeerCount":
+						postData(data._seed, eth.getPeerCount())
 
-					      break
+						break
 
-					case "getTxCountAt":
-					      require(1)
-					      postData(data._seed, eth.getTxCountAt(data.args[0]))
+						case "getTxCountAt":
+						require(1)
+						postData(data._seed, eth.getTxCountAt(data.args[0]))
 
-					      break
-					case "getBlockByNumber":
+						break
+						case "getBlockByNumber":
 						var block = eth.getBlock(data.args[0])
 						postData(data._seed, block)
 
 						break
-					case "getBlockByHash":
+						case "getBlockByHash":
 						var block = eth.getBlock(data.args[0])
 						postData(data._seed, block)
 
 						break
-					case "transact":
+						case "transact":
 						require(5)
 
 						var tx = eth.transact(data.args[0], data.args[1], data.args[2],data.args[3],data.args[4],data.args[5])
 						postData(data._seed, tx)
 
 						break
-					case "create":
+						case "create":
 						postData(data._seed, null)
 
 						break
-					case "getStorage":
+						case "getStorage":
 						require(2);
 
 						var stateObject = eth.getStateObject(data.args[0])
@@ -97,52 +132,52 @@ ApplicationWindow {
 						postData(data._seed, storage)
 
 						break
-					case "getStateKeyVals":
-					      require(1);
-					      var stateObject = eth.getStateObject(data.args[0]).stateKeyVal(true)
-					      postData(data._seed,stateObject)
+						case "getStateKeyVals":
+						require(1);
+						var stateObject = eth.getStateObject(data.args[0]).stateKeyVal(true)
+						postData(data._seed,stateObject)
 
 						break
-					case "getTransactionsFor":
-					      require(1);
-					      var txs = eth.getTransactionsFor(data.args[0], true)
-					      postData(data._seed, txs)
+						case "getTransactionsFor":
+						require(1);
+						var txs = eth.getTransactionsFor(data.args[0], true)
+						postData(data._seed, txs)
 
-					      break
-					case "getBalance":
+						break
+						case "getBalance":
 						require(1);
 
 						postData(data._seed, eth.getStateObject(data.args[0]).value());
 
 						break
-					case "getKey":
+						case "getKey":
 						var key = eth.getKey().privateKey;
 
 						postData(data._seed, key)
 						break
-					case "watch":
+						case "watch":
 						require(1)
 						eth.watch(data.args[0], data.args[1]);
 						break
-					case "disconnect":
+						case "disconnect":
 						require(1)
 						postData(data._seed, null)
 						break;
-					case "set":
-            console.log("'Set' has been depcrecated")
-          /*
-						for(var key in data.args) {
-							if(webview.hasOwnProperty(key)) {
-								window[key] = data.args[key];
-							}
-						}
-            */
+						case "set":
+						console.log("'Set' has been depcrecated")
+						/*
+						 for(var key in data.args) {
+							 if(webview.hasOwnProperty(key)) {
+								 window[key] = data.args[key];
+							 }
+						 }
+						 */
 						break;
-					case "getSecretToAddress":
+						case "getSecretToAddress":
 						require(1)
 						postData(data._seed, eth.secretToAddress(data.args[0]))
 						break;
-					case "debug":
+						case "debug":
 						console.log(data.args[0]);
 						break;
 					}
@@ -191,12 +226,12 @@ ApplicationWindow {
 						inspector.visible = false
 					}else{
 						inspector.visible = true
-            inspector.url = webview.experimental.remoteInspectorUrl
+						inspector.url = webview.experimental.remoteInspectorUrl
 					}
 				}
 				onDoubleClicked: {
-				  console.log('refreshing')
-				  webView.reload()
+					console.log('refreshing')
+					webView.reload()
 				}
 				anchors.fill: parent
 			}
