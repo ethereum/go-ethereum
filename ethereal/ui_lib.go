@@ -1,10 +1,11 @@
 package main
 
 import (
+	"path"
+
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/go-qml/qml"
-	"path"
 )
 
 type memAddr struct {
@@ -40,6 +41,10 @@ func (ui *UiLib) OpenHtml(path string) {
 	app := NewExtApplication(container, ui)
 
 	go app.run()
+}
+
+func (ui *UiLib) OpenBrowser() {
+	ui.OpenHtml("file://" + ui.AssetPath("ext/home.html"))
 }
 
 func (ui *UiLib) Muted(content string) {

@@ -27,6 +27,11 @@ ApplicationWindow {
 				onTriggered: openAppDialog.open()
 			}
 
+			MenuItem {
+				text: "Browser"
+				onTriggered: ui.openBrowser()
+			}
+
 			MenuSeparator {}
 
 			MenuItem {
