@@ -449,7 +449,7 @@ func (p *Peer) HandleInbound() {
 						peerlogger.Infof("Attempting to catch (%x). Parent unknown\n", b.Hash())
 						p.catchingUp = false
 
-						p.CatchupWithPeer(b.Hash())
+						p.CatchupWithPeer(b.PrevHash)
 
 						peerlogger.Infoln(b)
 

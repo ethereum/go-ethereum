@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethpipe"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 )
@@ -41,6 +42,7 @@ func (self helper) NameReg() *ethstate.StateObject {
 	return nil
 }
 
+// TODO Re-write / refactor
 type PEthereum struct {
 	manager      ethchain.EthManager
 	stateManager *ethchain.StateManager
@@ -63,6 +65,17 @@ func New(manager ethchain.EthManager) *PEthereum {
 		manager.TxPool(),
 		manager.KeyManager(),
 	}
+}
+
+func (self *PEthereum) LookupDomain(domain string) string {
+	pipe := ethpipe.New(self.manager)
+	world := pipe.World()
+
+	if len(domain) > 32 {
+		domain = string(ethcrypto.Sha3Bin([]byte(domain)))
+	}
+
+	return strings.Trim(world.Config().Get("DomainReg").StorageString(domain).Str(), "\x00")
 }
 
 func (lib *PEthereum) GetBlock(hexHash string) *PBlock {

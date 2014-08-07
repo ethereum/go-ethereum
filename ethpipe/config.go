@@ -15,6 +15,11 @@ func (self *Config) Get(name string) *Object {
 	switch name {
 	case "NameReg":
 		addr = []byte{0}
+	case "DomainReg":
+		objectAddr := configCtrl.GetStorage(ethutil.BigD([]byte{0}))
+		domainAddr := (&Object{self.pipe.World().safeGet(objectAddr.Bytes())}).StorageString("DomainReg").Bytes()
+
+		return &Object{self.pipe.World().safeGet(domainAddr)}
 	default:
 		addr = ethutil.RightPadBytes([]byte(name), 32)
 	}
