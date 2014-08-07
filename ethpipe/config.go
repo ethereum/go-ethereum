@@ -15,9 +15,9 @@ func (self *Config) Get(name string) *Object {
 	switch name {
 	case "NameReg":
 		addr = []byte{0}
-	case "DomainReg":
+	case "DnsReg":
 		objectAddr := configCtrl.GetStorage(ethutil.BigD([]byte{0}))
-		domainAddr := (&Object{self.pipe.World().safeGet(objectAddr.Bytes())}).StorageString("DomainReg").Bytes()
+		domainAddr := (&Object{self.pipe.World().safeGet(objectAddr.Bytes())}).StorageString("DnsReg").Bytes()
 
 		return &Object{self.pipe.World().safeGet(domainAddr)}
 	default:

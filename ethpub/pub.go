@@ -75,7 +75,7 @@ func (self *PEthereum) LookupDomain(domain string) string {
 		domain = string(ethcrypto.Sha3Bin([]byte(domain)))
 	}
 
-	return strings.Trim(world.Config().Get("DomainReg").StorageString(domain).Str(), "\x00")
+	return strings.Trim(world.Config().Get("DnsReg").StorageString(domain).Str(), "\x00")
 }
 
 func (lib *PEthereum) GetBlock(hexHash string) *PBlock {
