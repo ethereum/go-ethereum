@@ -59,7 +59,7 @@ func (st *Stack) Peek() *big.Int {
 }
 
 func (st *Stack) Peekn() (*big.Int, *big.Int) {
-	ints := st.data[:2]
+	ints := st.data[len(st.data)-2:]
 
 	return ints[0], ints[1]
 }

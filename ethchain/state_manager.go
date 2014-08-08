@@ -4,15 +4,16 @@ import (
 	"bytes"
 	"container/list"
 	"fmt"
+	"math/big"
+	"sync"
+	"time"
+
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
-	"math/big"
-	"sync"
-	"time"
 )
 
 var statelogger = ethlog.NewLogger("STATE")

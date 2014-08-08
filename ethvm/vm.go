@@ -129,14 +129,14 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 						fmt.Printf("%x %x\n", new(big.Int).SetBytes([]byte(key)).Bytes(), value.Bytes())
 					})
 				}
-
-				b := pc.Bytes()
-				if len(b) == 0 {
-					b = []byte{0}
-				}
-
-				fmt.Printf("%x %x %x %x\n", closure.Address(), b, []byte{byte(op)}, closure.Gas.Bytes())
 			*/
+
+			b := pc.Bytes()
+			if len(b) == 0 {
+				b = []byte{0}
+			}
+
+			fmt.Printf("%x %x %x %x\n", closure.Address(), b, []byte{byte(op)}, closure.Gas.Bytes())
 		}
 
 		gas := new(big.Int)
@@ -856,12 +856,12 @@ func (self *Vm) Endl() *Vm {
 }
 
 func ensure256(x *big.Int) {
-	maxInt, _ := new(big.Int).SetString("115792089237316195423570985008687907853269984665640564039457584007913129639935", 0)
-	if x.Cmp(maxInt) >= 0 {
-		x.SetInt64(0)
-
-		return
-	}
+	//max, _ := big.NewInt(0).SetString("115792089237316195423570985008687907853269984665640564039457584007913129639936", 0)
+	//if x.Cmp(max) >= 0 {
+	d := big.NewInt(1)
+	d.Lsh(d, 256).Sub(d, big.NewInt(1))
+	x.And(x, d)
+	//}
 
 	// Could have done this with an OR, but big ints are costly.
 
