@@ -130,8 +130,10 @@ func (block *Block) CalcGasLimit(parent *Block) *big.Int {
 		return ethutil.BigPow(10, 6)
 	}
 
-	previous := new(big.Int).Mul(big.NewInt(1023), parent.GasLimit)
-	current := new(big.Rat).Mul(new(big.Rat).SetInt(block.GasUsed), big.NewRat(6, 5))
+	// ((1024-1) * parent.gasLimit + (gasUsed * 6 / 5)) / 1024
+
+	previous := new(big.Int).Mul(big.NewInt(1024-1), parent.GasLimit)
+	current := new(big.Rat).Mul(new(big.Rat).SetInt(parent.GasUsed), big.NewRat(6, 5))
 	curInt := new(big.Int).Div(current.Num(), current.Denom())
 
 	result := new(big.Int).Add(previous, curInt)
