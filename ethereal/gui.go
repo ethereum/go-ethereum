@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
 	"math/big"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -142,10 +143,12 @@ func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
 
 	win := gui.createWindow(component)
 
-	gui.setInitialBlockChain()
-	gui.loadAddressBook()
-	gui.readPreviousTransactions()
-	gui.setPeerInfo()
+	go func() {
+		gui.setInitialBlockChain()
+		gui.loadAddressBook()
+		gui.readPreviousTransactions()
+		gui.setPeerInfo()
+	}()
 
 	go gui.update()
 
@@ -219,8 +222,9 @@ func (gui *Gui) loadAddressBook() {
 
 	nameReg := ethpub.EthereumConfig(gui.eth.StateManager()).NameReg()
 	if nameReg != nil {
-		nameReg.State().EachStorage(func(name string, value *ethutil.Value) {
+		nameReg.EachStorage(func(name string, value *ethutil.Value) {
 			if name[0] != 0 {
+				value.Decode()
 				gui.win.Root().Call("addAddress", struct{ Name, Address string }{name, ethutil.Bytes2Hex(value.Bytes())})
 			}
 		})
@@ -369,11 +373,14 @@ func (gui *Gui) update() {
 			}
 
 		case <-generalUpdateTicker.C:
+			statusText := "#" + gui.eth.BlockChain().CurrentBlock.Number.String()
 			if gui.miner != nil {
 				pow := gui.miner.GetPow()
-				fmt.Println("HashRate from miner", pow.GetHashrate())
+				if pow.GetHashrate() != 0 {
+					statusText = "Mining @ " + strconv.FormatInt(pow.GetHashrate(), 10) + "Khash - " + statusText
+				}
 			}
-			lastBlockLabel.Set("text", "#"+gui.eth.BlockChain().CurrentBlock.Number.String())
+			lastBlockLabel.Set("text", statusText)
 		}
 	}
 }

@@ -247,7 +247,10 @@ func StartMining(ethereum *eth.Ethereum) bool {
 		addr := ethereum.KeyManager().Address()
 
 		go func() {
-			miner = ethminer.NewDefaultMiner(addr, ethereum)
+			if miner == nil {
+				miner = ethminer.NewDefaultMiner(addr, ethereum)
+			}
+
 			// Give it some time to connect with peers
 			time.Sleep(3 * time.Second)
 			for !ethereum.IsUpToDate() {
@@ -255,7 +258,6 @@ func StartMining(ethereum *eth.Ethereum) bool {
 			}
 
 			logger.Infoln("Miner started")
-			miner := ethminer.NewDefaultMiner(addr, ethereum)
 			miner.Start()
 		}()
 		RegisterInterrupt(func(os.Signal) {
@@ -269,10 +271,14 @@ func StartMining(ethereum *eth.Ethereum) bool {
 func StopMining(ethereum *eth.Ethereum) bool {
 	if ethereum.Mining && miner != nil {
 		miner.Stop()
+
 		logger.Infoln("Miner stopped")
+
 		ethereum.Mining = false
+
 		return true
 	}
+
 	return false
 }
 

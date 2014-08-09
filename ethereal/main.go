@@ -10,14 +10,13 @@ import (
 
 const (
 	ClientIdentifier = "Ethereal"
-	Version          = "0.5.17"
+	Version          = "0.6.0"
 )
 
 func main() {
-	// Leave QT on top at ALL times. Qt Needs to be initialized from the main thread
-	qml.Init(nil)
-
 	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	qml.Init(nil)
 
 	var interrupted = false
 	utils.RegisterInterrupt(func(os.Signal) {
