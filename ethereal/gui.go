@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethminer"
+	"github.com/ethereum/eth-go/ethpipe"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethutil"
@@ -236,20 +237,54 @@ func (gui *Gui) loadAddressBook() {
 	}
 }
 
+func (gui *Gui) insertTransaction(window string, tx *ethchain.Transaction) {
+	nameReg := ethpipe.New(gui.eth).World().Config().Get("NameReg")
+	addr := gui.address()
+
+	var inout string
+	if bytes.Compare(tx.Sender(), addr) == 0 {
+		inout = "send"
+	} else {
+		inout = "recv"
+	}
+
+	var (
+		ptx  = ethpub.NewPTx(tx)
+		send = nameReg.Storage(tx.Sender())
+		rec  = nameReg.Storage(tx.Recipient)
+		s, r string
+	)
+
+	if tx.CreatesContract() {
+		rec = nameReg.Storage(tx.CreationAddress())
+	}
+
+	if send.Len() != 0 {
+		s = strings.Trim(send.Str(), "\x00")
+	} else {
+		s = ethutil.Bytes2Hex(tx.Sender())
+	}
+	if rec.Len() != 0 {
+		r = strings.Trim(rec.Str(), "\x00")
+	} else {
+		if tx.CreatesContract() {
+			r = ethutil.Bytes2Hex(tx.CreationAddress())
+		} else {
+			r = ethutil.Bytes2Hex(tx.Recipient)
+		}
+	}
+	ptx.Sender = s
+	ptx.Address = r
+
+	gui.win.Root().Call("addTx", window, ptx, inout)
+}
+
 func (gui *Gui) readPreviousTransactions() {
 	it := gui.txDb.Db().NewIterator(nil, nil)
-	addr := gui.address()
 	for it.Next() {
 		tx := ethchain.NewTransactionFromBytes(it.Value())
 
-		var inout string
-		if bytes.Compare(tx.Sender(), addr) == 0 {
-			inout = "send"
-		} else {
-			inout = "recv"
-		}
-
-		gui.win.Root().Call("addTx", ethpub.NewPTx(tx), inout)
+		gui.insertTransaction("post", tx)
 
 	}
 	it.Release()
@@ -322,24 +357,26 @@ func (gui *Gui) update() {
 					object := state.GetAccount(gui.address())
 
 					if bytes.Compare(tx.Sender(), gui.address()) == 0 {
-						gui.win.Root().Call("addTx", ethpub.NewPTx(tx), "send")
-						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-
 						unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
 					} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
-						gui.win.Root().Call("addTx", ethpub.NewPTx(tx), "recv")
-						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-
 						unconfirmedFunds.Add(unconfirmedFunds, tx.Value)
 					}
 
 					gui.setWalletValue(object.Balance, unconfirmedFunds)
+
+					gui.insertTransaction("pre", tx)
 				} else {
 					object := state.GetAccount(gui.address())
 					if bytes.Compare(tx.Sender(), gui.address()) == 0 {
 						object.SubAmount(tx.Value)
+
+						gui.win.Root().Call("addTx", "post", ethpub.NewPTx(tx), "send")
+						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 					} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
 						object.AddAmount(tx.Value)
+
+						gui.win.Root().Call("addTx", "post", ethpub.NewPTx(tx), "recv")
+						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 					}
 
 					gui.setWalletValue(object.Balance, nil)
@@ -420,6 +457,11 @@ func (gui *Gui) Transact(recipient, value, gas, gasPrice, data string) (*ethpub.
 
 func (gui *Gui) Create(recipient, value, gas, gasPrice, data string) (*ethpub.PReceipt, error) {
 	return gui.pub.Transact(gui.privateKey(), recipient, value, gas, gasPrice, data)
+}
+
+func (self *Gui) ImportTx(rlpTx string) {
+	tx := ethchain.NewTransactionFromBytes(ethutil.Hex2Bytes(rlpTx))
+	self.eth.TxPool().QueueTransaction(tx)
 }
 
 func (gui *Gui) SetCustomIdentifier(customIdentifier string) {
