@@ -44,8 +44,8 @@ type Ethereum struct {
 	// Channel for shutting down the ethereum
 	shutdownChan chan bool
 	quit         chan bool
+
 	// DB interface
-	//db *ethdb.LDBDatabase
 	db ethutil.Database
 	// State manager for processing new blocks and managing the over all states
 	stateManager *ethchain.StateManager
@@ -148,6 +148,9 @@ func (s *Ethereum) StateManager() *ethchain.StateManager {
 
 func (s *Ethereum) TxPool() *ethchain.TxPool {
 	return s.txPool
+}
+func (self *Ethereum) Db() ethutil.Database {
+	return self.db
 }
 
 func (s *Ethereum) ServerCaps() Caps {

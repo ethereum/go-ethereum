@@ -6,9 +6,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/ethereum/eth-go/ethutil"
 	"net"
 	"time"
+
+	"github.com/ethereum/eth-go/ethutil"
 )
 
 // Connection interface describing the methods required to implement the wire protocol.
@@ -109,7 +110,7 @@ func (self *Connection) Write(typ MsgType, v ...interface{}) error {
 
 	slice := [][]interface{}{[]interface{}{byte(typ)}}
 	for _, value := range v {
-		if encodable, ok := value.(ethutil.RlpEncodable); ok {
+		if encodable, ok := value.(ethutil.RlpEncodeDecode); ok {
 			slice = append(slice, encodable.RlpValue())
 		} else if raw, ok := value.([]interface{}); ok {
 			slice = append(slice, raw)

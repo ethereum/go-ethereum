@@ -45,6 +45,7 @@ type EthManager interface {
 	Peers() *list.List
 	KeyManager() *ethcrypto.KeyManager
 	ClientIdentity() ethwire.ClientIdentity
+	Db() ethutil.Database
 }
 
 type StateManager struct {
@@ -235,7 +236,12 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 
 		// Add the block to the chain
 		sm.bc.Add(block)
-		sm.notifyChanges(state)
+
+		// Create a bloom bin for this block
+		filter := sm.createBloomFilter(state)
+		// Persist the data
+		fk := append([]byte("bloom"), block.Hash()...)
+		sm.Ethereum.Db().Put(fk, filter.Bin())
 
 		statelogger.Infof("Added block #%d (%x)\n", block.Number, block.Hash())
 		if dontReact == false {
@@ -363,14 +369,74 @@ func (sm *StateManager) Stop() {
 	sm.bc.Stop()
 }
 
-func (sm *StateManager) notifyChanges(state *ethstate.State) {
+// Manifest will handle both creating notifications and generating bloom bin data
+func (sm *StateManager) createBloomFilter(state *ethstate.State) *BloomFilter {
+	bloomf := NewBloomFilter(nil)
+
 	for addr, stateObject := range state.Manifest().ObjectChanges {
+		// Set the bloom filter's bin
+		bloomf.Set([]byte(addr))
+
 		sm.Ethereum.Reactor().Post("object:"+addr, stateObject)
 	}
 
 	for stateObjectAddr, mappedObjects := range state.Manifest().StorageChanges {
 		for addr, value := range mappedObjects {
+			// Set the bloom filter's bin
+			bloomf.Set(ethcrypto.Sha3Bin([]byte(stateObjectAddr + addr)))
+
 			sm.Ethereum.Reactor().Post("storage:"+stateObjectAddr+":"+addr, &ethstate.StorageState{[]byte(stateObjectAddr), []byte(addr), value})
 		}
 	}
+
+	return bloomf
+}
+
+func (sm *StateManager) GetMessages(block *Block) (messages []*ethstate.Message, err error) {
+	if !sm.bc.HasBlock(block.PrevHash) {
+		return nil, ParentError(block.PrevHash)
+	}
+
+	sm.lastAttemptedBlock = block
+
+	var (
+		parent = sm.bc.GetBlock(block.PrevHash)
+		state  = parent.State().Copy()
+	)
+
+	defer state.Reset()
+
+	if ethutil.Config.Diff && ethutil.Config.DiffType == "all" {
+		fmt.Printf("## %x %x ##\n", block.Hash(), block.Number)
+	}
+
+	receipts, err := sm.ApplyDiff(state, parent, block)
+	if err != nil {
+		return nil, err
+	}
+
+	txSha := CreateTxSha(receipts)
+	if bytes.Compare(txSha, block.TxSha) != 0 {
+		return nil, fmt.Errorf("Error validating tx sha. Received %x, got %x", block.TxSha, txSha)
+	}
+
+	// Block validation
+	if err = sm.ValidateBlock(block); err != nil {
+		statelogger.Errorln("Error validating block:", err)
+		return nil, err
+	}
+
+	// I'm not sure, but I don't know if there should be thrown
+	// any errors at this time.
+	if err = sm.AccumelateRewards(state, block); err != nil {
+		statelogger.Errorln("Error accumulating reward", err)
+		return nil, err
+	}
+
+	if !block.State().Cmp(state) {
+		err = fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().Trie.Root, state.Trie.Root)
+		return nil, err
+	}
+
+	return state.Manifest().Messages, nil
 }

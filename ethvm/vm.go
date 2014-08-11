@@ -52,6 +52,7 @@ type Environment interface {
 	Time() int64
 	Difficulty() *big.Int
 	Value() *big.Int
+	BlockHash() []byte
 }
 
 type Object interface {
@@ -696,6 +697,12 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			self.Printf(" (*) %x", addr).Endl()
 
+			msg := self.env.State().Manifest().AddMessage(&ethstate.Message{
+				To: addr, From: closure.Address(),
+				Origin: self.env.Origin(),
+				Block:  self.env.BlockHash(), Timestamp: self.env.Time(), Coinbase: self.env.Coinbase(), Number: self.env.BlockNumber(),
+			})
+
 			// Create a new contract
 			contract := self.env.State().NewStateObject(addr)
 			if contract.Balance.Cmp(value) >= 0 {
@@ -704,7 +711,8 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 				// Set the init script
 				initCode := mem.Get(offset.Int64(), size.Int64())
-				//fmt.Printf("%x\n", initCode)
+				msg.Input = initCode
+
 				// Transfer all remaining gas to the new
 				// contract so it may run the init script
 				gas := new(big.Int).Set(closure.Gas)
@@ -728,7 +736,8 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				self.Printf("CREATE err %v", err)
 			} else {
 				stack.Push(ethutil.BigD(addr))
-				self.Printf("CREATE success")
+
+				msg.Output = contract.Code
 			}
 			self.Endl()
 
@@ -751,6 +760,13 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
+
+			msg := self.env.State().Manifest().AddMessage(&ethstate.Message{
+				To: addr.Bytes(), From: closure.Address(),
+				Input:  args,
+				Origin: self.env.Origin(),
+				Block:  self.env.BlockHash(), Timestamp: self.env.Time(), Coinbase: self.env.Coinbase(), Number: self.env.BlockNumber(),
+			})
 
 			if closure.object.Balance.Cmp(value) < 0 {
 				vmlogger.Debugf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Balance)
@@ -781,6 +797,8 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 					mem.Set(retOffset.Int64(), retSize.Int64(), ret)
 				}
+
+				msg.Output = ret
 
 				// Debug hook
 				if self.Dbg != nil {

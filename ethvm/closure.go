@@ -3,9 +3,10 @@ package ethvm
 // TODO Re write VM to use values instead of big integers?
 
 import (
+	"math/big"
+
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
-	"math/big"
 )
 
 type ClosureRef interface {

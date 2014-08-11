@@ -2,15 +2,16 @@ package ethutil
 
 import (
 	"bytes"
-	_ "encoding/binary"
 	"fmt"
-	_ "log"
-	_ "math"
 	"math/big"
 )
 
-type RlpEncodable interface {
+type RlpEncode interface {
 	RlpEncode() []byte
+}
+
+type RlpEncodeDecode interface {
+	RlpEncode
 	RlpValue() []interface{}
 }
 

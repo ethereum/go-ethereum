@@ -300,6 +300,8 @@ func (bc *BlockChain) setLastBlock() {
 		bc.genesisBlock.state.Trie.Sync()
 		// Prepare the genesis block
 		bc.Add(bc.genesisBlock)
+		fk := append([]byte("bloom"), bc.genesisBlock.Hash()...)
+		bc.Ethereum.Db().Put(fk, make([]byte, 255))
 	}
 
 	// Set the last know difficulty (might be 0x0 as initial value, Genesis)

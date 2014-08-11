@@ -211,6 +211,13 @@ func (self *StateTransition) TransitionState() (err error) {
 		snapshot = self.state.Copy()
 	}
 
+	msg := self.state.Manifest().AddMessage(&ethstate.Message{
+		To: receiver.Address(), From: sender.Address(),
+		Input:  self.tx.Data,
+		Origin: sender.Address(),
+		Block:  self.block.Hash(), Timestamp: self.block.Time, Coinbase: self.block.Coinbase, Number: self.block.Number,
+	})
+
 	// Process the init code and create 'valid' contract
 	if IsContractAddr(self.receiver) {
 		// Evaluate the initialization script
@@ -226,14 +233,17 @@ func (self *StateTransition) TransitionState() (err error) {
 		}
 
 		receiver.Code = code
+		msg.Output = code
 	} else {
 		if len(receiver.Code) > 0 {
-			_, err = self.Eval(receiver.Code, receiver, "code")
+			ret, err := self.Eval(receiver.Code, receiver, "code")
 			if err != nil {
 				self.state.Set(snapshot)
 
 				return fmt.Errorf("Error during code execution %v", err)
 			}
+
+			msg.Output = ret
 		}
 	}
 

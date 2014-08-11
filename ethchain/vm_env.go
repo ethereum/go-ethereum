@@ -1,8 +1,9 @@
 package ethchain
 
 import (
-	"github.com/ethereum/eth-go/ethstate"
 	"math/big"
+
+	"github.com/ethereum/eth-go/ethstate"
 )
 
 type VMEnv struct {
@@ -25,5 +26,6 @@ func (self *VMEnv) PrevHash() []byte       { return self.block.PrevHash }
 func (self *VMEnv) Coinbase() []byte       { return self.block.Coinbase }
 func (self *VMEnv) Time() int64            { return self.block.Time }
 func (self *VMEnv) Difficulty() *big.Int   { return self.block.Difficulty }
+func (self *VMEnv) BlockHash() []byte      { return self.block.Hash() }
 func (self *VMEnv) Value() *big.Int        { return self.tx.Value }
 func (self *VMEnv) State() *ethstate.State { return self.state }

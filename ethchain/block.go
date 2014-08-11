@@ -142,19 +142,6 @@ func (block *Block) CalcGasLimit(parent *Block) *big.Int {
 	min := big.NewInt(125000)
 
 	return ethutil.BigMax(min, result)
-	/*
-		base := new(big.Int)
-		base2 := new(big.Int)
-		parentGL := bc.CurrentBlock.GasLimit
-		parentUsed := bc.CurrentBlock.GasUsed
-
-		base.Mul(parentGL, big.NewInt(1024-1))
-		base2.Mul(parentUsed, big.NewInt(6))
-		base2.Div(base2, big.NewInt(5))
-		base.Add(base, base2)
-		base.Div(base, big.NewInt(1024))
-	*/
-
 }
 
 func (block *Block) BlockInfo() BlockInfo {
