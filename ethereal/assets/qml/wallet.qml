@@ -26,6 +26,27 @@ ApplicationWindow {
 				shortcut: "Ctrl+o"
 				onTriggered: openAppDialog.open()
 			}
+
+			MenuItem {
+				text: "Browser"
+				onTriggered: ui.openBrowser()
+			}
+
+			MenuSeparator {}
+
+			MenuItem {
+				text: "Import key"
+				shortcut: "Ctrl+i"
+				onTriggered: importDialog.open()
+			}
+
+			MenuItem {
+				text: "Export keys"
+				shortcut: "Ctrl+e"
+				onTriggered: exportDialog.open()
+			}
+
+			//MenuSeparator {}
 		}
 
 		Menu {
@@ -34,6 +55,13 @@ ApplicationWindow {
 				text: "Debugger"
 				shortcut: "Ctrl+d"
 				onTriggered: ui.startDebugger()
+			}
+
+			MenuItem {
+				text: "Import Tx"
+				onTriggered: {
+					txImportDialog.visible = true
+				}
 			}
 		}
 
@@ -77,6 +105,7 @@ ApplicationWindow {
 		historyView.visible = false
 		newTxView.visible = false
 		infoView.visible = false
+		pendingTxView.visible = false
 		view.visible = true
 		//root.title = "Ethereal - " = view.title
 	}
@@ -137,6 +166,17 @@ ApplicationWindow {
 						anchors.fill: parent
 						onClicked: {
 							setView(infoView)
+						}
+					}
+				}
+
+				Image {
+					source: "../tx.png"
+					anchors.horizontalCenter: parent.horizontalCenter
+					MouseArea {
+						anchors.fill: parent
+						onClicked: {
+							setView(pendingTxView)
 						}
 					}
 				}
@@ -344,6 +384,28 @@ ApplicationWindow {
 				}
 			}
 
+			Rectangle {
+				anchors.fill: parent
+				visible: false
+				id: pendingTxView
+				property var title: "Pending Transactions"
+
+				property var pendingTxModel: ListModel {
+					id: pendingTxModel
+				}
+
+				TableView {
+					id: pendingTxTableView
+					anchors.fill: parent
+					TableViewColumn{ role: "value" ; title: "Value" ; width: 100 }
+					TableViewColumn{ role: "from" ; title: "sender" ; width: 230 }
+					TableViewColumn{ role: "to" ; title: "Reciever" ; width: 230 }
+					TableViewColumn{ role: "contract" ; title: "Contract" ; width: 100 }
+
+					model: pendingTxModel
+				}
+			}
+
 			/*
 			 signal addPlugin(string name)
 			 Component {
@@ -375,14 +437,28 @@ ApplicationWindow {
 			//ui.open(openAppDialog.fileUrl.toString())
 			//ui.openHtml(Qt.resolvedUrl(ui.assetPath("test.html")))
 			var path = openAppDialog.fileUrl.toString()
-			console.log(path)
 			var ext = path.split('.').pop()
-			console.log(ext)
 			if(ext == "html" || ext == "htm") {
 				ui.openHtml(path)
 			}else if(ext == "qml"){
 				ui.openQml(path)
 			}
+		}
+	}
+
+	FileDialog {
+		id: exportDialog
+		title: "Export keys"
+		onAccepted: {
+		}
+	}
+
+	FileDialog {
+		id: importDialog
+		title: "Import key"
+		onAccepted: {
+			var path = this.fileUrl.toString()
+			ui.importKey(path)
 		}
 	}
 
@@ -463,6 +539,36 @@ ApplicationWindow {
                 source: "../network.png"
             }
         }
+	}
+
+	Window {
+		id: txImportDialog
+		minimumWidth: 270
+		maximumWidth: 270
+		maximumHeight: 50
+		minimumHeight: 50
+		TextField {
+			id: txImportField
+			width: 170
+			anchors.verticalCenter: parent.verticalCenter
+			anchors.left: parent.left
+			anchors.leftMargin: 10
+			onAccepted: {
+			}
+		}
+		Button {
+			anchors.left: txImportField.right
+			anchors.verticalCenter: parent.verticalCenter
+			anchors.leftMargin: 5
+			text: "Import"
+			onClicked: {
+				eth.importTx(txImportField.text)
+				txImportField.visible = false
+			}
+		}
+		Component.onCompleted: {
+			addrField.focus = true
+		}
 	}
 
 	Window {
@@ -660,7 +766,7 @@ ApplicationWindow {
 			anchors.left: aboutIcon.right
 			anchors.leftMargin: 10
 			font.pointSize: 12
-			text: "<h2>Ethereal</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Maran Hidskes<br>Viktor Trón<br>"
+			text: "<h2>Ethereal - Adrastea</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Maran Hidskes<br>Viktor Trón<br>"
 		}
 	}
 
@@ -684,7 +790,7 @@ ApplicationWindow {
 		walletValueLabel.text = value
 	}
 
-	function addTx(tx, inout) {
+	function addTx(type, tx, inout) {
 		var isContract
 		if (tx.contract == true){
 			isContract = "Yes"
@@ -692,13 +798,19 @@ ApplicationWindow {
 			isContract = "No"
 		}
 
-		var address;
-		if(inout == "recv") {
-			address = tx.sender;
-		} else {
-			address = tx.address;
+
+		if(type == "post") {
+			var address;
+			if(inout == "recv") {
+				address = tx.sender;
+			} else {
+				address = tx.address;
+			}
+
+			txModel.insert(0, {inout: inout, hash: tx.hash, address: address, value: tx.value, contract: isContract})
+		} else if(type == "pre") {
+			pendingTxModel.insert(0, {hash: tx.hash, to: tx.address, from: tx.sender, value: tx.value, contract: isContract})
 		}
-		txModel.insert(0, {inout: inout, hash: tx.hash, address: address, value: tx.value, contract: isContract})
 	}
 
 	function addBlock(block, initial) {
@@ -714,7 +826,7 @@ ApplicationWindow {
 
 		if(initial){
 			blockModel.append({number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
-		}else{
+		} else {
 			blockModel.insert(0, {number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
 		}
 	}
@@ -770,7 +882,7 @@ ApplicationWindow {
 	// ******************************************
 	Window {
 		id: peerWindow
-        //flags: Qt.CustomizeWindowHint | Qt.Tool | Qt.WindowCloseButtonHint
+		//flags: Qt.CustomizeWindowHint | Qt.Tool | Qt.WindowCloseButtonHint
 		height: 200
 		width: 700
 		Rectangle {
@@ -897,10 +1009,10 @@ ApplicationWindow {
 					placeholderText: "Gas"
 					text: "500"
 					/*
-					onTextChanged: {
-						contractFormReady()
-					}
-					*/
+					 onTextChanged: {
+						 contractFormReady()
+					 }
+					 */
 				}
 				Label {
 					id: atLabel
@@ -914,10 +1026,10 @@ ApplicationWindow {
 					text: "10"
 					validator: RegExpValidator { regExp: /\d*/ }
 					/*
-					onTextChanged: {
-						contractFormReady()
-					}
-					*/
+					 onTextChanged: {
+						 contractFormReady()
+					 }
+					 */
 				}
 
 				ComboBox {
@@ -962,7 +1074,7 @@ ApplicationWindow {
 					var gasPrice = txGasPrice.text + denomModel.get(gasDenom.currentIndex).zeros;
 					var res = eth.create(txFuelRecipient.text, value, txGas.text, gasPrice, codeView.text)
 					if(res[1]) {
-						txResult.text = "Your contract <b>could not</b> be send over the network:\n<b>"
+						txResult.text = "Your contract <b>could not</b> be sent over the network:\n<b>"
 						txResult.text += res[1].error()
 						txResult.text += "</b>"
 						mainContractColumn.state = "ERROR"

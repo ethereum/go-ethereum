@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethpub"
+	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/go-qml/qml"
@@ -25,8 +25,8 @@ type AppContainer interface {
 type ExtApplication struct {
 	*ethpub.PEthereum
 
-	blockChan       chan ethutil.React
-	changeChan      chan ethutil.React
+	blockChan       chan ethreact.Event
+	changeChan      chan ethreact.Event
 	quitChan        chan bool
 	watcherQuitChan chan bool
 
@@ -38,8 +38,8 @@ type ExtApplication struct {
 func NewExtApplication(container AppContainer, lib *UiLib) *ExtApplication {
 	app := &ExtApplication{
 		ethpub.NewPEthereum(lib.eth),
-		make(chan ethutil.React, 1),
-		make(chan ethutil.React, 1),
+		make(chan ethreact.Event, 100),
+		make(chan ethreact.Event, 100),
 		make(chan bool),
 		make(chan bool),
 		container,
@@ -58,8 +58,7 @@ func (app *ExtApplication) run() {
 
 	err := app.container.Create()
 	if err != nil {
-		fmt.Println(err)
-
+		logger.Errorln(err)
 		return
 	}
 

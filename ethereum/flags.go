@@ -3,10 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/ethereum/eth-go/ethlog"
 	"os"
 	"os/user"
 	"path"
+
+	"github.com/ethereum/eth-go/ethlog"
 )
 
 var Identifier string
@@ -31,6 +32,9 @@ var LogFile string
 var ConfigFile string
 var DebugFile string
 var LogLevel int
+var Dump bool
+var DumpHash string
+var DumpNumber int
 
 // flags specific to cli client
 var StartMining bool
@@ -70,6 +74,10 @@ func Init() {
 	flag.IntVar(&LogLevel, "loglevel", int(ethlog.InfoLevel), "loglevel: 0-5: silent,error,warn,info,debug,debug detail)")
 	flag.BoolVar(&DiffTool, "difftool", false, "creates output for diff'ing. Sets LogLevel=0")
 	flag.StringVar(&DiffType, "diff", "all", "sets the level of diff output [vm, all]. Has no effect if difftool=false")
+
+	flag.BoolVar(&Dump, "dump", false, "output the ethereum state in JSON format. Sub args [number, hash]")
+	flag.StringVar(&DumpHash, "hash", "", "specify arg in hex")
+	flag.IntVar(&DumpNumber, "number", -1, "specify arg in number")
 
 	flag.BoolVar(&StartMining, "mine", false, "start dagger mining")
 	flag.BoolVar(&StartJsConsole, "js", false, "launches javascript console")

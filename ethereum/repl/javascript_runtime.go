@@ -2,18 +2,20 @@ package ethrepl
 
 import (
 	"fmt"
-	"github.com/ethereum/eth-go"
-	"github.com/ethereum/eth-go/ethchain"
-	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethpub"
-	"github.com/ethereum/eth-go/ethstate"
-	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/go-ethereum/utils"
-	"github.com/obscuren/otto"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
+
+	"github.com/ethereum/eth-go"
+	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethpub"
+	"github.com/ethereum/eth-go/ethreact"
+	"github.com/ethereum/eth-go/ethstate"
+	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/go-ethereum/utils"
+	"github.com/obscuren/otto"
 )
 
 var jsrelogger = ethlog.NewLogger("JSRE")
@@ -23,8 +25,8 @@ type JSRE struct {
 	vm       *otto.Otto
 	lib      *ethpub.PEthereum
 
-	blockChan  chan ethutil.React
-	changeChan chan ethutil.React
+	blockChan  chan ethreact.Event
+	changeChan chan ethreact.Event
 	quitChan   chan bool
 
 	objectCb map[string][]otto.Value
@@ -49,8 +51,8 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 		ethereum,
 		otto.New(),
 		ethpub.NewPEthereum(ethereum),
-		make(chan ethutil.React, 1),
-		make(chan ethutil.React, 1),
+		make(chan ethreact.Event, 10),
+		make(chan ethreact.Event, 10),
 		make(chan bool),
 		make(map[string][]otto.Value),
 	}
@@ -64,6 +66,10 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 
 	// We have to make sure that, whoever calls this, calls "Stop"
 	go re.mainLoop()
+
+	// Subscribe to events
+	reactor := ethereum.Reactor()
+	reactor.Subscribe("newBlock", re.blockChan)
 
 	re.Bind("eth", &JSEthereum{re.lib, re.vm})
 
@@ -109,10 +115,6 @@ func (self *JSRE) Stop() {
 }
 
 func (self *JSRE) mainLoop() {
-	// Subscribe to events
-	reactor := self.ethereum.Reactor()
-	reactor.Subscribe("newBlock", self.blockChan)
-
 out:
 	for {
 		select {
@@ -146,11 +148,43 @@ func (self *JSRE) initStdFuncs() {
 	eth.Set("stopMining", self.stopMining)
 	eth.Set("startMining", self.startMining)
 	eth.Set("execBlock", self.execBlock)
+	eth.Set("dump", self.dump)
 }
 
 /*
  * The following methods are natively implemented javascript functions
  */
+
+func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
+	var state *ethstate.State
+
+	if len(call.ArgumentList) > 0 {
+		var block *ethchain.Block
+		if call.Argument(0).IsNumber() {
+			num, _ := call.Argument(0).ToInteger()
+			block = self.ethereum.BlockChain().GetBlockByNumber(uint64(num))
+		} else if call.Argument(0).IsString() {
+			hash, _ := call.Argument(0).ToString()
+			block = self.ethereum.BlockChain().GetBlock(ethutil.Hex2Bytes(hash))
+		} else {
+			fmt.Println("invalid argument for dump. Either hex string or number")
+		}
+
+		if block == nil {
+			fmt.Println("block not found")
+
+			return otto.UndefinedValue()
+		}
+
+		state = block.State()
+	} else {
+		state = self.ethereum.StateManager().CurrentState()
+	}
+
+	v, _ := self.vm.ToValue(state.Dump())
+
+	return v
+}
 
 func (self *JSRE) stopMining(call otto.FunctionCall) otto.Value {
 	v, _ := self.vm.ToValue(utils.StopMining(self.ethereum))
