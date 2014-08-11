@@ -3,12 +3,14 @@ package ethrepl
 import (
 	"bufio"
 	"fmt"
-	"github.com/ethereum/eth-go"
-	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethutil"
 	"io"
 	"os"
 	"path"
+
+	"github.com/ethereum/eth-go"
+	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/go-ethereum/javascript"
 )
 
 var logger = ethlog.NewLogger("REPL")
@@ -19,7 +21,7 @@ type Repl interface {
 }
 
 type JSRepl struct {
-	re *JSRE
+	re *javascript.JSRE
 
 	prompt string
 
@@ -34,7 +36,7 @@ func NewJSRepl(ethereum *eth.Ethereum) *JSRepl {
 		panic(err)
 	}
 
-	return &JSRepl{re: NewJSRE(ethereum), prompt: "> ", history: hist}
+	return &JSRepl{re: javascript.NewJSRE(ethereum), prompt: "> ", history: hist}
 }
 
 func (self *JSRepl) Start() {

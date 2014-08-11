@@ -63,6 +63,16 @@ ApplicationWindow {
 					txImportDialog.visible = true
 				}
 			}
+
+			MenuItem {
+				text: "Run JS file"
+				onTriggered: {
+					generalFileDialog.callback = function(path) {
+						eth.evalJavascriptFile(path)
+					}
+					generalFileDialog.open()
+				}
+			}
 		}
 
 		Menu {
@@ -450,6 +460,16 @@ ApplicationWindow {
 		id: exportDialog
 		title: "Export keys"
 		onAccepted: {
+		}
+	}
+	
+
+	FileDialog {
+		id: generalFileDialog
+		property var callback;
+		onAccepted: {
+			var path = this.fileUrl.toString()
+			callback.call(this, path)
 		}
 	}
 

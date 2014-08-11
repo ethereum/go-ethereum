@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
+	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
 )
@@ -47,6 +48,8 @@ type Gui struct {
 	config         *ethutil.ConfigManager
 
 	miner *ethminer.Miner
+
+	jsEngine *javascript.JSRE
 }
 
 // Create GUI, but doesn't start it
@@ -58,7 +61,7 @@ func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIden
 
 	pub := ethpub.NewPEthereum(ethereum)
 
-	return &Gui{eth: ethereum, txDb: db, pub: pub, logLevel: ethlog.LogLevel(logLevel), Session: session, open: false, clientIdentity: clientIdentity, config: config}
+	return &Gui{eth: ethereum, txDb: db, pub: pub, logLevel: ethlog.LogLevel(logLevel), Session: session, open: false, clientIdentity: clientIdentity, config: config, jsEngine: javascript.NewJSRE(ethereum)}
 }
 
 func (gui *Gui) Start(assetPath string) {
@@ -121,6 +124,9 @@ func (gui *Gui) Stop() {
 		gui.open = false
 		gui.win.Hide()
 	}
+
+	gui.jsEngine.Stop()
+
 	logger.Infoln("Stopped")
 }
 
@@ -462,6 +468,13 @@ func (gui *Gui) Create(recipient, value, gas, gasPrice, data string) (*ethpub.PR
 func (self *Gui) ImportTx(rlpTx string) {
 	tx := ethchain.NewTransactionFromBytes(ethutil.Hex2Bytes(rlpTx))
 	self.eth.TxPool().QueueTransaction(tx)
+}
+
+func (self *Gui) SearchChange(blockHash, address, storageAddress string) {
+}
+
+func (self *Gui) EvalJavascriptFile(path string) {
+	self.jsEngine.LoadExtFile(path[7:])
 }
 
 func (gui *Gui) SetCustomIdentifier(customIdentifier string) {
