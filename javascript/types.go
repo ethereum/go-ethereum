@@ -1,8 +1,12 @@
-package ethrepl
+package javascript
 
 import (
 	"fmt"
+
+	"github.com/ethereum/eth-go"
+	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethpub"
+	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/otto"
 )
@@ -34,9 +38,37 @@ func (self *JSBlock) GetTransaction(hash string) otto.Value {
 	return self.eth.toVal(self.PBlock.GetTransaction(hash))
 }
 
+type JSMessage struct {
+	To, From  string
+	Input     string
+	Output    string
+	Path      int
+	Origin    string
+	Timestamp int32
+	Coinbase  string
+	Block     string
+	Number    int32
+}
+
+func NewJSMessage(message *ethstate.Message) JSMessage {
+	return JSMessage{
+		To:        ethutil.Bytes2Hex(message.To),
+		From:      ethutil.Bytes2Hex(message.From),
+		Input:     ethutil.Bytes2Hex(message.Input),
+		Output:    ethutil.Bytes2Hex(message.Output),
+		Path:      message.Path,
+		Origin:    ethutil.Bytes2Hex(message.Origin),
+		Timestamp: int32(message.Timestamp),
+		Coinbase:  ethutil.Bytes2Hex(message.Origin),
+		Block:     ethutil.Bytes2Hex(message.Block),
+		Number:    int32(message.Number.Int64()),
+	}
+}
+
 type JSEthereum struct {
 	*ethpub.PEthereum
-	vm *otto.Otto
+	vm       *otto.Otto
+	ethereum *eth.Ethereum
 }
 
 func (self *JSEthereum) GetBlock(hash string) otto.Value {
@@ -92,4 +124,47 @@ func (self *JSEthereum) toVal(v interface{}) otto.Value {
 	}
 
 	return result
+}
+
+func (self *JSEthereum) Messages(object map[string]interface{}) otto.Value {
+	filter := ethchain.NewFilter(self.ethereum)
+
+	if object["earliest"] != nil {
+		earliest := object["earliest"]
+		if e, ok := earliest.(string); ok {
+			filter.SetEarliestBlock(ethutil.Hex2Bytes(e))
+		} else {
+			filter.SetEarliestBlock(earliest)
+		}
+	}
+	if object["latest"] != nil {
+		latest := object["latest"]
+		if l, ok := latest.(string); ok {
+			filter.SetLatestBlock(ethutil.Hex2Bytes(l))
+		} else {
+			filter.SetLatestBlock(latest)
+		}
+	}
+	if object["to"] != nil {
+		filter.SetTo(ethutil.Hex2Bytes(object["to"].(string)))
+	}
+	if object["from"] != nil {
+		filter.SetFrom(ethutil.Hex2Bytes(object["from"].(string)))
+	}
+	if object["max"] != nil {
+		filter.SetMax(object["max"].(int))
+	}
+	if object["skip"] != nil {
+		filter.SetSkip(object["skip"].(int))
+	}
+
+	messages := filter.Find()
+	var msgs []JSMessage
+	for _, m := range messages {
+		msgs = append(msgs, NewJSMessage(m))
+	}
+
+	v, _ := self.vm.ToValue(msgs)
+
+	return v
 }

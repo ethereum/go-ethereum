@@ -1,4 +1,4 @@
-package ethrepl
+package javascript
 
 import (
 	"fmt"
@@ -22,7 +22,7 @@ var jsrelogger = ethlog.NewLogger("JSRE")
 
 type JSRE struct {
 	ethereum *eth.Ethereum
-	vm       *otto.Otto
+	Vm       *otto.Otto
 	lib      *ethpub.PEthereum
 
 	blockChan  chan ethreact.Event
@@ -35,9 +35,9 @@ type JSRE struct {
 func (jsre *JSRE) LoadExtFile(path string) {
 	result, err := ioutil.ReadFile(path)
 	if err == nil {
-		jsre.vm.Run(result)
+		jsre.Vm.Run(result)
 	} else {
-		jsrelogger.Debugln("Could not load file:", path)
+		jsrelogger.Infoln("Could not load file:", path)
 	}
 }
 
@@ -58,7 +58,7 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	}
 
 	// Init the JS lib
-	re.vm.Run(jsLib)
+	re.Vm.Run(jsLib)
 
 	// Load extra javascript files
 	re.LoadIntFile("string.js")
@@ -71,7 +71,7 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	reactor := ethereum.Reactor()
 	reactor.Subscribe("newBlock", re.blockChan)
 
-	re.Bind("eth", &JSEthereum{re.lib, re.vm})
+	re.Bind("eth", &JSEthereum{re.lib, re.Vm, ethereum})
 
 	re.initStdFuncs()
 
@@ -81,11 +81,11 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 }
 
 func (self *JSRE) Bind(name string, v interface{}) {
-	self.vm.Set(name, v)
+	self.Vm.Set(name, v)
 }
 
 func (self *JSRE) Run(code string) (otto.Value, error) {
-	return self.vm.Run(code)
+	return self.Vm.Run(code)
 }
 
 func (self *JSRE) Require(file string) error {
@@ -126,12 +126,12 @@ out:
 		case object := <-self.changeChan:
 			if stateObject, ok := object.Resource.(*ethstate.StateObject); ok {
 				for _, cb := range self.objectCb[ethutil.Bytes2Hex(stateObject.Address())] {
-					val, _ := self.vm.ToValue(ethpub.NewPStateObject(stateObject))
+					val, _ := self.Vm.ToValue(ethpub.NewPStateObject(stateObject))
 					cb.Call(cb, val)
 				}
 			} else if storageObject, ok := object.Resource.(*ethstate.StorageState); ok {
 				for _, cb := range self.objectCb[ethutil.Bytes2Hex(storageObject.StateAddress)+ethutil.Bytes2Hex(storageObject.Address)] {
-					val, _ := self.vm.ToValue(ethpub.NewPStorageState(storageObject))
+					val, _ := self.Vm.ToValue(ethpub.NewPStorageState(storageObject))
 					cb.Call(cb, val)
 				}
 			}
@@ -140,7 +140,7 @@ out:
 }
 
 func (self *JSRE) initStdFuncs() {
-	t, _ := self.vm.Get("eth")
+	t, _ := self.Vm.Get("eth")
 	eth := t.Object()
 	eth.Set("watch", self.watch)
 	eth.Set("addPeer", self.addPeer)
@@ -181,18 +181,18 @@ func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
 		state = self.ethereum.StateManager().CurrentState()
 	}
 
-	v, _ := self.vm.ToValue(state.Dump())
+	v, _ := self.Vm.ToValue(state.Dump())
 
 	return v
 }
 
 func (self *JSRE) stopMining(call otto.FunctionCall) otto.Value {
-	v, _ := self.vm.ToValue(utils.StopMining(self.ethereum))
+	v, _ := self.Vm.ToValue(utils.StopMining(self.ethereum))
 	return v
 }
 
 func (self *JSRE) startMining(call otto.FunctionCall) otto.Value {
-	v, _ := self.vm.ToValue(utils.StartMining(self.ethereum))
+	v, _ := self.Vm.ToValue(utils.StartMining(self.ethereum))
 	return v
 }
 
@@ -245,7 +245,7 @@ func (self *JSRE) require(call otto.FunctionCall) otto.Value {
 		return otto.UndefinedValue()
 	}
 
-	t, _ := self.vm.Get("exports")
+	t, _ := self.Vm.Get("exports")
 
 	return t
 }
