@@ -31,6 +31,7 @@ type Gui struct {
 	// QML Engine
 	engine    *qml.Engine
 	component *qml.Common
+	qmlDone   bool
 	// The ethereum interface
 	eth *eth.Ethereum
 
@@ -150,18 +151,16 @@ func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
 		return nil, err
 	}
 
-	win := gui.createWindow(component)
-
-	go func() {
-		go gui.setInitialBlockChain()
-		gui.loadAddressBook()
-		gui.setPeerInfo()
-		gui.readPreviousTransactions()
-	}()
+	gui.win = gui.createWindow(component)
 
 	gui.update()
 
-	return win, nil
+	return gui.win, nil
+}
+
+// The done handler will be called by QML when all views have been loaded
+func (gui *Gui) Done() {
+	gui.qmlDone = true
 }
 
 func (gui *Gui) ImportKey(filePath string) {
@@ -230,14 +229,16 @@ type address struct {
 }
 
 func (gui *Gui) loadAddressBook() {
-	gui.win.Root().Call("clearAddress")
+	view := gui.getObjectByName("infoView")
+	view.Call("clearAddress")
 
 	nameReg := ethpub.EthereumConfig(gui.eth.StateManager()).NameReg()
 	if nameReg != nil {
 		nameReg.EachStorage(func(name string, value *ethutil.Value) {
 			if name[0] != 0 {
 				value.Decode()
-				gui.win.Root().Call("addAddress", struct{ Name, Address string }{name, ethutil.Bytes2Hex(value.Bytes())})
+
+				view.Call("addAddress", struct{ Name, Address string }{name, ethutil.Bytes2Hex(value.Bytes())})
 			}
 		})
 	}
@@ -282,7 +283,7 @@ func (gui *Gui) insertTransaction(window string, tx *ethchain.Transaction) {
 	ptx.Sender = s
 	ptx.Address = r
 
-	gui.win.Root().Call("addTx", window, ptx, inout)
+	gui.getObjectByName("transactionView").Call("addTx", window, ptx, inout)
 }
 
 func (gui *Gui) readPreviousTransactions() {
@@ -301,7 +302,7 @@ func (gui *Gui) processBlock(block *ethchain.Block, initial bool) {
 	b := ethpub.NewPBlock(block)
 	b.Name = name
 
-	gui.win.Root().Call("addBlock", b, initial)
+	gui.getObjectByName("chainView").Call("addBlock", b, initial)
 }
 
 func (gui *Gui) setWalletValue(amount, unconfirmedFunds *big.Int) {
@@ -326,6 +327,17 @@ func (self *Gui) getObjectByName(objectName string) qml.Object {
 
 // Simple go routine function that updates the list of peers in the GUI
 func (gui *Gui) update() {
+	// We have to wait for qml to be done loading all the windows.
+	for !gui.qmlDone {
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	go func() {
+		go gui.setInitialBlockChain()
+		gui.loadAddressBook()
+		gui.setPeerInfo()
+		gui.readPreviousTransactions()
+	}()
 
 	var (
 		blockChan     = make(chan ethreact.Event, 100)
@@ -514,7 +526,9 @@ func (gui *Gui) Printf(format string, v ...interface{}) {
 func (gui *Gui) printLog(s string) {
 	str := strings.TrimRight(s, "\n")
 	lines := strings.Split(str, "\n")
+
+	view := gui.getObjectByName("infoView")
 	for _, line := range lines {
-		gui.win.Root().Call("addLog", line)
+		view.Call("addLog", line)
 	}
 }
