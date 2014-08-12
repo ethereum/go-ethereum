@@ -4,7 +4,9 @@ import (
 	"path"
 
 	"github.com/ethereum/eth-go"
+	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/go-qml/qml"
 )
 
@@ -23,10 +25,21 @@ type UiLib struct {
 	win      *qml.Window
 	Db       *Debugger
 	DbWindow *DebuggerWindow
+
+	jsEngine *javascript.JSRE
 }
 
 func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
-	return &UiLib{engine: engine, eth: eth, assetPath: assetPath}
+	return &UiLib{engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth)}
+}
+
+func (self *UiLib) ImportTx(rlpTx string) {
+	tx := ethchain.NewTransactionFromBytes(ethutil.Hex2Bytes(rlpTx))
+	self.eth.TxPool().QueueTransaction(tx)
+}
+
+func (self *UiLib) EvalJavascriptFile(path string) {
+	self.jsEngine.LoadExtFile(path[7:])
 }
 
 func (ui *UiLib) OpenQml(path string) {

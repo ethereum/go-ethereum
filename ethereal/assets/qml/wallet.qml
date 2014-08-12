@@ -26,7 +26,7 @@ ApplicationWindow {
 		var pendingTxView = addPlugin("./views/pending_tx.qml")
 
 		// Call the ready handler
-		eth.done()
+		gui.done()
 	}
 
 	function addPlugin(path, options) {
@@ -111,7 +111,7 @@ ApplicationWindow {
 				text: "Run JS file"
 				onTriggered: {
 					generalFileDialog.callback = function(path) {
-						eth.evalJavascriptFile(path)
+						lib.evalJavascriptFile(path)
 					}
 					generalFileDialog.open()
 				}
@@ -155,7 +155,7 @@ ApplicationWindow {
 				id: miningButton
 				text: "Start Mining"
 				onClicked: {
-					eth.toggleMining()
+					gui.toggleMining()
 				}
 			}
 
@@ -456,7 +456,7 @@ ApplicationWindow {
 			anchors.leftMargin: 5
 			text: "Import"
 			onClicked: {
-				eth.importTx(txImportField.text)
+				lib.importTx(txImportField.text)
 				txImportField.visible = false
 			}
 		}

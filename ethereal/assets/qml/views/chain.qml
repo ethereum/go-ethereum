@@ -145,9 +145,9 @@ Rectangle {
 				text: "Debug contract"
 				onClicked: {
 					if(tx.createsContract){
-						ui.startDbWithCode(tx.rawData)
+						eth.startDbWithCode(tx.rawData)
 					}else {
-						ui.startDbWithContractAndData(tx.address, tx.rawData)
+						eth.startDbWithContractAndData(tx.address, tx.rawData)
 					}
 				}
 			}

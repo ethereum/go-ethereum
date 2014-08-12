@@ -35,11 +35,11 @@ Rectangle {
 			text: "Client ID"
 		}
 		TextField {
-			text: eth.getCustomIdentifier()
+			text: gui.getCustomIdentifier()
 			width: 500
 			placeholderText: "Anonymous"
 			onTextChanged: {
-				eth.setCustomIdentifier(text)
+				gui.setCustomIdentifier(text)
 			}
 		}
 	}
@@ -75,7 +75,7 @@ Rectangle {
 			MouseArea{
 				anchors.fill: parent
 				onClicked: {
-					eth.registerName(nameToReg.text)
+					gui.registerName(nameToReg.text)
 					nameToReg.text = ""
 				}
 			}
@@ -107,7 +107,7 @@ Rectangle {
 
 		Slider {
 			id: logLevelSlider
-			value: eth.getLogLevelInt()
+			value: gui.getLogLevelInt()
 			anchors {
 				right: parent.right
 				top: parent.top
@@ -124,7 +124,7 @@ Rectangle {
 			stepSize: 1
 
 			onValueChanged: {
-				eth.setLogLevel(value)
+				gui.setLogLevel(value)
 			}
 		}
 	}

@@ -18,7 +18,6 @@ import (
 	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
-	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
 )
@@ -49,8 +48,6 @@ type Gui struct {
 	config         *ethutil.ConfigManager
 
 	miner *ethminer.Miner
-
-	jsEngine *javascript.JSRE
 }
 
 // Create GUI, but doesn't start it
@@ -62,7 +59,7 @@ func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIden
 
 	pub := ethpub.NewPEthereum(ethereum)
 
-	return &Gui{eth: ethereum, txDb: db, pub: pub, logLevel: ethlog.LogLevel(logLevel), Session: session, open: false, clientIdentity: clientIdentity, config: config, jsEngine: javascript.NewJSRE(ethereum)}
+	return &Gui{eth: ethereum, txDb: db, pub: pub, logLevel: ethlog.LogLevel(logLevel), Session: session, open: false, clientIdentity: clientIdentity, config: config}
 }
 
 func (gui *Gui) Start(assetPath string) {
@@ -81,12 +78,12 @@ func (gui *Gui) Start(assetPath string) {
 	// Create a new QML engine
 	gui.engine = qml.NewEngine()
 	context := gui.engine.Context()
+	gui.uiLib = NewUiLib(gui.engine, gui.eth, assetPath)
 
 	// Expose the eth library and the ui library to QML
-	context.SetVar("eth", gui)
+	context.SetVar("gui", gui)
 	context.SetVar("pub", gui.pub)
-	gui.uiLib = NewUiLib(gui.engine, gui.eth, assetPath)
-	context.SetVar("ui", gui.uiLib)
+	context.SetVar("eth", gui.uiLib)
 
 	// Load the main QML interface
 	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
@@ -126,7 +123,7 @@ func (gui *Gui) Stop() {
 		gui.win.Hide()
 	}
 
-	gui.jsEngine.Stop()
+	gui.uiLib.jsEngine.Stop()
 
 	logger.Infoln("Stopped")
 }
@@ -475,18 +472,6 @@ func (gui *Gui) Transact(recipient, value, gas, gasPrice, data string) (*ethpub.
 
 func (gui *Gui) Create(recipient, value, gas, gasPrice, data string) (*ethpub.PReceipt, error) {
 	return gui.pub.Transact(gui.privateKey(), recipient, value, gas, gasPrice, data)
-}
-
-func (self *Gui) ImportTx(rlpTx string) {
-	tx := ethchain.NewTransactionFromBytes(ethutil.Hex2Bytes(rlpTx))
-	self.eth.TxPool().QueueTransaction(tx)
-}
-
-func (self *Gui) SearchChange(blockHash, address, storageAddress string) {
-}
-
-func (self *Gui) EvalJavascriptFile(path string) {
-	self.jsEngine.LoadExtFile(path[7:])
 }
 
 func (gui *Gui) SetCustomIdentifier(customIdentifier string) {
