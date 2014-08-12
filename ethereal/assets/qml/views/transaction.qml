@@ -28,11 +28,13 @@ Rectangle {
 		states: [
 			State{
 				name: "ERROR"
+
 				PropertyChanges { target: txResult; visible:true}
 				PropertyChanges { target: codeView; visible:true}
 			},
 			State {
 				name: "DONE"
+
 				PropertyChanges { target: txValue; visible:false}
 				PropertyChanges { target: txGas; visible:false}
 				PropertyChanges { target: txGasPrice; visible:false}
@@ -41,6 +43,8 @@ Rectangle {
 				PropertyChanges { target: txDataLabel; visible:false}
 				PropertyChanges { target: atLabel; visible:false}
 				PropertyChanges { target: txFuelRecipient; visible:false}
+				PropertyChanges { target: valueDenom; visible:false}
+				PropertyChanges { target: gasDenom; visible:false}
 
 				PropertyChanges { target: txResult; visible:true}
 				PropertyChanges { target: txOutput; visible:true}
@@ -48,12 +52,15 @@ Rectangle {
 			},
 			State {
 				name: "SETUP"
+
 				PropertyChanges { target: txValue; visible:true; text: ""}
-				PropertyChanges { target: txGas; visible:true; text: ""}
-				PropertyChanges { target: txGasPrice; visible:true; text: ""}
+				PropertyChanges { target: txGas; visible:true;}
+				PropertyChanges { target: txGasPrice; visible:true;}
 				PropertyChanges { target: codeView; visible:true; text: ""}
 				PropertyChanges { target: txButton; visible:true}
 				PropertyChanges { target: txDataLabel; visible:true}
+				PropertyChanges { target: valueDenom; visible:true}
+				PropertyChanges { target: gasDenom; visible:true}
 
 				PropertyChanges { target: txResult; visible:false}
 				PropertyChanges { target: txOutput; visible:false}
@@ -113,11 +120,6 @@ Rectangle {
 				validator: RegExpValidator { regExp: /\d*/ }
 				placeholderText: "Gas"
 				text: "500"
-				/*
-				 onTextChanged: {
-					 contractFormReady()
-				 }
-				 */
 			}
 			Label {
 				id: atLabel
@@ -130,11 +132,6 @@ Rectangle {
 				placeholderText: "Gas price"
 				text: "10"
 				validator: RegExpValidator { regExp: /\d*/ }
-				/*
-				 onTextChanged: {
-					 contractFormReady()
-				 }
-				 */
 			}
 
 			ComboBox {
