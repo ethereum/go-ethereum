@@ -55,7 +55,7 @@ ApplicationWindow {
 
 			MenuItem {
 				text: "Browser"
-				onTriggered: ui.openBrowser()
+				onTriggered: eth.openBrowser()
 			}
 
 			MenuItem {
@@ -163,7 +163,7 @@ ApplicationWindow {
 				id: importAppButton
 				text: "Browser"
 				onClicked: {
-					ui.openBrowser()
+					eth.openBrowser()
 				}
 			}
 
