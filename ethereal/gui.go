@@ -106,11 +106,13 @@ func (gui *Gui) Start(assetPath string) {
 	logger.Infoln("Starting GUI")
 	gui.open = true
 	win.Show()
+
 	// only add the gui logger after window is shown otherwise slider wont be shown
 	if addlog {
 		ethlog.AddLogSystem(gui)
 	}
 	win.Wait()
+
 	// need to silence gui logger after window closed otherwise logsystem hangs (but do not save loglevel)
 	gui.logLevel = ethlog.Silence
 	gui.open = false

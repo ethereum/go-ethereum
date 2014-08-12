@@ -112,7 +112,6 @@ func (self *UiLib) StartDbWithCode(code string) {
 
 func (self *UiLib) StartDebugger() {
 	dbWindow := NewDebuggerWindow(self)
-	//self.DbWindow = dbWindow
 
 	dbWindow.Show()
 }

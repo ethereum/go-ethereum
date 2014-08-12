@@ -318,14 +318,6 @@ ApplicationWindow {
 
 	}
 
-	function importApp(path) {
-		var ext = path.split('.').pop()
-		if(ext == "html" || ext == "htm") {
-			ui.openHtml(path)
-		}else if(ext == "qml"){
-			ui.openQml(path)
-		}
-	}
 
 	/******************
 	 * Dialogs
@@ -340,6 +332,17 @@ ApplicationWindow {
 	}
 
 
+	/******************
+	 * Wallet functions
+	 *****************/
+	function importApp(path) {
+		var ext = path.split('.').pop()
+		if(ext == "html" || ext == "htm") {
+			ui.openHtml(path)
+		}else if(ext == "qml"){
+			ui.openQml(path)
+		}
+	}
 
 	function setWalletValue(value) {
 		walletValueLabel.text = value
@@ -381,9 +384,9 @@ ApplicationWindow {
 		return time;
 	}
 
-	// ******************************************
-	// Windows
-	// ******************************************
+	/**********************
+	 * Windows
+	 *********************/
 	Window {
 		id: peerWindow
 		//flags: Qt.CustomizeWindowHint | Qt.Tool | Qt.WindowCloseButtonHint
