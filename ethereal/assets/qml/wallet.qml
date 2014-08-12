@@ -47,7 +47,10 @@ ApplicationWindow {
 			MenuItem {
 				text: "Import App"
 				shortcut: "Ctrl+o"
-				onTriggered: openAppDialog.open()
+				onTriggered: {
+					generalFileDialog.callback = importApp;
+					generalFileDialog.open()
+				}
 			}
 
 			MenuItem {
@@ -58,7 +61,10 @@ ApplicationWindow {
 			MenuItem {
 				text: "Add plugin"
 				onTriggered: {
-					mainSplit.addPlugin("test")
+					generalFileDialog.callback = function(path) {
+						addPlugin(path, {canClose: true})
+					}
+					generalFileDialog.open()
 				}
 			}
 
@@ -67,16 +73,23 @@ ApplicationWindow {
 			MenuItem {
 				text: "Import key"
 				shortcut: "Ctrl+i"
-				onTriggered: importDialog.open()
+				onTriggered: {
+					generalFileDialog.callback = function(path) {
+						ui.importKey(path)
+					}
+					generalFileDialog.open()
+				}
 			}
 
 			MenuItem {
 				text: "Export keys"
 				shortcut: "Ctrl+e"
-				onTriggered: exportDialog.open()
+				onTriggered: {
+					generalFileDialog.callback = function(path) {
+					}
+					generalFileDialog.open()
+				}
 			}
-
-			//MenuSeparator {}
 		}
 
 		Menu {
@@ -135,166 +148,34 @@ ApplicationWindow {
 
 	}
 
-
-	property var blockModel: ListModel {
-		id: blockModel
-	}
-
-	SplitView {
-		property var views: [];
-
-		id: mainSplit
-		anchors.fill: parent
-		resizing: false
-
-		function setView(view) {
-			for(var i = 0; i < views.length; i++) {
-				views[i].visible = false
-			}
-
-			view.visible = true
-		}
-
-		function addComponent(component, options) {
-			var view = mainView.createView(component, options)
-			if(!view.hasOwnProperty("iconFile")) {
-				console.log("Could not load plugin. Property 'iconFile' not found on view.");
-				return;
-			}
-
-			menu.createMenuItem(view.iconFile, view);
-			mainSplit.views.push(view);
-
-			return view
-		}
-
-		Rectangle {
-			id: menu
-			Layout.minimumWidth: 80
-			Layout.maximumWidth: 80
-			anchors.top: parent.top
-			color: "#252525"
-
-			Component {
-				id: menuItemTemplate
-				Image {
-					property var view;
-					anchors.horizontalCenter: parent.horizontalCenter
-					MouseArea {
-						anchors.fill: parent
-						onClicked: {
-							mainSplit.setView(view)
-						}
-					}
-				}
-			}
-
-
-			function createMenuItem(icon, view) {
-				var comp = menuItemTemplate.createObject(menuColumn)
-				comp.view = view
-				comp.source = icon
-			}
-
-			ColumnLayout {
-				id: menuColumn
-				y: 50
-				anchors.left: parent.left
-				anchors.right: parent.right
-			}
-		}
-
-		Rectangle {
-			id: mainView
-			color: "#00000000"
-
-			anchors.right: parent.right
-			anchors.left: menu.right
-			anchors.bottom: parent.bottom
-			anchors.top: parent.top
-
-			function createView(component) {
-				var view = component.createObject(mainView)
-
-				return view;
-			}
-		}
-
-
-	}
-
-	FileDialog {
-		id: openAppDialog
-		title: "Open QML Application"
-		onAccepted: {
-			var path = openAppDialog.fileUrl.toString()
-			var ext = path.split('.').pop()
-			if(ext == "html" || ext == "htm") {
-				ui.openHtml(path)
-			}else if(ext == "qml"){
-				ui.openQml(path)
-			}
-		}
-	}
-
-	FileDialog {
-		id: exportDialog
-		title: "Export keys"
-		onAccepted: {
-		}
-	}
-
-
-	FileDialog {
-		id: generalFileDialog
-		property var callback;
-		onAccepted: {
-			var path = this.fileUrl.toString()
-			callback.call(this, path)
-		}
-	}
-
-	FileDialog {
-		id: importDialog
-		title: "Import key"
-		onAccepted: {
-			var path = this.fileUrl.toString()
-			ui.importKey(path)
-		}
-	}
-
 	statusBar: StatusBar {
-		height: 30
+		height: 32
 		RowLayout {
 			Button {
 				id: miningButton
+				text: "Start Mining"
 				onClicked: {
 					eth.toggleMining()
 				}
-				text: "Start Mining"
-			}
-
-			Button {
-				property var enabled: true
-				id: debuggerWindow
-				onClicked: {
-					ui.startDebugger()
-				}
-				text: "Debugger"
 			}
 
 			Button {
 				id: importAppButton
-				anchors.left: debuggerWindow.right
-				anchors.leftMargin: 5
-				onClicked: openAppDialog.open()
-				text: "Import App"
+				text: "Browser"
+				onClicked: {
+					ui.openBrowser()
+				}
 			}
 
-			Label {
-				anchors.left: importAppButton.right
-				anchors.leftMargin: 5
-				id: walletValueLabel
+			RowLayout {
+				Label {
+					anchors.left: importAppButton.right
+					anchors.leftMargin: 5
+					id: walletValueLabel
+
+					font.pixelSize: 10
+					styleColor: "#797979"
+				}
 			}
 		}
 
@@ -341,6 +222,123 @@ ApplicationWindow {
 			}
 		}
 	}
+
+
+	property var blockModel: ListModel {
+		id: blockModel
+	}
+
+	SplitView {
+		property var views: [];
+
+		id: mainSplit
+		anchors.fill: parent
+		resizing: false
+
+		function setView(view) {
+			for(var i = 0; i < views.length; i++) {
+				views[i].visible = false
+			}
+
+			view.visible = true
+		}
+
+		function addComponent(component, options) {
+			var view = mainView.createView(component, options)
+			if(!view.hasOwnProperty("iconFile")) {
+				console.log("Could not load plugin. Property 'iconFile' not found on view.");
+				return;
+			}
+
+			menu.createMenuItem(view.iconFile, view);
+			mainSplit.views.push(view);
+
+			return view
+		}
+
+		/*********************
+		 * Main menu.
+		 ********************/
+		Rectangle {
+			id: menu
+			Layout.minimumWidth: 80
+			Layout.maximumWidth: 80
+			anchors.top: parent.top
+			color: "#252525"
+
+			Component {
+				id: menuItemTemplate
+				Image {
+					property var view;
+					anchors.horizontalCenter: parent.horizontalCenter
+					MouseArea {
+						anchors.fill: parent
+						onClicked: {
+							mainSplit.setView(view)
+						}
+					}
+				}
+			}
+
+
+			function createMenuItem(icon, view) {
+				var comp = menuItemTemplate.createObject(menuColumn)
+				comp.view = view
+				comp.source = icon
+			}
+
+			ColumnLayout {
+				id: menuColumn
+				y: 50
+				anchors.left: parent.left
+				anchors.right: parent.right
+				spacing: 10
+			}
+		}
+
+		/*********************
+		 * Main view
+		 ********************/
+		Rectangle {
+			id: mainView
+			color: "#00000000"
+
+			anchors.right: parent.right
+			anchors.left: menu.right
+			anchors.bottom: parent.bottom
+			anchors.top: parent.top
+
+			function createView(component) {
+				var view = component.createObject(mainView)
+
+				return view;
+			}
+		}
+
+
+	}
+
+	function importApp(path) {
+		var ext = path.split('.').pop()
+		if(ext == "html" || ext == "htm") {
+			ui.openHtml(path)
+		}else if(ext == "qml"){
+			ui.openQml(path)
+		}
+	}
+
+	/******************
+	 * Dialogs
+	 *****************/
+	FileDialog {
+		id: generalFileDialog
+		property var callback;
+		onAccepted: {
+			var path = this.fileUrl.toString()
+			callback.call(this, path)
+		}
+	}
+
 
 
 	function setWalletValue(value) {
