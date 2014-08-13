@@ -18,13 +18,8 @@ Rectangle {
 	Column {
 		id: mainContractColumn
 		anchors.fill: parent
-		function contractFormReady(){
-			if(codeView.text.length > 0 && txValue.text.length > 0 && txGas.text.length > 0 && txGasPrice.length > 0) {
-				txButton.state = "READY"
-			}else{
-				txButton.state = "NOTREADY"
-			}
-		}
+
+
 		states: [
 			State{
 				name: "ERROR"
@@ -206,6 +201,14 @@ Rectangle {
 				txOutput.text = ""
 				mainContractColumn.state = "SETUP"
 			}
+		}
+	}
+
+	function contractFormReady(){
+		if(codeView.text.length > 0 && txValue.text.length > 0 && txGas.text.length > 0 && txGasPrice.length > 0) {
+			txButton.state = "READY"
+		}else{
+			txButton.state = "NOTREADY"
 		}
 	}
 }

@@ -31,9 +31,13 @@ ApplicationWindow {
 			//text: webview.url
 
 			Keys.onReturnPressed: {
+				var uri = this.text;
+				if(!/.*\:\/\/.*/.test(uri)) {
+					uri = "http://" + uri;
+				}
+
 				var reg = /(^https?\:\/\/(?:www\.)?)([a-zA-Z0-9_\-]*\.eth)(.*)/
 
-				var uri = this.text;
 				if(reg.test(uri)) {
 					this.text.replace(reg, function(match, pre, domain, path) {
 						uri = pre;
@@ -45,7 +49,7 @@ ApplicationWindow {
 						}
 
 						if(ip.length != 0) {
-							uri += ip.join(".");
+							uri += lookup;
 						} else {
 							uri += domain;
 						}

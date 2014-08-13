@@ -19,11 +19,11 @@ ApplicationWindow {
 
 	// Takes care of loading all default plugins
 	Component.onCompleted: {
-		var historyView = addPlugin("./views/history.qml")
-		var newTxView = addPlugin("./views/transaction.qml")
-		var chainView = addPlugin("./views/chain.qml")
-		var infoView = addPlugin("./views/info.qml")
-		var pendingTxView = addPlugin("./views/pending_tx.qml")
+		var historyView = addPlugin("./views/history.qml", {title: "History"})
+		var newTxView = addPlugin("./views/transaction.qml", {title: "New Transaction"})
+		var chainView = addPlugin("./views/chain.qml", {title: "Block chain"})
+		var infoView = addPlugin("./views/info.qml", {title: "Info"})
+		var pendingTxView = addPlugin("./views/pending_tx.qml", {title: "Pending", canClose: true})
 
 		// Call the ready handler
 		gui.done()
@@ -38,7 +38,7 @@ ApplicationWindow {
 			return
 		}
 
-		return mainSplit.addComponent(component, {objectName: objectName})
+		return mainSplit.addComponent(component, options)
 	}
 
 	MenuBar {
@@ -111,7 +111,7 @@ ApplicationWindow {
 				text: "Run JS file"
 				onTriggered: {
 					generalFileDialog.callback = function(path) {
-						lib.evalJavascriptFile(path)
+						eth.evalJavascriptFile(path)
 					}
 					generalFileDialog.open()
 				}
@@ -169,8 +169,6 @@ ApplicationWindow {
 
 			RowLayout {
 				Label {
-					anchors.left: importAppButton.right
-					anchors.leftMargin: 5
 					id: walletValueLabel
 
 					font.pixelSize: 10
@@ -250,7 +248,7 @@ ApplicationWindow {
 				return;
 			}
 
-			menu.createMenuItem(view.iconFile, view);
+			menu.createMenuItem(view.iconFile, view, options);
 			mainSplit.views.push(view);
 
 			return view
@@ -261,8 +259,8 @@ ApplicationWindow {
 		 ********************/
 		Rectangle {
 			id: menu
-			Layout.minimumWidth: 80
-			Layout.maximumWidth: 80
+			Layout.minimumWidth: 180
+			Layout.maximumWidth: 180
 			anchors.top: parent.top
 			color: "#252525"
 
@@ -280,11 +278,73 @@ ApplicationWindow {
 				}
 			}
 
+		       /*
+			Component {
+				id: menuItemTemplate
+				Rectangle {
+					property var view;
+					property var source;
+					property alias title: title.text
+					height: 25
 
-			function createMenuItem(icon, view) {
+					id: tab
+
+					anchors {
+						left: parent.left
+						right: parent.right
+					}
+
+					Label {
+						id: title
+						y: parent.height / 2 - this.height / 2
+						x: 5
+						font.pixelSize: 10
+					}
+
+					MouseArea {
+						anchors.fill: parent
+						onClicked: {
+							mainSplit.setView(view)
+						}
+					}
+
+					Image {
+						id: closeButton
+						y: parent.height / 2 - this.height / 2
+						visible: false
+
+						source: "../close.png"
+						anchors {
+							right: parent.right
+							rightMargin: 5
+						}
+
+						MouseArea {
+							anchors.fill: parent
+							onClicked: {
+								console.log("should close")
+							}
+						}
+					}
+				}
+			}
+			*/
+
+
+			function createMenuItem(icon, view, options) {
+				if(options === undefined) {
+					options = {};
+				}
+
 				var comp = menuItemTemplate.createObject(menuColumn)
 				comp.view = view
 				comp.source = icon
+				/*
+				comp.title = options.title
+				if(options.canClose) {
+					//comp.closeButton.visible = options.canClose
+				}
+				*/
 			}
 
 			ColumnLayout {
@@ -459,7 +519,7 @@ ApplicationWindow {
 			anchors.leftMargin: 5
 			text: "Import"
 			onClicked: {
-				lib.importTx(txImportField.text)
+				eth.importTx(txImportField.text)
 				txImportField.visible = false
 			}
 		}
@@ -483,7 +543,7 @@ ApplicationWindow {
 			anchors.leftMargin: 10
 			placeholderText: "address:port"
 			onAccepted: {
-				ui.connectToPeer(addrField.text)
+				eth.connectToPeer(addrField.text)
 				addPeerWin.visible = false
 			}
 		}
@@ -493,7 +553,7 @@ ApplicationWindow {
 			anchors.leftMargin: 5
 			text: "Add"
 			onClicked: {
-				ui.connectToPeer(addrField.text)
+				eth.connectToPeer(addrField.text)
 				addPeerWin.visible = false
 			}
 		}
