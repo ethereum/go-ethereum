@@ -1,10 +1,13 @@
 package main
 
 import (
-	"github.com/ethereum/eth-go"
-	"github.com/ethereum/eth-go/ethutil"
-	"github.com/go-qml/qml"
 	"path"
+
+	"github.com/ethereum/eth-go"
+	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/go-ethereum/javascript"
+	"github.com/go-qml/qml"
 )
 
 type memAddr struct {
@@ -22,10 +25,21 @@ type UiLib struct {
 	win      *qml.Window
 	Db       *Debugger
 	DbWindow *DebuggerWindow
+
+	jsEngine *javascript.JSRE
 }
 
 func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
-	return &UiLib{engine: engine, eth: eth, assetPath: assetPath}
+	return &UiLib{engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth)}
+}
+
+func (self *UiLib) ImportTx(rlpTx string) {
+	tx := ethchain.NewTransactionFromBytes(ethutil.Hex2Bytes(rlpTx))
+	self.eth.TxPool().QueueTransaction(tx)
+}
+
+func (self *UiLib) EvalJavascriptFile(path string) {
+	self.jsEngine.LoadExtFile(path[7:])
 }
 
 func (ui *UiLib) OpenQml(path string) {
@@ -40,6 +54,10 @@ func (ui *UiLib) OpenHtml(path string) {
 	app := NewExtApplication(container, ui)
 
 	go app.run()
+}
+
+func (ui *UiLib) OpenBrowser() {
+	ui.OpenHtml("file://" + ui.AssetPath("ext/home.html"))
 }
 
 func (ui *UiLib) Muted(content string) {
@@ -94,7 +112,6 @@ func (self *UiLib) StartDbWithCode(code string) {
 
 func (self *UiLib) StartDebugger() {
 	dbWindow := NewDebuggerWindow(self)
-	//self.DbWindow = dbWindow
 
 	dbWindow.Show()
 }

@@ -115,8 +115,8 @@ L:
 }
 
 func (self *JSRepl) PrintValue(v interface{}) {
-	method, _ := self.re.vm.Get("prettyPrint")
-	v, err := self.re.vm.ToValue(v)
+	method, _ := self.re.Vm.Get("prettyPrint")
+	v, err := self.re.Vm.ToValue(v)
 	if err == nil {
 		method.Call(method, v)
 	}

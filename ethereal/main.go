@@ -1,16 +1,17 @@
 package main
 
 import (
+	"os"
+	"runtime"
+
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/go-qml/qml"
-	"os"
-	"runtime"
 )
 
 const (
 	ClientIdentifier = "Ethereal"
-	Version          = "0.6.0"
+	Version          = "0.6.1"
 )
 
 func main() {
