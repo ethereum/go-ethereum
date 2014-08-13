@@ -2,30 +2,97 @@
 window.eth = {
 	prototype: Object(),
 
+	mutan: function(code) {
+	},
+
+	toHex: function(str) {
+		var hex = "";
+		for(var i = 0; i < str.length; i++) {
+			var n = str.charCodeAt(i).toString(16);
+			hex += n.length < 2 ? '0' + n : n;
+		}
+
+		return hex;
+	},
+
+	toAscii: function(hex) {
+		// Find termination
+		var str = "";
+		var i = 0, l = hex.length;
+		for(; i < l; i+=2) {
+			var code = hex.charCodeAt(i)
+			if(code == 0) {
+				break;
+			}
+
+			str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+		}
+
+		return str;
+	},
+
+	fromAscii: function(str, pad) {
+		if(pad === undefined) {
+			pad = 32
+		}
+
+		var hex = this.toHex(str);
+
+		while(hex.length < pad*2)
+			hex += "00";
+
+		return hex
+	},
+
+
 	// Retrieve block
 	//
 	// Either supply a number or a string. Type is determent for the lookup method
 	// string - Retrieves the block by looking up the hash
 	// number - Retrieves the block by looking up the block number
-        getBlock: function(numberOrHash, cb) {
-                var func;
-                if(typeof numberOrHash == "string") {
-                        func =  "getBlockByHash";
-                } else {
-                        func =  "getBlockByNumber";
-                }
-                postData({call: func, args: [numberOrHash]}, cb);
-        },
+	getBlock: function(numberOrHash, cb) {
+		var func;
+		if(typeof numberOrHash == "string") {
+			func =  "getBlockByHash";
+		} else {
+			func =  "getBlockByNumber";
+		}
+		postData({call: func, args: [numberOrHash]}, cb);
+	},
 
 	// Create transaction
 	//
 	// Transact between two state objects
-	transact: function(sec, recipient, value, gas, gasPrice, data, cb) {
-		postData({call: "transact", args: [sec, recipient, value, gas, gasPrice, data]}, cb);
-	},
+	transact: function(params, cb) {
+		if(params === undefined) {
+			params = {};
+		}
 
-	create: function(sec, value, gas, gasPrice, init, body, cb) {
-		postData({call: "create", args: [sec, value, gas, gasPrice, init, body]}, cb);
+		if(params.endowment !== undefined)
+			params.value = params.endowment;
+		if(params.code !== undefined)
+			params.data = params.code;
+
+		// Make sure everything is string
+		var fields = ["to", "from", "value", "gas", "gasPrice"];
+		for(var i = 0; i < fields.length; i++) {
+			if(params[fields[i]] === undefined) {
+				params[fields[i]] = "";
+			}
+			params[fields[i]] = params[fields[i]].toString();
+		}
+
+		var data;
+		if(typeof params.data === "object") {
+			data = "";
+			for(var i = 0; i < params.data.length; i++) {
+				data += params.data[i]
+			}
+		} else {
+			data = params.data;
+		}
+
+		postData({call: "transact", args: [params.from, params.to, params.value, params.gas, params.gasPrice, "0x"+data]}, cb);
 	},
 
 	getStorageAt: function(address, storageAddress, cb) {

@@ -17,6 +17,7 @@ Rectangle {
 	color: "#00000000"
 
 	Column {
+		id: info
 		spacing: 3
 		anchors.fill: parent
 		anchors.topMargin: 5
@@ -49,37 +50,13 @@ Rectangle {
 	}
 	TableView {
 		id: addressView
-		width: parent.width - 200
+		width: parent.width
 		height: 200
 		anchors.bottom: logLayout.top
 		TableViewColumn{ role: "name"; title: "name" }
 		TableViewColumn{ role: "address"; title: "address"; width: 300}
 
 		model: addressModel
-	}
-
-	Rectangle {
-		anchors.top: addressView.top
-		anchors.left: addressView.right
-		anchors.leftMargin: 20
-
-		TextField {
-			placeholderText: "Name to register"
-			id: nameToReg
-			width: 150
-		}
-
-		Button {
-			anchors.top: nameToReg.bottom
-			text: "Register"
-			MouseArea{
-				anchors.fill: parent
-				onClicked: {
-					gui.registerName(nameToReg.text)
-					nameToReg.text = ""
-				}
-			}
-		}
 	}
 
 	property var logModel: ListModel {

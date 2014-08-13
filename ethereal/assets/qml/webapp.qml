@@ -21,46 +21,62 @@ ApplicationWindow {
 		id: root
 		anchors.fill: parent
 		state: "inspectorShown"
-		TextField {
+
+		RowLayout {
+			id: navBar
 			anchors {
-				top: parent.top
 				left: parent.left
 				right: parent.right
 			}
-			id: uriNav
-			//text: webview.url
 
-			Keys.onReturnPressed: {
-				var uri = this.text;
-				if(!/.*\:\/\/.*/.test(uri)) {
-					uri = "http://" + uri;
+			Button {
+				id: back
+				iconSource: "../back.png"
+				onClicked: {
+					webview.goBack()
 				}
+			}
 
-				var reg = /(^https?\:\/\/(?:www\.)?)([a-zA-Z0-9_\-]*\.eth)(.*)/
-
-				if(reg.test(uri)) {
-					this.text.replace(reg, function(match, pre, domain, path) {
-						uri = pre;
-
-						var lookup = eth.lookupDomain(domain.substring(0, domain.length - 4));
-						var ip = [];
-						for(var i = 0, l = lookup.length; i < l; i++) {
-							ip.push(lookup.charCodeAt(i))
-						}
-
-						if(ip.length != 0) {
-							uri += lookup;
-						} else {
-							uri += domain;
-						}
-
-						uri += path;
-					});
+			TextField {
+				anchors {
+					top: parent.top
+					left: back.right
+					right: parent.right
 				}
+				id: uriNav
 
-				console.log("connecting to ...", uri)
+				Keys.onReturnPressed: {
+					var uri = this.text;
+					if(!/.*\:\/\/.*/.test(uri)) {
+						uri = "http://" + uri;
+					}
 
-				webview.url = uri;
+					var reg = /(^https?\:\/\/(?:www\.)?)([a-zA-Z0-9_\-]*\.eth)(.*)/
+
+					if(reg.test(uri)) {
+						this.text.replace(reg, function(match, pre, domain, path) {
+							uri = pre;
+
+							var lookup = eth.lookupDomain(domain.substring(0, domain.length - 4));
+							var ip = [];
+							for(var i = 0, l = lookup.length; i < l; i++) {
+								ip.push(lookup.charCodeAt(i))
+							}
+
+							if(ip.length != 0) {
+								uri += lookup;
+							} else {
+								uri += domain;
+							}
+
+							uri += path;
+						});
+					}
+
+					console.log("connecting to ...", uri)
+
+					webview.url = uri;
+				}
 			}
 		}
 
@@ -71,7 +87,7 @@ ApplicationWindow {
 				left: parent.left
 				right: parent.right
 				bottom: parent.bottom
-				top: uriNav.bottom
+				top: navBar.bottom
 			}
 			onTitleChanged: { window.title = title }
 			experimental.preferences.javascriptEnabled: true
@@ -86,103 +102,107 @@ ApplicationWindow {
 				try {
 					switch(data.call) {
 						case "getCoinBase":
-						postData(data._seed, eth.getCoinBase())
+							postData(data._seed, eth.getCoinBase())
 
-						break
+							break
+
 						case "getIsListening":
-						postData(data._seed, eth.getIsListening())
+							postData(data._seed, eth.getIsListening())
 
-						break
+							break
+
 						case "getIsMining":
-						postData(data._seed, eth.getIsMining())
+							postData(data._seed, eth.getIsMining())
 
-						break
+							break
+
 						case "getPeerCount":
-						postData(data._seed, eth.getPeerCount())
+							postData(data._seed, eth.getPeerCount())
 
-						break
+							break
 
 						case "getTxCountAt":
-						require(1)
-						postData(data._seed, eth.getTxCountAt(data.args[0]))
+							require(1)
+							postData(data._seed, eth.getTxCountAt(data.args[0]))
 
-						break
+							break
+
 						case "getBlockByNumber":
-						var block = eth.getBlock(data.args[0])
-						postData(data._seed, block)
+							var block = eth.getBlock(data.args[0])
+							postData(data._seed, block)
 
-						break
+							break
+
 						case "getBlockByHash":
-						var block = eth.getBlock(data.args[0])
-						postData(data._seed, block)
+							var block = eth.getBlock(data.args[0])
+							postData(data._seed, block)
 
-						break
+							break
+
 						case "transact":
-						require(5)
+							require(5)
 
-						var tx = eth.transact(data.args[0], data.args[1], data.args[2],data.args[3],data.args[4],data.args[5])
-						postData(data._seed, tx)
+							var tx = eth.transact(data.args[0], data.args[1], data.args[2],data.args[3],data.args[4],data.args[5])
+							postData(data._seed, tx)
 
-						break
-						case "create":
-						postData(data._seed, null)
+							break
 
-						break
 						case "getStorage":
-						require(2);
+							require(2);
 
-						var stateObject = eth.getStateObject(data.args[0])
-						var storage = stateObject.getStorage(data.args[1])
-						postData(data._seed, storage)
+							var stateObject = eth.getStateObject(data.args[0])
+							var storage = stateObject.getStorage(data.args[1])
+							postData(data._seed, storage)
 
-						break
+							break
+
 						case "getStateKeyVals":
-						require(1);
-						var stateObject = eth.getStateObject(data.args[0]).stateKeyVal(true)
-						postData(data._seed,stateObject)
+							require(1);
+							var stateObject = eth.getStateObject(data.args[0]).stateKeyVal(true)
+							postData(data._seed,stateObject)
 
-						break
+							break
+
 						case "getTransactionsFor":
-						require(1);
-						var txs = eth.getTransactionsFor(data.args[0], true)
-						postData(data._seed, txs)
+							require(1);
+							var txs = eth.getTransactionsFor(data.args[0], true)
+							postData(data._seed, txs)
 
-						break
+							break
+
 						case "getBalance":
-						require(1);
+							require(1);
 
-						postData(data._seed, eth.getStateObject(data.args[0]).value());
+							postData(data._seed, eth.getStateObject(data.args[0]).value());
 
-						break
+							break
+
 						case "getKey":
-						var key = eth.getKey().privateKey;
+							var key = eth.getKey().privateKey;
 
-						postData(data._seed, key)
-						break
+							postData(data._seed, key)
+							break
+
 						case "watch":
-						require(1)
-						eth.watch(data.args[0], data.args[1]);
-						break
+							require(1)
+							eth.watch(data.args[0], data.args[1]);
+
+							break
+
 						case "disconnect":
-						require(1)
-						postData(data._seed, null)
-						break;
-						case "set":
-						console.log("'Set' has been depcrecated")
-						/*
-						 for(var key in data.args) {
-							 if(webview.hasOwnProperty(key)) {
-								 window[key] = data.args[key];
-							 }
-						 }
-						 */
-						break;
+							require(1)
+							postData(data._seed, null)
+
+							break;
+
 						case "getSecretToAddress":
-						require(1)
-						postData(data._seed, eth.secretToAddress(data.args[0]))
-						break;
+							require(1)
+							postData(data._seed, eth.secretToAddress(data.args[0]))
+
+							break;
+
 						case "debug":
-						console.log(data.args[0]);
+							console.log(data.args[0]);
 						break;
 					}
 				} catch(e) {
@@ -215,12 +235,13 @@ ApplicationWindow {
 				postEvent(ev, [storageObject.address, storageObject.value])
 			}
 		}
+
 		Rectangle {
 			id: toggleInspector
 			color: "#bcbcbc"
 			visible: true
-			height: 12
-			width: 12
+			height: 20
+			width: 20
 			anchors {
 				right: root.right
 			}
@@ -233,8 +254,8 @@ ApplicationWindow {
 						inspector.url = webview.experimental.remoteInspectorUrl
 					}
 				}
+
 				onDoubleClicked: {
-					console.log('refreshing')
 					webView.reload()
 				}
 				anchors.fill: parent

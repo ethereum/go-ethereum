@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"path"
 
 	"github.com/ethereum/eth-go"
@@ -40,6 +41,15 @@ func (self *UiLib) ImportTx(rlpTx string) {
 
 func (self *UiLib) EvalJavascriptFile(path string) {
 	self.jsEngine.LoadExtFile(path[7:])
+}
+
+func (self *UiLib) EvalJavascriptString(str string) string {
+	value, err := self.jsEngine.Run(str)
+	if err != nil {
+		return err.Error()
+	}
+
+	return fmt.Sprintf("%v", value)
 }
 
 func (ui *UiLib) OpenQml(path string) {

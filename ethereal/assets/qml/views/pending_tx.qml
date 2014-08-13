@@ -30,7 +30,7 @@ Rectangle {
 		model: pendingTxModel
 	}
 
-	function addTx(type, tx, inout) {
+	function addTx(tx, inout) {
 		var isContract
 		if (tx.contract == true){
 			isContract = "Yes"

@@ -24,6 +24,7 @@ ApplicationWindow {
 		var chainView = addPlugin("./views/chain.qml", {title: "Block chain"})
 		var infoView = addPlugin("./views/info.qml", {title: "Info"})
 		var pendingTxView = addPlugin("./views/pending_tx.qml", {title: "Pending", canClose: true})
+		var pendingTxView = addPlugin("./views/javascript.qml", {title: "JavaScript", canClose: true})
 
 		// Call the ready handler
 		gui.done()
@@ -259,8 +260,8 @@ ApplicationWindow {
 		 ********************/
 		Rectangle {
 			id: menu
-			Layout.minimumWidth: 180
-			Layout.maximumWidth: 180
+			Layout.minimumWidth: 80
+			Layout.maximumWidth: 80
 			anchors.top: parent.top
 			color: "#252525"
 
@@ -398,9 +399,9 @@ ApplicationWindow {
 	function importApp(path) {
 		var ext = path.split('.').pop()
 		if(ext == "html" || ext == "htm") {
-			ui.openHtml(path)
+			eth.openHtml(path)
 		}else if(ext == "qml"){
-			ui.openQml(path)
+			eth.openQml(path)
 		}
 	}
 

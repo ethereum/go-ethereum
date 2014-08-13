@@ -29,7 +29,7 @@ Rectangle {
 		model: txModel
 	}
 
-	function addTx(type, tx, inout) {
+	function addTx(tx, inout) {
 		var isContract
 		if (tx.contract == true){
 			isContract = "Yes"

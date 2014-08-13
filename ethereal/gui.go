@@ -282,7 +282,11 @@ func (gui *Gui) insertTransaction(window string, tx *ethchain.Transaction) {
 	ptx.Sender = s
 	ptx.Address = r
 
-	gui.getObjectByName("transactionView").Call("addTx", window, ptx, inout)
+	if window == "post" {
+		gui.getObjectByName("transactionView").Call("addTx", ptx, inout)
+	} else {
+		gui.getObjectByName("pendingTxView").Call("addTx", ptx, inout)
+	}
 }
 
 func (gui *Gui) readPreviousTransactions() {
