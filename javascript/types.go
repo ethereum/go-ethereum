@@ -39,15 +39,16 @@ func (self *JSBlock) GetTransaction(hash string) otto.Value {
 }
 
 type JSMessage struct {
-	To, From  string
-	Input     string
-	Output    string
-	Path      int
-	Origin    string
-	Timestamp int32
-	Coinbase  string
-	Block     string
-	Number    int32
+	To        string `json:"to"`
+	From      string `json:"from"`
+	Input     string `json:"input"`
+	Output    string `json:"output"`
+	Path      int    `json:"path"`
+	Origin    string `json:"origin"`
+	Timestamp int32  `json:"timestamp"`
+	Coinbase  string `json:"coinbase"`
+	Block     string `json:"block"`
+	Number    int32  `json:"number"`
 }
 
 func NewJSMessage(message *ethstate.Message) JSMessage {
@@ -137,6 +138,7 @@ func (self *JSEthereum) Messages(object map[string]interface{}) otto.Value {
 			filter.SetEarliestBlock(earliest)
 		}
 	}
+
 	if object["latest"] != nil {
 		latest := object["latest"]
 		if l, ok := latest.(string); ok {
@@ -146,10 +148,10 @@ func (self *JSEthereum) Messages(object map[string]interface{}) otto.Value {
 		}
 	}
 	if object["to"] != nil {
-		filter.SetTo(ethutil.Hex2Bytes(object["to"].(string)))
+		filter.AddTo(ethutil.Hex2Bytes(object["to"].(string)))
 	}
 	if object["from"] != nil {
-		filter.SetFrom(ethutil.Hex2Bytes(object["from"].(string)))
+		filter.AddFrom(ethutil.Hex2Bytes(object["from"].(string)))
 	}
 	if object["max"] != nil {
 		filter.SetMax(object["max"].(int))
