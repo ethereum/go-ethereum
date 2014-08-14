@@ -17,7 +17,7 @@ type Manifest struct {
 	ObjectChanges  map[string]*StateObject
 	StorageChanges map[string]map[string]*big.Int
 
-	Messages []*Message
+	Messages Messages
 }
 
 func NewManifest() *Manifest {
@@ -50,6 +50,7 @@ func (self *Manifest) AddMessage(msg *Message) *Message {
 	return msg
 }
 
+type Messages []*Message
 type Message struct {
 	To, From  []byte
 	Input     []byte

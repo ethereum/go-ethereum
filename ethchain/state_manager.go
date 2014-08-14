@@ -380,14 +380,18 @@ func (sm *StateManager) createBloomFilter(state *ethstate.State) *BloomFilter {
 		sm.Ethereum.Reactor().Post("object:"+addr, stateObject)
 	}
 
-	for stateObjectAddr, mappedObjects := range state.Manifest().StorageChanges {
-		for addr, value := range mappedObjects {
-			// Set the bloom filter's bin
-			bloomf.Set(ethcrypto.Sha3Bin([]byte(stateObjectAddr + addr)))
+	sm.Ethereum.Reactor().Post("messages", state.Manifest().Messages)
 
-			sm.Ethereum.Reactor().Post("storage:"+stateObjectAddr+":"+addr, &ethstate.StorageState{[]byte(stateObjectAddr), []byte(addr), value})
+	/*
+		for stateObjectAddr, mappedObjects := range state.Manifest().StorageChanges {
+			for addr, value := range mappedObjects {
+				// Set the bloom filter's bin
+				bloomf.Set(ethcrypto.Sha3Bin([]byte(stateObjectAddr + addr)))
+
+				sm.Ethereum.Reactor().Post("storage:"+stateObjectAddr+":"+addr, &ethstate.StorageState{[]byte(stateObjectAddr), []byte(addr), value})
+			}
 		}
-	}
+	*/
 
 	return bloomf
 }
