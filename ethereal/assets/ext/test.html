@@ -1,0 +1,30 @@
+<!doctype>
+<html>
+<head>
+<title>Tests</title>
+</head>
+
+<body>
+<button onclick="test();">Test me</button>
+
+<script type="text/javascript">
+function test() {
+	var filter = eth.watch({
+		latest: -1,
+		from: "e6716f9544a56c530d868e4bfbacb172315bdead",
+	});
+
+	filter.changed(function(messages) {
+		console.log("messages", messages)
+	})
+
+	filter.getMessages(function(messages) {
+			console.log("getMessages", messages)
+			});
+
+}
+</script>
+
+</body>
+
+</html>

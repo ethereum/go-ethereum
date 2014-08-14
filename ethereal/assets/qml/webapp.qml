@@ -220,11 +220,16 @@ ApplicationWindow {
 						postData(data._seed, key)
 						break
 
+						/*
 						case "watch":
-						require(1)
-						eth.watch(data.args[0], data.args[1]);
+							require(1)
+							eth.watch(data.args[0], data.args[1]);
 
-						break
+							break
+						*/
+					       case "watch":
+					       		require(2)
+							eth.watch(data.args[0], data.args[1])
 
 						case "disconnect":
 						require(1)
@@ -247,7 +252,7 @@ ApplicationWindow {
 							break
 
 						case "debug":
-						console.log(data.args[0]);
+							console.log(data.args[0]);
 						break;
 					}
 				} catch(e) {
@@ -267,6 +272,11 @@ ApplicationWindow {
 			}
 			function postEvent(event, data) {
 				webview.experimental.postMessage(JSON.stringify({data: data, _event: event}))
+			}
+
+			function onWatchedCb(data, id) {
+				var messages = JSON.parse(data)
+				postEvent("watched:"+id, messages)
 			}
 
 			function onNewBlockCb(block) {

@@ -1,12 +1,14 @@
 package main
 
 import (
+	"fmt"
+	"runtime"
+
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/go-qml/qml"
-	"runtime"
 )
 
 type QmlApplication struct {
@@ -57,6 +59,10 @@ func (app *QmlApplication) ObjectChanged(stateObject *ethstate.StateObject) {
 
 func (app *QmlApplication) StorageChanged(storageObject *ethstate.StorageState) {
 	app.win.Call("onStorageChangeCb", ethpub.NewPStorageState(storageObject))
+}
+
+func (self *QmlApplication) Messages(msgs ethstate.Messages, id string) {
+	fmt.Println("IMPLEMENT QML APPLICATION MESSAGES METHOD")
 }
 
 // Getters

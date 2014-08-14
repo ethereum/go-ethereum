@@ -137,6 +137,7 @@ window.eth = {
 		postData({call: "getSecretToAddress", args: [sec]}, cb);
 	},
 
+	/*
 	watch: function(address, storageAddrOrCb, cb) {
 		var ev;
 		if(cb === undefined) {
@@ -166,6 +167,16 @@ window.eth = {
 
 		postData({call: "disconnect", args: [address, storageAddrOrCb]});
 	},
+	*/
+
+       watch: function(options) {
+	       var filter = new Filter(options);
+	       filter.number = newWatchNum().toString()
+
+	       postData({call: "watch", args: [options, filter.number]})
+
+	       return filter;
+       },
 
 	set: function(props) {
 		postData({call: "set", args: props});
@@ -208,11 +219,28 @@ window.eth = {
 			}
 		}
 	},
-
-
 }
+
 window.eth._callbacks = {}
 window.eth._onCallbacks = {}
+
+var Filter = function(options) {
+	this.options = options;
+};
+
+Filter.prototype.changed = function(callback) {
+	eth.on("watched:"+this.number, callback)
+}
+
+Filter.prototype.getMessages = function(cb) {
+	return eth.getMessages(this.options, cb)
+}
+
+var watchNum = 0;
+function newWatchNum() {
+	return watchNum++;
+}
+
 function postData(data, cb) {
 	data._seed = Math.floor(Math.random() * 1000000)
 	if(cb) {

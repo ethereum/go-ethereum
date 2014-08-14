@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethstate"
-	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/go-qml/qml"
 )
@@ -23,6 +22,7 @@ type AppContainer interface {
 	ObjectChanged(*ethstate.StateObject)
 	StorageChanged(*ethstate.StorageState)
 	NewWatcher(chan bool)
+	Messages(ethstate.Messages, string)
 }
 
 type ExtApplication struct {
@@ -31,8 +31,11 @@ type ExtApplication struct {
 
 	blockChan       chan ethreact.Event
 	changeChan      chan ethreact.Event
+	messageChan     chan ethreact.Event
 	quitChan        chan bool
 	watcherQuitChan chan bool
+
+	filters map[string]*ethchain.Filter
 
 	container        AppContainer
 	lib              *UiLib
@@ -45,8 +48,10 @@ func NewExtApplication(container AppContainer, lib *UiLib) *ExtApplication {
 		lib.eth,
 		make(chan ethreact.Event, 100),
 		make(chan ethreact.Event, 100),
+		make(chan ethreact.Event, 100),
 		make(chan bool),
 		make(chan bool),
+		make(map[string]*ethchain.Filter),
 		container,
 		lib,
 		nil,
@@ -73,6 +78,7 @@ func (app *ExtApplication) run() {
 	// Subscribe to events
 	reactor := app.lib.eth.Reactor()
 	reactor.Subscribe("newBlock", app.blockChan)
+	reactor.Subscribe("messages", app.messageChan)
 
 	app.container.NewWatcher(app.watcherQuitChan)
 
@@ -118,56 +124,27 @@ out:
 			} else if storageObject, ok := object.Resource.(*ethstate.StorageState); ok {
 				app.container.StorageChanged(storageObject)
 			}
+
+		case msg := <-app.messageChan:
+			if messages, ok := msg.Resource.(ethstate.Messages); ok {
+				for id, filter := range app.filters {
+					msgs := filter.FilterMessages(messages)
+					if len(msgs) > 0 {
+						app.container.Messages(msgs, id)
+					}
+				}
+			}
 		}
 	}
 
 }
 
-func (app *ExtApplication) Watch(addr, storageAddr string) {
-	var event string
-	if len(storageAddr) == 0 {
-		event = "object:" + string(ethutil.Hex2Bytes(addr))
-		app.lib.eth.Reactor().Subscribe(event, app.changeChan)
-	} else {
-		event = "storage:" + string(ethutil.Hex2Bytes(addr)) + ":" + string(ethutil.Hex2Bytes(storageAddr))
-		app.lib.eth.Reactor().Subscribe(event, app.changeChan)
-	}
-
-	app.registeredEvents = append(app.registeredEvents, event)
+func (self *ExtApplication) Watch(filterOptions map[string]interface{}, identifier string) {
+	self.filters[identifier] = ethchain.NewFilterFromMap(filterOptions, self.eth)
 }
 
 func (self *ExtApplication) GetMessages(object map[string]interface{}) string {
-	filter := ethchain.NewFilter(self.eth)
-
-	if object["earliest"] != nil {
-		earliest := object["earliest"]
-		if e, ok := earliest.(string); ok {
-			filter.SetEarliestBlock(ethutil.Hex2Bytes(e))
-		} else {
-			filter.SetEarliestBlock(earliest)
-		}
-	}
-
-	if object["latest"] != nil {
-		latest := object["latest"]
-		if l, ok := latest.(string); ok {
-			filter.SetLatestBlock(ethutil.Hex2Bytes(l))
-		} else {
-			filter.SetLatestBlock(latest)
-		}
-	}
-	if object["to"] != nil {
-		filter.AddTo(ethutil.Hex2Bytes(object["to"].(string)))
-	}
-	if object["from"] != nil {
-		filter.AddFrom(ethutil.Hex2Bytes(object["from"].(string)))
-	}
-	if object["max"] != nil {
-		filter.SetMax(object["max"].(int))
-	}
-	if object["skip"] != nil {
-		filter.SetSkip(object["skip"].(int))
-	}
+	filter := ethchain.NewFilterFromMap(object, self.eth)
 
 	messages := filter.Find()
 	var msgs []javascript.JSMessage

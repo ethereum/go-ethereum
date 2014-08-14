@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"io/ioutil"
 	"net/url"
@@ -12,6 +13,7 @@ import (
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/go-qml/qml"
 	"github.com/howeyc/fsnotify"
 )
@@ -129,6 +131,17 @@ func (app *HtmlApplication) ObjectChanged(stateObject *ethstate.StateObject) {
 
 func (app *HtmlApplication) StorageChanged(storageObject *ethstate.StorageState) {
 	app.webView.Call("onStorageChangeCb", ethpub.NewPStorageState(storageObject))
+}
+
+func (self *HtmlApplication) Messages(messages ethstate.Messages, id string) {
+	var msgs []javascript.JSMessage
+	for _, m := range messages {
+		msgs = append(msgs, javascript.NewJSMessage(m))
+	}
+
+	b, _ := json.Marshal(msgs)
+
+	self.webView.Call("onWatchedCb", string(b), id)
 }
 
 func (app *HtmlApplication) Destroy() {
