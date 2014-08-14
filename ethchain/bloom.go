@@ -6,7 +6,7 @@ type BloomFilter struct {
 
 func NewBloomFilter(bin []byte) *BloomFilter {
 	if bin == nil {
-		bin = make([]byte, 255)
+		bin = make([]byte, 256)
 	}
 
 	return &BloomFilter{

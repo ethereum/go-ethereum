@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"math/big"
+	"strconv"
 	"strings"
 	"sync/atomic"
 
@@ -74,8 +75,22 @@ func (self *PEthereum) LookupDomain(domain string) string {
 	if len(domain) > 32 {
 		domain = string(ethcrypto.Sha3Bin([]byte(domain)))
 	}
+	data := world.Config().Get("DnsReg").StorageString(domain).Bytes()
 
-	return strings.Trim(world.Config().Get("DnsReg").StorageString(domain).Str(), "\x00")
+	// Left padded = A record, Right padded = CNAME
+	if data[0] == 0 {
+		data = bytes.TrimLeft(data, "\x00")
+		var ipSlice []string
+		for _, d := range data {
+			ipSlice = append(ipSlice, strconv.Itoa(int(d)))
+		}
+
+		return strings.Join(ipSlice, ".")
+	} else {
+		data = bytes.TrimRight(data, "\x00")
+
+		return string(data)
+	}
 }
 
 func (lib *PEthereum) GetBlock(hexHash string) *PBlock {
