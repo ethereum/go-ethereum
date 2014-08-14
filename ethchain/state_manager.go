@@ -406,37 +406,9 @@ func (sm *StateManager) GetMessages(block *Block) (messages []*ethstate.Message,
 
 	defer state.Reset()
 
-	if ethutil.Config.Diff && ethutil.Config.DiffType == "all" {
-		fmt.Printf("## %x %x ##\n", block.Hash(), block.Number)
-	}
+	sm.ApplyDiff(state, parent, block)
 
-	receipts, err := sm.ApplyDiff(state, parent, block)
-	if err != nil {
-		return nil, err
-	}
-
-	txSha := CreateTxSha(receipts)
-	if bytes.Compare(txSha, block.TxSha) != 0 {
-		return nil, fmt.Errorf("Error validating tx sha. Received %x, got %x", block.TxSha, txSha)
-	}
-
-	// Block validation
-	if err = sm.ValidateBlock(block); err != nil {
-		statelogger.Errorln("Error validating block:", err)
-		return nil, err
-	}
-
-	// I'm not sure, but I don't know if there should be thrown
-	// any errors at this time.
-	if err = sm.AccumelateRewards(state, block); err != nil {
-		statelogger.Errorln("Error accumulating reward", err)
-		return nil, err
-	}
-
-	if !block.State().Cmp(state) {
-		err = fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().Trie.Root, state.Trie.Root)
-		return nil, err
-	}
+	sm.AccumelateRewards(state, block)
 
 	return state.Manifest().Messages, nil
 }
