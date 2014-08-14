@@ -14,7 +14,7 @@ type Filter struct {
 	earliest []byte
 	latest   []byte
 	skip     int
-	from, to []byte
+	from, to [][]byte
 	max      int
 }
 
@@ -53,12 +53,20 @@ func (self *Filter) SetLatestBlock(latest interface{}) {
 	}
 }
 
-func (self *Filter) SetFrom(addr []byte) {
+func (self *Filter) SetFrom(addr [][]byte) {
 	self.from = addr
 }
 
-func (self *Filter) SetTo(addr []byte) {
+func (self *Filter) AddFrom(addr []byte) {
+	self.from = append(self.from, addr)
+}
+
+func (self *Filter) SetTo(addr [][]byte) {
 	self.to = addr
+}
+
+func (self *Filter) AddTo(addr []byte) {
+	self.from = append(self.to, addr)
 }
 
 func (self *Filter) SetMax(max int) {
@@ -101,13 +109,22 @@ func (self *Filter) Find() []*ethstate.Message {
 				break
 			}
 
+			includes := func(addresses [][]byte, a []byte) (found bool) {
+				for _, addr := range addresses {
+					if bytes.Compare(addr, a) == 0 {
+						return true
+					}
+				}
+
+				return
+			}
 			// Filter the messages for interesting stuff
 			for _, message := range msgs {
-				if len(self.to) > 0 && bytes.Compare(message.To, self.to) != 0 {
+				if len(self.to) > 0 && !includes(self.to, message.To) {
 					continue
 				}
 
-				if len(self.from) > 0 && bytes.Compare(message.From, self.from) != 0 {
+				if len(self.from) > 0 && !includes(self.from, message.From) {
 					continue
 				}
 
@@ -130,17 +147,28 @@ func (self *Filter) bloomFilter(block *Block) bool {
 
 	bloom := NewBloomFilter(bin)
 
+	var fromIncluded, toIncluded bool
 	if len(self.from) > 0 {
-		if !bloom.Search(self.from) {
-			return false
+		for _, from := range self.from {
+			if bloom.Search(from) {
+				fromIncluded = true
+				break
+			}
 		}
+	} else {
+		fromIncluded = true
 	}
 
 	if len(self.to) > 0 {
-		if !bloom.Search(self.to) {
-			return false
+		for _, to := range self.to {
+			if bloom.Search(to) {
+				toIncluded = true
+				break
+			}
 		}
+	} else {
+		toIncluded = true
 	}
 
-	return true
+	return fromIncluded && toIncluded
 }
