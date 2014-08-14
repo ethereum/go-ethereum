@@ -221,15 +221,16 @@ func (self *PStateObject) EachStorage(cb ethtrie.EachCallback) {
 }
 
 type KeyVal struct {
-	Key   string
-	Value string
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
 func (c *PStateObject) StateKeyVal(asJson bool) interface{} {
 	var values []KeyVal
 	if c.object != nil {
 		c.object.EachStorage(func(name string, value *ethutil.Value) {
-			values = append(values, KeyVal{name, ethutil.Bytes2Hex(value.Bytes())})
+			value.Decode()
+			values = append(values, KeyVal{ethutil.Bytes2Hex([]byte(name)), ethutil.Bytes2Hex(value.Bytes())})
 		})
 	}
 
@@ -238,7 +239,7 @@ func (c *PStateObject) StateKeyVal(asJson bool) interface{} {
 		if err != nil {
 			return nil
 		}
-		fmt.Println(string(valuesJson))
+
 		return string(valuesJson)
 	}
 
