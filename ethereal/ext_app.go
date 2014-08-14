@@ -1,11 +1,14 @@
 package main
 
 import (
+	"encoding/json"
+
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/go-qml/qml"
 )
 
@@ -24,6 +27,7 @@ type AppContainer interface {
 
 type ExtApplication struct {
 	*ethpub.PEthereum
+	eth ethchain.EthManager
 
 	blockChan       chan ethreact.Event
 	changeChan      chan ethreact.Event
@@ -38,6 +42,7 @@ type ExtApplication struct {
 func NewExtApplication(container AppContainer, lib *UiLib) *ExtApplication {
 	app := &ExtApplication{
 		ethpub.NewPEthereum(lib.eth),
+		lib.eth,
 		make(chan ethreact.Event, 100),
 		make(chan ethreact.Event, 100),
 		make(chan bool),
@@ -129,4 +134,51 @@ func (app *ExtApplication) Watch(addr, storageAddr string) {
 	}
 
 	app.registeredEvents = append(app.registeredEvents, event)
+}
+
+func (self *ExtApplication) GetMessages(object map[string]interface{}) string {
+	filter := ethchain.NewFilter(self.eth)
+
+	if object["earliest"] != nil {
+		earliest := object["earliest"]
+		if e, ok := earliest.(string); ok {
+			filter.SetEarliestBlock(ethutil.Hex2Bytes(e))
+		} else {
+			filter.SetEarliestBlock(earliest)
+		}
+	}
+
+	if object["latest"] != nil {
+		latest := object["latest"]
+		if l, ok := latest.(string); ok {
+			filter.SetLatestBlock(ethutil.Hex2Bytes(l))
+		} else {
+			filter.SetLatestBlock(latest)
+		}
+	}
+	if object["to"] != nil {
+		filter.AddTo(ethutil.Hex2Bytes(object["to"].(string)))
+	}
+	if object["from"] != nil {
+		filter.AddFrom(ethutil.Hex2Bytes(object["from"].(string)))
+	}
+	if object["max"] != nil {
+		filter.SetMax(object["max"].(int))
+	}
+	if object["skip"] != nil {
+		filter.SetSkip(object["skip"].(int))
+	}
+
+	messages := filter.Find()
+	var msgs []javascript.JSMessage
+	for _, m := range messages {
+		msgs = append(msgs, javascript.NewJSMessage(m))
+	}
+
+	b, err := json.Marshal(msgs)
+	if err != nil {
+		return "{\"error\":" + err.Error() + "}"
+	}
+
+	return string(b)
 }

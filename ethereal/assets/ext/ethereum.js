@@ -95,6 +95,10 @@ window.eth = {
 		postData({call: "transact", args: [params.from, params.to, params.value, params.gas, params.gasPrice, "0x"+data]}, cb);
 	},
 
+	getMessages: function(filter, cb) {
+		postData({call: "messages", args: [filter]}, cb);
+	},
+
 	getStorageAt: function(address, storageAddress, cb) {
 		postData({call: "getStorage", args: [address, storageAddress]}, cb);
 	},
@@ -209,4 +213,33 @@ window.eth = {
 }
 window.eth._callbacks = {}
 window.eth._onCallbacks = {}
+function postData(data, cb) {
+	data._seed = Math.floor(Math.random() * 1000000)
+	if(cb) {
+		eth._callbacks[data._seed] = cb;
+	}
 
+	if(data.args === undefined) {
+		data.args = [];
+	}
+
+	navigator.qt.postMessage(JSON.stringify(data));
+}
+
+navigator.qt.onmessage = function(ev) {
+	var data = JSON.parse(ev.data)
+
+	if(data._event !== undefined) {
+		eth.trigger(data._event, data.data);
+	} else {
+		if(data._seed) {
+			var cb = eth._callbacks[data._seed];
+			if(cb) {
+				cb.call(this, data.data)
+
+				// Remove the "trigger" callback
+				delete eth._callbacks[ev._seed];
+			}
+		}
+	}
+}

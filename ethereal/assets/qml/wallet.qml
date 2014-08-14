@@ -98,7 +98,7 @@ ApplicationWindow {
 			MenuItem {
 				text: "Debugger"
 				shortcut: "Ctrl+d"
-				onTriggered: ui.startDebugger()
+				onTriggered: eth.startDebugger()
 			}
 
 			MenuItem {
@@ -282,9 +282,10 @@ ApplicationWindow {
 		       /*
 			Component {
 				id: menuItemTemplate
-				Rectangle {
+
+				RowLayout {
 					property var view;
-					property var source;
+					property alias source: icon.source;
 					property alias title: title.text
 					height: 25
 
@@ -295,11 +296,9 @@ ApplicationWindow {
 						right: parent.right
 					}
 
-					Label {
-						id: title
-						y: parent.height / 2 - this.height / 2
-						x: 5
-						font.pixelSize: 10
+					Image {
+						id: icon
+						//anchors.horizontalCenter: parent.horizontalCenter
 					}
 
 					MouseArea {
@@ -309,28 +308,38 @@ ApplicationWindow {
 						}
 					}
 
-					Image {
-						id: closeButton
-						y: parent.height / 2 - this.height / 2
-						visible: false
-
-						source: "../close.png"
-						anchors {
-							right: parent.right
-							rightMargin: 5
+					Rectangle {
+						color: "#bbbbbb"
+						Label {
+							id: title
+							y: parent.height / 2 - this.height / 2
+							//x: 5
+							font.pixelSize: 10
 						}
 
-						MouseArea {
-							anchors.fill: parent
-							onClicked: {
-								console.log("should close")
+
+						Image {
+							id: closeButton
+							y: parent.height / 2 - this.height / 2
+							visible: false
+
+							source: "../close.png"
+							anchors {
+								right: parent.right
+								rightMargin: 5
+							}
+
+							MouseArea {
+								anchors.fill: parent
+								onClicked: {
+									console.log("should close")
+								}
 							}
 						}
 					}
 				}
 			}
 			*/
-
 
 			function createMenuItem(icon, view, options) {
 				if(options === undefined) {
@@ -340,8 +349,8 @@ ApplicationWindow {
 				var comp = menuItemTemplate.createObject(menuColumn)
 				comp.view = view
 				comp.source = icon
+				//comp.title = options.title
 				/*
-				comp.title = options.title
 				if(options.canClose) {
 					//comp.closeButton.visible = options.canClose
 				}

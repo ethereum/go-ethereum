@@ -515,11 +515,13 @@ func (gui *Gui) Printf(format string, v ...interface{}) {
 
 // Print function that logs directly to the GUI
 func (gui *Gui) printLog(s string) {
-	str := strings.TrimRight(s, "\n")
-	lines := strings.Split(str, "\n")
+	/*
+		str := strings.TrimRight(s, "\n")
+		lines := strings.Split(str, "\n")
 
-	view := gui.getObjectByName("infoView")
-	for _, line := range lines {
-		view.Call("addLog", line)
-	}
+		view := gui.getObjectByName("infoView")
+		for _, line := range lines {
+			view.Call("addLog", line)
+		}
+	*/
 }

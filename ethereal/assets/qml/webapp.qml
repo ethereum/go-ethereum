@@ -238,6 +238,14 @@ ApplicationWindow {
 
 						break;
 
+						case "messages":
+							require(1);
+
+							var messages = JSON.parse(eth.getMessages(data.args[0]))
+							postData(data._seed, messages)
+
+							break
+
 						case "debug":
 						console.log(data.args[0]);
 						break;
