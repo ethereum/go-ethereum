@@ -391,12 +391,12 @@ func (gui *Gui) update() {
 					if bytes.Compare(tx.Sender(), gui.address()) == 0 {
 						object.SubAmount(tx.Value)
 
-						gui.getObjectByName("transactionView").Call("addTx", "post", ethpub.NewPTx(tx), "send")
+						gui.getObjectByName("transactionView").Call("addTx", ethpub.NewPTx(tx), "send")
 						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 					} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
 						object.AddAmount(tx.Value)
 
-						gui.getObjectByName("transactionView").Call("addTx", "post", ethpub.NewPTx(tx), "recv")
+						gui.getObjectByName("transactionView").Call("addTx", ethpub.NewPTx(tx), "recv")
 						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 					}
 

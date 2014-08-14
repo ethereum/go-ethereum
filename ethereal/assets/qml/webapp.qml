@@ -2,6 +2,7 @@ import QtQuick 2.0
 import QtWebKit 3.0
 import QtWebKit.experimental 1.0
 import QtQuick.Controls 1.0;
+import QtQuick.Controls.Styles 1.0
 import QtQuick.Layouts 1.0;
 import QtQuick.Window 2.1;
 import Ethereum 1.0
@@ -9,8 +10,8 @@ import Ethereum 1.0
 ApplicationWindow {
 	id: window
 	title: "Ethereum"
-	width: 900
-	height: 600
+	width: 1000
+	height: 800
 	minimumHeight: 300
 
 	property alias url: webview.url
@@ -24,29 +25,74 @@ ApplicationWindow {
 
 		RowLayout {
 			id: navBar
+			height: 40
 			anchors {
 				left: parent.left
 				right: parent.right
+				leftMargin: 7
 			}
 
 			Button {
 				id: back
-				iconSource: "../back.png"
 				onClicked: {
 					webview.goBack()
+				}
+				style: ButtonStyle {
+					background: Image {
+						source: "../back.png"
+						width: 30
+						height: 30
+					}
 				}
 			}
 
 			TextField {
 				anchors {
-					top: parent.top
 					left: back.right
-					right: parent.right
+					right: toggleInspector.left
+					leftMargin: 5
+					rightMargin: 5
 				}
 				id: uriNav
+				y: parent.height / 2 - this.height / 2
 
 				Keys.onReturnPressed: {
-					var uri = this.text;
+					webview.url = this.text;
+				}
+			}
+
+			Button {
+				id: toggleInspector
+				anchors {
+					right: parent.right
+				}
+				iconSource: "../bug.png"
+				onClicked: {
+					if(inspector.visible == true){
+						inspector.visible = false
+					}else{
+						inspector.visible = true
+						inspector.url = webview.experimental.remoteInspectorUrl
+					}
+				}
+			}
+		}
+
+		WebView {
+			objectName: "webView"
+			id: webview
+			anchors {
+				left: parent.left
+				right: parent.right
+				bottom: parent.bottom
+				top: navBar.bottom
+			}
+			onTitleChanged: { window.title = title }
+
+			property var cleanPath: false
+			onNavigationRequested: {
+				if(!this.cleanPath) {
+					var uri = request.url.toString();
 					if(!/.*\:\/\/.*/.test(uri)) {
 						uri = "http://" + uri;
 					}
@@ -54,7 +100,7 @@ ApplicationWindow {
 					var reg = /(^https?\:\/\/(?:www\.)?)([a-zA-Z0-9_\-]*\.eth)(.*)/
 
 					if(reg.test(uri)) {
-						this.text.replace(reg, function(match, pre, domain, path) {
+						uri.replace(reg, function(match, pre, domain, path) {
 							uri = pre;
 
 							var lookup = eth.lookupDomain(domain.substring(0, domain.length - 4));
@@ -73,23 +119,14 @@ ApplicationWindow {
 						});
 					}
 
-					console.log("connecting to ...", uri)
+					this.cleanPath = true;
 
 					webview.url = uri;
+				} else {
+					// Prevent inf loop.
+					this.cleanPath = false;
 				}
 			}
-		}
-
-		WebView {
-			objectName: "webView"
-			id: webview
-			anchors {
-				left: parent.left
-				right: parent.right
-				bottom: parent.bottom
-				top: navBar.bottom
-			}
-			onTitleChanged: { window.title = title }
 			experimental.preferences.javascriptEnabled: true
 			experimental.preferences.navigatorQtObjectEnabled: true
 			experimental.preferences.developerExtrasEnabled: true
@@ -102,107 +139,107 @@ ApplicationWindow {
 				try {
 					switch(data.call) {
 						case "getCoinBase":
-							postData(data._seed, eth.getCoinBase())
+						postData(data._seed, eth.getCoinBase())
 
-							break
+						break
 
 						case "getIsListening":
-							postData(data._seed, eth.getIsListening())
+						postData(data._seed, eth.getIsListening())
 
-							break
+						break
 
 						case "getIsMining":
-							postData(data._seed, eth.getIsMining())
+						postData(data._seed, eth.getIsMining())
 
-							break
+						break
 
 						case "getPeerCount":
-							postData(data._seed, eth.getPeerCount())
+						postData(data._seed, eth.getPeerCount())
 
-							break
+						break
 
 						case "getTxCountAt":
-							require(1)
-							postData(data._seed, eth.getTxCountAt(data.args[0]))
+						require(1)
+						postData(data._seed, eth.getTxCountAt(data.args[0]))
 
-							break
+						break
 
 						case "getBlockByNumber":
-							var block = eth.getBlock(data.args[0])
-							postData(data._seed, block)
+						var block = eth.getBlock(data.args[0])
+						postData(data._seed, block)
 
-							break
+						break
 
 						case "getBlockByHash":
-							var block = eth.getBlock(data.args[0])
-							postData(data._seed, block)
+						var block = eth.getBlock(data.args[0])
+						postData(data._seed, block)
 
-							break
+						break
 
 						case "transact":
-							require(5)
+						require(5)
 
-							var tx = eth.transact(data.args[0], data.args[1], data.args[2],data.args[3],data.args[4],data.args[5])
-							postData(data._seed, tx)
+						var tx = eth.transact(data.args[0], data.args[1], data.args[2],data.args[3],data.args[4],data.args[5])
+						postData(data._seed, tx)
 
-							break
+						break
 
 						case "getStorage":
-							require(2);
+						require(2);
 
-							var stateObject = eth.getStateObject(data.args[0])
-							var storage = stateObject.getStorage(data.args[1])
-							postData(data._seed, storage)
+						var stateObject = eth.getStateObject(data.args[0])
+						var storage = stateObject.getStorage(data.args[1])
+						postData(data._seed, storage)
 
-							break
+						break
 
 						case "getStateKeyVals":
-							require(1);
-							var stateObject = eth.getStateObject(data.args[0]).stateKeyVal(true)
-							postData(data._seed,stateObject)
+						require(1);
+						var stateObject = eth.getStateObject(data.args[0]).stateKeyVal(true)
+						postData(data._seed,stateObject)
 
-							break
+						break
 
 						case "getTransactionsFor":
-							require(1);
-							var txs = eth.getTransactionsFor(data.args[0], true)
-							postData(data._seed, txs)
+						require(1);
+						var txs = eth.getTransactionsFor(data.args[0], true)
+						postData(data._seed, txs)
 
-							break
+						break
 
 						case "getBalance":
-							require(1);
+						require(1);
 
-							postData(data._seed, eth.getStateObject(data.args[0]).value());
+						postData(data._seed, eth.getStateObject(data.args[0]).value());
 
-							break
+						break
 
 						case "getKey":
-							var key = eth.getKey().privateKey;
+						var key = eth.getKey().privateKey;
 
-							postData(data._seed, key)
-							break
+						postData(data._seed, key)
+						break
 
 						case "watch":
-							require(1)
-							eth.watch(data.args[0], data.args[1]);
+						require(1)
+						eth.watch(data.args[0], data.args[1]);
 
-							break
+						break
 
 						case "disconnect":
-							require(1)
-							postData(data._seed, null)
+						require(1)
+						postData(data._seed, null)
 
-							break;
+						break;
 
 						case "getSecretToAddress":
-							require(1)
-							postData(data._seed, eth.secretToAddress(data.args[0]))
+						require(1)
+						postData(data._seed, eth.secretToAddress(data.args[0]))
 
-							break;
+						break;
 
 						case "debug":
-							console.log(data.args[0]);
+						console.log(data.args[0]);
 						break;
 					}
 				} catch(e) {
@@ -236,31 +273,6 @@ ApplicationWindow {
 			}
 		}
 
-		Rectangle {
-			id: toggleInspector
-			color: "#bcbcbc"
-			visible: true
-			height: 20
-			width: 20
-			anchors {
-				right: root.right
-			}
-			MouseArea {
-				onClicked: {
-					if(inspector.visible == true){
-						inspector.visible = false
-					}else{
-						inspector.visible = true
-						inspector.url = webview.experimental.remoteInspectorUrl
-					}
-				}
-
-				onDoubleClicked: {
-					webView.reload()
-				}
-				anchors.fill: parent
-			}
-		}
 
 		Rectangle {
 			id: sizeGrip
