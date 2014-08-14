@@ -1,8 +1,17 @@
 package utils
 
 import (
-	"bitbucket.org/kardianos/osext"
 	"fmt"
+	"io"
+	"log"
+	"os"
+	"os/signal"
+	"path"
+	"path/filepath"
+	"runtime"
+	"time"
+
+	"bitbucket.org/kardianos/osext"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethdb"
@@ -12,14 +21,6 @@ import (
 	"github.com/ethereum/eth-go/ethrpc"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
-	"io"
-	"log"
-	"os"
-	"os/signal"
-	"path"
-	"path/filepath"
-	"runtime"
-	"time"
 )
 
 var logger = ethlog.NewLogger("CLI")
@@ -227,7 +228,7 @@ func KeyTasks(keyManager *ethcrypto.KeyManager, KeyRing string, GenAddr bool, Se
 
 func StartRpc(ethereum *eth.Ethereum, RpcPort int) {
 	var err error
-	ethereum.RpcServer, err = ethrpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum), RpcPort)
+	ethereum.RpcServer, err = ethrpc.NewJsonRpcServer(ethpub.New(ethereum), RpcPort)
 	if err != nil {
 		logger.Errorf("Could not start RPC interface (port %v): %v", RpcPort, err)
 	} else {

@@ -44,7 +44,7 @@ type ExtApplication struct {
 
 func NewExtApplication(container AppContainer, lib *UiLib) *ExtApplication {
 	app := &ExtApplication{
-		ethpub.NewPEthereum(lib.eth),
+		ethpub.New(lib.eth),
 		lib.eth,
 		make(chan ethreact.Event, 100),
 		make(chan ethreact.Event, 100),

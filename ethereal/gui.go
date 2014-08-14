@@ -57,7 +57,7 @@ func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIden
 		panic(err)
 	}
 
-	pub := ethpub.NewPEthereum(ethereum)
+	pub := ethpub.New(ethereum)
 
 	return &Gui{eth: ethereum, txDb: db, pub: pub, logLevel: ethlog.LogLevel(logLevel), Session: session, open: false, clientIdentity: clientIdentity, config: config}
 }

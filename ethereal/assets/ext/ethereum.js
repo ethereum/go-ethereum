@@ -1,6 +1,8 @@
 // Main Ethereum library
 window.eth = {
 	prototype: Object(),
+	_callbacks: {},
+	_onCallbacks: {},
 
 	mutan: function(code) {
 	},
@@ -103,8 +105,8 @@ window.eth = {
 		postData({call: "getStorage", args: [address, storageAddress]}, cb);
 	},
 
-	getStateKeyVals: function(address, cb){
-		postData({call: "getStateKeyVals", args: [address]}, cb);
+	getEachStorageAt: function(address, cb){
+		postData({call: "getEachStorage", args: [address]}, cb);
 	},
 
 	getKey: function(cb) {
@@ -221,17 +223,15 @@ window.eth = {
 	},
 }
 
-window.eth._callbacks = {}
-window.eth._onCallbacks = {}
 
 var Filter = function(options) {
 	this.options = options;
 };
-
 Filter.prototype.changed = function(callback) {
+	// Register the watched:<number>. Qml will call the appropriate event if anything
+	// interesting happens in the land of Go.
 	eth.on("watched:"+this.number, callback)
 }
-
 Filter.prototype.getMessages = function(cb) {
 	return eth.getMessages(this.options, cb)
 }

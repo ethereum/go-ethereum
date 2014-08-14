@@ -22,6 +22,9 @@ function test() {
 			console.log("getMessages", messages)
 			});
 
+	eth.getEachStorageAt("9ef0f0d81e040012600b0c1abdef7c48f720f88a", function(a, b) {
+			console.log(a,b)
+	})
 }
 </script>
 

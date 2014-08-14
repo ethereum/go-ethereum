@@ -193,7 +193,7 @@ ApplicationWindow {
 
 						break
 
-						case "getStateKeyVals":
+						case "getEachStorage":
 						require(1);
 						var stateObject = eth.getStateObject(data.args[0]).stateKeyVal(true)
 						postData(data._seed,stateObject)

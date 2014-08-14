@@ -50,7 +50,7 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	re := &JSRE{
 		ethereum,
 		otto.New(),
-		ethpub.NewPEthereum(ethereum),
+		ethpub.New(ethereum),
 		make(chan ethreact.Event, 10),
 		make(chan ethreact.Event, 10),
 		make(chan bool),
