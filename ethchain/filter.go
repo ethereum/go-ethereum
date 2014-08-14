@@ -24,6 +24,46 @@ func NewFilter(eth EthManager) *Filter {
 	return &Filter{eth: eth}
 }
 
+func NewFilterFromMap(object map[string]interface{}, eth EthManager) *Filter {
+	filter := NewFilter(eth)
+
+	if object["earliest"] != nil {
+		earliest := object["earliest"]
+		if e, ok := earliest.(string); ok {
+			filter.SetEarliestBlock(ethutil.Hex2Bytes(e))
+		} else {
+			filter.SetEarliestBlock(earliest)
+		}
+	}
+
+	if object["latest"] != nil {
+		latest := object["latest"]
+		if l, ok := latest.(string); ok {
+			filter.SetLatestBlock(ethutil.Hex2Bytes(l))
+		} else {
+			filter.SetLatestBlock(latest)
+		}
+	}
+
+	if object["to"] != nil {
+		filter.AddTo(ethutil.Hex2Bytes(object["to"].(string)))
+	}
+
+	if object["from"] != nil {
+		filter.AddFrom(ethutil.Hex2Bytes(object["from"].(string)))
+	}
+
+	if object["max"] != nil {
+		filter.SetMax(object["max"].(int))
+	}
+
+	if object["skip"] != nil {
+		filter.SetSkip(object["skip"].(int))
+	}
+
+	return filter
+}
+
 // Set the earliest and latest block for filtering.
 // -1 = latest block (i.e., the current block)
 // hash = particular hash from-to
@@ -109,30 +149,37 @@ func (self *Filter) Find() []*ethstate.Message {
 				break
 			}
 
-			includes := func(addresses [][]byte, a []byte) (found bool) {
-				for _, addr := range addresses {
-					if bytes.Compare(addr, a) == 0 {
-						return true
-					}
-				}
-
-				return
-			}
-			// Filter the messages for interesting stuff
-			for _, message := range msgs {
-				if len(self.to) > 0 && !includes(self.to, message.To) {
-					continue
-				}
-
-				if len(self.from) > 0 && !includes(self.from, message.From) {
-					continue
-				}
-
-				messages = append(messages, message)
-			}
+			messages = append(messages, self.FilterMessages(msgs)...)
 		}
 
 		block = self.eth.BlockChain().GetBlock(block.PrevHash)
+	}
+
+	return messages
+}
+
+func (self *Filter) FilterMessages(msgs []*ethstate.Message) []*ethstate.Message {
+	var messages []*ethstate.Message
+	includes := func(addresses [][]byte, a []byte) (found bool) {
+		for _, addr := range addresses {
+			if bytes.Compare(addr, a) == 0 {
+				return true
+			}
+		}
+
+		return
+	}
+	// Filter the messages for interesting stuff
+	for _, message := range msgs {
+		if len(self.to) > 0 && !includes(self.to, message.To) {
+			continue
+		}
+
+		if len(self.from) > 0 && !includes(self.from, message.From) {
+			continue
+		}
+
+		messages = append(messages, message)
 	}
 
 	return messages
