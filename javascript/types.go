@@ -128,37 +128,7 @@ func (self *JSEthereum) toVal(v interface{}) otto.Value {
 }
 
 func (self *JSEthereum) Messages(object map[string]interface{}) otto.Value {
-	filter := ethchain.NewFilter(self.ethereum)
-
-	if object["earliest"] != nil {
-		earliest := object["earliest"]
-		if e, ok := earliest.(string); ok {
-			filter.SetEarliestBlock(ethutil.Hex2Bytes(e))
-		} else {
-			filter.SetEarliestBlock(earliest)
-		}
-	}
-
-	if object["latest"] != nil {
-		latest := object["latest"]
-		if l, ok := latest.(string); ok {
-			filter.SetLatestBlock(ethutil.Hex2Bytes(l))
-		} else {
-			filter.SetLatestBlock(latest)
-		}
-	}
-	if object["to"] != nil {
-		filter.AddTo(ethutil.Hex2Bytes(object["to"].(string)))
-	}
-	if object["from"] != nil {
-		filter.AddFrom(ethutil.Hex2Bytes(object["from"].(string)))
-	}
-	if object["max"] != nil {
-		filter.SetMax(object["max"].(int))
-	}
-	if object["skip"] != nil {
-		filter.SetSkip(object["skip"].(int))
-	}
+	filter := ethchain.NewFilterFromMap(object, self.ethereum)
 
 	messages := filter.Find()
 	var msgs []JSMessage

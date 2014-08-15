@@ -28,7 +28,7 @@ Rectangle {
 			text: "Address"
 		}
 		TextField {
-			text: pub.getKey().address
+			text: eth.getKey().address
 			width: 500
 		}
 

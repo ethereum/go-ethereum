@@ -6,6 +6,7 @@ import (
 
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethpipe"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/go-qml/qml"
@@ -18,6 +19,7 @@ type memAddr struct {
 
 // UI Library that has some basic functionality exposed
 type UiLib struct {
+	*ethpipe.JSPipe
 	engine    *qml.Engine
 	eth       *eth.Ethereum
 	connected bool
@@ -31,7 +33,7 @@ type UiLib struct {
 }
 
 func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
-	return &UiLib{engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth)}
+	return &UiLib{JSPipe: ethpipe.NewJSPipe(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth)}
 }
 
 func (self *UiLib) ImportTx(rlpTx string) {

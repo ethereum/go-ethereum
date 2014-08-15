@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/ethereum/eth-go/ethchain"
-	"github.com/ethereum/eth-go/ethpub"
+	"github.com/ethereum/eth-go/ethpipe"
 	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/go-ethereum/javascript"
@@ -19,34 +19,29 @@ type AppContainer interface {
 	Engine() *qml.Engine
 
 	NewBlock(*ethchain.Block)
-	ObjectChanged(*ethstate.StateObject)
-	StorageChanged(*ethstate.StorageState)
 	NewWatcher(chan bool)
 	Messages(ethstate.Messages, string)
 }
 
 type ExtApplication struct {
-	*ethpub.PEthereum
+	*ethpipe.JSPipe
 	eth ethchain.EthManager
 
 	blockChan       chan ethreact.Event
-	changeChan      chan ethreact.Event
 	messageChan     chan ethreact.Event
 	quitChan        chan bool
 	watcherQuitChan chan bool
 
 	filters map[string]*ethchain.Filter
 
-	container        AppContainer
-	lib              *UiLib
-	registeredEvents []string
+	container AppContainer
+	lib       *UiLib
 }
 
 func NewExtApplication(container AppContainer, lib *UiLib) *ExtApplication {
 	app := &ExtApplication{
-		ethpub.New(lib.eth),
+		ethpipe.NewJSPipe(lib.eth),
 		lib.eth,
-		make(chan ethreact.Event, 100),
 		make(chan ethreact.Event, 100),
 		make(chan ethreact.Event, 100),
 		make(chan bool),
@@ -54,7 +49,6 @@ func NewExtApplication(container AppContainer, lib *UiLib) *ExtApplication {
 		make(map[string]*ethchain.Filter),
 		container,
 		lib,
-		nil,
 	}
 
 	return app
@@ -93,9 +87,6 @@ func (app *ExtApplication) stop() {
 	// Clean up
 	reactor := app.lib.eth.Reactor()
 	reactor.Unsubscribe("newBlock", app.blockChan)
-	for _, event := range app.registeredEvents {
-		reactor.Unsubscribe(event, app.changeChan)
-	}
 
 	// Kill the main loop
 	app.quitChan <- true
@@ -103,7 +94,6 @@ func (app *ExtApplication) stop() {
 
 	close(app.blockChan)
 	close(app.quitChan)
-	close(app.changeChan)
 
 	app.container.Destroy()
 }
@@ -118,13 +108,6 @@ out:
 			if block, ok := block.Resource.(*ethchain.Block); ok {
 				app.container.NewBlock(block)
 			}
-		case object := <-app.changeChan:
-			if stateObject, ok := object.Resource.(*ethstate.StateObject); ok {
-				app.container.ObjectChanged(stateObject)
-			} else if storageObject, ok := object.Resource.(*ethstate.StorageState); ok {
-				app.container.StorageChanged(storageObject)
-			}
-
 		case msg := <-app.messageChan:
 			if messages, ok := msg.Resource.(ethstate.Messages); ok {
 				for id, filter := range app.filters {

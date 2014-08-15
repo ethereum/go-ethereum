@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethminer"
 	"github.com/ethereum/eth-go/ethpipe"
-	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
@@ -39,9 +38,10 @@ type Gui struct {
 
 	txDb *ethdb.LDBDatabase
 
-	pub      *ethpub.PEthereum
 	logLevel ethlog.LogLevel
 	open     bool
+
+	pipe *ethpipe.JSPipe
 
 	Session        string
 	clientIdentity *ethwire.SimpleClientIdentity
@@ -57,9 +57,9 @@ func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIden
 		panic(err)
 	}
 
-	pub := ethpub.New(ethereum)
+	pipe := ethpipe.NewJSPipe(ethereum)
 
-	return &Gui{eth: ethereum, txDb: db, pub: pub, logLevel: ethlog.LogLevel(logLevel), Session: session, open: false, clientIdentity: clientIdentity, config: config}
+	return &Gui{eth: ethereum, txDb: db, pipe: pipe, logLevel: ethlog.LogLevel(logLevel), Session: session, open: false, clientIdentity: clientIdentity, config: config}
 }
 
 func (gui *Gui) Start(assetPath string) {
@@ -68,13 +68,12 @@ func (gui *Gui) Start(assetPath string) {
 
 	// Register ethereum functions
 	qml.RegisterTypes("Ethereum", 1, 0, []qml.TypeSpec{{
-		Init: func(p *ethpub.PBlock, obj qml.Object) { p.Number = 0; p.Hash = "" },
+		Init: func(p *ethpipe.JSBlock, obj qml.Object) { p.Number = 0; p.Hash = "" },
 	}, {
-		Init: func(p *ethpub.PTx, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
+		Init: func(p *ethpipe.JSTransaction, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
 	}, {
-		Init: func(p *ethpub.KeyVal, obj qml.Object) { p.Key = ""; p.Value = "" },
+		Init: func(p *ethpipe.KeyVal, obj qml.Object) { p.Key = ""; p.Value = "" },
 	}})
-
 	// Create a new QML engine
 	gui.engine = qml.NewEngine()
 	context := gui.engine.Context()
@@ -82,7 +81,6 @@ func (gui *Gui) Start(assetPath string) {
 
 	// Expose the eth library and the ui library to QML
 	context.SetVar("gui", gui)
-	context.SetVar("pub", gui.pub)
 	context.SetVar("eth", gui.uiLib)
 
 	// Load the main QML interface
@@ -231,7 +229,7 @@ func (gui *Gui) loadAddressBook() {
 	view := gui.getObjectByName("infoView")
 	view.Call("clearAddress")
 
-	nameReg := ethpub.EthereumConfig(gui.eth.StateManager()).NameReg()
+	nameReg := gui.pipe.World().Config().Get("NameReg")
 	if nameReg != nil {
 		nameReg.EachStorage(func(name string, value *ethutil.Value) {
 			if name[0] != 0 {
@@ -255,7 +253,7 @@ func (gui *Gui) insertTransaction(window string, tx *ethchain.Transaction) {
 	}
 
 	var (
-		ptx  = ethpub.NewPTx(tx)
+		ptx  = ethpipe.NewJSTx(tx)
 		send = nameReg.Storage(tx.Sender())
 		rec  = nameReg.Storage(tx.Recipient)
 		s, r string
@@ -301,8 +299,9 @@ func (gui *Gui) readPreviousTransactions() {
 }
 
 func (gui *Gui) processBlock(block *ethchain.Block, initial bool) {
-	name := ethpub.FindNameInNameReg(gui.eth.StateManager(), block.Coinbase)
-	b := ethpub.NewPBlock(block)
+	//name := ethpub.FindNameInNameReg(gui.eth.StateManager(), block.Coinbase)
+	name := strings.Trim(gui.pipe.World().Config().Get("NameReg").Storage(block.Coinbase).Str(), "\x00")
+	b := ethpipe.NewJSBlock(block)
 	b.Name = name
 
 	gui.getObjectByName("chainView").Call("addBlock", b, initial)
@@ -391,12 +390,12 @@ func (gui *Gui) update() {
 					if bytes.Compare(tx.Sender(), gui.address()) == 0 {
 						object.SubAmount(tx.Value)
 
-						gui.getObjectByName("transactionView").Call("addTx", ethpub.NewPTx(tx), "send")
+						gui.getObjectByName("transactionView").Call("addTx", ethpipe.NewJSTx(tx), "send")
 						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 					} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
 						object.AddAmount(tx.Value)
 
-						gui.getObjectByName("transactionView").Call("addTx", ethpub.NewPTx(tx), "recv")
+						gui.getObjectByName("transactionView").Call("addTx", ethpipe.NewJSTx(tx), "recv")
 						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 					}
 
@@ -442,10 +441,9 @@ func (gui *Gui) update() {
 	reactor.Subscribe("miner:start", miningChan)
 	reactor.Subscribe("miner:stop", miningChan)
 
-	nameReg := ethpub.EthereumConfig(gui.eth.StateManager()).NameReg()
-	if nameReg != nil {
-		reactor.Subscribe("object:"+string(nameReg.Address()), objectChan)
-	}
+	nameReg := gui.pipe.World().Config().Get("NameReg")
+	reactor.Subscribe("object:"+string(nameReg.Address()), objectChan)
+
 	reactor.Subscribe("peerList", peerChan)
 }
 
@@ -453,7 +451,7 @@ func (gui *Gui) setPeerInfo() {
 	gui.win.Root().Call("setPeers", fmt.Sprintf("%d / %d", gui.eth.PeerCount(), gui.eth.MaxPeers))
 
 	gui.win.Root().Call("resetPeers")
-	for _, peer := range gui.pub.GetPeers() {
+	for _, peer := range gui.pipe.GetPeers() {
 		gui.win.Root().Call("addPeer", peer)
 	}
 }
@@ -466,18 +464,10 @@ func (gui *Gui) address() []byte {
 	return gui.eth.KeyManager().Address()
 }
 
-func (gui *Gui) RegisterName(name string) {
-	name = fmt.Sprintf("\"register\"\n\"%s\"", name)
+func (gui *Gui) Transact(recipient, value, gas, gasPrice, d string) (*ethpipe.JSReceipt, error) {
+	data := ethutil.Bytes2Hex(utils.FormatTransactionData(d))
 
-	gui.pub.Transact(gui.privateKey(), "NameReg", "", "10000", "10000000000000", name)
-}
-
-func (gui *Gui) Transact(recipient, value, gas, gasPrice, data string) (*ethpub.PReceipt, error) {
-	return gui.pub.Transact(gui.privateKey(), recipient, value, gas, gasPrice, data)
-}
-
-func (gui *Gui) Create(recipient, value, gas, gasPrice, data string) (*ethpub.PReceipt, error) {
-	return gui.pub.Transact(gui.privateKey(), recipient, value, gas, gasPrice, data)
+	return gui.pipe.Transact(gui.privateKey(), recipient, value, gas, gasPrice, data)
 }
 
 func (gui *Gui) SetCustomIdentifier(customIdentifier string) {

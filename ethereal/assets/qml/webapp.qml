@@ -165,13 +165,13 @@ ApplicationWindow {
 						break
 
 						case "getBlockByNumber":
-						var block = eth.getBlock(data.args[0])
+						var block = eth.getBlockByNumber(data.args[0])
 						postData(data._seed, block)
 
 						break
 
 						case "getBlockByHash":
-						var block = eth.getBlock(data.args[0])
+						var block = eth.getBlockByHash(data.args[0])
 						postData(data._seed, block)
 
 						break
@@ -195,8 +195,8 @@ ApplicationWindow {
 
 						case "getEachStorage":
 						require(1);
-						var stateObject = eth.getStateObject(data.args[0]).stateKeyVal(true)
-						postData(data._seed,stateObject)
+						var storage = eth.getEachStorage(data.args[0])
+						postData(data._seed, storage)
 
 						break
 

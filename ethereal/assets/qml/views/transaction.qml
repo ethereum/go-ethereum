@@ -169,7 +169,7 @@ Rectangle {
 			onClicked: {
 				var value = txValue.text + denomModel.get(valueDenom.currentIndex).zeros;
 				var gasPrice = txGasPrice.text + denomModel.get(gasDenom.currentIndex).zeros;
-				var res = gui.create(txFuelRecipient.text, value, txGas.text, gasPrice, codeView.text)
+				var res = gui.transact(txFuelRecipient.text, value, txGas.text, gasPrice, codeView.text)
 				if(res[1]) {
 					txResult.text = "Your contract <b>could not</b> be sent over the network:\n<b>"
 					txResult.text += res[1].error()

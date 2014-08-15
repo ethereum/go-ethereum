@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"time"
 
@@ -265,6 +266,19 @@ func StartMining(ethereum *eth.Ethereum) bool {
 		return true
 	}
 	return false
+}
+
+func FormatTransactionData(data string) []byte {
+	d := ethutil.StringToByteFunc(data, func(s string) (ret []byte) {
+		slice := regexp.MustCompile("\\n|\\s").Split(s, 1000000000)
+		for _, dataItem := range slice {
+			d := ethutil.FormatData(dataItem)
+			ret = append(ret, d...)
+		}
+		return
+	})
+
+	return d
 }
 
 func StopMining(ethereum *eth.Ethereum) bool {

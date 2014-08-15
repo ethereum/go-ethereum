@@ -125,14 +125,6 @@ func (app *HtmlApplication) NewBlock(block *ethchain.Block) {
 	app.webView.Call("onNewBlockCb", b)
 }
 
-func (app *HtmlApplication) ObjectChanged(stateObject *ethstate.StateObject) {
-	app.webView.Call("onObjectChangeCb", ethpub.NewPStateObject(stateObject))
-}
-
-func (app *HtmlApplication) StorageChanged(storageObject *ethstate.StorageState) {
-	app.webView.Call("onStorageChangeCb", ethpub.NewPStorageState(storageObject))
-}
-
 func (self *HtmlApplication) Messages(messages ethstate.Messages, id string) {
 	var msgs []javascript.JSMessage
 	for _, m := range messages {

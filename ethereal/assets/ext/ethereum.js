@@ -4,6 +4,16 @@ window.eth = {
 	_callbacks: {},
 	_onCallbacks: {},
 
+    test: function() {
+        var t = undefined;
+        navigator.qt.onmessage = function(d) { t = d; }
+        for(;;) {
+            if(t !== undefined) {
+                return t
+            }
+        }
+    },
+
 	mutan: function(code) {
 	},
 

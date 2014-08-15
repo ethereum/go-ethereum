@@ -103,14 +103,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 		}
 	}()
 
-	data := ethutil.StringToByteFunc(dataStr, func(s string) (ret []byte) {
-		slice := strings.Split(dataStr, "\n")
-		for _, dataItem := range slice {
-			d := ethutil.FormatData(dataItem)
-			ret = append(ret, d...)
-		}
-		return
-	})
+	data := utils.FormatTransactionData(dataStr)
 
 	var err error
 	script := ethutil.StringToByteFunc(scriptStr, func(s string) (ret []byte) {
