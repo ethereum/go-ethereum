@@ -30,6 +30,10 @@ func (self *World) Get(addr []byte) *Object {
 	return &Object{self.State().GetStateObject(addr)}
 }
 
+func (self *World) SafeGet(addr []byte) *Object {
+	return &Object{self.safeGet(addr)}
+}
+
 func (self *World) safeGet(addr []byte) *ethstate.StateObject {
 	object := self.State().GetStateObject(addr)
 	if object == nil {
