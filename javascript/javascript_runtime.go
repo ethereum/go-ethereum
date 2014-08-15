@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethpub"
+	"github.com/ethereum/eth-go/ethpipe"
 	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
@@ -23,7 +23,7 @@ var jsrelogger = ethlog.NewLogger("JSRE")
 type JSRE struct {
 	ethereum *eth.Ethereum
 	Vm       *otto.Otto
-	lib      *ethpub.PEthereum
+	pipe     *ethpipe.JSPipe
 
 	blockChan  chan ethreact.Event
 	changeChan chan ethreact.Event
@@ -50,7 +50,7 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	re := &JSRE{
 		ethereum,
 		otto.New(),
-		ethpub.New(ethereum),
+		ethpipe.NewJSPipe(ethereum),
 		make(chan ethreact.Event, 10),
 		make(chan ethreact.Event, 10),
 		make(chan bool),
@@ -71,7 +71,7 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	reactor := ethereum.Reactor()
 	reactor.Subscribe("newBlock", re.blockChan)
 
-	re.Bind("eth", &JSEthereum{re.lib, re.Vm, ethereum})
+	re.Bind("eth", &JSEthereum{re.pipe, re.Vm, ethereum})
 
 	re.initStdFuncs()
 
@@ -122,18 +122,6 @@ out:
 			break out
 		case block := <-self.blockChan:
 			if _, ok := block.Resource.(*ethchain.Block); ok {
-			}
-		case object := <-self.changeChan:
-			if stateObject, ok := object.Resource.(*ethstate.StateObject); ok {
-				for _, cb := range self.objectCb[ethutil.Bytes2Hex(stateObject.Address())] {
-					val, _ := self.Vm.ToValue(ethpub.NewPStateObject(stateObject))
-					cb.Call(cb, val)
-				}
-			} else if storageObject, ok := object.Resource.(*ethstate.StorageState); ok {
-				for _, cb := range self.objectCb[ethutil.Bytes2Hex(storageObject.StateAddress)+ethutil.Bytes2Hex(storageObject.Address)] {
-					val, _ := self.Vm.ToValue(ethpub.NewPStorageState(storageObject))
-					cb.Call(cb, val)
-				}
 			}
 		}
 	}

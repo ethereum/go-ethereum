@@ -5,7 +5,7 @@ import (
 	"runtime"
 
 	"github.com/ethereum/eth-go/ethchain"
-	"github.com/ethereum/eth-go/ethpub"
+	"github.com/ethereum/eth-go/ethpipe"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"gopkg.in/qml.v1"
@@ -49,16 +49,8 @@ func (app *QmlApplication) NewWatcher(quitChan chan bool) {
 
 // Events
 func (app *QmlApplication) NewBlock(block *ethchain.Block) {
-	pblock := &ethpub.PBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Bytes2Hex(block.Hash())}
+	pblock := &ethpipe.JSBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Bytes2Hex(block.Hash())}
 	app.win.Call("onNewBlockCb", pblock)
-}
-
-func (app *QmlApplication) ObjectChanged(stateObject *ethstate.StateObject) {
-	app.win.Call("onObjectChangeCb", ethpub.NewPStateObject(stateObject))
-}
-
-func (app *QmlApplication) StorageChanged(storageObject *ethstate.StorageState) {
-	app.win.Call("onStorageChangeCb", ethpub.NewPStorageState(storageObject))
 }
 
 func (self *QmlApplication) Messages(msgs ethstate.Messages, id string) {

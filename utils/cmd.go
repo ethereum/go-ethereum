@@ -18,7 +18,7 @@ import (
 	"github.com/ethereum/eth-go/ethdb"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethminer"
-	"github.com/ethereum/eth-go/ethpub"
+	"github.com/ethereum/eth-go/ethpipe"
 	"github.com/ethereum/eth-go/ethrpc"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
@@ -228,7 +228,7 @@ func KeyTasks(keyManager *ethcrypto.KeyManager, KeyRing string, GenAddr bool, Se
 
 func StartRpc(ethereum *eth.Ethereum, RpcPort int) {
 	var err error
-	ethereum.RpcServer, err = ethrpc.NewJsonRpcServer(ethpub.New(ethereum), RpcPort)
+	ethereum.RpcServer, err = ethrpc.NewJsonRpcServer(ethpipe.NewJSPipe(ethereum), RpcPort)
 	if err != nil {
 		logger.Errorf("Could not start RPC interface (port %v): %v", RpcPort, err)
 	} else {
