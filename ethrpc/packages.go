@@ -6,12 +6,12 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/ethereum/eth-go/ethpub"
+	"github.com/ethereum/eth-go/ethpipe"
 	"github.com/ethereum/eth-go/ethutil"
 )
 
 type EthereumApi struct {
-	ethp *ethpub.PEthereum
+	pipe *ethpipe.JSPipe
 }
 
 type JsonArgs interface {
@@ -73,8 +73,8 @@ func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *string) error {
 	if err != nil {
 		return err
 	}
-	// Do something
-	block := p.ethp.GetBlock(args.Hash)
+
+	block := p.pipe.GetBlockByHash(args.Hash)
 	*reply = NewSuccessRes(block)
 	return nil
 }
@@ -129,7 +129,7 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *string) error {
 	if err != nil {
 		return err
 	}
-	result, _ := p.ethp.Transact(p.ethp.GetKey().PrivateKey, args.Recipient, args.Value, args.Gas, args.GasPrice, args.Body)
+	result, _ := p.pipe.Transact(p.pipe.GetKey().PrivateKey, args.Recipient, args.Value, args.Gas, args.GasPrice, args.Body)
 	*reply = NewSuccessRes(result)
 	return nil
 }
@@ -139,13 +139,14 @@ func (p *EthereumApi) Create(args *NewTxArgs, reply *string) error {
 	if err != nil {
 		return err
 	}
-	result, _ := p.ethp.Create(p.ethp.GetKey().PrivateKey, args.Value, args.Gas, args.GasPrice, args.Body)
+
+	result, _ := p.pipe.Transact(p.pipe.GetKey().PrivateKey, "", args.Value, args.Gas, args.GasPrice, args.Body)
 	*reply = NewSuccessRes(result)
 	return nil
 }
 
 func (p *EthereumApi) GetKey(args interface{}, reply *string) error {
-	*reply = NewSuccessRes(p.ethp.GetKey())
+	*reply = NewSuccessRes(p.pipe.GetKey())
 	return nil
 }
 
@@ -175,7 +176,8 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *string) error {
 	if err != nil {
 		return err
 	}
-	state := p.ethp.GetStateObject(args.Address)
+
+	state := p.pipe.World().SafeGet(ethutil.Hex2Bytes(args.Address))
 
 	var hx string
 	if strings.Index(args.Key, "0x") == 0 {
@@ -186,8 +188,8 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *string) error {
 		hx = ethutil.Bytes2Hex(i.Bytes())
 	}
 	logger.Debugf("GetStorageAt(%s, %s)\n", args.Address, hx)
-	value := state.GetStorage(hx)
-	*reply = NewSuccessRes(GetStorageAtRes{Address: args.Address, Key: args.Key, Value: value})
+	value := state.Storage(ethutil.Hex2Bytes(hx))
+	*reply = NewSuccessRes(GetStorageAtRes{Address: args.Address, Key: args.Key, Value: value.Str()})
 	return nil
 }
 
@@ -210,7 +212,7 @@ type GetPeerCountRes struct {
 }
 
 func (p *EthereumApi) GetPeerCount(args *interface{}, reply *string) error {
-	*reply = NewSuccessRes(GetPeerCountRes{PeerCount: p.ethp.GetPeerCount()})
+	*reply = NewSuccessRes(GetPeerCountRes{PeerCount: p.pipe.GetPeerCount()})
 	return nil
 }
 
@@ -219,7 +221,7 @@ type GetListeningRes struct {
 }
 
 func (p *EthereumApi) GetIsListening(args *interface{}, reply *string) error {
-	*reply = NewSuccessRes(GetListeningRes{IsListening: p.ethp.GetIsListening()})
+	*reply = NewSuccessRes(GetListeningRes{IsListening: p.pipe.GetIsListening()})
 	return nil
 }
 
@@ -228,7 +230,7 @@ type GetCoinbaseRes struct {
 }
 
 func (p *EthereumApi) GetCoinbase(args *interface{}, reply *string) error {
-	*reply = NewSuccessRes(GetCoinbaseRes{Coinbase: p.ethp.GetCoinBase()})
+	*reply = NewSuccessRes(GetCoinbaseRes{Coinbase: p.pipe.GetCoinBase()})
 	return nil
 }
 
@@ -237,7 +239,7 @@ type GetMiningRes struct {
 }
 
 func (p *EthereumApi) GetIsMining(args *interface{}, reply *string) error {
-	*reply = NewSuccessRes(GetMiningRes{IsMining: p.ethp.GetIsMining()})
+	*reply = NewSuccessRes(GetMiningRes{IsMining: p.pipe.GetIsMining()})
 	return nil
 }
 
@@ -246,7 +248,7 @@ func (p *EthereumApi) GetTxCountAt(args *GetTxCountArgs, reply *string) error {
 	if err != nil {
 		return err
 	}
-	state := p.ethp.GetTxCountAt(args.Address)
+	state := p.pipe.GetTxCountAt(args.Address)
 	*reply = NewSuccessRes(GetTxCountRes{Nonce: state})
 	return nil
 }
@@ -272,8 +274,8 @@ func (p *EthereumApi) GetBalanceAt(args *GetBalanceArgs, reply *string) error {
 	if err != nil {
 		return err
 	}
-	state := p.ethp.GetStateObject(args.Address)
-	*reply = NewSuccessRes(BalanceRes{Balance: state.Balance(), Address: args.Address})
+	state := p.pipe.World().SafeGet(ethutil.Hex2Bytes(args.Address))
+	*reply = NewSuccessRes(BalanceRes{Balance: state.Balance.String(), Address: args.Address})
 	return nil
 }
 
