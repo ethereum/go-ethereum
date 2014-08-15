@@ -18,9 +18,10 @@ type ClosureRef interface {
 
 // Basic inline closure object which implement the 'closure' interface
 type Closure struct {
-	caller ClosureRef
-	object *ethstate.StateObject
-	Code   []byte
+	caller  ClosureRef
+	object  *ethstate.StateObject
+	Code    []byte
+	message *ethstate.Message
 
 	Gas, UsedGas, Price *big.Int
 
@@ -28,8 +29,8 @@ type Closure struct {
 }
 
 // Create a new closure for the given data items
-func NewClosure(caller ClosureRef, object *ethstate.StateObject, code []byte, gas, price *big.Int) *Closure {
-	c := &Closure{caller: caller, object: object, Code: code, Args: nil}
+func NewClosure(msg *ethstate.Message, caller ClosureRef, object *ethstate.StateObject, code []byte, gas, price *big.Int) *Closure {
+	c := &Closure{message: msg, caller: caller, object: object, Code: code, Args: nil}
 
 	// Gas should be a pointer so it can safely be reduced through the run
 	// This pointer will be off the state transition

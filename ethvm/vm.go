@@ -645,8 +645,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			val, loc := stack.Popn()
 			closure.SetStorage(loc, ethutil.NewValue(val))
 
-			// Add the change to manifest
-			self.env.State().Manifest().AddStorageChange(closure.Object(), loc.Bytes(), val)
+			closure.message.AddStorageChange(loc.Bytes())
 
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case JUMP:
@@ -719,7 +718,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				closure.UseGas(closure.Gas)
 
 				// Create the closure
-				c := NewClosure(closure, contract, initCode, gas, closure.Price)
+				c := NewClosure(msg, closure, contract, initCode, gas, closure.Price)
 				// Call the closure and set the return value as
 				// main script.
 				contract.Code, _, err = c.Call(self, nil)
@@ -783,7 +782,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				stateObject.AddAmount(value)
 
 				// Create a new callable closure
-				c := NewClosure(closure, stateObject, stateObject.Code, gas, closure.Price)
+				c := NewClosure(msg, closure, stateObject, stateObject.Code, gas, closure.Price)
 				// Executer the closure and get the return value (if any)
 				ret, _, err := c.Call(self, args)
 				if err != nil {

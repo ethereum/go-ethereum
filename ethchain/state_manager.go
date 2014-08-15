@@ -373,11 +373,17 @@ func (sm *StateManager) Stop() {
 func (sm *StateManager) createBloomFilter(state *ethstate.State) *BloomFilter {
 	bloomf := NewBloomFilter(nil)
 
-	for addr, stateObject := range state.Manifest().ObjectChanges {
-		// Set the bloom filter's bin
-		bloomf.Set([]byte(addr))
+	/*
+		for addr, stateObject := range state.Manifest().ObjectChanges {
+			// Set the bloom filter's bin
+			bloomf.Set([]byte(addr))
 
-		sm.Ethereum.Reactor().Post("object:"+addr, stateObject)
+			sm.Ethereum.Reactor().Post("object:"+addr, stateObject)
+		}
+	*/
+	for _, msg := range state.Manifest().Messages {
+		bloomf.Set(msg.To)
+		bloomf.Set(msg.From)
 	}
 
 	sm.Ethereum.Reactor().Post("messages", state.Manifest().Messages)

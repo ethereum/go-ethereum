@@ -61,7 +61,7 @@ func (self *Pipe) ExecuteObject(object *Object, data []byte, value, gas, price *
 
 	vm := ethvm.New(NewEnv(self.Vm.State, block, value.BigInt(), initiator.Address()))
 
-	closure := ethvm.NewClosure(initiator, stateObject, object.Code, gas.BigInt(), price.BigInt())
+	closure := ethvm.NewClosure(&ethstate.Message{}, initiator, stateObject, object.Code, gas.BigInt(), price.BigInt())
 	ret, _, err := closure.Call(vm, data)
 
 	return ret, err

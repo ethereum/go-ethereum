@@ -6,7 +6,12 @@ import (
 
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
+	"gopkg.in/qml.v1"
 )
+
+type data struct {
+	id, address []byte
+}
 
 // Filtering interface
 type Filter struct {
@@ -16,6 +21,8 @@ type Filter struct {
 	skip     int
 	from, to [][]byte
 	max      int
+
+	altered []data
 }
 
 // Create a new filter which uses a bloom filter on blocks to figure out whether a particular block
@@ -61,7 +68,17 @@ func NewFilterFromMap(object map[string]interface{}, eth EthManager) *Filter {
 		filter.SetSkip(object["skip"].(int))
 	}
 
+	if object["altered"] != nil {
+		filter.altered = makeAltered(object["altered"])
+	}
+
+	fmt.Println("ALTERED", filter.altered)
+
 	return filter
+}
+
+func (self *Filter) AddAltered(id, address []byte) {
+	self.altered = append(self.altered, data{id, address})
 }
 
 // Set the earliest and latest block for filtering.
@@ -158,17 +175,19 @@ func (self *Filter) Find() []*ethstate.Message {
 	return messages
 }
 
+func includes(addresses [][]byte, a []byte) (found bool) {
+	for _, addr := range addresses {
+		if bytes.Compare(addr, a) == 0 {
+			return true
+		}
+	}
+
+	return
+}
+
 func (self *Filter) FilterMessages(msgs []*ethstate.Message) []*ethstate.Message {
 	var messages []*ethstate.Message
-	includes := func(addresses [][]byte, a []byte) (found bool) {
-		for _, addr := range addresses {
-			if bytes.Compare(addr, a) == 0 {
-				return true
-			}
-		}
 
-		return
-	}
 	// Filter the messages for interesting stuff
 	for _, message := range msgs {
 		if len(self.to) > 0 && !includes(self.to, message.To) {
@@ -176,6 +195,28 @@ func (self *Filter) FilterMessages(msgs []*ethstate.Message) []*ethstate.Message
 		}
 
 		if len(self.from) > 0 && !includes(self.from, message.From) {
+			continue
+		}
+
+		var match bool
+		if len(self.altered) == 0 {
+			match = true
+		}
+
+		for _, item := range self.altered {
+			if len(item.id) > 0 && bytes.Compare(message.To, item.id) != 0 {
+				continue
+			}
+
+			if len(item.address) > 0 && !includes(message.ChangedAddresses, item.address) {
+				continue
+			}
+
+			match = true
+			break
+		}
+
+		if !match {
 			continue
 		}
 
@@ -218,4 +259,48 @@ func (self *Filter) bloomFilter(block *Block) bool {
 	}
 
 	return fromIncluded && toIncluded
+}
+
+// Conversion methodn
+func mapToData(m map[string]interface{}) (d data) {
+	if str, ok := m["id"].(string); ok {
+		d.id = ethutil.Hex2Bytes(str)
+	}
+
+	if str, ok := m["at"].(string); ok {
+		d.address = ethutil.Hex2Bytes(str)
+	}
+
+	return
+}
+
+// data can come in in the following formats:
+// ["aabbccdd", {id: "ccddee", at: "11223344"}], "aabbcc", {id: "ccddee", at: "1122"}
+func makeAltered(v interface{}) (d []data) {
+	if str, ok := v.(string); ok {
+		d = append(d, data{ethutil.Hex2Bytes(str), nil})
+	} else if obj, ok := v.(map[string]interface{}); ok {
+		d = append(d, mapToData(obj))
+	} else if slice, ok := v.([]interface{}); ok {
+		for _, item := range slice {
+			d = append(d, makeAltered(item)...)
+		}
+	} else if qList, ok := v.(*qml.List); ok {
+		var s []interface{}
+		qList.Convert(&s)
+
+		fmt.Println(s)
+
+		d = makeAltered(s)
+	} else if qMap, ok := v.(*qml.Map); ok {
+		var m map[string]interface{}
+		qMap.Convert(&m)
+		fmt.Println(m)
+
+		d = makeAltered(m)
+	} else {
+		panic(fmt.Sprintf("makeAltered err (unknown conversion): %T\n", v))
+	}
+
+	return
 }

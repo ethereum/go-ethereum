@@ -60,8 +60,6 @@ func (self *State) UpdateStateObject(stateObject *StateObject) {
 	ethutil.Config.Db.Put(ethcrypto.Sha3Bin(stateObject.Code), stateObject.Code)
 
 	self.Trie.Update(string(addr), string(stateObject.RlpEncode()))
-
-	self.manifest.AddObjectChange(stateObject)
 }
 
 // Delete the given state object and delete it from the state trie

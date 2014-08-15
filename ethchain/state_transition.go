@@ -225,7 +225,7 @@ func (self *StateTransition) TransitionState() (err error) {
 		// script section for the state object.
 		self.data = nil
 
-		code, err := self.Eval(receiver.Init(), receiver, "init")
+		code, err := self.Eval(msg, receiver.Init(), receiver, "init")
 		if err != nil {
 			self.state.Set(snapshot)
 
@@ -236,7 +236,7 @@ func (self *StateTransition) TransitionState() (err error) {
 		msg.Output = code
 	} else {
 		if len(receiver.Code) > 0 {
-			ret, err := self.Eval(receiver.Code, receiver, "code")
+			ret, err := self.Eval(msg, receiver.Code, receiver, "code")
 			if err != nil {
 				self.state.Set(snapshot)
 
@@ -263,12 +263,12 @@ func (self *StateTransition) transferValue(sender, receiver *ethstate.StateObjec
 	return nil
 }
 
-func (self *StateTransition) Eval(script []byte, context *ethstate.StateObject, typ string) (ret []byte, err error) {
+func (self *StateTransition) Eval(msg *ethstate.Message, script []byte, context *ethstate.StateObject, typ string) (ret []byte, err error) {
 	var (
 		transactor    = self.Sender()
 		state         = self.state
 		env           = NewEnv(state, self.tx, self.block)
-		callerClosure = ethvm.NewClosure(transactor, context, script, self.gas, self.gasPrice)
+		callerClosure = ethvm.NewClosure(msg, transactor, context, script, self.gas, self.gasPrice)
 	)
 
 	vm := ethvm.New(env)
