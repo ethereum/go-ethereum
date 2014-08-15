@@ -12,6 +12,7 @@ function test() {
 	var filter = eth.watch({
 		latest: -1,
 		from: "e6716f9544a56c530d868e4bfbacb172315bdead",
+		altered: ["aabb", {id: "eeff", "at": "aabb"}],
 	});
 
 	filter.changed(function(messages) {
@@ -22,8 +23,10 @@ function test() {
 			console.log("getMessages", messages)
 			});
 
-	eth.getEachStorageAt("9ef0f0d81e040012600b0c1abdef7c48f720f88a", function(a, b) {
-			console.log(a,b)
+	eth.getEachStorageAt("9ef0f0d81e040012600b0c1abdef7c48f720f88a", function(entries) {
+			for(var i = 0; i < entries.length; i++) {
+				console.log(entries[i].key, " : ", entries[i].value)
+			}
 	})
 
 	eth.getBlock("f70097659f329a09642a27f11338d9269de64f1d4485786e36bfc410832148cd", function(block) {

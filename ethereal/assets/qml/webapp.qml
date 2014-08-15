@@ -195,7 +195,7 @@ ApplicationWindow {
 
 						case "getEachStorage":
 						require(1);
-						var storage = eth.getEachStorage(data.args[0])
+						var storage = JSON.parse(eth.getEachStorage(data.args[0]))
 						postData(data._seed, storage)
 
 						break
