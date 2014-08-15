@@ -195,7 +195,6 @@ func DefaultAssetPath() string {
 }
 
 func KeyTasks(keyManager *ethcrypto.KeyManager, KeyRing string, GenAddr bool, SecretFile string, ExportDir string, NonInteractive bool) {
-	ethcrypto.InitWords(DefaultAssetPath()) // Init mnemonic word list
 
 	var err error
 	switch {
