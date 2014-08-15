@@ -134,7 +134,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 
 	block := self.lib.eth.BlockChain().CurrentBlock
 
-	callerClosure := ethvm.NewClosure(account, contract, script, gas, gasPrice)
+	callerClosure := ethvm.NewClosure(&ethstate.Message{}, account, contract, script, gas, gasPrice)
 	env := utils.NewEnv(state, block, account.Address(), value)
 	vm := ethvm.New(env)
 	vm.Verbose = true
