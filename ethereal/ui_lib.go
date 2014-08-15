@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"path"
+	"strconv"
+	"strings"
 
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethpipe"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/javascript"
@@ -34,6 +38,30 @@ type UiLib struct {
 
 func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
 	return &UiLib{JSPipe: ethpipe.NewJSPipe(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth)}
+}
+
+func (self *UiLib) LookupDomain(domain string) string {
+	world := self.World()
+
+	if len(domain) > 32 {
+		domain = string(ethcrypto.Sha3Bin([]byte(domain)))
+	}
+	data := world.Config().Get("DnsReg").StorageString(domain).Bytes()
+
+	// Left padded = A record, Right padded = CNAME
+	if data[0] == 0 {
+		data = bytes.TrimLeft(data, "\x00")
+		var ipSlice []string
+		for _, d := range data {
+			ipSlice = append(ipSlice, strconv.Itoa(int(d)))
+		}
+
+		return strings.Join(ipSlice, ".")
+	} else {
+		data = bytes.TrimRight(data, "\x00")
+
+		return string(data)
+	}
 }
 
 func (self *UiLib) ImportTx(rlpTx string) {

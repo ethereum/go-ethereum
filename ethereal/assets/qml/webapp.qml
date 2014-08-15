@@ -103,7 +103,7 @@ ApplicationWindow {
 						uri.replace(reg, function(match, pre, domain, path) {
 							uri = pre;
 
-							var lookup = eth.lookupDomain(domain.substring(0, domain.length - 4));
+							var lookup = ui.lookupDomain(domain.substring(0, domain.length - 4));
 							var ip = [];
 							for(var i = 0, l = lookup.length; i < l; i++) {
 								ip.push(lookup.charCodeAt(i))
