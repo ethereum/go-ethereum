@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/eth-go/ethpub"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/go-qml/qml"
+	"gopkg.in/qml.v1"
 )
 
 type QmlApplication struct {

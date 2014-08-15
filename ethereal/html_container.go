@@ -14,8 +14,8 @@ import (
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/javascript"
-	"github.com/go-qml/qml"
 	"github.com/howeyc/fsnotify"
+	"gopkg.in/qml.v1"
 )
 
 type HtmlApplication struct {

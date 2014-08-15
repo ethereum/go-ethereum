@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/eth-go/ethpipe"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/javascript"
-	"github.com/go-qml/qml"
+	"gopkg.in/qml.v1"
 )
 
 type memAddr struct {

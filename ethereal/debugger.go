@@ -11,7 +11,7 @@ import (
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethvm"
 	"github.com/ethereum/go-ethereum/utils"
-	"github.com/go-qml/qml"
+	"gopkg.in/qml.v1"
 )
 
 type DebuggerWindow struct {
