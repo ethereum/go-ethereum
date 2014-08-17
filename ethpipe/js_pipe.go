@@ -166,3 +166,12 @@ func (self *JSPipe) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr 
 
 	return NewJSReciept(contractCreation, tx.CreationAddress(), tx.Hash(), keyPair.Address()), nil
 }
+
+func (self *JSPipe) CompileMutan(code string) string {
+	data, err := self.Pipe.CompileMutan(code)
+	if err != nil {
+		return err.Error()
+	}
+
+	return ethutil.Bytes2Hex(data)
+}
