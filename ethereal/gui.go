@@ -334,7 +334,6 @@ func (gui *Gui) readPreviousTransactions() {
 }
 
 func (gui *Gui) processBlock(block *ethchain.Block, initial bool) {
-	//name := ethpub.FindNameInNameReg(gui.eth.StateManager(), block.Coinbase)
 	name := strings.Trim(gui.pipe.World().Config().Get("NameReg").Storage(block.Coinbase).Str(), "\x00")
 	b := ethpipe.NewJSBlock(block)
 	b.Name = name
@@ -491,7 +490,7 @@ func (gui *Gui) setPeerInfo() {
 	gui.win.Root().Call("setPeers", fmt.Sprintf("%d / %d", gui.eth.PeerCount(), gui.eth.MaxPeers))
 
 	gui.win.Root().Call("resetPeers")
-	for _, peer := range gui.pipe.GetPeers() {
+	for _, peer := range gui.pipe.Peers() {
 		gui.win.Root().Call("addPeer", peer)
 	}
 }

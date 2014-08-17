@@ -73,15 +73,15 @@ type JSEthereum struct {
 }
 
 func (self *JSEthereum) GetBlock(hash string) otto.Value {
-	return self.toVal(&JSBlock{self.JSPipe.GetBlockByHash(hash), self})
+	return self.toVal(&JSBlock{self.JSPipe.BlockByHash(hash), self})
 }
 
 func (self *JSEthereum) GetPeers() otto.Value {
-	return self.toVal(self.JSPipe.GetPeers())
+	return self.toVal(self.JSPipe.Peers())
 }
 
 func (self *JSEthereum) GetKey() otto.Value {
-	return self.toVal(self.JSPipe.GetKey())
+	return self.toVal(self.JSPipe.Key())
 }
 
 func (self *JSEthereum) GetStateObject(addr string) otto.Value {

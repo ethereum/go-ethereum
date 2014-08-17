@@ -142,39 +142,39 @@ ApplicationWindow {
 				try {
 					switch(data.call) {
 						case "getCoinBase":
-						postData(data._seed, eth.getCoinBase())
+						postData(data._seed, eth.coinBase())
 
 						break
 
 						case "getIsListening":
-						postData(data._seed, eth.getIsListening())
+						postData(data._seed, eth.isListening())
 
 						break
 
 						case "getIsMining":
-						postData(data._seed, eth.getIsMining())
+						postData(data._seed, eth.isMining())
 
 						break
 
 						case "getPeerCount":
-						postData(data._seed, eth.getPeerCount())
+						postData(data._seed, eth.peerCount())
 
 						break
 
 						case "getTxCountAt":
 						require(1)
-						postData(data._seed, eth.getTxCountAt(data.args[0]))
+						postData(data._seed, eth.txCountAt(data.args[0]))
 
 						break
 
 						case "getBlockByNumber":
-						var block = eth.getBlockByNumber(data.args[0])
+						var block = eth.blockByNumber(data.args[0])
 						postData(data._seed, block)
 
 						break
 
 						case "getBlockByHash":
-						var block = eth.getBlockByHash(data.args[0])
+						var block = eth.blockByHash(data.args[0])
 						postData(data._seed, block)
 
 						break
@@ -190,22 +190,22 @@ ApplicationWindow {
 						case "getStorage":
 						require(2);
 
-						var stateObject = eth.getStateObject(data.args[0])
-						var storage = stateObject.getStorage(data.args[1])
+						var stateObject = eth.stateObject(data.args[0])
+						var storage = stateObject.storageAt(data.args[1])
 						postData(data._seed, storage)
 
 						break
 
 						case "getEachStorage":
 						require(1);
-						var storage = JSON.parse(eth.getEachStorage(data.args[0]))
+						var storage = JSON.parse(eth.eachStorage(data.args[0]))
 						postData(data._seed, storage)
 
 						break
 
 						case "getTransactionsFor":
 						require(1);
-						var txs = eth.getTransactionsFor(data.args[0], true)
+						var txs = eth.transactionsFor(data.args[0], true)
 						postData(data._seed, txs)
 
 						break
@@ -213,12 +213,12 @@ ApplicationWindow {
 						case "getBalance":
 						require(1);
 
-						postData(data._seed, eth.getStateObject(data.args[0]).value());
+						postData(data._seed, eth.stateObject(data.args[0]).value());
 
 						break
 
 						case "getKey":
-						var key = eth.getKey().privateKey;
+						var key = eth.key().privateKey;
 
 						postData(data._seed, key)
 						break

@@ -11,14 +11,15 @@ Rectangle {
 	property var title: "Transactions"
 	property var menuItem
 
-	property var txModel: ListModel {
-		id: txModel
-	}
 
 	id: historyView
+	visible: false
 	anchors.fill: parent
 	objectName: "transactionView"
 
+	property var txModel: ListModel {
+		id: txModel
+	}
 	TableView {
 		id: txTableView
 		anchors.fill: parent

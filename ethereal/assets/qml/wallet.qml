@@ -6,6 +6,7 @@ import QtQuick.Window 2.1;
 import QtQuick.Controls.Styles 1.1
 import Ethereum 1.0
 
+
 ApplicationWindow {
 	id: root
 
@@ -30,12 +31,14 @@ ApplicationWindow {
 
 	// Takes care of loading all default plugins
 	Component.onCompleted: {
-		var historyView = addPlugin("./views/history.qml", {default: true})
-		var newTxView = addPlugin("./views/transaction.qml", {default: true})
-		var chainView = addPlugin("./views/chain.qml", {default: true})
-		var infoView = addPlugin("./views/info.qml", {default: true})
-		var pendingTxView = addPlugin("./views/pending_tx.qml", {default: true})
-		var pendingTxView = addPlugin("./views/javascript.qml", {default: true})
+		var walletView = addPlugin("./views/wallet.qml", {section: "ethereum"})
+
+		var historyView = addPlugin("./views/history.qml", {section: "legacy"})
+		var newTxView = addPlugin("./views/transaction.qml", {section: "legacy"})
+		var chainView = addPlugin("./views/chain.qml", {section: "legacy"})
+		var infoView = addPlugin("./views/info.qml", {section: "legacy"})
+		var pendingTxView = addPlugin("./views/pending_tx.qml", {section: "legacy"})
+		var pendingTxView = addPlugin("./views/javascript.qml", {section: "legacy"})
 
 		// Call the ready handler
 		gui.done()
@@ -252,10 +255,10 @@ ApplicationWindow {
 
 		function setView(view, menu) {
 			for(var i = 0; i < views.length; i++) {
-				views[i][0].visible = false
+				views[i].view.visible = false
 
-				views[i][1].border.color = "#00000000"
-				views[i][1].color = "#00000000"
+				views[i].menuItem.border.color = "#00000000"
+				views[i].menuItem.color = "#00000000"
 			}
 			view.visible = true
 
@@ -265,14 +268,21 @@ ApplicationWindow {
 
 		function addComponent(component, options) {
 			var view = mainView.createView(component, options)
+
 			if(!view.hasOwnProperty("iconFile")) {
 				console.log("Could not load plugin. Property 'iconFile' not found on view.");
 				return;
 			}
 
 			var menuItem = menu.createMenuItem(view.iconFile, view, options);
+			if(view.hasOwnProperty("menuItem")) {
+				view.menuItem = menuItem;
+			}
+			mainSplit.views.push({view: view, menuItem: menuItem});
 
-			mainSplit.views.push([view, menuItem]);
+			if(view.hasOwnProperty("onReady")) {
+				view.onReady.call(view)
+			}
 
 			return view
 		}
@@ -294,6 +304,7 @@ ApplicationWindow {
 					property var view;
 
 					property alias title: label.text
+					property alias icon: icon.source
 					property alias secondary: secondary.text
 
 					width: 180
@@ -310,11 +321,13 @@ ApplicationWindow {
 
 					Image {
 						id: icon
+						height: 20
+						width: 20
 						anchors {
 							left: parent.left
 							verticalCenter: parent.verticalCenter
+							leftMargin: 3
 						}
-						source: "../pick.png"
 					}
 
 					Text {
@@ -322,10 +335,10 @@ ApplicationWindow {
 						anchors {
 							left: icon.right
 							verticalCenter: parent.verticalCenter
+							leftMargin: 3
 						}
 
-						text: "Chain"
-						font.bold: true
+						//font.bold: true
 						color: "#0D0A01"
 						font.pixelSize: 12
 					}
@@ -355,15 +368,29 @@ ApplicationWindow {
 					options = {};
 				}
 
-				if(options.default) {
-					var comp = menuItemTemplate.createObject(menuDefault)
+				var section;
+				switch(options.section) {
+				case "ethereum":
+					section = menuDefault;
+					break;
+				case "legacy":
+					section = menuLegacy;
+					break;
+				default:
+					section = menuApps;
+					break;
 				}
+						
+				var comp = menuItemTemplate.createObject(section)
 
 				comp.view = view
 				comp.title = view.title
+				comp.icon = view.iconFile
+				/*
 				if(view.secondary !== undefined) {
 					comp.secondary = view.secondary
 				}
+				*/
 
 				return comp
 
@@ -376,7 +403,7 @@ ApplicationWindow {
 
 			ColumnLayout {
 				id: menuColumn
-				y: 30
+				y: 10
 				width: parent.width
 				anchors.left: parent.left
 				anchors.right: parent.right
@@ -394,6 +421,25 @@ ApplicationWindow {
 
 				ColumnLayout {
 					id: menuDefault
+					spacing: 3
+					anchors {
+						left: parent.left
+						right: parent.right
+					}
+				}
+
+				Text {
+					text: "LEGACY"
+					font.bold: true
+					anchors {
+						left: parent.left
+						leftMargin: 5
+					}
+					color: "#888888"
+				}
+
+				ColumnLayout {
+					id: menuLegacy
 					spacing: 3
 					anchors {
 						left: parent.left
