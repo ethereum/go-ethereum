@@ -9,6 +9,7 @@ import Ethereum 1.0
 Rectangle {
 	property var iconFile: "../tx.png"
 	property var title: "Transactions"
+	property var menuItem
 
 	property var txModel: ListModel {
 		id: txModel

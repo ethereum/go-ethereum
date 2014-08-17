@@ -9,6 +9,7 @@ import Ethereum 1.0
 Rectangle {
 	property var title: "JavaScript"
 	property var iconFile: "../tx.png"
+	property var menuItem
 
 	objectName: "javascriptView"
 	visible: false
@@ -33,7 +34,6 @@ Rectangle {
 
 	TextArea {
 		id: output
-		verticalAlignment: TextEdit.AlignBottom
 		text: "> JSRE Ready..."
 		anchors {
 			top: parent.top

@@ -30,12 +30,12 @@ ApplicationWindow {
 
 	// Takes care of loading all default plugins
 	Component.onCompleted: {
-		var historyView = addPlugin("./views/history.qml", {title: "History"})
-		var newTxView = addPlugin("./views/transaction.qml", {title: "New Transaction"})
-		var chainView = addPlugin("./views/chain.qml", {title: "Block chain"})
-		var infoView = addPlugin("./views/info.qml", {title: "Info"})
-		var pendingTxView = addPlugin("./views/pending_tx.qml", {title: "Pending", canClose: true})
-		var pendingTxView = addPlugin("./views/javascript.qml", {title: "JavaScript", canClose: true})
+		var historyView = addPlugin("./views/history.qml", {default: true})
+		var newTxView = addPlugin("./views/transaction.qml", {default: true})
+		var chainView = addPlugin("./views/chain.qml", {default: true})
+		var infoView = addPlugin("./views/info.qml", {default: true})
+		var pendingTxView = addPlugin("./views/pending_tx.qml", {default: true})
+		var pendingTxView = addPlugin("./views/javascript.qml", {default: true})
 
 		// Call the ready handler
 		gui.done()
@@ -250,12 +250,17 @@ ApplicationWindow {
 		anchors.fill: parent
 		resizing: false
 
-		function setView(view) {
+		function setView(view, menu) {
 			for(var i = 0; i < views.length; i++) {
-				views[i].visible = false
-			}
+				views[i][0].visible = false
 
+				views[i][1].border.color = "#00000000"
+				views[i][1].color = "#00000000"
+			}
 			view.visible = true
+
+			menu.border.color = "#CCCCCC"
+			menu.color = "#FFFFFFFF"
 		}
 
 		function addComponent(component, options) {
@@ -265,8 +270,9 @@ ApplicationWindow {
 				return;
 			}
 
-			menu.createMenuItem(view.iconFile, view, options);
-			mainSplit.views.push(view);
+			var menuItem = menu.createMenuItem(view.iconFile, view, options);
+
+			mainSplit.views.push([view, menuItem]);
 
 			return view
 		}
@@ -276,96 +282,91 @@ ApplicationWindow {
 		 ********************/
 		Rectangle {
 			id: menu
-			Layout.minimumWidth: 80
-			Layout.maximumWidth: 80
+			Layout.minimumWidth: 180
+			Layout.maximumWidth: 180
 			anchors.top: parent.top
-			color: "#252525"
+			color: "#ececec"
 
 			Component {
 				id: menuItemTemplate
-				Image {
+				Rectangle {
+					id: menuItem
 					property var view;
-					anchors.horizontalCenter: parent.horizontalCenter
-					MouseArea {
-						anchors.fill: parent
-						onClicked: {
-							mainSplit.setView(view)
-						}
-					}
-				}
-			}
 
-		       /*
-			Component {
-				id: menuItemTemplate
+					property alias title: label.text
+					property alias secondary: secondary.text
 
-				RowLayout {
-					property var view;
-					property alias source: icon.source;
-					property alias title: title.text
-					height: 25
-
-					id: tab
+					width: 180
+					height: 28
+					border.color: "#00000000"
+					border.width: 1
+					radius: 5
+					color: "#00000000"
 
 					anchors {
 						left: parent.left
-						right: parent.right
+						leftMargin: 4
 					}
 
 					Image {
 						id: icon
-						//anchors.horizontalCenter: parent.horizontalCenter
+						anchors {
+							left: parent.left
+							verticalCenter: parent.verticalCenter
+						}
+						source: "../pick.png"
+					}
+
+					Text {
+						id: label
+						anchors {
+							left: icon.right
+							verticalCenter: parent.verticalCenter
+						}
+
+						text: "Chain"
+						font.bold: true
+						color: "#0D0A01"
+						font.pixelSize: 12
+					}
+
+					Text {
+						id: secondary
+						anchors {
+							right: parent.right
+							rightMargin: 8
+							verticalCenter: parent.verticalCenter
+						}
+						color: "#AEADBE"
+						font.pixelSize: 12
 					}
 
 					MouseArea {
 						anchors.fill: parent
 						onClicked: {
-							mainSplit.setView(view)
-						}
-					}
-
-					Rectangle {
-						color: "#bbbbbb"
-						Label {
-							id: title
-							y: parent.height / 2 - this.height / 2
-							//x: 5
-							font.pixelSize: 10
-						}
-
-
-						Image {
-							id: closeButton
-							y: parent.height / 2 - this.height / 2
-							visible: false
-
-							source: "../close.png"
-							anchors {
-								right: parent.right
-								rightMargin: 5
-							}
-
-							MouseArea {
-								anchors.fill: parent
-								onClicked: {
-									console.log("should close")
-								}
-							}
+							mainSplit.setView(view, menuItem)
 						}
 					}
 				}
 			}
-			*/
 
 			function createMenuItem(icon, view, options) {
 				if(options === undefined) {
 					options = {};
 				}
 
-				var comp = menuItemTemplate.createObject(menuColumn)
+				if(options.default) {
+					var comp = menuItemTemplate.createObject(menuDefault)
+				}
+
 				comp.view = view
-				comp.source = icon
-				//comp.title = options.title
+				comp.title = view.title
+				if(view.secondary !== undefined) {
+					comp.secondary = view.secondary
+				}
+
+				return comp
+
 				/*
 				if(options.canClose) {
 					//comp.closeButton.visible = options.canClose
@@ -375,10 +376,87 @@ ApplicationWindow {
 
 			ColumnLayout {
 				id: menuColumn
-				y: 50
+				y: 30
+				width: parent.width
 				anchors.left: parent.left
 				anchors.right: parent.right
-				spacing: 10
+				spacing: 3
+
+				Text {
+					text: "ETHEREUM"
+					font.bold: true
+					anchors {
+						left: parent.left
+						leftMargin: 5
+					}
+					color: "#888888"
+				}
+
+				ColumnLayout {
+					id: menuDefault
+					spacing: 3
+					anchors {
+						left: parent.left
+						right: parent.right
+					}
+				}
+
+				Text {
+					text: "APPS"
+					font.bold: true
+					anchors {
+						left: parent.left
+						leftMargin: 5
+					}
+					color: "#888888"
+				}
+
+				/*
+				Rectangle {
+					width: 180
+					height: 28
+					border.color: "#CCCCCC"
+					border.width: 1
+					radius: 5
+					color: "#FFFFFF"
+
+					anchors {
+						left: parent.left
+						leftMargin: 4
+					}
+
+					Image {
+						id: icon
+						anchors {
+							left: parent.left
+							verticalCenter: parent.verticalCenter
+						}
+						source: "../pick.png"
+					}
+
+					Text {
+						anchors {
+							left: icon.right
+							verticalCenter: parent.verticalCenter
+						}
+
+						text: "Wallet"
+						font.bold: true
+						color: "#0D0A01"
+					}
+
+					Text {
+						anchors {
+							right: parent.right
+							rightMargin: 8
+							verticalCenter: parent.verticalCenter
+						}
+						color: "#AEADBE"
+						text: "12e15 Ξ"
+						font.pixelSize: 12
+					}
+				}
+				*/
 			}
 		}
 

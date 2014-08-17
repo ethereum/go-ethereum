@@ -7,8 +7,11 @@ import QtQuick.Controls.Styles 1.1
 import Ethereum 1.0
 
 Rectangle {
+	id: root
 	property var title: "Network"
 	property var iconFile: "../net.png"
+	property var secondary: "Hi"
+	property var menuItem
 
 	objectName: "chainView"
 	visible: false
@@ -93,6 +96,8 @@ Rectangle {
 		}
 	}
 
+
+
 	function addBlock(block, initial) {
 		var txs = JSON.parse(block.transactions);
 		var amount = 0
@@ -109,6 +114,8 @@ Rectangle {
 		} else {
 			blockModel.insert(0, {number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
 		}
+
+		//root.secondary.text = "#" + block.number;
 	}
 
 	Window {

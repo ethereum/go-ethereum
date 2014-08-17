@@ -9,6 +9,7 @@ import Ethereum 1.0
 Rectangle {
 	property var title: "Information"
 	property var iconFile: "../heart.png"
+	property var menuItem
 
 	objectName: "infoView"
 	visible: false

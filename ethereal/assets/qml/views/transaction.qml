@@ -9,6 +9,7 @@ import Ethereum 1.0
 Rectangle {
 	property var iconFile: "../new.png"
 	property var title: "New transaction"
+	property var menuItem
 
 	objectName: "newTxView"
 	visible: false
