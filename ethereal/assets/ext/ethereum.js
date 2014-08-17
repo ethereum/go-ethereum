@@ -6,7 +6,8 @@ window.eth = {
 
     test: function() {
         var t = undefined;
-        navigator.qt.onmessage = function(d) { t = d; }
+	postData({call: "test"})
+        navigator.qt.onmessage = function(d) {console.log("onmessage called"); t = d; }
         for(;;) {
             if(t !== undefined) {
                 return t
@@ -14,7 +15,8 @@ window.eth = {
         }
     },
 
-	mutan: function(code) {
+	mutan: function(code, cb) {
+		postData({call: "mutan", args: [code]}, cb)
 	},
 
 	toHex: function(str) {
@@ -281,3 +283,13 @@ navigator.qt.onmessage = function(ev) {
 		}
 	}
 }
+
+eth.on("chain:changed", function() {
+})
+
+eth.on("messages", { /* filters */}, function(messages){
+})
+
+eth.on("pending:changed", function() {
+})
+

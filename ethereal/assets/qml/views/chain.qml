@@ -25,9 +25,57 @@ Rectangle {
 
 		model: blockModel
 
-		onDoubleClicked: {
-			popup.visible = true
-			popup.setDetails(blockModel.get(row))
+		itemDelegate: Item {
+			Text {
+				anchors {
+					left: parent.left
+					right: parent.right
+					leftMargin: 10
+					verticalCenter: parent.verticalCenter
+				}
+				color: styleData.textColor
+				elide: styleData.elideMode
+				text: styleData.value
+				font.pixelSize: 11
+				MouseArea {
+					acceptedButtons: Qt.RightButton
+					propagateComposedEvents: true
+					anchors.fill: parent
+					onClicked: {
+						blockTable.selection.clear()
+						blockTable.selection.select(styleData.row)
+
+						contextMenu.row = styleData.row;
+						contextMenu.popup()
+					}
+				}
+			}
+
+		}
+
+		Menu {
+			id: contextMenu
+			property var row;
+			MenuItem {
+				text: "Details"
+				onTriggered: {
+					popup.visible = true
+					popup.setDetails(blockModel.get(this.row))
+				}
+			}
+
+			MenuSeparator{}
+
+			MenuItem {
+				text: "Dump State"
+				onTriggered: {
+					generalFileDialog.show(false, function(path) {
+						var hash = blockModel.get(this.row).hash;
+
+						gui.dumpState(hash, path);
+					});
+				}
+			}
 		}
 	}
 

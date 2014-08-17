@@ -64,3 +64,5 @@ func (app *QmlApplication) Engine() *qml.Engine {
 func (app *QmlApplication) Window() *qml.Window {
 	return app.win
 }
+
+func (app *QmlApplication) Post(data string, s int) {}

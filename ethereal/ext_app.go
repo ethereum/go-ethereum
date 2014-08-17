@@ -21,6 +21,7 @@ type AppContainer interface {
 	NewBlock(*ethchain.Block)
 	NewWatcher(chan bool)
 	Messages(ethstate.Messages, string)
+	Post(string, int)
 }
 
 type ExtApplication struct {

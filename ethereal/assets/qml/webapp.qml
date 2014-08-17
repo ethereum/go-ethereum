@@ -78,6 +78,7 @@ ApplicationWindow {
 			}
 		}
 
+
 		WebView {
 			objectName: "webView"
 			id: webview
@@ -127,6 +128,8 @@ ApplicationWindow {
 					this.cleanPath = false;
 				}
 			}
+
+
 			experimental.preferences.javascriptEnabled: true
 			experimental.preferences.navigatorQtObjectEnabled: true
 			experimental.preferences.developerExtrasEnabled: true
@@ -251,15 +254,24 @@ ApplicationWindow {
 
 							break
 
-						case "debug":
-							console.log(data.args[0]);
-						break;
+						case "mutan":
+							require(1)
+
+							var code = eth.compileMutan(data.args[0])
+							postData(data._seed, "0x"+code)
+
+							break;
 					}
 				} catch(e) {
 					console.log(data.call + ": " + e)
 
 					postData(data._seed, null);
 				}
+			}
+
+			function post(seed, data) {
+				console.log("data", data)
+				postData(data._seed, data)
 			}
 
 			function require(args, num) {

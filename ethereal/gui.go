@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -153,6 +154,40 @@ func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
 	gui.update()
 
 	return gui.win, nil
+}
+
+func (self *Gui) DumpState(hash, path string) {
+	var stateDump []byte
+
+	if len(hash) == 0 {
+		stateDump = self.eth.StateManager().CurrentState().Dump()
+	} else {
+		var block *ethchain.Block
+		if hash[0] == '#' {
+			i, _ := strconv.Atoi(hash[1:])
+			block = self.eth.BlockChain().GetBlockByNumber(uint64(i))
+		} else {
+			block = self.eth.BlockChain().GetBlock(ethutil.Hex2Bytes(hash))
+		}
+
+		if block == nil {
+			logger.Infof("block err: not found %s\n", hash)
+			return
+		}
+
+		stateDump = block.State().Dump()
+	}
+
+	file, err := os.OpenFile(path[7:], os.O_CREATE|os.O_RDWR, os.ModePerm)
+	if err != nil {
+		logger.Infoln("dump err: ", err)
+		return
+	}
+	defer file.Close()
+
+	logger.Infof("dumped state (%s) to %s\n", hash, path)
+
+	file.Write(stateDump)
 }
 
 // The done handler will be called by QML when all views have been loaded

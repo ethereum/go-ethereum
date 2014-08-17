@@ -49,8 +49,7 @@ ApplicationWindow {
 				text: "Import App"
 				shortcut: "Ctrl+o"
 				onTriggered: {
-					generalFileDialog.callback = importApp;
-					generalFileDialog.open()
+					generalFileDialog.show(true, importApp)
 				}
 			}
 
@@ -62,10 +61,9 @@ ApplicationWindow {
 			MenuItem {
 				text: "Add plugin"
 				onTriggered: {
-					generalFileDialog.callback = function(path) {
+					generalFileDialog.show(true, function(path) {
 						addPlugin(path, {canClose: true})
-					}
-					generalFileDialog.open()
+					})
 				}
 			}
 
@@ -75,10 +73,9 @@ ApplicationWindow {
 				text: "Import key"
 				shortcut: "Ctrl+i"
 				onTriggered: {
-					generalFileDialog.callback = function(path) {
-						ui.importKey(path)
-					}
-					generalFileDialog.open()
+					generalFileDialog.show(true, function(path) {
+						gui.importKey(path)
+					})
 				}
 			}
 
@@ -86,9 +83,8 @@ ApplicationWindow {
 				text: "Export keys"
 				shortcut: "Ctrl+e"
 				onTriggered: {
-					generalFileDialog.callback = function(path) {
-					}
-					generalFileDialog.open()
+					generalFileDialog.show(false, function(path) {
+					})
 				}
 			}
 		}
@@ -111,10 +107,19 @@ ApplicationWindow {
 			MenuItem {
 				text: "Run JS file"
 				onTriggered: {
-					generalFileDialog.callback = function(path) {
+					generalFileDialog.show(true, function(path) {
 						eth.evalJavascriptFile(path)
-					}
-					generalFileDialog.open()
+					})
+				}
+			}
+
+			MenuItem {
+				text: "Dump state"
+				onTriggered: {
+					generalFileDialog.show(false, function(path) {
+						// Empty hash for latest
+						gui.dumpState("", path)
+					})
 				}
 			}
 		}
@@ -396,8 +401,15 @@ ApplicationWindow {
 		id: generalFileDialog
 		property var callback;
 		onAccepted: {
-			var path = this.fileUrl.toString()
-			callback.call(this, path)
+			var path = this.fileUrl.toString();
+			callback.call(this, path);
+		}
+
+		function show(selectExisting, callback) {
+			generalFileDialog.callback = callback;
+			generalFileDialog.selectExisting = selectExisting;
+
+			this.open();
 		}
 	}
 

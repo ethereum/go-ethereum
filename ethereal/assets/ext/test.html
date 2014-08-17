@@ -32,6 +32,10 @@ function test() {
 	eth.getBlock("f70097659f329a09642a27f11338d9269de64f1d4485786e36bfc410832148cd", function(block) {
 			console.log(block)
 	})
+
+	eth.mutan("var a = 10", function(code) {
+			console.log("code", code)
+	});
 }
 </script>
 

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -138,4 +139,9 @@ func (self *HtmlApplication) Messages(messages ethstate.Messages, id string) {
 
 func (app *HtmlApplication) Destroy() {
 	app.engine.Destroy()
+}
+
+func (app *HtmlApplication) Post(data string, seed int) {
+	fmt.Println("about to call 'post'")
+	app.webView.Call("post", seed, data)
 }
