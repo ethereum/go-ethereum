@@ -148,3 +148,12 @@ func (self *Pipe) Transact(key *ethcrypto.KeyPair, rec []byte, value, gas, price
 
 	return tx.Hash(), nil
 }
+
+func (self *Pipe) CompileMutan(code string) ([]byte, error) {
+	data, err := ethutil.Compile(code, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
