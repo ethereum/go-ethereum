@@ -482,6 +482,11 @@ func (gui *Gui) update() {
 	reactor.Subscribe("peerList", peerChan)
 }
 
+func (gui *Gui) CopyToClipboard(data string) {
+	//clipboard.WriteAll("test")
+	fmt.Println("COPY currently BUGGED. Here are the contents:\n", data)
+}
+
 func (gui *Gui) setPeerInfo() {
 	gui.win.Root().Call("setPeers", fmt.Sprintf("%d / %d", gui.eth.PeerCount(), gui.eth.MaxPeers))
 

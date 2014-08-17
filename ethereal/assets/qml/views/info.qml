@@ -57,6 +57,47 @@ Rectangle {
 		TableViewColumn{ role: "address"; title: "address"; width: 300}
 
 		model: addressModel
+		itemDelegate: Item {
+			Text {
+				anchors {
+					left: parent.left
+					right: parent.right
+					leftMargin: 10
+					verticalCenter: parent.verticalCenter
+				}
+				color: styleData.textColor
+				elide: styleData.elideMode
+				text: styleData.value
+				font.pixelSize: 11
+				MouseArea {
+					acceptedButtons: Qt.LeftButton | Qt.RightButton
+					propagateComposedEvents: true
+					anchors.fill: parent
+					onClicked: {
+						addressView.selection.clear()
+						addressView.selection.select(styleData.row)
+
+						if(mouse.button == Qt.RightButton) {
+							contextMenu.row = styleData.row;
+							contextMenu.popup()
+						}
+					}
+				}
+			}
+
+		}
+
+		Menu {
+			id: contextMenu
+			property var row;
+
+			MenuItem {
+				text: "Copy"
+				onTriggered: {
+					copyToClipboard(addressModel.get(this.row).address)
+				}
+			}
+		}
 	}
 
 	property var logModel: ListModel {

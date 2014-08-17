@@ -74,6 +74,13 @@ Rectangle {
 			MenuSeparator{}
 
 			MenuItem {
+				text: "Copy"
+				onTriggered: {
+					copyToClipboard(blockModel.get(this.row).hash)
+				}
+			}
+
+			MenuItem {
 				text: "Dump State"
 				onTriggered: {
 					generalFileDialog.show(false, function(path) {

@@ -17,6 +17,17 @@ ApplicationWindow {
 
 	title: "Ethereal"
 
+	TextField {
+		id: copyElementHax
+		visible: false
+	}
+
+	function copyToClipboard(text) {
+		copyElementHax.text = text
+		copyElementHax.selectAll()
+		copyElementHax.copy()
+	}
+
 	// Takes care of loading all default plugins
 	Component.onCompleted: {
 		var historyView = addPlugin("./views/history.qml", {title: "History"})
