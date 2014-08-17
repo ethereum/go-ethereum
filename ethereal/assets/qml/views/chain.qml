@@ -38,15 +38,22 @@ Rectangle {
 				text: styleData.value
 				font.pixelSize: 11
 				MouseArea {
-					acceptedButtons: Qt.RightButton
+					acceptedButtons: Qt.LeftButton | Qt.RightButton
 					propagateComposedEvents: true
 					anchors.fill: parent
 					onClicked: {
 						blockTable.selection.clear()
 						blockTable.selection.select(styleData.row)
 
-						contextMenu.row = styleData.row;
-						contextMenu.popup()
+						if(mouse.button == Qt.RightButton) {
+							contextMenu.row = styleData.row;
+							contextMenu.popup()
+						}
+					}
+
+					onDoubleClicked: {
+						popup.visible = true
+						popup.setDetails(blockModel.get(styleData.row))
 					}
 				}
 			}
