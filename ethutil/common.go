@@ -34,26 +34,43 @@ var (
 // Currency to string
 // Returns a string representing a human readable format
 func CurrencyToString(num *big.Int) string {
+	var (
+		fin   *big.Int = num
+		denom string   = "Wei"
+	)
+
 	switch {
 	case num.Cmp(Douglas) >= 0:
-		return fmt.Sprintf("%v Douglas", new(big.Int).Div(num, Douglas))
+		fin = new(big.Int).Div(num, Douglas)
+		denom = "Douglas"
 	case num.Cmp(Einstein) >= 0:
-		return fmt.Sprintf("%v Einstein", new(big.Int).Div(num, Einstein))
+		fin = new(big.Int).Div(num, Einstein)
+		denom = "Einstein"
 	case num.Cmp(Ether) >= 0:
-		return fmt.Sprintf("%v Ether", new(big.Int).Div(num, Ether))
+		fin = new(big.Int).Div(num, Ether)
+		denom = "Ether"
 	case num.Cmp(Finney) >= 0:
-		return fmt.Sprintf("%v Finney", new(big.Int).Div(num, Finney))
+		fin = new(big.Int).Div(num, Finney)
+		denom = "Finney"
 	case num.Cmp(Szabo) >= 0:
-		return fmt.Sprintf("%v Szabo", new(big.Int).Div(num, Szabo))
+		fin = new(big.Int).Div(num, Szabo)
+		denom = "Szabo"
 	case num.Cmp(Shannon) >= 0:
-		return fmt.Sprintf("%v Shannon", new(big.Int).Div(num, Shannon))
+		fin = new(big.Int).Div(num, Shannon)
+		denom = "Shannon"
 	case num.Cmp(Babbage) >= 0:
-		return fmt.Sprintf("%v Babbage", new(big.Int).Div(num, Babbage))
+		fin = new(big.Int).Div(num, Babbage)
+		denom = "Babbage"
 	case num.Cmp(Ada) >= 0:
-		return fmt.Sprintf("%v Ada", new(big.Int).Div(num, Ada))
+		fin = new(big.Int).Div(num, Ada)
+		denom = "Ada"
 	}
 
-	return fmt.Sprintf("%v Wei", num)
+	if len(fin.String()) > 5 {
+		return fmt.Sprintf("%sE%d %s", fin.String()[0:5], len(fin.String())-5, denom)
+	}
+
+	return fmt.Sprintf("%v %s", fin, denom)
 }
 
 // Common big integers often used
