@@ -74,7 +74,7 @@ func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *string) error {
 		return err
 	}
 
-	block := p.pipe.GetBlockByHash(args.Hash)
+	block := p.pipe.BlockByHash(args.Hash)
 	*reply = NewSuccessRes(block)
 	return nil
 }
@@ -129,7 +129,7 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *string) error {
 	if err != nil {
 		return err
 	}
-	result, _ := p.pipe.Transact(p.pipe.GetKey().PrivateKey, args.Recipient, args.Value, args.Gas, args.GasPrice, args.Body)
+	result, _ := p.pipe.Transact(p.pipe.Key().PrivateKey, args.Recipient, args.Value, args.Gas, args.GasPrice, args.Body)
 	*reply = NewSuccessRes(result)
 	return nil
 }
@@ -140,13 +140,13 @@ func (p *EthereumApi) Create(args *NewTxArgs, reply *string) error {
 		return err
 	}
 
-	result, _ := p.pipe.Transact(p.pipe.GetKey().PrivateKey, "", args.Value, args.Gas, args.GasPrice, args.Body)
+	result, _ := p.pipe.Transact(p.pipe.Key().PrivateKey, "", args.Value, args.Gas, args.GasPrice, args.Body)
 	*reply = NewSuccessRes(result)
 	return nil
 }
 
 func (p *EthereumApi) GetKey(args interface{}, reply *string) error {
-	*reply = NewSuccessRes(p.pipe.GetKey())
+	*reply = NewSuccessRes(p.pipe.Key())
 	return nil
 }
 
@@ -212,7 +212,7 @@ type GetPeerCountRes struct {
 }
 
 func (p *EthereumApi) GetPeerCount(args *interface{}, reply *string) error {
-	*reply = NewSuccessRes(GetPeerCountRes{PeerCount: p.pipe.GetPeerCount()})
+	*reply = NewSuccessRes(GetPeerCountRes{PeerCount: p.pipe.PeerCount()})
 	return nil
 }
 
@@ -221,7 +221,7 @@ type GetListeningRes struct {
 }
 
 func (p *EthereumApi) GetIsListening(args *interface{}, reply *string) error {
-	*reply = NewSuccessRes(GetListeningRes{IsListening: p.pipe.GetIsListening()})
+	*reply = NewSuccessRes(GetListeningRes{IsListening: p.pipe.IsListening()})
 	return nil
 }
 
@@ -230,7 +230,7 @@ type GetCoinbaseRes struct {
 }
 
 func (p *EthereumApi) GetCoinbase(args *interface{}, reply *string) error {
-	*reply = NewSuccessRes(GetCoinbaseRes{Coinbase: p.pipe.GetCoinBase()})
+	*reply = NewSuccessRes(GetCoinbaseRes{Coinbase: p.pipe.CoinBase()})
 	return nil
 }
 
@@ -239,7 +239,7 @@ type GetMiningRes struct {
 }
 
 func (p *EthereumApi) GetIsMining(args *interface{}, reply *string) error {
-	*reply = NewSuccessRes(GetMiningRes{IsMining: p.pipe.GetIsMining()})
+	*reply = NewSuccessRes(GetMiningRes{IsMining: p.pipe.IsMining()})
 	return nil
 }
 
@@ -248,7 +248,7 @@ func (p *EthereumApi) GetTxCountAt(args *GetTxCountArgs, reply *string) error {
 	if err != nil {
 		return err
 	}
-	state := p.pipe.GetTxCountAt(args.Address)
+	state := p.pipe.TxCountAt(args.Address)
 	*reply = NewSuccessRes(GetTxCountRes{Nonce: state})
 	return nil
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethcrypto"
+	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 )
 
@@ -173,5 +174,35 @@ func NewJSReciept(contractCreation bool, creationAddress, hash, address []byte) 
 		ethutil.Bytes2Hex(creationAddress),
 		ethutil.Bytes2Hex(hash),
 		ethutil.Bytes2Hex(address),
+	}
+}
+
+type JSMessage struct {
+	To        string `json:"to"`
+	From      string `json:"from"`
+	Input     string `json:"input"`
+	Output    string `json:"output"`
+	Path      int32  `json:"path"`
+	Origin    string `json:"origin"`
+	Timestamp int32  `json:"timestamp"`
+	Coinbase  string `json:"coinbase"`
+	Block     string `json:"block"`
+	Number    int32  `json:"number"`
+	Value     string `json:"value"`
+}
+
+func NewJSMessage(message *ethstate.Message) JSMessage {
+	return JSMessage{
+		To:        ethutil.Bytes2Hex(message.To),
+		From:      ethutil.Bytes2Hex(message.From),
+		Input:     ethutil.Bytes2Hex(message.Input),
+		Output:    ethutil.Bytes2Hex(message.Output),
+		Path:      int32(message.Path),
+		Origin:    ethutil.Bytes2Hex(message.Origin),
+		Timestamp: int32(message.Timestamp),
+		Coinbase:  ethutil.Bytes2Hex(message.Origin),
+		Block:     ethutil.Bytes2Hex(message.Block),
+		Number:    int32(message.Number.Int64()),
+		Value:     message.Value.String(),
 	}
 }

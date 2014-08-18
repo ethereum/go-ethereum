@@ -17,28 +17,28 @@ func NewJSPipe(eth ethchain.EthManager) *JSPipe {
 	return &JSPipe{New(eth)}
 }
 
-func (self *JSPipe) GetBlockByHash(strHash string) *JSBlock {
+func (self *JSPipe) BlockByHash(strHash string) *JSBlock {
 	hash := ethutil.Hex2Bytes(strHash)
 	block := self.obj.BlockChain().GetBlock(hash)
 
 	return NewJSBlock(block)
 }
 
-func (self *JSPipe) GetKey() *JSKey {
+func (self *JSPipe) Key() *JSKey {
 	return NewJSKey(self.obj.KeyManager().KeyPair())
 }
 
-func (self *JSPipe) GetStateObject(addr string) *JSObject {
+func (self *JSPipe) StateObject(addr string) *JSObject {
 	object := &Object{self.World().safeGet(ethutil.Hex2Bytes(addr))}
 
 	return NewJSObject(object)
 }
 
-func (self *JSPipe) GetPeerCount() int {
+func (self *JSPipe) PeerCount() int {
 	return self.obj.PeerCount()
 }
 
-func (self *JSPipe) GetPeers() []JSPeer {
+func (self *JSPipe) Peers() []JSPeer {
 	var peers []JSPeer
 	for peer := self.obj.Peers().Front(); peer != nil; peer = peer.Next() {
 		p := peer.Value.(ethchain.Peer)
@@ -51,23 +51,33 @@ func (self *JSPipe) GetPeers() []JSPeer {
 	return peers
 }
 
-func (self *JSPipe) GetIsMining() bool {
+func (self *JSPipe) IsMining() bool {
 	return self.obj.IsMining()
 }
 
-func (self *JSPipe) GetIsListening() bool {
+func (self *JSPipe) IsListening() bool {
 	return self.obj.IsListening()
 }
 
-func (self *JSPipe) GetCoinBase() string {
+func (self *JSPipe) CoinBase() string {
 	return ethutil.Bytes2Hex(self.obj.KeyManager().Address())
 }
 
-func (self *JSPipe) GetStorage(addr, storageAddr string) string {
+func (self *JSPipe) BalanceAt(addr string) string {
+	return self.World().SafeGet(ethutil.Hex2Bytes(addr)).Balance.String()
+}
+
+func (self *JSPipe) NumberToHuman(balance string) string {
+	b := ethutil.Big(balance)
+
+	return ethutil.CurrencyToString(b)
+}
+
+func (self *JSPipe) StorageAt(addr, storageAddr string) string {
 	return self.World().SafeGet(ethutil.Hex2Bytes(addr)).Storage(ethutil.Hex2Bytes(storageAddr)).Str()
 }
 
-func (self *JSPipe) GetTxCountAt(address string) int {
+func (self *JSPipe) TxCountAt(address string) int {
 	return int(self.World().SafeGet(ethutil.Hex2Bytes(address)).Nonce)
 }
 
@@ -89,7 +99,7 @@ type KeyVal struct {
 	Value string `json:"value"`
 }
 
-func (self *JSPipe) GetEachStorage(addr string) string {
+func (self *JSPipe) EachStorage(addr string) string {
 	var values []KeyVal
 	object := self.World().SafeGet(ethutil.Hex2Bytes(addr))
 	object.EachStorage(func(name string, value *ethutil.Value) {
@@ -174,4 +184,21 @@ func (self *JSPipe) CompileMutan(code string) string {
 	}
 
 	return ethutil.Bytes2Hex(data)
+}
+
+func (self *JSPipe) Messages(object map[string]interface{}) string {
+	filter := ethchain.NewFilterFromMap(object, self.obj)
+
+	messages := filter.Find()
+	var msgs []JSMessage
+	for _, m := range messages {
+		msgs = append(msgs, NewJSMessage(m))
+	}
+
+	b, err := json.Marshal(msgs)
+	if err != nil {
+		return "{\"error\":" + err.Error() + "}"
+	}
+
+	return string(b)
 }

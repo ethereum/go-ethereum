@@ -216,6 +216,7 @@ func (self *StateTransition) TransitionState() (err error) {
 		Input:  self.tx.Data,
 		Origin: sender.Address(),
 		Block:  self.block.Hash(), Timestamp: self.block.Time, Coinbase: self.block.Coinbase, Number: self.block.Number,
+		Value: self.value,
 	})
 
 	// Process the init code and create 'valid' contract

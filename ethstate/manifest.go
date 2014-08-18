@@ -41,6 +41,7 @@ type Message struct {
 	Coinbase  []byte
 	Block     []byte
 	Number    *big.Int
+	Value     *big.Int
 
 	ChangedAddresses [][]byte
 }
@@ -50,5 +51,5 @@ func (self *Message) AddStorageChange(addr []byte) {
 }
 
 func (self *Message) String() string {
-	return fmt.Sprintf("Message{to: %x from: %x input: %x output: %x origin: %x coinbase: %x block: %x number: %v timestamp: %d path: %d", self.To, self.From, self.Input, self.Output, self.Origin, self.Coinbase, self.Block, self.Number, self.Timestamp, self.Path)
+	return fmt.Sprintf("Message{to: %x from: %x input: %x output: %x origin: %x coinbase: %x block: %x number: %v timestamp: %d path: %d value: %v", self.To, self.From, self.Input, self.Output, self.Origin, self.Coinbase, self.Block, self.Number, self.Timestamp, self.Path, self.Value)
 }

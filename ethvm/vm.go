@@ -700,6 +700,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				To: addr, From: closure.Address(),
 				Origin: self.env.Origin(),
 				Block:  self.env.BlockHash(), Timestamp: self.env.Time(), Coinbase: self.env.Coinbase(), Number: self.env.BlockNumber(),
+				Value: value,
 			})
 
 			// Create a new contract
@@ -765,6 +766,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				Input:  args,
 				Origin: self.env.Origin(),
 				Block:  self.env.BlockHash(), Timestamp: self.env.Time(), Coinbase: self.env.Coinbase(), Number: self.env.BlockNumber(),
+				Value: value,
 			})
 
 			if closure.object.Balance.Cmp(value) < 0 {
