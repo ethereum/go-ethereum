@@ -169,6 +169,20 @@ func (self *UiLib) RegisterFilter(object map[string]interface{}, seed int) {
 			self.win.Root().Call("invokeFilterCallback", filter.MessagesToJson(messages), seed, callbackSeed)
 		}
 	}
+
+}
+
+func (self *UiLib) RegisterFilterString(typ string, seed int) {
+	filter := &GuiFilter{ethpipe.NewJSFilterFromMap(nil, self.eth), seed}
+	self.filters[seed] = filter
+
+	if typ == "chain" {
+		filter.BlockCallback = func(block *ethchain.Block) {
+			for _, callbackSeed := range self.filterCallbacks[seed] {
+				self.win.Root().Call("invokeFilterCallback", "{}", seed, callbackSeed)
+			}
+		}
+	}
 }
 
 func (self *UiLib) RegisterFilterCallback(seed, cbSeed int) {
@@ -186,4 +200,52 @@ func (self *UiLib) UninstallFilter(seed int) {
 type GuiFilter struct {
 	*ethpipe.JSFilter
 	seed int
+}
+
+func (self *UiLib) Transact(object map[string]interface{}) (*ethpipe.JSReceipt, error) {
+	// Default values
+	if object["from"] == nil {
+		object["from"] = ""
+	}
+	if object["to"] == nil {
+		object["to"] = ""
+	}
+	if object["value"] == nil {
+		object["value"] = ""
+	}
+	if object["gas"] == nil {
+		object["gas"] = ""
+	}
+	if object["gasPrice"] == nil {
+		object["gasPrice"] = ""
+	}
+
+	var dataStr string
+	var data []string
+	if list, ok := object["data"].(*qml.List); ok {
+		list.Convert(&data)
+	}
+
+	for _, str := range data {
+		if ethutil.IsHex(str) {
+			str = str[2:]
+
+			if len(str) != 64 {
+				str = ethutil.LeftPadString(str, 64)
+			}
+		} else {
+			str = ethutil.Bytes2Hex(ethutil.LeftPadBytes(ethutil.Big(str).Bytes(), 32))
+		}
+
+		dataStr += str
+	}
+
+	return self.JSPipe.Transact(
+		object["from"].(string),
+		object["to"].(string),
+		object["value"].(string),
+		object["gas"].(string),
+		object["gasPrice"].(string),
+		dataStr,
+	)
 }

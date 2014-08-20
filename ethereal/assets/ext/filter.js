@@ -3,7 +3,11 @@ var Filter = function(options) {
 	this.seed = Math.floor(Math.random() * 1000000);
 	this.options = options;
 
-	eth.registerFilter(options, this.seed);
+	if(options == "chain") {
+		eth.registerFilterString(options, this.seed);
+	} else if(typeof options === "object") {
+		eth.registerFilter(options, this.seed);
+	}
 };
 
 Filter.prototype.changed = function(callback) {

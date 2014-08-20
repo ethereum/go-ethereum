@@ -72,7 +72,7 @@ func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIden
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println(string(data))
+	fmt.Println("plugins:", string(data))
 
 	json.Unmarshal([]byte(data), &gui.plugins)
 
