@@ -125,7 +125,7 @@ Rectangle {
 					onClicked: {
 						var value = txValue.text + denomModel.get(valueDenom.currentIndex).zeros;
 						var gasPrice = "10000000000000"
-						var res = eth.transact(eth.key().privateKey, txTo.text, value, "500", gasPrice, "")
+						var res = eth.transact({from: eth.key().privateKey, to: txTo.text, value: value, gas: "500", gasPrice: gasPrice})
 						console.log(res)
 					}
 				}

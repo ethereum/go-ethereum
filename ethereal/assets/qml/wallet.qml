@@ -26,7 +26,7 @@ ApplicationWindow {
 	function invokeFilterCallback(data, receiverSeed, callbackSeed) {
 		var messages = JSON.parse(data)
 		// Signal handler
-		message(data, receiverSeed, callbackSeed);
+		message(messages, receiverSeed, callbackSeed);
 	}
 
 	TextField {
