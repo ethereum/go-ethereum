@@ -28,12 +28,24 @@ func (self *JSPipe) BlockByHash(strHash string) *JSBlock {
 	return NewJSBlock(block)
 }
 
-func (self *JSPipe) GetBlockByNumber(num int32) *JSBlock {
+func (self *JSPipe) BlockByNumber(num int32) *JSBlock {
 	if num == -1 {
 		return NewJSBlock(self.obj.BlockChain().CurrentBlock)
 	}
 
 	return NewJSBlock(self.obj.BlockChain().GetBlockByNumber(uint64(num)))
+}
+
+func (self *JSPipe) Block(v interface{}) *JSBlock {
+	if n, ok := v.(int32); ok {
+		return self.BlockByNumber(n)
+	} else if str, ok := v.(string); ok {
+		return self.BlockByHash(str)
+	} else if f, ok := v.(float64); ok { // Don't ask ...
+		return self.BlockByNumber(int32(f))
+	}
+
+	return nil
 }
 
 func (self *JSPipe) Key() *JSKey {
