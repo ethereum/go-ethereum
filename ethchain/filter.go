@@ -72,8 +72,6 @@ func NewFilterFromMap(object map[string]interface{}, eth EthManager) *Filter {
 		filter.altered = makeAltered(object["altered"])
 	}
 
-	fmt.Println("ALTERED", filter.altered)
-
 	return filter
 }
 
@@ -123,7 +121,7 @@ func (self *Filter) SetTo(addr [][]byte) {
 }
 
 func (self *Filter) AddTo(addr []byte) {
-	self.from = append(self.to, addr)
+	self.to = append(self.to, addr)
 }
 
 func (self *Filter) SetMax(max int) {

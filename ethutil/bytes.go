@@ -173,6 +173,28 @@ func LeftPadBytes(slice []byte, l int) []byte {
 	return padded
 }
 
+func LeftPadString(str string, l int) string {
+	if l < len(str) {
+		return str
+	}
+
+	zeros := Bytes2Hex(make([]byte, (l-len(str))/2))
+
+	return zeros + str
+
+}
+
+func RightPadString(str string, l int) string {
+	if l < len(str) {
+		return str
+	}
+
+	zeros := Bytes2Hex(make([]byte, (l-len(str))/2))
+
+	return str + zeros
+
+}
+
 func Address(slice []byte) (addr []byte) {
 	if len(slice) < 20 {
 		addr = LeftPadBytes(slice, 20)

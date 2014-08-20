@@ -1,6 +1,7 @@
 package ethpipe
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"sync/atomic"
@@ -119,6 +120,28 @@ func (self *JSPipe) EachStorage(addr string) string {
 	return string(valuesJson)
 }
 
+func (self *JSPipe) ToAscii(str string) string {
+	padded := ethutil.RightPadBytes([]byte(str), 32)
+
+	return "0x" + ethutil.Bytes2Hex(padded)
+}
+
+func (self *JSPipe) FromAscii(str string) string {
+	if ethutil.IsHex(str) {
+		str = str[2:]
+	}
+
+	return string(bytes.Trim(ethutil.Hex2Bytes(str), "\x00"))
+}
+
+func (self *JSPipe) FromNumber(str string) string {
+	if ethutil.IsHex(str) {
+		str = str[2:]
+	}
+
+	return ethutil.BigD(ethutil.Hex2Bytes(str)).String()
+}
+
 func (self *JSPipe) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (*JSReceipt, error) {
 	var hash []byte
 	var contractCreation bool
@@ -200,8 +223,7 @@ func (self *JSPipe) Watch(object map[string]interface{}) *JSFilter {
 
 func (self *JSPipe) Messages(object map[string]interface{}) string {
 	filter := self.Watch(object)
-
-	defer filter.Uninstall()
+	filter.Uninstall()
 
 	return filter.Messages()
 
@@ -247,8 +269,8 @@ func (self *JSFilter) Messages() string {
 }
 
 func (self *JSFilter) mainLoop() {
-	blockChan := make(chan ethreact.Event, 1)
-	messageChan := make(chan ethreact.Event, 1)
+	blockChan := make(chan ethreact.Event, 5)
+	messageChan := make(chan ethreact.Event, 5)
 	// Subscribe to events
 	reactor := self.eth.Reactor()
 	reactor.Subscribe("newBlock", blockChan)
@@ -267,8 +289,11 @@ out:
 		case msg := <-messageChan:
 			if messages, ok := msg.Resource.(ethstate.Messages); ok {
 				if self.MessageCallback != nil {
+					println("messages!")
 					msgs := self.FilterMessages(messages)
-					self.MessageCallback(msgs)
+					if len(msgs) > 0 {
+						self.MessageCallback(msgs)
+					}
 				}
 			}
 		}
