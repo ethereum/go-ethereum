@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethpipe"
+	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/go-ethereum/javascript"
 	"gopkg.in/qml.v1"
@@ -34,10 +35,13 @@ type UiLib struct {
 	DbWindow *DebuggerWindow
 
 	jsEngine *javascript.JSRE
+
+	filterCallbacks map[int][]int
+	filters         map[int]*GuiFilter
 }
 
 func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
-	return &UiLib{JSPipe: ethpipe.NewJSPipe(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth)}
+	return &UiLib{JSPipe: ethpipe.NewJSPipe(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth), filterCallbacks: make(map[int][]int), filters: make(map[int]*GuiFilter)}
 }
 
 func (self *UiLib) LookupDomain(domain string) string {
@@ -154,4 +158,32 @@ func (self *UiLib) StartDebugger() {
 	dbWindow := NewDebuggerWindow(self)
 
 	dbWindow.Show()
+}
+
+func (self *UiLib) RegisterFilter(object map[string]interface{}, seed int) {
+	filter := &GuiFilter{ethpipe.NewJSFilterFromMap(object, self.eth), seed}
+	self.filters[seed] = filter
+
+	filter.MessageCallback = func(messages ethstate.Messages) {
+		for _, callbackSeed := range self.filterCallbacks[seed] {
+			self.win.Root().Call("invokeFilterCallback", filter.MessagesToJson(messages), seed, callbackSeed)
+		}
+	}
+}
+
+func (self *UiLib) RegisterFilterCallback(seed, cbSeed int) {
+	self.filterCallbacks[seed] = append(self.filterCallbacks[seed], cbSeed)
+}
+
+func (self *UiLib) UninstallFilter(seed int) {
+	filter := self.filters[seed]
+	if filter != nil {
+		filter.Uninstall()
+		delete(self.filters, seed)
+	}
+}
+
+type GuiFilter struct {
+	*ethpipe.JSFilter
+	seed int
 }

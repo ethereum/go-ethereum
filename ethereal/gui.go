@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"os"
@@ -23,6 +24,11 @@ import (
 )
 
 var logger = ethlog.NewLogger("GUI")
+
+type plugin struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
 
 type Gui struct {
 	// The main application window
@@ -48,6 +54,8 @@ type Gui struct {
 	clientIdentity *ethwire.SimpleClientIdentity
 	config         *ethutil.ConfigManager
 
+	plugins map[string]plugin
+
 	miner *ethminer.Miner
 }
 
@@ -59,8 +67,16 @@ func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIden
 	}
 
 	pipe := ethpipe.NewJSPipe(ethereum)
+	gui := &Gui{eth: ethereum, txDb: db, pipe: pipe, logLevel: ethlog.LogLevel(logLevel), Session: session, open: false, clientIdentity: clientIdentity, config: config, plugins: make(map[string]plugin)}
+	data, err := ethutil.ReadAllFile(ethutil.Config.ExecPath + "/plugins.json")
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(string(data))
 
-	return &Gui{eth: ethereum, txDb: db, pipe: pipe, logLevel: ethlog.LogLevel(logLevel), Session: session, open: false, clientIdentity: clientIdentity, config: config}
+	json.Unmarshal([]byte(data), &gui.plugins)
+
+	return gui
 }
 
 func (gui *Gui) Start(assetPath string) {
@@ -193,6 +209,7 @@ func (self *Gui) DumpState(hash, path string) {
 // The done handler will be called by QML when all views have been loaded
 func (gui *Gui) Done() {
 	gui.qmlDone = true
+
 }
 
 func (gui *Gui) ImportKey(filePath string) {
@@ -375,6 +392,10 @@ func (gui *Gui) update() {
 		gui.readPreviousTransactions()
 	}()
 
+	for _, plugin := range gui.plugins {
+		gui.win.Root().Call("addPlugin", plugin.Path, "")
+	}
+
 	var (
 		blockChan     = make(chan ethreact.Event, 100)
 		txChan        = make(chan ethreact.Event, 100)
@@ -504,7 +525,16 @@ func (gui *Gui) address() []byte {
 }
 
 func (gui *Gui) Transact(recipient, value, gas, gasPrice, d string) (*ethpipe.JSReceipt, error) {
-	data := ethutil.Bytes2Hex(utils.FormatTransactionData(d))
+	var data string
+	if len(recipient) == 0 {
+		code, err := ethutil.Compile(d, false)
+		if err != nil {
+			return nil, err
+		}
+		data = ethutil.Bytes2Hex(code)
+	} else {
+		data = ethutil.Bytes2Hex(utils.FormatTransactionData(d))
+	}
 
 	return gui.pipe.Transact(gui.privateKey(), recipient, value, gas, gasPrice, data)
 }
@@ -526,6 +556,20 @@ func (gui *Gui) SetLogLevel(level ethlog.LogLevel) {
 
 func (gui *Gui) GetLogLevel() ethlog.LogLevel {
 	return gui.logLevel
+}
+
+func (self *Gui) AddPlugin(pluginPath string) {
+	self.plugins[pluginPath] = plugin{Name: "SomeName", Path: pluginPath}
+
+	json, _ := json.MarshalIndent(self.plugins, "", "    ")
+	ethutil.WriteFile(ethutil.Config.ExecPath+"/plugins.json", json)
+}
+
+func (self *Gui) RemovePlugin(pluginPath string) {
+	delete(self.plugins, pluginPath)
+
+	json, _ := json.MarshalIndent(self.plugins, "", "    ")
+	ethutil.WriteFile(ethutil.Config.ExecPath+"/plugins.json", json)
 }
 
 // this extra function needed to give int typecast value to gui widget
