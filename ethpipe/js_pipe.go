@@ -28,6 +28,14 @@ func (self *JSPipe) BlockByHash(strHash string) *JSBlock {
 	return NewJSBlock(block)
 }
 
+func (self *JSPipe) GetBlockByNumber(num int32) *JSBlock {
+	if num == -1 {
+		return NewJSBlock(self.obj.BlockChain().CurrentBlock)
+	}
+
+	return NewJSBlock(self.obj.BlockChain().GetBlockByNumber(uint64(num)))
+}
+
 func (self *JSPipe) Key() *JSKey {
 	return NewJSKey(self.obj.KeyManager().KeyPair())
 }
