@@ -9,14 +9,14 @@ import Ethereum 1.0
 Rectangle {
 	id: root
 	property var title: "Wallet"
-	property var iconFile: "../wallet.png"
+	property var iconSource: "../wallet.png"
 	property var menuItem
 
 	objectName: "walletView"
 	anchors.fill: parent
 
 	function onReady() {
-		menuItem.secondary = eth.numberToHuman(eth.balanceAt(eth.key().address))
+		menuItem.secondaryTitle = eth.numberToHuman(eth.balanceAt(eth.key().address))
 	}
 
 	ListModel {

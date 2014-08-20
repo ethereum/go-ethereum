@@ -292,12 +292,12 @@ ApplicationWindow {
 			view.visible = false
 			view.anchors.fill = mainView
 
-			if( !view.hasOwnProperty("iconFile") ) {
-				console.log("Could not load plugin. Property 'iconFile' not found on view.");
+			if( !view.hasOwnProperty("iconSource") ) {
+				console.log("Could not load plugin. Property 'iconSourc' not found on view.");
 				return;
 			}
 
-			var menuItem = menu.createMenuItem(view.iconFile, view, options);
+			var menuItem = menu.createMenuItem(view.iconSource, view, options);
 			if( view.hasOwnProperty("menuItem") ) {
 				view.menuItem = menuItem;
 			}
@@ -333,7 +333,7 @@ ApplicationWindow {
 
 					 property alias title: label.text
 					 property alias icon: icon.source
-					 property alias secondary: secondary.text
+					 property alias secondaryTitle: secondary.text
 
 					 width: 180
 					 height: 28
@@ -429,7 +429,7 @@ ApplicationWindow {
 
 				 comp.view = view
 				 comp.title = view.title
-				 comp.icon = view.iconFile
+				 comp.icon = view.iconSource
 				 /*
 				  if(view.secondary !== undefined) {
 					  comp.secondary = view.secondary

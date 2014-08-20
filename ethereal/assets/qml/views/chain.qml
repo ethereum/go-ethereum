@@ -9,7 +9,7 @@ import Ethereum 1.0
 Rectangle {
 	id: root
 	property var title: "Network"
-	property var iconFile: "../net.png"
+	property var iconSource: "../net.png"
 	property var secondary: "Hi"
 	property var menuItem
 
