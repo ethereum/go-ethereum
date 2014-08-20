@@ -1,14 +1,14 @@
-var Filter = function(eth, options) {
+var Filter = function(options) {
 	this.callbacks = {};
 	this.seed = Math.floor(Math.random() * 1000000);
-	this.eth = eth;
+	this.options = options;
 
 	eth.registerFilter(options, this.seed);
 };
 
 Filter.prototype.changed = function(callback) {
 	var cbseed = Math.floor(Math.random() * 1000000);
-	this.eth.registerFilterCallback(this.seed, cbseed);
+	eth.registerFilterCallback(this.seed, cbseed);
 
 	var self = this;
 	message.connect(function(messages, seed, callbackSeed) {
@@ -20,4 +20,8 @@ Filter.prototype.changed = function(callback) {
 
 Filter.prototype.uninstall = function() {
 	eth.uninstallFilter(this.seed)
+}
+
+Filter.prototype.messages = function() {
+	return JSON.parse(eth.messages(this.options))
 }
