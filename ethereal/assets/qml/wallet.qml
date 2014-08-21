@@ -659,7 +659,7 @@ ApplicationWindow {
 			     anchors.left: aboutIcon.right
 			     anchors.leftMargin: 10
 			     font.pointSize: 12
-			     text: "<h2>Ethereal - Adrastea</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Maran Hidskes<br>Viktor Trón<br>"
+			     text: "<h2>Ethereal - Aitne</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Maran Hidskes<br>Viktor Trón<br>"
 		     }
 	     }
 
