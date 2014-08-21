@@ -435,6 +435,8 @@ func (p *Peer) HandleInbound() {
 				p.QueueMessage(ethwire.NewMessage(ethwire.MsgBlockTy, blocks))
 
 			case ethwire.MsgBlockHashesTy:
+				p.catchingUp = true
+
 				blockPool := p.ethereum.blockPool
 
 				foundCommonHash := false
@@ -452,6 +454,8 @@ func (p *Peer) HandleInbound() {
 					blockPool.AddHash(hash)
 
 					p.lastReceivedHash = hash
+
+					p.lastBlockReceived = time.Now()
 				}
 
 				if foundCommonHash {
@@ -459,14 +463,20 @@ func (p *Peer) HandleInbound() {
 				} else {
 					p.FetchHashes()
 				}
+
 			case ethwire.MsgBlockTy:
+				p.catchingUp = true
+
 				blockPool := p.ethereum.blockPool
 
 				it := msg.Data.NewIterator()
 
 				for it.Next() {
 					block := ethchain.NewBlockFromRlpValue(it.Value())
+
 					blockPool.SetBlock(block)
+
+					p.lastBlockReceived = time.Now()
 				}
 
 				linked := blockPool.CheckLinkAndProcess(func(block *ethchain.Block) {
