@@ -439,6 +439,36 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			} else {
 				stack.Push(ethutil.BigFalse)
 			}
+		case ADDMOD:
+			require(3)
+
+			x := stack.Pop()
+			y := stack.Pop()
+			z := stack.Pop()
+
+			base.Add(x, y)
+			base.Mod(base, z)
+
+			ensure256(base)
+
+			self.Printf(" = %v", base)
+
+			stack.Push(base)
+		case MULMOD:
+			require(3)
+
+			x := stack.Pop()
+			y := stack.Pop()
+			z := stack.Pop()
+
+			base.Mul(x, y)
+			base.Mod(base, z)
+
+			ensure256(base)
+
+			self.Printf(" = %v", base)
+
+			stack.Push(base)
 
 			// 0x20 range
 		case SHA3:
