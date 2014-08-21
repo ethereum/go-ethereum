@@ -2,11 +2,12 @@ package ethrpc
 
 import (
 	"fmt"
-	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethpub"
 	"net"
 	"net/rpc"
 	"net/rpc/jsonrpc"
+
+	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethpipe"
 )
 
 var logger = ethlog.NewLogger("JSON")
@@ -14,7 +15,7 @@ var logger = ethlog.NewLogger("JSON")
 type JsonRpcServer struct {
 	quit     chan bool
 	listener net.Listener
-	ethp     *ethpub.PEthereum
+	pipe     *ethpipe.JSPipe
 }
 
 func (s *JsonRpcServer) exitHandler() {
@@ -37,7 +38,7 @@ func (s *JsonRpcServer) Stop() {
 func (s *JsonRpcServer) Start() {
 	logger.Infoln("Starting JSON-RPC server")
 	go s.exitHandler()
-	rpc.Register(&EthereumApi{ethp: s.ethp})
+	rpc.Register(&EthereumApi{pipe: s.pipe})
 	rpc.HandleHTTP()
 
 	for {
@@ -51,7 +52,7 @@ func (s *JsonRpcServer) Start() {
 	}
 }
 
-func NewJsonRpcServer(ethp *ethpub.PEthereum, port int) (*JsonRpcServer, error) {
+func NewJsonRpcServer(pipe *ethpipe.JSPipe, port int) (*JsonRpcServer, error) {
 	sport := fmt.Sprintf(":%d", port)
 	l, err := net.Listen("tcp", sport)
 	if err != nil {
@@ -61,6 +62,6 @@ func NewJsonRpcServer(ethp *ethpub.PEthereum, port int) (*JsonRpcServer, error) 
 	return &JsonRpcServer{
 		listener: l,
 		quit:     make(chan bool),
-		ethp:     ethp,
+		pipe:     pipe,
 	}, nil
 }

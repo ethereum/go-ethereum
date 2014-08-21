@@ -39,7 +39,9 @@ func (msg *logMessage) send(logger LogSystem) {
 
 var logMessages chan (*logMessage)
 var logSystems []LogSystem
-var quit chan bool
+var quit chan chan error
+var drained chan bool
+var mutex = sync.Mutex{}
 
 type LogLevel uint8
 
@@ -52,34 +54,55 @@ const (
 	DebugDetailLevel
 )
 
+func dispatch(msg *logMessage) {
+	for _, logSystem := range logSystems {
+		if logSystem.GetLogLevel() >= msg.LogLevel {
+			msg.send(logSystem)
+		}
+	}
+}
+
 // log messages are dispatched to log writers
 func start() {
-out:
 	for {
 		select {
+		case status := <-quit:
+			status <- nil
+			return
 		case msg := <-logMessages:
-			for _, logSystem := range logSystems {
-				if logSystem.GetLogLevel() >= msg.LogLevel {
-					msg.send(logSystem)
-				}
-			}
-		case <-quit:
-			break out
+			dispatch(msg)
+		default:
+			drained <- true // this blocks until a message is sent to the queue
 		}
+	}
+}
+
+func send(msg *logMessage) {
+	logMessages <- msg
+	select {
+	case <-drained:
+	default:
+	}
+}
+
+func Reset() {
+	mutex.Lock()
+	defer mutex.Unlock()
+	if logSystems != nil {
+		status := make(chan error)
+		quit <- status
+		select {
+		case <-drained:
+		default:
+		}
+		<-status
 	}
 }
 
 // waits until log messages are drained (dispatched to log writers)
 func Flush() {
-	quit <- true
-
-done:
-	for {
-		select {
-		case <-logMessages:
-		default:
-			break done
-		}
+	if logSystems != nil {
+		<-drained
 	}
 }
 
@@ -97,7 +120,8 @@ func AddLogSystem(logSystem LogSystem) {
 	defer mutex.Unlock()
 	if logSystems == nil {
 		logMessages = make(chan *logMessage, 10)
-		quit = make(chan bool, 1)
+		quit = make(chan chan error, 1)
+		drained = make(chan bool, 1)
 		go start()
 	}
 	logSystems = append(logSystems, logSystem)
@@ -106,14 +130,14 @@ func AddLogSystem(logSystem LogSystem) {
 func (logger *Logger) sendln(level LogLevel, v ...interface{}) {
 	if logMessages != nil {
 		msg := newPrintlnLogMessage(level, logger.tag, v...)
-		logMessages <- msg
+		send(msg)
 	}
 }
 
 func (logger *Logger) sendf(level LogLevel, format string, v ...interface{}) {
 	if logMessages != nil {
 		msg := newPrintfLogMessage(level, logger.tag, format, v...)
-		logMessages <- msg
+		send(msg)
 	}
 }
 

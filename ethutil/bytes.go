@@ -44,26 +44,28 @@ func BytesToNumber(b []byte) uint64 {
 // Read variable int
 //
 // Read a variable length number in big endian byte order
-func ReadVarint(reader *bytes.Reader) (ret uint64) {
-	if reader.Len() == 8 {
-		var num uint64
-		binary.Read(reader, binary.BigEndian, &num)
-		ret = uint64(num)
-	} else if reader.Len() == 4 {
+func ReadVarInt(buff []byte) (ret uint64) {
+	switch l := len(buff); {
+	case l > 4:
+		d := LeftPadBytes(buff, 8)
+		binary.Read(bytes.NewReader(d), binary.BigEndian, &ret)
+	case l > 2:
 		var num uint32
-		binary.Read(reader, binary.BigEndian, &num)
+		d := LeftPadBytes(buff, 4)
+		binary.Read(bytes.NewReader(d), binary.BigEndian, &num)
 		ret = uint64(num)
-	} else if reader.Len() == 2 {
+	case l > 1:
 		var num uint16
-		binary.Read(reader, binary.BigEndian, &num)
+		d := LeftPadBytes(buff, 2)
+		binary.Read(bytes.NewReader(d), binary.BigEndian, &num)
 		ret = uint64(num)
-	} else {
+	default:
 		var num uint8
-		binary.Read(reader, binary.BigEndian, &num)
+		binary.Read(bytes.NewReader(buff), binary.BigEndian, &num)
 		ret = uint64(num)
 	}
 
-	return ret
+	return
 }
 
 // Binary length
@@ -98,6 +100,7 @@ func Bytes2Hex(d []byte) string {
 
 func Hex2Bytes(str string) []byte {
 	h, _ := hex.DecodeString(str)
+
 	return h
 }
 
@@ -128,6 +131,26 @@ func FormatData(data string) []byte {
 	return BigToBytes(d, 256)
 }
 
+func ParseData(data ...interface{}) (ret []byte) {
+	for _, item := range data {
+		switch t := item.(type) {
+		case string:
+			var str []byte
+			if IsHex(t) {
+				str = Hex2Bytes(t[2:])
+			} else {
+				str = []byte(t)
+			}
+
+			ret = append(ret, RightPadBytes(str, 32)...)
+		case []byte:
+			ret = append(ret, LeftPadBytes(t, 32)...)
+		}
+	}
+
+	return
+}
+
 func RightPadBytes(slice []byte, l int) []byte {
 	if l < len(slice) {
 		return slice
@@ -150,6 +173,28 @@ func LeftPadBytes(slice []byte, l int) []byte {
 	return padded
 }
 
+func LeftPadString(str string, l int) string {
+	if l < len(str) {
+		return str
+	}
+
+	zeros := Bytes2Hex(make([]byte, (l-len(str))/2))
+
+	return zeros + str
+
+}
+
+func RightPadString(str string, l int) string {
+	if l < len(str) {
+		return str
+	}
+
+	zeros := Bytes2Hex(make([]byte, (l-len(str))/2))
+
+	return str + zeros
+
+}
+
 func Address(slice []byte) (addr []byte) {
 	if len(slice) < 20 {
 		addr = LeftPadBytes(slice, 20)
@@ -160,6 +205,14 @@ func Address(slice []byte) (addr []byte) {
 	}
 
 	addr = CopyBytes(addr)
+
+	return
+}
+
+func ByteSliceToInterface(slice [][]byte) (ret []interface{}) {
+	for _, i := range slice {
+		ret = append(ret, i)
+	}
 
 	return
 }

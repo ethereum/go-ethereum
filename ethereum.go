@@ -3,24 +3,27 @@ package eth
 import (
 	"container/list"
 	"fmt"
-	"github.com/ethereum/eth-go/ethchain"
-	"github.com/ethereum/eth-go/ethcrypto"
-	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethrpc"
-	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/eth-go/ethwire"
-	"io/ioutil"
 	"math/rand"
 	"net"
-	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethcrypto"
+	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethreact"
+	"github.com/ethereum/eth-go/ethrpc"
+	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ethwire"
 )
 
-const seedTextFileUri string = "http://www.ethereum.org/servers.poc3.txt"
+const (
+	seedTextFileUri string = "http://www.ethereum.org/servers.poc3.txt"
+	seedNodeAddress        = "54.76.56.74:30303"
+)
 
 var ethlogger = ethlog.NewLogger("SERV")
 
@@ -41,8 +44,8 @@ type Ethereum struct {
 	// Channel for shutting down the ethereum
 	shutdownChan chan bool
 	quit         chan bool
+
 	// DB interface
-	//db *ethdb.LDBDatabase
 	db ethutil.Database
 	// State manager for processing new blocks and managing the over all states
 	stateManager *ethchain.StateManager
@@ -51,6 +54,8 @@ type Ethereum struct {
 	txPool *ethchain.TxPool
 	// The canonical chain
 	blockChain *ethchain.BlockChain
+	// The block pool
+	blockPool *BlockPool
 	// Peers (NYI)
 	peers *list.List
 	// Nonce
@@ -73,7 +78,7 @@ type Ethereum struct {
 
 	listening bool
 
-	reactor *ethutil.ReactorEngine
+	reactor *ethreact.ReactorEngine
 
 	RpcServer *ethrpc.JsonRpcServer
 
@@ -111,8 +116,9 @@ func New(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager 
 		clientIdentity: clientIdentity,
 		isUpToDate:     true,
 	}
-	ethereum.reactor = ethutil.NewReactorEngine()
+	ethereum.reactor = ethreact.New()
 
+	ethereum.blockPool = NewBlockPool(ethereum)
 	ethereum.txPool = ethchain.NewTxPool(ethereum)
 	ethereum.blockChain = ethchain.NewBlockChain(ethereum)
 	ethereum.stateManager = ethchain.NewStateManager(ethereum)
@@ -123,7 +129,7 @@ func New(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager 
 	return ethereum, nil
 }
 
-func (s *Ethereum) Reactor() *ethutil.ReactorEngine {
+func (s *Ethereum) Reactor() *ethreact.ReactorEngine {
 	return s.reactor
 }
 
@@ -145,6 +151,9 @@ func (s *Ethereum) StateManager() *ethchain.StateManager {
 
 func (s *Ethereum) TxPool() *ethchain.TxPool {
 	return s.txPool
+}
+func (self *Ethereum) Db() ethutil.Database {
+	return self.db
 }
 
 func (s *Ethereum) ServerCaps() Caps {
@@ -355,6 +364,7 @@ func (s *Ethereum) ReapDeadPeerHandler() {
 
 // Start the ethereum
 func (s *Ethereum) Start(seed bool) {
+	s.reactor.Start()
 	// Bind to addr and port
 	ln, err := net.Listen("tcp", ":"+s.Port)
 	if err != nil {
@@ -420,22 +430,10 @@ func (s *Ethereum) Seed() {
 		}
 		// Connect to Peer list
 		s.ProcessPeerList(peers)
-	} else {
-		// Fallback to servers.poc3.txt
-		resp, err := http.Get(seedTextFileUri)
-		if err != nil {
-			ethlogger.Warnln("Fetching seed failed:", err)
-			return
-		}
-		defer resp.Body.Close()
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			ethlogger.Warnln("Reading seed failed:", err)
-			return
-		}
-
-		s.ConnectToPeer(string(body))
 	}
+
+	// XXX tmp
+	s.ConnectToPeer(seedNodeAddress)
 }
 
 func (s *Ethereum) peerHandler(listener net.Listener) {
@@ -466,6 +464,8 @@ func (s *Ethereum) Stop() {
 	}
 	s.txPool.Stop()
 	s.stateManager.Stop()
+	s.reactor.Flush()
+	s.reactor.Stop()
 
 	ethlogger.Infoln("Server stopped")
 	close(s.shutdownChan)

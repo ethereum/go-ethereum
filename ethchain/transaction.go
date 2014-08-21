@@ -3,10 +3,11 @@ package ethchain
 import (
 	"bytes"
 	"fmt"
+	"math/big"
+
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/secp256k1-go"
-	"math/big"
 )
 
 var ContractAddr = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
@@ -130,7 +131,7 @@ func (tx *Transaction) RlpData() interface{} {
 
 	// TODO Remove prefixing zero's
 
-	return append(data, tx.v, tx.r, tx.s)
+	return append(data, tx.v, new(big.Int).SetBytes(tx.r).Bytes(), new(big.Int).SetBytes(tx.s).Bytes())
 }
 
 func (tx *Transaction) RlpValue() *ethutil.Value {

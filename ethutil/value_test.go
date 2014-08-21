@@ -63,3 +63,18 @@ func TestIterator(t *testing.T) {
 		i++
 	}
 }
+
+func TestMath(t *testing.T) {
+	a := NewValue(1)
+	a.Add(1).Add(1)
+
+	if !a.DeepCmp(NewValue(3)) {
+		t.Error("Expected 3, got", a)
+	}
+
+	a = NewValue(2)
+	a.Sub(1).Sub(1)
+	if !a.DeepCmp(NewValue(0)) {
+		t.Error("Expected 0, got", a)
+	}
+}

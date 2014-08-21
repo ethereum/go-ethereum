@@ -1,6 +1,6 @@
 package ethtrie
 
-import ()
+import "math"
 
 // Helper function for comparing slices
 func CompareIntSlice(a, b []int) bool {
@@ -17,9 +17,13 @@ func CompareIntSlice(a, b []int) bool {
 
 // Returns the amount of nibbles that match each other from 0 ...
 func MatchingNibbleLength(a, b []int) int {
-	i := 0
-	for CompareIntSlice(a[:i+1], b[:i+1]) && i < len(b) {
-		i += 1
+	var i, length = 0, int(math.Min(float64(len(a)), float64(len(b))))
+
+	for i < length {
+		if a[i] != b[i] {
+			break
+		}
+		i++
 	}
 
 	return i

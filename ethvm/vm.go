@@ -2,11 +2,12 @@ package ethvm
 
 import (
 	"fmt"
+	"math"
+	"math/big"
+
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
-	"math"
-	"math/big"
 )
 
 type Debugger interface {
@@ -51,6 +52,7 @@ type Environment interface {
 	Time() int64
 	Difficulty() *big.Int
 	Value() *big.Int
+	BlockHash() []byte
 }
 
 type Object interface {
@@ -128,14 +130,14 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 						fmt.Printf("%x %x\n", new(big.Int).SetBytes([]byte(key)).Bytes(), value.Bytes())
 					})
 				}
-
-				b := pc.Bytes()
-				if len(b) == 0 {
-					b = []byte{0}
-				}
-
-				fmt.Printf("%x %x %x %x\n", closure.Address(), b, []byte{byte(op)}, closure.Gas.Bytes())
 			*/
+
+			b := pc.Bytes()
+			if len(b) == 0 {
+				b = []byte{0}
+			}
+
+			fmt.Printf("%x %x %x %x\n", closure.Address(), b, []byte{byte(op)}, closure.Gas.Bytes())
 		}
 
 		gas := new(big.Int)
@@ -244,6 +246,8 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			base.Add(y, x)
 
+			ensure256(base)
+
 			self.Printf(" = %v", base)
 			// Pop result back on the stack
 			stack.Push(base)
@@ -254,6 +258,8 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			base.Sub(y, x)
 
+			ensure256(base)
+
 			self.Printf(" = %v", base)
 			// Pop result back on the stack
 			stack.Push(base)
@@ -263,6 +269,8 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			self.Printf(" %v * %v", y, x)
 
 			base.Mul(y, x)
+
+			ensure256(base)
 
 			self.Printf(" = %v", base)
 			// Pop result back on the stack
@@ -276,6 +284,8 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				base.Div(y, x)
 			}
 
+			ensure256(base)
+
 			self.Printf(" = %v", base)
 			// Pop result back on the stack
 			stack.Push(base)
@@ -288,6 +298,8 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				base.Div(y, x)
 			}
 
+			ensure256(base)
+
 			self.Printf(" = %v", base)
 			// Pop result back on the stack
 			stack.Push(base)
@@ -299,6 +311,8 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			base.Mod(y, x)
 
+			ensure256(base)
+
 			self.Printf(" = %v", base)
 			stack.Push(base)
 		case SMOD:
@@ -308,6 +322,8 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			self.Printf(" %v %% %v", y, x)
 
 			base.Mod(y, x)
+
+			ensure256(base)
 
 			self.Printf(" = %v", base)
 			stack.Push(base)
@@ -319,6 +335,8 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			self.Printf(" %v ** %v", y, x)
 
 			base.Exp(y, x, Pow256)
+
+			ensure256(base)
 
 			self.Printf(" = %v", base)
 
@@ -627,8 +645,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			val, loc := stack.Popn()
 			closure.SetStorage(loc, ethutil.NewValue(val))
 
-			// Add the change to manifest
-			self.env.State().Manifest().AddStorageChange(closure.Object(), loc.Bytes(), val)
+			closure.message.AddStorageChange(loc.Bytes())
 
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case JUMP:
@@ -679,27 +696,35 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			self.Printf(" (*) %x", addr).Endl()
 
+			msg := self.env.State().Manifest().AddMessage(&ethstate.Message{
+				To: addr, From: closure.Address(),
+				Origin: self.env.Origin(),
+				Block:  self.env.BlockHash(), Timestamp: self.env.Time(), Coinbase: self.env.Coinbase(), Number: self.env.BlockNumber(),
+				Value: value,
+			})
+
 			// Create a new contract
 			contract := self.env.State().NewStateObject(addr)
-			if contract.Amount.Cmp(value) >= 0 {
+			if contract.Balance.Cmp(value) >= 0 {
 				closure.object.SubAmount(value)
 				contract.AddAmount(value)
 
 				// Set the init script
 				initCode := mem.Get(offset.Int64(), size.Int64())
-				//fmt.Printf("%x\n", initCode)
+				msg.Input = initCode
+
 				// Transfer all remaining gas to the new
 				// contract so it may run the init script
 				gas := new(big.Int).Set(closure.Gas)
 				closure.UseGas(closure.Gas)
 
 				// Create the closure
-				c := NewClosure(closure, contract, initCode, gas, closure.Price)
+				c := NewClosure(msg, closure, contract, initCode, gas, closure.Price)
 				// Call the closure and set the return value as
 				// main script.
 				contract.Code, _, err = c.Call(self, nil)
 			} else {
-				err = fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Amount)
+				err = fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Balance)
 			}
 
 			if err != nil {
@@ -711,7 +736,8 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				self.Printf("CREATE err %v", err)
 			} else {
 				stack.Push(ethutil.BigD(addr))
-				self.Printf("CREATE success")
+
+				msg.Output = contract.Code
 			}
 			self.Endl()
 
@@ -735,8 +761,16 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 
-			if closure.object.Amount.Cmp(value) < 0 {
-				vmlogger.Debugf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Amount)
+			msg := self.env.State().Manifest().AddMessage(&ethstate.Message{
+				To: addr.Bytes(), From: closure.Address(),
+				Input:  args,
+				Origin: self.env.Origin(),
+				Block:  self.env.BlockHash(), Timestamp: self.env.Time(), Coinbase: self.env.Coinbase(), Number: self.env.BlockNumber(),
+				Value: value,
+			})
+
+			if closure.object.Balance.Cmp(value) < 0 {
+				vmlogger.Debugf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Balance)
 
 				closure.ReturnGas(gas, nil)
 
@@ -750,7 +784,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				stateObject.AddAmount(value)
 
 				// Create a new callable closure
-				c := NewClosure(closure, stateObject, stateObject.Code, gas, closure.Price)
+				c := NewClosure(msg, closure, stateObject, stateObject.Code, gas, closure.Price)
 				// Executer the closure and get the return value (if any)
 				ret, _, err := c.Call(self, args)
 				if err != nil {
@@ -764,6 +798,8 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 					mem.Set(retOffset.Int64(), retSize.Int64(), ret)
 				}
+
+				msg.Output = ret
 
 				// Debug hook
 				if self.Dbg != nil {
@@ -783,7 +819,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			receiver := self.env.State().GetOrNewStateObject(stack.Pop().Bytes())
 
-			receiver.AddAmount(closure.object.Amount)
+			receiver.AddAmount(closure.object.Balance)
 
 			closure.object.MarkForDeletion()
 
@@ -836,4 +872,19 @@ func (self *Vm) Endl() *Vm {
 	}
 
 	return self
+}
+
+func ensure256(x *big.Int) {
+	//max, _ := big.NewInt(0).SetString("115792089237316195423570985008687907853269984665640564039457584007913129639936", 0)
+	//if x.Cmp(max) >= 0 {
+	d := big.NewInt(1)
+	d.Lsh(d, 256).Sub(d, big.NewInt(1))
+	x.And(x, d)
+	//}
+
+	// Could have done this with an OR, but big ints are costly.
+
+	if x.Cmp(new(big.Int)) < 0 {
+		x.SetInt64(0)
+	}
 }

@@ -3,13 +3,14 @@ package ethchain
 import (
 	"bytes"
 	"fmt"
+	"math/big"
+	_ "strconv"
+	"time"
+
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
-	"math/big"
-	_ "strconv"
-	"time"
 )
 
 type BlockInfo struct {
@@ -63,12 +64,6 @@ type Block struct {
 	TxSha        []byte
 }
 
-// New block takes a raw encoded string
-// XXX DEPRICATED
-func NewBlockFromData(raw []byte) *Block {
-	return NewBlockFromBytes(raw)
-}
-
 func NewBlockFromBytes(raw []byte) *Block {
 	block := &Block{}
 	block.RlpDecode(raw)
@@ -105,7 +100,7 @@ func CreateBlock(root interface{},
 	}
 	block.SetUncles([]*Block{})
 
-	block.state = ethstate.NewState(ethtrie.NewTrie(ethutil.Config.Db, root))
+	block.state = ethstate.New(ethtrie.New(ethutil.Config.Db, root))
 
 	return block
 }
@@ -130,40 +125,15 @@ func (block *Block) Transactions() []*Transaction {
 	return block.transactions
 }
 
-func (block *Block) PayFee(addr []byte, fee *big.Int) bool {
-	contract := block.state.GetStateObject(addr)
-	// If we can't pay the fee return
-	if contract == nil || contract.Amount.Cmp(fee) < 0 /* amount < fee */ {
-		fmt.Println("Contract has insufficient funds", contract.Amount, fee)
-
-		return false
-	}
-
-	base := new(big.Int)
-	contract.Amount = base.Sub(contract.Amount, fee)
-	block.state.Trie.Update(string(addr), string(contract.RlpEncode()))
-
-	data := block.state.Trie.Get(string(block.Coinbase))
-
-	// Get the ether (Coinbase) and add the fee (gief fee to miner)
-	account := ethstate.NewStateObjectFromBytes(block.Coinbase, []byte(data))
-
-	base = new(big.Int)
-	account.Amount = base.Add(account.Amount, fee)
-
-	//block.state.Trie.Update(string(block.Coinbase), string(ether.RlpEncode()))
-	block.state.UpdateStateObject(account)
-
-	return true
-}
-
 func (block *Block) CalcGasLimit(parent *Block) *big.Int {
 	if block.Number.Cmp(big.NewInt(0)) == 0 {
 		return ethutil.BigPow(10, 6)
 	}
 
-	previous := new(big.Int).Mul(big.NewInt(1023), parent.GasLimit)
-	current := new(big.Rat).Mul(new(big.Rat).SetInt(block.GasUsed), big.NewRat(6, 5))
+	// ((1024-1) * parent.gasLimit + (gasUsed * 6 / 5)) / 1024
+
+	previous := new(big.Int).Mul(big.NewInt(1024-1), parent.GasLimit)
+	current := new(big.Rat).Mul(new(big.Rat).SetInt(parent.GasUsed), big.NewRat(6, 5))
 	curInt := new(big.Int).Div(current.Num(), current.Denom())
 
 	result := new(big.Int).Add(previous, curInt)
@@ -172,19 +142,6 @@ func (block *Block) CalcGasLimit(parent *Block) *big.Int {
 	min := big.NewInt(125000)
 
 	return ethutil.BigMax(min, result)
-	/*
-		base := new(big.Int)
-		base2 := new(big.Int)
-		parentGL := bc.CurrentBlock.GasLimit
-		parentUsed := bc.CurrentBlock.GasUsed
-
-		base.Mul(parentGL, big.NewInt(1024-1))
-		base2.Mul(parentUsed, big.NewInt(6))
-		base2.Div(base2, big.NewInt(5))
-		base.Add(base, base2)
-		base.Div(base, big.NewInt(1024))
-	*/
-
 }
 
 func (block *Block) BlockInfo() BlockInfo {
@@ -252,26 +209,10 @@ func (self *Block) SetReceipts(receipts []*Receipt, txs []*Transaction) {
 
 func (block *Block) setTransactions(txs []*Transaction) {
 	block.transactions = txs
-
-	/*
-		trie := ethtrie.NewTrie(ethutil.Config.Db, "")
-		for i, tx := range txs {
-			trie.Update(strconv.Itoa(i), string(tx.RlpEncode()))
-		}
-
-		switch trie.Root.(type) {
-		case string:
-			block.TxSha = []byte(trie.Root.(string))
-		case []byte:
-			block.TxSha = trie.Root.([]byte)
-		default:
-			panic(fmt.Sprintf("invalid root type %T", trie.Root))
-		}
-	*/
 }
 
 func CreateTxSha(receipts Receipts) (sha []byte) {
-	trie := ethtrie.NewTrie(ethutil.Config.Db, "")
+	trie := ethtrie.New(ethutil.Config.Db, "")
 	for i, receipt := range receipts {
 		trie.Update(string(ethutil.NewValue(i).Encode()), string(ethutil.NewValue(receipt.RlpData()).Encode()))
 	}
@@ -313,7 +254,7 @@ func (block *Block) RlpValueDecode(decoder *ethutil.Value) {
 	block.PrevHash = header.Get(0).Bytes()
 	block.UncleSha = header.Get(1).Bytes()
 	block.Coinbase = header.Get(2).Bytes()
-	block.state = ethstate.NewState(ethtrie.NewTrie(ethutil.Config.Db, header.Get(3).Val))
+	block.state = ethstate.New(ethtrie.New(ethutil.Config.Db, header.Get(3).Val))
 	block.TxSha = header.Get(4).Bytes()
 	block.Difficulty = header.Get(5).BigInt()
 	block.Number = header.Get(6).BigInt()
@@ -355,7 +296,7 @@ func NewUncleBlockFromValue(header *ethutil.Value) *Block {
 	block.PrevHash = header.Get(0).Bytes()
 	block.UncleSha = header.Get(1).Bytes()
 	block.Coinbase = header.Get(2).Bytes()
-	block.state = ethstate.NewState(ethtrie.NewTrie(ethutil.Config.Db, header.Get(3).Val))
+	block.state = ethstate.New(ethtrie.New(ethutil.Config.Db, header.Get(3).Val))
 	block.TxSha = header.Get(4).Bytes()
 	block.Difficulty = header.Get(5).BigInt()
 	block.Number = header.Get(6).BigInt()

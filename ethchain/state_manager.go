@@ -4,14 +4,16 @@ import (
 	"bytes"
 	"container/list"
 	"fmt"
-	"github.com/ethereum/eth-go/ethcrypto"
-	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethstate"
-	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/eth-go/ethwire"
 	"math/big"
 	"sync"
 	"time"
+
+	"github.com/ethereum/eth-go/ethcrypto"
+	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethreact"
+	"github.com/ethereum/eth-go/ethstate"
+	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ethwire"
 )
 
 var statelogger = ethlog.NewLogger("STATE")
@@ -36,13 +38,14 @@ type EthManager interface {
 	BlockChain() *BlockChain
 	TxPool() *TxPool
 	Broadcast(msgType ethwire.MsgType, data []interface{})
-	Reactor() *ethutil.ReactorEngine
+	Reactor() *ethreact.ReactorEngine
 	PeerCount() int
 	IsMining() bool
 	IsListening() bool
 	Peers() *list.List
 	KeyManager() *ethcrypto.KeyManager
 	ClientIdentity() ethwire.ClientIdentity
+	Db() ethutil.Database
 }
 
 type StateManager struct {
@@ -233,7 +236,12 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 
 		// Add the block to the chain
 		sm.bc.Add(block)
-		sm.notifyChanges(state)
+
+		// Create a bloom bin for this block
+		filter := sm.createBloomFilter(state)
+		// Persist the data
+		fk := append([]byte("bloom"), block.Hash()...)
+		sm.Ethereum.Db().Put(fk, filter.Bin())
 
 		statelogger.Infof("Added block #%d (%x)\n", block.Number, block.Hash())
 		if dontReact == false {
@@ -361,14 +369,56 @@ func (sm *StateManager) Stop() {
 	sm.bc.Stop()
 }
 
-func (sm *StateManager) notifyChanges(state *ethstate.State) {
-	for addr, stateObject := range state.Manifest().ObjectChanges {
-		sm.Ethereum.Reactor().Post("object:"+addr, stateObject)
+// Manifest will handle both creating notifications and generating bloom bin data
+func (sm *StateManager) createBloomFilter(state *ethstate.State) *BloomFilter {
+	bloomf := NewBloomFilter(nil)
+
+	/*
+		for addr, stateObject := range state.Manifest().ObjectChanges {
+			// Set the bloom filter's bin
+			bloomf.Set([]byte(addr))
+
+			sm.Ethereum.Reactor().Post("object:"+addr, stateObject)
+		}
+	*/
+	for _, msg := range state.Manifest().Messages {
+		bloomf.Set(msg.To)
+		bloomf.Set(msg.From)
 	}
 
-	for stateObjectAddr, mappedObjects := range state.Manifest().StorageChanges {
-		for addr, value := range mappedObjects {
-			sm.Ethereum.Reactor().Post("storage:"+stateObjectAddr+":"+addr, &ethstate.StorageState{[]byte(stateObjectAddr), []byte(addr), value})
+	sm.Ethereum.Reactor().Post("messages", state.Manifest().Messages)
+
+	/*
+		for stateObjectAddr, mappedObjects := range state.Manifest().StorageChanges {
+			for addr, value := range mappedObjects {
+				// Set the bloom filter's bin
+				bloomf.Set(ethcrypto.Sha3Bin([]byte(stateObjectAddr + addr)))
+
+				sm.Ethereum.Reactor().Post("storage:"+stateObjectAddr+":"+addr, &ethstate.StorageState{[]byte(stateObjectAddr), []byte(addr), value})
+			}
 		}
+	*/
+
+	return bloomf
+}
+
+func (sm *StateManager) GetMessages(block *Block) (messages []*ethstate.Message, err error) {
+	if !sm.bc.HasBlock(block.PrevHash) {
+		return nil, ParentError(block.PrevHash)
 	}
+
+	sm.lastAttemptedBlock = block
+
+	var (
+		parent = sm.bc.GetBlock(block.PrevHash)
+		state  = parent.State().Copy()
+	)
+
+	defer state.Reset()
+
+	sm.ApplyDiff(state, parent, block)
+
+	sm.AccumelateRewards(state, block)
+
+	return state.Manifest().Messages, nil
 }

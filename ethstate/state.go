@@ -1,11 +1,12 @@
 package ethstate
 
 import (
+	"math/big"
+
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
-	"math/big"
 )
 
 var statelogger = ethlog.NewLogger("STATE")
@@ -25,7 +26,7 @@ type State struct {
 }
 
 // Create a new state from a given trie
-func NewState(trie *ethtrie.Trie) *State {
+func New(trie *ethtrie.Trie) *State {
 	return &State{Trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest()}
 }
 
@@ -33,7 +34,7 @@ func NewState(trie *ethtrie.Trie) *State {
 func (self *State) GetBalance(addr []byte) *big.Int {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
-		return stateObject.Amount
+		return stateObject.Balance
 	}
 
 	return ethutil.Big0
@@ -59,8 +60,6 @@ func (self *State) UpdateStateObject(stateObject *StateObject) {
 	ethutil.Config.Db.Put(ethcrypto.Sha3Bin(stateObject.Code), stateObject.Code)
 
 	self.Trie.Update(string(addr), string(stateObject.RlpEncode()))
-
-	self.manifest.AddObjectChange(stateObject)
 }
 
 // Delete the given state object and delete it from the state trie
@@ -127,7 +126,7 @@ func (s *State) Cmp(other *State) bool {
 
 func (self *State) Copy() *State {
 	if self.Trie != nil {
-		state := NewState(self.Trie.Copy())
+		state := New(self.Trie.Copy())
 		for k, stateObject := range self.stateObjects {
 			state.stateObjects[k] = stateObject.Copy()
 		}
@@ -210,50 +209,13 @@ func (self *State) Update() {
 	}
 }
 
+func (self *State) Manifest() *Manifest {
+	return self.manifest
+}
+
 // Debug stuff
 func (self *State) CreateOutputForDiff() {
 	for _, stateObject := range self.stateObjects {
 		stateObject.CreateOutputForDiff()
 	}
-}
-
-func (self *State) Manifest() *Manifest {
-	return self.manifest
-}
-
-// Object manifest
-//
-// The object manifest is used to keep changes to the state so we can keep track of the changes
-// that occurred during a state transitioning phase.
-type Manifest struct {
-	// XXX These will be handy in the future. Not important for now.
-	objectAddresses  map[string]bool
-	storageAddresses map[string]map[string]bool
-
-	ObjectChanges  map[string]*StateObject
-	StorageChanges map[string]map[string]*big.Int
-}
-
-func NewManifest() *Manifest {
-	m := &Manifest{objectAddresses: make(map[string]bool), storageAddresses: make(map[string]map[string]bool)}
-	m.Reset()
-
-	return m
-}
-
-func (m *Manifest) Reset() {
-	m.ObjectChanges = make(map[string]*StateObject)
-	m.StorageChanges = make(map[string]map[string]*big.Int)
-}
-
-func (m *Manifest) AddObjectChange(stateObject *StateObject) {
-	m.ObjectChanges[string(stateObject.Address())] = stateObject
-}
-
-func (m *Manifest) AddStorageChange(stateObject *StateObject, storageAddr []byte, storage *big.Int) {
-	if m.StorageChanges[string(stateObject.Address())] == nil {
-		m.StorageChanges[string(stateObject.Address())] = make(map[string]*big.Int)
-	}
-
-	m.StorageChanges[string(stateObject.Address())][string(storageAddr)] = storage
 }

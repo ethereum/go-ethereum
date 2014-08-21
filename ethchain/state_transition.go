@@ -2,11 +2,12 @@ package ethchain
 
 import (
 	"fmt"
+	"math/big"
+
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethvm"
-	"math/big"
 )
 
 /*
@@ -94,8 +95,8 @@ func (self *StateTransition) BuyGas() error {
 	var err error
 
 	sender := self.Sender()
-	if sender.Amount.Cmp(self.tx.GasValue()) < 0 {
-		return fmt.Errorf("Insufficient funds to pre-pay gas. Req %v, has %v", self.tx.GasValue(), sender.Amount)
+	if sender.Balance.Cmp(self.tx.GasValue()) < 0 {
+		return fmt.Errorf("Insufficient funds to pre-pay gas. Req %v, has %v", self.tx.GasValue(), sender.Balance)
 	}
 
 	coinbase := self.Coinbase()
@@ -178,8 +179,8 @@ func (self *StateTransition) TransitionState() (err error) {
 		return
 	}
 
-	if sender.Amount.Cmp(self.value) < 0 {
-		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Amount)
+	if sender.Balance.Cmp(self.value) < 0 {
+		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Balance)
 	}
 
 	var snapshot *ethstate.State
@@ -210,6 +211,14 @@ func (self *StateTransition) TransitionState() (err error) {
 		snapshot = self.state.Copy()
 	}
 
+	msg := self.state.Manifest().AddMessage(&ethstate.Message{
+		To: receiver.Address(), From: sender.Address(),
+		Input:  self.tx.Data,
+		Origin: sender.Address(),
+		Block:  self.block.Hash(), Timestamp: self.block.Time, Coinbase: self.block.Coinbase, Number: self.block.Number,
+		Value: self.value,
+	})
+
 	// Process the init code and create 'valid' contract
 	if IsContractAddr(self.receiver) {
 		// Evaluate the initialization script
@@ -217,7 +226,7 @@ func (self *StateTransition) TransitionState() (err error) {
 		// script section for the state object.
 		self.data = nil
 
-		code, err := self.Eval(receiver.Init(), receiver, "init")
+		code, err := self.Eval(msg, receiver.Init(), receiver, "init")
 		if err != nil {
 			self.state.Set(snapshot)
 
@@ -225,14 +234,17 @@ func (self *StateTransition) TransitionState() (err error) {
 		}
 
 		receiver.Code = code
+		msg.Output = code
 	} else {
 		if len(receiver.Code) > 0 {
-			_, err = self.Eval(receiver.Code, receiver, "code")
+			ret, err := self.Eval(msg, receiver.Code, receiver, "code")
 			if err != nil {
 				self.state.Set(snapshot)
 
 				return fmt.Errorf("Error during code execution %v", err)
 			}
+
+			msg.Output = ret
 		}
 	}
 
@@ -240,8 +252,8 @@ func (self *StateTransition) TransitionState() (err error) {
 }
 
 func (self *StateTransition) transferValue(sender, receiver *ethstate.StateObject) error {
-	if sender.Amount.Cmp(self.value) < 0 {
-		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Amount)
+	if sender.Balance.Cmp(self.value) < 0 {
+		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Balance)
 	}
 
 	// Subtract the amount from the senders account
@@ -252,12 +264,12 @@ func (self *StateTransition) transferValue(sender, receiver *ethstate.StateObjec
 	return nil
 }
 
-func (self *StateTransition) Eval(script []byte, context *ethstate.StateObject, typ string) (ret []byte, err error) {
+func (self *StateTransition) Eval(msg *ethstate.Message, script []byte, context *ethstate.StateObject, typ string) (ret []byte, err error) {
 	var (
 		transactor    = self.Sender()
 		state         = self.state
 		env           = NewEnv(state, self.tx, self.block)
-		callerClosure = ethvm.NewClosure(transactor, context, script, self.gas, self.gasPrice)
+		callerClosure = ethvm.NewClosure(msg, transactor, context, script, self.gas, self.gasPrice)
 	)
 
 	vm := ethvm.New(env)
@@ -277,7 +289,7 @@ func MakeContract(tx *Transaction, state *ethstate.State) *ethstate.StateObject 
 
 		contract := state.NewStateObject(addr)
 		contract.InitCode = tx.Data
-		contract.State = ethstate.NewState(ethtrie.NewTrie(ethutil.Config.Db, ""))
+		contract.State = ethstate.New(ethtrie.New(ethutil.Config.Db, ""))
 
 		return contract
 	}
