@@ -276,6 +276,11 @@ func (self *JSFilter) MessagesToJson(messages ethstate.Messages) string {
 		msgs = append(msgs, NewJSMessage(m))
 	}
 
+	// Return an empty array instead of "null"
+	if len(msgs) == 0 {
+		return "[]"
+	}
+
 	b, err := json.Marshal(msgs)
 	if err != nil {
 		return "{\"error\":" + err.Error() + "}"
