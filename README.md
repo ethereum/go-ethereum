@@ -6,7 +6,7 @@ Ethereum
 Ethereum Go Development package (C) Jeffrey Wilcke
 
 Ethereum is currently in its testing phase. The current state is "Proof
-of Concept 0.6.0". For build instructions see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum(Go)).
+of Concept 0.6.3". For build instructions see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum(Go)).
 
 Ethereum Go is split up in several sub packages Please refer to each
 individual package for more information.
@@ -15,6 +15,11 @@ individual package for more information.
   3. [ethwire](https://github.com/ethereum/eth-go/tree/master/ethwire)
   4. [ethdb](https://github.com/ethereum/eth-go/tree/master/ethdb)
   5. [ethutil](https://github.com/ethereum/eth-go/tree/master/ethutil)
+  6. [ethpipe](https://github.com/ethereum/eth-go/tree/master/ethpipe)
+  7. [ethvm](https://github.com/ethereum/eth-go/tree/master/ethvm)
+  8. [ethtrie](https://github.com/ethereum/eth-go/tree/master/ethtrie)
+  9. [ethreact](https://github.com/ethereum/eth-go/tree/master/ethreact)
+  10. [ethlog](https://github.com/ethereum/eth-go/tree/master/ethlog)
 
 The [eth](https://github.com/ethereum/eth-go) is the top-level package
 of the Ethereum protocol. It functions as the Ethereum bootstrapping and
@@ -45,7 +50,7 @@ Contribution
 
 If you'd like to contribute to Eth please fork, fix, commit and
 send a pull request. Commits who do not comply with the coding standards
-are ignored. If you send pull requests make absolute sure that you
+are ignored (use gofmt!). If you send pull requests make absolute sure that you
 commit on the `develop` branch and that you do not merge to master.
 Commits that are directly based on master are simply ignored.
 
