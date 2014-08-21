@@ -59,9 +59,9 @@ const (
 	GASLIMIT   = 0x45
 
 	// 0x50 range - 'storage' and execution
-	POP     = 0x50
-	DUP     = 0x51
-	SWAP    = 0x52
+	POP = 0x50
+	//DUP     = 0x51
+	//SWAP    = 0x52
 	MLOAD   = 0x53
 	MSTORE  = 0x54
 	MSTORE8 = 0x55
@@ -204,9 +204,9 @@ var opCodeToString = map[OpCode]string{
 	GASLIMIT:   "GASLIMIT",
 
 	// 0x50 range - 'storage' and execution
-	POP:     "POP",
-	DUP:     "DUP",
-	SWAP:    "SWAP",
+	POP: "POP",
+	//DUP:     "DUP",
+	//SWAP:    "SWAP",
 	MLOAD:   "MLOAD",
 	MSTORE:  "MSTORE",
 	MSTORE8: "MSTORE8",
