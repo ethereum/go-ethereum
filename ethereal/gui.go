@@ -150,10 +150,14 @@ func (gui *Gui) ToggleMining() {
 	if gui.eth.Mining {
 		utils.StopMining(gui.eth)
 		txt = "Start mining"
+
+		gui.getObjectByName("miningLabel").Set("visible", false)
 	} else {
 		utils.StartMining(gui.eth)
 		gui.miner = utils.GetMiner()
 		txt = "Stop mining"
+
+		gui.getObjectByName("miningLabel").Set("visible", true)
 	}
 
 	gui.win.Root().Set("miningButtonText", txt)
@@ -415,6 +419,7 @@ func (gui *Gui) update() {
 	gui.getObjectByName("syncProgressIndicator").Set("visible", !gui.eth.IsUpToDate())
 
 	lastBlockLabel := gui.getObjectByName("lastBlockLabel")
+	miningLabel := gui.getObjectByName("miningLabel")
 
 	go func() {
 		for {
@@ -476,13 +481,12 @@ func (gui *Gui) update() {
 				}
 			case <-generalUpdateTicker.C:
 				statusText := "#" + gui.eth.BlockChain().CurrentBlock.Number.String()
+				lastBlockLabel.Set("text", statusText)
+
 				if gui.miner != nil {
 					pow := gui.miner.GetPow()
-					if pow.GetHashrate() != 0 {
-						statusText = "Mining @ " + strconv.FormatInt(pow.GetHashrate(), 10) + "Khash - " + statusText
-					}
+					miningLabel.Set("text", "Mining @ "+strconv.FormatInt(pow.GetHashrate(), 10)+"Khash")
 				}
-				lastBlockLabel.Set("text", statusText)
 			}
 		}
 	}()
@@ -546,6 +550,10 @@ func (gui *Gui) SetCustomIdentifier(customIdentifier string) {
 
 func (gui *Gui) GetCustomIdentifier() string {
 	return gui.clientIdentity.GetCustomIdentifier()
+}
+
+func (gui *Gui) ToggleTurboMining() {
+	gui.miner.ToggleTurbo()
 }
 
 // functions that allow Gui to implement interface ethlog.LogSystem
