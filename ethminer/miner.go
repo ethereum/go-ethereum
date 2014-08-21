@@ -2,11 +2,12 @@ package ethminer
 
 import (
 	"bytes"
+	"sort"
+
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethwire"
-	"sort"
 )
 
 var logger = ethlog.NewLogger("MINER")
