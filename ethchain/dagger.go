@@ -1,15 +1,16 @@
 package ethchain
 
 import (
+	"hash"
+	"math/big"
+	"math/rand"
+	"time"
+
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/sha3"
-	"hash"
-	"math/big"
-	"math/rand"
-	"time"
 )
 
 var powlogger = ethlog.NewLogger("POW")
@@ -18,15 +19,21 @@ type PoW interface {
 	Search(block *Block, reactChan chan ethreact.Event) []byte
 	Verify(hash []byte, diff *big.Int, nonce []byte) bool
 	GetHashrate() int64
+	Turbo(bool)
 }
 
 type EasyPow struct {
 	hash     *big.Int
 	HashRate int64
+	turbo    bool
 }
 
 func (pow *EasyPow) GetHashrate() int64 {
 	return pow.HashRate
+}
+
+func (pow *EasyPow) Turbo(on bool) {
+	pow.turbo = on
 }
 
 func (pow *EasyPow) Search(block *Block, reactChan chan ethreact.Event) []byte {
@@ -54,6 +61,10 @@ func (pow *EasyPow) Search(block *Block, reactChan chan ethreact.Event) []byte {
 			if pow.Verify(hash, diff, sha) {
 				return sha
 			}
+		}
+
+		if !pow.turbo {
+			time.Sleep(500 * time.Millisecond)
 		}
 	}
 
