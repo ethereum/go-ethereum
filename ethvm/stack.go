@@ -64,6 +64,18 @@ func (st *Stack) Peekn() (*big.Int, *big.Int) {
 	return ints[0], ints[1]
 }
 
+func (st *Stack) Swapn(n int) (*big.Int, *big.Int) {
+	st.data[n], st.data[0] = st.data[0], st.data[n]
+
+	return st.data[n], st.data[0]
+}
+
+func (st *Stack) Dupn(n int) *big.Int {
+	st.Push(st.data[n])
+
+	return st.Peek()
+}
+
 func (st *Stack) Push(d *big.Int) {
 	st.data = append(st.data, new(big.Int).Set(d))
 }

@@ -27,10 +27,12 @@ const (
 	NOT  = 0x0f
 
 	// 0x10 range - bit ops
-	AND  = 0x10
-	OR   = 0x11
-	XOR  = 0x12
-	BYTE = 0x13
+	AND    = 0x10
+	OR     = 0x11
+	XOR    = 0x12
+	BYTE   = 0x13
+	ADDMOD = 0x14
+	MULMOD = 0x15
 
 	// 0x20 range - crypto
 	SHA3 = 0x20
@@ -105,6 +107,40 @@ const (
 	PUSH31 = 0x7e
 	PUSH32 = 0x7f
 
+	DUP1  = 0x80
+	DUP2  = 0x81
+	DUP3  = 0x82
+	DUP4  = 0x83
+	DUP5  = 0x84
+	DUP6  = 0x85
+	DUP7  = 0x86
+	DUP8  = 0x87
+	DUP9  = 0x88
+	DUP10 = 0x89
+	DUP11 = 0x8a
+	DUP12 = 0x8b
+	DUP13 = 0x8c
+	DUP14 = 0x8d
+	DUP15 = 0x8e
+	DUP16 = 0x8f
+
+	SWAP1  = 0x90
+	SWAP2  = 0x91
+	SWAP3  = 0x92
+	SWAP4  = 0x93
+	SWAP5  = 0x94
+	SWAP6  = 0x95
+	SWAP7  = 0x96
+	SWAP8  = 0x97
+	SWAP9  = 0x98
+	SWAP10 = 0x99
+	SWAP11 = 0x9a
+	SWAP12 = 0x9b
+	SWAP13 = 0x9c
+	SWAP14 = 0x9d
+	SWAP15 = 0x9e
+	SWAP16 = 0x9f
+
 	// 0xf0 range - closures
 	CREATE = 0xf0
 	CALL   = 0xf1
@@ -136,10 +172,12 @@ var opCodeToString = map[OpCode]string{
 	NOT:  "NOT",
 
 	// 0x10 range - bit ops
-	AND:  "AND",
-	OR:   "OR",
-	XOR:  "XOR",
-	BYTE: "BYTE",
+	AND:    "AND",
+	OR:     "OR",
+	XOR:    "XOR",
+	BYTE:   "BYTE",
+	ADDMOD: "ADDMOD",
+	MULMOD: "MULMOD",
 
 	// 0x20 range - crypto
 	SHA3: "SHA3",
@@ -214,6 +252,40 @@ var opCodeToString = map[OpCode]string{
 	PUSH31: "PUSH31",
 	PUSH32: "PUSH32",
 
+	DUP1:  "DUP1",
+	DUP2:  "DUP2",
+	DUP3:  "DUP3",
+	DUP4:  "DUP4",
+	DUP5:  "DUP5",
+	DUP6:  "DUP6",
+	DUP7:  "DUP7",
+	DUP8:  "DUP8",
+	DUP9:  "DUP9",
+	DUP10: "DUP10",
+	DUP11: "DUP11",
+	DUP12: "DUP12",
+	DUP13: "DUP13",
+	DUP14: "DUP14",
+	DUP15: "DUP15",
+	DUP16: "DUP16",
+
+	SWAP1:  "SWAP1",
+	SWAP2:  "SWAP2",
+	SWAP3:  "SWAP3",
+	SWAP4:  "SWAP4",
+	SWAP5:  "SWAP5",
+	SWAP6:  "SWAP6",
+	SWAP7:  "SWAP7",
+	SWAP8:  "SWAP8",
+	SWAP9:  "SWAP9",
+	SWAP10: "SWAP10",
+	SWAP11: "SWAP11",
+	SWAP12: "SWAP12",
+	SWAP13: "SWAP13",
+	SWAP14: "SWAP14",
+	SWAP15: "SWAP15",
+	SWAP16: "SWAP16",
+
 	// 0xf0 range
 	CREATE: "CREATE",
 	CALL:   "CALL",
@@ -252,10 +324,12 @@ var OpCodes = map[string]byte{
 	"NOT":  0x0d,
 
 	// 0x10 range - bit ops
-	"AND":  0x10,
-	"OR":   0x11,
-	"XOR":  0x12,
-	"BYTE": 0x13,
+	"AND":    0x10,
+	"OR":     0x11,
+	"XOR":    0x12,
+	"BYTE":   0x13,
+	"ADDMOD": 0x14,
+	"MULMOD": 0x15,
 
 	// 0x20 range - crypto
 	"SHA3": 0x20,
@@ -325,6 +399,40 @@ var OpCodes = map[string]byte{
 	"PUSH30": 0x7d,
 	"PUSH31": 0x7e,
 	"PUSH32": 0x7f,
+
+	"DUP1":  0x80,
+	"DUP2":  0x81,
+	"DUP3":  0x82,
+	"DUP4":  0x83,
+	"DUP5":  0x84,
+	"DUP6":  0x85,
+	"DUP7":  0x86,
+	"DUP8":  0x87,
+	"DUP9":  0x88,
+	"DUP10": 0x89,
+	"DUP11": 0x8a,
+	"DUP12": 0x8b,
+	"DUP13": 0x8c,
+	"DUP14": 0x8d,
+	"DUP15": 0x8e,
+	"DUP16": 0x8f,
+
+	"SWAP1":  0x90,
+	"SWAP2":  0x91,
+	"SWAP3":  0x92,
+	"SWAP4":  0x93,
+	"SWAP5":  0x94,
+	"SWAP6":  0x95,
+	"SWAP7":  0x96,
+	"SWAP8":  0x97,
+	"SWAP9":  0x98,
+	"SWAP10": 0x99,
+	"SWAP11": 0x9a,
+	"SWAP12": 0x9b,
+	"SWAP13": 0x9c,
+	"SWAP14": 0x9d,
+	"SWAP15": 0x9e,
+	"SWAP16": 0x9f,
 
 	// 0xf0 range - closures
 	"CREATE": 0xf0,

@@ -28,7 +28,7 @@ var GenesisHeader = []interface{}{
 	"",
 	// Difficulty
 	//ethutil.BigPow(2, 22),
-	big.NewInt(4096),
+	big.NewInt(131072),
 	// Number
 	ethutil.Big0,
 	// Block minimum gas price

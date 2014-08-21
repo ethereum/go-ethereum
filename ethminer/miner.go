@@ -2,11 +2,12 @@ package ethminer
 
 import (
 	"bytes"
+	"sort"
+
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethwire"
-	"sort"
 )
 
 var logger = ethlog.NewLogger("MINER")
@@ -22,6 +23,8 @@ type Miner struct {
 	powChan     chan []byte
 	powQuitChan chan ethreact.Event
 	quitChan    chan chan error
+
+	turbo bool
 }
 
 func (self *Miner) GetPow() ethchain.PoW {
@@ -36,6 +39,12 @@ func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) *Miner {
 	}
 
 	return &miner
+}
+
+func (self *Miner) ToggleTurbo() {
+	self.turbo = !self.turbo
+
+	self.pow.Turbo(self.turbo)
 }
 
 func (miner *Miner) Start() {
