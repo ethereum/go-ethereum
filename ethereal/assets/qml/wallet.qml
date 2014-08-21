@@ -157,6 +157,21 @@ ApplicationWindow {
 					})
 				}
 			}
+
+			MenuSeparator {}
+
+			MenuItem {
+				id: miningSpeed
+				text: "Mining: Turbo"
+				onTriggered: {
+					gui.toggleTurboMining()
+					if(text == "Mining: Turbo") {
+						text = "Mining: Normal";
+					} else {
+						text = "Mining: Turbo";
+					}
+				}
+			}
 		}
 
 		Menu {
@@ -216,6 +231,15 @@ ApplicationWindow {
 					styleColor: "#797979"
 				}
 			}
+		}
+
+		Label {
+			y: 6
+			objectName: "miningLabel"
+			visible: true
+			font.pixelSize: 10
+			anchors.right: lastBlockLabel.left
+			anchors.rightMargin: 5
 		}
 
 		Label {
