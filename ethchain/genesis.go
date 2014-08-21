@@ -1,9 +1,10 @@
 package ethchain
 
 import (
+	"math/big"
+
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethutil"
-	"math/big"
 )
 
 /*
@@ -26,7 +27,8 @@ var GenesisHeader = []interface{}{
 	// tx sha
 	"",
 	// Difficulty
-	ethutil.BigPow(2, 22),
+	//ethutil.BigPow(2, 22),
+	big.NewInt(4096),
 	// Number
 	ethutil.Big0,
 	// Block minimum gas price

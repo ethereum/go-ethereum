@@ -208,6 +208,26 @@ func (bc *BlockChain) GenesisBlock() *Block {
 	return bc.genesisBlock
 }
 
+func (self *BlockChain) GetChainHashesFromHash(hash []byte, max uint64) (chain [][]byte) {
+	block := self.GetBlock(hash)
+	if block == nil {
+		return
+	}
+
+	// XXX Could be optimised by using a different database which only holds hashes (i.e., linked list)
+	for i := uint64(0); i < max; i++ {
+		chain = append(chain, block.Hash())
+
+		if block.Number.Cmp(ethutil.Big0) <= 0 {
+			break
+		}
+
+		block = self.GetBlock(block.PrevHash)
+	}
+
+	return
+}
+
 // Get chain return blocks from hash up to max in RLP format
 func (bc *BlockChain) GetChainFromHash(hash []byte, max uint64) []interface{} {
 	var chain []interface{}

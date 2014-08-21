@@ -208,3 +208,11 @@ func Address(slice []byte) (addr []byte) {
 
 	return
 }
+
+func ByteSliceToInterface(slice [][]byte) (ret []interface{}) {
+	for _, i := range slice {
+		ret = append(ret, i)
+	}
+
+	return
+}

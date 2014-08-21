@@ -54,6 +54,8 @@ type Ethereum struct {
 	txPool *ethchain.TxPool
 	// The canonical chain
 	blockChain *ethchain.BlockChain
+	// The block pool
+	blockPool *BlockPool
 	// Peers (NYI)
 	peers *list.List
 	// Nonce
@@ -116,6 +118,7 @@ func New(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager 
 	}
 	ethereum.reactor = ethreact.New()
 
+	ethereum.blockPool = NewBlockPool(ethereum)
 	ethereum.txPool = ethchain.NewTxPool(ethereum)
 	ethereum.blockChain = ethchain.NewBlockChain(ethereum)
 	ethereum.stateManager = ethchain.NewStateManager(ethereum)

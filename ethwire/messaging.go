@@ -27,33 +27,41 @@ const (
 	// Values are given explicitly instead of by iota because these values are
 	// defined by the wire protocol spec; it is easier for humans to ensure
 	// correctness when values are explicit.
-	MsgHandshakeTy  = 0x00
-	MsgDiscTy       = 0x01
-	MsgPingTy       = 0x02
-	MsgPongTy       = 0x03
-	MsgGetPeersTy   = 0x10
-	MsgPeersTy      = 0x11
-	MsgTxTy         = 0x12
-	MsgBlockTy      = 0x13
-	MsgGetChainTy   = 0x14
-	MsgNotInChainTy = 0x15
-	MsgGetTxsTy     = 0x16
+	MsgHandshakeTy      = 0x00
+	MsgDiscTy           = 0x01
+	MsgPingTy           = 0x02
+	MsgPongTy           = 0x03
+	MsgGetPeersTy       = 0x10
+	MsgPeersTy          = 0x11
+	MsgTxTy             = 0x12
+	MsgGetChainTy       = 0x14
+	MsgNotInChainTy     = 0x15
+	MsgGetTxsTy         = 0x16
+	MsgGetBlockHashesTy = 0x17
+	MsgBlockHashesTy    = 0x18
+	MsgGetBlocksTy      = 0x19
+	MsgBlockTy          = 0x13
+
+	MsgOldBlockTy = 0xbb
 
 	MsgTalkTy = 0xff
 )
 
 var msgTypeToString = map[MsgType]string{
-	MsgHandshakeTy:  "Handshake",
-	MsgDiscTy:       "Disconnect",
-	MsgPingTy:       "Ping",
-	MsgPongTy:       "Pong",
-	MsgGetPeersTy:   "Get peers",
-	MsgPeersTy:      "Peers",
-	MsgTxTy:         "Transactions",
-	MsgBlockTy:      "Blocks",
-	MsgGetChainTy:   "Get chain",
-	MsgGetTxsTy:     "Get Txs",
-	MsgNotInChainTy: "Not in chain",
+	MsgHandshakeTy:      "Handshake",
+	MsgDiscTy:           "Disconnect",
+	MsgPingTy:           "Ping",
+	MsgPongTy:           "Pong",
+	MsgGetPeersTy:       "Get peers",
+	MsgPeersTy:          "Peers",
+	MsgTxTy:             "Transactions",
+	MsgBlockTy:          "Blocks",
+	MsgGetChainTy:       "Get chain",
+	MsgGetTxsTy:         "Get Txs",
+	MsgNotInChainTy:     "Not in chain",
+	MsgGetBlockHashesTy: "Get block hashes",
+	MsgBlockHashesTy:    "Block hashes",
+	MsgGetBlocksTy:      "Get blocks",
 }
 
 func (mt MsgType) String() string {
