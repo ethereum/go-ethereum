@@ -23,6 +23,8 @@ type Miner struct {
 	powChan     chan []byte
 	powQuitChan chan ethreact.Event
 	quitChan    chan chan error
+
+	turbo bool
 }
 
 func (self *Miner) GetPow() ethchain.PoW {
@@ -37,6 +39,12 @@ func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) *Miner {
 	}
 
 	return &miner
+}
+
+func (self *Miner) ToggleTurbo() {
+	self.turbo = !self.turbo
+
+	self.pow.Turbo(self.turbo)
 }
 
 func (miner *Miner) Start() {

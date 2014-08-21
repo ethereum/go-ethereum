@@ -42,6 +42,7 @@ func (pow *EasyPow) Search(block *Block, reactChan chan ethreact.Event) []byte {
 	diff := block.Difficulty
 	i := int64(0)
 	start := time.Now().UnixNano()
+	t := time.Now()
 
 	for {
 		select {
@@ -50,11 +51,14 @@ func (pow *EasyPow) Search(block *Block, reactChan chan ethreact.Event) []byte {
 			return nil
 		default:
 			i++
-			if i%1234567 == 0 {
+
+			if time.Since(t) > (1 * time.Second) {
 				elapsed := time.Now().UnixNano() - start
 				hashes := ((float64(1e9) / float64(elapsed)) * float64(i)) / 1000
 				pow.HashRate = int64(hashes)
 				powlogger.Infoln("Hashing @", int64(pow.HashRate), "khash")
+
+				t = time.Now()
 			}
 
 			sha := ethcrypto.Sha3Bin(big.NewInt(r.Int63()).Bytes())
@@ -64,7 +68,7 @@ func (pow *EasyPow) Search(block *Block, reactChan chan ethreact.Event) []byte {
 		}
 
 		if !pow.turbo {
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(20 * time.Microsecond)
 		}
 	}
 
