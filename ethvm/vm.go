@@ -640,10 +640,6 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			x, y := stack.Swapn(n)
 
 			self.Printf(" => [%d] %x [0] %x", n, x.Bytes(), y.Bytes())
-		case DUP:
-			// NOP
-		case SWAP:
-			// NOP
 		case MLOAD:
 			require(1)
 			offset := stack.Pop()
