@@ -2,15 +2,16 @@ package main
 
 import (
 	"fmt"
+	"math/big"
+	"strconv"
+	"strings"
+
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethvm"
 	"github.com/ethereum/go-ethereum/utils"
-	"github.com/go-qml/qml"
-	"math/big"
-	"strconv"
-	"strings"
+	"gopkg.in/qml.v1"
 )
 
 type DebuggerWindow struct {
@@ -102,14 +103,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 		}
 	}()
 
-	data := ethutil.StringToByteFunc(dataStr, func(s string) (ret []byte) {
-		slice := strings.Split(dataStr, "\n")
-		for _, dataItem := range slice {
-			d := ethutil.FormatData(dataItem)
-			ret = append(ret, d...)
-		}
-		return
-	})
+	data := utils.FormatTransactionData(dataStr)
 
 	var err error
 	script := ethutil.StringToByteFunc(scriptStr, func(s string) (ret []byte) {
@@ -134,26 +128,13 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 	state := self.lib.eth.StateManager().TransState()
 	account := self.lib.eth.StateManager().TransState().GetAccount(keyPair.Address())
 	contract := ethstate.NewStateObject([]byte{0})
-	contract.Amount = value
+	contract.Balance = value
 
 	self.SetAsm(script)
 
-	callerClosure := ethvm.NewClosure(account, contract, script, gas, gasPrice)
-
 	block := self.lib.eth.BlockChain().CurrentBlock
 
-	/*
-		vm := ethchain.NewVm(state, self.lib.eth.StateManager(), ethchain.RuntimeVars{
-			Block:       block,
-			Origin:      account.Address(),
-			BlockNumber: block.Number,
-			PrevHash:    block.PrevHash,
-			Coinbase:    block.Coinbase,
-			Time:        block.Time,
-			Diff:        block.Difficulty,
-			Value:       ethutil.Big(valueStr),
-		})
-	*/
+	callerClosure := ethvm.NewClosure(&ethstate.Message{}, account, contract, script, gas, gasPrice)
 	env := utils.NewEnv(state, block, account.Address(), value)
 	vm := ethvm.New(env)
 	vm.Verbose = true

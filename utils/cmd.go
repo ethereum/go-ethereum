@@ -1,25 +1,27 @@
 package utils
 
 import (
-	"bitbucket.org/kardianos/osext"
 	"fmt"
-	"github.com/ethereum/eth-go"
-	"github.com/ethereum/eth-go/ethcrypto"
-	"github.com/ethereum/eth-go/ethdb"
-	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethminer"
-	"github.com/ethereum/eth-go/ethpub"
-	"github.com/ethereum/eth-go/ethrpc"
-	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/eth-go/ethwire"
 	"io"
 	"log"
 	"os"
 	"os/signal"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"time"
+
+	"bitbucket.org/kardianos/osext"
+	"github.com/ethereum/eth-go"
+	"github.com/ethereum/eth-go/ethcrypto"
+	"github.com/ethereum/eth-go/ethdb"
+	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethminer"
+	"github.com/ethereum/eth-go/ethpipe"
+	"github.com/ethereum/eth-go/ethrpc"
+	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ethwire"
 )
 
 var logger = ethlog.NewLogger("CLI")
@@ -127,6 +129,7 @@ func NewDatabase() ethutil.Database {
 }
 
 func NewClientIdentity(clientIdentifier, version, customIdentifier string) *ethwire.SimpleClientIdentity {
+	logger.Infoln("identity created")
 	return ethwire.NewSimpleClientIdentity(clientIdentifier, version, customIdentifier)
 }
 
@@ -193,7 +196,6 @@ func DefaultAssetPath() string {
 }
 
 func KeyTasks(keyManager *ethcrypto.KeyManager, KeyRing string, GenAddr bool, SecretFile string, ExportDir string, NonInteractive bool) {
-	ethcrypto.InitWords(DefaultAssetPath()) // Init mnemonic word list
 
 	var err error
 	switch {
@@ -226,7 +228,7 @@ func KeyTasks(keyManager *ethcrypto.KeyManager, KeyRing string, GenAddr bool, Se
 
 func StartRpc(ethereum *eth.Ethereum, RpcPort int) {
 	var err error
-	ethereum.RpcServer, err = ethrpc.NewJsonRpcServer(ethpub.NewPEthereum(ethereum), RpcPort)
+	ethereum.RpcServer, err = ethrpc.NewJsonRpcServer(ethpipe.NewJSPipe(ethereum), RpcPort)
 	if err != nil {
 		logger.Errorf("Could not start RPC interface (port %v): %v", RpcPort, err)
 	} else {
@@ -243,21 +245,18 @@ func GetMiner() *ethminer.Miner {
 func StartMining(ethereum *eth.Ethereum) bool {
 	if !ethereum.Mining {
 		ethereum.Mining = true
-
 		addr := ethereum.KeyManager().Address()
 
 		go func() {
+			logger.Infoln("Start mining")
 			if miner == nil {
 				miner = ethminer.NewDefaultMiner(addr, ethereum)
 			}
-
 			// Give it some time to connect with peers
 			time.Sleep(3 * time.Second)
 			for !ethereum.IsUpToDate() {
 				time.Sleep(5 * time.Second)
 			}
-
-			logger.Infoln("Miner started")
 			miner.Start()
 		}()
 		RegisterInterrupt(func(os.Signal) {
@@ -268,12 +267,23 @@ func StartMining(ethereum *eth.Ethereum) bool {
 	return false
 }
 
+func FormatTransactionData(data string) []byte {
+	d := ethutil.StringToByteFunc(data, func(s string) (ret []byte) {
+		slice := regexp.MustCompile("\\n|\\s").Split(s, 1000000000)
+		for _, dataItem := range slice {
+			d := ethutil.FormatData(dataItem)
+			ret = append(ret, d...)
+		}
+		return
+	})
+
+	return d
+}
+
 func StopMining(ethereum *eth.Ethereum) bool {
 	if ethereum.Mining && miner != nil {
 		miner.Stop()
-
-		logger.Infoln("Miner stopped")
-
+		logger.Infoln("Stopped mining")
 		ethereum.Mining = false
 
 		return true

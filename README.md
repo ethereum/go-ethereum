@@ -1,11 +1,13 @@
 Ethereum
 ========
 
-[![Build Status](https://travis-ci.org/ethereum/go-ethereum.png?branch=master)](https://travis-ci.org/ethereum/go-ethereum)
+Master [![Build
+Status](http://cpt-obvious.ethercasts.com:8010/buildstatusimage?builder=go-ethereum-master-docker)](http://cpt-obvious.ethercasts.com:8010/builders/go-ethereum-master-docker/builds/-1) Develop [![Build
+Status](http://cpt-obvious.ethercasts.com:8010/buildstatusimage?builder=go-ethereum-develop-docker)](http://cpt-obvious.ethercasts.com:8010/builders/go-ethereum-develop-docker/builds/-1)
 
 Ethereum Go Client © 2014 Jeffrey Wilcke.
 
-Current state: Proof of Concept 0.6.0.
+Current state: Proof of Concept 0.6.3.
 
 For the development package please see the [eth-go package](https://github.com/ethereum/eth-go).
 

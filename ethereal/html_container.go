@@ -1,18 +1,22 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
-	"github.com/ethereum/eth-go/ethchain"
-	"github.com/ethereum/eth-go/ethpub"
-	"github.com/ethereum/eth-go/ethstate"
-	"github.com/ethereum/eth-go/ethutil"
-	"github.com/go-qml/qml"
-	"github.com/howeyc/fsnotify"
+	"fmt"
 	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
+
+	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethpipe"
+	"github.com/ethereum/eth-go/ethstate"
+	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/go-ethereum/javascript"
+	"github.com/howeyc/fsnotify"
+	"gopkg.in/qml.v1"
 )
 
 type HtmlApplication struct {
@@ -41,7 +45,7 @@ func (app *HtmlApplication) Create() error {
 		return errors.New("Ethereum package not yet supported")
 
 		// TODO
-		ethutil.OpenPackage(app.path)
+		//ethutil.OpenPackage(app.path)
 	}
 
 	win := component.CreateWindow(nil)
@@ -118,18 +122,26 @@ func (app *HtmlApplication) Window() *qml.Window {
 }
 
 func (app *HtmlApplication) NewBlock(block *ethchain.Block) {
-	b := &ethpub.PBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Bytes2Hex(block.Hash())}
+	b := &ethpipe.JSBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Bytes2Hex(block.Hash())}
 	app.webView.Call("onNewBlockCb", b)
 }
 
-func (app *HtmlApplication) ObjectChanged(stateObject *ethstate.StateObject) {
-	app.webView.Call("onObjectChangeCb", ethpub.NewPStateObject(stateObject))
-}
+func (self *HtmlApplication) Messages(messages ethstate.Messages, id string) {
+	var msgs []javascript.JSMessage
+	for _, m := range messages {
+		msgs = append(msgs, javascript.NewJSMessage(m))
+	}
 
-func (app *HtmlApplication) StorageChanged(storageObject *ethstate.StorageState) {
-	app.webView.Call("onStorageChangeCb", ethpub.NewPStorageState(storageObject))
+	b, _ := json.Marshal(msgs)
+
+	self.webView.Call("onWatchedCb", string(b), id)
 }
 
 func (app *HtmlApplication) Destroy() {
 	app.engine.Destroy()
+}
+
+func (app *HtmlApplication) Post(data string, seed int) {
+	fmt.Println("about to call 'post'")
+	app.webView.Call("post", seed, data)
 }

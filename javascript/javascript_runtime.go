@@ -1,30 +1,32 @@
-package ethrepl
+package javascript
 
 import (
 	"fmt"
-	"github.com/ethereum/eth-go"
-	"github.com/ethereum/eth-go/ethchain"
-	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethpub"
-	"github.com/ethereum/eth-go/ethstate"
-	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/go-ethereum/utils"
-	"github.com/obscuren/otto"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
+
+	"github.com/ethereum/eth-go"
+	"github.com/ethereum/eth-go/ethchain"
+	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethpipe"
+	"github.com/ethereum/eth-go/ethreact"
+	"github.com/ethereum/eth-go/ethstate"
+	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/go-ethereum/utils"
+	"github.com/obscuren/otto"
 )
 
 var jsrelogger = ethlog.NewLogger("JSRE")
 
 type JSRE struct {
 	ethereum *eth.Ethereum
-	vm       *otto.Otto
-	lib      *ethpub.PEthereum
+	Vm       *otto.Otto
+	pipe     *ethpipe.JSPipe
 
-	blockChan  chan ethutil.React
-	changeChan chan ethutil.React
+	blockChan  chan ethreact.Event
+	changeChan chan ethreact.Event
 	quitChan   chan bool
 
 	objectCb map[string][]otto.Value
@@ -33,9 +35,9 @@ type JSRE struct {
 func (jsre *JSRE) LoadExtFile(path string) {
 	result, err := ioutil.ReadFile(path)
 	if err == nil {
-		jsre.vm.Run(result)
+		jsre.Vm.Run(result)
 	} else {
-		jsrelogger.Debugln("Could not load file:", path)
+		jsrelogger.Infoln("Could not load file:", path)
 	}
 }
 
@@ -48,15 +50,15 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	re := &JSRE{
 		ethereum,
 		otto.New(),
-		ethpub.NewPEthereum(ethereum),
-		make(chan ethutil.React, 1),
-		make(chan ethutil.React, 1),
+		ethpipe.NewJSPipe(ethereum),
+		make(chan ethreact.Event, 10),
+		make(chan ethreact.Event, 10),
 		make(chan bool),
 		make(map[string][]otto.Value),
 	}
 
 	// Init the JS lib
-	re.vm.Run(jsLib)
+	re.Vm.Run(jsLib)
 
 	// Load extra javascript files
 	re.LoadIntFile("string.js")
@@ -65,7 +67,11 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	// We have to make sure that, whoever calls this, calls "Stop"
 	go re.mainLoop()
 
-	re.Bind("eth", &JSEthereum{re.lib, re.vm})
+	// Subscribe to events
+	reactor := ethereum.Reactor()
+	reactor.Subscribe("newBlock", re.blockChan)
+
+	re.Bind("eth", &JSEthereum{re.pipe, re.Vm, ethereum})
 
 	re.initStdFuncs()
 
@@ -75,11 +81,11 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 }
 
 func (self *JSRE) Bind(name string, v interface{}) {
-	self.vm.Set(name, v)
+	self.Vm.Set(name, v)
 }
 
 func (self *JSRE) Run(code string) (otto.Value, error) {
-	return self.vm.Run(code)
+	return self.Vm.Run(code)
 }
 
 func (self *JSRE) Require(file string) error {
@@ -109,10 +115,6 @@ func (self *JSRE) Stop() {
 }
 
 func (self *JSRE) mainLoop() {
-	// Subscribe to events
-	reactor := self.ethereum.Reactor()
-	reactor.Subscribe("newBlock", self.blockChan)
-
 out:
 	for {
 		select {
@@ -121,24 +123,12 @@ out:
 		case block := <-self.blockChan:
 			if _, ok := block.Resource.(*ethchain.Block); ok {
 			}
-		case object := <-self.changeChan:
-			if stateObject, ok := object.Resource.(*ethstate.StateObject); ok {
-				for _, cb := range self.objectCb[ethutil.Bytes2Hex(stateObject.Address())] {
-					val, _ := self.vm.ToValue(ethpub.NewPStateObject(stateObject))
-					cb.Call(cb, val)
-				}
-			} else if storageObject, ok := object.Resource.(*ethstate.StorageState); ok {
-				for _, cb := range self.objectCb[ethutil.Bytes2Hex(storageObject.StateAddress)+ethutil.Bytes2Hex(storageObject.Address)] {
-					val, _ := self.vm.ToValue(ethpub.NewPStorageState(storageObject))
-					cb.Call(cb, val)
-				}
-			}
 		}
 	}
 }
 
 func (self *JSRE) initStdFuncs() {
-	t, _ := self.vm.Get("eth")
+	t, _ := self.Vm.Get("eth")
 	eth := t.Object()
 	eth.Set("watch", self.watch)
 	eth.Set("addPeer", self.addPeer)
@@ -146,19 +136,51 @@ func (self *JSRE) initStdFuncs() {
 	eth.Set("stopMining", self.stopMining)
 	eth.Set("startMining", self.startMining)
 	eth.Set("execBlock", self.execBlock)
+	eth.Set("dump", self.dump)
 }
 
 /*
  * The following methods are natively implemented javascript functions
  */
 
+func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
+	var state *ethstate.State
+
+	if len(call.ArgumentList) > 0 {
+		var block *ethchain.Block
+		if call.Argument(0).IsNumber() {
+			num, _ := call.Argument(0).ToInteger()
+			block = self.ethereum.BlockChain().GetBlockByNumber(uint64(num))
+		} else if call.Argument(0).IsString() {
+			hash, _ := call.Argument(0).ToString()
+			block = self.ethereum.BlockChain().GetBlock(ethutil.Hex2Bytes(hash))
+		} else {
+			fmt.Println("invalid argument for dump. Either hex string or number")
+		}
+
+		if block == nil {
+			fmt.Println("block not found")
+
+			return otto.UndefinedValue()
+		}
+
+		state = block.State()
+	} else {
+		state = self.ethereum.StateManager().CurrentState()
+	}
+
+	v, _ := self.Vm.ToValue(state.Dump())
+
+	return v
+}
+
 func (self *JSRE) stopMining(call otto.FunctionCall) otto.Value {
-	v, _ := self.vm.ToValue(utils.StopMining(self.ethereum))
+	v, _ := self.Vm.ToValue(utils.StopMining(self.ethereum))
 	return v
 }
 
 func (self *JSRE) startMining(call otto.FunctionCall) otto.Value {
-	v, _ := self.vm.ToValue(utils.StartMining(self.ethereum))
+	v, _ := self.Vm.ToValue(utils.StartMining(self.ethereum))
 	return v
 }
 
@@ -211,7 +233,7 @@ func (self *JSRE) require(call otto.FunctionCall) otto.Value {
 		return otto.UndefinedValue()
 	}
 
-	t, _ := self.vm.Get("exports")
+	t, _ := self.Vm.Get("exports")
 
 	return t
 }

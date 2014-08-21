@@ -1,0 +1,44 @@
+<!doctype>
+<html>
+<head>
+<title>Tests</title>
+</head>
+
+<body>
+<button onclick="test();">Test me</button>
+
+<script type="text/javascript">
+function test() {
+	var filter = eth.watch({
+		latest: -1,
+		from: "e6716f9544a56c530d868e4bfbacb172315bdead",
+		altered: ["aabb", {id: "eeff", "at": "aabb"}],
+	});
+
+	filter.changed(function(messages) {
+		console.log("messages", messages)
+	})
+
+	filter.getMessages(function(messages) {
+			console.log("getMessages", messages)
+			});
+
+	eth.getEachStorageAt("9ef0f0d81e040012600b0c1abdef7c48f720f88a", function(entries) {
+			for(var i = 0; i < entries.length; i++) {
+				console.log(entries[i].key, " : ", entries[i].value)
+			}
+	})
+
+	eth.getBlock("f70097659f329a09642a27f11338d9269de64f1d4485786e36bfc410832148cd", function(block) {
+			console.log(block)
+	})
+
+	eth.mutan("var a = 10", function(code) {
+			console.log("code", code)
+	});
+}
+</script>
+
+</body>
+
+</html>

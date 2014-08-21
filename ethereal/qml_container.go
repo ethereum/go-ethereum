@@ -1,12 +1,14 @@
 package main
 
 import (
+	"fmt"
+	"runtime"
+
 	"github.com/ethereum/eth-go/ethchain"
-	"github.com/ethereum/eth-go/ethpub"
+	"github.com/ethereum/eth-go/ethpipe"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/go-qml/qml"
-	"runtime"
+	"gopkg.in/qml.v1"
 )
 
 type QmlApplication struct {
@@ -25,7 +27,7 @@ func (app *QmlApplication) Create() error {
 	path := string(app.path)
 
 	// For some reason for windows we get /c:/path/to/something, windows doesn't like the first slash but is fine with the others so we are removing it
-	if string(app.path[0]) == "/" && runtime.GOOS == "windows" {
+	if app.path[0] == '/' && runtime.GOOS == "windows" {
 		path = app.path[1:]
 	}
 
@@ -47,16 +49,12 @@ func (app *QmlApplication) NewWatcher(quitChan chan bool) {
 
 // Events
 func (app *QmlApplication) NewBlock(block *ethchain.Block) {
-	pblock := &ethpub.PBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Bytes2Hex(block.Hash())}
+	pblock := &ethpipe.JSBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Bytes2Hex(block.Hash())}
 	app.win.Call("onNewBlockCb", pblock)
 }
 
-func (app *QmlApplication) ObjectChanged(stateObject *ethstate.StateObject) {
-	app.win.Call("onObjectChangeCb", ethpub.NewPStateObject(stateObject))
-}
-
-func (app *QmlApplication) StorageChanged(storageObject *ethstate.StorageState) {
-	app.win.Call("onStorageChangeCb", ethpub.NewPStorageState(storageObject))
+func (self *QmlApplication) Messages(msgs ethstate.Messages, id string) {
+	fmt.Println("IMPLEMENT QML APPLICATION MESSAGES METHOD")
 }
 
 // Getters
@@ -66,3 +64,5 @@ func (app *QmlApplication) Engine() *qml.Engine {
 func (app *QmlApplication) Window() *qml.Window {
 	return app.win
 }
+
+func (app *QmlApplication) Post(data string, s int) {}
