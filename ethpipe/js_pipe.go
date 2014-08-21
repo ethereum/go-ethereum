@@ -99,7 +99,8 @@ func (self *JSPipe) NumberToHuman(balance string) string {
 
 func (self *JSPipe) StorageAt(addr, storageAddr string) string {
 	storage := self.World().SafeGet(ethutil.Hex2Bytes(addr)).Storage(ethutil.Hex2Bytes(storageAddr))
-	return storage.BigInt().String()
+
+	return ethutil.Bytes2Hex(storage.Bytes())
 }
 
 func (self *JSPipe) TxCountAt(address string) int {
