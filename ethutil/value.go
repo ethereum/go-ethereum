@@ -141,6 +141,8 @@ func (val *Value) Bytes() []byte {
 		return []byte(s)
 	} else if s, ok := val.Val.(*big.Int); ok {
 		return s.Bytes()
+	} else {
+		return big.NewInt(val.Int()).Bytes()
 	}
 
 	return []byte{}

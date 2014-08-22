@@ -90,7 +90,6 @@ type Ethereum struct {
 }
 
 func New(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager *ethcrypto.KeyManager, caps Caps, usePnp bool) (*Ethereum, error) {
-
 	var err error
 	var nat NAT
 
@@ -100,6 +99,8 @@ func New(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager 
 			ethlogger.Debugln("UPnP failed", err)
 		}
 	}
+
+	bootstrapDb(db)
 
 	ethutil.Config.Db = db
 
@@ -532,5 +533,14 @@ out:
 		case <-self.quit:
 			break out
 		}
+	}
+}
+
+func bootstrapDb(db ethutil.Database) {
+	d, _ := db.Get([]byte("ProtocolVersion"))
+	protov := ethutil.NewValue(d).Uint()
+
+	if protov == 0 {
+		db.Put([]byte("ProtocolVersion"), ethutil.NewValue(ProtocolVersion).Bytes())
 	}
 }
