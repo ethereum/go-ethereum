@@ -103,7 +103,7 @@ func (self *State) GetOrNewStateObject(addr []byte) *StateObject {
 func (self *State) NewStateObject(addr []byte) *StateObject {
 	addr = ethutil.Address(addr)
 
-	statelogger.Infof("(+) %x\n", addr)
+	statelogger.Debugf("(+) %x\n", addr)
 
 	stateObject := NewStateObject(addr)
 	self.stateObjects[string(addr)] = stateObject
