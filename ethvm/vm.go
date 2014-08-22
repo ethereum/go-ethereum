@@ -631,12 +631,12 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			require(1)
 			stack.Pop()
 		case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:
-			n := int(op - DUP1 + 1)
+			n := int(op - DUP1)
 			stack.Dupn(n)
 
 			self.Printf(" => [%d] 0x%x", n, stack.Peek().Bytes())
 		case SWAP1, SWAP2, SWAP3, SWAP4, SWAP5, SWAP6, SWAP7, SWAP8, SWAP9, SWAP10, SWAP11, SWAP12, SWAP13, SWAP14, SWAP15, SWAP16:
-			n := int(op - SWAP1 + 1)
+			n := int(op - SWAP1)
 			x, y := stack.Swapn(n)
 
 			self.Printf(" => [%d] %x [0] %x", n, x.Bytes(), y.Bytes())
