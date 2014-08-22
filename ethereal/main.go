@@ -31,6 +31,7 @@ func run() error {
 	err := utils.DBSanityCheck(db)
 	if err != nil {
 		ErrorWindow(err)
+
 		os.Exit(1)
 	}
 
