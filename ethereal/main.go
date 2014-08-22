@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"runtime"
 
@@ -12,7 +13,7 @@ import (
 
 const (
 	ClientIdentifier = "Ethereal"
-	Version          = "0.6.4"
+	Version          = "0.6.5"
 )
 
 var ethereum *eth.Ethereum
@@ -28,6 +29,23 @@ func run() error {
 	utils.InitLogging(Datadir, LogFile, LogLevel, DebugFile)
 
 	db := utils.NewDatabase()
+	err := utils.DBSanityCheck(db)
+	if err != nil {
+		engine := qml.NewEngine()
+		component, e := engine.LoadString("local", qmlErr)
+		if e != nil {
+			fmt.Println("err:", err)
+			os.Exit(1)
+		}
+
+		win := component.CreateWindow(nil)
+		win.Root().ObjectByName("label").Set("text", err.Error())
+		win.Show()
+		win.Wait()
+
+		ErrorWindow(err)
+		os.Exit(1)
+	}
 
 	keyManager := utils.NewKeyManager(KeyStore, Datadir, db)
 

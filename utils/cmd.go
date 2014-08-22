@@ -80,6 +80,16 @@ func confirm(message string) bool {
 	return r == "y"
 }
 
+func DBSanityCheck(db ethutil.Database) error {
+	d, _ := db.Get([]byte("ProtocolVersion"))
+	protov := ethutil.NewValue(d).Uint()
+	if protov != eth.ProtocolVersion && protov != 0 {
+		return fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, eth.ProtocolVersion, ethutil.Config.ExecPath+"/database")
+	}
+
+	return nil
+}
+
 func InitDataDir(Datadir string) {
 	_, err := os.Stat(Datadir)
 	if err != nil {
@@ -112,7 +122,6 @@ func InitConfig(ConfigFile string, Datadir string, EnvPrefix string) *ethutil.Co
 func exit(err error) {
 	status := 0
 	if err != nil {
-		fmt.Println(err)
 		logger.Errorln("Fatal: ", err)
 		status = 1
 	}
