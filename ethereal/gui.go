@@ -56,7 +56,8 @@ type Gui struct {
 
 	plugins map[string]plugin
 
-	miner *ethminer.Miner
+	miner  *ethminer.Miner
+	stdLog ethlog.LogSystem
 }
 
 // Create GUI, but doesn't start it
@@ -559,6 +560,7 @@ func (gui *Gui) ToggleTurboMining() {
 // functions that allow Gui to implement interface ethlog.LogSystem
 func (gui *Gui) SetLogLevel(level ethlog.LogLevel) {
 	gui.logLevel = level
+	gui.stdLog.SetLogLevel(level)
 	gui.config.Save("loglevel", level)
 }
 

@@ -100,18 +100,22 @@ func InitDataDir(Datadir string) {
 	}
 }
 
-func InitLogging(Datadir string, LogFile string, LogLevel int, DebugFile string) {
+func InitLogging(Datadir string, LogFile string, LogLevel int, DebugFile string) ethlog.LogSystem {
 	var writer io.Writer
 	if LogFile == "" {
 		writer = os.Stdout
 	} else {
 		writer = openLogFile(Datadir, LogFile)
 	}
-	ethlog.AddLogSystem(ethlog.NewStdLogSystem(writer, log.LstdFlags, ethlog.LogLevel(LogLevel)))
+
+	sys := ethlog.NewStdLogSystem(writer, log.LstdFlags, ethlog.LogLevel(LogLevel))
+	ethlog.AddLogSystem(sys)
 	if DebugFile != "" {
 		writer = openLogFile(Datadir, DebugFile)
 		ethlog.AddLogSystem(ethlog.NewStdLogSystem(writer, log.LstdFlags, ethlog.DebugLevel))
 	}
+
+	return sys
 }
 
 func InitConfig(ConfigFile string, Datadir string, EnvPrefix string) *ethutil.ConfigManager {

@@ -43,6 +43,7 @@ func main() {
 	err := utils.DBSanityCheck(db)
 	if err != nil {
 		logger.Errorln(err)
+
 		os.Exit(1)
 	}
 

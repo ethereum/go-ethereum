@@ -25,7 +25,7 @@ func run() error {
 
 	utils.InitDataDir(Datadir)
 
-	utils.InitLogging(Datadir, LogFile, LogLevel, DebugFile)
+	stdLog := utils.InitLogging(Datadir, LogFile, LogLevel, DebugFile)
 
 	db := utils.NewDatabase()
 	err := utils.DBSanityCheck(db)
@@ -53,6 +53,7 @@ func run() error {
 	}
 
 	gui := NewWindow(ethereum, config, clientIdentity, KeyRing, LogLevel)
+	gui.stdLog = stdLog
 
 	utils.RegisterInterrupt(func(os.Signal) {
 		gui.Stop()
