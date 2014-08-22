@@ -474,7 +474,7 @@ func (p *Peer) HandleInbound() {
 				for it.Next() {
 					block := ethchain.NewBlockFromRlpValue(it.Value())
 
-					blockPool.SetBlock(block)
+					blockPool.SetBlock(block, p)
 
 					p.lastBlockReceived = time.Now()
 				}
@@ -507,6 +507,7 @@ func (self *Peer) FetchHashes() {
 
 	if self.td.Cmp(blockPool.td) >= 0 {
 		peerlogger.Debugf("Requesting hashes from %x\n", self.lastReceivedHash)
+		blockPool.td = self.td
 
 		if !blockPool.HasLatestHash() {
 			self.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{self.lastReceivedHash, uint32(200)}))
@@ -625,7 +626,6 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 
 	usedPub := 0
 	// This peer is already added to the peerlist so we expect to find a double pubkey at least once
-
 	eachPeer(p.ethereum.Peers(), func(peer *Peer, e *list.Element) {
 		if bytes.Compare(p.pubkey, peer.pubkey) == 0 {
 			usedPub++
@@ -644,7 +644,6 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 		return
 	}
 
-	// [PROTOCOL_VERSION, NETWORK_ID, CLIENT_ID, CAPS, PORT, PUBKEY]
 	p.versionKnown = true
 
 	// If this is an inbound connection send an ack back
@@ -680,15 +679,8 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 
 	ethlogger.Infof("Added peer (%s) %d / %d (TD = %v ~ %x)\n", p.conn.RemoteAddr(), p.ethereum.Peers().Len(), p.ethereum.MaxPeers, p.td, p.bestHash)
 
-	/*
-		// Catch up with the connected peer
-		if !p.ethereum.IsUpToDate() {
-			peerlogger.Debugln("Already syncing up with a peer; sleeping")
-			time.Sleep(10 * time.Second)
-		}
-	*/
-	//p.SyncWithPeerToLastKnown()
-
+	// Compare the total TD with the blockchain TD. If remote is higher
+	// fetch hashes from highest TD node.
 	if p.td.Cmp(p.ethereum.BlockChain().TD) > 0 {
 		p.ethereum.blockPool.AddHash(p.lastReceivedHash)
 		p.FetchHashes()
@@ -713,47 +705,6 @@ func (p *Peer) String() string {
 
 	return fmt.Sprintf("[%s] (%s) %v %s [%s]", strConnectType, strBoundType, p.conn.RemoteAddr(), p.version, p.caps)
 
-}
-func (p *Peer) SyncWithPeerToLastKnown() {
-	p.catchingUp = false
-	p.CatchupWithPeer(p.ethereum.BlockChain().CurrentBlock.Hash())
-}
-
-func (p *Peer) FindCommonParentBlock() {
-	if p.catchingUp {
-		return
-	}
-
-	p.catchingUp = true
-	if p.blocksRequested == 0 {
-		p.blocksRequested = 20
-	}
-	blocks := p.ethereum.BlockChain().GetChain(p.ethereum.BlockChain().CurrentBlock.Hash(), p.blocksRequested)
-
-	var hashes []interface{}
-	for _, block := range blocks {
-		hashes = append(hashes, block.Hash())
-	}
-
-	msgInfo := append(hashes, uint64(len(hashes)))
-
-	peerlogger.DebugDetailf("Asking for block from %x (%d total) from %s\n", p.ethereum.BlockChain().CurrentBlock.Hash(), len(hashes), p.conn.RemoteAddr().String())
-
-	msg := ethwire.NewMessage(ethwire.MsgGetChainTy, msgInfo)
-	p.QueueMessage(msg)
-}
-func (p *Peer) CatchupWithPeer(blockHash []byte) {
-	if !p.catchingUp {
-		// Make sure nobody else is catching up when you want to do this
-		p.catchingUp = true
-		msg := ethwire.NewMessage(ethwire.MsgGetChainTy, []interface{}{blockHash, uint64(100)})
-		p.QueueMessage(msg)
-
-		peerlogger.DebugDetailf("Requesting blockchain %x... from peer %s\n", p.ethereum.BlockChain().CurrentBlock.Hash()[:4], p.conn.RemoteAddr())
-
-		msg = ethwire.NewMessage(ethwire.MsgGetTxsTy, []interface{}{})
-		p.QueueMessage(msg)
-	}
 }
 
 func (p *Peer) RlpData() []interface{} {

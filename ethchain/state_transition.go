@@ -140,7 +140,7 @@ func (self *StateTransition) preCheck() (err error) {
 }
 
 func (self *StateTransition) TransitionState() (err error) {
-	statelogger.Infof("(~) %x\n", self.tx.Hash())
+	statelogger.Debugf("(~) %x\n", self.tx.Hash())
 
 	/*
 		defer func() {
