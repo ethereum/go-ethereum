@@ -1,6 +1,7 @@
 package eth
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 	"sync"
@@ -51,6 +52,7 @@ func (self *BlockPool) AddHash(hash []byte) {
 
 func (self *BlockPool) SetBlock(b *ethchain.Block, peer *Peer) {
 	hash := string(b.Hash())
+	fmt.Printf("::SetBlock %x\n", hash)
 
 	if self.pool[hash] == nil {
 		self.pool[hash] = &block{peer, nil}
@@ -88,13 +90,19 @@ func (self *BlockPool) CheckLinkAndProcess(f func(block *ethchain.Block)) bool {
 }
 
 func (self *BlockPool) IsLinked() bool {
-	if len(self.hashPool) == 0 || self.pool[string(self.hashPool[0])] == nil {
+	if len(self.hashPool) == 0 {
 		return false
 	}
 
-	block := self.pool[string(self.hashPool[0])].block
-	if block != nil {
-		return self.eth.BlockChain().HasBlock(block.PrevHash)
+	for i := 0; i < len(self.hashPool); i++ {
+		item := self.pool[string(self.hashPool[i])]
+		if item != nil && item.block != nil {
+			if self.eth.BlockChain().HasBlock(item.block.PrevHash) {
+				self.hashPool = self.hashPool[i:]
+
+				return true
+			}
+		}
 	}
 
 	return false
