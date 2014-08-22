@@ -12,7 +12,7 @@ import (
 
 const (
 	ClientIdentifier = "Ethereal"
-	Version          = "0.6.4"
+	Version          = "0.6.5"
 )
 
 var ethereum *eth.Ethereum
@@ -25,9 +25,15 @@ func run() error {
 
 	utils.InitDataDir(Datadir)
 
-	utils.InitLogging(Datadir, LogFile, LogLevel, DebugFile)
+	stdLog := utils.InitLogging(Datadir, LogFile, LogLevel, DebugFile)
 
 	db := utils.NewDatabase()
+	err := utils.DBSanityCheck(db)
+	if err != nil {
+		ErrorWindow(err)
+
+		os.Exit(1)
+	}
 
 	keyManager := utils.NewKeyManager(KeyStore, Datadir, db)
 
@@ -47,6 +53,7 @@ func run() error {
 	}
 
 	gui := NewWindow(ethereum, config, clientIdentity, KeyRing, LogLevel)
+	gui.stdLog = stdLog
 
 	utils.RegisterInterrupt(func(os.Signal) {
 		gui.Stop()

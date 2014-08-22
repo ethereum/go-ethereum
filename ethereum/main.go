@@ -13,7 +13,7 @@ import (
 
 const (
 	ClientIdentifier = "Ethereum(G)"
-	Version          = "0.6.4"
+	Version          = "0.6.5"
 )
 
 var logger = ethlog.NewLogger("CLI")
@@ -40,6 +40,12 @@ func main() {
 	utils.InitLogging(Datadir, LogFile, LogLevel, DebugFile)
 
 	db := utils.NewDatabase()
+	err := utils.DBSanityCheck(db)
+	if err != nil {
+		logger.Errorln(err)
+
+		os.Exit(1)
+	}
 
 	keyManager := utils.NewKeyManager(KeyStore, Datadir, db)
 

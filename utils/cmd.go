@@ -80,6 +80,16 @@ func confirm(message string) bool {
 	return r == "y"
 }
 
+func DBSanityCheck(db ethutil.Database) error {
+	d, _ := db.Get([]byte("ProtocolVersion"))
+	protov := ethutil.NewValue(d).Uint()
+	if protov != eth.ProtocolVersion && protov != 0 {
+		return fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, eth.ProtocolVersion, ethutil.Config.ExecPath+"/database")
+	}
+
+	return nil
+}
+
 func InitDataDir(Datadir string) {
 	_, err := os.Stat(Datadir)
 	if err != nil {
@@ -90,18 +100,22 @@ func InitDataDir(Datadir string) {
 	}
 }
 
-func InitLogging(Datadir string, LogFile string, LogLevel int, DebugFile string) {
+func InitLogging(Datadir string, LogFile string, LogLevel int, DebugFile string) ethlog.LogSystem {
 	var writer io.Writer
 	if LogFile == "" {
 		writer = os.Stdout
 	} else {
 		writer = openLogFile(Datadir, LogFile)
 	}
-	ethlog.AddLogSystem(ethlog.NewStdLogSystem(writer, log.LstdFlags, ethlog.LogLevel(LogLevel)))
+
+	sys := ethlog.NewStdLogSystem(writer, log.LstdFlags, ethlog.LogLevel(LogLevel))
+	ethlog.AddLogSystem(sys)
 	if DebugFile != "" {
 		writer = openLogFile(Datadir, DebugFile)
 		ethlog.AddLogSystem(ethlog.NewStdLogSystem(writer, log.LstdFlags, ethlog.DebugLevel))
 	}
+
+	return sys
 }
 
 func InitConfig(ConfigFile string, Datadir string, EnvPrefix string) *ethutil.ConfigManager {
@@ -112,7 +126,6 @@ func InitConfig(ConfigFile string, Datadir string, EnvPrefix string) *ethutil.Co
 func exit(err error) {
 	status := 0
 	if err != nil {
-		fmt.Println(err)
 		logger.Errorln("Fatal: ", err)
 		status = 1
 	}
