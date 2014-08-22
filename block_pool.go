@@ -1,7 +1,6 @@
 package eth
 
 import (
-	"fmt"
 	"math"
 	"math/big"
 	"sync"
@@ -52,7 +51,6 @@ func (self *BlockPool) AddHash(hash []byte) {
 
 func (self *BlockPool) SetBlock(b *ethchain.Block, peer *Peer) {
 	hash := string(b.Hash())
-	fmt.Printf("::SetBlock %x\n", hash)
 
 	if self.pool[hash] == nil {
 		self.pool[hash] = &block{peer, nil}
