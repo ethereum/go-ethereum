@@ -1,8 +1,9 @@
 package ethreact
 
 import (
-	"github.com/ethereum/eth-go/ethlog"
 	"sync"
+
+	"github.com/ethereum/eth-go/ethlog"
 )
 
 var logger = ethlog.NewLogger("REACTOR")
@@ -32,7 +33,7 @@ func (e *EventHandler) Post(event Event) {
 		select {
 		case ch <- event:
 		default:
-			logger.Warnf("subscribing channel %d to event %s blocked. skipping\n", i, event.Name)
+			logger.Debugf("subscribing channel %d to event %s blocked. skipping\n", i, event.Name)
 		}
 	}
 }
