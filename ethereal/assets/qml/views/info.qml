@@ -106,7 +106,6 @@ Rectangle {
 						}
 					}
 				}
-
 			}
 
 			Menu {

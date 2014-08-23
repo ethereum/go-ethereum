@@ -53,7 +53,7 @@ func (self *UiLib) LookupDomain(domain string) string {
 	data := world.Config().Get("DnsReg").StorageString(domain).Bytes()
 
 	// Left padded = A record, Right padded = CNAME
-	if data[0] == 0 {
+	if len(data) > 0 && data[0] == 0 {
 		data = bytes.TrimLeft(data, "\x00")
 		var ipSlice []string
 		for _, d := range data {

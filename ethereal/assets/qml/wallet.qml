@@ -43,7 +43,6 @@ ApplicationWindow {
 	// Takes care of loading all default plugins
 	Component.onCompleted: {
 		var walletView = addPlugin("./views/wallet.qml", {noAdd: true, section: "ethereum", active: true})
-		var historyView = addPlugin("./views/history.qml", {noAdd: true, section: "legacy"})
 		var newTxView = addPlugin("./views/transaction.qml", {noAdd: true, section: "legacy"})
 		var chainView = addPlugin("./views/chain.qml", {noAdd: true, section: "legacy"})
 		var infoView = addPlugin("./views/info.qml", {noAdd: true, section: "legacy"})
