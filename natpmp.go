@@ -1,9 +1,11 @@
 package eth
 
 import (
-	natpmp "code.google.com/p/go-nat-pmp"
+	//natpmp "code.google.com/p/go-nat-pmp"
 	"fmt"
 	"net"
+
+	natpmp "github.com/jackpal/go-nat-pmp"
 )
 
 // Adapt the NAT-PMP protocol to the NAT interface
