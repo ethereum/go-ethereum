@@ -71,7 +71,6 @@ func main() {
 	// This is a bit of a cheat, but ey!
 	os.Setenv("QTWEBKIT_INSPECTOR_SERVER", "127.0.0.1:99999")
 
-	//qml.Init(nil)
 	qml.Run(run)
 
 	var interrupted = false

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -412,6 +413,7 @@ func (gui *Gui) update() {
 
 	peerUpdateTicker := time.NewTicker(5 * time.Second)
 	generalUpdateTicker := time.NewTicker(1 * time.Second)
+	statsUpdateTicker := time.NewTicker(5 * time.Second)
 
 	state := gui.eth.StateManager().TransState()
 
@@ -488,6 +490,10 @@ func (gui *Gui) update() {
 					pow := gui.miner.GetPow()
 					miningLabel.Set("text", "Mining @ "+strconv.FormatInt(pow.GetHashrate(), 10)+"Khash")
 				}
+
+			case <-statsUpdateTicker.C:
+				gui.setStatsPane()
+
 			}
 		}
 	}()
@@ -505,6 +511,28 @@ func (gui *Gui) update() {
 	reactor.Subscribe("object:"+string(nameReg.Address()), objectChan)
 
 	reactor.Subscribe("peerList", peerChan)
+}
+
+func (gui *Gui) setStatsPane() {
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+
+	statsPane := gui.getObjectByName("statsPane")
+	statsPane.Set("text", fmt.Sprintf(`###### Ethereal 0.6.4 (%s) #######
+
+CPU:        # %d
+Goroutines: # %d
+CGoCalls:   # %d
+
+Alloc:      %d
+Heap Alloc: %d
+
+CGNext:     %x
+NumGC:      %d
+`, runtime.Version(), runtime.NumCPU, runtime.NumGoroutine(), runtime.NumCgoCall(),
+		memStats.Alloc, memStats.HeapAlloc,
+		memStats.NextGC, memStats.NumGC,
+	))
 }
 
 func (gui *Gui) CopyToClipboard(data string) {
