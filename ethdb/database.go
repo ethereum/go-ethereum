@@ -2,9 +2,10 @@ package ethdb
 
 import (
 	"fmt"
+	"path"
+
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/syndtr/goleveldb/leveldb"
-	"path"
 )
 
 type LDBDatabase struct {
@@ -45,7 +46,7 @@ func (db *LDBDatabase) Db() *leveldb.DB {
 }
 
 func (db *LDBDatabase) LastKnownTD() []byte {
-	data, _ := db.db.Get([]byte("LastKnownTotalDifficulty"), nil)
+	data, _ := db.db.Get([]byte("LTD"), nil)
 
 	if len(data) == 0 {
 		data = []byte{0x0}
@@ -53,14 +54,6 @@ func (db *LDBDatabase) LastKnownTD() []byte {
 
 	return data
 }
-
-/*
-func (db *LDBDatabase) GetKeys() []*ethutil.Key {
-	data, _ := db.Get([]byte("KeyRing"))
-
-	return []*ethutil.Key{ethutil.NewKeyFromBytes(data)}
-}
-*/
 
 func (db *LDBDatabase) Close() {
 	// Close the leveldb database

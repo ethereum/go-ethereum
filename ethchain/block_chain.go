@@ -176,7 +176,7 @@ func (bc *BlockChain) setLastBlock() {
 }
 
 func (bc *BlockChain) SetTotalDifficulty(td *big.Int) {
-	ethutil.Config.Db.Put([]byte("LastKnownTotalDifficulty"), td.Bytes())
+	ethutil.Config.Db.Put([]byte("LTD"), td.Bytes())
 	bc.TD = td
 }
 
