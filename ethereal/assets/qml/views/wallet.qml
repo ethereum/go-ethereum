@@ -5,6 +5,7 @@ import QtQuick.Dialogs 1.0;
 import QtQuick.Window 2.1;
 import QtQuick.Controls.Styles 1.1
 import Ethereum 1.0
+import "../../ext/filter.js" as Eth
 
 Rectangle {
 	id: root
@@ -151,10 +152,15 @@ Rectangle {
 				model: ListModel {
 					id: txModel
 					Component.onCompleted: {
-						var messages = JSON.parse(eth.messages({latest: -1, from: eth.key().address}))
+						var filter = new Eth.Filter({latest: -1, from: eth.key().address})
+						filter.changed(addTxs)
+
+						addTxs(filter.messages())
+					}
+					function addTxs(messages) {
 						for(var i = 0; i < messages.length; i++) {
 							var message = messages[i];
-							this.insert(0, {num: i, from: message.from, to: message.to, value: eth.numberToHuman(message.value)})
+							txModel.insert(0, {num: txModel.count, from: message.from, to: message.to, value: eth.numberToHuman(message.value)})
 						}
 					}
 				}
