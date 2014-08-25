@@ -351,7 +351,7 @@ func (block *Block) header() []interface{} {
 
 func (block *Block) String() string {
 	return fmt.Sprintf(`
-	BLOCK(%x):
+	BLOCK(%x): Size: %v
 	PrevHash:   %x
 	UncleSha:   %x
 	Coinbase:   %x
@@ -368,6 +368,7 @@ func (block *Block) String() string {
 	NumTx:      %v
 `,
 		block.Hash(),
+		block.Size(),
 		block.PrevHash,
 		block.UncleSha,
 		block.Coinbase,
@@ -383,4 +384,8 @@ func (block *Block) String() string {
 		block.Nonce,
 		len(block.transactions),
 	)
+}
+
+func (self *Block) Size() ethutil.StorageSize {
+	return ethutil.StorageSize(len(self.RlpEncode()))
 }
