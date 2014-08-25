@@ -151,7 +151,7 @@ Rectangle {
 				model: ListModel {
 					id: txModel
 					Component.onCompleted: {
-						var messages = JSON.parse(eth.messages({latest: -1, from: "e6716f9544a56c530d868e4bfbacb172315bdead"}))
+						var messages = JSON.parse(eth.messages({latest: -1, from: eth.key().address}))
 						for(var i = 0; i < messages.length; i++) {
 							var message = messages[i];
 							this.insert(0, {num: i, from: message.from, to: message.to, value: eth.numberToHuman(message.value)})
