@@ -12,6 +12,7 @@ import (
 type ClosureRef interface {
 	ReturnGas(*big.Int, *big.Int)
 	Address() []byte
+	Object() *ethstate.StateObject
 	GetStorage(*big.Int) *ethutil.Value
 	SetStorage(*big.Int, *ethutil.Value)
 }

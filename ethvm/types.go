@@ -145,6 +145,7 @@ const (
 	CREATE = 0xf0
 	CALL   = 0xf1
 	RETURN = 0xf2
+	POST   = 0xf3
 
 	// 0x70 range - other
 	LOG     = 0xfe // XXX Unofficial
@@ -438,6 +439,7 @@ var OpCodes = map[string]byte{
 	"CREATE": 0xf0,
 	"CALL":   0xf1,
 	"RETURN": 0xf2,
+	"POST":   0xf3,
 
 	// 0x70 range - other
 	"LOG":     0xfe,

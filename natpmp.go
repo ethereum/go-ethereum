@@ -1,7 +1,6 @@
 package eth
 
 import (
-	//natpmp "code.google.com/p/go-nat-pmp"
 	"fmt"
 	"net"
 

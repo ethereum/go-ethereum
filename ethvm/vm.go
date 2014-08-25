@@ -1,6 +1,7 @@
 package ethvm
 
 import (
+	"container/list"
 	"fmt"
 	"math"
 	"math/big"
@@ -18,11 +19,6 @@ type Debugger interface {
 }
 
 type Vm struct {
-	// Stack for processing contracts
-	stack *Stack
-	// non-persistent key/value memory storage
-	mem map[string]*big.Int
-
 	env Environment
 
 	Verbose bool
@@ -40,6 +36,8 @@ type Vm struct {
 	Fn          string
 
 	Recoverable bool
+
+	queue *list.List
 }
 
 type Environment interface {
@@ -66,7 +64,7 @@ func New(env Environment) *Vm {
 		lt = LogTyDiff
 	}
 
-	return &Vm{env: env, logTy: lt, Recoverable: true}
+	return &Vm{env: env, logTy: lt, Recoverable: true, queue: list.New()}
 }
 
 func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
@@ -215,6 +213,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			newMemSize = stack.data[stack.Len()-2].Uint64() + stack.data[stack.Len()-3].Uint64()
 		}
 
+		// BUG This will break on overflows. https://github.com/ethereum/eth-go/issues/47
 		newMemSize = (newMemSize + 31) / 32 * 32
 		if newMemSize > uint64(mem.Len()) {
 			m := GasMemory.Uint64() * (newMemSize - uint64(mem.Len())) / 32
@@ -711,6 +710,8 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				err          error
 				value        = stack.Pop()
 				size, offset = stack.Popn()
+				input        = mem.Get(offset.Int64(), size.Int64())
+				gas          = new(big.Int).Set(closure.Gas)
 
 				// Snapshot the current stack so we are able to
 				// revert back to it later.
@@ -726,37 +727,10 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			self.Printf(" (*) %x", addr).Endl()
 
-			msg := self.env.State().Manifest().AddMessage(&ethstate.Message{
-				To: addr, From: closure.Address(),
-				Origin: self.env.Origin(),
-				Block:  self.env.BlockHash(), Timestamp: self.env.Time(), Coinbase: self.env.Coinbase(), Number: self.env.BlockNumber(),
-				Value: value,
-			})
+			closure.UseGas(closure.Gas)
 
-			// Create a new contract
-			contract := self.env.State().NewStateObject(addr)
-			if contract.Balance.Cmp(value) >= 0 {
-				closure.object.SubAmount(value)
-				contract.AddAmount(value)
-
-				// Set the init script
-				initCode := mem.Get(offset.Int64(), size.Int64())
-				msg.Input = initCode
-
-				// Transfer all remaining gas to the new
-				// contract so it may run the init script
-				gas := new(big.Int).Set(closure.Gas)
-				closure.UseGas(closure.Gas)
-
-				// Create the closure
-				c := NewClosure(msg, closure, contract, initCode, gas, closure.Price)
-				// Call the closure and set the return value as
-				// main script.
-				contract.Code, _, err = c.Call(self, nil)
-			} else {
-				err = fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Balance)
-			}
-
+			msg := NewMessage(self, addr, input, gas, closure.Price, value)
+			ret, err := msg.Exec(closure)
 			if err != nil {
 				stack.Push(ethutil.BigFalse)
 
@@ -765,10 +739,55 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 				self.Printf("CREATE err %v", err)
 			} else {
-				stack.Push(ethutil.BigD(addr))
+				msg.object.Code = ret
 
-				msg.Output = contract.Code
+				stack.Push(ethutil.BigD(addr))
 			}
+			/*
+					msg := self.env.State().Manifest().AddMessage(&ethstate.Message{
+						To: addr, From: closure.Address(),
+						Origin: self.env.Origin(),
+						Block:  self.env.BlockHash(), Timestamp: self.env.Time(), Coinbase: self.env.Coinbase(), Number: self.env.BlockNumber(),
+						Value: value,
+					})
+
+					// Create a new contract
+					contract := self.env.State().NewStateObject(addr)
+					if contract.Balance.Cmp(value) >= 0 {
+						closure.object.SubAmount(value)
+						contract.AddAmount(value)
+
+						// Set the init script
+						initCode := mem.Get(offset.Int64(), size.Int64())
+						msg.Input = initCode
+
+						// Transfer all remaining gas to the new
+						// contract so it may run the init script
+						gas := new(big.Int).Set(closure.Gas)
+						closure.UseGas(closure.Gas)
+
+						// Create the closure
+						c := NewClosure(msg, closure, contract, initCode, gas, closure.Price)
+						// Call the closure and set the return value as
+						// main script.
+						contract.Code, _, err = c.Call(self, nil)
+					} else {
+						err = fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Balance)
+					}
+
+				if err != nil {
+					stack.Push(ethutil.BigFalse)
+
+					// Revert the state as it was before.
+					self.env.State().Set(snapshot)
+
+					self.Printf("CREATE err %v", err)
+				} else {
+					stack.Push(ethutil.BigD(addr))
+
+					msg.Output = contract.Code
+				}
+			*/
 			self.Endl()
 
 			// Debug hook
@@ -791,51 +810,88 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 
-			msg := self.env.State().Manifest().AddMessage(&ethstate.Message{
-				To: addr.Bytes(), From: closure.Address(),
-				Input:  args,
-				Origin: self.env.Origin(),
-				Block:  self.env.BlockHash(), Timestamp: self.env.Time(), Coinbase: self.env.Coinbase(), Number: self.env.BlockNumber(),
-				Value: value,
-			})
+			snapshot := self.env.State().Copy()
 
-			if closure.object.Balance.Cmp(value) < 0 {
-				vmlogger.Debugf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Balance)
-
-				closure.ReturnGas(gas, nil)
-
+			msg := NewMessage(self, addr.Bytes(), args, gas, closure.Price, value)
+			ret, err := msg.Exec(closure)
+			if err != nil {
 				stack.Push(ethutil.BigFalse)
+
+				self.env.State().Set(snapshot)
 			} else {
-				snapshot := self.env.State().Copy()
+				stack.Push(ethutil.BigTrue)
 
-				stateObject := self.env.State().GetOrNewStateObject(addr.Bytes())
-
-				closure.object.SubAmount(value)
-				stateObject.AddAmount(value)
-
-				// Create a new callable closure
-				c := NewClosure(msg, closure, stateObject, stateObject.Code, gas, closure.Price)
-				// Executer the closure and get the return value (if any)
-				ret, _, err := c.Call(self, args)
-				if err != nil {
-					stack.Push(ethutil.BigFalse)
-
-					vmlogger.Debugf("Closure execution failed. %v\n", err)
-
-					self.env.State().Set(snapshot)
-				} else {
-					stack.Push(ethutil.BigTrue)
-
-					mem.Set(retOffset.Int64(), retSize.Int64(), ret)
-				}
-
-				msg.Output = ret
-
-				// Debug hook
-				if self.Dbg != nil {
-					self.Dbg.SetCode(closure.Code)
-				}
+				mem.Set(retOffset.Int64(), retSize.Int64(), ret)
 			}
+
+			// Debug hook
+			if self.Dbg != nil {
+				self.Dbg.SetCode(closure.Code)
+			}
+
+			/*
+				msg := self.env.State().Manifest().AddMessage(&ethstate.Message{
+					To: addr.Bytes(), From: closure.Address(),
+					Input:  args,
+					Origin: self.env.Origin(),
+					Block:  self.env.BlockHash(), Timestamp: self.env.Time(), Coinbase: self.env.Coinbase(), Number: self.env.BlockNumber(),
+					Value: value,
+				})
+
+				if closure.object.Balance.Cmp(value) < 0 {
+					vmlogger.Debugf("Insufficient funds to transfer value. Req %v, has %v", value, closure.object.Balance)
+
+					closure.ReturnGas(gas, nil)
+
+					stack.Push(ethutil.BigFalse)
+				} else {
+					snapshot := self.env.State().Copy()
+
+					stateObject := self.env.State().GetOrNewStateObject(addr.Bytes())
+
+					closure.object.SubAmount(value)
+					stateObject.AddAmount(value)
+
+					// Create a new callable closure
+					c := NewClosure(msg, closure, stateObject, stateObject.Code, gas, closure.Price)
+					// Executer the closure and get the return value (if any)
+					ret, _, err := c.Call(self, args)
+					if err != nil {
+						stack.Push(ethutil.BigFalse)
+
+						vmlogger.Debugf("Closure execution failed. %v\n", err)
+
+						self.env.State().Set(snapshot)
+					} else {
+						stack.Push(ethutil.BigTrue)
+
+						mem.Set(retOffset.Int64(), retSize.Int64(), ret)
+					}
+
+					msg.Output = ret
+
+					// Debug hook
+					if self.Dbg != nil {
+						self.Dbg.SetCode(closure.Code)
+					}
+				}
+			*/
+		case POST:
+			require(6)
+
+			self.Endl()
+
+			gas := stack.Pop()
+			// Pop gas and value of the stack.
+			value, addr := stack.Popn()
+			// Pop input size and offset
+			inSize, inOffset := stack.Popn()
+			// Get the arguments from the memory
+			args := mem.Get(inOffset.Int64(), inSize.Int64())
+
+			msg := NewMessage(self, addr.Bytes(), args, gas, closure.Price, value)
+
+			msg.Postpone()
 		case RETURN:
 			require(2)
 			size, offset := stack.Popn()
@@ -887,6 +943,10 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 	}
 }
 
+func (self *Vm) Queue() *list.List {
+	return self.queue
+}
+
 func (self *Vm) Printf(format string, v ...interface{}) *Vm {
 	if self.Verbose && self.logTy == LogTyPretty {
 		self.logStr += fmt.Sprintf(format, v...)
@@ -917,4 +977,65 @@ func ensure256(x *big.Int) {
 	if x.Cmp(new(big.Int)) < 0 {
 		x.SetInt64(0)
 	}
+}
+
+type Message struct {
+	vm                *Vm
+	closure           *Closure
+	address, input    []byte
+	gas, price, value *big.Int
+	object            *ethstate.StateObject
+}
+
+func NewMessage(vm *Vm, address, input []byte, gas, gasPrice, value *big.Int) *Message {
+	return &Message{vm: vm, address: address, input: input, gas: gas, price: gasPrice, value: value}
+}
+
+func (self *Message) Postpone() {
+	self.vm.queue.PushBack(self)
+}
+
+func (self *Message) Exec(caller ClosureRef) (ret []byte, err error) {
+	queue := self.vm.queue
+	self.vm.queue = list.New()
+
+	defer func() {
+		if err == nil {
+			queue.PushBackList(self.vm.queue)
+		}
+
+		self.vm.queue = queue
+	}()
+
+	msg := self.vm.env.State().Manifest().AddMessage(&ethstate.Message{
+		To: self.address, From: caller.Address(),
+		Input:  self.input,
+		Origin: self.vm.env.Origin(),
+		Block:  self.vm.env.BlockHash(), Timestamp: self.vm.env.Time(), Coinbase: self.vm.env.Coinbase(), Number: self.vm.env.BlockNumber(),
+		Value: self.value,
+	})
+
+	object := caller.Object()
+	if object.Balance.Cmp(self.value) < 0 {
+		caller.ReturnGas(self.gas, self.price)
+
+		err = fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, object.Balance)
+	} else {
+		stateObject := self.vm.env.State().GetOrNewStateObject(self.address)
+		self.object = stateObject
+
+		caller.Object().SubAmount(self.value)
+		stateObject.AddAmount(self.value)
+
+		// Create a new callable closure
+		c := NewClosure(msg, caller, object, object.Code, self.gas, self.price)
+		// Executer the closure and get the return value (if any)
+		ret, _, err = c.Call(self.vm, self.input)
+
+		msg.Output = ret
+
+		return ret, err
+	}
+
+	return
 }

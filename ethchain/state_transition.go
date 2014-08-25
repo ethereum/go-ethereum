@@ -278,6 +278,15 @@ func (self *StateTransition) Eval(msg *ethstate.Message, script []byte, context 
 
 	ret, _, err = callerClosure.Call(vm, self.tx.Data)
 
+	if err == nil {
+		// Execute POSTs
+		for e := vm.Queue().Front(); e != nil; e = e.Next() {
+			msg := e.Value.(*ethvm.Message)
+
+			msg.Exec(transactor)
+		}
+	}
+
 	return
 }
 

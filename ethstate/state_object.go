@@ -245,6 +245,7 @@ func (self *StateObject) Copy() *StateObject {
 	stateObject.InitCode = ethutil.CopyBytes(self.InitCode)
 	stateObject.storage = self.storage.Copy()
 	stateObject.gasPool.Set(self.gasPool)
+	stateObject.remove = self.remove
 
 	return stateObject
 }
@@ -269,6 +270,11 @@ func (c *StateObject) Address() []byte {
 // Returns the initialization Code
 func (c *StateObject) Init() Code {
 	return c.InitCode
+}
+
+// To satisfy ClosureRef
+func (self *StateObject) Object() *StateObject {
+	return self
 }
 
 // Debug stuff
