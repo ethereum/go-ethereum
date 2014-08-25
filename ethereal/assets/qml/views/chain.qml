@@ -10,7 +10,6 @@ Rectangle {
 	id: root
 	property var title: "Network"
 	property var iconSource: "../net.png"
-	property var secondary: "Hi"
 	property var menuItem
 
 	objectName: "chainView"
@@ -110,9 +109,9 @@ Rectangle {
 		}
 
 		if(initial){
-			blockModel.append({number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
+			blockModel.append({size: block.size, number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
 		} else {
-			blockModel.insert(0, {number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
+			blockModel.insert(0, {size: block.size, number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
 		}
 
 		//root.secondary.text = "#" + block.number;
@@ -137,7 +136,7 @@ Rectangle {
 					anchors.top: parent.top
 					anchors.left: parent.left
 					Text { text: '<h3>Block details</h3>'; color: "#F2F2F2"}
-					Text { text: '<b>Block number:</b> ' + number; color: "#F2F2F2"}
+					Text { text: '<b>Block number:</b> ' + number + " (Size: " + size + ")"; color: "#F2F2F2"}
 					Text { text: '<b>Hash:</b> ' + hash; color: "#F2F2F2"}
 					Text { text: '<b>Coinbase:</b> &lt;' + name + '&gt; ' + coinbase; color: "#F2F2F2"}
 					Text { text: '<b>Block found at:</b> ' + prettyTime; color: "#F2F2F2"}

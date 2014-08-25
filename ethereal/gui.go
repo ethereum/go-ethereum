@@ -279,7 +279,7 @@ func (gui *Gui) insertTransaction(window string, tx *ethchain.Transaction) {
 	ptx.Address = r
 
 	if window == "post" {
-		gui.getObjectByName("transactionView").Call("addTx", ptx, inout)
+		//gui.getObjectByName("transactionView").Call("addTx", ptx, inout)
 	} else {
 		gui.getObjectByName("pendingTxView").Call("addTx", ptx, inout)
 	}
@@ -393,12 +393,12 @@ func (gui *Gui) update() {
 					if bytes.Compare(tx.Sender(), gui.address()) == 0 {
 						object.SubAmount(tx.Value)
 
-						gui.getObjectByName("transactionView").Call("addTx", ethpipe.NewJSTx(tx), "send")
+						//gui.getObjectByName("transactionView").Call("addTx", ethpipe.NewJSTx(tx), "send")
 						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 					} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
 						object.AddAmount(tx.Value)
 
-						gui.getObjectByName("transactionView").Call("addTx", ethpipe.NewJSTx(tx), "recv")
+						//gui.getObjectByName("transactionView").Call("addTx", ethpipe.NewJSTx(tx), "recv")
 						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 					}
 
