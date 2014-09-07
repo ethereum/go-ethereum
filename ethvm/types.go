@@ -49,6 +49,8 @@ const (
 	CODESIZE     = 0x38
 	CODECOPY     = 0x39
 	GASPRICE     = 0x3a
+	EXTCODECOPY  = 0x3b
+	EXTCODESIZE  = 0x3c
 
 	// 0x40 range - block operations
 	PREVHASH   = 0x40
@@ -142,10 +144,11 @@ const (
 	SWAP16 = 0x9f
 
 	// 0xf0 range - closures
-	CREATE = 0xf0
-	CALL   = 0xf1
-	RETURN = 0xf2
-	POST   = 0xf3
+	CREATE        = 0xf0
+	CALL          = 0xf1
+	RETURN        = 0xf2
+	POST          = 0xf3
+	CALLSTATELESS = 0xf4
 
 	// 0x70 range - other
 	LOG     = 0xfe // XXX Unofficial
@@ -197,12 +200,14 @@ var opCodeToString = map[OpCode]string{
 	GASPRICE:     "TXGASPRICE",
 
 	// 0x40 range - block operations
-	PREVHASH:   "PREVHASH",
-	COINBASE:   "COINBASE",
-	TIMESTAMP:  "TIMESTAMP",
-	NUMBER:     "NUMBER",
-	DIFFICULTY: "DIFFICULTY",
-	GASLIMIT:   "GASLIMIT",
+	PREVHASH:    "PREVHASH",
+	COINBASE:    "COINBASE",
+	TIMESTAMP:   "TIMESTAMP",
+	NUMBER:      "NUMBER",
+	DIFFICULTY:  "DIFFICULTY",
+	GASLIMIT:    "GASLIMIT",
+	EXTCODESIZE: "EXTCODESIZE",
+	EXTCODECOPY: "EXTCODECOPY",
 
 	// 0x50 range - 'storage' and execution
 	POP: "POP",
@@ -288,9 +293,11 @@ var opCodeToString = map[OpCode]string{
 	SWAP16: "SWAP16",
 
 	// 0xf0 range
-	CREATE: "CREATE",
-	CALL:   "CALL",
-	RETURN: "RETURN",
+	CREATE:        "CREATE",
+	CALL:          "CALL",
+	RETURN:        "RETURN",
+	POST:          "POST",
+	CALLSTATELESS: "CALLSTATELESS",
 
 	// 0x70 range - other
 	LOG:     "LOG",
@@ -343,7 +350,12 @@ var OpCodes = map[string]byte{
 	"CALLVALUE":    0x34,
 	"CALLDATALOAD": 0x35,
 	"CALLDATASIZE": 0x36,
-	"GASPRICE":     0x38,
+	"CALLDATACOPY": 0x37,
+	"CODESIZE":     0x38,
+	"CODECOPY":     0x39,
+	"GASPRICE":     0x3a,
+	"EXTCODECOPY":  0x3b,
+	"EXTCODESIZE":  0x3c,
 
 	// 0x40 range - block operations
 	"PREVHASH":   0x40,
@@ -436,10 +448,11 @@ var OpCodes = map[string]byte{
 	"SWAP16": 0x9f,
 
 	// 0xf0 range - closures
-	"CREATE": 0xf0,
-	"CALL":   0xf1,
-	"RETURN": 0xf2,
-	"POST":   0xf3,
+	"CREATE":        0xf0,
+	"CALL":          0xf1,
+	"RETURN":        0xf2,
+	"POST":          0xf3,
+	"CALLSTATELESS": 0xf4,
 
 	// 0x70 range - other
 	"LOG":     0xfe,

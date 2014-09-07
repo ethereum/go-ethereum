@@ -197,6 +197,10 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			require(3)
 
 			newMemSize = stack.Peek().Uint64() + stack.data[stack.Len()-3].Uint64()
+		case EXTCODECOPY:
+			require(4)
+
+			newMemSize = stack.data[stack.Len()-1].Uint64() + stack.data[stack.Len()-4].Uint64()
 		case CALL:
 			require(7)
 			gas.Set(GasCall)
@@ -550,14 +554,32 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			code := closure.Args[cOff : cOff+l]
 
 			mem.Set(mOff, l, code)
-		case CODESIZE:
-			l := big.NewInt(int64(len(closure.Code)))
+		case CODESIZE, EXTCODESIZE:
+			var code []byte
+			if op == EXTCODECOPY {
+				addr := stack.Pop().Bytes()
+
+				code = self.env.State().GetCode(addr)
+			} else {
+				code = closure.Code
+			}
+
+			l := big.NewInt(int64(len(code)))
 			stack.Push(l)
 
 			self.Printf(" => %d", l)
-		case CODECOPY:
+		case CODECOPY, EXTCODECOPY:
+			var code []byte
+			if op == EXTCODECOPY {
+				addr := stack.Pop().Bytes()
+
+				code = self.env.State().GetCode(addr)
+			} else {
+				code = closure.Code
+			}
+
 			var (
-				size = int64(len(closure.Code))
+				size = int64(len(code))
 				mOff = stack.Pop().Int64()
 				cOff = stack.Pop().Int64()
 				l    = stack.Pop().Int64()
@@ -570,9 +592,9 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				l = 0
 			}
 
-			code := closure.Code[cOff : cOff+l]
+			codeCopy := code[cOff : cOff+l]
 
-			mem.Set(mOff, l, code)
+			mem.Set(mOff, l, codeCopy)
 		case GASPRICE:
 			stack.Push(closure.Price)
 
