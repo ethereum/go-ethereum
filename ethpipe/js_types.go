@@ -1,7 +1,6 @@
 package ethpipe
 
 import (
-	"encoding/json"
 	"strconv"
 	"strings"
 
@@ -13,16 +12,17 @@ import (
 
 // Block interface exposed to QML
 type JSBlock struct {
+	//Transactions string `json:"transactions"`
 	ref          *ethchain.Block
-	Size         string `json:"size"`
-	Number       int    `json:"number"`
-	Hash         string `json:"hash"`
-	Transactions string `json:"transactions"`
-	Time         int64  `json:"time"`
-	Coinbase     string `json:"coinbase"`
-	Name         string `json:"name"`
-	GasLimit     string `json:"gasLimit"`
-	GasUsed      string `json:"gasUsed"`
+	Size         string        `json:"size"`
+	Number       int           `json:"number"`
+	Hash         string        `json:"hash"`
+	Transactions *ethutil.List `json:"transactions"`
+	Time         int64         `json:"time"`
+	Coinbase     string        `json:"coinbase"`
+	Name         string        `json:"name"`
+	GasLimit     string        `json:"gasLimit"`
+	GasUsed      string        `json:"gasUsed"`
 }
 
 // Creates a new QML Block from a chain block
@@ -36,12 +36,16 @@ func NewJSBlock(block *ethchain.Block) *JSBlock {
 		ptxs = append(ptxs, *NewJSTx(tx))
 	}
 
-	txJson, err := json.Marshal(ptxs)
-	if err != nil {
-		return nil
-	}
+	/*
+		txJson, err := json.Marshal(ptxs)
+		if err != nil {
+			return nil
+		}
+		return &JSBlock{ref: block, Size: block.Size().String(), Number: int(block.Number.Uint64()), GasUsed: block.GasUsed.String(), GasLimit: block.GasLimit.String(), Hash: ethutil.Bytes2Hex(block.Hash()), Transactions: string(txJson), Time: block.Time, Coinbase: ethutil.Bytes2Hex(block.Coinbase)}
+	*/
+	list := ethutil.NewList(ptxs)
 
-	return &JSBlock{ref: block, Size: block.Size().String(), Number: int(block.Number.Uint64()), GasUsed: block.GasUsed.String(), GasLimit: block.GasLimit.String(), Hash: ethutil.Bytes2Hex(block.Hash()), Transactions: string(txJson), Time: block.Time, Coinbase: ethutil.Bytes2Hex(block.Coinbase)}
+	return &JSBlock{ref: block, Size: block.Size().String(), Number: int(block.Number.Uint64()), GasUsed: block.GasUsed.String(), GasLimit: block.GasLimit.String(), Hash: ethutil.Bytes2Hex(block.Hash()), Transactions: list, Time: block.Time, Coinbase: ethutil.Bytes2Hex(block.Coinbase)}
 }
 
 func (self *JSBlock) ToString() string {
