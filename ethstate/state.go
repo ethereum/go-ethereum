@@ -49,6 +49,15 @@ func (self *State) GetNonce(addr []byte) uint64 {
 	return 0
 }
 
+func (self *State) GetCode(addr []byte) []byte {
+	stateObject := self.GetStateObject(addr)
+	if stateObject != nil {
+		return stateObject.Code
+	}
+
+	return nil
+}
+
 //
 // Setting, updating & deleting state object methods
 //

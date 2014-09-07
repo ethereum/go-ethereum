@@ -297,8 +297,12 @@ func (c *StateObject) RlpEncode() []byte {
 	} else {
 		root = ""
 	}
+	var codeHash []byte
+	if len(c.Code) > 0 {
+		codeHash = ethcrypto.Sha3Bin(c.Code)
+	}
 
-	return ethutil.Encode([]interface{}{c.Nonce, c.Balance, root, ethcrypto.Sha3Bin(c.Code)})
+	return ethutil.Encode([]interface{}{c.Nonce, c.Balance, root, codeHash})
 }
 
 func (c *StateObject) RlpDecode(data []byte) {
