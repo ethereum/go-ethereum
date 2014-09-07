@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/eth-go/ethutil"
 )
 
+// FIPS 202 test (reverted back to FIPS 180)
 func TestSha3(t *testing.T) {
 	const exp = "3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532"
 	sha3_256 := Sha3Bin([]byte("abc"))
