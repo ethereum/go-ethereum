@@ -98,15 +98,18 @@ Rectangle {
 
 
 	function addBlock(block, initial) {
-		var txs = JSON.parse(block.transactions);
-		var amount = 0
 		if(initial == undefined){
 			initial = false
 		}
 
+		/*
+		var txs = JSON.parse(block.transactions);
 		if(txs != null){
 			amount = txs.length
 		}
+		*/
+	       var txs = block.transactions;
+	       var amount = block.transactions.length;
 
 		if(initial){
 			blockModel.append({size: block.size, number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
@@ -241,8 +244,8 @@ Rectangle {
 			singleBlock.set(0,block)
 			popup.height = 300
 			transactionModel.clear()
-			if(block.txs != undefined){
-				for(var i = 0; i < block.txs.count; ++i) {
+			if(block.txs !== undefined){
+				for(var i = 0; i < block.txs.length; i++) {
 					transactionModel.insert(0, block.txs.get(i))
 				}
 				if(block.txs.get(0).data){

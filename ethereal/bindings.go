@@ -78,7 +78,7 @@ func (gui *Gui) GetLogLevel() ethlog.LogLevel {
 }
 
 func (self *Gui) AddPlugin(pluginPath string) {
-	self.plugins[pluginPath] = plugin{Name: "SomeName", Path: pluginPath}
+	self.plugins[pluginPath] = plugin{Name: pluginPath, Path: pluginPath}
 
 	json, _ := json.MarshalIndent(self.plugins, "", "    ")
 	ethutil.WriteFile(ethutil.Config.ExecPath+"/plugins.json", json)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"path"
 	"runtime"
 	"strconv"
 	"strings"
@@ -63,12 +64,7 @@ func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIden
 
 	pipe := ethpipe.NewJSPipe(ethereum)
 	gui := &Gui{eth: ethereum, txDb: db, pipe: pipe, logLevel: ethlog.LogLevel(logLevel), Session: session, open: false, clientIdentity: clientIdentity, config: config, plugins: make(map[string]plugin)}
-	data, err := ethutil.ReadAllFile(ethutil.Config.ExecPath + "/plugins.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println("plugins:", string(data))
-
+	data, _ := ethutil.ReadAllFile(path.Join(ethutil.Config.ExecPath, "plugins.json"))
 	json.Unmarshal([]byte(data), &gui.plugins)
 
 	return gui
@@ -339,6 +335,8 @@ func (gui *Gui) update() {
 	}()
 
 	for _, plugin := range gui.plugins {
+		logger.Infoln("Loading plugin ", plugin.Name)
+
 		gui.win.Root().Call("addPlugin", plugin.Path, "")
 	}
 

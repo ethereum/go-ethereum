@@ -18,7 +18,7 @@ ApplicationWindow {
 	height: 600
 	minimumHeight: 300
 
-	title: "Ether browser"
+	title: "Ethegate"
 
 	// This signal is used by the filter API. The filter API connects using this signal handler from
 	// the different QML files and plugins.
@@ -55,25 +55,28 @@ ApplicationWindow {
 	}
 
 	function addPlugin(path, options) {
-		var component = Qt.createComponent(path);
-		if(component.status != Component.Ready) {
-			if(component.status == Component.Error) {
-				console.debug("Error:"+ component.errorString());
+		try {
+			var component = Qt.createComponent(path);
+			if(component.status != Component.Ready) {
+				if(component.status == Component.Error) {
+					console.debug("Error:"+ component.errorString());
+				}
+
+				return
 			}
 
-			return
+			var views = mainSplit.addComponent(component, options)
+			views.menuItem.path = path
+
+			mainSplit.views.push(views);
+
+			if(!options.noAdd) {
+				gui.addPlugin(path)
+			}
+
+			return views.view
+		} catch(e) {
 		}
-
-		var views = mainSplit.addComponent(component, options)
-		views.menuItem.path = path
-
-		mainSplit.views.push(views);
-
-		if(!options.noAdd) {
-			gui.addPlugin(path)
-		}
-
-		return views.view
 	}
 
 	MenuBar {

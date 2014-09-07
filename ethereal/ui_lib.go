@@ -44,6 +44,10 @@ func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
 	return &UiLib{JSPipe: ethpipe.NewJSPipe(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth), filterCallbacks: make(map[int][]int), filters: make(map[int]*GuiFilter)}
 }
 
+func (self *UiLib) Note(msg string) {
+	logger.Infoln(msg)
+}
+
 func (self *UiLib) LookupDomain(domain string) string {
 	world := self.World()
 
