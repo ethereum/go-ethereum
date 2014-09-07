@@ -72,8 +72,6 @@ type TxPool struct {
 
 func NewTxPool(ethereum EthManager) *TxPool {
 	return &TxPool{
-		//server:    s,
-		mutex:     sync.Mutex{},
 		pool:      list.New(),
 		queueChan: make(chan *Transaction, txPoolQueueSize),
 		quit:      make(chan bool),
