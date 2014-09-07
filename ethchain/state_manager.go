@@ -237,6 +237,8 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 		// Add the block to the chain
 		sm.bc.Add(block)
 
+		sm.transState = state.Copy()
+
 		// Create a bloom bin for this block
 		filter := sm.createBloomFilter(state)
 		// Persist the data
