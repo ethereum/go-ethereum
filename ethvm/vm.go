@@ -201,7 +201,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			require(4)
 
 			newMemSize = stack.data[stack.Len()-1].Uint64() + stack.data[stack.Len()-4].Uint64()
-		case CALL:
+		case CALL, CALLSTATELESS:
 			require(7)
 			gas.Set(GasCall)
 			addStepGasUsage(stack.data[stack.Len()-1])
@@ -752,7 +752,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			closure.UseGas(closure.Gas)
 
 			msg := NewMessage(self, addr, input, gas, closure.Price, value)
-			ret, err := msg.Exec(closure)
+			ret, err := msg.Exec(addr, closure)
 			if err != nil {
 				stack.Push(ethutil.BigFalse)
 
@@ -816,7 +816,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			if self.Dbg != nil {
 				self.Dbg.SetCode(closure.Code)
 			}
-		case CALL:
+		case CALL, CALLSTATELESS:
 			require(7)
 
 			self.Endl()
@@ -834,8 +834,15 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			snapshot := self.env.State().Copy()
 
-			msg := NewMessage(self, addr.Bytes(), args, gas, closure.Price, value)
-			ret, err := msg.Exec(closure)
+			var executeAddr []byte
+			if op == CALLSTATELESS {
+				executeAddr = closure.Address()
+			} else {
+				executeAddr = addr.Bytes()
+			}
+
+			msg := NewMessage(self, executeAddr, args, gas, closure.Price, value)
+			ret, err := msg.Exec(addr.Bytes(), closure)
 			if err != nil {
 				stack.Push(ethutil.BigFalse)
 
@@ -1017,7 +1024,11 @@ func (self *Message) Postpone() {
 	self.vm.queue.PushBack(self)
 }
 
-func (self *Message) Exec(caller ClosureRef) (ret []byte, err error) {
+func (self *Message) Addr() []byte {
+	return self.address
+}
+
+func (self *Message) Exec(codeAddr []byte, caller ClosureRef) (ret []byte, err error) {
 	queue := self.vm.queue
 	self.vm.queue = list.New()
 
@@ -1049,8 +1060,11 @@ func (self *Message) Exec(caller ClosureRef) (ret []byte, err error) {
 		caller.Object().SubAmount(self.value)
 		stateObject.AddAmount(self.value)
 
+		// Retrieve the executing code
+		code := self.vm.env.State().GetCode(codeAddr)
+
 		// Create a new callable closure
-		c := NewClosure(msg, caller, object, object.Code, self.gas, self.price)
+		c := NewClosure(msg, caller, object, code, self.gas, self.price)
 		// Executer the closure and get the return value (if any)
 		ret, _, err = c.Call(self.vm, self.input)
 

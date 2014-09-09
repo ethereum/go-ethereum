@@ -283,7 +283,7 @@ func (self *StateTransition) Eval(msg *ethstate.Message, script []byte, context 
 		for e := vm.Queue().Front(); e != nil; e = e.Next() {
 			msg := e.Value.(*ethvm.Message)
 
-			msg.Exec(transactor)
+			msg.Exec(msg.Addr(), transactor)
 		}
 	}
 
