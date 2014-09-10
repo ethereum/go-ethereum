@@ -49,6 +49,7 @@ var msgTypeToString = map[MsgType]string{
 	MsgPingTy:           "Ping",
 	MsgPongTy:           "Pong",
 	MsgGetPeersTy:       "Get peers",
+	MsgStatusTy:         "Status",
 	MsgPeersTy:          "Peers",
 	MsgTxTy:             "Transactions",
 	MsgBlockTy:          "Blocks",

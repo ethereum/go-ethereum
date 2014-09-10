@@ -694,7 +694,7 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	}
 
 	// Handle the pub key (validation, uniqueness)
-	if pub == nil || len(pub) == 0 {
+	if len(pub) == 0 {
 		peerlogger.Warnln("Pubkey required, not supplied in handshake.")
 		p.Stop()
 		return
