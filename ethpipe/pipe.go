@@ -149,6 +149,15 @@ func (self *Pipe) Transact(key *ethcrypto.KeyPair, rec []byte, value, gas, price
 	return tx.Hash(), nil
 }
 
+func (self *Pipe) PushTx(tx *ethchain.Transaction) ([]byte, error) {
+    self.obj.TxPool().QueueTransaction(tx)
+    if tx.Recipient == nil {
+        logger.Infof("Contract addr %x", tx.CreationAddress())
+        return tx.CreationAddress(), nil
+    }
+    return tx.Hash(), nil
+}
+
 func (self *Pipe) CompileMutan(code string) ([]byte, error) {
 	data, err := ethutil.Compile(code, false)
 	if err != nil {
