@@ -225,6 +225,12 @@ func (self *JSPipe) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr 
 	return NewJSReciept(contractCreation, tx.CreationAddress(), tx.Hash(), keyPair.Address()), nil
 }
 
+func (self *JSPipe) PushTx(txStr string) (*JSReceipt, error) {
+    tx := ethchain.NewTransactionFromBytes(ethutil.Hex2Bytes(txStr))
+    self.obj.TxPool().QueueTransaction(tx)
+    return NewJSReciept(tx.CreatesContract(), tx.CreationAddress(), tx.Hash(), tx.Sender()), nil
+}
+
 func (self *JSPipe) CompileMutan(code string) string {
 	data, err := self.Pipe.CompileMutan(code)
 	if err != nil {
