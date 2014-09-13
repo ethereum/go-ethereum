@@ -145,6 +145,27 @@ func (p *EthereumApi) Create(args *NewTxArgs, reply *string) error {
 	return nil
 }
 
+type PushTxArgs struct {
+    Tx string
+}
+
+func (a *PushTxArgs) requirementsPushTx() error {
+    if a.Tx == "" {
+        return NewErrorResponse("PushTx requires a 'tx' as argument")
+    }
+    return nil
+}
+
+func (p *EthereumApi) PushTx(args *PushTxArgs, reply *string) error {
+    err := args.requirementsPushTx()
+    if err != nil {
+        return err
+    }
+    result, _ := p.pipe.PushTx(args.Tx)
+    *reply = NewSuccessRes(result)
+    return nil
+}
+
 func (p *EthereumApi) GetKey(args interface{}, reply *string) error {
 	*reply = NewSuccessRes(p.pipe.Key())
 	return nil
