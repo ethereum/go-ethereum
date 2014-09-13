@@ -37,15 +37,15 @@ type UiLib struct {
 	jsEngine *javascript.JSRE
 
 	filterCallbacks map[int][]int
-	filters         map[int]*GuiFilter
+	//filters         map[int]*ethpipe.JSFilter
 }
 
 func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
-	return &UiLib{JSPipe: ethpipe.NewJSPipe(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth), filterCallbacks: make(map[int][]int), filters: make(map[int]*GuiFilter)}
+	return &UiLib{JSPipe: ethpipe.NewJSPipe(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth), filterCallbacks: make(map[int][]int)} //, filters: make(map[int]*ethpipe.JSFilter)}
 }
 
-func (self *UiLib) Note(msg string) {
-	logger.Infoln(msg)
+func (self *UiLib) Notef(args []interface{}) {
+	logger.Infoln(args...)
 }
 
 func (self *UiLib) LookupDomain(domain string) string {
@@ -164,46 +164,37 @@ func (self *UiLib) StartDebugger() {
 	dbWindow.Show()
 }
 
-func (self *UiLib) RegisterFilter(object map[string]interface{}, seed int) {
-	filter := &GuiFilter{ethpipe.NewJSFilterFromMap(object, self.eth), seed}
-	self.filters[seed] = filter
-
+func (self *UiLib) NewFilter(object map[string]interface{}) int {
+	filter, id := self.eth.InstallFilter(object)
 	filter.MessageCallback = func(messages ethstate.Messages) {
-		for _, callbackSeed := range self.filterCallbacks[seed] {
-			self.win.Root().Call("invokeFilterCallback", filter.MessagesToJson(messages), seed, callbackSeed)
-		}
+		self.win.Root().Call("invokeFilterCallback", ethpipe.ToJSMessages(messages), id)
 	}
 
+	return id
 }
 
-func (self *UiLib) RegisterFilterString(typ string, seed int) {
-	filter := &GuiFilter{ethpipe.NewJSFilterFromMap(nil, self.eth), seed}
-	self.filters[seed] = filter
-
-	if typ == "chain" {
-		filter.BlockCallback = func(block *ethchain.Block) {
-			for _, callbackSeed := range self.filterCallbacks[seed] {
-				self.win.Root().Call("invokeFilterCallback", "{}", seed, callbackSeed)
-			}
-		}
+func (self *UiLib) NewFilterString(typ string) int {
+	filter, id := self.eth.InstallFilter(nil)
+	filter.BlockCallback = func(block *ethchain.Block) {
+		self.win.Root().Call("invokeFilterCallback", "{}", id)
 	}
+
+	return id
 }
 
-func (self *UiLib) RegisterFilterCallback(seed, cbSeed int) {
-	self.filterCallbacks[seed] = append(self.filterCallbacks[seed], cbSeed)
-}
-
-func (self *UiLib) UninstallFilter(seed int) {
-	filter := self.filters[seed]
+func (self *UiLib) Messages(id int) *ethutil.List {
+	filter := self.eth.GetFilter(id)
 	if filter != nil {
-		filter.Uninstall()
-		delete(self.filters, seed)
+		messages := filter.Find()
+
+		return ethpipe.ToJSMessages(messages)
 	}
+
+	return ethutil.EmptyList()
 }
 
-type GuiFilter struct {
-	*ethpipe.JSFilter
-	seed int
+func (self *UiLib) UninstallFilter(id int) {
+	self.eth.UninstallFilter(id)
 }
 
 func (self *UiLib) Transact(object map[string]interface{}) (*ethpipe.JSReceipt, error) {

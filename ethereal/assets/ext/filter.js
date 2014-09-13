@@ -1,31 +1,49 @@
+var ethx = {
+    prototype: Object,
+
+    watch: function(options) {
+        return new Filter(options);
+    },
+
+    note: function() {
+        var args = Array.prototype.slice.call(arguments, 0);
+        var o = []
+        for(var i = 0; i < args.length; i++) {
+            o.push(args[i].toString())
+        }
+
+        eth.notef(o);
+    },
+};
+
 var Filter = function(options) {
-	this.callbacks = {};
-	this.seed = Math.floor(Math.random() * 1000000);
+	this.callbacks = [];
 	this.options = options;
 
 	if(options === "chain") {
-		eth.registerFilterString(options, this.seed);
+		this.id = eth.newFilterString(options);
 	} else if(typeof options === "object") {
-		eth.registerFilter(options, this.seed);
+		this.id = eth.newFilter(options);
 	}
 };
 
 Filter.prototype.changed = function(callback) {
-	var cbseed = Math.floor(Math.random() * 1000000);
-	eth.registerFilterCallback(this.seed, cbseed);
+    this.callbacks.push(callback);
 
 	var self = this;
-	message.connect(function(messages, seed, callbackSeed) {
-		if(seed ==  self.seed && callbackSeed == cbseed) {
-			callback.call(self, messages);
+	message.connect(function(messages, id) {
+		if(id ==  self.id) {
+            for(var i = 0; i < self.callbacks.length; i++) {
+                self.callbacks[i].call(self, messages);
+            }
 		}
 	});
 };
 
 Filter.prototype.uninstall = function() {
-	eth.uninstallFilter(this.seed)
+	eth.uninstallFilter(this.id)
 }
 
 Filter.prototype.messages = function() {
-	return JSON.parse(eth.messages(this.options))
+	return eth.messages(this.id)
 }

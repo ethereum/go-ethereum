@@ -1,5 +1,8 @@
 package main
 
+// #include "/Users/jeffrey/go/src/github.com/go-qml/qml/cpp/capi.h"
+import "C"
+
 import (
 	"bytes"
 	"encoding/json"
@@ -10,7 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 
+	"bitbucket.org/binet/go-ffi/pkg/ffi"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethdb"
@@ -22,6 +27,29 @@ import (
 	"github.com/ethereum/eth-go/ethwire"
 	"gopkg.in/qml.v1"
 )
+
+func LoadExtension(path string) (uintptr, error) {
+	lib, err := ffi.NewLibrary(path)
+	if err != nil {
+		return 0, err
+	}
+
+	so, err := lib.Fct("sharedObject", ffi.Pointer, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	ptr := so()
+
+	/*
+		err = lib.Close()
+		if err != nil {
+			return 0, err
+		}
+	*/
+
+	return ptr.Interface().(uintptr), nil
+}
 
 var logger = ethlog.NewLogger("GUI")
 
@@ -90,6 +118,14 @@ func (gui *Gui) Start(assetPath string) {
 	// Expose the eth library and the ui library to QML
 	context.SetVar("gui", gui)
 	context.SetVar("eth", gui.uiLib)
+
+	vec, errr := LoadExtension("/Users/jeffrey/Desktop/build-libqmltest-Desktop_Qt_5_2_1_clang_64bit-Debug/liblibqmltest_debug.dylib")
+	fmt.Printf("Fetched vec with addr: %#x\n", vec)
+	if errr != nil {
+		fmt.Println(errr)
+	} else {
+		context.SetVar("vec", (unsafe.Pointer)(vec))
+	}
 
 	// Load the main QML interface
 	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
