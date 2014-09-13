@@ -2,6 +2,7 @@ package ethutil
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
 	"testing"
 )
@@ -77,4 +78,9 @@ func TestMath(t *testing.T) {
 	if !a.DeepCmp(NewValue(0)) {
 		t.Error("Expected 0, got", a)
 	}
+}
+
+func TestString(t *testing.T) {
+	a := NewValue("10")
+	fmt.Println("VALUE WITH STRING:", a.Int())
 }
