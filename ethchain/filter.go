@@ -23,6 +23,9 @@ type Filter struct {
 	max      int
 
 	altered []data
+
+	BlockCallback   func(*Block)
+	MessageCallback func(ethstate.Messages)
 }
 
 // Create a new filter which uses a bloom filter on blocks to figure out whether a particular block

@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethrpc"
+	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
 )
@@ -87,6 +88,8 @@ type Ethereum struct {
 	clientIdentity ethwire.ClientIdentity
 
 	isUpToDate bool
+
+	filters map[int]*ethchain.Filter
 }
 
 func New(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager *ethcrypto.KeyManager, caps Caps, usePnp bool) (*Ethereum, error) {
@@ -116,6 +119,7 @@ func New(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager 
 		keyManager:     keyManager,
 		clientIdentity: clientIdentity,
 		isUpToDate:     true,
+		filters:        make(map[int]*ethchain.Filter),
 	}
 	ethereum.reactor = ethreact.New()
 
@@ -386,6 +390,7 @@ func (s *Ethereum) Start(seed bool) {
 	// Start the reaping processes
 	go s.ReapDeadPeerHandler()
 	go s.update()
+	go s.filterLoop()
 
 	if seed {
 		s.Seed()
@@ -532,6 +537,60 @@ out:
 			}
 		case <-self.quit:
 			break out
+		}
+	}
+}
+
+var filterId = 0
+
+func (self *Ethereum) InstallFilter(object map[string]interface{}) (*ethchain.Filter, int) {
+	defer func() { filterId++ }()
+
+	filter := ethchain.NewFilterFromMap(object, self)
+	self.filters[filterId] = filter
+
+	return filter, filterId
+}
+
+func (self *Ethereum) UninstallFilter(id int) {
+	delete(self.filters, id)
+}
+
+func (self *Ethereum) GetFilter(id int) *ethchain.Filter {
+	return self.filters[id]
+}
+
+func (self *Ethereum) filterLoop() {
+	blockChan := make(chan ethreact.Event, 5)
+	messageChan := make(chan ethreact.Event, 5)
+	// Subscribe to events
+	reactor := self.Reactor()
+	reactor.Subscribe("newBlock", blockChan)
+	reactor.Subscribe("messages", messageChan)
+out:
+	for {
+		select {
+		case <-self.quit:
+			break out
+		case block := <-blockChan:
+			if block, ok := block.Resource.(*ethchain.Block); ok {
+				for _, filter := range self.filters {
+					if filter.BlockCallback != nil {
+						filter.BlockCallback(block)
+					}
+				}
+			}
+		case msg := <-messageChan:
+			if messages, ok := msg.Resource.(ethstate.Messages); ok {
+				for _, filter := range self.filters {
+					if filter.MessageCallback != nil {
+						msgs := filter.FilterMessages(messages)
+						if len(msgs) > 0 {
+							filter.MessageCallback(msgs)
+						}
+					}
+				}
+			}
 		}
 	}
 }

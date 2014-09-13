@@ -20,6 +20,10 @@ func NewList(t interface{}) *List {
 	return &List{list, list.Len()}
 }
 
+func EmptyList() *List {
+	return NewList([]interface{}{})
+}
+
 // Get N element from the embedded slice. Returns nil if OOB.
 func (self *List) Get(i int) interface{} {
 	if self.list.Len() > i {

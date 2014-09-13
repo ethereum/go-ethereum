@@ -3,12 +3,10 @@ package ethpipe
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"sync/atomic"
 
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethcrypto"
-	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 )
@@ -234,102 +232,11 @@ func (self *JSPipe) CompileMutan(code string) string {
 	return ethutil.Bytes2Hex(data)
 }
 
-func (self *JSPipe) Watch(object map[string]interface{}) *JSFilter {
-	return NewJSFilterFromMap(object, self.Pipe.obj)
-	/*} else if str, ok := object.(string); ok {
-	println("str")
-	return NewJSFilterFromString(str, self.Pipe.obj)
-	*/
-}
-
-func (self *JSPipe) Messages(object map[string]interface{}) string {
-	filter := self.Watch(object)
-	filter.Uninstall()
-
-	return filter.Messages()
-
-}
-
-type JSFilter struct {
-	eth ethchain.EthManager
-	*ethchain.Filter
-	quit chan bool
-
-	BlockCallback   func(*ethchain.Block)
-	MessageCallback func(ethstate.Messages)
-}
-
-func NewJSFilterFromMap(object map[string]interface{}, eth ethchain.EthManager) *JSFilter {
-	filter := &JSFilter{eth, ethchain.NewFilterFromMap(object, eth), make(chan bool), nil, nil}
-
-	go filter.mainLoop()
-
-	return filter
-}
-
-func NewJSFilterFromString(str string, eth ethchain.EthManager) *JSFilter {
-	return nil
-}
-
-func (self *JSFilter) MessagesToJson(messages ethstate.Messages) string {
+func ToJSMessages(messages ethstate.Messages) *ethutil.List {
 	var msgs []JSMessage
 	for _, m := range messages {
 		msgs = append(msgs, NewJSMessage(m))
 	}
 
-	// Return an empty array instead of "null"
-	if len(msgs) == 0 {
-		return "[]"
-	}
-
-	b, err := json.Marshal(msgs)
-	if err != nil {
-		return "{\"error\":" + err.Error() + "}"
-	}
-
-	return string(b)
-}
-
-func (self *JSFilter) Messages() string {
-	return self.MessagesToJson(self.Find())
-}
-
-func (self *JSFilter) mainLoop() {
-	blockChan := make(chan ethreact.Event, 5)
-	messageChan := make(chan ethreact.Event, 5)
-	// Subscribe to events
-	reactor := self.eth.Reactor()
-	reactor.Subscribe("newBlock", blockChan)
-	reactor.Subscribe("messages", messageChan)
-out:
-	for {
-		select {
-		case <-self.quit:
-			break out
-		case block := <-blockChan:
-			if block, ok := block.Resource.(*ethchain.Block); ok {
-				if self.BlockCallback != nil {
-					self.BlockCallback(block)
-				}
-			}
-		case msg := <-messageChan:
-			if messages, ok := msg.Resource.(ethstate.Messages); ok {
-				if self.MessageCallback != nil {
-					println("messages!")
-					msgs := self.FilterMessages(messages)
-					if len(msgs) > 0 {
-						self.MessageCallback(msgs)
-					}
-				}
-			}
-		}
-	}
-}
-
-func (self *JSFilter) Changed(object interface{}) {
-	fmt.Printf("%T\n", object)
-}
-
-func (self *JSFilter) Uninstall() {
-	self.quit <- true
+	return ethutil.NewList(msgs)
 }
