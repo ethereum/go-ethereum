@@ -53,6 +53,7 @@ func (self *BlockPool) SetBlock(b *ethchain.Block, peer *Peer) {
 	hash := string(b.Hash())
 
 	if self.pool[hash] == nil {
+		self.hashPool = append(self.hashPool, b.Hash())
 		self.pool[hash] = &block{peer, nil}
 	}
 

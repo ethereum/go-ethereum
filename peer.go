@@ -486,7 +486,6 @@ func (p *Peer) HandleInbound() {
 				blockPool := p.ethereum.blockPool
 
 				it := msg.Data.NewIterator()
-
 				for it.Next() {
 					block := ethchain.NewBlockFromRlpValue(it.Value())
 
