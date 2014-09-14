@@ -99,7 +99,7 @@ func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 		return fmt.Errorf("[TXPL] No last block on the block chain")
 	}
 
-	if len(tx.Recipient) != 20 {
+	if len(tx.Recipient) != 0 && len(tx.Recipient) != 20 {
 		return fmt.Errorf("[TXPL] Invalid recipient. len = %d", len(tx.Recipient))
 	}
 
@@ -148,7 +148,10 @@ out:
 				// Call blocking version.
 				pool.addTransaction(tx)
 
-				txplogger.Debugf("(t) %x => %x (%v) %x\n", tx.Sender()[:4], tx.Recipient[:4], tx.Value, tx.Hash())
+				tmp := make([]byte, 4)
+				copy(tmp, tx.Recipient)
+
+				txplogger.Debugf("(t) %x => %x (%v) %x\n", tx.Sender()[:4], tmp, tx.Value, tx.Hash())
 
 				// Notify the subscribers
 				pool.Ethereum.Reactor().Post("newTx:pre", tx)
