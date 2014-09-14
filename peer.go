@@ -182,6 +182,7 @@ func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 		inbound:     false,
 		connected:   0,
 		disconnect:  0,
+		port:        30303,
 		caps:        caps,
 		version:     ethereum.ClientIdentity().String(),
 	}
@@ -629,17 +630,6 @@ func (p *Peer) pushPeers() {
 	p.QueueMessage(p.peersMessage())
 }
 
-func (p *Peer) pushHandshake() error {
-	pubkey := p.ethereum.KeyManager().PublicKey()
-	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-		uint32(0), []byte(p.version), []string{"eth"}, p.port, pubkey[1:],
-	})
-
-	p.QueueMessage(msg)
-
-	return nil
-}
-
 func (self *Peer) pushStatus() {
 	const netVersion = 0
 	msg := ethwire.NewMessage(ethwire.MsgStatusTy, []interface{}{
@@ -673,8 +663,21 @@ func (self *Peer) handleStatus(msg *ethwire.Msg) {
 	ethlogger.Infof("Peer is [ETH] capable. (TD = %v ~ %x", self.td, self.bestHash)
 }
 
+func (p *Peer) pushHandshake() error {
+	pubkey := p.ethereum.KeyManager().PublicKey()
+	fmt.Println("pubkey", pubkey)
+	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
+		uint32(0), []byte(p.version), []string{"eth"}, uint32(p.port), pubkey[1:],
+	})
+
+	p.QueueMessage(msg)
+
+	return nil
+}
+
 func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	c := msg.Data
+	fmt.Println(c, c.Len())
 
 	var (
 		p2pVersion = c.Get(0).Uint()
@@ -683,8 +686,6 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 		port       = c.Get(3).Uint()
 		pub        = c.Get(4).Bytes()
 	)
-
-	fmt.Println("PEER CAPS", caps)
 
 	// Check correctness of p2p protocol version
 	if p2pVersion != P2PVersion {
@@ -735,7 +736,7 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	p.ethereum.PushPeer(p)
 	p.ethereum.reactor.Post("peerList", p.ethereum.Peers())
 
-	ethlogger.Infof("Added peer (%s) %d / %d \n", p.conn.RemoteAddr(), p.ethereum.Peers().Len(), p.ethereum.MaxPeers)
+	ethlogger.Infof("Added peer (%s) %d / %d (%v)\n", p.conn.RemoteAddr(), p.ethereum.Peers().Len(), p.ethereum.MaxPeers, caps)
 
 	peerlogger.Debugln(p)
 
