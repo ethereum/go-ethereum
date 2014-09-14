@@ -1,6 +1,5 @@
 package main
 
-// #include "/Users/jeffrey/go/src/github.com/go-qml/qml/cpp/capi.h"
 import "C"
 
 import (
@@ -13,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethdb"
