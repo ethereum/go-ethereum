@@ -180,6 +180,8 @@ Rectangle {
 					txResult.text = "Your transaction has been submitted:\n"
 					txOutput.text = res[0].address
 					mainContractColumn.state = "DONE"
+
+					console.log(res)
 				}
 			}
 		}

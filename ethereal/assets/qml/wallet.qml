@@ -76,7 +76,7 @@ ApplicationWindow {
 
             return views.view
         } catch(e) {
-            eth.note(e)
+            ethx.note(e)
         }
     }
 

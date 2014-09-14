@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unsafe"
 
 	"bitbucket.org/binet/go-ffi/pkg/ffi"
 	"github.com/ethereum/eth-go"
@@ -119,13 +118,15 @@ func (gui *Gui) Start(assetPath string) {
 	context.SetVar("gui", gui)
 	context.SetVar("eth", gui.uiLib)
 
-	vec, errr := LoadExtension("/Users/jeffrey/Desktop/build-libqmltest-Desktop_Qt_5_2_1_clang_64bit-Debug/liblibqmltest_debug.dylib")
-	fmt.Printf("Fetched vec with addr: %#x\n", vec)
-	if errr != nil {
-		fmt.Println(errr)
-	} else {
-		context.SetVar("vec", (unsafe.Pointer)(vec))
-	}
+	/*
+		vec, errr := LoadExtension("/Users/jeffrey/Desktop/build-libqmltest-Desktop_Qt_5_2_1_clang_64bit-Debug/liblibqmltest_debug.dylib")
+		fmt.Printf("Fetched vec with addr: %#x\n", vec)
+		if errr != nil {
+			fmt.Println(errr)
+		} else {
+			context.SetVar("vec", (unsafe.Pointer)(vec))
+		}
+	*/
 
 	// Load the main QML interface
 	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
