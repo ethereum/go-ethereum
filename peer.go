@@ -634,8 +634,8 @@ func (self *Peer) pushStatus() {
 	const netVersion = 0
 	msg := ethwire.NewMessage(ethwire.MsgStatusTy, []interface{}{
 		uint32(ProtocolVersion),
-		netVersion,
-		self.ethereum.BlockChain().TD.Uint64(),
+		uint32(netVersion),
+		self.ethereum.BlockChain().TD,
 		self.ethereum.BlockChain().CurrentBlock.Hash(),
 		self.ethereum.BlockChain().Genesis().Hash(),
 	})
@@ -645,13 +645,22 @@ func (self *Peer) pushStatus() {
 
 func (self *Peer) handleStatus(msg *ethwire.Msg) {
 	c := msg.Data
-	// Set the peer's caps
-	//p.caps = Caps(c.Get(3).Byte())
+
+	var (
+		protoVersion = c.Get(0).Uint()
+		netVersion   = c.Get(1).Uint()
+		td           = c.Get(2).BigInt()
+		bestHash     = c.Get(3).Bytes()
+		genesis      = c.Get(4).Bytes()
+	)
+	ethlogger.Infof("gen = %x\n", genesis)
 
 	// Get the td and last hash
-	self.td = c.Get(6).BigInt()
-	self.bestHash = c.Get(7).Bytes()
-	self.lastReceivedHash = self.bestHash
+	self.td = td
+	self.bestHash = bestHash
+	self.lastReceivedHash = bestHash
+
+	self.statusKnown = true
 
 	// Compare the total TD with the blockchain TD. If remote is higher
 	// fetch hashes from highest TD node.
@@ -660,13 +669,14 @@ func (self *Peer) handleStatus(msg *ethwire.Msg) {
 		self.FetchHashes()
 	}
 
-	ethlogger.Infof("Peer is [ETH] capable. (TD = %v ~ %x", self.td, self.bestHash)
+	ethlogger.Infof("Peer is [ETH] capable. (TD = %v ~ %x) %d / %d", self.td, self.bestHash, protoVersion, netVersion)
+
 }
 
 func (p *Peer) pushHandshake() error {
 	pubkey := p.ethereum.KeyManager().PublicKey()
 	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-		uint32(0), []byte(p.version), []string{"eth"}, uint32(30303) /*p.port*/, pubkey[1:],
+		P2PVersion, []byte(p.version), []interface{}{"eth"}, uint32(30303) /*p.port*/, pubkey[1:],
 	})
 
 	p.QueueMessage(msg)
