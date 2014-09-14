@@ -1,15 +1,16 @@
 package main
 
 import (
-	"bitbucket.org/kardianos/osext"
 	"flag"
 	"fmt"
-	"github.com/ethereum/eth-go/ethlog"
 	"os"
 	"os/user"
 	"path"
 	"path/filepath"
 	"runtime"
+
+	"bitbucket.org/kardianos/osext"
+	"github.com/ethereum/eth-go/ethlog"
 )
 
 var Identifier string
@@ -78,7 +79,7 @@ func Init() {
 	flag.StringVar(&KeyRing, "keyring", "", "identifier for keyring to use")
 	flag.StringVar(&KeyStore, "keystore", "db", "system to store keyrings: db|file (db)")
 	flag.StringVar(&OutboundPort, "port", "30303", "listening port")
-	flag.BoolVar(&UseUPnP, "upnp", false, "enable UPnP support")
+	flag.BoolVar(&UseUPnP, "upnp", true, "enable UPnP support")
 	flag.IntVar(&MaxPeer, "maxpeer", 10, "maximum desired peers")
 	flag.IntVar(&RpcPort, "rpcport", 8080, "port to start json-rpc server on")
 	flag.BoolVar(&StartRpc, "rpc", false, "start rpc server")

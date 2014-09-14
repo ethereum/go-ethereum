@@ -13,8 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"bitbucket.org/binet/go-ffi/pkg/ffi"
 	"github.com/ethereum/eth-go"
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethdb"
@@ -27,6 +25,7 @@ import (
 	"gopkg.in/qml.v1"
 )
 
+/*
 func LoadExtension(path string) (uintptr, error) {
 	lib, err := ffi.NewLibrary(path)
 	if err != nil {
@@ -40,15 +39,14 @@ func LoadExtension(path string) (uintptr, error) {
 
 	ptr := so()
 
-	/*
 		err = lib.Close()
 		if err != nil {
 			return 0, err
 		}
-	*/
 
 	return ptr.Interface().(uintptr), nil
 }
+*/
 
 var logger = ethlog.NewLogger("GUI")
 
