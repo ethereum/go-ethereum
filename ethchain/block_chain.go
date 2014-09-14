@@ -60,7 +60,7 @@ func (bc *BlockChain) NewBlock(coinbase []byte) *Block {
 
 	if bc.CurrentBlock != nil {
 		var mul *big.Int
-		if block.Time < lastBlockTime+42 {
+		if block.Time < lastBlockTime+5 {
 			mul = big.NewInt(1)
 		} else {
 			mul = big.NewInt(-1)

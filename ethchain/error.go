@@ -25,6 +25,24 @@ func IsParentErr(err error) bool {
 	return ok
 }
 
+type UncleErr struct {
+	Message string
+}
+
+func (err *UncleErr) Error() string {
+	return err.Message
+}
+
+func UncleError(str string) error {
+	return &UncleErr{Message: str}
+}
+
+func IsUncleErr(err error) bool {
+	_, ok := err.(*UncleErr)
+
+	return ok
+}
+
 // Block validation error. If any validation fails, this error will be thrown
 type ValidationErr struct {
 	Message string

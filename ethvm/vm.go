@@ -3,7 +3,6 @@ package ethvm
 import (
 	"container/list"
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/ethereum/eth-go/ethcrypto"
@@ -65,6 +64,19 @@ func New(env Environment) *Vm {
 	}
 
 	return &Vm{env: env, logTy: lt, Recoverable: true, queue: list.New()}
+}
+
+func calcMemSize(off, l *big.Int) *big.Int {
+	if l.Cmp(ethutil.Big0) == 0 {
+		return ethutil.Big0
+	}
+
+	return new(big.Int).Add(off, l)
+}
+
+// Simple helper
+func u256(n int64) *big.Int {
+	return big.NewInt(n)
 }
 
 func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
@@ -147,7 +159,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 		addStepGasUsage(GasStep)
 
-		var newMemSize uint64 = 0
+		var newMemSize *big.Int = ethutil.Big0
 		switch op {
 		case STOP:
 			gas.Set(ethutil.Big0)
@@ -171,57 +183,62 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			gas.Set(GasBalance)
 		case MSTORE:
 			require(2)
-			newMemSize = stack.Peek().Uint64() + 32
+			newMemSize = calcMemSize(stack.Peek(), u256(32))
 		case MLOAD:
 			require(1)
 
-			newMemSize = stack.Peek().Uint64() + 32
+			newMemSize = calcMemSize(stack.Peek(), u256(32))
 		case MSTORE8:
 			require(2)
-			newMemSize = stack.Peek().Uint64() + 1
+			newMemSize = calcMemSize(stack.Peek(), u256(1))
 		case RETURN:
 			require(2)
 
-			newMemSize = stack.Peek().Uint64() + stack.data[stack.Len()-2].Uint64()
+			newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-2])
 		case SHA3:
 			require(2)
 
 			gas.Set(GasSha)
 
-			newMemSize = stack.Peek().Uint64() + stack.data[stack.Len()-2].Uint64()
+			newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-2])
 		case CALLDATACOPY:
 			require(3)
 
-			newMemSize = stack.Peek().Uint64() + stack.data[stack.Len()-3].Uint64()
+			newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-3])
 		case CODECOPY:
 			require(3)
 
-			newMemSize = stack.Peek().Uint64() + stack.data[stack.Len()-3].Uint64()
+			newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-3])
 		case EXTCODECOPY:
 			require(4)
 
-			newMemSize = stack.data[stack.Len()-1].Uint64() + stack.data[stack.Len()-4].Uint64()
+			newMemSize = calcMemSize(stack.data[stack.Len()-1], stack.data[stack.Len()-4])
 		case CALL, CALLSTATELESS:
 			require(7)
 			gas.Set(GasCall)
 			addStepGasUsage(stack.data[stack.Len()-1])
 
-			x := stack.data[stack.Len()-6].Uint64() + stack.data[stack.Len()-7].Uint64()
-			y := stack.data[stack.Len()-4].Uint64() + stack.data[stack.Len()-5].Uint64()
+			x := calcMemSize(stack.data[stack.Len()-6], stack.data[stack.Len()-7])
+			y := calcMemSize(stack.data[stack.Len()-4], stack.data[stack.Len()-5])
 
-			newMemSize = uint64(math.Max(float64(x), float64(y)))
+			newMemSize = ethutil.BigMax(x, y)
 		case CREATE:
 			require(3)
 			gas.Set(GasCreate)
 
-			newMemSize = stack.data[stack.Len()-2].Uint64() + stack.data[stack.Len()-3].Uint64()
+			newMemSize = calcMemSize(stack.data[stack.Len()-2], stack.data[stack.Len()-3])
 		}
 
-		// BUG This will break on overflows. https://github.com/ethereum/eth-go/issues/47
-		newMemSize = (newMemSize + 31) / 32 * 32
-		if newMemSize > uint64(mem.Len()) {
-			m := GasMemory.Uint64() * (newMemSize - uint64(mem.Len())) / 32
-			addStepGasUsage(big.NewInt(int64(m)))
+		if newMemSize.Cmp(ethutil.Big0) > 0 {
+			//newMemSize = (newMemSize + 31) / 32 * 32
+			newMemSize = newMemSize.Add(newMemSize, u256(31)).Div(newMemSize, u256(32)).Mul(newMemSize, u256(32))
+			//if newMemSize > uint64(mem.Len()) {
+			if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
+				newMemSize = newMemSize.Sub(newMemSize, u256(int64(mem.Len())))
+				memGasUsage := newMemSize.Mul(GasMemory, newMemSize).Div(newMemSize, u256(32))
+				//m := GasMemory.Uint64() * (newMemSize - uint64(mem.Len())) / 32
+				addStepGasUsage(memGasUsage)
+			}
 		}
 
 		if !closure.UseGas(gas) {
@@ -235,7 +252,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		self.Printf("(pc) %-3d -o- %-14s", pc, op.String())
 		self.Printf(" (g) %-3v (%v)", gas, closure.Gas)
 
-		mem.Resize(newMemSize)
+		mem.Resize(newMemSize.Uint64())
 
 		switch op {
 		case LOG:

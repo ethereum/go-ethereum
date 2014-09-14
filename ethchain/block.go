@@ -31,11 +31,22 @@ func (bi *BlockInfo) RlpEncode() []byte {
 	return ethutil.Encode([]interface{}{bi.Number, bi.Hash, bi.Parent})
 }
 
+type Blocks []*Block
+
+func (self Blocks) AsSet() ethutil.UniqueSet {
+	set := make(ethutil.UniqueSet)
+	for _, block := range self {
+		set.Insert(block.Hash())
+	}
+
+	return set
+}
+
 type Block struct {
 	// Hash to the previous block
 	PrevHash []byte
 	// Uncles of this block
-	Uncles   []*Block
+	Uncles   Blocks
 	UncleSha []byte
 	// The coin base address
 	Coinbase []byte

@@ -187,7 +187,7 @@ func (self *Miner) mineNewBlock() {
 	self.block.SetReceipts(receipts, txs)
 
 	// Accumulate the rewards included for this block
-	stateManager.AccumelateRewards(self.block.State(), self.block)
+	stateManager.AccumelateRewards(self.block.State(), self.block, parent)
 
 	self.block.State().Update()
 

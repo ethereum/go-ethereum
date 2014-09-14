@@ -675,7 +675,7 @@ func (self *Peer) handleStatus(msg *ethwire.Msg) {
 func (p *Peer) pushHandshake() error {
 	pubkey := p.ethereum.KeyManager().PublicKey()
 	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-		P2PVersion, []byte(p.version), []interface{}{"eth"}, uint32(30303) /*p.port*/, pubkey[1:],
+		P2PVersion, []byte(p.version), []interface{}{"eth"}, p.port, pubkey[1:],
 	})
 
 	p.QueueMessage(msg)
