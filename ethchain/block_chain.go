@@ -148,6 +148,9 @@ func AddTestNetFunds(block *Block) {
 }
 
 func (bc *BlockChain) setLastBlock() {
+	// Prep genesis
+	AddTestNetFunds(bc.genesisBlock)
+
 	data, _ := ethutil.Config.Db.Get([]byte("LastBlock"))
 	if len(data) != 0 {
 		block := NewBlockFromBytes(data)
@@ -155,12 +158,7 @@ func (bc *BlockChain) setLastBlock() {
 		bc.LastBlockHash = block.Hash()
 		bc.LastBlockNumber = block.Number.Uint64()
 
-		if bc.LastBlockNumber == 0 {
-			bc.genesisBlock = block
-		}
 	} else {
-		AddTestNetFunds(bc.genesisBlock)
-
 		bc.genesisBlock.state.Trie.Sync()
 		// Prepare the genesis block
 		bc.Add(bc.genesisBlock)

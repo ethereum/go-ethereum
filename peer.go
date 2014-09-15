@@ -497,18 +497,16 @@ func (p *Peer) HandleInbound() {
 					p.lastBlockReceived = time.Now()
 				}
 
+				var err error
 				blockPool.CheckLinkAndProcess(func(block *ethchain.Block) {
-					err := p.ethereum.StateManager().Process(block, false)
-					if err != nil {
-						peerlogger.Infoln(err)
-					}
+					err = p.ethereum.StateManager().Process(block, false)
 				})
 
-				/*
-					if !linked {
-						p.FetchBlocks()
-					}
-				*/
+				if err != nil {
+					peerlogger.Infoln(err)
+				} else {
+					p.FetchBlocks()
+				}
 			}
 		}
 	}
@@ -529,11 +527,10 @@ func (self *Peer) FetchHashes() {
 	blockPool := self.ethereum.blockPool
 
 	if self.td.Cmp(blockPool.td) >= 0 {
-		peerlogger.Debugf("Requesting hashes from %x\n", self.lastReceivedHash)
 		blockPool.td = self.td
 
 		if !blockPool.HasLatestHash() {
-			self.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{self.lastReceivedHash, uint32(200)}))
+			self.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{self.lastReceivedHash, uint32(256)}))
 		}
 	}
 }

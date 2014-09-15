@@ -5,6 +5,7 @@ import (
 	"container/list"
 	"fmt"
 	"math/big"
+	"os"
 	"sync"
 	"time"
 
@@ -154,6 +155,10 @@ done:
 		if i < len(block.Receipts()) {
 			original := block.Receipts()[i]
 			if !original.Cmp(receipt) {
+				if ethutil.Config.Diff {
+					os.Exit(1)
+				}
+
 				return nil, nil, nil, fmt.Errorf("err diff #%d (r) %v ~ %x  <=>  (c) %v ~ %x (%x)\n", i+1, original.CumulativeGasUsed, original.PostState[0:4], receipt.CumulativeGasUsed, receipt.PostState[0:4], receipt.Tx.Hash())
 			}
 		}
@@ -307,14 +312,16 @@ func (sm *StateManager) ValidateBlock(block *Block) error {
 
 	// Check each uncle's previous hash. In order for it to be valid
 	// is if it has the same block hash as the current
-	previousBlock := sm.bc.GetBlock(block.PrevHash)
-	for _, uncle := range block.Uncles {
-		if bytes.Compare(uncle.PrevHash, previousBlock.PrevHash) != 0 {
-			return ValidationError("Mismatch uncle's previous hash. Expected %x, got %x", previousBlock.PrevHash, uncle.PrevHash)
+	parent := sm.bc.GetBlock(block.PrevHash)
+	/*
+		for _, uncle := range block.Uncles {
+			if bytes.Compare(uncle.PrevHash,parent.PrevHash) != 0 {
+				return ValidationError("Mismatch uncle's previous hash. Expected %x, got %x",parent.PrevHash, uncle.PrevHash)
+			}
 		}
-	}
+	*/
 
-	diff := block.Time - previousBlock.Time
+	diff := block.Time - parent.Time
 	if diff < 0 {
 		return ValidationError("Block timestamp less then prev block %v (%v - %v)", diff, block.Time, sm.bc.CurrentBlock.Time)
 	}

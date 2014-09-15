@@ -63,7 +63,7 @@ func New(env Environment) *Vm {
 		lt = LogTyDiff
 	}
 
-	return &Vm{env: env, logTy: lt, Recoverable: true, queue: list.New()}
+	return &Vm{env: env, logTy: lt, Recoverable: false, queue: list.New()}
 }
 
 func calcMemSize(off, l *big.Int) *big.Int {
@@ -132,15 +132,13 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		// XXX Leave this Println intact. Don't change this to the log system.
 		// Used for creating diffs between implementations
 		if self.logTy == LogTyDiff {
-			/*
-				switch op {
-				case STOP, RETURN, SUICIDE:
-					closure.object.EachStorage(func(key string, value *ethutil.Value) {
-						value.Decode()
-						fmt.Printf("%x %x\n", new(big.Int).SetBytes([]byte(key)).Bytes(), value.Bytes())
-					})
-				}
-			*/
+			switch op {
+			case STOP, RETURN, SUICIDE:
+				closure.object.EachStorage(func(key string, value *ethutil.Value) {
+					value.Decode()
+					fmt.Printf("%x %x\n", new(big.Int).SetBytes([]byte(key)).Bytes(), value.Bytes())
+				})
+			}
 
 			b := pc.Bytes()
 			if len(b) == 0 {
@@ -230,13 +228,15 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		}
 
 		if newMemSize.Cmp(ethutil.Big0) > 0 {
-			//newMemSize = (newMemSize + 31) / 32 * 32
-			newMemSize = newMemSize.Add(newMemSize, u256(31)).Div(newMemSize, u256(32)).Mul(newMemSize, u256(32))
-			//if newMemSize > uint64(mem.Len()) {
+			newMemSize.Add(newMemSize, u256(31))
+			newMemSize.Div(newMemSize, u256(32))
+			newMemSize.Mul(newMemSize, u256(32))
+
 			if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
-				newMemSize = newMemSize.Sub(newMemSize, u256(int64(mem.Len())))
-				memGasUsage := newMemSize.Mul(GasMemory, newMemSize).Div(newMemSize, u256(32))
-				//m := GasMemory.Uint64() * (newMemSize - uint64(mem.Len())) / 32
+				memGasUsage := new(big.Int).Sub(newMemSize, u256(int64(mem.Len())))
+				memGasUsage.Mul(GasMemory, memGasUsage)
+				memGasUsage.Div(memGasUsage, u256(32))
+
 				addStepGasUsage(memGasUsage)
 			}
 		}
@@ -669,12 +669,12 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			require(1)
 			stack.Pop()
 		case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:
-			n := int(op - DUP1)
+			n := int(op - DUP1 + 1)
 			stack.Dupn(n)
 
 			self.Printf(" => [%d] 0x%x", n, stack.Peek().Bytes())
 		case SWAP1, SWAP2, SWAP3, SWAP4, SWAP5, SWAP6, SWAP7, SWAP8, SWAP9, SWAP10, SWAP11, SWAP12, SWAP13, SWAP14, SWAP15, SWAP16:
-			n := int(op - SWAP1)
+			n := int(op - SWAP1 + 2)
 			x, y := stack.Swapn(n)
 
 			self.Printf(" => [%d] %x [0] %x", n, x.Bytes(), y.Bytes())
@@ -694,12 +694,12 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			self.Printf(" => 0x%x", val)
 		case MSTORE8:
 			require(2)
-			val, mStart := stack.Popn()
-			//base.And(val, new(big.Int).SetInt64(0xff))
-			//mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(base, 256))
-			mem.store[mStart.Int64()] = byte(val.Int64() & 0xff)
+			off := stack.Pop()
+			val := stack.Pop()
 
-			self.Printf(" => 0x%x", val)
+			mem.store[off.Int64()] = byte(val.Int64() & 0xff)
+
+			self.Printf(" => [%v] 0x%x", off, val)
 		case SLOAD:
 			require(1)
 			loc := stack.Pop()
@@ -955,6 +955,7 @@ func (self *Message) Addr() []byte {
 }
 
 func (self *Message) Exec(codeAddr []byte, caller ClosureRef) (ret []byte, err error) {
+	fmt.Printf("%x %x\n", codeAddr[0:4], self.address[0:4])
 	queue := self.vm.queue
 	self.vm.queue = list.New()
 
@@ -990,7 +991,7 @@ func (self *Message) Exec(codeAddr []byte, caller ClosureRef) (ret []byte, err e
 		code := self.vm.env.State().GetCode(codeAddr)
 
 		// Create a new callable closure
-		c := NewClosure(msg, caller, object, code, self.gas, self.price)
+		c := NewClosure(msg, caller, stateObject, code, self.gas, self.price)
 		// Executer the closure and get the return value (if any)
 		ret, _, err = c.Call(self.vm, self.input)
 

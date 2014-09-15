@@ -282,8 +282,10 @@ func ReadMessages(conn net.Conn) (msgs []*Msg, err error) {
 	var buff []byte
 	var totalBytes int
 	for {
+		// This is a bit of a cheat actually to make buffering extremely fast.
+		defer recover()
 		// Give buffering some time
-		conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		conn.SetReadDeadline(time.Now().Add(5 * time.Millisecond))
 		// Create a new temporarily buffer
 		b := make([]byte, 1440)
 		// Wait for a message from this peer
