@@ -32,7 +32,7 @@ type StateObject struct {
 	address []byte
 	// Shared attributes
 	Balance  *big.Int
-	CodeHash []byte
+	codeHash []byte
 	Nonce    uint64
 	// Contract related attributes
 	State    *State
@@ -236,7 +236,7 @@ func (self *StateObject) RefundGas(gas, price *big.Int) {
 func (self *StateObject) Copy() *StateObject {
 	stateObject := NewStateObject(self.Address())
 	stateObject.Balance.Set(self.Balance)
-	stateObject.CodeHash = ethutil.CopyBytes(self.CodeHash)
+	stateObject.codeHash = ethutil.CopyBytes(self.codeHash)
 	stateObject.Nonce = self.Nonce
 	if self.State != nil {
 		stateObject.State = self.State.Copy()
@@ -297,12 +297,17 @@ func (c *StateObject) RlpEncode() []byte {
 	} else {
 		root = ""
 	}
+
+	return ethutil.Encode([]interface{}{c.Nonce, c.Balance, root, c.CodeHash()})
+}
+
+func (c *StateObject) CodeHash() ethutil.Bytes {
 	var codeHash []byte
 	if len(c.Code) > 0 {
 		codeHash = ethcrypto.Sha3Bin(c.Code)
 	}
 
-	return ethutil.Encode([]interface{}{c.Nonce, c.Balance, root, codeHash})
+	return codeHash
 }
 
 func (c *StateObject) RlpDecode(data []byte) {
@@ -314,9 +319,9 @@ func (c *StateObject) RlpDecode(data []byte) {
 	c.storage = make(map[string]*ethutil.Value)
 	c.gasPool = new(big.Int)
 
-	c.CodeHash = decoder.Get(3).Bytes()
+	c.codeHash = decoder.Get(3).Bytes()
 
-	c.Code, _ = ethutil.Config.Db.Get(c.CodeHash)
+	c.Code, _ = ethutil.Config.Db.Get(c.codeHash)
 }
 
 // Storage change object. Used by the manifest for notifying changes to

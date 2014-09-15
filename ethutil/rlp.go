@@ -124,6 +124,8 @@ func Encode(object interface{}) []byte {
 			} else {
 				buff.Write(Encode(t.Bytes()))
 			}
+		case Bytes:
+			buff.Write(Encode([]byte(t)))
 		case []byte:
 			if len(t) == 1 && t[0] <= 0x7f {
 				buff.Write(t)

@@ -4,9 +4,13 @@ type Settable interface {
 	AsSet() UniqueSet
 }
 
-type UniqueSet map[interface{}]struct{}
+type Stringable interface {
+	String() string
+}
 
-func NewSet(v ...interface{}) UniqueSet {
+type UniqueSet map[string]struct{}
+
+func NewSet(v ...Stringable) UniqueSet {
 	set := make(UniqueSet)
 	for _, val := range v {
 		set.Insert(val)
@@ -15,14 +19,14 @@ func NewSet(v ...interface{}) UniqueSet {
 	return set
 }
 
-func (self UniqueSet) Insert(k interface{}) UniqueSet {
-	self[k] = struct{}{}
+func (self UniqueSet) Insert(k Stringable) UniqueSet {
+	self[k.String()] = struct{}{}
 
 	return self
 }
 
-func (self UniqueSet) Include(k interface{}) bool {
-	_, ok := self[k]
+func (self UniqueSet) Include(k Stringable) bool {
+	_, ok := self[k.String()]
 
 	return ok
 }

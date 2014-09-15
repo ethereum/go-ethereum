@@ -52,59 +52,34 @@ func (self *BlockPool) AddHash(hash []byte) {
 func (self *BlockPool) SetBlock(b *ethchain.Block, peer *Peer) {
 	hash := string(b.Hash())
 
-	if self.pool[hash] == nil {
+	if self.pool[hash] == nil && !self.eth.BlockChain().HasBlock(b.Hash()) {
 		self.hashPool = append(self.hashPool, b.Hash())
-		self.pool[hash] = &block{peer, nil}
+		self.pool[hash] = &block{peer, b}
+	} else if self.pool[hash] != nil {
+		self.pool[hash].block = b
 	}
-
-	self.pool[hash].block = b
 }
 
-func (self *BlockPool) CheckLinkAndProcess(f func(block *ethchain.Block)) bool {
-	self.mut.Lock()
-	defer self.mut.Unlock()
+func (self *BlockPool) CheckLinkAndProcess(f func(block *ethchain.Block)) {
 
-	if self.IsLinked() {
-		for i, hash := range self.hashPool {
-			if self.pool[string(hash)] == nil {
-				continue
-			}
-
-			block := self.pool[string(hash)].block
-			if block != nil {
-				f(block)
-
-				delete(self.pool, string(hash))
-			} else {
-				self.hashPool = self.hashPool[i:]
-
-				return false
-			}
-		}
-
-		return true
-	}
-
-	return false
-}
-
-func (self *BlockPool) IsLinked() bool {
-	if len(self.hashPool) == 0 {
-		return false
-	}
-
-	for i := 0; i < len(self.hashPool); i++ {
-		item := self.pool[string(self.hashPool[i])]
-		if item != nil && item.block != nil {
-			if self.eth.BlockChain().HasBlock(item.block.PrevHash) {
-				self.hashPool = self.hashPool[i:]
-
-				return true
-			}
+	var blocks ethchain.Blocks
+	for _, item := range self.pool {
+		if item.block != nil {
+			blocks = append(blocks, item.block)
 		}
 	}
 
-	return false
+	ethchain.BlockBy(ethchain.Number).Sort(blocks)
+	for _, block := range blocks {
+		if self.eth.BlockChain().HasBlock(block.PrevHash) {
+			f(block)
+
+			hash := block.Hash()
+			self.hashPool = ethutil.DeleteFromByteSlice(self.hashPool, hash)
+			delete(self.pool, string(hash))
+		}
+
+	}
 }
 
 func (self *BlockPool) Take(amount int, peer *Peer) (hashes [][]byte) {

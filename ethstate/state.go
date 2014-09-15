@@ -3,7 +3,6 @@ package ethstate
 import (
 	"math/big"
 
-	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
@@ -66,7 +65,9 @@ func (self *State) GetCode(addr []byte) []byte {
 func (self *State) UpdateStateObject(stateObject *StateObject) {
 	addr := stateObject.Address()
 
-	ethutil.Config.Db.Put(ethcrypto.Sha3Bin(stateObject.Code), stateObject.Code)
+	if len(stateObject.CodeHash()) > 0 {
+		ethutil.Config.Db.Put(stateObject.CodeHash(), stateObject.Code)
+	}
 
 	self.Trie.Update(string(addr), string(stateObject.RlpEncode()))
 }

@@ -217,12 +217,12 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 		return err
 	}
 
-	// I'm not sure, but I don't know if there should be thrown
-	// any errors at this time.
 	if err = sm.AccumelateRewards(state, block, parent); err != nil {
 		statelogger.Errorln("Error accumulating reward", err)
 		return err
 	}
+
+	state.Update()
 
 	if !block.State().Cmp(state) {
 		err = fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().Trie.Root, state.Trie.Root)
@@ -335,7 +335,7 @@ func (sm *StateManager) ValidateBlock(block *Block) error {
 }
 
 func (sm *StateManager) AccumelateRewards(state *ethstate.State, block, parent *Block) error {
-	reward := new(big.Int)
+	reward := new(big.Int).Set(BlockReward)
 
 	knownUncles := ethutil.Set(parent.Uncles)
 	nonces := ethutil.NewSet(block.Nonce)
@@ -357,6 +357,8 @@ func (sm *StateManager) AccumelateRewards(state *ethstate.State, block, parent *
 		if knownUncles.Include(uncle.Hash()) {
 			return UncleError("Uncle in chain")
 		}
+
+		nonces.Insert(uncle.Nonce)
 
 		r := new(big.Int)
 		r.Mul(BlockReward, big.NewInt(15)).Div(r, big.NewInt(16))

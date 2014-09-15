@@ -58,24 +58,20 @@ func (bc *BlockChain) NewBlock(coinbase []byte) *Block {
 
 	block.MinGasPrice = big.NewInt(10000000000000)
 
-	if bc.CurrentBlock != nil {
-		var mul *big.Int
-		if block.Time < lastBlockTime+5 {
-			mul = big.NewInt(1)
-		} else {
-			mul = big.NewInt(-1)
-		}
-
+	parent := bc.CurrentBlock
+	if parent != nil {
 		diff := new(big.Int)
-		diff.Add(diff, bc.CurrentBlock.Difficulty)
-		diff.Div(diff, big.NewInt(1024))
-		diff.Mul(diff, mul)
-		diff.Add(diff, bc.CurrentBlock.Difficulty)
+
+		adjust := new(big.Int).Rsh(parent.Difficulty, 10)
+		if block.Time >= lastBlockTime+5 {
+			diff.Sub(parent.Difficulty, adjust)
+		} else {
+			diff.Add(parent.Difficulty, adjust)
+		}
 		block.Difficulty = diff
-
 		block.Number = new(big.Int).Add(bc.CurrentBlock.Number, ethutil.Big1)
-
 		block.GasLimit = block.CalcGasLimit(bc.CurrentBlock)
+
 	}
 
 	return block
@@ -159,6 +155,9 @@ func (bc *BlockChain) setLastBlock() {
 		bc.LastBlockHash = block.Hash()
 		bc.LastBlockNumber = block.Number.Uint64()
 
+		if bc.LastBlockNumber == 0 {
+			bc.genesisBlock = block
+		}
 	} else {
 		AddTestNetFunds(bc.genesisBlock)
 

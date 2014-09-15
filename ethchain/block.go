@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
+	"sort"
 	_ "strconv"
 	"time"
 
@@ -42,9 +43,32 @@ func (self Blocks) AsSet() ethutil.UniqueSet {
 	return set
 }
 
+type BlockBy func(b1, b2 *Block) bool
+
+func (self BlockBy) Sort(blocks Blocks) {
+	bs := blockSorter{
+		blocks: blocks,
+		by:     self,
+	}
+	sort.Sort(bs)
+}
+
+type blockSorter struct {
+	blocks Blocks
+	by     func(b1, b2 *Block) bool
+}
+
+func (self blockSorter) Len() int { return len(self.blocks) }
+func (self blockSorter) Swap(i, j int) {
+	self.blocks[i], self.blocks[j] = self.blocks[j], self.blocks[i]
+}
+func (self blockSorter) Less(i, j int) bool { return self.by(self.blocks[i], self.blocks[j]) }
+
+func Number(b1, b2 *Block) bool { return b1.Number.Cmp(b2.Number) < 0 }
+
 type Block struct {
 	// Hash to the previous block
-	PrevHash []byte
+	PrevHash ethutil.Bytes
 	// Uncles of this block
 	Uncles   Blocks
 	UncleSha []byte
@@ -68,7 +92,7 @@ type Block struct {
 	// Extra data
 	Extra string
 	// Block Nonce for verification
-	Nonce []byte
+	Nonce ethutil.Bytes
 	// List of transactions and/or contracts
 	transactions []*Transaction
 	receipts     []*Receipt
@@ -117,8 +141,9 @@ func CreateBlock(root interface{},
 }
 
 // Returns a hash of the block
-func (block *Block) Hash() []byte {
-	return ethcrypto.Sha3Bin(block.Value().Encode())
+func (block *Block) Hash() ethutil.Bytes {
+	return ethcrypto.Sha3Bin(ethutil.NewValue(block.header()).Encode())
+	//return ethcrypto.Sha3Bin(block.Value().Encode())
 }
 
 func (block *Block) HashNoNonce() []byte {

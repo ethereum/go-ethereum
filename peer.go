@@ -24,7 +24,7 @@ const (
 	// The size of the output buffer for writing messages
 	outputBufferSize = 50
 	// Current protocol version
-	ProtocolVersion = 28
+	ProtocolVersion = 32
 	// Current P2P version
 	P2PVersion = 0
 	// Interval for ping/pong message
@@ -276,13 +276,15 @@ func (p *Peer) writeMessage(msg *ethwire.Msg) {
 			return
 		}
 	} else {
-		if !p.statusKnown {
-			switch msg.Type {
-			case ethwire.MsgStatusTy: // Ok
-			default: // Anything but ack is allowed
-				return
+		/*
+			if !p.statusKnown {
+				switch msg.Type {
+				case ethwire.MsgStatusTy: // Ok
+				default: // Anything but ack is allowed
+					return
+				}
 			}
-		}
+		*/
 	}
 
 	peerlogger.DebugDetailf("(%v) <= %v %v\n", p.conn.RemoteAddr(), msg.Type, msg.Data)
@@ -488,19 +490,25 @@ func (p *Peer) HandleInbound() {
 				it := msg.Data.NewIterator()
 				for it.Next() {
 					block := ethchain.NewBlockFromRlpValue(it.Value())
+					//fmt.Printf("%v %x - %x\n", block.Number, block.Hash()[0:4], block.PrevHash[0:4])
 
 					blockPool.SetBlock(block, p)
 
 					p.lastBlockReceived = time.Now()
 				}
 
-				linked := blockPool.CheckLinkAndProcess(func(block *ethchain.Block) {
-					p.ethereum.StateManager().Process(block, false)
+				blockPool.CheckLinkAndProcess(func(block *ethchain.Block) {
+					err := p.ethereum.StateManager().Process(block, false)
+					if err != nil {
+						peerlogger.Infoln(err)
+					}
 				})
 
-				if !linked {
-					p.FetchBlocks()
-				}
+				/*
+					if !linked {
+						p.FetchBlocks()
+					}
+				*/
 			}
 		}
 	}
@@ -595,20 +603,6 @@ func (p *Peer) Stop() {
 	// Pre-emptively remove the peer; don't wait for reaping. We already know it's dead if we are here
 	p.ethereum.RemovePeer(p)
 }
-
-/*
-func (p *Peer) pushHandshake() error {
-	pubkey := p.ethereum.KeyManager().PublicKey()
-	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-		uint32(ProtocolVersion), uint32(0), []byte(p.version), byte(p.caps), p.port, pubkey[1:],
-		p.ethereum.BlockChain().TD.Uint64(), p.ethereum.BlockChain().CurrentBlock.Hash(),
-	})
-
-	p.QueueMessage(msg)
-
-	return nil
-}
-*/
 
 func (p *Peer) peersMessage() *ethwire.Msg {
 	outPeers := make([]interface{}, len(p.ethereum.InOutPeers()))
