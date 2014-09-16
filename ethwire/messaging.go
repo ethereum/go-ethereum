@@ -109,28 +109,23 @@ func ReadMessages(conn net.Conn) (msgs []*Msg, err error) {
 			}
 		}
 
-		if n == 0 {
+		if n == 0 && len(buff) == 0 {
 			continue
 		}
 
+		buff = append(buff, b[:n]...)
 		if msgLength == 0 {
 			// Check if the received 4 first bytes are the magic token
-			if bytes.Compare(MagicToken, b[:4]) != 0 {
-				return nil, fmt.Errorf("MagicToken mismatch. Received %v", b[:4])
+			if bytes.Compare(MagicToken, buff[:4]) != 0 {
+				return nil, fmt.Errorf("MagicToken mismatch. Received %v", buff[:4])
 			}
 
-			// Remove the token
-			b = b[4:]
 			// Read the length of the message
-			msgLength = int(ethutil.BytesToNumber(b[:4]))
+			msgLength = int(ethutil.BytesToNumber(buff[4:8]))
 
-			// Remove the length
-			b = b[4:]
-
-			n -= 8
+			// Remove the token and length
+			buff = buff[8:]
 		}
-
-		buff = append(buff, b[:n]...)
 
 		if len(buff) >= msgLength {
 			messages = append(messages, buff[:msgLength])
