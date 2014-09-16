@@ -96,7 +96,7 @@ func ReadMessages(conn net.Conn) (msgs []*Msg, err error) {
 
 	for {
 		// Give buffering some time
-		conn.SetReadDeadline(time.Now().Add(5 * time.Millisecond))
+		conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		// Create a new temporarily buffer
 		b := make([]byte, 1440)
 		n, _ := conn.Read(b)
