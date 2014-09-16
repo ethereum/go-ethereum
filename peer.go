@@ -680,7 +680,7 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	var (
 		p2pVersion = c.Get(0).Uint()
 		clientId   = c.Get(1).Str()
-		caps       = c.Get(2).Raw()
+		caps       = c.Get(2)
 		port       = c.Get(3).Uint()
 		pub        = c.Get(4).Bytes()
 	)
@@ -734,11 +734,17 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	p.ethereum.PushPeer(p)
 	p.ethereum.reactor.Post("peerList", p.ethereum.Peers())
 
-	ethlogger.Infof("Added peer (%s) %d / %d (%v)\n", p.conn.RemoteAddr(), p.ethereum.Peers().Len(), p.ethereum.MaxPeers, caps)
+	ethlogger.Infof("Added peer (%s) %d / %d (%v)\n", p.conn.RemoteAddr(), p.ethereum.Peers().Len(), p.ethereum.MaxPeers, caps.Raw())
 
 	peerlogger.Debugln(p)
 
-	p.pushStatus()
+	capsIt := caps.NewIterator()
+	for capsIt.Next() {
+		switch capsIt.Value().Str() {
+		case "eth":
+			p.pushStatus()
+		}
+	}
 }
 
 func (p *Peer) String() string {

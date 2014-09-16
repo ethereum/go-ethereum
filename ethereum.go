@@ -2,9 +2,11 @@ package eth
 
 import (
 	"container/list"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,9 +33,7 @@ var ethlogger = ethlog.NewLogger("SERV")
 func eachPeer(peers *list.List, callback func(*Peer, *list.Element)) {
 	// Loop thru the peers and close them (if we had them)
 	for e := peers.Front(); e != nil; e = e.Next() {
-		if peer, ok := e.Value.(*Peer); ok {
-			callback(peer, e)
-		}
+		callback(e.Value.(*Peer), e)
 	}
 }
 
@@ -399,47 +399,57 @@ func (s *Ethereum) Start(seed bool) {
 }
 
 func (s *Ethereum) Seed() {
-	ethlogger.Debugln("Retrieving seed nodes")
-
-	// Eth-Go Bootstrapping
-	ips, er := net.LookupIP("seed.bysh.me")
-	if er == nil {
-		peers := []string{}
+	var ips []string
+	data, _ := ethutil.ReadAllFile(path.Join(ethutil.Config.ExecPath, "known_peers.json"))
+	json.Unmarshal([]byte(data), &ips)
+	if len(ips) > 0 {
 		for _, ip := range ips {
-			node := fmt.Sprintf("%s:%d", ip.String(), 30303)
-			ethlogger.Debugln("Found DNS Go Peer:", node)
-			peers = append(peers, node)
+			ethlogger.Infoln("Connecting to previous peer ", ip)
+			s.ConnectToPeer(ip)
 		}
-		s.ProcessPeerList(peers)
-	}
+	} else {
+		ethlogger.Debugln("Retrieving seed nodes")
 
-	// Official DNS Bootstrapping
-	_, nodes, err := net.LookupSRV("eth", "tcp", "ethereum.org")
-	if err == nil {
-		peers := []string{}
-		// Iterate SRV nodes
-		for _, n := range nodes {
-			target := n.Target
-			port := strconv.Itoa(int(n.Port))
-			// Resolve target to ip (Go returns list, so may resolve to multiple ips?)
-			addr, err := net.LookupHost(target)
-			if err == nil {
-				for _, a := range addr {
-					// Build string out of SRV port and Resolved IP
-					peer := net.JoinHostPort(a, port)
-					ethlogger.Debugln("Found DNS Bootstrap Peer:", peer)
-					peers = append(peers, peer)
-				}
-			} else {
-				ethlogger.Debugln("Couldn't resolve :", target)
+		// Eth-Go Bootstrapping
+		ips, er := net.LookupIP("seed.bysh.me")
+		if er == nil {
+			peers := []string{}
+			for _, ip := range ips {
+				node := fmt.Sprintf("%s:%d", ip.String(), 30303)
+				ethlogger.Debugln("Found DNS Go Peer:", node)
+				peers = append(peers, node)
 			}
+			s.ProcessPeerList(peers)
 		}
-		// Connect to Peer list
-		s.ProcessPeerList(peers)
-	}
 
-	// XXX tmp
-	s.ConnectToPeer(seedNodeAddress)
+		// Official DNS Bootstrapping
+		_, nodes, err := net.LookupSRV("eth", "tcp", "ethereum.org")
+		if err == nil {
+			peers := []string{}
+			// Iterate SRV nodes
+			for _, n := range nodes {
+				target := n.Target
+				port := strconv.Itoa(int(n.Port))
+				// Resolve target to ip (Go returns list, so may resolve to multiple ips?)
+				addr, err := net.LookupHost(target)
+				if err == nil {
+					for _, a := range addr {
+						// Build string out of SRV port and Resolved IP
+						peer := net.JoinHostPort(a, port)
+						ethlogger.Debugln("Found DNS Bootstrap Peer:", peer)
+						peers = append(peers, peer)
+					}
+				} else {
+					ethlogger.Debugln("Couldn't resolve :", target)
+				}
+			}
+			// Connect to Peer list
+			s.ProcessPeerList(peers)
+		}
+
+		// XXX tmp
+		s.ConnectToPeer(seedNodeAddress)
+	}
 }
 
 func (s *Ethereum) peerHandler(listener net.Listener) {
@@ -458,6 +468,13 @@ func (s *Ethereum) peerHandler(listener net.Listener) {
 func (s *Ethereum) Stop() {
 	// Close the database
 	defer s.db.Close()
+
+	var ips []string
+	eachPeer(s.peers, func(p *Peer, e *list.Element) {
+		ips = append(ips, p.conn.RemoteAddr().String())
+	})
+	d, _ := json.MarshalIndent(ips, "", "    ")
+	ethutil.WriteFile(path.Join(ethutil.Config.ExecPath, "known_peers.json"), d)
 
 	eachPeer(s.peers, func(p *Peer, e *list.Element) {
 		p.Stop()
