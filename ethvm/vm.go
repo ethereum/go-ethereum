@@ -63,7 +63,7 @@ func New(env Environment) *Vm {
 		lt = LogTyDiff
 	}
 
-	return &Vm{env: env, logTy: lt, Recoverable: false, queue: list.New()}
+	return &Vm{env: env, logTy: lt, Recoverable: true, queue: list.New()}
 }
 
 func calcMemSize(off, l *big.Int) *big.Int {
@@ -200,7 +200,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-2])
 		case CALLDATACOPY:
-			require(3)
+			require(2)
 
 			newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-3])
 		case CODECOPY:
@@ -210,7 +210,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case EXTCODECOPY:
 			require(4)
 
-			newMemSize = calcMemSize(stack.data[stack.Len()-1], stack.data[stack.Len()-4])
+			newMemSize = calcMemSize(stack.data[stack.Len()-2], stack.data[stack.Len()-4])
 		case CALL, CALLSTATELESS:
 			require(7)
 			gas.Set(GasCall)
@@ -832,7 +832,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			}
 
 		case POST:
-			require(6)
+			require(5)
 
 			self.Endl()
 
@@ -871,6 +871,9 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			return closure.Return(nil), nil
 		default:
 			vmlogger.Debugf("(pc) %-3v Invalid opcode %x\n", pc, op)
+
+			// XXX Really?
+			closure.UseGas(closure.Gas)
 
 			return closure.Return(nil), fmt.Errorf("Invalid opcode %x", op)
 		}
