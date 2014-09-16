@@ -7,15 +7,23 @@ import QtQuick.Layouts 1.0;
 import QtQuick.Window 2.1;
 import Ethereum 1.0
 
-ApplicationWindow {
+//ApplicationWindow {
+Rectangle {
 	id: window
-	title: "Ethereum"
-	width: 1000
-	height: 800
-	minimumHeight: 300
+	property var title: "Browser"
+	property var iconSource: "../browser.png"
+	property var menuItem
+
+	//width: 1000
+	//height: 800
+	//minimumHeight: 300
 
 	property alias url: webview.url
 	property alias webView: webview
+
+	Component.onCompleted: {
+		webview.url = "http://etherian.io"
+	}
 
 	Item {
 		objectName: "root"
@@ -53,6 +61,7 @@ ApplicationWindow {
 					leftMargin: 5
 					rightMargin: 5
 				}
+				text: "http://etherian.io"
 				id: uriNav
 				y: parent.height / 2 - this.height / 2
 

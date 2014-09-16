@@ -44,6 +44,7 @@ ApplicationWindow {
 	// Takes care of loading all default plugins
 	Component.onCompleted: {
 		addPlugin("./views/wallet.qml", {noAdd: true, section: "ethereum", active: true});
+		addPlugin("./webapp.qml", {noAdd: true, section: "ethereum", active: true});
 
 		addPlugin("./views/transaction.qml", {noAdd: true, section: "legacy"});
 		addPlugin("./views/chain.qml", {noAdd: true, section: "legacy"});
@@ -111,10 +112,12 @@ ApplicationWindow {
 				}
 			}
 
+			/*
 			MenuItem {
 				text: "Browser"
 				onTriggered: eth.openBrowser()
 			}
+			*/
 
 			MenuItem {
 				text: "Add plugin"
@@ -145,6 +148,7 @@ ApplicationWindow {
 					})
 				}
 			}
+
 		}
 
 		Menu {
@@ -225,6 +229,17 @@ ApplicationWindow {
 			}
 		}
 
+		Menu {
+			title: "GLOBAL SHORTCUTS"
+			visible: false
+			MenuItem {
+				visible: false
+				shortcut: "Ctrl+l"
+				onTriggered: {
+					url.focus = true
+				}
+			}
+		}
 	}
 
 	statusBar: StatusBar {
@@ -238,6 +253,7 @@ ApplicationWindow {
 				}
 			}
 
+			/*
 			Button {
 				id: importAppButton
 				text: "Browser"
@@ -245,6 +261,7 @@ ApplicationWindow {
 					eth.openBrowser()
 				}
 			}
+			*/
 
 			RowLayout {
 				Label {
