@@ -189,7 +189,7 @@ func DefaultAssetPath() string {
 	// assume a debug build and use the source directory as
 	// asset directory.
 	pwd, _ := os.Getwd()
-	if pwd == path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "ethereal") {
+	if pwd == path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "Mist") {
 		assetPath = path.Join(pwd, "assets")
 	} else {
 		switch runtime.GOOS {
@@ -198,7 +198,7 @@ func DefaultAssetPath() string {
 			exedir, _ := osext.ExecutableFolder()
 			assetPath = filepath.Join(exedir, "../Resources")
 		case "linux":
-			assetPath = "/usr/share/ethereal"
+			assetPath = "/usr/share/mist"
 		case "windows":
 			assetPath = "./assets"
 		default:

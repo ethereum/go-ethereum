@@ -72,6 +72,10 @@ func (self *UiLib) LookupDomain(domain string) string {
 	}
 }
 
+func (self *UiLib) PastPeers() *ethutil.List {
+	return ethutil.NewList(eth.PastPeers())
+}
+
 func (self *UiLib) ImportTx(rlpTx string) {
 	tx := ethchain.NewTransactionFromBytes(ethutil.Hex2Bytes(rlpTx))
 	self.eth.TxPool().QueueTransaction(tx)

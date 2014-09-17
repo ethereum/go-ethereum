@@ -42,7 +42,7 @@ func (jsre *JSRE) LoadExtFile(path string) {
 }
 
 func (jsre *JSRE) LoadIntFile(file string) {
-	assetPath := path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "ethereal", "assets", "ext")
+	assetPath := path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "Mist", "assets", "ext")
 	jsre.LoadExtFile(path.Join(assetPath, file))
 }
 

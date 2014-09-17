@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	ClientIdentifier = "Ethereal"
-	Version          = "0.6.6"
+	ClientIdentifier = "Mist"
+	Version          = "0.6.7"
 )
 
 var ethereum *eth.Ethereum

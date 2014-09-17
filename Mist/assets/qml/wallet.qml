@@ -19,7 +19,7 @@ ApplicationWindow {
 	height: 600
 	minimumHeight: 300
 
-	title: "Ether Browser"
+	title: "Mist"
 
 	// This signal is used by the filter API. The filter API connects using this signal handler from
 	// the different QML files and plugins.
@@ -853,16 +853,20 @@ ApplicationWindow {
 	     Window {
 		     id: addPeerWin
 		     visible: false
-		     minimumWidth: 230
-		     maximumWidth: 230
+		     minimumWidth: 300
+		     maximumWidth: 300
 		     maximumHeight: 50
 		     minimumHeight: 50
+		     title: "Add peer"
 
+		     /*
 		     TextField {
 			     id: addrField
 			     anchors.verticalCenter: parent.verticalCenter
 			     anchors.left: parent.left
+			     anchors.right: addPeerButton.left
 			     anchors.leftMargin: 10
+			     anchors.rightMargin: 10
 			     placeholderText: "address:port"
 			     text: "54.76.56.74:30303"
 			     onAccepted: {
@@ -870,13 +874,40 @@ ApplicationWindow {
 				     addPeerWin.visible = false
 			     }
 		     }
-		     Button {
-			     anchors.left: addrField.right
+		     */
+		    ComboBox {
+			     id: addrField
 			     anchors.verticalCenter: parent.verticalCenter
-			     anchors.leftMargin: 5
+			     anchors.left: parent.left
+			     anchors.right: addPeerButton.left
+			     anchors.leftMargin: 10
+			     anchors.rightMargin: 10
+			     onAccepted: {
+				     eth.connectToPeer(addrField.currentText)
+				     addPeerWin.visible = false
+			     }
+
+			     editable: true
+			     model: ListModel { id: pastPeers }
+
+			     Component.onCompleted: {
+				     var ips = eth.pastPeers()
+				     for(var i = 0; i < ips.length; i++) {
+					     pastPeers.append({text: ips.get(i)})
+				     }
+
+				     pastPeers.insert(0, {text: "54.76.56.74:30303"})
+			     }
+		    }
+
+		     Button {
+			     id: addPeerButton
+			     anchors.right: parent.right
+			     anchors.verticalCenter: parent.verticalCenter
+			     anchors.rightMargin: 10
 			     text: "Add"
 			     onClicked: {
-				     eth.connectToPeer(addrField.text)
+				     eth.connectToPeer(addrField.currentText)
 				     addPeerWin.visible = false
 			     }
 		     }
