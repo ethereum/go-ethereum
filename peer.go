@@ -287,7 +287,7 @@ func (p *Peer) writeMessage(msg *ethwire.Msg) {
 		*/
 	}
 
-	peerlogger.DebugDetailf("(%v) <= %v %v\n", p.conn.RemoteAddr(), msg.Type, msg.Data)
+	peerlogger.DebugDetailf("(%v) <= %v\n", p.conn.RemoteAddr(), formatMessage(msg))
 
 	err := ethwire.WriteMessage(p.conn, msg)
 	if err != nil {
@@ -351,6 +351,27 @@ clean:
 	}
 }
 
+func formatMessage(msg *ethwire.Msg) (ret string) {
+	ret = fmt.Sprintf("%v ", msg.Type)
+
+	/*
+		XXX Commented out because I need the log level here to determine
+		if i should or shouldn't generate this message
+	*/
+	switch msg.Type {
+	case ethwire.MsgPeersTy:
+		ret += fmt.Sprintf("(%d entries)", msg.Data.Len())
+	case ethwire.MsgBlockTy:
+		b1, b2 := ethchain.NewBlockFromRlpValue(msg.Data.Get(0)), ethchain.NewBlockFromRlpValue(msg.Data.Get(msg.Data.Len()-1))
+		ret += fmt.Sprintf("(%d entries) %x - %x", msg.Data.Len(), b1.Hash()[0:4], b2.Hash()[0:4])
+	case ethwire.MsgBlockHashesTy:
+		h1, h2 := msg.Data.Get(0).Bytes(), msg.Data.Get(msg.Data.Len()-1).Bytes()
+		ret += fmt.Sprintf("(%d entries) %x - %x", msg.Data.Len(), h1[0:4], h2[0:4])
+	}
+
+	return
+}
+
 // Inbound handler. Inbound messages are received here and passed to the appropriate methods
 func (p *Peer) HandleInbound() {
 	for atomic.LoadInt32(&p.disconnect) == 0 {
@@ -363,7 +384,7 @@ func (p *Peer) HandleInbound() {
 			peerlogger.Debugln(err)
 		}
 		for _, msg := range msgs {
-			peerlogger.DebugDetailf("(%v) => %v %v\n", p.conn.RemoteAddr(), msg.Type, msg.Data)
+			peerlogger.DebugDetailf("(%v) => %v\n", p.conn.RemoteAddr(), formatMessage(msg))
 
 			switch msg.Type {
 			case ethwire.MsgHandshakeTy:
@@ -505,7 +526,10 @@ func (p *Peer) HandleInbound() {
 				if err != nil {
 					peerlogger.Infoln(err)
 				} else {
-					p.FetchBlocks()
+					// Don't trigger if there's just one block.
+					if blockPool.Len() != 0 && msg.Data.Len() > 1 {
+						p.FetchBlocks()
+					}
 				}
 			}
 		}
@@ -643,7 +667,11 @@ func (self *Peer) handleStatus(msg *ethwire.Msg) {
 		bestHash     = c.Get(3).Bytes()
 		genesis      = c.Get(4).Bytes()
 	)
-	ethlogger.Infof("gen = %x\n", genesis)
+
+	if bytes.Compare(self.ethereum.BlockChain().Genesis().Hash(), genesis) != 0 {
+		ethlogger.Warnf("Invalid genisis hash %x. Disabling [ETH]\n", genesis)
+		return
+	}
 
 	// Get the td and last hash
 	self.td = td
@@ -734,17 +762,21 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	p.ethereum.PushPeer(p)
 	p.ethereum.reactor.Post("peerList", p.ethereum.Peers())
 
-	ethlogger.Infof("Added peer (%s) %d / %d (%v)\n", p.conn.RemoteAddr(), p.ethereum.Peers().Len(), p.ethereum.MaxPeers, caps.Raw())
-
-	peerlogger.Debugln(p)
-
 	capsIt := caps.NewIterator()
+	var capsStrs []string
 	for capsIt.Next() {
-		switch capsIt.Value().Str() {
+		cap := capsIt.Value().Str()
+		switch cap {
 		case "eth":
 			p.pushStatus()
 		}
+
+		capsStrs = append(capsStrs, cap)
 	}
+
+	ethlogger.Infof("Added peer (%s) %d / %d (%v)\n", p.conn.RemoteAddr(), p.ethereum.Peers().Len(), p.ethereum.MaxPeers, capsStrs)
+
+	peerlogger.Debugln(p)
 }
 
 func (p *Peer) String() string {

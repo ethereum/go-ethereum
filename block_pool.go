@@ -33,6 +33,10 @@ func NewBlockPool(eth *Ethereum) *BlockPool {
 	}
 }
 
+func (self *BlockPool) Len() int {
+	return len(self.hashPool)
+}
+
 func (self *BlockPool) HasLatestHash() bool {
 	return self.pool[string(self.eth.BlockChain().CurrentBlock.Hash())] != nil
 }
