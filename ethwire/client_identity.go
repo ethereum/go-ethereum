@@ -24,7 +24,7 @@ func NewSimpleClientIdentity(clientIdentifier string, version string, customIden
 		version:          version,
 		customIdentifier: customIdentifier,
 		os:               runtime.GOOS,
-		implementation:   "Go",
+		implementation:   runtime.Version(),
 	}
 
 	return clientIdentity

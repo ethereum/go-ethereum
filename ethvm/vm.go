@@ -872,8 +872,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		default:
 			vmlogger.Debugf("(pc) %-3v Invalid opcode %x\n", pc, op)
 
-			// XXX Really?
-			closure.UseGas(closure.Gas)
+			//panic(fmt.Sprintf("Invalid opcode %x", op))
 
 			return closure.Return(nil), fmt.Errorf("Invalid opcode %x", op)
 		}
