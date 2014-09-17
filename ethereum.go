@@ -399,9 +399,7 @@ func (s *Ethereum) Start(seed bool) {
 }
 
 func (s *Ethereum) Seed() {
-	var ips []string
-	data, _ := ethutil.ReadAllFile(path.Join(ethutil.Config.ExecPath, "known_peers.json"))
-	json.Unmarshal([]byte(data), &ips)
+	ips := PastPeers()
 	if len(ips) > 0 {
 		for _, ip := range ips {
 			ethlogger.Infoln("Connecting to previous peer ", ip)
@@ -473,8 +471,11 @@ func (s *Ethereum) Stop() {
 	eachPeer(s.peers, func(p *Peer, e *list.Element) {
 		ips = append(ips, p.conn.RemoteAddr().String())
 	})
-	d, _ := json.MarshalIndent(ips, "", "    ")
-	ethutil.WriteFile(path.Join(ethutil.Config.ExecPath, "known_peers.json"), d)
+
+	if len(ips) > 0 {
+		d, _ := json.MarshalIndent(ips, "", "    ")
+		ethutil.WriteFile(path.Join(ethutil.Config.ExecPath, "known_peers.json"), d)
+	}
 
 	eachPeer(s.peers, func(p *Peer, e *list.Element) {
 		p.Stop()
@@ -619,4 +620,12 @@ func bootstrapDb(db ethutil.Database) {
 	if protov == 0 {
 		db.Put([]byte("ProtocolVersion"), ethutil.NewValue(ProtocolVersion).Bytes())
 	}
+}
+
+func PastPeers() []string {
+	var ips []string
+	data, _ := ethutil.ReadAllFile(path.Join(ethutil.Config.ExecPath, "known_peers.json"))
+	json.Unmarshal([]byte(data), &ips)
+
+	return ips
 }
