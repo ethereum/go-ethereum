@@ -11,7 +11,6 @@ type ClientIdentity interface {
 }
 
 type SimpleClientIdentity struct {
-	clientString     string
 	clientIdentifier string
 	version          string
 	customIdentifier string
@@ -27,26 +26,29 @@ func NewSimpleClientIdentity(clientIdentifier string, version string, customIden
 		os:               runtime.GOOS,
 		implementation:   "Go",
 	}
-	clientIdentity.init()
+
 	return clientIdentity
 }
 
 func (c *SimpleClientIdentity) init() {
-	c.clientString = fmt.Sprintf("%s/v%s/%s/%s/%s",
+}
+
+func (c *SimpleClientIdentity) String() string {
+	var id string
+	if len(c.customIdentifier) > 0 {
+		id = "/" + c.customIdentifier
+	}
+
+	return fmt.Sprintf("%s/v%s%s/%s/%s",
 		c.clientIdentifier,
 		c.version,
-		c.customIdentifier,
+		id,
 		c.os,
 		c.implementation)
 }
 
-func (c *SimpleClientIdentity) String() string {
-	return c.clientString
-}
-
 func (c *SimpleClientIdentity) SetCustomIdentifier(customIdentifier string) {
 	c.customIdentifier = customIdentifier
-	c.init()
 }
 
 func (c *SimpleClientIdentity) GetCustomIdentifier() string {
