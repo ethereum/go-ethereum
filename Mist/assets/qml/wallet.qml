@@ -101,16 +101,16 @@ ApplicationWindow {
 		}
 	}
 
-    menuBar: MenuBar {
-        Menu {
-            title: "File"
-            MenuItem {
-                text: "Import App"
-                shortcut: "Ctrl+o"
-                onTriggered: {
-                    generalFileDialog.show(true, importApp)
-                }
-            }
+	menuBar: MenuBar {
+        	Menu {
+            		title: "File"
+            		MenuItem {
+                		text: "Import App"
+                		shortcut: "Ctrl+o"
+                		onTriggered: {
+                    			generalFileDialog.show(true, importApp)
+                		}
+            		}
 
 			/*
 			MenuItem {
