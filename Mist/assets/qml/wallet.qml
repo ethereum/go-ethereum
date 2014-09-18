@@ -154,6 +154,7 @@ ApplicationWindow {
         Menu {
             title: "Developer"
             MenuItem {
+                iconSource: "../icecream.png"
                 text: "Debugger"
                 shortcut: "Ctrl+d"
                 onTriggered: eth.startDebugger()
@@ -252,16 +253,6 @@ ApplicationWindow {
                     gui.toggleMining()
                 }
             }
-
-            /*
-             Button {
-                 id: importAppButton
-                 text: "Browser"
-                 onClicked: {
-                     eth.openBrowser()
-                 }
-             }
-             */
 
             RowLayout {
                 Label {
@@ -669,8 +660,7 @@ ApplicationWindow {
 
               Rectangle {
                   id: mainView
-
-
+                  color: "#00000000"
                   anchors.right: parent.right
                   anchors.left: parent.left
                   anchors.bottom: parent.bottom
