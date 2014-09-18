@@ -223,18 +223,29 @@ ApplicationWindow {
 						}
 					}
 
-					Rectangle {
-						height: 200
-						width: parent.width
-						TableView {
-							id: logTableView
-							property var logModel: ListModel {
-								id: logModel
+					SplitView {
+						Rectangle {
+							height: 200
+							width: parent.width * 0.66
+							TableView {
+								id: logTableView
+								property var logModel: ListModel {
+									id: logModel
+								}
+								height: parent.height
+								width: parent.width
+								TableViewColumn{ id: message ; role: "message" ; title: "log" ; width: logTableView.width - 2 }
+								model: logModel
 							}
-							height: parent.height
-							width: parent.width
-							TableViewColumn{ id: message ; role: "message" ; title: "log" ; width: logTableView.width - 2 }
-							model: logModel
+						}
+
+						TextArea {
+							objectName: "info"
+							anchors {
+								top: parent.top
+								bottom: parent.bottom
+							}
+							readOnly: true
 						}
 					}
 				}

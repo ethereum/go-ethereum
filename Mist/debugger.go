@@ -284,6 +284,8 @@ func (d *Debugger) halting(pc int, op ethvm.OpCode, mem *ethvm.Memory, stack *et
 		d.win.Root().Call("setStorage", storeVal{fmt.Sprintf("% x", key), fmt.Sprintf("% x", node.Str())})
 	})
 
+	d.win.Root().ObjectByName("info").Set("text", fmt.Sprintf(`stack frame %v`, new(big.Int).SetBytes(mem.Get(0, 32))))
+
 out:
 	for {
 		select {
