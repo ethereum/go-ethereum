@@ -101,7 +101,7 @@ ApplicationWindow {
         }
     }
 
-    MenuBar {
+    menuBar: MenuBar {
         Menu {
             title: "File"
             MenuItem {
