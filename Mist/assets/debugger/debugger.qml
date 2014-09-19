@@ -86,8 +86,37 @@ ApplicationWindow {
 		TableView {
 			id: asmTableView
 			width: 200
+			headerVisible: false
 			TableViewColumn{ role: "value" ; title: "" ; width: asmTableView.width - 2 }
 			model: asmModel
+			/*
+			alternatingRowColors: false
+			itemDelegate: Item {
+				Rectangle {
+					anchors.fill: parent
+					color: "#DDD"
+					Text {
+						anchors {
+							left: parent.left
+							right: parent.right
+							leftMargin: 10
+							verticalCenter: parent.verticalCenter
+						}
+						color: "#333"
+						elide: styleData.elideMode
+						text: styleData.value
+						font.pixelSize: 11
+						MouseArea {
+							acceptedButtons: Qt.LeftButton
+							anchors.fill: parent
+							onClicked: {
+								mouse.accepted = true
+							}
+						}
+					}
+				}
+			}
+			*/
 		}
 
 		Rectangle {
@@ -201,8 +230,8 @@ ApplicationWindow {
 							}
 							height: parent.height
 							width: parent.width - stackTableView.width
-							TableViewColumn{ id:mnumColmn ; role: "num" ; title: "#" ; width: 50}
-							TableViewColumn{ role: "value" ; title: "Memory" ; width: 750}
+							TableViewColumn{ id:mnumColmn ; role: "num" ; title: "#" ; width: 50 }
+							TableViewColumn{ role: "value" ; title: "Memory" ; width: 750 }
 							model: memModel
 						}
 					}
@@ -223,31 +252,21 @@ ApplicationWindow {
 						}
 					}
 
-					SplitView {
-						Rectangle {
-							height: 200
-							width: parent.width * 0.66
-							TableView {
-								id: logTableView
-								property var logModel: ListModel {
-									id: logModel
-								}
-								height: parent.height
-								width: parent.width
-								TableViewColumn{ id: message ; role: "message" ; title: "log" ; width: logTableView.width - 2 }
-								model: logModel
+					Rectangle {
+						height: 200
+						width: parent.width * 0.66
+						TableView {
+							id: logTableView
+							property var logModel: ListModel {
+								id: logModel
 							}
-						}
-
-						TextArea {
-							objectName: "info"
-							anchors {
-								top: parent.top
-								bottom: parent.bottom
-							}
-							readOnly: true
+							height: parent.height
+							width: parent.width
+							TableViewColumn{ id: message ; role: "message" ; title: "log" ; width: logTableView.width - 2 }
+							model: logModel
 						}
 					}
+
 				}
 			}
 		}
@@ -271,12 +290,37 @@ ApplicationWindow {
 				exec()
 			}
 		}
+
+		RowLayout {
+			anchors.left: dbgCommand.right
+			anchors.leftMargin: 10
+			spacing: 5
+			y: parent.height / 2 - this.height / 2
+
+			Text {
+				objectName: "stackFrame"
+				font.pixelSize: 10
+				text: "<b>stack ptr</b>: 0"
+			}
+
+			Text {
+				objectName: "stackSize"
+				font.pixelSize: 10
+				text: "<b>stack size</b>: 0"
+			}
+
+			Text {
+				objectName: "memSize"
+				font.pixelSize: 10
+				text: "<b>mem size</b>: 0"
+			}
+		}
 	}
 
 	toolBar: ToolBar {
 		height: 30
 		RowLayout {
-			spacing: 5
+			spacing: 10
 
 			Button {
 				property var enabled: true
@@ -338,6 +382,7 @@ ApplicationWindow {
 	function setInstruction(num) {
 		asmTableView.selection.clear()
 		asmTableView.selection.select(num)
+		asmTableView.positionViewAtRow(num, ListView.Center)
 	}
 
 	function setMem(mem) {
