@@ -94,9 +94,7 @@ func (self *DebuggerWindow) ClearLog() {
 }
 
 func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, dataStr string) {
-	if !self.Db.done {
-		self.Db.Q <- true
-	}
+	self.Stop()
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -184,6 +182,12 @@ func (self *DebuggerWindow) Next() {
 func (self *DebuggerWindow) Continue() {
 	self.vm.Stepping = false
 	self.Next()
+}
+
+func (self *DebuggerWindow) Stop() {
+	if !self.Db.done {
+		self.Db.Q <- true
+	}
 }
 
 func (self *DebuggerWindow) ExecCommand(command string) {

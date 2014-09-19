@@ -7,16 +7,14 @@ import QtQuick.Layouts 1.0;
 import QtQuick.Window 2.1;
 import Ethereum 1.0
 
+import "../ext/qml_messaging.js" as Messaging
+
 //ApplicationWindow {
 Rectangle {
 	id: window
 	property var title: "Browser"
 	property var iconSource: "../browser.png"
 	property var menuItem
-
-	//width: 1000
-	//height: 800
-	//minimumHeight: 300
 
 	property alias url: webview.url
 	property alias webView: webview
@@ -97,7 +95,6 @@ Rectangle {
 				bottom: parent.bottom
 				top: navBar.bottom
 			}
-			onTitleChanged: { window.title = title }
 
 			property var cleanPath: false
 			onNavigationRequested: {
@@ -113,7 +110,7 @@ Rectangle {
 						uri.replace(reg, function(match, pre, domain, path) {
 							uri = pre;
 
-							var lookup = ui.lookupDomain(domain.substring(0, domain.length - 4));
+							var lookup = eth.lookupDomain(domain.substring(0, domain.length - 4));
 							var ip = [];
 							for(var i = 0, l = lookup.length; i < l; i++) {
 								ip.push(lookup.charCodeAt(i))
@@ -138,11 +135,22 @@ Rectangle {
 				}
 			}
 
+			function sendMessage(data) {
+				//this.experimental.evaluateJavaScript("window.____returnData="+JSON.stringify(data));
+				webview.experimental.postMessage(JSON.stringify(data))
+			}
+
+			onTitleChanged: {
+				var data = Messaging.HandleMessage(title);
+				if(data) {
+					sendMessage(data)
+				}
+			}
 
 			experimental.preferences.javascriptEnabled: true
 			experimental.preferences.navigatorQtObjectEnabled: true
 			experimental.preferences.developerExtrasEnabled: true
-			experimental.userScripts: ["../ext/pre.js", "../ext/big.js", "../ext/string.js", "../ext/ethereum.js"]
+			experimental.userScripts: ["../ext/q.js", "../ext/pre.js", "../ext/big.js", "../ext/string.js", "../ext/html_messaging.js"]
 			experimental.onMessageReceived: {
 				console.log("[onMessageReceived]: ", message.data)
 				// TODO move to messaging.js
@@ -150,6 +158,10 @@ Rectangle {
 
 				try {
 					switch(data.call) {
+						case "compile":
+						postData(data._seed, eth.compile(data.args[0]))
+						break
+
 						case "getCoinBase":
 						postData(data._seed, eth.coinBase())
 
@@ -191,7 +203,8 @@ Rectangle {
 						case "transact":
 						require(5)
 
-						var tx = eth.transact(data.args[0], data.args[1], data.args[2],data.args[3],data.args[4],data.args[5])
+						var tx = eth.transact(data.args)
+						console.log("transactx", tx)
 						postData(data._seed, tx)
 
 						break

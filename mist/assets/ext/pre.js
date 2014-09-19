@@ -35,3 +35,7 @@ navigator.qt.onmessage = function(ev) {
 		}
 	}
 }
+
+if(typeof(Promise) === "undefined") {
+	window.Promise = Q.Promise;
+}

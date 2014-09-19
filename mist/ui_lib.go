@@ -248,3 +248,12 @@ func (self *UiLib) Transact(object map[string]interface{}) (*ethpipe.JSReceipt, 
 		dataStr,
 	)
 }
+
+func (self *UiLib) Compile(code string) (string, error) {
+	bcode, err := ethutil.Compile(code, false)
+	if err != nil {
+		return err.Error(), err
+	}
+
+	return ethutil.Bytes2Hex(bcode), err
+}
