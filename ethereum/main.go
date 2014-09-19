@@ -76,6 +76,8 @@ func main() {
 			os.Exit(1)
 		}
 
+		fmt.Printf("RLP: %x\nstate: %x\nhash: %x\n", ethutil.Rlp(block), block.GetRoot(), block.Hash())
+
 		// Leave the Println. This needs clean output for piping
 		fmt.Printf("%s\n", block.State().Dump())
 
