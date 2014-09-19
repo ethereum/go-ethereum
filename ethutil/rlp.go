@@ -15,6 +15,10 @@ type RlpEncodeDecode interface {
 	RlpValue() []interface{}
 }
 
+func Rlp(encoder RlpEncode) []byte {
+	return encoder.RlpEncode()
+}
+
 type RlpEncoder struct {
 	rlpData []byte
 }

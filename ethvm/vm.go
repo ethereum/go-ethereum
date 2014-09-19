@@ -670,9 +670,13 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			stack.Pop()
 		case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:
 			n := int(op - DUP1 + 1)
-			stack.Dupn(n)
+			v := stack.Dupn(n)
 
 			self.Printf(" => [%d] 0x%x", n, stack.Peek().Bytes())
+
+			if OpCode(closure.Get(new(big.Int).Add(pc, ethutil.Big1)).Uint()) == POP && OpCode(closure.Get(new(big.Int).Add(pc, big.NewInt(2))).Uint()) == POP {
+				fmt.Println(toValue(v))
+			}
 		case SWAP1, SWAP2, SWAP3, SWAP4, SWAP5, SWAP6, SWAP7, SWAP8, SWAP9, SWAP10, SWAP11, SWAP12, SWAP13, SWAP14, SWAP15, SWAP16:
 			n := int(op - SWAP1 + 2)
 			x, y := stack.Swapn(n)
@@ -1003,4 +1007,15 @@ func (self *Message) Exec(codeAddr []byte, caller ClosureRef) (ret []byte, err e
 	}
 
 	return
+}
+
+// Mainly used for print variables and passing to Print*
+func toValue(val *big.Int) interface{} {
+	// Let's assume a string on right padded zero's
+	b := val.Bytes()
+	if b[0] != 0 && b[len(b)-1] == 0x0 && b[len(b)-2] == 0x0 {
+		return string(b)
+	}
+
+	return val
 }
