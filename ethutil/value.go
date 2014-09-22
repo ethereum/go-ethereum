@@ -118,6 +118,8 @@ func (val *Value) BigInt() *big.Int {
 		return b
 	} else if a, ok := val.Val.(*big.Int); ok {
 		return a
+	} else if a, ok := val.Val.(string); ok {
+		return Big(a)
 	} else {
 		return big.NewInt(int64(val.Uint()))
 	}
