@@ -208,7 +208,6 @@ func (s *Ethereum) ProcessPeerList(addrs []string) {
 }
 
 func (s *Ethereum) ConnectToPeer(addr string) error {
-	fmt.Println("ConnectToPeer", addr)
 	if s.peers.Len() < s.MaxPeers {
 		var alreadyConnected bool
 
