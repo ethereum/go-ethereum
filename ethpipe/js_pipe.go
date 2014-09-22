@@ -85,10 +85,6 @@ func (self *JSPipe) CoinBase() string {
 	return ethutil.Bytes2Hex(self.obj.KeyManager().Address())
 }
 
-func (self *JSPipe) BalanceAt(addr string) string {
-	return self.World().SafeGet(ethutil.Hex2Bytes(addr)).Balance.String()
-}
-
 func (self *JSPipe) NumberToHuman(balance string) string {
 	b := ethutil.Big(balance)
 
@@ -101,8 +97,16 @@ func (self *JSPipe) StorageAt(addr, storageAddr string) string {
 	return ethutil.Bytes2Hex(storage.Bytes())
 }
 
+func (self *JSPipe) BalanceAt(addr string) string {
+	return self.World().SafeGet(ethutil.Hex2Bytes(addr)).Balance.String()
+}
+
 func (self *JSPipe) TxCountAt(address string) int {
 	return int(self.World().SafeGet(ethutil.Hex2Bytes(address)).Nonce)
+}
+
+func (self *JSPipe) CodeAt(address string) string {
+	return ethutil.Bytes2Hex(self.World().SafeGet(ethutil.Hex2Bytes(address)).Code)
 }
 
 func (self *JSPipe) IsContract(address string) bool {
@@ -116,6 +120,18 @@ func (self *JSPipe) SecretToAddress(key string) string {
 	}
 
 	return ethutil.Bytes2Hex(pair.Address())
+}
+
+func (self *JSPipe) Execute(addr, value, gas, price, data string) (string, error) {
+	ret, err := self.ExecuteObject(&Object{
+		self.World().safeGet(ethutil.Hex2Bytes(addr))},
+		ethutil.Hex2Bytes(data),
+		ethutil.NewValue(value),
+		ethutil.NewValue(gas),
+		ethutil.NewValue(price),
+	)
+
+	return ethutil.Bytes2Hex(ret), err
 }
 
 type KeyVal struct {
@@ -224,9 +240,9 @@ func (self *JSPipe) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr 
 }
 
 func (self *JSPipe) PushTx(txStr string) (*JSReceipt, error) {
-    tx := ethchain.NewTransactionFromBytes(ethutil.Hex2Bytes(txStr))
-    self.obj.TxPool().QueueTransaction(tx)
-    return NewJSReciept(tx.CreatesContract(), tx.CreationAddress(), tx.Hash(), tx.Sender()), nil
+	tx := ethchain.NewTransactionFromBytes(ethutil.Hex2Bytes(txStr))
+	self.obj.TxPool().QueueTransaction(tx)
+	return NewJSReciept(tx.CreatesContract(), tx.CreationAddress(), tx.Hash(), tx.Sender()), nil
 }
 
 func (self *JSPipe) CompileMutan(code string) string {
