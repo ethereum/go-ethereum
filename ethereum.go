@@ -25,7 +25,7 @@ import (
 
 const (
 	seedTextFileUri string = "http://www.ethereum.org/servers.poc3.txt"
-	seedNodeAddress        = "54.76.56.74:30303"
+	seedNodeAddress        = "poc-6.ethdev.com:30303"
 )
 
 var ethlogger = ethlog.NewLogger("SERV")
@@ -208,6 +208,7 @@ func (s *Ethereum) ProcessPeerList(addrs []string) {
 }
 
 func (s *Ethereum) ConnectToPeer(addr string) error {
+	fmt.Println("ConnectToPeer", addr)
 	if s.peers.Len() < s.MaxPeers {
 		var alreadyConnected bool
 
