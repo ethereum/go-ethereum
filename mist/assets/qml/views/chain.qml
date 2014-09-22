@@ -248,7 +248,7 @@ Rectangle {
 				for(var i = 0; i < block.txs.length; i++) {
 					transactionModel.insert(0, block.txs.get(i))
 				}
-				if(block.txs.get(0).data){
+				if(block.txs.length > 0 && block.txs.get(0).data){
 					popup.showContractData(block.txs.get(0))
 				}
 			}
