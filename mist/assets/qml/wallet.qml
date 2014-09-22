@@ -55,6 +55,8 @@ ApplicationWindow {
         addPlugin("./views/pending_tx.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/javascript.qml", {noAdd: true, close: false, section: "legacy"});
 
+	addPlugin("./views/jeffcoin/jeffcoin.qml", {noAdd: true, close: false, section: "apps"})
+
 	mainSplit.setView(wallet.view, wallet.menuItem);
 
         // Call the ready handler
