@@ -25,7 +25,7 @@ import (
 
 const (
 	seedTextFileUri string = "http://www.ethereum.org/servers.poc3.txt"
-	seedNodeAddress        = "54.76.56.74:30303"
+	seedNodeAddress        = "poc-6.ethdev.com:30303"
 )
 
 var ethlogger = ethlog.NewLogger("SERV")

@@ -362,22 +362,24 @@ clean:
 }
 
 func formatMessage(msg *ethwire.Msg) (ret string) {
-	ret = fmt.Sprintf("%v ", msg.Type)
+	ret = fmt.Sprintf("%v %v", msg.Type, msg.Data)
 
 	/*
 		XXX Commented out because I need the log level here to determine
 		if i should or shouldn't generate this message
 	*/
-	switch msg.Type {
-	case ethwire.MsgPeersTy:
-		ret += fmt.Sprintf("(%d entries)", msg.Data.Len())
-	case ethwire.MsgBlockTy:
-		b1, b2 := ethchain.NewBlockFromRlpValue(msg.Data.Get(0)), ethchain.NewBlockFromRlpValue(msg.Data.Get(msg.Data.Len()-1))
-		ret += fmt.Sprintf("(%d entries) %x - %x", msg.Data.Len(), b1.Hash()[0:4], b2.Hash()[0:4])
-	case ethwire.MsgBlockHashesTy:
-		h1, h2 := msg.Data.Get(0).Bytes(), msg.Data.Get(msg.Data.Len()-1).Bytes()
-		ret += fmt.Sprintf("(%d entries) %x - %x", msg.Data.Len(), h1[0:4], h2[0:4])
-	}
+	/*
+		switch msg.Type {
+		case ethwire.MsgPeersTy:
+			ret += fmt.Sprintf("(%d entries)", msg.Data.Len())
+		case ethwire.MsgBlockTy:
+			b1, b2 := ethchain.NewBlockFromRlpValue(msg.Data.Get(0)), ethchain.NewBlockFromRlpValue(msg.Data.Get(msg.Data.Len()-1))
+			ret += fmt.Sprintf("(%d entries) %x - %x", msg.Data.Len(), b1.Hash()[0:4], b2.Hash()[0:4])
+		case ethwire.MsgBlockHashesTy:
+			h1, h2 := msg.Data.Get(0).Bytes(), msg.Data.Get(msg.Data.Len()-1).Bytes()
+			ret += fmt.Sprintf("(%d entries) %x - %x", msg.Data.Len(), h1, h2)
+		}
+	*/
 
 	return
 }
@@ -512,7 +514,7 @@ func (p *Peer) HandleInbound() {
 						p.lastBlockReceived = time.Now()
 					}
 
-					if foundCommonHash {
+					if foundCommonHash || msg.Data.Len() == 0 {
 						p.FetchBlocks()
 					} else {
 						p.FetchHashes()
