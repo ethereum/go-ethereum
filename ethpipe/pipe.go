@@ -1,6 +1,7 @@
 package ethpipe
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/ethereum/eth-go/ethchain"
@@ -51,18 +52,19 @@ func (self *Pipe) Execute(addr []byte, data []byte, value, gas, price *ethutil.V
 
 func (self *Pipe) ExecuteObject(object *Object, data []byte, value, gas, price *ethutil.Value) ([]byte, error) {
 	var (
-		initiator   = ethstate.NewStateObject([]byte{0})
-		block       = self.blockChain.CurrentBlock
-		stateObject = object.StateObject
+		initiator = ethstate.NewStateObject(self.obj.KeyManager().KeyPair().Address())
+		block     = self.blockChain.CurrentBlock
 	)
-	if self.Vm.State == nil {
-		self.Vm.State = self.World().State().Copy()
-	}
+
+	self.Vm.State = self.World().State().Copy()
 
 	vm := ethvm.New(NewEnv(self.Vm.State, block, value.BigInt(), initiator.Address()))
+	vm.Verbose = true
 
-	closure := ethvm.NewClosure(&ethstate.Message{}, initiator, stateObject, object.Code, gas.BigInt(), price.BigInt())
-	ret, _, err := closure.Call(vm, data)
+	msg := ethvm.NewMessage(vm, object.Address(), data, gas.BigInt(), price.BigInt(), value.BigInt())
+	ret, err := msg.Exec(object.Address(), initiator)
+
+	fmt.Println("returned from call", ret, err)
 
 	return ret, err
 }
@@ -146,6 +148,15 @@ func (self *Pipe) Transact(key *ethcrypto.KeyPair, rec []byte, value, gas, price
 		return tx.CreationAddress(), nil
 	}
 
+	return tx.Hash(), nil
+}
+
+func (self *Pipe) PushTx(tx *ethchain.Transaction) ([]byte, error) {
+	self.obj.TxPool().QueueTransaction(tx)
+	if tx.Recipient == nil {
+		logger.Infof("Contract addr %x", tx.CreationAddress())
+		return tx.CreationAddress(), nil
+	}
 	return tx.Hash(), nil
 }
 

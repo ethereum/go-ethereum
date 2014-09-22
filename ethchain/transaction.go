@@ -13,7 +13,8 @@ import (
 var ContractAddr = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 
 func IsContractAddr(addr []byte) bool {
-	return bytes.Compare(addr, ContractAddr) == 0
+	return len(addr) == 0
+	//return bytes.Compare(addr, ContractAddr) == 0
 }
 
 type Transaction struct {
@@ -31,7 +32,7 @@ type Transaction struct {
 }
 
 func NewContractCreationTx(value, gas, gasPrice *big.Int, script []byte) *Transaction {
-	return &Transaction{Recipient: ContractAddr, Value: value, Gas: gas, GasPrice: gasPrice, Data: script, contractCreation: true}
+	return &Transaction{Recipient: nil, Value: value, Gas: gas, GasPrice: gasPrice, Data: script, contractCreation: true}
 }
 
 func NewTransactionMessage(to []byte, value, gas, gasPrice *big.Int, data []byte) *Transaction {

@@ -45,7 +45,7 @@ func ReadAllFile(filePath string) (string, error) {
 }
 
 func WriteFile(filePath string, content []byte) error {
-	fh, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE, os.ModePerm)
+	fh, err := os.OpenFile(filePath, os.O_TRUNC|os.O_RDWR|os.O_CREATE, os.ModePerm)
 	if err != nil {
 		return err
 	}

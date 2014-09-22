@@ -1,9 +1,11 @@
 package ethutil
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"reflect"
+	"strconv"
 )
 
 // Data values are returned by the rlp decoder. The data values represents
@@ -93,6 +95,9 @@ func (val *Value) Int() int64 {
 		return new(big.Int).SetBytes(Val).Int64()
 	} else if Val, ok := val.Val.(*big.Int); ok {
 		return Val.Int64()
+	} else if Val, ok := val.Val.(string); ok {
+		n, _ := strconv.Atoi(Val)
+		return int64(n)
 	}
 
 	return 0
@@ -113,6 +118,8 @@ func (val *Value) BigInt() *big.Int {
 		return b
 	} else if a, ok := val.Val.(*big.Int); ok {
 		return a
+	} else if a, ok := val.Val.(string); ok {
+		return Big(a)
 	} else {
 		return big.NewInt(int64(val.Uint()))
 	}
@@ -141,6 +148,8 @@ func (val *Value) Bytes() []byte {
 		return []byte(s)
 	} else if s, ok := val.Val.(*big.Int); ok {
 		return s.Bytes()
+	} else {
+		return big.NewInt(val.Int()).Bytes()
 	}
 
 	return []byte{}
@@ -244,10 +253,7 @@ func (val *Value) Cmp(o *Value) bool {
 }
 
 func (self *Value) DeepCmp(o *Value) bool {
-	a := NewValue(self.BigInt())
-	b := NewValue(o.BigInt())
-
-	return a.Cmp(b)
+	return bytes.Compare(self.Bytes(), o.Bytes()) == 0
 }
 
 func (val *Value) Encode() []byte {

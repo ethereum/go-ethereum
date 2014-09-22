@@ -5,6 +5,7 @@ import (
 	"container/list"
 	"fmt"
 	"math/big"
+	"os"
 	"sync"
 	"time"
 
@@ -154,6 +155,10 @@ done:
 		if i < len(block.Receipts()) {
 			original := block.Receipts()[i]
 			if !original.Cmp(receipt) {
+				if ethutil.Config.Diff {
+					os.Exit(1)
+				}
+
 				return nil, nil, nil, fmt.Errorf("err diff #%d (r) %v ~ %x  <=>  (c) %v ~ %x (%x)\n", i+1, original.CumulativeGasUsed, original.PostState[0:4], receipt.CumulativeGasUsed, receipt.PostState[0:4], receipt.Tx.Hash())
 			}
 		}
@@ -217,12 +222,12 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 		return err
 	}
 
-	// I'm not sure, but I don't know if there should be thrown
-	// any errors at this time.
-	if err = sm.AccumelateRewards(state, block); err != nil {
+	if err = sm.AccumelateRewards(state, block, parent); err != nil {
 		statelogger.Errorln("Error accumulating reward", err)
 		return err
 	}
+
+	state.Update()
 
 	if !block.State().Cmp(state) {
 		err = fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().Trie.Root, state.Trie.Root)
@@ -236,6 +241,8 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 
 		// Add the block to the chain
 		sm.bc.Add(block)
+
+		sm.transState = state.Copy()
 
 		// Create a bloom bin for this block
 		filter := sm.createBloomFilter(state)
@@ -305,14 +312,16 @@ func (sm *StateManager) ValidateBlock(block *Block) error {
 
 	// Check each uncle's previous hash. In order for it to be valid
 	// is if it has the same block hash as the current
-	previousBlock := sm.bc.GetBlock(block.PrevHash)
-	for _, uncle := range block.Uncles {
-		if bytes.Compare(uncle.PrevHash, previousBlock.PrevHash) != 0 {
-			return ValidationError("Mismatch uncle's previous hash. Expected %x, got %x", previousBlock.PrevHash, uncle.PrevHash)
+	parent := sm.bc.GetBlock(block.PrevHash)
+	/*
+		for _, uncle := range block.Uncles {
+			if bytes.Compare(uncle.PrevHash,parent.PrevHash) != 0 {
+				return ValidationError("Mismatch uncle's previous hash. Expected %x, got %x",parent.PrevHash, uncle.PrevHash)
+			}
 		}
-	}
+	*/
 
-	diff := block.Time - previousBlock.Time
+	diff := block.Time - parent.Time
 	if diff < 0 {
 		return ValidationError("Block timestamp less then prev block %v (%v - %v)", diff, block.Time, sm.bc.CurrentBlock.Time)
 	}
@@ -332,35 +341,45 @@ func (sm *StateManager) ValidateBlock(block *Block) error {
 	return nil
 }
 
-func CalculateBlockReward(block *Block, uncleLength int) *big.Int {
-	base := new(big.Int)
-	for i := 0; i < uncleLength; i++ {
-		base.Add(base, UncleInclusionReward)
+func (sm *StateManager) AccumelateRewards(state *ethstate.State, block, parent *Block) error {
+	reward := new(big.Int).Set(BlockReward)
+
+	knownUncles := ethutil.Set(parent.Uncles)
+	nonces := ethutil.NewSet(block.Nonce)
+	for _, uncle := range block.Uncles {
+		if nonces.Include(uncle.Nonce) {
+			// Error not unique
+			return UncleError("Uncle not unique")
+		}
+
+		uncleParent := sm.bc.GetBlock(uncle.PrevHash)
+		if uncleParent == nil {
+			return UncleError("Uncle's parent unknown")
+		}
+
+		if uncleParent.Number.Cmp(new(big.Int).Sub(parent.Number, big.NewInt(6))) < 0 {
+			return UncleError("Uncle too old")
+		}
+
+		if knownUncles.Include(uncle.Hash()) {
+			return UncleError("Uncle in chain")
+		}
+
+		nonces.Insert(uncle.Nonce)
+
+		r := new(big.Int)
+		r.Mul(BlockReward, big.NewInt(15)).Div(r, big.NewInt(16))
+
+		uncleAccount := state.GetAccount(uncle.Coinbase)
+		uncleAccount.AddAmount(r)
+
+		reward.Add(reward, new(big.Int).Div(BlockReward, big.NewInt(32)))
 	}
 
-	return base.Add(base, BlockReward)
-}
-
-func CalculateUncleReward(block *Block) *big.Int {
-	return UncleReward
-}
-
-func (sm *StateManager) AccumelateRewards(state *ethstate.State, block *Block) error {
 	// Get the account associated with the coinbase
 	account := state.GetAccount(block.Coinbase)
 	// Reward amount of ether to the coinbase address
-	account.AddAmount(CalculateBlockReward(block, len(block.Uncles)))
-
-	addr := make([]byte, len(block.Coinbase))
-	copy(addr, block.Coinbase)
-	state.UpdateStateObject(account)
-
-	for _, uncle := range block.Uncles {
-		uncleAccount := state.GetAccount(uncle.Coinbase)
-		uncleAccount.AddAmount(CalculateUncleReward(uncle))
-
-		state.UpdateStateObject(uncleAccount)
-	}
+	account.AddAmount(reward)
 
 	return nil
 }
@@ -373,31 +392,12 @@ func (sm *StateManager) Stop() {
 func (sm *StateManager) createBloomFilter(state *ethstate.State) *BloomFilter {
 	bloomf := NewBloomFilter(nil)
 
-	/*
-		for addr, stateObject := range state.Manifest().ObjectChanges {
-			// Set the bloom filter's bin
-			bloomf.Set([]byte(addr))
-
-			sm.Ethereum.Reactor().Post("object:"+addr, stateObject)
-		}
-	*/
 	for _, msg := range state.Manifest().Messages {
 		bloomf.Set(msg.To)
 		bloomf.Set(msg.From)
 	}
 
 	sm.Ethereum.Reactor().Post("messages", state.Manifest().Messages)
-
-	/*
-		for stateObjectAddr, mappedObjects := range state.Manifest().StorageChanges {
-			for addr, value := range mappedObjects {
-				// Set the bloom filter's bin
-				bloomf.Set(ethcrypto.Sha3Bin([]byte(stateObjectAddr + addr)))
-
-				sm.Ethereum.Reactor().Post("storage:"+stateObjectAddr+":"+addr, &ethstate.StorageState{[]byte(stateObjectAddr), []byte(addr), value})
-			}
-		}
-	*/
 
 	return bloomf
 }
@@ -418,7 +418,7 @@ func (sm *StateManager) GetMessages(block *Block) (messages []*ethstate.Message,
 
 	sm.ApplyDiff(state, parent, block)
 
-	sm.AccumelateRewards(state, block)
+	sm.AccumelateRewards(state, block, parent)
 
 	return state.Manifest().Messages, nil
 }

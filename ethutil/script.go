@@ -2,9 +2,11 @@ package ethutil
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/obscuren/mutan"
 	"github.com/obscuren/mutan/backends"
-	"strings"
+	"github.com/obscuren/serpent-go"
 )
 
 // General compile function
@@ -14,15 +16,13 @@ func Compile(script string, silent bool) (ret []byte, err error) {
 
 		if len(line) > 1 && line[0:2] == "#!" {
 			switch line {
-			/*
-				case "#!serpent":
-					byteCode, err := serpent.Compile(script)
-					if err != nil {
-						return nil, err
-					}
+			case "#!serpent":
+				byteCode, err := serpent.Compile(script)
+				if err != nil {
+					return nil, err
+				}
 
-					return byteCode, nil
-			*/
+				return byteCode, nil
 			}
 		} else {
 

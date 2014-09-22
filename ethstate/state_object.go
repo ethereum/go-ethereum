@@ -32,7 +32,7 @@ type StateObject struct {
 	address []byte
 	// Shared attributes
 	Balance  *big.Int
-	CodeHash []byte
+	codeHash []byte
 	Nonce    uint64
 	// Contract related attributes
 	State    *State
@@ -236,7 +236,7 @@ func (self *StateObject) RefundGas(gas, price *big.Int) {
 func (self *StateObject) Copy() *StateObject {
 	stateObject := NewStateObject(self.Address())
 	stateObject.Balance.Set(self.Balance)
-	stateObject.CodeHash = ethutil.CopyBytes(self.CodeHash)
+	stateObject.codeHash = ethutil.CopyBytes(self.codeHash)
 	stateObject.Nonce = self.Nonce
 	if self.State != nil {
 		stateObject.State = self.State.Copy()
@@ -245,6 +245,7 @@ func (self *StateObject) Copy() *StateObject {
 	stateObject.InitCode = ethutil.CopyBytes(self.InitCode)
 	stateObject.storage = self.storage.Copy()
 	stateObject.gasPool.Set(self.gasPool)
+	stateObject.remove = self.remove
 
 	return stateObject
 }
@@ -271,6 +272,11 @@ func (c *StateObject) Init() Code {
 	return c.InitCode
 }
 
+// To satisfy ClosureRef
+func (self *StateObject) Object() *StateObject {
+	return self
+}
+
 // Debug stuff
 func (self *StateObject) CreateOutputForDiff() {
 	fmt.Printf("%x %x %x %x\n", self.Address(), self.State.Root(), self.Balance.Bytes(), self.Nonce)
@@ -292,7 +298,16 @@ func (c *StateObject) RlpEncode() []byte {
 		root = ""
 	}
 
-	return ethutil.Encode([]interface{}{c.Nonce, c.Balance, root, ethcrypto.Sha3Bin(c.Code)})
+	return ethutil.Encode([]interface{}{c.Nonce, c.Balance, root, c.CodeHash()})
+}
+
+func (c *StateObject) CodeHash() ethutil.Bytes {
+	var codeHash []byte
+	if len(c.Code) > 0 {
+		codeHash = ethcrypto.Sha3Bin(c.Code)
+	}
+
+	return codeHash
 }
 
 func (c *StateObject) RlpDecode(data []byte) {
@@ -304,9 +319,9 @@ func (c *StateObject) RlpDecode(data []byte) {
 	c.storage = make(map[string]*ethutil.Value)
 	c.gasPool = new(big.Int)
 
-	c.CodeHash = decoder.Get(3).Bytes()
+	c.codeHash = decoder.Get(3).Bytes()
 
-	c.Code, _ = ethutil.Config.Db.Get(c.CodeHash)
+	c.Code, _ = ethutil.Config.Db.Get(c.codeHash)
 }
 
 // Storage change object. Used by the manifest for notifying changes to

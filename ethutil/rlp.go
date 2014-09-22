@@ -15,6 +15,10 @@ type RlpEncodeDecode interface {
 	RlpValue() []interface{}
 }
 
+func Rlp(encoder RlpEncode) []byte {
+	return encoder.RlpEncode()
+}
+
 type RlpEncoder struct {
 	rlpData []byte
 }
@@ -124,6 +128,8 @@ func Encode(object interface{}) []byte {
 			} else {
 				buff.Write(Encode(t.Bytes()))
 			}
+		case Bytes:
+			buff.Write(Encode([]byte(t)))
 		case []byte:
 			if len(t) == 1 && t[0] <= 0x7f {
 				buff.Write(t)

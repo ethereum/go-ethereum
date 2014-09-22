@@ -92,6 +92,13 @@ func (cache *Cache) Get(key []byte) *ethutil.Value {
 	data, _ := cache.db.Get(key)
 	// Create the cached value
 	value := ethutil.NewValueFromBytes(data)
+
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("RECOVER GET", cache, cache.nodes)
+			panic("bye")
+		}
+	}()
 	// Create caching node
 	cache.nodes[string(key)] = NewNode(key, value, false)
 

@@ -2,9 +2,11 @@ package eth
 
 import (
 	"container/list"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,13 +18,14 @@ import (
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethrpc"
+	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
 )
 
 const (
 	seedTextFileUri string = "http://www.ethereum.org/servers.poc3.txt"
-	seedNodeAddress        = "54.76.56.74:30303"
+	seedNodeAddress        = "poc-6.ethdev.com:30303"
 )
 
 var ethlogger = ethlog.NewLogger("SERV")
@@ -30,9 +33,7 @@ var ethlogger = ethlog.NewLogger("SERV")
 func eachPeer(peers *list.List, callback func(*Peer, *list.Element)) {
 	// Loop thru the peers and close them (if we had them)
 	for e := peers.Front(); e != nil; e = e.Next() {
-		if peer, ok := e.Value.(*Peer); ok {
-			callback(peer, e)
-		}
+		callback(e.Value.(*Peer), e)
 	}
 }
 
@@ -87,10 +88,11 @@ type Ethereum struct {
 	clientIdentity ethwire.ClientIdentity
 
 	isUpToDate bool
+
+	filters map[int]*ethchain.Filter
 }
 
 func New(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager *ethcrypto.KeyManager, caps Caps, usePnp bool) (*Ethereum, error) {
-
 	var err error
 	var nat NAT
 
@@ -100,6 +102,8 @@ func New(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager 
 			ethlogger.Debugln("UPnP failed", err)
 		}
 	}
+
+	bootstrapDb(db)
 
 	ethutil.Config.Db = db
 
@@ -115,6 +119,7 @@ func New(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager 
 		keyManager:     keyManager,
 		clientIdentity: clientIdentity,
 		isUpToDate:     true,
+		filters:        make(map[int]*ethchain.Filter),
 	}
 	ethereum.reactor = ethreact.New()
 
@@ -385,6 +390,7 @@ func (s *Ethereum) Start(seed bool) {
 	// Start the reaping processes
 	go s.ReapDeadPeerHandler()
 	go s.update()
+	go s.filterLoop()
 
 	if seed {
 		s.Seed()
@@ -393,47 +399,55 @@ func (s *Ethereum) Start(seed bool) {
 }
 
 func (s *Ethereum) Seed() {
-	ethlogger.Debugln("Retrieving seed nodes")
-
-	// Eth-Go Bootstrapping
-	ips, er := net.LookupIP("seed.bysh.me")
-	if er == nil {
-		peers := []string{}
+	ips := PastPeers()
+	if len(ips) > 0 {
 		for _, ip := range ips {
-			node := fmt.Sprintf("%s:%d", ip.String(), 30303)
-			ethlogger.Debugln("Found DNS Go Peer:", node)
-			peers = append(peers, node)
+			ethlogger.Infoln("Connecting to previous peer ", ip)
+			s.ConnectToPeer(ip)
 		}
-		s.ProcessPeerList(peers)
-	}
+	} else {
+		ethlogger.Debugln("Retrieving seed nodes")
 
-	// Official DNS Bootstrapping
-	_, nodes, err := net.LookupSRV("eth", "tcp", "ethereum.org")
-	if err == nil {
-		peers := []string{}
-		// Iterate SRV nodes
-		for _, n := range nodes {
-			target := n.Target
-			port := strconv.Itoa(int(n.Port))
-			// Resolve target to ip (Go returns list, so may resolve to multiple ips?)
-			addr, err := net.LookupHost(target)
-			if err == nil {
-				for _, a := range addr {
-					// Build string out of SRV port and Resolved IP
-					peer := net.JoinHostPort(a, port)
-					ethlogger.Debugln("Found DNS Bootstrap Peer:", peer)
-					peers = append(peers, peer)
-				}
-			} else {
-				ethlogger.Debugln("Couldn't resolve :", target)
+		// Eth-Go Bootstrapping
+		ips, er := net.LookupIP("seed.bysh.me")
+		if er == nil {
+			peers := []string{}
+			for _, ip := range ips {
+				node := fmt.Sprintf("%s:%d", ip.String(), 30303)
+				ethlogger.Debugln("Found DNS Go Peer:", node)
+				peers = append(peers, node)
 			}
+			s.ProcessPeerList(peers)
 		}
-		// Connect to Peer list
-		s.ProcessPeerList(peers)
-	}
 
-	// XXX tmp
-	s.ConnectToPeer(seedNodeAddress)
+		// Official DNS Bootstrapping
+		_, nodes, err := net.LookupSRV("eth", "tcp", "ethereum.org")
+		if err == nil {
+			peers := []string{}
+			// Iterate SRV nodes
+			for _, n := range nodes {
+				target := n.Target
+				port := strconv.Itoa(int(n.Port))
+				// Resolve target to ip (Go returns list, so may resolve to multiple ips?)
+				addr, err := net.LookupHost(target)
+				if err == nil {
+					for _, a := range addr {
+						// Build string out of SRV port and Resolved IP
+						peer := net.JoinHostPort(a, port)
+						ethlogger.Debugln("Found DNS Bootstrap Peer:", peer)
+						peers = append(peers, peer)
+					}
+				} else {
+					ethlogger.Debugln("Couldn't resolve :", target)
+				}
+			}
+			// Connect to Peer list
+			s.ProcessPeerList(peers)
+		}
+
+		// XXX tmp
+		s.ConnectToPeer(seedNodeAddress)
+	}
 }
 
 func (s *Ethereum) peerHandler(listener net.Listener) {
@@ -452,6 +466,16 @@ func (s *Ethereum) peerHandler(listener net.Listener) {
 func (s *Ethereum) Stop() {
 	// Close the database
 	defer s.db.Close()
+
+	var ips []string
+	eachPeer(s.peers, func(p *Peer, e *list.Element) {
+		ips = append(ips, p.conn.RemoteAddr().String())
+	})
+
+	if len(ips) > 0 {
+		d, _ := json.MarshalIndent(ips, "", "    ")
+		ethutil.WriteFile(path.Join(ethutil.Config.ExecPath, "known_peers.json"), d)
+	}
 
 	eachPeer(s.peers, func(p *Peer, e *list.Element) {
 		p.Stop()
@@ -533,4 +557,75 @@ out:
 			break out
 		}
 	}
+}
+
+var filterId = 0
+
+func (self *Ethereum) InstallFilter(object map[string]interface{}) (*ethchain.Filter, int) {
+	defer func() { filterId++ }()
+
+	filter := ethchain.NewFilterFromMap(object, self)
+	self.filters[filterId] = filter
+
+	return filter, filterId
+}
+
+func (self *Ethereum) UninstallFilter(id int) {
+	delete(self.filters, id)
+}
+
+func (self *Ethereum) GetFilter(id int) *ethchain.Filter {
+	return self.filters[id]
+}
+
+func (self *Ethereum) filterLoop() {
+	blockChan := make(chan ethreact.Event, 5)
+	messageChan := make(chan ethreact.Event, 5)
+	// Subscribe to events
+	reactor := self.Reactor()
+	reactor.Subscribe("newBlock", blockChan)
+	reactor.Subscribe("messages", messageChan)
+out:
+	for {
+		select {
+		case <-self.quit:
+			break out
+		case block := <-blockChan:
+			if block, ok := block.Resource.(*ethchain.Block); ok {
+				for _, filter := range self.filters {
+					if filter.BlockCallback != nil {
+						filter.BlockCallback(block)
+					}
+				}
+			}
+		case msg := <-messageChan:
+			if messages, ok := msg.Resource.(ethstate.Messages); ok {
+				for _, filter := range self.filters {
+					if filter.MessageCallback != nil {
+						msgs := filter.FilterMessages(messages)
+						if len(msgs) > 0 {
+							filter.MessageCallback(msgs)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func bootstrapDb(db ethutil.Database) {
+	d, _ := db.Get([]byte("ProtocolVersion"))
+	protov := ethutil.NewValue(d).Uint()
+
+	if protov == 0 {
+		db.Put([]byte("ProtocolVersion"), ethutil.NewValue(ProtocolVersion).Bytes())
+	}
+}
+
+func PastPeers() []string {
+	var ips []string
+	data, _ := ethutil.ReadAllFile(path.Join(ethutil.Config.ExecPath, "known_peers.json"))
+	json.Unmarshal([]byte(data), &ips)
+
+	return ips
 }

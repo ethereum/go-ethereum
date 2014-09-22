@@ -3,7 +3,6 @@ package ethstate
 import (
 	"math/big"
 
-	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
@@ -49,6 +48,15 @@ func (self *State) GetNonce(addr []byte) uint64 {
 	return 0
 }
 
+func (self *State) GetCode(addr []byte) []byte {
+	stateObject := self.GetStateObject(addr)
+	if stateObject != nil {
+		return stateObject.Code
+	}
+
+	return nil
+}
+
 //
 // Setting, updating & deleting state object methods
 //
@@ -57,7 +65,9 @@ func (self *State) GetNonce(addr []byte) uint64 {
 func (self *State) UpdateStateObject(stateObject *StateObject) {
 	addr := stateObject.Address()
 
-	ethutil.Config.Db.Put(ethcrypto.Sha3Bin(stateObject.Code), stateObject.Code)
+	if len(stateObject.CodeHash()) > 0 {
+		ethutil.Config.Db.Put(stateObject.CodeHash(), stateObject.Code)
+	}
 
 	self.Trie.Update(string(addr), string(stateObject.RlpEncode()))
 }
@@ -103,7 +113,7 @@ func (self *State) GetOrNewStateObject(addr []byte) *StateObject {
 func (self *State) NewStateObject(addr []byte) *StateObject {
 	addr = ethutil.Address(addr)
 
-	statelogger.Infof("(+) %x\n", addr)
+	statelogger.Debugf("(+) %x\n", addr)
 
 	stateObject := NewStateObject(addr)
 	self.stateObjects[string(addr)] = stateObject

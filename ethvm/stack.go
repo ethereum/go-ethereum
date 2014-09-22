@@ -65,13 +65,13 @@ func (st *Stack) Peekn() (*big.Int, *big.Int) {
 }
 
 func (st *Stack) Swapn(n int) (*big.Int, *big.Int) {
-	st.data[n], st.data[0] = st.data[0], st.data[n]
+	st.data[len(st.data)-n], st.data[len(st.data)-1] = st.data[len(st.data)-1], st.data[len(st.data)-n]
 
-	return st.data[n], st.data[0]
+	return st.data[len(st.data)-n], st.data[len(st.data)-1]
 }
 
 func (st *Stack) Dupn(n int) *big.Int {
-	st.Push(st.data[n])
+	st.Push(st.data[len(st.data)-n])
 
 	return st.Peek()
 }

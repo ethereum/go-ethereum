@@ -140,7 +140,7 @@ func (self *StateTransition) preCheck() (err error) {
 }
 
 func (self *StateTransition) TransitionState() (err error) {
-	statelogger.Infof("(~) %x\n", self.tx.Hash())
+	statelogger.Debugf("(~) %x\n", self.tx.Hash())
 
 	/*
 		defer func() {
@@ -277,6 +277,15 @@ func (self *StateTransition) Eval(msg *ethstate.Message, script []byte, context 
 	vm.Fn = typ
 
 	ret, _, err = callerClosure.Call(vm, self.tx.Data)
+
+	if err == nil {
+		// Execute POSTs
+		for e := vm.Queue().Front(); e != nil; e = e.Next() {
+			msg := e.Value.(*ethvm.Message)
+
+			msg.Exec(msg.Addr(), transactor)
+		}
+	}
 
 	return
 }

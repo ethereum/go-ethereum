@@ -33,6 +33,10 @@ func NewBlockPool(eth *Ethereum) *BlockPool {
 	}
 }
 
+func (self *BlockPool) Len() int {
+	return len(self.hashPool)
+}
+
 func (self *BlockPool) HasLatestHash() bool {
 	return self.pool[string(self.eth.BlockChain().CurrentBlock.Hash())] != nil
 }
@@ -49,51 +53,37 @@ func (self *BlockPool) AddHash(hash []byte) {
 	}
 }
 
-func (self *BlockPool) SetBlock(b *ethchain.Block) {
+func (self *BlockPool) SetBlock(b *ethchain.Block, peer *Peer) {
 	hash := string(b.Hash())
 
-	if self.pool[string(hash)] == nil {
-		self.pool[hash] = &block{nil, nil}
+	if self.pool[hash] == nil && !self.eth.BlockChain().HasBlock(b.Hash()) {
+		self.hashPool = append(self.hashPool, b.Hash())
+		self.pool[hash] = &block{peer, b}
+	} else if self.pool[hash] != nil {
+		self.pool[hash].block = b
 	}
-
-	self.pool[hash].block = b
 }
 
-func (self *BlockPool) CheckLinkAndProcess(f func(block *ethchain.Block)) bool {
-	self.mut.Lock()
-	defer self.mut.Unlock()
+func (self *BlockPool) CheckLinkAndProcess(f func(block *ethchain.Block)) {
 
-	if self.IsLinked() {
-		for i, hash := range self.hashPool {
-			block := self.pool[string(hash)].block
-			if block != nil {
-				f(block)
+	var blocks ethchain.Blocks
+	for _, item := range self.pool {
+		if item.block != nil {
+			blocks = append(blocks, item.block)
+		}
+	}
 
-				delete(self.pool, string(hash))
-			} else {
-				self.hashPool = self.hashPool[i:]
+	ethchain.BlockBy(ethchain.Number).Sort(blocks)
+	for _, block := range blocks {
+		if self.eth.BlockChain().HasBlock(block.PrevHash) {
+			f(block)
 
-				return false
-			}
+			hash := block.Hash()
+			self.hashPool = ethutil.DeleteFromByteSlice(self.hashPool, hash)
+			delete(self.pool, string(hash))
 		}
 
-		return true
 	}
-
-	return false
-}
-
-func (self *BlockPool) IsLinked() bool {
-	if len(self.hashPool) == 0 {
-		return false
-	}
-
-	block := self.pool[string(self.hashPool[0])].block
-	if block != nil {
-		return self.eth.BlockChain().HasBlock(block.PrevHash)
-	}
-
-	return false
 }
 
 func (self *BlockPool) Take(amount int, peer *Peer) (hashes [][]byte) {
@@ -104,7 +94,7 @@ func (self *BlockPool) Take(amount int, peer *Peer) (hashes [][]byte) {
 	j := 0
 	for i := 0; i < len(self.hashPool) && j < num; i++ {
 		hash := string(self.hashPool[i])
-		if self.pool[hash].peer == nil || self.pool[hash].peer == peer {
+		if self.pool[hash] != nil && (self.pool[hash].peer == nil || self.pool[hash].peer == peer) && self.pool[hash].block == nil {
 			self.pool[hash].peer = peer
 
 			hashes = append(hashes, self.hashPool[i])

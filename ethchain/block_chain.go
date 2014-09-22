@@ -2,12 +2,10 @@ package ethchain
 
 import (
 	"bytes"
-	"math"
 	"math/big"
 
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/eth-go/ethwire"
 )
 
 var chainlogger = ethlog.NewLogger("CHAIN")
@@ -60,24 +58,20 @@ func (bc *BlockChain) NewBlock(coinbase []byte) *Block {
 
 	block.MinGasPrice = big.NewInt(10000000000000)
 
-	if bc.CurrentBlock != nil {
-		var mul *big.Int
-		if block.Time < lastBlockTime+42 {
-			mul = big.NewInt(1)
-		} else {
-			mul = big.NewInt(-1)
-		}
-
+	parent := bc.CurrentBlock
+	if parent != nil {
 		diff := new(big.Int)
-		diff.Add(diff, bc.CurrentBlock.Difficulty)
-		diff.Div(diff, big.NewInt(1024))
-		diff.Mul(diff, mul)
-		diff.Add(diff, bc.CurrentBlock.Difficulty)
+
+		adjust := new(big.Int).Rsh(parent.Difficulty, 10)
+		if block.Time >= lastBlockTime+5 {
+			diff.Sub(parent.Difficulty, adjust)
+		} else {
+			diff.Add(parent.Difficulty, adjust)
+		}
 		block.Difficulty = diff
-
 		block.Number = new(big.Int).Add(bc.CurrentBlock.Number, ethutil.Big1)
-
 		block.GasLimit = block.CalcGasLimit(bc.CurrentBlock)
+
 	}
 
 	return block
@@ -110,99 +104,6 @@ func (bc *BlockChain) CalculateBlockTD(block *Block) *big.Int {
 
 	return blockDiff
 }
-func (bc *BlockChain) FindCanonicalChainFromMsg(msg *ethwire.Msg, commonBlockHash []byte) bool {
-	var blocks []*Block
-	for i := 0; i < (msg.Data.Len() - 1); i++ {
-		block := NewBlockFromRlpValue(msg.Data.Get(i))
-		blocks = append(blocks, block)
-	}
-	return bc.FindCanonicalChain(blocks, commonBlockHash)
-}
-
-// Is tasked by finding the CanonicalChain and resetting the chain if we are not the Conical one
-// Return true if we are the using the canonical chain false if not
-func (bc *BlockChain) FindCanonicalChain(blocks []*Block, commonBlockHash []byte) bool {
-	// 1. Calculate TD of the current chain
-	// 2. Calculate TD of the new chain
-	// Reset state to the correct one
-
-	chainDifficulty := new(big.Int)
-
-	// Calculate the entire chain until the block we both have
-	// Start with the newest block we got, all the way back to the common block we both know
-	for _, block := range blocks {
-		if bytes.Compare(block.Hash(), commonBlockHash) == 0 {
-			chainlogger.Infoln("We have found the common parent block, breaking")
-			break
-		}
-		chainDifficulty.Add(chainDifficulty, bc.CalculateBlockTD(block))
-	}
-
-	chainlogger.Infoln("Incoming chain difficulty:", chainDifficulty)
-
-	curChainDifficulty := new(big.Int)
-	block := bc.CurrentBlock
-	for i := 0; block != nil; block = bc.GetBlock(block.PrevHash) {
-		i++
-		if bytes.Compare(block.Hash(), commonBlockHash) == 0 {
-			chainlogger.Infoln("Found the common parent block")
-			break
-		}
-		anOtherBlock := bc.GetBlock(block.PrevHash)
-		if anOtherBlock == nil {
-			// We do not want to count the genesis block for difficulty since that's not being sent
-			chainlogger.Infoln("Found genesis block. Stop")
-			break
-		}
-		curChainDifficulty.Add(curChainDifficulty, bc.CalculateBlockTD(block))
-	}
-
-	chainlogger.Infoln("Current chain difficulty:", curChainDifficulty)
-	if chainDifficulty.Cmp(curChainDifficulty) == 1 {
-		chainlogger.Infof("Resetting to block %x. Changing chain.")
-		bc.ResetTillBlockHash(commonBlockHash)
-		return false
-	} else {
-		chainlogger.Infoln("Current chain is longest chain. Ignoring incoming chain.")
-		return true
-	}
-}
-func (bc *BlockChain) ResetTillBlockHash(hash []byte) error {
-	lastBlock := bc.CurrentBlock
-	var returnTo *Block
-	// Reset to Genesis if that's all the origin there is.
-	if bytes.Compare(hash, bc.genesisBlock.Hash()) == 0 {
-		returnTo = bc.genesisBlock
-		bc.CurrentBlock = bc.genesisBlock
-		bc.LastBlockHash = bc.genesisBlock.Hash()
-		bc.LastBlockNumber = 1
-	} else {
-		returnTo = bc.GetBlock(hash)
-		bc.CurrentBlock = returnTo
-		bc.LastBlockHash = returnTo.Hash()
-		bc.LastBlockNumber = returnTo.Number.Uint64()
-	}
-
-	// Manually reset the last sync block
-	err := ethutil.Config.Db.Delete(lastBlock.Hash())
-	if err != nil {
-		return err
-	}
-
-	var block *Block
-	for ; block != nil; block = bc.GetBlock(block.PrevHash) {
-		if bytes.Compare(block.Hash(), hash) == 0 {
-			chainlogger.Infoln("We have arrived at the the common parent block, breaking")
-			break
-		}
-		err = ethutil.Config.Db.Delete(block.Hash())
-		if err != nil {
-			return err
-		}
-	}
-	chainlogger.Infoln("Split chain deleted and reverted to common parent block.")
-	return nil
-}
 
 func (bc *BlockChain) GenesisBlock() *Block {
 	return bc.genesisBlock
@@ -228,66 +129,6 @@ func (self *BlockChain) GetChainHashesFromHash(hash []byte, max uint64) (chain [
 	return
 }
 
-// Get chain return blocks from hash up to max in RLP format
-func (bc *BlockChain) GetChainFromHash(hash []byte, max uint64) []interface{} {
-	var chain []interface{}
-	// Get the current hash to start with
-	currentHash := bc.CurrentBlock.Hash()
-	// Get the last number on the block chain
-	lastNumber := bc.CurrentBlock.Number.Uint64()
-	// Get the parents number
-	parentNumber := bc.GetBlock(hash).Number.Uint64()
-	// Get the min amount. We might not have max amount of blocks
-	count := uint64(math.Min(float64(lastNumber-parentNumber), float64(max)))
-	startNumber := parentNumber + count
-
-	num := lastNumber
-	for num > startNumber {
-		num--
-
-		block := bc.GetBlock(currentHash)
-		if block == nil {
-			break
-		}
-		currentHash = block.PrevHash
-	}
-
-	for i := uint64(0); bytes.Compare(currentHash, hash) != 0 && num >= parentNumber && i < count; i++ {
-		// Get the block of the chain
-		block := bc.GetBlock(currentHash)
-		if block == nil {
-			chainlogger.Debugf("Unexpected error during GetChainFromHash: Unable to find %x\n", currentHash)
-			break
-		}
-
-		currentHash = block.PrevHash
-
-		chain = append(chain, block.Value().Val)
-
-		num--
-	}
-
-	return chain
-}
-
-func (bc *BlockChain) GetChain(hash []byte, amount int) []*Block {
-	genHash := bc.genesisBlock.Hash()
-
-	block := bc.GetBlock(hash)
-	var blocks []*Block
-
-	for i := 0; i < amount && block != nil; block = bc.GetBlock(block.PrevHash) {
-		blocks = append([]*Block{block}, blocks...)
-
-		if bytes.Compare(genHash, block.Hash()) == 0 {
-			break
-		}
-		i++
-	}
-
-	return blocks
-}
-
 func AddTestNetFunds(block *Block) {
 	for _, addr := range []string{
 		"51ba59315b3a95761d0863b05ccc7a7f54703d99",
@@ -307,6 +148,9 @@ func AddTestNetFunds(block *Block) {
 }
 
 func (bc *BlockChain) setLastBlock() {
+	// Prep genesis
+	AddTestNetFunds(bc.genesisBlock)
+
 	data, _ := ethutil.Config.Db.Get([]byte("LastBlock"))
 	if len(data) != 0 {
 		block := NewBlockFromBytes(data)
@@ -315,13 +159,12 @@ func (bc *BlockChain) setLastBlock() {
 		bc.LastBlockNumber = block.Number.Uint64()
 
 	} else {
-		AddTestNetFunds(bc.genesisBlock)
-
 		bc.genesisBlock.state.Trie.Sync()
 		// Prepare the genesis block
 		bc.Add(bc.genesisBlock)
 		fk := append([]byte("bloom"), bc.genesisBlock.Hash()...)
 		bc.Ethereum.Db().Put(fk, make([]byte, 255))
+		bc.CurrentBlock = bc.genesisBlock
 	}
 
 	// Set the last know difficulty (might be 0x0 as initial value, Genesis)
@@ -331,7 +174,7 @@ func (bc *BlockChain) setLastBlock() {
 }
 
 func (bc *BlockChain) SetTotalDifficulty(td *big.Int) {
-	ethutil.Config.Db.Put([]byte("LastKnownTotalDifficulty"), td.Bytes())
+	ethutil.Config.Db.Put([]byte("LTD"), td.Bytes())
 	bc.TD = td
 }
 
@@ -359,10 +202,13 @@ func (bc *BlockChain) GetBlock(hash []byte) *Block {
 
 func (self *BlockChain) GetBlockByNumber(num uint64) *Block {
 	block := self.CurrentBlock
-	for ; block.Number.Uint64() != num; block = self.GetBlock(block.PrevHash) {
+	for ; block != nil; block = self.GetBlock(block.PrevHash) {
+		if block.Number.Uint64() == num {
+			break
+		}
 	}
 
-	if block.Number.Uint64() == 0 && num != 0 {
+	if block != nil && block.Number.Uint64() == 0 && num != 0 {
 		return nil
 	}
 
