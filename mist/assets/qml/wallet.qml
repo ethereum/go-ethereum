@@ -16,8 +16,8 @@ ApplicationWindow {
     property var ethx : Eth.ethx
     property var web
 
-    width: 1024
-    height: 750
+    width: 1200
+    height: 820
     minimumHeight: 300
 
     title: "Mist"
@@ -379,8 +379,8 @@ ApplicationWindow {
          ********************/
          Rectangle {
              id: menu
-             Layout.minimumWidth: 180
-             Layout.maximumWidth: 180
+             Layout.minimumWidth: 210
+             Layout.maximumWidth: 210
              anchors.top: parent.top
              color: "#ececec"
 
@@ -399,7 +399,7 @@ ApplicationWindow {
                          sel.visible = on
                      }
 
-                     width: 176
+                     width: 206
                      height: 28
                      color: "#00000000"
 
