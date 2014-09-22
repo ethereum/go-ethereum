@@ -491,7 +491,7 @@ func (gui *Gui) setStatsPane() {
 	runtime.ReadMemStats(&memStats)
 
 	statsPane := gui.getObjectByName("statsPane")
-	statsPane.Set("text", fmt.Sprintf(`###### Mist 0.6.4 (%s) #######
+	statsPane.Set("text", fmt.Sprintf(`###### Mist 0.6.5 (%s) #######
 
 eth %d (p2p = %d)
 

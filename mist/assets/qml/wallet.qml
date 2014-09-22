@@ -804,9 +804,9 @@ ApplicationWindow {
                  anchors.left: aboutIcon.right
                  anchors.leftMargin: 10
                  anchors.top: parent.top
-                 anchors.topMargin: 40
+                 anchors.topMargin: 30
                  font.pointSize: 12
-                 text: "<h2>Mist (0.6.5)</h2><h4>Amalthea</h4><br><h3>Development</h3>Jeffrey Wilcke<br>Viktor Trón<br>"
+                 text: "<h2>Mist (0.6.5)</h2><h4>Amalthea</h4><br><h3>Development</h3>Jeffrey Wilcke<br>Viktor Trón<br><h3>Building</h3>Maran Hidskes"
              }
          }
 
