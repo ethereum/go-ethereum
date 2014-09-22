@@ -109,7 +109,6 @@ func ReadMessages(conn net.Conn) (msgs []*Msg, err error) {
 			}
 		}
 
-		fmt.Println(n, len(buff))
 		if n == 0 && len(buff) == 0 {
 			// If there's nothing on the wire wait for a bit
 			time.Sleep(200 * time.Millisecond)
