@@ -221,7 +221,7 @@ ApplicationWindow {
                             }
                             height: parent.height
                             width: 300
-                            TableViewColumn{ role: "value" ; title: "Temp" ; width: 200 }
+                            TableViewColumn{ role: "value" ; title: "Local VM stack" ; width: stackTableView.width - 2 }
                             model: stackModel
                         }
 
@@ -233,7 +233,7 @@ ApplicationWindow {
                             height: parent.height
                             width: parent.width - stackTableView.width
                             TableViewColumn{ id:mnumColmn ; role: "num" ; title: "#" ; width: 50 }
-                            TableViewColumn{ role: "value" ; title: "Memory" ; width: 750 }
+                            TableViewColumn{ role: "value" ; title: "Memory" ; width: 650 }
                             model: memModel
                         }
                     }
@@ -248,8 +248,8 @@ ApplicationWindow {
                             }
                             height: parent.height
                             width: parent.width
-                            TableViewColumn{ id: key ; role: "key" ; title: "#" ; width: storageTableView.width / 2}
-                            TableViewColumn{ role: "value" ; title: "Storage" ; width:  storageTableView.width / 2}
+                            TableViewColumn{ id: key ; role: "key" ; title: "#" ; width: storageTableView.width / 2 - 1}
+                            TableViewColumn{ role: "value" ; title: "Storage" ; width:  storageTableView.width / 2 - 1}
                             model: storageModel
                         }
                     }

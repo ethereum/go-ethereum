@@ -31,11 +31,11 @@ Filter.prototype.changed = function(callback) {
     this.callbacks.push(callback);
 
 	var self = this;
-	message.connect(function(messages, id) {
+	messages.connect(function(messages, id) {
 		if(id ==  self.id) {
-            for(var i = 0; i < self.callbacks.length; i++) {
-                self.callbacks[i].call(self, messages);
-            }
+			for(var i = 0; i < self.callbacks.length; i++) {
+				self.callbacks[i].call(self, messages);
+			}
 		}
 	});
 };

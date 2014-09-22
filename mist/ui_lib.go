@@ -37,7 +37,6 @@ type UiLib struct {
 	jsEngine *javascript.JSRE
 
 	filterCallbacks map[int][]int
-	//filters         map[int]*ethpipe.JSFilter
 }
 
 func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
@@ -201,7 +200,7 @@ func (self *UiLib) UninstallFilter(id int) {
 	self.eth.UninstallFilter(id)
 }
 
-func (self *UiLib) Transact(object map[string]interface{}) (*ethpipe.JSReceipt, error) {
+func mapToTxParams(object map[string]interface{}) map[string]string {
 	// Default values
 	if object["from"] == nil {
 		object["from"] = ""
@@ -223,6 +222,8 @@ func (self *UiLib) Transact(object map[string]interface{}) (*ethpipe.JSReceipt, 
 	var data []string
 	if list, ok := object["data"].(*qml.List); ok {
 		list.Convert(&data)
+	} else if str, ok := object["data"].(string); ok {
+		data = []string{str}
 	}
 
 	for _, str := range data {
@@ -238,14 +239,29 @@ func (self *UiLib) Transact(object map[string]interface{}) (*ethpipe.JSReceipt, 
 
 		dataStr += str
 	}
+	object["data"] = dataStr
+	fmt.Println(object)
+
+	conv := make(map[string]string)
+	for key, value := range object {
+		if v, ok := value.(string); ok {
+			conv[key] = v
+		}
+	}
+
+	return conv
+}
+
+func (self *UiLib) Transact(params map[string]interface{}) (*ethpipe.JSReceipt, error) {
+	object := mapToTxParams(params)
 
 	return self.JSPipe.Transact(
-		object["from"].(string),
-		object["to"].(string),
-		object["value"].(string),
-		object["gas"].(string),
-		object["gasPrice"].(string),
-		dataStr,
+		object["from"],
+		object["to"],
+		object["value"],
+		object["gas"],
+		object["gasPrice"],
+		object["data"],
 	)
 }
 
@@ -256,4 +272,16 @@ func (self *UiLib) Compile(code string) (string, error) {
 	}
 
 	return ethutil.Bytes2Hex(bcode), err
+}
+
+func (self *UiLib) Call(params map[string]interface{}) (string, error) {
+	object := mapToTxParams(params)
+
+	return self.JSPipe.Execute(
+		object["to"],
+		object["value"],
+		object["gas"],
+		object["gasPrice"],
+		object["data"],
+	)
 }

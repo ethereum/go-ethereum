@@ -276,7 +276,7 @@ func (d *Debugger) halting(pc int, op ethvm.OpCode, mem *ethvm.Memory, stack *et
 	d.win.Root().Call("clearStorage")
 
 	addr := 0
-	for i := 0; i+32 <= mem.Len(); i += 16 {
+	for i := 0; i+16 <= mem.Len(); i += 16 {
 		dat := mem.Data()[i : i+16]
 		var str string
 

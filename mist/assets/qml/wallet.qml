@@ -14,20 +14,22 @@ ApplicationWindow {
 
     property alias miningButtonText: miningButton.text
     property var ethx : Eth.ethx
+    property var web
 
-    width: 900
-    height: 600
+    width: 1024
+    height: 750
     minimumHeight: 300
 
     title: "Mist"
 
     // This signal is used by the filter API. The filter API connects using this signal handler from
     // the different QML files and plugins.
-    signal message(var callback, int seed);
+    signal messages(var messages, int id);
     function invokeFilterCallback(data, receiverSeed) {
         //var messages = JSON.parse(data)
         // Signal handler
-        message(data, receiverSeed);
+        messages(data, receiverSeed);
+	root.web.messages(data, receiverSeed);
     }
 
     TextField {
@@ -44,7 +46,7 @@ ApplicationWindow {
     // Takes care of loading all default plugins
     Component.onCompleted: {
         addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "ethereum", active: true});
-        addPlugin("./webapp.qml", {noAdd: true, close: false, section: "ethereum", active: true});
+        root.web = addPlugin("./webapp.qml", {noAdd: true, close: false, section: "ethereum", active: true});
 
         addPlugin("./views/transaction.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/chain.qml", {noAdd: true, close: false, section: "legacy"});
