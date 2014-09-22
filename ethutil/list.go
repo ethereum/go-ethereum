@@ -1,6 +1,9 @@
 package ethutil
 
-import "reflect"
+import (
+	"encoding/json"
+	"reflect"
+)
 
 // The list type is an anonymous slice handler which can be used
 // for containing any slice type to use in an environment which
@@ -43,4 +46,16 @@ func (self *List) Append(v interface{}) {
 // Returns the underlying slice as interface.
 func (self *List) Interface() interface{} {
 	return self.list.Interface()
+}
+
+// For JavaScript <3
+func (self *List) ToJSON() string {
+	var list []interface{}
+	for i := 0; i < self.Length; i++ {
+		list = append(list, self.Get(i))
+	}
+
+	data, _ := json.Marshal(list)
+
+	return string(data)
 }
