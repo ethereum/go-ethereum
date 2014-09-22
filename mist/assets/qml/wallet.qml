@@ -45,14 +45,17 @@ ApplicationWindow {
 
     // Takes care of loading all default plugins
     Component.onCompleted: {
-        addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "ethereum", active: true});
-        root.web = addPlugin("./webapp.qml", {noAdd: true, close: false, section: "ethereum", active: true});
+        var wallet = addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "ethereum", active: true});
+        var browser = addPlugin("./webapp.qml", {noAdd: true, close: false, section: "ethereum", active: true});
+	root.web = browser.view;
 
         addPlugin("./views/transaction.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/chain.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/info.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/pending_tx.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/javascript.qml", {noAdd: true, close: false, section: "legacy"});
+
+	mainSplit.setView(wallet.view, wallet.menuItem);
 
         // Call the ready handler
         gui.done();
@@ -97,7 +100,7 @@ ApplicationWindow {
             var view = mainView.createView(component, options)
             var views = addViews(view, path, options)
 
-            return views.view
+            return views
         } catch(e) {
             ethx.note(e)
         }
@@ -803,7 +806,7 @@ ApplicationWindow {
                  anchors.top: parent.top
                  anchors.topMargin: 40
                  font.pointSize: 12
-                 text: "<h2>Mist - Amalthea</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Viktor Trón<br>"
+                 text: "<h2>Mist (0.6.5)</h2><h4>Amalthea</h4><br><h3>Development</h3>Jeffrey Wilcke<br>Viktor Trón<br>"
              }
          }
 
@@ -867,7 +870,7 @@ ApplicationWindow {
                          pastPeers.append({text: ips.get(i)})
                      }
 
-                     pastPeers.insert(0, {text: "54.76.56.74:30303"})
+                     pastPeers.insert(0, {text: "poc-6.ethdev.com:30303"})
                  }
              }
 
