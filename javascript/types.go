@@ -88,6 +88,10 @@ func (self *JSEthereum) GetStateObject(addr string) otto.Value {
 	return self.toVal(&JSStateObject{ethpipe.NewJSObject(self.JSPipe.World().SafeGet(ethutil.Hex2Bytes(addr))), self})
 }
 
+func (self *JSEthereum) Peers() otto.Value {
+	return self.toVal(self.JSPipe.Peers())
+}
+
 func (self *JSEthereum) Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr string) otto.Value {
 	r, err := self.JSPipe.Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr)
 	if err != nil {

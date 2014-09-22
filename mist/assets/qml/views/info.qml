@@ -44,59 +44,103 @@ Rectangle {
 				gui.setCustomIdentifier(text)
 			}
 		}
+
+		TextArea {
+			objectName: "statsPane"
+			width: parent.width
+			height: 200
+			selectByMouse: true
+			readOnly: true
+			font.family: "Courier"
+		}
 	}
 
-	property var addressModel: ListModel {
-		id: addressModel
-	}
-	TableView {
-		id: addressView
+	RowLayout {
+		id: logLayout
 		width: parent.width
 		height: 200
-		anchors.bottom: logLayout.top
-		TableViewColumn{ role: "name"; title: "name" }
-		TableViewColumn{ role: "address"; title: "address"; width: 300}
+		anchors.bottom: parent.bottom
 
-		model: addressModel
-		itemDelegate: Item {
-			Text {
-				anchors {
-					left: parent.left
-					right: parent.right
-					leftMargin: 10
-					verticalCenter: parent.verticalCenter
-				}
-				color: styleData.textColor
-				elide: styleData.elideMode
-				text: styleData.value
-				font.pixelSize: 11
-				MouseArea {
-					acceptedButtons: Qt.LeftButton | Qt.RightButton
-					propagateComposedEvents: true
-					anchors.fill: parent
-					onClicked: {
-						addressView.selection.clear()
-						addressView.selection.select(styleData.row)
+		TableView {
+			id: addressView
+			width: parent.width
+			height: 200
+			anchors {
+				left: parent.left
+				right: logLevelSlider.left
+				bottom: parent.bottom
+				top: parent.top
+			}
+			TableViewColumn{ role: "name"; title: "name" }
+			TableViewColumn{ role: "address"; title: "address"; width: 300}
 
-						if(mouse.button == Qt.RightButton) {
-							contextMenu.row = styleData.row;
-							contextMenu.popup()
+			property var addressModel: ListModel {
+				id: addressModel
+			}
+
+			model: addressModel
+			itemDelegate: Item {
+				Text {
+					anchors {
+						left: parent.left
+						right: parent.right
+						leftMargin: 10
+						verticalCenter: parent.verticalCenter
+					}
+					color: styleData.textColor
+					elide: styleData.elideMode
+					text: styleData.value
+					font.pixelSize: 11
+					MouseArea {
+						acceptedButtons: Qt.LeftButton | Qt.RightButton
+						propagateComposedEvents: true
+						anchors.fill: parent
+						onClicked: {
+							addressView.selection.clear()
+							addressView.selection.select(styleData.row)
+
+							if(mouse.button == Qt.RightButton) {
+								contextMenu.row = styleData.row;
+								contextMenu.popup()
+							}
 						}
 					}
 				}
 			}
 
+			Menu {
+				id: contextMenu
+				property var row;
+
+				MenuItem {
+					text: "Copy"
+					onTriggered: {
+						copyToClipboard(addressModel.get(this.row).address)
+					}
+				}
+			}
 		}
 
-		Menu {
-			id: contextMenu
-			property var row;
+		Slider {
+			id: logLevelSlider
+			value: gui.getLogLevelInt()
+			anchors {
+				right: parent.right
+				top: parent.top
+				bottom: parent.bottom
 
-			MenuItem {
-				text: "Copy"
-				onTriggered: {
-					copyToClipboard(addressModel.get(this.row).address)
-				}
+				rightMargin: 5
+				leftMargin: 5
+				topMargin: 5
+				bottomMargin: 5
+			}
+
+			orientation: Qt.Vertical
+			maximumValue: 5
+			stepSize: 1
+
+			onValueChanged: {
+				gui.setLogLevel(value)
 			}
 		}
 	}
@@ -104,6 +148,8 @@ Rectangle {
 	property var logModel: ListModel {
 		id: logModel
 	}
+
+	/*
 	RowLayout {
 		id: logLayout
 		width: parent.width
@@ -147,6 +193,7 @@ Rectangle {
 			}
 		}
 	}
+	*/
 
 	function addDebugMessage(message){
 		debuggerLog.append({value: message})

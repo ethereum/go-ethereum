@@ -37,11 +37,14 @@ type UiLib struct {
 	jsEngine *javascript.JSRE
 
 	filterCallbacks map[int][]int
-	filters         map[int]*GuiFilter
 }
 
 func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
-	return &UiLib{JSPipe: ethpipe.NewJSPipe(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth), filterCallbacks: make(map[int][]int), filters: make(map[int]*GuiFilter)}
+	return &UiLib{JSPipe: ethpipe.NewJSPipe(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth), filterCallbacks: make(map[int][]int)} //, filters: make(map[int]*ethpipe.JSFilter)}
+}
+
+func (self *UiLib) Notef(args []interface{}) {
+	logger.Infoln(args...)
 }
 
 func (self *UiLib) LookupDomain(domain string) string {
@@ -53,7 +56,7 @@ func (self *UiLib) LookupDomain(domain string) string {
 	data := world.Config().Get("DnsReg").StorageString(domain).Bytes()
 
 	// Left padded = A record, Right padded = CNAME
-	if data[0] == 0 {
+	if len(data) > 0 && data[0] == 0 {
 		data = bytes.TrimLeft(data, "\x00")
 		var ipSlice []string
 		for _, d := range data {
@@ -66,6 +69,10 @@ func (self *UiLib) LookupDomain(domain string) string {
 
 		return string(data)
 	}
+}
+
+func (self *UiLib) PastPeers() *ethutil.List {
+	return ethutil.NewList(eth.PastPeers())
 }
 
 func (self *UiLib) ImportTx(rlpTx string) {
@@ -160,49 +167,40 @@ func (self *UiLib) StartDebugger() {
 	dbWindow.Show()
 }
 
-func (self *UiLib) RegisterFilter(object map[string]interface{}, seed int) {
-	filter := &GuiFilter{ethpipe.NewJSFilterFromMap(object, self.eth), seed}
-	self.filters[seed] = filter
-
+func (self *UiLib) NewFilter(object map[string]interface{}) int {
+	filter, id := self.eth.InstallFilter(object)
 	filter.MessageCallback = func(messages ethstate.Messages) {
-		for _, callbackSeed := range self.filterCallbacks[seed] {
-			self.win.Root().Call("invokeFilterCallback", filter.MessagesToJson(messages), seed, callbackSeed)
-		}
+		self.win.Root().Call("invokeFilterCallback", ethpipe.ToJSMessages(messages), id)
 	}
 
+	return id
 }
 
-func (self *UiLib) RegisterFilterString(typ string, seed int) {
-	filter := &GuiFilter{ethpipe.NewJSFilterFromMap(nil, self.eth), seed}
-	self.filters[seed] = filter
-
-	if typ == "chain" {
-		filter.BlockCallback = func(block *ethchain.Block) {
-			for _, callbackSeed := range self.filterCallbacks[seed] {
-				self.win.Root().Call("invokeFilterCallback", "{}", seed, callbackSeed)
-			}
-		}
+func (self *UiLib) NewFilterString(typ string) int {
+	filter, id := self.eth.InstallFilter(nil)
+	filter.BlockCallback = func(block *ethchain.Block) {
+		self.win.Root().Call("invokeFilterCallback", "{}", id)
 	}
+
+	return id
 }
 
-func (self *UiLib) RegisterFilterCallback(seed, cbSeed int) {
-	self.filterCallbacks[seed] = append(self.filterCallbacks[seed], cbSeed)
-}
-
-func (self *UiLib) UninstallFilter(seed int) {
-	filter := self.filters[seed]
+func (self *UiLib) Messages(id int) *ethutil.List {
+	filter := self.eth.GetFilter(id)
 	if filter != nil {
-		filter.Uninstall()
-		delete(self.filters, seed)
+		messages := filter.Find()
+
+		return ethpipe.ToJSMessages(messages)
 	}
+
+	return ethutil.EmptyList()
 }
 
-type GuiFilter struct {
-	*ethpipe.JSFilter
-	seed int
+func (self *UiLib) UninstallFilter(id int) {
+	self.eth.UninstallFilter(id)
 }
 
-func (self *UiLib) Transact(object map[string]interface{}) (*ethpipe.JSReceipt, error) {
+func mapToTxParams(object map[string]interface{}) map[string]string {
 	// Default values
 	if object["from"] == nil {
 		object["from"] = ""
@@ -224,6 +222,8 @@ func (self *UiLib) Transact(object map[string]interface{}) (*ethpipe.JSReceipt, 
 	var data []string
 	if list, ok := object["data"].(*qml.List); ok {
 		list.Convert(&data)
+	} else if str, ok := object["data"].(string); ok {
+		data = []string{str}
 	}
 
 	for _, str := range data {
@@ -239,13 +239,49 @@ func (self *UiLib) Transact(object map[string]interface{}) (*ethpipe.JSReceipt, 
 
 		dataStr += str
 	}
+	object["data"] = dataStr
+	fmt.Println(object)
+
+	conv := make(map[string]string)
+	for key, value := range object {
+		if v, ok := value.(string); ok {
+			conv[key] = v
+		}
+	}
+
+	return conv
+}
+
+func (self *UiLib) Transact(params map[string]interface{}) (*ethpipe.JSReceipt, error) {
+	object := mapToTxParams(params)
 
 	return self.JSPipe.Transact(
-		object["from"].(string),
-		object["to"].(string),
-		object["value"].(string),
-		object["gas"].(string),
-		object["gasPrice"].(string),
-		dataStr,
+		object["from"],
+		object["to"],
+		object["value"],
+		object["gas"],
+		object["gasPrice"],
+		object["data"],
+	)
+}
+
+func (self *UiLib) Compile(code string) (string, error) {
+	bcode, err := ethutil.Compile(code, false)
+	if err != nil {
+		return err.Error(), err
+	}
+
+	return ethutil.Bytes2Hex(bcode), err
+}
+
+func (self *UiLib) Call(params map[string]interface{}) (string, error) {
+	object := mapToTxParams(params)
+
+	return self.JSPipe.Execute(
+		object["to"],
+		object["value"],
+		object["gas"],
+		object["gasPrice"],
+		object["data"],
 	)
 }

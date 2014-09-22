@@ -4,32 +4,67 @@ import QtQuick.Layouts 1.0;
 import QtQuick.Dialogs 1.0;
 import QtQuick.Window 2.1;
 import QtQuick.Controls.Styles 1.1
-import Ethereum 1.0
 
 Rectangle {
 	id: root
-	property var title: "Wallet"
-	property var iconSource: "../wallet.png"
+	property var title: "JeffCoin"
+	property var iconSource: "./views/jeffcoin/jeff.png"
 	property var menuItem
+	property var filter
+	property var address: "fc0a9436890478bb9b1c6ed7455c2535366f4a99"
 
-	objectName: "walletView"
-	anchors.fill: parent
+	function insertTx(message, blockNumber) {
+		if(!message) return;
 
-	function onReady() {
-		menuItem.secondaryTitle = eth.numberToHuman(eth.balanceAt(eth.key().address))
+		var from = message.from
+		var to = message.input.substr(24, 40)
+		var value = eth.fromNumber(message.input.substr(64, 64))
+
+		var me = eth.key().address;
+		if((to == me|| from == me) && message.input.length == 128) {
+			txModel.insert(0, {confirmations: blockNumber - message.number, from: from, to: to, value: value})
+		}
 	}
 
-	ListModel {
-		id: denomModel
-		ListElement { text: "Wei" ;     zeros: "" }
-		ListElement { text: "Ada" ;     zeros: "000" }
-		ListElement { text: "Babbage" ; zeros: "000000" }
-		ListElement { text: "Shannon" ; zeros: "000000000" }
-		ListElement { text: "Szabo" ;   zeros: "000000000000" }
-		ListElement { text: "Finney" ;  zeros: "000000000000000" }
-		ListElement { text: "Ether" ;   zeros: "000000000000000000" }
-		ListElement { text: "Einstein" ;zeros: "000000000000000000000" }
-		ListElement { text: "Douglas" ; zeros: "000000000000000000000000000000000000000000" }
+	function setBalance() {
+		var jeffCoinAmount = eth.fromNumber(eth.storageAt(address, eth.key().address)) + " JΞF"
+		menuItem.secondaryTitle = jeffCoinAmount
+
+		balance.text = "<b>Balance</b>: " + jeffCoinAmount;
+	}
+
+	function onReady() {
+		setBalance()
+
+		filter = new ethx.watch({latest: -1, to: address})
+		filter.changed(function(messages) {
+			setBalance()
+
+			var blockNumber = eth.block(-1).number;
+			for(var i = 0; i < messages.length; i++) {
+				insertTx(messages.get(i), blockNumber);
+			}
+		});
+
+		var blockNumber = eth.block(-1).number;
+		var messages = filter.messages()
+		for(var i = messages.length-1; i >= 0; i--) {
+			var message = messages.get(i)
+
+			insertTx(message, blockNumber)
+		}
+
+		var chainChanged = ethx.watch("chain")
+		chainChanged.changed(function() {
+			for(var i = 0; i < txModel.count; i++) {
+				var entry = txModel.get(i);
+				entry.confirmations++;
+			}
+		});
+	}
+
+	function onDestroy() {
+		filter.uninstall()
 	}
 
 	ColumnLayout {
@@ -39,7 +74,7 @@ Rectangle {
 
 		Text {
 			id: balance
-			text: "<b>Balance</b>: " + eth.numberToHuman(eth.balanceAt(eth.key().address))
+			text: "<b>Balance</b>: " + eth.fromNumber(eth.storageAt(address, eth.key().address)) + " JΞF"
 			font.pixelSize: 24
 			anchors {
 				horizontalCenter: parent.horizontalCenter
@@ -74,7 +109,7 @@ Rectangle {
 				}
 
 				Text {
-					text: "Ξ  "
+					text: "JΞF  "
 				}
 
 				// There's something off with the row layout where textfields won't listen to the width setting
@@ -87,13 +122,6 @@ Rectangle {
 						placeholderText: "0.00"
 					}
 				}
-
-				ComboBox {
-					id: valueDenom
-					currentIndex: 6
-					model: denomModel
-				}
-
 			}
 
 			RowLayout {
@@ -123,10 +151,7 @@ Rectangle {
 				Button {
 					text: "Send"
 					onClicked: {
-						var value = txValue.text + denomModel.get(valueDenom.currentIndex).zeros;
-						var gasPrice = "10000000000000"
-						var res = eth.transact({from: eth.key().privateKey, to: txTo.text, value: value, gas: "500", gasPrice: gasPrice})
-						console.log(res)
+						eth.transact({from: eth.key().privateKey, to:address, gas: "9000", gasPrice: "100000000000", data: ["0x"+txTo.text, txValue.text]})
 					}
 				}
 			}
@@ -143,23 +168,17 @@ Rectangle {
 			TableView {
 				id: txTableView
 				anchors.fill : parent
-				TableViewColumn{ role: "num" ; title: "#" ; width: 30 }
+				TableViewColumn{ role: "value" ; title: "Amount" ; width: 100 }
 				TableViewColumn{ role: "from" ; title: "From" ; width: 280 }
 				TableViewColumn{ role: "to" ; title: "To" ; width: 280 }
-				TableViewColumn{ role: "value" ; title: "Amount" ; width: 100 }
+				TableViewColumn{ role: "confirmations" ; title: "Confirmations" ; width: 100 }
 
 				model: ListModel {
 					id: txModel
 					Component.onCompleted: {
-						var messages = JSON.parse(eth.messages({latest: -1, from: "e6716f9544a56c530d868e4bfbacb172315bdead"}))
-						for(var i = 0; i < messages.length; i++) {
-							var message = messages[i];
-							this.insert(0, {num: i, from: message.from, to: message.to, value: eth.numberToHuman(message.value)})
-						}
 					}
 				}
 			}
 		}
-
 	}
 }

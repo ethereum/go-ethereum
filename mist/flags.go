@@ -1,15 +1,16 @@
 package main
 
 import (
-	"bitbucket.org/kardianos/osext"
 	"flag"
 	"fmt"
-	"github.com/ethereum/eth-go/ethlog"
 	"os"
 	"os/user"
 	"path"
 	"path/filepath"
 	"runtime"
+
+	"bitbucket.org/kardianos/osext"
+	"github.com/ethereum/eth-go/ethlog"
 )
 
 var Identifier string
@@ -43,7 +44,7 @@ func defaultAssetPath() string {
 	// assume a debug build and use the source directory as
 	// asset directory.
 	pwd, _ := os.Getwd()
-	if pwd == path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "ethereal") {
+	if pwd == path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "mist") {
 		assetPath = path.Join(pwd, "assets")
 	} else {
 		switch runtime.GOOS {
@@ -52,7 +53,7 @@ func defaultAssetPath() string {
 			exedir, _ := osext.ExecutableFolder()
 			assetPath = filepath.Join(exedir, "../Resources")
 		case "linux":
-			assetPath = "/usr/share/ethereal"
+			assetPath = "/usr/share/mist"
 		case "windows":
 			assetPath = "./assets"
 		default:
@@ -63,7 +64,7 @@ func defaultAssetPath() string {
 }
 func defaultDataDir() string {
 	usr, _ := user.Current()
-	return path.Join(usr.HomeDir, ".ethereal")
+	return path.Join(usr.HomeDir, ".mist")
 }
 
 var defaultConfigFile = path.Join(defaultDataDir(), "conf.ini")
@@ -78,7 +79,7 @@ func Init() {
 	flag.StringVar(&KeyRing, "keyring", "", "identifier for keyring to use")
 	flag.StringVar(&KeyStore, "keystore", "db", "system to store keyrings: db|file (db)")
 	flag.StringVar(&OutboundPort, "port", "30303", "listening port")
-	flag.BoolVar(&UseUPnP, "upnp", false, "enable UPnP support")
+	flag.BoolVar(&UseUPnP, "upnp", true, "enable UPnP support")
 	flag.IntVar(&MaxPeer, "maxpeer", 10, "maximum desired peers")
 	flag.IntVar(&RpcPort, "rpcport", 8080, "port to start json-rpc server on")
 	flag.BoolVar(&StartRpc, "rpc", false, "start rpc server")

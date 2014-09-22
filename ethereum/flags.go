@@ -74,6 +74,7 @@ func Init() {
 	flag.IntVar(&LogLevel, "loglevel", int(ethlog.InfoLevel), "loglevel: 0-5: silent,error,warn,info,debug,debug detail)")
 	flag.BoolVar(&DiffTool, "difftool", false, "creates output for diff'ing. Sets LogLevel=0")
 	flag.StringVar(&DiffType, "diff", "all", "sets the level of diff output [vm, all]. Has no effect if difftool=false")
+	flag.BoolVar(&ShowGenesis, "genesis", false, "Dump the genesis block")
 
 	flag.BoolVar(&Dump, "dump", false, "output the ethereum state in JSON format. Sub args [number, hash]")
 	flag.StringVar(&DumpHash, "hash", "", "specify arg in hex")

@@ -10,7 +10,6 @@ Rectangle {
 	id: root
 	property var title: "Network"
 	property var iconSource: "../net.png"
-	property var secondary: "Hi"
 	property var menuItem
 
 	objectName: "chainView"
@@ -99,20 +98,23 @@ Rectangle {
 
 
 	function addBlock(block, initial) {
-		var txs = JSON.parse(block.transactions);
-		var amount = 0
 		if(initial == undefined){
 			initial = false
 		}
 
+		/*
+		var txs = JSON.parse(block.transactions);
 		if(txs != null){
 			amount = txs.length
 		}
+		*/
+	       var txs = block.transactions;
+	       var amount = block.transactions.length;
 
 		if(initial){
-			blockModel.append({number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
+			blockModel.append({size: block.size, number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
 		} else {
-			blockModel.insert(0, {number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
+			blockModel.insert(0, {size: block.size, number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
 		}
 
 		//root.secondary.text = "#" + block.number;
@@ -137,7 +139,7 @@ Rectangle {
 					anchors.top: parent.top
 					anchors.left: parent.left
 					Text { text: '<h3>Block details</h3>'; color: "#F2F2F2"}
-					Text { text: '<b>Block number:</b> ' + number; color: "#F2F2F2"}
+					Text { text: '<b>Block number:</b> ' + number + " (Size: " + size + ")"; color: "#F2F2F2"}
 					Text { text: '<b>Hash:</b> ' + hash; color: "#F2F2F2"}
 					Text { text: '<b>Coinbase:</b> &lt;' + name + '&gt; ' + coinbase; color: "#F2F2F2"}
 					Text { text: '<b>Block found at:</b> ' + prettyTime; color: "#F2F2F2"}
@@ -242,11 +244,11 @@ Rectangle {
 			singleBlock.set(0,block)
 			popup.height = 300
 			transactionModel.clear()
-			if(block.txs != undefined){
-				for(var i = 0; i < block.txs.count; ++i) {
+			if(block.txs !== undefined){
+				for(var i = 0; i < block.txs.length; i++) {
 					transactionModel.insert(0, block.txs.get(i))
 				}
-				if(block.txs.get(0).data){
+				if(block.txs.length > 0 && block.txs.get(0).data){
 					popup.showContractData(block.txs.get(0))
 				}
 			}

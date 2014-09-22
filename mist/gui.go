@@ -1,11 +1,14 @@
 package main
 
+import "C"
+
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"os"
+	"path"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -19,16 +22,33 @@ import (
 	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
-	"github.com/ethereum/go-ethereum/utils"
 	"gopkg.in/qml.v1"
 )
 
-var logger = ethlog.NewLogger("GUI")
+/*
+func LoadExtension(path string) (uintptr, error) {
+	lib, err := ffi.NewLibrary(path)
+	if err != nil {
+		return 0, err
+	}
 
-type plugin struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
+	so, err := lib.Fct("sharedObject", ffi.Pointer, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	ptr := so()
+
+		err = lib.Close()
+		if err != nil {
+			return 0, err
+		}
+
+	return ptr.Interface().(uintptr), nil
 }
+*/
+
+var logger = ethlog.NewLogger("GUI")
 
 type Gui struct {
 	// The main application window
@@ -56,7 +76,8 @@ type Gui struct {
 
 	plugins map[string]plugin
 
-	miner *ethminer.Miner
+	miner  *ethminer.Miner
+	stdLog ethlog.LogSystem
 }
 
 // Create GUI, but doesn't start it
@@ -68,12 +89,7 @@ func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIden
 
 	pipe := ethpipe.NewJSPipe(ethereum)
 	gui := &Gui{eth: ethereum, txDb: db, pipe: pipe, logLevel: ethlog.LogLevel(logLevel), Session: session, open: false, clientIdentity: clientIdentity, config: config, plugins: make(map[string]plugin)}
-	data, err := ethutil.ReadAllFile(ethutil.Config.ExecPath + "/plugins.json")
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println("plugins:", string(data))
-
+	data, _ := ethutil.ReadAllFile(path.Join(ethutil.Config.ExecPath, "plugins.json"))
 	json.Unmarshal([]byte(data), &gui.plugins)
 
 	return gui
@@ -99,6 +115,16 @@ func (gui *Gui) Start(assetPath string) {
 	// Expose the eth library and the ui library to QML
 	context.SetVar("gui", gui)
 	context.SetVar("eth", gui.uiLib)
+
+	/*
+		vec, errr := LoadExtension("/Users/jeffrey/Desktop/build-libqmltest-Desktop_Qt_5_2_1_clang_64bit-Debug/liblibqmltest_debug.dylib")
+		fmt.Printf("Fetched vec with addr: %#x\n", vec)
+		if errr != nil {
+			fmt.Println(errr)
+		} else {
+			context.SetVar("vec", (unsafe.Pointer)(vec))
+		}
+	*/
 
 	// Load the main QML interface
 	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
@@ -145,24 +171,6 @@ func (gui *Gui) Stop() {
 	logger.Infoln("Stopped")
 }
 
-func (gui *Gui) ToggleMining() {
-	var txt string
-	if gui.eth.Mining {
-		utils.StopMining(gui.eth)
-		txt = "Start mining"
-
-		gui.getObjectByName("miningLabel").Set("visible", false)
-	} else {
-		utils.StartMining(gui.eth)
-		gui.miner = utils.GetMiner()
-		txt = "Stop mining"
-
-		gui.getObjectByName("miningLabel").Set("visible", true)
-	}
-
-	gui.win.Root().Set("miningButtonText", txt)
-}
-
 func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
 	component, err := gui.engine.LoadFile(gui.uiLib.AssetPath("qml/wallet.qml"))
 	if err != nil {
@@ -176,44 +184,9 @@ func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
 	return gui.win, nil
 }
 
-func (self *Gui) DumpState(hash, path string) {
-	var stateDump []byte
-
-	if len(hash) == 0 {
-		stateDump = self.eth.StateManager().CurrentState().Dump()
-	} else {
-		var block *ethchain.Block
-		if hash[0] == '#' {
-			i, _ := strconv.Atoi(hash[1:])
-			block = self.eth.BlockChain().GetBlockByNumber(uint64(i))
-		} else {
-			block = self.eth.BlockChain().GetBlock(ethutil.Hex2Bytes(hash))
-		}
-
-		if block == nil {
-			logger.Infof("block err: not found %s\n", hash)
-			return
-		}
-
-		stateDump = block.State().Dump()
-	}
-
-	file, err := os.OpenFile(path[7:], os.O_CREATE|os.O_RDWR, os.ModePerm)
-	if err != nil {
-		logger.Infoln("dump err: ", err)
-		return
-	}
-	defer file.Close()
-
-	logger.Infof("dumped state (%s) to %s\n", hash, path)
-
-	file.Write(stateDump)
-}
-
 // The done handler will be called by QML when all views have been loaded
 func (gui *Gui) Done() {
 	gui.qmlDone = true
-
 }
 
 func (gui *Gui) ImportKey(filePath string) {
@@ -337,7 +310,7 @@ func (gui *Gui) insertTransaction(window string, tx *ethchain.Transaction) {
 	ptx.Address = r
 
 	if window == "post" {
-		gui.getObjectByName("transactionView").Call("addTx", ptx, inout)
+		//gui.getObjectByName("transactionView").Call("addTx", ptx, inout)
 	} else {
 		gui.getObjectByName("pendingTxView").Call("addTx", ptx, inout)
 	}
@@ -397,6 +370,8 @@ func (gui *Gui) update() {
 	}()
 
 	for _, plugin := range gui.plugins {
+		logger.Infoln("Loading plugin ", plugin.Name)
+
 		gui.win.Root().Call("addPlugin", plugin.Path, "")
 	}
 
@@ -411,6 +386,7 @@ func (gui *Gui) update() {
 
 	peerUpdateTicker := time.NewTicker(5 * time.Second)
 	generalUpdateTicker := time.NewTicker(1 * time.Second)
+	statsUpdateTicker := time.NewTicker(5 * time.Second)
 
 	state := gui.eth.StateManager().TransState()
 
@@ -450,12 +426,12 @@ func (gui *Gui) update() {
 					if bytes.Compare(tx.Sender(), gui.address()) == 0 {
 						object.SubAmount(tx.Value)
 
-						gui.getObjectByName("transactionView").Call("addTx", ethpipe.NewJSTx(tx), "send")
+						//gui.getObjectByName("transactionView").Call("addTx", ethpipe.NewJSTx(tx), "send")
 						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 					} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
 						object.AddAmount(tx.Value)
 
-						gui.getObjectByName("transactionView").Call("addTx", ethpipe.NewJSTx(tx), "recv")
+						//gui.getObjectByName("transactionView").Call("addTx", ethpipe.NewJSTx(tx), "recv")
 						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 					}
 
@@ -487,6 +463,10 @@ func (gui *Gui) update() {
 					pow := gui.miner.GetPow()
 					miningLabel.Set("text", "Mining @ "+strconv.FormatInt(pow.GetHashrate(), 10)+"Khash")
 				}
+
+			case <-statsUpdateTicker.C:
+				gui.setStatsPane()
+
 			}
 		}
 	}()
@@ -506,9 +486,30 @@ func (gui *Gui) update() {
 	reactor.Subscribe("peerList", peerChan)
 }
 
-func (gui *Gui) CopyToClipboard(data string) {
-	//clipboard.WriteAll("test")
-	fmt.Println("COPY currently BUGGED. Here are the contents:\n", data)
+func (gui *Gui) setStatsPane() {
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+
+	statsPane := gui.getObjectByName("statsPane")
+	statsPane.Set("text", fmt.Sprintf(`###### Mist 0.6.5 (%s) #######
+
+eth %d (p2p = %d)
+
+CPU:        # %d
+Goroutines: # %d
+CGoCalls:   # %d
+
+Alloc:      %d
+Heap Alloc: %d
+
+CGNext:     %x
+NumGC:      %d
+`, runtime.Version(),
+		eth.ProtocolVersion, eth.P2PVersion,
+		runtime.NumCPU, runtime.NumGoroutine(), runtime.NumCgoCall(),
+		memStats.Alloc, memStats.HeapAlloc,
+		memStats.NextGC, memStats.NumGC,
+	))
 }
 
 func (gui *Gui) setPeerInfo() {
@@ -526,83 +527,4 @@ func (gui *Gui) privateKey() string {
 
 func (gui *Gui) address() []byte {
 	return gui.eth.KeyManager().Address()
-}
-
-func (gui *Gui) Transact(recipient, value, gas, gasPrice, d string) (*ethpipe.JSReceipt, error) {
-	var data string
-	if len(recipient) == 0 {
-		code, err := ethutil.Compile(d, false)
-		if err != nil {
-			return nil, err
-		}
-		data = ethutil.Bytes2Hex(code)
-	} else {
-		data = ethutil.Bytes2Hex(utils.FormatTransactionData(d))
-	}
-
-	return gui.pipe.Transact(gui.privateKey(), recipient, value, gas, gasPrice, data)
-}
-
-func (gui *Gui) SetCustomIdentifier(customIdentifier string) {
-	gui.clientIdentity.SetCustomIdentifier(customIdentifier)
-	gui.config.Save("id", customIdentifier)
-}
-
-func (gui *Gui) GetCustomIdentifier() string {
-	return gui.clientIdentity.GetCustomIdentifier()
-}
-
-func (gui *Gui) ToggleTurboMining() {
-	gui.miner.ToggleTurbo()
-}
-
-// functions that allow Gui to implement interface ethlog.LogSystem
-func (gui *Gui) SetLogLevel(level ethlog.LogLevel) {
-	gui.logLevel = level
-	gui.config.Save("loglevel", level)
-}
-
-func (gui *Gui) GetLogLevel() ethlog.LogLevel {
-	return gui.logLevel
-}
-
-func (self *Gui) AddPlugin(pluginPath string) {
-	self.plugins[pluginPath] = plugin{Name: "SomeName", Path: pluginPath}
-
-	json, _ := json.MarshalIndent(self.plugins, "", "    ")
-	ethutil.WriteFile(ethutil.Config.ExecPath+"/plugins.json", json)
-}
-
-func (self *Gui) RemovePlugin(pluginPath string) {
-	delete(self.plugins, pluginPath)
-
-	json, _ := json.MarshalIndent(self.plugins, "", "    ")
-	ethutil.WriteFile(ethutil.Config.ExecPath+"/plugins.json", json)
-}
-
-// this extra function needed to give int typecast value to gui widget
-// that sets initial loglevel to default
-func (gui *Gui) GetLogLevelInt() int {
-	return int(gui.logLevel)
-}
-
-func (gui *Gui) Println(v ...interface{}) {
-	gui.printLog(fmt.Sprintln(v...))
-}
-
-func (gui *Gui) Printf(format string, v ...interface{}) {
-	gui.printLog(fmt.Sprintf(format, v...))
-}
-
-// Print function that logs directly to the GUI
-func (gui *Gui) printLog(s string) {
-	/*
-		str := strings.TrimRight(s, "\n")
-		lines := strings.Split(str, "\n")
-
-		view := gui.getObjectByName("infoView")
-		for _, line := range lines {
-			view.Call("addLog", line)
-		}
-	*/
 }

@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethstate"
@@ -93,9 +94,7 @@ func (self *DebuggerWindow) ClearLog() {
 }
 
 func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, dataStr string) {
-	if !self.Db.done {
-		self.Db.Q <- true
-	}
+	self.Stop()
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -185,6 +184,12 @@ func (self *DebuggerWindow) Continue() {
 	self.Next()
 }
 
+func (self *DebuggerWindow) Stop() {
+	if !self.Db.done {
+		self.Db.Q <- true
+	}
+}
+
 func (self *DebuggerWindow) ExecCommand(command string) {
 	if len(command) > 0 {
 		cmd := strings.Split(command, " ")
@@ -271,9 +276,20 @@ func (d *Debugger) halting(pc int, op ethvm.OpCode, mem *ethvm.Memory, stack *et
 	d.win.Root().Call("clearStorage")
 
 	addr := 0
-	for i := 0; i+32 <= mem.Len(); i += 32 {
-		d.win.Root().Call("setMem", memAddr{fmt.Sprintf("%03d", addr), fmt.Sprintf("% x", mem.Data()[i:i+32])})
-		addr++
+	for i := 0; i+16 <= mem.Len(); i += 16 {
+		dat := mem.Data()[i : i+16]
+		var str string
+
+		for _, d := range dat {
+			if unicode.IsGraphic(rune(d)) {
+				str += string(d)
+			} else {
+				str += "?"
+			}
+		}
+
+		d.win.Root().Call("setMem", memAddr{fmt.Sprintf("%03d", addr), fmt.Sprintf("%s  % x", str, dat)})
+		addr += 16
 	}
 
 	for _, val := range stack.Data() {
@@ -283,6 +299,12 @@ func (d *Debugger) halting(pc int, op ethvm.OpCode, mem *ethvm.Memory, stack *et
 	stateObject.EachStorage(func(key string, node *ethutil.Value) {
 		d.win.Root().Call("setStorage", storeVal{fmt.Sprintf("% x", key), fmt.Sprintf("% x", node.Str())})
 	})
+
+	stackFrameAt := new(big.Int).SetBytes(mem.Get(0, 32))
+	psize := mem.Len() - int(new(big.Int).SetBytes(mem.Get(0, 32)).Uint64())
+	d.win.Root().ObjectByName("stackFrame").Set("text", fmt.Sprintf(`<b>stack ptr</b>: %v`, stackFrameAt))
+	d.win.Root().ObjectByName("stackSize").Set("text", fmt.Sprintf(`<b>stack size</b>: %d`, psize))
+	d.win.Root().ObjectByName("memSize").Set("text", fmt.Sprintf(`<b>mem size</b>: %v`, mem.Len()))
 
 out:
 	for {
