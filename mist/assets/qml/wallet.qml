@@ -14,7 +14,7 @@ ApplicationWindow {
 
     property alias miningButtonText: miningButton.text
     property var ethx : Eth.ethx
-    property var web
+    property var browser
 
     width: 1200
     height: 820
@@ -29,7 +29,7 @@ ApplicationWindow {
         //var messages = JSON.parse(data)
         // Signal handler
         messages(data, receiverSeed);
-	root.web.messages(data, receiverSeed);
+	root.browser.view.messages(data, receiverSeed);
     }
 
     TextField {
@@ -47,7 +47,7 @@ ApplicationWindow {
     Component.onCompleted: {
         var wallet = addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "ethereum", active: true});
         var browser = addPlugin("./webapp.qml", {noAdd: true, close: false, section: "ethereum", active: true});
-	root.web = browser.view;
+	root.browser = browser;
 
         addPlugin("./views/transaction.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/chain.qml", {noAdd: true, close: false, section: "legacy"});
@@ -648,7 +648,12 @@ ApplicationWindow {
                       }
 
                       Keys.onReturnPressed: {
-                          addPlugin(this.text, {close: true, section: "apps"})
+			      if(/^https?/.test(this.text)) {
+				      root.browser.view.open(this.text);
+				      mainSplit.setView(root.browser.view, root.browser.menuItem);
+			      } else {
+				      addPlugin(this.text, {close: true, section: "apps"})
+			      }
                       }
                   }
 

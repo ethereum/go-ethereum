@@ -240,7 +240,6 @@ func mapToTxParams(object map[string]interface{}) map[string]string {
 		dataStr += str
 	}
 	object["data"] = dataStr
-	fmt.Println(object)
 
 	conv := make(map[string]string)
 	for key, value := range object {

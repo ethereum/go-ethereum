@@ -335,7 +335,7 @@
 
 	Object.defineProperty(eth, "gasPrice", {
 		get: function() {
-			return "1000000000000"
+			return "10000000000000"
 		}
 	});
 
