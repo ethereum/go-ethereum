@@ -648,8 +648,6 @@ ApplicationWindow {
                       }
 
                       Keys.onReturnPressed: {
-			  if(this.text == "uuddlrlrba") { gui.toggleTurboMining(); }
-
                           addPlugin(this.text, {close: true, section: "apps"})
                       }
                   }
