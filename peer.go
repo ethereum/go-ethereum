@@ -572,7 +572,7 @@ func (self *Peer) FetchBlocks() {
 func (self *Peer) FetchHashes() {
 	blockPool := self.ethereum.blockPool
 
-	if self.statusKnown && self.td.Cmp(blockPool.td) >= 0 {
+	if self.td.Cmp(blockPool.td) >= 0 {
 		blockPool.td = self.td
 
 		if !blockPool.HasLatestHash() {

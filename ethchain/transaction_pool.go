@@ -105,7 +105,7 @@ func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 		return fmt.Errorf("[TXPL] Invalid recipient. len = %d", len(tx.Recipient))
 	}
 
-	if tx.GasPrice.Cmp(MinGasPrice) >= 0 {
+	if tx.GasPrice.Cmp(MinGasPrice) < 0 {
 		return fmt.Errorf("Gas price to low. Require %v > Got %v", MinGasPrice, tx.GasPrice)
 	}
 
