@@ -19,6 +19,48 @@ import "../ext/qml_messaging.js" as Messaging
 		property alias url: webview.url
 		property alias webView: webview
 
+		property var cleanPath: false
+		property var open: function(url) {
+			if(!window.cleanPath) {
+				var uri = url;
+				if(!/.*\:\/\/.*/.test(uri)) {
+					uri = "http://" + uri;
+				}
+
+				var reg = /(^https?\:\/\/(?:www\.)?)([a-zA-Z0-9_\-]*\.eth)(.*)/
+
+				if(reg.test(uri)) {
+					uri.replace(reg, function(match, pre, domain, path) {
+						uri = pre;
+
+						var lookup = eth.lookupDomain(domain.substring(0, domain.length - 4));
+						var ip = [];
+						for(var i = 0, l = lookup.length; i < l; i++) {
+							ip.push(lookup.charCodeAt(i))
+						}
+
+						if(ip.length != 0) {
+							uri += lookup;
+						} else {
+							uri += domain;
+						}
+
+						uri += path;
+					});
+				}
+
+				window.cleanPath = true;
+
+				webview.url = uri;
+
+				//uriNav.text = uri.text.replace(/(^https?\:\/\/(?:www\.)?)([a-zA-Z0-9_\-]*\.\w{2,3})(.*)/, "$1$2<span style='color:#CCC'>$3</span>");
+				uriNav.text = uri;
+			} else {
+				// Prevent inf loop.
+				window.cleanPath = false;
+			}
+		}
+
 		Component.onCompleted: {
 			webview.url = "http://etherian.io"
 		}
@@ -103,43 +145,9 @@ import "../ext/qml_messaging.js" as Messaging
 					top: navBar.bottom
 				}
 
-				property var cleanPath: false
+				//property var cleanPath: false
 				onNavigationRequested: {
-					if(!this.cleanPath) {
-						var uri = request.url.toString();
-						if(!/.*\:\/\/.*/.test(uri)) {
-							uri = "http://" + uri;
-						}
-
-						var reg = /(^https?\:\/\/(?:www\.)?)([a-zA-Z0-9_\-]*\.eth)(.*)/
-
-						if(reg.test(uri)) {
-							uri.replace(reg, function(match, pre, domain, path) {
-								uri = pre;
-
-								var lookup = eth.lookupDomain(domain.substring(0, domain.length - 4));
-								var ip = [];
-								for(var i = 0, l = lookup.length; i < l; i++) {
-									ip.push(lookup.charCodeAt(i))
-								}
-
-								if(ip.length != 0) {
-									uri += lookup;
-								} else {
-									uri += domain;
-								}
-
-								uri += path;
-							});
-						}
-
-						this.cleanPath = true;
-
-						webview.url = uri;
-					} else {
-						// Prevent inf loop.
-						this.cleanPath = false;
-					}
+					window.open(request.url.toString());					
 				}
 
 				function sendMessage(data) {

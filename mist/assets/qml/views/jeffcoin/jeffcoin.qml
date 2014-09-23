@@ -151,7 +151,7 @@ Rectangle {
 				Button {
 					text: "Send"
 					onClicked: {
-						eth.transact({from: eth.key().privateKey, to:address, gas: "9000", gasPrice: "100000000000", data: ["0x"+txTo.text, txValue.text]})
+						eth.transact({from: eth.key().privateKey, to:address, gas: "9000", gasPrice: "10000000000000", data: ["0x"+txTo.text, txValue.text]})
 					}
 				}
 			}
