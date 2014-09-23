@@ -155,6 +155,8 @@ type Peer struct {
 	pingStartTime time.Time
 
 	lastRequestedBlock *ethchain.Block
+
+	protocolCaps *ethutil.Value
 }
 
 func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
@@ -173,20 +175,22 @@ func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
 		blocksRequested: 10,
 		caps:            ethereum.ServerCaps(),
 		version:         ethereum.ClientIdentity().String(),
+		protocolCaps:    ethutil.NewValue(nil),
 	}
 }
 
 func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 	p := &Peer{
-		outputQueue: make(chan *ethwire.Msg, outputBufferSize),
-		quit:        make(chan bool),
-		ethereum:    ethereum,
-		inbound:     false,
-		connected:   0,
-		disconnect:  0,
-		port:        30303,
-		caps:        caps,
-		version:     ethereum.ClientIdentity().String(),
+		outputQueue:  make(chan *ethwire.Msg, outputBufferSize),
+		quit:         make(chan bool),
+		ethereum:     ethereum,
+		inbound:      false,
+		connected:    0,
+		disconnect:   0,
+		port:         30303,
+		caps:         caps,
+		version:      ethereum.ClientIdentity().String(),
+		protocolCaps: ethutil.NewValue(nil),
 	}
 
 	// Set up the connection in another goroutine so we don't block the main thread
@@ -568,7 +572,7 @@ func (self *Peer) FetchBlocks() {
 func (self *Peer) FetchHashes() {
 	blockPool := self.ethereum.blockPool
 
-	if self.td.Cmp(blockPool.td) >= 0 {
+	if self.statusKnown && self.td.Cmp(blockPool.td) >= 0 {
 		blockPool.td = self.td
 
 		if !blockPool.HasLatestHash() {
@@ -585,7 +589,10 @@ out:
 	for {
 		select {
 		case <-serviceTimer.C:
-			if time.Since(self.lastBlockReceived) > 10*time.Second {
+			since := time.Since(self.lastBlockReceived)
+			if since > 10*time.Second && self.ethereum.blockPool.Len() != 0 && self.IsCap("eth") {
+				self.FetchHashes()
+			} else if since > 5*time.Second {
 				self.catchingUp = false
 			}
 		case <-self.quit:
@@ -789,6 +796,7 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	p.ethereum.PushPeer(p)
 	p.ethereum.reactor.Post("peerList", p.ethereum.Peers())
 
+	p.protocolCaps = caps
 	capsIt := caps.NewIterator()
 	var capsStrs []string
 	for capsIt.Next() {
@@ -804,6 +812,17 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	ethlogger.Infof("Added peer (%s) %d / %d (%v)\n", p.conn.RemoteAddr(), p.ethereum.Peers().Len(), p.ethereum.MaxPeers, capsStrs)
 
 	peerlogger.Debugln(p)
+}
+
+func (self *Peer) IsCap(cap string) bool {
+	capsIt := self.protocolCaps.NewIterator()
+	for capsIt.Next() {
+		if capsIt.Value().Str() == cap {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (p *Peer) String() string {
