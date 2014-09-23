@@ -27,6 +27,8 @@ const (
 	minGasPrice = 1000000
 )
 
+var MinGasPrice = big.NewInt(10000000000000)
+
 type TxMsg struct {
 	Tx   *Transaction
 	Type TxMsgTy
@@ -101,6 +103,10 @@ func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 
 	if len(tx.Recipient) != 0 && len(tx.Recipient) != 20 {
 		return fmt.Errorf("[TXPL] Invalid recipient. len = %d", len(tx.Recipient))
+	}
+
+	if tx.GasPrice.Cmp(MinGasPrice) >= 0 {
+		return fmt.Errorf("Gas price to low. Require %v > Got %v", MinGasPrice, tx.GasPrice)
 	}
 
 	// Get the sender

@@ -1,4 +1,4 @@
-// +build !windows
+// +build !windows !cgo
 package ethutil
 
 import (
