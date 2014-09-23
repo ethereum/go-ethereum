@@ -3,6 +3,7 @@ package ethminer
 import (
 	"bytes"
 	"sort"
+	"time"
 
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethlog"
@@ -135,6 +136,12 @@ func (miner *Miner) listener() {
 				}
 			}
 		default:
+			// This hack is only temporarily
+			if len(miner.txs) == 0 {
+				time.Sleep(2 * time.Second)
+				continue
+			}
+
 			miner.mineNewBlock()
 		}
 	}
@@ -159,6 +166,7 @@ func (miner *Miner) Stop() {
 }
 
 func (self *Miner) mineNewBlock() {
+
 	stateManager := self.ethereum.StateManager()
 
 	self.block = self.ethereum.BlockChain().NewBlock(self.coinbase)
