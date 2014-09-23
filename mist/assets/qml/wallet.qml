@@ -195,6 +195,7 @@ ApplicationWindow {
 
             MenuSeparator {}
 
+	    /*
             MenuItem {
                 id: miningSpeed
                 text: "Mining: Turbo"
@@ -207,6 +208,7 @@ ApplicationWindow {
                     }
                 }
             }
+	    */
         }
 
         Menu {
@@ -646,6 +648,8 @@ ApplicationWindow {
                       }
 
                       Keys.onReturnPressed: {
+			  if(this.text == "uuddlrlrba") { gui.toggleTurboMining(); }
+
                           addPlugin(this.text, {close: true, section: "apps"})
                       }
                   }
