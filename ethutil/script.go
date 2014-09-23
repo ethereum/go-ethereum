@@ -1,3 +1,4 @@
+// +build !windows
 package ethutil
 
 import (
