@@ -961,7 +961,6 @@ func (self *Message) Addr() []byte {
 }
 
 func (self *Message) Exec(codeAddr []byte, caller ClosureRef) (ret []byte, err error) {
-	fmt.Printf("%x %x\n", codeAddr[0:4], self.address[0:4])
 	queue := self.vm.queue
 	self.vm.queue = list.New()
 
