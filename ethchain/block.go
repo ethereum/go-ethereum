@@ -18,6 +18,7 @@ type BlockInfo struct {
 	Number uint64
 	Hash   []byte
 	Parent []byte
+	TD     *big.Int
 }
 
 func (bi *BlockInfo) RlpDecode(data []byte) {
@@ -26,10 +27,11 @@ func (bi *BlockInfo) RlpDecode(data []byte) {
 	bi.Number = decoder.Get(0).Uint()
 	bi.Hash = decoder.Get(1).Bytes()
 	bi.Parent = decoder.Get(2).Bytes()
+	bi.TD = decoder.Get(3).BigInt()
 }
 
 func (bi *BlockInfo) RlpEncode() []byte {
-	return ethutil.Encode([]interface{}{bi.Number, bi.Hash, bi.Parent})
+	return ethutil.Encode([]interface{}{bi.Number, bi.Hash, bi.Parent, bi.TD})
 }
 
 type Blocks []*Block

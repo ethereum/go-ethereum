@@ -2,6 +2,7 @@ package ethutil
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 )
 
@@ -29,6 +30,10 @@ func EmptyList() *List {
 
 // Get N element from the embedded slice. Returns nil if OOB.
 func (self *List) Get(i int) interface{} {
+	if self.list.Len() == 3 {
+		fmt.Println("get", i, self.list.Index(i).Interface())
+	}
+
 	if self.list.Len() > i {
 		return self.list.Index(i).Interface()
 	}

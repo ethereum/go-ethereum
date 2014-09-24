@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"math/rand"
 	"net"
 	"path"
@@ -188,6 +189,18 @@ func (s *Ethereum) IsListening() bool {
 	return s.listening
 }
 
+func (s *Ethereum) HighestTDPeer() (td *big.Int) {
+	td = big.NewInt(0)
+
+	eachPeer(s.peers, func(p *Peer, v *list.Element) {
+		if p.td.Cmp(td) > 0 {
+			td = p.td
+		}
+	})
+
+	return
+}
+
 func (s *Ethereum) AddPeer(conn net.Conn) {
 	peer := NewPeer(conn, s, true)
 
@@ -370,6 +383,7 @@ func (s *Ethereum) ReapDeadPeerHandler() {
 // Start the ethereum
 func (s *Ethereum) Start(seed bool) {
 	s.reactor.Start()
+	s.blockPool.Start()
 	// Bind to addr and port
 	ln, err := net.Listen("tcp", ":"+s.Port)
 	if err != nil {
