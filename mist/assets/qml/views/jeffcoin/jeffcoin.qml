@@ -47,9 +47,9 @@ Rectangle {
 		});
 
 		var blockNumber = eth.block(-1).number;
-		var messages = filter.messages()
-		for(var i = messages.length-1; i >= 0; i--) {
-			var message = messages.get(i)
+		var msgs = filter.messages()
+		for(var i = msgs.length-1; i >= 0; i--) {
+			var message = JSON.parse(msgs.getAsJson(i))
 
 			insertTx(message, blockNumber)
 		}

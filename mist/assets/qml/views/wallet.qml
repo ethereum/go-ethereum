@@ -151,7 +151,7 @@ Rectangle {
 				model: ListModel {
 					id: txModel
 					Component.onCompleted: {
-                        var filter = ethx.watch({latest: -1, from: eth.key().address});
+						var filter = ethx.watch({latest: -1, from: eth.key().address});
 						filter.changed(addTxs)
 
 						addTxs(filter.messages())

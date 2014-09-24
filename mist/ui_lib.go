@@ -188,9 +188,9 @@ func (self *UiLib) NewFilterString(typ string) int {
 func (self *UiLib) Messages(id int) *ethutil.List {
 	filter := self.eth.GetFilter(id)
 	if filter != nil {
-		messages := filter.Find()
+		messages := ethpipe.ToJSMessages(filter.Find())
 
-		return ethpipe.ToJSMessages(messages)
+		return messages
 	}
 
 	return ethutil.EmptyList()
