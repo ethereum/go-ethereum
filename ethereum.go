@@ -158,6 +158,9 @@ func (s *Ethereum) StateManager() *ethchain.StateManager {
 func (s *Ethereum) TxPool() *ethchain.TxPool {
 	return s.txPool
 }
+func (s *Ethereum) BlockPool() *BlockPool {
+	return s.blockPool
+}
 func (self *Ethereum) Db() ethutil.Database {
 	return self.db
 }
@@ -383,6 +386,7 @@ func (s *Ethereum) ReapDeadPeerHandler() {
 // Start the ethereum
 func (s *Ethereum) Start(seed bool) {
 	s.reactor.Start()
+	s.blockPool.Start()
 	// Bind to addr and port
 	ln, err := net.Listen("tcp", ":"+s.Port)
 	if err != nil {
@@ -503,6 +507,7 @@ func (s *Ethereum) Stop() {
 	s.stateManager.Stop()
 	s.reactor.Flush()
 	s.reactor.Stop()
+	s.blockPool.Stop()
 
 	ethlogger.Infoln("Server stopped")
 	close(s.shutdownChan)
