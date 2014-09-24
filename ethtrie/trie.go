@@ -196,8 +196,8 @@ func (t *Trie) Update(key, value string) {
 }
 
 func (t *Trie) Get(key string) string {
-	t.mut.RLock()
-	defer t.mut.RUnlock()
+	t.mut.Lock()
+	defer t.mut.Unlock()
 
 	k := CompactHexDecode(key)
 	c := ethutil.NewValue(t.getState(t.Root, k))

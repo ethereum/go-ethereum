@@ -250,14 +250,12 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 		fk := append([]byte("bloom"), block.Hash()...)
 		sm.Ethereum.Db().Put(fk, filter.Bin())
 
-		statelogger.Infof("Added block #%d (%x)\n", block.Number, block.Hash())
+		statelogger.Debugf("Added block #%d (%x)\n", block.Number, block.Hash())
 		if dontReact == false {
 			sm.Ethereum.Reactor().Post("newBlock", block)
 
 			state.Manifest().Reset()
 		}
-
-		sm.Ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
 
 		sm.Ethereum.TxPool().RemoveInvalid(state)
 	} else {

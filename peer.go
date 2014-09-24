@@ -131,7 +131,7 @@ type Peer struct {
 	// Last received pong message
 	lastPong          int64
 	lastBlockReceived time.Time
-	lastHashReceived  time.Time
+	LastHashReceived  time.Time
 
 	host             []byte
 	port             uint16
@@ -177,6 +177,7 @@ func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
 		caps:            ethereum.ServerCaps(),
 		version:         ethereum.ClientIdentity().String(),
 		protocolCaps:    ethutil.NewValue(nil),
+		td:              big.NewInt(0),
 	}
 }
 
@@ -192,6 +193,7 @@ func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 		caps:         caps,
 		version:      ethereum.ClientIdentity().String(),
 		protocolCaps: ethutil.NewValue(nil),
+		td:           big.NewInt(0),
 	}
 
 	// Set up the connection in another goroutine so we don't block the main thread
@@ -507,7 +509,7 @@ func (p *Peer) HandleInbound() {
 						hash := it.Value().Bytes()
 
 						p.lastReceivedHash = hash
-						p.lastHashReceived = time.Now()
+						p.LastHashReceived = time.Now()
 
 						if blockPool.HasCommonHash(hash) {
 							foundCommonHash = true
@@ -515,12 +517,10 @@ func (p *Peer) HandleInbound() {
 							break
 						}
 
-						blockPool.AddHash(hash)
+						blockPool.AddHash(hash, p)
 					}
 
-					if foundCommonHash || msg.Data.Len() == 0 {
-						p.FetchBlocks()
-					} else {
+					if !foundCommonHash && msg.Data.Len() != 0 {
 						p.FetchHashes()
 					}
 
@@ -538,20 +538,6 @@ func (p *Peer) HandleInbound() {
 
 						p.lastBlockReceived = time.Now()
 					}
-
-					var err error
-					blockPool.CheckLinkAndProcess(func(block *ethchain.Block) {
-						err = p.ethereum.StateManager().Process(block, false)
-					})
-
-					if err != nil {
-						peerlogger.Infoln(err)
-					} /*else {
-						// Don't trigger if there's just one block.
-						if blockPool.Len() != 0 && msg.Data.Len() > 1 {
-							p.FetchBlocks()
-						}
-					}*/
 				}
 			}
 		}
@@ -560,10 +546,7 @@ func (p *Peer) HandleInbound() {
 	p.Stop()
 }
 
-func (self *Peer) FetchBlocks() {
-	blockPool := self.ethereum.blockPool
-
-	hashes := blockPool.Take(100, self)
+func (self *Peer) FetchBlocks(hashes [][]byte) {
 	if len(hashes) > 0 {
 		self.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlocksTy, ethutil.ByteSliceToInterface(hashes)))
 	}
@@ -572,13 +555,17 @@ func (self *Peer) FetchBlocks() {
 func (self *Peer) FetchHashes() {
 	blockPool := self.ethereum.blockPool
 
-	if self.td.Cmp(blockPool.td) >= 0 {
+	if self.td.Cmp(self.ethereum.HighestTDPeer()) >= 0 {
 		blockPool.td = self.td
 
 		if !blockPool.HasLatestHash() {
 			self.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{self.lastReceivedHash, uint32(256)}))
 		}
 	}
+}
+
+func (self *Peer) FetchingHashes() bool {
+	return time.Since(self.LastHashReceived) < 5*time.Second
 }
 
 // General update method
@@ -592,18 +579,11 @@ out:
 			if self.IsCap("eth") {
 				var (
 					sinceBlock = time.Since(self.lastBlockReceived)
-					sinceHash  = time.Since(self.lastHashReceived)
+					sinceHash  = time.Since(self.LastHashReceived)
 				)
 
 				if sinceBlock > 5*time.Second && sinceHash > 5*time.Second {
 					self.catchingUp = false
-				}
-
-				if sinceHash > 10*time.Second && self.ethereum.blockPool.Len() != 0 {
-					// XXX While this is completely and utterly incorrect, in order to do anything on the test net is to do it this way
-					// Assume that when fetching hashes timeouts, we are done.
-					//self.FetchHashes()
-					self.FetchBlocks()
 				}
 			}
 		case <-self.quit:
@@ -728,7 +708,7 @@ func (self *Peer) handleStatus(msg *ethwire.Msg) {
 	// Compare the total TD with the blockchain TD. If remote is higher
 	// fetch hashes from highest TD node.
 	if self.td.Cmp(self.ethereum.BlockChain().TD) > 0 {
-		self.ethereum.blockPool.AddHash(self.lastReceivedHash)
+		self.ethereum.blockPool.AddHash(self.lastReceivedHash, self)
 		self.FetchHashes()
 	}
 
