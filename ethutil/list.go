@@ -2,7 +2,6 @@ package ethutil
 
 import (
 	"encoding/json"
-	"fmt"
 	"reflect"
 )
 
@@ -10,6 +9,7 @@ import (
 // for containing any slice type to use in an environment which
 // does not support slice types (e.g., JavaScript, QML)
 type List struct {
+	val    interface{}
 	list   reflect.Value
 	Length int
 }
@@ -21,7 +21,7 @@ func NewList(t interface{}) *List {
 		panic("list container initialized with a non-slice type")
 	}
 
-	return &List{list, list.Len()}
+	return &List{t, list, list.Len()}
 }
 
 func EmptyList() *List {
@@ -30,15 +30,22 @@ func EmptyList() *List {
 
 // Get N element from the embedded slice. Returns nil if OOB.
 func (self *List) Get(i int) interface{} {
-	if self.list.Len() == 3 {
-		fmt.Println("get", i, self.list.Index(i).Interface())
-	}
 
 	if self.list.Len() > i {
-		return self.list.Index(i).Interface()
+		i := self.list.Index(i).Interface()
+
+		return i
 	}
 
 	return nil
+}
+
+func (self *List) GetAsJson(i int) interface{} {
+	e := self.Get(i)
+
+	r, _ := json.Marshal(e)
+
+	return string(r)
 }
 
 // Appends value at the end of the slice. Panics when incompatible value
