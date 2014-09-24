@@ -385,14 +385,13 @@ func (gui *Gui) update() {
 	)
 
 	peerUpdateTicker := time.NewTicker(5 * time.Second)
-	generalUpdateTicker := time.NewTicker(1 * time.Second)
+	generalUpdateTicker := time.NewTicker(500 * time.Millisecond)
 	statsUpdateTicker := time.NewTicker(5 * time.Second)
 
 	state := gui.eth.StateManager().TransState()
 
 	unconfirmedFunds := new(big.Int)
 	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetAccount(gui.address()).Balance)))
-	gui.getObjectByName("syncProgressIndicator").Set("visible", !gui.eth.IsUpToDate())
 
 	lastBlockLabel := gui.getObjectByName("lastBlockLabel")
 	miningLabel := gui.getObjectByName("miningLabel")
@@ -439,9 +438,6 @@ func (gui *Gui) update() {
 
 					state.UpdateStateObject(object)
 				}
-			case msg := <-chainSyncChan:
-				sync := msg.Resource.(bool)
-				gui.win.Root().ObjectByName("syncProgressIndicator").Set("visible", sync)
 
 			case <-objectChan:
 				gui.loadAddressBook()
@@ -464,9 +460,22 @@ func (gui *Gui) update() {
 					miningLabel.Set("text", "Mining @ "+strconv.FormatInt(pow.GetHashrate(), 10)+"Khash")
 				}
 
+				blockLength := gui.eth.BlockPool().BlocksProcessed
+				chainLength := gui.eth.BlockPool().ChainLength
+
+				var (
+					pct      float64 = 1.0 / float64(chainLength) * float64(blockLength)
+					dlWidget         = gui.win.Root().ObjectByName("downloadIndicator")
+				)
+				if pct < 1.0 {
+					dlWidget.Set("visible", true)
+					dlWidget.Set("value", pct)
+				} else {
+					dlWidget.Set("visible", false)
+				}
+
 			case <-statsUpdateTicker.C:
 				gui.setStatsPane()
-
 			}
 		}
 	}()

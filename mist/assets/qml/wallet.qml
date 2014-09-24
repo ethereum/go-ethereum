@@ -254,6 +254,7 @@ ApplicationWindow {
 
     statusBar: StatusBar {
         height: 32
+	id: statusBar
         RowLayout {
             Button {
                 id: miningButton
@@ -294,15 +295,15 @@ ApplicationWindow {
         }
 
         ProgressBar {
-            id: syncProgressIndicator
-            visible: false
-            objectName: "syncProgressIndicator"
+            id: downloadIndicator
+	    value: 0
+            visible: true
+            objectName: "downloadIndicator"
             y: 3
-            width: 140
-            indeterminate: true
-            anchors.right: peerGroup.left
-            anchors.rightMargin: 5
+	    x: statusBar.width / 2 - this.width / 2
+            width: 160
         }
+
 
         RowLayout {
             id: peerGroup
