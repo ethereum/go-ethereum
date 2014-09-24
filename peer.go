@@ -311,7 +311,7 @@ func (p *Peer) writeMessage(msg *ethwire.Msg) {
 func (p *Peer) HandleOutbound() {
 	// The ping timer. Makes sure that every 2 minutes a ping is send to the peer
 	pingTimer := time.NewTicker(pingPongTimer)
-	serviceTimer := time.NewTicker(5 * time.Second)
+	serviceTimer := time.NewTicker(10 * time.Second)
 
 out:
 	for {
@@ -346,7 +346,7 @@ out:
 		// posting or block posting
 		case <-serviceTimer.C:
 
-			//p.QueueMessage(ethwire.NewMessage(ethwire.MsgGetPeersTy, ""))
+			p.QueueMessage(ethwire.NewMessage(ethwire.MsgGetPeersTy, ""))
 
 		case <-p.quit:
 			// Break out of the for loop if a quit message is posted
