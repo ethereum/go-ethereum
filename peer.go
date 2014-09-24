@@ -131,6 +131,7 @@ type Peer struct {
 	// Last received pong message
 	lastPong          int64
 	lastBlockReceived time.Time
+	lastHashReceived  time.Time
 
 	host             []byte
 	port             uint16
@@ -505,6 +506,9 @@ func (p *Peer) HandleInbound() {
 					for it.Next() {
 						hash := it.Value().Bytes()
 
+						p.lastReceivedHash = hash
+						p.lastHashReceived = time.Now()
+
 						if blockPool.HasCommonHash(hash) {
 							foundCommonHash = true
 
@@ -512,10 +516,6 @@ func (p *Peer) HandleInbound() {
 						}
 
 						blockPool.AddHash(hash)
-
-						p.lastReceivedHash = hash
-
-						p.lastBlockReceived = time.Now()
 					}
 
 					if foundCommonHash || msg.Data.Len() == 0 {
@@ -546,12 +546,12 @@ func (p *Peer) HandleInbound() {
 
 					if err != nil {
 						peerlogger.Infoln(err)
-					} else {
+					} /*else {
 						// Don't trigger if there's just one block.
 						if blockPool.Len() != 0 && msg.Data.Len() > 1 {
 							p.FetchBlocks()
 						}
-					}
+					}*/
 				}
 			}
 		}
@@ -583,17 +583,28 @@ func (self *Peer) FetchHashes() {
 
 // General update method
 func (self *Peer) update() {
-	serviceTimer := time.NewTicker(5 * time.Second)
+	serviceTimer := time.NewTicker(100 * time.Millisecond)
 
 out:
 	for {
 		select {
 		case <-serviceTimer.C:
-			since := time.Since(self.lastBlockReceived)
-			if since > 10*time.Second && self.ethereum.blockPool.Len() != 0 && self.IsCap("eth") {
-				self.FetchHashes()
-			} else if since > 5*time.Second {
-				self.catchingUp = false
+			if self.IsCap("eth") {
+				var (
+					sinceBlock = time.Since(self.lastBlockReceived)
+					sinceHash  = time.Since(self.lastHashReceived)
+				)
+
+				if sinceBlock > 5*time.Second && sinceHash > 5*time.Second {
+					self.catchingUp = false
+				}
+
+				if sinceHash > 10*time.Second && self.ethereum.blockPool.Len() != 0 {
+					// XXX While this is completely and utterly incorrect, in order to do anything on the test net is to do it this way
+					// Assume that when fetching hashes timeouts, we are done.
+					//self.FetchHashes()
+					self.FetchBlocks()
+				}
 			}
 		case <-self.quit:
 			break out
@@ -761,6 +772,14 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 		return
 	}
 
+	// Self connect detection
+	pubkey := p.ethereum.KeyManager().PublicKey()
+	if bytes.Compare(pubkey[1:], pub) == 0 {
+		p.Stop()
+
+		return
+	}
+
 	usedPub := 0
 	// This peer is already added to the peerlist so we expect to find a double pubkey at least once
 	eachPeer(p.ethereum.Peers(), func(peer *Peer, e *list.Element) {
@@ -779,16 +798,8 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	// If this is an inbound connection send an ack back
 	if p.inbound {
 		p.port = uint16(port)
-
-		// Self connect detection
-		pubkey := p.ethereum.KeyManager().PublicKey()
-		if bytes.Compare(pubkey, p.pubkey) == 0 {
-			p.Stop()
-
-			return
-		}
-
 	}
+
 	p.SetVersion(clientId)
 
 	p.versionKnown = true
