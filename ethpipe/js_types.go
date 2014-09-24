@@ -36,13 +36,6 @@ func NewJSBlock(block *ethchain.Block) *JSBlock {
 		ptxs = append(ptxs, *NewJSTx(tx))
 	}
 
-	/*
-		txJson, err := json.Marshal(ptxs)
-		if err != nil {
-			return nil
-		}
-		return &JSBlock{ref: block, Size: block.Size().String(), Number: int(block.Number.Uint64()), GasUsed: block.GasUsed.String(), GasLimit: block.GasLimit.String(), Hash: ethutil.Bytes2Hex(block.Hash()), Transactions: string(txJson), Time: block.Time, Coinbase: ethutil.Bytes2Hex(block.Coinbase)}
-	*/
 	list := ethutil.NewList(ptxs)
 
 	return &JSBlock{ref: block, Size: block.Size().String(), Number: int(block.Number.Uint64()), GasUsed: block.GasUsed.String(), GasLimit: block.GasLimit.String(), Hash: ethutil.Bytes2Hex(block.Hash()), Transactions: list, Time: block.Time, Coinbase: ethutil.Bytes2Hex(block.Coinbase)}
