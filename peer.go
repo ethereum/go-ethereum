@@ -517,16 +517,9 @@ func (p *Peer) HandleInbound() {
 							break
 						}
 
-						blockPool.AddHash(hash)
+						blockPool.AddHash(hash, p)
 					}
 
-					/*
-						if foundCommonHash || msg.Data.Len() == 0 {
-							p.FetchBlocks()
-						} else {
-							p.FetchHashes()
-						}
-					*/
 					if !foundCommonHash && msg.Data.Len() != 0 {
 						p.FetchHashes()
 					}
@@ -545,22 +538,6 @@ func (p *Peer) HandleInbound() {
 
 						p.lastBlockReceived = time.Now()
 					}
-
-					/*
-						var err error
-						blockPool.CheckLinkAndProcess(func(block *ethchain.Block) {
-							err = p.ethereum.StateManager().Process(block, false)
-						})
-
-						if err != nil {
-							peerlogger.Infoln(err)
-						} else {
-							// Don't trigger if there's just one block.
-							if blockPool.Len() != 0 && msg.Data.Len() > 1 {
-								p.FetchBlocks()
-							}
-						}
-					*/
 				}
 			}
 		}
@@ -607,13 +584,6 @@ out:
 
 				if sinceBlock > 5*time.Second && sinceHash > 5*time.Second {
 					self.catchingUp = false
-				}
-
-				if sinceHash > 10*time.Second && self.ethereum.blockPool.Len() != 0 {
-					// XXX While this is completely and utterly incorrect, in order to do anything on the test net is to do it this way
-					// Assume that when fetching hashes timeouts, we are done.
-					//self.FetchHashes()
-					//self.FetchBlocks()
 				}
 			}
 		case <-self.quit:
@@ -738,7 +708,7 @@ func (self *Peer) handleStatus(msg *ethwire.Msg) {
 	// Compare the total TD with the blockchain TD. If remote is higher
 	// fetch hashes from highest TD node.
 	if self.td.Cmp(self.ethereum.BlockChain().TD) > 0 {
-		self.ethereum.blockPool.AddHash(self.lastReceivedHash)
+		self.ethereum.blockPool.AddHash(self.lastReceivedHash, self)
 		self.FetchHashes()
 	}
 
