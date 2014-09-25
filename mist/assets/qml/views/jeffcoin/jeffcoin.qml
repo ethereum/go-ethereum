@@ -22,6 +22,8 @@ Rectangle {
 
 		var me = eth.key().address;
 		if((to == me|| from == me) && message.input.length == 128) {
+			var to = eth.lookupName(to)
+			var from = eth.lookupName(from)
 			txModel.insert(0, {confirmations: blockNumber - message.number, from: from, to: to, value: value})
 		}
 	}
@@ -151,7 +153,11 @@ Rectangle {
 				Button {
 					text: "Send"
 					onClicked: {
-						eth.transact({from: eth.key().privateKey, to:address, gas: "9000", gasPrice: "10000000000000", data: ["0x"+txTo.text, txValue.text]})
+						var lookup = eth.lookupAddress(address)
+						if(lookup.length == 0)
+							lookup = address
+
+						eth.transact({from: eth.key().privateKey, to:lookup, gas: "9000", gasPrice: "10000000000000", data: ["0x"+txTo.text, txValue.text]})
 					}
 				}
 			}
