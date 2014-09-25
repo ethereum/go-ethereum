@@ -23,12 +23,13 @@ type JSBlock struct {
 	Name         string        `json:"name"`
 	GasLimit     string        `json:"gasLimit"`
 	GasUsed      string        `json:"gasUsed"`
+	PrevHash     string        `json:"prevHash"`
 }
 
 // Creates a new QML Block from a chain block
 func NewJSBlock(block *ethchain.Block) *JSBlock {
 	if block == nil {
-		return nil
+		return &JSBlock{}
 	}
 
 	var ptxs []JSTransaction
@@ -38,7 +39,14 @@ func NewJSBlock(block *ethchain.Block) *JSBlock {
 
 	list := ethutil.NewList(ptxs)
 
-	return &JSBlock{ref: block, Size: block.Size().String(), Number: int(block.Number.Uint64()), GasUsed: block.GasUsed.String(), GasLimit: block.GasLimit.String(), Hash: ethutil.Bytes2Hex(block.Hash()), Transactions: list, Time: block.Time, Coinbase: ethutil.Bytes2Hex(block.Coinbase)}
+	return &JSBlock{
+		ref: block, Size: block.Size().String(),
+		Number: int(block.Number.Uint64()), GasUsed: block.GasUsed.String(),
+		GasLimit: block.GasLimit.String(), Hash: ethutil.Bytes2Hex(block.Hash()),
+		Transactions: list, Time: block.Time,
+		Coinbase: ethutil.Bytes2Hex(block.Coinbase),
+		PrevHash: ethutil.Bytes2Hex(block.PrevHash),
+	}
 }
 
 func (self *JSBlock) ToString() string {

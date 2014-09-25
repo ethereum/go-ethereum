@@ -73,6 +73,10 @@ func (self *BlockPool) SetBlock(b *ethchain.Block, peer *Peer) {
 	if self.pool[hash] == nil && !self.eth.BlockChain().HasBlock(b.Hash()) {
 		self.hashPool = append(self.hashPool, b.Hash())
 		self.pool[hash] = &block{peer, peer, b, time.Now(), 0}
+
+		if !self.eth.BlockChain().HasBlock(b.PrevHash) && self.pool[string(b.PrevHash)] == nil {
+			peer.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{b.PrevHash, uint32(256)}))
+		}
 	} else if self.pool[hash] != nil {
 		self.pool[hash].block = b
 	}
@@ -218,6 +222,7 @@ out:
 		case <-procTimer.C:
 			// XXX We can optimize this lifting this on to a new goroutine.
 			// We'd need to make sure that the pools are properly protected by a mutex
+			// XXX This should moved in The Great Refactor(TM)
 			amount := self.ProcessCanonical(func(block *ethchain.Block) {
 				err := self.eth.StateManager().Process(block, false)
 				if err != nil {
