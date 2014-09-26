@@ -314,14 +314,14 @@ func (p *Peer) HandleOutbound() {
 
 out:
 	for {
+	skip:
 		select {
 		// Main message queue. All outbound messages are processed through here
 		case msg := <-p.outputQueue:
 			if !p.statusKnown {
 				switch msg.Type {
-				case ethwire.MsgGetTxsTy, ethwire.MsgGetBlockHashesTy, ethwire.MsgGetBlocksTy, ethwire.MsgBlockHashesTy, ethwire.MsgBlockTy:
-					peerlogger.Debugln("Blocked outgoing [eth] message to peer without the [eth] cap.")
-					break
+				case ethwire.MsgStatusTy, ethwire.MsgGetTxsTy, ethwire.MsgTxTy, ethwire.MsgGetBlockHashesTy, ethwire.MsgBlockHashesTy, ethwire.MsgGetBlocksTy, ethwire.MsgBlockTy:
+					break skip
 				}
 			}
 
