@@ -459,7 +459,6 @@
 
 		g_seed++;
 
-        console.log(data)
 		navigator.qt.postMessage(JSON.stringify(data));
 	}
 
