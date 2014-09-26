@@ -1,6 +1,7 @@
 package ethpipe
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -151,6 +152,7 @@ type JSPeer struct {
 	Version      string `json:"version"`
 	LastResponse string `json:"lastResponse"`
 	Latency      string `json:"latency"`
+	Caps         string `json:"caps"`
 }
 
 func NewJSPeer(peer ethchain.Peer) *JSPeer {
@@ -164,7 +166,13 @@ func NewJSPeer(peer ethchain.Peer) *JSPeer {
 	}
 	ipAddress := strings.Join(ip, ".")
 
-	return &JSPeer{ref: &peer, Inbound: peer.Inbound(), LastSend: peer.LastSend().Unix(), LastPong: peer.LastPong(), Version: peer.Version(), Ip: ipAddress, Port: int(peer.Port()), Latency: peer.PingTime()}
+	var caps []string
+	capsIt := peer.Caps().NewIterator()
+	for capsIt.Next() {
+		caps = append(caps, capsIt.Value().Str())
+	}
+
+	return &JSPeer{ref: &peer, Inbound: peer.Inbound(), LastSend: peer.LastSend().Unix(), LastPong: peer.LastPong(), Version: peer.Version(), Ip: ipAddress, Port: int(peer.Port()), Latency: peer.PingTime(), Caps: fmt.Sprintf("%v", caps)}
 }
 
 type JSReceipt struct {

@@ -813,6 +813,10 @@ func (self *Peer) IsCap(cap string) bool {
 	return false
 }
 
+func (self *Peer) Caps() *ethutil.Value {
+	return self.protocolCaps
+}
+
 func (p *Peer) String() string {
 	var strBoundType string
 	if p.inbound {

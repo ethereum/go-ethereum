@@ -32,6 +32,7 @@ type Peer interface {
 	Version() string
 	PingTime() string
 	Connected() *int32
+	Caps() *ethutil.Value
 }
 
 type EthManager interface {
