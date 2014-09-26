@@ -236,6 +236,16 @@ func (self *BlockChain) GetBlockByNumber(num uint64) *Block {
 	return block
 }
 
+func (self *BlockChain) GetBlockBack(num uint64) *Block {
+	block := self.CurrentBlock
+
+	for ; num != 0 && block != nil; num-- {
+		block = self.GetBlock(block.PrevHash)
+	}
+
+	return block
+}
+
 func (bc *BlockChain) BlockInfoByHash(hash []byte) BlockInfo {
 	bi := BlockInfo{}
 	data, _ := ethutil.Config.Db.Get(append(hash, []byte("Info")...))
