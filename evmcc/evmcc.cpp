@@ -11,6 +11,7 @@
 #include <libevmface/Instruction.h>
 
 #include "Compiler.h"
+#include "ExecutionEngine.h"
 
 using namespace dev;
 
@@ -27,28 +28,23 @@ int main(int argc, char** argv)
     std::string input_file;
     bool opt_dissassemble = false;
     bool opt_show_bytes = false;
-    bool opt_compile = false;
+	bool opt_compile = false;
+	bool opt_interpret = false;
     bool opt_unknown = false;
 
     for (int i = 1; i < argc; i++)
     {
         std::string option = argv[i];
         if (option == "-b")
-        {
             opt_show_bytes = true;
-        }
         else if (option == "-c")
-        {
             opt_compile = true;
-        }
         else if (option == "-d")
-        {
-            opt_dissassemble = true;
-        }
-        else if (option[0] != '-' && input_file.empty())
-        {
-            input_file = option;
-        }
+			opt_dissassemble = true;
+		else if (option == "-i")
+			opt_interpret = true;
+		else if (option[0] != '-' && input_file.empty())
+			input_file = option;
         else
         {
             opt_unknown = true;
@@ -58,7 +54,7 @@ int main(int argc, char** argv)
 
     if (opt_unknown ||
         input_file.empty() ||
-        (!opt_show_bytes && !opt_compile && !opt_dissassemble))
+        (!opt_show_bytes && !opt_compile && !opt_dissassemble && !opt_interpret))
     {
         show_usage();
         exit(1);
@@ -93,6 +89,13 @@ int main(int argc, char** argv)
     {
         evmcc::Compiler().compile(bytecode);
     }
+
+	if (opt_interpret)
+	{
+		auto engine = evmcc::ExecutionEngine();
+		auto result = engine.run(bytecode);
+		return result;
+	}
 
     return 0;
 }
