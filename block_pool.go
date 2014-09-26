@@ -14,7 +14,7 @@ import (
 	"github.com/ethereum/eth-go/ethwire"
 )
 
-var poollogger = ethlog.NewLogger("[BPOOL]")
+var poollogger = ethlog.NewLogger("BPOOL")
 
 type block struct {
 	from      *Peer
@@ -71,6 +71,8 @@ func (self *BlockPool) SetBlock(b *ethchain.Block, peer *Peer) {
 	hash := string(b.Hash())
 
 	if self.pool[hash] == nil && !self.eth.BlockChain().HasBlock(b.Hash()) {
+		poollogger.Infof("Got unrequested block (%x...)\n", hash[0:4])
+
 		self.hashPool = append(self.hashPool, b.Hash())
 		self.pool[hash] = &block{peer, peer, b, time.Now(), 0}
 

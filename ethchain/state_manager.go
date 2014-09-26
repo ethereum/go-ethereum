@@ -251,7 +251,7 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 		fk := append([]byte("bloom"), block.Hash()...)
 		sm.Ethereum.Db().Put(fk, filter.Bin())
 
-		statelogger.Debugf("Added block #%d (%x)\n", block.Number, block.Hash())
+		statelogger.Infof("Imported block #%d (%x...)\n", block.Number, block.Hash()[0:4])
 		if dontReact == false {
 			sm.Ethereum.Reactor().Post("newBlock", block)
 
