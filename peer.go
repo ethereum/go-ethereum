@@ -344,7 +344,6 @@ out:
 		// Service timer takes care of peer broadcasting, transaction
 		// posting or block posting
 		case <-serviceTimer.C:
-
 			p.QueueMessage(ethwire.NewMessage(ethwire.MsgGetPeersTy, ""))
 
 		case <-p.quit:
