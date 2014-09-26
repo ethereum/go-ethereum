@@ -2,7 +2,6 @@
 #include "Compiler.h"
 
 #include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/Module.h>
 
 namespace evmcc
 {
@@ -29,13 +28,13 @@ Compiler::Compiler()
 }
 
 
-void Compiler::compile(const dev::bytes& bytecode)
+std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 {
 	using namespace llvm;
 
 	auto& context = getGlobalContext();
 
-	Module* module = new Module("main", context);
+	auto module = std::make_unique<Module>("main", context);
 	IRBuilder<> builder(context);
 
 	// Create globals for memory, memory size, stack and stack top
@@ -55,11 +54,11 @@ void Compiler::compile(const dev::bytes& bytecode)
 	// Create value for void* malloc(size_t)
 	std::vector<Type*> mallocArgTypes = { Types.size };
 	Value* mallocVal = Function::Create(FunctionType::get(Types.word8ptr, mallocArgTypes, false),
-		GlobalValue::LinkageTypes::ExternalLinkage, "malloc", module);
+		GlobalValue::LinkageTypes::ExternalLinkage, "malloc", module.get());
 
 	// Create main function
 	FunctionType* funcType = FunctionType::get(llvm::Type::getInt32Ty(context), false);
-	Function* mainFunc = Function::Create(funcType, Function::ExternalLinkage, "main", module);
+	Function* mainFunc = Function::Create(funcType, Function::ExternalLinkage, "main", module.get());
 
 	BasicBlock* entryBlock = BasicBlock::Create(context, "entry", mainFunc);
 	builder.SetInsertPoint(entryBlock);
@@ -77,9 +76,9 @@ void Compiler::compile(const dev::bytes& bytecode)
 	builder.CreateStore(mallocCast, stackVal);
 	*/
 
-	builder.CreateRet(ConstantInt::get(Type::getInt32Ty(context), 0));
+	builder.CreateRet(ConstantInt::get(Type::getInt32Ty(context), 13));
 
-	module->dump();
+	return module;
 }
 
 }

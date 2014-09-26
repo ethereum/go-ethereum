@@ -87,13 +87,15 @@ int main(int argc, char** argv)
 
     if (opt_compile)
     {
-        evmcc::Compiler().compile(bytecode);
+		evmcc::Compiler().compile(bytecode)->dump();
     }
 
 	if (opt_interpret)
 	{
 		auto engine = evmcc::ExecutionEngine();
-		auto result = engine.run(bytecode);
+		auto module = evmcc::Compiler().compile(bytecode);
+		module->dump();
+		auto result = engine.run(std::move(module));
 		return result;
 	}
 

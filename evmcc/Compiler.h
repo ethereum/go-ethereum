@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include <llvm/IR/Module.h>
+
 #include <libdevcore/Common.h>
 
 namespace evmcc
@@ -12,7 +14,7 @@ public:
 
 	Compiler();
 
-	void compile(const dev::bytes& bytecode);
+	std::unique_ptr<llvm::Module> compile(const dev::bytes& bytecode);
 
 };
 
