@@ -7,6 +7,16 @@
 namespace evmcc
 {
 
+struct
+{
+	llvm::Type* word8;
+	llvm::Type* word8ptr;
+	llvm::Type* word256;
+	llvm::Type* word256ptr;
+	llvm::Type* word256arr;
+	llvm::Type* size;
+} Types;
+
 Compiler::Compiler()
 {
 	auto& context = llvm::getGlobalContext();
