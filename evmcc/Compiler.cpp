@@ -14,6 +14,7 @@ struct
 	llvm::Type* word256ptr;
 	llvm::Type* word256arr;
 	llvm::Type* size;
+	llvm::Type* Void;
 } Types;
 
 Compiler::Compiler()
@@ -25,6 +26,7 @@ Compiler::Compiler()
 	Types.word256ptr = Types.word256->getPointerTo();
 	Types.word256arr = llvm::ArrayType::get(Types.word256, 100);
 	Types.size = llvm::Type::getInt64Ty(context);
+	Types.Void = llvm::Type::getVoidTy(context);
 }
 
 
@@ -44,7 +46,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	auto memSize = new GlobalVariable(*module, Types.size, false,
 		GlobalValue::LinkageTypes::PrivateLinkage,
 		ConstantInt::get(Types.size, 0), "memsize");
-	auto stack = new GlobalVariable(*module, Types.word256arr, false,
+	auto stack2 = new GlobalVariable(*module, Types.word256arr, false,
 		GlobalValue::LinkageTypes::PrivateLinkage,
 		ConstantAggregateZero::get(Types.word256arr), "stack");
 	auto stackTop = new GlobalVariable(*module, Types.size, false,
@@ -52,9 +54,15 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		ConstantInt::get(Types.size, 0), "stackTop");
 
 	// Create value for void* malloc(size_t)
-	std::vector<Type*> mallocArgTypes = { Types.size };
-	Value* mallocVal = Function::Create(FunctionType::get(Types.word8ptr, mallocArgTypes, false),
+	auto mallocVal = Function::Create(FunctionType::get(Types.word8ptr, { Types.size }, false),
 		GlobalValue::LinkageTypes::ExternalLinkage, "malloc", module.get());
+
+	// Create stack_create declaration
+	auto stackCreate = Function::Create(FunctionType::get(Types.word8ptr, false),
+		GlobalValue::LinkageTypes::ExternalLinkage, "evmccrt_stack_create", module.get());
+
+	auto stackPush = Function::Create(FunctionType::get(Types.Void, std::vector<Type*>{ Types.word8ptr, Types.word256 }, false),
+		GlobalValue::LinkageTypes::ExternalLinkage, "evmccrt_stack_push", module.get());
 
 	// Create main function
 	FunctionType* funcType = FunctionType::get(llvm::Type::getInt32Ty(context), false);
@@ -68,6 +76,15 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	auto mallocMemCall = builder.CreateCall(mallocVal, mallocMemArgs, "malloc_mem");
 	builder.CreateStore(mallocMemCall, memory);
 	builder.CreateStore(ConstantInt::get(Types.size, 100), memSize);
+
+	auto stack = builder.CreateCall(stackCreate, "stack");
+
+	uint64_t words[] = { 1, 2, 3, 4 };
+	auto val = llvm::APInt(256, 4, words);
+	auto c = ConstantInt::get(Types.word256, val);
+
+	Value* args[] = { stack, c };
+	builder.CreateCall(stackPush, args);
 
 	/*
 	std::vector<Value*> mallocStackArgs = { ConstantInt::get(sizeTy, 200) };
