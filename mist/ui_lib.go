@@ -71,6 +71,32 @@ func (self *UiLib) LookupDomain(domain string) string {
 	}
 }
 
+func (self *UiLib) LookupName(addr string) string {
+	var (
+		nameReg = self.World().Config().Get("NameReg")
+		lookup  = nameReg.Storage(ethutil.Hex2Bytes(addr))
+	)
+
+	if lookup.Len() != 0 {
+		return strings.Trim(lookup.Str(), "\x00")
+	}
+
+	return addr
+}
+
+func (self *UiLib) LookupAddress(name string) string {
+	var (
+		nameReg = self.World().Config().Get("NameReg")
+		lookup  = nameReg.Storage(ethutil.RightPadBytes([]byte(name), 32))
+	)
+
+	if lookup.Len() != 0 {
+		return ethutil.Bytes2Hex(lookup.Bytes())
+	}
+
+	return ""
+}
+
 func (self *UiLib) PastPeers() *ethutil.List {
 	return ethutil.NewList(eth.PastPeers())
 }

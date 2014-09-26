@@ -160,7 +160,9 @@ Rectangle {
 					function addTxs(messages) {
 						for(var i = 0; i < messages.length; i++) {
 							var message = messages.get(i);
-							txModel.insert(0, {num: txModel.count, from: message.from, to: message.to, value: eth.numberToHuman(message.value)})
+							var to = eth.lookupName(message.to);
+							var from = eth.lookupName(message.from);
+							txModel.insert(0, {num: txModel.count, from: from, to: to, value: eth.numberToHuman(message.value)})
 						}
 					}
 				}

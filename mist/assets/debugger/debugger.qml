@@ -357,7 +357,7 @@ ApplicationWindow {
             anchors.right: parent.right
             model: ListModel {
                 ListElement { text: "Snippets" ; value: "" }
-                ListElement { text: "Call Contract" ; value: "var[2] in;\nvar ret;\n\nin[0] = \"arg1\"\nin[1] = 0xdeadbeef\n\nvar success = call(0x0c542ddea93dae0c2fcb2cf175f03ad80d6be9a0, 0, 7000, in, ret)\n\nreturn ret" }
+                ListElement { text: "Call Contract" ; value: "var[2] in = { \"arg1\", 0xdeadbeef };\nvar ret;\n\nvar success = call(0x0c542ddea93dae0c2fcb2cf175f03ad80d6be9a0, 0, 7000, in, ret)\n\nreturn ret" }
             }
             onCurrentIndexChanged: {
                 if(currentIndex != 0) {

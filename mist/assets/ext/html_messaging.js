@@ -92,19 +92,19 @@
 				promises.push(params.from.then(function(_from) { params.from = _from; }));
 			}
 
-			if(isPromise(params.data)) {
-				promises.push(params.data.then(function(_code) { params.data = _code; }));
-			} else {
-				if(typeof params.data === "object") {
-					data = "";
-					for(var i = 0; i < params.data.length; i++) {
-						data += params.data[i]
-					}
-				} else {
-					data = params.data;
-				}
-			}
+            if(typeof params.data !== "object" || isPromise(params.data)) {
+                params.data = [params.data]
+            }
 
+            var data = params.data;
+            for(var i = 0; i < params.data.length; i++) {
+                if(isPromise(params.data[i])) {
+                    var promise = params.data[i];
+                    var _i = i;
+                    promises.push(promise.then(function(_arg) { params.data[_i] = _arg; }));
+                }
+            }
+                
 			// Make sure everything is string
 			var fields = ["value", "gas", "gasPrice"];
 			for(var i = 0; i < fields.length; i++) {
@@ -117,6 +117,7 @@
 			// Load promises then call the last "transact".
 			return Q.all(promises).then(function() {
 				return new Promise(function(resolve, reject) {
+                    params.data = params.data.join("");
 					postData({call: "transact", args: params}, function(data) {
 						if(data[1])
 							reject(data[0]);

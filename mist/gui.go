@@ -172,7 +172,7 @@ func (gui *Gui) Stop() {
 }
 
 func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
-	component, err := gui.engine.LoadFile(gui.uiLib.AssetPath("qml/wallet.qml"))
+	component, err := gui.engine.LoadFile(gui.uiLib.AssetPath("qml/main.qml"))
 	if err != nil {
 		return nil, err
 	}
@@ -500,7 +500,7 @@ func (gui *Gui) setStatsPane() {
 	runtime.ReadMemStats(&memStats)
 
 	statsPane := gui.getObjectByName("statsPane")
-	statsPane.Set("text", fmt.Sprintf(`###### Mist 0.6.5 (%s) #######
+	statsPane.Set("text", fmt.Sprintf(`###### Mist 0.6.7 (%s) #######
 
 eth %d (p2p = %d)
 
