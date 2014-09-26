@@ -172,7 +172,7 @@ func (gui *Gui) Stop() {
 }
 
 func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
-	component, err := gui.engine.LoadFile(gui.uiLib.AssetPath("qml/wallet.qml"))
+	component, err := gui.engine.LoadFile(gui.uiLib.AssetPath("qml/main.qml"))
 	if err != nil {
 		return nil, err
 	}
