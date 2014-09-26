@@ -7,7 +7,7 @@ Status](http://cpt-obvious.ethercasts.com:8010/buildstatusimage?builder=go-ether
 
 Ethereum Go Client © 2014 Jeffrey Wilcke.
 
-Current state: Proof of Concept 0.6.6.
+Current state: Proof of Concept 0.6.7.
 
 For the development package please see the [eth-go package](https://github.com/ethereum/eth-go).
 

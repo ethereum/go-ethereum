@@ -739,7 +739,7 @@ ApplicationWindow {
 
         function addPeer(peer) {
             // We could just append the whole peer object but it cries if you try to alter them
-            peerModel.append({ip: peer.ip, port: peer.port, lastResponse:timeAgo(peer.lastSend), latency: peer.latency, version: peer.version})
+            peerModel.append({ip: peer.ip, port: peer.port, lastResponse:timeAgo(peer.lastSend), latency: peer.latency, version: peer.version, caps: peer.caps})
         }
 
         function resetPeers(){
@@ -782,10 +782,11 @@ ApplicationWindow {
                      id: peerTable
                      model: peerModel
                      TableViewColumn{width: 100; role: "ip" ; title: "IP" }
-                     TableViewColumn{width: 60; role: "port" ; title: "Port" }
+                     TableViewColumn{width: 60;  role: "port" ; title: "Port" }
                      TableViewColumn{width: 140; role: "lastResponse"; title: "Last event" }
                      TableViewColumn{width: 100; role: "latency"; title: "Latency" }
                      TableViewColumn{width: 260; role: "version" ; title: "Version" }
+		     TableViewColumn{width: 80;  role: "caps" ; title: "Capabilities" }
                  }
              }
          }
