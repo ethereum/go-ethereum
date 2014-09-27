@@ -22,6 +22,7 @@ if ("${TARGET_PLATFORM}" STREQUAL "w64")
 	target_link_libraries(${EXECUTABLE} boost_thread_win32-mt-s)
 	set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS)
 elseif (UNIX)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 else ()
 	find_package(Threads REQUIRED)
 	target_link_libraries(${EXECUTABLE} ${CMAKE_THREAD_LIBS_INIT})
@@ -37,7 +38,7 @@ message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
-llvm_map_components_to_libnames(llvm_libs support core irreader)
+llvm_map_components_to_libnames(llvm_libs core support mcjit x86asmparser x86codegen)
 target_link_libraries(evmcc ${llvm_libs})
 
 # end of LLVM specific commands
