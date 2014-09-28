@@ -143,9 +143,6 @@ done:
 			}
 		}
 
-		// Notify all subscribers
-		self.Ethereum.Reactor().Post("newTx:post", tx)
-
 		// Update the state with pending changes
 		state.Update()
 
@@ -160,9 +157,14 @@ done:
 					os.Exit(1)
 				}
 
-				return nil, nil, nil, fmt.Errorf("err diff #%d (r) %v ~ %x  <=>  (c) %v ~ %x (%x)\n", i+1, original.CumulativeGasUsed, original.PostState[0:4], receipt.CumulativeGasUsed, receipt.PostState[0:4], receipt.Tx.Hash())
+				err := fmt.Errorf("#%d receipt failed (r) %v ~ %x  <=>  (c) %v ~ %x (%x...)", i+1, original.CumulativeGasUsed, original.PostState[0:4], receipt.CumulativeGasUsed, receipt.PostState[0:4], receipt.Tx.Hash()[0:4])
+
+				return nil, nil, nil, err
 			}
 		}
+
+		// Notify all subscribers
+		self.Ethereum.Reactor().Post("newTx:post", tx)
 
 		receipts = append(receipts, receipt)
 		handled = append(handled, tx)

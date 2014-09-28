@@ -503,15 +503,14 @@ func (p *Peer) HandleInbound() {
 					it := msg.Data.NewIterator()
 					for it.Next() {
 						hash := it.Value().Bytes()
-
-						p.lastReceivedHash = hash
-						p.LastHashReceived = time.Now()
-
 						if blockPool.HasCommonHash(hash) {
 							foundCommonHash = true
 
 							break
 						}
+
+						p.lastReceivedHash = hash
+						p.LastHashReceived = time.Now()
 
 						blockPool.AddHash(hash, p)
 					}
@@ -530,7 +529,7 @@ func (p *Peer) HandleInbound() {
 						block := ethchain.NewBlockFromRlpValue(it.Value())
 						//fmt.Printf("%v %x - %x\n", block.Number, block.Hash()[0:4], block.PrevHash[0:4])
 
-						blockPool.SetBlock(block, p)
+						blockPool.Add(block, p)
 
 						p.lastBlockReceived = time.Now()
 					}
@@ -561,7 +560,7 @@ func (self *Peer) FetchHashes() {
 }
 
 func (self *Peer) FetchingHashes() bool {
-	return time.Since(self.LastHashReceived) < 5*time.Second
+	return time.Since(self.LastHashReceived) < 200*time.Millisecond
 }
 
 // General update method
