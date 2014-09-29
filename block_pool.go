@@ -1,6 +1,7 @@
 package eth
 
 import (
+	"bytes"
 	"container/list"
 	"math"
 	"math/big"
@@ -236,22 +237,31 @@ out:
 		case <-self.quit:
 			break out
 		case <-procTimer.C:
-			// XXX We can optimize this lifting this on to a new goroutine.
-			// We'd need to make sure that the pools are properly protected by a mutex
-			// XXX This should moved in The Great Refactor(TM)
-			amount := self.ProcessCanonical(func(block *ethchain.Block) {
-				err := self.eth.StateManager().Process(block, false)
-				if err != nil {
-					poollogger.Infoln(err)
-					poollogger.Debugf("Block #%v failed (%x...)\n", block.Number, block.Hash()[0:4])
-					poollogger.Debugln(block)
-				}
-			})
+			blocks := self.Blocks()
+			ethchain.BlockBy(ethchain.Number).Sort(blocks)
 
-			// Do not propagate to the network on catchups
-			if amount == 1 {
-				block := self.eth.BlockChain().CurrentBlock
-				self.eth.Broadcast(ethwire.MsgBlockTy, []interface{}{block.Value().Val})
+			if len(blocks) > 0 {
+				if self.eth.BlockChain().HasBlock(blocks[0].PrevHash) {
+					for i, block := range blocks[1:] {
+						// NOTE: The Ith element in this loop refers to the previous block in
+						// outer "blocks"
+						if bytes.Compare(block.PrevHash, blocks[i].Hash()) != 0 {
+							blocks = blocks[:i]
+
+							break
+						}
+					}
+				} else {
+					blocks = nil
+				}
+			}
+
+			// Handle in batches of 4k
+			max := int(math.Min(4000, float64(len(blocks))))
+			for _, block := range blocks[:max] {
+				self.eth.Eventer().Post("block", block)
+
+				self.Remove(block.Hash())
 			}
 		}
 	}

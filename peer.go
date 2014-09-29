@@ -554,7 +554,9 @@ func (self *Peer) FetchHashes() {
 		blockPool.td = self.td
 
 		if !blockPool.HasLatestHash() {
-			self.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{self.lastReceivedHash, uint32(256)}))
+			const amount = 256
+			peerlogger.Debugf("Fetching hashes (%d)\n", amount)
+			self.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{self.lastReceivedHash, uint32(amount)}))
 		}
 	}
 }
