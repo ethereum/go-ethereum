@@ -3,6 +3,8 @@
 
 #include <llvm/IR/IRBuilder.h>
 
+#include "Stack.h"
+
 namespace evmcc
 {
 
@@ -49,20 +51,13 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	auto stack2 = new GlobalVariable(*module, Types.word256arr, false,
 		GlobalValue::LinkageTypes::PrivateLinkage,
 		ConstantAggregateZero::get(Types.word256arr), "stack");
-	auto stackTop = new GlobalVariable(*module, Types.size, false,
+	auto stackTop2 = new GlobalVariable(*module, Types.size, false,
 		GlobalValue::LinkageTypes::PrivateLinkage,
 		ConstantInt::get(Types.size, 0), "stackTop");
 
 	// Create value for void* malloc(size_t)
 	auto mallocVal = Function::Create(FunctionType::get(Types.word8ptr, { Types.size }, false),
 		GlobalValue::LinkageTypes::ExternalLinkage, "malloc", module.get());
-
-	// Create stack_create declaration
-	auto stackCreate = Function::Create(FunctionType::get(Types.word8ptr, false),
-		GlobalValue::LinkageTypes::ExternalLinkage, "evmccrt_stack_create", module.get());
-
-	auto stackPush = Function::Create(FunctionType::get(Types.Void, std::vector<Type*>{ Types.word8ptr, Types.word256 }, false),
-		GlobalValue::LinkageTypes::ExternalLinkage, "evmccrt_stack_push", module.get());
 
 	// Create main function
 	FunctionType* funcType = FunctionType::get(llvm::Type::getInt32Ty(context), false);
@@ -77,14 +72,20 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	builder.CreateStore(mallocMemCall, memory);
 	builder.CreateStore(ConstantInt::get(Types.size, 100), memSize);
 
-	auto stack = builder.CreateCall(stackCreate, "stack");
+	auto stack = Stack(builder, module.get());
 
 	uint64_t words[] = { 1, 2, 3, 4 };
 	auto val = llvm::APInt(256, 4, words);
 	auto c = ConstantInt::get(Types.word256, val);
 
-	Value* args[] = { stack, c };
-	builder.CreateCall(stackPush, args);
+	stack.push(c);
+	stack.push(ConstantInt::get(Types.word256, 0x1122334455667788));
+
+	auto top = stack.top();
+	stack.push(top);	// dup
+
+	stack.pop();
+
 
 	/*
 	std::vector<Value*> mallocStackArgs = { ConstantInt::get(sizeTy, 200) };

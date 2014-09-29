@@ -1,14 +1,22 @@
 
+#include "Stack.h"
+
 #include <vector>
 #include <iostream>
 #include <iomanip>
 #include <cstdint>
+#include <cassert>
+
+#include <llvm/IR/Function.h>
 
 #ifdef _MSC_VER
 	#define EXPORT __declspec(dllexport)
 #else
 	#define EXPORT
 #endif
+
+namespace evmcc
+{
 
 struct i256
 {
@@ -17,30 +25,114 @@ struct i256
 	uint64_t c;
 	uint64_t d;
 };
+static_assert(sizeof(i256) == 32, "Wrong i265 size");
 
-using Stack = std::vector<i256>;
+using StackImpl = std::vector<i256>;
+
+
+Stack::Stack(llvm::IRBuilder<>& _builder, llvm::Module* _module)
+	: m_builder(_builder)
+{
+	// TODO: Clean up LLVM types
+	auto stackPtrTy = m_builder.getInt8PtrTy();
+	auto i256Ty = m_builder.getIntNTy(256);
+	auto i256PtrTy = i256Ty->getPointerTo();
+	auto voidTy = m_builder.getVoidTy();
+
+	auto stackCreate = llvm::Function::Create(llvm::FunctionType::get(stackPtrTy, false),
+		llvm::GlobalValue::LinkageTypes::ExternalLinkage, "evmccrt_stack_create", _module);
+
+	llvm::Type* argsTypes[] = {stackPtrTy, i256PtrTy};
+	auto funcType = llvm::FunctionType::get(voidTy, argsTypes, false);
+	m_stackPush = llvm::Function::Create(funcType,
+		llvm::GlobalValue::LinkageTypes::ExternalLinkage, "evmccrt_stack_push", _module);
+
+	m_stackTop = llvm::Function::Create(funcType,
+		llvm::GlobalValue::LinkageTypes::ExternalLinkage, "evmccrt_stack_top", _module);
+
+	m_stackPop = llvm::Function::Create(funcType,
+		llvm::GlobalValue::LinkageTypes::ExternalLinkage, "evmccrt_stack_pop", _module);
+
+	m_args[0] = m_builder.CreateCall(stackCreate, "stack.ptr");
+	m_args[1] = m_builder.CreateAlloca(i256Ty, nullptr, "stack.val");
+}
+
+
+void Stack::push(llvm::Value* _value)
+{
+	m_builder.CreateStore(_value, m_args[1]);	  // copy value to memory
+	m_builder.CreateCall(m_stackPush, m_args);
+}
+
+
+llvm::Value* Stack::top()
+{
+	m_builder.CreateCall(m_stackTop, m_args);
+	return m_builder.CreateLoad(m_args[1]);
+}
+
+
+llvm::Value* Stack::pop()
+{
+	m_builder.CreateCall(m_stackPop, m_args);
+	return m_builder.CreateLoad(m_args[1]);
+}
+
+
+void debugStack(const char* op, const i256& word)
+{
+	std::cerr << "STACK " << std::setw(4) << std::setfill(' ') << op << ": "
+		<< std::dec << word.a
+		<< " HEX: " << std::hex << std::setfill('0');
+	if (word.b || word.c || word.d)
+	{
+		std::cerr << std::setw(16) << word.d << " "
+			<< std::setw(16) << word.c << " "
+			<< std::setw(16) << word.b << " ";
+	}
+	std::cerr << std::setw(16) << word.a << "\n";
+}
+
+}
 
 extern "C"
 {
+	using namespace evmcc;
 
 EXPORT void* evmccrt_stack_create()
 {
-	std::cerr << "STACK create: ";
-	auto stack = new Stack;
-	std::cerr << stack << "\n";
+	auto stack = new StackImpl;
+	std::cerr << "STACK create\n";
 	return stack;
 }
 
-EXPORT void evmccrt_stack_push(void* _stack, uint64_t _partA, uint64_t _partB, uint64_t _partC, uint64_t _partD)
+EXPORT void evmccrt_stack_push(void* _stack, void* _pWord)
 {
-	std::cerr << "STACK push: " << _partA << " (" << std::hex << std::setfill('0')
-			  << std::setw(16) << _partD << " " 
-			  << std::setw(16) << _partC << " " 
-			  << std::setw(16) << _partB << " "
-			  << std::setw(16) << _partA;
-	auto stack = static_cast<Stack*>(_stack);
-	stack->push_back({_partA, _partB, _partC, _partD});
-	std::cerr << ")\n";
+	auto stack = static_cast<StackImpl*>(_stack);
+	auto word = static_cast<i256*>(_pWord);
+	debugStack("push", *word);
+	stack->push_back(*word);
+}
+
+EXPORT void evmccrt_stack_top(void* _stack, void* _pWord)
+{
+	auto stack = static_cast<StackImpl*>(_stack);
+	assert(!stack->empty());
+	auto word = &stack->back();
+	debugStack("top", *word);
+	auto outWord = static_cast<i256*>(_pWord);
+	*outWord = *word;
+}
+
+EXPORT void evmccrt_stack_pop(void* _stack, void* _pWord)
+{
+	auto stack = static_cast<StackImpl*>(_stack);
+	assert(!stack->empty());
+	auto word = &stack->back();
+	debugStack("pop", *word);
+	auto outWord = static_cast<i256*>(_pWord);
+	stack->pop_back();
+	*outWord = *word;
 }
 
 }	// extern "C"
