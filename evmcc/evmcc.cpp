@@ -6,6 +6,8 @@
 
 #include <boost/algorithm/string.hpp>
 
+#include <llvm/Support/raw_os_ostream.h>
+
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
 #include <libevmface/Instruction.h>
@@ -87,7 +89,9 @@ int main(int argc, char** argv)
 
     if (opt_compile)
     {
-		evmcc::Compiler().compile(bytecode)->dump();
+		auto module = evmcc::Compiler().compile(bytecode);
+		llvm::raw_os_ostream out(std::cout);
+		module->print(out, nullptr);
     }
 
 	if (opt_interpret)
