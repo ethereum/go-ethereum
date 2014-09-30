@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/eth-go/ethwire"
 )
 
 var poollogger = ethlog.NewLogger("BPOOL")
@@ -99,8 +98,8 @@ func (self *BlockPool) Add(b *ethchain.Block, peer *Peer) {
 		self.pool[hash] = &block{peer, peer, b, time.Now(), 0}
 
 		if !self.eth.BlockChain().HasBlock(b.PrevHash) && !self.fetchingHashes {
-			poollogger.Infof("Unknown block, requesting parent (%x...)\n", b.PrevHash[0:4])
-			peer.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{b.PrevHash, uint32(256)}))
+			//poollogger.Infof("Unknown block, requesting parent (%x...)\n", b.PrevHash[0:4])
+			//peer.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{b.PrevHash, uint32(256)}))
 		}
 	} else if self.pool[hash] != nil {
 		self.pool[hash].block = b

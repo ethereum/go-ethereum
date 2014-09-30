@@ -320,7 +320,7 @@ out:
 		case msg := <-p.outputQueue:
 			if !p.statusKnown {
 				switch msg.Type {
-				case ethwire.MsgStatusTy, ethwire.MsgGetTxsTy, ethwire.MsgTxTy, ethwire.MsgGetBlockHashesTy, ethwire.MsgBlockHashesTy, ethwire.MsgGetBlocksTy, ethwire.MsgBlockTy:
+				case ethwire.MsgGetTxsTy, ethwire.MsgTxTy, ethwire.MsgGetBlockHashesTy, ethwire.MsgBlockHashesTy, ethwire.MsgGetBlocksTy, ethwire.MsgBlockTy:
 					break skip
 				}
 			}
