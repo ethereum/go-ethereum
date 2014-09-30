@@ -13,6 +13,8 @@
 #include <llvm/Support/PrettyStackTrace.h>
 #include <llvm/Support/Host.h>
 
+#include "Ext.h"
+
 namespace evmcc
 {
 
@@ -65,6 +67,9 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 	}
 	_module.release();	// Successfully created llvm::ExecutionEngine takes ownership of the module
 	exec->finalizeObject();
+
+	auto ext = std::make_unique<dev::eth::ExtVMFace>();
+	Ext::init(std::move(ext));
 
 	auto entryFunc = module->getFunction("main");
 	if (!entryFunc)
