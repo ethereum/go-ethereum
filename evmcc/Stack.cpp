@@ -55,6 +55,9 @@ Stack::Stack(llvm::IRBuilder<>& _builder, llvm::Module* _module)
 	m_stackGet = llvm::Function::Create(getFuncType,
 		llvm::GlobalValue::LinkageTypes::ExternalLinkage, "evmccrt_stack_get", _module);
 
+	m_stackSet = llvm::Function::Create(getFuncType,
+		llvm::GlobalValue::LinkageTypes::ExternalLinkage, "evmccrt_stack_set", _module);
+
 	m_args[0] = m_builder.CreateCall(stackCreate, "stack.ptr");
 	m_args[1] = m_builder.CreateAlloca(i256Ty, nullptr, "stack.val");
 }
@@ -82,24 +85,33 @@ llvm::Value* Stack::get(uint32_t _index)
 }
 
 
+void Stack::set(uint32_t _index, llvm::Value* _value)
+{
+	m_builder.CreateStore(_value, m_args[1]);	  // copy value to memory
+	llvm::Value* args[] = {m_args[0], m_builder.getInt32(_index), m_args[1]};
+	m_builder.CreateCall(m_stackSet, args);
+}
+
+
 llvm::Value* Stack::top()
 {
 	return get(0);
 }
 
 
-void debugStack(const char* op, const i256& word)
+void debugStack(const char* _op, const i256& _word, uint32_t _index = 0)
 {
-	std::cerr << "STACK " << std::setw(4) << std::setfill(' ') << op << ": "
-		<< std::dec << word.a
-		<< " HEX: " << std::hex << std::setfill('0');
-	if (word.b || word.c || word.d)
+	std::cerr << "STACK " << std::setw(4) << std::setfill(' ') << _op
+			  << " [" << std::setw(2) << std::setfill('0') << _index << "] "
+			  << std::dec << _word.a
+			  << " HEX: " << std::hex;
+	if (_word.b || _word.c || _word.d)
 	{
-		std::cerr << std::setw(16) << word.d << " "
-			<< std::setw(16) << word.c << " "
-			<< std::setw(16) << word.b << " ";
+		std::cerr << std::setw(16) << _word.d << " "
+				  << std::setw(16) << _word.c << " "
+				  << std::setw(16) << _word.b << " ";
 	}
-	std::cerr << std::setw(16) << word.a << "\n";
+	std::cerr << std::setw(16) << _word.a << "\n";
 }
 
 }
@@ -138,10 +150,19 @@ EXPORT void evmccrt_stack_get(void* _stack, uint32_t _index, void* _pWord)
 {
 	auto stack = static_cast<StackImpl*>(_stack);
 	assert(_index < stack->size());
-	auto word = &(*stack)[stack->size() - _index - 1];
-	debugStack("get", *word);
+	auto word = stack->rbegin() + _index;
+	debugStack("get", *word, _index);
 	auto outWord = static_cast<i256*>(_pWord);
 	*outWord = *word;
+}
+
+EXPORT void evmccrt_stack_set(void* _stack, uint32_t _index, void* _pWord)
+{
+	auto stack = static_cast<StackImpl*>(_stack);
+	auto word = static_cast<i256*>(_pWord);
+	assert(_index < stack->size());
+	*(stack->rbegin() + _index) = *word;
+	debugStack("set", *word, _index);
 }
 
 }	// extern "C"

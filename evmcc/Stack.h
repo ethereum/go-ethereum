@@ -15,6 +15,7 @@ public:
 	llvm::Value* pop();
 	llvm::Value* top();
 	llvm::Value* get(uint32_t _index);
+	void set(uint32_t _index, llvm::Value* _value);
 
 private:
 	llvm::IRBuilder<>& m_builder;
@@ -22,6 +23,7 @@ private:
 	llvm::Function* m_stackPush;
 	llvm::Function* m_stackPop;
 	llvm::Function* m_stackGet;
+	llvm::Function* m_stackSet;
 };
 
 }

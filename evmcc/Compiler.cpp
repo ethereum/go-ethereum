@@ -134,6 +134,31 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			break;
 		}
 
+		case Instruction::SWAP1:
+		case Instruction::SWAP2:
+		case Instruction::SWAP3:
+		case Instruction::SWAP4:
+		case Instruction::SWAP5:
+		case Instruction::SWAP6:
+		case Instruction::SWAP7:
+		case Instruction::SWAP8:
+		case Instruction::SWAP9:
+		case Instruction::SWAP10:
+		case Instruction::SWAP11:
+		case Instruction::SWAP12:
+		case Instruction::SWAP13:
+		case Instruction::SWAP14:
+		case Instruction::SWAP15:
+		case Instruction::SWAP16:
+		{
+			auto index = static_cast<uint32_t>(inst) - static_cast<uint32_t>(Instruction::SWAP1) + 1;
+			auto loValue = stack.get(index);
+			auto hiValue = stack.get(0);
+			stack.set(index, hiValue);
+			stack.set(0, loValue);
+			break;
+		}
+
 		}
 	}
 
