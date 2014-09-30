@@ -59,6 +59,12 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		auto inst = static_cast<Instruction>(*pc);
 		switch (inst)
 		{
+		case Instruction::POP:
+		{
+			stack.pop();
+			break;
+		}
+
 		case Instruction::PUSH1:
 		case Instruction::PUSH2:
 		case Instruction::PUSH3:
@@ -104,20 +110,32 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			stack.push(c);
 			break;
 		}
+
+		case Instruction::DUP1:
+		case Instruction::DUP2:
+		case Instruction::DUP3:
+		case Instruction::DUP4:
+		case Instruction::DUP5:
+		case Instruction::DUP6:
+		case Instruction::DUP7:
+		case Instruction::DUP8:
+		case Instruction::DUP9:
+		case Instruction::DUP10:
+		case Instruction::DUP11:
+		case Instruction::DUP12:
+		case Instruction::DUP13:
+		case Instruction::DUP14:
+		case Instruction::DUP15:
+		case Instruction::DUP16:
+		{
+			auto index = static_cast<uint32_t>(inst) - static_cast<uint32_t>(Instruction::DUP1);
+			auto value = stack.get(index);
+			stack.push(value);
+			break;
+		}
+
 		}
 	}
-
-	//uint64_t words[] = { 1, 2, 3, 4 };
-	//auto val = llvm::APInt(256, 4, words);
-	//auto c = ConstantInt::get(Types.word256, val);
-
-	//stack.push(c);
-	//stack.push(ConstantInt::get(Types.word256, 0x1122334455667788));
-
-	//auto top = stack.top();
-	//stack.push(top);	// dup
-
-	//stack.pop();
 
 	builder.CreateRet(ConstantInt::get(Type::getInt32Ty(context), 0));
 
