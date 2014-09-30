@@ -51,7 +51,7 @@ Stack::Stack(llvm::IRBuilder<>& _builder, llvm::Module* _module)
 		llvm::GlobalValue::LinkageTypes::ExternalLinkage, "evmccrt_stack_pop", _module);
 
 	llvm::Type* getArgsTypes[] = {stackPtrTy, m_builder.getInt32Ty(), i256PtrTy};
-	auto getFuncType = llvm::FunctionType::get(voidTy, getArgsTypes);
+	auto getFuncType = llvm::FunctionType::get(voidTy, getArgsTypes, false);
 	m_stackGet = llvm::Function::Create(getFuncType,
 		llvm::GlobalValue::LinkageTypes::ExternalLinkage, "evmccrt_stack_get", _module);
 
