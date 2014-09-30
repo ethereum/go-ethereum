@@ -3,6 +3,7 @@
 
 #include <llvm/IR/IRBuilder.h>
 
+#include "Memory.h"
 #include "Stack.h"
 
 namespace evmcc
@@ -41,24 +42,6 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	auto module = std::make_unique<Module>("main", context);
 	IRBuilder<> builder(context);
 
-	// Create globals for memory, memory size, stack and stack top
-	auto memory = new GlobalVariable(*module, Types.word8ptr, false,
-		GlobalValue::LinkageTypes::PrivateLinkage,
-		Constant::getNullValue(Types.word8ptr), "memory");
-	auto memSize = new GlobalVariable(*module, Types.size, false,
-		GlobalValue::LinkageTypes::PrivateLinkage,
-		ConstantInt::get(Types.size, 0), "memsize");
-	auto stack2 = new GlobalVariable(*module, Types.word256arr, false,
-		GlobalValue::LinkageTypes::PrivateLinkage,
-		ConstantAggregateZero::get(Types.word256arr), "stack");
-	auto stackTop2 = new GlobalVariable(*module, Types.size, false,
-		GlobalValue::LinkageTypes::PrivateLinkage,
-		ConstantInt::get(Types.size, 0), "stackTop");
-
-	// Create value for void* malloc(size_t)
-	auto mallocVal = Function::Create(FunctionType::get(Types.word8ptr, { Types.size }, false),
-		GlobalValue::LinkageTypes::ExternalLinkage, "malloc", module.get());
-
 	// Create main function
 	FunctionType* funcType = FunctionType::get(llvm::Type::getInt32Ty(context), false);
 	Function* mainFunc = Function::Create(funcType, Function::ExternalLinkage, "main", module.get());
@@ -66,13 +49,9 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	BasicBlock* entryBlock = BasicBlock::Create(context, "entry", mainFunc);
 	builder.SetInsertPoint(entryBlock);
 
-	// Initialize memory with call to malloc, update memsize
-	std::vector<Value*> mallocMemArgs = { ConstantInt::get(Types.size, 100) };
-	auto mallocMemCall = builder.CreateCall(mallocVal, mallocMemArgs, "malloc_mem");
-	builder.CreateStore(mallocMemCall, memory);
-	builder.CreateStore(ConstantInt::get(Types.size, 100), memSize);
 
 	auto stack = Stack(builder, module.get());
+	auto memory = Memory(builder, module.get());
 
 	uint64_t words[] = { 1, 2, 3, 4 };
 	auto val = llvm::APInt(256, 4, words);
@@ -83,18 +62,17 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 	auto top = stack.top();
 	stack.push(top);	// dup
-
 	stack.pop();
 
+	auto index = ConstantInt::get(Types.word256, 123);
+	memory.storeWord(index, c);
 
-	/*
-	std::vector<Value*> mallocStackArgs = { ConstantInt::get(sizeTy, 200) };
-	auto mallocStackCall = builder.CreateCall(mallocVal, mallocStackArgs, "malloc_stack");
-	auto mallocCast = builder.CreatePointerBitCastOrAddrSpaceCast(mallocStackCall, int256ptr);
-	builder.CreateStore(mallocCast, stackVal);
-	*/
+	memory.dump(123, 123+32);
 
-	builder.CreateRet(ConstantInt::get(Type::getInt32Ty(context), 13));
+	auto index2 = ConstantInt::get(Types.word256, 123 + 16);
+	auto byte = memory.loadByte(index2);
+	auto result = builder.CreateZExt(byte, builder.getInt32Ty());
+	builder.CreateRet(result); // should return 3
 
 	return module;
 }
