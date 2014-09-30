@@ -6,6 +6,7 @@
 #include <libevmface/Instruction.h>
 
 #include "Stack.h"
+#include "Ext.h"
 
 namespace evmcc
 {
@@ -55,6 +56,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 	// Init stack
 	auto stack = Stack(builder, module.get());
+
+	auto ext = Ext(builder);
 
 	for (auto pc = bytecode.cbegin(); pc != bytecode.cend(); ++pc)
 	{
