@@ -19,6 +19,7 @@ struct
 	llvm::Type* word256arr;
 	llvm::Type* size;
 	llvm::Type* Void;
+	llvm::Type* WordLowPrecision;
 } Types;
 
 Compiler::Compiler()
@@ -31,6 +32,9 @@ Compiler::Compiler()
 	Types.word256arr = llvm::ArrayType::get(Types.word256, 100);
 	Types.size = llvm::Type::getInt64Ty(context);
 	Types.Void = llvm::Type::getVoidTy(context);
+
+	// TODO: Use 64-bit for now. In 128-bit compiler-rt library functions are required
+	Types.WordLowPrecision = llvm::Type::getIntNTy(context, 64);
 }
 
 
@@ -59,6 +63,85 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		auto inst = static_cast<Instruction>(*pc);
 		switch (inst)
 		{
+
+		case Instruction::ADD:
+		{
+			auto lhs = stack.pop();
+			auto rhs = stack.pop();
+			auto result = builder.CreateAdd(lhs, rhs);
+			stack.push(result);
+			break;
+		}
+
+		case Instruction::SUB:
+		{
+			auto lhs = stack.pop();
+			auto rhs = stack.pop();
+			auto result = builder.CreateSub(lhs, rhs);
+			stack.push(result);
+			break;
+		}
+
+		case Instruction::MUL:
+		{
+			auto lhs256 = stack.pop();
+			auto rhs256 = stack.pop();
+			auto lhs128 = builder.CreateTrunc(lhs256, Types.WordLowPrecision);
+			auto rhs128 = builder.CreateTrunc(rhs256, Types.WordLowPrecision);
+			auto res128 = builder.CreateMul(lhs128, rhs128);
+			auto res256 = builder.CreateZExt(res128, Types.word256);
+			stack.push(res256);
+			break;
+		}
+
+		case Instruction::DIV:
+		{
+			auto lhs256 = stack.pop();
+			auto rhs256 = stack.pop();
+			auto lhs128 = builder.CreateTrunc(lhs256, Types.WordLowPrecision);
+			auto rhs128 = builder.CreateTrunc(rhs256, Types.WordLowPrecision);
+			auto res128 = builder.CreateUDiv(lhs128, rhs128);
+			auto res256 = builder.CreateZExt(res128, Types.word256);
+			stack.push(res256);
+			break;
+		}
+
+		case Instruction::SDIV:
+		{
+			auto lhs256 = stack.pop();
+			auto rhs256 = stack.pop();
+			auto lhs128 = builder.CreateTrunc(lhs256, Types.WordLowPrecision);
+			auto rhs128 = builder.CreateTrunc(rhs256, Types.WordLowPrecision);
+			auto res128 = builder.CreateSDiv(lhs128, rhs128);
+			auto res256 = builder.CreateSExt(res128, Types.word256);
+			stack.push(res256);
+			break;
+		}
+
+		case Instruction::MOD:
+		{
+			auto lhs256 = stack.pop();
+			auto rhs256 = stack.pop();
+			auto lhs128 = builder.CreateTrunc(lhs256, Types.WordLowPrecision);
+			auto rhs128 = builder.CreateTrunc(rhs256, Types.WordLowPrecision);
+			auto res128 = builder.CreateURem(lhs128, rhs128);
+			auto res256 = builder.CreateZExt(res128, Types.word256);
+			stack.push(res256);
+			break;
+		}
+
+		case Instruction::SMOD:
+		{
+			auto lhs256 = stack.pop();
+			auto rhs256 = stack.pop();
+			auto lhs128 = builder.CreateTrunc(lhs256, Types.WordLowPrecision);
+			auto rhs128 = builder.CreateTrunc(rhs256, Types.WordLowPrecision);
+			auto res128 = builder.CreateSRem(lhs128, rhs128);
+			auto res256 = builder.CreateSExt(res128, Types.word256);
+			stack.push(res256);
+			break;
+		}
+
 		case Instruction::POP:
 		{
 			stack.pop();
