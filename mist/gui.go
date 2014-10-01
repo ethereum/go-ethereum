@@ -466,12 +466,17 @@ func (gui *Gui) update() {
 				var (
 					pct      float64 = 1.0 / float64(chainLength) * float64(blockLength)
 					dlWidget         = gui.win.Root().ObjectByName("downloadIndicator")
+					dlLabel          = gui.win.Root().ObjectByName("downloadLabel")
 				)
 				if pct < 1.0 {
 					dlWidget.Set("visible", true)
 					dlWidget.Set("value", pct)
+
+					dlLabel.Set("visible", true)
+					dlLabel.Set("text", fmt.Sprintf("%d / %d", blockLength, chainLength))
 				} else {
 					dlWidget.Set("visible", false)
+					dlLabel.Set("visible", false)
 				}
 
 			case <-statsUpdateTicker.C:

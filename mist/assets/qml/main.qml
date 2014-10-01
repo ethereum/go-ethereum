@@ -303,6 +303,14 @@ ApplicationWindow {
 	    x: statusBar.width / 2 - this.width / 2
             width: 160
         }
+	Label {
+		objectName: "downloadLabel"
+		y: 7
+		anchors.left: downloadIndicator.right
+		anchors.leftMargin: 5
+		font.pixelSize: 10
+		text: "0 / 0"
+	}
 
 
         RowLayout {
