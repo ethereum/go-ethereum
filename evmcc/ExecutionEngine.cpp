@@ -74,7 +74,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 	ext->origin = dev::Address(101010101010101010);
 	ext->value = 0xabcd;
 	ext->gasPrice = 1002;
-	std::string calldata = "Hello World!";
+	std::string calldata = "Hello the Beautiful World of Ethereum!";
 	ext->data = calldata;
 	Ext::init(std::move(ext));
 
