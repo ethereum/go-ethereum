@@ -63,10 +63,11 @@ Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* _module)
 llvm::Value* Memory::loadWord(llvm::Value* _addr)
 {
 	// trunc _addr (an i256) to i64 index and use it to index the memory
-	auto index = m_builder.CreateTrunc(_addr, m_builder.getInt64Ty(), "index");
+	auto index = m_builder.CreateTrunc(_addr, m_builder.getInt64Ty(), "mem.index");
+	auto index31 = m_builder.CreateAdd(index, llvm::ConstantInt::get(m_builder.getInt64Ty(), 31), "mem.index.31");
 
 	// load from evmccrt_memory_require()[index]
-	auto base = m_builder.CreateCall(m_memRequire, index, "base");
+	auto base = m_builder.CreateCall(m_memRequire, index31, "base");
 	auto ptr = m_builder.CreateGEP(base, index, "ptr");
 
 	auto i256ptrTy = m_builder.getIntNTy(256)->getPointerTo();
@@ -79,10 +80,10 @@ llvm::Value* Memory::loadWord(llvm::Value* _addr)
 
 void Memory::storeWord(llvm::Value* _addr, llvm::Value* _word)
 {
-	auto index = m_builder.CreateTrunc(_addr, m_builder.getInt64Ty(), "index");
-	auto index32 = m_builder.CreateAdd(index, llvm::ConstantInt::get(m_builder.getInt64Ty(), 32), "index32");
+	auto index = m_builder.CreateTrunc(_addr, m_builder.getInt64Ty(), "mem.index");
+	auto index31 = m_builder.CreateAdd(index, llvm::ConstantInt::get(m_builder.getInt64Ty(), 31), "mem.index31");
 
-	auto base = m_builder.CreateCall(m_memRequire, index32, "base");
+	auto base = m_builder.CreateCall(m_memRequire, index31, "base");
 	auto ptr = m_builder.CreateGEP(base, index, "ptr");
 
 	auto i256ptrTy = m_builder.getIntNTy(256)->getPointerTo();
@@ -141,21 +142,24 @@ EXPORT void evmccrt_memory_create(void)
 // Resizes memory to contain at least _index + 1 bytes and returns the base address.
 EXPORT uint8_t* evmccrt_memory_require(uint64_t _index)
 {
-	uint64_t size = _index + 1;
+	uint64_t requiredSize = (_index / 32 + 1) * 32;
 
-	std::cerr << "MEMORY: require(), current size = " << evmccrt_memory->size()
-			  << ", required size = " << size
-			  << std::endl;
+	if (evmccrt_memory->size() < requiredSize)
+	{
+		std::cerr << "MEMORY: current size: " << std::dec
+				  << evmccrt_memory->size() << " bytes, required size: "
+				  << requiredSize << " bytes"
+				  << std::endl;
 
-	if (evmccrt_memory->size() < size)
-		evmccrt_memory->resize(size);
+		evmccrt_memory->resize(requiredSize);
+	}
 
 	return &(*evmccrt_memory)[0];
 }
 
 EXPORT uint64_t evmccrt_memory_size()
 {
-	return (evmccrt_memory->size() + 31) / 32;
+	return evmccrt_memory->size() / 32;
 }
 
 EXPORT void evmccrt_memory_dump(uint64_t _begin, uint64_t _end)
@@ -163,8 +167,10 @@ EXPORT void evmccrt_memory_dump(uint64_t _begin, uint64_t _end)
 	if (_end == 0)
 		_end = evmccrt_memory->size();
 
-	std::cerr << "Active memory size: " << evmccrt_memory_size() << " words\n";
-	std::cerr << "Memory dump from " << std::hex << _begin << " to " << std::hex << _end << ":";
+	std::cerr << "MEMORY: active size: " << std::dec
+			  << evmccrt_memory_size() << " words\n";
+	std::cerr << "MEMORY: dump from " << std::dec
+			  << _begin << " to " << _end << ":";
 	if (_end <= _begin)
 		return;
 
