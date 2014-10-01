@@ -247,6 +247,37 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			break;
 		}
 
+		case Instruction::MLOAD:
+		{
+			auto addr = stack.pop();
+			auto word = memory.loadWord(addr);
+			stack.push(word);
+			break;
+		}
+
+		case Instruction::MSTORE:
+		{
+			auto addr = stack.pop();
+			auto word = stack.pop();
+			memory.storeWord(addr, word);
+			break;
+		}
+
+		case Instruction::MSTORE8:
+		{
+			auto addr = stack.pop();
+			auto word = stack.pop();
+			memory.storeByte(addr, word);
+			break;
+		}
+
+		case Instruction::MSIZE:
+		{
+			auto word = memory.getSize();
+			stack.push(word);
+			break;
+		}
+
 		case Instruction::SLOAD:
 		{
 			auto index = stack.pop();
