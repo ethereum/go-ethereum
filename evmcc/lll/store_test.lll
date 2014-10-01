@@ -1,8 +1,14 @@
 
 (asm 
 123
+124
+1
 SSTORE
+0
+SSTORE
+1
 SLOAD
-123
+0
+SLOAD
 SUB
 )

@@ -9,6 +9,8 @@
 
 #include <llvm/IR/Function.h>
 
+#include "Utils.h"
+
 #ifdef _MSC_VER
 	#define EXPORT __declspec(dllexport)
 #else
@@ -17,15 +19,6 @@
 
 namespace evmcc
 {
-
-struct i256
-{
-	uint64_t a;
-	uint64_t b;
-	uint64_t c;
-	uint64_t d;
-};
-static_assert(sizeof(i256) == 32, "Wrong i265 size");
 
 using StackImpl = std::vector<i256>;
 

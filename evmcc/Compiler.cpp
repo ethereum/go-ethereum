@@ -247,6 +247,22 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			break;
 		}
 
+		case Instruction::SLOAD:
+		{
+			auto index = stack.pop();
+			auto value = ext.store(index);
+			stack.push(value);
+			break;
+		}
+
+		case Instruction::SSTORE:
+		{
+			auto index = stack.pop();
+			auto value = stack.pop();
+			ext.setStore(index, value);
+			break;
+		}
+
 		}
 	}
 
