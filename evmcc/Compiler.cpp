@@ -60,7 +60,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 	// Init stack and memory
 	auto stack = Stack(builder, module.get());
-	auto memory = Memory(builder, module.get());
+	auto memory = Memory(builder);
 
 	auto ext = Ext(builder);
 

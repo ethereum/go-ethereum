@@ -2,13 +2,17 @@
 
 #include <llvm/IR/IRBuilder.h>
 
+#include <libdevcore/Common.h>
+
 namespace evmcc
 {
 
 class Memory
 {
 public:
-	Memory(llvm::IRBuilder<>& _builder, llvm::Module* _module);
+	Memory(llvm::IRBuilder<>& _builder);
+
+	static const dev::bytes& init();
 
 	llvm::Value* loadWord(llvm::Value* _addr);
 	void storeWord(llvm::Value* _addr, llvm::Value* _word);

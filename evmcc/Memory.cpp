@@ -23,33 +23,40 @@ namespace evmcc
 
 using MemoryImpl = dev::bytes;
 
+static MemoryImpl* evmccrt_memory;
 
-Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* _module)
+
+Memory::Memory(llvm::IRBuilder<>& _builder)
 	: m_builder(_builder)
 {
 	auto voidTy	= m_builder.getVoidTy();
 	auto i64Ty = m_builder.getInt64Ty();
-
-	auto memoryCreate = llvm::Function::Create(llvm::FunctionType::get(voidTy, false),
-	                                           llvm::GlobalValue::LinkageTypes::ExternalLinkage,
-	                                           "evmccrt_memory_create", _module);
-	m_builder.CreateCall(memoryCreate);
+	auto module = _builder.GetInsertBlock()->getParent()->getParent();
 
 
 	auto memRequireTy = llvm::FunctionType::get(m_builder.getInt8PtrTy(), i64Ty, false);
 	m_memRequire = llvm::Function::Create(memRequireTy,
 	                                      llvm::GlobalValue::LinkageTypes::ExternalLinkage,
-	                                      "evmccrt_memory_require", _module);
+	                                      "evmccrt_memory_require", module);
 
 	auto memSizeTy = llvm::FunctionType::get(i64Ty, false);
 	m_memSize = llvm::Function::Create(memSizeTy,
 	                                   llvm::GlobalValue::LinkageTypes::ExternalLinkage,
-	                                   "evmccrt_memory_size", _module);
+	                                   "evmccrt_memory_size", module);
 
 	std::vector<llvm::Type*> argTypes = {i64Ty, i64Ty};
 	auto dumpTy = llvm::FunctionType::get(m_builder.getVoidTy(), llvm::ArrayRef<llvm::Type*>(argTypes), false);
  	m_memDump = llvm::Function::Create(dumpTy, llvm::GlobalValue::LinkageTypes::ExternalLinkage,
- 	                                   "evmccrt_memory_dump", _module);
+ 	                                   "evmccrt_memory_dump", module);
+}
+
+const dev::bytes& Memory::init()
+{
+	evmccrt_memory = new MemoryImpl();
+	std::cerr << "MEMORY: create(), initial size = " << evmccrt_memory->size()
+		<< std::endl;
+
+	return *evmccrt_memory;
 }
 
 
@@ -122,15 +129,6 @@ void Memory::dump(uint64_t _begin, uint64_t _end)
 extern "C"
 {
 	using namespace evmcc;
-
-static MemoryImpl* evmccrt_memory;
-
-EXPORT void evmccrt_memory_create(void)
-{
-	evmccrt_memory = new MemoryImpl();
-	std::cerr << "MEMORY: create(), initial size = " << evmccrt_memory->size()
-			  << std::endl;
-}
 
 // Resizes memory to contain at least _index + 1 bytes and returns the base address.
 EXPORT uint8_t* evmccrt_memory_require(uint64_t _index)
