@@ -263,6 +263,13 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			break;
 		}
 
+		case Instruction::ADDRESS:
+		{
+			auto value = ext.address();
+			stack.push(value);
+			break;
+		}
+
 		}
 	}
 

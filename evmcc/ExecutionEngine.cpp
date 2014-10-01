@@ -69,6 +69,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 	exec->finalizeObject();
 
 	auto ext = std::make_unique<dev::eth::ExtVMFace>();
+	ext->myAddress = dev::Address(1122334455667788);
 	Ext::init(std::move(ext));
 
 	auto entryFunc = module->getFunction("main");
