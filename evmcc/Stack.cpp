@@ -120,42 +120,34 @@ EXPORT void* evmccrt_stack_create()
 	return stack;
 }
 
-EXPORT void evmccrt_stack_push(void* _stack, void* _pWord)
+EXPORT void evmccrt_stack_push(StackImpl* _stack, i256* _word)
 {
-	auto stack = static_cast<StackImpl*>(_stack);
-	auto word = static_cast<i256*>(_pWord);
-	debugStack("push", *word);
-	stack->push_back(*word);
+	debugStack("push", *_word);
+	_stack->push_back(*_word);
 }
 
-EXPORT void evmccrt_stack_pop(void* _stack, void* _pWord)
+EXPORT void evmccrt_stack_pop(StackImpl* _stack, i256* _outWord)
 {
-	auto stack = static_cast<StackImpl*>(_stack);
-	assert(!stack->empty());
-	auto word = &stack->back();
+	assert(!_stack->empty());
+	auto word = &_stack->back();
 	debugStack("pop", *word);
-	auto outWord = static_cast<i256*>(_pWord);
-	stack->pop_back();
-	*outWord = *word;
+	_stack->pop_back();
+	*_outWord = *word;
 }
 
-EXPORT void evmccrt_stack_get(void* _stack, uint32_t _index, void* _pWord)
+EXPORT void evmccrt_stack_get(StackImpl* _stack, uint32_t _index, i256* _outWord)
 {
-	auto stack = static_cast<StackImpl*>(_stack);
-	assert(_index < stack->size());
-	auto word = stack->rbegin() + _index;
+	assert(_index < _stack->size());
+	auto word = _stack->rbegin() + _index;
 	debugStack("get", *word, _index);
-	auto outWord = static_cast<i256*>(_pWord);
-	*outWord = *word;
+	*_outWord = *word;
 }
 
-EXPORT void evmccrt_stack_set(void* _stack, uint32_t _index, void* _pWord)
+EXPORT void evmccrt_stack_set(StackImpl* _stack, uint32_t _index, i256* _word)
 {
-	auto stack = static_cast<StackImpl*>(_stack);
-	auto word = static_cast<i256*>(_pWord);
-	assert(_index < stack->size());
-	*(stack->rbegin() + _index) = *word;
-	debugStack("set", *word, _index);
+	assert(_index < _stack->size());
+	*(_stack->rbegin() + _index) = *_word;
+	debugStack("set", *_word, _index);
 }
 
 }	// extern "C"
