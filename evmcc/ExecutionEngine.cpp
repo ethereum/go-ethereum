@@ -86,8 +86,14 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 	}
 
 	auto result = exec->runFunction(entryFunc, {});
-	auto intResult = result.IntVal.getZExtValue();
-	return intResult;
+	if (auto intResult = result.IntVal.getZExtValue())
+	{
+		auto index = intResult >> 32;
+		auto size = 0xFFFFFFFF & intResult;
+		// TODO: Get the data from memory
+		return 10;
+	}	
+	return 0;
 }
 
 }

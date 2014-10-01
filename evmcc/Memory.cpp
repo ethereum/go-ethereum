@@ -10,6 +10,8 @@
 
 #include <libdevcore/Common.h>
 
+#include "Utils.h"
+
 #ifdef _MSC_VER
 	#define EXPORT __declspec(dllexport)
 #else
@@ -18,15 +20,6 @@
 
 namespace evmcc
 {
-
-struct i256
-{
-	uint64_t a;
-	uint64_t b;
-	uint64_t c;
-	uint64_t d;
-};
-static_assert(sizeof(i256) == 32, "Wrong i256 size");
 
 using MemoryImpl = dev::bytes;
 
@@ -102,7 +95,7 @@ extern "C"
 {
 	using namespace evmcc;
 
-EXPORT MemoryImpl* evmccrt_memory;
+static MemoryImpl* evmccrt_memory;
 
 EXPORT void evmccrt_memory_create(void)
 {
@@ -121,7 +114,7 @@ EXPORT void* evmccrt_memory_require(uint64_t _size)
 	if (evmccrt_memory->size() < _size)
 		evmccrt_memory->resize(_size);
 
-	return &(*evmccrt_memory)[0];
+	return evmccrt_memory->data();
 }
 
 EXPORT void evmccrt_memory_dump(uint64_t _begin, uint64_t _end)
