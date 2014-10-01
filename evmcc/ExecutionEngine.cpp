@@ -70,6 +70,12 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 
 	auto ext = std::make_unique<dev::eth::ExtVMFace>();
 	ext->myAddress = dev::Address(1122334455667788);
+	ext->caller = dev::Address(0xfacefacefaceface);
+	ext->origin = dev::Address(101010101010101010);
+	ext->value = 0xabcd;
+	ext->gasPrice = 1002;
+	std::string calldata = "Hello World!";
+	ext->data = calldata;
 	Ext::init(std::move(ext));
 
 	auto entryFunc = module->getFunction("main");

@@ -87,11 +87,18 @@ void Ext::setStore(llvm::Value* _index, llvm::Value* _value)
 	m_builder.CreateCall(m_setStore, m_args);
 }
 
-Value* Ext::address()
+Value* Ext::getDataElem(unsigned _index, const Twine& _name)
 {
-	auto valuePtr = m_builder.CreateStructGEP(m_data, 0);
+	auto valuePtr = m_builder.CreateStructGEP(m_data, _index, _name);
 	return m_builder.CreateLoad(valuePtr);
 }
+
+Value* Ext::address() { return getDataElem(0, "address"); }
+Value* Ext::caller() { return getDataElem(1, "caller"); }
+Value* Ext::origin() { return getDataElem(2, "origin"); }
+Value* Ext::callvalue() { return getDataElem(3, "callvalue"); }
+Value* Ext::calldatasize() { return getDataElem(5, "calldatasize"); }
+Value* Ext::gasprice() { return getDataElem(4, "gasprice"); }
 
 extern "C"
 {

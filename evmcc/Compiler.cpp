@@ -270,6 +270,41 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			break;
 		}
 
+		case Instruction::CALLER:
+		{
+			auto value = ext.caller();
+			stack.push(value);
+			break;
+		}
+
+		case Instruction::ORIGIN:
+		{
+			auto value = ext.origin();
+			stack.push(value);
+			break;
+		}
+
+		case Instruction::CALLVALUE:
+		{
+			auto value = ext.callvalue();
+			stack.push(value);
+			break;
+		}
+
+		case Instruction::CALLDATASIZE:
+		{
+			auto value = ext.calldatasize();
+			stack.push(value);
+			break;
+		}
+
+		case Instruction::GASPRICE:
+		{
+			auto value = ext.gasprice();
+			stack.push(value);
+			break;
+		}
+
 		}
 	}
 
