@@ -217,9 +217,7 @@ out:
 				}
 			})
 
-			if !self.fetchingHashes && len(self.hashPool) > 0 {
-				self.DistributeHashes()
-			}
+			self.DistributeHashes()
 
 			if self.ChainLength < len(self.hashPool) {
 				self.ChainLength = len(self.hashPool)
