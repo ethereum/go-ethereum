@@ -26,6 +26,8 @@ public:
 	llvm::Value* calldatasize();
 	llvm::Value* gasprice();
 
+	llvm::Value* calldataload(llvm::Value* _index);
+
 private:
 	llvm::Value* getDataElem(unsigned _index, const llvm::Twine& _name = "");
 
@@ -37,6 +39,7 @@ private:
 	llvm::Function* m_init;
 	llvm::Function* m_store;
 	llvm::Function* m_setStore;
+	llvm::Function* m_calldataload;
 };
 	
 

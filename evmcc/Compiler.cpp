@@ -298,6 +298,14 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			break;
 		}
 
+		case Instruction::CALLDATALOAD:
+		{
+			auto index = stack.pop();
+			auto value = ext.calldataload(index);
+			stack.push(value);
+			break;
+		}
+
 		case Instruction::GASPRICE:
 		{
 			auto value = ext.gasprice();

@@ -69,6 +69,7 @@ Ext::Ext(llvm::IRBuilder<>& _builder)
 	m_init = Function::Create(FunctionType::get(m_builder.getVoidTy(), extDataTy->getPointerTo(), false), Linkage::ExternalLinkage, "ext_init", module);
 	m_store = Function::Create(TypeBuilder<void(i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_store", module);
 	m_setStore = Function::Create(TypeBuilder<void(i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_setStore", module);
+	m_calldataload = Function::Create(TypeBuilder<void(i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_calldataload", module);
 
 	m_builder.CreateCall(m_init, m_data);
 }
@@ -100,6 +101,13 @@ Value* Ext::callvalue() { return getDataElem(3, "callvalue"); }
 Value* Ext::calldatasize() { return getDataElem(5, "calldatasize"); }
 Value* Ext::gasprice() { return getDataElem(4, "gasprice"); }
 
+Value* Ext::calldataload(Value* _index)
+{
+	m_builder.CreateStore(_index, m_args[0]);
+	m_builder.CreateCall(m_calldataload, m_args);
+	return m_builder.CreateLoad(m_args[1]);
+}
+
 extern "C"
 {
 
@@ -126,6 +134,16 @@ EXPORT void ext_setStore(i256* _index, i256* _value)
 	auto index = llvm2eth(*_index);
 	auto value = llvm2eth(*_value);
 	g_ext->setStore(index, value);
+}
+
+EXPORT void ext_calldataload(i256* _index, i256* _value)
+{
+	auto index = static_cast<size_t>(llvm2eth(*_index));
+	assert(index + 31 > index); // TODO: Handle large index
+	auto b = reinterpret_cast<byte*>(_value);
+	for (size_t i = index, j = 31; i <= index + 31; ++i, --j)
+		b[j] = i < g_ext->data.size() ? g_ext->data[i] : 0;
+	// TODO: It all can be done by adding padding to data or by using min() algorithm without branch
 }
 
 }
