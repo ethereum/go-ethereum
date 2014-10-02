@@ -60,6 +60,8 @@ llvm::BasicBlock* Compiler::getOrCreateBasicBlockAtPC(ProgramCounter pc)
 
 void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 {
+	getOrCreateBasicBlockAtPC(0);
+
 	for (auto curr = bytecode.cbegin(); curr != bytecode.cend(); ++curr)
 	{
 		using dev::eth::Instruction;
@@ -168,7 +170,6 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 	// Create the basic blocks.
 	auto entryBlock = BasicBlock::Create(context, "entry", mainFunc);
-	basicBlocks[0] = entryBlock;
 	builder.SetInsertPoint(entryBlock);
 	createBasicBlocks(bytecode);
 
@@ -189,11 +190,12 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		ProgramCounter currentPC = pc - bytecode.cbegin();
 
 		auto blockIter = basicBlocks.find(currentPC);
-		if (currentPC > 0 && blockIter != basicBlocks.end())
+		if (blockIter != basicBlocks.end())
 		{
 			auto nextBlock = blockIter->second;
 			// Terminate the current block by jumping to the next one.
-			builder.CreateBr(nextBlock);
+			if (currentBlock != nullptr)
+				builder.CreateBr(nextBlock);
 			// Insert the next block into the main function.
 			mainFunc->getBasicBlockList().push_back(nextBlock);
 			builder.SetInsertPoint(nextBlock);
@@ -281,6 +283,16 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			auto res128 = builder.CreateSRem(lhs128, rhs128);
 			auto res256 = builder.CreateSExt(res128, Types.word256);
 			stack.push(res256);
+			break;
+		}
+
+		case Instruction::NOT:
+		{
+			auto top = stack.pop();
+			auto zero = ConstantInt::get(Types.word256, 0);
+			auto nonzero = builder.CreateICmpNE(top, zero, "nonzero");
+			auto result = builder.CreateZExt(nonzero, Types.word256);
+			stack.push(result);
 			break;
 		}
 
@@ -453,7 +465,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			stack.pop();
 
 			auto top = stack.pop();
-			auto cond = builder.CreateTrunc(top, builder.getInt1Ty(), "cond");
+			auto zero = ConstantInt::get(Types.word256, 0);
+			auto cond = builder.CreateICmpNE(top, zero, "nonzero");
 			auto targetBlock = jumpTargets[currentPC];
 			auto followBlock = basicBlocks[currentPC + 1];
 			builder.CreateCondBr(cond, targetBlock, followBlock);
@@ -549,6 +562,20 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		}
 
 		}
+	}
+
+	// Generate final basic block (may be jumped to).
+	auto finalPC = bytecode.size();
+	auto it = basicBlocks.find(finalPC);
+	if (it != basicBlocks.end())
+	{
+		auto finalBlock = it->second;
+
+		if (currentBlock != nullptr)
+			builder.CreateBr(finalBlock);
+
+		mainFunc->getBasicBlockList().push_back(finalBlock);
+		builder.SetInsertPoint(finalBlock);
 	}
 
 	if (!userRet)
