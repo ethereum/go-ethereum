@@ -18,7 +18,7 @@ func (self Bytes) String() string {
 func DeleteFromByteSlice(s [][]byte, hash []byte) [][]byte {
 	for i, h := range s {
 		if bytes.Compare(h, hash) == 0 {
-			return append(s[:i], s[i+1:]...)
+			return append(s[:i:i], s[i+1:]...)
 		}
 	}
 
