@@ -10,7 +10,7 @@ namespace evmcc
 class Memory
 {
 public:
-	Memory(llvm::IRBuilder<>& _builder);
+	Memory(llvm::IRBuilder<>& _builder, llvm::Module* module);
 
 	static const dev::bytes& init();
 

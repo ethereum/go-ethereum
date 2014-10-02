@@ -26,13 +26,11 @@ using MemoryImpl = dev::bytes;
 static MemoryImpl* evmccrt_memory;
 
 
-Memory::Memory(llvm::IRBuilder<>& _builder)
+Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* module)
 	: m_builder(_builder)
 {
 	auto voidTy	= m_builder.getVoidTy();
 	auto i64Ty = m_builder.getInt64Ty();
-	auto module = _builder.GetInsertBlock()->getParent()->getParent();
-
 
 	auto memRequireTy = llvm::FunctionType::get(m_builder.getInt8PtrTy(), i64Ty, false);
 	m_memRequire = llvm::Function::Create(memRequireTy,

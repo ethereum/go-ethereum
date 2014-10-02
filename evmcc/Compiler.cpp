@@ -39,6 +39,119 @@ Compiler::Compiler()
 	Types.WordLowPrecision = llvm::Type::getIntNTy(context, 64);
 }
 
+llvm::BasicBlock* Compiler::getOrCreateBasicBlockAtPC(ProgramCounter pc)
+{
+	llvm::BasicBlock* block = nullptr;
+	auto blockIter = basicBlocks.find(pc);
+	if (blockIter == basicBlocks.cend())
+	{
+		// Create a basic block at targetPC.
+		std::ostringstream oss;
+		oss << "instr." << pc;
+		block = llvm::BasicBlock::Create(llvm::getGlobalContext(), oss.str());
+		basicBlocks[pc] = block;
+	}
+	else
+	{
+		block = blockIter->second;
+	}
+	return block;
+}
+
+void Compiler::createBasicBlocks(const dev::bytes& bytecode)
+{
+	getOrCreateBasicBlockAtPC(0);
+
+	for (auto curr = bytecode.cbegin(); curr != bytecode.cend(); ++curr)
+	{
+		using dev::eth::Instruction;
+
+		auto inst = static_cast<Instruction>(*curr);
+		switch (inst)
+		{
+		case Instruction::PUSH1:
+		case Instruction::PUSH2:
+		case Instruction::PUSH3:
+		case Instruction::PUSH4:
+		case Instruction::PUSH5:
+		case Instruction::PUSH6:
+		case Instruction::PUSH7:
+		case Instruction::PUSH8:
+		case Instruction::PUSH9:
+		case Instruction::PUSH10:
+		case Instruction::PUSH11:
+		case Instruction::PUSH12:
+		case Instruction::PUSH13:
+		case Instruction::PUSH14:
+		case Instruction::PUSH15:
+		case Instruction::PUSH16:
+		case Instruction::PUSH17:
+		case Instruction::PUSH18:
+		case Instruction::PUSH19:
+		case Instruction::PUSH20:
+		case Instruction::PUSH21:
+		case Instruction::PUSH22:
+		case Instruction::PUSH23:
+		case Instruction::PUSH24:
+		case Instruction::PUSH25:
+		case Instruction::PUSH26:
+		case Instruction::PUSH27:
+		case Instruction::PUSH28:
+		case Instruction::PUSH29:
+		case Instruction::PUSH30:
+		case Instruction::PUSH31:
+		case Instruction::PUSH32:
+		{
+			auto numBytes = static_cast<size_t>(inst) - static_cast<size_t>(Instruction::PUSH1) + 1;
+			auto next = curr + numBytes + 1;
+			if (next == bytecode.cend())
+				break;
+
+			auto nextInst = static_cast<Instruction>(*next);
+
+			if (nextInst == Instruction::JUMP || nextInst == Instruction::JUMPI)
+			{
+				// Compute target PC of the jump.
+				dev::u256 val = 0;
+				for (auto iter = curr + 1; iter < next; ++iter)
+				{
+					val <<= 8;
+					val |= *iter;
+				}
+
+				// Create a block for the JUMP target.
+				ProgramCounter targetPC = val.convert_to<ProgramCounter>();
+				auto targetBlock = getOrCreateBasicBlockAtPC(targetPC);
+
+				ProgramCounter jumpPC = (next - bytecode.cbegin());
+				jumpTargets[jumpPC] = targetBlock;
+
+				// Create a block following the JUMP.
+				if (next + 1 < bytecode.cend())
+				{
+					ProgramCounter nextPC = (next + 1 - bytecode.cbegin());
+					getOrCreateBasicBlockAtPC(nextPC);
+				}
+
+				curr += 1; // skip over JUMP
+			}
+
+			curr += numBytes;
+			break;
+		}
+
+		case Instruction::JUMP:
+		case Instruction::JUMPI:
+		{
+			std::cerr << "JUMP/JUMPI at " << (curr - bytecode.cbegin()) << " not preceded by PUSH\n";
+			std::exit(1);
+		}
+
+		default:
+			break;
+		}
+	}
+}
 
 std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 {
@@ -55,20 +168,41 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	auto mainFuncType = FunctionType::get(builder.getInt64Ty(), false);
 	auto mainFunc = Function::Create(mainFuncType, Function::ExternalLinkage, "main", module.get());
 
+	// Create the basic blocks.
 	auto entryBlock = BasicBlock::Create(context, "entry", mainFunc);
 	builder.SetInsertPoint(entryBlock);
+	createBasicBlocks(bytecode);
 
-	// Init stack and memory
+	// Init runtime structures.
 	auto stack = Stack(builder, module.get());
-	auto memory = Memory(builder);
-
-	auto ext = Ext(builder);
+	auto memory = Memory(builder, module.get());
+	auto ext = Ext(builder, module.get());
 
 	auto userRet = false;
 	auto finished = false;
-	for (auto pc = bytecode.cbegin(); pc != bytecode.cend() && !finished; ++pc)
+
+	BasicBlock* currentBlock = entryBlock;
+
+	for (auto pc = bytecode.cbegin(); pc != bytecode.cend(); ++pc)
 	{
 		using dev::eth::Instruction;
+
+		ProgramCounter currentPC = pc - bytecode.cbegin();
+
+		auto blockIter = basicBlocks.find(currentPC);
+		if (blockIter != basicBlocks.end())
+		{
+			auto nextBlock = blockIter->second;
+			// Terminate the current block by jumping to the next one.
+			if (currentBlock != nullptr)
+				builder.CreateBr(nextBlock);
+			// Insert the next block into the main function.
+			mainFunc->getBasicBlockList().push_back(nextBlock);
+			builder.SetInsertPoint(nextBlock);
+			currentBlock = nextBlock;
+		}
+
+		assert(currentBlock != nullptr);
 
 		auto inst = static_cast<Instruction>(*pc);
 		switch (inst)
@@ -149,6 +283,16 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			auto res128 = builder.CreateSRem(lhs128, rhs128);
 			auto res256 = builder.CreateSExt(res128, Types.word256);
 			stack.push(res256);
+			break;
+		}
+
+		case Instruction::NOT:
+		{
+			auto top = stack.pop();
+			auto zero = ConstantInt::get(Types.word256, 0);
+			auto iszero = builder.CreateICmpEQ(top, zero, "iszero");
+			auto result = builder.CreateZExt(iszero, Types.word256);
+			stack.push(result);
 			break;
 		}
 
@@ -299,6 +443,38 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			break;
 		}
 
+		case Instruction::JUMP:
+		{
+			// The target address is computed at compile time,
+			// just pop it without looking...
+			stack.pop();
+
+			auto targetBlock = jumpTargets[currentPC];
+			builder.CreateBr(targetBlock);
+
+			currentBlock = nullptr;
+			break;
+		}
+
+		case Instruction::JUMPI:
+		{
+			assert(pc + 1 < bytecode.cend());
+
+			// The target address is computed at compile time,
+			// just pop it without looking...
+			stack.pop();
+
+			auto top = stack.pop();
+			auto zero = ConstantInt::get(Types.word256, 0);
+			auto cond = builder.CreateICmpNE(top, zero, "nonzero");
+			auto targetBlock = jumpTargets[currentPC];
+			auto followBlock = basicBlocks[currentPC + 1];
+			builder.CreateCondBr(cond, targetBlock, followBlock);
+
+			currentBlock = nullptr;
+			break;
+		}
+
 		case Instruction::ADDRESS:
 		{
 			auto value = ext.address();
@@ -394,6 +570,20 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		}
 
 		}
+	}
+
+	// Generate final basic block (may be jumped to).
+	auto finalPC = bytecode.size();
+	auto it = basicBlocks.find(finalPC);
+	if (it != basicBlocks.end())
+	{
+		auto finalBlock = it->second;
+
+		if (currentBlock != nullptr)
+			builder.CreateBr(finalBlock);
+
+		mainFunc->getBasicBlockList().push_back(finalBlock);
+		builder.SetInsertPoint(finalBlock);
 	}
 
 	if (!userRet)
