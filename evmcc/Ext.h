@@ -26,10 +26,13 @@ public:
 	llvm::Value* calldatasize();
 	llvm::Value* gasprice();
 
+	llvm::Value* balance(llvm::Value* _address);
 	llvm::Value* calldataload(llvm::Value* _index);
 
 private:
 	llvm::Value* getDataElem(unsigned _index, const llvm::Twine& _name = "");
+
+	llvm::Value* bswap(llvm::Value*);
 
 private:
 	llvm::IRBuilder<>& m_builder;
@@ -40,6 +43,8 @@ private:
 	llvm::Function* m_store;
 	llvm::Function* m_setStore;
 	llvm::Function* m_calldataload;
+	llvm::Function* m_balance;
+	llvm::Function* m_bswap;
 };
 	
 
