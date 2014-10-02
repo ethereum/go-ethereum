@@ -286,6 +286,26 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			break;
 		}
 
+		case Instruction::LT:
+		{
+			auto lhs = stack.pop();
+			auto rhs = stack.pop();
+			auto res1 = builder.CreateICmpULT(lhs, rhs);
+			auto res256 = builder.CreateZExt(res1, Types.word256);
+			stack.push(res256);
+			break;
+		}
+
+		case Instruction::GT:
+		{
+			auto lhs = stack.pop();
+			auto rhs = stack.pop();
+			auto res1 = builder.CreateICmpUGT(lhs, rhs);
+			auto res256 = builder.CreateZExt(res1, Types.word256);
+			stack.push(res256);
+			break;
+		}
+
 		case Instruction::NOT:
 		{
 			auto top = stack.pop();
