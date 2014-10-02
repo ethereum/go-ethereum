@@ -315,6 +315,33 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			stack.push(result);
 			break;
 		}
+		
+		case Instruction::AND:
+		{
+			auto lhs = stack.pop();
+			auto rhs = stack.pop();
+			auto res = builder.CreateAnd(lhs, rhs);
+			stack.push(res);
+			break;
+		}
+
+		case Instruction::OR:
+		{
+			auto lhs = stack.pop();
+			auto rhs = stack.pop();
+			auto res = builder.CreateOr(lhs, rhs);
+			stack.push(res);
+			break;
+		}
+
+		case Instruction::XOR:
+		{
+			auto lhs = stack.pop();
+			auto rhs = stack.pop();
+			auto res = builder.CreateXor(lhs, rhs);
+			stack.push(res);
+			break;
+		}
 
 		case Instruction::POP:
 		{
