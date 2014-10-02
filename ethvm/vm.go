@@ -763,9 +763,9 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			// Generate a new address
 			addr := ethcrypto.CreateAddress(closure.Address(), closure.object.Nonce)
-			for i := uint64(0); self.env.State().GetStateObject(addr) != nil; i++ {
-				ethcrypto.CreateAddress(closure.Address(), closure.object.Nonce+i)
-			}
+			//for i := uint64(0); self.env.State().GetStateObject(addr) != nil; i++ {
+			//	ethcrypto.CreateAddress(closure.Address(), closure.object.Nonce+i)
+			//}
 			closure.object.Nonce++
 
 			self.Printf(" (*) %x", addr).Endl()

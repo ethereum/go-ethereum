@@ -143,9 +143,10 @@ func (self *Pipe) Transact(key *ethcrypto.KeyPair, rec []byte, value, gas, price
 	self.obj.TxPool().QueueTransaction(tx)
 
 	if contractCreation {
-		logger.Infof("Contract addr %x", tx.CreationAddress())
+		addr := tx.CreationAddress(self.World().State())
+		logger.Infof("Contract addr %x\n", addr)
 
-		return tx.CreationAddress(), nil
+		return addr, nil
 	}
 
 	return tx.Hash(), nil
@@ -154,8 +155,9 @@ func (self *Pipe) Transact(key *ethcrypto.KeyPair, rec []byte, value, gas, price
 func (self *Pipe) PushTx(tx *ethchain.Transaction) ([]byte, error) {
 	self.obj.TxPool().QueueTransaction(tx)
 	if tx.Recipient == nil {
-		logger.Infof("Contract addr %x", tx.CreationAddress())
-		return tx.CreationAddress(), nil
+		addr := tx.CreationAddress(self.World().State())
+		logger.Infof("Contract addr %x\n", addr)
+		return addr, nil
 	}
 	return tx.Hash(), nil
 }

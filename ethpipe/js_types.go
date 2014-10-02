@@ -35,7 +35,7 @@ func NewJSBlock(block *ethchain.Block) *JSBlock {
 
 	var ptxs []JSTransaction
 	for _, tx := range block.Transactions() {
-		ptxs = append(ptxs, *NewJSTx(tx))
+		ptxs = append(ptxs, *NewJSTx(tx, block.State()))
 	}
 
 	list := ethutil.NewList(ptxs)
@@ -64,7 +64,7 @@ func (self *JSBlock) GetTransaction(hash string) *JSTransaction {
 		return nil
 	}
 
-	return NewJSTx(tx)
+	return NewJSTx(tx, self.ref.State())
 }
 
 type JSTransaction struct {
@@ -83,11 +83,11 @@ type JSTransaction struct {
 	Confirmations   int    `json:"confirmations"`
 }
 
-func NewJSTx(tx *ethchain.Transaction) *JSTransaction {
+func NewJSTx(tx *ethchain.Transaction, state *ethstate.State) *JSTransaction {
 	hash := ethutil.Bytes2Hex(tx.Hash())
 	receiver := ethutil.Bytes2Hex(tx.Recipient)
 	if receiver == "0000000000000000000000000000000000000000" {
-		receiver = ethutil.Bytes2Hex(tx.CreationAddress())
+		receiver = ethutil.Bytes2Hex(tx.CreationAddress(state))
 	}
 	sender := ethutil.Bytes2Hex(tx.Sender())
 	createsContract := tx.CreatesContract()

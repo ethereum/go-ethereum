@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/eth-go/ethcrypto"
+	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/secp256k1-go"
 )
@@ -77,8 +78,14 @@ func (tx *Transaction) IsContract() bool {
 	return tx.CreatesContract()
 }
 
-func (tx *Transaction) CreationAddress() []byte {
-	return ethcrypto.Sha3Bin(ethutil.NewValue([]interface{}{tx.Sender(), tx.Nonce}).Encode())[12:]
+func (tx *Transaction) CreationAddress(state *ethstate.State) []byte {
+	// Generate a new address
+	addr := ethcrypto.Sha3Bin(ethutil.NewValue([]interface{}{tx.Sender(), tx.Nonce}).Encode())[12:]
+	//for i := uint64(0); state.GetStateObject(addr) != nil; i++ {
+	//	addr = ethcrypto.Sha3Bin(ethutil.NewValue([]interface{}{tx.Sender(), tx.Nonce + i}).Encode())[12:]
+	//}
+
+	return addr
 }
 
 func (tx *Transaction) Signature(key []byte) []byte {

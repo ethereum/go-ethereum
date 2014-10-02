@@ -104,18 +104,21 @@ func (self *StateManager) Stop() {
 }
 
 func (self *StateManager) updateThread() {
-	blockChan := self.eth.Eventer().Register("block")
+	blockChan := self.eth.Eventer().Register("blocks")
 
 out:
 	for {
 		select {
 		case event := <-blockChan:
-			block := event.Data.(*Block)
-			err := self.Process(block, false)
-			if err != nil {
-				statelogger.Infoln(err)
-				statelogger.Debugf("Block #%v failed (%x...)\n", block.Number, block.Hash()[0:4])
-				statelogger.Debugln(block)
+			blocks := event.Data.(Blocks)
+			for _, block := range blocks {
+				err := self.Process(block, false)
+				if err != nil {
+					statelogger.Infoln(err)
+					statelogger.Debugf("Block #%v failed (%x...)\n", block.Number, block.Hash()[0:4])
+					statelogger.Debugln(block)
+					break
+				}
 			}
 
 		case <-self.quit:

@@ -292,9 +292,9 @@ func (self *StateTransition) Eval(msg *ethstate.Message, script []byte, context 
 func MakeContract(tx *Transaction, state *ethstate.State) *ethstate.StateObject {
 	// Create contract if there's no recipient
 	if tx.IsContract() {
-		addr := tx.CreationAddress()
+		addr := tx.CreationAddress(state)
 
-		contract := state.NewStateObject(addr)
+		contract := state.GetOrNewStateObject(addr)
 		contract.InitCode = tx.Data
 		contract.State = ethstate.New(ethtrie.New(ethutil.Config.Db, ""))
 
