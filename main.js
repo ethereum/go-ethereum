@@ -56,7 +56,7 @@
                     func =  "getBlockByNumber";
                 }
 
-                postData({call: func, args: [numberOrHash]}, function(block) {
+                eth.provider.send({call: func, args: [numberOrHash]}, function(block) {
                     if(block)
                         resolve(block);
                     else
@@ -111,7 +111,7 @@
             return Promise.all(promises).then(function() {
                 return new Promise(function(resolve, reject) {
                     params.data = params.data.join("");
-                    postData({call: "transact", args: [params]}, function(data) {
+                    eth.provider.send({call: "transact", args: [params]}, function(data) {
                         if(data[1])
                             reject(data[0]);
                         else
@@ -123,7 +123,7 @@
 
         compile: function(code) {
             return new Promise(function(resolve, reject) {
-                postData({call: "compile", args: [code]}, function(data) {
+                eth.provider.send({call: "compile", args: [code]}, function(data) {
                     if(data[1])
                         reject(data[0]);
                     else
@@ -141,7 +141,7 @@
 
             return Promise.all(promises).then(function() {
                 return new Promise(function(resolve, reject) {
-                    postData({call: "getBalanceAt", args: [address]}, function(balance) {
+                    eth.provider.send({call: "getBalanceAt", args: [address]}, function(balance) {
                         resolve(balance);
                     });
                 });
@@ -157,7 +157,7 @@
 
             return Promise.all(promises).then(function() {
                 return new Promise(function(resolve, reject) {
-                    postData({call: "getCountAt", args: [address]}, function(count) {
+                    eth.provider.send({call: "getCountAt", args: [address]}, function(count) {
                         resolve(count);
                     });
                 });
@@ -173,7 +173,7 @@
 
             return Promise.all(promises).then(function() {
                 return new Promise(function(resolve, reject) {
-                    postData({call: "getCodeAt", args: [address]}, function(code) {
+                    eth.provider.send({call: "getCodeAt", args: [address]}, function(code) {
                         resolve(code);
                     });
                 });
@@ -193,7 +193,7 @@
 
             return Promise.all(promises).then(function() {
                 return new Promise(function(resolve, reject) {
-                    postData({call: "getStorageAt", args: [address, storageAddress]}, function(entry) {
+                    eth.provider.send({call: "getStorageAt", args: [address, storageAddress]}, function(entry) {
                         resolve(entry);
                     });
                 });
@@ -248,7 +248,7 @@
             // Load promises then call the last "transact".
             return Promise.all(promises).then(function() {
                 return new Promise(function(resolve, reject) {
-                    postData({call: "call", args: params}, function(data) {
+                    eth.provider.send({call: "call", args: params}, function(data) {
                         if(data[1])
                             reject(data[0]);
                         else
@@ -270,7 +270,7 @@
 
             return Promise.all(promises).then(function() {
                 return new Promise(function(resolve, reject) {
-                    postData({call: "getSecretToAddress", args: [key]}, function(address) {
+                    eth.provider.send({call: "getSecretToAddress", args: [key]}, function(address) {
                         resolve(address);
                     });
                 });
@@ -320,7 +320,7 @@
     Object.defineProperty(eth, "key", {
         get: function() {
             return new Promise(function(resolve, reject) {
-                postData({call: "getKey"}, function(k) {
+                eth.provider.send({call: "getKey"}, function(k) {
                     resolve(k);
                 });
             });
@@ -336,7 +336,7 @@
     Object.defineProperty(eth, "coinbase", {
         get: function() {
             return new Promise(function(resolve, reject) {
-                postData({call: "getCoinBase"}, function(coinbase) {
+                eth.provider.send({call: "getCoinBase"}, function(coinbase) {
                     resolve(coinbase);
                 });
             });
@@ -346,7 +346,7 @@
     Object.defineProperty(eth, "listening", {
         get: function() {
             return new Promise(function(resolve, reject) {
-                postData({call: "getIsListening"}, function(listening) {
+                eth.provider.send({call: "getIsListening"}, function(listening) {
                     resolve(listening);
                 });
             });
@@ -357,7 +357,7 @@
     Object.defineProperty(eth, "mining", {
         get: function() {
             return new Promise(function(resolve, reject) {
-                postData({call: "getIsMining"}, function(mining) {
+                eth.provider.send({call: "getIsMining"}, function(mining) {
                     resolve(mining);
                 });
             });
@@ -367,12 +367,65 @@
     Object.defineProperty(eth, "peerCount", {
         get: function() {
             return new Promise(function(resolve, reject) {
-                postData({call: "getPeerCount"}, function(peerCount) {
+                eth.provider.send({call: "getPeerCount"}, function(peerCount) {
                     resolve(peerCount);
                 });
             });
         },
     });
+
+    var ProviderManager = function() {
+        this.queued = [];
+        this.ready = false;
+        this.provider = undefined;
+        this.seed = 1;
+    };
+    ProviderManager.prototype.send = function(data, cb) {
+        data.seed = this.seed;
+        if(cb) {
+            eth._callbacks[data.seed] = cb;
+        }
+
+        if(data.args === undefined) {
+            data.args = [];
+        }
+
+        this.seed++;
+
+        if(this.provider !== undefined) {
+            this.provider.send(data);
+        } else {
+            this.queued = data;
+        }
+    };
+
+    ProviderManager.prototype.set = function(provider) {
+        if(this.provider !== undefined && this.provider.unload !== undefined) {
+            this.provider.unload();
+        }
+
+        this.provider = provider;
+        this.ready = true;
+    };
+
+    ProviderManager.prototype.sendQueued = function() {
+        for(var i = 0; this.queued.length; i++) {
+            // Resend
+            this.send(this.queued[i]);
+        }
+    };
+
+    ProviderManager.prototype.installed = function() {
+        return this.provider !== undefined;
+    };
+
+    eth.provider = new ProviderManager();
+
+    eth.setProvider = function(provider) {
+        eth.provider.set(provider);
+
+        eth.provider.sendQueued();
+    };
 
     var EthWebSocket = function(host) {
         // onmessage handlers
@@ -413,6 +466,10 @@
     EthWebSocket.prototype.onMessage = function(handler) {
         this.handlers.push(handler);
     };
+
+    EthWebSocket.prototype.unload = function() {
+        this.ws.close();
+    };
     eth.WebSocket = EthWebSocket;
 
     var filters = [];
@@ -431,7 +488,7 @@
 
         var self = this; // Cheaper than binding
         this.promise = new Promise(function(resolve, reject) {
-            postData({call: call, args: [options]}, function(id) {
+            eth.provider.send({call: call, args: [options]}, function(id) {
                 self.id = id;
 
                 resolve(id);
@@ -456,7 +513,7 @@
 
     Filter.prototype.uninstall = function() {
         this.promise.then(function(id) {
-            postData({call: "uninstallFilter", args:[id]});
+            eth.provider.send({call: "uninstallFilter", args:[id]});
         });
     };
 
@@ -465,7 +522,7 @@
         return Promise.all([this.promise]).then(function() {
             var id = self.id
             return new Promise(function(resolve, reject) {
-                postData({call: "getMessages", args: [id]}, function(messages) {
+                eth.provider.send({call: "getMessages", args: [id]}, function(messages) {
                     resolve(messages);
                 });
             });
@@ -480,30 +537,10 @@
         }
     });
 
-    var g_seed = 1;
-    function postData(data, cb) {
-        //console.log("postData", data.call)
 
-        data.seed = g_seed;
-        if(cb) {
-            eth._callbacks[data.seed] = cb;
-        }
-
-        if(data.args === undefined) {
-            data.args = [];
-        }
-
-        g_seed++;
-
-        window._messagingAdapter.call(this, data)
-    }
-
-    var sock;
-    eth.init = function(addr) {
-        if(sock)
-            sock.ws.close();
-
-        sock = new eth.WebSocket(addr);
+    // Install default provider
+    if(!eth.provider.installed()) {
+        var sock = new eth.WebSocket("ws://localhost:40404/eth");
         sock.onMessage(function(ev) {
             var data = JSON.parse(ev)
 
@@ -522,13 +559,25 @@
             }
         });
 
-        window._messagingAdapter = function(data) {
-            sock.send(data);
-        };
+        eth.setProvider(sock);
     }
-
-    eth.init("ws://localhost:40404/eth");
 
     window.eth = eth;
 })(this);
 
+/*
+   function eth.provider.send(data, cb) {
+   data.seed = g_seed;
+   if(cb) {
+   eth._callbacks[data.seed] = cb;
+   }
+
+   if(data.args === undefined) {
+   data.args = [];
+   }
+
+   g_seed++;
+
+   window._messagingAdapter.call(this, data)
+   }
+   */
