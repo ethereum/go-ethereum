@@ -13,7 +13,7 @@ namespace evmcc
 class Ext
 {
 public:
-	Ext(llvm::IRBuilder<>& _builder);
+	Ext(llvm::IRBuilder<>& _builder, llvm::Module* module);
 	static void init(std::unique_ptr<dev::eth::ExtVMFace> _ext);
 
 	llvm::Value* store(llvm::Value* _index);

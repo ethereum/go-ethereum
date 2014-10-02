@@ -166,16 +166,15 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	auto mainFuncType = FunctionType::get(builder.getInt64Ty(), false);
 	auto mainFunc = Function::Create(mainFuncType, Function::ExternalLinkage, "main", module.get());
 
-	// Init stack and memory
-	auto stack = Stack(builder, module.get());
-	auto memory = Memory(builder);
-
-	auto ext = Ext(builder);
-
 	// Create the basic blocks.
 	auto entryBlock = BasicBlock::Create(context, "entry", mainFunc);
 	basicBlocks[0] = entryBlock;
 	createBasicBlocks(bytecode);
+
+	// Init runtime structures.
+	auto stack = Stack(builder, module.get());
+	auto memory = Memory(builder, module.get());
+	auto ext = Ext(builder, module.get());
 
 	auto userRet = false;
 	auto finished = false;

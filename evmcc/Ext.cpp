@@ -43,10 +43,9 @@ struct ExtData
 	const byte* calldata;
 };
 
-Ext::Ext(llvm::IRBuilder<>& _builder)
+Ext::Ext(llvm::IRBuilder<>& _builder, llvm::Module* module)
 	: m_builder(_builder)
 {
-	auto module = m_builder.GetInsertBlock()->getParent()->getParent();
 	auto&& ctx = _builder.getContext();
 
 	auto i256Ty = m_builder.getIntNTy(256);
