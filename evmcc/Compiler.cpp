@@ -169,6 +169,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	// Create the basic blocks.
 	auto entryBlock = BasicBlock::Create(context, "entry", mainFunc);
 	basicBlocks[0] = entryBlock;
+	builder.SetInsertPoint(entryBlock);
 	createBasicBlocks(bytecode);
 
 	// Init runtime structures.
@@ -179,7 +180,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	auto userRet = false;
 	auto finished = false;
 
-	BasicBlock* currentBlock = nullptr;
+	BasicBlock* currentBlock = entryBlock;
 
 	for (auto pc = bytecode.cbegin(); pc != bytecode.cend(); ++pc)
 	{
@@ -188,17 +189,13 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		ProgramCounter currentPC = pc - bytecode.cbegin();
 
 		auto blockIter = basicBlocks.find(currentPC);
-		if (blockIter != basicBlocks.end())
+		if (currentPC > 0 && blockIter != basicBlocks.end())
 		{
 			auto nextBlock = blockIter->second;
-			if (currentBlock != nullptr)
-			{
-				// Terminate the current block by jumping to the next one.
-				builder.CreateBr(nextBlock);
-			}
+			// Terminate the current block by jumping to the next one.
+			builder.CreateBr(nextBlock);
 			// Insert the next block into the main function.
-			if (nextBlock != entryBlock)
-				mainFunc->getBasicBlockList().push_back(nextBlock);
+			mainFunc->getBasicBlockList().push_back(nextBlock);
 			builder.SetInsertPoint(nextBlock);
 			currentBlock = nextBlock;
 		}
@@ -208,36 +205,6 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		auto inst = static_cast<Instruction>(*pc);
 		switch (inst)
 		{
-
-		case Instruction::JUMP:
-		{
-			// The target address is computed at compile time,
-			// just pop it without looking...
-			stack.pop();
-
-			auto targetBlock = jumpTargets[currentPC];
-			builder.CreateBr(targetBlock);
-
-			currentBlock = nullptr;
-			break;
-		}
-
-		case Instruction::JUMPI:
-		{
-			assert(pc + 1 < bytecode.cend());
-
-			// The target address is computed at compile time,
-			// just pop it without looking...
-			stack.pop();
-
-			auto cond = stack.pop();
-			auto targetBlock = jumpTargets[currentPC];
-			auto followBlock = basicBlocks[currentPC + 1];
-			builder.CreateCondBr(cond, targetBlock, followBlock);
-
-			currentBlock = nullptr;
-			break;
-		}
 
 		case Instruction::ADD:
 		{
@@ -461,6 +428,37 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			auto index = stack.pop();
 			auto value = stack.pop();
 			ext.setStore(index, value);
+			break;
+		}
+
+		case Instruction::JUMP:
+		{
+			// The target address is computed at compile time,
+			// just pop it without looking...
+			stack.pop();
+
+			auto targetBlock = jumpTargets[currentPC];
+			builder.CreateBr(targetBlock);
+
+			currentBlock = nullptr;
+			break;
+		}
+
+		case Instruction::JUMPI:
+		{
+			assert(pc + 1 < bytecode.cend());
+
+			// The target address is computed at compile time,
+			// just pop it without looking...
+			stack.pop();
+
+			auto top = stack.pop();
+			auto cond = builder.CreateTrunc(top, builder.getInt1Ty(), "cond");
+			auto targetBlock = jumpTargets[currentPC];
+			auto followBlock = basicBlocks[currentPC + 1];
+			builder.CreateCondBr(cond, targetBlock, followBlock);
+
+			currentBlock = nullptr;
 			break;
 		}
 
