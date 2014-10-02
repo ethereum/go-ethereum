@@ -343,6 +343,29 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			break;
 		}
 
+		case Instruction::BYTE:
+		{
+			auto byteNum = stack.pop();
+			
+			// TODO
+			//auto value = stack.pop();
+
+			/*
+			if (byteNum < 32)	- use select
+			{
+				value <<= byteNum*8;
+				value >>= (31-byteNum)*8;
+				push value
+			}
+			else
+			{
+				push 0
+			}
+			*/
+
+			break;
+		}
+
 		case Instruction::POP:
 		{
 			stack.pop();
