@@ -502,6 +502,14 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			break;
 		}
 
+		case Instruction::BALANCE:
+		{
+			auto address = stack.pop();
+			auto value = ext.balance(address);
+			stack.push(value);
+			break;
+		}
+
 		case Instruction::CALLER:
 		{
 			auto value = ext.caller();
