@@ -69,6 +69,8 @@ type Ethereum struct {
 	Addr net.Addr
 	Port string
 
+	blacklist [][]byte
+
 	peerMut sync.Mutex
 
 	// Capabilities for outgoing peers
@@ -209,6 +211,10 @@ func (s *Ethereum) HighestTDPeer() (td *big.Int) {
 	})
 
 	return
+}
+
+func (self *Ethereum) BlacklistPeer(peer *Peer) {
+	self.blacklist = append(self.blacklist, peer.pubkey)
 }
 
 func (s *Ethereum) AddPeer(conn net.Conn) {

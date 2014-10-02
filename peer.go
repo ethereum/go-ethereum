@@ -39,15 +39,15 @@ const (
 	// Values are given explicitly instead of by iota because these values are
 	// defined by the wire protocol spec; it is easier for humans to ensure
 	// correctness when values are explicit.
-	DiscReRequested  = 0x00
-	DiscReTcpSysErr  = 0x01
-	DiscBadProto     = 0x02
-	DiscBadPeer      = 0x03
-	DiscTooManyPeers = 0x04
-	DiscConnDup      = 0x05
-	DiscGenesisErr   = 0x06
-	DiscProtoErr     = 0x07
-	DiscQuitting     = 0x08
+	DiscRequested DiscReason = iota
+	DiscReTcpSysErr
+	DiscBadProto
+	DiscBadPeer
+	DiscTooManyPeers
+	DiscConnDup
+	DiscGenesisErr
+	DiscProtoErr
+	DiscQuitting
 )
 
 var discReasonToString = []string{
@@ -554,19 +554,22 @@ func (self *Peer) FetchBlocks(hashes [][]byte) {
 }
 
 func (self *Peer) FetchHashes() {
-	self.doneFetchingHashes = false
-
 	blockPool := self.ethereum.blockPool
+	blockPool.FetchHashes(self)
 
-	if self.td.Cmp(self.ethereum.HighestTDPeer()) >= 0 {
-		blockPool.td = self.td
+	/*
+		if self.td.Cmp(self.ethereum.HighestTDPeer()) >= 0 {
+			blockPool.td = self.td
 
-		if !blockPool.HasLatestHash() {
-			const amount = 256
-			peerlogger.Debugf("Fetching hashes (%d)\n", amount)
-			self.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{self.lastReceivedHash, uint32(amount)}))
+			if !blockPool.HasLatestHash() {
+				self.doneFetchingHashes = false
+
+				const amount = 256
+				peerlogger.Debugf("Fetching hashes (%d)\n", amount)
+				self.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{self.lastReceivedHash, uint32(amount)}))
+			}
 		}
-	}
+	*/
 }
 
 func (self *Peer) FetchingHashes() bool {
@@ -631,18 +634,22 @@ func (p *Peer) Start() {
 }
 
 func (p *Peer) Stop() {
+	p.StopWithReason(DiscRequested)
+}
+
+func (p *Peer) StopWithReason(reason DiscReason) {
 	if atomic.AddInt32(&p.disconnect, 1) != 1 {
 		return
 	}
 
-	close(p.quit)
-	if atomic.LoadInt32(&p.connected) != 0 {
-		p.writeMessage(ethwire.NewMessage(ethwire.MsgDiscTy, ""))
-		p.conn.Close()
-	}
-
 	// Pre-emptively remove the peer; don't wait for reaping. We already know it's dead if we are here
 	p.ethereum.RemovePeer(p)
+
+	close(p.quit)
+	if atomic.LoadInt32(&p.connected) != 0 {
+		p.writeMessage(ethwire.NewMessage(ethwire.MsgDiscTy, reason))
+		p.conn.Close()
+	}
 }
 
 func (p *Peer) peersMessage() *ethwire.Msg {
@@ -762,6 +769,16 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 		p.Stop()
 
 		return
+	}
+
+	// Check for blacklisting
+	for _, pk := range p.ethereum.blacklist {
+		if bytes.Compare(pk, pub) == 0 {
+			peerlogger.Debugf("Blacklisted peer tried to connect (%x...)\n", pubkey[0:4])
+			p.StopWithReason(DiscBadPeer)
+
+			return
+		}
 	}
 
 	usedPub := 0
