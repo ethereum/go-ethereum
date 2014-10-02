@@ -183,7 +183,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 	BasicBlock* currentBlock = entryBlock;
 
-	for (auto pc = bytecode.cbegin(); pc != bytecode.cend(); ++pc)
+	for (auto pc = bytecode.cbegin(); pc != bytecode.cend() && !finished; ++pc)
 	{
 		using dev::eth::Instruction;
 
@@ -536,6 +536,48 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		case Instruction::CODESIZE:
 		{
 			auto value = builder.getIntN(256, bytecode.size());
+			stack.push(value);
+			break;
+		}
+
+		case Instruction::PREVHASH:
+		{
+			auto value = ext.prevhash();
+			stack.push(value);
+			break;
+		}
+
+		case Instruction::COINBASE:
+		{
+			auto value = ext.coinbase();
+			stack.push(value);
+			break;
+		}
+
+		case Instruction::TIMESTAMP:
+		{
+			auto value = ext.timestamp();
+			stack.push(value);
+			break;
+		}
+
+		case Instruction::NUMBER:
+		{
+			auto value = ext.number();
+			stack.push(value);
+			break;
+		}
+
+		case Instruction::DIFFICULTY:
+		{
+			auto value = ext.difficulty();
+			stack.push(value);
+			break;
+		}
+
+		case Instruction::GASLIMIT:
+		{
+			auto value = ext.gaslimit();
 			stack.push(value);
 			break;
 		}

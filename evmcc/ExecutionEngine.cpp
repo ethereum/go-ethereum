@@ -77,6 +77,12 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 	ext->origin = dev::Address(101010101010101010);
 	ext->value = 0xabcd;
 	ext->gasPrice = 1002;
+	ext->previousBlock.hash = dev::u256(1003);
+	ext->currentBlock.coinbaseAddress = dev::Address(1004);
+	ext->currentBlock.timestamp = 1005;
+	ext->currentBlock.number = 1006;
+	ext->currentBlock.difficulty = 1007;
+	ext->currentBlock.gasLimit = 1008;
 	std::string calldata = "Hello the Beautiful World of Ethereum!";
 	ext->data = calldata;
 	Ext::init(std::move(ext));

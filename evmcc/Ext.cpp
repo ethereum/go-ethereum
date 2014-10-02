@@ -34,14 +34,20 @@ void Ext::init(std::unique_ptr<dev::eth::ExtVMFace> _ext)
 	g_ext = std::move(_ext);
 }
 
-struct ExtData
+struct ExtData 
 {
 	i256 address;
 	i256 caller;
 	i256 origin;
 	i256 callvalue;
-	i256 gasprice;
 	i256 calldatasize;
+	i256 gasprice;
+	i256 prevhash;
+	i256 coinbase;
+	i256 timestamp;
+	i256 number;
+	i256 difficulty;
+	i256 gaslimit;
 	const byte* calldata;
 };
 
@@ -55,13 +61,19 @@ Ext::Ext(llvm::IRBuilder<>& _builder, llvm::Module* module)
 	m_args[1] = m_builder.CreateAlloca(i256Ty, nullptr, "ext.value");
 
 	Type* elements[] = {
-		i256Ty,
-		i256Ty,
-		i256Ty,
-		i256Ty,
-		i256Ty,
-		i256Ty,
-		m_builder.getInt8PtrTy()
+		i256Ty,	 // i256 address;
+		i256Ty,	 // i256 caller;
+		i256Ty,	 // i256 origin;
+		i256Ty,	 // i256 callvalue;
+		i256Ty,	 // i256 calldatasize;
+		i256Ty,	 // i256 gasprice;
+		i256Ty,	 // i256 prevhash;
+		i256Ty,	 // i256 coinbase;
+		i256Ty,	 // i256 timestamp;
+		i256Ty,	 // i256 number;
+		i256Ty,	 // i256 difficulty;
+		i256Ty,	 // i256 gaslimit;
+		//m_builder.getInt8PtrTy()
 	};
 	auto extDataTy = StructType::create(elements, "ext.Data");
 
@@ -101,8 +113,14 @@ Value* Ext::address() { return getDataElem(0, "address"); }
 Value* Ext::caller() { return getDataElem(1, "caller"); }
 Value* Ext::origin() { return getDataElem(2, "origin"); }
 Value* Ext::callvalue() { return getDataElem(3, "callvalue"); }
-Value* Ext::calldatasize() { return getDataElem(5, "calldatasize"); }
-Value* Ext::gasprice() { return getDataElem(4, "gasprice"); }
+Value* Ext::calldatasize() { return getDataElem(4, "calldatasize"); }
+Value* Ext::gasprice() { return getDataElem(5, "gasprice"); }
+Value* Ext::prevhash() { return getDataElem(6, "prevhash"); }
+Value* Ext::coinbase() { return getDataElem(7, "coinbase"); }
+Value* Ext::timestamp() { return getDataElem(8, "timestamp"); }
+Value* Ext::number() { return getDataElem(9, "number"); }
+Value* Ext::difficulty() { return getDataElem(10, "difficulty"); }
+Value* Ext::gaslimit() { return getDataElem(11, "gaslimit"); }
 
 Value* Ext::calldataload(Value* _index)
 {
@@ -135,7 +153,13 @@ EXPORT void ext_init(ExtData* _extData)
 	_extData->callvalue = eth2llvm(g_ext->value);
 	_extData->gasprice = eth2llvm(g_ext->gasPrice);
 	_extData->calldatasize = eth2llvm(g_ext->data.size());
-	_extData->calldata = g_ext->data.data();
+	_extData->prevhash = eth2llvm(g_ext->previousBlock.hash);
+	_extData->coinbase = eth2llvm(fromAddress(g_ext->currentBlock.coinbaseAddress));
+	_extData->timestamp = eth2llvm(g_ext->currentBlock.timestamp);
+	_extData->number = eth2llvm(g_ext->currentBlock.number);
+	_extData->difficulty = eth2llvm(g_ext->currentBlock.difficulty);
+	_extData->gaslimit = eth2llvm(g_ext->currentBlock.gasLimit);
+	//_extData->calldata = g_ext->data.data();
 }
 
 EXPORT void ext_store(i256* _index, i256* _value)

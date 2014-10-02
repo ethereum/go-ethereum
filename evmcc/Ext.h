@@ -25,6 +25,12 @@ public:
 	llvm::Value* callvalue();
 	llvm::Value* calldatasize();
 	llvm::Value* gasprice();
+	llvm::Value* prevhash();
+	llvm::Value* coinbase();
+	llvm::Value* timestamp();
+	llvm::Value* number();
+	llvm::Value* difficulty();
+	llvm::Value* gaslimit();
 
 	llvm::Value* balance(llvm::Value* _address);
 	llvm::Value* calldataload(llvm::Value* _index);
