@@ -14,6 +14,7 @@
 #include <llvm/Support/Host.h>
 
 #include "Ext.h"
+#include "Memory.h"
 
 namespace evmcc
 {
@@ -68,6 +69,8 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 	_module.release();	// Successfully created llvm::ExecutionEngine takes ownership of the module
 	exec->finalizeObject();
 
+	auto&& memory = Memory::init();
+
 	auto ext = std::make_unique<dev::eth::ExtVMFace>();
 	ext->myAddress = dev::Address(1122334455667788);
 	ext->caller = dev::Address(0xfacefacefaceface);
@@ -86,8 +89,19 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 	}
 
 	auto result = exec->runFunction(entryFunc, {});
-	auto intResult = result.IntVal.getZExtValue();
-	return intResult;
+	if (auto intResult = result.IntVal.getZExtValue())
+	{
+		auto index = intResult >> 32;
+		auto size = 0xFFFFFFFF & intResult;
+
+		std::cout << "RETURN [ ";
+		for (dev::bytes::const_iterator it = memory.cbegin() + index, end = it + size; it != end; ++it)
+			std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)*it << " ";
+		std::cout << "]";
+
+		return 10;
+	}	
+	return 0;
 }
 
 }

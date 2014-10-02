@@ -160,12 +160,15 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	IRBuilder<> builder(context);
 
 	// Create main function
-	auto mainFuncType = FunctionType::get(llvm::Type::getInt32Ty(context), false);
+	const auto i32Ty = builder.getInt32Ty();
+	Type* retTypeElems[] = {i32Ty, i32Ty};
+	auto retType = StructType::create(retTypeElems, "MemRef", true);
+	auto mainFuncType = FunctionType::get(builder.getInt64Ty(), false);
 	auto mainFunc = Function::Create(mainFuncType, Function::ExternalLinkage, "main", module.get());
 
 	// Init stack and memory
 	auto stack = Stack(builder, module.get());
-	auto memory = Memory(builder, module.get());
+	auto memory = Memory(builder);
 
 	auto ext = Ext(builder);
 
@@ -173,6 +176,9 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	auto entryBlock = BasicBlock::Create(context, "entry", mainFunc);
 	basicBlocks[0] = entryBlock;
 	createBasicBlocks(bytecode);
+
+	auto userRet = false;
+	auto finished = false;
 
 	BasicBlock* currentBlock = nullptr;
 
@@ -509,10 +515,47 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			break;
 		}
 
+		case Instruction::CODESIZE:
+		{
+			auto value = builder.getIntN(256, bytecode.size());
+			stack.push(value);
+			break;
+		}
+
+		case Instruction::RETURN:
+		{
+			auto index = stack.pop();
+			auto size = stack.pop();
+
+			// MCJIT does not support returning structs
+			//auto index32 = builder.CreateTrunc(index, i32Ty, "index32");
+			//auto size32 = builder.CreateTrunc(size, i32Ty, "size32");
+			//auto ret = builder.CreateInsertValue(UndefValue::get(retType), index32, 0, "ret");
+			//ret = builder.CreateInsertValue(ret, size32, 1, "ret");
+
+			auto ret = builder.CreateTrunc(index, builder.getInt64Ty());
+			ret = builder.CreateShl(ret, 32);
+			size = builder.CreateTrunc(size, i32Ty);
+			size = builder.CreateZExt(size, builder.getInt64Ty());
+			ret = builder.CreateOr(ret, size);
+
+			builder.CreateRet(ret);
+			finished = true;
+			userRet = true;
+			break;
+		}
+
+		case Instruction::STOP:
+		{
+			finished = true;
+			break;
+		}
+
 		}
 	}
 
-	builder.CreateRet(ConstantInt::get(Type::getInt32Ty(context), 0));
+	if (!userRet)
+		builder.CreateRet(builder.getInt64(0));
 
 	return module;
 }
