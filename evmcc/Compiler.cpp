@@ -345,23 +345,28 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 		case Instruction::BYTE:
 		{
-			auto byteNum = stack.pop();
-			
-			// TODO
-			//auto value = stack.pop();
+			const auto byteNum = stack.pop();
+			auto value = stack.pop();
 
 			/*
 			if (byteNum < 32)	- use select
 			{
-				value <<= byteNum*8;
-				value >>= (31-byteNum)*8;
-				push value
+			value <<= byteNum*8
+			value >>= 31*8
+			push value
 			}
-			else
-			{
-				push 0
-			}
+			else push 0
 			*/
+
+			// TODO: Shifting by 0 gives wrong results as of this bug http://llvm.org/bugs/show_bug.cgi?id=16439
+			
+			auto shbits = builder.CreateShl(byteNum, builder.getIntN(256, 3));
+			value = builder.CreateShl(value, shbits);
+			value = builder.CreateLShr(value, builder.getIntN(256, 31 * 8));
+
+			auto byteNumValid = builder.CreateICmpULT(byteNum, builder.getIntN(256, 32));
+			value = builder.CreateSelect(byteNumValid, value, builder.getIntN(256, 0));
+			stack.push(value);		
 
 			break;
 		}
