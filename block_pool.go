@@ -56,6 +56,11 @@ func (self *BlockPool) Len() int {
 	return len(self.hashPool)
 }
 
+func (self *BlockPool) Reset() {
+	self.pool = make(map[string]*block)
+	self.hashPool = nil
+}
+
 func (self *BlockPool) HasLatestHash() bool {
 	self.mut.Lock()
 	defer self.mut.Unlock()
@@ -77,7 +82,7 @@ func (self *BlockPool) Blocks() (blocks ethchain.Blocks) {
 	return
 }
 
-func (self *BlockPool) FetchHashes(peer *Peer) {
+func (self *BlockPool) FetchHashes(peer *Peer) bool {
 	highestTd := self.eth.HighestTDPeer()
 
 	if (self.peer == nil && peer.td.Cmp(highestTd) >= 0) || (self.peer != nil && peer.td.Cmp(self.peer.td) >= 0) || self.peer == peer {
@@ -95,7 +100,11 @@ func (self *BlockPool) FetchHashes(peer *Peer) {
 			peerlogger.Debugf("Fetching hashes (%d)\n", amount)
 			peer.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{peer.lastReceivedHash, uint32(amount)}))
 		}
+
+		return true
 	}
+
+	return false
 }
 
 func (self *BlockPool) AddHash(hash []byte, peer *Peer) {
@@ -122,7 +131,7 @@ func (self *BlockPool) Add(b *ethchain.Block, peer *Peer) {
 		self.pool[hash] = &block{peer, peer, b, time.Now(), 0}
 
 		if !self.eth.BlockChain().HasBlock(b.PrevHash) && self.pool[string(b.PrevHash)] == nil && !self.fetchingHashes {
-			poollogger.Infof("Unknown block, requesting parent (%x...)\n", b.PrevHash[0:4])
+			poollogger.Infof("Unknown chain, requesting (%x...)\n", b.PrevHash[0:4])
 			peer.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{b.Hash(), uint32(256)}))
 		}
 	} else if self.pool[hash] != nil {
@@ -308,6 +317,7 @@ out:
 			}
 
 			if err != nil {
+				self.Reset()
 				// Remove this bad chain
 				for _, block := range blocks {
 					self.Remove(block.Hash())

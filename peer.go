@@ -202,7 +202,7 @@ func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 	go func() {
 		conn, err := p.Connect(addr)
 		if err != nil {
-			peerlogger.Debugln("Connection to peer failed. Giving up.", err)
+			//peerlogger.Debugln("Connection to peer failed. Giving up.", err)
 			p.Stop()
 			return
 		}
@@ -517,7 +517,9 @@ func (p *Peer) HandleInbound() {
 					}
 
 					if !foundCommonHash && msg.Data.Len() != 0 {
-						p.FetchHashes()
+						if !p.FetchHashes() {
+							p.doneFetchingHashes = true
+						}
 					} else {
 						peerlogger.Infof("Found common hash (%x...)\n", p.lastReceivedHash[0:4])
 						p.doneFetchingHashes = true
@@ -553,9 +555,9 @@ func (self *Peer) FetchBlocks(hashes [][]byte) {
 	}
 }
 
-func (self *Peer) FetchHashes() {
+func (self *Peer) FetchHashes() bool {
 	blockPool := self.ethereum.blockPool
-	blockPool.FetchHashes(self)
+	return blockPool.FetchHashes(self)
 
 	/*
 		if self.td.Cmp(self.ethereum.HighestTDPeer()) >= 0 {
@@ -718,10 +720,7 @@ func (self *Peer) handleStatus(msg *ethwire.Msg) {
 
 	// Compare the total TD with the blockchain TD. If remote is higher
 	// fetch hashes from highest TD node.
-	if self.td.Cmp(self.ethereum.BlockChain().TD) > 0 {
-		self.ethereum.blockPool.AddHash(self.lastReceivedHash, self)
-		self.FetchHashes()
-	}
+	self.FetchHashes()
 
 	ethlogger.Infof("Peer is [eth] capable. (TD = %v ~ %x) %d / %d", self.td, self.bestHash, protoVersion, netVersion)
 
