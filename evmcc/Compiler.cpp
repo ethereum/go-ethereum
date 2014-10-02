@@ -290,8 +290,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		{
 			auto top = stack.pop();
 			auto zero = ConstantInt::get(Types.word256, 0);
-			auto nonzero = builder.CreateICmpNE(top, zero, "nonzero");
-			auto result = builder.CreateZExt(nonzero, Types.word256);
+			auto iszero = builder.CreateICmpEQ(top, zero, "iszero");
+			auto result = builder.CreateZExt(iszero, Types.word256);
 			stack.push(result);
 			break;
 		}
