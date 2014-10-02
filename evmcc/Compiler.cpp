@@ -495,6 +495,13 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			break;
 		}
 
+		case Instruction::PC:
+		{
+			auto value = builder.getIntN(256, currentPC);
+			stack.push(value);
+			break;
+		}
+
 		case Instruction::ADDRESS:
 		{
 			auto value = ext.address();
