@@ -712,6 +712,17 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			stack.push(value);
 			break;
 		}
+		
+		case Instruction::CREATE:
+		{
+			auto endowment = stack.pop();
+			auto initOff = stack.pop();
+			auto initSize = stack.pop();
+
+			auto address = ext.create(endowment, initOff, initSize);
+			stack.push(address);
+			break;
+		}
 
 		case Instruction::RETURN:
 		{

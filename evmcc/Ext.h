@@ -34,6 +34,7 @@ public:
 
 	llvm::Value* balance(llvm::Value* _address);
 	llvm::Value* calldataload(llvm::Value* _index);
+	llvm::Value* create(llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* _initSize);
 
 private:
 	llvm::Value* getDataElem(unsigned _index, const llvm::Twine& _name = "");
@@ -44,12 +45,15 @@ private:
 	llvm::IRBuilder<>& m_builder;
 
 	llvm::Value* m_args[2];
+	llvm::Value* m_arg2;
+	llvm::Value* m_arg3;
 	llvm::Value* m_data;
 	llvm::Function* m_init;
 	llvm::Function* m_store;
 	llvm::Function* m_setStore;
 	llvm::Function* m_calldataload;
 	llvm::Function* m_balance;
+	llvm::Function* m_create;
 	llvm::Function* m_bswap;
 };
 	

@@ -17,6 +17,7 @@ using namespace llvm;
 using llvm::types::i;
 using Linkage = llvm::GlobalValue::LinkageTypes;
 using dev::h256;
+using dev::u256;
 
 namespace evmcc
 {
@@ -52,6 +53,8 @@ Ext::Ext(llvm::IRBuilder<>& _builder, llvm::Module* module)
 	auto i256Ty = m_builder.getIntNTy(256);
 	m_args[0] = m_builder.CreateAlloca(i256Ty, nullptr, "ext.index");
 	m_args[1] = m_builder.CreateAlloca(i256Ty, nullptr, "ext.value");
+	m_arg2 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg2");
+	m_arg3 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg3");
 
 	Type* elements[] = {
 		i256Ty,	 // i256 address;
@@ -77,7 +80,9 @@ Ext::Ext(llvm::IRBuilder<>& _builder, llvm::Module* module)
 	m_setStore = Function::Create(TypeBuilder<void(i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_setStore", module);
 	m_calldataload = Function::Create(TypeBuilder<void(i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_calldataload", module);
 	m_balance = Function::Create(TypeBuilder<void(i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_balance", module);
+	m_create = Function::Create(TypeBuilder<void(i<256>*, i<256>*, i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_create", module);
 	m_bswap = Intrinsic::getDeclaration(module, Intrinsic::bswap, i256Ty);
+
 
 	m_builder.CreateCall(m_init, m_data);
 }
@@ -129,10 +134,22 @@ Value* Ext::bswap(Value* _value)
 
 Value* Ext::balance(Value* _address)
 {
-	auto address = bswap(_address); // to BigEndian	// TODO: I don't get it. It seems not needed
+	auto address = bswap(_address); // to BE
 	m_builder.CreateStore(address, m_args[0]);
 	m_builder.CreateCall(m_balance, m_args);
 	return m_builder.CreateLoad(m_args[1]);
+}
+
+Value* Ext::create(llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* _initSize)
+{
+	m_builder.CreateStore(_endowment, m_args[0]);
+	m_builder.CreateStore(_initOff, m_arg2);
+	m_builder.CreateStore(_initSize, m_arg3);
+	Value* args[] = {m_args[0], m_arg2, m_arg3, m_args[1]};
+	m_builder.CreateCall(m_create, args);
+	Value* address = m_builder.CreateLoad(m_args[1]);
+	address = bswap(address); // to LE
+	return address;
 }
 
 extern "C"
@@ -184,6 +201,26 @@ EXPORT void ext_balance(h256* _address, i256* _value)
 {
 	auto u = Runtime::getExt().balance(dev::right160(*_address));
 	*_value = eth2llvm(u);
+}
+
+EXPORT void ext_create(i256* _endowment, i256* _initOff, i256* _initSize, h256* _address)
+{
+	auto&& ext = Runtime::getExt();
+	auto endowment = llvm2eth(*_endowment);
+	auto initOff =  static_cast<size_t>(llvm2eth(*_initOff));
+	auto initSize = static_cast<size_t>(llvm2eth(*_initSize));
+
+	if (ext.balance(ext.myAddress) >= endowment)
+	{
+		ext.subBalance(endowment);
+		u256 gas;	// TODO: Handle gas
+		auto&& initRef = dev::bytesConstRef(Runtime::getMemory().data() + initOff, initSize);
+		auto&& onOp = dev::bytesConstRef(); // TODO: Handle that thing
+		h256 address = ext.create(endowment, &gas, initRef, onOp);
+		*_address = address;
+	}
+	else
+		*_address = {};
 }
 
 }
