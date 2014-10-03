@@ -724,6 +724,21 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			break;
 		}
 
+		case Instruction::CALL:
+		{
+			auto gas = stack.pop();
+			auto receiveAddress = stack.pop();
+			auto value = stack.pop();
+			auto inOff = stack.pop();
+			auto inSize = stack.pop();
+			auto outOff = stack.pop();
+			auto outSize = stack.pop();
+
+			auto ret = ext.call(gas, receiveAddress, value, inOff, inSize, outOff, outSize);
+			stack.push(ret);
+			break;
+		}
+
 		case Instruction::RETURN:
 		{
 			auto index = stack.pop();

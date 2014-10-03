@@ -51,10 +51,15 @@ Ext::Ext(llvm::IRBuilder<>& _builder, llvm::Module* module)
 	auto&& ctx = _builder.getContext();
 
 	auto i256Ty = m_builder.getIntNTy(256);
+	auto i256PtrTy = i256Ty->getPointerTo();
 	m_args[0] = m_builder.CreateAlloca(i256Ty, nullptr, "ext.index");
 	m_args[1] = m_builder.CreateAlloca(i256Ty, nullptr, "ext.value");
 	m_arg2 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg2");
 	m_arg3 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg3");
+	m_arg4 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg4");
+	m_arg5 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg5");
+	m_arg6 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg6");
+	m_arg7 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg7");
 
 	Type* elements[] = {
 		i256Ty,	 // i256 address;
@@ -81,6 +86,8 @@ Ext::Ext(llvm::IRBuilder<>& _builder, llvm::Module* module)
 	m_calldataload = Function::Create(TypeBuilder<void(i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_calldataload", module);
 	m_balance = Function::Create(TypeBuilder<void(i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_balance", module);
 	m_create = Function::Create(TypeBuilder<void(i<256>*, i<256>*, i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_create", module);
+	Type* args[] = {i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy};
+	m_call = Function::Create(FunctionType::get(m_builder.getVoidTy(), args, false), Linkage::ExternalLinkage, "ext_call", module);
 	m_bswap = Intrinsic::getDeclaration(module, Intrinsic::bswap, i256Ty);
 
 
@@ -152,6 +159,21 @@ Value* Ext::create(llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* 
 	return address;
 }
 
+llvm::Value* Ext::call(llvm::Value* _gas, llvm::Value* _receiveAddress, llvm::Value* _value, llvm::Value* _inOff, llvm::Value* _inSize, llvm::Value* _outOff, llvm::Value* _outSize)
+{
+	m_builder.CreateStore(_gas, m_args[0]);
+	auto receiveAddress = bswap(_receiveAddress); // to BE
+	m_builder.CreateStore(receiveAddress, m_arg2);
+	m_builder.CreateStore(_value, m_arg3);
+	m_builder.CreateStore(_inOff, m_arg4);
+	m_builder.CreateStore(_inSize, m_arg5);
+	m_builder.CreateStore(_outOff, m_arg6);
+	m_builder.CreateStore(_outSize, m_arg7);
+	llvm::Value* args[] = {m_args[0], m_arg2, m_arg3, m_arg4, m_arg5, m_arg6, m_arg7, m_args[1]};
+	m_builder.CreateCall(m_call, args);
+	return m_builder.CreateLoad(m_args[1]);
+}
+
 extern "C"
 {
 
@@ -207,13 +229,13 @@ EXPORT void ext_create(i256* _endowment, i256* _initOff, i256* _initSize, h256* 
 {
 	auto&& ext = Runtime::getExt();
 	auto endowment = llvm2eth(*_endowment);
-	auto initOff =  static_cast<size_t>(llvm2eth(*_initOff));
-	auto initSize = static_cast<size_t>(llvm2eth(*_initSize));
 
 	if (ext.balance(ext.myAddress) >= endowment)
 	{
 		ext.subBalance(endowment);
 		u256 gas;	// TODO: Handle gas
+		auto initOff = static_cast<size_t>(llvm2eth(*_initOff));
+		auto initSize = static_cast<size_t>(llvm2eth(*_initSize));
 		auto&& initRef = dev::bytesConstRef(Runtime::getMemory().data() + initOff, initSize);
 		auto&& onOp = dev::bytesConstRef(); // TODO: Handle that thing
 		h256 address = ext.create(endowment, &gas, initRef, onOp);
@@ -221,6 +243,33 @@ EXPORT void ext_create(i256* _endowment, i256* _initOff, i256* _initSize, h256* 
 	}
 	else
 		*_address = {};
+}
+
+
+
+EXPORT void ext_call(i256* _gas, h256* _receiveAddress, i256* _value, i256* _inOff, i256* _inSize, i256* _outOff, i256* _outSize, i256* _ret)
+{
+	auto&& ext = Runtime::getExt();
+	auto value = llvm2eth(*_value);
+
+	auto ret = false;
+	if (ext.balance(ext.myAddress) >= value)
+	{
+		ext.subBalance(value);
+		auto gas = llvm2eth(*_gas);
+		auto receiveAddress = dev::right160(*_receiveAddress);
+		auto inOff = static_cast<size_t>(llvm2eth(*_inOff));
+		auto inSize = static_cast<size_t>(llvm2eth(*_inSize));
+		auto outOff = static_cast<size_t>(llvm2eth(*_outOff));
+		auto outSize = static_cast<size_t>(llvm2eth(*_outSize));
+		auto&& inRef = dev::bytesConstRef(Runtime::getMemory().data() + inOff, inSize);
+		auto&& outRef = dev::bytesConstRef(Runtime::getMemory().data() + outOff, outSize);
+		dev::eth::OnOpFunc onOp{}; // TODO: Handle that thing
+		auto ret = ext.call(receiveAddress, value, inRef, &gas, outRef, onOp, {}, receiveAddress);
+	}
+
+	// m_gas += gas; // TODO: Handle gas
+	_ret->a = ret ? 1 : 0;
 }
 
 }
