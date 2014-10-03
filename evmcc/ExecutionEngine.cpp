@@ -13,8 +13,7 @@
 #include <llvm/Support/PrettyStackTrace.h>
 #include <llvm/Support/Host.h>
 
-#include "Ext.h"
-#include "Memory.h"
+#include "Runtime.h"
 
 namespace evmcc
 {
@@ -69,8 +68,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 	_module.release();	// Successfully created llvm::ExecutionEngine takes ownership of the module
 	exec->finalizeObject();
 
-	auto&& memory = Memory::init();
-
+	// Create fake ExtVM interface
 	auto ext = std::make_unique<dev::eth::ExtVMFace>();
 	ext->myAddress = dev::Address(1122334455667788);
 	ext->caller = dev::Address(0xfacefacefaceface);
@@ -85,7 +83,9 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 	ext->currentBlock.gasLimit = 1008;
 	std::string calldata = "Hello the Beautiful World of Ethereum!";
 	ext->data = calldata;
-	Ext::init(std::move(ext));
+
+	// Init runtime
+	Runtime runtime(std::move(ext));
 
 	auto entryFunc = module->getFunction("main");
 	if (!entryFunc)
@@ -101,7 +101,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 		auto size = 0xFFFFFFFF & intResult;
 
 		std::cout << "RETURN [ ";
-		for (dev::bytes::const_iterator it = memory.cbegin() + index, end = it + size; it != end; ++it)
+		for (dev::bytes::const_iterator it = Runtime::getMemory().cbegin() + index, end = it + size; it != end; ++it)
 			std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)*it << " ";
 		std::cout << "]";
 

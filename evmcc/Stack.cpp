@@ -9,7 +9,7 @@
 
 #include <llvm/IR/Function.h>
 
-#include "Utils.h"
+#include "Runtime.h"
 
 #ifdef _MSC_VER
 	#define EXPORT __declspec(dllexport)
@@ -19,9 +19,6 @@
 
 namespace evmcc
 {
-
-using StackImpl = std::vector<i256>;
-
 
 Stack::Stack(llvm::IRBuilder<>& _builder, llvm::Module* _module)
 	: m_builder(_builder)
@@ -115,7 +112,8 @@ extern "C"
 
 EXPORT void* evmccrt_stack_create()
 {
-	auto stack = new StackImpl;
+	// TODO: Simplify stack pointer passing
+	auto stack = &Runtime::getStack();
 	std::cerr << "STACK create\n";
 	return stack;
 }
@@ -130,7 +128,7 @@ EXPORT void evmccrt_stack_pop(StackImpl* _stack, i256* _outWord)
 {
 	assert(!_stack->empty());
 	auto word = &_stack->back();
-	debugStack("pop", *word);
+	//debugStack("pop", *word);
 	_stack->pop_back();
 	*_outWord = *word;
 }
@@ -139,7 +137,7 @@ EXPORT void evmccrt_stack_get(StackImpl* _stack, uint32_t _index, i256* _outWord
 {
 	assert(_index < _stack->size());
 	auto word = _stack->rbegin() + _index;
-	debugStack("get", *word, _index);
+	//debugStack("get", *word, _index);
 	*_outWord = *word;
 }
 
@@ -147,7 +145,7 @@ EXPORT void evmccrt_stack_set(StackImpl* _stack, uint32_t _index, i256* _word)
 {
 	assert(_index < _stack->size());
 	*(_stack->rbegin() + _index) = *_word;
-	debugStack("set", *_word, _index);
+	//debugStack("set", *_word, _index);
 }
 
 }	// extern "C"

@@ -12,8 +12,6 @@ class Memory
 public:
 	Memory(llvm::IRBuilder<>& _builder, llvm::Module* module);
 
-	static const dev::bytes& init();
-
 	llvm::Value* loadWord(llvm::Value* _addr);
 	void storeWord(llvm::Value* _addr, llvm::Value* _word);
 	void storeByte(llvm::Value* _addr, llvm::Value* _byte);
