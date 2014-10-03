@@ -29,18 +29,14 @@ Stack::Stack(llvm::IRBuilder<>& _builder, llvm::Module* _module)
 	auto i256PtrTy = i256Ty->getPointerTo();
 	auto voidTy = m_builder.getVoidTy();
 
-	auto stackCreate = llvm::Function::Create(llvm::FunctionType::get(stackPtrTy, false),
-		llvm::GlobalValue::LinkageTypes::ExternalLinkage, "evmccrt_stack_create", _module);
-
-	llvm::Type* argsTypes[] = {stackPtrTy, i256PtrTy};
-	auto funcType = llvm::FunctionType::get(voidTy, argsTypes, false);
+	auto funcType = llvm::FunctionType::get(voidTy, i256PtrTy, false);
 	m_stackPush = llvm::Function::Create(funcType,
 		llvm::GlobalValue::LinkageTypes::ExternalLinkage, "evmccrt_stack_push", _module);
 
 	m_stackPop = llvm::Function::Create(funcType,
 		llvm::GlobalValue::LinkageTypes::ExternalLinkage, "evmccrt_stack_pop", _module);
 
-	llvm::Type* getArgsTypes[] = {stackPtrTy, m_builder.getInt32Ty(), i256PtrTy};
+	llvm::Type* getArgsTypes[] = {m_builder.getInt32Ty(), i256PtrTy};
 	auto getFuncType = llvm::FunctionType::get(voidTy, getArgsTypes, false);
 	m_stackGet = llvm::Function::Create(getFuncType,
 		llvm::GlobalValue::LinkageTypes::ExternalLinkage, "evmccrt_stack_get", _module);
@@ -48,37 +44,36 @@ Stack::Stack(llvm::IRBuilder<>& _builder, llvm::Module* _module)
 	m_stackSet = llvm::Function::Create(getFuncType,
 		llvm::GlobalValue::LinkageTypes::ExternalLinkage, "evmccrt_stack_set", _module);
 
-	m_args[0] = m_builder.CreateCall(stackCreate, "stack.ptr");
-	m_args[1] = m_builder.CreateAlloca(i256Ty, nullptr, "stack.val");
+	m_stackVal = m_builder.CreateAlloca(i256Ty, nullptr, "stack.val");
 }
 
 
 void Stack::push(llvm::Value* _value)
 {
-	m_builder.CreateStore(_value, m_args[1]);	  // copy value to memory
-	m_builder.CreateCall(m_stackPush, m_args);
+	m_builder.CreateStore(_value, m_stackVal);	  // copy value to memory
+	m_builder.CreateCall(m_stackPush, m_stackVal);
 }
 
 
 llvm::Value* Stack::pop()
 {
-	m_builder.CreateCall(m_stackPop, m_args);
-	return m_builder.CreateLoad(m_args[1]);
+	m_builder.CreateCall(m_stackPop, m_stackVal);
+	return m_builder.CreateLoad(m_stackVal);
 }
 
 
 llvm::Value* Stack::get(uint32_t _index)
 {
-	llvm::Value* args[] = {m_args[0], m_builder.getInt32(_index), m_args[1]};
+	llvm::Value* args[] = {m_builder.getInt32(_index), m_stackVal};
 	m_builder.CreateCall(m_stackGet, args);
-	return m_builder.CreateLoad(m_args[1]);
+	return m_builder.CreateLoad(m_stackVal);
 }
 
 
 void Stack::set(uint32_t _index, llvm::Value* _value)
 {
-	m_builder.CreateStore(_value, m_args[1]);	  // copy value to memory
-	llvm::Value* args[] = {m_args[0], m_builder.getInt32(_index), m_args[1]};
+	m_builder.CreateStore(_value, m_stackVal);	  // copy value to memory
+	llvm::Value* args[] = {m_builder.getInt32(_index), m_stackVal};
 	m_builder.CreateCall(m_stackSet, args);
 }
 
@@ -110,41 +105,33 @@ extern "C"
 {
 	using namespace evmcc;
 
-EXPORT void* evmccrt_stack_create()
+EXPORT void evmccrt_stack_push(i256* _word)
 {
-	// TODO: Simplify stack pointer passing
-	auto stack = &Runtime::getStack();
-	std::cerr << "STACK create\n";
-	return stack;
+	//debugStack("push", *_word);
+	Runtime::getStack().push_back(*_word);
 }
 
-EXPORT void evmccrt_stack_push(StackImpl* _stack, i256* _word)
+EXPORT void evmccrt_stack_pop(i256* _outWord)
 {
-	debugStack("push", *_word);
-	_stack->push_back(*_word);
-}
-
-EXPORT void evmccrt_stack_pop(StackImpl* _stack, i256* _outWord)
-{
-	assert(!_stack->empty());
-	auto word = &_stack->back();
+	assert(!Runtime::getStack().empty());
+	auto word = &Runtime::getStack().back();
 	//debugStack("pop", *word);
-	_stack->pop_back();
+	Runtime::getStack().pop_back();
 	*_outWord = *word;
 }
 
-EXPORT void evmccrt_stack_get(StackImpl* _stack, uint32_t _index, i256* _outWord)
+EXPORT void evmccrt_stack_get(uint32_t _index, i256* _outWord)
 {
-	assert(_index < _stack->size());
-	auto word = _stack->rbegin() + _index;
+	assert(_index < Runtime::getStack().size());
+	auto word = Runtime::getStack().rbegin() + _index;
 	//debugStack("get", *word, _index);
 	*_outWord = *word;
 }
 
-EXPORT void evmccrt_stack_set(StackImpl* _stack, uint32_t _index, i256* _word)
+EXPORT void evmccrt_stack_set(uint32_t _index, i256* _word)
 {
-	assert(_index < _stack->size());
-	*(_stack->rbegin() + _index) = *_word;
+	assert(_index < Runtime::getStack().size());
+	*(Runtime::getStack().rbegin() + _index) = *_word;
 	//debugStack("set", *_word, _index);
 }
 
