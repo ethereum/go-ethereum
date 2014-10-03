@@ -400,9 +400,9 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			/*
 			if (byteNum < 32)	- use select
 			{
-			value <<= byteNum*8
-			value >>= 31*8
-			push value
+				value <<= byteNum*8
+				value >>= 31*8
+				push value
 			}
 			else push 0
 			*/

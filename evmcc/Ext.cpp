@@ -5,7 +5,7 @@
 #include <llvm/IR/TypeBuilder.h>
 #include <llvm/IR/IntrinsicInst.h>
 
-#include "Utils.h"
+#include "Runtime.h"
 
 #ifdef _MSC_VER
 #define EXPORT __declspec(dllexport)
@@ -25,13 +25,6 @@ namespace evmcc
 inline dev::u256 fromAddress(dev::Address _a)
 {
 	return (dev::u160)_a;
-}
-
-std::unique_ptr<dev::eth::ExtVMFace> g_ext;
-
-void Ext::init(std::unique_ptr<dev::eth::ExtVMFace> _ext)
-{
-	g_ext = std::move(_ext);
 }
 
 struct ExtData 
@@ -147,25 +140,26 @@ extern "C"
 
 EXPORT void ext_init(ExtData* _extData)
 {
-	_extData->address = eth2llvm(fromAddress(g_ext->myAddress));
-	_extData->caller = eth2llvm(fromAddress(g_ext->caller));
-	_extData->origin = eth2llvm(fromAddress(g_ext->origin));
-	_extData->callvalue = eth2llvm(g_ext->value);
-	_extData->gasprice = eth2llvm(g_ext->gasPrice);
-	_extData->calldatasize = eth2llvm(g_ext->data.size());
-	_extData->prevhash = eth2llvm(g_ext->previousBlock.hash);
-	_extData->coinbase = eth2llvm(fromAddress(g_ext->currentBlock.coinbaseAddress));
-	_extData->timestamp = eth2llvm(g_ext->currentBlock.timestamp);
-	_extData->number = eth2llvm(g_ext->currentBlock.number);
-	_extData->difficulty = eth2llvm(g_ext->currentBlock.difficulty);
-	_extData->gaslimit = eth2llvm(g_ext->currentBlock.gasLimit);
-	//_extData->calldata = g_ext->data.data();
+	auto&& ext = Runtime::getExt();
+	_extData->address = eth2llvm(fromAddress(ext.myAddress));
+	_extData->caller = eth2llvm(fromAddress(ext.caller));
+	_extData->origin = eth2llvm(fromAddress(ext.origin));
+	_extData->callvalue = eth2llvm(ext.value);
+	_extData->gasprice = eth2llvm(ext.gasPrice);
+	_extData->calldatasize = eth2llvm(ext.data.size());
+	_extData->prevhash = eth2llvm(ext.previousBlock.hash);
+	_extData->coinbase = eth2llvm(fromAddress(ext.currentBlock.coinbaseAddress));
+	_extData->timestamp = eth2llvm(ext.currentBlock.timestamp);
+	_extData->number = eth2llvm(ext.currentBlock.number);
+	_extData->difficulty = eth2llvm(ext.currentBlock.difficulty);
+	_extData->gaslimit = eth2llvm(ext.currentBlock.gasLimit);
+	//_extData->calldata = ext.data.data();
 }
 
 EXPORT void ext_store(i256* _index, i256* _value)
 {
 	auto index = llvm2eth(*_index);
-	auto value = g_ext->store(index);
+	auto value = Runtime::getExt().store(index);
 	*_value = eth2llvm(value);
 }
 
@@ -173,7 +167,7 @@ EXPORT void ext_setStore(i256* _index, i256* _value)
 {
 	auto index = llvm2eth(*_index);
 	auto value = llvm2eth(*_value);
-	g_ext->setStore(index, value);
+	Runtime::getExt().setStore(index, value);
 }
 
 EXPORT void ext_calldataload(i256* _index, i256* _value)
@@ -182,13 +176,13 @@ EXPORT void ext_calldataload(i256* _index, i256* _value)
 	assert(index + 31 > index); // TODO: Handle large index
 	auto b = reinterpret_cast<byte*>(_value);
 	for (size_t i = index, j = 31; i <= index + 31; ++i, --j)
-		b[j] = i < g_ext->data.size() ? g_ext->data[i] : 0;
+		b[j] = i < Runtime::getExt().data.size() ? Runtime::getExt().data[i] : 0;
 	// TODO: It all can be done by adding padding to data or by using min() algorithm without branch
 }
 
 EXPORT void ext_balance(h256* _address, i256* _value)
 {
-	auto u = g_ext->balance(dev::right160(*_address));
+	auto u = Runtime::getExt().balance(dev::right160(*_address));
 	*_value = eth2llvm(u);
 }
 

@@ -19,7 +19,7 @@ public:
 
 private:
 	llvm::IRBuilder<>& m_builder;
-	llvm::Value* m_args[2];
+	llvm::Value* m_stackVal;
 	llvm::Function* m_stackPush;
 	llvm::Function* m_stackPop;
 	llvm::Function* m_stackGet;

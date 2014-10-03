@@ -10,7 +10,7 @@
 
 #include <libdevcore/Common.h>
 
-#include "Utils.h"
+#include "Runtime.h"
 
 #ifdef _MSC_VER
 	#define EXPORT __declspec(dllexport)
@@ -20,11 +20,6 @@
 
 namespace evmcc
 {
-
-using MemoryImpl = dev::bytes;
-
-static MemoryImpl* evmccrt_memory;
-
 
 Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* module)
 	: m_builder(_builder)
@@ -46,15 +41,6 @@ Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* module)
 	auto dumpTy = llvm::FunctionType::get(m_builder.getVoidTy(), llvm::ArrayRef<llvm::Type*>(argTypes), false);
  	m_memDump = llvm::Function::Create(dumpTy, llvm::GlobalValue::LinkageTypes::ExternalLinkage,
  	                                   "evmccrt_memory_dump", module);
-}
-
-const dev::bytes& Memory::init()
-{
-	evmccrt_memory = new MemoryImpl();
-	std::cerr << "MEMORY: create(), initial size = " << evmccrt_memory->size()
-		<< std::endl;
-
-	return *evmccrt_memory;
 }
 
 
@@ -132,29 +118,30 @@ extern "C"
 EXPORT uint8_t* evmccrt_memory_require(uint64_t _index)
 {
 	uint64_t requiredSize = (_index / 32 + 1) * 32;
+	auto&& memory = Runtime::getMemory();
 
-	if (evmccrt_memory->size() < requiredSize)
+	if (memory.size() < requiredSize)
 	{
 		std::cerr << "MEMORY: current size: " << std::dec
-				  << evmccrt_memory->size() << " bytes, required size: "
+				  << memory.size() << " bytes, required size: "
 				  << requiredSize << " bytes"
 				  << std::endl;
 
-		evmccrt_memory->resize(requiredSize);
+		memory.resize(requiredSize);
 	}
 
-	return evmccrt_memory->data();
+	return memory.data();
 }
 
 EXPORT uint64_t evmccrt_memory_size()
 {
-	return evmccrt_memory->size() / 32;
+	return Runtime::getMemory().size() / 32;
 }
 
 EXPORT void evmccrt_memory_dump(uint64_t _begin, uint64_t _end)
 {
 	if (_end == 0)
-		_end = evmccrt_memory->size();
+		_end = Runtime::getMemory().size();
 
 	std::cerr << "MEMORY: active size: " << std::dec
 			  << evmccrt_memory_size() << " words\n";
@@ -169,7 +156,7 @@ EXPORT void evmccrt_memory_dump(uint64_t _begin, uint64_t _end)
 		if ((i - _begin) % 16 == 0)
 			std::cerr << '\n' << std::dec << i << ":  ";
 
-		uint8_t b = (*evmccrt_memory)[i];
+		auto b = Runtime::getMemory()[i];
 		std::cerr << std::hex << std::setw(2) << static_cast<int>(b) << ' ';
 	}
 	std::cerr << std::endl;
