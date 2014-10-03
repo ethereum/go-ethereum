@@ -61,6 +61,7 @@ llvm::BasicBlock* Compiler::getOrCreateBasicBlockAtPC(ProgramCounter pc)
 void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 {
 	getOrCreateBasicBlockAtPC(0);
+	getOrCreateBasicBlockAtPC(bytecode.size());
 
 	for (auto curr = bytecode.cbegin(); curr != bytecode.cend(); ++curr)
 	{
@@ -147,6 +148,18 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 			std::exit(1);
 		}
 
+		case Instruction::RETURN:
+		case Instruction::STOP:
+		{
+			// Create a basic block starting at the following instruction.
+			if (curr + 1 < bytecode.cend())
+			{
+				ProgramCounter nextPC = (curr + 1 - bytecode.cbegin());
+				getOrCreateBasicBlockAtPC(nextPC);
+			}
+			break;
+		}
+
 		default:
 			break;
 		}
@@ -178,12 +191,9 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	auto memory = Memory(builder, module.get());
 	auto ext = Ext(builder, module.get());
 
-	auto userRet = false;
-	auto finished = false;
-
 	BasicBlock* currentBlock = entryBlock;
 
-	for (auto pc = bytecode.cbegin(); pc != bytecode.cend() && !finished; ++pc)
+	for (auto pc = bytecode.cbegin(); pc != bytecode.cend(); ++pc)
 	{
 		using dev::eth::Instruction;
 
@@ -286,6 +296,15 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			break;
 		}
 
+		case Instruction::NEG:
+		{
+			auto top = stack.pop();
+			auto zero = ConstantInt::get(Types.word256, 0);
+			auto res = builder.CreateSub(zero, top);
+			stack.push(res);
+			break;
+		}
+
 		case Instruction::LT:
 		{
 			auto lhs = stack.pop();
@@ -301,6 +320,36 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			auto lhs = stack.pop();
 			auto rhs = stack.pop();
 			auto res1 = builder.CreateICmpUGT(lhs, rhs);
+			auto res256 = builder.CreateZExt(res1, Types.word256);
+			stack.push(res256);
+			break;
+		}
+
+		case Instruction::SLT:
+		{
+			auto lhs = stack.pop();
+			auto rhs = stack.pop();
+			auto res1 = builder.CreateICmpSLT(lhs, rhs);
+			auto res256 = builder.CreateZExt(res1, Types.word256);
+			stack.push(res256);
+			break;
+		}
+
+		case Instruction::SGT:
+		{
+			auto lhs = stack.pop();
+			auto rhs = stack.pop();
+			auto res1 = builder.CreateICmpSGT(lhs, rhs);
+			auto res256 = builder.CreateZExt(res1, Types.word256);
+			stack.push(res256);
+			break;
+		}
+
+		case Instruction::EQ:
+		{
+			auto lhs = stack.pop();
+			auto rhs = stack.pop();
+			auto res1 = builder.CreateICmpEQ(lhs, rhs);
 			auto res256 = builder.CreateZExt(res1, Types.word256);
 			stack.push(res256);
 			break;
@@ -682,36 +731,32 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			ret = builder.CreateOr(ret, size);
 
 			builder.CreateRet(ret);
-			finished = true;
-			userRet = true;
+			currentBlock = nullptr;
 			break;
 		}
 
 		case Instruction::STOP:
 		{
-			finished = true;
+			builder.CreateRet(builder.getInt64(0));
+			currentBlock = nullptr;
 			break;
 		}
 
 		}
 	}
 
-	// Generate final basic block (may be jumped to).
+	// Generate the final basic block.
 	auto finalPC = bytecode.size();
 	auto it = basicBlocks.find(finalPC);
-	if (it != basicBlocks.end())
-	{
-		auto finalBlock = it->second;
+	assert(it != basicBlocks.end());
+	auto finalBlock = it->second;
 
-		if (currentBlock != nullptr)
-			builder.CreateBr(finalBlock);
+	if (currentBlock != nullptr)
+		builder.CreateBr(finalBlock);
 
-		mainFunc->getBasicBlockList().push_back(finalBlock);
-		builder.SetInsertPoint(finalBlock);
-	}
-
-	if (!userRet)
-		builder.CreateRet(builder.getInt64(0));
+	mainFunc->getBasicBlockList().push_back(finalBlock);
+	builder.SetInsertPoint(finalBlock);
+	builder.CreateRet(builder.getInt64(0));
 
 	return module;
 }
