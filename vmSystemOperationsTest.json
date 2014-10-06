@@ -4,7 +4,7 @@
             {
                 "data" : "0x",
                 "destination" : "945304eb96065b2a98b57a48a06ae28d285a71b5",
-                "gasLimit" : "28460",
+                "gasLimit" : "100000",
                 "value" : "23"
             }
         ],
@@ -70,7 +70,7 @@
             {
                 "data" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffaaffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffaa",
                 "destination" : "945304eb96065b2a98b57a48a06ae28d285a71b5",
-                "gasLimit" : "999761",
+                "gasLimit" : "1000000",
                 "value" : "23"
             }
         ],
@@ -138,7 +138,7 @@
             {
                 "data" : "0xeeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00aaffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffaa",
                 "destination" : "945304eb96065b2a98b57a48a06ae28d285a71b5",
-                "gasLimit" : "261",
+                "gasLimit" : "500",
                 "value" : "23"
             }
         ],
@@ -206,7 +206,7 @@
             {
                 "data" : "0x",
                 "destination" : "945304eb96065b2a98b57a48a06ae28d285a71b5",
-                "gasLimit" : "361",
+                "gasLimit" : "500",
                 "value" : "23"
             }
         ],
@@ -493,9 +493,9 @@
     "CallToReturn1" : {
         "callcreates" : [
             {
-                "data" : "0x3700ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffaaffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffaa",
+                "data" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffaaffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffaa",
                 "destination" : "945304eb96065b2a98b57a48a06ae28d285a71b5",
-                "gasLimit" : "999781",
+                "gasLimit" : "1000000",
                 "value" : "23"
             }
         ],
@@ -720,7 +720,7 @@
             {
                 "data" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffaaffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffaa",
                 "destination" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
-                "gasLimit" : "999987",
+                "gasLimit" : "1000000",
                 "value" : "23"
             }
         ],
@@ -785,7 +785,7 @@
             {
                 "data" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffaaffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffaa",
                 "destination" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
-                "gasLimit" : "487",
+                "gasLimit" : "500",
                 "value" : "23"
             }
         ],
@@ -850,7 +850,7 @@
             {
                 "data" : "0x601080600c6000396000f200600035560f6009590060203560003557",
                 "destination" : "0000000000000000000000000000000000000000",
-                "gasLimit" : "9885",
+                "gasLimit" : "9893",
                 "value" : "23"
             }
         ],
