@@ -28,9 +28,7 @@
                 "code" : "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff01600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe"
-                    ]
+                    "0x" : "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe"
                 }
             }
         },
@@ -73,9 +71,7 @@
                 "code" : "0x60047fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff01600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x03"
-                    ]
+                    "0x" : "0x03"
                 }
             }
         },
@@ -244,9 +240,7 @@
                 "code" : "0x6002600504600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x02"
-                    ]
+                    "0x" : "0x02"
                 }
             }
         },
@@ -373,9 +367,7 @@
                 "code" : "0x6001600104600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x01"
-                    ]
+                    "0x" : "0x01"
                 }
             }
         },
@@ -502,9 +494,7 @@
                 "code" : "0x600060000e600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x01"
-                    ]
+                    "0x" : "0x01"
                 }
             }
         },
@@ -547,9 +537,7 @@
                 "code" : "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0e600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x01"
-                    ]
+                    "0x" : "0x01"
                 }
             }
         },
@@ -592,9 +580,7 @@
                 "code" : "0x6002600208600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x04"
-                    ]
+                    "0x" : "0x04"
                 }
             }
         },
@@ -637,9 +623,7 @@
                 "code" : "0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff08600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x01"
-                    ]
+                    "0x" : "0x01"
                 }
             }
         },
@@ -682,9 +666,7 @@
                 "code" : "0x637fffffff637fffffff08600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0xbc8cccccccc888888880000000aaaaaab00000000fffffffffffffff7fffffff"
-                    ]
+                    "0x" : "0xbc8cccccccc888888880000000aaaaaab00000000fffffffffffffff7fffffff"
                 }
             }
         },
@@ -769,9 +751,7 @@
                 "code" : "0x6000637fffffff08600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x01"
-                    ]
+                    "0x" : "0x01"
                 }
             }
         },
@@ -814,9 +794,7 @@
                 "code" : "0x600161010108600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x0101"
-                    ]
+                    "0x" : "0x0101"
                 }
             }
         },
@@ -859,9 +837,7 @@
                 "code" : "0x610101600108600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x01"
-                    ]
+                    "0x" : "0x01"
                 }
             }
         },
@@ -946,9 +922,7 @@
                 "code" : "0x600060026000030b600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x01"
-                    ]
+                    "0x" : "0x01"
                 }
             }
         },
@@ -1033,9 +1007,7 @@
                 "code" : "0x60007fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0b600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x01"
-                    ]
+                    "0x" : "0x01"
                 }
             }
         },
@@ -1162,9 +1134,7 @@
                 "code" : "0x600260000360000a600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x01"
-                    ]
+                    "0x" : "0x01"
                 }
             }
         },
@@ -1249,9 +1219,7 @@
                 "code" : "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60000a600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x01"
-                    ]
+                    "0x" : "0x01"
                 }
             }
         },
@@ -1294,9 +1262,7 @@
                 "code" : "0x6003600206600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x02"
-                    ]
+                    "0x" : "0x02"
                 }
             }
         },
@@ -1339,9 +1305,7 @@
                 "code" : "0x60027fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff06600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x01"
-                    ]
+                    "0x" : "0x01"
                 }
             }
         },
@@ -1468,9 +1432,7 @@
                 "code" : "0x6003600260000306600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x02"
-                    ]
+                    "0x" : "0x02"
                 }
             }
         },
@@ -1513,9 +1475,7 @@
                 "code" : "0x6003600202600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x06"
-                    ]
+                    "0x" : "0x06"
                 }
             }
         },
@@ -1558,9 +1518,7 @@
                 "code" : "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff02600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x01"
-                    ]
+                    "0x" : "0x01"
                 }
             }
         },
@@ -1645,9 +1603,7 @@
                 "code" : "0x6001601702600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x17"
-                    ]
+                    "0x" : "0x17"
                 }
             }
         },
@@ -1732,9 +1688,7 @@
                 "code" : "0x600209600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe"
-                    ]
+                    "0x" : "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe"
                 }
             }
         },
@@ -1777,9 +1731,7 @@
                 "code" : "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff09600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x01"
-                    ]
+                    "0x" : "0x01"
                 }
             }
         },
@@ -1822,9 +1774,7 @@
                 "code" : "0x600260000309600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x02"
-                    ]
+                    "0x" : "0x02"
                 }
             }
         },
@@ -1867,9 +1817,7 @@
                 "code" : "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60000309600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-                    ]
+                    "0x" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                 }
             }
         },
@@ -1996,9 +1944,7 @@
                 "code" : "0x60000f600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x01"
-                    ]
+                    "0x" : "0x01"
                 }
             }
         },
@@ -2041,9 +1987,7 @@
                 "code" : "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60000305600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-                    ]
+                    "0x" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                 }
             }
         },
@@ -2086,9 +2030,7 @@
                 "code" : "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6000037fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff05600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-                    ]
+                    "0x" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                 }
             }
         },
@@ -2173,9 +2115,7 @@
                 "code" : "0x6002600003600405600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe"
-                    ]
+                    "0x" : "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe"
                 }
             }
         },
@@ -2344,9 +2284,7 @@
                 "code" : "0x600260000360000d600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x01"
-                    ]
+                    "0x" : "0x01"
                 }
             }
         },
@@ -2431,9 +2369,7 @@
                 "code" : "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60000d600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x01"
-                    ]
+                    "0x" : "0x01"
                 }
             }
         },
@@ -2518,9 +2454,7 @@
                 "code" : "0x600060026000030c600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x01"
-                    ]
+                    "0x" : "0x01"
                 }
             }
         },
@@ -2605,9 +2539,7 @@
                 "code" : "0x60007fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0c600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x01"
-                    ]
+                    "0x" : "0x01"
                 }
             }
         },
@@ -2692,9 +2624,7 @@
                 "code" : "0x600360000360056000030c600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x01"
-                    ]
+                    "0x" : "0x01"
                 }
             }
         },
@@ -2737,9 +2667,7 @@
                 "code" : "0x6003600003600560000307600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe"
-                    ]
+                    "0x" : "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe"
                 }
             }
         },
@@ -2782,9 +2710,7 @@
                 "code" : "0x6003600003600507600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x02"
-                    ]
+                    "0x" : "0x02"
                 }
             }
         },
@@ -2827,9 +2753,7 @@
                 "code" : "0x6003600560000307600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe"
-                    ]
+                    "0x" : "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe"
                 }
             }
         },
@@ -2998,9 +2922,7 @@
                 "code" : "0x6001601703600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x16"
-                    ]
+                    "0x" : "0x16"
                 }
             }
         },
@@ -3043,9 +2965,7 @@
                 "code" : "0x6003600203600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-                    ]
+                    "0x" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                 }
             }
         },
@@ -3088,9 +3008,7 @@
                 "code" : "0x6017600003600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe9"
-                    ]
+                    "0x" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe9"
                 }
             }
         },
@@ -3133,9 +3051,7 @@
                 "code" : "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff600003600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x01"
-                    ]
+                    "0x" : "0x01"
                 }
             }
         },
@@ -3178,9 +3094,7 @@
                 "code" : "0x60007fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff03600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-                    ]
+                    "0x" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                 }
             }
         },

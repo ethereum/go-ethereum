@@ -70,9 +70,7 @@
                 "code" : "0x64ffffffffff60005461eeee605a545c600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x2705"
-                    ]
+                    "0x" : "0x2705"
                 }
             }
         },
@@ -115,9 +113,7 @@
                 "code" : "0x5c600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x270f"
-                    ]
+                    "0x" : "0x270f"
                 }
             }
         },
@@ -160,9 +156,7 @@
                 "code" : "0x60236007586001600257",
                 "nonce" : "0",
                 "storage" : {
-                    "0x02" : [
-                        "0x23"
-                    ]
+                    "0x02" : "0x23"
                 }
             }
         },
@@ -247,9 +241,7 @@
                 "code" : "0x602360016009596001600257",
                 "nonce" : "0",
                 "storage" : {
-                    "0x02" : [
-                        "0x23"
-                    ]
+                    "0x02" : "0x23"
                 }
             }
         },
@@ -292,9 +284,7 @@
                 "code" : "0x602360006009596001600257",
                 "nonce" : "0",
                 "storage" : {
-                    "0x02" : [
-                        "0x01"
-                    ]
+                    "0x02" : "0x01"
                 }
             }
         },
@@ -463,9 +453,7 @@
                 "code" : "0x60ff6000545b600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x20"
-                    ]
+                    "0x" : "0x20"
                 }
             }
         },
@@ -508,9 +496,7 @@
                 "code" : "0x64ffffffffff6000545b600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x20"
-                    ]
+                    "0x" : "0x20"
                 }
             }
         },
@@ -553,9 +539,7 @@
                 "code" : "0x64ffffffffff60005461eeee6020545b600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x40"
-                    ]
+                    "0x" : "0x40"
                 }
             }
         },
@@ -598,9 +582,7 @@
                 "code" : "0x64ffffffffff60005461eeee605a545b600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x80"
-                    ]
+                    "0x" : "0x80"
                 }
             }
         },
@@ -643,9 +625,7 @@
                 "code" : "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff600154600153600157",
                 "nonce" : "0",
                 "storage" : {
-                    "0x01" : [
-                        "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-                    ]
+                    "0x01" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                 }
             }
         },
@@ -688,9 +668,7 @@
                 "code" : "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff600201600154600153600157",
                 "nonce" : "0",
                 "storage" : {
-                    "0x01" : [
-                        "0x01"
-                    ]
+                    "0x01" : "0x01"
                 }
             }
         },
@@ -775,9 +753,7 @@
                 "code" : "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff600155600153600157",
                 "nonce" : "0",
                 "storage" : {
-                    "0x01" : [
-                        "0xff00000000000000000000000000000000000000000000000000000000000000"
-                    ]
+                    "0x01" : "0xff00000000000000000000000000000000000000000000000000000000000000"
                 }
             }
         },
@@ -820,9 +796,7 @@
                 "code" : "0x60ff60015560ee600255600053600157",
                 "nonce" : "0",
                 "storage" : {
-                    "0x01" : [
-                        "0xffee0000000000000000000000000000000000000000000000000000000000"
-                    ]
+                    "0x01" : "0xffee0000000000000000000000000000000000000000000000000000000000"
                 }
             }
         },
@@ -907,9 +881,7 @@
                 "code" : "0x6017600054600053600157",
                 "nonce" : "0",
                 "storage" : {
-                    "0x01" : [
-                        "0x17"
-                    ]
+                    "0x01" : "0x17"
                 }
             }
         },
@@ -994,9 +966,7 @@
                 "code" : "0x60ff6000575a600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x05"
-                    ]
+                    "0x" : "0x05"
                 }
             }
         },
@@ -1039,9 +1009,7 @@
                 "code" : "0x6002600360045057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x03" : [
-                        "0x02"
-                    ]
+                    "0x03" : "0x02"
                 }
             }
         },
@@ -1126,15 +1094,9 @@
                 "code" : "0x60ff60005760ee600a57600056601457",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0xff"
-                    ],
-                    "0x0a" : [
-                        "0xee"
-                    ],
-                    "0x14" : [
-                        "0xff"
-                    ]
+                    "0x" : "0xff",
+                    "0x0a" : "0xee",
+                    "0x14" : "0xff"
                 }
             }
         },
@@ -1177,12 +1139,8 @@
                 "code" : "0x60ff60005760ee600a57606456601457",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0xff"
-                    ],
-                    "0x0a" : [
-                        "0xee"
-                    ]
+                    "0x" : "0xff",
+                    "0x0a" : "0xee"
                 }
             }
         },
@@ -1225,22 +1183,11 @@
                 "code" : "0x60ff60005760ee60015760dd600257600156600a57600256601457",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0xff",
-                        "0xee",
-                        "0xdd",
-                        0,
-                        0,
-                        0,
-                        0,
-                        0,
-                        0,
-                        0,
-                        "0xee"
-                    ],
-                    "0x14" : [
-                        "0xdd"
-                    ]
+                    "0x" : "0xff",
+                    "0x01" : "0xee",
+                    "0x02" : "0xdd",
+                    "0x0a" : "0xee",
+                    "0x14" : "0xdd"
                 }
             }
         },
