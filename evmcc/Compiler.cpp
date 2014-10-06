@@ -421,6 +421,14 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			break;
 		}
 
+		case Instruction::SHA3:
+		{
+			auto inOff = stack.pop();
+			auto inSize = stack.pop();
+			auto hash = ext.sha3(inOff, inSize);
+			stack.push(hash);
+		}
+
 		case Instruction::POP:
 		{
 			stack.pop();

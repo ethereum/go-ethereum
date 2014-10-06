@@ -5,6 +5,8 @@
 #include <llvm/IR/TypeBuilder.h>
 #include <llvm/IR/IntrinsicInst.h>
 
+#include <libdevcrypto/SHA3.h>
+
 #include "Runtime.h"
 
 #ifdef _MSC_VER
@@ -90,6 +92,7 @@ Ext::Ext(llvm::IRBuilder<>& _builder, llvm::Module* module)
 	Type* args[] = {i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy};
 	m_call = Function::Create(FunctionType::get(m_builder.getVoidTy(), args, false), Linkage::ExternalLinkage, "ext_call", module);
 	m_bswap = Intrinsic::getDeclaration(module, Intrinsic::bswap, i256Ty);
+	m_sha3 = Function::Create(TypeBuilder<void(i<256>*, i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_sha3", module);
 
 
 	m_builder.CreateCall(m_init, m_data);
@@ -180,6 +183,17 @@ llvm::Value* Ext::call(llvm::Value* _gas, llvm::Value* _receiveAddress, llvm::Va
 	llvm::Value* args[] = {m_args[0], m_arg2, m_arg3, m_arg4, m_arg5, m_arg6, m_arg7, m_args[1]};
 	m_builder.CreateCall(m_call, args);
 	return m_builder.CreateLoad(m_args[1]);
+}
+
+llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
+{
+	m_builder.CreateStore(_inOff, m_args[0]);
+	m_builder.CreateStore(_inSize, m_arg2);
+	llvm::Value* args[] = {m_args[0], m_arg2, m_args[1]};
+	m_builder.CreateCall(m_sha3, args);
+	Value* hash = m_builder.CreateLoad(m_args[1]);
+	hash = bswap(hash); // to LE
+	return hash;
 }
 
 extern "C"
@@ -283,6 +297,15 @@ EXPORT void ext_call(i256* _gas, h256* _receiveAddress, i256* _value, i256* _inO
 
 	// m_gas += gas; // TODO: Handle gas
 	_ret->a = ret ? 1 : 0;
+}
+
+EXPORT void ext_sha3(i256* _inOff, i256* _inSize, i256* _ret)
+{
+	auto inOff = static_cast<size_t>(llvm2eth(*_inOff));
+	auto inSize = static_cast<size_t>(llvm2eth(*_inSize));
+	auto dataRef = dev::bytesConstRef(Runtime::getMemory().data() + inOff, inSize);
+	auto hash = dev::eth::sha3(dataRef);
+	*_ret = *reinterpret_cast<i256*>(&hash);
 }
 
 }

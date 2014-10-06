@@ -38,6 +38,8 @@ public:
 	llvm::Value* create(llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* _initSize);
 	llvm::Value* call(llvm::Value* _gas, llvm::Value* _receiveAddress, llvm::Value* _value, llvm::Value* _inOff, llvm::Value* _inSize, llvm::Value* _outOff, llvm::Value* _outSize);
 
+	llvm::Value* sha3(llvm::Value* _inOff, llvm::Value* _inSize);
+
 private:
 	llvm::Value* getDataElem(unsigned _index, const llvm::Twine& _name = "");
 
@@ -63,6 +65,7 @@ private:
 	llvm::Function* m_create;
 	llvm::Function* m_call;
 	llvm::Function* m_bswap;
+	llvm::Function* m_sha3;
 };
 	
 
