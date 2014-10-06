@@ -1,6 +1,6 @@
 (function(window) {
     function isPromise(o) {
-        return typeof o === "object" && o.then
+        return o instanceof Promise
     }
 
     var eth = {
@@ -111,7 +111,7 @@
             return Promise.all(promises).then(function() {
                 return new Promise(function(resolve, reject) {
                     params.data = params.data.join("");
-                    eth.provider.send({call: "transact", args: [params]}, function(data) {
+                    eth.provider.send({call: "transact", args: ["0x"+params]}, function(data) {
                         if(data[1])
                             reject(data[0]);
                         else
@@ -395,7 +395,7 @@
         if(this.provider !== undefined) {
             this.provider.send(data);
         } else {
-            this.queued = data;
+            this.queued.push(data);
         }
     };
 
@@ -564,20 +564,3 @@
 
     window.eth = eth;
 })(this);
-
-/*
-   function eth.provider.send(data, cb) {
-   data.seed = g_seed;
-   if(cb) {
-   eth._callbacks[data.seed] = cb;
-   }
-
-   if(data.args === undefined) {
-   data.args = [];
-   }
-
-   g_seed++;
-
-   window._messagingAdapter.call(this, data)
-   }
-   */
