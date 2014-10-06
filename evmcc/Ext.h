@@ -33,6 +33,7 @@ public:
 	llvm::Value* gaslimit();
 
 	llvm::Value* balance(llvm::Value* _address);
+	void suicide(llvm::Value* _address);
 	llvm::Value* calldataload(llvm::Value* _index);
 	llvm::Value* create(llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* _initSize);
 	llvm::Value* call(llvm::Value* _gas, llvm::Value* _receiveAddress, llvm::Value* _value, llvm::Value* _inOff, llvm::Value* _inSize, llvm::Value* _outOff, llvm::Value* _outSize);
@@ -58,6 +59,7 @@ private:
 	llvm::Function* m_setStore;
 	llvm::Function* m_calldataload;
 	llvm::Function* m_balance;
+	llvm::Function* m_suicide;
 	llvm::Function* m_create;
 	llvm::Function* m_call;
 	llvm::Function* m_bswap;

@@ -85,6 +85,7 @@ Ext::Ext(llvm::IRBuilder<>& _builder, llvm::Module* module)
 	m_setStore = Function::Create(TypeBuilder<void(i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_setStore", module);
 	m_calldataload = Function::Create(TypeBuilder<void(i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_calldataload", module);
 	m_balance = Function::Create(TypeBuilder<void(i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_balance", module);
+	m_suicide = Function::Create(TypeBuilder<void(i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_suicide", module);
 	m_create = Function::Create(TypeBuilder<void(i<256>*, i<256>*, i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_create", module);
 	Type* args[] = {i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy};
 	m_call = Function::Create(FunctionType::get(m_builder.getVoidTy(), args, false), Linkage::ExternalLinkage, "ext_call", module);
@@ -145,6 +146,13 @@ Value* Ext::balance(Value* _address)
 	m_builder.CreateStore(address, m_args[0]);
 	m_builder.CreateCall(m_balance, m_args);
 	return m_builder.CreateLoad(m_args[1]);
+}
+
+void Ext::suicide(Value* _address)
+{
+	auto address = bswap(_address); // to BE
+	m_builder.CreateStore(address, m_args[0]);
+	m_builder.CreateCall(m_suicide, m_args[0]);
 }
 
 Value* Ext::create(llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* _initSize)
@@ -223,6 +231,11 @@ EXPORT void ext_balance(h256* _address, i256* _value)
 {
 	auto u = Runtime::getExt().balance(dev::right160(*_address));
 	*_value = eth2llvm(u);
+}
+
+EXPORT void ext_suicide(h256* _address)
+{
+	Runtime::getExt().suicide(dev::right160(*_address));
 }
 
 EXPORT void ext_create(i256* _endowment, i256* _initOff, i256* _initSize, h256* _address)

@@ -150,6 +150,7 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 
 		case Instruction::RETURN:
 		case Instruction::STOP:
+		case Instruction::SUICIDE:
 		{
 			// Create a basic block starting at the following instruction.
 			if (curr + 1 < bytecode.cend())
@@ -761,6 +762,12 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			break;
 		}
 
+		case Instruction::SUICIDE:
+		{
+			auto address = stack.pop();
+			ext.suicide(address);
+			// Fall through
+		}
 		case Instruction::STOP:
 		{
 			builder.CreateRet(builder.getInt64(0));
