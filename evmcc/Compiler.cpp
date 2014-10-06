@@ -188,11 +188,12 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	createBasicBlocks(bytecode);
 
 	// Init runtime structures.
-	auto stack = Stack(builder, module.get());
+	auto globalStack = Stack(builder, module.get());
 	auto memory = Memory(builder, module.get());
 	auto ext = Ext(builder, module.get());
 
 	BasicBlock* currentBlock = entryBlock;
+	BBStack stack; // Stack for current block
 
 	for (auto pc = bytecode.cbegin(); pc != bytecode.cend(); ++pc)
 	{
@@ -211,6 +212,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			mainFunc->getBasicBlockList().push_back(nextBlock);
 			builder.SetInsertPoint(nextBlock);
 			currentBlock = nextBlock;
+			stack = BBStack();	// Reset stack
 		}
 
 		assert(currentBlock != nullptr);
@@ -498,9 +500,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		case Instruction::DUP15:
 		case Instruction::DUP16:
 		{
-			auto index = static_cast<uint32_t>(inst) - static_cast<uint32_t>(Instruction::DUP1);
-			auto value = stack.get(index);
-			stack.push(value);
+			auto index = static_cast<size_t>(inst) - static_cast<size_t>(Instruction::DUP1);
+			stack.dup(index);
 			break;
 		}
 
@@ -521,11 +522,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		case Instruction::SWAP15:
 		case Instruction::SWAP16:
 		{
-			auto index = static_cast<uint32_t>(inst) - static_cast<uint32_t>(Instruction::SWAP1) + 1;
-			auto loValue = stack.get(index);
-			auto hiValue = stack.get(0);
-			stack.set(index, hiValue);
-			stack.set(0, loValue);
+			auto index = static_cast<size_t>(inst) - static_cast<size_t>(Instruction::SWAP1) + 1;
+			stack.swap(index);
 			break;
 		}
 

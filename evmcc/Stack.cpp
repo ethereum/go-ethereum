@@ -20,6 +20,30 @@
 namespace evmcc
 {
 
+void BBStack::push(llvm::Value* _value)
+{
+	m_state.push_back(_value);
+}
+
+llvm::Value* BBStack::pop()
+{
+	auto top = m_state.back();
+	m_state.pop_back();
+	return top;
+}
+
+void BBStack::dup(size_t _index)
+{
+	auto value = *(m_state.rbegin() + _index);
+	m_state.push_back(value);
+}
+
+void BBStack::swap(size_t _index)
+{
+	assert(_index != 0);
+	std::swap(*m_state.rbegin(), *(m_state.rbegin() + _index));
+}
+
 Stack::Stack(llvm::IRBuilder<>& _builder, llvm::Module* _module)
 	: m_builder(_builder)
 {
