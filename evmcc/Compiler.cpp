@@ -797,14 +797,13 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 void Compiler::linkBasicBlocks()
 {
 	/// Helper function that finds basic block given LLVM basic block pointer
-	auto findBB = [this](llvm::BasicBlock* _llvmBB)
+	auto findBasicBlock = [this](llvm::BasicBlock* _llbb) -> BasicBlock&
 	{
-		for (auto&& bb : basicBlocks)
-		{
-			if (bb.second.llvm() == _llvmBB)
-				return &bb.second;
-		}
-		return (BasicBlock*)nullptr;
+		// Name is used to get basic block index (index of first instruction)
+		// TODO: If basicBlocs are still a map - multikey map can be used
+		auto&& idxStr = _llbb->getName().substr(sizeof(BasicBlock::NamePrefix) - 2);
+		auto idx = std::stoul(idxStr);
+		return basicBlocks.find(idx)->second;
 	};
 
 	// Link basic blocks
@@ -813,19 +812,16 @@ void Compiler::linkBasicBlocks()
 		BasicBlock& bb = p.second;
 		llvm::BasicBlock* llvmBB = bb.llvm();
 
-		size_t i = 0;
-		for (auto& inst : *llvmBB)
+		size_t valueIdx = 0;
+		auto firstNonPhi = llvmBB->getFirstNonPHI();
+		for (auto instIt = llvmBB->begin(); &*instIt != firstNonPhi; ++instIt, ++valueIdx)
 		{
-			if (auto phi = llvm::dyn_cast<llvm::PHINode>(&inst))
+			auto phi = llvm::cast<llvm::PHINode>(instIt);
+			for (auto predIt = llvm::pred_begin(llvmBB); predIt != llvm::pred_end(llvmBB); ++predIt)
 			{
-				for (auto preIt = llvm::pred_begin(llvmBB); preIt != llvm::pred_end(llvmBB); ++preIt)
-				{
-					llvm::BasicBlock* preBB = *preIt;
-					auto pbb = findBB(preBB);
-					assert(i < pbb->getState().size()); // TODO: Report error
-					phi->addIncoming(*(pbb->getState().rbegin() + i), preBB);
-				}
-				++i;
+				auto& predBB = findBasicBlock(*predIt);
+				assert(valueIdx < predBB.getState().size()); // TODO: Report error
+				phi->addIncoming(*(predBB.getState().rbegin() + valueIdx), predBB);
 			}
 		}
 	}

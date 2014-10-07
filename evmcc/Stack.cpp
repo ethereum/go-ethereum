@@ -23,7 +23,7 @@ llvm::Value* BBStack::pop()
 		// Create PHI node
 		auto i256Ty = llvm::Type::getIntNTy(m_block->llvm()->getContext(), 256);
 		auto llvmBB = m_block->llvm();
-		if (llvmBB->getInstList().empty())
+		if (llvmBB->empty())
 			return llvm::PHINode::Create(i256Ty, 0, {}, m_block->llvm());
 		return llvm::PHINode::Create(i256Ty, 0, {}, llvmBB->getFirstNonPHI());
 	}

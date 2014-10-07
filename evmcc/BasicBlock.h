@@ -13,6 +13,8 @@ class BasicBlock
 public:
 	using State = std::vector<llvm::Value*>;
 
+	static const char* NamePrefix;
+
 	explicit BasicBlock(ProgramCounter _beginInstIdx, llvm::Function* _mainFunc);
 
 	BasicBlock(const BasicBlock&) = delete;
