@@ -25,7 +25,8 @@ public:
 
 	State& getState() { return m_state; }
 
-	void setEnd(ProgramCounter _endInstIdx) { m_endInstIdx = _endInstIdx; }
+	ProgramCounter begin() { return m_beginInstIdx; }
+	ProgramCounter end() { return m_endInstIdx; }
 
 private:
 	ProgramCounter m_beginInstIdx;
