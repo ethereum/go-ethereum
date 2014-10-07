@@ -53,8 +53,7 @@ BasicBlock& Compiler::getOrCreateBasicBlockAtPC(ProgramCounter pc)
 
 void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 {
-	getOrCreateBasicBlockAtPC(0);
-	getOrCreateBasicBlockAtPC(bytecode.size());
+	getOrCreateBasicBlockAtPC(0);	// First basic block
 
 	for (auto curr = bytecode.cbegin(); curr != bytecode.cend(); ++curr)
 	{
@@ -113,19 +112,19 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 					val |= *iter;
 				}
 
-				// Create a block for the JUMP target.
-				ProgramCounter targetPC = val.convert_to<ProgramCounter>();
-				auto& targetBlock = getOrCreateBasicBlockAtPC(targetPC);
-
-				ProgramCounter jumpPC = (next - bytecode.cbegin());
-				jumpTargets[jumpPC] = targetBlock;
-
 				// Create a block following the JUMP.
 				if (next + 1 < bytecode.cend())
 				{
 					ProgramCounter nextPC = (next + 1 - bytecode.cbegin());
 					getOrCreateBasicBlockAtPC(nextPC);
 				}
+
+				// Create a block for the JUMP target.
+				ProgramCounter targetPC = val.convert_to<ProgramCounter>();
+				auto& targetBlock = getOrCreateBasicBlockAtPC(targetPC);
+
+				ProgramCounter jumpPC = (next - bytecode.cbegin());
+				jumpTargets[jumpPC] = targetBlock;
 
 				curr += 1; // skip over JUMP
 			}
@@ -158,6 +157,8 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 			break;
 		}
 	}
+
+	getOrCreateBasicBlockAtPC(bytecode.size());	// Final basic block
 }
 
 std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
