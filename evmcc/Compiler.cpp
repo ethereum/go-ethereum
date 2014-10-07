@@ -40,20 +40,10 @@ Compiler::Compiler()
 	Types.WordLowPrecision = llvm::Type::getIntNTy(context, 64);
 }
 
-BasicBlock& Compiler::getOrCreateBasicBlockAtPC(ProgramCounter pc)
-{
-	auto blockIter = basicBlocks.find(pc);
-	if (blockIter == basicBlocks.end())
-	{
-		// Create a basic block at target pc directly in collection
-		blockIter = basicBlocks.emplace(std::piecewise_construct, std::forward_as_tuple(pc), std::forward_as_tuple(pc, m_mainFunc)).first;
-	}
-	return blockIter->second;
-}
-
 void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 {
-	getOrCreateBasicBlockAtPC(0);	// First basic block
+	std::set<ProgramCounter> splitPoints; // Sorted collections of instruction indecies where basic blocks start/end
+	splitPoints.insert(0);	// First basic block
 
 	for (auto curr = bytecode.cbegin(); curr != bytecode.cend(); ++curr)
 	{
@@ -116,15 +106,15 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 				if (next + 1 < bytecode.cend())
 				{
 					ProgramCounter nextPC = (next + 1 - bytecode.cbegin());
-					getOrCreateBasicBlockAtPC(nextPC);
+					splitPoints.insert(nextPC);
 				}
 
 				// Create a block for the JUMP target.
 				ProgramCounter targetPC = val.convert_to<ProgramCounter>();
-				auto& targetBlock = getOrCreateBasicBlockAtPC(targetPC);
+				splitPoints.insert(targetPC);
 
 				ProgramCounter jumpPC = (next - bytecode.cbegin());
-				jumpTargets[jumpPC] = targetBlock;
+				jumpTargets[jumpPC] = targetPC;
 
 				curr += 1; // skip over JUMP
 			}
@@ -148,7 +138,7 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 			if (curr + 1 < bytecode.cend())
 			{
 				ProgramCounter nextPC = (curr + 1 - bytecode.cbegin());
-				getOrCreateBasicBlockAtPC(nextPC);
+				splitPoints.insert(nextPC);
 			}
 			break;
 		}
@@ -158,7 +148,14 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 		}
 	}
 
-	getOrCreateBasicBlockAtPC(bytecode.size());	// Final basic block
+	splitPoints.insert(bytecode.size()); // For final block
+	for (auto it = splitPoints.cbegin(); it != splitPoints.cend();)
+	{
+		auto beginInstIdx = *it;
+		++it;
+		auto endInstIdx = it != splitPoints.cend() ? *it : beginInstIdx; // For final block
+		basicBlocks.emplace(std::piecewise_construct, std::forward_as_tuple(beginInstIdx), std::forward_as_tuple(beginInstIdx, endInstIdx, m_mainFunc));
+	}
 }
 
 std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
@@ -572,7 +569,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			// just pop it without looking...
 			stack.pop();
 
-			auto targetBlock = jumpTargets[currentPC];
+			auto& targetBlock = basicBlocks.find(jumpTargets[currentPC])->second;
 			builder.CreateBr(targetBlock);
 
 			currentBlock = nullptr;
@@ -590,7 +587,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			auto top = stack.pop();
 			auto zero = ConstantInt::get(Types.word256, 0);
 			auto cond = builder.CreateICmpNE(top, zero, "nonzero");
-			auto targetBlock = jumpTargets[currentPC];
+			auto& targetBlock = basicBlocks.find(jumpTargets[currentPC])->second;
 			auto& followBlock = basicBlocks.find(currentPC + 1)->second;
 			builder.CreateCondBr(cond, targetBlock, followBlock);
 
@@ -742,12 +739,6 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		{
 			auto index = stack.pop();
 			auto size = stack.pop();
-
-			// MCJIT does not support returning structs
-			//auto index32 = builder.CreateTrunc(index, i32Ty, "index32");
-			//auto size32 = builder.CreateTrunc(size, i32Ty, "size32");
-			//auto ret = builder.CreateInsertValue(UndefValue::get(retType), index32, 0, "ret");
-			//ret = builder.CreateInsertValue(ret, size32, 1, "ret");
 
 			auto ret = builder.CreateTrunc(index, builder.getInt64Ty());
 			ret = builder.CreateShl(ret, 32);

@@ -22,7 +22,6 @@ public:
 
 private:
 
-	BasicBlock& getOrCreateBasicBlockAtPC(ProgramCounter pc);
 	void createBasicBlocks(const dev::bytes& bytecode);
 
 	void linkBasicBlocks();
@@ -33,16 +32,16 @@ private:
 	std::map<ProgramCounter, BasicBlock> basicBlocks;
 
 	/**
-	 *  Maps a pc at which there is a JUMP or JUMPI to the target block of the jump.
+	 *  Maps a pc at which there is a JUMP or JUMPI to the target pc of the jump.
 	 */
-	std::map<ProgramCounter, llvm::BasicBlock*> jumpTargets;
+	std::map<ProgramCounter, ProgramCounter> jumpTargets;
 
 private:
 	/// Collection of basic blocks in program
 	//std::vector<BasicBlock> m_basicBlocks;
 
 	/// Main program function
-	llvm::Function* m_mainFunc;
+	llvm::Function* m_mainFunc = nullptr;
 };
 
 }

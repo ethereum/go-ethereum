@@ -11,6 +11,7 @@ class BasicBlock;
  Stack adapter for Basic Block
  
  Transforms stack to SSA: tracks values and their positions on the imaginary stack used inside a basic block.
+ TODO: Integrate into BasicBlock class
  */
 class BBStack
 {
