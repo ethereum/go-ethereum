@@ -25,6 +25,8 @@ private:
 	BasicBlock& getOrCreateBasicBlockAtPC(ProgramCounter pc);
 	void createBasicBlocks(const dev::bytes& bytecode);
 
+	void linkBasicBlocks();
+
 	/**
 	 *  Maps a program counter pc to a basic block which starts at pc (if any).
 	 */

@@ -789,6 +789,15 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	builder.SetInsertPoint(finalBlock);
 	builder.CreateRet(builder.getInt64(0));
 
+	linkBasicBlocks();
+
+	return module;
+}
+
+
+void Compiler::linkBasicBlocks()
+{
+	/// Helper function that finds basic block given LLVM basic block pointer
 	auto findBB = [this](llvm::BasicBlock* _llvmBB)
 	{
 		for (auto&& bb : basicBlocks)
@@ -821,8 +830,6 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			}
 		}
 	}
-
-	return module;
 }
 
 }
