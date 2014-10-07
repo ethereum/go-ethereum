@@ -6,8 +6,9 @@
 namespace evmcc
 {
 
-BasicBlock::BasicBlock(ProgramCounter _instIdx, llvm::Function* _mainFunc)
-	: m_llvmBB(llvm::BasicBlock::Create(_mainFunc->getContext(), {"Instr.", std::to_string(_instIdx)}, _mainFunc))
+BasicBlock::BasicBlock(ProgramCounter _beginInstIdx, llvm::Function* _mainFunc):
+	m_beginInstIdx(_beginInstIdx),
+	m_llvmBB(llvm::BasicBlock::Create(_mainFunc->getContext(), {"Instr.", std::to_string(_beginInstIdx)}, _mainFunc))
 {}
 
 }

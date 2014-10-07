@@ -2,6 +2,7 @@
 #include "Compiler.h"
 
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/CFG.h>
 
 #include <libevmface/Instruction.h>
 
@@ -183,8 +184,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	auto memory = Memory(builder, module.get());
 	auto ext = Ext(builder, module.get());
 
-	llvm::BasicBlock* currentBlock = entryBlock;
-	BBStack stack(extStack); // Stack for current block
+	BasicBlock* currentBlock = &basicBlocks.find(0)->second; // Any value, just to create branch for %entry to %Instr.0
+	BBStack stack(builder, extStack); // Stack for current block
 
 	for (auto pc = bytecode.cbegin(); pc != bytecode.cend(); ++pc)
 	{
@@ -192,6 +193,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 		ProgramCounter currentPC = pc - bytecode.cbegin();
 
+		// Change basic block
 		auto blockIter = basicBlocks.find(currentPC);
 		if (blockIter != basicBlocks.end())
 		{
@@ -201,8 +203,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				builder.CreateBr(nextBlock);
 			// Insert the next block into the main function.
 			builder.SetInsertPoint(nextBlock);
-			currentBlock = nextBlock;
-			assert(stack.empty()); // Stack should be empty
+			currentBlock = &nextBlock;
+			stack.setBasicBlock(*currentBlock);
 		}
 
 		assert(currentBlock != nullptr);
@@ -569,7 +571,6 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			// The target address is computed at compile time,
 			// just pop it without looking...
 			stack.pop();
-			stack.reset();
 
 			auto targetBlock = jumpTargets[currentPC];
 			builder.CreateBr(targetBlock);
@@ -589,7 +590,6 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			auto top = stack.pop();
 			auto zero = ConstantInt::get(Types.word256, 0);
 			auto cond = builder.CreateICmpNE(top, zero, "nonzero");
-			stack.reset();
 			auto targetBlock = jumpTargets[currentPC];
 			auto& followBlock = basicBlocks.find(currentPC + 1)->second;
 			builder.CreateCondBr(cond, targetBlock, followBlock);
@@ -756,7 +756,6 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			ret = builder.CreateOr(ret, size);
 
 			builder.CreateRet(ret);
-			stack.clear();
 			currentBlock = nullptr;
 			break;
 		}
@@ -770,7 +769,6 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		case Instruction::STOP:
 		{
 			builder.CreateRet(builder.getInt64(0));
-			stack.clear();
 			currentBlock = nullptr;
 			break;
 		}
@@ -789,6 +787,39 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 	builder.SetInsertPoint(finalBlock);
 	builder.CreateRet(builder.getInt64(0));
+
+	auto findBB = [this](llvm::BasicBlock* _llvmBB)
+	{
+		for (auto&& bb : basicBlocks)
+		{
+			if (bb.second.llvm() == _llvmBB)
+				return &bb.second;
+		}
+		return (BasicBlock*)nullptr;
+	};
+
+	// Link basic blocks
+	for (auto&& p : basicBlocks)
+	{
+		BasicBlock& bb = p.second;
+		llvm::BasicBlock* llvmBB = bb.llvm();
+
+		size_t i = 0;
+		for (auto& inst : *llvmBB)
+		{
+			if (auto phi = llvm::dyn_cast<llvm::PHINode>(&inst))
+			{
+				for (auto preIt = llvm::pred_begin(llvmBB); preIt != llvm::pred_end(llvmBB); ++preIt)
+				{
+					llvm::BasicBlock* preBB = *preIt;
+					auto pbb = findBB(preBB);
+					assert(i < pbb->getState().size()); // TODO: Report error
+					phi->addIncoming(*(pbb->getState().rbegin() + i), preBB);
+				}
+				++i;
+			}
+		}
+	}
 
 	return module;
 }

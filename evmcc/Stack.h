@@ -7,6 +7,7 @@
 
 namespace evmcc
 {
+class BasicBlock;
 
 class Stack
 {
@@ -36,7 +37,7 @@ private:
 class BBStack
 {
 public:
-	BBStack(Stack& _extStack);
+	BBStack(llvm::IRBuilder<>& _builder, Stack& _extStack);
 
 	void push(llvm::Value* _value);
 	llvm::Value* pop();
@@ -44,23 +45,14 @@ public:
 	void swap(size_t _index);
 
 	/**
-	 Resets stack on basic block change.
-	 Values left on local stack are pushed on external stack.
-	 Local stack is empty after this operation and compilation of new basic block can be started.
+	 Changes current basic block with a new one with empty state.
 	 */
-	void reset();
-
-	/**
-	 Dumps values on stack.
-	 */
-	void clear();
-
-	/// Debug only
-	bool empty() const;
+	void setBasicBlock(BasicBlock& _newBlock);
 
 private:
-	std::vector<llvm::Value*> m_state;	///< Basic black state vector - current values and their positions
 	Stack& m_extStack;                  ///< External (global) stack
+	BasicBlock* m_block = nullptr;		///< Current basic block
+	llvm::IRBuilder<>& m_builder;
 };
 
 

@@ -9,6 +9,7 @@
 
 #include <llvm/IR/Function.h>
 
+#include "BasicBlock.h"
 #include "Runtime.h"
 
 #ifdef _MSC_VER
@@ -20,52 +21,55 @@
 namespace evmcc
 {
 
-BBStack::BBStack(Stack& _extStack)
-	: m_extStack(_extStack)
+BBStack::BBStack(llvm::IRBuilder<>& _builder, Stack& _extStack):
+	m_extStack(_extStack),
+	m_builder(_builder)
 {}
 
 void BBStack::push(llvm::Value* _value)
 {
-	m_state.push_back(_value);
+	m_block->getState().push_back(_value);
 }
 
 llvm::Value* BBStack::pop()
 {
-	if (m_state.empty())
-		return m_extStack.pop();
+	auto&& state = m_block->getState();
+	if (state.empty())
+	{
+		// Create PHI node
+		auto first = m_block->llvm()->getFirstNonPHI();
+		auto llvmBB = m_block->llvm();
+		if (llvmBB->getInstList().empty())
+			return llvm::PHINode::Create(m_builder.getIntNTy(256), 0, {}, m_block->llvm());
+		return llvm::PHINode::Create(m_builder.getIntNTy(256), 0, {}, llvmBB->getFirstNonPHI());
+	}
 
-	auto top = m_state.back();
-	m_state.pop_back();
+	auto top = state.back();
+	state.pop_back();
 	return top;
 }
 
-void BBStack::reset()
+void BBStack::setBasicBlock(BasicBlock& _newBlock)
 {
-	for (auto&& value : m_state)
-		m_extStack.push(value);
-	m_state.clear();
-}
-
-void BBStack::clear()
-{
-	m_state.clear();
-}
-
-bool BBStack::empty() const
-{
-	return m_state.empty();
+	// Current block keeps end state
+	// Just update pointer to current block
+	// New block should have empty state
+	assert(_newBlock.getState().empty()); 
+	m_block = &_newBlock;
 }
 
 void BBStack::dup(size_t _index)
 {
-	auto value = *(m_state.rbegin() + _index);
-	m_state.push_back(value);
+	auto&& state = m_block->getState();
+	auto value = *(state.rbegin() + _index);
+	state.push_back(value);
 }
 
 void BBStack::swap(size_t _index)
 {
 	assert(_index != 0);
-	std::swap(*m_state.rbegin(), *(m_state.rbegin() + _index));
+	auto&& state = m_block->getState();
+	std::swap(*state.rbegin(), *(state.rbegin() + _index));
 }
 
 Stack::Stack(llvm::IRBuilder<>& _builder, llvm::Module* _module)
