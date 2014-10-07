@@ -39,23 +39,15 @@ Compiler::Compiler()
 	Types.WordLowPrecision = llvm::Type::getIntNTy(context, 64);
 }
 
-llvm::BasicBlock* Compiler::getOrCreateBasicBlockAtPC(ProgramCounter pc)
+BasicBlock& Compiler::getOrCreateBasicBlockAtPC(ProgramCounter pc)
 {
-	llvm::BasicBlock* block = nullptr;
 	auto blockIter = basicBlocks.find(pc);
-	if (blockIter == basicBlocks.cend())
+	if (blockIter == basicBlocks.end())
 	{
-		// Create a basic block at targetPC.
-		std::ostringstream oss;
-		oss << "instr." << pc;
-		block = llvm::BasicBlock::Create(llvm::getGlobalContext(), oss.str());
-		basicBlocks[pc] = block;
+		// Create a basic block at target pc directly in collection
+		blockIter = basicBlocks.emplace(std::piecewise_construct, std::forward_as_tuple(pc), std::forward_as_tuple(pc, m_mainFunc)).first;
 	}
-	else
-	{
-		block = blockIter->second;
-	}
-	return block;
+	return blockIter->second;
 }
 
 void Compiler::createBasicBlocks(const dev::bytes& bytecode)
@@ -122,7 +114,7 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 
 				// Create a block for the JUMP target.
 				ProgramCounter targetPC = val.convert_to<ProgramCounter>();
-				auto targetBlock = getOrCreateBasicBlockAtPC(targetPC);
+				auto& targetBlock = getOrCreateBasicBlockAtPC(targetPC);
 
 				ProgramCounter jumpPC = (next - bytecode.cbegin());
 				jumpTargets[jumpPC] = targetBlock;
@@ -177,13 +169,12 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 	// Create main function
 	const auto i32Ty = builder.getInt32Ty();
-	Type* retTypeElems[] = {i32Ty, i32Ty};
-	auto retType = StructType::create(retTypeElems, "MemRef", true);
-	auto mainFuncType = FunctionType::get(builder.getInt64Ty(), false);
-	auto mainFunc = Function::Create(mainFuncType, Function::ExternalLinkage, "main", module.get());
+	//Type* retTypeElems[] = {i32Ty, i32Ty};
+	//auto retType = StructType::create(retTypeElems, "MemRef", true);
+	m_mainFunc = Function::Create(FunctionType::get(builder.getInt64Ty(), false), Function::ExternalLinkage, "main", module.get());
 
 	// Create the basic blocks.
-	auto entryBlock = BasicBlock::Create(context, "entry", mainFunc);
+	auto entryBlock = llvm::BasicBlock::Create(context, "entry", m_mainFunc);
 	builder.SetInsertPoint(entryBlock);
 	createBasicBlocks(bytecode);
 
@@ -192,7 +183,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	auto memory = Memory(builder, module.get());
 	auto ext = Ext(builder, module.get());
 
-	BasicBlock* currentBlock = entryBlock;
+	llvm::BasicBlock* currentBlock = entryBlock;
 	BBStack stack(extStack); // Stack for current block
 
 	for (auto pc = bytecode.cbegin(); pc != bytecode.cend(); ++pc)
@@ -204,12 +195,11 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		auto blockIter = basicBlocks.find(currentPC);
 		if (blockIter != basicBlocks.end())
 		{
-			auto nextBlock = blockIter->second;
+			auto& nextBlock = blockIter->second;
 			// Terminate the current block by jumping to the next one.
 			if (currentBlock != nullptr)
 				builder.CreateBr(nextBlock);
 			// Insert the next block into the main function.
-			mainFunc->getBasicBlockList().push_back(nextBlock);
 			builder.SetInsertPoint(nextBlock);
 			currentBlock = nextBlock;
 			assert(stack.empty()); // Stack should be empty
@@ -601,7 +591,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			auto cond = builder.CreateICmpNE(top, zero, "nonzero");
 			stack.reset();
 			auto targetBlock = jumpTargets[currentPC];
-			auto followBlock = basicBlocks[currentPC + 1];
+			auto& followBlock = basicBlocks.find(currentPC + 1)->second;
 			builder.CreateCondBr(cond, targetBlock, followBlock);
 
 			currentBlock = nullptr;
@@ -792,12 +782,11 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	auto finalPC = bytecode.size();
 	auto it = basicBlocks.find(finalPC);
 	assert(it != basicBlocks.end());
-	auto finalBlock = it->second;
+	auto& finalBlock = it->second;
 
 	if (currentBlock != nullptr)
 		builder.CreateBr(finalBlock);
 
-	mainFunc->getBasicBlockList().push_back(finalBlock);
 	builder.SetInsertPoint(finalBlock);
 	builder.CreateRet(builder.getInt64(0));
 
