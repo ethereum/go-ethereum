@@ -186,7 +186,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	auto ext = Ext(builder, module.get());
 
 	BasicBlock* currentBlock = &basicBlocks.find(0)->second; // Any value, just to create branch for %entry to %Instr.0
-	BBStack stack(builder, extStack); // Stack for current block
+	BBStack stack; // Stack for current block
 
 	for (auto pc = bytecode.cbegin(); pc != bytecode.cend(); ++pc)
 	{

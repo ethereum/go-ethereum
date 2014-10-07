@@ -37,22 +37,31 @@ private:
 class BBStack
 {
 public:
-	BBStack(llvm::IRBuilder<>& _builder, Stack& _extStack);
+	BBStack() = default;
+	BBStack(const BBStack&) = delete;
+	void operator=(const BBStack&) = delete;
+
+	/**
+	 Changes current basic block (if any) with a new one with empty state.
+	*/
+	void setBasicBlock(BasicBlock& _newBlock);
 
 	void push(llvm::Value* _value);
 	llvm::Value* pop();
-	void dup(size_t _index);
-	void swap(size_t _index);
 
 	/**
-	 Changes current basic block with a new one with empty state.
+	 Duplicates _index'th value on stack.
 	 */
-	void setBasicBlock(BasicBlock& _newBlock);
+	void dup(size_t _index);
+
+	/**
+	 Swaps _index'th value on stack with a value on stack top.
+	 @param _index Index of value to be swaped. Cannot be 0.
+	 */
+	void swap(size_t _index);
 
 private:
-	Stack& m_extStack;                  ///< External (global) stack
 	BasicBlock* m_block = nullptr;		///< Current basic block
-	llvm::IRBuilder<>& m_builder;
 };
 
 

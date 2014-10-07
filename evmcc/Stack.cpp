@@ -21,11 +21,6 @@
 namespace evmcc
 {
 
-BBStack::BBStack(llvm::IRBuilder<>& _builder, Stack& _extStack):
-	m_extStack(_extStack),
-	m_builder(_builder)
-{}
-
 void BBStack::push(llvm::Value* _value)
 {
 	m_block->getState().push_back(_value);
@@ -37,11 +32,11 @@ llvm::Value* BBStack::pop()
 	if (state.empty())
 	{
 		// Create PHI node
-		auto first = m_block->llvm()->getFirstNonPHI();
+		auto i256Ty = llvm::Type::getIntNTy(m_block->llvm()->getContext(), 256);
 		auto llvmBB = m_block->llvm();
 		if (llvmBB->getInstList().empty())
-			return llvm::PHINode::Create(m_builder.getIntNTy(256), 0, {}, m_block->llvm());
-		return llvm::PHINode::Create(m_builder.getIntNTy(256), 0, {}, llvmBB->getFirstNonPHI());
+			return llvm::PHINode::Create(i256Ty, 0, {}, m_block->llvm());
+		return llvm::PHINode::Create(i256Ty, 0, {}, llvmBB->getFirstNonPHI());
 	}
 
 	auto top = state.back();
