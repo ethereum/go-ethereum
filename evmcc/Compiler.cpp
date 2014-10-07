@@ -188,12 +188,12 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	createBasicBlocks(bytecode);
 
 	// Init runtime structures.
-	auto globalStack = Stack(builder, module.get());
+	auto extStack = Stack(builder, module.get());
 	auto memory = Memory(builder, module.get());
 	auto ext = Ext(builder, module.get());
 
 	BasicBlock* currentBlock = entryBlock;
-	BBStack stack; // Stack for current block
+	BBStack stack(extStack); // Stack for current block
 
 	for (auto pc = bytecode.cbegin(); pc != bytecode.cend(); ++pc)
 	{
@@ -212,7 +212,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			mainFunc->getBasicBlockList().push_back(nextBlock);
 			builder.SetInsertPoint(nextBlock);
 			currentBlock = nextBlock;
-			stack = BBStack();	// Reset stack
+			assert(stack.empty()); // Stack should be empty
 		}
 
 		assert(currentBlock != nullptr);
@@ -579,6 +579,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			// The target address is computed at compile time,
 			// just pop it without looking...
 			stack.pop();
+			stack.reset();
 
 			auto targetBlock = jumpTargets[currentPC];
 			builder.CreateBr(targetBlock);
@@ -598,6 +599,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			auto top = stack.pop();
 			auto zero = ConstantInt::get(Types.word256, 0);
 			auto cond = builder.CreateICmpNE(top, zero, "nonzero");
+			stack.reset();
 			auto targetBlock = jumpTargets[currentPC];
 			auto followBlock = basicBlocks[currentPC + 1];
 			builder.CreateCondBr(cond, targetBlock, followBlock);
@@ -764,6 +766,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			ret = builder.CreateOr(ret, size);
 
 			builder.CreateRet(ret);
+			stack.clear();
 			currentBlock = nullptr;
 			break;
 		}
@@ -777,6 +780,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		case Instruction::STOP:
 		{
 			builder.CreateRet(builder.getInt64(0));
+			stack.clear();
 			currentBlock = nullptr;
 			break;
 		}

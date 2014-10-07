@@ -20,6 +20,10 @@
 namespace evmcc
 {
 
+BBStack::BBStack(Stack& _extStack)
+	: m_extStack(_extStack)
+{}
+
 void BBStack::push(llvm::Value* _value)
 {
 	m_state.push_back(_value);
@@ -27,9 +31,29 @@ void BBStack::push(llvm::Value* _value)
 
 llvm::Value* BBStack::pop()
 {
+	if (m_state.empty())
+		return m_extStack.pop();
+
 	auto top = m_state.back();
 	m_state.pop_back();
 	return top;
+}
+
+void BBStack::reset()
+{
+	for (auto&& value : m_state)
+		m_extStack.push(value);
+	m_state.clear();
+}
+
+void BBStack::clear()
+{
+	m_state.clear();
+}
+
+bool BBStack::empty() const
+{
+	return m_state.empty();
 }
 
 void BBStack::dup(size_t _index)

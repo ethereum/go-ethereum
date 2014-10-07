@@ -103,7 +103,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 		std::cout << "RETURN [ ";
 		for (dev::bytes::const_iterator it = Runtime::getMemory().cbegin() + index, end = it + size; it != end; ++it)
 			std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)*it << " ";
-		std::cout << "]";
+		std::cout << "]\n";
 
 		return 10;
 	}	
