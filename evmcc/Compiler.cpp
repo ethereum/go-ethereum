@@ -181,7 +181,6 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	createBasicBlocks(bytecode);
 
 	// Init runtime structures.
-	auto extStack = Stack(builder, module.get());
 	auto memory = Memory(builder, module.get());
 	auto ext = Ext(builder, module.get());
 
