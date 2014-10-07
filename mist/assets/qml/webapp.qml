@@ -164,7 +164,7 @@ import "../ext/qml_messaging.js" as Messaging
 				experimental.preferences.javascriptEnabled: true
 				experimental.preferences.navigatorQtObjectEnabled: true
 				experimental.preferences.developerExtrasEnabled: true
-				experimental.userScripts: ["../ext/q.js", "../ext/pre.js", "../ext/big.js", "../ext/string.js", "../ext/html_messaging.js"]
+				experimental.userScripts: ["../ext/qt_messaging_adapter.js", "../ext/q.js", "../ext/big.js", "../ext/string.js", "../ext/html_messaging.js"]
 				experimental.onMessageReceived: {
 					console.log("[onMessageReceived]: ", message.data)
 					// TODO move to messaging.js

@@ -271,7 +271,8 @@ func (gui *Gui) loadAddressBook() {
 }
 
 func (gui *Gui) insertTransaction(window string, tx *ethchain.Transaction) {
-	nameReg := ethpipe.New(gui.eth).World().Config().Get("NameReg")
+	pipe := ethpipe.New(gui.eth)
+	nameReg := pipe.World().Config().Get("NameReg")
 	addr := gui.address()
 
 	var inout string
@@ -282,14 +283,14 @@ func (gui *Gui) insertTransaction(window string, tx *ethchain.Transaction) {
 	}
 
 	var (
-		ptx  = ethpipe.NewJSTx(tx)
+		ptx  = ethpipe.NewJSTx(tx, pipe.World().State())
 		send = nameReg.Storage(tx.Sender())
 		rec  = nameReg.Storage(tx.Recipient)
 		s, r string
 	)
 
 	if tx.CreatesContract() {
-		rec = nameReg.Storage(tx.CreationAddress())
+		rec = nameReg.Storage(tx.CreationAddress(pipe.World().State()))
 	}
 
 	if send.Len() != 0 {
@@ -301,7 +302,7 @@ func (gui *Gui) insertTransaction(window string, tx *ethchain.Transaction) {
 		r = strings.Trim(rec.Str(), "\x00")
 	} else {
 		if tx.CreatesContract() {
-			r = ethutil.Bytes2Hex(tx.CreationAddress())
+			r = ethutil.Bytes2Hex(tx.CreationAddress(pipe.World().State()))
 		} else {
 			r = ethutil.Bytes2Hex(tx.Recipient)
 		}
@@ -466,13 +467,11 @@ func (gui *Gui) update() {
 				var (
 					pct      float64 = 1.0 / float64(chainLength) * float64(blockLength)
 					dlWidget         = gui.win.Root().ObjectByName("downloadIndicator")
+					dlLabel          = gui.win.Root().ObjectByName("downloadLabel")
 				)
-				if pct < 1.0 {
-					dlWidget.Set("visible", true)
-					dlWidget.Set("value", pct)
-				} else {
-					dlWidget.Set("visible", false)
-				}
+
+				dlWidget.Set("value", pct)
+				dlLabel.Set("text", fmt.Sprintf("%d / %d", blockLength, chainLength))
 
 			case <-statsUpdateTicker.C:
 				gui.setStatsPane()
@@ -500,7 +499,7 @@ func (gui *Gui) setStatsPane() {
 	runtime.ReadMemStats(&memStats)
 
 	statsPane := gui.getObjectByName("statsPane")
-	statsPane.Set("text", fmt.Sprintf(`###### Mist 0.6.7 (%s) #######
+	statsPane.Set("text", fmt.Sprintf(`###### Mist 0.6.8 (%s) #######
 
 eth %d (p2p = %d)
 

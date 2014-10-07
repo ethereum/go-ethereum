@@ -103,6 +103,10 @@ func main() {
 		utils.StartRpc(ethereum, RpcPort)
 	}
 
+	if StartWebSockets {
+		utils.StartWebSockets(ethereum)
+	}
+
 	utils.StartEthereum(ethereum, UseSeed)
 
 	// this blocks the thread

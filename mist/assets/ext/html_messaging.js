@@ -1,9 +1,8 @@
 // The magic return variable. The magic return variable will be set during the execution of the QML call.
 (function(window) {
-	function message(type, data) {
-		document.title = JSON.stringify({type: type, data: data});
-
-		return window.____returnData;
+	var Promise = window.Promise;
+	if(typeof(Promise) === "undefined") {
+		var Promise = Q.Promise;
 	}
 
 	function isPromise(o) {
@@ -446,6 +445,7 @@
 		}
 	});
 
+
 	var g_seed = 1;
 	function postData(data, cb) {
 		data._seed = g_seed;
@@ -459,24 +459,6 @@
 
 		g_seed++;
 
-		navigator.qt.postMessage(JSON.stringify(data));
-	}
-
-	navigator.qt.onmessage = function(ev) {
-		var data = JSON.parse(ev.data)
-
-		if(data._event !== undefined) {
-			eth.trigger(data._event, data.data);
-		} else {
-			if(data._seed) {
-				var cb = eth._callbacks[data._seed];
-				if(cb) {
-					cb.call(this, data.data)
-
-					// Remove the "trigger" callback
-					delete eth._callbacks[ev._seed];
-				}
-			}
-		}
+		window._messagingAdapter.call(this, JSON.stringify(data))
 	}
 })(this);
