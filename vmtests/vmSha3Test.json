@@ -28,9 +28,7 @@
                 "code" : "0x6000600020600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
-                    ]
+                    "0x" : "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
                 }
             }
         },
@@ -73,9 +71,7 @@
                 "code" : "0x6005600420600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0xc41589e7559804ea4a2080dad19d876a024ccb05117835447d72ce08c1d020ec"
-                    ]
+                    "0x" : "0xc41589e7559804ea4a2080dad19d876a024ccb05117835447d72ce08c1d020ec"
                 }
             }
         },
@@ -118,9 +114,7 @@
                 "code" : "0x600a600a20600057",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : [
-                        "0x6bd2dd6bd408cbee33429358bf24fdc64612fbf8b1b4db604518f40ffd34b607"
-                    ]
+                    "0x" : "0x6bd2dd6bd408cbee33429358bf24fdc64612fbf8b1b4db604518f40ffd34b607"
                 }
             }
         },
