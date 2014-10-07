@@ -216,7 +216,7 @@ func (self *Filter) bloomFilter(block *Block) bool {
 	fk := append([]byte("bloom"), block.Hash()...)
 	bin, err := self.eth.Db().Get(fk)
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
 	}
 
 	bloom := NewBloomFilter(bin)

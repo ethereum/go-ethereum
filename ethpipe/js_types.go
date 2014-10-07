@@ -33,9 +33,9 @@ func NewJSBlock(block *ethchain.Block) *JSBlock {
 		return &JSBlock{}
 	}
 
-	var ptxs []JSTransaction
+	var ptxs []*JSTransaction
 	for _, tx := range block.Transactions() {
-		ptxs = append(ptxs, *NewJSTx(tx, block.State()))
+		ptxs = append(ptxs, NewJSTx(tx, block.State()))
 	}
 
 	list := ethutil.NewList(ptxs)

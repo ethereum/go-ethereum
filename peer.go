@@ -516,10 +516,11 @@ func (p *Peer) HandleInbound() {
 						blockPool.AddHash(hash, p)
 					}
 
-					if !foundCommonHash && msg.Data.Len() != 0 {
-						if !p.FetchHashes() {
-							p.doneFetchingHashes = true
-						}
+					if !foundCommonHash {
+						//if !p.FetchHashes() {
+						//	p.doneFetchingHashes = true
+						//}
+						p.FetchHashes()
 					} else {
 						peerlogger.Infof("Found common hash (%x...)\n", p.lastReceivedHash[0:4])
 						p.doneFetchingHashes = true
@@ -533,8 +534,6 @@ func (p *Peer) HandleInbound() {
 					it := msg.Data.NewIterator()
 					for it.Next() {
 						block := ethchain.NewBlockFromRlpValue(it.Value())
-						//fmt.Printf("%v %x - %x\n", block.Number, block.Hash()[0:4], block.PrevHash[0:4])
-
 						blockPool.Add(block, p)
 
 						p.lastBlockReceived = time.Now()
@@ -557,21 +556,8 @@ func (self *Peer) FetchBlocks(hashes [][]byte) {
 
 func (self *Peer) FetchHashes() bool {
 	blockPool := self.ethereum.blockPool
+
 	return blockPool.FetchHashes(self)
-
-	/*
-		if self.td.Cmp(self.ethereum.HighestTDPeer()) >= 0 {
-			blockPool.td = self.td
-
-			if !blockPool.HasLatestHash() {
-				self.doneFetchingHashes = false
-
-				const amount = 256
-				peerlogger.Debugf("Fetching hashes (%d)\n", amount)
-				self.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{self.lastReceivedHash, uint32(amount)}))
-			}
-		}
-	*/
 }
 
 func (self *Peer) FetchingHashes() bool {

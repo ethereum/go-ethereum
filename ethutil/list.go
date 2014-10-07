@@ -3,12 +3,14 @@ package ethutil
 import (
 	"encoding/json"
 	"reflect"
+	"sync"
 )
 
 // The list type is an anonymous slice handler which can be used
 // for containing any slice type to use in an environment which
 // does not support slice types (e.g., JavaScript, QML)
 type List struct {
+	mut    sync.Mutex
 	val    interface{}
 	list   reflect.Value
 	Length int
@@ -21,7 +23,7 @@ func NewList(t interface{}) *List {
 		panic("list container initialized with a non-slice type")
 	}
 
-	return &List{t, list, list.Len()}
+	return &List{sync.Mutex{}, t, list, list.Len()}
 }
 
 func EmptyList() *List {
@@ -30,8 +32,10 @@ func EmptyList() *List {
 
 // Get N element from the embedded slice. Returns nil if OOB.
 func (self *List) Get(i int) interface{} {
-
 	if self.list.Len() > i {
+		self.mut.Lock()
+		defer self.mut.Unlock()
+
 		i := self.list.Index(i).Interface()
 
 		return i
@@ -51,6 +55,9 @@ func (self *List) GetAsJson(i int) interface{} {
 // Appends value at the end of the slice. Panics when incompatible value
 // is given.
 func (self *List) Append(v interface{}) {
+	self.mut.Lock()
+	defer self.mut.Unlock()
+
 	self.list = reflect.Append(self.list, reflect.ValueOf(v))
 	self.Length = self.list.Len()
 }

@@ -3,6 +3,7 @@ package eth
 import (
 	"bytes"
 	"container/list"
+	"fmt"
 	"math"
 	"math/big"
 	"sync"
@@ -29,8 +30,8 @@ type BlockPool struct {
 
 	eth *Ethereum
 
-	hashPool [][]byte
-	pool     map[string]*block
+	hashes [][]byte
+	pool   map[string]*block
 
 	td   *big.Int
 	quit chan bool
@@ -53,12 +54,12 @@ func NewBlockPool(eth *Ethereum) *BlockPool {
 }
 
 func (self *BlockPool) Len() int {
-	return len(self.hashPool)
+	return len(self.hashes)
 }
 
 func (self *BlockPool) Reset() {
 	self.pool = make(map[string]*block)
-	self.hashPool = nil
+	self.hashes = nil
 }
 
 func (self *BlockPool) HasLatestHash() bool {
@@ -88,6 +89,10 @@ func (self *BlockPool) FetchHashes(peer *Peer) bool {
 	if (self.peer == nil && peer.td.Cmp(highestTd) >= 0) || (self.peer != nil && peer.td.Cmp(self.peer.td) >= 0) || self.peer == peer {
 		if self.peer != peer {
 			poollogger.Debugf("Found better suitable peer (%v vs %v)\n", self.td, peer.td)
+
+			if self.peer != nil {
+				self.peer.doneFetchingHashes = true
+			}
 		}
 
 		self.peer = peer
@@ -114,7 +119,7 @@ func (self *BlockPool) AddHash(hash []byte, peer *Peer) {
 	if self.pool[string(hash)] == nil {
 		self.pool[string(hash)] = &block{peer, nil, nil, time.Now(), 0}
 
-		self.hashPool = append([][]byte{hash}, self.hashPool...)
+		self.hashes = append([][]byte{hash}, self.hashes...)
 	}
 }
 
@@ -127,9 +132,12 @@ func (self *BlockPool) Add(b *ethchain.Block, peer *Peer) {
 	if self.pool[hash] == nil && !self.eth.BlockChain().HasBlock(b.Hash()) {
 		poollogger.Infof("Got unrequested block (%x...)\n", hash[0:4])
 
-		self.hashPool = append(self.hashPool, b.Hash())
+		self.hashes = append(self.hashes, b.Hash())
 		self.pool[hash] = &block{peer, peer, b, time.Now(), 0}
 
+		fmt.Println("1.", !self.eth.BlockChain().HasBlock(b.PrevHash), ethutil.Bytes2Hex(b.Hash()[0:4]), ethutil.Bytes2Hex(b.PrevHash[0:4]))
+		fmt.Println("2.", self.pool[string(b.PrevHash)] == nil)
+		fmt.Println("3.", !self.fetchingHashes)
 		if !self.eth.BlockChain().HasBlock(b.PrevHash) && self.pool[string(b.PrevHash)] == nil && !self.fetchingHashes {
 			poollogger.Infof("Unknown chain, requesting (%x...)\n", b.PrevHash[0:4])
 			peer.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{b.Hash(), uint32(256)}))
@@ -145,26 +153,8 @@ func (self *BlockPool) Remove(hash []byte) {
 	self.mut.Lock()
 	defer self.mut.Unlock()
 
-	self.hashPool = ethutil.DeleteFromByteSlice(self.hashPool, hash)
+	self.hashes = ethutil.DeleteFromByteSlice(self.hashes, hash)
 	delete(self.pool, string(hash))
-}
-
-func (self *BlockPool) ProcessCanonical(f func(block *ethchain.Block)) (procAmount int) {
-	blocks := self.Blocks()
-
-	ethchain.BlockBy(ethchain.Number).Sort(blocks)
-	for _, block := range blocks {
-		if self.eth.BlockChain().HasBlock(block.PrevHash) {
-			procAmount++
-
-			f(block)
-
-			self.Remove(block.Hash())
-		}
-
-	}
-
-	return
 }
 
 func (self *BlockPool) DistributeHashes() {
@@ -178,8 +168,8 @@ func (self *BlockPool) DistributeHashes() {
 	)
 
 	num := int(math.Min(float64(amount), float64(len(self.pool))))
-	for i, j := 0, 0; i < len(self.hashPool) && j < num; i++ {
-		hash := self.hashPool[i]
+	for i, j := 0, 0; i < len(self.hashes) && j < num; i++ {
+		hash := self.hashes[i]
 		item := self.pool[string(hash)]
 
 		if item != nil && item.block == nil {
@@ -193,7 +183,7 @@ func (self *BlockPool) DistributeHashes() {
 					peer = item.from
 				} else {
 					// Remove it
-					self.hashPool = ethutil.DeleteFromByteSlice(self.hashPool, hash)
+					self.hashes = ethutil.DeleteFromByteSlice(self.hashes, hash)
 					delete(self.pool, string(hash))
 				}
 			} else if lastFetchFailed || item.peer == nil {
@@ -250,17 +240,31 @@ out:
 				}
 			})
 
-			self.DistributeHashes()
-
-			if self.ChainLength < len(self.hashPool) {
-				self.ChainLength = len(self.hashPool)
+			if len(self.hashes) > 0 {
+				self.DistributeHashes()
 			}
+
+			if self.ChainLength < len(self.hashes) {
+				self.ChainLength = len(self.hashes)
+			}
+
+			/*
+				if !self.fetchingHashes {
+					blocks := self.Blocks()
+					ethchain.BlockBy(ethchain.Number).Sort(blocks)
+
+					if len(blocks) > 0 {
+						if !self.eth.BlockChain().HasBlock(b.PrevHash) && self.pool[string(b.PrevHash)] == nil && !self.fetchingHashes {
+						}
+					}
+				}
+			*/
 		}
 	}
 }
 
 func (self *BlockPool) chainThread() {
-	procTimer := time.NewTicker(1000 * time.Millisecond)
+	procTimer := time.NewTicker(500 * time.Millisecond)
 out:
 	for {
 		select {
@@ -294,14 +298,8 @@ out:
 				}
 			}
 
-			if len(blocks) > 0 {
-				self.eth.Eventer().Post("blocks", blocks)
-
-			}
-
 			var err error
 			for i, block := range blocks {
-				//self.eth.Eventer().Post("block", block)
 				err = self.eth.StateManager().Process(block, false)
 				if err != nil {
 					poollogger.Infoln(err)
@@ -318,10 +316,6 @@ out:
 
 			if err != nil {
 				self.Reset()
-				// Remove this bad chain
-				for _, block := range blocks {
-					self.Remove(block.Hash())
-				}
 
 				poollogger.Debugf("Punishing peer for supplying bad chain (%v)\n", self.peer.conn.RemoteAddr())
 				// This peer gave us bad hashes and made us fetch a bad chain, therefor he shall be punished.
@@ -330,16 +324,6 @@ out:
 				self.td = ethutil.Big0
 				self.peer = nil
 			}
-
-			/*
-				// Handle in batches of 4k
-				//max := int(math.Min(4000, float64(len(blocks))))
-				for _, block := range blocks {
-					self.eth.Eventer().Post("block", block)
-
-					self.Remove(block.Hash())
-				}
-			*/
 		}
 	}
 }
