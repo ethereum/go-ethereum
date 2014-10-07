@@ -8,7 +8,6 @@ import Ethereum 1.0
 
 Rectangle {
 	property var title: "Pending Transactions"
-	property var iconSource: "../tx.png"
 	property var menuItem
 
 	objectName: "pendingTxView"

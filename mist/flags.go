@@ -13,26 +13,29 @@ import (
 	"github.com/ethereum/eth-go/ethlog"
 )
 
-var Identifier string
-var KeyRing string
-var KeyStore string
-var StartRpc bool
-var RpcPort int
-var UseUPnP bool
-var OutboundPort string
-var ShowGenesis bool
-var AddPeer string
-var MaxPeer int
-var GenAddr bool
-var UseSeed bool
-var SecretFile string
-var ExportDir string
-var NonInteractive bool
-var Datadir string
-var LogFile string
-var ConfigFile string
-var DebugFile string
-var LogLevel int
+var (
+	Identifier      string
+	KeyRing         string
+	KeyStore        string
+	StartRpc        bool
+	StartWebSockets bool
+	RpcPort         int
+	UseUPnP         bool
+	OutboundPort    string
+	ShowGenesis     bool
+	AddPeer         string
+	MaxPeer         int
+	GenAddr         bool
+	UseSeed         bool
+	SecretFile      string
+	ExportDir       string
+	NonInteractive  bool
+	Datadir         string
+	LogFile         string
+	ConfigFile      string
+	DebugFile       string
+	LogLevel        int
+)
 
 // flags specific to gui client
 var AssetPath string
@@ -83,6 +86,7 @@ func Init() {
 	flag.IntVar(&MaxPeer, "maxpeer", 10, "maximum desired peers")
 	flag.IntVar(&RpcPort, "rpcport", 8080, "port to start json-rpc server on")
 	flag.BoolVar(&StartRpc, "rpc", false, "start rpc server")
+	flag.BoolVar(&StartWebSockets, "ws", false, "start websocket server")
 	flag.BoolVar(&NonInteractive, "y", false, "non-interactive mode (say yes to confirmations)")
 	flag.BoolVar(&UseSeed, "seed", true, "seed peers")
 	flag.BoolVar(&GenAddr, "genaddr", false, "create a new priv/pub key")

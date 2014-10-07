@@ -8,8 +8,7 @@ import Ethereum 1.0
 
 Rectangle {
 	id: root
-	property var title: "Network"
-	property var iconSource: "../net.png"
+	property var title: "Block chain"
 	property var menuItem
 
 	objectName: "chainView"
@@ -102,22 +101,18 @@ Rectangle {
 			initial = false
 		}
 
-		/*
-		var txs = JSON.parse(block.transactions);
-		if(txs != null){
-			amount = txs.length
-		}
-		*/
-	       var txs = block.transactions;
 	       var amount = block.transactions.length;
+	       var txs = [];
+	       for(var i = 0; i < block.transactions.length; i++) {
+		       var tx = JSON.parse(block.transactions.getAsJson(i));
+		       txs.push(tx);
+	       }
 
 		if(initial){
 			blockModel.append({size: block.size, number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
 		} else {
 			blockModel.insert(0, {size: block.size, number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
 		}
-
-		//root.secondary.text = "#" + block.number;
 	}
 
 	Window {
@@ -240,16 +235,16 @@ Rectangle {
 		property var singleBlock: ListModel {
 			id: singleBlock
 		}
-		function setDetails(block){
-			singleBlock.set(0,block)
+		function setDetails(bl){
+			singleBlock.set(0, bl)
 			popup.height = 300
 			transactionModel.clear()
-			if(block.txs !== undefined){
-				for(var i = 0; i < block.txs.length; i++) {
-					transactionModel.insert(0, block.txs.get(i))
+			if(bl.txs !== undefined){
+				for(var i = 0; i < bl.txs.count; i++) {
+					transactionModel.insert(0, bl.txs.get(i))
 				}
-				if(block.txs.length > 0 && block.txs.get(0).data){
-					popup.showContractData(block.txs.get(0))
+				if(bl.txs.count > 0 && bl.txs.get(0).data){
+					popup.showContractData(bl.txs.get(0))
 				}
 			}
 			txView.forceActiveFocus()

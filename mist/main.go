@@ -12,7 +12,7 @@ import (
 
 const (
 	ClientIdentifier = "Mist"
-	Version          = "0.6.7"
+	Version          = "0.6.8"
 )
 
 var ethereum *eth.Ethereum
@@ -79,6 +79,10 @@ func main() {
 	})
 
 	utils.HandleInterrupt()
+
+	if StartWebSockets {
+		utils.StartWebSockets(ethereum)
+	}
 
 	// we need to run the interrupt callbacks in case gui is closed
 	// this skips if we got here by actual interrupt stopping the GUI

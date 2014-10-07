@@ -51,9 +51,8 @@ ApplicationWindow {
 
 		addPlugin("./views/transaction.qml", {noAdd: true, close: false, section: "legacy"});
 		addPlugin("./views/chain.qml", {noAdd: true, close: false, section: "legacy"});
-		addPlugin("./views/info.qml", {noAdd: true, close: false, section: "legacy"});
 		addPlugin("./views/pending_tx.qml", {noAdd: true, close: false, section: "legacy"});
-		addPlugin("./views/javascript.qml", {noAdd: true, close: false, section: "legacy"});
+		addPlugin("./views/info.qml", {noAdd: true, close: false, section: "legacy"});
 
 		addPlugin("./views/jeffcoin/jeffcoin.qml", {noAdd: true, close: false, section: "apps"})
 
@@ -363,12 +362,7 @@ ApplicationWindow {
 			view.visible = false
 			view.anchors.fill = mainView
 
-			if( !view.hasOwnProperty("iconSource") ) {
-				console.log("Could not load plugin. Property 'iconSourc' not found on view.");
-				return;
-			}
-
-			var menuItem = menu.createMenuItem(view.iconSource, view, options);
+			var menuItem = menu.createMenuItem(view, options);
 			if( view.hasOwnProperty("menuItem") ) {
 				view.menuItem = menuItem;
 			}
@@ -525,7 +519,7 @@ ApplicationWindow {
 				 }
 			 }
 
-			 function createMenuItem(icon, view, options) {
+			 function createMenuItem(view, options) {
 				 if(options === undefined) {
 					 options = {};
 				 }
@@ -547,7 +541,10 @@ ApplicationWindow {
 
 				 comp.view = view
 				 comp.title = view.title
-				 comp.icon = view.iconSource
+
+				 if(view.hasOwnProperty("iconSource")) {
+					 comp.icon = view.iconSource;
+				 }
 				 comp.closable = options.close;
 
 				 return comp

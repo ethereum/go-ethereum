@@ -7,8 +7,7 @@ import QtQuick.Controls.Styles 1.1
 import Ethereum 1.0
 
 Rectangle {
-	property var title: "Information"
-	property var iconSource: "../heart.png"
+	property var title: "Debug Info"
 	property var menuItem
 
 	objectName: "infoView"

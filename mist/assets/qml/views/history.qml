@@ -7,7 +7,6 @@ import QtQuick.Controls.Styles 1.1
 import Ethereum 1.0
 
 Rectangle {
-	property var iconSource: "../tx.png"
 	property var title: "Transactions"
 	property var menuItem
 
