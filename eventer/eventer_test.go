@@ -3,7 +3,7 @@ package eventer
 import "testing"
 
 func TestChannel(t *testing.T) {
-	eventer := New(nil)
+	eventer := New()
 
 	c := make(Channel, 1)
 	eventer.RegisterChannel("test", c)
@@ -17,7 +17,7 @@ func TestChannel(t *testing.T) {
 }
 
 func TestFunction(t *testing.T) {
-	eventer := New(nil)
+	eventer := New()
 
 	var data string
 	eventer.RegisterFunc("test", func(ev Event) {
@@ -31,7 +31,7 @@ func TestFunction(t *testing.T) {
 }
 
 func TestRegister(t *testing.T) {
-	eventer := New(nil)
+	eventer := New()
 
 	c := eventer.Register("test")
 	eventer.Post("test", "hello world")
@@ -44,7 +44,7 @@ func TestRegister(t *testing.T) {
 }
 
 func TestOn(t *testing.T) {
-	eventer := New(nil)
+	eventer := New()
 
 	c := make(Channel, 1)
 	eventer.On("test", c)
