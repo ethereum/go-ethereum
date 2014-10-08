@@ -51,7 +51,7 @@ func (self *UiLib) LookupDomain(domain string) string {
 	world := self.World()
 
 	if len(domain) > 32 {
-		domain = string(ethcrypto.Sha3Bin([]byte(domain)))
+		domain = string(ethcrypto.Sha3([]byte(domain)))
 	}
 	data := world.Config().Get("DnsReg").StorageString(domain).Bytes()
 
