@@ -539,7 +539,15 @@ func (p *Peer) HandleInbound() {
 						p.lastBlockReceived = time.Now()
 					}
 				case ethwire.MsgNewBlockTy:
-					p.ethereum.blockPool.AddNew(ethchain.NewBlockFromRlpValue(msg.Data), p)
+					var (
+						blockPool = p.ethereum.blockPool
+						block     = ethchain.NewBlockFromRlpValue(msg.Data.Get(0))
+						td        = msg.Data.Get(1).BigInt()
+					)
+
+					if td.Cmp(blockPool.td) > 0 {
+						p.ethereum.blockPool.AddNew(block, p)
+					}
 				}
 
 			}
