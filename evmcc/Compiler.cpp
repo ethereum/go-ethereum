@@ -7,7 +7,6 @@
 #include <libevmface/Instruction.h>
 
 #include "Memory.h"
-#include "Stack.h"
 #include "Ext.h"
 
 namespace evmcc
@@ -187,9 +186,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	for (auto basicBlockPairIt = basicBlocks.begin(); basicBlockPairIt != basicBlocks.end(); ++basicBlockPairIt)
 	{
 		auto& basicBlock = basicBlockPairIt->second;
-
-		BBStack stack;
-		stack.setBasicBlock(basicBlock);
+		auto& stack = basicBlock.getStack();
 		builder.SetInsertPoint(basicBlock);
 
 		for (auto currentPC = basicBlock.begin(); currentPC != basicBlock.end(); ++currentPC)
@@ -799,8 +796,8 @@ void Compiler::linkBasicBlocks()
 			for (auto predIt = llvm::pred_begin(llvmBB); predIt != llvm::pred_end(llvmBB); ++predIt)
 			{
 				auto& predBB = findBasicBlock(*predIt);
-				assert(valueIdx < predBB.getState().size()); // TODO: Report error
-				phi->addIncoming(*(predBB.getState().rbegin() + valueIdx), predBB);
+				assert(valueIdx < predBB.getStack().size()); // TODO: Report error
+				phi->addIncoming(predBB.getStack().get(valueIdx), predBB);
 			}
 		}
 	}
