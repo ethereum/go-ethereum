@@ -1,7 +1,6 @@
 package ethvm
 
 import (
-	"container/list"
 	"fmt"
 	"math/big"
 
@@ -35,8 +34,6 @@ type Vm struct {
 	Fn          string
 
 	Recoverable bool
-
-	queue *list.List
 }
 
 type Environment interface {
@@ -63,7 +60,7 @@ func New(env Environment) *Vm {
 		lt = LogTyDiff
 	}
 
-	return &Vm{env: env, logTy: lt, Recoverable: true, queue: list.New()}
+	return &Vm{env: env, logTy: lt, Recoverable: true}
 }
 
 func calcMemSize(off, l *big.Int) *big.Int {
@@ -86,7 +83,6 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			if r := recover(); r != nil {
 				ret = closure.Return(nil)
 				err = fmt.Errorf("%v", r)
-				vmlogger.Errorln("vm err", err)
 			}
 		}()
 	}
@@ -211,7 +207,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			require(4)
 
 			newMemSize = calcMemSize(stack.data[stack.Len()-2], stack.data[stack.Len()-4])
-		case CALL, CALLSTATELESS:
+		case CALL, CALLCODE:
 			require(7)
 			gas.Set(GasCall)
 			addStepGasUsage(stack.data[stack.Len()-1])
@@ -733,12 +729,16 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			if cond.Cmp(ethutil.BigTrue) >= 0 {
 				pc = pos
 
-				self.Printf(" ~> %v (t)", pc).Endl()
+				if OpCode(closure.Get(pc).Uint()) != JUMPDEST {
+					return closure.Return(nil), fmt.Errorf("JUMP missed JUMPDEST %v", pc)
+				}
 
 				continue
 			} else {
 				self.Printf(" (f)")
 			}
+		case JUMPDEST:
+			self.Printf(" ~> %v (t)", pc).Endl()
 		case PC:
 			stack.Push(pc)
 		case MSIZE:
@@ -772,7 +772,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			closure.UseGas(closure.Gas)
 
-			msg := NewMessage(self, addr, input, gas, closure.Price, value)
+			msg := NewExecution(self, addr, input, gas, closure.Price, value)
 			ret, err := msg.Exec(addr, closure)
 			if err != nil {
 				stack.Push(ethutil.BigFalse)
@@ -793,7 +793,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			if self.Dbg != nil {
 				self.Dbg.SetCode(closure.Code)
 			}
-		case CALL, CALLSTATELESS:
+		case CALL, CALLCODE:
 			require(7)
 
 			self.Endl()
@@ -812,13 +812,13 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			snapshot := self.env.State().Copy()
 
 			var executeAddr []byte
-			if op == CALLSTATELESS {
+			if op == CALLCODE {
 				executeAddr = closure.Address()
 			} else {
 				executeAddr = addr.Bytes()
 			}
 
-			msg := NewMessage(self, executeAddr, args, gas, closure.Price, value)
+			msg := NewExecution(self, executeAddr, args, gas, closure.Price, value)
 			ret, err := msg.Exec(addr.Bytes(), closure)
 			if err != nil {
 				stack.Push(ethutil.BigFalse)
@@ -835,22 +835,6 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				self.Dbg.SetCode(closure.Code)
 			}
 
-		case POST:
-			require(5)
-
-			self.Endl()
-
-			gas := stack.Pop()
-			// Pop gas and value of the stack.
-			value, addr := stack.Popn()
-			// Pop input size and offset
-			inSize, inOffset := stack.Popn()
-			// Get the arguments from the memory
-			args := mem.Get(inOffset.Int64(), inSize.Int64())
-
-			msg := NewMessage(self, addr.Bytes(), args, gas, closure.Price, value)
-
-			msg.Postpone()
 		case RETURN:
 			require(2)
 			size, offset := stack.Popn()
@@ -904,10 +888,6 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 	}
 }
 
-func (self *Vm) Queue() *list.List {
-	return self.queue
-}
-
 func (self *Vm) Printf(format string, v ...interface{}) *Vm {
 	if self.Verbose && self.logTy == LogTyPretty {
 		self.logStr += fmt.Sprintf(format, v...)
@@ -940,7 +920,7 @@ func ensure256(x *big.Int) {
 	}
 }
 
-type Message struct {
+type Execution struct {
 	vm                *Vm
 	closure           *Closure
 	address, input    []byte
@@ -948,30 +928,15 @@ type Message struct {
 	object            *ethstate.StateObject
 }
 
-func NewMessage(vm *Vm, address, input []byte, gas, gasPrice, value *big.Int) *Message {
-	return &Message{vm: vm, address: address, input: input, gas: gas, price: gasPrice, value: value}
+func NewExecution(vm *Vm, address, input []byte, gas, gasPrice, value *big.Int) *Execution {
+	return &Execution{vm: vm, address: address, input: input, gas: gas, price: gasPrice, value: value}
 }
 
-func (self *Message) Postpone() {
-	self.vm.queue.PushBack(self)
-}
-
-func (self *Message) Addr() []byte {
+func (self *Execution) Addr() []byte {
 	return self.address
 }
 
-func (self *Message) Exec(codeAddr []byte, caller ClosureRef) (ret []byte, err error) {
-	queue := self.vm.queue
-	self.vm.queue = list.New()
-
-	defer func() {
-		if err == nil {
-			queue.PushBackList(self.vm.queue)
-		}
-
-		self.vm.queue = queue
-	}()
-
+func (self *Execution) Exec(codeAddr []byte, caller ClosureRef) (ret []byte, err error) {
 	msg := self.vm.env.State().Manifest().AddMessage(&ethstate.Message{
 		To: self.address, From: caller.Address(),
 		Input:  self.input,
@@ -992,17 +957,21 @@ func (self *Message) Exec(codeAddr []byte, caller ClosureRef) (ret []byte, err e
 		caller.Object().SubAmount(self.value)
 		stateObject.AddAmount(self.value)
 
-		// Retrieve the executing code
-		code := self.vm.env.State().GetCode(codeAddr)
+		if p := Precompiled[ethutil.BigD(codeAddr).Uint64()]; p != nil {
+			if self.gas.Cmp(p.Gas) >= 0 {
+				ret = p.Call(self.input)
+			}
+		} else {
+			// Retrieve the executing code
+			code := self.vm.env.State().GetCode(codeAddr)
 
-		// Create a new callable closure
-		c := NewClosure(msg, caller, stateObject, code, self.gas, self.price)
-		// Executer the closure and get the return value (if any)
-		ret, _, err = c.Call(self.vm, self.input)
+			// Create a new callable closure
+			c := NewClosure(msg, caller, stateObject, code, self.gas, self.price)
+			// Executer the closure and get the return value (if any)
+			ret, _, err = c.Call(self.vm, self.input)
 
-		msg.Output = ret
-
-		return ret, err
+			msg.Output = ret
+		}
 	}
 
 	return
