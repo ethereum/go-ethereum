@@ -1,61 +1,84 @@
 {
   "singleItem": {
-    "inputs": [
-      ["A", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
-    ],
-    "expectation": "d23786fb4a010da3ce639d66d5e904a11dbc02746d1ce25029e53290cabf28ab"
+    "in": {
+      "A": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "root": "d23786fb4a010da3ce639d66d5e904a11dbc02746d1ce25029e53290cabf28ab"
   },
   "dogs": {
-    "inputs": [
-      ["doe", "reindeer"],
-      ["dog", "puppy"],
-      ["dogglesworth", "cat"]
-    ],
-    "expectation": "8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3"
+    "in": {
+      "doe": "reindeer",
+      "dog": "puppy",
+      "dogglesworth": "cat"
+    },
+    "root": "8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3"
   },
   "puppy": {
-    "inputs":[
-      ["do", "verb"],
-      ["horse", "stallion"],
-      ["doge", "coin"],
-      ["dog", "puppy"]
-    ],
-    "expectation": "5991bb8c6514148a29db676a14ac506cd2cd5775ace63c30a4fe457715e9ac84"
+    "in": {
+      "do": "verb",
+      "horse": "stallion",
+      "doge": "coin",
+      "dog": "puppy"
+    },
+    "root": "5991bb8c6514148a29db676a14ac506cd2cd5775ace63c30a4fe457715e9ac84"
   },
   "emptyValues": {
-    "inputs":[
-      ["do", "verb"],
-      ["ether", "wookiedoo"],
-      ["horse", "stallion"],
-      ["shaman", "horse"],
-      ["doge", "coin"],
-      ["ether", ""],
-      ["dog", "puppy"],
-      ["shaman", ""]
-    ],
-    "expectation": "5991bb8c6514148a29db676a14ac506cd2cd5775ace63c30a4fe457715e9ac84"
+    "in": {
+      "do": "verb",
+      "ether": "wookiedoo",
+      "horse": "stallion",
+      "shaman": "horse",
+      "doge": "coin",
+      "ether": "",
+      "dog": "puppy",
+      "shaman": ""
+    },
+    "root": "4505cb6d817068bcd68fb225ab4d5ab70860461d3b35738bf6bcf7b44d702d0d"
   },
   "foo": {
-    "inputs":[
-      ["foo", "bar"],
-      ["food", "bat"],
-      ["food", "bass"]
-    ],
-    "expectation": "17beaa1648bafa633cda809c90c04af50fc8aed3cb40d16efbddee6fdf63c4c3"
+    "in": {
+      "foo": "bar",
+      "food": "bat",
+      "food": "bass"
+    },
+    "root": "17beaa1648bafa633cda809c90c04af50fc8aed3cb40d16efbddee6fdf63c4c3"
   },
   "smallValues": {
-    "inputs":[
-      ["be", "e"],
-      ["dog", "puppy"],
-      ["bed", "d"]
-    ],
-    "expectation": "3f67c7a47520f79faa29255d2d3c084a7a6df0453116ed7232ff10277a8be68b"
+    "in": {
+      "be": "e",
+      "dog": "puppy",
+      "bed": "d"
+    },
+    "root": "3f67c7a47520f79faa29255d2d3c084a7a6df0453116ed7232ff10277a8be68b"
   },
   "testy": {
-    "inputs":[
-      ["test", "test"],
-      ["te", "testy"]
-    ],
-    "expectation": "8452568af70d8d140f58d941338542f645fcca50094b20f3c3d8c3df49337928"
-  }
+    "in": {
+      "test": "test",
+      "te": "testy"
+    },
+    "root": "8452568af70d8d140f58d941338542f645fcca50094b20f3c3d8c3df49337928"
+  },
+  "hex": {
+    "in": {
+            "0x0045": "0x0123456789",
+            "0x4500": "0x9876543210"
+        },
+        "root": "285505fcabe84badc8aa310e2aae17eddc7d120aabec8a476902c8184b3a3503"
+    },
+  "jeff": {
+    "in": {
+        "0x0000000000000000000000000000000000000000000000000000000000000045": "0x22b224a1420a802ab51d326e29fa98e34c4f24ea",
+        "0x0000000000000000000000000000000000000000000000000000000000000046": "0x67706c2076330000000000000000000000000000000000000000000000000000",
+        "0x0000000000000000000000000000000000000000000000000000001234567890": "0x697c7b8c961b56f675d570498424ac8de1a918f6",
+        "0x000000000000000000000000697c7b8c961b56f675d570498424ac8de1a918f6": "0x1234567890",
+        "0x0000000000000000000000007ef9e639e2733cb34e4dfc576d4b23f72db776b2": "0x4655474156000000000000000000000000000000000000000000000000000000",
+        "0x000000000000000000000000ec4f34c97e43fbb2816cfd95e388353c7181dab1": "0x4e616d6552656700000000000000000000000000000000000000000000000000",
+        "0x4655474156000000000000000000000000000000000000000000000000000000": "0x7ef9e639e2733cb34e4dfc576d4b23f72db776b2",
+        "0x4e616d6552656700000000000000000000000000000000000000000000000000": "0xec4f34c97e43fbb2816cfd95e388353c7181dab1",
+        "0x0000000000000000000000000000000000000000000000000000001234567890": "",
+        "0x000000000000000000000000697c7b8c961b56f675d570498424ac8de1a918f6": "0x6f6f6f6820736f2067726561742c207265616c6c6c793f000000000000000000",
+        "0x6f6f6f6820736f2067726561742c207265616c6c6c793f000000000000000000": "0x697c7b8c961b56f675d570498424ac8de1a918f6"
+      },
+      "root": "088c8e162c91c75ca9efa63f21530bbc6964cff7453a5d6af8404d090292a3e7"
+    }
 }
