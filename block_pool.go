@@ -124,6 +124,14 @@ func (self *BlockPool) AddHash(hash []byte, peer *Peer) {
 }
 
 func (self *BlockPool) Add(b *ethchain.Block, peer *Peer) {
+	self.addBlock(b, peer, false)
+}
+
+func (self *BlockPool) AddNew(b *ethchain.Block, peer *Peer) {
+	self.addBlock(b, peer, true)
+}
+
+func (self *BlockPool) addBlock(b *ethchain.Block, peer *Peer, newBlock bool) {
 	self.mut.Lock()
 	defer self.mut.Unlock()
 
@@ -135,12 +143,15 @@ func (self *BlockPool) Add(b *ethchain.Block, peer *Peer) {
 		self.hashes = append(self.hashes, b.Hash())
 		self.pool[hash] = &block{peer, peer, b, time.Now(), 0}
 
-		fmt.Println("1.", !self.eth.BlockChain().HasBlock(b.PrevHash), ethutil.Bytes2Hex(b.Hash()[0:4]), ethutil.Bytes2Hex(b.PrevHash[0:4]))
-		fmt.Println("2.", self.pool[string(b.PrevHash)] == nil)
-		fmt.Println("3.", !self.fetchingHashes)
-		if !self.eth.BlockChain().HasBlock(b.PrevHash) && self.pool[string(b.PrevHash)] == nil && !self.fetchingHashes {
-			poollogger.Infof("Unknown chain, requesting (%x...)\n", b.PrevHash[0:4])
-			peer.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{b.Hash(), uint32(256)}))
+		// The following is only performed on an unrequested new block
+		if newBlock {
+			fmt.Println("1.", !self.eth.BlockChain().HasBlock(b.PrevHash), ethutil.Bytes2Hex(b.Hash()[0:4]), ethutil.Bytes2Hex(b.PrevHash[0:4]))
+			fmt.Println("2.", self.pool[string(b.PrevHash)] == nil)
+			fmt.Println("3.", !self.fetchingHashes)
+			if !self.eth.BlockChain().HasBlock(b.PrevHash) && self.pool[string(b.PrevHash)] == nil && !self.fetchingHashes {
+				poollogger.Infof("Unknown chain, requesting (%x...)\n", b.PrevHash[0:4])
+				peer.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{b.Hash(), uint32(256)}))
+			}
 		}
 	} else if self.pool[hash] != nil {
 		self.pool[hash].block = b

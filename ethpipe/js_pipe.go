@@ -3,7 +3,6 @@ package ethpipe
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"sync/atomic"
 
 	"github.com/ethereum/eth-go/ethchain"
@@ -93,7 +92,6 @@ func (self *JSPipe) NumberToHuman(balance string) string {
 }
 
 func (self *JSPipe) StorageAt(addr, storageAddr string) string {
-	fmt.Println("get", addr, storageAddr)
 	storage := self.World().SafeGet(ethutil.Hex2Bytes(addr)).Storage(ethutil.Hex2Bytes(storageAddr))
 
 	return ethutil.Bytes2Hex(storage.Bytes())

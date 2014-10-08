@@ -40,6 +40,7 @@ const (
 	MsgBlockHashesTy    = 0x14
 	MsgGetBlocksTy      = 0x15
 	MsgBlockTy          = 0x16
+	MsgNewBlockTy       = 0x17
 )
 
 var msgTypeToString = map[MsgType]string{

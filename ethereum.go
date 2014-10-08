@@ -385,7 +385,7 @@ func (s *Ethereum) RemovePeer(p *Peer) {
 	})
 }
 
-func (s *Ethereum) ReapDeadPeerHandler() {
+func (s *Ethereum) reapDeadPeerHandler() {
 	reapTimer := time.NewTicker(processReapingTimeout * time.Second)
 
 	for {
@@ -420,7 +420,7 @@ func (s *Ethereum) Start(seed bool) {
 	}
 
 	// Start the reaping processes
-	go s.ReapDeadPeerHandler()
+	go s.reapDeadPeerHandler()
 	go s.update()
 	go s.filterLoop()
 
