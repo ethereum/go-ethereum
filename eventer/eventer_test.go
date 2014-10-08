@@ -1,6 +1,10 @@
 package eventer
 
-import "testing"
+import (
+	"math/rand"
+	"testing"
+	"time"
+)
 
 func TestChannel(t *testing.T) {
 	eventer := New()
@@ -63,4 +67,47 @@ func TestOn(t *testing.T) {
 	if data != "hello world" {
 		t.Error("Expected function event with data 'hello world'. Got", data)
 	}
+}
+
+func TestConcurrentUsage(t *testing.T) {
+	rand.Seed(time.Now().Unix())
+	eventer := New()
+	stop := make(chan struct{})
+	recv := make(chan int)
+	poster := func() {
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				eventer.Post("test", "hi")
+			}
+		}
+	}
+	listener := func(i int) {
+		time.Sleep(time.Duration(rand.Intn(99)) * time.Millisecond)
+		c := eventer.Register("test")
+		// wait for the first event
+		<-c
+		recv <- i
+		// keep receiving to prevent deadlock
+		for {
+			select {
+			case <-stop:
+				return
+			case <-c:
+			}
+		}
+	}
+
+	nlisteners := 200
+	go poster()
+	for i := 0; i < nlisteners; i++ {
+		go listener(i)
+	}
+	// wait until everyone has been served
+	for i := 0; i < nlisteners; i++ {
+		<-recv
+	}
+	close(stop)
 }
