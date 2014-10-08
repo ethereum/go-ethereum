@@ -78,6 +78,22 @@ func (bc *BlockChain) NewBlock(coinbase []byte) *Block {
 	return block
 }
 
+func (bc *BlockChain) Reset() {
+	AddTestNetFunds(bc.genesisBlock)
+
+	bc.genesisBlock.state.Trie.Sync()
+	// Prepare the genesis block
+	bc.Add(bc.genesisBlock)
+	fk := append([]byte("bloom"), bc.genesisBlock.Hash()...)
+	bc.Ethereum.Db().Put(fk, make([]byte, 255))
+	bc.CurrentBlock = bc.genesisBlock
+
+	bc.SetTotalDifficulty(ethutil.Big("0"))
+
+	// Set the last know difficulty (might be 0x0 as initial value, Genesis)
+	bc.TD = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
+}
+
 func (bc *BlockChain) HasBlock(hash []byte) bool {
 	data, _ := ethutil.Config.Db.Get(hash)
 	return len(data) != 0
@@ -149,27 +165,21 @@ func AddTestNetFunds(block *Block) {
 }
 
 func (bc *BlockChain) setLastBlock() {
-	// Prep genesis
-	AddTestNetFunds(bc.genesisBlock)
-
 	data, _ := ethutil.Config.Db.Get([]byte("LastBlock"))
 	if len(data) != 0 {
+		// Prep genesis
+		AddTestNetFunds(bc.genesisBlock)
+
 		block := NewBlockFromBytes(data)
 		bc.CurrentBlock = block
 		bc.LastBlockHash = block.Hash()
 		bc.LastBlockNumber = block.Number.Uint64()
 
+		// Set the last know difficulty (might be 0x0 as initial value, Genesis)
+		bc.TD = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
 	} else {
-		bc.genesisBlock.state.Trie.Sync()
-		// Prepare the genesis block
-		bc.Add(bc.genesisBlock)
-		fk := append([]byte("bloom"), bc.genesisBlock.Hash()...)
-		bc.Ethereum.Db().Put(fk, make([]byte, 255))
-		bc.CurrentBlock = bc.genesisBlock
+		bc.Reset()
 	}
-
-	// Set the last know difficulty (might be 0x0 as initial value, Genesis)
-	bc.TD = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
 
 	chainlogger.Infof("Last block (#%d) %x\n", bc.LastBlockNumber, bc.CurrentBlock.Hash())
 }

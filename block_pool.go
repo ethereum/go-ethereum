@@ -86,7 +86,7 @@ func (self *BlockPool) Blocks() (blocks ethchain.Blocks) {
 func (self *BlockPool) FetchHashes(peer *Peer) bool {
 	highestTd := self.eth.HighestTDPeer()
 
-	if (self.peer == nil && peer.td.Cmp(highestTd) >= 0) || (self.peer != nil && peer.td.Cmp(self.peer.td) >= 0) || self.peer == peer {
+	if (self.peer == nil && peer.td.Cmp(highestTd) >= 0) || (self.peer != nil && peer.td.Cmp(self.peer.td) > 0) || self.peer == peer {
 		if self.peer != peer {
 			poollogger.Debugf("Found better suitable peer (%v vs %v)\n", self.td, peer.td)
 
@@ -102,7 +102,7 @@ func (self *BlockPool) FetchHashes(peer *Peer) bool {
 			peer.doneFetchingHashes = false
 
 			const amount = 256
-			peerlogger.Debugf("Fetching hashes (%d)\n", amount)
+			peerlogger.Debugf("Fetching hashes (%d) %x...\n", amount, peer.lastReceivedHash[0:4])
 			peer.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{peer.lastReceivedHash, uint32(amount)}))
 		}
 

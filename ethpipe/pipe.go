@@ -61,7 +61,7 @@ func (self *Pipe) ExecuteObject(object *Object, data []byte, value, gas, price *
 	vm := ethvm.New(NewEnv(self.Vm.State, block, value.BigInt(), initiator.Address()))
 	vm.Verbose = true
 
-	msg := ethvm.NewMessage(vm, object.Address(), data, gas.BigInt(), price.BigInt(), value.BigInt())
+	msg := ethvm.NewExecution(vm, object.Address(), data, gas.BigInt(), price.BigInt(), value.BigInt())
 	ret, err := msg.Exec(object.Address(), initiator)
 
 	fmt.Println("returned from call", ret, err)

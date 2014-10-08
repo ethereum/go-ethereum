@@ -181,8 +181,6 @@ func (s *State) Reset() {
 func (s *State) Sync() {
 	// Sync all nested states
 	for _, stateObject := range s.stateObjects {
-		//s.UpdateStateObject(stateObject)
-
 		if stateObject.State == nil {
 			continue
 		}
@@ -200,9 +198,11 @@ func (self *State) Empty() {
 }
 
 func (self *State) Update() {
+	var deleted bool
 	for _, stateObject := range self.stateObjects {
 		if stateObject.remove {
 			self.DeleteStateObject(stateObject)
+			deleted = true
 		} else {
 			stateObject.Sync()
 
@@ -211,11 +211,13 @@ func (self *State) Update() {
 	}
 
 	// FIXME trie delete is broken
-	valid, t2 := ethtrie.ParanoiaCheck(self.Trie)
-	if !valid {
-		statelogger.Infof("Warn: PARANOIA: Different state root during copy %x vs %x\n", self.Trie.Root, t2.Root)
+	if deleted {
+		valid, t2 := ethtrie.ParanoiaCheck(self.Trie)
+		if !valid {
+			statelogger.Infof("Warn: PARANOIA: Different state root during copy %x vs %x\n", self.Trie.Root, t2.Root)
 
-		self.Trie = t2
+			self.Trie = t2
+		}
 	}
 }
 

@@ -144,11 +144,10 @@ const (
 	SWAP16 = 0x9f
 
 	// 0xf0 range - closures
-	CREATE        = 0xf0
-	CALL          = 0xf1
-	RETURN        = 0xf2
-	POST          = 0xf3
-	CALLSTATELESS = 0xf4
+	CREATE   = 0xf0
+	CALL     = 0xf1
+	RETURN   = 0xf2
+	CALLCODE = 0xf3
 
 	// 0x70 range - other
 	LOG     = 0xfe // XXX Unofficial
@@ -293,11 +292,10 @@ var opCodeToString = map[OpCode]string{
 	SWAP16: "SWAP16",
 
 	// 0xf0 range
-	CREATE:        "CREATE",
-	CALL:          "CALL",
-	RETURN:        "RETURN",
-	POST:          "POST",
-	CALLSTATELESS: "CALLSTATELESS",
+	CREATE:   "CREATE",
+	CALL:     "CALL",
+	RETURN:   "RETURN",
+	CALLCODE: "CALLCODE",
 
 	// 0x70 range - other
 	LOG:     "LOG",
