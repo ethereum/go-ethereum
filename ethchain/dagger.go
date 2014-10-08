@@ -61,7 +61,7 @@ func (pow *EasyPow) Search(block *Block, reactChan chan ethreact.Event) []byte {
 				t = time.Now()
 			}
 
-			sha := ethcrypto.Sha3Bin(big.NewInt(r.Int63()).Bytes())
+			sha := ethcrypto.Sha3(big.NewInt(r.Int63()).Bytes())
 			if pow.Verify(hash, diff, sha) {
 				return sha
 			}

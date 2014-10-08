@@ -490,7 +490,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case SHA3:
 			require(2)
 			size, offset := stack.Popn()
-			data := ethcrypto.Sha3Bin(mem.Get(offset.Int64(), size.Int64()))
+			data := ethcrypto.Sha3(mem.Get(offset.Int64(), size.Int64()))
 
 			stack.Push(ethutil.BigD(data))
 

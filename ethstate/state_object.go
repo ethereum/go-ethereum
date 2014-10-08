@@ -304,7 +304,7 @@ func (c *StateObject) RlpEncode() []byte {
 func (c *StateObject) CodeHash() ethutil.Bytes {
 	var codeHash []byte
 	if len(c.Code) > 0 {
-		codeHash = ethcrypto.Sha3Bin(c.Code)
+		codeHash = ethcrypto.Sha3(c.Code)
 	}
 
 	return codeHash

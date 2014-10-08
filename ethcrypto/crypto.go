@@ -1,7 +1,6 @@
 package ethcrypto
 
 import (
-	//"code.google.com/p/go.crypto/sha3"
 	"crypto/sha256"
 
 	"code.google.com/p/go.crypto/ripemd160"
@@ -12,7 +11,7 @@ import (
 )
 
 // TODO refactor, remove (bin)
-func Sha3Bin(data []byte) []byte {
+func Sha3(data []byte) []byte {
 	d := sha3.NewKeccak256()
 	d.Write(data)
 
@@ -21,7 +20,7 @@ func Sha3Bin(data []byte) []byte {
 
 // Creates an ethereum address given the bytes and the nonce
 func CreateAddress(b []byte, nonce uint64) []byte {
-	return Sha3Bin(ethutil.NewValue([]interface{}{b, nonce}).Encode())[12:]
+	return Sha3(ethutil.NewValue([]interface{}{b, nonce}).Encode())[12:]
 }
 
 func Sha256(data []byte) []byte {

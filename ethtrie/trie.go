@@ -67,7 +67,7 @@ func (cache *Cache) PutValue(v interface{}, force bool) interface{} {
 
 	enc := value.Encode()
 	if len(enc) >= 32 || force {
-		sha := ethcrypto.Sha3Bin(enc)
+		sha := ethcrypto.Sha3(enc)
 
 		cache.nodes[string(sha)] = NewNode(sha, value, true)
 		cache.IsDirty = true

@@ -431,6 +431,8 @@ func (s *Ethereum) Start(seed bool) {
 }
 
 func (s *Ethereum) Seed() {
+	// Sorry Py person. I must blacklist. you perform badly
+	s.blacklist = append(s.blacklist, ethutil.Hex2Bytes("64656330303561383532336435376331616537643864663236623336313863373537353163636634333530626263396330346237336262623931383064393031"))
 	ips := PastPeers()
 	if len(ips) > 0 {
 		for _, ip := range ips {

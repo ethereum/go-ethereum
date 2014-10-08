@@ -13,13 +13,13 @@ import (
 
 var ZeroHash256 = make([]byte, 32)
 var ZeroHash160 = make([]byte, 20)
-var EmptyShaList = ethcrypto.Sha3Bin(ethutil.Encode([]interface{}{}))
+var EmptyShaList = ethcrypto.Sha3(ethutil.Encode([]interface{}{}))
 
 var GenesisHeader = []interface{}{
 	// Previous hash (none)
 	ZeroHash256,
 	// Sha of uncles
-	ethcrypto.Sha3Bin(ethutil.Encode([]interface{}{})),
+	ethcrypto.Sha3(ethutil.Encode([]interface{}{})),
 	// Coinbase
 	ZeroHash160,
 	// Root state
@@ -42,7 +42,7 @@ var GenesisHeader = []interface{}{
 	// Extra
 	nil,
 	// Nonce
-	ethcrypto.Sha3Bin(big.NewInt(42).Bytes()),
+	ethcrypto.Sha3(big.NewInt(42).Bytes()),
 }
 
 var Genesis = []interface{}{GenesisHeader, []interface{}{}, []interface{}{}}

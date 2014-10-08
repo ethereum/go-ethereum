@@ -144,12 +144,12 @@ func CreateBlock(root interface{},
 
 // Returns a hash of the block
 func (block *Block) Hash() ethutil.Bytes {
-	return ethcrypto.Sha3Bin(ethutil.NewValue(block.header()).Encode())
-	//return ethcrypto.Sha3Bin(block.Value().Encode())
+	return ethcrypto.Sha3(ethutil.NewValue(block.header()).Encode())
+	//return ethcrypto.Sha3(block.Value().Encode())
 }
 
 func (block *Block) HashNoNonce() []byte {
-	return ethcrypto.Sha3Bin(ethutil.Encode([]interface{}{block.PrevHash,
+	return ethcrypto.Sha3(ethutil.Encode([]interface{}{block.PrevHash,
 		block.UncleSha, block.Coinbase, block.state.Trie.Root,
 		block.TxSha, block.Difficulty, block.Number, block.MinGasPrice,
 		block.GasLimit, block.GasUsed, block.Time, block.Extra}))
@@ -237,7 +237,7 @@ func (block *Block) SetUncles(uncles []*Block) {
 	block.Uncles = uncles
 
 	// Sha of the concatenated uncles
-	block.UncleSha = ethcrypto.Sha3Bin(ethutil.Encode(block.rlpUncles()))
+	block.UncleSha = ethcrypto.Sha3(ethutil.Encode(block.rlpUncles()))
 }
 
 func (self *Block) SetReceipts(receipts []*Receipt, txs []*Transaction) {

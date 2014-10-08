@@ -1,9 +1,10 @@
 package ethcrypto
 
 import (
+	"strings"
+
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/secp256k1-go"
-	"strings"
 )
 
 type KeyPair struct {
@@ -32,7 +33,7 @@ func NewKeyPairFromSec(seckey []byte) (*KeyPair, error) {
 
 func (k *KeyPair) Address() []byte {
 	if k.address == nil {
-		k.address = Sha3Bin(k.PublicKey[1:])[12:]
+		k.address = Sha3(k.PublicKey[1:])[12:]
 	}
 	return k.address
 }
