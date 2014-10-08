@@ -9,6 +9,9 @@ import (
 	"github.com/ethereum/eth-go/ethutil"
 )
 
+// Shortcut :-)
+var To256 = ethutil.To256
+
 type Debugger interface {
 	BreakHook(step int, op OpCode, mem *Memory, stack *Stack, object *ethstate.StateObject) bool
 	StepHook(step int, op OpCode, mem *Memory, stack *Stack, object *ethstate.StateObject) bool
@@ -262,7 +265,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			base.Add(y, x)
 
-			ensure256(base)
+			To256(base)
 
 			self.Printf(" = %v", base)
 			// Pop result back on the stack
@@ -274,7 +277,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			base.Sub(y, x)
 
-			ensure256(base)
+			To256(base)
 
 			self.Printf(" = %v", base)
 			// Pop result back on the stack
@@ -286,7 +289,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			base.Mul(y, x)
 
-			ensure256(base)
+			To256(base)
 
 			self.Printf(" = %v", base)
 			// Pop result back on the stack
@@ -300,7 +303,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				base.Div(y, x)
 			}
 
-			ensure256(base)
+			To256(base)
 
 			self.Printf(" = %v", base)
 			// Pop result back on the stack
@@ -314,7 +317,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				base.Div(y, x)
 			}
 
-			ensure256(base)
+			To256(base)
 
 			self.Printf(" = %v", base)
 			// Pop result back on the stack
@@ -327,7 +330,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			base.Mod(y, x)
 
-			ensure256(base)
+			To256(base)
 
 			self.Printf(" = %v", base)
 			stack.Push(base)
@@ -339,7 +342,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			base.Mod(y, x)
 
-			ensure256(base)
+			To256(base)
 
 			self.Printf(" = %v", base)
 			stack.Push(base)
@@ -352,7 +355,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			base.Exp(y, x, Pow256)
 
-			ensure256(base)
+			To256(base)
 
 			self.Printf(" = %v", base)
 
@@ -465,7 +468,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			base.Add(x, y)
 			base.Mod(base, z)
 
-			ensure256(base)
+			To256(base)
 
 			self.Printf(" = %v", base)
 
@@ -480,7 +483,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			base.Mul(x, y)
 			base.Mod(base, z)
 
-			ensure256(base)
+			To256(base)
 
 			self.Printf(" = %v", base)
 
@@ -758,7 +761,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 				// Snapshot the current stack so we are able to
 				// revert back to it later.
-				snapshot = self.env.State().Copy()
+				//snapshot = self.env.State().Copy()
 			)
 
 			// Generate a new address
@@ -778,7 +781,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				stack.Push(ethutil.BigFalse)
 
 				// Revert the state as it was before.
-				self.env.State().Set(snapshot)
+				//self.env.State().Set(snapshot)
 
 				self.Printf("CREATE err %v", err)
 			} else {
@@ -809,7 +812,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 
-			snapshot := self.env.State().Copy()
+			//snapshot := self.env.State().Copy()
 
 			var executeAddr []byte
 			if op == CALLCODE {
@@ -823,7 +826,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			if err != nil {
 				stack.Push(ethutil.BigFalse)
 
-				self.env.State().Set(snapshot)
+				//self.env.State().Set(snapshot)
 			} else {
 				stack.Push(ethutil.BigTrue)
 
@@ -905,21 +908,6 @@ func (self *Vm) Endl() *Vm {
 	return self
 }
 
-func ensure256(x *big.Int) {
-	//max, _ := big.NewInt(0).SetString("115792089237316195423570985008687907853269984665640564039457584007913129639936", 0)
-	//if x.Cmp(max) >= 0 {
-	d := big.NewInt(1)
-	d.Lsh(d, 256).Sub(d, big.NewInt(1))
-	x.And(x, d)
-	//}
-
-	// Could have done this with an OR, but big ints are costly.
-
-	if x.Cmp(new(big.Int)) < 0 {
-		x.SetInt64(0)
-	}
-}
-
 type Execution struct {
 	vm                *Vm
 	closure           *Closure
@@ -937,6 +925,8 @@ func (self *Execution) Addr() []byte {
 }
 
 func (self *Execution) Exec(codeAddr []byte, caller ClosureRef) (ret []byte, err error) {
+	snapshot := self.vm.env.State().Copy()
+
 	msg := self.vm.env.State().Manifest().AddMessage(&ethstate.Message{
 		To: self.address, From: caller.Address(),
 		Input:  self.input,
@@ -957,6 +947,7 @@ func (self *Execution) Exec(codeAddr []byte, caller ClosureRef) (ret []byte, err
 		caller.Object().SubAmount(self.value)
 		stateObject.AddAmount(self.value)
 
+		// Precompiled contracts (address.go) 1, 2 & 3.
 		if p := Precompiled[ethutil.BigD(codeAddr).Uint64()]; p != nil {
 			if self.gas.Cmp(p.Gas) >= 0 {
 				ret = p.Call(self.input)
@@ -972,6 +963,10 @@ func (self *Execution) Exec(codeAddr []byte, caller ClosureRef) (ret []byte, err
 
 			msg.Output = ret
 		}
+	}
+
+	if err != nil {
+		self.vm.env.State().Set(snapshot)
 	}
 
 	return
