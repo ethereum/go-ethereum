@@ -24,7 +24,7 @@ const (
 	// The size of the output buffer for writing messages
 	outputBufferSize = 50
 	// Current protocol version
-	ProtocolVersion = 33
+	ProtocolVersion = 34
 	// Current P2P version
 	P2PVersion = 0
 	// Ethereum network version
@@ -848,26 +848,23 @@ func (p *Peer) RlpData() []interface{} {
 	return []interface{}{p.host, p.port, p.pubkey}
 }
 
-func packAddr(address, port string) ([]byte, uint16) {
-	addr := strings.Split(address, ".")
-	a, _ := strconv.Atoi(addr[0])
-	b, _ := strconv.Atoi(addr[1])
-	c, _ := strconv.Atoi(addr[2])
-	d, _ := strconv.Atoi(addr[3])
-	host := []byte{byte(a), byte(b), byte(c), byte(d)}
-	prt, _ := strconv.Atoi(port)
+func packAddr(address, _port string) (host []byte, port uint16) {
+	p, _ := strconv.Atoi(_port)
+	port = uint16(p)
 
-	return host, uint16(prt)
+	h := net.ParseIP(address)
+	if ip := h.To4(); ip != nil {
+		host = []byte(ip)
+	} else {
+		host = []byte(h)
+	}
+
+	return
 }
 
 func unpackAddr(value *ethutil.Value, p uint64) string {
-	byts := value.Bytes()
-	a := strconv.Itoa(int(byts[0]))
-	b := strconv.Itoa(int(byts[1]))
-	c := strconv.Itoa(int(byts[2]))
-	d := strconv.Itoa(int(byts[3]))
-	host := strings.Join([]string{a, b, c, d}, ".")
-	port := strconv.Itoa(int(p))
+	host, _ := net.IP(value.Bytes()).MarshalText()
+	prt := strconv.Itoa(int(p))
 
-	return net.JoinHostPort(host, port)
+	return net.JoinHostPort(string(host), prt)
 }
