@@ -7,6 +7,8 @@
 #include <libevmface/Instruction.h>
 #include <libevm/FeeStructure.h>
 
+#include "Type.h"
+
 namespace evmcc
 {
 
@@ -52,7 +54,7 @@ uint64_t getStepCost(dev::eth::Instruction inst) // TODO: Add this function to F
 GasMeter::GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* _module):
 	m_builder(_builder)
 {
-	m_gas = new llvm::GlobalVariable(*_module, m_builder.getIntNTy(256), false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(m_builder.getIntNTy(256)), "gas");
+	m_gas = new llvm::GlobalVariable(*_module, Type::i256, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(Type::i256), "gas");
 	m_gas->setUnnamedAddr(true); // Address is not important
 
 	//llvm::Function::Create()

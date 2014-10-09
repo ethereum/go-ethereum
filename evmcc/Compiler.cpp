@@ -6,6 +6,7 @@
 
 #include <libevmface/Instruction.h>
 
+#include "Type.h"
 #include "Memory.h"
 #include "Ext.h"
 #include "GasMeter.h"
@@ -20,9 +21,6 @@ struct
 {
 	llvm::Type* word8;
 	llvm::Type* word8ptr;
-	llvm::Type* word256;
-	llvm::Type* word256ptr;
-	llvm::Type* word256arr;
 	llvm::Type* size;
 	llvm::Type* Void;
 	llvm::Type* WordLowPrecision;
@@ -30,12 +28,10 @@ struct
 
 Compiler::Compiler()
 {
+	Type::init(llvm::getGlobalContext());
 	auto& context = llvm::getGlobalContext();
 	Types.word8 = llvm::Type::getInt8Ty(context);
 	Types.word8ptr = llvm::Type::getInt8PtrTy(context);
-	Types.word256 = llvm::Type::getIntNTy(context, 256);
-	Types.word256ptr = Types.word256->getPointerTo();
-	Types.word256arr = llvm::ArrayType::get(Types.word256, 100);
 	Types.size = llvm::Type::getInt64Ty(context);
 	Types.Void = llvm::Type::getVoidTy(context);
 
@@ -227,7 +223,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto lhs128 = builder.CreateTrunc(lhs256, Types.WordLowPrecision);
 				auto rhs128 = builder.CreateTrunc(rhs256, Types.WordLowPrecision);
 				auto res128 = builder.CreateMul(lhs128, rhs128);
-				auto res256 = builder.CreateZExt(res128, Types.word256);
+				auto res256 = builder.CreateZExt(res128, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -239,7 +235,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto lhs128 = builder.CreateTrunc(lhs256, Types.WordLowPrecision);
 				auto rhs128 = builder.CreateTrunc(rhs256, Types.WordLowPrecision);
 				auto res128 = builder.CreateUDiv(lhs128, rhs128);
-				auto res256 = builder.CreateZExt(res128, Types.word256);
+				auto res256 = builder.CreateZExt(res128, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -251,7 +247,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto lhs128 = builder.CreateTrunc(lhs256, Types.WordLowPrecision);
 				auto rhs128 = builder.CreateTrunc(rhs256, Types.WordLowPrecision);
 				auto res128 = builder.CreateSDiv(lhs128, rhs128);
-				auto res256 = builder.CreateSExt(res128, Types.word256);
+				auto res256 = builder.CreateSExt(res128, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -263,7 +259,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto lhs128 = builder.CreateTrunc(lhs256, Types.WordLowPrecision);
 				auto rhs128 = builder.CreateTrunc(rhs256, Types.WordLowPrecision);
 				auto res128 = builder.CreateURem(lhs128, rhs128);
-				auto res256 = builder.CreateZExt(res128, Types.word256);
+				auto res256 = builder.CreateZExt(res128, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -275,7 +271,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto lhs128 = builder.CreateTrunc(lhs256, Types.WordLowPrecision);
 				auto rhs128 = builder.CreateTrunc(rhs256, Types.WordLowPrecision);
 				auto res128 = builder.CreateSRem(lhs128, rhs128);
-				auto res256 = builder.CreateSExt(res128, Types.word256);
+				auto res256 = builder.CreateSExt(res128, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -292,7 +288,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			case Instruction::NEG:
 			{
 				auto top = stack.pop();
-				auto zero = ConstantInt::get(Types.word256, 0);
+				auto zero = ConstantInt::get(Type::i256, 0);
 				auto res = builder.CreateSub(zero, top);
 				stack.push(res);
 				break;
@@ -303,7 +299,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto lhs = stack.pop();
 				auto rhs = stack.pop();
 				auto res1 = builder.CreateICmpULT(lhs, rhs);
-				auto res256 = builder.CreateZExt(res1, Types.word256);
+				auto res256 = builder.CreateZExt(res1, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -313,7 +309,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto lhs = stack.pop();
 				auto rhs = stack.pop();
 				auto res1 = builder.CreateICmpUGT(lhs, rhs);
-				auto res256 = builder.CreateZExt(res1, Types.word256);
+				auto res256 = builder.CreateZExt(res1, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -323,7 +319,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto lhs = stack.pop();
 				auto rhs = stack.pop();
 				auto res1 = builder.CreateICmpSLT(lhs, rhs);
-				auto res256 = builder.CreateZExt(res1, Types.word256);
+				auto res256 = builder.CreateZExt(res1, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -333,7 +329,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto lhs = stack.pop();
 				auto rhs = stack.pop();
 				auto res1 = builder.CreateICmpSGT(lhs, rhs);
-				auto res256 = builder.CreateZExt(res1, Types.word256);
+				auto res256 = builder.CreateZExt(res1, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -343,7 +339,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto lhs = stack.pop();
 				auto rhs = stack.pop();
 				auto res1 = builder.CreateICmpEQ(lhs, rhs);
-				auto res256 = builder.CreateZExt(res1, Types.word256);
+				auto res256 = builder.CreateZExt(res1, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -351,9 +347,9 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			case Instruction::NOT:
 			{
 				auto top = stack.pop();
-				auto zero = ConstantInt::get(Types.word256, 0);
+				auto zero = ConstantInt::get(Type::i256, 0);
 				auto iszero = builder.CreateICmpEQ(top, zero, "iszero");
-				auto result = builder.CreateZExt(iszero, Types.word256);
+				auto result = builder.CreateZExt(iszero, Type::i256);
 				stack.push(result);
 				break;
 			}
@@ -584,7 +580,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				stack.pop();
 
 				auto top = stack.pop();
-				auto zero = ConstantInt::get(Types.word256, 0);
+				auto zero = ConstantInt::get(Type::i256, 0);
 				auto cond = builder.CreateICmpNE(top, zero, "nonzero");
 				auto& targetBlock = basicBlocks.find(jumpTargets[currentPC])->second;
 				auto& followBlock = basicBlocks.find(currentPC + 1)->second;

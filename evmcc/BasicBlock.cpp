@@ -4,6 +4,8 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 
+#include "Type.h"
+
 namespace evmcc
 {
 
@@ -27,10 +29,9 @@ llvm::Value* BasicBlock::Stack::pop()
 	if (m_backend.empty())
 	{
 		// Create PHI node
-		auto i256Ty = llvm::Type::getIntNTy(m_llvmBB->getContext(), 256);
 		if (m_llvmBB->empty())
-			return llvm::PHINode::Create(i256Ty, 0, {}, m_llvmBB);
-		return llvm::PHINode::Create(i256Ty, 0, {}, m_llvmBB->getFirstNonPHI());
+			return llvm::PHINode::Create(Type::i256, 0, {}, m_llvmBB);
+		return llvm::PHINode::Create(Type::i256, 0, {}, m_llvmBB->getFirstNonPHI());
 	}
 
 	auto top = m_backend.back();
