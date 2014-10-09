@@ -39,6 +39,7 @@ public:
 	llvm::Value* call(llvm::Value* _gas, llvm::Value* _receiveAddress, llvm::Value* _value, llvm::Value* _inOff, llvm::Value* _inSize, llvm::Value* _outOff, llvm::Value* _outSize);
 
 	llvm::Value* sha3(llvm::Value* _inOff, llvm::Value* _inSize);
+	llvm::Value* exp(llvm::Value* _left, llvm::Value* _right);
 
 private:
 	llvm::Value* getDataElem(unsigned _index, const llvm::Twine& _name = "");
@@ -66,6 +67,7 @@ private:
 	llvm::Function* m_call;
 	llvm::Function* m_bswap;
 	llvm::Function* m_sha3;
+	llvm::Function* m_exp;
 };
 	
 

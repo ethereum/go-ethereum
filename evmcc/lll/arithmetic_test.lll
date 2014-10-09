@@ -26,4 +26,12 @@ SWAP1
 SMOD;; 3
 3
 SUB ;; 0
+9
+17
+EXP ;; 17^9
+0
+MSTORE
+8
+0
+RETURN
 )

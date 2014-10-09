@@ -274,6 +274,15 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				break;
 			}
 
+			case Instruction::EXP:
+			{
+				auto left = stack.pop();
+				auto right = stack.pop();
+				auto ret = ext.exp(left, right);
+				stack.push(ret);
+				break;
+			}
+
 			case Instruction::NEG:
 			{
 				auto top = stack.pop();
