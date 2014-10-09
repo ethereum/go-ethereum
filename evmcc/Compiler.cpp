@@ -12,6 +12,9 @@
 namespace evmcc
 {
 
+using dev::eth::Instruction;
+using namespace dev::eth; // We should move all the JIT code into dev::eth namespace
+
 struct
 {
 	llvm::Type* word8;
@@ -191,7 +194,6 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 		for (auto currentPC = basicBlock.begin(); currentPC != basicBlock.end(); ++currentPC)
 		{
-			using dev::eth::Instruction;
 			auto inst = static_cast<Instruction>(bytecode[currentPC]);
 			switch (inst)
 			{
