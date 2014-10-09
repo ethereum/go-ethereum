@@ -8,6 +8,7 @@
 
 #include "Memory.h"
 #include "Ext.h"
+#include "GasMeter.h"
 
 namespace evmcc
 {
@@ -182,6 +183,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	// Init runtime structures.
 	auto memory = Memory(builder, module.get());
 	auto ext = Ext(builder, module.get());
+	GasMeter gasMeter(builder, module.get());
 
 	// Jump to first instruction
 	builder.CreateBr(basicBlocks.begin()->second);
@@ -195,6 +197,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		for (auto currentPC = basicBlock.begin(); currentPC != basicBlock.end(); ++currentPC)
 		{
 			auto inst = static_cast<Instruction>(bytecode[currentPC]);
+			gasMeter.check(inst);
+
 			switch (inst)
 			{
 

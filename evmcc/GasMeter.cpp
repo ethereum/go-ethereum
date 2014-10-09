@@ -1,6 +1,9 @@
 
 #include "GasMeter.h"
 
+#include <llvm/IR/GlobalVariable.h>
+#include <llvm/IR/Function.h>
+
 #include <libevmface/Instruction.h>
 #include <libevm/FeeStructure.h>
 
@@ -9,7 +12,7 @@ namespace evmcc
 
 using namespace dev::eth; // We should move all the JIT code into dev::eth namespace
 
-namespace
+namespace // Helper functions
 {
 
 uint64_t getStepCost(dev::eth::Instruction inst) // TODO: Add this function to FeeSructure
@@ -44,6 +47,23 @@ uint64_t getStepCost(dev::eth::Instruction inst) // TODO: Add this function to F
 	}
 }
 
+}
+
+GasMeter::GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* _module):
+	m_builder(_builder)
+{
+	m_gas = new llvm::GlobalVariable(*_module, m_builder.getIntNTy(256), false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(m_builder.getIntNTy(256)), "gas");
+	m_gas->setUnnamedAddr(true); // Address is not important
+
+	//llvm::Function::Create()
+}
+
+void GasMeter::check(Instruction _inst)
+{
+	auto stepCost = getStepCost(_inst);
+	auto before = m_builder.CreateLoad(m_gas, "gas.before");
+	auto after = m_builder.CreateSub(before, m_builder.getIntN(256, stepCost));
+	m_builder.CreateStore(after, m_gas);
 }
 
 }
