@@ -57,15 +57,23 @@ GasMeter::GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* _module):
 	m_gas = new llvm::GlobalVariable(*_module, Type::i256, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(Type::i256), "gas");
 	m_gas->setUnnamedAddr(true); // Address is not important
 
-	//llvm::Function::Create()
+	auto pt = m_builder.GetInsertPoint();
+	auto bb = m_builder.GetInsertBlock();
+	m_gasCheckFunc = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::i256, false), llvm::Function::PrivateLinkage, "gas.check", _module);
+	auto gasCheckBB = llvm::BasicBlock::Create(_builder.getContext(), {}, m_gasCheckFunc);
+	m_builder.SetInsertPoint(gasCheckBB);
+	llvm::Value* cost = m_gasCheckFunc->arg_begin();
+	llvm::Value* gas = m_builder.CreateLoad(m_gas);
+	gas = m_builder.CreateSub(gas, cost);
+	m_builder.CreateStore(gas, m_gas);
+	m_builder.CreateRetVoid();
+	m_builder.SetInsertPoint(bb, pt);
 }
 
 void GasMeter::check(Instruction _inst)
 {
 	auto stepCost = getStepCost(_inst);
-	auto before = m_builder.CreateLoad(m_gas, "gas.before");
-	auto after = m_builder.CreateSub(before, m_builder.getIntN(256, stepCost));
-	m_builder.CreateStore(after, m_gas);
+	m_builder.CreateCall(m_gasCheckFunc, m_builder.getIntN(256, stepCost));
 }
 
 }

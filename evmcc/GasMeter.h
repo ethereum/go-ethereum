@@ -21,6 +21,7 @@ public:
 private:
 	llvm::IRBuilder<>& m_builder;
 	llvm::GlobalVariable* m_gas;
+	llvm::Function* m_gasCheckFunc;
 };
 
 }
