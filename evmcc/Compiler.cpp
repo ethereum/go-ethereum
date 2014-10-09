@@ -17,26 +17,10 @@ namespace evmcc
 using dev::eth::Instruction;
 using namespace dev::eth; // We should move all the JIT code into dev::eth namespace
 
-struct
-{
-	llvm::Type* word8;
-	llvm::Type* word8ptr;
-	llvm::Type* size;
-	llvm::Type* Void;
-	llvm::Type* WordLowPrecision;
-} Types;
 
 Compiler::Compiler()
 {
 	Type::init(llvm::getGlobalContext());
-	auto& context = llvm::getGlobalContext();
-	Types.word8 = llvm::Type::getInt8Ty(context);
-	Types.word8ptr = llvm::Type::getInt8PtrTy(context);
-	Types.size = llvm::Type::getInt64Ty(context);
-	Types.Void = llvm::Type::getVoidTy(context);
-
-	// TODO: Use 64-bit for now. In 128-bit compiler-rt library functions are required
-	Types.WordLowPrecision = llvm::Type::getIntNTy(context, 64);
 }
 
 void Compiler::createBasicBlocks(const dev::bytes& bytecode)
@@ -220,8 +204,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			{
 				auto lhs256 = stack.pop();
 				auto rhs256 = stack.pop();
-				auto lhs128 = builder.CreateTrunc(lhs256, Types.WordLowPrecision);
-				auto rhs128 = builder.CreateTrunc(rhs256, Types.WordLowPrecision);
+				auto lhs128 = builder.CreateTrunc(lhs256, Type::lowPrecision);
+				auto rhs128 = builder.CreateTrunc(rhs256, Type::lowPrecision);
 				auto res128 = builder.CreateMul(lhs128, rhs128);
 				auto res256 = builder.CreateZExt(res128, Type::i256);
 				stack.push(res256);
@@ -232,8 +216,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			{
 				auto lhs256 = stack.pop();
 				auto rhs256 = stack.pop();
-				auto lhs128 = builder.CreateTrunc(lhs256, Types.WordLowPrecision);
-				auto rhs128 = builder.CreateTrunc(rhs256, Types.WordLowPrecision);
+				auto lhs128 = builder.CreateTrunc(lhs256, Type::lowPrecision);
+				auto rhs128 = builder.CreateTrunc(rhs256, Type::lowPrecision);
 				auto res128 = builder.CreateUDiv(lhs128, rhs128);
 				auto res256 = builder.CreateZExt(res128, Type::i256);
 				stack.push(res256);
@@ -244,8 +228,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			{
 				auto lhs256 = stack.pop();
 				auto rhs256 = stack.pop();
-				auto lhs128 = builder.CreateTrunc(lhs256, Types.WordLowPrecision);
-				auto rhs128 = builder.CreateTrunc(rhs256, Types.WordLowPrecision);
+				auto lhs128 = builder.CreateTrunc(lhs256, Type::lowPrecision);
+				auto rhs128 = builder.CreateTrunc(rhs256, Type::lowPrecision);
 				auto res128 = builder.CreateSDiv(lhs128, rhs128);
 				auto res256 = builder.CreateSExt(res128, Type::i256);
 				stack.push(res256);
@@ -256,8 +240,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			{
 				auto lhs256 = stack.pop();
 				auto rhs256 = stack.pop();
-				auto lhs128 = builder.CreateTrunc(lhs256, Types.WordLowPrecision);
-				auto rhs128 = builder.CreateTrunc(rhs256, Types.WordLowPrecision);
+				auto lhs128 = builder.CreateTrunc(lhs256, Type::lowPrecision);
+				auto rhs128 = builder.CreateTrunc(rhs256, Type::lowPrecision);
 				auto res128 = builder.CreateURem(lhs128, rhs128);
 				auto res256 = builder.CreateZExt(res128, Type::i256);
 				stack.push(res256);
@@ -268,8 +252,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			{
 				auto lhs256 = stack.pop();
 				auto rhs256 = stack.pop();
-				auto lhs128 = builder.CreateTrunc(lhs256, Types.WordLowPrecision);
-				auto rhs128 = builder.CreateTrunc(rhs256, Types.WordLowPrecision);
+				auto lhs128 = builder.CreateTrunc(lhs256, Type::lowPrecision);
+				auto rhs128 = builder.CreateTrunc(rhs256, Type::lowPrecision);
 				auto res128 = builder.CreateSRem(lhs128, rhs128);
 				auto res256 = builder.CreateSExt(res128, Type::i256);
 				stack.push(res256);
