@@ -177,7 +177,9 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		for (auto currentPC = basicBlock.begin(); currentPC != basicBlock.end(); ++currentPC)
 		{
 			auto inst = static_cast<Instruction>(bytecode[currentPC]);
-			gasMeter.check(inst);
+
+			// Disable for now
+			//gasMeter.check(inst);
 
 			switch (inst)
 			{
