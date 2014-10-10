@@ -108,15 +108,7 @@ llvm::Value* Memory::loadWord(llvm::Value* _addr)
 
 void Memory::storeWord(llvm::Value* _addr, llvm::Value* _word)
 {
-	auto index = m_builder.CreateTrunc(_addr, m_builder.getInt64Ty(), "mem.index");
-	auto index31 = m_builder.CreateAdd(index, llvm::ConstantInt::get(m_builder.getInt64Ty(), 31), "mem.index31");
-
-	auto base = m_builder.CreateCall(m_memRequire, index31, "base");
-	auto ptr = m_builder.CreateGEP(base, index, "ptr");
-
-	auto i256ptrTy = m_builder.getIntNTy(256)->getPointerTo();
-	auto wordPtr = m_builder.CreateBitCast(ptr, i256ptrTy, "wordptr");
-	m_builder.CreateStore(_word, wordPtr);
+	m_builder.CreateCall2(m_store, _addr, _word);
 
 	dump(0);
 }
@@ -160,6 +152,7 @@ extern "C"
 
 EXPORT uint8_t* mem_resize(i256* _size)
 {
+	assert(false);
 	auto size = _size->a; // Trunc to 64-bit
 	auto& memory = Runtime::getMemory();
 	memory.resize(size);
