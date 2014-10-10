@@ -193,21 +193,21 @@ func (self *UiLib) StartDebugger() {
 	dbWindow.Show()
 }
 
-func (self *UiLib) NewFilter(object map[string]interface{}) int {
-	filter, id := self.eth.InstallFilter(object)
+func (self *UiLib) NewFilter(object map[string]interface{}) (id int) {
+	filter := ethchain.NewFilterFromMap(object, self.eth)
 	filter.MessageCallback = func(messages ethstate.Messages) {
 		self.win.Root().Call("invokeFilterCallback", ethpipe.ToJSMessages(messages), id)
 	}
-
+	id = self.eth.InstallFilter(filter)
 	return id
 }
 
-func (self *UiLib) NewFilterString(typ string) int {
-	filter, id := self.eth.InstallFilter(nil)
+func (self *UiLib) NewFilterString(typ string) (id int) {
+	filter := ethchain.NewFilter(self.eth)
 	filter.BlockCallback = func(block *ethchain.Block) {
 		self.win.Root().Call("invokeFilterCallback", "{}", id)
 	}
-
+	id = self.eth.InstallFilter(filter)
 	return id
 }
 
