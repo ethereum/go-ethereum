@@ -50,6 +50,7 @@ public:
 	static const char* NamePrefix;
 
 	explicit BasicBlock(ProgramCounter _beginInstIdx, ProgramCounter _endInstIdx, llvm::Function* _mainFunc);
+	explicit BasicBlock(std::string _name, llvm::Function* _mainFunc);
 
 	BasicBlock(const BasicBlock&) = delete;
 	void operator=(const BasicBlock&) = delete;
