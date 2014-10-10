@@ -49,6 +49,33 @@ uint64_t getStepCost(dev::eth::Instruction inst) // TODO: Add this function to F
 	}
 }
 
+bool isCommitTrigger(Instruction _inst)
+{
+	switch (_inst)
+	{
+	case Instruction::STOP:
+	case Instruction::CALLDATACOPY:
+	case Instruction::CODECOPY:
+	case Instruction::MLOAD:
+	case Instruction::MSTORE:
+	case Instruction::MSTORE8:
+	case Instruction::SSTORE:
+	case Instruction::JUMP:
+	case Instruction::JUMPI:
+	case Instruction::JUMPDEST:
+	case Instruction::GAS:
+	case Instruction::CREATE:
+	case Instruction::CALL:
+	case Instruction::CALLCODE:
+	case Instruction::RETURN:
+	case Instruction::SUICIDE:
+		return true;
+
+	default:
+		return false;
+	}
+}
+
 }
 
 GasMeter::GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* _module):
@@ -72,8 +99,20 @@ GasMeter::GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* _module):
 
 void GasMeter::check(Instruction _inst)
 {
+	if (!m_checkCall)
+	{
+		m_checkCall = m_builder.CreateCall(m_gasCheckFunc, m_builder.getIntN(256, 0));
+	}
+	
 	auto stepCost = getStepCost(_inst);
-	m_builder.CreateCall(m_gasCheckFunc, m_builder.getIntN(256, stepCost));
+	m_blockCost += stepCost;
+
+	auto isTrigger = isCommitTrigger(_inst);
+	if (isTrigger)
+	{
+		m_checkCall->setArgOperand(0, m_builder.getIntN(256, m_blockCost));
+		m_checkCall = nullptr;
+	}	
 }
 
 }
