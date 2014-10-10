@@ -50,6 +50,11 @@ private:
 	std::unique_ptr<BasicBlock> m_finalBlock;
 
 	/**
+	 *  Block with a jump table.
+	 */
+	std::unique_ptr<BasicBlock> m_jumpTableBlock;
+
+	/**
 	 *  Default destination for indirect jumps.
 	 */
 	std::unique_ptr<BasicBlock> m_badJumpBlock;

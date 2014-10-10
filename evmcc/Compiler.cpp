@@ -147,6 +147,7 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 
 	m_finalBlock = std::make_unique<BasicBlock>("FinalBlock", m_mainFunc);
 	m_badJumpBlock = std::make_unique<BasicBlock>("BadJumpBlock", m_mainFunc);
+	m_jumpTableBlock = std::make_unique<BasicBlock>("JumpTableBlock", m_mainFunc);
 
 	for (auto it = directJumpTargets.cbegin(); it != directJumpTargets.cend(); ++it)
 	{
@@ -626,6 +627,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 					std::exit(1);
 				}
 
+				builder.CreateBr(m_jumpTableBlock->llvm());
+				/*
 				// Generate switch for indirect jump.
 				auto dest = stack.pop();
 				auto switchInstr = 	builder.CreateSwitch(dest, m_badJumpBlock->llvm(),
@@ -636,7 +639,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 					auto dest = ConstantInt::get(Type::i256, bb->begin());
 					switchInstr->addCase(dest, bb->llvm());
 				}
-
+				 */
 				break;
 			}
 
@@ -836,12 +839,35 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	}
 
 	// Code for special blocks:
+	// TODO: move to separate function.
+	// Note: Right now the codegen for special blocks depends only on createBasicBlock(),
+	// not on the codegen for 'regular' blocks. But it has to be done before linkBasicBlocks().
 	builder.SetInsertPoint(m_finalBlock->llvm());
 	builder.CreateRet(builder.getInt64(0));
 
 	// TODO: throw an exception or something
 	builder.SetInsertPoint(m_badJumpBlock->llvm());
-	builder.CreateRet(builder.getInt64(1));
+	builder.CreateRet(builder.getInt64(0));
+
+	builder.SetInsertPoint(m_jumpTableBlock->llvm());
+	if (m_indirectJumpTargets.size() > 0)
+	{
+		auto& stack = m_jumpTableBlock->getStack();
+
+		auto dest = stack.pop();
+		auto switchInstr = 	builder.CreateSwitch(dest, m_badJumpBlock->llvm(),
+		                   	                     m_indirectJumpTargets.size());
+		for (auto it = m_indirectJumpTargets.cbegin(); it != m_indirectJumpTargets.cend(); ++it)
+		{
+			auto& bb = *it;
+			auto dest = ConstantInt::get(Type::i256, bb->begin());
+			switchInstr->addCase(dest, bb->llvm());
+		}
+	}
+	else
+	{
+		builder.CreateRet(builder.getInt64(0));
+	}
 
 	linkBasicBlocks();
 
@@ -861,10 +887,30 @@ void Compiler::linkBasicBlocks()
 		return basicBlocks.find(idx)->second;
 	};
 
+	auto completePhiNodes = [findBasicBlock](llvm::BasicBlock* _llbb) -> void
+	{
+		size_t valueIdx = 0;
+		auto firstNonPhi = _llbb->getFirstNonPHI();
+		for (auto instIt = _llbb->begin(); &*instIt != firstNonPhi; ++instIt, ++valueIdx)
+		{
+			auto phi = llvm::cast<llvm::PHINode>(instIt);
+			for (auto predIt = llvm::pred_begin(_llbb); predIt != llvm::pred_end(_llbb); ++predIt)
+			{
+				auto& predBB = findBasicBlock(*predIt);
+				// assert(valueIdx < predBB.getStack().size()); // TODO: Report error
+				phi->addIncoming(predBB.getStack().get(valueIdx), predBB);
+			}
+		}
+	};
+
 	// Link basic blocks
 	for (auto&& p : basicBlocks)
 	{
 		BasicBlock& bb = p.second;
+		completePhiNodes(bb.llvm());
+	}
+	completePhiNodes(m_jumpTableBlock->llvm());
+	/*
 		llvm::BasicBlock* llvmBB = bb.llvm();
 
 		size_t valueIdx = 0;
@@ -879,7 +925,7 @@ void Compiler::linkBasicBlocks()
 				phi->addIncoming(predBB.getStack().get(valueIdx), predBB);
 			}
 		}
-	}
+	*/
 }
 
 }
