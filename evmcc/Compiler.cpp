@@ -8,47 +8,23 @@
 
 #include <libevmface/Instruction.h>
 
+#include "Type.h"
 #include "Memory.h"
 #include "Ext.h"
+#include "GasMeter.h"
 
 namespace evmcc
 {
 
-struct
-{
-	llvm::IntegerType* word8;
-	llvm::Type* word8ptr;
-	llvm::IntegerType* word256;
-	llvm::Type* word256ptr;
-	llvm::Type* word256arr;
-	llvm::IntegerType* size;
-	llvm::Type* Void;
-	llvm::Type* WordLowPrecision;
-} Types;
+using dev::eth::Instruction;
+using namespace dev::eth; // We should move all the JIT code into dev::eth namespace
+
 
 Compiler::Compiler()
 	: m_finalBlock(nullptr)
 	, m_badJumpBlock(nullptr)
 {
-	auto& context = llvm::getGlobalContext();
-	Types.word8 = llvm::Type::getInt8Ty(context);
-	Types.word8ptr = llvm::Type::getInt8PtrTy(context);
-	Types.word256 = llvm::Type::getIntNTy(context, 256);
-	Types.word256ptr = Types.word256->getPointerTo();
-	Types.word256arr = llvm::ArrayType::get(Types.word256, 100);
-	Types.size = llvm::Type::getInt64Ty(context);
-	Types.Void = llvm::Type::getVoidTy(context);
-
-	// TODO: Use 64-bit for now. In 128-bit compiler-rt library functions are required
-	Types.WordLowPrecision = llvm::Type::getIntNTy(context, 64);
-}
-
-namespace
-{
-	void validateSplitPoints(cons dev::bytes& bytecode, std::set<ProgramCounter> splitPoints)
-	{
-
-	}
+	Type::init(llvm::getGlobalContext());
 }
 
 void Compiler::createBasicBlocks(const dev::bytes& bytecode)
@@ -58,7 +34,6 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 
 	std::map<ProgramCounter, ProgramCounter> directJumpTargets;
 	std::vector<ProgramCounter> indirectJumpTargets;
-
 	boost::dynamic_bitset<> validJumpTargets(bytecode.size());
 
 	for (auto curr = bytecode.cbegin(); curr != bytecode.cend(); ++curr)
@@ -162,15 +137,6 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 		}
 	}
 
-	for (auto it = splitPoints.cbegin(); it != splitPoints.cend() && *it < bytecode.size(); ++it)
-	{
-		if (! validJumpTargets[*it])
-		{
-			std::cerr "Jump to invalid PC " << *it << "\n";
-			std::exit(1);
-		}
-	}
-
 	for (auto it = splitPoints.cbegin(); it != splitPoints.cend() && *it < bytecode.size();)
 	{
 		auto beginInstIdx = *it;
@@ -184,11 +150,22 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 
 	for (auto it = directJumpTargets.cbegin(); it != directJumpTargets.cend(); ++it)
 	{
-		if (it->second >= bytecode.size())
+		if (it->second >= bytecode.size()) // Jump out of code
+		{
 			m_directJumpTargets[it->first] = m_finalBlock.get();
+		}
+		else if (!validJumpTargets[it->second]) // Jump into data
+		{
+			std::cerr << "Bad JUMP at PC " << it->first
+					  << ": " << it->second << " is not a valid PC\n";
+			m_directJumpTargets[it->first] = m_badJumpBlock.get();
+		}
 		else
+		{
 			m_directJumpTargets[it->first] = &basicBlocks.find(it->second)->second;
+		}
 	}
+
 	for (auto it = indirectJumpTargets.cbegin(); it != indirectJumpTargets.cend(); ++it)
 	{
 		if (*it >= bytecode.size())
@@ -220,6 +197,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	// Init runtime structures.
 	auto memory = Memory(builder, module.get());
 	auto ext = Ext(builder, module.get());
+	GasMeter gasMeter(builder, module.get());
 
 	// Jump to first instruction
 	builder.CreateBr(basicBlocks.begin()->second);
@@ -232,8 +210,11 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 		for (auto currentPC = basicBlock.begin(); currentPC != basicBlock.end(); ++currentPC)
 		{
-			using dev::eth::Instruction;
 			auto inst = static_cast<Instruction>(bytecode[currentPC]);
+
+			// Disable for now
+			//gasMeter.check(inst);
+
 			switch (inst)
 			{
 
@@ -259,10 +240,10 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			{
 				auto lhs256 = stack.pop();
 				auto rhs256 = stack.pop();
-				auto lhs128 = builder.CreateTrunc(lhs256, Types.WordLowPrecision);
-				auto rhs128 = builder.CreateTrunc(rhs256, Types.WordLowPrecision);
+				auto lhs128 = builder.CreateTrunc(lhs256, Type::lowPrecision);
+				auto rhs128 = builder.CreateTrunc(rhs256, Type::lowPrecision);
 				auto res128 = builder.CreateMul(lhs128, rhs128);
-				auto res256 = builder.CreateZExt(res128, Types.word256);
+				auto res256 = builder.CreateZExt(res128, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -271,10 +252,10 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			{
 				auto lhs256 = stack.pop();
 				auto rhs256 = stack.pop();
-				auto lhs128 = builder.CreateTrunc(lhs256, Types.WordLowPrecision);
-				auto rhs128 = builder.CreateTrunc(rhs256, Types.WordLowPrecision);
+				auto lhs128 = builder.CreateTrunc(lhs256, Type::lowPrecision);
+				auto rhs128 = builder.CreateTrunc(rhs256, Type::lowPrecision);
 				auto res128 = builder.CreateUDiv(lhs128, rhs128);
-				auto res256 = builder.CreateZExt(res128, Types.word256);
+				auto res256 = builder.CreateZExt(res128, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -283,10 +264,10 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			{
 				auto lhs256 = stack.pop();
 				auto rhs256 = stack.pop();
-				auto lhs128 = builder.CreateTrunc(lhs256, Types.WordLowPrecision);
-				auto rhs128 = builder.CreateTrunc(rhs256, Types.WordLowPrecision);
+				auto lhs128 = builder.CreateTrunc(lhs256, Type::lowPrecision);
+				auto rhs128 = builder.CreateTrunc(rhs256, Type::lowPrecision);
 				auto res128 = builder.CreateSDiv(lhs128, rhs128);
-				auto res256 = builder.CreateSExt(res128, Types.word256);
+				auto res256 = builder.CreateSExt(res128, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -295,10 +276,10 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			{
 				auto lhs256 = stack.pop();
 				auto rhs256 = stack.pop();
-				auto lhs128 = builder.CreateTrunc(lhs256, Types.WordLowPrecision);
-				auto rhs128 = builder.CreateTrunc(rhs256, Types.WordLowPrecision);
+				auto lhs128 = builder.CreateTrunc(lhs256, Type::lowPrecision);
+				auto rhs128 = builder.CreateTrunc(rhs256, Type::lowPrecision);
 				auto res128 = builder.CreateURem(lhs128, rhs128);
-				auto res256 = builder.CreateZExt(res128, Types.word256);
+				auto res256 = builder.CreateZExt(res128, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -307,10 +288,10 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			{
 				auto lhs256 = stack.pop();
 				auto rhs256 = stack.pop();
-				auto lhs128 = builder.CreateTrunc(lhs256, Types.WordLowPrecision);
-				auto rhs128 = builder.CreateTrunc(rhs256, Types.WordLowPrecision);
+				auto lhs128 = builder.CreateTrunc(lhs256, Type::lowPrecision);
+				auto rhs128 = builder.CreateTrunc(rhs256, Type::lowPrecision);
 				auto res128 = builder.CreateSRem(lhs128, rhs128);
-				auto res256 = builder.CreateSExt(res128, Types.word256);
+				auto res256 = builder.CreateSExt(res128, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -327,7 +308,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			case Instruction::NEG:
 			{
 				auto top = stack.pop();
-				auto zero = ConstantInt::get(Types.word256, 0);
+				auto zero = ConstantInt::get(Type::i256, 0);
 				auto res = builder.CreateSub(zero, top);
 				stack.push(res);
 				break;
@@ -338,7 +319,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto lhs = stack.pop();
 				auto rhs = stack.pop();
 				auto res1 = builder.CreateICmpULT(lhs, rhs);
-				auto res256 = builder.CreateZExt(res1, Types.word256);
+				auto res256 = builder.CreateZExt(res1, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -348,7 +329,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto lhs = stack.pop();
 				auto rhs = stack.pop();
 				auto res1 = builder.CreateICmpUGT(lhs, rhs);
-				auto res256 = builder.CreateZExt(res1, Types.word256);
+				auto res256 = builder.CreateZExt(res1, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -358,7 +339,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto lhs = stack.pop();
 				auto rhs = stack.pop();
 				auto res1 = builder.CreateICmpSLT(lhs, rhs);
-				auto res256 = builder.CreateZExt(res1, Types.word256);
+				auto res256 = builder.CreateZExt(res1, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -368,7 +349,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto lhs = stack.pop();
 				auto rhs = stack.pop();
 				auto res1 = builder.CreateICmpSGT(lhs, rhs);
-				auto res256 = builder.CreateZExt(res1, Types.word256);
+				auto res256 = builder.CreateZExt(res1, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -378,7 +359,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto lhs = stack.pop();
 				auto rhs = stack.pop();
 				auto res1 = builder.CreateICmpEQ(lhs, rhs);
-				auto res256 = builder.CreateZExt(res1, Types.word256);
+				auto res256 = builder.CreateZExt(res1, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -386,9 +367,9 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			case Instruction::NOT:
 			{
 				auto top = stack.pop();
-				auto zero = ConstantInt::get(Types.word256, 0);
+				auto zero = ConstantInt::get(Type::i256, 0);
 				auto iszero = builder.CreateICmpEQ(top, zero, "iszero");
-				auto result = builder.CreateZExt(iszero, Types.word256);
+				auto result = builder.CreateZExt(iszero, Type::i256);
 				stack.push(result);
 				break;
 			}
@@ -624,7 +605,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 						else // JUMPI
 						{
 							auto top = stack.pop();
-							auto zero = ConstantInt::get(Types.word256, 0);
+							auto zero = ConstantInt::get(Type::i256, 0);
 							auto cond = builder.CreateICmpNE(top, zero, "nonzero");
 
 							// Assume the basic blocks are properly ordered:
@@ -652,7 +633,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				for (auto it = m_indirectJumpTargets.cbegin(); it != m_indirectJumpTargets.cend(); ++it)
 				{
 					auto& bb = *it;
-					auto dest = ConstantInt::get(Types.word256, bb->begin());
+					auto dest = ConstantInt::get(Type::i256, bb->begin());
 					switchInstr->addCase(dest, bb->llvm());
 				}
 
