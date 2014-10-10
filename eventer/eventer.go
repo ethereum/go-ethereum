@@ -1,5 +1,7 @@
 package eventer
 
+import "sync"
+
 // Basic receiver interface.
 type Receiver interface {
 	Send(Event)
@@ -27,17 +29,18 @@ type Event struct {
 type Channels map[string][]Receiver
 
 type EventMachine struct {
+	mu       sync.RWMutex
 	channels Channels
 }
 
 func New() *EventMachine {
-	return &EventMachine{
-		channels: make(Channels),
-	}
+	return &EventMachine{channels: make(Channels)}
 }
 
 func (self *EventMachine) add(typ string, r Receiver) {
+	self.mu.Lock()
 	self.channels[typ] = append(self.channels[typ], r)
+	self.mu.Unlock()
 }
 
 // Generalised methods for the known receiver types
@@ -64,11 +67,11 @@ func (self *EventMachine) RegisterFunc(typ string, f Function) {
 func (self *EventMachine) Register(typ string) Channel {
 	c := make(Channel, 1)
 	self.add(typ, c)
-
 	return c
 }
 
 func (self *EventMachine) Post(typ string, data interface{}) {
+	self.mu.RLock()
 	if self.channels[typ] != nil {
 		ev := Event{typ, data}
 		for _, receiver := range self.channels[typ] {
@@ -76,4 +79,5 @@ func (self *EventMachine) Post(typ string, data interface{}) {
 			receiver.Send(ev)
 		}
 	}
+	self.mu.RUnlock()
 }
