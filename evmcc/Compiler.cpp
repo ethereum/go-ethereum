@@ -213,8 +213,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		{
 			auto inst = static_cast<Instruction>(bytecode[currentPC]);
 
-			// Disable for now
-			//gasMeter.check(inst);
+			gasMeter.check(inst);
 
 			switch (inst)
 			{

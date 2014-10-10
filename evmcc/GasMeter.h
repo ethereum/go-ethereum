@@ -19,7 +19,11 @@ public:
 	void check(dev::eth::Instruction _inst);
 
 private:
+	/// Cumulative gas cost of a block of instructions
+	/// @TODO Handle overflow
+	uint64_t m_blockCost = 0;
 	llvm::IRBuilder<>& m_builder;
+	llvm::CallInst* m_checkCall;
 	llvm::GlobalVariable* m_gas;
 	llvm::Function* m_gasCheckFunc;
 };
