@@ -348,8 +348,16 @@ func NewUncleBlockFromValue(header *ethutil.Value) *Block {
 	return block
 }
 
+func (block *Block) Trie() *ethrie.Trie {
+	return block.state.Trie
+}
+
 func (block *Block) GetRoot() interface{} {
 	return block.state.Trie.Root
+}
+
+func (block *Block) Diff() *big.Int {
+	return block.Difficulty
 }
 
 func (self *Block) Receipts() []*Receipt {
