@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func CompactEncode(hexSlice []int) string {
+func CompactEncode(hexSlice []byte) string {
 	terminator := 0
 	if hexSlice[len(hexSlice)-1] == 16 {
 		terminator = 1
@@ -17,11 +17,11 @@ func CompactEncode(hexSlice []int) string {
 	}
 
 	oddlen := len(hexSlice) % 2
-	flags := 2*terminator + oddlen
+	flags := byte(2*terminator + oddlen)
 	if oddlen != 0 {
-		hexSlice = append([]int{flags}, hexSlice...)
+		hexSlice = append([]byte{flags}, hexSlice...)
 	} else {
-		hexSlice = append([]int{flags, 0}, hexSlice...)
+		hexSlice = append([]byte{flags, 0}, hexSlice...)
 	}
 
 	var buff bytes.Buffer
@@ -32,7 +32,7 @@ func CompactEncode(hexSlice []int) string {
 	return buff.String()
 }
 
-func CompactDecode(str string) []int {
+func CompactDecode(str string) []byte {
 	base := CompactHexDecode(str)
 	base = base[:len(base)-1]
 	if base[0] >= 2 {
@@ -47,20 +47,20 @@ func CompactDecode(str string) []int {
 	return base
 }
 
-func CompactHexDecode(str string) []int {
+func CompactHexDecode(str string) []byte {
 	base := "0123456789abcdef"
-	hexSlice := make([]int, 0)
+	hexSlice := make([]byte, 0)
 
 	enc := hex.EncodeToString([]byte(str))
 	for _, v := range enc {
-		hexSlice = append(hexSlice, strings.IndexByte(base, byte(v)))
+		hexSlice = append(hexSlice, byte(strings.IndexByte(base, byte(v))))
 	}
 	hexSlice = append(hexSlice, 16)
 
 	return hexSlice
 }
 
-func DecodeCompact(key []int) string {
+func DecodeCompact(key []byte) string {
 	base := "0123456789abcdef"
 	var str string
 

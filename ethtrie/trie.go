@@ -252,7 +252,7 @@ func (t *Trie) Cache() *Cache {
 	return t.cache
 }
 
-func (t *Trie) getState(node interface{}, key []int) interface{} {
+func (t *Trie) getState(node interface{}, key []byte) interface{} {
 	n := ethutil.NewValue(node)
 	// Return the node if key is empty (= found)
 	if len(key) == 0 || n.IsNil() || n.Len() == 0 {
@@ -269,13 +269,13 @@ func (t *Trie) getState(node interface{}, key []int) interface{} {
 		k := CompactDecode(currentNode.Get(0).Str())
 		v := currentNode.Get(1).Raw()
 
-		if len(key) >= len(k) && CompareIntSlice(k, key[:len(k)]) {
+		if len(key) >= len(k) && bytes.Equal(k, key[:len(k)]) { //CompareIntSlice(k, key[:len(k)]) {
 			return t.getState(v, key[len(k):])
 		} else {
 			return ""
 		}
 	} else if length == 17 {
-		return t.getState(currentNode.Get(key[0]).Raw(), key[1:])
+		return t.getState(currentNode.Get(int(key[0])).Raw(), key[1:])
 	}
 
 	// It shouldn't come this far
@@ -301,20 +301,11 @@ func (t *Trie) getNode(node interface{}) *ethutil.Value {
 	return data
 }
 
-func (t *Trie) UpdateState(node interface{}, key []int, value string) interface{} {
+func (t *Trie) UpdateState(node interface{}, key []byte, value string) interface{} {
 	return t.InsertState(node, key, value)
 }
 
 func (t *Trie) Put(node interface{}) interface{} {
-	/*
-		TODO?
-			c := Conv(t.Root)
-			fmt.Println(c.Type(), c.Length())
-			if c.Type() == reflect.String && c.AsString() == "" {
-				return enc
-			}
-	*/
-
 	return t.cache.Put(node)
 
 }
@@ -327,7 +318,7 @@ func EmptyStringSlice(l int) []interface{} {
 	return slice
 }
 
-func (t *Trie) InsertState(node interface{}, key []int, value interface{}) interface{} {
+func (t *Trie) InsertState(node interface{}, key []byte, value interface{}) interface{} {
 	if len(key) == 0 {
 		return value
 	}
@@ -335,7 +326,6 @@ func (t *Trie) InsertState(node interface{}, key []int, value interface{}) inter
 	// New node
 	n := ethutil.NewValue(node)
 	if node == nil || n.Len() == 0 {
-		//if node == nil || (n.Type() == reflect.String && (n.Str() == "" || n.Get(0).IsNil())) || n.Len() == 0 {
 		newNode := []interface{}{CompactEncode(key), value}
 
 		return t.Put(newNode)
@@ -350,7 +340,7 @@ func (t *Trie) InsertState(node interface{}, key []int, value interface{}) inter
 		v := currentNode.Get(1).Raw()
 
 		// Matching key pair (ie. there's already an object with this key)
-		if CompareIntSlice(k, key) {
+		if bytes.Equal(k, key) { //CompareIntSlice(k, key) {
 			newNode := []interface{}{CompactEncode(key), value}
 			return t.Put(newNode)
 		}
@@ -392,7 +382,7 @@ func (t *Trie) InsertState(node interface{}, key []int, value interface{}) inter
 			}
 		}
 
-		newNode[key[0]] = t.InsertState(currentNode.Get(key[0]).Raw(), key[1:], value)
+		newNode[key[0]] = t.InsertState(currentNode.Get(int(key[0])).Raw(), key[1:], value)
 
 		return t.Put(newNode)
 	}
@@ -400,9 +390,8 @@ func (t *Trie) InsertState(node interface{}, key []int, value interface{}) inter
 	panic("unexpected end")
 }
 
-func (t *Trie) deleteState(node interface{}, key []int) interface{} {
+func (t *Trie) deleteState(node interface{}, key []byte) interface{} {
 	if len(key) == 0 {
-		println("<empty ret>")
 		return ""
 	}
 
@@ -424,18 +413,13 @@ func (t *Trie) deleteState(node interface{}, key []int) interface{} {
 		v := currentNode.Get(1).Raw()
 
 		// Matching key pair (ie. there's already an object with this key)
-		if CompareIntSlice(k, key) {
+		if bytes.Equal(k, key) { //CompareIntSlice(k, key) {
 			//fmt.Printf("<delete ret> %x\n", v)
 
 			return ""
-		} else if CompareIntSlice(key[:len(k)], k) {
+		} else if bytes.Equal(key[:len(k)], k) { //CompareIntSlice(key[:len(k)], k) {
 			hash := t.deleteState(v, key[len(k):])
 			child := t.getNode(hash)
-			/*
-				if child.IsNil() {
-					return node
-				}
-			*/
 
 			var newNode []interface{}
 			if child.Len() == 2 {
@@ -475,13 +459,13 @@ func (t *Trie) deleteState(node interface{}, key []int) interface{} {
 			}
 		}
 		if amount == 16 {
-			newNode = []interface{}{CompactEncode([]int{16}), n[amount]}
+			newNode = []interface{}{CompactEncode([]byte{16}), n[amount]}
 		} else if amount >= 0 {
 			child := t.getNode(n[amount])
 			if child.Len() == 17 {
-				newNode = []interface{}{CompactEncode([]int{amount}), n[amount]}
+				newNode = []interface{}{CompactEncode([]byte{byte(amount)}), n[amount]}
 			} else if child.Len() == 2 {
-				key := append([]int{amount}, CompactDecode(child.Get(0).Str())...)
+				key := append([]byte{byte(amount)}, CompactDecode(child.Get(0).Str())...)
 				newNode = []interface{}{CompactEncode(key), child.Get(1).Str()}
 			}
 
@@ -509,6 +493,10 @@ type TrieIterator struct {
 
 func (t *Trie) NewIterator() *TrieIterator {
 	return &TrieIterator{trie: t}
+}
+
+func (self *Trie) Iterator() *Iterator {
+	return NewIterator(self)
 }
 
 // Some time in the near future this will need refactoring :-)
@@ -583,11 +571,11 @@ func (it *TrieIterator) Each(cb EachCallback) {
 	it.fetchNode(nil, ethutil.NewValue(it.trie.Root).Bytes(), cb)
 }
 
-func (it *TrieIterator) fetchNode(key []int, node []byte, cb EachCallback) {
+func (it *TrieIterator) fetchNode(key []byte, node []byte, cb EachCallback) {
 	it.iterateNode(key, it.trie.cache.Get(node), cb)
 }
 
-func (it *TrieIterator) iterateNode(key []int, currentNode *ethutil.Value, cb EachCallback) {
+func (it *TrieIterator) iterateNode(key []byte, currentNode *ethutil.Value, cb EachCallback) {
 	if currentNode.Len() == 2 {
 		k := CompactDecode(currentNode.Get(0).Str())
 
@@ -595,7 +583,6 @@ func (it *TrieIterator) iterateNode(key []int, currentNode *ethutil.Value, cb Ea
 		if currentNode.Get(1).Len() != 0 && currentNode.Get(1).Str() == "" {
 			it.iterateNode(pk, currentNode.Get(1), cb)
 		} else {
-
 			if k[len(k)-1] == 16 {
 				cb(DecodeCompact(pk), currentNode.Get(1))
 			} else {
@@ -604,7 +591,7 @@ func (it *TrieIterator) iterateNode(key []int, currentNode *ethutil.Value, cb Ea
 		}
 	} else {
 		for i := 0; i < currentNode.Len(); i++ {
-			pk := append(key, i)
+			pk := append(key, byte(i))
 			if i == 16 && currentNode.Get(i).Len() != 0 {
 				cb(DecodeCompact(pk), currentNode.Get(i))
 			} else {

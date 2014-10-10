@@ -346,9 +346,6 @@ func (sm *StateManager) CalculateTD(block *Block) bool {
 // an uncle or anything that isn't on the current block chain.
 // Validation validates easy over difficult (dagger takes longer time = difficult)
 func (sm *StateManager) ValidateBlock(block *Block) error {
-	// TODO
-	// 2. Check if the difficulty is correct
-
 	// Check each uncle's previous hash. In order for it to be valid
 	// is if it has the same block hash as the current
 	parent := sm.bc.GetBlock(block.PrevHash)
@@ -359,6 +356,11 @@ func (sm *StateManager) ValidateBlock(block *Block) error {
 			}
 		}
 	*/
+
+	expd := CalcDifficulty(block, parent)
+	if expd.Cmp(block.Difficulty) < 0 {
+		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Difficulty, expd)
+	}
 
 	diff := block.Time - parent.Time
 	if diff < 0 {

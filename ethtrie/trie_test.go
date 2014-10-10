@@ -1,16 +1,16 @@
 package ethtrie
 
 import (
-	_ "bytes"
-	_ "encoding/hex"
-	_ "encoding/json"
+	"bytes"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
-	_ "io/ioutil"
-	_ "math/rand"
-	_ "net/http"
-	_ "reflect"
+	"io/ioutil"
+	"math/rand"
+	"net/http"
+	"reflect"
 	"testing"
-	_ "time"
+	"time"
 
 	"github.com/ethereum/eth-go/ethutil"
 )
@@ -44,7 +44,6 @@ func NewTrie() (*MemDatabase, *Trie) {
 	return db, New(db, "")
 }
 
-/*
 func TestTrieSync(t *testing.T) {
 	db, trie := NewTrie()
 
@@ -247,41 +246,6 @@ func CreateTests(uri string, cb func(Test)) map[string]Test {
 	return tests
 }
 
-func TestRemote(t *testing.T) {
-	CreateTests("https://raw.githubusercontent.com/ethereum/tests/develop/trietest.json", func(test Test) {
-		_, trie := NewTrie()
-		for key, value := range test.In {
-			trie.Update(get(key), get(value))
-		}
-
-		a := ethutil.NewValue(h(test.Root)).Bytes()
-		b := ethutil.NewValue(trie.Root).Bytes()
-		if bytes.Compare(a, b) != 0 {
-			t.Errorf("%-10s: %x %x", test.Name, a, b)
-		}
-	})
-}
-
-func TestTrieReplay(t *testing.T) {
-	CreateTests("https://raw.githubusercontent.com/ethereum/tests/develop/trietest.json", func(test Test) {
-		_, trie := NewTrie()
-		for key, value := range test.In {
-			trie.Update(get(key), get(value))
-		}
-
-		_, trie2 := NewTrie()
-		trie.NewIterator().Each(func(key string, v *ethutil.Value) {
-			trie2.Update(key, v.Str())
-		})
-
-		a := ethutil.NewValue(trie.Root).Bytes()
-		b := ethutil.NewValue(trie2.Root).Bytes()
-		if bytes.Compare(a, b) != 0 {
-			t.Errorf("%s %x %x\n", test.Name, trie.Root, trie2.Root)
-		}
-	})
-}
-
 func RandomData() [][]string {
 	data := [][]string{
 		{"0x000000000000000000000000ec4f34c97e43fbb2816cfd95e388353c7181dab1", "0x4e616d6552656700000000000000000000000000000000000000000000000000"},
@@ -352,7 +316,6 @@ func TestDelete(t *testing.T) {
 	trie.Delete("a")
 	trie.Update("aaaa", "testmegood")
 
-	fmt.Println("aa =>", trie.Get("aa"))
 	_, t2 := NewTrie()
 	trie.NewIterator().Each(func(key string, v *ethutil.Value) {
 		if key == "aaaa" {
@@ -365,10 +328,59 @@ func TestDelete(t *testing.T) {
 	a := ethutil.NewValue(trie.Root).Bytes()
 	b := ethutil.NewValue(t2.Root).Bytes()
 
-	fmt.Printf("o: %x\nc: %x\n", a, b)
+	if bytes.Compare(a, b) != 0 {
+		t.Errorf("Expected %x and %x to be equal", a, b)
+	}
 }
-*/
 
+func TestTerminator(t *testing.T) {
+	key := CompactDecode("hello")
+	if !HasTerm(key) {
+		t.Errorf("Expected %v to have a terminator", key)
+	}
+}
+
+func TestIt(t *testing.T) {
+	_, trie := NewTrie()
+	trie.Update("cat", "cat")
+	trie.Update("doge", "doge")
+	trie.Update("wallace", "wallace")
+	it := trie.Iterator()
+
+	inputs := []struct {
+		In, Out string
+	}{
+		{"", "cat"},
+		{"bobo", "cat"},
+		{"c", "cat"},
+		{"car", "cat"},
+		{"catering", "doge"},
+		{"w", "wallace"},
+		{"wallace123", ""},
+	}
+
+	for _, test := range inputs {
+		res := string(it.Next(test.In))
+		if res != test.Out {
+			t.Errorf(test.In, "failed. Got", res, "Expected", test.Out)
+		}
+	}
+}
+
+func TestBeginsWith(t *testing.T) {
+	a := CompactDecode("hello")
+	b := CompactDecode("hel")
+
+	if BeginsWith(a, b) {
+		t.Errorf("Expected %x to begin with %x", a, b)
+	}
+
+	if BeginsWith(b, a) {
+		t.Errorf("Expected %x not to begin with %x", b, a)
+	}
+}
+
+/*
 func TestRndCase(t *testing.T) {
 	_, trie := NewTrie()
 
@@ -419,3 +431,4 @@ func TestRndCase(t *testing.T) {
 
 	fmt.Printf("%x\n", trie.Get(string(ethutil.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"))))
 }
+*/

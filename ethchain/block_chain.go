@@ -40,13 +40,11 @@ func (bc *BlockChain) Genesis() *Block {
 
 func (bc *BlockChain) NewBlock(coinbase []byte) *Block {
 	var root interface{}
-	var lastBlockTime int64
 	hash := ZeroHash256
 
 	if bc.CurrentBlock != nil {
 		root = bc.CurrentBlock.state.Trie.Root
 		hash = bc.LastBlockHash
-		lastBlockTime = bc.CurrentBlock.Time
 	}
 
 	block := CreateBlock(
@@ -61,21 +59,26 @@ func (bc *BlockChain) NewBlock(coinbase []byte) *Block {
 
 	parent := bc.CurrentBlock
 	if parent != nil {
-		diff := new(big.Int)
-
-		adjust := new(big.Int).Rsh(parent.Difficulty, 10)
-		if block.Time >= lastBlockTime+5 {
-			diff.Sub(parent.Difficulty, adjust)
-		} else {
-			diff.Add(parent.Difficulty, adjust)
-		}
-		block.Difficulty = diff
+		block.Difficulty = CalcDifficulty(block, parent)
 		block.Number = new(big.Int).Add(bc.CurrentBlock.Number, ethutil.Big1)
 		block.GasLimit = block.CalcGasLimit(bc.CurrentBlock)
 
 	}
 
 	return block
+}
+
+func CalcDifficulty(block, parent *Block) *big.Int {
+	diff := new(big.Int)
+
+	adjust := new(big.Int).Rsh(parent.Difficulty, 10)
+	if block.Time >= parent.Time+5 {
+		diff.Sub(parent.Difficulty, adjust)
+	} else {
+		diff.Add(parent.Difficulty, adjust)
+	}
+
+	return diff
 }
 
 func (bc *BlockChain) Reset() {
