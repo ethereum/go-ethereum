@@ -12,6 +12,8 @@ import (
 // Shortcut :-)
 var To256 = ethutil.To256
 
+const MaxCallDepth = 1024
+
 type Debugger interface {
 	BreakHook(step int, op OpCode, mem *Memory, stack *Stack, object *ethstate.StateObject) bool
 	StepHook(step int, op OpCode, mem *Memory, stack *Stack, object *ethstate.StateObject) bool
@@ -37,6 +39,8 @@ type Vm struct {
 	Fn          string
 
 	Recoverable bool
+
+	depth int
 }
 
 type Environment interface {
@@ -80,6 +84,8 @@ func u256(n int64) *big.Int {
 }
 
 func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
+	self.depth++
+
 	if self.Recoverable {
 		// Recover from any require exception
 		defer func() {
@@ -766,9 +772,6 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			// Generate a new address
 			addr := ethcrypto.CreateAddress(closure.Address(), closure.object.Nonce)
-			//for i := uint64(0); self.env.State().GetStateObject(addr) != nil; i++ {
-			//	ethcrypto.CreateAddress(closure.Address(), closure.object.Nonce+i)
-			//}
 			closure.object.Nonce++
 
 			self.Printf(" (*) %x", addr).Endl()
@@ -953,6 +956,10 @@ func (self *Execution) Exec(codeAddr []byte, caller ClosureRef) (ret []byte, err
 				ret = p.Call(self.input)
 			}
 		} else {
+			if self.vm.depth == MaxCallDepth {
+				return nil, fmt.Errorf("Max call depth exceeded (%d)", MaxCallDepth)
+			}
+
 			// Retrieve the executing code
 			code := self.vm.env.State().GetCode(codeAddr)
 

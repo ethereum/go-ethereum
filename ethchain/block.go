@@ -348,7 +348,7 @@ func NewUncleBlockFromValue(header *ethutil.Value) *Block {
 	return block
 }
 
-func (block *Block) Trie() *ethrie.Trie {
+func (block *Block) Trie() *ethtrie.Trie {
 	return block.state.Trie
 }
 
