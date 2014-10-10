@@ -1,0 +1,32 @@
+;; Direct JUMP.
+;; output: memory[1] = 1
+
+;; 0, 2 --> 3 .. 7 --> 13 -*-> 15 .. 19
+ 
+(asm
+3          ;; 0 
+JUMP       ;; 2 
+
+15         ;; 3 <- start
+13     	   ;; 5
+JUMP       ;; 7 <- b
+STOP       ;; 8
+
+20         ;; 9
+7          ;; 11
+
+JUMP       ;; 13 <- a
+STOP   	   ;; 14
+
+JUMPDEST   ;; 15 <- c
+1          ;; 16 
+1          ;; 18
+MSTORE     ;; 19
+STOP       ;; 20
+
+JUMPDEST   ;; 21 <- d
+2          ;; 22
+2          ;; 24 
+MSTORE     ;; 26  
+STOP       ;; 27
+)
