@@ -6,10 +6,12 @@
 #include <cstdint>
 #include <cassert>
 
+#include <llvm/IR/GlobalVariable.h>
 #include <llvm/IR/Function.h>
 
 #include <libdevcore/Common.h>
 
+#include "Type.h"
 #include "Runtime.h"
 
 #ifdef _MSC_VER
@@ -21,7 +23,7 @@
 namespace evmcc
 {
 
-Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* module)
+Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* _module)
 	: m_builder(_builder)
 {
 	auto voidTy	= m_builder.getVoidTy();
@@ -30,17 +32,59 @@ Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* module)
 	auto memRequireTy = llvm::FunctionType::get(m_builder.getInt8PtrTy(), i64Ty, false);
 	m_memRequire = llvm::Function::Create(memRequireTy,
 	                                      llvm::GlobalValue::LinkageTypes::ExternalLinkage,
-	                                      "evmccrt_memory_require", module);
+										  "evmccrt_memory_require", _module);
 
 	auto memSizeTy = llvm::FunctionType::get(i64Ty, false);
 	m_memSize = llvm::Function::Create(memSizeTy,
 	                                   llvm::GlobalValue::LinkageTypes::ExternalLinkage,
-	                                   "evmccrt_memory_size", module);
+									   "evmccrt_memory_size", _module);
 
 	std::vector<llvm::Type*> argTypes = {i64Ty, i64Ty};
 	auto dumpTy = llvm::FunctionType::get(m_builder.getVoidTy(), llvm::ArrayRef<llvm::Type*>(argTypes), false);
  	m_memDump = llvm::Function::Create(dumpTy, llvm::GlobalValue::LinkageTypes::ExternalLinkage,
- 	                                   "evmccrt_memory_dump", module);
+		"evmccrt_memory_dump", _module);
+
+	m_data = new llvm::GlobalVariable(*_module, Type::BytePtr, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(Type::BytePtr), "mem.data");
+	m_data->setUnnamedAddr(true); // Address is not important
+
+	m_size = new llvm::GlobalVariable(*_module, Type::i256, false, llvm::GlobalVariable::PrivateLinkage, m_builder.getIntN(256, 0), "mem.size");
+	m_size->setUnnamedAddr(true); // Address is not important
+
+	m_resize = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, Type::WordPtr, false), llvm::Function::ExternalLinkage, "mem_resize", _module);
+
+	llvm::Type* storeArgs[] = {Type::i256, Type::i256};
+	m_store = llvm::Function::Create(llvm::FunctionType::get(Type::Void, storeArgs, false), llvm::Function::PrivateLinkage, "mem.store", _module);
+	auto origBB = m_builder.GetInsertBlock();
+	auto origPt = m_builder.GetInsertPoint();
+
+	auto checkBB = llvm::BasicBlock::Create(m_store->getContext(), "check", m_store);
+	auto resizeBB = llvm::BasicBlock::Create(m_store->getContext(), "resize", m_store);
+	auto storeBB = llvm::BasicBlock::Create(m_store->getContext(), "store", m_store);
+
+	m_builder.SetInsertPoint(checkBB);
+	llvm::Value* index = m_store->arg_begin();
+	index->setName("index");
+	llvm::Value* value = ++m_store->arg_begin();
+	value->setName("value");
+	auto sizeRequired = m_builder.CreateAdd(index, m_builder.getIntN(256, 32), "sizeRequired");
+	auto size = m_builder.CreateLoad(m_size, "size");
+	auto resizeNeeded = m_builder.CreateICmpULE(sizeRequired, size, "resizeNeeded");
+	m_builder.CreateCondBr(resizeNeeded, resizeBB, storeBB); // OPT branch weights?
+
+	m_builder.SetInsertPoint(resizeBB);
+	m_builder.CreateStore(sizeRequired, m_size);
+	llvm::Value* data = m_builder.CreateCall(m_resize, m_size, "data");
+	m_builder.CreateStore(data, m_data);
+	m_builder.CreateBr(storeBB);
+
+	m_builder.SetInsertPoint(storeBB);
+	data = m_builder.CreateLoad(m_data, "data");
+	auto ptr = m_builder.CreateGEP(data, index, "ptr");
+	ptr = m_builder.CreateBitCast(ptr, Type::WordPtr, "wordPtr");
+	m_builder.CreateStore(value, ptr);
+	m_builder.CreateRetVoid();
+
+	m_builder.SetInsertPoint(origBB, origPt);
 }
 
 
@@ -113,6 +157,14 @@ void Memory::dump(uint64_t _begin, uint64_t _end)
 extern "C"
 {
 	using namespace evmcc;
+
+EXPORT uint8_t* mem_resize(i256* _size)
+{
+	auto size = _size->a; // Trunc to 64-bit
+	auto& memory = Runtime::getMemory();
+	memory.resize(size);
+	return memory.data();
+}
 
 // Resizes memory to contain at least _index + 1 bytes and returns the base address.
 EXPORT uint8_t* evmccrt_memory_require(uint64_t _index)
