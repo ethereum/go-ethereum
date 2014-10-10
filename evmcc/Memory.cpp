@@ -51,40 +51,48 @@ Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* _module)
 	m_size->setUnnamedAddr(true); // Address is not important
 
 	m_resize = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, Type::WordPtr, false), llvm::Function::ExternalLinkage, "mem_resize", _module);
+	m_storeWord = createStoreFunc(Type::i256, _module);
+	m_storeByte = createStoreFunc(Type::Byte, _module);
+}
 
-	llvm::Type* storeArgs[] = {Type::i256, Type::i256};
-	m_store = llvm::Function::Create(llvm::FunctionType::get(Type::Void, storeArgs, false), llvm::Function::PrivateLinkage, "mem.store", _module);
-	auto origBB = m_builder.GetInsertBlock();
-	auto origPt = m_builder.GetInsertPoint();
+llvm::Function* Memory::createStoreFunc(llvm::Type* _valueType, llvm::Module* _module)
+{
+	auto wordValue = _valueType == Type::i256;
 
-	auto checkBB = llvm::BasicBlock::Create(m_store->getContext(), "check", m_store);
-	auto resizeBB = llvm::BasicBlock::Create(m_store->getContext(), "resize", m_store);
-	auto storeBB = llvm::BasicBlock::Create(m_store->getContext(), "store", m_store);
+	llvm::Type* storeArgs[] = {Type::i256, _valueType};
+	auto name = wordValue ? "store" : "store8";
+	auto storeFunc = llvm::Function::Create(llvm::FunctionType::get(Type::Void, storeArgs, false), llvm::Function::PrivateLinkage, name, _module);
 
-	m_builder.SetInsertPoint(checkBB);
-	llvm::Value* index = m_store->arg_begin();
+	auto checkBB  = llvm::BasicBlock::Create(storeFunc->getContext(), "check", storeFunc);
+	auto resizeBB = llvm::BasicBlock::Create(storeFunc->getContext(), "resize", storeFunc);
+	auto storeBB  = llvm::BasicBlock::Create(storeFunc->getContext(), "store", storeFunc);
+
+	llvm::IRBuilder<> builder(checkBB);
+	llvm::Value* index = storeFunc->arg_begin();
 	index->setName("index");
-	llvm::Value* value = ++m_store->arg_begin();
+	llvm::Value* value = ++storeFunc->arg_begin();
 	value->setName("value");
-	auto sizeRequired = m_builder.CreateAdd(index, m_builder.getIntN(256, 32), "sizeRequired");
-	auto size = m_builder.CreateLoad(m_size, "size");
-	auto resizeNeeded = m_builder.CreateICmpULE(sizeRequired, size, "resizeNeeded");
-	m_builder.CreateCondBr(resizeNeeded, resizeBB, storeBB); // OPT branch weights?
+	auto valueSize = _valueType->getPrimitiveSizeInBits() / 8;
+	auto sizeRequired = builder.CreateAdd(index, builder.getIntN(256, valueSize), "sizeRequired");
+	auto size = builder.CreateLoad(m_size, "size");
+	auto resizeNeeded = builder.CreateICmpULE(sizeRequired, size, "resizeNeeded");
+	builder.CreateCondBr(resizeNeeded, resizeBB, storeBB); // OPT branch weights?
 
-	m_builder.SetInsertPoint(resizeBB);
-	m_builder.CreateStore(sizeRequired, m_size);
-	llvm::Value* data = m_builder.CreateCall(m_resize, m_size, "data");
-	m_builder.CreateStore(data, m_data);
-	m_builder.CreateBr(storeBB);
+	builder.SetInsertPoint(resizeBB);
+	builder.CreateStore(sizeRequired, m_size);
+	auto newData = builder.CreateCall(m_resize, m_size, "newData");
+	builder.CreateStore(newData, m_data);
+	builder.CreateBr(storeBB);
 
-	m_builder.SetInsertPoint(storeBB);
-	data = m_builder.CreateLoad(m_data, "data");
-	auto ptr = m_builder.CreateGEP(data, index, "ptr");
-	ptr = m_builder.CreateBitCast(ptr, Type::WordPtr, "wordPtr");
-	m_builder.CreateStore(value, ptr);
-	m_builder.CreateRetVoid();
+	builder.SetInsertPoint(storeBB);
+	auto data = builder.CreateLoad(m_data, "data");
+	auto ptr = builder.CreateGEP(data, index, "ptr");
+	if (wordValue)
+		ptr = builder.CreateBitCast(ptr, Type::WordPtr, "wordPtr");
+	builder.CreateStore(value, ptr);
+	builder.CreateRetVoid();
 
-	m_builder.SetInsertPoint(origBB, origPt);
+	return storeFunc;
 }
 
 
@@ -108,19 +116,15 @@ llvm::Value* Memory::loadWord(llvm::Value* _addr)
 
 void Memory::storeWord(llvm::Value* _addr, llvm::Value* _word)
 {
-	m_builder.CreateCall2(m_store, _addr, _word);
+	m_builder.CreateCall2(m_storeWord, _addr, _word);
 
 	dump(0);
 }
 
 void Memory::storeByte(llvm::Value* _addr, llvm::Value* _word)
 {
-	auto byte = m_builder.CreateTrunc(_word, m_builder.getInt8Ty(), "byte");
-	auto index = m_builder.CreateTrunc(_addr, m_builder.getInt64Ty(), "index");
-
-	auto base = m_builder.CreateCall(m_memRequire, index, "base");
-	auto ptr = m_builder.CreateGEP(base, index, "ptr");
-	m_builder.CreateStore(byte, ptr);
+	auto byte = m_builder.CreateTrunc(_word, Type::Byte, "byte");
+	m_builder.CreateCall2(m_storeByte, _addr, byte);
 
 	dump(0);
 }
@@ -152,7 +156,6 @@ extern "C"
 
 EXPORT uint8_t* mem_resize(i256* _size)
 {
-	assert(false);
 	auto size = _size->a; // Trunc to 64-bit
 	auto& memory = Runtime::getMemory();
 	memory.resize(size);
