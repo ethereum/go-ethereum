@@ -879,6 +879,10 @@ void Compiler::linkBasicBlocks()
 	/// Helper function that finds basic block given LLVM basic block pointer
 	auto findBasicBlock = [this](llvm::BasicBlock* _llbb) -> BasicBlock&
 	{
+		// TODO: Fix for finding jumpTableBlock
+		if (_llbb == this->m_jumpTableBlock->llvm())
+			return *this->m_jumpTableBlock;
+
 		// Name is used to get basic block index (index of first instruction)
 		// TODO: If basicBlocs are still a map - multikey map can be used
 		auto&& idxStr = _llbb->getName().substr(sizeof(BasicBlock::NamePrefix) - 2);
