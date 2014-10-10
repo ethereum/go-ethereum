@@ -33,17 +33,27 @@ void BasicBlock::Stack::push(llvm::Value* _value)
 
 llvm::Value* BasicBlock::Stack::pop()
 {
-	if (m_backend.empty())
-	{
-		// Create PHI node
-		if (m_llvmBB->empty())
-			return llvm::PHINode::Create(Type::i256, 0, {}, m_llvmBB);
-		return llvm::PHINode::Create(Type::i256, 0, {}, m_llvmBB->getFirstNonPHI());
-	}
-
-	auto top = m_backend.back();
+	auto top = get(0);
 	m_backend.pop_back();
 	return top;
+}
+
+llvm::Value* BasicBlock::Stack::get(size_t _index)
+{	
+	if (_index >= m_backend.size())
+	{
+		// Create PHI node for missing values
+		auto nMissingVals = _index - m_backend.size() + 1;
+		m_backend.insert(m_backend.begin(), nMissingVals, nullptr);
+		for (decltype(nMissingVals) i = 0; i < nMissingVals; ++i)
+		{
+			m_backend[i] = m_llvmBB->empty() ?
+				llvm::PHINode::Create(Type::i256, 0, {}, m_llvmBB) :
+				llvm::PHINode::Create(Type::i256, 0, {}, m_llvmBB->getFirstNonPHI());
+		}
+	}
+
+	return *(m_backend.rbegin() + _index);
 }
 
 void BasicBlock::Stack::dup(size_t _index)
@@ -54,7 +64,8 @@ void BasicBlock::Stack::dup(size_t _index)
 void BasicBlock::Stack::swap(size_t _index)
 {
 	assert(_index != 0);
-	std::swap(get(0), get(_index));
+	get(_index); // Create PHI nodes
+	std::swap(*m_backend.rbegin(), *(m_backend.rbegin() + _index));
 }
 
 }

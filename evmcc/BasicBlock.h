@@ -21,7 +21,7 @@ public:
 		llvm::Value* pop();
 
 		/// Gets _index'th value from top (counting from 0)
-		llvm::Value*& get(size_t _index) { return *(m_backend.rbegin() + _index); }
+		llvm::Value* get(size_t _index);
 
 		/// Duplicates _index'th value on stack.
 		void dup(size_t _index);
