@@ -18,6 +18,13 @@ BasicBlock::BasicBlock(ProgramCounter _beginInstIdx, ProgramCounter _endInstIdx,
 	m_stack(m_llvmBB)
 {}
 
+BasicBlock::BasicBlock(std::string _name, llvm::Function* _mainFunc) :
+	m_beginInstIdx(0),
+	m_endInstIdx(0),
+	m_llvmBB(llvm::BasicBlock::Create(_mainFunc->getContext(), _name, _mainFunc)),
+	m_stack(m_llvmBB)
+{}
+
 
 void BasicBlock::Stack::push(llvm::Value* _value)
 {

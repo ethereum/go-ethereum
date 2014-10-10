@@ -1,0 +1,10 @@
+;; Direct JUMP past the end of code.
+;; output: memory should have size 0.
+
+(asm
+42    
+JUMP  
+1     
+1     
+MSTORE
+)

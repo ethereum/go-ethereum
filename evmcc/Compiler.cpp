@@ -1,6 +1,8 @@
 
 #include "Compiler.h"
 
+#include <boost/dynamic_bitset.hpp>
+
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/CFG.h>
 
@@ -19,18 +21,27 @@ using namespace dev::eth; // We should move all the JIT code into dev::eth names
 
 
 Compiler::Compiler()
+	: m_finalBlock(nullptr)
+	, m_badJumpBlock(nullptr)
 {
 	Type::init(llvm::getGlobalContext());
 }
 
 void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 {
-	std::set<ProgramCounter> splitPoints; // Sorted collections of instruction indecies where basic blocks start/end
+	std::set<ProgramCounter> splitPoints; // Sorted collections of instruction indices where basic blocks start/end
 	splitPoints.insert(0);	// First basic block
+
+	std::map<ProgramCounter, ProgramCounter> directJumpTargets;
+	std::vector<ProgramCounter> indirectJumpTargets;
+	boost::dynamic_bitset<> validJumpTargets(bytecode.size());
 
 	for (auto curr = bytecode.cbegin(); curr != bytecode.cend(); ++curr)
 	{
 		using dev::eth::Instruction;
+
+		ProgramCounter currentPC = curr - bytecode.cbegin();
+		validJumpTargets[currentPC] = 1;
 
 		auto inst = static_cast<Instruction>(*curr);
 		switch (inst)
@@ -70,7 +81,7 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 		{
 			auto numBytes = static_cast<size_t>(inst) - static_cast<size_t>(Instruction::PUSH1) + 1;
 			auto next = curr + numBytes + 1;
-			if (next == bytecode.cend())
+			if (next >= bytecode.cend())
 				break;
 
 			auto nextInst = static_cast<Instruction>(*next);
@@ -85,34 +96,30 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 					val |= *iter;
 				}
 
-				// Create a block following the JUMP.
-				if (next + 1 < bytecode.cend())
-				{
-					ProgramCounter nextPC = (next + 1 - bytecode.cbegin());
-					splitPoints.insert(nextPC);
-				}
-
 				// Create a block for the JUMP target.
 				ProgramCounter targetPC = val.convert_to<ProgramCounter>();
+				if (targetPC > bytecode.size())
+					targetPC = bytecode.size();
 				splitPoints.insert(targetPC);
 
 				ProgramCounter jumpPC = (next - bytecode.cbegin());
-				jumpTargets[jumpPC] = targetPC;
-
-				curr += 1; // skip over JUMP
+				directJumpTargets[jumpPC] = targetPC;
 			}
 
 			curr += numBytes;
 			break;
 		}
 
-		case Instruction::JUMP:
-		case Instruction::JUMPI:
+		case Instruction::JUMPDEST:
 		{
-			std::cerr << "JUMP/JUMPI at " << (curr - bytecode.cbegin()) << " not preceded by PUSH\n";
-			std::exit(1);
+			// A basic block starts here.
+			splitPoints.insert(currentPC);
+			indirectJumpTargets.push_back(currentPC);
+			break;
 		}
 
+		case Instruction::JUMP:
+		case Instruction::JUMPI:
 		case Instruction::RETURN:
 		case Instruction::STOP:
 		case Instruction::SUICIDE:
@@ -120,8 +127,7 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 			// Create a basic block starting at the following instruction.
 			if (curr + 1 < bytecode.cend())
 			{
-				ProgramCounter nextPC = (curr + 1 - bytecode.cbegin());
-				splitPoints.insert(nextPC);
+				splitPoints.insert(currentPC + 1);
 			}
 			break;
 		}
@@ -131,13 +137,41 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 		}
 	}
 
-	splitPoints.insert(bytecode.size()); // For final block
-	for (auto it = splitPoints.cbegin(); it != splitPoints.cend();)
+	for (auto it = splitPoints.cbegin(); it != splitPoints.cend() && *it < bytecode.size();)
 	{
 		auto beginInstIdx = *it;
 		++it;
-		auto endInstIdx = it != splitPoints.cend() ? *it : beginInstIdx; // For final block
+		auto endInstIdx = it != splitPoints.cend() ? *it : bytecode.size();
 		basicBlocks.emplace(std::piecewise_construct, std::forward_as_tuple(beginInstIdx), std::forward_as_tuple(beginInstIdx, endInstIdx, m_mainFunc));
+	}
+
+	m_finalBlock = std::make_unique<BasicBlock>("FinalBlock", m_mainFunc);
+	m_badJumpBlock = std::make_unique<BasicBlock>("BadJumpBlock", m_mainFunc);
+
+	for (auto it = directJumpTargets.cbegin(); it != directJumpTargets.cend(); ++it)
+	{
+		if (it->second >= bytecode.size()) // Jump out of code
+		{
+			m_directJumpTargets[it->first] = m_finalBlock.get();
+		}
+		else if (!validJumpTargets[it->second]) // Jump into data
+		{
+			std::cerr << "Bad JUMP at PC " << it->first
+					  << ": " << it->second << " is not a valid PC\n";
+			m_directJumpTargets[it->first] = m_badJumpBlock.get();
+		}
+		else
+		{
+			m_directJumpTargets[it->first] = &basicBlocks.find(it->second)->second;
+		}
+	}
+
+	for (auto it = indirectJumpTargets.cbegin(); it != indirectJumpTargets.cend(); ++it)
+	{
+		if (*it >= bytecode.size())
+			m_indirectJumpTargets.push_back(m_finalBlock.get());
+		else
+			m_indirectJumpTargets.push_back(&basicBlocks.find(*it)->second);
 	}
 }
 
@@ -546,30 +580,69 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			}
 
 			case Instruction::JUMP:
+			case Instruction::JUMPI:
 			{
-				// The target address is computed at compile time,
-				// just pop it without looking...
-				stack.pop();
+				// Generate direct jump iff:
+				// 1. this is not the first instruction in the block
+				// 2. m_directJumpTargets[currentPC] is defined (meaning that the previous instruction is a PUSH)
+				// Otherwise generate a indirect jump (a switch).
+				if (currentPC != basicBlock.begin())
+				{
+					auto pairIter = m_directJumpTargets.find(currentPC);
+					if (pairIter != m_directJumpTargets.end())
+					{
+						auto targetBlock = pairIter->second;
 
-				auto& targetBlock = basicBlocks.find(jumpTargets[currentPC])->second;
-				builder.CreateBr(targetBlock);
+						// The target address is computed at compile time,
+						// just pop it without looking...
+						stack.pop();
+
+						if (inst == Instruction::JUMP)
+						{
+							builder.CreateBr(targetBlock->llvm());
+						}
+						else // JUMPI
+						{
+							auto top = stack.pop();
+							auto zero = ConstantInt::get(Type::i256, 0);
+							auto cond = builder.CreateICmpNE(top, zero, "nonzero");
+
+							// Assume the basic blocks are properly ordered:
+							auto nextBBIter = basicBlockPairIt;
+							++nextBBIter;
+							assert (nextBBIter != basicBlocks.end());
+							auto& followBlock = nextBBIter->second;
+							builder.CreateCondBr(cond, targetBlock->llvm(), followBlock.llvm());
+						}
+						break;
+					}
+				}
+
+				if (inst == Instruction::JUMPI)
+				{
+					std::cerr << "Indirect JUMPI is not supported yet (at PC "
+							  << currentPC << ")\n";
+					std::exit(1);
+				}
+
+				// Generate switch for indirect jump.
+				auto dest = stack.pop();
+				auto switchInstr = 	builder.CreateSwitch(dest, m_badJumpBlock->llvm(),
+				                   	                     m_indirectJumpTargets.size());
+				for (auto it = m_indirectJumpTargets.cbegin(); it != m_indirectJumpTargets.cend(); ++it)
+				{
+					auto& bb = *it;
+					auto dest = ConstantInt::get(Type::i256, bb->begin());
+					switchInstr->addCase(dest, bb->llvm());
+				}
+
 				break;
 			}
 
-			case Instruction::JUMPI:
+			case Instruction::JUMPDEST:
 			{
-				assert(currentPC + 1 < bytecode.size());
-
-				// The target address is computed at compile time,
-				// just pop it without looking...
-				stack.pop();
-
-				auto top = stack.pop();
-				auto zero = ConstantInt::get(Type::i256, 0);
-				auto cond = builder.CreateICmpNE(top, zero, "nonzero");
-				auto& targetBlock = basicBlocks.find(jumpTargets[currentPC])->second;
-				auto& followBlock = basicBlocks.find(currentPC + 1)->second;
-				builder.CreateCondBr(cond, targetBlock, followBlock);
+				// Extra asserts just in case.
+				assert(currentPC == basicBlock.begin());
 				break;
 			}
 
@@ -741,17 +814,18 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			}
 
 			}
-
 		}
 
 		if (!builder.GetInsertBlock()->getTerminator())	// If block not terminated
 		{
-			if (basicBlock.begin() == bytecode.size())	// Special final block
+			if (basicBlock.end() == bytecode.size())
 			{
-				builder.CreateRet(builder.getInt64(0));
+				//	Branch from the last regular block to the final block.
+				builder.CreateBr(m_finalBlock->llvm());
 			}
 			else
 			{
+				// Branch to the next block.
 				auto iterCopy = basicBlockPairIt;
 				++iterCopy;
 				auto& next = iterCopy->second;
@@ -759,6 +833,14 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			}
 		}
 	}
+
+	// Code for special blocks:
+	builder.SetInsertPoint(m_finalBlock->llvm());
+	builder.CreateRet(builder.getInt64(0));
+
+	// TODO: throw an exception or something
+	builder.SetInsertPoint(m_badJumpBlock->llvm());
+	builder.CreateRet(builder.getInt64(1));
 
 	linkBasicBlocks();
 

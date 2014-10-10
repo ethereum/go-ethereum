@@ -6,8 +6,8 @@
 namespace evmcc
 {
 
-llvm::Type* Type::i256;
-llvm::Type* Type::lowPrecision;
+llvm::IntegerType* Type::i256;
+llvm::IntegerType* Type::lowPrecision;
 llvm::Type* Type::Void;
 
 void Type::init(llvm::LLVMContext& _context)
