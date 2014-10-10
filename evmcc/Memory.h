@@ -22,7 +22,7 @@ public:
 	void dump(uint64_t _begin, uint64_t _end = 0);
 
 private:
-	llvm::Function* createStoreFunc(llvm::Type* _type, llvm::Module* _module);
+	llvm::Function* createFunc(bool _isStore, llvm::Type* _type, llvm::Module* _module);
 
 private:
 	llvm::IRBuilder<>& m_builder;
@@ -30,6 +30,7 @@ private:
 	llvm::GlobalVariable* m_data;
 	llvm::GlobalVariable* m_size;
 
+	llvm::Function* m_loadWord;
 	llvm::Function* m_storeWord;
 	llvm::Function* m_storeByte;
 	llvm::Function* m_resize;

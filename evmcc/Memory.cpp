@@ -51,67 +51,66 @@ Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* _module)
 	m_size->setUnnamedAddr(true); // Address is not important
 
 	m_resize = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, Type::WordPtr, false), llvm::Function::ExternalLinkage, "mem_resize", _module);
-	m_storeWord = createStoreFunc(Type::i256, _module);
-	m_storeByte = createStoreFunc(Type::Byte, _module);
+	m_loadWord = createFunc(false, Type::i256, _module);
+	m_storeWord = createFunc(true, Type::i256, _module);
+	m_storeByte = createFunc(true, Type::Byte, _module);
 }
 
-llvm::Function* Memory::createStoreFunc(llvm::Type* _valueType, llvm::Module* _module)
+llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, llvm::Module* _module)
 {
-	auto wordValue = _valueType == Type::i256;
+	auto isWord = _valueType == Type::i256;
 
 	llvm::Type* storeArgs[] = {Type::i256, _valueType};
-	auto name = wordValue ? "store" : "store8";
-	auto storeFunc = llvm::Function::Create(llvm::FunctionType::get(Type::Void, storeArgs, false), llvm::Function::PrivateLinkage, name, _module);
+	auto name = _isStore ? isWord ? "mstore" : "mstore8" : "mload";
+	auto funcType = _isStore ? llvm::FunctionType::get(Type::Void, storeArgs, false) : llvm::FunctionType::get(Type::i256, Type::i256, false);
+	auto func = llvm::Function::Create(funcType, llvm::Function::PrivateLinkage, name, _module);
 
-	auto checkBB  = llvm::BasicBlock::Create(storeFunc->getContext(), "check", storeFunc);
-	auto resizeBB = llvm::BasicBlock::Create(storeFunc->getContext(), "resize", storeFunc);
-	auto storeBB  = llvm::BasicBlock::Create(storeFunc->getContext(), "store", storeFunc);
+	auto checkBB = llvm::BasicBlock::Create(func->getContext(), "check", func);
+	auto resizeBB = llvm::BasicBlock::Create(func->getContext(), "resize", func);
+	auto accessBB = llvm::BasicBlock::Create(func->getContext(), "access", func);
 
 	llvm::IRBuilder<> builder(checkBB);
-	llvm::Value* index = storeFunc->arg_begin();
+	llvm::Value* index = func->arg_begin();
 	index->setName("index");
-	llvm::Value* value = ++storeFunc->arg_begin();
-	value->setName("value");
 	auto valueSize = _valueType->getPrimitiveSizeInBits() / 8;
 	auto sizeRequired = builder.CreateAdd(index, builder.getIntN(256, valueSize), "sizeRequired");
 	auto size = builder.CreateLoad(m_size, "size");
 	auto resizeNeeded = builder.CreateICmpULE(sizeRequired, size, "resizeNeeded");
-	builder.CreateCondBr(resizeNeeded, resizeBB, storeBB); // OPT branch weights?
+	builder.CreateCondBr(resizeNeeded, resizeBB, accessBB); // OPT branch weights?
 
 	builder.SetInsertPoint(resizeBB);
 	builder.CreateStore(sizeRequired, m_size);
 	auto newData = builder.CreateCall(m_resize, m_size, "newData");
 	builder.CreateStore(newData, m_data);
-	builder.CreateBr(storeBB);
+	builder.CreateBr(accessBB);
 
-	builder.SetInsertPoint(storeBB);
+	builder.SetInsertPoint(accessBB);
 	auto data = builder.CreateLoad(m_data, "data");
 	auto ptr = builder.CreateGEP(data, index, "ptr");
-	if (wordValue)
+	if (isWord)
 		ptr = builder.CreateBitCast(ptr, Type::WordPtr, "wordPtr");
-	builder.CreateStore(value, ptr);
-	builder.CreateRetVoid();
-
-	return storeFunc;
+	if (_isStore)
+	{
+		llvm::Value* value = ++func->arg_begin();
+		value->setName("value");
+		builder.CreateStore(value, ptr);
+		builder.CreateRetVoid();
+	}
+	else
+	{
+		auto ret = builder.CreateLoad(ptr);
+		builder.CreateRet(ret);
+	}
+	return func;
 }
 
 
 llvm::Value* Memory::loadWord(llvm::Value* _addr)
 {
-	// trunc _addr (an i256) to i64 index and use it to index the memory
-	auto index = m_builder.CreateTrunc(_addr, m_builder.getInt64Ty(), "mem.index");
-	auto index31 = m_builder.CreateAdd(index, llvm::ConstantInt::get(m_builder.getInt64Ty(), 31), "mem.index.31");
-
-	// load from evmccrt_memory_require()[index]
-	auto base = m_builder.CreateCall(m_memRequire, index31, "base");
-	auto ptr = m_builder.CreateGEP(base, index, "ptr");
-
-	auto i256ptrTy = m_builder.getIntNTy(256)->getPointerTo();
-	auto wordPtr = m_builder.CreateBitCast(ptr, i256ptrTy, "wordptr");
-	auto byte = m_builder.CreateLoad(wordPtr, "word");
+	auto value = m_builder.CreateCall(m_loadWord, _addr);
 
 	dump(0);
-	return byte;
+	return value;
 }
 
 void Memory::storeWord(llvm::Value* _addr, llvm::Value* _word)
@@ -131,9 +130,7 @@ void Memory::storeByte(llvm::Value* _addr, llvm::Value* _word)
 
 llvm::Value* Memory::getSize()
 {
-	auto size = m_builder.CreateCall(m_memSize, "mem.size");
-	auto word = m_builder.CreateZExt(size, m_builder.getIntNTy(256), "mem.wsize");
-	return word;
+	return m_builder.CreateLoad(m_size);
 }
 
 void Memory::dump(uint64_t _begin, uint64_t _end)
