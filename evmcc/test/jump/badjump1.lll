@@ -1,0 +1,9 @@
+;; Bad indirect jump. Should go to BadJumpBlock.
+
+(asm
+27
+37
+MUL
+JUMP
+JUMPDEST
+)
