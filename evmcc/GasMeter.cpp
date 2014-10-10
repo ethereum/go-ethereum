@@ -49,7 +49,7 @@ uint64_t getStepCost(dev::eth::Instruction inst) // TODO: Add this function to F
 	}
 }
 
-bool isCommitTrigger(Instruction _inst)
+bool isCostBlockEnd(Instruction _inst)
 {
 	switch (_inst)
 	{
@@ -101,17 +101,16 @@ void GasMeter::check(Instruction _inst)
 {
 	if (!m_checkCall)
 	{
+		// Create gas check call with mocked block cost at begining of current cost-block
 		m_checkCall = m_builder.CreateCall(m_gasCheckFunc, m_builder.getIntN(256, 0));
 	}
 	
-	auto stepCost = getStepCost(_inst);
-	m_blockCost += stepCost;
+	m_blockCost += getStepCost(_inst);
 
-	auto isTrigger = isCommitTrigger(_inst);
-	if (isTrigger)
-	{
-		m_checkCall->setArgOperand(0, m_builder.getIntN(256, m_blockCost));
-		m_checkCall = nullptr;
+	if (isCostBlockEnd(_inst))
+	{		
+		m_checkCall->setArgOperand(0, m_builder.getIntN(256, m_blockCost)); // Update block cost in gas check call		
+		m_checkCall = nullptr; // End cost-block
 	}	
 }
 
