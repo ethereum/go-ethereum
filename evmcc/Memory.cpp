@@ -75,7 +75,7 @@ llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, llvm::
 	auto valueSize = _valueType->getPrimitiveSizeInBits() / 8;
 	auto sizeRequired = builder.CreateAdd(index, builder.getIntN(256, valueSize), "sizeRequired");
 	auto size = builder.CreateLoad(m_size, "size");
-	auto resizeNeeded = builder.CreateICmpULE(sizeRequired, size, "resizeNeeded");
+	auto resizeNeeded = builder.CreateICmpULE(size, sizeRequired, "resizeNeeded");
 	builder.CreateCondBr(resizeNeeded, resizeBB, accessBB); // OPT branch weights?
 
 	builder.SetInsertPoint(resizeBB);
