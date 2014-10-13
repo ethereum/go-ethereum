@@ -111,6 +111,7 @@ void GasMeter::check(Instruction _inst)
 	{		
 		m_checkCall->setArgOperand(0, m_builder.getIntN(256, m_blockCost)); // Update block cost in gas check call		
 		m_checkCall = nullptr; // End cost-block
+		m_blockCost = 0;
 	}	
 }
 
