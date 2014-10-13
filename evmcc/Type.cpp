@@ -25,6 +25,11 @@ void Type::init(llvm::LLVMContext& _context)
 	MainReturn = llvm::Type::getInt32Ty(_context);
 }
 
+llvm::Constant* Constant::get(uint64_t _n)
+{
+	return llvm::ConstantInt::get(Type::i256, _n);
+}
+
 llvm::Constant* Constant::get(ReturnCode _returnCode)
 {
 	return llvm::ConstantInt::get(Type::MainReturn, static_cast<uint64_t>(_returnCode));

@@ -38,6 +38,9 @@ enum class ReturnCode
 
 struct Constant
 {
+	/// Returns word-size constant
+	static llvm::Constant* get(uint64_t _n);
+
 	static llvm::Constant* get(ReturnCode _returnCode);
 };
 

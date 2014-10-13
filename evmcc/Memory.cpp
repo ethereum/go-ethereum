@@ -133,6 +133,9 @@ llvm::Value* Memory::getSize()
 
 void Memory::registerReturnData(llvm::Value* _index, llvm::Value* _size)
 {
+	auto lastWord = m_builder.CreateAdd(_index, m_builder.CreateSub(_size, Constant::get(32)), "lastWord");
+	loadWord(lastWord); // Make sure that memory is allocated and count gas
+
 	m_builder.CreateStore(_index, m_returnDataOffset);
 	m_builder.CreateStore(_size, m_returnDataSize);
 }
