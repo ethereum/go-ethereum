@@ -81,7 +81,7 @@ bool isCostBlockEnd(Instruction _inst)
 GasMeter::GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* _module):
 	m_builder(_builder)
 {
-	m_gas = new llvm::GlobalVariable(*_module, Type::i256, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(Type::i256), "gas");
+	m_gas = new llvm::GlobalVariable(*_module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "gas");
 	m_gas->setUnnamedAddr(true); // Address is not important
 
 	auto pt = m_builder.GetInsertPoint();

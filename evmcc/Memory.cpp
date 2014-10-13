@@ -15,12 +15,6 @@
 #include "Runtime.h"
 #include "GasMeter.h"
 
-#ifdef _MSC_VER
-	#define EXPORT __declspec(dllexport)
-#else
-	#define EXPORT
-#endif
-
 namespace evmcc
 {
 

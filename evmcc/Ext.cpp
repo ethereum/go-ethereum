@@ -9,12 +9,6 @@
 
 #include "Runtime.h"
 
-#ifdef _MSC_VER
-#define EXPORT __declspec(dllexport)
-#else
-#define EXPORT
-#endif
-
 using namespace llvm;
 using llvm::types::i;
 using Linkage = llvm::GlobalValue::LinkageTypes;
