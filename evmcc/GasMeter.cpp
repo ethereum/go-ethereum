@@ -130,4 +130,9 @@ void GasMeter::checkMemory(llvm::Value* _additionalMemoryInWords, llvm::IRBuilde
 	_builder.CreateCall(m_gasCheckFunc, cost);
 }
 
+llvm::GlobalVariable* GasMeter::getLLVMGasVar()
+{
+	return m_gas;
+}
+
 }

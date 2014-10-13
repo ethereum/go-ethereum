@@ -434,6 +434,36 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				break;
 			}
 
+			case Instruction::ADDMOD:
+			{
+				auto val1 = stack.pop();
+				auto val2 = stack.pop();
+				auto sum = builder.CreateAdd(val1, val2);
+				auto mod = stack.pop();
+
+				auto sum128 = builder.CreateTrunc(sum, Type::lowPrecision);
+				auto mod128 = builder.CreateTrunc(mod, Type::lowPrecision);
+				auto res128 = builder.CreateURem(sum128, mod128);
+				auto res256 = builder.CreateZExt(res128, Type::i256);
+				stack.push(res256);
+				break;
+			}
+
+			case Instruction::MULMOD:
+			{
+				auto val1 = stack.pop();
+				auto val2 = stack.pop();
+				auto prod = builder.CreateMul(val1, val2);
+				auto mod = stack.pop();
+
+				auto prod128 = builder.CreateTrunc(prod, Type::lowPrecision);
+				auto mod128 = builder.CreateTrunc(mod, Type::lowPrecision);
+				auto res128 = builder.CreateURem(prod128, mod128);
+				auto res256 = builder.CreateZExt(res128, Type::i256);
+				stack.push(res256);
+				break;
+			}
+
 			case Instruction::SHA3:
 			{
 				auto inOff = stack.pop();
