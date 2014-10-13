@@ -51,24 +51,20 @@ uint64_t getStepCost(dev::eth::Instruction inst) // TODO: Add this function to F
 
 bool isCostBlockEnd(Instruction _inst)
 {
+	// Basic block terminators like STOP are not needed on the list
+	// as cost will be commited at the end of basic block
 	switch (_inst)
 	{
-	case Instruction::STOP:
 	case Instruction::CALLDATACOPY:
 	case Instruction::CODECOPY:
 	case Instruction::MLOAD:
 	case Instruction::MSTORE:
 	case Instruction::MSTORE8:
 	case Instruction::SSTORE:
-	case Instruction::JUMP:
-	case Instruction::JUMPI:
-	case Instruction::JUMPDEST:
 	case Instruction::GAS:
 	case Instruction::CREATE:
 	case Instruction::CALL:
 	case Instruction::CALLCODE:
-	case Instruction::RETURN:
-	case Instruction::SUICIDE:
 		return true;
 
 	default:
