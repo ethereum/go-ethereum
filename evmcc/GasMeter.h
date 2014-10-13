@@ -16,7 +16,11 @@ public:
 	GasMeter(const GasMeter&) = delete;
 	void operator=(GasMeter) = delete;
 
-	void check(dev::eth::Instruction _inst);
+	/// Count step cost of instruction
+	void count(dev::eth::Instruction _inst);
+
+	/// Finalize cost block by checking gas needed for the block before the block
+	void commitCostBlock();
 
 	/// Generate code that checks the cost of additional memory used by program
 	void checkMemory(llvm::Value* _additionalMemoryInWords, llvm::IRBuilder<>& _builder);

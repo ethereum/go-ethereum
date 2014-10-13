@@ -213,7 +213,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		{
 			auto inst = static_cast<Instruction>(bytecode[currentPC]);
 
-			gasMeter.check(inst);
+			gasMeter.count(inst);
 
 			switch (inst)
 			{
@@ -818,6 +818,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 			}
 		}
+
+		gasMeter.commitCostBlock();
 
 		if (!builder.GetInsertBlock()->getTerminator())	// If block not terminated
 		{
