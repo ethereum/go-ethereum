@@ -190,10 +190,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	IRBuilder<> builder(context);
 
 	// Create main function
-	const auto i32Ty = builder.getInt32Ty();
-	//Type* retTypeElems[] = {i32Ty, i32Ty};
-	//auto retType = StructType::create(retTypeElems, "MemRef", true);
-	m_mainFunc = Function::Create(FunctionType::get(builder.getInt64Ty(), false), Function::ExternalLinkage, "main", module.get());
+	m_mainFunc = Function::Create(FunctionType::get(Type::MainReturn, false), Function::ExternalLinkage, "main", module.get());
 
 	// Create the basic blocks.
 	auto entryBlock = llvm::BasicBlock::Create(context, "entry", m_mainFunc);
@@ -797,13 +794,9 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto index = stack.pop();
 				auto size = stack.pop();
 
-				auto ret = builder.CreateTrunc(index, builder.getInt64Ty());
-				ret = builder.CreateShl(ret, 32);
-				size = builder.CreateTrunc(size, i32Ty);
-				size = builder.CreateZExt(size, builder.getInt64Ty());
-				ret = builder.CreateOr(ret, size);
+				memory.registerReturnData(index, size);
 
-				builder.CreateRet(ret);
+				builder.CreateRet(Constant::get(ReturnCode::Return));
 				break;
 			}
 
@@ -815,7 +808,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			}
 			case Instruction::STOP:
 			{
-				builder.CreateRet(builder.getInt64(0));
+				builder.CreateRet(Constant::get(ReturnCode::Stop));
 				break;
 			}
 
@@ -847,11 +840,11 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	// Note: Right now the codegen for special blocks depends only on createBasicBlock(),
 	// not on the codegen for 'regular' blocks. But it has to be done before linkBasicBlocks().
 	builder.SetInsertPoint(m_finalBlock->llvm());
-	builder.CreateRet(builder.getInt64(0));
+	builder.CreateRet(Constant::get(ReturnCode::Stop));
 
 	// TODO: throw an exception or something
 	builder.SetInsertPoint(m_badJumpBlock->llvm());
-	builder.CreateRet(builder.getInt64(0));
+	builder.CreateRet(Constant::get(ReturnCode::BadJumpDestination));
 
 	builder.SetInsertPoint(m_jumpTableBlock->llvm());
 	if (m_indirectJumpTargets.size() > 0)

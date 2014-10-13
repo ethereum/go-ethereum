@@ -21,20 +21,8 @@ namespace evmcc
 Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* _module, GasMeter& _gasMeter):
 	m_builder(_builder)
 {
-	auto voidTy	= m_builder.getVoidTy();
 	auto i64Ty = m_builder.getInt64Ty();
-
-	auto memRequireTy = llvm::FunctionType::get(m_builder.getInt8PtrTy(), i64Ty, false);
-	m_memRequire = llvm::Function::Create(memRequireTy,
-	                                      llvm::GlobalValue::LinkageTypes::ExternalLinkage,
-										  "evmccrt_memory_require", _module);
-
-	auto memSizeTy = llvm::FunctionType::get(i64Ty, false);
-	m_memSize = llvm::Function::Create(memSizeTy,
-	                                   llvm::GlobalValue::LinkageTypes::ExternalLinkage,
-									   "evmccrt_memory_size", _module);
-
-	std::vector<llvm::Type*> argTypes = {i64Ty, i64Ty};
+	llvm::Type* argTypes[] = {i64Ty, i64Ty};
 	auto dumpTy = llvm::FunctionType::get(m_builder.getVoidTy(), llvm::ArrayRef<llvm::Type*>(argTypes), false);
  	m_memDump = llvm::Function::Create(dumpTy, llvm::GlobalValue::LinkageTypes::ExternalLinkage,
 		"evmccrt_memory_dump", _module);
@@ -44,6 +32,12 @@ Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* _module, GasMeter& _ga
 
 	m_size = new llvm::GlobalVariable(*_module, Type::i256, false, llvm::GlobalVariable::PrivateLinkage, m_builder.getIntN(256, 0), "mem.size");
 	m_size->setUnnamedAddr(true); // Address is not important
+
+	m_returnDataOffset = new llvm::GlobalVariable(*_module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "mem_returnDataOffset");
+	m_returnDataOffset->setUnnamedAddr(true); // Address is not important
+
+	m_returnDataSize = new llvm::GlobalVariable(*_module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "mem_returnDataSize");
+	m_returnDataSize->setUnnamedAddr(true); // Address is not important
 
 	m_resize = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, Type::WordPtr, false), llvm::Function::ExternalLinkage, "mem_resize", _module);
 	m_loadWord = createFunc(false, Type::i256, _module, _gasMeter);
@@ -137,6 +131,12 @@ llvm::Value* Memory::getSize()
 	return m_builder.CreateLoad(m_size);
 }
 
+void Memory::registerReturnData(llvm::Value* _index, llvm::Value* _size)
+{
+	m_builder.CreateStore(_index, m_returnDataOffset);
+	m_builder.CreateStore(_size, m_returnDataSize);
+}
+
 void Memory::dump(uint64_t _begin, uint64_t _end)
 {
 	if (getenv("EVMCC_DEBUG_MEMORY") == nullptr)
@@ -155,6 +155,9 @@ extern "C"
 {
 	using namespace evmcc;
 
+EXPORT i256 mem_returnDataOffset;
+EXPORT i256 mem_returnDataSize;
+
 EXPORT uint8_t* mem_resize(i256* _size)
 {
 	auto size = _size->a; // Trunc to 64-bit
@@ -163,37 +166,13 @@ EXPORT uint8_t* mem_resize(i256* _size)
 	return memory.data();
 }
 
-// Resizes memory to contain at least _index + 1 bytes and returns the base address.
-EXPORT uint8_t* evmccrt_memory_require(uint64_t _index)
-{
-	uint64_t requiredSize = (_index / 32 + 1) * 32;
-	auto&& memory = Runtime::getMemory();
-
-	if (memory.size() < requiredSize)
-	{
-		std::cerr << "MEMORY: current size: " << std::dec
-				  << memory.size() << " bytes, required size: "
-				  << requiredSize << " bytes"
-				  << std::endl;
-
-		memory.resize(requiredSize);
-	}
-
-	return memory.data();
-}
-
-EXPORT uint64_t evmccrt_memory_size()
-{
-	return Runtime::getMemory().size() / 32;
-}
-
 EXPORT void evmccrt_memory_dump(uint64_t _begin, uint64_t _end)
 {
 	if (_end == 0)
 		_end = Runtime::getMemory().size();
 
 	std::cerr << "MEMORY: active size: " << std::dec
-			  << evmccrt_memory_size() << " words\n";
+			  << Runtime::getMemory().size() / 32 << " words\n";
 	std::cerr << "MEMORY: dump from " << std::dec
 			  << _begin << " to " << _end << ":";
 	if (_end <= _begin)
@@ -212,3 +191,12 @@ EXPORT void evmccrt_memory_dump(uint64_t _begin, uint64_t _end)
 }
 
 }	// extern "C"
+
+dev::bytesConstRef evmcc::Memory::getReturnData()
+{
+	// TODO: Handle large indexes
+	auto offset = static_cast<size_t>(llvm2eth(mem_returnDataOffset));
+	auto size = static_cast<size_t>(llvm2eth(mem_returnDataSize));
+	auto& memory = Runtime::getMemory();
+	return {memory.data() + offset, size};
+}
