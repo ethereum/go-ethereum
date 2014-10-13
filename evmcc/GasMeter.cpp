@@ -112,7 +112,11 @@ void GasMeter::commitCostBlock()
 	// If any uncommited block
 	if (m_checkCall)
 	{
-		m_checkCall->setArgOperand(0, m_builder.getIntN(256, m_blockCost)); // Update block cost in gas check call
+		if (m_blockCost > 0) // If any cost
+			m_checkCall->setArgOperand(0, m_builder.getIntN(256, m_blockCost)); // Update block cost in gas check call
+		else
+			m_checkCall->eraseFromParent(); // Remove the gas check call
+
 		m_checkCall = nullptr; // End cost-block
 		m_blockCost = 0;
 	}
