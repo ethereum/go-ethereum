@@ -882,17 +882,22 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 void Compiler::linkBasicBlocks()
 {
 	/// Helper function that finds basic block given LLVM basic block pointer
-	auto findBasicBlock = [this](llvm::BasicBlock* _llbb) -> BasicBlock&
+	auto findBasicBlock = [this](llvm::BasicBlock* _llbb) -> BasicBlock*
 	{
 		// TODO: Fix for finding jumpTableBlock
 		if (_llbb == this->m_jumpTableBlock->llvm())
-			return *this->m_jumpTableBlock;
+			return this->m_jumpTableBlock.get();
+
+		for (auto&& bb : this->basicBlocks)
+			if (_llbb == bb.second.llvm())
+				return &bb.second;
+		return nullptr;
 
 		// Name is used to get basic block index (index of first instruction)
 		// TODO: If basicBlocs are still a map - multikey map can be used
-		auto&& idxStr = _llbb->getName().substr(sizeof(BasicBlock::NamePrefix) - 2);
-		auto idx = std::stoul(idxStr);
-		return basicBlocks.find(idx)->second;
+		//auto&& idxStr = _llbb->getName().substr(sizeof(BasicBlock::NamePrefix) - 2);
+		//auto idx = std::stoul(idxStr);
+		//return basicBlocks.find(idx)->second;
 	};
 
 	auto completePhiNodes = [findBasicBlock](llvm::BasicBlock* _llbb) -> void
@@ -905,9 +910,14 @@ void Compiler::linkBasicBlocks()
 			for (auto predIt = llvm::pred_begin(_llbb); predIt != llvm::pred_end(_llbb); ++predIt)
 			{
 				// TODO: In case entry block is reached - report error
-				auto& predBB = findBasicBlock(*predIt);
-				auto value = predBB.getStack().get(valueIdx);
-				phi->addIncoming(value, predBB);
+				auto predBB = findBasicBlock(*predIt);
+				if (!predBB)
+				{
+					std::cerr << "Stack too small in " << _llbb->getName().str() << std::endl;
+					std::exit(1);
+				}
+				auto value = predBB->getStack().get(valueIdx);
+				phi->addIncoming(value, predBB->llvm());
 			}
 		}
 	};

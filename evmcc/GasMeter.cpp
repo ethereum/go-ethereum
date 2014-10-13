@@ -45,7 +45,7 @@ uint64_t getStepCost(dev::eth::Instruction inst) // TODO: Add this function to F
 		return static_cast<uint64_t>(c_createGas);
 
 	default: // Assumes instruction code is valid
-		return static_cast<uint64_t>(c_stepGas);;
+		return static_cast<uint64_t>(c_stepGas);
 	}
 }
 
