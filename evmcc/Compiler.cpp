@@ -420,12 +420,12 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 				// TODO: Shifting by 0 gives wrong results as of this bug http://llvm.org/bugs/show_bug.cgi?id=16439
 
-				auto shbits = builder.CreateShl(byteNum, builder.getIntN(256, 3));
+				auto shbits = builder.CreateShl(byteNum, Constant::get(3));
 				value = builder.CreateShl(value, shbits);
-				value = builder.CreateLShr(value, builder.getIntN(256, 31 * 8));
+				value = builder.CreateLShr(value, Constant::get(31 * 8));
 
-				auto byteNumValid = builder.CreateICmpULT(byteNum, builder.getIntN(256, 32));
-				value = builder.CreateSelect(byteNumValid, value, builder.getIntN(256, 0));
+				auto byteNumValid = builder.CreateICmpULT(byteNum, Constant::get(32));
+				value = builder.CreateSelect(byteNumValid, value, Constant::get(0));
 				stack.push(value);
 
 				break;
@@ -651,7 +651,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 			case Instruction::PC:
 			{
-				auto value = builder.getIntN(256, currentPC);
+				auto value = Constant::get(currentPC);
 				stack.push(value);
 				break;
 			}
@@ -716,7 +716,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 			case Instruction::CODESIZE:
 			{
-				auto value = builder.getIntN(256, bytecode.size());
+				auto value = Constant::get(bytecode.size());
 				stack.push(value);
 				break;
 			}

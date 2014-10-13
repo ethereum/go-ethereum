@@ -113,7 +113,7 @@ void GasMeter::commitCostBlock()
 	if (m_checkCall)
 	{
 		if (m_blockCost > 0) // If any cost
-			m_checkCall->setArgOperand(0, m_builder.getIntN(256, m_blockCost)); // Update block cost in gas check call
+			m_checkCall->setArgOperand(0, Constant::get(m_blockCost)); // Update block cost in gas check call
 		else
 			m_checkCall->eraseFromParent(); // Remove the gas check call
 
@@ -126,7 +126,7 @@ void GasMeter::commitCostBlock()
 void GasMeter::checkMemory(llvm::Value* _additionalMemoryInWords, llvm::IRBuilder<>& _builder)
 {
 	// Memory uses other builder, but that can be changes later
-	auto cost = _builder.CreateMul(_additionalMemoryInWords, _builder.getIntN(256, static_cast<uint64_t>(c_memoryGas)), "memcost");
+	auto cost = _builder.CreateMul(_additionalMemoryInWords, Constant::get(static_cast<uint64_t>(c_memoryGas)), "memcost");
 	_builder.CreateCall(m_gasCheckFunc, cost);
 }
 

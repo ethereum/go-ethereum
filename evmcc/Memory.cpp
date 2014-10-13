@@ -30,7 +30,7 @@ Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* _module, GasMeter& _ga
 	m_data = new llvm::GlobalVariable(*_module, Type::BytePtr, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(Type::BytePtr), "mem.data");
 	m_data->setUnnamedAddr(true); // Address is not important
 
-	m_size = new llvm::GlobalVariable(*_module, Type::i256, false, llvm::GlobalVariable::PrivateLinkage, m_builder.getIntN(256, 0), "mem.size");
+	m_size = new llvm::GlobalVariable(*_module, Type::i256, false, llvm::GlobalVariable::PrivateLinkage, Constant::get(0), "mem.size");
 	m_size->setUnnamedAddr(true); // Address is not important
 
 	m_returnDataOffset = new llvm::GlobalVariable(*_module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "mem_returnDataOffset");
@@ -63,7 +63,7 @@ llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, llvm::
 	llvm::Value* index = func->arg_begin();
 	index->setName("index");
 	auto valueSize = _valueType->getPrimitiveSizeInBits() / 8;
-	auto sizeRequired = builder.CreateAdd(index, builder.getIntN(256, valueSize), "sizeRequired");
+	auto sizeRequired = builder.CreateAdd(index, Constant::get(valueSize), "sizeRequired");
 	auto size = builder.CreateLoad(m_size, "size");
 	auto resizeNeeded = builder.CreateICmpULE(size, sizeRequired, "resizeNeeded");
 	builder.CreateCondBr(resizeNeeded, resizeBB, accessBB); // OPT branch weights?
@@ -71,8 +71,8 @@ llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, llvm::
 	// BB "resize"
 	builder.SetInsertPoint(resizeBB);
 	// Check gas first
-	auto wordsRequired = builder.CreateUDiv(builder.CreateAdd(sizeRequired, builder.getIntN(256, 31)), builder.getIntN(256, 32), "wordsRequired");
-	auto words = builder.CreateUDiv(builder.CreateAdd(size, builder.getIntN(256, 31)), builder.getIntN(256, 32), "words");
+	auto wordsRequired = builder.CreateUDiv(builder.CreateAdd(sizeRequired, Constant::get(31)), Constant::get(32), "wordsRequired");
+	auto words = builder.CreateUDiv(builder.CreateAdd(size, Constant::get(31)), Constant::get(32), "words");
 	auto newWords = builder.CreateSub(wordsRequired, words, "addtionalWords");
 	_gasMeter.checkMemory(newWords, builder);
 	// Resize
