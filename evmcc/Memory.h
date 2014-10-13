@@ -6,11 +6,12 @@
 
 namespace evmcc
 {
+class GasMeter;
 
 class Memory
 {
 public:
-	Memory(llvm::IRBuilder<>& _builder, llvm::Module* _module);
+	Memory(llvm::IRBuilder<>& _builder, llvm::Module* _module, GasMeter& _gasMeter);
 	Memory(const Memory&) = delete;
 	void operator=(Memory) = delete;
 
@@ -22,7 +23,7 @@ public:
 	void dump(uint64_t _begin, uint64_t _end = 0);
 
 private:
-	llvm::Function* createFunc(bool _isStore, llvm::Type* _type, llvm::Module* _module);
+	llvm::Function* createFunc(bool _isStore, llvm::Type* _type, llvm::Module* _module, GasMeter& _gasMeter);
 
 private:
 	llvm::IRBuilder<>& m_builder;

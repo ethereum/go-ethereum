@@ -199,9 +199,9 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	createBasicBlocks(bytecode);
 
 	// Init runtime structures.
-	Memory memory(builder, module.get());
-	Ext ext(builder, module.get());
 	GasMeter gasMeter(builder, module.get());
+	Memory memory(builder, module.get(), gasMeter);
+	Ext ext(builder, module.get());
 
 	// Jump to first instruction
 	builder.CreateBr(basicBlocks.begin()->second);
@@ -216,7 +216,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		{
 			auto inst = static_cast<Instruction>(bytecode[currentPC]);
 
-			gasMeter.check(inst);
+			gasMeter.count(inst);
 
 			switch (inst)
 			{
@@ -819,6 +819,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 			}
 		}
+
+		gasMeter.commitCostBlock();
 
 		if (!builder.GetInsertBlock()->getTerminator())	// If block not terminated
 		{

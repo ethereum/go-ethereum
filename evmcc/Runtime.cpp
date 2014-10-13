@@ -6,11 +6,14 @@ namespace evmcc
 
 static Runtime* g_runtime;
 
-Runtime::Runtime(std::unique_ptr<dev::eth::ExtVMFace> _ext)
-	: m_ext(std::move(_ext))
+extern "C" { EXPORT i256 gas; }
+
+Runtime::Runtime(dev::u256 _gas, std::unique_ptr<dev::eth::ExtVMFace> _ext):
+	m_ext(std::move(_ext))
 {
 	assert(!g_runtime);
 	g_runtime = this;
+	gas = eth2llvm(_gas);
 }
 
 Runtime::~Runtime()
@@ -31,6 +34,11 @@ MemoryImpl& Runtime::getMemory()
 dev::eth::ExtVMFace& Runtime::getExt()
 {
 	return *g_runtime->m_ext;
+}
+
+dev::u256 Runtime::getGas()
+{
+	return llvm2eth(gas);
 }
 
 }

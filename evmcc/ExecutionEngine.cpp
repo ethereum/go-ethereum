@@ -85,7 +85,8 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 	ext->data = calldata;
 
 	// Init runtime
-	Runtime runtime(std::move(ext));
+	uint64_t gas = 1000000;
+	Runtime runtime(gas, std::move(ext));
 
 	auto entryFunc = module->getFunction("main");
 	if (!entryFunc)
@@ -95,6 +96,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 	}
 
 	auto result = exec->runFunction(entryFunc, {});
+	gas = static_cast<decltype(gas)>(Runtime::getGas());
 	if (auto intResult = result.IntVal.getZExtValue())
 	{
 		auto index = intResult >> 32;

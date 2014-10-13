@@ -7,6 +7,13 @@
 
 #include "Utils.h"
 
+
+#ifdef _MSC_VER
+	#define EXPORT __declspec(dllexport)
+#else
+	#define EXPORT
+#endif
+
 namespace evmcc
 {
 
@@ -16,7 +23,7 @@ using MemoryImpl = dev::bytes;
 class Runtime
 {
 public:
-	Runtime(std::unique_ptr<dev::eth::ExtVMFace> _ext);
+	Runtime(dev::u256 _gas, std::unique_ptr<dev::eth::ExtVMFace> _ext);
 	~Runtime();
 
 	Runtime(const Runtime&) = delete;
@@ -25,6 +32,7 @@ public:
 	static StackImpl& getStack();
 	static MemoryImpl& getMemory();
 	static dev::eth::ExtVMFace& getExt();
+	static dev::u256 getGas();
 
 private:
 	StackImpl m_stack;

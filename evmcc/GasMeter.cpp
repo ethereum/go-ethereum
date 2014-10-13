@@ -81,7 +81,7 @@ bool isCostBlockEnd(Instruction _inst)
 GasMeter::GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* _module):
 	m_builder(_builder)
 {
-	m_gas = new llvm::GlobalVariable(*_module, Type::i256, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(Type::i256), "gas");
+	m_gas = new llvm::GlobalVariable(*_module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "gas");
 	m_gas->setUnnamedAddr(true); // Address is not important
 
 	auto pt = m_builder.GetInsertPoint();
@@ -97,21 +97,37 @@ GasMeter::GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* _module):
 	m_builder.SetInsertPoint(bb, pt);
 }
 
-void GasMeter::check(Instruction _inst)
+void GasMeter::count(Instruction _inst)
 {
 	if (!m_checkCall)
 	{
 		// Create gas check call with mocked block cost at begining of current cost-block
-		m_checkCall = m_builder.CreateCall(m_gasCheckFunc, m_builder.getIntN(256, 0));
+		m_checkCall = m_builder.CreateCall(m_gasCheckFunc, llvm::UndefValue::get(Type::i256));
 	}
 	
 	m_blockCost += getStepCost(_inst);
 
 	if (isCostBlockEnd(_inst))
-	{		
-		m_checkCall->setArgOperand(0, m_builder.getIntN(256, m_blockCost)); // Update block cost in gas check call		
+		commitCostBlock();
+}
+
+void GasMeter::commitCostBlock()
+{
+	// If any uncommited block
+	if (m_checkCall)
+	{
+		m_checkCall->setArgOperand(0, m_builder.getIntN(256, m_blockCost)); // Update block cost in gas check call
 		m_checkCall = nullptr; // End cost-block
-	}	
+		m_blockCost = 0;
+	}
+	assert(m_blockCost == 0);
+}
+
+void GasMeter::checkMemory(llvm::Value* _additionalMemoryInWords, llvm::IRBuilder<>& _builder)
+{
+	// Memory uses other builder, but that can be changes later
+	auto cost = _builder.CreateMul(_additionalMemoryInWords, _builder.getIntN(256, static_cast<uint64_t>(c_memoryGas)), "memcost");
+	_builder.CreateCall(m_gasCheckFunc, cost);
 }
 
 }
