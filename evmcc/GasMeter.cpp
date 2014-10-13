@@ -114,4 +114,11 @@ void GasMeter::check(Instruction _inst)
 	}	
 }
 
+void GasMeter::checkMemory(llvm::Value* _additionalMemoryInWords, llvm::IRBuilder<>& _builder)
+{
+	// Memory uses other builder, but that can be changes later
+	auto cost = _builder.CreateMul(_additionalMemoryInWords, _builder.getIntN(256, static_cast<uint64_t>(c_memoryGas)), "memcost");
+	_builder.CreateCall(m_gasCheckFunc, cost);
+}
+
 }

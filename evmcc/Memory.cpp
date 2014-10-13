@@ -13,6 +13,7 @@
 
 #include "Type.h"
 #include "Runtime.h"
+#include "GasMeter.h"
 
 #ifdef _MSC_VER
 	#define EXPORT __declspec(dllexport)
@@ -23,8 +24,8 @@
 namespace evmcc
 {
 
-Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* _module)
-	: m_builder(_builder)
+Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* _module, GasMeter& _gasMeter):
+	m_builder(_builder)
 {
 	auto voidTy	= m_builder.getVoidTy();
 	auto i64Ty = m_builder.getInt64Ty();
@@ -51,12 +52,12 @@ Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* _module)
 	m_size->setUnnamedAddr(true); // Address is not important
 
 	m_resize = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, Type::WordPtr, false), llvm::Function::ExternalLinkage, "mem_resize", _module);
-	m_loadWord = createFunc(false, Type::i256, _module);
-	m_storeWord = createFunc(true, Type::i256, _module);
-	m_storeByte = createFunc(true, Type::Byte, _module);
+	m_loadWord = createFunc(false, Type::i256, _module, _gasMeter);
+	m_storeWord = createFunc(true, Type::i256, _module, _gasMeter);
+	m_storeByte = createFunc(true, Type::Byte, _module, _gasMeter);
 }
 
-llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, llvm::Module* _module)
+llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, llvm::Module* _module, GasMeter& _gasMeter)
 {
 	auto isWord = _valueType == Type::i256;
 
@@ -69,6 +70,7 @@ llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, llvm::
 	auto resizeBB = llvm::BasicBlock::Create(func->getContext(), "resize", func);
 	auto accessBB = llvm::BasicBlock::Create(func->getContext(), "access", func);
 
+	// BB "check"
 	llvm::IRBuilder<> builder(checkBB);
 	llvm::Value* index = func->arg_begin();
 	index->setName("index");
@@ -78,12 +80,20 @@ llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, llvm::
 	auto resizeNeeded = builder.CreateICmpULE(size, sizeRequired, "resizeNeeded");
 	builder.CreateCondBr(resizeNeeded, resizeBB, accessBB); // OPT branch weights?
 
+	// BB "resize"
 	builder.SetInsertPoint(resizeBB);
+	// Check gas first
+	auto wordsRequired = builder.CreateUDiv(builder.CreateAdd(sizeRequired, builder.getIntN(256, 31)), builder.getIntN(256, 32), "wordsRequired");
+	auto words = builder.CreateUDiv(builder.CreateAdd(size, builder.getIntN(256, 31)), builder.getIntN(256, 32), "words");
+	auto newWords = builder.CreateSub(wordsRequired, words, "addtionalWords");
+	_gasMeter.checkMemory(newWords, builder);
+	// Resize
 	builder.CreateStore(sizeRequired, m_size);
 	auto newData = builder.CreateCall(m_resize, m_size, "newData");
 	builder.CreateStore(newData, m_data);
 	builder.CreateBr(accessBB);
 
+	// BB "access"
 	builder.SetInsertPoint(accessBB);
 	auto data = builder.CreateLoad(m_data, "data");
 	auto ptr = builder.CreateGEP(data, index, "ptr");
