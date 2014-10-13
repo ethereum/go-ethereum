@@ -30,7 +30,7 @@ private:
 	/// @TODO Handle overflow
 	uint64_t m_blockCost = 0;
 	llvm::IRBuilder<>& m_builder;
-	llvm::CallInst* m_checkCall;
+	llvm::CallInst* m_checkCall = nullptr;
 	llvm::GlobalVariable* m_gas;
 	llvm::Function* m_gasCheckFunc;
 };

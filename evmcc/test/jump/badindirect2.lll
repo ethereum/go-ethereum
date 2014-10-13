@@ -1,0 +1,12 @@
+;; Indirect jump into data
+
+(asm
+1          ;; 0
+3         
+3 
+MUL        ;; 6
+JUMPI      ;; 7
+0          ;; 8
+0          
+JUMP       
+)

@@ -1,0 +1,9 @@
+;; Direct jump into data
+
+(asm
+4      ;; 0   0-3
+JUMP   ;; 2
+0      ;; 3   3-4
+0      ;; 5   4-7
+JUMP   ;; 6
+)

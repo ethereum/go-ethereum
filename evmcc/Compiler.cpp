@@ -139,7 +139,16 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 		}
 	}
 
-	for (auto it = splitPoints.cbegin(); it != splitPoints.cend() && *it < bytecode.size();)
+	// Remove split points generated from jumps out of code or into data.
+	for (auto it = splitPoints.cbegin(); it != splitPoints.cend(); )
+	{
+		if (*it > bytecode.size() || !validJumpTargets[*it])
+			it = splitPoints.erase(it);
+		else
+			++it;
+	}
+
+	for (auto it = splitPoints.cbegin(); it != splitPoints.cend(); )
 	{
 		auto beginInstIdx = *it;
 		++it;
@@ -153,28 +162,22 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 
 	for (auto it = directJumpTargets.cbegin(); it != directJumpTargets.cend(); ++it)
 	{
-		if (it->second >= bytecode.size()) // Jump out of code
+		auto blockIter = basicBlocks.find(it->second);
+		if (blockIter != basicBlocks.end())
 		{
-			m_directJumpTargets[it->first] = m_finalBlock.get();
+			m_directJumpTargets[it->first] = &(blockIter->second);
 		}
-		else if (!validJumpTargets[it->second]) // Jump into data
+		else
 		{
 			std::cerr << "Bad JUMP at PC " << it->first
 					  << ": " << it->second << " is not a valid PC\n";
 			m_directJumpTargets[it->first] = m_badJumpBlock.get();
 		}
-		else
-		{
-			m_directJumpTargets[it->first] = &basicBlocks.find(it->second)->second;
-		}
 	}
 
 	for (auto it = indirectJumpTargets.cbegin(); it != indirectJumpTargets.cend(); ++it)
 	{
-		if (*it >= bytecode.size())
-			m_indirectJumpTargets.push_back(m_finalBlock.get());
-		else
-			m_indirectJumpTargets.push_back(&basicBlocks.find(*it)->second);
+		m_indirectJumpTargets.push_back(&basicBlocks.find(*it)->second);
 	}
 }
 
@@ -589,58 +592,56 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				// 1. this is not the first instruction in the block
 				// 2. m_directJumpTargets[currentPC] is defined (meaning that the previous instruction is a PUSH)
 				// Otherwise generate a indirect jump (a switch).
+				BasicBlock* targetBlock = nullptr;
 				if (currentPC != basicBlock.begin())
 				{
 					auto pairIter = m_directJumpTargets.find(currentPC);
 					if (pairIter != m_directJumpTargets.end())
 					{
-						auto targetBlock = pairIter->second;
-
-						// The target address is computed at compile time,
-						// just pop it without looking...
-						stack.pop();
-
-						if (inst == Instruction::JUMP)
-						{
-							builder.CreateBr(targetBlock->llvm());
-						}
-						else // JUMPI
-						{
-							auto top = stack.pop();
-							auto zero = ConstantInt::get(Type::i256, 0);
-							auto cond = builder.CreateICmpNE(top, zero, "nonzero");
-
-							// Assume the basic blocks are properly ordered:
-							auto nextBBIter = basicBlockPairIt;
-							++nextBBIter;
-							assert (nextBBIter != basicBlocks.end());
-							auto& followBlock = nextBBIter->second;
-							builder.CreateCondBr(cond, targetBlock->llvm(), followBlock.llvm());
-						}
-						break;
+						targetBlock = pairIter->second;
 					}
 				}
 
-				if (inst == Instruction::JUMPI)
+				if (inst == Instruction::JUMP)
 				{
-					std::cerr << "Indirect JUMPI is not supported yet (at PC "
-							  << currentPC << ")\n";
-					std::exit(1);
+					if (targetBlock)
+					{
+						// The target address is computed at compile time,
+						// just pop it without looking...
+						stack.pop();
+						builder.CreateBr(targetBlock->llvm());
+					}
+					else
+					{
+						// FIXME: this get(0) is a temporary workaround to get some of the jump tests running.
+						stack.get(0);
+						builder.CreateBr(m_jumpTableBlock->llvm());
+					}
+				}
+				else // JUMPI
+				{
+					stack.swap(1);
+					auto val = stack.pop();
+					auto zero = ConstantInt::get(Type::i256, 0);
+					auto cond = builder.CreateICmpNE(val, zero, "nonzero");
+
+					// Assume the basic blocks are properly ordered:
+					auto nextBBIter = basicBlockPairIt;
+					++nextBBIter;
+					assert (nextBBIter != basicBlocks.end());
+					auto& followBlock = nextBBIter->second;
+
+					if (targetBlock)
+					{
+						stack.pop();
+						builder.CreateCondBr(cond, targetBlock->llvm(), followBlock.llvm());
+					}
+					else
+					{
+						builder.CreateCondBr(cond, m_jumpTableBlock->llvm(), followBlock.llvm());
+					}
 				}
 
-				builder.CreateBr(m_jumpTableBlock->llvm());
-				/*
-				// Generate switch for indirect jump.
-				auto dest = stack.pop();
-				auto switchInstr = 	builder.CreateSwitch(dest, m_badJumpBlock->llvm(),
-				                   	                     m_indirectJumpTargets.size());
-				for (auto it = m_indirectJumpTargets.cbegin(); it != m_indirectJumpTargets.cend(); ++it)
-				{
-					auto& bb = *it;
-					auto dest = ConstantInt::get(Type::i256, bb->begin());
-					switchInstr->addCase(dest, bb->llvm());
-				}
-				 */
 				break;
 			}
 
@@ -869,7 +870,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	}
 	else
 	{
-		builder.CreateRet(builder.getInt64(0));
+		builder.CreateBr(m_badJumpBlock->llvm());
 	}
 
 	linkBasicBlocks();
