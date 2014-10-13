@@ -5,6 +5,8 @@
 
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/CFG.h>
+#include <llvm/ADT/PostOrderIterator.h>
+//#include <llvm/Transforms/Scalar.h>
 
 #include <libevmface/Instruction.h>
 
@@ -901,36 +903,26 @@ void Compiler::linkBasicBlocks()
 			auto phi = llvm::cast<llvm::PHINode>(instIt);
 			for (auto predIt = llvm::pred_begin(_llbb); predIt != llvm::pred_end(_llbb); ++predIt)
 			{
+				// TODO: In case entry block is reached - report error
 				auto& predBB = findBasicBlock(*predIt);
-				// assert(valueIdx < predBB.getStack().size()); // TODO: Report error
-				phi->addIncoming(predBB.getStack().get(valueIdx), predBB);
+				auto value = predBB.getStack().get(valueIdx);
+				phi->addIncoming(value, predBB);
 			}
 		}
 	};
 
-	// Link basic blocks
-	for (auto&& p : basicBlocks)
+	
+	// TODO: It is crappy visiting of basic blocks.
+	llvm::SmallPtrSet<llvm::BasicBlock*, 32> visitSet;
+	for (auto&& bb : basicBlocks) // TODO: External loop is to visit unreable blocks that can also have phi nodes
 	{
-		BasicBlock& bb = p.second;
-		completePhiNodes(bb.llvm());
-	}
-	completePhiNodes(m_jumpTableBlock->llvm());
-	/*
-		llvm::BasicBlock* llvmBB = bb.llvm();
-
-		size_t valueIdx = 0;
-		auto firstNonPhi = llvmBB->getFirstNonPHI();
-		for (auto instIt = llvmBB->begin(); &*instIt != firstNonPhi; ++instIt, ++valueIdx)
+		for (auto it = llvm::po_ext_begin(bb.second.llvm(), visitSet),
+			end = llvm::po_ext_end(bb.second.llvm(), visitSet); it != end; ++it)
 		{
-			auto phi = llvm::cast<llvm::PHINode>(instIt);
-			for (auto predIt = llvm::pred_begin(llvmBB); predIt != llvm::pred_end(llvmBB); ++predIt)
-			{
-				auto& predBB = findBasicBlock(*predIt);
-				assert(valueIdx < predBB.getStack().size()); // TODO: Report error
-				phi->addIncoming(predBB.getStack().get(valueIdx), predBB);
-			}
+			std::cerr << it->getName().str() << std::endl;
+			completePhiNodes(*it);
 		}
-	*/
+	}
 }
 
 }
