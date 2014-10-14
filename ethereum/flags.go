@@ -3,11 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/user"
 	"path"
 
 	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethvm"
 )
 
 var (
@@ -37,6 +39,7 @@ var (
 	Dump            bool
 	DumpHash        string
 	DumpNumber      int
+	VmType          int
 )
 
 // flags specific to cli client
@@ -59,6 +62,7 @@ func Init() {
 		flag.PrintDefaults()
 	}
 
+	flag.IntVar(&VmType, "vm", 0, "Virtual Machine type: 0-1: standard, debug")
 	flag.StringVar(&Identifier, "id", "", "Custom client identifier")
 	flag.StringVar(&KeyRing, "keyring", "", "identifier for keyring to use")
 	flag.StringVar(&KeyStore, "keystore", "db", "system to store keyrings: db|file (db)")
@@ -90,6 +94,10 @@ func Init() {
 	flag.BoolVar(&StartJsConsole, "js", false, "launches javascript console")
 
 	flag.Parse()
+
+	if VmType >= int(ethvm.MaxVmTy) {
+		log.Fatal("Invalid VM type ", VmType)
+	}
 
 	InputFile = flag.Arg(0)
 }

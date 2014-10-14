@@ -21,7 +21,7 @@ func run() error {
 	// precedence: code-internal flag default < config file < environment variables < command line
 	Init() // parsing command line
 
-	config := utils.InitConfig(ConfigFile, Datadir, "ETH")
+	config := utils.InitConfig(VmType, ConfigFile, Datadir, "ETH")
 
 	utils.InitDataDir(Datadir)
 

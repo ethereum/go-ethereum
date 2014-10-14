@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/user"
 	"path"
@@ -11,6 +12,7 @@ import (
 
 	"bitbucket.org/kardianos/osext"
 	"github.com/ethereum/eth-go/ethlog"
+	"github.com/ethereum/eth-go/ethvm"
 )
 
 var (
@@ -35,6 +37,7 @@ var (
 	ConfigFile      string
 	DebugFile       string
 	LogLevel        int
+	VmType          int
 )
 
 // flags specific to gui client
@@ -78,6 +81,7 @@ func Init() {
 		flag.PrintDefaults()
 	}
 
+	flag.IntVar(&VmType, "vm", 0, "Virtual Machine type: 0-1: standard, debug")
 	flag.StringVar(&Identifier, "id", "", "Custom client identifier")
 	flag.StringVar(&KeyRing, "keyring", "", "identifier for keyring to use")
 	flag.StringVar(&KeyStore, "keystore", "db", "system to store keyrings: db|file (db)")
@@ -101,4 +105,8 @@ func Init() {
 	flag.StringVar(&AssetPath, "asset_path", defaultAssetPath(), "absolute path to GUI assets directory")
 
 	flag.Parse()
+
+	if VmType >= int(ethvm.MaxVmTy) {
+		log.Fatal("Invalid VM type ", VmType)
+	}
 }

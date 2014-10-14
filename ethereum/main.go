@@ -31,7 +31,7 @@ func main() {
 		LogLevel = 0
 	}
 
-	utils.InitConfig(ConfigFile, Datadir, "ETH")
+	utils.InitConfig(VmType, ConfigFile, Datadir, "ETH")
 	ethutil.Config.Diff = DiffTool
 	ethutil.Config.DiffType = DiffType
 

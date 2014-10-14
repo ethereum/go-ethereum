@@ -20,7 +20,7 @@ type DebuggerWindow struct {
 	engine *qml.Engine
 	lib    *UiLib
 
-	vm *ethvm.Vm
+	vm *ethvm.DebugVm
 	Db *Debugger
 
 	state *ethstate.State
@@ -37,7 +37,7 @@ func NewDebuggerWindow(lib *UiLib) *DebuggerWindow {
 
 	win := component.CreateWindow(nil)
 
-	w := &DebuggerWindow{engine: engine, win: win, lib: lib, vm: &ethvm.Vm{}}
+	w := &DebuggerWindow{engine: engine, win: win, lib: lib, vm: &ethvm.DebugVm{}}
 	w.Db = NewDebugger(w)
 
 	return w
@@ -135,8 +135,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 
 	callerClosure := ethvm.NewClosure(&ethstate.Message{}, account, contract, script, gas, gasPrice)
 	env := utils.NewEnv(state, block, account.Address(), value)
-	vm := ethvm.New(env)
-	vm.Verbose = true
+	vm := ethvm.NewDebugVm(env)
 	vm.Dbg = self.Db
 
 	self.vm = vm

@@ -118,9 +118,12 @@ func InitLogging(Datadir string, LogFile string, LogLevel int, DebugFile string)
 	return sys
 }
 
-func InitConfig(ConfigFile string, Datadir string, EnvPrefix string) *ethutil.ConfigManager {
+func InitConfig(vmType int, ConfigFile string, Datadir string, EnvPrefix string) *ethutil.ConfigManager {
 	InitDataDir(Datadir)
-	return ethutil.ReadConfig(ConfigFile, Datadir, EnvPrefix)
+	cfg := ethutil.ReadConfig(ConfigFile, Datadir, EnvPrefix)
+	cfg.VmType = vmType
+
+	return cfg
 }
 
 func exit(err error) {
