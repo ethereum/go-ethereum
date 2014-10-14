@@ -23,6 +23,7 @@ type Closure struct {
 	object  *ethstate.StateObject
 	Code    []byte
 	message *ethstate.Message
+	exe     *Execution
 
 	Gas, UsedGas, Price *big.Int
 

@@ -94,9 +94,13 @@ func (self *State) GetStateObject(addr []byte) *StateObject {
 	}
 
 	stateObject = NewStateObjectFromBytes(addr, []byte(data))
-	self.stateObjects[string(addr)] = stateObject
+	self.SetStateObject(stateObject)
 
 	return stateObject
+}
+
+func (self *State) SetStateObject(object *StateObject) {
+	self.stateObjects[string(object.address)] = object
 }
 
 // Retrieve a state object or create a new state object if nil

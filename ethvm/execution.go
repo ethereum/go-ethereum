@@ -66,6 +66,7 @@ func (self *Execution) Exec(codeAddr []byte, caller ClosureRef) (ret []byte, err
 
 			// Create a new callable closure
 			c := NewClosure(msg, caller, stateObject, code, self.gas, self.price)
+			c.exe = self
 			// Executer the closure and get the return value (if any)
 			ret, _, err = c.Call(self.vm, self.input)
 

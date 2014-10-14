@@ -16,7 +16,6 @@ type Environment interface {
 	Coinbase() []byte
 	Time() int64
 	Difficulty() *big.Int
-	Value() *big.Int
 	BlockHash() []byte
 }
 

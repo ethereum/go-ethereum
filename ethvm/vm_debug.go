@@ -482,7 +482,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			self.Printf(" => %x", caller)
 		case CALLVALUE:
-			value := self.env.Value()
+			value := closure.exe.value
 
 			stack.Push(value)
 
@@ -674,7 +674,10 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			val, loc := stack.Popn()
 			closure.SetStorage(loc, ethutil.NewValue(val))
 
-			closure.message.AddStorageChange(loc.Bytes())
+			// Debug sessions are allowed to run without message
+			if closure.message != nil {
+				closure.message.AddStorageChange(loc.Bytes())
+			}
 
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case JUMP:

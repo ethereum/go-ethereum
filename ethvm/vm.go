@@ -392,7 +392,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			stack.Push(ethutil.BigD(caller))
 
 		case CALLVALUE:
-			value := self.env.Value()
+			value := closure.exe.value
 
 			stack.Push(value)
 
