@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"sync/atomic"
 )
 
 type LogSystem interface {
@@ -198,7 +199,7 @@ func (logger *Logger) Fatalf(format string, v ...interface{}) {
 
 type StdLogSystem struct {
 	logger *log.Logger
-	level  LogLevel
+	level  uint32
 }
 
 func (t *StdLogSystem) Println(v ...interface{}) {
@@ -210,14 +211,14 @@ func (t *StdLogSystem) Printf(format string, v ...interface{}) {
 }
 
 func (t *StdLogSystem) SetLogLevel(i LogLevel) {
-	t.level = i
+	atomic.StoreUint32(&t.level, uint32(i))
 }
 
 func (t *StdLogSystem) GetLogLevel() LogLevel {
-	return t.level
+	return LogLevel(atomic.LoadUint32(&t.level))
 }
 
 func NewStdLogSystem(writer io.Writer, flags int, level LogLevel) *StdLogSystem {
 	logger := log.New(writer, "", flags)
-	return &StdLogSystem{logger, level}
+	return &StdLogSystem{logger, uint32(level)}
 }
