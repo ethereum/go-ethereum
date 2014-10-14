@@ -1,3 +1,36 @@
+/*
+Package ethlog implements a multi-output leveled logger.
+
+Features
+
+Other packages use tagged logger to send log messages to shared (process-wide) logging engine.
+The shared logging engine dispatches to multiple log systems.
+The log level can be set separately per log system.
+
+Logging is asynchrounous and does not block the main thread. Message
+formatting is performed by the caller goroutine to avoid incorrect
+logging of mutable state.
+
+Usage
+
+The Logger type provides named Printf and Println style methods for
+all loglevels. Each ethereum component should have its own logger with
+a unique prefix.
+
+    logger.Infoln("this is info") # > [TAG] This is info
+    logger.Infof("this %v is info", object) # > [TAG] This object is info
+
+ethlog also provides constructors for that wrap io.Writers into a
+standard logger with a settable level:
+
+    filename := "test.log"
+    file, _ := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, os.ModePerm)
+    fileLogSystem := NewStdLogSystem(file, 0, WarnLevel)
+    AddLogSystem(fileLogSystem)
+    stdOutLogSystem := NewStdLogSystem(os.Stdout, 0, WarnLevel)
+    AddLogSystem(stdOutLogSystem)
+
+*/
 package ethlog
 
 import (
@@ -9,6 +42,8 @@ import (
 	"sync/atomic"
 )
 
+// LogSystem is implemented by log output devices.
+// All methods can be called concurrently from multiple goroutines.
 type LogSystem interface {
 	GetLogLevel() LogLevel
 	SetLogLevel(i LogLevel)
@@ -33,6 +68,7 @@ func newPrintfLogMessage(level LogLevel, tag string, format string, v ...interfa
 type LogLevel uint8
 
 const (
+	// Standard log levels
 	Silence LogLevel = iota
 	ErrorLevel
 	WarnLevel
@@ -102,7 +138,7 @@ func send(msg *logMessage) {
 	logMessages <- msg
 }
 
-// Reset removes all registered log systems.
+// Reset removes all active log systems.
 func Reset() {
 	mutex.Lock()
 	logSystems = nil
@@ -117,18 +153,21 @@ func Flush() {
 	<-waiter
 }
 
+// AddLogSystem starts printing messages to the given LogSystem.
+func AddLogSystem(logSystem LogSystem) {
+	mutex.Lock()
+	logSystems = append(logSystems, logSystem)
+	mutex.Unlock()
+}
+
+// A Logger prints messages prefixed by a given tag.
+// You should create one with a unique tag for each high-level component.
 type Logger struct {
 	tag string
 }
 
 func NewLogger(tag string) *Logger {
 	return &Logger{tag}
-}
-
-func AddLogSystem(logSystem LogSystem) {
-	mutex.Lock()
-	logSystems = append(logSystems, logSystem)
-	mutex.Unlock()
 }
 
 func (logger *Logger) sendln(level LogLevel, v ...interface{}) {
@@ -145,80 +184,94 @@ func (logger *Logger) sendf(level LogLevel, format string, v ...interface{}) {
 	}
 }
 
+// Errorln writes a message with ErrorLevel.
 func (logger *Logger) Errorln(v ...interface{}) {
 	logger.sendln(ErrorLevel, v...)
 }
 
+// Warnln writes a message with WarnLevel.
 func (logger *Logger) Warnln(v ...interface{}) {
 	logger.sendln(WarnLevel, v...)
 }
 
+// Infoln writes a message with InfoLevel.
 func (logger *Logger) Infoln(v ...interface{}) {
 	logger.sendln(InfoLevel, v...)
 }
 
+// Debugln writes a message with DebugLevel.
 func (logger *Logger) Debugln(v ...interface{}) {
 	logger.sendln(DebugLevel, v...)
 }
 
+// DebugDetailln writes a message with DebugDetailLevel.
 func (logger *Logger) DebugDetailln(v ...interface{}) {
 	logger.sendln(DebugDetailLevel, v...)
 }
 
+// Errorf writes a message with ErrorLevel.
 func (logger *Logger) Errorf(format string, v ...interface{}) {
 	logger.sendf(ErrorLevel, format, v...)
 }
 
+// Warnf writes a message with WarnLevel.
 func (logger *Logger) Warnf(format string, v ...interface{}) {
 	logger.sendf(WarnLevel, format, v...)
 }
 
+// Infof writes a message with InfoLevel.
 func (logger *Logger) Infof(format string, v ...interface{}) {
 	logger.sendf(InfoLevel, format, v...)
 }
 
+// Debugf writes a message with DebugLevel.
 func (logger *Logger) Debugf(format string, v ...interface{}) {
 	logger.sendf(DebugLevel, format, v...)
 }
 
+// DebugDetailf writes a message with DebugDetailLevel.
 func (logger *Logger) DebugDetailf(format string, v ...interface{}) {
 	logger.sendf(DebugDetailLevel, format, v...)
 }
 
+// Fatalln writes a message with ErrorLevel and exits the program.
 func (logger *Logger) Fatalln(v ...interface{}) {
 	logger.sendln(ErrorLevel, v...)
 	Flush()
 	os.Exit(0)
 }
 
+// Fatalf writes a message with ErrorLevel and exits the program.
 func (logger *Logger) Fatalf(format string, v ...interface{}) {
 	logger.sendf(ErrorLevel, format, v...)
 	Flush()
 	os.Exit(0)
 }
 
-type StdLogSystem struct {
+// NewStdLogSystem creates a LogSystem that prints to the given writer.
+// The flag values are defined package log.
+func NewStdLogSystem(writer io.Writer, flags int, level LogLevel) LogSystem {
+	logger := log.New(writer, "", flags)
+	return &stdLogSystem{logger, uint32(level)}
+}
+
+type stdLogSystem struct {
 	logger *log.Logger
 	level  uint32
 }
 
-func (t *StdLogSystem) Println(v ...interface{}) {
+func (t *stdLogSystem) Println(v ...interface{}) {
 	t.logger.Println(v...)
 }
 
-func (t *StdLogSystem) Printf(format string, v ...interface{}) {
+func (t *stdLogSystem) Printf(format string, v ...interface{}) {
 	t.logger.Printf(format, v...)
 }
 
-func (t *StdLogSystem) SetLogLevel(i LogLevel) {
+func (t *stdLogSystem) SetLogLevel(i LogLevel) {
 	atomic.StoreUint32(&t.level, uint32(i))
 }
 
-func (t *StdLogSystem) GetLogLevel() LogLevel {
+func (t *stdLogSystem) GetLogLevel() LogLevel {
 	return LogLevel(atomic.LoadUint32(&t.level))
-}
-
-func NewStdLogSystem(writer io.Writer, flags int, level LogLevel) *StdLogSystem {
-	logger := log.New(writer, "", flags)
-	return &StdLogSystem{logger, uint32(level)}
 }
