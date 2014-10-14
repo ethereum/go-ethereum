@@ -173,10 +173,15 @@ void Memory::require(llvm::Value* _size)
 	m_builder.CreateCall(m_require, _size);
 }
 
-void Memory::registerReturnData(llvm::Value* _index, llvm::Value* _size)
+void Memory::require(llvm::Value* _offset, llvm::Value* _size)
 {
-	auto sizeRequired = m_builder.CreateAdd(_index, _size, "sizeRequired");
-	require(sizeRequired); // Make sure that memory is allocated and count gas
+	auto sizeRequired = m_builder.CreateAdd(_offset, _size, "sizeRequired");
+	require(sizeRequired);
+}
+
+void Memory::registerReturnData(llvm::Value* _index, llvm::Value* _size)
+{ 
+	require(_index, _size); // Make sure that memory is allocated and count gas
 
 	m_builder.CreateStore(_index, m_returnDataOffset);
 	m_builder.CreateStore(_size, m_returnDataSize);

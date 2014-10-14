@@ -20,7 +20,11 @@ public:
 	void storeByte(llvm::Value* _addr, llvm::Value* _byte);
 	llvm::Value* getSize();
 
+	/// Requires this amount of memory. And counts gas fee for that memory.
 	void require(llvm::Value* _size);
+
+	/// Requires the amount of memory to for data defined by offset and size. And counts gas fee for that memory.
+	void require(llvm::Value* _offset, llvm::Value* _size);
 
 	void registerReturnData(llvm::Value* _index, llvm::Value* _size);
 	static dev::bytesConstRef getReturnData();
