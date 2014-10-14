@@ -23,6 +23,9 @@ public:
 	/// @param _additionalCost adds additional cost to cost-block before commit
 	void commitCostBlock(llvm::Value* _additionalCost = nullptr);
 
+	/// Give back an amount of gas not used by a call
+	void giveBack(llvm::Value* _gas);
+
 	/// Generate code that checks the cost of additional memory used by program
 	void checkMemory(llvm::Value* _additionalMemoryInWords, llvm::IRBuilder<>& _builder);
 

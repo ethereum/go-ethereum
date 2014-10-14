@@ -165,7 +165,7 @@ Value* Ext::create(llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* 
 	return address;
 }
 
-llvm::Value* Ext::call(llvm::Value* _gas, llvm::Value* _receiveAddress, llvm::Value* _value, llvm::Value* _inOff, llvm::Value* _inSize, llvm::Value* _outOff, llvm::Value* _outSize)
+llvm::Value* Ext::call(llvm::Value*& _gas, llvm::Value* _receiveAddress, llvm::Value* _value, llvm::Value* _inOff, llvm::Value* _inSize, llvm::Value* _outOff, llvm::Value* _outSize)
 {
 	m_builder.CreateStore(_gas, m_args[0]);
 	auto receiveAddress = bswap(_receiveAddress); // to BE
@@ -177,6 +177,7 @@ llvm::Value* Ext::call(llvm::Value* _gas, llvm::Value* _receiveAddress, llvm::Va
 	m_builder.CreateStore(_outSize, m_arg7);
 	llvm::Value* args[] = {m_args[0], m_arg2, m_arg3, m_arg4, m_arg5, m_arg6, m_arg7, m_args[1]};
 	m_builder.CreateCall(m_call, args);
+	_gas = m_builder.CreateLoad(m_args[0]); // Return gas
 	return m_builder.CreateLoad(m_args[1]);
 }
 
@@ -284,10 +285,10 @@ EXPORT void ext_call(i256* _gas, h256* _receiveAddress, i256* _value, i256* _inO
 	auto value = llvm2eth(*_value);
 
 	auto ret = false;
+	auto gas = llvm2eth(*_gas);
 	if (ext.balance(ext.myAddress) >= value)
 	{
 		ext.subBalance(value);
-		auto gas = llvm2eth(*_gas);
 		auto receiveAddress = dev::right160(*_receiveAddress);
 		auto inOff = static_cast<size_t>(llvm2eth(*_inOff));
 		auto inSize = static_cast<size_t>(llvm2eth(*_inSize));
@@ -299,7 +300,7 @@ EXPORT void ext_call(i256* _gas, h256* _receiveAddress, i256* _value, i256* _inO
 		auto ret = ext.call(receiveAddress, value, inRef, &gas, outRef, onOp, {}, receiveAddress);
 	}
 
-	// m_gas += gas; // TODO: Handle gas
+	*_gas = eth2llvm(gas);
 	_ret->a = ret ? 1 : 0;
 }
 

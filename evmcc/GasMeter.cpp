@@ -108,6 +108,13 @@ void GasMeter::count(Instruction _inst)
 		commitCostBlock();
 }
 
+void GasMeter::giveBack(llvm::Value* _gas)
+{
+	llvm::Value* gasCounter = m_builder.CreateLoad(m_gas, "gas");
+	gasCounter = m_builder.CreateAdd(gasCounter, _gas);
+	m_builder.CreateStore(gasCounter, m_gas);
+}
+
 void GasMeter::commitCostBlock(llvm::Value* _additionalCost)
 {
 	assert(!_additionalCost || m_checkCall); // _additionalCost => m_checkCall; Must be inside cost-block

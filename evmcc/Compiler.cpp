@@ -786,6 +786,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 				gasMeter.commitCostBlock(gas);
 				auto ret = ext.call(gas, receiveAddress, value, inOff, inSize, outOff, outSize);
+				gasMeter.giveBack(gas);
 				stack.push(ret);
 				break;
 			}
