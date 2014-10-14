@@ -26,8 +26,6 @@ var Precompiled = map[uint64]*PrecompiledAddress{
 	3: &PrecompiledAddress{big.NewInt(100), ripemd160Func},
 }
 
-var NoAddr = PrecompiledAddress{}
-
 func sha256Func(in []byte) []byte {
 	return ethcrypto.Sha256(in)
 }

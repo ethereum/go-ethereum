@@ -50,9 +50,11 @@ func (self *Execution) Exec(codeAddr []byte, caller ClosureRef) (ret []byte, err
 		stateObject.AddAmount(self.value)
 
 		// Precompiled contracts (address.go) 1, 2 & 3.
-		if p := Precompiled[ethutil.BigD(codeAddr).Uint64()]; p != nil {
+		naddr := ethutil.BigD(codeAddr).Uint64()
+		if p := Precompiled[naddr]; p != nil {
 			if self.gas.Cmp(p.Gas) >= 0 {
 				ret = p.Call(self.input)
+				self.vm.Printf("NATIVE_FUNC(%x) => %x", naddr, ret)
 			}
 		} else {
 			if self.vm.Depth() == MaxCallDepth {

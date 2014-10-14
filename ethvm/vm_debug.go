@@ -846,7 +846,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 	}
 }
 
-func (self *DebugVm) Printf(format string, v ...interface{}) *DebugVm {
+func (self *DebugVm) Printf(format string, v ...interface{}) VirtualMachine {
 	if self.logTy == LogTyPretty {
 		self.logStr += fmt.Sprintf(format, v...)
 	}
@@ -854,7 +854,7 @@ func (self *DebugVm) Printf(format string, v ...interface{}) *DebugVm {
 	return self
 }
 
-func (self *DebugVm) Endl() *DebugVm {
+func (self *DebugVm) Endl() VirtualMachine {
 	if self.logTy == LogTyPretty {
 		vmlogger.Debugln(self.logStr)
 		self.logStr = ""

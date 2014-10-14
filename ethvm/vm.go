@@ -694,3 +694,6 @@ func (self *Vm) Env() Environment {
 func (self *Vm) Depth() int {
 	return self.depth
 }
+
+func (self *Vm) Printf(format string, v ...interface{}) VirtualMachine { return self }
+func (self *Vm) Endl() VirtualMachine                                  { return self }
