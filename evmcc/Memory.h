@@ -20,6 +20,9 @@ public:
 	void storeByte(llvm::Value* _addr, llvm::Value* _byte);
 	llvm::Value* getSize();
 
+	void registerReturnData(llvm::Value* _index, llvm::Value* _size);
+	static dev::bytesConstRef getReturnData();
+
 	void dump(uint64_t _begin, uint64_t _end = 0);
 
 private:
@@ -31,14 +34,16 @@ private:
 	llvm::GlobalVariable* m_data;
 	llvm::GlobalVariable* m_size;
 
+	/// @TODO: m_data and m_size could be used
+	llvm::GlobalVariable* m_returnDataOffset;
+	llvm::GlobalVariable* m_returnDataSize;
+
 	llvm::Function* m_loadWord;
 	llvm::Function* m_storeWord;
 	llvm::Function* m_storeByte;
 	llvm::Function* m_resize;
 
-	llvm::Function* m_memRequire;
 	llvm::Function* m_memDump;
-	llvm::Function* m_memSize;
 };
 
 }

@@ -14,6 +14,8 @@
 #include <llvm/Support/Host.h>
 
 #include "Runtime.h"
+#include "Memory.h"
+#include "Type.h"
 
 namespace evmcc
 {
@@ -97,13 +99,13 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 
 	auto result = exec->runFunction(entryFunc, {});
 	gas = static_cast<decltype(gas)>(Runtime::getGas());
-	if (auto intResult = result.IntVal.getZExtValue())
+	auto returnCode = static_cast<ReturnCode>(result.IntVal.getZExtValue());
+	if (returnCode == ReturnCode::Return)
 	{
-		auto index = intResult >> 32;
-		auto size = 0xFFFFFFFF & intResult;
+		auto&& returnData = Memory::getReturnData(); // TODO: It might be better to place is in Runtime interface
 
 		std::cout << "RETURN [ ";
-		for (dev::bytes::const_iterator it = Runtime::getMemory().cbegin() + index, end = it + size; it != end; ++it)
+		for (auto it = returnData.begin(), end = returnData.end(); it != end; ++it)
 			std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)*it << " ";
 		std::cout << "]\n";
 

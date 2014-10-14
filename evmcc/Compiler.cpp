@@ -190,10 +190,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	IRBuilder<> builder(context);
 
 	// Create main function
-	const auto i32Ty = builder.getInt32Ty();
-	//Type* retTypeElems[] = {i32Ty, i32Ty};
-	//auto retType = StructType::create(retTypeElems, "MemRef", true);
-	m_mainFunc = Function::Create(FunctionType::get(builder.getInt64Ty(), false), Function::ExternalLinkage, "main", module.get());
+	m_mainFunc = Function::Create(FunctionType::get(Type::MainReturn, false), Function::ExternalLinkage, "main", module.get());
 
 	// Create the basic blocks.
 	auto entryBlock = llvm::BasicBlock::Create(context, "entry", m_mainFunc);
@@ -423,12 +420,12 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 				// TODO: Shifting by 0 gives wrong results as of this bug http://llvm.org/bugs/show_bug.cgi?id=16439
 
-				auto shbits = builder.CreateShl(byteNum, builder.getIntN(256, 3));
+				auto shbits = builder.CreateShl(byteNum, Constant::get(3));
 				value = builder.CreateShl(value, shbits);
-				value = builder.CreateLShr(value, builder.getIntN(256, 31 * 8));
+				value = builder.CreateLShr(value, Constant::get(31 * 8));
 
-				auto byteNumValid = builder.CreateICmpULT(byteNum, builder.getIntN(256, 32));
-				value = builder.CreateSelect(byteNumValid, value, builder.getIntN(256, 0));
+				auto byteNumValid = builder.CreateICmpULT(byteNum, Constant::get(32));
+				value = builder.CreateSelect(byteNumValid, value, Constant::get(0));
 				stack.push(value);
 
 				break;
@@ -684,7 +681,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 			case Instruction::PC:
 			{
-				auto value = builder.getIntN(256, currentPC);
+				auto value = Constant::get(currentPC);
 				stack.push(value);
 				break;
 			}
@@ -756,7 +753,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 			case Instruction::CODESIZE:
 			{
-				auto value = builder.getIntN(256, bytecode.size());
+				auto value = Constant::get(bytecode.size());
 				stack.push(value);
 				break;
 			}
@@ -834,13 +831,9 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto index = stack.pop();
 				auto size = stack.pop();
 
-				auto ret = builder.CreateTrunc(index, builder.getInt64Ty());
-				ret = builder.CreateShl(ret, 32);
-				size = builder.CreateTrunc(size, i32Ty);
-				size = builder.CreateZExt(size, builder.getInt64Ty());
-				ret = builder.CreateOr(ret, size);
+				memory.registerReturnData(index, size);
 
-				builder.CreateRet(ret);
+				builder.CreateRet(Constant::get(ReturnCode::Return));
 				break;
 			}
 
@@ -852,7 +845,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			}
 			case Instruction::STOP:
 			{
-				builder.CreateRet(builder.getInt64(0));
+				builder.CreateRet(Constant::get(ReturnCode::Stop));
 				break;
 			}
 
@@ -884,11 +877,11 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	// Note: Right now the codegen for special blocks depends only on createBasicBlock(),
 	// not on the codegen for 'regular' blocks. But it has to be done before linkBasicBlocks().
 	builder.SetInsertPoint(m_finalBlock->llvm());
-	builder.CreateRet(builder.getInt64(0));
+	builder.CreateRet(Constant::get(ReturnCode::Stop));
 
 	// TODO: throw an exception or something
 	builder.SetInsertPoint(m_badJumpBlock->llvm());
-	builder.CreateRet(builder.getInt64(0));
+	builder.CreateRet(Constant::get(ReturnCode::BadJumpDestination));
 
 	builder.SetInsertPoint(m_jumpTableBlock->llvm());
 	if (m_indirectJumpTargets.size() > 0)
@@ -919,17 +912,22 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 void Compiler::linkBasicBlocks()
 {
 	/// Helper function that finds basic block given LLVM basic block pointer
-	auto findBasicBlock = [this](llvm::BasicBlock* _llbb) -> BasicBlock&
+	auto findBasicBlock = [this](llvm::BasicBlock* _llbb) -> BasicBlock*
 	{
 		// TODO: Fix for finding jumpTableBlock
 		if (_llbb == this->m_jumpTableBlock->llvm())
-			return *this->m_jumpTableBlock;
+			return this->m_jumpTableBlock.get();
+
+		for (auto&& bb : this->basicBlocks)
+			if (_llbb == bb.second.llvm())
+				return &bb.second;
+		return nullptr;
 
 		// Name is used to get basic block index (index of first instruction)
 		// TODO: If basicBlocs are still a map - multikey map can be used
-		auto&& idxStr = _llbb->getName().substr(sizeof(BasicBlock::NamePrefix) - 2);
-		auto idx = std::stoul(idxStr);
-		return basicBlocks.find(idx)->second;
+		//auto&& idxStr = _llbb->getName().substr(sizeof(BasicBlock::NamePrefix) - 2);
+		//auto idx = std::stoul(idxStr);
+		//return basicBlocks.find(idx)->second;
 	};
 
 	auto completePhiNodes = [findBasicBlock](llvm::BasicBlock* _llbb) -> void
@@ -942,9 +940,14 @@ void Compiler::linkBasicBlocks()
 			for (auto predIt = llvm::pred_begin(_llbb); predIt != llvm::pred_end(_llbb); ++predIt)
 			{
 				// TODO: In case entry block is reached - report error
-				auto& predBB = findBasicBlock(*predIt);
-				auto value = predBB.getStack().get(valueIdx);
-				phi->addIncoming(value, predBB);
+				auto predBB = findBasicBlock(*predIt);
+				if (!predBB)
+				{
+					std::cerr << "Stack too small in " << _llbb->getName().str() << std::endl;
+					std::exit(1);
+				}
+				auto value = predBB->getStack().get(valueIdx);
+				phi->addIncoming(value, predBB->llvm());
 			}
 		}
 	};

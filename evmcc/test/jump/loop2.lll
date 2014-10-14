@@ -5,7 +5,7 @@
 
 ;; 2
 DUP1        
-1 
+1      
 SWAP1   
 SUB    
 DUP1
@@ -19,8 +19,8 @@ MSTORE
 MSTORE
 2 
 MSTORE
-3 
-MSTORE
+;;3 
+;;MSTORE
 
 STOP
 )

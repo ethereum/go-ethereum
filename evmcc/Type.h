@@ -2,6 +2,7 @@
 #pragma once
 
 #include <llvm/IR/Type.h>
+#include <llvm/IR/Constants.h>
 
 namespace evmcc
 {
@@ -20,7 +21,27 @@ struct Type
 
 	static llvm::Type* Void;
 
+	/// Main function return type
+	static llvm::Type* MainReturn;
+
 	static void init(llvm::LLVMContext& _context);
+};
+
+enum class ReturnCode
+{
+	Stop = 0,
+	Return = 1,
+	Suicide = 2,
+
+	BadJumpDestination = 101,
+};
+
+struct Constant
+{
+	/// Returns word-size constant
+	static llvm::Constant* get(uint64_t _n);
+
+	static llvm::Constant* get(ReturnCode _returnCode);
 };
 
 }
