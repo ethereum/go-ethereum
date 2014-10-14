@@ -53,6 +53,9 @@ bool isCostBlockEnd(Instruction _inst)
 {
 	// Basic block terminators like STOP are not needed on the list
 	// as cost will be commited at the end of basic block
+
+	// CALL & CALLCODE are commited manually
+
 	switch (_inst)
 	{
 	case Instruction::CALLDATACOPY:
@@ -63,8 +66,6 @@ bool isCostBlockEnd(Instruction _inst)
 	case Instruction::SSTORE:
 	case Instruction::GAS:
 	case Instruction::CREATE:
-	case Instruction::CALL:
-	case Instruction::CALLCODE:
 		return true;
 
 	default:
@@ -107,16 +108,24 @@ void GasMeter::count(Instruction _inst)
 		commitCostBlock();
 }
 
-void GasMeter::commitCostBlock()
+void GasMeter::commitCostBlock(llvm::Value* _additionalCost)
 {
+	assert(!_additionalCost || m_checkCall); // _additionalCost => m_checkCall; Must be inside cost-block
+
 	// If any uncommited block
 	if (m_checkCall)
 	{
-		if (m_blockCost > 0) // If any cost
-			m_checkCall->setArgOperand(0, Constant::get(m_blockCost)); // Update block cost in gas check call
-		else
+		if (m_blockCost == 0 && !_additionalCost) // Do not check 0
+		{
 			m_checkCall->eraseFromParent(); // Remove the gas check call
+			return;
+		}
 
+		llvm::Value* cost = Constant::get(m_blockCost);
+		if (_additionalCost)
+			cost = m_builder.CreateAdd(cost, _additionalCost);
+		
+		m_checkCall->setArgOperand(0, cost); // Update block cost in gas check call
 		m_checkCall = nullptr; // End cost-block
 		m_blockCost = 0;
 	}
