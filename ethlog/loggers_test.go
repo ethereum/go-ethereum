@@ -5,29 +5,50 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"sync"
 	"testing"
 	"time"
 )
 
 type TestLogSystem struct {
-	Output string
+	mutex  sync.Mutex
+	output string
 	level  LogLevel
 }
 
-func (t *TestLogSystem) Println(v ...interface{}) {
-	t.Output += fmt.Sprintln(v...)
+func (ls *TestLogSystem) Println(v ...interface{}) {
+	ls.mutex.Lock()
+	ls.output += fmt.Sprintln(v...)
+	ls.mutex.Unlock()
 }
 
-func (t *TestLogSystem) Printf(format string, v ...interface{}) {
-	t.Output += fmt.Sprintf(format, v...)
+func (ls *TestLogSystem) Printf(format string, v ...interface{}) {
+	ls.mutex.Lock()
+	ls.output += fmt.Sprintf(format, v...)
+	ls.mutex.Unlock()
 }
 
-func (t *TestLogSystem) SetLogLevel(i LogLevel) {
-	t.level = i
+func (ls *TestLogSystem) SetLogLevel(i LogLevel) {
+	ls.mutex.Lock()
+	ls.level = i
+	ls.mutex.Unlock()
 }
 
-func (t *TestLogSystem) GetLogLevel() LogLevel {
-	return t.level
+func (ls *TestLogSystem) GetLogLevel() LogLevel {
+	ls.mutex.Lock()
+	defer ls.mutex.Unlock()
+	return ls.level
+}
+
+func (ls *TestLogSystem) CheckOutput(t *testing.T, expected string) {
+	ls.mutex.Lock()
+	output := ls.output
+	ls.mutex.Unlock()
+	if output != expected {
+		t.Errorf("log output mismatch:\n   got: %q\n  want: %q\n", output, expected)
+	}
+}
+
 }
 
 func TestLoggerFlush(t *testing.T) {
@@ -57,10 +78,8 @@ func TestLoggerPrintln(t *testing.T) {
 	logger.Infoln("info")
 	logger.Debugln("debug")
 	Flush()
-	output := testLogSystem.Output
-	if output != "[TEST] error\n[TEST] warn\n" {
-		t.Error("Expected logger output '[TEST] error\\n[TEST] warn\\n', got ", output)
-	}
+
+	testLogSystem.CheckOutput(t, "[TEST] error\n[TEST] warn\n")
 }
 
 func TestLoggerPrintf(t *testing.T) {
@@ -69,15 +88,12 @@ func TestLoggerPrintf(t *testing.T) {
 	logger := NewLogger("TEST")
 	testLogSystem := &TestLogSystem{level: WarnLevel}
 	AddLogSystem(testLogSystem)
-	logger.Errorf("error to %v\n", *testLogSystem)
+	logger.Errorf("error to %v\n", []int{1, 2, 3})
 	logger.Warnf("warn")
 	logger.Infof("info")
 	logger.Debugf("debug")
 	Flush()
-	output := testLogSystem.Output
-	if output != "[TEST] error to { 2}\n[TEST] warn" {
-		t.Error("Expected logger output '[TEST] error to { 2}\\n[TEST] warn', got ", output)
-	}
+	testLogSystem.CheckOutput(t, "[TEST] error to [1 2 3]\n[TEST] warn")
 }
 
 func TestMultipleLogSystems(t *testing.T) {
@@ -91,14 +107,9 @@ func TestMultipleLogSystems(t *testing.T) {
 	logger.Errorln("error")
 	logger.Warnln("warn")
 	Flush()
-	output0 := testLogSystem0.Output
-	output1 := testLogSystem1.Output
-	if output0 != "[TEST] error\n" {
-		t.Error("Expected logger 0 output '[TEST] error\\n', got ", output0)
-	}
-	if output1 != "[TEST] error\n[TEST] warn\n" {
-		t.Error("Expected logger 1 output '[TEST] error\\n[TEST] warn\\n', got ", output1)
-	}
+
+	testLogSystem0.CheckOutput(t, "[TEST] error\n")
+	testLogSystem1.CheckOutput(t, "[TEST] error\n[TEST] warn\n")
 }
 
 func TestFileLogSystem(t *testing.T) {
@@ -140,7 +151,7 @@ func TestConcurrentAddSystem(t *testing.T) {
 		case <-stop:
 			return
 		default:
-			logger.Infof("foo")
+			logger.Infoln("foo")
 			Flush()
 		}
 	}
