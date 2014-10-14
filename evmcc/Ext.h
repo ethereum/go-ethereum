@@ -31,7 +31,9 @@ public:
 	llvm::Value* number();
 	llvm::Value* difficulty();
 	llvm::Value* gaslimit();
+	llvm::Value* codesize();
 	llvm::Value* calldata();
+	llvm::Value* code();
 
 	llvm::Value* balance(llvm::Value* _address);
 	void suicide(llvm::Value* _address);

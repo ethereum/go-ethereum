@@ -1,0 +1,13 @@
+(asm
+CODESIZE      ;; byte count
+0             ;; source index in code array
+0             ;; dest index in memory
+CODECOPY
+
+0
+MLOAD ;; to dump memory
+
+0
+10
+RETURN
+)

@@ -37,7 +37,9 @@ struct ExtData
 	i256 number;
 	i256 difficulty;
 	i256 gaslimit;
+	i256 codesize;
 	const byte* calldata;
+	const byte* code;
 };
 
 Ext::Ext(llvm::IRBuilder<>& _builder, llvm::Module* module)
@@ -47,6 +49,8 @@ Ext::Ext(llvm::IRBuilder<>& _builder, llvm::Module* module)
 
 	auto i256Ty = m_builder.getIntNTy(256);
 	auto i256PtrTy = i256Ty->getPointerTo();
+	auto i8PtrTy = m_builder.getInt8PtrTy();
+
 	m_args[0] = m_builder.CreateAlloca(i256Ty, nullptr, "ext.index");
 	m_args[1] = m_builder.CreateAlloca(i256Ty, nullptr, "ext.value");
 	m_arg2 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg2");
@@ -69,7 +73,10 @@ Ext::Ext(llvm::IRBuilder<>& _builder, llvm::Module* module)
 		i256Ty,	 // i256 number;
 		i256Ty,	 // i256 difficulty;
 		i256Ty,	 // i256 gaslimit;
-		m_builder.getInt8PtrTy() // byte* calldata
+		i256Ty,  // i256 codesize
+		i8PtrTy, // byte* calldata
+		i8PtrTy, // byte* code
+
 	};
 	auto extDataTy = StructType::create(elements, "ext.Data");
 
@@ -87,7 +94,6 @@ Ext::Ext(llvm::IRBuilder<>& _builder, llvm::Module* module)
 	m_bswap = Intrinsic::getDeclaration(module, Intrinsic::bswap, i256Ty);
 	m_sha3 = Function::Create(TypeBuilder<void(i<256>*, i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_sha3", module);
 	m_exp = Function::Create(TypeBuilder<void(i<256>*, i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_exp", module);
-
 
 	m_builder.CreateCall(m_init, m_data);
 }
@@ -124,7 +130,9 @@ Value* Ext::timestamp() { return getDataElem(8, "timestamp"); }
 Value* Ext::number() { return getDataElem(9, "number"); }
 Value* Ext::difficulty() { return getDataElem(10, "difficulty"); }
 Value* Ext::gaslimit() { return getDataElem(11, "gaslimit"); }
-Value* Ext::calldata() { return getDataElem(12, "calldata"); }
+Value* Ext::codesize() { return getDataElem(12, "codesize"); }
+Value* Ext::calldata() { return getDataElem(13, "calldata"); }
+Value* Ext::code() { return getDataElem(14, "code"); }
 
 Value* Ext::calldataload(Value* _index)
 {
@@ -219,7 +227,9 @@ EXPORT void ext_init(ExtData* _extData)
 	_extData->number = eth2llvm(ext.currentBlock.number);
 	_extData->difficulty = eth2llvm(ext.currentBlock.difficulty);
 	_extData->gaslimit = eth2llvm(ext.currentBlock.gasLimit);
+	_extData->codesize = eth2llvm(ext.code.size());
 	_extData->calldata = ext.data.data();
+	_extData->code = ext.code.data();
 }
 
 EXPORT void ext_store(i256* _index, i256* _value)
