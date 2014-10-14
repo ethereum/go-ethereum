@@ -435,6 +435,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			{
 				auto inOff = stack.pop();
 				auto inSize = stack.pop();
+				memory.require(inOff, inSize);
 				auto hash = ext.sha3(inOff, inSize);
 				stack.push(hash);
 			}
@@ -768,6 +769,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto endowment = stack.pop();
 				auto initOff = stack.pop();
 				auto initSize = stack.pop();
+				memory.require(initOff, initSize);
 
 				auto address = ext.create(endowment, initOff, initSize);
 				stack.push(address);
