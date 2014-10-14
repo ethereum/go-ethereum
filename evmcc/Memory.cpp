@@ -40,33 +40,27 @@ Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* _module, GasMeter& _ga
 	m_returnDataSize->setUnnamedAddr(true); // Address is not important
 
 	m_resize = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, Type::WordPtr, false), llvm::Function::ExternalLinkage, "mem_resize", _module);
+	m_require = createRequireFunc(_module, _gasMeter);
 	m_loadWord = createFunc(false, Type::i256, _module, _gasMeter);
 	m_storeWord = createFunc(true, Type::i256, _module, _gasMeter);
 	m_storeByte = createFunc(true, Type::Byte, _module, _gasMeter);
 }
 
-llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, llvm::Module* _module, GasMeter& _gasMeter)
+llvm::Function* Memory::createRequireFunc(llvm::Module* _module, GasMeter& _gasMeter)
 {
-	auto isWord = _valueType == Type::i256;
-
-	llvm::Type* storeArgs[] = {Type::i256, _valueType};
-	auto name = _isStore ? isWord ? "mstore" : "mstore8" : "mload";
-	auto funcType = _isStore ? llvm::FunctionType::get(Type::Void, storeArgs, false) : llvm::FunctionType::get(Type::i256, Type::i256, false);
-	auto func = llvm::Function::Create(funcType, llvm::Function::PrivateLinkage, name, _module);
+	auto func = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::i256, false), llvm::Function::PrivateLinkage, "mem.require", _module);
 
 	auto checkBB = llvm::BasicBlock::Create(func->getContext(), "check", func);
 	auto resizeBB = llvm::BasicBlock::Create(func->getContext(), "resize", func);
-	auto accessBB = llvm::BasicBlock::Create(func->getContext(), "access", func);
+	auto returnBB = llvm::BasicBlock::Create(func->getContext(), "return", func);
 
 	// BB "check"
 	llvm::IRBuilder<> builder(checkBB);
-	llvm::Value* index = func->arg_begin();
-	index->setName("index");
-	auto valueSize = _valueType->getPrimitiveSizeInBits() / 8;
-	auto sizeRequired = builder.CreateAdd(index, Constant::get(valueSize), "sizeRequired");
+	llvm::Value* sizeRequired = func->arg_begin();
+	sizeRequired->setName("sizeRequired");
 	auto size = builder.CreateLoad(m_size, "size");
 	auto resizeNeeded = builder.CreateICmpULE(size, sizeRequired, "resizeNeeded");
-	builder.CreateCondBr(resizeNeeded, resizeBB, accessBB); // OPT branch weights?
+	builder.CreateCondBr(resizeNeeded, resizeBB, returnBB); // OPT branch weights?
 
 	// BB "resize"
 	builder.SetInsertPoint(resizeBB);
@@ -79,26 +73,51 @@ llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, llvm::
 	builder.CreateStore(sizeRequired, m_size);
 	auto newData = builder.CreateCall(m_resize, m_size, "newData");
 	builder.CreateStore(newData, m_data);
-	builder.CreateBr(accessBB);
+	builder.CreateBr(returnBB);
 
-	// BB "access"
-	builder.SetInsertPoint(accessBB);
-	auto data = builder.CreateLoad(m_data, "data");
-	auto ptr = builder.CreateGEP(data, index, "ptr");
+	// BB "return"
+	builder.SetInsertPoint(returnBB);
+	builder.CreateRetVoid();
+	return func;
+}
+
+llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, llvm::Module* _module, GasMeter& _gasMeter)
+{
+	auto isWord = _valueType == Type::i256;
+
+	llvm::Type* storeArgs[] = {Type::i256, _valueType};
+	auto name = _isStore ? isWord ? "mstore" : "mstore8" : "mload";
+	auto funcType = _isStore ? llvm::FunctionType::get(Type::Void, storeArgs, false) : llvm::FunctionType::get(Type::i256, Type::i256, false);
+	auto func = llvm::Function::Create(funcType, llvm::Function::PrivateLinkage, name, _module);
+
+	auto origBB = m_builder.GetInsertBlock();
+	auto origPt = m_builder.GetInsertPoint();
+
+	m_builder.SetInsertPoint(llvm::BasicBlock::Create(func->getContext(), {}, func));
+	llvm::Value* index = func->arg_begin();
+	index->setName("index");
+	
+	auto valueSize = _valueType->getPrimitiveSizeInBits() / 8;
+	this->require(index, Constant::get(valueSize));
+	auto data = m_builder.CreateLoad(m_data, "data");
+	auto ptr = m_builder.CreateGEP(data, index, "ptr");
 	if (isWord)
-		ptr = builder.CreateBitCast(ptr, Type::WordPtr, "wordPtr");
+		ptr = m_builder.CreateBitCast(ptr, Type::WordPtr, "wordPtr");
 	if (_isStore)
 	{
 		llvm::Value* value = ++func->arg_begin();
 		value->setName("value");
-		builder.CreateStore(value, ptr);
-		builder.CreateRetVoid();
+		m_builder.CreateStore(value, ptr);
+		m_builder.CreateRetVoid();
 	}
 	else
 	{
-		auto ret = builder.CreateLoad(ptr);
-		builder.CreateRet(ret);
+		auto ret = m_builder.CreateLoad(ptr);
+		m_builder.CreateRet(ret);
 	}
+
+	m_builder.SetInsertPoint(origBB, origPt);
+
 	return func;
 }
 
@@ -136,10 +155,20 @@ llvm::Value* Memory::getSize()
 	return m_builder.CreateLoad(m_size);
 }
 
-void Memory::registerReturnData(llvm::Value* _index, llvm::Value* _size)
+void Memory::require(llvm::Value* _size)
 {
-	auto lastWord = m_builder.CreateAdd(_index, m_builder.CreateSub(_size, Constant::get(32)), "lastWord");
-	loadWord(lastWord); // Make sure that memory is allocated and count gas
+	m_builder.CreateCall(m_require, _size);
+}
+
+void Memory::require(llvm::Value* _offset, llvm::Value* _size)
+{
+	auto sizeRequired = m_builder.CreateAdd(_offset, _size, "sizeRequired");
+	require(sizeRequired);
+}
+
+void Memory::registerReturnData(llvm::Value* _index, llvm::Value* _size)
+{ 
+	require(_index, _size); // Make sure that memory is allocated and count gas
 
 	m_builder.CreateStore(_index, m_returnDataOffset);
 	m_builder.CreateStore(_size, m_returnDataSize);
