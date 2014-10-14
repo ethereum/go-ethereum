@@ -162,7 +162,7 @@ func TestConcurrentAddSystem(t *testing.T) {
 	stopTime := time.Now().Add(100 * time.Millisecond)
 	for time.Now().Before(stopTime) {
 		time.Sleep(time.Duration(rand.Intn(20)) * time.Millisecond)
-		AddLogSystem(&TestLogSystem{level: InfoLevel})
+		AddLogSystem(NewStdLogSystem(ioutil.Discard, 0, InfoLevel))
 	}
 	close(stop)
 }
