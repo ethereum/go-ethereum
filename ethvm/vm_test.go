@@ -25,21 +25,27 @@ func (self TestEnv) Difficulty() *big.Int   { return nil }
 func (self TestEnv) Value() *big.Int        { return nil }
 func (self TestEnv) State() *ethstate.State { return nil }
 
+const mutcode = `
+var x = 0;
+for i := 0; i < 10; i++ {
+	x = i
+}
+
+return x`
+
 func setup(level int, typ Type) (*Closure, VirtualMachine) {
+	code, err := ethutil.Compile(mutcode, true)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// Pipe output to /dev/null
 	ethlog.AddLogSystem(ethlog.NewStdLogSystem(ioutil.Discard, log.LstdFlags, ethlog.LogLevel(level)))
 
 	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")
 
 	stateObject := ethstate.NewStateObject([]byte{'j', 'e', 'f', 'f'})
-	callerClosure := NewClosure(nil, stateObject, stateObject, []byte{
-		PUSH1, 1,
-		PUSH1, 0,
-		MSTORE,
-		PUSH1, 32,
-		PUSH1, 0,
-		RETURN,
-	}, big.NewInt(1000000), big.NewInt(0))
+	callerClosure := NewClosure(nil, stateObject, stateObject, code, big.NewInt(1000000), big.NewInt(0))
 
 	return callerClosure, New(TestEnv{}, typ)
 }
@@ -51,7 +57,7 @@ func TestDebugVm(t *testing.T) {
 		fmt.Println("error", e)
 	}
 
-	if ret[len(ret)-1] != 1 {
+	if ret[len(ret)-1] != 9 {
 		t.Errorf("Expected VM to return 1, got", ret, "instead.")
 	}
 }
@@ -63,7 +69,7 @@ func TestVm(t *testing.T) {
 		fmt.Println("error", e)
 	}
 
-	if ret[len(ret)-1] != 1 {
+	if ret[len(ret)-1] != 9 {
 		t.Errorf("Expected VM to return 1, got", ret, "instead.")
 	}
 }
