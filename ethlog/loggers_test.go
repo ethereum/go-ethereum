@@ -54,7 +54,6 @@ func TestLoggerPrintln(t *testing.T) {
 	Flush()
 	Reset()
 	output := testLogSystem.Output
-	fmt.Println(quote(output))
 	if output != "[TEST] error\n[TEST] warn\n" {
 		t.Error("Expected logger output '[TEST] error\\n[TEST] warn\\n', got ", output)
 	}
