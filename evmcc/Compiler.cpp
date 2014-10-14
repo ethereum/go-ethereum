@@ -609,6 +609,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			{
 				auto index = stack.pop();
 				auto value = stack.pop();
+				gasMeter.countSStore(ext, index, value);
 				ext.setStore(index, value);
 				break;
 			}

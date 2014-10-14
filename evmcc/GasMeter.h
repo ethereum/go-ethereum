@@ -19,6 +19,9 @@ public:
 	/// Count step cost of instruction
 	void count(dev::eth::Instruction _inst);
 
+	/// Calculate & count gas cost for SSTORE instruction
+	void countSStore(class Ext& _ext, llvm::Value* _index, llvm::Value* _newValue);
+
 	/// Finalize cost-block by checking gas needed for the block before the block
 	/// @param _additionalCost adds additional cost to cost-block before commit
 	void commitCostBlock(llvm::Value* _additionalCost = nullptr);
