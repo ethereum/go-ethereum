@@ -690,8 +690,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 			case Instruction::GAS:
 			{
-				auto value = builder.CreateLoad(gasMeter.getLLVMGasVar());
-				stack.push(value);
+				stack.push(gasMeter.getGas());
 				break;
 			}
 
