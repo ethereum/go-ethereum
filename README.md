@@ -1,9 +1,9 @@
 Ethereum
 ========
 
-Master [![Build
-Status](http://cpt-obvious.ethercasts.com:8010/buildstatusimage?builder=go-ethereum-master-docker)](http://cpt-obvious.ethercasts.com:8010/builders/go-ethereum-master-docker/builds/-1) Develop [![Build
-Status](http://cpt-obvious.ethercasts.com:8010/buildstatusimage?builder=go-ethereum-develop-docker)](http://cpt-obvious.ethercasts.com:8010/builders/go-ethereum-develop-docker/builds/-1)
+[![Build
+Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20master%20branch)](http://build.ethdev.com:8010/builders/Linux%20Go%20master%20branch/builds/-1) master [![Build
+Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20branch)](http://build.ethdev.com:8010/builders/Linux%20Go%20develop%20branch/builds/-1) develop
 
 Ethereum Go Client © 2014 Jeffrey Wilcke.
 
