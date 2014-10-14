@@ -58,8 +58,7 @@ func (self *Pipe) ExecuteObject(object *Object, data []byte, value, gas, price *
 
 	self.Vm.State = self.World().State().Copy()
 
-	vm := ethvm.New(NewEnv(self.Vm.State, block, value.BigInt(), initiator.Address()))
-	vm.Verbose = true
+	vm := ethvm.New(NewEnv(self.Vm.State, block, value.BigInt(), initiator.Address()), ethvm.Type(ethutil.Config.VmType))
 
 	msg := ethvm.NewExecution(vm, object.Address(), data, gas.BigInt(), price.BigInt(), value.BigInt())
 	ret, err := msg.Exec(object.Address(), initiator)

@@ -224,7 +224,7 @@ func (self *StateTransition) TransitionState() (err error) {
 		// script section for the state object.
 		self.data = nil
 
-		code, err := self.Eval(msg, receiver.Init(), receiver, "init")
+		code, err := self.Eval(msg, receiver.Init(), receiver)
 		if err != nil {
 			self.state.Set(snapshot)
 
@@ -235,7 +235,7 @@ func (self *StateTransition) TransitionState() (err error) {
 		msg.Output = code
 	} else {
 		if len(receiver.Code) > 0 {
-			ret, err := self.Eval(msg, receiver.Code, receiver, "code")
+			ret, err := self.Eval(msg, receiver.Code, receiver)
 			if err != nil {
 				self.state.Set(snapshot)
 
@@ -262,7 +262,7 @@ func (self *StateTransition) transferValue(sender, receiver *ethstate.StateObjec
 	return nil
 }
 
-func (self *StateTransition) Eval(msg *ethstate.Message, script []byte, context *ethstate.StateObject, typ string) (ret []byte, err error) {
+func (self *StateTransition) Eval(msg *ethstate.Message, script []byte, context *ethstate.StateObject) (ret []byte, err error) {
 	var (
 		transactor    = self.Sender()
 		state         = self.state
@@ -270,9 +270,7 @@ func (self *StateTransition) Eval(msg *ethstate.Message, script []byte, context 
 		callerClosure = ethvm.NewClosure(msg, transactor, context, script, self.gas, self.gasPrice)
 	)
 
-	vm := ethvm.New(env)
-	vm.Verbose = true
-	vm.Fn = typ
+	vm := ethvm.New(env, ethvm.Type(ethutil.Config.VmType))
 
 	ret, _, err = callerClosure.Call(vm, self.tx.Data)
 

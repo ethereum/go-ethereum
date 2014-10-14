@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-type OpCode int
+type OpCode byte
 
 // Op codes
 const (

@@ -17,6 +17,7 @@ type ConfigManager struct {
 	Diff     bool
 	DiffType string
 	Paranoia bool
+	VmType   int
 
 	conf *globalconf.GlobalConf
 }

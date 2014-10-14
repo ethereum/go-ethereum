@@ -58,6 +58,26 @@ func (c *Closure) Get(x *big.Int) *ethutil.Value {
 	return c.Gets(x, big.NewInt(1))
 }
 
+func (c *Closure) GetOp(x int) OpCode {
+	return OpCode(c.GetByte(x))
+}
+
+func (c *Closure) GetByte(x int) byte {
+	if x < len(c.Code) {
+		return c.Code[x]
+	}
+
+	return 0
+}
+
+func (c *Closure) GetBytes(x, y int) []byte {
+	if x >= len(c.Code) || y >= len(c.Code) {
+		return nil
+	}
+
+	return c.Code[x : x+y]
+}
+
 func (c *Closure) Gets(x, y *big.Int) *ethutil.Value {
 	if x.Int64() >= int64(len(c.Code)) || y.Int64() >= int64(len(c.Code)) {
 		return ethutil.NewValue(0)
@@ -76,7 +96,7 @@ func (c *Closure) Address() []byte {
 	return c.object.Address()
 }
 
-func (c *Closure) Call(vm *Vm, args []byte) ([]byte, *big.Int, error) {
+func (c *Closure) Call(vm VirtualMachine, args []byte) ([]byte, *big.Int, error) {
 	c.Args = args
 
 	ret, err := vm.RunClosure(c)
