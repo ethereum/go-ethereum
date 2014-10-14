@@ -19,6 +19,9 @@ public:
 	/// Count step cost of instruction
 	void count(dev::eth::Instruction _inst);
 
+	/// Calculate & count gas cost for SSTORE instruction
+	void countSStore(class Ext& _ext, llvm::Value* _index, llvm::Value* _newValue);
+
 	/// Finalize cost-block by checking gas needed for the block before the block
 	/// @param _additionalCost adds additional cost to cost-block before commit
 	void commitCostBlock(llvm::Value* _additionalCost = nullptr);
@@ -29,7 +32,7 @@ public:
 	/// Generate code that checks the cost of additional memory used by program
 	void checkMemory(llvm::Value* _additionalMemoryInWords, llvm::IRBuilder<>& _builder);
 
-	llvm::GlobalVariable* getLLVMGasVar();
+	llvm::Value* getGas();
 
 private:
 	/// Cumulative gas cost of a block of instructions
@@ -38,6 +41,7 @@ private:
 	llvm::IRBuilder<>& m_builder;
 	llvm::CallInst* m_checkCall = nullptr;
 	llvm::GlobalVariable* m_gas;
+	llvm::Function* m_rtExit;
 	llvm::Function* m_gasCheckFunc;
 };
 

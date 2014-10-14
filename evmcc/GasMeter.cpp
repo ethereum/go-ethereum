@@ -9,6 +9,7 @@
 
 #include "Type.h"
 #include "Utils.h"
+#include "Ext.h"
 
 namespace evmcc
 {
@@ -82,11 +83,27 @@ GasMeter::GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* _module):
 	m_gas = new llvm::GlobalVariable(*_module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "gas");
 	m_gas->setUnnamedAddr(true); // Address is not important
 
+	m_rtExit = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::MainReturn, false), llvm::Function::ExternalLinkage, "rt_exit", _module);
+
 	m_gasCheckFunc = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::i256, false), llvm::Function::PrivateLinkage, "gas.check", _module);
 	InsertPointGuard guard(m_builder); 
-	m_builder.SetInsertPoint(llvm::BasicBlock::Create(_builder.getContext(), {}, m_gasCheckFunc));
+
+	auto checkBB = llvm::BasicBlock::Create(_builder.getContext(), "check", m_gasCheckFunc);
+	auto outOfGasBB = llvm::BasicBlock::Create(_builder.getContext(), "outOfGas", m_gasCheckFunc);
+	auto updateBB = llvm::BasicBlock::Create(_builder.getContext(), "update", m_gasCheckFunc);
+
+	m_builder.SetInsertPoint(checkBB);
 	llvm::Value* cost = m_gasCheckFunc->arg_begin();
-	llvm::Value* gas = m_builder.CreateLoad(m_gas);
+	cost->setName("cost");
+	llvm::Value* gas = m_builder.CreateLoad(m_gas, "gas");
+	auto isOutOfGas = m_builder.CreateICmpUGT(cost, gas, "isOutOfGas");
+	m_builder.CreateCondBr(isOutOfGas, outOfGasBB, updateBB);
+
+	m_builder.SetInsertPoint(outOfGasBB);
+	m_builder.CreateCall(m_rtExit, Constant::get(ReturnCode::OutOfGas));
+	m_builder.CreateRetVoid();
+
+	m_builder.SetInsertPoint(updateBB);
 	gas = m_builder.CreateSub(gas, cost);
 	m_builder.CreateStore(gas, m_gas);
 	m_builder.CreateRetVoid();
@@ -100,10 +117,32 @@ void GasMeter::count(Instruction _inst)
 		m_checkCall = m_builder.CreateCall(m_gasCheckFunc, llvm::UndefValue::get(Type::i256));
 	}
 	
-	m_blockCost += getStepCost(_inst);
+	if (_inst != Instruction::SSTORE) // Handle cost of SSTORE separately in countSStore()
+		m_blockCost += getStepCost(_inst);
 
 	if (isCostBlockEnd(_inst))
 		commitCostBlock();
+}
+
+void GasMeter::countSStore(Ext& _ext, llvm::Value* _index, llvm::Value* _newValue)
+{
+	assert(!m_checkCall); // Everything should've been commited before
+
+	static const auto sstoreCost = static_cast<uint64_t>(c_sstoreGas);
+
+	// [ADD] if oldValue == 0 and newValue != 0  =>  2*cost
+	// [DEL] if oldValue != 0 and newValue == 0  =>  0
+
+	auto oldValue = _ext.store(_index);
+	auto oldValueIsZero = m_builder.CreateICmpEQ(oldValue, Constant::get(0), "oldValueIsZero");
+	auto newValueIsZero = m_builder.CreateICmpEQ(_newValue, Constant::get(0), "newValueIsZero");
+	auto oldValueIsntZero = m_builder.CreateICmpNE(oldValue, Constant::get(0), "oldValueIsntZero");
+	auto newValueIsntZero = m_builder.CreateICmpNE(_newValue, Constant::get(0), "newValueIsntZero");
+	auto isAdd = m_builder.CreateAnd(oldValueIsZero, newValueIsntZero, "isAdd");
+	auto isDel = m_builder.CreateAnd(oldValueIsntZero, newValueIsZero, "isDel");
+	auto cost = m_builder.CreateSelect(isAdd, Constant::get(2 * sstoreCost), Constant::get(sstoreCost), "cost");
+	cost = m_builder.CreateSelect(isDel, Constant::get(0), cost, "cost");
+	m_builder.CreateCall(m_gasCheckFunc, cost);
 }
 
 void GasMeter::giveBack(llvm::Value* _gas)
@@ -144,9 +183,9 @@ void GasMeter::checkMemory(llvm::Value* _additionalMemoryInWords, llvm::IRBuilde
 	_builder.CreateCall(m_gasCheckFunc, cost);
 }
 
-llvm::GlobalVariable* GasMeter::getLLVMGasVar()
+llvm::Value* GasMeter::getGas()
 {
-	return m_gas;
+	return m_builder.CreateLoad(m_gas, "gas");
 }
 
 }

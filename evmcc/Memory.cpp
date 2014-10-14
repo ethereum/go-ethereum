@@ -40,6 +40,10 @@ Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* _module, GasMeter& _ga
 	m_returnDataSize->setUnnamedAddr(true); // Address is not important
 
 	m_resize = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, Type::WordPtr, false), llvm::Function::ExternalLinkage, "mem_resize", _module);
+	llvm::AttrBuilder attrBuilder;
+	attrBuilder.addAttribute(llvm::Attribute::NoAlias).addAttribute(llvm::Attribute::NoCapture).addAttribute(llvm::Attribute::NonNull).addAttribute(llvm::Attribute::ReadOnly);
+	m_resize->setAttributes(llvm::AttributeSet::get(m_resize->getContext(), 1, attrBuilder));
+
 	m_require = createRequireFunc(_module, _gasMeter);
 	m_loadWord = createFunc(false, Type::i256, _module, _gasMeter);
 	m_storeWord = createFunc(true, Type::i256, _module, _gasMeter);
