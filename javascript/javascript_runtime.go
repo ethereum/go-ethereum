@@ -11,9 +11,9 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethpipe"
-	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/event"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/obscuren/otto"
 )
@@ -25,9 +25,8 @@ type JSRE struct {
 	Vm       *otto.Otto
 	pipe     *ethpipe.JSPipe
 
-	blockChan  chan ethreact.Event
-	changeChan chan ethreact.Event
-	quitChan   chan bool
+	events   event.Subscription
+	quitChan chan bool
 
 	objectCb map[string][]otto.Value
 }
@@ -51,8 +50,7 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 		ethereum,
 		otto.New(),
 		ethpipe.NewJSPipe(ethereum),
-		make(chan ethreact.Event, 10),
-		make(chan ethreact.Event, 10),
+		nil,
 		make(chan bool),
 		make(map[string][]otto.Value),
 	}
@@ -68,8 +66,8 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	go re.mainLoop()
 
 	// Subscribe to events
-	reactor := ethereum.Reactor()
-	reactor.Subscribe("newBlock", re.blockChan)
+	mux := ethereum.EventMux()
+	re.events = mux.Subscribe(ethchain.NewBlockEvent{})
 
 	re.Bind("eth", &JSEthereum{re.pipe, re.Vm, ethereum})
 
@@ -105,25 +103,16 @@ func (self *JSRE) Require(file string) error {
 }
 
 func (self *JSRE) Stop() {
+	self.events.Unsubscribe()
 	// Kill the main loop
 	self.quitChan <- true
 
-	close(self.blockChan)
 	close(self.quitChan)
-	close(self.changeChan)
 	jsrelogger.Infoln("stopped")
 }
 
 func (self *JSRE) mainLoop() {
-out:
-	for {
-		select {
-		case <-self.quitChan:
-			break out
-		case block := <-self.blockChan:
-			if _, ok := block.Resource.(*ethchain.Block); ok {
-			}
-		}
+	for _ = range self.events.Chan() {
 	}
 }
 
@@ -201,13 +190,13 @@ func (self *JSRE) watch(call otto.FunctionCall) otto.Value {
 	if storageCallback {
 		self.objectCb[addr+storageAddr] = append(self.objectCb[addr+storageAddr], cb)
 
-		event := "storage:" + string(ethutil.Hex2Bytes(addr)) + ":" + string(ethutil.Hex2Bytes(storageAddr))
-		self.ethereum.Reactor().Subscribe(event, self.changeChan)
+		// event := "storage:" + string(ethutil.Hex2Bytes(addr)) + ":" + string(ethutil.Hex2Bytes(storageAddr))
+		// self.ethereum.EventMux().Subscribe(event, self.changeChan)
 	} else {
 		self.objectCb[addr] = append(self.objectCb[addr], cb)
 
-		event := "object:" + string(ethutil.Hex2Bytes(addr))
-		self.ethereum.Reactor().Subscribe(event, self.changeChan)
+		// event := "object:" + string(ethutil.Hex2Bytes(addr))
+		// self.ethereum.EventMux().Subscribe(event, self.changeChan)
 	}
 
 	return otto.UndefinedValue()
