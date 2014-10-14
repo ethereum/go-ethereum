@@ -431,6 +431,36 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				break;
 			}
 
+			case Instruction::ADDMOD:
+			{
+				auto val1 = stack.pop();
+				auto val2 = stack.pop();
+				auto sum = builder.CreateAdd(val1, val2);
+				auto mod = stack.pop();
+
+				auto sum128 = builder.CreateTrunc(sum, Type::lowPrecision);
+				auto mod128 = builder.CreateTrunc(mod, Type::lowPrecision);
+				auto res128 = builder.CreateURem(sum128, mod128);
+				auto res256 = builder.CreateZExt(res128, Type::i256);
+				stack.push(res256);
+				break;
+			}
+
+			case Instruction::MULMOD:
+			{
+				auto val1 = stack.pop();
+				auto val2 = stack.pop();
+				auto prod = builder.CreateMul(val1, val2);
+				auto mod = stack.pop();
+
+				auto prod128 = builder.CreateTrunc(prod, Type::lowPrecision);
+				auto mod128 = builder.CreateTrunc(mod, Type::lowPrecision);
+				auto res128 = builder.CreateURem(prod128, mod128);
+				auto res256 = builder.CreateZExt(res128, Type::i256);
+				stack.push(res256);
+				break;
+			}
+
 			case Instruction::SHA3:
 			{
 				auto inOff = stack.pop();
@@ -657,6 +687,13 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				break;
 			}
 
+			case Instruction::GAS:
+			{
+				auto value = builder.CreateLoad(gasMeter.getLLVMGasVar());
+				stack.push(value);
+				break;
+			}
+
 			case Instruction::ADDRESS:
 			{
 				auto value = ext.address();
@@ -697,6 +734,38 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			{
 				auto value = ext.calldatasize();
 				stack.push(value);
+				break;
+			}
+
+			case Instruction::CALLDATACOPY:
+			{
+				auto zero256 = ConstantInt::get(Type::i256, 0);
+
+				auto destMemIdx = stack.pop();
+				auto srcDataIdx = stack.pop();
+				auto reqBytes = stack.pop();
+
+				// FIXME: ensure memory size reqMemSize.
+				auto reqMemSize = builder.CreateAdd(destMemIdx, reqBytes, "req_mem_size");
+				memory.require(reqMemSize);
+
+				auto memPtr = memory.getData();
+				auto destPtr = builder.CreateGEP(memPtr, destMemIdx, "dest_mem_ptr");
+
+				auto calldataPtr = ext.calldata();
+				auto srcPtr = builder.CreateGEP(calldataPtr, srcDataIdx, "src_idx");
+
+				auto calldataSize = ext.calldatasize();
+				// remaining data bytes:
+				auto remDataSize = builder.CreateSub(calldataSize, srcDataIdx);
+				auto remSizeNegative = builder.CreateICmpSLT(remDataSize, zero256);
+				auto remDataBytes = builder.CreateSelect(remSizeNegative, zero256, remDataSize, "rem_data_bytes");
+
+				auto tooLittleDataBytes = builder.CreateICmpULT(remDataBytes, reqBytes);
+				auto bytesToCopy = builder.CreateSelect(tooLittleDataBytes, remDataBytes, reqBytes, "bytes_to_copy");
+
+				builder.CreateMemCpy(destPtr, srcPtr, bytesToCopy, 0);
+
 				break;
 			}
 

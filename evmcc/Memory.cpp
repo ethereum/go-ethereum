@@ -144,6 +144,11 @@ void Memory::storeByte(llvm::Value* _addr, llvm::Value* _word)
 	dump(0);
 }
 
+llvm::Value* Memory::getData()
+{
+	return m_builder.CreateLoad(m_data);
+}
+
 llvm::Value* Memory::getSize()
 {
 	return m_builder.CreateLoad(m_size);

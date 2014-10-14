@@ -29,6 +29,8 @@ public:
 	/// Generate code that checks the cost of additional memory used by program
 	void checkMemory(llvm::Value* _additionalMemoryInWords, llvm::IRBuilder<>& _builder);
 
+	llvm::GlobalVariable* getLLVMGasVar();
+
 private:
 	/// Cumulative gas cost of a block of instructions
 	/// @TODO Handle overflow

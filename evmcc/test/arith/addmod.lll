@@ -1,0 +1,12 @@
+;; Should return (1975 + 39) `mod` 100  = 14 = 0x0e
+(asm
+100
+1975
+39
+ADDMOD
+0 
+MSTORE8 
+0
+1
+RETURN
+)
