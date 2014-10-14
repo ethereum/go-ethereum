@@ -14,7 +14,6 @@ using llvm::types::i;
 using Linkage = llvm::GlobalValue::LinkageTypes;
 using dev::h256;
 using dev::u256;
-
 namespace evmcc
 {
 
@@ -70,7 +69,7 @@ Ext::Ext(llvm::IRBuilder<>& _builder, llvm::Module* module)
 		i256Ty,	 // i256 number;
 		i256Ty,	 // i256 difficulty;
 		i256Ty,	 // i256 gaslimit;
-		//m_builder.getInt8PtrTy()
+		m_builder.getInt8PtrTy() // byte* calldata
 	};
 	auto extDataTy = StructType::create(elements, "ext.Data");
 
@@ -125,6 +124,7 @@ Value* Ext::timestamp() { return getDataElem(8, "timestamp"); }
 Value* Ext::number() { return getDataElem(9, "number"); }
 Value* Ext::difficulty() { return getDataElem(10, "difficulty"); }
 Value* Ext::gaslimit() { return getDataElem(11, "gaslimit"); }
+Value* Ext::calldata() { return getDataElem(12, "calldata"); }
 
 Value* Ext::calldataload(Value* _index)
 {
@@ -218,7 +218,7 @@ EXPORT void ext_init(ExtData* _extData)
 	_extData->number = eth2llvm(ext.currentBlock.number);
 	_extData->difficulty = eth2llvm(ext.currentBlock.difficulty);
 	_extData->gaslimit = eth2llvm(ext.currentBlock.gasLimit);
-	//_extData->calldata = ext.data.data();
+	_extData->calldata = ext.data.data();
 }
 
 EXPORT void ext_store(i256* _index, i256* _value)

@@ -18,6 +18,7 @@ public:
 	llvm::Value* loadWord(llvm::Value* _addr);
 	void storeWord(llvm::Value* _addr, llvm::Value* _word);
 	void storeByte(llvm::Value* _addr, llvm::Value* _byte);
+	llvm::Value* getData();
 	llvm::Value* getSize();
 
 	void registerReturnData(llvm::Value* _index, llvm::Value* _size);

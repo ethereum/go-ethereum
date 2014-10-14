@@ -736,6 +736,36 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				break;
 			}
 
+			case Instruction::CALLDATACOPY:
+			{
+				auto zero256 = ConstantInt::get(Type::i256, 0);
+
+				auto destMemIdx = stack.pop();
+				auto srcDataIdx = stack.pop();
+				auto reqByteCount = stack.pop();
+
+				// FIXME: ensure memory size reqMemSize.
+				auto reqMemSize = builder.CreateAdd(destMemIdx, reqByteCount);
+				auto reqMemWord = builder.CreateSub(reqMemSize, ConstantInt::get(Type::i256, 32));
+				memory.loadWord(reqMemWord);
+
+				auto memPtr = memory.getData();
+				auto destPtr = builder.CreateGEP(memPtr, destMemIdx);
+
+				auto calldataPtr = ext.calldata();
+				auto srcPtr = builder.CreateGEP(calldataPtr, srcDataIdx);
+
+				auto calldataSize = ext.calldatasize();
+				// remaining data bytes:
+				auto remDataSize = builder.CreateSub(calldataSize, srcDataIdx);
+				auto remSizeNegative = builder.CreateICmpSLT(remDataSize, zero256);
+				auto bytesToCopy = builder.CreateSelect(remSizeNegative, zero256, remDataSize);
+
+				builder.CreateMemCpy(destPtr, srcPtr, bytesToCopy, 0);
+
+				break;
+			}
+
 			case Instruction::CALLDATALOAD:
 			{
 				auto index = stack.pop();
