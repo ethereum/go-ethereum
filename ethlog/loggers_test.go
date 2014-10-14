@@ -29,6 +29,8 @@ func (t *TestLogSystem) GetLogLevel() LogLevel {
 }
 
 func TestLoggerFlush(t *testing.T) {
+	Reset()
+
 	logger := NewLogger("TEST")
 	testLogSystem := &TestLogSystem{level: WarnLevel}
 	AddLogSystem(testLogSystem)
@@ -36,7 +38,6 @@ func TestLoggerFlush(t *testing.T) {
 		logger.Errorf(".")
 	}
 	Flush()
-	Reset()
 	output := testLogSystem.Output
 	if output != "[TEST] .[TEST] .[TEST] .[TEST] .[TEST] ." {
 		t.Error("Expected complete logger output '[TEST] .[TEST] .[TEST] .[TEST] .[TEST] .', got ", output)
@@ -44,6 +45,8 @@ func TestLoggerFlush(t *testing.T) {
 }
 
 func TestLoggerPrintln(t *testing.T) {
+	Reset()
+
 	logger := NewLogger("TEST")
 	testLogSystem := &TestLogSystem{level: WarnLevel}
 	AddLogSystem(testLogSystem)
@@ -52,7 +55,6 @@ func TestLoggerPrintln(t *testing.T) {
 	logger.Infoln("info")
 	logger.Debugln("debug")
 	Flush()
-	Reset()
 	output := testLogSystem.Output
 	if output != "[TEST] error\n[TEST] warn\n" {
 		t.Error("Expected logger output '[TEST] error\\n[TEST] warn\\n', got ", output)
@@ -60,6 +62,8 @@ func TestLoggerPrintln(t *testing.T) {
 }
 
 func TestLoggerPrintf(t *testing.T) {
+	Reset()
+
 	logger := NewLogger("TEST")
 	testLogSystem := &TestLogSystem{level: WarnLevel}
 	AddLogSystem(testLogSystem)
@@ -68,7 +72,6 @@ func TestLoggerPrintf(t *testing.T) {
 	logger.Infof("info")
 	logger.Debugf("debug")
 	Flush()
-	Reset()
 	output := testLogSystem.Output
 	if output != "[TEST] error to { 2}\n[TEST] warn" {
 		t.Error("Expected logger output '[TEST] error to { 2}\\n[TEST] warn', got ", output)
@@ -76,6 +79,8 @@ func TestLoggerPrintf(t *testing.T) {
 }
 
 func TestMultipleLogSystems(t *testing.T) {
+	Reset()
+
 	logger := NewLogger("TEST")
 	testLogSystem0 := &TestLogSystem{level: ErrorLevel}
 	testLogSystem1 := &TestLogSystem{level: WarnLevel}
@@ -84,7 +89,6 @@ func TestMultipleLogSystems(t *testing.T) {
 	logger.Errorln("error")
 	logger.Warnln("warn")
 	Flush()
-	Reset()
 	output0 := testLogSystem0.Output
 	output1 := testLogSystem1.Output
 	if output0 != "[TEST] error\n" {
@@ -96,6 +100,8 @@ func TestMultipleLogSystems(t *testing.T) {
 }
 
 func TestFileLogSystem(t *testing.T) {
+	Reset()
+
 	logger := NewLogger("TEST")
 	filename := "test.log"
 	file, _ := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, os.ModePerm)
@@ -114,6 +120,8 @@ func TestFileLogSystem(t *testing.T) {
 }
 
 func TestNoLogSystem(t *testing.T) {
+	Reset()
+
 	logger := NewLogger("TEST")
 	logger.Warnln("warn")
 	Flush()
