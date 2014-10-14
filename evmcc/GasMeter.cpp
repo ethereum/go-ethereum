@@ -8,6 +8,7 @@
 #include <libevm/FeeStructure.h>
 
 #include "Type.h"
+#include "Utils.h"
 
 namespace evmcc
 {
@@ -81,17 +82,14 @@ GasMeter::GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* _module):
 	m_gas = new llvm::GlobalVariable(*_module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "gas");
 	m_gas->setUnnamedAddr(true); // Address is not important
 
-	auto pt = m_builder.GetInsertPoint();
-	auto bb = m_builder.GetInsertBlock();
 	m_gasCheckFunc = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::i256, false), llvm::Function::PrivateLinkage, "gas.check", _module);
-	auto gasCheckBB = llvm::BasicBlock::Create(_builder.getContext(), {}, m_gasCheckFunc);
-	m_builder.SetInsertPoint(gasCheckBB);
+	InsertPointGuard guard(m_builder); 
+	m_builder.SetInsertPoint(llvm::BasicBlock::Create(_builder.getContext(), {}, m_gasCheckFunc));
 	llvm::Value* cost = m_gasCheckFunc->arg_begin();
 	llvm::Value* gas = m_builder.CreateLoad(m_gas);
 	gas = m_builder.CreateSub(gas, cost);
 	m_builder.CreateStore(gas, m_gas);
 	m_builder.CreateRetVoid();
-	m_builder.SetInsertPoint(bb, pt);
 }
 
 void GasMeter::count(Instruction _inst)

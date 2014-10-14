@@ -465,6 +465,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			{
 				auto inOff = stack.pop();
 				auto inSize = stack.pop();
+				memory.require(inOff, inSize);
 				auto hash = ext.sha3(inOff, inSize);
 				stack.push(hash);
 			}
@@ -837,6 +838,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto endowment = stack.pop();
 				auto initOff = stack.pop();
 				auto initSize = stack.pop();
+				memory.require(initOff, initSize);
 
 				auto address = ext.create(endowment, initOff, initSize);
 				stack.push(address);
@@ -854,6 +856,14 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto outSize = stack.pop();
 
 				gasMeter.commitCostBlock(gas);
+
+				// Require memory for the max of in and out buffers
+				auto inSizeReq = builder.CreateAdd(inOff, inSize, "inSizeReq");
+				auto outSizeReq = builder.CreateAdd(outOff, outSize, "outSizeReq");
+				auto cmp = builder.CreateICmpUGT(inSizeReq, outSizeReq);
+				auto sizeReq = builder.CreateSelect(cmp, inSizeReq, outSizeReq, "sizeReq");
+				memory.require(sizeReq);
+
 				auto ret = ext.call(gas, receiveAddress, value, inOff, inSize, outOff, outSize);
 				gasMeter.giveBack(gas);
 				stack.push(ret);

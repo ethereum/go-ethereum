@@ -46,11 +46,11 @@ private:
 	llvm::GlobalVariable* m_returnDataOffset;
 	llvm::GlobalVariable* m_returnDataSize;
 
+	llvm::Function* m_resize;
+	llvm::Function* m_require;
 	llvm::Function* m_loadWord;
 	llvm::Function* m_storeWord;
 	llvm::Function* m_storeByte;
-	llvm::Function* m_require;
-	llvm::Function* m_resize;
 
 	llvm::Function* m_memDump;
 };
