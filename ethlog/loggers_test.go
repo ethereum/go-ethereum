@@ -49,22 +49,40 @@ func (ls *TestLogSystem) CheckOutput(t *testing.T, expected string) {
 	}
 }
 
+type blockedLogSystem struct {
+	LogSystem
+	unblock chan struct{}
+}
+
+func (ls blockedLogSystem) Println(v ...interface{}) {
+	<-ls.unblock
+	ls.LogSystem.Println(v...)
+}
+
+func (ls blockedLogSystem) Printf(fmt string, v ...interface{}) {
+	<-ls.unblock
+	ls.LogSystem.Printf(fmt, v...)
 }
 
 func TestLoggerFlush(t *testing.T) {
 	Reset()
 
 	logger := NewLogger("TEST")
-	testLogSystem := &TestLogSystem{level: WarnLevel}
-	AddLogSystem(testLogSystem)
+	ls := blockedLogSystem{&TestLogSystem{level: WarnLevel}, make(chan struct{})}
+	AddLogSystem(ls)
 	for i := 0; i < 5; i++ {
+		// these writes shouldn't hang even though ls is blocked
 		logger.Errorf(".")
 	}
-	Flush()
-	output := testLogSystem.Output
-	if output != "[TEST] .[TEST] .[TEST] .[TEST] .[TEST] ." {
-		t.Error("Expected complete logger output '[TEST] .[TEST] .[TEST] .[TEST] .[TEST] .', got ", output)
+
+	beforeFlush := time.Now()
+	time.AfterFunc(80*time.Millisecond, func() { close(ls.unblock) })
+	Flush() // this should hang for approx. 80ms
+	if blockd := time.Now().Sub(beforeFlush); blockd < 80*time.Millisecond {
+		t.Errorf("Flush didn't block long enough, blocked for %v, should've been >= 80ms", blockd)
 	}
+
+	ls.LogSystem.(*TestLogSystem).CheckOutput(t, "[TEST] .[TEST] .[TEST] .[TEST] .[TEST] .")
 }
 
 func TestLoggerPrintln(t *testing.T) {
