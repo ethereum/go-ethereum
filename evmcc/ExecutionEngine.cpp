@@ -13,6 +13,8 @@
 #include <llvm/Support/PrettyStackTrace.h>
 #include <llvm/Support/Host.h>
 
+#include <libevm/VM.h>
+
 #include "Runtime.h"
 #include "Memory.h"
 #include "Type.h"
@@ -87,7 +89,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 	ext->data = calldata;
 
 	// Init runtime
-	uint64_t gas = 1000000;
+	uint64_t gas = 100;
 	Runtime runtime(gas, std::move(ext));
 
 	auto entryFunc = module->getFunction("main");
@@ -97,9 +99,20 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 		exit(1);
 	}
 
-	auto result = exec->runFunction(entryFunc, {});
+
+	ReturnCode returnCode;
+	try
+	{
+		auto result = exec->runFunction(entryFunc, {});
+		returnCode = static_cast<ReturnCode>(result.IntVal.getZExtValue());
+	}
+	catch (const dev::eth::OutOfGas&)
+	{
+		returnCode = ReturnCode::OutOfGas;
+	}
+
 	gas = static_cast<decltype(gas)>(Runtime::getGas());
-	auto returnCode = static_cast<ReturnCode>(result.IntVal.getZExtValue());
+	
 	if (returnCode == ReturnCode::Return)
 	{
 		auto&& returnData = Memory::getReturnData(); // TODO: It might be better to place is in Runtime interface
@@ -108,10 +121,8 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 		for (auto it = returnData.begin(), end = returnData.end(); it != end; ++it)
 			std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)*it << " ";
 		std::cout << "]\n";
-
-		return 10;
 	}	
-	return 0;
+	return static_cast<int>(returnCode);
 }
 
 }

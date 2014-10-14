@@ -34,6 +34,7 @@ enum class ReturnCode
 	Suicide = 2,
 
 	BadJumpDestination = 101,
+	OutOfGas = 102,
 };
 
 struct Constant
