@@ -3,8 +3,10 @@ package ethlog
 import (
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"testing"
+	"time"
 )
 
 type TestLogSystem struct {
@@ -125,4 +127,31 @@ func TestNoLogSystem(t *testing.T) {
 	logger := NewLogger("TEST")
 	logger.Warnln("warn")
 	Flush()
+}
+
+func TestConcurrentAddSystem(t *testing.T) {
+	rand.Seed(time.Now().Unix())
+	Reset()
+
+	logger := NewLogger("TEST")
+	stop := make(chan struct{})
+	writer := func() {
+		select {
+		case <-stop:
+			return
+		default:
+			logger.Infof("foo")
+			Flush()
+		}
+	}
+
+	go writer()
+	go writer()
+
+	stopTime := time.Now().Add(100 * time.Millisecond)
+	for time.Now().Before(stopTime) {
+		time.Sleep(time.Duration(rand.Intn(20)) * time.Millisecond)
+		AddLogSystem(&TestLogSystem{level: InfoLevel})
+	}
+	close(stop)
 }
