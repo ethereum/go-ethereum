@@ -64,7 +64,7 @@ func TestDebugVm(t *testing.T) {
 	}
 
 	if ret[len(ret)-1] != 9 {
-		t.Errorf("Expected VM to return 1, got", ret, "instead.")
+		t.Errorf("Expected VM to return 9, got", ret, "instead.")
 	}
 }
 
@@ -76,7 +76,7 @@ func TestVm(t *testing.T) {
 	}
 
 	if ret[len(ret)-1] != 9 {
-		t.Errorf("Expected VM to return 1, got", ret, "instead.")
+		t.Errorf("Expected VM to return 9, got", ret, "instead.")
 	}
 }
 
@@ -106,8 +106,7 @@ func RunCode(mutCode string, typ Type) []byte {
 		log.Fatal(err)
 	}
 
-	// Pipe output to /dev/null
-	ethlog.AddLogSystem(ethlog.NewStdLogSystem(os.Stdout, log.LstdFlags, ethlog.LogLevel(4)))
+	ethlog.AddLogSystem(ethlog.NewStdLogSystem(os.Stdout, log.LstdFlags, ethlog.LogLevel(3)))
 
 	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")
 
