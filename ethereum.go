@@ -59,7 +59,7 @@ type Ethereum struct {
 	// The block pool
 	blockPool *BlockPool
 	// Eventer
-	eventMux *event.TypeMux
+	eventMux event.TypeMux
 	// Peers
 	peers *list.List
 	// Nonce
@@ -126,7 +126,6 @@ func New(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager 
 		isUpToDate:     true,
 		filters:        make(map[int]*ethchain.Filter),
 	}
-	ethereum.eventMux = event.NewTypeMux()
 
 	ethereum.blockPool = NewBlockPool(ethereum)
 	ethereum.txPool = ethchain.NewTxPool(ethereum)
@@ -162,7 +161,7 @@ func (s *Ethereum) BlockPool() *BlockPool {
 	return s.blockPool
 }
 func (s *Ethereum) EventMux() *event.TypeMux {
-	return s.eventMux
+	return &s.eventMux
 }
 func (self *Ethereum) Db() ethutil.Database {
 	return self.db
