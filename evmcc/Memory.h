@@ -20,6 +20,8 @@ public:
 	void storeByte(llvm::Value* _addr, llvm::Value* _byte);
 	llvm::Value* getSize();
 
+	void require(llvm::Value* _size);
+
 	void registerReturnData(llvm::Value* _index, llvm::Value* _size);
 	static dev::bytesConstRef getReturnData();
 
@@ -27,6 +29,7 @@ public:
 
 private:
 	llvm::Function* createFunc(bool _isStore, llvm::Type* _type, llvm::Module* _module, GasMeter& _gasMeter);
+	llvm::Function* createRequireFunc(llvm::Module* _module, GasMeter& _gasMeter);
 
 private:
 	llvm::IRBuilder<>& m_builder;
@@ -41,6 +44,7 @@ private:
 	llvm::Function* m_loadWord;
 	llvm::Function* m_storeWord;
 	llvm::Function* m_storeByte;
+	llvm::Function* m_require;
 	llvm::Function* m_resize;
 
 	llvm::Function* m_memDump;

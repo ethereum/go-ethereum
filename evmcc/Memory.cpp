@@ -43,6 +43,43 @@ Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* _module, GasMeter& _ga
 	m_loadWord = createFunc(false, Type::i256, _module, _gasMeter);
 	m_storeWord = createFunc(true, Type::i256, _module, _gasMeter);
 	m_storeByte = createFunc(true, Type::Byte, _module, _gasMeter);
+
+	m_require = createRequireFunc(_module, _gasMeter);
+}
+
+llvm::Function* Memory::createRequireFunc(llvm::Module* _module, GasMeter& _gasMeter)
+{
+	auto func = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::i256, false), llvm::Function::PrivateLinkage, "mem.require", _module);
+
+	auto checkBB = llvm::BasicBlock::Create(func->getContext(), "check", func);
+	auto resizeBB = llvm::BasicBlock::Create(func->getContext(), "resize", func);
+	auto returnBB = llvm::BasicBlock::Create(func->getContext(), "return", func);
+
+	// BB "check"
+	llvm::IRBuilder<> builder(checkBB);
+	llvm::Value* sizeRequired = func->arg_begin();
+	sizeRequired->setName("sizeRequired");
+	auto size = builder.CreateLoad(m_size, "size");
+	auto resizeNeeded = builder.CreateICmpULE(size, sizeRequired, "resizeNeeded");
+	builder.CreateCondBr(resizeNeeded, resizeBB, returnBB); // OPT branch weights?
+
+	// BB "resize"
+	builder.SetInsertPoint(resizeBB);
+	// Check gas first
+	auto wordsRequired = builder.CreateUDiv(builder.CreateAdd(sizeRequired, Constant::get(31)), Constant::get(32), "wordsRequired");
+	auto words = builder.CreateUDiv(builder.CreateAdd(size, Constant::get(31)), Constant::get(32), "words");
+	auto newWords = builder.CreateSub(wordsRequired, words, "addtionalWords");
+	_gasMeter.checkMemory(newWords, builder);
+	// Resize
+	builder.CreateStore(sizeRequired, m_size);
+	auto newData = builder.CreateCall(m_resize, m_size, "newData");
+	builder.CreateStore(newData, m_data);
+	builder.CreateBr(returnBB);
+
+	// BB "return"
+	builder.SetInsertPoint(returnBB);
+	builder.CreateRetVoid();
+	return func;
 }
 
 llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, llvm::Module* _module, GasMeter& _gasMeter)
@@ -131,10 +168,15 @@ llvm::Value* Memory::getSize()
 	return m_builder.CreateLoad(m_size);
 }
 
+void Memory::require(llvm::Value* _size)
+{
+	m_builder.CreateCall(m_require, _size);
+}
+
 void Memory::registerReturnData(llvm::Value* _index, llvm::Value* _size)
 {
-	auto lastWord = m_builder.CreateAdd(_index, m_builder.CreateSub(_size, Constant::get(32)), "lastWord");
-	loadWord(lastWord); // Make sure that memory is allocated and count gas
+	auto sizeRequired = m_builder.CreateAdd(_index, _size, "sizeRequired");
+	require(sizeRequired); // Make sure that memory is allocated and count gas
 
 	m_builder.CreateStore(_index, m_returnDataOffset);
 	m_builder.CreateStore(_size, m_returnDataSize);
