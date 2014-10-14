@@ -742,24 +742,26 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 				auto destMemIdx = stack.pop();
 				auto srcDataIdx = stack.pop();
-				auto reqByteCount = stack.pop();
+				auto reqBytes = stack.pop();
 
 				// FIXME: ensure memory size reqMemSize.
-				auto reqMemSize = builder.CreateAdd(destMemIdx, reqByteCount);
-				auto reqMemWord = builder.CreateSub(reqMemSize, ConstantInt::get(Type::i256, 32));
-				memory.loadWord(reqMemWord);
+				auto reqMemSize = builder.CreateAdd(destMemIdx, reqBytes, "req_mem_size");
+				memory.require(reqMemSize);
 
 				auto memPtr = memory.getData();
-				auto destPtr = builder.CreateGEP(memPtr, destMemIdx);
+				auto destPtr = builder.CreateGEP(memPtr, destMemIdx, "dest_mem_ptr");
 
 				auto calldataPtr = ext.calldata();
-				auto srcPtr = builder.CreateGEP(calldataPtr, srcDataIdx);
+				auto srcPtr = builder.CreateGEP(calldataPtr, srcDataIdx, "src_idx");
 
 				auto calldataSize = ext.calldatasize();
 				// remaining data bytes:
 				auto remDataSize = builder.CreateSub(calldataSize, srcDataIdx);
 				auto remSizeNegative = builder.CreateICmpSLT(remDataSize, zero256);
-				auto bytesToCopy = builder.CreateSelect(remSizeNegative, zero256, remDataSize);
+				auto remDataBytes = builder.CreateSelect(remSizeNegative, zero256, remDataSize, "rem_data_bytes");
+
+				auto tooLittleDataBytes = builder.CreateICmpULT(remDataBytes, reqBytes);
+				auto bytesToCopy = builder.CreateSelect(tooLittleDataBytes, remDataBytes, reqBytes, "bytes_to_copy");
 
 				builder.CreateMemCpy(destPtr, srcPtr, bytesToCopy, 0);
 
