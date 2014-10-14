@@ -745,9 +745,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto srcDataIdx = stack.pop();
 				auto reqBytes = stack.pop();
 
-				// FIXME: ensure memory size reqMemSize.
-				auto reqMemSize = builder.CreateAdd(destMemIdx, reqBytes, "req_mem_size");
-				memory.require(reqMemSize);
+				memory.require(destMemIdx, reqBytes);
 
 				auto memPtr = memory.getData();
 				auto destPtr = builder.CreateGEP(memPtr, destMemIdx, "dest_mem_ptr");
@@ -856,6 +854,14 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto outSize = stack.pop();
 
 				gasMeter.commitCostBlock(gas);
+
+				// Require memory for the max of in and out buffers
+				auto inSizeReq = builder.CreateAdd(inOff, inSize, "inSizeReq");
+				auto outSizeReq = builder.CreateAdd(outOff, outSize, "outSizeReq");
+				auto cmp = builder.CreateICmpUGT(inSizeReq, outSizeReq);
+				auto sizeReq = builder.CreateSelect(cmp, inSizeReq, outSizeReq, "sizeReq");
+				memory.require(sizeReq);
+
 				auto ret = ext.call(gas, receiveAddress, value, inOff, inSize, outOff, outSize);
 				gasMeter.giveBack(gas);
 				stack.push(ret);
