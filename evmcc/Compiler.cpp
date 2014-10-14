@@ -6,7 +6,7 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/ADT/PostOrderIterator.h>
-//#include <llvm/Transforms/Scalar.h>
+#include <llvm/IR/IntrinsicInst.h>
 
 #include <libevmface/Instruction.h>
 
@@ -159,6 +159,7 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 	m_finalBlock = std::make_unique<BasicBlock>("FinalBlock", m_mainFunc);
 	m_badJumpBlock = std::make_unique<BasicBlock>("BadJumpBlock", m_mainFunc);
 	m_jumpTableBlock = std::make_unique<BasicBlock>("JumpTableBlock", m_mainFunc);
+	m_outOfGasBlock = std::make_unique<BasicBlock>("OutOfGas", m_mainFunc);
 
 	for (auto it = directJumpTargets.cbegin(); it != directJumpTargets.cend(); ++it)
 	{
@@ -195,6 +196,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	// Create the basic blocks.
 	auto entryBlock = llvm::BasicBlock::Create(context, "entry", m_mainFunc);
 	builder.SetInsertPoint(entryBlock);
+
 	createBasicBlocks(bytecode);
 
 	// Init runtime structures.
@@ -203,7 +205,12 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	Ext ext(builder, module.get());
 
 	// Jump to first instruction
-	builder.CreateBr(basicBlocks.begin()->second);
+	auto setjmpFunc = llvm::Intrinsic::getDeclaration(module.get(), llvm::Intrinsic::eh_sjlj_setjmp);
+	auto jmpBufTy = llvm::ArrayType::get(builder.getInt64Ty(), 5);
+	auto jmpBuf = new llvm::GlobalVariable(*module, jmpBufTy, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(jmpBufTy), "jmpBuf");
+	auto setjmpRet = builder.CreateCall(setjmpFunc, builder.CreateBitCast(jmpBuf, Type::BytePtr));
+	auto isNormalFlow = builder.CreateICmpEQ(setjmpRet, builder.getInt32(0));
+	builder.CreateCondBr(isNormalFlow, basicBlocks.begin()->second, m_outOfGasBlock->llvm());
 
 	for (auto basicBlockPairIt = basicBlocks.begin(); basicBlockPairIt != basicBlocks.end(); ++basicBlockPairIt)
 	{
@@ -921,9 +928,11 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 	builder.SetInsertPoint(m_finalBlock->llvm());
 	builder.CreateRet(Constant::get(ReturnCode::Stop));
 
-	// TODO: throw an exception or something
 	builder.SetInsertPoint(m_badJumpBlock->llvm());
 	builder.CreateRet(Constant::get(ReturnCode::BadJumpDestination));
+
+	builder.SetInsertPoint(m_outOfGasBlock->llvm());
+	builder.CreateRet(Constant::get(ReturnCode::OutOfGas));
 
 	builder.SetInsertPoint(m_jumpTableBlock->llvm());
 	if (m_indirectJumpTargets.size() > 0)
