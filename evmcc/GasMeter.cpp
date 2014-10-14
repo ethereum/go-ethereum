@@ -169,7 +169,7 @@ void GasMeter::checkMemory(llvm::Value* _additionalMemoryInWords, llvm::IRBuilde
 
 llvm::Value* GasMeter::getGas()
 {
-	m_builder.CreateLoad(m_gas, "gas");
+	return m_builder.CreateLoad(m_gas, "gas");
 }
 
 }
