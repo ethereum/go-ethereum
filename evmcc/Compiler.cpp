@@ -862,19 +862,12 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, const bytes& bytecode, 
 
 	gasMeter.commitCostBlock();
 
-	if (!m_builder.GetInsertBlock()->getTerminator())	// If block not terminated
+	if (!basicBlock.llvm()->getTerminator())	// If block not terminated
 	{
-		if (basicBlock.end() == bytecode.size())
-		{
-			// Return STOP code
-			m_builder.CreateRet(Constant::get(ReturnCode::Stop));
-		}
+		if (nextBasicBlock)
+			m_builder.CreateBr(nextBasicBlock);	// Branch to the next block
 		else
-		{
-			// Branch to the next block.
-			assert(nextBasicBlock);
-			m_builder.CreateBr(nextBasicBlock);
-		}
+			m_builder.CreateRet(Constant::get(ReturnCode::Stop));	// Return STOP code
 	}
 }
 
