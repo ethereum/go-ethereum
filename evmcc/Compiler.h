@@ -59,6 +59,8 @@ private:
 	 */
 	std::unique_ptr<BasicBlock> m_badJumpBlock;
 
+	std::unique_ptr<BasicBlock> m_outOfGasBlock;
+
 	/// Main program function
 	llvm::Function* m_mainFunc = nullptr;
 };

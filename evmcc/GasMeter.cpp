@@ -3,6 +3,7 @@
 
 #include <llvm/IR/GlobalVariable.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/IntrinsicInst.h>
 
 #include <libevmface/Instruction.h>
 #include <libevm/FeeStructure.h>
@@ -77,7 +78,7 @@ bool isCostBlockEnd(Instruction _inst)
 
 }
 
-GasMeter::GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* _module):
+GasMeter::GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* _module, llvm::Value* _jmpBuf) :
 	m_builder(_builder)
 {
 	m_gas = new llvm::GlobalVariable(*_module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "gas");
@@ -88,9 +89,9 @@ GasMeter::GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* _module):
 	m_gasCheckFunc = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::i256, false), llvm::Function::PrivateLinkage, "gas.check", _module);
 	InsertPointGuard guard(m_builder); 
 
-	auto checkBB = llvm::BasicBlock::Create(_builder.getContext(), "check", m_gasCheckFunc);
-	auto outOfGasBB = llvm::BasicBlock::Create(_builder.getContext(), "outOfGas", m_gasCheckFunc);
-	auto updateBB = llvm::BasicBlock::Create(_builder.getContext(), "update", m_gasCheckFunc);
+	auto checkBB = llvm::BasicBlock::Create(_builder.getContext(), "Check", m_gasCheckFunc);
+	auto outOfGasBB = llvm::BasicBlock::Create(_builder.getContext(), "OutOfGas", m_gasCheckFunc);
+	auto updateBB = llvm::BasicBlock::Create(_builder.getContext(), "Update", m_gasCheckFunc);
 
 	m_builder.SetInsertPoint(checkBB);
 	llvm::Value* cost = m_gasCheckFunc->arg_begin();
@@ -100,8 +101,10 @@ GasMeter::GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* _module):
 	m_builder.CreateCondBr(isOutOfGas, outOfGasBB, updateBB);
 
 	m_builder.SetInsertPoint(outOfGasBB);
-	m_builder.CreateCall(m_rtExit, Constant::get(ReturnCode::OutOfGas));
-	m_builder.CreateRetVoid();
+
+	auto longjmpFunc = llvm::Intrinsic::getDeclaration(_module, llvm::Intrinsic::eh_sjlj_longjmp);
+	m_builder.CreateCall(longjmpFunc, _jmpBuf);
+	m_builder.CreateUnreachable();
 
 	m_builder.SetInsertPoint(updateBB);
 	gas = m_builder.CreateSub(gas, cost);
