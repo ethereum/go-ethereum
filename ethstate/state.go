@@ -57,6 +57,15 @@ func (self *State) GetCode(addr []byte) []byte {
 	return nil
 }
 
+func (self *State) GetState(a, b []byte) []byte {
+	stateObject := self.GetStateObject(a)
+	if stateObject != nil {
+		return stateObject.GetState(b).Bytes()
+	}
+
+	return nil
+}
+
 //
 // Setting, updating & deleting state object methods
 //

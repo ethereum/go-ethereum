@@ -40,10 +40,27 @@ func NewDebugVm(env Environment) *DebugVm {
 func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 	self.depth++
 
+	var (
+		op OpCode
+
+		mem      = &Memory{}
+		stack    = NewStack()
+		pc       = big.NewInt(0)
+		step     = 0
+		prevStep = 0
+		require  = func(m int) {
+			if stack.Len() < m {
+				panic(fmt.Sprintf("%04v (%v) stack err size = %d, required = %d", pc, op, stack.Len(), m))
+			}
+		}
+	)
+
 	if self.Recoverable {
 		// Recover from any require exception
 		defer func() {
 			if r := recover(); r != nil {
+				self.Endl()
+
 				ret = closure.Return(nil)
 				err = fmt.Errorf("%v", r)
 			}
@@ -61,21 +78,6 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 	}
 
 	vmlogger.Debugf("(%s) %x gas: %v (d) %x\n", self.Fn, closure.Address(), closure.Gas, closure.Args)
-
-	var (
-		op OpCode
-
-		mem      = &Memory{}
-		stack    = NewStack()
-		pc       = big.NewInt(0)
-		step     = 0
-		prevStep = 0
-		require  = func(m int) {
-			if stack.Len() < m {
-				panic(fmt.Sprintf("%04v (%v) stack err size = %d, required = %d", pc, op, stack.Len(), m))
-			}
-		}
-	)
 
 	for {
 		prevStep = step
@@ -223,7 +225,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			base.Add(y, x)
 
-			To256(base)
+			U256(base)
 
 			self.Printf(" = %v", base)
 			// Pop result back on the stack
@@ -235,7 +237,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			base.Sub(y, x)
 
-			To256(base)
+			U256(base)
 
 			self.Printf(" = %v", base)
 			// Pop result back on the stack
@@ -247,60 +249,84 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			base.Mul(y, x)
 
-			To256(base)
+			U256(base)
 
 			self.Printf(" = %v", base)
 			// Pop result back on the stack
 			stack.Push(base)
 		case DIV:
 			require(2)
-			x, y := stack.Popn()
-			self.Printf(" %v / %v", y, x)
+			x, y := stack.Pop(), stack.Pop()
+			self.Printf(" %v / %v", x, y)
 
-			if x.Cmp(ethutil.Big0) != 0 {
-				base.Div(y, x)
+			if y.Cmp(ethutil.Big0) != 0 {
+				base.Div(x, y)
 			}
 
-			To256(base)
+			U256(base)
 
 			self.Printf(" = %v", base)
 			// Pop result back on the stack
 			stack.Push(base)
 		case SDIV:
 			require(2)
-			x, y := stack.Popn()
-			self.Printf(" %v / %v", y, x)
+			x, y := S256(stack.Pop()), S256(stack.Pop())
 
-			if x.Cmp(ethutil.Big0) != 0 {
-				base.Div(y, x)
+			self.Printf(" %v / %v", x, y)
+
+			if y.Cmp(ethutil.Big0) == 0 {
+				base.Set(ethutil.Big0)
+			} else {
+				n := new(big.Int)
+				if new(big.Int).Mul(x, y).Cmp(ethutil.Big0) < 0 {
+					n.SetInt64(-1)
+				} else {
+					n.SetInt64(1)
+				}
+
+				base.Div(x.Abs(x), y.Abs(y)).Mul(base, n)
+
+				U256(base)
 			}
 
-			To256(base)
-
 			self.Printf(" = %v", base)
-			// Pop result back on the stack
 			stack.Push(base)
 		case MOD:
 			require(2)
-			x, y := stack.Popn()
+			x, y := stack.Pop(), stack.Pop()
 
-			self.Printf(" %v %% %v", y, x)
+			self.Printf(" %v %% %v", x, y)
 
-			base.Mod(y, x)
+			if y.Cmp(ethutil.Big0) == 0 {
+				base.Set(ethutil.Big0)
+			} else {
+				base.Mod(x, y)
+			}
 
-			To256(base)
+			U256(base)
 
 			self.Printf(" = %v", base)
 			stack.Push(base)
 		case SMOD:
 			require(2)
-			x, y := stack.Popn()
+			x, y := S256(stack.Pop()), S256(stack.Pop())
 
-			self.Printf(" %v %% %v", y, x)
+			self.Printf(" %v %% %v", x, y)
 
-			base.Mod(y, x)
+			if y.Cmp(ethutil.Big0) == 0 {
+				base.Set(ethutil.Big0)
+			} else {
+				n := new(big.Int)
+				if x.Cmp(ethutil.Big0) < 0 {
+					n.SetInt64(-1)
+				} else {
+					n.SetInt64(1)
+				}
 
-			To256(base)
+				base.Mod(x.Abs(x), y.Abs(y)).Mul(base, n)
+
+				U256(base)
+			}
 
 			self.Printf(" = %v", base)
 			stack.Push(base)
@@ -313,7 +339,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			base.Exp(y, x, Pow256)
 
-			To256(base)
+			U256(base)
 
 			self.Printf(" = %v", base)
 
@@ -321,6 +347,9 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case NEG:
 			require(1)
 			base.Sub(Pow256, stack.Pop())
+
+			base = U256(base)
+
 			stack.Push(base)
 		case LT:
 			require(2)
@@ -346,17 +375,17 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 		case SLT:
 			require(2)
-			x, y := stack.Popn()
+			y, x := S256(stack.Pop()), S256(stack.Pop())
 			self.Printf(" %v < %v", y, x)
 			// x < y
-			if y.Cmp(x) < 0 {
+			if y.Cmp(S256(x)) < 0 {
 				stack.Push(ethutil.BigTrue)
 			} else {
 				stack.Push(ethutil.BigFalse)
 			}
 		case SGT:
 			require(2)
-			x, y := stack.Popn()
+			y, x := S256(stack.Pop()), S256(stack.Pop())
 			self.Printf(" %v > %v", y, x)
 
 			// x > y
@@ -426,7 +455,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			base.Add(x, y)
 			base.Mod(base, z)
 
-			To256(base)
+			U256(base)
 
 			self.Printf(" = %v", base)
 
@@ -441,7 +470,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			base.Mul(x, y)
 			base.Mod(base, z)
 
-			To256(base)
+			U256(base)
 
 			self.Printf(" = %v", base)
 

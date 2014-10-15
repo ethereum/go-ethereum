@@ -2,7 +2,6 @@ package ethvm
 
 import (
 	"bytes"
-	"log"
 	"testing"
 
 	"github.com/ethereum/eth-go/ethstate"
@@ -40,12 +39,9 @@ type VmTest struct {
 	Pre         map[string]Account
 }
 
-func TestRemote(t *testing.T) {
+func RunVmTest(url string, t *testing.T) {
 	tests := make(map[string]VmTest)
-	err := helper.CreateTests("https://raw.githubusercontent.com/ethereum/tests/master/vmtests/vmSha3Test.json", &tests)
-	if err != nil {
-		log.Fatal(err)
-	}
+	helper.CreateTests(t, url, &tests)
 
 	for name, test := range tests {
 		state := ethstate.New(helper.NewTrie())
@@ -54,7 +50,10 @@ func TestRemote(t *testing.T) {
 			state.SetStateObject(obj)
 		}
 
-		ret, gas := helper.RunVm(state, test.Env, test.Exec)
+		ret, gas, err := helper.RunVm(state, test.Env, test.Exec)
+		if err != nil {
+			t.Errorf("%s's execution failed. %v\n", name, err)
+		}
 
 		rexp := helper.FromHex(test.Out)
 		if bytes.Compare(rexp, ret) != 0 {
@@ -78,4 +77,18 @@ func TestRemote(t *testing.T) {
 			}
 		}
 	}
+}
+
+// I've created a new function for each tests so it's easier to identify where the problem lies if any of them fail.
+func TestVMSha3(t *testing.T) {
+	helper.Logger.SetLogLevel(0)
+	defer helper.Logger.SetLogLevel(4)
+
+	const url = "https://raw.githubusercontent.com/ethereum/tests/master/vmtests/vmSha3Test.json"
+	RunVmTest(url, t)
+}
+
+func TestVMArithmetic(t *testing.T) {
+	const url = "https://raw.githubusercontent.com/ethereum/tests/master/vmtests/vmArithmeticTest.json"
+	RunVmTest(url, t)
 }

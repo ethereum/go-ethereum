@@ -8,8 +8,11 @@ import (
 	"github.com/ethereum/eth-go/ethutil"
 )
 
+var Logger ethlog.LogSystem
+
 func init() {
-	ethlog.AddLogSystem(ethlog.NewStdLogSystem(os.Stdout, log.LstdFlags, ethlog.LogLevel(4)))
+	Logger = ethlog.NewStdLogSystem(os.Stdout, log.LstdFlags, ethlog.LogLevel(4))
+	ethlog.AddLogSystem(Logger)
 
 	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")
 }

@@ -8,6 +8,9 @@ import (
 	"github.com/ethereum/eth-go/ethutil"
 )
 
+// BIG FAT WARNING. THIS VM IS NOT YET IS USE!
+// I want to get all VM tests pass first before updating this VM
+
 type Vm struct {
 	env   Environment
 	err   error
@@ -170,7 +173,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			base.Add(y, x)
 
-			To256(base)
+			U256(base)
 
 			// Pop result back on the stack
 			stack.Push(base)
@@ -180,7 +183,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			base.Sub(y, x)
 
-			To256(base)
+			U256(base)
 
 			// Pop result back on the stack
 			stack.Push(base)
@@ -190,7 +193,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			base.Mul(y, x)
 
-			To256(base)
+			U256(base)
 
 			// Pop result back on the stack
 			stack.Push(base)
@@ -202,21 +205,29 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 				base.Div(y, x)
 			}
 
-			To256(base)
+			U256(base)
 
 			// Pop result back on the stack
 			stack.Push(base)
 		case SDIV:
 			require(2)
-			x, y := stack.Popn()
+			y, x := S256(stack.Pop()), S256(stack.Pop())
 
-			if x.Cmp(ethutil.Big0) != 0 {
-				base.Div(y, x)
+			if x.Cmp(ethutil.Big0) == 0 {
+				base.Set(ethutil.Big0)
+			} else {
+				n := new(big.Int)
+				if new(big.Int).Mul(y, x).Cmp(ethutil.Big0) < 0 {
+					n.SetInt64(-1)
+				} else {
+					n.SetInt64(1)
+				}
+
+				base.Div(y.Abs(y), x.Mul(x.Abs(x), n))
+
+				U256(base)
 			}
 
-			To256(base)
-
-			// Pop result back on the stack
 			stack.Push(base)
 		case MOD:
 			require(2)
@@ -224,16 +235,27 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			base.Mod(y, x)
 
-			To256(base)
+			U256(base)
 
 			stack.Push(base)
 		case SMOD:
 			require(2)
-			x, y := stack.Popn()
+			y, x := S256(stack.Pop()), S256(stack.Pop())
 
-			base.Mod(y, x)
+			if x.Cmp(ethutil.Big0) == 0 {
+				base.Set(ethutil.Big0)
+			} else {
+				n := new(big.Int)
+				if y.Cmp(ethutil.Big0) < 0 {
+					n.SetInt64(-1)
+				} else {
+					n.SetInt64(1)
+				}
 
-			To256(base)
+				base.Mod(y.Abs(y), x.Mul(x.Abs(x), n))
+
+				U256(base)
+			}
 
 			stack.Push(base)
 
@@ -243,12 +265,15 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			base.Exp(y, x, Pow256)
 
-			To256(base)
+			U256(base)
 
 			stack.Push(base)
 		case NEG:
 			require(1)
 			base.Sub(Pow256, stack.Pop())
+
+			base = U256(base)
+
 			stack.Push(base)
 		case LT:
 			require(2)
@@ -272,16 +297,16 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 		case SLT:
 			require(2)
-			x, y := stack.Popn()
+			y, x := S256(stack.Pop()), S256(stack.Pop())
 			// x < y
-			if y.Cmp(x) < 0 {
+			if y.Cmp(S256(x)) < 0 {
 				stack.Push(ethutil.BigTrue)
 			} else {
 				stack.Push(ethutil.BigFalse)
 			}
 		case SGT:
 			require(2)
-			x, y := stack.Popn()
+			y, x := S256(stack.Pop()), S256(stack.Pop())
 
 			// x > y
 			if y.Cmp(x) > 0 {
@@ -345,7 +370,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			base.Add(x, y)
 			base.Mod(base, z)
 
-			To256(base)
+			U256(base)
 
 			stack.Push(base)
 		case MULMOD:
@@ -358,7 +383,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			base.Mul(x, y)
 			base.Mod(base, z)
 
-			To256(base)
+			U256(base)
 
 			stack.Push(base)
 

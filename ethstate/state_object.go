@@ -98,13 +98,13 @@ func (c *StateObject) SetAddr(addr []byte, value interface{}) {
 }
 
 func (self *StateObject) GetStorage(key *big.Int) *ethutil.Value {
-	return self.getStorage(key.Bytes())
+	return self.GetState(key.Bytes())
 }
 func (self *StateObject) SetStorage(key *big.Int, value *ethutil.Value) {
-	self.setStorage(key.Bytes(), value)
+	self.SetState(key.Bytes(), value)
 }
 
-func (self *StateObject) getStorage(k []byte) *ethutil.Value {
+func (self *StateObject) GetState(k []byte) *ethutil.Value {
 	key := ethutil.LeftPadBytes(k, 32)
 
 	value := self.storage[string(key)]
@@ -117,11 +117,9 @@ func (self *StateObject) getStorage(k []byte) *ethutil.Value {
 	}
 
 	return value
-
-	//return self.GetAddr(key)
 }
 
-func (self *StateObject) setStorage(k []byte, value *ethutil.Value) {
+func (self *StateObject) SetState(k []byte, value *ethutil.Value) {
 	key := ethutil.LeftPadBytes(k, 32)
 	self.storage[string(key)] = value.Copy()
 }

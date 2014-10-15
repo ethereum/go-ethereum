@@ -270,7 +270,8 @@ func (self *StateTransition) Eval(msg *ethstate.Message, script []byte, context 
 		callerClosure = ethvm.NewClosure(msg, transactor, context, script, self.gas, self.gasPrice)
 	)
 
-	vm := ethvm.New(env, ethvm.Type(ethutil.Config.VmType))
+	//vm := ethvm.New(env, ethvm.Type(ethutil.Config.VmType))
+	vm := ethutil.New(env, ethvm.DebugVmTy)
 
 	ret, _, err = callerClosure.Call(vm, self.tx.Data)
 

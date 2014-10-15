@@ -35,7 +35,8 @@ var (
 	LogTyPretty byte = 0x1
 	LogTyDiff   byte = 0x2
 
-	To256 = ethutil.To256
+	U256 = ethutil.U256
+	S256 = ethutil.S256
 )
 
 const MaxCallDepth = 1024

@@ -4,12 +4,15 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"testing"
 )
 
-func CreateTests(uri string, value interface{}) error {
+func CreateTests(t *testing.T, uri string, value interface{}) {
 	resp, err := http.Get(uri)
 	if err != nil {
-		panic(err)
+		t.Error(err)
+
+		return
 	}
 	defer resp.Body.Close()
 
@@ -17,8 +20,6 @@ func CreateTests(uri string, value interface{}) error {
 
 	err = json.Unmarshal(data, &value)
 	if err != nil {
-		return err
+		t.Error(err)
 	}
-
-	return nil
 }

@@ -1,7 +1,6 @@
 package helper
 
 import (
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/eth-go/ethstate"
@@ -51,16 +50,13 @@ func (self *Env) BlockHash() []byte     { return nil }
 // This is likely to fail if anything ever gets looked up in the state trie :-)
 func (self *Env) State() *ethstate.State { return ethstate.New(ethtrie.New(nil, "")) }
 
-func RunVm(state *ethstate.State, env, exec map[string]string) ([]byte, *big.Int) {
+func RunVm(state *ethstate.State, env, exec map[string]string) ([]byte, *big.Int, error) {
 	caller := state.NewStateObject(ethutil.Hex2Bytes(exec["caller"]))
 	callee := state.GetStateObject(ethutil.Hex2Bytes(exec["address"]))
 	closure := ethvm.NewClosure(nil, caller, callee, callee.Code, ethutil.Big(exec["gas"]), ethutil.Big(exec["gasPrice"]))
 
 	vm := ethvm.New(NewEnvFromMap(state, env, exec), ethvm.DebugVmTy)
 	ret, _, e := closure.Call(vm, nil)
-	if e != nil {
-		fmt.Println(e)
-	}
 
-	return ret, closure.Gas
+	return ret, closure.Gas, e
 }
