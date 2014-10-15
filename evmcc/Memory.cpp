@@ -224,7 +224,8 @@ void Memory::dump(uint64_t _begin, uint64_t _end)
 
 extern "C"
 {
-	using namespace dev::eth::jit;
+
+using namespace dev::eth::jit;
 
 EXPORT i256 mem_returnDataOffset;
 EXPORT i256 mem_returnDataSize;

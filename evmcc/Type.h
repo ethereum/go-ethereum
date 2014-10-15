@@ -26,7 +26,7 @@ struct Type
 	static llvm::Type* Void;
 
 	/// Main function return type
-	static llvm::Type* MainReturn;
+	static llvm::IntegerType* MainReturn;
 
 	static void init(llvm::LLVMContext& _context);
 };
@@ -44,9 +44,9 @@ enum class ReturnCode
 struct Constant
 {
 	/// Returns word-size constant
-	static llvm::Constant* get(uint64_t _n);
+	static llvm::ConstantInt* get(uint64_t _n);
 
-	static llvm::Constant* get(ReturnCode _returnCode);
+	static llvm::ConstantInt* get(ReturnCode _returnCode);
 };
 
 }

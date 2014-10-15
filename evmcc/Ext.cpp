@@ -10,10 +10,6 @@
 #include "Runtime.h"
 
 using namespace llvm;
-using llvm::types::i;
-using Linkage = llvm::GlobalValue::LinkageTypes;
-using dev::h256;
-using dev::u256;
 
 namespace dev
 {
@@ -88,6 +84,8 @@ Ext::Ext(llvm::IRBuilder<>& _builder, llvm::Module* module)
 
 	m_data = m_builder.CreateAlloca(extDataTy, nullptr, "ext.data");
 
+	using llvm::types::i;
+	using Linkage = llvm::GlobalValue::LinkageTypes;
 	m_init = Function::Create(FunctionType::get(m_builder.getVoidTy(), extDataTy->getPointerTo(), false), Linkage::ExternalLinkage, "ext_init", module);
 	m_store = Function::Create(TypeBuilder<void(i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_store", module);
 	m_setStore = Function::Create(TypeBuilder<void(i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_setStore", module);

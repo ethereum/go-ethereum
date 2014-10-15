@@ -23,10 +23,6 @@ namespace eth
 namespace jit
 {
 
-using dev::eth::Instruction;
-using namespace dev::eth; // We should move all the JIT code into dev::eth namespace
-
-
 Compiler::Compiler()
 	: m_finalBlock(nullptr)
 	, m_badJumpBlock(nullptr)
@@ -159,14 +155,12 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 
 std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 {
-	using namespace llvm;
-
-	auto& context = getGlobalContext();
-	auto module = std::make_unique<Module>("main", context);
-	IRBuilder<> builder(context);
+	auto& context = llvm::getGlobalContext();
+	auto module = std::make_unique<llvm::Module>("main", context);
+	llvm::IRBuilder<> builder(context);
 
 	// Create main function
-	m_mainFunc = Function::Create(FunctionType::get(Type::MainReturn, false), Function::ExternalLinkage, "main", module.get());
+	m_mainFunc = llvm::Function::Create(llvm::FunctionType::get(Type::MainReturn, false), llvm::Function::ExternalLinkage, "main", module.get());
 
 	// Create the basic blocks.
 	auto entryBlock = llvm::BasicBlock::Create(context, "entry", m_mainFunc);
@@ -286,7 +280,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			case Instruction::NEG:
 			{
 				auto top = stack.pop();
-				auto zero = ConstantInt::get(Type::i256, 0);
+				auto zero = Constant::get(0);
 				auto res = builder.CreateSub(zero, top);
 				stack.push(res);
 				break;
@@ -345,7 +339,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			case Instruction::NOT:
 			{
 				auto top = stack.pop();
-				auto zero = ConstantInt::get(Type::i256, 0);
+				auto zero = Constant::get(0);
 				auto iszero = builder.CreateICmpEQ(top, zero, "iszero");
 				auto result = builder.CreateZExt(iszero, Type::i256);
 				stack.push(result);
@@ -566,7 +560,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				{
 					stack.swap(1);
 					auto val = stack.pop();
-					auto zero = ConstantInt::get(Type::i256, 0);
+					auto zero = Constant::get(0);
 					auto cond = builder.CreateICmpNE(val, zero, "nonzero");
 
 					// Assume the basic blocks are properly ordered:
@@ -876,7 +870,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 		for (auto it = m_indirectJumpTargets.cbegin(); it != m_indirectJumpTargets.cend(); ++it)
 		{
 			auto& bb = *it;
-			auto dest = ConstantInt::get(Type::i256, bb->begin());
+			auto dest = Constant::get(bb->begin());
 			switchInstr->addCase(dest, bb->llvm());
 		}
 	}

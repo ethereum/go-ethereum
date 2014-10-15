@@ -16,7 +16,7 @@ llvm::IntegerType* Type::lowPrecision;
 llvm::IntegerType* Type::Byte;
 llvm::PointerType* Type::BytePtr;
 llvm::Type* Type::Void;
-llvm::Type* Type::MainReturn;
+llvm::IntegerType* Type::MainReturn;
 
 void Type::init(llvm::LLVMContext& _context)
 {
@@ -29,12 +29,12 @@ void Type::init(llvm::LLVMContext& _context)
 	MainReturn = llvm::Type::getInt32Ty(_context);
 }
 
-llvm::Constant* Constant::get(uint64_t _n)
+llvm::ConstantInt* Constant::get(uint64_t _n)
 {
 	return llvm::ConstantInt::get(Type::i256, _n);
 }
 
-llvm::Constant* Constant::get(ReturnCode _returnCode)
+llvm::ConstantInt* Constant::get(ReturnCode _returnCode)
 {
 	return llvm::ConstantInt::get(Type::MainReturn, static_cast<uint64_t>(_returnCode));
 }

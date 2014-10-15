@@ -19,12 +19,10 @@ namespace eth
 namespace jit
 {
 
-using namespace dev::eth; // We should move all the JIT code into dev::eth namespace
-
 namespace // Helper functions
 {
 
-uint64_t getStepCost(dev::eth::Instruction inst) // TODO: Add this function to FeeSructure
+uint64_t getStepCost(dev::eth::Instruction inst) // TODO: Add this function to FeeSructure (pull request submitted)
 {
 	switch (inst)
 	{
