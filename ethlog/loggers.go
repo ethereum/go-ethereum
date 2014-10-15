@@ -1,35 +1,14 @@
 /*
 Package ethlog implements a multi-output leveled logger.
 
-Features
+Other packages use tagged logger to send log messages to shared
+(process-wide) logging engine. The shared logging engine dispatches to
+multiple log systems. The log level can be set separately per log
+system.
 
-Other packages use tagged logger to send log messages to shared (process-wide) logging engine.
-The shared logging engine dispatches to multiple log systems.
-The log level can be set separately per log system.
-
-Logging is asynchrounous and does not block the main thread. Message
+Logging is asynchrounous and does not block the caller. Message
 formatting is performed by the caller goroutine to avoid incorrect
 logging of mutable state.
-
-Usage
-
-The Logger type provides named Printf and Println style methods for
-all loglevels. Each ethereum component should have its own logger with
-a unique prefix.
-
-    logger.Infoln("this is info") # > [TAG] This is info
-    logger.Infof("this %v is info", object) # > [TAG] This object is info
-
-ethlog also provides constructors for that wrap io.Writers into a
-standard logger with a settable level:
-
-    filename := "test.log"
-    file, _ := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, os.ModePerm)
-    fileLogSystem := NewStdLogSystem(file, 0, WarnLevel)
-    AddLogSystem(fileLogSystem)
-    stdOutLogSystem := NewStdLogSystem(os.Stdout, 0, WarnLevel)
-    AddLogSystem(stdOutLogSystem)
-
 */
 package ethlog
 
@@ -160,8 +139,9 @@ func AddLogSystem(logSystem LogSystem) {
 	mutex.Unlock()
 }
 
-// A Logger prints messages prefixed by a given tag.
-// You should create one with a unique tag for each high-level component.
+// A Logger prints messages prefixed by a given tag. It provides named
+// Printf and Println style methods for all loglevels. Each ethereum
+// component should have its own logger with a unique prefix.
 type Logger struct {
 	tag string
 }
