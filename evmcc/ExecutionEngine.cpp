@@ -1,6 +1,8 @@
 
 #include "ExecutionEngine.h"
 
+#include <csetjmp>
+
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/ADT/Triple.h>
@@ -26,6 +28,8 @@ ExecutionEngine::ExecutionEngine()
 {
 
 }
+
+extern "C" { EXPORT std::jmp_buf* rt_jmpBuf; }
 
 
 int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
@@ -101,17 +105,17 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 		exit(1);
 	}
 
-
 	ReturnCode returnCode;
-	try
+	std::jmp_buf buf;
+	auto r = setjmp(buf);
+	if (r == 0)
 	{
+		rt_jmpBuf = &buf;
 		auto result = exec->runFunction(entryFunc, {});
 		returnCode = static_cast<ReturnCode>(result.IntVal.getZExtValue());
 	}
-	catch (const dev::eth::OutOfGas&)
-	{
-		returnCode = ReturnCode::OutOfGas;
-	}
+	else
+		returnCode = static_cast<ReturnCode>(r);
 
 	gas = static_cast<decltype(gas)>(Runtime::getGas());
 	
