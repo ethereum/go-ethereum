@@ -11,7 +11,7 @@ namespace evmcc
 class GasMeter
 {
 public:
-	GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* module);
+	GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* _module, llvm::Value* _jmpBuf);
 
 	GasMeter(const GasMeter&) = delete;
 	void operator=(GasMeter) = delete;

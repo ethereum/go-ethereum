@@ -199,16 +199,20 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 
 	createBasicBlocks(bytecode);
 
+	// Prepare jump buffer
+	auto jmpBufStorageTy = llvm::ArrayType::get(Type::Byte, 2048);
+	auto jmpBufStorage = new llvm::GlobalVariable(*module, jmpBufStorageTy, false, llvm::GlobalVariable::PrivateLinkage, llvm::ConstantAggregateZero::get(jmpBufStorageTy), "jmpBuf");
+	jmpBufStorage->setAlignment(16);
+	auto jmpBuf = builder.CreateConstInBoundsGEP2_32(jmpBufStorage, 0, 0);
+
 	// Init runtime structures.
-	GasMeter gasMeter(builder, module.get());
+	GasMeter gasMeter(builder, module.get(), jmpBuf);
 	Memory memory(builder, module.get(), gasMeter);
 	Ext ext(builder, module.get());
 
-	// Jump to first instruction
+	// Create exception landing with setjmp and jump to first instruction
 	auto setjmpFunc = llvm::Intrinsic::getDeclaration(module.get(), llvm::Intrinsic::eh_sjlj_setjmp);
-	auto jmpBufTy = llvm::ArrayType::get(builder.getInt64Ty(), 5);
-	auto jmpBuf = new llvm::GlobalVariable(*module, jmpBufTy, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(jmpBufTy), "jmpBuf");
-	auto setjmpRet = builder.CreateCall(setjmpFunc, builder.CreateBitCast(jmpBuf, Type::BytePtr));
+	auto setjmpRet = builder.CreateCall(setjmpFunc, jmpBuf);
 	auto isNormalFlow = builder.CreateICmpEQ(setjmpRet, builder.getInt32(0));
 	builder.CreateCondBr(isNormalFlow, basicBlocks.begin()->second, m_outOfGasBlock->llvm());
 

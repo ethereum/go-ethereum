@@ -121,7 +121,9 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 		for (auto it = returnData.begin(), end = returnData.end(); it != end; ++it)
 			std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)*it << " ";
 		std::cout << "]\n";
-	}	
+	}
+
+	std::cout << "RETURN CODE: " << (int)returnCode << std::endl;
 	return static_cast<int>(returnCode);
 }
 
