@@ -28,6 +28,8 @@ private:
 
 	void createBasicBlocks(const bytes& bytecode);
 
+	void compileBasicBlock(BasicBlock& basicBlock, const bytes& bytecode, class Memory& memory, class Ext& ext, class GasMeter& gasMeter, llvm::BasicBlock* nextBasicBlock);
+
 	void linkBasicBlocks();
 
 	llvm::IRBuilder<> m_builder;
