@@ -177,6 +177,30 @@ void Memory::registerReturnData(llvm::Value* _index, llvm::Value* _size)
 	m_builder.CreateStore(_size, m_returnDataSize);
 }
 
+void Memory::copyBytes(llvm::Value* _srcPtr, llvm::Value* _srcSize, llvm::Value* _srcIdx,
+                       llvm::Value* _destMemIdx, llvm::Value* _reqBytes)
+{
+	auto zero256 = llvm::ConstantInt::get(Type::i256, 0);
+
+	auto reqMemSize = m_builder.CreateAdd(_destMemIdx, _reqBytes, "req_mem_size");
+	require(reqMemSize);
+
+	auto srcPtr = m_builder.CreateGEP(_srcPtr, _srcIdx, "src_idx");
+
+	auto memPtr = getData();
+	auto destPtr = m_builder.CreateGEP(memPtr, _destMemIdx, "dest_mem_ptr");
+
+	// remaining source bytes:
+	auto remSrcSize = m_builder.CreateSub(_srcSize, _srcIdx);
+	auto remSizeNegative = m_builder.CreateICmpSLT(remSrcSize, zero256);
+	auto remSrcBytes = m_builder.CreateSelect(remSizeNegative, zero256, remSrcSize, "rem_src_bytes");
+
+	auto tooFewSrcBytes = m_builder.CreateICmpULT(remSrcBytes, _reqBytes);
+	auto bytesToCopy = m_builder.CreateSelect(tooFewSrcBytes, remSrcBytes, _reqBytes, "bytes_to_copy");
+
+	m_builder.CreateMemCpy(destPtr, srcPtr, bytesToCopy, 0);
+}
+
 void Memory::dump(uint64_t _begin, uint64_t _end)
 {
 	if (getenv("EVMCC_DEBUG_MEMORY") == nullptr)

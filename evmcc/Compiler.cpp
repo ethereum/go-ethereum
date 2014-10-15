@@ -745,35 +745,51 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				break;
 			}
 
-			case Instruction::CALLDATACOPY:
-			case Instruction::CODECOPY:
+			case Instruction::EXTCODESIZE:
 			{
-				auto zero256 = ConstantInt::get(Type::i256, 0);
+				auto addr = stack.pop();
+				auto value = ext.codesizeAt(addr);
+				stack.push(value);
+				break;
+			}
 
+			case Instruction::CALLDATACOPY:
+			{
 				auto destMemIdx = stack.pop();
 				auto srcIdx = stack.pop();
 				auto reqBytes = stack.pop();
 
-				auto reqMemSize = builder.CreateAdd(destMemIdx, reqBytes, "req_mem_size");
-				memory.require(reqMemSize);
+				auto srcPtr = ext.calldata();
+				auto srcSize = ext.calldatasize();
 
-				auto memPtr = memory.getData();
-				auto destPtr = builder.CreateGEP(memPtr, destMemIdx, "dest_mem_ptr");
+				memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);
+				break;
+			}
 
-				auto srcBasePtr = inst == Instruction::CALLDATACOPY ? ext.calldata() : ext.code();
-				auto srcPtr = builder.CreateGEP(srcBasePtr, srcIdx, "src_idx");
+			case Instruction::CODECOPY:
+			{
+				auto destMemIdx = stack.pop();
+				auto srcIdx = stack.pop();
+				auto reqBytes = stack.pop();
 
-				auto srcSize = inst == Instruction::CALLDATACOPY ? ext.calldatasize() : ext.codesize();
-				// remaining data bytes:
-				auto remSrcSize = builder.CreateSub(srcSize, srcIdx);
-				auto remSizeNegative = builder.CreateICmpSLT(remSrcSize, zero256);
-				auto remSrcBytes = builder.CreateSelect(remSizeNegative, zero256, remSrcSize, "rem_src_bytes");
+				auto srcPtr = ext.code();
+				auto srcSize = ext.codesize();
 
-				auto tooLittleDataBytes = builder.CreateICmpULT(remSrcBytes, reqBytes);
-				auto bytesToCopy = builder.CreateSelect(tooLittleDataBytes, remSrcBytes, reqBytes, "bytes_to_copy");
+				memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);
+				break;
+			}
 
-				builder.CreateMemCpy(destPtr, srcPtr, bytesToCopy, 0);
+			case Instruction::EXTCODECOPY:
+			{
+				auto extAddr = stack.pop();
+				auto destMemIdx = stack.pop();
+				auto srcIdx = stack.pop();
+				auto reqBytes = stack.pop();
 
+				auto srcPtr = ext.codeAt(extAddr);
+				auto srcSize = ext.codesizeAt(extAddr);
+
+				memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);
 				break;
 			}
 
@@ -847,9 +863,10 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			}
 
 			case Instruction::CALL:
+			case Instruction::CALLCODE:
 			{
 				auto gas = stack.pop();
-				auto receiveAddress = stack.pop();
+				auto codeAddress = stack.pop();
 				auto value = stack.pop();
 				auto inOff = stack.pop();
 				auto inSize = stack.pop();
@@ -865,7 +882,11 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto sizeReq = builder.CreateSelect(cmp, inSizeReq, outSizeReq, "sizeReq");
 				memory.require(sizeReq);
 
-				auto ret = ext.call(gas, receiveAddress, value, inOff, inSize, outOff, outSize);
+				auto receiveAddress = codeAddress;
+				if (inst == Instruction::CALLCODE)
+					receiveAddress = ext.address();
+
+				auto ret = ext.call(gas, receiveAddress, value, inOff, inSize, outOff, outSize, codeAddress);
 				gasMeter.giveBack(gas);
 				stack.push(ret);
 				break;
