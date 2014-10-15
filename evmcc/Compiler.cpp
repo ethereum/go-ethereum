@@ -873,9 +873,10 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			}
 
 			case Instruction::CALL:
+			case Instruction::CALLCODE:
 			{
 				auto gas = stack.pop();
-				auto receiveAddress = stack.pop();
+				auto codeAddress = stack.pop();
 				auto value = stack.pop();
 				auto inOff = stack.pop();
 				auto inSize = stack.pop();
@@ -891,7 +892,11 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				auto sizeReq = builder.CreateSelect(cmp, inSizeReq, outSizeReq, "sizeReq");
 				memory.require(sizeReq);
 
-				auto ret = ext.call(gas, receiveAddress, value, inOff, inSize, outOff, outSize);
+				auto receiveAddress = codeAddress;
+				if (inst == Instruction::CALLCODE)
+					receiveAddress = ext.address();
+
+				auto ret = ext.call(gas, receiveAddress, value, inOff, inSize, outOff, outSize, codeAddress);
 				gasMeter.giveBack(gas);
 				stack.push(ret);
 				break;

@@ -1,0 +1,11 @@
+(asm
+200   ;; byte count
+0     ;; source index in code array
+10    ;; dest index in memory
+ADDRESS
+EXTCODECOPY
+
+0 MLOAD ;; to dump memory
+
+0 32 RETURN
+)

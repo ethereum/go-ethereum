@@ -27,7 +27,6 @@ ExecutionEngine::ExecutionEngine()
 
 }
 
-
 int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 {
 	auto module = _module.get(); // Keep ownership of the module in _module
