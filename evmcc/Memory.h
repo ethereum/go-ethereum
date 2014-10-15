@@ -20,6 +20,8 @@ public:
 	void storeByte(llvm::Value* _addr, llvm::Value* _byte);
 	llvm::Value* getData();
 	llvm::Value* getSize();
+	void copyBytes(llvm::Value* _srcPtr, llvm::Value* _srcSize, llvm::Value* _srcIndex,
+	               llvm::Value* _destMemIdx, llvm::Value* _byteCount);
 
 	/// Requires this amount of memory. And counts gas fee for that memory.
 	void require(llvm::Value* _size);

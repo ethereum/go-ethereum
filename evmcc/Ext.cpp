@@ -14,6 +14,7 @@ using llvm::types::i;
 using Linkage = llvm::GlobalValue::LinkageTypes;
 using dev::h256;
 using dev::u256;
+
 namespace evmcc
 {
 
@@ -94,6 +95,8 @@ Ext::Ext(llvm::IRBuilder<>& _builder, llvm::Module* module)
 	m_bswap = Intrinsic::getDeclaration(module, Intrinsic::bswap, i256Ty);
 	m_sha3 = Function::Create(TypeBuilder<void(i<256>*, i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_sha3", module);
 	m_exp = Function::Create(TypeBuilder<void(i<256>*, i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_exp", module);
+	m_codeAt = Function::Create(TypeBuilder<void(i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_codeAt", module);
+	m_codesizeAt = Function::Create(TypeBuilder<void(i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_codesizeAt", module);
 
 	m_builder.CreateCall(m_init, m_data);
 }
@@ -209,8 +212,31 @@ llvm::Value* Ext::exp(llvm::Value* _left, llvm::Value* _right)
 	return m_builder.CreateLoad(m_args[1]);
 }
 
+llvm::Value* Ext::codeAt(llvm::Value* _addr)
+{
+	auto addr = bswap(_addr);
+	m_builder.CreateStore(addr, m_args[0]);
+	llvm::Value* args[] = {m_args[0], m_args[1]};
+	m_builder.CreateCall(m_codeAt, args);
+	return m_builder.CreateLoad(m_args[1]);
+}
+
+llvm::Value* Ext::codesizeAt(llvm::Value* _addr)
+{
+	auto addr = bswap(_addr);
+	m_builder.CreateStore(addr, m_args[0]);
+	llvm::Value* args[] = {m_args[0], m_args[1]};
+	m_builder.CreateCall(m_codesizeAt, args);
+	return m_builder.CreateLoad(m_args[1]);
+}
+
+}
+
+
 extern "C"
 {
+
+using namespace evmcc;
 
 EXPORT void ext_init(ExtData* _extData)
 {
@@ -307,7 +333,7 @@ EXPORT void ext_call(i256* _gas, h256* _receiveAddress, i256* _value, i256* _inO
 		auto&& inRef = dev::bytesConstRef(Runtime::getMemory().data() + inOff, inSize);
 		auto&& outRef = dev::bytesConstRef(Runtime::getMemory().data() + outOff, outSize);
 		dev::eth::OnOpFunc onOp{}; // TODO: Handle that thing
-		auto ret = ext.call(receiveAddress, value, inRef, &gas, outRef, onOp, {}, receiveAddress);
+		ret = ext.call(receiveAddress, value, inRef, &gas, outRef, onOp, {}, receiveAddress);
 	}
 
 	*_gas = eth2llvm(gas);
@@ -331,6 +357,20 @@ EXPORT void ext_exp(i256* _left, i256* _right, i256* _ret)
 	*_ret = eth2llvm(ret);
 }
 
+EXPORT void ext_codeAt(h256* _addr256, i256* _ret)
+{
+	auto&& ext = Runtime::getExt();
+	auto addr = dev::right160(*_addr256);
+	auto& code = ext.codeAt(addr);
+	*_ret = *reinterpret_cast<i256*>(const_cast<unsigned char*>(&code[0]));
+}
+
+EXPORT void ext_codesizeAt(h256* _addr256, i256* _ret)
+{
+	auto&& ext = Runtime::getExt();
+	auto addr = dev::right160(*_addr256);
+	auto& code = ext.codeAt(addr);
+	*_ret = eth2llvm(u256(code.size()));
 }
 
 }
