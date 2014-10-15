@@ -748,30 +748,39 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 				break;
 			}
 
+			case Instruction::CODESIZE:
+			{
+				auto value = ext.codesize();
+				stack.push(value);
+				break;
+			}
+
 			case Instruction::CALLDATACOPY:
+			case Instruction::CODECOPY:
 			{
 				auto zero256 = ConstantInt::get(Type::i256, 0);
 
 				auto destMemIdx = stack.pop();
-				auto srcDataIdx = stack.pop();
+				auto srcIdx = stack.pop();
 				auto reqBytes = stack.pop();
 
-				memory.require(destMemIdx, reqBytes);
+				auto reqMemSize = builder.CreateAdd(destMemIdx, reqBytes, "req_mem_size");
+				memory.require(reqMemSize);
 
 				auto memPtr = memory.getData();
 				auto destPtr = builder.CreateGEP(memPtr, destMemIdx, "dest_mem_ptr");
 
-				auto calldataPtr = ext.calldata();
-				auto srcPtr = builder.CreateGEP(calldataPtr, srcDataIdx, "src_idx");
+				auto srcBasePtr = inst == Instruction::CALLDATACOPY ? ext.calldata() : ext.code();
+				auto srcPtr = builder.CreateGEP(srcBasePtr, srcIdx, "src_idx");
 
-				auto calldataSize = ext.calldatasize();
+				auto srcSize = inst == Instruction::CALLDATACOPY ? ext.calldatasize() : ext.codesize();
 				// remaining data bytes:
-				auto remDataSize = builder.CreateSub(calldataSize, srcDataIdx);
-				auto remSizeNegative = builder.CreateICmpSLT(remDataSize, zero256);
-				auto remDataBytes = builder.CreateSelect(remSizeNegative, zero256, remDataSize, "rem_data_bytes");
+				auto remSrcSize = builder.CreateSub(srcSize, srcIdx);
+				auto remSizeNegative = builder.CreateICmpSLT(remSrcSize, zero256);
+				auto remSrcBytes = builder.CreateSelect(remSizeNegative, zero256, remSrcSize, "rem_src_bytes");
 
-				auto tooLittleDataBytes = builder.CreateICmpULT(remDataBytes, reqBytes);
-				auto bytesToCopy = builder.CreateSelect(tooLittleDataBytes, remDataBytes, reqBytes, "bytes_to_copy");
+				auto tooLittleDataBytes = builder.CreateICmpULT(remSrcBytes, reqBytes);
+				auto bytesToCopy = builder.CreateSelect(tooLittleDataBytes, remSrcBytes, reqBytes, "bytes_to_copy");
 
 				builder.CreateMemCpy(destPtr, srcPtr, bytesToCopy, 0);
 
@@ -789,13 +798,6 @@ std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
 			case Instruction::GASPRICE:
 			{
 				auto value = ext.gasprice();
-				stack.push(value);
-				break;
-			}
-
-			case Instruction::CODESIZE:
-			{
-				auto value = Constant::get(bytecode.size());
 				stack.push(value);
 				break;
 			}

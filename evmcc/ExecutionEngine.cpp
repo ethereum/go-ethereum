@@ -87,6 +87,8 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 	ext->currentBlock.gasLimit = 1008;
 	std::string calldata = "Hello the Beautiful World of Ethereum!";
 	ext->data = calldata;
+	unsigned char fakecode[] = { 0x0d, 0x0e, 0x0a, 0x0d, 0x0b, 0x0e, 0xe, 0xf };
+	ext->code = decltype(ext->code)(fakecode, 8);
 
 	// Init runtime
 	uint64_t gas = 100;

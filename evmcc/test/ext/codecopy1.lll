@@ -1,8 +1,8 @@
 (asm
-50  ;; byte count
-0   ;; source index in calldata array
+20  ;; byte count
+0   ;; source index in code array
 10  ;; dest index in memory
-CALLDATACOPY
+CODECOPY
 
 0
 MLOAD ;; to dump memory
