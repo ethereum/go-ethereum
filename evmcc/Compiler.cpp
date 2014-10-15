@@ -24,8 +24,7 @@ namespace jit
 {
 
 Compiler::Compiler()
-	: m_finalBlock(nullptr)
-	, m_badJumpBlock(nullptr)
+	: m_badJumpBlock(nullptr)
 {
 	Type::init(llvm::getGlobalContext());
 }
@@ -125,10 +124,9 @@ void Compiler::createBasicBlocks(const bytes& bytecode)
 		basicBlocks.emplace(std::piecewise_construct, std::forward_as_tuple(beginInstIdx), std::forward_as_tuple(beginInstIdx, endInstIdx, m_mainFunc));
 	}
 
-	m_finalBlock = std::make_unique<BasicBlock>("FinalBlock", m_mainFunc);
+	m_stopBB = llvm::BasicBlock::Create(m_mainFunc->getContext(), "Stop", m_mainFunc);
 	m_badJumpBlock = std::make_unique<BasicBlock>("BadJumpBlock", m_mainFunc);
 	m_jumpTableBlock = std::make_unique<BasicBlock>("JumpTableBlock", m_mainFunc);
-	m_outOfGasBlock = std::make_unique<BasicBlock>("OutOfGas", m_mainFunc);
 
 	for (auto it = directJumpTargets.cbegin(); it != directJumpTargets.cend(); ++it)
 	{
@@ -830,8 +828,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 		{
 			if (basicBlock.end() == bytecode.size())
 			{
-				//	Branch from the last regular block to the final block.
-				builder.CreateBr(m_finalBlock->llvm());
+				// Return STOP code
+				builder.CreateRet(Constant::get(ReturnCode::Stop));
 			}
 			else
 			{
@@ -848,14 +846,11 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 	// TODO: move to separate function.
 	// Note: Right now the codegen for special blocks depends only on createBasicBlock(),
 	// not on the codegen for 'regular' blocks. But it has to be done before linkBasicBlocks().
-	builder.SetInsertPoint(m_finalBlock->llvm());
+	builder.SetInsertPoint(m_stopBB);
 	builder.CreateRet(Constant::get(ReturnCode::Stop));
 
 	builder.SetInsertPoint(m_badJumpBlock->llvm());
 	builder.CreateRet(Constant::get(ReturnCode::BadJumpDestination));
-
-	builder.SetInsertPoint(m_outOfGasBlock->llvm());
-	builder.CreateRet(Constant::get(ReturnCode::OutOfGas));
 
 	builder.SetInsertPoint(m_jumpTableBlock->llvm());
 	if (m_indirectJumpTargets.size() > 0)

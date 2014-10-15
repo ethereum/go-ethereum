@@ -31,7 +31,7 @@ private:
 	void linkBasicBlocks();
 
 	/**
-	 *  Maps a program counter pc to a basic block which starts at pc (if any).
+	 *  Maps a program counter pc to a basic block that starts at pc (if any).
 	 */
 	std::map<ProgramCounter, BasicBlock> basicBlocks;
 
@@ -45,13 +45,8 @@ private:
 	 */
 	std::vector<BasicBlock*> m_indirectJumpTargets;
 
-	/// Collection of basic blocks in program
-	//std::vector<BasicBlock> m_basicBlocks;
-
-	/**
-	 *  Final block for normal (non-exceptional) execution.
-	 */
-	std::unique_ptr<BasicBlock> m_finalBlock;
+	/// Stop basic block - terminates execution with STOP code (0)
+	llvm::BasicBlock* m_stopBB = nullptr;
 
 	/**
 	 *  Block with a jump table.
@@ -62,8 +57,6 @@ private:
 	 *  Default destination for indirect jumps.
 	 */
 	std::unique_ptr<BasicBlock> m_badJumpBlock;
-
-	std::unique_ptr<BasicBlock> m_outOfGasBlock;
 
 	/// Main program function
 	llvm::Function* m_mainFunc = nullptr;
