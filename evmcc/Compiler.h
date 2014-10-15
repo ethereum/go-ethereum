@@ -22,11 +22,11 @@ public:
 
 	Compiler();
 
-	std::unique_ptr<llvm::Module> compile(const dev::bytes& bytecode);
+	std::unique_ptr<llvm::Module> compile(const bytes& bytecode);
 
 private:
 
-	void createBasicBlocks(const dev::bytes& bytecode);
+	void createBasicBlocks(const bytes& bytecode);
 
 	void linkBasicBlocks();
 

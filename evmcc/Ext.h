@@ -16,7 +16,7 @@ class Ext
 {
 public:
 	Ext(llvm::IRBuilder<>& _builder, llvm::Module* module);
-	static void init(std::unique_ptr<dev::eth::ExtVMFace> _ext);
+	static void init(std::unique_ptr<ExtVMFace> _ext);
 
 	llvm::Value* store(llvm::Value* _index);
 	void setStore(llvm::Value* _index, llvm::Value* _value);

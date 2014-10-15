@@ -35,7 +35,7 @@ public:
 	void require(llvm::Value* _offset, llvm::Value* _size);
 
 	void registerReturnData(llvm::Value* _index, llvm::Value* _size);
-	static dev::bytesConstRef getReturnData();
+	static bytesConstRef getReturnData();
 
 	void dump(uint64_t _begin, uint64_t _end = 0);
 

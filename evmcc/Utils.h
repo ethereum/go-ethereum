@@ -23,8 +23,8 @@ struct i256
 };
 static_assert(sizeof(i256) == 32, "Wrong i265 size");
 
-dev::u256 llvm2eth(i256);
-i256 eth2llvm(dev::u256);
+u256 llvm2eth(i256);
+i256 eth2llvm(u256);
 
 struct InsertPointGuard
 {

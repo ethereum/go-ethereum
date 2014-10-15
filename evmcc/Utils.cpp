@@ -8,9 +8,9 @@ namespace eth
 namespace jit
 {
 
-dev::u256 llvm2eth(i256 _i)
+u256 llvm2eth(i256 _i)
 {
-	dev::u256 u = 0;
+	u256 u = 0;
 	u |= _i.d;
 	u <<= 64;
 	u |= _i.c;
@@ -21,10 +21,10 @@ dev::u256 llvm2eth(i256 _i)
 	return u;
 }
 
-i256 eth2llvm(dev::u256 _u)
+i256 eth2llvm(u256 _u)
 {
 	i256 i;
-	dev::u256 mask = 0xFFFFFFFFFFFFFFFF;
+	u256 mask = 0xFFFFFFFFFFFFFFFF;
 	i.a = static_cast<uint64_t>(_u & mask);
 	_u >>= 64;
 	i.b = static_cast<uint64_t>(_u & mask);

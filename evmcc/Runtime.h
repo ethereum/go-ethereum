@@ -22,12 +22,12 @@ namespace jit
 {
 
 using StackImpl = std::vector<i256>;
-using MemoryImpl = dev::bytes;
+using MemoryImpl = bytes;
 
 class Runtime
 {
 public:
-	Runtime(dev::u256 _gas, std::unique_ptr<dev::eth::ExtVMFace> _ext);
+	Runtime(u256 _gas, std::unique_ptr<ExtVMFace> _ext);
 	~Runtime();
 
 	Runtime(const Runtime&) = delete;
@@ -35,13 +35,13 @@ public:
 
 	static StackImpl& getStack();
 	static MemoryImpl& getMemory();
-	static dev::eth::ExtVMFace& getExt();
-	static dev::u256 getGas();
+	static ExtVMFace& getExt();
+	static u256 getGas();
 
 private:
 	StackImpl m_stack;
 	MemoryImpl m_memory;
-	std::unique_ptr<dev::eth::ExtVMFace> m_ext;
+	std::unique_ptr<ExtVMFace> m_ext;
 };
 
 }

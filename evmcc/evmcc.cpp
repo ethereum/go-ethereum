@@ -78,7 +78,7 @@ int main(int argc, char** argv)
 
     if (opt_show_bytes)
     {
-        std::cout << dev::memDump(bytecode) << std::endl;
+        std::cout << memDump(bytecode) << std::endl;
     }
 
     if (opt_dissassemble)

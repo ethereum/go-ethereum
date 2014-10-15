@@ -21,7 +21,7 @@ public:
 	void operator=(GasMeter) = delete;
 
 	/// Count step cost of instruction
-	void count(dev::eth::Instruction _inst);
+	void count(Instruction _inst);
 
 	/// Calculate & count gas cost for SSTORE instruction
 	void countSStore(class Ext& _ext, llvm::Value* _index, llvm::Value* _newValue);

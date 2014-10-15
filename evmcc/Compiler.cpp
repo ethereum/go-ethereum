@@ -30,7 +30,7 @@ Compiler::Compiler()
 	Type::init(llvm::getGlobalContext());
 }
 
-void Compiler::createBasicBlocks(const dev::bytes& bytecode)
+void Compiler::createBasicBlocks(const bytes& bytecode)
 {
 	std::set<ProgramCounter> splitPoints; // Sorted collections of instruction indices where basic blocks start/end
 	splitPoints.insert(0);	// First basic block
@@ -41,8 +41,6 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 
 	for (auto curr = bytecode.cbegin(); curr != bytecode.cend(); ++curr)
 	{
-		using dev::eth::Instruction;
-
 		ProgramCounter currentPC = curr - bytecode.cbegin();
 		validJumpTargets[currentPC] = 1;
 
@@ -62,7 +60,7 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 			if (nextInst == Instruction::JUMP || nextInst == Instruction::JUMPI)
 			{
 				// Compute target PC of the jump.
-				dev::u256 val = 0;
+				u256 val = 0;
 				for (auto iter = curr + 1; iter < next; ++iter)
 				{
 					val <<= 8;
@@ -153,7 +151,7 @@ void Compiler::createBasicBlocks(const dev::bytes& bytecode)
 	}
 }
 
-std::unique_ptr<llvm::Module> Compiler::compile(const dev::bytes& bytecode)
+std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 {
 	auto& context = llvm::getGlobalContext();
 	auto module = std::make_unique<llvm::Module>("main", context);

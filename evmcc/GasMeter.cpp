@@ -22,7 +22,7 @@ namespace jit
 namespace // Helper functions
 {
 
-uint64_t getStepCost(dev::eth::Instruction inst) // TODO: Add this function to FeeSructure (pull request submitted)
+uint64_t getStepCost(Instruction inst) // TODO: Add this function to FeeSructure (pull request submitted)
 {
 	switch (inst)
 	{

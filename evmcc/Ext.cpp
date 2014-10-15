@@ -18,10 +18,10 @@ namespace eth
 namespace jit
 {
 
-// TODO: Copy of dev::eth::fromAddress in VM.h
-inline dev::u256 fromAddress(dev::Address _a)
+// TODO: Copy of fromAddress in VM.h
+inline u256 fromAddress(Address _a)
 {
-	return (dev::u160)_a;
+	return (u160)_a;
 }
 
 struct ExtData 
@@ -288,13 +288,13 @@ EXPORT void ext_calldataload(i256* _index, i256* _value)
 
 EXPORT void ext_balance(h256* _address, i256* _value)
 {
-	auto u = Runtime::getExt().balance(dev::right160(*_address));
+	auto u = Runtime::getExt().balance(right160(*_address));
 	*_value = eth2llvm(u);
 }
 
 EXPORT void ext_suicide(h256* _address)
 {
-	Runtime::getExt().suicide(dev::right160(*_address));
+	Runtime::getExt().suicide(right160(*_address));
 }
 
 EXPORT void ext_create(i256* _endowment, i256* _initOff, i256* _initSize, h256* _address)
@@ -308,8 +308,8 @@ EXPORT void ext_create(i256* _endowment, i256* _initOff, i256* _initSize, h256* 
 		u256 gas;	// TODO: Handle gas
 		auto initOff = static_cast<size_t>(llvm2eth(*_initOff));
 		auto initSize = static_cast<size_t>(llvm2eth(*_initSize));
-		auto&& initRef = dev::bytesConstRef(Runtime::getMemory().data() + initOff, initSize);
-		auto&& onOp = dev::bytesConstRef(); // TODO: Handle that thing
+		auto&& initRef = bytesConstRef(Runtime::getMemory().data() + initOff, initSize);
+		auto&& onOp = bytesConstRef(); // TODO: Handle that thing
 		h256 address = ext.create(endowment, &gas, initRef, onOp);
 		*_address = address;
 	}
@@ -329,15 +329,15 @@ EXPORT void ext_call(i256* _gas, h256* _receiveAddress, i256* _value, i256* _inO
 	if (ext.balance(ext.myAddress) >= value)
 	{
 		ext.subBalance(value);
-		auto receiveAddress = dev::right160(*_receiveAddress);
+		auto receiveAddress = right160(*_receiveAddress);
 		auto inOff = static_cast<size_t>(llvm2eth(*_inOff));
 		auto inSize = static_cast<size_t>(llvm2eth(*_inSize));
 		auto outOff = static_cast<size_t>(llvm2eth(*_outOff));
 		auto outSize = static_cast<size_t>(llvm2eth(*_outSize));
-		auto&& inRef = dev::bytesConstRef(Runtime::getMemory().data() + inOff, inSize);
-		auto&& outRef = dev::bytesConstRef(Runtime::getMemory().data() + outOff, outSize);
-		dev::eth::OnOpFunc onOp{}; // TODO: Handle that thing
-		auto codeAddress = dev::right160(*_codeAddress);
+		auto&& inRef = bytesConstRef(Runtime::getMemory().data() + inOff, inSize);
+		auto&& outRef = bytesConstRef(Runtime::getMemory().data() + outOff, outSize);
+		OnOpFunc onOp{}; // TODO: Handle that thing
+		auto codeAddress = right160(*_codeAddress);
 		ret = ext.call(receiveAddress, value, inRef, &gas, outRef, onOp, {}, codeAddress);
 	}
 
@@ -349,23 +349,23 @@ EXPORT void ext_sha3(i256* _inOff, i256* _inSize, i256* _ret)
 {
 	auto inOff = static_cast<size_t>(llvm2eth(*_inOff));
 	auto inSize = static_cast<size_t>(llvm2eth(*_inSize));
-	auto dataRef = dev::bytesConstRef(Runtime::getMemory().data() + inOff, inSize);
-	auto hash = dev::eth::sha3(dataRef);
+	auto dataRef = bytesConstRef(Runtime::getMemory().data() + inOff, inSize);
+	auto hash = sha3(dataRef);
 	*_ret = *reinterpret_cast<i256*>(&hash);
 }
 
 EXPORT void ext_exp(i256* _left, i256* _right, i256* _ret)
 {
-	dev::bigint left = llvm2eth(*_left);
-	dev::bigint right = llvm2eth(*_right);
-	auto ret = static_cast<u256>(boost::multiprecision::powm(left, right, dev::bigint(2) << 256));
+	bigint left = llvm2eth(*_left);
+	bigint right = llvm2eth(*_right);
+	auto ret = static_cast<u256>(boost::multiprecision::powm(left, right, bigint(2) << 256));
 	*_ret = eth2llvm(ret);
 }
 
 EXPORT unsigned char* ext_codeAt(h256* _addr256)
 {
 	auto&& ext = Runtime::getExt();
-	auto addr = dev::right160(*_addr256);
+	auto addr = right160(*_addr256);
 	auto& code = ext.codeAt(addr);
 	return const_cast<unsigned char*>(code.data());
 }
@@ -373,7 +373,7 @@ EXPORT unsigned char* ext_codeAt(h256* _addr256)
 EXPORT void ext_codesizeAt(h256* _addr256, i256* _ret)
 {
 	auto&& ext = Runtime::getExt();
-	auto addr = dev::right160(*_addr256);
+	auto addr = right160(*_addr256);
 	auto& code = ext.codeAt(addr);
 	*_ret = eth2llvm(u256(code.size()));
 }
