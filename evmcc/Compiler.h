@@ -1,7 +1,7 @@
 
 #pragma once
 
-#include <llvm/IR/Module.h>
+#include <llvm/IR/IRBuilder.h>
 
 #include <libdevcore/Common.h>
 
@@ -29,6 +29,8 @@ private:
 	void createBasicBlocks(const bytes& bytecode);
 
 	void linkBasicBlocks();
+
+	llvm::IRBuilder<> m_builder;
 
 	/**
 	 *  Maps a program counter pc to a basic block that starts at pc (if any).

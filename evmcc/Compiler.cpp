@@ -3,7 +3,7 @@
 
 #include <boost/dynamic_bitset.hpp>
 
-#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Module.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/IR/IntrinsicInst.h>
@@ -23,10 +23,10 @@ namespace eth
 namespace jit
 {
 
-Compiler::Compiler()
-	: m_badJumpBlock(nullptr)
+Compiler::Compiler():
+	m_builder(llvm::getGlobalContext())
 {
-	Type::init(llvm::getGlobalContext());
+	Type::init(m_builder.getContext());
 }
 
 void Compiler::createBasicBlocks(const bytes& bytecode)
@@ -151,31 +151,29 @@ void Compiler::createBasicBlocks(const bytes& bytecode)
 
 std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 {
-	auto& context = llvm::getGlobalContext();
-	auto module = std::make_unique<llvm::Module>("main", context);
-	llvm::IRBuilder<> builder(context);
+	auto module = std::make_unique<llvm::Module>("main", m_builder.getContext());
 
 	// Create main function
 	m_mainFunc = llvm::Function::Create(llvm::FunctionType::get(Type::MainReturn, false), llvm::Function::ExternalLinkage, "main", module.get());
 
 	// Create the basic blocks.
-	auto entryBlock = llvm::BasicBlock::Create(context, "entry", m_mainFunc);
-	builder.SetInsertPoint(entryBlock);
+	auto entryBlock = llvm::BasicBlock::Create(m_builder.getContext(), "entry", m_mainFunc);
+	m_builder.SetInsertPoint(entryBlock);
 
 	createBasicBlocks(bytecode);
 
 	// Init runtime structures.
-	GasMeter gasMeter(builder, module.get());
-	Memory memory(builder, module.get(), gasMeter);
-	Ext ext(builder, module.get());
+	GasMeter gasMeter(m_builder, module.get());
+	Memory memory(m_builder, module.get(), gasMeter);
+	Ext ext(m_builder, module.get());
 
-	builder.CreateBr(basicBlocks.begin()->second);
+	m_builder.CreateBr(basicBlocks.begin()->second);
 
 	for (auto basicBlockPairIt = basicBlocks.begin(); basicBlockPairIt != basicBlocks.end(); ++basicBlockPairIt)
 	{
 		auto& basicBlock = basicBlockPairIt->second;
 		auto& stack = basicBlock.getStack();
-		builder.SetInsertPoint(basicBlock);
+		m_builder.SetInsertPoint(basicBlock);
 
 		for (auto currentPC = basicBlock.begin(); currentPC != basicBlock.end(); ++currentPC)
 		{
@@ -190,7 +188,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 			{
 				auto lhs = stack.pop();
 				auto rhs = stack.pop();
-				auto result = builder.CreateAdd(lhs, rhs);
+				auto result = m_builder.CreateAdd(lhs, rhs);
 				stack.push(result);
 				break;
 			}
@@ -199,7 +197,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 			{
 				auto lhs = stack.pop();
 				auto rhs = stack.pop();
-				auto result = builder.CreateSub(lhs, rhs);
+				auto result = m_builder.CreateSub(lhs, rhs);
 				stack.push(result);
 				break;
 			}
@@ -208,10 +206,10 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 			{
 				auto lhs256 = stack.pop();
 				auto rhs256 = stack.pop();
-				auto lhs128 = builder.CreateTrunc(lhs256, Type::lowPrecision);
-				auto rhs128 = builder.CreateTrunc(rhs256, Type::lowPrecision);
-				auto res128 = builder.CreateMul(lhs128, rhs128);
-				auto res256 = builder.CreateZExt(res128, Type::i256);
+				auto lhs128 = m_builder.CreateTrunc(lhs256, Type::lowPrecision);
+				auto rhs128 = m_builder.CreateTrunc(rhs256, Type::lowPrecision);
+				auto res128 = m_builder.CreateMul(lhs128, rhs128);
+				auto res256 = m_builder.CreateZExt(res128, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -220,10 +218,10 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 			{
 				auto lhs256 = stack.pop();
 				auto rhs256 = stack.pop();
-				auto lhs128 = builder.CreateTrunc(lhs256, Type::lowPrecision);
-				auto rhs128 = builder.CreateTrunc(rhs256, Type::lowPrecision);
-				auto res128 = builder.CreateUDiv(lhs128, rhs128);
-				auto res256 = builder.CreateZExt(res128, Type::i256);
+				auto lhs128 = m_builder.CreateTrunc(lhs256, Type::lowPrecision);
+				auto rhs128 = m_builder.CreateTrunc(rhs256, Type::lowPrecision);
+				auto res128 = m_builder.CreateUDiv(lhs128, rhs128);
+				auto res256 = m_builder.CreateZExt(res128, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -232,10 +230,10 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 			{
 				auto lhs256 = stack.pop();
 				auto rhs256 = stack.pop();
-				auto lhs128 = builder.CreateTrunc(lhs256, Type::lowPrecision);
-				auto rhs128 = builder.CreateTrunc(rhs256, Type::lowPrecision);
-				auto res128 = builder.CreateSDiv(lhs128, rhs128);
-				auto res256 = builder.CreateSExt(res128, Type::i256);
+				auto lhs128 = m_builder.CreateTrunc(lhs256, Type::lowPrecision);
+				auto rhs128 = m_builder.CreateTrunc(rhs256, Type::lowPrecision);
+				auto res128 = m_builder.CreateSDiv(lhs128, rhs128);
+				auto res256 = m_builder.CreateSExt(res128, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -244,10 +242,10 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 			{
 				auto lhs256 = stack.pop();
 				auto rhs256 = stack.pop();
-				auto lhs128 = builder.CreateTrunc(lhs256, Type::lowPrecision);
-				auto rhs128 = builder.CreateTrunc(rhs256, Type::lowPrecision);
-				auto res128 = builder.CreateURem(lhs128, rhs128);
-				auto res256 = builder.CreateZExt(res128, Type::i256);
+				auto lhs128 = m_builder.CreateTrunc(lhs256, Type::lowPrecision);
+				auto rhs128 = m_builder.CreateTrunc(rhs256, Type::lowPrecision);
+				auto res128 = m_builder.CreateURem(lhs128, rhs128);
+				auto res256 = m_builder.CreateZExt(res128, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -256,10 +254,10 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 			{
 				auto lhs256 = stack.pop();
 				auto rhs256 = stack.pop();
-				auto lhs128 = builder.CreateTrunc(lhs256, Type::lowPrecision);
-				auto rhs128 = builder.CreateTrunc(rhs256, Type::lowPrecision);
-				auto res128 = builder.CreateSRem(lhs128, rhs128);
-				auto res256 = builder.CreateSExt(res128, Type::i256);
+				auto lhs128 = m_builder.CreateTrunc(lhs256, Type::lowPrecision);
+				auto rhs128 = m_builder.CreateTrunc(rhs256, Type::lowPrecision);
+				auto res128 = m_builder.CreateSRem(lhs128, rhs128);
+				auto res256 = m_builder.CreateSExt(res128, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -277,7 +275,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 			{
 				auto top = stack.pop();
 				auto zero = Constant::get(0);
-				auto res = builder.CreateSub(zero, top);
+				auto res = m_builder.CreateSub(zero, top);
 				stack.push(res);
 				break;
 			}
@@ -286,8 +284,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 			{
 				auto lhs = stack.pop();
 				auto rhs = stack.pop();
-				auto res1 = builder.CreateICmpULT(lhs, rhs);
-				auto res256 = builder.CreateZExt(res1, Type::i256);
+				auto res1 = m_builder.CreateICmpULT(lhs, rhs);
+				auto res256 = m_builder.CreateZExt(res1, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -296,8 +294,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 			{
 				auto lhs = stack.pop();
 				auto rhs = stack.pop();
-				auto res1 = builder.CreateICmpUGT(lhs, rhs);
-				auto res256 = builder.CreateZExt(res1, Type::i256);
+				auto res1 = m_builder.CreateICmpUGT(lhs, rhs);
+				auto res256 = m_builder.CreateZExt(res1, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -306,8 +304,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 			{
 				auto lhs = stack.pop();
 				auto rhs = stack.pop();
-				auto res1 = builder.CreateICmpSLT(lhs, rhs);
-				auto res256 = builder.CreateZExt(res1, Type::i256);
+				auto res1 = m_builder.CreateICmpSLT(lhs, rhs);
+				auto res256 = m_builder.CreateZExt(res1, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -316,8 +314,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 			{
 				auto lhs = stack.pop();
 				auto rhs = stack.pop();
-				auto res1 = builder.CreateICmpSGT(lhs, rhs);
-				auto res256 = builder.CreateZExt(res1, Type::i256);
+				auto res1 = m_builder.CreateICmpSGT(lhs, rhs);
+				auto res256 = m_builder.CreateZExt(res1, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -326,8 +324,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 			{
 				auto lhs = stack.pop();
 				auto rhs = stack.pop();
-				auto res1 = builder.CreateICmpEQ(lhs, rhs);
-				auto res256 = builder.CreateZExt(res1, Type::i256);
+				auto res1 = m_builder.CreateICmpEQ(lhs, rhs);
+				auto res256 = m_builder.CreateZExt(res1, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -335,9 +333,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 			case Instruction::NOT:
 			{
 				auto top = stack.pop();
-				auto zero = Constant::get(0);
-				auto iszero = builder.CreateICmpEQ(top, zero, "iszero");
-				auto result = builder.CreateZExt(iszero, Type::i256);
+				auto iszero = m_builder.CreateICmpEQ(top, Constant::get(0), "iszero");
+				auto result = m_builder.CreateZExt(iszero, Type::i256);
 				stack.push(result);
 				break;
 			}
@@ -346,7 +343,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 			{
 				auto lhs = stack.pop();
 				auto rhs = stack.pop();
-				auto res = builder.CreateAnd(lhs, rhs);
+				auto res = m_builder.CreateAnd(lhs, rhs);
 				stack.push(res);
 				break;
 			}
@@ -355,7 +352,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 			{
 				auto lhs = stack.pop();
 				auto rhs = stack.pop();
-				auto res = builder.CreateOr(lhs, rhs);
+				auto res = m_builder.CreateOr(lhs, rhs);
 				stack.push(res);
 				break;
 			}
@@ -364,7 +361,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 			{
 				auto lhs = stack.pop();
 				auto rhs = stack.pop();
-				auto res = builder.CreateXor(lhs, rhs);
+				auto res = m_builder.CreateXor(lhs, rhs);
 				stack.push(res);
 				break;
 			}
@@ -386,12 +383,12 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 
 				// TODO: Shifting by 0 gives wrong results as of this bug http://llvm.org/bugs/show_bug.cgi?id=16439
 
-				auto shbits = builder.CreateShl(byteNum, Constant::get(3));
-				value = builder.CreateShl(value, shbits);
-				value = builder.CreateLShr(value, Constant::get(31 * 8));
+				auto shbits = m_builder.CreateShl(byteNum, Constant::get(3));
+				value = m_builder.CreateShl(value, shbits);
+				value = m_builder.CreateLShr(value, Constant::get(31 * 8));
 
-				auto byteNumValid = builder.CreateICmpULT(byteNum, Constant::get(32));
-				value = builder.CreateSelect(byteNumValid, value, Constant::get(0));
+				auto byteNumValid = m_builder.CreateICmpULT(byteNum, Constant::get(32));
+				value = m_builder.CreateSelect(byteNumValid, value, Constant::get(0));
 				stack.push(value);
 
 				break;
@@ -401,13 +398,13 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 			{
 				auto val1 = stack.pop();
 				auto val2 = stack.pop();
-				auto sum = builder.CreateAdd(val1, val2);
+				auto sum = m_builder.CreateAdd(val1, val2);
 				auto mod = stack.pop();
 
-				auto sum128 = builder.CreateTrunc(sum, Type::lowPrecision);
-				auto mod128 = builder.CreateTrunc(mod, Type::lowPrecision);
-				auto res128 = builder.CreateURem(sum128, mod128);
-				auto res256 = builder.CreateZExt(res128, Type::i256);
+				auto sum128 = m_builder.CreateTrunc(sum, Type::lowPrecision);
+				auto mod128 = m_builder.CreateTrunc(mod, Type::lowPrecision);
+				auto res128 = m_builder.CreateURem(sum128, mod128);
+				auto res256 = m_builder.CreateZExt(res128, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -416,13 +413,13 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 			{
 				auto val1 = stack.pop();
 				auto val2 = stack.pop();
-				auto prod = builder.CreateMul(val1, val2);
+				auto prod = m_builder.CreateMul(val1, val2);
 				auto mod = stack.pop();
 
-				auto prod128 = builder.CreateTrunc(prod, Type::lowPrecision);
-				auto mod128 = builder.CreateTrunc(mod, Type::lowPrecision);
-				auto res128 = builder.CreateURem(prod128, mod128);
-				auto res256 = builder.CreateZExt(res128, Type::i256);
+				auto prod128 = m_builder.CreateTrunc(prod, Type::lowPrecision);
+				auto mod128 = m_builder.CreateTrunc(mod, Type::lowPrecision);
+				auto res128 = m_builder.CreateURem(prod128, mod128);
+				auto res256 = m_builder.CreateZExt(res128, Type::i256);
 				stack.push(res256);
 				break;
 			}
@@ -452,7 +449,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 					value <<= 8;
 					value |= bytecode[currentPC];
 				}
-				auto c = builder.getInt(value);
+				auto c = m_builder.getInt(value);
 				stack.push(c);
 				break;
 			}
@@ -543,13 +540,13 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 						// The target address is computed at compile time,
 						// just pop it without looking...
 						stack.pop();
-						builder.CreateBr(targetBlock->llvm());
+						m_builder.CreateBr(targetBlock->llvm());
 					}
 					else
 					{
 						// FIXME: this get(0) is a temporary workaround to get some of the jump tests running.
 						stack.get(0);
-						builder.CreateBr(m_jumpTableBlock->llvm());
+						m_builder.CreateBr(m_jumpTableBlock->llvm());
 					}
 				}
 				else // JUMPI
@@ -557,7 +554,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 					stack.swap(1);
 					auto val = stack.pop();
 					auto zero = Constant::get(0);
-					auto cond = builder.CreateICmpNE(val, zero, "nonzero");
+					auto cond = m_builder.CreateICmpNE(val, zero, "nonzero");
 
 					// Assume the basic blocks are properly ordered:
 					auto nextBBIter = basicBlockPairIt;
@@ -568,11 +565,11 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 					if (targetBlock)
 					{
 						stack.pop();
-						builder.CreateCondBr(cond, targetBlock->llvm(), followBlock.llvm());
+						m_builder.CreateCondBr(cond, targetBlock->llvm(), followBlock.llvm());
 					}
 					else
 					{
-						builder.CreateCondBr(cond, m_jumpTableBlock->llvm(), followBlock.llvm());
+						m_builder.CreateCondBr(cond, m_jumpTableBlock->llvm(), followBlock.llvm());
 					}
 				}
 
@@ -780,10 +777,10 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 				gasMeter.commitCostBlock(gas);
 
 				// Require memory for the max of in and out buffers
-				auto inSizeReq = builder.CreateAdd(inOff, inSize, "inSizeReq");
-				auto outSizeReq = builder.CreateAdd(outOff, outSize, "outSizeReq");
-				auto cmp = builder.CreateICmpUGT(inSizeReq, outSizeReq);
-				auto sizeReq = builder.CreateSelect(cmp, inSizeReq, outSizeReq, "sizeReq");
+				auto inSizeReq = m_builder.CreateAdd(inOff, inSize, "inSizeReq");
+				auto outSizeReq = m_builder.CreateAdd(outOff, outSize, "outSizeReq");
+				auto cmp = m_builder.CreateICmpUGT(inSizeReq, outSizeReq);
+				auto sizeReq = m_builder.CreateSelect(cmp, inSizeReq, outSizeReq, "sizeReq");
 				memory.require(sizeReq);
 
 				auto receiveAddress = codeAddress;
@@ -803,7 +800,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 
 				memory.registerReturnData(index, size);
 
-				builder.CreateRet(Constant::get(ReturnCode::Return));
+				m_builder.CreateRet(Constant::get(ReturnCode::Return));
 				break;
 			}
 
@@ -815,7 +812,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 			}
 			case Instruction::STOP:
 			{
-				builder.CreateRet(Constant::get(ReturnCode::Stop));
+				m_builder.CreateRet(Constant::get(ReturnCode::Stop));
 				break;
 			}
 
@@ -824,12 +821,12 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 
 		gasMeter.commitCostBlock();
 
-		if (!builder.GetInsertBlock()->getTerminator())	// If block not terminated
+		if (!m_builder.GetInsertBlock()->getTerminator())	// If block not terminated
 		{
 			if (basicBlock.end() == bytecode.size())
 			{
 				// Return STOP code
-				builder.CreateRet(Constant::get(ReturnCode::Stop));
+				m_builder.CreateRet(Constant::get(ReturnCode::Stop));
 			}
 			else
 			{
@@ -837,7 +834,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 				auto iterCopy = basicBlockPairIt;
 				++iterCopy;
 				auto& next = iterCopy->second;
-				builder.CreateBr(next);
+				m_builder.CreateBr(next);
 			}
 		}
 	}
@@ -846,19 +843,19 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 	// TODO: move to separate function.
 	// Note: Right now the codegen for special blocks depends only on createBasicBlock(),
 	// not on the codegen for 'regular' blocks. But it has to be done before linkBasicBlocks().
-	builder.SetInsertPoint(m_stopBB);
-	builder.CreateRet(Constant::get(ReturnCode::Stop));
+	m_builder.SetInsertPoint(m_stopBB);
+	m_builder.CreateRet(Constant::get(ReturnCode::Stop));
 
-	builder.SetInsertPoint(m_badJumpBlock->llvm());
-	builder.CreateRet(Constant::get(ReturnCode::BadJumpDestination));
+	m_builder.SetInsertPoint(m_badJumpBlock->llvm());
+	m_builder.CreateRet(Constant::get(ReturnCode::BadJumpDestination));
 
-	builder.SetInsertPoint(m_jumpTableBlock->llvm());
+	m_builder.SetInsertPoint(m_jumpTableBlock->llvm());
 	if (m_indirectJumpTargets.size() > 0)
 	{
 		auto& stack = m_jumpTableBlock->getStack();
 
 		auto dest = stack.pop();
-		auto switchInstr = 	builder.CreateSwitch(dest, m_badJumpBlock->llvm(),
+		auto switchInstr = 	m_builder.CreateSwitch(dest, m_badJumpBlock->llvm(),
 		                   	                     m_indirectJumpTargets.size());
 		for (auto it = m_indirectJumpTargets.cbegin(); it != m_indirectJumpTargets.cend(); ++it)
 		{
@@ -869,7 +866,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 	}
 	else
 	{
-		builder.CreateBr(m_badJumpBlock->llvm());
+		m_builder.CreateBr(m_badJumpBlock->llvm());
 	}
 
 	linkBasicBlocks();
