@@ -13,14 +13,6 @@ static Runtime* g_runtime;
 extern "C"
 {
 EXPORT i256 gas;
-
-EXPORT void rt_exit(int32_t _returnCode)
-{
-	auto returnCode = static_cast<ReturnCode>(_returnCode);
-	if (returnCode == ReturnCode::OutOfGas)
-		BOOST_THROW_EXCEPTION(dev::eth::OutOfGas());
-}
-
 }
 
 Runtime::Runtime(dev::u256 _gas, std::unique_ptr<dev::eth::ExtVMFace> _ext):

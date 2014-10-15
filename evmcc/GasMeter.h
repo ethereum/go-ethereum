@@ -41,7 +41,6 @@ private:
 	llvm::IRBuilder<>& m_builder;
 	llvm::CallInst* m_checkCall = nullptr;
 	llvm::GlobalVariable* m_gas;
-	llvm::Function* m_rtExit;
 	llvm::Function* m_gasCheckFunc;
 };
 

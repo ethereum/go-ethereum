@@ -84,8 +84,6 @@ GasMeter::GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* _module) :
 	m_gas = new llvm::GlobalVariable(*_module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "gas");
 	m_gas->setUnnamedAddr(true); // Address is not important
 
-	m_rtExit = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::MainReturn, false), llvm::Function::ExternalLinkage, "rt_exit", _module);
-
 	m_gasCheckFunc = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::i256, false), llvm::Function::PrivateLinkage, "gas.check", _module);
 	InsertPointGuard guard(m_builder); 
 
