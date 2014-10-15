@@ -5,7 +5,11 @@
 
 #include <libevmface/Instruction.h>
 
-namespace evmcc
+namespace dev
+{
+namespace eth
+{
+namespace jit
 {
 
 class GasMeter
@@ -45,3 +49,6 @@ private:
 };
 
 }
+}
+}
+

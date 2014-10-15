@@ -3,7 +3,11 @@
 
 #include <llvm/IR/BasicBlock.h>
 
-namespace evmcc
+namespace dev
+{
+namespace eth
+{
+namespace jit
 {
 
 using ProgramCounter = uint64_t; // TODO: Rename
@@ -74,3 +78,6 @@ private:
 };
 
 }
+}
+}
+

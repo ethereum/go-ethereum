@@ -7,7 +7,11 @@
 
 #include "BasicBlock.h"
 
-namespace evmcc
+namespace dev
+{
+namespace eth
+{
+namespace jit
 {
 
 class Compiler
@@ -65,4 +69,6 @@ private:
 	llvm::Function* m_mainFunc = nullptr;
 };
 
+}
+}
 }

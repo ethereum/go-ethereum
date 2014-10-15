@@ -4,8 +4,13 @@
 
 #include <libdevcore/Common.h>
 
-namespace evmcc
+namespace dev
 {
+namespace eth
+{
+namespace jit
+{
+
 class GasMeter;
 
 class Memory
@@ -58,3 +63,6 @@ private:
 };
 
 }
+}
+}
+

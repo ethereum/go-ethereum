@@ -5,10 +5,12 @@
 
 #include <libevm/ExtVMFace.h>
 
-namespace evmcc
+namespace dev
 {
-
-
+namespace eth
+{
+namespace jit
+{
 
 class Ext
 {
@@ -80,3 +82,6 @@ private:
 	
 
 }
+}
+}
+

@@ -6,7 +6,11 @@
 
 #include "Type.h"
 
-namespace evmcc
+namespace dev
+{
+namespace eth
+{
+namespace jit
 {
 
 const char* BasicBlock::NamePrefix = "Instr.";
@@ -69,3 +73,6 @@ void BasicBlock::Stack::swap(size_t _index)
 }
 
 }
+}
+}
+

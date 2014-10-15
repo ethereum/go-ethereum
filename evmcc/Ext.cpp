@@ -15,7 +15,11 @@ using Linkage = llvm::GlobalValue::LinkageTypes;
 using dev::h256;
 using dev::u256;
 
-namespace evmcc
+namespace dev
+{
+namespace eth
+{
+namespace jit
 {
 
 // TODO: Copy of dev::eth::fromAddress in VM.h
@@ -238,7 +242,7 @@ llvm::Value* Ext::codesizeAt(llvm::Value* _addr)
 extern "C"
 {
 
-using namespace evmcc;
+using namespace dev::eth::jit;
 
 EXPORT void ext_init(ExtData* _extData)
 {
@@ -377,3 +381,6 @@ EXPORT void ext_codesizeAt(h256* _addr256, i256* _ret)
 }
 
 }
+}
+}
+

@@ -15,8 +15,6 @@
 #include "Compiler.h"
 #include "ExecutionEngine.h"
 
-using namespace dev;
-
 
 void show_usage()
 {
@@ -74,6 +72,8 @@ int main(int argc, char** argv)
 
     boost::algorithm::trim(src);
 
+	using namespace dev;
+
     bytes bytecode = fromHex(src);
 
     if (opt_show_bytes)
@@ -89,15 +89,15 @@ int main(int argc, char** argv)
 
     if (opt_compile)
     {
-		auto module = evmcc::Compiler().compile(bytecode);
+		auto module = eth::jit::Compiler().compile(bytecode);
 		llvm::raw_os_ostream out(std::cout);
 		module->print(out, nullptr);
     }
 
 	if (opt_interpret)
 	{
-		auto engine = evmcc::ExecutionEngine();
-		auto module = evmcc::Compiler().compile(bytecode);
+		auto engine = eth::jit::ExecutionEngine();
+		auto module = eth::jit::Compiler().compile(bytecode);
 		module->dump();
 		auto result = engine.run(std::move(module));
 		return result;

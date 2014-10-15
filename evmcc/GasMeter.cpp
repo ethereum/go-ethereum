@@ -12,7 +12,11 @@
 #include "Utils.h"
 #include "Ext.h"
 
-namespace evmcc
+namespace dev
+{
+namespace eth
+{
+namespace jit
 {
 
 using namespace dev::eth; // We should move all the JIT code into dev::eth namespace
@@ -193,3 +197,6 @@ llvm::Value* GasMeter::getGas()
 }
 
 }
+}
+}
+

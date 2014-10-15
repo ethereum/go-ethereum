@@ -14,7 +14,11 @@
 	#define EXPORT
 #endif
 
-namespace evmcc
+namespace dev
+{
+namespace eth
+{
+namespace jit
 {
 
 using StackImpl = std::vector<i256>;
@@ -40,4 +44,6 @@ private:
 	std::unique_ptr<dev::eth::ExtVMFace> m_ext;
 };
 
+}
+}
 }

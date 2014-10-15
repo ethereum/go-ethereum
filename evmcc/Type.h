@@ -4,7 +4,11 @@
 #include <llvm/IR/Type.h>
 #include <llvm/IR/Constants.h>
 
-namespace evmcc
+namespace dev
+{
+namespace eth
+{
+namespace jit
 {
 
 struct Type
@@ -46,3 +50,6 @@ struct Constant
 };
 
 }
+}
+}
+

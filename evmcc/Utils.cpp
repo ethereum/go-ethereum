@@ -1,7 +1,11 @@
 
 #include "Utils.h"
 
-namespace evmcc
+namespace dev
+{
+namespace eth
+{
+namespace jit
 {
 
 dev::u256 llvm2eth(i256 _i)
@@ -31,4 +35,6 @@ i256 eth2llvm(dev::u256 _u)
 	return i;
 }
 
+}
+}
 }

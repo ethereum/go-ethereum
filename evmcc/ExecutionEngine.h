@@ -5,7 +5,11 @@
 
 #include <libdevcore/Common.h>
 
-namespace evmcc
+namespace dev
+{
+namespace eth
+{
+namespace jit
 {
 
 class ExecutionEngine
@@ -16,4 +20,6 @@ public:
 	int run(std::unique_ptr<llvm::Module> module);
 };
 
+}
+}
 }

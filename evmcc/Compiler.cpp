@@ -16,7 +16,11 @@
 #include "GasMeter.h"
 #include "Utils.h"
 
-namespace evmcc
+namespace dev
+{
+namespace eth
+{
+namespace jit
 {
 
 using dev::eth::Instruction;
@@ -945,3 +949,6 @@ void Compiler::linkBasicBlocks()
 }
 
 }
+}
+}
+

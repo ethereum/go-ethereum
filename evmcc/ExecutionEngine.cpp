@@ -21,7 +21,11 @@
 #include "Memory.h"
 #include "Type.h"
 
-namespace evmcc
+namespace dev
+{
+namespace eth
+{
+namespace jit
 {
 
 ExecutionEngine::ExecutionEngine()
@@ -91,7 +95,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 	ext->currentBlock.gasLimit = 1008;
 	std::string calldata = "Hello the Beautiful World of Ethereum!";
 	ext->data = calldata;
-	unsigned char fakecode[] = { 0x0d, 0x0e, 0x0a, 0x0d, 0x0b, 0x0e, 0xe, 0xf };
+	unsigned char fakecode[] = {0x0d, 0x0e, 0x0a, 0x0d, 0x0b, 0x0e, 0xe, 0xf};
 	ext->code = decltype(ext->code)(fakecode, 8);
 
 	// Init runtime
@@ -118,7 +122,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 		returnCode = static_cast<ReturnCode>(r);
 
 	gas = static_cast<decltype(gas)>(Runtime::getGas());
-	
+
 	if (returnCode == ReturnCode::Return)
 	{
 		auto&& returnData = Memory::getReturnData(); // TODO: It might be better to place is in Runtime interface
@@ -133,4 +137,6 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 	return static_cast<int>(returnCode);
 }
 
+}
+}
 }

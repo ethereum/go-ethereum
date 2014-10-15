@@ -5,7 +5,11 @@
 
 #include "Type.h"
 
-namespace evmcc
+namespace dev
+{
+namespace eth
+{
+namespace jit
 {
 
 static Runtime* g_runtime;
@@ -48,4 +52,6 @@ dev::u256 Runtime::getGas()
 	return llvm2eth(gas);
 }
 
+}
+}
 }

@@ -15,7 +15,11 @@
 #include "Runtime.h"
 #include "GasMeter.h"
 
-namespace evmcc
+namespace dev
+{
+namespace eth
+{
+namespace jit
 {
 
 Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* _module, GasMeter& _gasMeter):
@@ -213,11 +217,14 @@ void Memory::dump(uint64_t _begin, uint64_t _end)
 	m_builder.CreateCall(m_memDump, llvm::ArrayRef<llvm::Value*>(args));
 }
 
-} // namespace evmcc
+}
+}
+}
+
 
 extern "C"
 {
-	using namespace evmcc;
+	using namespace dev::eth::jit;
 
 EXPORT i256 mem_returnDataOffset;
 EXPORT i256 mem_returnDataSize;
@@ -256,7 +263,7 @@ EXPORT void evmccrt_memory_dump(uint64_t _begin, uint64_t _end)
 
 }	// extern "C"
 
-dev::bytesConstRef evmcc::Memory::getReturnData()
+dev::bytesConstRef dev::eth::jit::Memory::getReturnData()
 {
 	// TODO: Handle large indexes
 	auto offset = static_cast<size_t>(llvm2eth(mem_returnDataOffset));

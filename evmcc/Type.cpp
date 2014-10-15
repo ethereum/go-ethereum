@@ -3,7 +3,11 @@
 
 #include <llvm/IR/DerivedTypes.h>
 
-namespace evmcc
+namespace dev
+{
+namespace eth
+{
+namespace jit
 {
 
 llvm::IntegerType* Type::i256;
@@ -36,3 +40,6 @@ llvm::Constant* Constant::get(ReturnCode _returnCode)
 }
 
 }
+}
+}
+

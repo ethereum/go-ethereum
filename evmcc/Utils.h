@@ -5,7 +5,11 @@
 
 #include <libdevcore/Common.h>
 
-namespace evmcc
+namespace dev
+{
+namespace eth
+{
+namespace jit
 {
 
 /// Representation of 256-bit value binary compatible with LLVM i256
@@ -111,4 +115,6 @@ private:
 	case Instruction::SWAP15: \
 	case Instruction::SWAP16
 
+}
+}
 }
