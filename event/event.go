@@ -23,6 +23,8 @@ type Subscription interface {
 // A TypeMux dispatches events to registered receivers. Receivers can be
 // registered to handle events of certain type. Any operation
 // called after mux is stopped will return ErrMuxClosed.
+//
+// The zero value is ready to use.
 type TypeMux struct {
 	mutex   sync.RWMutex
 	subm    map[reflect.Type][]*muxsub
@@ -32,11 +34,6 @@ type TypeMux struct {
 // ErrMuxClosed is returned when Posting on a closed TypeMux.
 var ErrMuxClosed = errors.New("event: mux closed")
 
-// NewTypeMux creates a running mux.
-func NewTypeMux() *TypeMux {
-	return &TypeMux{subm: make(map[reflect.Type][]*muxsub)}
-}
-
 // Subscribe creates a subscription for events of the given types. The
 // subscription's channel is closed when it is unsubscribed
 // or the mux is closed.
@@ -44,9 +41,11 @@ func (mux *TypeMux) Subscribe(types ...interface{}) Subscription {
 	sub := newsub(mux)
 	mux.mutex.Lock()
 	if mux.stopped {
-		mux.mutex.Unlock()
 		close(sub.postC)
 	} else {
+		if mux.subm == nil {
+			mux.subm = make(map[reflect.Type][]*muxsub)
+		}
 		for _, t := range types {
 			rtyp := reflect.TypeOf(t)
 			oldsubs := mux.subm[rtyp]
@@ -55,8 +54,8 @@ func (mux *TypeMux) Subscribe(types ...interface{}) Subscription {
 			subs[len(oldsubs)] = sub
 			mux.subm[rtyp] = subs
 		}
-		mux.mutex.Unlock()
 	}
+	mux.mutex.Unlock()
 	return sub
 }
 

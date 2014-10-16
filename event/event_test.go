@@ -10,7 +10,7 @@ import (
 type testEvent int
 
 func TestSub(t *testing.T) {
-	mux := NewTypeMux()
+	mux := new(TypeMux)
 	defer mux.Stop()
 
 	sub := mux.Subscribe(testEvent(0))
@@ -28,7 +28,7 @@ func TestSub(t *testing.T) {
 }
 
 func TestMuxErrorAfterStop(t *testing.T) {
-	mux := NewTypeMux()
+	mux := new(TypeMux)
 	mux.Stop()
 
 	sub := mux.Subscribe(testEvent(0))
@@ -41,7 +41,7 @@ func TestMuxErrorAfterStop(t *testing.T) {
 }
 
 func TestUnsubscribeUnblockPost(t *testing.T) {
-	mux := NewTypeMux()
+	mux := new(TypeMux)
 	defer mux.Stop()
 
 	sub := mux.Subscribe(testEvent(0))
@@ -62,7 +62,7 @@ func TestUnsubscribeUnblockPost(t *testing.T) {
 
 func TestMuxConcurrent(t *testing.T) {
 	rand.Seed(time.Now().Unix())
-	mux := NewTypeMux()
+	mux := new(TypeMux)
 	defer mux.Stop()
 
 	recv := make(chan int)
@@ -111,7 +111,7 @@ func emptySubscriber(mux *TypeMux, types ...interface{}) {
 }
 
 func BenchmarkPost3(b *testing.B) {
-	var mux = NewTypeMux()
+	var mux = new(TypeMux)
 	defer mux.Stop()
 	emptySubscriber(mux, testEvent(0))
 	emptySubscriber(mux, testEvent(0))
@@ -123,7 +123,7 @@ func BenchmarkPost3(b *testing.B) {
 }
 
 func BenchmarkPostConcurrent(b *testing.B) {
-	var mux = NewTypeMux()
+	var mux = new(TypeMux)
 	defer mux.Stop()
 	emptySubscriber(mux, testEvent(0))
 	emptySubscriber(mux, testEvent(0))
