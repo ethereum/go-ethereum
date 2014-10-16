@@ -4,7 +4,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/eth-go/ethstate"
-	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethvm"
 )
@@ -39,19 +38,17 @@ func NewEnvFromMap(state *ethstate.State, envValues map[string]string, exeValues
 	return env
 }
 
-func (self *Env) Origin() []byte        { return self.origin }
-func (self *Env) BlockNumber() *big.Int { return self.number }
-func (self *Env) PrevHash() []byte      { return self.parent }
-func (self *Env) Coinbase() []byte      { return self.coinbase }
-func (self *Env) Time() int64           { return self.time }
-func (self *Env) Difficulty() *big.Int  { return self.difficulty }
-func (self *Env) BlockHash() []byte     { return nil }
-
-// This is likely to fail if anything ever gets looked up in the state trie :-)
-func (self *Env) State() *ethstate.State { return ethstate.New(ethtrie.New(nil, "")) }
+func (self *Env) Origin() []byte         { return self.origin }
+func (self *Env) BlockNumber() *big.Int  { return self.number }
+func (self *Env) PrevHash() []byte       { return self.parent }
+func (self *Env) Coinbase() []byte       { return self.coinbase }
+func (self *Env) Time() int64            { return self.time }
+func (self *Env) Difficulty() *big.Int   { return self.difficulty }
+func (self *Env) BlockHash() []byte      { return nil }
+func (self *Env) State() *ethstate.State { return self.state }
 
 func RunVm(state *ethstate.State, env, exec map[string]string) ([]byte, *big.Int, error) {
-	caller := state.NewStateObject(ethutil.Hex2Bytes(exec["caller"]))
+	caller := state.GetOrNewStateObject(ethutil.Hex2Bytes(exec["caller"]))
 	callee := state.GetStateObject(ethutil.Hex2Bytes(exec["address"]))
 	closure := ethvm.NewClosure(nil, caller, callee, callee.Code, ethutil.Big(exec["gas"]), ethutil.Big(exec["gasPrice"]))
 
