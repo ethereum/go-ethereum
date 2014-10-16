@@ -1,7 +1,6 @@
 package ethlog
 
 import (
-	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -16,15 +15,9 @@ type TestLogSystem struct {
 	level  LogLevel
 }
 
-func (ls *TestLogSystem) Println(v ...interface{}) {
+func (ls *TestLogSystem) LogPrint(level LogLevel, msg string) {
 	ls.mutex.Lock()
-	ls.output += fmt.Sprintln(v...)
-	ls.mutex.Unlock()
-}
-
-func (ls *TestLogSystem) Printf(format string, v ...interface{}) {
-	ls.mutex.Lock()
-	ls.output += fmt.Sprintf(format, v...)
+	ls.output += msg
 	ls.mutex.Unlock()
 }
 
@@ -54,14 +47,9 @@ type blockedLogSystem struct {
 	unblock chan struct{}
 }
 
-func (ls blockedLogSystem) Println(v ...interface{}) {
+func (ls blockedLogSystem) LogPrint(level LogLevel, msg string) {
 	<-ls.unblock
-	ls.LogSystem.Println(v...)
-}
-
-func (ls blockedLogSystem) Printf(fmt string, v ...interface{}) {
-	<-ls.unblock
-	ls.LogSystem.Printf(fmt, v...)
+	ls.LogSystem.LogPrint(level, msg)
 }
 
 func TestLoggerFlush(t *testing.T) {

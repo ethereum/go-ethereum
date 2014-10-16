@@ -26,22 +26,12 @@ import (
 type LogSystem interface {
 	GetLogLevel() LogLevel
 	SetLogLevel(i LogLevel)
-	Println(v ...interface{})
-	Printf(format string, v ...interface{})
+	LogPrint(LogLevel, string)
 }
 
-type logMessage struct {
-	LogLevel LogLevel
-	format   bool
-	msg      string
-}
-
-func newPrintlnLogMessage(level LogLevel, tag string, v ...interface{}) *logMessage {
-	return &logMessage{level, false, fmt.Sprintf("[%s] %s", tag, fmt.Sprint(v...))}
-}
-
-func newPrintfLogMessage(level LogLevel, tag string, format string, v ...interface{}) *logMessage {
-	return &logMessage{level, true, fmt.Sprintf("[%s] %s", tag, fmt.Sprintf(format, v...))}
+type message struct {
+	level LogLevel
+	msg   string
 }
 
 type LogLevel uint8
@@ -60,7 +50,7 @@ var (
 	mutex      sync.RWMutex // protects logSystems
 	logSystems []LogSystem
 
-	logMessages  = make(chan *logMessage)
+	logMessages  = make(chan message)
 	drainWaitReq = make(chan chan struct{})
 )
 
@@ -95,26 +85,15 @@ func dispatchLoop() {
 	}
 }
 
-func dispatch(msg *logMessage, done chan<- struct{}) {
+func dispatch(msg message, done chan<- struct{}) {
 	mutex.RLock()
 	for _, sys := range logSystems {
-		if sys.GetLogLevel() >= msg.LogLevel {
-			if msg.format {
-				sys.Printf(msg.msg)
-			} else {
-				sys.Println(msg.msg)
-			}
+		if sys.GetLogLevel() >= msg.level {
+			sys.LogPrint(msg.level, msg.msg)
 		}
 	}
 	mutex.RUnlock()
 	done <- struct{}{}
-}
-
-// send delivers a message to all installed log
-// systems. it doesn't wait for the message to be
-// written.
-func send(msg *logMessage) {
-	logMessages <- msg
 }
 
 // Reset removes all active log systems.
@@ -147,21 +126,15 @@ type Logger struct {
 }
 
 func NewLogger(tag string) *Logger {
-	return &Logger{tag}
+	return &Logger{"[" + tag + "] "}
 }
 
 func (logger *Logger) sendln(level LogLevel, v ...interface{}) {
-	if logMessages != nil {
-		msg := newPrintlnLogMessage(level, logger.tag, v...)
-		send(msg)
-	}
+	logMessages <- message{level, logger.tag + fmt.Sprintln(v...)}
 }
 
 func (logger *Logger) sendf(level LogLevel, format string, v ...interface{}) {
-	if logMessages != nil {
-		msg := newPrintfLogMessage(level, logger.tag, format, v...)
-		send(msg)
-	}
+	logMessages <- message{level, logger.tag + fmt.Sprintf(format, v...)}
 }
 
 // Errorln writes a message with ErrorLevel.
@@ -240,12 +213,8 @@ type stdLogSystem struct {
 	level  uint32
 }
 
-func (t *stdLogSystem) Println(v ...interface{}) {
-	t.logger.Println(v...)
-}
-
-func (t *stdLogSystem) Printf(format string, v ...interface{}) {
-	t.logger.Printf(format, v...)
+func (t *stdLogSystem) LogPrint(level LogLevel, msg string) {
+	t.logger.Print(msg)
 }
 
 func (t *stdLogSystem) SetLogLevel(i LogLevel) {
