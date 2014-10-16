@@ -12,7 +12,7 @@ var Logger ethlog.LogSystem
 var Log = ethlog.NewLogger("TEST")
 
 func init() {
-	Logger = ethlog.NewStdLogSystem(os.Stdout, log.LstdFlags, ethlog.LogLevel(3))
+	Logger = ethlog.NewStdLogSystem(os.Stdout, log.LstdFlags, ethlog.InfoLevel)
 	ethlog.AddLogSystem(Logger)
 
 	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")

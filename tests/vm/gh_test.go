@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/tests/helper"
@@ -87,6 +88,9 @@ func RunVmTest(url string, t *testing.T) {
 }
 
 // I've created a new function for each tests so it's easier to identify where the problem lies if any of them fail.
+func TestVMSha3(t *testing.T) {
+	helper.Logger.SetLogLevel(ethlog.Silence)
+	defer helper.Logger.SetLogLevel(ethlog.DebugLevel)
 
 func TestVMArithmetic(t *testing.T) {
 	const url = "https://raw.githubusercontent.com/ethereum/tests/develop/vmtests/vmArithmeticTest.json"
