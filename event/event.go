@@ -124,14 +124,16 @@ func posdelete(slice []*muxsub, pos int) []*muxsub {
 
 type muxsub struct {
 	mux     *TypeMux
-	mutex   sync.RWMutex
+	closeMu sync.Mutex
 	closing chan struct{}
+	closed  bool
 
 	// these two are the same channel. they are stored separately so
 	// postC can be set to nil without affecting the return value of
 	// Chan.
-	readC <-chan interface{}
-	postC chan<- interface{}
+	postMu sync.RWMutex
+	readC  <-chan interface{}
+	postC  chan<- interface{}
 }
 
 func newsub(mux *TypeMux) *muxsub {
@@ -154,18 +156,25 @@ func (s *muxsub) Unsubscribe() {
 }
 
 func (s *muxsub) closewait() {
+	s.closeMu.Lock()
+	defer s.closeMu.Unlock()
+	if s.closed {
+		return
+	}
 	close(s.closing)
-	s.mutex.Lock()
+	s.closed = true
+
+	s.postMu.Lock()
 	close(s.postC)
 	s.postC = nil
-	s.mutex.Unlock()
+	s.postMu.Unlock()
 }
 
 func (s *muxsub) deliver(ev interface{}) {
-	s.mutex.RLock()
+	s.postMu.RLock()
 	select {
 	case s.postC <- ev:
 	case <-s.closing:
 	}
-	s.mutex.RUnlock()
+	s.postMu.RUnlock()
 }
