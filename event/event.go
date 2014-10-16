@@ -7,8 +7,16 @@ import (
 	"sync"
 )
 
+// Subscription is implemented by event subscriptions.
 type Subscription interface {
+	// Chan returns a channel that carries events.
+	// Implementations should return the same channel
+	// for any subsequent calls to Chan.
 	Chan() <-chan interface{}
+
+	// Unsubscribe stops delivery of events to a subscription.
+	// The event channel is closed.
+	// Unsubscribe can be called more than once.
 	Unsubscribe()
 }
 
@@ -21,6 +29,7 @@ type TypeMux struct {
 	stopped bool
 }
 
+// ErrMuxClosed is returned when Posting on a closed TypeMux.
 var ErrMuxClosed = errors.New("event: mux closed")
 
 // NewTypeMux creates a running mux.
