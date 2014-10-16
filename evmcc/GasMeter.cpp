@@ -9,7 +9,6 @@
 #include <libevm/FeeStructure.h>
 
 #include "Type.h"
-#include "Utils.h"
 #include "Ext.h"
 
 namespace dev
