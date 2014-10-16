@@ -104,6 +104,10 @@ func (self *StateObject) SetStorage(key *big.Int, value *ethutil.Value) {
 	self.SetState(key.Bytes(), value)
 }
 
+func (self *StateObject) Storage() map[string]*ethutil.Value {
+	return self.storage
+}
+
 func (self *StateObject) GetState(k []byte) *ethutil.Value {
 	key := ethutil.LeftPadBytes(k, 32)
 

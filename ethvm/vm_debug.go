@@ -48,6 +48,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		pc       = big.NewInt(0)
 		step     = 0
 		prevStep = 0
+		state    = self.env.State()
 		require  = func(m int) {
 			if stack.Len() < m {
 				panic(fmt.Sprintf("%04v (%v) stack err size = %d, required = %d", pc, op, stack.Len(), m))
@@ -93,7 +94,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		if self.logTy == LogTyDiff {
 			switch op {
 			case STOP, RETURN, SUICIDE:
-				closure.object.EachStorage(func(key string, value *ethutil.Value) {
+				state.GetStateObject(closure.Address()).EachStorage(func(key string, value *ethutil.Value) {
 					value.Decode()
 					fmt.Printf("%x %x\n", new(big.Int).SetBytes([]byte(key)).Bytes(), value.Bytes())
 				})
@@ -200,16 +201,18 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			}
 		}
 
+		self.Printf("(pc) %-3d -o- %-14s", pc, op.String())
+		self.Printf(" (g) %-3v (%v)", gas, closure.Gas)
+
 		if !closure.UseGas(gas) {
+			self.Endl()
+
 			err := fmt.Errorf("Insufficient gas for %v. req %v has %v", op, gas, closure.Gas)
 
 			closure.UseGas(closure.Gas)
 
 			return closure.Return(nil), err
 		}
-
-		self.Printf("(pc) %-3d -o- %-14s", pc, op.String())
-		self.Printf(" (g) %-3v (%v)", gas, closure.Gas)
 
 		mem.Resize(newMemSize.Uint64())
 
@@ -494,7 +497,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			require(1)
 
 			addr := stack.Pop().Bytes()
-			balance := self.env.State().GetBalance(addr)
+			balance := state.GetBalance(addr)
 
 			stack.Push(balance)
 
@@ -562,7 +565,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			if op == EXTCODECOPY {
 				addr := stack.Pop().Bytes()
 
-				code = self.env.State().GetCode(addr)
+				code = state.GetCode(addr)
 			} else {
 				code = closure.Code
 			}
@@ -576,7 +579,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			if op == EXTCODECOPY {
 				addr := stack.Pop().Bytes()
 
-				code = self.env.State().GetCode(addr)
+				code = state.GetCode(addr)
 			} else {
 				code = closure.Code
 			}
@@ -693,15 +696,14 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case SLOAD:
 			require(1)
 			loc := stack.Pop()
-			val := closure.GetStorage(loc)
-
-			stack.Push(val.BigInt())
+			val := ethutil.BigD(state.GetState(closure.Address(), loc.Bytes()))
+			stack.Push(val)
 
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case SSTORE:
 			require(2)
 			val, loc := stack.Popn()
-			closure.SetStorage(loc, ethutil.NewValue(val))
+			state.SetState(closure.Address(), loc.Bytes(), val)
 
 			// Debug sessions are allowed to run without message
 			if closure.message != nil {
@@ -712,6 +714,11 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case JUMP:
 			require(1)
 			pc = stack.Pop()
+
+			if OpCode(closure.Get(pc).Uint()) != JUMPDEST {
+				panic(fmt.Sprintf("JUMP missed JUMPDEST %v", pc))
+			}
+
 			// Reduce pc by one because of the increment that's at the end of this for loop
 			self.Printf(" ~> %v", pc).Endl()
 
@@ -723,7 +730,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 				pc = pos
 
 				if OpCode(closure.Get(pc).Uint()) != JUMPDEST {
-					return closure.Return(nil), fmt.Errorf("JUMP missed JUMPDEST %v", pc)
+					panic(fmt.Sprintf("JUMP missed JUMPDEST %v", pc))
 				}
 
 				continue
@@ -755,8 +762,9 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			)
 
 			// Generate a new address
-			addr := ethcrypto.CreateAddress(closure.Address(), closure.object.Nonce)
-			closure.object.Nonce++
+			n := state.GetNonce(closure.Address())
+			addr := ethcrypto.CreateAddress(closure.Address(), n)
+			state.SetNonce(closure.Address(), n+1)
 
 			self.Printf(" (*) %x", addr).Endl()
 
@@ -799,8 +807,6 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 
-			//snapshot := self.env.State().Copy()
-
 			var executeAddr []byte
 			if op == CALLCODE {
 				executeAddr = closure.Address()
@@ -813,12 +819,13 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			if err != nil {
 				stack.Push(ethutil.BigFalse)
 
-				//self.env.State().Set(snapshot)
+				vmlogger.Debugln(err)
 			} else {
 				stack.Push(ethutil.BigTrue)
 
 				mem.Set(retOffset.Int64(), retSize.Int64(), ret)
 			}
+			self.Printf("resume %x", closure.Address())
 
 			// Debug hook
 			if self.Dbg != nil {
@@ -836,11 +843,10 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case SUICIDE:
 			require(1)
 
-			receiver := self.env.State().GetOrNewStateObject(stack.Pop().Bytes())
+			receiver := state.GetOrNewStateObject(stack.Pop().Bytes())
 
-			receiver.AddAmount(closure.object.Balance)
-
-			closure.object.MarkForDeletion()
+			receiver.AddAmount(state.GetBalance(closure.Address()))
+			state.Delete(closure.Address())
 
 			fallthrough
 		case STOP: // Stop the closure
@@ -864,11 +870,11 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 				if pc.Cmp(big.NewInt(instrNo)) == 0 {
 					self.Stepping = true
 
-					if !self.Dbg.BreakHook(prevStep, op, mem, stack, closure.Object()) {
+					if !self.Dbg.BreakHook(prevStep, op, mem, stack, state.GetStateObject(closure.Address())) {
 						return nil, nil
 					}
 				} else if self.Stepping {
-					if !self.Dbg.StepHook(prevStep, op, mem, stack, closure.Object()) {
+					if !self.Dbg.StepHook(prevStep, op, mem, stack, state.GetStateObject(closure.Address())) {
 						return nil, nil
 					}
 				}

@@ -48,6 +48,13 @@ func (self *State) GetNonce(addr []byte) uint64 {
 	return 0
 }
 
+func (self *State) SetNonce(addr []byte, nonce uint64) {
+	stateObject := self.GetStateObject(addr)
+	if stateObject != nil {
+		stateObject.Nonce = nonce
+	}
+}
+
 func (self *State) GetCode(addr []byte) []byte {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
@@ -64,6 +71,24 @@ func (self *State) GetState(a, b []byte) []byte {
 	}
 
 	return nil
+}
+
+func (self *State) SetState(addr, key []byte, value interface{}) {
+	stateObject := self.GetStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetState(key, ethutil.NewValue(value))
+	}
+}
+
+func (self *State) Delete(addr []byte) bool {
+	stateObject := self.GetStateObject(addr)
+	if stateObject != nil {
+		stateObject.MarkForDeletion()
+
+		return true
+	}
+
+	return false
 }
 
 //
