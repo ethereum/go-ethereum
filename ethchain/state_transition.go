@@ -271,7 +271,7 @@ func (self *StateTransition) Eval(msg *ethstate.Message, script []byte, context 
 	)
 
 	//vm := ethvm.New(env, ethvm.Type(ethutil.Config.VmType))
-	vm := ethutil.New(env, ethvm.DebugVmTy)
+	vm := ethvm.New(env, ethvm.DebugVmTy)
 
 	ret, _, err = callerClosure.Call(vm, self.tx.Data)
 
