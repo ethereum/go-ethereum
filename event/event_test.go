@@ -60,6 +60,21 @@ func TestUnsubscribeUnblockPost(t *testing.T) {
 	}
 }
 
+func TestSubscribeDuplicateType(t *testing.T) {
+	mux := new(TypeMux)
+	expected := "event: duplicate type event.testEvent in Subscribe"
+
+	defer func() {
+		err := recover()
+		if err == nil {
+			t.Errorf("Subscribe didn't panic for duplicate type")
+		} else if err != expected {
+			t.Errorf("panic mismatch: got %#v, expected %#v", err, expected)
+		}
+	}()
+	mux.Subscribe(testEvent(1), testEvent(2))
+}
+
 func TestMuxConcurrent(t *testing.T) {
 	rand.Seed(time.Now().Unix())
 	mux := new(TypeMux)

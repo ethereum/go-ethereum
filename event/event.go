@@ -3,6 +3,7 @@ package event
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"sync"
 )
@@ -40,6 +41,7 @@ var ErrMuxClosed = errors.New("event: mux closed")
 func (mux *TypeMux) Subscribe(types ...interface{}) Subscription {
 	sub := newsub(mux)
 	mux.mutex.Lock()
+	defer mux.mutex.Unlock()
 	if mux.stopped {
 		close(sub.postC)
 	} else {
@@ -49,13 +51,15 @@ func (mux *TypeMux) Subscribe(types ...interface{}) Subscription {
 		for _, t := range types {
 			rtyp := reflect.TypeOf(t)
 			oldsubs := mux.subm[rtyp]
+			if find(oldsubs, sub) != -1 {
+				panic(fmt.Sprintf("event: duplicate type %s in Subscribe", rtyp))
+			}
 			subs := make([]*muxsub, len(oldsubs)+1)
 			copy(subs, oldsubs)
 			subs[len(oldsubs)] = sub
 			mux.subm[rtyp] = subs
 		}
 	}
-	mux.mutex.Unlock()
 	return sub
 }
 
