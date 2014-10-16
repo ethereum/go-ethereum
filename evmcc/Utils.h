@@ -26,28 +26,6 @@ static_assert(sizeof(i256) == 32, "Wrong i265 size");
 u256 llvm2eth(i256);
 i256 eth2llvm(u256);
 
-struct InsertPointGuard
-{
-	InsertPointGuard(llvm::IRBuilder<>& _builder) :
-		m_builder(_builder),
-		m_insertBB(m_builder.GetInsertBlock()),
-		m_insertPt(m_builder.GetInsertPoint())
-	{}
-
-	~InsertPointGuard()
-	{
-		m_builder.SetInsertPoint(m_insertBB, m_insertPt);
-	}
-
-private:
-	llvm::IRBuilder<>& m_builder;
-	llvm::BasicBlock* m_insertBB;
-	llvm::BasicBlock::iterator m_insertPt;
-
-	InsertPointGuard(const InsertPointGuard&) = delete;
-	void operator=(InsertPointGuard) = delete;
-};
-
 #define ANY_PUSH	  PUSH1:  \
 	case Instruction::PUSH2:  \
 	case Instruction::PUSH3:  \

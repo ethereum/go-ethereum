@@ -9,7 +9,6 @@
 #include <libevm/FeeStructure.h>
 
 #include "Type.h"
-#include "Utils.h"
 #include "Ext.h"
 
 namespace dev
@@ -80,13 +79,14 @@ bool isCostBlockEnd(Instruction _inst)
 
 }
 
-GasMeter::GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* _module) :
-	m_builder(_builder)
+GasMeter::GasMeter(llvm::IRBuilder<>& _builder) :
+	CompilerHelper(_builder)
 {
-	m_gas = new llvm::GlobalVariable(*_module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "gas");
+	auto module = getModule();
+	m_gas = new llvm::GlobalVariable(*module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "gas");
 	m_gas->setUnnamedAddr(true); // Address is not important
 
-	m_gasCheckFunc = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::i256, false), llvm::Function::PrivateLinkage, "gas.check", _module);
+	m_gasCheckFunc = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::i256, false), llvm::Function::PrivateLinkage, "gas.check", module);
 	InsertPointGuard guard(m_builder); 
 
 	auto checkBB = llvm::BasicBlock::Create(_builder.getContext(), "Check", m_gasCheckFunc);
@@ -103,9 +103,9 @@ GasMeter::GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* _module) :
 	m_builder.SetInsertPoint(outOfGasBB);
 
 	//auto longjmpFunc = llvm::Intrinsic::getDeclaration(_module, llvm::Intrinsic::eh_sjlj_longjmp);
-	auto extJmpBuf = new llvm::GlobalVariable(*_module, Type::BytePtr, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "rt_jmpBuf");
+	auto extJmpBuf = new llvm::GlobalVariable(*module, Type::BytePtr, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "rt_jmpBuf");
 	llvm::Type* args[] = {Type::BytePtr, m_builder.getInt32Ty()};
-	auto longjmpNative = llvm::Function::Create(llvm::FunctionType::get(Type::Void, args, false), llvm::Function::ExternalLinkage, "longjmp", _module);
+	auto longjmpNative = llvm::Function::Create(llvm::FunctionType::get(Type::Void, args, false), llvm::Function::ExternalLinkage, "longjmp", module);
 	m_builder.CreateCall2(longjmpNative, m_builder.CreateLoad(extJmpBuf), Constant::get(ReturnCode::OutOfGas));
 	m_builder.CreateUnreachable();
 

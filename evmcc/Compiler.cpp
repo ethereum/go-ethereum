@@ -163,9 +163,9 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 	createBasicBlocks(bytecode);
 
 	// Init runtime structures.
-	GasMeter gasMeter(m_builder, module.get());
-	Memory memory(m_builder, module.get(), gasMeter);
-	Ext ext(m_builder, module.get());
+	GasMeter gasMeter(m_builder);
+	Memory memory(m_builder, gasMeter);
+	Ext ext(m_builder);
 
 	m_builder.CreateBr(basicBlocks.begin()->second);
 
@@ -714,7 +714,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, const bytes& bytecode, 
 			auto srcIdx = stack.pop();
 			auto reqBytes = stack.pop();
 
-			auto srcPtr = ext.code();
+			auto srcPtr = ext.code();	// TODO: Code & its size are constants, feature #80814234
 			auto srcSize = ext.codesize();
 
 			memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);
