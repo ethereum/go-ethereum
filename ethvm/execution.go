@@ -28,6 +28,11 @@ func (self *Execution) Exec(codeAddr []byte, caller ClosureRef) (ret []byte, err
 	env := self.vm.Env()
 
 	snapshot := env.State().Copy()
+	defer func() {
+		if err != nil {
+			env.State().Set(snapshot)
+		}
+	}()
 
 	msg := env.State().Manifest().AddMessage(&ethstate.Message{
 		To: self.address, From: caller.Address(),
@@ -49,7 +54,7 @@ func (self *Execution) Exec(codeAddr []byte, caller ClosureRef) (ret []byte, err
 		caller.Object().SubAmount(self.value)
 		stateObject.AddAmount(self.value)
 
-		// Precompiled contracts (address.go) 1, 2 & 3.
+		// Pre-compiled contracts (address.go) 1, 2 & 3.
 		naddr := ethutil.BigD(codeAddr).Uint64()
 		if p := Precompiled[naddr]; p != nil {
 			if self.gas.Cmp(p.Gas) >= 0 {
@@ -72,10 +77,6 @@ func (self *Execution) Exec(codeAddr []byte, caller ClosureRef) (ret []byte, err
 
 			msg.Output = ret
 		}
-	}
-
-	if err != nil {
-		env.State().Set(snapshot)
 	}
 
 	return
