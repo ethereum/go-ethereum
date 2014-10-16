@@ -25,38 +25,39 @@ namespace jit
 Memory::Memory(llvm::IRBuilder<>& _builder, GasMeter& _gasMeter):
 	CompilerHelper(_builder)
 {
+	auto module = getModule();
 	auto i64Ty = m_builder.getInt64Ty();
 	llvm::Type* argTypes[] = {i64Ty, i64Ty};
 	auto dumpTy = llvm::FunctionType::get(m_builder.getVoidTy(), llvm::ArrayRef<llvm::Type*>(argTypes), false);
  	m_memDump = llvm::Function::Create(dumpTy, llvm::GlobalValue::LinkageTypes::ExternalLinkage,
-		"evmccrt_memory_dump", m_module);
+		"evmccrt_memory_dump", module);
 
-	m_data = new llvm::GlobalVariable(*m_module, Type::BytePtr, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(Type::BytePtr), "mem.data");
+	m_data = new llvm::GlobalVariable(*module, Type::BytePtr, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(Type::BytePtr), "mem.data");
 	m_data->setUnnamedAddr(true); // Address is not important
 
-	m_size = new llvm::GlobalVariable(*m_module, Type::i256, false, llvm::GlobalVariable::PrivateLinkage, Constant::get(0), "mem.size");
+	m_size = new llvm::GlobalVariable(*module, Type::i256, false, llvm::GlobalVariable::PrivateLinkage, Constant::get(0), "mem.size");
 	m_size->setUnnamedAddr(true); // Address is not important
 
-	m_returnDataOffset = new llvm::GlobalVariable(*m_module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "mem_returnDataOffset");
+	m_returnDataOffset = new llvm::GlobalVariable(*module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "mem_returnDataOffset");
 	m_returnDataOffset->setUnnamedAddr(true); // Address is not important
 
-	m_returnDataSize = new llvm::GlobalVariable(*m_module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "mem_returnDataSize");
+	m_returnDataSize = new llvm::GlobalVariable(*module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "mem_returnDataSize");
 	m_returnDataSize->setUnnamedAddr(true); // Address is not important
 
-	m_resize = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, Type::WordPtr, false), llvm::Function::ExternalLinkage, "mem_resize", m_module);
+	m_resize = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, Type::WordPtr, false), llvm::Function::ExternalLinkage, "mem_resize", module);
 	llvm::AttrBuilder attrBuilder;
 	attrBuilder.addAttribute(llvm::Attribute::NoAlias).addAttribute(llvm::Attribute::NoCapture).addAttribute(llvm::Attribute::NonNull).addAttribute(llvm::Attribute::ReadOnly);
 	m_resize->setAttributes(llvm::AttributeSet::get(m_resize->getContext(), 1, attrBuilder));
 
-	m_require = createRequireFunc(m_module, _gasMeter);
-	m_loadWord = createFunc(false, Type::i256, m_module, _gasMeter);
-	m_storeWord = createFunc(true, Type::i256, m_module, _gasMeter);
-	m_storeByte = createFunc(true, Type::Byte, m_module, _gasMeter);
+	m_require = createRequireFunc(_gasMeter);
+	m_loadWord = createFunc(false, Type::i256, _gasMeter);
+	m_storeWord = createFunc(true, Type::i256, _gasMeter);
+	m_storeByte = createFunc(true, Type::Byte,  _gasMeter);
 }
 
-llvm::Function* Memory::createRequireFunc(llvm::Module* _module, GasMeter& _gasMeter)
+llvm::Function* Memory::createRequireFunc(GasMeter& _gasMeter)
 {
-	auto func = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::i256, false), llvm::Function::PrivateLinkage, "mem.require", _module);
+	auto func = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::i256, false), llvm::Function::PrivateLinkage, "mem.require", getModule());
 
 	auto checkBB = llvm::BasicBlock::Create(func->getContext(), "check", func);
 	auto resizeBB = llvm::BasicBlock::Create(func->getContext(), "resize", func);
@@ -91,14 +92,14 @@ llvm::Function* Memory::createRequireFunc(llvm::Module* _module, GasMeter& _gasM
 	return func;
 }
 
-llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, llvm::Module* _module, GasMeter& _gasMeter)
+llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, GasMeter& _gasMeter)
 {
 	auto isWord = _valueType == Type::i256;
 
 	llvm::Type* storeArgs[] = {Type::i256, _valueType};
 	auto name = _isStore ? isWord ? "mstore" : "mstore8" : "mload";
 	auto funcType = _isStore ? llvm::FunctionType::get(Type::Void, storeArgs, false) : llvm::FunctionType::get(Type::i256, Type::i256, false);
-	auto func = llvm::Function::Create(funcType, llvm::Function::PrivateLinkage, name, _module);
+	auto func = llvm::Function::Create(funcType, llvm::Function::PrivateLinkage, name, getModule());
 
 	InsertPointGuard guard(m_builder); // Restores insert point at function exit
 

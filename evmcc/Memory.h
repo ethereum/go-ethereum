@@ -36,8 +36,8 @@ public:
 	void dump(uint64_t _begin, uint64_t _end = 0);
 
 private:
-	llvm::Function* createFunc(bool _isStore, llvm::Type* _type, llvm::Module* _module, GasMeter& _gasMeter);
-	llvm::Function* createRequireFunc(llvm::Module* _module, GasMeter& _gasMeter);
+	llvm::Function* createFunc(bool _isStore, llvm::Type* _type, GasMeter& _gasMeter);
+	llvm::Function* createRequireFunc(GasMeter& _gasMeter);
 
 private:
 	llvm::GlobalVariable* m_data;

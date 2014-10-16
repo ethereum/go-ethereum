@@ -47,7 +47,7 @@ Ext::Ext(llvm::IRBuilder<>& _builder):
 	CompilerHelper(_builder)
 {
 	auto&& ctx = _builder.getContext();
-	auto module = m_module;
+	auto module = getModule();
 
 	auto i256Ty = m_builder.getIntNTy(256);
 	auto i256PtrTy = i256Ty->getPointerTo();

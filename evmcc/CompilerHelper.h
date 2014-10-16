@@ -19,11 +19,11 @@ protected:
 	CompilerHelper(const CompilerHelper&) = delete;
 	void operator=(CompilerHelper) = delete;
 
+	/// Reference to the IR module being compiled
+	llvm::Module* getModule();
+
 	/// Reference to parent compiler IR builder
 	llvm::IRBuilder<>& m_builder;
-
-	/// Reference to the IR module being compiled
-	llvm::Module* m_module;
 };
 
 }
