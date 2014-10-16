@@ -15,7 +15,7 @@ namespace jit
 class GasMeter : public CompilerHelper
 {
 public:
-	GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* _module);
+	GasMeter(llvm::IRBuilder<>& _builder);
 
 	/// Count step cost of instruction
 	void count(Instruction _inst);

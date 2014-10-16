@@ -14,7 +14,7 @@ namespace jit
 class Memory : public CompilerHelper
 {
 public:
-	Memory(llvm::IRBuilder<>& _builder, llvm::Module* _module, class GasMeter& _gasMeter);
+	Memory(llvm::IRBuilder<>& _builder, class GasMeter& _gasMeter);
 
 	llvm::Value* loadWord(llvm::Value* _addr);
 	void storeWord(llvm::Value* _addr, llvm::Value* _word);

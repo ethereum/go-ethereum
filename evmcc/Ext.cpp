@@ -43,10 +43,11 @@ struct ExtData
 	const byte* code;
 };
 
-Ext::Ext(llvm::IRBuilder<>& _builder, llvm::Module* module):
-	CompilerHelper(_builder, module)
+Ext::Ext(llvm::IRBuilder<>& _builder):
+	CompilerHelper(_builder)
 {
 	auto&& ctx = _builder.getContext();
+	auto module = m_module;
 
 	auto i256Ty = m_builder.getIntNTy(256);
 	auto i256PtrTy = i256Ty->getPointerTo();

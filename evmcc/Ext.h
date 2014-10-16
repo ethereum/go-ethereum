@@ -15,7 +15,7 @@ namespace jit
 class Ext : public CompilerHelper
 {
 public:
-	Ext(llvm::IRBuilder<>& _builder, llvm::Module* module);
+	Ext(llvm::IRBuilder<>& _builder);
 
 	llvm::Value* store(llvm::Value* _index);
 	void setStore(llvm::Value* _index, llvm::Value* _value);

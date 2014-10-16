@@ -163,9 +163,9 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 	createBasicBlocks(bytecode);
 
 	// Init runtime structures.
-	GasMeter gasMeter(m_builder, module.get());
-	Memory memory(m_builder, module.get(), gasMeter);
-	Ext ext(m_builder, module.get());
+	GasMeter gasMeter(m_builder);
+	Memory memory(m_builder, gasMeter);
+	Ext ext(m_builder);
 
 	m_builder.CreateBr(basicBlocks.begin()->second);
 

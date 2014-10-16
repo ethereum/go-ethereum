@@ -14,10 +14,7 @@ namespace jit
 class CompilerHelper
 {
 protected:
-	CompilerHelper(llvm::IRBuilder<>& _builder, llvm::Module* _module):
-		m_builder(_builder),
-		m_module(_module)
-	{}
+	CompilerHelper(llvm::IRBuilder<>& _builder);
 
 	CompilerHelper(const CompilerHelper&) = delete;
 	void operator=(CompilerHelper) = delete;
