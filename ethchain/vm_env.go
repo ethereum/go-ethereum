@@ -29,3 +29,4 @@ func (self *VMEnv) Difficulty() *big.Int   { return self.block.Difficulty }
 func (self *VMEnv) BlockHash() []byte      { return self.block.Hash() }
 func (self *VMEnv) Value() *big.Int        { return self.tx.Value }
 func (self *VMEnv) State() *ethstate.State { return self.state }
+func (self *VMEnv) GasLimit() *big.Int     { return self.block.GasLimit }

@@ -54,6 +54,25 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 				panic(fmt.Sprintf("%04v (%v) stack err size = %d, required = %d", pc, op, stack.Len(), m))
 			}
 		}
+
+		jump = func(pos *big.Int) {
+			p := int(pos.Int64())
+
+			self.Printf(" ~> %v", pos)
+			// Return to start
+			if p == 0 {
+				pc = big.NewInt(0)
+			} else {
+				nop := OpCode(closure.GetOp(p - 1))
+				if nop != JUMPDEST {
+					panic(fmt.Sprintf("JUMP missed JUMPDEST (%v) %v", nop, p))
+				}
+
+				pc = pos
+			}
+
+			self.Endl()
+		}
 	)
 
 	if self.Recoverable {
@@ -440,14 +459,18 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case BYTE:
 			require(2)
 			val, th := stack.Popn()
-			if th.Cmp(big.NewInt(32)) < 0 && th.Cmp(big.NewInt(int64(len(val.Bytes())))) < 0 {
-				byt := big.NewInt(int64(ethutil.LeftPadBytes(val.Bytes(), 32)[th.Int64()]))
-				stack.Push(byt)
 
-				self.Printf(" => 0x%x", byt.Bytes())
+			if th.Cmp(big.NewInt(32)) < 0 {
+				byt := big.NewInt(int64(ethutil.LeftPadBytes(val.Bytes(), 32)[th.Int64()]))
+
+				base.Set(byt)
 			} else {
-				stack.Push(ethutil.BigFalse)
+				base.Set(ethutil.BigFalse)
 			}
+
+			self.Printf(" => 0x%x", base.Bytes())
+
+			stack.Push(base)
 		case ADDMOD:
 			require(3)
 
@@ -562,7 +585,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			mem.Set(mOff, l, code)
 		case CODESIZE, EXTCODESIZE:
 			var code []byte
-			if op == EXTCODECOPY {
+			if op == EXTCODESIZE {
 				addr := stack.Pop().Bytes()
 
 				code = state.GetCode(addr)
@@ -638,8 +661,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			self.Printf(" => 0x%x", difficulty.Bytes())
 		case GASLIMIT:
-			// TODO
-			stack.Push(big.NewInt(0))
+			stack.Push(self.env.GasLimit())
 
 			// 0x50 range
 		case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
@@ -713,32 +735,21 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case JUMP:
 			require(1)
-			pc = stack.Pop()
 
-			if OpCode(closure.Get(pc).Uint()) != JUMPDEST {
-				panic(fmt.Sprintf("JUMP missed JUMPDEST %v", pc))
-			}
-
-			// Reduce pc by one because of the increment that's at the end of this for loop
-			self.Printf(" ~> %v", pc).Endl()
+			jump(stack.Pop())
 
 			continue
 		case JUMPI:
 			require(2)
 			cond, pos := stack.Popn()
-			if cond.Cmp(ethutil.BigTrue) >= 0 {
-				pc = pos
 
-				if OpCode(closure.Get(pc).Uint()) != JUMPDEST {
-					panic(fmt.Sprintf("JUMP missed JUMPDEST %v", pc))
-				}
+			if cond.Cmp(ethutil.BigTrue) >= 0 {
+				jump(pos)
 
 				continue
-			} else {
-				self.Printf(" (f)")
 			}
+
 		case JUMPDEST:
-			self.Printf(" ~> %v (t)", pc).Endl()
 		case PC:
 			stack.Push(pc)
 		case MSIZE:
@@ -771,7 +782,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			closure.UseGas(closure.Gas)
 
 			msg := NewExecution(self, addr, input, gas, closure.Price, value)
-			ret, err := msg.Exec(addr, closure)
+			ret, err := msg.Create(closure)
 			if err != nil {
 				stack.Push(ethutil.BigFalse)
 
@@ -857,6 +868,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			vmlogger.Debugf("(pc) %-3v Invalid opcode %x\n", pc, op)
 
 			//panic(fmt.Sprintf("Invalid opcode %x", op))
+			closure.ReturnGas(big.NewInt(1), nil)
 
 			return closure.Return(nil), fmt.Errorf("Invalid opcode %x", op)
 		}

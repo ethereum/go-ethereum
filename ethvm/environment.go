@@ -17,6 +17,7 @@ type Environment interface {
 	Time() int64
 	Difficulty() *big.Int
 	BlockHash() []byte
+	GasLimit() *big.Int
 }
 
 type Object interface {
