@@ -714,7 +714,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, const bytes& bytecode, 
 			auto srcIdx = stack.pop();
 			auto reqBytes = stack.pop();
 
-			auto srcPtr = ext.code();
+			auto srcPtr = ext.code();	// TODO: Code & its size are constants, feature #80814234
 			auto srcSize = ext.codesize();
 
 			memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);

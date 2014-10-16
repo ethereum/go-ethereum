@@ -81,7 +81,7 @@ bool isCostBlockEnd(Instruction _inst)
 }
 
 GasMeter::GasMeter(llvm::IRBuilder<>& _builder, llvm::Module* _module) :
-	m_builder(_builder)
+	CompilerHelper(_builder, _module)
 {
 	m_gas = new llvm::GlobalVariable(*_module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "gas");
 	m_gas->setUnnamedAddr(true); // Address is not important

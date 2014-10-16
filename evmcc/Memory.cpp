@@ -23,7 +23,7 @@ namespace jit
 {
 
 Memory::Memory(llvm::IRBuilder<>& _builder, llvm::Module* _module, GasMeter& _gasMeter):
-	m_builder(_builder)
+	CompilerHelper(_builder, _module)
 {
 	auto i64Ty = m_builder.getInt64Ty();
 	llvm::Type* argTypes[] = {i64Ty, i64Ty};

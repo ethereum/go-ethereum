@@ -1,9 +1,9 @@
 
 #pragma once
 
-#include <llvm/IR/IRBuilder.h>
-
 #include <libevm/ExtVMFace.h>
+
+#include "CompilerHelper.h"
 
 namespace dev
 {
@@ -12,11 +12,10 @@ namespace eth
 namespace jit
 {
 
-class Ext
+class Ext : public CompilerHelper
 {
 public:
 	Ext(llvm::IRBuilder<>& _builder, llvm::Module* module);
-	static void init(std::unique_ptr<ExtVMFace> _ext);
 
 	llvm::Value* store(llvm::Value* _index);
 	void setStore(llvm::Value* _index, llvm::Value* _value);
@@ -54,8 +53,6 @@ private:
 	llvm::Value* bswap(llvm::Value*);
 
 private:
-	llvm::IRBuilder<>& m_builder;
-
 	llvm::Value* m_args[2];
 	llvm::Value* m_arg2;
 	llvm::Value* m_arg3;
