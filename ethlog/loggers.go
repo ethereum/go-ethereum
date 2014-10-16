@@ -6,7 +6,7 @@ Other packages use tagged logger to send log messages to shared
 multiple log systems. The log level can be set separately per log
 system.
 
-Logging is asynchrounous and does not block the caller. Message
+Logging is asynchronous and does not block the caller. Message
 formatting is performed by the caller goroutine to avoid incorrect
 logging of mutable state.
 */
