@@ -12,9 +12,8 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
 #include <libevmface/Instruction.h>
-
-#include "Compiler.h"
-#include "ExecutionEngine.h"
+#include <libevmjit/Compiler.h>
+#include <libevmjit/ExecutionEngine.h>
 
 
 void show_usage()
