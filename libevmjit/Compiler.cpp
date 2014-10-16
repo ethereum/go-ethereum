@@ -29,7 +29,7 @@ Compiler::Compiler():
 	Type::init(m_builder.getContext());
 }
 
-void Compiler::createBasicBlocks(const bytes& bytecode)
+void Compiler::createBasicBlocks(bytesConstRef bytecode)
 {
 	std::set<ProgramCounter> splitPoints; // Sorted collections of instruction indices where basic blocks start/end
 	splitPoints.insert(0);	// First basic block
@@ -38,9 +38,9 @@ void Compiler::createBasicBlocks(const bytes& bytecode)
 	std::vector<ProgramCounter> indirectJumpTargets;
 	boost::dynamic_bitset<> validJumpTargets(bytecode.size());
 
-	for (auto curr = bytecode.cbegin(); curr != bytecode.cend(); ++curr)
+	for (auto curr = bytecode.begin(); curr != bytecode.end(); ++curr)
 	{
-		ProgramCounter currentPC = curr - bytecode.cbegin();
+		ProgramCounter currentPC = curr - bytecode.begin();
 		validJumpTargets[currentPC] = 1;
 
 		auto inst = static_cast<Instruction>(*curr);
@@ -51,7 +51,7 @@ void Compiler::createBasicBlocks(const bytes& bytecode)
 		{
 			auto numBytes = static_cast<size_t>(inst) - static_cast<size_t>(Instruction::PUSH1) + 1;
 			auto next = curr + numBytes + 1;
-			if (next >= bytecode.cend())
+			if (next >= bytecode.end())
 				break;
 
 			auto nextInst = static_cast<Instruction>(*next);
@@ -72,7 +72,7 @@ void Compiler::createBasicBlocks(const bytes& bytecode)
 					targetPC = bytecode.size();
 				splitPoints.insert(targetPC);
 
-				ProgramCounter jumpPC = (next - bytecode.cbegin());
+				ProgramCounter jumpPC = (next - bytecode.begin());
 				directJumpTargets[jumpPC] = targetPC;
 			}
 
@@ -95,7 +95,7 @@ void Compiler::createBasicBlocks(const bytes& bytecode)
 		case Instruction::SUICIDE:
 		{
 			// Create a basic block starting at the following instruction.
-			if (curr + 1 < bytecode.cend())
+			if (curr + 1 < bytecode.end())
 			{
 				splitPoints.insert(currentPC + 1);
 			}
@@ -149,7 +149,7 @@ void Compiler::createBasicBlocks(const bytes& bytecode)
 	}
 }
 
-std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
+std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 {
 	auto module = std::make_unique<llvm::Module>("main", m_builder.getContext());
 
@@ -214,7 +214,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(const bytes& bytecode)
 }
 
 
-void Compiler::compileBasicBlock(BasicBlock& basicBlock, const bytes& bytecode, Memory& memory, Ext& ext, GasMeter& gasMeter, llvm::BasicBlock* nextBasicBlock)
+void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode, Memory& memory, Ext& ext, GasMeter& gasMeter, llvm::BasicBlock* nextBasicBlock)
 {
 	auto& stack = basicBlock.getStack();
 	m_builder.SetInsertPoint(basicBlock.llvm());

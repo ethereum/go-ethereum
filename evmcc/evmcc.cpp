@@ -94,7 +94,7 @@ int main(int argc, char** argv)
     if (opt_compile)
     {
     	auto compiler = eth::jit::Compiler();
-		auto module = compiler.compile(bytecode);
+		auto module = compiler.compile({bytecode.data(), bytecode.size()});
 		llvm::raw_os_ostream out(std::cout);
 		module->print(out, nullptr);
 
@@ -110,7 +110,7 @@ int main(int argc, char** argv)
 	if (opt_interpret)
 	{
 		auto engine = eth::jit::ExecutionEngine();
-		auto module = eth::jit::Compiler().compile(bytecode);
+		auto module = eth::jit::Compiler().compile({bytecode.data(), bytecode.size()});
 		module->dump();
 		auto result = engine.run(std::move(module));
 		return result;

@@ -22,16 +22,16 @@ public:
 
 	Compiler();
 
-	std::unique_ptr<llvm::Module> compile(const bytes& bytecode);
+	std::unique_ptr<llvm::Module> compile(bytesConstRef bytecode);
 
 	void dumpBasicBlockGraph(std::ostream& out);
 
 
 private:
 
-	void createBasicBlocks(const bytes& bytecode);
+	void createBasicBlocks(bytesConstRef bytecode);
 
-	void compileBasicBlock(BasicBlock& basicBlock, const bytes& bytecode, class Memory& memory, class Ext& ext, class GasMeter& gasMeter, llvm::BasicBlock* nextBasicBlock);
+	void compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode, class Memory& memory, class Ext& ext, class GasMeter& gasMeter, llvm::BasicBlock* nextBasicBlock);
 
 	void linkBasicBlocks();
 

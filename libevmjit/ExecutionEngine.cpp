@@ -125,7 +125,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 
 	if (returnCode == ReturnCode::Return)
 	{
-		auto&& returnData = Memory::getReturnData(); // TODO: It might be better to place is in Runtime interface
+		returnData = Memory::getReturnData().toVector(); // TODO: It might be better to place is in Runtime interface
 
 		std::cout << "RETURN [ ";
 		for (auto it = returnData.begin(), end = returnData.end(); it != end; ++it)

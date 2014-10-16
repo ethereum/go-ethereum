@@ -18,6 +18,8 @@ public:
 	ExecutionEngine();
 
 	int run(std::unique_ptr<llvm::Module> module);
+
+	bytes returnData;
 };
 
 }
