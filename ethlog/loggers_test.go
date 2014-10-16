@@ -107,11 +107,11 @@ func TestLoggerPrintf(t *testing.T) {
 	testLogSystem := &TestLogSystem{level: WarnLevel}
 	AddLogSystem(testLogSystem)
 	logger.Errorf("error to %v\n", []int{1, 2, 3})
-	logger.Warnf("warn")
+	logger.Warnf("warn %%d %d", 5)
 	logger.Infof("info")
 	logger.Debugf("debug")
 	Flush()
-	testLogSystem.CheckOutput(t, "[TEST] error to [1 2 3]\n[TEST] warn")
+	testLogSystem.CheckOutput(t, "[TEST] error to [1 2 3]\n[TEST] warn %d 5")
 }
 
 func TestMultipleLogSystems(t *testing.T) {
