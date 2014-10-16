@@ -24,6 +24,9 @@ public:
 
 	std::unique_ptr<llvm::Module> compile(const bytes& bytecode);
 
+	void dumpBasicBlockGraph(std::ostream& out);
+
+
 private:
 
 	void createBasicBlocks(const bytes& bytecode);
@@ -31,6 +34,7 @@ private:
 	void compileBasicBlock(BasicBlock& basicBlock, const bytes& bytecode, class Memory& memory, class Ext& ext, class GasMeter& gasMeter, llvm::BasicBlock* nextBasicBlock);
 
 	void linkBasicBlocks();
+
 
 	llvm::IRBuilder<> m_builder;
 
