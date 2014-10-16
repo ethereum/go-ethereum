@@ -929,6 +929,58 @@ void Compiler::linkBasicBlocks()
 	}
 }
 
+void Compiler::dumpBasicBlockGraph(std::ostream& out)
+{
+	out << "digraph BB {\n"
+	    << "  node [shape=record];\n"
+	    << "  entry [share=record, label=\"entry block\"];\n";
+
+	// std::map<std::string, BasicBlock*> blocksByName;
+	std::vector<BasicBlock*> blocks;
+	for (auto& pair : this->basicBlocks)
+	{
+		blocks.push_back(&pair.second);
+	}
+	blocks.push_back(m_jumpTableBlock.get());
+	blocks.push_back(m_badJumpBlock.get());
+
+	// Output nodes
+	for (auto bb : blocks)
+	{
+		std::string blockName = bb->llvm()->getName();
+		// blocksByName.insert(std::pair<std::string, BasicBlock*>(blockName, bb));
+
+		int numOfPhiNodes = 0;
+		auto firstNonPhiPtr = bb->llvm()->getFirstNonPHI();
+		for (auto instrIter = bb->llvm()->begin(); &*instrIter != firstNonPhiPtr; ++instrIter, ++numOfPhiNodes);
+
+		auto endStackSize = bb->getStack().size();
+
+		out << "  \"" << blockName  << "\" [shape=record, label=\""
+			<< std::to_string(numOfPhiNodes) << "|"
+			<< blockName << "|"
+			<< std::to_string(endStackSize)
+		<< "\"];\n";
+	}
+
+	out << "  entry -> \"Instr.0\";\n";
+
+	// Output edges
+	for (auto bb : blocks)
+	{
+		std::string blockName = bb->llvm()->getName();
+
+		auto end = llvm::succ_end(bb->llvm());
+		for (llvm::succ_iterator it = llvm::succ_begin(bb->llvm()); it != end; ++it)
+		{
+			std::string succName = it->getName();
+			out << "  \"" << blockName << "\" -> \"" << succName << "\";\n";
+		}
+	}
+
+	out << "}\n";
+}
+
 }
 }
 }
