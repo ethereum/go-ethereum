@@ -49,8 +49,8 @@ const (
 	CODESIZE     = 0x38
 	CODECOPY     = 0x39
 	GASPRICE     = 0x3a
-	EXTCODECOPY  = 0x3b
-	EXTCODESIZE  = 0x3c
+	EXTCODESIZE  = 0x3b
+	EXTCODECOPY  = 0x3c
 
 	// 0x40 range - block operations
 	PREVHASH   = 0x40
