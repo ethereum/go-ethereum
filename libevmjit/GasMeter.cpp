@@ -168,6 +168,7 @@ void GasMeter::commitCostBlock(llvm::Value* _additionalCost)
 		if (m_blockCost == 0 && !_additionalCost) // Do not check 0
 		{
 			m_checkCall->eraseFromParent(); // Remove the gas check call
+			m_checkCall = nullptr;
 			return;
 		}
 
