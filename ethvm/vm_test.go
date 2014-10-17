@@ -39,14 +39,14 @@ for i := 0; i < 10; i++ {
 
 return x`
 
-func setup(level int, typ Type) (*Closure, VirtualMachine) {
+func setup(level ethlog.LogLevel, typ Type) (*Closure, VirtualMachine) {
 	code, err := ethutil.Compile(mutcode, true)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Pipe output to /dev/null
-	ethlog.AddLogSystem(ethlog.NewStdLogSystem(ioutil.Discard, log.LstdFlags, ethlog.LogLevel(level)))
+	ethlog.AddLogSystem(ethlog.NewStdLogSystem(ioutil.Discard, log.LstdFlags, level))
 
 	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")
 
@@ -57,7 +57,7 @@ func setup(level int, typ Type) (*Closure, VirtualMachine) {
 }
 
 func TestDebugVm(t *testing.T) {
-	closure, vm := setup(4, DebugVmTy)
+	closure, vm := setup(ethlog.DebugLevel, DebugVmTy)
 	ret, _, e := closure.Call(vm, nil)
 	if e != nil {
 		fmt.Println("error", e)
@@ -69,7 +69,7 @@ func TestDebugVm(t *testing.T) {
 }
 
 func TestVm(t *testing.T) {
-	closure, vm := setup(4, StandardVmTy)
+	closure, vm := setup(ethlog.DebugLevel, StandardVmTy)
 	ret, _, e := closure.Call(vm, nil)
 	if e != nil {
 		fmt.Println("error", e)
@@ -81,7 +81,7 @@ func TestVm(t *testing.T) {
 }
 
 func BenchmarkDebugVm(b *testing.B) {
-	closure, vm := setup(3, DebugVmTy)
+	closure, vm := setup(ethlog.InfoLevel, DebugVmTy)
 
 	b.ResetTimer()
 
@@ -91,7 +91,7 @@ func BenchmarkDebugVm(b *testing.B) {
 }
 
 func BenchmarkVm(b *testing.B) {
-	closure, vm := setup(3, StandardVmTy)
+	closure, vm := setup(ethlog.InfoLevel, StandardVmTy)
 
 	b.ResetTimer()
 
@@ -106,7 +106,7 @@ func RunCode(mutCode string, typ Type) []byte {
 		log.Fatal(err)
 	}
 
-	ethlog.AddLogSystem(ethlog.NewStdLogSystem(os.Stdout, log.LstdFlags, ethlog.LogLevel(3)))
+	ethlog.AddLogSystem(ethlog.NewStdLogSystem(os.Stdout, log.LstdFlags, ethlog.InfoLevel))
 
 	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")
 
