@@ -112,7 +112,8 @@ int main(int argc, char** argv)
 		auto engine = eth::jit::ExecutionEngine();
 		auto module = eth::jit::Compiler().compile({bytecode.data(), bytecode.size()});
 		module->dump();
-		auto result = engine.run(std::move(module));
+		u256 gas = 10000;
+		auto result = engine.run(std::move(module), gas);
 		return result;
 	}
 

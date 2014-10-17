@@ -18,7 +18,7 @@ class ExecutionEngine
 public:
 	ExecutionEngine();
 
-	int run(std::unique_ptr<llvm::Module> module, ExtVMFace* _ext = nullptr);
+	int run(std::unique_ptr<llvm::Module> module, u256& _gas, ExtVMFace* _ext = nullptr);
 
 	bytes returnData;
 };

@@ -36,7 +36,7 @@ ExecutionEngine::ExecutionEngine()
 extern "C" { EXPORT std::jmp_buf* rt_jmpBuf; }
 
 
-int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, ExtVMFace* _ext)
+int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtVMFace* _ext)
 {
 	auto module = _module.get(); // Keep ownership of the module in _module
 
@@ -83,7 +83,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, ExtVMFace* _ext)
 	// Create fake ExtVM interface
 	if (!_ext)
 	{
-		auto _ext = new ExtVMFace;
+		_ext = new ExtVMFace;
 		_ext->myAddress = Address(1122334455667788);
 		_ext->caller = Address(0xfacefacefaceface);
 		_ext->origin = Address(101010101010101010);
@@ -102,8 +102,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, ExtVMFace* _ext)
 	}
 
 	// Init runtime
-	uint64_t gas = 100;
-	Runtime runtime(gas, *_ext);
+	Runtime runtime(_gas, *_ext);
 
 	auto entryFunc = module->getFunction("main");
 	if (!entryFunc)
@@ -124,7 +123,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, ExtVMFace* _ext)
 	else
 		returnCode = static_cast<ReturnCode>(r);
 
-	gas = static_cast<decltype(gas)>(Runtime::getGas());
+	_gas = Runtime::getGas();
 
 	if (returnCode == ReturnCode::Return)
 	{
