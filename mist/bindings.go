@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"strconv"
 
@@ -18,16 +17,8 @@ type plugin struct {
 	Path string `json:"path"`
 }
 
-func (gui *Gui) Println(v ...interface{}) {
-	gui.printLog(fmt.Sprintln(v...))
-}
-
-func (gui *Gui) Printf(format string, v ...interface{}) {
-	gui.printLog(fmt.Sprintf(format, v...))
-}
-
-// Print function that logs directly to the GUI
-func (gui *Gui) printLog(s string) {
+// LogPrint writes to the GUI log.
+func (gui *Gui) LogPrint(level ethlog.LogLevel, msg string) {
 	/*
 		str := strings.TrimRight(s, "\n")
 		lines := strings.Split(str, "\n")
