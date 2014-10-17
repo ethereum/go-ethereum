@@ -14,9 +14,9 @@ For the development package please see the [eth-go package](https://github.com/e
 Build
 =======
 
-To build Ethereal (GUI):
+To build Mist (GUI):
 
-`go get github.com/ethereum/go-ethereum/ethereal`
+`go get github.com/ethereum/go-ethereum/mist`
 
 To build the node (CLI):
 
@@ -28,7 +28,7 @@ General command line options
 ====================
 
 ```
-Shared between ethereum and ethereal
+Shared between ethereum and Mist
 -id      Set the custom identifier of the client (shows up on other clients)
 -port    Port on which the server will accept incomming connections
 -upnp    Enable UPnP
@@ -46,7 +46,7 @@ ethereum [options] [filename]
 filename   Load the given file and interpret as JavaScript
 -m       Start mining blocks
 
-Etheral only
+Mist only
 -asset_path    absolute path to GUI assets directory
 ```
 

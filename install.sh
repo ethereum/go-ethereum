@@ -2,7 +2,7 @@
 
 if [ "$1" == "" ]; then
 	echo "Usage $0 executable branch ethereum develop"
-	echo "executable    ethereum or ethereal"
+	echo "executable    ethereum or mist"
 	echo "branch        develop or master"
 	exit
 fi
@@ -41,8 +41,8 @@ echo "go-ethereum"
 cd $GOPATH/src/github.com/ethereum/go-ethereum/$exe
 git checkout $branch
 
-if [ "$exe" == "ethereal" ]; then
-	echo "Building ethereal GUI. Assuming Qt is installed. If this step"
+if [ "$exe" == "mist" ]; then
+	echo "Building Mist GUI. Assuming Qt is installed. If this step"
 	echo "fails; please refer to: https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum(Go)"
 else
 	echo "Building ethereum CLI."
