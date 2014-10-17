@@ -19,7 +19,6 @@ import (
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethminer"
 	"github.com/ethereum/eth-go/ethpipe"
-	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
 	"gopkg.in/qml.v1"
@@ -376,15 +375,6 @@ func (gui *Gui) update() {
 		gui.win.Root().Call("addPlugin", plugin.Path, "")
 	}
 
-	var (
-		blockChan     = make(chan ethreact.Event, 100)
-		txChan        = make(chan ethreact.Event, 100)
-		objectChan    = make(chan ethreact.Event, 100)
-		peerChan      = make(chan ethreact.Event, 100)
-		chainSyncChan = make(chan ethreact.Event, 100)
-		miningChan    = make(chan ethreact.Event, 100)
-	)
-
 	peerUpdateTicker := time.NewTicker(5 * time.Second)
 	generalUpdateTicker := time.NewTicker(500 * time.Millisecond)
 	statsUpdateTicker := time.NewTicker(5 * time.Second)
@@ -397,61 +387,82 @@ func (gui *Gui) update() {
 	lastBlockLabel := gui.getObjectByName("lastBlockLabel")
 	miningLabel := gui.getObjectByName("miningLabel")
 
+	events := gui.eth.EventMux().Subscribe(
+		eth.ChainSyncEvent{},
+		eth.PeerListEvent{},
+		ethchain.NewBlockEvent{},
+		ethchain.TxEvent{},
+		ethminer.Event{},
+	)
+
+	// nameReg := gui.pipe.World().Config().Get("NameReg")
+	// mux.Subscribe("object:"+string(nameReg.Address()), objectChan)
+
 	go func() {
+		defer events.Unsubscribe()
 		for {
 			select {
-			case b := <-blockChan:
-				block := b.Resource.(*ethchain.Block)
-				gui.processBlock(block, false)
-				if bytes.Compare(block.Coinbase, gui.address()) == 0 {
-					gui.setWalletValue(gui.eth.StateManager().CurrentState().GetAccount(gui.address()).Balance, nil)
+			case ev, isopen := <-events.Chan():
+				if !isopen {
+					return
 				}
-			case txMsg := <-txChan:
-				tx := txMsg.Resource.(*ethchain.Transaction)
-
-				if txMsg.Name == "newTx:pre" {
-					object := state.GetAccount(gui.address())
-
-					if bytes.Compare(tx.Sender(), gui.address()) == 0 {
-						unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
-					} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
-						unconfirmedFunds.Add(unconfirmedFunds, tx.Value)
+				switch ev := ev.(type) {
+				case ethchain.NewBlockEvent:
+					gui.processBlock(ev.Block, false)
+					if bytes.Compare(ev.Block.Coinbase, gui.address()) == 0 {
+						gui.setWalletValue(gui.eth.StateManager().CurrentState().GetAccount(gui.address()).Balance, nil)
 					}
 
-					gui.setWalletValue(object.Balance, unconfirmedFunds)
+				case ethchain.TxEvent:
+					tx := ev.Tx
+					if ev.Type == ethchain.TxPre {
+						object := state.GetAccount(gui.address())
 
-					gui.insertTransaction("pre", tx)
-				} else {
-					object := state.GetAccount(gui.address())
-					if bytes.Compare(tx.Sender(), gui.address()) == 0 {
-						object.SubAmount(tx.Value)
+						if bytes.Compare(tx.Sender(), gui.address()) == 0 {
+							unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
+						} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
+							unconfirmedFunds.Add(unconfirmedFunds, tx.Value)
+						}
 
-						//gui.getObjectByName("transactionView").Call("addTx", ethpipe.NewJSTx(tx), "send")
-						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-					} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
-						object.AddAmount(tx.Value)
+						gui.setWalletValue(object.Balance, unconfirmedFunds)
 
-						//gui.getObjectByName("transactionView").Call("addTx", ethpipe.NewJSTx(tx), "recv")
-						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
+						gui.insertTransaction("pre", tx)
+
+					} else if ev.Type == ethchain.TxPost {
+						object := state.GetAccount(gui.address())
+						if bytes.Compare(tx.Sender(), gui.address()) == 0 {
+							object.SubAmount(tx.Value)
+
+							//gui.getObjectByName("transactionView").Call("addTx", ethpipe.NewJSTx(tx), "send")
+							gui.txDb.Put(tx.Hash(), tx.RlpEncode())
+						} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
+							object.AddAmount(tx.Value)
+
+							//gui.getObjectByName("transactionView").Call("addTx", ethpipe.NewJSTx(tx), "recv")
+							gui.txDb.Put(tx.Hash(), tx.RlpEncode())
+						}
+
+						gui.setWalletValue(object.Balance, nil)
+
+						state.UpdateStateObject(object)
 					}
 
-					gui.setWalletValue(object.Balance, nil)
+				// case object:
+				// 	gui.loadAddressBook()
 
-					state.UpdateStateObject(object)
+				case eth.PeerListEvent:
+					gui.setPeerInfo()
+
+				case ethminer.Event:
+					if ev.Type == ethminer.Started {
+						gui.miner = ev.Miner
+					} else {
+						gui.miner = nil
+					}
 				}
 
-			case <-objectChan:
-				gui.loadAddressBook()
-			case <-peerChan:
-				gui.setPeerInfo()
 			case <-peerUpdateTicker.C:
 				gui.setPeerInfo()
-			case msg := <-miningChan:
-				if msg.Name == "miner:start" {
-					gui.miner = msg.Resource.(*ethminer.Miner)
-				} else {
-					gui.miner = nil
-				}
 			case <-generalUpdateTicker.C:
 				statusText := "#" + gui.eth.BlockChain().CurrentBlock.Number.String()
 				lastBlockLabel.Set("text", statusText)
@@ -478,20 +489,6 @@ func (gui *Gui) update() {
 			}
 		}
 	}()
-
-	reactor := gui.eth.Reactor()
-
-	reactor.Subscribe("newBlock", blockChan)
-	reactor.Subscribe("newTx:pre", txChan)
-	reactor.Subscribe("newTx:post", txChan)
-	reactor.Subscribe("chainSync", chainSyncChan)
-	reactor.Subscribe("miner:start", miningChan)
-	reactor.Subscribe("miner:stop", miningChan)
-
-	nameReg := gui.pipe.World().Config().Get("NameReg")
-	reactor.Subscribe("object:"+string(nameReg.Address()), objectChan)
-
-	reactor.Subscribe("peerList", peerChan)
 }
 
 func (gui *Gui) setStatsPane() {

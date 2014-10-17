@@ -5,8 +5,8 @@ import (
 
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethpipe"
-	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethstate"
+	"github.com/ethereum/eth-go/event"
 	"github.com/ethereum/go-ethereum/javascript"
 	"gopkg.in/qml.v1"
 )
@@ -28,9 +28,7 @@ type ExtApplication struct {
 	*ethpipe.JSPipe
 	eth ethchain.EthManager
 
-	blockChan       chan ethreact.Event
-	messageChan     chan ethreact.Event
-	quitChan        chan bool
+	events          event.Subscription
 	watcherQuitChan chan bool
 
 	filters map[string]*ethchain.Filter
@@ -40,19 +38,14 @@ type ExtApplication struct {
 }
 
 func NewExtApplication(container AppContainer, lib *UiLib) *ExtApplication {
-	app := &ExtApplication{
-		ethpipe.NewJSPipe(lib.eth),
-		lib.eth,
-		make(chan ethreact.Event, 100),
-		make(chan ethreact.Event, 100),
-		make(chan bool),
-		make(chan bool),
-		make(map[string]*ethchain.Filter),
-		container,
-		lib,
+	return &ExtApplication{
+		JSPipe:          ethpipe.NewJSPipe(lib.eth),
+		eth:             lib.eth,
+		watcherQuitChan: make(chan bool),
+		filters:         make(map[string]*ethchain.Filter),
+		container:       container,
+		lib:             lib,
 	}
-
-	return app
 }
 
 func (app *ExtApplication) run() {
@@ -67,13 +60,12 @@ func (app *ExtApplication) run() {
 		return
 	}
 
+	// Subscribe to events
+	mux := app.lib.eth.EventMux()
+	app.events = mux.Subscribe(ethchain.NewBlockEvent{}, ethstate.Messages(nil))
+
 	// Call the main loop
 	go app.mainLoop()
-
-	// Subscribe to events
-	reactor := app.lib.eth.Reactor()
-	reactor.Subscribe("newBlock", app.blockChan)
-	reactor.Subscribe("messages", app.messageChan)
 
 	app.container.NewWatcher(app.watcherQuitChan)
 
@@ -85,42 +77,29 @@ func (app *ExtApplication) run() {
 }
 
 func (app *ExtApplication) stop() {
-	// Clean up
-	reactor := app.lib.eth.Reactor()
-	reactor.Unsubscribe("newBlock", app.blockChan)
+	app.events.Unsubscribe()
 
 	// Kill the main loop
-	app.quitChan <- true
 	app.watcherQuitChan <- true
-
-	close(app.blockChan)
-	close(app.quitChan)
 
 	app.container.Destroy()
 }
 
 func (app *ExtApplication) mainLoop() {
-out:
-	for {
-		select {
-		case <-app.quitChan:
-			break out
-		case block := <-app.blockChan:
-			if block, ok := block.Resource.(*ethchain.Block); ok {
-				app.container.NewBlock(block)
-			}
-		case msg := <-app.messageChan:
-			if messages, ok := msg.Resource.(ethstate.Messages); ok {
-				for id, filter := range app.filters {
-					msgs := filter.FilterMessages(messages)
-					if len(msgs) > 0 {
-						app.container.Messages(msgs, id)
-					}
+	for ev := range app.events.Chan() {
+		switch ev := ev.(type) {
+		case ethchain.NewBlockEvent:
+			app.container.NewBlock(ev.Block)
+
+		case ethstate.Messages:
+			for id, filter := range app.filters {
+				msgs := filter.FilterMessages(ev)
+				if len(msgs) > 0 {
+					app.container.Messages(msgs, id)
 				}
 			}
 		}
 	}
-
 }
 
 func (self *ExtApplication) Watch(filterOptions map[string]interface{}, identifier string) {
