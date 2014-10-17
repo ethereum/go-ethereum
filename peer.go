@@ -24,9 +24,9 @@ const (
 	// The size of the output buffer for writing messages
 	outputBufferSize = 50
 	// Current protocol version
-	ProtocolVersion = 34
+	ProtocolVersion = 35
 	// Current P2P version
-	P2PVersion = 0
+	P2PVersion = 2
 	// Ethereum network version
 	NetVersion = 0
 	// Interval for ping/pong message
@@ -434,7 +434,7 @@ func (p *Peer) HandleInbound() {
 				}
 			case ethwire.MsgGetPeersTy:
 				// Peer asked for list of connected peers
-				p.pushPeers()
+				//p.pushPeers()
 			case ethwire.MsgPeersTy:
 				// Received a list of peers (probably because MsgGetPeersTy was send)
 				data := msg.Data
@@ -672,7 +672,7 @@ func (p *Peer) pushPeers() {
 
 func (self *Peer) pushStatus() {
 	msg := ethwire.NewMessage(ethwire.MsgStatusTy, []interface{}{
-		uint32(ProtocolVersion),
+		//uint32(ProtocolVersion),
 		uint32(NetVersion),
 		self.ethereum.BlockChain().TD,
 		self.ethereum.BlockChain().CurrentBlock.Hash(),
@@ -686,11 +686,11 @@ func (self *Peer) handleStatus(msg *ethwire.Msg) {
 	c := msg.Data
 
 	var (
-		protoVersion = c.Get(0).Uint()
-		netVersion   = c.Get(1).Uint()
-		td           = c.Get(2).BigInt()
-		bestHash     = c.Get(3).Bytes()
-		genesis      = c.Get(4).Bytes()
+		//protoVersion = c.Get(0).Uint()
+		netVersion = c.Get(0).Uint()
+		td         = c.Get(1).BigInt()
+		bestHash   = c.Get(2).Bytes()
+		genesis    = c.Get(3).Bytes()
 	)
 
 	if bytes.Compare(self.ethereum.BlockChain().Genesis().Hash(), genesis) != 0 {
@@ -703,10 +703,12 @@ func (self *Peer) handleStatus(msg *ethwire.Msg) {
 		return
 	}
 
-	if protoVersion != ProtocolVersion {
-		ethlogger.Warnf("Invalid protocol version %d. Disabling [eth]\n", protoVersion)
-		return
-	}
+	/*
+		if protoVersion != ProtocolVersion {
+			ethlogger.Warnf("Invalid protocol version %d. Disabling [eth]\n", protoVersion)
+			return
+		}
+	*/
 
 	// Get the td and last hash
 	self.td = td
@@ -719,14 +721,14 @@ func (self *Peer) handleStatus(msg *ethwire.Msg) {
 	// fetch hashes from highest TD node.
 	self.FetchHashes()
 
-	ethlogger.Infof("Peer is [eth] capable. (TD = %v ~ %x) %d / %d", self.td, self.bestHash, protoVersion, netVersion)
+	ethlogger.Infof("Peer is [eth] capable. (TD = %v ~ %x)", self.td, self.bestHash)
 
 }
 
 func (p *Peer) pushHandshake() error {
 	pubkey := p.ethereum.KeyManager().PublicKey()
 	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-		P2PVersion, []byte(p.version), []interface{}{"eth"}, p.port, pubkey[1:],
+		P2PVersion, []byte(p.version), []interface{}{"eth", ProtocolVersion}, p.port, pubkey[1:],
 	})
 
 	p.QueueMessage(msg)
@@ -811,6 +813,12 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 		cap := capsIt.Value().Str()
 		switch cap {
 		case "eth":
+			capsIt.Next()
+			version := capsIt.Value().Uint()
+			if version != ProtocolVersion {
+				ethlogger.Warnf("Invalid protocol version %d. Disabling [eth]\n", version)
+				continue
+			}
 			p.pushStatus()
 		}
 
