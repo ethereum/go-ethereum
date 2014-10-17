@@ -24,6 +24,7 @@ type TxMsgTy byte
 const (
 	TxPre = iota
 	TxPost
+
 	minGasPrice = 1000000
 )
 
@@ -160,7 +161,7 @@ out:
 				txplogger.Debugf("(t) %x => %x (%v) %x\n", tx.Sender()[:4], tmp, tx.Value, tx.Hash())
 
 				// Notify the subscribers
-				pool.Ethereum.Reactor().Post("newTx:pre", tx)
+				pool.Ethereum.EventMux().Post(TxEvent{TxPre, tx})
 			}
 		case <-pool.quit:
 			break out

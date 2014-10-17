@@ -802,7 +802,7 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	p.versionKnown = true
 
 	p.ethereum.PushPeer(p)
-	p.ethereum.reactor.Post("peerList", p.ethereum.Peers())
+	p.ethereum.eventMux.Post(PeerListEvent{p.ethereum.Peers()})
 
 	p.protocolCaps = caps
 	capsIt := caps.NewIterator()

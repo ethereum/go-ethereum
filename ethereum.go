@@ -17,12 +17,11 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethrpc"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
-	"github.com/ethereum/eth-go/eventer"
+	"github.com/ethereum/eth-go/event"
 )
 
 const (
@@ -60,7 +59,7 @@ type Ethereum struct {
 	// The block pool
 	blockPool *BlockPool
 	// Eventer
-	eventer *eventer.EventMachine
+	eventMux event.TypeMux
 	// Peers
 	peers *list.List
 	// Nonce
@@ -84,8 +83,6 @@ type Ethereum struct {
 	Mining bool
 
 	listening bool
-
-	reactor *ethreact.ReactorEngine
 
 	RpcServer *ethrpc.JsonRpcServer
 
@@ -129,8 +126,6 @@ func New(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager 
 		isUpToDate:     true,
 		filters:        make(map[int]*ethchain.Filter),
 	}
-	ethereum.reactor = ethreact.New()
-	ethereum.eventer = eventer.New()
 
 	ethereum.blockPool = NewBlockPool(ethereum)
 	ethereum.txPool = ethchain.NewTxPool(ethereum)
@@ -141,10 +136,6 @@ func New(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager 
 	ethereum.txPool.Start()
 
 	return ethereum, nil
-}
-
-func (s *Ethereum) Reactor() *ethreact.ReactorEngine {
-	return s.reactor
 }
 
 func (s *Ethereum) KeyManager() *ethcrypto.KeyManager {
@@ -169,8 +160,8 @@ func (s *Ethereum) TxPool() *ethchain.TxPool {
 func (s *Ethereum) BlockPool() *BlockPool {
 	return s.blockPool
 }
-func (s *Ethereum) Eventer() *eventer.EventMachine {
-	return s.eventer
+func (s *Ethereum) EventMux() *event.TypeMux {
+	return &s.eventMux
 }
 func (self *Ethereum) Db() ethutil.Database {
 	return self.db
@@ -376,7 +367,7 @@ func (s *Ethereum) removePeerElement(e *list.Element) {
 
 	s.peers.Remove(e)
 
-	s.reactor.Post("peerList", s.peers)
+	s.eventMux.Post(PeerListEvent{s.peers})
 }
 
 func (s *Ethereum) RemovePeer(p *Peer) {
@@ -400,7 +391,6 @@ func (s *Ethereum) reapDeadPeerHandler() {
 
 // Start the ethereum
 func (s *Ethereum) Start(seed bool) {
-	s.reactor.Start()
 	s.blockPool.Start()
 	s.stateManager.Start()
 
@@ -524,8 +514,7 @@ func (s *Ethereum) Stop() {
 	}
 	s.txPool.Stop()
 	s.stateManager.Stop()
-	s.reactor.Flush()
-	s.reactor.Stop()
+	s.eventMux.Stop()
 	s.blockPool.Stop()
 
 	ethlogger.Infoln("Server stopped")
@@ -584,10 +573,10 @@ out:
 		select {
 		case <-upToDateTimer.C:
 			if self.IsUpToDate() && !self.isUpToDate {
-				self.reactor.Post("chainSync", false)
+				self.eventMux.Post(ChainSyncEvent{false})
 				self.isUpToDate = true
 			} else if !self.IsUpToDate() && self.isUpToDate {
-				self.reactor.Post("chainSync", true)
+				self.eventMux.Post(ChainSyncEvent{true})
 				self.isUpToDate = false
 			}
 		case <-self.quit:
@@ -623,40 +612,30 @@ func (self *Ethereum) GetFilter(id int) *ethchain.Filter {
 }
 
 func (self *Ethereum) filterLoop() {
-	blockChan := make(chan ethreact.Event, 5)
-	messageChan := make(chan ethreact.Event, 5)
 	// Subscribe to events
-	reactor := self.Reactor()
-	reactor.Subscribe("newBlock", blockChan)
-	reactor.Subscribe("messages", messageChan)
-out:
-	for {
-		select {
-		case <-self.quit:
-			break out
-		case block := <-blockChan:
-			if block, ok := block.Resource.(*ethchain.Block); ok {
-				self.filterMu.RLock()
-				for _, filter := range self.filters {
-					if filter.BlockCallback != nil {
-						filter.BlockCallback(block)
+	events := self.eventMux.Subscribe(ethchain.NewBlockEvent{}, ethstate.Messages(nil))
+	for event := range events.Chan() {
+		switch event := event.(type) {
+		case ethchain.NewBlockEvent:
+			self.filterMu.RLock()
+			for _, filter := range self.filters {
+				if filter.BlockCallback != nil {
+					filter.BlockCallback(event.Block)
+				}
+			}
+			self.filterMu.RUnlock()
+
+		case ethstate.Messages:
+			self.filterMu.RLock()
+			for _, filter := range self.filters {
+				if filter.MessageCallback != nil {
+					msgs := filter.FilterMessages(event)
+					if len(msgs) > 0 {
+						filter.MessageCallback(msgs)
 					}
 				}
-				self.filterMu.RUnlock()
 			}
-		case msg := <-messageChan:
-			if messages, ok := msg.Resource.(ethstate.Messages); ok {
-				self.filterMu.RLock()
-				for _, filter := range self.filters {
-					if filter.MessageCallback != nil {
-						msgs := filter.FilterMessages(messages)
-						if len(msgs) > 0 {
-							filter.MessageCallback(msgs)
-						}
-					}
-				}
-				self.filterMu.RUnlock()
-			}
+			self.filterMu.RUnlock()
 		}
 	}
 }

@@ -8,7 +8,6 @@ import (
 
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/obscuren/sha3"
 )
@@ -16,7 +15,7 @@ import (
 var powlogger = ethlog.NewLogger("POW")
 
 type PoW interface {
-	Search(block *Block, reactChan chan ethreact.Event) []byte
+	Search(block *Block, stop <-chan struct{}) []byte
 	Verify(hash []byte, diff *big.Int, nonce []byte) bool
 	GetHashrate() int64
 	Turbo(bool)
@@ -36,7 +35,7 @@ func (pow *EasyPow) Turbo(on bool) {
 	pow.turbo = on
 }
 
-func (pow *EasyPow) Search(block *Block, reactChan chan ethreact.Event) []byte {
+func (pow *EasyPow) Search(block *Block, stop <-chan struct{}) []byte {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	hash := block.HashNoNonce()
 	diff := block.Difficulty
@@ -46,7 +45,7 @@ func (pow *EasyPow) Search(block *Block, reactChan chan ethreact.Event) []byte {
 
 	for {
 		select {
-		case <-reactChan:
+		case <-stop:
 			powlogger.Infoln("Breaking from mining")
 			return nil
 		default:

@@ -6,16 +6,17 @@ import (
 
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethdb"
-	"github.com/ethereum/eth-go/ethreact"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
+	"github.com/ethereum/eth-go/event"
 )
 
 // Implement our EthTest Manager
 type TestManager struct {
 	stateManager *StateManager
-	reactor      *ethreact.ReactorEngine
+	eventMux     *event.TypeMux
 
+	db         ethutil.Database
 	txPool     *TxPool
 	blockChain *BlockChain
 	Blocks     []*Block
@@ -49,8 +50,8 @@ func (tm *TestManager) StateManager() *StateManager {
 	return tm.stateManager
 }
 
-func (tm *TestManager) Reactor() *ethreact.ReactorEngine {
-	return tm.reactor
+func (tm *TestManager) EventMux() *event.TypeMux {
+	return tm.eventMux
 }
 func (tm *TestManager) Broadcast(msgType ethwire.MsgType, data []interface{}) {
 	fmt.Println("Broadcast not implemented")
@@ -63,7 +64,10 @@ func (tm *TestManager) KeyManager() *ethcrypto.KeyManager {
 	return nil
 }
 
-func (tm *TestManager) Db() ethutil.Database { return nil }
+func (tm *TestManager) Db() ethutil.Database {
+	return tm.db
+}
+
 func NewTestManager() *TestManager {
 	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "ETH")
 
@@ -75,8 +79,8 @@ func NewTestManager() *TestManager {
 	ethutil.Config.Db = db
 
 	testManager := &TestManager{}
-	testManager.reactor = ethreact.New()
-
+	testManager.eventMux = new(event.TypeMux)
+	testManager.db = db
 	testManager.txPool = NewTxPool(testManager)
 	testManager.blockChain = NewBlockChain(testManager)
 	testManager.stateManager = NewStateManager(testManager)
