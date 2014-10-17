@@ -886,7 +886,7 @@ ApplicationWindow {
 					     pastPeers.append({text: ips.get(i)})
 				     }
 
-				     pastPeers.insert(0, {text: "poc-6.ethdev.com:30303"})
+				     pastPeers.insert(0, {text: "poc-7.ethdev.com:30303"})
 			     }
 		     }
 
