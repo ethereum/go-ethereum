@@ -46,7 +46,7 @@ private:
 	/**
 	 *  Maps a pc at which there is a JUMP or JUMPI to the target block of the jump.
 	 */
-	std::map<ProgramCounter, BasicBlock*> m_directJumpTargets;
+	std::map<ProgramCounter, llvm::BasicBlock*> m_directJumpTargets;
 
 	/**
 	 *  A list of possible blocks to which there may be indirect jumps.

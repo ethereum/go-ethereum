@@ -67,9 +67,7 @@ void Compiler::createBasicBlocks(bytesConstRef bytecode)
 				}
 
 				// Create a block for the JUMP target.
-				ProgramCounter targetPC = val.convert_to<ProgramCounter>();
-				if (targetPC > bytecode.size())
-					targetPC = bytecode.size();
+				ProgramCounter targetPC = val < bytecode.size() ? val.convert_to<ProgramCounter>() : bytecode.size();
 				splitPoints.insert(targetPC);
 
 				ProgramCounter jumpPC = (next - bytecode.begin());
@@ -130,16 +128,23 @@ void Compiler::createBasicBlocks(bytesConstRef bytecode)
 
 	for (auto it = directJumpTargets.cbegin(); it != directJumpTargets.cend(); ++it)
 	{
+		if (it->second >= bytecode.size())
+		{
+			// Jumping out of code means STOP
+			m_directJumpTargets[it->first] = m_stopBB;
+			continue;
+		}
+
 		auto blockIter = basicBlocks.find(it->second);
 		if (blockIter != basicBlocks.end())
 		{
-			m_directJumpTargets[it->first] = &(blockIter->second);
+			m_directJumpTargets[it->first] = blockIter->second.llvm();
 		}
 		else
 		{
 			std::cerr << "Bad JUMP at PC " << it->first
 					  << ": " << it->second << " is not a valid PC\n";
-			m_directJumpTargets[it->first] = m_badJumpBlock.get();
+			m_directJumpTargets[it->first] = m_badJumpBlock->llvm();
 		}
 	}
 
@@ -567,7 +572,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			// 1. this is not the first instruction in the block
 			// 2. m_directJumpTargets[currentPC] is defined (meaning that the previous instruction is a PUSH)
 			// Otherwise generate a indirect jump (a switch).
-			BasicBlock* targetBlock = nullptr;
+			llvm::BasicBlock* targetBlock = nullptr;
 			if (currentPC != basicBlock.begin())
 			{
 				auto pairIter = m_directJumpTargets.find(currentPC);
@@ -584,7 +589,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 					// The target address is computed at compile time,
 					// just pop it without looking...
 					stack.pop();
-					m_builder.CreateBr(targetBlock->llvm());
+					m_builder.CreateBr(targetBlock);
 				}
 				else
 				{
@@ -606,7 +611,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 				if (targetBlock)
 				{
 					stack.pop();
-					m_builder.CreateCondBr(cond, targetBlock->llvm(), nextBasicBlock);
+					m_builder.CreateCondBr(cond, targetBlock, nextBasicBlock);
 				}
 				else
 				{
