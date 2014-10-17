@@ -165,20 +165,21 @@ void GasMeter::commitCostBlock(llvm::Value* _additionalCost)
 	// If any uncommited block
 	if (m_checkCall)
 	{
-		if (m_blockCost == 0 && !_additionalCost) // Do not check 0
+		if (m_blockCost == 0) // Do not check 0
 		{
 			m_checkCall->eraseFromParent(); // Remove the gas check call
 			m_checkCall = nullptr;
 			return;
 		}
 
-		llvm::Value* cost = Constant::get(m_blockCost);
-		if (_additionalCost)
-			cost = m_builder.CreateAdd(cost, _additionalCost);
-		
-		m_checkCall->setArgOperand(0, cost); // Update block cost in gas check call
+		m_checkCall->setArgOperand(0, Constant::get(m_blockCost)); // Update block cost in gas check call
 		m_checkCall = nullptr; // End cost-block
 		m_blockCost = 0;
+
+		if (_additionalCost)
+		{
+			m_builder.CreateCall(m_gasCheckFunc, _additionalCost);
+		}
 	}
 	assert(m_blockCost == 0);
 }
