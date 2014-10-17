@@ -4,6 +4,7 @@
 #include <llvm/IR/Module.h>
 
 #include <libdevcore/Common.h>
+#include <libevm/ExtVMFace.h>
 
 namespace dev
 {
@@ -17,7 +18,7 @@ class ExecutionEngine
 public:
 	ExecutionEngine();
 
-	int run(std::unique_ptr<llvm::Module> module);
+	int run(std::unique_ptr<llvm::Module> module, ExtVMFace* _ext = nullptr);
 
 	bytes returnData;
 };

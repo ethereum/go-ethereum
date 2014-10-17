@@ -36,7 +36,7 @@ ExecutionEngine::ExecutionEngine()
 extern "C" { EXPORT std::jmp_buf* rt_jmpBuf; }
 
 
-int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
+int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, ExtVMFace* _ext)
 {
 	auto module = _module.get(); // Keep ownership of the module in _module
 
@@ -81,26 +81,29 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module)
 	exec->finalizeObject();
 
 	// Create fake ExtVM interface
-	auto ext = std::make_unique<ExtVMFace>();
-	ext->myAddress = Address(1122334455667788);
-	ext->caller = Address(0xfacefacefaceface);
-	ext->origin = Address(101010101010101010);
-	ext->value = 0xabcd;
-	ext->gasPrice = 1002;
-	ext->previousBlock.hash = u256(1003);
-	ext->currentBlock.coinbaseAddress = Address(1004);
-	ext->currentBlock.timestamp = 1005;
-	ext->currentBlock.number = 1006;
-	ext->currentBlock.difficulty = 1007;
-	ext->currentBlock.gasLimit = 1008;
-	std::string calldata = "Hello the Beautiful World of Ethereum!";
-	ext->data = calldata;
-	unsigned char fakecode[] = {0x0d, 0x0e, 0x0a, 0x0d, 0x0b, 0x0e, 0xe, 0xf};
-	ext->code = decltype(ext->code)(fakecode, 8);
+	if (!_ext)
+	{
+		auto _ext = new ExtVMFace;
+		_ext->myAddress = Address(1122334455667788);
+		_ext->caller = Address(0xfacefacefaceface);
+		_ext->origin = Address(101010101010101010);
+		_ext->value = 0xabcd;
+		_ext->gasPrice = 1002;
+		_ext->previousBlock.hash = u256(1003);
+		_ext->currentBlock.coinbaseAddress = Address(1004);
+		_ext->currentBlock.timestamp = 1005;
+		_ext->currentBlock.number = 1006;
+		_ext->currentBlock.difficulty = 1007;
+		_ext->currentBlock.gasLimit = 1008;
+		std::string calldata = "Hello the Beautiful World of Ethereum!";
+		_ext->data = calldata;
+		unsigned char fakecode[] = {0x0d, 0x0e, 0x0a, 0x0d, 0x0b, 0x0e, 0xe, 0xf};
+		_ext->code = decltype(_ext->code)(fakecode, 8);
+	}
 
 	// Init runtime
 	uint64_t gas = 100;
-	Runtime runtime(gas, std::move(ext));
+	Runtime runtime(gas, *_ext);
 
 	auto entryFunc = module->getFunction("main");
 	if (!entryFunc)

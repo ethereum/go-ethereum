@@ -19,7 +19,7 @@ bytes VM::go(ExtVMFace& _ext)
 	module->dump();
 
 	ExecutionEngine engine;
-	auto exitCode = engine.run(std::move(module));
+	auto exitCode = engine.run(std::move(module), &_ext);
 
 	switch (exitCode)
 	{
