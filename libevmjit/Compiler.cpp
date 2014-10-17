@@ -927,6 +927,13 @@ void Compiler::linkBasicBlocks()
 			completePhiNodes(*it);
 		}
 	}
+
+	// Remove jump table block if not predecessors
+	if (llvm::pred_begin(m_jumpTableBlock->llvm()) == llvm::pred_end(m_jumpTableBlock->llvm()))
+	{
+		m_jumpTableBlock->llvm()->eraseFromParent();
+		m_jumpTableBlock.reset();
+	}
 }
 
 void Compiler::dumpBasicBlockGraph(std::ostream& out)
