@@ -923,7 +923,8 @@ void Compiler::linkBasicBlocks()
 		for (auto it = llvm::po_ext_begin(bb.second.llvm(), visitSet),
 			end = llvm::po_ext_end(bb.second.llvm(), visitSet); it != end; ++it)
 		{
-			std::cerr << it->getName().str() << std::endl;
+			// TODO: Use logger
+			//std::cerr << it->getName().str() << std::endl;
 			completePhiNodes(*it);
 		}
 	}

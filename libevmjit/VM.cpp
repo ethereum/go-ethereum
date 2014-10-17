@@ -16,7 +16,6 @@ namespace jit
 bytes VM::go(ExtVMFace& _ext)
 {
 	auto module = Compiler().compile(_ext.code);
-	module->dump();
 
 	ExecutionEngine engine;
 	auto exitCode = engine.run(std::move(module), m_gas, &_ext);
