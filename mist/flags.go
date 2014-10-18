@@ -12,7 +12,7 @@ import (
 
 	"bitbucket.org/kardianos/osext"
 	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethvm"
+	"github.com/ethereum/eth-go/vm"
 )
 
 var (
@@ -106,7 +106,7 @@ func Init() {
 
 	flag.Parse()
 
-	if VmType >= int(ethvm.MaxVmTy) {
+	if VmType >= int(vm.MaxVmTy) {
 		log.Fatal("Invalid VM type ", VmType)
 	}
 }
