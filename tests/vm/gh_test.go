@@ -41,7 +41,7 @@ type VmTest struct {
 
 func RunVmTest(url string, t *testing.T) {
 	tests := make(map[string]VmTest)
-	helper.CreateTests(t, url, &tests)
+	helper.CreateHttpTests(t, url, &tests)
 
 	for name, test := range tests {
 		state := ethstate.New(helper.NewTrie())
@@ -88,12 +88,12 @@ func RunVmTest(url string, t *testing.T) {
 
 // I've created a new function for each tests so it's easier to identify where the problem lies if any of them fail.
 func TestVMArithmetic(t *testing.T) {
+	//helper.Logger.SetLogLevel(5)
 	const url = "https://raw.githubusercontent.com/ethereum/tests/develop/vmtests/vmArithmeticTest.json"
 	RunVmTest(url, t)
 }
 
 func TestVMSystemOperation(t *testing.T) {
-	//helper.Logger.SetLogLevel(5)
 	const url = "https://raw.githubusercontent.com/ethereum/tests/develop/vmtests/vmSystemOperationsTest.json"
 	RunVmTest(url, t)
 }
