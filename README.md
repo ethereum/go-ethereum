@@ -1,7 +1,8 @@
 Ethereum
 ========
 
-[![Build Status](https://travis-ci.org/ethereum/go-ethereum.png?branch=master)](https://travis-ci.org/ethereum/go-ethereum)
+Master: [![Build Status](https://travis-ci.org/ethereum/eth-go.png?branch=master)](https://travis-ci.org/ethereum/eth-go)
+Develop: [![Build Status](https://travis-ci.org/ethereum/eth-go.png?branch=develop)](https://travis-ci.org/ethereum/eth-go)
 
 Ethereum Go Development package (C) Jeffrey Wilcke
 
