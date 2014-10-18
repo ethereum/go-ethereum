@@ -4,10 +4,10 @@ import (
 	"fmt"
 
 	"github.com/ethereum/eth-go"
-	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethpipe"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ui"
 	"github.com/obscuren/otto"
 )
 
@@ -128,7 +128,7 @@ func (self *JSEthereum) toVal(v interface{}) otto.Value {
 }
 
 func (self *JSEthereum) Messages(object map[string]interface{}) otto.Value {
-	filter := ethchain.NewFilterFromMap(object, self.ethereum)
+	filter := ui.NewFilterFromMap(object, self.ethereum)
 
 	messages := filter.Find()
 	var msgs []JSMessage

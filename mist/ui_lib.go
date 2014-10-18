@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/eth-go/ethpipe"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/eth-go/ui/qt"
 	"github.com/ethereum/go-ethereum/javascript"
 	"gopkg.in/qml.v1"
 )
@@ -194,7 +195,7 @@ func (self *UiLib) StartDebugger() {
 }
 
 func (self *UiLib) NewFilter(object map[string]interface{}) (id int) {
-	filter := ethchain.NewFilterFromMap(object, self.eth)
+	filter := qt.NewFilterFromMap(object, self.eth)
 	filter.MessageCallback = func(messages ethstate.Messages) {
 		self.win.Root().Call("invokeFilterCallback", ethpipe.ToJSMessages(messages), id)
 	}

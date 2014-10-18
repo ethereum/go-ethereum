@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/eth-go/ethpipe"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/event"
+	"github.com/ethereum/eth-go/ui/qt"
 	"github.com/ethereum/go-ethereum/javascript"
 	"gopkg.in/qml.v1"
 )
@@ -103,11 +104,11 @@ func (app *ExtApplication) mainLoop() {
 }
 
 func (self *ExtApplication) Watch(filterOptions map[string]interface{}, identifier string) {
-	self.filters[identifier] = ethchain.NewFilterFromMap(filterOptions, self.eth)
+	self.filters[identifier] = qt.NewFilterFromMap(filterOptions, self.eth)
 }
 
 func (self *ExtApplication) GetMessages(object map[string]interface{}) string {
-	filter := ethchain.NewFilterFromMap(object, self.eth)
+	filter := qt.NewFilterFromMap(object, self.eth)
 
 	messages := filter.Find()
 	var msgs []javascript.JSMessage
