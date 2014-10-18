@@ -9,6 +9,7 @@ package ethrepl
 // #include <readline/history.h>
 import "C"
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"strings"
