@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethtrie"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/eth-go/ethvm"
+	"github.com/ethereum/eth-go/vm"
 )
 
 /*
@@ -160,13 +160,13 @@ func (self *StateTransition) TransitionState() (err error) {
 	sender.Nonce += 1
 
 	// Transaction gas
-	if err = self.UseGas(ethvm.GasTx); err != nil {
+	if err = self.UseGas(vm.GasTx); err != nil {
 		return
 	}
 
 	// Pay data gas
 	dataPrice := big.NewInt(int64(len(self.data)))
-	dataPrice.Mul(dataPrice, ethvm.GasData)
+	dataPrice.Mul(dataPrice, vm.GasData)
 	if err = self.UseGas(dataPrice); err != nil {
 		return
 	}
@@ -261,11 +261,11 @@ func (self *StateTransition) Eval(msg *ethstate.Message, script []byte, context 
 		transactor    = self.Sender()
 		state         = self.state
 		env           = NewEnv(state, self.tx, self.block)
-		callerClosure = ethvm.NewClosure(msg, transactor, context, script, self.gas, self.gasPrice)
+		callerClosure = vm.NewClosure(msg, transactor, context, script, self.gas, self.gasPrice)
 	)
 
-	//vm := ethvm.New(env, ethvm.Type(ethutil.Config.VmType))
-	vm := ethvm.New(env, ethvm.DebugVmTy)
+	//vm := vm.New(env, vm.Type(ethutil.Config.VmType))
+	vm := vm.New(env, vm.DebugVmTy)
 
 	ret, _, err = callerClosure.Call(vm, self.tx.Data)
 

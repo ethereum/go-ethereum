@@ -1,9 +1,10 @@
-package ethvm
+package vm
 
 import (
 	"fmt"
-	"github.com/ethereum/eth-go/ethutil"
 	"math/big"
+
+	"github.com/ethereum/eth-go/ethutil"
 )
 
 func Disassemble(script []byte) (asm []string) {

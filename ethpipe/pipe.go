@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/eth-go/ethlog"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/eth-go/ethvm"
+	"github.com/ethereum/eth-go/vm"
 )
 
 var logger = ethlog.NewLogger("PIPE")
@@ -58,9 +58,9 @@ func (self *Pipe) ExecuteObject(object *Object, data []byte, value, gas, price *
 
 	self.Vm.State = self.World().State().Copy()
 
-	vm := ethvm.New(NewEnv(self.Vm.State, block, value.BigInt(), initiator.Address()), ethvm.Type(ethutil.Config.VmType))
+	evm := vm.New(NewEnv(self.Vm.State, block, value.BigInt(), initiator.Address()), vm.Type(ethutil.Config.VmType))
 
-	msg := ethvm.NewExecution(vm, object.Address(), data, gas.BigInt(), price.BigInt(), value.BigInt())
+	msg := vm.NewExecution(evm, object.Address(), data, gas.BigInt(), price.BigInt(), value.BigInt())
 	ret, err := msg.Exec(object.Address(), initiator)
 
 	fmt.Println("returned from call", ret, err)

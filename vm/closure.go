@@ -1,4 +1,4 @@
-package ethvm
+package vm
 
 // TODO Re write VM to use values instead of big integers?
 

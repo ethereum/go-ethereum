@@ -1,4 +1,4 @@
-package ethvm
+package vm
 
 import "github.com/ethereum/eth-go/ethstate"
 
