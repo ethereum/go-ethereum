@@ -5,7 +5,7 @@ import (
 
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/eth-go/ethvm"
+	"github.com/ethereum/eth-go/vm"
 )
 
 type Env struct {
@@ -56,9 +56,9 @@ func RunVm(state *ethstate.State, env, exec map[string]string) ([]byte, *big.Int
 	caller := state.GetOrNewStateObject(FromHex(exec["caller"]))
 	caller.Balance = ethutil.Big(exec["value"])
 
-	vm := ethvm.New(NewEnvFromMap(state, env, exec), ethvm.DebugVmTy)
+	evm := vm.New(NewEnvFromMap(state, env, exec), vm.DebugVmTy)
 
-	execution := ethvm.NewExecution(vm, address, FromHex(exec["data"]), ethutil.Big(exec["gas"]), ethutil.Big(exec["gasPrice"]), ethutil.Big(exec["value"]))
+	execution := vm.NewExecution(evm, address, FromHex(exec["data"]), ethutil.Big(exec["gas"]), ethutil.Big(exec["gasPrice"]), ethutil.Big(exec["value"]))
 	ret, err := execution.Exec(address, caller)
 
 	return ret, execution.Gas, err
