@@ -39,9 +39,9 @@ type VmTest struct {
 	Pre         map[string]Account
 }
 
-func RunVmTest(url string, t *testing.T) {
+func RunVmTest(p string, t *testing.T) {
 	tests := make(map[string]VmTest)
-	helper.CreateHttpTests(t, url, &tests)
+	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
 		state := ethstate.New(helper.NewTrie())
@@ -89,46 +89,46 @@ func RunVmTest(url string, t *testing.T) {
 // I've created a new function for each tests so it's easier to identify where the problem lies if any of them fail.
 func TestVMArithmetic(t *testing.T) {
 	//helper.Logger.SetLogLevel(5)
-	const url = "https://raw.githubusercontent.com/ethereum/tests/develop/vmtests/vmArithmeticTest.json"
-	RunVmTest(url, t)
+	const fn = "files/vmtests/vmArithmeticTest.json"
+	RunVmTest(fn, t)
 }
 
 func TestVMSystemOperation(t *testing.T) {
-	const url = "https://raw.githubusercontent.com/ethereum/tests/develop/vmtests/vmSystemOperationsTest.json"
-	RunVmTest(url, t)
+	const fn = "files/vmtests/vmSystemOperationsTest.json"
+	RunVmTest(fn, t)
 }
 
 func TestBitwiseLogicOperation(t *testing.T) {
-	const url = "https://raw.githubusercontent.com/ethereum/tests/develop/vmtests/vmBitwiseLogicOperationTest.json"
-	RunVmTest(url, t)
+	const fn = "files/vmtests/vmBitwiseLogicOperationTest.json"
+	RunVmTest(fn, t)
 }
 
 func TestBlockInfo(t *testing.T) {
-	const url = "https://raw.githubusercontent.com/ethereum/tests/develop/vmtests/vmBlockInfoTest.json"
-	RunVmTest(url, t)
+	const fn = "files/vmtests/vmBlockInfoTest.json"
+	RunVmTest(fn, t)
 }
 
 func TestEnvironmentalInfo(t *testing.T) {
-	const url = "https://raw.githubusercontent.com/ethereum/tests/develop/vmtests/vmEnvironmentalInfoTest.json"
-	RunVmTest(url, t)
+	const fn = "files/vmtests/vmEnvironmentalInfoTest.json"
+	RunVmTest(fn, t)
 }
 
 func TestFlowOperation(t *testing.T) {
-	const url = "https://raw.githubusercontent.com/ethereum/tests/develop/vmtests/vmIOandFlowOperationsTest.json"
-	RunVmTest(url, t)
+	const fn = "files/vmtests/vmIOandFlowOperationsTest.json"
+	RunVmTest(fn, t)
 }
 
 func TestPushDupSwap(t *testing.T) {
-	const url = "https://raw.githubusercontent.com/ethereum/tests/develop/vmtests/vmPushDupSwapTest.json"
-	RunVmTest(url, t)
+	const fn = "files/vmtests/vmPushDupSwapTest.json"
+	RunVmTest(fn, t)
 }
 
 func TestVMSha3(t *testing.T) {
-	const url = "https://raw.githubusercontent.com/ethereum/tests/develop/vmtests/vmSha3Test.json"
-	RunVmTest(url, t)
+	const fn = "files/vmtests/vmSha3Test.json"
+	RunVmTest(fn, t)
 }
 
 func TestVm(t *testing.T) {
-	const url = "https://raw.githubusercontent.com/ethereum/tests/develop/vmtests/vmtests.json"
-	RunVmTest(url, t)
+	const fn = "files/vmtests/vmtests.json"
+	RunVmTest(fn, t)
 }
