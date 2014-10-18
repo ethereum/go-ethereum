@@ -89,46 +89,46 @@ func RunVmTest(p string, t *testing.T) {
 // I've created a new function for each tests so it's easier to identify where the problem lies if any of them fail.
 func TestVMArithmetic(t *testing.T) {
 	//helper.Logger.SetLogLevel(5)
-	const fn = "files/vmtests/vmArithmeticTest.json"
+	const fn = "../files/vmtests/vmArithmeticTest.json"
 	RunVmTest(fn, t)
 }
 
 func TestVMSystemOperation(t *testing.T) {
-	const fn = "files/vmtests/vmSystemOperationsTest.json"
+	const fn = "../files/vmtests/vmSystemOperationsTest.json"
 	RunVmTest(fn, t)
 }
 
 func TestBitwiseLogicOperation(t *testing.T) {
-	const fn = "files/vmtests/vmBitwiseLogicOperationTest.json"
+	const fn = "../files/vmtests/vmBitwiseLogicOperationTest.json"
 	RunVmTest(fn, t)
 }
 
 func TestBlockInfo(t *testing.T) {
-	const fn = "files/vmtests/vmBlockInfoTest.json"
+	const fn = "../files/vmtests/vmBlockInfoTest.json"
 	RunVmTest(fn, t)
 }
 
 func TestEnvironmentalInfo(t *testing.T) {
-	const fn = "files/vmtests/vmEnvironmentalInfoTest.json"
+	const fn = "../files/vmtests/vmEnvironmentalInfoTest.json"
 	RunVmTest(fn, t)
 }
 
 func TestFlowOperation(t *testing.T) {
-	const fn = "files/vmtests/vmIOandFlowOperationsTest.json"
+	const fn = "../files/vmtests/vmIOandFlowOperationsTest.json"
 	RunVmTest(fn, t)
 }
 
 func TestPushDupSwap(t *testing.T) {
-	const fn = "files/vmtests/vmPushDupSwapTest.json"
+	const fn = "../files/vmtests/vmPushDupSwapTest.json"
 	RunVmTest(fn, t)
 }
 
 func TestVMSha3(t *testing.T) {
-	const fn = "files/vmtests/vmSha3Test.json"
+	const fn = "../files/vmtests/vmSha3Test.json"
 	RunVmTest(fn, t)
 }
 
 func TestVm(t *testing.T) {
-	const fn = "files/vmtests/vmtests.json"
+	const fn = "../files/vmtests/vmtests.json"
 	RunVmTest(fn, t)
 }
