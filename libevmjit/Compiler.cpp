@@ -901,10 +901,7 @@ void Compiler::linkBasicBlocks()
 				// TODO: In case entry block is reached - report error
 				auto predBB = findBasicBlock(*predIt);
 				if (!predBB)
-				{
-					std::cerr << "Stack too small in " << _llbb->getName().str() << std::endl;
-					std::exit(1);
-				}
+					BOOST_THROW_EXCEPTION(Exception() << errinfo_comment("Unsupported dynamic stack"));
 				auto value = predBB->getStack().get(valueIdx);
 				phi->addIncoming(value, predBB->llvm());
 			}

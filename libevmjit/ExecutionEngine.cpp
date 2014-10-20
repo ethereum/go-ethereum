@@ -70,13 +70,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtV
 
 	auto exec = std::unique_ptr<llvm::ExecutionEngine>(builder.create());
 	if (!exec)
-	{
-		if (!errorMsg.empty())
-			std::cerr << "error creating EE: " << errorMsg << std::endl;
-		else
-			std::cerr << "unknown error creating llvm::ExecutionEngine" << std::endl;
-		exit(1);
-	}
+		BOOST_THROW_EXCEPTION(Exception() << errinfo_comment(errorMsg));
 	_module.release();	// Successfully created llvm::ExecutionEngine takes ownership of the module
 	exec->finalizeObject();
 
@@ -106,10 +100,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtV
 
 	auto entryFunc = module->getFunction("main");
 	if (!entryFunc)
-	{
-		std::cerr << "main function not found\n";
-		exit(1);
-	}
+		BOOST_THROW_EXCEPTION(Exception() << errinfo_comment("main function not found"));
 
 	ReturnCode returnCode;
 	std::jmp_buf buf;
