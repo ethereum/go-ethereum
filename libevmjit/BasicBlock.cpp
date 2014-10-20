@@ -32,6 +32,7 @@ BasicBlock::BasicBlock(std::string _name, llvm::Function* _mainFunc) :
 
 void BasicBlock::Stack::push(llvm::Value* _value)
 {
+	assert(_value->getType() == Type::i256);
 	m_backend.push_back(_value);
 }
 

@@ -15,6 +15,7 @@
 #include "Ext.h"
 #include "GasMeter.h"
 #include "Utils.h"
+#include "Endianness.h"
 
 namespace dev
 {
@@ -420,21 +421,11 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			const auto byteNum = stack.pop();
 			auto value = stack.pop();
 
-			/*
-			if (byteNum < 32)	- use select
-			{
-			value <<= byteNum*8
-			value >>= 31*8
-			push value
-			}
-			else push 0
-			*/
-
-			// TODO: Shifting by 0 gives wrong results as of this bug http://llvm.org/bugs/show_bug.cgi?id=16439
-
-			auto shbits = m_builder.CreateShl(byteNum, Constant::get(3));
-			value = m_builder.CreateShl(value, shbits);
-			value = m_builder.CreateLShr(value, Constant::get(31 * 8));
+			//
+			value = Endianness::toBE(m_builder, value);
+			auto bytes = m_builder.CreateBitCast(value, llvm::VectorType::get(Type::Byte, 32), "bytes");
+			auto byte = m_builder.CreateExtractElement(bytes, byteNum, "byte");
+			value = m_builder.CreateZExt(byte, Type::i256);
 
 			auto byteNumValid = m_builder.CreateICmpULT(byteNum, Constant::get(32));
 			value = m_builder.CreateSelect(byteNumValid, value, Constant::get(0));
