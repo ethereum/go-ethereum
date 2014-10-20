@@ -321,16 +321,6 @@
 
     var eth = web3.eth;
     // Eth object properties
-    Object.defineProperty(eth, "key", {
-        get: function() {
-            return new Promise(function(resolve, reject) {
-                eth.provider.send({call: "getKey"}, function(k) {
-                    resolve(k);
-                });
-            });
-        },
-    });
-
     Object.defineProperty(eth, "gasPrice", {
         get: function() {
             return "10000000000000"
@@ -340,7 +330,7 @@
     Object.defineProperty(eth, "coinbase", {
         get: function() {
             return new Promise(function(resolve, reject) {
-                web3.provider.send({call: "getCoinBase"}, function(coinbase) {
+                web3.provider.send({call: "coinbase"}, function(coinbase) {
                     resolve(coinbase);
                 });
             });
@@ -350,7 +340,7 @@
     Object.defineProperty(eth, "listening", {
         get: function() {
             return new Promise(function(resolve, reject) {
-                web3.provider.send({call: "getIsListening"}, function(listening) {
+                web3.provider.send({call: "listening"}, function(listening) {
                     resolve(listening);
                 });
             });
@@ -361,7 +351,7 @@
     Object.defineProperty(eth, "mining", {
         get: function() {
             return new Promise(function(resolve, reject) {
-                web3.provider.send({call: "getIsMining"}, function(mining) {
+                web3.provider.send({call: "mining"}, function(mining) {
                     resolve(mining);
                 });
             });
@@ -371,7 +361,7 @@
     Object.defineProperty(eth, "peerCount", {
         get: function() {
             return new Promise(function(resolve, reject) {
-                web3.provider.send({call: "getPeerCount"}, function(peerCount) {
+                web3.provider.send({call: "peerCount"}, function(peerCount) {
                     resolve(peerCount);
                 });
             });
