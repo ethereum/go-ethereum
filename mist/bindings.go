@@ -96,9 +96,9 @@ func (self *Gui) DumpState(hash, path string) {
 		var block *ethchain.Block
 		if hash[0] == '#' {
 			i, _ := strconv.Atoi(hash[1:])
-			block = self.eth.BlockChain().GetBlockByNumber(uint64(i))
+			block = self.eth.ChainManager().GetBlockByNumber(uint64(i))
 		} else {
-			block = self.eth.BlockChain().GetBlock(ethutil.Hex2Bytes(hash))
+			block = self.eth.ChainManager().GetBlock(ethutil.Hex2Bytes(hash))
 		}
 
 		if block == nil {

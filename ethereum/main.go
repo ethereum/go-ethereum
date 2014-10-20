@@ -60,11 +60,11 @@ func main() {
 		var block *ethchain.Block
 
 		if len(DumpHash) == 0 && DumpNumber == -1 {
-			block = ethereum.BlockChain().CurrentBlock
+			block = ethereum.ChainManager().CurrentBlock
 		} else if len(DumpHash) > 0 {
-			block = ethereum.BlockChain().GetBlock(ethutil.Hex2Bytes(DumpHash))
+			block = ethereum.ChainManager().GetBlock(ethutil.Hex2Bytes(DumpHash))
 		} else {
-			block = ethereum.BlockChain().GetBlockByNumber(uint64(DumpNumber))
+			block = ethereum.ChainManager().GetBlockByNumber(uint64(DumpNumber))
 		}
 
 		if block == nil {

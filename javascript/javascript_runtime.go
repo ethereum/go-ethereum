@@ -139,10 +139,10 @@ func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
 		var block *ethchain.Block
 		if call.Argument(0).IsNumber() {
 			num, _ := call.Argument(0).ToInteger()
-			block = self.ethereum.BlockChain().GetBlockByNumber(uint64(num))
+			block = self.ethereum.ChainManager().GetBlockByNumber(uint64(num))
 		} else if call.Argument(0).IsString() {
 			hash, _ := call.Argument(0).ToString()
-			block = self.ethereum.BlockChain().GetBlock(ethutil.Hex2Bytes(hash))
+			block = self.ethereum.ChainManager().GetBlock(ethutil.Hex2Bytes(hash))
 		} else {
 			fmt.Println("invalid argument for dump. Either hex string or number")
 		}

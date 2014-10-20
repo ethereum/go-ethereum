@@ -228,10 +228,10 @@ func (gui *Gui) CreateAndSetPrivKey() (string, string, string, string) {
 	return gui.eth.KeyManager().KeyPair().AsStrings()
 }
 
-func (gui *Gui) setInitialBlockChain() {
-	sBlk := gui.eth.BlockChain().LastBlockHash
-	blk := gui.eth.BlockChain().GetBlock(sBlk)
-	for ; blk != nil; blk = gui.eth.BlockChain().GetBlock(sBlk) {
+func (gui *Gui) setInitialChainManager() {
+	sBlk := gui.eth.ChainManager().LastBlockHash
+	blk := gui.eth.ChainManager().GetBlock(sBlk)
+	for ; blk != nil; blk = gui.eth.ChainManager().GetBlock(sBlk) {
 		sBlk = blk.PrevHash
 		addr := gui.address()
 
@@ -363,7 +363,7 @@ func (gui *Gui) update() {
 	}
 
 	go func() {
-		go gui.setInitialBlockChain()
+		go gui.setInitialChainManager()
 		gui.loadAddressBook()
 		gui.setPeerInfo()
 		gui.readPreviousTransactions()
@@ -464,7 +464,7 @@ func (gui *Gui) update() {
 			case <-peerUpdateTicker.C:
 				gui.setPeerInfo()
 			case <-generalUpdateTicker.C:
-				statusText := "#" + gui.eth.BlockChain().CurrentBlock.Number.String()
+				statusText := "#" + gui.eth.ChainManager().CurrentBlock.Number.String()
 				lastBlockLabel.Set("text", statusText)
 
 				if gui.miner != nil {

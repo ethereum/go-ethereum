@@ -131,7 +131,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 
 	self.SetAsm(script)
 
-	block := self.lib.eth.BlockChain().CurrentBlock
+	block := self.lib.eth.ChainManager().CurrentBlock
 
 	callerClosure := vm.NewClosure(&ethstate.Message{}, account, contract, script, gas, gasPrice)
 	env := utils.NewEnv(state, block, account.Address(), value)
