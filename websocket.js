@@ -46,6 +46,6 @@
     });
 
     if(typeof(web3) !== "undefined" && web3.providers !== undefined) {
-        web3.WebSocketProvider = WebSocketProvider;
+        web3.providers.WebSocketProvider = WebSocketProvider;
     }
 })();

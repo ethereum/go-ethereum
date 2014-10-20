@@ -3,12 +3,15 @@
 
 <head>
 <script type="text/javascript" src="main.js"></script>
+<script type="text/javascript" src="websocket.js"></script>
+<script type="text/javascript" src="qt.js"></script>
 <script type="text/javascript">
 function registerName() {
     var name = document.querySelector("#name").value;
-    name = eth.fromAscii(name);
+    name = web3.fromAscii(name);
 
-    eth.transact({to: "NameReg", gas: "10000", gasPrice: eth.gasPrice, data: [eth.fromAscii("register"), name]}).then(function(tx) {
+    var eth = web3.eth;
+    eth.transact({to: "NameReg", gas: "10000", gasPrice: eth.gasPrice, data: [web3.fromAscii("register"), name]}).then(function(tx) {
         document.querySelector("#result").innerHTML = "Registered name. Please wait for the next block to come through.";
     }, function(err) {
         console.log(err); 
