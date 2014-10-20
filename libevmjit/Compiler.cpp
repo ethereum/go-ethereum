@@ -33,16 +33,18 @@ Compiler::Compiler():
 void Compiler::createBasicBlocks(bytesConstRef bytecode)
 {
 	std::set<ProgramCounter> splitPoints; // Sorted collections of instruction indices where basic blocks start/end
-	splitPoints.insert(0);	// First basic block
 
 	std::map<ProgramCounter, ProgramCounter> directJumpTargets;
 	std::vector<ProgramCounter> indirectJumpTargets;
-	boost::dynamic_bitset<> validJumpTargets(bytecode.size());
+	boost::dynamic_bitset<> validJumpTargets(std::max(bytecode.size(), size_t(1)));
+
+	splitPoints.insert(0);	// First basic block
+	validJumpTargets[0] = true;
 
 	for (auto curr = bytecode.begin(); curr != bytecode.end(); ++curr)
 	{
 		ProgramCounter currentPC = curr - bytecode.begin();
-		validJumpTargets[currentPC] = 1;
+		validJumpTargets[currentPC] = true;
 
 		auto inst = static_cast<Instruction>(*curr);
 		switch (inst)
