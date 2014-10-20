@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"time"
 
 	"bitbucket.org/kardianos/osext"
 	"github.com/ethereum/eth-go"
@@ -266,11 +265,6 @@ func StartMining(ethereum *eth.Ethereum) bool {
 			logger.Infoln("Start mining")
 			if miner == nil {
 				miner = ethminer.NewDefaultMiner(addr, ethereum)
-			}
-			// Give it some time to connect with peers
-			time.Sleep(3 * time.Second)
-			for !ethereum.IsUpToDate() {
-				time.Sleep(5 * time.Second)
 			}
 			miner.Start()
 		}()
