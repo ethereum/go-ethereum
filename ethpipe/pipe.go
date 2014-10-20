@@ -21,7 +21,7 @@ type VmVars struct {
 type Pipe struct {
 	obj          ethchain.EthManager
 	stateManager *ethchain.StateManager
-	blockChain   *ethchain.BlockChain
+	blockChain   *ethchain.ChainManager
 	world        *World
 
 	Vm VmVars
@@ -31,7 +31,7 @@ func New(obj ethchain.EthManager) *Pipe {
 	pipe := &Pipe{
 		obj:          obj,
 		stateManager: obj.StateManager(),
-		blockChain:   obj.BlockChain(),
+		blockChain:   obj.ChainManager(),
 	}
 	pipe.world = NewWorld(pipe)
 

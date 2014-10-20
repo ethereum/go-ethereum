@@ -11,7 +11,7 @@ import (
 
 var chainlogger = ethlog.NewLogger("CHAIN")
 
-type BlockChain struct {
+type ChainManager struct {
 	Ethereum EthManager
 	// The famous, the fabulous Mister GENESIIIIIIS (block)
 	genesisBlock *Block
@@ -24,8 +24,8 @@ type BlockChain struct {
 	LastBlockHash []byte
 }
 
-func NewBlockChain(ethereum EthManager) *BlockChain {
-	bc := &BlockChain{}
+func NewChainManager(ethereum EthManager) *ChainManager {
+	bc := &ChainManager{}
 	bc.genesisBlock = NewBlockFromBytes(ethutil.Encode(Genesis))
 	bc.Ethereum = ethereum
 
@@ -34,11 +34,11 @@ func NewBlockChain(ethereum EthManager) *BlockChain {
 	return bc
 }
 
-func (bc *BlockChain) Genesis() *Block {
+func (bc *ChainManager) Genesis() *Block {
 	return bc.genesisBlock
 }
 
-func (bc *BlockChain) NewBlock(coinbase []byte) *Block {
+func (bc *ChainManager) NewBlock(coinbase []byte) *Block {
 	var root interface{}
 	hash := ZeroHash256
 
@@ -81,7 +81,7 @@ func CalcDifficulty(block, parent *Block) *big.Int {
 	return diff
 }
 
-func (bc *BlockChain) Reset() {
+func (bc *ChainManager) Reset() {
 	AddTestNetFunds(bc.genesisBlock)
 
 	bc.genesisBlock.state.Trie.Sync()
@@ -97,13 +97,13 @@ func (bc *BlockChain) Reset() {
 	bc.TD = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
 }
 
-func (bc *BlockChain) HasBlock(hash []byte) bool {
+func (bc *ChainManager) HasBlock(hash []byte) bool {
 	data, _ := ethutil.Config.Db.Get(hash)
 	return len(data) != 0
 }
 
 // TODO: At one point we might want to save a block by prevHash in the db to optimise this...
-func (bc *BlockChain) HasBlockWithPrevHash(hash []byte) bool {
+func (bc *ChainManager) HasBlockWithPrevHash(hash []byte) bool {
 	block := bc.CurrentBlock
 
 	for ; block != nil; block = bc.GetBlock(block.PrevHash) {
@@ -114,7 +114,7 @@ func (bc *BlockChain) HasBlockWithPrevHash(hash []byte) bool {
 	return false
 }
 
-func (bc *BlockChain) CalculateBlockTD(block *Block) *big.Int {
+func (bc *ChainManager) CalculateBlockTD(block *Block) *big.Int {
 	blockDiff := new(big.Int)
 
 	for _, uncle := range block.Uncles {
@@ -125,11 +125,11 @@ func (bc *BlockChain) CalculateBlockTD(block *Block) *big.Int {
 	return blockDiff
 }
 
-func (bc *BlockChain) GenesisBlock() *Block {
+func (bc *ChainManager) GenesisBlock() *Block {
 	return bc.genesisBlock
 }
 
-func (self *BlockChain) GetChainHashesFromHash(hash []byte, max uint64) (chain [][]byte) {
+func (self *ChainManager) GetChainHashesFromHash(hash []byte, max uint64) (chain [][]byte) {
 	block := self.GetBlock(hash)
 	if block == nil {
 		return
@@ -167,7 +167,7 @@ func AddTestNetFunds(block *Block) {
 	}
 }
 
-func (bc *BlockChain) setLastBlock() {
+func (bc *ChainManager) setLastBlock() {
 	data, _ := ethutil.Config.Db.Get([]byte("LastBlock"))
 	if len(data) != 0 {
 		// Prep genesis
@@ -187,13 +187,13 @@ func (bc *BlockChain) setLastBlock() {
 	chainlogger.Infof("Last block (#%d) %x\n", bc.LastBlockNumber, bc.CurrentBlock.Hash())
 }
 
-func (bc *BlockChain) SetTotalDifficulty(td *big.Int) {
+func (bc *ChainManager) SetTotalDifficulty(td *big.Int) {
 	ethutil.Config.Db.Put([]byte("LTD"), td.Bytes())
 	bc.TD = td
 }
 
 // Add a block to the chain and record addition information
-func (bc *BlockChain) Add(block *Block) {
+func (bc *ChainManager) Add(block *Block) {
 	bc.writeBlockInfo(block)
 	// Prepare the genesis block
 
@@ -205,7 +205,7 @@ func (bc *BlockChain) Add(block *Block) {
 	ethutil.Config.Db.Put([]byte("LastBlock"), encodedBlock)
 }
 
-func (self *BlockChain) CalcTotalDiff(block *Block) (*big.Int, error) {
+func (self *ChainManager) CalcTotalDiff(block *Block) (*big.Int, error) {
 	parent := self.GetBlock(block.PrevHash)
 	if parent == nil {
 		return nil, fmt.Errorf("Unable to calculate total diff without known parent %x", block.PrevHash)
@@ -225,7 +225,7 @@ func (self *BlockChain) CalcTotalDiff(block *Block) (*big.Int, error) {
 	return td, nil
 }
 
-func (bc *BlockChain) GetBlock(hash []byte) *Block {
+func (bc *ChainManager) GetBlock(hash []byte) *Block {
 	data, _ := ethutil.Config.Db.Get(hash)
 	if len(data) == 0 {
 		return nil
@@ -234,7 +234,7 @@ func (bc *BlockChain) GetBlock(hash []byte) *Block {
 	return NewBlockFromBytes(data)
 }
 
-func (self *BlockChain) GetBlockByNumber(num uint64) *Block {
+func (self *ChainManager) GetBlockByNumber(num uint64) *Block {
 	block := self.CurrentBlock
 	for ; block != nil; block = self.GetBlock(block.PrevHash) {
 		if block.Number.Uint64() == num {
@@ -249,7 +249,7 @@ func (self *BlockChain) GetBlockByNumber(num uint64) *Block {
 	return block
 }
 
-func (self *BlockChain) GetBlockBack(num uint64) *Block {
+func (self *ChainManager) GetBlockBack(num uint64) *Block {
 	block := self.CurrentBlock
 
 	for ; num != 0 && block != nil; num-- {
@@ -259,7 +259,7 @@ func (self *BlockChain) GetBlockBack(num uint64) *Block {
 	return block
 }
 
-func (bc *BlockChain) BlockInfoByHash(hash []byte) BlockInfo {
+func (bc *ChainManager) BlockInfoByHash(hash []byte) BlockInfo {
 	bi := BlockInfo{}
 	data, _ := ethutil.Config.Db.Get(append(hash, []byte("Info")...))
 	bi.RlpDecode(data)
@@ -267,7 +267,7 @@ func (bc *BlockChain) BlockInfoByHash(hash []byte) BlockInfo {
 	return bi
 }
 
-func (bc *BlockChain) BlockInfo(block *Block) BlockInfo {
+func (bc *ChainManager) BlockInfo(block *Block) BlockInfo {
 	bi := BlockInfo{}
 	data, _ := ethutil.Config.Db.Get(append(block.Hash(), []byte("Info")...))
 	bi.RlpDecode(data)
@@ -276,7 +276,7 @@ func (bc *BlockChain) BlockInfo(block *Block) BlockInfo {
 }
 
 // Unexported method for writing extra non-essential block info to the db
-func (bc *BlockChain) writeBlockInfo(block *Block) {
+func (bc *ChainManager) writeBlockInfo(block *Block) {
 	bc.LastBlockNumber++
 	bi := BlockInfo{Number: bc.LastBlockNumber, Hash: block.Hash(), Parent: block.PrevHash, TD: bc.TD}
 
@@ -284,7 +284,7 @@ func (bc *BlockChain) writeBlockInfo(block *Block) {
 	ethutil.Config.Db.Put(append(block.Hash(), []byte("Info")...), bi.RlpEncode())
 }
 
-func (bc *BlockChain) Stop() {
+func (bc *ChainManager) Stop() {
 	if bc.CurrentBlock != nil {
 		chainlogger.Infoln("Stopped")
 	}

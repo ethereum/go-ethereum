@@ -97,7 +97,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		return closure.Return(nil), nil
 	}
 
-	vmlogger.Debugf("(%s) %x gas: %v (d) %x\n", self.Fn, closure.Address(), closure.Gas, closure.Args)
+	vmlogger.Debugf("(%d) %x gas: %v (d) %x\n", self.depth, closure.Address(), closure.Gas, closure.Args)
 
 	for {
 		prevStep = step

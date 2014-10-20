@@ -44,6 +44,9 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
+		if name != "CallRecursiveBomb" {
+			continue
+		}
 		state := ethstate.New(helper.NewTrie())
 		for addr, account := range test.Pre {
 			obj := StateObjectFromAccount(addr, account)
@@ -56,11 +59,6 @@ func RunVmTest(p string, t *testing.T) {
 		if err != nil {
 			helper.Log.Infoln(err)
 		}
-		/*
-			if err != nil {
-				t.Errorf("%s's execution failed. %v\n", name, err)
-			}
-		*/
 
 		rexp := helper.FromHex(test.Out)
 		if bytes.Compare(rexp, ret) != 0 {
@@ -94,6 +92,7 @@ func TestVMArithmetic(t *testing.T) {
 }
 
 func TestVMSystemOperation(t *testing.T) {
+	helper.Logger.SetLogLevel(5)
 	const fn = "../files/vmtests/vmSystemOperationsTest.json"
 	RunVmTest(fn, t)
 }

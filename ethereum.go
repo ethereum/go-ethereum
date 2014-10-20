@@ -55,7 +55,7 @@ type Ethereum struct {
 	// for later including in the blocks
 	txPool *ethchain.TxPool
 	// The canonical chain
-	blockChain *ethchain.BlockChain
+	blockChain *ethchain.ChainManager
 	// The block pool
 	blockPool *BlockPool
 	// Eventer
@@ -129,7 +129,7 @@ func New(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager 
 
 	ethereum.blockPool = NewBlockPool(ethereum)
 	ethereum.txPool = ethchain.NewTxPool(ethereum)
-	ethereum.blockChain = ethchain.NewBlockChain(ethereum)
+	ethereum.blockChain = ethchain.NewChainManager(ethereum)
 	ethereum.stateManager = ethchain.NewStateManager(ethereum)
 
 	// Start the tx pool
@@ -146,7 +146,7 @@ func (s *Ethereum) ClientIdentity() ethwire.ClientIdentity {
 	return s.clientIdentity
 }
 
-func (s *Ethereum) BlockChain() *ethchain.BlockChain {
+func (s *Ethereum) ChainManager() *ethchain.ChainManager {
 	return s.blockChain
 }
 

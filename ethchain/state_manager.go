@@ -33,7 +33,7 @@ type Peer interface {
 
 type EthManager interface {
 	StateManager() *StateManager
-	BlockChain() *BlockChain
+	ChainManager() *ChainManager
 	TxPool() *TxPool
 	Broadcast(msgType ethwire.MsgType, data []interface{})
 	PeerCount() int
@@ -50,7 +50,7 @@ type StateManager struct {
 	// Mutex for locking the block processor. Blocks can only be handled one at a time
 	mutex sync.Mutex
 	// Canonical block chain
-	bc *BlockChain
+	bc *ChainManager
 	// non-persistent key/value memory storage
 	mem map[string]*big.Int
 	// Proof of work used for validating
@@ -79,10 +79,10 @@ func NewStateManager(ethereum EthManager) *StateManager {
 		mem: make(map[string]*big.Int),
 		Pow: &EasyPow{},
 		eth: ethereum,
-		bc:  ethereum.BlockChain(),
+		bc:  ethereum.ChainManager(),
 	}
-	sm.transState = ethereum.BlockChain().CurrentBlock.State().Copy()
-	sm.miningState = ethereum.BlockChain().CurrentBlock.State().Copy()
+	sm.transState = ethereum.ChainManager().CurrentBlock.State().Copy()
+	sm.miningState = ethereum.ChainManager().CurrentBlock.State().Copy()
 
 	return sm
 }
@@ -113,7 +113,7 @@ func (self *StateManager) updateThread() {
 }
 
 func (sm *StateManager) CurrentState() *ethstate.State {
-	return sm.eth.BlockChain().CurrentBlock.State()
+	return sm.eth.ChainManager().CurrentBlock.State()
 }
 
 func (sm *StateManager) TransState() *ethstate.State {
@@ -125,12 +125,12 @@ func (sm *StateManager) MiningState() *ethstate.State {
 }
 
 func (sm *StateManager) NewMiningState() *ethstate.State {
-	sm.miningState = sm.eth.BlockChain().CurrentBlock.State().Copy()
+	sm.miningState = sm.eth.ChainManager().CurrentBlock.State().Copy()
 
 	return sm.miningState
 }
 
-func (sm *StateManager) BlockChain() *BlockChain {
+func (sm *StateManager) ChainManager() *ChainManager {
 	return sm.bc
 }
 

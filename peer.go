@@ -476,7 +476,7 @@ func (p *Peer) HandleInbound() {
 					hash := msg.Data.Get(0).Bytes()
 					amount := msg.Data.Get(1).Uint()
 
-					hashes := p.ethereum.BlockChain().GetChainHashesFromHash(hash, amount)
+					hashes := p.ethereum.ChainManager().GetChainHashesFromHash(hash, amount)
 
 					p.QueueMessage(ethwire.NewMessage(ethwire.MsgBlockHashesTy, ethutil.ByteSliceToInterface(hashes)))
 
@@ -487,7 +487,7 @@ func (p *Peer) HandleInbound() {
 
 					for i := 0; i < max; i++ {
 						hash := msg.Data.Get(i).Bytes()
-						block := p.ethereum.BlockChain().GetBlock(hash)
+						block := p.ethereum.ChainManager().GetBlock(hash)
 						if block != nil {
 							blocks = append(blocks, block.Value().Raw())
 						}
@@ -674,9 +674,9 @@ func (self *Peer) pushStatus() {
 	msg := ethwire.NewMessage(ethwire.MsgStatusTy, []interface{}{
 		//uint32(ProtocolVersion),
 		uint32(NetVersion),
-		self.ethereum.BlockChain().TD,
-		self.ethereum.BlockChain().CurrentBlock.Hash(),
-		self.ethereum.BlockChain().Genesis().Hash(),
+		self.ethereum.ChainManager().TD,
+		self.ethereum.ChainManager().CurrentBlock.Hash(),
+		self.ethereum.ChainManager().Genesis().Hash(),
 	})
 
 	self.QueueMessage(msg)
@@ -693,7 +693,7 @@ func (self *Peer) handleStatus(msg *ethwire.Msg) {
 		genesis    = c.Get(3).Bytes()
 	)
 
-	if bytes.Compare(self.ethereum.BlockChain().Genesis().Hash(), genesis) != 0 {
+	if bytes.Compare(self.ethereum.ChainManager().Genesis().Hash(), genesis) != 0 {
 		ethlogger.Warnf("Invalid genisis hash %x. Disabling [eth]\n", genesis)
 		return
 	}
@@ -728,7 +728,7 @@ func (self *Peer) handleStatus(msg *ethwire.Msg) {
 func (p *Peer) pushHandshake() error {
 	pubkey := p.ethereum.KeyManager().PublicKey()
 	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
-		P2PVersion, []byte(p.version), []interface{}{"eth", ProtocolVersion}, p.port, pubkey[1:],
+		P2PVersion, []byte(p.version), []interface{}{[]interface{}{"eth", ProtocolVersion}}, p.port, pubkey[1:],
 	})
 
 	p.QueueMessage(msg)
@@ -749,6 +749,7 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 
 	// Check correctness of p2p protocol version
 	if p2pVersion != P2PVersion {
+		fmt.Println(p)
 		peerlogger.Debugf("Invalid P2P version. Require protocol %d, received %d\n", P2PVersion, p2pVersion)
 		p.Stop()
 		return
@@ -807,16 +808,16 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 	p.ethereum.eventMux.Post(PeerListEvent{p.ethereum.Peers()})
 
 	p.protocolCaps = caps
-	capsIt := caps.NewIterator()
+
+	it := caps.NewIterator()
 	var capsStrs []string
-	for capsIt.Next() {
-		cap := capsIt.Value().Str()
+	for it.Next() {
+		cap := it.Value().Get(0).Str()
+		ver := it.Value().Get(1).Uint()
 		switch cap {
 		case "eth":
-			capsIt.Next()
-			version := capsIt.Value().Uint()
-			if version != ProtocolVersion {
-				ethlogger.Warnf("Invalid protocol version %d. Disabling [eth]\n", version)
+			if ver != ProtocolVersion {
+				ethlogger.Warnf("Invalid protocol version %d. Disabling [eth]\n", ver)
 				continue
 			}
 			p.pushStatus()

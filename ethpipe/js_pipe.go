@@ -21,17 +21,17 @@ func NewJSPipe(eth ethchain.EthManager) *JSPipe {
 
 func (self *JSPipe) BlockByHash(strHash string) *JSBlock {
 	hash := ethutil.Hex2Bytes(strHash)
-	block := self.obj.BlockChain().GetBlock(hash)
+	block := self.obj.ChainManager().GetBlock(hash)
 
 	return NewJSBlock(block)
 }
 
 func (self *JSPipe) BlockByNumber(num int32) *JSBlock {
 	if num == -1 {
-		return NewJSBlock(self.obj.BlockChain().CurrentBlock)
+		return NewJSBlock(self.obj.ChainManager().CurrentBlock)
 	}
 
-	return NewJSBlock(self.obj.BlockChain().GetBlockByNumber(uint64(num)))
+	return NewJSBlock(self.obj.ChainManager().GetBlockByNumber(uint64(num)))
 }
 
 func (self *JSPipe) Block(v interface{}) *JSBlock {

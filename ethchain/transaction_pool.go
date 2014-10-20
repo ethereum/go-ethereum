@@ -96,7 +96,7 @@ func (pool *TxPool) addTransaction(tx *Transaction) {
 func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 	// Get the last block so we can retrieve the sender and receiver from
 	// the merkle trie
-	block := pool.Ethereum.BlockChain().CurrentBlock
+	block := pool.Ethereum.ChainManager().CurrentBlock
 	// Something has gone horribly wrong if this happens
 	if block == nil {
 		return fmt.Errorf("[TXPL] No last block on the block chain")

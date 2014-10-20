@@ -61,7 +61,7 @@ func (miner *Miner) Start() {
 
 	// Insert initial TXs in our little miner 'pool'
 	miner.txs = miner.ethereum.TxPool().Flush()
-	miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase)
+	miner.block = miner.ethereum.ChainManager().NewBlock(miner.coinbase)
 
 	mux := miner.ethereum.EventMux()
 	miner.events = mux.Subscribe(ethchain.NewBlockEvent{}, ethchain.TxEvent{})
@@ -95,7 +95,7 @@ func (miner *Miner) listener() {
 			case ethchain.NewBlockEvent:
 				block := event.Block
 				//logger.Infoln("Got new block via Reactor")
-				if bytes.Compare(miner.ethereum.BlockChain().CurrentBlock.Hash(), block.Hash()) == 0 {
+				if bytes.Compare(miner.ethereum.ChainManager().CurrentBlock.Hash(), block.Hash()) == 0 {
 					// TODO: Perhaps continue mining to get some uncle rewards
 					//logger.Infoln("New top block found resetting state")
 
@@ -115,10 +115,10 @@ func (miner *Miner) listener() {
 					miner.txs = newtxs
 
 					// Setup a fresh state to mine on
-					//miner.block = miner.ethereum.BlockChain().NewBlock(miner.coinbase, miner.txs)
+					//miner.block = miner.ethereum.ChainManager().NewBlock(miner.coinbase, miner.txs)
 
 				} else {
-					if bytes.Compare(block.PrevHash, miner.ethereum.BlockChain().CurrentBlock.PrevHash) == 0 {
+					if bytes.Compare(block.PrevHash, miner.ethereum.ChainManager().CurrentBlock.PrevHash) == 0 {
 						logger.Infoln("Adding uncle block")
 						miner.uncles = append(miner.uncles, block)
 					}
@@ -163,7 +163,7 @@ func (miner *Miner) stopMining() {
 func (self *Miner) mineNewBlock() {
 	stateManager := self.ethereum.StateManager()
 
-	self.block = self.ethereum.BlockChain().NewBlock(self.coinbase)
+	self.block = self.ethereum.ChainManager().NewBlock(self.coinbase)
 
 	// Apply uncles
 	if len(self.uncles) > 0 {
@@ -175,7 +175,7 @@ func (self *Miner) mineNewBlock() {
 
 	// Accumulate all valid transactions and apply them to the new state
 	// Error may be ignored. It's not important during mining
-	parent := self.ethereum.BlockChain().GetBlock(self.block.PrevHash)
+	parent := self.ethereum.ChainManager().GetBlock(self.block.PrevHash)
 	coinbase := self.block.State().GetOrNewStateObject(self.block.Coinbase)
 	coinbase.SetGasPool(self.block.CalcGasLimit(parent))
 	receipts, txs, unhandledTxs, err := stateManager.ProcessTransactions(coinbase, self.block.State(), self.block, self.block, self.txs)

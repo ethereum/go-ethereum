@@ -66,11 +66,11 @@ func (self *BlockPool) HasLatestHash() bool {
 	self.mut.Lock()
 	defer self.mut.Unlock()
 
-	return self.pool[string(self.eth.BlockChain().CurrentBlock.Hash())] != nil
+	return self.pool[string(self.eth.ChainManager().CurrentBlock.Hash())] != nil
 }
 
 func (self *BlockPool) HasCommonHash(hash []byte) bool {
-	return self.eth.BlockChain().GetBlock(hash) != nil
+	return self.eth.ChainManager().GetBlock(hash) != nil
 }
 
 func (self *BlockPool) Blocks() (blocks ethchain.Blocks) {
@@ -137,7 +137,7 @@ func (self *BlockPool) addBlock(b *ethchain.Block, peer *Peer, newBlock bool) {
 
 	hash := string(b.Hash())
 
-	if self.pool[hash] == nil && !self.eth.BlockChain().HasBlock(b.Hash()) {
+	if self.pool[hash] == nil && !self.eth.ChainManager().HasBlock(b.Hash()) {
 		poollogger.Infof("Got unrequested block (%x...)\n", hash[0:4])
 
 		self.hashes = append(self.hashes, b.Hash())
@@ -145,10 +145,10 @@ func (self *BlockPool) addBlock(b *ethchain.Block, peer *Peer, newBlock bool) {
 
 		// The following is only performed on an unrequested new block
 		if newBlock {
-			fmt.Println("1.", !self.eth.BlockChain().HasBlock(b.PrevHash), ethutil.Bytes2Hex(b.Hash()[0:4]), ethutil.Bytes2Hex(b.PrevHash[0:4]))
+			fmt.Println("1.", !self.eth.ChainManager().HasBlock(b.PrevHash), ethutil.Bytes2Hex(b.Hash()[0:4]), ethutil.Bytes2Hex(b.PrevHash[0:4]))
 			fmt.Println("2.", self.pool[string(b.PrevHash)] == nil)
 			fmt.Println("3.", !self.fetchingHashes)
-			if !self.eth.BlockChain().HasBlock(b.PrevHash) && self.pool[string(b.PrevHash)] == nil && !self.fetchingHashes {
+			if !self.eth.ChainManager().HasBlock(b.PrevHash) && self.pool[string(b.PrevHash)] == nil && !self.fetchingHashes {
 				poollogger.Infof("Unknown chain, requesting (%x...)\n", b.PrevHash[0:4])
 				peer.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{b.Hash(), uint32(256)}))
 			}
@@ -265,7 +265,7 @@ out:
 					ethchain.BlockBy(ethchain.Number).Sort(blocks)
 
 					if len(blocks) > 0 {
-						if !self.eth.BlockChain().HasBlock(b.PrevHash) && self.pool[string(b.PrevHash)] == nil && !self.fetchingHashes {
+						if !self.eth.ChainManager().HasBlock(b.PrevHash) && self.pool[string(b.PrevHash)] == nil && !self.fetchingHashes {
 						}
 					}
 				}
@@ -287,14 +287,14 @@ out:
 
 			// Find common block
 			for i, block := range blocks {
-				if self.eth.BlockChain().HasBlock(block.PrevHash) {
+				if self.eth.ChainManager().HasBlock(block.PrevHash) {
 					blocks = blocks[i:]
 					break
 				}
 			}
 
 			if len(blocks) > 0 {
-				if self.eth.BlockChain().HasBlock(blocks[0].PrevHash) {
+				if self.eth.ChainManager().HasBlock(blocks[0].PrevHash) {
 					for i, block := range blocks[1:] {
 						// NOTE: The Ith element in this loop refers to the previous block in
 						// outer "blocks"
