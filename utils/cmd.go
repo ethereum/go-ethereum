@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"time"
 
 	"bitbucket.org/kardianos/osext"
 	"github.com/ethereum/eth-go"
@@ -21,7 +20,7 @@ import (
 	"github.com/ethereum/eth-go/ethpipe"
 	"github.com/ethereum/eth-go/ethrpc"
 	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/eth-go/ethwire"
+	"github.com/ethereum/eth-go/p2p"
 )
 
 var logger = ethlog.NewLogger("CLI")
@@ -144,18 +143,17 @@ func NewDatabase() ethutil.Database {
 	return db
 }
 
-func NewClientIdentity(clientIdentifier, version, customIdentifier string) *ethwire.SimpleClientIdentity {
+func NewClientIdentity(clientIdentifier, version, customIdentifier string, keyManager *ethcrypto.KeyManager) *p2p.SimpleClientIdentity {
 	logger.Infoln("identity created")
-	return ethwire.NewSimpleClientIdentity(clientIdentifier, version, customIdentifier)
+	pubkey := keyManager.PublicKey()[1:]
+	return p2p.NewSimpleClientIdentity(clientIdentifier, version, customIdentifier, string(pubkey))
 }
 
-func NewEthereum(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager *ethcrypto.KeyManager, usePnp bool, OutboundPort string, MaxPeer int) *eth.Ethereum {
-	ethereum, err := eth.New(db, clientIdentity, keyManager, eth.CapDefault, usePnp)
+func NewEthereum(db ethutil.Database, clientIdentity p2p.ClientIdentity, keyManager *ethcrypto.KeyManager, usePnp bool, OutboundPort string, MaxPeer int) *eth.Ethereum {
+	ethereum, err := eth.New(db, clientIdentity, keyManager, eth.CapDefault, usePnp, OutboundPort, MaxPeer)
 	if err != nil {
 		logger.Fatalln("eth start err:", err)
 	}
-	ethereum.Port = OutboundPort
-	ethereum.MaxPeers = MaxPeer
 	return ethereum
 }
 
@@ -267,11 +265,6 @@ func StartMining(ethereum *eth.Ethereum) bool {
 			logger.Infoln("Start mining")
 			if miner == nil {
 				miner = ethminer.NewDefaultMiner(addr, ethereum)
-			}
-			// Give it some time to connect with peers
-			time.Sleep(3 * time.Second)
-			for !ethereum.IsUpToDate() {
-				time.Sleep(5 * time.Second)
 			}
 			miner.Start()
 		}()
