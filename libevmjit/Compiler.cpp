@@ -939,7 +939,6 @@ void Compiler::dumpBasicBlockGraph(std::ostream& out)
 	    << "  node [shape=record];\n"
 	    << "  entry [share=record, label=\"entry block\"];\n";
 
-	// std::map<std::string, BasicBlock*> blocksByName;
 	std::vector<BasicBlock*> blocks;
 	for (auto& pair : this->basicBlocks)
 	{
@@ -952,7 +951,6 @@ void Compiler::dumpBasicBlockGraph(std::ostream& out)
 	for (auto bb : blocks)
 	{
 		std::string blockName = bb->llvm()->getName();
-		// blocksByName.insert(std::pair<std::string, BasicBlock*>(blockName, bb));
 
 		int numOfPhiNodes = 0;
 		auto firstNonPhiPtr = bb->llvm()->getFirstNonPHI();
@@ -961,10 +959,8 @@ void Compiler::dumpBasicBlockGraph(std::ostream& out)
 		auto endStackSize = bb->getStack().size();
 
 		out << "  \"" << blockName  << "\" [shape=record, label=\""
-			<< std::to_string(numOfPhiNodes) << "|"
-			<< blockName << "|"
-			<< std::to_string(endStackSize)
-		<< "\"];\n";
+			<< numOfPhiNodes << "|" << blockName << "|" << endStackSize
+			<< "\"];\n";
 	}
 
 	out << "  entry -> \"Instr.0\";\n";
@@ -978,7 +974,8 @@ void Compiler::dumpBasicBlockGraph(std::ostream& out)
 		for (llvm::succ_iterator it = llvm::succ_begin(bb->llvm()); it != end; ++it)
 		{
 			std::string succName = it->getName();
-			out << "  \"" << blockName << "\" -> \"" << succName << "\";\n";
+			out << "  \"" << blockName << "\" -> \"" << succName << "\""
+			    << ((bb == m_jumpTableBlock.get()) ? " [style = dashed];\n" : "\n");
 		}
 	}
 
