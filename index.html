@@ -8,7 +8,7 @@ function registerName() {
     var name = document.querySelector("#name").value;
     name = eth.fromAscii(name);
 
-    eth.transact({to: "NameReg", from: eth.key, gas: "10000", gasPrice: eth.gasPrice, data: [eth.fromAscii("register"), name]}).then(function(tx) {
+    eth.transact({to: "NameReg", gas: "10000", gasPrice: eth.gasPrice, data: [eth.fromAscii("register"), name]}).then(function(tx) {
         document.querySelector("#result").innerHTML = "Registered name. Please wait for the next block to come through.";
     }, function(err) {
         console.log(err); 
