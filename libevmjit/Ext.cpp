@@ -310,7 +310,7 @@ EXPORT void ext_create(i256* _endowment, i256* _initOff, i256* _initSize, h256* 
 		auto initOff = static_cast<size_t>(llvm2eth(*_initOff));
 		auto initSize = static_cast<size_t>(llvm2eth(*_initSize));
 		auto&& initRef = bytesConstRef(Runtime::getMemory().data() + initOff, initSize);
-		auto&& onOp = bytesConstRef(); // TODO: Handle that thing
+		OnOpFunc onOp{}; // TODO: Handle that thing
 		h256 address = ext.create(endowment, &gas, initRef, onOp);
 		*_address = address;
 	}
