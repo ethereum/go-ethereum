@@ -19,8 +19,8 @@ extern "C"
 EXPORT i256 gas;
 }
 
-Runtime::Runtime(u256 _gas, std::unique_ptr<ExtVMFace> _ext):
-	m_ext(std::move(_ext))
+Runtime::Runtime(u256 _gas, ExtVMFace& _ext):
+	m_ext(_ext)
 {
 	assert(!g_runtime);
 	g_runtime = this;
@@ -44,7 +44,7 @@ MemoryImpl& Runtime::getMemory()
 
 ExtVMFace& Runtime::getExt()
 {
-	return *g_runtime->m_ext;
+	return g_runtime->m_ext;
 }
 
 u256 Runtime::getGas()

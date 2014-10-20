@@ -27,7 +27,7 @@ using MemoryImpl = bytes;
 class Runtime
 {
 public:
-	Runtime(u256 _gas, std::unique_ptr<ExtVMFace> _ext);
+	Runtime(u256 _gas, ExtVMFace& _ext);
 	~Runtime();
 
 	Runtime(const Runtime&) = delete;
@@ -41,7 +41,7 @@ public:
 private:
 	StackImpl m_stack;
 	MemoryImpl m_memory;
-	std::unique_ptr<ExtVMFace> m_ext;
+	ExtVMFace& m_ext;
 };
 
 }

@@ -30,26 +30,26 @@ uint64_t getStepCost(Instruction inst) // TODO: Add this function to FeeSructure
 		return 0;
 
 	case Instruction::SSTORE:
-		return static_cast<uint64_t>(c_sstoreGas);
+		return static_cast<uint64_t>(FeeStructure::c_sstoreGas);
 
 	case Instruction::SLOAD:
-		return static_cast<uint64_t>(c_sloadGas);
+		return static_cast<uint64_t>(FeeStructure::c_sloadGas);
 
 	case Instruction::SHA3:
-		return static_cast<uint64_t>(c_sha3Gas);
+		return static_cast<uint64_t>(FeeStructure::c_sha3Gas);
 
 	case Instruction::BALANCE:
-		return static_cast<uint64_t>(c_sha3Gas);
+		return static_cast<uint64_t>(FeeStructure::c_sha3Gas);
 
 	case Instruction::CALL:
 	case Instruction::CALLCODE:
-		return static_cast<uint64_t>(c_callGas);
+		return static_cast<uint64_t>(FeeStructure::c_callGas);
 
 	case Instruction::CREATE:
-		return static_cast<uint64_t>(c_createGas);
+		return static_cast<uint64_t>(FeeStructure::c_createGas);
 
 	default: // Assumes instruction code is valid
-		return static_cast<uint64_t>(c_stepGas);
+		return static_cast<uint64_t>(FeeStructure::c_stepGas);
 	}
 }
 
@@ -134,7 +134,7 @@ void GasMeter::countSStore(Ext& _ext, llvm::Value* _index, llvm::Value* _newValu
 {
 	assert(!m_checkCall); // Everything should've been commited before
 
-	static const auto sstoreCost = static_cast<uint64_t>(c_sstoreGas);
+	static const auto sstoreCost = static_cast<uint64_t>(FeeStructure::c_sstoreGas);
 
 	// [ADD] if oldValue == 0 and newValue != 0  =>  2*cost
 	// [DEL] if oldValue != 0 and newValue == 0  =>  0
@@ -165,19 +165,21 @@ void GasMeter::commitCostBlock(llvm::Value* _additionalCost)
 	// If any uncommited block
 	if (m_checkCall)
 	{
-		if (m_blockCost == 0 && !_additionalCost) // Do not check 0
+		if (m_blockCost == 0) // Do not check 0
 		{
 			m_checkCall->eraseFromParent(); // Remove the gas check call
+			m_checkCall = nullptr;
 			return;
 		}
 
-		llvm::Value* cost = Constant::get(m_blockCost);
-		if (_additionalCost)
-			cost = m_builder.CreateAdd(cost, _additionalCost);
-		
-		m_checkCall->setArgOperand(0, cost); // Update block cost in gas check call
+		m_checkCall->setArgOperand(0, Constant::get(m_blockCost)); // Update block cost in gas check call
 		m_checkCall = nullptr; // End cost-block
 		m_blockCost = 0;
+
+		if (_additionalCost)
+		{
+			m_builder.CreateCall(m_gasCheckFunc, _additionalCost);
+		}
 	}
 	assert(m_blockCost == 0);
 }
@@ -185,7 +187,7 @@ void GasMeter::commitCostBlock(llvm::Value* _additionalCost)
 void GasMeter::checkMemory(llvm::Value* _additionalMemoryInWords, llvm::IRBuilder<>& _builder)
 {
 	// Memory uses other builder, but that can be changes later
-	auto cost = _builder.CreateMul(_additionalMemoryInWords, Constant::get(static_cast<uint64_t>(c_memoryGas)), "memcost");
+	auto cost = _builder.CreateMul(_additionalMemoryInWords, Constant::get(static_cast<uint64_t>(FeeStructure::c_memoryGas)), "memcost");
 	_builder.CreateCall(m_gasCheckFunc, cost);
 }
 

@@ -61,7 +61,7 @@ Ext::Ext(llvm::IRBuilder<>& _builder):
 	m_arg5 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg5");
 	m_arg6 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg6");
 	m_arg7 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg7");
-	m_arg7 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg8");
+	m_arg8 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg8");
 
 	Type* elements[] = {
 		i256Ty,	 // i256 address;
