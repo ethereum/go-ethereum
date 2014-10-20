@@ -1,7 +1,7 @@
 # Ethereum JavaScript API
 
-This is the Ethereum compatible JavaScript API implemented using
-`WebSocket` and `Promise`s.
+This is the Ethereum compatible JavaScript API using `Promise`s
+which implements the [Generic JSON RPC](https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC) spec.
 
 For an example see `index.html`.
 
