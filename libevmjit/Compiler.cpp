@@ -473,6 +473,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			memory.require(inOff, inSize);
 			auto hash = ext.sha3(inOff, inSize);
 			stack.push(hash);
+			break;
 		}
 
 		case Instruction::POP:
