@@ -14,6 +14,7 @@
 #include "Type.h"
 #include "Runtime.h"
 #include "GasMeter.h"
+#include "Endianness.h"
 
 namespace dev
 {
@@ -117,12 +118,15 @@ llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, GasMet
 	{
 		llvm::Value* value = ++func->arg_begin();
 		value->setName("value");
+		if (isWord)
+			value = Endianness::toBE(m_builder, value);
 		m_builder.CreateStore(value, ptr);
 		m_builder.CreateRetVoid();
 	}
 	else
 	{
-		auto ret = m_builder.CreateLoad(ptr);
+		llvm::Value* ret = m_builder.CreateLoad(ptr);
+		ret = Endianness::toNative(m_builder, ret);
 		m_builder.CreateRet(ret);
 	}
 
