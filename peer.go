@@ -322,7 +322,7 @@ out:
 		case msg := <-p.outputQueue:
 			if !p.statusKnown {
 				switch msg.Type {
-				case ethwire.MsgGetTxsTy, ethwire.MsgTxTy, ethwire.MsgGetBlockHashesTy, ethwire.MsgBlockHashesTy, ethwire.MsgGetBlocksTy, ethwire.MsgBlockTy:
+				case ethwire.MsgTxTy, ethwire.MsgGetBlockHashesTy, ethwire.MsgBlockHashesTy, ethwire.MsgGetBlocksTy, ethwire.MsgBlockTy:
 					break skip
 				}
 			}
@@ -457,16 +457,18 @@ func (p *Peer) HandleInbound() {
 			// TMP
 			if p.statusKnown {
 				switch msg.Type {
-				case ethwire.MsgGetTxsTy:
-					// Get the current transactions of the pool
-					txs := p.ethereum.TxPool().CurrentTransactions()
-					// Get the RlpData values from the txs
-					txsInterface := make([]interface{}, len(txs))
-					for i, tx := range txs {
-						txsInterface[i] = tx.RlpData()
-					}
-					// Broadcast it back to the peer
-					p.QueueMessage(ethwire.NewMessage(ethwire.MsgTxTy, txsInterface))
+				/*
+					case ethwire.MsgGetTxsTy:
+						// Get the current transactions of the pool
+						txs := p.ethereum.TxPool().CurrentTransactions()
+						// Get the RlpData values from the txs
+						txsInterface := make([]interface{}, len(txs))
+						for i, tx := range txs {
+							txsInterface[i] = tx.RlpData()
+						}
+						// Broadcast it back to the peer
+						p.QueueMessage(ethwire.NewMessage(ethwire.MsgTxTy, txsInterface))
+				*/
 
 				case ethwire.MsgGetBlockHashesTy:
 					if msg.Data.Len() < 2 {
@@ -687,10 +689,10 @@ func (self *Peer) handleStatus(msg *ethwire.Msg) {
 
 	var (
 		//protoVersion = c.Get(0).Uint()
-		netVersion = c.Get(0).Uint()
-		td         = c.Get(1).BigInt()
-		bestHash   = c.Get(2).Bytes()
-		genesis    = c.Get(3).Bytes()
+		netVersion = c.Get(1).Uint()
+		td         = c.Get(2).BigInt()
+		bestHash   = c.Get(3).Bytes()
+		genesis    = c.Get(4).Bytes()
 	)
 
 	if bytes.Compare(self.ethereum.ChainManager().Genesis().Hash(), genesis) != 0 {

@@ -17,16 +17,16 @@ import (
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethcrypto"
 	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethrpc"
 	"github.com/ethereum/eth-go/ethstate"
 	"github.com/ethereum/eth-go/ethutil"
 	"github.com/ethereum/eth-go/ethwire"
 	"github.com/ethereum/eth-go/event"
+	"github.com/ethereum/eth-go/rpc"
 )
 
 const (
 	seedTextFileUri string = "http://www.ethereum.org/servers.poc3.txt"
-	seedNodeAddress        = "poc-6.ethdev.com:30303"
+	seedNodeAddress        = "poc-7.ethdev.com:30303"
 )
 
 var ethlogger = ethlog.NewLogger("SERV")
@@ -84,7 +84,7 @@ type Ethereum struct {
 
 	listening bool
 
-	RpcServer *ethrpc.JsonRpcServer
+	RpcServer *rpc.JsonRpcServer
 
 	keyManager *ethcrypto.KeyManager
 

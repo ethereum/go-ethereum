@@ -33,8 +33,8 @@ const (
 	MsgGetPeersTy  = 0x04
 	MsgPeersTy     = 0x05
 
-	MsgStatusTy         = 0x10
-	MsgGetTxsTy         = 0x11
+	MsgStatusTy = 0x10
+	//MsgGetTxsTy         = 0x11
 	MsgTxTy             = 0x12
 	MsgGetBlockHashesTy = 0x13
 	MsgBlockHashesTy    = 0x14
@@ -44,16 +44,16 @@ const (
 )
 
 var msgTypeToString = map[MsgType]string{
-	MsgHandshakeTy:      "Handshake",
-	MsgDiscTy:           "Disconnect",
-	MsgPingTy:           "Ping",
-	MsgPongTy:           "Pong",
-	MsgGetPeersTy:       "Get peers",
-	MsgStatusTy:         "Status",
-	MsgPeersTy:          "Peers",
-	MsgTxTy:             "Transactions",
-	MsgBlockTy:          "Blocks",
-	MsgGetTxsTy:         "Get Txs",
+	MsgHandshakeTy: "Handshake",
+	MsgDiscTy:      "Disconnect",
+	MsgPingTy:      "Ping",
+	MsgPongTy:      "Pong",
+	MsgGetPeersTy:  "Get peers",
+	MsgStatusTy:    "Status",
+	MsgPeersTy:     "Peers",
+	MsgTxTy:        "Transactions",
+	MsgBlockTy:     "Blocks",
+	//MsgGetTxsTy:         "Get Txs",
 	MsgGetBlockHashesTy: "Get block hashes",
 	MsgBlockHashesTy:    "Block hashes",
 	MsgGetBlocksTy:      "Get blocks",

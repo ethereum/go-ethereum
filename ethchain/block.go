@@ -130,7 +130,7 @@ func CreateBlock(root interface{},
 		Nonce:       Nonce,
 		Time:        time.Now().Unix(),
 		Extra:       extra,
-		UncleSha:    EmptyShaList,
+		UncleSha:    EmptyShaList, //nil,
 		GasUsed:     new(big.Int),
 		MinGasPrice: new(big.Int),
 		GasLimit:    new(big.Int),
@@ -237,7 +237,9 @@ func (block *Block) SetUncles(uncles []*Block) {
 	block.Uncles = uncles
 
 	// Sha of the concatenated uncles
-	block.UncleSha = ethcrypto.Sha3(ethutil.Encode(block.rlpUncles()))
+	//if len(uncles) > 0 {
+	//	block.UncleSha = ethcrypto.Sha3(ethutil.Encode(block.rlpUncles()))
+	//}
 }
 
 func (self *Block) SetReceipts(receipts []*Receipt, txs []*Transaction) {
