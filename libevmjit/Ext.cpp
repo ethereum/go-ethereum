@@ -8,6 +8,7 @@
 #include <libdevcrypto/SHA3.h>
 
 #include "Runtime.h"
+#include "Endianness.h"
 
 using namespace llvm;
 
@@ -145,7 +146,8 @@ Value* Ext::calldataload(Value* _index)
 {
 	m_builder.CreateStore(_index, m_args[0]);
 	m_builder.CreateCall(m_calldataload, m_args);
-	return m_builder.CreateLoad(m_args[1]);
+	auto ret = m_builder.CreateLoad(m_args[1]);
+	return Endianness::toNative(m_builder, ret);
 }
 
 Value* Ext::bswap(Value* _value)
@@ -282,8 +284,8 @@ EXPORT void ext_calldataload(i256* _index, i256* _value)
 	auto index = static_cast<size_t>(llvm2eth(*_index));
 	assert(index + 31 > index); // TODO: Handle large index
 	auto b = reinterpret_cast<byte*>(_value);
-	for (size_t i = index, j = 31; i <= index + 31; ++i, --j)
-		b[j] = i < Runtime::getExt().data.size() ? Runtime::getExt().data[i] : 0;
+	for (size_t i = index, j = 0; i <= index + 31; ++i, ++j)
+		b[j] = i < Runtime::getExt().data.size() ? Runtime::getExt().data[i] : 0; // Keep Big Endian
 	// TODO: It all can be done by adding padding to data or by using min() algorithm without branch
 }
 
