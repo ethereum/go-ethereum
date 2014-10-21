@@ -114,7 +114,8 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtV
 	else
 		returnCode = static_cast<ReturnCode>(r);
 
-	_gas = Runtime::getGas();
+	// Return remaining gas
+	_gas = returnCode == ReturnCode::OutOfGas ? 0 : Runtime::getGas();
 
 	if (returnCode == ReturnCode::Return)
 	{

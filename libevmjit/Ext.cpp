@@ -8,6 +8,7 @@
 #include <libdevcrypto/SHA3.h>
 
 #include "Runtime.h"
+#include "Endianness.h"
 
 using namespace llvm;
 
@@ -108,7 +109,7 @@ Ext::Ext(llvm::IRBuilder<>& _builder):
 llvm::Value* Ext::store(llvm::Value* _index)
 {
 	m_builder.CreateStore(_index, m_args[0]);
-	m_builder.CreateCall(m_store, m_args);
+	m_builder.CreateCall(m_store, m_args); // Uses native endianness
 	return m_builder.CreateLoad(m_args[1]);
 }
 
@@ -116,7 +117,7 @@ void Ext::setStore(llvm::Value* _index, llvm::Value* _value)
 {
 	m_builder.CreateStore(_index, m_args[0]);
 	m_builder.CreateStore(_value, m_args[1]);
-	m_builder.CreateCall(m_setStore, m_args);
+	m_builder.CreateCall(m_setStore, m_args); // Uses native endianness
 }
 
 Value* Ext::getDataElem(unsigned _index, const Twine& _name)
@@ -145,17 +146,13 @@ Value* Ext::calldataload(Value* _index)
 {
 	m_builder.CreateStore(_index, m_args[0]);
 	m_builder.CreateCall(m_calldataload, m_args);
-	return m_builder.CreateLoad(m_args[1]);
-}
-
-Value* Ext::bswap(Value* _value)
-{
-	return m_builder.CreateCall(m_bswap, _value);
+	auto ret = m_builder.CreateLoad(m_args[1]);
+	return Endianness::toNative(m_builder, ret);
 }
 
 Value* Ext::balance(Value* _address)
 {
-	auto address = bswap(_address); // to BE
+	auto address = Endianness::toBE(m_builder, _address);
 	m_builder.CreateStore(address, m_args[0]);
 	m_builder.CreateCall(m_balance, m_args);
 	return m_builder.CreateLoad(m_args[1]);
@@ -163,7 +160,7 @@ Value* Ext::balance(Value* _address)
 
 void Ext::suicide(Value* _address)
 {
-	auto address = bswap(_address); // to BE
+	auto address = Endianness::toBE(m_builder, _address);
 	m_builder.CreateStore(address, m_args[0]);
 	m_builder.CreateCall(m_suicide, m_args[0]);
 }
@@ -176,21 +173,21 @@ Value* Ext::create(llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* 
 	Value* args[] = {m_args[0], m_arg2, m_arg3, m_args[1]};
 	m_builder.CreateCall(m_create, args);
 	Value* address = m_builder.CreateLoad(m_args[1]);
-	address = bswap(address); // to LE
+	address = Endianness::toNative(m_builder, address);
 	return address;
 }
 
 llvm::Value* Ext::call(llvm::Value*& _gas, llvm::Value* _receiveAddress, llvm::Value* _value, llvm::Value* _inOff, llvm::Value* _inSize, llvm::Value* _outOff, llvm::Value* _outSize, llvm::Value* _codeAddress)
 {
 	m_builder.CreateStore(_gas, m_args[0]);
-	auto receiveAddress = bswap(_receiveAddress); // to BE
+	auto receiveAddress = Endianness::toBE(m_builder, _receiveAddress);
 	m_builder.CreateStore(receiveAddress, m_arg2);
 	m_builder.CreateStore(_value, m_arg3);
 	m_builder.CreateStore(_inOff, m_arg4);
 	m_builder.CreateStore(_inSize, m_arg5);
 	m_builder.CreateStore(_outOff, m_arg6);
 	m_builder.CreateStore(_outSize, m_arg7);
-	auto codeAddress = bswap(_codeAddress); // toBE
+	auto codeAddress = Endianness::toBE(m_builder, _codeAddress);
 	m_builder.CreateStore(codeAddress, m_arg8);
 
 	llvm::Value* args[] = {m_args[0], m_arg2, m_arg3, m_arg4, m_arg5, m_arg6, m_arg7, m_arg8, m_args[1]};
@@ -206,7 +203,7 @@ llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
 	llvm::Value* args[] = {m_args[0], m_arg2, m_args[1]};
 	m_builder.CreateCall(m_sha3, args);
 	Value* hash = m_builder.CreateLoad(m_args[1]);
-	hash = bswap(hash); // to LE
+	hash = Endianness::toNative(m_builder, hash);
 	return hash;
 }
 
@@ -221,14 +218,14 @@ llvm::Value* Ext::exp(llvm::Value* _left, llvm::Value* _right)
 
 llvm::Value* Ext::codeAt(llvm::Value* _addr)
 {
-	auto addr = bswap(_addr);
+	auto addr = Endianness::toBE(m_builder, _addr);
 	m_builder.CreateStore(addr, m_args[0]);
 	return m_builder.CreateCall(m_codeAt, m_args[0]);
 }
 
 llvm::Value* Ext::codesizeAt(llvm::Value* _addr)
 {
-	auto addr = bswap(_addr);
+	auto addr = Endianness::toBE(m_builder, _addr);
 	m_builder.CreateStore(addr, m_args[0]);
 	llvm::Value* args[] = {m_args[0], m_args[1]};
 	m_builder.CreateCall(m_codesizeAt, args);
@@ -266,7 +263,7 @@ EXPORT void ext_init(ExtData* _extData)
 EXPORT void ext_store(i256* _index, i256* _value)
 {
 	auto index = llvm2eth(*_index);
-	auto value = Runtime::getExt().store(index);
+	auto value = Runtime::getExt().store(index); // Interface uses native endianness
 	*_value = eth2llvm(value);
 }
 
@@ -274,7 +271,7 @@ EXPORT void ext_setStore(i256* _index, i256* _value)
 {
 	auto index = llvm2eth(*_index);
 	auto value = llvm2eth(*_value);
-	Runtime::getExt().setStore(index, value);
+	Runtime::getExt().setStore(index, value); // Interface uses native endianness
 }
 
 EXPORT void ext_calldataload(i256* _index, i256* _value)
@@ -282,8 +279,8 @@ EXPORT void ext_calldataload(i256* _index, i256* _value)
 	auto index = static_cast<size_t>(llvm2eth(*_index));
 	assert(index + 31 > index); // TODO: Handle large index
 	auto b = reinterpret_cast<byte*>(_value);
-	for (size_t i = index, j = 31; i <= index + 31; ++i, --j)
-		b[j] = i < Runtime::getExt().data.size() ? Runtime::getExt().data[i] : 0;
+	for (size_t i = index, j = 0; i <= index + 31; ++i, ++j)
+		b[j] = i < Runtime::getExt().data.size() ? Runtime::getExt().data[i] : 0; // Keep Big Endian
 	// TODO: It all can be done by adding padding to data or by using min() algorithm without branch
 }
 

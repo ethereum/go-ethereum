@@ -50,8 +50,6 @@ public:
 private:
 	llvm::Value* getDataElem(unsigned _index, const llvm::Twine& _name = "");
 
-	llvm::Value* bswap(llvm::Value*);
-
 private:
 	llvm::Value* m_args[2];
 	llvm::Value* m_arg2;
