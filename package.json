@@ -1,5 +1,5 @@
 {
-  "name": "ethrereum-tests",
+  "name": "ethereum-tests",
   "version": "0.0.0",
   "description": "tests for ethereum",
   "main": "index.js",
