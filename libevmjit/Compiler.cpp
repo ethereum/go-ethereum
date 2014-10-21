@@ -892,7 +892,16 @@ void Compiler::linkBasicBlocks(Stack& stack)
 			else
 				++it;
 		}
-	} while (sthErased);
+	}
+	while (sthErased);
+
+	// Remove jump table block if no predecessors
+	if (llvm::pred_begin(m_jumpTableBlock->llvm()) == llvm::pred_end(m_jumpTableBlock->llvm()))
+	{
+		m_jumpTableBlock->llvm()->eraseFromParent();
+		m_jumpTableBlock.reset();
+	}
+
 
 	struct BBInfo
 	{
@@ -931,7 +940,11 @@ void Compiler::linkBasicBlocks(Stack& stack)
 		for (auto predIt = llvm::pred_begin(bbPtr); predIt != llvm::pred_end(bbPtr); ++predIt)
 		{
 			if (*predIt != &entryBlock)
-				bbInfo.predecessors.push_back(&cfg.find(*predIt)->second);
+			{
+				auto predInfoEntry = cfg.find(*predIt);
+				assert(predInfoEntry != cfg.end());
+				bbInfo.predecessors.push_back(&predInfoEntry->second);
+			}
 		}
 	}
 
@@ -1000,13 +1013,6 @@ void Compiler::linkBasicBlocks(Stack& stack)
 		assert(localStackSize >= bbInfo.outputItems);
 		for (size_t i = 0; i < localStackSize - bbInfo.outputItems; ++i)
 			stack.pushWord(bblock.getStack().get(localStackSize - 1 - i));
-	}
-
-	// Remove jump table block if not predecessors
-	if (llvm::pred_begin(m_jumpTableBlock->llvm()) == llvm::pred_end(m_jumpTableBlock->llvm()))
-	{
-		m_jumpTableBlock->llvm()->eraseFromParent();
-		m_jumpTableBlock.reset();
 	}
 }
 
