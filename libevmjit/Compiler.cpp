@@ -12,6 +12,7 @@
 
 #include "Type.h"
 #include "Memory.h"
+#include "Stack.h"
 #include "Ext.h"
 #include "GasMeter.h"
 #include "Utils.h"
@@ -174,6 +175,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 	GasMeter gasMeter(m_builder);
 	Memory memory(m_builder, gasMeter);
 	Ext ext(m_builder);
+	Stack stack(m_builder);
 
 	m_builder.CreateBr(basicBlocks.begin()->second);
 
@@ -216,7 +218,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 		m_builder.CreateBr(m_badJumpBlock->llvm());
 	}
 
-	linkBasicBlocks();
+	linkBasicBlocks(stack);
 
 	return module;
 }
@@ -871,77 +873,111 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 }
 
 
-void Compiler::linkBasicBlocks()
+void Compiler::linkBasicBlocks(Stack& stack)
 {
-	/// Helper function that finds basic block given LLVM basic block pointer
-	auto findBasicBlock = [this](llvm::BasicBlock* _llbb) -> BasicBlock*
+	struct BBInfo
 	{
-		// TODO: Fix for finding jumpTableBlock
-		if (_llbb == this->m_jumpTableBlock->llvm())
-			return this->m_jumpTableBlock.get();
+		BasicBlock& bblock;
+		std::vector<BBInfo*> predecessors;
+		size_t inputItems;
+		size_t outputItems;
 
-		for (auto&& bb : this->basicBlocks)
-			if (_llbb == bb.second.llvm())
-				return &bb.second;
-		return nullptr;
-
-		// Name is used to get basic block index (index of first instruction)
-		// TODO: If basicBlocs are still a map - multikey map can be used
-		//auto&& idxStr = _llbb->getName().substr(sizeof(BasicBlock::NamePrefix) - 2);
-		//auto idx = std::stoul(idxStr);
-		//return basicBlocks.find(idx)->second;
+		BBInfo(BasicBlock& _bblock)
+			: bblock(_bblock),
+			  predecessors(),
+			  inputItems(_bblock.getStack().initialSize()),
+			  outputItems(_bblock.getStack().size())
+		{}
 	};
 
-	auto completePhiNodes = [findBasicBlock](llvm::BasicBlock* _llbb) -> void
-	{
-		size_t valueIdx = 0;
-		auto firstNonPhi = _llbb->getFirstNonPHI();
-		for (auto instIt = _llbb->begin(); &*instIt != firstNonPhi; ++instIt, ++valueIdx)
-		{
-			auto phi = llvm::cast<llvm::PHINode>(instIt);
-			for (auto predIt = llvm::pred_begin(_llbb); predIt != llvm::pred_end(_llbb); ++predIt)
-			{
-				// TODO: In case entry block is reached - report error
-				auto predBB = findBasicBlock(*predIt);
-				if (!predBB)
-					BOOST_THROW_EXCEPTION(Exception() << errinfo_comment("Unsupported dynamic stack"));
-				auto value = predBB->getStack().get(valueIdx);
-				phi->addIncoming(value, predBB->llvm());
-			}
-		}
-	};
+	std::map<llvm::BasicBlock*, BBInfo> cfg;
 
-	// Remove dead basic blocks
-	auto sthErased = false;
-	do
+	// Create nodes in cfg
+	for (auto& pair : this->basicBlocks)
 	{
-		sthErased = false;
-		for (auto it = basicBlocks.begin(); it != basicBlocks.end();)
+		auto& bb = pair.second;
+		cfg.emplace(std::piecewise_construct,
+		            std::forward_as_tuple(bb.llvm()),
+		            std::forward_as_tuple(bb));
+	}
+
+	auto& entryBlock = m_mainFunc->getEntryBlock();
+
+	// Create edges in cfg
+	for (auto& pair : cfg)
+	{
+		auto bbPtr = pair.first;
+		auto& bbInfo = pair.second;
+
+		for (auto predIt = llvm::pred_begin(bbPtr); predIt != llvm::pred_end(bbPtr); ++predIt)
 		{
-			auto llvmBB = it->second.llvm();
-			if (llvm::pred_begin(llvmBB) == llvm::pred_end(llvmBB))
-			{
-				llvmBB->eraseFromParent();
-				basicBlocks.erase(it++);
-				sthErased = true;
-			}
-			else
-				++it;
+			if (*predIt != &entryBlock)
+				bbInfo.predecessors.push_back(&cfg.find(*predIt)->second);
 		}
 	}
-	while (sthErased);
 
-	// TODO: It is crappy visiting of basic blocks.
-	llvm::SmallPtrSet<llvm::BasicBlock*, 32> visitSet;
-	for (auto&& bb : basicBlocks) // TODO: External loop is to visit unreable blocks that can also have phi nodes
+	// Iteratively compute inputs and outputs of each block, until reaching fixpoint.
+	bool valuesChanged = true;
+	while (valuesChanged)
 	{
-		for (auto it = llvm::po_ext_begin(bb.second.llvm(), visitSet),
-			end = llvm::po_ext_end(bb.second.llvm(), visitSet); it != end; ++it)
+		valuesChanged = false;
+		for (auto& pair : cfg)
 		{
-			// TODO: Use logger
-			//std::cerr << it->getName().str() << std::endl;
-			completePhiNodes(*it);
+			auto& bbInfo = pair.second;
+
+			for (auto predInfo : bbInfo.predecessors)
+			{
+				if (predInfo->outputItems < bbInfo.inputItems)
+				{
+					bbInfo.inputItems = predInfo->outputItems;
+					valuesChanged = true;
+				}
+				else if (predInfo->outputItems > bbInfo.inputItems)
+				{
+					predInfo->outputItems = bbInfo.inputItems;
+					valuesChanged = true;
+				}
+			}
 		}
+	}
+
+	// Propagate values between blocks.
+	for (auto& pair : cfg)
+	{
+		auto  llbb = pair.first;
+		auto& bbInfo = pair.second;
+		auto& bblock = bbInfo.bblock;
+
+		// Complete phi nodes for the top bbInfo.inputItems placeholder values
+		auto instrIter = llbb->begin();
+		for (size_t valueIdx = 0; valueIdx < bbInfo.inputItems; ++instrIter, ++valueIdx)
+		{
+			auto phi = llvm::cast<llvm::PHINode>(instrIter);
+			for (auto predIt : bbInfo.predecessors)
+			{
+				assert(valueIdx < predIt->bblock.getStack().size());
+				auto value = predIt->bblock.getStack().get(valueIdx);
+				phi->addIncoming(value, predIt->bblock.llvm());
+			}
+		}
+
+		// Turn the remaining phi nodes into stack.pop's.
+		m_builder.SetInsertPoint(llbb, llvm::BasicBlock::iterator(llbb->getFirstNonPHI()));
+		for (; llvm::isa<llvm::PHINode>(*instrIter); )
+		{
+			auto phi = llvm::cast<llvm::PHINode>(instrIter);
+			auto value = stack.popWord();
+			phi->replaceAllUsesWith(value);
+			++ instrIter;
+			phi->eraseFromParent();
+		}
+
+		// Emit stack push's at the end of the block, just before the terminator;
+		m_builder.SetInsertPoint(llbb, -- llbb->end());
+		auto localStackSize = bblock.getStack().size();
+		assert(localStackSize >= bbInfo.outputItems);
+		for (size_t i = 0; i < localStackSize - bbInfo.outputItems; ++i)
+			stack.pushWord(bblock.getStack().get(localStackSize - 1 - i));
 	}
 
 	// Remove jump table block if not predecessors

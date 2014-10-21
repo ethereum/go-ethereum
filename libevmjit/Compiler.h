@@ -33,7 +33,7 @@ private:
 
 	void compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode, class Memory& memory, class Ext& ext, class GasMeter& gasMeter, llvm::BasicBlock* nextBasicBlock);
 
-	void linkBasicBlocks();
+	void linkBasicBlocks(class Stack& stack);
 
 
 	llvm::IRBuilder<> m_builder;

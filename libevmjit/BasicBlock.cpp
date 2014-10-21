@@ -30,20 +30,20 @@ BasicBlock::BasicBlock(std::string _name, llvm::Function* _mainFunc) :
 {}
 
 
-void BasicBlock::Stack::push(llvm::Value* _value)
+void BasicBlock::LocalStack::push(llvm::Value* _value)
 {
 	assert(_value->getType() == Type::i256);
 	m_backend.push_back(_value);
 }
 
-llvm::Value* BasicBlock::Stack::pop()
+llvm::Value* BasicBlock::LocalStack::pop()
 {
 	auto top = get(0);
 	m_backend.pop_back();
 	return top;
 }
 
-llvm::Value* BasicBlock::Stack::get(size_t _index)
+llvm::Value* BasicBlock::LocalStack::get(size_t _index)
 {	
 	if (_index >= m_backend.size())
 	{
@@ -55,18 +55,19 @@ llvm::Value* BasicBlock::Stack::get(size_t _index)
 			m_backend[i] = m_llvmBB->empty() ?
 				llvm::PHINode::Create(Type::i256, 0, {}, m_llvmBB) :
 				llvm::PHINode::Create(Type::i256, 0, {}, m_llvmBB->getFirstNonPHI());
+			m_numRequiredStackItems += 1;
 		}
 	}
 
 	return *(m_backend.rbegin() + _index);
 }
 
-void BasicBlock::Stack::dup(size_t _index)
+void BasicBlock::LocalStack::dup(size_t _index)
 {
 	m_backend.push_back(get(_index));
 }
 
-void BasicBlock::Stack::swap(size_t _index)
+void BasicBlock::LocalStack::swap(size_t _index)
 {
 	assert(_index != 0);
 	get(_index); // Create PHI nodes
