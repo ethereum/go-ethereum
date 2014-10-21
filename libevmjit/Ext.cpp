@@ -109,7 +109,7 @@ Ext::Ext(llvm::IRBuilder<>& _builder):
 llvm::Value* Ext::store(llvm::Value* _index)
 {
 	m_builder.CreateStore(_index, m_args[0]);
-	m_builder.CreateCall(m_store, m_args);
+	m_builder.CreateCall(m_store, m_args); // Uses native endianness
 	return m_builder.CreateLoad(m_args[1]);
 }
 
@@ -117,7 +117,7 @@ void Ext::setStore(llvm::Value* _index, llvm::Value* _value)
 {
 	m_builder.CreateStore(_index, m_args[0]);
 	m_builder.CreateStore(_value, m_args[1]);
-	m_builder.CreateCall(m_setStore, m_args);
+	m_builder.CreateCall(m_setStore, m_args); // Uses native endianness
 }
 
 Value* Ext::getDataElem(unsigned _index, const Twine& _name)
@@ -268,7 +268,7 @@ EXPORT void ext_init(ExtData* _extData)
 EXPORT void ext_store(i256* _index, i256* _value)
 {
 	auto index = llvm2eth(*_index);
-	auto value = Runtime::getExt().store(index);
+	auto value = Runtime::getExt().store(index); // Interface uses native endianness
 	*_value = eth2llvm(value);
 }
 
@@ -276,7 +276,7 @@ EXPORT void ext_setStore(i256* _index, i256* _value)
 {
 	auto index = llvm2eth(*_index);
 	auto value = llvm2eth(*_value);
-	Runtime::getExt().setStore(index, value);
+	Runtime::getExt().setStore(index, value); // Interface uses native endianness
 }
 
 EXPORT void ext_calldataload(i256* _index, i256* _value)
