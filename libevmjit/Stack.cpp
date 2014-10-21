@@ -1,5 +1,8 @@
 #include "Stack.h"
 #include "Runtime.h"
+#include "Type.h"
+
+#include <csetjmp>
 
 #include <llvm/IR/Function.h>
 #include <llvm/IR/TypeBuilder.h>
@@ -51,9 +54,14 @@ extern "C"
 
 using namespace dev::eth::jit;
 
+extern std::jmp_buf* rt_jmpBuf;
+
 EXPORT void stack_pop(i256* _ret)
 {
 	auto& stack = Runtime::getStack();
+	if (stack.size() == 0)
+		longjmp(*rt_jmpBuf, static_cast<uint64_t>(ReturnCode::StackTooSmall));
+
 	assert(stack.size() > 0);
 	*_ret = stack.back();
 	stack.pop_back();

@@ -925,6 +925,9 @@ void Compiler::linkBasicBlocks(Stack& stack)
 		{
 			auto& bbInfo = pair.second;
 
+			if (bbInfo.predecessors.empty())
+				bbInfo.inputItems = 0; // no consequences for other blocks, so leave valuesChanged false
+
 			for (auto predInfo : bbInfo.predecessors)
 			{
 				if (predInfo->outputItems < bbInfo.inputItems)
@@ -996,11 +999,11 @@ void Compiler::dumpBasicBlockGraph(std::ostream& out)
 
 	std::vector<BasicBlock*> blocks;
 	for (auto& pair : this->basicBlocks)
-	{
 		blocks.push_back(&pair.second);
-	}
-	blocks.push_back(m_jumpTableBlock.get());
-	blocks.push_back(m_badJumpBlock.get());
+	if (m_jumpTableBlock.get())
+		blocks.push_back(m_jumpTableBlock.get());
+	if (m_badJumpBlock.get())
+		blocks.push_back(m_badJumpBlock.get());
 
 	// Output nodes
 	for (auto bb : blocks)

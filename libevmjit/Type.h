@@ -39,6 +39,7 @@ enum class ReturnCode
 
 	BadJumpDestination = 101,
 	OutOfGas = 102,
+	StackTooSmall = 103
 };
 
 struct Constant
