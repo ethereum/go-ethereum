@@ -150,14 +150,9 @@ Value* Ext::calldataload(Value* _index)
 	return Endianness::toNative(m_builder, ret);
 }
 
-Value* Ext::bswap(Value* _value)
-{
-	return m_builder.CreateCall(m_bswap, _value);
-}
-
 Value* Ext::balance(Value* _address)
 {
-	auto address = bswap(_address); // to BE
+	auto address = Endianness::toBE(m_builder, _address);
 	m_builder.CreateStore(address, m_args[0]);
 	m_builder.CreateCall(m_balance, m_args);
 	return m_builder.CreateLoad(m_args[1]);
@@ -165,7 +160,7 @@ Value* Ext::balance(Value* _address)
 
 void Ext::suicide(Value* _address)
 {
-	auto address = bswap(_address); // to BE
+	auto address = Endianness::toBE(m_builder, _address);
 	m_builder.CreateStore(address, m_args[0]);
 	m_builder.CreateCall(m_suicide, m_args[0]);
 }
@@ -178,21 +173,21 @@ Value* Ext::create(llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* 
 	Value* args[] = {m_args[0], m_arg2, m_arg3, m_args[1]};
 	m_builder.CreateCall(m_create, args);
 	Value* address = m_builder.CreateLoad(m_args[1]);
-	address = bswap(address); // to LE
+	address = Endianness::toNative(m_builder, address);
 	return address;
 }
 
 llvm::Value* Ext::call(llvm::Value*& _gas, llvm::Value* _receiveAddress, llvm::Value* _value, llvm::Value* _inOff, llvm::Value* _inSize, llvm::Value* _outOff, llvm::Value* _outSize, llvm::Value* _codeAddress)
 {
 	m_builder.CreateStore(_gas, m_args[0]);
-	auto receiveAddress = bswap(_receiveAddress); // to BE
+	auto receiveAddress = Endianness::toBE(m_builder, _receiveAddress);
 	m_builder.CreateStore(receiveAddress, m_arg2);
 	m_builder.CreateStore(_value, m_arg3);
 	m_builder.CreateStore(_inOff, m_arg4);
 	m_builder.CreateStore(_inSize, m_arg5);
 	m_builder.CreateStore(_outOff, m_arg6);
 	m_builder.CreateStore(_outSize, m_arg7);
-	auto codeAddress = bswap(_codeAddress); // toBE
+	auto codeAddress = Endianness::toBE(m_builder, _codeAddress);
 	m_builder.CreateStore(codeAddress, m_arg8);
 
 	llvm::Value* args[] = {m_args[0], m_arg2, m_arg3, m_arg4, m_arg5, m_arg6, m_arg7, m_arg8, m_args[1]};
@@ -208,7 +203,7 @@ llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
 	llvm::Value* args[] = {m_args[0], m_arg2, m_args[1]};
 	m_builder.CreateCall(m_sha3, args);
 	Value* hash = m_builder.CreateLoad(m_args[1]);
-	hash = bswap(hash); // to LE
+	hash = Endianness::toNative(m_builder, hash);
 	return hash;
 }
 
@@ -223,14 +218,14 @@ llvm::Value* Ext::exp(llvm::Value* _left, llvm::Value* _right)
 
 llvm::Value* Ext::codeAt(llvm::Value* _addr)
 {
-	auto addr = bswap(_addr);
+	auto addr = Endianness::toBE(m_builder, _addr);
 	m_builder.CreateStore(addr, m_args[0]);
 	return m_builder.CreateCall(m_codeAt, m_args[0]);
 }
 
 llvm::Value* Ext::codesizeAt(llvm::Value* _addr)
 {
-	auto addr = bswap(_addr);
+	auto addr = Endianness::toBE(m_builder, _addr);
 	m_builder.CreateStore(addr, m_args[0]);
 	llvm::Value* args[] = {m_args[0], m_args[1]};
 	m_builder.CreateCall(m_codesizeAt, args);
