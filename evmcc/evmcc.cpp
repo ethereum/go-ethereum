@@ -91,12 +91,12 @@ int main(int argc, char** argv)
         std::cout << assembly << std::endl;
     }
 
-    if (opt_compile)
+    if (opt_compile || opt_interpret)
     {
     	auto compiler = eth::jit::Compiler();
 		auto module = compiler.compile({bytecode.data(), bytecode.size()});
-		llvm::raw_os_ostream out(std::cout);
-		module->print(out, nullptr);
+
+		module->dump();
 
 		if (opt_dump_graph)
 		{
@@ -105,17 +105,15 @@ int main(int argc, char** argv)
 			ofs.close();
 			std::cout << "Basic blocks graph written to block.dot\n";
 		}
-    }
 
-	if (opt_interpret)
-	{
-		auto engine = eth::jit::ExecutionEngine();
-		auto module = eth::jit::Compiler().compile({bytecode.data(), bytecode.size()});
-		module->dump();
-		u256 gas = 10000;
-		auto result = engine.run(std::move(module), gas);
-		return result;
-	}
+		if (opt_interpret)
+		{
+			auto engine = eth::jit::ExecutionEngine();
+			u256 gas = 10000;
+			auto result = engine.run(std::move(module), gas);
+			return result;
+		}
+    }
 
     return 0;
 }
