@@ -15,7 +15,7 @@ using ProgramCounter = uint64_t; // TODO: Rename
 class BasicBlock
 {
 public:
-	class Stack
+	class LocalStack
 	{
 	public:
 		/// Pushes value on stack
@@ -37,17 +37,23 @@ public:
 		/// Size of the stack
 		size_t size() const { return m_backend.size(); }
 
+		size_t initialSize() const { return m_numRequiredStackItems; }
+
 	private:
-		Stack(llvm::BasicBlock* _llvmBB) : m_llvmBB(_llvmBB) {}
-		Stack(const Stack&) = delete;
-		void operator=(const Stack&) = delete;
+		// LocalStack(llvm::BasicBlock* _llvmBB) : m_llvmBB(_llvmBB) {}
+		LocalStack(llvm::BasicBlock* _llvmBB) : m_llvmBB(_llvmBB), m_numRequiredStackItems(0) {}
+		LocalStack(LocalStack const&) = delete;
+		void operator=(LocalStack const&) = delete;
 		friend BasicBlock;
 
 	private:
 		std::vector<llvm::Value*> m_backend;
 
-		/// LLVM Basic Block where phi nodes are inserted
-		llvm::BasicBlock* const m_llvmBB;
+		/** Basic block into which phi nodes are inserted */
+		llvm::BasicBlock* m_llvmBB;
+
+		/** Number of items required on the EVM stack at the beginning of the block */
+		size_t m_numRequiredStackItems;
 	};
 
 	/// Basic block name prefix. The rest is beging instruction index.
@@ -62,7 +68,7 @@ public:
 	operator llvm::BasicBlock*() { return m_llvmBB; }
 	llvm::BasicBlock* llvm() { return m_llvmBB; }
 
-	Stack& getStack() { return m_stack; }
+	LocalStack& getStack() { return m_stack; }
 
 	ProgramCounter begin() { return m_beginInstIdx; }
 	ProgramCounter end() { return m_endInstIdx; }
@@ -74,7 +80,7 @@ private:
 
 	/// Basic black state vector (stack) - current/end values and their positions on stack
 	/// @internal Must be AFTER m_llvmBB
-	Stack m_stack;
+	LocalStack m_stack;
 };
 
 }
