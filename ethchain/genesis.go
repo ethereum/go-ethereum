@@ -18,9 +18,8 @@ var EmptyShaList = ethcrypto.Sha3(ethutil.Encode([]interface{}{}))
 var GenesisHeader = []interface{}{
 	// Previous hash (none)
 	ZeroHash256,
-	ethcrypto.Sha3(ethutil.Encode([]interface{}{})),
 	// Empty uncles
-	//"",
+	"",
 	// Coinbase
 	ZeroHash160,
 	// Root state
