@@ -875,6 +875,25 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 
 void Compiler::linkBasicBlocks(Stack& stack)
 {
+	// Remove dead basic blocks
+	auto sthErased = false;
+	do
+	{
+		sthErased = false;
+		for (auto it = basicBlocks.begin(); it != basicBlocks.end();)
+		{
+			auto llvmBB = it->second.llvm();
+			if (llvm::pred_begin(llvmBB) == llvm::pred_end(llvmBB))
+			{
+				llvmBB->eraseFromParent();
+				basicBlocks.erase(it++);
+				sthErased = true;
+			}
+			else
+				++it;
+		}
+	} while (sthErased);
+
 	struct BBInfo
 	{
 		BasicBlock& bblock;
