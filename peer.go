@@ -674,7 +674,7 @@ func (p *Peer) pushPeers() {
 
 func (self *Peer) pushStatus() {
 	msg := ethwire.NewMessage(ethwire.MsgStatusTy, []interface{}{
-		//uint32(ProtocolVersion),
+		uint32(ProtocolVersion),
 		uint32(NetVersion),
 		self.ethereum.ChainManager().TD,
 		self.ethereum.ChainManager().CurrentBlock.Hash(),

@@ -692,7 +692,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			receiver := self.env.State().GetOrNewStateObject(stack.Pop().Bytes())
 
-			receiver.AddAmount(closure.object.Balance)
+			receiver.AddAmount(closure.object.Balance())
 
 			closure.object.MarkForDeletion()
 

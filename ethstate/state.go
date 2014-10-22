@@ -33,7 +33,7 @@ func New(trie *ethtrie.Trie) *State {
 func (self *State) GetBalance(addr []byte) *big.Int {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
-		return stateObject.Balance
+		return stateObject.balance
 	}
 
 	return ethutil.Big0

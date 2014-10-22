@@ -31,7 +31,7 @@ type StateObject struct {
 	// Address of the object
 	address []byte
 	// Shared attributes
-	Balance  *big.Int
+	balance  *big.Int
 	codeHash []byte
 	Nonce    uint64
 	// Contract related attributes
@@ -61,7 +61,7 @@ func NewStateObject(addr []byte) *StateObject {
 	// This to ensure that it has 20 bytes (and not 0 bytes), thus left or right pad doesn't matter.
 	address := ethutil.Address(addr)
 
-	object := &StateObject{address: address, Balance: new(big.Int), gasPool: new(big.Int)}
+	object := &StateObject{address: address, balance: new(big.Int), gasPool: new(big.Int)}
 	object.State = New(ethtrie.New(ethutil.Config.Db, ""))
 	object.storage = make(Storage)
 	object.gasPool = new(big.Int)
@@ -71,7 +71,7 @@ func NewStateObject(addr []byte) *StateObject {
 
 func NewContract(address []byte, balance *big.Int, root []byte) *StateObject {
 	contract := NewStateObject(address)
-	contract.Balance = balance
+	contract.balance = balance
 	contract.State = New(ethtrie.New(ethutil.Config.Db, string(root)))
 
 	return contract
@@ -86,7 +86,7 @@ func NewStateObjectFromBytes(address, data []byte) *StateObject {
 
 func (self *StateObject) MarkForDeletion() {
 	self.remove = true
-	statelogger.DebugDetailf("%x: #%d %v (deletion)\n", self.Address(), self.Nonce, self.Balance)
+	statelogger.DebugDetailf("%x: #%d %v (deletion)\n", self.Address(), self.Nonce, self.balance)
 }
 
 func (c *StateObject) GetAddr(addr []byte) *ethutil.Value {
@@ -174,21 +174,25 @@ func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
 	return ethutil.NewValueFromBytes([]byte{c.Code[pc.Int64()]})
 }
 
-func (c *StateObject) AddAmount(amount *big.Int) {
-	c.SetBalance(new(big.Int).Add(c.Balance, amount))
+func (c *StateObject) AddBalance(amount *big.Int) {
+	c.SetBalance(new(big.Int).Add(c.balance, amount))
 
-	statelogger.Debugf("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce, c.Balance, amount)
+	statelogger.Debugf("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce, c.balance, amount)
 }
+func (c *StateObject) AddAmount(amount *big.Int) { c.AddBalance(amount) }
 
-func (c *StateObject) SubAmount(amount *big.Int) {
-	c.SetBalance(new(big.Int).Sub(c.Balance, amount))
+func (c *StateObject) SubBalance(amount *big.Int) {
+	c.SetBalance(new(big.Int).Sub(c.balance, amount))
 
-	statelogger.Debugf("%x: #%d %v (- %v)\n", c.Address(), c.Nonce, c.Balance, amount)
+	statelogger.Debugf("%x: #%d %v (- %v)\n", c.Address(), c.Nonce, c.balance, amount)
 }
+func (c *StateObject) SubAmount(amount *big.Int) { c.SubBalance(amount) }
 
 func (c *StateObject) SetBalance(amount *big.Int) {
-	c.Balance = amount
+	c.balance = amount
 }
+
+func (self *StateObject) Balance() *big.Int { return self.balance }
 
 //
 // Gas setters and getters
@@ -198,8 +202,8 @@ func (c *StateObject) SetBalance(amount *big.Int) {
 func (c *StateObject) ReturnGas(gas, price *big.Int) {}
 func (c *StateObject) ConvertGas(gas, price *big.Int) error {
 	total := new(big.Int).Mul(gas, price)
-	if total.Cmp(c.Balance) > 0 {
-		return fmt.Errorf("insufficient amount: %v, %v", c.Balance, total)
+	if total.Cmp(c.balance) > 0 {
+		return fmt.Errorf("insufficient amount: %v, %v", c.balance, total)
 	}
 
 	c.SubAmount(total)
@@ -232,12 +236,12 @@ func (self *StateObject) RefundGas(gas, price *big.Int) {
 	rGas := new(big.Int).Set(gas)
 	rGas.Mul(rGas, price)
 
-	self.Balance.Sub(self.Balance, rGas)
+	self.balance.Sub(self.balance, rGas)
 }
 
 func (self *StateObject) Copy() *StateObject {
 	stateObject := NewStateObject(self.Address())
-	stateObject.Balance.Set(self.Balance)
+	stateObject.balance.Set(self.balance)
 	stateObject.codeHash = ethutil.CopyBytes(self.codeHash)
 	stateObject.Nonce = self.Nonce
 	if self.State != nil {
@@ -281,7 +285,7 @@ func (self *StateObject) Object() *StateObject {
 
 // Debug stuff
 func (self *StateObject) CreateOutputForDiff() {
-	fmt.Printf("%x %x %x %x\n", self.Address(), self.State.Root(), self.Balance.Bytes(), self.Nonce)
+	fmt.Printf("%x %x %x %x\n", self.Address(), self.State.Root(), self.balance.Bytes(), self.Nonce)
 	self.EachStorage(func(addr string, value *ethutil.Value) {
 		fmt.Printf("%x %x\n", addr, value.Bytes())
 	})
@@ -300,7 +304,7 @@ func (c *StateObject) RlpEncode() []byte {
 		root = ""
 	}
 
-	return ethutil.Encode([]interface{}{c.Nonce, c.Balance, root, c.CodeHash()})
+	return ethutil.Encode([]interface{}{c.Nonce, c.balance, root, c.CodeHash()})
 }
 
 func (c *StateObject) CodeHash() ethutil.Bytes {
@@ -316,7 +320,7 @@ func (c *StateObject) RlpDecode(data []byte) {
 	decoder := ethutil.NewValueFromBytes(data)
 
 	c.Nonce = decoder.Get(0).Uint()
-	c.Balance = decoder.Get(1).BigInt()
+	c.balance = decoder.Get(1).BigInt()
 	c.State = New(ethtrie.New(ethutil.Config.Db, decoder.Get(2).Interface()))
 	c.storage = make(map[string]*ethutil.Value)
 	c.gasPool = new(big.Int)

@@ -18,7 +18,7 @@ type Account struct {
 
 func StateObjectFromAccount(addr string, account Account) *ethstate.StateObject {
 	obj := ethstate.NewStateObject(ethutil.Hex2Bytes(addr))
-	obj.Balance = ethutil.Big(account.Balance)
+	obj.SetBalance(ethutil.Big(account.Balance))
 
 	if ethutil.IsHex(account.Code) {
 		account.Code = account.Code[2:]
@@ -44,9 +44,6 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
-		if name != "CallRecursiveBomb" {
-			continue
-		}
 		state := ethstate.New(helper.NewTrie())
 		for addr, account := range test.Pre {
 			obj := StateObjectFromAccount(addr, account)
@@ -92,7 +89,6 @@ func TestVMArithmetic(t *testing.T) {
 }
 
 func TestVMSystemOperation(t *testing.T) {
-	helper.Logger.SetLogLevel(5)
 	const fn = "../files/vmtests/vmSystemOperationsTest.json"
 	RunVmTest(fn, t)
 }

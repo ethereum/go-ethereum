@@ -28,7 +28,7 @@ func (self *State) Dump() []byte {
 	self.Trie.NewIterator().Each(func(key string, value *ethutil.Value) {
 		stateObject := NewStateObjectFromBytes([]byte(key), value.Bytes())
 
-		account := Account{Balance: stateObject.Balance.String(), Nonce: stateObject.Nonce, CodeHash: ethutil.Bytes2Hex(stateObject.codeHash)}
+		account := Account{Balance: stateObject.balance.String(), Nonce: stateObject.Nonce, CodeHash: ethutil.Bytes2Hex(stateObject.codeHash)}
 		account.Storage = make(map[string]string)
 
 		stateObject.EachStorage(func(key string, value *ethutil.Value) {

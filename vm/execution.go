@@ -48,17 +48,17 @@ func (self *Execution) exec(code, caddr []byte, caller ClosureRef) (ret []byte, 
 		Value: self.value,
 	})
 
-	object := caller.Object()
-	if object.Balance.Cmp(self.value) < 0 {
+	from, to := caller.Object(), env.State().GetOrNewStateObject(self.address)
+	err = env.Transfer(from, to, self.value)
+	if err != nil {
 		caller.ReturnGas(self.Gas, self.price)
 
-		err = fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, object.Balance)
+		err = fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, from.Balance)
 	} else {
-		stateObject := env.State().GetOrNewStateObject(self.address)
-		self.object = stateObject
+		self.object = to
 
-		caller.Object().SubAmount(self.value)
-		stateObject.AddAmount(self.value)
+		//caller.Object().SubAmount(self.value)
+		//stateObject.AddAmount(self.value)
 
 		// Pre-compiled contracts (address.go) 1, 2 & 3.
 		naddr := ethutil.BigD(caddr).Uint64()
@@ -69,7 +69,7 @@ func (self *Execution) exec(code, caddr []byte, caller ClosureRef) (ret []byte, 
 			}
 		} else {
 			// Create a new callable closure
-			c := NewClosure(msg, caller, stateObject, code, self.Gas, self.price)
+			c := NewClosure(msg, caller, to, code, self.Gas, self.price)
 			c.exe = self
 
 			if self.vm.Depth() == MaxCallDepth {
