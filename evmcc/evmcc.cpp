@@ -25,7 +25,6 @@ void show_usage()
 
 int main(int argc, char** argv)
 {
-
     std::string input_file;
     bool opt_dissassemble = false;
     bool opt_show_bytes = false;
@@ -33,6 +32,7 @@ int main(int argc, char** argv)
 	bool opt_interpret = false;
 	bool opt_dump_graph = false;
 	bool opt_unknown = false;
+	size_t initialGas = 10000;
 
     for (int i = 1; i < argc; i++)
     {
@@ -47,6 +47,12 @@ int main(int argc, char** argv)
 			opt_interpret = true;
 		else if (option == "-g")
 			opt_dump_graph = true;
+		else if (option == "-G" && i + 1 < argc)
+		{
+			std::string gasValue = argv[++i];
+			initialGas = boost::lexical_cast<size_t>(gasValue);
+			std::cerr << "Initial gas set to " << initialGas << "\n";
+		}
 		else if (option[0] != '-' && input_file.empty())
 			input_file = option;
         else
@@ -109,7 +115,7 @@ int main(int argc, char** argv)
 		if (opt_interpret)
 		{
 			auto engine = eth::jit::ExecutionEngine();
-			u256 gas = 10000;
+			u256 gas = initialGas;
 			auto result = engine.run(std::move(module), gas);
 			return result;
 		}
