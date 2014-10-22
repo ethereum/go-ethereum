@@ -1,3 +1,4 @@
+[![Stories in Ready](https://badge.waffle.io/ethereum/go-ethereum.png?label=ready&title=Ready)](https://waffle.io/ethereum/go-ethereum)
 Ethereum
 ========
 
