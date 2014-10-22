@@ -7,7 +7,7 @@ import QtQuick.Controls.Styles 1.1
 import Ethereum 1.0
 
 Rectangle {
-	property var title: "New transaction"
+	property var title: "New Transaction"
 	property var menuItem
 
 	objectName: "newTxView"
