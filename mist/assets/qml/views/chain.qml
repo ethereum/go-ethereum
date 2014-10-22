@@ -8,7 +8,7 @@ import Ethereum 1.0
 
 Rectangle {
 	id: root
-	property var title: "Block chain"
+	property var title: "Block Chain"
 	property var menuItem
 
 	objectName: "chainView"
@@ -63,12 +63,12 @@ Rectangle {
 
 		Menu {
 			id: contextMenu
-			property var row;
+			property var row
 			MenuItem {
 				text: "Details"
 				onTriggered: {
 					popup.visible = true
-					popup.setDetails(blockModel.get(this.row))
+					popup.setDetails(blockModel.get(contextMenu.row))
 				}
 			}
 
@@ -77,7 +77,7 @@ Rectangle {
 			MenuItem {
 				text: "Copy"
 				onTriggered: {
-					copyToClipboard(blockModel.get(this.row).hash)
+					copyToClipboard(blockModel.get(contextMenu.row).hash)
 				}
 			}
 
@@ -85,7 +85,7 @@ Rectangle {
 				text: "Dump State"
 				onTriggered: {
 					generalFileDialog.show(false, function(path) {
-						var hash = blockModel.get(this.row).hash;
+						var hash = blockModel.get(contextMenu.row).hash;
 
 						gui.dumpState(hash, path);
 					});
