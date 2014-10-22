@@ -127,7 +127,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 	state := self.lib.eth.StateManager().TransState()
 	account := self.lib.eth.StateManager().TransState().GetAccount(keyPair.Address())
 	contract := ethstate.NewStateObject([]byte{0})
-	contract.Balance = value
+	contract.SetBalance(value)
 
 	self.SetAsm(script)
 
@@ -135,14 +135,14 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 
 	callerClosure := vm.NewClosure(&ethstate.Message{}, account, contract, script, gas, gasPrice)
 	env := utils.NewEnv(state, block, account.Address(), value)
-	vm := vm.NewDebugVm(env)
-	vm.Dbg = self.Db
+	evm := vm.NewDebugVm(env)
+	evm.Dbg = self.Db
 
-	self.vm = vm
+	self.vm = evm
 	self.Db.done = false
 	self.Logf("callsize %d", len(script))
 	go func() {
-		ret, g, err := callerClosure.Call(vm, data)
+		ret, g, err := callerClosure.Call(evm, data)
 		tot := new(big.Int).Mul(g, gasPrice)
 		self.Logf("gas usage %v total price = %v (%v)", g, tot, ethutil.CurrencyToString(tot))
 		if err != nil {

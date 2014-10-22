@@ -5,6 +5,7 @@ import (
 
 	"github.com/ethereum/eth-go/ethchain"
 	"github.com/ethereum/eth-go/ethstate"
+	"github.com/ethereum/eth-go/vm"
 )
 
 type VMEnv struct {
@@ -34,3 +35,6 @@ func (self *VMEnv) BlockHash() []byte      { return self.block.Hash() }
 func (self *VMEnv) Value() *big.Int        { return self.value }
 func (self *VMEnv) State() *ethstate.State { return self.state }
 func (self *VMEnv) GasLimit() *big.Int     { return self.block.GasLimit }
+func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) error {
+	return vm.Transfer(from, to, amount)
+}

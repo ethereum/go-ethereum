@@ -382,7 +382,7 @@ func (gui *Gui) update() {
 	state := gui.eth.StateManager().TransState()
 
 	unconfirmedFunds := new(big.Int)
-	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetAccount(gui.address()).Balance)))
+	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetAccount(gui.address()).Balance())))
 
 	lastBlockLabel := gui.getObjectByName("lastBlockLabel")
 	miningLabel := gui.getObjectByName("miningLabel")
@@ -410,7 +410,7 @@ func (gui *Gui) update() {
 				case ethchain.NewBlockEvent:
 					gui.processBlock(ev.Block, false)
 					if bytes.Compare(ev.Block.Coinbase, gui.address()) == 0 {
-						gui.setWalletValue(gui.eth.StateManager().CurrentState().GetAccount(gui.address()).Balance, nil)
+						gui.setWalletValue(gui.eth.StateManager().CurrentState().GetAccount(gui.address()).Balance(), nil)
 					}
 
 				case ethchain.TxEvent:
@@ -424,7 +424,7 @@ func (gui *Gui) update() {
 							unconfirmedFunds.Add(unconfirmedFunds, tx.Value)
 						}
 
-						gui.setWalletValue(object.Balance, unconfirmedFunds)
+						gui.setWalletValue(object.Balance(), unconfirmedFunds)
 
 						gui.insertTransaction("pre", tx)
 
@@ -442,7 +442,7 @@ func (gui *Gui) update() {
 							gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 						}
 
-						gui.setWalletValue(object.Balance, nil)
+						gui.setWalletValue(object.Balance(), nil)
 
 						state.UpdateStateObject(object)
 					}
