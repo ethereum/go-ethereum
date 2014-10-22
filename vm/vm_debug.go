@@ -82,7 +82,8 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 				self.Endl()
 
 				ret = closure.Return(nil)
-				err = fmt.Errorf("%v", r)
+				// No error should be set. Recover is used with require
+				// Is this too error prone?
 			}
 		}()
 	}
@@ -106,7 +107,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 		step++
 		// Get the memory location of pc
-		op := OpCode(closure.Get(pc).Uint())
+		op = OpCode(closure.Get(pc).Uint())
 
 		// XXX Leave this Println intact. Don't change this to the log system.
 		// Used for creating diffs between implementations
