@@ -1,0 +1,4 @@
+let f n = 
+    if n == 0 then 2 else f (n-1)
+
+return f 10

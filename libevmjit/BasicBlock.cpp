@@ -52,7 +52,7 @@ llvm::Value* BasicBlock::LocalStack::get(size_t _index)
 		m_backend.insert(m_backend.begin(), nMissingVals, nullptr);
 		for (decltype(nMissingVals) i = 0; i < nMissingVals; ++i)
 		{
-			m_backend[i] = m_llvmBB->empty() ?
+			m_backend[nMissingVals - 1 - i] = m_llvmBB->empty() ?
 				llvm::PHINode::Create(Type::i256, 0, {}, m_llvmBB) :
 				llvm::PHINode::Create(Type::i256, 0, {}, m_llvmBB->getFirstNonPHI());
 			m_numRequiredStackItems += 1;
