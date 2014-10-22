@@ -5,7 +5,9 @@
 <script type="text/javascript" src="main.js"></script>
 <script type="text/javascript" src="websocket.js"></script>
 <script type="text/javascript" src="qt.js"></script>
+<script type="text/javascript" src="http.js"></script>
 <script type="text/javascript">
+web3.setProvider(new web3.providers.HttpProvider('http://localhost:8080'));
 function registerName() {
     var name = document.querySelector("#name").value;
     name = web3.fromAscii(name);

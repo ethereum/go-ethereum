@@ -49,11 +49,10 @@
         eth: {
             prototype: Object(),
 
-            //TODO solve the issue with numberOrHash impl
             block: function(numberOrHash) {
                 return new Promise(function(resolve, reject) {
-                    var args = typeof numberOrHash === "string" ? [0, numberOrHash] : [numberOrHash, ""];
-                    web3.provider.send({call: "block", args: args}, function(block) {
+                    var call = typeof numberOrHash === "string" ? 'blockByHash' : 'blockByNumber';
+                    web3.provider.send({call: call, args: [numberOrHash]}, function(block) {
                         if(block)
                             resolve(block);
                         else
@@ -64,8 +63,8 @@
 
             transaction: function(numberOrHash, nth) {
                 return new Promise(function(resolve, reject) {
-                    var args = typeof numberOrHash === "string" ? [0, numberOrHash, nth] : [numberOrHash, "", nth];
-                    web3.provider.send({call: "transaction", args: args}, function(block) {
+                    var call = typeof numberOrHash === "string" ? 'transactionByHash' : 'transactonByNumber';
+                    web3.provider.send({call: call, args: [numberOrHash, nth]}, function(block) {
                         if(block)
                             resolve(block);
                         else
@@ -76,8 +75,8 @@
 
             uncle: function(numberOrHash, nth) {
                 return new Promise(function(resolve, reject) {
-                    var args = typeof numberOrHash === "string" ? [0, numberOrHash, nth] : [numberOrHash, "", nth];
-                    web3.provider.send({call: "uncle", args: args}, function(block) {
+                    var call = typeof numberOrHash === "string" ? 'uncleByHash' : 'uncleByNumber';
+                    web3.provider.send({call: call, args: [numberOrHash, nth]}, function(block) {
                         if(block)
                             resolve(block);
                         else

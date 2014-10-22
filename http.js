@@ -4,7 +4,6 @@
         this.host = host;
     };
 
-    //TODO unify the format of object passed to 'send method'
     function formatJsonRpcObject(object) {
         return {
             jsonrpc: '2.0',
@@ -14,7 +13,6 @@
         }
     };
 
-    //TODO unify the format of output messages, maybe there should be objects instead
     function formatJsonRpcMessage(message) {    
         var object = JSON.parse(message);
        
