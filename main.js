@@ -489,8 +489,7 @@
         }
     });
 
-    function messageHandler(ev) {
-        var data = JSON.parse(ev)
+    function messageHandler(data) {
 
         if(data._event !== undefined) {
             web3.trigger(data._event, data.data);

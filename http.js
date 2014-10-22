@@ -16,10 +16,10 @@
     function formatJsonRpcMessage(message) {    
         var object = JSON.parse(message);
        
-        return JSON.stringify({
+        return {
             _id: object.id,
             data: object.result
-        });
+        };
     };
 
     HttpProvider.prototype.send = function (payload) {
