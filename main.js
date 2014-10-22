@@ -49,37 +49,40 @@
         eth: {
             prototype: Object(),
 
-
+            //TODO solve the issue with numberOrHash impl
             block: function(numberOrHash) {
                 return new Promise(function(resolve, reject) {
-                    /*
-                    var func;
-                    if(typeof numberOrHash == "string") {
-                        func =  "getBlockByHash";
-                    } else {
-                        func =  "getBlockByNumber";
-                    }
-                    */
-
-                    web3.provider.send({call: /*func*/"block", args: [numberOrHash]}, function(block) {
+                    var args = typeof numberOrHash === "string" ? [0, numberOrHash] : [numberOrHash, ""];
+                    web3.provider.send({call: "block", args: args}, function(block) {
                         if(block)
                             resolve(block);
                         else
                             reject("not found");
-
                     });
                 });
             },
 
             transaction: function(numberOrHash, nth) {
                 return new Promise(function(resolve, reject) {
-                    reject("`transaction` not yet implemented")
+                    var args = typeof numberOrHash === "string" ? [0, numberOrHash, nth] : [numberOrHash, "", nth];
+                    web3.provider.send({call: "transaction", args: args}, function(block) {
+                        if(block)
+                            resolve(block);
+                        else
+                            reject("not found");
+                    });
                 });
             },
 
             uncle: function(numberOrHash, nth) {
                 return new Promise(function(resolve, reject) {
-                    reject("`uncle` not yet implemented")
+                    var args = typeof numberOrHash === "string" ? [0, numberOrHash, nth] : [numberOrHash, "", nth];
+                    web3.provider.send({call: "uncle", args: args}, function(block) {
+                        if(block)
+                            resolve(block);
+                        else
+                            reject("not found");
+                    });
                 });
             },
 
@@ -128,7 +131,7 @@
                 return Promise.all(promises).then(function() {
                     return new Promise(function(resolve, reject) {
                         params.data = params.data.join("");
-                        web3.provider.send({call: "transact", args: ["0x"+params]}, function(data) {
+                        web3.provider.send({call: "transact", args: [params]}, function(data) {
                             if(data[1])
                                 reject(data[0]);
                             else
