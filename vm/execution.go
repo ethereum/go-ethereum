@@ -13,6 +13,7 @@ type Execution struct {
 	address, input    []byte
 	Gas, price, value *big.Int
 	object            *ethstate.StateObject
+	SkipTransfer      bool
 }
 
 func NewExecution(vm VirtualMachine, address, input []byte, gas, gasPrice, value *big.Int) *Execution {
@@ -49,17 +50,17 @@ func (self *Execution) exec(code, caddr []byte, caller ClosureRef) (ret []byte, 
 	})
 
 	from, to := caller.Object(), env.State().GetOrNewStateObject(self.address)
-	err = env.Transfer(from, to, self.value)
+	// Skipping transfer is used on testing for the initial call
+	if !self.SkipTransfer {
+		err = env.Transfer(from, to, self.value)
+	}
+
 	if err != nil {
 		caller.ReturnGas(self.Gas, self.price)
 
 		err = fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, from.Balance)
 	} else {
 		self.object = to
-
-		//caller.Object().SubAmount(self.value)
-		//stateObject.AddAmount(self.value)
-
 		// Pre-compiled contracts (address.go) 1, 2 & 3.
 		naddr := ethutil.BigD(caddr).Uint64()
 		if p := Precompiled[naddr]; p != nil {
@@ -73,14 +74,13 @@ func (self *Execution) exec(code, caddr []byte, caller ClosureRef) (ret []byte, 
 			c.exe = self
 
 			if self.vm.Depth() == MaxCallDepth {
-				c.UseGas(c.Gas)
+				c.UseGas(self.Gas)
 
 				return c.Return(nil), fmt.Errorf("Max call depth exceeded (%d)", MaxCallDepth)
 			}
 
 			// Executer the closure and get the return value (if any)
 			ret, _, err = c.Call(self.vm, self.input)
-
 			msg.Output = ret
 		}
 	}

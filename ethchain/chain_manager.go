@@ -162,7 +162,7 @@ func AddTestNetFunds(block *Block) {
 	} {
 		codedAddr := ethutil.Hex2Bytes(addr)
 		account := block.state.GetAccount(codedAddr)
-		account.Balance = ethutil.Big("1606938044258990275541962092341162602522202993782792835301376") //ethutil.BigPow(2, 200)
+		account.SetBalance(ethutil.Big("1606938044258990275541962092341162602522202993782792835301376")) //ethutil.BigPow(2, 200)
 		block.state.UpdateStateObject(account)
 	}
 }

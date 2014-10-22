@@ -51,17 +51,16 @@ func (self *Env) BlockHash() []byte      { return nil }
 func (self *Env) State() *ethstate.State { return self.state }
 func (self *Env) GasLimit() *big.Int     { return self.gasLimit }
 func (self *Env) Transfer(from, to vm.Account, amount *big.Int) error {
-	return nil
+	return vm.Transfer(from, to, amount)
 }
 
 func RunVm(state *ethstate.State, env, exec map[string]string) ([]byte, *big.Int, error) {
 	address := FromHex(exec["address"])
 	caller := state.GetOrNewStateObject(FromHex(exec["caller"]))
-	caller.SetBalance(ethutil.Big(exec["value"]))
 
 	evm := vm.New(NewEnvFromMap(state, env, exec), vm.DebugVmTy)
-
 	execution := vm.NewExecution(evm, address, FromHex(exec["data"]), ethutil.Big(exec["gas"]), ethutil.Big(exec["gasPrice"]), ethutil.Big(exec["value"]))
+	execution.SkipTransfer = true
 	ret, err := execution.Exec(address, caller)
 
 	return ret, execution.Gas, err

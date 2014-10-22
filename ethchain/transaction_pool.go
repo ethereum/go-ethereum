@@ -117,7 +117,7 @@ func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 	totAmount := new(big.Int).Set(tx.Value)
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.
-	if sender.Balance.Cmp(totAmount) < 0 {
+	if sender.Balance().Cmp(totAmount) < 0 {
 		return fmt.Errorf("[TXPL] Insufficient amount in sender's (%x) account", tx.Sender())
 	}
 

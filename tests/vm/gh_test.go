@@ -89,6 +89,7 @@ func TestVMArithmetic(t *testing.T) {
 }
 
 func TestVMSystemOperation(t *testing.T) {
+	//helper.Logger.SetLogLevel(5)
 	const fn = "../files/vmtests/vmSystemOperationsTest.json"
 	RunVmTest(fn, t)
 }

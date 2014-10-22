@@ -22,7 +22,7 @@ type Account struct {
 
 func StateObjectFromAccount(addr string, account Account) *ethstate.StateObject {
 	obj := ethstate.NewStateObject(ethutil.Hex2Bytes(addr))
-	obj.Balance = ethutil.Big(account.Balance)
+	obj.SetBalance(ethutil.Big(account.Balance))
 
 	if ethutil.IsHex(account.Code) {
 		account.Code = account.Code[2:]

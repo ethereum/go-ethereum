@@ -237,10 +237,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		mem.Resize(newMemSize.Uint64())
 
 		switch op {
-		case LOG:
-			stack.Print()
-			mem.Print()
-			// 0x20 range
+		// 0x20 range
 		case ADD:
 			require(2)
 			x, y := stack.Popn()

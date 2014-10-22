@@ -660,8 +660,6 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 
-			//snapshot := self.env.State().Copy()
-
 			var executeAddr []byte
 			if op == CALLCODE {
 				executeAddr = closure.Address()
@@ -673,8 +671,6 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			ret, err := msg.Exec(addr.Bytes(), closure)
 			if err != nil {
 				stack.Push(ethutil.BigFalse)
-
-				//self.env.State().Set(snapshot)
 			} else {
 				stack.Push(ethutil.BigTrue)
 

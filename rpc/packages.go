@@ -296,7 +296,7 @@ func (p *EthereumApi) GetBalanceAt(args *GetBalanceArgs, reply *string) error {
 		return err
 	}
 	state := p.pipe.World().SafeGet(ethutil.Hex2Bytes(args.Address))
-	*reply = NewSuccessRes(BalanceRes{Balance: state.Balance.String(), Address: args.Address})
+	*reply = NewSuccessRes(BalanceRes{Balance: state.Balance().String(), Address: args.Address})
 	return nil
 }
 

@@ -151,7 +151,6 @@ const (
 	CALLCODE = 0xf3
 
 	// 0x70 range - other
-	LOG     = 0xfe // XXX Unofficial
 	SUICIDE = 0xff
 )
 
@@ -300,7 +299,6 @@ var opCodeToString = map[OpCode]string{
 	CALLCODE: "CALLCODE",
 
 	// 0x70 range - other
-	LOG:     "LOG",
 	SUICIDE: "SUICIDE",
 }
 

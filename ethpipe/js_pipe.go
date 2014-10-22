@@ -98,7 +98,7 @@ func (self *JSPipe) StorageAt(addr, storageAddr string) string {
 }
 
 func (self *JSPipe) BalanceAt(addr string) string {
-	return self.World().SafeGet(ethutil.Hex2Bytes(addr)).Balance.String()
+	return self.World().SafeGet(ethutil.Hex2Bytes(addr)).Balance().String()
 }
 
 func (self *JSPipe) TxCountAt(address string) int {

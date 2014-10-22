@@ -89,8 +89,8 @@ func (self *StateTransition) BuyGas() error {
 	var err error
 
 	sender := self.Sender()
-	if sender.Balance.Cmp(self.tx.GasValue()) < 0 {
-		return fmt.Errorf("Insufficient funds to pre-pay gas. Req %v, has %v", self.tx.GasValue(), sender.Balance)
+	if sender.Balance().Cmp(self.tx.GasValue()) < 0 {
+		return fmt.Errorf("Insufficient funds to pre-pay gas. Req %v, has %v", self.tx.GasValue(), sender.Balance())
 	}
 
 	coinbase := self.Coinbase()
@@ -171,7 +171,7 @@ func (self *StateTransition) TransitionState() (err error) {
 		return
 	}
 
-	if sender.Balance.Cmp(self.value) < 0 {
+	if sender.Balance().Cmp(self.value) < 0 {
 		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Balance)
 	}
 
@@ -243,19 +243,6 @@ func (self *StateTransition) TransitionState() (err error) {
 	return
 }
 
-func (self *StateTransition) transferValue(sender, receiver *ethstate.StateObject) error {
-	if sender.Balance.Cmp(self.value) < 0 {
-		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Balance)
-	}
-
-	// Subtract the amount from the senders account
-	sender.SubAmount(self.value)
-	// Add the amount to receivers account which should conclude this transaction
-	receiver.AddAmount(self.value)
-
-	return nil
-}
-
 func (self *StateTransition) Eval(msg *ethstate.Message, script []byte, context *ethstate.StateObject) (ret []byte, err error) {
 	var (
 		transactor    = self.Sender()
@@ -265,9 +252,9 @@ func (self *StateTransition) Eval(msg *ethstate.Message, script []byte, context 
 	)
 
 	//vm := vm.New(env, vm.Type(ethutil.Config.VmType))
-	vm := vm.New(env, vm.DebugVmTy)
+	evm := vm.New(env, vm.DebugVmTy)
 
-	ret, _, err = callerClosure.Call(vm, self.tx.Data)
+	ret, _, err = callerClosure.Call(evm, self.tx.Data)
 
 	return
 }
