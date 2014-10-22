@@ -1,7 +1,7 @@
 
 #include "VM.h"
 
-#include <libevm/VM.h>
+#include <libevm/VMFace.h>
 
 #include "ExecutionEngine.h"
 #include "Compiler.h"
@@ -13,7 +13,7 @@ namespace eth
 namespace jit
 {
 
-bytes VM::go(ExtVMFace& _ext)
+bytesConstRef VM::go(ExtVMFace& _ext, OnOpFunc const& _onOp, uint64_t _steps)
 {
 	auto module = Compiler().compile(_ext.code);
 
@@ -30,7 +30,8 @@ bytes VM::go(ExtVMFace& _ext)
 		BOOST_THROW_EXCEPTION(StackTooSmall(1,0));
 	}
 
-	return std::move(engine.returnData);
+	m_output = std::move(engine.returnData);
+	return {m_output.data(), m_output.size()};	// TODO: This all bytesConstRef stuff sucks
 }
 
 }
