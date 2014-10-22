@@ -42,7 +42,7 @@ func main() {
 	db := utils.NewDatabase()
 	err := utils.DBSanityCheck(db)
 	if err != nil {
-		logger.Errorln(err)
+		fmt.Println(err)
 
 		os.Exit(1)
 	}
