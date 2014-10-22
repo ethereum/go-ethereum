@@ -210,7 +210,7 @@ Rectangle {
 				anchors.topMargin: 10
 				text: "Debug contract"
 				onClicked: {
-					if(tx.createsContract){
+					if(tx && tx.createsContract){
 						eth.startDbWithCode(tx.rawData)
 					}else {
 						eth.startDbWithContractAndData(tx.address, tx.rawData)
