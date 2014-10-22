@@ -14,12 +14,12 @@ namespace jit
 
 class VM: public VMFace
 {
-public:
-	explicit VM(u256 _gas = 0): VMFace(_gas) {}
-
-	virtual bytesConstRef go(ExtVMFace& _ext, OnOpFunc const& _onOp = {}, uint64_t _steps = (uint64_t)-1) final;
+	virtual bytesConstRef go(ExtVMFace& _ext, OnOpFunc const& _onOp = {}, uint64_t _steps = (uint64_t)-1) override final;
 
 private:
+	friend VMFace;
+	explicit VM(u256 _gas = 0): VMFace(_gas) {}
+
 	bytes m_output;
 };
 
