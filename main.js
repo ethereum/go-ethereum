@@ -391,6 +391,7 @@
         if(this.provider !== undefined) {
             this.provider.send(data);
         } else {
+            console.warn("provider is not set");
             this.queued.push(data);
         }
     };
