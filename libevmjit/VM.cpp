@@ -15,6 +15,9 @@ namespace jit
 
 bytesConstRef VM::go(ExtVMFace& _ext, OnOpFunc const& _onOp, uint64_t _steps)
 {
+	assert(_onOp == nullptr); // Parameter ignored
+	assert(_steps == (uint64_t)-1); // Parameter ignored
+
 	auto module = Compiler().compile(_ext.code);
 
 	ExecutionEngine engine;
