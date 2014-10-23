@@ -1,7 +1,10 @@
+#pragma once
 
 #include <vector>
 
 #include <llvm/IR/BasicBlock.h>
+
+#include "Stack.h"
 
 namespace dev
 {
@@ -18,49 +21,72 @@ public:
 	class LocalStack
 	{
 	public:
+
 		/// Pushes value on stack
 		void push(llvm::Value* _value);
 
 		/// Pops and returns top value
 		llvm::Value* pop();
 
-		/// Gets _index'th value from top (counting from 0)
-		llvm::Value* get(size_t _index);
-
-		/// Duplicates _index'th value on stack.
+		/// Duplicates _index'th value on stack
 		void dup(size_t _index);
 
 		/// Swaps _index'th value on stack with a value on stack top.
-		/// @param _index Index of value to be swaped. Cannot be 0.
+		/// @param _index Index of value to be swaped. Must be > 0.
 		void swap(size_t _index);
 
-		/// Size of the stack
-		size_t size() const { return m_backend.size(); }
-
-		size_t initialSize() const { return m_numRequiredStackItems; }
+		/// Synchronize current local stack with the EVM stack.
+		void synchronize(Stack& _evmStack);
 
 	private:
-		// LocalStack(llvm::BasicBlock* _llvmBB) : m_llvmBB(_llvmBB) {}
-		LocalStack(llvm::BasicBlock* _llvmBB) : m_llvmBB(_llvmBB), m_numRequiredStackItems(0) {}
+
+		LocalStack(llvm::IRBuilder<>& _builder);
 		LocalStack(LocalStack const&) = delete;
 		void operator=(LocalStack const&) = delete;
 		friend BasicBlock;
 
+		/// Gets _index'th value from top (counting from 0)
+		llvm::Value* get(size_t _index);
+
+		/// Sets _index'th value from top (counting from 0)
+		void set(size_t _index, llvm::Value* _value);
+
+		std::vector<llvm::Value*>::iterator getItemIterator(size_t _index);
+
 	private:
-		std::vector<llvm::Value*> m_backend;
 
-		/** Basic block into which phi nodes are inserted */
-		llvm::BasicBlock* m_llvmBB;
+		llvm::IRBuilder<>& m_builder;
 
-		/** Number of items required on the EVM stack at the beginning of the block */
-		size_t m_numRequiredStackItems;
+		/**
+		 *  This stack contains LLVM values that correspond to items found at
+		 *  the EVM stack when the current basic block starts executing.
+		 *  Location 0 corresponds to the top of the EVM stack, location 1 is
+		 *  the item below the top and so on. The stack grows as the code
+		 *  accesses more items on the EVM stack but once a value is put on
+		 *  the stack, it will never be replaced.
+		 */
+		std::vector<llvm::Value*> m_initialStack;
+
+		/**
+		 *  This stack tracks the contents of the EVM stack as the current basic
+		 *  block executes. It may grow on both sides, as the code pushes items on
+		 *  top of the stack or changes existing items.
+		 */
+		std::vector<llvm::Value*> m_currentStack;
+
+		/**
+		 *  How many items higher is the current stack than the initial one.
+		 *  May be negative.
+		 */
+		int m_tosOffset;
+
 	};
 
 	/// Basic block name prefix. The rest is beging instruction index.
 	static const char* NamePrefix;
 
-	explicit BasicBlock(ProgramCounter _beginInstIdx, ProgramCounter _endInstIdx, llvm::Function* _mainFunc);
-	explicit BasicBlock(std::string _name, llvm::Function* _mainFunc);
+	explicit BasicBlock(ProgramCounter _beginInstIdx, ProgramCounter _endInstIdx, llvm::Function* _mainFunc, llvm::IRBuilder<>& _builder);
+	explicit BasicBlock(std::string _name, llvm::Function* _mainFunc, llvm::IRBuilder<>& _builder);
 
 	BasicBlock(const BasicBlock&) = delete;
 	void operator=(const BasicBlock&) = delete;
@@ -68,10 +94,14 @@ public:
 	operator llvm::BasicBlock*() { return m_llvmBB; }
 	llvm::BasicBlock* llvm() { return m_llvmBB; }
 
-	LocalStack& getStack() { return m_stack; }
-
 	ProgramCounter begin() { return m_beginInstIdx; }
 	ProgramCounter end() { return m_endInstIdx; }
+
+	LocalStack& localStack() { return m_stack; }
+
+	/// Prints local stack and block instructions to stderr.
+	/// Useful for calling in a debugger session.
+	void dump();
 
 private:
 	ProgramCounter const m_beginInstIdx;

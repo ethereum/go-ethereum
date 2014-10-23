@@ -20,6 +20,8 @@ struct Type
 	/// @TODO: Use 64-bit for now. In 128-bit compiler-rt library functions are required
 	static llvm::IntegerType* lowPrecision;
 
+	static llvm::IntegerType* Size;
+
 	static llvm::IntegerType* Byte;
 	static llvm::PointerType* BytePtr;
 

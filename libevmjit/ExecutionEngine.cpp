@@ -19,6 +19,7 @@
 
 #include "Runtime.h"
 #include "Memory.h"
+#include "Stack.h"
 #include "Type.h"
 
 namespace dev
@@ -34,7 +35,6 @@ ExecutionEngine::ExecutionEngine()
 }
 
 extern "C" { EXPORT std::jmp_buf* rt_jmpBuf; }
-
 
 int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtVMFace* _ext)
 {
@@ -117,6 +117,8 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtV
 	// Return remaining gas
 	_gas = returnCode == ReturnCode::OutOfGas ? 0 : Runtime::getGas();
 
+	std::cout << "Max stack size: " << Stack::maxStackSize << std::endl;
+
 	if (returnCode == ReturnCode::Return)
 	{
 		returnData = Memory::getReturnData().toVector(); // TODO: It might be better to place is in Runtime interface
@@ -128,6 +130,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtV
 	}
 
 	std::cout << "RETURN CODE: " << (int)returnCode << std::endl;
+
 	return static_cast<int>(returnCode);
 }
 

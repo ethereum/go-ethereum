@@ -123,12 +123,12 @@ void Compiler::createBasicBlocks(bytesConstRef bytecode)
 		auto beginInstIdx = *it;
 		++it;
 		auto endInstIdx = it != splitPoints.cend() ? *it : bytecode.size();
-		basicBlocks.emplace(std::piecewise_construct, std::forward_as_tuple(beginInstIdx), std::forward_as_tuple(beginInstIdx, endInstIdx, m_mainFunc));
+		basicBlocks.emplace(std::piecewise_construct, std::forward_as_tuple(beginInstIdx), std::forward_as_tuple(beginInstIdx, endInstIdx, m_mainFunc, m_builder));
 	}
 
 	m_stopBB = llvm::BasicBlock::Create(m_mainFunc->getContext(), "Stop", m_mainFunc);
-	m_badJumpBlock = std::make_unique<BasicBlock>("BadJumpBlock", m_mainFunc);
-	m_jumpTableBlock = std::make_unique<BasicBlock>("JumpTableBlock", m_mainFunc);
+	m_badJumpBlock = std::make_unique<BasicBlock>("BadJumpBlock", m_mainFunc, m_builder);
+	m_jumpTableBlock = std::make_unique<BasicBlock>("JumpTableBlock", m_mainFunc, m_builder);
 
 	for (auto it = directJumpTargets.cbegin(); it != directJumpTargets.cend(); ++it)
 	{
@@ -186,6 +186,9 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 		++iterCopy;
 		auto nextBasicBlock = (iterCopy != basicBlocks.end()) ? iterCopy->second.llvm() : nullptr;
 		compileBasicBlock(basicBlock, bytecode, memory, ext, gasMeter, nextBasicBlock);
+		if (getenv("EVMCC_DEBUG_BLOCKS"))
+			basicBlock.dump();
+		basicBlock.localStack().synchronize(stack);
 	}
 
 	// Code for special blocks:
@@ -201,9 +204,9 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 	m_builder.SetInsertPoint(m_jumpTableBlock->llvm());
 	if (m_indirectJumpTargets.size() > 0)
 	{
-		auto& stack = m_jumpTableBlock->getStack();
+		// auto& stack = m_jumpTableBlock->getStack();
 
-		auto dest = stack.pop();
+		auto dest = m_jumpTableBlock->localStack().pop(); //m_jumpTableBlock->localGet(0); // stack.pop();
 		auto switchInstr = 	m_builder.CreateSwitch(dest, m_badJumpBlock->llvm(),
 		                   	                     m_indirectJumpTargets.size());
 		for (auto it = m_indirectJumpTargets.cbegin(); it != m_indirectJumpTargets.cend(); ++it)
@@ -218,7 +221,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 		m_builder.CreateBr(m_badJumpBlock->llvm());
 	}
 
-	linkBasicBlocks(stack);
+	m_jumpTableBlock->localStack().synchronize(stack);
+	linkBasicBlocks();
 
 	return module;
 }
@@ -226,8 +230,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 
 void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode, Memory& memory, Ext& ext, GasMeter& gasMeter, llvm::BasicBlock* nextBasicBlock)
 {
-	auto& stack = basicBlock.getStack();
 	m_builder.SetInsertPoint(basicBlock.llvm());
+	auto& stack = basicBlock.localStack();
 
 	for (auto currentPC = basicBlock.begin(); currentPC != basicBlock.end(); ++currentPC)
 	{
@@ -589,8 +593,6 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 				}
 				else
 				{
-					// FIXME: this get(0) is a temporary workaround to get some of the jump tests running.
-					stack.get(0);
 					m_builder.CreateBr(m_jumpTableBlock->llvm());
 				}
 			}
@@ -873,7 +875,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 }
 
 
-void Compiler::linkBasicBlocks(Stack& stack)
+void Compiler::linkBasicBlocks() // Stack& stack)
 {
 	// Remove dead basic blocks
 	auto sthErased = false;
@@ -902,13 +904,14 @@ void Compiler::linkBasicBlocks(Stack& stack)
 		m_jumpTableBlock.reset();
 	}
 
-
+/*
 	struct BBInfo
 	{
 		BasicBlock& bblock;
 		std::vector<BBInfo*> predecessors;
 		size_t inputItems;
 		size_t outputItems;
+		std::vector<llvm::PHINode*> phisToRewrite;
 
 		BBInfo(BasicBlock& _bblock)
 			: bblock(_bblock),
@@ -978,7 +981,8 @@ void Compiler::linkBasicBlocks(Stack& stack)
 		}
 	}
 
-	std::map<llvm::Instruction*, llvm::Value*> phiReplacements;
+	// std::map<llvm::Instruction*, llvm::Value*> phiReplacements;
+	// std::vector<llvm::Instruction*> phiNodesToRewrite;
 
 	// Propagate values between blocks.
 	for (auto& pair : cfg)
@@ -1001,13 +1005,14 @@ void Compiler::linkBasicBlocks(Stack& stack)
 		}
 
 		// Turn the remaining phi nodes into stack.pop's.
-		m_builder.SetInsertPoint(llbb, llvm::BasicBlock::iterator(llbb->getFirstNonPHI()));
+		// m_builder.SetInsertPoint(llbb, llvm::BasicBlock::iterator(llbb->getFirstNonPHI()));
 		for (; llvm::isa<llvm::PHINode>(*instrIter); ++instrIter)
 		{
 			auto phi = llvm::cast<llvm::PHINode>(instrIter);
-			auto value = stack.popWord();
+			// auto value = stack.popWord();
 			// Don't delete the phi node yet. It may still be stored in a local stack of some block.
-			phiReplacements[phi] = value;
+			// phiReplacements[phi] = value;
+			bbInfo.phisToRewrite.push_back(phi);
 		}
 
 		// Emit stack push's at the end of the block, just before the terminator;
@@ -1018,11 +1023,33 @@ void Compiler::linkBasicBlocks(Stack& stack)
 			stack.pushWord(bblock.getStack().get(localStackSize - 1 - i));
 	}
 
-	for (auto& entry : phiReplacements)
+	for (auto& entry : cfg)
 	{
-		entry.first->replaceAllUsesWith(entry.second);
-		entry.first->eraseFromParent();
+		// Where was the last stack.pop() inserted
+		auto lastPopIt = entry.first->begin();
+
+		for (auto phi : entry.second.phisToRewrite)
+		{
+			// Insert stack.pop() before the first use of phi,
+			// then replace all uses of phi with the popped val.
+
+			if (phi->use_begin() == phi->use_end())
+			{
+				// For a phi with no uses, insert pop just after the previous one
+			}
+			std::cout << "*** PHI node " << phi->getName().str() << " has no uses!\n";
+		}
+		else
+		{
+			assert(llvm::isa<llvm::Instruction>(phi->use_begin()->getUser()));
+
+			m_builder.SetInsertPoint(*phi->use_begin());
+			auto popVal = stack.popWord();
+			phi->replaceAllUsesWith(popVal);
+			phi->eraseFromParent();
+		}
 	}
+	*/
 }
 
 void Compiler::dumpBasicBlockGraph(std::ostream& out)
@@ -1030,7 +1057,7 @@ void Compiler::dumpBasicBlockGraph(std::ostream& out)
 	out << "digraph BB {\n"
 	    << "  node [shape=record];\n"
 	    << "  entry [share=record, label=\"entry block\"];\n";
-
+/*
 	std::vector<BasicBlock*> blocks;
 	for (auto& pair : this->basicBlocks)
 		blocks.push_back(&pair.second);
@@ -1076,6 +1103,7 @@ void Compiler::dumpBasicBlockGraph(std::ostream& out)
 	}
 
 	out << "}\n";
+	*/
 }
 
 }
