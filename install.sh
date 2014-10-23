@@ -34,7 +34,7 @@ git submodule init
 git submodule update
 
 echo "eth-go"
-cd $GOPATH/src/github.com/ethereum/eth-go
+cd $GOPATH/src/github.com/ethereum/go-ethereum
 git checkout $branch
 
 echo "go-ethereum"

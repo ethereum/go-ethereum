@@ -13,15 +13,15 @@ import (
 	"time"
 
 	"bitbucket.org/kardianos/osext"
-	"github.com/ethereum/eth-go"
-	"github.com/ethereum/eth-go/ethcrypto"
-	"github.com/ethereum/eth-go/ethdb"
-	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethminer"
-	"github.com/ethereum/eth-go/ethpipe"
-	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/eth-go/ethwire"
-	"github.com/ethereum/eth-go/rpc"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/ethcrypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethlog"
+	"github.com/ethereum/go-ethereum/ethminer"
+	"github.com/ethereum/go-ethereum/ethpipe"
+	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/ethwire"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 var logger = ethlog.NewLogger("CLI")
