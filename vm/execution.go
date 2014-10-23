@@ -36,7 +36,7 @@ func (self *Execution) exec(code, caddr []byte, caller ClosureRef) (ret []byte, 
 
 	snapshot := env.State().Copy()
 	defer func() {
-		if err != nil {
+		if IsDepthErr(err) || IsOOGErr(err) {
 			env.State().Set(snapshot)
 		}
 	}()
@@ -76,7 +76,7 @@ func (self *Execution) exec(code, caddr []byte, caller ClosureRef) (ret []byte, 
 			if self.vm.Depth() == MaxCallDepth {
 				c.UseGas(self.Gas)
 
-				return c.Return(nil), fmt.Errorf("Max call depth exceeded (%d)", MaxCallDepth)
+				return c.Return(nil), DepthError{}
 			}
 
 			// Executer the closure and get the return value (if any)

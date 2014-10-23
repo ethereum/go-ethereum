@@ -63,7 +63,7 @@ func RunVmTest(js string) (failed int) {
 		// When an error is returned it doesn't always mean the tests fails.
 		// Have to come up with some conditional failing mechanism.
 		if err != nil {
-			helper.Log.Infoln(err)
+			log.Println(err)
 		}
 
 		rexp := helper.FromHex(test.Out)
@@ -96,6 +96,7 @@ func RunVmTest(js string) (failed int) {
 }
 
 func main() {
+	helper.Logger.SetLogLevel(5)
 	if len(os.Args) == 1 {
 		log.Fatalln("no json supplied")
 	}

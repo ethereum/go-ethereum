@@ -107,7 +107,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 		step++
 		// Get the memory location of pc
-		op = OpCode(closure.Get(pc).Uint())
+		op = closure.GetOp(int(pc.Uint64()))
 
 		// XXX Leave this Println intact. Don't change this to the log system.
 		// Used for creating diffs between implementations
@@ -246,11 +246,11 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		if !closure.UseGas(gas) {
 			self.Endl()
 
-			err := fmt.Errorf("Insufficient gas for %v. req %v has %v", op, gas, closure.Gas)
+			tmp := new(big.Int).Set(closure.Gas)
 
 			closure.UseGas(closure.Gas)
 
-			return closure.Return(nil), err
+			return closure.Return(nil), OOG(gas, tmp)
 		}
 
 		mem.Resize(newMemSize.Uint64())
