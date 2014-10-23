@@ -44,11 +44,11 @@ Build
 
 To build Mist (GUI):
 
-`go get github.com/ethereum/go-ethereum/mist`
+`go get github.com/ethereum/go-ethereum/cmd/mist`
 
 To build the node (CLI):
 
-`go get github.com/ethereum/go-ethereum/ethereum`
+`go get github.com/ethereum/go-ethereum/cmd/ethereum`
 
 For further, detailed, build instruction please see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum(Go))
 
