@@ -3,9 +3,9 @@ package utils
 import (
 	"math/big"
 
-	"github.com/ethereum/eth-go/ethchain"
-	"github.com/ethereum/eth-go/ethstate"
-	"github.com/ethereum/eth-go/vm"
+	"github.com/ethereum/go-ethereum/ethchain"
+	"github.com/ethereum/go-ethereum/ethstate"
+	"github.com/ethereum/go-ethereum/vm"
 )
 
 type VMEnv struct {

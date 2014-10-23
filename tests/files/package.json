@@ -1,0 +1,23 @@
+{
+  "name": "ethereum-tests",
+  "version": "0.0.0",
+  "description": "tests for ethereum",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"There are no tests for there tests\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ethereum/tests"
+  },
+  "keywords": [
+    "tests",
+    "ethereum"
+  ],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ethereum/tests/issues"
+  },
+  "homepage": "https://github.com/ethereum/tests"
+}

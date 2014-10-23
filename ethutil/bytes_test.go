@@ -1,0 +1,14 @@
+package ethutil
+
+import (
+	"bytes"
+	"testing"
+)
+
+func TestParseData(t *testing.T) {
+	data := ParseData("hello", "world", "0x0106")
+	exp := "68656c6c6f000000000000000000000000000000000000000000000000000000776f726c640000000000000000000000000000000000000000000000000000000106000000000000000000000000000000000000000000000000000000000000"
+	if bytes.Compare(data, Hex2Bytes(exp)) != 0 {
+		t.Error("Error parsing data")
+	}
+}
