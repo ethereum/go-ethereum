@@ -314,7 +314,7 @@
                     if(data instanceof Array) {
                         callbacks[i].apply(this, data);
                     } else {
-                        callbacks[i].call(this, data);
+                        callbacks[i].call(this, undefined, data);
                     }
                 }
             }
@@ -372,10 +372,25 @@
 
     var ProviderManager = function() {
         this.queued = [];
+        this.polls = [];
         this.ready = false;
         this.provider = undefined;
         this.id = 1;
+
+        var self = this;
+        var poll = function () {
+            if (self.provider && self.provider.poll) {
+                self.polls.forEach(function (data) {
+                    data.data._id = self.id; 
+                    self.id++;
+                    self.provider.poll(data.data, data.id);
+                });
+            }
+            setTimeout(poll, 12000);
+        };
+        poll();
     };
+
     ProviderManager.prototype.send = function(data, cb) {
         data._id = this.id;
         if(cb) {
@@ -415,6 +430,23 @@
     ProviderManager.prototype.installed = function() {
         return this.provider !== undefined;
     };
+
+    ProviderManager.prototype.startPolling = function (data, pollId) {
+        if (!this.provider || !this.provider.poll) {
+            return;
+        }
+        this.polls.push({data: data, id: pollId});
+    };
+
+    ProviderManager.prototype.stopPolling = function (pollId) {
+        for (var i = this.polls.length; i--;) {
+            var poll = this.polls[i];
+            if (poll.id === pollId) {
+                this.polls.splice(i, 1);
+            }
+        }
+    };
+
     web3.provider = new ProviderManager();
 
     web3.setProvider = function(provider) {
@@ -433,7 +465,7 @@
         this.options = options;
 
         var call;
-        if(options === "chain") {
+        if(options === "chain" || options === "pending") {
             call = "newFilterString"
         } else if(typeof options === "object") {
             call = "newFilter"
@@ -443,7 +475,7 @@
         this.promise = new Promise(function(resolve, reject) {
             web3.provider.send({call: call, args: [options]}, function(id) {
                 self.id = id;
-
+                web3.provider.startPolling({call: "changed", args: [id]}, id); 
                 resolve(id);
             });
         });
@@ -467,6 +499,7 @@
     Filter.prototype.uninstall = function() {
         this.promise.then(function(id) {
             web3.provider.send({call: "uninstallFilter", args:[id]});
+            web3.provider.stopPolling(id);
         });
     };
 
@@ -491,7 +524,6 @@
     });
 
     function messageHandler(data) {
-
         if(data._event !== undefined) {
             web3.trigger(data._event, data.data);
         } else {
@@ -501,7 +533,7 @@
                     cb.call(this, data.data)
 
                     // Remove the "trigger" callback
-                    delete web3._callbacks[ev._id];
+                    delete web3._callbacks[data._id];
                 }
             }
         }

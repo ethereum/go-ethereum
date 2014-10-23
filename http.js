@@ -22,20 +22,39 @@
         };
     };
 
-    HttpProvider.prototype.send = function (payload) {
+    HttpProvider.prototype.sendRequest = function (payload, cb) {
         var data = formatJsonRpcObject(payload);
 
         var request = new XMLHttpRequest();
         request.open("POST", this.host, true);
         request.send(JSON.stringify(data));
-        var self = this;
         request.onreadystatechange = function () {
-            if (request.readyState === 4) {
-                self.handlers.forEach(function (handler) {
-                    handler.call(self, formatJsonRpcMessage(request.responseText));
-                });
+            if (request.readyState === 4 && cb) {
+                cb(request);
             }
         }
+    };
+
+    HttpProvider.prototype.send = function (payload) {
+        var self = this;
+        this.sendRequest(payload, function (request) {
+            self.handlers.forEach(function (handler) {
+                handler.call(self, formatJsonRpcMessage(request.responseText));
+            });
+        });
+    };
+
+    HttpProvider.prototype.poll = function (payload, id) {
+        var self = this;
+        this.sendRequest(payload, function (request) {
+            var parsed = JSON.parse(request.responseText);
+            if (!parsed.result) {
+                return;
+            }
+            self.handlers.forEach(function (handler) {
+                handler.call(self, {_event: "messages", data: id});
+            });
+        });
     };
 
     Object.defineProperty(HttpProvider.prototype, "onmessage", {
