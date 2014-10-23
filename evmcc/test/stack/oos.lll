@@ -1,0 +1,11 @@
+(asm     ;; x . v y z
+1        ;; 1 x . v y z
+DUP2     ;; x 1 x . v y z
+SWAP5    ;; y 1 x . v x z 
+POP      ;; 1 x . v x z
+POP      ;; x . v x z
+POP      ;; . v x z
+POP      ;; v x z
+SWAP2    ;; z x v
+POP      ;; x v
+)
