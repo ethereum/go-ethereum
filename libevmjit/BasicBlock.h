@@ -40,7 +40,7 @@ public:
 
 	private:
 
-		LocalStack(llvm::IRBuilder<>& _builder);
+		LocalStack(llvm::IRBuilder<>& _builder, llvm::BasicBlock* _llvmBB);
 		LocalStack(LocalStack const&) = delete;
 		void operator=(LocalStack const&) = delete;
 		friend BasicBlock;
@@ -54,6 +54,8 @@ public:
 		std::vector<llvm::Value*>::iterator getItemIterator(size_t _index);
 
 	private:
+
+		llvm::BasicBlock* m_llvmBB;
 
 		llvm::IRBuilder<>& m_builder;
 
@@ -99,9 +101,14 @@ public:
 
 	LocalStack& localStack() { return m_stack; }
 
+	/// Optimization: propagates values between local stacks in basic blocks
+	/// to avoid excessive pushing/popping on the EVM stack.
+	static void linkLocalStacks(std::vector<BasicBlock*> _basicBlocks, llvm::IRBuilder<>& _builder);
+
 	/// Prints local stack and block instructions to stderr.
 	/// Useful for calling in a debugger session.
 	void dump();
+	void dump(std::ostream& os, bool _dotOutput = false);
 
 private:
 	ProgramCounter const m_beginInstIdx;

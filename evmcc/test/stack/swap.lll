@@ -1,20 +1,26 @@
 (asm
-1      ;; 0
+5      ;; 0
 2      ;; 2
 1      ;; 4
-10     ;; 6
+12     ;; 6
 JUMPI  ;; 8
-STOP   ;; 9
+
+POP    ;; 9
+POP    ;; 10
+STOP   ;; 11
 
 ;; stack = 2,1
-SWAP1  ;; 10
-1      ;; 11
-17     ;; 13
-JUMPI  ;; 15
-STOP   ;; 16
+SWAP1  ;; 12
+1      ;; 13
+21     ;; 15
+JUMPI  ;; 17
+
+POP    ;; 18
+POP    ;; 19
+STOP   ;; 20
 
 ;; stack = 1,2
-ADD    ;; 17
+SUB    ;; 21
 0
 MSTORE
 1
