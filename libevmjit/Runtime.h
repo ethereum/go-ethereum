@@ -21,6 +21,13 @@ namespace eth
 namespace jit
 {
 
+struct RuntimeData
+{
+	static llvm::StructType* getType();
+
+	i256 gas;
+};
+
 using StackImpl = std::vector<i256>;
 using MemoryImpl = bytes;
 
@@ -33,12 +40,17 @@ public:
 	Runtime(const Runtime&) = delete;
 	void operator=(const Runtime&) = delete;
 
+	RuntimeData* getDataPtr() { return &m_data; }
+
 	static StackImpl& getStack();
 	static MemoryImpl& getMemory();
 	static ExtVMFace& getExt();
 	static u256 getGas();
 
 private:
+
+	/// @internal Must be the first element to asure Runtime* === RuntimeData*
+	RuntimeData m_data;
 	StackImpl m_stack;
 	MemoryImpl m_memory;
 	ExtVMFace& m_ext;

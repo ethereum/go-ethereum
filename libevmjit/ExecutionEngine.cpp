@@ -108,7 +108,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtV
 	if (r == 0)
 	{
 		rt_jmpBuf = &buf;
-		auto result = exec->runFunction(entryFunc, {});
+		auto result = exec->runFunction(entryFunc, {{}, llvm::GenericValue(runtime.getDataPtr())});
 		returnCode = static_cast<ReturnCode>(result.IntVal.getZExtValue());
 	}
 	else

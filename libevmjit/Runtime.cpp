@@ -12,6 +12,15 @@ namespace eth
 namespace jit
 {
 
+llvm::StructType* RuntimeData::getType()
+{
+	llvm::Type* elems[] =
+	{
+		Type::i256,
+	};
+	return llvm::StructType::create(elems, "RuntimeData");
+}
+
 static Runtime* g_runtime;
 
 extern "C"

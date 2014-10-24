@@ -17,6 +17,7 @@
 #include "GasMeter.h"
 #include "Utils.h"
 #include "Endianness.h"
+#include "Runtime.h"
 
 namespace dev
 {
@@ -163,7 +164,9 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 	auto module = std::make_unique<llvm::Module>("main", m_builder.getContext());
 
 	// Create main function
-	m_mainFunc = llvm::Function::Create(llvm::FunctionType::get(Type::MainReturn, false), llvm::Function::ExternalLinkage, "main", module.get());
+	llvm::Type* mainFuncArgTypes[] = {m_builder.getInt32Ty(), RuntimeData::getType()->getPointerTo()};	// There must be int in first place because LLVM does not support other signatures
+	auto mainFuncType = llvm::FunctionType::get(Type::MainReturn, mainFuncArgTypes, false);
+	m_mainFunc = llvm::Function::Create(mainFuncType, llvm::Function::ExternalLinkage, "main", module.get());
 
 	// Create the basic blocks.
 	auto entryBlock = llvm::BasicBlock::Create(m_builder.getContext(), "entry", m_mainFunc);
