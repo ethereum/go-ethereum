@@ -5,6 +5,7 @@
 
 #include <libevm/ExtVMFace.h>
 
+#include "CompilerHelper.h"
 #include "Utils.h"
 
 
@@ -54,6 +55,17 @@ private:
 	StackImpl m_stack;
 	MemoryImpl m_memory;
 	ExtVMFace& m_ext;
+};
+
+class RuntimeManager: public CompilerHelper
+{
+public:
+	RuntimeManager(llvm::IRBuilder<>& _builder);
+
+	llvm::Value* getGas();
+
+private:
+	llvm::GlobalVariable* m_dataPtr;
 };
 
 }

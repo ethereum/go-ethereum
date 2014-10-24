@@ -23,6 +23,9 @@ protected:
 	/// Reference to the IR module being compiled
 	llvm::Module* getModule();
 
+	/// Reference to the main module function
+	llvm::Function* getMainFunction();
+
 	/// Reference to parent compiler IR builder
 	llvm::IRBuilder<>& m_builder;
 };

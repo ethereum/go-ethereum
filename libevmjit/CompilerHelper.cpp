@@ -21,6 +21,14 @@ llvm::Module* CompilerHelper::getModule()
 	return m_builder.GetInsertBlock()->getParent()->getParent();
 }
 
+llvm::Function* CompilerHelper::getMainFunction()
+{
+	assert(m_builder.GetInsertBlock());
+	auto mainFunc = m_builder.GetInsertBlock()->getParent();
+	assert(mainFunc && mainFunc->getName() == "main");
+	return mainFunc;
+}
+
 }
 }
 }

@@ -1,6 +1,9 @@
 
 #include "Runtime.h"
 
+#include <llvm/IR/GlobalVariable.h>
+#include <llvm/IR/Function.h>
+
 #include <libevm/VM.h>
 
 #include "Type.h"
@@ -14,11 +17,16 @@ namespace jit
 
 llvm::StructType* RuntimeData::getType()
 {
-	llvm::Type* elems[] =
+	static llvm::StructType* type = nullptr;
+	if (!type)
 	{
-		Type::i256,
-	};
-	return llvm::StructType::create(elems, "RuntimeData");
+		llvm::Type* elems[] =
+		{
+			Type::i256,
+		};
+		type = llvm::StructType::create(elems, "RuntimeData");
+	}
+	return type;
 }
 
 static Runtime* g_runtime;
@@ -59,6 +67,18 @@ ExtVMFace& Runtime::getExt()
 u256 Runtime::getGas()
 {
 	return llvm2eth(gas);
+}
+
+
+RuntimeManager::RuntimeManager(llvm::IRBuilder<>& _builder): CompilerHelper(_builder)
+{
+	auto dataPtrType = RuntimeData::getType()->getPointerTo();
+	m_dataPtr = new llvm::GlobalVariable(*getModule(), dataPtrType, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(dataPtrType), "rt");
+
+	// Export data
+	auto mainFunc = getMainFunction();
+	llvm::Value* dataPtr = &mainFunc->getArgumentList().back();
+	m_builder.CreateStore(dataPtr, m_dataPtr);
 }
 
 }
