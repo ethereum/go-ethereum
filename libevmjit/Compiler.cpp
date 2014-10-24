@@ -1,11 +1,13 @@
 
 #include "Compiler.h"
 
+#include <fstream>
+
 #include <boost/dynamic_bitset.hpp>
 
-#include <llvm/IR/Module.h>
-#include <llvm/IR/CFG.h>
 #include <llvm/ADT/PostOrderIterator.h>
+#include <llvm/IR/CFG.h>
+#include <llvm/IR/Module.h>
 #include <llvm/IR/IntrinsicInst.h>
 
 #include <libevmface/Instruction.h>
@@ -186,9 +188,6 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 		++iterCopy;
 		auto nextBasicBlock = (iterCopy != basicBlocks.end()) ? iterCopy->second.llvm() : nullptr;
 		compileBasicBlock(basicBlock, bytecode, memory, ext, gasMeter, nextBasicBlock);
-		if (getenv("EVMCC_DEBUG_BLOCKS"))
-			basicBlock.dump();
-		basicBlock.localStack().synchronize(stack);
 	}
 
 	// Code for special blocks:
@@ -204,9 +203,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 	m_builder.SetInsertPoint(m_jumpTableBlock->llvm());
 	if (m_indirectJumpTargets.size() > 0)
 	{
-		// auto& stack = m_jumpTableBlock->getStack();
-
-		auto dest = m_jumpTableBlock->localStack().pop(); //m_jumpTableBlock->localGet(0); // stack.pop();
+		auto dest = m_jumpTableBlock->localStack().pop();
 		auto switchInstr = 	m_builder.CreateSwitch(dest, m_badJumpBlock->llvm(),
 		                   	                     m_indirectJumpTargets.size());
 		for (auto it = m_indirectJumpTargets.cbegin(); it != m_indirectJumpTargets.cend(); ++it)
@@ -221,8 +218,51 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 		m_builder.CreateBr(m_badJumpBlock->llvm());
 	}
 
-	m_jumpTableBlock->localStack().synchronize(stack);
-	linkBasicBlocks();
+	removeDeadBlocks();
+
+	if (getenv("EVMCC_DEBUG_BLOCKS"))
+	{
+		std::ofstream ofs("blocks-init.dot");
+		dumpBasicBlockGraph(ofs);
+		ofs.close();
+		std::cerr << "\n\nAfter dead block elimination \n\n";
+		dump();
+	}
+
+	if (getenv("EVMCC_OPTIMIZE_STACK"))
+	{
+		std::vector<BasicBlock*> blockList;
+		for	(auto& entry : basicBlocks)
+			blockList.push_back(&entry.second);
+
+		if (m_jumpTableBlock != nullptr)
+			blockList.push_back(m_jumpTableBlock.get());
+
+		BasicBlock::linkLocalStacks(blockList, m_builder);
+
+		if (getenv("EVMCC_DEBUG_BLOCKS"))
+		{
+			std::ofstream ofs("blocks-opt.dot");
+			dumpBasicBlockGraph(ofs);
+			ofs.close();
+			std::cerr << "\n\nAfter stack optimization \n\n";
+			dump();
+		}
+	}
+
+	for (auto& entry : basicBlocks)
+		entry.second.localStack().synchronize(stack);
+	if (m_jumpTableBlock != nullptr)
+		m_jumpTableBlock->localStack().synchronize(stack);
+
+	if (getenv("EVMCC_DEBUG_BLOCKS"))
+	{
+		std::ofstream ofs("blocks-sync.dot");
+		dumpBasicBlockGraph(ofs);
+		ofs.close();
+		std::cerr << "\n\nAfter stack synchronization \n\n";
+		dump();
+	}
 
 	return module;
 }
@@ -875,7 +915,8 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 }
 
 
-void Compiler::linkBasicBlocks() // Stack& stack)
+
+void Compiler::removeDeadBlocks()
 {
 	// Remove dead basic blocks
 	auto sthErased = false;
@@ -903,187 +944,33 @@ void Compiler::linkBasicBlocks() // Stack& stack)
 		m_jumpTableBlock->llvm()->eraseFromParent();
 		m_jumpTableBlock.reset();
 	}
-
-/*
-	struct BBInfo
-	{
-		BasicBlock& bblock;
-		std::vector<BBInfo*> predecessors;
-		size_t inputItems;
-		size_t outputItems;
-		std::vector<llvm::PHINode*> phisToRewrite;
-
-		BBInfo(BasicBlock& _bblock)
-			: bblock(_bblock),
-			  predecessors(),
-			  inputItems(_bblock.getStack().initialSize()),
-			  outputItems(_bblock.getStack().size())
-		{}
-	};
-
-	std::map<llvm::BasicBlock*, BBInfo> cfg;
-
-	// Create nodes in cfg
-	for (auto& pair : this->basicBlocks)
-	{
-		auto& bb = pair.second;
-		cfg.emplace(bb.llvm(), bb);
-	}
-
-	// Insert jump table block into cfg
-	if (m_jumpTableBlock)
-		cfg.emplace(m_jumpTableBlock->llvm(), *m_jumpTableBlock);
-
-	auto& entryBlock = m_mainFunc->getEntryBlock();
-
-	// Create edges in cfg
-	for (auto& pair : cfg)
-	{
-		auto bbPtr = pair.first;
-		auto& bbInfo = pair.second;
-
-		for (auto predIt = llvm::pred_begin(bbPtr); predIt != llvm::pred_end(bbPtr); ++predIt)
-		{
-			if (*predIt != &entryBlock)
-			{
-				auto predInfoEntry = cfg.find(*predIt);
-				assert(predInfoEntry != cfg.end());
-				bbInfo.predecessors.push_back(&predInfoEntry->second);
-			}
-		}
-	}
-
-	// Iteratively compute inputs and outputs of each block, until reaching fixpoint.
-	bool valuesChanged = true;
-	while (valuesChanged)
-	{
-		valuesChanged = false;
-		for (auto& pair : cfg)
-		{
-			auto& bbInfo = pair.second;
-
-			if (bbInfo.predecessors.empty())
-				bbInfo.inputItems = 0; // no consequences for other blocks, so leave valuesChanged false
-
-			for (auto predInfo : bbInfo.predecessors)
-			{
-				if (predInfo->outputItems < bbInfo.inputItems)
-				{
-					bbInfo.inputItems = predInfo->outputItems;
-					valuesChanged = true;
-				}
-				else if (predInfo->outputItems > bbInfo.inputItems)
-				{
-					predInfo->outputItems = bbInfo.inputItems;
-					valuesChanged = true;
-				}
-			}
-		}
-	}
-
-	// std::map<llvm::Instruction*, llvm::Value*> phiReplacements;
-	// std::vector<llvm::Instruction*> phiNodesToRewrite;
-
-	// Propagate values between blocks.
-	for (auto& pair : cfg)
-	{
-		auto  llbb = pair.first;
-		auto& bbInfo = pair.second;
-		auto& bblock = bbInfo.bblock;
-
-		// Complete phi nodes for the top bbInfo.inputItems placeholder values
-		auto instrIter = llbb->begin();
-		for (size_t valueIdx = 0; valueIdx < bbInfo.inputItems; ++instrIter, ++valueIdx)
-		{
-			auto phi = llvm::cast<llvm::PHINode>(instrIter);
-			for (auto predIt : bbInfo.predecessors)
-			{
-				assert(valueIdx < predIt->bblock.getStack().size());
-				auto value = predIt->bblock.getStack().get(valueIdx);
-				phi->addIncoming(value, predIt->bblock.llvm());
-			}
-		}
-
-		// Turn the remaining phi nodes into stack.pop's.
-		// m_builder.SetInsertPoint(llbb, llvm::BasicBlock::iterator(llbb->getFirstNonPHI()));
-		for (; llvm::isa<llvm::PHINode>(*instrIter); ++instrIter)
-		{
-			auto phi = llvm::cast<llvm::PHINode>(instrIter);
-			// auto value = stack.popWord();
-			// Don't delete the phi node yet. It may still be stored in a local stack of some block.
-			// phiReplacements[phi] = value;
-			bbInfo.phisToRewrite.push_back(phi);
-		}
-
-		// Emit stack push's at the end of the block, just before the terminator;
-		m_builder.SetInsertPoint(llbb, -- llbb->end());
-		auto localStackSize = bblock.getStack().size();
-		assert(localStackSize >= bbInfo.outputItems);
-		for (size_t i = 0; i < localStackSize - bbInfo.outputItems; ++i)
-			stack.pushWord(bblock.getStack().get(localStackSize - 1 - i));
-	}
-
-	for (auto& entry : cfg)
-	{
-		// Where was the last stack.pop() inserted
-		auto lastPopIt = entry.first->begin();
-
-		for (auto phi : entry.second.phisToRewrite)
-		{
-			// Insert stack.pop() before the first use of phi,
-			// then replace all uses of phi with the popped val.
-
-			if (phi->use_begin() == phi->use_end())
-			{
-				// For a phi with no uses, insert pop just after the previous one
-			}
-			std::cout << "*** PHI node " << phi->getName().str() << " has no uses!\n";
-		}
-		else
-		{
-			assert(llvm::isa<llvm::Instruction>(phi->use_begin()->getUser()));
-
-			m_builder.SetInsertPoint(*phi->use_begin());
-			auto popVal = stack.popWord();
-			phi->replaceAllUsesWith(popVal);
-			phi->eraseFromParent();
-		}
-	}
-	*/
 }
 
 void Compiler::dumpBasicBlockGraph(std::ostream& out)
 {
 	out << "digraph BB {\n"
-	    << "  node [shape=record];\n"
+	    << "  node [shape=record, fontname=Courier, fontsize=10];\n"
 	    << "  entry [share=record, label=\"entry block\"];\n";
-/*
+
 	std::vector<BasicBlock*> blocks;
-	for (auto& pair : this->basicBlocks)
+	for (auto& pair : basicBlocks)
 		blocks.push_back(&pair.second);
 	if (m_jumpTableBlock)
 		blocks.push_back(m_jumpTableBlock.get());
 	if (m_badJumpBlock)
 		blocks.push_back(m_badJumpBlock.get());
 
-	std::map<BasicBlock*,int> phiNodesPerBlock;
+	// std::map<BasicBlock*,int> phiNodesPerBlock;
 
 	// Output nodes
 	for (auto bb : blocks)
 	{
 		std::string blockName = bb->llvm()->getName();
 
-		int numOfPhiNodes = 0;
-		auto firstNonPhiPtr = bb->llvm()->getFirstNonPHI();
-		for (auto instrIter = bb->llvm()->begin(); &*instrIter != firstNonPhiPtr; ++instrIter, ++numOfPhiNodes);
-		phiNodesPerBlock[bb] = numOfPhiNodes;
+		std::ostringstream oss;
+		bb->dump(oss, true);
 
-		auto initStackSize = bb->getStack().initialSize();
-		auto endStackSize = bb->getStack().size();
-
-		out << "  \"" << blockName  << "\" [shape=record, label=\""
-			<< initStackSize << "|" << blockName << "|" << endStackSize
-			<< "\"];\n";
+		out << " \"" << blockName << "\" [shape=record, label=\" { " << blockName << "|" << oss.str() << "} \"];\n";
 	}
 
 	// Output edges
@@ -1096,14 +983,21 @@ void Compiler::dumpBasicBlockGraph(std::ostream& out)
 		{
 			out << "  \"" << (*it)->getName().str() << "\" -> \"" << blockName << "\" ["
 			    << ((m_jumpTableBlock.get() && *it == m_jumpTableBlock.get()->llvm()) ? "style = dashed, " : "")
-			    << "label = \""
-			    << phiNodesPerBlock[bb]
-			    << "\"];\n";
+			    //<< "label = \""
+			    //<< phiNodesPerBlock[bb]
+			    << "];\n";
 		}
 	}
 
 	out << "}\n";
-	*/
+}
+
+void Compiler::dump()
+{
+	for (auto& entry : basicBlocks)
+		entry.second.dump();
+	if (m_jumpTableBlock != nullptr)
+		m_jumpTableBlock->dump();
 }
 
 }
