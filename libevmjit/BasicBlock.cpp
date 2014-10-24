@@ -1,6 +1,8 @@
 
 #include "BasicBlock.h"
 
+#include <iostream>
+
 #include <boost/lexical_cast.hpp>
 
 #include <llvm/IR/CFG.h>
