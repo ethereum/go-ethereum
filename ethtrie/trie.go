@@ -3,14 +3,11 @@ package ethtrie
 import (
 	"bytes"
 	"fmt"
-	_ "reflect"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/ethcrypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 )
-
-func __ignore() { fmt.Println("") }
 
 func ParanoiaCheck(t1 *Trie) (bool, *Trie) {
 	t2 := New(ethutil.Config.Db, "")
