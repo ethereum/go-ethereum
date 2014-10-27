@@ -114,7 +114,7 @@ Rectangle {
 				width: 50
 				validator: RegExpValidator { regExp: /\d*/ }
 				placeholderText: "Gas"
-				text: "500"
+				text: "5000"
 			}
 			Label {
 				id: atLabel
