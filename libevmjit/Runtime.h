@@ -67,7 +67,7 @@ public:
 
 	StackImpl& getStack() { return m_stack; }
 	MemoryImpl& getMemory() { return m_memory; }
-	static ExtVMFace& getExt();
+	ExtVMFace& getExt() { return m_ext; }
 
 	u256 getGas() const;
 	bytesConstRef getReturnData() const;

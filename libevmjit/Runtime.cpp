@@ -91,12 +91,6 @@ void Runtime::set(RuntimeData::Index _index, u256 _value)
 	m_data.elems[_index] = eth2llvm(_value);
 }
 
-
-ExtVMFace& Runtime::getExt()
-{
-	return g_runtime->m_ext;
-}
-
 u256 Runtime::getGas() const
 {
 	return llvm2eth(m_data.elems[RuntimeData::Gas]);
