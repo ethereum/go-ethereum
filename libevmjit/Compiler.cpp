@@ -180,7 +180,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 	RuntimeManager runtimeManager(m_builder);
 	GasMeter gasMeter(m_builder, runtimeManager);
 	Memory memory(m_builder, gasMeter, runtimeManager);
-	Ext ext(m_builder);
+	Ext ext(runtimeManager);
 	Stack stack(m_builder, runtimeManager);
 
 	m_builder.CreateBr(basicBlocks.begin()->second);
@@ -686,7 +686,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 
 		case Instruction::ADDRESS:
 		{
-			auto value = ext.address();
+			auto value = _runtimeManager.get(RuntimeData::Address);
 			stack.push(value);
 			break;
 		}
@@ -873,7 +873,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 
 			auto receiveAddress = codeAddress;
 			if (inst == Instruction::CALLCODE)
-				receiveAddress = ext.address();
+				receiveAddress = _runtimeManager.get(RuntimeData::Address);
 
 			auto ret = ext.call(gas, receiveAddress, value, inOff, inSize, outOff, outSize, codeAddress);
 			gasMeter.giveBack(gas);

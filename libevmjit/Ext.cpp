@@ -44,10 +44,10 @@ struct ExtData
 	const byte* code;
 };
 
-Ext::Ext(llvm::IRBuilder<>& _builder):
-	CompilerHelper(_builder)
+Ext::Ext(RuntimeManager& _runtimeManager):
+	RuntimeHelper(_runtimeManager)
 {
-	auto&& ctx = _builder.getContext();
+	auto&& ctx = m_builder.getContext();
 	auto module = getModule();
 
 	auto i256Ty = m_builder.getIntNTy(256);
@@ -126,7 +126,6 @@ Value* Ext::getDataElem(unsigned _index, const Twine& _name)
 	return m_builder.CreateLoad(valuePtr);
 }
 
-Value* Ext::address() { return getDataElem(0, "address"); }
 Value* Ext::caller() { return getDataElem(1, "caller"); }
 Value* Ext::origin() { return getDataElem(2, "origin"); }
 Value* Ext::callvalue() { return getDataElem(3, "callvalue"); }
@@ -243,7 +242,6 @@ using namespace dev::eth::jit;
 EXPORT void ext_init(ExtData* _extData)
 {
 	auto&& ext = Runtime::getExt();
-	_extData->address = eth2llvm(fromAddress(ext.myAddress));
 	_extData->caller = eth2llvm(fromAddress(ext.caller));
 	_extData->origin = eth2llvm(fromAddress(ext.origin));
 	_extData->callvalue = eth2llvm(ext.value);

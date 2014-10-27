@@ -22,7 +22,7 @@ llvm::StructType* RuntimeData::getType()
 	{
 		llvm::Type* elems[] =
 		{
-			Type::i256,
+			llvm::ArrayType::get(Type::i256, _size)
 		};
 		type = llvm::StructType::create(elems, "RuntimeData");
 	}
@@ -36,12 +36,18 @@ Runtime::Runtime(u256 _gas, ExtVMFace& _ext):
 {
 	assert(!g_runtime);
 	g_runtime = this;
-	m_data.gas = eth2llvm(_gas);
+	set(RuntimeData::Gas, _gas);
+	set(RuntimeData::Address, fromAddress(_ext.myAddress));
 }
 
 Runtime::~Runtime()
 {
 	g_runtime = nullptr;
+}
+
+void Runtime::set(RuntimeData::Index _index, u256 _value)
+{
+	m_data.elems[_index] = eth2llvm(_value);
 }
 
 
@@ -50,9 +56,9 @@ ExtVMFace& Runtime::getExt()
 	return g_runtime->m_ext;
 }
 
-u256 Runtime::getGas()
+u256 Runtime::getGas() const
 {
-	return llvm2eth(m_data.gas);
+	return llvm2eth(m_data.elems[RuntimeData::Gas]);
 }
 
 extern "C" {
@@ -60,12 +66,12 @@ extern "C" {
 	EXPORT i256 mem_returnDataSize;
 }
 
-bytesConstRef Runtime::getReturnData()
+bytesConstRef Runtime::getReturnData() const
 {
 	// TODO: Handle large indexes
 	auto offset = static_cast<size_t>(llvm2eth(mem_returnDataOffset));
 	auto size = static_cast<size_t>(llvm2eth(mem_returnDataSize));
-	return{getMemory().data() + offset, size};
+	return {m_memory.data() + offset, size};
 }
 
 
@@ -85,16 +91,23 @@ llvm::Value* RuntimeManager::getRuntimePtr()
 	return m_builder.CreateLoad(m_dataPtr);
 }
 
+llvm::Value* RuntimeManager::get(RuntimeData::Index _index)
+{
+	llvm::Value* idxList[] = {m_builder.getInt32(0), m_builder.getInt32(0), m_builder.getInt32(_index)};
+	auto ptr = m_builder.CreateInBoundsGEP(getRuntimePtr(), idxList, "dataElemPtr");
+	return m_builder.CreateLoad(ptr);
+}
+
 llvm::Value* RuntimeManager::getGas()
 {
-	auto gasPtr = m_builder.CreateStructGEP(getRuntimePtr(), 0);
-	return m_builder.CreateLoad(gasPtr, "gas");
+	return get(RuntimeData::Gas);
 }
 
 void RuntimeManager::setGas(llvm::Value* _gas)
 {
-	auto gasPtr = m_builder.CreateStructGEP(getRuntimePtr(), 0);
-	m_builder.CreateStore(_gas, gasPtr);
+	llvm::Value* idxList[] = {m_builder.getInt32(0), m_builder.getInt32(0), m_builder.getInt32(RuntimeData::Gas)};
+	auto ptr = m_builder.CreateInBoundsGEP(getRuntimePtr(), idxList, "gasPtr");
+	m_builder.CreateStore(_gas, ptr);
 }
 
 }

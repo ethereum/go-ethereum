@@ -12,15 +12,14 @@ namespace eth
 namespace jit
 {
 
-class Ext : public CompilerHelper
+class Ext : public RuntimeHelper
 {
 public:
-	Ext(llvm::IRBuilder<>& _builder);
+	Ext(RuntimeManager& _runtimeManager);
 
 	llvm::Value* store(llvm::Value* _index);
 	void setStore(llvm::Value* _index, llvm::Value* _value);
 
-	llvm::Value* address();
 	llvm::Value* caller();
 	llvm::Value* origin();
 	llvm::Value* callvalue();

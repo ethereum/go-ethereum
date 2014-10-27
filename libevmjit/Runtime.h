@@ -24,9 +24,17 @@ namespace jit
 
 struct RuntimeData
 {
-	static llvm::StructType* getType();
+	enum Index: unsigned
+	{
+		Gas,
+		Address,
 
-	i256 gas;
+		_size
+	};
+
+	i256 elems[_size];
+
+	static llvm::StructType* getType();
 };
 
 using StackImpl = std::vector<i256>;
@@ -46,10 +54,12 @@ public:
 	StackImpl& getStack() { return m_stack; }
 	MemoryImpl& getMemory() { return m_memory; }
 	static ExtVMFace& getExt();
-	u256 getGas();
-	bytesConstRef getReturnData();
+
+	u256 getGas() const;
+	bytesConstRef getReturnData() const;
 
 private:
+	void set(RuntimeData::Index _index, u256 _value);
 
 	/// @internal Must be the first element to asure Runtime* === RuntimeData*
 	RuntimeData m_data;
@@ -65,6 +75,7 @@ public:
 
 	llvm::Value* getRuntimePtr();
 
+	llvm::Value* get(RuntimeData::Index _index);
 	llvm::Value* getGas();
 	void setGas(llvm::Value* _gas);
 
