@@ -35,6 +35,14 @@ type TxMsg struct {
 	Type TxMsgTy
 }
 
+func EachTx(pool *list.List, it func(*Transaction, *list.Element) bool) {
+	for e := pool.Front(); e != nil; e = e.Next() {
+		if it(e.Value.(*Transaction), e) {
+			break
+		}
+	}
+}
+
 func FindTx(pool *list.List, finder func(*Transaction, *list.Element) bool) *Transaction {
 	for e := pool.Front(); e != nil; e = e.Next() {
 		if tx, ok := e.Value.(*Transaction); ok {
@@ -191,6 +199,9 @@ func (pool *TxPool) CurrentTransactions() []*Transaction {
 }
 
 func (pool *TxPool) RemoveInvalid(state *ethstate.State) {
+	pool.mutex.Lock()
+	defer pool.mutex.Unlock()
+
 	for e := pool.pool.Front(); e != nil; e = e.Next() {
 		tx := e.Value.(*Transaction)
 		sender := state.GetAccount(tx.Sender())
@@ -198,6 +209,21 @@ func (pool *TxPool) RemoveInvalid(state *ethstate.State) {
 		if err != nil || sender.Nonce >= tx.Nonce {
 			pool.pool.Remove(e)
 		}
+	}
+}
+
+func (self *TxPool) RemoveSet(txs Transactions) {
+	self.mutex.Lock()
+	defer self.mutex.Unlock()
+
+	for _, tx := range txs {
+		EachTx(self.pool, func(t *Transaction, element *list.Element) bool {
+			if t == tx {
+				self.pool.Remove(element)
+				return true // To stop the loop
+			}
+			return false
+		})
 	}
 }
 

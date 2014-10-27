@@ -40,7 +40,7 @@ func NewContractCreationTx(value, gas, gasPrice *big.Int, script []byte) *Transa
 }
 
 func NewTransactionMessage(to []byte, value, gas, gasPrice *big.Int, data []byte) *Transaction {
-	return &Transaction{Recipient: to, Value: value, GasPrice: gasPrice, Gas: gas, Data: data}
+	return &Transaction{Recipient: to, Value: value, GasPrice: gasPrice, Gas: gas, Data: data, contractCreation: IsContractAddr(to)}
 }
 
 func NewTransactionFromBytes(data []byte) *Transaction {

@@ -17,7 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 )
 
-var statelogger = ethlog.NewLogger("STATE")
+var statelogger = ethlog.NewLogger("BLOCK")
 
 type Peer interface {
 	Inbound() bool
@@ -134,10 +134,11 @@ func (sm *StateManager) ChainManager() *ChainManager {
 	return sm.bc
 }
 
-func (self *StateManager) ProcessTransactions(coinbase *ethstate.StateObject, state *ethstate.State, block, parent *Block, txs Transactions) (Receipts, Transactions, Transactions, error) {
+func (self *StateManager) ProcessTransactions(coinbase *ethstate.StateObject, state *ethstate.State, block, parent *Block, txs Transactions) (Receipts, Transactions, Transactions, Transactions, error) {
 	var (
 		receipts           Receipts
 		handled, unhandled Transactions
+		erroneous          Transactions
 		totalUsedGas       = big.NewInt(0)
 		err                error
 	)
@@ -161,7 +162,9 @@ done:
 				break done
 			default:
 				statelogger.Infoln(err)
+				erroneous = append(erroneous, tx)
 				err = nil
+				continue
 				//return nil, nil, nil, err
 			}
 		}
@@ -182,7 +185,7 @@ done:
 
 				err := fmt.Errorf("#%d receipt failed (r) %v ~ %x  <=>  (c) %v ~ %x (%x...)", i+1, original.CumulativeGasUsed, original.PostState[0:4], receipt.CumulativeGasUsed, receipt.PostState[0:4], receipt.Tx.Hash()[0:4])
 
-				return nil, nil, nil, err
+				return nil, nil, nil, nil, err
 			}
 		}
 
@@ -199,7 +202,7 @@ done:
 
 	parent.GasUsed = totalUsedGas
 
-	return receipts, handled, unhandled, err
+	return receipts, handled, unhandled, erroneous, err
 }
 
 func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
@@ -283,7 +286,7 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 			state.Manifest().Reset()
 		}
 
-		sm.eth.TxPool().RemoveInvalid(state)
+		sm.eth.TxPool().RemoveSet(block.Transactions())
 	} else {
 		statelogger.Errorln("total diff failed")
 	}
@@ -296,7 +299,7 @@ func (sm *StateManager) ApplyDiff(state *ethstate.State, parent, block *Block) (
 	coinbase.SetGasPool(block.CalcGasLimit(parent))
 
 	// Process the transactions on to current block
-	receipts, _, _, err = sm.ProcessTransactions(coinbase, state, block, parent, block.Transactions())
+	receipts, _, _, _, err = sm.ProcessTransactions(coinbase, state, block, parent, block.Transactions())
 	if err != nil {
 		return nil, err
 	}
