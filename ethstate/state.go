@@ -39,6 +39,13 @@ func (self *State) GetBalance(addr []byte) *big.Int {
 	return ethutil.Big0
 }
 
+func (self *State) AddBalance(addr []byte, amount *big.Int) {
+	stateObject := self.GetStateObject(addr)
+	if stateObject != nil {
+		stateObject.AddBalance(amount)
+	}
+}
+
 func (self *State) GetNonce(addr []byte) uint64 {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
