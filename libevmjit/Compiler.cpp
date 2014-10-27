@@ -720,7 +720,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto srcIdx = stack.pop();
 			auto reqBytes = stack.pop();
 
-			auto srcPtr = ext.calldata();
+			auto srcPtr = _runtimeManager.getCallData();
 			auto srcSize = _runtimeManager.get(RuntimeData::CallDataSize);
 
 			memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);

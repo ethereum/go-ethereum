@@ -22,7 +22,8 @@ llvm::StructType* RuntimeData::getType()
 	{
 		llvm::Type* elems[] =
 		{
-			llvm::ArrayType::get(Type::i256, _size)
+			llvm::ArrayType::get(Type::i256, _size),
+			Type::BytePtr
 		};
 		type = llvm::StructType::create(elems, "RuntimeData");
 	}
@@ -75,6 +76,7 @@ Runtime::Runtime(u256 _gas, ExtVMFace& _ext):
 	set(RuntimeData::Difficulty, _ext.currentBlock.difficulty);
 	set(RuntimeData::GasLimit, _ext.currentBlock.gasLimit);
 	set(RuntimeData::CodeSize, _ext.code.size());	// TODO: Use constant
+	m_data.callData = _ext.data.data();
 }
 
 Runtime::~Runtime()
@@ -155,6 +157,12 @@ llvm::Value* RuntimeManager::get(Instruction _inst)
 	case Instruction::GASLIMIT:		return get(RuntimeData::GasLimit);
 	case Instruction::CODESIZE:		return get(RuntimeData::CodeSize);
 	}
+}
+
+llvm::Value* RuntimeManager::getCallData()
+{
+	auto ptr = getBuilder().CreateStructGEP(getRuntimePtr(), 1, "calldataPtr");
+	return getBuilder().CreateLoad(ptr, "calldata");
 }
 
 llvm::Value* RuntimeManager::getGas()

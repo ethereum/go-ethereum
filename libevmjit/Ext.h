@@ -20,7 +20,6 @@ public:
 	llvm::Value* store(llvm::Value* _index);
 	void setStore(llvm::Value* _index, llvm::Value* _value);
 
-	llvm::Value* calldata();
 	llvm::Value* code();
 
 	llvm::Value* balance(llvm::Value* _address);

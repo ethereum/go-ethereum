@@ -52,7 +52,6 @@ Ext::Ext(RuntimeManager& _runtimeManager):
 	m_arg8 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg8");
 
 	Type* elements[] = {
-		i8PtrTy, // byte* calldata
 		i8PtrTy, // byte* code
 
 	};
@@ -100,8 +99,7 @@ Value* Ext::getDataElem(unsigned _index, const Twine& _name)
 	return m_builder.CreateLoad(valuePtr);
 }
 
-Value* Ext::calldata() { return getDataElem(0, "calldata"); }
-Value* Ext::code() { return getDataElem(1, "code"); }
+Value* Ext::code() { return getDataElem(0, "code"); }
 
 Value* Ext::calldataload(Value* _index)
 {
