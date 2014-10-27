@@ -29,8 +29,12 @@ To build the node (CLI):
 
 For further, detailed, build instruction please see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum(Go))
 
-Automated (dev) builds: [OS X (Windows, Linux are Coming
-Soon&trade;)](http://build.ethdev.com/builds/OSX%20Go%20develop%20branch/latest/app/)
+Automated (dev) builds
+======================
+
+* [[OS X](http://build.ethdev.com/builds/OSX%20Go%20develop%20branch/latest/app/)]
+* [Windows] Coming soon&trade;
+* [Linux] Coming soon&trade;
 
 Packages
 ========
