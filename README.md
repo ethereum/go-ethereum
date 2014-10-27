@@ -1,7 +1,7 @@
-[![Stories in Ready](https://badge.waffle.io/ethereum/go-ethereum.png?label=bug&title=Bugs)](https://waffle.io/ethereum/go-ethereum)
+[![Bugs](https://badge.waffle.io/ethereum/go-ethereum.png?label=bug&title=Bugs)](https://waffle.io/ethereum/go-ethereum)
 [![Stories in Ready](https://badge.waffle.io/ethereum/go-ethereum.png?label=ready&title=Ready)](https://waffle.io/ethereum/go-ethereum)
 [![Stories in
-Ready](https://badge.waffle.io/ethereum/go-ethereum.svg?label=in%20progress&title=In Progress)](http://waffle.io/ethereum/go-ethereum)
+Progress](https://badge.waffle.io/ethereum/go-ethereum.svg?label=in%20progress&title=In Progress)](http://waffle.io/ethereum/go-ethereum)
 
 Ethereum
 ========
@@ -12,10 +12,28 @@ Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20
 
 Ethereum Go Client © 2014 Jeffrey Wilcke.
 
-Current state: Proof of Concept 0.6.7.
+Current state: Proof of Concept 0.7
 
 Ethereum is currently in its testing phase. 
-For build instructions see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum(Go)).
+
+Build
+=====
+
+To build Mist (GUI):
+
+`go get github.com/ethereum/go-ethereum/cmd/mist`
+
+To build the node (CLI):
+
+`go get github.com/ethereum/go-ethereum/cmd/ethereum`
+
+For further, detailed, build instruction please see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum(Go))
+
+Automated (dev) builds: [OS X (Windows, Linux are Coming
+Soon&trade;)](http://build.ethdev.com/builds/OSX%20Go%20develop%20branch/latest/app/)
+
+Packages
+========
 
 Ethereum Go is split up in several sub packages Please refer to each
 individual package for more information.
@@ -43,21 +61,8 @@ contains the [patricia trie](http://wiki.ethereum.org/index.php/Patricia_Tree),
 helpers. The [ethdb](https://github.com/ethereum/go-ethereum/tree/master/ethdb) package
 contains the LevelDB interface and memory DB interface.
 
-Build
-=======
-
-To build Mist (GUI):
-
-`go get github.com/ethereum/go-ethereum/cmd/mist`
-
-To build the node (CLI):
-
-`go get github.com/ethereum/go-ethereum/cmd/ethereum`
-
-For further, detailed, build instruction please see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum(Go))
-
 General command line options
-====================
+============================
 
 ```
 Shared between ethereum and Mist
