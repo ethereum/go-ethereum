@@ -46,7 +46,7 @@ public:
 	static StackImpl& getStack();
 	static MemoryImpl& getMemory();
 	static ExtVMFace& getExt();
-	static u256 getGas();
+	u256 getGas();
 
 private:
 
@@ -63,6 +63,7 @@ public:
 	RuntimeManager(llvm::IRBuilder<>& _builder);
 
 	llvm::Value* getGas();
+	void setGas(llvm::Value* _gas);
 
 private:
 	llvm::GlobalVariable* m_dataPtr;

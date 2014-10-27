@@ -115,7 +115,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtV
 		returnCode = static_cast<ReturnCode>(r);
 
 	// Return remaining gas
-	_gas = returnCode == ReturnCode::OutOfGas ? 0 : Runtime::getGas();
+	_gas = returnCode == ReturnCode::OutOfGas ? 0 : runtime.getGas();
 
 	std::cout << "Max stack size: " << Stack::maxStackSize << std::endl;
 

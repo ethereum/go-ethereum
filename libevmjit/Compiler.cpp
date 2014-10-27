@@ -178,7 +178,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 
 	// Init runtime structures.
 	RuntimeManager runtimeManager(m_builder);
-	GasMeter gasMeter(m_builder);
+	GasMeter gasMeter(m_builder, runtimeManager);
 	Memory memory(m_builder, gasMeter);
 	Ext ext(m_builder);
 	Stack stack(m_builder);
@@ -191,7 +191,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 		auto iterCopy = basicBlockPairIt;
 		++iterCopy;
 		auto nextBasicBlock = (iterCopy != basicBlocks.end()) ? iterCopy->second.llvm() : nullptr;
-		compileBasicBlock(basicBlock, bytecode, memory, ext, gasMeter, nextBasicBlock);
+		compileBasicBlock(basicBlock, bytecode, runtimeManager, memory, ext, gasMeter, nextBasicBlock);
 	}
 
 	// Code for special blocks:
@@ -272,7 +272,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 }
 
 
-void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode, Memory& memory, Ext& ext, GasMeter& gasMeter, llvm::BasicBlock* nextBasicBlock)
+void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode, RuntimeManager& _runtimeManager, Memory& memory, Ext& ext, GasMeter& gasMeter, llvm::BasicBlock* nextBasicBlock)
 {
 	m_builder.SetInsertPoint(basicBlock.llvm());
 	auto& stack = basicBlock.localStack();
@@ -680,7 +680,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 
 		case Instruction::GAS:
 		{
-			stack.push(gasMeter.getGas());
+			stack.push(_runtimeManager.getGas());
 			break;
 		}
 

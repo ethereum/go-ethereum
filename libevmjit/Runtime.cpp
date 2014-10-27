@@ -31,17 +31,12 @@ llvm::StructType* RuntimeData::getType()
 
 static Runtime* g_runtime;
 
-extern "C"
-{
-EXPORT i256 gas;
-}
-
 Runtime::Runtime(u256 _gas, ExtVMFace& _ext):
 	m_ext(_ext)
 {
 	assert(!g_runtime);
 	g_runtime = this;
-	gas = eth2llvm(_gas);
+	m_data.gas = eth2llvm(_gas);
 }
 
 Runtime::~Runtime()
@@ -66,7 +61,7 @@ ExtVMFace& Runtime::getExt()
 
 u256 Runtime::getGas()
 {
-	return llvm2eth(gas);
+	return llvm2eth(m_data.gas);
 }
 
 
@@ -79,6 +74,22 @@ RuntimeManager::RuntimeManager(llvm::IRBuilder<>& _builder): CompilerHelper(_bui
 	auto mainFunc = getMainFunction();
 	llvm::Value* dataPtr = &mainFunc->getArgumentList().back();
 	m_builder.CreateStore(dataPtr, m_dataPtr);
+}
+
+llvm::Value* RuntimeManager::getGas()
+{
+	//auto gasPtr = m_builder.CreateConstGEP2_64(m_dataPtr, 0, 0);
+	auto rt = m_builder.CreateLoad(m_dataPtr);
+	auto gasPtr = m_builder.CreateStructGEP(rt, 0);
+	return m_builder.CreateLoad(gasPtr, "gas");
+}
+
+void RuntimeManager::setGas(llvm::Value* _gas)
+{
+	//auto gasPtr = m_builder.CreateStructGEP(m_dataPtr, 0);
+	auto rt = m_builder.CreateLoad(m_dataPtr);
+	auto gasPtr = m_builder.CreateStructGEP(rt, 0);
+	m_builder.CreateStore(_gas, gasPtr);
 }
 
 }

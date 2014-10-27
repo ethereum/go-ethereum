@@ -10,6 +10,7 @@
 
 #include "Type.h"
 #include "Ext.h"
+#include "Runtime.h"
 
 namespace dev
 {
@@ -79,12 +80,11 @@ bool isCostBlockEnd(Instruction _inst)
 
 }
 
-GasMeter::GasMeter(llvm::IRBuilder<>& _builder) :
-	CompilerHelper(_builder)
+GasMeter::GasMeter(llvm::IRBuilder<>& _builder, RuntimeManager& _runtimeManager) :
+	CompilerHelper(_builder),
+	m_runtimeManager(_runtimeManager)
 {
 	auto module = getModule();
-	m_gas = new llvm::GlobalVariable(*module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "gas");
-	m_gas->setUnnamedAddr(true); // Address is not important
 
 	m_gasCheckFunc = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::i256, false), llvm::Function::PrivateLinkage, "gas.check", module);
 	InsertPointGuard guard(m_builder); 
@@ -96,7 +96,7 @@ GasMeter::GasMeter(llvm::IRBuilder<>& _builder) :
 	m_builder.SetInsertPoint(checkBB);
 	llvm::Value* cost = m_gasCheckFunc->arg_begin();
 	cost->setName("cost");
-	llvm::Value* gas = m_builder.CreateLoad(m_gas, "gas");
+	auto gas = m_runtimeManager.getGas();
 	auto isOutOfGas = m_builder.CreateICmpUGT(cost, gas, "isOutOfGas");
 	m_builder.CreateCondBr(isOutOfGas, outOfGasBB, updateBB);
 
@@ -111,7 +111,7 @@ GasMeter::GasMeter(llvm::IRBuilder<>& _builder) :
 
 	m_builder.SetInsertPoint(updateBB);
 	gas = m_builder.CreateSub(gas, cost);
-	m_builder.CreateStore(gas, m_gas);
+	m_runtimeManager.setGas(gas);
 	m_builder.CreateRetVoid();
 }
 
@@ -153,9 +153,7 @@ void GasMeter::countSStore(Ext& _ext, llvm::Value* _index, llvm::Value* _newValu
 
 void GasMeter::giveBack(llvm::Value* _gas)
 {
-	llvm::Value* gasCounter = m_builder.CreateLoad(m_gas, "gas");
-	gasCounter = m_builder.CreateAdd(gasCounter, _gas);
-	m_builder.CreateStore(gasCounter, m_gas);
+	m_runtimeManager.setGas(m_builder.CreateAdd(m_runtimeManager.getGas(), _gas));
 }
 
 void GasMeter::commitCostBlock(llvm::Value* _additionalCost)
@@ -189,11 +187,6 @@ void GasMeter::checkMemory(llvm::Value* _additionalMemoryInWords, llvm::IRBuilde
 	// Memory uses other builder, but that can be changes later
 	auto cost = _builder.CreateMul(_additionalMemoryInWords, Constant::get(static_cast<uint64_t>(c_memoryGas)), "memcost");
 	_builder.CreateCall(m_gasCheckFunc, cost);
-}
-
-llvm::Value* GasMeter::getGas()
-{
-	return m_builder.CreateLoad(m_gas, "gas");
 }
 
 }

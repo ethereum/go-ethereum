@@ -31,7 +31,7 @@ private:
 
 	void createBasicBlocks(bytesConstRef bytecode);
 
-	void compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode, class Memory& memory, class Ext& ext, class GasMeter& gasMeter, llvm::BasicBlock* nextBasicBlock);
+	void compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode, class RuntimeManager& _runtimeManager, class Memory& memory, class Ext& ext, class GasMeter& gasMeter, llvm::BasicBlock* nextBasicBlock);
 
 	void removeDeadBlocks();
 
