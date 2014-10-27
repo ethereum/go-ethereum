@@ -20,6 +20,7 @@ type Environment interface {
 	BlockHash() []byte
 	GasLimit() *big.Int
 	Transfer(from, to Account, amount *big.Int) error
+	AddLog(Log)
 }
 
 type Object interface {

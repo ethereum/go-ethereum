@@ -18,7 +18,7 @@ const (
 	MOD  = 0x06
 	SMOD = 0x07
 	EXP  = 0x08
-	NEG  = 0x09
+	BNOT = 0x09
 	LT   = 0x0a
 	GT   = 0x0b
 	SLT  = 0x0c
@@ -144,6 +144,12 @@ const (
 	SWAP15 = 0x9e
 	SWAP16 = 0x9f
 
+	LOG0 = 0xa0
+	LOG1 = 0xa1
+	LOG2 = 0xa2
+	LOG3 = 0xa3
+	LOG4 = 0xa4
+
 	// 0xf0 range - closures
 	CREATE   = 0xf0
 	CALL     = 0xf1
@@ -166,7 +172,7 @@ var opCodeToString = map[OpCode]string{
 	MOD:  "MOD",
 	SMOD: "SMOD",
 	EXP:  "EXP",
-	NEG:  "NEG",
+	BNOT: "BNOT",
 	LT:   "LT",
 	GT:   "GT",
 	SLT:  "SLT",

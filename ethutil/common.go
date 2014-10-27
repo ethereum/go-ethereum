@@ -77,6 +77,7 @@ func CurrencyToString(num *big.Int) string {
 var (
 	Big1     = big.NewInt(1)
 	Big2     = big.NewInt(2)
+	Big3     = big.NewInt(3)
 	Big0     = big.NewInt(0)
 	BigTrue  = Big1
 	BigFalse = Big0

@@ -29,6 +29,7 @@ var (
 	GasMemory  = big.NewInt(1)
 	GasData    = big.NewInt(5)
 	GasTx      = big.NewInt(500)
+	GasLog     = big.NewInt(32)
 
 	Pow256 = ethutil.BigPow(2, 256)
 

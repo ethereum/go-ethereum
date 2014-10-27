@@ -31,6 +31,9 @@ func (self *VMEnv) BlockHash() []byte      { return self.block.Hash() }
 func (self *VMEnv) Value() *big.Int        { return self.tx.Value }
 func (self *VMEnv) State() *ethstate.State { return self.state }
 func (self *VMEnv) GasLimit() *big.Int     { return self.block.GasLimit }
+func (self *VMEnv) AddLog(log vm.Log) {
+	self.tx.addLog(log)
+}
 func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) error {
 	return vm.Transfer(from, to, amount)
 }

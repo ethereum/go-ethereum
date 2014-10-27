@@ -268,7 +268,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			U256(base)
 
 			stack.Push(base)
-		case NEG:
+		case BNOT:
 			require(1)
 			base.Sub(Pow256, stack.Pop())
 

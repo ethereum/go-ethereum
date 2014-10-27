@@ -141,7 +141,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		// Stack Check, memory resize & gas phase
 		switch op {
 		// Stack checks only
-		case NOT, CALLDATALOAD, POP, JUMP, NEG: // 1
+		case NOT, CALLDATALOAD, POP, JUMP, BNOT: // 1
 			require(1)
 		case ADD, SUB, DIV, SDIV, MOD, SMOD, EXP, LT, GT, SLT, SGT, EQ, AND, OR, XOR, BYTE: // 2
 			require(2)
@@ -153,6 +153,14 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:
 			n := int(op - DUP1 + 1)
 			require(n)
+		case LOG0, LOG1, LOG2, LOG3, LOG4:
+			n := int(op - LOG0)
+			require(n + 2)
+
+			mSize, mStart := stack.Peekn()
+			gas.Set(GasLog)
+			addStepGasUsage(new(big.Int).Mul(big.NewInt(int64(n)), GasLog))
+			addStepGasUsage(new(big.Int).Add(mSize, mStart))
 		// Gas only
 		case STOP:
 			gas.Set(ethutil.Big0)
@@ -168,13 +176,16 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			y, x := stack.Peekn()
 			val := closure.GetStorage(x)
 			if val.BigInt().Cmp(ethutil.Big0) == 0 && len(y.Bytes()) > 0 {
-				mult = ethutil.Big2
+				// 0 => non 0
+				mult = ethutil.Big3
 			} else if val.BigInt().Cmp(ethutil.Big0) != 0 && len(y.Bytes()) == 0 {
+				//state.AddBalance(closure.caller.Address(), new(big.Int).Mul(big.NewInt(100), closure.Price))
 				mult = ethutil.Big0
 			} else {
+				// non 0 => non 0
 				mult = ethutil.Big1
 			}
-			gas = new(big.Int).Mul(mult, GasSStore)
+			gas.Set(new(big.Int).Mul(mult, GasSStore))
 		case BALANCE:
 			require(1)
 			gas.Set(GasBalance)
@@ -375,10 +386,11 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			self.Printf(" = %v", base)
 
 			stack.Push(base)
-		case NEG:
-			base.Sub(Pow256, stack.Pop())
+		case BNOT:
+			base.Sub(Pow256, stack.Pop()).Sub(base, ethutil.Big1)
 
-			base = U256(base)
+			// Not needed
+			//base = U256(base)
 
 			stack.Push(base)
 		case LT:
@@ -685,6 +697,15 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			x, y := stack.Swapn(n)
 
 			self.Printf(" => [%d] %x [0] %x", n, x.Bytes(), y.Bytes())
+		case LOG0, LOG1, LOG2, LOG3, LOG4:
+			n := int(op - LOG0)
+			topics := make([]*big.Int, n)
+			mSize, mStart := stack.Pop().Int64(), stack.Pop().Int64()
+			data := mem.Geti(mStart, mSize)
+			for i := 0; i < n; i++ {
+				topics[i] = stack.Pop()
+			}
+			self.env.AddLog(Log{closure.Address(), topics, data})
 		case MLOAD:
 			offset := stack.Pop()
 			val := ethutil.BigD(mem.Get(offset.Int64(), 32))
