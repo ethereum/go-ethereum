@@ -10,6 +10,9 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IntrinsicInst.h>
 
+#include <llvm/PassManager.h>
+#include <llvm/Transforms/Scalar.h>
+
 #include <libevmface/Instruction.h>
 
 #include "Type.h"
@@ -263,6 +266,11 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 		std::cerr << "\n\nAfter stack synchronization \n\n";
 		dump();
 	}
+
+	llvm::FunctionPassManager fpManager(module.get());
+	fpManager.add(llvm::createLowerSwitchPass());
+	fpManager.doInitialization();
+	fpManager.run(*m_mainFunc);
 
 	return module;
 }

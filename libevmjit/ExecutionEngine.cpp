@@ -2,6 +2,7 @@
 #include "ExecutionEngine.h"
 
 #include <csetjmp>
+#include <chrono>
 
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
@@ -72,7 +73,13 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtV
 	if (!exec)
 		BOOST_THROW_EXCEPTION(Exception() << errinfo_comment(errorMsg));
 	_module.release();	// Successfully created llvm::ExecutionEngine takes ownership of the module
+
+	auto finalizationStartTime = std::chrono::high_resolution_clock::now();
 	exec->finalizeObject();
+	auto finalizationEndTime = std::chrono::high_resolution_clock::now();
+	std::cerr << "*** Module finalization time: "
+						  << std::chrono::duration_cast<std::chrono::microseconds>(finalizationEndTime - finalizationStartTime).count()
+						  << std::endl;
 
 	// Create fake ExtVM interface
 	if (!_ext)
@@ -107,9 +114,17 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtV
 	auto r = setjmp(buf);
 	if (r == 0)
 	{
+		auto executionStartTime = std::chrono::high_resolution_clock::now();
+
 		rt_jmpBuf = &buf;
 		auto result = exec->runFunction(entryFunc, {});
 		returnCode = static_cast<ReturnCode>(result.IntVal.getZExtValue());
+
+		auto executionEndTime = std::chrono::high_resolution_clock::now();
+		std::cerr << "*** Execution time: "
+							  << std::chrono::duration_cast<std::chrono::microseconds>(executionEndTime - executionStartTime).count()
+							  << std::endl;
+
 	}
 	else
 		returnCode = static_cast<ReturnCode>(r);
