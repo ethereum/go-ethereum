@@ -10,6 +10,7 @@ namespace eth
 {
 namespace jit
 {
+class RuntimeManager;
 
 /// Base class for compiler helpers like Memory, GasMeter, etc.
 class CompilerHelper
@@ -28,6 +29,22 @@ protected:
 
 	/// Reference to parent compiler IR builder
 	llvm::IRBuilder<>& m_builder;
+	llvm::IRBuilder<>& getBuilder() { return m_builder; }
+
+	friend class RuntimeHelper;
+};
+
+
+/// Compiler helper that depends on runtime data
+class RuntimeHelper : public CompilerHelper
+{
+protected:
+	RuntimeHelper(RuntimeManager& _runtimeManager);
+
+	RuntimeManager& getRuntimeManager() { return m_runtimeManager; }
+
+private:
+	RuntimeManager& m_runtimeManager;
 };
 
 

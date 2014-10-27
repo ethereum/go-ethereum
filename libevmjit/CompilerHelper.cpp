@@ -3,6 +3,8 @@
 
 #include <llvm/IR/Function.h>
 
+#include "Runtime.h"
+
 namespace dev
 {
 namespace eth
@@ -28,6 +30,12 @@ llvm::Function* CompilerHelper::getMainFunction()
 	assert(mainFunc && mainFunc->getName() == "main");
 	return mainFunc;
 }
+
+
+RuntimeHelper::RuntimeHelper(RuntimeManager& _runtimeManager):
+	CompilerHelper(_runtimeManager.getBuilder()),
+	m_runtimeManager(_runtimeManager)
+{}
 
 }
 }
