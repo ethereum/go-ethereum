@@ -29,6 +29,19 @@ llvm::StructType* RuntimeData::getType()
 	return type;
 }
 
+namespace
+{
+llvm::Twine getName(RuntimeData::Index _index)
+{
+	switch (_index)
+	{
+	default:					return "data";
+	case RuntimeData::Gas:		return "gas";
+	case RuntimeData::Address:	return "address";
+	}
+}
+}
+
 static Runtime* g_runtime;	// FIXME: Remove
 
 Runtime::Runtime(u256 _gas, ExtVMFace& _ext):
@@ -94,8 +107,8 @@ llvm::Value* RuntimeManager::getRuntimePtr()
 llvm::Value* RuntimeManager::get(RuntimeData::Index _index)
 {
 	llvm::Value* idxList[] = {m_builder.getInt32(0), m_builder.getInt32(0), m_builder.getInt32(_index)};
-	auto ptr = m_builder.CreateInBoundsGEP(getRuntimePtr(), idxList, "dataElemPtr");
-	return m_builder.CreateLoad(ptr);
+	auto ptr = m_builder.CreateInBoundsGEP(getRuntimePtr(), idxList, getName(_index) + "Ptr");
+	return m_builder.CreateLoad(ptr, getName(_index));
 }
 
 llvm::Value* RuntimeManager::getGas()
