@@ -14,7 +14,7 @@ func CreateBloom(txs Transactions) uint64 {
 func logsBloom(logs []vm.Log) uint64 {
 	var bin uint64
 	for _, log := range logs {
-		data := []byte{log.Address}
+		data := [][]byte{log.Address}
 		for _, topic := range log.Topics {
 			data = append(data, topic.Bytes())
 		}
@@ -31,7 +31,7 @@ func logsBloom(logs []vm.Log) uint64 {
 func bloom9(b []byte) uint64 {
 	var r uint64
 	for _, i := range []int{0, 2, 4} {
-		r |= 1 << (b[i+1] + 256*(b[i]&1))
+		r |= 1 << (uint64(b[i+1]) + 256*(uint64(b[i])&1))
 	}
 
 	return r
