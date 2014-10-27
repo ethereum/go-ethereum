@@ -22,6 +22,7 @@
 #include "GasMeter.h"
 #include "Utils.h"
 #include "Endianness.h"
+#include "Runtime.h"
 
 namespace dev
 {
@@ -168,7 +169,9 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 	auto module = std::make_unique<llvm::Module>("main", m_builder.getContext());
 
 	// Create main function
-	m_mainFunc = llvm::Function::Create(llvm::FunctionType::get(Type::MainReturn, false), llvm::Function::ExternalLinkage, "main", module.get());
+	llvm::Type* mainFuncArgTypes[] = {m_builder.getInt32Ty(), Type::RuntimePtr};	// There must be int in first place because LLVM does not support other signatures
+	auto mainFuncType = llvm::FunctionType::get(Type::MainReturn, mainFuncArgTypes, false);
+	m_mainFunc = llvm::Function::Create(mainFuncType, llvm::Function::ExternalLinkage, "main", module.get());
 
 	// Create the basic blocks.
 	auto entryBlock = llvm::BasicBlock::Create(m_builder.getContext(), "entry", m_mainFunc);
@@ -177,10 +180,11 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 	createBasicBlocks(bytecode);
 
 	// Init runtime structures.
-	GasMeter gasMeter(m_builder);
-	Memory memory(m_builder, gasMeter);
-	Ext ext(m_builder);
-	Stack stack(m_builder);
+	RuntimeManager runtimeManager(m_builder);
+	GasMeter gasMeter(m_builder, runtimeManager);
+	Memory memory(m_builder, gasMeter, runtimeManager);
+	Ext ext(runtimeManager);
+	Stack stack(m_builder, runtimeManager);
 
 	m_builder.CreateBr(basicBlocks.begin()->second);
 
@@ -190,7 +194,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 		auto iterCopy = basicBlockPairIt;
 		++iterCopy;
 		auto nextBasicBlock = (iterCopy != basicBlocks.end()) ? iterCopy->second.llvm() : nullptr;
-		compileBasicBlock(basicBlock, bytecode, memory, ext, gasMeter, nextBasicBlock);
+		compileBasicBlock(basicBlock, bytecode, runtimeManager, memory, ext, gasMeter, nextBasicBlock);
 	}
 
 	// Code for special blocks:
@@ -276,7 +280,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 }
 
 
-void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode, Memory& memory, Ext& ext, GasMeter& gasMeter, llvm::BasicBlock* nextBasicBlock)
+void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode, RuntimeManager& _runtimeManager, Memory& memory, Ext& ext, GasMeter& gasMeter, llvm::BasicBlock* nextBasicBlock)
 {
 	m_builder.SetInsertPoint(basicBlock.llvm());
 	auto& stack = basicBlock.localStack();
@@ -683,15 +687,22 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		}
 
 		case Instruction::GAS:
-		{
-			stack.push(gasMeter.getGas());
-			break;
-		}
-
 		case Instruction::ADDRESS:
+		case Instruction::CALLER:
+		case Instruction::ORIGIN:
+		case Instruction::CALLVALUE:
+		case Instruction::CALLDATASIZE:
+		case Instruction::CODESIZE:
+		case Instruction::GASPRICE:
+		case Instruction::PREVHASH:
+		case Instruction::COINBASE:
+		case Instruction::TIMESTAMP:
+		case Instruction::NUMBER:
+		case Instruction::DIFFICULTY:
+		case Instruction::GASLIMIT:
 		{
-			auto value = ext.address();
-			stack.push(value);
+			// Pushes an element of runtime data on stack
+			stack.push(_runtimeManager.get(inst));
 			break;
 		}
 
@@ -699,41 +710,6 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		{
 			auto address = stack.pop();
 			auto value = ext.balance(address);
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::CALLER:
-		{
-			auto value = ext.caller();
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::ORIGIN:
-		{
-			auto value = ext.origin();
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::CALLVALUE:
-		{
-			auto value = ext.callvalue();
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::CALLDATASIZE:
-		{
-			auto value = ext.calldatasize();
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::CODESIZE:
-		{
-			auto value = ext.codesize();
 			stack.push(value);
 			break;
 		}
@@ -752,8 +728,8 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto srcIdx = stack.pop();
 			auto reqBytes = stack.pop();
 
-			auto srcPtr = ext.calldata();
-			auto srcSize = ext.calldatasize();
+			auto srcPtr = _runtimeManager.getCallData();
+			auto srcSize = _runtimeManager.get(RuntimeData::CallDataSize);
 
 			memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);
 			break;
@@ -765,8 +741,8 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto srcIdx = stack.pop();
 			auto reqBytes = stack.pop();
 
-			auto srcPtr = ext.code();	// TODO: Code & its size are constants, feature #80814234
-			auto srcSize = ext.codesize();
+			auto srcPtr = _runtimeManager.getCode();	// TODO: Code & its size are constants, feature #80814234
+			auto srcSize = _runtimeManager.get(RuntimeData::CodeSize);
 
 			memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);
 			break;
@@ -790,55 +766,6 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		{
 			auto index = stack.pop();
 			auto value = ext.calldataload(index);
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::GASPRICE:
-		{
-			auto value = ext.gasprice();
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::PREVHASH:
-		{
-			auto value = ext.prevhash();
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::COINBASE:
-		{
-			auto value = ext.coinbase();
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::TIMESTAMP:
-		{
-			auto value = ext.timestamp();
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::NUMBER:
-		{
-			auto value = ext.number();
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::DIFFICULTY:
-		{
-			auto value = ext.difficulty();
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::GASLIMIT:
-		{
-			auto value = ext.gaslimit();
 			stack.push(value);
 			break;
 		}
@@ -877,7 +804,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 
 			auto receiveAddress = codeAddress;
 			if (inst == Instruction::CALLCODE)
-				receiveAddress = ext.address();
+				receiveAddress = _runtimeManager.get(RuntimeData::Address);
 
 			auto ret = ext.call(gas, receiveAddress, value, inOff, inSize, outOff, outSize, codeAddress);
 			gasMeter.giveBack(gas);

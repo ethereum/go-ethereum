@@ -11,11 +11,12 @@ namespace eth
 {
 namespace jit
 {
+class RuntimeManager;
 
 class GasMeter : public CompilerHelper
 {
 public:
-	GasMeter(llvm::IRBuilder<>& _builder);
+	GasMeter(llvm::IRBuilder<>& _builder, RuntimeManager& _runtimeManager);
 
 	/// Count step cost of instruction
 	void count(Instruction _inst);
@@ -33,16 +34,15 @@ public:
 	/// Generate code that checks the cost of additional memory used by program
 	void checkMemory(llvm::Value* _additionalMemoryInWords, llvm::IRBuilder<>& _builder);
 
-	llvm::Value* getGas();
-
 private:
 	/// Cumulative gas cost of a block of instructions
 	/// @TODO Handle overflow
 	uint64_t m_blockCost = 0;
 
 	llvm::CallInst* m_checkCall = nullptr;
-	llvm::GlobalVariable* m_gas;
 	llvm::Function* m_gasCheckFunc;
+
+	RuntimeManager& m_runtimeManager;
 };
 
 }

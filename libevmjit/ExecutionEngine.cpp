@@ -117,7 +117,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtV
 		auto executionStartTime = std::chrono::high_resolution_clock::now();
 
 		rt_jmpBuf = &buf;
-		auto result = exec->runFunction(entryFunc, {});
+		auto result = exec->runFunction(entryFunc, {{}, llvm::GenericValue(runtime.getDataPtr())});
 		returnCode = static_cast<ReturnCode>(result.IntVal.getZExtValue());
 
 		auto executionEndTime = std::chrono::high_resolution_clock::now();
@@ -130,13 +130,13 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtV
 		returnCode = static_cast<ReturnCode>(r);
 
 	// Return remaining gas
-	_gas = returnCode == ReturnCode::OutOfGas ? 0 : Runtime::getGas();
+	_gas = returnCode == ReturnCode::OutOfGas ? 0 : runtime.getGas();
 
 	std::cout << "Max stack size: " << Stack::maxStackSize << std::endl;
 
 	if (returnCode == ReturnCode::Return)
 	{
-		returnData = Memory::getReturnData().toVector(); // TODO: It might be better to place is in Runtime interface
+		returnData = runtime.getReturnData().toVector(); // TODO: It might be better to place is in Runtime interface
 
 		std::cout << "RETURN [ ";
 		for (auto it = returnData.begin(), end = returnData.end(); it != end; ++it)

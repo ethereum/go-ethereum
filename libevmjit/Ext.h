@@ -12,29 +12,13 @@ namespace eth
 namespace jit
 {
 
-class Ext : public CompilerHelper
+class Ext : public RuntimeHelper
 {
 public:
-	Ext(llvm::IRBuilder<>& _builder);
+	Ext(RuntimeManager& _runtimeManager);
 
 	llvm::Value* store(llvm::Value* _index);
 	void setStore(llvm::Value* _index, llvm::Value* _value);
-
-	llvm::Value* address();
-	llvm::Value* caller();
-	llvm::Value* origin();
-	llvm::Value* callvalue();
-	llvm::Value* calldatasize();
-	llvm::Value* gasprice();
-	llvm::Value* prevhash();
-	llvm::Value* coinbase();
-	llvm::Value* timestamp();
-	llvm::Value* number();
-	llvm::Value* difficulty();
-	llvm::Value* gaslimit();
-	llvm::Value* codesize();
-	llvm::Value* calldata();
-	llvm::Value* code();
 
 	llvm::Value* balance(llvm::Value* _address);
 	void suicide(llvm::Value* _address);
@@ -47,8 +31,6 @@ public:
 	llvm::Value* codeAt(llvm::Value* _addr);
 	llvm::Value* codesizeAt(llvm::Value* _addr);
 
-private:
-	llvm::Value* getDataElem(unsigned _index, const llvm::Twine& _name = "");
 
 private:
 	llvm::Value* m_args[2];
@@ -60,7 +42,6 @@ private:
 	llvm::Value* m_arg7;
 	llvm::Value* m_arg8;
 	llvm::Value* m_data;
-	llvm::Function* m_init;
 	llvm::Function* m_store;
 	llvm::Function* m_setStore;
 	llvm::Function* m_calldataload;
@@ -68,7 +49,6 @@ private:
 	llvm::Function* m_suicide;
 	llvm::Function* m_create;
 	llvm::Function* m_call;
-	llvm::Function* m_bswap;
 	llvm::Function* m_sha3;
 	llvm::Function* m_exp;
 	llvm::Function* m_codeAt;

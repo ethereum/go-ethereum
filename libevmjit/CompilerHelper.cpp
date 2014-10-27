@@ -3,6 +3,8 @@
 
 #include <llvm/IR/Function.h>
 
+#include "Runtime.h"
+
 namespace dev
 {
 namespace eth
@@ -20,6 +22,20 @@ llvm::Module* CompilerHelper::getModule()
 	assert(m_builder.GetInsertBlock()->getParent()); // BB must be in a function
 	return m_builder.GetInsertBlock()->getParent()->getParent();
 }
+
+llvm::Function* CompilerHelper::getMainFunction()
+{
+	assert(m_builder.GetInsertBlock());
+	auto mainFunc = m_builder.GetInsertBlock()->getParent();
+	assert(mainFunc && mainFunc->getName() == "main");
+	return mainFunc;
+}
+
+
+RuntimeHelper::RuntimeHelper(RuntimeManager& _runtimeManager):
+	CompilerHelper(_runtimeManager.getBuilder()),
+	m_runtimeManager(_runtimeManager)
+{}
 
 }
 }

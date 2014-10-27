@@ -15,6 +15,7 @@
 #include "Runtime.h"
 #include "GasMeter.h"
 #include "Endianness.h"
+#include "Runtime.h"
 
 namespace dev
 {
@@ -23,7 +24,7 @@ namespace eth
 namespace jit
 {
 
-Memory::Memory(llvm::IRBuilder<>& _builder, GasMeter& _gasMeter):
+Memory::Memory(llvm::IRBuilder<>& _builder, GasMeter& _gasMeter, RuntimeManager& _runtimeManager):
 	CompilerHelper(_builder)
 {
 	auto module = getModule();
@@ -45,18 +46,19 @@ Memory::Memory(llvm::IRBuilder<>& _builder, GasMeter& _gasMeter):
 	m_returnDataSize = new llvm::GlobalVariable(*module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "mem_returnDataSize");
 	m_returnDataSize->setUnnamedAddr(true); // Address is not important
 
-	m_resize = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, Type::WordPtr, false), llvm::Function::ExternalLinkage, "mem_resize", module);
+	llvm::Type* resizeArgs[] = {Type::RuntimePtr, Type::WordPtr};
+	m_resize = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, resizeArgs, false), llvm::Function::ExternalLinkage, "mem_resize", module);
 	llvm::AttrBuilder attrBuilder;
 	attrBuilder.addAttribute(llvm::Attribute::NoAlias).addAttribute(llvm::Attribute::NoCapture).addAttribute(llvm::Attribute::NonNull).addAttribute(llvm::Attribute::ReadOnly);
 	m_resize->setAttributes(llvm::AttributeSet::get(m_resize->getContext(), 1, attrBuilder));
 
-	m_require = createRequireFunc(_gasMeter);
+	m_require = createRequireFunc(_gasMeter, _runtimeManager);
 	m_loadWord = createFunc(false, Type::i256, _gasMeter);
 	m_storeWord = createFunc(true, Type::i256, _gasMeter);
 	m_storeByte = createFunc(true, Type::Byte,  _gasMeter);
 }
 
-llvm::Function* Memory::createRequireFunc(GasMeter& _gasMeter)
+llvm::Function* Memory::createRequireFunc(GasMeter& _gasMeter, RuntimeManager& _runtimeManager)
 {
 	auto func = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::i256, false), llvm::Function::PrivateLinkage, "mem.require", getModule());
 
@@ -83,7 +85,7 @@ llvm::Function* Memory::createRequireFunc(GasMeter& _gasMeter)
 	_gasMeter.checkMemory(newWords, m_builder);
 	// Resize
 	m_builder.CreateStore(sizeRequired, m_size);
-	auto newData = m_builder.CreateCall(m_resize, m_size, "newData");
+	auto newData = m_builder.CreateCall2(m_resize, _runtimeManager.getRuntimePtr(), m_size, "newData");
 	m_builder.CreateStore(newData, m_data);
 	m_builder.CreateBr(returnBB);
 
@@ -232,48 +234,36 @@ extern "C"
 
 using namespace dev::eth::jit;
 
-EXPORT i256 mem_returnDataOffset;
-EXPORT i256 mem_returnDataSize;
-
-EXPORT uint8_t* mem_resize(i256* _size)
+EXPORT uint8_t* mem_resize(Runtime* _rt, i256* _size)
 {
 	auto size = _size->a; // Trunc to 64-bit
-	auto& memory = Runtime::getMemory();
+	auto& memory = _rt->getMemory();
 	memory.resize(size);
 	return memory.data();
 }
 
 EXPORT void evmccrt_memory_dump(uint64_t _begin, uint64_t _end)
 {
-	if (_end == 0)
-		_end = Runtime::getMemory().size();
+	//if (_end == 0)
+	//	_end = Runtime::getMemory().size();
 
-	std::cerr << "MEMORY: active size: " << std::dec
-			  << Runtime::getMemory().size() / 32 << " words\n";
-	std::cerr << "MEMORY: dump from " << std::dec
-			  << _begin << " to " << _end << ":";
-	if (_end <= _begin)
-		return;
+	//std::cerr << "MEMORY: active size: " << std::dec
+	//		  << Runtime::getMemory().size() / 32 << " words\n";
+	//std::cerr << "MEMORY: dump from " << std::dec
+	//		  << _begin << " to " << _end << ":";
+	//if (_end <= _begin)
+	//	return;
 
-	_begin = _begin / 16 * 16;
-	for (size_t i = _begin; i < _end; i++)
-	{
-		if ((i - _begin) % 16 == 0)
-			std::cerr << '\n' << std::dec << i << ":  ";
+	//_begin = _begin / 16 * 16;
+	//for (size_t i = _begin; i < _end; i++)
+	//{
+	//	if ((i - _begin) % 16 == 0)
+	//		std::cerr << '\n' << std::dec << i << ":  ";
 
-		auto b = Runtime::getMemory()[i];
-		std::cerr << std::hex << std::setw(2) << static_cast<int>(b) << ' ';
-	}
-	std::cerr << std::endl;
+	//	auto b = Runtime::getMemory()[i];
+	//	std::cerr << std::hex << std::setw(2) << static_cast<int>(b) << ' ';
+	//}
+	//std::cerr << std::endl;
 }
 
 }	// extern "C"
-
-dev::bytesConstRef dev::eth::jit::Memory::getReturnData()
-{
-	// TODO: Handle large indexes
-	auto offset = static_cast<size_t>(llvm2eth(mem_returnDataOffset));
-	auto size = static_cast<size_t>(llvm2eth(mem_returnDataSize));
-	auto& memory = Runtime::getMemory();
-	return {memory.data() + offset, size};
-}

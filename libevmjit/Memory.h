@@ -10,11 +10,12 @@ namespace eth
 {
 namespace jit
 {
+class RuntimeManager;
 
 class Memory : public CompilerHelper
 {
 public:
-	Memory(llvm::IRBuilder<>& _builder, class GasMeter& _gasMeter);
+	Memory(llvm::IRBuilder<>& _builder, class GasMeter& _gasMeter, RuntimeManager& _runtimeManager);
 
 	llvm::Value* loadWord(llvm::Value* _addr);
 	void storeWord(llvm::Value* _addr, llvm::Value* _word);
@@ -31,13 +32,13 @@ public:
 	void require(llvm::Value* _offset, llvm::Value* _size);
 
 	void registerReturnData(llvm::Value* _index, llvm::Value* _size);
-	static bytesConstRef getReturnData();
+	bytesConstRef getReturnData();
 
 	void dump(uint64_t _begin, uint64_t _end = 0);
 
 private:
 	llvm::Function* createFunc(bool _isStore, llvm::Type* _type, GasMeter& _gasMeter);
-	llvm::Function* createRequireFunc(GasMeter& _gasMeter);
+	llvm::Function* createRequireFunc(GasMeter& _gasMeter, RuntimeManager& _runtimeManager);
 
 private:
 	llvm::GlobalVariable* m_data;
