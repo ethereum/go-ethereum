@@ -61,7 +61,6 @@ Ext::Ext(RuntimeManager& _runtimeManager):
 	m_create = Function::Create(TypeBuilder<void(i<256>*, i<256>*, i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_create", module);
 	Type* args[] = {i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy, i256PtrTy};
 	m_call = Function::Create(FunctionType::get(m_builder.getVoidTy(), args, false), Linkage::ExternalLinkage, "ext_call", module);
-	m_bswap = Intrinsic::getDeclaration(module, Intrinsic::bswap, i256Ty);
 	m_sha3 = Function::Create(TypeBuilder<void(i<256>*, i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_sha3", module);
 	m_exp = Function::Create(TypeBuilder<void(i<256>*, i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_exp", module);
 	m_codeAt = Function::Create(TypeBuilder<i<8>*(i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_codeAt", module);
