@@ -35,9 +35,12 @@ llvm::Twine getName(RuntimeData::Index _index)
 {
 	switch (_index)
 	{
-	default:					return "data";
-	case RuntimeData::Gas:		return "gas";
-	case RuntimeData::Address:	return "address";
+	default:						return "data";
+	case RuntimeData::Gas:			return "gas";
+	case RuntimeData::Address:		return "address";
+	case RuntimeData::Caller:		return "caller";
+	case RuntimeData::Origin:		return "origin";
+	case RuntimeData::CallValue:	return "callvalue";
 	}
 }
 }
@@ -51,6 +54,9 @@ Runtime::Runtime(u256 _gas, ExtVMFace& _ext):
 	g_runtime = this;
 	set(RuntimeData::Gas, _gas);
 	set(RuntimeData::Address, fromAddress(_ext.myAddress));
+	set(RuntimeData::Caller, fromAddress(_ext.caller));
+	set(RuntimeData::Origin, fromAddress(_ext.origin));
+	set(RuntimeData::CallValue, _ext.value);
 }
 
 Runtime::~Runtime()

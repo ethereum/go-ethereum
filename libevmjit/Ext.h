@@ -20,9 +20,6 @@ public:
 	llvm::Value* store(llvm::Value* _index);
 	void setStore(llvm::Value* _index, llvm::Value* _value);
 
-	llvm::Value* caller();
-	llvm::Value* origin();
-	llvm::Value* callvalue();
 	llvm::Value* calldatasize();
 	llvm::Value* gasprice();
 	llvm::Value* prevhash();

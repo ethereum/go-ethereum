@@ -28,6 +28,9 @@ struct RuntimeData
 	{
 		Gas,
 		Address,
+		Caller,
+		Origin,
+		CallValue,
 
 		_size
 	};

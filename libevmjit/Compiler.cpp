@@ -701,21 +701,21 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 
 		case Instruction::CALLER:
 		{
-			auto value = ext.caller();
+			auto value = _runtimeManager.get(RuntimeData::Caller);
 			stack.push(value);
 			break;
 		}
 
 		case Instruction::ORIGIN:
 		{
-			auto value = ext.origin();
+			auto value = _runtimeManager.get(RuntimeData::Origin);
 			stack.push(value);
 			break;
 		}
 
 		case Instruction::CALLVALUE:
 		{
-			auto value = ext.callvalue();
+			auto value = _runtimeManager.get(RuntimeData::CallValue);
 			stack.push(value);
 			break;
 		}

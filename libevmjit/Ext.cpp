@@ -27,10 +27,6 @@ inline u256 fromAddress(Address _a)
 
 struct ExtData 
 {
-	i256 address;
-	i256 caller;
-	i256 origin;
-	i256 callvalue;
 	i256 calldatasize;
 	i256 gasprice;
 	i256 prevhash;
@@ -65,10 +61,6 @@ Ext::Ext(RuntimeManager& _runtimeManager):
 	m_arg8 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg8");
 
 	Type* elements[] = {
-		i256Ty,	 // i256 address;
-		i256Ty,	 // i256 caller;
-		i256Ty,	 // i256 origin;
-		i256Ty,	 // i256 callvalue;
 		i256Ty,	 // i256 calldatasize;
 		i256Ty,	 // i256 gasprice;
 		i256Ty,	 // i256 prevhash;
@@ -126,20 +118,17 @@ Value* Ext::getDataElem(unsigned _index, const Twine& _name)
 	return m_builder.CreateLoad(valuePtr);
 }
 
-Value* Ext::caller() { return getDataElem(1, "caller"); }
-Value* Ext::origin() { return getDataElem(2, "origin"); }
-Value* Ext::callvalue() { return getDataElem(3, "callvalue"); }
-Value* Ext::calldatasize() { return getDataElem(4, "calldatasize"); }
-Value* Ext::gasprice() { return getDataElem(5, "gasprice"); }
-Value* Ext::prevhash() { return getDataElem(6, "prevhash"); }
-Value* Ext::coinbase() { return getDataElem(7, "coinbase"); }
-Value* Ext::timestamp() { return getDataElem(8, "timestamp"); }
-Value* Ext::number() { return getDataElem(9, "number"); }
-Value* Ext::difficulty() { return getDataElem(10, "difficulty"); }
-Value* Ext::gaslimit() { return getDataElem(11, "gaslimit"); }
-Value* Ext::codesize() { return getDataElem(12, "codesize"); }
-Value* Ext::calldata() { return getDataElem(13, "calldata"); }
-Value* Ext::code() { return getDataElem(14, "code"); }
+Value* Ext::calldatasize() { return getDataElem(0, "calldatasize"); }
+Value* Ext::gasprice() { return getDataElem(1, "gasprice"); }
+Value* Ext::prevhash() { return getDataElem(2, "prevhash"); }
+Value* Ext::coinbase() { return getDataElem(3, "coinbase"); }
+Value* Ext::timestamp() { return getDataElem(4, "timestamp"); }
+Value* Ext::number() { return getDataElem(5, "number"); }
+Value* Ext::difficulty() { return getDataElem(6, "difficulty"); }
+Value* Ext::gaslimit() { return getDataElem(7, "gaslimit"); }
+Value* Ext::codesize() { return getDataElem(8, "codesize"); }
+Value* Ext::calldata() { return getDataElem(9, "calldata"); }
+Value* Ext::code() { return getDataElem(10, "code"); }
 
 Value* Ext::calldataload(Value* _index)
 {
@@ -242,9 +231,6 @@ using namespace dev::eth::jit;
 EXPORT void ext_init(ExtData* _extData)
 {
 	auto&& ext = Runtime::getExt();
-	_extData->caller = eth2llvm(fromAddress(ext.caller));
-	_extData->origin = eth2llvm(fromAddress(ext.origin));
-	_extData->callvalue = eth2llvm(ext.value);
 	_extData->gasprice = eth2llvm(ext.gasPrice);
 	_extData->calldatasize = eth2llvm(ext.data.size());
 	_extData->prevhash = eth2llvm(ext.previousBlock.hash);
