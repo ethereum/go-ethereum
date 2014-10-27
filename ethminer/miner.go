@@ -81,18 +81,19 @@ func (miner *Miner) Stop() {
 }
 
 func (miner *Miner) listener() {
-	for {
-		miner.startMining()
+	miner.startMining()
 
+	for {
 		select {
 		case event, isopen := <-miner.events.Chan():
-			miner.stopMining()
 			if !isopen {
 				return
 			}
 
 			switch event := event.(type) {
 			case ethchain.NewBlockEvent:
+				miner.stopMining()
+
 				block := event.Block
 				//logger.Infoln("Got new block via Reactor")
 				if bytes.Compare(miner.ethereum.ChainManager().CurrentBlock.Hash(), block.Hash()) == 0 {
@@ -126,6 +127,8 @@ func (miner *Miner) listener() {
 
 			case ethchain.TxEvent:
 				if event.Type == ethchain.TxPre {
+					miner.stopMining()
+
 					found := false
 					for _, ctx := range miner.txs {
 						if found = bytes.Compare(ctx.Hash(), event.Tx.Hash()) == 0; found {
@@ -142,7 +145,7 @@ func (miner *Miner) listener() {
 			}
 
 		case <-miner.powDone:
-			// next iteration will start mining again
+			miner.startMining()
 		}
 	}
 }
@@ -178,10 +181,11 @@ func (self *Miner) mineNewBlock() {
 	parent := self.ethereum.ChainManager().GetBlock(self.block.PrevHash)
 	coinbase := self.block.State().GetOrNewStateObject(self.block.Coinbase)
 	coinbase.SetGasPool(self.block.CalcGasLimit(parent))
-	receipts, txs, unhandledTxs, err := stateManager.ProcessTransactions(coinbase, self.block.State(), self.block, self.block, self.txs)
+	receipts, txs, unhandledTxs, erroneous, err := stateManager.ProcessTransactions(coinbase, self.block.State(), self.block, self.block, self.txs)
 	if err != nil {
 		logger.Debugln(err)
 	}
+	self.ethereum.TxPool().RemoveSet(erroneous)
 	self.txs = append(txs, unhandledTxs...)
 	self.block.SetTxHash(receipts)
 
