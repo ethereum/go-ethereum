@@ -121,7 +121,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtV
 
 	if (returnCode == ReturnCode::Return)
 	{
-		returnData = Memory::getReturnData().toVector(); // TODO: It might be better to place is in Runtime interface
+		returnData = runtime.getReturnData().toVector(); // TODO: It might be better to place is in Runtime interface
 
 		std::cout << "RETURN [ ";
 		for (auto it = returnData.begin(), end = returnData.end(); it != end; ++it)

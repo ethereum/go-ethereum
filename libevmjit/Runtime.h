@@ -44,9 +44,10 @@ public:
 	RuntimeData* getDataPtr() { return &m_data; }
 
 	static StackImpl& getStack();
-	static MemoryImpl& getMemory();
+	MemoryImpl& getMemory() { return m_memory; }
 	static ExtVMFace& getExt();
 	u256 getGas();
+	bytesConstRef getReturnData();
 
 private:
 
@@ -61,6 +62,8 @@ class RuntimeManager: public CompilerHelper
 {
 public:
 	RuntimeManager(llvm::IRBuilder<>& _builder);
+
+	llvm::Value* getRuntimePtr();
 
 	llvm::Value* getGas();
 	void setGas(llvm::Value* _gas);

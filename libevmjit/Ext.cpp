@@ -306,7 +306,8 @@ EXPORT void ext_create(i256* _endowment, i256* _initOff, i256* _initSize, h256* 
 		u256 gas;	// TODO: Handle gas
 		auto initOff = static_cast<size_t>(llvm2eth(*_initOff));
 		auto initSize = static_cast<size_t>(llvm2eth(*_initSize));
-		auto&& initRef = bytesConstRef(Runtime::getMemory().data() + initOff, initSize);
+		//auto&& initRef = bytesConstRef(Runtime::getMemory().data() + initOff, initSize);
+		bytesConstRef initRef;
 		OnOpFunc onOp{}; // TODO: Handle that thing
 		h256 address = ext.create(endowment, &gas, initRef, onOp);
 		*_address = address;
@@ -332,8 +333,8 @@ EXPORT void ext_call(i256* _gas, h256* _receiveAddress, i256* _value, i256* _inO
 		auto inSize = static_cast<size_t>(llvm2eth(*_inSize));
 		auto outOff = static_cast<size_t>(llvm2eth(*_outOff));
 		auto outSize = static_cast<size_t>(llvm2eth(*_outSize));
-		auto&& inRef = bytesConstRef(Runtime::getMemory().data() + inOff, inSize);
-		auto&& outRef = bytesConstRef(Runtime::getMemory().data() + outOff, outSize);
+		auto&& inRef = bytesConstRef();	//Runtime::getMemory().data() + inOff, inSize);
+		auto&& outRef = bytesConstRef(); // Runtime::getMemory().data() + outOff, outSize);
 		OnOpFunc onOp{}; // TODO: Handle that thing
 		auto codeAddress = right160(*_codeAddress);
 		ret = ext.call(receiveAddress, value, inRef, &gas, outRef, onOp, {}, codeAddress);
@@ -347,7 +348,7 @@ EXPORT void ext_sha3(i256* _inOff, i256* _inSize, i256* _ret)
 {
 	auto inOff = static_cast<size_t>(llvm2eth(*_inOff));
 	auto inSize = static_cast<size_t>(llvm2eth(*_inSize));
-	auto dataRef = bytesConstRef(Runtime::getMemory().data() + inOff, inSize);
+	auto dataRef = bytesConstRef(); // Runtime::getMemory().data() + inOff, inSize);
 	auto hash = sha3(dataRef);
 	*_ret = *reinterpret_cast<i256*>(&hash);
 }

@@ -179,7 +179,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 	// Init runtime structures.
 	RuntimeManager runtimeManager(m_builder);
 	GasMeter gasMeter(m_builder, runtimeManager);
-	Memory memory(m_builder, gasMeter);
+	Memory memory(m_builder, gasMeter, runtimeManager);
 	Ext ext(m_builder);
 	Stack stack(m_builder);
 

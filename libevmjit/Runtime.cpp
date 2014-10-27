@@ -29,7 +29,7 @@ llvm::StructType* RuntimeData::getType()
 	return type;
 }
 
-static Runtime* g_runtime;
+static Runtime* g_runtime;	// FIXME: Remove
 
 Runtime::Runtime(u256 _gas, ExtVMFace& _ext):
 	m_ext(_ext)
@@ -49,11 +49,6 @@ StackImpl& Runtime::getStack()
 	return g_runtime->m_stack;
 }
 
-MemoryImpl& Runtime::getMemory()
-{
-	return g_runtime->m_memory;
-}
-
 ExtVMFace& Runtime::getExt()
 {
 	return g_runtime->m_ext;
@@ -62,6 +57,19 @@ ExtVMFace& Runtime::getExt()
 u256 Runtime::getGas()
 {
 	return llvm2eth(m_data.gas);
+}
+
+extern "C" {
+	EXPORT i256 mem_returnDataOffset;	// FIXME: Dis-globalize
+	EXPORT i256 mem_returnDataSize;
+}
+
+bytesConstRef Runtime::getReturnData()
+{
+	// TODO: Handle large indexes
+	auto offset = static_cast<size_t>(llvm2eth(mem_returnDataOffset));
+	auto size = static_cast<size_t>(llvm2eth(mem_returnDataSize));
+	return{getMemory().data() + offset, size};
 }
 
 
@@ -76,19 +84,21 @@ RuntimeManager::RuntimeManager(llvm::IRBuilder<>& _builder): CompilerHelper(_bui
 	m_builder.CreateStore(dataPtr, m_dataPtr);
 }
 
+llvm::Value* RuntimeManager::getRuntimePtr()
+{
+	// TODO: If in main function - get it from param
+	return m_builder.CreateLoad(m_dataPtr);
+}
+
 llvm::Value* RuntimeManager::getGas()
 {
-	//auto gasPtr = m_builder.CreateConstGEP2_64(m_dataPtr, 0, 0);
-	auto rt = m_builder.CreateLoad(m_dataPtr);
-	auto gasPtr = m_builder.CreateStructGEP(rt, 0);
+	auto gasPtr = m_builder.CreateStructGEP(getRuntimePtr(), 0);
 	return m_builder.CreateLoad(gasPtr, "gas");
 }
 
 void RuntimeManager::setGas(llvm::Value* _gas)
 {
-	//auto gasPtr = m_builder.CreateStructGEP(m_dataPtr, 0);
-	auto rt = m_builder.CreateLoad(m_dataPtr);
-	auto gasPtr = m_builder.CreateStructGEP(rt, 0);
+	auto gasPtr = m_builder.CreateStructGEP(getRuntimePtr(), 0);
 	m_builder.CreateStore(_gas, gasPtr);
 }
 
