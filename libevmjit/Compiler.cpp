@@ -166,7 +166,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 	auto module = std::make_unique<llvm::Module>("main", m_builder.getContext());
 
 	// Create main function
-	llvm::Type* mainFuncArgTypes[] = {m_builder.getInt32Ty(), RuntimeData::getType()->getPointerTo()};	// There must be int in first place because LLVM does not support other signatures
+	llvm::Type* mainFuncArgTypes[] = {m_builder.getInt32Ty(), Type::RuntimePtr};	// There must be int in first place because LLVM does not support other signatures
 	auto mainFuncType = llvm::FunctionType::get(Type::MainReturn, mainFuncArgTypes, false);
 	m_mainFunc = llvm::Function::Create(mainFuncType, llvm::Function::ExternalLinkage, "main", module.get());
 

@@ -46,7 +46,7 @@ Memory::Memory(llvm::IRBuilder<>& _builder, GasMeter& _gasMeter, RuntimeManager&
 	m_returnDataSize = new llvm::GlobalVariable(*module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "mem_returnDataSize");
 	m_returnDataSize->setUnnamedAddr(true); // Address is not important
 
-	llvm::Type* resizeArgs[] = {RuntimeData::getType()->getPointerTo(), Type::WordPtr};
+	llvm::Type* resizeArgs[] = {Type::RuntimePtr, Type::WordPtr};
 	m_resize = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, resizeArgs, false), llvm::Function::ExternalLinkage, "mem_resize", module);
 	llvm::AttrBuilder attrBuilder;
 	attrBuilder.addAttribute(llvm::Attribute::NoAlias).addAttribute(llvm::Attribute::NoCapture).addAttribute(llvm::Attribute::NonNull).addAttribute(llvm::Attribute::ReadOnly);

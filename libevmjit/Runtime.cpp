@@ -71,8 +71,7 @@ bytesConstRef Runtime::getReturnData()
 
 RuntimeManager::RuntimeManager(llvm::IRBuilder<>& _builder): CompilerHelper(_builder)
 {
-	auto dataPtrType = RuntimeData::getType()->getPointerTo();
-	m_dataPtr = new llvm::GlobalVariable(*getModule(), dataPtrType, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(dataPtrType), "rt");
+	m_dataPtr = new llvm::GlobalVariable(*getModule(), Type::RuntimePtr, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(Type::RuntimePtr), "rt");
 
 	// Export data
 	auto mainFunc = getMainFunction();
