@@ -41,6 +41,15 @@ llvm::Twine getName(RuntimeData::Index _index)
 	case RuntimeData::Caller:		return "caller";
 	case RuntimeData::Origin:		return "origin";
 	case RuntimeData::CallValue:	return "callvalue";
+	case RuntimeData::CallDataSize:	return "calldatasize";
+	case RuntimeData::GasPrice:		return "gasprice";
+	case RuntimeData::PrevHash:		return "prevhash";
+	case RuntimeData::CoinBase:		return "coinbase";
+	case RuntimeData::TimeStamp:	return "timestamp";
+	case RuntimeData::Number:		return "number";
+	case RuntimeData::Difficulty:	return "difficulty";
+	case RuntimeData::GasLimit:		return "gaslimit";
+	case RuntimeData::CodeSize:		return "codesize";
 	}
 }
 }
@@ -57,6 +66,15 @@ Runtime::Runtime(u256 _gas, ExtVMFace& _ext):
 	set(RuntimeData::Caller, fromAddress(_ext.caller));
 	set(RuntimeData::Origin, fromAddress(_ext.origin));
 	set(RuntimeData::CallValue, _ext.value);
+	set(RuntimeData::CallDataSize, _ext.data.size());
+	set(RuntimeData::GasPrice, _ext.gasPrice);
+	set(RuntimeData::PrevHash, _ext.previousBlock.hash);
+	set(RuntimeData::CoinBase, fromAddress(_ext.currentBlock.coinbaseAddress));
+	set(RuntimeData::TimeStamp, _ext.currentBlock.timestamp);
+	set(RuntimeData::Number, _ext.currentBlock.number);
+	set(RuntimeData::Difficulty, _ext.currentBlock.difficulty);
+	set(RuntimeData::GasLimit, _ext.currentBlock.gasLimit);
+	set(RuntimeData::CodeSize, _ext.code.size());	// TODO: Use constant
 }
 
 Runtime::~Runtime()

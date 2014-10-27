@@ -27,15 +27,6 @@ inline u256 fromAddress(Address _a)
 
 struct ExtData 
 {
-	i256 calldatasize;
-	i256 gasprice;
-	i256 prevhash;
-	i256 coinbase;
-	i256 timestamp;
-	i256 number;
-	i256 difficulty;
-	i256 gaslimit;
-	i256 codesize;
 	const byte* calldata;
 	const byte* code;
 };
@@ -61,15 +52,6 @@ Ext::Ext(RuntimeManager& _runtimeManager):
 	m_arg8 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg8");
 
 	Type* elements[] = {
-		i256Ty,	 // i256 calldatasize;
-		i256Ty,	 // i256 gasprice;
-		i256Ty,	 // i256 prevhash;
-		i256Ty,	 // i256 coinbase;
-		i256Ty,	 // i256 timestamp;
-		i256Ty,	 // i256 number;
-		i256Ty,	 // i256 difficulty;
-		i256Ty,	 // i256 gaslimit;
-		i256Ty,  // i256 codesize
 		i8PtrTy, // byte* calldata
 		i8PtrTy, // byte* code
 
@@ -118,17 +100,8 @@ Value* Ext::getDataElem(unsigned _index, const Twine& _name)
 	return m_builder.CreateLoad(valuePtr);
 }
 
-Value* Ext::calldatasize() { return getDataElem(0, "calldatasize"); }
-Value* Ext::gasprice() { return getDataElem(1, "gasprice"); }
-Value* Ext::prevhash() { return getDataElem(2, "prevhash"); }
-Value* Ext::coinbase() { return getDataElem(3, "coinbase"); }
-Value* Ext::timestamp() { return getDataElem(4, "timestamp"); }
-Value* Ext::number() { return getDataElem(5, "number"); }
-Value* Ext::difficulty() { return getDataElem(6, "difficulty"); }
-Value* Ext::gaslimit() { return getDataElem(7, "gaslimit"); }
-Value* Ext::codesize() { return getDataElem(8, "codesize"); }
-Value* Ext::calldata() { return getDataElem(9, "calldata"); }
-Value* Ext::code() { return getDataElem(10, "code"); }
+Value* Ext::calldata() { return getDataElem(0, "calldata"); }
+Value* Ext::code() { return getDataElem(1, "code"); }
 
 Value* Ext::calldataload(Value* _index)
 {
@@ -231,15 +204,6 @@ using namespace dev::eth::jit;
 EXPORT void ext_init(ExtData* _extData)
 {
 	auto&& ext = Runtime::getExt();
-	_extData->gasprice = eth2llvm(ext.gasPrice);
-	_extData->calldatasize = eth2llvm(ext.data.size());
-	_extData->prevhash = eth2llvm(ext.previousBlock.hash);
-	_extData->coinbase = eth2llvm(fromAddress(ext.currentBlock.coinbaseAddress));
-	_extData->timestamp = eth2llvm(ext.currentBlock.timestamp);
-	_extData->number = eth2llvm(ext.currentBlock.number);
-	_extData->difficulty = eth2llvm(ext.currentBlock.difficulty);
-	_extData->gaslimit = eth2llvm(ext.currentBlock.gasLimit);
-	_extData->codesize = eth2llvm(ext.code.size());
 	_extData->calldata = ext.data.data();
 	_extData->code = ext.code.data();
 }

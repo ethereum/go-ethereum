@@ -722,14 +722,14 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 
 		case Instruction::CALLDATASIZE:
 		{
-			auto value = ext.calldatasize();
+			auto value = _runtimeManager.get(RuntimeData::CallDataSize);
 			stack.push(value);
 			break;
 		}
 
 		case Instruction::CODESIZE:
 		{
-			auto value = ext.codesize();
+			auto value = _runtimeManager.get(RuntimeData::CodeSize);
 			stack.push(value);
 			break;
 		}
@@ -749,7 +749,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto reqBytes = stack.pop();
 
 			auto srcPtr = ext.calldata();
-			auto srcSize = ext.calldatasize();
+			auto srcSize = _runtimeManager.get(RuntimeData::CallDataSize);
 
 			memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);
 			break;
@@ -762,7 +762,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto reqBytes = stack.pop();
 
 			auto srcPtr = ext.code();	// TODO: Code & its size are constants, feature #80814234
-			auto srcSize = ext.codesize();
+			auto srcSize = _runtimeManager.get(RuntimeData::CodeSize);
 
 			memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);
 			break;
@@ -791,50 +791,50 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		}
 
 		case Instruction::GASPRICE:
-		{
-			auto value = ext.gasprice();
+		{			
+			auto value = _runtimeManager.get(RuntimeData::GasPrice);
 			stack.push(value);
 			break;
 		}
 
 		case Instruction::PREVHASH:
 		{
-			auto value = ext.prevhash();
+			auto value = _runtimeManager.get(RuntimeData::PrevHash);
 			stack.push(value);
 			break;
 		}
 
 		case Instruction::COINBASE:
 		{
-			auto value = ext.coinbase();
+			auto value = _runtimeManager.get(RuntimeData::CoinBase);
 			stack.push(value);
 			break;
 		}
 
 		case Instruction::TIMESTAMP:
 		{
-			auto value = ext.timestamp();
+			auto value = _runtimeManager.get(RuntimeData::TimeStamp);
 			stack.push(value);
 			break;
 		}
 
 		case Instruction::NUMBER:
 		{
-			auto value = ext.number();
+			auto value = _runtimeManager.get(RuntimeData::Number);
 			stack.push(value);
 			break;
 		}
 
 		case Instruction::DIFFICULTY:
 		{
-			auto value = ext.difficulty();
+			auto value = _runtimeManager.get(RuntimeData::Difficulty);
 			stack.push(value);
 			break;
 		}
 
 		case Instruction::GASLIMIT:
 		{
-			auto value = ext.gaslimit();
+			auto value = _runtimeManager.get(RuntimeData::GasLimit);
 			stack.push(value);
 			break;
 		}

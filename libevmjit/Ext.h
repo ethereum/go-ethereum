@@ -20,15 +20,6 @@ public:
 	llvm::Value* store(llvm::Value* _index);
 	void setStore(llvm::Value* _index, llvm::Value* _value);
 
-	llvm::Value* calldatasize();
-	llvm::Value* gasprice();
-	llvm::Value* prevhash();
-	llvm::Value* coinbase();
-	llvm::Value* timestamp();
-	llvm::Value* number();
-	llvm::Value* difficulty();
-	llvm::Value* gaslimit();
-	llvm::Value* codesize();
 	llvm::Value* calldata();
 	llvm::Value* code();
 

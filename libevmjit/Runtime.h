@@ -31,6 +31,15 @@ struct RuntimeData
 		Caller,
 		Origin,
 		CallValue,
+		CallDataSize,
+		GasPrice,
+		PrevHash,
+		CoinBase,
+		TimeStamp,
+		Number,
+		Difficulty,
+		GasLimit,
+		CodeSize,
 
 		_size
 	};
