@@ -679,15 +679,22 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		}
 
 		case Instruction::GAS:
-		{
-			stack.push(_runtimeManager.getGas());
-			break;
-		}
-
 		case Instruction::ADDRESS:
+		case Instruction::CALLER:
+		case Instruction::ORIGIN:
+		case Instruction::CALLVALUE:
+		case Instruction::CALLDATASIZE:
+		case Instruction::CODESIZE:
+		case Instruction::GASPRICE:
+		case Instruction::PREVHASH:
+		case Instruction::COINBASE:
+		case Instruction::TIMESTAMP:
+		case Instruction::NUMBER:
+		case Instruction::DIFFICULTY:
+		case Instruction::GASLIMIT:
 		{
-			auto value = _runtimeManager.get(RuntimeData::Address);
-			stack.push(value);
+			// Pushes an element of runtime data on stack
+			stack.push(_runtimeManager.get(inst));
 			break;
 		}
 
@@ -695,41 +702,6 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		{
 			auto address = stack.pop();
 			auto value = ext.balance(address);
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::CALLER:
-		{
-			auto value = _runtimeManager.get(RuntimeData::Caller);
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::ORIGIN:
-		{
-			auto value = _runtimeManager.get(RuntimeData::Origin);
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::CALLVALUE:
-		{
-			auto value = _runtimeManager.get(RuntimeData::CallValue);
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::CALLDATASIZE:
-		{
-			auto value = _runtimeManager.get(RuntimeData::CallDataSize);
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::CODESIZE:
-		{
-			auto value = _runtimeManager.get(RuntimeData::CodeSize);
 			stack.push(value);
 			break;
 		}
@@ -786,55 +758,6 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		{
 			auto index = stack.pop();
 			auto value = ext.calldataload(index);
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::GASPRICE:
-		{			
-			auto value = _runtimeManager.get(RuntimeData::GasPrice);
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::PREVHASH:
-		{
-			auto value = _runtimeManager.get(RuntimeData::PrevHash);
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::COINBASE:
-		{
-			auto value = _runtimeManager.get(RuntimeData::CoinBase);
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::TIMESTAMP:
-		{
-			auto value = _runtimeManager.get(RuntimeData::TimeStamp);
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::NUMBER:
-		{
-			auto value = _runtimeManager.get(RuntimeData::Number);
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::DIFFICULTY:
-		{
-			auto value = _runtimeManager.get(RuntimeData::Difficulty);
-			stack.push(value);
-			break;
-		}
-
-		case Instruction::GASLIMIT:
-		{
-			auto value = _runtimeManager.get(RuntimeData::GasLimit);
 			stack.push(value);
 			break;
 		}

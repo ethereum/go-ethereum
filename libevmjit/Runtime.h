@@ -88,6 +88,7 @@ public:
 	llvm::Value* getRuntimePtr();
 
 	llvm::Value* get(RuntimeData::Index _index);
+	llvm::Value* get(Instruction _inst);
 	llvm::Value* getGas();
 	void setGas(llvm::Value* _gas);
 

@@ -135,6 +135,28 @@ llvm::Value* RuntimeManager::get(RuntimeData::Index _index)
 	return m_builder.CreateLoad(ptr, getName(_index));
 }
 
+llvm::Value* RuntimeManager::get(Instruction _inst)
+{
+	switch (_inst)
+	{
+	default: assert(false); return nullptr;
+	case Instruction::GAS:			return get(RuntimeData::Gas);
+	case Instruction::ADDRESS:		return get(RuntimeData::Address);
+	case Instruction::CALLER:		return get(RuntimeData::Caller);
+	case Instruction::ORIGIN:		return get(RuntimeData::Origin);
+	case Instruction::CALLVALUE:	return get(RuntimeData::CallValue);
+	case Instruction::CALLDATASIZE:	return get(RuntimeData::CallDataSize);
+	case Instruction::GASPRICE:		return get(RuntimeData::GasPrice);
+	case Instruction::PREVHASH:		return get(RuntimeData::PrevHash);
+	case Instruction::COINBASE:		return get(RuntimeData::CoinBase);
+	case Instruction::TIMESTAMP:	return get(RuntimeData::TimeStamp);
+	case Instruction::NUMBER:		return get(RuntimeData::Number);
+	case Instruction::DIFFICULTY:	return get(RuntimeData::Difficulty);
+	case Instruction::GASLIMIT:		return get(RuntimeData::GasLimit);
+	case Instruction::CODESIZE:		return get(RuntimeData::CodeSize);
+	}
+}
+
 llvm::Value* RuntimeManager::getGas()
 {
 	return get(RuntimeData::Gas);
