@@ -46,6 +46,7 @@ struct RuntimeData
 
 	i256 elems[_size];
 	byte const* callData;
+	byte const* code;
 
 	static llvm::StructType* getType();
 };
@@ -92,6 +93,7 @@ public:
 	llvm::Value* get(Instruction _inst);
 	llvm::Value* getGas();	// TODO: Remove
 	llvm::Value* getCallData();
+	llvm::Value* getCode();
 	void setGas(llvm::Value* _gas);
 
 private:

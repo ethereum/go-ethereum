@@ -733,7 +733,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto srcIdx = stack.pop();
 			auto reqBytes = stack.pop();
 
-			auto srcPtr = ext.code();	// TODO: Code & its size are constants, feature #80814234
+			auto srcPtr = _runtimeManager.getCode();	// TODO: Code & its size are constants, feature #80814234
 			auto srcSize = _runtimeManager.get(RuntimeData::CodeSize);
 
 			memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);

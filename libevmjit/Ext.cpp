@@ -51,17 +51,8 @@ Ext::Ext(RuntimeManager& _runtimeManager):
 	m_arg7 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg7");
 	m_arg8 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg8");
 
-	Type* elements[] = {
-		i8PtrTy, // byte* code
-
-	};
-	auto extDataTy = StructType::create(elements, "ext.Data");
-
-	m_data = m_builder.CreateAlloca(extDataTy, nullptr, "ext.data");
-
 	using llvm::types::i;
 	using Linkage = llvm::GlobalValue::LinkageTypes;
-	m_init = Function::Create(FunctionType::get(m_builder.getVoidTy(), extDataTy->getPointerTo(), false), Linkage::ExternalLinkage, "ext_init", module);
 	m_store = Function::Create(TypeBuilder<void(i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_store", module);
 	m_setStore = Function::Create(TypeBuilder<void(i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_setStore", module);
 	m_calldataload = Function::Create(TypeBuilder<void(i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_calldataload", module);
@@ -75,8 +66,6 @@ Ext::Ext(RuntimeManager& _runtimeManager):
 	m_exp = Function::Create(TypeBuilder<void(i<256>*, i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_exp", module);
 	m_codeAt = Function::Create(TypeBuilder<i<8>*(i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_codeAt", module);
 	m_codesizeAt = Function::Create(TypeBuilder<void(i<256>*, i<256>*), true>::get(ctx), Linkage::ExternalLinkage, "ext_codesizeAt", module);
-
-	m_builder.CreateCall(m_init, m_data);
 }
 
 llvm::Value* Ext::store(llvm::Value* _index)
@@ -92,14 +81,6 @@ void Ext::setStore(llvm::Value* _index, llvm::Value* _value)
 	m_builder.CreateStore(_value, m_args[1]);
 	m_builder.CreateCall(m_setStore, m_args); // Uses native endianness
 }
-
-Value* Ext::getDataElem(unsigned _index, const Twine& _name)
-{
-	auto valuePtr = m_builder.CreateStructGEP(m_data, _index, _name);
-	return m_builder.CreateLoad(valuePtr);
-}
-
-Value* Ext::code() { return getDataElem(0, "code"); }
 
 Value* Ext::calldataload(Value* _index)
 {

@@ -20,8 +20,6 @@ public:
 	llvm::Value* store(llvm::Value* _index);
 	void setStore(llvm::Value* _index, llvm::Value* _value);
 
-	llvm::Value* code();
-
 	llvm::Value* balance(llvm::Value* _address);
 	void suicide(llvm::Value* _address);
 	llvm::Value* calldataload(llvm::Value* _index);
@@ -33,8 +31,6 @@ public:
 	llvm::Value* codeAt(llvm::Value* _addr);
 	llvm::Value* codesizeAt(llvm::Value* _addr);
 
-private:
-	llvm::Value* getDataElem(unsigned _index, const llvm::Twine& _name = "");
 
 private:
 	llvm::Value* m_args[2];
@@ -46,7 +42,6 @@ private:
 	llvm::Value* m_arg7;
 	llvm::Value* m_arg8;
 	llvm::Value* m_data;
-	llvm::Function* m_init;
 	llvm::Function* m_store;
 	llvm::Function* m_setStore;
 	llvm::Function* m_calldataload;
