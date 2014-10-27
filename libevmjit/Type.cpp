@@ -3,6 +3,8 @@
 
 #include <llvm/IR/DerivedTypes.h>
 
+#include "Runtime.h"
+
 namespace dev
 {
 namespace eth
@@ -18,6 +20,7 @@ llvm::IntegerType* Type::Byte;
 llvm::PointerType* Type::BytePtr;
 llvm::Type* Type::Void;
 llvm::IntegerType* Type::MainReturn;
+llvm::PointerType* Type::RuntimePtr;
 
 void Type::init(llvm::LLVMContext& _context)
 {
@@ -30,6 +33,7 @@ void Type::init(llvm::LLVMContext& _context)
 	BytePtr = Byte->getPointerTo();
 	Void = llvm::Type::getVoidTy(_context);
 	MainReturn = llvm::Type::getInt32Ty(_context);
+	RuntimePtr = RuntimeData::getType()->getPointerTo();
 }
 
 llvm::ConstantInt* Constant::get(uint64_t _n)
