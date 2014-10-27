@@ -181,7 +181,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 	GasMeter gasMeter(m_builder, runtimeManager);
 	Memory memory(m_builder, gasMeter, runtimeManager);
 	Ext ext(m_builder);
-	Stack stack(m_builder);
+	Stack stack(m_builder, runtimeManager);
 
 	m_builder.CreateBr(basicBlocks.begin()->second);
 

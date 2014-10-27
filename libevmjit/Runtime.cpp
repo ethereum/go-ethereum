@@ -44,10 +44,6 @@ Runtime::~Runtime()
 	g_runtime = nullptr;
 }
 
-StackImpl& Runtime::getStack()
-{
-	return g_runtime->m_stack;
-}
 
 ExtVMFace& Runtime::getExt()
 {

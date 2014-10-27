@@ -10,12 +10,13 @@ namespace eth
 {
 namespace jit
 {
+class RuntimeManager;
 
 class Stack : public CompilerHelper
 {
 public:
 
-	Stack(llvm::IRBuilder<>& builder);
+	Stack(llvm::IRBuilder<>& builder, RuntimeManager& runtimeManager);
 	virtual ~Stack();
 
 	llvm::Value* get(size_t _index);
@@ -26,6 +27,7 @@ public:
 	static size_t maxStackSize;
 
 private:
+	RuntimeManager& m_runtimeManager;
 
 	llvm::Function* m_push;
 	llvm::Function* m_pop;
