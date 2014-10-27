@@ -136,13 +136,6 @@ func (self *StateTransition) preCheck() (err error) {
 func (self *StateTransition) TransitionState() (err error) {
 	statelogger.Debugf("(~) %x\n", self.tx.Hash())
 
-	defer func() {
-		if r := recover(); r != nil {
-			statelogger.Infoln(r)
-			err = fmt.Errorf("state transition err %v", r)
-		}
-	}()
-
 	// XXX Transactions after this point are considered valid.
 	if err = self.preCheck(); err != nil {
 		return
@@ -184,7 +177,7 @@ func (self *StateTransition) TransitionState() (err error) {
 		snapshot = self.state.Copy()
 
 		// Create a new state object for the contract
-		receiver := MakeContract(tx, self.state)
+		receiver = MakeContract(tx, self.state)
 		self.rec = receiver
 		if receiver == nil {
 			return fmt.Errorf("Unable to create contract")
@@ -218,22 +211,22 @@ func (self *StateTransition) TransitionState() (err error) {
 		// script section for the state object.
 		self.data = nil
 
-		code, err := self.Eval(msg, receiver.Init(), receiver)
-		if err != nil {
+		code, evmerr := self.Eval(msg, receiver.Init(), receiver)
+		if evmerr != nil {
 			self.state.Set(snapshot)
 
-			return fmt.Errorf("Error during init execution %v", err)
+			statelogger.Debugf("Error during init execution %v", evmerr)
 		}
 
 		receiver.Code = code
 		msg.Output = code
 	} else {
 		if len(receiver.Code) > 0 {
-			ret, err := self.Eval(msg, receiver.Code, receiver)
-			if err != nil {
+			ret, evmerr := self.Eval(msg, receiver.Code, receiver)
+			if evmerr != nil {
 				self.state.Set(snapshot)
 
-				return fmt.Errorf("Error during code execution %v", err)
+				statelogger.Debugf("Error during code execution %v", evmerr)
 			}
 
 			msg.Output = ret
@@ -267,16 +260,11 @@ func (self *StateTransition) Eval(msg *ethstate.Message, script []byte, context 
 
 // Converts an transaction in to a state object
 func MakeContract(tx *Transaction, state *ethstate.State) *ethstate.StateObject {
-	// Create contract if there's no recipient
-	if tx.IsContract() {
-		addr := tx.CreationAddress(state)
+	addr := tx.CreationAddress(state)
 
-		contract := state.GetOrNewStateObject(addr)
-		contract.InitCode = tx.Data
-		contract.State = ethstate.New(ethtrie.New(ethutil.Config.Db, ""))
+	contract := state.GetOrNewStateObject(addr)
+	contract.InitCode = tx.Data
+	contract.State = ethstate.New(ethtrie.New(ethutil.Config.Db, ""))
 
-		return contract
-	}
-
-	return nil
+	return contract
 }
