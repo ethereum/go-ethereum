@@ -192,7 +192,7 @@ func DefaultAssetPath() string {
 	// assume a debug build and use the source directory as
 	// asset directory.
 	pwd, _ := os.Getwd()
-	if pwd == path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "mist") {
+	if pwd == path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist") {
 		assetPath = path.Join(pwd, "assets")
 	} else {
 		switch runtime.GOOS {

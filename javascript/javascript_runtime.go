@@ -41,7 +41,7 @@ func (jsre *JSRE) LoadExtFile(path string) {
 }
 
 func (jsre *JSRE) LoadIntFile(file string) {
-	assetPath := path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "mist", "assets", "ext")
+	assetPath := path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist", "assets", "ext")
 	jsre.LoadExtFile(path.Join(assetPath, file))
 }
 
@@ -62,12 +62,12 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	re.LoadIntFile("string.js")
 	re.LoadIntFile("big.js")
 
-	// We have to make sure that, whoever calls this, calls "Stop"
-	go re.mainLoop()
-
 	// Subscribe to events
 	mux := ethereum.EventMux()
 	re.events = mux.Subscribe(ethchain.NewBlockEvent{})
+
+	// We have to make sure that, whoever calls this, calls "Stop"
+	go re.mainLoop()
 
 	re.Bind("eth", &JSEthereum{re.pipe, re.Vm, ethereum})
 
