@@ -816,6 +816,11 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			break;
 		}
 
+		default: // Invalid instruction - runtime exception
+		{
+			_runtimeManager.raiseException(ReturnCode::BadInstruction);
+		}
+
 		}
 	}
 

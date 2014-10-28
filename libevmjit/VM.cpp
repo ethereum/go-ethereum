@@ -5,6 +5,7 @@
 
 #include "ExecutionEngine.h"
 #include "Compiler.h"
+#include "Type.h"
 
 namespace dev
 {
@@ -20,14 +21,16 @@ bytesConstRef VM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 	ExecutionEngine engine;
 	auto exitCode = engine.run(std::move(module), m_gas, &_ext);
 
-	switch (exitCode)
+	switch (static_cast<ReturnCode>(exitCode))
 	{
-	case 101:
+	case ReturnCode::BadJumpDestination:
 		BOOST_THROW_EXCEPTION(BadJumpDestination());
-	case 102:
+	case ReturnCode::OutOfGas:
 		BOOST_THROW_EXCEPTION(OutOfGas());
-	case 103:
+	case ReturnCode::StackTooSmall:
 		BOOST_THROW_EXCEPTION(StackTooSmall(1,0));
+	case ReturnCode::BadInstruction:
+		BOOST_THROW_EXCEPTION(BadInstruction());
 	}
 
 	m_output = std::move(engine.returnData);
