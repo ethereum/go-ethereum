@@ -41,10 +41,10 @@ struct RuntimeData
 		GasLimit,
 		CodeSize,
 
-		ReturnDataOffset = CallValue,	// Reuse 2 fields for return data reference
-		ReturnDataSize = CallDataSize,
+		_size,
 
-		_size
+		ReturnDataOffset = CallValue,	// Reuse 2 fields for return data reference
+		ReturnDataSize = CallDataSize
 	};
 
 	i256 elems[_size];
