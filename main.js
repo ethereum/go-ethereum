@@ -3,6 +3,140 @@
         return o instanceof Promise
     }
 
+    function flattenPromise (obj) {
+        if (obj instanceof Promise) {
+            return Promise.resolve(obj);
+        }
+
+        if (obj instanceof Array) {
+            return new Promise(function (resolve) {
+                var promises = obj.map(function (o) {
+                    return flattenPromise(o);
+                });
+
+                return Promise.all(promises).then(function (res) {
+                    for (var i = 0; i < obj.length; i++) {
+                        obj[i] = res[i];
+                    }
+                    resolve(obj);
+                });
+            });
+        }
+        
+        if (obj instanceof Object) {
+            return new Promise(function (resolve) {
+                var keys = Object.keys(obj);
+                var promises = keys.map(function (key) {
+                    return flattenPromise(obj[key]);
+                });
+
+                return Promise.all(promises).then(function (res) {
+                    for (var i = 0; i < keys.length; i++) {
+                        obj[keys[i]] = res[i];
+                    }
+                    resolve(obj);
+                });
+            });
+        }
+
+        return Promise.resolve(obj);
+    };
+
+    var ethMethods = function () {
+        var blockCall = function (args) {
+            return typeof args[0] === "string" ? "blockByHash" : "blockByNumber";
+        };
+
+        var transactionCall = function (args) {
+            return typeof args[0] === "string" ? 'transactionByHash' : 'transactonByNumber';   
+        };
+
+        var uncleCall = function (args) {
+            return typeof args[0] === "string" ? 'uncleByHash' : 'uncleByNumber';       
+        };
+
+        var methods = [
+        { name: 'balanceAt', call: 'balanceAt' },
+        { name: 'stateAt', call: 'stateAt' },
+        { name: 'countAt', call: 'countAt'},
+        { name: 'codeAt', call: 'codeAt' },
+        { name: 'transact', call: 'transact' },
+        { name: 'call', call: 'call' },
+        { name: 'block', call: blockCall },
+        { name: 'transaction', call: transactionCall },
+        { name: 'uncle', call: uncleCall },
+        { name: 'compile', call: 'compile' }
+        ];
+        return methods;
+    };
+
+    var ethProperties = function () {
+        return [
+        { name: 'coinbase', getter: 'coinbase', setter: 'setCoinbase' },
+        { name: 'listening', getter: 'listening', setter: 'setListening' },
+        { name: 'mining', getter: 'mining', setter: 'setMining' },
+        { name: 'gasPrice', getter: 'gasPrice' },
+        { name: 'accounts', getter: 'accounts' },
+        { name: 'peerCount', getter: 'peerCount' },
+        { name: 'defaultBlock', getter: 'defaultBlock', setter: 'setDefaultBlock' },
+        { name: 'number', getter: 'number'}
+        ];
+    };
+
+    var setupMethods = function (obj, methods) {
+        methods.forEach(function (method) {
+            obj[method.name] = function () {
+                return flattenPromise(Array.prototype.slice.call(arguments)).then(function (args) {
+                    var call = typeof method.call === "function" ? method.call(args) : method.call; 
+                    return {call: call, args: args};
+                }).then(function (request) {
+                    return new Promise(function (resolve, reject) {
+                        web3.provider.send(request, function (result) {
+                            if (result) {
+                                resolve(result);
+                            } else {
+                                reject(result);
+                            }
+                        });
+                    });
+                }).catch(function( err) {
+                    console.error(err);
+                });
+            };
+        });
+    };
+
+    var setupProperties = function (obj, properties) {
+        properties.forEach(function (property) {
+            var proto = {};
+            proto.get = function () {
+                return new Promise(function(resolve, reject) {
+                    web3.provider.send({call: property.getter}, function(result) {
+                        resolve(result);
+                    });
+                });
+            };
+            if (property.setter) {
+                proto.set = function (val) {
+                    return flattenPromise([val]).then(function (args) {
+                        return new Promise(function (resolve) {
+                            web3.provider.send({call: property.setter, args: args}, function (result) {
+                                if (result) {
+                                    resolve(result);
+                                } else {
+                                    reject(result);
+                                }
+                            });
+                        });
+                    }).catch(function (err) {
+                        console.error(err);
+                    });
+                }
+            }
+            Object.defineProperty(obj, property.name, proto);
+        });
+    };
+    
     var web3 = {
         _callbacks: {},
         _events: {},
@@ -48,235 +182,6 @@
 
         eth: {
             prototype: Object(),
-
-            block: function(numberOrHash) {
-                return new Promise(function(resolve, reject) {
-                    var call = typeof numberOrHash === "string" ? 'blockByHash' : 'blockByNumber';
-                    web3.provider.send({call: call, args: [numberOrHash]}, function(block) {
-                        if(block)
-                            resolve(block);
-                        else
-                            reject("not found");
-                    });
-                });
-            },
-
-            transaction: function(numberOrHash, nth) {
-                return new Promise(function(resolve, reject) {
-                    var call = typeof numberOrHash === "string" ? 'transactionByHash' : 'transactonByNumber';
-                    web3.provider.send({call: call, args: [numberOrHash, nth]}, function(block) {
-                        if(block)
-                            resolve(block);
-                        else
-                            reject("not found");
-                    });
-                });
-            },
-
-            uncle: function(numberOrHash, nth) {
-                return new Promise(function(resolve, reject) {
-                    var call = typeof numberOrHash === "string" ? 'uncleByHash' : 'uncleByNumber';
-                    web3.provider.send({call: call, args: [numberOrHash, nth]}, function(block) {
-                        if(block)
-                            resolve(block);
-                        else
-                            reject("not found");
-                    });
-                });
-            },
-
-            transact: function(params) {
-                if(params === undefined) {
-                    params = {};
-                }
-
-                if(params.endowment !== undefined)
-                    params.value = params.endowment;
-                if(params.code !== undefined)
-                    params.data = params.code;
-
-
-                var promises = []
-                if(isPromise(params.to)) {
-                    promises.push(params.to.then(function(_to) { params.to = _to; }));
-                }
-                if(isPromise(params.from)) {
-                    promises.push(params.from.then(function(_from) { params.from = _from; }));
-                }
-
-                if(typeof params.data !== "object" || isPromise(params.data)) {
-                    params.data = [params.data]
-                }
-
-                var data = params.data;
-                for(var i = 0; i < params.data.length; i++) {
-                    if(isPromise(params.data[i])) {
-                        var promise = params.data[i];
-                        var _i = i;
-                        promises.push(promise.then(function(_arg) { params.data[_i] = _arg; }));
-                    }
-                }
-
-                // Make sure everything is string
-                var fields = ["value", "gas", "gasPrice"];
-                for(var i = 0; i < fields.length; i++) {
-                    if(params[fields[i]] === undefined) {
-                        params[fields[i]] = "";
-                    }
-                    params[fields[i]] = params[fields[i]].toString();
-                }
-
-                // Load promises then call the last "transact".
-                return Promise.all(promises).then(function() {
-                    return new Promise(function(resolve, reject) {
-                        params.data = params.data.join("");
-                        web3.provider.send({call: "transact", args: [params]}, function(data) {
-                            if(data[1])
-                                reject(data[0]);
-                            else
-                                resolve(data[0]);
-                        });
-                    });
-                })
-            },
-
-            compile: function(code) {
-                return new Promise(function(resolve, reject) {
-                    web3.provider.send({call: "compile", args: [code]}, function(data) {
-                        if(data[1])
-                            reject(data[0]);
-                        else
-                            resolve(data[0]);
-                    });
-                });
-            },
-
-            balanceAt: function(address) {
-                var promises = [];
-
-                if(isPromise(address)) {
-                    promises.push(address.then(function(_address) { address = _address; }));
-                }
-
-                return Promise.all(promises).then(function() {
-                    return new Promise(function(resolve, reject) {
-                        web3.provider.send({call: "balanceAt", args: [address]}, function(balance) {
-                            resolve(balance);
-                        });
-                    });
-                });
-            },
-
-            countAt: function(address) {
-                var promises = [];
-
-                if(isPromise(address)) {
-                    promises.push(address.then(function(_address) { address = _address; }));
-                }
-
-                return Promise.all(promises).then(function() {
-                    return new Promise(function(resolve, reject) {
-                        web3.provider.send({call: "countAt", args: [address]}, function(count) {
-                            resolve(count);
-                        });
-                    });
-                });
-            },
-
-            codeAt: function(address) {
-                var promises = [];
-
-                if(isPromise(address)) {
-                    promises.push(address.then(function(_address) { address = _address; }));
-                }
-
-                return Promise.all(promises).then(function() {
-                    return new Promise(function(resolve, reject) {
-                        web3.provider.send({call: "codeAt", args: [address]}, function(code) {
-                            resolve(code);
-                        });
-                    });
-                });
-            },
-
-            storageAt: function(address, storageAddress) {
-                var promises = [];
-
-                if(isPromise(address)) {
-                    promises.push(address.then(function(_address) { address = _address; }));
-                }
-
-                if(isPromise(storageAddress)) {
-                    promises.push(storageAddress.then(function(_sa) { storageAddress = _sa; }));
-                }
-
-                return Promise.all(promises).then(function() {
-                    return new Promise(function(resolve, reject) {
-                        web3.provider.send({call: "stateAt", args: [address, storageAddress]}, function(entry) {
-                            resolve(entry);
-                        });
-                    });
-                });
-            },
-
-            stateAt: function(address, storageAddress) {
-                return this.storageAt(address, storageAddress);
-            },
-
-            call: function(params) {
-                if(params === undefined) {
-                    params = {};
-                }
-
-                if(params.endowment !== undefined)
-                    params.value = params.endowment;
-                if(params.code !== undefined)
-                    params.data = params.code;
-
-
-                var promises = []
-                if(isPromise(params.to)) {
-                    promises.push(params.to.then(function(_to) { params.to = _to; }));
-                }
-                if(isPromise(params.from)) {
-                    promises.push(params.from.then(function(_from) { params.from = _from; }));
-                }
-
-                if(isPromise(params.data)) {
-                    promises.push(params.data.then(function(_code) { params.data = _code; }));
-                } else {
-                    if(typeof params.data === "object") {
-                        data = "";
-                        for(var i = 0; i < params.data.length; i++) {
-                            data += params.data[i]
-                        }
-                    } else {
-                        data = params.data;
-                    }
-                }
-
-                // Make sure everything is string
-                var fields = ["value", "gas", "gasPrice"];
-                for(var i = 0; i < fields.length; i++) {
-                    if(params[fields[i]] === undefined) {
-                        params[fields[i]] = "";
-                    }
-                    params[fields[i]] = params[fields[i]].toString();
-                }
-
-                // Load promises then call the last "transact".
-                return Promise.all(promises).then(function() {
-                    return new Promise(function(resolve, reject) {
-                        web3.provider.send({call: "call", args: params}, function(data) {
-                            if(data[1])
-                                reject(data[0]);
-                            else
-                                resolve(data[0]);
-                        });
-                    });
-                })
-            },
-
             watch: function(params) {
                 return new Filter(params);
             },
@@ -322,53 +227,8 @@
     };
 
     var eth = web3.eth;
-    // Eth object properties
-    Object.defineProperty(eth, "gasPrice", {
-        get: function() {
-            return "10000000000000"
-        }
-    });
-
-    Object.defineProperty(eth, "coinbase", {
-        get: function() {
-            return new Promise(function(resolve, reject) {
-                web3.provider.send({call: "coinbase"}, function(coinbase) {
-                    resolve(coinbase);
-                });
-            });
-        },
-    });
-
-    Object.defineProperty(eth, "listening", {
-        get: function() {
-            return new Promise(function(resolve, reject) {
-                web3.provider.send({call: "listening"}, function(listening) {
-                    resolve(listening);
-                });
-            });
-        },
-    });
-
-
-    Object.defineProperty(eth, "mining", {
-        get: function() {
-            return new Promise(function(resolve, reject) {
-                web3.provider.send({call: "mining"}, function(mining) {
-                    resolve(mining);
-                });
-            });
-        },
-    });
-
-    Object.defineProperty(eth, "peerCount", {
-        get: function() {
-            return new Promise(function(resolve, reject) {
-                web3.provider.send({call: "peerCount"}, function(peerCount) {
-                    resolve(peerCount);
-                });
-            });
-        },
-    });
+    setupMethods(eth, ethMethods());
+    setupProperties(eth, ethProperties());
 
     var ProviderManager = function() {
         this.queued = [];
@@ -549,4 +409,5 @@
     */
 
     window.web3 = web3;
+
 })(this);
