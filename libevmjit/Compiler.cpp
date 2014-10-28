@@ -91,9 +91,12 @@ void Compiler::createBasicBlocks(bytesConstRef bytecode)
 
 		case Instruction::JUMPDEST:
 		{
-			// A basic block starts here.
-			splitPoints.insert(currentPC);
-			indirectJumpTargets.push_back(currentPC);
+			// A basic block starts at the next instruction.
+			if (currentPC + 1 < bytecode.size())
+			{
+				splitPoints.insert(currentPC + 1);
+				indirectJumpTargets.push_back(currentPC + 1);
+			}
 			break;
 		}
 
@@ -653,8 +656,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 
 		case Instruction::JUMPDEST:
 		{
-			// Extra asserts just in case.
-			assert(currentPC == basicBlock.begin());
+			// Nothing to do
 			break;
 		}
 
