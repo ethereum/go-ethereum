@@ -24,8 +24,8 @@ namespace eth
 namespace jit
 {
 
-Memory::Memory(llvm::IRBuilder<>& _builder, GasMeter& _gasMeter, RuntimeManager& _runtimeManager):
-	CompilerHelper(_builder)
+Memory::Memory(RuntimeManager& _runtimeManager, GasMeter& _gasMeter):
+	RuntimeHelper(_runtimeManager)
 {
 	auto module = getModule();
 	auto i64Ty = m_builder.getInt64Ty();
@@ -39,12 +39,6 @@ Memory::Memory(llvm::IRBuilder<>& _builder, GasMeter& _gasMeter, RuntimeManager&
 
 	m_size = new llvm::GlobalVariable(*module, Type::i256, false, llvm::GlobalVariable::PrivateLinkage, Constant::get(0), "mem.size");
 	m_size->setUnnamedAddr(true); // Address is not important
-
-	m_returnDataOffset = new llvm::GlobalVariable(*module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "mem_returnDataOffset");
-	m_returnDataOffset->setUnnamedAddr(true); // Address is not important
-
-	m_returnDataSize = new llvm::GlobalVariable(*module, Type::i256, false, llvm::GlobalVariable::ExternalLinkage, nullptr, "mem_returnDataSize");
-	m_returnDataSize->setUnnamedAddr(true); // Address is not important
 
 	llvm::Type* resizeArgs[] = {Type::RuntimePtr, Type::WordPtr};
 	m_resize = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, resizeArgs, false), llvm::Function::ExternalLinkage, "mem_resize", module);
@@ -178,14 +172,6 @@ void Memory::require(llvm::Value* _offset, llvm::Value* _size)
 {
 	auto sizeRequired = m_builder.CreateAdd(_offset, _size, "sizeRequired");
 	require(sizeRequired);
-}
-
-void Memory::registerReturnData(llvm::Value* _index, llvm::Value* _size)
-{ 
-	require(_index, _size); // Make sure that memory is allocated and count gas
-
-	m_builder.CreateStore(_index, m_returnDataOffset);
-	m_builder.CreateStore(_size, m_returnDataSize);
 }
 
 void Memory::copyBytes(llvm::Value* _srcPtr, llvm::Value* _srcSize, llvm::Value* _srcIdx,

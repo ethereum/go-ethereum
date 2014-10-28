@@ -182,7 +182,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 	// Init runtime structures.
 	RuntimeManager runtimeManager(m_builder);
 	GasMeter gasMeter(m_builder, runtimeManager);
-	Memory memory(m_builder, gasMeter, runtimeManager);
+	Memory memory(runtimeManager, gasMeter);
 	Ext ext(runtimeManager);
 	Stack stack(m_builder, runtimeManager);
 
@@ -817,7 +817,8 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto index = stack.pop();
 			auto size = stack.pop();
 
-			memory.registerReturnData(index, size);
+			memory.require(index, size);
+			_runtimeManager.registerReturnData(index, size);
 
 			m_builder.CreateRet(Constant::get(ReturnCode::Return));
 			break;

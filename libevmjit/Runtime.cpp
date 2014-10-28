@@ -98,16 +98,14 @@ u256 Runtime::getGas() const
 	return llvm2eth(m_data.elems[RuntimeData::Gas]);
 }
 
-extern "C" {
-	EXPORT i256 mem_returnDataOffset;	// FIXME: Dis-globalize
-	EXPORT i256 mem_returnDataSize;
-}
-
 bytesConstRef Runtime::getReturnData() const
 {
 	// TODO: Handle large indexes
-	auto offset = static_cast<size_t>(llvm2eth(mem_returnDataOffset));
-	auto size = static_cast<size_t>(llvm2eth(mem_returnDataSize));
+	auto offset = static_cast<size_t>(llvm2eth(m_data.elems[RuntimeData::ReturnDataOffset]));
+	auto size = static_cast<size_t>(llvm2eth(m_data.elems[RuntimeData::ReturnDataSize]));
+
+	assert(offset + size <= m_memory.size());
+	// TODO: Handle invalid data access by returning empty ref
 	return {m_memory.data() + offset, size};
 }
 
@@ -128,11 +126,26 @@ llvm::Value* RuntimeManager::getRuntimePtr()
 	return m_builder.CreateLoad(m_dataPtr);
 }
 
-llvm::Value* RuntimeManager::get(RuntimeData::Index _index)
+llvm::Value* RuntimeManager::getPtr(RuntimeData::Index _index)
 {
 	llvm::Value* idxList[] = {m_builder.getInt32(0), m_builder.getInt32(0), m_builder.getInt32(_index)};
-	auto ptr = m_builder.CreateInBoundsGEP(getRuntimePtr(), idxList, getName(_index) + "Ptr");
-	return m_builder.CreateLoad(ptr, getName(_index));
+	return m_builder.CreateInBoundsGEP(getRuntimePtr(), idxList, getName(_index) + "Ptr");
+}
+
+llvm::Value* RuntimeManager::get(RuntimeData::Index _index)
+{
+	return m_builder.CreateLoad(getPtr(_index), getName(_index));
+}
+
+void RuntimeManager::set(RuntimeData::Index _index, llvm::Value* _value)
+{
+	m_builder.CreateStore(_value, getPtr(_index));
+}
+
+void RuntimeManager::registerReturnData(llvm::Value* _offset, llvm::Value* _size)
+{
+	set(RuntimeData::ReturnDataOffset, _offset);
+	set(RuntimeData::ReturnDataSize, _size);
 }
 
 llvm::Value* RuntimeManager::get(Instruction _inst)

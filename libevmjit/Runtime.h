@@ -102,7 +102,12 @@ public:
 	llvm::Value* getJmpBuf();
 	void setGas(llvm::Value* _gas);
 
+	void registerReturnData(llvm::Value* _index, llvm::Value* _size);
+
 private:
+	llvm::Value* getPtr(RuntimeData::Index _index);
+	void set(RuntimeData::Index _index, llvm::Value* _value);
+
 	llvm::GlobalVariable* m_dataPtr;
 };
 
