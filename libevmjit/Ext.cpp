@@ -63,7 +63,7 @@ Ext::Ext(RuntimeManager& _runtimeManager):
 	m_call = llvm::Function::Create(llvm::FunctionType::get(Type::Void, argsTypes, false), Linkage::ExternalLinkage, "ext_call", module);
 	m_sha3 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 4}, false), Linkage::ExternalLinkage, "ext_sha3", module);
 	m_exp = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 4}, false), Linkage::ExternalLinkage, "ext_exp", module);
-	m_codeAt = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, Type::WordPtr, false), Linkage::ExternalLinkage, "ext_codeAt", module);
+	m_codeAt = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, {argsTypes, 2}, false), Linkage::ExternalLinkage, "ext_codeAt", module);
 	m_codesizeAt = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_codesizeAt", module);
 }
 
