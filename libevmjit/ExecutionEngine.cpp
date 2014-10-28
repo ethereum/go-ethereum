@@ -35,8 +35,6 @@ ExecutionEngine::ExecutionEngine()
 
 }
 
-extern "C" { EXPORT std::jmp_buf* rt_jmpBuf; }
-
 int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtVMFace* _ext)
 {
 	auto module = _module.get(); // Keep ownership of the module in _module
@@ -102,21 +100,19 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtV
 		_ext->code = decltype(_ext->code)(fakecode, 8);
 	}
 
-	// Init runtime
-	Runtime runtime(_gas, *_ext);
-
 	auto entryFunc = module->getFunction("main");
 	if (!entryFunc)
 		BOOST_THROW_EXCEPTION(Exception() << errinfo_comment("main function not found"));
 
 	ReturnCode returnCode;
 	std::jmp_buf buf;
+	Runtime runtime(_gas, *_ext, buf);
 	auto r = setjmp(buf);
 	if (r == 0)
 	{
+
 		auto executionStartTime = std::chrono::high_resolution_clock::now();
 
-		rt_jmpBuf = &buf;
 		auto result = exec->runFunction(entryFunc, {{}, llvm::GenericValue(runtime.getDataPtr())});
 		returnCode = static_cast<ReturnCode>(result.IntVal.getZExtValue());
 

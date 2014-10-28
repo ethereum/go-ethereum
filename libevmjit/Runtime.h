@@ -41,12 +41,16 @@ struct RuntimeData
 		GasLimit,
 		CodeSize,
 
+		ReturnDataOffset = CallValue,	// Reuse 2 fields for return data reference
+		ReturnDataSize = CallDataSize,
+
 		_size
 	};
 
 	i256 elems[_size];
 	byte const* callData;
 	byte const* code;
+	decltype(&jmp_buf{}[0]) jmpBuf;
 
 	static llvm::StructType* getType();
 };
@@ -57,7 +61,7 @@ using MemoryImpl = bytes;
 class Runtime
 {
 public:
-	Runtime(u256 _gas, ExtVMFace& _ext);
+	Runtime(u256 _gas, ExtVMFace& _ext, jmp_buf _jmpBuf);
 	~Runtime();
 
 	Runtime(const Runtime&) = delete;
@@ -71,6 +75,7 @@ public:
 
 	u256 getGas() const;
 	bytesConstRef getReturnData() const;
+	decltype(&jmp_buf{}[0]) getJmpBuf() { return m_data.jmpBuf; }
 
 private:
 	void set(RuntimeData::Index _index, u256 _value);
@@ -94,6 +99,7 @@ public:
 	llvm::Value* getGas();	// TODO: Remove
 	llvm::Value* getCallData();
 	llvm::Value* getCode();
+	llvm::Value* getJmpBuf();
 	void setGas(llvm::Value* _gas);
 
 private:

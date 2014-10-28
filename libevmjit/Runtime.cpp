@@ -24,6 +24,7 @@ llvm::StructType* RuntimeData::getType()
 		{
 			llvm::ArrayType::get(Type::i256, _size),
 			Type::BytePtr,
+			Type::BytePtr,
 			Type::BytePtr
 		};
 		type = llvm::StructType::create(elems, "RuntimeData");
@@ -58,7 +59,7 @@ llvm::Twine getName(RuntimeData::Index _index)
 
 static Runtime* g_runtime;	// FIXME: Remove
 
-Runtime::Runtime(u256 _gas, ExtVMFace& _ext):
+Runtime::Runtime(u256 _gas, ExtVMFace& _ext, jmp_buf _jmpBuf):
 	m_ext(_ext)
 {
 	assert(!g_runtime);
@@ -79,6 +80,7 @@ Runtime::Runtime(u256 _gas, ExtVMFace& _ext):
 	set(RuntimeData::CodeSize, _ext.code.size());	// TODO: Use constant
 	m_data.callData = _ext.data.data();
 	m_data.code = _ext.code.data();
+	m_data.jmpBuf = _jmpBuf;
 }
 
 Runtime::~Runtime()
@@ -165,6 +167,12 @@ llvm::Value* RuntimeManager::getCode()
 {
 	auto ptr = getBuilder().CreateStructGEP(getRuntimePtr(), 2, "codePtr");
 	return getBuilder().CreateLoad(ptr, "code");
+}
+
+llvm::Value* RuntimeManager::getJmpBuf()
+{
+	auto ptr = getBuilder().CreateStructGEP(getRuntimePtr(), 3, "jmpbufPtr");
+	return getBuilder().CreateLoad(ptr, "jmpbuf");
 }
 
 llvm::Value* RuntimeManager::getGas()
