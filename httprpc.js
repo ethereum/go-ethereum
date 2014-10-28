@@ -1,5 +1,5 @@
 (function () {
-    var HttpProvider = function (host) {
+    var HttpRpcProvider = function (host) {
         this.handlers = [];
         this.host = host;
     };
@@ -22,7 +22,7 @@
         };
     };
 
-    HttpProvider.prototype.sendRequest = function (payload, cb) {
+    HttpRpcProvider.prototype.sendRequest = function (payload, cb) {
         var data = formatJsonRpcObject(payload);
 
         var request = new XMLHttpRequest();
@@ -35,7 +35,7 @@
         }
     };
 
-    HttpProvider.prototype.send = function (payload) {
+    HttpRpcProvider.prototype.send = function (payload) {
         var self = this;
         this.sendRequest(payload, function (request) {
             self.handlers.forEach(function (handler) {
@@ -44,7 +44,7 @@
         });
     };
 
-    HttpProvider.prototype.poll = function (payload, id) {
+    HttpRpcProvider.prototype.poll = function (payload, id) {
         var self = this;
         this.sendRequest(payload, function (request) {
             var parsed = JSON.parse(request.responseText);
@@ -57,13 +57,14 @@
         });
     };
 
-    Object.defineProperty(HttpProvider.prototype, "onmessage", {
+    Object.defineProperty(HttpRpcProvider.prototype, "onmessage", {
         set: function (handler) {
             this.handlers.push(handler);
         }
     });
 
     if (typeof(web3) !== "undefined" && web3.providers !== undefined) {
-        web3.providers.HttpProvider = HttpProvider;
+        web3.providers.HttpRpcProvider = HttpRpcProvider;
     }
 })();
+
