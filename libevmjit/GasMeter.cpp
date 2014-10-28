@@ -143,7 +143,7 @@ void GasMeter::countSStore(Ext& _ext, llvm::Value* _index, llvm::Value* _newValu
 	auto isDel = m_builder.CreateAnd(oldValueIsntZero, newValueIsZero, "isDel");
 	auto cost = m_builder.CreateSelect(isAdd, Constant::get(2 * sstoreCost), Constant::get(sstoreCost), "cost");
 	cost = m_builder.CreateSelect(isDel, Constant::get(0), cost, "cost");
-	m_builder.CreateCall(m_gasCheckFunc, cost);
+	call(m_gasCheckFunc, cost);
 }
 
 void GasMeter::giveBack(llvm::Value* _gas)

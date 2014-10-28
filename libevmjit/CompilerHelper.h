@@ -31,6 +31,13 @@ protected:
 	llvm::IRBuilder<>& m_builder;
 	llvm::IRBuilder<>& getBuilder() { return m_builder; }
 
+	template<typename ..._Args>
+	llvm::CallInst* call(llvm::Function* _func, _Args*... _args)
+	{
+		llvm::Value* args[] = {_args...};
+		return m_builder.CreateCall(_func, args);
+	}
+
 	friend class RuntimeHelper;
 };
 
