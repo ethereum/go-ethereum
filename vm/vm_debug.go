@@ -179,7 +179,8 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 				// 0 => non 0
 				mult = ethutil.Big3
 			} else if val.BigInt().Cmp(ethutil.Big0) != 0 && len(y.Bytes()) == 0 {
-				//state.AddBalance(closure.caller.Address(), new(big.Int).Mul(big.NewInt(100), closure.Price))
+				state.Refund(closure.caller.Address(), big.NewInt(100), closure.Price)
+
 				mult = ethutil.Big0
 			} else {
 				// non 0 => non 0

@@ -22,11 +22,13 @@ type State struct {
 	stateObjects map[string]*StateObject
 
 	manifest *Manifest
+
+	refund map[string]*big.Int
 }
 
 // Create a new state from a given trie
 func New(trie *ethtrie.Trie) *State {
-	return &State{Trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest()}
+	return &State{Trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest(), refund: make(map[string]*big.Int)}
 }
 
 // Retrieve the balance from the given address or 0 if object not found
@@ -37,6 +39,16 @@ func (self *State) GetBalance(addr []byte) *big.Int {
 	}
 
 	return ethutil.Big0
+}
+
+func (self *State) Refund(addr []byte, gas, price *big.Int) {
+	amount := new(big.Int).Mul(gas, price)
+
+	if self.refund[string(addr)] == nil {
+		self.refund[string(addr)] = new(big.Int)
+	}
+
+	self.refund[string(addr)] = new(big.Int).Add(self.refund[string(addr)], amount)
 }
 
 func (self *State) AddBalance(addr []byte, amount *big.Int) {
@@ -186,6 +198,10 @@ func (self *State) Copy() *State {
 			state.stateObjects[k] = stateObject.Copy()
 		}
 
+		for addr, refund := range self.refund {
+			state.refund[addr] = refund
+		}
+
 		return state
 	}
 
@@ -199,6 +215,7 @@ func (self *State) Set(state *State) {
 
 	self.Trie = state.Trie
 	self.stateObjects = state.stateObjects
+	self.refund = state.refund
 }
 
 func (s *State) Root() interface{} {
@@ -240,10 +257,17 @@ func (s *State) Sync() {
 
 func (self *State) Empty() {
 	self.stateObjects = make(map[string]*StateObject)
+	self.refund = make(map[string]*big.Int)
 }
 
 func (self *State) Update() {
 	var deleted bool
+
+	// Refund any gas that's left
+	for addr, amount := range self.refund {
+		self.GetStateObject([]byte(addr)).AddBalance(amount)
+	}
+
 	for _, stateObject := range self.stateObjects {
 		if stateObject.remove {
 			self.DeleteStateObject(stateObject)
