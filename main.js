@@ -83,6 +83,25 @@
         ];
     };
 
+    var dbMethods = function () {
+        return [
+        { name: 'put', call: 'put' },
+        { name: 'get', call: 'get' },
+        { name: 'putString', call: 'putString' },
+        { name: 'getString', call: 'getString' }
+        ];
+    };
+
+    var shhMethods = function () {
+        return [
+        { name: 'post', call: 'post' },
+        { name: 'newIdentity', call: 'newIdentity' },
+        { name: 'haveIdentity', call: 'haveIdentity' },
+        { name: 'newGroup', call: 'newGroup' },
+        { name: 'addToGroup', call: 'addToGroup' }
+        ];
+    };
+
     var setupMethods = function (obj, methods) {
         methods.forEach(function (method) {
             obj[method.name] = function () {
@@ -187,6 +206,14 @@
             },
         },
 
+        db: {
+            prototype: Object()
+        },
+
+        shh: {
+            prototype: Object()
+        },
+
         on: function(event, cb) {
             if(web3._events[event] === undefined) {
                 web3._events[event] = [];
@@ -229,6 +256,8 @@
     var eth = web3.eth;
     setupMethods(eth, ethMethods());
     setupProperties(eth, ethProperties());
+    setupMethods(web3.db, dbMethods());
+    setupMethods(web3.shh, shhMethods());
 
     var ProviderManager = function() {
         this.queued = [];
