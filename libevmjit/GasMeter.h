@@ -13,7 +13,7 @@ namespace jit
 {
 class RuntimeManager;
 
-class GasMeter : public CompilerHelper
+class GasMeter : public CompilerHelper // TODO: Use RuntimeHelper
 {
 public:
 	GasMeter(llvm::IRBuilder<>& _builder, RuntimeManager& _runtimeManager);
