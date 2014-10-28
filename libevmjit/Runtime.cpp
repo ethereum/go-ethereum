@@ -27,7 +27,7 @@ llvm::StructType* RuntimeData::getType()
 			Type::BytePtr,
 			Type::BytePtr
 		};
-		type = llvm::StructType::create(elems, "RuntimeData");
+		type = llvm::StructType::create(elems, "Runtime");
 	}
 	return type;
 }
