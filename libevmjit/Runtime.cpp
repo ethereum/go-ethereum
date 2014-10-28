@@ -122,8 +122,9 @@ RuntimeManager::RuntimeManager(llvm::IRBuilder<>& _builder): CompilerHelper(_bui
 
 llvm::Value* RuntimeManager::getRuntimePtr()
 {
-	// TODO: If in main function - get it from param
-	return m_builder.CreateLoad(m_dataPtr);
+	if (auto mainFunc = getMainFunction())
+		return mainFunc->arg_begin()->getNextNode();	// Runtime is the second parameter of main function
+	return m_builder.CreateLoad(m_dataPtr, "rt");
 }
 
 llvm::Value* RuntimeManager::getPtr(RuntimeData::Index _index)

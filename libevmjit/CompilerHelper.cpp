@@ -27,8 +27,10 @@ llvm::Function* CompilerHelper::getMainFunction()
 {
 	assert(m_builder.GetInsertBlock());
 	auto mainFunc = m_builder.GetInsertBlock()->getParent();
-	assert(mainFunc && mainFunc->getName() == "main");
-	return mainFunc;
+	assert(mainFunc);
+	if (mainFunc->getName() == "main")
+		return mainFunc;
+	return nullptr;
 }
 
 
