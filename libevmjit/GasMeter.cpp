@@ -31,7 +31,7 @@ uint64_t getStepCost(Instruction inst) // TODO: Add this function to FeeSructure
 		return 0;
 
 	case Instruction::SSTORE:
-		return static_cast<uint64_t>(c_sstoreGas);
+		return static_cast<uint64_t>(c_sstoreResetGas);	// FIXME: Check store gas
 
 	case Instruction::SLOAD:
 		return static_cast<uint64_t>(c_sloadGas);
@@ -133,7 +133,7 @@ void GasMeter::countSStore(Ext& _ext, llvm::Value* _index, llvm::Value* _newValu
 {
 	assert(!m_checkCall); // Everything should've been commited before
 
-	static const auto sstoreCost = static_cast<uint64_t>(c_sstoreGas);
+	static const auto sstoreCost = static_cast<uint64_t>(c_sstoreResetGas);	// FIXME: Check store gas
 
 	// [ADD] if oldValue == 0 and newValue != 0  =>  2*cost
 	// [DEL] if oldValue != 0 and newValue == 0  =>  0

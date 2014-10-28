@@ -369,14 +369,14 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			break;
 		}
 
-		case Instruction::NEG:
+		/*case Instruction::NEG:
 		{
 			auto top = stack.pop();
 			auto zero = Constant::get(0);
 			auto res = m_builder.CreateSub(zero, top);
 			stack.push(res);
 			break;
-		}
+		}*/
 
 		case Instruction::LT:
 		{
