@@ -22,6 +22,7 @@
 #include "GasMeter.h"
 #include "Utils.h"
 #include "Endianness.h"
+#include "Arith256.h"
 #include "Runtime.h"
 
 namespace dev
@@ -185,6 +186,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 	Memory memory(m_builder, gasMeter, runtimeManager);
 	Ext ext(runtimeManager);
 	Stack stack(m_builder, runtimeManager);
+	Arith256 arith(m_builder);
 
 	m_builder.CreateBr(basicBlocks.begin()->second);
 
@@ -194,7 +196,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 		auto iterCopy = basicBlockPairIt;
 		++iterCopy;
 		auto nextBasicBlock = (iterCopy != basicBlocks.end()) ? iterCopy->second.llvm() : nullptr;
-		compileBasicBlock(basicBlock, bytecode, runtimeManager, memory, ext, gasMeter, nextBasicBlock);
+		compileBasicBlock(basicBlock, bytecode, runtimeManager, arith, memory, ext, gasMeter, nextBasicBlock);
 	}
 
 	// Code for special blocks:
@@ -280,7 +282,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 }
 
 
-void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode, RuntimeManager& _runtimeManager, Memory& memory, Ext& ext, GasMeter& gasMeter, llvm::BasicBlock* nextBasicBlock)
+void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode, RuntimeManager& _runtimeManager, Arith256& arith, Memory& memory, Ext& ext, GasMeter& gasMeter, llvm::BasicBlock* nextBasicBlock)
 {
 	m_builder.SetInsertPoint(basicBlock.llvm());
 	auto& stack = basicBlock.localStack();
@@ -314,61 +316,46 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 
 		case Instruction::MUL:
 		{
-			auto lhs256 = stack.pop();
-			auto rhs256 = stack.pop();
-			auto lhs128 = m_builder.CreateTrunc(lhs256, Type::lowPrecision);
-			auto rhs128 = m_builder.CreateTrunc(rhs256, Type::lowPrecision);
-			auto res128 = m_builder.CreateMul(lhs128, rhs128);
-			auto res256 = m_builder.CreateZExt(res128, Type::i256);
-			stack.push(res256);
+			auto lhs = stack.pop();
+			auto rhs = stack.pop();
+			auto res = arith.mul(lhs, rhs);
+			stack.push(res);
 			break;
 		}
 
 		case Instruction::DIV:
 		{
-			auto lhs256 = stack.pop();
-			auto rhs256 = stack.pop();
-			auto lhs128 = m_builder.CreateTrunc(lhs256, Type::lowPrecision);
-			auto rhs128 = m_builder.CreateTrunc(rhs256, Type::lowPrecision);
-			auto res128 = m_builder.CreateUDiv(lhs128, rhs128);
-			auto res256 = m_builder.CreateZExt(res128, Type::i256);
-			stack.push(res256);
+			auto lhs = stack.pop();
+			auto rhs = stack.pop();
+			auto res = arith.div(lhs, rhs);
+			stack.push(res);
 			break;
 		}
 
 		case Instruction::SDIV:
 		{
-			auto lhs256 = stack.pop();
-			auto rhs256 = stack.pop();
-			auto lhs128 = m_builder.CreateTrunc(lhs256, Type::lowPrecision);
-			auto rhs128 = m_builder.CreateTrunc(rhs256, Type::lowPrecision);
-			auto res128 = m_builder.CreateSDiv(lhs128, rhs128);
-			auto res256 = m_builder.CreateSExt(res128, Type::i256);
-			stack.push(res256);
+			auto lhs = stack.pop();
+			auto rhs = stack.pop();
+			auto res = arith.sdiv(lhs, rhs);
+			stack.push(res);
 			break;
 		}
 
 		case Instruction::MOD:
 		{
-			auto lhs256 = stack.pop();
-			auto rhs256 = stack.pop();
-			auto lhs128 = m_builder.CreateTrunc(lhs256, Type::lowPrecision);
-			auto rhs128 = m_builder.CreateTrunc(rhs256, Type::lowPrecision);
-			auto res128 = m_builder.CreateURem(lhs128, rhs128);
-			auto res256 = m_builder.CreateZExt(res128, Type::i256);
-			stack.push(res256);
+			auto lhs = stack.pop();
+			auto rhs = stack.pop();
+			auto res = arith.mod(lhs, rhs);
+			stack.push(res);
 			break;
 		}
 
 		case Instruction::SMOD:
 		{
-			auto lhs256 = stack.pop();
-			auto rhs256 = stack.pop();
-			auto lhs128 = m_builder.CreateTrunc(lhs256, Type::lowPrecision);
-			auto rhs128 = m_builder.CreateTrunc(rhs256, Type::lowPrecision);
-			auto res128 = m_builder.CreateSRem(lhs128, rhs128);
-			auto res256 = m_builder.CreateSExt(res128, Type::i256);
-			stack.push(res256);
+			auto lhs = stack.pop();
+			auto rhs = stack.pop();
+			auto res = arith.smod(lhs, rhs);
+			stack.push(res);
 			break;
 		}
 
@@ -496,31 +483,23 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 
 		case Instruction::ADDMOD:
 		{
-			auto val1 = stack.pop();
-			auto val2 = stack.pop();
-			auto sum = m_builder.CreateAdd(val1, val2);
+			auto lhs = stack.pop();
+			auto rhs = stack.pop();
+			auto sum = m_builder.CreateAdd(lhs, rhs);
 			auto mod = stack.pop();
-
-			auto sum128 = m_builder.CreateTrunc(sum, Type::lowPrecision);
-			auto mod128 = m_builder.CreateTrunc(mod, Type::lowPrecision);
-			auto res128 = m_builder.CreateURem(sum128, mod128);
-			auto res256 = m_builder.CreateZExt(res128, Type::i256);
-			stack.push(res256);
+			auto res = arith.mod(sum, mod);
+			stack.push(res);
 			break;
 		}
 
 		case Instruction::MULMOD:
 		{
-			auto val1 = stack.pop();
-			auto val2 = stack.pop();
-			auto prod = m_builder.CreateMul(val1, val2);
+			auto lhs = stack.pop();
+			auto rhs = stack.pop();
+			auto prod = m_builder.CreateMul(lhs, rhs);
 			auto mod = stack.pop();
-
-			auto prod128 = m_builder.CreateTrunc(prod, Type::lowPrecision);
-			auto mod128 = m_builder.CreateTrunc(mod, Type::lowPrecision);
-			auto res128 = m_builder.CreateURem(prod128, mod128);
-			auto res256 = m_builder.CreateZExt(res128, Type::i256);
-			stack.push(res256);
+			auto res = arith.mod(prod, mod);
+			stack.push(res);
 			break;
 		}
 
