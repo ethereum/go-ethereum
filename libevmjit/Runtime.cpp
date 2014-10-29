@@ -73,7 +73,7 @@ Runtime::Runtime(u256 _gas, ExtVMFace& _ext, jmp_buf _jmpBuf):
 	set(RuntimeData::Number, _ext.currentBlock.number);
 	set(RuntimeData::Difficulty, _ext.currentBlock.difficulty);
 	set(RuntimeData::GasLimit, _ext.currentBlock.gasLimit);
-	set(RuntimeData::CodeSize, _ext.code.size());	// TODO: Use constant
+	set(RuntimeData::CodeSize, _ext.code.size());   // TODO: Use constant
 	m_data.callData = _ext.data.data();
 	m_data.code = _ext.code.data();
 	m_data.jmpBuf = _jmpBuf;
@@ -116,7 +116,7 @@ RuntimeManager::RuntimeManager(llvm::IRBuilder<>& _builder): CompilerHelper(_bui
 llvm::Value* RuntimeManager::getRuntimePtr()
 {
 	if (auto mainFunc = getMainFunction())
-		return mainFunc->arg_begin()->getNextNode();	// Runtime is the second parameter of main function
+		return mainFunc->arg_begin()->getNextNode();    // Runtime is the second parameter of main function
 	return m_builder.CreateLoad(m_dataPtr, "rt");
 }
 
