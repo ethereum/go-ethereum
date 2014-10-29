@@ -91,9 +91,12 @@ void Compiler::createBasicBlocks(bytesConstRef bytecode)
 
 		case Instruction::JUMPDEST:
 		{
-			// A basic block starts here.
-			splitPoints.insert(currentPC);
-			indirectJumpTargets.push_back(currentPC);
+			// A basic block starts at the next instruction.
+			if (currentPC + 1 < bytecode.size())
+			{
+				splitPoints.insert(currentPC + 1);
+				indirectJumpTargets.push_back(currentPC + 1);
+			}
 			break;
 		}
 
@@ -486,9 +489,8 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		{
 			auto lhs = stack.pop();
 			auto rhs = stack.pop();
-			auto sum = m_builder.CreateAdd(lhs, rhs);
 			auto mod = stack.pop();
-			auto res = arith.mod(sum, mod);
+			auto res = arith.addmod(lhs, rhs, mod);
 			stack.push(res);
 			break;
 		}
@@ -497,9 +499,8 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		{
 			auto lhs = stack.pop();
 			auto rhs = stack.pop();
-			auto prod = m_builder.CreateMul(lhs, rhs);
 			auto mod = stack.pop();
-			auto res = arith.mod(prod, mod);
+			auto res = arith.mulmod(lhs, rhs, mod);
 			stack.push(res);
 			break;
 		}
@@ -654,8 +655,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 
 		case Instruction::JUMPDEST:
 		{
-			// Extra asserts just in case.
-			assert(currentPC == basicBlock.begin());
+			// Nothing to do
 			break;
 		}
 
