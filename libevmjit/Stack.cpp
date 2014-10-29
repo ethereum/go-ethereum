@@ -14,8 +14,8 @@ namespace eth
 namespace jit
 {
 
-Stack::Stack(llvm::IRBuilder<>& _builder, RuntimeManager& _runtimeManager)
-	: CompilerHelper(_builder),
+Stack::Stack(llvm::IRBuilder<>& _builder, RuntimeManager& _runtimeManager):
+	CompilerHelper(_builder),
 	m_runtimeManager(_runtimeManager)
 {
 	m_arg = m_builder.CreateAlloca(Type::i256, nullptr, "stack.arg");
@@ -35,9 +35,6 @@ Stack::Stack(llvm::IRBuilder<>& _builder, RuntimeManager& _runtimeManager)
 	m_get = Function::Create(FunctionType::get(Type::Void, getSetArgTypes, false), Linkage::ExternalLinkage, "stack_get", module);
 	m_set = Function::Create(FunctionType::get(Type::Void, getSetArgTypes, false), Linkage::ExternalLinkage, "stack_set", module);
 }
-
-Stack::~Stack()
-{}
 
 llvm::Value* Stack::get(size_t _index)
 {
@@ -71,46 +68,45 @@ size_t Stack::maxStackSize = 0;
 
 extern "C"
 {
+	using namespace dev::eth::jit;
 
-using namespace dev::eth::jit;
+	EXPORT void stack_pop(Runtime* _rt, uint64_t _count)
+	{
+		auto& stack = _rt->getStack();
+		if (stack.size() < _count)
+			longjmp(_rt->getJmpBuf(), static_cast<uint64_t>(ReturnCode::StackTooSmall));
 
-EXPORT void stack_pop(Runtime* _rt, uint64_t _count)
-{
-	auto& stack = _rt->getStack();
-	if (stack.size() < _count)
-		longjmp(_rt->getJmpBuf(), static_cast<uint64_t>(ReturnCode::StackTooSmall));
+		stack.erase(stack.end() - _count, stack.end());
+	}
 
-	stack.erase(stack.end() - _count, stack.end());
-}
+	EXPORT void stack_push(Runtime* _rt, i256* _word)
+	{
+		auto& stack = _rt->getStack();
+		stack.push_back(*_word);
 
-EXPORT void stack_push(Runtime* _rt, i256* _word)
-{
-	auto& stack = _rt->getStack();
-	stack.push_back(*_word);
+		if (stack.size() > Stack::maxStackSize)
+			Stack::maxStackSize = stack.size();
+	}
 
-	if (stack.size() > Stack::maxStackSize)
-		Stack::maxStackSize = stack.size();
-}
+	EXPORT void stack_get(Runtime* _rt, uint64_t _index, i256* _ret)
+	{
+		auto& stack = _rt->getStack();
+		// TODO: encode _index and stack size in the return code
+		if (stack.size() <= _index)
+			longjmp(_rt->getJmpBuf(), static_cast<uint64_t>(ReturnCode::StackTooSmall));
 
-EXPORT void stack_get(Runtime* _rt, uint64_t _index, i256* _ret)
-{
-	auto& stack = _rt->getStack();
-	// TODO: encode _index and stack size in the return code
-	if (stack.size() <= _index)
-		longjmp(_rt->getJmpBuf(), static_cast<uint64_t>(ReturnCode::StackTooSmall));
+		*_ret = *(stack.rbegin() + _index);
+	}
 
-	*_ret = *(stack.rbegin() + _index);
-}
+	EXPORT void stack_set(Runtime* _rt, uint64_t _index, i256* _word)
+	{
+		auto& stack = _rt->getStack();
+		// TODO: encode _index and stack size in the return code
+		if (stack.size() <= _index)
+			longjmp(_rt->getJmpBuf(), static_cast<uint64_t>(ReturnCode::StackTooSmall));
 
-EXPORT void stack_set(Runtime* _rt, uint64_t _index, i256* _word)
-{
-	auto& stack = _rt->getStack();
-	// TODO: encode _index and stack size in the return code
-	if (stack.size() <= _index)
-		longjmp(_rt->getJmpBuf(), static_cast<uint64_t>(ReturnCode::StackTooSmall));
-
-	*(stack.rbegin() + _index) = *_word;
-}
+		*(stack.rbegin() + _index) = *_word;
+	}
 
 } // extern "C"
 
