@@ -54,7 +54,7 @@ private:
 	llvm::Function* m_codeAt;
 	llvm::Function* m_codesizeAt;
 };
-	
+
 
 }
 }

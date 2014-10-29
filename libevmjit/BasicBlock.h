@@ -14,7 +14,7 @@ namespace jit
 {
 
 using ProgramCounter = uint64_t; // TODO: Rename
-	
+
 class BasicBlock
 {
 public:
