@@ -8,7 +8,7 @@ import (
 
 func TestBloom9(t *testing.T) {
 	testCase := []byte("testtest")
-	bin := LogsBloom([]vm.Log{vm.Log{testCase, nil, nil}}).Bytes()
+	bin := LogsBloom([]vm.Log{vm.Log{testCase, [][]byte{[]byte("hellohello")}, nil}}).Bytes()
 	res := BloomLookup(bin, testCase)
 
 	if !res {

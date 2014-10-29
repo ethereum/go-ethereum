@@ -170,13 +170,10 @@ func (self *Filter) FilterMessages(msgs []*ethstate.Message) []*ethstate.Message
 }
 
 func (self *Filter) bloomFilter(block *Block) bool {
-	// TODO update to the new bloom filter
-	bloom := NewBloomFilter(nil)
-
 	var fromIncluded, toIncluded bool
 	if len(self.from) > 0 {
 		for _, from := range self.from {
-			if bloom.Search(from) {
+			if BloomLookup(block.LogsBloom, from) {
 				fromIncluded = true
 				break
 			}
@@ -187,7 +184,7 @@ func (self *Filter) bloomFilter(block *Block) bool {
 
 	if len(self.to) > 0 {
 		for _, to := range self.to {
-			if bloom.Search(to) {
+			if BloomLookup(block.LogsBloom, to) {
 				toIncluded = true
 				break
 			}
