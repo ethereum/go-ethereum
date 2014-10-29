@@ -14,22 +14,30 @@ import (
 	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethtrie"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/obscuren/mutan"
 )
 
-type TestEnv struct {
+type TestEnv struct{}
+
+func (TestEnv) Origin() []byte        { return nil }
+func (TestEnv) BlockNumber() *big.Int { return nil }
+func (TestEnv) BlockHash() []byte     { return nil }
+func (TestEnv) PrevHash() []byte      { return nil }
+func (TestEnv) Coinbase() []byte      { return nil }
+func (TestEnv) Time() int64           { return 0 }
+func (TestEnv) GasLimit() *big.Int    { return nil }
+func (TestEnv) Difficulty() *big.Int  { return nil }
+func (TestEnv) Value() *big.Int       { return nil }
+func (TestEnv) AddLog(Log)            {}
+
+func (TestEnv) Transfer(from, to Account, amount *big.Int) error {
+	return nil
 }
 
-func (self TestEnv) Origin() []byte        { return nil }
-func (self TestEnv) BlockNumber() *big.Int { return nil }
-func (self TestEnv) BlockHash() []byte     { return nil }
-func (self TestEnv) PrevHash() []byte      { return nil }
-func (self TestEnv) Coinbase() []byte      { return nil }
-func (self TestEnv) Time() int64           { return 0 }
-func (self TestEnv) Difficulty() *big.Int  { return nil }
-func (self TestEnv) Value() *big.Int       { return nil }
-
 // This is likely to fail if anything ever gets looked up in the state trie :-)
-func (self TestEnv) State() *ethstate.State { return ethstate.New(ethtrie.New(nil, "")) }
+func (TestEnv) State() *ethstate.State {
+	return ethstate.New(ethtrie.New(nil, ""))
+}
 
 const mutcode = `
 var x = 0;
@@ -56,27 +64,35 @@ func setup(level ethlog.LogLevel, typ Type) (*Closure, VirtualMachine) {
 	return callerClosure, New(TestEnv{}, typ)
 }
 
+var big9 = ethutil.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000009")
+
 func TestDebugVm(t *testing.T) {
+	if mutan.Version < "0.6" {
+		t.Skip("skipping for mutan version", mutan.Version, " < 0.6")
+	}
+
 	closure, vm := setup(ethlog.DebugLevel, DebugVmTy)
 	ret, _, e := closure.Call(vm, nil)
 	if e != nil {
-		fmt.Println("error", e)
+		t.Fatalf("Call returned error: %v", e)
 	}
-
-	if ret[len(ret)-1] != 9 {
-		t.Errorf("Expected VM to return 9, got", ret, "instead.")
+	if !bytes.Equal(ret, big9) {
+		t.Errorf("Wrong return value '%x', want '%x'", ret, big9)
 	}
 }
 
 func TestVm(t *testing.T) {
+	if mutan.Version < "0.6" {
+		t.Skip("skipping for mutan version", mutan.Version, " < 0.6")
+	}
+
 	closure, vm := setup(ethlog.DebugLevel, StandardVmTy)
 	ret, _, e := closure.Call(vm, nil)
 	if e != nil {
-		fmt.Println("error", e)
+		t.Fatalf("Call returned error: %v", e)
 	}
-
-	if ret[len(ret)-1] != 9 {
-		t.Errorf("Expected VM to return 9, got", ret, "instead.")
+	if !bytes.Equal(ret, big9) {
+		t.Errorf("Wrong return value '%x', want '%x'", ret, big9)
 	}
 }
 
