@@ -18,7 +18,7 @@ type TestManager struct {
 
 	db         ethutil.Database
 	txPool     *TxPool
-	blockChain *BlockChain
+	blockChain *ChainManager
 	Blocks     []*Block
 }
 
@@ -38,7 +38,7 @@ func (s *TestManager) Peers() *list.List {
 	return list.New()
 }
 
-func (s *TestManager) BlockChain() *BlockChain {
+func (s *TestManager) ChainManager() *ChainManager {
 	return s.blockChain
 }
 
@@ -82,7 +82,7 @@ func NewTestManager() *TestManager {
 	testManager.eventMux = new(event.TypeMux)
 	testManager.db = db
 	testManager.txPool = NewTxPool(testManager)
-	testManager.blockChain = NewBlockChain(testManager)
+	testManager.blockChain = NewChainManager(testManager)
 	testManager.stateManager = NewStateManager(testManager)
 
 	// Start the tx pool
