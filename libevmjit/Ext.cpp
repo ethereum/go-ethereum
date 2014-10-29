@@ -24,7 +24,7 @@ inline u256 fromAddress(Address _a)
 	return (u160)_a;
 }
 
-struct ExtData 
+struct ExtData
 {
 	const byte* calldata;
 	const byte* code;
@@ -172,123 +172,123 @@ llvm::Value* Ext::codesizeAt(llvm::Value* _addr)
 extern "C"
 {
 
-using namespace dev::eth::jit;
+	using namespace dev::eth::jit;
 
-EXPORT void ext_store(Runtime* _rt, i256* _index, i256* _value)
-{
-	auto index = llvm2eth(*_index);
-	auto value = _rt->getExt().store(index); // Interface uses native endianness
-	*_value = eth2llvm(value);
-}
-
-EXPORT void ext_setStore(Runtime* _rt, i256* _index, i256* _value)
-{
-	auto index = llvm2eth(*_index);
-	auto value = llvm2eth(*_value);
-	_rt->getExt().setStore(index, value); // Interface uses native endianness
-}
-
-EXPORT void ext_calldataload(Runtime* _rt, i256* _index, i256* _value)
-{
-	auto index = static_cast<size_t>(llvm2eth(*_index));
-	assert(index + 31 > index); // TODO: Handle large index
-	auto b = reinterpret_cast<byte*>(_value);
-	for (size_t i = index, j = 0; i <= index + 31; ++i, ++j)
-		b[j] = i < _rt->getExt().data.size() ? _rt->getExt().data[i] : 0; // Keep Big Endian
-	// TODO: It all can be done by adding padding to data or by using min() algorithm without branch
-}
-
-EXPORT void ext_balance(Runtime* _rt, h256* _address, i256* _value)
-{
-	auto u = _rt->getExt().balance(right160(*_address));
-	*_value = eth2llvm(u);
-}
-
-EXPORT void ext_suicide(Runtime* _rt, h256* _address)
-{
-	_rt->getExt().suicide(right160(*_address));
-}
-
-EXPORT void ext_create(Runtime* _rt, i256* _endowment, i256* _initOff, i256* _initSize, h256* _address)
-{
-	auto&& ext = _rt->getExt();
-	auto endowment = llvm2eth(*_endowment);
-
-	if (ext.balance(ext.myAddress) >= endowment)
+	EXPORT void ext_store(Runtime* _rt, i256* _index, i256* _value)
 	{
-		ext.subBalance(endowment);
-		u256 gas;	// TODO: Handle gas
-		auto initOff = static_cast<size_t>(llvm2eth(*_initOff));
-		auto initSize = static_cast<size_t>(llvm2eth(*_initSize));
-		auto&& initRef = bytesConstRef(_rt->getMemory().data() + initOff, initSize);
-		OnOpFunc onOp{}; // TODO: Handle that thing
-		h256 address(ext.create(endowment, &gas, initRef, onOp), h256::AlignRight);
-		*_address = address;
+		auto index = llvm2eth(*_index);
+		auto value = _rt->getExt().store(index); // Interface uses native endianness
+		*_value = eth2llvm(value);
 	}
-	else
-		*_address = {};
-}
 
-
-
-EXPORT void ext_call(Runtime* _rt, i256* _gas, h256* _receiveAddress, i256* _value, i256* _inOff, i256* _inSize, i256* _outOff, i256* _outSize, h256* _codeAddress, i256* _ret)
-{
-	auto&& ext = _rt->getExt();
-	auto value = llvm2eth(*_value);
-
-	auto ret = false;
-	auto gas = llvm2eth(*_gas);
-	if (ext.balance(ext.myAddress) >= value)
+	EXPORT void ext_setStore(Runtime* _rt, i256* _index, i256* _value)
 	{
-		ext.subBalance(value);
-		auto receiveAddress = right160(*_receiveAddress);
+		auto index = llvm2eth(*_index);
+		auto value = llvm2eth(*_value);
+		_rt->getExt().setStore(index, value); // Interface uses native endianness
+	}
+
+	EXPORT void ext_calldataload(Runtime* _rt, i256* _index, i256* _value)
+	{
+		auto index = static_cast<size_t>(llvm2eth(*_index));
+		assert(index + 31 > index); // TODO: Handle large index
+		auto b = reinterpret_cast<byte*>(_value);
+		for (size_t i = index, j = 0; i <= index + 31; ++i, ++j)
+			b[j] = i < _rt->getExt().data.size() ? _rt->getExt().data[i] : 0; // Keep Big Endian
+		// TODO: It all can be done by adding padding to data or by using min() algorithm without branch
+	}
+
+	EXPORT void ext_balance(Runtime* _rt, h256* _address, i256* _value)
+	{
+		auto u = _rt->getExt().balance(right160(*_address));
+		*_value = eth2llvm(u);
+	}
+
+	EXPORT void ext_suicide(Runtime* _rt, h256* _address)
+	{
+		_rt->getExt().suicide(right160(*_address));
+	}
+
+	EXPORT void ext_create(Runtime* _rt, i256* _endowment, i256* _initOff, i256* _initSize, h256* _address)
+	{
+		auto&& ext = _rt->getExt();
+		auto endowment = llvm2eth(*_endowment);
+
+		if (ext.balance(ext.myAddress) >= endowment)
+		{
+			ext.subBalance(endowment);
+			u256 gas;   // TODO: Handle gas
+			auto initOff = static_cast<size_t>(llvm2eth(*_initOff));
+			auto initSize = static_cast<size_t>(llvm2eth(*_initSize));
+			auto&& initRef = bytesConstRef(_rt->getMemory().data() + initOff, initSize);
+			OnOpFunc onOp {}; // TODO: Handle that thing
+			h256 address(ext.create(endowment, &gas, initRef, onOp), h256::AlignRight);
+			*_address = address;
+		}
+		else
+			*_address = {};
+	}
+
+
+
+	EXPORT void ext_call(Runtime* _rt, i256* _gas, h256* _receiveAddress, i256* _value, i256* _inOff, i256* _inSize, i256* _outOff, i256* _outSize, h256* _codeAddress, i256* _ret)
+	{
+		auto&& ext = _rt->getExt();
+		auto value = llvm2eth(*_value);
+
+		auto ret = false;
+		auto gas = llvm2eth(*_gas);
+		if (ext.balance(ext.myAddress) >= value)
+		{
+			ext.subBalance(value);
+			auto receiveAddress = right160(*_receiveAddress);
+			auto inOff = static_cast<size_t>(llvm2eth(*_inOff));
+			auto inSize = static_cast<size_t>(llvm2eth(*_inSize));
+			auto outOff = static_cast<size_t>(llvm2eth(*_outOff));
+			auto outSize = static_cast<size_t>(llvm2eth(*_outSize));
+			auto&& inRef = bytesConstRef(_rt->getMemory().data() + inOff, inSize);
+			auto&& outRef = bytesConstRef(_rt->getMemory().data() + outOff, outSize);
+			OnOpFunc onOp {}; // TODO: Handle that thing
+			auto codeAddress = right160(*_codeAddress);
+			ret = ext.call(receiveAddress, value, inRef, &gas, outRef, onOp, {}, codeAddress);
+		}
+
+		*_gas = eth2llvm(gas);
+		_ret->a = ret ? 1 : 0;
+	}
+
+	EXPORT void ext_sha3(Runtime* _rt, i256* _inOff, i256* _inSize, i256* _ret)
+	{
 		auto inOff = static_cast<size_t>(llvm2eth(*_inOff));
 		auto inSize = static_cast<size_t>(llvm2eth(*_inSize));
-		auto outOff = static_cast<size_t>(llvm2eth(*_outOff));
-		auto outSize = static_cast<size_t>(llvm2eth(*_outSize));
-		auto&& inRef = bytesConstRef(_rt->getMemory().data() + inOff, inSize);
-		auto&& outRef = bytesConstRef(_rt->getMemory().data() + outOff, outSize);
-		OnOpFunc onOp{}; // TODO: Handle that thing
-		auto codeAddress = right160(*_codeAddress);
-		ret = ext.call(receiveAddress, value, inRef, &gas, outRef, onOp, {}, codeAddress);
+		auto dataRef = bytesConstRef(_rt->getMemory().data() + inOff, inSize);
+		auto hash = sha3(dataRef);
+		*_ret = *reinterpret_cast<i256*>(&hash);
 	}
 
-	*_gas = eth2llvm(gas);
-	_ret->a = ret ? 1 : 0;
-}
+	EXPORT void ext_exp(Runtime* _rt, i256* _left, i256* _right, i256* _ret)
+	{
+		bigint left = llvm2eth(*_left);
+		bigint right = llvm2eth(*_right);
+		auto ret = static_cast<u256>(boost::multiprecision::powm(left, right, bigint(2) << 256));
+		*_ret = eth2llvm(ret);
+	}
 
-EXPORT void ext_sha3(Runtime* _rt, i256* _inOff, i256* _inSize, i256* _ret)
-{
-	auto inOff = static_cast<size_t>(llvm2eth(*_inOff));
-	auto inSize = static_cast<size_t>(llvm2eth(*_inSize));
-	auto dataRef = bytesConstRef(_rt->getMemory().data() + inOff, inSize);
-	auto hash = sha3(dataRef);
-	*_ret = *reinterpret_cast<i256*>(&hash);
-}
+	EXPORT unsigned char* ext_codeAt(Runtime* _rt, h256* _addr256)
+	{
+		auto&& ext = _rt->getExt();
+		auto addr = right160(*_addr256);
+		auto& code = ext.codeAt(addr);
+		return const_cast<unsigned char*>(code.data());
+	}
 
-EXPORT void ext_exp(Runtime* _rt, i256* _left, i256* _right, i256* _ret)
-{
-	bigint left = llvm2eth(*_left);
-	bigint right = llvm2eth(*_right);
-	auto ret = static_cast<u256>(boost::multiprecision::powm(left, right, bigint(2) << 256));
-	*_ret = eth2llvm(ret);
-}
-
-EXPORT unsigned char* ext_codeAt(Runtime* _rt, h256* _addr256)
-{
-	auto&& ext = _rt->getExt();
-	auto addr = right160(*_addr256);
-	auto& code = ext.codeAt(addr);
-	return const_cast<unsigned char*>(code.data());
-}
-
-EXPORT void ext_codesizeAt(Runtime* _rt, h256* _addr256, i256* _ret)
-{
-	auto&& ext = _rt->getExt();
-	auto addr = right160(*_addr256);
-	auto& code = ext.codeAt(addr);
-	*_ret = eth2llvm(u256(code.size()));
-}
+	EXPORT void ext_codesizeAt(Runtime* _rt, h256* _addr256, i256* _ret)
+	{
+		auto&& ext = _rt->getExt();
+		auto addr = right160(*_addr256);
+		auto& code = ext.codeAt(addr);
+		*_ret = eth2llvm(u256(code.size()));
+	}
 
 }
 }
