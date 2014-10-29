@@ -408,7 +408,8 @@ func (gui *Gui) update() {
 		eth.ChainSyncEvent{},
 		eth.PeerListEvent{},
 		ethchain.NewBlockEvent{},
-		ethchain.TxEvent{},
+		ethchain.TxPreEvent{},
+		ethchain.TxPostEvent{},
 		ethminer.Event{},
 	)
 
@@ -430,39 +431,37 @@ func (gui *Gui) update() {
 						gui.setWalletValue(gui.eth.StateManager().CurrentState().GetAccount(gui.address()).Balance(), nil)
 					}
 
-				case ethchain.TxEvent:
+				case ethchain.TxPreEvent:
 					tx := ev.Tx
-					if ev.Type == ethchain.TxPre {
-						object := state.GetAccount(gui.address())
+					object := state.GetAccount(gui.address())
 
-						if bytes.Compare(tx.Sender(), gui.address()) == 0 {
-							unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
-						} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
-							unconfirmedFunds.Add(unconfirmedFunds, tx.Value)
-						}
-
-						gui.setWalletValue(object.Balance(), unconfirmedFunds)
-
-						gui.insertTransaction("pre", tx)
-
-					} else if ev.Type == ethchain.TxPost {
-						object := state.GetAccount(gui.address())
-						if bytes.Compare(tx.Sender(), gui.address()) == 0 {
-							object.SubAmount(tx.Value)
-
-							//gui.getObjectByName("transactionView").Call("addTx", ethpipe.NewJSTx(tx), "send")
-							gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-						} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
-							object.AddAmount(tx.Value)
-
-							//gui.getObjectByName("transactionView").Call("addTx", ethpipe.NewJSTx(tx), "recv")
-							gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-						}
-
-						gui.setWalletValue(object.Balance(), nil)
-
-						state.UpdateStateObject(object)
+					if bytes.Compare(tx.Sender(), gui.address()) == 0 {
+						unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
+					} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
+						unconfirmedFunds.Add(unconfirmedFunds, tx.Value)
 					}
+
+					gui.setWalletValue(object.Balance(), unconfirmedFunds)
+					gui.insertTransaction("pre", tx)
+
+				case ethchain.TxPostEvent:
+					tx := ev.Tx
+					object := state.GetAccount(gui.address())
+
+					if bytes.Compare(tx.Sender(), gui.address()) == 0 {
+						object.SubAmount(tx.Value)
+
+						//gui.getObjectByName("transactionView").Call("addTx", ethpipe.NewJSTx(tx), "send")
+						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
+					} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
+						object.AddAmount(tx.Value)
+
+						//gui.getObjectByName("transactionView").Call("addTx", ethpipe.NewJSTx(tx), "recv")
+						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
+					}
+
+					gui.setWalletValue(object.Balance(), nil)
+					state.UpdateStateObject(object)
 
 				// case object:
 				// 	gui.loadAddressBook()
