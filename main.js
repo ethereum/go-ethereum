@@ -102,6 +102,28 @@
         ];
     };
 
+    var ethWatchMethods = function () {
+        var newFilter = function (args) {
+            return typeof args[0] === 'string' ? 'newFilterString' : 'newFilter';
+        };
+
+        return [
+        { name: 'newFilter', call: newFilter },
+        { name: 'uninstallFilter', call: 'uninstallFilter' },
+        { name: 'changed', call: 'changed' },
+        { name: 'getMessages', call: 'getMessages' }
+        ];
+    };
+
+    var shhWatchMethods = function () {
+        return [
+        { name: 'newFilter', call: 'shhNewFilter' },
+        { name: 'uninstallFilter', call: 'shhUninstallFilter' },
+        { name: 'changed', call: 'shhChanged' },
+        { name: 'getMessage', call: 'shhGetMessages' }
+        ];
+    };
+
     var setupMethods = function (obj, methods) {
         methods.forEach(function (method) {
             obj[method.name] = function () {
@@ -186,6 +208,10 @@
             return str;
         },
 
+        toDecimal: function (val) {
+            return parseInt(val, 16);         
+        },
+
         fromAscii: function(str, pad) {
             if(pad === undefined) {
                 pad = 32
@@ -201,8 +227,8 @@
 
         eth: {
             prototype: Object(),
-            watch: function(params) {
-                return new Filter(params);
+            watch: function (params) {
+                return new Filter(params, ethWatch);
             },
         },
 
@@ -211,7 +237,10 @@
         },
 
         shh: {
-            prototype: Object()
+            prototype: Object(),
+            watch: function (params) {
+                return new Filter(params, shhWatch);
+            }
         },
 
         on: function(event, cb) {
@@ -258,6 +287,11 @@
     setupProperties(eth, ethProperties());
     setupMethods(web3.db, dbMethods());
     setupMethods(web3.shh, shhMethods());
+
+    var ethWatch = {};
+    setupMethods(ethWatch, ethWatchMethods());
+    var shhWatch = {};
+    setupMethods(shhWatch, shhWatchMethods());
 
     var ProviderManager = function() {
         this.queued = [];
@@ -340,33 +374,22 @@
 
     web3.setProvider = function(provider) {
         provider.onmessage = messageHandler;
-
         web3.provider.set(provider);
-
         web3.provider.sendQueued();
     };
 
     var filters = [];
-    var Filter = function(options) {
+    var Filter = function(options, impl) {
         filters.push(this);
 
+        this.impl = impl;
         this.callbacks = [];
-        this.options = options;
-
-        var call;
-        if(options === "chain" || options === "pending") {
-            call = "newFilterString"
-        } else if(typeof options === "object") {
-            call = "newFilter"
-        }
 
         var self = this; // Cheaper than binding
-        this.promise = new Promise(function(resolve, reject) {
-            web3.provider.send({call: call, args: [options]}, function(id) {
-                self.id = id;
-                web3.provider.startPolling({call: "changed", args: [id]}, id); 
-                resolve(id);
-            });
+        this.promise = impl.newFilter(options); 
+        this.promise.then(function (id) {
+            self.id = id;
+            web3.provider.startPolling({call: 'changed', args: [id]}, id);
         });
     };
 
@@ -386,21 +409,17 @@
     };
 
     Filter.prototype.uninstall = function() {
-        this.promise.then(function(id) {
-            web3.provider.send({call: "uninstallFilter", args:[id]});
+        var self = this;
+        this.promise.then(function (id) {
+            self.impl.uninstallFilter(id);
             web3.provider.stopPolling(id);
         });
     };
 
     Filter.prototype.messages = function() {
-        var self=this;
-        return Promise.all([this.promise]).then(function() {
-            var id = self.id
-            return new Promise(function(resolve, reject) {
-                web3.provider.send({call: "getMessages", args: [id]}, function(messages) {
-                    resolve(messages);
-                });
-            });
+        var self = this;    
+        return this.promise.then(function (id) {
+            return self.impl.getMessages(id);
         });
     };
 
