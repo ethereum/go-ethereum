@@ -490,6 +490,9 @@ func (s *Ethereum) peerHandler(listener net.Listener) {
 }
 
 func (s *Ethereum) Stop() {
+	// Stop eventMux first, it will close all subscriptions.
+	s.eventMux.Stop()
+
 	// Close the database
 	defer s.db.Close()
 
@@ -514,7 +517,6 @@ func (s *Ethereum) Stop() {
 	}
 	s.txPool.Stop()
 	s.stateManager.Stop()
-	s.eventMux.Stop()
 	s.blockPool.Stop()
 
 	ethlogger.Infoln("Server stopped")
