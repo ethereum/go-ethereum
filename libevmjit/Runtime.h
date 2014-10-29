@@ -1,9 +1,8 @@
 
 #pragma once
 
-
-#include <setjmp.h>
 #include <vector>
+#include <csetjmp>
 
 #include <libevm/ExtVMFace.h>
 
