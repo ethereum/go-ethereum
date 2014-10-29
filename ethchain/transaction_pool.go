@@ -14,17 +14,12 @@ import (
 
 var txplogger = ethlog.NewLogger("TXP")
 
-const (
-	txPoolQueueSize = 50
-)
+const txPoolQueueSize = 50
 
 type TxPoolHook chan *Transaction
 type TxMsgTy byte
 
 const (
-	TxPre = iota
-	TxPost
-
 	minGasPrice = 1000000
 )
 
@@ -169,7 +164,7 @@ out:
 				txplogger.Debugf("(t) %x => %x (%v) %x\n", tx.Sender()[:4], tmp, tx.Value, tx.Hash())
 
 				// Notify the subscribers
-				pool.Ethereum.EventMux().Post(TxEvent{TxPre, tx})
+				pool.Ethereum.EventMux().Post(TxPreEvent{tx})
 			}
 		case <-pool.quit:
 			break out

@@ -64,7 +64,7 @@ func (miner *Miner) Start() {
 	miner.block = miner.ethereum.ChainManager().NewBlock(miner.coinbase)
 
 	mux := miner.ethereum.EventMux()
-	miner.events = mux.Subscribe(ethchain.NewBlockEvent{}, ethchain.TxEvent{})
+	miner.events = mux.Subscribe(ethchain.NewBlockEvent{}, ethchain.TxPreEvent{})
 
 	// Prepare inital block
 	//miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
@@ -125,22 +125,20 @@ func (miner *Miner) listener() {
 					}
 				}
 
-			case ethchain.TxEvent:
-				if event.Type == ethchain.TxPre {
-					miner.stopMining()
+			case ethchain.TxPreEvent:
+				miner.stopMining()
 
-					found := false
-					for _, ctx := range miner.txs {
-						if found = bytes.Compare(ctx.Hash(), event.Tx.Hash()) == 0; found {
-							break
-						}
+				found := false
+				for _, ctx := range miner.txs {
+					if found = bytes.Compare(ctx.Hash(), event.Tx.Hash()) == 0; found {
+						break
 					}
-					if found == false {
-						// Undo all previous commits
-						miner.block.Undo()
-						// Apply new transactions
-						miner.txs = append(miner.txs, event.Tx)
-					}
+				}
+				if found == false {
+					// Undo all previous commits
+					miner.block.Undo()
+					// Apply new transactions
+					miner.txs = append(miner.txs, event.Tx)
 				}
 			}
 
