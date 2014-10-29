@@ -242,8 +242,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 		dump();
 	}
 
-	if (getenv("EVMCC_OPTIMIZE_STACK"))
-	{
+	//if (getenv("EVMCC_OPTIMIZE_STACK"))
+	//{
 		std::vector<BasicBlock*> blockList;
 		for	(auto& entry : basicBlocks)
 			blockList.push_back(&entry.second);
@@ -261,7 +261,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 			std::cerr << "\n\nAfter stack optimization \n\n";
 			dump();
 		}
-	}
+	//}
 
 	for (auto& entry : basicBlocks)
 		entry.second.localStack().synchronize(stack);
