@@ -153,8 +153,8 @@ void Compiler::createBasicBlocks(bytesConstRef bytecode)
 		}
 		else
 		{
-			std::cerr << "Bad JUMP at PC " << it->first
-					  << ": " << it->second << " is not a valid PC\n";
+			clog(JIT) << "Bad JUMP at PC " << it->first
+					  << ": " << it->second << " is not a valid PC";
 			m_directJumpTargets[it->first] = m_badJumpBlock->llvm();
 		}
 	}
