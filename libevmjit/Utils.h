@@ -4,6 +4,7 @@
 #include <llvm/IR/IRBuilder.h>
 
 #include <libdevcore/Common.h>
+#include <libdevcore/Log.h>
 
 namespace dev
 {
@@ -11,6 +12,8 @@ namespace eth
 {
 namespace jit
 {
+
+struct JIT: public NoteChannel  { static const char* name() { return "JIT"; } };
 
 /// Representation of 256-bit value binary compatible with LLVM i256
 // TODO: Replace with h256

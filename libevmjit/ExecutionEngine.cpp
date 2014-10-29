@@ -75,9 +75,8 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtV
 	auto finalizationStartTime = std::chrono::high_resolution_clock::now();
 	exec->finalizeObject();
 	auto finalizationEndTime = std::chrono::high_resolution_clock::now();
-	std::cerr << "*** Module finalization time: "
-						  << std::chrono::duration_cast<std::chrono::microseconds>(finalizationEndTime - finalizationStartTime).count()
-						  << std::endl;
+	clog(JIT) << "Module finalization time: "
+		<< std::chrono::duration_cast<std::chrono::microseconds>(finalizationEndTime - finalizationStartTime).count();
 
 	// Create fake ExtVM interface
 	if (!_ext)
@@ -117,9 +116,8 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtV
 		returnCode = static_cast<ReturnCode>(result.IntVal.getZExtValue());
 
 		auto executionEndTime = std::chrono::high_resolution_clock::now();
-		std::cerr << "*** Execution time: "
-							  << std::chrono::duration_cast<std::chrono::microseconds>(executionEndTime - executionStartTime).count()
-							  << std::endl;
+		clog(JIT) << "Execution time : "
+			<< std::chrono::duration_cast<std::chrono::microseconds>(executionEndTime - executionStartTime).count();
 
 	}
 	else
@@ -128,19 +126,20 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtV
 	// Return remaining gas
 	_gas = returnCode == ReturnCode::OutOfGas ? 0 : runtime.getGas();
 
-	std::cout << "Max stack size: " << Stack::maxStackSize << std::endl;
+	clog(JIT) << "Max stack size: " << Stack::maxStackSize;
 
 	if (returnCode == ReturnCode::Return)
 	{
 		returnData = runtime.getReturnData().toVector(); // TODO: It might be better to place is in Runtime interface
 
-		std::cout << "RETURN [ ";
+		auto&& log = clog(JIT);
+		log << "RETURN [ ";
 		for (auto it = returnData.begin(), end = returnData.end(); it != end; ++it)
-			std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)*it << " ";
-		std::cout << "]\n";
+			log << std::hex << std::setw(2) << std::setfill('0') << (int)*it << " ";
+		log << "]";
 	}
-
-	std::cout << "RETURN CODE: " << (int)returnCode << std::endl;
+	else
+		cslog(JIT) << "RETURN " << (int)returnCode;
 
 	return static_cast<int>(returnCode);
 }
