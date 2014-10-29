@@ -63,7 +63,7 @@ Ext::Ext(RuntimeManager& _runtimeManager):
 	m_call = llvm::Function::Create(llvm::FunctionType::get(Type::Void, argsTypes, false), Linkage::ExternalLinkage, "ext_call", module);
 	m_sha3 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 4}, false), Linkage::ExternalLinkage, "ext_sha3", module);
 	m_exp = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 4}, false), Linkage::ExternalLinkage, "ext_exp", module);
-	m_codeAt = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, Type::WordPtr, false), Linkage::ExternalLinkage, "ext_codeAt", module);
+	m_codeAt = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, {argsTypes, 2}, false), Linkage::ExternalLinkage, "ext_codeAt", module);
 	m_codesizeAt = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_codesizeAt", module);
 }
 
@@ -109,8 +109,7 @@ llvm::Value* Ext::create(llvm::Value* _endowment, llvm::Value* _initOff, llvm::V
 	m_builder.CreateStore(_endowment, m_args[0]);
 	m_builder.CreateStore(_initOff, m_arg2);
 	m_builder.CreateStore(_initSize, m_arg3);
-	llvm::Value* args[] = {getRuntimeManager().getRuntimePtr(), m_args[0], m_arg2, m_arg3, m_args[1]};
-	m_builder.CreateCall(m_create, args);
+	createCall(m_create, getRuntimeManager().getRuntimePtr(), m_args[0], m_arg2, m_arg3, m_args[1]);
 	llvm::Value* address = m_builder.CreateLoad(m_args[1]);
 	address = Endianness::toNative(m_builder, address);
 	return address;
@@ -128,9 +127,7 @@ llvm::Value* Ext::call(llvm::Value*& _gas, llvm::Value* _receiveAddress, llvm::V
 	m_builder.CreateStore(_outSize, m_arg7);
 	auto codeAddress = Endianness::toBE(m_builder, _codeAddress);
 	m_builder.CreateStore(codeAddress, m_arg8);
-
-	llvm::Value* args[] = {getRuntimeManager().getRuntimePtr(), m_args[0], m_arg2, m_arg3, m_arg4, m_arg5, m_arg6, m_arg7, m_arg8, m_args[1]};
-	m_builder.CreateCall(m_call, args);
+	createCall(m_call, getRuntimeManager().getRuntimePtr(), m_args[0], m_arg2, m_arg3, m_arg4, m_arg5, m_arg6, m_arg7, m_arg8, m_args[1]);
 	_gas = m_builder.CreateLoad(m_args[0]); // Return gas
 	return m_builder.CreateLoad(m_args[1]);
 }
@@ -139,8 +136,7 @@ llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
 {
 	m_builder.CreateStore(_inOff, m_args[0]);
 	m_builder.CreateStore(_inSize, m_arg2);
-	llvm::Value* args[] = {getRuntimeManager().getRuntimePtr(), m_args[0], m_arg2, m_args[1]};
-	m_builder.CreateCall(m_sha3, args);
+	createCall(m_sha3, getRuntimeManager().getRuntimePtr(), m_args[0], m_arg2, m_args[1]);
 	llvm::Value* hash = m_builder.CreateLoad(m_args[1]);
 	hash = Endianness::toNative(m_builder, hash);
 	return hash;
@@ -148,10 +144,10 @@ llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
 
 llvm::Value* Ext::exp(llvm::Value* _left, llvm::Value* _right)
 {
+	// TODO: Move ext to Arith256
 	m_builder.CreateStore(_left, m_args[0]);
 	m_builder.CreateStore(_right, m_arg2);
-	llvm::Value* args[] = {getRuntimeManager().getRuntimePtr(), m_args[0], m_arg2, m_args[1]};
-	m_builder.CreateCall(m_exp, args);
+	createCall(m_exp, getRuntimeManager().getRuntimePtr(), m_args[0], m_arg2, m_args[1]);
 	return m_builder.CreateLoad(m_args[1]);
 }
 
@@ -166,8 +162,7 @@ llvm::Value* Ext::codesizeAt(llvm::Value* _addr)
 {
 	auto addr = Endianness::toBE(m_builder, _addr);
 	m_builder.CreateStore(addr, m_args[0]);
-	llvm::Value* args[] = {getRuntimeManager().getRuntimePtr(), m_args[0], m_args[1]};
-	m_builder.CreateCall(m_codesizeAt, args);
+	createCall(m_codesizeAt, getRuntimeManager().getRuntimePtr(), m_args[0], m_args[1]);
 	return m_builder.CreateLoad(m_args[1]);
 }
 
@@ -225,10 +220,9 @@ EXPORT void ext_create(Runtime* _rt, i256* _endowment, i256* _initOff, i256* _in
 		u256 gas;	// TODO: Handle gas
 		auto initOff = static_cast<size_t>(llvm2eth(*_initOff));
 		auto initSize = static_cast<size_t>(llvm2eth(*_initSize));
-		//auto&& initRef = bytesConstRef(Runtime::getMemory().data() + initOff, initSize);
-		bytesConstRef initRef;
+		auto&& initRef = bytesConstRef(_rt->getMemory().data() + initOff, initSize);
 		OnOpFunc onOp{}; // TODO: Handle that thing
-		h256 address = ext.create(endowment, &gas, initRef, onOp);
+		h256 address(ext.create(endowment, &gas, initRef, onOp), h256::AlignRight);
 		*_address = address;
 	}
 	else
@@ -252,8 +246,8 @@ EXPORT void ext_call(Runtime* _rt, i256* _gas, h256* _receiveAddress, i256* _val
 		auto inSize = static_cast<size_t>(llvm2eth(*_inSize));
 		auto outOff = static_cast<size_t>(llvm2eth(*_outOff));
 		auto outSize = static_cast<size_t>(llvm2eth(*_outSize));
-		auto&& inRef = bytesConstRef();	//Runtime::getMemory().data() + inOff, inSize);
-		auto&& outRef = bytesConstRef(); // Runtime::getMemory().data() + outOff, outSize);
+		auto&& inRef = bytesConstRef(_rt->getMemory().data() + inOff, inSize);
+		auto&& outRef = bytesConstRef(_rt->getMemory().data() + outOff, outSize);
 		OnOpFunc onOp{}; // TODO: Handle that thing
 		auto codeAddress = right160(*_codeAddress);
 		ret = ext.call(receiveAddress, value, inRef, &gas, outRef, onOp, {}, codeAddress);
@@ -267,7 +261,7 @@ EXPORT void ext_sha3(Runtime* _rt, i256* _inOff, i256* _inSize, i256* _ret)
 {
 	auto inOff = static_cast<size_t>(llvm2eth(*_inOff));
 	auto inSize = static_cast<size_t>(llvm2eth(*_inSize));
-	auto dataRef = bytesConstRef(); // Runtime::getMemory().data() + inOff, inSize);
+	auto dataRef = bytesConstRef(_rt->getMemory().data() + inOff, inSize);
 	auto hash = sha3(dataRef);
 	*_ret = *reinterpret_cast<i256*>(&hash);
 }

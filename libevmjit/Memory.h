@@ -10,12 +10,11 @@ namespace eth
 {
 namespace jit
 {
-class RuntimeManager;
 
-class Memory : public CompilerHelper
+class Memory : public RuntimeHelper
 {
 public:
-	Memory(llvm::IRBuilder<>& _builder, class GasMeter& _gasMeter, RuntimeManager& _runtimeManager);
+	Memory(RuntimeManager& _runtimeManager, class GasMeter& _gasMeter);
 
 	llvm::Value* loadWord(llvm::Value* _addr);
 	void storeWord(llvm::Value* _addr, llvm::Value* _word);
@@ -31,9 +30,6 @@ public:
 	/// Requires the amount of memory to for data defined by offset and size. And counts gas fee for that memory.
 	void require(llvm::Value* _offset, llvm::Value* _size);
 
-	void registerReturnData(llvm::Value* _index, llvm::Value* _size);
-	bytesConstRef getReturnData();
-
 	void dump(uint64_t _begin, uint64_t _end = 0);
 
 private:
@@ -43,10 +39,6 @@ private:
 private:
 	llvm::GlobalVariable* m_data;
 	llvm::GlobalVariable* m_size;
-
-	/// @TODO: m_data and m_size could be used
-	llvm::GlobalVariable* m_returnDataOffset;
-	llvm::GlobalVariable* m_returnDataSize;
 
 	llvm::Function* m_resize;
 	llvm::Function* m_require;

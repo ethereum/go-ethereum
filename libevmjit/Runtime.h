@@ -7,6 +7,7 @@
 
 #include "CompilerHelper.h"
 #include "Utils.h"
+#include "Type.h"
 
 
 #ifdef _MSC_VER
@@ -41,12 +42,16 @@ struct RuntimeData
 		GasLimit,
 		CodeSize,
 
-		_size
+		_size,
+
+		ReturnDataOffset = CallValue,	// Reuse 2 fields for return data reference
+		ReturnDataSize = CallDataSize
 	};
 
 	i256 elems[_size];
 	byte const* callData;
 	byte const* code;
+	decltype(&jmp_buf{}[0]) jmpBuf;
 
 	static llvm::StructType* getType();
 };
@@ -57,8 +62,7 @@ using MemoryImpl = bytes;
 class Runtime
 {
 public:
-	Runtime(u256 _gas, ExtVMFace& _ext);
-	~Runtime();
+	Runtime(u256 _gas, ExtVMFace& _ext, jmp_buf _jmpBuf);
 
 	Runtime(const Runtime&) = delete;
 	void operator=(const Runtime&) = delete;
@@ -71,6 +75,7 @@ public:
 
 	u256 getGas() const;
 	bytesConstRef getReturnData() const;
+	decltype(&jmp_buf{}[0]) getJmpBuf() { return m_data.jmpBuf; }
 
 private:
 	void set(RuntimeData::Index _index, u256 _value);
@@ -96,8 +101,17 @@ public:
 	llvm::Value* getCode();
 	void setGas(llvm::Value* _gas);
 
+	void registerReturnData(llvm::Value* _index, llvm::Value* _size);
+
+	void raiseException(ReturnCode _returnCode);
+
 private:
-	llvm::GlobalVariable* m_dataPtr;
+	llvm::Value* getPtr(RuntimeData::Index _index);
+	void set(RuntimeData::Index _index, llvm::Value* _value);
+	llvm::Value* getJmpBuf();
+
+	llvm::GlobalVariable* m_dataPtr = nullptr;
+	llvm::Function* m_longjmp = nullptr;
 };
 
 }

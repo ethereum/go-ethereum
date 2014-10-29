@@ -5,6 +5,7 @@
 
 #include "ExecutionEngine.h"
 #include "Compiler.h"
+#include "Type.h"
 
 namespace dev
 {
@@ -13,24 +14,23 @@ namespace eth
 namespace jit
 {
 
-bytesConstRef VM::go(ExtVMFace& _ext, OnOpFunc const& _onOp, uint64_t _steps)
+bytesConstRef VM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 {
-	assert(!_onOp); // Parameter ignored
-	assert(_steps == (uint64_t)-1); // Parameter ignored
-
 	auto module = Compiler().compile(_ext.code);
 
 	ExecutionEngine engine;
 	auto exitCode = engine.run(std::move(module), m_gas, &_ext);
 
-	switch (exitCode)
+	switch (static_cast<ReturnCode>(exitCode))
 	{
-	case 101:
+	case ReturnCode::BadJumpDestination:
 		BOOST_THROW_EXCEPTION(BadJumpDestination());
-	case 102:
+	case ReturnCode::OutOfGas:
 		BOOST_THROW_EXCEPTION(OutOfGas());
-	case 103:
+	case ReturnCode::StackTooSmall:
 		BOOST_THROW_EXCEPTION(StackTooSmall(1,0));
+	case ReturnCode::BadInstruction:
+		BOOST_THROW_EXCEPTION(BadInstruction());
 	}
 
 	m_output = std::move(engine.returnData);

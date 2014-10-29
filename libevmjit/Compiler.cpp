@@ -176,6 +176,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 	llvm::Type* mainFuncArgTypes[] = {m_builder.getInt32Ty(), Type::RuntimePtr};	// There must be int in first place because LLVM does not support other signatures
 	auto mainFuncType = llvm::FunctionType::get(Type::MainReturn, mainFuncArgTypes, false);
 	m_mainFunc = llvm::Function::Create(mainFuncType, llvm::Function::ExternalLinkage, "main", module.get());
+	m_mainFunc->arg_begin()->getNextNode()->setName("rt");
 
 	// Create the basic blocks.
 	auto entryBlock = llvm::BasicBlock::Create(m_builder.getContext(), "entry", m_mainFunc);
@@ -186,7 +187,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 	// Init runtime structures.
 	RuntimeManager runtimeManager(m_builder);
 	GasMeter gasMeter(m_builder, runtimeManager);
-	Memory memory(m_builder, gasMeter, runtimeManager);
+	Memory memory(runtimeManager, gasMeter);
 	Ext ext(runtimeManager);
 	Stack stack(m_builder, runtimeManager);
 	Arith256 arith(m_builder);
@@ -371,14 +372,14 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			break;
 		}
 
-		case Instruction::NEG:
+		/*case Instruction::NEG:
 		{
 			auto top = stack.pop();
 			auto zero = Constant::get(0);
 			auto res = m_builder.CreateSub(zero, top);
 			stack.push(res);
 			break;
-		}
+		}*/
 
 		case Instruction::LT:
 		{
@@ -796,7 +797,8 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto index = stack.pop();
 			auto size = stack.pop();
 
-			memory.registerReturnData(index, size);
+			memory.require(index, size);
+			_runtimeManager.registerReturnData(index, size);
 
 			m_builder.CreateRet(Constant::get(ReturnCode::Return));
 			break;
@@ -812,6 +814,11 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		{
 			m_builder.CreateRet(Constant::get(ReturnCode::Stop));
 			break;
+		}
+
+		default: // Invalid instruction - runtime exception
+		{
+			_runtimeManager.raiseException(ReturnCode::BadInstruction);
 		}
 
 		}

@@ -24,9 +24,10 @@ llvm::StructType* RuntimeData::getType()
 		{
 			llvm::ArrayType::get(Type::i256, _size),
 			Type::BytePtr,
+			Type::BytePtr,
 			Type::BytePtr
 		};
-		type = llvm::StructType::create(elems, "RuntimeData");
+		type = llvm::StructType::create(elems, "Runtime");
 	}
 	return type;
 }
@@ -56,13 +57,9 @@ llvm::Twine getName(RuntimeData::Index _index)
 }
 }
 
-static Runtime* g_runtime;	// FIXME: Remove
-
-Runtime::Runtime(u256 _gas, ExtVMFace& _ext):
+Runtime::Runtime(u256 _gas, ExtVMFace& _ext, jmp_buf _jmpBuf):
 	m_ext(_ext)
 {
-	assert(!g_runtime);
-	g_runtime = this;
 	set(RuntimeData::Gas, _gas);
 	set(RuntimeData::Address, fromAddress(_ext.myAddress));
 	set(RuntimeData::Caller, fromAddress(_ext.caller));
@@ -79,11 +76,7 @@ Runtime::Runtime(u256 _gas, ExtVMFace& _ext):
 	set(RuntimeData::CodeSize, _ext.code.size());	// TODO: Use constant
 	m_data.callData = _ext.data.data();
 	m_data.code = _ext.code.data();
-}
-
-Runtime::~Runtime()
-{
-	g_runtime = nullptr;
+	m_data.jmpBuf = _jmpBuf;
 }
 
 void Runtime::set(RuntimeData::Index _index, u256 _value)
@@ -96,16 +89,14 @@ u256 Runtime::getGas() const
 	return llvm2eth(m_data.elems[RuntimeData::Gas]);
 }
 
-extern "C" {
-	EXPORT i256 mem_returnDataOffset;	// FIXME: Dis-globalize
-	EXPORT i256 mem_returnDataSize;
-}
-
 bytesConstRef Runtime::getReturnData() const
 {
 	// TODO: Handle large indexes
-	auto offset = static_cast<size_t>(llvm2eth(mem_returnDataOffset));
-	auto size = static_cast<size_t>(llvm2eth(mem_returnDataSize));
+	auto offset = static_cast<size_t>(llvm2eth(m_data.elems[RuntimeData::ReturnDataOffset]));
+	auto size = static_cast<size_t>(llvm2eth(m_data.elems[RuntimeData::ReturnDataSize]));
+
+	assert(offset + size <= m_memory.size());
+	// TODO: Handle invalid data access by returning empty ref
 	return {m_memory.data() + offset, size};
 }
 
@@ -113,6 +104,8 @@ bytesConstRef Runtime::getReturnData() const
 RuntimeManager::RuntimeManager(llvm::IRBuilder<>& _builder): CompilerHelper(_builder)
 {
 	m_dataPtr = new llvm::GlobalVariable(*getModule(), Type::RuntimePtr, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(Type::RuntimePtr), "rt");
+	llvm::Type* args[] = {Type::BytePtr, m_builder.getInt32Ty()};
+	m_longjmp = llvm::Function::Create(llvm::FunctionType::get(Type::Void, args, false), llvm::Function::ExternalLinkage, "longjmp", getModule());
 
 	// Export data
 	auto mainFunc = getMainFunction();
@@ -122,15 +115,36 @@ RuntimeManager::RuntimeManager(llvm::IRBuilder<>& _builder): CompilerHelper(_bui
 
 llvm::Value* RuntimeManager::getRuntimePtr()
 {
-	// TODO: If in main function - get it from param
-	return m_builder.CreateLoad(m_dataPtr);
+	if (auto mainFunc = getMainFunction())
+		return mainFunc->arg_begin()->getNextNode();	// Runtime is the second parameter of main function
+	return m_builder.CreateLoad(m_dataPtr, "rt");
+}
+
+llvm::Value* RuntimeManager::getPtr(RuntimeData::Index _index)
+{
+	llvm::Value* idxList[] = {m_builder.getInt32(0), m_builder.getInt32(0), m_builder.getInt32(_index)};
+	return m_builder.CreateInBoundsGEP(getRuntimePtr(), idxList, getName(_index) + "Ptr");
 }
 
 llvm::Value* RuntimeManager::get(RuntimeData::Index _index)
 {
-	llvm::Value* idxList[] = {m_builder.getInt32(0), m_builder.getInt32(0), m_builder.getInt32(_index)};
-	auto ptr = m_builder.CreateInBoundsGEP(getRuntimePtr(), idxList, getName(_index) + "Ptr");
-	return m_builder.CreateLoad(ptr, getName(_index));
+	return m_builder.CreateLoad(getPtr(_index), getName(_index));
+}
+
+void RuntimeManager::set(RuntimeData::Index _index, llvm::Value* _value)
+{
+	m_builder.CreateStore(_value, getPtr(_index));
+}
+
+void RuntimeManager::registerReturnData(llvm::Value* _offset, llvm::Value* _size)
+{
+	set(RuntimeData::ReturnDataOffset, _offset);
+	set(RuntimeData::ReturnDataSize, _size);
+}
+
+void RuntimeManager::raiseException(ReturnCode _returnCode)
+{
+	m_builder.CreateCall2(m_longjmp, getJmpBuf(), Constant::get(_returnCode));
 }
 
 llvm::Value* RuntimeManager::get(Instruction _inst)
@@ -165,6 +179,12 @@ llvm::Value* RuntimeManager::getCode()
 {
 	auto ptr = getBuilder().CreateStructGEP(getRuntimePtr(), 2, "codePtr");
 	return getBuilder().CreateLoad(ptr, "code");
+}
+
+llvm::Value* RuntimeManager::getJmpBuf()
+{
+	auto ptr = getBuilder().CreateStructGEP(getRuntimePtr(), 3, "jmpbufPtr");
+	return getBuilder().CreateLoad(ptr, "jmpbuf");
 }
 
 llvm::Value* RuntimeManager::getGas()
