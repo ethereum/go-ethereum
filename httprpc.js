@@ -52,7 +52,7 @@
                 return;
             }
             self.handlers.forEach(function (handler) {
-                handler.call(self, {_event: "messages", data: id});
+                handler.call(self, {_event: payload.call, _id: id, data: parsed.result});
             });
         });
     };

@@ -110,7 +110,6 @@
         return [
         { name: 'newFilter', call: newFilter },
         { name: 'uninstallFilter', call: 'uninstallFilter' },
-        { name: 'changed', call: 'changed' },
         { name: 'getMessages', call: 'getMessages' }
         ];
     };
@@ -119,7 +118,6 @@
         return [
         { name: 'newFilter', call: 'shhNewFilter' },
         { name: 'uninstallFilter', call: 'shhUninstallFilter' },
-        { name: 'changed', call: 'shhChanged' },
         { name: 'getMessage', call: 'shhGetMessages' }
         ];
     };
@@ -213,15 +211,10 @@
         },
 
         fromAscii: function(str, pad) {
-            if(pad === undefined) {
-                pad = 32
-            }
-
+            pad = pad === undefined ? 32 : pad;
             var hex = this.toHex(str);
-
             while(hex.length < pad*2)
                 hex += "00";
-
             return hex
         },
 
@@ -243,42 +236,30 @@
             }
         },
 
-        on: function(event, cb) {
+        on: function(event, id, cb) {
             if(web3._events[event] === undefined) {
-                web3._events[event] = [];
+                web3._events[event] = {};
             }
 
-            web3._events[event].push(cb);
-
+            web3._events[event][id] = cb;
             return this
         },
 
-        off: function(event, cb) {
+        off: function(event, id) {
             if(web3._events[event] !== undefined) {
-                var callbacks = web3._events[event];
-                for(var i = 0; i < callbacks.length; i++) {
-                    if(callbacks[i] === cb) {
-                        delete callbacks[i];
-                    }
-                }
+                delete web3._events[event][id];
             }
 
             return this
         },
 
-        trigger: function(event, data) {
+        trigger: function(event, id, data) {
             var callbacks = web3._events[event];
-            if(callbacks !== undefined) {
-                for(var i = 0; i < callbacks.length; i++) {
-                    // Figure out whether the returned data was an array
-                    // array means multiple return arguments (multiple params)
-                    if(data instanceof Array) {
-                        callbacks[i].apply(this, data);
-                    } else {
-                        callbacks[i].call(this, undefined, data);
-                    }
-                }
+            if (!callbacks || !callbacks[id]) {
+                return;
             }
+            var cb = callbacks[id];
+            cb(data);
         },
     };
 
@@ -288,9 +269,13 @@
     setupMethods(web3.db, dbMethods());
     setupMethods(web3.shh, shhMethods());
 
-    var ethWatch = {};
+    var ethWatch = {
+        changed: 'changed'
+    };
     setupMethods(ethWatch, ethWatchMethods());
-    var shhWatch = {};
+    var shhWatch = {
+        changed: 'shhChanged'
+    };
     setupMethods(shhWatch, shhWatchMethods());
 
     var ProviderManager = function() {
@@ -316,14 +301,11 @@
 
     ProviderManager.prototype.send = function(data, cb) {
         data._id = this.id;
-        if(cb) {
+        if (cb) {
             web3._callbacks[data._id] = cb;
         }
 
-        if(data.args === undefined) {
-            data.args = [];
-        }
-
+        data.args = data.args || [];
         this.id++;
 
         if(this.provider !== undefined) {
@@ -378,18 +360,16 @@
         web3.provider.sendQueued();
     };
 
-    var filters = [];
     var Filter = function(options, impl) {
-        filters.push(this);
-
         this.impl = impl;
         this.callbacks = [];
 
-        var self = this; // Cheaper than binding
+        var self = this; 
         this.promise = impl.newFilter(options); 
         this.promise.then(function (id) {
             self.id = id;
-            web3.provider.startPolling({call: 'changed', args: [id]}, id);
+            web3.on(impl.changed, id, self.trigger.bind(self));
+            web3.provider.startPolling({call: impl.changed, args: [id]}, id);
         });
     };
 
@@ -400,11 +380,9 @@
         });
     };
 
-    Filter.prototype.trigger = function(messages, id) {
-        if(id == this.id) {
-            for(var i = 0; i < this.callbacks.length; i++) {
-                this.callbacks[i].call(this, messages);
-            }
+    Filter.prototype.trigger = function(messages) {
+        for(var i = 0; i < this.callbacks.length; i++) {
+            this.callbacks[i].call(this, messages);
         }
     };
 
@@ -413,6 +391,7 @@
         this.promise.then(function (id) {
             self.impl.uninstallFilter(id);
             web3.provider.stopPolling(id);
+            web3.off(impl.changed, id);
         });
     };
 
@@ -423,26 +402,17 @@
         });
     };
 
-    // Register to the messages callback. "messages" will be emitted when new messages
-    // from the client have been created.
-    web3.on("messages", function(messages, id) {
-        for(var i = 0; i < filters.length; i++) {
-            filters[i].trigger(messages, id);
-        }
-    });
-
     function messageHandler(data) {
         if(data._event !== undefined) {
-            web3.trigger(data._event, data.data);
-        } else {
-            if(data._id) {
-                var cb = web3._callbacks[data._id];
-                if(cb) {
-                    cb.call(this, data.data)
-
-                    // Remove the "trigger" callback
-                    delete web3._callbacks[data._id];
-                }
+            web3.trigger(data._event, data._id, data.data);
+            return;
+        }
+        
+        if(data._id) {
+            var cb = web3._callbacks[data._id];
+            if (cb) {
+                cb.call(this, data.data)
+                delete web3._callbacks[data._id];
             }
         }
     }
