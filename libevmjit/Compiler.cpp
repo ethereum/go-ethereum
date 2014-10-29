@@ -488,9 +488,8 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		{
 			auto lhs = stack.pop();
 			auto rhs = stack.pop();
-			auto sum = m_builder.CreateAdd(lhs, rhs);
 			auto mod = stack.pop();
-			auto res = arith.mod(sum, mod);
+			auto res = arith.addmod(lhs, rhs, mod);
 			stack.push(res);
 			break;
 		}
@@ -499,9 +498,8 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		{
 			auto lhs = stack.pop();
 			auto rhs = stack.pop();
-			auto prod = m_builder.CreateMul(lhs, rhs);
 			auto mod = stack.pop();
-			auto res = arith.mod(prod, mod);
+			auto res = arith.mulmod(lhs, rhs, mod);
 			stack.push(res);
 			break;
 		}
