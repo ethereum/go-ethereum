@@ -274,7 +274,7 @@ EXPORT void ext_exp(Runtime* _rt, i256* _left, i256* _right, i256* _ret)
 	*_ret = eth2llvm(ret);
 }
 
-EXPORT unsigned char* ext_codeAt(Runtime* _rt, h256* _addr256)	//FIXME: Check endianess
+EXPORT unsigned char* ext_codeAt(Runtime* _rt, h256* _addr256)
 {
 	auto&& ext = _rt->getExt();
 	auto addr = right160(*_addr256);
@@ -282,7 +282,7 @@ EXPORT unsigned char* ext_codeAt(Runtime* _rt, h256* _addr256)	//FIXME: Check en
 	return const_cast<unsigned char*>(code.data());
 }
 
-EXPORT void ext_codesizeAt(Runtime* _rt, h256* _addr256, i256* _ret)	//FIXME: Check endianess
+EXPORT void ext_codesizeAt(Runtime* _rt, h256* _addr256, i256* _ret)
 {
 	auto&& ext = _rt->getExt();
 	auto addr = right160(*_addr256);
