@@ -131,11 +131,11 @@
                 }).then(function (request) {
                     return new Promise(function (resolve, reject) {
                         web3.provider.send(request, function (result) {
-                            if (result) {
+                            if (result || typeof result === "boolean") {
                                 resolve(result);
-                            } else {
-                                reject(result);
-                            }
+                                return;
+                            } 
+                            reject(result);
                         });
                     });
                 }).catch(function( err) {
@@ -372,6 +372,10 @@
             web3.provider.startPolling({call: impl.changed, args: [id]}, id);
         });
     };
+
+    Filter.prototype.arrived = function(callback) {
+        this.changed(callback);
+    }
 
     Filter.prototype.changed = function(callback) {
         var self = this;

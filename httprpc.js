@@ -48,7 +48,7 @@
         var self = this;
         this.sendRequest(payload, function (request) {
             var parsed = JSON.parse(request.responseText);
-            if (!parsed.result) {
+            if (parsed.result instanceof Array ? parsed.result.length === 0 : !parsed.result) {
                 return;
             }
             self.handlers.forEach(function (handler) {
