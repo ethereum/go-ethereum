@@ -57,13 +57,9 @@ llvm::Twine getName(RuntimeData::Index _index)
 }
 }
 
-static Runtime* g_runtime;	// FIXME: Remove
-
 Runtime::Runtime(u256 _gas, ExtVMFace& _ext, jmp_buf _jmpBuf):
 	m_ext(_ext)
 {
-	assert(!g_runtime);
-	g_runtime = this;
 	set(RuntimeData::Gas, _gas);
 	set(RuntimeData::Address, fromAddress(_ext.myAddress));
 	set(RuntimeData::Caller, fromAddress(_ext.caller));
@@ -81,11 +77,6 @@ Runtime::Runtime(u256 _gas, ExtVMFace& _ext, jmp_buf _jmpBuf):
 	m_data.callData = _ext.data.data();
 	m_data.code = _ext.code.data();
 	m_data.jmpBuf = _jmpBuf;
-}
-
-Runtime::~Runtime()
-{
-	g_runtime = nullptr;
 }
 
 void Runtime::set(RuntimeData::Index _index, u256 _value)

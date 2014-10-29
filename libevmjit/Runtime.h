@@ -63,7 +63,6 @@ class Runtime
 {
 public:
 	Runtime(u256 _gas, ExtVMFace& _ext, jmp_buf _jmpBuf);
-	~Runtime();
 
 	Runtime(const Runtime&) = delete;
 	void operator=(const Runtime&) = delete;
