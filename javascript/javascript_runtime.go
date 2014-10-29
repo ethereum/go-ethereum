@@ -25,8 +25,7 @@ type JSRE struct {
 	Vm       *otto.Otto
 	pipe     *ethpipe.JSPipe
 
-	events   event.Subscription
-	quitChan chan bool
+	events event.Subscription
 
 	objectCb map[string][]otto.Value
 }
@@ -51,7 +50,6 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 		otto.New(),
 		ethpipe.NewJSPipe(ethereum),
 		nil,
-		make(chan bool),
 		make(map[string][]otto.Value),
 	}
 
@@ -104,10 +102,6 @@ func (self *JSRE) Require(file string) error {
 
 func (self *JSRE) Stop() {
 	self.events.Unsubscribe()
-	// Kill the main loop
-	self.quitChan <- true
-
-	close(self.quitChan)
 	jsrelogger.Infoln("stopped")
 }
 
