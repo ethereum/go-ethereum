@@ -109,7 +109,7 @@ void BasicBlock::LocalStack::synchronize(Stack& _evmStack)
 	}
 
 	// Push new values
-	for ( ; currIter < endIter; ++currIter)
+	for (; currIter < endIter; ++currIter)
 	{
 		assert(*currIter != nullptr);
 		_evmStack.push(*currIter);
@@ -243,11 +243,11 @@ void BasicBlock::linkLocalStacks(std::vector<BasicBlock*> basicBlocks, llvm::IRB
 	{
 		if (getenv("EVMCC_DEBUG_BLOCKS"))
 		{
-			for (auto& pair: cfg)
+			for (auto& pair : cfg)
 				std::cerr << pair.second.bblock.llvm()->getName().str()
 						  << ": in " << pair.second.inputItems
-					      << ", out " << pair.second.outputItems
-					      << "\n";
+						  << ", out " << pair.second.outputItems
+						  << "\n";
 		}
 
 		valuesChanged = false;
@@ -347,7 +347,7 @@ void BasicBlock::dump(std::ostream& _out, bool _dotOutput)
 		out << (_dotOutput ? "\\l" : "\n");
 	}
 
-    out << (_dotOutput ? "| " : "Instructions:\n");
+	out << (_dotOutput ? "| " : "Instructions:\n");
 	for (auto ins = m_llvmBB->begin(); ins != m_llvmBB->end(); ++ins)
 		out << *ins << (_dotOutput ? "\\l" : "\n");
 
