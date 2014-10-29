@@ -3,6 +3,7 @@ package ethchain
 import (
 	"math/big"
 
+	"github.com/ethereum.backup/ethutil-go"
 	"github.com/ethereum/go-ethereum/vm"
 )
 
@@ -23,7 +24,10 @@ func LogsBloom(logs []vm.Log) *big.Int {
 		for _, topic := range log.Topics {
 			data = append(data, topic)
 		}
-		data = append(data, log.Data)
+
+		if log.Data != nil {
+			data = append(data, log.Data)
+		}
 
 		for _, b := range data {
 			bin.Or(bin, bloom9(b))
@@ -41,4 +45,11 @@ func bloom9(b []byte) *big.Int {
 	}
 
 	return r
+}
+
+func BloomLookup(bin, topic []byte) bool {
+	bloom := ethutil.BigD(bin)
+	cmp := bloom9(topic)
+
+	return bloom.And(bloom, cmp).Cmp(cmp) == 0
 }
