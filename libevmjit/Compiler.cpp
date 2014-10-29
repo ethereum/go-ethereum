@@ -46,7 +46,7 @@ void Compiler::createBasicBlocks(bytesConstRef bytecode)
 	std::vector<ProgramCounter> indirectJumpTargets;
 	boost::dynamic_bitset<> validJumpTargets(std::max(bytecode.size(), size_t(1)));
 
-	splitPoints.insert(0);	// First basic block
+	splitPoints.insert(0);  // First basic block
 	validJumpTargets[0] = true;
 
 	for (auto curr = bytecode.begin(); curr != bytecode.end(); ++curr)
@@ -120,7 +120,7 @@ void Compiler::createBasicBlocks(bytesConstRef bytecode)
 	}
 
 	// Remove split points generated from jumps out of code or into data.
-	for (auto it = splitPoints.cbegin(); it != splitPoints.cend(); )
+	for (auto it = splitPoints.cbegin(); it != splitPoints.cend();)
 	{
 		if (*it > bytecode.size() || !validJumpTargets[*it])
 			it = splitPoints.erase(it);
@@ -128,7 +128,7 @@ void Compiler::createBasicBlocks(bytesConstRef bytecode)
 			++it;
 	}
 
-	for (auto it = splitPoints.cbegin(); it != splitPoints.cend(); )
+	for (auto it = splitPoints.cbegin(); it != splitPoints.cend();)
 	{
 		auto beginInstIdx = *it;
 		++it;
@@ -173,7 +173,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 	auto module = std::make_unique<llvm::Module>("main", m_builder.getContext());
 
 	// Create main function
-	llvm::Type* mainFuncArgTypes[] = {m_builder.getInt32Ty(), Type::RuntimePtr};	// There must be int in first place because LLVM does not support other signatures
+	llvm::Type* mainFuncArgTypes[] = {m_builder.getInt32Ty(), Type::RuntimePtr};    // There must be int in first place because LLVM does not support other signatures
 	auto mainFuncType = llvm::FunctionType::get(Type::MainReturn, mainFuncArgTypes, false);
 	m_mainFunc = llvm::Function::Create(mainFuncType, llvm::Function::ExternalLinkage, "main", module.get());
 	m_mainFunc->arg_begin()->getNextNode()->setName("rt");
@@ -217,8 +217,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 	if (m_indirectJumpTargets.size() > 0)
 	{
 		auto dest = m_jumpTableBlock->localStack().pop();
-		auto switchInstr = 	m_builder.CreateSwitch(dest, m_badJumpBlock->llvm(),
-		                   	                     m_indirectJumpTargets.size());
+		auto switchInstr =  m_builder.CreateSwitch(dest, m_badJumpBlock->llvm(),
+							m_indirectJumpTargets.size());
 		for (auto it = m_indirectJumpTargets.cbegin(); it != m_indirectJumpTargets.cend(); ++it)
 		{
 			auto& bb = *it;
@@ -523,9 +523,9 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 
 		case Instruction::ANY_PUSH:
 		{
-			auto numBytes = static_cast<size_t>(inst)-static_cast<size_t>(Instruction::PUSH1) + 1;
+			auto numBytes = static_cast<size_t>(inst) - static_cast<size_t>(Instruction::PUSH1) + 1;
 			auto value = llvm::APInt(256, 0);
-			for (decltype(numBytes) i = 0; i < numBytes; ++i)	// TODO: Use pc as iterator
+			for (decltype(numBytes) i = 0; i < numBytes; ++i)   // TODO: Use pc as iterator
 			{
 				++currentPC;
 				value <<= 8;
@@ -538,14 +538,14 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 
 		case Instruction::ANY_DUP:
 		{
-			auto index = static_cast<size_t>(inst)-static_cast<size_t>(Instruction::DUP1);
+			auto index = static_cast<size_t>(inst) - static_cast<size_t>(Instruction::DUP1);
 			stack.dup(index);
 			break;
 		}
 
 		case Instruction::ANY_SWAP:
 		{
-			auto index = static_cast<size_t>(inst)-static_cast<size_t>(Instruction::SWAP1) + 1;
+			auto index = static_cast<size_t>(inst) - static_cast<size_t>(Instruction::SWAP1) + 1;
 			stack.swap(index);
 			break;
 		}
@@ -721,7 +721,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto srcIdx = stack.pop();
 			auto reqBytes = stack.pop();
 
-			auto srcPtr = _runtimeManager.getCode();	// TODO: Code & its size are constants, feature #80814234
+			auto srcPtr = _runtimeManager.getCode();    // TODO: Code & its size are constants, feature #80814234
 			auto srcSize = _runtimeManager.get(RuntimeData::CodeSize);
 
 			memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);
@@ -826,12 +826,12 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 
 	gasMeter.commitCostBlock();
 
-	if (!basicBlock.llvm()->getTerminator())	// If block not terminated
+	if (!basicBlock.llvm()->getTerminator())    // If block not terminated
 	{
 		if (nextBasicBlock)
-			m_builder.CreateBr(nextBasicBlock);	// Branch to the next block
+			m_builder.CreateBr(nextBasicBlock); // Branch to the next block
 		else
-			m_builder.CreateRet(Constant::get(ReturnCode::Stop));	// Return STOP code
+			m_builder.CreateRet(Constant::get(ReturnCode::Stop));   // Return STOP code
 	}
 }
 
@@ -870,8 +870,8 @@ void Compiler::removeDeadBlocks()
 void Compiler::dumpBasicBlockGraph(std::ostream& out)
 {
 	out << "digraph BB {\n"
-	    << "  node [shape=record, fontname=Courier, fontsize=10];\n"
-	    << "  entry [share=record, label=\"entry block\"];\n";
+		<< "  node [shape=record, fontname=Courier, fontsize=10];\n"
+		<< "  entry [share=record, label=\"entry block\"];\n";
 
 	std::vector<BasicBlock*> blocks;
 	for (auto& pair : basicBlocks)
@@ -903,10 +903,10 @@ void Compiler::dumpBasicBlockGraph(std::ostream& out)
 		for (llvm::pred_iterator it = llvm::pred_begin(bb->llvm()); it != end; ++it)
 		{
 			out << "  \"" << (*it)->getName().str() << "\" -> \"" << blockName << "\" ["
-			    << ((m_jumpTableBlock.get() && *it == m_jumpTableBlock.get()->llvm()) ? "style = dashed, " : "")
-			    //<< "label = \""
-			    //<< phiNodesPerBlock[bb]
-			    << "];\n";
+				<< ((m_jumpTableBlock.get() && *it == m_jumpTableBlock.get()->llvm()) ? "style = dashed, " : "")
+				//<< "label = \""
+				//<< phiNodesPerBlock[bb]
+				<< "];\n";
 		}
 	}
 
