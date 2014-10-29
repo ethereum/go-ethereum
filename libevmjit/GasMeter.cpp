@@ -126,9 +126,6 @@ void GasMeter::countSStore(Ext& _ext, llvm::Value* _index, llvm::Value* _newValu
 {
 	assert(!m_checkCall); // Everything should've been commited before
 
-	static const auto updateCost = static_cast<uint64_t>(c_sstoreResetGas); // TODO: Discuss naming (DB names look better)
-	static const auto insertCost = static_cast<uint64_t>(c_sstoreSetGas);
-
 	auto oldValue = _ext.store(_index);
 	auto oldValueIsZero = m_builder.CreateICmpEQ(oldValue, Constant::get(0), "oldValueIsZero");
 	auto newValueIsZero = m_builder.CreateICmpEQ(_newValue, Constant::get(0), "newValueIsZero");
@@ -136,7 +133,7 @@ void GasMeter::countSStore(Ext& _ext, llvm::Value* _index, llvm::Value* _newValu
 	auto newValueIsntZero = m_builder.CreateICmpNE(_newValue, Constant::get(0), "newValueIsntZero");
 	auto isInsert = m_builder.CreateAnd(oldValueIsZero, newValueIsntZero, "isInsert");
 	auto isDelete = m_builder.CreateAnd(oldValueIsntZero, newValueIsZero, "isDelete");
-	auto cost = m_builder.CreateSelect(isInsert, Constant::get(insertCost), Constant::get(updateCost), "cost");
+	auto cost = m_builder.CreateSelect(isInsert, Constant::get(c_sstoreSetGas), Constant::get(c_sstoreResetGas), "cost");
 	cost = m_builder.CreateSelect(isDelete, Constant::get(0), cost, "cost");
 	createCall(m_gasCheckFunc, cost);
 }

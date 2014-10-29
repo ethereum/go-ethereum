@@ -3,6 +3,7 @@
 
 #include <llvm/IR/Type.h>
 #include <llvm/IR/Constants.h>
+#include <libdevcore/Common.h>
 
 namespace dev
 {
@@ -50,7 +51,8 @@ enum class ReturnCode
 struct Constant
 {
 	/// Returns word-size constant
-	static llvm::ConstantInt* get(uint64_t _n); // TODO: add overload with u256
+	static llvm::ConstantInt* get(uint64_t _n);
+	static llvm::ConstantInt* get(u256 _n);
 
 	static llvm::ConstantInt* get(ReturnCode _returnCode);
 };
