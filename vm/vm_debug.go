@@ -704,11 +704,11 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			self.Printf(" => [%d] %x [0] %x", n, x.Bytes(), y.Bytes())
 		case LOG0, LOG1, LOG2, LOG3, LOG4:
 			n := int(op - LOG0)
-			topics := make([]*big.Int, n)
+			topics := make([][]byte, n)
 			mSize, mStart := stack.Pop().Int64(), stack.Pop().Int64()
 			data := mem.Geti(mStart, mSize)
 			for i := 0; i < n; i++ {
-				topics[i] = stack.Pop()
+				topics[i] = stack.Pop().Bytes()
 			}
 			self.env.AddLog(Log{closure.Address(), topics, data})
 		case MLOAD:

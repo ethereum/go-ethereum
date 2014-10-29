@@ -187,7 +187,7 @@ func (self *Miner) mineNewBlock() {
 	}
 	self.ethereum.TxPool().RemoveSet(erroneous)
 	self.txs = append(txs, unhandledTxs...)
-	self.block.SetTxHash(receipts)
+	self.block.SetReceiptHash(receipts)
 
 	// Set the transactions to the block so the new SHA3 can be calculated
 	self.block.SetReceipts(receipts, txs)

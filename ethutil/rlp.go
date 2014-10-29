@@ -15,6 +15,10 @@ type RlpEncodeDecode interface {
 	RlpValue() []interface{}
 }
 
+type RlpEncodable interface {
+	RlpData() interface{}
+}
+
 func Rlp(encoder RlpEncode) []byte {
 	return encoder.RlpEncode()
 }
@@ -100,6 +104,8 @@ func Encode(object interface{}) []byte {
 		switch t := object.(type) {
 		case *Value:
 			buff.Write(Encode(t.Raw()))
+		case RlpEncodable:
+			buff.Write(Encode(t.RlpData()))
 		// Code dup :-/
 		case int:
 			buff.Write(Encode(big.NewInt(int64(t))))

@@ -5,7 +5,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/ethstate"
-	"github.com/ethereum/go-ethereum/ethtrie"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/vm"
 )
@@ -231,11 +230,9 @@ func (self *StateTransition) TransitionState() (err error) {
 
 			msg.Output = ret
 		} else {
-			// Add default LOG
-			// PUSH1 1 CALLER ADD LOG1
+			// Add default LOG. Default = big(sender.addr) + 1
 			addr := ethutil.BigD(sender.Address())
-			addr.Add(addr, ethutil.Big1)
-			tx.addLog(vm.Log{sender.Address(), []*big.Int{addr}, nil})
+			tx.addLog(vm.Log{sender.Address(), [][]byte{addr.Add(addr, ethutil.Big1).Bytes()}, nil})
 		}
 	}
 
@@ -250,9 +247,7 @@ func (self *StateTransition) Eval(msg *ethstate.Message, script []byte, context 
 		callerClosure = vm.NewClosure(msg, transactor, context, script, self.gas, self.gasPrice)
 	)
 
-	//vm := vm.New(env, vm.Type(ethutil.Config.VmType))
 	evm := vm.New(env, vm.DebugVmTy)
-
 	ret, _, err = callerClosure.Call(evm, self.tx.Data)
 
 	return
@@ -264,7 +259,6 @@ func MakeContract(tx *Transaction, state *ethstate.State) *ethstate.StateObject 
 
 	contract := state.GetOrNewStateObject(addr)
 	contract.InitCode = tx.Data
-	contract.State = ethstate.New(ethtrie.New(ethutil.Config.Db, ""))
 
 	return contract
 }

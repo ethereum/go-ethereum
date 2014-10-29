@@ -377,6 +377,10 @@ func (val *Value) NewIterator() *ValueIterator {
 	return &ValueIterator{value: val}
 }
 
+func (it *ValueIterator) Len() int {
+	return it.value.Len()
+}
+
 func (it *ValueIterator) Next() bool {
 	if it.idx >= it.value.Len() {
 		return false

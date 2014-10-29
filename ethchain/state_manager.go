@@ -173,8 +173,9 @@ done:
 		state.Update()
 
 		txGas.Sub(txGas, st.gas)
-		accumelative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, txGas))
-		receipt := &Receipt{tx, ethutil.CopyBytes(state.Root().([]byte)), accumelative}
+		cumulative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, txGas))
+		//receipt := &Receipt{tx, ethutil.CopyBytes(state.Root().([]byte)), accumelative}
+		receipt := &Receipt{ethutil.CopyBytes(state.Root().([]byte)), cumulative, LogsBloom(tx.logs).Bytes(), tx.logs}
 
 		if i < len(block.Receipts()) {
 			original := block.Receipts()[i]
@@ -183,7 +184,7 @@ done:
 					os.Exit(1)
 				}
 
-				err := fmt.Errorf("#%d receipt failed (r) %v ~ %x  <=>  (c) %v ~ %x (%x...)", i+1, original.CumulativeGasUsed, original.PostState[0:4], receipt.CumulativeGasUsed, receipt.PostState[0:4], receipt.Tx.Hash()[0:4])
+				err := fmt.Errorf("#%d receipt failed (r) %v ~ %x  <=>  (c) %v ~ %x (%x...)", i+1, original.CumulativeGasUsed, original.PostState[0:4], receipt.CumulativeGasUsed, receipt.PostState[0:4], tx.Hash()[0:4])
 
 				return nil, nil, nil, nil, err
 			}
@@ -235,14 +236,19 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 		fmt.Printf("## %x %x ##\n", block.Hash(), block.Number)
 	}
 
+	txSha := DeriveSha(block.transactions)
+	if bytes.Compare(txSha, block.TxSha) != 0 {
+		return fmt.Errorf("Error validating transaction sha. Received %x, got %x", block.ReceiptSha, txSha)
+	}
+
 	receipts, err := sm.ApplyDiff(state, parent, block)
 	if err != nil {
 		return err
 	}
 
-	txSha := CreateTxSha(receipts)
-	if bytes.Compare(txSha, block.TxSha) != 0 {
-		return fmt.Errorf("Error validating tx sha. Received %x, got %x", block.TxSha, txSha)
+	receiptSha := DeriveSha(receipts)
+	if bytes.Compare(receiptSha, block.ReceiptSha) != 0 {
+		return fmt.Errorf("Error validating receipt sha. Received %x, got %x", block.ReceiptSha, receiptSha)
 	}
 
 	// Block validation
@@ -271,13 +277,15 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 		// Add the block to the chain
 		sm.bc.Add(block)
 
+		// TODO at this point we should also insert LOGS in to a database
+
 		sm.transState = state.Copy()
 
 		// Create a bloom bin for this block
-		filter := sm.createBloomFilter(state)
+		//filter := sm.createBloomFilter(state)
 		// Persist the data
-		fk := append([]byte("bloom"), block.Hash()...)
-		sm.eth.Db().Put(fk, filter.Bin())
+		//fk := append([]byte("bloom"), block.Hash()...)
+		//sm.eth.Db().Put(fk, filter.Bin())
 
 		statelogger.Infof("Imported block #%d (%x...)\n", block.Number, block.Hash()[0:4])
 		if dontReact == false {

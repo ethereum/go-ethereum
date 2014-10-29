@@ -87,8 +87,8 @@ func (bc *ChainManager) Reset() {
 	bc.genesisBlock.state.Trie.Sync()
 	// Prepare the genesis block
 	bc.Add(bc.genesisBlock)
-	fk := append([]byte("bloom"), bc.genesisBlock.Hash()...)
-	bc.Ethereum.Db().Put(fk, make([]byte, 255))
+	//fk := append([]byte("bloom"), bc.genesisBlock.Hash()...)
+	//bc.Ethereum.Db().Put(fk, make([]byte, 255))
 	bc.CurrentBlock = bc.genesisBlock
 
 	bc.SetTotalDifficulty(ethutil.Big("0"))

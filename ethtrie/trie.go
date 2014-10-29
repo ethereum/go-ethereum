@@ -219,6 +219,17 @@ func (t *Trie) Delete(key string) {
 	}
 }
 
+func (self *Trie) GetRoot() []byte {
+	switch self.Root.(type) {
+	case string:
+		return []byte(self.Root.(string))
+	case []byte:
+		return self.Root.([]byte)
+	default:
+		panic(fmt.Sprintf("invalid root type %T", self.Root))
+	}
+}
+
 // Simple compare function which creates a rlp value out of the evaluated objects
 func (t *Trie) Cmp(trie *Trie) bool {
 	return ethutil.NewValue(t.Root).Cmp(ethutil.NewValue(trie.Root))

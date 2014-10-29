@@ -113,7 +113,8 @@ func (tx *Transaction) PublicKey() []byte {
 	sig := append(r, s...)
 	sig = append(sig, tx.v-27)
 
-	pubkey, _ := secp256k1.RecoverPubkey(hash, sig)
+	pubkey := ethcrypto.Ecrecover(append(hash, sig...))
+	//pubkey, _ := secp256k1.RecoverPubkey(hash, sig)
 
 	return pubkey
 }
@@ -208,11 +209,11 @@ func (tx *Transaction) String() string {
 }
 
 type Receipt struct {
-	Tx                *Transaction
 	PostState         []byte
 	CumulativeGasUsed *big.Int
+	Bloom             []byte
+	Logs              vm.Logs
 }
-type Receipts []*Receipt
 
 func NewRecieptFromValue(val *ethutil.Value) *Receipt {
 	r := &Receipt{}
@@ -222,25 +223,22 @@ func NewRecieptFromValue(val *ethutil.Value) *Receipt {
 }
 
 func (self *Receipt) RlpValueDecode(decoder *ethutil.Value) {
-	self.Tx = NewTransactionFromValue(decoder.Get(0))
-	self.PostState = decoder.Get(1).Bytes()
-	self.CumulativeGasUsed = decoder.Get(2).BigInt()
+	self.PostState = decoder.Get(0).Bytes()
+	self.CumulativeGasUsed = decoder.Get(1).BigInt()
+	self.Bloom = decoder.Get(2).Bytes()
+
+	it := decoder.Get(3).NewIterator()
+	for it.Next() {
+		self.Logs = append(self.Logs, vm.NewLogFromValue(it.Value()))
+	}
 }
 
 func (self *Receipt) RlpData() interface{} {
-	return []interface{}{self.Tx.RlpData(), self.PostState, self.CumulativeGasUsed}
+	return []interface{}{self.PostState, self.CumulativeGasUsed, self.Bloom, self.Logs.RlpData()}
 }
 
-func (self *Receipt) String() string {
-	return fmt.Sprintf(`
-	R
-	Tx:[                 %v]
-	PostState:           0x%x
-	CumulativeGasUsed:   %v
-	`,
-		self.Tx,
-		self.PostState,
-		self.CumulativeGasUsed)
+func (self *Receipt) RlpEncode() []byte {
+	return ethutil.Encode(self.RlpData())
 }
 
 func (self *Receipt) Cmp(other *Receipt) bool {
@@ -251,11 +249,27 @@ func (self *Receipt) Cmp(other *Receipt) bool {
 	return true
 }
 
+type Receipts []*Receipt
+
+func (self Receipts) Len() int            { return len(self) }
+func (self Receipts) GetRlp(i int) []byte { return ethutil.Rlp(self[i]) }
+
 // Transaction slice type for basic sorting
 type Transactions []*Transaction
 
-func (s Transactions) Len() int      { return len(s) }
-func (s Transactions) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+func (self Transactions) RlpData() interface{} {
+	// Marshal the transactions of this block
+	enc := make([]interface{}, len(self))
+	for i, tx := range self {
+		// Cast it to a string (safe)
+		enc[i] = tx.RlpData()
+	}
+
+	return enc
+}
+func (s Transactions) Len() int            { return len(s) }
+func (s Transactions) Swap(i, j int)       { s[i], s[j] = s[j], s[i] }
+func (s Transactions) GetRlp(i int) []byte { return ethutil.Rlp(s[i]) }
 
 type TxByNonce struct{ Transactions }
 
