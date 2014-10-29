@@ -101,7 +101,7 @@ func (self *StateManager) Stop() {
 func (self *StateManager) updateThread() {
 	for ev := range self.events.Chan() {
 		for _, block := range ev.(Blocks) {
-			err := self.Process(block, false)
+			err := self.Process(block)
 			if err != nil {
 				statelogger.Infoln(err)
 				statelogger.Debugf("Block #%v failed (%x...)\n", block.Number, block.Hash()[0:4])
@@ -206,7 +206,7 @@ done:
 	return receipts, handled, unhandled, erroneous, err
 }
 
-func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
+func (sm *StateManager) Process(block *Block) (err error) {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
@@ -281,18 +281,9 @@ func (sm *StateManager) Process(block *Block, dontReact bool) (err error) {
 
 		sm.transState = state.Copy()
 
-		// Create a bloom bin for this block
-		//filter := sm.createBloomFilter(state)
-		// Persist the data
-		//fk := append([]byte("bloom"), block.Hash()...)
-		//sm.eth.Db().Put(fk, filter.Bin())
-
 		statelogger.Infof("Imported block #%d (%x...)\n", block.Number, block.Hash()[0:4])
-		if dontReact == false {
-			sm.eth.EventMux().Post(NewBlockEvent{block})
 
-			state.Manifest().Reset()
-		}
+		state.Manifest().Reset()
 
 		sm.eth.TxPool().RemoveSet(block.Transactions())
 	} else {

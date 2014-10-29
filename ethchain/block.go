@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
-	_ "strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/ethcrypto"
@@ -240,15 +239,19 @@ func (block *Block) SetUncles(uncles []*Block) {
 	block.UncleSha = ethcrypto.Sha3(ethutil.Encode(block.rlpUncles()))
 }
 
-func (self *Block) SetReceipts(receipts []*Receipt, txs []*Transaction) {
+func (self *Block) SetReceipts(receipts Receipts) {
 	self.receipts = receipts
-	self.setTransactions(txs)
+	self.SetReceiptHash(receipts)
 }
 
-func (block *Block) setTransactions(txs []*Transaction) {
-	block.transactions = txs
+func (self *Block) SetTransactions(txs Transactions) {
+	self.setTransactions(txs)
+	self.SetTransactionHash(txs)
+}
 
-	block.LogsBloom = CreateBloom(txs)
+func (block *Block) setTransactions(txs Transactions) {
+	block.transactions = txs
+	block.LogsBloom = CreateBloom(block)
 }
 
 func (self *Block) SetTransactionHash(transactions Transactions) {
@@ -424,22 +427,7 @@ func (self *Block) Size() ethutil.StorageSize {
 	return ethutil.StorageSize(len(self.RlpEncode()))
 }
 
-/*
-func DeriveReceiptHash(receipts Receipts) (sha []byte) {
-	trie := ethtrie.New(ethutil.Config.Db, "")
-	for i, receipt := range receipts {
-		trie.Update(string(ethutil.NewValue(i).Encode()), string(ethutil.NewValue(receipt.RlpData()).Encode()))
-	}
-
-	switch trie.Root.(type) {
-	case string:
-		sha = []byte(trie.Root.(string))
-	case []byte:
-		sha = trie.Root.([]byte)
-	default:
-		panic(fmt.Sprintf("invalid root type %T", trie.Root))
-	}
-
-	return sha
+// Implement RlpEncodable
+func (self *Block) RlpData() interface{} {
+	return self.Value().Val
 }
-*/

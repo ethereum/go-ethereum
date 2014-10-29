@@ -309,9 +309,13 @@ out:
 				}
 			}
 
+			// TODO figure out whether we were catching up
+			// If caught up and just a new block has been propagated:
+			// sm.eth.EventMux().Post(NewBlockEvent{block})
+			// otherwise process and don't emit anything
 			var err error
 			for i, block := range blocks {
-				err = self.eth.StateManager().Process(block, false)
+				err = self.eth.StateManager().Process(block)
 				if err != nil {
 					poollogger.Infoln(err)
 					poollogger.Debugf("Block #%v failed (%x...)\n", block.Number, block.Hash()[0:4])

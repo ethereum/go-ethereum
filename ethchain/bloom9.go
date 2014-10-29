@@ -6,9 +6,10 @@ import (
 	"github.com/ethereum/go-ethereum/vm"
 )
 
-func CreateBloom(txs Transactions) []byte {
+func CreateBloom(block *Block) []byte {
 	bin := new(big.Int)
-	for _, tx := range txs {
+	bin.Or(bin, bloom9(block.Coinbase))
+	for _, tx := range block.Transactions() {
 		bin.Or(bin, LogsBloom(tx.logs))
 	}
 
@@ -36,9 +37,7 @@ func bloom9(b []byte) *big.Int {
 	r := new(big.Int)
 	for _, i := range []int{0, 2, 4} {
 		t := big.NewInt(1)
-
-		//r |= 1 << (uint64(b[i+1]) + 256*(uint64(b[i])&1))
-		r.Or(r, t.Rsh(t, uint(b[i+1])+256*(uint(b[i])&1)))
+		r.Or(r, t.Lsh(t, uint(b[i+1])+256*(uint(b[i])&1)))
 	}
 
 	return r

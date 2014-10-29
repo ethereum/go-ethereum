@@ -170,12 +170,6 @@ func (self *Filter) FilterMessages(msgs []*ethstate.Message) []*ethstate.Message
 }
 
 func (self *Filter) bloomFilter(block *Block) bool {
-	//fk := append([]byte("bloom"), block.Hash()...)
-	//bin, err := self.eth.Db().Get(fk)
-	//if err != nil {
-	//	fmt.Println(err)
-	//}
-
 	// TODO update to the new bloom filter
 	bloom := NewBloomFilter(nil)
 

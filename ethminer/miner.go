@@ -85,11 +85,7 @@ func (miner *Miner) listener() {
 
 	for {
 		select {
-		case event, isopen := <-miner.events.Chan():
-			if !isopen {
-				return
-			}
-
+		case event := <-miner.events.Chan():
 			switch event := event.(type) {
 			case ethchain.NewBlockEvent:
 				miner.stopMining()
@@ -114,16 +110,13 @@ func (miner *Miner) listener() {
 						}
 					}
 					miner.txs = newtxs
-
-					// Setup a fresh state to mine on
-					//miner.block = miner.ethereum.ChainManager().NewBlock(miner.coinbase, miner.txs)
-
 				} else {
 					if bytes.Compare(block.PrevHash, miner.ethereum.ChainManager().CurrentBlock.PrevHash) == 0 {
 						logger.Infoln("Adding uncle block")
 						miner.uncles = append(miner.uncles, block)
 					}
 				}
+				miner.startMining()
 
 			case ethchain.TxEvent:
 				if event.Type == ethchain.TxPre {
@@ -141,6 +134,8 @@ func (miner *Miner) listener() {
 						// Apply new transactions
 						miner.txs = append(miner.txs, event.Tx)
 					}
+
+					miner.startMining()
 				}
 			}
 
@@ -159,8 +154,12 @@ func (miner *Miner) startMining() {
 }
 
 func (miner *Miner) stopMining() {
-	close(miner.powQuitChan)
-	<-miner.powDone
+	println("stop mining")
+	_, isopen := <-miner.powQuitChan
+	if isopen {
+		close(miner.powQuitChan)
+	}
+	//<-miner.powDone
 }
 
 func (self *Miner) mineNewBlock() {
@@ -187,10 +186,9 @@ func (self *Miner) mineNewBlock() {
 	}
 	self.ethereum.TxPool().RemoveSet(erroneous)
 	self.txs = append(txs, unhandledTxs...)
-	self.block.SetReceiptHash(receipts)
 
-	// Set the transactions to the block so the new SHA3 can be calculated
-	self.block.SetReceipts(receipts, txs)
+	self.block.SetReceipts(receipts)
+	self.block.SetTransactions(txs)
 
 	// Accumulate the rewards included for this block
 	stateManager.AccumelateRewards(self.block.State(), self.block, parent)
@@ -203,7 +201,7 @@ func (self *Miner) mineNewBlock() {
 	nonce := self.pow.Search(self.block, self.powQuitChan)
 	if nonce != nil {
 		self.block.Nonce = nonce
-		err := self.ethereum.StateManager().Process(self.block, false)
+		err := self.ethereum.StateManager().Process(self.block)
 		if err != nil {
 			logger.Infoln(err)
 		} else {
@@ -212,7 +210,10 @@ func (self *Miner) mineNewBlock() {
 			logger.Infoln(self.block)
 			// Gather the new batch of transactions currently in the tx pool
 			self.txs = self.ethereum.TxPool().CurrentTransactions()
+			self.ethereum.EventMux().Post(ethchain.NewBlockEvent{self.block})
 		}
+
+		// Continue mining on the next block
+		self.startMining()
 	}
-	self.powDone <- struct{}{}
 }

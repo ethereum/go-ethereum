@@ -168,7 +168,24 @@ func New(db ethutil.Database, Root interface{}) *Trie {
 	r := copyRoot(Root)
 	p := copyRoot(Root)
 
-	return &Trie{cache: NewCache(db), Root: r, prevRoot: p}
+	trie := &Trie{cache: NewCache(db), Root: r, prevRoot: p}
+	trie.setRoot(Root)
+
+	return trie
+}
+
+func (self *Trie) setRoot(root interface{}) {
+	switch t := root.(type) {
+	case string:
+		if t == "" {
+			root = ethcrypto.Sha3([]byte(""))
+		}
+		self.Root = root
+	case []byte:
+		self.Root = root
+	default:
+		self.Root = self.cache.PutValue(root, true)
+	}
 }
 
 /*
@@ -182,14 +199,7 @@ func (t *Trie) Update(key, value string) {
 	k := CompactHexDecode(key)
 
 	root := t.UpdateState(t.Root, k, value)
-	switch root.(type) {
-	case string:
-		t.Root = root
-	case []byte:
-		t.Root = root
-	default:
-		t.Root = t.cache.PutValue(root, true)
-	}
+	t.setRoot(root)
 }
 
 func (t *Trie) Get(key string) string {
@@ -209,14 +219,7 @@ func (t *Trie) Delete(key string) {
 	k := CompactHexDecode(key)
 
 	root := t.deleteState(t.Root, k)
-	switch root.(type) {
-	case string:
-		t.Root = root
-	case []byte:
-		t.Root = root
-	default:
-		t.Root = t.cache.PutValue(root, true)
-	}
+	t.setRoot(root)
 }
 
 func (self *Trie) GetRoot() []byte {

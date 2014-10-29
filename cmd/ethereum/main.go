@@ -98,6 +98,8 @@ func main() {
 		// Leave the Println. This needs clean output for piping
 		fmt.Printf("%s\n", block.State().Dump())
 
+		fmt.Println(block)
+
 		os.Exit(0)
 	}
 

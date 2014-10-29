@@ -231,7 +231,7 @@ func (self *StateTransition) TransitionState() (err error) {
 			msg.Output = ret
 		} else {
 			// Add default LOG. Default = big(sender.addr) + 1
-			addr := ethutil.BigD(sender.Address())
+			addr := ethutil.BigD(receiver.Address())
 			tx.addLog(vm.Log{sender.Address(), [][]byte{addr.Add(addr, ethutil.Big1).Bytes()}, nil})
 		}
 	}
