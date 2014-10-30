@@ -20,7 +20,7 @@ type Environment interface {
 	BlockHash() []byte
 	GasLimit() *big.Int
 	Transfer(from, to Account, amount *big.Int) error
-	AddLog(Log)
+	AddLog(ethstate.Log)
 }
 
 type Object interface {
@@ -42,6 +42,10 @@ func Transfer(from, to Account, amount *big.Int) error {
 
 	from.SubBalance(amount)
 	to.AddBalance(amount)
+
+	// Add default LOG. Default = big(sender.addr) + 1
+	//addr := ethutil.BigD(receiver.Address())
+	//tx.addLog(vm.Log{sender.Address(), [][]byte{ethutil.U256(addr.Add(addr, ethutil.Big1)).Bytes()}, nil})
 
 	return nil
 }

@@ -149,10 +149,7 @@ func (block *Block) Hash() ethutil.Bytes {
 }
 
 func (block *Block) HashNoNonce() []byte {
-	return ethcrypto.Sha3(ethutil.Encode([]interface{}{block.PrevHash,
-		block.UncleSha, block.Coinbase, block.state.Trie.Root,
-		block.ReceiptSha, block.Difficulty, block.Number, block.MinGasPrice,
-		block.GasLimit, block.GasUsed, block.Time, block.Extra}))
+	return ethcrypto.Sha3(ethutil.Encode(block.miningHeader()))
 }
 
 func (block *Block) State() *ethstate.State {
@@ -235,31 +232,18 @@ func (block *Block) rlpUncles() interface{} {
 
 func (block *Block) SetUncles(uncles []*Block) {
 	block.Uncles = uncles
-
 	block.UncleSha = ethcrypto.Sha3(ethutil.Encode(block.rlpUncles()))
 }
 
 func (self *Block) SetReceipts(receipts Receipts) {
 	self.receipts = receipts
-	self.SetReceiptHash(receipts)
+	self.ReceiptSha = DeriveSha(receipts)
+	self.LogsBloom = CreateBloom(self)
 }
 
 func (self *Block) SetTransactions(txs Transactions) {
-	self.setTransactions(txs)
-	self.SetTransactionHash(txs)
-}
-
-func (block *Block) setTransactions(txs Transactions) {
-	block.transactions = txs
-	block.LogsBloom = CreateBloom(block)
-}
-
-func (self *Block) SetTransactionHash(transactions Transactions) {
-	self.TxSha = DeriveSha(transactions)
-}
-
-func (self *Block) SetReceiptHash(receipts Receipts) {
-	self.ReceiptSha = DeriveSha(receipts)
+	self.transactions = txs
+	self.TxSha = DeriveSha(txs)
 }
 
 func (block *Block) Value() *ethutil.Value {
@@ -285,10 +269,10 @@ func (block *Block) RlpValueDecode(decoder *ethutil.Value) {
 	if decoder.Get(1).IsNil() == false { // Yes explicitness
 		//receipts := decoder.Get(1)
 		//block.receipts = make([]*Receipt, receipts.Len())
-		it := decoder.Get(1).NewIterator()
-		block.transactions = make(Transactions, it.Len())
-		for it.Next() {
-			block.transactions[it.Idx()] = NewTransactionFromValue(it.Value())
+		txs := decoder.Get(1)
+		block.transactions = make(Transactions, txs.Len())
+		for i := 0; i < txs.Len(); i++ {
+			block.transactions[i] = NewTransactionFromValue(txs.Get(i))
 			//receipt := NewRecieptFromValue(receipts.Get(i))
 			//block.transactions[i] = receipt.Tx
 			//block.receipts[i] = receipt
@@ -347,7 +331,7 @@ func (self *Block) Receipts() []*Receipt {
 	return self.receipts
 }
 
-func (block *Block) header() []interface{} {
+func (block *Block) miningHeader() []interface{} {
 	return []interface{}{
 		// Sha of the previous block
 		block.PrevHash,
@@ -377,9 +361,11 @@ func (block *Block) header() []interface{} {
 		block.Time,
 		// Extra data
 		block.Extra,
-		// Block's Nonce for validation
-		block.Nonce,
 	}
+}
+
+func (block *Block) header() []interface{} {
+	return append(block.miningHeader(), block.Nonce)
 }
 
 func (block *Block) String() string {

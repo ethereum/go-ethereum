@@ -3,21 +3,21 @@ package ethchain
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/vm"
 )
 
 func CreateBloom(block *Block) []byte {
 	bin := new(big.Int)
 	bin.Or(bin, bloom9(block.Coinbase))
-	for _, tx := range block.Transactions() {
-		bin.Or(bin, LogsBloom(tx.logs))
+	for _, receipt := range block.Receipts() {
+		bin.Or(bin, LogsBloom(receipt.logs))
 	}
 
 	return bin.Bytes()
 }
 
-func LogsBloom(logs []vm.Log) *big.Int {
+func LogsBloom(logs ethstate.Logs) *big.Int {
 	bin := new(big.Int)
 	for _, log := range logs {
 		data := [][]byte{log.Address}

@@ -232,7 +232,7 @@ func (self *StateTransition) TransitionState() (err error) {
 		} else {
 			// Add default LOG. Default = big(sender.addr) + 1
 			addr := ethutil.BigD(receiver.Address())
-			tx.addLog(vm.Log{sender.Address(), [][]byte{addr.Add(addr, ethutil.Big1).Bytes()}, nil})
+			self.state.AddLog(ethstate.Log{sender.Address(), [][]byte{ethutil.U256(addr.Add(addr, ethutil.Big1)).Bytes()}, nil})
 		}
 	}
 

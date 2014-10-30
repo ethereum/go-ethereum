@@ -24,11 +24,25 @@ type State struct {
 	manifest *Manifest
 
 	refund map[string]*big.Int
+
+	logs Logs
 }
 
 // Create a new state from a given trie
 func New(trie *ethtrie.Trie) *State {
 	return &State{Trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest(), refund: make(map[string]*big.Int)}
+}
+
+func (self *State) EmptyLogs() {
+	self.logs = nil
+}
+
+func (self *State) AddLog(log Log) {
+	self.logs = append(self.logs, log)
+}
+
+func (self *State) Logs() Logs {
+	return self.logs
 }
 
 // Retrieve the balance from the given address or 0 if object not found
@@ -202,6 +216,10 @@ func (self *State) Copy() *State {
 			state.refund[addr] = refund
 		}
 
+		logs := make(Logs, len(self.logs))
+		copy(logs, self.logs)
+		state.logs = logs
+
 		return state
 	}
 
@@ -216,6 +234,7 @@ func (self *State) Set(state *State) {
 	self.Trie = state.Trie
 	self.stateObjects = state.stateObjects
 	self.refund = state.refund
+	self.logs = state.logs
 }
 
 func (s *State) Root() interface{} {

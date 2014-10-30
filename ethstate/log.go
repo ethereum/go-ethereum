@@ -1,4 +1,4 @@
-package vm
+package ethstate
 
 import "github.com/ethereum/go-ethereum/ethutil"
 

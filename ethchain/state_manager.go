@@ -145,6 +145,9 @@ func (self *StateManager) ProcessTransactions(coinbase *ethstate.StateObject, st
 
 done:
 	for i, tx := range txs {
+		// If we are mining this block and validating we want to set the logs back to 0
+		state.EmptyLogs()
+
 		txGas := new(big.Int).Set(tx.Gas)
 
 		cb := state.GetStateObject(coinbase.Address())
@@ -175,7 +178,7 @@ done:
 		txGas.Sub(txGas, st.gas)
 		cumulative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, txGas))
 		//receipt := &Receipt{tx, ethutil.CopyBytes(state.Root().([]byte)), accumelative}
-		receipt := &Receipt{ethutil.CopyBytes(state.Root().([]byte)), cumulative, LogsBloom(tx.logs).Bytes(), tx.logs}
+		receipt := &Receipt{ethutil.CopyBytes(state.Root().([]byte)), cumulative, LogsBloom(state.Logs()).Bytes(), state.Logs()}
 
 		if i < len(block.Receipts()) {
 			original := block.Receipts()[i]
@@ -238,7 +241,7 @@ func (sm *StateManager) Process(block *Block) (err error) {
 
 	txSha := DeriveSha(block.transactions)
 	if bytes.Compare(txSha, block.TxSha) != 0 {
-		return fmt.Errorf("Error validating transaction sha. Received %x, got %x", block.ReceiptSha, txSha)
+		return fmt.Errorf("Error validating transaction sha. Received %x, got %x", block.TxSha, txSha)
 	}
 
 	receipts, err := sm.ApplyDiff(state, parent, block)

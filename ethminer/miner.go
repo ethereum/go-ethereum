@@ -185,8 +185,8 @@ func (self *Miner) mineNewBlock() {
 	self.ethereum.TxPool().RemoveSet(erroneous)
 	self.txs = append(txs, unhandledTxs...)
 
-	self.block.SetReceipts(receipts)
 	self.block.SetTransactions(txs)
+	self.block.SetReceipts(receipts)
 
 	// Accumulate the rewards included for this block
 	stateManager.AccumelateRewards(self.block.State(), self.block, parent)
