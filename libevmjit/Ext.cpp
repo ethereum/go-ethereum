@@ -24,12 +24,6 @@ inline u256 fromAddress(Address _a)
 	return (u160)_a;
 }
 
-struct ExtData
-{
-	const byte* calldata;
-	const byte* code;
-};
-
 Ext::Ext(RuntimeManager& _runtimeManager):
 	RuntimeHelper(_runtimeManager)
 {
