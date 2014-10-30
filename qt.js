@@ -5,13 +5,13 @@
         var self = this;
         navigator.qt.onmessage = function (message) {
             self.handlers.forEach(function (handler) {
-                handler.call(self, JSON.parse(message));
+                handler.call(self, JSON.parse(message.data));
             });
         }
     };
 
     QtProvider.prototype.send = function(payload) {
-        navigator.qt.postData(JSON.stringify(payload));
+        navigator.qt.postMessage(JSON.stringify(payload));
     };
 
     Object.defineProperty(QtProvider.prototype, "onmessage", {
