@@ -1,8 +1,10 @@
-
 #include "ExecutionEngine.h"
 
 #include <csetjmp>
 #include <chrono>
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
@@ -15,6 +17,9 @@
 #include <llvm/Support/Signals.h>
 #include <llvm/Support/PrettyStackTrace.h>
 #include <llvm/Support/Host.h>
+
+#pragma GCC diagnostic pop
+
 
 #include <libevm/VM.h>
 

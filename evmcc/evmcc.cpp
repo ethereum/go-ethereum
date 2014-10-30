@@ -8,8 +8,6 @@
 
 #include <boost/algorithm/string.hpp>
 
-#include <llvm/Support/raw_os_ostream.h>
-
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
 #include <libevmface/Instruction.h>
