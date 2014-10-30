@@ -6,6 +6,7 @@
 #include <llvm/IR/IntrinsicInst.h>
 
 #include <libdevcrypto/SHA3.h>
+#include <libevm/FeeStructure.h>
 
 #include "Runtime.h"
 #include "Type.h"
@@ -23,12 +24,6 @@ inline u256 fromAddress(Address _a)
 {
 	return (u160)_a;
 }
-
-struct ExtData
-{
-	const byte* calldata;
-	const byte* code;
-};
 
 Ext::Ext(RuntimeManager& _runtimeManager):
 	RuntimeHelper(_runtimeManager),
@@ -184,7 +179,12 @@ extern "C"
 	{
 		auto index = llvm2eth(*_index);
 		auto value = llvm2eth(*_value);
-		_rt->getExt().setStore(index, value); // Interface uses native endianness
+		auto& ext = _rt->getExt();
+
+		if (value == 0 && ext.store(index) != 0)	// If delete
+			ext.sub.refunds += c_sstoreRefundGas;	// Increase refund counter
+
+		ext.setStore(index, value);	// Interface uses native endianness
 	}
 
 	EXPORT void ext_calldataload(Runtime* _rt, i256* _index, i256* _value)

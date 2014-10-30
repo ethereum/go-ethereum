@@ -41,6 +41,16 @@ llvm::ConstantInt* Constant::get(uint64_t _n)
 	return llvm::ConstantInt::get(Type::i256, _n);
 }
 
+llvm::ConstantInt* Constant::get(u256 _n)
+{
+	auto& backend = _n.backend();
+	auto words = reinterpret_cast<uint64_t*>(backend.limbs());
+	auto nWords = backend.limb_bits == 64 ? backend.size() : (backend.size() + 1) / 2;
+	llvm::APInt n(256, nWords, words);
+	assert(n.toString(10, false) == _n.str());
+	return static_cast<llvm::ConstantInt*>(llvm::ConstantInt::get(Type::i256, n));
+}
+
 llvm::ConstantInt* Constant::get(ReturnCode _returnCode)
 {
 	return llvm::ConstantInt::get(Type::MainReturn, static_cast<uint64_t>(_returnCode));

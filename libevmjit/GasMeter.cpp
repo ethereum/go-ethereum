@@ -28,10 +28,8 @@ uint64_t getStepCost(Instruction inst) // TODO: Add this function to FeeSructure
 	{
 	case Instruction::STOP:
 	case Instruction::SUICIDE:
+	case Instruction::SSTORE: // Handle cost of SSTORE separately in GasMeter::countSStore()
 		return 0;
-
-	case Instruction::SSTORE:
-		return static_cast<uint64_t>(c_sstoreResetGas); // FIXME: Check store gas
 
 	case Instruction::SLOAD:
 		return static_cast<uint64_t>(c_sloadGas);
@@ -118,8 +116,7 @@ void GasMeter::count(Instruction _inst)
 		m_checkCall = m_builder.CreateCall(m_gasCheckFunc, llvm::UndefValue::get(Type::i256));
 	}
 
-	if (_inst != Instruction::SSTORE) // Handle cost of SSTORE separately in countSStore()
-		m_blockCost += getStepCost(_inst);
+	m_blockCost += getStepCost(_inst);
 
 	if (isCostBlockEnd(_inst))
 		commitCostBlock();
@@ -129,20 +126,15 @@ void GasMeter::countSStore(Ext& _ext, llvm::Value* _index, llvm::Value* _newValu
 {
 	assert(!m_checkCall); // Everything should've been commited before
 
-	static const auto sstoreCost = static_cast<uint64_t>(c_sstoreResetGas); // FIXME: Check store gas
-
-	// [ADD] if oldValue == 0 and newValue != 0  =>  2*cost
-	// [DEL] if oldValue != 0 and newValue == 0  =>  0
-
 	auto oldValue = _ext.store(_index);
 	auto oldValueIsZero = m_builder.CreateICmpEQ(oldValue, Constant::get(0), "oldValueIsZero");
 	auto newValueIsZero = m_builder.CreateICmpEQ(_newValue, Constant::get(0), "newValueIsZero");
 	auto oldValueIsntZero = m_builder.CreateICmpNE(oldValue, Constant::get(0), "oldValueIsntZero");
 	auto newValueIsntZero = m_builder.CreateICmpNE(_newValue, Constant::get(0), "newValueIsntZero");
-	auto isAdd = m_builder.CreateAnd(oldValueIsZero, newValueIsntZero, "isAdd");
-	auto isDel = m_builder.CreateAnd(oldValueIsntZero, newValueIsZero, "isDel");
-	auto cost = m_builder.CreateSelect(isAdd, Constant::get(2 * sstoreCost), Constant::get(sstoreCost), "cost");
-	cost = m_builder.CreateSelect(isDel, Constant::get(0), cost, "cost");
+	auto isInsert = m_builder.CreateAnd(oldValueIsZero, newValueIsntZero, "isInsert");
+	auto isDelete = m_builder.CreateAnd(oldValueIsntZero, newValueIsZero, "isDelete");
+	auto cost = m_builder.CreateSelect(isInsert, Constant::get(c_sstoreSetGas), Constant::get(c_sstoreResetGas), "cost");
+	cost = m_builder.CreateSelect(isDelete, Constant::get(0), cost, "cost");
 	createCall(m_gasCheckFunc, cost);
 }
 

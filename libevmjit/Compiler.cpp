@@ -374,10 +374,9 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 
 		case Instruction::BNOT:
 		{
-			auto top = stack.pop();
-			auto allones = llvm::ConstantInt::get(Type::i256, llvm::APInt::getAllOnesValue(256));
-			auto res = m_builder.CreateXor(top, allones);
-			stack.push(res);
+			auto value = stack.pop();
+			auto ret = m_builder.CreateXor(value, llvm::APInt(256, -1, true), "bnot");
+			stack.push(ret);
 			break;
 		}
 
@@ -507,28 +506,29 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 
 		case Instruction::SIGNEXTEND:
 		{
-			auto k = stack.pop();
-			auto b = stack.pop();
-			auto k32 = m_builder.CreateTrunc(k, m_builder.getIntNTy(5), "k_32");
-			auto k32ext = m_builder.CreateZExt(k32, Type::i256);
-			auto k32x8 = m_builder.CreateMul(k32ext, Constant::get(8), "kx8");
+			auto idx = stack.pop();
+			auto word = stack.pop();
+
+			auto k32_ = m_builder.CreateTrunc(idx, m_builder.getIntNTy(5), "k_32");
+			auto k32 = m_builder.CreateZExt(k32_, Type::i256);
+			auto k32x8 = m_builder.CreateMul(k32, Constant::get(8), "kx8");
 
 			// test for b >> (k * 8 + 7)
-			auto val = m_builder.CreateAdd(k32x8, llvm::ConstantInt::get(Type::i256, 7));
-			auto tmp = m_builder.CreateAShr(b, val);
-			auto bitset = m_builder.CreateTrunc(tmp, m_builder.getInt1Ty());
+			auto bitpos = m_builder.CreateAdd(k32x8, Constant::get(7), "bitpos");
+			auto bitval = m_builder.CreateLShr(word, bitpos, "bitval");
+			auto bittest = m_builder.CreateTrunc(bitval, m_builder.getInt1Ty(), "bittest");
 
-			// shift left by (31 - k) * 8 = (248 - k*8), then do arithmetic shr by the same amount.
-			auto shiftSize = m_builder.CreateSub(llvm::ConstantInt::get(Type::i256, 31 * 8), k32x8);
-			auto bshl = m_builder.CreateShl(b, shiftSize);
-			auto bshr = m_builder.CreateAShr(bshl, shiftSize);
+			auto mask_ = m_builder.CreateShl(Constant::get(1), bitpos);
+			auto mask = m_builder.CreateSub(mask_, Constant::get(1), "mask");
 
-			// bshr is our final value if 0 <= k <= 30 and bitset is true,
-			// otherwise we push back b unchanged
-			auto kInRange = m_builder.CreateICmpULE(k, llvm::ConstantInt::get(Type::i256, 30));
-			auto cond = m_builder.CreateAnd(kInRange, bitset);
+			auto negmask = m_builder.CreateXor(mask, llvm::ConstantInt::getAllOnesValue(Type::i256), "negmask");
+			auto val1 = m_builder.CreateOr(word, negmask);
+			auto val0 = m_builder.CreateAnd(word, mask);
 
-			auto result = m_builder.CreateSelect(cond, bshr, b);
+			auto kInRange = m_builder.CreateICmpULE(idx, llvm::ConstantInt::get(Type::i256, 30));
+			auto result = m_builder.CreateSelect(kInRange,
+			                                     m_builder.CreateSelect(bittest, val1, val0),
+			                                     word);
 			stack.push(result);
 
 			break;
