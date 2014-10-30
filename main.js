@@ -48,7 +48,7 @@
         };
 
         var transactionCall = function (args) {
-            return typeof args[0] === "string" ? 'transactionByHash' : 'transactonByNumber';   
+            return typeof args[0] === "string" ? 'transactionByHash' : 'transactionByNumber';   
         };
 
         var uncleCall = function (args) {
