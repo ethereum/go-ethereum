@@ -35,6 +35,23 @@ i256 eth2llvm(u256 _u)
 	return i;
 }
 
+u256 readPushData(const byte*& _curr, const byte* _end)
+{
+	auto pushInst = *_curr;
+	assert(Instruction(pushInst) >= Instruction::PUSH1 && Instruction(pushInst) <= Instruction::PUSH32);
+	auto numBytes = pushInst - static_cast<size_t>(Instruction::PUSH1) + 1;
+	u256 value;
+	++_curr;	// Point the data
+	for (decltype(numBytes) i = 0; i < numBytes; ++i)
+	{
+		byte b = (_curr != _end) ? *_curr++ : 0;
+		value <<= 8;
+		value |= b;
+	}
+	--_curr;	// Point the last real byte read
+	return value;
+}
+
 }
 }
 }

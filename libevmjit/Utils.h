@@ -5,6 +5,7 @@
 
 #include <libdevcore/Common.h>
 #include <libdevcore/Log.h>
+#include <libevmface/Instruction.h>
 
 namespace dev
 {
@@ -28,6 +29,11 @@ static_assert(sizeof(i256) == 32, "Wrong i265 size");
 
 u256 llvm2eth(i256);
 i256 eth2llvm(u256);
+
+/// Reads PUSH data from pointed fragment of bytecode and constructs number out of it
+/// Reading out of bytecode means reading 0
+/// @param _curr is updates and points the last real byte read
+u256 readPushData(const byte*& _curr, const byte* _end);
 
 #define ANY_PUSH	  PUSH1:  \
 	case Instruction::PUSH2:  \
