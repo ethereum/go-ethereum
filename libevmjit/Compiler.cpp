@@ -372,14 +372,11 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			break;
 		}
 
-		/*case Instruction::NEG:
+		case Instruction::BNOT:
 		{
-			auto top = stack.pop();
-			auto zero = Constant::get(0);
-			auto res = m_builder.CreateSub(zero, top);
-			stack.push(res);
-			break;
-		}*/
+			auto value = stack.pop();
+			auto ret = m_builder.CreateXor(value, llvm::APInt(256, -1, true), "bnot");
+		}
 
 		case Instruction::LT:
 		{

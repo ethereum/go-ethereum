@@ -1,0 +1,14 @@
+
+(asm 
+123456
+0
+MSTORE
+0
+MLOAD
+BNOT
+0
+MSTORE
+32
+0
+RETURN
+)
