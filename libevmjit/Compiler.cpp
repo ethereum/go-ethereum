@@ -552,16 +552,15 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 
 		case Instruction::ANY_PUSH:
 		{
-			auto numBytes = static_cast<size_t>(inst) - static_cast<size_t>(Instruction::PUSH1) + 1;
+			const auto numBytes = static_cast<size_t>(inst) - static_cast<size_t>(Instruction::PUSH1) + 1;
 			auto value = llvm::APInt(256, 0);
-			for (decltype(numBytes) i = 0; i < numBytes; ++i)   // TODO: Use pc as iterator
+			for (auto lastPC = currentPC + numBytes; currentPC < lastPC;)
 			{
-				++currentPC;
 				value <<= 8;
-				value |= bytecode[currentPC];
+				value |= bytecode[++currentPC];
 			}
-			auto c = m_builder.getInt(value);
-			stack.push(c);
+
+			stack.push(m_builder.getInt(value));
 			break;
 		}
 
