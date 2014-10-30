@@ -76,6 +76,7 @@
         { name: 'listening', getter: 'listening', setter: 'setListening' },
         { name: 'mining', getter: 'mining', setter: 'setMining' },
         { name: 'gasPrice', getter: 'gasPrice' },
+        { name: 'account', getter: 'account' },
         { name: 'accounts', getter: 'accounts' },
         { name: 'peerCount', getter: 'peerCount' },
         { name: 'defaultBlock', getter: 'defaultBlock', setter: 'setDefaultBlock' },
