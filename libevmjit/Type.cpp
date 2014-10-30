@@ -43,10 +43,7 @@ llvm::ConstantInt* Constant::get(uint64_t _n)
 
 llvm::ConstantInt* Constant::get(u256 _n)
 {
-	auto& backend = _n.backend();
-	auto words = reinterpret_cast<uint64_t*>(backend.limbs());
-	auto nWords = backend.limb_bits == 64 ? backend.size() : (backend.size() + 1) / 2;
-	llvm::APInt n(256, nWords, words);
+	llvm::APInt n(256, _n.str(0, std::ios_base::hex), 16);
 	assert(n.toString(10, false) == _n.str());
 	return static_cast<llvm::ConstantInt*>(llvm::ConstantInt::get(Type::i256, n));
 }
