@@ -554,16 +554,15 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 
 		case Instruction::ANY_PUSH:
 		{
-			auto numBytes = static_cast<size_t>(inst) - static_cast<size_t>(Instruction::PUSH1) + 1;
+			const auto numBytes = static_cast<size_t>(inst) - static_cast<size_t>(Instruction::PUSH1) + 1;
 			auto value = llvm::APInt(256, 0);
-			for (decltype(numBytes) i = 0; i < numBytes; ++i)   // TODO: Use pc as iterator
+			for (auto lastPC = currentPC + numBytes; currentPC < lastPC;)
 			{
-				++currentPC;
 				value <<= 8;
-				value |= bytecode[currentPC];
+				value |= bytecode[++currentPC];
 			}
-			auto c = m_builder.getInt(value);
-			stack.push(c);
+
+			stack.push(m_builder.getInt(value));
 			break;
 		}
 
@@ -641,9 +640,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			{
 				auto pairIter = m_directJumpTargets.find(currentPC);
 				if (pairIter != m_directJumpTargets.end())
-				{
 					targetBlock = pairIter->second;
-				}
 			}
 
 			if (inst == Instruction::JUMP)
@@ -656,9 +653,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 					m_builder.CreateBr(targetBlock);
 				}
 				else
-				{
 					m_builder.CreateBr(m_jumpTableBlock->llvm());
-				}
 			}
 			else // JUMPI
 			{
@@ -667,8 +662,9 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 				auto zero = Constant::get(0);
 				auto cond = m_builder.CreateICmpNE(val, zero, "nonzero");
 
-				// Assume the basic blocks are properly ordered:
-				assert(nextBasicBlock); // FIXME: JUMPI can be last instruction
+				
+				if (!nextBasicBlock)	// In case JUMPI is the last instruction
+					nextBasicBlock = m_stopBB;
 
 				if (targetBlock)
 				{
@@ -676,9 +672,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 					m_builder.CreateCondBr(cond, targetBlock, nextBasicBlock);
 				}
 				else
-				{
 					m_builder.CreateCondBr(cond, m_jumpTableBlock->llvm(), nextBasicBlock);
-				}
 			}
 
 			break;

@@ -74,7 +74,8 @@ llvm::Function* Memory::createRequireFunc(GasMeter& _gasMeter, RuntimeManager& _
 	m_builder.SetInsertPoint(resizeBB);
 	// Check gas first
 	auto wordsRequired = m_builder.CreateUDiv(m_builder.CreateAdd(sizeRequired, Constant::get(31)), Constant::get(32), "wordsRequired");
-	auto words = m_builder.CreateUDiv(m_builder.CreateAdd(size, Constant::get(31)), Constant::get(32), "words");
+	sizeRequired = m_builder.CreateMul(wordsRequired, Constant::get(32), "roundedSizeRequired");
+	auto words = m_builder.CreateUDiv(size, Constant::get(32), "words");	// size is always 32*k
 	auto newWords = m_builder.CreateSub(wordsRequired, words, "addtionalWords");
 	_gasMeter.checkMemory(newWords, m_builder);
 	// Resize
