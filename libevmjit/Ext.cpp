@@ -26,14 +26,13 @@ inline u256 fromAddress(Address _a)
 }
 
 Ext::Ext(RuntimeManager& _runtimeManager):
-	RuntimeHelper(_runtimeManager)
+	RuntimeHelper(_runtimeManager),
+	m_data()
 {
 	auto&& ctx = m_builder.getContext();
 	auto module = getModule();
 
 	auto i256Ty = m_builder.getIntNTy(256);
-	auto i256PtrTy = i256Ty->getPointerTo();
-	auto i8PtrTy = m_builder.getInt8PtrTy();
 
 	m_args[0] = m_builder.CreateAlloca(i256Ty, nullptr, "ext.index");
 	m_args[1] = m_builder.CreateAlloca(i256Ty, nullptr, "ext.value");
@@ -266,7 +265,7 @@ extern "C"
 		*_ret = *reinterpret_cast<i256*>(&hash);
 	}
 
-	EXPORT void ext_exp(Runtime* _rt, i256* _left, i256* _right, i256* _ret)
+	EXPORT void ext_exp(Runtime*, i256* _left, i256* _right, i256* _ret)
 	{
 		bigint left = llvm2eth(*_left);
 		bigint right = llvm2eth(*_right);

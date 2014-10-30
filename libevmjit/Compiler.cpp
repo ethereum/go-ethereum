@@ -504,6 +504,36 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			break;
 		}
 
+		case Instruction::SIGNEXTEND:
+		{
+			auto idx = stack.pop();
+			auto word = stack.pop();
+
+			auto k32_ = m_builder.CreateTrunc(idx, m_builder.getIntNTy(5), "k_32");
+			auto k32 = m_builder.CreateZExt(k32_, Type::i256);
+			auto k32x8 = m_builder.CreateMul(k32, Constant::get(8), "kx8");
+
+			// test for b >> (k * 8 + 7)
+			auto bitpos = m_builder.CreateAdd(k32x8, Constant::get(7), "bitpos");
+			auto bitval = m_builder.CreateLShr(word, bitpos, "bitval");
+			auto bittest = m_builder.CreateTrunc(bitval, m_builder.getInt1Ty(), "bittest");
+
+			auto mask_ = m_builder.CreateShl(Constant::get(1), bitpos);
+			auto mask = m_builder.CreateSub(mask_, Constant::get(1), "mask");
+
+			auto negmask = m_builder.CreateXor(mask, llvm::ConstantInt::getAllOnesValue(Type::i256), "negmask");
+			auto val1 = m_builder.CreateOr(word, negmask);
+			auto val0 = m_builder.CreateAnd(word, mask);
+
+			auto kInRange = m_builder.CreateICmpULE(idx, llvm::ConstantInt::get(Type::i256, 30));
+			auto result = m_builder.CreateSelect(kInRange,
+			                                     m_builder.CreateSelect(bittest, val1, val0),
+			                                     word);
+			stack.push(result);
+
+			break;
+		}
+
 		case Instruction::SHA3:
 		{
 			auto inOff = stack.pop();

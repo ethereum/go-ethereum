@@ -31,6 +31,8 @@ bytesConstRef VM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 		BOOST_THROW_EXCEPTION(StackTooSmall(1, 0));
 	case ReturnCode::BadInstruction:
 		BOOST_THROW_EXCEPTION(BadInstruction());
+	default:
+		break;
 	}
 
 	m_output = std::move(engine.returnData);

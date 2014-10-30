@@ -89,7 +89,7 @@ llvm::Function* Memory::createRequireFunc(GasMeter& _gasMeter, RuntimeManager& _
 	return func;
 }
 
-llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, GasMeter& _gasMeter)
+llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, GasMeter&)
 {
 	auto isWord = _valueType == Type::i256;
 
@@ -226,30 +226,6 @@ extern "C"
 		auto& memory = _rt->getMemory();
 		memory.resize(size);
 		return memory.data();
-	}
-
-	EXPORT void evmccrt_memory_dump(uint64_t _begin, uint64_t _end)
-	{
-		//if (_end == 0)
-		//  _end = Runtime::getMemory().size();
-
-		//std::cerr << "MEMORY: active size: " << std::dec
-		//        << Runtime::getMemory().size() / 32 << " words\n";
-		//std::cerr << "MEMORY: dump from " << std::dec
-		//        << _begin << " to " << _end << ":";
-		//if (_end <= _begin)
-		//  return;
-
-		//_begin = _begin / 16 * 16;
-		//for (size_t i = _begin; i < _end; i++)
-		//{
-		//  if ((i - _begin) % 16 == 0)
-		//      std::cerr << '\n' << std::dec << i << ":  ";
-
-		//  auto b = Runtime::getMemory()[i];
-		//  std::cerr << std::hex << std::setw(2) << static_cast<int>(b) << ' ';
-		//}
-		//std::cerr << std::endl;
 	}
 
 }   // extern "C"
