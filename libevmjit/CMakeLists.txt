@@ -20,6 +20,7 @@ target_link_libraries(${EXECUTABLE} ethcore)
 target_link_libraries(${EXECUTABLE} evm)
 target_link_libraries(${EXECUTABLE} evmface)
 
+
 if ("${TARGET_PLATFORM}" STREQUAL "w64")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libgcc -static-libstdc++")
 	target_link_libraries(${EXECUTABLE} gcc)
@@ -30,14 +31,12 @@ if ("${TARGET_PLATFORM}" STREQUAL "w64")
 	target_link_libraries(${EXECUTABLE} iphlpapi)
 	target_link_libraries(${EXECUTABLE} boost_thread_win32-mt-s)
 	set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS)
-elseif (UNIX)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 else ()
 	find_package(Threads REQUIRED)
 	target_link_libraries(${EXECUTABLE} ${CMAKE_THREAD_LIBS_INIT})
 endif ()
 
-# LLVM specific commands
+# LLVM specific config
 
 find_package(LLVM REQUIRED CONFIG)
 
@@ -50,7 +49,7 @@ add_definitions(${LLVM_DEFINITIONS})
 llvm_map_components_to_libnames(llvm_libs core support mcjit x86asmparser x86codegen)
 target_link_libraries(evmjit ${llvm_libs})
 
-# end of LLVM specific commands
+# end of LLVM specific config
 
 
 
