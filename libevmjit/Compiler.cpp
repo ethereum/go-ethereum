@@ -366,7 +366,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		case Instruction::BNOT:
 		{
 			auto value = stack.pop();
-			auto ret = m_builder.CreateXor(value, llvm::APInt(256, -1, true), "bnot");
+			auto ret = m_builder.CreateXor(value, Constant::get(-1), "bnot");
 			stack.push(ret);
 			break;
 		}
