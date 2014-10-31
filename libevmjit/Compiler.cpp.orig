@@ -760,9 +760,18 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytesConstRef _bytecod
 
 			_gasMeter.commitCostBlock(gas);
 
+<<<<<<< HEAD
+			// Require _memory for the max of in and out buffers
+			auto inSizeReq = m_builder.CreateAdd(inOff, inSize, "inSizeReq");
+			auto outSizeReq = m_builder.CreateAdd(outOff, outSize, "outSizeReq");
+			auto cmp = m_builder.CreateICmpUGT(inSizeReq, outSizeReq);
+			auto sizeReq = m_builder.CreateSelect(cmp, inSizeReq, outSizeReq, "sizeReq");
+			_memory.require(sizeReq);
+=======
 			// Require memory for in and out buffers
-			_memory.require(outOff, outSize);	// Out buffer first as we guess it will be after the in one
-			_memory.require(inOff, inSize);
+			memory.require(outOff, outSize);	// Out buffer first as we guess it will be after the in one
+			memory.require(inOff, inSize);
+>>>>>>> ec07859aedd18ebfd9b40cfa2a182e49c5b3f30a
 
 			auto receiveAddress = codeAddress;
 			if (inst == Instruction::CALLCODE)
