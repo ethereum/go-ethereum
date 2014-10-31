@@ -18,10 +18,10 @@ Arith256::Arith256(llvm::IRBuilder<>& _builder) :
 {
 	using namespace llvm;
 
-	m_result = m_builder.CreateAlloca(Type::i256, nullptr, "arith.result");
-	m_arg1 = m_builder.CreateAlloca(Type::i256, nullptr, "arith.arg1");
-	m_arg2 = m_builder.CreateAlloca(Type::i256, nullptr, "arith.arg2");
-	m_arg3 = m_builder.CreateAlloca(Type::i256, nullptr, "arith.arg3");
+	m_result = m_builder.CreateAlloca(Type::Word, nullptr, "arith.result");
+	m_arg1 = m_builder.CreateAlloca(Type::Word, nullptr, "arith.arg1");
+	m_arg2 = m_builder.CreateAlloca(Type::Word, nullptr, "arith.arg2");
+	m_arg3 = m_builder.CreateAlloca(Type::Word, nullptr, "arith.arg3");
 
 	using Linkage = GlobalValue::LinkageTypes;
 

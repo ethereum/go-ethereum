@@ -171,7 +171,7 @@ llvm::Value* BasicBlock::LocalStack::get(size_t _index)
 		assert(m_initialStack[initialIdx] == nullptr);
 		// Create a dummy value.
 		std::string name = "get_" + boost::lexical_cast<std::string>(_index);
-		m_initialStack[initialIdx] = m_builder.CreatePHI(Type::i256, 0, name);
+		m_initialStack[initialIdx] = m_builder.CreatePHI(Type::Word, 0, name);
 		*itemIter = m_initialStack[initialIdx];
 	}
 

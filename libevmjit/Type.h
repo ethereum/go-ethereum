@@ -14,7 +14,7 @@ namespace jit
 
 struct Type
 {
-	static llvm::IntegerType* i256;
+	static llvm::IntegerType* Word;
 	static llvm::PointerType* WordPtr;
 
 	/// Type for doing low precision arithmetics where 256-bit precision is not supported by native target

@@ -12,7 +12,7 @@ namespace eth
 namespace jit
 {
 
-llvm::IntegerType* Type::i256;
+llvm::IntegerType* Type::Word;
 llvm::PointerType* Type::WordPtr;
 llvm::IntegerType* Type::lowPrecision;
 llvm::IntegerType* Type::Size;
@@ -24,8 +24,8 @@ llvm::PointerType* Type::RuntimePtr;
 
 void Type::init(llvm::LLVMContext& _context)
 {
-	i256 = llvm::Type::getIntNTy(_context, 256);
-	WordPtr = i256->getPointerTo();
+	Word = llvm::Type::getIntNTy(_context, 256);
+	WordPtr = Word->getPointerTo();
 	lowPrecision = llvm::Type::getInt64Ty(_context);
 	// TODO: Size should be architecture-dependent
 	Size = llvm::Type::getInt64Ty(_context);
@@ -38,14 +38,14 @@ void Type::init(llvm::LLVMContext& _context)
 
 llvm::ConstantInt* Constant::get(int64_t _n)
 {
-	return llvm::ConstantInt::getSigned(Type::i256, _n);
+	return llvm::ConstantInt::getSigned(Type::Word, _n);
 }
 
 llvm::ConstantInt* Constant::get(u256 _n)
 {
 	llvm::APInt n(256, _n.str(0, std::ios_base::hex), 16);
 	assert(n.toString(10, false) == _n.str());
-	return static_cast<llvm::ConstantInt*>(llvm::ConstantInt::get(Type::i256, n));
+	return static_cast<llvm::ConstantInt*>(llvm::ConstantInt::get(Type::Word, n));
 }
 
 llvm::ConstantInt* Constant::get(ReturnCode _returnCode)

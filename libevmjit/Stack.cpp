@@ -18,7 +18,7 @@ Stack::Stack(llvm::IRBuilder<>& _builder, RuntimeManager& _runtimeManager):
 	CompilerHelper(_builder),
 	m_runtimeManager(_runtimeManager)
 {
-	m_arg = m_builder.CreateAlloca(Type::i256, nullptr, "stack.arg");
+	m_arg = m_builder.CreateAlloca(Type::Word, nullptr, "stack.arg");
 
 	using namespace llvm;
 	using Linkage = GlobalValue::LinkageTypes;

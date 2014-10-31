@@ -84,7 +84,7 @@ GasMeter::GasMeter(llvm::IRBuilder<>& _builder, RuntimeManager& _runtimeManager)
 {
 	auto module = getModule();
 
-	m_gasCheckFunc = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::i256, false), llvm::Function::PrivateLinkage, "gas.check", module);
+	m_gasCheckFunc = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::Word, false), llvm::Function::PrivateLinkage, "gas.check", module);
 	InsertPointGuard guard(m_builder);
 
 	auto checkBB = llvm::BasicBlock::Create(_builder.getContext(), "Check", m_gasCheckFunc);
@@ -113,7 +113,7 @@ void GasMeter::count(Instruction _inst)
 	if (!m_checkCall)
 	{
 		// Create gas check call with mocked block cost at begining of current cost-block
-		m_checkCall = m_builder.CreateCall(m_gasCheckFunc, llvm::UndefValue::get(Type::i256));
+		m_checkCall = m_builder.CreateCall(m_gasCheckFunc, llvm::UndefValue::get(Type::Word));
 	}
 
 	m_blockCost += getStepCost(_inst);

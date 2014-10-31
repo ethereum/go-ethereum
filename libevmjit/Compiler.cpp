@@ -376,7 +376,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto lhs = stack.pop();
 			auto rhs = stack.pop();
 			auto res1 = m_builder.CreateICmpULT(lhs, rhs);
-			auto res256 = m_builder.CreateZExt(res1, Type::i256);
+			auto res256 = m_builder.CreateZExt(res1, Type::Word);
 			stack.push(res256);
 			break;
 		}
@@ -386,7 +386,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto lhs = stack.pop();
 			auto rhs = stack.pop();
 			auto res1 = m_builder.CreateICmpUGT(lhs, rhs);
-			auto res256 = m_builder.CreateZExt(res1, Type::i256);
+			auto res256 = m_builder.CreateZExt(res1, Type::Word);
 			stack.push(res256);
 			break;
 		}
@@ -396,7 +396,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto lhs = stack.pop();
 			auto rhs = stack.pop();
 			auto res1 = m_builder.CreateICmpSLT(lhs, rhs);
-			auto res256 = m_builder.CreateZExt(res1, Type::i256);
+			auto res256 = m_builder.CreateZExt(res1, Type::Word);
 			stack.push(res256);
 			break;
 		}
@@ -406,7 +406,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto lhs = stack.pop();
 			auto rhs = stack.pop();
 			auto res1 = m_builder.CreateICmpSGT(lhs, rhs);
-			auto res256 = m_builder.CreateZExt(res1, Type::i256);
+			auto res256 = m_builder.CreateZExt(res1, Type::Word);
 			stack.push(res256);
 			break;
 		}
@@ -416,7 +416,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto lhs = stack.pop();
 			auto rhs = stack.pop();
 			auto res1 = m_builder.CreateICmpEQ(lhs, rhs);
-			auto res256 = m_builder.CreateZExt(res1, Type::i256);
+			auto res256 = m_builder.CreateZExt(res1, Type::Word);
 			stack.push(res256);
 			break;
 		}
@@ -425,7 +425,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		{
 			auto top = stack.pop();
 			auto iszero = m_builder.CreateICmpEQ(top, Constant::get(0), "iszero");
-			auto result = m_builder.CreateZExt(iszero, Type::i256);
+			auto result = m_builder.CreateZExt(iszero, Type::Word);
 			stack.push(result);
 			break;
 		}
@@ -465,7 +465,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			value = Endianness::toBE(m_builder, value);
 			auto bytes = m_builder.CreateBitCast(value, llvm::VectorType::get(Type::Byte, 32), "bytes");
 			auto byte = m_builder.CreateExtractElement(bytes, byteNum, "byte");
-			value = m_builder.CreateZExt(byte, Type::i256);
+			value = m_builder.CreateZExt(byte, Type::Word);
 
 			auto byteNumValid = m_builder.CreateICmpULT(byteNum, Constant::get(32));
 			value = m_builder.CreateSelect(byteNumValid, value, Constant::get(0));
@@ -499,7 +499,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto word = stack.pop();
 
 			auto k32_ = m_builder.CreateTrunc(idx, m_builder.getIntNTy(5), "k_32");
-			auto k32 = m_builder.CreateZExt(k32_, Type::i256);
+			auto k32 = m_builder.CreateZExt(k32_, Type::Word);
 			auto k32x8 = m_builder.CreateMul(k32, Constant::get(8), "kx8");
 
 			// test for word >> (k * 8 + 7)
@@ -510,11 +510,11 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto mask_ = m_builder.CreateShl(Constant::get(1), bitpos);
 			auto mask = m_builder.CreateSub(mask_, Constant::get(1), "mask");
 
-			auto negmask = m_builder.CreateXor(mask, llvm::ConstantInt::getAllOnesValue(Type::i256), "negmask");
+			auto negmask = m_builder.CreateXor(mask, llvm::ConstantInt::getAllOnesValue(Type::Word), "negmask");
 			auto val1 = m_builder.CreateOr(word, negmask);
 			auto val0 = m_builder.CreateAnd(word, mask);
 
-			auto kInRange = m_builder.CreateICmpULE(idx, llvm::ConstantInt::get(Type::i256, 30));
+			auto kInRange = m_builder.CreateICmpULE(idx, llvm::ConstantInt::get(Type::Word, 30));
 			auto result = m_builder.CreateSelect(kInRange,
 			                                     m_builder.CreateSelect(bittest, val1, val0),
 			                                     word);

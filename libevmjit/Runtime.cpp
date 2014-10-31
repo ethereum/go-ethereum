@@ -22,7 +22,7 @@ llvm::StructType* RuntimeData::getType()
 	{
 		llvm::Type* elems[] =
 		{
-			llvm::ArrayType::get(Type::i256, _size),
+			llvm::ArrayType::get(Type::Word, _size),
 			Type::BytePtr,
 			Type::BytePtr,
 			Type::BytePtr
