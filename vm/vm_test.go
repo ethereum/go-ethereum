@@ -28,7 +28,7 @@ func (TestEnv) Time() int64           { return 0 }
 func (TestEnv) GasLimit() *big.Int    { return nil }
 func (TestEnv) Difficulty() *big.Int  { return nil }
 func (TestEnv) Value() *big.Int       { return nil }
-func (TestEnv) AddLog(Log)            {}
+func (TestEnv) AddLog(state.Log)      {}
 
 func (TestEnv) Transfer(from, to Account, amount *big.Int) error {
 	return nil
