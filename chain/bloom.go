@@ -1,4 +1,4 @@
-package ethchain
+package chain
 
 type BloomFilter struct {
 	bin []byte

@@ -1,12 +1,12 @@
 package ui
 
 import (
-	"github.com/ethereum/go-ethereum/ethchain"
+	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/ethutil"
 )
 
-func NewFilterFromMap(object map[string]interface{}, eth ethchain.EthManager) *ethchain.Filter {
-	filter := ethchain.NewFilter(eth)
+func NewFilterFromMap(object map[string]interface{}, eth chain.EthManager) *chain.Filter {
+	filter := chain.NewFilter(eth)
 
 	if object["earliest"] != nil {
 		val := ethutil.NewValue(object["earliest"])
@@ -46,7 +46,7 @@ func NewFilterFromMap(object map[string]interface{}, eth ethchain.EthManager) *e
 }
 
 // Conversion methodn
-func mapToAccountChange(m map[string]interface{}) (d ethchain.AccountChange) {
+func mapToAccountChange(m map[string]interface{}) (d chain.AccountChange) {
 	if str, ok := m["id"].(string); ok {
 		d.Address = ethutil.Hex2Bytes(str)
 	}
@@ -60,9 +60,9 @@ func mapToAccountChange(m map[string]interface{}) (d ethchain.AccountChange) {
 
 // data can come in in the following formats:
 // ["aabbccdd", {id: "ccddee", at: "11223344"}], "aabbcc", {id: "ccddee", at: "1122"}
-func makeAltered(v interface{}) (d []ethchain.AccountChange) {
+func makeAltered(v interface{}) (d []chain.AccountChange) {
 	if str, ok := v.(string); ok {
-		d = append(d, ethchain.AccountChange{ethutil.Hex2Bytes(str), nil})
+		d = append(d, chain.AccountChange{ethutil.Hex2Bytes(str), nil})
 	} else if obj, ok := v.(map[string]interface{}); ok {
 		d = append(d, mapToAccountChange(obj))
 	} else if slice, ok := v.([]interface{}); ok {

@@ -25,7 +25,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/ethchain"
+	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/ethcrypto"
 	"github.com/ethereum/go-ethereum/ethpipe"
 	"github.com/ethereum/go-ethereum/ethstate"
@@ -120,7 +120,7 @@ func (self *UiLib) PastPeers() *ethutil.List {
 }
 
 func (self *UiLib) ImportTx(rlpTx string) {
-	tx := ethchain.NewTransactionFromBytes(ethutil.Hex2Bytes(rlpTx))
+	tx := chain.NewTransactionFromBytes(ethutil.Hex2Bytes(rlpTx))
 	self.eth.TxPool().QueueTransaction(tx)
 }
 
@@ -221,8 +221,8 @@ func (self *UiLib) NewFilter(object map[string]interface{}) (id int) {
 }
 
 func (self *UiLib) NewFilterString(typ string) (id int) {
-	filter := ethchain.NewFilter(self.eth)
-	filter.BlockCallback = func(block *ethchain.Block) {
+	filter := chain.NewFilter(self.eth)
+	filter.BlockCallback = func(block *chain.Block) {
 		self.win.Root().Call("invokeFilterCallback", "{}", id)
 	}
 	id = self.eth.InstallFilter(filter)

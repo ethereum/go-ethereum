@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/ethchain"
+	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethpipe"
 	"github.com/ethereum/go-ethereum/ethstate"
@@ -62,7 +62,7 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 
 	// Subscribe to events
 	mux := ethereum.EventMux()
-	re.events = mux.Subscribe(ethchain.NewBlockEvent{})
+	re.events = mux.Subscribe(chain.NewBlockEvent{})
 
 	// We have to make sure that, whoever calls this, calls "Stop"
 	go re.mainLoop()
@@ -130,7 +130,7 @@ func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
 	var state *ethstate.State
 
 	if len(call.ArgumentList) > 0 {
-		var block *ethchain.Block
+		var block *chain.Block
 		if call.Argument(0).IsNumber() {
 			num, _ := call.Argument(0).ToInteger()
 			block = self.ethereum.ChainManager().GetBlockByNumber(uint64(num))

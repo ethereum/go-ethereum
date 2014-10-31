@@ -3,20 +3,20 @@ package utils
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethchain"
+	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/vm"
 )
 
 type VMEnv struct {
 	state *ethstate.State
-	block *ethchain.Block
+	block *chain.Block
 
 	transactor []byte
 	value      *big.Int
 }
 
-func NewEnv(state *ethstate.State, block *ethchain.Block, transactor []byte, value *big.Int) *VMEnv {
+func NewEnv(state *ethstate.State, block *chain.Block, transactor []byte, value *big.Int) *VMEnv {
 	return &VMEnv{
 		state:      state,
 		block:      block,

@@ -1,4 +1,4 @@
-package ethchain
+package chain
 
 // TxPreEvent is posted when a transaction enters the transaction pool.
 type TxPreEvent struct{ Tx *Transaction }

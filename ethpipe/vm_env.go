@@ -3,19 +3,19 @@ package ethpipe
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethchain"
+	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/vm"
 )
 
 type VMEnv struct {
 	state  *ethstate.State
-	block  *ethchain.Block
+	block  *chain.Block
 	value  *big.Int
 	sender []byte
 }
 
-func NewEnv(state *ethstate.State, block *ethchain.Block, value *big.Int, sender []byte) *VMEnv {
+func NewEnv(state *ethstate.State, block *chain.Block, value *big.Int, sender []byte) *VMEnv {
 	return &VMEnv{
 		state:  state,
 		block:  block,

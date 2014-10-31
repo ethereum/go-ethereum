@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"sort"
 
-	"github.com/ethereum/go-ethereum/ethchain"
+	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethwire"
 	"github.com/ethereum/go-ethereum/event"
@@ -13,12 +13,12 @@ import (
 var logger = ethlog.NewLogger("MINER")
 
 type Miner struct {
-	pow      ethchain.PoW
-	ethereum ethchain.EthManager
+	pow      chain.PoW
+	ethereum chain.EthManager
 	coinbase []byte
-	txs      ethchain.Transactions
-	uncles   []*ethchain.Block
-	block    *ethchain.Block
+	txs      chain.Transactions
+	uncles   []*chain.Block
+	block    *chain.Block
 
 	events      event.Subscription
 	powQuitChan chan struct{}
@@ -37,13 +37,13 @@ type Event struct {
 	Miner *Miner
 }
 
-func (self *Miner) GetPow() ethchain.PoW {
+func (self *Miner) GetPow() chain.PoW {
 	return self.pow
 }
 
-func NewDefaultMiner(coinbase []byte, ethereum ethchain.EthManager) *Miner {
+func NewDefaultMiner(coinbase []byte, ethereum chain.EthManager) *Miner {
 	miner := Miner{
-		pow:      &ethchain.EasyPow{},
+		pow:      &chain.EasyPow{},
 		ethereum: ethereum,
 		coinbase: coinbase,
 	}
@@ -64,7 +64,7 @@ func (miner *Miner) Start() {
 	miner.block = miner.ethereum.ChainManager().NewBlock(miner.coinbase)
 
 	mux := miner.ethereum.EventMux()
-	miner.events = mux.Subscribe(ethchain.NewBlockEvent{}, ethchain.TxPreEvent{})
+	miner.events = mux.Subscribe(chain.NewBlockEvent{}, chain.TxPreEvent{})
 
 	// Prepare inital block
 	//miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
@@ -87,7 +87,7 @@ func (miner *Miner) listener() {
 		select {
 		case event := <-miner.events.Chan():
 			switch event := event.(type) {
-			case ethchain.NewBlockEvent:
+			case chain.NewBlockEvent:
 				miner.stopMining()
 
 				block := event.Block
@@ -97,7 +97,7 @@ func (miner *Miner) listener() {
 					//logger.Infoln("New top block found resetting state")
 
 					// Filter out which Transactions we have that were not in this block
-					var newtxs []*ethchain.Transaction
+					var newtxs []*chain.Transaction
 					for _, tx := range miner.txs {
 						found := false
 						for _, othertx := range block.Transactions() {
@@ -118,7 +118,7 @@ func (miner *Miner) listener() {
 				}
 				miner.startMining()
 
-			case ethchain.TxPreEvent:
+			case chain.TxPreEvent:
 				miner.stopMining()
 
 				found := false
@@ -171,7 +171,7 @@ func (self *Miner) mineNewBlock() {
 	}
 
 	// Sort the transactions by nonce in case of odd network propagation
-	sort.Sort(ethchain.TxByNonce{self.txs})
+	sort.Sort(chain.TxByNonce{self.txs})
 
 	// Accumulate all valid transactions and apply them to the new state
 	// Error may be ignored. It's not important during mining
@@ -208,7 +208,7 @@ func (self *Miner) mineNewBlock() {
 			logger.Infoln(self.block)
 			// Gather the new batch of transactions currently in the tx pool
 			self.txs = self.ethereum.TxPool().CurrentTransactions()
-			self.ethereum.EventMux().Post(ethchain.NewBlockEvent{self.block})
+			self.ethereum.EventMux().Post(chain.NewBlockEvent{self.block})
 		}
 
 		// Continue mining on the next block

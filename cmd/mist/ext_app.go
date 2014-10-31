@@ -20,7 +20,7 @@ package main
 import (
 	"encoding/json"
 
-	"github.com/ethereum/go-ethereum/ethchain"
+	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/ethpipe"
 	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/event"
@@ -36,7 +36,7 @@ type AppContainer interface {
 	Window() *qml.Window
 	Engine() *qml.Engine
 
-	NewBlock(*ethchain.Block)
+	NewBlock(*chain.Block)
 	NewWatcher(chan bool)
 	Messages(ethstate.Messages, string)
 	Post(string, int)
@@ -44,12 +44,12 @@ type AppContainer interface {
 
 type ExtApplication struct {
 	*ethpipe.JSPipe
-	eth ethchain.EthManager
+	eth chain.EthManager
 
 	events          event.Subscription
 	watcherQuitChan chan bool
 
-	filters map[string]*ethchain.Filter
+	filters map[string]*chain.Filter
 
 	container AppContainer
 	lib       *UiLib
@@ -60,7 +60,7 @@ func NewExtApplication(container AppContainer, lib *UiLib) *ExtApplication {
 		JSPipe:          ethpipe.NewJSPipe(lib.eth),
 		eth:             lib.eth,
 		watcherQuitChan: make(chan bool),
-		filters:         make(map[string]*ethchain.Filter),
+		filters:         make(map[string]*chain.Filter),
 		container:       container,
 		lib:             lib,
 	}
@@ -80,7 +80,7 @@ func (app *ExtApplication) run() {
 
 	// Subscribe to events
 	mux := app.lib.eth.EventMux()
-	app.events = mux.Subscribe(ethchain.NewBlockEvent{}, ethstate.Messages(nil))
+	app.events = mux.Subscribe(chain.NewBlockEvent{}, ethstate.Messages(nil))
 
 	// Call the main loop
 	go app.mainLoop()
@@ -106,7 +106,7 @@ func (app *ExtApplication) stop() {
 func (app *ExtApplication) mainLoop() {
 	for ev := range app.events.Chan() {
 		switch ev := ev.(type) {
-		case ethchain.NewBlockEvent:
+		case chain.NewBlockEvent:
 			app.container.NewBlock(ev.Block)
 
 		case ethstate.Messages:

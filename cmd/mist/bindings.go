@@ -22,7 +22,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/ethchain"
+	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethpipe"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -110,7 +110,7 @@ func (self *Gui) DumpState(hash, path string) {
 	if len(hash) == 0 {
 		stateDump = self.eth.StateManager().CurrentState().Dump()
 	} else {
-		var block *ethchain.Block
+		var block *chain.Block
 		if hash[0] == '#' {
 			i, _ := strconv.Atoi(hash[1:])
 			block = self.eth.ChainManager().GetBlockByNumber(uint64(i))

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/ethchain"
+	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/ethcrypto"
 	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethstate"
@@ -19,15 +19,15 @@ type VmVars struct {
 }
 
 type Pipe struct {
-	obj          ethchain.EthManager
-	stateManager *ethchain.StateManager
-	blockChain   *ethchain.ChainManager
+	obj          chain.EthManager
+	stateManager *chain.StateManager
+	blockChain   *chain.ChainManager
 	world        *World
 
 	Vm VmVars
 }
 
-func New(obj ethchain.EthManager) *Pipe {
+func New(obj chain.EthManager) *Pipe {
 	pipe := &Pipe{
 		obj:          obj,
 		stateManager: obj.StateManager(),
@@ -68,7 +68,7 @@ func (self *Pipe) ExecuteObject(object *Object, data []byte, value, gas, price *
 	return ret, err
 }
 
-func (self *Pipe) Block(hash []byte) *ethchain.Block {
+func (self *Pipe) Block(hash []byte) *chain.Block {
 	return self.blockChain.GetBlock(hash)
 }
 
@@ -111,7 +111,7 @@ func (self *Pipe) Transact(key *ethcrypto.KeyPair, rec []byte, value, gas, price
 		contractCreation = true
 	}
 
-	var tx *ethchain.Transaction
+	var tx *chain.Transaction
 	// Compile and assemble the given data
 	if contractCreation {
 		script, err := ethutil.Compile(string(data), false)
@@ -119,7 +119,7 @@ func (self *Pipe) Transact(key *ethcrypto.KeyPair, rec []byte, value, gas, price
 			return nil, err
 		}
 
-		tx = ethchain.NewContractCreationTx(value.BigInt(), gas.BigInt(), price.BigInt(), script)
+		tx = chain.NewContractCreationTx(value.BigInt(), gas.BigInt(), price.BigInt(), script)
 	} else {
 		data := ethutil.StringToByteFunc(string(data), func(s string) (ret []byte) {
 			slice := strings.Split(s, "\n")
@@ -130,7 +130,7 @@ func (self *Pipe) Transact(key *ethcrypto.KeyPair, rec []byte, value, gas, price
 			return
 		})
 
-		tx = ethchain.NewTransactionMessage(hash, value.BigInt(), gas.BigInt(), price.BigInt(), data)
+		tx = chain.NewTransactionMessage(hash, value.BigInt(), gas.BigInt(), price.BigInt(), data)
 	}
 
 	acc := self.stateManager.TransState().GetOrNewStateObject(key.Address())
@@ -151,7 +151,7 @@ func (self *Pipe) Transact(key *ethcrypto.KeyPair, rec []byte, value, gas, price
 	return tx.Hash(), nil
 }
 
-func (self *Pipe) PushTx(tx *ethchain.Transaction) ([]byte, error) {
+func (self *Pipe) PushTx(tx *chain.Transaction) ([]byte, error) {
 	self.obj.TxPool().QueueTransaction(tx)
 	if tx.Recipient == nil {
 		addr := tx.CreationAddress(self.World().State())

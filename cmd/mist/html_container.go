@@ -27,7 +27,7 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/ethereum/go-ethereum/ethchain"
+	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/ethpipe"
 	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -138,7 +138,7 @@ func (app *HtmlApplication) Window() *qml.Window {
 	return app.win
 }
 
-func (app *HtmlApplication) NewBlock(block *ethchain.Block) {
+func (app *HtmlApplication) NewBlock(block *chain.Block) {
 	b := &ethpipe.JSBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Bytes2Hex(block.Hash())}
 	app.webView.Call("onNewBlockCb", b)
 }

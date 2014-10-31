@@ -3,12 +3,12 @@ package qt
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/ethchain"
+	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/ui"
 	"gopkg.in/qml.v1"
 )
 
-func NewFilterFromMap(object map[string]interface{}, eth ethchain.EthManager) *ethchain.Filter {
+func NewFilterFromMap(object map[string]interface{}, eth chain.EthManager) *chain.Filter {
 	filter := ui.NewFilterFromMap(object, eth)
 
 	if object["altered"] != nil {
@@ -18,7 +18,7 @@ func NewFilterFromMap(object map[string]interface{}, eth ethchain.EthManager) *e
 	return filter
 }
 
-func makeAltered(v interface{}) (d []ethchain.AccountChange) {
+func makeAltered(v interface{}) (d []chain.AccountChange) {
 	if qList, ok := v.(*qml.List); ok {
 		var s []interface{}
 		qList.Convert(&s)

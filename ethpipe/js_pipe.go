@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/ethchain"
+	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/ethcrypto"
 	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -15,7 +15,7 @@ type JSPipe struct {
 	*Pipe
 }
 
-func NewJSPipe(eth ethchain.EthManager) *JSPipe {
+func NewJSPipe(eth chain.EthManager) *JSPipe {
 	return &JSPipe{New(eth)}
 }
 
@@ -63,7 +63,7 @@ func (self *JSPipe) PeerCount() int {
 func (self *JSPipe) Peers() []JSPeer {
 	var peers []JSPeer
 	for peer := self.obj.Peers().Front(); peer != nil; peer = peer.Next() {
-		p := peer.Value.(ethchain.Peer)
+		p := peer.Value.(chain.Peer)
 		// we only want connected peers
 		if atomic.LoadInt32(p.Connected()) != 0 {
 			peers = append(peers, *NewJSPeer(p))
@@ -209,7 +209,7 @@ func (self *JSPipe) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr 
 		gas      = ethutil.Big(gasStr)
 		gasPrice = ethutil.Big(gasPriceStr)
 		data     []byte
-		tx       *ethchain.Transaction
+		tx       *chain.Transaction
 	)
 
 	if ethutil.IsHex(codeStr) {
@@ -219,9 +219,9 @@ func (self *JSPipe) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr 
 	}
 
 	if contractCreation {
-		tx = ethchain.NewContractCreationTx(value, gas, gasPrice, data)
+		tx = chain.NewContractCreationTx(value, gas, gasPrice, data)
 	} else {
-		tx = ethchain.NewTransactionMessage(hash, value, gas, gasPrice, data)
+		tx = chain.NewTransactionMessage(hash, value, gas, gasPrice, data)
 	}
 
 	acc := self.obj.StateManager().TransState().GetOrNewStateObject(keyPair.Address())
@@ -240,7 +240,7 @@ func (self *JSPipe) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr 
 }
 
 func (self *JSPipe) PushTx(txStr string) (*JSReceipt, error) {
-	tx := ethchain.NewTransactionFromBytes(ethutil.Hex2Bytes(txStr))
+	tx := chain.NewTransactionFromBytes(ethutil.Hex2Bytes(txStr))
 	self.obj.TxPool().QueueTransaction(tx)
 	return NewJSReciept(tx.CreatesContract(), tx.CreationAddress(self.World().State()), tx.Hash(), tx.Sender()), nil
 }

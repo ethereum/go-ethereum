@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/ethchain"
+	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/ethwire"
@@ -155,7 +155,7 @@ type Peer struct {
 	pingTime      time.Duration
 	pingStartTime time.Time
 
-	lastRequestedBlock *ethchain.Block
+	lastRequestedBlock *chain.Block
 
 	protocolCaps *ethutil.Value
 }
@@ -378,7 +378,7 @@ func formatMessage(msg *ethwire.Msg) (ret string) {
 		case ethwire.MsgPeersTy:
 			ret += fmt.Sprintf("(%d entries)", msg.Data.Len())
 		case ethwire.MsgBlockTy:
-			b1, b2 := ethchain.NewBlockFromRlpValue(msg.Data.Get(0)), ethchain.NewBlockFromRlpValue(msg.Data.Get(msg.Data.Len()-1))
+			b1, b2 := chain.NewBlockFromRlpValue(msg.Data.Get(0)), ethchain.NewBlockFromRlpValue(msg.Data.Get(msg.Data.Len()-1))
 			ret += fmt.Sprintf("(%d entries) %x - %x", msg.Data.Len(), b1.Hash()[0:4], b2.Hash()[0:4])
 		case ethwire.MsgBlockHashesTy:
 			h1, h2 := msg.Data.Get(0).Bytes(), msg.Data.Get(msg.Data.Len()-1).Bytes()
@@ -429,7 +429,7 @@ func (p *Peer) HandleInbound() {
 				// in the TxPool where it will undergo validation and
 				// processing when a new block is found
 				for i := 0; i < msg.Data.Len(); i++ {
-					tx := ethchain.NewTransactionFromValue(msg.Data.Get(i))
+					tx := chain.NewTransactionFromValue(msg.Data.Get(i))
 					p.ethereum.TxPool().QueueTransaction(tx)
 				}
 			case ethwire.MsgGetPeersTy:
@@ -535,7 +535,7 @@ func (p *Peer) HandleInbound() {
 
 					it := msg.Data.NewIterator()
 					for it.Next() {
-						block := ethchain.NewBlockFromRlpValue(it.Value())
+						block := chain.NewBlockFromRlpValue(it.Value())
 						blockPool.Add(block, p)
 
 						p.lastBlockReceived = time.Now()
@@ -543,7 +543,7 @@ func (p *Peer) HandleInbound() {
 				case ethwire.MsgNewBlockTy:
 					var (
 						blockPool = p.ethereum.blockPool
-						block     = ethchain.NewBlockFromRlpValue(msg.Data.Get(0))
+						block     = chain.NewBlockFromRlpValue(msg.Data.Get(0))
 						td        = msg.Data.Get(1).BigInt()
 					)
 

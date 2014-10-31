@@ -1,4 +1,4 @@
-package ethchain
+package chain
 
 import (
 	"container/list"

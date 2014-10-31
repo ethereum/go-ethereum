@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/ethchain"
+	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/ethcrypto"
 	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -14,7 +14,7 @@ import (
 // Block interface exposed to QML
 type JSBlock struct {
 	//Transactions string `json:"transactions"`
-	ref          *ethchain.Block
+	ref          *chain.Block
 	Size         string        `json:"size"`
 	Number       int           `json:"number"`
 	Hash         string        `json:"hash"`
@@ -29,7 +29,7 @@ type JSBlock struct {
 }
 
 // Creates a new QML Block from a chain block
-func NewJSBlock(block *ethchain.Block) *JSBlock {
+func NewJSBlock(block *chain.Block) *JSBlock {
 	if block == nil {
 		return &JSBlock{}
 	}
@@ -75,7 +75,7 @@ func (self *JSBlock) GetTransaction(hash string) *JSTransaction {
 }
 
 type JSTransaction struct {
-	ref *ethchain.Transaction
+	ref *chain.Transaction
 
 	Value           string `json:"value"`
 	Gas             string `json:"gas"`
@@ -90,7 +90,7 @@ type JSTransaction struct {
 	Confirmations   int    `json:"confirmations"`
 }
 
-func NewJSTx(tx *ethchain.Transaction, state *ethstate.State) *JSTransaction {
+func NewJSTx(tx *chain.Transaction, state *ethstate.State) *JSTransaction {
 	hash := ethutil.Bytes2Hex(tx.Hash())
 	receiver := ethutil.Bytes2Hex(tx.Recipient)
 	if receiver == "0000000000000000000000000000000000000000" {
@@ -101,7 +101,7 @@ func NewJSTx(tx *ethchain.Transaction, state *ethstate.State) *JSTransaction {
 
 	var data string
 	if tx.CreatesContract() {
-		data = strings.Join(ethchain.Disassemble(tx.Data), "\n")
+		data = strings.Join(chain.Disassemble(tx.Data), "\n")
 	} else {
 		data = ethutil.Bytes2Hex(tx.Data)
 	}
@@ -150,7 +150,7 @@ func NewPReciept(contractCreation bool, creationAddress, hash, address []byte) *
 // Peer interface exposed to QML
 
 type JSPeer struct {
-	ref          *ethchain.Peer
+	ref          *chain.Peer
 	Inbound      bool   `json:"isInbound"`
 	LastSend     int64  `json:"lastSend"`
 	LastPong     int64  `json:"lastPong"`
@@ -162,7 +162,7 @@ type JSPeer struct {
 	Caps         string `json:"caps"`
 }
 
-func NewJSPeer(peer ethchain.Peer) *JSPeer {
+func NewJSPeer(peer chain.Peer) *JSPeer {
 	if peer == nil {
 		return nil
 	}

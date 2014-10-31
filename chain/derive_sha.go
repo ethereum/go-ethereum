@@ -1,4 +1,4 @@
-package ethchain
+package chain
 
 import (
 	"github.com/ethereum/go-ethereum/ethtrie"

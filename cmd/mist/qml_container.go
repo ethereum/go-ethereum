@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/ethereum/go-ethereum/ethchain"
+	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/ethpipe"
 	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -65,7 +65,7 @@ func (app *QmlApplication) NewWatcher(quitChan chan bool) {
 }
 
 // Events
-func (app *QmlApplication) NewBlock(block *ethchain.Block) {
+func (app *QmlApplication) NewBlock(block *chain.Block) {
 	pblock := &ethpipe.JSBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Bytes2Hex(block.Hash())}
 	app.win.Call("onNewBlockCb", pblock)
 }
