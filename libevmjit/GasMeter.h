@@ -32,7 +32,7 @@ public:
 	void giveBack(llvm::Value* _gas);
 
 	/// Generate code that checks the cost of additional memory used by program
-	void checkMemory(llvm::Value* _additionalMemoryInWords, llvm::IRBuilder<>& _builder);
+	void checkMemory(llvm::Value* _additionalMemoryInWords);
 
 private:
 	/// Cumulative gas cost of a block of instructions
@@ -40,7 +40,7 @@ private:
 	uint64_t m_blockCost = 0;
 
 	llvm::CallInst* m_checkCall = nullptr;
-	llvm::Function* m_gasCheckFunc;
+	llvm::Function* m_gasCheckFunc = nullptr;
 
 	RuntimeManager& m_runtimeManager;
 };

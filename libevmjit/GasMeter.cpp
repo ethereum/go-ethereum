@@ -169,11 +169,10 @@ void GasMeter::commitCostBlock(llvm::Value* _additionalCost)
 	assert(m_blockCost == 0);
 }
 
-void GasMeter::checkMemory(llvm::Value* _additionalMemoryInWords, llvm::IRBuilder<>& _builder)
+void GasMeter::checkMemory(llvm::Value* _additionalMemoryInWords)
 {
-	// Memory uses other builder, but that can be changes later
-	auto cost = _builder.CreateMul(_additionalMemoryInWords, Constant::get(static_cast<uint64_t>(c_memoryGas)), "memcost");
-	_builder.CreateCall(m_gasCheckFunc, cost);
+	auto cost = m_builder.CreateNUWMul(_additionalMemoryInWords, Constant::get(static_cast<uint64_t>(c_memoryGas)), "memcost");
+	m_builder.CreateCall(m_gasCheckFunc, cost);
 }
 
 }

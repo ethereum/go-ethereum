@@ -90,7 +90,7 @@ llvm::Function* Memory::createRequireFunc(GasMeter& _gasMeter, RuntimeManager& _
 	sizeRequired = m_builder.CreateMul(wordsRequired, Constant::get(32), "roundedSizeReq");
 	auto words = m_builder.CreateUDiv(currSize, Constant::get(32), "words");	// size is always 32*k
 	auto newWords = m_builder.CreateSub(wordsRequired, words, "addtionalWords");
-	_gasMeter.checkMemory(newWords, m_builder);
+	_gasMeter.checkMemory(newWords);
 	// Resize
 	m_builder.CreateStore(sizeRequired, m_size);
 	auto newData = m_builder.CreateCall2(m_resize, _runtimeManager.getRuntimePtr(), m_size, "newData");
