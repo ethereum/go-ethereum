@@ -28,8 +28,7 @@ Memory::Memory(RuntimeManager& _runtimeManager, GasMeter& _gasMeter):
 	RuntimeHelper(_runtimeManager)
 {
 	auto module = getModule();
-	auto i64Ty = m_builder.getInt64Ty();
-	llvm::Type* argTypes[] = {i64Ty, i64Ty};
+	llvm::Type* argTypes[] = {Type::i256, Type::i256};
 	auto dumpTy = llvm::FunctionType::get(m_builder.getVoidTy(), llvm::ArrayRef<llvm::Type*>(argTypes), false);
 	m_memDump = llvm::Function::Create(dumpTy, llvm::GlobalValue::LinkageTypes::ExternalLinkage,
 									   "evmccrt_memory_dump", module);
@@ -54,19 +53,23 @@ Memory::Memory(RuntimeManager& _runtimeManager, GasMeter& _gasMeter):
 
 llvm::Function* Memory::createRequireFunc(GasMeter& _gasMeter, RuntimeManager& _runtimeManager)
 {
-	auto func = llvm::Function::Create(llvm::FunctionType::get(Type::Void, Type::i256, false), llvm::Function::PrivateLinkage, "mem.require", getModule());
+	llvm::Type* argTypes[] = {Type::i256, Type::i256};
+	auto func = llvm::Function::Create(llvm::FunctionType::get(Type::Void, argTypes, false), llvm::Function::PrivateLinkage, "mem.require", getModule());
+	auto offset = func->arg_begin();
+	offset->setName("offset");
+	auto size = offset->getNextNode();
+	size->setName("size");
 
-	auto checkBB = llvm::BasicBlock::Create(func->getContext(), "check", func);
-	auto resizeBB = llvm::BasicBlock::Create(func->getContext(), "resize", func);
-	auto returnBB = llvm::BasicBlock::Create(func->getContext(), "return", func);
+	auto checkBB = llvm::BasicBlock::Create(func->getContext(), "Check", func);
+	auto resizeBB = llvm::BasicBlock::Create(func->getContext(), "Resize", func);
+	auto returnBB = llvm::BasicBlock::Create(func->getContext(), "Return", func);
 
 	InsertPointGuard guard(m_builder); // Restores insert point at function exit
 
 	// BB "check"
 	m_builder.SetInsertPoint(checkBB);
-	llvm::Value* sizeRequired = func->arg_begin();
-	sizeRequired->setName("sizeRequired");
-	auto size = m_builder.CreateLoad(m_size, "size");
+	auto sizeRequired = m_builder.CreateNUWAdd(offset, size, "sizeRequired");
+	auto currSize = m_builder.CreateLoad(m_size, "currSize");
 	auto resizeNeeded = m_builder.CreateICmpULE(size, sizeRequired, "resizeNeeded");
 	m_builder.CreateCondBr(resizeNeeded, resizeBB, returnBB); // OPT branch weights?
 
@@ -164,15 +167,9 @@ llvm::Value* Memory::getSize()
 	return m_builder.CreateLoad(m_size);
 }
 
-void Memory::require(llvm::Value* _size)
-{
-	m_builder.CreateCall(m_require, _size);
-}
-
 void Memory::require(llvm::Value* _offset, llvm::Value* _size)
 {
-	auto sizeRequired = m_builder.CreateNUWAdd(_offset, _size, "sizeRequired");
-	require(sizeRequired);
+	m_builder.CreateCall2(m_require, _offset, _size);
 }
 
 void Memory::copyBytes(llvm::Value* _srcPtr, llvm::Value* _srcSize, llvm::Value* _srcIdx,
@@ -180,8 +177,7 @@ void Memory::copyBytes(llvm::Value* _srcPtr, llvm::Value* _srcSize, llvm::Value*
 {
 	auto zero256 = llvm::ConstantInt::get(Type::i256, 0);
 
-	auto reqMemSize = m_builder.CreateAdd(_destMemIdx, _reqBytes, "req_mem_size");
-	require(reqMemSize);
+	require(_destMemIdx, _reqBytes);
 
 	auto srcPtr = m_builder.CreateGEP(_srcPtr, _srcIdx, "src_idx");
 

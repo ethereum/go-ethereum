@@ -33,9 +33,6 @@ private:
 	llvm::Function* createFunc(bool _isStore, llvm::Type* _type, GasMeter& _gasMeter);
 	llvm::Function* createRequireFunc(GasMeter& _gasMeter, RuntimeManager& _runtimeManager);
 
-	/// Requires this amount of memory. And counts gas fee for that memory.
-	void require(llvm::Value* _size);
-
 	llvm::GlobalVariable* m_data;
 	llvm::GlobalVariable* m_size;
 
