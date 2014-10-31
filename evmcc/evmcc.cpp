@@ -101,7 +101,10 @@ int main(int argc, char** argv)
 	{
 		auto compilationStartTime = std::chrono::high_resolution_clock::now();
 
-		auto compiler = eth::jit::Compiler();
+		eth::jit::Compiler::Options options;
+		options.dumpCFG = opt_dump_graph;
+
+		auto compiler = eth::jit::Compiler(options);
 		auto module = compiler.compile({bytecode.data(), bytecode.size()});
 
 		auto compilationEndTime = std::chrono::high_resolution_clock::now();
@@ -113,14 +116,6 @@ int main(int argc, char** argv)
 			std::cerr << "*** Compilation time: "
 			          << std::chrono::duration_cast<std::chrono::microseconds>(compilationEndTime - compilationStartTime).count()
 			          << std::endl;
-		}
-
-		if (opt_dump_graph)
-		{
-			std::ofstream ofs("blocks.dot");
-			compiler.dumpBasicBlockGraph(ofs);
-			ofs.close();
-			std::cout << "Basic blocks graph written to block.dot\n";
 		}
 
 		if (opt_interpret)
