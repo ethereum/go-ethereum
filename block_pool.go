@@ -11,8 +11,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/ethwire"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/wire"
 )
 
 var poollogger = logger.NewLogger("BPOOL")
@@ -103,7 +103,7 @@ func (self *BlockPool) FetchHashes(peer *Peer) bool {
 
 			const amount = 256
 			peerlogger.Debugf("Fetching hashes (%d) %x...\n", amount, peer.lastReceivedHash[0:4])
-			peer.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{peer.lastReceivedHash, uint32(amount)}))
+			peer.QueueMessage(wire.NewMessage(wire.MsgGetBlockHashesTy, []interface{}{peer.lastReceivedHash, uint32(amount)}))
 		}
 
 		return true
@@ -150,7 +150,7 @@ func (self *BlockPool) addBlock(b *chain.Block, peer *Peer, newBlock bool) {
 			fmt.Println("3.", !self.fetchingHashes)
 			if !self.eth.ChainManager().HasBlock(b.PrevHash) && self.pool[string(b.PrevHash)] == nil && !self.fetchingHashes {
 				poollogger.Infof("Unknown chain, requesting (%x...)\n", b.PrevHash[0:4])
-				peer.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlockHashesTy, []interface{}{b.Hash(), uint32(256)}))
+				peer.QueueMessage(wire.NewMessage(wire.MsgGetBlockHashesTy, []interface{}{b.Hash(), uint32(256)}))
 			}
 		}
 	} else if self.pool[hash] != nil {

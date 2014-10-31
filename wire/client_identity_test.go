@@ -1,4 +1,4 @@
-package ethwire
+package wire
 
 import (
 	"fmt"

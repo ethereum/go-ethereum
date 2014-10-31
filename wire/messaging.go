@@ -1,6 +1,6 @@
-// Package ethwire provides low level access to the Ethereum network and allows
+// Package wire provides low level access to the Ethereum network and allows
 // you to broadcast data over the network.
-package ethwire
+package wire
 
 import (
 	"bytes"
@@ -85,7 +85,7 @@ func ReadMessages(conn net.Conn) (msgs []*Msg, err error) {
 	// The recovering function in case anything goes horribly wrong
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("ethwire.ReadMessage error: %v", r)
+			err = fmt.Errorf("wire.ReadMessage error: %v", r)
 		}
 	}()
 

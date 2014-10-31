@@ -14,8 +14,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/ethwire"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/wire"
 )
 
 var peerlogger = logger.NewLogger("PEER")
@@ -112,7 +112,7 @@ type Peer struct {
 	// Net connection
 	conn net.Conn
 	// Output queue which is used to communicate and handle messages
-	outputQueue chan *ethwire.Msg
+	outputQueue chan *wire.Msg
 	// Quit channel
 	quit chan bool
 	// Determines whether it's an inbound or outbound peer
@@ -164,7 +164,7 @@ func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
 	pubkey := ethereum.KeyManager().PublicKey()[1:]
 
 	return &Peer{
-		outputQueue:        make(chan *ethwire.Msg, outputBufferSize),
+		outputQueue:        make(chan *wire.Msg, outputBufferSize),
 		quit:               make(chan bool),
 		ethereum:           ethereum,
 		conn:               conn,
@@ -184,7 +184,7 @@ func NewPeer(conn net.Conn, ethereum *Ethereum, inbound bool) *Peer {
 
 func NewOutboundPeer(addr string, ethereum *Ethereum, caps Caps) *Peer {
 	p := &Peer{
-		outputQueue:        make(chan *ethwire.Msg, outputBufferSize),
+		outputQueue:        make(chan *wire.Msg, outputBufferSize),
 		quit:               make(chan bool),
 		ethereum:           ethereum,
 		inbound:            false,
@@ -266,14 +266,14 @@ func (p *Peer) SetVersion(version string) {
 }
 
 // Outputs any RLP encoded data to the peer
-func (p *Peer) QueueMessage(msg *ethwire.Msg) {
+func (p *Peer) QueueMessage(msg *wire.Msg) {
 	if atomic.LoadInt32(&p.connected) != 1 {
 		return
 	}
 	p.outputQueue <- msg
 }
 
-func (p *Peer) writeMessage(msg *ethwire.Msg) {
+func (p *Peer) writeMessage(msg *wire.Msg) {
 	// Ignore the write if we're not connected
 	if atomic.LoadInt32(&p.connected) != 1 {
 		return
@@ -281,7 +281,7 @@ func (p *Peer) writeMessage(msg *ethwire.Msg) {
 
 	if !p.versionKnown {
 		switch msg.Type {
-		case ethwire.MsgHandshakeTy: // Ok
+		case wire.MsgHandshakeTy: // Ok
 		default: // Anything but ack is allowed
 			return
 		}
@@ -289,7 +289,7 @@ func (p *Peer) writeMessage(msg *ethwire.Msg) {
 		/*
 			if !p.statusKnown {
 				switch msg.Type {
-				case ethwire.MsgStatusTy: // Ok
+				case wire.MsgStatusTy: // Ok
 				default: // Anything but ack is allowed
 					return
 				}
@@ -299,7 +299,7 @@ func (p *Peer) writeMessage(msg *ethwire.Msg) {
 
 	peerlogger.DebugDetailf("(%v) <= %v\n", p.conn.RemoteAddr(), formatMessage(msg))
 
-	err := ethwire.WriteMessage(p.conn, msg)
+	err := wire.WriteMessage(p.conn, msg)
 	if err != nil {
 		peerlogger.Debugln(" Can't send message:", err)
 		// Stop the client if there was an error writing to it
@@ -322,7 +322,7 @@ out:
 		case msg := <-p.outputQueue:
 			if !p.statusKnown {
 				switch msg.Type {
-				case ethwire.MsgTxTy, ethwire.MsgGetBlockHashesTy, ethwire.MsgBlockHashesTy, ethwire.MsgGetBlocksTy, ethwire.MsgBlockTy:
+				case wire.MsgTxTy, wire.MsgGetBlockHashesTy, wire.MsgBlockHashesTy, wire.MsgGetBlocksTy, wire.MsgBlockTy:
 					break skip
 				}
 			}
@@ -340,13 +340,13 @@ out:
 					return
 				}
 			*/
-			p.writeMessage(ethwire.NewMessage(ethwire.MsgPingTy, ""))
+			p.writeMessage(wire.NewMessage(wire.MsgPingTy, ""))
 			p.pingStartTime = time.Now()
 
 		// Service timer takes care of peer broadcasting, transaction
 		// posting or block posting
 		case <-serviceTimer.C:
-			p.QueueMessage(ethwire.NewMessage(ethwire.MsgGetPeersTy, ""))
+			p.QueueMessage(wire.NewMessage(wire.MsgGetPeersTy, ""))
 
 		case <-p.quit:
 			// Break out of the for loop if a quit message is posted
@@ -366,7 +366,7 @@ clean:
 	}
 }
 
-func formatMessage(msg *ethwire.Msg) (ret string) {
+func formatMessage(msg *wire.Msg) (ret string) {
 	ret = fmt.Sprintf("%v %v", msg.Type, msg.Data)
 
 	/*
@@ -375,12 +375,12 @@ func formatMessage(msg *ethwire.Msg) (ret string) {
 	*/
 	/*
 		switch msg.Type {
-		case ethwire.MsgPeersTy:
+		case wire.MsgPeersTy:
 			ret += fmt.Sprintf("(%d entries)", msg.Data.Len())
-		case ethwire.MsgBlockTy:
+		case wire.MsgBlockTy:
 			b1, b2 := chain.NewBlockFromRlpValue(msg.Data.Get(0)), ethchain.NewBlockFromRlpValue(msg.Data.Get(msg.Data.Len()-1))
 			ret += fmt.Sprintf("(%d entries) %x - %x", msg.Data.Len(), b1.Hash()[0:4], b2.Hash()[0:4])
-		case ethwire.MsgBlockHashesTy:
+		case wire.MsgBlockHashesTy:
 			h1, h2 := msg.Data.Get(0).Bytes(), msg.Data.Get(msg.Data.Len()-1).Bytes()
 			ret += fmt.Sprintf("(%d entries) %x - %x", msg.Data.Len(), h1, h2)
 		}
@@ -396,7 +396,7 @@ func (p *Peer) HandleInbound() {
 		// HMM?
 		time.Sleep(50 * time.Millisecond)
 		// Wait for a message from the peer
-		msgs, err := ethwire.ReadMessages(p.conn)
+		msgs, err := wire.ReadMessages(p.conn)
 		if err != nil {
 			peerlogger.Debugln(err)
 		}
@@ -404,27 +404,27 @@ func (p *Peer) HandleInbound() {
 			peerlogger.DebugDetailf("(%v) => %v\n", p.conn.RemoteAddr(), formatMessage(msg))
 
 			switch msg.Type {
-			case ethwire.MsgHandshakeTy:
+			case wire.MsgHandshakeTy:
 				// Version message
 				p.handleHandshake(msg)
 
 				//if p.caps.IsCap(CapPeerDiscTy) {
-				p.QueueMessage(ethwire.NewMessage(ethwire.MsgGetPeersTy, ""))
+				p.QueueMessage(wire.NewMessage(wire.MsgGetPeersTy, ""))
 				//}
 
-			case ethwire.MsgDiscTy:
+			case wire.MsgDiscTy:
 				p.Stop()
 				peerlogger.Infoln("Disconnect peer: ", DiscReason(msg.Data.Get(0).Uint()))
-			case ethwire.MsgPingTy:
+			case wire.MsgPingTy:
 				// Respond back with pong
-				p.QueueMessage(ethwire.NewMessage(ethwire.MsgPongTy, ""))
-			case ethwire.MsgPongTy:
+				p.QueueMessage(wire.NewMessage(wire.MsgPongTy, ""))
+			case wire.MsgPongTy:
 				// If we received a pong back from a peer we set the
 				// last pong so the peer handler knows this peer is still
 				// active.
 				p.lastPong = time.Now().Unix()
 				p.pingTime = time.Since(p.pingStartTime)
-			case ethwire.MsgTxTy:
+			case wire.MsgTxTy:
 				// If the message was a transaction queue the transaction
 				// in the TxPool where it will undergo validation and
 				// processing when a new block is found
@@ -432,10 +432,10 @@ func (p *Peer) HandleInbound() {
 					tx := chain.NewTransactionFromValue(msg.Data.Get(i))
 					p.ethereum.TxPool().QueueTransaction(tx)
 				}
-			case ethwire.MsgGetPeersTy:
+			case wire.MsgGetPeersTy:
 				// Peer asked for list of connected peers
 				//p.pushPeers()
-			case ethwire.MsgPeersTy:
+			case wire.MsgPeersTy:
 				// Received a list of peers (probably because MsgGetPeersTy was send)
 				data := msg.Data
 				// Create new list of possible peers for the ethereum to process
@@ -449,7 +449,7 @@ func (p *Peer) HandleInbound() {
 				// Connect to the list of peers
 				p.ethereum.ProcessPeerList(peers)
 
-			case ethwire.MsgStatusTy:
+			case wire.MsgStatusTy:
 				// Handle peer's status msg
 				p.handleStatus(msg)
 			}
@@ -458,7 +458,7 @@ func (p *Peer) HandleInbound() {
 			if p.statusKnown {
 				switch msg.Type {
 				/*
-					case ethwire.MsgGetTxsTy:
+					case wire.MsgGetTxsTy:
 						// Get the current transactions of the pool
 						txs := p.ethereum.TxPool().CurrentTransactions()
 						// Get the RlpData values from the txs
@@ -467,10 +467,10 @@ func (p *Peer) HandleInbound() {
 							txsInterface[i] = tx.RlpData()
 						}
 						// Broadcast it back to the peer
-						p.QueueMessage(ethwire.NewMessage(ethwire.MsgTxTy, txsInterface))
+						p.QueueMessage(wire.NewMessage(wire.MsgTxTy, txsInterface))
 				*/
 
-				case ethwire.MsgGetBlockHashesTy:
+				case wire.MsgGetBlockHashesTy:
 					if msg.Data.Len() < 2 {
 						peerlogger.Debugln("err: argument length invalid ", msg.Data.Len())
 					}
@@ -480,9 +480,9 @@ func (p *Peer) HandleInbound() {
 
 					hashes := p.ethereum.ChainManager().GetChainHashesFromHash(hash, amount)
 
-					p.QueueMessage(ethwire.NewMessage(ethwire.MsgBlockHashesTy, ethutil.ByteSliceToInterface(hashes)))
+					p.QueueMessage(wire.NewMessage(wire.MsgBlockHashesTy, ethutil.ByteSliceToInterface(hashes)))
 
-				case ethwire.MsgGetBlocksTy:
+				case wire.MsgGetBlocksTy:
 					// Limit to max 300 blocks
 					max := int(math.Min(float64(msg.Data.Len()), 300.0))
 					var blocks []interface{}
@@ -495,9 +495,9 @@ func (p *Peer) HandleInbound() {
 						}
 					}
 
-					p.QueueMessage(ethwire.NewMessage(ethwire.MsgBlockTy, blocks))
+					p.QueueMessage(wire.NewMessage(wire.MsgBlockTy, blocks))
 
-				case ethwire.MsgBlockHashesTy:
+				case wire.MsgBlockHashesTy:
 					p.catchingUp = true
 
 					blockPool := p.ethereum.blockPool
@@ -528,7 +528,7 @@ func (p *Peer) HandleInbound() {
 						p.doneFetchingHashes = true
 					}
 
-				case ethwire.MsgBlockTy:
+				case wire.MsgBlockTy:
 					p.catchingUp = true
 
 					blockPool := p.ethereum.blockPool
@@ -540,7 +540,7 @@ func (p *Peer) HandleInbound() {
 
 						p.lastBlockReceived = time.Now()
 					}
-				case ethwire.MsgNewBlockTy:
+				case wire.MsgNewBlockTy:
 					var (
 						blockPool = p.ethereum.blockPool
 						block     = chain.NewBlockFromRlpValue(msg.Data.Get(0))
@@ -563,7 +563,7 @@ func (self *Peer) FetchBlocks(hashes [][]byte) {
 	if len(hashes) > 0 {
 		peerlogger.Debugf("Fetching blocks (%d)\n", len(hashes))
 
-		self.QueueMessage(ethwire.NewMessage(ethwire.MsgGetBlocksTy, ethutil.ByteSliceToInterface(hashes)))
+		self.QueueMessage(wire.NewMessage(wire.MsgGetBlocksTy, ethutil.ByteSliceToInterface(hashes)))
 	}
 }
 
@@ -629,7 +629,7 @@ func (p *Peer) Start() {
 
 	// Wait a few seconds for startup and then ask for an initial ping
 	time.Sleep(2 * time.Second)
-	p.writeMessage(ethwire.NewMessage(ethwire.MsgPingTy, ""))
+	p.writeMessage(wire.NewMessage(wire.MsgPingTy, ""))
 	p.pingStartTime = time.Now()
 
 }
@@ -648,12 +648,12 @@ func (p *Peer) StopWithReason(reason DiscReason) {
 
 	close(p.quit)
 	if atomic.LoadInt32(&p.connected) != 0 {
-		p.writeMessage(ethwire.NewMessage(ethwire.MsgDiscTy, reason))
+		p.writeMessage(wire.NewMessage(wire.MsgDiscTy, reason))
 		p.conn.Close()
 	}
 }
 
-func (p *Peer) peersMessage() *ethwire.Msg {
+func (p *Peer) peersMessage() *wire.Msg {
 	outPeers := make([]interface{}, len(p.ethereum.InOutPeers()))
 	// Serialise each peer
 	for i, peer := range p.ethereum.InOutPeers() {
@@ -664,7 +664,7 @@ func (p *Peer) peersMessage() *ethwire.Msg {
 	}
 
 	// Return the message to the peer with the known list of connected clients
-	return ethwire.NewMessage(ethwire.MsgPeersTy, outPeers)
+	return wire.NewMessage(wire.MsgPeersTy, outPeers)
 }
 
 // Pushes the list of outbound peers to the client when requested
@@ -673,7 +673,7 @@ func (p *Peer) pushPeers() {
 }
 
 func (self *Peer) pushStatus() {
-	msg := ethwire.NewMessage(ethwire.MsgStatusTy, []interface{}{
+	msg := wire.NewMessage(wire.MsgStatusTy, []interface{}{
 		uint32(ProtocolVersion),
 		uint32(NetVersion),
 		self.ethereum.ChainManager().TD,
@@ -684,7 +684,7 @@ func (self *Peer) pushStatus() {
 	self.QueueMessage(msg)
 }
 
-func (self *Peer) handleStatus(msg *ethwire.Msg) {
+func (self *Peer) handleStatus(msg *wire.Msg) {
 	c := msg.Data
 
 	var (
@@ -729,7 +729,7 @@ func (self *Peer) handleStatus(msg *ethwire.Msg) {
 
 func (p *Peer) pushHandshake() error {
 	pubkey := p.ethereum.KeyManager().PublicKey()
-	msg := ethwire.NewMessage(ethwire.MsgHandshakeTy, []interface{}{
+	msg := wire.NewMessage(wire.MsgHandshakeTy, []interface{}{
 		P2PVersion, []byte(p.version), []interface{}{[]interface{}{"eth", ProtocolVersion}}, p.port, pubkey[1:],
 	})
 
@@ -738,7 +738,7 @@ func (p *Peer) pushHandshake() error {
 	return nil
 }
 
-func (p *Peer) handleHandshake(msg *ethwire.Msg) {
+func (p *Peer) handleHandshake(msg *wire.Msg) {
 	c := msg.Data
 
 	var (

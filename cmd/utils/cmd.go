@@ -18,9 +18,9 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethminer"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/ethwire"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/wire"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -144,12 +144,12 @@ func NewDatabase() ethutil.Database {
 	return db
 }
 
-func NewClientIdentity(clientIdentifier, version, customIdentifier string) *ethwire.SimpleClientIdentity {
+func NewClientIdentity(clientIdentifier, version, customIdentifier string) *wire.SimpleClientIdentity {
 	clilogger.Infoln("identity created")
-	return ethwire.NewSimpleClientIdentity(clientIdentifier, version, customIdentifier)
+	return wire.NewSimpleClientIdentity(clientIdentifier, version, customIdentifier)
 }
 
-func NewEthereum(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager *crypto.KeyManager, usePnp bool, OutboundPort string, MaxPeer int) *eth.Ethereum {
+func NewEthereum(db ethutil.Database, clientIdentity wire.ClientIdentity, keyManager *crypto.KeyManager, usePnp bool, OutboundPort string, MaxPeer int) *eth.Ethereum {
 	ethereum, err := eth.New(db, clientIdentity, keyManager, eth.CapDefault, usePnp)
 	if err != nil {
 		clilogger.Fatalln("eth start err:", err)

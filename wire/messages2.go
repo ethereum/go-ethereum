@@ -1,4 +1,4 @@
-package ethwire
+package wire
 
 import (
 	"bytes"
@@ -113,7 +113,7 @@ func (self *Connection) readMessages() (err error) {
 	// The recovering function in case anything goes horribly wrong
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("ethwire.ReadMessage error: %v", r)
+			err = fmt.Errorf("wire.ReadMessage error: %v", r)
 		}
 	}()
 

@@ -11,10 +11,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/ethwire"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/wire"
 )
 
 var statelogger = logger.NewLogger("BLOCK")
@@ -35,13 +35,13 @@ type EthManager interface {
 	StateManager() *StateManager
 	ChainManager() *ChainManager
 	TxPool() *TxPool
-	Broadcast(msgType ethwire.MsgType, data []interface{})
+	Broadcast(msgType wire.MsgType, data []interface{})
 	PeerCount() int
 	IsMining() bool
 	IsListening() bool
 	Peers() *list.List
 	KeyManager() *crypto.KeyManager
-	ClientIdentity() ethwire.ClientIdentity
+	ClientIdentity() wire.ClientIdentity
 	Db() ethutil.Database
 	EventMux() *event.TypeMux
 }
