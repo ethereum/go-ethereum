@@ -16,7 +16,8 @@ namespace jit
 
 bytesConstRef VM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 {
-	auto module = Compiler().compile(_ext.code);
+	Compiler::Options defaultOptions;
+	auto module = Compiler(defaultOptions).compile(_ext.code);
 
 	ExecutionEngine engine;
 	auto exitCode = engine.run(std::move(module), m_gas, &_ext);

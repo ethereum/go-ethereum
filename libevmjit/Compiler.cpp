@@ -758,8 +758,8 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytesConstRef _bytecod
 			_gasMeter.commitCostBlock(gas);
 
 			// Require memory for in and out buffers
-			memory.require(outOff, outSize);	// Out buffer first as we guess it will be after the in one
-			memory.require(inOff, inSize);
+			_memory.require(outOff, outSize);	// Out buffer first as we guess it will be after the in one
+			_memory.require(inOff, inSize);
 
 			auto receiveAddress = codeAddress;
 			if (inst == Instruction::CALLCODE)
