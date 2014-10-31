@@ -5,8 +5,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethtrie"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 type Code []byte
@@ -62,7 +62,7 @@ func NewStateObject(addr []byte) *StateObject {
 	address := ethutil.Address(addr)
 
 	object := &StateObject{address: address, balance: new(big.Int), gasPool: new(big.Int)}
-	object.State = New(ethtrie.New(ethutil.Config.Db, ""))
+	object.State = New(trie.New(ethutil.Config.Db, ""))
 	object.storage = make(Storage)
 	object.gasPool = new(big.Int)
 
@@ -72,7 +72,7 @@ func NewStateObject(addr []byte) *StateObject {
 func NewContract(address []byte, balance *big.Int, root []byte) *StateObject {
 	contract := NewStateObject(address)
 	contract.balance = balance
-	contract.State = New(ethtrie.New(ethutil.Config.Db, string(root)))
+	contract.State = New(trie.New(ethutil.Config.Db, string(root)))
 
 	return contract
 }
@@ -129,7 +129,7 @@ func (self *StateObject) SetState(k []byte, value *ethutil.Value) {
 }
 
 // Iterate over each storage address and yield callback
-func (self *StateObject) EachStorage(cb ethtrie.EachCallback) {
+func (self *StateObject) EachStorage(cb trie.EachCallback) {
 	// First loop over the uncommit/cached values in storage
 	for key, value := range self.storage {
 		// XXX Most iterators Fns as it stands require encoded values
@@ -158,7 +158,7 @@ func (self *StateObject) Sync() {
 		self.SetAddr([]byte(key), value)
 	}
 
-	valid, t2 := ethtrie.ParanoiaCheck(self.State.Trie)
+	valid, t2 := trie.ParanoiaCheck(self.State.Trie)
 	if !valid {
 		statelogger.Infof("Warn: PARANOIA: Different state storage root during copy %x vs %x\n", self.State.Trie.Root, t2.Root)
 
@@ -321,7 +321,7 @@ func (c *StateObject) RlpDecode(data []byte) {
 
 	c.Nonce = decoder.Get(0).Uint()
 	c.balance = decoder.Get(1).BigInt()
-	c.State = New(ethtrie.New(ethutil.Config.Db, decoder.Get(2).Interface()))
+	c.State = New(trie.New(ethutil.Config.Db, decoder.Get(2).Interface()))
 	c.storage = make(map[string]*ethutil.Value)
 	c.gasPool = new(big.Int)
 

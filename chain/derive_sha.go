@@ -1,8 +1,8 @@
 package chain
 
 import (
-	"github.com/ethereum/go-ethereum/ethtrie"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 type DerivableList interface {
@@ -11,7 +11,7 @@ type DerivableList interface {
 }
 
 func DeriveSha(list DerivableList) []byte {
-	trie := ethtrie.New(ethutil.Config.Db, "")
+	trie := trie.New(ethutil.Config.Db, "")
 	for i := 0; i < list.Len(); i++ {
 		trie.Update(string(ethutil.NewValue(i).Encode()), string(list.GetRlp(i)))
 	}

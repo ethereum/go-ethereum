@@ -1,4 +1,4 @@
-package ethtrie
+package trie
 
 import (
 	"bytes"

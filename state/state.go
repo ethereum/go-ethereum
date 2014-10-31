@@ -3,9 +3,9 @@ package state
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethtrie"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var statelogger = logger.NewLogger("STATE")
@@ -17,7 +17,7 @@ var statelogger = logger.NewLogger("STATE")
 // * Accounts
 type State struct {
 	// The trie for this structure
-	Trie *ethtrie.Trie
+	Trie *trie.Trie
 
 	stateObjects map[string]*StateObject
 
@@ -29,7 +29,7 @@ type State struct {
 }
 
 // Create a new state from a given trie
-func New(trie *ethtrie.Trie) *State {
+func New(trie *trie.Trie) *State {
 	return &State{Trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest(), refund: make(map[string]*big.Int)}
 }
 
@@ -300,7 +300,7 @@ func (self *State) Update() {
 
 	// FIXME trie delete is broken
 	if deleted {
-		valid, t2 := ethtrie.ParanoiaCheck(self.Trie)
+		valid, t2 := trie.ParanoiaCheck(self.Trie)
 		if !valid {
 			statelogger.Infof("Warn: PARANOIA: Different state root during copy %x vs %x\n", self.Trie.Root, t2.Root)
 

@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethtrie"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 type BlockInfo struct {
@@ -137,7 +137,7 @@ func CreateBlock(root interface{},
 	}
 	block.SetUncles([]*Block{})
 
-	block.state = state.New(ethtrie.New(ethutil.Config.Db, root))
+	block.state = state.New(trie.New(ethutil.Config.Db, root))
 
 	return block
 }
@@ -294,7 +294,7 @@ func (self *Block) setHeader(header *ethutil.Value) {
 	self.PrevHash = header.Get(0).Bytes()
 	self.UncleSha = header.Get(1).Bytes()
 	self.Coinbase = header.Get(2).Bytes()
-	self.state = state.New(ethtrie.New(ethutil.Config.Db, header.Get(3).Val))
+	self.state = state.New(trie.New(ethutil.Config.Db, header.Get(3).Val))
 	self.TxSha = header.Get(4).Bytes()
 	self.ReceiptSha = header.Get(5).Bytes()
 	self.LogsBloom = header.Get(6).Bytes()
@@ -315,7 +315,7 @@ func NewUncleBlockFromValue(header *ethutil.Value) *Block {
 	return block
 }
 
-func (block *Block) Trie() *ethtrie.Trie {
+func (block *Block) Trie() *trie.Trie {
 	return block.state.Trie
 }
 
