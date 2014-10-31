@@ -34,10 +34,10 @@ import (
 	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethminer"
-	"github.com/ethereum/go-ethereum/ethpipe"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/ethwire"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/xeth"
 	"gopkg.in/qml.v1"
 )
 
@@ -84,7 +84,7 @@ type Gui struct {
 	logLevel logger.LogLevel
 	open     bool
 
-	pipe *ethpipe.JSPipe
+	pipe *xeth.JSXEth
 
 	Session        string
 	clientIdentity *ethwire.SimpleClientIdentity
@@ -103,7 +103,7 @@ func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIden
 		panic(err)
 	}
 
-	pipe := ethpipe.NewJSPipe(ethereum)
+	pipe := xeth.NewJSXEth(ethereum)
 	gui := &Gui{eth: ethereum, txDb: db, pipe: pipe, logLevel: logger.LogLevel(logLevel), Session: session, open: false, clientIdentity: clientIdentity, config: config, plugins: make(map[string]plugin)}
 	data, _ := ethutil.ReadAllFile(path.Join(ethutil.Config.ExecPath, "plugins.json"))
 	json.Unmarshal([]byte(data), &gui.plugins)
@@ -117,11 +117,11 @@ func (gui *Gui) Start(assetPath string) {
 
 	// Register ethereum functions
 	qml.RegisterTypes("Ethereum", 1, 0, []qml.TypeSpec{{
-		Init: func(p *ethpipe.JSBlock, obj qml.Object) { p.Number = 0; p.Hash = "" },
+		Init: func(p *xeth.JSBlock, obj qml.Object) { p.Number = 0; p.Hash = "" },
 	}, {
-		Init: func(p *ethpipe.JSTransaction, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
+		Init: func(p *xeth.JSTransaction, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
 	}, {
-		Init: func(p *ethpipe.KeyVal, obj qml.Object) { p.Key = ""; p.Value = "" },
+		Init: func(p *xeth.KeyVal, obj qml.Object) { p.Key = ""; p.Value = "" },
 	}})
 	// Create a new QML engine
 	gui.engine = qml.NewEngine()
@@ -287,7 +287,7 @@ func (gui *Gui) loadAddressBook() {
 }
 
 func (gui *Gui) insertTransaction(window string, tx *chain.Transaction) {
-	pipe := ethpipe.New(gui.eth)
+	pipe := xeth.New(gui.eth)
 	nameReg := pipe.World().Config().Get("NameReg")
 	addr := gui.address()
 
@@ -299,7 +299,7 @@ func (gui *Gui) insertTransaction(window string, tx *chain.Transaction) {
 	}
 
 	var (
-		ptx  = ethpipe.NewJSTx(tx, pipe.World().State())
+		ptx  = xeth.NewJSTx(tx, pipe.World().State())
 		send = nameReg.Storage(tx.Sender())
 		rec  = nameReg.Storage(tx.Recipient)
 		s, r string
@@ -346,7 +346,7 @@ func (gui *Gui) readPreviousTransactions() {
 
 func (gui *Gui) processBlock(block *chain.Block, initial bool) {
 	name := strings.Trim(gui.pipe.World().Config().Get("NameReg").Storage(block.Coinbase).Str(), "\x00")
-	b := ethpipe.NewJSBlock(block)
+	b := xeth.NewJSBlock(block)
 	b.Name = name
 
 	gui.getObjectByName("chainView").Call("addBlock", b, initial)
@@ -451,12 +451,12 @@ func (gui *Gui) update() {
 					if bytes.Compare(tx.Sender(), gui.address()) == 0 {
 						object.SubAmount(tx.Value)
 
-						//gui.getObjectByName("transactionView").Call("addTx", ethpipe.NewJSTx(tx), "send")
+						//gui.getObjectByName("transactionView").Call("addTx", xeth.NewJSTx(tx), "send")
 						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 					} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
 						object.AddAmount(tx.Value)
 
-						//gui.getObjectByName("transactionView").Call("addTx", ethpipe.NewJSTx(tx), "recv")
+						//gui.getObjectByName("transactionView").Call("addTx", xeth.NewJSTx(tx), "recv")
 						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 					}
 

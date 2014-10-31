@@ -1,4 +1,4 @@
-package ethpipe
+package xeth
 
 import (
 	"bytes"
@@ -11,22 +11,22 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 )
 
-type JSPipe struct {
-	*Pipe
+type JSXEth struct {
+	*XEth
 }
 
-func NewJSPipe(eth chain.EthManager) *JSPipe {
-	return &JSPipe{New(eth)}
+func NewJSXEth(eth chain.EthManager) *JSXEth {
+	return &JSXEth{New(eth)}
 }
 
-func (self *JSPipe) BlockByHash(strHash string) *JSBlock {
+func (self *JSXEth) BlockByHash(strHash string) *JSBlock {
 	hash := ethutil.Hex2Bytes(strHash)
 	block := self.obj.ChainManager().GetBlock(hash)
 
 	return NewJSBlock(block)
 }
 
-func (self *JSPipe) BlockByNumber(num int32) *JSBlock {
+func (self *JSXEth) BlockByNumber(num int32) *JSBlock {
 	if num == -1 {
 		return NewJSBlock(self.obj.ChainManager().CurrentBlock)
 	}
@@ -34,7 +34,7 @@ func (self *JSPipe) BlockByNumber(num int32) *JSBlock {
 	return NewJSBlock(self.obj.ChainManager().GetBlockByNumber(uint64(num)))
 }
 
-func (self *JSPipe) Block(v interface{}) *JSBlock {
+func (self *JSXEth) Block(v interface{}) *JSBlock {
 	if n, ok := v.(int32); ok {
 		return self.BlockByNumber(n)
 	} else if str, ok := v.(string); ok {
@@ -46,21 +46,21 @@ func (self *JSPipe) Block(v interface{}) *JSBlock {
 	return nil
 }
 
-func (self *JSPipe) Key() *JSKey {
+func (self *JSXEth) Key() *JSKey {
 	return NewJSKey(self.obj.KeyManager().KeyPair())
 }
 
-func (self *JSPipe) StateObject(addr string) *JSObject {
+func (self *JSXEth) StateObject(addr string) *JSObject {
 	object := &Object{self.World().safeGet(ethutil.Hex2Bytes(addr))}
 
 	return NewJSObject(object)
 }
 
-func (self *JSPipe) PeerCount() int {
+func (self *JSXEth) PeerCount() int {
 	return self.obj.PeerCount()
 }
 
-func (self *JSPipe) Peers() []JSPeer {
+func (self *JSXEth) Peers() []JSPeer {
 	var peers []JSPeer
 	for peer := self.obj.Peers().Front(); peer != nil; peer = peer.Next() {
 		p := peer.Value.(chain.Peer)
@@ -73,47 +73,47 @@ func (self *JSPipe) Peers() []JSPeer {
 	return peers
 }
 
-func (self *JSPipe) IsMining() bool {
+func (self *JSXEth) IsMining() bool {
 	return self.obj.IsMining()
 }
 
-func (self *JSPipe) IsListening() bool {
+func (self *JSXEth) IsListening() bool {
 	return self.obj.IsListening()
 }
 
-func (self *JSPipe) CoinBase() string {
+func (self *JSXEth) CoinBase() string {
 	return ethutil.Bytes2Hex(self.obj.KeyManager().Address())
 }
 
-func (self *JSPipe) NumberToHuman(balance string) string {
+func (self *JSXEth) NumberToHuman(balance string) string {
 	b := ethutil.Big(balance)
 
 	return ethutil.CurrencyToString(b)
 }
 
-func (self *JSPipe) StorageAt(addr, storageAddr string) string {
+func (self *JSXEth) StorageAt(addr, storageAddr string) string {
 	storage := self.World().SafeGet(ethutil.Hex2Bytes(addr)).Storage(ethutil.Hex2Bytes(storageAddr))
 
 	return ethutil.Bytes2Hex(storage.Bytes())
 }
 
-func (self *JSPipe) BalanceAt(addr string) string {
+func (self *JSXEth) BalanceAt(addr string) string {
 	return self.World().SafeGet(ethutil.Hex2Bytes(addr)).Balance().String()
 }
 
-func (self *JSPipe) TxCountAt(address string) int {
+func (self *JSXEth) TxCountAt(address string) int {
 	return int(self.World().SafeGet(ethutil.Hex2Bytes(address)).Nonce)
 }
 
-func (self *JSPipe) CodeAt(address string) string {
+func (self *JSXEth) CodeAt(address string) string {
 	return ethutil.Bytes2Hex(self.World().SafeGet(ethutil.Hex2Bytes(address)).Code)
 }
 
-func (self *JSPipe) IsContract(address string) bool {
+func (self *JSXEth) IsContract(address string) bool {
 	return len(self.World().SafeGet(ethutil.Hex2Bytes(address)).Code) > 0
 }
 
-func (self *JSPipe) SecretToAddress(key string) string {
+func (self *JSXEth) SecretToAddress(key string) string {
 	pair, err := crypto.NewKeyPairFromSec(ethutil.Hex2Bytes(key))
 	if err != nil {
 		return ""
@@ -122,7 +122,7 @@ func (self *JSPipe) SecretToAddress(key string) string {
 	return ethutil.Bytes2Hex(pair.Address())
 }
 
-func (self *JSPipe) Execute(addr, value, gas, price, data string) (string, error) {
+func (self *JSXEth) Execute(addr, value, gas, price, data string) (string, error) {
 	ret, err := self.ExecuteObject(&Object{
 		self.World().safeGet(ethutil.Hex2Bytes(addr))},
 		ethutil.Hex2Bytes(data),
@@ -139,7 +139,7 @@ type KeyVal struct {
 	Value string `json:"value"`
 }
 
-func (self *JSPipe) EachStorage(addr string) string {
+func (self *JSXEth) EachStorage(addr string) string {
 	var values []KeyVal
 	object := self.World().SafeGet(ethutil.Hex2Bytes(addr))
 	object.EachStorage(func(name string, value *ethutil.Value) {
@@ -155,13 +155,13 @@ func (self *JSPipe) EachStorage(addr string) string {
 	return string(valuesJson)
 }
 
-func (self *JSPipe) ToAscii(str string) string {
+func (self *JSXEth) ToAscii(str string) string {
 	padded := ethutil.RightPadBytes([]byte(str), 32)
 
 	return "0x" + ethutil.Bytes2Hex(padded)
 }
 
-func (self *JSPipe) FromAscii(str string) string {
+func (self *JSXEth) FromAscii(str string) string {
 	if ethutil.IsHex(str) {
 		str = str[2:]
 	}
@@ -169,7 +169,7 @@ func (self *JSPipe) FromAscii(str string) string {
 	return string(bytes.Trim(ethutil.Hex2Bytes(str), "\x00"))
 }
 
-func (self *JSPipe) FromNumber(str string) string {
+func (self *JSXEth) FromNumber(str string) string {
 	if ethutil.IsHex(str) {
 		str = str[2:]
 	}
@@ -177,7 +177,7 @@ func (self *JSPipe) FromNumber(str string) string {
 	return ethutil.BigD(ethutil.Hex2Bytes(str)).String()
 }
 
-func (self *JSPipe) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (*JSReceipt, error) {
+func (self *JSXEth) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (*JSReceipt, error) {
 	var hash []byte
 	var contractCreation bool
 	if len(toStr) == 0 {
@@ -239,14 +239,14 @@ func (self *JSPipe) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr 
 	return NewJSReciept(contractCreation, tx.CreationAddress(self.World().State()), tx.Hash(), keyPair.Address()), nil
 }
 
-func (self *JSPipe) PushTx(txStr string) (*JSReceipt, error) {
+func (self *JSXEth) PushTx(txStr string) (*JSReceipt, error) {
 	tx := chain.NewTransactionFromBytes(ethutil.Hex2Bytes(txStr))
 	self.obj.TxPool().QueueTransaction(tx)
 	return NewJSReciept(tx.CreatesContract(), tx.CreationAddress(self.World().State()), tx.Hash(), tx.Sender()), nil
 }
 
-func (self *JSPipe) CompileMutan(code string) string {
-	data, err := self.Pipe.CompileMutan(code)
+func (self *JSXEth) CompileMutan(code string) string {
+	data, err := self.XEth.CompileMutan(code)
 	if err != nil {
 		return err.Error()
 	}

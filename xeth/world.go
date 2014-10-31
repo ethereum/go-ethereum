@@ -1,4 +1,4 @@
-package ethpipe
+package xeth
 
 import (
 	"container/list"
@@ -7,18 +7,18 @@ import (
 )
 
 type World struct {
-	pipe *Pipe
+	pipe *XEth
 	cfg  *Config
 }
 
-func NewWorld(pipe *Pipe) *World {
+func NewWorld(pipe *XEth) *World {
 	world := &World{pipe, nil}
 	world.cfg = &Config{pipe}
 
 	return world
 }
 
-func (self *Pipe) World() *World {
+func (self *XEth) World() *World {
 	return self.world
 }
 

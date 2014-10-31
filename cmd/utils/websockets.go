@@ -2,9 +2,9 @@ package utils
 
 import (
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/ethpipe"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/websocket"
+	"github.com/ethereum/go-ethereum/xeth"
 )
 
 func args(v ...interface{}) []interface{} {
@@ -21,7 +21,7 @@ func NewWebSocketServer(eth *eth.Ethereum) *WebSocketServer {
 }
 
 func (self *WebSocketServer) Serv() {
-	pipe := ethpipe.NewJSPipe(self.ethereum)
+	pipe := xeth.NewJSXEth(self.ethereum)
 
 	wsServ := websocket.NewServer("/eth", ":40404")
 	wsServ.MessageFunc(func(c *websocket.Client, msg *websocket.Message) {

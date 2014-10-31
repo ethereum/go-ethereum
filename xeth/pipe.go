@@ -1,4 +1,8 @@
-package ethpipe
+package xeth
+
+/*
+ * eXtended ETHereum
+ */
 
 import (
 	"fmt"
@@ -12,13 +16,13 @@ import (
 	"github.com/ethereum/go-ethereum/vm"
 )
 
-var pipelogger = logger.NewLogger("PIPE")
+var pipelogger = logger.NewLogger("XETH")
 
 type VmVars struct {
 	State *ethstate.State
 }
 
-type Pipe struct {
+type XEth struct {
 	obj          chain.EthManager
 	stateManager *chain.StateManager
 	blockChain   *chain.ChainManager
@@ -27,8 +31,8 @@ type Pipe struct {
 	Vm VmVars
 }
 
-func New(obj chain.EthManager) *Pipe {
-	pipe := &Pipe{
+func New(obj chain.EthManager) *XEth {
+	pipe := &XEth{
 		obj:          obj,
 		stateManager: obj.StateManager(),
 		blockChain:   obj.ChainManager(),
@@ -38,19 +42,19 @@ func New(obj chain.EthManager) *Pipe {
 	return pipe
 }
 
-func (self *Pipe) Balance(addr []byte) *ethutil.Value {
+func (self *XEth) Balance(addr []byte) *ethutil.Value {
 	return ethutil.NewValue(self.World().safeGet(addr).Balance)
 }
 
-func (self *Pipe) Nonce(addr []byte) uint64 {
+func (self *XEth) Nonce(addr []byte) uint64 {
 	return self.World().safeGet(addr).Nonce
 }
 
-func (self *Pipe) Execute(addr []byte, data []byte, value, gas, price *ethutil.Value) ([]byte, error) {
+func (self *XEth) Execute(addr []byte, data []byte, value, gas, price *ethutil.Value) ([]byte, error) {
 	return self.ExecuteObject(&Object{self.World().safeGet(addr)}, data, value, gas, price)
 }
 
-func (self *Pipe) ExecuteObject(object *Object, data []byte, value, gas, price *ethutil.Value) ([]byte, error) {
+func (self *XEth) ExecuteObject(object *Object, data []byte, value, gas, price *ethutil.Value) ([]byte, error) {
 	var (
 		initiator = ethstate.NewStateObject(self.obj.KeyManager().KeyPair().Address())
 		block     = self.blockChain.CurrentBlock
@@ -68,15 +72,15 @@ func (self *Pipe) ExecuteObject(object *Object, data []byte, value, gas, price *
 	return ret, err
 }
 
-func (self *Pipe) Block(hash []byte) *chain.Block {
+func (self *XEth) Block(hash []byte) *chain.Block {
 	return self.blockChain.GetBlock(hash)
 }
 
-func (self *Pipe) Storage(addr, storageAddr []byte) *ethutil.Value {
+func (self *XEth) Storage(addr, storageAddr []byte) *ethutil.Value {
 	return self.World().safeGet(addr).GetStorage(ethutil.BigD(storageAddr))
 }
 
-func (self *Pipe) ToAddress(priv []byte) []byte {
+func (self *XEth) ToAddress(priv []byte) []byte {
 	pair, err := crypto.NewKeyPairFromSec(priv)
 	if err != nil {
 		return nil
@@ -85,11 +89,11 @@ func (self *Pipe) ToAddress(priv []byte) []byte {
 	return pair.Address()
 }
 
-func (self *Pipe) Exists(addr []byte) bool {
+func (self *XEth) Exists(addr []byte) bool {
 	return self.World().Get(addr) != nil
 }
 
-func (self *Pipe) TransactString(key *crypto.KeyPair, rec string, value, gas, price *ethutil.Value, data []byte) ([]byte, error) {
+func (self *XEth) TransactString(key *crypto.KeyPair, rec string, value, gas, price *ethutil.Value, data []byte) ([]byte, error) {
 	// Check if an address is stored by this address
 	var hash []byte
 	addr := self.World().Config().Get("NameReg").StorageString(rec).Bytes()
@@ -104,7 +108,7 @@ func (self *Pipe) TransactString(key *crypto.KeyPair, rec string, value, gas, pr
 	return self.Transact(key, hash, value, gas, price, data)
 }
 
-func (self *Pipe) Transact(key *crypto.KeyPair, rec []byte, value, gas, price *ethutil.Value, data []byte) ([]byte, error) {
+func (self *XEth) Transact(key *crypto.KeyPair, rec []byte, value, gas, price *ethutil.Value, data []byte) ([]byte, error) {
 	var hash []byte
 	var contractCreation bool
 	if rec == nil {
@@ -151,7 +155,7 @@ func (self *Pipe) Transact(key *crypto.KeyPair, rec []byte, value, gas, price *e
 	return tx.Hash(), nil
 }
 
-func (self *Pipe) PushTx(tx *chain.Transaction) ([]byte, error) {
+func (self *XEth) PushTx(tx *chain.Transaction) ([]byte, error) {
 	self.obj.TxPool().QueueTransaction(tx)
 	if tx.Recipient == nil {
 		addr := tx.CreationAddress(self.World().State())
@@ -161,7 +165,7 @@ func (self *Pipe) PushTx(tx *chain.Transaction) ([]byte, error) {
 	return tx.Hash(), nil
 }
 
-func (self *Pipe) CompileMutan(code string) ([]byte, error) {
+func (self *XEth) CompileMutan(code string) ([]byte, error) {
 	data, err := ethutil.Compile(code, false)
 	if err != nil {
 		return nil, err

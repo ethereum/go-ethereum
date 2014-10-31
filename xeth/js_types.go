@@ -1,4 +1,4 @@
-package ethpipe
+package xeth
 
 import (
 	"fmt"

@@ -6,12 +6,12 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/ethpipe"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/xeth"
 )
 
 type EthereumApi struct {
-	pipe *ethpipe.JSPipe
+	pipe *xeth.JSXEth
 }
 
 type JsonArgs interface {

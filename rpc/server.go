@@ -6,8 +6,8 @@ import (
 	"net/rpc"
 	"net/rpc/jsonrpc"
 
-	"github.com/ethereum/go-ethereum/ethpipe"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/xeth"
 )
 
 var jsonlogger = logger.NewLogger("JSON")
@@ -15,7 +15,7 @@ var jsonlogger = logger.NewLogger("JSON")
 type JsonRpcServer struct {
 	quit     chan bool
 	listener net.Listener
-	pipe     *ethpipe.JSPipe
+	pipe     *xeth.JSXEth
 }
 
 func (s *JsonRpcServer) exitHandler() {
@@ -52,7 +52,7 @@ func (s *JsonRpcServer) Start() {
 	}
 }
 
-func NewJsonRpcServer(pipe *ethpipe.JSPipe, port int) (*JsonRpcServer, error) {
+func NewJsonRpcServer(pipe *xeth.JSXEth, port int) (*JsonRpcServer, error) {
 	sport := fmt.Sprintf(":%d", port)
 	l, err := net.Listen("tcp", sport)
 	if err != nil {
