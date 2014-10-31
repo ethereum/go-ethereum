@@ -8,6 +8,7 @@
 
 #include <llvm/IR/GlobalVariable.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/IntrinsicInst.h>
 
 #include <libdevcore/Common.h>
 
@@ -68,17 +69,26 @@ llvm::Function* Memory::createRequireFunc(GasMeter& _gasMeter, RuntimeManager& _
 
 	// BB "check"
 	m_builder.SetInsertPoint(checkBB);
-	auto sizeRequired = m_builder.CreateNUWAdd(offset, size, "sizeRequired");
+	auto uaddWO = llvm::Intrinsic::getDeclaration(getModule(), llvm::Intrinsic::uadd_with_overflow, Type::i256);
+	auto uaddRes = m_builder.CreateCall2(uaddWO, offset, size, "res");
+	auto sizeRequired = m_builder.CreateExtractValue(uaddRes, 0, "sizeReq");
+	auto overflow1 = m_builder.CreateExtractValue(uaddRes, 1, "overflow1");
 	auto currSize = m_builder.CreateLoad(m_size, "currSize");
-	auto resizeNeeded = m_builder.CreateICmpULE(size, sizeRequired, "resizeNeeded");
+	auto tooSmall = m_builder.CreateICmpULE(size, sizeRequired, "tooSmall");
+	auto resizeNeeded = m_builder.CreateOr(tooSmall, overflow1, "resizeNeeded");
 	m_builder.CreateCondBr(resizeNeeded, resizeBB, returnBB); // OPT branch weights?
 
 	// BB "resize"
 	m_builder.SetInsertPoint(resizeBB);
 	// Check gas first
-	auto wordsRequired = m_builder.CreateUDiv(m_builder.CreateAdd(sizeRequired, Constant::get(31)), Constant::get(32), "wordsRequired");
-	sizeRequired = m_builder.CreateMul(wordsRequired, Constant::get(32), "roundedSizeRequired");
-	auto words = m_builder.CreateUDiv(size, Constant::get(32), "words");	// size is always 32*k
+	uaddRes = m_builder.CreateCall2(uaddWO, sizeRequired, Constant::get(31), "res");
+	auto wordsRequired = m_builder.CreateExtractValue(uaddRes, 0);
+	auto overflow2 = m_builder.CreateExtractValue(uaddRes, 1, "overflow2");
+	auto overflow = m_builder.CreateOr(overflow1, overflow2, "overflow");
+	wordsRequired = m_builder.CreateSelect(overflow, Constant::get(-1), wordsRequired);
+	wordsRequired = m_builder.CreateUDiv(wordsRequired, Constant::get(32), "wordsReq");
+	sizeRequired = m_builder.CreateMul(wordsRequired, Constant::get(32), "roundedSizeReq");
+	auto words = m_builder.CreateUDiv(currSize, Constant::get(32), "words");	// size is always 32*k
 	auto newWords = m_builder.CreateSub(wordsRequired, words, "addtionalWords");
 	_gasMeter.checkMemory(newWords, m_builder);
 	// Resize
