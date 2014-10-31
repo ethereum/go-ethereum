@@ -24,9 +24,6 @@ public:
 	void copyBytes(llvm::Value* _srcPtr, llvm::Value* _srcSize, llvm::Value* _srcIndex,
 				   llvm::Value* _destMemIdx, llvm::Value* _byteCount);
 
-	/// Requires this amount of memory. And counts gas fee for that memory.
-	void require(llvm::Value* _size);
-
 	/// Requires the amount of memory to for data defined by offset and size. And counts gas fee for that memory.
 	void require(llvm::Value* _offset, llvm::Value* _size);
 
@@ -36,7 +33,9 @@ private:
 	llvm::Function* createFunc(bool _isStore, llvm::Type* _type, GasMeter& _gasMeter);
 	llvm::Function* createRequireFunc(GasMeter& _gasMeter, RuntimeManager& _runtimeManager);
 
-private:
+	/// Requires this amount of memory. And counts gas fee for that memory.
+	void require(llvm::Value* _size);
+
 	llvm::GlobalVariable* m_data;
 	llvm::GlobalVariable* m_size;
 

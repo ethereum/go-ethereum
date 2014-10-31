@@ -171,7 +171,7 @@ void Memory::require(llvm::Value* _size)
 
 void Memory::require(llvm::Value* _offset, llvm::Value* _size)
 {
-	auto sizeRequired = m_builder.CreateAdd(_offset, _size, "sizeRequired");
+	auto sizeRequired = m_builder.CreateNUWAdd(_offset, _size, "sizeRequired");
 	require(sizeRequired);
 }
 
