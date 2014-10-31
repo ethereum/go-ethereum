@@ -342,7 +342,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytesConstRef _bytecod
 			break;
 		}
 
-		case Instruction::BNOT:
+		case Instruction::NOT:
 		{
 			auto value = stack.pop();
 			auto ret = m_builder.CreateXor(value, Constant::get(-1), "bnot");
@@ -400,7 +400,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytesConstRef _bytecod
 			break;
 		}
 
-		case Instruction::NOT:
+		case Instruction::ISZERO:
 		{
 			auto top = stack.pop();
 			auto iszero = m_builder.CreateICmpEQ(top, Constant::get(0), "iszero");
