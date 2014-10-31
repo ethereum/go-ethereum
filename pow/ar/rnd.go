@@ -3,7 +3,7 @@ package ar
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethcrypto"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 )
 
@@ -21,16 +21,16 @@ func (self ByteNode) Big() *big.Int {
 
 func Sha3(v interface{}) *big.Int {
 	if b, ok := v.(*big.Int); ok {
-		return ethutil.BigD(ethcrypto.Sha3(b.Bytes()))
+		return ethutil.BigD(crypto.Sha3(b.Bytes()))
 	} else if b, ok := v.([]interface{}); ok {
-		return ethutil.BigD(ethcrypto.Sha3(ethutil.Encode(b)))
+		return ethutil.BigD(crypto.Sha3(ethutil.Encode(b)))
 	} else if s, ok := v.([]*big.Int); ok {
 		v := make([]interface{}, len(s))
 		for i, b := range s {
 			v[i] = b
 		}
 
-		return ethutil.BigD(ethcrypto.Sha3(ethutil.Encode(v)))
+		return ethutil.BigD(crypto.Sha3(ethutil.Encode(v)))
 	}
 
 	return nil

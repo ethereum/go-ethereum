@@ -4,11 +4,11 @@ import (
 	"container/list"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/ethcrypto"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/ethwire"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/wire"
 )
 
 // Implement our EthTest Manager
@@ -53,14 +53,14 @@ func (tm *TestManager) StateManager() *StateManager {
 func (tm *TestManager) EventMux() *event.TypeMux {
 	return tm.eventMux
 }
-func (tm *TestManager) Broadcast(msgType ethwire.MsgType, data []interface{}) {
+func (tm *TestManager) Broadcast(msgType wire.MsgType, data []interface{}) {
 	fmt.Println("Broadcast not implemented")
 }
 
-func (tm *TestManager) ClientIdentity() ethwire.ClientIdentity {
+func (tm *TestManager) ClientIdentity() wire.ClientIdentity {
 	return nil
 }
-func (tm *TestManager) KeyManager() *ethcrypto.KeyManager {
+func (tm *TestManager) KeyManager() *crypto.KeyManager {
 	return nil
 }
 

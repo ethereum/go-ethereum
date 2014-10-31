@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/eth-go/ethlog"
+	logpkg "github.com/ethereum/go-ethereum/logger"
 )
 
 const (
@@ -93,7 +93,7 @@ type Server struct {
 	handlers       Handlers
 }
 
-var logger = ethlog.NewLogger("P2P")
+var logger = logpkg.NewLogger("P2P")
 
 func New(network Network, addr net.Addr, identity ClientIdentity, handlers Handlers, maxPeers int, blacklist Blacklist) *Server {
 	// get alphabetical list of protocol names from handlers map
