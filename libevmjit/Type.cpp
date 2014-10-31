@@ -36,9 +36,9 @@ void Type::init(llvm::LLVMContext& _context)
 	RuntimePtr = RuntimeData::getType()->getPointerTo();
 }
 
-llvm::ConstantInt* Constant::get(uint64_t _n)
+llvm::ConstantInt* Constant::get(int64_t _n)
 {
-	return llvm::ConstantInt::get(Type::i256, _n);
+	return llvm::ConstantInt::getSigned(Type::i256, _n);
 }
 
 llvm::ConstantInt* Constant::get(u256 _n)

@@ -345,7 +345,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytesConstRef _bytecod
 		case Instruction::BNOT:
 		{
 			auto value = stack.pop();
-			auto ret = m_builder.CreateXor(value, llvm::APInt(256, -1, true), "bnot");
+			auto ret = m_builder.CreateXor(value, Constant::get(-1), "bnot");
 			stack.push(ret);
 			break;
 		}
@@ -760,12 +760,9 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytesConstRef _bytecod
 
 			_gasMeter.commitCostBlock(gas);
 
-			// Require _memory for the max of in and out buffers
-			auto inSizeReq = m_builder.CreateAdd(inOff, inSize, "inSizeReq");
-			auto outSizeReq = m_builder.CreateAdd(outOff, outSize, "outSizeReq");
-			auto cmp = m_builder.CreateICmpUGT(inSizeReq, outSizeReq);
-			auto sizeReq = m_builder.CreateSelect(cmp, inSizeReq, outSizeReq, "sizeReq");
-			_memory.require(sizeReq);
+			// Require memory for in and out buffers
+			memory.require(outOff, outSize);	// Out buffer first as we guess it will be after the in one
+			memory.require(inOff, inSize);
 
 			auto receiveAddress = codeAddress;
 			if (inst == Instruction::CALLCODE)
