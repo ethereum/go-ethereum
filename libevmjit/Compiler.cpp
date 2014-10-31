@@ -32,28 +32,27 @@ namespace eth
 namespace jit
 {
 
-Compiler::Compiler():
-	m_builder(llvm::getGlobalContext()),
-	m_jumpTableBlock(),
-	m_badJumpBlock()
+Compiler::Compiler(Options const& _options):
+	m_options(_options),
+	m_builder(llvm::getGlobalContext())
 {
 	Type::init(m_builder.getContext());
 }
 
-void Compiler::createBasicBlocks(bytesConstRef bytecode)
+void Compiler::createBasicBlocks(bytesConstRef _bytecode)
 {
 	std::set<ProgramCounter> splitPoints; // Sorted collections of instruction indices where basic blocks start/end
 
 	std::map<ProgramCounter, ProgramCounter> directJumpTargets;
 	std::vector<ProgramCounter> indirectJumpTargets;
-	boost::dynamic_bitset<> validJumpTargets(std::max(bytecode.size(), size_t(1)));
+	boost::dynamic_bitset<> validJumpTargets(std::max(_bytecode.size(), size_t(1)));
 
 	splitPoints.insert(0);  // First basic block
 	validJumpTargets[0] = true;
 
-	for (auto curr = bytecode.begin(); curr != bytecode.end(); ++curr)
+	for (auto curr = _bytecode.begin(); curr != _bytecode.end(); ++curr)
 	{
-		ProgramCounter currentPC = curr - bytecode.begin();
+		ProgramCounter currentPC = curr - _bytecode.begin();
 		validJumpTargets[currentPC] = true;
 
 		auto inst = Instruction(*curr);
@@ -62,19 +61,19 @@ void Compiler::createBasicBlocks(bytesConstRef bytecode)
 
 		case Instruction::ANY_PUSH:
 		{
-			auto val = readPushData(curr, bytecode.end());
+			auto val = readPushData(curr, _bytecode.end());
 			auto next = curr + 1;
-			if (next == bytecode.end())
+			if (next == _bytecode.end())
 				break;
 
 			auto nextInst = Instruction(*next);
 			if (nextInst == Instruction::JUMP || nextInst == Instruction::JUMPI)
 			{
 				// Create a block for the JUMP target.
-				ProgramCounter targetPC = val < bytecode.size() ? val.convert_to<ProgramCounter>() : bytecode.size();
+				ProgramCounter targetPC = val < _bytecode.size() ? val.convert_to<ProgramCounter>() : _bytecode.size();
 				splitPoints.insert(targetPC);
 
-				ProgramCounter jumpPC = (next - bytecode.begin());
+				ProgramCounter jumpPC = (next - _bytecode.begin());
 				directJumpTargets[jumpPC] = targetPC;
 			}
 			break;
@@ -83,7 +82,7 @@ void Compiler::createBasicBlocks(bytesConstRef bytecode)
 		case Instruction::JUMPDEST:
 		{
 			// A basic block starts at the next instruction.
-			if (currentPC + 1 < bytecode.size())
+			if (currentPC + 1 < _bytecode.size())
 			{
 				splitPoints.insert(currentPC + 1);
 				indirectJumpTargets.push_back(currentPC + 1);
@@ -98,7 +97,7 @@ void Compiler::createBasicBlocks(bytesConstRef bytecode)
 		case Instruction::SUICIDE:
 		{
 			// Create a basic block starting at the following instruction.
-			if (curr + 1 < bytecode.end())
+			if (curr + 1 < _bytecode.end())
 			{
 				splitPoints.insert(currentPC + 1);
 			}
@@ -113,7 +112,7 @@ void Compiler::createBasicBlocks(bytesConstRef bytecode)
 	// Remove split points generated from jumps out of code or into data.
 	for (auto it = splitPoints.cbegin(); it != splitPoints.cend();)
 	{
-		if (*it > bytecode.size() || !validJumpTargets[*it])
+		if (*it > _bytecode.size() || !validJumpTargets[*it])
 			it = splitPoints.erase(it);
 		else
 			++it;
@@ -123,7 +122,7 @@ void Compiler::createBasicBlocks(bytesConstRef bytecode)
 	{
 		auto beginInstIdx = *it;
 		++it;
-		auto endInstIdx = it != splitPoints.cend() ? *it : bytecode.size();
+		auto endInstIdx = it != splitPoints.cend() ? *it : _bytecode.size();
 		basicBlocks.emplace(std::piecewise_construct, std::forward_as_tuple(beginInstIdx), std::forward_as_tuple(beginInstIdx, endInstIdx, m_mainFunc, m_builder));
 	}
 
@@ -133,7 +132,7 @@ void Compiler::createBasicBlocks(bytesConstRef bytecode)
 
 	for (auto it = directJumpTargets.cbegin(); it != directJumpTargets.cend(); ++it)
 	{
-		if (it->second >= bytecode.size())
+		if (it->second >= _bytecode.size())
 		{
 			// Jumping out of code means STOP
 			m_directJumpTargets[it->first] = m_stopBB;
@@ -154,12 +153,10 @@ void Compiler::createBasicBlocks(bytesConstRef bytecode)
 	}
 
 	for (auto it = indirectJumpTargets.cbegin(); it != indirectJumpTargets.cend(); ++it)
-	{
 		m_indirectJumpTargets.push_back(&basicBlocks.find(*it)->second);
-	}
 }
 
-std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
+std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef _bytecode)
 {
 	auto module = std::unique_ptr<llvm::Module>(new llvm::Module("main", m_builder.getContext()));
 
@@ -173,7 +170,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 	auto entryBlock = llvm::BasicBlock::Create(m_builder.getContext(), "entry", m_mainFunc);
 	m_builder.SetInsertPoint(entryBlock);
 
-	createBasicBlocks(bytecode);
+	createBasicBlocks(_bytecode);
 
 	// Init runtime structures.
 	RuntimeManager runtimeManager(m_builder);
@@ -191,13 +188,11 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 		auto iterCopy = basicBlockPairIt;
 		++iterCopy;
 		auto nextBasicBlock = (iterCopy != basicBlocks.end()) ? iterCopy->second.llvm() : nullptr;
-		compileBasicBlock(basicBlock, bytecode, runtimeManager, arith, memory, ext, gasMeter, nextBasicBlock);
+		compileBasicBlock(basicBlock, _bytecode, runtimeManager, arith, memory, ext, gasMeter, nextBasicBlock);
 	}
 
 	// Code for special blocks:
 	// TODO: move to separate function.
-	// Note: Right now the codegen for special blocks depends only on createBasicBlock(),
-	// not on the codegen for 'regular' blocks. But it has to be done before linkBasicBlocks().
 	m_builder.SetInsertPoint(m_stopBB);
 	m_builder.CreateRet(Constant::get(ReturnCode::Stop));
 
@@ -218,75 +213,59 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef bytecode)
 		}
 	}
 	else
-	{
 		m_builder.CreateBr(m_badJumpBlock->llvm());
-	}
 
 	removeDeadBlocks();
 
-	if (getenv("EVMCC_DEBUG_BLOCKS"))
-	{
-		std::ofstream ofs("blocks-init.dot");
-		dumpBasicBlockGraph(ofs);
-		ofs.close();
-		std::cerr << "\n\nAfter dead block elimination \n\n";
-		dump();
-	}
+	dumpCFGifRequired("blocks-init.dot");
 
-	//if (getenv("EVMCC_OPTIMIZE_STACK"))
-	//{
+	if (m_options.optimizeStack)
+	{
 		std::vector<BasicBlock*> blockList;
 		for	(auto& entry : basicBlocks)
 			blockList.push_back(&entry.second);
 
-		if (m_jumpTableBlock != nullptr)
+		if (m_jumpTableBlock)
 			blockList.push_back(m_jumpTableBlock.get());
 
 		BasicBlock::linkLocalStacks(blockList, m_builder);
 
-		if (getenv("EVMCC_DEBUG_BLOCKS"))
-		{
-			std::ofstream ofs("blocks-opt.dot");
-			dumpBasicBlockGraph(ofs);
-			ofs.close();
-			std::cerr << "\n\nAfter stack optimization \n\n";
-			dump();
-		}
-	//}
+		dumpCFGifRequired("blocks-opt.dot");
+	}
 
 	for (auto& entry : basicBlocks)
 		entry.second.localStack().synchronize(stack);
-	if (m_jumpTableBlock != nullptr)
+	if (m_jumpTableBlock)
 		m_jumpTableBlock->localStack().synchronize(stack);
 
-	if (getenv("EVMCC_DEBUG_BLOCKS"))
-	{
-		std::ofstream ofs("blocks-sync.dot");
-		dumpBasicBlockGraph(ofs);
-		ofs.close();
-		std::cerr << "\n\nAfter stack synchronization \n\n";
-		dump();
-	}
+	dumpCFGifRequired("blocks-sync.dot");
 
-	llvm::FunctionPassManager fpManager(module.get());
-	fpManager.add(llvm::createLowerSwitchPass());
-	fpManager.doInitialization();
-	fpManager.run(*m_mainFunc);
+	if (m_jumpTableBlock && m_options.rewriteSwitchToBranches)
+	{
+		llvm::FunctionPassManager fpManager(module.get());
+		fpManager.add(llvm::createLowerSwitchPass());
+		fpManager.doInitialization();
+		fpManager.run(*m_mainFunc);
+	}
 
 	return module;
 }
 
 
-void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode, RuntimeManager& _runtimeManager, Arith256& arith, Memory& memory, Ext& ext, GasMeter& gasMeter, llvm::BasicBlock* nextBasicBlock)
+void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytesConstRef _bytecode, RuntimeManager& _runtimeManager,
+                                 Arith256& _arith, Memory& _memory, Ext& _ext, GasMeter& _gasMeter, llvm::BasicBlock* _nextBasicBlock)
 {
-	m_builder.SetInsertPoint(basicBlock.llvm());
-	auto& stack = basicBlock.localStack();
+	if (!_nextBasicBlock) // this is the last block in the code
+		_nextBasicBlock = m_stopBB;
 
-	for (auto currentPC = basicBlock.begin(); currentPC != basicBlock.end(); ++currentPC)
+	m_builder.SetInsertPoint(_basicBlock.llvm());
+	auto& stack = _basicBlock.localStack();
+
+	for (auto currentPC = _basicBlock.begin(); currentPC != _basicBlock.end(); ++currentPC)
 	{
-		auto inst = static_cast<Instruction>(bytecode[currentPC]);
+		auto inst = static_cast<Instruction>(_bytecode[currentPC]);
 
-		gasMeter.count(inst);
+		_gasMeter.count(inst);
 
 		switch (inst)
 		{
@@ -313,7 +292,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		{
 			auto lhs = stack.pop();
 			auto rhs = stack.pop();
-			auto res = arith.mul(lhs, rhs);
+			auto res = _arith.mul(lhs, rhs);
 			stack.push(res);
 			break;
 		}
@@ -322,7 +301,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		{
 			auto lhs = stack.pop();
 			auto rhs = stack.pop();
-			auto res = arith.div(lhs, rhs);
+			auto res = _arith.div(lhs, rhs);
 			stack.push(res);
 			break;
 		}
@@ -331,7 +310,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		{
 			auto lhs = stack.pop();
 			auto rhs = stack.pop();
-			auto res = arith.sdiv(lhs, rhs);
+			auto res = _arith.sdiv(lhs, rhs);
 			stack.push(res);
 			break;
 		}
@@ -340,7 +319,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		{
 			auto lhs = stack.pop();
 			auto rhs = stack.pop();
-			auto res = arith.mod(lhs, rhs);
+			auto res = _arith.mod(lhs, rhs);
 			stack.push(res);
 			break;
 		}
@@ -349,7 +328,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		{
 			auto lhs = stack.pop();
 			auto rhs = stack.pop();
-			auto res = arith.smod(lhs, rhs);
+			auto res = _arith.smod(lhs, rhs);
 			stack.push(res);
 			break;
 		}
@@ -358,7 +337,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		{
 			auto left = stack.pop();
 			auto right = stack.pop();
-			auto ret = ext.exp(left, right);
+			auto ret = _ext.exp(left, right);
 			stack.push(ret);
 			break;
 		}
@@ -478,7 +457,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto lhs = stack.pop();
 			auto rhs = stack.pop();
 			auto mod = stack.pop();
-			auto res = arith.addmod(lhs, rhs, mod);
+			auto res = _arith.addmod(lhs, rhs, mod);
 			stack.push(res);
 			break;
 		}
@@ -488,7 +467,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto lhs = stack.pop();
 			auto rhs = stack.pop();
 			auto mod = stack.pop();
-			auto res = arith.mulmod(lhs, rhs, mod);
+			auto res = _arith.mulmod(lhs, rhs, mod);
 			stack.push(res);
 			break;
 		}
@@ -526,8 +505,8 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		{
 			auto inOff = stack.pop();
 			auto inSize = stack.pop();
-			memory.require(inOff, inSize);
-			auto hash = ext.sha3(inOff, inSize);
+			_memory.require(inOff, inSize);
+			auto hash = _ext.sha3(inOff, inSize);
 			stack.push(hash);
 			break;
 		}
@@ -540,9 +519,9 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 
 		case Instruction::ANY_PUSH:
 		{
-			auto curr = bytecode.begin() + currentPC;	// TODO: replace currentPC with iterator
-			auto value = readPushData(curr, bytecode.end());
-			currentPC = curr - bytecode.begin();
+			auto curr = _bytecode.begin() + currentPC;	// TODO: replace currentPC with iterator
+			auto value = readPushData(curr, _bytecode.end());
+			currentPC = curr - _bytecode.begin();
 
 			stack.push(Constant::get(value));
 			break;
@@ -565,7 +544,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		case Instruction::MLOAD:
 		{
 			auto addr = stack.pop();
-			auto word = memory.loadWord(addr);
+			auto word = _memory.loadWord(addr);
 			stack.push(word);
 			break;
 		}
@@ -574,7 +553,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		{
 			auto addr = stack.pop();
 			auto word = stack.pop();
-			memory.storeWord(addr, word);
+			_memory.storeWord(addr, word);
 			break;
 		}
 
@@ -582,13 +561,13 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		{
 			auto addr = stack.pop();
 			auto word = stack.pop();
-			memory.storeByte(addr, word);
+			_memory.storeByte(addr, word);
 			break;
 		}
 
 		case Instruction::MSIZE:
 		{
-			auto word = memory.getSize();
+			auto word = _memory.getSize();
 			stack.push(word);
 			break;
 		}
@@ -596,7 +575,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		case Instruction::SLOAD:
 		{
 			auto index = stack.pop();
-			auto value = ext.store(index);
+			auto value = _ext.store(index);
 			stack.push(value);
 			break;
 		}
@@ -605,8 +584,8 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		{
 			auto index = stack.pop();
 			auto value = stack.pop();
-			gasMeter.countSStore(ext, index, value);
-			ext.setStore(index, value);
+			_gasMeter.countSStore(_ext, index, value);
+			_ext.setStore(index, value);
 			break;
 		}
 
@@ -618,7 +597,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			// 2. m_directJumpTargets[currentPC] is defined (meaning that the previous instruction is a PUSH)
 			// Otherwise generate a indirect jump (a switch).
 			llvm::BasicBlock* targetBlock = nullptr;
-			if (currentPC != basicBlock.begin())
+			if (currentPC != _basicBlock.begin())
 			{
 				auto pairIter = m_directJumpTargets.find(currentPC);
 				if (pairIter != m_directJumpTargets.end())
@@ -644,17 +623,13 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 				auto zero = Constant::get(0);
 				auto cond = m_builder.CreateICmpNE(val, zero, "nonzero");
 
-				
-				if (!nextBasicBlock)	// In case JUMPI is the last instruction
-					nextBasicBlock = m_stopBB;
-
 				if (targetBlock)
 				{
 					stack.pop();
-					m_builder.CreateCondBr(cond, targetBlock, nextBasicBlock);
+					m_builder.CreateCondBr(cond, targetBlock, _nextBasicBlock);
 				}
 				else
-					m_builder.CreateCondBr(cond, m_jumpTableBlock->llvm(), nextBasicBlock);
+					m_builder.CreateCondBr(cond, m_jumpTableBlock->llvm(), _nextBasicBlock);
 			}
 
 			break;
@@ -696,7 +671,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		case Instruction::BALANCE:
 		{
 			auto address = stack.pop();
-			auto value = ext.balance(address);
+			auto value = _ext.balance(address);
 			stack.push(value);
 			break;
 		}
@@ -704,7 +679,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		case Instruction::EXTCODESIZE:
 		{
 			auto addr = stack.pop();
-			auto value = ext.codesizeAt(addr);
+			auto value = _ext.codesizeAt(addr);
 			stack.push(value);
 			break;
 		}
@@ -718,7 +693,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto srcPtr = _runtimeManager.getCallData();
 			auto srcSize = _runtimeManager.get(RuntimeData::CallDataSize);
 
-			memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);
+			_memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);
 			break;
 		}
 
@@ -731,7 +706,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto srcPtr = _runtimeManager.getCode();    // TODO: Code & its size are constants, feature #80814234
 			auto srcSize = _runtimeManager.get(RuntimeData::CodeSize);
 
-			memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);
+			_memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);
 			break;
 		}
 
@@ -742,17 +717,17 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto srcIdx = stack.pop();
 			auto reqBytes = stack.pop();
 
-			auto srcPtr = ext.codeAt(extAddr);
-			auto srcSize = ext.codesizeAt(extAddr);
+			auto srcPtr = _ext.codeAt(extAddr);
+			auto srcSize = _ext.codesizeAt(extAddr);
 
-			memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);
+			_memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);
 			break;
 		}
 
 		case Instruction::CALLDATALOAD:
 		{
 			auto index = stack.pop();
-			auto value = ext.calldataload(index);
+			auto value = _ext.calldataload(index);
 			stack.push(value);
 			break;
 		}
@@ -762,9 +737,9 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto endowment = stack.pop();
 			auto initOff = stack.pop();
 			auto initSize = stack.pop();
-			memory.require(initOff, initSize);
+			_memory.require(initOff, initSize);
 
-			auto address = ext.create(endowment, initOff, initSize);
+			auto address = _ext.create(endowment, initOff, initSize);
 			stack.push(address);
 			break;
 		}
@@ -780,7 +755,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto outOff = stack.pop();
 			auto outSize = stack.pop();
 
-			gasMeter.commitCostBlock(gas);
+			_gasMeter.commitCostBlock(gas);
 
 			// Require memory for in and out buffers
 			memory.require(outOff, outSize);	// Out buffer first as we guess it will be after the in one
@@ -790,8 +765,8 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			if (inst == Instruction::CALLCODE)
 				receiveAddress = _runtimeManager.get(RuntimeData::Address);
 
-			auto ret = ext.call(gas, receiveAddress, value, inOff, inSize, outOff, outSize, codeAddress);
-			gasMeter.giveBack(gas);
+			auto ret = _ext.call(gas, receiveAddress, value, inOff, inSize, outOff, outSize, codeAddress);
+			_gasMeter.giveBack(gas);
 			stack.push(ret);
 			break;
 		}
@@ -801,7 +776,7 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto index = stack.pop();
 			auto size = stack.pop();
 
-			memory.require(index, size);
+			_memory.require(index, size);
 			_runtimeManager.registerReturnData(index, size);
 
 			m_builder.CreateRet(Constant::get(ReturnCode::Return));
@@ -809,13 +784,14 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		}
 
 		case Instruction::SUICIDE:
-		{
-			auto address = stack.pop();
-			ext.suicide(address);
-			// Fall through
-		}
 		case Instruction::STOP:
 		{
+			if (inst == Instruction::SUICIDE)
+			{
+				auto address = stack.pop();
+				_ext.suicide(address);
+			}
+
 			m_builder.CreateRet(Constant::get(ReturnCode::Stop));
 			break;
 		}
@@ -828,15 +804,11 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 		}
 	}
 
-	gasMeter.commitCostBlock();
+	_gasMeter.commitCostBlock();
 
-	if (!basicBlock.llvm()->getTerminator())    // If block not terminated
-	{
-		if (nextBasicBlock)
-			m_builder.CreateBr(nextBasicBlock); // Branch to the next block
-		else
-			m_builder.CreateRet(Constant::get(ReturnCode::Stop));   // Return STOP code
-	}
+	// Block may have no terminator if the next instruction is a jump destination.
+	if (!_basicBlock.llvm()->getTerminator())
+		m_builder.CreateBr(_nextBasicBlock);
 }
 
 
@@ -871,11 +843,22 @@ void Compiler::removeDeadBlocks()
 	}
 }
 
-void Compiler::dumpBasicBlockGraph(std::ostream& out)
+void Compiler::dumpCFGifRequired(std::string const& _dotfilePath)
 {
-	out << "digraph BB {\n"
-		<< "  node [shape=record, fontname=Courier, fontsize=10];\n"
-		<< "  entry [share=record, label=\"entry block\"];\n";
+	if (! m_options.dumpCFG)
+		return;
+
+	// TODO: handle i/o failures
+	std::ofstream ofs(_dotfilePath);
+	dumpCFGtoStream(ofs);
+	ofs.close();
+}
+
+void Compiler::dumpCFGtoStream(std::ostream& _out)
+{
+	_out << "digraph BB {\n"
+		 << "  node [shape=record, fontname=Courier, fontsize=10];\n"
+		 << "  entry [share=record, label=\"entry block\"];\n";
 
 	std::vector<BasicBlock*> blocks;
 	for (auto& pair : basicBlocks)
@@ -895,7 +878,7 @@ void Compiler::dumpBasicBlockGraph(std::ostream& out)
 		std::ostringstream oss;
 		bb->dump(oss, true);
 
-		out << " \"" << blockName << "\" [shape=record, label=\" { " << blockName << "|" << oss.str() << "} \"];\n";
+		_out << " \"" << blockName << "\" [shape=record, label=\" { " << blockName << "|" << oss.str() << "} \"];\n";
 	}
 
 	// Output edges
@@ -906,15 +889,13 @@ void Compiler::dumpBasicBlockGraph(std::ostream& out)
 		auto end = llvm::pred_end(bb->llvm());
 		for (llvm::pred_iterator it = llvm::pred_begin(bb->llvm()); it != end; ++it)
 		{
-			out << "  \"" << (*it)->getName().str() << "\" -> \"" << blockName << "\" ["
-				<< ((m_jumpTableBlock.get() && *it == m_jumpTableBlock.get()->llvm()) ? "style = dashed, " : "")
-				//<< "label = \""
-				//<< phiNodesPerBlock[bb]
-				<< "];\n";
+			_out << "  \"" << (*it)->getName().str() << "\" -> \"" << blockName << "\" ["
+				 << ((m_jumpTableBlock.get() && *it == m_jumpTableBlock.get()->llvm()) ? "style = dashed, " : "")
+				 << "];\n";
 		}
 	}
 
-	out << "}\n";
+	_out << "}\n";
 }
 
 void Compiler::dump()
