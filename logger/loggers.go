@@ -1,5 +1,5 @@
 /*
-Package ethlog implements a multi-output leveled logger.
+Package logger implements a multi-output leveled logger.
 
 Other packages use tagged logger to send log messages to shared
 (process-wide) logging engine. The shared logging engine dispatches to
@@ -10,7 +10,7 @@ Logging is asynchronous and does not block the caller. Message
 formatting is performed by the caller goroutine to avoid incorrect
 logging of mutable state.
 */
-package ethlog
+package logger
 
 import (
 	"fmt"

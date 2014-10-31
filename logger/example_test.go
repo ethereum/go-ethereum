@@ -1,4 +1,4 @@
-package ethlog
+package logger
 
 import "os"
 

@@ -98,12 +98,12 @@ func (app *HtmlApplication) NewWatcher(quitChan chan bool) {
 
 	app.watcher, err = fsnotify.NewWatcher()
 	if err != nil {
-		logger.Infoln("Could not create new auto-reload watcher:", err)
+		guilogger.Infoln("Could not create new auto-reload watcher:", err)
 		return
 	}
 	err = app.watcher.Watch(app.RootFolder())
 	if err != nil {
-		logger.Infoln("Could not start auto-reload watcher:", err)
+		guilogger.Infoln("Could not start auto-reload watcher:", err)
 		return
 	}
 	for _, folder := range app.RecursiveFolders() {
@@ -119,11 +119,11 @@ func (app *HtmlApplication) NewWatcher(quitChan chan bool) {
 				app.watcher.Close()
 				break out
 			case <-app.watcher.Event:
-				//logger.Debugln("Got event:", ev)
+				//guilogger.Debugln("Got event:", ev)
 				app.webView.Call("reload")
 			case err := <-app.watcher.Error:
 				// TODO: Do something here
-				logger.Infoln("Watcher error:", err)
+				guilogger.Infoln("Watcher error:", err)
 			}
 		}
 	}()

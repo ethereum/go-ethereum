@@ -16,15 +16,15 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethminer"
 	"github.com/ethereum/go-ethereum/ethpipe"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/ethwire"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-var logger = ethlog.NewLogger("CLI")
+var clilogger = logger.NewLogger("CLI")
 var interruptCallbacks = []func(os.Signal){}
 
 // Register interrupt handlers callbacks
@@ -38,7 +38,7 @@ func HandleInterrupt() {
 	go func() {
 		signal.Notify(c, os.Interrupt)
 		for sig := range c {
-			logger.Errorf("Shutting down (%v) ... \n", sig)
+			clilogger.Errorf("Shutting down (%v) ... \n", sig)
 			RunInterruptCallbacks(sig)
 		}
 	}()
@@ -100,7 +100,7 @@ func InitDataDir(Datadir string) {
 	}
 }
 
-func InitLogging(Datadir string, LogFile string, LogLevel int, DebugFile string) ethlog.LogSystem {
+func InitLogging(Datadir string, LogFile string, LogLevel int, DebugFile string) logger.LogSystem {
 	var writer io.Writer
 	if LogFile == "" {
 		writer = os.Stdout
@@ -108,11 +108,11 @@ func InitLogging(Datadir string, LogFile string, LogLevel int, DebugFile string)
 		writer = openLogFile(Datadir, LogFile)
 	}
 
-	sys := ethlog.NewStdLogSystem(writer, log.LstdFlags, ethlog.LogLevel(LogLevel))
-	ethlog.AddLogSystem(sys)
+	sys := logger.NewStdLogSystem(writer, log.LstdFlags, logger.LogLevel(LogLevel))
+	logger.AddLogSystem(sys)
 	if DebugFile != "" {
 		writer = openLogFile(Datadir, DebugFile)
-		ethlog.AddLogSystem(ethlog.NewStdLogSystem(writer, log.LstdFlags, ethlog.DebugLevel))
+		logger.AddLogSystem(logger.NewStdLogSystem(writer, log.LstdFlags, logger.DebugLevel))
 	}
 
 	return sys
@@ -129,10 +129,10 @@ func InitConfig(vmType int, ConfigFile string, Datadir string, EnvPrefix string)
 func exit(err error) {
 	status := 0
 	if err != nil {
-		logger.Errorln("Fatal: ", err)
+		clilogger.Errorln("Fatal: ", err)
 		status = 1
 	}
-	ethlog.Flush()
+	logger.Flush()
 	os.Exit(status)
 }
 
@@ -145,14 +145,14 @@ func NewDatabase() ethutil.Database {
 }
 
 func NewClientIdentity(clientIdentifier, version, customIdentifier string) *ethwire.SimpleClientIdentity {
-	logger.Infoln("identity created")
+	clilogger.Infoln("identity created")
 	return ethwire.NewSimpleClientIdentity(clientIdentifier, version, customIdentifier)
 }
 
 func NewEthereum(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager *crypto.KeyManager, usePnp bool, OutboundPort string, MaxPeer int) *eth.Ethereum {
 	ethereum, err := eth.New(db, clientIdentity, keyManager, eth.CapDefault, usePnp)
 	if err != nil {
-		logger.Fatalln("eth start err:", err)
+		clilogger.Fatalln("eth start err:", err)
 	}
 	ethereum.Port = OutboundPort
 	ethereum.MaxPeers = MaxPeer
@@ -160,16 +160,16 @@ func NewEthereum(db ethutil.Database, clientIdentity ethwire.ClientIdentity, key
 }
 
 func StartEthereum(ethereum *eth.Ethereum, UseSeed bool) {
-	logger.Infof("Starting %s", ethereum.ClientIdentity())
+	clilogger.Infof("Starting %s", ethereum.ClientIdentity())
 	ethereum.Start(UseSeed)
 	RegisterInterrupt(func(sig os.Signal) {
 		ethereum.Stop()
-		ethlog.Flush()
+		logger.Flush()
 	})
 }
 
 func ShowGenesis(ethereum *eth.Ethereum) {
-	logger.Infoln(ethereum.ChainManager().Genesis())
+	clilogger.Infoln(ethereum.ChainManager().Genesis())
 	exit(nil)
 }
 
@@ -246,7 +246,7 @@ func StartRpc(ethereum *eth.Ethereum, RpcPort int) {
 	var err error
 	ethereum.RpcServer, err = rpc.NewJsonRpcServer(ethpipe.NewJSPipe(ethereum), RpcPort)
 	if err != nil {
-		logger.Errorf("Could not start RPC interface (port %v): %v", RpcPort, err)
+		clilogger.Errorf("Could not start RPC interface (port %v): %v", RpcPort, err)
 	} else {
 		go ethereum.RpcServer.Start()
 	}
@@ -264,7 +264,7 @@ func StartMining(ethereum *eth.Ethereum) bool {
 		addr := ethereum.KeyManager().Address()
 
 		go func() {
-			logger.Infoln("Start mining")
+			clilogger.Infoln("Start mining")
 			if miner == nil {
 				miner = ethminer.NewDefaultMiner(addr, ethereum)
 			}
@@ -299,7 +299,7 @@ func FormatTransactionData(data string) []byte {
 func StopMining(ethereum *eth.Ethereum) bool {
 	if ethereum.Mining && miner != nil {
 		miner.Stop()
-		logger.Infoln("Stopped mining")
+		clilogger.Infoln("Stopped mining")
 		ethereum.Mining = false
 
 		return true

@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/ethwire"
+	"github.com/ethereum/go-ethereum/logger"
 )
 
-var poollogger = ethlog.NewLogger("BPOOL")
+var poollogger = logger.NewLogger("BPOOL")
 
 type block struct {
 	from      *Peer

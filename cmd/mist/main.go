@@ -22,7 +22,7 @@ import (
 	"runtime"
 
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/ethlog"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/utils"
 	"gopkg.in/qml.v1"
 )
@@ -108,5 +108,5 @@ func main() {
 	}
 	// this blocks the thread
 	ethereum.WaitForShutdown()
-	ethlog.Flush()
+	logger.Flush()
 }

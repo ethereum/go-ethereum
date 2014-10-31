@@ -25,12 +25,12 @@ import (
 	"path"
 
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/javascript"
+	"github.com/ethereum/go-ethereum/logger"
 )
 
-var logger = ethlog.NewLogger("REPL")
+var repllogger = logger.NewLogger("REPL")
 
 type Repl interface {
 	Start()
@@ -59,7 +59,7 @@ func NewJSRepl(ethereum *eth.Ethereum) *JSRepl {
 func (self *JSRepl) Start() {
 	if !self.running {
 		self.running = true
-		logger.Infoln("init JS Console")
+		repllogger.Infoln("init JS Console")
 		reader := bufio.NewReader(self.history)
 		for {
 			line, err := reader.ReadString('\n')
@@ -80,7 +80,7 @@ func (self *JSRepl) Stop() {
 	if self.running {
 		self.running = false
 		self.re.Stop()
-		logger.Infoln("exit JS Console")
+		repllogger.Infoln("exit JS Console")
 		self.history.Close()
 	}
 }

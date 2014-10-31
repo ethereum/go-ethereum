@@ -3,12 +3,12 @@ package ethstate
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethtrie"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/logger"
 )
 
-var statelogger = ethlog.NewLogger("STATE")
+var statelogger = logger.NewLogger("STATE")
 
 // States within the ethereum protocol are used to store anything
 // within the merkle trie. States take care of caching and storing

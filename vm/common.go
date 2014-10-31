@@ -3,11 +3,11 @@ package vm
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/logger"
 )
 
-var vmlogger = ethlog.NewLogger("VM")
+var vmlogger = logger.NewLogger("VM")
 
 type Type int
 

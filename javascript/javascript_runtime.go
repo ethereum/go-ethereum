@@ -9,16 +9,16 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethpipe"
 	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/utils"
 	"github.com/obscuren/otto"
 )
 
-var jsrelogger = ethlog.NewLogger("JSRE")
+var jsrelogger = logger.NewLogger("JSRE")
 
 type JSRE struct {
 	ethereum *eth.Ethereum

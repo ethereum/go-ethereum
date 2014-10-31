@@ -23,9 +23,9 @@ import (
 	"strconv"
 
 	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethpipe"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/utils"
 )
 
@@ -35,7 +35,7 @@ type plugin struct {
 }
 
 // LogPrint writes to the GUI log.
-func (gui *Gui) LogPrint(level ethlog.LogLevel, msg string) {
+func (gui *Gui) LogPrint(level logger.LogLevel, msg string) {
 	/*
 		str := strings.TrimRight(s, "\n")
 		lines := strings.Split(str, "\n")
@@ -74,14 +74,14 @@ func (gui *Gui) ToggleTurboMining() {
 	gui.miner.ToggleTurbo()
 }
 
-// functions that allow Gui to implement interface ethlog.LogSystem
-func (gui *Gui) SetLogLevel(level ethlog.LogLevel) {
+// functions that allow Gui to implement interface guilogger.LogSystem
+func (gui *Gui) SetLogLevel(level logger.LogLevel) {
 	gui.logLevel = level
 	gui.stdLog.SetLogLevel(level)
 	gui.config.Save("loglevel", level)
 }
 
-func (gui *Gui) GetLogLevel() ethlog.LogLevel {
+func (gui *Gui) GetLogLevel() logger.LogLevel {
 	return gui.logLevel
 }
 
@@ -119,7 +119,7 @@ func (self *Gui) DumpState(hash, path string) {
 		}
 
 		if block == nil {
-			logger.Infof("block err: not found %s\n", hash)
+			guilogger.Infof("block err: not found %s\n", hash)
 			return
 		}
 
@@ -128,12 +128,12 @@ func (self *Gui) DumpState(hash, path string) {
 
 	file, err := os.OpenFile(path[7:], os.O_CREATE|os.O_RDWR, os.ModePerm)
 	if err != nil {
-		logger.Infoln("dump err: ", err)
+		guilogger.Infoln("dump err: ", err)
 		return
 	}
 	defer file.Close()
 
-	logger.Infof("dumped state (%s) to %s\n", hash, path)
+	guilogger.Infof("dumped state (%s) to %s\n", hash, path)
 
 	file.Write(stateDump)
 }

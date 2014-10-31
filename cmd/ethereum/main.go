@@ -23,9 +23,10 @@ import (
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/utils"
+	"github.com/ethgo.old/ethlog"
 )
 
 const (
@@ -33,7 +34,7 @@ const (
 	Version          = "0.7.0"
 )
 
-var logger = ethlog.NewLogger("CLI")
+var clilogger = logger.NewLogger("CLI")
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())

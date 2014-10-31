@@ -233,7 +233,7 @@ func (self *JSPipe) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr 
 	self.obj.TxPool().QueueTransaction(tx)
 
 	if contractCreation {
-		logger.Infof("Contract addr %x", tx.CreationAddress(self.World().State()))
+		pipelogger.Infof("Contract addr %x", tx.CreationAddress(self.World().State()))
 	}
 
 	return NewJSReciept(contractCreation, tx.CreationAddress(self.World().State()), tx.Hash(), keyPair.Address()), nil

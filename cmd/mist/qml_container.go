@@ -50,7 +50,7 @@ func (app *QmlApplication) Create() error {
 
 	component, err := app.engine.LoadFile(path)
 	if err != nil {
-		logger.Warnln(err)
+		guilogger.Warnln(err)
 	}
 	app.win = component.CreateWindow(nil)
 

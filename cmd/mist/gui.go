@@ -33,11 +33,11 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethminer"
 	"github.com/ethereum/go-ethereum/ethpipe"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/ethwire"
+	"github.com/ethereum/go-ethereum/logger"
 	"gopkg.in/qml.v1"
 )
 
@@ -64,7 +64,7 @@ func LoadExtension(path string) (uintptr, error) {
 }
 */
 
-var logger = ethlog.NewLogger("GUI")
+var guilogger = logger.NewLogger("GUI")
 
 type Gui struct {
 	// The main application window
@@ -81,7 +81,7 @@ type Gui struct {
 
 	txDb *ethdb.LDBDatabase
 
-	logLevel ethlog.LogLevel
+	logLevel logger.LogLevel
 	open     bool
 
 	pipe *ethpipe.JSPipe
@@ -93,7 +93,7 @@ type Gui struct {
 	plugins map[string]plugin
 
 	miner  *ethminer.Miner
-	stdLog ethlog.LogSystem
+	stdLog logger.LogSystem
 }
 
 // Create GUI, but doesn't start it
@@ -104,7 +104,7 @@ func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIden
 	}
 
 	pipe := ethpipe.NewJSPipe(ethereum)
-	gui := &Gui{eth: ethereum, txDb: db, pipe: pipe, logLevel: ethlog.LogLevel(logLevel), Session: session, open: false, clientIdentity: clientIdentity, config: config, plugins: make(map[string]plugin)}
+	gui := &Gui{eth: ethereum, txDb: db, pipe: pipe, logLevel: logger.LogLevel(logLevel), Session: session, open: false, clientIdentity: clientIdentity, config: config, plugins: make(map[string]plugin)}
 	data, _ := ethutil.ReadAllFile(path.Join(ethutil.Config.ExecPath, "plugins.json"))
 	json.Unmarshal([]byte(data), &gui.plugins)
 
@@ -155,36 +155,36 @@ func (gui *Gui) Start(assetPath string) {
 		addlog = true
 	}
 	if err != nil {
-		logger.Errorln("asset not found: you can set an alternative asset path on the command line using option 'asset_path'", err)
+		guilogger.Errorln("asset not found: you can set an alternative asset path on the command line using option 'asset_path'", err)
 
 		panic(err)
 	}
 
-	logger.Infoln("Starting GUI")
+	guilogger.Infoln("Starting GUI")
 	gui.open = true
 	win.Show()
 
-	// only add the gui logger after window is shown otherwise slider wont be shown
+	// only add the gui guilogger after window is shown otherwise slider wont be shown
 	if addlog {
-		ethlog.AddLogSystem(gui)
+		logger.AddLogSystem(gui)
 	}
 	win.Wait()
 
-	// need to silence gui logger after window closed otherwise logsystem hangs (but do not save loglevel)
-	gui.logLevel = ethlog.Silence
+	// need to silence gui guilogger after window closed otherwise logsystem hangs (but do not save loglevel)
+	gui.logLevel = logger.Silence
 	gui.open = false
 }
 
 func (gui *Gui) Stop() {
 	if gui.open {
-		gui.logLevel = ethlog.Silence
+		gui.logLevel = logger.Silence
 		gui.open = false
 		gui.win.Hide()
 	}
 
 	gui.uiLib.jsEngine.Stop()
 
-	logger.Infoln("Stopped")
+	guilogger.Infoln("Stopped")
 }
 
 func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
@@ -229,17 +229,17 @@ func (gui *Gui) createWindow(comp qml.Object) *qml.Window {
 func (gui *Gui) ImportAndSetPrivKey(secret string) bool {
 	err := gui.eth.KeyManager().InitFromString(gui.Session, 0, secret)
 	if err != nil {
-		logger.Errorln("unable to import: ", err)
+		guilogger.Errorln("unable to import: ", err)
 		return false
 	}
-	logger.Errorln("successfully imported: ", err)
+	guilogger.Errorln("successfully imported: ", err)
 	return true
 }
 
 func (gui *Gui) CreateAndSetPrivKey() (string, string, string, string) {
 	err := gui.eth.KeyManager().Init(gui.Session, 0, true)
 	if err != nil {
-		logger.Errorln("unable to create key: ", err)
+		guilogger.Errorln("unable to create key: ", err)
 		return "", "", "", ""
 	}
 	return gui.eth.KeyManager().KeyPair().AsStrings()
@@ -387,7 +387,7 @@ func (gui *Gui) update() {
 	}()
 
 	for _, plugin := range gui.plugins {
-		logger.Infoln("Loading plugin ", plugin.Name)
+		guilogger.Infoln("Loading plugin ", plugin.Name)
 
 		gui.win.Root().Call("addPlugin", plugin.Path, "")
 	}

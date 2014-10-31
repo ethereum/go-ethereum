@@ -25,7 +25,7 @@ import (
 	"os/user"
 	"path"
 
-	"github.com/ethereum/go-ethereum/ethlog"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/vm"
 )
 
@@ -98,7 +98,7 @@ func Init() {
 	flag.StringVar(&Datadir, "datadir", defaultDataDir(), "specifies the datadir to use")
 	flag.StringVar(&ConfigFile, "conf", defaultConfigFile, "config file")
 	flag.StringVar(&DebugFile, "debug", "", "debug file (no debugging if not set)")
-	flag.IntVar(&LogLevel, "loglevel", int(ethlog.InfoLevel), "loglevel: 0-5: silent,error,warn,info,debug,debug detail)")
+	flag.IntVar(&LogLevel, "loglevel", int(logger.InfoLevel), "loglevel: 0-5: silent,error,warn,info,debug,debug detail)")
 	flag.BoolVar(&DiffTool, "difftool", false, "creates output for diff'ing. Sets LogLevel=0")
 	flag.StringVar(&DiffType, "diff", "all", "sets the level of diff output [vm, all]. Has no effect if difftool=false")
 	flag.BoolVar(&ShowGenesis, "genesis", false, "Dump the genesis block")

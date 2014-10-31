@@ -13,12 +13,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/ethwire"
+	"github.com/ethereum/go-ethereum/logger"
 )
 
-var peerlogger = ethlog.NewLogger("PEER")
+var peerlogger = logger.NewLogger("PEER")
 
 const (
 	// The size of the output buffer for writing messages
@@ -696,18 +696,18 @@ func (self *Peer) handleStatus(msg *ethwire.Msg) {
 	)
 
 	if bytes.Compare(self.ethereum.ChainManager().Genesis().Hash(), genesis) != 0 {
-		ethlogger.Warnf("Invalid genisis hash %x. Disabling [eth]\n", genesis)
+		loggerger.Warnf("Invalid genisis hash %x. Disabling [eth]\n", genesis)
 		return
 	}
 
 	if netVersion != NetVersion {
-		ethlogger.Warnf("Invalid network version %d. Disabling [eth]\n", netVersion)
+		loggerger.Warnf("Invalid network version %d. Disabling [eth]\n", netVersion)
 		return
 	}
 
 	/*
 		if protoVersion != ProtocolVersion {
-			ethlogger.Warnf("Invalid protocol version %d. Disabling [eth]\n", protoVersion)
+			loggerger.Warnf("Invalid protocol version %d. Disabling [eth]\n", protoVersion)
 			return
 		}
 	*/
@@ -723,7 +723,7 @@ func (self *Peer) handleStatus(msg *ethwire.Msg) {
 	// fetch hashes from highest TD node.
 	self.FetchHashes()
 
-	ethlogger.Infof("Peer is [eth] capable. (TD = %v ~ %x)", self.td, self.bestHash)
+	loggerger.Infof("Peer is [eth] capable. (TD = %v ~ %x)", self.td, self.bestHash)
 
 }
 
@@ -819,7 +819,7 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 		switch cap {
 		case "eth":
 			if ver != ProtocolVersion {
-				ethlogger.Warnf("Invalid protocol version %d. Disabling [eth]\n", ver)
+				loggerger.Warnf("Invalid protocol version %d. Disabling [eth]\n", ver)
 				continue
 			}
 			p.pushStatus()
@@ -828,7 +828,7 @@ func (p *Peer) handleHandshake(msg *ethwire.Msg) {
 		capsStrs = append(capsStrs, cap)
 	}
 
-	ethlogger.Infof("Added peer (%s) %d / %d (%v)\n", p.conn.RemoteAddr(), p.ethereum.Peers().Len(), p.ethereum.MaxPeers, capsStrs)
+	peerlogger.Infof("Added peer (%s) %d / %d (%v)\n", p.conn.RemoteAddr(), p.ethereum.Peers().Len(), p.ethereum.MaxPeers, capsStrs)
 
 	peerlogger.Debugln(p)
 }

@@ -28,7 +28,6 @@ import (
 	"runtime"
 
 	"bitbucket.org/kardianos/osext"
-	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/vm"
 )
 
@@ -117,7 +116,7 @@ func Init() {
 	flag.StringVar(&Datadir, "datadir", defaultDataDir(), "specifies the datadir to use")
 	flag.StringVar(&ConfigFile, "conf", defaultConfigFile, "config file")
 	flag.StringVar(&DebugFile, "debug", "", "debug file (no debugging if not set)")
-	flag.IntVar(&LogLevel, "loglevel", int(ethlog.InfoLevel), "loglevel: 0-5: silent,error,warn,info,debug,debug detail)")
+	flag.IntVar(&LogLevel, "loglevel", int(repllogger.InfoLevel), "loglevel: 0-5: silent,error,warn,info,debug,debug detail)")
 
 	flag.StringVar(&AssetPath, "asset_path", defaultAssetPath(), "absolute path to GUI assets directory")
 

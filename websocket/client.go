@@ -73,13 +73,13 @@ func (c *Client) Listen() {
 
 // Listen write request via chanel
 func (c *Client) listenWrite() {
-	logger.Debugln("Listening write to client")
+	wslogger.Debugln("Listening write to client")
 	for {
 		select {
 
 		// send message to the client
 		case msg := <-c.ch:
-			logger.Debugln("Send:", msg)
+			wslogger.Debugln("Send:", msg)
 			ws.JSON.Send(c.ws, msg)
 
 		// receive done request
@@ -93,7 +93,7 @@ func (c *Client) listenWrite() {
 
 // Listen read request via chanel
 func (c *Client) listenRead() {
-	logger.Debugln("Listening read from client")
+	wslogger.Debugln("Listening read from client")
 	for {
 		select {
 
@@ -112,7 +112,7 @@ func (c *Client) listenRead() {
 			} else if err != nil {
 				c.server.Err(err)
 			} else {
-				logger.Debugln(&msg)
+				wslogger.Debugln(&msg)
 				if c.onMessage != nil {
 					c.onMessage(c, &msg)
 				}

@@ -74,7 +74,7 @@ func (app *ExtApplication) run() {
 
 	err := app.container.Create()
 	if err != nil {
-		logger.Errorln(err)
+		guilogger.Errorln(err)
 		return
 	}
 

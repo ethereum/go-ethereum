@@ -5,12 +5,12 @@ import (
 	"sort"
 
 	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethwire"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/logger"
 )
 
-var logger = ethlog.NewLogger("MINER")
+var minerlogger = logger.NewLogger("MINER")
 
 type Miner struct {
 	pow      chain.PoW
@@ -70,12 +70,12 @@ func (miner *Miner) Start() {
 	//miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
 	go miner.listener()
 
-	logger.Infoln("Started")
+	minerlogger.Infoln("Started")
 	mux.Post(Event{Started, miner})
 }
 
 func (miner *Miner) Stop() {
-	logger.Infoln("Stopping...")
+	minerlogger.Infoln("Stopping...")
 	miner.events.Unsubscribe()
 	miner.ethereum.EventMux().Post(Event{Stopped, miner})
 }
@@ -91,10 +91,10 @@ func (miner *Miner) listener() {
 				miner.stopMining()
 
 				block := event.Block
-				//logger.Infoln("Got new block via Reactor")
+				//minerlogger.Infoln("Got new block via Reactor")
 				if bytes.Compare(miner.ethereum.ChainManager().CurrentBlock.Hash(), block.Hash()) == 0 {
 					// TODO: Perhaps continue mining to get some uncle rewards
-					//logger.Infoln("New top block found resetting state")
+					//minerlogger.Infoln("New top block found resetting state")
 
 					// Filter out which Transactions we have that were not in this block
 					var newtxs []*chain.Transaction
@@ -112,7 +112,7 @@ func (miner *Miner) listener() {
 					miner.txs = newtxs
 				} else {
 					if bytes.Compare(block.PrevHash, miner.ethereum.ChainManager().CurrentBlock.PrevHash) == 0 {
-						logger.Infoln("Adding uncle block")
+						minerlogger.Infoln("Adding uncle block")
 						miner.uncles = append(miner.uncles, block)
 					}
 				}
@@ -180,7 +180,7 @@ func (self *Miner) mineNewBlock() {
 	coinbase.SetGasPool(self.block.CalcGasLimit(parent))
 	receipts, txs, unhandledTxs, erroneous, err := stateManager.ProcessTransactions(coinbase, self.block.State(), self.block, self.block, self.txs)
 	if err != nil {
-		logger.Debugln(err)
+		minerlogger.Debugln(err)
 	}
 	self.ethereum.TxPool().RemoveSet(erroneous)
 	self.txs = append(txs, unhandledTxs...)
@@ -193,7 +193,7 @@ func (self *Miner) mineNewBlock() {
 
 	self.block.State().Update()
 
-	logger.Infof("Mining on block. Includes %v transactions", len(self.txs))
+	minerlogger.Infof("Mining on block. Includes %v transactions", len(self.txs))
 
 	// Find a valid nonce
 	nonce := self.pow.Search(self.block, self.powQuitChan)
@@ -201,11 +201,11 @@ func (self *Miner) mineNewBlock() {
 		self.block.Nonce = nonce
 		err := self.ethereum.StateManager().Process(self.block)
 		if err != nil {
-			logger.Infoln(err)
+			minerlogger.Infoln(err)
 		} else {
 			self.ethereum.Broadcast(ethwire.MsgBlockTy, []interface{}{self.block.Value().Val})
-			logger.Infof("🔨  Mined block %x\n", self.block.Hash())
-			logger.Infoln(self.block)
+			minerlogger.Infof("🔨  Mined block %x\n", self.block.Hash())
+			minerlogger.Infoln(self.block)
 			// Gather the new batch of transactions currently in the tx pool
 			self.txs = self.ethereum.TxPool().CurrentTransactions()
 			self.ethereum.EventMux().Post(chain.NewBlockEvent{self.block})

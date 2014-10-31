@@ -6,13 +6,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/vm"
 )
 
-var logger = ethlog.NewLogger("PIPE")
+var pipelogger = logger.NewLogger("PIPE")
 
 type VmVars struct {
 	State *ethstate.State
@@ -143,7 +143,7 @@ func (self *Pipe) Transact(key *crypto.KeyPair, rec []byte, value, gas, price *e
 
 	if contractCreation {
 		addr := tx.CreationAddress(self.World().State())
-		logger.Infof("Contract addr %x\n", addr)
+		pipelogger.Infof("Contract addr %x\n", addr)
 
 		return addr, nil
 	}
@@ -155,7 +155,7 @@ func (self *Pipe) PushTx(tx *chain.Transaction) ([]byte, error) {
 	self.obj.TxPool().QueueTransaction(tx)
 	if tx.Recipient == nil {
 		addr := tx.CreationAddress(self.World().State())
-		logger.Infof("Contract addr %x\n", addr)
+		pipelogger.Infof("Contract addr %x\n", addr)
 		return addr, nil
 	}
 	return tx.Hash(), nil

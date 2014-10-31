@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/logger"
 )
 
-var chainlogger = ethlog.NewLogger("CHAIN")
+var chainlogger = logger.NewLogger("CHAIN")
 
 type ChainManager struct {
 	Ethereum EthManager

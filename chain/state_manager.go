@@ -10,14 +10,14 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/ethwire"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/logger"
 )
 
-var statelogger = ethlog.NewLogger("BLOCK")
+var statelogger = logger.NewLogger("BLOCK")
 
 type Peer interface {
 	Inbound() bool

@@ -3,12 +3,12 @@ package websocket
 import (
 	"net/http"
 
-	"github.com/ethereum/go-ethereum/ethlog"
+	"github.com/ethereum/go-ethereum/logger"
 
 	ws "code.google.com/p/go.net/websocket"
 )
 
-var logger = ethlog.NewLogger("WS")
+var wslogger = logger.NewLogger("WS")
 
 // Chat server.
 type Server struct {
@@ -68,10 +68,10 @@ func (s *Server) Err(err error) {
 }
 
 func (s *Server) servHTTP() {
-	logger.Debugln("Serving http", s.httpServ)
+	wslogger.Debugln("Serving http", s.httpServ)
 	err := http.ListenAndServe(s.httpServ, nil)
 
-	logger.Warnln(err)
+	wslogger.Warnln(err)
 }
 
 func (s *Server) MessageFunc(f MsgFunc) {
@@ -81,7 +81,7 @@ func (s *Server) MessageFunc(f MsgFunc) {
 // Listen and serve.
 // It serves client connection and broadcast request.
 func (s *Server) Listen() {
-	logger.Debugln("Listening server...")
+	wslogger.Debugln("Listening server...")
 
 	// ws handler
 	onConnected := func(ws *ws.Conn) {
@@ -102,7 +102,7 @@ func (s *Server) Listen() {
 		s := ws.Server{Handler: ws.Handler(onConnected)}
 		s.ServeHTTP(w, req)
 	})
-	logger.Debugln("Created handler")
+	wslogger.Debugln("Created handler")
 
 	go s.servHTTP()
 
@@ -118,7 +118,7 @@ func (s *Server) Listen() {
 			delete(s.clients, c.id)
 
 		case err := <-s.errCh:
-			logger.Debugln("Error:", err.Error())
+			wslogger.Debugln("Error:", err.Error())
 
 		case <-s.doneCh:
 			return

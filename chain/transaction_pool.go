@@ -7,12 +7,12 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethwire"
+	"github.com/ethereum/go-ethereum/logger"
 )
 
-var txplogger = ethlog.NewLogger("TXP")
+var txplogger = logger.NewLogger("TXP")
 
 const txPoolQueueSize = 50
 

@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/obscuren/sha3"
 )
 
-var powlogger = ethlog.NewLogger("POW")
+var powlogger = logger.NewLogger("POW")
 
 type PoW interface {
 	Search(block *Block, stop <-chan struct{}) []byte

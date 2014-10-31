@@ -62,7 +62,7 @@ func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
 }
 
 func (self *UiLib) Notef(args []interface{}) {
-	logger.Infoln(args...)
+	guilogger.Infoln(args...)
 }
 
 func (self *UiLib) LookupDomain(domain string) string {
@@ -158,7 +158,7 @@ func (ui *UiLib) OpenBrowser() {
 func (ui *UiLib) Muted(content string) {
 	component, err := ui.engine.LoadFile(ui.AssetPath("qml/muted.qml"))
 	if err != nil {
-		logger.Debugln(err)
+		guilogger.Debugln(err)
 
 		return
 	}

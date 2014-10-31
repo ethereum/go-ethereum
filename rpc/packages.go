@@ -208,7 +208,7 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *string) error {
 		i, _ := new(big.Int).SetString(args.Key, 10)
 		hx = ethutil.Bytes2Hex(i.Bytes())
 	}
-	logger.Debugf("GetStorageAt(%s, %s)\n", args.Address, hx)
+	jsonlogger.Debugf("GetStorageAt(%s, %s)\n", args.Address, hx)
 	value := state.Storage(ethutil.Hex2Bytes(hx))
 	*reply = NewSuccessRes(GetStorageAtRes{Address: args.Address, Key: args.Key, Value: value.Str()})
 	return nil

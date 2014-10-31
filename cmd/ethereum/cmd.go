@@ -38,11 +38,11 @@ func InitJsConsole(ethereum *eth.Ethereum) {
 func ExecJsFile(ethereum *eth.Ethereum, InputFile string) {
 	file, err := os.Open(InputFile)
 	if err != nil {
-		logger.Fatalln(err)
+		clilogger.Fatalln(err)
 	}
 	content, err := ioutil.ReadAll(file)
 	if err != nil {
-		logger.Fatalln(err)
+		clilogger.Fatalln(err)
 	}
 	re := javascript.NewJSRE(ethereum)
 	utils.RegisterInterrupt(func(os.Signal) {

@@ -16,11 +16,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/ethwire"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -29,7 +29,7 @@ const (
 	seedNodeAddress        = "poc-7.ethdev.com:30303"
 )
 
-var ethlogger = ethlog.NewLogger("SERV")
+var loggerger = logger.NewLogger("SERV")
 
 func eachPeer(peers *list.List, callback func(*Peer, *list.Element)) {
 	// Loop thru the peers and close them (if we had them)
@@ -104,7 +104,7 @@ func New(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager 
 	if usePnp {
 		nat, err = Discover()
 		if err != nil {
-			ethlogger.Debugln("UPnP failed", err)
+			loggerger.Debugln("UPnP failed", err)
 		}
 	}
 
@@ -217,7 +217,7 @@ func (s *Ethereum) AddPeer(conn net.Conn) {
 		if s.peers.Len() < s.MaxPeers {
 			peer.Start()
 		} else {
-			ethlogger.Debugf("Max connected peers reached. Not adding incoming peer.")
+			loggerger.Debugf("Max connected peers reached. Not adding incoming peer.")
 		}
 	}
 }
@@ -277,7 +277,7 @@ func (s *Ethereum) ConnectToPeer(addr string) error {
 
 			if phost == chost {
 				alreadyConnected = true
-				//ethlogger.Debugf("Peer %s already added.\n", chost)
+				//loggerger.Debugf("Peer %s already added.\n", chost)
 				return
 			}
 		})
@@ -397,12 +397,12 @@ func (s *Ethereum) Start(seed bool) {
 	// Bind to addr and port
 	ln, err := net.Listen("tcp", ":"+s.Port)
 	if err != nil {
-		ethlogger.Warnf("Port %s in use. Connection listening disabled. Acting as client", s.Port)
+		loggerger.Warnf("Port %s in use. Connection listening disabled. Acting as client", s.Port)
 		s.listening = false
 	} else {
 		s.listening = true
 		// Starting accepting connections
-		ethlogger.Infoln("Ready and accepting connections")
+		loggerger.Infoln("Ready and accepting connections")
 		// Start the peer handler
 		go s.peerHandler(ln)
 	}
@@ -419,7 +419,7 @@ func (s *Ethereum) Start(seed bool) {
 	if seed {
 		s.Seed()
 	}
-	ethlogger.Infoln("Server started")
+	loggerger.Infoln("Server started")
 }
 
 func (s *Ethereum) Seed() {
@@ -428,11 +428,11 @@ func (s *Ethereum) Seed() {
 	ips := PastPeers()
 	if len(ips) > 0 {
 		for _, ip := range ips {
-			ethlogger.Infoln("Connecting to previous peer ", ip)
+			loggerger.Infoln("Connecting to previous peer ", ip)
 			s.ConnectToPeer(ip)
 		}
 	} else {
-		ethlogger.Debugln("Retrieving seed nodes")
+		loggerger.Debugln("Retrieving seed nodes")
 
 		// Eth-Go Bootstrapping
 		ips, er := net.LookupIP("seed.bysh.me")
@@ -440,7 +440,7 @@ func (s *Ethereum) Seed() {
 			peers := []string{}
 			for _, ip := range ips {
 				node := fmt.Sprintf("%s:%d", ip.String(), 30303)
-				ethlogger.Debugln("Found DNS Go Peer:", node)
+				loggerger.Debugln("Found DNS Go Peer:", node)
 				peers = append(peers, node)
 			}
 			s.ProcessPeerList(peers)
@@ -460,11 +460,11 @@ func (s *Ethereum) Seed() {
 					for _, a := range addr {
 						// Build string out of SRV port and Resolved IP
 						peer := net.JoinHostPort(a, port)
-						ethlogger.Debugln("Found DNS Bootstrap Peer:", peer)
+						loggerger.Debugln("Found DNS Bootstrap Peer:", peer)
 						peers = append(peers, peer)
 					}
 				} else {
-					ethlogger.Debugln("Couldn't resolve :", target)
+					loggerger.Debugln("Couldn't resolve :", target)
 				}
 			}
 			// Connect to Peer list
@@ -480,7 +480,7 @@ func (s *Ethereum) peerHandler(listener net.Listener) {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			ethlogger.Debugln(err)
+			loggerger.Debugln(err)
 
 			continue
 		}
@@ -519,7 +519,7 @@ func (s *Ethereum) Stop() {
 	s.stateManager.Stop()
 	s.blockPool.Stop()
 
-	ethlogger.Infoln("Server stopped")
+	loggerger.Infoln("Server stopped")
 	close(s.shutdownChan)
 }
 
@@ -541,13 +541,13 @@ out:
 			var err error
 			_, err = s.nat.AddPortMapping("TCP", int(lport), int(lport), "eth listen port", 20*60)
 			if err != nil {
-				ethlogger.Debugln("can't add UPnP port mapping:", err)
+				loggerger.Debugln("can't add UPnP port mapping:", err)
 				break out
 			}
 			if first && err == nil {
 				_, err = s.nat.GetExternalAddress()
 				if err != nil {
-					ethlogger.Debugln("UPnP can't get external address:", err)
+					loggerger.Debugln("UPnP can't get external address:", err)
 					continue out
 				}
 				first = false
@@ -561,9 +561,9 @@ out:
 	timer.Stop()
 
 	if err := s.nat.DeletePortMapping("TCP", int(lport), int(lport)); err != nil {
-		ethlogger.Debugln("unable to remove UPnP port mapping:", err)
+		loggerger.Debugln("unable to remove UPnP port mapping:", err)
 	} else {
-		ethlogger.Debugln("succesfully disestablished UPnP port mapping")
+		loggerger.Debugln("succesfully disestablished UPnP port mapping")
 	}
 }
 
