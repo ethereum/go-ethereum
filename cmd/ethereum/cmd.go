@@ -23,8 +23,8 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/cmd/ethereum/repl"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/javascript"
-	"github.com/ethereum/go-ethereum/utils"
 )
 
 func InitJsConsole(ethereum *eth.Ethereum) {

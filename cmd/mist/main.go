@@ -22,8 +22,8 @@ import (
 	"runtime"
 
 	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/utils"
 	"gopkg.in/qml.v1"
 )
 

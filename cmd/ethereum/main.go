@@ -23,9 +23,9 @@ import (
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/chain"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/utils"
 	"github.com/ethgo.old/ethlog"
 )
 

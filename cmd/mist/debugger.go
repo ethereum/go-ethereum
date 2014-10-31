@@ -25,9 +25,9 @@ import (
 	"unicode"
 
 	"github.com/ethereum/go-ethereum/chain"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/utils"
 	"github.com/ethereum/go-ethereum/vm"
 	"gopkg.in/qml.v1"
 )
