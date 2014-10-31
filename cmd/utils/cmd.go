@@ -16,9 +16,9 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethminer"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/wire"
 	"github.com/ethereum/go-ethereum/xeth"
@@ -252,10 +252,10 @@ func StartRpc(ethereum *eth.Ethereum, RpcPort int) {
 	}
 }
 
-var miner *ethminer.Miner
+var gminer *miner.Miner
 
-func GetMiner() *ethminer.Miner {
-	return miner
+func GetMiner() *miner.Miner {
+	return gminer
 }
 
 func StartMining(ethereum *eth.Ethereum) bool {
@@ -265,15 +265,15 @@ func StartMining(ethereum *eth.Ethereum) bool {
 
 		go func() {
 			clilogger.Infoln("Start mining")
-			if miner == nil {
-				miner = ethminer.NewDefaultMiner(addr, ethereum)
+			if gminer == nil {
+				gminer = miner.NewDefaultMiner(addr, ethereum)
 			}
 			// Give it some time to connect with peers
 			time.Sleep(3 * time.Second)
 			for !ethereum.IsUpToDate() {
 				time.Sleep(5 * time.Second)
 			}
-			miner.Start()
+			gminer.Start()
 		}()
 		RegisterInterrupt(func(os.Signal) {
 			StopMining(ethereum)
@@ -297,8 +297,8 @@ func FormatTransactionData(data string) []byte {
 }
 
 func StopMining(ethereum *eth.Ethereum) bool {
-	if ethereum.Mining && miner != nil {
-		miner.Stop()
+	if ethereum.Mining && gminer != nil {
+		gminer.Stop()
 		clilogger.Infoln("Stopped mining")
 		ethereum.Mining = false
 
