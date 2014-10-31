@@ -21,9 +21,9 @@ import (
 	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/javascript"
+	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/ui/qt"
 	"github.com/ethereum/go-ethereum/xeth"
 	"gopkg.in/qml.v1"
@@ -38,7 +38,7 @@ type AppContainer interface {
 
 	NewBlock(*chain.Block)
 	NewWatcher(chan bool)
-	Messages(ethstate.Messages, string)
+	Messages(state.Messages, string)
 	Post(string, int)
 }
 
@@ -80,7 +80,7 @@ func (app *ExtApplication) run() {
 
 	// Subscribe to events
 	mux := app.lib.eth.EventMux()
-	app.events = mux.Subscribe(chain.NewBlockEvent{}, ethstate.Messages(nil))
+	app.events = mux.Subscribe(chain.NewBlockEvent{}, state.Messages(nil))
 
 	// Call the main loop
 	go app.mainLoop()
@@ -109,7 +109,7 @@ func (app *ExtApplication) mainLoop() {
 		case chain.NewBlockEvent:
 			app.container.NewBlock(ev.Block)
 
-		case ethstate.Messages:
+		case state.Messages:
 			for id, filter := range app.filters {
 				msgs := filter.FilterMessages(ev)
 				if len(msgs) > 0 {

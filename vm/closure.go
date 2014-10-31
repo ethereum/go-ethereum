@@ -5,14 +5,14 @@ package vm
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/state"
 )
 
 type ClosureRef interface {
 	ReturnGas(*big.Int, *big.Int)
 	Address() []byte
-	Object() *ethstate.StateObject
+	Object() *state.StateObject
 	GetStorage(*big.Int) *ethutil.Value
 	SetStorage(*big.Int, *ethutil.Value)
 }
@@ -20,9 +20,9 @@ type ClosureRef interface {
 // Basic inline closure object which implement the 'closure' interface
 type Closure struct {
 	caller  ClosureRef
-	object  *ethstate.StateObject
+	object  *state.StateObject
 	Code    []byte
-	message *ethstate.Message
+	message *state.Message
 	exe     *Execution
 
 	Gas, UsedGas, Price *big.Int
@@ -31,7 +31,7 @@ type Closure struct {
 }
 
 // Create a new closure for the given data items
-func NewClosure(msg *ethstate.Message, caller ClosureRef, object *ethstate.StateObject, code []byte, gas, price *big.Int) *Closure {
+func NewClosure(msg *state.Message, caller ClosureRef, object *state.StateObject, code []byte, gas, price *big.Int) *Closure {
 	c := &Closure{message: msg, caller: caller, object: object, Code: code, Args: nil}
 
 	// Gas should be a pointer so it can safely be reduced through the run
@@ -131,7 +131,7 @@ func (c *Closure) ReturnGas(gas, price *big.Int) {
 	c.UsedGas.Sub(c.UsedGas, gas)
 }
 
-func (c *Closure) Object() *ethstate.StateObject {
+func (c *Closure) Object() *state.StateObject {
 	return c.object
 }
 

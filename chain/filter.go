@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"math"
 
-	"github.com/ethereum/go-ethereum/ethstate"
+	"github.com/ethereum/go-ethereum/state"
 )
 
 type AccountChange struct {
@@ -23,7 +23,7 @@ type Filter struct {
 	Altered []AccountChange
 
 	BlockCallback   func(*Block)
-	MessageCallback func(ethstate.Messages)
+	MessageCallback func(state.Messages)
 }
 
 // Create a new filter which uses a bloom filter on blocks to figure out whether a particular block
@@ -72,7 +72,7 @@ func (self *Filter) SetSkip(skip int) {
 }
 
 // Run filters messages with the current parameters set
-func (self *Filter) Find() []*ethstate.Message {
+func (self *Filter) Find() []*state.Message {
 	var earliestBlockNo uint64 = uint64(self.earliest)
 	if self.earliest == -1 {
 		earliestBlockNo = self.eth.ChainManager().CurrentBlock.Number.Uint64()
@@ -83,7 +83,7 @@ func (self *Filter) Find() []*ethstate.Message {
 	}
 
 	var (
-		messages []*ethstate.Message
+		messages []*state.Message
 		block    = self.eth.ChainManager().GetBlockByNumber(latestBlockNo)
 		quit     bool
 	)
@@ -128,8 +128,8 @@ func includes(addresses [][]byte, a []byte) (found bool) {
 	return
 }
 
-func (self *Filter) FilterMessages(msgs []*ethstate.Message) []*ethstate.Message {
-	var messages []*ethstate.Message
+func (self *Filter) FilterMessages(msgs []*state.Message) []*state.Message {
+	var messages []*state.Message
 
 	// Filter the messages for interesting stuff
 	for _, message := range msgs {

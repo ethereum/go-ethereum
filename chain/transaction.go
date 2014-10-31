@@ -6,8 +6,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/state"
 	"github.com/obscuren/secp256k1-go"
 )
 
@@ -78,7 +78,7 @@ func (tx *Transaction) IsContract() bool {
 	return tx.CreatesContract()
 }
 
-func (tx *Transaction) CreationAddress(state *ethstate.State) []byte {
+func (tx *Transaction) CreationAddress(state *state.State) []byte {
 	// Generate a new address
 	addr := crypto.Sha3(ethutil.NewValue([]interface{}{tx.Sender(), tx.Nonce}).Encode())[12:]
 	//for i := uint64(0); state.GetStateObject(addr) != nil; i++ {
@@ -205,7 +205,7 @@ type Receipt struct {
 	PostState         []byte
 	CumulativeGasUsed *big.Int
 	Bloom             []byte
-	logs              ethstate.Logs
+	logs              state.Logs
 }
 
 func NewRecieptFromValue(val *ethutil.Value) *Receipt {
@@ -222,7 +222,7 @@ func (self *Receipt) RlpValueDecode(decoder *ethutil.Value) {
 
 	it := decoder.Get(3).NewIterator()
 	for it.Next() {
-		self.logs = append(self.logs, ethstate.NewLogFromValue(it.Value()))
+		self.logs = append(self.logs, state.NewLogFromValue(it.Value()))
 	}
 }
 

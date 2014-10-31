@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/ethwire"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/state"
 )
 
 var statelogger = logger.NewLogger("BLOCK")
@@ -61,10 +61,10 @@ type StateManager struct {
 	// Transiently state. The trans state isn't ever saved, validated and
 	// it could be used for setting account nonces without effecting
 	// the main states.
-	transState *ethstate.State
+	transState *state.State
 	// Mining state. The mining state is used purely and solely by the mining
 	// operation.
-	miningState *ethstate.State
+	miningState *state.State
 
 	// The last attempted block is mainly used for debugging purposes
 	// This does not have to be a valid block and will be set during
@@ -112,19 +112,19 @@ func (self *StateManager) updateThread() {
 	}
 }
 
-func (sm *StateManager) CurrentState() *ethstate.State {
+func (sm *StateManager) CurrentState() *state.State {
 	return sm.eth.ChainManager().CurrentBlock.State()
 }
 
-func (sm *StateManager) TransState() *ethstate.State {
+func (sm *StateManager) TransState() *state.State {
 	return sm.transState
 }
 
-func (sm *StateManager) MiningState() *ethstate.State {
+func (sm *StateManager) MiningState() *state.State {
 	return sm.miningState
 }
 
-func (sm *StateManager) NewMiningState() *ethstate.State {
+func (sm *StateManager) NewMiningState() *state.State {
 	sm.miningState = sm.eth.ChainManager().CurrentBlock.State().Copy()
 
 	return sm.miningState
@@ -134,7 +134,7 @@ func (sm *StateManager) ChainManager() *ChainManager {
 	return sm.bc
 }
 
-func (self *StateManager) ProcessTransactions(coinbase *ethstate.StateObject, state *ethstate.State, block, parent *Block, txs Transactions) (Receipts, Transactions, Transactions, Transactions, error) {
+func (self *StateManager) ProcessTransactions(coinbase *state.StateObject, state *state.State, block, parent *Block, txs Transactions) (Receipts, Transactions, Transactions, Transactions, error) {
 	var (
 		receipts           Receipts
 		handled, unhandled Transactions
@@ -296,7 +296,7 @@ func (sm *StateManager) Process(block *Block) (err error) {
 	return nil
 }
 
-func (sm *StateManager) ApplyDiff(state *ethstate.State, parent, block *Block) (receipts Receipts, err error) {
+func (sm *StateManager) ApplyDiff(state *state.State, parent, block *Block) (receipts Receipts, err error) {
 	coinbase := state.GetOrNewStateObject(block.Coinbase)
 	coinbase.SetGasPool(block.CalcGasLimit(parent))
 
@@ -372,7 +372,7 @@ func (sm *StateManager) ValidateBlock(block *Block) error {
 	return nil
 }
 
-func (sm *StateManager) AccumelateRewards(state *ethstate.State, block, parent *Block) error {
+func (sm *StateManager) AccumelateRewards(state *state.State, block, parent *Block) error {
 	reward := new(big.Int).Set(BlockReward)
 
 	knownUncles := ethutil.Set(parent.Uncles)
@@ -416,7 +416,7 @@ func (sm *StateManager) AccumelateRewards(state *ethstate.State, block, parent *
 }
 
 // Manifest will handle both creating notifications and generating bloom bin data
-func (sm *StateManager) createBloomFilter(state *ethstate.State) *BloomFilter {
+func (sm *StateManager) createBloomFilter(state *state.State) *BloomFilter {
 	bloomf := NewBloomFilter(nil)
 
 	for _, msg := range state.Manifest().Messages {
@@ -429,7 +429,7 @@ func (sm *StateManager) createBloomFilter(state *ethstate.State) *BloomFilter {
 	return bloomf
 }
 
-func (sm *StateManager) GetMessages(block *Block) (messages []*ethstate.Message, err error) {
+func (sm *StateManager) GetMessages(block *Block) (messages []*state.Message, err error) {
 	if !sm.bc.HasBlock(block.PrevHash) {
 		return nil, ParentError(block.PrevHash)
 	}

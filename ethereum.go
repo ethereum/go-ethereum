@@ -16,12 +16,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/ethwire"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/state"
 )
 
 const (
@@ -615,7 +615,7 @@ func (self *Ethereum) GetFilter(id int) *chain.Filter {
 
 func (self *Ethereum) filterLoop() {
 	// Subscribe to events
-	events := self.eventMux.Subscribe(chain.NewBlockEvent{}, ethstate.Messages(nil))
+	events := self.eventMux.Subscribe(chain.NewBlockEvent{}, state.Messages(nil))
 	for event := range events.Chan() {
 		switch event := event.(type) {
 		case chain.NewBlockEvent:
@@ -627,7 +627,7 @@ func (self *Ethereum) filterLoop() {
 			}
 			self.filterMu.RUnlock()
 
-		case ethstate.Messages:
+		case state.Messages:
 			self.filterMu.RLock()
 			for _, filter := range self.filters {
 				if filter.MessageCallback != nil {

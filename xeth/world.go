@@ -3,7 +3,7 @@ package xeth
 import (
 	"container/list"
 
-	"github.com/ethereum/go-ethereum/ethstate"
+	"github.com/ethereum/go-ethereum/state"
 )
 
 type World struct {
@@ -22,7 +22,7 @@ func (self *XEth) World() *World {
 	return self.world
 }
 
-func (self *World) State() *ethstate.State {
+func (self *World) State() *state.State {
 	return self.pipe.stateManager.CurrentState()
 }
 
@@ -34,16 +34,16 @@ func (self *World) SafeGet(addr []byte) *Object {
 	return &Object{self.safeGet(addr)}
 }
 
-func (self *World) safeGet(addr []byte) *ethstate.StateObject {
+func (self *World) safeGet(addr []byte) *state.StateObject {
 	object := self.State().GetStateObject(addr)
 	if object == nil {
-		object = ethstate.NewStateObject(addr)
+		object = state.NewStateObject(addr)
 	}
 
 	return object
 }
 
-func (self *World) Coinbase() *ethstate.StateObject {
+func (self *World) Coinbase() *state.StateObject {
 	return nil
 }
 

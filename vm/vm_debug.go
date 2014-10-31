@@ -5,8 +5,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/state"
 )
 
 type DebugVm struct {
@@ -49,7 +49,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		pc       = big.NewInt(0)
 		step     = 0
 		prevStep = 0
-		state    = self.env.State()
+		statedb  = self.env.State()
 		require  = func(m int) {
 			if stack.Len() < m {
 				panic(fmt.Sprintf("%04v (%v) stack err size = %d, required = %d", pc, op, stack.Len(), m))
@@ -115,7 +115,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		if self.logTy == LogTyDiff {
 			switch op {
 			case STOP, RETURN, SUICIDE:
-				state.GetStateObject(closure.Address()).EachStorage(func(key string, value *ethutil.Value) {
+				statedb.GetStateObject(closure.Address()).EachStorage(func(key string, value *ethutil.Value) {
 					value.Decode()
 					fmt.Printf("%x %x\n", new(big.Int).SetBytes([]byte(key)).Bytes(), value.Bytes())
 				})
@@ -184,7 +184,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 				// 0 => non 0
 				mult = ethutil.Big3
 			} else if val.BigInt().Cmp(ethutil.Big0) != 0 && len(y.Bytes()) == 0 {
-				state.Refund(closure.caller.Address(), GasSStoreRefund, closure.Price)
+				statedb.Refund(closure.caller.Address(), GasSStoreRefund, closure.Price)
 
 				mult = ethutil.Big0
 			} else {
@@ -532,7 +532,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case BALANCE:
 
 			addr := stack.Pop().Bytes()
-			balance := state.GetBalance(addr)
+			balance := statedb.GetBalance(addr)
 
 			stack.Push(balance)
 
@@ -599,7 +599,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			if op == EXTCODESIZE {
 				addr := stack.Pop().Bytes()
 
-				code = state.GetCode(addr)
+				code = statedb.GetCode(addr)
 			} else {
 				code = closure.Code
 			}
@@ -613,7 +613,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			if op == EXTCODECOPY {
 				addr := stack.Pop().Bytes()
 
-				code = state.GetCode(addr)
+				code = statedb.GetCode(addr)
 			} else {
 				code = closure.Code
 			}
@@ -711,7 +711,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			for i := 0; i < n; i++ {
 				topics[i] = stack.Pop().Bytes()
 			}
-			self.env.AddLog(ethstate.Log{closure.Address(), topics, data})
+			self.env.AddLog(state.Log{closure.Address(), topics, data})
 		case MLOAD:
 			offset := stack.Pop()
 			val := ethutil.BigD(mem.Get(offset.Int64(), 32))
@@ -733,13 +733,13 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			self.Printf(" => [%v] 0x%x", off, val)
 		case SLOAD:
 			loc := stack.Pop()
-			val := ethutil.BigD(state.GetState(closure.Address(), loc.Bytes()))
+			val := ethutil.BigD(statedb.GetState(closure.Address(), loc.Bytes()))
 			stack.Push(val)
 
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case SSTORE:
 			val, loc := stack.Popn()
-			state.SetState(closure.Address(), loc.Bytes(), val)
+			statedb.SetState(closure.Address(), loc.Bytes(), val)
 
 			// Debug sessions are allowed to run without message
 			if closure.message != nil {
@@ -784,9 +784,9 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			)
 
 			// Generate a new address
-			n := state.GetNonce(closure.Address())
+			n := statedb.GetNonce(closure.Address())
 			addr := crypto.CreateAddress(closure.Address(), n)
-			state.SetNonce(closure.Address(), n+1)
+			statedb.SetNonce(closure.Address(), n+1)
 
 			self.Printf(" (*) %x", addr).Endl()
 
@@ -861,10 +861,10 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			return closure.Return(ret), nil
 		case SUICIDE:
 
-			receiver := state.GetOrNewStateObject(stack.Pop().Bytes())
+			receiver := statedb.GetOrNewStateObject(stack.Pop().Bytes())
 
-			receiver.AddAmount(state.GetBalance(closure.Address()))
-			state.Delete(closure.Address())
+			receiver.AddAmount(statedb.GetBalance(closure.Address()))
+			statedb.Delete(closure.Address())
 
 			fallthrough
 		case STOP: // Stop the closure
@@ -889,11 +889,11 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 				if pc.Cmp(big.NewInt(instrNo)) == 0 {
 					self.Stepping = true
 
-					if !self.Dbg.BreakHook(prevStep, op, mem, stack, state.GetStateObject(closure.Address())) {
+					if !self.Dbg.BreakHook(prevStep, op, mem, stack, statedb.GetStateObject(closure.Address())) {
 						return nil, nil
 					}
 				} else if self.Stepping {
-					if !self.Dbg.StepHook(prevStep, op, mem, stack, state.GetStateObject(closure.Address())) {
+					if !self.Dbg.StepHook(prevStep, op, mem, stack, statedb.GetStateObject(closure.Address())) {
 						return nil, nil
 					}
 				}

@@ -1,12 +1,12 @@
 package xeth
 
 import (
-	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/state"
 )
 
 type Object struct {
-	*ethstate.StateObject
+	*state.StateObject
 }
 
 func (self *Object) StorageString(str string) *ethutil.Value {

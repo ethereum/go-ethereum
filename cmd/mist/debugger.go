@@ -26,8 +26,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
 	"gopkg.in/qml.v1"
 )
@@ -40,7 +40,7 @@ type DebuggerWindow struct {
 	vm *vm.DebugVm
 	Db *Debugger
 
-	state *ethstate.State
+	state *state.State
 }
 
 func NewDebuggerWindow(lib *UiLib) *DebuggerWindow {
@@ -141,17 +141,17 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 		keyPair = self.lib.eth.KeyManager().KeyPair()
 	)
 
-	state := self.lib.eth.StateManager().TransState()
+	statedb := self.lib.eth.StateManager().TransState()
 	account := self.lib.eth.StateManager().TransState().GetAccount(keyPair.Address())
-	contract := ethstate.NewStateObject([]byte{0})
+	contract := statedb.NewStateObject([]byte{0})
 	contract.SetBalance(value)
 
 	self.SetAsm(script)
 
 	block := self.lib.eth.ChainManager().CurrentBlock
 
-	callerClosure := vm.NewClosure(&ethstate.Message{}, account, contract, script, gas, gasPrice)
-	env := utils.NewEnv(state, block, account.Address(), value)
+	callerClosure := vm.NewClosure(&state.Message{}, account, contract, script, gas, gasPrice)
+	env := utils.NewEnv(statedb, block, account.Address(), value)
 	evm := vm.NewDebugVm(env)
 	evm.Dbg = self.Db
 
@@ -172,7 +172,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 			}
 		}
 
-		state.Reset()
+		statedb.Reset()
 
 		if !self.Db.interrupt {
 			self.Db.done = true
@@ -267,13 +267,13 @@ type storeVal struct {
 	Key, Value string
 }
 
-func (self *Debugger) BreakHook(pc int, op vm.OpCode, mem *vm.Memory, stack *vm.Stack, stateObject *ethstate.StateObject) bool {
+func (self *Debugger) BreakHook(pc int, op vm.OpCode, mem *vm.Memory, stack *vm.Stack, stateObject *state.StateObject) bool {
 	self.main.Logln("break on instr:", pc)
 
 	return self.halting(pc, op, mem, stack, stateObject)
 }
 
-func (self *Debugger) StepHook(pc int, op vm.OpCode, mem *vm.Memory, stack *vm.Stack, stateObject *ethstate.StateObject) bool {
+func (self *Debugger) StepHook(pc int, op vm.OpCode, mem *vm.Memory, stack *vm.Stack, stateObject *state.StateObject) bool {
 	return self.halting(pc, op, mem, stack, stateObject)
 }
 
@@ -285,7 +285,7 @@ func (self *Debugger) BreakPoints() []int64 {
 	return self.breakPoints
 }
 
-func (d *Debugger) halting(pc int, op vm.OpCode, mem *vm.Memory, stack *vm.Stack, stateObject *ethstate.StateObject) bool {
+func (d *Debugger) halting(pc int, op vm.OpCode, mem *vm.Memory, stack *vm.Stack, stateObject *state.StateObject) bool {
 	d.win.Root().Call("setInstruction", pc)
 	d.win.Root().Call("clearMem")
 	d.win.Root().Call("clearStack")

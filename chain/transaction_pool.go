@@ -7,9 +7,9 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethwire"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/state"
 )
 
 var txplogger = logger.NewLogger("TXP")
@@ -193,7 +193,7 @@ func (pool *TxPool) CurrentTransactions() []*Transaction {
 	return txList
 }
 
-func (pool *TxPool) RemoveInvalid(state *ethstate.State) {
+func (pool *TxPool) RemoveInvalid(state *state.State) {
 	pool.mutex.Lock()
 	defer pool.mutex.Unlock()
 

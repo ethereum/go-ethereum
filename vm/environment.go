@@ -4,12 +4,12 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/state"
 )
 
 type Environment interface {
-	State() *ethstate.State
+	State() *state.State
 
 	Origin() []byte
 	BlockNumber() *big.Int
@@ -20,7 +20,7 @@ type Environment interface {
 	BlockHash() []byte
 	GasLimit() *big.Int
 	Transfer(from, to Account, amount *big.Int) error
-	AddLog(ethstate.Log)
+	AddLog(state.Log)
 }
 
 type Object interface {

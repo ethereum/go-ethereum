@@ -1,4 +1,4 @@
-package ethstate
+package state
 
 import (
 	"encoding/json"

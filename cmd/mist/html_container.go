@@ -28,9 +28,9 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/javascript"
+	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/howeyc/fsnotify"
 	"gopkg.in/qml.v1"
@@ -143,7 +143,7 @@ func (app *HtmlApplication) NewBlock(block *chain.Block) {
 	app.webView.Call("onNewBlockCb", b)
 }
 
-func (self *HtmlApplication) Messages(messages ethstate.Messages, id string) {
+func (self *HtmlApplication) Messages(messages state.Messages, id string) {
 	var msgs []javascript.JSMessage
 	for _, m := range messages {
 		msgs = append(msgs, javascript.NewJSMessage(m))

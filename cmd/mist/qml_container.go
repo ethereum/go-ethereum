@@ -22,8 +22,8 @@ import (
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
 	"gopkg.in/qml.v1"
 )
@@ -70,7 +70,7 @@ func (app *QmlApplication) NewBlock(block *chain.Block) {
 	app.win.Call("onNewBlockCb", pblock)
 }
 
-func (self *QmlApplication) Messages(msgs ethstate.Messages, id string) {
+func (self *QmlApplication) Messages(msgs state.Messages, id string) {
 	fmt.Println("IMPLEMENT QML APPLICATION MESSAGES METHOD")
 }
 

@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/state"
 )
 
 type Execution struct {
 	vm                VirtualMachine
 	address, input    []byte
 	Gas, price, value *big.Int
-	object            *ethstate.StateObject
+	object            *state.StateObject
 	SkipTransfer      bool
 }
 
@@ -41,7 +41,7 @@ func (self *Execution) exec(code, caddr []byte, caller ClosureRef) (ret []byte, 
 		}
 	}()
 
-	msg := env.State().Manifest().AddMessage(&ethstate.Message{
+	msg := env.State().Manifest().AddMessage(&state.Message{
 		To: self.address, From: caller.Address(),
 		Input:  self.input,
 		Origin: env.Origin(),

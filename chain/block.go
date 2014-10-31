@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethtrie"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/state"
 )
 
 type BlockInfo struct {
@@ -77,7 +77,7 @@ type Block struct {
 	Coinbase []byte
 	// Block Trie state
 	//state *ethutil.Trie
-	state *ethstate.State
+	state *state.State
 	// Difficulty for the current block
 	Difficulty *big.Int
 	// Creation time
@@ -137,7 +137,7 @@ func CreateBlock(root interface{},
 	}
 	block.SetUncles([]*Block{})
 
-	block.state = ethstate.New(ethtrie.New(ethutil.Config.Db, root))
+	block.state = state.New(ethtrie.New(ethutil.Config.Db, root))
 
 	return block
 }
@@ -152,7 +152,7 @@ func (block *Block) HashNoNonce() []byte {
 	return crypto.Sha3(ethutil.Encode(block.miningHeader()))
 }
 
-func (block *Block) State() *ethstate.State {
+func (block *Block) State() *state.State {
 	return block.state
 }
 
@@ -294,7 +294,7 @@ func (self *Block) setHeader(header *ethutil.Value) {
 	self.PrevHash = header.Get(0).Bytes()
 	self.UncleSha = header.Get(1).Bytes()
 	self.Coinbase = header.Get(2).Bytes()
-	self.state = ethstate.New(ethtrie.New(ethutil.Config.Db, header.Get(3).Val))
+	self.state = state.New(ethtrie.New(ethutil.Config.Db, header.Get(3).Val))
 	self.TxSha = header.Get(4).Bytes()
 	self.ReceiptSha = header.Get(5).Bytes()
 	self.LogsBloom = header.Get(6).Bytes()

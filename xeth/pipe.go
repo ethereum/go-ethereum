@@ -10,16 +10,16 @@ import (
 
 	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
 )
 
 var pipelogger = logger.NewLogger("XETH")
 
 type VmVars struct {
-	State *ethstate.State
+	State *state.State
 }
 
 type XEth struct {
@@ -56,7 +56,7 @@ func (self *XEth) Execute(addr []byte, data []byte, value, gas, price *ethutil.V
 
 func (self *XEth) ExecuteObject(object *Object, data []byte, value, gas, price *ethutil.Value) ([]byte, error) {
 	var (
-		initiator = ethstate.NewStateObject(self.obj.KeyManager().KeyPair().Address())
+		initiator = state.NewStateObject(self.obj.KeyManager().KeyPair().Address())
 		block     = self.blockChain.CurrentBlock
 	)
 

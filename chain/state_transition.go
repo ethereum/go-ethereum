@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
 )
 
@@ -31,17 +31,17 @@ type StateTransition struct {
 	gas, gasPrice      *big.Int
 	value              *big.Int
 	data               []byte
-	state              *ethstate.State
+	state              *state.State
 	block              *Block
 
-	cb, rec, sen *ethstate.StateObject
+	cb, rec, sen *state.StateObject
 }
 
-func NewStateTransition(coinbase *ethstate.StateObject, tx *Transaction, state *ethstate.State, block *Block) *StateTransition {
+func NewStateTransition(coinbase *state.StateObject, tx *Transaction, state *state.State, block *Block) *StateTransition {
 	return &StateTransition{coinbase.Address(), tx.Recipient, tx, new(big.Int), new(big.Int).Set(tx.GasPrice), tx.Value, tx.Data, state, block, coinbase, nil, nil}
 }
 
-func (self *StateTransition) Coinbase() *ethstate.StateObject {
+func (self *StateTransition) Coinbase() *state.StateObject {
 	if self.cb != nil {
 		return self.cb
 	}
@@ -49,7 +49,7 @@ func (self *StateTransition) Coinbase() *ethstate.StateObject {
 	self.cb = self.state.GetOrNewStateObject(self.coinbase)
 	return self.cb
 }
-func (self *StateTransition) Sender() *ethstate.StateObject {
+func (self *StateTransition) Sender() *state.StateObject {
 	if self.sen != nil {
 		return self.sen
 	}
@@ -58,7 +58,7 @@ func (self *StateTransition) Sender() *ethstate.StateObject {
 
 	return self.sen
 }
-func (self *StateTransition) Receiver() *ethstate.StateObject {
+func (self *StateTransition) Receiver() *state.StateObject {
 	if self.tx != nil && self.tx.CreatesContract() {
 		return nil
 	}
@@ -143,7 +143,7 @@ func (self *StateTransition) TransitionState() (err error) {
 	var (
 		tx       = self.tx
 		sender   = self.Sender()
-		receiver *ethstate.StateObject
+		receiver *state.StateObject
 	)
 
 	defer self.RefundGas()
@@ -167,7 +167,7 @@ func (self *StateTransition) TransitionState() (err error) {
 		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Balance)
 	}
 
-	var snapshot *ethstate.State
+	var snapshot *state.State
 	// If the receiver is nil it's a contract (\0*32).
 	if tx.CreatesContract() {
 		// Subtract the (irreversible) amount from the senders account
@@ -195,7 +195,7 @@ func (self *StateTransition) TransitionState() (err error) {
 		snapshot = self.state.Copy()
 	}
 
-	msg := self.state.Manifest().AddMessage(&ethstate.Message{
+	msg := self.state.Manifest().AddMessage(&state.Message{
 		To: receiver.Address(), From: sender.Address(),
 		Input:  self.tx.Data,
 		Origin: sender.Address(),
@@ -232,14 +232,14 @@ func (self *StateTransition) TransitionState() (err error) {
 		} else {
 			// Add default LOG. Default = big(sender.addr) + 1
 			addr := ethutil.BigD(receiver.Address())
-			self.state.AddLog(ethstate.Log{sender.Address(), [][]byte{ethutil.U256(addr.Add(addr, ethutil.Big1)).Bytes()}, nil})
+			self.state.AddLog(state.Log{sender.Address(), [][]byte{ethutil.U256(addr.Add(addr, ethutil.Big1)).Bytes()}, nil})
 		}
 	}
 
 	return
 }
 
-func (self *StateTransition) Eval(msg *ethstate.Message, script []byte, context *ethstate.StateObject) (ret []byte, err error) {
+func (self *StateTransition) Eval(msg *state.Message, script []byte, context *state.StateObject) (ret []byte, err error) {
 	var (
 		transactor    = self.Sender()
 		state         = self.state
@@ -254,7 +254,7 @@ func (self *StateTransition) Eval(msg *ethstate.Message, script []byte, context 
 }
 
 // Converts an transaction in to a state object
-func MakeContract(tx *Transaction, state *ethstate.State) *ethstate.StateObject {
+func MakeContract(tx *Transaction, state *state.State) *state.StateObject {
 	addr := tx.CreationAddress(state)
 
 	contract := state.GetOrNewStateObject(addr)

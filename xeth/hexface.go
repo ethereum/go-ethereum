@@ -7,8 +7,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/state"
 )
 
 type JSXEth struct {
@@ -254,7 +254,7 @@ func (self *JSXEth) CompileMutan(code string) string {
 	return ethutil.Bytes2Hex(data)
 }
 
-func ToJSMessages(messages ethstate.Messages) *ethutil.List {
+func ToJSMessages(messages state.Messages) *ethutil.List {
 	var msgs []JSMessage
 	for _, m := range messages {
 		msgs = append(msgs, NewJSMessage(m))
