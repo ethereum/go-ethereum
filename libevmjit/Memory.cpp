@@ -224,7 +224,6 @@ void Memory::dump(uint64_t _begin, uint64_t _end)
 
 extern "C"
 {
-
 	using namespace dev::eth::jit;
 
 	EXPORT uint8_t* mem_resize(Runtime* _rt, i256* _size)
@@ -234,5 +233,4 @@ extern "C"
 		memory.resize(size);
 		return memory.data();
 	}
-
-}   // extern "C"
+}

@@ -79,7 +79,7 @@ extern "C"
 		stack.erase(stack.end() - _count, stack.end());
 	}
 
-	EXPORT void stack_push(Runtime* _rt, i256* _word)
+	EXPORT void stack_push(Runtime* _rt, i256 const* _word)
 	{
 		auto& stack = _rt->getStack();
 		stack.push_back(*_word);
@@ -88,17 +88,17 @@ extern "C"
 			Stack::maxStackSize = stack.size();
 	}
 
-	EXPORT void stack_get(Runtime* _rt, uint64_t _index, i256* _ret)
+	EXPORT void stack_get(Runtime* _rt, uint64_t _index, i256* o_ret)
 	{
 		auto& stack = _rt->getStack();
 		// TODO: encode _index and stack size in the return code
 		if (stack.size() <= _index)
 			longjmp(_rt->getJmpBuf(), static_cast<uint64_t>(ReturnCode::StackTooSmall));
 
-		*_ret = *(stack.rbegin() + _index);
+		*o_ret = *(stack.rbegin() + _index);
 	}
 
-	EXPORT void stack_set(Runtime* _rt, uint64_t _index, i256* _word)
+	EXPORT void stack_set(Runtime* _rt, uint64_t _index, i256 const* _word)
 	{
 		auto& stack = _rt->getStack();
 		// TODO: encode _index and stack size in the return code

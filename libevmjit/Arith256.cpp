@@ -103,55 +103,55 @@ extern "C"
 
 	using namespace dev::eth::jit;
 
-	EXPORT void arith_mul(i256* _arg1, i256* _arg2, i256* _result)
+	EXPORT void arith_mul(i256* _arg1, i256* _arg2, i256* o_result)
 	{
 		dev::u256 arg1 = llvm2eth(*_arg1);
 		dev::u256 arg2 = llvm2eth(*_arg2);
-		*_result = eth2llvm(arg1 * arg2);
+		*o_result = eth2llvm(arg1 * arg2);
 	}
 
-	EXPORT void arith_div(i256* _arg1, i256* _arg2, i256* _result)
+	EXPORT void arith_div(i256* _arg1, i256* _arg2, i256* o_result)
 	{
 		dev::u256 arg1 = llvm2eth(*_arg1);
 		dev::u256 arg2 = llvm2eth(*_arg2);
-		*_result = eth2llvm(arg2 == 0 ? arg2 : arg1 / arg2);
+		*o_result = eth2llvm(arg2 == 0 ? arg2 : arg1 / arg2);
 	}
 
-	EXPORT void arith_mod(i256* _arg1, i256* _arg2, i256* _result)
+	EXPORT void arith_mod(i256* _arg1, i256* _arg2, i256* o_result)
 	{
 		dev::u256 arg1 = llvm2eth(*_arg1);
 		dev::u256 arg2 = llvm2eth(*_arg2);
-		*_result = eth2llvm(arg2 == 0 ? arg2 : arg1 % arg2);
+		*o_result = eth2llvm(arg2 == 0 ? arg2 : arg1 % arg2);
 	}
 
-	EXPORT void arith_sdiv(i256* _arg1, i256* _arg2, i256* _result)
+	EXPORT void arith_sdiv(i256* _arg1, i256* _arg2, i256* o_result)
 	{
 		dev::u256 arg1 = llvm2eth(*_arg1);
 		dev::u256 arg2 = llvm2eth(*_arg2);
-		*_result = eth2llvm(arg2 == 0 ? arg2 : dev::s2u(dev::u2s(arg1) / dev::u2s(arg2)));
+		*o_result = eth2llvm(arg2 == 0 ? arg2 : dev::s2u(dev::u2s(arg1) / dev::u2s(arg2)));
 	}
 
-	EXPORT void arith_smod(i256* _arg1, i256* _arg2, i256* _result)
+	EXPORT void arith_smod(i256* _arg1, i256* _arg2, i256* o_result)
 	{
 		dev::u256 arg1 = llvm2eth(*_arg1);
 		dev::u256 arg2 = llvm2eth(*_arg2);
-		*_result = eth2llvm(arg2 == 0 ? arg2 : dev::s2u(dev::u2s(arg1) % dev::u2s(arg2)));
+		*o_result = eth2llvm(arg2 == 0 ? arg2 : dev::s2u(dev::u2s(arg1) % dev::u2s(arg2)));
 	}
 
-	EXPORT void arith_mulmod(i256* _arg1, i256* _arg2, i256* _arg3, i256* _result)
+	EXPORT void arith_mulmod(i256* _arg1, i256* _arg2, i256* _arg3, i256* o_result)
 	{
 		dev::u256 arg1 = llvm2eth(*_arg1);
 		dev::u256 arg2 = llvm2eth(*_arg2);
 		dev::u256 arg3 = llvm2eth(*_arg3);
-		*_result = eth2llvm(dev::u256((dev::bigint(arg1) * dev::bigint(arg2)) % arg3));
+		*o_result = eth2llvm(dev::u256((dev::bigint(arg1) * dev::bigint(arg2)) % arg3));
 	}
 
-	EXPORT void arith_addmod(i256* _arg1, i256* _arg2, i256* _arg3, i256* _result)
+	EXPORT void arith_addmod(i256* _arg1, i256* _arg2, i256* _arg3, i256* o_result)
 	{
 		dev::u256 arg1 = llvm2eth(*_arg1);
 		dev::u256 arg2 = llvm2eth(*_arg2);
 		dev::u256 arg3 = llvm2eth(*_arg3);
-		*_result = eth2llvm(dev::u256((dev::bigint(arg1) + dev::bigint(arg2)) % arg3));
+		*o_result = eth2llvm(dev::u256((dev::bigint(arg1) + dev::bigint(arg2)) % arg3));
 	}
 
 }
