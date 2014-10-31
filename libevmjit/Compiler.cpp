@@ -462,7 +462,6 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			const auto byteNum = stack.pop();
 			auto value = stack.pop();
 
-			//
 			value = Endianness::toBE(m_builder, value);
 			auto bytes = m_builder.CreateBitCast(value, llvm::VectorType::get(Type::Byte, 32), "bytes");
 			auto byte = m_builder.CreateExtractElement(bytes, byteNum, "byte");
@@ -471,7 +470,6 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			auto byteNumValid = m_builder.CreateICmpULT(byteNum, Constant::get(32));
 			value = m_builder.CreateSelect(byteNumValid, value, Constant::get(0));
 			stack.push(value);
-
 			break;
 		}
 
@@ -521,7 +519,6 @@ void Compiler::compileBasicBlock(BasicBlock& basicBlock, bytesConstRef bytecode,
 			                                     m_builder.CreateSelect(bittest, val1, val0),
 			                                     word);
 			stack.push(result);
-
 			break;
 		}
 
