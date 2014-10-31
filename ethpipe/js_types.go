@@ -19,6 +19,7 @@ type JSBlock struct {
 	Number       int           `json:"number"`
 	Hash         string        `json:"hash"`
 	Transactions *ethutil.List `json:"transactions"`
+	Uncles       *ethutil.List `json:"uncles"`
 	Time         int64         `json:"time"`
 	Coinbase     string        `json:"coinbase"`
 	Name         string        `json:"name"`
@@ -33,18 +34,24 @@ func NewJSBlock(block *ethchain.Block) *JSBlock {
 		return &JSBlock{}
 	}
 
-	var ptxs []*JSTransaction
-	for _, tx := range block.Transactions() {
-		ptxs = append(ptxs, NewJSTx(tx, block.State()))
+	ptxs := make([]*JSTransaction, len(block.Transactions()))
+	for i, tx := range block.Transactions() {
+		ptxs[i] = NewJSTx(tx, block.State())
 	}
+	txlist := ethutil.NewList(ptxs)
 
-	list := ethutil.NewList(ptxs)
+	puncles := make([]*JSBlock, len(block.Uncles))
+	for i, uncle := range block.Uncles {
+		puncles[i] = NewJSBlock(uncle)
+	}
+	ulist := ethutil.NewList(puncles)
 
 	return &JSBlock{
 		ref: block, Size: block.Size().String(),
 		Number: int(block.Number.Uint64()), GasUsed: block.GasUsed.String(),
 		GasLimit: block.GasLimit.String(), Hash: ethutil.Bytes2Hex(block.Hash()),
-		Transactions: list, Time: block.Time,
+		Transactions: txlist, Uncles: ulist,
+		Time:     block.Time,
 		Coinbase: ethutil.Bytes2Hex(block.Coinbase),
 		PrevHash: ethutil.Bytes2Hex(block.PrevHash),
 	}

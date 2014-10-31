@@ -155,7 +155,8 @@ Rectangle {
             experimental.preferences.javascriptEnabled: true
             experimental.preferences.navigatorQtObjectEnabled: true
             experimental.preferences.developerExtrasEnabled: true
-            experimental.userScripts: ["../ext/qt_messaging_adapter.js", "../ext/q.js", "../ext/big.js", "../ext/string.js", "../ext/html_messaging.js"]
+            //experimental.userScripts: ["../ext/qt_messaging_adapter.js", "../ext/q.js", "../ext/big.js", "../ext/string.js", "../ext/html_messaging.js"]
+            experimental.userScripts: ["../ext/q.js", "../ext/eth.js/main.js", "../ext/eth.js/qt.js", "../ext/setup.js"]
             experimental.onMessageReceived: {
                 console.log("[onMessageReceived]: ", message.data)
                 // TODO move to messaging.js
@@ -164,51 +165,88 @@ Rectangle {
                 try {
                     switch(data.call) {
                         case "compile":
-                        postData(data._seed, eth.compile(data.args[0]))
+                        postData(data._id, eth.compile(data.args[0]))
                         break
 
-                        case "getCoinBase":
-                        postData(data._seed, eth.coinBase())
+                        case "coinbase":
+                        postData(data._id, eth.coinBase())
 
-                        break
+                        case "account":
+                        postData(data._id, eth.key().address);
 
-                        case "getIsListening":
-                        postData(data._seed, eth.isListening())
-
-                        break
-
-                        case "getIsMining":
-                        postData(data._seed, eth.isMining())
+                        case "isListening":
+                        postData(data._id, eth.isListening())
 
                         break
 
-                        case "getPeerCount":
-                        postData(data._seed, eth.peerCount())
+                        case "isMining":
+                        postData(data._id, eth.isMining())
 
                         break
 
-                        case "getCountAt":
+                        case "peerCount":
+                        postData(data._id, eth.peerCount())
+
+                        break
+
+                        case "countAt":
                         require(1)
-                        postData(data._seed, eth.txCountAt(data.args[0]))
+                        postData(data._id, eth.txCountAt(data.args[0]))
 
                         break
 
-                        case "getCodeAt":
+                        case "codeAt":
                         require(1)
                         var code = eth.codeAt(data.args[0])
-                        postData(data._seed, code);
+                        postData(data._id, code);
 
                         break
 
-                        case "getBlockByNumber":
+                        case "blockByNumber":
+                        require(1)
                         var block = eth.blockByNumber(data.args[0])
-                        postData(data._seed, block)
-
+                        postData(data._id, block)
                         break
 
-                        case "getBlockByHash":
+                        case "blockByHash":
+                        require(1)
                         var block = eth.blockByHash(data.args[0])
-                        postData(data._seed, block)
+                        postData(data._id, block)
+                        break
+
+                        require(2)
+                        var block = eth.blockByHash(data.args[0])
+                        postData(data._id, block.transactions[data.args[1]])
+                        break
+
+                        case "transactionByHash":
+                        case "transactionByNumber":
+                        require(2)
+
+                        var block;
+                        if (data.call === "transactionByHash")
+                            block = eth.blockByHash(data.args[0])
+                        else
+                            block = eth.blockByNumber(data.args[0])
+
+                        var tx = block.transactions.get(data.args[1])
+
+                        postData(data._id, tx)
+                        break
+
+                        case "uncleByHash":
+                        case "uncleByNumber":
+                        require(2)
+
+                        var block;
+                        if (data.call === "uncleByHash")
+                            block = eth.blockByHash(data.args[0])
+                        else
+                            block = eth.blockByNumber(data.args[0])
+
+                        var uncle = block.uncles.get(data.args[1])
+
+                        postData(data._id, uncle)
 
                         break
 
@@ -216,50 +254,28 @@ Rectangle {
                         require(5)
 
                         var tx = eth.transact(data.args)
-                        postData(data._seed, tx)
+                        postData(data._id, tx)
 
                         break
 
-                        case "getStorageAt":
+                        case "stateAt":
                         require(2);
 
                         var storage = eth.storageAt(data.args[0], data.args[1]);
-                        postData(data._seed, storage)
+                        postData(data._id, storage)
 
                         break
 
                         case "call":
                         require(1);
                         var ret = eth.call(data.args)
-                        postData(data._seed, ret)
-
+                        postData(data._id, ret)
                         break
 
-                        case "getEachStorage":
-                        require(1);
-                        var storage = JSON.parse(eth.eachStorage(data.args[0]))
-                        postData(data._seed, storage)
-
-                        break
-
-                        case "getTransactionsFor":
-                        require(1);
-                        var txs = eth.transactionsFor(data.args[0], true)
-                        postData(data._seed, txs)
-
-                        break
-
-                        case "getBalanceAt":
+                        case "balanceAt":
                         require(1);
 
-                        postData(data._seed, eth.balanceAt(data.args[0]));
-
-                        break
-
-                        case "getKey":
-                        var key = eth.key().privateKey;
-
-                        postData(data._seed, key)
+                        postData(data._id, eth.balanceAt(data.args[0]));
                         break
 
                         case "watch":
@@ -268,45 +284,34 @@ Rectangle {
 
                         case "disconnect":
                         require(1)
-                        postData(data._seed, null)
-
-                        break;
-
-                        case "getSecretToAddress":
-                        require(1)
-
-                        var addr = eth.secretToAddress(data.args[0])
-                        console.log("getsecret", addr)
-                        postData(data._seed, addr)
-
+                        postData(data._id, null)
                         break;
 
                         case "messages":
                         require(1);
 
                         var messages = JSON.parse(eth.getMessages(data.args[0]))
-                        postData(data._seed, messages)
-
+                        postData(data._id, messages)
                         break
 
                         case "mutan":
                         require(1)
 
                         var code = eth.compileMutan(data.args[0])
-                        postData(data._seed, "0x"+code)
-
+                        postData(data._id, "0x"+code)
                         break;
 
                         case "newFilterString":
                         require(1)
                         var id = eth.newFilterString(data.args[0])
-                        postData(data._seed, id);
+                        postData(data._id, id);
                         break;
+
                         case "newFilter":
                         require(1)
                         var id = eth.newFilter(data.args[0])
 
-                        postData(data._seed, id);
+                        postData(data._id, id);
                         break;
 
                         case "getMessages":
@@ -314,7 +319,7 @@ Rectangle {
 
                         var messages = eth.messages(data.args[0]);
                         var m = JSON.parse(JSON.parse(JSON.stringify(messages)))
-                        postData(data._seed, m);
+                        postData(data._id, m);
 
                         break;
 
@@ -326,13 +331,13 @@ Rectangle {
                 } catch(e) {
                     console.log(data.call + ": " + e)
 
-                    postData(data._seed, null);
+                    postData(data._id, null);
                 }
             }
 
 
             function post(seed, data) {
-                postData(data._seed, data)
+                postData(data._id, data)
             }
 
             function require(args, num) {
@@ -341,7 +346,7 @@ Rectangle {
                 }
             }
             function postData(seed, data) {
-                webview.experimental.postMessage(JSON.stringify({data: data, _seed: seed}))
+                webview.experimental.postMessage(JSON.stringify({data: data, _id: seed}))
             }
             function postEvent(event, data) {
                 webview.experimental.postMessage(JSON.stringify({data: data, _event: event}))

@@ -194,7 +194,7 @@ done:
 		}
 
 		// Notify all subscribers
-		self.eth.EventMux().Post(TxPostEvent{tx})
+		go self.eth.EventMux().Post(TxPostEvent{tx})
 
 		receipts = append(receipts, receipt)
 		handled = append(handled, tx)

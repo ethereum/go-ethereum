@@ -69,7 +69,8 @@ func (self *List) Interface() interface{} {
 
 // For JavaScript <3
 func (self *List) ToJSON() string {
-	var list []interface{}
+	// make(T, 0) != nil
+	list := make([]interface{}, 0)
 	for i := 0; i < self.Length; i++ {
 		list = append(list, self.Get(i))
 	}

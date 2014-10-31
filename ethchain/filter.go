@@ -90,7 +90,7 @@ func (self *Filter) Find() []*ethstate.Message {
 	for i := 0; !quit && block != nil; i++ {
 		// Quit on latest
 		switch {
-		case block.Number.Uint64() == earliestBlockNo:
+		case block.Number.Uint64() == earliestBlockNo, block.Number.Uint64() == 0:
 			quit = true
 		case self.max <= len(messages):
 			break
