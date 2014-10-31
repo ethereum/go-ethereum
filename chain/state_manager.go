@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/ethcrypto"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -40,7 +40,7 @@ type EthManager interface {
 	IsMining() bool
 	IsListening() bool
 	Peers() *list.List
-	KeyManager() *ethcrypto.KeyManager
+	KeyManager() *crypto.KeyManager
 	ClientIdentity() ethwire.ClientIdentity
 	Db() ethutil.Database
 	EventMux() *event.TypeMux

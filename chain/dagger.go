@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/ethereum/go-ethereum/ethcrypto"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/obscuren/sha3"
@@ -60,7 +60,7 @@ func (pow *EasyPow) Search(block *Block, stop <-chan struct{}) []byte {
 				t = time.Now()
 			}
 
-			sha := ethcrypto.Sha3(big.NewInt(r.Int63()).Bytes())
+			sha := crypto.Sha3(big.NewInt(r.Int63()).Bytes())
 			if pow.Verify(hash, diff, sha) {
 				return sha
 			}

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethcrypto"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethtrie"
 	"github.com/ethereum/go-ethereum/ethutil"
 )
@@ -310,7 +310,7 @@ func (c *StateObject) RlpEncode() []byte {
 func (c *StateObject) CodeHash() ethutil.Bytes {
 	var codeHash []byte
 	if len(c.Code) > 0 {
-		codeHash = ethcrypto.Sha3(c.Code)
+		codeHash = crypto.Sha3(c.Code)
 	}
 
 	return codeHash

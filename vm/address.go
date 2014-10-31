@@ -3,7 +3,7 @@ package vm
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethcrypto"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 )
 
@@ -27,16 +27,16 @@ var Precompiled = map[uint64]*PrecompiledAddress{
 }
 
 func sha256Func(in []byte) []byte {
-	return ethcrypto.Sha256(in)
+	return crypto.Sha256(in)
 }
 
 func ripemd160Func(in []byte) []byte {
-	return ethutil.RightPadBytes(ethcrypto.Ripemd160(in), 32)
+	return ethutil.RightPadBytes(crypto.Ripemd160(in), 32)
 }
 
 func ecrecoverFunc(in []byte) []byte {
 	// In case of an invalid sig. Defaults to return nil
 	defer func() { recover() }()
 
-	return ethcrypto.Ecrecover(in)
+	return crypto.Ecrecover(in)
 }

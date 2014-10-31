@@ -14,7 +14,7 @@ import (
 
 	"bitbucket.org/kardianos/osext"
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/ethcrypto"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethlog"
 	"github.com/ethereum/go-ethereum/ethminer"
@@ -149,7 +149,7 @@ func NewClientIdentity(clientIdentifier, version, customIdentifier string) *ethw
 	return ethwire.NewSimpleClientIdentity(clientIdentifier, version, customIdentifier)
 }
 
-func NewEthereum(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager *ethcrypto.KeyManager, usePnp bool, OutboundPort string, MaxPeer int) *eth.Ethereum {
+func NewEthereum(db ethutil.Database, clientIdentity ethwire.ClientIdentity, keyManager *crypto.KeyManager, usePnp bool, OutboundPort string, MaxPeer int) *eth.Ethereum {
 	ethereum, err := eth.New(db, clientIdentity, keyManager, eth.CapDefault, usePnp)
 	if err != nil {
 		logger.Fatalln("eth start err:", err)
@@ -173,13 +173,13 @@ func ShowGenesis(ethereum *eth.Ethereum) {
 	exit(nil)
 }
 
-func NewKeyManager(KeyStore string, Datadir string, db ethutil.Database) *ethcrypto.KeyManager {
-	var keyManager *ethcrypto.KeyManager
+func NewKeyManager(KeyStore string, Datadir string, db ethutil.Database) *crypto.KeyManager {
+	var keyManager *crypto.KeyManager
 	switch {
 	case KeyStore == "db":
-		keyManager = ethcrypto.NewDBKeyManager(db)
+		keyManager = crypto.NewDBKeyManager(db)
 	case KeyStore == "file":
-		keyManager = ethcrypto.NewFileKeyManager(Datadir)
+		keyManager = crypto.NewFileKeyManager(Datadir)
 	default:
 		exit(fmt.Errorf("unknown keystore type: %s", KeyStore))
 	}
@@ -211,7 +211,7 @@ func DefaultAssetPath() string {
 	return assetPath
 }
 
-func KeyTasks(keyManager *ethcrypto.KeyManager, KeyRing string, GenAddr bool, SecretFile string, ExportDir string, NonInteractive bool) {
+func KeyTasks(keyManager *crypto.KeyManager, KeyRing string, GenAddr bool, SecretFile string, ExportDir string, NonInteractive bool) {
 
 	var err error
 	switch {

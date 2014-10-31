@@ -26,7 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/ethcrypto"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethpipe"
 	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -69,7 +69,7 @@ func (self *UiLib) LookupDomain(domain string) string {
 	world := self.World()
 
 	if len(domain) > 32 {
-		domain = string(ethcrypto.Sha3([]byte(domain)))
+		domain = string(crypto.Sha3([]byte(domain)))
 	}
 	data := world.Config().Get("DnsReg").StorageString(domain).Bytes()
 

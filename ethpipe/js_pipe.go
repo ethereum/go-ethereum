@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/ethcrypto"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
 )
@@ -114,7 +114,7 @@ func (self *JSPipe) IsContract(address string) bool {
 }
 
 func (self *JSPipe) SecretToAddress(key string) string {
-	pair, err := ethcrypto.NewKeyPairFromSec(ethutil.Hex2Bytes(key))
+	pair, err := crypto.NewKeyPairFromSec(ethutil.Hex2Bytes(key))
 	if err != nil {
 		return ""
 	}
@@ -192,12 +192,12 @@ func (self *JSPipe) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr 
 		}
 	}
 
-	var keyPair *ethcrypto.KeyPair
+	var keyPair *crypto.KeyPair
 	var err error
 	if ethutil.IsHex(key) {
-		keyPair, err = ethcrypto.NewKeyPairFromSec([]byte(ethutil.Hex2Bytes(key[2:])))
+		keyPair, err = crypto.NewKeyPairFromSec([]byte(ethutil.Hex2Bytes(key[2:])))
 	} else {
-		keyPair, err = ethcrypto.NewKeyPairFromSec([]byte(ethutil.Hex2Bytes(key)))
+		keyPair, err = crypto.NewKeyPairFromSec([]byte(ethutil.Hex2Bytes(key)))
 	}
 
 	if err != nil {

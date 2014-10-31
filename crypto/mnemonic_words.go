@@ -1,4 +1,4 @@
-package ethcrypto
+package crypto
 
 var MnemonicWords []string = []string{
 	"like",

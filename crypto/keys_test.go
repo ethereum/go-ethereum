@@ -1,4 +1,4 @@
-package ethcrypto
+package crypto
 
 import (
 	"github.com/ethereum/go-ethereum/ethdb"

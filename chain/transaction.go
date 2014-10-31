@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethcrypto"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/obscuren/secp256k1-go"
@@ -66,7 +66,7 @@ func (self *Transaction) TotalValue() *big.Int {
 func (tx *Transaction) Hash() []byte {
 	data := []interface{}{tx.Nonce, tx.GasPrice, tx.Gas, tx.Recipient, tx.Value, tx.Data}
 
-	return ethcrypto.Sha3(ethutil.NewValue(data).Encode())
+	return crypto.Sha3(ethutil.NewValue(data).Encode())
 }
 
 func (tx *Transaction) CreatesContract() bool {
@@ -80,9 +80,9 @@ func (tx *Transaction) IsContract() bool {
 
 func (tx *Transaction) CreationAddress(state *ethstate.State) []byte {
 	// Generate a new address
-	addr := ethcrypto.Sha3(ethutil.NewValue([]interface{}{tx.Sender(), tx.Nonce}).Encode())[12:]
+	addr := crypto.Sha3(ethutil.NewValue([]interface{}{tx.Sender(), tx.Nonce}).Encode())[12:]
 	//for i := uint64(0); state.GetStateObject(addr) != nil; i++ {
-	//	addr = ethcrypto.Sha3(ethutil.NewValue([]interface{}{tx.Sender(), tx.Nonce + i}).Encode())[12:]
+	//	addr = crypto.Sha3(ethutil.NewValue([]interface{}{tx.Sender(), tx.Nonce + i}).Encode())[12:]
 	//}
 
 	return addr
@@ -106,7 +106,7 @@ func (tx *Transaction) PublicKey() []byte {
 	sig := append(r, s...)
 	sig = append(sig, tx.v-27)
 
-	pubkey := ethcrypto.Ecrecover(append(hash, sig...))
+	pubkey := crypto.Ecrecover(append(hash, sig...))
 	//pubkey, _ := secp256k1.RecoverPubkey(hash, sig)
 
 	return pubkey
@@ -121,7 +121,7 @@ func (tx *Transaction) Sender() []byte {
 		return nil
 	}
 
-	return ethcrypto.Sha3(pubkey[1:])[12:]
+	return crypto.Sha3(pubkey[1:])[12:]
 }
 
 func (tx *Transaction) Sign(privk []byte) error {

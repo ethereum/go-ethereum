@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/ethcrypto"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
 )
@@ -119,7 +119,7 @@ type JSKey struct {
 	PublicKey  string `json:"publicKey"`
 }
 
-func NewJSKey(key *ethcrypto.KeyPair) *JSKey {
+func NewJSKey(key *crypto.KeyPair) *JSKey {
 	return &JSKey{ethutil.Bytes2Hex(key.Address()), ethutil.Bytes2Hex(key.PrivateKey), ethutil.Bytes2Hex(key.PublicKey)}
 }
 
