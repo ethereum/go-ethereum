@@ -142,7 +142,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		// Stack Check, memory resize & gas phase
 		switch op {
 		// Stack checks only
-		case NOT, CALLDATALOAD, POP, JUMP, BNOT: // 1
+		case ISZERO, CALLDATALOAD, POP, JUMP, NOT: // 1
 			require(1)
 		case ADD, SUB, DIV, SDIV, MOD, SMOD, EXP, LT, GT, SLT, SGT, EQ, AND, OR, XOR, BYTE: // 2
 			require(2)
@@ -392,7 +392,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			self.Printf(" = %v", base)
 
 			stack.Push(base)
-		case BNOT:
+		case NOT:
 			base.Sub(Pow256, stack.Pop()).Sub(base, ethutil.Big1)
 
 			// Not needed
@@ -449,7 +449,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			} else {
 				stack.Push(ethutil.BigFalse)
 			}
-		case NOT:
+		case ISZERO:
 			x := stack.Pop()
 			if x.Cmp(ethutil.BigFalse) > 0 {
 				stack.Push(ethutil.BigFalse)

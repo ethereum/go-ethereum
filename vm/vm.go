@@ -268,7 +268,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			U256(base)
 
 			stack.Push(base)
-		case BNOT:
+		case NOT:
 			require(1)
 			base.Sub(Pow256, stack.Pop())
 
@@ -325,7 +325,7 @@ func (self *Vm) RunClosure(closure *Closure) (ret []byte, err error) {
 			} else {
 				stack.Push(ethutil.BigFalse)
 			}
-		case NOT:
+		case ISZERO:
 			require(1)
 			x := stack.Pop()
 			if x.Cmp(ethutil.BigFalse) > 0 {

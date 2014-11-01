@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/vm"
+	"github.com/ethgo.old/ethutil"
 )
 
 func Disassemble(script []byte) (asm []string) {
@@ -17,14 +18,18 @@ func Disassemble(script []byte) (asm []string) {
 		// Get the memory location of pc
 		val := script[pc.Int64()]
 		// Get the opcode (it must be an opcode!)
-		op := OpCode(val)
+		op := vm.OpCode(val)
 
 		asm = append(asm, fmt.Sprintf("%04v: %v", pc, op))
 
 		switch op {
-		case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
+		case vm.PUSH1, vm.PUSH2, vm.PUSH3, vm.PUSH4, vm.PUSH5, vm.PUSH6, vm.PUSH7, vm.PUSH8,
+			vm.PUSH9, vm.PUSH10, vm.PUSH11, vm.PUSH12, vm.PUSH13, vm.PUSH14, vm.PUSH15,
+			vm.PUSH16, vm.PUSH17, vm.PUSH18, vm.PUSH19, vm.PUSH20, vm.PUSH21, vm.PUSH22,
+			vm.PUSH23, vm.PUSH24, vm.PUSH25, vm.PUSH26, vm.PUSH27, vm.PUSH28, vm.PUSH29,
+			vm.PUSH30, vm.PUSH31, vm.PUSH32:
 			pc.Add(pc, ethutil.Big1)
-			a := int64(op) - int64(PUSH1) + 1
+			a := int64(op) - int64(vm.PUSH1) + 1
 			if int(pc.Int64()+a) > len(script) {
 				return
 			}
