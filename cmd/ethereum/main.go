@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethgo.old/ethlog"
 )
 
 const (
@@ -131,5 +130,5 @@ func main() {
 
 	// this blocks the thread
 	ethereum.WaitForShutdown()
-	ethlog.Flush()
+	logger.Flush()
 }

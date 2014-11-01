@@ -3,13 +3,13 @@ package helper
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
 )
 
 type Env struct {
-	state *ethstate.State
+	state *state.State
 
 	origin   []byte
 	parent   []byte
@@ -21,13 +21,13 @@ type Env struct {
 	gasLimit   *big.Int
 }
 
-func NewEnv(state *ethstate.State) *Env {
+func NewEnv(state *state.State) *Env {
 	return &Env{
 		state: state,
 	}
 }
 
-func NewEnvFromMap(state *ethstate.State, envValues map[string]string, exeValues map[string]string) *Env {
+func NewEnvFromMap(state *state.State, envValues map[string]string, exeValues map[string]string) *Env {
 	env := NewEnv(state)
 
 	env.origin = ethutil.Hex2Bytes(exeValues["caller"])
@@ -41,21 +41,21 @@ func NewEnvFromMap(state *ethstate.State, envValues map[string]string, exeValues
 	return env
 }
 
-func (self *Env) Origin() []byte         { return self.origin }
-func (self *Env) BlockNumber() *big.Int  { return self.number }
-func (self *Env) PrevHash() []byte       { return self.parent }
-func (self *Env) Coinbase() []byte       { return self.coinbase }
-func (self *Env) Time() int64            { return self.time }
-func (self *Env) Difficulty() *big.Int   { return self.difficulty }
-func (self *Env) BlockHash() []byte      { return nil }
-func (self *Env) State() *ethstate.State { return self.state }
-func (self *Env) GasLimit() *big.Int     { return self.gasLimit }
-func (self *Env) AddLog(vm.Log)          {}
+func (self *Env) Origin() []byte        { return self.origin }
+func (self *Env) BlockNumber() *big.Int { return self.number }
+func (self *Env) PrevHash() []byte      { return self.parent }
+func (self *Env) Coinbase() []byte      { return self.coinbase }
+func (self *Env) Time() int64           { return self.time }
+func (self *Env) Difficulty() *big.Int  { return self.difficulty }
+func (self *Env) BlockHash() []byte     { return nil }
+func (self *Env) State() *state.State   { return self.state }
+func (self *Env) GasLimit() *big.Int    { return self.gasLimit }
+func (self *Env) AddLog(state.Log)      {}
 func (self *Env) Transfer(from, to vm.Account, amount *big.Int) error {
 	return vm.Transfer(from, to, amount)
 }
 
-func RunVm(state *ethstate.State, env, exec map[string]string) ([]byte, *big.Int, error) {
+func RunVm(state *state.State, env, exec map[string]string) ([]byte, *big.Int, error) {
 	address := FromHex(exec["address"])
 	caller := state.GetOrNewStateObject(FromHex(exec["caller"]))
 

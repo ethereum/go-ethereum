@@ -3,10 +3,10 @@ package ar
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethtrie"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 type Block interface {
-	Trie() *ethtrie.Trie
+	Trie() *trie.Trie
 	Diff() *big.Int
 }

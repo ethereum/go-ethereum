@@ -9,11 +9,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/ethcrypto"
-	"github.com/ethereum/go-ethereum/ethlog"
-	"github.com/ethereum/go-ethereum/ethstate"
-	"github.com/ethereum/go-ethereum/ethtrie"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/obscuren/mutan"
 )
 
@@ -28,15 +28,15 @@ func (TestEnv) Time() int64           { return 0 }
 func (TestEnv) GasLimit() *big.Int    { return nil }
 func (TestEnv) Difficulty() *big.Int  { return nil }
 func (TestEnv) Value() *big.Int       { return nil }
-func (TestEnv) AddLog(Log)            {}
+func (TestEnv) AddLog(state.Log)      {}
 
 func (TestEnv) Transfer(from, to Account, amount *big.Int) error {
 	return nil
 }
 
 // This is likely to fail if anything ever gets looked up in the state trie :-)
-func (TestEnv) State() *ethstate.State {
-	return ethstate.New(ethtrie.New(nil, ""))
+func (TestEnv) State() *state.State {
+	return state.New(trie.New(nil, ""))
 }
 
 const mutcode = `
@@ -47,18 +47,18 @@ for i := 0; i < 10; i++ {
 
 return x`
 
-func setup(level ethlog.LogLevel, typ Type) (*Closure, VirtualMachine) {
+func setup(level logger.LogLevel, typ Type) (*Closure, VirtualMachine) {
 	code, err := ethutil.Compile(mutcode, true)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Pipe output to /dev/null
-	ethlog.AddLogSystem(ethlog.NewStdLogSystem(ioutil.Discard, log.LstdFlags, level))
+	logger.AddLogSystem(logger.NewStdLogSystem(ioutil.Discard, log.LstdFlags, level))
 
 	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")
 
-	stateObject := ethstate.NewStateObject([]byte{'j', 'e', 'f', 'f'})
+	stateObject := state.NewStateObject([]byte{'j', 'e', 'f', 'f'})
 	callerClosure := NewClosure(nil, stateObject, stateObject, code, big.NewInt(1000000), big.NewInt(0))
 
 	return callerClosure, New(TestEnv{}, typ)
@@ -71,7 +71,7 @@ func TestDebugVm(t *testing.T) {
 		t.Skip("skipping for mutan version", mutan.Version, " < 0.6")
 	}
 
-	closure, vm := setup(ethlog.DebugLevel, DebugVmTy)
+	closure, vm := setup(logger.DebugLevel, DebugVmTy)
 	ret, _, e := closure.Call(vm, nil)
 	if e != nil {
 		t.Fatalf("Call returned error: %v", e)
@@ -86,7 +86,7 @@ func TestVm(t *testing.T) {
 		t.Skip("skipping for mutan version", mutan.Version, " < 0.6")
 	}
 
-	closure, vm := setup(ethlog.DebugLevel, StandardVmTy)
+	closure, vm := setup(logger.DebugLevel, StandardVmTy)
 	ret, _, e := closure.Call(vm, nil)
 	if e != nil {
 		t.Fatalf("Call returned error: %v", e)
@@ -97,7 +97,7 @@ func TestVm(t *testing.T) {
 }
 
 func BenchmarkDebugVm(b *testing.B) {
-	closure, vm := setup(ethlog.InfoLevel, DebugVmTy)
+	closure, vm := setup(logger.InfoLevel, DebugVmTy)
 
 	b.ResetTimer()
 
@@ -107,7 +107,7 @@ func BenchmarkDebugVm(b *testing.B) {
 }
 
 func BenchmarkVm(b *testing.B) {
-	closure, vm := setup(ethlog.InfoLevel, StandardVmTy)
+	closure, vm := setup(logger.InfoLevel, StandardVmTy)
 
 	b.ResetTimer()
 
@@ -122,11 +122,11 @@ func RunCode(mutCode string, typ Type) []byte {
 		log.Fatal(err)
 	}
 
-	ethlog.AddLogSystem(ethlog.NewStdLogSystem(os.Stdout, log.LstdFlags, ethlog.InfoLevel))
+	logger.AddLogSystem(logger.NewStdLogSystem(os.Stdout, log.LstdFlags, logger.InfoLevel))
 
 	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")
 
-	stateObject := ethstate.NewStateObject([]byte{'j', 'e', 'f', 'f'})
+	stateObject := state.NewStateObject([]byte{'j', 'e', 'f', 'f'})
 	closure := NewClosure(nil, stateObject, stateObject, code, big.NewInt(1000000), big.NewInt(0))
 
 	vm := New(TestEnv{}, typ)
@@ -148,7 +148,7 @@ func TestBuildInSha256(t *testing.T) {
 	return out
 	`, DebugVmTy)
 
-	exp := ethcrypto.Sha256(ethutil.LeftPadBytes([]byte{42}, 32))
+	exp := crypto.Sha256(ethutil.LeftPadBytes([]byte{42}, 32))
 	if bytes.Compare(ret, exp) != 0 {
 		t.Errorf("Expected %x, got %x", exp, ret)
 	}
@@ -164,7 +164,7 @@ func TestBuildInRipemd(t *testing.T) {
 	return out
 	`, DebugVmTy)
 
-	exp := ethutil.RightPadBytes(ethcrypto.Ripemd160(ethutil.LeftPadBytes([]byte{42}, 32)), 32)
+	exp := ethutil.RightPadBytes(crypto.Ripemd160(ethutil.LeftPadBytes([]byte{42}, 32)), 32)
 	if bytes.Compare(ret, exp) != 0 {
 		t.Errorf("Expected %x, got %x", exp, ret)
 	}

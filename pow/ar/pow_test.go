@@ -6,17 +6,17 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethtrie"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 type TestBlock struct {
-	trie *ethtrie.Trie
+	trie *trie.Trie
 }
 
 func NewTestBlock() *TestBlock {
 	db, _ := ethdb.NewMemDatabase()
 	return &TestBlock{
-		trie: ethtrie.New(db, ""),
+		trie: trie.New(db, ""),
 	}
 }
 
@@ -24,7 +24,7 @@ func (self *TestBlock) Diff() *big.Int {
 	return b(10)
 }
 
-func (self *TestBlock) Trie() *ethtrie.Trie {
+func (self *TestBlock) Trie() *trie.Trie {
 	return self.trie
 }
 

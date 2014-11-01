@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/ethstate"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/tests/helper"
 )
 
@@ -16,8 +16,8 @@ type Account struct {
 	Storage map[string]string
 }
 
-func StateObjectFromAccount(addr string, account Account) *ethstate.StateObject {
-	obj := ethstate.NewStateObject(ethutil.Hex2Bytes(addr))
+func StateObjectFromAccount(addr string, account Account) *state.StateObject {
+	obj := state.NewStateObject(ethutil.Hex2Bytes(addr))
 	obj.SetBalance(ethutil.Big(account.Balance))
 
 	if ethutil.IsHex(account.Code) {
@@ -44,7 +44,7 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
-		state := ethstate.New(helper.NewTrie())
+		state := state.New(helper.NewTrie())
 		for addr, account := range test.Pre {
 			obj := StateObjectFromAccount(addr, account)
 			state.SetStateObject(obj)

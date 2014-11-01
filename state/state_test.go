@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethtrie"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var ZeroHash256 = make([]byte, 32)
@@ -15,7 +15,7 @@ func TestSnapshot(t *testing.T) {
 	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")
 	ethutil.Config.Db = db
 
-	state := New(ethtrie.New(db, ""))
+	state := New(trie.New(db, ""))
 
 	stateObject := state.GetOrNewStateObject([]byte("aa"))
 
