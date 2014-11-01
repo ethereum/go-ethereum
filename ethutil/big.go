@@ -34,6 +34,10 @@ func BigD(data []byte) *big.Int {
 	return n
 }
 
+func BitTest(num *big.Int, i int) bool {
+	return num.Bit(i) > 0
+}
+
 // To256
 //
 // "cast" the big int to a 256 big int (i.e., limit to)

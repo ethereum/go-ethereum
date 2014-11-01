@@ -392,6 +392,20 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			self.Printf(" = %v", base)
 
 			stack.Push(base)
+		case SIGNEXTEND:
+			back := stack.Pop().Uint64()
+			if back.Cmp(big.NewInt(31)) < 0 {
+				bit := uint(back*8 + 7)
+				num := stack.Pop()
+				mask := new(big.Int).Lsh(ethutil.Big1, bit)
+				mask.Sub(mask, ethutil.Big1)
+				if ethutil.BitTest(num, int(bit)) {
+					num.Or(num, mask.Not(mask))
+				} else {
+					num.And(num, mask)
+				}
+				stack.Push(num)
+			}
 		case NOT:
 			base.Sub(Pow256, stack.Pop()).Sub(base, ethutil.Big1)
 
