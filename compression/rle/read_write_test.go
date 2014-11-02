@@ -91,3 +91,25 @@ func TestCompressMulti(t *testing.T) {
 		t.Error("expected", exp, "got", res)
 	}
 }
+
+func TestCompressDecompress(t *testing.T) {
+	var in []byte
+
+	for i := 0; i < 20; i++ {
+		in = append(in, []byte{0, 0, 0, 0, 0}...)
+		in = append(in, crypto.Sha3([]byte(""))...)
+		in = append(in, crypto.Sha3([]byte{0x80})...)
+		in = append(in, []byte{123, 2, 19, 89, 245, 254, 255, token, 98, 233}...)
+		in = append(in, token)
+	}
+
+	c := Compress(in)
+	d, err := Decompress(c)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if bytes.Compare(d, in) != 0 {
+		t.Error("multi failed\n", d, "\n", in)
+	}
+}

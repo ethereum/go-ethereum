@@ -37,6 +37,8 @@ func Decompress(dat []byte) ([]byte, error) {
 			} else {
 				return nil, errors.New("error reading bytes. token encountered without proceeding bytes")
 			}
+		} else {
+			buf.WriteByte(dat[i])
 		}
 	}
 
