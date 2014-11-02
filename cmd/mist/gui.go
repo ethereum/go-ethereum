@@ -334,7 +334,7 @@ func (gui *Gui) insertTransaction(window string, tx *chain.Transaction) {
 }
 
 func (gui *Gui) readPreviousTransactions() {
-	it := gui.txDb.Db().NewIterator(nil, nil)
+	it := gui.txDb.NewIterator()
 	for it.Next() {
 		tx := chain.NewTransactionFromBytes(it.Value())
 
