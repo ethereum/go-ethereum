@@ -2,8 +2,6 @@ package ethutil
 
 import "math/big"
 
-var MaxInt256 *big.Int = BigD(Hex2Bytes("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
-
 // Big pow
 //
 // Returns the power of two big integers

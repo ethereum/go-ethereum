@@ -394,7 +394,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			stack.Push(base)
 		case SIGNEXTEND:
 			back := stack.Pop().Uint64()
-			if back.Cmp(big.NewInt(31)) < 0 {
+			if back < 31 {
 				bit := uint(back*8 + 7)
 				num := stack.Pop()
 				mask := new(big.Int).Lsh(ethutil.Big1, bit)
