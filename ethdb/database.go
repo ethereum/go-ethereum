@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"path"
 
+	"github.com/ethereum/go-ethereum/compression/rle"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/iterator"
 )
 
 type LDBDatabase struct {
-	db *leveldb.DB
+	db   *leveldb.DB
+	comp bool
 }
 
 func NewLDBDatabase(name string) (*LDBDatabase, error) {
@@ -21,32 +24,42 @@ func NewLDBDatabase(name string) (*LDBDatabase, error) {
 		return nil, err
 	}
 
-	database := &LDBDatabase{db: db}
+	database := &LDBDatabase{db: db, comp: true}
 
 	return database, nil
 }
 
-func (db *LDBDatabase) Put(key []byte, value []byte) {
-	err := db.db.Put(key, value, nil)
+func (self *LDBDatabase) Put(key []byte, value []byte) {
+	if self.comp {
+		value = rle.Compress(value)
+	}
+
+	err := self.db.Put(key, value, nil)
 	if err != nil {
 		fmt.Println("Error put", err)
 	}
 }
 
-func (db *LDBDatabase) Get(key []byte) ([]byte, error) {
-	return db.db.Get(key, nil)
+func (self *LDBDatabase) Get(key []byte) ([]byte, error) {
+	dat, err := self.db.Get(key, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if self.comp {
+		//fmt.Println("get", dat)
+		return rle.Decompress(dat)
+	}
+
+	return dat, nil
 }
 
-func (db *LDBDatabase) Delete(key []byte) error {
-	return db.db.Delete(key, nil)
+func (self *LDBDatabase) Delete(key []byte) error {
+	return self.db.Delete(key, nil)
 }
 
-func (db *LDBDatabase) Db() *leveldb.DB {
-	return db.db
-}
-
-func (db *LDBDatabase) LastKnownTD() []byte {
-	data, _ := db.db.Get([]byte("LTD"), nil)
+func (self *LDBDatabase) LastKnownTD() []byte {
+	data, _ := self.Get([]byte("LTD"))
 
 	if len(data) == 0 {
 		data = []byte{0x0}
@@ -55,13 +68,17 @@ func (db *LDBDatabase) LastKnownTD() []byte {
 	return data
 }
 
-func (db *LDBDatabase) Close() {
-	// Close the leveldb database
-	db.db.Close()
+func (self *LDBDatabase) NewIterator() iterator.Iterator {
+	return self.db.NewIterator(nil, nil)
 }
 
-func (db *LDBDatabase) Print() {
-	iter := db.db.NewIterator(nil, nil)
+func (self *LDBDatabase) Close() {
+	// Close the leveldb database
+	self.db.Close()
+}
+
+func (self *LDBDatabase) Print() {
+	iter := self.db.NewIterator(nil, nil)
 	for iter.Next() {
 		key := iter.Key()
 		value := iter.Value()

@@ -297,23 +297,11 @@ func (self *StateObject) CreateOutputForDiff() {
 
 // State object encoding methods
 func (c *StateObject) RlpEncode() []byte {
-	var root interface{}
-	if c.State != nil {
-		root = c.State.Trie.Root
-	} else {
-		root = ""
-	}
-
-	return ethutil.Encode([]interface{}{c.Nonce, c.balance, root, c.CodeHash()})
+	return ethutil.Encode([]interface{}{c.Nonce, c.balance, c.State.Trie.Root, c.CodeHash()})
 }
 
 func (c *StateObject) CodeHash() ethutil.Bytes {
-	var codeHash []byte
-	if len(c.Code) > 0 {
-		codeHash = crypto.Sha3(c.Code)
-	}
-
-	return codeHash
+	return crypto.Sha3(c.Code)
 }
 
 func (c *StateObject) RlpDecode(data []byte) {
