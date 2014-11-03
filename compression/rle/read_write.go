@@ -45,7 +45,7 @@ func Decompress(dat []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func compressBlock(dat []byte) (ret []byte, n int) {
+func compressChunk(dat []byte) (ret []byte, n int) {
 	switch {
 	case dat[0] == token:
 		return []byte{token, tokenToken}, 1
@@ -75,7 +75,7 @@ func Compress(dat []byte) []byte {
 
 	i := 0
 	for i < len(dat) {
-		b, n := compressBlock(dat[i:])
+		b, n := compressChunk(dat[i:])
 		buf.Write(b)
 		i += n
 	}
