@@ -178,7 +178,7 @@ func (self *Trie) setRoot(root interface{}) {
 	switch t := root.(type) {
 	case string:
 		if t == "" {
-			root = crypto.Sha3([]byte(""))
+			root = crypto.Sha3(ethutil.Encode(""))
 		}
 		self.Root = root
 	case []byte:

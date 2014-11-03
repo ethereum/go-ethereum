@@ -10,6 +10,7 @@ import (
 type Account struct {
 	Balance  string            `json:"balance"`
 	Nonce    uint64            `json:"nonce"`
+	Root     string            `json:"root"`
 	CodeHash string            `json:"codeHash"`
 	Storage  map[string]string `json:"storage"`
 }
@@ -28,7 +29,7 @@ func (self *State) Dump() []byte {
 	self.Trie.NewIterator().Each(func(key string, value *ethutil.Value) {
 		stateObject := NewStateObjectFromBytes([]byte(key), value.Bytes())
 
-		account := Account{Balance: stateObject.balance.String(), Nonce: stateObject.Nonce, CodeHash: ethutil.Bytes2Hex(stateObject.codeHash)}
+		account := Account{Balance: stateObject.balance.String(), Nonce: stateObject.Nonce, Root: ethutil.Bytes2Hex(stateObject.Root()), CodeHash: ethutil.Bytes2Hex(stateObject.codeHash)}
 		account.Storage = make(map[string]string)
 
 		stateObject.EachStorage(func(key string, value *ethutil.Value) {

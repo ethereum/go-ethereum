@@ -47,7 +47,6 @@ func (self *LDBDatabase) Get(key []byte) ([]byte, error) {
 	}
 
 	if self.comp {
-		//fmt.Println("get", dat)
 		return rle.Decompress(dat)
 	}
 

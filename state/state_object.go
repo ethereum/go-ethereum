@@ -283,6 +283,10 @@ func (self *StateObject) Object() *StateObject {
 	return self
 }
 
+func (self *StateObject) Root() []byte {
+	return self.State.Trie.GetRoot()
+}
+
 // Debug stuff
 func (self *StateObject) CreateOutputForDiff() {
 	fmt.Printf("%x %x %x %x\n", self.Address(), self.State.Root(), self.balance.Bytes(), self.Nonce)
@@ -297,6 +301,7 @@ func (self *StateObject) CreateOutputForDiff() {
 
 // State object encoding methods
 func (c *StateObject) RlpEncode() []byte {
+	fmt.Printf("%x %x\n", c.State.Trie.Root, c.CodeHash())
 	return ethutil.Encode([]interface{}{c.Nonce, c.balance, c.State.Trie.Root, c.CodeHash()})
 }
 
