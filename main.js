@@ -1,6 +1,6 @@
 (function(window) {
     function isPromise(o) {
-        return o instanceof Promise
+        return o instanceof Promise;
     }
 
     function flattenPromise (obj) {
@@ -40,7 +40,7 @@
         }
 
         return Promise.resolve(obj);
-    };
+    }
 
     var ethMethods = function () {
         var blockCall = function (args) {
@@ -171,7 +171,7 @@
                     }).catch(function (err) {
                         console.error(err);
                     });
-                }
+                };
             }
             Object.defineProperty(obj, property.name, proto);
         });
@@ -196,8 +196,8 @@
             var str = "";
             var i = 0, l = hex.length;
             for(; i < l; i+=2) {
-                var code = hex.charCodeAt(i)
-                if(code == 0) {
+                var code = hex.charCodeAt(i);
+                if(code === 0) {
                     break;
                 }
 
@@ -216,22 +216,18 @@
             var hex = this.toHex(str);
             while(hex.length < pad*2)
                 hex += "00";
-            return hex
+            return hex;
         },
 
         eth: {
-            prototype: Object(),
             watch: function (params) {
                 return new Filter(params, ethWatch);
             },
         },
 
-        db: {
-            prototype: Object()
-        },
+        db: {},
 
         shh: {
-            prototype: Object(),
             watch: function (params) {
                 return new Filter(params, shhWatch);
             }
@@ -243,7 +239,7 @@
             }
 
             web3._events[event][id] = cb;
-            return this
+            return this;
         },
 
         off: function(event, id) {
@@ -251,7 +247,7 @@
                 delete web3._events[event][id];
             }
 
-            return this
+            return this;
         },
 
         trigger: function(event, id, data) {
@@ -376,7 +372,7 @@
 
     Filter.prototype.arrived = function(callback) {
         this.changed(callback);
-    }
+    };
 
     Filter.prototype.changed = function(callback) {
         var self = this;
@@ -416,7 +412,7 @@
         if(data._id) {
             var cb = web3._callbacks[data._id];
             if (cb) {
-                cb.call(this, data.data)
+                cb.call(this, data.data);
                 delete web3._callbacks[data._id];
             }
         }

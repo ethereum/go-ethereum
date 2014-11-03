@@ -10,8 +10,8 @@
             method: object.call,
             params: object.args,
             id: object._id
-        }
-    };
+        };
+    }
 
     function formatJsonRpcMessage(message) {    
         var object = JSON.parse(message);
@@ -20,7 +20,7 @@
             _id: object.id,
             data: object.result
         };
-    };
+    }
 
     HttpRpcProvider.prototype.sendRequest = function (payload, cb) {
         var data = formatJsonRpcObject(payload);
@@ -32,7 +32,7 @@
             if (request.readyState === 4 && cb) {
                 cb(request);
             }
-        }
+        };
     };
 
     HttpRpcProvider.prototype.send = function (payload) {
