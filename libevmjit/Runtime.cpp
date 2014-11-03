@@ -105,7 +105,6 @@ bytesConstRef Runtime::getReturnData() const
 RuntimeManager::RuntimeManager(llvm::IRBuilder<>& _builder): CompilerHelper(_builder)
 {
 	m_dataPtr = new llvm::GlobalVariable(*getModule(), Type::RuntimePtr, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(Type::RuntimePtr), "rt");
-	llvm::Type* args[] = {Type::BytePtr, m_builder.getInt32Ty()};
 	m_longjmp = llvm::Intrinsic::getDeclaration(getModule(), llvm::Intrinsic::longjmp);
 
 	// Export data
