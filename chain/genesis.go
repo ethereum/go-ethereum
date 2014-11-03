@@ -15,6 +15,7 @@ var ZeroHash256 = make([]byte, 32)
 var ZeroHash160 = make([]byte, 20)
 var ZeroHash512 = make([]byte, 64)
 var EmptyShaList = crypto.Sha3(ethutil.Encode([]interface{}{}))
+var EmptyListRoot = crypto.Sha3(ethutil.Encode(""))
 
 var GenesisHeader = []interface{}{
 	// Previous hash (none)
@@ -25,10 +26,10 @@ var GenesisHeader = []interface{}{
 	ZeroHash160,
 	// Root state
 	EmptyShaList,
-	// tx sha
-	EmptyShaList,
-	// receipt list
-	EmptyShaList,
+	// tx root
+	EmptyListRoot,
+	// receipt root
+	EmptyListRoot,
 	// bloom
 	ZeroHash512,
 	// Difficulty
