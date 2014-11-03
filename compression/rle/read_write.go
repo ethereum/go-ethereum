@@ -45,39 +45,39 @@ func Decompress(dat []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+func compressBlock(dat []byte) (ret []byte, n int) {
+	switch {
+	case dat[0] == token:
+		return []byte{token, tokenToken}, 1
+	case len(dat) > 1 && dat[0] == 0x0 && dat[1] == 0x0:
+		j := 0
+		for j <= 254 && j < len(dat) {
+			if dat[j] != 0 {
+				break
+			}
+			j++
+		}
+		return []byte{token, byte(j + 2)}, j
+	case len(dat) >= 32:
+		if dat[0] == empty[0] && bytes.Compare(dat[:32], empty) == 0 {
+			return []byte{token, emptyShaToken}, 32
+		} else if dat[0] == emptyList[0] && bytes.Compare(dat[:32], emptyList) == 0 {
+			return []byte{token, emptyListShaToken}, 32
+		}
+		fallthrough
+	default:
+		return dat[:1], 1
+	}
+}
+
 func Compress(dat []byte) []byte {
 	buf := new(bytes.Buffer)
 
-	for i := 0; i < len(dat); i++ {
-		if dat[i] == token {
-			buf.Write([]byte{token, tokenToken})
-		} else if i+1 < len(dat) {
-			if dat[i] == 0x0 && dat[i+1] == 0x0 {
-				j := 0
-				for j <= 254 && i+j < len(dat) {
-					if dat[i+j] != 0 {
-						break
-					}
-					j++
-				}
-				buf.Write([]byte{token, byte(j + 2)})
-				i += (j - 1)
-			} else if len(dat[i:]) >= 32 {
-				if dat[i] == empty[0] && bytes.Compare(dat[i:i+32], empty) == 0 {
-					buf.Write([]byte{token, emptyShaToken})
-					i += 31
-				} else if dat[i] == emptyList[0] && bytes.Compare(dat[i:i+32], emptyList) == 0 {
-					buf.Write([]byte{token, emptyListShaToken})
-					i += 31
-				} else {
-					buf.WriteByte(dat[i])
-				}
-			} else {
-				buf.WriteByte(dat[i])
-			}
-		} else {
-			buf.WriteByte(dat[i])
-		}
+	i := 0
+	for i < len(dat) {
+		b, n := compressBlock(dat[i:])
+		buf.Write(b)
+		i += n
 	}
 
 	return buf.Bytes()
