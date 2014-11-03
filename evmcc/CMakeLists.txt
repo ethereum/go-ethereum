@@ -8,6 +8,7 @@ set(EXECUTABLE evmcc)
 
 add_executable(${EXECUTABLE} ${SRC_LIST})
 
+target_link_libraries(${EXECUTABLE} boost_program_options)
 target_link_libraries(${EXECUTABLE} devcore)
 target_link_libraries(${EXECUTABLE} ethcore)
 target_link_libraries(${EXECUTABLE} ethereum)
@@ -40,8 +41,8 @@ message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
-# llvm_map_components_to_libnames(llvm_libs core support mcjit x86asmparser x86codegen)
-# target_link_libraries(evmcc ${llvm_libs})
+llvm_map_components_to_libnames(llvm_libs bitwriter)
+target_link_libraries(evmcc ${llvm_libs})
 
 # end of LLVM specific commands
 
