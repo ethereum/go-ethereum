@@ -2,22 +2,27 @@
 <html>
 
 <head>
+<script type="text/javascript" src="es6-promise-2.0.0.js"></script>
 <script type="text/javascript" src="main.js"></script>
 <script type="text/javascript" src="websocket.js"></script>
 <script type="text/javascript" src="qt.js"></script>
 <script type="text/javascript" src="httprpc.js"></script>
 <script type="text/javascript">
-function registerName() {
-    var name = document.querySelector("#name").value;
-    name = web3.fromAscii(name);
+if (window.Promise === undefined) {
+    window.Promise = ES6Promise.Promise;
+}
 
-    var eth = web3.eth;
-    eth.transact({to: "NameReg", gas: "10000", gasPrice: eth.gasPrice, data: [web3.fromAscii("register"), name]}).then(function(tx) {
-        document.querySelector("#result").innerHTML = "Registered name. Please wait for the next block to come through.";
-    }, function(err) {
-        console.log(err); 
+//web3.setProvider(new web3.providers.QtProvider());
+web3.setProvider(new web3.providers.HttpRpcProvider("http://localhost:8080"));
+
+function testSnippet() {
+    web3.eth.watch({altered: web3.eth.coinbase}).changed(function() {
+        web3.eth.balanceAt(web3.eth.coinbase).then(function (balance) {
+            document.getElementById("result").innerText = web3.toDecimal(balance);
+        });
     });
 }
+
 </script>
 </head>
 
@@ -25,8 +30,10 @@ function registerName() {
 
 <h1>std::name_reg</h1>
 <input type="text" id="name"></input>
-<input type="submit" onClick="registerName();"></input>
-<div id="result"></div>
+<button type="button" onClick="testSnippet();">test snippet</button>
+
+<div></div>
+result: <div id="result"></div>
 
 </body>
 
