@@ -21,7 +21,6 @@ public:
 	class LocalStack
 	{
 	public:
-
 		/// Pushes value on stack
 		void push(llvm::Value* _value);
 
@@ -35,12 +34,8 @@ public:
 		/// @param _index Index of value to be swaped. Must be > 0.
 		void swap(size_t _index);
 
-		/// Synchronize current local stack with the EVM stack.
-		void synchronize(Stack& _evmStack);
-
 	private:
-
-		LocalStack(llvm::IRBuilder<>& _builder, llvm::BasicBlock* _llvmBB);
+		LocalStack(BasicBlock& _owner);
 		LocalStack(LocalStack const&) = delete;
 		void operator=(LocalStack const&) = delete;
 		friend BasicBlock;
@@ -54,34 +49,7 @@ public:
 		std::vector<llvm::Value*>::iterator getItemIterator(size_t _index);
 
 	private:
-
-		llvm::BasicBlock* m_llvmBB;
-
-		llvm::IRBuilder<>& m_builder;
-
-		/**
-		 *  This stack contains LLVM values that correspond to items found at
-		 *  the EVM stack when the current basic block starts executing.
-		 *  Location 0 corresponds to the top of the EVM stack, location 1 is
-		 *  the item below the top and so on. The stack grows as the code
-		 *  accesses more items on the EVM stack but once a value is put on
-		 *  the stack, it will never be replaced.
-		 */
-		std::vector<llvm::Value*> m_initialStack;
-
-		/**
-		 *  This stack tracks the contents of the EVM stack as the current basic
-		 *  block executes. It may grow on both sides, as the code pushes items on
-		 *  top of the stack or changes existing items.
-		 */
-		std::vector<llvm::Value*> m_currentStack;
-
-		/**
-		 *  How many items higher is the current stack than the initial one.
-		 *  May be negative.
-		 */
-		int m_tosOffset;
-
+		BasicBlock& m_bblock;
 	};
 
 	/// Basic block name prefix. The rest is beging instruction index.
@@ -105,6 +73,9 @@ public:
 	/// to avoid excessive pushing/popping on the EVM stack.
 	static void linkLocalStacks(std::vector<BasicBlock*> _basicBlocks, llvm::IRBuilder<>& _builder);
 
+	/// Synchronize current local stack with the EVM stack.
+	void synchronizeLocalStack(Stack& _evmStack);
+
 	/// Prints local stack and block instructions to stderr.
 	/// Useful for calling in a debugger session.
 	void dump();
@@ -113,11 +84,31 @@ public:
 private:
 	ProgramCounter const m_beginInstIdx;
 	ProgramCounter const m_endInstIdx;
+
 	llvm::BasicBlock* const m_llvmBB;
 
 	/// Basic black state vector (stack) - current/end values and their positions on stack
 	/// @internal Must be AFTER m_llvmBB
 	LocalStack m_stack;
+
+	llvm::IRBuilder<>& m_builder;
+
+	/// This stack contains LLVM values that correspond to items found at
+	/// the EVM stack when the current basic block starts executing.
+	/// Location 0 corresponds to the top of the EVM stack, location 1 is
+	/// the item below the top and so on. The stack grows as the code
+	/// accesses more items on the EVM stack but once a value is put on
+	/// the stack, it will never be replaced.
+	std::vector<llvm::Value*> m_initialStack = {};
+
+	/// This stack tracks the contents of the EVM stack as the basic block
+	/// executes. It may grow on both sides, as the code pushes items on
+	/// top of the stack or changes existing items.
+	std::vector<llvm::Value*> m_currentStack = {};
+
+	/// How many items higher is the current stack than the initial one.
+	/// May be negative.
+	int m_tosOffset = 0;
 };
 
 }

@@ -81,12 +81,9 @@ void Compiler::createBasicBlocks(bytesConstRef _bytecode)
 
 		case Instruction::JUMPDEST:
 		{
-			// A basic block starts at the next instruction.
-			if (currentPC + 1 < _bytecode.size())
-			{
-				splitPoints.insert(currentPC + 1);
-				indirectJumpTargets.push_back(currentPC + 1);
-			}
+			// A basic block starts here.
+			splitPoints.insert(currentPC);
+			indirectJumpTargets.push_back(currentPC);
 			break;
 		}
 
@@ -98,9 +95,7 @@ void Compiler::createBasicBlocks(bytesConstRef _bytecode)
 		{
 			// Create a basic block starting at the following instruction.
 			if (curr + 1 < _bytecode.end())
-			{
 				splitPoints.insert(currentPC + 1);
-			}
 			break;
 		}
 
@@ -234,9 +229,9 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef _bytecode)
 	}
 
 	for (auto& entry : basicBlocks)
-		entry.second.localStack().synchronize(stack);
+		entry.second.synchronizeLocalStack(stack);
 	if (m_jumpTableBlock)
-		m_jumpTableBlock->localStack().synchronize(stack);
+		m_jumpTableBlock->synchronizeLocalStack(stack);
 
 	dumpCFGifRequired("blocks-sync.dot");
 
