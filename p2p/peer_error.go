@@ -9,10 +9,9 @@ type ErrorCode int
 const errorChanCapacity = 10
 
 const (
-	PacketTooShort = iota
+	PacketTooLong = iota
 	PayloadTooShort
 	MagicTokenMismatch
-	EmptyPayload
 	ReadError
 	WriteError
 	MiscError
@@ -31,10 +30,9 @@ const (
 )
 
 var errorToString = map[ErrorCode]string{
-	PacketTooShort:         "Packet too short",
+	PacketTooLong:          "Packet too long",
 	PayloadTooShort:        "Payload too short",
 	MagicTokenMismatch:     "Magic token mismatch",
-	EmptyPayload:           "Empty payload",
 	ReadError:              "Read error",
 	WriteError:             "Write error",
 	MiscError:              "Misc error",
@@ -71,6 +69,6 @@ func (self *PeerError) Error() string {
 	return self.message
 }
 
-func NewPeerErrorChannel() chan *PeerError {
-	return make(chan *PeerError, errorChanCapacity)
+func NewPeerErrorChannel() chan error {
+	return make(chan error, errorChanCapacity)
 }
