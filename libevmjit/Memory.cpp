@@ -74,7 +74,7 @@ llvm::Function* Memory::createRequireFunc(GasMeter& _gasMeter, RuntimeManager& _
 	auto sizeRequired = m_builder.CreateExtractValue(uaddRes, 0, "sizeReq");
 	auto overflow1 = m_builder.CreateExtractValue(uaddRes, 1, "overflow1");
 	auto currSize = m_builder.CreateLoad(m_size, "currSize");
-	auto tooSmall = m_builder.CreateICmpULE(size, sizeRequired, "tooSmall");
+	auto tooSmall = m_builder.CreateICmpULE(currSize, sizeRequired, "tooSmall");
 	auto resizeNeeded = m_builder.CreateOr(tooSmall, overflow1, "resizeNeeded");
 	m_builder.CreateCondBr(resizeNeeded, resizeBB, returnBB); // OPT branch weights?
 
