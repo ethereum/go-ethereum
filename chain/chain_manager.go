@@ -319,10 +319,7 @@ func (self *ChainManager) InsertChain(chain *BlockChain) {
 	}
 }
 
-func (self *ChainManager) TestChain(chain *BlockChain) (i int, err error) {
-	var (
-		td *big.Int
-	)
+func (self *ChainManager) TestChain(chain *BlockChain) (td *big.Int, err error) {
 	for e := chain.Front(); e != nil; e = e.Next() {
 		var (
 			l      = e.Value.(*link)
@@ -355,9 +352,9 @@ func (self *ChainManager) TestChain(chain *BlockChain) (i int, err error) {
 	}
 
 	if td.Cmp(self.TD) <= 0 {
-		err = fmt.Errorf("incoming chain has a lower or equal TD (%v <= %v)", td, self.TD)
+		err = &TDError{td, self.TD}
 		return
 	}
 
-	return i, nil
+	return
 }
