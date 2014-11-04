@@ -83,6 +83,8 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 				nop := OpCode(closure.GetOp(p))
 				if !(nop == JUMPDEST || destinations[from.Int64()] != nil) {
 					panic(fmt.Sprintf("JUMP missed JUMPDEST (%v) %v", nop, p))
+				} else if nop == JUMP || nop == JUMPI {
+					panic(fmt.Sprintf("not allowed to JUMP(I) in to JUMP"))
 				}
 
 				pc = to
