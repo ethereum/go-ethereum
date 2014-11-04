@@ -79,3 +79,21 @@ func TestCommon(t *testing.T) {
 		t.Error("Got", wei)
 	}
 }
+
+func TestLarge(t *testing.T) {
+	douglaslarge := CurrencyToString(BigPow(100000000, 43))
+	adalarge := CurrencyToString(BigPow(100000000, 4))
+	weilarge := CurrencyToString(big.NewInt(100000000))
+
+	if douglaslarge != "10000E298 Douglas" {
+		t.Error("Got", douglaslarge)
+	}
+
+	if adalarge != "10000E7 Einstein" {
+		t.Error("Got", adalarge)
+	}
+
+	if weilarge != "100 Babbage" {
+		t.Error("Got", weilarge)
+	}
+}
