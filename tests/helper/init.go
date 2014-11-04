@@ -16,4 +16,5 @@ func init() {
 	logpkg.AddLogSystem(Logger)
 
 	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")
+	ethutil.Config.Db, _ = NewMemDatabase()
 }
