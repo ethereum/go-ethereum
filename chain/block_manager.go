@@ -3,6 +3,7 @@ package chain
 import (
 	"bytes"
 	"container/list"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -168,7 +169,6 @@ done:
 				erroneous = append(erroneous, tx)
 				err = nil
 				continue
-				//return nil, nil, nil, err
 			}
 		}
 
@@ -177,7 +177,6 @@ done:
 
 		txGas.Sub(txGas, st.gas)
 		cumulative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, txGas))
-		//receipt := &Receipt{tx, ethutil.CopyBytes(state.Root().([]byte)), accumelative}
 		receipt := &Receipt{ethutil.CopyBytes(state.Root().([]byte)), cumulative, LogsBloom(state.Logs()).Bytes(), state.Logs()}
 
 		if i < len(block.Receipts()) {
@@ -254,8 +253,6 @@ func (sm *BlockManager) Process(block *Block) (err error) {
 		return fmt.Errorf("Error validating receipt sha. Received %x, got %x", block.ReceiptSha, receiptSha)
 	}
 
-	// TODO validate bloom
-
 	// Block validation
 	if err = sm.ValidateBlock(block); err != nil {
 		statelogger.Errorln("Error validating block:", err)
@@ -265,6 +262,10 @@ func (sm *BlockManager) Process(block *Block) (err error) {
 	if err = sm.AccumelateRewards(state, block, parent); err != nil {
 		statelogger.Errorln("Error accumulating reward", err)
 		return err
+	}
+
+	if bytes.Compare(CreateBloom(block), block.LogsBloom) != 0 {
+		return errors.New("Unable to replicate block's bloom")
 	}
 
 	state.Update()
