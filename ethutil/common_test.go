@@ -33,6 +33,8 @@ func TestWindonziePath(t *testing.T) {
 }
 
 func TestCommon(t *testing.T) {
+	douglas := CurrencyToString(BigPow(10, 43))
+	einstein := CurrencyToString(BigPow(10, 22))
 	ether := CurrencyToString(BigPow(10, 19))
 	finney := CurrencyToString(BigPow(10, 16))
 	szabo := CurrencyToString(BigPow(10, 13))
@@ -40,6 +42,14 @@ func TestCommon(t *testing.T) {
 	babbage := CurrencyToString(BigPow(10, 7))
 	ada := CurrencyToString(BigPow(10, 4))
 	wei := CurrencyToString(big.NewInt(10))
+
+	if douglas != "10 Douglas" {
+		t.Error("Got", douglas)
+	}
+
+	if einstein != "10 Einstein" {
+		t.Error("Got", einstein)
+	}
 
 	if ether != "10 Ether" {
 		t.Error("Got", ether)
