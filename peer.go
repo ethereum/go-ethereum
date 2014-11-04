@@ -673,6 +673,7 @@ func (p *Peer) pushPeers() {
 }
 
 func (self *Peer) pushStatus() {
+	fmt.Println("push status")
 	msg := wire.NewMessage(wire.MsgStatusTy, []interface{}{
 		uint32(ProtocolVersion),
 		uint32(NetVersion),
@@ -825,7 +826,7 @@ func (p *Peer) handleHandshake(msg *wire.Msg) {
 			p.pushStatus()
 		}
 
-		capsStrs = append(capsStrs, cap)
+		capsStrs = append(capsStrs, fmt.Sprintf("%s/%d", cap, ver))
 	}
 
 	peerlogger.Infof("Added peer (%s) %d / %d (%v)\n", p.conn.RemoteAddr(), p.ethereum.Peers().Len(), p.ethereum.MaxPeers, capsStrs)

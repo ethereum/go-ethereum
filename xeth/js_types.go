@@ -176,10 +176,12 @@ func NewJSPeer(peer chain.Peer) *JSPeer {
 	var caps []string
 	capsIt := peer.Caps().NewIterator()
 	for capsIt.Next() {
-		caps = append(caps, capsIt.Value().Str())
+		cap := capsIt.Value().Get(0).Str()
+		ver := capsIt.Value().Get(1).Uint()
+		caps = append(caps, fmt.Sprintf("%s/%d", cap, ver))
 	}
 
-	return &JSPeer{ref: &peer, Inbound: peer.Inbound(), LastSend: peer.LastSend().Unix(), LastPong: peer.LastPong(), Version: peer.Version(), Ip: ipAddress, Port: int(peer.Port()), Latency: peer.PingTime(), Caps: fmt.Sprintf("%v", caps)}
+	return &JSPeer{ref: &peer, Inbound: peer.Inbound(), LastSend: peer.LastSend().Unix(), LastPong: peer.LastPong(), Version: peer.Version(), Ip: ipAddress, Port: int(peer.Port()), Latency: peer.PingTime(), Caps: "[" + strings.Join(caps, ", ") + "]"}
 }
 
 type JSReceipt struct {
