@@ -2,6 +2,7 @@ package chain
 
 import (
 	"bytes"
+	"container/list"
 	"fmt"
 	"math/big"
 
@@ -86,7 +87,7 @@ func (bc *ChainManager) Reset() {
 
 	bc.genesisBlock.state.Trie.Sync()
 	// Prepare the genesis block
-	bc.Add(bc.genesisBlock)
+	bc.add(bc.genesisBlock)
 	bc.CurrentBlock = bc.genesisBlock
 
 	bc.SetTotalDifficulty(ethutil.Big("0"))
@@ -191,9 +192,8 @@ func (bc *ChainManager) SetTotalDifficulty(td *big.Int) {
 }
 
 // Add a block to the chain and record addition information
-func (bc *ChainManager) Add(block *Block) {
+func (bc *ChainManager) add(block *Block) {
 	bc.writeBlockInfo(block)
-	// Prepare the genesis block
 
 	bc.CurrentBlock = block
 	bc.LastBlockHash = block.Hash()
@@ -201,6 +201,8 @@ func (bc *ChainManager) Add(block *Block) {
 	encodedBlock := block.RlpEncode()
 	ethutil.Config.Db.Put(block.Hash(), encodedBlock)
 	ethutil.Config.Db.Put([]byte("LastBlock"), encodedBlock)
+
+	chainlogger.Infof("Imported block #%d (%x...)\n", block.Number, block.Hash()[0:4])
 }
 
 func (self *ChainManager) CalcTotalDiff(block *Block) (*big.Int, error) {
@@ -286,4 +288,76 @@ func (bc *ChainManager) Stop() {
 	if bc.CurrentBlock != nil {
 		chainlogger.Infoln("Stopped")
 	}
+}
+
+type link struct {
+	block *Block
+	td    *big.Int
+}
+
+type BlockChain struct {
+	*list.List
+}
+
+func NewChain(blocks Blocks) *BlockChain {
+	chain := &BlockChain{list.New()}
+
+	for _, block := range blocks {
+		chain.PushBack(&link{block, nil})
+	}
+
+	return chain
+}
+
+// This function assumes you've done your checking. No checking is done at this stage anymore
+func (self *ChainManager) InsertChain(chain *BlockChain) {
+	for e := chain.Front(); e != nil; e = e.Next() {
+		link := e.Value.(*link)
+
+		self.SetTotalDifficulty(link.td)
+		self.add(link.block)
+	}
+}
+
+func (self *ChainManager) TestChain(chain *BlockChain) (i int, err error) {
+	var (
+		td *big.Int
+	)
+	for e := chain.Front(); e != nil; e = e.Next() {
+		var (
+			l      = e.Value.(*link)
+			block  = l.block
+			parent *Block
+			prev   = e.Prev()
+		)
+		if prev == nil {
+			parent = self.GetBlock(block.PrevHash)
+		} else {
+			parent = prev.Value.(*link).block
+		}
+
+		if parent == nil {
+			err = fmt.Errorf("incoming chain broken on hash %x\n", block.PrevHash[0:4])
+			return
+		}
+
+		td, err = self.Ethereum.BlockManager().ProcessWithParent(block, parent)
+		if err != nil {
+			chainlogger.Infoln(err)
+			chainlogger.Debugf("Block #%v failed (%x...)\n", block.Number, block.Hash()[0:4])
+			chainlogger.Debugln(block)
+
+			err = fmt.Errorf("incoming chain failed %v\n", err)
+			return
+		}
+		l.td = td
+		i++
+	}
+
+	if td.Cmp(self.TD) <= 0 {
+		err = fmt.Errorf("incoming chain has a lower or equal TD (%v <= %v)", td, self.TD)
+		return
+	}
+
+	return i, nil
 }

@@ -313,31 +313,25 @@ out:
 			// If caught up and just a new block has been propagated:
 			// sm.eth.EventMux().Post(NewBlockEvent{block})
 			// otherwise process and don't emit anything
-			var err error
-			for i, block := range blocks {
-				err = self.eth.BlockManager().Process(block)
+			if len(blocks) > 0 {
+				chainManager := self.eth.ChainManager()
+				chain := chain.NewChain(blocks)
+				_, err := chainManager.TestChain(chain)
 				if err != nil {
-					poollogger.Infoln(err)
-					poollogger.Debugf("Block #%v failed (%x...)\n", block.Number, block.Hash()[0:4])
-					poollogger.Debugln(block)
+					self.Reset()
 
-					blocks = blocks[i:]
-
-					break
+					poollogger.Debugf("Punishing peer for supplying bad chain (%v)\n", self.peer.conn.RemoteAddr())
+					// This peer gave us bad hashes and made us fetch a bad chain, therefor he shall be punished.
+					self.eth.BlacklistPeer(self.peer)
+					self.peer.StopWithReason(DiscBadPeer)
+					self.td = ethutil.Big0
+					self.peer = nil
+				} else {
+					chainManager.InsertChain(chain)
+					for _, block := range blocks {
+						self.Remove(block.Hash())
+					}
 				}
-
-				self.Remove(block.Hash())
-			}
-
-			if err != nil {
-				self.Reset()
-
-				poollogger.Debugf("Punishing peer for supplying bad chain (%v)\n", self.peer.conn.RemoteAddr())
-				// This peer gave us bad hashes and made us fetch a bad chain, therefor he shall be punished.
-				self.eth.BlacklistPeer(self.peer)
-				self.peer.StopWithReason(DiscBadPeer)
-				self.td = ethutil.Big0
-				self.peer = nil
 			}
 		}
 	}

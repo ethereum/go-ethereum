@@ -162,8 +162,9 @@ func (miner *Miner) stopMining() {
 
 func (self *Miner) mineNewBlock() {
 	blockManager := self.ethereum.BlockManager()
+	chainMan := self.ethereum.ChainManager()
 
-	self.block = self.ethereum.ChainManager().NewBlock(self.coinbase)
+	self.block = chainMan.NewBlock(self.coinbase)
 
 	// Apply uncles
 	if len(self.uncles) > 0 {
@@ -199,10 +200,12 @@ func (self *Miner) mineNewBlock() {
 	nonce := self.pow.Search(self.block, self.powQuitChan)
 	if nonce != nil {
 		self.block.Nonce = nonce
-		err := self.ethereum.BlockManager().Process(self.block)
+		lchain := chain.NewChain(chain.Blocks{self.block})
+		_, err := chainMan.TestChain(lchain)
 		if err != nil {
 			minerlogger.Infoln(err)
 		} else {
+			self.ethereum.ChainManager().InsertChain(lchain)
 			self.ethereum.Broadcast(wire.MsgBlockTy, []interface{}{self.block.Value().Val})
 			minerlogger.Infof("🔨  Mined block %x\n", self.block.Hash())
 			minerlogger.Infoln(self.block)

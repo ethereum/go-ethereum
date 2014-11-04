@@ -102,7 +102,7 @@ func (self *BlockManager) Stop() {
 func (self *BlockManager) updateThread() {
 	for ev := range self.events.Chan() {
 		for _, block := range ev.(Blocks) {
-			err := self.Process(block)
+			_, err := self.Process(block)
 			if err != nil {
 				statelogger.Infoln(err)
 				statelogger.Debugf("Block #%v failed (%x...)\n", block.Number, block.Hash()[0:4])
@@ -208,25 +208,27 @@ done:
 	return receipts, handled, unhandled, erroneous, err
 }
 
-func (sm *BlockManager) Process(block *Block) (err error) {
+func (sm *BlockManager) Process(block *Block) (td *big.Int, err error) {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
 	if sm.bc.HasBlock(block.Hash()) {
-		return nil
+		return nil, nil
 	}
 
 	if !sm.bc.HasBlock(block.PrevHash) {
-		return ParentError(block.PrevHash)
+		return nil, ParentError(block.PrevHash)
 	}
+	parent := sm.bc.GetBlock(block.PrevHash)
 
+	return sm.ProcessWithParent(block, parent)
+}
+
+func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, err error) {
 	sm.lastAttemptedBlock = block
 
-	var (
-		parent = sm.bc.GetBlock(block.PrevHash)
-		state  = parent.State()
-	)
+	state := parent.State()
 
 	// Defer the Undo on the Trie. If the block processing happened
 	// we don't want to undo but since undo only happens on dirty
@@ -240,32 +242,32 @@ func (sm *BlockManager) Process(block *Block) (err error) {
 
 	txSha := DeriveSha(block.transactions)
 	if bytes.Compare(txSha, block.TxSha) != 0 {
-		return fmt.Errorf("Error validating transaction sha. Received %x, got %x", block.TxSha, txSha)
+		return nil, fmt.Errorf("Error validating transaction sha. Received %x, got %x", block.TxSha, txSha)
 	}
 
 	receipts, err := sm.ApplyDiff(state, parent, block)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	receiptSha := DeriveSha(receipts)
 	if bytes.Compare(receiptSha, block.ReceiptSha) != 0 {
-		return fmt.Errorf("Error validating receipt sha. Received %x, got %x", block.ReceiptSha, receiptSha)
+		return nil, fmt.Errorf("Error validating receipt sha. Received %x, got %x", block.ReceiptSha, receiptSha)
 	}
 
 	// Block validation
-	if err = sm.ValidateBlock(block); err != nil {
+	if err = sm.ValidateBlock(block, parent); err != nil {
 		statelogger.Errorln("Error validating block:", err)
-		return err
+		return nil, err
 	}
 
 	if err = sm.AccumelateRewards(state, block, parent); err != nil {
 		statelogger.Errorln("Error accumulating reward", err)
-		return err
+		return nil, err
 	}
 
 	if bytes.Compare(CreateBloom(block), block.LogsBloom) != 0 {
-		return errors.New("Unable to replicate block's bloom")
+		return nil, errors.New("Unable to replicate block's bloom")
 	}
 
 	state.Update()
@@ -276,27 +278,22 @@ func (sm *BlockManager) Process(block *Block) (err error) {
 	}
 
 	// Calculate the new total difficulty and sync back to the db
-	if sm.CalculateTD(block) {
+	if td, ok := sm.CalculateTD(block); ok {
 		// Sync the current block's state to the database and cancelling out the deferred Undo
 		state.Sync()
-
-		// Add the block to the chain
-		sm.bc.Add(block)
 
 		// TODO at this point we should also insert LOGS in to a database
 
 		sm.transState = state.Copy()
 
-		statelogger.Infof("Imported block #%d (%x...)\n", block.Number, block.Hash()[0:4])
-
 		state.Manifest().Reset()
 
 		sm.eth.TxPool().RemoveSet(block.Transactions())
-	} else {
-		statelogger.Errorln("total diff failed")
-	}
 
-	return nil
+		return td, nil
+	} else {
+		return nil, errors.New("total diff failed")
+	}
 }
 
 func (sm *BlockManager) ApplyDiff(state *state.State, parent, block *Block) (receipts Receipts, err error) {
@@ -312,7 +309,7 @@ func (sm *BlockManager) ApplyDiff(state *state.State, parent, block *Block) (rec
 	return receipts, nil
 }
 
-func (sm *BlockManager) CalculateTD(block *Block) bool {
+func (sm *BlockManager) CalculateTD(block *Block) (*big.Int, bool) {
 	uncleDiff := new(big.Int)
 	for _, uncle := range block.Uncles {
 		uncleDiff = uncleDiff.Add(uncleDiff, uncle.Difficulty)
@@ -326,30 +323,19 @@ func (sm *BlockManager) CalculateTD(block *Block) bool {
 	// The new TD will only be accepted if the new difficulty is
 	// is greater than the previous.
 	if td.Cmp(sm.bc.TD) > 0 {
-		// Set the new total difficulty back to the block chain
-		sm.bc.SetTotalDifficulty(td)
+		return td, true
 
-		return true
+		// Set the new total difficulty back to the block chain
+		//sm.bc.SetTotalDifficulty(td)
 	}
 
-	return false
+	return nil, false
 }
 
 // Validates the current block. Returns an error if the block was invalid,
 // an uncle or anything that isn't on the current block chain.
 // Validation validates easy over difficult (dagger takes longer time = difficult)
-func (sm *BlockManager) ValidateBlock(block *Block) error {
-	// Check each uncle's previous hash. In order for it to be valid
-	// is if it has the same block hash as the current
-	parent := sm.bc.GetBlock(block.PrevHash)
-	/*
-		for _, uncle := range block.Uncles {
-			if bytes.Compare(uncle.PrevHash,parent.PrevHash) != 0 {
-				return ValidationError("Mismatch uncle's previous hash. Expected %x, got %x",parent.PrevHash, uncle.PrevHash)
-			}
-		}
-	*/
-
+func (sm *BlockManager) ValidateBlock(block, parent *Block) error {
 	expd := CalcDifficulty(block, parent)
 	if expd.Cmp(block.Difficulty) < 0 {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Difficulty, expd)
