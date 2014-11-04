@@ -254,6 +254,8 @@ func (sm *StateManager) Process(block *Block) (err error) {
 		return fmt.Errorf("Error validating receipt sha. Received %x, got %x", block.ReceiptSha, receiptSha)
 	}
 
+	// TODO validate bloom
+
 	// Block validation
 	if err = sm.ValidateBlock(block); err != nil {
 		statelogger.Errorln("Error validating block:", err)

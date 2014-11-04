@@ -301,7 +301,6 @@ func (self *StateObject) CreateOutputForDiff() {
 
 // State object encoding methods
 func (c *StateObject) RlpEncode() []byte {
-	fmt.Printf("%x %x\n", c.State.Trie.Root, c.CodeHash())
 	return ethutil.Encode([]interface{}{c.Nonce, c.balance, c.State.Trie.Root, c.CodeHash()})
 }
 
