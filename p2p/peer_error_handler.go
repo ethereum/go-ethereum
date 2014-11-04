@@ -18,17 +18,15 @@ type PeerErrorHandler struct {
 	address        net.Addr
 	peerDisconnect chan DisconnectRequest
 	severity       int
-	peerErrorChan  chan *PeerError
-	blacklist      Blacklist
+	errc           chan error
 }
 
-func NewPeerErrorHandler(address net.Addr, peerDisconnect chan DisconnectRequest, peerErrorChan chan *PeerError, blacklist Blacklist) *PeerErrorHandler {
+func NewPeerErrorHandler(address net.Addr, peerDisconnect chan DisconnectRequest, errc chan error) *PeerErrorHandler {
 	return &PeerErrorHandler{
 		quit:           make(chan chan bool),
 		address:        address,
 		peerDisconnect: peerDisconnect,
-		peerErrorChan:  peerErrorChan,
-		blacklist:      blacklist,
+		errc:           errc,
 	}
 }
 
@@ -45,10 +43,10 @@ func (self *PeerErrorHandler) Stop() {
 func (self *PeerErrorHandler) listen() {
 	for {
 		select {
-		case peerError, ok := <-self.peerErrorChan:
+		case err, ok := <-self.errc:
 			if ok {
-				logger.Debugf("error %v\n", peerError)
-				go self.handle(peerError)
+				logger.Debugf("error %v\n", err)
+				go self.handle(err)
 			} else {
 				return
 			}
@@ -59,8 +57,12 @@ func (self *PeerErrorHandler) listen() {
 	}
 }
 
-func (self *PeerErrorHandler) handle(peerError *PeerError) {
+func (self *PeerErrorHandler) handle(err error) {
 	reason := DiscReason(' ')
+	peerError, ok := err.(*PeerError)
+	if !ok {
+		peerError = NewPeerError(MiscError, " %v", err)
+	}
 	switch peerError.Code {
 	case P2PVersionMismatch:
 		reason = DiscIncompatibleVersion
@@ -68,11 +70,11 @@ func (self *PeerErrorHandler) handle(peerError *PeerError) {
 		reason = DiscInvalidIdentity
 	case PubkeyForbidden:
 		reason = DiscUselessPeer
-	case InvalidMsgCode, PacketTooShort, PayloadTooShort, MagicTokenMismatch, EmptyPayload, ProtocolBreach:
+	case InvalidMsgCode, PacketTooLong, PayloadTooShort, MagicTokenMismatch, ProtocolBreach:
 		reason = DiscProtocolError
 	case PingTimeout:
 		reason = DiscReadTimeout
-	case WriteError, MiscError:
+	case ReadError, WriteError, MiscError:
 		reason = DiscNetworkError
 	case InvalidGenesis, InvalidNetworkId, InvalidProtocolVersion:
 		reason = DiscSubprotocolError
@@ -92,10 +94,5 @@ func (self *PeerErrorHandler) handle(peerError *PeerError) {
 }
 
 func (self *PeerErrorHandler) getSeverity(peerError *PeerError) int {
-	switch peerError.Code {
-	case ReadError:
-		return 4 //tolerate 3 :)
-	default:
-		return 1
-	}
+	return 1
 }

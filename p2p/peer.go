@@ -7,7 +7,6 @@ import (
 )
 
 type Peer struct {
-	// quit      chan chan bool
 	Inbound          bool // inbound (via listener) or outbound (via dialout)
 	Address          net.Addr
 	Host             []byte
@@ -15,22 +14,10 @@ type Peer struct {
 	Pubkey           []byte
 	Id               string
 	Caps             []string
-	peerErrorChan    chan *PeerError
-	messenger        *Messenger
+	peerErrorChan    chan error
+	messenger        *messenger
 	peerErrorHandler *PeerErrorHandler
 	server           *Server
-}
-
-func (self *Peer) Messenger() *Messenger {
-	return self.messenger
-}
-
-func (self *Peer) PeerErrorChan() chan *PeerError {
-	return self.peerErrorChan
-}
-
-func (self *Peer) Server() *Server {
-	return self.server
 }
 
 func NewPeer(conn net.Conn, address net.Addr, inbound bool, server *Server) *Peer {
@@ -45,9 +32,8 @@ func NewPeer(conn net.Conn, address net.Addr, inbound bool, server *Server) *Pee
 		peerErrorChan: peerErrorChan,
 		server:        server,
 	}
-	connection := NewConnection(conn, peerErrorChan)
-	peer.messenger = NewMessenger(peer, connection, peerErrorChan, server.Handlers())
-	peer.peerErrorHandler = NewPeerErrorHandler(address, server.PeerDisconnect(), peerErrorChan, server.Blacklist())
+	peer.messenger = newMessenger(peer, conn, peerErrorChan, server.Handlers())
+	peer.peerErrorHandler = NewPeerErrorHandler(address, server.PeerDisconnect(), peerErrorChan)
 	return peer
 }
 
@@ -61,8 +47,8 @@ func (self *Peer) String() string {
 	return fmt.Sprintf("%v:%v (%s) v%v %v", self.Host, self.Port, kind, self.Id, self.Caps)
 }
 
-func (self *Peer) Write(protocol string, msg *Msg) error {
-	return self.messenger.Write(protocol, msg)
+func (self *Peer) Write(protocol string, msg Msg) error {
+	return self.messenger.writeProtoMsg(protocol, msg)
 }
 
 func (self *Peer) Start() {
@@ -73,9 +59,6 @@ func (self *Peer) Start() {
 func (self *Peer) Stop() {
 	self.peerErrorHandler.Stop()
 	self.messenger.Stop()
-	// q := make(chan bool)
-	// self.quit <- q
-	// <-q
 }
 
 func (p *Peer) Encode() []interface{} {
