@@ -1,23 +1,25 @@
 module.exports = {
-  blockgenesis: require('./blockgenesistest'),
-  genesishashes: require('./genesishashestest'),
-  hexencode: require('./hexencodetest'),
-  keyaddrtests: require('./keyaddrtest'),
-  namecoin: require('./namecoin'),
-  rlptest: require('./rlptest'),
-  trietest: require('./trietest'),
-  trietestnextprev: require('./trietestnextprev'),
-  txtest: require('./txtest'),
-  vmtests: {
-    random: require('./vmtests/random'),
-    vmArithmeticTest: require('./vmtests/vmArithmeticTest'),
-    vmBitwiseLogicOperationTest: require('./vmtests/vmBitwiseLogicOperationTest'),
-    vmBlockInfoTest: require('./vmtests/vmBlockInfoTest'),
-    vmEnvironmentalInfoTest: require('./vmtests/vmEnvironmentalInfoTest'),
-    vmIOandFlowOperationsTest: require('./vmtests/vmIOandFlowOperationsTest'),
-    vmPushDupSwapTest: require('./vmtests/vmPushDupSwapTest'),
-    vmSha3Test: require('./vmtests/vmSha3Test'),
-    vmSystemOperationsTest: require('./vmtests/vmSystemOperationsTest'),
-    vmtests: require('./vmtests/vmtests')
+  blockgenesis: require('./BasicTests/blockgenesistest'),
+  genesishashes: require('./BasicTests/genesishashestest'),
+  hexencode: require('./BasicTests/hexencodetest'),
+  keyaddrtests: require('./BasicTests/keyaddrtest'),
+  rlptest: require('./BasicTests/rlptest'),
+  trietest: require('./TrieTests/trietest'),
+  trietestnextprev: require('./TrieTests/trietestnextprev'),
+  txtest: require('./BasicTests/txtest'),
+  randomTests: {
+    201410211705: require('./randomTests/201410211705'),
+    201410211708: require('./randomTests/201410211708')
+  },
+  VMTests: {
+    vmArithmeticTest: require('./VMTests/vmArithmeticTest'),
+    vmBitwiseLogicOperationTest: require('./VMTests/vmBitwiseLogicOperationTest'),
+    vmBlockInfoTest: require('./VMTests/vmBlockInfoTest'),
+    vmEnvironmentalInfoTest: require('./VMTests/vmEnvironmentalInfoTest'),
+    vmIOandFlowOperationsTest: require('./VMTests/vmIOandFlowOperationsTest'),
+    vmNamecoin: require('./VMTests/vmNamecoin'),
+    vmPushDupSwapTest: require('./VMTests/vmPushDupSwapTest'),
+    vmSha3Test: require('./VMTests/vmSha3Test'),
+    vmtestst: require('./VMTests/vmtests'),
   }
 };
