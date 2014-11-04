@@ -224,10 +224,10 @@ func (self *JSXEth) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr 
 		tx = chain.NewTransactionMessage(hash, value, gas, gasPrice, data)
 	}
 
-	acc := self.obj.StateManager().TransState().GetOrNewStateObject(keyPair.Address())
+	acc := self.obj.BlockManager().TransState().GetOrNewStateObject(keyPair.Address())
 	tx.Nonce = acc.Nonce
 	acc.Nonce += 1
-	self.obj.StateManager().TransState().UpdateStateObject(acc)
+	self.obj.BlockManager().TransState().UpdateStateObject(acc)
 
 	tx.Sign(keyPair.PrivateKey)
 	self.obj.TxPool().QueueTransaction(tx)

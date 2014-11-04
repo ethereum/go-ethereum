@@ -315,7 +315,7 @@ out:
 			// otherwise process and don't emit anything
 			var err error
 			for i, block := range blocks {
-				err = self.eth.StateManager().Process(block)
+				err = self.eth.BlockManager().Process(block)
 				if err != nil {
 					poollogger.Infoln(err)
 					poollogger.Debugf("Block #%v failed (%x...)\n", block.Number, block.Hash()[0:4])

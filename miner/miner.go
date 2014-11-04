@@ -67,7 +67,7 @@ func (miner *Miner) Start() {
 	miner.events = mux.Subscribe(chain.NewBlockEvent{}, chain.TxPreEvent{})
 
 	// Prepare inital block
-	//miner.ethereum.StateManager().Prepare(miner.block.State(), miner.block.State())
+	//miner.ethereum.BlockManager().Prepare(miner.block.State(), miner.block.State())
 	go miner.listener()
 
 	minerlogger.Infoln("Started")
@@ -161,7 +161,7 @@ func (miner *Miner) stopMining() {
 }
 
 func (self *Miner) mineNewBlock() {
-	stateManager := self.ethereum.StateManager()
+	blockManager := self.ethereum.BlockManager()
 
 	self.block = self.ethereum.ChainManager().NewBlock(self.coinbase)
 
@@ -178,7 +178,7 @@ func (self *Miner) mineNewBlock() {
 	parent := self.ethereum.ChainManager().GetBlock(self.block.PrevHash)
 	coinbase := self.block.State().GetOrNewStateObject(self.block.Coinbase)
 	coinbase.SetGasPool(self.block.CalcGasLimit(parent))
-	receipts, txs, unhandledTxs, erroneous, err := stateManager.ProcessTransactions(coinbase, self.block.State(), self.block, self.block, self.txs)
+	receipts, txs, unhandledTxs, erroneous, err := blockManager.ProcessTransactions(coinbase, self.block.State(), self.block, self.block, self.txs)
 	if err != nil {
 		minerlogger.Debugln(err)
 	}
@@ -189,7 +189,7 @@ func (self *Miner) mineNewBlock() {
 	self.block.SetReceipts(receipts)
 
 	// Accumulate the rewards included for this block
-	stateManager.AccumelateRewards(self.block.State(), self.block, parent)
+	blockManager.AccumelateRewards(self.block.State(), self.block, parent)
 
 	self.block.State().Update()
 
@@ -199,7 +199,7 @@ func (self *Miner) mineNewBlock() {
 	nonce := self.pow.Search(self.block, self.powQuitChan)
 	if nonce != nil {
 		self.block.Nonce = nonce
-		err := self.ethereum.StateManager().Process(self.block)
+		err := self.ethereum.BlockManager().Process(self.block)
 		if err != nil {
 			minerlogger.Infoln(err)
 		} else {

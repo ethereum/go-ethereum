@@ -1,12 +1,8 @@
 package chain
 
 import (
-	"fmt"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/state"
-	"github.com/ethgo.old/ethutil"
 )
 
 func TestBloom9(t *testing.T) {
@@ -21,6 +17,7 @@ func TestBloom9(t *testing.T) {
 	}
 }
 
+/*
 func TestAddress(t *testing.T) {
 	block := &Block{}
 	block.Coinbase = ethutil.Hex2Bytes("22341ae42d6dd7384bc8584e50419ea3ac75b83f")
@@ -29,3 +26,4 @@ func TestAddress(t *testing.T) {
 	bin := CreateBloom(block)
 	fmt.Printf("bin = %x\n", ethutil.LeftPadBytes(bin, 64))
 }
+*/

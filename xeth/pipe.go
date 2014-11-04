@@ -24,7 +24,7 @@ type VmVars struct {
 
 type XEth struct {
 	obj          chain.EthManager
-	stateManager *chain.StateManager
+	blockManager *chain.BlockManager
 	blockChain   *chain.ChainManager
 	world        *World
 
@@ -34,7 +34,7 @@ type XEth struct {
 func New(obj chain.EthManager) *XEth {
 	pipe := &XEth{
 		obj:          obj,
-		stateManager: obj.StateManager(),
+		blockManager: obj.BlockManager(),
 		blockChain:   obj.ChainManager(),
 	}
 	pipe.world = NewWorld(pipe)
@@ -137,10 +137,10 @@ func (self *XEth) Transact(key *crypto.KeyPair, rec []byte, value, gas, price *e
 		tx = chain.NewTransactionMessage(hash, value.BigInt(), gas.BigInt(), price.BigInt(), data)
 	}
 
-	acc := self.stateManager.TransState().GetOrNewStateObject(key.Address())
+	acc := self.blockManager.TransState().GetOrNewStateObject(key.Address())
 	tx.Nonce = acc.Nonce
 	acc.Nonce += 1
-	self.stateManager.TransState().UpdateStateObject(acc)
+	self.blockManager.TransState().UpdateStateObject(acc)
 
 	tx.Sign(key.PrivateKey)
 	self.obj.TxPool().QueueTransaction(tx)

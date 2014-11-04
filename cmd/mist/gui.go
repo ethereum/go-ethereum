@@ -396,7 +396,7 @@ func (gui *Gui) update() {
 	generalUpdateTicker := time.NewTicker(500 * time.Millisecond)
 	statsUpdateTicker := time.NewTicker(5 * time.Second)
 
-	state := gui.eth.StateManager().TransState()
+	state := gui.eth.BlockManager().TransState()
 
 	unconfirmedFunds := new(big.Int)
 	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetAccount(gui.address()).Balance())))
@@ -428,7 +428,7 @@ func (gui *Gui) update() {
 				case chain.NewBlockEvent:
 					gui.processBlock(ev.Block, false)
 					if bytes.Compare(ev.Block.Coinbase, gui.address()) == 0 {
-						gui.setWalletValue(gui.eth.StateManager().CurrentState().GetAccount(gui.address()).Balance(), nil)
+						gui.setWalletValue(gui.eth.BlockManager().CurrentState().GetAccount(gui.address()).Balance(), nil)
 					}
 
 				case chain.TxPreEvent:

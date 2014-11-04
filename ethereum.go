@@ -50,7 +50,7 @@ type Ethereum struct {
 	// DB interface
 	db ethutil.Database
 	// State manager for processing new blocks and managing the over all states
-	stateManager *chain.StateManager
+	blockManager *chain.BlockManager
 	// The transaction pool. Transaction can be pushed on this pool
 	// for later including in the blocks
 	txPool *chain.TxPool
@@ -130,7 +130,7 @@ func New(db ethutil.Database, clientIdentity wire.ClientIdentity, keyManager *cr
 	ethereum.blockPool = NewBlockPool(ethereum)
 	ethereum.txPool = chain.NewTxPool(ethereum)
 	ethereum.blockChain = chain.NewChainManager(ethereum)
-	ethereum.stateManager = chain.NewStateManager(ethereum)
+	ethereum.blockManager = chain.NewBlockManager(ethereum)
 
 	// Start the tx pool
 	ethereum.txPool.Start()
@@ -150,8 +150,8 @@ func (s *Ethereum) ChainManager() *chain.ChainManager {
 	return s.blockChain
 }
 
-func (s *Ethereum) StateManager() *chain.StateManager {
-	return s.stateManager
+func (s *Ethereum) BlockManager() *chain.BlockManager {
+	return s.blockManager
 }
 
 func (s *Ethereum) TxPool() *chain.TxPool {
@@ -392,7 +392,7 @@ func (s *Ethereum) reapDeadPeerHandler() {
 // Start the ethereum
 func (s *Ethereum) Start(seed bool) {
 	s.blockPool.Start()
-	s.stateManager.Start()
+	s.blockManager.Start()
 
 	// Bind to addr and port
 	ln, err := net.Listen("tcp", ":"+s.Port)
@@ -516,7 +516,7 @@ func (s *Ethereum) Stop() {
 		s.RpcServer.Stop()
 	}
 	s.txPool.Stop()
-	s.stateManager.Stop()
+	s.blockManager.Stop()
 	s.blockPool.Stop()
 
 	loggerger.Infoln("Server stopped")

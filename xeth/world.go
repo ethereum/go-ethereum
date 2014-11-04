@@ -23,7 +23,7 @@ func (self *XEth) World() *World {
 }
 
 func (self *World) State() *state.State {
-	return self.pipe.stateManager.CurrentState()
+	return self.pipe.blockManager.CurrentState()
 }
 
 func (self *World) Get(addr []byte) *Object {

@@ -141,8 +141,8 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 		keyPair = self.lib.eth.KeyManager().KeyPair()
 	)
 
-	statedb := self.lib.eth.StateManager().TransState()
-	account := self.lib.eth.StateManager().TransState().GetAccount(keyPair.Address())
+	statedb := self.lib.eth.BlockManager().TransState()
+	account := self.lib.eth.BlockManager().TransState().GetAccount(keyPair.Address())
 	contract := statedb.NewStateObject([]byte{0})
 	contract.SetBalance(value)
 

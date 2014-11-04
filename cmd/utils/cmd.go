@@ -317,7 +317,7 @@ func BlockDo(ethereum *eth.Ethereum, hash []byte) error {
 
 	parent := ethereum.ChainManager().GetBlock(block.PrevHash)
 
-	_, err := ethereum.StateManager().ApplyDiff(parent.State(), parent, block)
+	_, err := ethereum.BlockManager().ApplyDiff(parent.State(), parent, block)
 	if err != nil {
 		return err
 	}

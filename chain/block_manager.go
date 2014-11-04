@@ -32,7 +32,7 @@ type Peer interface {
 }
 
 type EthManager interface {
-	StateManager() *StateManager
+	BlockManager() *BlockManager
 	ChainManager() *ChainManager
 	TxPool() *TxPool
 	Broadcast(msgType wire.MsgType, data []interface{})
@@ -46,7 +46,7 @@ type EthManager interface {
 	EventMux() *event.TypeMux
 }
 
-type StateManager struct {
+type BlockManager struct {
 	// Mutex for locking the block processor. Blocks can only be handled one at a time
 	mutex sync.Mutex
 	// Canonical block chain
@@ -74,8 +74,8 @@ type StateManager struct {
 	events event.Subscription
 }
 
-func NewStateManager(ethereum EthManager) *StateManager {
-	sm := &StateManager{
+func NewBlockManager(ethereum EthManager) *BlockManager {
+	sm := &BlockManager{
 		mem: make(map[string]*big.Int),
 		Pow: &EasyPow{},
 		eth: ethereum,
@@ -87,18 +87,18 @@ func NewStateManager(ethereum EthManager) *StateManager {
 	return sm
 }
 
-func (self *StateManager) Start() {
+func (self *BlockManager) Start() {
 	statelogger.Debugln("Starting state manager")
 	self.events = self.eth.EventMux().Subscribe(Blocks(nil))
 	go self.updateThread()
 }
 
-func (self *StateManager) Stop() {
+func (self *BlockManager) Stop() {
 	statelogger.Debugln("Stopping state manager")
 	self.events.Unsubscribe()
 }
 
-func (self *StateManager) updateThread() {
+func (self *BlockManager) updateThread() {
 	for ev := range self.events.Chan() {
 		for _, block := range ev.(Blocks) {
 			err := self.Process(block)
@@ -112,29 +112,29 @@ func (self *StateManager) updateThread() {
 	}
 }
 
-func (sm *StateManager) CurrentState() *state.State {
+func (sm *BlockManager) CurrentState() *state.State {
 	return sm.eth.ChainManager().CurrentBlock.State()
 }
 
-func (sm *StateManager) TransState() *state.State {
+func (sm *BlockManager) TransState() *state.State {
 	return sm.transState
 }
 
-func (sm *StateManager) MiningState() *state.State {
+func (sm *BlockManager) MiningState() *state.State {
 	return sm.miningState
 }
 
-func (sm *StateManager) NewMiningState() *state.State {
+func (sm *BlockManager) NewMiningState() *state.State {
 	sm.miningState = sm.eth.ChainManager().CurrentBlock.State().Copy()
 
 	return sm.miningState
 }
 
-func (sm *StateManager) ChainManager() *ChainManager {
+func (sm *BlockManager) ChainManager() *ChainManager {
 	return sm.bc
 }
 
-func (self *StateManager) ProcessTransactions(coinbase *state.StateObject, state *state.State, block, parent *Block, txs Transactions) (Receipts, Transactions, Transactions, Transactions, error) {
+func (self *BlockManager) ProcessTransactions(coinbase *state.StateObject, state *state.State, block, parent *Block, txs Transactions) (Receipts, Transactions, Transactions, Transactions, error) {
 	var (
 		receipts           Receipts
 		handled, unhandled Transactions
@@ -209,7 +209,7 @@ done:
 	return receipts, handled, unhandled, erroneous, err
 }
 
-func (sm *StateManager) Process(block *Block) (err error) {
+func (sm *BlockManager) Process(block *Block) (err error) {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
@@ -298,7 +298,7 @@ func (sm *StateManager) Process(block *Block) (err error) {
 	return nil
 }
 
-func (sm *StateManager) ApplyDiff(state *state.State, parent, block *Block) (receipts Receipts, err error) {
+func (sm *BlockManager) ApplyDiff(state *state.State, parent, block *Block) (receipts Receipts, err error) {
 	coinbase := state.GetOrNewStateObject(block.Coinbase)
 	coinbase.SetGasPool(block.CalcGasLimit(parent))
 
@@ -311,7 +311,7 @@ func (sm *StateManager) ApplyDiff(state *state.State, parent, block *Block) (rec
 	return receipts, nil
 }
 
-func (sm *StateManager) CalculateTD(block *Block) bool {
+func (sm *BlockManager) CalculateTD(block *Block) bool {
 	uncleDiff := new(big.Int)
 	for _, uncle := range block.Uncles {
 		uncleDiff = uncleDiff.Add(uncleDiff, uncle.Difficulty)
@@ -337,7 +337,7 @@ func (sm *StateManager) CalculateTD(block *Block) bool {
 // Validates the current block. Returns an error if the block was invalid,
 // an uncle or anything that isn't on the current block chain.
 // Validation validates easy over difficult (dagger takes longer time = difficult)
-func (sm *StateManager) ValidateBlock(block *Block) error {
+func (sm *BlockManager) ValidateBlock(block *Block) error {
 	// Check each uncle's previous hash. In order for it to be valid
 	// is if it has the same block hash as the current
 	parent := sm.bc.GetBlock(block.PrevHash)
@@ -374,7 +374,7 @@ func (sm *StateManager) ValidateBlock(block *Block) error {
 	return nil
 }
 
-func (sm *StateManager) AccumelateRewards(state *state.State, block, parent *Block) error {
+func (sm *BlockManager) AccumelateRewards(state *state.State, block, parent *Block) error {
 	reward := new(big.Int).Set(BlockReward)
 
 	knownUncles := ethutil.Set(parent.Uncles)
@@ -417,21 +417,7 @@ func (sm *StateManager) AccumelateRewards(state *state.State, block, parent *Blo
 	return nil
 }
 
-// Manifest will handle both creating notifications and generating bloom bin data
-func (sm *StateManager) createBloomFilter(state *state.State) *BloomFilter {
-	bloomf := NewBloomFilter(nil)
-
-	for _, msg := range state.Manifest().Messages {
-		bloomf.Set(msg.To)
-		bloomf.Set(msg.From)
-	}
-
-	sm.eth.EventMux().Post(state.Manifest().Messages)
-
-	return bloomf
-}
-
-func (sm *StateManager) GetMessages(block *Block) (messages []*state.Message, err error) {
+func (sm *BlockManager) GetMessages(block *Block) (messages []*state.Message, err error) {
 	if !sm.bc.HasBlock(block.PrevHash) {
 		return nil, ParentError(block.PrevHash)
 	}
