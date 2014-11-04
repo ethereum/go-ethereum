@@ -3,7 +3,7 @@ package vm
 import (
 	"math/big"
 
-	"github.com/ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/ethutil"
 )
 
 func analyseJumpDests(code []byte) (dests map[int64]*big.Int) {
