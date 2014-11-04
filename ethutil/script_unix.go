@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ethereum/serpent-go"
 	"github.com/obscuren/mutan"
 	"github.com/obscuren/mutan/backends"
-	"github.com/obscuren/serpent-go"
 )
 
 // General compile function
