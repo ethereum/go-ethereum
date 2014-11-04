@@ -59,32 +59,34 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 	var (
 		op OpCode
 
-		mem      = &Memory{}
-		stack    = NewStack()
-		pc       = big.NewInt(0)
-		step     = 0
-		prevStep = 0
-		statedb  = self.env.State()
-		require  = func(m int) {
+		destinations = analyseJumpDests(closure.Code)
+		mem          = &Memory{}
+		stack        = NewStack()
+		pc           = big.NewInt(0)
+		step         = 0
+		prevStep     = 0
+		statedb      = self.env.State()
+		require      = func(m int) {
 			if stack.Len() < m {
 				panic(fmt.Sprintf("%04v (%v) stack err size = %d, required = %d", pc, op, stack.Len(), m))
 			}
 		}
 
-		jump = func(pos *big.Int) {
-			p := int(pos.Int64())
+		jump = func(from, to *big.Int) {
+			p := int(to.Int64())
 
-			self.Printf(" ~> %v", pos)
+			self.Printf(" ~> %v", to)
 			// Return to start
 			if p == 0 {
 				pc = big.NewInt(0)
 			} else {
-				nop := OpCode(closure.GetOp(p - 1))
-				if nop != JUMPDEST {
+				nop := OpCode(closure.GetOp(p))
+				if !(nop == JUMPDEST || destinations[from.Int64()] != nil) {
 					panic(fmt.Sprintf("JUMP missed JUMPDEST (%v) %v", nop, p))
 				}
 
-				pc = pos
+				pc = to
+
 			}
 
 			self.Endl()
@@ -406,6 +408,11 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 				} else {
 					num.And(num, mask)
 				}
+
+				num = U256(num)
+
+				self.Printf(" = %v", num)
+
 				stack.Push(num)
 			}
 		case NOT:
@@ -765,14 +772,14 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case JUMP:
 
-			jump(stack.Pop())
+			jump(pc, stack.Pop())
 
 			continue
 		case JUMPI:
 			cond, pos := stack.Popn()
 
 			if cond.Cmp(ethutil.BigTrue) >= 0 {
-				jump(pos)
+				jump(pc, pos)
 
 				continue
 			}

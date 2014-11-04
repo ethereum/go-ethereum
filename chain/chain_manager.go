@@ -348,7 +348,6 @@ func (self *ChainManager) TestChain(chain *BlockChain) (td *big.Int, err error) 
 			return
 		}
 		l.td = td
-		i++
 	}
 
 	if td.Cmp(self.TD) <= 0 {

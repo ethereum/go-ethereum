@@ -88,11 +88,14 @@ func TestVMArithmetic(t *testing.T) {
 	RunVmTest(fn, t)
 }
 
+/*
+deleted?
 func TestVMSystemOperation(t *testing.T) {
-	//helper.Logger.SetLogLevel(5)
+	helper.Logger.SetLogLevel(5)
 	const fn = "../files/vmtests/vmSystemOperationsTest.json"
 	RunVmTest(fn, t)
 }
+*/
 
 func TestBitwiseLogicOperation(t *testing.T) {
 	const fn = "../files/vmtests/vmBitwiseLogicOperationTest.json"
@@ -110,6 +113,7 @@ func TestEnvironmentalInfo(t *testing.T) {
 }
 
 func TestFlowOperation(t *testing.T) {
+	//	helper.Logger.SetLogLevel(5)
 	const fn = "../files/vmtests/vmIOandFlowOperationsTest.json"
 	RunVmTest(fn, t)
 }

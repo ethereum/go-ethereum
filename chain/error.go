@@ -123,6 +123,6 @@ func (self *TDError) Error() string {
 	return fmt.Sprintf("incoming chain has a lower or equal TD (%v <= %v)", self.a, self.b)
 }
 func IsTDError(e error) bool {
-	_, ok := err.(*TDError)
+	_, ok := e.(*TDError)
 	return ok
 }
