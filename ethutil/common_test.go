@@ -2,8 +2,35 @@ package ethutil
 
 import (
 	"math/big"
+	"os"
 	"testing"
 )
+
+func TestOS(t *testing.T) {
+	res := IsWindows()
+
+	if res && (os.PathSeparator != '\\' || os.PathListSeparator != ';') {
+		t.Error("IsWindows is", res, "but path is", os.PathSeparator)
+	}
+
+	if !res && (os.PathSeparator == '\\' && os.PathListSeparator == ';') {
+		t.Error("IsWindows is", res, "but path is", os.PathSeparator)
+	}
+}
+
+func TestWindonziePath(t *testing.T) {
+	path := "/opt/eth/test/file.ext"
+	res := WindonizePath(path)
+	iswindowspath := os.PathSeparator == '\\'
+
+	if !iswindowspath && string(res[0]) != "/" {
+		t.Error("Got", res)
+	}
+
+	if iswindowspath && string(res[0]) == "/" {
+		t.Error("Got", res)
+	}
+}
 
 func TestCommon(t *testing.T) {
 	ether := CurrencyToString(BigPow(10, 19))
