@@ -41,6 +41,21 @@ func NewDebugVm(env Environment) *DebugVm {
 func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 	self.depth++
 
+	if self.Recoverable {
+		// Recover from any require exception
+		defer func() {
+			if r := recover(); r != nil {
+				self.Endl()
+
+				ret = closure.Return(nil)
+
+				err = fmt.Errorf("%v", r)
+				// No error should be set. Recover is used with require
+				// Is this too error prone?
+			}
+		}()
+	}
+
 	var (
 		op OpCode
 
@@ -75,19 +90,6 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			self.Endl()
 		}
 	)
-
-	if self.Recoverable {
-		// Recover from any require exception
-		defer func() {
-			if r := recover(); r != nil {
-				self.Endl()
-
-				ret = closure.Return(nil)
-				// No error should be set. Recover is used with require
-				// Is this too error prone?
-			}
-		}()
-	}
 
 	// Debug hook
 	if self.Dbg != nil {
