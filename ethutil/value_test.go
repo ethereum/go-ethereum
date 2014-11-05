@@ -2,7 +2,6 @@ package ethutil
 
 import (
 	"bytes"
-	"fmt"
 	"math/big"
 	"testing"
 )
@@ -81,6 +80,10 @@ func TestMath(t *testing.T) {
 }
 
 func TestString(t *testing.T) {
-	a := NewValue("10")
-	fmt.Println("VALUE WITH STRING:", a.Int())
+	data := "10"
+	exp := int64(10)
+	res := NewValue(data).Int()
+	if res != exp {
+		t.Errorf("Exprected %d Got res", exp, res)
+	}
 }
