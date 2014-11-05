@@ -2,23 +2,25 @@
 <html>
 
 <head>
-<script type="text/javascript" src="es6-promise-2.0.0.js"></script>
-<script type="text/javascript" src="main.js"></script>
-<script type="text/javascript" src="websocket.js"></script>
-<script type="text/javascript" src="qt.js"></script>
-<script type="text/javascript" src="httprpc.js"></script>
+<script type="text/javascript" src="js/es6-promise/promise.min.js"></script>
+<script type="text/javascript" src="../dist/ethereum.min.js"></script>
+
 <script type="text/javascript">
 if (window.Promise === undefined) {
     window.Promise = ES6Promise.Promise;
 }
+var web3 = require('web3');
 
 //web3.setProvider(new web3.providers.QtProvider());
 web3.setProvider(new web3.providers.HttpRpcProvider("http://localhost:8080"));
+// web3.setProvider(new web3.providers.WebSocketProvider("ws://localhost:40404/eth"));
 
 function testSnippet() {
     web3.eth.watch({altered: web3.eth.coinbase}).changed(function() {
         web3.eth.balanceAt(web3.eth.coinbase).then(function (balance) {
-            document.getElementById("result").innerText = web3.toDecimal(balance);
+        	console.log(parseInt(balance,16));
+        	console.log(typeof balance);
+            document.getElementById("result").innerText = +balance;
         });
     });
 }
