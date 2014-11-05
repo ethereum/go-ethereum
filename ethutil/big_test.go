@@ -1,7 +1,7 @@
 package ethutil
 
 import (
-	"fmt"
+	"bytes"
 	"testing"
 )
 
@@ -9,9 +9,11 @@ func TestMisc(t *testing.T) {
 	a := Big("10")
 	b := Big("57896044618658097711785492504343953926634992332820282019728792003956564819968")
 	c := []byte{1, 2, 3, 4}
-	fmt.Println(b)
 	z := BitTest(a, 1)
-	fmt.Println(z)
+
+	if z != true {
+		t.Error("Expected true got", z)
+	}
 
 	U256(a)
 	S256(a)
@@ -57,7 +59,15 @@ func TestBigCopy(t *testing.T) {
 	b := BigCopy(a)
 	c := Big("1000000000000")
 	y := BigToBytes(b, 16)
+	ybytes := []byte{0, 10}
 	z := BigToBytes(c, 16)
-	fmt.Println(y)
-	fmt.Println(z)
+	zbytes := []byte{232, 212, 165, 16, 0}
+
+	if bytes.Compare(y, ybytes) != 0 {
+		t.Error("Got", ybytes)
+	}
+
+	if bytes.Compare(z, zbytes) != 0 {
+		t.Error("Got", zbytes)
+	}
 }
