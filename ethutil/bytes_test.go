@@ -115,3 +115,22 @@ func TestReadVarInt(t *testing.T) {
 		t.Errorf("Expected %d | Got %d", exp1, res1)
 	}
 }
+
+func TestBinaryLength(t *testing.T) {
+	data1 := 0
+	data2 := 920987656789
+
+	exp1 := 0
+	exp2 := 5
+
+	res1 := BinaryLength(data1)
+	res2 := BinaryLength(data2)
+
+	if res1 != exp1 {
+		t.Errorf("Expected %d got %d", exp1, res1)
+	}
+
+	if res2 != exp2 {
+		t.Errorf("Expected %d got %d", exp2, res2)
+	}
+}
