@@ -82,3 +82,36 @@ func TestRightPadString(t *testing.T) {
 		t.Errorf("Expected % x Got % x", val, resshrt)
 	}
 }
+
+func TestReadVarInt(t *testing.T) {
+	data8 := []byte{1, 2, 3, 4, 5, 6, 7, 8}
+	data4 := []byte{1, 2, 3, 4}
+	data2 := []byte{1, 2}
+	data1 := []byte{1}
+
+	exp8 := uint64(72623859790382856)
+	exp4 := uint64(16909060)
+	exp2 := uint64(258)
+	exp1 := uint64(1)
+
+	res8 := ReadVarInt(data8)
+	res4 := ReadVarInt(data4)
+	res2 := ReadVarInt(data2)
+	res1 := ReadVarInt(data1)
+
+	if res8 != exp8 {
+		t.Errorf("Expected %d | Got %d", exp8, res8)
+	}
+
+	if res4 != exp4 {
+		t.Errorf("Expected %d | Got %d", exp4, res4)
+	}
+
+	if res2 != exp2 {
+		t.Errorf("Expected %d | Got %d", exp2, res2)
+	}
+
+	if res1 != exp1 {
+		t.Errorf("Expected %d | Got %d", exp1, res1)
+	}
+}
