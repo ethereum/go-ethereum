@@ -5,11 +5,21 @@ import (
 	"testing"
 )
 
-func TestParseData(t *testing.T) {
+func TestParseDataString(t *testing.T) {
 	data := ParseData("hello", "world", "0x0106")
 	exp := "68656c6c6f000000000000000000000000000000000000000000000000000000776f726c640000000000000000000000000000000000000000000000000000000106000000000000000000000000000000000000000000000000000000000000"
 	if bytes.Compare(data, Hex2Bytes(exp)) != 0 {
 		t.Error("Error parsing data")
+	}
+}
+
+func TestParseDataBytes(t *testing.T) {
+	data := []byte{232, 212, 165, 16, 0}
+	exp := []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 232, 212, 165, 16, 0}
+
+	res := ParseData(data)
+	if bytes.Compare(res, exp) != 0 {
+		t.Errorf("Expected %x got %x", exp, res)
 	}
 }
 
