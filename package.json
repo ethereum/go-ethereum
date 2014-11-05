@@ -38,7 +38,7 @@
   },
   "homepage": "https://github.com/cubedro/ethereum.js",
   "bugs": {
-    "url": "https://github.com/cubedro/ethereum.js/issues"
+    "url": "https://github.com/ethereum/ethereum.js/issues"
   },
   "keywords": [
     "ethereum",

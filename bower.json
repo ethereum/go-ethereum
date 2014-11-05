@@ -3,8 +3,7 @@
   "namespace": "ethereum",
   "version": "0.0.1",
   "description": "Ethereum Compatible JavaScript API",
-  "main": "dist/ethereum.js",
-  "scripts": ["dist/ethereum.js", "dist/ethereum.min.js"],
+  "main": ["./dist/ethereum.js", "./dist/ethereum.min.js"],
   "dependencies": {
     "es6-promise": "#master"
   },
@@ -12,6 +11,7 @@
     "type": "git",
     "url": "https://github.com/cubedro/ethereum.js.git"
   },
+  "homepage": "https://github.com/cubedro/ethereum.js",
   "bugs": {
     "url": "https://github.com/ethereum/ethereum.js/issues"
   },
@@ -38,11 +38,14 @@
     "lib",
     "node_modules",
     "package.json",
+    ".bowerrc",
     ".editorconfig",
     ".gitignore",
     ".jshintrc",
+    ".npmignore",
     ".travis.yml",
-    "./*.js",
+    "gulpfile.js",
+    "index.js",
     "**/*.txt"
   ]
 }
