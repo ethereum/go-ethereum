@@ -127,6 +127,39 @@ func TestLeftPadBytes(t *testing.T) {
 	}
 }
 
+func TestFormatData(t *testing.T) {
+	data1 := ""
+	data2 := "0xa9e67e00"
+	data3 := "a9e67e"
+	data4 := "\"a9e67e00\""
+
+	exp1 := []byte{}
+	exp2 := []byte{00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 0xa9, 0xe6, 0x7e, 00}
+	exp3 := []byte{00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00}
+	exp4 := []byte{0x61, 0x39, 0x65, 0x36, 0x37, 0x65, 0x30, 0x30, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00}
+
+	res1 := FormatData(data1)
+	res2 := FormatData(data2)
+	res3 := FormatData(data3)
+	res4 := FormatData(data4)
+
+	if bytes.Compare(res1, exp1) != 0 {
+		t.Errorf("Expected % x Got % x", exp1, res1)
+	}
+
+	if bytes.Compare(res2, exp2) != 0 {
+		t.Errorf("Expected % x Got % x", exp2, res2)
+	}
+
+	if bytes.Compare(res3, exp3) != 0 {
+		t.Errorf("Expected % x Got % x", exp3, res3)
+	}
+
+	if bytes.Compare(res4, exp4) != 0 {
+		t.Errorf("Expected % x Got % x", exp4, res4)
+	}
+}
+
 func TestRightPadBytes(t *testing.T) {
 	val := []byte{1, 2, 3, 4}
 	exp := []byte{1, 2, 3, 4, 0, 0, 0, 0}
