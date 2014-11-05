@@ -5,7 +5,8 @@
   "description": "Ethereum Compatible JavaScript API",
   "main": "./index.js",
   "directories": {
-    "lib": "./lib"
+    "lib": "lib",
+    "example": "example"
   },
   "dependencies": {
     "es6-promise": "*",
@@ -26,23 +27,25 @@
   "scripts": {
     "build": "gulp",
     "watch": "gulp watch",
-    "lint": "jshint lib"
+    "lint": "gulp lint"
   },
   "browser": {
     "xmlhttprequest": "./lib/browser_fix/xhr.js"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ethereum/ethereum.js.git"
+    "url": "https://github.com/cubedro/ethereum.js.git"
   },
+  "homepage": "https://github.com/cubedro/ethereum.js",
   "bugs": {
-    "url": "https://github.com/ethereum/ethereum.js/issues"
+    "url": "https://github.com/cubedro/ethereum.js/issues"
   },
   "keywords": [
     "ethereum",
     "javascript",
     "API"
   ],
+  "author": "ethdev.com",
   "authors": [
     {
       "name": "Jeffery Wilcke",
@@ -60,5 +63,5 @@
       "url": "https://github.com/cubedro"
     }
   ],
-  "license": "LGPL"
+  "license": "LGPL-3.0"
 }

@@ -1,0 +1,6 @@
+example/js
+node_modules
+test
+.gitignore
+.travis.yml
+component.json
