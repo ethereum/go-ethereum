@@ -5,6 +5,17 @@ import (
 	"testing"
 )
 
+func TestByteString(t *testing.T) {
+	var data Bytes
+	data = []byte{102, 111, 111}
+	exp := "foo"
+	res := data.String()
+
+	if res != exp {
+		t.Errorf("Expected %s got %s", exp, res)
+	}
+}
+
 func TestParseDataString(t *testing.T) {
 	data := ParseData("hello", "world", "0x0106")
 	exp := "68656c6c6f000000000000000000000000000000000000000000000000000000776f726c640000000000000000000000000000000000000000000000000000000106000000000000000000000000000000000000000000000000000000000000"
