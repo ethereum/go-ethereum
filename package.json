@@ -14,9 +14,9 @@
     "xmlhttprequest": "*"
   },
   "devDependencies": {
-    "bower": "^1.3.12",
+    "bower": ">=1.3.0",
     "browserify": "6.x",
-    "del": "^0.1.3",
+    "del": ">=0.1.1",
     "gulp": "3.8.x",
     "gulp-browserify-thin": "^0.1.5",
     "gulp-jshint": "^1.9.0",
