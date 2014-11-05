@@ -98,7 +98,7 @@ type byteReader interface {
 	io.ByteReader
 }
 
-// readMsg reads a message header.
+// readMsg reads a message header from r.
 func readMsg(r byteReader) (msg Msg, err error) {
 	// read magic and payload size
 	start := make([]byte, 8)

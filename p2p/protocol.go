@@ -143,9 +143,6 @@ func (d DiscReason) String() string {
 	return discReasonToString[d]
 }
 
-func (bp *baseProtocol) Ping() {
-}
-
 func (bp *baseProtocol) Offset() MsgCode {
 	return baseProtocolOffset
 }
@@ -287,7 +284,7 @@ func (bp *baseProtocol) handleHandshake(c *ethutil.Value) error {
 
 	// self connect detection
 	if bytes.Compare(bp.peer.server.ClientIdentity().Pubkey()[1:], pubkey) == 0 {
-		return NewPeerError(PubkeyForbidden, "not allowed to connect to bp")
+		return NewPeerError(PubkeyForbidden, "not allowed to connect to self")
 	}
 
 	// register pubkey on server. this also sets the pubkey on the peer (need lock)

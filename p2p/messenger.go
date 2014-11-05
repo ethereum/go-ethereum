@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-type Handlers map[string]func() Protocol
+type Handlers map[string]Protocol
 
 type proto struct {
 	in              chan Msg
@@ -23,6 +23,7 @@ func (rw *proto) WriteMsg(msg Msg) error {
 	if msg.Code >= rw.maxcode {
 		return NewPeerError(InvalidMsgCode, "not handled")
 	}
+	msg.Code += rw.offset
 	return rw.messenger.writeMsg(msg)
 }
 
@@ -31,12 +32,13 @@ func (rw *proto) ReadMsg() (Msg, error) {
 	if !ok {
 		return msg, io.EOF
 	}
+	msg.Code -= rw.offset
 	return msg, nil
 }
 
-// eofSignal is used to 'lend' the network connection
-// to a protocol. when the protocol's read loop has read the
-// whole payload, the done channel is closed.
+// eofSignal wraps a reader with eof signaling.
+// the eof channel is closed when the wrapped reader
+// reaches EOF.
 type eofSignal struct {
 	wrapped io.Reader
 	eof     chan struct{}
@@ -119,7 +121,6 @@ func (m *messenger) readLoop() {
 			m.err <- err
 			return
 		}
-		msg.Code -= proto.offset
 		if msg.Size <= wholePayloadSize {
 			// optimization: msg is small enough, read all
 			// of it and move on to the next message
@@ -185,11 +186,10 @@ func (m *messenger) setRemoteProtocols(protocols []string) {
 	defer m.protocolLock.Unlock()
 	offset := baseProtocolOffset
 	for _, name := range protocols {
-		protocolFunc, ok := m.handlers[name]
+		inst, ok := m.handlers[name]
 		if !ok {
 			continue // not handled
 		}
-		inst := protocolFunc()
 		m.protocols[name] = m.startProto(offset, name, inst)
 		offset += inst.Offset()
 	}
