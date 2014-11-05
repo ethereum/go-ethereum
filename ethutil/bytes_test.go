@@ -134,3 +134,12 @@ func TestBinaryLength(t *testing.T) {
 		t.Errorf("Expected %d got %d", exp2, res2)
 	}
 }
+
+func TestCopyBytes(t *testing.T) {
+	data1 := []byte{1, 2, 3, 4}
+	exp1 := []byte{1, 2, 3, 4}
+	res1 := CopyBytes(data1)
+	if bytes.Compare(res1, exp1) != 0 {
+		t.Errorf("Expected % x got % x", exp1, res1)
+	}
+}
