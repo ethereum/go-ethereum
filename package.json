@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "es6-promise": "*",
-    "ws": "^0.4.32",
-    "xmlhttprequest": "^1.6.0"
+    "ws": "*",
+    "xmlhttprequest": "*"
   },
   "devDependencies": {
     "bower": "^1.3.12",

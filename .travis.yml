@@ -4,8 +4,6 @@ node_js:
   - "0.10"
   - "0.8"
   - "0.6"
-  - "0.5"
-  - "0.4"
 before_script:
   - npm install
 after_script:
