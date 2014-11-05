@@ -16,6 +16,23 @@ func TestByteString(t *testing.T) {
 	}
 }
 
+
+func TestIsHex(t *testing.T) {
+	data1 := "a9e67e"
+	exp1 := false
+	res1 := IsHex(data1)
+	if exp1 != res1 {
+		t.Errorf("Expected % x Got % x", exp1, res1)
+	}
+
+	data2 := "0xa9e67e00"
+	exp2 := true
+	res2 := IsHex(data2)
+	if exp2 != res2 {
+		t.Errorf("Expected % x Got % x", exp2, res2)
+	}
+}
+
 func TestParseDataString(t *testing.T) {
 	data := ParseData("hello", "world", "0x0106")
 	exp := "68656c6c6f000000000000000000000000000000000000000000000000000000776f726c640000000000000000000000000000000000000000000000000000000106000000000000000000000000000000000000000000000000000000000000"
