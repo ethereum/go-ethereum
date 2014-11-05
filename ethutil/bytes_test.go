@@ -17,6 +17,67 @@ func TestByteString(t *testing.T) {
 }
 
 
+func TestReadVarInt(t *testing.T) {
+	data8 := []byte{1, 2, 3, 4, 5, 6, 7, 8}
+	data4 := []byte{1, 2, 3, 4}
+	data2 := []byte{1, 2}
+	data1 := []byte{1}
+
+	exp8 := uint64(72623859790382856)
+	exp4 := uint64(16909060)
+	exp2 := uint64(258)
+	exp1 := uint64(1)
+
+	res8 := ReadVarInt(data8)
+	res4 := ReadVarInt(data4)
+	res2 := ReadVarInt(data2)
+	res1 := ReadVarInt(data1)
+
+	if res8 != exp8 {
+		t.Errorf("Expected %d | Got %d", exp8, res8)
+	}
+
+	if res4 != exp4 {
+		t.Errorf("Expected %d | Got %d", exp4, res4)
+	}
+
+	if res2 != exp2 {
+		t.Errorf("Expected %d | Got %d", exp2, res2)
+	}
+
+	if res1 != exp1 {
+		t.Errorf("Expected %d | Got %d", exp1, res1)
+	}
+}
+
+func TestBinaryLength(t *testing.T) {
+	data1 := 0
+	data2 := 920987656789
+
+	exp1 := 0
+	exp2 := 5
+
+	res1 := BinaryLength(data1)
+	res2 := BinaryLength(data2)
+
+	if res1 != exp1 {
+		t.Errorf("Expected %d got %d", exp1, res1)
+	}
+
+	if res2 != exp2 {
+		t.Errorf("Expected %d got %d", exp2, res2)
+	}
+}
+
+func TestCopyBytes(t *testing.T) {
+	data1 := []byte{1, 2, 3, 4}
+	exp1 := []byte{1, 2, 3, 4}
+	res1 := CopyBytes(data1)
+	if bytes.Compare(res1, exp1) != 0 {
+		t.Errorf("Expected % x got % x", exp1, res1)
+	}
+}
+
 func TestIsHex(t *testing.T) {
 	data1 := "a9e67e"
 	exp1 := false
@@ -108,66 +169,5 @@ func TestRightPadString(t *testing.T) {
 	resshrt := RightPadString(val, 2)
 	if resshrt != val {
 		t.Errorf("Expected % x Got % x", val, resshrt)
-	}
-}
-
-func TestReadVarInt(t *testing.T) {
-	data8 := []byte{1, 2, 3, 4, 5, 6, 7, 8}
-	data4 := []byte{1, 2, 3, 4}
-	data2 := []byte{1, 2}
-	data1 := []byte{1}
-
-	exp8 := uint64(72623859790382856)
-	exp4 := uint64(16909060)
-	exp2 := uint64(258)
-	exp1 := uint64(1)
-
-	res8 := ReadVarInt(data8)
-	res4 := ReadVarInt(data4)
-	res2 := ReadVarInt(data2)
-	res1 := ReadVarInt(data1)
-
-	if res8 != exp8 {
-		t.Errorf("Expected %d | Got %d", exp8, res8)
-	}
-
-	if res4 != exp4 {
-		t.Errorf("Expected %d | Got %d", exp4, res4)
-	}
-
-	if res2 != exp2 {
-		t.Errorf("Expected %d | Got %d", exp2, res2)
-	}
-
-	if res1 != exp1 {
-		t.Errorf("Expected %d | Got %d", exp1, res1)
-	}
-}
-
-func TestBinaryLength(t *testing.T) {
-	data1 := 0
-	data2 := 920987656789
-
-	exp1 := 0
-	exp2 := 5
-
-	res1 := BinaryLength(data1)
-	res2 := BinaryLength(data2)
-
-	if res1 != exp1 {
-		t.Errorf("Expected %d got %d", exp1, res1)
-	}
-
-	if res2 != exp2 {
-		t.Errorf("Expected %d got %d", exp2, res2)
-	}
-}
-
-func TestCopyBytes(t *testing.T) {
-	data1 := []byte{1, 2, 3, 4}
-	exp1 := []byte{1, 2, 3, 4}
-	res1 := CopyBytes(data1)
-	if bytes.Compare(res1, exp1) != 0 {
-		t.Errorf("Expected % x got % x", exp1, res1)
 	}
 }
