@@ -42,7 +42,7 @@
     ".gitignore",
     ".jshintrc",
     ".travis.yml",
-    "*.js",
+    "./*.js",
     "**/*.txt"
   ]
 }
