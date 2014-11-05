@@ -4,6 +4,7 @@
   "version": "0.0.1",
   "description": "Ethereum Compatible JavaScript API",
   "main": "dist/ethereum.js",
+  "scripts": ["dist/ethereum.js", "dist/ethereum.min.js"],
   "dependencies": {
     "es6-promise": "#master"
   },
