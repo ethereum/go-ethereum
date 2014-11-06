@@ -7,13 +7,13 @@ which implements the [Generic JSON RPC](https://github.com/ethereum/wiki/wiki/Ge
 
 [![browser support](https://ci.testling.com/cubedro/ethereum.js.png)](https://ci.testling.com/cubedro/ethereum.js)
 
-### Installation
+## Installation
 
-## Node.js
+### Node.js
 
     npm install ethereum.js
 
-## For browser
+### For browser
 Bower
 
 	bower install ethereum.js
@@ -25,7 +25,7 @@ Component
 * Include `ethereum.min.js` in your html file.
 * Include [es6-promise](https://github.com/jakearchibald/es6-promise) or another ES6-Shim if your browser doesn't support ECMAScript 6.
 
-### Usage
+## Usage
 Require the library:
 
 	var web3 = require('web3');
@@ -50,7 +50,7 @@ web3.eth.coinbase.then(function(result){
 
 For another example see `example/index.html`.
 
-### Building
+## Building
 
 * `gulp build`
 

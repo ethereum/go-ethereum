@@ -2,5 +2,8 @@ example/js
 node_modules
 test
 .gitignore
+.editorconfig
 .travis.yml
+.npmignore
 component.json
+testling.html
