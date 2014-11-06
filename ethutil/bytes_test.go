@@ -16,6 +16,43 @@ func TestByteString(t *testing.T) {
 	}
 }
 
+/*
+func TestDeleteFromByteSlice(t *testing.T) {
+	data := []byte{1, 2, 3, 4}
+	slice := []byte{1, 2, 3, 4}
+	exp := []byte{1, 4}
+	res := DeleteFromByteSlice(data, slice)
+	if bytes.Compare(res, exp) != 0 {
+		t.Errorf("Expected % x Got % x", exp, res)
+	}
+}
+
+func TestNumberToBytes(t *testing.T) {
+	data := int(1)
+	exp := []byte{0, 0, 0, 0, 0, 0, 0, 1}
+	// TODO this fails. why?
+	res := NumberToBytes(data, 16)
+	if bytes.Compare(res, exp) != 0 {
+		t.Errorf("Expected % x Got % x", exp, res)
+	}
+}
+*/
+
+func TestBytesToNumber(t *testing.T) {
+	datasmall := []byte{0, 1}
+	datalarge := []byte{1, 2, 3}
+	expsmall := uint64(0)
+	explarge := uint64(0)
+	// TODO this fails. why?
+	ressmall := BytesToNumber(datasmall)
+	reslarge := BytesToNumber(datalarge)
+	if ressmall != expsmall {
+		t.Errorf("Expected %d Got %d", expsmall, ressmall)
+	}
+	if reslarge != explarge {
+		t.Errorf("Expected %d Got %d", explarge, reslarge)
+	}
+}
 
 func TestReadVarInt(t *testing.T) {
 	data8 := []byte{1, 2, 3, 4, 5, 6, 7, 8}
