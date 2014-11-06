@@ -29,7 +29,7 @@ bytesConstRef VM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 	case ReturnCode::OutOfGas:
 		BOOST_THROW_EXCEPTION(OutOfGas());
 	case ReturnCode::StackTooSmall:
-		BOOST_THROW_EXCEPTION(StackTooSmall(1, 0));
+		BOOST_THROW_EXCEPTION(StackTooSmall());
 	case ReturnCode::BadInstruction:
 		BOOST_THROW_EXCEPTION(BadInstruction());
 	default:
