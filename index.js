@@ -17,7 +17,6 @@ module.exports = {
     vmBlockInfoTest: require('./VMTests/vmBlockInfoTest'),
     vmEnvironmentalInfoTest: require('./VMTests/vmEnvironmentalInfoTest'),
     vmIOandFlowOperationsTest: require('./VMTests/vmIOandFlowOperationsTest'),
-    vmNamecoin: require('./VMTests/vmNamecoin'),
     vmPushDupSwapTest: require('./VMTests/vmPushDupSwapTest'),
     vmSha3Test: require('./VMTests/vmSha3Test'),
     vmtestst: require('./VMTests/vmtests'),
