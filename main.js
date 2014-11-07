@@ -153,15 +153,15 @@
                     return {call: call, args: args};
                 }).then(function (request) {
                     return new Promise(function (resolve, reject) {
-                        web3.provider.send(request, function (result) {
-                            if (result || typeof result === "boolean") {
+                        web3.provider.send(request, function (err, result) {
+                            if (!err) {
                                 resolve(result);
                                 return;
                             } 
-                            reject(result);
+                            reject(err);
                         });
                     });
-                }).catch(function( err) {
+                }).catch(function(err) {
                     console.error(err);
                 });
             };
@@ -173,8 +173,12 @@
             var proto = {};
             proto.get = function () {
                 return new Promise(function(resolve, reject) {
-                    web3.provider.send({call: property.getter}, function(result) {
-                        resolve(result);
+                    web3.provider.send({call: property.getter}, function(err, result) {
+                        if (!err) {
+                            resolve(result);
+                            return
+                        }
+                        reject(err);
                     });
                 });
             };
@@ -182,12 +186,12 @@
                 proto.set = function (val) {
                     return flattenPromise([val]).then(function (args) {
                         return new Promise(function (resolve) {
-                            web3.provider.send({call: property.setter, args: args}, function (result) {
-                                if (result) {
+                            web3.provider.send({call: property.setter, args: args}, function (err, result) {
+                                if (!err) {
                                     resolve(result);
-                                } else {
-                                    reject(result);
+                                    return
                                 }
+                                reject(err);
                             });
                         });
                     }).catch(function (err) {
@@ -438,7 +442,7 @@
         if(data._id) {
             var cb = web3._callbacks[data._id];
             if (cb) {
-                cb.call(this, data.data)
+                cb.call(this, data.error, data.data)
                 delete web3._callbacks[data._id];
             }
         }
