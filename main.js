@@ -217,6 +217,8 @@
             // Find termination
             var str = "";
             var i = 0, l = hex.length;
+            if (hex.substring(0, 2) == '0x')
+                i = 2;
             for(; i < l; i+=2) {
                 var code = hex.charCodeAt(i)
                 if(code == 0) {
@@ -238,7 +240,7 @@
             var hex = this.toHex(str);
             while(hex.length < pad*2)
                 hex += "00";
-            return hex
+            return "0x" + hex;
         },
 
         eth: {
