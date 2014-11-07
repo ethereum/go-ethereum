@@ -266,7 +266,7 @@ func StartMining(ethereum *eth.Ethereum) bool {
 		go func() {
 			clilogger.Infoln("Start mining")
 			if gminer == nil {
-				gminer = miner.NewDefaultMiner(addr, ethereum)
+				gminer = miner.New(addr, ethereum)
 			}
 			// Give it some time to connect with peers
 			time.Sleep(3 * time.Second)

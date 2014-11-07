@@ -315,9 +315,12 @@ out:
 			// otherwise process and don't emit anything
 			if len(blocks) > 0 {
 				chainManager := self.eth.ChainManager()
+				// Test and import
 				chain := chain.NewChain(blocks)
-				_, err := chainManager.TestChain(chain)
+				_, err := chainManager.TestChain(chain, true)
 				if err != nil {
+					poollogger.Debugln(err)
+
 					self.Reset()
 
 					poollogger.Debugf("Punishing peer for supplying bad chain (%v)\n", self.peer.conn.RemoteAddr())
@@ -327,7 +330,7 @@ out:
 					self.td = ethutil.Big0
 					self.peer = nil
 				} else {
-					chainManager.InsertChain(chain)
+					//chainManager.InsertChain(chain)
 					for _, block := range blocks {
 						self.Remove(block.Hash())
 					}

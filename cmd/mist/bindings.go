@@ -70,10 +70,6 @@ func (gui *Gui) GetCustomIdentifier() string {
 	return gui.clientIdentity.GetCustomIdentifier()
 }
 
-func (gui *Gui) ToggleTurboMining() {
-	gui.miner.ToggleTurbo()
-}
-
 // functions that allow Gui to implement interface guilogger.LogSystem
 func (gui *Gui) SetLogLevel(level logger.LogLevel) {
 	gui.logLevel = level
@@ -136,21 +132,4 @@ func (self *Gui) DumpState(hash, path string) {
 	guilogger.Infof("dumped state (%s) to %s\n", hash, path)
 
 	file.Write(stateDump)
-}
-func (gui *Gui) ToggleMining() {
-	var txt string
-	if gui.eth.Mining {
-		utils.StopMining(gui.eth)
-		txt = "Start mining"
-
-		gui.getObjectByName("miningLabel").Set("visible", false)
-	} else {
-		utils.StartMining(gui.eth)
-		gui.miner = utils.GetMiner()
-		txt = "Stop mining"
-
-		gui.getObjectByName("miningLabel").Set("visible", true)
-	}
-
-	gui.win.Root().Set("miningButtonText", txt)
 }

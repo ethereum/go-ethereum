@@ -3,9 +3,10 @@ package p2p
 import (
 	// "fmt"
 	"bytes"
-	"github.com/ethereum/eth-go/ethutil"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/ethutil"
 )
 
 func setupMessenger(handlers Handlers) (*TestNetworkConnection, chan *PeerError, *Messenger) {

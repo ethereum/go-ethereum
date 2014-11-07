@@ -12,7 +12,6 @@ import "../ext/http.js" as Http
 ApplicationWindow {
 	id: root
 
-	property alias miningButtonText: miningButton.text
 	property var ethx : Eth.ethx
 	property var browser
 
@@ -47,6 +46,7 @@ ApplicationWindow {
 	Component.onCompleted: {
 		var wallet = addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "ethereum", active: true});
 		var browser = addPlugin("./webapp.qml", {noAdd: true, close: false, section: "ethereum", active: true});
+		var browser = addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: true});
 		root.browser = browser;
 
 		addPlugin("./views/transaction.qml", {noAdd: true, close: false, section: "legacy"});
@@ -252,29 +252,18 @@ ApplicationWindow {
 	}
 
 	statusBar: StatusBar {
-		height: 32
+		//height: 32
 		id: statusBar
-		RowLayout {
-			Button {
-				id: miningButton
-				text: "Start Mining"
-				onClicked: {
-					gui.toggleMining()
-				}
-			}
+		Label {
+			//y: 6
+			id: walletValueLabel
 
-			RowLayout {
-				Label {
-					id: walletValueLabel
-
-					font.pixelSize: 10
-					styleColor: "#797979"
-				}
-			}
+			font.pixelSize: 10
+			styleColor: "#797979"
 		}
 
 		Label {
-			y: 6
+			//y: 6
 			objectName: "miningLabel"
 			visible: true
 			font.pixelSize: 10
@@ -283,7 +272,7 @@ ApplicationWindow {
 		}
 
 		Label {
-			y: 6
+			//y: 6
 			id: lastBlockLabel
 			objectName: "lastBlockLabel"
 			visible: true
@@ -297,14 +286,14 @@ ApplicationWindow {
 			id: downloadIndicator
 			value: 0
 			objectName: "downloadIndicator"
-			y: 3
+			y: -4
 			x: statusBar.width / 2 - this.width / 2
 			width: 160
 		}
 
 		Label {
 			objectName: "downloadLabel"
-			y: 7
+			//y: 7
 			anchors.left: downloadIndicator.right
 			anchors.leftMargin: 5
 			font.pixelSize: 10
@@ -314,7 +303,7 @@ ApplicationWindow {
 
 		RowLayout {
 			id: peerGroup
-			y: 7
+			//y: 7
 			anchors.right: parent.right
 			MouseArea {
 				onDoubleClicked:  peerWindow.visible = true
@@ -323,13 +312,8 @@ ApplicationWindow {
 
 			Label {
 				id: peerLabel
-				font.pixelSize: 8
+				font.pixelSize: 10
 				text: "0 / 0"
-			}
-			Image {
-				id: peerImage
-				width: 10; height: 10
-				source: "../network.png"
 			}
 		}
 	}

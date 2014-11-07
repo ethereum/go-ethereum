@@ -1,8 +1,11 @@
 package miner
 
 import (
-	"bytes"
+	"math/big"
 	"sort"
+
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/ethutil"
 
 	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/event"
@@ -10,211 +13,218 @@ import (
 	"github.com/ethereum/go-ethereum/wire"
 )
 
+type LocalTx struct {
+	To       []byte `json:"to"`
+	Data     []byte `json:"data"`
+	Gas      string `json:"gas"`
+	GasPrice string `json:"gasPrice"`
+	Value    string `json:"value"`
+}
+
+func (self *LocalTx) Sign(key []byte) *chain.Transaction {
+	return nil
+}
+
 var minerlogger = logger.NewLogger("MINER")
 
 type Miner struct {
-	pow      chain.PoW
-	ethereum chain.EthManager
-	coinbase []byte
-	txs      chain.Transactions
-	uncles   []*chain.Block
-	block    *chain.Block
+	eth    *eth.Ethereum
+	events event.Subscription
 
-	events      event.Subscription
-	powQuitChan chan struct{}
-	powDone     chan struct{}
+	uncles    chain.Blocks
+	localTxs  map[int]*LocalTx
+	localTxId int
 
-	turbo bool
+	pow       chain.PoW
+	quitCh    chan struct{}
+	powQuitCh chan struct{}
+
+	Coinbase []byte
+
+	mining bool
+
+	MinAcceptedGasPrice *big.Int
 }
 
-const (
-	Started = iota
-	Stopped
-)
-
-type Event struct {
-	Type  int // Started || Stopped
-	Miner *Miner
+func New(coinbase []byte, eth *eth.Ethereum) *Miner {
+	return &Miner{
+		eth:                 eth,
+		powQuitCh:           make(chan struct{}),
+		pow:                 &chain.EasyPow{},
+		mining:              false,
+		localTxs:            make(map[int]*LocalTx),
+		MinAcceptedGasPrice: big.NewInt(10000000000000),
+		Coinbase:            coinbase,
+	}
 }
 
 func (self *Miner) GetPow() chain.PoW {
 	return self.pow
 }
 
-func NewDefaultMiner(coinbase []byte, ethereum chain.EthManager) *Miner {
-	miner := Miner{
-		pow:      &chain.EasyPow{},
-		ethereum: ethereum,
-		coinbase: coinbase,
+func (self *Miner) AddLocalTx(tx *LocalTx) int {
+	minerlogger.Infof("Added local tx (%x %v / %v)\n", tx.To[0:4], tx.GasPrice, tx.Value)
+
+	self.localTxId++
+	self.localTxs[self.localTxId] = tx
+	self.eth.EventMux().Post(tx)
+
+	return self.localTxId
+}
+
+func (self *Miner) RemoveLocalTx(id int) {
+	if tx := self.localTxs[id]; tx != nil {
+		minerlogger.Infof("Removed local tx (%x %v / %v)\n", tx.To[0:4], tx.GasPrice, tx.Value)
+	}
+	self.eth.EventMux().Post(&LocalTx{})
+
+	delete(self.localTxs, id)
+}
+
+func (self *Miner) Start() {
+	if self.mining {
+		return
 	}
 
-	return &miner
+	minerlogger.Infoln("Starting mining operations")
+	self.mining = true
+	self.quitCh = make(chan struct{})
+	self.powQuitCh = make(chan struct{})
+
+	mux := self.eth.EventMux()
+	self.events = mux.Subscribe(chain.NewBlockEvent{}, chain.TxPreEvent{}, &LocalTx{})
+
+	go self.update()
+	go self.mine()
 }
 
-func (self *Miner) ToggleTurbo() {
-	self.turbo = !self.turbo
+func (self *Miner) Stop() {
+	if !self.mining {
+		return
+	}
 
-	self.pow.Turbo(self.turbo)
+	self.mining = false
+
+	minerlogger.Infoln("Stopping mining operations")
+
+	self.events.Unsubscribe()
+
+	close(self.quitCh)
+	close(self.powQuitCh)
 }
 
-func (miner *Miner) Start() {
-
-	// Insert initial TXs in our little miner 'pool'
-	miner.txs = miner.ethereum.TxPool().Flush()
-	miner.block = miner.ethereum.ChainManager().NewBlock(miner.coinbase)
-
-	mux := miner.ethereum.EventMux()
-	miner.events = mux.Subscribe(chain.NewBlockEvent{}, chain.TxPreEvent{})
-
-	// Prepare inital block
-	//miner.ethereum.BlockManager().Prepare(miner.block.State(), miner.block.State())
-	go miner.listener()
-
-	minerlogger.Infoln("Started")
-	mux.Post(Event{Started, miner})
+func (self *Miner) Mining() bool {
+	return self.mining
 }
 
-func (miner *Miner) Stop() {
-	minerlogger.Infoln("Stopping...")
-	miner.events.Unsubscribe()
-	miner.ethereum.EventMux().Post(Event{Stopped, miner})
-}
-
-func (miner *Miner) listener() {
-	miner.startMining()
-
+func (self *Miner) update() {
+out:
 	for {
 		select {
-		case event := <-miner.events.Chan():
+		case event := <-self.events.Chan():
 			switch event := event.(type) {
 			case chain.NewBlockEvent:
-				miner.stopMining()
-
 				block := event.Block
-				//minerlogger.Infoln("Got new block via Reactor")
-				if bytes.Compare(miner.ethereum.ChainManager().CurrentBlock.Hash(), block.Hash()) == 0 {
-					// TODO: Perhaps continue mining to get some uncle rewards
-					//minerlogger.Infoln("New top block found resetting state")
-
-					// Filter out which Transactions we have that were not in this block
-					var newtxs []*chain.Transaction
-					for _, tx := range miner.txs {
-						found := false
-						for _, othertx := range block.Transactions() {
-							if bytes.Compare(tx.Hash(), othertx.Hash()) == 0 {
-								found = true
-							}
-						}
-						if found == false {
-							newtxs = append(newtxs, tx)
-						}
-					}
-					miner.txs = newtxs
-				} else {
-					if bytes.Compare(block.PrevHash, miner.ethereum.ChainManager().CurrentBlock.PrevHash) == 0 {
-						minerlogger.Infoln("Adding uncle block")
-						miner.uncles = append(miner.uncles, block)
-					}
+				if self.eth.ChainManager().HasBlock(block.Hash()) {
+					self.reset()
+					self.eth.TxPool().RemoveSet(block.Transactions())
+					go self.mine()
+				} else if true {
+					// do uncle stuff
 				}
-				miner.startMining()
-
-			case chain.TxPreEvent:
-				miner.stopMining()
-
-				found := false
-				for _, ctx := range miner.txs {
-					if found = bytes.Compare(ctx.Hash(), event.Tx.Hash()) == 0; found {
-						break
-					}
-
-					miner.startMining()
-				}
-				if found == false {
-					// Undo all previous commits
-					miner.block.Undo()
-					// Apply new transactions
-					miner.txs = append(miner.txs, event.Tx)
-				}
+			case chain.TxPreEvent, *LocalTx:
+				self.reset()
+				go self.mine()
 			}
-
-		case <-miner.powDone:
-			miner.startMining()
+		case <-self.quitCh:
+			break out
 		}
 	}
 }
 
-func (miner *Miner) startMining() {
-	if miner.powDone == nil {
-		miner.powDone = make(chan struct{})
-	}
-	miner.powQuitChan = make(chan struct{})
-	go miner.mineNewBlock()
+func (self *Miner) reset() {
+	println("reset")
+	close(self.powQuitCh)
+	self.powQuitCh = make(chan struct{})
 }
 
-func (miner *Miner) stopMining() {
-	println("stop mining")
-	_, isopen := <-miner.powQuitChan
-	if isopen {
-		close(miner.powQuitChan)
-	}
-	//<-miner.powDone
-}
-
-func (self *Miner) mineNewBlock() {
-	blockManager := self.ethereum.BlockManager()
-	chainMan := self.ethereum.ChainManager()
-
-	self.block = chainMan.NewBlock(self.coinbase)
+func (self *Miner) mine() {
+	var (
+		blockManager = self.eth.BlockManager()
+		chainMan     = self.eth.ChainManager()
+		block        = chainMan.NewBlock(self.Coinbase)
+	)
+	block.MinGasPrice = self.MinAcceptedGasPrice
 
 	// Apply uncles
 	if len(self.uncles) > 0 {
-		self.block.SetUncles(self.uncles)
+		block.SetUncles(self.uncles)
 	}
 
-	// Sort the transactions by nonce in case of odd network propagation
-	sort.Sort(chain.TxByNonce{self.txs})
+	parent := chainMan.GetBlock(block.PrevHash)
+	coinbase := block.State().GetOrNewStateObject(block.Coinbase)
+	coinbase.SetGasPool(block.CalcGasLimit(parent))
+
+	transactions := self.finiliseTxs()
 
 	// Accumulate all valid transactions and apply them to the new state
 	// Error may be ignored. It's not important during mining
-	parent := self.ethereum.ChainManager().GetBlock(self.block.PrevHash)
-	coinbase := self.block.State().GetOrNewStateObject(self.block.Coinbase)
-	coinbase.SetGasPool(self.block.CalcGasLimit(parent))
-	receipts, txs, unhandledTxs, erroneous, err := blockManager.ProcessTransactions(coinbase, self.block.State(), self.block, self.block, self.txs)
+	receipts, txs, _, erroneous, err := blockManager.ProcessTransactions(coinbase, block.State(), block, block, transactions)
 	if err != nil {
 		minerlogger.Debugln(err)
 	}
-	self.ethereum.TxPool().RemoveSet(erroneous)
-	self.txs = append(txs, unhandledTxs...)
+	self.eth.TxPool().RemoveSet(erroneous)
 
-	self.block.SetTransactions(txs)
-	self.block.SetReceipts(receipts)
+	block.SetTransactions(txs)
+	block.SetReceipts(receipts)
 
 	// Accumulate the rewards included for this block
-	blockManager.AccumelateRewards(self.block.State(), self.block, parent)
+	blockManager.AccumelateRewards(block.State(), block, parent)
 
-	self.block.State().Update()
+	block.State().Update()
 
-	minerlogger.Infof("Mining on block. Includes %v transactions", len(self.txs))
+	minerlogger.Infof("Mining on block. Includes %v transactions", len(transactions))
 
 	// Find a valid nonce
-	nonce := self.pow.Search(self.block, self.powQuitChan)
+	nonce := self.pow.Search(block, self.powQuitCh)
 	if nonce != nil {
-		self.block.Nonce = nonce
-		lchain := chain.NewChain(chain.Blocks{self.block})
-		_, err := chainMan.TestChain(lchain)
+		block.Nonce = nonce
+		lchain := chain.NewChain(chain.Blocks{block})
+		_, err := chainMan.TestChain(lchain, true)
 		if err != nil {
 			minerlogger.Infoln(err)
 		} else {
-			self.ethereum.ChainManager().InsertChain(lchain)
-			self.ethereum.Broadcast(wire.MsgBlockTy, []interface{}{self.block.Value().Val})
-			minerlogger.Infof("🔨  Mined block %x\n", self.block.Hash())
-			minerlogger.Infoln(self.block)
-			// Gather the new batch of transactions currently in the tx pool
-			self.txs = self.ethereum.TxPool().CurrentTransactions()
-			self.ethereum.EventMux().Post(chain.NewBlockEvent{self.block})
+			//chainMan.InsertChain(lchain)
+			self.eth.EventMux().Post(chain.NewBlockEvent{block})
+			self.eth.Broadcast(wire.MsgBlockTy, []interface{}{block.Value().Val})
+
+			minerlogger.Infof("🔨  Mined block %x\n", block.Hash())
+			minerlogger.Infoln(block)
 		}
 
-		// Continue mining on the next block
-		self.startMining()
+		go self.mine()
 	}
+}
+
+func (self *Miner) finiliseTxs() chain.Transactions {
+	// Sort the transactions by nonce in case of odd network propagation
+	var txs chain.Transactions
+
+	state := self.eth.BlockManager().TransState()
+	// XXX This has to change. Coinbase is, for new, same as key.
+	key := self.eth.KeyManager()
+	for _, ltx := range self.localTxs {
+		tx := chain.NewTransactionMessage(ltx.To, ethutil.Big(ltx.Value), ethutil.Big(ltx.Gas), ethutil.Big(ltx.GasPrice), ltx.Data)
+		tx.Nonce = state.GetNonce(self.Coinbase)
+		state.SetNonce(self.Coinbase, tx.Nonce+1)
+
+		tx.Sign(key.PrivateKey())
+
+		txs = append(txs, tx)
+	}
+
+	txs = append(txs, self.eth.TxPool().CurrentTransactions()...)
+	sort.Sort(chain.TxByNonce{txs})
+
+	return txs
 }

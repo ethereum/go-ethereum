@@ -272,8 +272,6 @@ type address struct {
 
 func (gui *Gui) loadAddressBook() {
 	view := gui.getObjectByName("infoView")
-	view.Call("clearAddress")
-
 	nameReg := gui.pipe.World().Config().Get("NameReg")
 	if nameReg != nil {
 		nameReg.EachStorage(func(name string, value *ethutil.Value) {
@@ -281,6 +279,28 @@ func (gui *Gui) loadAddressBook() {
 				value.Decode()
 
 				view.Call("addAddress", struct{ Name, Address string }{name, ethutil.Bytes2Hex(value.Bytes())})
+			}
+		})
+	}
+}
+
+func (self *Gui) loadMergedMiningOptions() {
+	view := self.getObjectByName("mergedMiningModel")
+
+	nameReg := self.pipe.World().Config().Get("MergeMining")
+	if nameReg != nil {
+		i := 0
+		nameReg.EachStorage(func(name string, value *ethutil.Value) {
+			if name[0] != 0 {
+				value.Decode()
+
+				view.Call("addMergedMiningOption", struct {
+					Checked       bool
+					Name, Address string
+					Id, ItemId    int
+				}{false, name, ethutil.Bytes2Hex(value.Bytes()), 0, i})
+
+				i++
 			}
 		})
 	}
@@ -382,6 +402,7 @@ func (gui *Gui) update() {
 	go func() {
 		go gui.setInitialChainManager()
 		gui.loadAddressBook()
+		gui.loadMergedMiningOptions()
 		gui.setPeerInfo()
 		gui.readPreviousTransactions()
 	}()
@@ -410,7 +431,6 @@ func (gui *Gui) update() {
 		chain.NewBlockEvent{},
 		chain.TxPreEvent{},
 		chain.TxPostEvent{},
-		miner.Event{},
 	)
 
 	// nameReg := gui.pipe.World().Config().Get("NameReg")
@@ -469,12 +489,14 @@ func (gui *Gui) update() {
 				case eth.PeerListEvent:
 					gui.setPeerInfo()
 
-				case miner.Event:
-					if ev.Type == miner.Started {
-						gui.miner = ev.Miner
-					} else {
-						gui.miner = nil
-					}
+					/*
+						case miner.Event:
+							if ev.Type == miner.Started {
+								gui.miner = ev.Miner
+							} else {
+								gui.miner = nil
+							}
+					*/
 				}
 
 			case <-peerUpdateTicker.C:
@@ -483,10 +505,13 @@ func (gui *Gui) update() {
 				statusText := "#" + gui.eth.ChainManager().CurrentBlock.Number.String()
 				lastBlockLabel.Set("text", statusText)
 
-				if gui.miner != nil {
-					pow := gui.miner.GetPow()
-					miningLabel.Set("text", "Mining @ "+strconv.FormatInt(pow.GetHashrate(), 10)+"Khash")
-				}
+				miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.miner.GetPow().GetHashrate(), 10)+"Khash")
+				/*
+					if gui.miner != nil {
+						pow := gui.miner.GetPow()
+						miningLabel.Set("text", "Mining @ "+strconv.FormatInt(pow.GetHashrate(), 10)+"Khash")
+					}
+				*/
 
 				blockLength := gui.eth.BlockPool().BlocksProcessed
 				chainLength := gui.eth.BlockPool().ChainLength

@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/javascript"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/ui/qt"
 	"github.com/ethereum/go-ethereum/xeth"
@@ -55,10 +56,15 @@ type UiLib struct {
 	jsEngine *javascript.JSRE
 
 	filterCallbacks map[int][]int
+
+	miner *miner.Miner
 }
 
 func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
-	return &UiLib{JSXEth: xeth.NewJSXEth(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth), filterCallbacks: make(map[int][]int)} //, filters: make(map[int]*xeth.JSFilter)}
+	lib := &UiLib{JSXEth: xeth.NewJSXEth(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth), filterCallbacks: make(map[int][]int)} //, filters: make(map[int]*xeth.JSFilter)}
+	lib.miner = miner.New(eth.KeyManager().Address(), eth)
+
+	return lib
 }
 
 func (self *UiLib) Notef(args []interface{}) {
@@ -327,4 +333,34 @@ func (self *UiLib) Call(params map[string]interface{}) (string, error) {
 		object["gasPrice"],
 		object["data"],
 	)
+}
+
+func (self *UiLib) AddLocalTransaction(to, data, gas, gasPrice, value string) int {
+	return self.miner.AddLocalTx(&miner.LocalTx{
+		To:       ethutil.Hex2Bytes(to),
+		Data:     ethutil.Hex2Bytes(data),
+		Gas:      gas,
+		GasPrice: gasPrice,
+		Value:    value,
+	}) - 1
+}
+
+func (self *UiLib) RemoveLocalTransaction(id int) {
+	self.miner.RemoveLocalTx(id)
+}
+
+func (self *UiLib) SetGasPrice(price string) {
+	self.miner.MinAcceptedGasPrice = ethutil.Big(price)
+}
+
+func (self *UiLib) ToggleMining() bool {
+	if !self.miner.Mining() {
+		self.miner.Start()
+
+		return true
+	} else {
+		self.miner.Stop()
+
+		return false
+	}
 }

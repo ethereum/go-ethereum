@@ -228,7 +228,7 @@ func (sm *BlockManager) Process(block *Block) (td *big.Int, err error) {
 func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, err error) {
 	sm.lastAttemptedBlock = block
 
-	state := parent.State()
+	state := parent.State().Copy()
 
 	// Defer the Undo on the Trie. If the block processing happened
 	// we don't want to undo but since undo only happens on dirty
@@ -240,20 +240,22 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, er
 		fmt.Printf("## %x %x ##\n", block.Hash(), block.Number)
 	}
 
+	_, err = sm.ApplyDiff(state, parent, block)
+	if err != nil {
+		return nil, err
+	}
+
+	/* Go and C++ don't have consensus here. FIXME
 	txSha := DeriveSha(block.transactions)
 	if bytes.Compare(txSha, block.TxSha) != 0 {
 		return nil, fmt.Errorf("Error validating transaction sha. Received %x, got %x", block.TxSha, txSha)
-	}
-
-	receipts, err := sm.ApplyDiff(state, parent, block)
-	if err != nil {
-		return nil, err
 	}
 
 	receiptSha := DeriveSha(receipts)
 	if bytes.Compare(receiptSha, block.ReceiptSha) != 0 {
 		return nil, fmt.Errorf("Error validating receipt sha. Received %x, got %x", block.ReceiptSha, receiptSha)
 	}
+	*/
 
 	// Block validation
 	if err = sm.ValidateBlock(block, parent); err != nil {
@@ -374,7 +376,7 @@ func (sm *BlockManager) AccumelateRewards(state *state.State, block, parent *Blo
 
 		uncleParent := sm.bc.GetBlock(uncle.PrevHash)
 		if uncleParent == nil {
-			return UncleError("Uncle's parent unknown")
+			return UncleError(fmt.Sprintf("Uncle's parent unknown (%x)", uncle.PrevHash[0:4]))
 		}
 
 		if uncleParent.Number.Cmp(new(big.Int).Sub(parent.Number, big.NewInt(6))) < 0 {

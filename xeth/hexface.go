@@ -254,6 +254,10 @@ func (self *JSXEth) CompileMutan(code string) string {
 	return ethutil.Bytes2Hex(data)
 }
 
+func (self *JSXEth) FindInConfig(str string) string {
+	return ethutil.Bytes2Hex(self.World().Config().Get(str).Address())
+}
+
 func ToJSMessages(messages state.Messages) *ethutil.List {
 	var msgs []JSMessage
 	for _, m := range messages {

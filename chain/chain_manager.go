@@ -23,6 +23,8 @@ type ChainManager struct {
 
 	CurrentBlock  *Block
 	LastBlockHash []byte
+
+	workingChain *BlockChain
 }
 
 func NewChainManager(ethereum EthManager) *ChainManager {
@@ -225,9 +227,18 @@ func (self *ChainManager) CalcTotalDiff(block *Block) (*big.Int, error) {
 	return td, nil
 }
 
-func (bc *ChainManager) GetBlock(hash []byte) *Block {
+func (self *ChainManager) GetBlock(hash []byte) *Block {
 	data, _ := ethutil.Config.Db.Get(hash)
 	if len(data) == 0 {
+		if self.workingChain != nil {
+			// Check the temp chain
+			for e := self.workingChain.Front(); e != nil; e = e.Next() {
+				if bytes.Compare(e.Value.(*link).block.Hash(), hash) == 0 {
+					return e.Value.(*link).block
+				}
+			}
+		}
+
 		return nil
 	}
 
@@ -310,6 +321,7 @@ func NewChain(blocks Blocks) *BlockChain {
 }
 
 // This function assumes you've done your checking. No checking is done at this stage anymore
+/*
 func (self *ChainManager) InsertChain(chain *BlockChain) {
 	for e := chain.Front(); e != nil; e = e.Next() {
 		link := e.Value.(*link)
@@ -318,8 +330,11 @@ func (self *ChainManager) InsertChain(chain *BlockChain) {
 		self.add(link.block)
 	}
 }
+*/
 
-func (self *ChainManager) TestChain(chain *BlockChain) (td *big.Int, err error) {
+func (self *ChainManager) TestChain(chain *BlockChain, imp bool) (td *big.Int, err error) {
+	self.workingChain = chain
+
 	for e := chain.Front(); e != nil; e = e.Next() {
 		var (
 			l      = e.Value.(*link)
@@ -348,12 +363,21 @@ func (self *ChainManager) TestChain(chain *BlockChain) (td *big.Int, err error) 
 			return
 		}
 		l.td = td
+
+		if imp {
+			self.SetTotalDifficulty(td)
+			self.add(block)
+		}
 	}
 
-	if td.Cmp(self.TD) <= 0 {
-		err = &TDError{td, self.TD}
-		return
+	if !imp {
+		if td.Cmp(self.TD) <= 0 {
+			err = &TDError{td, self.TD}
+			return
+		}
 	}
+
+	self.workingChain = nil
 
 	return
 }

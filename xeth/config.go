@@ -19,6 +19,8 @@ func (self *Config) Get(name string) *Object {
 		objectAddr := configCtrl.GetStorage(ethutil.BigD([]byte{0}))
 		domainAddr := (&Object{self.pipe.World().safeGet(objectAddr.Bytes())}).StorageString("DnsReg").Bytes()
 		return &Object{self.pipe.World().safeGet(domainAddr)}
+	case "MergeMining":
+		addr = []byte{4}
 	default:
 		addr = ethutil.RightPadBytes([]byte(name), 32)
 	}

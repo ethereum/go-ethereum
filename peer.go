@@ -24,7 +24,7 @@ const (
 	// The size of the output buffer for writing messages
 	outputBufferSize = 50
 	// Current protocol version
-	ProtocolVersion = 37
+	ProtocolVersion = 39
 	// Current P2P version
 	P2PVersion = 2
 	// Ethereum network version
@@ -863,7 +863,7 @@ func (p *Peer) String() string {
 		strConnectType = "disconnected"
 	}
 
-	return fmt.Sprintf("[%s] (%s) %v %s [%s]", strConnectType, strBoundType, p.conn.RemoteAddr(), p.version, p.caps)
+	return fmt.Sprintf("[%s] (%s) %v %s", strConnectType, strBoundType, p.conn.RemoteAddr(), p.version)
 
 }
 
