@@ -176,7 +176,7 @@
                     web3.provider.send({call: property.getter}, function(err, result) {
                         if (!err) {
                             resolve(result);
-                            return
+                            return;
                         }
                         reject(err);
                     });
@@ -189,7 +189,7 @@
                             web3.provider.send({call: property.setter, args: args}, function (err, result) {
                                 if (!err) {
                                     resolve(result);
-                                    return
+                                    return;
                                 }
                                 reject(err);
                             });
