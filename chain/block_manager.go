@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"os"
 	"sync"
 	"time"
 
@@ -89,28 +88,11 @@ func NewBlockManager(ethereum EthManager) *BlockManager {
 }
 
 func (self *BlockManager) Start() {
-	statelogger.Debugln("Starting state manager")
-	self.events = self.eth.EventMux().Subscribe(Blocks(nil))
-	go self.updateThread()
+	statelogger.Debugln("Starting block manager")
 }
 
 func (self *BlockManager) Stop() {
 	statelogger.Debugln("Stopping state manager")
-	self.events.Unsubscribe()
-}
-
-func (self *BlockManager) updateThread() {
-	for ev := range self.events.Chan() {
-		for _, block := range ev.(Blocks) {
-			_, err := self.Process(block)
-			if err != nil {
-				statelogger.Infoln(err)
-				statelogger.Debugf("Block #%v failed (%x...)\n", block.Number, block.Hash()[0:4])
-				statelogger.Debugln(block)
-				break
-			}
-		}
-	}
 }
 
 func (sm *BlockManager) CurrentState() *state.State {
@@ -179,19 +161,6 @@ done:
 		cumulative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, txGas))
 		receipt := &Receipt{ethutil.CopyBytes(state.Root().([]byte)), cumulative, LogsBloom(state.Logs()).Bytes(), state.Logs()}
 
-		if i < len(block.Receipts()) {
-			original := block.Receipts()[i]
-			if !original.Cmp(receipt) {
-				if ethutil.Config.Diff {
-					os.Exit(1)
-				}
-
-				err := fmt.Errorf("#%d receipt failed (r) %v ~ %x  <=>  (c) %v ~ %x (%x...)", i+1, original.CumulativeGasUsed, original.PostState[0:4], receipt.CumulativeGasUsed, receipt.PostState[0:4], tx.Hash()[0:4])
-
-				return nil, nil, nil, nil, err
-			}
-		}
-
 		// Notify all subscribers
 		go self.eth.EventMux().Post(TxPostEvent{tx})
 
@@ -203,7 +172,7 @@ done:
 		}
 	}
 
-	parent.GasUsed = totalUsedGas
+	block.GasUsed = totalUsedGas
 
 	return receipts, handled, unhandled, erroneous, err
 }
@@ -240,12 +209,12 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, er
 		fmt.Printf("## %x %x ##\n", block.Hash(), block.Number)
 	}
 
-	_, err = sm.ApplyDiff(state, parent, block)
+	receipts, err := sm.ApplyDiff(state, parent, block)
 	if err != nil {
 		return nil, err
 	}
+	block.SetReceipts(receipts)
 
-	/* Go and C++ don't have consensus here. FIXME
 	txSha := DeriveSha(block.transactions)
 	if bytes.Compare(txSha, block.TxSha) != 0 {
 		return nil, fmt.Errorf("Error validating transaction sha. Received %x, got %x", block.TxSha, txSha)
@@ -255,7 +224,6 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, er
 	if bytes.Compare(receiptSha, block.ReceiptSha) != 0 {
 		return nil, fmt.Errorf("Error validating receipt sha. Received %x, got %x", block.ReceiptSha, receiptSha)
 	}
-	*/
 
 	// Block validation
 	if err = sm.ValidateBlock(block, parent); err != nil {
