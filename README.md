@@ -5,7 +5,7 @@ which implements the [Generic JSON RPC](https://github.com/ethereum/wiki/wiki/Ge
 
 [![NPM version][npm-image]][npm-url] [![Build Status][travis-image]][travis-url] [![dependency status][dep-image]][dep-url] [![dev dependency status][dep-dev-image]][dep-dev-url]
 
-[![browser support](https://ci.testling.com/cubedro/ethereum.js.png)](https://ci.testling.com/cubedro/ethereum.js)
+[![browser support](https://ci.testling.com/ethereum/ethereum.js.png)](https://ci.testling.com/ethereum/ethereum.js)
 
 ## Installation
 
@@ -71,9 +71,9 @@ ethereum -ws -loglevel=4
 
 [npm-image]: https://badge.fury.io/js/ethereum.js.png
 [npm-url]: https://npmjs.org/package/ethereum.js
-[travis-image]: https://travis-ci.org/cubedro/ethereum.js.svg
-[travis-url]: https://travis-ci.org/cubedro/ethereum.js
-[dep-image]: https://david-dm.org/cubedro/ethereum.js.svg
-[dep-url]: https://david-dm.org/cubedro/ethereum.js
-[dep-dev-image]: https://david-dm.org/cubedro/ethereum.js/dev-status.svg
-[dep-dev-url]: https://david-dm.org/cubedro/ethereum.js#info=devDependencies
+[travis-image]: https://travis-ci.org/ethereum/ethereum.js.svg
+[travis-url]: https://travis-ci.org/ethereum/ethereum.js
+[dep-image]: https://david-dm.org/ethereum/ethereum.js.svg
+[dep-url]: https://david-dm.org/ethereum/ethereum.js
+[dep-dev-image]: https://david-dm.org/ethereum/ethereum.js/dev-status.svg
+[dep-dev-url]: https://david-dm.org/ethereum/ethereum.js#info=devDependencies

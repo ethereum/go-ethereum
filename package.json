@@ -34,9 +34,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/cubedro/ethereum.js.git"
+    "url": "https://github.com/ethereum/ethereum.js.git"
   },
-  "homepage": "https://github.com/cubedro/ethereum.js",
+  "homepage": "https://github.com/ethereum/ethereum.js",
   "bugs": {
     "url": "https://github.com/ethereum/ethereum.js/issues"
   },
@@ -59,7 +59,7 @@
     },
     {
       "name": "Marian Oancea",
-      "email": "marian.oancea@gmail.com",
+      "email": "marian@ethdev.com",
       "url": "https://github.com/cubedro"
     }
   ],
