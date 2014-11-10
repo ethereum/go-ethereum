@@ -50,8 +50,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 				ret = closure.Return(nil)
 
 				err = fmt.Errorf("%v", r)
-				// No error should be set. Recover is used with require
-				// Is this too error prone?
+
 			}
 		}()
 	}

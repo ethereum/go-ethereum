@@ -169,3 +169,21 @@ func TestBuildInRipemd(t *testing.T) {
 		t.Errorf("Expected %x, got %x", exp, ret)
 	}
 }
+
+func TestOog(t *testing.T) {
+	// This tests takes a long time and will eventually run out of gas
+	//t.Skip()
+
+	logger.AddLogSystem(logger.NewStdLogSystem(os.Stdout, log.LstdFlags, logger.InfoLevel))
+
+	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")
+
+	stateObject := state.NewStateObject([]byte{'j', 'e', 'f', 'f'})
+	closure := NewClosure(nil, stateObject, stateObject, ethutil.Hex2Bytes("60ff60ff600057"), big.NewInt(1000000), big.NewInt(0))
+
+	vm := New(TestEnv{}, DebugVmTy)
+	_, _, e := closure.Call(vm, nil)
+	if e != nil {
+		fmt.Println(e)
+	}
+}
