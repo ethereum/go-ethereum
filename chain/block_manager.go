@@ -177,24 +177,24 @@ done:
 	return receipts, handled, unhandled, erroneous, err
 }
 
-func (sm *BlockManager) Process(block *Block) (td *big.Int, err error) {
+func (sm *BlockManager) Process(block *Block) (td *big.Int, msgs state.Messages, err error) {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
 	if sm.bc.HasBlock(block.Hash()) {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	if !sm.bc.HasBlock(block.PrevHash) {
-		return nil, ParentError(block.PrevHash)
+		return nil, nil, ParentError(block.PrevHash)
 	}
 	parent := sm.bc.GetBlock(block.PrevHash)
 
 	return sm.ProcessWithParent(block, parent)
 }
 
-func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, err error) {
+func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, messages state.Messages, err error) {
 	sm.lastAttemptedBlock = block
 
 	state := parent.State().Copy()
@@ -211,33 +211,36 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, er
 
 	receipts, err := sm.ApplyDiff(state, parent, block)
 	if err != nil {
-		return nil, err
+		return
 	}
 	block.SetReceipts(receipts)
 
 	txSha := DeriveSha(block.transactions)
 	if bytes.Compare(txSha, block.TxSha) != 0 {
-		return nil, fmt.Errorf("Error validating transaction sha. Received %x, got %x", block.TxSha, txSha)
+		err = fmt.Errorf("Error validating transaction sha. Received %x, got %x", block.TxSha, txSha)
+		return
 	}
 
 	receiptSha := DeriveSha(receipts)
 	if bytes.Compare(receiptSha, block.ReceiptSha) != 0 {
-		return nil, fmt.Errorf("Error validating receipt sha. Received %x, got %x", block.ReceiptSha, receiptSha)
+		err = fmt.Errorf("Error validating receipt sha. Received %x, got %x", block.ReceiptSha, receiptSha)
+		return
 	}
 
 	// Block validation
 	if err = sm.ValidateBlock(block, parent); err != nil {
 		statelogger.Errorln("Error validating block:", err)
-		return nil, err
+		return
 	}
 
 	if err = sm.AccumelateRewards(state, block, parent); err != nil {
 		statelogger.Errorln("Error accumulating reward", err)
-		return nil, err
+		return
 	}
 
 	if bytes.Compare(CreateBloom(block), block.LogsBloom) != 0 {
-		return nil, errors.New("Unable to replicate block's bloom")
+		err = errors.New("Unable to replicate block's bloom")
+		return
 	}
 
 	state.Update()
@@ -256,13 +259,14 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, er
 
 		sm.transState = state.Copy()
 
+		messages := state.Manifest().Messages
 		state.Manifest().Reset()
 
 		sm.eth.TxPool().RemoveSet(block.Transactions())
 
-		return td, nil
+		return td, messages, nil
 	} else {
-		return nil, errors.New("total diff failed")
+		return nil, nil, errors.New("total diff failed")
 	}
 }
 

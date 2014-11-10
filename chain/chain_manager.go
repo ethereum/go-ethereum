@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/state"
 )
 
 var chainlogger = logger.NewLogger("CHAIN")
@@ -303,8 +304,9 @@ func (bc *ChainManager) Stop() {
 }
 
 type link struct {
-	block *Block
-	td    *big.Int
+	block    *Block
+	messages state.Messages
+	td       *big.Int
 }
 
 type BlockChain struct {
@@ -315,7 +317,7 @@ func NewChain(blocks Blocks) *BlockChain {
 	chain := &BlockChain{list.New()}
 
 	for _, block := range blocks {
-		chain.PushBack(&link{block, nil})
+		chain.PushBack(&link{block, nil, nil})
 	}
 
 	return chain
@@ -329,6 +331,7 @@ func (self *ChainManager) InsertChain(chain *BlockChain) {
 		self.SetTotalDifficulty(link.td)
 		self.add(link.block)
 		self.Ethereum.EventMux().Post(NewBlockEvent{link.block})
+		self.Ethereum.EventMux().Post(link.messages)
 	}
 }
 
@@ -350,7 +353,8 @@ func (self *ChainManager) TestChain(chain *BlockChain) (td *big.Int, err error) 
 			return
 		}
 
-		td, err = self.Ethereum.BlockManager().ProcessWithParent(block, parent)
+		var messages state.Messages
+		td, messages, err = self.Ethereum.BlockManager().ProcessWithParent(block, parent)
 		if err != nil {
 			chainlogger.Infoln(err)
 			chainlogger.Debugf("Block #%v failed (%x...)\n", block.Number, block.Hash()[0:4])
@@ -360,6 +364,7 @@ func (self *ChainManager) TestChain(chain *BlockChain) (td *big.Int, err error) 
 			return
 		}
 		l.td = td
+		l.messages = messages
 	}
 
 	if td.Cmp(self.TD) <= 0 {

@@ -58,7 +58,7 @@ func main() {
 
 	logger.AddLogSystem(logger.NewStdLogSystem(os.Stdout, log.LstdFlags, logger.LogLevel(*loglevel)))
 
-	ethutil.ReadConfig(".ethtest", "/tmp/evm", "")
+	ethutil.ReadConfig("/tm/evmtest", "/tmp/evm", "")
 
 	stateObject := state.NewStateObject([]byte("evmuser"))
 	closure := vm.NewClosure(nil, stateObject, stateObject, ethutil.Hex2Bytes(*code), ethutil.Big(*gas), ethutil.Big(*price))
