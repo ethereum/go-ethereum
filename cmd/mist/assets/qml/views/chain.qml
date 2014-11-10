@@ -109,9 +109,9 @@ Rectangle {
 	       }
 
 		if(initial){
-			blockModel.append({size: block.size, number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
+			blockModel.append({raw: block.raw, bloom: block.bloom, size: block.size, number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
 		} else {
-			blockModel.insert(0, {size: block.size, number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
+			blockModel.insert(0, {bloom: block.bloom, size: block.size, number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
 		}
 	}
 
@@ -136,6 +136,7 @@ Rectangle {
 					Text { text: '<h3>Block details</h3>'; color: "#F2F2F2"}
 					Text { text: '<b>Block number:</b> ' + number + " (Size: " + size + ")"; color: "#F2F2F2"}
 					Text { text: '<b>Hash:</b> ' + hash; color: "#F2F2F2"}
+					Text { text: '<b>Bloom:</b> ' + bloom; color: "#F2F2F2"}
 					Text { text: '<b>Coinbase:</b> &lt;' + name + '&gt; ' + coinbase; color: "#F2F2F2"}
 					Text { text: '<b>Block found at:</b> ' + prettyTime; color: "#F2F2F2"}
 					Text { text: '<b>Gas used:</b> ' + gasUsed + " / " + gasLimit; color: "#F2F2F2"}
@@ -222,11 +223,17 @@ Rectangle {
 				text: "Contract"
 				anchors.top: contractLabel.bottom
 				anchors.left: parent.left
-				anchors.bottom: popup.bottom
+				anchors.right: parent.right
 				wrapMode: Text.Wrap
-				width: parent.width - 30
 				height: 80
-				anchors.leftMargin: 10
+			}
+			TextArea {
+				id: dumpData
+				anchors.top: contractData.bottom
+				anchors.left: parent.left
+				anchors.right: parent.right
+				anchors.bottom: parent.bottom
+				height: 300
 			}
 		}
 		property var transactionModel: ListModel {
@@ -248,6 +255,7 @@ Rectangle {
 				}
 			}
 			txView.forceActiveFocus()
+			dumpData.text = bl.raw;
 		}
 	}
 }

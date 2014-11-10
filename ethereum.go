@@ -419,6 +419,7 @@ func (s *Ethereum) Start(seed bool) {
 	if seed {
 		s.Seed()
 	}
+	s.ConnectToPeer("localhost:40404")
 	loggerger.Infoln("Server started")
 }
 
@@ -471,7 +472,6 @@ func (s *Ethereum) Seed() {
 			s.ProcessPeerList(peers)
 		}
 
-		// XXX tmp
 		s.ConnectToPeer(seedNodeAddress)
 	}
 }

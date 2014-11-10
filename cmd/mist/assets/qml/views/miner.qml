@@ -119,14 +119,12 @@ Rectangle {
 						}
 					}
 					Component.onCompleted: {
-						/* interface test stuff
 						// XXX Temp. replace with above eventually
 						var tmpItems = ["JEVCoin", "Some coin", "Other coin", "Etc coin"];
 						var address = "e6716f9544a56c530d868e4bfbacb172315bdead";
 						for (var i = 0; i < tmpItems.length; i++) {
 							mergedMiningModel.append({checked: false, name: tmpItems[i], address: address, id: 0, itemId: i});
 						}
-						*/
 					}
 				}
 			}

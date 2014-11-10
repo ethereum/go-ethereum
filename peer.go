@@ -673,7 +673,6 @@ func (p *Peer) pushPeers() {
 }
 
 func (self *Peer) pushStatus() {
-	fmt.Println("push status")
 	msg := wire.NewMessage(wire.MsgStatusTy, []interface{}{
 		uint32(ProtocolVersion),
 		uint32(NetVersion),

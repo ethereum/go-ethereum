@@ -138,6 +138,7 @@ func (self *ChainManager) GetChainHashesFromHash(hash []byte, max uint64) (chain
 
 	// XXX Could be optimised by using a different database which only holds hashes (i.e., linked list)
 	for i := uint64(0); i < max; i++ {
+
 		chain = append(chain, block.Hash())
 
 		if block.Number.Cmp(ethutil.Big0) <= 0 {
@@ -321,32 +322,28 @@ func NewChain(blocks Blocks) *BlockChain {
 }
 
 // This function assumes you've done your checking. No checking is done at this stage anymore
-/*
 func (self *ChainManager) InsertChain(chain *BlockChain) {
 	for e := chain.Front(); e != nil; e = e.Next() {
 		link := e.Value.(*link)
 
 		self.SetTotalDifficulty(link.td)
 		self.add(link.block)
+		self.Ethereum.EventMux().Post(NewBlockEvent{link.block})
 	}
 }
-*/
 
-func (self *ChainManager) TestChain(chain *BlockChain, imp bool) (td *big.Int, err error) {
+func (self *ChainManager) TestChain(chain *BlockChain) (td *big.Int, err error) {
 	self.workingChain = chain
 
 	for e := chain.Front(); e != nil; e = e.Next() {
 		var (
 			l      = e.Value.(*link)
 			block  = l.block
-			parent *Block
-			prev   = e.Prev()
-		)
-		if prev == nil {
 			parent = self.GetBlock(block.PrevHash)
-		} else {
-			parent = prev.Value.(*link).block
-		}
+		)
+
+		//fmt.Println("parent", parent)
+		//fmt.Println("current", block)
 
 		if parent == nil {
 			err = fmt.Errorf("incoming chain broken on hash %x\n", block.PrevHash[0:4])
@@ -363,18 +360,11 @@ func (self *ChainManager) TestChain(chain *BlockChain, imp bool) (td *big.Int, e
 			return
 		}
 		l.td = td
-
-		if imp {
-			self.SetTotalDifficulty(td)
-			self.add(block)
-		}
 	}
 
-	if !imp {
-		if td.Cmp(self.TD) <= 0 {
-			err = &TDError{td, self.TD}
-			return
-		}
+	if td.Cmp(self.TD) <= 0 {
+		err = &TDError{td, self.TD}
+		return
 	}
 
 	self.workingChain = nil

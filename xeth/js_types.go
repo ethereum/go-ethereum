@@ -26,6 +26,8 @@ type JSBlock struct {
 	GasLimit     string        `json:"gasLimit"`
 	GasUsed      string        `json:"gasUsed"`
 	PrevHash     string        `json:"prevHash"`
+	Bloom        string        `json:"bloom"`
+	Raw          string        `json:"raw"`
 }
 
 // Creates a new QML Block from a chain block
@@ -54,6 +56,8 @@ func NewJSBlock(block *chain.Block) *JSBlock {
 		Time:     block.Time,
 		Coinbase: ethutil.Bytes2Hex(block.Coinbase),
 		PrevHash: ethutil.Bytes2Hex(block.PrevHash),
+		Bloom:    ethutil.Bytes2Hex(block.LogsBloom),
+		Raw:      block.String(),
 	}
 }
 

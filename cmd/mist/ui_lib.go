@@ -229,7 +229,11 @@ func (self *UiLib) NewFilter(object map[string]interface{}) (id int) {
 func (self *UiLib) NewFilterString(typ string) (id int) {
 	filter := chain.NewFilter(self.eth)
 	filter.BlockCallback = func(block *chain.Block) {
-		self.win.Root().Call("invokeFilterCallback", "{}", id)
+		if self.win != nil && self.win.Root() != nil {
+			self.win.Root().Call("invokeFilterCallback", "{}", id)
+		} else {
+			fmt.Println("QML is lagging")
+		}
 	}
 	id = self.eth.InstallFilter(filter)
 	return id

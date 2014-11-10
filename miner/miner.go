@@ -1,3 +1,26 @@
+/*
+	This file is part of go-ethereum
+
+	go-ethereum is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Lesser General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	go-ethereum is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU Lesser General Public License
+	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/**
+ * @authors
+ * 	Jeffrey Wilcke <i@jev.io>
+ * @date 2014
+ *
+ */
+
 package miner
 
 import (
@@ -190,12 +213,12 @@ func (self *Miner) mine() {
 	if nonce != nil {
 		block.Nonce = nonce
 		lchain := chain.NewChain(chain.Blocks{block})
-		_, err := chainMan.TestChain(lchain, true)
+		_, err := chainMan.TestChain(lchain)
 		if err != nil {
 			minerlogger.Infoln(err)
 		} else {
-			//chainMan.InsertChain(lchain)
-			self.eth.EventMux().Post(chain.NewBlockEvent{block})
+			chainMan.InsertChain(lchain)
+			//self.eth.EventMux().Post(chain.NewBlockEvent{block})
 			self.eth.Broadcast(wire.MsgBlockTy, []interface{}{block.Value().Val})
 
 			minerlogger.Infof("🔨  Mined block %x\n", block.Hash())

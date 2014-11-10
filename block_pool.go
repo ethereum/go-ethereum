@@ -317,7 +317,7 @@ out:
 				chainManager := self.eth.ChainManager()
 				// Test and import
 				chain := chain.NewChain(blocks)
-				_, err := chainManager.TestChain(chain, true)
+				_, err := chainManager.TestChain(chain)
 				if err != nil {
 					poollogger.Debugln(err)
 
@@ -330,7 +330,7 @@ out:
 					self.td = ethutil.Big0
 					self.peer = nil
 				} else {
-					//chainManager.InsertChain(chain)
+					chainManager.InsertChain(chain)
 					for _, block := range blocks {
 						self.Remove(block.Hash())
 					}

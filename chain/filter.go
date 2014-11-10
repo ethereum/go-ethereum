@@ -2,8 +2,11 @@ package chain
 
 import (
 	"bytes"
+	"fmt"
 	"math"
+	"math/big"
 
+	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -99,6 +102,7 @@ func (self *Filter) Find() []*state.Message {
 		// Use bloom filtering to see if this block is interesting given the
 		// current parameters
 		if self.bloomFilter(block) {
+			fmt.Println("block", block.Number, "has something interesting")
 			// Get the messages of the block
 			msgs, err := self.eth.BlockManager().GetMessages(block)
 			if err != nil {
@@ -184,7 +188,7 @@ func (self *Filter) bloomFilter(block *Block) bool {
 
 	if len(self.to) > 0 {
 		for _, to := range self.to {
-			if BloomLookup(block.LogsBloom, to) {
+			if BloomLookup(block.LogsBloom, ethutil.U256(new(big.Int).Add(ethutil.Big1, ethutil.BigD(to))).Bytes()) {
 				toIncluded = true
 				break
 			}

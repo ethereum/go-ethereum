@@ -250,17 +250,6 @@ func (gui *Gui) setInitialChainManager() {
 	blk := gui.eth.ChainManager().GetBlock(sBlk)
 	for ; blk != nil; blk = gui.eth.ChainManager().GetBlock(sBlk) {
 		sBlk = blk.PrevHash
-		addr := gui.address()
-
-		// Loop through all transactions to see if we missed any while being offline
-		for _, tx := range blk.Transactions() {
-			if bytes.Compare(tx.Sender(), addr) == 0 || bytes.Compare(tx.Recipient, addr) == 0 {
-				if ok, _ := gui.txDb.Get(tx.Hash()); ok == nil {
-					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-				}
-
-			}
-		}
 
 		gui.processBlock(blk, true)
 	}
@@ -404,7 +393,7 @@ func (gui *Gui) update() {
 		gui.loadAddressBook()
 		gui.loadMergedMiningOptions()
 		gui.setPeerInfo()
-		gui.readPreviousTransactions()
+		//gui.readPreviousTransactions()
 	}()
 
 	for _, plugin := range gui.plugins {

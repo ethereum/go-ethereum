@@ -21,18 +21,18 @@ func CreateBloom(block *Block) []byte {
 func LogsBloom(logs state.Logs) *big.Int {
 	bin := new(big.Int)
 	for _, log := range logs {
-		data := [][]byte{crypto.Sha3(log.Address)}
+		data := [][]byte{log.Address}
 		for _, topic := range log.Topics {
 			data = append(data, topic)
 		}
 
-		if log.Data != nil {
-			data = append(data, log.Data)
+		for _, b := range data {
+			bin.Or(bin, ethutil.BigD(bloom9(crypto.Sha3(b)).Bytes()))
 		}
 
-		for _, b := range data {
-			bin.Or(bin, bloom9(b))
-		}
+		//if log.Data != nil {
+		//	data = append(data, log.Data)
+		//}
 	}
 
 	return bin
@@ -51,7 +51,7 @@ func bloom9(b []byte) *big.Int {
 
 func BloomLookup(bin, topic []byte) bool {
 	bloom := ethutil.BigD(bin)
-	cmp := bloom9(topic)
+	cmp := bloom9(crypto.Sha3(topic))
 
 	return bloom.And(bloom, cmp).Cmp(cmp) == 0
 }

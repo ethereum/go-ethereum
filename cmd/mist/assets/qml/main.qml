@@ -46,8 +46,8 @@ ApplicationWindow {
 	Component.onCompleted: {
 		var wallet = addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "ethereum", active: true});
 		var browser = addPlugin("./webapp.qml", {noAdd: true, close: false, section: "ethereum", active: true});
-		var browser = addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: true});
 		root.browser = browser;
+		addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: true});
 
 		addPlugin("./views/transaction.qml", {noAdd: true, close: false, section: "legacy"});
 		addPlugin("./views/chain.qml", {noAdd: true, close: false, section: "legacy"});
