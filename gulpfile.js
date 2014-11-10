@@ -36,7 +36,7 @@ gulp.task('clean', ['lint'], function(cb) {
   del([ DEST ], cb);
 });
 
-gulp.task('build', ['clean'], function () {
+gulp.task('prepare', ['clean'], function () {
   return browserify({
       debug: true,
       insert_global_vars: false,
@@ -59,8 +59,8 @@ gulp.task('build', ['clean'], function () {
         hoist_vars: true,
         negate_iife: false
       },
-      beautify: false,
-      warnings: true,
+      beautify: true,
+      warnings: true
     })
     .bundle()
     .pipe(exorcist(path.join( DEST, 'ethereum.js.map')))
@@ -68,7 +68,7 @@ gulp.task('build', ['clean'], function () {
     .pipe(gulp.dest( DEST ));
 });
 
-gulp.task('uglify', ['build'], function(){
+gulp.task('build', ['prepare'], function(){
   return gulp.src( DEST + 'ethereum.js')
     .pipe(uglify())
     .pipe(rename('ethereum.min.js'))
@@ -76,7 +76,7 @@ gulp.task('uglify', ['build'], function(){
 });
 
 gulp.task('watch', function() {
-  gulp.watch(['./lib/*.js'], ['lint', 'build', 'uglify']);
+  gulp.watch(['./lib/*.js'], ['lint', 'prepare', 'build']);
 });
 
-gulp.task('default', ['bower', 'lint', 'build', 'uglify']);
+gulp.task('default', ['bower', 'lint', 'prepare', 'build']);
