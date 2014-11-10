@@ -32,6 +32,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
@@ -64,11 +65,16 @@ func main() {
 
 	tstart := time.Now()
 
-	ret, _, e := closure.Call(vm.New(NewVmEnv(), vm.DebugVmTy), nil)
+	env := NewVmEnv()
+	ret, _, e := closure.Call(vm.New(env, vm.DebugVmTy), nil)
 
 	logger.Flush()
 	if e != nil {
 		perr(e)
+	}
+
+	if *dump {
+		fmt.Println(string(env.state.Dump()))
 	}
 
 	var mem runtime.MemStats
@@ -90,7 +96,8 @@ type VmEnv struct {
 }
 
 func NewVmEnv() *VmEnv {
-	return &VmEnv{state.New(trie.New(nil, ""))}
+	db, _ := ethdb.NewMemDatabase()
+	return &VmEnv{state.New(trie.New(db, ""))}
 }
 
 func (VmEnv) Origin() []byte            { return nil }
