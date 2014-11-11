@@ -50,7 +50,7 @@ func (self *Env) Difficulty() *big.Int  { return self.difficulty }
 func (self *Env) BlockHash() []byte     { return nil }
 func (self *Env) State() *state.State   { return self.state }
 func (self *Env) GasLimit() *big.Int    { return self.gasLimit }
-func (self *Env) AddLog(state.Log)      {}
+func (self *Env) AddLog(*state.Log)     {}
 func (self *Env) Transfer(from, to vm.Account, amount *big.Int) error {
 	return vm.Transfer(from, to, amount)
 }
