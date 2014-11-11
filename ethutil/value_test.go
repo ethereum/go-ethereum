@@ -3,10 +3,7 @@ package ethutil
 import (
 	checker "gopkg.in/check.v1"
 	"math/big"
-	"testing"
 )
-
-func Test(t *testing.T) { checker.TestingT(t) }
 
 type ValueSuite struct{}
 

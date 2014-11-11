@@ -1,10 +1,14 @@
 package ethutil
 
 import (
-	"testing"
+	checker "gopkg.in/check.v1"
 )
 
-func TestStorageSizeString(t *testing.T) {
+type SizeSuite struct{}
+
+var _ = checker.Suite(&SizeSuite{})
+
+func (s *SizeSuite) TestStorageSizeString(c *checker.C) {
 	data1 := 2381273
 	data2 := 2192
 	data3 := 12
