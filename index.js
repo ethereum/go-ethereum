@@ -7,10 +7,6 @@ module.exports = {
   trietest: require('./TrieTests/trietest'),
   trietestnextprev: require('./TrieTests/trietestnextprev'),
   txtest: require('./BasicTests/txtest'),
-  randomTests: {
-    201410211705: require('./randomTests/201410211705'),
-    201410211708: require('./randomTests/201410211708')
-  },
   StateTests: {
     stPreCompiledContracts: require('./StateTests/stPreCompiledContracts'),
     stSystemOperationsTest: require('./StateTests/stSystemOperationsTest'),
