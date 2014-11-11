@@ -16,27 +16,9 @@ var source = require('vinyl-source-stream');
 var exorcist = require('exorcist');
 var bower = require('bower');
 
-
 var DEST = './dist/';
 
-gulp.task('bower', function(cb){
-  bower.commands.install().on('end', function (installed){
-    console.log(installed);
-    cb();
-  });
-});
-
-gulp.task('lint', function(){
-  return gulp.src(['./*.js', './lib/*.js'])
-    .pipe(jshint())
-    .pipe(jshint.reporter('default'));
-});
-
-gulp.task('clean', ['lint'], function(cb) {
-  del([ DEST ], cb);
-});
-
-gulp.task('prepare', ['clean'], function () {
+var build = function(src, dst) {
   return browserify({
       debug: true,
       insert_global_vars: false,
@@ -44,7 +26,7 @@ gulp.task('prepare', ['clean'], function () {
       bundleExternal: false
     })
     .add('./')
-    .require('./index.js', {expose: 'web3'})
+    .require('./' + src + '.js', {expose: 'web3'})
     .transform('envify', {
       NODE_ENV: 'build'
     })
@@ -63,20 +45,54 @@ gulp.task('prepare', ['clean'], function () {
       warnings: true
     })
     .bundle()
-    .pipe(exorcist(path.join( DEST, 'ethereum.js.map')))
-    .pipe(source('ethereum.js'))
+    .pipe(exorcist(path.join( DEST, dst + '.js.map')))
+    .pipe(source(dst + '.js'))
     .pipe(gulp.dest( DEST ));
+};
+
+var uglifyFile = function(file) {
+  return gulp.src( DEST + file + '.js')
+    .pipe(uglify())
+    .pipe(rename(file + '.min.js'))
+    .pipe(gulp.dest( DEST ));
+};
+
+gulp.task('bower', function(cb){
+  bower.commands.install().on('end', function (installed){
+    console.log(installed);
+    cb();
+  });
 });
 
-gulp.task('build', ['prepare'], function(){
-  return gulp.src( DEST + 'ethereum.js')
-    .pipe(uglify())
-    .pipe(rename('ethereum.min.js'))
-    .pipe(gulp.dest( DEST ));
+gulp.task('lint', function(){
+  return gulp.src(['./*.js', './lib/*.js'])
+    .pipe(jshint())
+    .pipe(jshint.reporter('default'));
+});
+
+gulp.task('clean', ['lint'], function(cb) {
+  del([ DEST ], cb);
+});
+
+gulp.task('build', ['clean'], function () {
+    return build('index', 'ethereum');
+});
+
+gulp.task('buildQt', ['clean'], function () {
+    return build('index_qt', 'ethereum_qt');
+});
+
+gulp.task('uglify', ['build'], function(){
+    return uglifyFile('ethereum');
+});
+
+gulp.task('uglifyQt', ['buildQt'], function () {
+    return uglifyFile('ethereum_qt');
 });
 
 gulp.task('watch', function() {
   gulp.watch(['./lib/*.js'], ['lint', 'prepare', 'build']);
 });
 
-gulp.task('default', ['bower', 'lint', 'prepare', 'build']);
+gulp.task('default', ['bower', 'lint', 'build', 'uglify']);
+gulp.task('qt', ['bower', 'lint', 'buildQt', 'uglifyQt']);
