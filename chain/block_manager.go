@@ -159,7 +159,9 @@ done:
 
 		txGas.Sub(txGas, st.gas)
 		cumulative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, txGas))
-		receipt := &Receipt{ethutil.CopyBytes(state.Root().([]byte)), cumulative, LogsBloom(state.Logs()).Bytes(), state.Logs()}
+		bloom := ethutil.LeftPadBytes(LogsBloom(state.Logs()).Bytes(), 64)
+		receipt := &Receipt{ethutil.CopyBytes(state.Root()), cumulative, bloom, state.Logs()}
+		//fmt.Println(receipt)
 
 		// Notify all subscribers
 		go self.eth.EventMux().Post(TxPostEvent{tx})
@@ -213,13 +215,15 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 	if err != nil {
 		return
 	}
-	block.SetReceipts(receipts)
+	//block.SetReceipts(receipts)
 
-	txSha := DeriveSha(block.transactions)
-	if bytes.Compare(txSha, block.TxSha) != 0 {
-		err = fmt.Errorf("Error validating transaction sha. Received %x, got %x", block.TxSha, txSha)
-		return
-	}
+	/*
+		txSha := DeriveSha(block.transactions)
+		if bytes.Compare(txSha, block.TxSha) != 0 {
+			err = fmt.Errorf("Error validating transaction sha. Received %x, got %x", block.TxSha, txSha)
+			return
+		}
+	*/
 
 	receiptSha := DeriveSha(receipts)
 	if bytes.Compare(receiptSha, block.ReceiptSha) != 0 {
@@ -255,12 +259,17 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 		// Sync the current block's state to the database and cancelling out the deferred Undo
 		state.Sync()
 
-		// TODO at this point we should also insert LOGS in to a database
-
-		sm.transState = state.Copy()
-
 		messages := state.Manifest().Messages
 		state.Manifest().Reset()
+
+		/*
+			sm.eth.ChainManager().SetTotalDifficulty(td)
+			sm.eth.ChainManager().add(block)
+			sm.eth.EventMux().Post(NewBlockEvent{block})
+			sm.eth.EventMux().Post(messages)
+		*/
+
+		sm.transState = state.Copy()
 
 		sm.eth.TxPool().RemoveSet(block.Transactions())
 

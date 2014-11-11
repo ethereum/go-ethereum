@@ -337,6 +337,7 @@ func (self *ChainManager) InsertChain(chain *BlockChain) {
 
 func (self *ChainManager) TestChain(chain *BlockChain) (td *big.Int, err error) {
 	self.workingChain = chain
+	defer func() { self.workingChain = nil }()
 
 	for e := chain.Front(); e != nil; e = e.Next() {
 		var (

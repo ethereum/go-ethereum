@@ -62,7 +62,7 @@ func (self *State) Refund(addr []byte, gas, price *big.Int) {
 		self.refund[string(addr)] = new(big.Int)
 	}
 
-	self.refund[string(addr)] = new(big.Int).Add(self.refund[string(addr)], amount)
+	self.refund[string(addr)].Add(self.refund[string(addr)], amount)
 }
 
 func (self *State) AddBalance(addr []byte, amount *big.Int) {
@@ -237,8 +237,8 @@ func (self *State) Set(state *State) {
 	self.logs = state.logs
 }
 
-func (s *State) Root() interface{} {
-	return s.Trie.Root
+func (s *State) Root() []byte {
+	return s.Trie.GetRoot()
 }
 
 // Resets the trie and all siblings
