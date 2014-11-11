@@ -328,8 +328,8 @@ func (self *ChainManager) InsertChain(chain *BlockChain) {
 	for e := chain.Front(); e != nil; e = e.Next() {
 		link := e.Value.(*link)
 
-		self.SetTotalDifficulty(link.td)
 		self.add(link.block)
+		self.SetTotalDifficulty(link.td)
 		self.Ethereum.EventMux().Post(NewBlockEvent{link.block})
 		self.Ethereum.EventMux().Post(link.messages)
 	}

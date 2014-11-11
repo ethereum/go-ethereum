@@ -13,8 +13,8 @@ type Log struct {
 	Data    []byte
 }
 
-func NewLogFromValue(decoder *ethutil.Value) Log {
-	log := Log{
+func NewLogFromValue(decoder *ethutil.Value) *Log {
+	log := &Log{
 		Address: decoder.Get(0).Bytes(),
 		Data:    decoder.Get(2).Bytes(),
 	}
@@ -27,15 +27,15 @@ func NewLogFromValue(decoder *ethutil.Value) Log {
 	return log
 }
 
-func (self Log) RlpData() interface{} {
+func (self *Log) RlpData() interface{} {
 	return []interface{}{self.Address, ethutil.ByteSliceToInterface(self.Topics), self.Data}
 }
 
-func (self Log) String() string {
+func (self *Log) String() string {
 	return fmt.Sprintf(`log: %x %x %x`, self.Address, self.Topics, self.Data)
 }
 
-type Logs []Log
+type Logs []*Log
 
 func (self Logs) RlpData() interface{} {
 	data := make([]interface{}, len(self))

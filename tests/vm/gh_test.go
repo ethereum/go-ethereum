@@ -113,7 +113,7 @@ func TestEnvironmentalInfo(t *testing.T) {
 }
 
 func TestFlowOperation(t *testing.T) {
-	//	helper.Logger.SetLogLevel(5)
+	helper.Logger.SetLogLevel(5)
 	const fn = "../files/vmtests/vmIOandFlowOperationsTest.json"
 	RunVmTest(fn, t)
 }

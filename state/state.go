@@ -37,7 +37,7 @@ func (self *State) EmptyLogs() {
 	self.logs = nil
 }
 
-func (self *State) AddLog(log Log) {
+func (self *State) AddLog(log *Log) {
 	self.logs = append(self.logs, log)
 }
 

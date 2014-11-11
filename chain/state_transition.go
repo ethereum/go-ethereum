@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
 )
@@ -229,12 +228,12 @@ func (self *StateTransition) TransitionState() (err error) {
 			}
 
 			msg.Output = ret
-		} else {
-			// Add default LOG. Default = big(sender.addr) + 1
-			addr := ethutil.BigD(receiver.Address())
-			self.state.AddLog(state.Log{sender.Address(), [][]byte{ethutil.U256(addr.Add(addr, ethutil.Big1)).Bytes()}, nil})
 		}
 	}
+
+	// Add default LOG. Default = big(sender.addr) + 1
+	//addr := ethutil.BigD(receiver.Address())
+	//self.state.AddLog(&state.Log{ethutil.U256(addr.Add(addr, ethutil.Big1)).Bytes(), [][]byte{sender.Address()}, nil})
 
 	return
 }

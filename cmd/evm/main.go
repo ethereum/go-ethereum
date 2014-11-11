@@ -46,6 +46,7 @@ var (
 	gas      = flag.String("gas", "1000000", "gas amount")
 	price    = flag.String("price", "0", "gas price")
 	dump     = flag.Bool("dump", false, "dump state after run")
+	data     = flag.String("data", "", "data")
 )
 
 func perr(v ...interface{}) {
@@ -66,7 +67,7 @@ func main() {
 	tstart := time.Now()
 
 	env := NewVmEnv()
-	ret, _, e := closure.Call(vm.New(env, vm.DebugVmTy), nil)
+	ret, _, e := closure.Call(vm.New(env, vm.DebugVmTy), ethutil.Hex2Bytes(*data))
 
 	logger.Flush()
 	if e != nil {
@@ -110,7 +111,7 @@ func (VmEnv) GasLimit() *big.Int        { return nil }
 func (VmEnv) Difficulty() *big.Int      { return nil }
 func (VmEnv) Value() *big.Int           { return nil }
 func (self *VmEnv) State() *state.State { return self.state }
-func (VmEnv) AddLog(state.Log)          {}
+func (VmEnv) AddLog(*state.Log)         {}
 func (VmEnv) Transfer(from, to vm.Account, amount *big.Int) error {
 	return nil
 }

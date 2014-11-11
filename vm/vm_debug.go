@@ -47,6 +47,8 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			if r := recover(); r != nil {
 				self.Endl()
 
+				closure.UseGas(closure.Gas)
+
 				ret = closure.Return(nil)
 
 				err = fmt.Errorf("%v", r)
@@ -735,7 +737,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			for i := 0; i < n; i++ {
 				topics[i] = stack.Pop().Bytes()
 			}
-			self.env.AddLog(state.Log{closure.Address(), topics, data})
+			self.env.AddLog(&state.Log{closure.Address(), topics, data})
 		case MLOAD:
 			offset := stack.Pop()
 			val := ethutil.BigD(mem.Get(offset.Int64(), 32))
