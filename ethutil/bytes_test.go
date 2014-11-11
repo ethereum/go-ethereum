@@ -1,23 +1,24 @@
 package ethutil
 
 import (
-	"bytes"
-	"testing"
+	checker "gopkg.in/check.v1"
 )
 
-func TestByteString(t *testing.T) {
+type BytesSuite struct{}
+
+var _ = checker.Suite(&BytesSuite{})
+
+func (s *BytesSuite) TestByteString(c *checker.C) {
 	var data Bytes
 	data = []byte{102, 111, 111}
 	exp := "foo"
 	res := data.String()
 
-	if res != exp {
-		t.Errorf("Expected %s got %s", exp, res)
-	}
+	c.Assert(res, checker.Equals, exp)
 }
 
 /*
-func TestDeleteFromByteSlice(t *testing.T) {
+func (s *BytesSuite) TestDeleteFromByteSlice(c *checker.C) {
 	data := []byte{1, 2, 3, 4}
 	slice := []byte{1, 2, 3, 4}
 	exp := []byte{1, 4}
@@ -27,7 +28,7 @@ func TestDeleteFromByteSlice(t *testing.T) {
 	}
 }
 
-func TestNumberToBytes(t *testing.T) {
+func (s *BytesSuite) TestNumberToBytes(c *checker.C) {
 	data := int(1)
 	exp := []byte{0, 0, 0, 0, 0, 0, 0, 1}
 	// TODO this fails. why?
@@ -38,7 +39,7 @@ func TestNumberToBytes(t *testing.T) {
 }
 */
 
-func TestBytesToNumber(t *testing.T) {
+func (s *BytesSuite) TestBytesToNumber(c *checker.C) {
 	datasmall := []byte{0, 1}
 	datalarge := []byte{1, 2, 3}
 	expsmall := uint64(0)
@@ -46,15 +47,13 @@ func TestBytesToNumber(t *testing.T) {
 	// TODO this fails. why?
 	ressmall := BytesToNumber(datasmall)
 	reslarge := BytesToNumber(datalarge)
-	if ressmall != expsmall {
-		t.Errorf("Expected %d Got %d", expsmall, ressmall)
-	}
-	if reslarge != explarge {
-		t.Errorf("Expected %d Got %d", explarge, reslarge)
-	}
+
+	c.Assert(ressmall, checker.DeepEquals, expsmall)
+	c.Assert(reslarge, checker.DeepEquals, explarge)
+
 }
 
-func TestReadVarInt(t *testing.T) {
+func (s *BytesSuite) TestReadVarInt(c *checker.C) {
 	data8 := []byte{1, 2, 3, 4, 5, 6, 7, 8}
 	data4 := []byte{1, 2, 3, 4}
 	data2 := []byte{1, 2}
@@ -70,24 +69,13 @@ func TestReadVarInt(t *testing.T) {
 	res2 := ReadVarInt(data2)
 	res1 := ReadVarInt(data1)
 
-	if res8 != exp8 {
-		t.Errorf("Expected %d | Got %d", exp8, res8)
-	}
-
-	if res4 != exp4 {
-		t.Errorf("Expected %d | Got %d", exp4, res4)
-	}
-
-	if res2 != exp2 {
-		t.Errorf("Expected %d | Got %d", exp2, res2)
-	}
-
-	if res1 != exp1 {
-		t.Errorf("Expected %d | Got %d", exp1, res1)
-	}
+	c.Assert(res8, checker.Equals, exp8)
+	c.Assert(res4, checker.Equals, exp4)
+	c.Assert(res2, checker.Equals, exp2)
+	c.Assert(res1, checker.Equals, exp1)
 }
 
-func TestBinaryLength(t *testing.T) {
+func (s *BytesSuite) TestBinaryLength(c *checker.C) {
 	data1 := 0
 	data2 := 920987656789
 
@@ -97,80 +85,64 @@ func TestBinaryLength(t *testing.T) {
 	res1 := BinaryLength(data1)
 	res2 := BinaryLength(data2)
 
-	if res1 != exp1 {
-		t.Errorf("Expected %d got %d", exp1, res1)
-	}
-
-	if res2 != exp2 {
-		t.Errorf("Expected %d got %d", exp2, res2)
-	}
+	c.Assert(res1, checker.Equals, exp1)
+	c.Assert(res2, checker.Equals, exp2)
 }
 
-func TestCopyBytes(t *testing.T) {
+func (s *BytesSuite) TestCopyBytes(c *checker.C) {
 	data1 := []byte{1, 2, 3, 4}
 	exp1 := []byte{1, 2, 3, 4}
 	res1 := CopyBytes(data1)
-	if bytes.Compare(res1, exp1) != 0 {
-		t.Errorf("Expected % x got % x", exp1, res1)
-	}
+	c.Assert(res1, checker.DeepEquals, exp1)
 }
 
-func TestIsHex(t *testing.T) {
+func (s *BytesSuite) TestIsHex(c *checker.C) {
 	data1 := "a9e67e"
 	exp1 := false
 	res1 := IsHex(data1)
-	if exp1 != res1 {
-		t.Errorf("Expected % x Got % x", exp1, res1)
-	}
+	c.Assert(res1, checker.DeepEquals, exp1)
 
 	data2 := "0xa9e67e00"
 	exp2 := true
 	res2 := IsHex(data2)
-	if exp2 != res2 {
-		t.Errorf("Expected % x Got % x", exp2, res2)
-	}
+	c.Assert(res2, checker.DeepEquals, exp2)
+
 }
 
-func TestParseDataString(t *testing.T) {
-	data := ParseData("hello", "world", "0x0106")
-	exp := "68656c6c6f000000000000000000000000000000000000000000000000000000776f726c640000000000000000000000000000000000000000000000000000000106000000000000000000000000000000000000000000000000000000000000"
-	if bytes.Compare(data, Hex2Bytes(exp)) != 0 {
-		t.Error("Error parsing data")
-	}
+func (s *BytesSuite) TestParseDataString(c *checker.C) {
+	res1 := ParseData("hello", "world", "0x0106")
+	data := "68656c6c6f000000000000000000000000000000000000000000000000000000776f726c640000000000000000000000000000000000000000000000000000000106000000000000000000000000000000000000000000000000000000000000"
+	exp1 := Hex2Bytes(data)
+	c.Assert(res1, checker.DeepEquals, exp1)
 }
 
-func TestParseDataBytes(t *testing.T) {
-	data := []byte{232, 212, 165, 16, 0}
-	exp := []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 232, 212, 165, 16, 0}
+func (s *BytesSuite) TestParseDataBytes(c *checker.C) {
+	data1 := []byte{232, 212, 165, 16, 0}
+	exp1 := []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 232, 212, 165, 16, 0}
 
-	res := ParseData(data)
-	if bytes.Compare(res, exp) != 0 {
-		t.Errorf("Expected %x got %x", exp, res)
-	}
+	res1 := ParseData(data1)
+	c.Assert(res1, checker.DeepEquals, exp1)
+
 }
 
-func TestLeftPadBytes(t *testing.T) {
-	val := []byte{1, 2, 3, 4}
-	exp := []byte{0, 0, 0, 0, 1, 2, 3, 4}
+func (s *BytesSuite) TestLeftPadBytes(c *checker.C) {
+	val1 := []byte{1, 2, 3, 4}
+	exp1 := []byte{0, 0, 0, 0, 1, 2, 3, 4}
 
-	resstd := LeftPadBytes(val, 8)
-	if bytes.Compare(resstd, exp) != 0 {
-		t.Errorf("Expected % x Got % x", exp, resstd)
-	}
+	res1 := LeftPadBytes(val1, 8)
+	res2 := LeftPadBytes(val1, 2)
 
-	resshrt := LeftPadBytes(val, 2)
-	if bytes.Compare(resshrt, val) != 0 {
-		t.Errorf("Expected % x Got % x", exp, resshrt)
-	}
+	c.Assert(res1, checker.DeepEquals, exp1)
+	c.Assert(res2, checker.DeepEquals, val1)
 }
 
-func TestFormatData(t *testing.T) {
+func (s *BytesSuite) TestFormatData(c *checker.C) {
 	data1 := ""
 	data2 := "0xa9e67e00"
 	data3 := "a9e67e"
 	data4 := "\"a9e67e00\""
 
-	exp1 := []byte{}
+	// exp1 := []byte{}
 	exp2 := []byte{00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 0xa9, 0xe6, 0x7e, 00}
 	exp3 := []byte{00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00}
 	exp4 := []byte{0x61, 0x39, 0x65, 0x36, 0x37, 0x65, 0x30, 0x30, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00}
@@ -180,64 +152,41 @@ func TestFormatData(t *testing.T) {
 	res3 := FormatData(data3)
 	res4 := FormatData(data4)
 
-	if bytes.Compare(res1, exp1) != 0 {
-		t.Errorf("Expected % x Got % x", exp1, res1)
-	}
-
-	if bytes.Compare(res2, exp2) != 0 {
-		t.Errorf("Expected % x Got % x", exp2, res2)
-	}
-
-	if bytes.Compare(res3, exp3) != 0 {
-		t.Errorf("Expected % x Got % x", exp3, res3)
-	}
-
-	if bytes.Compare(res4, exp4) != 0 {
-		t.Errorf("Expected % x Got % x", exp4, res4)
-	}
+	c.Assert(res1, checker.IsNil)
+	c.Assert(res2, checker.DeepEquals, exp2)
+	c.Assert(res3, checker.DeepEquals, exp3)
+	c.Assert(res4, checker.DeepEquals, exp4)
 }
 
-func TestRightPadBytes(t *testing.T) {
+func (s *BytesSuite) TestRightPadBytes(c *checker.C) {
 	val := []byte{1, 2, 3, 4}
 	exp := []byte{1, 2, 3, 4, 0, 0, 0, 0}
 
 	resstd := RightPadBytes(val, 8)
-	if bytes.Compare(resstd, exp) != 0 {
-		t.Errorf("Expected % x Got % x", exp, resstd)
-	}
-
 	resshrt := RightPadBytes(val, 2)
-	if bytes.Compare(resshrt, val) != 0 {
-		t.Errorf("Expected % x Got % x", exp, resshrt)
-	}
+
+	c.Assert(resstd, checker.DeepEquals, exp)
+	c.Assert(resshrt, checker.DeepEquals, val)
 }
 
-func TestLeftPadString(t *testing.T) {
+func (s *BytesSuite) TestLeftPadString(c *checker.C) {
 	val := "test"
+	exp := "\x30\x30\x30\x30" + val
 
 	resstd := LeftPadString(val, 8)
-
-	if resstd != "\x30\x30\x30\x30"+val {
-		t.Errorf("Expected % x Got % x", val, resstd)
-	}
-
 	resshrt := LeftPadString(val, 2)
 
-	if resshrt != val {
-		t.Errorf("Expected % x Got % x", val, resshrt)
-	}
+	c.Assert(resstd, checker.Equals, exp)
+	c.Assert(resshrt, checker.Equals, val)
 }
 
-func TestRightPadString(t *testing.T) {
+func (s *BytesSuite) TestRightPadString(c *checker.C) {
 	val := "test"
+	exp := val + "\x30\x30\x30\x30"
 
 	resstd := RightPadString(val, 8)
-	if resstd != val+"\x30\x30\x30\x30" {
-		t.Errorf("Expected % x Got % x", val, resstd)
-	}
-
 	resshrt := RightPadString(val, 2)
-	if resshrt != val {
-		t.Errorf("Expected % x Got % x", val, resshrt)
-	}
+
+	c.Assert(resstd, checker.Equals, exp)
+	c.Assert(resshrt, checker.Equals, val)
 }
