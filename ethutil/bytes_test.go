@@ -41,16 +41,17 @@ func (s *BytesSuite) TestNumberToBytes(c *checker.C) {
 }
 
 func (s *BytesSuite) TestBytesToNumber(c *checker.C) {
-	datasmall := []byte{0, 1}
-	datalarge := []byte{1, 2, 3}
-	expsmall := uint64(0)
-	explarge := uint64(0)
-	// TODO this fails. why?
+	datasmall := []byte{0xe9, 0x38, 0xe9, 0x38}
+	datalarge := []byte{0xe9, 0x38, 0xe9, 0x38, 0xe9, 0x38, 0xe9, 0x38}
+
+	var expsmall uint64 = 0xe938e938
+	var explarge uint64 = 0x0
+
 	ressmall := BytesToNumber(datasmall)
 	reslarge := BytesToNumber(datalarge)
 
-	c.Assert(ressmall, checker.DeepEquals, expsmall)
-	c.Assert(reslarge, checker.DeepEquals, explarge)
+	c.Assert(ressmall, checker.Equals, expsmall)
+	c.Assert(reslarge, checker.Equals, explarge)
 
 }
 
