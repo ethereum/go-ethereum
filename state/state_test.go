@@ -1,6 +1,7 @@
 package state
 
 import (
+	. "gopkg.in/check.v1"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -8,29 +9,41 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-var ZeroHash256 = make([]byte, 32)
+func Test(t *testing.T) { TestingT(t) }
 
-func TestSnapshot(t *testing.T) {
+type StateSuite struct {
+	state *State
+}
+
+var _ = Suite(&StateSuite{})
+
+const expectedasbytes = "Expected % x Got % x"
+
+// var ZeroHash256 = make([]byte, 32)
+
+func (s *StateSuite) SetUpTest(c *C) {
 	db, _ := ethdb.NewMemDatabase()
 	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")
 	ethutil.Config.Db = db
+	s.state = New(trie.New(db, ""))
+}
 
-	state := New(trie.New(db, ""))
+func (s *StateSuite) TestSnapshot(c *C) {
+	data1 := ethutil.NewValue(42)
+	data2 := ethutil.NewValue(43)
+	storageaddr := ethutil.Big("0")
+	stateobjaddr := []byte("aa")
 
-	stateObject := state.GetOrNewStateObject([]byte("aa"))
+	stateObject := s.state.GetOrNewStateObject(stateobjaddr)
+	stateObject.SetStorage(storageaddr, data1)
+	snapshot := s.state.Copy()
 
-	stateObject.SetStorage(ethutil.Big("0"), ethutil.NewValue(42))
+	stateObject = s.state.GetStateObject(stateobjaddr)
+	stateObject.SetStorage(storageaddr, data2)
+	s.state.Set(snapshot)
 
-	snapshot := state.Copy()
+	stateObject = s.state.GetStateObject(stateobjaddr)
+	res := stateObject.GetStorage(storageaddr)
 
-	stateObject = state.GetStateObject([]byte("aa"))
-	stateObject.SetStorage(ethutil.Big("0"), ethutil.NewValue(43))
-
-	state.Set(snapshot)
-
-	stateObject = state.GetStateObject([]byte("aa"))
-	res := stateObject.GetStorage(ethutil.Big("0"))
-	if !res.Cmp(ethutil.NewValue(42)) {
-		t.Error("Expected storage 0 to be 42", res)
-	}
+	c.Assert(data1, DeepEquals, res, Commentf(expectedasbytes, data1, res))
 }
