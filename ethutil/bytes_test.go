@@ -23,9 +23,8 @@ func (s *BytesSuite) TestDeleteFromByteSlice(c *checker.C) {
 	slice := []byte{1, 2, 3, 4}
 	exp := []byte{1, 4}
 	res := DeleteFromByteSlice(data, slice)
-	if bytes.Compare(res, exp) != 0 {
-		t.Errorf("Expected % x Got % x", exp, res)
-	}
+
+	c.Assert(res, checker.DeepEquals, exp)
 }
 
 */
