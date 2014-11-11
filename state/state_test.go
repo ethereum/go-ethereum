@@ -29,20 +29,28 @@ func (s *StateSuite) SetUpTest(c *C) {
 }
 
 func (s *StateSuite) TestSnapshot(c *C) {
+	stateobjaddr := []byte("aa")
+	storageaddr := ethutil.Big("0")
 	data1 := ethutil.NewValue(42)
 	data2 := ethutil.NewValue(43)
-	storageaddr := ethutil.Big("0")
-	stateobjaddr := []byte("aa")
 
+	// get state object
 	stateObject := s.state.GetOrNewStateObject(stateobjaddr)
+	// set inital state object value
 	stateObject.SetStorage(storageaddr, data1)
+	// get snapshot of current state
 	snapshot := s.state.Copy()
 
+	// get state object. is this strictly necessary?
 	stateObject = s.state.GetStateObject(stateobjaddr)
+	// set new state object value
 	stateObject.SetStorage(storageaddr, data2)
+	// restore snapshot
 	s.state.Set(snapshot)
 
+	// get state object
 	stateObject = s.state.GetStateObject(stateobjaddr)
+	// get state storage value
 	res := stateObject.GetStorage(storageaddr)
 
 	c.Assert(data1, DeepEquals, res, Commentf(expectedasbytes, data1, res))
