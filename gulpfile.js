@@ -25,8 +25,8 @@ var build = function(src, dst) {
       detectGlobals: false,
       bundleExternal: false
     })
-    .add('./')
     .require('./' + src + '.js', {expose: 'web3'})
+    .add('./' + src + '.js')
     .transform('envify', {
       NODE_ENV: 'build'
     })
@@ -44,6 +44,25 @@ var build = function(src, dst) {
       beautify: true,
       warnings: true
     })
+    .bundle()
+    .pipe(exorcist(path.join( DEST, dst + '.js.map')))
+    .pipe(source(dst + '.js'))
+    .pipe(gulp.dest( DEST ));
+};
+
+var buildDev = function(src, dst) {
+  return browserify({
+      debug: true,
+      insert_global_vars: false,
+      detectGlobals: false,
+      bundleExternal: false
+    })
+    .require('./' + src + '.js', {expose: 'web3'})
+    .add('./' + src + '.js')
+    .transform('envify', {
+      NODE_ENV: 'build'
+    })
+    .transform('unreachable-branch-transform')
     .bundle()
     .pipe(exorcist(path.join( DEST, dst + '.js.map')))
     .pipe(source(dst + '.js'))
@@ -79,7 +98,11 @@ gulp.task('build', ['clean'], function () {
 });
 
 gulp.task('buildQt', ['clean'], function () {
-    return build('index_qt', 'ethereum_qt');
+    return build('index_qt', 'ethereum');
+});
+
+gulp.task('buildDev', ['clean'], function () {
+    return buildDev('index', 'ethereum');
 });
 
 gulp.task('uglify', ['build'], function(){
@@ -87,7 +110,7 @@ gulp.task('uglify', ['build'], function(){
 });
 
 gulp.task('uglifyQt', ['buildQt'], function () {
-    return uglifyFile('ethereum_qt');
+    return uglifyFile('ethereum');
 });
 
 gulp.task('watch', function() {
@@ -96,3 +119,5 @@ gulp.task('watch', function() {
 
 gulp.task('default', ['bower', 'lint', 'build', 'uglify']);
 gulp.task('qt', ['bower', 'lint', 'buildQt', 'uglifyQt']);
+gulp.task('dev', ['bower', 'lint', 'buildDev']);
+
