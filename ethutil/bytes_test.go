@@ -28,16 +28,17 @@ func (s *BytesSuite) TestDeleteFromByteSlice(c *checker.C) {
 	}
 }
 
-func (s *BytesSuite) TestNumberToBytes(c *checker.C) {
-	data := int(1)
-	exp := []byte{0, 0, 0, 0, 0, 0, 0, 1}
-	// TODO this fails. why?
-	res := NumberToBytes(data, 16)
-	if bytes.Compare(res, exp) != 0 {
-		t.Errorf("Expected % x Got % x", exp, res)
-	}
-}
 */
+func (s *BytesSuite) TestNumberToBytes(c *checker.C) {
+	// data1 := int(1)
+	// res1 := NumberToBytes(data1, 16)
+	// c.Check(res1, checker.Panics)
+
+	var data2 float64 = 3.141592653
+	exp2 := []byte{0xe9, 0x38}
+	res2 := NumberToBytes(data2, 16)
+	c.Assert(res2, checker.DeepEquals, exp2)
+}
 
 func (s *BytesSuite) TestBytesToNumber(c *checker.C) {
 	datasmall := []byte{0, 1}
