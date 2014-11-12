@@ -16,6 +16,15 @@ var _ = checker.Suite(&StateSuite{})
 
 // var ZeroHash256 = make([]byte, 32)
 
+func (s *StateSuite) TestDump(c *checker.C) {
+	key := []byte{0x01}
+	value := "foo"
+	node := []interface{}{key, value}
+	s.state.Trie.Put(node)
+	dump := s.state.Dump()
+	c.Assert(dump, checker.NotNil)
+}
+
 func (s *StateSuite) SetUpTest(c *checker.C) {
 	db, _ := ethdb.NewMemDatabase()
 	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")
