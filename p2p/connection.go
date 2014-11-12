@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/go-ethereum/ethutil"
 )
 
 type Connection struct {

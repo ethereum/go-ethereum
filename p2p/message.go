@@ -2,7 +2,7 @@ package p2p
 
 import (
 	// "fmt"
-	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/go-ethereum/ethutil"
 )
 
 type MsgCode uint8

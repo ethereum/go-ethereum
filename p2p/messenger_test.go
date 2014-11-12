@@ -3,7 +3,7 @@ package p2p
 import (
 	// "fmt"
 	"bytes"
-	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/go-ethereum/ethutil"
 	"testing"
 	"time"
 )
