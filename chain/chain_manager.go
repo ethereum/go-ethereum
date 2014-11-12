@@ -47,7 +47,7 @@ func (bc *ChainManager) NewBlock(coinbase []byte) *Block {
 	hash := ZeroHash256
 
 	if bc.CurrentBlock != nil {
-		root = bc.CurrentBlock.state.Trie.Root
+		root = bc.CurrentBlock.Root()
 		hash = bc.LastBlockHash
 	}
 

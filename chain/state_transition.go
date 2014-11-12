@@ -247,6 +247,8 @@ func (self *StateTransition) Eval(msg *state.Message, script []byte, context *st
 	)
 
 	evm := vm.New(env, vm.DebugVmTy)
+	// TMP this will change in the refactor
+	callerClosure.SetExecution(vm.NewExecution(evm, nil, nil, nil, nil, self.tx.Value))
 	ret, _, err = callerClosure.Call(evm, self.tx.Data)
 
 	return

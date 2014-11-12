@@ -138,3 +138,7 @@ func (c *Closure) Object() *state.StateObject {
 func (c *Closure) Caller() ClosureRef {
 	return c.caller
 }
+
+func (self *Closure) SetExecution(exe *Execution) {
+	self.exe = exe
+}

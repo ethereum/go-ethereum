@@ -161,7 +161,7 @@ done:
 		cumulative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, txGas))
 		bloom := ethutil.LeftPadBytes(LogsBloom(state.Logs()).Bytes(), 64)
 		receipt := &Receipt{ethutil.CopyBytes(state.Root()), cumulative, bloom, state.Logs()}
-		//fmt.Println(receipt)
+		fmt.Println(receipt)
 
 		// Notify all subscribers
 		go self.eth.EventMux().Post(TxPostEvent{tx})
@@ -217,13 +217,11 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 	}
 	//block.SetReceipts(receipts)
 
-	/*
-		txSha := DeriveSha(block.transactions)
-		if bytes.Compare(txSha, block.TxSha) != 0 {
-			err = fmt.Errorf("Error validating transaction sha. Received %x, got %x", block.TxSha, txSha)
-			return
-		}
-	*/
+	txSha := DeriveSha(block.transactions)
+	if bytes.Compare(txSha, block.TxSha) != 0 {
+		err = fmt.Errorf("Error validating transaction sha. Received %x, got %x", block.TxSha, txSha)
+		return
+	}
 
 	receiptSha := DeriveSha(receipts)
 	if bytes.Compare(receiptSha, block.ReceiptSha) != 0 {
@@ -250,7 +248,7 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 	state.Update()
 
 	if !block.State().Cmp(state) {
-		err = fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().Trie.Root, state.Trie.Root)
+		err = fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().Root(), state.Root())
 		return
 	}
 

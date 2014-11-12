@@ -22,7 +22,7 @@ type World struct {
 
 func (self *State) Dump() []byte {
 	world := World{
-		Root:     ethutil.Bytes2Hex(self.Trie.Root.([]byte)),
+		Root:     ethutil.Bytes2Hex(self.Trie.GetRoot()),
 		Accounts: make(map[string]Account),
 	}
 

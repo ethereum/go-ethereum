@@ -302,7 +302,7 @@ func (self *State) Update() {
 	if deleted {
 		valid, t2 := trie.ParanoiaCheck(self.Trie)
 		if !valid {
-			statelogger.Infof("Warn: PARANOIA: Different state root during copy %x vs %x\n", self.Trie.Root, t2.Root)
+			statelogger.Infof("Warn: PARANOIA: Different state root during copy %x vs %x\n", self.Trie.GetRoot(), t2.GetRoot())
 
 			self.Trie = t2
 		}

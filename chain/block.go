@@ -319,8 +319,8 @@ func (block *Block) Trie() *trie.Trie {
 	return block.state.Trie
 }
 
-func (block *Block) GetRoot() interface{} {
-	return block.state.Trie.Root
+func (block *Block) Root() interface{} {
+	return block.state.Root()
 }
 
 func (block *Block) Diff() *big.Int {
@@ -340,7 +340,7 @@ func (block *Block) miningHeader() []interface{} {
 		// Coinbase address
 		block.Coinbase,
 		// root state
-		block.state.Trie.Root,
+		block.Root(),
 		// tx root
 		block.TxSha,
 		// Sha of tx
@@ -393,7 +393,7 @@ func (block *Block) String() string {
 		block.PrevHash,
 		block.UncleSha,
 		block.Coinbase,
-		block.state.Trie.Root,
+		block.Root(),
 		block.TxSha,
 		block.ReceiptSha,
 		block.LogsBloom,

@@ -160,7 +160,7 @@ func (self *StateObject) Sync() {
 
 	valid, t2 := trie.ParanoiaCheck(self.State.Trie)
 	if !valid {
-		statelogger.Infof("Warn: PARANOIA: Different state storage root during copy %x vs %x\n", self.State.Trie.Root, t2.Root)
+		statelogger.Infof("Warn: PARANOIA: Different state storage root during copy %x vs %x\n", self.State.Root(), t2.GetRoot())
 
 		self.State.Trie = t2
 	}
@@ -301,7 +301,7 @@ func (self *StateObject) CreateOutputForDiff() {
 
 // State object encoding methods
 func (c *StateObject) RlpEncode() []byte {
-	return ethutil.Encode([]interface{}{c.Nonce, c.balance, c.State.Trie.Root, c.CodeHash()})
+	return ethutil.Encode([]interface{}{c.Nonce, c.balance, c.Root(), c.CodeHash()})
 }
 
 func (c *StateObject) CodeHash() ethutil.Bytes {
