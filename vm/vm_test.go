@@ -14,7 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/obscuren/mutan"
+	// "github.com/obscuren/mutan"
 )
 
 type TestEnv struct{}
@@ -67,9 +67,9 @@ func setup(level logger.LogLevel, typ Type) (*Closure, VirtualMachine) {
 var big9 = ethutil.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000009")
 
 func TestDebugVm(t *testing.T) {
-	if mutan.Version < "0.6" {
-		t.Skip("skipping for mutan version", mutan.Version, " < 0.6")
-	}
+	// if mutan.Version < "0.6" {
+	// 	t.Skip("skipping for mutan version", mutan.Version, " < 0.6")
+	// }
 
 	closure, vm := setup(logger.DebugLevel, DebugVmTy)
 	ret, _, e := closure.Call(vm, nil)
@@ -82,9 +82,9 @@ func TestDebugVm(t *testing.T) {
 }
 
 func TestVm(t *testing.T) {
-	if mutan.Version < "0.6" {
-		t.Skip("skipping for mutan version", mutan.Version, " < 0.6")
-	}
+	// if mutan.Version < "0.6" {
+	// 	t.Skip("skipping for mutan version", mutan.Version, " < 0.6")
+	// }
 
 	closure, vm := setup(logger.DebugLevel, StandardVmTy)
 	ret, _, e := closure.Call(vm, nil)
