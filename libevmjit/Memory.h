@@ -27,8 +27,6 @@ public:
 	/// Requires the amount of memory to for data defined by offset and size. And counts gas fee for that memory.
 	void require(llvm::Value* _offset, llvm::Value* _size);
 
-	void dump(uint64_t _begin, uint64_t _end = 0);
-
 private:
 	llvm::Function* createFunc(bool _isStore, llvm::Type* _type, GasMeter& _gasMeter);
 	llvm::Function* createRequireFunc(GasMeter& _gasMeter, RuntimeManager& _runtimeManager);
