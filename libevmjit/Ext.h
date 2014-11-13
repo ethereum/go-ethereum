@@ -31,8 +31,10 @@ public:
 	llvm::Value* codeAt(llvm::Value* _addr);
 	llvm::Value* codesizeAt(llvm::Value* _addr);
 
+	void log(llvm::Value* _memIdx, llvm::Value* _numBytes, size_t _numTopics, std::array<llvm::Value*,4> const& _topics);
 
 private:
+
 	llvm::Value* m_args[2];
 	llvm::Value* m_arg2;
 	llvm::Value* m_arg3;
@@ -53,6 +55,11 @@ private:
 	llvm::Function* m_exp;
 	llvm::Function* m_codeAt;
 	llvm::Function* m_codesizeAt;
+	llvm::Function* m_log0;
+	llvm::Function* m_log1;
+	llvm::Function* m_log2;
+	llvm::Function* m_log3;
+	llvm::Function* m_log4;
 };
 
 

@@ -58,8 +58,9 @@ llvm::Twine getName(RuntimeData::Index _index)
 }
 }
 
-Runtime::Runtime(u256 _gas, ExtVMFace& _ext, jmp_buf _jmpBuf):
-	m_ext(_ext)
+Runtime::Runtime(u256 _gas, ExtVMFace& _ext, jmp_buf _jmpBuf, bool _outputLogs):
+	m_ext(_ext),
+	m_outputLogs(_outputLogs)
 {
 	set(RuntimeData::Gas, _gas);
 	set(RuntimeData::Address, fromAddress(_ext.myAddress));
@@ -99,6 +100,11 @@ bytesConstRef Runtime::getReturnData() const
 	assert(offset + size <= m_memory.size());
 	// TODO: Handle invalid data access by returning empty ref
 	return {m_memory.data() + offset, size};
+}
+
+bool Runtime::outputLogs() const
+{
+	return m_outputLogs;
 }
 
 
