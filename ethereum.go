@@ -233,7 +233,7 @@ func (s *Ethereum) ConnectToPeer(addr string) error {
 	if s.peers.Len() < s.MaxPeers {
 		var alreadyConnected bool
 
-		ahost, _, _ := net.SplitHostPort(addr)
+		ahost, aport, _ := net.SplitHostPort(addr)
 		var chost string
 
 		ips, err := net.LookupIP(ahost)
@@ -273,9 +273,9 @@ func (s *Ethereum) ConnectToPeer(addr string) error {
 			if p.conn == nil {
 				return
 			}
-			phost, _, _ := net.SplitHostPort(p.conn.RemoteAddr().String())
+			phost, pport, _ := net.SplitHostPort(p.conn.RemoteAddr().String())
 
-			if phost == chost {
+			if phost == chost && pport == aport {
 				alreadyConnected = true
 				//loggerger.Debugf("Peer %s already added.\n", chost)
 				return

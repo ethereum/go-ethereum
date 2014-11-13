@@ -35,7 +35,6 @@ func (self *Receipt) RlpValueDecode(decoder *ethutil.Value) {
 }
 
 func (self *Receipt) RlpData() interface{} {
-	fmt.Println(self.logs.RlpData())
 	return []interface{}{self.PostState, self.CumulativeGasUsed, self.Bloom, self.logs.RlpData()}
 }
 

@@ -206,7 +206,7 @@ func (bc *ChainManager) add(block *Block) {
 	ethutil.Config.Db.Put(block.Hash(), encodedBlock)
 	ethutil.Config.Db.Put([]byte("LastBlock"), encodedBlock)
 
-	chainlogger.Infof("Imported block #%d (%x...)\n", block.Number, block.Hash()[0:4])
+	//chainlogger.Infof("Imported block #%d (%x...)\n", block.Number, block.Hash()[0:4])
 }
 
 func (self *ChainManager) CalcTotalDiff(block *Block) (*big.Int, error) {
@@ -332,6 +332,12 @@ func (self *ChainManager) InsertChain(chain *BlockChain) {
 		self.SetTotalDifficulty(link.td)
 		self.Ethereum.EventMux().Post(NewBlockEvent{link.block})
 		self.Ethereum.EventMux().Post(link.messages)
+	}
+
+	b, e := chain.Front(), chain.Back()
+	if b != nil && e != nil {
+		front, back := b.Value.(*link).block, e.Value.(*link).block
+		chainlogger.Infof("Imported %d blocks. #%v (%x) / %#v (%x)", chain.Len(), front.Number, front.Hash()[0:4], back.Number, back.Hash()[0:4])
 	}
 }
 

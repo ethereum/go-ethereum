@@ -231,6 +231,31 @@ func (self *StateTransition) TransitionState() (err error) {
 		}
 	}
 
+	/*
+	* XXX The following _should_ replace the above transaction
+	* execution (also for regular calls. Will replace / test next
+	* phase
+	 */
+	/*
+		// Execute transaction
+		if tx.CreatesContract() {
+			self.rec = MakeContract(tx, self.state)
+		}
+
+		address := self.Receiver().Address()
+		evm := vm.New(NewEnv(state, self.tx, self.block), vm.DebugVmTy)
+		exe := NewExecution(evm, address, self.tx.Data, self.gas, self.gas.Price, self.tx.Value)
+		ret, err := msg.Exec(address, self.Sender())
+		if err != nil {
+			statelogger.Debugln(err)
+		} else {
+			if tx.CreatesContract() {
+				self.Receiver().Code = ret
+			}
+			msg.Output = ret
+		}
+	*/
+
 	// Add default LOG. Default = big(sender.addr) + 1
 	//addr := ethutil.BigD(receiver.Address())
 	//self.state.AddLog(&state.Log{ethutil.U256(addr.Add(addr, ethutil.Big1)).Bytes(), [][]byte{sender.Address()}, nil})

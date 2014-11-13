@@ -161,7 +161,6 @@ done:
 		cumulative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, txGas))
 		bloom := ethutil.LeftPadBytes(LogsBloom(state.Logs()).Bytes(), 64)
 		receipt := &Receipt{ethutil.CopyBytes(state.Root()), cumulative, bloom, state.Logs()}
-		fmt.Println(receipt)
 
 		// Notify all subscribers
 		go self.eth.EventMux().Post(TxPostEvent{tx})
@@ -215,7 +214,6 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 	if err != nil {
 		return
 	}
-	//block.SetReceipts(receipts)
 
 	txSha := DeriveSha(block.transactions)
 	if bytes.Compare(txSha, block.TxSha) != 0 {
@@ -240,8 +238,10 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 		return
 	}
 
-	if bytes.Compare(CreateBloom(block), block.LogsBloom) != 0 {
-		err = errors.New("Unable to replicate block's bloom")
+	block.SetReceipts(receipts)
+	rbloom := CreateBloom(block)
+	if bytes.Compare(rbloom, block.LogsBloom) != 0 {
+		err = fmt.Errorf("unable to replicate block's bloom: %x", rbloom)
 		return
 	}
 

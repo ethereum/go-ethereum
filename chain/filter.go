@@ -2,7 +2,6 @@ package chain
 
 import (
 	"bytes"
-	"fmt"
 	"math"
 	"math/big"
 
@@ -102,7 +101,6 @@ func (self *Filter) Find() []*state.Message {
 		// Use bloom filtering to see if this block is interesting given the
 		// current parameters
 		if self.bloomFilter(block) {
-			fmt.Println("block", block.Number, "has something interesting")
 			// Get the messages of the block
 			msgs, err := self.eth.BlockManager().GetMessages(block)
 			if err != nil {

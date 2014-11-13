@@ -169,6 +169,8 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			gas.Set(GasLog)
 			addStepGasUsage(new(big.Int).Mul(big.NewInt(int64(n)), GasLog))
 			addStepGasUsage(new(big.Int).Add(mSize, mStart))
+			// BUG in C++
+			//gas.Set(ethutil.Big1)
 		// Gas only
 		case STOP:
 			gas.Set(ethutil.Big0)
@@ -732,12 +734,16 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case LOG0, LOG1, LOG2, LOG3, LOG4:
 			n := int(op - LOG0)
 			topics := make([][]byte, n)
-			mSize, mStart := stack.Pop().Int64(), stack.Pop().Int64()
+			mStart, mSize := stack.Pop().Int64(), stack.Pop().Int64()
 			data := mem.Geti(mStart, mSize)
 			for i := 0; i < n; i++ {
 				topics[i] = stack.Pop().Bytes()
 			}
-			self.env.AddLog(&state.Log{closure.Address(), topics, data})
+
+			log := &state.Log{closure.Address(), topics, data}
+			self.env.AddLog(log)
+
+			self.Printf(" => %v", log)
 		case MLOAD:
 			offset := stack.Pop()
 			val := ethutil.BigD(mem.Get(offset.Int64(), 32))
