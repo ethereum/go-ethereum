@@ -1,5 +1,5 @@
 {
-    "dupAt51doesNotExistAnymore" : {
+    "dupAt51becameMload" : {
         "callcreates" : [
         ],
         "env" : {
@@ -1500,7 +1500,7 @@
             }
         }
     },
-    "swapAt52doesNotExistAnymore" : {
+    "swapAt52becameMstore" : {
         "callcreates" : [
         ],
         "env" : {
