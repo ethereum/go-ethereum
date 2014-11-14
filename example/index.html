@@ -4,41 +4,38 @@
 <head>
 <script type="text/javascript" src="js/es6-promise/promise.min.js"></script>
 <script type="text/javascript" src="../dist/ethereum.js"></script>
-
 <script type="text/javascript">
-if (window.Promise === undefined) {
-    window.Promise = ES6Promise.Promise;
-}
+   
+    var web3 = require('web3');
+    web3.setProvider(new web3.providers.AutoProvider());
 
-var web3 = require('web3');
+    function watchBalance() {
+        var coinbase = web3.eth.coinbase;
+        var originalBalance = 0;
 
-//web3.setProvider(new web3.providers.QtProvider());
-//web3.setProvider(new web3.providers.HttpRpcProvider("http://localhost:8080"));
-// web3.setProvider(new web3.providers.WebSocketProvider("ws://localhost:40404/eth"));
-web3.setProvider(new web3.providers.AutoProvider());
-
-function testSnippet() {
-    web3.eth.watch({altered: web3.eth.coinbase}).changed(function() {
-        web3.eth.balanceAt(web3.eth.coinbase).then(function (balance) {
-        	console.log(parseInt(balance,16));
-        	console.log(typeof balance);
-            document.getElementById("result").innerText = +balance;
+        web3.eth.balanceAt(coinbase).then(function (balance) {
+            originalBalance = web3.toDecimal(balance);
+            document.getElementById('original').innerText = 'original balance: ' + originalBalance + '    watching...';
         });
-    });
-}
+
+        web3.eth.watch({altered: coinbase}).changed(function() {
+            web3.eth.balanceAt(coinbase).then(function (balance) {
+                var currentBalance = web3.toDecimal(balance);
+                document.getElementById("current").innerText = 'current: ' + currentBalance;
+                document.getElementById("diff").innerText = 'diff:    ' + (currentBalance - originalBalance);
+            });
+        });
+    }
 
 </script>
 </head>
-
 <body>
-
-<h1>std::name_reg</h1>
-<input type="text" id="name"></input>
-<button type="button" onClick="testSnippet();">test snippet</button>
-
-<div></div>
-result: <div id="result"></div>
-
+    <h1>coinbase balance</h1>
+    <button type="button" onClick="watchBalance();">watch balance</button>
+    <div></div>
+    <div id="original"></div>
+    <div id="current"></div>
+    <div id="diff"></div>
 </body>
-
 </html>
+
