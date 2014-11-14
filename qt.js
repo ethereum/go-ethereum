@@ -7,7 +7,7 @@
             self.handlers.forEach(function (handler) {
                 handler.call(self, JSON.parse(message.data));
             });
-        };
+        }
     };
 
     QtProvider.prototype.send = function(payload) {
