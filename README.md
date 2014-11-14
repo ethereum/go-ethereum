@@ -1,5 +1,7 @@
 # Ethereum JavaScript API
 
+[![Build Status](https://travis-ci.org/ethereum/ethereum.js.svg?branch=master)](https://travis-ci.org/ethereum/ethereum.js)
+
 This is the Ethereum compatible JavaScript API using `Promise`s
 which implements the [Generic JSON RPC](https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC) spec.
 
