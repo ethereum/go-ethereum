@@ -18,8 +18,10 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"runtime"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -38,6 +40,7 @@ func run() error {
 	// precedence: code-internal flag default < config file < environment variables < command line
 	Init() // parsing command line
 
+	tstart := time.Now()
 	config := utils.InitConfig(VmType, ConfigFile, Datadir, "ETH")
 
 	utils.InitDataDir(Datadir)
@@ -51,14 +54,11 @@ func run() error {
 
 		os.Exit(1)
 	}
-
 	keyManager := utils.NewKeyManager(KeyStore, Datadir, db)
 
 	// create, import, export keys
 	utils.KeyTasks(keyManager, KeyRing, GenAddr, SecretFile, ExportDir, NonInteractive)
-
 	clientIdentity := utils.NewClientIdentity(ClientIdentifier, Version, Identifier)
-
 	ethereum = utils.NewEthereum(db, clientIdentity, keyManager, UseUPnP, OutboundPort, MaxPeer)
 
 	if ShowGenesis {
@@ -75,7 +75,10 @@ func run() error {
 	utils.RegisterInterrupt(func(os.Signal) {
 		gui.Stop()
 	})
-	utils.StartEthereum(ethereum, UseSeed)
+	go utils.StartEthereum(ethereum, UseSeed)
+
+	fmt.Println("ETH stack took", time.Since(tstart))
+
 	// gui blocks the main thread
 	gui.Start(AssetPath)
 
