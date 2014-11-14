@@ -20,7 +20,7 @@ bytesConstRef VM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 	auto module = Compiler(defaultOptions).compile(_ext.code);
 
 	ExecutionEngine engine;
-	auto exitCode = engine.run(std::move(module), m_gas, false, &_ext);
+	auto exitCode = engine.run(std::move(module), m_gas, false, _ext);
 
 	switch (static_cast<ReturnCode>(exitCode))
 	{

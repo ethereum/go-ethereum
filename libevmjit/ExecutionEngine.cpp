@@ -39,7 +39,7 @@ ExecutionEngine::ExecutionEngine()
 {
 }
 
-int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, bool _outputLogs, ExtVMFace* _ext)
+int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, bool _outputLogs, ExtVMFace& _ext)
 {
 	auto module = _module.get(); // Keep ownership of the module in _module
 
@@ -82,33 +82,13 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, bool
 	clog(JIT) << "Module finalization time: "
 			  << std::chrono::duration_cast<std::chrono::microseconds>(finalizationEndTime - finalizationStartTime).count();
 
-	// Create fake ExtVM interface
-	if (!_ext)
-	{
-		_ext = new ExtVMFace;
-		_ext->myAddress = Address(1122334455667788);
-		_ext->caller = Address(0xfacefacefaceface);
-		_ext->origin = Address(101010101010101010);
-		_ext->value = 0xabcd;
-		_ext->gasPrice = 1002;
-		_ext->previousBlock.hash = u256(1003);
-		_ext->currentBlock.coinbaseAddress = Address(1004);
-		_ext->currentBlock.timestamp = 1005;
-		_ext->currentBlock.number = 1006;
-		_ext->currentBlock.difficulty = 1007;
-		_ext->currentBlock.gasLimit = 1008;
-		std::string calldata = "Hello the Beautiful World of Ethereum!";
-		_ext->data = calldata;
-        _ext->code = { 0x0d, 0x0e, 0x0a, 0x0d, 0x0b, 0x0e, 0xe, 0xf };
-	}
-
 	auto entryFunc = module->getFunction("main");
 	if (!entryFunc)
 		BOOST_THROW_EXCEPTION(Exception() << errinfo_comment("main function not found"));
 
 	ReturnCode returnCode;
 	std::jmp_buf buf;
-	Runtime runtime(_gas, *_ext, buf, _outputLogs);
+	Runtime runtime(_gas, _ext, buf, _outputLogs);
 	auto r = setjmp(buf);
 	if (r == 0)
 	{

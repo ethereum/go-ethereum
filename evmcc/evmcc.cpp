@@ -15,6 +15,7 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
 #include <libevmcore/Instruction.h>
+#include <libevm/ExtVMFace.h>
 #include <libevmjit/Compiler.h>
 #include <libevmjit/ExecutionEngine.h>
 
@@ -172,7 +173,24 @@ int main(int argc, char** argv)
 		{
 			auto engine = eth::jit::ExecutionEngine();
 			u256 gas = initialGas;
-			auto result = engine.run(std::move(module), gas, options.count("show-logs") > 0, nullptr);
+
+            // Create fake ExtVM interface
+            eth::ExtVMFace ext;
+            ext.myAddress = Address(1122334455667788);
+            ext.caller = Address(0xfacefacefaceface);
+            ext.origin = Address(101010101010101010);
+            ext.value = 0xabcd;
+            ext.gasPrice = 1002;
+            ext.previousBlock.hash = u256(1003);
+            ext.currentBlock.coinbaseAddress = Address(1004);
+            ext.currentBlock.timestamp = 1005;
+            ext.currentBlock.number = 1006;
+            ext.currentBlock.difficulty = 1007;
+            ext.currentBlock.gasLimit = 1008;
+            ext.data = std::string("Hello the Beautiful World of Ethereum!");
+            ext.code = { 0x0d, 0x0e, 0x0a, 0x0d, 0x0b, 0x0e, 0xe, 0xf };
+
+			auto result = engine.run(std::move(module), gas, options.count("show-logs") > 0, ext);
 			return result;
 		}
 	}
