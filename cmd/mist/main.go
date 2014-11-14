@@ -29,7 +29,7 @@ import (
 
 const (
 	ClientIdentifier = "Mist"
-	Version          = "0.7.4"
+	Version          = "0.7.5"
 )
 
 var ethereum *eth.Ethereum
