@@ -11,7 +11,7 @@
         var self = this;
         this.ws.onmessage = function(event) {
             for(var i = 0; i < self.handlers.length; i++) {
-                self.handlers[i].call(self, JSON.parse(event.data), event);
+                self.handlers[i].call(self, JSON.parse(event.data), event)
             }
         };
 
