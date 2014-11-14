@@ -100,8 +100,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtV
 		_ext->currentBlock.gasLimit = 1008;
 		std::string calldata = "Hello the Beautiful World of Ethereum!";
 		_ext->data = calldata;
-		unsigned char fakecode[] = {0x0d, 0x0e, 0x0a, 0x0d, 0x0b, 0x0e, 0xe, 0xf};
-		_ext->code = decltype(_ext->code)(fakecode, 8);
+        _ext->code = { 0x0d, 0x0e, 0x0a, 0x0d, 0x0b, 0x0e, 0xe, 0xf };
 	}
 
 	auto entryFunc = module->getFunction("main");

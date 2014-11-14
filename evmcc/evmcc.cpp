@@ -121,7 +121,7 @@ int main(int argc, char** argv)
 		compilerOptions.optimizeStack = options.count("optimize-stack") > 0;
 
 		auto compiler = eth::jit::Compiler(compilerOptions);
-		auto module = compiler.compile({bytecode.data(), bytecode.size()});
+		auto module = compiler.compile(bytecode);
 
 		auto compilationEndTime = std::chrono::high_resolution_clock::now();
 

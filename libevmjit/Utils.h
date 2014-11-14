@@ -33,7 +33,7 @@ i256 eth2llvm(u256);
 /// Reads PUSH data from pointed fragment of bytecode and constructs number out of it
 /// Reading out of bytecode means reading 0
 /// @param _curr is updates and points the last real byte read
-u256 readPushData(const byte*& _curr, const byte* _end);
+u256 readPushData(bytes::const_iterator& _curr, bytes::const_iterator _end);
 
 #define ANY_PUSH	  PUSH1:  \
 	case Instruction::PUSH2:  \

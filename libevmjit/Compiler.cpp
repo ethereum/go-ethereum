@@ -39,7 +39,7 @@ Compiler::Compiler(Options const& _options):
 	Type::init(m_builder.getContext());
 }
 
-void Compiler::createBasicBlocks(bytesConstRef _bytecode)
+void Compiler::createBasicBlocks(bytes const& _bytecode)
 {
 	std::set<ProgramCounter> splitPoints; // Sorted collections of instruction indices where basic blocks start/end
 
@@ -151,7 +151,7 @@ void Compiler::createBasicBlocks(bytesConstRef _bytecode)
 		m_indirectJumpTargets.push_back(&basicBlocks.find(*it)->second);
 }
 
-std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef _bytecode)
+std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode)
 {
 	auto module = std::unique_ptr<llvm::Module>(new llvm::Module("main", m_builder.getContext()));
 
@@ -247,7 +247,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytesConstRef _bytecode)
 }
 
 
-void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytesConstRef _bytecode, RuntimeManager& _runtimeManager,
+void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode, RuntimeManager& _runtimeManager,
                                  Arith256& _arith, Memory& _memory, Ext& _ext, GasMeter& _gasMeter, llvm::BasicBlock* _nextBasicBlock)
 {
 	if (!_nextBasicBlock) // this is the last block in the code

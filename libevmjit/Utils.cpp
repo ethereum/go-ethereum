@@ -35,7 +35,7 @@ i256 eth2llvm(u256 _u)
 	return i;
 }
 
-u256 readPushData(const byte*& _curr, const byte* _end)
+u256 readPushData(bytes::const_iterator& _curr, bytes::const_iterator _end)
 {
 	auto pushInst = *_curr;
 	assert(Instruction(pushInst) >= Instruction::PUSH1 && Instruction(pushInst) <= Instruction::PUSH32);
