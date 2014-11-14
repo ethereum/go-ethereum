@@ -172,7 +172,7 @@ int main(int argc, char** argv)
 		{
 			auto engine = eth::jit::ExecutionEngine();
 			u256 gas = initialGas;
-			auto result = engine.run(std::move(module), gas, options.count("show-logs") > 0);
+			auto result = engine.run(std::move(module), gas, options.count("show-logs") > 0, nullptr);
 			return result;
 		}
 	}
