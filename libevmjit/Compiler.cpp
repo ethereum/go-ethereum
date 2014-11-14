@@ -13,7 +13,7 @@
 #include <llvm/PassManager.h>
 #include <llvm/Transforms/Scalar.h>
 
-#include <libevmface/Instruction.h>
+#include <libevmcore/Instruction.h>
 
 #include "Type.h"
 #include "Memory.h"

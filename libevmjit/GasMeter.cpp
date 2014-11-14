@@ -5,7 +5,7 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IntrinsicInst.h>
 
-#include <libevmface/Instruction.h>
+#include <libevmcore/Instruction.h>
 #include <libevm/FeeStructure.h>
 
 #include "Type.h"

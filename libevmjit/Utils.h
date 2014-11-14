@@ -5,7 +5,7 @@
 
 #include <libdevcore/Common.h>
 #include <libdevcore/Log.h>
-#include <libevmface/Instruction.h>
+#include <libevmcore/Instruction.h>
 
 namespace dev
 {

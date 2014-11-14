@@ -1,7 +1,7 @@
 
 #pragma once
 
-#include <libevmface/Instruction.h>
+#include <libevmcore/Instruction.h>
 
 #include "CompilerHelper.h"
 

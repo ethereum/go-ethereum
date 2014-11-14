@@ -14,7 +14,7 @@
 
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
-#include <libevmface/Instruction.h>
+#include <libevmcore/Instruction.h>
 #include <libevmjit/Compiler.h>
 #include <libevmjit/ExecutionEngine.h>
 
