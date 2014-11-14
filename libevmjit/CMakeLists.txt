@@ -18,7 +18,7 @@ include_directories(..)
 target_link_libraries(${EXECUTABLE} devcore)
 target_link_libraries(${EXECUTABLE} ethcore)
 target_link_libraries(${EXECUTABLE} evm)
-target_link_libraries(${EXECUTABLE} evmface)
+target_link_libraries(${EXECUTABLE} evmcore)
 
 
 if ("${TARGET_PLATFORM}" STREQUAL "w64")

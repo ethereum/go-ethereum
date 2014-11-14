@@ -13,7 +13,7 @@ target_link_libraries(${EXECUTABLE} devcore)
 target_link_libraries(${EXECUTABLE} ethcore)
 target_link_libraries(${EXECUTABLE} ethereum)
 target_link_libraries(${EXECUTABLE} evm)
-target_link_libraries(${EXECUTABLE} evmface)
+target_link_libraries(${EXECUTABLE} evmcore)
 target_link_libraries(${EXECUTABLE} evmjit)
 
 if ("${TARGET_PLATFORM}" STREQUAL "w64")
