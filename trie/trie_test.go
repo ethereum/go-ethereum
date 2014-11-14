@@ -327,14 +327,11 @@ func (s *TrieSuite) TestBeginsWith(c *checker.C) {
 	c.Assert(BeginsWith(b, a), checker.Equals, true)
 }
 
-func TestItems(t *testing.T) {
-	_, trie := NewTrie()
-	trie.Update("A", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-
+func (s *TrieSuite) TestItems(c *checker.C) {
+	s.trie.Update("A", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 	exp := "d23786fb4a010da3ce639d66d5e904a11dbc02746d1ce25029e53290cabf28ab"
-	if bytes.Compare(trie.GetRoot(), ethutil.Hex2Bytes(exp)) != 0 {
-		t.Errorf("Expected root to be %s but got", exp, trie.GetRoot())
-	}
+
+	c.Assert(s.trie.GetRoot(), checker.DeepEquals, ethutil.Hex2Bytes(exp))
 }
 
 /*
