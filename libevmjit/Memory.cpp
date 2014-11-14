@@ -147,24 +147,18 @@ llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, GasMet
 llvm::Value* Memory::loadWord(llvm::Value* _addr)
 {
 	auto value = m_builder.CreateCall(m_loadWord, _addr);
-
-	dump(0);
 	return value;
 }
 
 void Memory::storeWord(llvm::Value* _addr, llvm::Value* _word)
 {
 	m_builder.CreateCall2(m_storeWord, _addr, _word);
-
-	dump(0);
 }
 
 void Memory::storeByte(llvm::Value* _addr, llvm::Value* _word)
 {
 	auto byte = m_builder.CreateTrunc(_word, Type::Byte, "byte");
 	m_builder.CreateCall2(m_storeByte, _addr, byte);
-
-	dump(0);
 }
 
 llvm::Value* Memory::getData()
@@ -203,18 +197,6 @@ void Memory::copyBytes(llvm::Value* _srcPtr, llvm::Value* _srcSize, llvm::Value*
 	auto bytesToCopy = m_builder.CreateSelect(tooFewSrcBytes, remSrcBytes, _reqBytes, "bytes_to_copy");
 
 	m_builder.CreateMemCpy(destPtr, srcPtr, bytesToCopy, 0);
-}
-
-void Memory::dump(uint64_t _begin, uint64_t _end)
-{
-	if (getenv("EVMCC_DEBUG_MEMORY") == nullptr)
-		return;
-
-	auto beginVal = llvm::ConstantInt::get(m_builder.getInt64Ty(), _begin);
-	auto endVal = llvm::ConstantInt::get(m_builder.getInt64Ty(), _end);
-
-	std::vector<llvm::Value*> args = {beginVal, endVal};
-	m_builder.CreateCall(m_memDump, llvm::ArrayRef<llvm::Value*>(args));
 }
 
 }

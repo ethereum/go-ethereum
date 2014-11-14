@@ -63,7 +63,7 @@ using MemoryImpl = bytes;
 class Runtime
 {
 public:
-	Runtime(u256 _gas, ExtVMFace& _ext, jmp_buf _jmpBuf);
+	Runtime(u256 _gas, ExtVMFace& _ext, jmp_buf _jmpBuf, bool _outputLogs);
 
 	Runtime(const Runtime&) = delete;
 	void operator=(const Runtime&) = delete;
@@ -77,6 +77,7 @@ public:
 	u256 getGas() const;
 	bytesConstRef getReturnData() const;
 	decltype(&jmp_buf{}[0]) getJmpBuf() { return m_data.jmpBuf; }
+	bool outputLogs() const;
 
 private:
 	void set(RuntimeData::Index _index, u256 _value);
@@ -86,6 +87,7 @@ private:
 	StackImpl m_stack;
 	MemoryImpl m_memory;
 	ExtVMFace& m_ext;
+	bool m_outputLogs; ///< write LOG statements to console
 };
 
 class RuntimeManager: public CompilerHelper

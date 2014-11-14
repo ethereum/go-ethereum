@@ -59,6 +59,11 @@ Ext::Ext(RuntimeManager& _runtimeManager):
 	m_exp = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 4}, false), Linkage::ExternalLinkage, "ext_exp", module);
 	m_codeAt = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, {argsTypes, 2}, false), Linkage::ExternalLinkage, "ext_codeAt", module);
 	m_codesizeAt = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_codesizeAt", module);
+	m_log0 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_log0", module);
+	m_log1 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 4}, false), Linkage::ExternalLinkage, "ext_log1", module);
+	m_log2 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 5}, false), Linkage::ExternalLinkage, "ext_log2", module);
+	m_log3 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 6}, false), Linkage::ExternalLinkage, "ext_log3", module);
+	m_log4 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 7}, false), Linkage::ExternalLinkage, "ext_log4", module);
 }
 
 llvm::Value* Ext::store(llvm::Value* _index)
@@ -158,6 +163,21 @@ llvm::Value* Ext::codesizeAt(llvm::Value* _addr)
 	m_builder.CreateStore(addr, m_args[0]);
 	createCall(m_codesizeAt, getRuntimeManager().getRuntimePtr(), m_args[0], m_args[1]);
 	return m_builder.CreateLoad(m_args[1]);
+}
+
+void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, size_t _numTopics, std::array<llvm::Value*,4> const& _topics)
+{
+	static llvm::Value* args[] = {nullptr, m_args[0], m_args[1], m_arg2, m_arg3, m_arg4, m_arg5};
+	static llvm::Value* funcs[] = {m_log0, m_log1, m_log2, m_log3, m_log4};
+
+	args[0] = getRuntimeManager().getRuntimePtr();
+	m_builder.CreateStore(_memIdx, m_args[0]);
+	m_builder.CreateStore(_numBytes, m_args[1]);
+
+	for (size_t i = 0; i < _numTopics; ++i)
+		m_builder.CreateStore(_topics[i], args[i + 3]);
+
+	m_builder.CreateCall(funcs[_numTopics], llvm::ArrayRef<llvm::Value*>(args, _numTopics + 3));
 }
 
 }
@@ -289,6 +309,111 @@ extern "C"
 		*o_ret = eth2llvm(u256(code.size()));
 	}
 
+	void ext_show_bytes(bytesConstRef _bytes)
+	{
+		for (auto b : _bytes)
+			std::cerr << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned>(b) << " ";
+		std::cerr << std::endl;
+	}
+
+	EXPORT void ext_log0(Runtime* _rt, i256* _memIdx, i256* _numBytes)
+	{
+		auto&& ext = _rt->getExt();
+
+		auto memIdx = static_cast<size_t>(llvm2eth(*_memIdx));
+		auto numBytes = static_cast<size_t>(llvm2eth(*_numBytes));
+
+		auto dataRef = bytesConstRef(_rt->getMemory().data() + memIdx, numBytes);
+		ext.log({}, dataRef);
+
+		if (_rt->outputLogs())
+		{
+			std::cerr << "LOG: ";
+			ext_show_bytes(dataRef);
+		}
+	}
+
+	EXPORT void ext_log1(Runtime* _rt, i256* _memIdx, i256* _numBytes, i256* _topic1)
+	{
+		auto&& ext = _rt->getExt();
+
+		auto memIdx = static_cast<size_t>(llvm2eth(*_memIdx));
+		auto numBytes = static_cast<size_t>(llvm2eth(*_numBytes));
+
+		auto topic1 = llvm2eth(*_topic1);
+
+		auto dataRef = bytesConstRef(_rt->getMemory().data() + memIdx, numBytes);
+		ext.log({topic1}, dataRef);
+
+		if (_rt->outputLogs())
+		{
+			std::cerr << "LOG [" << topic1 << "]: ";
+			ext_show_bytes(dataRef);
+		}
+	}
+
+	EXPORT void ext_log2(Runtime* _rt, i256* _memIdx, i256* _numBytes, i256* _topic1, i256* _topic2)
+	{
+		auto&& ext = _rt->getExt();
+
+		auto memIdx = static_cast<size_t>(llvm2eth(*_memIdx));
+		auto numBytes = static_cast<size_t>(llvm2eth(*_numBytes));
+
+		auto topic1 = llvm2eth(*_topic1);
+		auto topic2 = llvm2eth(*_topic2);
+
+		auto dataRef = bytesConstRef(_rt->getMemory().data() + memIdx, numBytes);
+		ext.log({topic1, topic2}, dataRef);
+
+		if (_rt->outputLogs())
+		{
+			std::cerr << "LOG [" << topic1 << "][" << topic2 << "]: ";
+			ext_show_bytes(dataRef);
+		}
+	}
+
+	EXPORT void ext_log3(Runtime* _rt, i256* _memIdx, i256* _numBytes, i256* _topic1, i256* _topic2, i256* _topic3)
+	{
+		auto&& ext = _rt->getExt();
+
+		auto memIdx = static_cast<size_t>(llvm2eth(*_memIdx));
+		auto numBytes = static_cast<size_t>(llvm2eth(*_numBytes));
+
+		auto topic1 = llvm2eth(*_topic1);
+		auto topic2 = llvm2eth(*_topic2);
+		auto topic3 = llvm2eth(*_topic3);
+
+		auto dataRef = bytesConstRef(_rt->getMemory().data() + memIdx, numBytes);
+		ext.log({topic1, topic2, topic3}, dataRef);
+
+		if (_rt->outputLogs())
+		{
+			std::cerr << "LOG [" << topic1 << "][" << topic2 << "][" << topic3 << "]: ";
+			ext_show_bytes(dataRef);
+		}
+	}
+
+	EXPORT void ext_log4(Runtime* _rt, i256* _memIdx, i256* _numBytes, i256* _topic1, i256* _topic2, i256* _topic3, i256* _topic4)
+	{
+		auto&& ext = _rt->getExt();
+
+		auto memIdx = static_cast<size_t>(llvm2eth(*_memIdx));
+		auto numBytes = static_cast<size_t>(llvm2eth(*_numBytes));
+
+		auto topic1 = llvm2eth(*_topic1);
+		auto topic2 = llvm2eth(*_topic2);
+		auto topic3 = llvm2eth(*_topic3);
+		auto topic4 = llvm2eth(*_topic4);
+
+		auto dataRef = bytesConstRef(_rt->getMemory().data() + memIdx, numBytes);
+		ext.log({topic1, topic2, topic3, topic4}, dataRef);
+
+		if (_rt->outputLogs())
+		{
+			std::cerr << "LOG [" << topic1 << "][" << topic2 << "][" << topic3 << "][" << topic4 << "]: ";
+			ext_show_bytes(dataRef);
+		}
+	}
 }
 }
 }

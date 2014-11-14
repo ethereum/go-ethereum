@@ -37,10 +37,9 @@ namespace jit
 
 ExecutionEngine::ExecutionEngine()
 {
-
 }
 
-int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtVMFace* _ext)
+int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, bool _outputLogs, ExtVMFace* _ext)
 {
 	auto module = _module.get(); // Keep ownership of the module in _module
 
@@ -109,7 +108,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, ExtV
 
 	ReturnCode returnCode;
 	std::jmp_buf buf;
-	Runtime runtime(_gas, *_ext, buf);
+	Runtime runtime(_gas, *_ext, buf, _outputLogs);
 	auto r = setjmp(buf);
 	if (r == 0)
 	{

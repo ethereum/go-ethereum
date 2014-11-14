@@ -508,7 +508,11 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 
 		case Instruction::POP:
 		{
-			stack.pop();
+			auto val = stack.pop();
+			static_cast<void>(val);
+			// Generate a dummy use of val to make sure that a get(0) will be emitted at this point,
+			// so that StackTooSmall will be thrown
+			// m_builder.CreateICmpEQ(val, val, "dummy");
 			break;
 		}
 
@@ -788,6 +792,25 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 			}
 
 			m_builder.CreateRet(Constant::get(ReturnCode::Stop));
+			break;
+		}
+
+		case Instruction::LOG0:
+		case Instruction::LOG1:
+		case Instruction::LOG2:
+		case Instruction::LOG3:
+		case Instruction::LOG4:
+		{
+			auto beginIdx = stack.pop();
+			auto numBytes = stack.pop();
+			_memory.require(beginIdx, numBytes);
+
+			std::array<llvm::Value*,4> topics;
+			auto numTopics = static_cast<size_t>(inst) - static_cast<size_t>(Instruction::LOG0);
+			for (size_t i = 0; i < numTopics; ++i)
+				topics[i] = stack.pop();
+
+			_ext.log(beginIdx, numBytes, numTopics, topics);
 			break;
 		}
 
