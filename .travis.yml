@@ -4,5 +4,8 @@ node_js:
   - "0.10"
 before_script:
   - npm install
+  - npm install jshint
+script:
+   - "jshint *.js lib"
 after_script:
   - npm run-script gulp
