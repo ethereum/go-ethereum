@@ -107,20 +107,26 @@ type Memory struct {
 	store []byte
 }
 
+func NewMemory() *Memory {
+	return &Memory{nil}
+}
+
 func (m *Memory) Set(offset, size int64, value []byte) {
-	totSize := offset + size
-	lenSize := int64(len(m.store) - 1)
-	if totSize > lenSize {
-		// Calculate the diff between the sizes
-		diff := totSize - lenSize
-		if diff > 0 {
-			// Create a new empty slice and append it
-			newSlice := make([]byte, diff-1)
-			// Resize slice
-			m.store = append(m.store, newSlice...)
+	if len(value) > 0 {
+		totSize := offset + size
+		lenSize := int64(len(m.store) - 1)
+		if totSize > lenSize {
+			// Calculate the diff between the sizes
+			diff := totSize - lenSize
+			if diff > 0 {
+				// Create a new empty slice and append it
+				newSlice := make([]byte, diff-1)
+				// Resize slice
+				m.store = append(m.store, newSlice...)
+			}
 		}
+		copy(m.store[offset:offset+size], value)
 	}
-	copy(m.store[offset:offset+size], value)
 }
 
 func (m *Memory) Resize(size uint64) {

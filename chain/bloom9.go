@@ -10,7 +10,6 @@ import (
 
 func CreateBloom(block *Block) []byte {
 	bin := new(big.Int)
-	bin.Or(bin, bloom9(crypto.Sha3(block.Coinbase)))
 	for _, receipt := range block.Receipts() {
 		bin.Or(bin, LogsBloom(receipt.logs))
 	}

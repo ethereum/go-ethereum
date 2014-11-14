@@ -61,7 +61,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		op OpCode
 
 		destinations = analyseJumpDests(closure.Code)
-		mem          = &Memory{}
+		mem          = NewMemory()
 		stack        = NewStack()
 		pc           = big.NewInt(0)
 		step         = 0
@@ -169,8 +169,6 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			gas.Set(GasLog)
 			addStepGasUsage(new(big.Int).Mul(big.NewInt(int64(n)), GasLog))
 			addStepGasUsage(new(big.Int).Add(mSize, mStart))
-			// BUG in C++
-			//gas.Set(ethutil.Big1)
 		// Gas only
 		case STOP:
 			gas.Set(ethutil.Big0)
@@ -263,11 +261,14 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 				memGasUsage.Div(memGasUsage, u256(32))
 
 				addStepGasUsage(memGasUsage)
+
+				mem.Resize(newMemSize.Uint64())
 			}
+
 		}
 
 		self.Printf("(pc) %-3d -o- %-14s", pc, op.String())
-		self.Printf(" (g) %-3v (%v)", gas, closure.Gas)
+		self.Printf(" (m) %-4d (s) %-4d (g) %-3v (%v)", mem.Len(), stack.Len(), gas, closure.Gas)
 
 		if !closure.UseGas(gas) {
 			self.Endl()
@@ -278,8 +279,6 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			return closure.Return(nil), OOG(gas, tmp)
 		}
-
-		mem.Resize(newMemSize.Uint64())
 
 		switch op {
 		// 0x20 range
@@ -622,6 +621,8 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			code := closure.Args[cOff : cOff+l]
 
 			mem.Set(mOff, l, code)
+
+			self.Printf(" => [%v, %v, %v] %x", mOff, cOff, l, code[cOff:cOff+l])
 		case CODESIZE, EXTCODESIZE:
 			var code []byte
 			if op == EXTCODESIZE {
@@ -663,6 +664,8 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			codeCopy := code[cOff : cOff+l]
 
 			mem.Set(mOff, l, codeCopy)
+
+			self.Printf(" => [%v, %v, %v] %x", mOff, cOff, l, code[cOff:cOff+l])
 		case GASPRICE:
 			stack.Push(closure.Price)
 

@@ -217,13 +217,13 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 
 	txSha := DeriveSha(block.transactions)
 	if bytes.Compare(txSha, block.TxSha) != 0 {
-		err = fmt.Errorf("Error validating transaction sha. Received %x, got %x", block.TxSha, txSha)
+		err = fmt.Errorf("Error validating transaction root. Received %x, got %x", block.TxSha, txSha)
 		return
 	}
 
 	receiptSha := DeriveSha(receipts)
 	if bytes.Compare(receiptSha, block.ReceiptSha) != 0 {
-		err = fmt.Errorf("Error validating receipt sha. Received %x, got %x", block.ReceiptSha, receiptSha)
+		err = fmt.Errorf("Error validating receipt root. Received %x, got %x", block.ReceiptSha, receiptSha)
 		return
 	}
 
@@ -238,7 +238,7 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 		return
 	}
 
-	block.SetReceipts(receipts)
+	block.receipts = receipts
 	rbloom := CreateBloom(block)
 	if bytes.Compare(rbloom, block.LogsBloom) != 0 {
 		err = fmt.Errorf("unable to replicate block's bloom: %x", rbloom)
@@ -260,12 +260,7 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 		messages := state.Manifest().Messages
 		state.Manifest().Reset()
 
-		/*
-			sm.eth.ChainManager().SetTotalDifficulty(td)
-			sm.eth.ChainManager().add(block)
-			sm.eth.EventMux().Post(NewBlockEvent{block})
-			sm.eth.EventMux().Post(messages)
-		*/
+		chainlogger.Infof("Processed block #%d (%x...)\n", block.Number, block.Hash()[0:4])
 
 		sm.transState = state.Copy()
 

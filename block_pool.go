@@ -200,7 +200,7 @@ func (self *BlockPool) DistributeHashes() {
 			} else if lastFetchFailed || item.peer == nil {
 				// Find a suitable, available peer
 				eachPeer(self.eth.peers, func(p *Peer, v *list.Element) {
-					if peer == nil && len(dist[p]) < amount/peerLen {
+					if peer == nil && len(dist[p]) < amount/peerLen && p.statusKnown {
 						peer = p
 					}
 				})

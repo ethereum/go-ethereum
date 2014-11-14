@@ -34,11 +34,13 @@ func (self *Execution) Exec(codeAddr []byte, caller ClosureRef) ([]byte, error) 
 func (self *Execution) exec(code, caddr []byte, caller ClosureRef) (ret []byte, err error) {
 	env := self.vm.Env()
 
+	vmlogger.Debugf("pre state %x\n", env.State().Root())
 	snapshot := env.State().Copy()
 	defer func() {
 		if IsDepthErr(err) || IsOOGErr(err) {
 			env.State().Set(snapshot)
 		}
+		vmlogger.Debugf("post state %x\n", env.State().Root())
 	}()
 
 	msg := env.State().Manifest().AddMessage(&state.Message{
