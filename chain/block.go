@@ -238,7 +238,7 @@ func (block *Block) SetUncles(uncles []*Block) {
 func (self *Block) SetReceipts(receipts Receipts) {
 	self.receipts = receipts
 	self.ReceiptSha = DeriveSha(receipts)
-	self.LogsBloom = CreateBloom(self)
+	self.LogsBloom = CreateBloom(receipts)
 }
 
 func (self *Block) SetTransactions(txs Transactions) {

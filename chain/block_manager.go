@@ -159,8 +159,8 @@ done:
 
 		txGas.Sub(txGas, st.gas)
 		cumulative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, txGas))
-		bloom := ethutil.LeftPadBytes(LogsBloom(state.Logs()).Bytes(), 64)
-		receipt := &Receipt{ethutil.CopyBytes(state.Root()), cumulative, bloom, state.Logs()}
+		receipt := &Receipt{ethutil.CopyBytes(state.Root()), cumulative, nil /*bloom*/, state.Logs()}
+		receipt.Bloom = CreateBloom(Receipts{receipt})
 
 		// Notify all subscribers
 		go self.eth.EventMux().Post(TxPostEvent{tx})
@@ -217,38 +217,38 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 
 	txSha := DeriveSha(block.transactions)
 	if bytes.Compare(txSha, block.TxSha) != 0 {
-		err = fmt.Errorf("Error validating transaction root. Received %x, got %x", block.TxSha, txSha)
+		err = fmt.Errorf("validating transaction root. received=%x got=%x", block.TxSha, txSha)
 		return
 	}
 
 	receiptSha := DeriveSha(receipts)
 	if bytes.Compare(receiptSha, block.ReceiptSha) != 0 {
-		err = fmt.Errorf("Error validating receipt root. Received %x, got %x", block.ReceiptSha, receiptSha)
+		err = fmt.Errorf("validating receipt root. received=%x got=%x", block.ReceiptSha, receiptSha)
 		return
 	}
 
 	// Block validation
 	if err = sm.ValidateBlock(block, parent); err != nil {
-		statelogger.Errorln("Error validating block:", err)
+		statelogger.Errorln("validating block:", err)
 		return
 	}
 
 	if err = sm.AccumelateRewards(state, block, parent); err != nil {
-		statelogger.Errorln("Error accumulating reward", err)
+		statelogger.Errorln("accumulating reward", err)
 		return
 	}
 
-	block.receipts = receipts
-	rbloom := CreateBloom(block)
+	block.receipts = receipts // although this isn't necessary it be in the future
+	rbloom := CreateBloom(receipts)
 	if bytes.Compare(rbloom, block.LogsBloom) != 0 {
-		err = fmt.Errorf("unable to replicate block's bloom: %x", rbloom)
+		err = fmt.Errorf("unable to replicate block's bloom=%x", rbloom)
 		return
 	}
 
 	state.Update()
 
 	if !block.State().Cmp(state) {
-		err = fmt.Errorf("Invalid merkle root.\nrec: %x\nis:  %x", block.State().Root(), state.Root())
+		err = fmt.Errorf("invalid merkle root. received=%x got=%x", block.Root(), state.Root())
 		return
 	}
 

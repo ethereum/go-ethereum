@@ -51,11 +51,7 @@ func (self *Receipt) Cmp(other *Receipt) bool {
 }
 
 func (self *Receipt) String() string {
-	return fmt.Sprintf(`Receipt: %x
-cumulative gas: %v
-bloom: %x
-logs: %v
-rlp: %x`, self.PostState, self.CumulativeGasUsed, self.Bloom, self.logs, self.RlpEncode())
+	return fmt.Sprintf("receipt{med=%x cgas=%v bloom=%x logs=%v}", self.PostState, self.CumulativeGasUsed, self.Bloom, self.logs)
 }
 
 type Receipts []*Receipt

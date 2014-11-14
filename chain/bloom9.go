@@ -8,16 +8,16 @@ import (
 	"github.com/ethereum/go-ethereum/state"
 )
 
-func CreateBloom(block *Block) []byte {
+func CreateBloom(receipts Receipts) []byte {
 	bin := new(big.Int)
-	for _, receipt := range block.Receipts() {
-		bin.Or(bin, LogsBloom(receipt.logs))
+	for _, receipt := range receipts {
+		bin.Or(bin, logsBloom(receipt.logs))
 	}
 
 	return ethutil.LeftPadBytes(bin.Bytes(), 64)
 }
 
-func LogsBloom(logs state.Logs) *big.Int {
+func logsBloom(logs state.Logs) *big.Int {
 	bin := new(big.Int)
 	for _, log := range logs {
 		data := [][]byte{log.Address}
