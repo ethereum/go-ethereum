@@ -2,17 +2,54 @@ package ethutil
 
 import (
 	"math/big"
+	"os"
 	"testing"
 )
 
+func TestOS(t *testing.T) {
+	res := IsWindows()
+
+	if res && (os.PathSeparator != '\\' || os.PathListSeparator != ';') {
+		t.Error("IsWindows is", res, "but path is", os.PathSeparator)
+	}
+
+	if !res && (os.PathSeparator == '\\' && os.PathListSeparator == ';') {
+		t.Error("IsWindows is", res, "but path is", os.PathSeparator)
+	}
+}
+
+func TestWindonziePath(t *testing.T) {
+	path := "/opt/eth/test/file.ext"
+	res := WindonizePath(path)
+	iswindowspath := os.PathSeparator == '\\'
+
+	if !iswindowspath && string(res[0]) != "/" {
+		t.Error("Got", res)
+	}
+
+	if iswindowspath && string(res[0]) == "/" {
+		t.Error("Got", res)
+	}
+}
+
 func TestCommon(t *testing.T) {
+	douglas := CurrencyToString(BigPow(10, 43))
+	einstein := CurrencyToString(BigPow(10, 22))
 	ether := CurrencyToString(BigPow(10, 19))
 	finney := CurrencyToString(BigPow(10, 16))
 	szabo := CurrencyToString(BigPow(10, 13))
-	vito := CurrencyToString(BigPow(10, 10))
-	turing := CurrencyToString(BigPow(10, 7))
-	eins := CurrencyToString(BigPow(10, 4))
+	shannon := CurrencyToString(BigPow(10, 10))
+	babbage := CurrencyToString(BigPow(10, 7))
+	ada := CurrencyToString(BigPow(10, 4))
 	wei := CurrencyToString(big.NewInt(10))
+
+	if douglas != "10 Douglas" {
+		t.Error("Got", douglas)
+	}
+
+	if einstein != "10 Einstein" {
+		t.Error("Got", einstein)
+	}
 
 	if ether != "10 Ether" {
 		t.Error("Got", ether)
@@ -26,19 +63,37 @@ func TestCommon(t *testing.T) {
 		t.Error("Got", szabo)
 	}
 
-	if vito != "10 Shannon" {
-		t.Error("Got", vito)
+	if shannon != "10 Shannon" {
+		t.Error("Got", shannon)
 	}
 
-	if turing != "10 Babbage" {
-		t.Error("Got", turing)
+	if babbage != "10 Babbage" {
+		t.Error("Got", babbage)
 	}
 
-	if eins != "10 Ada" {
-		t.Error("Got", eins)
+	if ada != "10 Ada" {
+		t.Error("Got", ada)
 	}
 
 	if wei != "10 Wei" {
 		t.Error("Got", wei)
+	}
+}
+
+func TestLarge(t *testing.T) {
+	douglaslarge := CurrencyToString(BigPow(100000000, 43))
+	adalarge := CurrencyToString(BigPow(100000000, 4))
+	weilarge := CurrencyToString(big.NewInt(100000000))
+
+	if douglaslarge != "10000E298 Douglas" {
+		t.Error("Got", douglaslarge)
+	}
+
+	if adalarge != "10000E7 Einstein" {
+		t.Error("Got", adalarge)
+	}
+
+	if weilarge != "100 Babbage" {
+		t.Error("Got", weilarge)
 	}
 }
