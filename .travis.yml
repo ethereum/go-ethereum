@@ -1,6 +1,6 @@
 before_install: sudo apt-get install libgmp3-dev
 install:
-  - go get
+  - go get code.google.com/p/go.net/websocket
   - go get code.google.com/p/go.tools/cmd/goimports
   - go get github.com/golang/lint/golint
   - go get code.google.com/p/go.tools/cmd/vet
