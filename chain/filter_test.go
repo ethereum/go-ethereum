@@ -1,7 +1,7 @@
 package chain
 
-import "testing"
+// import "testing"
 
-func TestFilter(t *testing.T) {
-	NewFilter(NewTestManager())
-}
+// func TestFilter(t *testing.T) {
+// 	NewFilter(NewTestManager())
+// }
