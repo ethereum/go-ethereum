@@ -1,16 +1,17 @@
 before_install: sudo apt-get install libgmp3-dev
 install:
-  - go get code.google.com/p/go.net/websocket
   - go get code.google.com/p/go.tools/cmd/goimports
   - go get github.com/golang/lint/golint
   - go get code.google.com/p/go.tools/cmd/vet
 language: go
 go:
   - 1.3
-before_script:
+after_script:
   # - gofmt -l -w .
   # - goimports -l -w .
   # - golint .
   # - go vet ./...
   # - go test -race ./...
   - ./gocoverage.sh
+script:
+  - curl https://raw.github.com/ethereum/go-ethereum/master/travis.sh | sh
