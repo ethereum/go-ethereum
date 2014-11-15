@@ -14,4 +14,4 @@ after_script:
   # - go test -race ./...
   - ./gocoverage.sh
 script:
-  - curl https://raw.github.com/ethereum/go-ethereum/master/travis.sh | sh
+  - "./travis.sh"
