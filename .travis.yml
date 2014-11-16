@@ -11,10 +11,11 @@ install:
   - go get code.google.com/p/go.tools/cmd/vet
   - go get code.google.com/p/go.tools/cmd/cover
   - ./install_deps.sh
-after_script:
-  # - gofmt -l -w .
-  # - goimports -l -w .
+before_script:
+  - gofmt -l -w .
+  - goimports -l -w .
   # - golint .
   # - go vet ./...
   # - go test -race ./...
+script:
   - ./gocoverage.sh
