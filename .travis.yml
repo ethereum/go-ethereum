@@ -1,4 +1,4 @@
-before_install: sudo apt-get install libgmp3-dev
+before_install: sudo apt-get install libgmp3-dev qtbase5-private-dev qtdeclarative5-private-dev libqt5opengl5-dev libreadline6-dev
 install:
   - go get code.google.com/p/go.tools/cmd/goimports
   - go get github.com/golang/lint/golint
