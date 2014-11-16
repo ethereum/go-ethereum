@@ -4,11 +4,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	checker "gopkg.in/check.v1"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"time"
+
+	checker "gopkg.in/check.v1"
 
 	"github.com/ethereum/go-ethereum/ethutil"
 )
