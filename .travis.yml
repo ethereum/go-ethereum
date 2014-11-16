@@ -1,3 +1,6 @@
+language: go
+go:
+  - 1.3
 before_install:
   - sudo add-apt-repository ppa:ubuntu-sdk-team/ppa -y
   - sudo apt-get update -qq
@@ -7,9 +10,7 @@ install:
   - go get github.com/golang/lint/golint
   - go get code.google.com/p/go.tools/cmd/vet
   - go get code.google.com/p/go.tools/cmd/cover
-language: go
-go:
-  - 1.3
+  - ./install_deps.sh
 after_script:
   # - gofmt -l -w .
   # - goimports -l -w .
@@ -17,6 +18,3 @@ after_script:
   # - go vet ./...
   # - go test -race ./...
   - ./gocoverage.sh
-script:
-  - chmod +x travis.sh
-  - ./travis.sh
