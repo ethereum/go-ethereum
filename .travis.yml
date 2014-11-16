@@ -3,8 +3,6 @@ before_install:
   - sudo apt-get update -qq
   - sudo apt-get install -yqq libgmp3-dev qtbase5-private-dev qtdeclarative5-private-dev libqt5opengl5-dev libreadline6-dev
 install:
-  - go get github.com/jackpal/go-nat-pmp
-  - go get code.google.com/p/go.net/websocket
   - go get code.google.com/p/go.tools/cmd/goimports
   - go get github.com/golang/lint/golint
   - go get code.google.com/p/go.tools/cmd/vet
