@@ -10,6 +10,7 @@ install:
   - go get github.com/golang/lint/golint
   - go get code.google.com/p/go.tools/cmd/vet
   - go get code.google.com/p/go.tools/cmd/cover
+  - go get github.com/mattn/goveralls
   - ./install_deps.sh
 before_script:
   - gofmt -l -w .
@@ -19,3 +20,8 @@ before_script:
   # - go test -race ./...
 script:
   - ./gocoverage.sh
+after_script:
+  - goveralls -coverprofile=profile.cov -service=travis-ci -repotoken $COVERALLS_TOKEN
+env:
+  - secure: "U2U1AmkU4NJBgKR/uUAebQY87cNL0+1JHjnLOmmXwxYYyj5ralWb1aSuSH3qSXiT93qLBmtaUkuv9fberHVqrbAeVlztVdUsKAq7JMQH+M99iFkC9UiRMqHmtjWJ0ok4COD1sRYixxi21wb/JrMe3M1iL4QJVS61iltjHhVdM64="
+
