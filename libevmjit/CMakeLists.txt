@@ -17,7 +17,6 @@ include_directories(..)
 
 target_link_libraries(${EXECUTABLE} devcore)
 target_link_libraries(${EXECUTABLE} ethcore)
-target_link_libraries(${EXECUTABLE} evm)
 target_link_libraries(${EXECUTABLE} evmcore)
 
 
