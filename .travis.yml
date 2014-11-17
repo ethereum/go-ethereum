@@ -15,7 +15,7 @@ install:
 before_script:
   - gofmt -l -w .
   - goimports -l -w .
-  # - golint .
+  - golint .
   # - go vet ./...
   # - go test -race ./...
 script:
