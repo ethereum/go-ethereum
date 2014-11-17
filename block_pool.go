@@ -333,9 +333,11 @@ out:
 					self.td = ethutil.Big0
 					self.peer = nil
 				} else {
-					chainManager.InsertChain(bchain)
-					for _, block := range blocks {
-						self.Remove(block.Hash())
+					if !chain.IsTDError(err) {
+						chainManager.InsertChain(bchain)
+						for _, block := range blocks {
+							self.Remove(block.Hash())
+						}
 					}
 				}
 			}
