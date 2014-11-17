@@ -8,7 +8,7 @@ before_install:
 install:
   - go get code.google.com/p/go.tools/cmd/goimports
   - go get github.com/golang/lint/golint
-  - go get code.google.com/p/go.tools/cmd/vet
+  # - go get code.google.com/p/go.tools/cmd/vet
   - go get code.google.com/p/go.tools/cmd/cover
   - go get github.com/mattn/goveralls
   - ./install_deps.sh
@@ -16,7 +16,7 @@ before_script:
   - gofmt -l -w .
   - goimports -l -w .
   - golint .
-  - go vet ./...
+  # - go vet ./...
   # - go test -race ./...
 script:
   - ./gocoverage.sh
