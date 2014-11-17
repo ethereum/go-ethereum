@@ -309,6 +309,7 @@ func makePtrDecoder(typ reflect.Type) (decoder, error) {
 	dec := func(s *Stream, val reflect.Value) (err error) {
 		_, size, err := s.Kind()
 		if err != nil || size == 0 && s.byteval == 0 {
+			val.Set(reflect.Zero(typ)) // set to nil
 			return err
 		}
 		newval := val

@@ -176,13 +176,16 @@ type recstruct struct {
 	Child *recstruct
 }
 
-var sharedByteArray [5]byte
-
 var (
 	veryBigInt = big.NewInt(0).Add(
 		big.NewInt(0).Lsh(big.NewInt(0xFFFFFFFFFFFFFF), 16),
 		big.NewInt(0xFFFF),
 	)
+)
+
+var (
+	sharedByteArray [5]byte
+	sharedPtr       = new(*int)
 )
 
 var decodeTests = []decodeTest{
@@ -267,6 +270,10 @@ var decodeTests = []decodeTest{
 	{input: "8108", ptr: new(*int), value: intp(8)},
 	{input: "C109", ptr: new(*[]int), value: &[]int{9}},
 	{input: "C58403030303", ptr: new(*[][]byte), value: &[][]byte{{3, 3, 3, 3}}},
+
+	// pointer should be reset to nil
+	{input: "05", ptr: sharedPtr, value: intp(5)},
+	{input: "80", ptr: sharedPtr, value: (*int)(nil)},
 
 	// interface{}
 	{input: "00", ptr: new(interface{}), value: []byte{0}},
