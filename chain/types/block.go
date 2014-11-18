@@ -1,4 +1,4 @@
-package chain
+package types
 
 import (
 	"bytes"
@@ -156,7 +156,7 @@ func (block *Block) State() *state.State {
 	return block.state
 }
 
-func (block *Block) Transactions() []*Transaction {
+func (block *Block) Transactions() Transactions {
 	return block.transactions
 }
 

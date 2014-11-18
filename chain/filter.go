@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 )
@@ -24,7 +25,7 @@ type Filter struct {
 
 	Altered []AccountChange
 
-	BlockCallback   func(*Block)
+	BlockCallback   func(*types.Block)
 	MessageCallback func(state.Messages)
 }
 
@@ -171,11 +172,11 @@ func (self *Filter) FilterMessages(msgs []*state.Message) []*state.Message {
 	return messages
 }
 
-func (self *Filter) bloomFilter(block *Block) bool {
+func (self *Filter) bloomFilter(block *types.Block) bool {
 	var fromIncluded, toIncluded bool
 	if len(self.from) > 0 {
 		for _, from := range self.from {
-			if BloomLookup(block.LogsBloom, from) {
+			if types.BloomLookup(block.LogsBloom, from) {
 				fromIncluded = true
 				break
 			}
@@ -186,7 +187,7 @@ func (self *Filter) bloomFilter(block *Block) bool {
 
 	if len(self.to) > 0 {
 		for _, to := range self.to {
-			if BloomLookup(block.LogsBloom, ethutil.U256(new(big.Int).Add(ethutil.Big1, ethutil.BigD(to))).Bytes()) {
+			if types.BloomLookup(block.LogsBloom, ethutil.U256(new(big.Int).Add(ethutil.Big1, ethutil.BigD(to))).Bytes()) {
 				toIncluded = true
 				break
 			}

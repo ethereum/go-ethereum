@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
@@ -13,7 +14,7 @@ import (
 
 var chainlogger = logger.NewLogger("CHAIN")
 
-func AddTestNetFunds(block *Block) {
+func AddTestNetFunds(block *types.Block) {
 	for _, addr := range []string{
 		"51ba59315b3a95761d0863b05ccc7a7f54703d99",
 		"e4157b34ea9615cfbde6b4fda419828124b70c78",
@@ -25,13 +26,13 @@ func AddTestNetFunds(block *Block) {
 		"1a26338f0d905e295fccb71fa9ea849ffa12aaf4",
 	} {
 		codedAddr := ethutil.Hex2Bytes(addr)
-		account := block.state.GetAccount(codedAddr)
+		account := block.State().GetAccount(codedAddr)
 		account.SetBalance(ethutil.Big("1606938044258990275541962092341162602522202993782792835301376")) //ethutil.BigPow(2, 200)
-		block.state.UpdateStateObject(account)
+		block.State().UpdateStateObject(account)
 	}
 }
 
-func CalcDifficulty(block, parent *Block) *big.Int {
+func CalcDifficulty(block, parent *types.Block) *big.Int {
 	diff := new(big.Int)
 
 	adjust := new(big.Int).Rsh(parent.Difficulty, 10)
@@ -45,27 +46,32 @@ func CalcDifficulty(block, parent *Block) *big.Int {
 }
 
 type ChainManager struct {
-	eth          EthManager
-	genesisBlock *Block
+	//eth          EthManager
+	processor    types.BlockProcessor
+	genesisBlock *types.Block
 	// Last known total difficulty
 	TD *big.Int
 
 	LastBlockNumber uint64
 
-	CurrentBlock  *Block
+	CurrentBlock  *types.Block
 	LastBlockHash []byte
 
 	workingChain *BlockChain
 }
 
-func NewChainManager(ethereum EthManager) *ChainManager {
+func NewChainManager() *ChainManager {
 	bc := &ChainManager{}
-	bc.genesisBlock = NewBlockFromBytes(ethutil.Encode(Genesis))
-	bc.eth = ethereum
+	bc.genesisBlock = types.NewBlockFromBytes(ethutil.Encode(Genesis))
+	//bc.eth = ethereum
 
 	bc.setLastBlock()
 
 	return bc
+}
+
+func (self *ChainManager) SetProcessor(proc types.BlockProcessor) {
+	self.processor = proc
 }
 
 func (bc *ChainManager) setLastBlock() {
@@ -74,7 +80,7 @@ func (bc *ChainManager) setLastBlock() {
 		// Prep genesis
 		AddTestNetFunds(bc.genesisBlock)
 
-		block := NewBlockFromBytes(data)
+		block := types.NewBlockFromBytes(data)
 		bc.CurrentBlock = block
 		bc.LastBlockHash = block.Hash()
 		bc.LastBlockNumber = block.Number.Uint64()
@@ -89,7 +95,7 @@ func (bc *ChainManager) setLastBlock() {
 }
 
 // Block creation & chain handling
-func (bc *ChainManager) NewBlock(coinbase []byte) *Block {
+func (bc *ChainManager) NewBlock(coinbase []byte) *types.Block {
 	var root interface{}
 	hash := ZeroHash256
 
@@ -98,7 +104,7 @@ func (bc *ChainManager) NewBlock(coinbase []byte) *Block {
 		hash = bc.LastBlockHash
 	}
 
-	block := CreateBlock(
+	block := types.CreateBlock(
 		root,
 		hash,
 		coinbase,
@@ -122,7 +128,7 @@ func (bc *ChainManager) NewBlock(coinbase []byte) *Block {
 func (bc *ChainManager) Reset() {
 	AddTestNetFunds(bc.genesisBlock)
 
-	bc.genesisBlock.state.Trie.Sync()
+	bc.genesisBlock.Trie().Sync()
 	// Prepare the genesis block
 	bc.add(bc.genesisBlock)
 	bc.CurrentBlock = bc.genesisBlock
@@ -134,7 +140,7 @@ func (bc *ChainManager) Reset() {
 }
 
 // Add a block to the chain and record addition information
-func (bc *ChainManager) add(block *Block) {
+func (bc *ChainManager) add(block *types.Block) {
 	bc.writeBlockInfo(block)
 
 	bc.CurrentBlock = block
@@ -148,7 +154,7 @@ func (bc *ChainManager) add(block *Block) {
 }
 
 // Accessors
-func (bc *ChainManager) Genesis() *Block {
+func (bc *ChainManager) Genesis() *types.Block {
 	return bc.genesisBlock
 }
 
@@ -179,7 +185,7 @@ func (self *ChainManager) GetChainHashesFromHash(hash []byte, max uint64) (chain
 	return
 }
 
-func (self *ChainManager) GetBlock(hash []byte) *Block {
+func (self *ChainManager) GetBlock(hash []byte) *types.Block {
 	data, _ := ethutil.Config.Db.Get(hash)
 	if len(data) == 0 {
 		if self.workingChain != nil {
@@ -194,10 +200,10 @@ func (self *ChainManager) GetBlock(hash []byte) *Block {
 		return nil
 	}
 
-	return NewBlockFromBytes(data)
+	return types.NewBlockFromBytes(data)
 }
 
-func (self *ChainManager) GetBlockByNumber(num uint64) *Block {
+func (self *ChainManager) GetBlockByNumber(num uint64) *types.Block {
 	block := self.CurrentBlock
 	for ; block != nil; block = self.GetBlock(block.PrevHash) {
 		if block.Number.Uint64() == num {
@@ -217,7 +223,7 @@ func (bc *ChainManager) SetTotalDifficulty(td *big.Int) {
 	bc.TD = td
 }
 
-func (self *ChainManager) CalcTotalDiff(block *Block) (*big.Int, error) {
+func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
 	parent := self.GetBlock(block.PrevHash)
 	if parent == nil {
 		return nil, fmt.Errorf("Unable to calculate total diff without known parent %x", block.PrevHash)
@@ -237,8 +243,8 @@ func (self *ChainManager) CalcTotalDiff(block *Block) (*big.Int, error) {
 	return td, nil
 }
 
-func (bc *ChainManager) BlockInfo(block *Block) BlockInfo {
-	bi := BlockInfo{}
+func (bc *ChainManager) BlockInfo(block *types.Block) types.BlockInfo {
+	bi := types.BlockInfo{}
 	data, _ := ethutil.Config.Db.Get(append(block.Hash(), []byte("Info")...))
 	bi.RlpDecode(data)
 
@@ -246,9 +252,9 @@ func (bc *ChainManager) BlockInfo(block *Block) BlockInfo {
 }
 
 // Unexported method for writing extra non-essential block info to the db
-func (bc *ChainManager) writeBlockInfo(block *Block) {
+func (bc *ChainManager) writeBlockInfo(block *types.Block) {
 	bc.LastBlockNumber++
-	bi := BlockInfo{Number: bc.LastBlockNumber, Hash: block.Hash(), Parent: block.PrevHash, TD: bc.TD}
+	bi := types.BlockInfo{Number: bc.LastBlockNumber, Hash: block.Hash(), Parent: block.PrevHash, TD: bc.TD}
 
 	// For now we use the block hash with the words "info" appended as key
 	ethutil.Config.Db.Put(append(block.Hash(), []byte("Info")...), bi.RlpEncode())
@@ -271,8 +277,8 @@ func (self *ChainManager) InsertChain(chain *BlockChain) {
 
 		self.add(link.block)
 		self.SetTotalDifficulty(link.td)
-		self.eth.EventMux().Post(NewBlockEvent{link.block})
-		self.eth.EventMux().Post(link.messages)
+		//self.eth.EventMux().Post(NewBlockEvent{link.block})
+		//self.eth.EventMux().Post(link.messages)
 	}
 
 	b, e := chain.Front(), chain.Back()
@@ -299,7 +305,7 @@ func (self *ChainManager) TestChain(chain *BlockChain) (td *big.Int, err error) 
 		}
 
 		var messages state.Messages
-		td, messages, err = self.eth.BlockManager().ProcessWithParent(block, parent)
+		td, messages, err = self.processor.ProcessWithParent(block, parent) //self.eth.BlockManager().ProcessWithParent(block, parent)
 		if err != nil {
 			chainlogger.Infoln(err)
 			chainlogger.Debugf("Block #%v failed (%x...)\n", block.Number, block.Hash()[0:4])
@@ -323,7 +329,7 @@ func (self *ChainManager) TestChain(chain *BlockChain) (td *big.Int, err error) 
 }
 
 type link struct {
-	block    *Block
+	block    *types.Block
 	messages state.Messages
 	td       *big.Int
 }
@@ -332,7 +338,7 @@ type BlockChain struct {
 	*list.List
 }
 
-func NewChain(blocks Blocks) *BlockChain {
+func NewChain(blocks types.Blocks) *BlockChain {
 	chain := &BlockChain{list.New()}
 
 	for _, block := range blocks {
@@ -353,10 +359,10 @@ func (self *BlockChain) RlpEncode() []byte {
 
 type ChainIterator struct {
 	cm    *ChainManager
-	block *Block // current block in the iterator
+	block *types.Block // current block in the iterator
 }
 
-func (self *ChainIterator) Prev() *Block {
+func (self *ChainIterator) Prev() *types.Block {
 	self.block = self.cm.GetBlock(self.block.PrevHash)
 	return self.block
 }

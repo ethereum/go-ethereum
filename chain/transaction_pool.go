@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/wire"
@@ -16,7 +17,7 @@ var txplogger = logger.NewLogger("TXP")
 
 const txPoolQueueSize = 50
 
-type TxPoolHook chan *Transaction
+type TxPoolHook chan *types.Transaction
 type TxMsgTy byte
 
 const (
@@ -26,21 +27,21 @@ const (
 var MinGasPrice = big.NewInt(10000000000000)
 
 type TxMsg struct {
-	Tx   *Transaction
+	Tx   *types.Transaction
 	Type TxMsgTy
 }
 
-func EachTx(pool *list.List, it func(*Transaction, *list.Element) bool) {
+func EachTx(pool *list.List, it func(*types.Transaction, *list.Element) bool) {
 	for e := pool.Front(); e != nil; e = e.Next() {
-		if it(e.Value.(*Transaction), e) {
+		if it(e.Value.(*types.Transaction), e) {
 			break
 		}
 	}
 }
 
-func FindTx(pool *list.List, finder func(*Transaction, *list.Element) bool) *Transaction {
+func FindTx(pool *list.List, finder func(*types.Transaction, *list.Element) bool) *types.Transaction {
 	for e := pool.Front(); e != nil; e = e.Next() {
-		if tx, ok := e.Value.(*Transaction); ok {
+		if tx, ok := e.Value.(*types.Transaction); ok {
 			if finder(tx, e) {
 				return tx
 			}
@@ -51,7 +52,7 @@ func FindTx(pool *list.List, finder func(*Transaction, *list.Element) bool) *Tra
 }
 
 type TxProcessor interface {
-	ProcessTransaction(tx *Transaction)
+	ProcessTransaction(tx *types.Transaction)
 }
 
 // The tx pool a thread safe transaction pool handler. In order to
@@ -65,7 +66,7 @@ type TxPool struct {
 	mutex sync.Mutex
 	// Queueing channel for reading and writing incoming
 	// transactions to
-	queueChan chan *Transaction
+	queueChan chan *types.Transaction
 	// Quiting channel
 	quit chan bool
 	// The actual pool
@@ -79,14 +80,14 @@ type TxPool struct {
 func NewTxPool(ethereum EthManager) *TxPool {
 	return &TxPool{
 		pool:      list.New(),
-		queueChan: make(chan *Transaction, txPoolQueueSize),
+		queueChan: make(chan *types.Transaction, txPoolQueueSize),
 		quit:      make(chan bool),
 		Ethereum:  ethereum,
 	}
 }
 
 // Blocking function. Don't use directly. Use QueueTransaction instead
-func (pool *TxPool) addTransaction(tx *Transaction) {
+func (pool *TxPool) addTransaction(tx *types.Transaction) {
 	pool.mutex.Lock()
 	defer pool.mutex.Unlock()
 
@@ -96,7 +97,7 @@ func (pool *TxPool) addTransaction(tx *Transaction) {
 	pool.Ethereum.Broadcast(wire.MsgTxTy, []interface{}{tx.RlpData()})
 }
 
-func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
+func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 	// Get the last block so we can retrieve the sender and receiver from
 	// the merkle trie
 	block := pool.Ethereum.ChainManager().CurrentBlock
@@ -142,7 +143,7 @@ out:
 		select {
 		case tx := <-pool.queueChan:
 			hash := tx.Hash()
-			foundTx := FindTx(pool.pool, func(tx *Transaction, e *list.Element) bool {
+			foundTx := FindTx(pool.pool, func(tx *types.Transaction, e *list.Element) bool {
 				return bytes.Compare(tx.Hash(), hash) == 0
 			})
 
@@ -172,18 +173,18 @@ out:
 	}
 }
 
-func (pool *TxPool) QueueTransaction(tx *Transaction) {
+func (pool *TxPool) QueueTransaction(tx *types.Transaction) {
 	pool.queueChan <- tx
 }
 
-func (pool *TxPool) CurrentTransactions() []*Transaction {
+func (pool *TxPool) CurrentTransactions() []*types.Transaction {
 	pool.mutex.Lock()
 	defer pool.mutex.Unlock()
 
-	txList := make([]*Transaction, pool.pool.Len())
+	txList := make([]*types.Transaction, pool.pool.Len())
 	i := 0
 	for e := pool.pool.Front(); e != nil; e = e.Next() {
-		tx := e.Value.(*Transaction)
+		tx := e.Value.(*types.Transaction)
 
 		txList[i] = tx
 
@@ -198,7 +199,7 @@ func (pool *TxPool) RemoveInvalid(state *state.State) {
 	defer pool.mutex.Unlock()
 
 	for e := pool.pool.Front(); e != nil; e = e.Next() {
-		tx := e.Value.(*Transaction)
+		tx := e.Value.(*types.Transaction)
 		sender := state.GetAccount(tx.Sender())
 		err := pool.ValidateTransaction(tx)
 		if err != nil || sender.Nonce >= tx.Nonce {
@@ -207,12 +208,12 @@ func (pool *TxPool) RemoveInvalid(state *state.State) {
 	}
 }
 
-func (self *TxPool) RemoveSet(txs Transactions) {
+func (self *TxPool) RemoveSet(txs types.Transactions) {
 	self.mutex.Lock()
 	defer self.mutex.Unlock()
 
 	for _, tx := range txs {
-		EachTx(self.pool, func(t *Transaction, element *list.Element) bool {
+		EachTx(self.pool, func(t *types.Transaction, element *list.Element) bool {
 			if t == tx {
 				self.pool.Remove(element)
 				return true // To stop the loop
@@ -222,7 +223,7 @@ func (self *TxPool) RemoveSet(txs Transactions) {
 	}
 }
 
-func (pool *TxPool) Flush() []*Transaction {
+func (pool *TxPool) Flush() []*types.Transaction {
 	txList := pool.CurrentTransactions()
 
 	// Recreate a new list all together

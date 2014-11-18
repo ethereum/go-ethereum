@@ -2,20 +2,19 @@ package xeth
 
 import (
 	"math/big"
-
-	"github.com/ethereum/go-ethereum/chain"
+	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
 )
 
 type VMEnv struct {
 	state  *state.State
-	block  *chain.Block
+	block  *types.Block
 	value  *big.Int
 	sender []byte
 }
 
-func NewEnv(state *state.State, block *chain.Block, value *big.Int, sender []byte) *VMEnv {
+func NewEnv(state *state.State, block *types.Block, value *big.Int, sender []byte) *VMEnv {
 	return &VMEnv{
 		state:  state,
 		block:  block,

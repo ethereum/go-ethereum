@@ -11,8 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
-
-	"github.com/ethereum/go-ethereum/chain"
+	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/wire"
@@ -155,7 +154,7 @@ type Peer struct {
 	pingTime      time.Duration
 	pingStartTime time.Time
 
-	lastRequestedBlock *chain.Block
+	lastRequestedBlock *types.Block
 
 	protocolCaps *ethutil.Value
 }
@@ -429,7 +428,7 @@ func (p *Peer) HandleInbound() {
 				// in the TxPool where it will undergo validation and
 				// processing when a new block is found
 				for i := 0; i < msg.Data.Len(); i++ {
-					tx := chain.NewTransactionFromValue(msg.Data.Get(i))
+					tx := types.NewTransactionFromValue(msg.Data.Get(i))
 					p.ethereum.TxPool().QueueTransaction(tx)
 				}
 			case wire.MsgGetPeersTy:
@@ -535,7 +534,7 @@ func (p *Peer) HandleInbound() {
 
 					it := msg.Data.NewIterator()
 					for it.Next() {
-						block := chain.NewBlockFromRlpValue(it.Value())
+						block := types.NewBlockFromRlpValue(it.Value())
 						blockPool.Add(block, p)
 
 						p.lastBlockReceived = time.Now()
@@ -543,7 +542,7 @@ func (p *Peer) HandleInbound() {
 				case wire.MsgNewBlockTy:
 					var (
 						blockPool = p.ethereum.blockPool
-						block     = chain.NewBlockFromRlpValue(msg.Data.Get(0))
+						block     = types.NewBlockFromRlpValue(msg.Data.Get(0))
 						td        = msg.Data.Get(1).BigInt()
 					)
 

@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 
 	"github.com/ethereum/go-ethereum/chain"
+	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/wire"
@@ -44,7 +45,7 @@ type LocalTx struct {
 	Value    string `json:"value"`
 }
 
-func (self *LocalTx) Sign(key []byte) *chain.Transaction {
+func (self *LocalTx) Sign(key []byte) *types.Transaction {
 	return nil
 }
 
@@ -54,7 +55,7 @@ type Miner struct {
 	eth    *eth.Ethereum
 	events event.Subscription
 
-	uncles    chain.Blocks
+	uncles    types.Blocks
 	localTxs  map[int]*LocalTx
 	localTxId int
 
@@ -212,7 +213,7 @@ func (self *Miner) mine() {
 	nonce := self.pow.Search(block, self.powQuitCh)
 	if nonce != nil {
 		block.Nonce = nonce
-		lchain := chain.NewChain(chain.Blocks{block})
+		lchain := chain.NewChain(types.Blocks{block})
 		_, err := chainMan.TestChain(lchain)
 		if err != nil {
 			minerlogger.Infoln(err)
@@ -229,15 +230,15 @@ func (self *Miner) mine() {
 	}
 }
 
-func (self *Miner) finiliseTxs() chain.Transactions {
+func (self *Miner) finiliseTxs() types.Transactions {
 	// Sort the transactions by nonce in case of odd network propagation
-	var txs chain.Transactions
+	var txs types.Transactions
 
 	state := self.eth.BlockManager().TransState()
 	// XXX This has to change. Coinbase is, for new, same as key.
 	key := self.eth.KeyManager()
 	for _, ltx := range self.localTxs {
-		tx := chain.NewTransactionMessage(ltx.To, ethutil.Big(ltx.Value), ethutil.Big(ltx.Gas), ethutil.Big(ltx.GasPrice), ltx.Data)
+		tx := types.NewTransactionMessage(ltx.To, ethutil.Big(ltx.Value), ethutil.Big(ltx.Gas), ethutil.Big(ltx.GasPrice), ltx.Data)
 		tx.Nonce = state.GetNonce(self.Coinbase)
 		state.SetNonce(self.Coinbase, tx.Nonce+1)
 
@@ -247,7 +248,7 @@ func (self *Miner) finiliseTxs() chain.Transactions {
 	}
 
 	txs = append(txs, self.eth.TxPool().CurrentTransactions()...)
-	sort.Sort(chain.TxByNonce{txs})
+	sort.Sort(types.TxByNonce{txs})
 
 	return txs
 }

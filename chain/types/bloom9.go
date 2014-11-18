@@ -1,4 +1,4 @@
-package chain
+package types
 
 import (
 	"math/big"

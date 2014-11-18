@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
@@ -69,7 +70,7 @@ type BlockManager struct {
 	// The last attempted block is mainly used for debugging purposes
 	// This does not have to be a valid block and will be set during
 	// 'Process' & canonical validation.
-	lastAttemptedBlock *Block
+	lastAttemptedBlock *types.Block
 
 	events event.Subscription
 }
@@ -117,11 +118,11 @@ func (sm *BlockManager) ChainManager() *ChainManager {
 	return sm.bc
 }
 
-func (self *BlockManager) ProcessTransactions(coinbase *state.StateObject, state *state.State, block, parent *Block, txs Transactions) (Receipts, Transactions, Transactions, Transactions, error) {
+func (self *BlockManager) ProcessTransactions(coinbase *state.StateObject, state *state.State, block, parent *types.Block, txs types.Transactions) (types.Receipts, types.Transactions, types.Transactions, types.Transactions, error) {
 	var (
-		receipts           Receipts
-		handled, unhandled Transactions
-		erroneous          Transactions
+		receipts           types.Receipts
+		handled, unhandled types.Transactions
+		erroneous          types.Transactions
 		totalUsedGas       = big.NewInt(0)
 		err                error
 	)
@@ -159,8 +160,9 @@ done:
 
 		txGas.Sub(txGas, st.gas)
 		cumulative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, txGas))
-		receipt := &Receipt{ethutil.CopyBytes(state.Root()), cumulative, nil /*bloom*/, state.Logs()}
-		receipt.Bloom = CreateBloom(Receipts{receipt})
+		receipt := types.NewReceipt(state.Root(), cumulative)
+		receipt.SetLogs(state.Logs())
+		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
 		// Notify all subscribers
 		go self.eth.EventMux().Post(TxPostEvent{tx})
@@ -178,7 +180,7 @@ done:
 	return receipts, handled, unhandled, erroneous, err
 }
 
-func (sm *BlockManager) Process(block *Block) (td *big.Int, msgs state.Messages, err error) {
+func (sm *BlockManager) Process(block *types.Block) (td *big.Int, msgs state.Messages, err error) {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
@@ -195,7 +197,7 @@ func (sm *BlockManager) Process(block *Block) (td *big.Int, msgs state.Messages,
 	return sm.ProcessWithParent(block, parent)
 }
 
-func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, messages state.Messages, err error) {
+func (sm *BlockManager) ProcessWithParent(block, parent *types.Block) (td *big.Int, messages state.Messages, err error) {
 	sm.lastAttemptedBlock = block
 
 	state := parent.State().Copy()
@@ -215,13 +217,13 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 		return
 	}
 
-	txSha := DeriveSha(block.transactions)
+	txSha := types.DeriveSha(block.Transactions())
 	if bytes.Compare(txSha, block.TxSha) != 0 {
 		err = fmt.Errorf("validating transaction root. received=%x got=%x", block.TxSha, txSha)
 		return
 	}
 
-	receiptSha := DeriveSha(receipts)
+	receiptSha := types.DeriveSha(receipts)
 	if bytes.Compare(receiptSha, block.ReceiptSha) != 0 {
 		err = fmt.Errorf("validating receipt root. received=%x got=%x", block.ReceiptSha, receiptSha)
 		return
@@ -238,8 +240,8 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 		return
 	}
 
-	block.receipts = receipts // although this isn't necessary it be in the future
-	rbloom := CreateBloom(receipts)
+	//block.receipts = receipts // although this isn't necessary it be in the future
+	rbloom := types.CreateBloom(receipts)
 	if bytes.Compare(rbloom, block.LogsBloom) != 0 {
 		err = fmt.Errorf("unable to replicate block's bloom=%x", rbloom)
 		return
@@ -272,7 +274,7 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 	}
 }
 
-func (sm *BlockManager) ApplyDiff(state *state.State, parent, block *Block) (receipts Receipts, err error) {
+func (sm *BlockManager) ApplyDiff(state *state.State, parent, block *types.Block) (receipts types.Receipts, err error) {
 	coinbase := state.GetOrNewStateObject(block.Coinbase)
 	coinbase.SetGasPool(block.CalcGasLimit(parent))
 
@@ -285,7 +287,7 @@ func (sm *BlockManager) ApplyDiff(state *state.State, parent, block *Block) (rec
 	return receipts, nil
 }
 
-func (sm *BlockManager) CalculateTD(block *Block) (*big.Int, bool) {
+func (sm *BlockManager) CalculateTD(block *types.Block) (*big.Int, bool) {
 	uncleDiff := new(big.Int)
 	for _, uncle := range block.Uncles {
 		uncleDiff = uncleDiff.Add(uncleDiff, uncle.Difficulty)
@@ -311,7 +313,7 @@ func (sm *BlockManager) CalculateTD(block *Block) (*big.Int, bool) {
 // Validates the current block. Returns an error if the block was invalid,
 // an uncle or anything that isn't on the current block chain.
 // Validation validates easy over difficult (dagger takes longer time = difficult)
-func (sm *BlockManager) ValidateBlock(block, parent *Block) error {
+func (sm *BlockManager) ValidateBlock(block, parent *types.Block) error {
 	expd := CalcDifficulty(block, parent)
 	if expd.Cmp(block.Difficulty) < 0 {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Difficulty, expd)
@@ -337,7 +339,7 @@ func (sm *BlockManager) ValidateBlock(block, parent *Block) error {
 	return nil
 }
 
-func (sm *BlockManager) AccumelateRewards(state *state.State, block, parent *Block) error {
+func (sm *BlockManager) AccumelateRewards(state *state.State, block, parent *types.Block) error {
 	reward := new(big.Int).Set(BlockReward)
 
 	knownUncles := ethutil.Set(parent.Uncles)
@@ -380,7 +382,7 @@ func (sm *BlockManager) AccumelateRewards(state *state.State, block, parent *Blo
 	return nil
 }
 
-func (sm *BlockManager) GetMessages(block *Block) (messages []*state.Message, err error) {
+func (sm *BlockManager) GetMessages(block *types.Block) (messages []*state.Message, err error) {
 	if !sm.bc.HasBlock(block.PrevHash) {
 		return nil, ParentError(block.PrevHash)
 	}

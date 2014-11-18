@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/chain"
+	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/wire"
@@ -20,7 +21,7 @@ var poollogger = logger.NewLogger("BPOOL")
 type block struct {
 	from      *Peer
 	peer      *Peer
-	block     *chain.Block
+	block     *types.Block
 	reqAt     time.Time
 	requested int
 }
@@ -73,7 +74,7 @@ func (self *BlockPool) HasCommonHash(hash []byte) bool {
 	return self.eth.ChainManager().GetBlock(hash) != nil
 }
 
-func (self *BlockPool) Blocks() (blocks chain.Blocks) {
+func (self *BlockPool) Blocks() (blocks types.Blocks) {
 	for _, item := range self.pool {
 		if item.block != nil {
 			blocks = append(blocks, item.block)
@@ -123,15 +124,15 @@ func (self *BlockPool) AddHash(hash []byte, peer *Peer) {
 	}
 }
 
-func (self *BlockPool) Add(b *chain.Block, peer *Peer) {
+func (self *BlockPool) Add(b *types.Block, peer *Peer) {
 	self.addBlock(b, peer, false)
 }
 
-func (self *BlockPool) AddNew(b *chain.Block, peer *Peer) {
+func (self *BlockPool) AddNew(b *types.Block, peer *Peer) {
 	self.addBlock(b, peer, true)
 }
 
-func (self *BlockPool) addBlock(b *chain.Block, peer *Peer, newBlock bool) {
+func (self *BlockPool) addBlock(b *types.Block, peer *Peer, newBlock bool) {
 	self.mut.Lock()
 	defer self.mut.Unlock()
 
@@ -283,7 +284,7 @@ out:
 			break out
 		case <-procTimer.C:
 			blocks := self.Blocks()
-			chain.BlockBy(chain.Number).Sort(blocks)
+			types.BlockBy(types.Number).Sort(blocks)
 
 			// Find common block
 			for i, block := range blocks {

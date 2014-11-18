@@ -21,8 +21,7 @@ import (
 	"encoding/json"
 	"os"
 	"strconv"
-
-	"github.com/ethereum/go-ethereum/chain"
+	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
@@ -106,7 +105,7 @@ func (self *Gui) DumpState(hash, path string) {
 	if len(hash) == 0 {
 		stateDump = self.eth.BlockManager().CurrentState().Dump()
 	} else {
-		var block *chain.Block
+		var block *types.Block
 		if hash[0] == '#' {
 			i, _ := strconv.Atoi(hash[1:])
 			block = self.eth.ChainManager().GetBlockByNumber(uint64(i))

@@ -1,7 +1,8 @@
-package chain
+package types
 
 import (
 	"testing"
+
 	"github.com/ethereum/go-ethereum/state"
 )
 
