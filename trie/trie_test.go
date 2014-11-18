@@ -1,12 +1,14 @@
 package trie
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"testing"
 	"time"
 
 	checker "gopkg.in/check.v1"

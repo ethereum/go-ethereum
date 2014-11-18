@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -19,7 +20,7 @@ type TestManager struct {
 	db         ethutil.Database
 	txPool     *TxPool
 	blockChain *ChainManager
-	Blocks     []*Block
+	Blocks     []*types.Block
 }
 
 func (s *TestManager) IsListening() bool {

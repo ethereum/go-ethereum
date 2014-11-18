@@ -132,7 +132,7 @@ func BenchmarkUpdate(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		trie.UpdateString(fmt.Sprintf("aaaaaaaaa%d", base, i), "value")
+		trie.UpdateString(fmt.Sprintf("aaaaaaaaa%d", i), "value")
 	}
 	trie.Hash()
 }

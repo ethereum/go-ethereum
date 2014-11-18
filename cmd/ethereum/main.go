@@ -21,8 +21,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-
-	"github.com/ethereum/go-ethereum/chain"
+	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
@@ -74,7 +73,7 @@ func main() {
 	ethereum := utils.NewEthereum(db, clientIdentity, keyManager, UseUPnP, OutboundPort, MaxPeer)
 
 	if Dump {
-		var block *chain.Block
+		var block *types.Block
 
 		if len(DumpHash) == 0 && DumpNumber == -1 {
 			block = ethereum.ChainManager().CurrentBlock
