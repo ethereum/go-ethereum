@@ -197,7 +197,12 @@ func (t *Trie) Update(key, value string) {
 
 	k := CompactHexDecode(key)
 
-	root := t.UpdateState(t.Root, k, value)
+	var root interface{}
+	if value != "" {
+		root = t.UpdateState(t.Root, k, value)
+	} else {
+		root = t.deleteState(t.Root, k)
+	}
 	t.setRoot(root)
 }
 
