@@ -45,6 +45,8 @@ func New(root []byte, backend Backend) *Trie {
 	return trie
 }
 
+// Legacy support
+func (self *Trie) Root() []byte { return self.Hash() }
 func (self *Trie) Hash() []byte {
 	var hash []byte
 	if self.root != nil {

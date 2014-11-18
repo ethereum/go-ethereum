@@ -132,7 +132,24 @@ func BenchmarkUpdate(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		trie.UpdateString(fmt.Sprintf("aaaaaaaaaaaaaaa%d", j), "value")
+		trie.UpdateString(fmt.Sprintf("aaaaaaaaa%d", base, i), "value")
 	}
 	trie.Hash()
+}
+
+// Not actual test
+func TestOutput(t *testing.T) {
+	base := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	trie := NewEmpty()
+	for i := 0; i < 50; i++ {
+		trie.UpdateString(fmt.Sprintf("%s%d", base, i), "valueeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+	}
+	trie.Hash()
+	fmt.Println("############################## FULL ################################")
+	fmt.Println(trie.root)
+
+	trie2 := New(trie.roothash, trie.backend)
+	trie2.GetString(base + "20")
+	fmt.Println("############################## SMALL ################################")
+	fmt.Println(trie2.root)
 }

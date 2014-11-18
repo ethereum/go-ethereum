@@ -497,6 +497,7 @@ func BenchmarkUpdate(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		trie.Update(fmt.Sprintf("aaaaaaaaaaaaaaa%d", j), "value")
+		trie.Update(fmt.Sprintf("aaaaaaaaaaaaaaa%d", i), "value")
 	}
+	fmt.Println(trie.root)
 }
