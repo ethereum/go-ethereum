@@ -32,7 +32,7 @@ func (self *JSRepl) read() {
 		if err != nil {
 			fmt.Println("Error reading input", err)
 		} else {
-			if (string(str) == "exit") {
+			if string(str) == "exit" {
 				self.Stop()
 				break
 			} else {
@@ -46,25 +46,25 @@ func addHistory(s string) {
 }
 
 func printColored(outputVal string) {
-	for ; outputVal != "" ; {
+	for outputVal != "" {
 		codePart := ""
-		if (strings.HasPrefix(outputVal, "\033[32m")) {
+		if strings.HasPrefix(outputVal, "\033[32m") {
 			codePart = "\033[32m"
 			changeColor(2)
 		}
-		if (strings.HasPrefix(outputVal, "\033[1m\033[30m")) {
+		if strings.HasPrefix(outputVal, "\033[1m\033[30m") {
 			codePart = "\033[1m\033[30m"
 			changeColor(8)
 		}
-		if (strings.HasPrefix(outputVal, "\033[31m")) {
+		if strings.HasPrefix(outputVal, "\033[31m") {
 			codePart = "\033[31m"
 			changeColor(red)
 		}
-		if (strings.HasPrefix(outputVal, "\033[35m")) {
+		if strings.HasPrefix(outputVal, "\033[35m") {
 			codePart = "\033[35m"
 			changeColor(5)
 		}
-		if (strings.HasPrefix(outputVal, "\033[0m")) {
+		if strings.HasPrefix(outputVal, "\033[0m") {
 			codePart = "\033[0m"
 			resetColorful()
 		}

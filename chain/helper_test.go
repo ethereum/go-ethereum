@@ -13,8 +13,8 @@ import (
 
 // Implement our EthTest Manager
 type TestManager struct {
-	stateManager *StateManager
-	eventMux     *event.TypeMux
+	// stateManager *StateManager
+	eventMux *event.TypeMux
 
 	db         ethutil.Database
 	txPool     *TxPool
@@ -46,9 +46,9 @@ func (tm *TestManager) TxPool() *TxPool {
 	return tm.txPool
 }
 
-func (tm *TestManager) StateManager() *StateManager {
-	return tm.stateManager
-}
+// func (tm *TestManager) StateManager() *StateManager {
+// 	return tm.stateManager
+// }
 
 func (tm *TestManager) EventMux() *event.TypeMux {
 	return tm.eventMux
@@ -81,9 +81,9 @@ func NewTestManager() *TestManager {
 	testManager := &TestManager{}
 	testManager.eventMux = new(event.TypeMux)
 	testManager.db = db
-	testManager.txPool = NewTxPool(testManager)
-	testManager.blockChain = NewChainManager(testManager)
-	testManager.stateManager = NewStateManager(testManager)
+	// testManager.txPool = NewTxPool(testManager)
+	// testManager.blockChain = NewChainManager(testManager)
+	// testManager.stateManager = NewStateManager(testManager)
 
 	// Start the tx pool
 	testManager.txPool.Start()

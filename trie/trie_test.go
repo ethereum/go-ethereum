@@ -1,21 +1,25 @@
 package trie
 
 import (
-	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
-	"reflect"
-	"testing"
 	"time"
+
+	checker "gopkg.in/check.v1"
 
 	"github.com/ethereum/go-ethereum/ethutil"
 )
 
 const LONG_WORD = "1234567890abcdefghijklmnopqrstuvwxxzABCEFGHIJKLMNOPQRSTUVWXYZ"
+
+type TrieSuite struct {
+	db   *MemDatabase
+	trie *Trie
+}
 
 type MemDatabase struct {
 	db map[string][]byte
@@ -44,142 +48,97 @@ func NewTrie() (*MemDatabase, *Trie) {
 	return db, New(db, "")
 }
 
-func TestTrieSync(t *testing.T) {
-	db, trie := NewTrie()
-
-	trie.Update("dog", LONG_WORD)
-	if len(db.db) != 0 {
-		t.Error("Expected no data in database")
-	}
-
-	trie.Sync()
-	if len(db.db) == 0 {
-		t.Error("Expected data to be persisted")
-	}
+func (s *TrieSuite) SetUpTest(c *checker.C) {
+	s.db, s.trie = NewTrie()
 }
 
-func TestTrieDirtyTracking(t *testing.T) {
-	_, trie := NewTrie()
-	trie.Update("dog", LONG_WORD)
-	if !trie.cache.IsDirty {
-		t.Error("Expected trie to be dirty")
-	}
-
-	trie.Sync()
-	if trie.cache.IsDirty {
-		t.Error("Expected trie not to be dirty")
-	}
-
-	trie.Update("test", LONG_WORD)
-	trie.cache.Undo()
-	if trie.cache.IsDirty {
-		t.Error("Expected trie not to be dirty")
-	}
-
+func (s *TrieSuite) TestTrieSync(c *checker.C) {
+	s.trie.Update("dog", LONG_WORD)
+	c.Assert(s.db.db, checker.HasLen, 0, checker.Commentf("Expected no data in database"))
+	s.trie.Sync()
+	c.Assert(s.db.db, checker.HasLen, 3)
 }
 
-func TestTrieReset(t *testing.T) {
-	_, trie := NewTrie()
+func (s *TrieSuite) TestTrieDirtyTracking(c *checker.C) {
+	s.trie.Update("dog", LONG_WORD)
+	c.Assert(s.trie.cache.IsDirty, checker.Equals, true, checker.Commentf("Expected no data in database"))
 
-	trie.Update("cat", LONG_WORD)
-	if len(trie.cache.nodes) == 0 {
-		t.Error("Expected cached nodes")
-	}
+	s.trie.Sync()
+	c.Assert(s.trie.cache.IsDirty, checker.Equals, false, checker.Commentf("Expected trie to be dirty"))
 
-	trie.cache.Undo()
-
-	if len(trie.cache.nodes) != 0 {
-		t.Error("Expected no nodes after undo", len(trie.cache.nodes))
-	}
+	s.trie.Update("test", LONG_WORD)
+	s.trie.cache.Undo()
+	c.Assert(s.trie.cache.IsDirty, checker.Equals, false)
 }
 
-func TestTrieGet(t *testing.T) {
-	_, trie := NewTrie()
+func (s *TrieSuite) TestTrieReset(c *checker.C) {
+	s.trie.Update("cat", LONG_WORD)
+	c.Assert(s.trie.cache.nodes, checker.HasLen, 1, checker.Commentf("Expected cached nodes"))
 
-	trie.Update("cat", LONG_WORD)
-	x := trie.Get("cat")
-	if x != LONG_WORD {
-		t.Error("expected %s, got %s", LONG_WORD, x)
-	}
+	s.trie.cache.Undo()
+	c.Assert(s.trie.cache.nodes, checker.HasLen, 0, checker.Commentf("Expected no nodes after undo"))
 }
 
-func TestTrieUpdating(t *testing.T) {
-	_, trie := NewTrie()
-	trie.Update("cat", LONG_WORD)
-	trie.Update("cat", LONG_WORD+"1")
-	x := trie.Get("cat")
-	if x != LONG_WORD+"1" {
-		t.Error("expected %S, got %s", LONG_WORD+"1", x)
-	}
+func (s *TrieSuite) TestTrieGet(c *checker.C) {
+	s.trie.Update("cat", LONG_WORD)
+	x := s.trie.Get("cat")
+	c.Assert(x, checker.DeepEquals, LONG_WORD)
 }
 
-func TestTrieCmp(t *testing.T) {
+func (s *TrieSuite) TestTrieUpdating(c *checker.C) {
+	s.trie.Update("cat", LONG_WORD)
+	s.trie.Update("cat", LONG_WORD+"1")
+	x := s.trie.Get("cat")
+	c.Assert(x, checker.DeepEquals, LONG_WORD+"1")
+}
+
+func (s *TrieSuite) TestTrieCmp(c *checker.C) {
 	_, trie1 := NewTrie()
 	_, trie2 := NewTrie()
 
 	trie1.Update("doge", LONG_WORD)
 	trie2.Update("doge", LONG_WORD)
-	if !trie1.Cmp(trie2) {
-		t.Error("Expected tries to be equal")
-	}
+	c.Assert(trie1, checker.DeepEquals, trie2)
 
 	trie1.Update("dog", LONG_WORD)
 	trie2.Update("cat", LONG_WORD)
-	if trie1.Cmp(trie2) {
-		t.Errorf("Expected tries not to be equal %x %x", trie1.Root, trie2.Root)
-	}
+	c.Assert(trie1, checker.Not(checker.DeepEquals), trie2)
 }
 
-func TestTrieDelete(t *testing.T) {
-	t.Skip()
-	_, trie := NewTrie()
-	trie.Update("cat", LONG_WORD)
-	exp := trie.Root
-	trie.Update("dog", LONG_WORD)
-	trie.Delete("dog")
-	if !reflect.DeepEqual(exp, trie.Root) {
-		t.Errorf("Expected tries to be equal %x : %x", exp, trie.Root)
-	}
+func (s *TrieSuite) TestTrieDelete(c *checker.C) {
+	s.trie.Update("cat", LONG_WORD)
+	exp := s.trie.Root
+	s.trie.Update("dog", LONG_WORD)
+	s.trie.Delete("dog")
+	c.Assert(s.trie.Root, checker.DeepEquals, exp)
 
-	trie.Update("dog", LONG_WORD)
-	exp = trie.Root
-	trie.Update("dude", LONG_WORD)
-	trie.Delete("dude")
-	if !reflect.DeepEqual(exp, trie.Root) {
-		t.Errorf("Expected tries to be equal %x : %x", exp, trie.Root)
-	}
+	s.trie.Update("dog", LONG_WORD)
+	exp = s.trie.Root
+	s.trie.Update("dude", LONG_WORD)
+	s.trie.Delete("dude")
+	c.Assert(s.trie.Root, checker.DeepEquals, exp)
 }
 
-func TestTrieDeleteWithValue(t *testing.T) {
-	t.Skip()
-	_, trie := NewTrie()
-	trie.Update("c", LONG_WORD)
-	exp := trie.Root
-	trie.Update("ca", LONG_WORD)
-	trie.Update("cat", LONG_WORD)
-	trie.Delete("ca")
-	trie.Delete("cat")
-	if !reflect.DeepEqual(exp, trie.Root) {
-		t.Errorf("Expected tries to be equal %x : %x", exp, trie.Root)
-	}
-
+func (s *TrieSuite) TestTrieDeleteWithValue(c *checker.C) {
+	s.trie.Update("c", LONG_WORD)
+	exp := s.trie.Root
+	s.trie.Update("ca", LONG_WORD)
+	s.trie.Update("cat", LONG_WORD)
+	s.trie.Delete("ca")
+	s.trie.Delete("cat")
+	c.Assert(s.trie.Root, checker.DeepEquals, exp)
 }
 
-func TestTriePurge(t *testing.T) {
-	_, trie := NewTrie()
-	trie.Update("c", LONG_WORD)
-	trie.Update("ca", LONG_WORD)
-	trie.Update("cat", LONG_WORD)
+func (s *TrieSuite) TestTriePurge(c *checker.C) {
+	s.trie.Update("c", LONG_WORD)
+	s.trie.Update("ca", LONG_WORD)
+	s.trie.Update("cat", LONG_WORD)
 
-	lenBefore := len(trie.cache.nodes)
-	it := trie.NewIterator()
-	if num := it.Purge(); num != 3 {
-		t.Errorf("Expected purge to return 3, got %d", num)
-	}
-
-	if lenBefore == len(trie.cache.nodes) {
-		t.Errorf("Expected cached nodes to be deleted")
-	}
+	lenBefore := len(s.trie.cache.nodes)
+	it := s.trie.NewIterator()
+	num := it.Purge()
+	c.Assert(num, checker.Equals, 3)
+	c.Assert(len(s.trie.cache.nodes), checker.Equals, lenBefore)
 }
 
 func h(str string) string {
@@ -201,23 +160,23 @@ func get(in string) (out string) {
 	return
 }
 
-type Test struct {
+type TrieTest struct {
 	Name string
 	In   map[string]string
 	Root string
 }
 
-func CreateTest(name string, data []byte) (Test, error) {
-	t := Test{Name: name}
+func CreateTest(name string, data []byte) (TrieTest, error) {
+	t := TrieTest{Name: name}
 	err := json.Unmarshal(data, &t)
 	if err != nil {
-		return Test{}, fmt.Errorf("%v", err)
+		return TrieTest{}, fmt.Errorf("%v", err)
 	}
 
 	return t, nil
 }
 
-func CreateTests(uri string, cb func(Test)) map[string]Test {
+func CreateTests(uri string, cb func(TrieTest)) map[string]TrieTest {
 	resp, err := http.Get(uri)
 	if err != nil {
 		panic(err)
@@ -232,7 +191,7 @@ func CreateTests(uri string, cb func(Test)) map[string]Test {
 		panic(err)
 	}
 
-	tests := make(map[string]Test)
+	tests := make(map[string]TrieTest)
 	for name, testData := range objmap {
 		test, err := CreateTest(name, *testData)
 		if err != nil {
@@ -276,7 +235,7 @@ func RandomData() [][]string {
 const MaxTest = 1000
 
 // This test insert data in random order and seeks to find indifferences between the different tries
-func TestRegression(t *testing.T) {
+func (s *TrieSuite) TestRegression(c *checker.C) {
 	rand.Seed(time.Now().Unix())
 
 	roots := make(map[string]int)
@@ -292,34 +251,33 @@ func TestRegression(t *testing.T) {
 		roots[string(trie.Root.([]byte))] += 1
 	}
 
-	if len(roots) > 1 {
-		for root, num := range roots {
-			t.Errorf("%x => %d\n", root, num)
-		}
-	}
+	c.Assert(len(roots) <= 1, checker.Equals, true)
+	// if len(roots) > 1 {
+	// 	for root, num := range roots {
+	// 		t.Errorf("%x => %d\n", root, num)
+	// 	}
+	// }
 }
 
-func TestDelete(t *testing.T) {
-	_, trie := NewTrie()
-
-	trie.Update("a", "jeffreytestlongstring")
-	trie.Update("aa", "otherstring")
-	trie.Update("aaa", "othermorestring")
-	trie.Update("aabbbbccc", "hithere")
-	trie.Update("abbcccdd", "hstanoehutnaheoustnh")
-	trie.Update("rnthaoeuabbcccdd", "hstanoehutnaheoustnh")
-	trie.Update("rneuabbcccdd", "hstanoehutnaheoustnh")
-	trie.Update("rneuabboeusntahoeucccdd", "hstanoehutnaheoustnh")
-	trie.Update("rnxabboeusntahoeucccdd", "hstanoehutnaheoustnh")
-	trie.Delete("aaboaestnuhbccc")
-	trie.Delete("a")
-	trie.Update("a", "nthaonethaosentuh")
-	trie.Update("c", "shtaosntehua")
-	trie.Delete("a")
-	trie.Update("aaaa", "testmegood")
+func (s *TrieSuite) TestDelete(c *checker.C) {
+	s.trie.Update("a", "jeffreytestlongstring")
+	s.trie.Update("aa", "otherstring")
+	s.trie.Update("aaa", "othermorestring")
+	s.trie.Update("aabbbbccc", "hithere")
+	s.trie.Update("abbcccdd", "hstanoehutnaheoustnh")
+	s.trie.Update("rnthaoeuabbcccdd", "hstanoehutnaheoustnh")
+	s.trie.Update("rneuabbcccdd", "hstanoehutnaheoustnh")
+	s.trie.Update("rneuabboeusntahoeucccdd", "hstanoehutnaheoustnh")
+	s.trie.Update("rnxabboeusntahoeucccdd", "hstanoehutnaheoustnh")
+	s.trie.Delete("aaboaestnuhbccc")
+	s.trie.Delete("a")
+	s.trie.Update("a", "nthaonethaosentuh")
+	s.trie.Update("c", "shtaosntehua")
+	s.trie.Delete("a")
+	s.trie.Update("aaaa", "testmegood")
 
 	_, t2 := NewTrie()
-	trie.NewIterator().Each(func(key string, v *ethutil.Value) {
+	s.trie.NewIterator().Each(func(key string, v *ethutil.Value) {
 		if key == "aaaa" {
 			t2.Update(key, v.Str())
 		} else {
@@ -327,27 +285,22 @@ func TestDelete(t *testing.T) {
 		}
 	})
 
-	a := ethutil.NewValue(trie.Root).Bytes()
+	a := ethutil.NewValue(s.trie.Root).Bytes()
 	b := ethutil.NewValue(t2.Root).Bytes()
 
-	if bytes.Compare(a, b) != 0 {
-		t.Errorf("Expected %x and %x to be equal", a, b)
-	}
+	c.Assert(a, checker.DeepEquals, b)
 }
 
-func TestTerminator(t *testing.T) {
+func (s *TrieSuite) TestTerminator(c *checker.C) {
 	key := CompactDecode("hello")
-	if !HasTerm(key) {
-		t.Errorf("Expected %v to have a terminator", key)
-	}
+	c.Assert(HasTerm(key), checker.Equals, true, checker.Commentf("Expected %v to have a terminator", key))
 }
 
-func TestIt(t *testing.T) {
-	_, trie := NewTrie()
-	trie.Update("cat", "cat")
-	trie.Update("doge", "doge")
-	trie.Update("wallace", "wallace")
-	it := trie.Iterator()
+func (s *TrieSuite) TestIt(c *checker.C) {
+	s.trie.Update("cat", "cat")
+	s.trie.Update("doge", "doge")
+	s.trie.Update("wallace", "wallace")
+	it := s.trie.Iterator()
 
 	inputs := []struct {
 		In, Out string
@@ -363,33 +316,23 @@ func TestIt(t *testing.T) {
 
 	for _, test := range inputs {
 		res := string(it.Next(test.In))
-		if res != test.Out {
-			t.Errorf(test.In, "failed. Got", res, "Expected", test.Out)
-		}
+		c.Assert(res, checker.Equals, test.Out)
 	}
 }
 
-func TestBeginsWith(t *testing.T) {
+func (s *TrieSuite) TestBeginsWith(c *checker.C) {
 	a := CompactDecode("hello")
 	b := CompactDecode("hel")
 
-	if BeginsWith(a, b) {
-		t.Errorf("Expected %x to begin with %x", a, b)
-	}
-
-	if BeginsWith(b, a) {
-		t.Errorf("Expected %x not to begin with %x", b, a)
-	}
+	c.Assert(BeginsWith(a, b), checker.Equals, false)
+	c.Assert(BeginsWith(b, a), checker.Equals, true)
 }
 
-func TestItems(t *testing.T) {
-	_, trie := NewTrie()
-	trie.Update("A", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-
+func (s *TrieSuite) TestItems(c *checker.C) {
+	s.trie.Update("A", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 	exp := "d23786fb4a010da3ce639d66d5e904a11dbc02746d1ce25029e53290cabf28ab"
-	if bytes.Compare(trie.GetRoot(), ethutil.Hex2Bytes(exp)) != 0 {
-		t.Errorf("Expected root to be %s but got", exp, trie.GetRoot())
-	}
+
+	c.Assert(s.trie.GetRoot(), checker.DeepEquals, ethutil.Hex2Bytes(exp))
 }
 
 /*

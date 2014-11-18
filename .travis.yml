@@ -1,4 +1,27 @@
-before_install: sudo apt-get install libgmp3-dev
 language: go
 go:
   - 1.3
+before_install:
+  - sudo add-apt-repository ppa:ubuntu-sdk-team/ppa -y
+  - sudo apt-get update -qq
+  - sudo apt-get install -yqq libgmp3-dev qtbase5-private-dev qtdeclarative5-private-dev libqt5opengl5-dev libreadline6-dev
+install:
+  - go get code.google.com/p/go.tools/cmd/goimports
+  - go get github.com/golang/lint/golint
+  # - go get code.google.com/p/go.tools/cmd/vet
+  - go get code.google.com/p/go.tools/cmd/cover
+  - go get github.com/mattn/goveralls
+  - ./install_deps.sh
+before_script:
+  - gofmt -l -w .
+  - goimports -l -w .
+  - golint .
+  # - go vet ./...
+  # - go test -race ./...
+script:
+  - ./gocoverage.sh
+after_script:
+  - goveralls -coverprofile=profile.cov -service=travis-ci -repotoken $COVERALLS_TOKEN
+env:
+  - secure: "U2U1AmkU4NJBgKR/uUAebQY87cNL0+1JHjnLOmmXwxYYyj5ralWb1aSuSH3qSXiT93qLBmtaUkuv9fberHVqrbAeVlztVdUsKAq7JMQH+M99iFkC9UiRMqHmtjWJ0ok4COD1sRYixxi21wb/JrMe3M1iL4QJVS61iltjHhVdM64="
+
