@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
 	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
@@ -23,7 +24,7 @@ const (
 	// The size of the output buffer for writing messages
 	outputBufferSize = 50
 	// Current protocol version
-	ProtocolVersion = 42
+	ProtocolVersion = 43
 	// Current P2P version
 	P2PVersion = 2
 	// Ethereum network version

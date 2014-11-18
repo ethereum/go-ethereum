@@ -29,6 +29,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/state"
 
 	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/chain/types"
@@ -218,8 +219,10 @@ func (self *Miner) mine() {
 		if err != nil {
 			minerlogger.Infoln(err)
 		} else {
-			chainMan.InsertChain(lchain)
-			//self.eth.EventMux().Post(chain.NewBlockEvent{block})
+			chainMan.InsertChain(lchain, func(block *types.Block, _ state.Messages) {
+				self.eth.EventMux().Post(chain.NewBlockEvent{block})
+			})
+
 			self.eth.Broadcast(wire.MsgBlockTy, []interface{}{block.Value().Val})
 
 			minerlogger.Infof("🔨  Mined block %x\n", block.Hash())

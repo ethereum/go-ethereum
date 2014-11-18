@@ -271,14 +271,14 @@ func (self *ChainManager) NewIterator(startHash []byte) *ChainIterator {
 }
 
 // This function assumes you've done your checking. No checking is done at this stage anymore
-func (self *ChainManager) InsertChain(chain *BlockChain) {
+func (self *ChainManager) InsertChain(chain *BlockChain, call func(*types.Block, state.Messages)) {
 	for e := chain.Front(); e != nil; e = e.Next() {
 		link := e.Value.(*link)
 
 		self.add(link.block)
 		self.SetTotalDifficulty(link.td)
-		//self.eth.EventMux().Post(NewBlockEvent{link.block})
-		//self.eth.EventMux().Post(link.messages)
+
+		call(link.block, link.messages)
 	}
 
 	b, e := chain.Front(), chain.Back()
