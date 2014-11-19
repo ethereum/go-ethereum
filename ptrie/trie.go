@@ -10,47 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-type Backend interface {
-	Get([]byte) []byte
-	Set([]byte, []byte)
-}
-
-type Cache struct {
-	store   map[string][]byte
-	backend Backend
-}
-
-func NewCache(backend Backend) *Cache {
-	return &Cache{make(map[string][]byte), backend}
-}
-
-func (self *Cache) Get(key []byte) []byte {
-	data := self.store[string(key)]
-	if data == nil {
-		data = self.backend.Get(key)
-	}
-
-	return data
-}
-
-func (self *Cache) Set(key []byte, data []byte) {
-	self.store[string(key)] = data
-}
-
-func (self *Cache) Flush() {
-	for k, v := range self.store {
-		self.backend.Set([]byte(k), v)
-	}
-
-	// This will eventually grow too large. We'd could
-	// do a make limit on storage and push out not-so-popular nodes.
-	//self.Reset()
-}
-
-func (self *Cache) Reset() {
-	self.store = make(map[string][]byte)
-}
-
 type Trie struct {
 	mu       sync.Mutex
 	root     Node
@@ -83,14 +42,17 @@ func (self *Trie) Root() []byte { return self.Hash() }
 func (self *Trie) Hash() []byte {
 	var hash []byte
 	if self.root != nil {
-		t := self.root.Hash()
-		if byts, ok := t.([]byte); ok {
-			hash = byts
-		} else {
-			hash = crypto.Sha3(ethutil.Encode(self.root.RlpData()))
-		}
+		hash = self.root.Hash().([]byte)
+		/*
+			t := self.root.Hash()
+			if byts, ok := t.([]byte); ok {
+				hash = byts
+			} else {
+				hash = crypto.Sha3(ethutil.Encode(self.root.RlpData()))
+			}
+		*/
 	} else {
-		hash = crypto.Sha3(ethutil.Encode(self.root))
+		hash = crypto.Sha3(ethutil.Encode(""))
 	}
 
 	if !bytes.Equal(hash, self.roothash) {
@@ -107,6 +69,7 @@ func (self *Trie) Commit() {
 	self.cache.Flush()
 }
 
+// Reset should only be called if the trie has been hashed
 func (self *Trie) Reset() {
 	self.cache.Reset()
 
