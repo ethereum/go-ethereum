@@ -14,6 +14,9 @@ func (self *FullNode) Value() Node {
 	self.nodes[16] = self.trie.trans(self.nodes[16])
 	return self.nodes[16]
 }
+func (self *FullNode) Branches() []Node {
+	return self.nodes[:16]
+}
 
 func (self *FullNode) Copy() Node { return self }
 
@@ -49,7 +52,7 @@ func (self *FullNode) set(k byte, value Node) {
 	self.nodes[int(k)] = value
 }
 
-func (self *FullNode) get(i byte) Node {
+func (self *FullNode) branch(i byte) Node {
 	if self.nodes[int(i)] != nil {
 		self.nodes[int(i)] = self.trie.trans(self.nodes[int(i)])
 

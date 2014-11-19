@@ -139,6 +139,8 @@ func BenchmarkUpdate(b *testing.B) {
 
 // Not actual test
 func TestOutput(t *testing.T) {
+	t.Skip()
+
 	base := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	trie := NewEmpty()
 	for i := 0; i < 50; i++ {

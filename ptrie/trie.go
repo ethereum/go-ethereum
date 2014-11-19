@@ -45,6 +45,10 @@ func New(root []byte, backend Backend) *Trie {
 	return trie
 }
 
+func (self *Trie) Iterator() *Iterator {
+	return NewIterator(self)
+}
+
 // Legacy support
 func (self *Trie) Root() []byte { return self.Hash() }
 func (self *Trie) Hash() []byte {
@@ -144,7 +148,7 @@ func (self *Trie) insert(node Node, key []byte, value Node) Node {
 
 	case *FullNode:
 		cpy := node.Copy().(*FullNode)
-		cpy.set(key[0], self.insert(node.get(key[0]), key[1:], value))
+		cpy.set(key[0], self.insert(node.branch(key[0]), key[1:], value))
 
 		return cpy
 
@@ -173,7 +177,7 @@ func (self *Trie) get(node Node, key []byte) Node {
 
 		return nil
 	case *FullNode:
-		return self.get(node.get(key[0]), key[1:])
+		return self.get(node.branch(key[0]), key[1:])
 	default:
 		panic("Invalid node")
 	}
@@ -209,11 +213,11 @@ func (self *Trie) delete(node Node, key []byte) Node {
 
 	case *FullNode:
 		n := node.Copy().(*FullNode)
-		n.set(key[0], self.delete(n.get(key[0]), key[1:]))
+		n.set(key[0], self.delete(n.branch(key[0]), key[1:]))
 
 		pos := -1
 		for i := 0; i < 17; i++ {
-			if n.get(byte(i)) != nil {
+			if n.branch(byte(i)) != nil {
 				if pos == -1 {
 					pos = i
 				} else {
@@ -224,16 +228,16 @@ func (self *Trie) delete(node Node, key []byte) Node {
 
 		var nnode Node
 		if pos == 16 {
-			nnode = NewShortNode(self, []byte{16}, n.get(byte(pos)))
+			nnode = NewShortNode(self, []byte{16}, n.branch(byte(pos)))
 		} else if pos >= 0 {
-			cnode := n.get(byte(pos))
+			cnode := n.branch(byte(pos))
 			switch cnode := cnode.(type) {
 			case *ShortNode:
 				// Stitch keys
 				k := append([]byte{byte(pos)}, cnode.Key()...)
 				nnode = NewShortNode(self, k, cnode.Value())
 			case *FullNode:
-				nnode = NewShortNode(self, []byte{byte(pos)}, n.get(byte(pos)))
+				nnode = NewShortNode(self, []byte{byte(pos)}, n.branch(byte(pos)))
 			}
 		} else {
 			nnode = n

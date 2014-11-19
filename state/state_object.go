@@ -148,9 +148,7 @@ func (self *StateObject) EachStorage(cb trie.EachCallback) {
 
 func (self *StateObject) Sync() {
 	for key, value := range self.storage {
-		if value.Len() == 0 { // value.BigInt().Cmp(ethutil.Big0) == 0 {
-			//data := self.getStorage([]byte(key))
-			//fmt.Printf("deleting %x %x 0x%x\n", self.Address(), []byte(key), data)
+		if value.Len() == 0 {
 			self.State.Trie.Delete(string(key))
 			continue
 		}
