@@ -9,6 +9,7 @@ module.exports = {
   txtest: require('./BasicTests/txtest'),
   StateTests: {
     stPreCompiledContracts: require('./StateTests/stPreCompiledContracts'),
+    stRecursiveCreate: require('./StateTests/stRecursiveCreate'),
     stSystemOperationsTest: require('./StateTests/stSystemOperationsTest'),
   },
   VMTests: {
