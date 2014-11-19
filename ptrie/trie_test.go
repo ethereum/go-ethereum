@@ -8,6 +8,16 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 )
 
+type Db map[string][]byte
+
+func (self Db) Get(k []byte) []byte { return self[string(k)] }
+func (self Db) Set(k, v []byte)     { self[string(k)] = v }
+
+// Used for testing
+func NewEmpty() *Trie {
+	return New(nil, make(Db))
+}
+
 func TestInsert(t *testing.T) {
 	trie := NewEmpty()
 
@@ -91,7 +101,7 @@ func TestReplication(t *testing.T) {
 	}
 	trie.Hash()
 
-	trie2 := New(trie.roothash, trie.backend)
+	trie2 := New(trie.roothash, trie.cache)
 	if string(trie2.GetString("horse")) != "stallion" {
 		t.Error("expected to have harse => stallion")
 	}
@@ -102,6 +112,53 @@ func TestReplication(t *testing.T) {
 		t.Errorf("root failure. expected %x got %x", exp, hash)
 	}
 
+}
+
+func TestReset(t *testing.T) {
+	trie := NewEmpty()
+	vals := []struct{ k, v string }{
+		{"do", "verb"},
+		{"ether", "wookiedoo"},
+		{"horse", "stallion"},
+	}
+	for _, val := range vals {
+		trie.UpdateString(val.k, val.v)
+	}
+	trie.Commit()
+
+	before := ethutil.CopyBytes(trie.roothash)
+	trie.UpdateString("should", "revert")
+	trie.Hash()
+	// Should have no effect
+	trie.Hash()
+	trie.Hash()
+	// ###
+
+	trie.Reset()
+	after := ethutil.CopyBytes(trie.roothash)
+
+	if !bytes.Equal(before, after) {
+		t.Errorf("expected roots to be equal. %x - %x", before, after)
+	}
+}
+
+// Not actual test
+func TestOutput(t *testing.T) {
+	t.Skip()
+
+	base := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	trie := NewEmpty()
+	for i := 0; i < 50; i++ {
+		trie.UpdateString(fmt.Sprintf("%s%d", base, i), "valueeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+	}
+	trie.Hash()
+	fmt.Println("############################## FULL ################################")
+	fmt.Println(trie.root)
+
+	trie2 := New(trie.roothash, trie.cache)
+	trie2.GetString(base + "20")
+	fmt.Println("############################## SMALL ################################")
+	fmt.Println(trie2.root)
 }
 
 func BenchmarkGets(b *testing.B) {
@@ -135,23 +192,4 @@ func BenchmarkUpdate(b *testing.B) {
 		trie.UpdateString(fmt.Sprintf("aaaaaaaaa%d", i), "value")
 	}
 	trie.Hash()
-}
-
-// Not actual test
-func TestOutput(t *testing.T) {
-	t.Skip()
-
-	base := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	trie := NewEmpty()
-	for i := 0; i < 50; i++ {
-		trie.UpdateString(fmt.Sprintf("%s%d", base, i), "valueeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
-	}
-	trie.Hash()
-	fmt.Println("############################## FULL ################################")
-	fmt.Println(trie.root)
-
-	trie2 := New(trie.roothash, trie.backend)
-	trie2.GetString(base + "20")
-	fmt.Println("############################## SMALL ################################")
-	fmt.Println(trie2.root)
 }

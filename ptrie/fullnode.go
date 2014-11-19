@@ -18,7 +18,14 @@ func (self *FullNode) Branches() []Node {
 	return self.nodes[:16]
 }
 
-func (self *FullNode) Copy() Node { return self }
+func (self *FullNode) Copy() Node {
+	nnode := NewFullNode(self.trie)
+	for i, node := range self.nodes {
+		nnode.nodes[i] = node
+	}
+
+	return nnode
+}
 
 // Returns the length of non-nil nodes
 func (self *FullNode) Len() (amount int) {

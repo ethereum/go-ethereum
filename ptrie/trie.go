@@ -2,6 +2,7 @@ package ptrie
 
 import (
 	"bytes"
+	"container/list"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -14,33 +15,61 @@ type Backend interface {
 	Set([]byte, []byte)
 }
 
-type Cache map[string][]byte
-
-func (self Cache) Get(key []byte) []byte {
-	return self[string(key)]
+type Cache struct {
+	store   map[string][]byte
+	backend Backend
 }
-func (self Cache) Set(key []byte, data []byte) {
-	self[string(key)] = data
+
+func NewCache(backend Backend) *Cache {
+	return &Cache{make(map[string][]byte), backend}
+}
+
+func (self *Cache) Get(key []byte) []byte {
+	data := self.store[string(key)]
+	if data == nil {
+		data = self.backend.Get(key)
+	}
+
+	return data
+}
+
+func (self *Cache) Set(key []byte, data []byte) {
+	self.store[string(key)] = data
+}
+
+func (self *Cache) Flush() {
+	for k, v := range self.store {
+		self.backend.Set([]byte(k), v)
+	}
+
+	// This will eventually grow too large. We'd could
+	// do a make limit on storage and push out not-so-popular nodes.
+	//self.Reset()
+}
+
+func (self *Cache) Reset() {
+	self.store = make(map[string][]byte)
 }
 
 type Trie struct {
 	mu       sync.Mutex
 	root     Node
 	roothash []byte
-	backend  Backend
-}
+	cache    *Cache
 
-func NewEmpty() *Trie {
-	return &Trie{sync.Mutex{}, nil, nil, make(Cache)}
+	revisions *list.List
 }
 
 func New(root []byte, backend Backend) *Trie {
 	trie := &Trie{}
+	trie.revisions = list.New()
 	trie.roothash = root
-	trie.backend = backend
+	trie.cache = NewCache(backend)
 
-	value := ethutil.NewValueFromBytes(trie.backend.Get(root))
-	trie.root = trie.mknode(value)
+	if root != nil {
+		value := ethutil.NewValueFromBytes(trie.cache.Get(root))
+		trie.root = trie.mknode(value)
+	}
 
 	return trie
 }
@@ -64,9 +93,27 @@ func (self *Trie) Hash() []byte {
 		hash = crypto.Sha3(ethutil.Encode(self.root))
 	}
 
-	self.roothash = hash
+	if !bytes.Equal(hash, self.roothash) {
+		self.revisions.PushBack(self.roothash)
+		self.roothash = hash
+	}
 
 	return hash
+}
+func (self *Trie) Commit() {
+	// Hash first
+	self.Hash()
+
+	self.cache.Flush()
+}
+
+func (self *Trie) Reset() {
+	self.cache.Reset()
+
+	revision := self.revisions.Remove(self.revisions.Back()).([]byte)
+	self.roothash = revision
+	value := ethutil.NewValueFromBytes(self.cache.Get(self.roothash))
+	self.root = self.mknode(value)
 }
 
 func (self *Trie) UpdateString(key, value string) Node { return self.Update([]byte(key), []byte(value)) }
@@ -272,7 +319,7 @@ func (self *Trie) mknode(value *ethutil.Value) Node {
 func (self *Trie) trans(node Node) Node {
 	switch node := node.(type) {
 	case *HashNode:
-		value := ethutil.NewValueFromBytes(self.backend.Get(node.key))
+		value := ethutil.NewValueFromBytes(self.cache.Get(node.key))
 		return self.mknode(value)
 	default:
 		return node
@@ -283,7 +330,7 @@ func (self *Trie) store(node Node) interface{} {
 	data := ethutil.Encode(node)
 	if len(data) >= 32 {
 		key := crypto.Sha3(data)
-		self.backend.Set(key, data)
+		self.cache.Set(key, data)
 
 		return key
 	}

@@ -17,7 +17,7 @@ func (self *ShortNode) Value() Node {
 	return self.value
 }
 func (self *ShortNode) Dirty() bool { return true }
-func (self *ShortNode) Copy() Node  { return self }
+func (self *ShortNode) Copy() Node  { return NewShortNode(self.trie, self.key, self.value) }
 
 func (self *ShortNode) RlpData() interface{} {
 	return []interface{}{self.key, self.value.Hash()}
