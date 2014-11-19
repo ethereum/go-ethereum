@@ -287,14 +287,6 @@ func (self *StateObject) Root() []byte {
 	return self.State.Trie.GetRoot()
 }
 
-// Debug stuff
-func (self *StateObject) CreateOutputForDiff() {
-	fmt.Printf("%x %x %x %x\n", self.Address(), self.State.Root(), self.balance.Bytes(), self.Nonce)
-	self.EachStorage(func(addr string, value *ethutil.Value) {
-		fmt.Printf("%x %x\n", addr, value.Bytes())
-	})
-}
-
 //
 // Encoding
 //
