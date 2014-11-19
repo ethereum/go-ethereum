@@ -10,6 +10,17 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+func ParanoiaCheck(t1 *Trie, backend Backend) (bool, *Trie) {
+	t2 := New(nil, backend)
+
+	it := t1.Iterator()
+	for it.Next() {
+		t2.Update(it.Key, it.Value)
+	}
+
+	return bytes.Compare(t2.Hash(), t1.Hash()) == 0, t2
+}
+
 type Trie struct {
 	mu       sync.Mutex
 	root     Node
@@ -293,7 +304,7 @@ func (self *Trie) store(node Node) interface{} {
 	data := ethutil.Encode(node)
 	if len(data) >= 32 {
 		key := crypto.Sha3(data)
-		self.cache.Set(key, data)
+		self.cache.Put(key, data)
 
 		return key
 	}

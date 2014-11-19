@@ -1,8 +1,8 @@
 package ptrie
 
 type Backend interface {
-	Get([]byte) []byte
-	Set([]byte, []byte)
+	Get([]byte) ([]byte, error)
+	Put([]byte, []byte)
 }
 
 type Cache struct {
@@ -17,19 +17,19 @@ func NewCache(backend Backend) *Cache {
 func (self *Cache) Get(key []byte) []byte {
 	data := self.store[string(key)]
 	if data == nil {
-		data = self.backend.Get(key)
+		data, _ = self.backend.Get(key)
 	}
 
 	return data
 }
 
-func (self *Cache) Set(key []byte, data []byte) {
+func (self *Cache) Put(key []byte, data []byte) {
 	self.store[string(key)] = data
 }
 
 func (self *Cache) Flush() {
 	for k, v := range self.store {
-		self.backend.Set([]byte(k), v)
+		self.backend.Put([]byte(k), v)
 	}
 
 	// This will eventually grow too large. We'd could
