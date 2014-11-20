@@ -65,9 +65,9 @@ func (self *Iterator) next(node Node, key []byte) []byte {
 			}
 		} else {
 			cnode := node.Value()
-			skey := key[len(k):]
 
 			var ret []byte
+			skey := key[len(k):]
 			if trie.BeginsWith(key, k) {
 				ret = self.next(cnode, skey)
 			} else if bytes.Compare(k, key[:len(k)]) > 0 {
@@ -93,7 +93,8 @@ func (self *Iterator) key(node Node) []byte {
 
 			return k
 		} else {
-			return self.key(node.Value())
+			k := trie.RemTerm(node.Key())
+			return append(k, self.key(node.Value())...)
 		}
 	case *FullNode:
 		if node.Value() != nil {

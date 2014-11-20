@@ -8,12 +8,17 @@ func TestIterator(t *testing.T) {
 		{"do", "verb"},
 		{"ether", "wookiedoo"},
 		{"horse", "stallion"},
+		{"shaman", "horse"},
+		{"doge", "coin"},
+		{"dog", "puppy"},
+		{"somethingveryoddindeedthis is", "myothernodedata"},
 	}
 	v := make(map[string]bool)
 	for _, val := range vals {
 		v[val.k] = false
 		trie.UpdateString(val.k, val.v)
 	}
+	trie.Commit()
 
 	it := trie.Iterator()
 	for it.Next() {

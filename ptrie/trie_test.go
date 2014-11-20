@@ -122,7 +122,6 @@ func TestEmptyValues(t *testing.T) {
 }
 
 func TestReplication(t *testing.T) {
-	t.Skip()
 	trie := NewEmpty()
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
@@ -138,7 +137,7 @@ func TestReplication(t *testing.T) {
 	for _, val := range vals {
 		trie.UpdateString(val.k, val.v)
 	}
-	trie.Hash()
+	trie.Commit()
 
 	trie2 := New(trie.roothash, trie.cache.backend)
 	if string(trie2.GetString("horse")) != "stallion" {
