@@ -53,15 +53,13 @@ func (self *Trie) Root() []byte { return self.Hash() }
 func (self *Trie) Hash() []byte {
 	var hash []byte
 	if self.root != nil {
-		hash = self.root.Hash().([]byte)
-		/*
-			t := self.root.Hash()
-			if byts, ok := t.([]byte); ok {
-				hash = byts
-			} else {
-				hash = crypto.Sha3(ethutil.Encode(self.root.RlpData()))
-			}
-		*/
+		//hash = self.root.Hash().([]byte)
+		t := self.root.Hash()
+		if byts, ok := t.([]byte); ok {
+			hash = byts
+		} else {
+			hash = crypto.Sha3(ethutil.Encode(self.root.RlpData()))
+		}
 	} else {
 		hash = crypto.Sha3(ethutil.Encode(""))
 	}
