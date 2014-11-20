@@ -1,7 +1,7 @@
 #!/bin/sh
 
 if [ "$1" == "" ]; then
-	echo "Usage $0 executable branch ethereum develop"
+	echo "Usage $0 executable ethereum branch develop"
 	echo "executable    ethereum or mist"
 	echo "branch        develop or master"
 	exit
@@ -19,8 +19,8 @@ if [ "$GOPATH" == "" ]; then
 	exit
 fi
 
-echo "go get -u -d github.com/ethereum/go-ethereum/$exe"
-go get -v -u -d github.com/ethereum/go-ethereum/$exe
+echo "go get -u -d github.com/ethereum/go-ethereum/cmd/$exe"
+go get -v -u -d github.com/ethereum/go-ethereum/cmd/$exe
 if [ $? != 0 ]; then
 	echo "go get failed"
 	exit
@@ -31,7 +31,7 @@ cd $GOPATH/src/github.com/ethereum/go-ethereum
 git checkout $branch
 
 echo "go-ethereum"
-cd $GOPATH/src/github.com/ethereum/go-ethereum/$exe
+cd $GOPATH/src/github.com/ethereum/go-ethereum/cmd/$exe
 git checkout $branch
 
 if [ "$exe" == "mist" ]; then
