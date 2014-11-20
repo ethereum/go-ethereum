@@ -1,14 +1,20 @@
 #!/bin/sh
 
 if [ "$1" == "" ]; then
-	echo "Usage $0 executable ethereum branch develop"
-	echo "executable    ethereum or mist"
-	echo "branch        develop or master"
+	echo "Usage $0 executable branch"
+	echo "executable    ethereum | mist"
+	echo "branch        develop | master"
 	exit
 fi
 
 exe=$1
 branch=$2
+branchPath=""
+
+# Set branchPath for develop as executables have moved
+if [ "$branch" == "develop" ]; then
+	branchPath="cmd/"
+fi
 
 # Test if go is installed
 command -v go >/dev/null 2>&1 || { echo >&2 "Unable to find 'go'. This script requires go."; exit 1; }
@@ -19,8 +25,8 @@ if [ "$GOPATH" == "" ]; then
 	exit
 fi
 
-echo "go get -u -d github.com/ethereum/go-ethereum/cmd/$exe"
-go get -v -u -d github.com/ethereum/go-ethereum/cmd/$exe
+echo "go get -u -d github.com/ethereum/go-ethereum/$branchPath$exe"
+go get -v -u -d github.com/ethereum/go-ethereum/$branchPath$exe
 if [ $? != 0 ]; then
 	echo "go get failed"
 	exit
@@ -31,7 +37,7 @@ cd $GOPATH/src/github.com/ethereum/go-ethereum
 git checkout $branch
 
 echo "go-ethereum"
-cd $GOPATH/src/github.com/ethereum/go-ethereum/cmd/$exe
+cd $GOPATH/src/github.com/ethereum/go-ethereum/$branchPath$exe
 git checkout $branch
 
 if [ "$exe" == "mist" ]; then
