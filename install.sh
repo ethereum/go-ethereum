@@ -28,6 +28,14 @@ echo "changing branch to $branch"
 cd $GOPATH/src/github.com/ethereum/go-ethereum
 git checkout $branch
 
+
+echo "go get -u -d github.com/ethereum/go-ethereum/$path"
+go get -v -u -d github.com/ethereum/go-ethereum/$path
+if [ $? != 0 ]; then
+	echo "go get failed"
+	exit
+fi
+
 cd $GOPATH/src/github.com/ethereum/go-ethereum/$path
 
 if [ "$exe" == "mist" ]; then
