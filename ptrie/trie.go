@@ -3,6 +3,7 @@ package ptrie
 import (
 	"bytes"
 	"container/list"
+	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -198,7 +199,7 @@ func (self *Trie) get(node Node, key []byte) Node {
 	case *FullNode:
 		return self.get(node.branch(key[0]), key[1:])
 	default:
-		panic("Invalid node")
+		panic(fmt.Sprintf("%T: invalid node: %v", node, node))
 	}
 }
 

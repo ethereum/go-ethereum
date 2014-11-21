@@ -215,13 +215,13 @@ func TestOutput(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		trie.UpdateString(fmt.Sprintf("%s%d", base, i), "valueeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
 	}
-	trie.Hash()
 	fmt.Println("############################## FULL ################################")
 	fmt.Println(trie.root)
 
+	trie.Commit()
+	fmt.Println("############################## SMALL ################################")
 	trie2 := New(trie.roothash, trie.cache.backend)
 	trie2.GetString(base + "20")
-	fmt.Println("############################## SMALL ################################")
 	fmt.Println(trie2.root)
 }
 
