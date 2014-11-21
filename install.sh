@@ -28,13 +28,17 @@ echo "changing branch to $branch"
 cd $GOPATH/src/github.com/ethereum/go-ethereum
 git checkout $branch
 
+# installing package dependencies doesn't work for develop
+# branch as go get always pulls from master head
+# so build will continue to fail, but this installs locally
+# for people who git clone since go install will manage deps
 
-echo "go get -u -d github.com/ethereum/go-ethereum/$path"
-go get -v -u -d github.com/ethereum/go-ethereum/$path
-if [ $? != 0 ]; then
-	echo "go get failed"
-	exit
-fi
+#echo "go get -u -d github.com/ethereum/go-ethereum/$path"
+#go get -v -u -d github.com/ethereum/go-ethereum/$path
+#if [ $? != 0 ]; then
+#	echo "go get failed"
+#	exit
+#fi
 
 cd $GOPATH/src/github.com/ethereum/go-ethereum/$path
 
