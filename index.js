@@ -20,6 +20,6 @@ module.exports = {
     vmIOandFlowOperationsTest: require('./VMTests/vmIOandFlowOperationsTest'),
     vmPushDupSwapTest: require('./VMTests/vmPushDupSwapTest'),
     vmSha3Test: require('./VMTests/vmSha3Test'),
-    vmtestst: require('./VMTests/vmtests'),
+    vmtests: require('./VMTests/vmtests'),
   }
 };
