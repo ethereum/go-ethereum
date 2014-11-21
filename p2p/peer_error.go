@@ -4,71 +4,121 @@ import (
 	"fmt"
 )
 
-type ErrorCode int
-
-const errorChanCapacity = 10
-
 const (
-	PacketTooLong = iota
-	PayloadTooShort
-	MagicTokenMismatch
-	ReadError
-	WriteError
-	MiscError
-	InvalidMsgCode
-	InvalidMsg
-	P2PVersionMismatch
-	PubkeyMissing
-	PubkeyInvalid
-	PubkeyForbidden
-	ProtocolBreach
-	PortMismatch
-	PingTimeout
-	InvalidGenesis
-	InvalidNetworkId
-	InvalidProtocolVersion
+	errMagicTokenMismatch = iota
+	errRead
+	errWrite
+	errMisc
+	errInvalidMsgCode
+	errInvalidMsg
+	errP2PVersionMismatch
+	errPubkeyMissing
+	errPubkeyInvalid
+	errPubkeyForbidden
+	errProtocolBreach
+	errPingTimeout
+	errInvalidNetworkId
+	errInvalidProtocolVersion
 )
 
-var errorToString = map[ErrorCode]string{
-	PacketTooLong:          "Packet too long",
-	PayloadTooShort:        "Payload too short",
-	MagicTokenMismatch:     "Magic token mismatch",
-	ReadError:              "Read error",
-	WriteError:             "Write error",
-	MiscError:              "Misc error",
-	InvalidMsgCode:         "Invalid message code",
-	InvalidMsg:             "Invalid message",
-	P2PVersionMismatch:     "P2P Version Mismatch",
-	PubkeyMissing:          "Public key missing",
-	PubkeyInvalid:          "Public key invalid",
-	PubkeyForbidden:        "Public key forbidden",
-	ProtocolBreach:         "Protocol Breach",
-	PortMismatch:           "Port mismatch",
-	PingTimeout:            "Ping timeout",
-	InvalidGenesis:         "Invalid genesis block",
-	InvalidNetworkId:       "Invalid network id",
-	InvalidProtocolVersion: "Invalid protocol version",
+var errorToString = map[int]string{
+	errMagicTokenMismatch:     "Magic token mismatch",
+	errRead:                   "Read error",
+	errWrite:                  "Write error",
+	errMisc:                   "Misc error",
+	errInvalidMsgCode:         "Invalid message code",
+	errInvalidMsg:             "Invalid message",
+	errP2PVersionMismatch:     "P2P Version Mismatch",
+	errPubkeyMissing:          "Public key missing",
+	errPubkeyInvalid:          "Public key invalid",
+	errPubkeyForbidden:        "Public key forbidden",
+	errProtocolBreach:         "Protocol Breach",
+	errPingTimeout:            "Ping timeout",
+	errInvalidNetworkId:       "Invalid network id",
+	errInvalidProtocolVersion: "Invalid protocol version",
 }
 
-type PeerError struct {
-	Code    ErrorCode
+type peerError struct {
+	Code    int
 	message string
 }
 
-func NewPeerError(code ErrorCode, format string, v ...interface{}) *PeerError {
+func newPeerError(code int, format string, v ...interface{}) *peerError {
 	desc, ok := errorToString[code]
 	if !ok {
 		panic("invalid error code")
 	}
-	format = desc + ": " + format
-	message := fmt.Sprintf(format, v...)
-	return &PeerError{code, message}
+	err := &peerError{code, desc}
+	if format != "" {
+		err.message += ": " + fmt.Sprintf(format, v...)
+	}
+	return err
 }
 
-func (self *PeerError) Error() string {
+func (self *peerError) Error() string {
 	return self.message
 }
 
-func NewPeerErrorChannel() chan error {
-	return make(chan error, errorChanCapacity)
+type DiscReason byte
+
+const (
+	DiscRequested           DiscReason = 0x00
+	DiscNetworkError                   = 0x01
+	DiscProtocolError                  = 0x02
+	DiscUselessPeer                    = 0x03
+	DiscTooManyPeers                   = 0x04
+	DiscAlreadyConnected               = 0x05
+	DiscIncompatibleVersion            = 0x06
+	DiscInvalidIdentity                = 0x07
+	DiscQuitting                       = 0x08
+	DiscUnexpectedIdentity             = 0x09
+	DiscSelf                           = 0x0a
+	DiscReadTimeout                    = 0x0b
+	DiscSubprotocolError               = 0x10
+)
+
+var discReasonToString = [DiscSubprotocolError + 1]string{
+	DiscRequested:           "Disconnect requested",
+	DiscNetworkError:        "Network error",
+	DiscProtocolError:       "Breach of protocol",
+	DiscUselessPeer:         "Useless peer",
+	DiscTooManyPeers:        "Too many peers",
+	DiscAlreadyConnected:    "Already connected",
+	DiscIncompatibleVersion: "Incompatible P2P protocol version",
+	DiscInvalidIdentity:     "Invalid node identity",
+	DiscQuitting:            "Client quitting",
+	DiscUnexpectedIdentity:  "Unexpected identity",
+	DiscSelf:                "Connected to self",
+	DiscReadTimeout:         "Read timeout",
+	DiscSubprotocolError:    "Subprotocol error",
+}
+
+func (d DiscReason) String() string {
+	if len(discReasonToString) < int(d) {
+		return fmt.Sprintf("Unknown Reason(%d)", d)
+	}
+	return discReasonToString[d]
+}
+
+func discReasonForError(err error) DiscReason {
+	peerError, ok := err.(*peerError)
+	if !ok {
+		return DiscSubprotocolError
+	}
+	switch peerError.Code {
+	case errP2PVersionMismatch:
+		return DiscIncompatibleVersion
+	case errPubkeyMissing, errPubkeyInvalid:
+		return DiscInvalidIdentity
+	case errPubkeyForbidden:
+		return DiscUselessPeer
+	case errInvalidMsgCode, errMagicTokenMismatch, errProtocolBreach:
+		return DiscProtocolError
+	case errPingTimeout:
+		return DiscReadTimeout
+	case errRead, errWrite, errMisc:
+		return DiscNetworkError
+	default:
+		return DiscSubprotocolError
+	}
 }

@@ -11,8 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 )
 
-type MsgCode uint64
-
 // Msg defines the structure of a p2p message.
 //
 // Note that a Msg can only be sent once since the Payload reader is
@@ -21,13 +19,13 @@ type MsgCode uint64
 // structure, encode the payload into a byte array and create a
 // separate Msg with a bytes.Reader as Payload for each send.
 type Msg struct {
-	Code    MsgCode
+	Code    uint64
 	Size    uint32 // size of the paylod
 	Payload io.Reader
 }
 
 // NewMsg creates an RLP-encoded message with the given code.
-func NewMsg(code MsgCode, params ...interface{}) Msg {
+func NewMsg(code uint64, params ...interface{}) Msg {
 	buf := new(bytes.Buffer)
 	for _, p := range params {
 		buf.Write(ethutil.Encode(p))
@@ -61,6 +59,52 @@ func (msg Msg) Data() (*ethutil.Value, error) {
 func (msg Msg) Discard() error {
 	_, err := io.Copy(ioutil.Discard, msg.Payload)
 	return err
+}
+
+type MsgReader interface {
+	ReadMsg() (Msg, error)
+}
+
+type MsgWriter interface {
+	// WriteMsg sends an existing message.
+	// The Payload reader of the message is consumed.
+	// Note that messages can be sent only once.
+	WriteMsg(Msg) error
+
+	// EncodeMsg writes an RLP-encoded message with the given
+	// code and data elements.
+	EncodeMsg(code uint64, data ...interface{}) error
+}
+
+// MsgReadWriter provides reading and writing of encoded messages.
+type MsgReadWriter interface {
+	MsgReader
+	MsgWriter
+}
+
+// MsgLoop reads messages off the given reader and
+// calls the handler function for each decoded message until
+// it returns an error or the peer connection is closed.
+//
+// If a message is larger than the given maximum size,
+// MsgLoop returns an appropriate error.
+func MsgLoop(r MsgReader, maxsize uint32, f func(code uint64, data *ethutil.Value) error) error {
+	for {
+		msg, err := r.ReadMsg()
+		if err != nil {
+			return err
+		}
+		if msg.Size > maxsize {
+			return newPeerError(errInvalidMsg, "size %d exceeds maximum size of %d", msg.Size, maxsize)
+		}
+		value, err := msg.Data()
+		if err != nil {
+			return err
+		}
+		if err := f(msg.Code, value); err != nil {
+			return err
+		}
+	}
 }
 
 var magicToken = []byte{34, 64, 8, 145}
@@ -103,10 +147,10 @@ func readMsg(r byteReader) (msg Msg, err error) {
 	// read magic and payload size
 	start := make([]byte, 8)
 	if _, err = io.ReadFull(r, start); err != nil {
-		return msg, NewPeerError(ReadError, "%v", err)
+		return msg, newPeerError(errRead, "%v", err)
 	}
 	if !bytes.HasPrefix(start, magicToken) {
-		return msg, NewPeerError(MagicTokenMismatch, "got %x, want %x", start[:4], magicToken)
+		return msg, newPeerError(errMagicTokenMismatch, "got %x, want %x", start[:4], magicToken)
 	}
 	size := binary.BigEndian.Uint32(start[4:])
 
@@ -152,13 +196,13 @@ func readListHeader(r byteReader) (len uint64, hdrlen uint32, err error) {
 }
 
 // readUint reads an RLP-encoded unsigned integer from r.
-func readMsgCode(r byteReader) (code MsgCode, codelen uint32, err error) {
+func readMsgCode(r byteReader) (code uint64, codelen uint32, err error) {
 	b, err := r.ReadByte()
 	if err != nil {
 		return 0, 0, err
 	}
 	if b < 0x80 {
-		return MsgCode(b), 1, nil
+		return uint64(b), 1, nil
 	} else if b < 0x89 { // max length for uint64 is 8 bytes
 		codelen = uint32(b - 0x80)
 		if codelen == 0 {
@@ -168,7 +212,7 @@ func readMsgCode(r byteReader) (code MsgCode, codelen uint32, err error) {
 		if _, err := io.ReadFull(r, buf[8-codelen:]); err != nil {
 			return 0, 0, err
 		}
-		return MsgCode(binary.BigEndian.Uint64(buf)), codelen, nil
+		return binary.BigEndian.Uint64(buf), codelen, nil
 	}
 	return 0, 0, fmt.Errorf("bad RLP type for message code: %x", b)
 }

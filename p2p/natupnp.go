@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -15,28 +16,46 @@ import (
 	"time"
 )
 
+const (
+	upnpDiscoverAttempts = 3
+	upnpDiscoverTimeout  = 5 * time.Second
+)
+
+// UPNP returns a NAT port mapper that uses UPnP. It will attempt to
+// discover the address of your router using UDP broadcasts.
+func UPNP() NAT {
+	return &upnpNAT{}
+}
+
 type upnpNAT struct {
 	serviceURL string
 	ourIP      string
 }
 
-func upnpDiscover(attempts int) (nat NAT, err error) {
+func (n *upnpNAT) String() string {
+	return "UPNP"
+}
+
+func (n *upnpNAT) discover() error {
+	if n.serviceURL != "" {
+		// already discovered
+		return nil
+	}
+
 	ssdp, err := net.ResolveUDPAddr("udp4", "239.255.255.250:1900")
 	if err != nil {
-		return
+		return err
 	}
+	// TODO: try on all network interfaces simultaneously.
+	// Broadcasting on 0.0.0.0 could select a random interface
+	// to send on (platform specific).
 	conn, err := net.ListenPacket("udp4", ":0")
 	if err != nil {
-		return
+		return err
 	}
-	socket := conn.(*net.UDPConn)
-	defer socket.Close()
+	defer conn.Close()
 
-	err = socket.SetDeadline(time.Now().Add(10 * time.Second))
-	if err != nil {
-		return
-	}
-
+	conn.SetDeadline(time.Now().Add(10 * time.Second))
 	st := "ST: urn:schemas-upnp-org:device:InternetGatewayDevice:1\r\n"
 	buf := bytes.NewBufferString(
 		"M-SEARCH * HTTP/1.1\r\n" +
@@ -46,19 +65,16 @@ func upnpDiscover(attempts int) (nat NAT, err error) {
 			"MX: 2\r\n\r\n")
 	message := buf.Bytes()
 	answerBytes := make([]byte, 1024)
-	for i := 0; i < attempts; i++ {
-		_, err = socket.WriteToUDP(message, ssdp)
+	for i := 0; i < upnpDiscoverAttempts; i++ {
+		_, err = conn.WriteTo(message, ssdp)
 		if err != nil {
-			return
+			return err
 		}
-		var n int
-		n, _, err = socket.ReadFromUDP(answerBytes)
+		nn, _, err := conn.ReadFrom(answerBytes)
 		if err != nil {
 			continue
-			// socket.Close()
-			// return
 		}
-		answer := string(answerBytes[0:n])
+		answer := string(answerBytes[0:nn])
 		if strings.Index(answer, "\r\n"+st) < 0 {
 			continue
 		}
@@ -79,17 +95,81 @@ func upnpDiscover(attempts int) (nat NAT, err error) {
 		var serviceURL string
 		serviceURL, err = getServiceURL(locURL)
 		if err != nil {
-			return
+			return err
 		}
 		var ourIP string
 		ourIP, err = getOurIP()
 		if err != nil {
-			return
+			return err
 		}
-		nat = &upnpNAT{serviceURL: serviceURL, ourIP: ourIP}
+		n.serviceURL = serviceURL
+		n.ourIP = ourIP
+		return nil
+	}
+	return errors.New("UPnP port discovery failed.")
+}
+
+func (n *upnpNAT) GetExternalAddress() (addr net.IP, err error) {
+	if err := n.discover(); err != nil {
+		return nil, err
+	}
+	info, err := n.getStatusInfo()
+	return net.ParseIP(info.externalIpAddress), err
+}
+
+func (n *upnpNAT) AddPortMapping(protocol string, extport, intport int, description string, lifetime time.Duration) error {
+	if err := n.discover(); err != nil {
+		return err
+	}
+
+	// A single concatenation would break ARM compilation.
+	message := "<u:AddPortMapping xmlns:u=\"urn:schemas-upnp-org:service:WANIPConnection:1\">\r\n" +
+		"<NewRemoteHost></NewRemoteHost><NewExternalPort>" + strconv.Itoa(extport)
+	message += "</NewExternalPort><NewProtocol>" + protocol + "</NewProtocol>"
+	message += "<NewInternalPort>" + strconv.Itoa(extport) + "</NewInternalPort>" +
+		"<NewInternalClient>" + n.ourIP + "</NewInternalClient>" +
+		"<NewEnabled>1</NewEnabled><NewPortMappingDescription>"
+	message += description +
+		"</NewPortMappingDescription><NewLeaseDuration>" + fmt.Sprint(lifetime/time.Second) +
+		"</NewLeaseDuration></u:AddPortMapping>"
+
+	// TODO: check response to see if the port was forwarded
+	_, err := soapRequest(n.serviceURL, "AddPortMapping", message)
+	return err
+}
+
+func (n *upnpNAT) DeletePortMapping(protocol string, externalPort, internalPort int) error {
+	if err := n.discover(); err != nil {
+		return err
+	}
+
+	message := "<u:DeletePortMapping xmlns:u=\"urn:schemas-upnp-org:service:WANIPConnection:1\">\r\n" +
+		"<NewRemoteHost></NewRemoteHost><NewExternalPort>" + strconv.Itoa(externalPort) +
+		"</NewExternalPort><NewProtocol>" + protocol + "</NewProtocol>" +
+		"</u:DeletePortMapping>"
+
+	// TODO: check response to see if the port was deleted
+	_, err := soapRequest(n.serviceURL, "DeletePortMapping", message)
+	return err
+}
+
+type statusInfo struct {
+	externalIpAddress string
+}
+
+func (n *upnpNAT) getStatusInfo() (info statusInfo, err error) {
+	message := "<u:GetStatusInfo xmlns:u=\"urn:schemas-upnp-org:service:WANIPConnection:1\">\r\n" +
+		"</u:GetStatusInfo>"
+
+	var response *http.Response
+	response, err = soapRequest(n.serviceURL, "GetStatusInfo", message)
+	if err != nil {
 		return
 	}
-	err = errors.New("UPnP port discovery failed.")
+
+	// TODO: Write a soap reply parser. It has to eat the Body and envelope tags...
+
+	response.Body.Close()
 	return
 }
 
@@ -257,79 +337,5 @@ func soapRequest(url, function, message string) (r *http.Response, err error) {
 		r = nil
 		return
 	}
-	return
-}
-
-type statusInfo struct {
-	externalIpAddress string
-}
-
-func (n *upnpNAT) getStatusInfo() (info statusInfo, err error) {
-
-	message := "<u:GetStatusInfo xmlns:u=\"urn:schemas-upnp-org:service:WANIPConnection:1\">\r\n" +
-		"</u:GetStatusInfo>"
-
-	var response *http.Response
-	response, err = soapRequest(n.serviceURL, "GetStatusInfo", message)
-	if err != nil {
-		return
-	}
-
-	// TODO: Write a soap reply parser. It has to eat the Body and envelope tags...
-
-	response.Body.Close()
-	return
-}
-
-func (n *upnpNAT) GetExternalAddress() (addr net.IP, err error) {
-	info, err := n.getStatusInfo()
-	if err != nil {
-		return
-	}
-	addr = net.ParseIP(info.externalIpAddress)
-	return
-}
-
-func (n *upnpNAT) AddPortMapping(protocol string, externalPort, internalPort int, description string, timeout int) (mappedExternalPort int, err error) {
-	// A single concatenation would break ARM compilation.
-	message := "<u:AddPortMapping xmlns:u=\"urn:schemas-upnp-org:service:WANIPConnection:1\">\r\n" +
-		"<NewRemoteHost></NewRemoteHost><NewExternalPort>" + strconv.Itoa(externalPort)
-	message += "</NewExternalPort><NewProtocol>" + protocol + "</NewProtocol>"
-	message += "<NewInternalPort>" + strconv.Itoa(internalPort) + "</NewInternalPort>" +
-		"<NewInternalClient>" + n.ourIP + "</NewInternalClient>" +
-		"<NewEnabled>1</NewEnabled><NewPortMappingDescription>"
-	message += description +
-		"</NewPortMappingDescription><NewLeaseDuration>" + strconv.Itoa(timeout) +
-		"</NewLeaseDuration></u:AddPortMapping>"
-
-	var response *http.Response
-	response, err = soapRequest(n.serviceURL, "AddPortMapping", message)
-	if err != nil {
-		return
-	}
-
-	// TODO: check response to see if the port was forwarded
-	// log.Println(message, response)
-	mappedExternalPort = externalPort
-	_ = response
-	return
-}
-
-func (n *upnpNAT) DeletePortMapping(protocol string, externalPort, internalPort int) (err error) {
-
-	message := "<u:DeletePortMapping xmlns:u=\"urn:schemas-upnp-org:service:WANIPConnection:1\">\r\n" +
-		"<NewRemoteHost></NewRemoteHost><NewExternalPort>" + strconv.Itoa(externalPort) +
-		"</NewExternalPort><NewProtocol>" + protocol + "</NewProtocol>" +
-		"</u:DeletePortMapping>"
-
-	var response *http.Response
-	response, err = soapRequest(n.serviceURL, "DeletePortMapping", message)
-	if err != nil {
-		return
-	}
-
-	// TODO: check response to see if the port was deleted
-	// log.Println(message, response)
-	_ = response
 	return
 }
