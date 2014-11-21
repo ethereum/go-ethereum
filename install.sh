@@ -8,12 +8,11 @@ if [ "$1" == "" ]; then
 fi
 
 exe=$1
+path=$exe
 branch=$2
-branchPath=""
 
-# Set branchPath for develop as executables have moved
 if [ "$branch" == "develop" ]; then
-	branchPath="cmd/"
+	path="cmd/$exe"
 fi
 
 # Test if go is installed
@@ -25,20 +24,11 @@ if [ "$GOPATH" == "" ]; then
 	exit
 fi
 
-echo "go get -u -d github.com/ethereum/go-ethereum/$branchPath$exe"
-go get -v -u -d github.com/ethereum/go-ethereum/$branchPath$exe
-if [ $? != 0 ]; then
-	echo "go get failed"
-	exit
-fi
-
-echo "eth-go"
+echo "changing branch to $branch"
 cd $GOPATH/src/github.com/ethereum/go-ethereum
 git checkout $branch
 
-echo "go-ethereum"
-cd $GOPATH/src/github.com/ethereum/go-ethereum/$branchPath$exe
-git checkout $branch
+cd $GOPATH/src/github.com/ethereum/go-ethereum/$path
 
 if [ "$exe" == "mist" ]; then
 	echo "Building Mist GUI. Assuming Qt is installed. If this step"
@@ -48,9 +38,4 @@ else
 fi
 
 go install
-if [ $? == 0 ]; then
-	echo "go install failed"
-	exit
-fi
-
 echo "done. Please run $exe :-)"
