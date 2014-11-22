@@ -40,6 +40,32 @@ func makechain(cman *ChainManager, max int) *BlockChain {
 	return NewChain(blocks)
 }
 
+func TestShorterFork(t *testing.T) {
+	cman := NewChainManager()
+	cman.SetProcessor(fakeproc{})
+
+	TD = big.NewInt(1)
+	chainA := makechain(cman, 5)
+
+	TD = big.NewInt(1)
+	chainB := makechain(cman, 3)
+
+	td, err := cman.TestChain(chainA)
+	if err != nil {
+		t.Error("unable to create new TD from chainA:", err)
+	}
+	cman.TD = td
+
+	td2, err := cman.TestChain(chainB)
+	if err != nil {
+		t.Error("expected chainB not to give errors:", err)
+	}
+
+	if td2.Cmp(td) >= 0 {
+		t.Error("expected chainB to have lower difficulty. Got", td2, "expected less than", td)
+	}
+}
+
 func TestLongerFork(t *testing.T) {
 	cman := NewChainManager()
 	cman.SetProcessor(fakeproc{})
