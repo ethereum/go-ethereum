@@ -3,7 +3,7 @@ package chain
 import (
 	"bytes"
 	"container/list"
-	"errors"
+	//	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -266,11 +266,15 @@ func (sm *BlockManager) ProcessWithParent(block, parent *types.Block) (td *big.I
 
 		sm.transState = state.Copy()
 
+		// XXX: the only reference to the eth object
+		// if this could be moved to BlockManager, testing wouldn't require
+		//  the eth object
 		sm.eth.TxPool().RemoveSet(block.Transactions())
 
 		return td, messages, nil
 	} else {
-		return nil, nil, errors.New("total diff failed")
+		// this is a fork, so return the td
+		return td, nil, nil
 	}
 }
 
@@ -288,15 +292,11 @@ func (sm *BlockManager) ApplyDiff(state *state.State, parent, block *types.Block
 }
 
 func (sm *BlockManager) CalculateTD(block *types.Block) (*big.Int, bool) {
-	uncleDiff := new(big.Int)
-	for _, uncle := range block.Uncles {
-		uncleDiff = uncleDiff.Add(uncleDiff, uncle.Difficulty)
+	td, err := sm.bc.CalcTotalDiff(block)
+	if err != nil {
+		fmt.Println(err)
+		return nil, false
 	}
-
-	// TD(genesis_block) = 0 and TD(B) = TD(B.parent) + sum(u.difficulty for u in B.uncles) + B.difficulty
-	td := new(big.Int)
-	td = td.Add(sm.bc.TD, uncleDiff)
-	td = td.Add(td, block.Difficulty)
 
 	// The new TD will only be accepted if the new difficulty is
 	// is greater than the previous.
@@ -307,7 +307,7 @@ func (sm *BlockManager) CalculateTD(block *types.Block) (*big.Int, bool) {
 		//sm.bc.SetTotalDifficulty(td)
 	}
 
-	return nil, false
+	return td, false
 }
 
 // Validates the current block. Returns an error if the block was invalid,
