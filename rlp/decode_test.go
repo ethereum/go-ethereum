@@ -54,6 +54,24 @@ func TestStreamKind(t *testing.T) {
 	}
 }
 
+func TestNewListStream(t *testing.T) {
+	ls := NewListStream(bytes.NewReader(unhex("0101010101")), 3)
+	if k, size, err := ls.Kind(); k != List || size != 3 || err != nil {
+		t.Errorf("Kind() returned (%v, %d, %v), expected (List, 3, nil)", k, size, err)
+	}
+	if size, err := ls.List(); size != 3 || err != nil {
+		t.Errorf("List() returned (%d, %v), expected (3, nil)", size, err)
+	}
+	for i := 0; i < 3; i++ {
+		if val, err := ls.Uint(); val != 1 || err != nil {
+			t.Errorf("Uint() returned (%d, %v), expected (1, nil)", val, err)
+		}
+	}
+	if err := ls.ListEnd(); err != nil {
+		t.Errorf("ListEnd() returned %v, expected (3, nil)", err)
+	}
+}
+
 func TestStreamErrors(t *testing.T) {
 	type calls []string
 	tests := []struct {
