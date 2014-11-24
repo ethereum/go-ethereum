@@ -57,7 +57,7 @@ func TestPeerProtoReadMsg(t *testing.T) {
 			if err != nil {
 				t.Errorf("data decoding error: %v", err)
 			}
-			expdata := []interface{}{1, []byte{0x30, 0x30, 0x30}}
+			expdata := []interface{}{[]byte{0x01}, []byte{0x30, 0x30, 0x30}}
 			if !reflect.DeepEqual(data.Slice(), expdata) {
 				t.Errorf("incorrect msg data %#v", data.Slice())
 			}

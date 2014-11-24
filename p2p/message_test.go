@@ -46,6 +46,9 @@ func TestEncodeDecodeMsg(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first payload item decode error: %v", err)
 	}
+	if v := data.Len(); v != 2 {
+		t.Errorf("incorrect data.Len(): got %v, expected %d", v, 1)
+	}
 	if v := data.Get(0).Uint(); v != 1 {
 		t.Errorf("incorrect data[0]: got %v, expected %d", v, 1)
 	}
