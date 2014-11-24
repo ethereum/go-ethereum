@@ -286,14 +286,14 @@ var decodeTests = []decodeTest{
 
 func intp(i int) *int { return &i }
 
-func TestDecode(t *testing.T) {
+func runTests(t *testing.T, decode func([]byte, interface{}) error) {
 	for i, test := range decodeTests {
 		input, err := hex.DecodeString(test.input)
 		if err != nil {
 			t.Errorf("test %d: invalid hex input %q", i, test.input)
 			continue
 		}
-		err = Decode(bytes.NewReader(input), test.ptr)
+		err = decode(input, test.ptr)
 		if err != nil && test.error == nil {
 			t.Errorf("test %d: unexpected Decode error: %v\ndecoding into %T\ninput %q",
 				i, err, test.ptr, test.input)
@@ -310,6 +310,40 @@ func TestDecode(t *testing.T) {
 				i, deref, test.value, test.ptr, test.input)
 		}
 	}
+}
+
+func TestDecodeWithByteReader(t *testing.T) {
+	runTests(t, func(input []byte, into interface{}) error {
+		return Decode(bytes.NewReader(input), into)
+	})
+}
+
+// dumbReader reads from a byte slice but does not
+// implement ReadByte.
+type dumbReader []byte
+
+func (r *dumbReader) Read(buf []byte) (n int, err error) {
+	if len(*r) == 0 {
+		return 0, io.EOF
+	}
+	n = copy(buf, *r)
+	*r = (*r)[n:]
+	return n, nil
+}
+
+func TestDecodeWithNonByteReader(t *testing.T) {
+	runTests(t, func(input []byte, into interface{}) error {
+		r := dumbReader(input)
+		return Decode(&r, into)
+	})
+}
+
+func TestDecodeStreamReset(t *testing.T) {
+	s := NewStream(nil)
+	runTests(t, func(input []byte, into interface{}) error {
+		s.Reset(bytes.NewReader(input))
+		return s.Decode(into)
+	})
 }
 
 type testDecoder struct{ called bool }

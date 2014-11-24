@@ -1,6 +1,7 @@
 package rlp
 
 import (
+	"bufio"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -24,8 +25,9 @@ type Decoder interface {
 	DecodeRLP(*Stream) error
 }
 
-// Decode parses RLP-encoded data from r and stores the result
-// in the value pointed to by val. Val must be a non-nil pointer.
+// Decode parses RLP-encoded data from r and stores the result in the
+// value pointed to by val. Val must be a non-nil pointer. If r does
+// not implement ByteReader, Decode will do its own buffering.
 //
 // Decode uses the following type-dependent decoding rules:
 //
@@ -66,7 +68,7 @@ type Decoder interface {
 //
 // Non-empty interface types are not supported, nor are bool, float32,
 // float64, maps, channel types and functions.
-func Decode(r ByteReader, val interface{}) error {
+func Decode(r io.Reader, val interface{}) error {
 	return NewStream(r).Decode(val)
 }
 
@@ -432,8 +434,14 @@ type Stream struct {
 
 type listpos struct{ pos, size uint64 }
 
-func NewStream(r ByteReader) *Stream {
-	return &Stream{r: r, uintbuf: make([]byte, 8), kind: -1}
+// NewStream creates a new stream reading from r.
+// If r does not implement ByteReader, the Stream will
+// introduce its own buffering.
+func NewStream(r io.Reader) *Stream {
+	s := new(Stream)
+	s.Reset(r)
+	return s
+}
 }
 
 // Bytes reads an RLP string and returns its contents as a byte slice.
@@ -541,6 +549,23 @@ func (s *Stream) Decode(val interface{}) error {
 		return err
 	}
 	return info.decoder(s, rval.Elem())
+}
+
+// Reset discards any information about the current decoding context
+// and starts reading from r. If r does not also implement ByteReader,
+// Stream will do its own buffering.
+func (s *Stream) Reset(r io.Reader) {
+	bufr, ok := r.(ByteReader)
+	if !ok {
+		bufr = bufio.NewReader(r)
+	}
+	s.r = bufr
+	s.stack = s.stack[:0]
+	s.size = 0
+	s.kind = -1
+	if s.uintbuf == nil {
+		s.uintbuf = make([]byte, 8)
+	}
 }
 
 // Kind returns the kind and size of the next value in the
