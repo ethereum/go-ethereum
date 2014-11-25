@@ -41,12 +41,20 @@ func encodePayload(params ...interface{}) []byte {
 	return buf.Bytes()
 }
 
-// Data returns the decoded RLP payload items in a message.
-func (msg Msg) Data() (*ethutil.Value, error) {
-	s := rlp.NewListStream(msg.Payload, uint64(msg.Size))
+// Value returns the decoded RLP payload items in a message.
+func (msg Msg) Value() (*ethutil.Value, error) {
 	var v []interface{}
-	err := s.Decode(&v)
+	err := msg.Decode(&v)
 	return ethutil.NewValue(v), err
+}
+
+// Decode parse the RLP content of a message into
+// the given value, which must be a pointer.
+//
+// For the decoding rules, please see package rlp.
+func (msg Msg) Decode(val interface{}) error {
+	s := rlp.NewListStream(msg.Payload, uint64(msg.Size))
+	return s.Decode(val)
 }
 
 // Discard reads any remaining payload data into a black hole.
@@ -91,7 +99,7 @@ func MsgLoop(r MsgReader, maxsize uint32, f func(code uint64, data *ethutil.Valu
 		if msg.Size > maxsize {
 			return newPeerError(errInvalidMsg, "size %d exceeds maximum size of %d", msg.Size, maxsize)
 		}
-		value, err := msg.Data()
+		value, err := msg.Value()
 		if err != nil {
 			return err
 		}

@@ -42,7 +42,7 @@ func TestEncodeDecodeMsg(t *testing.T) {
 	if decmsg.Size != 5 {
 		t.Errorf("incorrect size %d, want %d", decmsg.Size, 5)
 	}
-	data, err := decmsg.Data()
+	data, err := decmsg.Value()
 	if err != nil {
 		t.Fatalf("first payload item decode error: %v", err)
 	}

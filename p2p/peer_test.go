@@ -53,7 +53,7 @@ func TestPeerProtoReadMsg(t *testing.T) {
 			if msg.Code != 2 {
 				t.Errorf("incorrect msg code %d relayed to protocol", msg.Code)
 			}
-			data, err := msg.Data()
+			data, err := msg.Value()
 			if err != nil {
 				t.Errorf("data decoding error: %v", err)
 			}
