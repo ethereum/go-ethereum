@@ -2,8 +2,10 @@ package p2p
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/hex"
+	"io/ioutil"
 	"net"
-	"reflect"
 	"testing"
 	"time"
 )
@@ -53,13 +55,13 @@ func TestPeerProtoReadMsg(t *testing.T) {
 			if msg.Code != 2 {
 				t.Errorf("incorrect msg code %d relayed to protocol", msg.Code)
 			}
-			data, err := msg.Value()
+			data, err := ioutil.ReadAll(msg.Payload)
 			if err != nil {
-				t.Errorf("data decoding error: %v", err)
+				t.Errorf("payload read error: %v", err)
 			}
-			expdata := []interface{}{[]byte{0x01}, []byte{0x30, 0x30, 0x30}}
-			if !reflect.DeepEqual(data.Slice(), expdata) {
-				t.Errorf("incorrect msg data %#v", data.Slice())
+			expdata, _ := hex.DecodeString("0183303030")
+			if !bytes.Equal(expdata, data) {
+				t.Errorf("incorrect msg data %x", data)
 			}
 			close(done)
 			return nil

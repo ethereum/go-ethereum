@@ -41,13 +41,6 @@ func encodePayload(params ...interface{}) []byte {
 	return buf.Bytes()
 }
 
-// Value returns the decoded RLP payload items in a message.
-func (msg Msg) Value() (*ethutil.Value, error) {
-	var v []interface{}
-	err := msg.Decode(&v)
-	return ethutil.NewValue(v), err
-}
-
 // Decode parse the RLP content of a message into
 // the given value, which must be a pointer.
 //
@@ -82,31 +75,6 @@ type MsgWriter interface {
 type MsgReadWriter interface {
 	MsgReader
 	MsgWriter
-}
-
-// MsgLoop reads messages off the given reader and
-// calls the handler function for each decoded message until
-// it returns an error or the peer connection is closed.
-//
-// If a message is larger than the given maximum size,
-// MsgLoop returns an appropriate error.
-func MsgLoop(r MsgReader, maxsize uint32, f func(code uint64, data *ethutil.Value) error) error {
-	for {
-		msg, err := r.ReadMsg()
-		if err != nil {
-			return err
-		}
-		if msg.Size > maxsize {
-			return newPeerError(errInvalidMsg, "size %d exceeds maximum size of %d", msg.Size, maxsize)
-		}
-		value, err := msg.Value()
-		if err != nil {
-			return err
-		}
-		if err := f(msg.Code, value); err != nil {
-			return err
-		}
-	}
 }
 
 var magicToken = []byte{34, 64, 8, 145}

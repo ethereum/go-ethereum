@@ -29,8 +29,7 @@ func TestEncodeDecodeMsg(t *testing.T) {
 	if err := writeMsg(buf, msg); err != nil {
 		t.Fatalf("encodeMsg error: %v", err)
 	}
-
-	t.Logf("encoded: %x", buf.Bytes())
+	// t.Logf("encoded: %x", buf.Bytes())
 
 	decmsg, err := readMsg(buf)
 	if err != nil {
@@ -42,18 +41,19 @@ func TestEncodeDecodeMsg(t *testing.T) {
 	if decmsg.Size != 5 {
 		t.Errorf("incorrect size %d, want %d", decmsg.Size, 5)
 	}
-	data, err := decmsg.Value()
-	if err != nil {
-		t.Fatalf("first payload item decode error: %v", err)
+
+	var data struct {
+		I int
+		S string
 	}
-	if v := data.Len(); v != 2 {
-		t.Errorf("incorrect data.Len(): got %v, expected %d", v, 1)
+	if err := decmsg.Decode(&data); err != nil {
+		t.Fatalf("Decode error: %v", err)
 	}
-	if v := data.Get(0).Uint(); v != 1 {
-		t.Errorf("incorrect data[0]: got %v, expected %d", v, 1)
+	if data.I != 1 {
+		t.Errorf("incorrect data.I: got %v, expected %d", data.I, 1)
 	}
-	if v := data.Get(1).Str(); v != "000" {
-		t.Errorf("incorrect data[1]: got %q, expected %q", v, "000")
+	if data.S != "000" {
+		t.Errorf("incorrect data.S: got %q, expected %q", data.S, "000")
 	}
 }
 
