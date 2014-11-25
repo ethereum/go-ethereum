@@ -72,6 +72,15 @@ func Decode(r io.Reader, val interface{}) error {
 	return NewStream(r).Decode(val)
 }
 
+type decodeError struct {
+	msg string
+	typ reflect.Type
+}
+
+func (err decodeError) Error() string {
+	return fmt.Sprintf("rlp: %s for %v", err.msg, err.typ)
+}
+
 func makeNumDecoder(typ reflect.Type) decoder {
 	kind := typ.Kind()
 	switch {
@@ -85,8 +94,11 @@ func makeNumDecoder(typ reflect.Type) decoder {
 }
 
 func decodeInt(s *Stream, val reflect.Value) error {
-	num, err := s.uint(val.Type().Bits())
-	if err != nil {
+	typ := val.Type()
+	num, err := s.uint(typ.Bits())
+	if err == errUintOverflow {
+		return decodeError{"input string too long", typ}
+	} else if err != nil {
 		return err
 	}
 	val.SetInt(int64(num))
@@ -94,8 +106,11 @@ func decodeInt(s *Stream, val reflect.Value) error {
 }
 
 func decodeUint(s *Stream, val reflect.Value) error {
-	num, err := s.uint(val.Type().Bits())
-	if err != nil {
+	typ := val.Type()
+	num, err := s.uint(typ.Bits())
+	if err == errUintOverflow {
+		return decodeError{"input string too big", typ}
+	} else if err != nil {
 		return err
 	}
 	val.SetUint(num)
@@ -177,7 +192,7 @@ func decodeList(s *Stream, val reflect.Value, elemdec decoder, maxelem int) erro
 	i := 0
 	for {
 		if i > maxelem {
-			return fmt.Errorf("rlp: input List has more than %d elements", maxelem)
+			return decodeError{"input list has too many elements", val.Type()}
 		}
 		if val.Kind() == reflect.Slice {
 			// grow slice if necessary
@@ -228,8 +243,6 @@ func decodeByteSlice(s *Stream, val reflect.Value) error {
 	return err
 }
 
-var errStringDoesntFitArray = errors.New("rlp: string value doesn't fit into target array")
-
 func decodeByteArray(s *Stream, val reflect.Value) error {
 	kind, size, err := s.Kind()
 	if err != nil {
@@ -238,14 +251,14 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 	switch kind {
 	case Byte:
 		if val.Len() == 0 {
-			return errStringDoesntFitArray
+			return decodeError{"input string too big", val.Type()}
 		}
 		bv, _ := s.Uint()
 		val.Index(0).SetUint(bv)
 		zero(val, 1)
 	case String:
 		if uint64(val.Len()) < size {
-			return errStringDoesntFitArray
+			return decodeError{"input string too big", val.Type()}
 		}
 		slice := val.Slice(0, int(size)).Interface().([]byte)
 		if err := s.readFull(slice); err != nil {
@@ -295,7 +308,7 @@ func makeStructDecoder(typ reflect.Type) (decoder, error) {
 			}
 		}
 		if err = s.ListEnd(); err == errNotAtEOL {
-			err = errors.New("rlp: input List has too many elements")
+			err = decodeError{"input list has too many elements", typ}
 		}
 		return err
 	}
@@ -476,6 +489,8 @@ func (s *Stream) Bytes() ([]byte, error) {
 	}
 }
 
+var errUintOverflow = errors.New("rlp: uint overflow")
+
 // Uint reads an RLP string of up to 8 bytes and returns its contents
 // as an unsigned integer. If the input does not contain an RLP string, the
 // returned error will be ErrExpectedString.
@@ -494,7 +509,7 @@ func (s *Stream) uint(maxbits int) (uint64, error) {
 		return uint64(s.byteval), nil
 	case String:
 		if size > uint64(maxbits/8) {
-			return 0, fmt.Errorf("rlp: string is larger than %d bits", maxbits)
+			return 0, errUintOverflow
 		}
 		return s.readUint(byte(size))
 	default:
