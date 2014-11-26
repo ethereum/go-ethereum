@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"io/ioutil"
 	"net"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -221,4 +222,18 @@ func TestPeerActivity(t *testing.T) {
 	case err := <-peerErr:
 		t.Fatal("peer error", err)
 	}
+}
+
+func TestNewPeer(t *testing.T) {
+	id := NewSimpleClientIdentity("clientid", "version", "customid", "pubkey")
+	caps := []Cap{{"foo", 2}, {"bar", 3}}
+	p := NewPeer(id, caps)
+	if !reflect.DeepEqual(p.Caps(), caps) {
+		t.Errorf("Caps mismatch: got %v, expected %v", p.Caps(), caps)
+	}
+	if p.Identity() != id {
+		t.Errorf("Identity mismatch: got %v, expected %v", p.Identity(), id)
+	}
+	// Should not hang.
+	p.Disconnect(DiscAlreadyConnected)
 }
