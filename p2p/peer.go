@@ -97,6 +97,7 @@ func NewPeer(id ClientIdentity, caps []Cap) *Peer {
 	conn, _ := net.Pipe()
 	peer := newPeer(conn, nil, nil)
 	peer.setHandshakeInfo(id, nil, caps)
+	close(peer.closed)
 	return peer
 }
 
