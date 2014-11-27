@@ -2,6 +2,7 @@
 #include "VM.h"
 
 #include <libevm/VMFace.h>
+#include <libevm/VM.h>
 
 #include "ExecutionEngine.h"
 #include "Compiler.h"
