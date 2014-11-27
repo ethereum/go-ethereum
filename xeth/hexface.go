@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/chain"
+	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
@@ -209,7 +210,7 @@ func (self *JSXEth) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr 
 		gas      = ethutil.Big(gasStr)
 		gasPrice = ethutil.Big(gasPriceStr)
 		data     []byte
-		tx       *chain.Transaction
+		tx       *types.Transaction
 	)
 
 	if ethutil.IsHex(codeStr) {
@@ -219,9 +220,9 @@ func (self *JSXEth) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr 
 	}
 
 	if contractCreation {
-		tx = chain.NewContractCreationTx(value, gas, gasPrice, data)
+		tx = types.NewContractCreationTx(value, gas, gasPrice, data)
 	} else {
-		tx = chain.NewTransactionMessage(hash, value, gas, gasPrice, data)
+		tx = types.NewTransactionMessage(hash, value, gas, gasPrice, data)
 	}
 
 	acc := self.obj.BlockManager().TransState().GetOrNewStateObject(keyPair.Address())
@@ -240,7 +241,7 @@ func (self *JSXEth) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr 
 }
 
 func (self *JSXEth) PushTx(txStr string) (*JSReceipt, error) {
-	tx := chain.NewTransactionFromBytes(ethutil.Hex2Bytes(txStr))
+	tx := types.NewTransactionFromBytes(ethutil.Hex2Bytes(txStr))
 	self.obj.TxPool().QueueTransaction(tx)
 	return NewJSReciept(tx.CreatesContract(), tx.CreationAddress(self.World().State()), tx.Hash(), tx.Sender()), nil
 }

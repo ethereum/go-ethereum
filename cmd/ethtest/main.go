@@ -15,7 +15,7 @@
 	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
- * @authors
+ * @authors:
  * 	Jeffrey Wilcke <i@jev.io>
  * @date 2014
  *

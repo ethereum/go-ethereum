@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/chain"
+	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/ethereum/go-ethereum/state"
@@ -36,7 +37,7 @@ type AppContainer interface {
 	Window() *qml.Window
 	Engine() *qml.Engine
 
-	NewBlock(*chain.Block)
+	NewBlock(*types.Block)
 	NewWatcher(chan bool)
 	Messages(state.Messages, string)
 	Post(string, int)

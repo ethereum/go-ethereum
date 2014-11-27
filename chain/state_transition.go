@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
 )
@@ -26,17 +27,17 @@ import (
  */
 type StateTransition struct {
 	coinbase, receiver []byte
-	tx                 *Transaction
+	tx                 *types.Transaction
 	gas, gasPrice      *big.Int
 	value              *big.Int
 	data               []byte
 	state              *state.State
-	block              *Block
+	block              *types.Block
 
 	cb, rec, sen *state.StateObject
 }
 
-func NewStateTransition(coinbase *state.StateObject, tx *Transaction, state *state.State, block *Block) *StateTransition {
+func NewStateTransition(coinbase *state.StateObject, tx *types.Transaction, state *state.State, block *types.Block) *StateTransition {
 	return &StateTransition{coinbase.Address(), tx.Recipient, tx, new(big.Int), new(big.Int).Set(tx.GasPrice), tx.Value, tx.Data, state, block, coinbase, nil, nil}
 }
 
@@ -203,7 +204,7 @@ func (self *StateTransition) TransitionState() (err error) {
 	})
 
 	// Process the init code and create 'valid' contract
-	if IsContractAddr(self.receiver) {
+	if types.IsContractAddr(self.receiver) {
 		// Evaluate the initialization script
 		// and use the return value as the
 		// script section for the state object.
@@ -280,7 +281,7 @@ func (self *StateTransition) Eval(msg *state.Message, script []byte, context *st
 }
 
 // Converts an transaction in to a state object
-func MakeContract(tx *Transaction, state *state.State) *state.StateObject {
+func MakeContract(tx *types.Transaction, state *state.State) *state.StateObject {
 	addr := tx.CreationAddress(state)
 
 	contract := state.GetOrNewStateObject(addr)

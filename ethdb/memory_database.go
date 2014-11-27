@@ -23,6 +23,10 @@ func (db *MemDatabase) Put(key []byte, value []byte) {
 	db.db[string(key)] = value
 }
 
+func (db *MemDatabase) Set(key []byte, value []byte) {
+	db.Put(key, value)
+}
+
 func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 	return db.db[string(key)], nil
 }

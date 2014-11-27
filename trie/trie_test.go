@@ -1,12 +1,14 @@
 package trie
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"testing"
 	"time"
 
 	checker "gopkg.in/check.v1"
@@ -387,3 +389,59 @@ func TestRndCase(t *testing.T) {
 	fmt.Printf("%x\n", trie.Get(string(ethutil.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"))))
 }
 */
+
+func TestOtherSomething(t *testing.T) {
+	_, trie := NewTrie()
+
+	vals := []struct{ k, v string }{
+		{"do", "verb"},
+		{"ether", "wookiedoo"},
+		{"horse", "stallion"},
+		{"shaman", "horse"},
+		{"doge", "coin"},
+		{"ether", ""},
+		{"dog", "puppy"},
+		{"shaman", ""},
+	}
+	for _, val := range vals {
+		trie.Update(val.k, val.v)
+	}
+
+	exp := ethutil.Hex2Bytes("5991bb8c6514148a29db676a14ac506cd2cd5775ace63c30a4fe457715e9ac84")
+	hash := trie.Root.([]byte)
+	if !bytes.Equal(hash, exp) {
+		t.Errorf("expected %x got %x", exp, hash)
+	}
+}
+
+func BenchmarkGets(b *testing.B) {
+	_, trie := NewTrie()
+	vals := []struct{ k, v string }{
+		{"do", "verb"},
+		{"ether", "wookiedoo"},
+		{"horse", "stallion"},
+		{"shaman", "horse"},
+		{"doge", "coin"},
+		{"ether", ""},
+		{"dog", "puppy"},
+		{"shaman", ""},
+		{"somethingveryoddindeedthis is", "myothernodedata"},
+	}
+	for _, val := range vals {
+		trie.Update(val.k, val.v)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		trie.Get("horse")
+	}
+}
+
+func BenchmarkUpdate(b *testing.B) {
+	_, trie := NewTrie()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		trie.Update(fmt.Sprintf("aaaaaaaaaaaaaaa%d", i), "value")
+	}
+}

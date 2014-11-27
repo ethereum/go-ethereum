@@ -1,4 +1,4 @@
-package chain
+package types
 
 import (
 	"bytes"
@@ -16,11 +16,19 @@ type Receipt struct {
 	logs              state.Logs
 }
 
+func NewReceipt(root []byte, cumalativeGasUsed *big.Int) *Receipt {
+	return &Receipt{PostState: ethutil.CopyBytes(root), CumulativeGasUsed: cumalativeGasUsed}
+}
+
 func NewRecieptFromValue(val *ethutil.Value) *Receipt {
 	r := &Receipt{}
 	r.RlpValueDecode(val)
 
 	return r
+}
+
+func (self *Receipt) SetLogs(logs state.Logs) {
+	self.logs = logs
 }
 
 func (self *Receipt) RlpValueDecode(decoder *ethutil.Value) {

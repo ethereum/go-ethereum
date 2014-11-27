@@ -36,65 +36,11 @@ Automated (dev) builds
 * [Windows] Coming soon&trade;
 * [Linux] Coming soon&trade;
 
-Packages
+Binaries
 ========
 
-Ethereum Go is split up in several sub packages Please refer to each
-individual package for more information.
-  1. [eth](https://github.com/ethereum/go-ethereum)
-  2. [ethchain](https://github.com/ethereum/go-ethereum/tree/master/ethchain)
-  3. [ethwire](https://github.com/ethereum/go-ethereum/tree/master/ethwire)
-  4. [ethdb](https://github.com/ethereum/go-ethereum/tree/master/ethdb)
-  5. [ethutil](https://github.com/ethereum/go-ethereum/tree/master/ethutil)
-  6. [ethpipe](https://github.com/ethereum/go-ethereum/tree/master/ethpipe)
-  7. [ethvm](https://github.com/ethereum/go-ethereum/tree/master/ethvm)
-  8. [ethtrie](https://github.com/ethereum/go-ethereum/tree/master/ethtrie)
-  9. [ethreact](https://github.com/ethereum/go-ethereum/tree/master/ethreact)
-  10. [ethlog](https://github.com/ethereum/go-ethereum/tree/master/ethlog)
-
-The [eth](https://github.com/ethereum/go-ethereum) is the top-level package
-of the Ethereum protocol. It functions as the Ethereum bootstrapping and
-peer communication layer. The [ethchain](https://github.com/ethereum/go-ethereum/tree/master/ethchain)
-contains the Ethereum blockchain, block manager, transaction and
-transaction handlers. The [ethwire](https://github.com/ethereum/go-ethereum/tree/master/ethwire) contains
-the Ethereum [wire protocol](http://wiki.ethereum.org/index.php/Wire_Protocol) which can be used
-to hook in to the Ethereum network. [ethutil](https://github.com/ethereum/go-ethereum/tree/master/ethutil) contains
-utility functions which are not Ethereum specific. The utility package
-contains the [patricia trie](http://wiki.ethereum.org/index.php/Patricia_Tree),
-[RLP Encoding](http://wiki.ethereum.org/index.php/RLP) and hex encoding
-helpers. The [ethdb](https://github.com/ethereum/go-ethereum/tree/master/ethdb) package
-contains the LevelDB interface and memory DB interface.
-
-General command line options
-============================
-
-```
-Shared between ethereum and Mist
--id      Set the custom identifier of the client (shows up on other clients)
--port    Port on which the server will accept incomming connections
--upnp    Enable UPnP
--maxpeer Desired amount of peers
--rpc     Start JSON RPC
-
--dir     Data directory used to store configs and databases
--import  Import a private key
--genaddr Generates a new address and private key (destructive action)
--h       This
-
-Ethereum only
-ethereum [options] [filename]
--js        Start the JavaScript REPL
-filename   Load the given file and interpret as JavaScript
--m       Start mining blocks
-
-Mist only
--asset_path    absolute path to GUI assets directory
-```
-
-Tools
-=====
-
-Go Ethereum comes with several binaries:
+Go Ethereum comes with several binaries found in
+[cmd](https://github.com/ethereum/go-ethereum/tree/master/cmd):
 
 * `mist` Official Ethereum Browser
 * `ethereum` Ethereum CLI
@@ -103,6 +49,38 @@ Go Ethereum comes with several binaries:
 * `evm` is a generic Ethereum Virtual Machine: `evm -code 60ff60ff -gas
   10000 -price 0 -dump`. See `-h` for a detailed description.
 
+General command line options
+============================
+
+```
+== Shared between ethereum and Mist ==
+
+= Settings
+-id      Set the custom identifier of the client (shows up on other clients)
+-port    Port on which the server will accept incomming connections
+-upnp    Enable UPnP
+-maxpeer Desired amount of peers
+-rpc     Start JSON RPC
+-dir     Data directory used to store configs and databases
+
+= Utility 
+-h         This
+-import    Import a private key
+-genaddr   Generates a new address and private key (destructive action)
+-dump      Dump a specific state of a block to stdout given the -number or -hash
+-difftool  Supress all output and prints VM output to stdout
+-diff      vm=only vm output, all=all output including state storage
+
+Ethereum only
+ethereum [options] [filename]
+-js        Start the JavaScript REPL
+filename   Load the given file and interpret as JavaScript
+-m       Start mining blocks
+
+== Mist only ==
+
+-asset_path    absolute path to GUI assets directory
+```
 
 Contribution
 ============

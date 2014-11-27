@@ -20,8 +20,7 @@ package main
 import (
 	"fmt"
 	"runtime"
-
-	"github.com/ethereum/go-ethereum/chain"
+	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
@@ -65,7 +64,7 @@ func (app *QmlApplication) NewWatcher(quitChan chan bool) {
 }
 
 // Events
-func (app *QmlApplication) NewBlock(block *chain.Block) {
+func (app *QmlApplication) NewBlock(block *types.Block) {
 	pblock := &xeth.JSBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Bytes2Hex(block.Hash())}
 	app.win.Call("onNewBlockCb", pblock)
 }

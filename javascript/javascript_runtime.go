@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/chain"
+	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
@@ -130,7 +131,7 @@ func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
 	var state *state.State
 
 	if len(call.ArgumentList) > 0 {
-		var block *chain.Block
+		var block *types.Block
 		if call.Argument(0).IsNumber() {
 			num, _ := call.Argument(0).ToInteger()
 			block = self.ethereum.ChainManager().GetBlockByNumber(uint64(num))

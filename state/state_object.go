@@ -148,9 +148,7 @@ func (self *StateObject) EachStorage(cb trie.EachCallback) {
 
 func (self *StateObject) Sync() {
 	for key, value := range self.storage {
-		if value.Len() == 0 { // value.BigInt().Cmp(ethutil.Big0) == 0 {
-			//data := self.getStorage([]byte(key))
-			//fmt.Printf("deleting %x %x 0x%x\n", self.Address(), []byte(key), data)
+		if value.Len() == 0 {
 			self.State.Trie.Delete(string(key))
 			continue
 		}
@@ -285,14 +283,6 @@ func (self *StateObject) Object() *StateObject {
 
 func (self *StateObject) Root() []byte {
 	return self.State.Trie.GetRoot()
-}
-
-// Debug stuff
-func (self *StateObject) CreateOutputForDiff() {
-	fmt.Printf("%x %x %x %x\n", self.Address(), self.State.Root(), self.balance.Bytes(), self.Nonce)
-	self.EachStorage(func(addr string, value *ethutil.Value) {
-		fmt.Printf("%x %x\n", addr, value.Bytes())
-	})
 }
 
 //

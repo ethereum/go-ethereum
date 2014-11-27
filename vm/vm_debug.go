@@ -805,7 +805,6 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			stack.Push(closure.Gas)
 			// 0x60 range
 		case CREATE:
-
 			var (
 				err          error
 				value        = stack.Pop()
