@@ -24,6 +24,9 @@ public:
 	/// Calculate & count gas cost for SSTORE instruction
 	void countSStore(class Ext& _ext, llvm::Value* _index, llvm::Value* _newValue);
 
+	/// Count gas cost of LOG data
+	void countLogData(llvm::Value* _dataLength);
+
 	/// Finalize cost-block by checking gas needed for the block before the block
 	/// @param _additionalCost adds additional cost to cost-block before commit
 	void commitCostBlock(llvm::Value* _additionalCost = nullptr);

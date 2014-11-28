@@ -47,6 +47,16 @@ uint64_t getStepCost(Instruction inst) // TODO: Add this function to FeeSructure
 	case Instruction::CREATE:
 		return static_cast<uint64_t>(c_createGas);
 
+	case Instruction::LOG0:
+	case Instruction::LOG1:
+	case Instruction::LOG2:
+	case Instruction::LOG3:
+	case Instruction::LOG4:
+	{
+		auto numTopics = static_cast<uint64_t>(inst) - static_cast<uint64_t>(Instruction::LOG0);
+		return static_cast<uint64_t>(c_logGas) + numTopics * static_cast<uint64_t>(c_logTopicGas);
+	}
+
 	default: // Assumes instruction code is valid
 		return static_cast<uint64_t>(c_stepGas);
 	}
@@ -136,6 +146,14 @@ void GasMeter::countSStore(Ext& _ext, llvm::Value* _index, llvm::Value* _newValu
 	auto cost = m_builder.CreateSelect(isInsert, Constant::get(c_sstoreSetGas), Constant::get(c_sstoreResetGas), "cost");
 	cost = m_builder.CreateSelect(isDelete, Constant::get(0), cost, "cost");
 	createCall(m_gasCheckFunc, cost);
+}
+
+void GasMeter::countLogData(llvm::Value* _dataLength)
+{
+	assert(m_checkCall);
+	assert(m_blockCost > 0); // LOGn instruction is already counted
+	auto cost = m_builder.CreateMul(_dataLength, Constant::get(c_logDataGas), "logdata_cost");
+	commitCostBlock(cost);
 }
 
 void GasMeter::giveBack(llvm::Value* _gas)
