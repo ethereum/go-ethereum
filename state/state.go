@@ -23,14 +23,14 @@ type State struct {
 
 	manifest *Manifest
 
-	refund map[string]*big.Int
+	refund map[string][]refund
 
 	logs Logs
 }
 
 // Create a new state from a given trie
 func New(trie *trie.Trie) *State {
-	return &State{Trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest(), refund: make(map[string]*big.Int)}
+	return &State{Trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest(), refund: make(map[string][]refund)}
 }
 
 func (self *State) EmptyLogs() {
@@ -55,14 +55,12 @@ func (self *State) GetBalance(addr []byte) *big.Int {
 	return ethutil.Big0
 }
 
+type refund struct {
+	gas, price *big.Int
+}
+
 func (self *State) Refund(addr []byte, gas, price *big.Int) {
-	amount := new(big.Int).Mul(gas, price)
-
-	if self.refund[string(addr)] == nil {
-		self.refund[string(addr)] = new(big.Int)
-	}
-
-	self.refund[string(addr)].Add(self.refund[string(addr)], amount)
+	self.refund[string(addr)] = append(self.refund[string(addr)], refund{gas, price})
 }
 
 func (self *State) AddBalance(addr []byte, amount *big.Int) {
@@ -276,15 +274,20 @@ func (s *State) Sync() {
 
 func (self *State) Empty() {
 	self.stateObjects = make(map[string]*StateObject)
-	self.refund = make(map[string]*big.Int)
+	self.refund = make(map[string][]refund)
 }
 
-func (self *State) Update() {
+func (self *State) Update(gasUsed *big.Int) {
 	var deleted bool
 
 	// Refund any gas that's left
-	for addr, amount := range self.refund {
-		self.GetStateObject([]byte(addr)).AddBalance(amount)
+	uhalf := new(big.Int).Div(gasUsed, ethutil.Big2)
+	for addr, refs := range self.refund {
+		for _, ref := range refs {
+			refund := ethutil.BigMin(uhalf, ref.gas)
+
+			self.GetStateObject([]byte(addr)).AddBalance(refund.Mul(refund, ref.price))
+		}
 	}
 
 	for _, stateObject := range self.stateObjects {

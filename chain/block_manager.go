@@ -154,10 +154,11 @@ done:
 			}
 		}
 
-		// Update the state with pending changes
-		state.Update()
-
 		txGas.Sub(txGas, st.gas)
+
+		// Update the state with pending changes
+		state.Update(txGas)
+
 		cumulative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, txGas))
 		receipt := &Receipt{ethutil.CopyBytes(state.Root()), cumulative, nil /*bloom*/, state.Logs()}
 		receipt.Bloom = CreateBloom(Receipts{receipt})
@@ -245,7 +246,7 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 		return
 	}
 
-	state.Update()
+	state.Update(nil)
 
 	if !block.State().Cmp(state) {
 		err = fmt.Errorf("invalid merkle root. received=%x got=%x", block.Root(), state.Root())

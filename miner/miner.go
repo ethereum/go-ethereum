@@ -203,7 +203,7 @@ func (self *Miner) mine() {
 	// Accumulate the rewards included for this block
 	blockManager.AccumelateRewards(block.State(), block, parent)
 
-	block.State().Update()
+	block.State().Update(nil)
 
 	minerlogger.Infof("Mining on block. Includes %v transactions", len(transactions))
 
