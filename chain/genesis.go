@@ -37,8 +37,6 @@ var GenesisHeader = []interface{}{
 	big.NewInt(131072),
 	// Number
 	ethutil.Big0,
-	// Block minimum gas price
-	ethutil.Big0,
 	// Block upper gas bound
 	big.NewInt(1000000),
 	// Block gas used
