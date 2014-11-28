@@ -167,8 +167,8 @@ llvm::Value* Ext::codesizeAt(llvm::Value* _addr)
 
 void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, size_t _numTopics, std::array<llvm::Value*,4> const& _topics)
 {
-	static llvm::Value* args[] = {nullptr, m_args[0], m_args[1], m_arg2, m_arg3, m_arg4, m_arg5};
-	static llvm::Value* funcs[] = {m_log0, m_log1, m_log2, m_log3, m_log4};
+	llvm::Value* args[] = {nullptr, m_args[0], m_args[1], m_arg2, m_arg3, m_arg4, m_arg5};
+	llvm::Value* funcs[] = {m_log0, m_log1, m_log2, m_log3, m_log4};
 
 	args[0] = getRuntimeManager().getRuntimePtr();
 	m_builder.CreateStore(_memIdx, m_args[0]);
@@ -320,8 +320,8 @@ extern "C"
 	{
 		auto&& ext = _rt->getExt();
 
-		auto memIdx = static_cast<size_t>(llvm2eth(*_memIdx));
-		auto numBytes = static_cast<size_t>(llvm2eth(*_numBytes));
+		auto memIdx = llvm2eth(*_memIdx).convert_to<size_t>();
+		auto numBytes = llvm2eth(*_numBytes).convert_to<size_t>();
 
 		auto dataRef = bytesConstRef(_rt->getMemory().data() + memIdx, numBytes);
 		ext.log({}, dataRef);
