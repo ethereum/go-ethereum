@@ -177,7 +177,6 @@ func (self *Miner) mine() {
 		chainMan     = self.eth.ChainManager()
 		block        = chainMan.NewBlock(self.Coinbase)
 	)
-	block.MinGasPrice = self.MinAcceptedGasPrice
 
 	// Apply uncles
 	if len(self.uncles) > 0 {

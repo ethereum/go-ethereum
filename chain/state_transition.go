@@ -156,11 +156,23 @@ func (self *StateTransition) TransitionState() (err error) {
 	}
 
 	// Pay data gas
-	dataPrice := big.NewInt(int64(len(self.data)))
-	dataPrice.Mul(dataPrice, vm.GasData)
-	if err = self.UseGas(dataPrice); err != nil {
+	var dgas int64
+	for _, byt := range self.data {
+		if byt != 0 {
+			dgas += vm.GasData.Int64()
+		} else {
+			dgas += 1 // This is 1/5. If GasData changes this fails
+		}
+	}
+	if err = self.UseGas(big.NewInt(dgas)); err != nil {
 		return
 	}
+
+	//dataPrice := big.NewInt(int64(len(self.data)))
+	//dataPrice.Mul(dataPrice, vm.GasData)
+	//if err = self.UseGas(dataPrice); err != nil {
+	//	return
+	//}
 
 	if sender.Balance().Cmp(self.value) < 0 {
 		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Balance)
