@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+
 	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -29,7 +30,7 @@ import (
 
 const (
 	ClientIdentifier = "Ethereum(G)"
-	Version          = "0.7.5"
+	Version          = "0.7.6"
 )
 
 var clilogger = logger.NewLogger("CLI")

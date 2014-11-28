@@ -84,8 +84,6 @@ type Block struct {
 	Time int64
 	// The block number
 	Number *big.Int
-	// Minimum Gas Price
-	MinGasPrice *big.Int
 	// Gas limit
 	GasLimit *big.Int
 	// Gas used
@@ -124,16 +122,15 @@ func CreateBlock(root interface{},
 	extra string) *Block {
 
 	block := &Block{
-		PrevHash:    prevHash,
-		Coinbase:    base,
-		Difficulty:  Difficulty,
-		Nonce:       Nonce,
-		Time:        time.Now().Unix(),
-		Extra:       extra,
-		UncleSha:    nil,
-		GasUsed:     new(big.Int),
-		MinGasPrice: new(big.Int),
-		GasLimit:    new(big.Int),
+		PrevHash:   prevHash,
+		Coinbase:   base,
+		Difficulty: Difficulty,
+		Nonce:      Nonce,
+		Time:       time.Now().Unix(),
+		Extra:      extra,
+		UncleSha:   nil,
+		GasUsed:    new(big.Int),
+		GasLimit:   new(big.Int),
 	}
 	block.SetUncles([]*Block{})
 
@@ -300,12 +297,11 @@ func (self *Block) setHeader(header *ethutil.Value) {
 	self.LogsBloom = header.Get(6).Bytes()
 	self.Difficulty = header.Get(7).BigInt()
 	self.Number = header.Get(8).BigInt()
-	self.MinGasPrice = header.Get(9).BigInt()
-	self.GasLimit = header.Get(10).BigInt()
-	self.GasUsed = header.Get(11).BigInt()
-	self.Time = int64(header.Get(12).BigInt().Uint64())
-	self.Extra = header.Get(13).Str()
-	self.Nonce = header.Get(14).Bytes()
+	self.GasLimit = header.Get(9).BigInt()
+	self.GasUsed = header.Get(10).BigInt()
+	self.Time = int64(header.Get(11).BigInt().Uint64())
+	self.Extra = header.Get(12).Str()
+	self.Nonce = header.Get(13).Bytes()
 }
 
 func NewUncleBlockFromValue(header *ethutil.Value) *Block {
@@ -351,8 +347,6 @@ func (block *Block) miningHeader() []interface{} {
 		block.Difficulty,
 		// The block number
 		block.Number,
-		// Block minimum gas price
-		block.MinGasPrice,
 		// Block upper gas bound
 		block.GasLimit,
 		// Block gas used
@@ -380,7 +374,6 @@ func (block *Block) String() string {
 	Bloom:      %x
 	Difficulty: %v
 	Number:     %v
-	MinGas:     %v
 	MaxLimit:   %v
 	GasUsed:    %v
 	Time:       %v
@@ -399,7 +392,6 @@ func (block *Block) String() string {
 		block.LogsBloom,
 		block.Difficulty,
 		block.Number,
-		block.MinGasPrice,
 		block.GasLimit,
 		block.GasUsed,
 		block.Time,

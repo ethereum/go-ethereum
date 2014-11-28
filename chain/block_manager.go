@@ -155,10 +155,11 @@ done:
 			}
 		}
 
-		// Update the state with pending changes
-		state.Update()
-
 		txGas.Sub(txGas, st.gas)
+
+		// Update the state with pending changes
+		state.Update(txGas)
+
 		cumulative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, txGas))
 		receipt := types.NewReceipt(state.Root(), cumulative)
 		receipt.SetLogs(state.Logs())
@@ -247,7 +248,7 @@ func (sm *BlockManager) ProcessWithParent(block, parent *types.Block) (td *big.I
 		return
 	}
 
-	state.Update()
+	state.Update(nil)
 
 	if !block.State().Cmp(state) {
 		err = fmt.Errorf("invalid merkle root. received=%x got=%x", block.Root(), state.Root())

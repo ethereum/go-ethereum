@@ -112,8 +112,6 @@ func (bc *ChainManager) NewBlock(coinbase []byte) *types.Block {
 		nil,
 		"")
 
-	block.MinGasPrice = big.NewInt(10000000000000)
-
 	parent := bc.CurrentBlock
 	if parent != nil {
 		block.Difficulty = CalcDifficulty(block, parent)
