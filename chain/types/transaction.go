@@ -116,7 +116,7 @@ func (tx *Transaction) Sender() []byte {
 
 	// Validate the returned key.
 	// Return nil if public key isn't in full format
-	if len(pubkey) != 0 && pubkey[0] != 4 {
+	if len(pubkey) == 0 || pubkey[0] != 4 {
 		return nil
 	}
 
