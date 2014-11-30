@@ -90,6 +90,6 @@ func (self *Execution) exec(code, caddr []byte, caller ClosureRef) (ret []byte, 
 	return
 }
 
-func (self *Execution) Create(caller ClosureRef) (ret []byte, err error) {
+func (self *Execution) Create(caller []byte) (ret []byte, err error) {
 	return self.exec(self.input, nil, caller)
 }

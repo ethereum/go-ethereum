@@ -5,11 +5,10 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/state"
 )
 
 type Environment interface {
-	State() *state.State
+	//State() *state.State
 
 	Origin() []byte
 	BlockNumber() *big.Int
@@ -19,8 +18,16 @@ type Environment interface {
 	Difficulty() *big.Int
 	BlockHash() []byte
 	GasLimit() *big.Int
+
 	Transfer(from, to Account, amount *big.Int) error
-	AddLog(*state.Log)
+	AddLog(addr []byte, topics [][]byte, data []byte)
+	DeleteAccount(addr []byte)
+	SetState(addr, key, value []byte)
+	GetState(addr, key []byte) []byte
+	Balance(addr []byte) *big.Int
+	AddBalance(addr []byte, balance *big.Int)
+	GetCode(addr []byte) []byte
+	Refund(addr []byte, gas, price *big.Int)
 }
 
 type Object interface {
@@ -42,10 +49,6 @@ func Transfer(from, to Account, amount *big.Int) error {
 
 	from.SubBalance(amount)
 	to.AddBalance(amount)
-
-	// Add default LOG. Default = big(sender.addr) + 1
-	//addr := ethutil.BigD(receiver.Address())
-	//tx.addLog(vm.Log{sender.Address(), [][]byte{ethutil.U256(addr.Add(addr, ethutil.Big1)).Bytes()}, nil})
 
 	return nil
 }
