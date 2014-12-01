@@ -194,7 +194,6 @@ func (self *ChainManager) GetBlock(hash []byte) *types.Block {
 				}
 			}
 		}
-
 		return nil
 	}
 
@@ -227,7 +226,8 @@ func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
 		return nil, fmt.Errorf("Unable to calculate total diff without known parent %x", block.PrevHash)
 	}
 
-	parentTd := parent.BlockInfo().TD
+	//parentTd := parent.BlockInfo().TD
+	parentTd := self.BlockInfo(parent).TD
 
 	uncleDiff := new(big.Int)
 	for _, uncle := range block.Uncles {
@@ -244,8 +244,20 @@ func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
 func (bc *ChainManager) BlockInfo(block *types.Block) types.BlockInfo {
 	bi := types.BlockInfo{}
 	data, _ := ethutil.Config.Db.Get(append(block.Hash(), []byte("Info")...))
+	if len(data) == 0 {
+		if bc.workingChain != nil {
+			// Check the temp chain
+			for e := bc.workingChain.Front(); e != nil; e = e.Next() {
+				l := e.Value.(*link)
+				b := l.Block
+				if bytes.Compare(b.Hash(), block.Hash()) == 0 {
+					bi = types.BlockInfo{Number: b.Number.Uint64(), Hash: b.Hash(), Parent: b.PrevHash, TD: l.Td}
+					return bi
+				}
+			}
+		}
+	}
 	bi.RlpDecode(data)
-
 	return bi
 }
 
@@ -273,8 +285,10 @@ func (self *ChainManager) InsertChain(chain *BlockChain, call func(*types.Block,
 	for e := chain.Front(); e != nil; e = e.Next() {
 		link := e.Value.(*link)
 
-		self.add(link.Block)
+		// must set TD before adding as
+		// add calls writeBlockInfo which writes the most recent TD
 		self.SetTotalDifficulty(link.Td)
+		self.add(link.Block)
 
 		call(link.Block, link.Messages)
 	}
