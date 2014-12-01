@@ -3,6 +3,7 @@ package chain
 import (
 	"container/list"
 	"fmt"
+	"log"
 	"math/big"
 	"testing"
 	"time"
@@ -21,9 +22,24 @@ func init() {
 }
 
 // Called from each Test to re-init the DB
+// Since DBs are global, we need to use two
+//  to separate chains, so they don't know about
+//  eachother when they shouldn't
+var DB = []*ethdb.MemDatabase{}
+
 func initDB() {
 	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")
-	ethutil.Config.Db, _ = ethdb.NewMemDatabase()
+	// we need two databases, since we need two chain managers
+	for i := 0; i < 2; i++ {
+		db, _ := ethdb.NewMemDatabase()
+		DB = append(DB, db)
+	}
+	ethutil.Config.Db = DB[0]
+}
+
+// swap currently active global DB
+func setDB(i int) {
+	ethutil.Config.Db = DB[i]
 }
 
 // So we can generate blocks easily
@@ -87,13 +103,18 @@ func makeChain(bman *BlockManager, parent *types.Block, max int) *BlockChain {
 	bman.bc.LastBlockHash = parent.Hash()
 	blocks := make(types.Blocks, max)
 	var td *big.Int
+	var err error
 	for i := 0; i < max; i++ {
 		block := makeBlock(bman, parent, i)
 		// add the parent and its difficulty to the working chain
 		// so ProcessWithParent can access it
 		bman.bc.workingChain = NewChain(types.Blocks{parent})
 		bman.bc.workingChain.Back().Value.(*link).Td = td
-		td, _, _ = bman.bc.processor.ProcessWithParent(block, parent)
+		td, _, err = bman.bc.processor.ProcessWithParent(block, parent)
+		if err != nil {
+			fmt.Println("process with parent failed", err)
+			log.Fatal(err)
+		}
 		blocks[i] = block
 		parent = block
 	}
@@ -133,17 +154,52 @@ func newChainManager(block *types.Block) *ChainManager {
 	return bc
 }
 
+// Flush the blocks so their states point to the current DB,
+// and not the db they were created against (simulate receiving
+// blocks from a peer).
+// Encode to rlp, decode back, forcing an empty trie
+// with block's state root, pointing to current global DB
+// (ie. setDB should be called before using this, or it has no
+//	effect...)
+func flushChain(chain *BlockChain) *BlockChain {
+	for e := chain.Front(); e != nil; e = e.Next() {
+		l := e.Value.(*link)
+		b := l.Block
+		encode := b.RlpEncode()
+		b.RlpDecode(encode)
+	}
+	return chain
+}
+
 // Test fork of length N starting from block i
+// Since we are simulating two peers with different chains
+// and states, we must be careful to maintain two separate
+// databases that know nothing about eachother
 func testFork(t *testing.T, bman *BlockManager, i, N int, f func(td1, td2 *big.Int)) {
 	var b *types.Block = nil
 	if i > 0 {
 		b = bman.bc.GetBlockByNumber(uint64(i))
 	}
+	// switch database to create the new chain
+	setDB(1)
 	bman2 := &BlockManager{bc: newChainManager(b), Pow: fakePow{}, eth: &fakeEth{}}
 	bman2.bc.SetProcessor(bman2)
 	parent := bman2.bc.CurrentBlock
 	chainB := makeChain(bman2, parent, N)
-	// test second chain against first
+	bman2.bc.TestChain(chainB)
+	bman2.bc.InsertChain(chainB, func(block *types.Block, _ state.Messages) {})
+
+	// Now to test second chain against first
+	// we switch back to first chain's db
+	setDB(0)
+	// but chainB's blocks still have states that point to DB 1
+	// we need to flush the chain with some fresh rlp decode/encode
+	// to point to the new db
+	// This simulates receiving the chain from a peer
+	// (through the blockpool)
+	chainB = flushChain(chainB)
+	// now we try and reconstruct the states
+	// evaluating the fork
 	td2, err := bman.bc.TestChain(chainB)
 	if err != nil && !IsTDError(err) {
 		t.Error("expected chainB not to give errors:", err)
