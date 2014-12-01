@@ -172,12 +172,13 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case EXP:
 			require(2)
 
-			expGas := ethutil.FirstBitSet(stack.data[stack.Len()-2])
-			expGas.Div(expGas, u256(8))
-			expGas.Sub(u256(32), expGas)
-			expGas.Add(expGas, u256(1))
-
-			gas.Set(expGas)
+			exp := new(big.Int).Set(stack.data[stack.Len()-2])
+			nbytes := 0
+			for exp.Cmp(ethutil.Big0) > 0 {
+				nbytes += 1
+				exp.Rsh(exp, 8)
+			}
+			gas.Set(big.NewInt(int64(nbytes + 1)))
 		// Gas only
 		case STOP:
 			gas.Set(ethutil.Big0)

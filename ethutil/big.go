@@ -62,14 +62,14 @@ func S256(x *big.Int) *big.Int {
 	}
 }
 
-func FirstBitSet(v *big.Int) *big.Int {
+func FirstBitSet(v *big.Int) int {
 	for i := 0; i < v.BitLen(); i++ {
 		if v.Bit(i) > 0 {
-			return big.NewInt(int64(i))
+			return i
 		}
 	}
 
-	return big.NewInt(int64(v.BitLen()))
+	return v.BitLen()
 }
 
 // Big to bytes

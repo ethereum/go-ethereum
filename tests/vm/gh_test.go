@@ -2,7 +2,6 @@ package vm
 
 import (
 	"bytes"
-	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -45,7 +44,6 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
-		fmt.Println(name)
 		state := state.New(helper.NewTrie())
 		for addr, account := range test.Pre {
 			obj := StateObjectFromAccount(addr, account)
@@ -85,19 +83,9 @@ func RunVmTest(p string, t *testing.T) {
 
 // I've created a new function for each tests so it's easier to identify where the problem lies if any of them fail.
 func TestVMArithmetic(t *testing.T) {
-	//helper.Logger.SetLogLevel(5)
 	const fn = "../files/vmtests/vmArithmeticTest.json"
 	RunVmTest(fn, t)
 }
-
-/*
-deleted?
-func TestVMSystemOperation(t *testing.T) {
-	helper.Logger.SetLogLevel(5)
-	const fn = "../files/vmtests/vmSystemOperationsTest.json"
-	RunVmTest(fn, t)
-}
-*/
 
 func TestBitwiseLogicOperation(t *testing.T) {
 	const fn = "../files/vmtests/vmBitwiseLogicOperationTest.json"
@@ -126,7 +114,7 @@ func TestPushDupSwap(t *testing.T) {
 }
 
 func TestVMSha3(t *testing.T) {
-	helper.Logger.SetLogLevel(5)
+	//helper.Logger.SetLogLevel(5)
 	const fn = "../files/vmtests/vmSha3Test.json"
 	RunVmTest(fn, t)
 }
