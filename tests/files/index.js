@@ -9,6 +9,8 @@ module.exports = {
   txtest: require('./BasicTests/txtest'),
   StateTests: {
     stPreCompiledContracts: require('./StateTests/stPreCompiledContracts'),
+    stRecursiveCreate: require('./StateTests/stRecursiveCreate'),
+    stSpecial: require('./StateTests/stSpecialTest'),
     stSystemOperationsTest: require('./StateTests/stSystemOperationsTest'),
   },
   VMTests: {
@@ -17,8 +19,9 @@ module.exports = {
     vmBlockInfoTest: require('./VMTests/vmBlockInfoTest'),
     vmEnvironmentalInfoTest: require('./VMTests/vmEnvironmentalInfoTest'),
     vmIOandFlowOperationsTest: require('./VMTests/vmIOandFlowOperationsTest'),
+    vmLogTest: require('./VMTests/vmLogTest'),
     vmPushDupSwapTest: require('./VMTests/vmPushDupSwapTest'),
     vmSha3Test: require('./VMTests/vmSha3Test'),
-    vmtestst: require('./VMTests/vmtests'),
+    vmtests: require('./VMTests/vmtests'),
   }
 };
