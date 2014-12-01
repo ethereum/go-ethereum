@@ -430,7 +430,13 @@ func (p *Peer) HandleInbound() {
 				// processing when a new block is found
 				for i := 0; i < msg.Data.Len(); i++ {
 					tx := chain.NewTransactionFromValue(msg.Data.Get(i))
-					p.ethereum.TxPool().QueueTransaction(tx)
+					err := p.ethereum.TxPool().Add(tx)
+					if err != nil {
+						peerlogger.Infoln(err)
+					} else {
+						peerlogger.Infof("tx OK (%x)\n", tx.Hash()[0:4])
+					}
+					//p.ethereum.TxPool().QueueTransaction(tx)
 				}
 			case wire.MsgGetPeersTy:
 				// Peer asked for list of connected peers

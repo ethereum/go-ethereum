@@ -62,6 +62,16 @@ func S256(x *big.Int) *big.Int {
 	}
 }
 
+func FirstBitSet(v *big.Int) *big.Int {
+	for i := 0; i < v.BitLen(); i++ {
+		if v.Bit(i) > 0 {
+			return big.NewInt(int64(i))
+		}
+	}
+
+	return big.NewInt(int64(v.BitLen()))
+}
+
 // Big to bytes
 //
 // Returns the bytes of a big integer with the size specified by **base**

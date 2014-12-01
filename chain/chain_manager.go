@@ -322,6 +322,24 @@ func NewChain(blocks Blocks) *BlockChain {
 }
 
 // This function assumes you've done your checking. No checking is done at this stage anymore
+func (self *ChainManager) InsertChain(chain Blocks) error {
+	for _, block := range chain {
+		td, messages, err := self.Ethereum.BlockManager().Process(block)
+		if err != nil {
+			return err
+		}
+
+		self.add(block)
+		self.SetTotalDifficulty(td)
+		self.Ethereum.EventMux().Post(NewBlockEvent{block})
+		self.Ethereum.EventMux().Post(messages)
+	}
+
+	return nil
+}
+
+/*
+// This function assumes you've done your checking. No checking is done at this stage anymore
 func (self *ChainManager) InsertChain(chain *BlockChain) {
 	for e := chain.Front(); e != nil; e = e.Next() {
 		link := e.Value.(*link)
@@ -338,7 +356,9 @@ func (self *ChainManager) InsertChain(chain *BlockChain) {
 		chainlogger.Infof("Imported %d blocks. #%v (%x) / %#v (%x)", chain.Len(), front.Number, front.Hash()[0:4], back.Number, back.Hash()[0:4])
 	}
 }
+*/
 
+/*
 func (self *ChainManager) TestChain(chain *BlockChain) (td *big.Int, err error) {
 	self.workingChain = chain
 	defer func() { self.workingChain = nil }()
@@ -381,3 +401,4 @@ func (self *ChainManager) TestChain(chain *BlockChain) (td *big.Int, err error) 
 
 	return
 }
+*/

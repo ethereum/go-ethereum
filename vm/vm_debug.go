@@ -151,7 +151,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		// Stack checks only
 		case ISZERO, CALLDATALOAD, POP, JUMP, NOT: // 1
 			require(1)
-		case ADD, SUB, DIV, SDIV, MOD, SMOD, EXP, LT, GT, SLT, SGT, EQ, AND, OR, XOR, BYTE: // 2
+		case ADD, SUB, DIV, SDIV, MOD, SMOD, LT, GT, SLT, SGT, EQ, AND, OR, XOR, BYTE: // 2
 			require(2)
 		case ADDMOD, MULMOD: // 3
 			require(3)
@@ -169,6 +169,15 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			gas.Set(GasLog)
 			addStepGasUsage(new(big.Int).Mul(big.NewInt(int64(n)), GasLog))
 			addStepGasUsage(new(big.Int).Add(mSize, mStart))
+		case EXP:
+			require(2)
+
+			expGas := ethutil.FirstBitSet(stack.data[stack.Len()-2])
+			expGas.Div(expGas, u256(8))
+			expGas.Sub(u256(32), expGas)
+			expGas.Add(expGas, u256(1))
+
+			gas.Set(expGas)
 		// Gas only
 		case STOP:
 			gas.Set(ethutil.Big0)

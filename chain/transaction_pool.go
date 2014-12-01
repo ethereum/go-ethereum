@@ -114,7 +114,6 @@ func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 	}
 
 	// Get the sender
-	//sender := pool.Ethereum.BlockManager().procState.GetAccount(tx.Sender())
 	sender := pool.Ethereum.BlockManager().CurrentState().GetAccount(tx.Sender())
 
 	totAmount := new(big.Int).Set(tx.Value)
@@ -132,6 +131,34 @@ func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 
 	// Increment the nonce making each tx valid only once to prevent replay
 	// attacks
+
+	return nil
+}
+
+func (self *TxPool) Add(tx *Transaction) error {
+	hash := tx.Hash()
+	foundTx := FindTx(self.pool, func(tx *Transaction, e *list.Element) bool {
+		return bytes.Compare(tx.Hash(), hash) == 0
+	})
+
+	if foundTx != nil {
+		return fmt.Errorf("Known transaction (%x)", hash[0:4])
+	}
+
+	err := self.ValidateTransaction(tx)
+	if err != nil {
+		return err
+	}
+
+	self.addTransaction(tx)
+
+	tmp := make([]byte, 4)
+	copy(tmp, tx.Recipient)
+
+	txplogger.Debugf("(t) %x => %x (%v) %x\n", tx.Sender()[:4], tmp, tx.Value, tx.Hash())
+
+	// Notify the subscribers
+	self.Ethereum.EventMux().Post(TxPreEvent{tx})
 
 	return nil
 }
@@ -172,9 +199,11 @@ out:
 	}
 }
 
+/*
 func (pool *TxPool) QueueTransaction(tx *Transaction) {
 	pool.queueChan <- tx
 }
+*/
 
 func (pool *TxPool) CurrentTransactions() []*Transaction {
 	pool.mutex.Lock()

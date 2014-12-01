@@ -246,7 +246,7 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 		return
 	}
 
-	state.Update(nil)
+	state.Update(ethutil.Big0)
 
 	if !block.State().Cmp(state) {
 		err = fmt.Errorf("invalid merkle root. received=%x got=%x", block.Root(), state.Root())

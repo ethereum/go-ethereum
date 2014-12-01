@@ -203,7 +203,7 @@ func (self *Miner) mine() {
 	// Accumulate the rewards included for this block
 	blockManager.AccumelateRewards(block.State(), block, parent)
 
-	block.State().Update(nil)
+	block.State().Update(ethutil.Big0)
 
 	minerlogger.Infof("Mining on block. Includes %v transactions", len(transactions))
 
@@ -211,12 +211,13 @@ func (self *Miner) mine() {
 	nonce := self.pow.Search(block, self.powQuitCh)
 	if nonce != nil {
 		block.Nonce = nonce
-		lchain := chain.NewChain(chain.Blocks{block})
-		_, err := chainMan.TestChain(lchain)
+		//lchain := chain.NewChain(chain.Blocks{block})
+		//_, err := chainMan.TestChain(lchain)
+		err := chainMan.InsertChain(chain.Blocks{block})
 		if err != nil {
 			minerlogger.Infoln(err)
 		} else {
-			chainMan.InsertChain(lchain)
+			//chainMan.InsertChain(lchain)
 			//self.eth.EventMux().Post(chain.NewBlockEvent{block})
 			self.eth.Broadcast(wire.MsgBlockTy, []interface{}{block.Value().Val})
 

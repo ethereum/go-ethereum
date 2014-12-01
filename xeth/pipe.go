@@ -6,7 +6,6 @@ package xeth
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -93,7 +92,7 @@ func (self *XEth) Exists(addr []byte) bool {
 	return self.World().Get(addr) != nil
 }
 
-func (self *XEth) TransactString(key *crypto.KeyPair, rec string, value, gas, price *ethutil.Value, data []byte) ([]byte, error) {
+func (self *XEth) TransactString(key *crypto.KeyPair, rec string, value, gas, price *ethutil.Value, data []byte) (*chain.Transaction, error) {
 	// Check if an address is stored by this address
 	var hash []byte
 	addr := self.World().Config().Get("NameReg").StorageString(rec).Bytes()
@@ -108,55 +107,62 @@ func (self *XEth) TransactString(key *crypto.KeyPair, rec string, value, gas, pr
 	return self.Transact(key, hash, value, gas, price, data)
 }
 
-func (self *XEth) Transact(key *crypto.KeyPair, rec []byte, value, gas, price *ethutil.Value, data []byte) ([]byte, error) {
+func (self *XEth) Transact(key *crypto.KeyPair, to []byte, value, gas, price *ethutil.Value, data []byte) (*chain.Transaction, error) {
 	var hash []byte
 	var contractCreation bool
-	if rec == nil {
+	if chain.IsContractAddr(to) {
 		contractCreation = true
+	} else {
+		// Check if an address is stored by this address
+		addr := self.World().Config().Get("NameReg").Storage(to).Bytes()
+		if len(addr) > 0 {
+			hash = addr
+		} else {
+			hash = to
+		}
 	}
 
 	var tx *chain.Transaction
-	// Compile and assemble the given data
 	if contractCreation {
-		script, err := ethutil.Compile(string(data), false)
-		if err != nil {
-			return nil, err
-		}
-
-		tx = chain.NewContractCreationTx(value.BigInt(), gas.BigInt(), price.BigInt(), script)
+		tx = chain.NewContractCreationTx(value.BigInt(), gas.BigInt(), price.BigInt(), data)
 	} else {
-		data := ethutil.StringToByteFunc(string(data), func(s string) (ret []byte) {
-			slice := strings.Split(s, "\n")
-			for _, dataItem := range slice {
-				d := ethutil.FormatData(dataItem)
-				ret = append(ret, d...)
-			}
-			return
-		})
-
 		tx = chain.NewTransactionMessage(hash, value.BigInt(), gas.BigInt(), price.BigInt(), data)
 	}
 
-	acc := self.blockManager.TransState().GetOrNewStateObject(key.Address())
-	tx.Nonce = acc.Nonce
-	acc.Nonce += 1
-	self.blockManager.TransState().UpdateStateObject(acc)
+	state := self.blockManager.TransState()
+	nonce := state.GetNonce(key.Address())
 
+	tx.Nonce = nonce
 	tx.Sign(key.PrivateKey)
-	self.obj.TxPool().QueueTransaction(tx)
+	err := self.obj.TxPool().Add(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	state.SetNonce(key.Address(), nonce+1)
 
 	if contractCreation {
 		addr := tx.CreationAddress(self.World().State())
 		pipelogger.Infof("Contract addr %x\n", addr)
-
-		return addr, nil
 	}
 
-	return tx.Hash(), nil
+	return tx, nil
+
+	//acc := self.blockManager.TransState().GetOrNewStateObject(key.Address())
+	//self.obj.TxPool().QueueTransaction(tx)
+
+	//acc.Nonce += 1
+	//self.blockManager.TransState().UpdateStateObject(acc)
+
 }
 
 func (self *XEth) PushTx(tx *chain.Transaction) ([]byte, error) {
-	self.obj.TxPool().QueueTransaction(tx)
+	err := self.obj.TxPool().Add(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	//self.obj.TxPool().QueueTransaction(tx)
 	if tx.Recipient == nil {
 		addr := tx.CreationAddress(self.World().State())
 		pipelogger.Infof("Contract addr %x\n", addr)

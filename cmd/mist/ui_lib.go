@@ -127,7 +127,11 @@ func (self *UiLib) PastPeers() *ethutil.List {
 
 func (self *UiLib) ImportTx(rlpTx string) {
 	tx := chain.NewTransactionFromBytes(ethutil.Hex2Bytes(rlpTx))
-	self.eth.TxPool().QueueTransaction(tx)
+	//self.eth.TxPool().QueueTransaction(tx)
+	err := self.eth.TxPool().Add(tx)
+	if err != nil {
+		guilogger.Infoln("import tx failed ", err)
+	}
 }
 
 func (self *UiLib) EvalJavascriptFile(path string) {
@@ -305,7 +309,7 @@ func mapToTxParams(object map[string]interface{}) map[string]string {
 	return conv
 }
 
-func (self *UiLib) Transact(params map[string]interface{}) (*xeth.JSReceipt, error) {
+func (self *UiLib) Transact(params map[string]interface{}) (string, error) {
 	object := mapToTxParams(params)
 
 	return self.JSXEth.Transact(
