@@ -264,6 +264,12 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			newMemSize.Div(newMemSize, u256(32))
 			newMemSize.Mul(newMemSize, u256(32))
 
+			switch op {
+			// Additional gas usage on *CODPY
+			case CALLDATACOPY, CODECOPY, EXTCODECOPY:
+				addStepGasUsage(new(big.Int).Div(newMemSize, u256(32)))
+			}
+
 			if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
 				memGasUsage := new(big.Int).Sub(newMemSize, u256(int64(mem.Len())))
 				memGasUsage.Mul(GasMemory, memGasUsage)
