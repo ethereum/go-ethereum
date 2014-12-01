@@ -64,7 +64,7 @@ func (c *Closure) GetOp(x int) OpCode {
 }
 
 func (c *Closure) GetByte(x int) byte {
-	if x < len(c.Code) {
+	if x > -1 && x < len(c.Code) {
 		return c.Code[x]
 	}
 

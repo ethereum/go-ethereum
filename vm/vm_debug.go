@@ -277,7 +277,6 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 				addStepGasUsage(memGasUsage)
 
-				mem.Resize(newMemSize.Uint64())
 			}
 
 		}
@@ -294,6 +293,8 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			return closure.Return(nil), OOG(gas, tmp)
 		}
+
+		mem.Resize(newMemSize.Uint64())
 
 		switch op {
 		// 0x20 range

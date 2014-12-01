@@ -2,6 +2,7 @@ package vm
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -44,6 +45,7 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
+		fmt.Println(name)
 		state := state.New(helper.NewTrie())
 		for addr, account := range test.Pre {
 			obj := StateObjectFromAccount(addr, account)
@@ -113,7 +115,7 @@ func TestEnvironmentalInfo(t *testing.T) {
 }
 
 func TestFlowOperation(t *testing.T) {
-	helper.Logger.SetLogLevel(5)
+	//helper.Logger.SetLogLevel(5)
 	const fn = "../files/vmtests/vmIOandFlowOperationsTest.json"
 	RunVmTest(fn, t)
 }
@@ -124,6 +126,7 @@ func TestPushDupSwap(t *testing.T) {
 }
 
 func TestVMSha3(t *testing.T) {
+	helper.Logger.SetLogLevel(5)
 	const fn = "../files/vmtests/vmSha3Test.json"
 	RunVmTest(fn, t)
 }
