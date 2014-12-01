@@ -102,11 +102,15 @@ func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 	block := pool.Ethereum.ChainManager().CurrentBlock
 	// Something has gone horribly wrong if this happens
 	if block == nil {
-		return fmt.Errorf("[TXPL] No last block on the block chain")
+		return fmt.Errorf("No last block on the block chain")
 	}
 
 	if len(tx.Recipient) != 0 && len(tx.Recipient) != 20 {
-		return fmt.Errorf("[TXPL] Invalid recipient. len = %d", len(tx.Recipient))
+		return fmt.Errorf("Invalid recipient. len = %d", len(tx.Recipient))
+	}
+
+	if tx.v > 28 || tx.v < 27 {
+		return fmt.Errorf("tx.v != (28 || 27)")
 	}
 
 	if tx.GasPrice.Cmp(MinGasPrice) < 0 {
@@ -120,12 +124,12 @@ func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.
 	if sender.Balance().Cmp(totAmount) < 0 {
-		return fmt.Errorf("[TXPL] Insufficient amount in sender's (%x) account", tx.Sender())
+		return fmt.Errorf("Insufficient amount in sender's (%x) account", tx.Sender())
 	}
 
 	if tx.IsContract() {
 		if tx.GasPrice.Cmp(big.NewInt(minGasPrice)) < 0 {
-			return fmt.Errorf("[TXPL] Gasprice too low, %s given should be at least %d.", tx.GasPrice, minGasPrice)
+			return fmt.Errorf("Gasprice too low, %s given should be at least %d.", tx.GasPrice, minGasPrice)
 		}
 	}
 
