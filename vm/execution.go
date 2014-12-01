@@ -69,6 +69,7 @@ func (self *Execution) exec(code, caddr []byte, caller ClosureRef) (ret []byte, 
 			if self.Gas.Cmp(p.Gas) >= 0 {
 				ret = p.Call(self.input)
 				self.vm.Printf("NATIVE_FUNC(%x) => %x", naddr, ret)
+				self.vm.Endl()
 			}
 		} else {
 			// Create a new callable closure

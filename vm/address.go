@@ -31,12 +31,16 @@ func sha256Func(in []byte) []byte {
 }
 
 func ripemd160Func(in []byte) []byte {
-	return ethutil.RightPadBytes(crypto.Ripemd160(in), 32)
+	return ethutil.LeftPadBytes(crypto.Ripemd160(in), 32)
 }
 
 func ecrecoverFunc(in []byte) []byte {
 	// In case of an invalid sig. Defaults to return nil
 	defer func() { recover() }()
 
-	return crypto.Ecrecover(in)
+	hash := in[:32]
+	v := ethutil.BigD(in[32:64]).Bytes()[0] - 27
+	sig := append(in[64:], v)
+
+	return crypto.Sha3(crypto.Ecrecover(append(hash, sig...))[1:])
 }

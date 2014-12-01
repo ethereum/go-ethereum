@@ -2,6 +2,8 @@ package vm
 
 import (
 	"bytes"
+	"math/big"
+	"strconv"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -29,10 +31,21 @@ func StateObjectFromAccount(addr string, account Account) *state.StateObject {
 	return obj
 }
 
+type Env struct {
+	CurrentCoinbase   string
+	CurrentDifficulty string
+	CurrentGasLimit   string
+	CurrentNumber     string
+	CurrentTimestamp  interface{}
+	PreviousHash      string
+}
+
 type VmTest struct {
 	Callcreates interface{}
-	Env         map[string]string
+	//Env         map[string]string
+	Env         Env
 	Exec        map[string]string
+	Transaction map[string]string
 	Gas         string
 	Out         string
 	Post        map[string]Account
@@ -50,7 +63,31 @@ func RunVmTest(p string, t *testing.T) {
 			state.SetStateObject(obj)
 		}
 
-		ret, gas, err := helper.RunVm(state, test.Env, test.Exec)
+		// XXX Yeah, yeah...
+		env := make(map[string]string)
+		env["currentCoinbase"] = test.Env.CurrentCoinbase
+		env["currentDifficulty"] = test.Env.CurrentDifficulty
+		env["currentGasLimit"] = test.Env.CurrentGasLimit
+		env["currentNumber"] = test.Env.CurrentNumber
+		env["previousHash"] = test.Env.PreviousHash
+		if n, ok := test.Env.CurrentTimestamp.(float64); ok {
+			env["currentTimestamp"] = strconv.Itoa(int(n))
+		} else {
+			env["currentTimestamp"] = test.Env.CurrentTimestamp.(string)
+		}
+
+		var (
+			ret []byte
+			gas *big.Int
+			err error
+		)
+
+		if len(test.Exec) > 0 {
+			ret, gas, err = helper.RunVm(state, env, test.Exec)
+		} else {
+			ret, gas, err = helper.RunState(state, env, test.Transaction)
+		}
+
 		// When an error is returned it doesn't always mean the tests fails.
 		// Have to come up with some conditional failing mechanism.
 		if err != nil {
@@ -62,9 +99,11 @@ func RunVmTest(p string, t *testing.T) {
 			t.Errorf("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
 		}
 
-		gexp := ethutil.Big(test.Gas)
-		if gexp.Cmp(gas) != 0 {
-			t.Errorf("%s's gas failed. Expected %v, got %v\n", name, gexp, gas)
+		if len(test.Gas) > 0 {
+			gexp := ethutil.Big(test.Gas)
+			if gexp.Cmp(gas) != 0 {
+				t.Errorf("%s's gas failed. Expected %v, got %v\n", name, gexp, gas)
+			}
 		}
 
 		for addr, account := range test.Post {
@@ -121,5 +160,25 @@ func TestVMSha3(t *testing.T) {
 
 func TestVm(t *testing.T) {
 	const fn = "../files/vmtests/vmtests.json"
+	RunVmTest(fn, t)
+}
+
+func TestStateSystemOperations(t *testing.T) {
+	const fn = "../files/StateTests/stSystemOperationsTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestStatePreCompiledContracts(t *testing.T) {
+	const fn = "../files/StateTests/stPreCompiledContracts.json"
+	RunVmTest(fn, t)
+}
+
+func TestStateRecursiveCreate(t *testing.T) {
+	const fn = "../files/StateTests/stRecursiveCreate.json"
+	RunVmTest(fn, t)
+}
+
+func TestStateSpecialTest(t *testing.T) {
+	const fn = "../files/StateTests/stSpecialTest.json"
 	RunVmTest(fn, t)
 }
