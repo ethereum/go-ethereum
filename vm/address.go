@@ -42,5 +42,5 @@ func ecrecoverFunc(in []byte) []byte {
 	v := ethutil.BigD(in[32:64]).Bytes()[0] - 27
 	sig := append(in[64:], v)
 
-	return crypto.Sha3(crypto.Ecrecover(append(hash, sig...))[1:])
+	return ethutil.LeftPadBytes(crypto.Sha3(crypto.Ecrecover(append(hash, sig...))[1:])[12:], 32)
 }

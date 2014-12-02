@@ -185,6 +185,7 @@ func (sm *BlockManager) Process(block *Block) (td *big.Int, msgs state.Messages,
 	defer sm.mutex.Unlock()
 
 	if sm.bc.HasBlock(block.Hash()) {
+		fmt.Println("already having this block")
 		return nil, nil, nil
 	}
 
@@ -211,7 +212,7 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 		fmt.Printf("## %x %x ##\n", block.Hash(), block.Number)
 	}
 
-	receipts, err := sm.ApplyDiff(state, parent, block)
+	_, err = sm.ApplyDiff(state, parent, block)
 	if err != nil {
 		return
 	}
@@ -222,11 +223,13 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 		return
 	}
 
-	receiptSha := DeriveSha(receipts)
-	if bytes.Compare(receiptSha, block.ReceiptSha) != 0 {
-		err = fmt.Errorf("validating receipt root. received=%x got=%x", block.ReceiptSha, receiptSha)
-		return
-	}
+	/*
+		receiptSha := DeriveSha(receipts)
+		if bytes.Compare(receiptSha, block.ReceiptSha) != 0 {
+			err = fmt.Errorf("validating receipt root. received=%x got=%x", block.ReceiptSha, receiptSha)
+			return
+		}
+	*/
 
 	// Block validation
 	if err = sm.ValidateBlock(block, parent); err != nil {
@@ -239,12 +242,14 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 		return
 	}
 
-	block.receipts = receipts // although this isn't necessary it be in the future
-	rbloom := CreateBloom(receipts)
-	if bytes.Compare(rbloom, block.LogsBloom) != 0 {
-		err = fmt.Errorf("unable to replicate block's bloom=%x", rbloom)
-		return
-	}
+	/*
+		block.receipts = receipts // although this isn't necessary it be in the future
+		rbloom := CreateBloom(receipts)
+		if bytes.Compare(rbloom, block.LogsBloom) != 0 {
+			err = fmt.Errorf("unable to replicate block's bloom=%x", rbloom)
+			return
+		}
+	*/
 
 	state.Update(ethutil.Big0)
 
@@ -266,6 +271,7 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 		sm.transState = state.Copy()
 
 		sm.eth.TxPool().RemoveSet(block.Transactions())
+		fmt.Println("TD", td)
 
 		return td, messages, nil
 	} else {

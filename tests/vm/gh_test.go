@@ -142,7 +142,6 @@ func TestEnvironmentalInfo(t *testing.T) {
 }
 
 func TestFlowOperation(t *testing.T) {
-	//helper.Logger.SetLogLevel(5)
 	const fn = "../files/vmtests/vmIOandFlowOperationsTest.json"
 	RunVmTest(fn, t)
 }
@@ -153,7 +152,6 @@ func TestPushDupSwap(t *testing.T) {
 }
 
 func TestVMSha3(t *testing.T) {
-	//helper.Logger.SetLogLevel(5)
 	const fn = "../files/vmtests/vmSha3Test.json"
 	RunVmTest(fn, t)
 }

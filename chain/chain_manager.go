@@ -326,9 +326,14 @@ func (self *ChainManager) InsertChain(chain Blocks) error {
 	for _, block := range chain {
 		td, messages, err := self.Ethereum.BlockManager().Process(block)
 		if err != nil {
+			if IsKnownBlockErr(err) {
+				continue
+			}
+
 			return err
 		}
 
+		fmt.Println(td, messages, err)
 		self.add(block)
 		self.SetTotalDifficulty(td)
 		self.Ethereum.EventMux().Post(NewBlockEvent{block})
@@ -337,68 +342,3 @@ func (self *ChainManager) InsertChain(chain Blocks) error {
 
 	return nil
 }
-
-/*
-// This function assumes you've done your checking. No checking is done at this stage anymore
-func (self *ChainManager) InsertChain(chain *BlockChain) {
-	for e := chain.Front(); e != nil; e = e.Next() {
-		link := e.Value.(*link)
-
-		self.add(link.block)
-		self.SetTotalDifficulty(link.td)
-		self.Ethereum.EventMux().Post(NewBlockEvent{link.block})
-		self.Ethereum.EventMux().Post(link.messages)
-	}
-
-	b, e := chain.Front(), chain.Back()
-	if b != nil && e != nil {
-		front, back := b.Value.(*link).block, e.Value.(*link).block
-		chainlogger.Infof("Imported %d blocks. #%v (%x) / %#v (%x)", chain.Len(), front.Number, front.Hash()[0:4], back.Number, back.Hash()[0:4])
-	}
-}
-*/
-
-/*
-func (self *ChainManager) TestChain(chain *BlockChain) (td *big.Int, err error) {
-	self.workingChain = chain
-	defer func() { self.workingChain = nil }()
-
-	for e := chain.Front(); e != nil; e = e.Next() {
-		var (
-			l      = e.Value.(*link)
-			block  = l.block
-			parent = self.GetBlock(block.PrevHash)
-		)
-
-		//fmt.Println("parent", parent)
-		//fmt.Println("current", block)
-
-		if parent == nil {
-			err = fmt.Errorf("incoming chain broken on hash %x\n", block.PrevHash[0:4])
-			return
-		}
-
-		var messages state.Messages
-		td, messages, err = self.Ethereum.BlockManager().ProcessWithParent(block, parent)
-		if err != nil {
-			chainlogger.Infoln(err)
-			chainlogger.Debugf("Block #%v failed (%x...)\n", block.Number, block.Hash()[0:4])
-			chainlogger.Debugln(block)
-
-			err = fmt.Errorf("incoming chain failed %v\n", err)
-			return
-		}
-		l.td = td
-		l.messages = messages
-	}
-
-	if td.Cmp(self.TD) <= 0 {
-		err = &TDError{td, self.TD}
-		return
-	}
-
-	self.workingChain = nil
-
-	return
-}
-*/
