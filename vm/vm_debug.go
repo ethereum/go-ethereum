@@ -165,10 +165,11 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			n := int(op - LOG0)
 			require(n + 2)
 
-			mSize, mStart := stack.Peekn()
 			gas.Set(GasLog)
 			addStepGasUsage(new(big.Int).Mul(big.NewInt(int64(n)), GasLog))
-			addStepGasUsage(new(big.Int).Add(mSize, mStart))
+
+			mSize, _ := stack.Peekn()
+			addStepGasUsage(mSize)
 		case EXP:
 			require(2)
 

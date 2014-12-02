@@ -321,7 +321,6 @@ func NewChain(blocks Blocks) *BlockChain {
 	return chain
 }
 
-// This function assumes you've done your checking. No checking is done at this stage anymore
 func (self *ChainManager) InsertChain(chain Blocks) error {
 	for _, block := range chain {
 		td, messages, err := self.Ethereum.BlockManager().Process(block)
@@ -330,7 +329,9 @@ func (self *ChainManager) InsertChain(chain Blocks) error {
 				continue
 			}
 
-			chainlogger.Infof("block process failed %v (%x)\n", block.Number, block.Hash()[:4])
+			chainlogger.Infof("block #%v process failed (%x)\n", block.Number, block.Hash()[:4])
+			chainlogger.Infoln(block)
+			chainlogger.Infoln(err)
 			return err
 		}
 

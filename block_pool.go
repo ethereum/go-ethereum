@@ -336,32 +336,6 @@ out:
 						self.Remove(block.Hash())
 					}
 				}
-
-				/*
-					// Test and import
-					bchain := chain.NewChain(blocks)
-					_, err := chainManager.TestChain(bchain)
-					if err != nil && !chain.IsTDError(err) {
-						poollogger.Debugln(err)
-
-						self.Reset()
-
-						if self.peer != nil && self.peer.conn != nil {
-							poollogger.Debugf("Punishing peer for supplying bad chain (%v)\n", self.peer.conn.RemoteAddr())
-						}
-
-						// This peer gave us bad hashes and made us fetch a bad chain, therefor he shall be punished.
-						self.eth.BlacklistPeer(self.peer)
-						self.peer.StopWithReason(DiscBadPeer)
-						self.td = ethutil.Big0
-						self.peer = nil
-					} else {
-						chainManager.InsertChain(bchain)
-						for _, block := range blocks {
-							self.Remove(block.Hash())
-						}
-					}
-				*/
 			}
 		}
 	}

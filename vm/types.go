@@ -163,8 +163,8 @@ const (
 	// 0xf0 range - closures
 	CREATE OpCode = 0xf0 + iota
 	CALL
-	RETURN
 	CALLCODE
+	RETURN
 
 	// 0x70 range - other
 	SUICIDE = 0xff
@@ -308,12 +308,6 @@ var opCodeToString = map[OpCode]string{
 	SWAP14: "SWAP14",
 	SWAP15: "SWAP15",
 	SWAP16: "SWAP16",
-
-	LOG0: "LOG0",
-	LOG1: "LOG1",
-	LOG2: "LOG2",
-	LOG3: "LOG3",
-	LOG4: "LOG4",
 
 	// 0xf0 range
 	CREATE:   "CREATE",
