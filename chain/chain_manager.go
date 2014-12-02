@@ -1,15 +1,12 @@
 package chain
 
 import (
-	"bytes"
-	"container/list"
 	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/state"
 )
 
 var chainlogger = logger.NewLogger("CHAIN")
@@ -56,8 +53,6 @@ type ChainManager struct {
 
 	CurrentBlock  *types.Block
 	LastBlockHash []byte
-
-	workingChain *BlockChain
 }
 
 func NewChainManager() *ChainManager {
@@ -186,15 +181,6 @@ func (self *ChainManager) GetChainHashesFromHash(hash []byte, max uint64) (chain
 func (self *ChainManager) GetBlock(hash []byte) *types.Block {
 	data, _ := ethutil.Config.Db.Get(hash)
 	if len(data) == 0 {
-		if self.workingChain != nil {
-			// Check the temp chain
-			for e := self.workingChain.Front(); e != nil; e = e.Next() {
-				if bytes.Compare(e.Value.(*link).Block.Hash(), hash) == 0 {
-					return e.Value.(*link).Block
-				}
-			}
-		}
-
 		return nil
 	}
 
@@ -264,103 +250,22 @@ func (bc *ChainManager) Stop() {
 	}
 }
 
-func (self *ChainManager) NewIterator(startHash []byte) *ChainIterator {
-	return &ChainIterator{self, self.GetBlock(startHash)}
-}
-
-// This function assumes you've done your checking. No checking is done at this stage anymore
-func (self *ChainManager) InsertChain(chain *BlockChain, call func(*types.Block, state.Messages)) {
-	for e := chain.Front(); e != nil; e = e.Next() {
-		link := e.Value.(*link)
-
-		self.add(link.Block)
-		self.SetTotalDifficulty(link.Td)
-
-		call(link.Block, link.Messages)
-	}
-
-	b, e := chain.Front(), chain.Back()
-	if b != nil && e != nil {
-		front, back := b.Value.(*link).Block, e.Value.(*link).Block
-		chainlogger.Infof("Imported %d blocks. #%v (%x) / %#v (%x)", chain.Len(), front.Number, front.Hash()[0:4], back.Number, back.Hash()[0:4])
-	}
-}
-
-func (self *ChainManager) TestChain(chain *BlockChain) (td *big.Int, err error) {
-	self.workingChain = chain
-	defer func() { self.workingChain = nil }()
-
-	for e := chain.Front(); e != nil; e = e.Next() {
-		var (
-			l      = e.Value.(*link)
-			block  = l.Block
-			parent = self.GetBlock(block.PrevHash)
-		)
-
-		if parent == nil {
-			err = fmt.Errorf("incoming chain broken on hash %x\n", block.PrevHash[0:4])
-			return
-		}
-
-		var messages state.Messages
-		td, messages, err = self.processor.ProcessWithParent(block, parent) //self.eth.BlockManager().ProcessWithParent(block, parent)
+func (self *ChainManager) InsertChain(chain Blocks) error {
+	for _, block := range chain {
+		td, messages, err := self.Ethereum.BlockManager().Process(block)
 		if err != nil {
-			chainlogger.Infoln(err)
-			chainlogger.Debugf("Block #%v failed (%x...)\n", block.Number, block.Hash()[0:4])
-			chainlogger.Debugln(block)
+			if IsKnownBlockErr(err) {
+				continue
+			}
 
-			err = fmt.Errorf("incoming chain failed %v\n", err)
-			return
+			return err
 		}
-		l.Td = td
-		l.Messages = messages
+
+		self.add(block)
+		self.SetTotalDifficulty(td)
+		self.Ethereum.EventMux().Post(NewBlockEvent{block})
+		self.Ethereum.EventMux().Post(messages)
 	}
 
-	if td.Cmp(self.TD) <= 0 {
-		err = &TDError{td, self.TD}
-		return
-	}
-
-	self.workingChain = nil
-
-	return
-}
-
-type link struct {
-	Block    *types.Block
-	Messages state.Messages
-	Td       *big.Int
-}
-
-type BlockChain struct {
-	*list.List
-}
-
-func NewChain(blocks types.Blocks) *BlockChain {
-	chain := &BlockChain{list.New()}
-
-	for _, block := range blocks {
-		chain.PushBack(&link{block, nil, nil})
-	}
-
-	return chain
-}
-
-func (self *BlockChain) RlpEncode() []byte {
-	dat := make([]interface{}, 0)
-	for e := self.Front(); e != nil; e = e.Next() {
-		dat = append(dat, e.Value.(*link).Block.RlpData())
-	}
-
-	return ethutil.Encode(dat)
-}
-
-type ChainIterator struct {
-	cm    *ChainManager
-	block *types.Block // current block in the iterator
-}
-
-func (self *ChainIterator) Prev() *types.Block {
-	self.block = self.cm.GetBlock(self.block.PrevHash)
-	return self.block
+	return nil
 }

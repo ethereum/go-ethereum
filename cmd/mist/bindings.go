@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/xeth"
 )
 
 type plugin struct {
@@ -45,12 +44,12 @@ func (gui *Gui) LogPrint(level logger.LogLevel, msg string) {
 		}
 	*/
 }
-func (gui *Gui) Transact(recipient, value, gas, gasPrice, d string) (*xeth.JSReceipt, error) {
+func (gui *Gui) Transact(recipient, value, gas, gasPrice, d string) (string, error) {
 	var data string
 	if len(recipient) == 0 {
 		code, err := ethutil.Compile(d, false)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		data = ethutil.Bytes2Hex(code)
 	} else {

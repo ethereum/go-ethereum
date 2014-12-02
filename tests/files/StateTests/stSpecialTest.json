@@ -1,5 +1,5 @@
 {
-    "add11" : {
+    "makeMoney" : {
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "256",
@@ -13,24 +13,30 @@
         "out" : "0x",
         "post" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
-                "balance" : "1000000000000100000",
-                "code" : "0x6001600101600055",
+                "balance" : "1000000000000000010",
+                "code" : "0x7b601080600c6000396000f200600035541560095700602035600035556000526000600060006000601773aaaaaaaaace5edbc8e2a8697c15331677e6ebf0b7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffecf1",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : "0x02"
                 }
             },
             "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
-                "balance" : "804",
+                "balance" : "850",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "999999999999899196",
+                "balance" : "140",
                 "code" : "0x",
                 "nonce" : "1",
+                "storage" : {
+                }
+            },
+            "aaaaaaaaace5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000000000000000",
+                "code" : "0x600160015532600255",
+                "nonce" : "0",
                 "storage" : {
                 }
             }
@@ -38,14 +44,21 @@
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "1000000000000000000",
-                "code" : "0x6001600101600055",
+                "code" : "0x7b601080600c6000396000f200600035541560095700602035600035556000526000600060006000601773aaaaaaaaace5edbc8e2a8697c15331677e6ebf0b7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffecf1",
                 "nonce" : "0",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "1000000000000000000",
+                "balance" : "1000",
                 "code" : "0x",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "aaaaaaaaace5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000000000000000",
+                "code" : "0x600160015532600255",
                 "nonce" : "0",
                 "storage" : {
                 }
@@ -53,12 +66,12 @@
         },
         "transaction" : {
             "data" : "",
-            "gasLimit" : "10000",
+            "gasLimit" : "850",
             "gasPrice" : "1",
             "nonce" : "0",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
             "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
-            "value" : "100000"
+            "value" : "10"
         }
     }
 }

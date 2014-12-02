@@ -163,7 +163,7 @@ func (self *DebugVm) Run(call Options) (ret []byte, gas *big.Int, err error) {
 		// Stack checks only
 		case ISZERO, CALLDATALOAD, POP, JUMP, NOT: // 1
 			require(1)
-		case ADD, SUB, DIV, SDIV, MOD, SMOD, EXP, LT, GT, SLT, SGT, EQ, AND, OR, XOR, BYTE: // 2
+		case ADD, SUB, DIV, SDIV, MOD, SMOD, LT, GT, SLT, SGT, EQ, AND, OR, XOR, BYTE: // 2
 			require(2)
 		case ADDMOD, MULMOD: // 3
 			require(3)
@@ -181,6 +181,16 @@ func (self *DebugVm) Run(call Options) (ret []byte, gas *big.Int, err error) {
 			reqGs.Set(GasLog)
 			addStepGasUsage(new(big.Int).Mul(big.NewInt(int64(n)), GasLog))
 			addStepGasUsage(new(big.Int).Add(mSize, mStart))
+		case EXP:
+			require(2)
+
+			exp := new(big.Int).Set(stack.data[stack.Len()-2])
+			nbytes := 0
+			for exp.Cmp(ethutil.Big0) > 0 {
+				nbytes += 1
+				exp.Rsh(exp, 8)
+			}
+			gas.Set(big.NewInt(int64(nbytes + 1)))
 		// Gas only
 		case STOP:
 			reqGas.Set(ethutil.Big0)
@@ -281,7 +291,6 @@ func (self *DebugVm) Run(call Options) (ret []byte, gas *big.Int, err error) {
 
 				addStepGasUsage(memGasUsage)
 
-				mem.Resize(newMemSize.Uint64())
 			}
 
 		}
@@ -294,6 +303,8 @@ func (self *DebugVm) Run(call Options) (ret []byte, gas *big.Int, err error) {
 
 			return nil, new(big.Int), OOG(reqGas, gas)
 		}
+
+		mem.Resize(newMemSize.Uint64())
 
 		switch op {
 		// 0x20 range

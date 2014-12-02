@@ -178,19 +178,25 @@ func (self *JSXEth) FromNumber(str string) string {
 	return ethutil.BigD(ethutil.Hex2Bytes(str)).String()
 }
 
-func (self *JSXEth) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (*JSReceipt, error) {
-	var hash []byte
-	var contractCreation bool
-	if len(toStr) == 0 {
-		contractCreation = true
+func (self *JSXEth) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
+	var (
+		to       []byte
+		value    = ethutil.NewValue(valueStr)
+		gas      = ethutil.NewValue(gasStr)
+		gasPrice = ethutil.NewValue(gasPriceStr)
+		data     []byte
+	)
+
+	if ethutil.IsHex(codeStr) {
+		data = ethutil.Hex2Bytes(codeStr[2:])
 	} else {
-		// Check if an address is stored by this address
-		addr := self.World().Config().Get("NameReg").StorageString(toStr).Bytes()
-		if len(addr) > 0 {
-			hash = addr
-		} else {
-			hash = ethutil.Hex2Bytes(toStr)
-		}
+		data = ethutil.Hex2Bytes(codeStr)
+	}
+
+	if ethutil.IsHex(toStr) {
+		to = ethutil.Hex2Bytes(toStr[2:])
+	} else {
+		to = ethutil.Hex2Bytes(toStr)
 	}
 
 	var keyPair *crypto.KeyPair
@@ -202,47 +208,78 @@ func (self *JSXEth) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr 
 	}
 
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	var (
-		value    = ethutil.Big(valueStr)
-		gas      = ethutil.Big(gasStr)
-		gasPrice = ethutil.Big(gasPriceStr)
-		data     []byte
-		tx       *types.Transaction
-	)
-
-	if ethutil.IsHex(codeStr) {
-		data = ethutil.Hex2Bytes(codeStr[2:])
-	} else {
-		data = ethutil.Hex2Bytes(codeStr)
+	tx, err := self.XEth.Transact(keyPair, to, value, gas, gasPrice, data)
+	if err != nil {
+		return "", err
+	}
+	if chain.IsContractAddr(to) {
+		return ethutil.Bytes2Hex(tx.CreationAddress(nil)), nil
 	}
 
-	if contractCreation {
-		tx = types.NewContractCreationTx(value, gas, gasPrice, data)
-	} else {
-		tx = types.NewTransactionMessage(hash, value, gas, gasPrice, data)
-	}
+	return ethutil.Bytes2Hex(tx.Hash()), nil
 
-	acc := self.obj.BlockManager().TransState().GetOrNewStateObject(keyPair.Address())
-	tx.Nonce = acc.Nonce
-	acc.Nonce += 1
-	self.obj.BlockManager().TransState().UpdateStateObject(acc)
+	/*
+		var hash []byte
+		var contractCreation bool
+		if len(toStr) == 0 {
+			contractCreation = true
+		} else {
+			// Check if an address is stored by this address
+			addr := self.World().Config().Get("NameReg").StorageString(toStr).Bytes()
+			if len(addr) > 0 {
+				hash = addr
+			} else {
+				hash = ethutil.Hex2Bytes(toStr)
+			}
+		}
 
-	tx.Sign(keyPair.PrivateKey)
-	self.obj.TxPool().QueueTransaction(tx)
 
-	if contractCreation {
-		pipelogger.Infof("Contract addr %x", tx.CreationAddress(self.World().State()))
-	}
+		var (
+			value    = ethutil.Big(valueStr)
+			gas      = ethutil.Big(gasStr)
+			gasPrice = ethutil.Big(gasPriceStr)
+			data     []byte
+			tx       *chain.Transaction
+		)
 
-	return NewJSReciept(contractCreation, tx.CreationAddress(self.World().State()), tx.Hash(), keyPair.Address()), nil
+		if ethutil.IsHex(codeStr) {
+			data = ethutil.Hex2Bytes(codeStr[2:])
+		} else {
+			data = ethutil.Hex2Bytes(codeStr)
+		}
+
+		if contractCreation {
+			tx = chain.NewContractCreationTx(value, gas, gasPrice, data)
+		} else {
+			tx = chain.NewTransactionMessage(hash, value, gas, gasPrice, data)
+		}
+
+		acc := self.obj.BlockManager().TransState().GetOrNewStateObject(keyPair.Address())
+		tx.Nonce = acc.Nonce
+		acc.Nonce += 1
+		self.obj.BlockManager().TransState().UpdateStateObject(acc)
+
+		tx.Sign(keyPair.PrivateKey)
+		self.obj.TxPool().QueueTransaction(tx)
+
+		if contractCreation {
+			pipelogger.Infof("Contract addr %x", tx.CreationAddress(self.World().State()))
+		}
+
+		return NewJSReciept(contractCreation, tx.CreationAddress(self.World().State()), tx.Hash(), keyPair.Address()), nil
+	*/
 }
 
 func (self *JSXEth) PushTx(txStr string) (*JSReceipt, error) {
 	tx := types.NewTransactionFromBytes(ethutil.Hex2Bytes(txStr))
-	self.obj.TxPool().QueueTransaction(tx)
+	err := self.obj.TxPool().Add(tx)
+	if err != nil {
+		return nil, err
+	}
+
 	return NewJSReciept(tx.CreatesContract(), tx.CreationAddress(self.World().State()), tx.Hash(), tx.Sender()), nil
 }
 

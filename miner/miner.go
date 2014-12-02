@@ -29,7 +29,6 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/state"
 
 	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/chain/types"
@@ -205,7 +204,7 @@ func (self *Miner) mine() {
 	// Accumulate the rewards included for this block
 	blockManager.AccumelateRewards(block.State(), block, parent)
 
-	block.State().Update(nil)
+	block.State().Update(ethutil.Big0)
 
 	minerlogger.Infof("Mining on block. Includes %v transactions", len(transactions))
 
@@ -213,15 +212,10 @@ func (self *Miner) mine() {
 	nonce := self.pow.Search(block, self.powQuitCh)
 	if nonce != nil {
 		block.Nonce = nonce
-		lchain := chain.NewChain(types.Blocks{block})
-		_, err := chainMan.TestChain(lchain)
+		err := chainMan.InsertChain(types.Blocks{block})
 		if err != nil {
 			minerlogger.Infoln(err)
 		} else {
-			chainMan.InsertChain(lchain, func(block *types.Block, _ state.Messages) {
-				self.eth.EventMux().Post(chain.NewBlockEvent{block})
-			})
-
 			self.eth.Broadcast(wire.MsgBlockTy, []interface{}{block.Value().Val})
 
 			minerlogger.Infof("🔨  Mined block %x\n", block.Hash())

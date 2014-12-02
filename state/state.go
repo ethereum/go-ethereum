@@ -249,7 +249,6 @@ func (s *State) Reset() {
 			continue
 		}
 
-		//stateObject.state.Reset()
 		stateObject.Reset()
 	}
 
@@ -281,6 +280,7 @@ func (self *State) Update(gasUsed *big.Int) {
 	var deleted bool
 
 	// Refund any gas that's left
+	// XXX THIS WILL CHANGE IN POC8
 	uhalf := new(big.Int).Div(gasUsed, ethutil.Big2)
 	for addr, refs := range self.refund {
 		for _, ref := range refs {
@@ -289,6 +289,7 @@ func (self *State) Update(gasUsed *big.Int) {
 			self.GetStateObject([]byte(addr)).AddBalance(refund.Mul(refund, ref.price))
 		}
 	}
+	self.refund = make(map[string][]refund)
 
 	for _, stateObject := range self.stateObjects {
 		if stateObject.remove {

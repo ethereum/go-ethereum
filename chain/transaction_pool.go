@@ -103,11 +103,15 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 	block := pool.Ethereum.ChainManager().CurrentBlock
 	// Something has gone horribly wrong if this happens
 	if block == nil {
-		return fmt.Errorf("[TXPL] No last block on the block chain")
+		return fmt.Errorf("No last block on the block chain")
 	}
 
 	if len(tx.Recipient) != 0 && len(tx.Recipient) != 20 {
-		return fmt.Errorf("[TXPL] Invalid recipient. len = %d", len(tx.Recipient))
+		return fmt.Errorf("Invalid recipient. len = %d", len(tx.Recipient))
+	}
+
+	if tx.v > 28 || tx.v < 27 {
+		return fmt.Errorf("tx.v != (28 || 27)")
 	}
 
 	if tx.GasPrice.Cmp(MinGasPrice) < 0 {
@@ -115,24 +119,51 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 	}
 
 	// Get the sender
-	//sender := pool.Ethereum.BlockManager().procState.GetAccount(tx.Sender())
 	sender := pool.Ethereum.BlockManager().CurrentState().GetAccount(tx.Sender())
 
 	totAmount := new(big.Int).Set(tx.Value)
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.
 	if sender.Balance().Cmp(totAmount) < 0 {
-		return fmt.Errorf("[TXPL] Insufficient amount in sender's (%x) account", tx.Sender())
+		return fmt.Errorf("Insufficient amount in sender's (%x) account", tx.Sender())
 	}
 
 	if tx.IsContract() {
 		if tx.GasPrice.Cmp(big.NewInt(minGasPrice)) < 0 {
-			return fmt.Errorf("[TXPL] Gasprice too low, %s given should be at least %d.", tx.GasPrice, minGasPrice)
+			return fmt.Errorf("Gasprice too low, %s given should be at least %d.", tx.GasPrice, minGasPrice)
 		}
 	}
 
 	// Increment the nonce making each tx valid only once to prevent replay
 	// attacks
+
+	return nil
+}
+
+func (self *TxPool) Add(tx *types.Transaction) error {
+	hash := tx.Hash()
+	foundTx := FindTx(self.pool, func(tx *Transaction, e *list.Element) bool {
+		return bytes.Compare(tx.Hash(), hash) == 0
+	})
+
+	if foundTx != nil {
+		return fmt.Errorf("Known transaction (%x)", hash[0:4])
+	}
+
+	err := self.ValidateTransaction(tx)
+	if err != nil {
+		return err
+	}
+
+	self.addTransaction(tx)
+
+	tmp := make([]byte, 4)
+	copy(tmp, tx.Recipient)
+
+	txplogger.Debugf("(t) %x => %x (%v) %x\n", tx.Sender()[:4], tmp, tx.Value, tx.Hash())
+
+	// Notify the subscribers
+	self.Ethereum.EventMux().Post(TxPreEvent{tx})
 
 	return nil
 }
@@ -171,10 +202,6 @@ out:
 			break out
 		}
 	}
-}
-
-func (pool *TxPool) QueueTransaction(tx *types.Transaction) {
-	pool.queueChan <- tx
 }
 
 func (pool *TxPool) CurrentTransactions() []*types.Transaction {

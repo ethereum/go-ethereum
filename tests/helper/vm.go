@@ -3,6 +3,7 @@ package helper
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
@@ -62,6 +63,20 @@ func RunVm(state *state.State, env, exec map[string]string) ([]byte, *big.Int, e
 	evm := vm.New(NewEnvFromMap(state, env, exec), vm.DebugVmTy)
 	execution := vm.NewExecution(evm, address, FromHex(exec["data"]), ethutil.Big(exec["gas"]), ethutil.Big(exec["gasPrice"]), ethutil.Big(exec["value"]))
 	execution.SkipTransfer = true
+	ret, err := execution.Exec(address, caller)
+
+	return ret, execution.Gas, err
+}
+
+func RunState(state *state.State, env, tx map[string]string) ([]byte, *big.Int, error) {
+	address := FromHex(tx["to"])
+	keyPair, _ := crypto.NewKeyPairFromSec([]byte(ethutil.Hex2Bytes(tx["secretKey"])))
+	caller := state.GetOrNewStateObject(keyPair.Address())
+
+	vmenv := NewEnvFromMap(state, env, tx)
+	vmenv.origin = caller.Address()
+	evm := vm.New(vmenv, vm.DebugVmTy)
+	execution := vm.NewExecution(evm, address, FromHex(tx["data"]), ethutil.Big(tx["gasLimit"]), ethutil.Big(tx["gasPrice"]), ethutil.Big(tx["value"]))
 	ret, err := execution.Exec(address, caller)
 
 	return ret, execution.Gas, err

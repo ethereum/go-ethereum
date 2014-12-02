@@ -79,12 +79,7 @@ func (tx *Transaction) IsContract() bool {
 
 func (tx *Transaction) CreationAddress(state *state.State) []byte {
 	// Generate a new address
-	addr := crypto.Sha3(ethutil.NewValue([]interface{}{tx.Sender(), tx.Nonce}).Encode())[12:]
-	//for i := uint64(0); state.GetStateObject(addr) != nil; i++ {
-	//	addr = crypto.Sha3(ethutil.NewValue([]interface{}{tx.Sender(), tx.Nonce + i}).Encode())[12:]
-	//}
-
-	return addr
+	return crypto.Sha3(ethutil.NewValue([]interface{}{tx.Sender(), tx.Nonce}).Encode())[12:]
 }
 
 func (tx *Transaction) Signature(key []byte) []byte {

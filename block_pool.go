@@ -9,11 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/wire"
 )
 
@@ -312,11 +310,10 @@ out:
 			}
 
 			if len(blocks) > 0 {
-				chainManager := self.eth.ChainManager()
-				// Test and import
-				bchain := chain.NewChain(blocks)
-				_, err := chainManager.TestChain(bchain)
-				if err != nil && !chain.IsTDError(err) {
+				chainman := self.eth.ChainManager()
+
+				err := chainman.InsertChain(blocks)
+				if err != nil {
 					poollogger.Debugln(err)
 
 					self.Reset()
@@ -330,16 +327,10 @@ out:
 					self.peer.StopWithReason(DiscBadPeer)
 					self.td = ethutil.Big0
 					self.peer = nil
-				} else {
-					if !chain.IsTDError(err) {
-						chainManager.InsertChain(bchain, func(block *types.Block, messages state.Messages) {
-							self.eth.EventMux().Post(chain.NewBlockEvent{block})
-							self.eth.EventMux().Post(messages)
+				}
 
-							self.Remove(block.Hash())
-						})
-
-					}
+				for _, block := range blocks {
+					self.Remove(block.Hash())
 				}
 			}
 		}
