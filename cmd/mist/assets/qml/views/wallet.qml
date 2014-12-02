@@ -16,7 +16,13 @@ Rectangle {
 	anchors.fill: parent
 
 	function onReady() {
-		menuItem.secondaryTitle = eth.numberToHuman(eth.balanceAt(eth.key().address))
+		setBalance()
+	}
+
+	function setBalance() {
+		balance.text = "<b>Balance</b>: " + eth.numberToHuman(eth.balanceAt(eth.key().address))
+		if(menuItem)
+			menuItem.secondaryTitle = eth.numberToHuman(eth.balanceAt(eth.key().address))
 	}
 
 	ListModel {
@@ -39,7 +45,6 @@ Rectangle {
 
 		Text {
 			id: balance
-			text: "<b>Balance</b>: " + eth.numberToHuman(eth.balanceAt(eth.key().address))
 			font.pixelSize: 24
 			anchors {
 				horizontalCenter: parent.horizontalCenter
@@ -126,7 +131,6 @@ Rectangle {
 						var value = txValue.text + denomModel.get(valueDenom.currentIndex).zeros;
 						var gasPrice = "10000000000000"
 						var res = eth.transact({from: eth.key().privateKey, to: txTo.text, value: value, gas: "500", gasPrice: gasPrice})
-						console.log(res)
 					}
 				}
 			}
@@ -158,6 +162,8 @@ Rectangle {
 					}
 
 					function addTxs(messages) {
+						setBalance()
+
 						for(var i = 0; i < messages.length; i++) {
 							var message = messages.get(i);
 							var to = eth.lookupName(message.to);
