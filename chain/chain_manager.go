@@ -330,10 +330,10 @@ func (self *ChainManager) InsertChain(chain Blocks) error {
 				continue
 			}
 
+			chainlogger.Infof("block process failed %v (%x)\n", block.Number, block.Hash()[:4])
 			return err
 		}
 
-		fmt.Println(td, messages, err)
 		self.add(block)
 		self.SetTotalDifficulty(td)
 		self.Ethereum.EventMux().Post(NewBlockEvent{block})

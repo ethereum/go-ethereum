@@ -185,8 +185,7 @@ func (sm *BlockManager) Process(block *Block) (td *big.Int, msgs state.Messages,
 	defer sm.mutex.Unlock()
 
 	if sm.bc.HasBlock(block.Hash()) {
-		fmt.Println("already having this block")
-		return nil, nil, nil
+		return nil, nil, &KnownBlockError{block.Number, block.Hash()}
 	}
 
 	if !sm.bc.HasBlock(block.PrevHash) {
@@ -233,12 +232,10 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 
 	// Block validation
 	if err = sm.ValidateBlock(block, parent); err != nil {
-		statelogger.Errorln("validating block:", err)
 		return
 	}
 
 	if err = sm.AccumelateRewards(state, block, parent); err != nil {
-		statelogger.Errorln("accumulating reward", err)
 		return
 	}
 
@@ -271,7 +268,6 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 		sm.transState = state.Copy()
 
 		sm.eth.TxPool().RemoveSet(block.Transactions())
-		fmt.Println("TD", td)
 
 		return td, messages, nil
 	} else {

@@ -128,12 +128,12 @@ func IsTDError(e error) bool {
 }
 
 type KnownBlockError struct {
-	number uint64
+	number *big.Int
 	hash   []byte
 }
 
 func (self *KnownBlockError) Error() string {
-	return fmt.Sprintf("block %d already known (%x)", self.number, self.hash[0:4])
+	return fmt.Sprintf("block %v already known (%x)", self.number, self.hash[0:4])
 }
 func IsKnownBlockErr(e error) bool {
 	_, ok := e.(*KnownBlockError)
