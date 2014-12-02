@@ -275,15 +275,23 @@ func (sm *BlockManager) ProcessWithParent(block, parent *Block) (td *big.Int, me
 	}
 }
 
-func (sm *BlockManager) ApplyDiff(state *state.State, parent, block *Block) (receipts Receipts, err error) {
-	coinbase := state.GetOrNewStateObject(block.Coinbase)
+func (sm *BlockManager) ApplyDiff(statedb *state.State, parent, block *Block) (receipts Receipts, err error) {
+	coinbase := statedb.GetOrNewStateObject(block.Coinbase)
 	coinbase.SetGasPool(block.CalcGasLimit(parent))
 
 	// Process the transactions on to current block
-	receipts, _, _, _, err = sm.ProcessTransactions(coinbase, state, block, parent, block.Transactions())
+	receipts, _, _, _, err = sm.ProcessTransactions(coinbase, statedb, block, parent, block.Transactions())
 	if err != nil {
 		return nil, err
 	}
+
+	statedb.Manifest().AddMessage(&state.Message{
+		To: block.Coinbase, From: block.Coinbase,
+		Input:  nil,
+		Origin: nil,
+		Block:  block.Hash(), Timestamp: block.Time, Coinbase: block.Coinbase, Number: block.Number,
+		Value: new(big.Int),
+	})
 
 	return receipts, nil
 }
@@ -303,9 +311,6 @@ func (sm *BlockManager) CalculateTD(block *Block) (*big.Int, bool) {
 	// is greater than the previous.
 	if td.Cmp(sm.bc.TD) > 0 {
 		return td, true
-
-		// Set the new total difficulty back to the block chain
-		//sm.bc.SetTotalDifficulty(td)
 	}
 
 	return nil, false
