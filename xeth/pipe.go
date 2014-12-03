@@ -5,15 +5,12 @@ package xeth
  */
 
 import (
-	"fmt"
-
 	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
-	"github.com/ethereum/go-ethereum/vm"
 )
 
 var pipelogger = logger.NewLogger("XETH")
@@ -62,14 +59,18 @@ func (self *XEth) ExecuteObject(object *Object, data []byte, value, gas, price *
 
 	self.Vm.State = self.World().State().Copy()
 
-	evm := vm.New(NewEnv(self.Vm.State, block, value.BigInt(), initiator.Address()), vm.Type(ethutil.Config.VmType))
+	vmenv := NewEnv(self.Vm.State, block, value.BigInt(), initiator.Address())
+	return vmenv.Call(initiator, object.Address(), data, gas.BigInt(), price.BigInt(), value.BigInt())
+	/*
+		evm := vm.New(, vm.Type(ethutil.Config.VmType))
 
-	msg := vm.NewExecution(evm, object.Address(), data, gas.BigInt(), price.BigInt(), value.BigInt())
-	ret, err := msg.Exec(object.Address(), initiator)
+		msg := vm.NewExecution(evm, object.Address(), data, gas.BigInt(), price.BigInt(), value.BigInt())
+		ret, err := msg.Exec(object.Address(), initiator)
 
-	fmt.Println("returned from call", ret, err)
+		fmt.Println("returned from call", ret, err)
 
-	return ret, err
+		return ret, err
+	*/
 }
 
 func (self *XEth) Block(hash []byte) *types.Block {

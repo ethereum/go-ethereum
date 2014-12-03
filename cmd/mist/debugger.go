@@ -144,24 +144,28 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 	statedb := self.lib.eth.BlockManager().TransState()
 	account := self.lib.eth.BlockManager().TransState().GetAccount(keyPair.Address())
 	contract := statedb.NewStateObject([]byte{0})
+	contract.SetCode(script)
 	contract.SetBalance(value)
 
 	self.SetAsm(script)
 
 	block := self.lib.eth.ChainManager().CurrentBlock
 
-	callerClosure := vm.NewClosure(&state.Message{}, account, contract, script, gas, gasPrice)
 	env := utils.NewEnv(statedb, block, account.Address(), value)
-	evm := vm.NewDebugVm(env)
-	evm.Dbg = self.Db
+	/*
+		callerClosure := vm.NewClosure(&state.Message{}, account, contract, script, gas, gasPrice)
+		evm := vm.NewDebugVm(env)
+		evm.Dbg = self.Db
+		self.vm = evm
+		self.Db.done = false
+	*/
 
-	self.vm = evm
-	self.Db.done = false
 	self.Logf("callsize %d", len(script))
 	go func() {
-		ret, g, err := callerClosure.Call(evm, data)
-		tot := new(big.Int).Mul(g, gasPrice)
-		self.Logf("gas usage %v total price = %v (%v)", g, tot, ethutil.CurrencyToString(tot))
+		ret, err := env.Call(account, contract.Address(), data, gas, gasPrice, ethutil.Big0)
+		//ret, g, err := callerClosure.Call(evm, data)
+		tot := new(big.Int).Mul(env.Gas, gasPrice)
+		self.Logf("gas usage %v total price = %v (%v)", env.Gas, tot, ethutil.CurrencyToString(tot))
 		if err != nil {
 			self.Logln("exited with errors:", err)
 		} else {
