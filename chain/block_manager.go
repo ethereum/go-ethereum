@@ -118,6 +118,19 @@ func (sm *BlockManager) ChainManager() *ChainManager {
 	return sm.bc
 }
 
+func (sm *BlockManager) TransitionState(statedb *state.State, parent, block *types.Block) (receipts types.Receipts, err error) {
+	coinbase := statedb.GetOrNewStateObject(block.Coinbase)
+	coinbase.SetGasPool(block.CalcGasLimit(parent))
+
+	// Process the transactions on to current block
+	receipts, _, _, _, err = sm.ProcessTransactions(coinbase, statedb, block, parent, block.Transactions())
+	if err != nil {
+		return nil, err
+	}
+
+	return receipts, nil
+}
+
 func (self *BlockManager) ProcessTransactions(coinbase *state.StateObject, state *state.State, block, parent *types.Block, txs types.Transactions) (types.Receipts, types.Transactions, types.Transactions, types.Transactions, error) {
 	var (
 		receipts           types.Receipts
@@ -125,6 +138,7 @@ func (self *BlockManager) ProcessTransactions(coinbase *state.StateObject, state
 		erroneous          types.Transactions
 		totalUsedGas       = big.NewInt(0)
 		err                error
+		cumulativeSum      = new(big.Int)
 	)
 
 done:
@@ -156,6 +170,7 @@ done:
 		}
 
 		txGas.Sub(txGas, st.gas)
+		cumulativeSum.Add(cumulativeSum, new(big.Int).Mul(txGas, tx.GasPrice))
 
 		// Update the state with pending changes
 		state.Update(txGas)
@@ -176,6 +191,7 @@ done:
 		}
 	}
 
+	block.Reward = cumulativeSum
 	block.GasUsed = totalUsedGas
 
 	return receipts, handled, unhandled, erroneous, err
@@ -187,8 +203,7 @@ func (sm *BlockManager) Process(block *types.Block) (td *big.Int, msgs state.Mes
 	defer sm.mutex.Unlock()
 
 	if sm.bc.HasBlock(block.Hash()) {
-		fmt.Println("already having this block")
-		return nil, nil, nil
+		return nil, nil, &KnownBlockError{block.Number, block.Hash()}
 	}
 
 	if !sm.bc.HasBlock(block.PrevHash) {
@@ -214,7 +229,7 @@ func (sm *BlockManager) ProcessWithParent(block, parent *types.Block) (td *big.I
 		fmt.Printf("## %x %x ##\n", block.Hash(), block.Number)
 	}
 
-	_, err = sm.ApplyDiff(state, parent, block)
+	_, err = sm.TransitionState(state, parent, block)
 	if err != nil {
 		return
 	}
@@ -235,12 +250,10 @@ func (sm *BlockManager) ProcessWithParent(block, parent *types.Block) (td *big.I
 
 	// Block validation
 	if err = sm.ValidateBlock(block, parent); err != nil {
-		statelogger.Errorln("validating block:", err)
 		return
 	}
 
 	if err = sm.AccumelateRewards(state, block, parent); err != nil {
-		statelogger.Errorln("accumulating reward", err)
 		return
 	}
 
@@ -273,25 +286,11 @@ func (sm *BlockManager) ProcessWithParent(block, parent *types.Block) (td *big.I
 		sm.transState = state.Copy()
 
 		sm.eth.TxPool().RemoveSet(block.Transactions())
-		fmt.Println("TD", td)
 
 		return td, messages, nil
 	} else {
 		return nil, nil, errors.New("total diff failed")
 	}
-}
-
-func (sm *BlockManager) ApplyDiff(state *state.State, parent, block *types.Block) (receipts types.Receipts, err error) {
-	coinbase := state.GetOrNewStateObject(block.Coinbase)
-	coinbase.SetGasPool(block.CalcGasLimit(parent))
-
-	// Process the transactions on to current block
-	receipts, _, _, _, err = sm.ProcessTransactions(coinbase, state, block, parent, block.Transactions())
-	if err != nil {
-		return nil, err
-	}
-
-	return receipts, nil
 }
 
 func (sm *BlockManager) CalculateTD(block *types.Block) (*big.Int, bool) {
@@ -309,9 +308,6 @@ func (sm *BlockManager) CalculateTD(block *types.Block) (*big.Int, bool) {
 	// is greater than the previous.
 	if td.Cmp(sm.bc.TD) > 0 {
 		return td, true
-
-		// Set the new total difficulty back to the block chain
-		//sm.bc.SetTotalDifficulty(td)
 	}
 
 	return nil, false
@@ -375,16 +371,24 @@ func (sm *BlockManager) AccumelateRewards(state *state.State, block, parent *typ
 		r := new(big.Int)
 		r.Mul(BlockReward, big.NewInt(15)).Div(r, big.NewInt(16))
 
-		uncleAccount := state.GetAccount(uncle.Coinbase)
+		uncleAccount := statedb.GetAccount(uncle.Coinbase)
 		uncleAccount.AddAmount(r)
 
 		reward.Add(reward, new(big.Int).Div(BlockReward, big.NewInt(32)))
 	}
 
 	// Get the account associated with the coinbase
-	account := state.GetAccount(block.Coinbase)
+	account := statedb.GetAccount(block.Coinbase)
 	// Reward amount of ether to the coinbase address
 	account.AddAmount(reward)
+
+	statedb.Manifest().AddMessage(&state.Message{
+		To: block.Coinbase, From: block.Coinbase,
+		Input:  nil,
+		Origin: nil,
+		Block:  block.Hash(), Timestamp: block.Time, Coinbase: block.Coinbase, Number: block.Number,
+		Value: new(big.Int).Add(reward, block.Reward),
+	})
 
 	return nil
 }
@@ -403,8 +407,7 @@ func (sm *BlockManager) GetMessages(block *types.Block) (messages []*state.Messa
 
 	defer state.Reset()
 
-	sm.ApplyDiff(state, parent, block)
-
+	sm.TransitionState(state, parent, block)
 	sm.AccumelateRewards(state, block, parent)
 
 	return state.Manifest().Messages, nil

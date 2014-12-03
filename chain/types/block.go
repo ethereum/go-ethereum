@@ -97,6 +97,8 @@ type Block struct {
 	receipts          Receipts
 	TxSha, ReceiptSha []byte
 	LogsBloom         []byte
+
+	Reward *big.Int
 }
 
 func NewBlockFromBytes(raw []byte) *Block {

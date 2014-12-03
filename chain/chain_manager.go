@@ -258,6 +258,9 @@ func (self *ChainManager) InsertChain(chain Blocks) error {
 				continue
 			}
 
+			chainlogger.Infof("block #%v process failed (%x)\n", block.Number, block.Hash()[:4])
+			chainlogger.Infoln(block)
+			chainlogger.Infoln(err)
 			return err
 		}
 

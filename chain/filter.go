@@ -176,7 +176,7 @@ func (self *Filter) bloomFilter(block *types.Block) bool {
 	var fromIncluded, toIncluded bool
 	if len(self.from) > 0 {
 		for _, from := range self.from {
-			if types.BloomLookup(block.LogsBloom, from) {
+			if types.BloomLookup(block.LogsBloom, from) || bytes.Equal(block.Coinbase, from) {
 				fromIncluded = true
 				break
 			}
@@ -187,7 +187,7 @@ func (self *Filter) bloomFilter(block *types.Block) bool {
 
 	if len(self.to) > 0 {
 		for _, to := range self.to {
-			if types.BloomLookup(block.LogsBloom, ethutil.U256(new(big.Int).Add(ethutil.Big1, ethutil.BigD(to))).Bytes()) {
+			if types.BloomLookup(block.LogsBloom, ethutil.U256(new(big.Int).Add(ethutil.Big1, ethutil.BigD(to))).Bytes()) || bytes.Equal(block.Coinbase, to) {
 				toIncluded = true
 				break
 			}

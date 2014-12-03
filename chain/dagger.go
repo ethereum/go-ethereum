@@ -82,13 +82,17 @@ func (pow *EasyPow) Verify(hash []byte, diff *big.Int, nonce []byte) bool {
 	d := append(hash, nonce...)
 	sha.Write(d)
 
-	v := ethutil.BigPow(2, 256)
-	ret := new(big.Int).Div(v, diff)
+	verification := new(big.Int).Div(ethutil.BigPow(2, 256), diff)
+	res := ethutil.U256(ethutil.BigD(sha.Sum(nil)))
 
-	res := new(big.Int)
-	res.SetBytes(sha.Sum(nil))
+	/*
+		fmt.Printf("hash w/o nonce %x\n", hash)
+		fmt.Printf("2**256 / %v = %v\n", diff, verification)
+		fmt.Printf("%v <= %v\n", res, verification)
+		fmt.Printf("vlen: %d rlen: %d\n", len(verification.Bytes()), len(res.Bytes()))
+	*/
 
-	return res.Cmp(ret) == -1
+	return res.Cmp(verification) <= 0
 }
 
 func (pow *EasyPow) SetHash(hash *big.Int) {
