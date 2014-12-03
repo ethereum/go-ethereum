@@ -3,7 +3,7 @@
 
 #include <llvm/IR/Function.h>
 
-#include "Runtime.h"
+#include "RuntimeManager.h"
 
 namespace dev
 {

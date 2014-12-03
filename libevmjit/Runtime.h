@@ -10,6 +10,7 @@
 #include "CompilerHelper.h"
 #include "Utils.h"
 #include "Type.h"
+#include "RuntimeData.h"
 
 
 #ifdef _MSC_VER
@@ -24,39 +25,6 @@ namespace eth
 {
 namespace jit
 {
-
-struct RuntimeData
-{
-	enum Index: unsigned
-	{
-		Gas,
-		Address,
-		Caller,
-		Origin,
-		CallValue,
-		CallDataSize,
-		GasPrice,
-		PrevHash,
-		CoinBase,
-		TimeStamp,
-		Number,
-		Difficulty,
-		GasLimit,
-		CodeSize,
-
-		_size,
-
-		ReturnDataOffset = CallValue,	// Reuse 2 fields for return data reference
-		ReturnDataSize = CallDataSize
-	};
-
-	i256 elems[_size];
-	byte const* callData;
-	byte const* code;
-	decltype(&jmp_buf{}[0]) jmpBuf;
-
-	static llvm::StructType* getType();
-};
 
 using StackImpl = std::vector<i256>;
 using MemoryImpl = bytes;
@@ -89,33 +57,6 @@ private:
 	MemoryImpl m_memory;
 	ExtVMFace& m_ext;
 	bool m_outputLogs; ///< write LOG statements to console
-};
-
-class RuntimeManager: public CompilerHelper
-{
-public:
-	RuntimeManager(llvm::IRBuilder<>& _builder);
-
-	llvm::Value* getRuntimePtr();
-
-	llvm::Value* get(RuntimeData::Index _index);
-	llvm::Value* get(Instruction _inst);
-	llvm::Value* getGas();	// TODO: Remove
-	llvm::Value* getCallData();
-	llvm::Value* getCode();
-	void setGas(llvm::Value* _gas);
-
-	void registerReturnData(llvm::Value* _index, llvm::Value* _size);
-
-	void raiseException(ReturnCode _returnCode);
-
-private:
-	llvm::Value* getPtr(RuntimeData::Index _index);
-	void set(RuntimeData::Index _index, llvm::Value* _value);
-	llvm::Value* getJmpBuf();
-
-	llvm::GlobalVariable* m_dataPtr = nullptr;
-	llvm::Function* m_longjmp = nullptr;
 };
 
 }

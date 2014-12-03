@@ -14,7 +14,7 @@
 #include "Runtime.h"
 #include "GasMeter.h"
 #include "Endianness.h"
-#include "Runtime.h"
+#include "RuntimeManager.h"
 
 namespace dev
 {

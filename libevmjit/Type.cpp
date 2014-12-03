@@ -3,7 +3,7 @@
 
 #include <llvm/IR/DerivedTypes.h>
 
-#include "Runtime.h"
+#include "RuntimeManager.h"
 
 namespace dev
 {
@@ -33,7 +33,7 @@ void Type::init(llvm::LLVMContext& _context)
 	BytePtr = Byte->getPointerTo();
 	Void = llvm::Type::getVoidTy(_context);
 	MainReturn = llvm::Type::getInt32Ty(_context);
-	RuntimePtr = RuntimeData::getType()->getPointerTo();
+	RuntimePtr = RuntimeManager::getRuntimeDataType()->getPointerTo();
 }
 
 llvm::ConstantInt* Constant::get(int64_t _n)

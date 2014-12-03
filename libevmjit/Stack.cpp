@@ -1,4 +1,5 @@
 #include "Stack.h"
+#include "RuntimeManager.h"
 #include "Runtime.h"
 #include "Type.h"
 

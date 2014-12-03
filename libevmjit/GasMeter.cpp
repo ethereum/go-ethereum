@@ -7,7 +7,7 @@
 
 #include "Type.h"
 #include "Ext.h"
-#include "Runtime.h"
+#include "RuntimeManager.h"
 
 namespace dev
 {

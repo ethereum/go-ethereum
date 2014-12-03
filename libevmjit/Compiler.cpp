@@ -22,7 +22,7 @@
 #include "Utils.h"
 #include "Endianness.h"
 #include "Arith256.h"
-#include "Runtime.h"
+#include "RuntimeManager.h"
 
 namespace dev
 {
