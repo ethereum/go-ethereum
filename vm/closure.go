@@ -1,7 +1,5 @@
 package vm
 
-// TODO Re write VM to use values instead of big integers?
-
 import (
 	"math/big"
 
@@ -17,7 +15,6 @@ type ClosureRef interface {
 	SetStorage(*big.Int, *ethutil.Value)
 }
 
-// Basic inline closure object which implement the 'closure' interface
 type Closure struct {
 	caller  ClosureRef
 	object  ClosureRef
@@ -44,18 +41,8 @@ func NewClosure(msg *state.Message, caller ClosureRef, object ClosureRef, code [
 	return c
 }
 
-// Retuns the x element in data slice
-func (c *Closure) GetStorage(x *big.Int) *ethutil.Value {
-	m := c.object.GetStorage(x)
-	if m == nil {
-		return ethutil.EmptyValue()
-	}
-
-	return m
-}
-
-func (c *Closure) Get(x *big.Int) *ethutil.Value {
-	return c.Gets(x, big.NewInt(1))
+func (c *Closure) GetValue(x *big.Int) *ethutil.Value {
+	return c.GetRangeValue(x, big.NewInt(1))
 }
 
 func (c *Closure) GetOp(x int) OpCode {
@@ -78,7 +65,7 @@ func (c *Closure) GetBytes(x, y int) []byte {
 	return c.Code[x : x+y]
 }
 
-func (c *Closure) Gets(x, y *big.Int) *ethutil.Value {
+func (c *Closure) GetRangeValue(x, y *big.Int) *ethutil.Value {
 	if x.Int64() >= int64(len(c.Code)) || y.Int64() >= int64(len(c.Code)) {
 		return ethutil.NewValue(0)
 	}
@@ -88,27 +75,21 @@ func (c *Closure) Gets(x, y *big.Int) *ethutil.Value {
 	return ethutil.NewValue(partial)
 }
 
-func (self *Closure) SetCode(code []byte) {
-	self.Code = code
-}
-
+/*
+ * State storage functions
+ */
 func (c *Closure) SetStorage(x *big.Int, val *ethutil.Value) {
 	c.object.SetStorage(x, val)
 }
 
-func (c *Closure) Address() []byte {
-	return c.object.Address()
+func (c *Closure) GetStorage(x *big.Int) *ethutil.Value {
+	m := c.object.GetStorage(x)
+	if m == nil {
+		return ethutil.EmptyValue()
+	}
+
+	return m
 }
-
-/*
-func (c *Closure) Call(vm VirtualMachine, args []byte) ([]byte, *big.Int, error) {
-	c.Args = args
-
-	ret, err := vm.RunClosure(c)
-
-	return ret, c.UsedGas, err
-}
-*/
 
 func (c *Closure) Return(ret []byte) []byte {
 	// Return the remaining gas to the caller
@@ -117,6 +98,9 @@ func (c *Closure) Return(ret []byte) []byte {
 	return ret
 }
 
+/*
+ * Gas functions
+ */
 func (c *Closure) UseGas(gas *big.Int) bool {
 	if c.Gas.Cmp(gas) < 0 {
 		return false
@@ -136,6 +120,17 @@ func (c *Closure) ReturnGas(gas, price *big.Int) {
 	c.UsedGas.Sub(c.UsedGas, gas)
 }
 
+/*
+ * Set / Get
+ */
 func (c *Closure) Caller() ClosureRef {
 	return c.caller
+}
+
+func (c *Closure) Address() []byte {
+	return c.object.Address()
+}
+
+func (self *Closure) SetCode(code []byte) {
+	self.Code = code
 }

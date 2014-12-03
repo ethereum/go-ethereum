@@ -737,7 +737,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
 			a := big.NewInt(int64(op) - int64(PUSH1) + 1)
 			pc.Add(pc, ethutil.Big1)
-			data := closure.Gets(pc, a)
+			data := closure.GetRangeValue(pc, a)
 			val := ethutil.BigD(data.Bytes())
 			// Push value to stack
 			stack.Push(val)
@@ -754,7 +754,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 			self.Printf(" => [%d] 0x%x", n, stack.Peek().Bytes())
 
-			if OpCode(closure.Get(new(big.Int).Add(pc, ethutil.Big1)).Uint()) == POP && OpCode(closure.Get(new(big.Int).Add(pc, big.NewInt(2))).Uint()) == POP {
+			if OpCode(closure.GetValue(new(big.Int).Add(pc, ethutil.Big1)).Uint()) == POP && OpCode(closure.GetValue(new(big.Int).Add(pc, big.NewInt(2))).Uint()) == POP {
 				fmt.Println(toValue(v))
 			}
 		case SWAP1, SWAP2, SWAP3, SWAP4, SWAP5, SWAP6, SWAP7, SWAP8, SWAP9, SWAP10, SWAP11, SWAP12, SWAP13, SWAP14, SWAP15, SWAP16:

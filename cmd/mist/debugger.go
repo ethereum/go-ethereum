@@ -152,13 +152,6 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 	block := self.lib.eth.ChainManager().CurrentBlock
 
 	env := utils.NewEnv(statedb, block, account.Address(), value)
-	/*
-		callerClosure := vm.NewClosure(&state.Message{}, account, contract, script, gas, gasPrice)
-		evm := vm.NewDebugVm(env)
-		evm.Dbg = self.Db
-		self.vm = evm
-		self.Db.done = false
-	*/
 
 	self.Logf("callsize %d", len(script))
 	go func() {
