@@ -4,9 +4,8 @@
 #include <libevm/VMFace.h>
 #include <libevm/VM.h>
 
-#include "ExecutionEngine.h"
-#include "Compiler.h"
-#include "Type.h"
+#include "../libevmjit/ExecutionEngine.h"
+#include "../libevmjit/Compiler.h"
 
 namespace dev
 {
@@ -20,8 +19,30 @@ bytesConstRef VM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 	Compiler::Options defaultOptions;
 	auto module = Compiler(defaultOptions).compile(_ext.code);
 
+	RuntimeData data = {};
+
+#define set(INDEX, VALUE) data.elems[INDEX] = eth2llvm(VALUE)
+	set(RuntimeData::Gas, m_gas);
+	set(RuntimeData::Address, fromAddress(_ext.myAddress));
+	set(RuntimeData::Caller, fromAddress(_ext.caller));
+	set(RuntimeData::Origin, fromAddress(_ext.origin));
+	set(RuntimeData::CallValue, _ext.value);
+	set(RuntimeData::CallDataSize, _ext.data.size());
+	set(RuntimeData::GasPrice, _ext.gasPrice);
+	set(RuntimeData::PrevHash, _ext.previousBlock.hash);
+	set(RuntimeData::CoinBase, fromAddress(_ext.currentBlock.coinbaseAddress));
+	set(RuntimeData::TimeStamp, _ext.currentBlock.timestamp);
+	set(RuntimeData::Number, _ext.currentBlock.number);
+	set(RuntimeData::Difficulty, _ext.currentBlock.difficulty);
+	set(RuntimeData::GasLimit, _ext.currentBlock.gasLimit);
+	set(RuntimeData::CodeSize, _ext.code.size());   // TODO: Use constant
+	data.callData = _ext.data.data();
+	data.code = _ext.code.data();
+#undef set
+
 	ExecutionEngine engine;
-	auto exitCode = engine.run(std::move(module), m_gas, false, _ext);
+	auto env = reinterpret_cast<Env*>(&_ext);
+	auto exitCode = engine.run(std::move(module), &data, env);
 
 	switch (static_cast<ReturnCode>(exitCode))
 	{
