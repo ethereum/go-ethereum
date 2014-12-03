@@ -129,7 +129,7 @@ func New(db ethutil.Database, clientIdentity wire.ClientIdentity, keyManager *cr
 
 	ethereum.blockPool = NewBlockPool(ethereum)
 	ethereum.txPool = chain.NewTxPool(ethereum)
-	ethereum.blockChain = chain.NewChainManager()
+	ethereum.blockChain = chain.NewChainManager(ethereum.EventMux())
 	ethereum.blockManager = chain.NewBlockManager(ethereum)
 	ethereum.blockChain.SetProcessor(ethereum.blockManager)
 

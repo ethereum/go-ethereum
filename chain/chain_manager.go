@@ -6,6 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 )
 
@@ -45,6 +46,7 @@ func CalcDifficulty(block, parent *types.Block) *big.Int {
 type ChainManager struct {
 	//eth          EthManager
 	processor    types.BlockProcessor
+	eventMux     *event.TypeMux
 	genesisBlock *types.Block
 	// Last known total difficulty
 	TD *big.Int
@@ -55,10 +57,10 @@ type ChainManager struct {
 	LastBlockHash []byte
 }
 
-func NewChainManager() *ChainManager {
+func NewChainManager(mux *event.TypeMux) *ChainManager {
 	bc := &ChainManager{}
 	bc.genesisBlock = types.NewBlockFromBytes(ethutil.Encode(Genesis))
-	//bc.eth = ethereum
+	bc.eventMux = mux
 
 	bc.setLastBlock()
 
@@ -250,9 +252,9 @@ func (bc *ChainManager) Stop() {
 	}
 }
 
-func (self *ChainManager) InsertChain(chain Blocks) error {
+func (self *ChainManager) InsertChain(chain types.Blocks) error {
 	for _, block := range chain {
-		td, messages, err := self.Ethereum.BlockManager().Process(block)
+		td, messages, err := self.processor.Process(block)
 		if err != nil {
 			if IsKnownBlockErr(err) {
 				continue
@@ -266,8 +268,8 @@ func (self *ChainManager) InsertChain(chain Blocks) error {
 
 		self.add(block)
 		self.SetTotalDifficulty(td)
-		self.Ethereum.EventMux().Post(NewBlockEvent{block})
-		self.Ethereum.EventMux().Post(messages)
+		self.eventMux.Post(NewBlockEvent{block})
+		self.eventMux.Post(messages)
 	}
 
 	return nil

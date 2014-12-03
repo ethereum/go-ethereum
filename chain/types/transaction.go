@@ -82,6 +82,14 @@ func (tx *Transaction) CreationAddress(state *state.State) []byte {
 	return crypto.Sha3(ethutil.NewValue([]interface{}{tx.Sender(), tx.Nonce}).Encode())[12:]
 }
 
+func (tx *Transaction) Curve() (v byte, r []byte, s []byte) {
+	v = tx.v
+	r = ethutil.LeftPadBytes(tx.r, 32)
+	s = ethutil.LeftPadBytes(tx.s, 32)
+
+	return
+}
+
 func (tx *Transaction) Signature(key []byte) []byte {
 	hash := tx.Hash()
 
@@ -93,12 +101,10 @@ func (tx *Transaction) Signature(key []byte) []byte {
 func (tx *Transaction) PublicKey() []byte {
 	hash := tx.Hash()
 
-	// TODO
-	r := ethutil.LeftPadBytes(tx.r, 32)
-	s := ethutil.LeftPadBytes(tx.s, 32)
+	v, r, s := tx.Curve()
 
 	sig := append(r, s...)
-	sig = append(sig, tx.v-27)
+	sig = append(sig, v-27)
 
 	pubkey := crypto.Ecrecover(append(hash, sig...))
 	//pubkey, _ := secp256k1.RecoverPubkey(hash, sig)

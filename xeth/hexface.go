@@ -215,7 +215,7 @@ func (self *JSXEth) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr 
 	if err != nil {
 		return "", err
 	}
-	if chain.IsContractAddr(to) {
+	if types.IsContractAddr(to) {
 		return ethutil.Bytes2Hex(tx.CreationAddress(nil)), nil
 	}
 

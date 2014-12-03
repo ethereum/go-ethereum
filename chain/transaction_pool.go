@@ -110,7 +110,8 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 		return fmt.Errorf("Invalid recipient. len = %d", len(tx.Recipient))
 	}
 
-	if tx.v > 28 || tx.v < 27 {
+	v, _, _ := tx.Curve()
+	if v > 28 || v < 27 {
 		return fmt.Errorf("tx.v != (28 || 27)")
 	}
 
@@ -142,7 +143,7 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 
 func (self *TxPool) Add(tx *types.Transaction) error {
 	hash := tx.Hash()
-	foundTx := FindTx(self.pool, func(tx *Transaction, e *list.Element) bool {
+	foundTx := FindTx(self.pool, func(tx *types.Transaction, e *list.Element) bool {
 		return bytes.Compare(tx.Hash(), hash) == 0
 	})
 
@@ -166,42 +167,6 @@ func (self *TxPool) Add(tx *types.Transaction) error {
 	self.Ethereum.EventMux().Post(TxPreEvent{tx})
 
 	return nil
-}
-
-func (pool *TxPool) queueHandler() {
-out:
-	for {
-		select {
-		case tx := <-pool.queueChan:
-			hash := tx.Hash()
-			foundTx := FindTx(pool.pool, func(tx *types.Transaction, e *list.Element) bool {
-				return bytes.Compare(tx.Hash(), hash) == 0
-			})
-
-			if foundTx != nil {
-				break
-			}
-
-			// Validate the transaction
-			err := pool.ValidateTransaction(tx)
-			if err != nil {
-				txplogger.Debugln("Validating Tx failed", err)
-			} else {
-				// Call blocking version.
-				pool.addTransaction(tx)
-
-				tmp := make([]byte, 4)
-				copy(tmp, tx.Recipient)
-
-				txplogger.Debugf("(t) %x => %x (%v) %x\n", tx.Sender()[:4], tmp, tx.Value, tx.Hash())
-
-				// Notify the subscribers
-				pool.Ethereum.EventMux().Post(TxPreEvent{tx})
-			}
-		case <-pool.quit:
-			break out
-		}
-	}
 }
 
 func (pool *TxPool) CurrentTransactions() []*types.Transaction {
@@ -261,12 +226,10 @@ func (pool *TxPool) Flush() []*types.Transaction {
 }
 
 func (pool *TxPool) Start() {
-	go pool.queueHandler()
+	//go pool.queueHandler()
 }
 
 func (pool *TxPool) Stop() {
-	close(pool.quit)
-
 	pool.Flush()
 
 	txplogger.Infoln("Stopped")

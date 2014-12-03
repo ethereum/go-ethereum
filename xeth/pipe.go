@@ -93,7 +93,7 @@ func (self *XEth) Exists(addr []byte) bool {
 	return self.World().Get(addr) != nil
 }
 
-func (self *XEth) TransactString(key *crypto.KeyPair, rec string, value, gas, price *ethutil.Value, data []byte) (*chain.Transaction, error) {
+func (self *XEth) TransactString(key *crypto.KeyPair, rec string, value, gas, price *ethutil.Value, data []byte) (*types.Transaction, error) {
 	// Check if an address is stored by this address
 	var hash []byte
 	addr := self.World().Config().Get("NameReg").StorageString(rec).Bytes()
@@ -108,10 +108,10 @@ func (self *XEth) TransactString(key *crypto.KeyPair, rec string, value, gas, pr
 	return self.Transact(key, hash, value, gas, price, data)
 }
 
-func (self *XEth) Transact(key *crypto.KeyPair, to []byte, value, gas, price *ethutil.Value, data []byte) (*chain.Transaction, error) {
+func (self *XEth) Transact(key *crypto.KeyPair, to []byte, value, gas, price *ethutil.Value, data []byte) (*types.Transaction, error) {
 	var hash []byte
 	var contractCreation bool
-	if chain.IsContractAddr(to) {
+	if types.IsContractAddr(to) {
 		contractCreation = true
 	} else {
 		// Check if an address is stored by this address
@@ -125,9 +125,9 @@ func (self *XEth) Transact(key *crypto.KeyPair, to []byte, value, gas, price *et
 
 	var tx *types.Transaction
 	if contractCreation {
-		tx = chain.NewContractCreationTx(value.BigInt(), gas.BigInt(), price.BigInt(), data)
+		tx = types.NewContractCreationTx(value.BigInt(), gas.BigInt(), price.BigInt(), data)
 	} else {
-		tx = chain.NewTransactionMessage(hash, value.BigInt(), gas.BigInt(), price.BigInt(), data)
+		tx = types.NewTransactionMessage(hash, value.BigInt(), gas.BigInt(), price.BigInt(), data)
 	}
 
 	state := self.blockManager.TransState()
