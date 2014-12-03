@@ -3,8 +3,7 @@
 
 #include <llvm/IR/Module.h>
 
-#include "Common.h"
-//#include <libevm/ExtVMFace.h>
+#include "Runtime.h"
 
 namespace dev
 {
@@ -16,9 +15,9 @@ namespace jit
 class ExecutionEngine
 {
 public:
-	ExecutionEngine();
+	// FIXME: constructor? ExecutionEngine();
 
-	int run(std::unique_ptr<llvm::Module> module, u256& _gas, bool _outputLogs, ExtVMFace& _ext);
+	int run(std::unique_ptr<llvm::Module> module, RuntimeData* _data, Env* _env);
 
 	bytes returnData;
 };

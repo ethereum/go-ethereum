@@ -20,9 +20,6 @@
 
 #pragma GCC diagnostic pop
 
-
-#include <libevm/VM.h>
-
 #include "Runtime.h"
 #include "Memory.h"
 #include "Stack.h"
@@ -35,11 +32,7 @@ namespace eth
 namespace jit
 {
 
-ExecutionEngine::ExecutionEngine()
-{
-}
-
-int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, bool _outputLogs, ExtVMFace& _ext)
+int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeData* _data, Env* _env)
 {
 	auto module = _module.get(); // Keep ownership of the module in _module
 
@@ -73,7 +66,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, bool
 
 	auto exec = std::unique_ptr<llvm::ExecutionEngine>(builder.create());
 	if (!exec)
-		BOOST_THROW_EXCEPTION(Exception() << errinfo_comment(errorMsg));
+		return -1; // FIXME: Handle internal errors
 	_module.release();  // Successfully created llvm::ExecutionEngine takes ownership of the module
 
 	auto finalizationStartTime = std::chrono::high_resolution_clock::now();
@@ -84,11 +77,11 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, bool
 
 	auto entryFunc = module->getFunction("main");
 	if (!entryFunc)
-		BOOST_THROW_EXCEPTION(Exception() << errinfo_comment("main function not found"));
+		return -2; // FIXME: Handle internal errors
 
 	ReturnCode returnCode;
 	std::jmp_buf buf;
-	Runtime runtime(_gas, _ext, buf, _outputLogs);
+	Runtime runtime(_data, _env, buf);
 	auto r = setjmp(buf);
 	if (r == 0)
 	{
@@ -105,15 +98,12 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, bool
 	}
 	else
 		returnCode = static_cast<ReturnCode>(r);
-
-	// Return remaining gas
-	_gas = returnCode == ReturnCode::OutOfGas ? 0 : runtime.getGas();
-
+	
 	clog(JIT) << "Max stack size: " << Stack::maxStackSize;
 
 	if (returnCode == ReturnCode::Return)
 	{
-		returnData = runtime.getReturnData().toVector(); // TODO: It might be better to place is in Runtime interface
+		returnData = runtime.getReturnData(); // TODO: It might be better to place is in Runtime interface
 
 		auto&& log = clog(JIT);
 		log << "RETURN [ ";
@@ -122,7 +112,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, u256& _gas, bool
 		log << "]";
 	}
 	else
-		cslog(JIT) << "RETURN " << (int)returnCode;
+		clog(JIT) << "RETURN " << (int)returnCode;
 
 	return static_cast<int>(returnCode);
 }
