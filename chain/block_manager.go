@@ -342,7 +342,7 @@ func (sm *BlockManager) ValidateBlock(block, parent *types.Block) error {
 	return nil
 }
 
-func (sm *BlockManager) AccumelateRewards(state *state.State, block, parent *types.Block) error {
+func (sm *BlockManager) AccumelateRewards(statedb *state.State, block, parent *types.Block) error {
 	reward := new(big.Int).Set(BlockReward)
 
 	knownUncles := ethutil.Set(parent.Uncles)
