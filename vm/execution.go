@@ -26,7 +26,7 @@ func (self *Execution) Addr() []byte {
 
 func (self *Execution) Exec(codeAddr []byte, caller ClosureRef) ([]byte, error) {
 	// Retrieve the executing code
-	code := self.vm.Env().GetCode(codeAddr)
+	code := self.vm.Env().State().GetCode(codeAddr)
 
 	return self.exec(code, codeAddr, caller)
 }
@@ -34,11 +34,13 @@ func (self *Execution) Exec(codeAddr []byte, caller ClosureRef) ([]byte, error) 
 func (self *Execution) exec(code, caddr []byte, caller ClosureRef) (ret []byte, err error) {
 	env := self.vm.Env()
 
+	vmlogger.Debugf("pre state %x\n", env.State().Root())
 	snapshot := env.State().Copy()
 	defer func() {
 		if IsDepthErr(err) || IsOOGErr(err) {
 			env.State().Set(snapshot)
 		}
+		vmlogger.Debugf("post state %x\n", env.State().Root())
 	}()
 
 	msg := env.State().Manifest().AddMessage(&state.Message{
@@ -89,6 +91,6 @@ func (self *Execution) exec(code, caddr []byte, caller ClosureRef) (ret []byte, 
 	return
 }
 
-func (self *Execution) Create(caller []byte) (ret []byte, err error) {
+func (self *Execution) Create(caller ClosureRef) (ret []byte, err error) {
 	return self.exec(self.input, nil, caller)
 }
