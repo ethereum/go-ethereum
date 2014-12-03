@@ -1,7 +1,11 @@
 
 project(evmjit-cpp LANGUAGES CXX)
 
-set(SOURCES VM.cpp VM.h)
+set(SOURCES
+    Ext.cpp     Ext.h
+    Runtime.cpp Runtime.h
+    VM.cpp      VM.h
+)
 
 source_group("" FILES ${SOURCES})
 

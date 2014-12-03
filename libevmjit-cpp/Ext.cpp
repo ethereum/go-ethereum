@@ -8,7 +8,7 @@
 //#include <libdevcrypto/SHA3.h>
 //#include <libevm/FeeStructure.h>
 
-#include "RuntimeManager.h"
+#include "Runtime.h"
 #include "Type.h"
 #include "Endianness.h"
 
@@ -18,6 +18,12 @@ namespace eth
 {
 namespace jit
 {
+
+// TODO: Copy of fromAddress in VM.h
+inline u256 fromAddress(Address _a)
+{
+	return (u160)_a;
+}
 
 Ext::Ext(RuntimeManager& _runtimeManager):
 	RuntimeHelper(_runtimeManager),
@@ -179,18 +185,236 @@ void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, size_t _numTopics, s
 
 extern "C"
 {
+
 	using namespace dev::eth::jit;
 
-	//FIXME: Move to arithmentics
-	void ext_exp(i256* _left, i256* _right, i256* o_ret)
+	EXPORT void ext_store(Runtime* _rt, i256* _index, i256* o_value)
+	{
+		auto index = llvm2eth(*_index);
+		auto value = _rt->getExt().store(index); // Interface uses native endianness
+		*o_value = eth2llvm(value);
+	}
+
+	EXPORT void ext_setStore(Runtime* _rt, i256* _index, i256* _value)
+	{
+		auto index = llvm2eth(*_index);
+		auto value = llvm2eth(*_value);
+		auto& ext = _rt->getExt();
+
+		if (value == 0 && ext.store(index) != 0)	// If delete
+			ext.sub.refunds += c_sstoreRefundGas;	// Increase refund counter
+
+		ext.setStore(index, value);	// Interface uses native endianness
+	}
+
+	EXPORT void ext_calldataload(Runtime* _rt, i256* _index, i256* o_value)
+	{
+		auto index = static_cast<size_t>(llvm2eth(*_index));
+		assert(index + 31 > index); // TODO: Handle large index
+		auto b = reinterpret_cast<byte*>(o_value);
+		for (size_t i = index, j = 0; i <= index + 31; ++i, ++j)
+			b[j] = i < _rt->getExt().data.size() ? _rt->getExt().data[i] : 0; // Keep Big Endian
+		// TODO: It all can be done by adding padding to data or by using min() algorithm without branch
+	}
+
+	EXPORT void ext_balance(Runtime* _rt, h256* _address, i256* o_value)
+	{
+		auto u = _rt->getExt().balance(right160(*_address));
+		*o_value = eth2llvm(u);
+	}
+
+	EXPORT void ext_suicide(Runtime* _rt, h256 const* _address)
+	{
+		_rt->getExt().suicide(right160(*_address));
+	}
+
+	EXPORT void ext_create(Runtime* _rt, i256* _endowment, i256* _initOff, i256* _initSize, h256* o_address)
+	{
+		auto&& ext = _rt->getExt();
+		auto endowment = llvm2eth(*_endowment);
+
+		if (ext.balance(ext.myAddress) >= endowment)
+		{
+			ext.subBalance(endowment);
+			u256 gas;   // TODO: Handle gas
+			auto initOff = static_cast<size_t>(llvm2eth(*_initOff));
+			auto initSize = static_cast<size_t>(llvm2eth(*_initSize));
+			auto&& initRef = bytesConstRef(_rt->getMemory().data() + initOff, initSize);
+			OnOpFunc onOp {}; // TODO: Handle that thing
+			h256 address(ext.create(endowment, &gas, initRef, onOp), h256::AlignRight);
+			*o_address = address;
+		}
+		else
+			*o_address = {};
+	}
+
+
+
+	EXPORT void ext_call(Runtime* _rt, i256* io_gas, h256* _receiveAddress, i256* _value, i256* _inOff, i256* _inSize, i256* _outOff, i256* _outSize, h256* _codeAddress, i256* o_ret)
+	{
+		auto&& ext = _rt->getExt();
+		auto value = llvm2eth(*_value);
+
+		auto ret = false;
+		auto gas = llvm2eth(*io_gas);
+		if (ext.balance(ext.myAddress) >= value)
+		{
+			ext.subBalance(value);
+			auto receiveAddress = right160(*_receiveAddress);
+			auto inOff = static_cast<size_t>(llvm2eth(*_inOff));
+			auto inSize = static_cast<size_t>(llvm2eth(*_inSize));
+			auto outOff = static_cast<size_t>(llvm2eth(*_outOff));
+			auto outSize = static_cast<size_t>(llvm2eth(*_outSize));
+			auto&& inRef = bytesConstRef(_rt->getMemory().data() + inOff, inSize);
+			auto&& outRef = bytesConstRef(_rt->getMemory().data() + outOff, outSize);
+			OnOpFunc onOp {}; // TODO: Handle that thing
+			auto codeAddress = right160(*_codeAddress);
+			ret = ext.call(receiveAddress, value, inRef, &gas, outRef, onOp, {}, codeAddress);
+		}
+
+		*io_gas = eth2llvm(gas);
+		o_ret->a = ret ? 1 : 0;
+	}
+
+	EXPORT void ext_sha3(Runtime* _rt, i256* _inOff, i256* _inSize, i256* o_ret)
+	{
+		auto inOff = static_cast<size_t>(llvm2eth(*_inOff));
+		auto inSize = static_cast<size_t>(llvm2eth(*_inSize));
+		auto dataRef = bytesConstRef(_rt->getMemory().data() + inOff, inSize);
+		auto hash = sha3(dataRef);
+		*o_ret = *reinterpret_cast<i256*>(&hash);
+	}
+
+	EXPORT void ext_exp(Runtime*, i256* _left, i256* _right, i256* o_ret)
 	{
 		bigint left = llvm2eth(*_left);
 		bigint right = llvm2eth(*_right);
 		auto ret = static_cast<u256>(boost::multiprecision::powm(left, right, bigint(2) << 256));
 		*o_ret = eth2llvm(ret);
 	}
-}
 
+	EXPORT unsigned char* ext_codeAt(Runtime* _rt, h256* _addr256)
+	{
+		auto&& ext = _rt->getExt();
+		auto addr = right160(*_addr256);
+		auto& code = ext.codeAt(addr);
+		return const_cast<unsigned char*>(code.data());
+	}
+
+	EXPORT void ext_codesizeAt(Runtime* _rt, h256* _addr256, i256* o_ret)
+	{
+		auto&& ext = _rt->getExt();
+		auto addr = right160(*_addr256);
+		auto& code = ext.codeAt(addr);
+		*o_ret = eth2llvm(u256(code.size()));
+	}
+
+	void ext_show_bytes(bytesConstRef _bytes)
+	{
+		for (auto b : _bytes)
+			std::cerr << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned>(b) << " ";
+		std::cerr << std::endl;
+	}
+
+	EXPORT void ext_log0(Runtime* _rt, i256* _memIdx, i256* _numBytes)
+	{
+		auto&& ext = _rt->getExt();
+
+		auto memIdx = llvm2eth(*_memIdx).convert_to<size_t>();
+		auto numBytes = llvm2eth(*_numBytes).convert_to<size_t>();
+
+		auto dataRef = bytesConstRef(_rt->getMemory().data() + memIdx, numBytes);
+		ext.log({}, dataRef);
+
+		if (_rt->outputLogs())
+		{
+			std::cerr << "LOG: ";
+			ext_show_bytes(dataRef);
+		}
+	}
+
+	EXPORT void ext_log1(Runtime* _rt, i256* _memIdx, i256* _numBytes, i256* _topic1)
+	{
+		auto&& ext = _rt->getExt();
+
+		auto memIdx = static_cast<size_t>(llvm2eth(*_memIdx));
+		auto numBytes = static_cast<size_t>(llvm2eth(*_numBytes));
+
+		auto topic1 = llvm2eth(*_topic1);
+
+		auto dataRef = bytesConstRef(_rt->getMemory().data() + memIdx, numBytes);
+		ext.log({topic1}, dataRef);
+
+		if (_rt->outputLogs())
+		{
+			std::cerr << "LOG [" << topic1 << "]: ";
+			ext_show_bytes(dataRef);
+		}
+	}
+
+	EXPORT void ext_log2(Runtime* _rt, i256* _memIdx, i256* _numBytes, i256* _topic1, i256* _topic2)
+	{
+		auto&& ext = _rt->getExt();
+
+		auto memIdx = static_cast<size_t>(llvm2eth(*_memIdx));
+		auto numBytes = static_cast<size_t>(llvm2eth(*_numBytes));
+
+		auto topic1 = llvm2eth(*_topic1);
+		auto topic2 = llvm2eth(*_topic2);
+
+		auto dataRef = bytesConstRef(_rt->getMemory().data() + memIdx, numBytes);
+		ext.log({topic1, topic2}, dataRef);
+
+		if (_rt->outputLogs())
+		{
+			std::cerr << "LOG [" << topic1 << "][" << topic2 << "]: ";
+			ext_show_bytes(dataRef);
+		}
+	}
+
+	EXPORT void ext_log3(Runtime* _rt, i256* _memIdx, i256* _numBytes, i256* _topic1, i256* _topic2, i256* _topic3)
+	{
+		auto&& ext = _rt->getExt();
+
+		auto memIdx = static_cast<size_t>(llvm2eth(*_memIdx));
+		auto numBytes = static_cast<size_t>(llvm2eth(*_numBytes));
+
+		auto topic1 = llvm2eth(*_topic1);
+		auto topic2 = llvm2eth(*_topic2);
+		auto topic3 = llvm2eth(*_topic3);
+
+		auto dataRef = bytesConstRef(_rt->getMemory().data() + memIdx, numBytes);
+		ext.log({topic1, topic2, topic3}, dataRef);
+
+		if (_rt->outputLogs())
+		{
+			std::cerr << "LOG [" << topic1 << "][" << topic2 << "][" << topic3 << "]: ";
+			ext_show_bytes(dataRef);
+		}
+	}
+
+	EXPORT void ext_log4(Runtime* _rt, i256* _memIdx, i256* _numBytes, i256* _topic1, i256* _topic2, i256* _topic3, i256* _topic4)
+	{
+		auto&& ext = _rt->getExt();
+
+		auto memIdx = static_cast<size_t>(llvm2eth(*_memIdx));
+		auto numBytes = static_cast<size_t>(llvm2eth(*_numBytes));
+
+		auto topic1 = llvm2eth(*_topic1);
+		auto topic2 = llvm2eth(*_topic2);
+		auto topic3 = llvm2eth(*_topic3);
+		auto topic4 = llvm2eth(*_topic4);
+
+		auto dataRef = bytesConstRef(_rt->getMemory().data() + memIdx, numBytes);
+		ext.log({topic1, topic2, topic3, topic4}, dataRef);
+
+		if (_rt->outputLogs())
+		{
+			std::cerr << "LOG [" << topic1 << "][" << topic2 << "][" << topic3 << "][" << topic4 << "]: ";
+			ext_show_bytes(dataRef);
+		}
+	}
+}
 }
 }
 
