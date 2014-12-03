@@ -17,8 +17,6 @@ using bigint = boost::multiprecision::cpp_int;
 
 struct NoteChannel {};	// FIXME: Use some log library?
 
-struct ExtVMFace;
-
 }
 }
 }
