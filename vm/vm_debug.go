@@ -35,7 +35,7 @@ func NewDebugVm(env Environment) *DebugVm {
 		lt = LogTyDiff
 	}
 
-	return &DebugVm{env: env, logTy: lt, Recoverable: true}
+	return &DebugVm{env: env, logTy: lt, Recoverable: false}
 }
 
 func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
@@ -168,8 +168,10 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			gas.Set(GasLog)
 			addStepGasUsage(new(big.Int).Mul(big.NewInt(int64(n)), GasLog))
 
-			mSize, _ := stack.Peekn()
+			mSize, mStart := stack.Peekn()
 			addStepGasUsage(mSize)
+
+			newMemSize = calcMemSize(mStart, mSize)
 		case EXP:
 			require(2)
 
@@ -755,10 +757,10 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		case LOG0, LOG1, LOG2, LOG3, LOG4:
 			n := int(op - LOG0)
 			topics := make([][]byte, n)
-			mStart, mSize := stack.Pop().Int64(), stack.Pop().Int64()
+			mSize, mStart := stack.Pop().Int64(), stack.Pop().Int64()
 			data := mem.Geti(mStart, mSize)
 			for i := 0; i < n; i++ {
-				topics[i] = stack.Pop().Bytes()
+				topics[i] = ethutil.LeftPadBytes(stack.Pop().Bytes(), 32)
 			}
 
 			log := &state.Log{closure.Address(), topics, data}

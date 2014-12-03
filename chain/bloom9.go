@@ -11,13 +11,13 @@ import (
 func CreateBloom(receipts Receipts) []byte {
 	bin := new(big.Int)
 	for _, receipt := range receipts {
-		bin.Or(bin, logsBloom(receipt.logs))
+		bin.Or(bin, LogsBloom(receipt.logs))
 	}
 
 	return ethutil.LeftPadBytes(bin.Bytes(), 64)
 }
 
-func logsBloom(logs state.Logs) *big.Int {
+func LogsBloom(logs state.Logs) *big.Int {
 	bin := new(big.Int)
 	for _, log := range logs {
 		data := [][]byte{log.Address}

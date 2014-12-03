@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/tests/helper"
@@ -16,6 +17,12 @@ type Account struct {
 	Code    string
 	Nonce   string
 	Storage map[string]string
+}
+
+type Log struct {
+	Address string
+	Data    string
+	Topics  []string
 }
 
 func StateObjectFromAccount(addr string, account Account) *state.StateObject {
@@ -46,6 +53,7 @@ type VmTest struct {
 	Env         Env
 	Exec        map[string]string
 	Transaction map[string]string
+	Logs        map[string]Log
 	Gas         string
 	Out         string
 	Post        map[string]Account
@@ -57,10 +65,10 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
-		state := state.New(helper.NewTrie())
+		statedb := state.New(helper.NewTrie())
 		for addr, account := range test.Pre {
 			obj := StateObjectFromAccount(addr, account)
-			state.SetStateObject(obj)
+			statedb.SetStateObject(obj)
 		}
 
 		// XXX Yeah, yeah...
@@ -77,15 +85,16 @@ func RunVmTest(p string, t *testing.T) {
 		}
 
 		var (
-			ret []byte
-			gas *big.Int
-			err error
+			ret  []byte
+			gas  *big.Int
+			err  error
+			logs state.Logs
 		)
 
 		if len(test.Exec) > 0 {
-			ret, gas, err = helper.RunVm(state, env, test.Exec)
+			ret, logs, gas, err = helper.RunVm(statedb, env, test.Exec)
 		} else {
-			ret, gas, err = helper.RunState(state, env, test.Transaction)
+			ret, logs, gas, err = helper.RunState(statedb, env, test.Transaction)
 		}
 
 		// When an error is returned it doesn't always mean the tests fails.
@@ -107,13 +116,23 @@ func RunVmTest(p string, t *testing.T) {
 		}
 
 		for addr, account := range test.Post {
-			obj := state.GetStateObject(helper.FromHex(addr))
+			obj := statedb.GetStateObject(helper.FromHex(addr))
 			for addr, value := range account.Storage {
 				v := obj.GetState(helper.FromHex(addr)).Bytes()
 				vexp := helper.FromHex(value)
 
 				if bytes.Compare(v, vexp) != 0 {
 					t.Errorf("%s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address()[0:4], addr, vexp, v, ethutil.BigD(vexp), ethutil.BigD(v))
+				}
+			}
+		}
+
+		if len(test.Logs) > 0 {
+			genBloom := ethutil.LeftPadBytes(chain.LogsBloom(logs).Bytes(), 64)
+			// Logs within the test itself aren't correct, missing empty fields (32 0s)
+			for bloom /*logs*/, _ := range test.Logs {
+				if !bytes.Equal(genBloom, ethutil.Hex2Bytes(bloom)) {
+					t.Errorf("bloom mismatch")
 				}
 			}
 		}
@@ -158,6 +177,11 @@ func TestVMSha3(t *testing.T) {
 
 func TestVm(t *testing.T) {
 	const fn = "../files/vmtests/vmtests.json"
+	RunVmTest(fn, t)
+}
+
+func TestVmLog(t *testing.T) {
+	const fn = "../files/vmtests/vmLogTest.json"
 	RunVmTest(fn, t)
 }
 

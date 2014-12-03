@@ -147,9 +147,8 @@ func (m *Memory) Get(offset, size int64) []byte {
 
 func (self *Memory) Geti(offset, size int64) (cpy []byte) {
 	if len(self.store) > int(offset) {
-		s := int64(math.Min(float64(len(self.store)), float64(offset+size)))
 		cpy = make([]byte, size)
-		copy(cpy, self.store[offset:offset+s])
+		copy(cpy, self.store[offset:offset+size])
 
 		return
 	}
