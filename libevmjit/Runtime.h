@@ -4,8 +4,9 @@
 #include <vector>
 #include <csetjmp>
 
-#include <libevm/ExtVMFace.h>
+//#include <libevm/ExtVMFace.h>
 
+#include "Instruction.h"
 #include "CompilerHelper.h"
 #include "Utils.h"
 #include "Type.h"
@@ -75,7 +76,7 @@ public:
 	ExtVMFace& getExt() { return m_ext; }
 
 	u256 getGas() const;
-	bytesConstRef getReturnData() const;
+	bytes getReturnData() const;
 	decltype(&jmp_buf{}[0]) getJmpBuf() { return m_data.jmpBuf; }
 	bool outputLogs() const;
 

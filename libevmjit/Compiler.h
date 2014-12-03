@@ -3,8 +3,7 @@
 
 #include <llvm/IR/IRBuilder.h>
 
-#include <libdevcore/Common.h>
-
+#include "Common.h"
 #include "BasicBlock.h"
 
 namespace dev
@@ -44,9 +43,9 @@ public:
 
 private:
 
-    void createBasicBlocks(bytes const& _bytecode);
+	void createBasicBlocks(bytes const& _bytecode);
 
-    void compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode, class RuntimeManager& _runtimeManager, class Arith256& _arith, class Memory& _memory, class Ext& _ext, class GasMeter& _gasMeter, llvm::BasicBlock* _nextBasicBlock);
+	void compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode, class RuntimeManager& _runtimeManager, class Arith256& _arith, class Memory& _memory, class Ext& _ext, class GasMeter& _gasMeter, llvm::BasicBlock* _nextBasicBlock);
 
 	void removeDeadBlocks();
 

@@ -1,8 +1,7 @@
 
 #pragma once
 
-#include <libevm/ExtVMFace.h>
-
+#include <array>
 #include "CompilerHelper.h"
 
 namespace dev

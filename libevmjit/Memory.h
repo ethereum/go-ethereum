@@ -1,7 +1,5 @@
 #pragma once
 
-#include <libdevcore/Common.h>
-
 #include "CompilerHelper.h"
 
 namespace dev

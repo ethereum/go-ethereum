@@ -1,5 +1,6 @@
 
 #include "Utils.h"
+#include "Instruction.h"
 
 namespace dev
 {

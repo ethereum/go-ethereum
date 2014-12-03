@@ -13,8 +13,7 @@
 #include <llvm/PassManager.h>
 #include <llvm/Transforms/Scalar.h>
 
-#include <libevmcore/Instruction.h>
-
+#include "Instruction.h"
 #include "Type.h"
 #include "Memory.h"
 #include "Stack.h"
@@ -248,7 +247,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode)
 
 
 void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode, RuntimeManager& _runtimeManager,
-                                 Arith256& _arith, Memory& _memory, Ext& _ext, GasMeter& _gasMeter, llvm::BasicBlock* _nextBasicBlock)
+								 Arith256& _arith, Memory& _memory, Ext& _ext, GasMeter& _gasMeter, llvm::BasicBlock* _nextBasicBlock)
 {
 	if (!_nextBasicBlock) // this is the last block in the code
 		_nextBasicBlock = m_stopBB;
@@ -490,8 +489,8 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 
 			auto kInRange = m_builder.CreateICmpULE(idx, llvm::ConstantInt::get(Type::Word, 30));
 			auto result = m_builder.CreateSelect(kInRange,
-			                                     m_builder.CreateSelect(bittest, val1, val0),
-			                                     word);
+												 m_builder.CreateSelect(bittest, val1, val0),
+												 word);
 			stack.push(result);
 			break;
 		}

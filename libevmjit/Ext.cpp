@@ -5,8 +5,8 @@
 #include <llvm/IR/TypeBuilder.h>
 #include <llvm/IR/IntrinsicInst.h>
 
-#include <libdevcrypto/SHA3.h>
-#include <libevm/FeeStructure.h>
+//#include <libdevcrypto/SHA3.h>
+//#include <libevm/FeeStructure.h>
 
 #include "Runtime.h"
 #include "Type.h"

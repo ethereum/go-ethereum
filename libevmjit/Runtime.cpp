@@ -91,7 +91,7 @@ u256 Runtime::getGas() const
 	return llvm2eth(m_data.elems[RuntimeData::Gas]);
 }
 
-bytesConstRef Runtime::getReturnData() const
+bytes Runtime::getReturnData() const	// FIXME: Reconsider returning by copy
 {
 	// TODO: Handle large indexes
 	auto offset = static_cast<size_t>(llvm2eth(m_data.elems[RuntimeData::ReturnDataOffset]));
@@ -99,7 +99,8 @@ bytesConstRef Runtime::getReturnData() const
 
 	assert(offset + size <= m_memory.size());
 	// TODO: Handle invalid data access by returning empty ref
-	return {m_memory.data() + offset, size};
+	auto dataBeg = m_memory.begin() + offset;
+	return {dataBeg, dataBeg + size};
 }
 
 bool Runtime::outputLogs() const

@@ -1,9 +1,8 @@
 
 #pragma once
 
-#include <libevmcore/Instruction.h>
-
 #include "CompilerHelper.h"
+#include "Instruction.h"
 
 namespace dev
 {

@@ -3,8 +3,8 @@
 
 #include <llvm/IR/Module.h>
 
-#include <libdevcore/Common.h>
-#include <libevm/ExtVMFace.h>
+#include "Common.h"
+//#include <libevm/ExtVMFace.h>
 
 namespace dev
 {

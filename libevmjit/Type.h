@@ -3,7 +3,7 @@
 
 #include <llvm/IR/Type.h>
 #include <llvm/IR/Constants.h>
-#include <libdevcore/Common.h>
+#include "Common.h"
 
 namespace dev
 {

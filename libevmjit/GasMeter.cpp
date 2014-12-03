@@ -5,9 +5,6 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IntrinsicInst.h>
 
-#include <libevmcore/Instruction.h>
-#include <libevm/FeeStructure.h>
-
 #include "Type.h"
 #include "Ext.h"
 #include "Runtime.h"
@@ -22,6 +19,26 @@ namespace jit
 namespace // Helper functions
 {
 
+uint64_t const c_stepGas = 1;
+uint64_t const c_balanceGas = 20;
+uint64_t const c_sha3Gas = 20;
+uint64_t const c_sloadGas = 20;
+uint64_t const c_sstoreSetGas = 300;
+uint64_t const c_sstoreResetGas = 100;
+uint64_t const c_sstoreRefundGas = 100;
+uint64_t const c_createGas = 100;
+uint64_t const c_callGas = 20;
+uint64_t const c_expGas = 1;
+uint64_t const c_expByteGas = 1;
+uint64_t const c_memoryGas = 1;
+uint64_t const c_txDataZeroGas = 1;
+uint64_t const c_txDataNonZeroGas = 5;
+uint64_t const c_txGas = 500;
+uint64_t const c_logGas = 32;
+uint64_t const c_logDataGas = 1;
+uint64_t const c_logTopicGas = 32;
+uint64_t const c_copyGas = 1;
+
 uint64_t getStepCost(Instruction inst) // TODO: Add this function to FeeSructure (pull request submitted)
 {
 	switch (inst)
@@ -31,21 +48,16 @@ uint64_t getStepCost(Instruction inst) // TODO: Add this function to FeeSructure
 	case Instruction::SSTORE: // Handle cost of SSTORE separately in GasMeter::countSStore()
 		return 0;
 
-	case Instruction::SLOAD:
-		return static_cast<uint64_t>(c_sloadGas);
+	case Instruction::SLOAD:	return c_sloadGas;
 
-	case Instruction::SHA3:
-		return static_cast<uint64_t>(c_sha3Gas);
+	case Instruction::SHA3:		return c_sha3Gas;
 
-	case Instruction::BALANCE:
-		return static_cast<uint64_t>(c_sha3Gas);
+	case Instruction::BALANCE:	return c_balanceGas;
 
 	case Instruction::CALL:
-	case Instruction::CALLCODE:
-		return static_cast<uint64_t>(c_callGas);
+	case Instruction::CALLCODE:	return c_callGas;
 
-	case Instruction::CREATE:
-		return static_cast<uint64_t>(c_createGas);
+	case Instruction::CREATE:	return c_createGas;
 
 	case Instruction::LOG0:
 	case Instruction::LOG1:
@@ -54,11 +66,11 @@ uint64_t getStepCost(Instruction inst) // TODO: Add this function to FeeSructure
 	case Instruction::LOG4:
 	{
 		auto numTopics = static_cast<uint64_t>(inst) - static_cast<uint64_t>(Instruction::LOG0);
-		return static_cast<uint64_t>(c_logGas) + numTopics * static_cast<uint64_t>(c_logTopicGas);
+		return c_logGas + numTopics * c_logTopicGas;
 	}
 
 	default: // Assumes instruction code is valid
-		return static_cast<uint64_t>(c_stepGas);
+		return 1;
 	}
 }
 

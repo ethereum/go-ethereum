@@ -10,8 +10,6 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IntrinsicInst.h>
 
-#include <libdevcore/Common.h>
-
 #include "Type.h"
 #include "Runtime.h"
 #include "GasMeter.h"
@@ -208,7 +206,7 @@ extern "C"
 {
 	using namespace dev::eth::jit;
 
-	EXPORT uint8_t* mem_resize(Runtime* _rt, i256* _size)
+	EXPORT byte* mem_resize(Runtime* _rt, i256* _size)
 	{
 		auto size = _size->a; // Trunc to 64-bit
 		auto& memory = _rt->getMemory();
