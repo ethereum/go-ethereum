@@ -2,6 +2,9 @@
 #pragma once
 
 #include <vector>
+#include <csetjmp>
+
+//#include <libevm/ExtVMFace.h>
 
 #include "Instruction.h"
 #include "CompilerHelper.h"
@@ -25,15 +28,11 @@ namespace jit
 
 using StackImpl = std::vector<i256>;
 using MemoryImpl = bytes;
-using JmpBufRef = decltype(&jmp_buf{}[0]);
-
-/// VM Environment (ExtVM) opaque type
-struct Env;
 
 class Runtime
 {
 public:
-	Runtime(RuntimeData* _data, Env* _env, JmpBufRef _jmpBuf);
+	Runtime(u256 _gas, ExtVMFace& _ext, jmp_buf _jmpBuf, bool _outputLogs);
 
 	Runtime(const Runtime&) = delete;
 	void operator=(const Runtime&) = delete;
@@ -42,18 +41,22 @@ public:
 
 	StackImpl& getStack() { return m_stack; }
 	MemoryImpl& getMemory() { return m_memory; }
-	Env* getEnvPtr() { return &m_env; }
+	ExtVMFace& getExt() { return m_ext; }
 
 	u256 getGas() const;
 	bytes getReturnData() const;
-	JmpBufRef getJmpBuf() { return m_jmpBuf; }
+	decltype(&jmp_buf{}[0]) getJmpBuf() { return m_data.jmpBuf; }
+	bool outputLogs() const;
 
 private:
-	RuntimeData& m_data;
-	Env& m_env;
-	JmpBufRef m_jmpBuf;
+	void set(RuntimeData::Index _index, u256 _value);
+
+	/// @internal Must be the first element to asure Runtime* === RuntimeData*
+	RuntimeData m_data;
 	StackImpl m_stack;
 	MemoryImpl m_memory;
+	ExtVMFace& m_ext;
+	bool m_outputLogs; ///< write LOG statements to console
 };
 
 }

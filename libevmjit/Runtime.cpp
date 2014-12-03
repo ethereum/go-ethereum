@@ -14,33 +14,11 @@ namespace eth
 namespace jit
 {
 
-Runtime::Runtime(u256 _gas, ExtVMFace& _ext, jmp_buf _jmpBuf, bool _outputLogs):
-	m_ext(_ext),
-	m_outputLogs(_outputLogs)
-{
-	set(RuntimeData::Gas, _gas);
-	set(RuntimeData::Address, fromAddress(_ext.myAddress));
-	set(RuntimeData::Caller, fromAddress(_ext.caller));
-	set(RuntimeData::Origin, fromAddress(_ext.origin));
-	set(RuntimeData::CallValue, _ext.value);
-	set(RuntimeData::CallDataSize, _ext.data.size());
-	set(RuntimeData::GasPrice, _ext.gasPrice);
-	set(RuntimeData::PrevHash, _ext.previousBlock.hash);
-	set(RuntimeData::CoinBase, fromAddress(_ext.currentBlock.coinbaseAddress));
-	set(RuntimeData::TimeStamp, _ext.currentBlock.timestamp);
-	set(RuntimeData::Number, _ext.currentBlock.number);
-	set(RuntimeData::Difficulty, _ext.currentBlock.difficulty);
-	set(RuntimeData::GasLimit, _ext.currentBlock.gasLimit);
-	set(RuntimeData::CodeSize, _ext.code.size());   // TODO: Use constant
-	m_data.callData = _ext.data.data();
-	m_data.code = _ext.code.data();
-	m_data.jmpBuf = _jmpBuf;
-}
-
-void Runtime::set(RuntimeData::Index _index, u256 _value)
-{
-	m_data.elems[_index] = eth2llvm(_value);
-}
+Runtime::Runtime(RuntimeData* _data, Env* _env, JmpBufRef _jmpBuf):
+	m_data(*_data),
+	m_env(*_env),
+	m_jmpBuf(_jmpBuf)
+{}
 
 u256 Runtime::getGas() const
 {
@@ -58,12 +36,6 @@ bytes Runtime::getReturnData() const	// FIXME: Reconsider returning by copy
 	auto dataBeg = m_memory.begin() + offset;
 	return {dataBeg, dataBeg + size};
 }
-
-bool Runtime::outputLogs() const
-{
-	return m_outputLogs;
-}
-
 
 }
 }

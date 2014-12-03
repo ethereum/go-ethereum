@@ -12,9 +12,7 @@ namespace eth
 {
 namespace jit
 {
-
-using jmpBufRef = decltype(&jmp_buf{}[0]);
-
+	
 struct RuntimeData
 {
 	enum Index
@@ -43,7 +41,6 @@ struct RuntimeData
 	i256 elems[_size];
 	byte const* callData;
 	byte const* code;
-	jmpBufRef jmpBuf;
 };
 
 }
