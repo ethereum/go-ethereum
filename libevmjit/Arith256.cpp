@@ -31,6 +31,7 @@ Arith256::Arith256(llvm::IRBuilder<>& _builder) :
 	m_mod = Function::Create(FunctionType::get(Type::Void, arg2Types, false), Linkage::ExternalLinkage, "arith_mod", getModule());
 	m_sdiv = Function::Create(FunctionType::get(Type::Void, arg2Types, false), Linkage::ExternalLinkage, "arith_sdiv", getModule());
 	m_smod = Function::Create(FunctionType::get(Type::Void, arg2Types, false), Linkage::ExternalLinkage, "arith_smod", getModule());
+	m_exp = Function::Create(FunctionType::get(Type::Void, arg2Types, false), Linkage::ExternalLinkage, "arith_exp", getModule());
 	m_addmod = Function::Create(FunctionType::get(Type::Void, arg3Types, false), Linkage::ExternalLinkage, "arith_addmod", getModule());
 	m_mulmod = Function::Create(FunctionType::get(Type::Void, arg3Types, false), Linkage::ExternalLinkage, "arith_mulmod", getModule());
 }
@@ -78,6 +79,11 @@ llvm::Value* Arith256::sdiv(llvm::Value* _arg1, llvm::Value* _arg2)
 llvm::Value* Arith256::smod(llvm::Value* _arg1, llvm::Value* _arg2)
 {
 	return binaryOp(m_smod, _arg1, _arg2);
+}
+
+llvm::Value* Arith256::exp(llvm::Value* _arg1, llvm::Value* _arg2)
+{
+	return binaryOp(m_exp, _arg1, _arg2);
 }
 
 llvm::Value* Arith256::addmod(llvm::Value* _arg1, llvm::Value* _arg2, llvm::Value* _arg3)
@@ -135,6 +141,14 @@ extern "C"
 		auto arg1 = llvm2eth(*_arg1);
 		auto arg2 = llvm2eth(*_arg2);
 		*o_result = eth2llvm(arg2 == 0 ? arg2 : (arg1.convert_to<s256>() % arg2.convert_to<s256>()).convert_to<u256>());
+	}
+
+	EXPORT void arith_exp(i256* _arg1, i256* _arg2, i256* o_result)
+	{
+		bigint left = llvm2eth(*_arg1);
+		bigint right = llvm2eth(*_arg2);
+		auto ret = static_cast<u256>(boost::multiprecision::powm(left, right, bigint(2) << 256));
+		*o_result = eth2llvm(ret);
 	}
 
 	EXPORT void arith_mulmod(i256* _arg1, i256* _arg2, i256* _arg3, i256* o_result)

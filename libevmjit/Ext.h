@@ -26,7 +26,6 @@ public:
 	llvm::Value* call(llvm::Value*& _gas, llvm::Value* _receiveAddress, llvm::Value* _value, llvm::Value* _inOff, llvm::Value* _inSize, llvm::Value* _outOff, llvm::Value* _outSize, llvm::Value* _codeAddress);
 
 	llvm::Value* sha3(llvm::Value* _inOff, llvm::Value* _inSize);
-	llvm::Value* exp(llvm::Value* _left, llvm::Value* _right);
 	llvm::Value* codeAt(llvm::Value* _addr);
 	llvm::Value* codesizeAt(llvm::Value* _addr);
 

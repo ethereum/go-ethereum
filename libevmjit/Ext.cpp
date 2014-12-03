@@ -135,15 +135,6 @@ llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
 	return hash;
 }
 
-llvm::Value* Ext::exp(llvm::Value* _left, llvm::Value* _right)
-{
-	// TODO: Move ext to Arith256
-	m_builder.CreateStore(_left, m_args[0]);
-	m_builder.CreateStore(_right, m_arg2);
-	createCall(m_exp, getRuntimeManager().getRuntimePtr(), m_args[0], m_arg2, m_args[1]);
-	return m_builder.CreateLoad(m_args[1]);
-}
-
 llvm::Value* Ext::codeAt(llvm::Value* _addr)
 {
 	auto addr = Endianness::toBE(m_builder, _addr);
@@ -175,22 +166,5 @@ void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, size_t _numTopics, s
 }
 
 }
-
-
-extern "C"
-{
-	using namespace dev::eth::jit;
-
-	//FIXME: Move to arithmentics
-	void ext_exp(i256* _left, i256* _right, i256* o_ret)
-	{
-		bigint left = llvm2eth(*_left);
-		bigint right = llvm2eth(*_right);
-		auto ret = static_cast<u256>(boost::multiprecision::powm(left, right, bigint(2) << 256));
-		*o_ret = eth2llvm(ret);
-	}
-}
-
 }
 }
-

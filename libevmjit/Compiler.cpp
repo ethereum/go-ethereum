@@ -331,7 +331,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 		{
 			auto left = stack.pop();
 			auto right = stack.pop();
-			auto ret = _ext.exp(left, right);
+			auto ret = _arith.exp(left, right);
 			stack.push(ret);
 			break;
 		}

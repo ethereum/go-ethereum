@@ -20,6 +20,7 @@ public:
 	llvm::Value* mod(llvm::Value* _arg1, llvm::Value* _arg2);
 	llvm::Value* sdiv(llvm::Value* _arg1, llvm::Value* _arg2);
 	llvm::Value* smod(llvm::Value* _arg1, llvm::Value* _arg2);
+	llvm::Value* exp(llvm::Value* _arg1, llvm::Value* _arg2);
 	llvm::Value* mulmod(llvm::Value* _arg1, llvm::Value* _arg2, llvm::Value* _arg3);
 	llvm::Value* addmod(llvm::Value* _arg1, llvm::Value* _arg2, llvm::Value* _arg3);
 
@@ -32,6 +33,7 @@ private:
 	llvm::Function* m_mod;
 	llvm::Function* m_sdiv;
 	llvm::Function* m_smod;
+	llvm::Function* m_exp;
 	llvm::Function* m_mulmod;
 	llvm::Function* m_addmod;
 
