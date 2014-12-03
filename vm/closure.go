@@ -12,7 +12,7 @@ import (
 type ClosureRef interface {
 	ReturnGas(*big.Int, *big.Int)
 	Address() []byte
-	Object() *state.StateObject
+	SetCode([]byte)
 	GetStorage(*big.Int) *ethutil.Value
 	SetStorage(*big.Int, *ethutil.Value)
 }
@@ -20,10 +20,9 @@ type ClosureRef interface {
 // Basic inline closure object which implement the 'closure' interface
 type Closure struct {
 	caller  ClosureRef
-	object  *state.StateObject
+	object  ClosureRef
 	Code    []byte
 	message *state.Message
-	exe     *Execution
 
 	Gas, UsedGas, Price *big.Int
 
@@ -31,7 +30,7 @@ type Closure struct {
 }
 
 // Create a new closure for the given data items
-func NewClosure(msg *state.Message, caller ClosureRef, object *state.StateObject, code []byte, gas, price *big.Int) *Closure {
+func NewClosure(msg *state.Message, caller ClosureRef, object ClosureRef, code []byte, gas, price *big.Int) *Closure {
 	c := &Closure{message: msg, caller: caller, object: object, Code: code, Args: nil}
 
 	// Gas should be a pointer so it can safely be reduced through the run
@@ -89,6 +88,10 @@ func (c *Closure) Gets(x, y *big.Int) *ethutil.Value {
 	return ethutil.NewValue(partial)
 }
 
+func (self *Closure) SetCode(code []byte) {
+	self.Code = code
+}
+
 func (c *Closure) SetStorage(x *big.Int, val *ethutil.Value) {
 	c.object.SetStorage(x, val)
 }
@@ -97,6 +100,7 @@ func (c *Closure) Address() []byte {
 	return c.object.Address()
 }
 
+/*
 func (c *Closure) Call(vm VirtualMachine, args []byte) ([]byte, *big.Int, error) {
 	c.Args = args
 
@@ -104,6 +108,7 @@ func (c *Closure) Call(vm VirtualMachine, args []byte) ([]byte, *big.Int, error)
 
 	return ret, c.UsedGas, err
 }
+*/
 
 func (c *Closure) Return(ret []byte) []byte {
 	// Return the remaining gas to the caller
@@ -131,14 +136,6 @@ func (c *Closure) ReturnGas(gas, price *big.Int) {
 	c.UsedGas.Sub(c.UsedGas, gas)
 }
 
-func (c *Closure) Object() *state.StateObject {
-	return c.object
-}
-
 func (c *Closure) Caller() ClosureRef {
 	return c.caller
-}
-
-func (self *Closure) SetExecution(exe *Execution) {
-	self.exe = exe
 }

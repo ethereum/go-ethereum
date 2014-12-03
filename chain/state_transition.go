@@ -169,119 +169,20 @@ func (self *StateTransition) TransitionState() (err error) {
 		return
 	}
 
-	if sender.Balance().Cmp(self.value) < 0 {
-		return fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, sender.Balance)
-	}
-
-	var snapshot *state.State
-	// If the receiver is nil it's a contract (\0*32).
+	var ret []byte
+	vmenv := NewEnv(self.state, self.tx, self.block)
+	var ref vm.ClosureRef
 	if tx.CreatesContract() {
-		// Subtract the (irreversible) amount from the senders account
-		sender.SubAmount(self.value)
+		self.rec = MakeContract(tx, self.state)
 
-		snapshot = self.state.Copy()
-
-		// Create a new state object for the contract
-		receiver = MakeContract(tx, self.state)
-		self.rec = receiver
-		if receiver == nil {
-			return fmt.Errorf("Unable to create contract")
-		}
-
-		// Add the amount to receivers account which should conclude this transaction
-		receiver.AddAmount(self.value)
+		ret, err, ref = vmenv.Create(sender, receiver.Address(), self.tx.Data, self.gas, self.gasPrice, self.value)
+		ref.SetCode(ret)
 	} else {
-		receiver = self.Receiver()
-
-		// Subtract the amount from the senders account
-		sender.SubAmount(self.value)
-		// Add the amount to receivers account which should conclude this transaction
-		receiver.AddAmount(self.value)
-
-		snapshot = self.state.Copy()
+		ret, err = vmenv.Call(self.Sender(), self.Receiver().Address(), self.tx.Data, self.gas, self.gasPrice, self.value)
 	}
-
-	msg := self.state.Manifest().AddMessage(&state.Message{
-		To: receiver.Address(), From: sender.Address(),
-		Input:  self.tx.Data,
-		Origin: sender.Address(),
-		Block:  self.block.Hash(), Timestamp: self.block.Time, Coinbase: self.block.Coinbase, Number: self.block.Number,
-		Value: self.value,
-	})
-
-	// Process the init code and create 'valid' contract
-	if types.IsContractAddr(self.receiver) {
-		// Evaluate the initialization script
-		// and use the return value as the
-		// script section for the state object.
-		self.data = nil
-
-		code, evmerr := self.Eval(msg, receiver.Init(), receiver)
-		if evmerr != nil {
-			self.state.Set(snapshot)
-
-			statelogger.Debugf("Error during init execution %v", evmerr)
-		}
-
-		receiver.Code = code
-		msg.Output = code
-	} else {
-		if len(receiver.Code) > 0 {
-			ret, evmerr := self.Eval(msg, receiver.Code, receiver)
-			if evmerr != nil {
-				self.state.Set(snapshot)
-
-				statelogger.Debugf("Error during code execution %v", evmerr)
-			}
-
-			msg.Output = ret
-		}
+	if err != nil {
+		statelogger.Debugln(err)
 	}
-
-	/*
-	* XXX The following _should_ replace the above transaction
-	* execution (also for regular calls. Will replace / test next
-	* phase
-	 */
-	/*
-		// Execute transaction
-		if tx.CreatesContract() {
-			self.rec = MakeContract(tx, self.state)
-		}
-
-		address := self.Receiver().Address()
-		evm := vm.New(NewEnv(state, self.tx, self.block), vm.DebugVmTy)
-		exe := NewExecution(evm, address, self.tx.Data, self.gas, self.gas.Price, self.tx.Value)
-		ret, err := msg.Exec(address, self.Sender())
-		if err != nil {
-			statelogger.Debugln(err)
-		} else {
-			if tx.CreatesContract() {
-				self.Receiver().Code = ret
-			}
-			msg.Output = ret
-		}
-	*/
-
-	// Add default LOG. Default = big(sender.addr) + 1
-	//addr := ethutil.BigD(receiver.Address())
-	//self.state.AddLog(&state.Log{ethutil.U256(addr.Add(addr, ethutil.Big1)).Bytes(), [][]byte{sender.Address()}, nil})
-
-	return
-}
-
-func (self *StateTransition) Eval(msg *state.Message, script []byte, context *state.StateObject) (ret []byte, err error) {
-	var (
-		transactor    = self.Sender()
-		state         = self.state
-		env           = NewEnv(state, self.tx, self.block)
-		callerClosure = vm.NewClosure(msg, transactor, context, script, self.gas, self.gasPrice)
-	)
-
-	evm := vm.New(env, vm.DebugVmTy)
-	// TMP this will change in the refactor
-	callerClosure.SetExecution(vm.NewExecution(evm, nil, nil, nil, nil, self.tx.Value))
-	ret, _, err = callerClosure.Call(evm, self.tx.Data)
 
 	return
 }

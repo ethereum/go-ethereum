@@ -21,6 +21,13 @@ type Environment interface {
 	GasLimit() *big.Int
 	Transfer(from, to Account, amount *big.Int) error
 	AddLog(*state.Log)
+
+	Depth() int
+	SetDepth(i int)
+
+	Call(me ClosureRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error)
+	CallCode(me ClosureRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error)
+	Create(me ClosureRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error, ClosureRef)
 }
 
 type Object interface {
@@ -42,10 +49,6 @@ func Transfer(from, to Account, amount *big.Int) error {
 
 	from.SubBalance(amount)
 	to.AddBalance(amount)
-
-	// Add default LOG. Default = big(sender.addr) + 1
-	//addr := ethutil.BigD(receiver.Address())
-	//tx.addLog(vm.Log{sender.Address(), [][]byte{ethutil.U256(addr.Add(addr, ethutil.Big1)).Bytes()}, nil})
 
 	return nil
 }

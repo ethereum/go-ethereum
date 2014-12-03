@@ -276,13 +276,12 @@ func (c *StateObject) Init() Code {
 	return c.InitCode
 }
 
-// To satisfy ClosureRef
-func (self *StateObject) Object() *StateObject {
-	return self
-}
-
 func (self *StateObject) Root() []byte {
 	return self.State.Trie.GetRoot()
+}
+
+func (self *StateObject) SetCode(code []byte) {
+	self.Code = code
 }
 
 //

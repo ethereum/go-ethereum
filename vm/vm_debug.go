@@ -35,11 +35,26 @@ func NewDebugVm(env Environment) *DebugVm {
 		lt = LogTyDiff
 	}
 
-	return &DebugVm{env: env, logTy: lt, Recoverable: false}
+	return &DebugVm{env: env, logTy: lt, Recoverable: true}
 }
 
-func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
-	self.depth++
+func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
+	self.env.SetDepth(self.env.Depth() + 1)
+
+	msg := self.env.State().Manifest().AddMessage(&state.Message{
+		To: me.Address(), From: caller.Address(),
+		Input:  callData,
+		Origin: self.env.Origin(),
+		Block:  self.env.BlockHash(), Timestamp: self.env.Time(), Coinbase: self.env.Coinbase(), Number: self.env.BlockNumber(),
+		Value: value,
+	})
+	closure := NewClosure(msg, caller, me, code, gas, price)
+
+	if self.env.Depth() == MaxCallDepth {
+		closure.UseGas(gas)
+
+		return closure.Return(nil), DepthError{}
+	}
 
 	if self.Recoverable {
 		// Recover from any require exception
@@ -96,17 +111,12 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 		}
 	)
 
-	// Debug hook
-	if self.Dbg != nil {
-		self.Dbg.SetCode(closure.Code)
-	}
-
 	// Don't bother with the execution if there's no code.
-	if len(closure.Code) == 0 {
+	if len(code) == 0 {
 		return closure.Return(nil), nil
 	}
 
-	vmlogger.Debugf("(%d) %x gas: %v (d) %x\n", self.depth, closure.Address(), closure.Gas, closure.Args)
+	vmlogger.Debugf("(%d) %x gas: %v (d) %x\n", self.depth, closure.Address(), closure.Gas, callData)
 
 	for {
 		prevStep = step
@@ -596,8 +606,6 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			self.Printf(" => %x", caller)
 		case CALLVALUE:
-			value := closure.exe.value
-
 			stack.Push(value)
 
 			self.Printf(" => %v", value)
@@ -605,27 +613,27 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 			var (
 				offset  = stack.Pop()
 				data    = make([]byte, 32)
-				lenData = big.NewInt(int64(len(closure.Args)))
+				lenData = big.NewInt(int64(len(callData)))
 			)
 
 			if lenData.Cmp(offset) >= 0 {
 				length := new(big.Int).Add(offset, ethutil.Big32)
 				length = ethutil.BigMin(length, lenData)
 
-				copy(data, closure.Args[offset.Int64():length.Int64()])
+				copy(data, callData[offset.Int64():length.Int64()])
 			}
 
 			self.Printf(" => 0x%x", data)
 
 			stack.Push(ethutil.BigD(data))
 		case CALLDATASIZE:
-			l := int64(len(closure.Args))
+			l := int64(len(callData))
 			stack.Push(big.NewInt(l))
 
 			self.Printf(" => %d", l)
 		case CALLDATACOPY:
 			var (
-				size = int64(len(closure.Args))
+				size = int64(len(callData))
 				mOff = stack.Pop().Int64()
 				cOff = stack.Pop().Int64()
 				l    = stack.Pop().Int64()
@@ -638,7 +646,7 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 				l = 0
 			}
 
-			code := closure.Args[cOff : cOff+l]
+			code := callData[cOff : cOff+l]
 
 			mem.Set(mOff, l, code)
 
@@ -847,17 +855,14 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 
 			closure.UseGas(closure.Gas)
 
-			msg := NewExecution(self, addr, input, gas, closure.Price, value)
-			ret, err := msg.Create(closure)
+			ret, err, ref := self.env.Create(closure, addr, input, gas, price, value)
 			if err != nil {
 				stack.Push(ethutil.BigFalse)
 
-				// Revert the state as it was before.
-				//self.env.State().Set(snapshot)
-
 				self.Printf("CREATE err %v", err)
 			} else {
-				msg.object.Code = ret
+				ref.SetCode(ret)
+				msg.Output = ret
 
 				stack.Push(ethutil.BigD(addr))
 			}
@@ -889,14 +894,14 @@ func (self *DebugVm) RunClosure(closure *Closure) (ret []byte, err error) {
 				executeAddr = addr.Bytes()
 			}
 
-			msg := NewExecution(self, executeAddr, args, gas, closure.Price, value)
-			ret, err := msg.Exec(addr.Bytes(), closure)
+			ret, err := self.env.Call(closure, executeAddr, args, gas, price, value)
 			if err != nil {
 				stack.Push(ethutil.BigFalse)
 
 				vmlogger.Debugln(err)
 			} else {
 				stack.Push(ethutil.BigTrue)
+				msg.Output = ret
 
 				mem.Set(retOffset.Int64(), retSize.Int64(), ret)
 			}

@@ -3,6 +3,7 @@ package helper
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
@@ -10,7 +11,10 @@ import (
 )
 
 type Env struct {
-	state *state.State
+	depth        int
+	state        *state.State
+	skipTransfer bool
+	Gas          *big.Int
 
 	origin   []byte
 	parent   []byte
@@ -56,33 +60,71 @@ func (self *Env) GasLimit() *big.Int    { return self.gasLimit }
 func (self *Env) AddLog(log *state.Log) {
 	self.logs = append(self.logs, log)
 }
+func (self *Env) Depth() int     { return self.depth }
+func (self *Env) SetDepth(i int) { self.depth = i }
 func (self *Env) Transfer(from, to vm.Account, amount *big.Int) error {
 	return vm.Transfer(from, to, amount)
 }
 
+func (self *Env) vm(addr, data []byte, gas, price, value *big.Int) *chain.Execution {
+	evm := vm.New(self, vm.DebugVmTy)
+	exec := chain.NewExecution(evm, addr, data, gas, price, value)
+	exec.SkipTransfer = self.skipTransfer
+
+	return exec
+}
+
+func (self *Env) Call(caller vm.ClosureRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error) {
+	exe := self.vm(addr, data, gas, price, value)
+	ret, err := exe.Call(addr, caller)
+	self.Gas = exe.Gas
+
+	return ret, err
+}
+func (self *Env) CallCode(caller vm.ClosureRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error) {
+	exe := self.vm(caller.Address(), data, gas, price, value)
+	return exe.Call(addr, caller)
+}
+
+func (self *Env) Create(caller vm.ClosureRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error, vm.ClosureRef) {
+	exe := self.vm(addr, data, gas, price, value)
+	return exe.Create(caller)
+}
+
 func RunVm(state *state.State, env, exec map[string]string) ([]byte, state.Logs, *big.Int, error) {
-	address := FromHex(exec["address"])
-	caller := state.GetOrNewStateObject(FromHex(exec["caller"]))
+	var (
+		to    = FromHex(exec["address"])
+		from  = FromHex(exec["caller"])
+		data  = FromHex(exec["data"])
+		gas   = ethutil.Big(exec["gas"])
+		price = ethutil.Big(exec["gasPrice"])
+		value = ethutil.Big(exec["value"])
+	)
+
+	caller := state.GetOrNewStateObject(from)
 
 	vmenv := NewEnvFromMap(state, env, exec)
-	evm := vm.New(vmenv, vm.DebugVmTy)
-	execution := vm.NewExecution(evm, address, FromHex(exec["data"]), ethutil.Big(exec["gas"]), ethutil.Big(exec["gasPrice"]), ethutil.Big(exec["value"]))
-	execution.SkipTransfer = true
-	ret, err := execution.Exec(address, caller)
+	vmenv.skipTransfer = true
+	ret, err := vmenv.Call(caller, to, data, gas, price, value)
 
-	return ret, vmenv.logs, execution.Gas, err
+	return ret, vmenv.logs, vmenv.Gas, err
 }
 
 func RunState(state *state.State, env, tx map[string]string) ([]byte, state.Logs, *big.Int, error) {
-	address := FromHex(tx["to"])
-	keyPair, _ := crypto.NewKeyPairFromSec([]byte(ethutil.Hex2Bytes(tx["secretKey"])))
+	var (
+		keyPair, _ = crypto.NewKeyPairFromSec([]byte(ethutil.Hex2Bytes(tx["secretKey"])))
+		to         = FromHex(tx["to"])
+		data       = FromHex(tx["data"])
+		gas        = ethutil.Big(tx["gasLimit"])
+		price      = ethutil.Big(tx["gasPrice"])
+		value      = ethutil.Big(tx["value"])
+	)
+
 	caller := state.GetOrNewStateObject(keyPair.Address())
 
 	vmenv := NewEnvFromMap(state, env, tx)
 	vmenv.origin = caller.Address()
-	evm := vm.New(vmenv, vm.DebugVmTy)
-	execution := vm.NewExecution(evm, address, FromHex(tx["data"]), ethutil.Big(tx["gasLimit"]), ethutil.Big(tx["gasPrice"]), ethutil.Big(tx["value"]))
-	ret, err := execution.Exec(address, caller)
+	ret, err := vmenv.Call(caller, to, data, gas, price, value)
 
-	return ret, vmenv.logs, execution.Gas, err
+	return ret, vmenv.logs, vmenv.Gas, err
 }
