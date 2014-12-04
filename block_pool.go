@@ -88,7 +88,7 @@ func (self *BlockPool) FetchHashes(peer *Peer) bool {
 
 	if (self.peer == nil && peer.td.Cmp(highestTd) >= 0) || (self.peer != nil && peer.td.Cmp(self.peer.td) > 0) || self.peer == peer {
 		if self.peer != peer {
-			poollogger.Debugf("Found better suitable peer (%v vs %v)\n", self.td, peer.td)
+			poollogger.Infof("Found better suitable peer (%v vs %v)\n", self.td, peer.td)
 
 			if self.peer != nil {
 				self.peer.doneFetchingHashes = true
@@ -99,8 +99,7 @@ func (self *BlockPool) FetchHashes(peer *Peer) bool {
 		self.td = peer.td
 
 		if !self.HasLatestHash() {
-			peer.doneFetchingHashes = false
-
+			peer.doneFetchingHashes = fInfo
 			const amount = 256
 			peerlogger.Debugf("Fetching hashes (%d) %x...\n", amount, peer.lastReceivedHash[0:4])
 			peer.QueueMessage(wire.NewMessage(wire.MsgGetBlockHashesTy, []interface{}{peer.lastReceivedHash, uint32(amount)}))

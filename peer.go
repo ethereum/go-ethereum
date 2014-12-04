@@ -756,7 +756,6 @@ func (p *Peer) handleHandshake(msg *wire.Msg) {
 
 	// Check correctness of p2p protocol version
 	if p2pVersion != P2PVersion {
-		fmt.Println(p)
 		peerlogger.Debugf("Invalid P2P version. Require protocol %d, received %d\n", P2PVersion, p2pVersion)
 		p.Stop()
 		return
