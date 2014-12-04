@@ -211,7 +211,7 @@ extern "C"
 {
 	using namespace dev::eth::jit;
 
-	EXPORT byte* mem_resize(Runtime* _rt, i256* _size)
+	EXPORT byte* mem_resize(Runtime* _rt, i256* _size)	// TODO: Use uint64 as size OR use realloc in LLVM IR
 	{
 		auto size = _size->a; // Trunc to 64-bit
 		auto& memory = _rt->getMemory();
