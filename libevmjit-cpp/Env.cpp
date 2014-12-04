@@ -11,11 +11,6 @@
 
 #include "../libevmjit/Utils.h"
 
-namespace dev
-{
-namespace eth
-{
-
 extern "C"
 {
 	#ifdef _MSC_VER
@@ -24,7 +19,10 @@ extern "C"
 		#define EXPORT
 	#endif
 
-	using namespace jit;
+	using namespace dev;
+	using namespace dev::eth;
+	using jit::i256;
+	using jit::eth2llvm;
 
 	EXPORT void ext_store(ExtVMFace* _env, i256* _index, i256* o_value)
 	{
@@ -44,13 +42,12 @@ extern "C"
 		_env->setStore(index, value);	// Interface uses native endianness
 	}
 
-	EXPORT void ext_calldataload(ExtVMFace* _env, i256* _index, i256* o_value)
+	EXPORT void ext_calldataload(ExtVMFace* _env, i256* _index, ::byte* o_value)
 	{
 		auto index = static_cast<size_t>(llvm2eth(*_index));
 		assert(index + 31 > index); // TODO: Handle large index
-		auto b = reinterpret_cast<byte*>(o_value);
 		for (size_t i = index, j = 0; i <= index + 31; ++i, ++j)
-			b[j] = i < _env->data.size() ? _env->data[i] : 0; // Keep Big Endian
+			o_value[j] = i < _env->data.size() ? _env->data[i] : 0; // Keep Big Endian
 		// TODO: It all can be done by adding padding to data or by using min() algorithm without branch
 	}
 
@@ -207,8 +204,5 @@ extern "C"
 		auto dataRef = bytesConstRef(); // FIXME: Handle memory
 		_env->log({ topic1, topic2, topic3, topic4 }, dataRef);
 	}
-}
-
-}
 }
 
