@@ -224,8 +224,9 @@ func (sm *BlockManager) ProcessWithParent(block, parent *types.Block) (td *big.I
 	// before that.
 	defer state.Reset()
 
-	if ethutil.Config.Diff && ethutil.Config.DiffType == "all" {
-		fmt.Printf("## %x %x ##\n", block.Hash(), block.Number)
+	// Block validation
+	if err = sm.ValidateBlock(block, parent); err != nil {
+		return
 	}
 
 	_, err = sm.TransitionState(state, parent, block)
@@ -246,11 +247,6 @@ func (sm *BlockManager) ProcessWithParent(block, parent *types.Block) (td *big.I
 			return
 		}
 	*/
-
-	// Block validation
-	if err = sm.ValidateBlock(block, parent); err != nil {
-		return
-	}
 
 	if err = sm.AccumelateRewards(state, block, parent); err != nil {
 		return

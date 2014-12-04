@@ -24,7 +24,7 @@ const (
 	// The size of the output buffer for writing messages
 	outputBufferSize = 50
 	// Current protocol version
-	ProtocolVersion = 46
+	ProtocolVersion = 47
 	// Current P2P version
 	P2PVersion = 2
 	// Ethereum network version
