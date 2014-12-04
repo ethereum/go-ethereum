@@ -577,7 +577,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 		case Instruction::SLOAD:
 		{
 			auto index = stack.pop();
-			auto value = _ext.store(index);
+			auto value = _ext.sload(index);
 			stack.push(value);
 			break;
 		}
@@ -587,7 +587,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 			auto index = stack.pop();
 			auto value = stack.pop();
 			_gasMeter.countSStore(_ext, index, value);
-			_ext.setStore(index, value);
+			_ext.sstore(index, value);
 			break;
 		}
 

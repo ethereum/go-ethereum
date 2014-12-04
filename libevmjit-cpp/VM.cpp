@@ -70,6 +70,6 @@ bytesConstRef VM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 namespace
 {
 	// MSVS linker ignores export symbols in Env.cpp if nothing point at least one of them
-	extern "C" void ext_store();
-	void linkerWorkaround() { ext_store(); }
+	extern "C" void env_sload();
+	void linkerWorkaround() { env_sload(); }
 }

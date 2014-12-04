@@ -18,14 +18,14 @@ extern "C"
 	using jit::i256;
 	using jit::eth2llvm;
 
-	EXPORT void ext_store(ExtVMFace* _env, i256* _index, i256* o_value)
+	EXPORT void env_sload(ExtVMFace* _env, i256* _index, i256* o_value)
 	{
 		auto index = llvm2eth(*_index);
 		auto value = _env->store(index); // Interface uses native endianness
 		*o_value = eth2llvm(value);
 	}
 
-	EXPORT void ext_setStore(ExtVMFace* _env, i256* _index, i256* _value)
+	EXPORT void env_sstore(ExtVMFace* _env, i256* _index, i256* _value)
 	{
 		auto index = llvm2eth(*_index);
 		auto value = llvm2eth(*_value);
@@ -104,7 +104,7 @@ extern "C"
 		o_ret->a = ret ? 1 : 0;
 	}
 
-	EXPORT void ext_sha3(byte* _begin, uint64_t _size, h256* o_hash)
+	EXPORT void env_sha3(byte* _begin, uint64_t _size, h256* o_hash)
 	{
 		auto hash = sha3({_begin, _size});
 		*o_hash = hash;

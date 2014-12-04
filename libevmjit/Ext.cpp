@@ -43,8 +43,8 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 
 	llvm::Type* argsTypes[] = {Type::EnvPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr};
 
-	m_store = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_store", module);
-	m_setStore = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_setStore", module);
+	m_sload = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "env_sload", module);
+	m_sstore = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "env_sstore", module);
 	m_calldataload = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_calldataload", module);
 	m_balance = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_balance", module);
 	m_suicide = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 2}, false), Linkage::ExternalLinkage, "ext_suicide", module);
@@ -60,21 +60,21 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 	m_log4 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 7}, false), Linkage::ExternalLinkage, "ext_log4", module);
 
 	llvm::Type* sha3ArgsTypes[] = {Type::BytePtr, Type::Size, Type::WordPtr};
-	m_sha3 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, sha3ArgsTypes, false), Linkage::ExternalLinkage, "ext_sha3", module);
+	m_sha3 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, sha3ArgsTypes, false), Linkage::ExternalLinkage, "env_sha3", module);
 }
 
-llvm::Value* Ext::store(llvm::Value* _index)
+llvm::Value* Ext::sload(llvm::Value* _index)
 {
 	m_builder.CreateStore(_index, m_args[0]);
-	m_builder.CreateCall3(m_store, getRuntimeManager().getEnv(), m_args[0], m_args[1]); // Uses native endianness
+	m_builder.CreateCall3(m_sload, getRuntimeManager().getEnv(), m_args[0], m_args[1]); // Uses native endianness
 	return m_builder.CreateLoad(m_args[1]);
 }
 
-void Ext::setStore(llvm::Value* _index, llvm::Value* _value)
+void Ext::sstore(llvm::Value* _index, llvm::Value* _value)
 {
 	m_builder.CreateStore(_index, m_args[0]);
 	m_builder.CreateStore(_value, m_args[1]);
-	m_builder.CreateCall3(m_setStore, getRuntimeManager().getEnv(), m_args[0], m_args[1]); // Uses native endianness
+	m_builder.CreateCall3(m_sstore, getRuntimeManager().getEnv(), m_args[0], m_args[1]); // Uses native endianness
 }
 
 llvm::Value* Ext::calldataload(llvm::Value* _index)
