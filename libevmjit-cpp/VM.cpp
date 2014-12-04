@@ -58,6 +58,7 @@ bytesConstRef VM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 		break;
 	}
 
+	m_gas = llvm2eth(data.elems[RuntimeData::Gas]);
 	m_output = std::move(engine.returnData);
 	return {m_output.data(), m_output.size()};  // TODO: This all bytesConstRef stuff sucks
 }
