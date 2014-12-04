@@ -136,11 +136,17 @@ func (self *XEth) Transact(key *crypto.KeyPair, to []byte, value, gas, price *et
 
 	tx.Nonce = nonce
 	tx.Sign(key.PrivateKey)
+
+	// Do some pre processing for our "pre" events  and hooks
+	block := self.blockChain.NewBlock(key.Address())
+	coinbase := state.GetStateObject(key.Address())
+	coinbase.SetGasPool(block.GasLimit)
+	self.blockManager.ApplyTransactions(coinbase, state, block, types.Transactions{tx}, true)
+
 	err := self.obj.TxPool().Add(tx)
 	if err != nil {
 		return nil, err
 	}
-
 	state.SetNonce(key.Address(), nonce+1)
 
 	if contractCreation {
