@@ -39,7 +39,7 @@ llvm::StructType* RuntimeManager::getRuntimeType()
 		llvm::Type* elems[] =
 		{
 			Type::RuntimeDataPtr,	// data
-			Type::BytePtr,			// Env*
+			Type::EnvPtr,			// Env*
 			Type::BytePtr			// jmpbuf
 		};
 		type = llvm::StructType::create(elems, "Runtime");
@@ -85,6 +85,10 @@ RuntimeManager::RuntimeManager(llvm::IRBuilder<>& _builder): CompilerHelper(_bui
 	auto dataPtr = m_builder.CreateStructGEP(rtPtr, 0, "dataPtr");
 	auto data = m_builder.CreateLoad(dataPtr, "data");
 	m_builder.CreateStore(data, m_dataPtr);
+
+	auto envPtr = m_builder.CreateStructGEP(rtPtr, 1, "envPtr");
+	m_env = m_builder.CreateLoad(envPtr, "env");
+	assert(m_env->getType() == Type::EnvPtr);
 }
 
 llvm::Value* RuntimeManager::getRuntimePtr()
@@ -101,6 +105,12 @@ llvm::Value* RuntimeManager::getDataPtr()
 	//if (auto mainFunc = getMainFunction())
 	//	return mainFunc->arg_begin()->getNextNode();    // Runtime is the second parameter of main function
 	return m_builder.CreateLoad(m_dataPtr, "data");
+}
+
+llvm::Value* RuntimeManager::getEnv()
+{
+	assert(getMainFunction());	// Available only in main function
+	return m_env;
 }
 
 llvm::Value* RuntimeManager::getPtr(RuntimeData::Index _index)

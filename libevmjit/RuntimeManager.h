@@ -19,6 +19,7 @@ public:
 
 	llvm::Value* getRuntimePtr();
 	llvm::Value* getDataPtr();
+	llvm::Value* getEnv();
 
 	llvm::Value* get(RuntimeData::Index _index);
 	llvm::Value* get(Instruction _inst);
@@ -42,6 +43,7 @@ private:
 	llvm::GlobalVariable* m_rtPtr = nullptr;
 	llvm::GlobalVariable* m_dataPtr = nullptr;
 	llvm::Function* m_longjmp = nullptr;
+	llvm::Value* m_env = nullptr;
 };
 
 }

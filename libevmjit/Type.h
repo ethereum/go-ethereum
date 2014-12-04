@@ -31,6 +31,7 @@ struct Type
 	/// Main function return type
 	static llvm::IntegerType* MainReturn;
 
+	static llvm::PointerType* EnvPtr;
 	static llvm::PointerType* RuntimeDataPtr;
 	static llvm::PointerType* RuntimePtr;
 

@@ -20,22 +20,28 @@ llvm::IntegerType* Type::Byte;
 llvm::PointerType* Type::BytePtr;
 llvm::Type* Type::Void;
 llvm::IntegerType* Type::MainReturn;
+llvm::PointerType* Type::EnvPtr;
 llvm::PointerType* Type::RuntimeDataPtr;
 llvm::PointerType* Type::RuntimePtr;
 
 void Type::init(llvm::LLVMContext& _context)
 {
-	Word = llvm::Type::getIntNTy(_context, 256);
-	WordPtr = Word->getPointerTo();
-	lowPrecision = llvm::Type::getInt64Ty(_context);
-	// TODO: Size should be architecture-dependent
-	Size = llvm::Type::getInt64Ty(_context);
-	Byte = llvm::Type::getInt8Ty(_context);
-	BytePtr = Byte->getPointerTo();
-	Void = llvm::Type::getVoidTy(_context);
-	MainReturn = llvm::Type::getInt32Ty(_context);
-	RuntimeDataPtr = RuntimeManager::getRuntimeDataType()->getPointerTo();
-	RuntimePtr = RuntimeManager::getRuntimeType()->getPointerTo();
+	if (!Word)	// Do init only once
+	{
+		Word = llvm::Type::getIntNTy(_context, 256);
+		WordPtr = Word->getPointerTo();
+		lowPrecision = llvm::Type::getInt64Ty(_context);
+		// TODO: Size should be architecture-dependent
+		Size = llvm::Type::getInt64Ty(_context);
+		Byte = llvm::Type::getInt8Ty(_context);
+		BytePtr = Byte->getPointerTo();
+		Void = llvm::Type::getVoidTy(_context);
+		MainReturn = llvm::Type::getInt32Ty(_context);
+
+		EnvPtr = llvm::StructType::create(_context, "Env")->getPointerTo();
+		RuntimeDataPtr = RuntimeManager::getRuntimeDataType()->getPointerTo();
+		RuntimePtr = RuntimeManager::getRuntimeType()->getPointerTo();
+	}
 }
 
 llvm::ConstantInt* Constant::get(int64_t _n)
