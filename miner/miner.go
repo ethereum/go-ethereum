@@ -228,23 +228,33 @@ func (self *Miner) mine() {
 
 func (self *Miner) finiliseTxs() types.Transactions {
 	// Sort the transactions by nonce in case of odd network propagation
-	var txs types.Transactions
+	actualSize := len(self.localTxs) // See copy below
+	txs := make(types.Transactions, actualSize+self.eth.TxPool().Size())
 
 	state := self.eth.BlockManager().TransState()
 	// XXX This has to change. Coinbase is, for new, same as key.
 	key := self.eth.KeyManager()
-	for _, ltx := range self.localTxs {
+	for i, ltx := range self.localTxs {
 		tx := types.NewTransactionMessage(ltx.To, ethutil.Big(ltx.Value), ethutil.Big(ltx.Gas), ethutil.Big(ltx.GasPrice), ltx.Data)
 		tx.Nonce = state.GetNonce(self.Coinbase)
 		state.SetNonce(self.Coinbase, tx.Nonce+1)
 
 		tx.Sign(key.PrivateKey())
 
-		txs = append(txs, tx)
+		txs[i] = tx
 	}
 
-	txs = append(txs, self.eth.TxPool().CurrentTransactions()...)
-	sort.Sort(types.TxByNonce{txs})
+	// Faster than append
+	for _, tx := range self.eth.TxPool().CurrentTransactions() {
+		if tx.GasPrice.Cmp(self.MinAcceptedGasPrice) >= 0 {
+			txs[actualSize] = tx
+			actualSize++
+		}
+	}
 
-	return txs
+	newTransactions := make(types.Transactions, actualSize)
+	copy(newTransactions, txs[:actualSize])
+	sort.Sort(types.TxByNonce{newTransactions})
+
+	return newTransactions
 }

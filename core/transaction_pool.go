@@ -115,10 +115,6 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 		return fmt.Errorf("tx.v != (28 || 27)")
 	}
 
-	if tx.GasPrice.Cmp(MinGasPrice) < 0 {
-		return fmt.Errorf("Gas price to low. Require %v > Got %v", MinGasPrice, tx.GasPrice)
-	}
-
 	// Get the sender
 	sender := pool.Ethereum.BlockManager().CurrentState().GetAccount(tx.Sender())
 
@@ -167,6 +163,10 @@ func (self *TxPool) Add(tx *types.Transaction) error {
 	go self.Ethereum.EventMux().Post(TxPreEvent{tx})
 
 	return nil
+}
+
+func (self *TxPool) Size() int {
+	return self.pool.Len()
 }
 
 func (pool *TxPool) CurrentTransactions() []*types.Transaction {

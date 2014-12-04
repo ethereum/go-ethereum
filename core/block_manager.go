@@ -231,7 +231,7 @@ func (sm *BlockManager) ProcessWithParent(block, parent *types.Block) (td *big.I
 		return
 	}
 
-	_, err = sm.TransitionState(state, parent, block)
+	receipts, err := sm.TransitionState(state, parent, block)
 	if err != nil {
 		return
 	}
@@ -242,26 +242,22 @@ func (sm *BlockManager) ProcessWithParent(block, parent *types.Block) (td *big.I
 		return
 	}
 
-	/*
-		receiptSha := types.DeriveSha(receipts)
-		if bytes.Compare(receiptSha, block.ReceiptSha) != 0 {
-			err = fmt.Errorf("validating receipt root. received=%x got=%x", block.ReceiptSha, receiptSha)
-			return
-		}
-	*/
+	receiptSha := types.DeriveSha(receipts)
+	if bytes.Compare(receiptSha, block.ReceiptSha) != 0 {
+		err = fmt.Errorf("validating receipt root. received=%x got=%x", block.ReceiptSha, receiptSha)
+		return
+	}
 
 	if err = sm.AccumelateRewards(state, block, parent); err != nil {
 		return
 	}
 
-	/*
-		//block.receipts = receipts // although this isn't necessary it be in the future
-		rbloom := types.CreateBloom(receipts)
-		if bytes.Compare(rbloom, block.LogsBloom) != 0 {
-			err = fmt.Errorf("unable to replicate block's bloom=%x", rbloom)
-			return
-		}
-	*/
+	//block.receipts = receipts // although this isn't necessary it be in the future
+	rbloom := types.CreateBloom(receipts)
+	if bytes.Compare(rbloom, block.LogsBloom) != 0 {
+		err = fmt.Errorf("unable to replicate block's bloom=%x", rbloom)
+		return
+	}
 
 	state.Update(ethutil.Big0)
 
