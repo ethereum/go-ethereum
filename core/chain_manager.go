@@ -267,7 +267,10 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 		}
 
 		self.add(block)
-		self.SetTotalDifficulty(td)
+		if td.Cmp(self.TD) > 0 {
+			self.SetTotalDifficulty(td)
+		}
+
 		self.eventMux.Post(NewBlockEvent{block})
 		self.eventMux.Post(messages)
 	}
