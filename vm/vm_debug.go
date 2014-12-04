@@ -35,7 +35,7 @@ func NewDebugVm(env Environment) *DebugVm {
 		lt = LogTyDiff
 	}
 
-	return &DebugVm{env: env, logTy: lt, Recoverable: true}
+	return &DebugVm{env: env, logTy: lt, Recoverable: false}
 }
 
 func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
@@ -631,7 +631,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 			mem.Set(mOff, l, code)
 
-			self.Printf(" => [%v, %v, %v] %x", mOff, cOff, l, code[cOff:cOff+l])
+			self.Printf(" => [%v, %v, %v] %x", mOff, cOff, l, callData[cOff:cOff+l])
 		case CODESIZE, EXTCODESIZE:
 			var code []byte
 			if op == EXTCODESIZE {

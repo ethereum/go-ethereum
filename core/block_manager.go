@@ -152,7 +152,6 @@ done:
 		st := NewStateTransition(cb, tx, state, block)
 		err = st.TransitionState()
 		if err != nil {
-			statelogger.Infoln(err)
 			switch {
 			case IsNonceErr(err):
 				err = nil // ignore error

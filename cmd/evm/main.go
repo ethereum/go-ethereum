@@ -45,7 +45,7 @@ import (
 var (
 	code     = flag.String("code", "", "evm code")
 	loglevel = flag.Int("log", 4, "log level")
-	gas      = flag.String("gas", "1000000", "gas amount")
+	gas      = flag.String("gas", "1000000000", "gas amount")
 	price    = flag.String("price", "0", "gas price")
 	value    = flag.String("value", "0", "tx value")
 	dump     = flag.Bool("dump", false, "dump state after run")
@@ -68,7 +68,8 @@ func main() {
 	statedb := state.New(trie.New(db, ""))
 	sender := statedb.NewStateObject([]byte("sender"))
 	receiver := statedb.NewStateObject([]byte("receiver"))
-	receiver.SetCode([]byte(*code))
+	//receiver.SetCode([]byte(*code))
+	receiver.SetCode(ethutil.Hex2Bytes(*code))
 
 	vmenv := NewEnv(statedb, []byte("evmuser"), ethutil.Big(*value))
 
@@ -100,7 +101,7 @@ num gc:     %d
 }
 
 type VMEnv struct {
-	state *state.State
+	state *state.StateDB
 	block *types.Block
 
 	transactor []byte
@@ -111,7 +112,7 @@ type VMEnv struct {
 	time  int64
 }
 
-func NewEnv(state *state.State, transactor []byte, value *big.Int) *VMEnv {
+func NewEnv(state *state.StateDB, transactor []byte, value *big.Int) *VMEnv {
 	return &VMEnv{
 		state:      state,
 		transactor: transactor,
@@ -120,7 +121,7 @@ func NewEnv(state *state.State, transactor []byte, value *big.Int) *VMEnv {
 	}
 }
 
-func (self *VMEnv) State() *state.State   { return self.state }
+func (self *VMEnv) State() *state.StateDB { return self.state }
 func (self *VMEnv) Origin() []byte        { return self.transactor }
 func (self *VMEnv) BlockNumber() *big.Int { return ethutil.Big0 }
 func (self *VMEnv) PrevHash() []byte      { return make([]byte, 32) }
@@ -130,7 +131,7 @@ func (self *VMEnv) Difficulty() *big.Int  { return ethutil.Big1 }
 func (self *VMEnv) BlockHash() []byte     { return make([]byte, 32) }
 func (self *VMEnv) Value() *big.Int       { return self.value }
 func (self *VMEnv) GasLimit() *big.Int    { return big.NewInt(1000000000) }
-func (self *VMEnv) Depth() int            { return self.depth }
+func (self *VMEnv) Depth() int            { return 0 }
 func (self *VMEnv) SetDepth(i int)        { self.depth = i }
 func (self *VMEnv) AddLog(log *state.Log) {
 	self.state.AddLog(log)
