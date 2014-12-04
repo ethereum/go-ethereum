@@ -127,27 +127,6 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		// Get the memory location of pc
 		op = closure.GetOp(pc)
 
-		/*
-			// XXX Leave this Println intact. Don't change this to the log system.
-			// Used for creating diffs between implementations
-			if self.logTy == LogTyDiff {
-				switch op {
-				case STOP, RETURN, SUICIDE:
-					statedb.GetStateObject(closure.Address()).EachStorage(func(key string, value *ethutil.Value) {
-						value.Decode()
-						fmt.Printf("%x %x\n", new(big.Int).SetBytes([]byte(key)).Bytes(), value.Bytes())
-					})
-				}
-
-				b := pc.Bytes()
-				if len(b) == 0 {
-					b = []byte{0}
-				}
-
-				fmt.Printf("%x %x %x %x\n", closure.Address(), b, []byte{byte(op)}, closure.Gas.Bytes())
-			}
-		*/
-
 		gas := new(big.Int)
 		addStepGasUsage := func(amount *big.Int) {
 			if amount.Cmp(ethutil.Big0) >= 0 {
