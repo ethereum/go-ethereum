@@ -118,8 +118,7 @@ llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, GasMet
 
 	auto valueSize = _valueType->getPrimitiveSizeInBits() / 8;
 	this->require(index, Constant::get(valueSize));
-	auto data = m_builder.CreateLoad(m_data, "data");
-	auto ptr = m_builder.CreateGEP(data, index, "ptr");
+	auto ptr = getBytePtr(index);
 	if (isWord)
 		ptr = m_builder.CreateBitCast(ptr, Type::WordPtr, "wordPtr");
 	if (_isStore)
@@ -167,6 +166,12 @@ llvm::Value* Memory::getData()
 llvm::Value* Memory::getSize()
 {
 	return m_builder.CreateLoad(m_size);
+}
+
+llvm::Value* Memory::getBytePtr(llvm::Value* _index)
+{
+	auto data = m_builder.CreateLoad(m_data, "data");
+	return m_builder.CreateGEP(data, _index, "ptr");
 }
 
 void Memory::require(llvm::Value* _offset, llvm::Value* _size)

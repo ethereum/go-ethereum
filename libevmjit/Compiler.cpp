@@ -172,7 +172,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode)
 	RuntimeManager runtimeManager(m_builder);
 	GasMeter gasMeter(m_builder, runtimeManager);
 	Memory memory(runtimeManager, gasMeter);
-	Ext ext(runtimeManager);
+	Ext ext(runtimeManager, memory);
 	Stack stack(m_builder, runtimeManager);
 	Arith256 arith(m_builder);
 

@@ -9,6 +9,7 @@
 //#include <libevm/FeeStructure.h>
 
 #include "RuntimeManager.h"
+#include "Memory.h"
 #include "Type.h"
 #include "Endianness.h"
 
@@ -19,9 +20,9 @@ namespace eth
 namespace jit
 {
 
-Ext::Ext(RuntimeManager& _runtimeManager):
+Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 	RuntimeHelper(_runtimeManager),
-	m_data()
+	m_memoryMan(_memoryMan)
 {
 	auto&& ctx = m_builder.getContext();
 	auto module = getModule();
@@ -49,7 +50,6 @@ Ext::Ext(RuntimeManager& _runtimeManager):
 	m_suicide = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 2}, false), Linkage::ExternalLinkage, "ext_suicide", module);
 	m_create = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 5}, false), Linkage::ExternalLinkage, "ext_create", module);
 	m_call = llvm::Function::Create(llvm::FunctionType::get(Type::Void, argsTypes, false), Linkage::ExternalLinkage, "ext_call", module);
-	m_sha3 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 4}, false), Linkage::ExternalLinkage, "ext_sha3", module);
 	m_exp = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 4}, false), Linkage::ExternalLinkage, "ext_exp", module);
 	m_codeAt = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, {argsTypes, 2}, false), Linkage::ExternalLinkage, "ext_codeAt", module);
 	m_codesizeAt = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_codesizeAt", module);
@@ -58,6 +58,9 @@ Ext::Ext(RuntimeManager& _runtimeManager):
 	m_log2 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 5}, false), Linkage::ExternalLinkage, "ext_log2", module);
 	m_log3 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 6}, false), Linkage::ExternalLinkage, "ext_log3", module);
 	m_log4 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 7}, false), Linkage::ExternalLinkage, "ext_log4", module);
+
+	llvm::Type* sha3ArgsTypes[] = { Type::EnvPtr, Type::BytePtr, Type::Size, Type::WordPtr };
+	m_sha3 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, sha3ArgsTypes, false), Linkage::ExternalLinkage, "ext_sha3", module);
 }
 
 llvm::Value* Ext::store(llvm::Value* _index)
@@ -127,9 +130,9 @@ llvm::Value* Ext::call(llvm::Value*& _gas, llvm::Value* _receiveAddress, llvm::V
 
 llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
 {
-	m_builder.CreateStore(_inOff, m_args[0]);
-	m_builder.CreateStore(_inSize, m_arg2);
-	createCall(m_sha3, getRuntimeManager().getEnv(), m_args[0], m_arg2, m_args[1]);
+	auto begin = m_memoryMan.getBytePtr(_inOff);
+	auto size = m_builder.CreateTrunc(_inSize, Type::Size, "size");
+	createCall(m_sha3, getRuntimeManager().getEnv(), begin, size, m_args[1]);
 	llvm::Value* hash = m_builder.CreateLoad(m_args[1]);
 	hash = Endianness::toNative(m_builder, hash);
 	return hash;

@@ -108,14 +108,10 @@ extern "C"
 		o_ret->a = ret ? 1 : 0;
 	}
 
-	EXPORT void ext_sha3(ExtVMFace* _env, i256* _inOff, i256* _inSize, i256* o_ret)
+	EXPORT void ext_sha3(ExtVMFace* _env, byte* _begin, uint64_t _size, h256* o_hash)
 	{
-		auto inOff = static_cast<size_t>(llvm2eth(*_inOff));
-		auto inSize = static_cast<size_t>(llvm2eth(*_inSize));
-		//auto dataRef = bytesConstRef(_rt->getMemory().data() + inOff, inSize);
-		auto dataRef = bytesConstRef(); // FIXME: Handle memory
-		auto hash = sha3(dataRef);
-		*o_ret = *reinterpret_cast<i256*>(&hash);
+		auto hash = sha3({_begin, _size});
+		*o_hash = hash;
 	}
 
 	EXPORT unsigned char* ext_codeAt(ExtVMFace* _env, h256* _addr256)

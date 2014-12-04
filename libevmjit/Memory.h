@@ -19,6 +19,7 @@ public:
 	void storeByte(llvm::Value* _addr, llvm::Value* _byte);
 	llvm::Value* getData();
 	llvm::Value* getSize();
+	llvm::Value* getBytePtr(llvm::Value* _index);
 	void copyBytes(llvm::Value* _srcPtr, llvm::Value* _srcSize, llvm::Value* _srcIndex,
 				   llvm::Value* _destMemIdx, llvm::Value* _byteCount);
 
