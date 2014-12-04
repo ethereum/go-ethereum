@@ -1,8 +1,4 @@
 
-#include <llvm/IR/Function.h>
-#include <llvm/IR/TypeBuilder.h>
-#include <llvm/IR/IntrinsicInst.h>
-
 #include <libdevcrypto/SHA3.h>
 #include <libevm/FeeStructure.h>
 #include <libevm/ExtVMFace.h>
@@ -126,13 +122,6 @@ extern "C"
 		auto addr = right160(*_addr256);
 		auto& code = _env->codeAt(addr);
 		*o_ret = eth2llvm(u256(code.size()));
-	}
-
-	void ext_show_bytes(bytesConstRef _bytes)
-	{
-		for (auto b : _bytes)
-			std::cerr << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned>(b) << " ";
-		std::cerr << std::endl;
 	}
 
 	EXPORT void ext_log0(ExtVMFace* _env, i256* _memIdx, i256* _numBytes)
