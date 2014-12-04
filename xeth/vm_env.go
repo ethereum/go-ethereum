@@ -3,8 +3,8 @@ package xeth
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/chain/types"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
 )
@@ -46,10 +46,10 @@ func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) error {
 	return vm.Transfer(from, to, amount)
 }
 
-func (self *VMEnv) vm(addr, data []byte, gas, price, value *big.Int) *chain.Execution {
+func (self *VMEnv) vm(addr, data []byte, gas, price, value *big.Int) *core.Execution {
 	evm := vm.New(self, vm.DebugVmTy)
 
-	return chain.NewExecution(evm, addr, data, gas, price, value)
+	return core.NewExecution(evm, addr, data, gas, price, value)
 }
 
 func (self *VMEnv) Call(me vm.ClosureRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error) {

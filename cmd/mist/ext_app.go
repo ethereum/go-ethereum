@@ -20,8 +20,8 @@ package main
 import (
 	"encoding/json"
 
-	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/chain/types"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/ethereum/go-ethereum/state"
@@ -45,12 +45,12 @@ type AppContainer interface {
 
 type ExtApplication struct {
 	*xeth.JSXEth
-	eth chain.EthManager
+	eth core.EthManager
 
 	events          event.Subscription
 	watcherQuitChan chan bool
 
-	filters map[string]*chain.Filter
+	filters map[string]*core.Filter
 
 	container AppContainer
 	lib       *UiLib
@@ -61,7 +61,7 @@ func NewExtApplication(container AppContainer, lib *UiLib) *ExtApplication {
 		JSXEth:          xeth.NewJSXEth(lib.eth),
 		eth:             lib.eth,
 		watcherQuitChan: make(chan bool),
-		filters:         make(map[string]*chain.Filter),
+		filters:         make(map[string]*core.Filter),
 		container:       container,
 		lib:             lib,
 	}
@@ -81,7 +81,7 @@ func (app *ExtApplication) run() {
 
 	// Subscribe to events
 	mux := app.lib.eth.EventMux()
-	app.events = mux.Subscribe(chain.NewBlockEvent{}, state.Messages(nil))
+	app.events = mux.Subscribe(core.NewBlockEvent{}, state.Messages(nil))
 
 	// Call the main loop
 	go app.mainLoop()
@@ -107,7 +107,7 @@ func (app *ExtApplication) stop() {
 func (app *ExtApplication) mainLoop() {
 	for ev := range app.events.Chan() {
 		switch ev := ev.(type) {
-		case chain.NewBlockEvent:
+		case core.NewBlockEvent:
 			app.container.NewBlock(ev.Block)
 
 		case state.Messages:

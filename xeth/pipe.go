@@ -5,8 +5,8 @@ package xeth
  */
 
 import (
-	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/chain/types"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
@@ -20,15 +20,15 @@ type VmVars struct {
 }
 
 type XEth struct {
-	obj          chain.EthManager
-	blockManager *chain.BlockManager
-	blockChain   *chain.ChainManager
+	obj          core.EthManager
+	blockManager *core.BlockManager
+	blockChain   *core.ChainManager
 	world        *World
 
 	Vm VmVars
 }
 
-func New(obj chain.EthManager) *XEth {
+func New(obj core.EthManager) *XEth {
 	pipe := &XEth{
 		obj:          obj,
 		blockManager: obj.BlockManager(),

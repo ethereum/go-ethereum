@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/chain/types"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
@@ -106,7 +106,7 @@ func NewJSTx(tx *types.Transaction, state *state.State) *JSTransaction {
 
 	var data string
 	if tx.CreatesContract() {
-		data = strings.Join(chain.Disassemble(tx.Data), "\n")
+		data = strings.Join(core.Disassemble(tx.Data), "\n")
 	} else {
 		data = ethutil.Bytes2Hex(tx.Data)
 	}
@@ -155,7 +155,7 @@ func NewPReciept(contractCreation bool, creationAddress, hash, address []byte) *
 // Peer interface exposed to QML
 
 type JSPeer struct {
-	ref          *chain.Peer
+	ref          *core.Peer
 	Inbound      bool   `json:"isInbound"`
 	LastSend     int64  `json:"lastSend"`
 	LastPong     int64  `json:"lastPong"`
@@ -167,7 +167,7 @@ type JSPeer struct {
 	Caps         string `json:"caps"`
 }
 
-func NewJSPeer(peer chain.Peer) *JSPeer {
+func NewJSPeer(peer core.Peer) *JSPeer {
 	if peer == nil {
 		return nil
 	}

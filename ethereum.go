@@ -14,7 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/chain"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
@@ -50,12 +50,12 @@ type Ethereum struct {
 	// DB interface
 	db ethutil.Database
 	// State manager for processing new blocks and managing the over all states
-	blockManager *chain.BlockManager
+	blockManager *core.BlockManager
 	// The transaction pool. Transaction can be pushed on this pool
 	// for later including in the blocks
-	txPool *chain.TxPool
+	txPool *core.TxPool
 	// The canonical chain
-	blockChain *chain.ChainManager
+	blockChain *core.ChainManager
 	// The block pool
 	blockPool *BlockPool
 	// Eventer
@@ -94,7 +94,7 @@ type Ethereum struct {
 
 	filterMu sync.RWMutex
 	filterId int
-	filters  map[int]*chain.Filter
+	filters  map[int]*core.Filter
 }
 
 func New(db ethutil.Database, clientIdentity wire.ClientIdentity, keyManager *crypto.KeyManager, caps Caps, usePnp bool) (*Ethereum, error) {
@@ -124,13 +124,13 @@ func New(db ethutil.Database, clientIdentity wire.ClientIdentity, keyManager *cr
 		keyManager:     keyManager,
 		clientIdentity: clientIdentity,
 		isUpToDate:     true,
-		filters:        make(map[int]*chain.Filter),
+		filters:        make(map[int]*core.Filter),
 	}
 
 	ethereum.blockPool = NewBlockPool(ethereum)
-	ethereum.txPool = chain.NewTxPool(ethereum)
-	ethereum.blockChain = chain.NewChainManager(ethereum.EventMux())
-	ethereum.blockManager = chain.NewBlockManager(ethereum)
+	ethereum.txPool = core.NewTxPool(ethereum)
+	ethereum.blockChain = core.NewChainManager(ethereum.EventMux())
+	ethereum.blockManager = core.NewBlockManager(ethereum)
 	ethereum.blockChain.SetProcessor(ethereum.blockManager)
 
 	// Start the tx pool
@@ -147,15 +147,15 @@ func (s *Ethereum) ClientIdentity() wire.ClientIdentity {
 	return s.clientIdentity
 }
 
-func (s *Ethereum) ChainManager() *chain.ChainManager {
+func (s *Ethereum) ChainManager() *core.ChainManager {
 	return s.blockChain
 }
 
-func (s *Ethereum) BlockManager() *chain.BlockManager {
+func (s *Ethereum) BlockManager() *core.BlockManager {
 	return s.blockManager
 }
 
-func (s *Ethereum) TxPool() *chain.TxPool {
+func (s *Ethereum) TxPool() *core.TxPool {
 	return s.txPool
 }
 func (s *Ethereum) BlockPool() *BlockPool {
@@ -591,7 +591,7 @@ out:
 // InstallFilter adds filter for blockchain events.
 // The filter's callbacks will run for matching blocks and messages.
 // The filter should not be modified after it has been installed.
-func (self *Ethereum) InstallFilter(filter *chain.Filter) (id int) {
+func (self *Ethereum) InstallFilter(filter *core.Filter) (id int) {
 	self.filterMu.Lock()
 	id = self.filterId
 	self.filters[id] = filter
@@ -608,7 +608,7 @@ func (self *Ethereum) UninstallFilter(id int) {
 
 // GetFilter retrieves a filter installed using InstallFilter.
 // The filter may not be modified.
-func (self *Ethereum) GetFilter(id int) *chain.Filter {
+func (self *Ethereum) GetFilter(id int) *core.Filter {
 	self.filterMu.RLock()
 	defer self.filterMu.RUnlock()
 	return self.filters[id]
@@ -616,10 +616,10 @@ func (self *Ethereum) GetFilter(id int) *chain.Filter {
 
 func (self *Ethereum) filterLoop() {
 	// Subscribe to events
-	events := self.eventMux.Subscribe(chain.NewBlockEvent{}, state.Messages(nil))
+	events := self.eventMux.Subscribe(core.NewBlockEvent{}, state.Messages(nil))
 	for event := range events.Chan() {
 		switch event := event.(type) {
-		case chain.NewBlockEvent:
+		case core.NewBlockEvent:
 			self.filterMu.RLock()
 			for _, filter := range self.filters {
 				if filter.BlockCallback != nil {

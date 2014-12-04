@@ -24,8 +24,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
@@ -81,7 +81,7 @@ func (self *DebuggerWindow) SetData(data string) {
 func (self *DebuggerWindow) SetAsm(data []byte) {
 	self.win.Root().Call("clearAsm")
 
-	dis := chain.Disassemble(data)
+	dis := core.Disassemble(data)
 	for _, str := range dis {
 		self.win.Root().Call("setAsm", str)
 	}

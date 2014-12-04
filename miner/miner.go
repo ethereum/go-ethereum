@@ -30,8 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/ethutil"
 
-	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/chain/types"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/wire"
@@ -59,7 +59,7 @@ type Miner struct {
 	localTxs  map[int]*LocalTx
 	localTxId int
 
-	pow       chain.PoW
+	pow       core.PoW
 	quitCh    chan struct{}
 	powQuitCh chan struct{}
 
@@ -74,7 +74,7 @@ func New(coinbase []byte, eth *eth.Ethereum) *Miner {
 	return &Miner{
 		eth:                 eth,
 		powQuitCh:           make(chan struct{}),
-		pow:                 &chain.EasyPow{},
+		pow:                 &core.EasyPow{},
 		mining:              false,
 		localTxs:            make(map[int]*LocalTx),
 		MinAcceptedGasPrice: big.NewInt(10000000000000),
@@ -82,7 +82,7 @@ func New(coinbase []byte, eth *eth.Ethereum) *Miner {
 	}
 }
 
-func (self *Miner) GetPow() chain.PoW {
+func (self *Miner) GetPow() core.PoW {
 	return self.pow
 }
 
@@ -116,7 +116,7 @@ func (self *Miner) Start() {
 	self.powQuitCh = make(chan struct{})
 
 	mux := self.eth.EventMux()
-	self.events = mux.Subscribe(chain.NewBlockEvent{}, chain.TxPreEvent{}, &LocalTx{})
+	self.events = mux.Subscribe(core.NewBlockEvent{}, core.TxPreEvent{}, &LocalTx{})
 
 	go self.update()
 	go self.mine()
@@ -147,7 +147,7 @@ out:
 		select {
 		case event := <-self.events.Chan():
 			switch event := event.(type) {
-			case chain.NewBlockEvent:
+			case core.NewBlockEvent:
 				block := event.Block
 				if self.eth.ChainManager().HasBlock(block.Hash()) {
 					self.reset()
@@ -156,7 +156,7 @@ out:
 				} else if true {
 					// do uncle stuff
 				}
-			case chain.TxPreEvent, *LocalTx:
+			case core.TxPreEvent, *LocalTx:
 				self.reset()
 				go self.mine()
 			}

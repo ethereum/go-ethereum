@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/chain/types"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
@@ -16,7 +16,7 @@ type JSXEth struct {
 	*XEth
 }
 
-func NewJSXEth(eth chain.EthManager) *JSXEth {
+func NewJSXEth(eth core.EthManager) *JSXEth {
 	return &JSXEth{New(eth)}
 }
 
@@ -64,7 +64,7 @@ func (self *JSXEth) PeerCount() int {
 func (self *JSXEth) Peers() []JSPeer {
 	var peers []JSPeer
 	for peer := self.obj.Peers().Front(); peer != nil; peer = peer.Next() {
-		p := peer.Value.(chain.Peer)
+		p := peer.Value.(core.Peer)
 		// we only want connected peers
 		if atomic.LoadInt32(p.Connected()) != 0 {
 			peers = append(peers, *NewJSPeer(p))
@@ -220,57 +220,6 @@ func (self *JSXEth) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr 
 	}
 
 	return ethutil.Bytes2Hex(tx.Hash()), nil
-
-	/*
-		var hash []byte
-		var contractCreation bool
-		if len(toStr) == 0 {
-			contractCreation = true
-		} else {
-			// Check if an address is stored by this address
-			addr := self.World().Config().Get("NameReg").StorageString(toStr).Bytes()
-			if len(addr) > 0 {
-				hash = addr
-			} else {
-				hash = ethutil.Hex2Bytes(toStr)
-			}
-		}
-
-
-		var (
-			value    = ethutil.Big(valueStr)
-			gas      = ethutil.Big(gasStr)
-			gasPrice = ethutil.Big(gasPriceStr)
-			data     []byte
-			tx       *chain.Transaction
-		)
-
-		if ethutil.IsHex(codeStr) {
-			data = ethutil.Hex2Bytes(codeStr[2:])
-		} else {
-			data = ethutil.Hex2Bytes(codeStr)
-		}
-
-		if contractCreation {
-			tx = chain.NewContractCreationTx(value, gas, gasPrice, data)
-		} else {
-			tx = chain.NewTransactionMessage(hash, value, gas, gasPrice, data)
-		}
-
-		acc := self.obj.BlockManager().TransState().GetOrNewStateObject(keyPair.Address())
-		tx.Nonce = acc.Nonce
-		acc.Nonce += 1
-		self.obj.BlockManager().TransState().UpdateStateObject(acc)
-
-		tx.Sign(keyPair.PrivateKey)
-		self.obj.TxPool().QueueTransaction(tx)
-
-		if contractCreation {
-			pipelogger.Infof("Contract addr %x", tx.CreationAddress(self.World().State()))
-		}
-
-		return NewJSReciept(contractCreation, tx.CreationAddress(self.World().State()), tx.Hash(), keyPair.Address()), nil
-	*/
 }
 
 func (self *JSXEth) PushTx(txStr string) (*JSReceipt, error) {

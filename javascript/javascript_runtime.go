@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
@@ -63,7 +63,7 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 
 	// Subscribe to events
 	mux := ethereum.EventMux()
-	re.events = mux.Subscribe(chain.NewBlockEvent{})
+	re.events = mux.Subscribe(core.NewBlockEvent{})
 
 	// We have to make sure that, whoever calls this, calls "Stop"
 	go re.mainLoop()

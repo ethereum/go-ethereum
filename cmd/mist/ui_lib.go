@@ -25,8 +25,8 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/chain/types"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/javascript"
@@ -231,7 +231,7 @@ func (self *UiLib) NewFilter(object map[string]interface{}) (id int) {
 }
 
 func (self *UiLib) NewFilterString(typ string) (id int) {
-	filter := chain.NewFilter(self.eth)
+	filter := core.NewFilter(self.eth)
 	filter.BlockCallback = func(block *types.Block) {
 		if self.win != nil && self.win.Root() != nil {
 			self.win.Root().Call("invokeFilterCallback", "{}", id)

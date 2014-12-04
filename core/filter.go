@@ -1,11 +1,11 @@
-package chain
+package core
 
 import (
 	"bytes"
 	"math"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/chain/types"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 )

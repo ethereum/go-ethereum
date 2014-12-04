@@ -26,7 +26,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"github.com/ethereum/go-ethereum/chain/types"
+
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/ethereum/go-ethereum/state"
