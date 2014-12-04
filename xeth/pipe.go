@@ -39,6 +39,9 @@ func New(obj core.EthManager) *XEth {
 	return pipe
 }
 
+/*
+ * State / Account accessors
+ */
 func (self *XEth) Balance(addr []byte) *ethutil.Value {
 	return ethutil.NewValue(self.World().safeGet(addr).Balance)
 }
@@ -47,6 +50,31 @@ func (self *XEth) Nonce(addr []byte) uint64 {
 	return self.World().safeGet(addr).Nonce
 }
 
+func (self *XEth) Block(hash []byte) *types.Block {
+	return self.blockChain.GetBlock(hash)
+}
+
+func (self *XEth) Storage(addr, storageAddr []byte) *ethutil.Value {
+	return self.World().safeGet(addr).GetStorage(ethutil.BigD(storageAddr))
+}
+
+func (self *XEth) Exists(addr []byte) bool {
+	return self.World().Get(addr) != nil
+}
+
+// Converts the given private key to an address
+func (self *XEth) ToAddress(priv []byte) []byte {
+	pair, err := crypto.NewKeyPairFromSec(priv)
+	if err != nil {
+		return nil
+	}
+
+	return pair.Address()
+}
+
+/*
+ * Execution helpers
+ */
 func (self *XEth) Execute(addr []byte, data []byte, value, gas, price *ethutil.Value) ([]byte, error) {
 	return self.ExecuteObject(&Object{self.World().safeGet(addr)}, data, value, gas, price)
 }
@@ -61,39 +89,11 @@ func (self *XEth) ExecuteObject(object *Object, data []byte, value, gas, price *
 
 	vmenv := NewEnv(self.Vm.State, block, value.BigInt(), initiator.Address())
 	return vmenv.Call(initiator, object.Address(), data, gas.BigInt(), price.BigInt(), value.BigInt())
-	/*
-		evm := vm.New(, vm.Type(ethutil.Config.VmType))
-
-		msg := vm.NewExecution(evm, object.Address(), data, gas.BigInt(), price.BigInt(), value.BigInt())
-		ret, err := msg.Exec(object.Address(), initiator)
-
-		fmt.Println("returned from call", ret, err)
-
-		return ret, err
-	*/
 }
 
-func (self *XEth) Block(hash []byte) *types.Block {
-	return self.blockChain.GetBlock(hash)
-}
-
-func (self *XEth) Storage(addr, storageAddr []byte) *ethutil.Value {
-	return self.World().safeGet(addr).GetStorage(ethutil.BigD(storageAddr))
-}
-
-func (self *XEth) ToAddress(priv []byte) []byte {
-	pair, err := crypto.NewKeyPairFromSec(priv)
-	if err != nil {
-		return nil
-	}
-
-	return pair.Address()
-}
-
-func (self *XEth) Exists(addr []byte) bool {
-	return self.World().Get(addr) != nil
-}
-
+/*
+ * Transactional methods
+ */
 func (self *XEth) TransactString(key *crypto.KeyPair, rec string, value, gas, price *ethutil.Value, data []byte) (*types.Transaction, error) {
 	// Check if an address is stored by this address
 	var hash []byte
@@ -149,13 +149,6 @@ func (self *XEth) Transact(key *crypto.KeyPair, to []byte, value, gas, price *et
 	}
 
 	return tx, nil
-
-	//acc := self.blockManager.TransState().GetOrNewStateObject(key.Address())
-	//self.obj.TxPool().QueueTransaction(tx)
-
-	//acc.Nonce += 1
-	//self.blockManager.TransState().UpdateStateObject(acc)
-
 }
 
 func (self *XEth) PushTx(tx *types.Transaction) ([]byte, error) {

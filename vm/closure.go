@@ -41,16 +41,16 @@ func NewClosure(msg *state.Message, caller ClosureRef, object ClosureRef, code [
 	return c
 }
 
-func (c *Closure) GetValue(x *big.Int) *ethutil.Value {
-	return c.GetRangeValue(x, big.NewInt(1))
+func (c *Closure) GetValue(x uint64) *ethutil.Value {
+	return c.GetRangeValue(x, 1)
 }
 
-func (c *Closure) GetOp(x int) OpCode {
+func (c *Closure) GetOp(x uint64) OpCode {
 	return OpCode(c.GetByte(x))
 }
 
-func (c *Closure) GetByte(x int) byte {
-	if x > -1 && x < len(c.Code) {
+func (c *Closure) GetByte(x uint64) byte {
+	if x < uint64(len(c.Code)) {
 		return c.Code[x]
 	}
 
@@ -65,12 +65,12 @@ func (c *Closure) GetBytes(x, y int) []byte {
 	return c.Code[x : x+y]
 }
 
-func (c *Closure) GetRangeValue(x, y *big.Int) *ethutil.Value {
-	if x.Int64() >= int64(len(c.Code)) || y.Int64() >= int64(len(c.Code)) {
+func (c *Closure) GetRangeValue(x, y uint64) *ethutil.Value {
+	if x >= uint64(len(c.Code)) || y >= uint64(len(c.Code)) {
 		return ethutil.NewValue(0)
 	}
 
-	partial := c.Code[x.Int64() : x.Int64()+y.Int64()]
+	partial := c.Code[x : x+y]
 
 	return ethutil.NewValue(partial)
 }

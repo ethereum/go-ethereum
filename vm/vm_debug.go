@@ -75,35 +75,35 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 	var (
 		op OpCode
 
-		destinations = analyseJumpDests(closure.Code)
-		mem          = NewMemory()
-		stack        = NewStack()
-		pc           = big.NewInt(0)
-		step         = 0
-		prevStep     = 0
-		statedb      = self.env.State()
-		require      = func(m int) {
+		destinations        = analyseJumpDests(closure.Code)
+		mem                 = NewMemory()
+		stack               = NewStack()
+		pc           uint64 = 0
+		step                = 0
+		prevStep            = 0
+		statedb             = self.env.State()
+		require             = func(m int) {
 			if stack.Len() < m {
 				panic(fmt.Sprintf("%04v (%v) stack err size = %d, required = %d", pc, op, stack.Len(), m))
 			}
 		}
 
-		jump = func(from, to *big.Int) {
-			p := int(to.Int64())
+		jump = func(from uint64, to *big.Int) {
+			p := to.Uint64()
 
 			self.Printf(" ~> %v", to)
 			// Return to start
 			if p == 0 {
-				pc = big.NewInt(0)
+				pc = 0
 			} else {
 				nop := OpCode(closure.GetOp(p))
-				if !(nop == JUMPDEST || destinations[from.Int64()] != nil) {
+				if !(nop == JUMPDEST || destinations[from] != nil) {
 					panic(fmt.Sprintf("JUMP missed JUMPDEST (%v) %v", nop, p))
 				} else if nop == JUMP || nop == JUMPI {
 					panic(fmt.Sprintf("not allowed to JUMP(I) in to JUMP"))
 				}
 
-				pc = to
+				pc = to.Uint64()
 
 			}
 
@@ -125,26 +125,28 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 		step++
 		// Get the memory location of pc
-		op = closure.GetOp(int(pc.Uint64()))
+		op = closure.GetOp(pc)
 
-		// XXX Leave this Println intact. Don't change this to the log system.
-		// Used for creating diffs between implementations
-		if self.logTy == LogTyDiff {
-			switch op {
-			case STOP, RETURN, SUICIDE:
-				statedb.GetStateObject(closure.Address()).EachStorage(func(key string, value *ethutil.Value) {
-					value.Decode()
-					fmt.Printf("%x %x\n", new(big.Int).SetBytes([]byte(key)).Bytes(), value.Bytes())
-				})
+		/*
+			// XXX Leave this Println intact. Don't change this to the log system.
+			// Used for creating diffs between implementations
+			if self.logTy == LogTyDiff {
+				switch op {
+				case STOP, RETURN, SUICIDE:
+					statedb.GetStateObject(closure.Address()).EachStorage(func(key string, value *ethutil.Value) {
+						value.Decode()
+						fmt.Printf("%x %x\n", new(big.Int).SetBytes([]byte(key)).Bytes(), value.Bytes())
+					})
+				}
+
+				b := pc.Bytes()
+				if len(b) == 0 {
+					b = []byte{0}
+				}
+
+				fmt.Printf("%x %x %x %x\n", closure.Address(), b, []byte{byte(op)}, closure.Gas.Bytes())
 			}
-
-			b := pc.Bytes()
-			if len(b) == 0 {
-				b = []byte{0}
-			}
-
-			fmt.Printf("%x %x %x %x\n", closure.Address(), b, []byte{byte(op)}, closure.Gas.Bytes())
-		}
+		*/
 
 		gas := new(big.Int)
 		addStepGasUsage := func(amount *big.Int) {
@@ -735,13 +737,15 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 			// 0x50 range
 		case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
-			a := big.NewInt(int64(op) - int64(PUSH1) + 1)
-			pc.Add(pc, ethutil.Big1)
-			data := closure.GetRangeValue(pc, a)
+			//a := big.NewInt(int64(op) - int64(PUSH1) + 1)
+			a := uint64(op - PUSH1 + 1)
+			//pc.Add(pc, ethutil.Big1)
+			data := closure.GetRangeValue(pc+1, a)
 			val := ethutil.BigD(data.Bytes())
 			// Push value to stack
 			stack.Push(val)
-			pc.Add(pc, a.Sub(a, big.NewInt(1)))
+			pc += a
+			//pc.Add(pc, a.Sub(a, big.NewInt(1)))
 
 			step += int(op) - int(PUSH1) + 1
 
@@ -750,13 +754,9 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			stack.Pop()
 		case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:
 			n := int(op - DUP1 + 1)
-			v := stack.Dupn(n)
+			stack.Dupn(n)
 
 			self.Printf(" => [%d] 0x%x", n, stack.Peek().Bytes())
-
-			if OpCode(closure.GetValue(new(big.Int).Add(pc, ethutil.Big1)).Uint()) == POP && OpCode(closure.GetValue(new(big.Int).Add(pc, big.NewInt(2))).Uint()) == POP {
-				fmt.Println(toValue(v))
-			}
 		case SWAP1, SWAP2, SWAP3, SWAP4, SWAP5, SWAP6, SWAP7, SWAP8, SWAP9, SWAP10, SWAP11, SWAP12, SWAP13, SWAP14, SWAP15, SWAP16:
 			n := int(op - SWAP1 + 2)
 			x, y := stack.Swapn(n)
@@ -811,7 +811,6 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case JUMP:
-
 			jump(pc, stack.Pop())
 
 			continue
@@ -826,7 +825,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 		case JUMPDEST:
 		case PC:
-			stack.Push(pc)
+			stack.Push(big.NewInt(int64(pc)))
 		case MSIZE:
 			stack.Push(big.NewInt(int64(mem.Len())))
 		case GAS:
@@ -940,13 +939,13 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			return closure.Return(nil), fmt.Errorf("Invalid opcode %x", op)
 		}
 
-		pc.Add(pc, ethutil.Big1)
+		pc++
 
 		self.Endl()
 
 		if self.Dbg != nil {
 			for _, instrNo := range self.Dbg.BreakPoints() {
-				if pc.Cmp(big.NewInt(instrNo)) == 0 {
+				if pc == uint64(instrNo) {
 					self.Stepping = true
 
 					if !self.Dbg.BreakHook(prevStep, op, mem, stack, statedb.GetStateObject(closure.Address())) {

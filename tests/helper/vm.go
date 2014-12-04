@@ -3,7 +3,7 @@ package helper
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/chain"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
@@ -66,9 +66,9 @@ func (self *Env) Transfer(from, to vm.Account, amount *big.Int) error {
 	return vm.Transfer(from, to, amount)
 }
 
-func (self *Env) vm(addr, data []byte, gas, price, value *big.Int) *chain.Execution {
+func (self *Env) vm(addr, data []byte, gas, price, value *big.Int) *core.Execution {
 	evm := vm.New(self, vm.DebugVmTy)
-	exec := chain.NewExecution(evm, addr, data, gas, price, value)
+	exec := core.NewExecution(evm, addr, data, gas, price, value)
 	exec.SkipTransfer = self.skipTransfer
 
 	return exec

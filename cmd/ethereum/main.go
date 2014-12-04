@@ -22,8 +22,8 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/ethereum/go-ethereum/chain/types"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 )
