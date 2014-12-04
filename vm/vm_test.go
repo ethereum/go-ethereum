@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/trie"
 	checker "gopkg.in/check.v1"
-	// "github.com/obscuren/mutan"
 )
 
 type VmSuite struct{}
@@ -68,24 +67,18 @@ func setup(level logger.LogLevel, typ Type) (*Closure, VirtualMachine) {
 }
 
 func (s *VmSuite) TestDebugVm(c *checker.C) {
-	// if mutan.Version < "0.6" {
-	// 	t.Skip("skipping for mutan version", mutan.Version, " < 0.6")
-	// }
 	closure, vm := setup(logger.DebugLevel, DebugVmTy)
 	ret, _, e := closure.Call(vm, nil)
 	c.Assert(e, checker.NotNil)
-	c.Skip("Depends on mutan")
+	c.Skip("Depends on mutan. Requires serpent implementation")
 	c.Assert(ret, checker.DeepEquals, big9)
 }
 
 func (s *VmSuite) TestVm(c *checker.C) {
-	// if mutan.Version < "0.6" {
-	// 	t.Skip("skipping for mutan version", mutan.Version, " < 0.6")
-	// }
 	closure, vm := setup(logger.DebugLevel, StandardVmTy)
 	ret, _, e := closure.Call(vm, nil)
 	c.Assert(e, checker.NotNil)
-	c.Skip("Depends on mutan")
+	c.Skip("Depends on mutan. Requires serpent implementation")
 	c.Assert(ret, checker.DeepEquals, big9)
 }
 
@@ -142,7 +135,7 @@ func (s *VmSuite) TestBuildInSha256(c *checker.C) {
 	`, DebugVmTy)
 
 	exp := crypto.Sha256(ethutil.LeftPadBytes([]byte{42}, 32))
-	c.Skip("Depends on mutan")
+	c.Skip("Depends on mutan. Requires serpent implementation")
 	c.Assert(ret, checker.DeepEquals, exp)
 }
 
@@ -157,7 +150,7 @@ func (s *VmSuite) TestBuildInRipemd(c *checker.C) {
 	`, DebugVmTy)
 
 	exp := ethutil.RightPadBytes(crypto.Ripemd160(ethutil.LeftPadBytes([]byte{42}, 32)), 32)
-	c.Skip("Depends on mutan")
+	c.Skip("Depends on mutan. Requires serpent implementation")
 	c.Assert(ret, checker.DeepEquals, exp)
 }
 
