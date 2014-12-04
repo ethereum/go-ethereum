@@ -22,10 +22,25 @@ llvm::StructType* RuntimeManager::getRuntimeDataType()
 	{
 		llvm::Type* elems[] =
 		{
-			llvm::ArrayType::get(Type::Word, RuntimeData::_size),
-			Type::BytePtr,
-			Type::BytePtr,
-			Type::BytePtr
+			llvm::ArrayType::get(Type::Word, RuntimeData::_size),	// i256[]
+			Type::BytePtr,		// callData
+			Type::BytePtr		// code
+		};
+		type = llvm::StructType::create(elems, "RuntimeData");
+	}
+	return type;
+}
+
+llvm::StructType* RuntimeManager::getRuntimeType()
+{
+	static llvm::StructType* type = nullptr;
+	if (!type)
+	{
+		llvm::Type* elems[] =
+		{
+			Type::RuntimeDataPtr,	// data
+			Type::BytePtr,			// Env*
+			Type::BytePtr			// jmpbuf
 		};
 		type = llvm::StructType::create(elems, "Runtime");
 	}
@@ -59,26 +74,39 @@ llvm::Twine getName(RuntimeData::Index _index)
 
 RuntimeManager::RuntimeManager(llvm::IRBuilder<>& _builder): CompilerHelper(_builder)
 {
-	m_dataPtr = new llvm::GlobalVariable(*getModule(), Type::RuntimePtr, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(Type::RuntimePtr), "rt");
+	m_rtPtr = new llvm::GlobalVariable(*getModule(), Type::RuntimePtr, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(Type::RuntimePtr), "rt");
+	m_dataPtr = new llvm::GlobalVariable(*getModule(), Type::RuntimeDataPtr, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(Type::RuntimeDataPtr), "data");
 	m_longjmp = llvm::Intrinsic::getDeclaration(getModule(), llvm::Intrinsic::longjmp);
 
 	// Export data
 	auto mainFunc = getMainFunction();
-	llvm::Value* dataPtr = &mainFunc->getArgumentList().back();
-	m_builder.CreateStore(dataPtr, m_dataPtr);
+	llvm::Value* rtPtr = &mainFunc->getArgumentList().back();
+	m_builder.CreateStore(rtPtr, m_rtPtr);
+	auto dataPtr = m_builder.CreateStructGEP(rtPtr, 0, "dataPtr");
+	auto data = m_builder.CreateLoad(dataPtr, "data");
+	m_builder.CreateStore(data, m_dataPtr);
 }
 
 llvm::Value* RuntimeManager::getRuntimePtr()
 {
-	if (auto mainFunc = getMainFunction())
-		return mainFunc->arg_begin()->getNextNode();    // Runtime is the second parameter of main function
-	return m_builder.CreateLoad(m_dataPtr, "rt");
+	// FIXME: Data ptr
+	//if (auto mainFunc = getMainFunction())
+	//	return mainFunc->arg_begin()->getNextNode();    // Runtime is the second parameter of main function
+	return m_builder.CreateLoad(m_rtPtr, "rt");
+}
+
+llvm::Value* RuntimeManager::getDataPtr()
+{
+	// FIXME: Data ptr
+	//if (auto mainFunc = getMainFunction())
+	//	return mainFunc->arg_begin()->getNextNode();    // Runtime is the second parameter of main function
+	return m_builder.CreateLoad(m_dataPtr, "data");
 }
 
 llvm::Value* RuntimeManager::getPtr(RuntimeData::Index _index)
 {
 	llvm::Value* idxList[] = {m_builder.getInt32(0), m_builder.getInt32(0), m_builder.getInt32(_index)};
-	return m_builder.CreateInBoundsGEP(getRuntimePtr(), idxList, getName(_index) + "Ptr");
+	return m_builder.CreateInBoundsGEP(getDataPtr(), idxList, getName(_index) + "Ptr");
 }
 
 llvm::Value* RuntimeManager::get(RuntimeData::Index _index)
@@ -126,19 +154,19 @@ llvm::Value* RuntimeManager::get(Instruction _inst)
 
 llvm::Value* RuntimeManager::getCallData()
 {
-	auto ptr = getBuilder().CreateStructGEP(getRuntimePtr(), 1, "calldataPtr");
+	auto ptr = getBuilder().CreateStructGEP(getDataPtr(), 1, "calldataPtr");
 	return getBuilder().CreateLoad(ptr, "calldata");
 }
 
 llvm::Value* RuntimeManager::getCode()
 {
-	auto ptr = getBuilder().CreateStructGEP(getRuntimePtr(), 2, "codePtr");
+	auto ptr = getBuilder().CreateStructGEP(getDataPtr(), 2, "codePtr");
 	return getBuilder().CreateLoad(ptr, "code");
 }
 
 llvm::Value* RuntimeManager::getJmpBuf()
 {
-	auto ptr = getBuilder().CreateStructGEP(getRuntimePtr(), 3, "jmpbufPtr");
+	auto ptr = getBuilder().CreateStructGEP(getRuntimePtr(), 2, "jmpbufPtr");
 	return getBuilder().CreateLoad(ptr, "jmpbuf");
 }
 
@@ -150,7 +178,7 @@ llvm::Value* RuntimeManager::getGas()
 void RuntimeManager::setGas(llvm::Value* _gas)
 {
 	llvm::Value* idxList[] = {m_builder.getInt32(0), m_builder.getInt32(0), m_builder.getInt32(RuntimeData::Gas)};
-	auto ptr = m_builder.CreateInBoundsGEP(getRuntimePtr(), idxList, "gasPtr");
+	auto ptr = m_builder.CreateInBoundsGEP(getDataPtr(), idxList, "gasPtr");
 	m_builder.CreateStore(_gas, ptr);
 }
 

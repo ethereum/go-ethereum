@@ -38,7 +38,7 @@ public:
 	Runtime(const Runtime&) = delete;
 	void operator=(const Runtime&) = delete;
 
-	RuntimeData* getDataPtr() { return &m_data; }
+	RuntimeData* getDataPtr() { return &m_data; } // FIXME: Remove
 
 	StackImpl& getStack() { return m_stack; }
 	MemoryImpl& getMemory() { return m_memory; }

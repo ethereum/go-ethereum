@@ -20,6 +20,7 @@ llvm::IntegerType* Type::Byte;
 llvm::PointerType* Type::BytePtr;
 llvm::Type* Type::Void;
 llvm::IntegerType* Type::MainReturn;
+llvm::PointerType* Type::RuntimeDataPtr;
 llvm::PointerType* Type::RuntimePtr;
 
 void Type::init(llvm::LLVMContext& _context)
@@ -33,7 +34,8 @@ void Type::init(llvm::LLVMContext& _context)
 	BytePtr = Byte->getPointerTo();
 	Void = llvm::Type::getVoidTy(_context);
 	MainReturn = llvm::Type::getInt32Ty(_context);
-	RuntimePtr = RuntimeManager::getRuntimeDataType()->getPointerTo();
+	RuntimeDataPtr = RuntimeManager::getRuntimeDataType()->getPointerTo();
+	RuntimePtr = RuntimeManager::getRuntimeType()->getPointerTo();
 }
 
 llvm::ConstantInt* Constant::get(int64_t _n)

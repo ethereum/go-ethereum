@@ -88,7 +88,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeData* _da
 
 		auto executionStartTime = std::chrono::high_resolution_clock::now();
 
-		auto result = exec->runFunction(entryFunc, {{}, llvm::GenericValue(runtime.getDataPtr())});
+		auto result = exec->runFunction(entryFunc, {{}, llvm::GenericValue(&runtime)});
 		returnCode = static_cast<ReturnCode>(result.IntVal.getZExtValue());
 
 		auto executionEndTime = std::chrono::high_resolution_clock::now();
