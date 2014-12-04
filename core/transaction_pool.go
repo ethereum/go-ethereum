@@ -186,7 +186,7 @@ func (pool *TxPool) CurrentTransactions() []*types.Transaction {
 	return txList
 }
 
-func (pool *TxPool) RemoveInvalid(state *state.State) {
+func (pool *TxPool) RemoveInvalid(state *state.StateDB) {
 	pool.mutex.Lock()
 	defer pool.mutex.Unlock()
 

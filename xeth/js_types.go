@@ -95,7 +95,7 @@ type JSTransaction struct {
 	Confirmations   int    `json:"confirmations"`
 }
 
-func NewJSTx(tx *types.Transaction, state *state.State) *JSTransaction {
+func NewJSTx(tx *types.Transaction, state *state.StateDB) *JSTransaction {
 	hash := ethutil.Bytes2Hex(tx.Hash())
 	receiver := ethutil.Bytes2Hex(tx.Recipient)
 	if receiver == "0000000000000000000000000000000000000000" {

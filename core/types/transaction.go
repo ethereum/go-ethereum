@@ -77,7 +77,7 @@ func (tx *Transaction) IsContract() bool {
 	return tx.CreatesContract()
 }
 
-func (tx *Transaction) CreationAddress(state *state.State) []byte {
+func (tx *Transaction) CreationAddress(state *state.StateDB) []byte {
 	// Generate a new address
 	return crypto.Sha3(ethutil.NewValue([]interface{}{tx.Sender(), tx.Nonce}).Encode())[12:]
 }

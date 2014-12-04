@@ -62,10 +62,10 @@ type BlockManager struct {
 	// Transiently state. The trans state isn't ever saved, validated and
 	// it could be used for setting account nonces without effecting
 	// the main states.
-	transState *state.State
+	transState *state.StateDB
 	// Mining state. The mining state is used purely and solely by the mining
 	// operation.
-	miningState *state.State
+	miningState *state.StateDB
 
 	// The last attempted block is mainly used for debugging purposes
 	// This does not have to be a valid block and will be set during
@@ -96,19 +96,19 @@ func (self *BlockManager) Stop() {
 	statelogger.Debugln("Stopping state manager")
 }
 
-func (sm *BlockManager) CurrentState() *state.State {
+func (sm *BlockManager) CurrentState() *state.StateDB {
 	return sm.eth.ChainManager().CurrentBlock.State()
 }
 
-func (sm *BlockManager) TransState() *state.State {
+func (sm *BlockManager) TransState() *state.StateDB {
 	return sm.transState
 }
 
-func (sm *BlockManager) MiningState() *state.State {
+func (sm *BlockManager) MiningState() *state.StateDB {
 	return sm.miningState
 }
 
-func (sm *BlockManager) NewMiningState() *state.State {
+func (sm *BlockManager) NewMiningState() *state.StateDB {
 	sm.miningState = sm.eth.ChainManager().CurrentBlock.State().Copy()
 
 	return sm.miningState
@@ -118,7 +118,7 @@ func (sm *BlockManager) ChainManager() *ChainManager {
 	return sm.bc
 }
 
-func (sm *BlockManager) TransitionState(statedb *state.State, parent, block *types.Block) (receipts types.Receipts, err error) {
+func (sm *BlockManager) TransitionState(statedb *state.StateDB, parent, block *types.Block) (receipts types.Receipts, err error) {
 	coinbase := statedb.GetOrNewStateObject(block.Coinbase)
 	coinbase.SetGasPool(block.CalcGasLimit(parent))
 
@@ -131,7 +131,7 @@ func (sm *BlockManager) TransitionState(statedb *state.State, parent, block *typ
 	return receipts, nil
 }
 
-func (self *BlockManager) ProcessTransactions(coinbase *state.StateObject, state *state.State, block, parent *types.Block, txs types.Transactions) (types.Receipts, types.Transactions, types.Transactions, types.Transactions, error) {
+func (self *BlockManager) ProcessTransactions(coinbase *state.StateObject, state *state.StateDB, block, parent *types.Block, txs types.Transactions) (types.Receipts, types.Transactions, types.Transactions, types.Transactions, error) {
 	var (
 		receipts           types.Receipts
 		handled, unhandled types.Transactions
@@ -342,7 +342,7 @@ func (sm *BlockManager) ValidateBlock(block, parent *types.Block) error {
 	return nil
 }
 
-func (sm *BlockManager) AccumelateRewards(statedb *state.State, block, parent *types.Block) error {
+func (sm *BlockManager) AccumelateRewards(statedb *state.StateDB, block, parent *types.Block) error {
 	reward := new(big.Int).Set(BlockReward)
 
 	knownUncles := ethutil.Set(parent.Uncles)

@@ -40,7 +40,7 @@ type DebuggerWindow struct {
 	vm *vm.DebugVm
 	Db *Debugger
 
-	state *state.State
+	state *state.StateDB
 }
 
 func NewDebuggerWindow(lib *UiLib) *DebuggerWindow {

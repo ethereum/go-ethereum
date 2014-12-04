@@ -9,7 +9,7 @@ import (
 )
 
 type Environment interface {
-	State() *state.State
+	State() *state.StateDB
 
 	Origin() []byte
 	BlockNumber() *big.Int

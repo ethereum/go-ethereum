@@ -20,7 +20,7 @@ type World struct {
 	Accounts map[string]Account `json:"accounts"`
 }
 
-func (self *State) Dump() []byte {
+func (self *StateDB) Dump() []byte {
 	world := World{
 		Root:     ethutil.Bytes2Hex(self.Trie.GetRoot()),
 		Accounts: make(map[string]Account),

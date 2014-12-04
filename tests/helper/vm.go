@@ -12,7 +12,7 @@ import (
 
 type Env struct {
 	depth        int
-	state        *state.State
+	state        *state.StateDB
 	skipTransfer bool
 	Gas          *big.Int
 
@@ -28,13 +28,13 @@ type Env struct {
 	logs state.Logs
 }
 
-func NewEnv(state *state.State) *Env {
+func NewEnv(state *state.StateDB) *Env {
 	return &Env{
 		state: state,
 	}
 }
 
-func NewEnvFromMap(state *state.State, envValues map[string]string, exeValues map[string]string) *Env {
+func NewEnvFromMap(state *state.StateDB, envValues map[string]string, exeValues map[string]string) *Env {
 	env := NewEnv(state)
 
 	env.origin = ethutil.Hex2Bytes(exeValues["caller"])
@@ -55,7 +55,7 @@ func (self *Env) Coinbase() []byte      { return self.coinbase }
 func (self *Env) Time() int64           { return self.time }
 func (self *Env) Difficulty() *big.Int  { return self.difficulty }
 func (self *Env) BlockHash() []byte     { return nil }
-func (self *Env) State() *state.State   { return self.state }
+func (self *Env) State() *state.StateDB { return self.state }
 func (self *Env) GasLimit() *big.Int    { return self.gasLimit }
 func (self *Env) AddLog(log *state.Log) {
 	self.logs = append(self.logs, log)
@@ -91,7 +91,7 @@ func (self *Env) Create(caller vm.ClosureRef, addr, data []byte, gas, price, val
 	return exe.Create(caller)
 }
 
-func RunVm(state *state.State, env, exec map[string]string) ([]byte, state.Logs, *big.Int, error) {
+func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, state.Logs, *big.Int, error) {
 	var (
 		to    = FromHex(exec["address"])
 		from  = FromHex(exec["caller"])
@@ -110,7 +110,7 @@ func RunVm(state *state.State, env, exec map[string]string) ([]byte, state.Logs,
 	return ret, vmenv.logs, vmenv.Gas, err
 }
 
-func RunState(state *state.State, env, tx map[string]string) ([]byte, state.Logs, *big.Int, error) {
+func RunState(state *state.StateDB, env, tx map[string]string) ([]byte, state.Logs, *big.Int, error) {
 	var (
 		keyPair, _ = crypto.NewKeyPairFromSec([]byte(ethutil.Hex2Bytes(tx["secretKey"])))
 		to         = FromHex(tx["to"])

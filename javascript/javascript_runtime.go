@@ -128,7 +128,7 @@ func (self *JSRE) initStdFuncs() {
  */
 
 func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
-	var state *state.State
+	var state *state.StateDB
 
 	if len(call.ArgumentList) > 0 {
 		var block *types.Block

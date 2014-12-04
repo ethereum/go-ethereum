@@ -31,13 +31,13 @@ type StateTransition struct {
 	gas, gasPrice      *big.Int
 	value              *big.Int
 	data               []byte
-	state              *state.State
+	state              *state.StateDB
 	block              *types.Block
 
 	cb, rec, sen *state.StateObject
 }
 
-func NewStateTransition(coinbase *state.StateObject, tx *types.Transaction, state *state.State, block *types.Block) *StateTransition {
+func NewStateTransition(coinbase *state.StateObject, tx *types.Transaction, state *state.StateDB, block *types.Block) *StateTransition {
 	return &StateTransition{coinbase.Address(), tx.Recipient, tx, new(big.Int), new(big.Int).Set(tx.GasPrice), tx.Value, tx.Data, state, block, coinbase, nil, nil}
 }
 
@@ -188,7 +188,7 @@ func (self *StateTransition) TransitionState() (err error) {
 }
 
 // Converts an transaction in to a state object
-func MakeContract(tx *types.Transaction, state *state.State) *state.StateObject {
+func MakeContract(tx *types.Transaction, state *state.StateDB) *state.StateObject {
 	addr := tx.CreationAddress(state)
 
 	contract := state.GetOrNewStateObject(addr)

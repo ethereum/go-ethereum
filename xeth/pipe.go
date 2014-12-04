@@ -16,7 +16,7 @@ import (
 var pipelogger = logger.NewLogger("XETH")
 
 type VmVars struct {
-	State *state.State
+	State *state.StateDB
 }
 
 type XEth struct {

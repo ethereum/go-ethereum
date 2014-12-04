@@ -35,7 +35,7 @@ type StateObject struct {
 	codeHash []byte
 	Nonce    uint64
 	// Contract related attributes
-	State    *State
+	State    *StateDB
 	Code     Code
 	InitCode Code
 

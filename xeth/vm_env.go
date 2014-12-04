@@ -10,7 +10,7 @@ import (
 )
 
 type VMEnv struct {
-	state  *state.State
+	state  *state.StateDB
 	block  *types.Block
 	value  *big.Int
 	sender []byte
@@ -18,7 +18,7 @@ type VMEnv struct {
 	depth int
 }
 
-func NewEnv(state *state.State, block *types.Block, value *big.Int, sender []byte) *VMEnv {
+func NewEnv(state *state.StateDB, block *types.Block, value *big.Int, sender []byte) *VMEnv {
 	return &VMEnv{
 		state:  state,
 		block:  block,
@@ -35,7 +35,7 @@ func (self *VMEnv) Time() int64           { return self.block.Time }
 func (self *VMEnv) Difficulty() *big.Int  { return self.block.Difficulty }
 func (self *VMEnv) BlockHash() []byte     { return self.block.Hash() }
 func (self *VMEnv) Value() *big.Int       { return self.value }
-func (self *VMEnv) State() *state.State   { return self.state }
+func (self *VMEnv) State() *state.StateDB { return self.state }
 func (self *VMEnv) GasLimit() *big.Int    { return self.block.GasLimit }
 func (self *VMEnv) Depth() int            { return self.depth }
 func (self *VMEnv) SetDepth(i int)        { self.depth = i }

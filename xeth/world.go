@@ -22,7 +22,7 @@ func (self *XEth) World() *World {
 	return self.world
 }
 
-func (self *World) State() *state.State {
+func (self *World) State() *state.StateDB {
 	return self.pipe.blockManager.CurrentState()
 }
 

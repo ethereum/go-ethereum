@@ -77,7 +77,7 @@ type Block struct {
 	Coinbase []byte
 	// Block Trie state
 	//state *ethutil.Trie
-	state *state.State
+	state *state.StateDB
 	// Difficulty for the current block
 	Difficulty *big.Int
 	// Creation time
@@ -151,7 +151,7 @@ func (block *Block) HashNoNonce() []byte {
 	return crypto.Sha3(ethutil.Encode(block.miningHeader()))
 }
 
-func (block *Block) State() *state.State {
+func (block *Block) State() *state.StateDB {
 	return block.state
 }
 
