@@ -404,7 +404,6 @@ func (gui *Gui) update() {
 
 	state := gui.eth.BlockManager().TransState()
 
-	unconfirmedFunds := new(big.Int)
 	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetAccount(gui.address()).Balance())))
 
 	lastBlockLabel := gui.getObjectByName("lastBlockLabel")
@@ -438,15 +437,15 @@ func (gui *Gui) update() {
 
 				case core.TxPreEvent:
 					tx := ev.Tx
-					object := state.GetAccount(gui.address())
 
-					if bytes.Compare(tx.Sender(), gui.address()) == 0 {
-						unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
-					} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
-						unconfirmedFunds.Add(unconfirmedFunds, tx.Value)
-					}
+					tstate := gui.eth.BlockManager().TransState()
+					cstate := gui.eth.BlockManager().CurrentState()
 
-					gui.setWalletValue(object.Balance(), unconfirmedFunds)
+					taccount := tstate.GetAccount(gui.address())
+					caccount := cstate.GetAccount(gui.address())
+					unconfirmedFunds := new(big.Int).Sub(taccount.Balance(), caccount.Balance())
+
+					gui.setWalletValue(taccount.Balance(), unconfirmedFunds)
 					gui.insertTransaction("pre", tx)
 
 				case core.TxPostEvent:
@@ -456,32 +455,18 @@ func (gui *Gui) update() {
 					if bytes.Compare(tx.Sender(), gui.address()) == 0 {
 						object.SubAmount(tx.Value)
 
-						//gui.getObjectByName("transactionView").Call("addTx", xeth.NewJSTx(tx), "send")
 						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 					} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
 						object.AddAmount(tx.Value)
 
-						//gui.getObjectByName("transactionView").Call("addTx", xeth.NewJSTx(tx), "recv")
 						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 					}
 
 					gui.setWalletValue(object.Balance(), nil)
 					state.UpdateStateObject(object)
 
-				// case object:
-				// 	gui.loadAddressBook()
-
 				case eth.PeerListEvent:
 					gui.setPeerInfo()
-
-					/*
-						case miner.Event:
-							if ev.Type == miner.Started {
-								gui.miner = ev.Miner
-							} else {
-								gui.miner = nil
-							}
-					*/
 				}
 
 			case <-peerUpdateTicker.C:

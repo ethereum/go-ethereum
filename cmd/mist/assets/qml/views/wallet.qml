@@ -155,10 +155,14 @@ Rectangle {
 				model: ListModel {
 					id: txModel
 					Component.onCompleted: {
-						var filter = ethx.watch({latest: -1, from: eth.key().address});
-						filter.changed(addTxs)
+						var me = eth.key().address;
+						var filterTo = ethx.watch({latest: -1, to: me});
+						var filterFrom = ethx.watch({latest: -1, from: me});
+						filterTo.changed(addTxs)
+						filterFrom.changed(addTxs)
 
-						addTxs(filter.messages())
+						addTxs(filterTo.messages())
+						addTxs(filterFrom.messages())
 					}
 
 					function addTxs(messages) {
@@ -167,7 +171,12 @@ Rectangle {
 						for(var i = 0; i < messages.length; i++) {
 							var message = messages.get(i);
 							var to = eth.lookupName(message.to);
-							var from = eth.lookupName(message.from);
+							var from;
+							if(message.from.length == 0) {
+								from = "- MINED -";
+							} else {
+								from = eth.lookupName(message.from);
+							}
 							txModel.insert(0, {num: txModel.count, from: from, to: to, value: eth.numberToHuman(message.value)})
 						}
 					}

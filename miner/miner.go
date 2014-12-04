@@ -192,7 +192,7 @@ func (self *Miner) mine() {
 
 	// Accumulate all valid transactions and apply them to the new state
 	// Error may be ignored. It's not important during mining
-	receipts, txs, _, erroneous, err := blockManager.ProcessTransactions(coinbase, block.State(), block, block, transactions)
+	receipts, txs, _, erroneous, err := blockManager.ApplyTransactions(coinbase, block.State(), block, transactions, true)
 	if err != nil {
 		minerlogger.Debugln(err)
 	}

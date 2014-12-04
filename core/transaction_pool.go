@@ -164,7 +164,7 @@ func (self *TxPool) Add(tx *types.Transaction) error {
 	txplogger.Debugf("(t) %x => %x (%v) %x\n", tx.Sender()[:4], tmp, tx.Value, tx.Hash())
 
 	// Notify the subscribers
-	self.Ethereum.EventMux().Post(TxPreEvent{tx})
+	go self.Ethereum.EventMux().Post(TxPreEvent{tx})
 
 	return nil
 }

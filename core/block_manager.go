@@ -123,7 +123,7 @@ func (sm *BlockManager) TransitionState(statedb *state.StateDB, parent, block *t
 	coinbase.SetGasPool(block.CalcGasLimit(parent))
 
 	// Process the transactions on to current block
-	receipts, _, _, _, err = sm.ProcessTransactions(coinbase, statedb, block, parent, block.Transactions())
+	receipts, _, _, _, err = sm.ApplyTransactions(coinbase, statedb, block, block.Transactions(), false)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func (sm *BlockManager) TransitionState(statedb *state.StateDB, parent, block *t
 	return receipts, nil
 }
 
-func (self *BlockManager) ProcessTransactions(coinbase *state.StateObject, state *state.StateDB, block, parent *types.Block, txs types.Transactions) (types.Receipts, types.Transactions, types.Transactions, types.Transactions, error) {
+func (self *BlockManager) ApplyTransactions(coinbase *state.StateObject, state *state.StateDB, block *types.Block, txs types.Transactions, transientProcess bool) (types.Receipts, types.Transactions, types.Transactions, types.Transactions, error) {
 	var (
 		receipts           types.Receipts
 		handled, unhandled types.Transactions
@@ -180,7 +180,9 @@ done:
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
 		// Notify all subscribers
-		go self.eth.EventMux().Post(TxPostEvent{tx})
+		if !transientProcess {
+			go self.eth.EventMux().Post(TxPostEvent{tx})
+		}
 
 		receipts = append(receipts, receipt)
 		handled = append(handled, tx)
@@ -378,7 +380,7 @@ func (sm *BlockManager) AccumelateRewards(statedb *state.StateDB, block, parent 
 	account.AddAmount(reward)
 
 	statedb.Manifest().AddMessage(&state.Message{
-		To: block.Coinbase, From: block.Coinbase,
+		To:     block.Coinbase,
 		Input:  nil,
 		Origin: nil,
 		Block:  block.Hash(), Timestamp: block.Time, Coinbase: block.Coinbase, Number: block.Number,
