@@ -681,8 +681,8 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 		case Instruction::EXTCODESIZE:
 		{
 			auto addr = stack.pop();
-			auto value = _ext.codesizeAt(addr);
-			stack.push(value);
+			auto codeRef = _ext.getExtCode(addr);
+			stack.push(codeRef.size);
 			break;
 		}
 
@@ -714,15 +714,14 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 
 		case Instruction::EXTCODECOPY:
 		{
-			auto extAddr = stack.pop();
+			auto addr = stack.pop();
 			auto destMemIdx = stack.pop();
 			auto srcIdx = stack.pop();
 			auto reqBytes = stack.pop();
 
-			auto srcPtr = _ext.codeAt(extAddr);
-			auto srcSize = _ext.codesizeAt(extAddr);
+			auto codeRef = _ext.getExtCode(addr);
 
-			_memory.copyBytes(srcPtr, srcSize, srcIdx, destMemIdx, reqBytes);
+			_memory.copyBytes(codeRef.ptr, codeRef.size, srcIdx, destMemIdx, reqBytes);
 			break;
 		}
 

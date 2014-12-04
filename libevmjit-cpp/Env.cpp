@@ -99,18 +99,12 @@ extern "C"
 		*o_hash = hash;
 	}
 
-	EXPORT unsigned char* ext_codeAt(ExtVMFace* _env, h256* _addr256)
+	EXPORT byte const* env_getExtCode(ExtVMFace* _env, h256* _addr256, uint64_t* o_size)
 	{
 		auto addr = right160(*_addr256);
 		auto& code = _env->codeAt(addr);
-		return const_cast<unsigned char*>(code.data());
-	}
-
-	EXPORT void ext_codesizeAt(ExtVMFace* _env, h256* _addr256, i256* o_ret)
-	{
-		auto addr = right160(*_addr256);
-		auto& code = _env->codeAt(addr);
-		*o_ret = eth2llvm(u256(code.size()));
+		*o_size = code.size();
+		return code.data();
 	}
 
 	EXPORT void env_log(ExtVMFace* _env, byte* _beg, uint64_t _size, h256* _topic1, h256* _topic2, h256* _topic3, h256* _topic4)

@@ -38,6 +38,7 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 	m_arg6 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg6");
 	m_arg7 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg7");
 	m_arg8 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg8");
+	m_size = m_builder.CreateAlloca(Type::Size, nullptr, "env.size");
 
 	using Linkage = llvm::GlobalValue::LinkageTypes;
 
@@ -48,9 +49,6 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 	m_calldataload = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_calldataload", module);
 	m_balance = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_balance", module);
 	m_suicide = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 2}, false), Linkage::ExternalLinkage, "ext_suicide", module);
-	m_exp = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 4}, false), Linkage::ExternalLinkage, "ext_exp", module); // FIXME: Remove
-	m_codeAt = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, {argsTypes, 2}, false), Linkage::ExternalLinkage, "ext_codeAt", module);
-	m_codesizeAt = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_codesizeAt", module);
 
 	llvm::Type* sha3ArgsTypes[] = {Type::BytePtr, Type::Size, Type::WordPtr};
 	m_sha3 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, sha3ArgsTypes, false), Linkage::ExternalLinkage, "env_sha3", module);
@@ -63,6 +61,9 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 
 	llvm::Type* logArgsTypes[] = {Type::EnvPtr, Type::BytePtr, Type::Size, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr};
 	m_log = llvm::Function::Create(llvm::FunctionType::get(Type::Void, logArgsTypes, false), Linkage::ExternalLinkage, "env_log", module);
+
+	llvm::Type* getExtCodeArgsTypes[] = {Type::EnvPtr, Type::WordPtr, Type::Size->getPointerTo()};
+	m_getExtCode = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, getExtCodeArgsTypes, false), Linkage::ExternalLinkage, "env_getExtCode", module);
 }
 
 llvm::Value* Ext::sload(llvm::Value* _index)
@@ -140,19 +141,14 @@ llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
 	return hash;
 }
 
-llvm::Value* Ext::codeAt(llvm::Value* _addr)
+MemoryRef Ext::getExtCode(llvm::Value* _addr)
 {
 	auto addr = Endianness::toBE(m_builder, _addr);
 	m_builder.CreateStore(addr, m_args[0]);
-	return m_builder.CreateCall2(m_codeAt, getRuntimeManager().getEnv(), m_args[0]);
-}
-
-llvm::Value* Ext::codesizeAt(llvm::Value* _addr)
-{
-	auto addr = Endianness::toBE(m_builder, _addr);
-	m_builder.CreateStore(addr, m_args[0]);
-	createCall(m_codesizeAt, getRuntimeManager().getEnv(), m_args[0], m_args[1]);
-	return m_builder.CreateLoad(m_args[1]);
+	auto code = createCall(m_getExtCode, getRuntimeManager().getEnv(), m_args[0], m_size);
+	auto codeSize = m_builder.CreateLoad(m_size);
+	auto codeSize256 = m_builder.CreateZExt(codeSize, Type::Word);
+	return {code, codeSize256};
 }
 
 void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, std::array<llvm::Value*,4> const& _topics)

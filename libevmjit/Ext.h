@@ -12,6 +12,12 @@ namespace jit
 {
 	class Memory;
 
+struct MemoryRef
+{
+	llvm::Value* ptr;
+	llvm::Value* size;
+};
+
 class Ext : public RuntimeHelper
 {
 public:
@@ -27,8 +33,7 @@ public:
 	llvm::Value* call(llvm::Value*& _gas, llvm::Value* _receiveAddress, llvm::Value* _value, llvm::Value* _inOff, llvm::Value* _inSize, llvm::Value* _outOff, llvm::Value* _outSize, llvm::Value* _codeAddress);
 
 	llvm::Value* sha3(llvm::Value* _inOff, llvm::Value* _inSize);
-	llvm::Value* codeAt(llvm::Value* _addr);
-	llvm::Value* codesizeAt(llvm::Value* _addr);
+	MemoryRef getExtCode(llvm::Value* _addr);
 
 	void log(llvm::Value* _memIdx, llvm::Value* _numBytes, std::array<llvm::Value*,4> const& _topics);
 
@@ -43,6 +48,7 @@ private:
 	llvm::Value* m_arg6;
 	llvm::Value* m_arg7;
 	llvm::Value* m_arg8;
+	llvm::Value* m_size;
 	llvm::Value* m_data = nullptr;
 	llvm::Function* m_sload;
 	llvm::Function* m_sstore;
@@ -53,8 +59,7 @@ private:
 	llvm::Function* m_call;
 	llvm::Function* m_sha3;
 	llvm::Function* m_exp;
-	llvm::Function* m_codeAt;
-	llvm::Function* m_codesizeAt;
+	llvm::Function* m_getExtCode;
 	llvm::Function* m_log;
 };
 
