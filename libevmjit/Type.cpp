@@ -15,6 +15,7 @@ namespace jit
 llvm::IntegerType* Type::Word;
 llvm::PointerType* Type::WordPtr;
 llvm::IntegerType* Type::lowPrecision;
+llvm::IntegerType* Type::Bool;
 llvm::IntegerType* Type::Size;
 llvm::IntegerType* Type::Byte;
 llvm::PointerType* Type::BytePtr;
@@ -32,6 +33,7 @@ void Type::init(llvm::LLVMContext& _context)
 		WordPtr = Word->getPointerTo();
 		lowPrecision = llvm::Type::getInt64Ty(_context);
 		// TODO: Size should be architecture-dependent
+		Bool = llvm::Type::getInt1Ty(_context);
 		Size = llvm::Type::getInt64Ty(_context);
 		Byte = llvm::Type::getInt8Ty(_context);
 		BytePtr = Byte->getPointerTo();

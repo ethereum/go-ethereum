@@ -36,6 +36,7 @@ extern "C"
 		_env->setStore(index, value);	// Interface uses native endianness
 	}
 
+	// TODO: Move to Memory/Runtime
 	EXPORT void ext_calldataload(ExtVMFace* _env, i256* _index, ::byte* o_value)
 	{
 		auto index = static_cast<size_t>(llvm2eth(*_index));
@@ -72,32 +73,24 @@ extern "C"
 			*o_address = {};
 	}
 
-	EXPORT void ext_call(ExtVMFace* _env, i256* io_gas, h256* _receiveAddress, i256* _value, i256* _inOff, i256* _inSize, i256* _outOff, i256* _outSize, h256* _codeAddress, i256* o_ret)
+	EXPORT bool env_call(ExtVMFace* _env, i256* io_gas, h256* _receiveAddress, i256* _value, byte* _inBeg, uint64_t _inSize, byte* _outBeg, uint64_t _outSize, h256* _codeAddress)
 	{
-		auto&& ext = *_env;
 		auto value = llvm2eth(*_value);
-
-		auto ret = false;
-		auto gas = llvm2eth(*io_gas);
-		if (ext.balance(ext.myAddress) >= value)
+		if (_env->balance(_env->myAddress) >= value)
 		{
-			ext.subBalance(value);
+			_env->subBalance(value);
 			auto receiveAddress = right160(*_receiveAddress);
-			auto inOff = static_cast<size_t>(llvm2eth(*_inOff));
-			auto inSize = static_cast<size_t>(llvm2eth(*_inSize));
-			auto outOff = static_cast<size_t>(llvm2eth(*_outOff));
-			auto outSize = static_cast<size_t>(llvm2eth(*_outSize));
-			//auto&& inRef = bytesConstRef(_rt->getMemory().data() + inOff, inSize);
-			//auto&& outRef = bytesConstRef(_rt->getMemory().data() + outOff, outSize);
-			auto inRef = bytesConstRef(); // FIXME: Handle memory
-			auto outRef = bytesConstRef(); // FIXME: Handle memory
+			auto inRef = bytesConstRef{_inBeg, _inSize};
+			auto outRef = bytesConstRef{_outBeg, _outSize};
 			OnOpFunc onOp {}; // TODO: Handle that thing
 			auto codeAddress = right160(*_codeAddress);
-			ret = ext.call(receiveAddress, value, inRef, &gas, outRef, onOp, {}, codeAddress);
+			auto gas = llvm2eth(*io_gas);
+			auto ret = _env->call(receiveAddress, value, inRef, &gas, outRef, onOp, {}, codeAddress);
+			*io_gas = eth2llvm(gas);
+			return ret;
 		}
 
-		*io_gas = eth2llvm(gas);
-		o_ret->a = ret ? 1 : 0;
+		return false;
 	}
 
 	EXPORT void env_sha3(byte* _begin, uint64_t _size, h256* o_hash)

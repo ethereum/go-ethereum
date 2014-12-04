@@ -48,7 +48,6 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 	m_calldataload = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_calldataload", module);
 	m_balance = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_balance", module);
 	m_suicide = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 2}, false), Linkage::ExternalLinkage, "ext_suicide", module);
-	m_call = llvm::Function::Create(llvm::FunctionType::get(Type::Void, argsTypes, false), Linkage::ExternalLinkage, "ext_call", module);
 	m_exp = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 4}, false), Linkage::ExternalLinkage, "ext_exp", module);
 	m_codeAt = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, {argsTypes, 2}, false), Linkage::ExternalLinkage, "ext_codeAt", module);
 	m_codesizeAt = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_codesizeAt", module);
@@ -63,6 +62,9 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 
 	llvm::Type* createArgsTypes[] = {Type::EnvPtr, Type::WordPtr, Type::BytePtr, Type::Size, Type::WordPtr};
 	m_create = llvm::Function::Create(llvm::FunctionType::get(Type::Void, createArgsTypes, false), Linkage::ExternalLinkage, "env_create", module);
+
+	llvm::Type* callArgsTypes[] = {Type::EnvPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::BytePtr, Type::Size, Type::BytePtr, Type::Size, Type::WordPtr};
+	m_call = llvm::Function::Create(llvm::FunctionType::get(Type::Bool, callArgsTypes, false), Linkage::ExternalLinkage, "env_call", module);
 }
 
 llvm::Value* Ext::sload(llvm::Value* _index)
@@ -119,15 +121,15 @@ llvm::Value* Ext::call(llvm::Value*& _gas, llvm::Value* _receiveAddress, llvm::V
 	auto receiveAddress = Endianness::toBE(m_builder, _receiveAddress);
 	m_builder.CreateStore(receiveAddress, m_arg2);
 	m_builder.CreateStore(_value, m_arg3);
-	m_builder.CreateStore(_inOff, m_arg4);
-	m_builder.CreateStore(_inSize, m_arg5);
-	m_builder.CreateStore(_outOff, m_arg6);
-	m_builder.CreateStore(_outSize, m_arg7);
+	auto inBeg = m_memoryMan.getBytePtr(_inOff);
+	auto inSize = m_builder.CreateTrunc(_inSize, Type::Size, "in.size");
+	auto outBeg = m_memoryMan.getBytePtr(_outOff);
+	auto outSize = m_builder.CreateTrunc(_outSize, Type::Size, "out.size");
 	auto codeAddress = Endianness::toBE(m_builder, _codeAddress);
 	m_builder.CreateStore(codeAddress, m_arg8);
-	createCall(m_call, getRuntimeManager().getEnv(), m_args[0], m_arg2, m_arg3, m_arg4, m_arg5, m_arg6, m_arg7, m_arg8, m_args[1]);
+	auto ret = createCall(m_call, getRuntimeManager().getEnv(), m_args[0], m_arg2, m_arg3, inBeg, inSize, outBeg, outSize, m_arg8);
 	_gas = m_builder.CreateLoad(m_args[0]); // Return gas
-	return m_builder.CreateLoad(m_args[1]);
+	return m_builder.CreateZExt(ret, Type::Word, "ret");
 }
 
 llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
