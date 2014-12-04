@@ -99,7 +99,8 @@ func (self *BlockPool) FetchHashes(peer *Peer) bool {
 		self.td = peer.td
 
 		if !self.HasLatestHash() {
-			peer.doneFetchingHashes = fInfo
+			peer.doneFetchingHashes = false
+
 			const amount = 256
 			peerlogger.Debugf("Fetching hashes (%d) %x...\n", amount, peer.lastReceivedHash[0:4])
 			peer.QueueMessage(wire.NewMessage(wire.MsgGetBlockHashesTy, []interface{}{peer.lastReceivedHash, uint32(amount)}))
