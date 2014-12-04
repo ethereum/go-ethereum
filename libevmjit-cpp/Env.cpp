@@ -56,7 +56,7 @@ extern "C"
 		_env->suicide(right160(*_address));
 	}
 
-	EXPORT void ext_create(ExtVMFace* _env, i256* _endowment, i256* _initOff, i256* _initSize, h256* o_address)
+	EXPORT void env_create(ExtVMFace* _env, i256* _endowment, byte* _initBeg, uint64_t _initSize, h256* o_address)
 	{
 		auto endowment = llvm2eth(*_endowment);
 
@@ -64,12 +64,8 @@ extern "C"
 		{
 			_env->subBalance(endowment);
 			u256 gas;   // TODO: Handle gas
-			auto initOff = static_cast<size_t>(llvm2eth(*_initOff));
-			auto initSize = static_cast<size_t>(llvm2eth(*_initSize));
-			//auto&& initRef = bytesConstRef(_rt->getMemory().data() + initOff, initSize);
-			auto initRef = bytesConstRef(); // FIXME: Handle memory
 			OnOpFunc onOp {}; // TODO: Handle that thing
-			h256 address(_env->create(endowment, &gas, initRef, onOp), h256::AlignRight);
+			h256 address(_env->create(endowment, &gas, {_initBeg, _initSize}, onOp), h256::AlignRight);
 			*o_address = address;
 		}
 		else
