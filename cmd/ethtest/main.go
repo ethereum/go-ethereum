@@ -82,7 +82,7 @@ func RunVmTest(js string) (failed int) {
 			state.SetStateObject(obj)
 		}
 
-		ret, gas, err := helper.RunVm(state, test.Env, test.Exec)
+		ret, _, gas, err := helper.RunVm(state, test.Env, test.Exec)
 		// When an error is returned it doesn't always mean the tests fails.
 		// Have to come up with some conditional failing mechanism.
 		if err != nil {
