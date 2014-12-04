@@ -96,6 +96,29 @@ llvm::Value* Arith256::mulmod(llvm::Value* _arg1, llvm::Value* _arg2, llvm::Valu
 	return ternaryOp(m_mulmod, _arg1, _arg2, _arg3);
 }
 
+namespace
+{
+	using s256 = boost::multiprecision::int256_t;
+
+	inline s256 u2s(u256 _u)
+	{
+		static const bigint c_end = (bigint)1 << 256;
+		static const u256 c_send = (u256)1 << 255;
+		if (_u < c_send)
+			return (s256)_u;
+		else
+			return (s256)-(c_end - _u);
+	}
+
+	inline u256 s2u(s256 _u)
+	{
+		static const bigint c_end = (bigint)1 << 256;
+		if (_u >= 0)
+			return (u256)_u;
+		else
+			return (u256)(c_end + _u);
+	}
+}
 
 }
 }
@@ -106,7 +129,6 @@ extern "C"
 {
 
 	using namespace dev::eth::jit;
-	using s256 = boost::multiprecision::int256_t;
 
 	EXPORT void arith_mul(i256* _arg1, i256* _arg2, i256* o_result)
 	{
@@ -133,14 +155,14 @@ extern "C"
 	{
 		auto arg1 = llvm2eth(*_arg1);
 		auto arg2 = llvm2eth(*_arg2);
-		*o_result = eth2llvm(arg2 == 0 ? arg2 : (arg1.convert_to<s256>() / arg2.convert_to<s256>()).convert_to<u256>());
+		*o_result = eth2llvm(arg2 == 0 ? arg2 : s2u(u2s(arg1) / u2s(arg2)));
 	}
 
 	EXPORT void arith_smod(i256* _arg1, i256* _arg2, i256* o_result)
 	{
 		auto arg1 = llvm2eth(*_arg1);
 		auto arg2 = llvm2eth(*_arg2);
-		*o_result = eth2llvm(arg2 == 0 ? arg2 : (arg1.convert_to<s256>() % arg2.convert_to<s256>()).convert_to<u256>());
+		*o_result = eth2llvm(arg2 == 0 ? arg2 : s2u(u2s(arg1) % u2s(arg2)));
 	}
 
 	EXPORT void arith_exp(i256* _arg1, i256* _arg2, i256* o_result)
