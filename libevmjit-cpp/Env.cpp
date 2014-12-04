@@ -113,68 +113,23 @@ extern "C"
 		*o_ret = eth2llvm(u256(code.size()));
 	}
 
-	EXPORT void ext_log0(ExtVMFace* _env, i256* _memIdx, i256* _numBytes)
+	EXPORT void env_log(ExtVMFace* _env, byte* _beg, uint64_t _size, h256* _topic1, h256* _topic2, h256* _topic3, h256* _topic4)
 	{
-		auto memIdx = llvm2eth(*_memIdx).convert_to<size_t>();
-		auto numBytes = llvm2eth(*_numBytes).convert_to<size_t>();
+		dev::h256s topics;
 
-		//auto dataRef = bytesConstRef(_rt->getMemory().data() + memIdx, numBytes);
-		auto dataRef = bytesConstRef(); // FIXME: Handle memory
-		_env->log({}, dataRef);
-	}
+		if (_topic1)
+			topics.push_back(*_topic1);
 
-	EXPORT void ext_log1(ExtVMFace* _env, i256* _memIdx, i256* _numBytes, i256* _topic1)
-	{
-		auto memIdx = static_cast<size_t>(llvm2eth(*_memIdx));
-		auto numBytes = static_cast<size_t>(llvm2eth(*_numBytes));
+		if (_topic2)
+			topics.push_back(*_topic2);
 
-		auto topic1 = llvm2eth(*_topic1);
+		if (_topic3)
+			topics.push_back(*_topic3);
 
-		//auto dataRef = bytesConstRef(_rt->getMemory().data() + memIdx, numBytes);
-		auto dataRef = bytesConstRef(); // FIXME: Handle memory
-		_env->log({topic1}, dataRef);
-	}
+		if (_topic4)
+			topics.push_back(*_topic4);
 
-	EXPORT void ext_log2(ExtVMFace* _env, i256* _memIdx, i256* _numBytes, i256* _topic1, i256* _topic2)
-	{
-		auto memIdx = static_cast<size_t>(llvm2eth(*_memIdx));
-		auto numBytes = static_cast<size_t>(llvm2eth(*_numBytes));
-
-		auto topic1 = llvm2eth(*_topic1);
-		auto topic2 = llvm2eth(*_topic2);
-
-		//auto dataRef = bytesConstRef(_rt->getMemory().data() + memIdx, numBytes);
-		auto dataRef = bytesConstRef(); // FIXME: Handle memory
-		_env->log({ topic1, topic2 }, dataRef);
-	}
-
-	EXPORT void ext_log3(ExtVMFace* _env, i256* _memIdx, i256* _numBytes, i256* _topic1, i256* _topic2, i256* _topic3)
-	{
-		auto memIdx = static_cast<size_t>(llvm2eth(*_memIdx));
-		auto numBytes = static_cast<size_t>(llvm2eth(*_numBytes));
-
-		auto topic1 = llvm2eth(*_topic1);
-		auto topic2 = llvm2eth(*_topic2);
-		auto topic3 = llvm2eth(*_topic3);
-
-		//auto dataRef = bytesConstRef(_rt->getMemory().data() + memIdx, numBytes);
-		auto dataRef = bytesConstRef(); // FIXME: Handle memory
-		_env->log({ topic1, topic2, topic3 }, dataRef);
-	}
-
-	EXPORT void ext_log4(ExtVMFace* _env, i256* _memIdx, i256* _numBytes, i256* _topic1, i256* _topic2, i256* _topic3, i256* _topic4)
-	{
-		auto memIdx = static_cast<size_t>(llvm2eth(*_memIdx));
-		auto numBytes = static_cast<size_t>(llvm2eth(*_numBytes));
-
-		auto topic1 = llvm2eth(*_topic1);
-		auto topic2 = llvm2eth(*_topic2);
-		auto topic3 = llvm2eth(*_topic3);
-		auto topic4 = llvm2eth(*_topic4);
-
-		//auto dataRef = bytesConstRef(_rt->getMemory().data() + memIdx, numBytes);
-		auto dataRef = bytesConstRef(); // FIXME: Handle memory
-		_env->log({ topic1, topic2, topic3, topic4 }, dataRef);
+		_env->log(std::move(topics), {_beg, _size});
 	}
 }
 

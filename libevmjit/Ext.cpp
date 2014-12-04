@@ -48,14 +48,9 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 	m_calldataload = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_calldataload", module);
 	m_balance = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_balance", module);
 	m_suicide = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 2}, false), Linkage::ExternalLinkage, "ext_suicide", module);
-	m_exp = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 4}, false), Linkage::ExternalLinkage, "ext_exp", module);
+	m_exp = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 4}, false), Linkage::ExternalLinkage, "ext_exp", module); // FIXME: Remove
 	m_codeAt = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, {argsTypes, 2}, false), Linkage::ExternalLinkage, "ext_codeAt", module);
 	m_codesizeAt = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_codesizeAt", module);
-	m_log0 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_log0", module);
-	m_log1 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 4}, false), Linkage::ExternalLinkage, "ext_log1", module);
-	m_log2 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 5}, false), Linkage::ExternalLinkage, "ext_log2", module);
-	m_log3 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 6}, false), Linkage::ExternalLinkage, "ext_log3", module);
-	m_log4 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 7}, false), Linkage::ExternalLinkage, "ext_log4", module);
 
 	llvm::Type* sha3ArgsTypes[] = {Type::BytePtr, Type::Size, Type::WordPtr};
 	m_sha3 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, sha3ArgsTypes, false), Linkage::ExternalLinkage, "env_sha3", module);
@@ -65,6 +60,9 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 
 	llvm::Type* callArgsTypes[] = {Type::EnvPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::BytePtr, Type::Size, Type::BytePtr, Type::Size, Type::WordPtr};
 	m_call = llvm::Function::Create(llvm::FunctionType::get(Type::Bool, callArgsTypes, false), Linkage::ExternalLinkage, "env_call", module);
+
+	llvm::Type* logArgsTypes[] = {Type::EnvPtr, Type::BytePtr, Type::Size, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr};
+	m_log = llvm::Function::Create(llvm::FunctionType::get(Type::Void, logArgsTypes, false), Linkage::ExternalLinkage, "env_log", module);
 }
 
 llvm::Value* Ext::sload(llvm::Value* _index)
@@ -157,19 +155,23 @@ llvm::Value* Ext::codesizeAt(llvm::Value* _addr)
 	return m_builder.CreateLoad(m_args[1]);
 }
 
-void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, size_t _numTopics, std::array<llvm::Value*,4> const& _topics)
+void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, std::array<llvm::Value*,4> const& _topics)
 {
-	llvm::Value* args[] = {nullptr, m_args[0], m_args[1], m_arg2, m_arg3, m_arg4, m_arg5};
-	llvm::Value* funcs[] = {m_log0, m_log1, m_log2, m_log3, m_log4};
+	auto begin = m_memoryMan.getBytePtr(_memIdx);
+	auto size = m_builder.CreateTrunc(_numBytes, Type::Size, "size");
+	llvm::Value* args[] = {getRuntimeManager().getEnv(), begin, size, m_arg2, m_arg3, m_arg4, m_arg5};
 
-	args[0] = getRuntimeManager().getEnv();
-	m_builder.CreateStore(_memIdx, m_args[0]);
-	m_builder.CreateStore(_numBytes, m_args[1]);
+	auto topicArgPtr = &args[3];
+	for (auto&& topic : _topics)
+	{
+		if (topic)
+			m_builder.CreateStore(Endianness::toBE(m_builder, topic), *topicArgPtr);
+		else
+			*topicArgPtr = llvm::ConstantPointerNull::get(Type::WordPtr);
+		++topicArgPtr;
+	}
 
-	for (size_t i = 0; i < _numTopics; ++i)
-		m_builder.CreateStore(_topics[i], args[i + 3]);
-
-	m_builder.CreateCall(funcs[_numTopics], llvm::ArrayRef<llvm::Value*>(args, _numTopics + 3));
+	m_builder.CreateCall(m_log, args);
 }
 
 }
