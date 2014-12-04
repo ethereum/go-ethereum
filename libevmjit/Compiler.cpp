@@ -2,6 +2,7 @@
 #include "Compiler.h"
 
 #include <fstream>
+#include <chrono>
 
 #include <boost/dynamic_bitset.hpp>
 
@@ -152,6 +153,7 @@ void Compiler::createBasicBlocks(bytes const& _bytecode)
 
 std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode)
 {
+	auto compilationStartTime = std::chrono::high_resolution_clock::now();
 	auto module = std::unique_ptr<llvm::Module>(new llvm::Module("main", m_builder.getContext()));
 
 	// Create main function
@@ -242,6 +244,8 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode)
 		fpManager.run(*m_mainFunc);
 	}
 
+	auto compilationEndTime = std::chrono::high_resolution_clock::now();
+	clog(JIT) << "JIT: " << std::chrono::duration_cast<std::chrono::milliseconds>(compilationEndTime - compilationStartTime).count();
 	return module;
 }
 

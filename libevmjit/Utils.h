@@ -14,7 +14,7 @@ namespace jit
 
 struct JIT: public NoteChannel  { static const char* name() { return "JIT"; } };
 
-#define clog(CHANNEL) std::cerr << CHANNEL::name() << ": "
+#define clog(CHANNEL) std::cerr
 
 /// Representation of 256-bit value binary compatible with LLVM i256
 // TODO: Replace with h256

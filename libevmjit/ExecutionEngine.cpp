@@ -69,11 +69,12 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeData* _da
 		return -1; // FIXME: Handle internal errors
 	_module.release();  // Successfully created llvm::ExecutionEngine takes ownership of the module
 
-	auto finalizationStartTime = std::chrono::high_resolution_clock::now();
+	auto finalizationStartTime = std::chrono::high_resolution_clock::now(); // FIXME: It's not compilation time
 	exec->finalizeObject();
 	auto finalizationEndTime = std::chrono::high_resolution_clock::now();
-	clog(JIT) << "Module finalization time: "
-			  << std::chrono::duration_cast<std::chrono::microseconds>(finalizationEndTime - finalizationStartTime).count();
+	clog(JIT) << " + " << std::chrono::duration_cast<std::chrono::milliseconds>(finalizationEndTime - finalizationStartTime).count();
+
+	auto executionStartTime = std::chrono::high_resolution_clock::now();
 
 	auto entryFunc = module->getFunction("main");
 	if (!entryFunc)
@@ -85,21 +86,15 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeData* _da
 	auto r = setjmp(buf);
 	if (r == 0)
 	{
-
-		auto executionStartTime = std::chrono::high_resolution_clock::now();
-
 		auto result = exec->runFunction(entryFunc, {{}, llvm::GenericValue(&runtime)});
 		returnCode = static_cast<ReturnCode>(result.IntVal.getZExtValue());
-
-		auto executionEndTime = std::chrono::high_resolution_clock::now();
-		clog(JIT) << "Execution time : "
-				  << std::chrono::duration_cast<std::chrono::microseconds>(executionEndTime - executionStartTime).count();
-
 	}
 	else
 		returnCode = static_cast<ReturnCode>(r);
 	
-	clog(JIT) << "Max stack size: " << Stack::maxStackSize;
+	auto executionEndTime = std::chrono::high_resolution_clock::now();
+	clog(JIT) << " + " << std::chrono::duration_cast<std::chrono::milliseconds>(executionEndTime - executionStartTime).count() << " ms ";
+	//clog(JIT) << "Max stack size: " << Stack::maxStackSize;
 
 	if (returnCode == ReturnCode::Return)
 	{
@@ -113,6 +108,8 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeData* _da
 	}
 	else
 		clog(JIT) << "RETURN " << (int)returnCode;
+
+	clog(JIT) << "\n";
 
 	return static_cast<int>(returnCode);
 }
