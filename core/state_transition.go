@@ -141,9 +141,8 @@ func (self *StateTransition) TransitionState() (err error) {
 	}
 
 	var (
-		tx       = self.tx
-		sender   = self.Sender()
-		receiver *state.StateObject
+		tx     = self.tx
+		sender = self.Sender()
 	)
 
 	defer self.RefundGas()
@@ -175,7 +174,7 @@ func (self *StateTransition) TransitionState() (err error) {
 	if tx.CreatesContract() {
 		self.rec = MakeContract(tx, self.state)
 
-		ret, err, ref = vmenv.Create(sender, receiver.Address(), self.tx.Data, self.gas, self.gasPrice, self.value)
+		ret, err, ref = vmenv.Create(sender, self.rec.Address(), self.tx.Data, self.gas, self.gasPrice, self.value)
 		ref.SetCode(ret)
 	} else {
 		ret, err = vmenv.Call(self.Sender(), self.Receiver().Address(), self.tx.Data, self.gas, self.gasPrice, self.value)
