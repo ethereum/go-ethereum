@@ -57,7 +57,7 @@ func (self *Env) Difficulty() *big.Int  { return self.difficulty }
 func (self *Env) BlockHash() []byte     { return nil }
 func (self *Env) State() *state.StateDB { return self.state }
 func (self *Env) GasLimit() *big.Int    { return self.gasLimit }
-func (self *Env) AddLog(log *state.Log) {
+func (self *Env) AddLog(log state.Log) {
 	self.logs = append(self.logs, log)
 }
 func (self *Env) Depth() int     { return self.depth }

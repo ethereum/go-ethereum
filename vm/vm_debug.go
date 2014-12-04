@@ -35,7 +35,7 @@ func NewDebugVm(env Environment) *DebugVm {
 		lt = LogTyDiff
 	}
 
-	return &DebugVm{env: env, logTy: lt, Recoverable: false}
+	return &DebugVm{env: env, logTy: lt, Recoverable: true}
 }
 
 func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
@@ -750,7 +750,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 				topics[i] = ethutil.LeftPadBytes(stack.Pop().Bytes(), 32)
 			}
 
-			log := &state.Log{closure.Address(), topics, data}
+			log := &Log{closure.Address(), topics, data}
 			self.env.AddLog(log)
 
 			self.Printf(" => %v", log)

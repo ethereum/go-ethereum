@@ -20,8 +20,8 @@ func CreateBloom(receipts Receipts) []byte {
 func LogsBloom(logs state.Logs) *big.Int {
 	bin := new(big.Int)
 	for _, log := range logs {
-		data := [][]byte{log.Address}
-		for _, topic := range log.Topics {
+		data := [][]byte{log.Address()}
+		for _, topic := range log.Topics() {
 			data = append(data, topic)
 		}
 

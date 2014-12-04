@@ -20,7 +20,7 @@ type Environment interface {
 	BlockHash() []byte
 	GasLimit() *big.Int
 	Transfer(from, to Account, amount *big.Int) error
-	AddLog(*state.Log)
+	AddLog(state.Log)
 
 	Depth() int
 	SetDepth(i int)
@@ -51,4 +51,26 @@ func Transfer(from, to Account, amount *big.Int) error {
 	to.AddBalance(amount)
 
 	return nil
+}
+
+type Log struct {
+	address []byte
+	topics  [][]byte
+	data    []byte
+}
+
+func (self *Log) Address() []byte {
+	return self.address
+}
+
+func (self *Log) Topics() [][]byte {
+	return self.topics
+}
+
+func (self *Log) Data() []byte {
+	return self.data
+}
+
+func (self *Log) RlpData() interface{} {
+	return []interface{}{self.address, ethutil.ByteSliceToInterface(self.topics), self.data}
 }

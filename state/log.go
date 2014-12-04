@@ -2,40 +2,63 @@ package state
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/ethutil"
 )
 
-type Log struct {
-	Address []byte
-	Topics  [][]byte
-	Data    []byte
+type Log interface {
+	ethutil.RlpEncodable
+
+	Address() []byte
+	Topics() [][]byte
+	Data() []byte
 }
 
-func NewLogFromValue(decoder *ethutil.Value) *Log {
-	log := &Log{
-		Address: decoder.Get(0).Bytes(),
-		Data:    decoder.Get(2).Bytes(),
+type StateLog struct {
+	address []byte
+	topics  [][]byte
+	data    []byte
+}
+
+func NewLog(address []byte, topics [][]byte, data []byte) *StateLog {
+	return &StateLog{address, topics, data}
+}
+
+func (self *StateLog) Address() []byte {
+	return self.address
+}
+
+func (self *StateLog) Topics() [][]byte {
+	return self.topics
+}
+
+func (self *StateLog) Data() []byte {
+	return self.data
+}
+
+func NewLogFromValue(decoder *ethutil.Value) *StateLog {
+	log := &StateLog{
+		address: decoder.Get(0).Bytes(),
+		data:    decoder.Get(2).Bytes(),
 	}
 
 	it := decoder.Get(1).NewIterator()
 	for it.Next() {
-		log.Topics = append(log.Topics, it.Value().Bytes())
+		log.topics = append(log.topics, it.Value().Bytes())
 	}
 
 	return log
 }
 
-func (self *Log) RlpData() interface{} {
-	return []interface{}{self.Address, ethutil.ByteSliceToInterface(self.Topics), self.Data}
+func (self *StateLog) RlpData() interface{} {
+	return []interface{}{self.address, ethutil.ByteSliceToInterface(self.topics), self.data}
 }
 
-func (self *Log) String() string {
-	return fmt.Sprintf(`log: %x %x %x`, self.Address, self.Topics, self.Data)
+func (self *StateLog) String() string {
+	return fmt.Sprintf(`log: %x %x %x`, self.address, self.topics, self.data)
 }
 
-type Logs []*Log
+type Logs []Log
 
 func (self Logs) RlpData() interface{} {
 	data := make([]interface{}, len(self))
@@ -46,10 +69,10 @@ func (self Logs) RlpData() interface{} {
 	return data
 }
 
-func (self Logs) String() string {
-	var logs []string
+func (self Logs) String() (ret string) {
 	for _, log := range self {
-		logs = append(logs, log.String())
+		ret += fmt.Sprintf("%v", log)
 	}
-	return "[ " + strings.Join(logs, ", ") + " ]"
+
+	return "[" + ret + "]"
 }

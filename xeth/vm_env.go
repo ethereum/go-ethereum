@@ -39,7 +39,7 @@ func (self *VMEnv) State() *state.StateDB { return self.state }
 func (self *VMEnv) GasLimit() *big.Int    { return self.block.GasLimit }
 func (self *VMEnv) Depth() int            { return self.depth }
 func (self *VMEnv) SetDepth(i int)        { self.depth = i }
-func (self *VMEnv) AddLog(log *state.Log) {
+func (self *VMEnv) AddLog(log state.Log) {
 	self.state.AddLog(log)
 }
 func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) error {
