@@ -108,7 +108,7 @@ extern "C"
 		o_ret->a = ret ? 1 : 0;
 	}
 
-	EXPORT void ext_sha3(ExtVMFace* _env, byte* _begin, uint64_t _size, h256* o_hash)
+	EXPORT void ext_sha3(byte* _begin, uint64_t _size, h256* o_hash)
 	{
 		auto hash = sha3({_begin, _size});
 		*o_hash = hash;

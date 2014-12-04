@@ -59,7 +59,7 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 	m_log3 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 6}, false), Linkage::ExternalLinkage, "ext_log3", module);
 	m_log4 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 7}, false), Linkage::ExternalLinkage, "ext_log4", module);
 
-	llvm::Type* sha3ArgsTypes[] = { Type::EnvPtr, Type::BytePtr, Type::Size, Type::WordPtr };
+	llvm::Type* sha3ArgsTypes[] = {Type::BytePtr, Type::Size, Type::WordPtr};
 	m_sha3 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, sha3ArgsTypes, false), Linkage::ExternalLinkage, "ext_sha3", module);
 }
 
@@ -132,7 +132,7 @@ llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
 {
 	auto begin = m_memoryMan.getBytePtr(_inOff);
 	auto size = m_builder.CreateTrunc(_inSize, Type::Size, "size");
-	createCall(m_sha3, getRuntimeManager().getEnv(), begin, size, m_args[1]);
+	createCall(m_sha3, begin, size, m_args[1]);
 	llvm::Value* hash = m_builder.CreateLoad(m_args[1]);
 	hash = Endianness::toNative(m_builder, hash);
 	return hash;
