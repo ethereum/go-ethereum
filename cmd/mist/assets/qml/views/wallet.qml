@@ -148,8 +148,8 @@ Rectangle {
 				id: txTableView
 				anchors.fill : parent
 				TableViewColumn{ role: "num" ; title: "#" ; width: 30 }
-				TableViewColumn{ role: "from" ; title: "From" ; width: 280 }
-				TableViewColumn{ role: "to" ; title: "To" ; width: 280 }
+				TableViewColumn{ role: "from" ; title: "From" ; width: 340 }
+				TableViewColumn{ role: "to" ; title: "To" ; width: 340 }
 				TableViewColumn{ role: "value" ; title: "Amount" ; width: 100 }
 
 				model: ListModel {

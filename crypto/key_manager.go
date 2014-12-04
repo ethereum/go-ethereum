@@ -5,7 +5,10 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/logger"
 )
+
+var keylogger = logger.NewLogger("KEY")
 
 type KeyManager struct {
 	keyRing  *KeyRing
@@ -104,6 +107,7 @@ func (k *KeyManager) Init(session string, cursor int, force bool) error {
 	}
 	if keyRing == nil {
 		keyRing = NewGeneratedKeyRing(1)
+		keylogger.Infof("Created keypair. Private key: %x\n", keyRing.keys[0].PrivateKey)
 	}
 	return k.reset(session, cursor, keyRing)
 }
