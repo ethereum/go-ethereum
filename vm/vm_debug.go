@@ -744,12 +744,12 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		case LOG0, LOG1, LOG2, LOG3, LOG4:
 			n := int(op - LOG0)
 			topics := make([][]byte, n)
-			mSize, mStart := stack.Pop().Int64(), stack.Pop().Int64()
-			data := mem.Geti(mStart, mSize)
+			mSize, mStart := stack.Popn()
 			for i := 0; i < n; i++ {
 				topics[i] = ethutil.LeftPadBytes(stack.Pop().Bytes(), 32)
 			}
 
+			data := mem.Geti(mStart.Int64(), mSize.Int64())
 			log := &Log{closure.Address(), topics, data}
 			self.env.AddLog(log)
 

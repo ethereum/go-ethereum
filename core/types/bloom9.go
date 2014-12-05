@@ -20,18 +20,16 @@ func CreateBloom(receipts Receipts) []byte {
 func LogsBloom(logs state.Logs) *big.Int {
 	bin := new(big.Int)
 	for _, log := range logs {
-		data := [][]byte{log.Address()}
-		for _, topic := range log.Topics() {
-			data = append(data, topic)
+		data := make([][]byte, len(log.Topics())+1)
+		data[0] = log.Address()
+
+		for i, topic := range log.Topics() {
+			data[i+1] = topic
 		}
 
 		for _, b := range data {
 			bin.Or(bin, ethutil.BigD(bloom9(crypto.Sha3(b)).Bytes()))
 		}
-
-		//if log.Data != nil {
-		//	data = append(data, log.Data)
-		//}
 	}
 
 	return bin

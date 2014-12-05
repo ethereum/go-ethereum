@@ -236,6 +236,12 @@ func (sm *BlockManager) ProcessWithParent(block, parent *types.Block) (td *big.I
 		return
 	}
 
+	rbloom := types.CreateBloom(receipts)
+	if bytes.Compare(rbloom, block.LogsBloom) != 0 {
+		err = fmt.Errorf("unable to replicate block's bloom=%x", rbloom)
+		return
+	}
+
 	txSha := types.DeriveSha(block.Transactions())
 	if bytes.Compare(txSha, block.TxSha) != 0 {
 		err = fmt.Errorf("validating transaction root. received=%x got=%x", block.TxSha, txSha)
@@ -249,13 +255,6 @@ func (sm *BlockManager) ProcessWithParent(block, parent *types.Block) (td *big.I
 	}
 
 	if err = sm.AccumelateRewards(state, block, parent); err != nil {
-		return
-	}
-
-	//block.receipts = receipts // although this isn't necessary it be in the future
-	rbloom := types.CreateBloom(receipts)
-	if bytes.Compare(rbloom, block.LogsBloom) != 0 {
-		err = fmt.Errorf("unable to replicate block's bloom=%x", rbloom)
 		return
 	}
 

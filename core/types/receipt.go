@@ -64,5 +64,18 @@ func (self *Receipt) String() string {
 
 type Receipts []*Receipt
 
+func (self Receipts) RlpData() interface{} {
+	data := make([]interface{}, len(self))
+	for i, receipt := range self {
+		data[i] = receipt.RlpData()
+	}
+
+	return data
+}
+
+func (self Receipts) RlpEncode() []byte {
+	return ethutil.Encode(self.RlpData())
+}
+
 func (self Receipts) Len() int            { return len(self) }
 func (self Receipts) GetRlp(i int) []byte { return ethutil.Rlp(self[i]) }

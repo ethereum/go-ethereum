@@ -99,17 +99,23 @@ func (self *BlockPool) FetchHashes(peer *Peer) bool {
 		self.td = peer.td
 
 		if !self.HasLatestHash() {
-			peer.doneFetchingHashes = false
-
-			const amount = 256
-			peerlogger.Debugf("Fetching hashes (%d) %x...\n", amount, peer.lastReceivedHash[0:4])
-			peer.QueueMessage(wire.NewMessage(wire.MsgGetBlockHashesTy, []interface{}{peer.lastReceivedHash, uint32(amount)}))
+			self.fetchHashes()
 		}
 
 		return true
 	}
 
 	return false
+}
+
+func (self *BlockPool) fetchHashes() {
+	peer := self.peer
+
+	peer.doneFetchingHashes = false
+
+	const amount = 256
+	peerlogger.Debugf("Fetching hashes (%d) %x...\n", amount, peer.lastReceivedHash[0:4])
+	peer.QueueMessage(wire.NewMessage(wire.MsgGetBlockHashesTy, []interface{}{peer.lastReceivedHash, uint32(amount)}))
 }
 
 func (self *BlockPool) AddHash(hash []byte, peer *Peer) {
@@ -257,6 +263,13 @@ out:
 
 			if self.ChainLength < len(self.hashes) {
 				self.ChainLength = len(self.hashes)
+			}
+
+			if self.peer != nil &&
+				!self.peer.doneFetchingHashes &&
+				time.Since(self.peer.lastHashAt) > 10*time.Second &&
+				time.Since(self.peer.lastHashRequestedAt) > 5*time.Second {
+				self.fetchHashes()
 			}
 
 			/*
