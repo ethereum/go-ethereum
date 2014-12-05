@@ -2,207 +2,160 @@ package p2p
 
 import (
 	"bytes"
-	"fmt"
+	"io"
 	"net"
+	"sync"
 	"testing"
 	"time"
 )
 
-type TestNetwork struct {
-	connections map[string]*TestNetworkConnection
-	dialer      Dialer
-	maxinbound  int
-}
-
-func NewTestNetwork(maxinbound int) *TestNetwork {
-	connections := make(map[string]*TestNetworkConnection)
-	return &TestNetwork{
-		connections: connections,
-		dialer:      &TestDialer{connections},
-		maxinbound:  maxinbound,
+func startTestServer(t *testing.T, pf peerFunc) *Server {
+	server := &Server{
+		Identity:    NewSimpleClientIdentity("clientIdentifier", "version", "customIdentifier", "pubkey"),
+		MaxPeers:    10,
+		ListenAddr:  "127.0.0.1:0",
+		newPeerFunc: pf,
 	}
-}
-
-func (self *TestNetwork) Dialer(addr net.Addr) (Dialer, error) {
-	return self.dialer, nil
-}
-
-func (self *TestNetwork) Listener(addr net.Addr) (net.Listener, error) {
-	return &TestListener{
-		connections: self.connections,
-		addr:        addr,
-		max:         self.maxinbound,
-	}, nil
-}
-
-func (self *TestNetwork) Start() error {
-	return nil
-}
-
-func (self *TestNetwork) NewAddr(string, int) (addr net.Addr, err error) {
-	return
-}
-
-func (self *TestNetwork) ParseAddr(string) (addr net.Addr, err error) {
-	return
-}
-
-type TestAddr struct {
-	name string
-}
-
-func (self *TestAddr) String() string {
-	return self.name
-}
-
-func (*TestAddr) Network() string {
-	return "test"
-}
-
-type TestDialer struct {
-	connections map[string]*TestNetworkConnection
-}
-
-func (self *TestDialer) Dial(network string, addr string) (conn net.Conn, err error) {
-	address := &TestAddr{addr}
-	tconn := NewTestNetworkConnection(address)
-	self.connections[addr] = tconn
-	conn = net.Conn(tconn)
-	return
-}
-
-type TestListener struct {
-	connections map[string]*TestNetworkConnection
-	addr        net.Addr
-	max         int
-	i           int
-}
-
-func (self *TestListener) Accept() (conn net.Conn, err error) {
-	self.i++
-	if self.i > self.max {
-		err = fmt.Errorf("no more")
-	} else {
-		addr := &TestAddr{fmt.Sprintf("inboundpeer-%d", self.i)}
-		tconn := NewTestNetworkConnection(addr)
-		key := tconn.RemoteAddr().String()
-		self.connections[key] = tconn
-		conn = net.Conn(tconn)
-		fmt.Printf("accepted connection from: %v \n", addr)
+	if err := server.Start(); err != nil {
+		t.Fatalf("Could not start server: %v", err)
 	}
-	return
+	return server
 }
 
-func (self *TestListener) Close() error {
-	return nil
-}
+func TestServerListen(t *testing.T) {
+	defer testlog(t).detach()
 
-func (self *TestListener) Addr() net.Addr {
-	return self.addr
-}
-
-func SetupTestServer(handlers Handlers) (network *TestNetwork, server *Server) {
-	network = NewTestNetwork(1)
-	addr := &TestAddr{"test:30303"}
-	identity := NewSimpleClientIdentity("clientIdentifier", "version", "customIdentifier", "pubkey")
-	maxPeers := 2
-	if handlers == nil {
-		handlers = make(Handlers)
-	}
-	blackist := NewBlacklist()
-	server = New(network, addr, identity, handlers, maxPeers, blackist)
-	fmt.Println(server.identity.Pubkey())
-	return
-}
-
-func TestServerListener(t *testing.T) {
-	network, server := SetupTestServer(nil)
-	server.Start(true, false)
-	time.Sleep(10 * time.Millisecond)
-	server.Stop()
-	peer1, ok := network.connections["inboundpeer-1"]
-	if !ok {
-		t.Error("not found inbound peer 1")
-	} else {
-		fmt.Printf("out: %v\n", peer1.Out)
-		if len(peer1.Out) != 2 {
-			t.Errorf("not enough messages sent to peer 1: %v ", len(peer1.Out))
+	// start the test server
+	connected := make(chan *Peer)
+	srv := startTestServer(t, func(srv *Server, conn net.Conn, dialAddr *peerAddr) *Peer {
+		if conn == nil {
+			t.Error("peer func called with nil conn")
 		}
-	}
+		if dialAddr != nil {
+			t.Error("peer func called with non-nil dialAddr")
+		}
+		peer := newPeer(conn, nil, dialAddr)
+		connected <- peer
+		return peer
+	})
+	defer close(connected)
+	defer srv.Stop()
 
+	// dial the test server
+	conn, err := net.DialTimeout("tcp", srv.ListenAddr, 5*time.Second)
+	if err != nil {
+		t.Fatalf("could not dial: %v", err)
+	}
+	defer conn.Close()
+
+	select {
+	case peer := <-connected:
+		if peer.conn.LocalAddr().String() != conn.RemoteAddr().String() {
+			t.Errorf("peer started with wrong conn: got %v, want %v",
+				peer.conn.LocalAddr(), conn.RemoteAddr())
+		}
+	case <-time.After(1 * time.Second):
+		t.Error("server did not accept within one second")
+	}
 }
 
-func TestServerDialer(t *testing.T) {
-	network, server := SetupTestServer(nil)
-	server.Start(false, true)
-	server.peerConnect <- &TestAddr{"outboundpeer-1"}
-	time.Sleep(10 * time.Millisecond)
-	server.Stop()
-	peer1, ok := network.connections["outboundpeer-1"]
-	if !ok {
-		t.Error("not found outbound peer 1")
-	} else {
-		fmt.Printf("out: %v\n", peer1.Out)
-		if len(peer1.Out) != 2 {
-			t.Errorf("not enough messages sent to peer 1: %v ", len(peer1.Out))
+func TestServerDial(t *testing.T) {
+	defer testlog(t).detach()
+
+	// run a fake TCP server to handle the connection.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("could not setup listener: %v")
+	}
+	defer listener.Close()
+	accepted := make(chan net.Conn)
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			t.Error("acccept error:", err)
 		}
+		conn.Close()
+		accepted <- conn
+	}()
+
+	// start the test server
+	connected := make(chan *Peer)
+	srv := startTestServer(t, func(srv *Server, conn net.Conn, dialAddr *peerAddr) *Peer {
+		if conn == nil {
+			t.Error("peer func called with nil conn")
+		}
+		peer := newPeer(conn, nil, dialAddr)
+		connected <- peer
+		return peer
+	})
+	defer close(connected)
+	defer srv.Stop()
+
+	// tell the server to connect.
+	connAddr := newPeerAddr(listener.Addr(), nil)
+	srv.peerConnect <- connAddr
+
+	select {
+	case conn := <-accepted:
+		select {
+		case peer := <-connected:
+			if peer.conn.RemoteAddr().String() != conn.LocalAddr().String() {
+				t.Errorf("peer started with wrong conn: got %v, want %v",
+					peer.conn.RemoteAddr(), conn.LocalAddr())
+			}
+			if peer.dialAddr != connAddr {
+				t.Errorf("peer started with wrong dialAddr: got %v, want %v",
+					peer.dialAddr, connAddr)
+			}
+		case <-time.After(1 * time.Second):
+			t.Error("server did not launch peer within one second")
+		}
+
+	case <-time.After(1 * time.Second):
+		t.Error("server did not connect within one second")
 	}
 }
 
 func TestServerBroadcast(t *testing.T) {
-	handlers := make(Handlers)
-	testProtocol := &TestProtocol{Msgs: []*Msg{}}
-	handlers["aaa"] = func(p *Peer) Protocol { return testProtocol }
-	network, server := SetupTestServer(handlers)
-	server.Start(true, true)
-	server.peerConnect <- &TestAddr{"outboundpeer-1"}
-	time.Sleep(10 * time.Millisecond)
-	msg, _ := NewMsg(0)
-	server.Broadcast("", msg)
-	packet := Packet(0, 0)
-	time.Sleep(10 * time.Millisecond)
-	server.Stop()
-	peer1, ok := network.connections["outboundpeer-1"]
-	if !ok {
-		t.Error("not found outbound peer 1")
-	} else {
-		fmt.Printf("out: %v\n", peer1.Out)
-		if len(peer1.Out) != 3 {
-			t.Errorf("not enough messages sent to peer 1: %v ", len(peer1.Out))
-		} else {
-			if bytes.Compare(peer1.Out[1], packet) != 0 {
-				t.Errorf("incorrect broadcast packet %v != %v", peer1.Out[1], packet)
-			}
-		}
-	}
-	peer2, ok := network.connections["inboundpeer-1"]
-	if !ok {
-		t.Error("not found inbound peer 2")
-	} else {
-		fmt.Printf("out: %v\n", peer2.Out)
-		if len(peer1.Out) != 3 {
-			t.Errorf("not enough messages sent to peer 2: %v ", len(peer2.Out))
-		} else {
-			if bytes.Compare(peer2.Out[1], packet) != 0 {
-				t.Errorf("incorrect broadcast packet %v != %v", peer2.Out[1], packet)
-			}
-		}
-	}
-}
+	defer testlog(t).detach()
+	var connected sync.WaitGroup
+	srv := startTestServer(t, func(srv *Server, c net.Conn, dialAddr *peerAddr) *Peer {
+		peer := newPeer(c, []Protocol{discard}, dialAddr)
+		peer.startSubprotocols([]Cap{discard.cap()})
+		connected.Done()
+		return peer
+	})
+	defer srv.Stop()
 
-func TestServerPeersMessage(t *testing.T) {
-	handlers := make(Handlers)
-	_, server := SetupTestServer(handlers)
-	server.Start(true, true)
-	defer server.Stop()
-	server.peerConnect <- &TestAddr{"outboundpeer-1"}
-	time.Sleep(10 * time.Millisecond)
-	peersMsg, err := server.PeersMessage()
-	fmt.Println(peersMsg)
-	if err != nil {
-		t.Errorf("expect no error, got %v", err)
+	// dial a bunch of conns
+	var conns = make([]net.Conn, 8)
+	connected.Add(len(conns))
+	deadline := time.Now().Add(3 * time.Second)
+	dialer := &net.Dialer{Deadline: deadline}
+	for i := range conns {
+		conn, err := dialer.Dial("tcp", srv.ListenAddr)
+		if err != nil {
+			t.Fatalf("conn %d: dial error: %v", i, err)
+		}
+		defer conn.Close()
+		conn.SetDeadline(deadline)
+		conns[i] = conn
 	}
-	if c := server.PeerCount(); c != 2 {
-		t.Errorf("expect 2 peers, got %v", c)
+	connected.Wait()
+
+	// broadcast one message
+	srv.Broadcast("discard", 0, "foo")
+	goldbuf := new(bytes.Buffer)
+	writeMsg(goldbuf, NewMsg(16, "foo"))
+	golden := goldbuf.Bytes()
+
+	// check that the message has been written everywhere
+	for i, conn := range conns {
+		buf := make([]byte, len(golden))
+		if _, err := io.ReadFull(conn, buf); err != nil {
+			t.Errorf("conn %d: read error: %v", i, err)
+		} else if !bytes.Equal(buf, golden) {
+			t.Errorf("conn %d: msg mismatch\ngot:  %x\nwant: %x", i, buf, golden)
+		}
 	}
 }
