@@ -2,277 +2,294 @@ package p2p
 
 import (
 	"bytes"
-	"fmt"
-	"net"
-	"sort"
-	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/ethutil"
 )
 
-type Protocol interface {
-	Start()
-	Stop()
-	HandleIn(*Msg, chan *Msg)
-	HandleOut(*Msg) bool
-	Offset() MsgCode
-	Name() string
+// Protocol represents a P2P subprotocol implementation.
+type Protocol struct {
+	// Name should contain the official protocol name,
+	// often a three-letter word.
+	Name string
+
+	// Version should contain the version number of the protocol.
+	Version uint
+
+	// Length should contain the number of message codes used
+	// by the protocol.
+	Length uint64
+
+	// Run is called in a new groutine when the protocol has been
+	// negotiated with a peer. It should read and write messages from
+	// rw. The Payload for each message must be fully consumed.
+	//
+	// The peer connection is closed when Start returns. It should return
+	// any protocol-level error (such as an I/O error) that is
+	// encountered.
+	Run func(peer *Peer, rw MsgReadWriter) error
+}
+
+func (p Protocol) cap() Cap {
+	return Cap{p.Name, p.Version}
 }
 
 const (
-	P2PVersion      = 0
-	pingTimeout     = 2
-	pingGracePeriod = 2
+	baseProtocolVersion    = 2
+	baseProtocolLength     = uint64(16)
+	baseProtocolMaxMsgSize = 10 * 1024 * 1024
 )
 
 const (
-	HandshakeMsg = iota
-	DiscMsg
-	PingMsg
-	PongMsg
-	GetPeersMsg
-	PeersMsg
-	offset = 16
+	// devp2p message codes
+	handshakeMsg = 0x00
+	discMsg      = 0x01
+	pingMsg      = 0x02
+	pongMsg      = 0x03
+	getPeersMsg  = 0x04
+	peersMsg     = 0x05
 )
 
-type ProtocolState uint8
-
-const (
-	nullState = iota
-	handshakeReceived
-)
-
-type DiscReason byte
-
-const (
-	// Values are given explicitly instead of by iota because these values are
-	// defined by the wire protocol spec; it is easier for humans to ensure
-	// correctness when values are explicit.
-	DiscRequested           = 0x00
-	DiscNetworkError        = 0x01
-	DiscProtocolError       = 0x02
-	DiscUselessPeer         = 0x03
-	DiscTooManyPeers        = 0x04
-	DiscAlreadyConnected    = 0x05
-	DiscIncompatibleVersion = 0x06
-	DiscInvalidIdentity     = 0x07
-	DiscQuitting            = 0x08
-	DiscUnexpectedIdentity  = 0x09
-	DiscSelf                = 0x0a
-	DiscReadTimeout         = 0x0b
-	DiscSubprotocolError    = 0x10
-)
-
-var discReasonToString = map[DiscReason]string{
-	DiscRequested:           "Disconnect requested",
-	DiscNetworkError:        "Network error",
-	DiscProtocolError:       "Breach of protocol",
-	DiscUselessPeer:         "Useless peer",
-	DiscTooManyPeers:        "Too many peers",
-	DiscAlreadyConnected:    "Already connected",
-	DiscIncompatibleVersion: "Incompatible P2P protocol version",
-	DiscInvalidIdentity:     "Invalid node identity",
-	DiscQuitting:            "Client quitting",
-	DiscUnexpectedIdentity:  "Unexpected identity",
-	DiscSelf:                "Connected to self",
-	DiscReadTimeout:         "Read timeout",
-	DiscSubprotocolError:    "Subprotocol error",
+// handshake is the structure of a handshake list.
+type handshake struct {
+	Version    uint64
+	ID         string
+	Caps       []Cap
+	ListenPort uint64
+	NodeID     []byte
 }
 
-func (d DiscReason) String() string {
-	if len(discReasonToString) < int(d) {
-		return "Unknown"
+func (h *handshake) String() string {
+	return h.ID
+}
+func (h *handshake) Pubkey() []byte {
+	return h.NodeID
+}
+
+// Cap is the structure of a peer capability.
+type Cap struct {
+	Name    string
+	Version uint
+}
+
+func (cap Cap) RlpData() interface{} {
+	return []interface{}{cap.Name, cap.Version}
+}
+
+type capsByName []Cap
+
+func (cs capsByName) Len() int           { return len(cs) }
+func (cs capsByName) Less(i, j int) bool { return cs[i].Name < cs[j].Name }
+func (cs capsByName) Swap(i, j int)      { cs[i], cs[j] = cs[j], cs[i] }
+
+type baseProtocol struct {
+	rw   MsgReadWriter
+	peer *Peer
+}
+
+func runBaseProtocol(peer *Peer, rw MsgReadWriter) error {
+	bp := &baseProtocol{rw, peer}
+	if err := bp.doHandshake(rw); err != nil {
+		return err
 	}
-
-	return discReasonToString[d]
-}
-
-type BaseProtocol struct {
-	peer      *Peer
-	state     ProtocolState
-	stateLock sync.RWMutex
-}
-
-func NewBaseProtocol(peer *Peer) *BaseProtocol {
-	self := &BaseProtocol{
-		peer: peer,
-	}
-
-	return self
-}
-
-func (self *BaseProtocol) Start() {
-	if self.peer != nil {
-		self.peer.Write("", self.peer.Server().Handshake())
-		go self.peer.Messenger().PingPong(
-			pingTimeout*time.Second,
-			pingGracePeriod*time.Second,
-			self.Ping,
-			self.Timeout,
-		)
-	}
-}
-
-func (self *BaseProtocol) Stop() {
-}
-
-func (self *BaseProtocol) Ping() {
-	msg, _ := NewMsg(PingMsg)
-	self.peer.Write("", msg)
-}
-
-func (self *BaseProtocol) Timeout() {
-	self.peerError(PingTimeout, "")
-}
-
-func (self *BaseProtocol) Name() string {
-	return ""
-}
-
-func (self *BaseProtocol) Offset() MsgCode {
-	return offset
-}
-
-func (self *BaseProtocol) CheckState(state ProtocolState) bool {
-	self.stateLock.RLock()
-	self.stateLock.RUnlock()
-	if self.state != state {
-		return false
-	} else {
-		return true
-	}
-}
-
-func (self *BaseProtocol) HandleIn(msg *Msg, response chan *Msg) {
-	if msg.Code() == HandshakeMsg {
-		self.handleHandshake(msg)
-	} else {
-		if !self.CheckState(handshakeReceived) {
-			self.peerError(ProtocolBreach, "message code %v not allowed", msg.Code())
-			close(response)
-			return
+	// run main loop
+	quit := make(chan error, 1)
+	go func() {
+		for {
+			if err := bp.handle(rw); err != nil {
+				quit <- err
+				break
+			}
 		}
-		switch msg.Code() {
-		case DiscMsg:
-			logger.Infof("Disconnect requested from peer %v, reason", DiscReason(msg.Data().Get(0).Uint()))
-			self.peer.Server().PeerDisconnect() <- DisconnectRequest{
-				addr:   self.peer.Address,
-				reason: DiscRequested,
+	}()
+	return bp.loop(quit)
+}
+
+var pingTimeout = 2 * time.Second
+
+func (bp *baseProtocol) loop(quit <-chan error) error {
+	ping := time.NewTimer(pingTimeout)
+	activity := bp.peer.activity.Subscribe(time.Time{})
+	lastActive := time.Time{}
+	defer ping.Stop()
+	defer activity.Unsubscribe()
+
+	getPeersTick := time.NewTicker(10 * time.Second)
+	defer getPeersTick.Stop()
+	err := bp.rw.EncodeMsg(getPeersMsg)
+
+	for err == nil {
+		select {
+		case err = <-quit:
+			return err
+		case <-getPeersTick.C:
+			err = bp.rw.EncodeMsg(getPeersMsg)
+		case event := <-activity.Chan():
+			ping.Reset(pingTimeout)
+			lastActive = event.(time.Time)
+		case t := <-ping.C:
+			if lastActive.Add(pingTimeout * 2).Before(t) {
+				err = newPeerError(errPingTimeout, "")
+			} else if lastActive.Add(pingTimeout).Before(t) {
+				err = bp.rw.EncodeMsg(pingMsg)
 			}
-		case PingMsg:
-			out, _ := NewMsg(PongMsg)
-			response <- out
-		case PongMsg:
-		case GetPeersMsg:
-			// Peer asked for list of connected peers
-			if out, err := self.peer.Server().PeersMessage(); err != nil {
-				response <- out
-			}
-		case PeersMsg:
-			self.handlePeers(msg)
-		default:
-			self.peerError(InvalidMsgCode, "unknown message code %v", msg.Code())
 		}
 	}
-	close(response)
+	return err
 }
 
-func (self *BaseProtocol) HandleOut(msg *Msg) (allowed bool) {
-	// somewhat overly paranoid
-	allowed = msg.Code() == HandshakeMsg || msg.Code() == DiscMsg || msg.Code() < self.Offset() && self.CheckState(handshakeReceived)
-	return
-}
-
-func (self *BaseProtocol) peerError(errorCode ErrorCode, format string, v ...interface{}) {
-	err := NewPeerError(errorCode, format, v...)
-	logger.Warnln(err)
-	fmt.Println(self.peer, err)
-	if self.peer != nil {
-		self.peer.PeerErrorChan() <- err
+func (bp *baseProtocol) handle(rw MsgReadWriter) error {
+	msg, err := rw.ReadMsg()
+	if err != nil {
+		return err
 	}
+	if msg.Size > baseProtocolMaxMsgSize {
+		return newPeerError(errMisc, "message too big")
+	}
+	// make sure that the payload has been fully consumed
+	defer msg.Discard()
+
+	switch msg.Code {
+	case handshakeMsg:
+		return newPeerError(errProtocolBreach, "extra handshake received")
+
+	case discMsg:
+		var reason DiscReason
+		if err := msg.Decode(&reason); err != nil {
+			return err
+		}
+		bp.peer.Disconnect(reason)
+		return nil
+
+	case pingMsg:
+		return bp.rw.EncodeMsg(pongMsg)
+
+	case pongMsg:
+
+	case getPeersMsg:
+		peers := bp.peerList()
+		// this is dangerous. the spec says that we should _delay_
+		// sending the response if no new information is available.
+		// this means that would need to send a response later when
+		// new peers become available.
+		//
+		// TODO: add event mechanism to notify baseProtocol for new peers
+		if len(peers) > 0 {
+			return bp.rw.EncodeMsg(peersMsg, peers)
+		}
+
+	case peersMsg:
+		var peers []*peerAddr
+		if err := msg.Decode(&peers); err != nil {
+			return err
+		}
+		for _, addr := range peers {
+			bp.peer.Debugf("received peer suggestion: %v", addr)
+			bp.peer.newPeerAddr <- addr
+		}
+
+	default:
+		return newPeerError(errInvalidMsgCode, "unknown message code %v", msg.Code)
+	}
+	return nil
 }
 
-func (self *BaseProtocol) handlePeers(msg *Msg) {
-	it := msg.Data().NewIterator()
-	for it.Next() {
-		ip := net.IP(it.Value().Get(0).Bytes())
-		port := it.Value().Get(1).Uint()
-		address := &net.TCPAddr{IP: ip, Port: int(port)}
-		go self.peer.Server().PeerConnect(address)
+func (bp *baseProtocol) doHandshake(rw MsgReadWriter) error {
+	// send our handshake
+	if err := rw.WriteMsg(bp.handshakeMsg()); err != nil {
+		return err
 	}
+
+	// read and handle remote handshake
+	msg, err := rw.ReadMsg()
+	if err != nil {
+		return err
+	}
+	if msg.Code != handshakeMsg {
+		return newPeerError(errProtocolBreach, "first message must be handshake, got %x", msg.Code)
+	}
+	if msg.Size > baseProtocolMaxMsgSize {
+		return newPeerError(errMisc, "message too big")
+	}
+
+	var hs handshake
+	if err := msg.Decode(&hs); err != nil {
+		return err
+	}
+
+	// validate handshake info
+	if hs.Version != baseProtocolVersion {
+		return newPeerError(errP2PVersionMismatch, "Require protocol %d, received %d\n",
+			baseProtocolVersion, hs.Version)
+	}
+	if len(hs.NodeID) == 0 {
+		return newPeerError(errPubkeyMissing, "")
+	}
+	if len(hs.NodeID) != 64 {
+		return newPeerError(errPubkeyInvalid, "require 512 bit, got %v", len(hs.NodeID)*8)
+	}
+	if da := bp.peer.dialAddr; da != nil {
+		// verify that the peer we wanted to connect to
+		// actually holds the target public key.
+		if da.Pubkey != nil && !bytes.Equal(da.Pubkey, hs.NodeID) {
+			return newPeerError(errPubkeyForbidden, "dial address pubkey mismatch")
+		}
+	}
+	pa := newPeerAddr(bp.peer.conn.RemoteAddr(), hs.NodeID)
+	if err := bp.peer.pubkeyHook(pa); err != nil {
+		return newPeerError(errPubkeyForbidden, "%v", err)
+	}
+
+	// TODO: remove Caps with empty name
+
+	var addr *peerAddr
+	if hs.ListenPort != 0 {
+		addr = newPeerAddr(bp.peer.conn.RemoteAddr(), hs.NodeID)
+		addr.Port = hs.ListenPort
+	}
+	bp.peer.setHandshakeInfo(&hs, addr, hs.Caps)
+	bp.peer.startSubprotocols(hs.Caps)
+	return nil
 }
 
-func (self *BaseProtocol) handleHandshake(msg *Msg) {
-	self.stateLock.Lock()
-	defer self.stateLock.Unlock()
-	if self.state != nullState {
-		self.peerError(ProtocolBreach, "extra handshake")
-		return
-	}
-
-	c := msg.Data()
-
+func (bp *baseProtocol) handshakeMsg() Msg {
 	var (
-		p2pVersion = c.Get(0).Uint()
-		id         = c.Get(1).Str()
-		caps       = c.Get(2)
-		port       = c.Get(3).Uint()
-		pubkey     = c.Get(4).Bytes()
+		port uint64
+		caps []interface{}
 	)
-	fmt.Printf("handshake received %v, %v, %v, %v, %v ", p2pVersion, id, caps, port, pubkey)
-
-	// Check correctness of p2p protocol version
-	if p2pVersion != P2PVersion {
-		self.peerError(P2PVersionMismatch, "Require protocol %d, received %d\n", P2PVersion, p2pVersion)
-		return
+	if bp.peer.ourListenAddr != nil {
+		port = bp.peer.ourListenAddr.Port
 	}
-
-	// Handle the pub key (validation, uniqueness)
-	if len(pubkey) == 0 {
-		self.peerError(PubkeyMissing, "not supplied in handshake.")
-		return
+	for _, proto := range bp.peer.protocols {
+		caps = append(caps, proto.cap())
 	}
+	return NewMsg(handshakeMsg,
+		baseProtocolVersion,
+		bp.peer.ourID.String(),
+		caps,
+		port,
+		bp.peer.ourID.Pubkey()[1:],
+	)
+}
 
-	if len(pubkey) != 64 {
-		self.peerError(PubkeyInvalid, "require 512 bit, got %v", len(pubkey)*8)
-		return
-	}
-
-	// Self connect detection
-	if bytes.Compare(self.peer.Server().ClientIdentity().Pubkey()[1:], pubkey) == 0 {
-		self.peerError(PubkeyForbidden, "not allowed to connect to self")
-		return
-	}
-
-	// register pubkey on server. this also sets the pubkey on the peer (need lock)
-	if err := self.peer.Server().RegisterPubkey(self.peer, pubkey); err != nil {
-		self.peerError(PubkeyForbidden, err.Error())
-		return
-	}
-
-	// check port
-	if self.peer.Inbound {
-		uint16port := uint16(port)
-		if self.peer.Port > 0 && self.peer.Port != uint16port {
-			self.peerError(PortMismatch, "port mismatch: %v != %v", self.peer.Port, port)
-			return
-		} else {
-			self.peer.Port = uint16port
+func (bp *baseProtocol) peerList() []ethutil.RlpEncodable {
+	peers := bp.peer.otherPeers()
+	ds := make([]ethutil.RlpEncodable, 0, len(peers))
+	for _, p := range peers {
+		p.infolock.Lock()
+		addr := p.listenAddr
+		p.infolock.Unlock()
+		// filter out this peer and peers that are not listening or
+		// have not completed the handshake.
+		// TODO: track previously sent peers and exclude them as well.
+		if p == bp.peer || addr == nil {
+			continue
 		}
+		ds = append(ds, addr)
 	}
-
-	capsIt := caps.NewIterator()
-	for capsIt.Next() {
-		cap := capsIt.Value().Str()
-		self.peer.Caps = append(self.peer.Caps, cap)
+	ourAddr := bp.peer.ourListenAddr
+	if ourAddr != nil && !ourAddr.IP.IsLoopback() && !ourAddr.IP.IsUnspecified() {
+		ds = append(ds, ourAddr)
 	}
-	sort.Strings(self.peer.Caps)
-	self.peer.Messenger().AddProtocols(self.peer.Caps)
-
-	self.peer.Id = id
-
-	self.state = handshakeReceived
-
-	//p.ethereum.PushPeer(p)
-	// p.ethereum.reactor.Post("peerList", p.ethereum.Peers())
-	return
+	return ds
 }
