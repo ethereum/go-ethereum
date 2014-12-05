@@ -1,0 +1,133 @@
+package eth
+
+import (
+	"io"
+	"math/big"
+	"testing"
+
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/p2p"
+)
+
+type testMsgReadWriter struct {
+	in  chan p2p.Msg
+	out chan p2p.Msg
+}
+
+func (self *testMsgReadWriter) In(msg p2p.Msg) {
+	self.in <- msg
+}
+
+func (self *testMsgReadWriter) Out(msg p2p.Msg) {
+	self.in <- msg
+}
+
+func (self *testMsgReadWriter) WriteMsg(msg p2p.Msg) error {
+	self.out <- msg
+	return nil
+}
+
+func (self *testMsgReadWriter) EncodeMsg(code uint64, data ...interface{}) error {
+	return self.WriteMsg(p2p.NewMsg(code, data))
+}
+
+func (self *testMsgReadWriter) ReadMsg() (p2p.Msg, error) {
+	msg, ok := <-self.in
+	if !ok {
+		return msg, io.EOF
+	}
+	return msg, nil
+}
+
+func errorCheck(t *testing.T, expCode int, err error) {
+	perr, ok := err.(*protocolError)
+	if ok && perr != nil {
+		if code := perr.Code; code != expCode {
+			ok = false
+		}
+	}
+	if !ok {
+		t.Errorf("expected error code %v, got %v", ErrNoStatusMsg, err)
+	}
+}
+
+type TestBackend struct {
+	getTransactions func() []*types.Transaction
+	addTransactions func(txs []*types.Transaction)
+	getBlockHashes  func(hash []byte, amount uint32) (hashes [][]byte)
+	addHash         func(hash []byte, peer *p2p.Peer) (more bool)
+	getBlock        func(hash []byte) *types.Block
+	addBlock        func(td *big.Int, block *types.Block, peer *p2p.Peer) (fetchHashes bool, err error)
+	addPeer         func(td *big.Int, currentBlock []byte, peer *p2p.Peer) (fetchHashes bool)
+	status          func() (td *big.Int, currentBlock []byte, genesisBlock []byte)
+}
+
+func (self *TestBackend) GetTransactions() (txs []*types.Transaction) {
+	if self.getTransactions != nil {
+		txs = self.getTransactions()
+	}
+	return
+}
+
+func (self *TestBackend) AddTransactions(txs []*types.Transaction) {
+	if self.addTransactions != nil {
+		self.addTransactions(txs)
+	}
+}
+
+func (self *TestBackend) GetBlockHashes(hash []byte, amount uint32) (hashes [][]byte) {
+	if self.getBlockHashes != nil {
+		hashes = self.getBlockHashes(hash, amount)
+	}
+	return
+}
+
+func (self *TestBackend) AddHash(hash []byte, peer *p2p.Peer) (more bool) {
+	if self.addHash != nil {
+		more = self.addHash(hash, peer)
+	}
+	return
+}
+func (self *TestBackend) GetBlock(hash []byte) (block *types.Block) {
+	if self.getBlock != nil {
+		block = self.getBlock(hash)
+	}
+	return
+}
+
+func (self *TestBackend) AddBlock(td *big.Int, block *types.Block, peer *p2p.Peer) (fetchHashes bool, err error) {
+	if self.addBlock != nil {
+		fetchHashes, err = self.addBlock(td, block, peer)
+	}
+	return
+}
+
+func (self *TestBackend) AddPeer(td *big.Int, currentBlock []byte, peer *p2p.Peer) (fetchHashes bool) {
+	if self.addPeer != nil {
+		fetchHashes = self.addPeer(td, currentBlock, peer)
+	}
+	return
+}
+
+func (self *TestBackend) Status() (td *big.Int, currentBlock []byte, genesisBlock []byte) {
+	if self.status != nil {
+		td, currentBlock, genesisBlock = self.status()
+	}
+	return
+}
+
+func TestEth(t *testing.T) {
+	quit := make(chan bool)
+	rw := &testMsgReadWriter{make(chan p2p.Msg, 10), make(chan p2p.Msg, 10)}
+	testBackend := &TestBackend{}
+	var err error
+	go func() {
+		err = runEthProtocol(testBackend, nil, rw)
+		close(quit)
+	}()
+	statusMsg := p2p.NewMsg(4)
+	rw.In(statusMsg)
+	<-quit
+	errorCheck(t, ErrNoStatusMsg, err)
+	// read(t, remote, []byte("hello, world"), nil)
+}
