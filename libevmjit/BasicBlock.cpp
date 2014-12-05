@@ -3,8 +3,6 @@
 
 #include <iostream>
 
-#include <boost/lexical_cast.hpp>
-
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -112,8 +110,8 @@ llvm::Value* BasicBlock::LocalStack::get(size_t _index)
 
 		assert(initialStack[initialIdx] == nullptr);
 		// Create a dummy value.
-		std::string name = "get_" + boost::lexical_cast<std::string>(_index);
-		initialStack[initialIdx] = m_bblock.m_builder.CreatePHI(Type::Word, 0, name);
+		std::string name = "get_" + std::to_string(_index);
+		initialStack[initialIdx] = m_bblock.m_builder.CreatePHI(Type::Word, 0, std::move(name));
 		*itemIter = initialStack[initialIdx];
 	}
 
