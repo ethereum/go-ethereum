@@ -5,10 +5,10 @@ import (
 	"runtime"
 )
 
-// should be used in Peer handleHandshake, incorporate Caps, ProtocolVersion, Pubkey etc.
+// ClientIdentity represents the identity of a peer.
 type ClientIdentity interface {
-	String() string
-	Pubkey() []byte
+	String() string // human readable identity
+	Pubkey() []byte // 512-bit public key
 }
 
 type SimpleClientIdentity struct {

@@ -3,7 +3,6 @@ package rlp
 import (
 	"bytes"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -54,6 +53,24 @@ func TestStreamKind(t *testing.T) {
 	}
 }
 
+func TestNewListStream(t *testing.T) {
+	ls := NewListStream(bytes.NewReader(unhex("0101010101")), 3)
+	if k, size, err := ls.Kind(); k != List || size != 3 || err != nil {
+		t.Errorf("Kind() returned (%v, %d, %v), expected (List, 3, nil)", k, size, err)
+	}
+	if size, err := ls.List(); size != 3 || err != nil {
+		t.Errorf("List() returned (%d, %v), expected (3, nil)", size, err)
+	}
+	for i := 0; i < 3; i++ {
+		if val, err := ls.Uint(); val != 1 || err != nil {
+			t.Errorf("Uint() returned (%d, %v), expected (1, nil)", val, err)
+		}
+	}
+	if err := ls.ListEnd(); err != nil {
+		t.Errorf("ListEnd() returned %v, expected (3, nil)", err)
+	}
+}
+
 func TestStreamErrors(t *testing.T) {
 	type calls []string
 	tests := []struct {
@@ -69,7 +86,7 @@ func TestStreamErrors(t *testing.T) {
 		{"81", calls{"Bytes"}, io.ErrUnexpectedEOF},
 		{"81", calls{"Uint"}, io.ErrUnexpectedEOF},
 		{"BFFFFFFFFFFFFFFF", calls{"Bytes"}, io.ErrUnexpectedEOF},
-		{"89000000000000000001", calls{"Uint"}, errors.New("rlp: string is larger than 64 bits")},
+		{"89000000000000000001", calls{"Uint"}, errUintOverflow},
 		{"00", calls{"List"}, ErrExpectedList},
 		{"80", calls{"List"}, ErrExpectedList},
 		{"C0", calls{"List", "Uint"}, EOL},
@@ -163,7 +180,7 @@ type decodeTest struct {
 	input string
 	ptr   interface{}
 	value interface{}
-	error error
+	error string
 }
 
 type simplestruct struct {
@@ -196,8 +213,8 @@ var decodeTests = []decodeTest{
 	{input: "820505", ptr: new(uint32), value: uint32(0x0505)},
 	{input: "83050505", ptr: new(uint32), value: uint32(0x050505)},
 	{input: "8405050505", ptr: new(uint32), value: uint32(0x05050505)},
-	{input: "850505050505", ptr: new(uint32), error: errors.New("rlp: string is larger than 32 bits")},
-	{input: "C0", ptr: new(uint32), error: ErrExpectedString},
+	{input: "850505050505", ptr: new(uint32), error: "rlp: input string too big for uint32"},
+	{input: "C0", ptr: new(uint32), error: ErrExpectedString.Error()},
 
 	// slices
 	{input: "C0", ptr: new([]int), value: []int{}},
@@ -206,7 +223,7 @@ var decodeTests = []decodeTest{
 	// arrays
 	{input: "C0", ptr: new([5]int), value: [5]int{}},
 	{input: "C50102030405", ptr: new([5]int), value: [5]int{1, 2, 3, 4, 5}},
-	{input: "C6010203040506", ptr: new([5]int), error: errors.New("rlp: input List has more than 5 elements")},
+	{input: "C6010203040506", ptr: new([5]int), error: "rlp: input list has too many elements for [5]int"},
 
 	// byte slices
 	{input: "01", ptr: new([]byte), value: []byte{1}},
@@ -214,7 +231,7 @@ var decodeTests = []decodeTest{
 	{input: "8D6162636465666768696A6B6C6D", ptr: new([]byte), value: []byte("abcdefghijklm")},
 	{input: "C0", ptr: new([]byte), value: []byte{}},
 	{input: "C3010203", ptr: new([]byte), value: []byte{1, 2, 3}},
-	{input: "C3820102", ptr: new([]byte), error: errors.New("rlp: string is larger than 8 bits")},
+	{input: "C3820102", ptr: new([]byte), error: "rlp: input string too big for uint8"},
 
 	// byte arrays
 	{input: "01", ptr: new([5]byte), value: [5]byte{1}},
@@ -222,9 +239,9 @@ var decodeTests = []decodeTest{
 	{input: "850102030405", ptr: new([5]byte), value: [5]byte{1, 2, 3, 4, 5}},
 	{input: "C0", ptr: new([5]byte), value: [5]byte{}},
 	{input: "C3010203", ptr: new([5]byte), value: [5]byte{1, 2, 3, 0, 0}},
-	{input: "C3820102", ptr: new([5]byte), error: errors.New("rlp: string is larger than 8 bits")},
-	{input: "86010203040506", ptr: new([5]byte), error: errStringDoesntFitArray},
-	{input: "850101", ptr: new([5]byte), error: io.ErrUnexpectedEOF},
+	{input: "C3820102", ptr: new([5]byte), error: "rlp: input string too big for uint8"},
+	{input: "86010203040506", ptr: new([5]byte), error: "rlp: input string too big for [5]uint8"},
+	{input: "850101", ptr: new([5]byte), error: io.ErrUnexpectedEOF.Error()},
 
 	// byte array reuse (should be zeroed)
 	{input: "850102030405", ptr: &sharedByteArray, value: [5]byte{1, 2, 3, 4, 5}},
@@ -237,25 +254,25 @@ var decodeTests = []decodeTest{
 	// zero sized byte arrays
 	{input: "80", ptr: new([0]byte), value: [0]byte{}},
 	{input: "C0", ptr: new([0]byte), value: [0]byte{}},
-	{input: "01", ptr: new([0]byte), error: errStringDoesntFitArray},
-	{input: "8101", ptr: new([0]byte), error: errStringDoesntFitArray},
+	{input: "01", ptr: new([0]byte), error: "rlp: input string too big for [0]uint8"},
+	{input: "8101", ptr: new([0]byte), error: "rlp: input string too big for [0]uint8"},
 
 	// strings
 	{input: "00", ptr: new(string), value: "\000"},
 	{input: "8D6162636465666768696A6B6C6D", ptr: new(string), value: "abcdefghijklm"},
-	{input: "C0", ptr: new(string), error: ErrExpectedString},
+	{input: "C0", ptr: new(string), error: ErrExpectedString.Error()},
 
 	// big ints
 	{input: "01", ptr: new(*big.Int), value: big.NewInt(1)},
 	{input: "89FFFFFFFFFFFFFFFFFF", ptr: new(*big.Int), value: veryBigInt},
 	{input: "10", ptr: new(big.Int), value: *big.NewInt(16)}, // non-pointer also works
-	{input: "C0", ptr: new(*big.Int), error: ErrExpectedString},
+	{input: "C0", ptr: new(*big.Int), error: ErrExpectedString.Error()},
 
 	// structs
 	{input: "C0", ptr: new(simplestruct), value: simplestruct{0, ""}},
 	{input: "C105", ptr: new(simplestruct), value: simplestruct{5, ""}},
 	{input: "C50583343434", ptr: new(simplestruct), value: simplestruct{5, "444"}},
-	{input: "C3010101", ptr: new(simplestruct), error: errors.New("rlp: input List has too many elements")},
+	{input: "C3010101", ptr: new(simplestruct), error: "rlp: input list has too many elements for rlp.simplestruct"},
 	{
 		input: "C501C302C103",
 		ptr:   new(recstruct),
@@ -286,20 +303,20 @@ var decodeTests = []decodeTest{
 
 func intp(i int) *int { return &i }
 
-func TestDecode(t *testing.T) {
+func runTests(t *testing.T, decode func([]byte, interface{}) error) {
 	for i, test := range decodeTests {
 		input, err := hex.DecodeString(test.input)
 		if err != nil {
 			t.Errorf("test %d: invalid hex input %q", i, test.input)
 			continue
 		}
-		err = Decode(bytes.NewReader(input), test.ptr)
-		if err != nil && test.error == nil {
+		err = decode(input, test.ptr)
+		if err != nil && test.error == "" {
 			t.Errorf("test %d: unexpected Decode error: %v\ndecoding into %T\ninput %q",
 				i, err, test.ptr, test.input)
 			continue
 		}
-		if test.error != nil && fmt.Sprint(err) != fmt.Sprint(test.error) {
+		if test.error != "" && fmt.Sprint(err) != test.error {
 			t.Errorf("test %d: Decode error mismatch\ngot  %v\nwant %v\ndecoding into %T\ninput %q",
 				i, err, test.error, test.ptr, test.input)
 			continue
@@ -310,6 +327,40 @@ func TestDecode(t *testing.T) {
 				i, deref, test.value, test.ptr, test.input)
 		}
 	}
+}
+
+func TestDecodeWithByteReader(t *testing.T) {
+	runTests(t, func(input []byte, into interface{}) error {
+		return Decode(bytes.NewReader(input), into)
+	})
+}
+
+// dumbReader reads from a byte slice but does not
+// implement ReadByte.
+type dumbReader []byte
+
+func (r *dumbReader) Read(buf []byte) (n int, err error) {
+	if len(*r) == 0 {
+		return 0, io.EOF
+	}
+	n = copy(buf, *r)
+	*r = (*r)[n:]
+	return n, nil
+}
+
+func TestDecodeWithNonByteReader(t *testing.T) {
+	runTests(t, func(input []byte, into interface{}) error {
+		r := dumbReader(input)
+		return Decode(&r, into)
+	})
+}
+
+func TestDecodeStreamReset(t *testing.T) {
+	s := NewStream(nil)
+	runTests(t, func(input []byte, into interface{}) error {
+		s.Reset(bytes.NewReader(input))
+		return s.Decode(into)
+	})
 }
 
 type testDecoder struct{ called bool }
