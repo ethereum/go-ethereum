@@ -17,7 +17,7 @@ bytesConstRef JitVM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 	Compiler::Options defaultOptions;
 	auto module = Compiler(defaultOptions).compile(_ext.code);
 
-	RuntimeData data = {};
+	RuntimeData data{{},nullptr,nullptr};
 
 #define set(INDEX, VALUE) data.elems[INDEX] = eth2llvm(VALUE)
 	set(RuntimeData::Gas, m_gas);
@@ -63,10 +63,14 @@ bytesConstRef JitVM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 
 }
 }
-
+ 
 namespace
 {
 	// MSVS linker ignores export symbols in Env.cpp if nothing point at least one of them
 	extern "C" void env_sload();
-	void linkerWorkaround() { env_sload(); }
+	void linkerWorkaround() 
+	{ 
+		env_sload();
+		(void)linkerWorkaround; // suppress unused function warning from GCC
+	}
 }
