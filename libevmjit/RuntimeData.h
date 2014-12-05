@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Common.h"
+#include "Utils.h"
 
 
 namespace dev
@@ -35,9 +35,11 @@ struct RuntimeData
 		ReturnDataSize = CallDataSize
 	};
 
-	i256 elems[_size];
-	byte const* callData;
-	byte const* code;
+	i256 elems[_size] = {};
+	byte const* callData = nullptr;
+	byte const* code = nullptr;
+
+	void set(Index _index, u256 _value) { elems[_index] = eth2llvm(_value); }
 };
 
 /// VM Environment (ExtVM) opaque type

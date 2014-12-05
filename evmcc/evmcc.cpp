@@ -171,28 +171,33 @@ int main(int argc, char** argv)
 
 		if (options.count("interpret"))
 		{
-			eth::jit::ExecutionEngine engine;
-			u256 gas = initialGas;
+			using namespace eth::jit;
 
-			// Create fake ExtVM interface
-			eth::ExtVMFace ext;
-			ext.myAddress = Address(1122334455667788);
-			ext.caller = Address(0xfacefacefaceface);
-			ext.origin = Address(101010101010101010);
-			ext.value = 0xabcd;
-			ext.gasPrice = 1002;
-			ext.previousBlock.hash = u256(1003);
-			ext.currentBlock.coinbaseAddress = Address(1004);
-			ext.currentBlock.timestamp = 1005;
-			ext.currentBlock.number = 1006;
-			ext.currentBlock.difficulty = 1007;
-			ext.currentBlock.gasLimit = 1008;
-			ext.data = std::string("Hello the Beautiful World of Ethereum!");
-			ext.code = { 0x0d, 0x0e, 0x0a, 0x0d, 0x0b, 0x0e, 0xe, 0xf };
+			ExecutionEngine engine;
+			eth::jit::u256 gas = initialGas;
+
+			// Create random runtime data
+			RuntimeData data;
+			data.set(RuntimeData::Gas, gas);
+			data.set(RuntimeData::Address, (u160)Address(1122334455667788));
+			data.set(RuntimeData::Caller, (u160)Address(0xfacefacefaceface));
+			data.set(RuntimeData::Origin, (u160)Address(101010101010101010));
+			data.set(RuntimeData::CallValue, 0xabcd);
+			data.set(RuntimeData::CallDataSize, 3);
+			data.set(RuntimeData::GasPrice, 1003);
+			data.set(RuntimeData::PrevHash, 1003);
+			data.set(RuntimeData::CoinBase, (u160)Address(101010101010101015));
+			data.set(RuntimeData::TimeStamp, 1005);
+			data.set(RuntimeData::Number, 1006);
+			data.set(RuntimeData::Difficulty, 16);
+			data.set(RuntimeData::GasLimit, 1008);
+			data.set(RuntimeData::CodeSize, bytecode.size());
+			data.callData = (uint8_t*)"abc";
+			data.code = bytecode.data();
 
 			// BROKEN: env_* functions must be implemented & RuntimeData struct created
-			auto result = engine.run(std::move(module), gas, ext);
-			return result;
+			auto result = engine.run(std::move(module), &data, nullptr);
+			return static_cast<int>(result);
 		}
 	}
 
