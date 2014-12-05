@@ -67,6 +67,6 @@ namespace
 	void linkerWorkaround() 
 	{ 
 		env_sload();
-		(void)linkerWorkaround; // suppress unused function warning from GCC
+		(void)&linkerWorkaround; // suppress unused function warning from GCC
 	}
 }
