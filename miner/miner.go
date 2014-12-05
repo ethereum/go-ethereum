@@ -167,7 +167,6 @@ out:
 }
 
 func (self *Miner) reset() {
-	println("reset")
 	close(self.powQuitCh)
 	self.powQuitCh = make(chan struct{})
 }

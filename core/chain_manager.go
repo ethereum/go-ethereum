@@ -125,7 +125,8 @@ func (bc *ChainManager) Reset() {
 
 	bc.genesisBlock.Trie().Sync()
 	// Prepare the genesis block
-	bc.add(bc.genesisBlock)
+	bc.write(bc.genesisBlock)
+	bc.insert(bc.genesisBlock)
 	bc.CurrentBlock = bc.genesisBlock
 
 	bc.SetTotalDifficulty(ethutil.Big("0"))
@@ -134,18 +135,18 @@ func (bc *ChainManager) Reset() {
 	bc.TD = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
 }
 
-// Add a block to the chain and record addition information
-func (bc *ChainManager) add(block *types.Block) {
-	bc.writeBlockInfo(block)
-
+func (bc *ChainManager) insert(block *types.Block) {
+	encodedBlock := block.RlpEncode()
+	ethutil.Config.Db.Put([]byte("LastBlock"), encodedBlock)
 	bc.CurrentBlock = block
 	bc.LastBlockHash = block.Hash()
+}
+
+func (bc *ChainManager) write(block *types.Block) {
+	bc.writeBlockInfo(block)
 
 	encodedBlock := block.RlpEncode()
 	ethutil.Config.Db.Put(block.Hash(), encodedBlock)
-	ethutil.Config.Db.Put([]byte("LastBlock"), encodedBlock)
-
-	//chainlogger.Infof("Imported block #%d (%x...)\n", block.Number, block.Hash()[0:4])
 }
 
 // Accessors
@@ -266,9 +267,14 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			return err
 		}
 
-		self.add(block)
+		self.write(block)
 		if td.Cmp(self.TD) > 0 {
+			if block.Number.Cmp(new(big.Int).Add(self.CurrentBlock.Number, ethutil.Big1)) < 0 {
+				chainlogger.Infof("Split detected. New head #%v (%x), was #%v (%x)\n", block.Number, block.Hash()[:4], self.CurrentBlock.Number, self.CurrentBlock.Hash()[:4])
+			}
+
 			self.SetTotalDifficulty(td)
+			self.insert(block)
 		}
 
 		self.eventMux.Post(NewBlockEvent{block})

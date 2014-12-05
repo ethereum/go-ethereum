@@ -389,7 +389,6 @@ func (gui *Gui) update() {
 		gui.loadAddressBook()
 		gui.loadMergedMiningOptions()
 		gui.setPeerInfo()
-		//gui.readPreviousTransactions()
 	}()
 
 	for _, plugin := range gui.plugins {
@@ -416,9 +415,6 @@ func (gui *Gui) update() {
 		core.TxPreEvent{},
 		core.TxPostEvent{},
 	)
-
-	// nameReg := gui.pipe.World().Config().Get("NameReg")
-	// mux.Subscribe("object:"+string(nameReg.Address()), objectChan)
 
 	go func() {
 		defer events.Unsubscribe()

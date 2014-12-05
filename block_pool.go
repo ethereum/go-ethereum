@@ -154,7 +154,7 @@ func (self *BlockPool) addBlock(b *types.Block, peer *Peer, newBlock bool) {
 			fmt.Println("1.", !self.eth.ChainManager().HasBlock(b.PrevHash), ethutil.Bytes2Hex(b.Hash()[0:4]), ethutil.Bytes2Hex(b.PrevHash[0:4]))
 			fmt.Println("2.", self.pool[string(b.PrevHash)] == nil)
 			fmt.Println("3.", !self.fetchingHashes)
-			if !self.eth.ChainManager().HasBlock(b.PrevHash) && self.pool[string(b.PrevHash)] == nil && !self.fetchingHashes {
+			if !self.eth.ChainManager().HasBlock(b.PrevHash) /*&& self.pool[string(b.PrevHash)] == nil*/ && !self.fetchingHashes {
 				poollogger.Infof("Unknown chain, requesting (%x...)\n", b.PrevHash[0:4])
 				peer.QueueMessage(wire.NewMessage(wire.MsgGetBlockHashesTy, []interface{}{b.Hash(), uint32(256)}))
 			}
