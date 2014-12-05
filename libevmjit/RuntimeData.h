@@ -1,9 +1,6 @@
-
 #pragma once
 
-#include <csetjmp>
-
-#include "Utils.h"
+#include "Common.h"
 
 
 namespace dev
@@ -42,6 +39,9 @@ struct RuntimeData
 	byte const* callData;
 	byte const* code;
 };
+
+/// VM Environment (ExtVM) opaque type
+struct Env;
 
 }
 }

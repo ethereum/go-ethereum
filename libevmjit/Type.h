@@ -39,18 +39,6 @@ struct Type
 	static void init(llvm::LLVMContext& _context);
 };
 
-enum class ReturnCode
-{
-	Stop = 0,
-	Return = 1,
-	Suicide = 2,
-
-	BadJumpDestination = 101,
-	OutOfGas = 102,
-	StackTooSmall = 103,
-	BadInstruction = 104,
-};
-
 struct Constant
 {
 	/// Returns word-size constant

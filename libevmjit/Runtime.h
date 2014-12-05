@@ -27,9 +27,6 @@ using StackImpl = std::vector<i256>;
 using MemoryImpl = bytes;
 using JmpBufRef = decltype(&jmp_buf{}[0]);
 
-/// VM Environment (ExtVM) opaque type
-struct Env;
-
 class Runtime
 {
 public:
@@ -37,8 +34,6 @@ public:
 
 	Runtime(const Runtime&) = delete;
 	void operator=(const Runtime&) = delete;
-
-	RuntimeData* getDataPtr() { return &m_data; } // FIXME: Remove
 
 	StackImpl& getStack() { return m_stack; }
 	MemoryImpl& getMemory() { return m_memory; }

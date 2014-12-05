@@ -1,9 +1,6 @@
-
 #pragma once
 
-#include <libdevcore/Common.h>
 #include <libevm/VMFace.h>
-#include <libevm/ExtVMFace.h>
 
 namespace dev
 {

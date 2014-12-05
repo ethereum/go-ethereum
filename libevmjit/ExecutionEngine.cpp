@@ -24,6 +24,7 @@
 #include "Memory.h"
 #include "Stack.h"
 #include "Type.h"
+#include "Compiler.h"
 
 namespace dev
 {
@@ -32,12 +33,19 @@ namespace eth
 namespace jit
 {
 
-int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeData* _data, Env* _env)
+ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _env)
+{
+	Compiler::Options defaultOptions;
+	auto module = Compiler(defaultOptions).compile(_code);
+	return run(std::move(module), _data, _env);
+}
+
+ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeData* _data, Env* _env)
 {
 	auto module = _module.get(); // Keep ownership of the module in _module
 
 	llvm::sys::PrintStackTraceOnErrorSignal();
-	static const auto program = "evmcc";
+	static const auto program = "EVM JIT";
 	llvm::PrettyStackTraceProgram X(1, &program);
 
 	auto&& context = llvm::getGlobalContext();
@@ -66,10 +74,10 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeData* _da
 
 	auto exec = std::unique_ptr<llvm::ExecutionEngine>(builder.create());
 	if (!exec)
-		return -1; // FIXME: Handle internal errors
+		return ReturnCode::LLVMConfigError;
 	_module.release();  // Successfully created llvm::ExecutionEngine takes ownership of the module
 
-	auto finalizationStartTime = std::chrono::high_resolution_clock::now(); // FIXME: It's not compilation time
+	auto finalizationStartTime = std::chrono::high_resolution_clock::now();
 	exec->finalizeObject();
 	auto finalizationEndTime = std::chrono::high_resolution_clock::now();
 	clog(JIT) << " + " << std::chrono::duration_cast<std::chrono::milliseconds>(finalizationEndTime - finalizationStartTime).count();
@@ -78,7 +86,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeData* _da
 
 	auto entryFunc = module->getFunction("main");
 	if (!entryFunc)
-		return -2; // FIXME: Handle internal errors
+		return ReturnCode::LLVMLinkError;
 
 	ReturnCode returnCode;
 	std::jmp_buf buf;
@@ -111,7 +119,7 @@ int ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeData* _da
 
 	clog(JIT) << "\n";
 
-	return static_cast<int>(returnCode);
+	return returnCode;
 }
 
 }

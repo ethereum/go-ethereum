@@ -65,7 +65,7 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 	m_getExtCode = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, getExtCodeArgsTypes, false), Linkage::ExternalLinkage, "env_getExtCode", module);
 
 	// Helper function, not client Env interface
-	llvm::Type* callDataLoadArgsTypes[] = {Type::RuntimePtr, Type::WordPtr, Type::WordPtr};
+	llvm::Type* callDataLoadArgsTypes[] = {Type::RuntimeDataPtr, Type::WordPtr, Type::WordPtr};
 	m_calldataload = llvm::Function::Create(llvm::FunctionType::get(Type::Void, callDataLoadArgsTypes, false), Linkage::ExternalLinkage, "ext_calldataload", module);
 }
 
@@ -86,7 +86,7 @@ void Ext::sstore(llvm::Value* _index, llvm::Value* _value)
 llvm::Value* Ext::calldataload(llvm::Value* _index)
 {
 	m_builder.CreateStore(_index, m_args[0]);
-	createCall(m_calldataload, getRuntimeManager().getRuntimePtr(), m_args[0], m_args[1]);
+	createCall(m_calldataload, getRuntimeManager().getDataPtr(), m_args[0], m_args[1]);
 	auto ret = m_builder.CreateLoad(m_args[1]);
 	return Endianness::toNative(m_builder, ret);
 }

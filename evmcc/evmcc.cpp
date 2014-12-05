@@ -171,7 +171,7 @@ int main(int argc, char** argv)
 
 		if (options.count("interpret"))
 		{
-			auto engine = eth::jit::ExecutionEngine();
+			eth::jit::ExecutionEngine engine;
 			u256 gas = initialGas;
 
 			// Create fake ExtVM interface

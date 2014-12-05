@@ -1,9 +1,11 @@
-
 #pragma once
 
-#include <llvm/IR/Module.h>
+namespace llvm
+{
+	class Module;
+}
 
-#include "Runtime.h"
+#include "RuntimeData.h"
 
 namespace dev
 {
@@ -15,9 +17,12 @@ namespace jit
 class ExecutionEngine
 {
 public:
-	// FIXME: constructor? ExecutionEngine();
+	ExecutionEngine() = default;
+	ExecutionEngine(ExecutionEngine const&) = delete;
+	void operator=(ExecutionEngine) = delete;
 
-	int run(std::unique_ptr<llvm::Module> module, RuntimeData* _data, Env* _env);
+	ReturnCode run(bytes const& _code, RuntimeData* _data, Env* _env);
+	ReturnCode run(std::unique_ptr<llvm::Module> module, RuntimeData* _data, Env* _env);
 
 	bytes returnData;
 };

@@ -1,9 +1,8 @@
 
 #include "JitVM.h"
-#include <libevm/VMFace.h>
 #include <libevm/VM.h>
 #include <evmjit/libevmjit/ExecutionEngine.h>
-#include <evmjit/libevmjit/Compiler.h>
+#include <evmjit/libevmjit/Utils.h>
 
 namespace dev
 {
@@ -13,9 +12,6 @@ namespace eth
 bytesConstRef JitVM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 {
 	using namespace jit;
-
-	Compiler::Options defaultOptions;
-	auto module = Compiler(defaultOptions).compile(_ext.code);
 
 	RuntimeData data = {};
 
@@ -40,9 +36,9 @@ bytesConstRef JitVM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 
 	ExecutionEngine engine;
 	auto env = reinterpret_cast<Env*>(&_ext);
-	auto exitCode = engine.run(std::move(module), &data, env);
+	auto exitCode = engine.run(_ext.code, &data, env);
 
-	switch (static_cast<ReturnCode>(exitCode))
+	switch (exitCode)
 	{
 	case ReturnCode::BadJumpDestination:
 		BOOST_THROW_EXCEPTION(BadJumpDestination());
