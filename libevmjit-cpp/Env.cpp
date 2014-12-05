@@ -36,16 +36,6 @@ extern "C"
 		_env->setStore(index, value);	// Interface uses native endianness
 	}
 
-	// TODO: Move to Memory/Runtime
-	EXPORT void ext_calldataload(ExtVMFace* _env, i256* _index, ::byte* o_value)
-	{
-		auto index = static_cast<size_t>(llvm2eth(*_index));
-		assert(index + 31 > index); // TODO: Handle large index
-		for (size_t i = index, j = 0; i <= index + 31; ++i, ++j)
-			o_value[j] = i < _env->data.size() ? _env->data[i] : 0; // Keep Big Endian
-		// TODO: It all can be done by adding padding to data or by using min() algorithm without branch
-	}
-
 	EXPORT void ext_balance(ExtVMFace* _env, h256* _address, i256* o_value)
 	{
 		auto u = _env->balance(right160(*_address));

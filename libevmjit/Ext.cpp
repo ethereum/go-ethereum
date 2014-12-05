@@ -46,7 +46,6 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 
 	m_sload = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "env_sload", module);
 	m_sstore = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "env_sstore", module);
-	m_calldataload = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_calldataload", module);
 	m_balance = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_balance", module);
 	m_suicide = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 2}, false), Linkage::ExternalLinkage, "ext_suicide", module);
 
@@ -64,6 +63,10 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 
 	llvm::Type* getExtCodeArgsTypes[] = {Type::EnvPtr, Type::WordPtr, Type::Size->getPointerTo()};
 	m_getExtCode = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, getExtCodeArgsTypes, false), Linkage::ExternalLinkage, "env_getExtCode", module);
+
+	// Helper function, not client Env interface
+	llvm::Type* callDataLoadArgsTypes[] = {Type::RuntimePtr, Type::WordPtr, Type::WordPtr};
+	m_calldataload = llvm::Function::Create(llvm::FunctionType::get(Type::Void, callDataLoadArgsTypes, false), Linkage::ExternalLinkage, "ext_calldataload", module);
 }
 
 llvm::Value* Ext::sload(llvm::Value* _index)
@@ -83,7 +86,7 @@ void Ext::sstore(llvm::Value* _index, llvm::Value* _value)
 llvm::Value* Ext::calldataload(llvm::Value* _index)
 {
 	m_builder.CreateStore(_index, m_args[0]);
-	m_builder.CreateCall3(m_calldataload, getRuntimeManager().getEnv(), m_args[0], m_args[1]);
+	createCall(m_calldataload, getRuntimeManager().getRuntimePtr(), m_args[0], m_args[1]);
 	auto ret = m_builder.CreateLoad(m_args[1]);
 	return Endianness::toNative(m_builder, ret);
 }
