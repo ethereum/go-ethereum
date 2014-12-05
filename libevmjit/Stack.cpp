@@ -3,8 +3,6 @@
 #include "Runtime.h"
 #include "Type.h"
 
-#include <csetjmp>
-
 #include <llvm/IR/Function.h>
 #include <llvm/IR/TypeBuilder.h>
 
