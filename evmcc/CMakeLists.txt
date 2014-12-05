@@ -1,12 +1,15 @@
 cmake_policy(SET CMP0015 NEW)
 
-aux_source_directory(. SRC_LIST)
+project(evmjit CXX)
 
-include_directories(..)
+file(GLOB SOURCES "*.cpp")
+file(GLOB HEADERS "*.h")
+set_property(TARGET ${PROJECT_NAME} PROPERTY FOLDER "tools")
 
 set(EXECUTABLE evmcc)
+add_executable(${EXECUTABLE} ${HEADERS} ${SOURCES})
 
-add_executable(${EXECUTABLE} ${SRC_LIST})
+include_directories(../..)
 
 target_link_libraries(${EXECUTABLE} boost_program_options)
 target_link_libraries(${EXECUTABLE} devcore)
@@ -31,18 +34,12 @@ else ()
 endif ()
 
 # LLVM specific commands
-
 find_package(LLVM REQUIRED CONFIG)
-
-message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
-message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
-
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
 llvm_map_components_to_libnames(llvm_libs bitwriter)
 target_link_libraries(evmcc ${llvm_libs})
-
 # end of LLVM specific commands
 
 

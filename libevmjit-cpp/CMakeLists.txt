@@ -1,14 +1,17 @@
-
-project(evmjit-cpp LANGUAGES CXX)
+project(evmjit-cpp CXX)
 
 set(SOURCES
-    Ext.cpp     Ext.h
-    Runtime.cpp Runtime.h
-    VM.cpp      VM.h
+    Env.cpp     
+    JitVM.cpp   JitVM.h
 )
 
-source_group("" FILES ${SOURCES})
-
 add_library(${PROJECT_NAME} ${SOURCES})
-set_property(TARGET ${PROJECT_NAME} PROPERTY FOLDER "libs")
 
+include_directories(../..)
+
+find_package(LLVM REQUIRED CONFIG)
+include_directories(${LLVM_INCLUDE_DIRS})
+add_definitions(${LLVM_DEFINITIONS})
+
+source_group("" FILES ${SOURCES})
+set_property(TARGET ${PROJECT_NAME} PROPERTY FOLDER "libs")
