@@ -10,7 +10,7 @@ namespace jit
 {
 
 /// Virtual machine bytecode instruction.
-enum class Instruction : uint8_t
+enum class Instruction: uint8_t
 {
 	STOP = 0x00,		///< halts execution
 	ADD,				///< addition operation
@@ -148,8 +148,8 @@ enum class Instruction : uint8_t
 
 	CREATE = 0xf0,		///< create a new account with associated code
 	CALL,				///< message-call into an account
+	CALLCODE,			///< message-call with another account's code only
 	RETURN,				///< halt execution returning output data
-	CALLCODE,
 	SUICIDE = 0xff		///< halt execution and register account for later deletion
 };
 
