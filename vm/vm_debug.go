@@ -166,13 +166,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		case EXP:
 			require(2)
 
-			exp := new(big.Int).Set(stack.data[stack.Len()-2])
-			nbytes := 0
-			for exp.Cmp(ethutil.Big0) > 0 {
-				nbytes += 1
-				exp.Rsh(exp, 8)
-			}
-			gas.Set(big.NewInt(int64(nbytes + 1)))
+			gas.Set(big.NewInt(int64(len(stack.data[stack.Len()-2].Bytes()) + 1)))
 		// Gas only
 		case STOP:
 			gas.Set(ethutil.Big0)
