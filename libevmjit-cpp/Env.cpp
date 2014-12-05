@@ -3,7 +3,7 @@
 #include <libevm/FeeStructure.h>
 #include <libevm/ExtVMFace.h>
 
-#include "../libevmjit/Utils.h"
+#include <evmjit/libevmjit/Utils.h>
 
 extern "C"
 {

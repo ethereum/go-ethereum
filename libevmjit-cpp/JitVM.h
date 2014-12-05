@@ -10,12 +10,7 @@ namespace dev
 namespace eth
 {
 
-class VMFactory;
-
-namespace jit
-{
-
-class VM: public VMFace
+class JitVM: public VMFace
 {
 	virtual bytesConstRef go(ExtVMFace& _ext, OnOpFunc const& _onOp = {}, uint64_t _steps = (uint64_t)-1) override final;
 
@@ -23,12 +18,12 @@ class VM: public VMFace
 	static std::unique_ptr<VMFace> create(Kind, u256 _gas = 0);
 
 private:
-	friend VMFactory;
-	explicit VM(u256 _gas = 0): VMFace(_gas) {}
+	friend class VMFactory;
+	explicit JitVM(u256 _gas = 0) : VMFace(_gas) {}
 
 	bytes m_output;
 };
 
-}
+
 }
 }

@@ -1,21 +1,19 @@
 
-#include "VM.h"
-
+#include "JitVM.h"
 #include <libevm/VMFace.h>
 #include <libevm/VM.h>
-
-#include "../libevmjit/ExecutionEngine.h"
-#include "../libevmjit/Compiler.h"
+#include <evmjit/libevmjit/ExecutionEngine.h>
+#include <evmjit/libevmjit/Compiler.h>
 
 namespace dev
 {
 namespace eth
 {
-namespace jit
-{
 
-bytesConstRef VM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
+bytesConstRef JitVM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 {
+	using namespace jit;
+
 	Compiler::Options defaultOptions;
 	auto module = Compiler(defaultOptions).compile(_ext.code);
 
@@ -63,7 +61,6 @@ bytesConstRef VM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 	return {m_output.data(), m_output.size()};  // TODO: This all bytesConstRef stuff sucks
 }
 
-}
 }
 }
 
