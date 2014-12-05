@@ -56,11 +56,18 @@ type TestBackend struct {
 	getTransactions func() []*types.Transaction
 	addTransactions func(txs []*types.Transaction)
 	getBlockHashes  func(hash []byte, amount uint32) (hashes [][]byte)
+<<<<<<< HEAD
 	addBlockHashes  func(next func() ([]byte, bool), peerId string)
 	getBlock        func(hash []byte) *types.Block
 	addBlock        func(block *types.Block, peerId string) (err error)
 	addPeer         func(td *big.Int, currentBlock []byte, peerId string, requestHashes func([]byte) error, requestBlocks func([][]byte) error, invalidBlock func(error)) (best bool)
 	removePeer      func(peerId string)
+=======
+	addHash         func(hash []byte, peer *p2p.Peer) (more bool)
+	getBlock        func(hash []byte) *types.Block
+	addBlock        func(td *big.Int, block *types.Block, peer *p2p.Peer) (fetchHashes bool, err error)
+	addPeer         func(td *big.Int, currentBlock []byte, peer *p2p.Peer) (fetchHashes bool)
+>>>>>>> initial commit for eth-p2p integration
 	status          func() (td *big.Int, currentBlock []byte, genesisBlock []byte)
 }
 
@@ -84,12 +91,21 @@ func (self *TestBackend) GetBlockHashes(hash []byte, amount uint32) (hashes [][]
 	return
 }
 
+<<<<<<< HEAD
 func (self *TestBackend) AddBlockHashes(next func() ([]byte, bool), peerId string) {
 	if self.addBlockHashes != nil {
 		self.addBlockHashes(next, peerId)
 	}
 }
 
+=======
+func (self *TestBackend) AddHash(hash []byte, peer *p2p.Peer) (more bool) {
+	if self.addHash != nil {
+		more = self.addHash(hash, peer)
+	}
+	return
+}
+>>>>>>> initial commit for eth-p2p integration
 func (self *TestBackend) GetBlock(hash []byte) (block *types.Block) {
 	if self.getBlock != nil {
 		block = self.getBlock(hash)
@@ -97,26 +113,41 @@ func (self *TestBackend) GetBlock(hash []byte) (block *types.Block) {
 	return
 }
 
+<<<<<<< HEAD
 func (self *TestBackend) AddBlock(block *types.Block, peerId string) (err error) {
 	if self.addBlock != nil {
 		err = self.addBlock(block, peerId)
+=======
+func (self *TestBackend) AddBlock(td *big.Int, block *types.Block, peer *p2p.Peer) (fetchHashes bool, err error) {
+	if self.addBlock != nil {
+		fetchHashes, err = self.addBlock(td, block, peer)
+>>>>>>> initial commit for eth-p2p integration
 	}
 	return
 }
 
+<<<<<<< HEAD
 func (self *TestBackend) AddPeer(td *big.Int, currentBlock []byte, peerId string, requestBlockHashes func([]byte) error, requestBlocks func([][]byte) error, invalidBlock func(error)) (best bool) {
 	if self.addPeer != nil {
 		best = self.addPeer(td, currentBlock, peerId, requestBlockHashes, requestBlocks, invalidBlock)
+=======
+func (self *TestBackend) AddPeer(td *big.Int, currentBlock []byte, peer *p2p.Peer) (fetchHashes bool) {
+	if self.addPeer != nil {
+		fetchHashes = self.addPeer(td, currentBlock, peer)
+>>>>>>> initial commit for eth-p2p integration
 	}
 	return
 }
 
+<<<<<<< HEAD
 func (self *TestBackend) RemovePeer(peerId string) {
 	if self.removePeer != nil {
 		self.removePeer(peerId)
 	}
 }
 
+=======
+>>>>>>> initial commit for eth-p2p integration
 func (self *TestBackend) Status() (td *big.Int, currentBlock []byte, genesisBlock []byte) {
 	if self.status != nil {
 		td, currentBlock, genesisBlock = self.status()
@@ -124,6 +155,7 @@ func (self *TestBackend) Status() (td *big.Int, currentBlock []byte, genesisBloc
 	return
 }
 
+<<<<<<< HEAD
 // TODO: refactor this into p2p/client_identity
 type peerId struct {
 	pubkey []byte
@@ -147,12 +179,19 @@ func testPeer() *p2p.Peer {
 }
 
 func TestErrNoStatusMsg(t *testing.T) {
+=======
+func TestEth(t *testing.T) {
+>>>>>>> initial commit for eth-p2p integration
 	quit := make(chan bool)
 	rw := &testMsgReadWriter{make(chan p2p.Msg, 10), make(chan p2p.Msg, 10)}
 	testBackend := &TestBackend{}
 	var err error
 	go func() {
+<<<<<<< HEAD
 		err = runEthProtocol(testBackend, testPeer(), rw)
+=======
+		err = runEthProtocol(testBackend, nil, rw)
+>>>>>>> initial commit for eth-p2p integration
 		close(quit)
 	}()
 	statusMsg := p2p.NewMsg(4)
