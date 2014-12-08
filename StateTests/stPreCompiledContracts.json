@@ -8,8 +8,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000001" : {
@@ -79,8 +79,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000001" : {
@@ -148,8 +148,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000001" : {
@@ -216,8 +216,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000001" : {
@@ -286,8 +286,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000001" : {
@@ -357,8 +357,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000001" : {
@@ -428,8 +428,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000001" : {
@@ -497,8 +497,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000001" : {
@@ -566,8 +566,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000001" : {
@@ -636,8 +636,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000003" : {
@@ -705,8 +705,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000003" : {
@@ -775,8 +775,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000003" : {
@@ -845,8 +845,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000003" : {
@@ -915,8 +915,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000003" : {
@@ -985,8 +985,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000003" : {
@@ -1054,8 +1054,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000003" : {
@@ -1124,8 +1124,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000002" : {
@@ -1193,8 +1193,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000002" : {
@@ -1263,8 +1263,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000002" : {
@@ -1333,8 +1333,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000002" : {
@@ -1403,8 +1403,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000002" : {
@@ -1473,8 +1473,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000002" : {
@@ -1543,8 +1543,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000002" : {
@@ -1612,8 +1612,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "0000000000000000000000000000000000000002" : {
