@@ -81,9 +81,14 @@ func (self *peer) broadcast(envelopes []*Envelope) error {
 		if err := self.ws.WriteMsg(msg); err != nil {
 			return err
 		}
+		self.peer.Infoln("broadcasted", i, "message(s)")
 	}
 
 	return nil
+}
+
+func (self *peer) addKnown(envelope *Envelope) {
+	self.known.Add(envelope.Hash())
 }
 
 func (self *peer) handleStatus() error {

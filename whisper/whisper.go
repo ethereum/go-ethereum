@@ -2,6 +2,7 @@ package whisper
 
 import (
 	"bytes"
+	"fmt"
 	"sync"
 	"time"
 
@@ -34,6 +35,8 @@ const (
 	envelopesMsg = 0x01
 )
 
+const defaultTtl = 50 * time.Second
+
 type Whisper struct {
 	pub, sec []byte
 	protocol p2p.Protocol
@@ -54,6 +57,8 @@ func New(pub, sec []byte) *Whisper {
 		quit:     make(chan struct{}),
 	}
 	go whisper.update()
+
+	whisper.Send(defaultTtl, nil, NewMessage([]byte("Hello world. This is whisper-go")))
 
 	// p2p whisper sub protocol handler
 	whisper.protocol = p2p.Protocol{
@@ -102,6 +107,7 @@ func (self *Whisper) msgHandler(peer *p2p.Peer, ws p2p.MsgReadWriter) error {
 		}
 
 		self.add(envelope)
+		wpeer.addKnown(envelope)
 	}
 }
 
@@ -110,6 +116,7 @@ func (self *Whisper) add(envelope *Envelope) {
 	self.mmu.Lock()
 	defer self.mmu.Unlock()
 
+	fmt.Println("add", envelope)
 	self.messages[envelope.Hash()] = envelope
 	if self.expiry[envelope.Expiry] == nil {
 		self.expiry[envelope.Expiry] = set.NewNonTS()

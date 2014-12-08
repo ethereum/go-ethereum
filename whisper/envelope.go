@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	DefaultTtl = 50 * time.Second
+	DefaultPow = 50 * time.Millisecond
 )
 
 type Envelope struct {
@@ -56,7 +56,7 @@ func NewEnvelope(ttl time.Duration, topics [][]byte, data *Message) *Envelope {
 }
 
 func (self *Envelope) Seal() {
-	self.proveWork(DefaultTtl)
+	self.proveWork(DefaultPow)
 }
 
 func (self *Envelope) proveWork(dura time.Duration) {
