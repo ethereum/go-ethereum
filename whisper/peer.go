@@ -38,6 +38,13 @@ func (self *peer) init() error {
 
 func (self *peer) start() {
 	go self.update()
+	self.peer.Infoln("whisper started")
+}
+
+func (self *peer) stop() {
+	self.peer.Infoln("whisper stopped")
+
+	close(self.quit)
 }
 
 func (self *peer) update() {
@@ -69,9 +76,11 @@ func (self *peer) broadcast(envelopes []*Envelope) error {
 		}
 	}
 
-	msg := p2p.NewMsg(envelopesMsg, envs[:i]...)
-	if err := self.ws.WriteMsg(msg); err != nil {
-		return err
+	if i > 0 {
+		msg := p2p.NewMsg(envelopesMsg, envs[:i]...)
+		if err := self.ws.WriteMsg(msg); err != nil {
+			return err
+		}
 	}
 
 	return nil

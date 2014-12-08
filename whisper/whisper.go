@@ -1,7 +1,7 @@
 package whisper
 
 import (
-	"fmt"
+	"bytes"
 	"sync"
 	"time"
 
@@ -21,6 +21,10 @@ func H(hash []byte) Hash {
 }
 func HS(hash string) Hash {
 	return Hash{hash}
+}
+
+func (self Hash) Compare(other Hash) int {
+	return bytes.Compare([]byte(self.hash), []byte(other.hash))
 }
 
 // MOVE ME END
@@ -73,13 +77,18 @@ func (self *Whisper) Send(ttl time.Duration, topics [][]byte, data *Message) {
 	self.add(envelope)
 }
 
+// Main handler for passing whisper messages to whisper peer objects
 func (self *Whisper) msgHandler(peer *p2p.Peer, ws p2p.MsgReadWriter) error {
 	wpeer := NewPeer(self, peer, ws)
+	// init whisper peer (handshake/status)
 	if err := wpeer.init(); err != nil {
 		return err
 	}
+	// kick of the main handler for broadcasting/managing envelopes
 	go wpeer.start()
+	defer wpeer.stop()
 
+	// Main *read* loop. Writing is done by the peer it self.
 	for {
 		msg, err := ws.ReadMsg()
 		if err != nil {
@@ -96,11 +105,11 @@ func (self *Whisper) msgHandler(peer *p2p.Peer, ws p2p.MsgReadWriter) error {
 	}
 }
 
+// takes care of adding envelopes to the messages pool. At this moment no sanity checks are being performed.
 func (self *Whisper) add(envelope *Envelope) {
 	self.mmu.Lock()
 	defer self.mmu.Unlock()
 
-	fmt.Println("received envelope", envelope)
 	self.messages[envelope.Hash()] = envelope
 	if self.expiry[envelope.Expiry] == nil {
 		self.expiry[envelope.Expiry] = set.NewNonTS()
@@ -120,6 +129,7 @@ out:
 		}
 	}
 }
+
 func (self *Whisper) expire() {
 	self.mmu.Lock()
 	defer self.mmu.Unlock()
