@@ -171,7 +171,7 @@ func TestDecodeErrors(t *testing.T) {
 		t.Errorf("Decode(r, new(chan bool)) error mismatch, got %q, want %q", err, expectErr)
 	}
 
-	if err := Decode(r, new(int)); err != io.EOF {
+	if err := Decode(r, new(uint)); err != io.EOF {
 		t.Errorf("Decode(r, new(int)) error mismatch, got %q, want %q", err, io.EOF)
 	}
 }
@@ -184,12 +184,12 @@ type decodeTest struct {
 }
 
 type simplestruct struct {
-	A int
+	A uint
 	B string
 }
 
 type recstruct struct {
-	I     int
+	I     uint
 	Child *recstruct
 }
 
@@ -202,7 +202,7 @@ var (
 
 var (
 	sharedByteArray [5]byte
-	sharedPtr       = new(*int)
+	sharedPtr       = new(*uint)
 )
 
 var decodeTests = []decodeTest{
@@ -213,17 +213,17 @@ var decodeTests = []decodeTest{
 	{input: "820505", ptr: new(uint32), value: uint32(0x0505)},
 	{input: "83050505", ptr: new(uint32), value: uint32(0x050505)},
 	{input: "8405050505", ptr: new(uint32), value: uint32(0x05050505)},
-	{input: "850505050505", ptr: new(uint32), error: "rlp: input string too big for uint32"},
-	{input: "C0", ptr: new(uint32), error: ErrExpectedString.Error()},
+	{input: "850505050505", ptr: new(uint32), error: "rlp: input string too long for uint32"},
+	{input: "C0", ptr: new(uint32), error: "rlp: expected input string or byte for uint32"},
 
 	// slices
-	{input: "C0", ptr: new([]int), value: []int{}},
-	{input: "C80102030405060708", ptr: new([]int), value: []int{1, 2, 3, 4, 5, 6, 7, 8}},
+	{input: "C0", ptr: new([]uint), value: []uint{}},
+	{input: "C80102030405060708", ptr: new([]uint), value: []uint{1, 2, 3, 4, 5, 6, 7, 8}},
 
 	// arrays
-	{input: "C0", ptr: new([5]int), value: [5]int{}},
-	{input: "C50102030405", ptr: new([5]int), value: [5]int{1, 2, 3, 4, 5}},
-	{input: "C6010203040506", ptr: new([5]int), error: "rlp: input list has too many elements for [5]int"},
+	{input: "C0", ptr: new([5]uint), value: [5]uint{}},
+	{input: "C50102030405", ptr: new([5]uint), value: [5]uint{1, 2, 3, 4, 5}},
+	{input: "C6010203040506", ptr: new([5]uint), error: "rlp: input list has too many elements for [5]uint"},
 
 	// byte slices
 	{input: "01", ptr: new([]byte), value: []byte{1}},
@@ -231,7 +231,7 @@ var decodeTests = []decodeTest{
 	{input: "8D6162636465666768696A6B6C6D", ptr: new([]byte), value: []byte("abcdefghijklm")},
 	{input: "C0", ptr: new([]byte), value: []byte{}},
 	{input: "C3010203", ptr: new([]byte), value: []byte{1, 2, 3}},
-	{input: "C3820102", ptr: new([]byte), error: "rlp: input string too big for uint8"},
+	{input: "C3820102", ptr: new([]byte), error: "rlp: input string too long for uint8"},
 
 	// byte arrays
 	{input: "01", ptr: new([5]byte), value: [5]byte{1}},
@@ -239,8 +239,8 @@ var decodeTests = []decodeTest{
 	{input: "850102030405", ptr: new([5]byte), value: [5]byte{1, 2, 3, 4, 5}},
 	{input: "C0", ptr: new([5]byte), value: [5]byte{}},
 	{input: "C3010203", ptr: new([5]byte), value: [5]byte{1, 2, 3, 0, 0}},
-	{input: "C3820102", ptr: new([5]byte), error: "rlp: input string too big for uint8"},
-	{input: "86010203040506", ptr: new([5]byte), error: "rlp: input string too big for [5]uint8"},
+	{input: "C3820102", ptr: new([5]byte), error: "rlp: input string too long for uint8"},
+	{input: "86010203040506", ptr: new([5]byte), error: "rlp: input string too long for [5]uint8"},
 	{input: "850101", ptr: new([5]byte), error: io.ErrUnexpectedEOF.Error()},
 
 	// byte array reuse (should be zeroed)
@@ -254,19 +254,19 @@ var decodeTests = []decodeTest{
 	// zero sized byte arrays
 	{input: "80", ptr: new([0]byte), value: [0]byte{}},
 	{input: "C0", ptr: new([0]byte), value: [0]byte{}},
-	{input: "01", ptr: new([0]byte), error: "rlp: input string too big for [0]uint8"},
-	{input: "8101", ptr: new([0]byte), error: "rlp: input string too big for [0]uint8"},
+	{input: "01", ptr: new([0]byte), error: "rlp: input string too long for [0]uint8"},
+	{input: "8101", ptr: new([0]byte), error: "rlp: input string too long for [0]uint8"},
 
 	// strings
 	{input: "00", ptr: new(string), value: "\000"},
 	{input: "8D6162636465666768696A6B6C6D", ptr: new(string), value: "abcdefghijklm"},
-	{input: "C0", ptr: new(string), error: ErrExpectedString.Error()},
+	{input: "C0", ptr: new(string), error: "rlp: expected input string or byte for string"},
 
 	// big ints
 	{input: "01", ptr: new(*big.Int), value: big.NewInt(1)},
 	{input: "89FFFFFFFFFFFFFFFFFF", ptr: new(*big.Int), value: veryBigInt},
 	{input: "10", ptr: new(big.Int), value: *big.NewInt(16)}, // non-pointer also works
-	{input: "C0", ptr: new(*big.Int), error: ErrExpectedString.Error()},
+	{input: "C0", ptr: new(*big.Int), error: "rlp: expected input string or byte for *big.Int"},
 
 	// structs
 	{input: "C0", ptr: new(simplestruct), value: simplestruct{0, ""}},
@@ -280,17 +280,17 @@ var decodeTests = []decodeTest{
 	},
 
 	// pointers
-	{input: "00", ptr: new(*int), value: (*int)(nil)},
-	{input: "80", ptr: new(*int), value: (*int)(nil)},
-	{input: "C0", ptr: new(*int), value: (*int)(nil)},
-	{input: "07", ptr: new(*int), value: intp(7)},
-	{input: "8108", ptr: new(*int), value: intp(8)},
-	{input: "C109", ptr: new(*[]int), value: &[]int{9}},
+	{input: "00", ptr: new(*uint), value: (*uint)(nil)},
+	{input: "80", ptr: new(*uint), value: (*uint)(nil)},
+	{input: "C0", ptr: new(*uint), value: (*uint)(nil)},
+	{input: "07", ptr: new(*uint), value: uintp(7)},
+	{input: "8108", ptr: new(*uint), value: uintp(8)},
+	{input: "C109", ptr: new(*[]uint), value: &[]uint{9}},
 	{input: "C58403030303", ptr: new(*[][]byte), value: &[][]byte{{3, 3, 3, 3}}},
 
 	// pointer should be reset to nil
-	{input: "05", ptr: sharedPtr, value: intp(5)},
-	{input: "80", ptr: sharedPtr, value: (*int)(nil)},
+	{input: "05", ptr: sharedPtr, value: uintp(5)},
+	{input: "80", ptr: sharedPtr, value: (*uint)(nil)},
 
 	// interface{}
 	{input: "00", ptr: new(interface{}), value: []byte{0}},
@@ -301,7 +301,7 @@ var decodeTests = []decodeTest{
 	{input: "C50183040404", ptr: new(interface{}), value: []interface{}{[]byte{1}, []byte{4, 4, 4}}},
 }
 
-func intp(i int) *int { return &i }
+func uintp(i uint) *uint { return &i }
 
 func runTests(t *testing.T, decode func([]byte, interface{}) error) {
 	for i, test := range decodeTests {
@@ -434,8 +434,8 @@ func ExampleDecode() {
 	input, _ := hex.DecodeString("C90A1486666F6F626172")
 
 	type example struct {
-		A, B    int
-		private int // private fields are ignored
+		A, B    uint
+		private uint // private fields are ignored
 		String  string
 	}
 
@@ -447,7 +447,7 @@ func ExampleDecode() {
 		fmt.Printf("Decoded value: %#v\n", s)
 	}
 	// Output:
-	// Decoded value: rlp.example{A:10, B:20, private:0, String:"foobar"}
+	// Decoded value: rlp.example{A:0xa, B:0x14, private:0x0, String:"foobar"}
 }
 
 func ExampleStream() {
