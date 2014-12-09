@@ -238,8 +238,6 @@ func decodeListArray(s *Stream, val reflect.Value, elemdec decoder) error {
 		} else if err != nil {
 			return err
 		}
-		if i == vlen {
-		}
 	}
 	if i < vlen {
 		zero(val, i)
