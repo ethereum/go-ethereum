@@ -2,7 +2,6 @@ package eth
 
 import (
 	"fmt"
-	// "github.com/ethereum/go-ethereum/logger"
 )
 
 const (
@@ -45,11 +44,6 @@ func newProtocolError(code int, format string, params ...interface{}) *protocolE
 func ProtocolError(code int, format string, params ...interface{}) (err *protocolError) {
 	err = newProtocolError(code, format, params...)
 	// report(err)
-	if err.Fatal() {
-		logger.Errorln(err)
-	} else {
-		logger.Debugln(err)
-	}
 	return
 }
 
