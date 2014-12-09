@@ -2,6 +2,7 @@ package whisper
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -35,7 +36,7 @@ const (
 	envelopesMsg = 0x01
 )
 
-const defaultTtl = 50 * time.Second
+const DefaultTtl = 50 * time.Second
 
 type Whisper struct {
 	pub, sec []byte
@@ -43,7 +44,7 @@ type Whisper struct {
 
 	mmu      sync.RWMutex
 	messages map[Hash]*Envelope
-	expiry   map[int32]*set.SetNonTS
+	expiry   map[uint32]*set.SetNonTS
 
 	quit chan struct{}
 }
@@ -53,12 +54,18 @@ func New(pub, sec []byte) *Whisper {
 		pub:      pub,
 		sec:      sec,
 		messages: make(map[Hash]*Envelope),
-		expiry:   make(map[int32]*set.SetNonTS),
+		expiry:   make(map[uint32]*set.SetNonTS),
 		quit:     make(chan struct{}),
 	}
 	go whisper.update()
 
-	whisper.Send(defaultTtl, nil, NewMessage([]byte("Hello world. This is whisper-go")))
+	msg := NewMessage([]byte(fmt.Sprintf("Hello world. This is whisper-go. Incase you're wondering; the time is %v", time.Now())))
+	envelope, _ := msg.Seal(DefaultPow, Opts{
+		Ttl: DefaultTtl,
+	})
+	if err := whisper.Send(envelope); err != nil {
+		fmt.Println(err)
+	}
 
 	// p2p whisper sub protocol handler
 	whisper.protocol = p2p.Protocol{
@@ -75,17 +82,14 @@ func (self *Whisper) Stop() {
 	close(self.quit)
 }
 
-func (self *Whisper) Send(ttl time.Duration, topics [][]byte, data *Message) {
-	envelope := NewEnvelope(ttl, topics, data)
-	envelope.Seal()
-
-	self.add(envelope)
+func (self *Whisper) Send(envelope *Envelope) error {
+	return self.add(envelope)
 }
 
 // Main handler for passing whisper messages to whisper peer objects
 func (self *Whisper) msgHandler(peer *p2p.Peer, ws p2p.MsgReadWriter) error {
 	wpeer := NewPeer(self, peer, ws)
-	// init whisper peer (handshake/status)
+	// initialise whisper peer (handshake/status)
 	if err := wpeer.init(); err != nil {
 		return err
 	}
@@ -106,22 +110,37 @@ func (self *Whisper) msgHandler(peer *p2p.Peer, ws p2p.MsgReadWriter) error {
 			continue
 		}
 
-		self.add(envelope)
+		if err := self.add(envelope); err != nil {
+			// TODO Punish peer here. Invalid envelope.
+			peer.Infoln(err)
+		}
 		wpeer.addKnown(envelope)
 	}
 }
 
 // takes care of adding envelopes to the messages pool. At this moment no sanity checks are being performed.
-func (self *Whisper) add(envelope *Envelope) {
+func (self *Whisper) add(envelope *Envelope) error {
+	if !envelope.valid() {
+		return errors.New("invalid pow for envelope")
+	}
+
 	self.mmu.Lock()
 	defer self.mmu.Unlock()
 
-	fmt.Println("add", envelope)
-	self.messages[envelope.Hash()] = envelope
+	hash := envelope.Hash()
+	self.messages[hash] = envelope
 	if self.expiry[envelope.Expiry] == nil {
 		self.expiry[envelope.Expiry] = set.NewNonTS()
 	}
-	self.expiry[envelope.Expiry].Add(envelope.Hash())
+
+	if !self.expiry[envelope.Expiry].Has(hash) {
+		self.expiry[envelope.Expiry].Add(hash)
+		// TODO notify listeners (given that we had any ...)
+	}
+
+	fmt.Println("add", envelope)
+
+	return nil
 }
 
 func (self *Whisper) update() {
@@ -141,7 +160,7 @@ func (self *Whisper) expire() {
 	self.mmu.Lock()
 	defer self.mmu.Unlock()
 
-	now := int32(time.Now().Unix())
+	now := uint32(time.Now().Unix())
 	for then, hashSet := range self.expiry {
 		if then > now {
 			continue

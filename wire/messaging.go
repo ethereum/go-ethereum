@@ -33,8 +33,7 @@ const (
 	MsgGetPeersTy  = 0x04
 	MsgPeersTy     = 0x05
 
-	MsgStatusTy = 0x10
-	//MsgGetTxsTy         = 0x11
+	MsgStatusTy         = 0x10
 	MsgTxTy             = 0x12
 	MsgGetBlockHashesTy = 0x13
 	MsgBlockHashesTy    = 0x14

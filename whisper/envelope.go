@@ -16,8 +16,8 @@ const (
 )
 
 type Envelope struct {
-	Expiry int32 // Whisper protocol specifies int32, really should be int64
-	Ttl    int32 // ^^^^^^
+	Expiry uint32 // Whisper protocol specifies int32, really should be int64
+	Ttl    uint32 // ^^^^^^
 	Topics [][]byte
 	Data   []byte
 	Nonce  uint32
@@ -52,11 +52,11 @@ func (self *Envelope) Hash() Hash {
 func NewEnvelope(ttl time.Duration, topics [][]byte, data *Message) *Envelope {
 	exp := time.Now().Add(ttl)
 
-	return &Envelope{int32(exp.Unix()), int32(ttl.Seconds()), topics, data.Bytes(), 0, Hash{}}
+	return &Envelope{uint32(exp.Unix()), uint32(ttl.Seconds()), topics, data.Bytes(), 0, Hash{}}
 }
 
-func (self *Envelope) Seal() {
-	self.proveWork(DefaultPow)
+func (self *Envelope) Seal(pow time.Duration) {
+	self.proveWork(pow)
 }
 
 func (self *Envelope) proveWork(dura time.Duration) {
