@@ -82,6 +82,20 @@ func (err decodeError) Error() string {
 	return fmt.Sprintf("rlp: %s for %v", err.msg, err.typ)
 }
 
+func wrapStreamError(err error, typ reflect.Type) error {
+	switch err {
+	case ErrExpectedList:
+		return decodeError{"expected input list", typ}
+	case ErrExpectedString:
+		return decodeError{"expected input string or byte", typ}
+	case errUintOverflow:
+		return decodeError{"input string too long", typ}
+	case errNotAtEOL:
+		return decodeError{"input list has too many elements", typ}
+	}
+	return err
+}
+
 var (
 	decoderInterface = reflect.TypeOf(new(Decoder)).Elem()
 	bigInt           = reflect.TypeOf(big.Int{})
@@ -118,10 +132,8 @@ func makeDecoder(typ reflect.Type) (dec decoder, err error) {
 func decodeUint(s *Stream, val reflect.Value) error {
 	typ := val.Type()
 	num, err := s.uint(typ.Bits())
-	if err == errUintOverflow {
-		return decodeError{"input string too big", typ}
-	} else if err != nil {
-		return err
+	if err != nil {
+		return wrapStreamError(err, val.Type())
 	}
 	val.SetUint(num)
 	return nil
@@ -130,7 +142,7 @@ func decodeUint(s *Stream, val reflect.Value) error {
 func decodeString(s *Stream, val reflect.Value) error {
 	b, err := s.Bytes()
 	if err != nil {
-		return err
+		return wrapStreamError(err, val.Type())
 	}
 	val.SetString(string(b))
 	return nil
@@ -143,7 +155,7 @@ func decodeBigIntNoPtr(s *Stream, val reflect.Value) error {
 func decodeBigInt(s *Stream, val reflect.Value) error {
 	b, err := s.Bytes()
 	if err != nil {
-		return err
+		return wrapStreamError(err, val.Type())
 	}
 	i := val.Interface().(*big.Int)
 	if i == nil {
@@ -181,7 +193,7 @@ func makeListDecoder(typ reflect.Type) (decoder, error) {
 func decodeListSlice(s *Stream, val reflect.Value, elemdec decoder) error {
 	size, err := s.List()
 	if err != nil {
-		return err
+		return wrapStreamError(err, val.Type())
 	}
 	if size == 0 {
 		val.Set(reflect.MakeSlice(val.Type(), 0, 0))
@@ -242,10 +254,7 @@ func decodeListArray(s *Stream, val reflect.Value, elemdec decoder) error {
 	if i < vlen {
 		zero(val, i)
 	}
-	if err = s.ListEnd(); err == errNotAtEOL {
-		return decodeError{"input list has too many elements", val.Type()}
-	}
-	return err
+	return wrapStreamError(s.ListEnd(), val.Type())
 }
 
 func decodeByteSlice(s *Stream, val reflect.Value) error {
@@ -271,14 +280,14 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 	switch kind {
 	case Byte:
 		if val.Len() == 0 {
-			return decodeError{"input string too big", val.Type()}
+			return decodeError{"input string too long", val.Type()}
 		}
 		bv, _ := s.Uint()
 		val.Index(0).SetUint(bv)
 		zero(val, 1)
 	case String:
 		if uint64(val.Len()) < size {
-			return decodeError{"input string too big", val.Type()}
+			return decodeError{"input string too long", val.Type()}
 		}
 		slice := val.Slice(0, int(size)).Interface().([]byte)
 		if err := s.readFull(slice); err != nil {
@@ -317,7 +326,7 @@ func makeStructDecoder(typ reflect.Type) (decoder, error) {
 	}
 	dec := func(s *Stream, val reflect.Value) (err error) {
 		if _, err = s.List(); err != nil {
-			return err
+			return wrapStreamError(err, typ)
 		}
 		for _, f := range fields {
 			err = f.info.decoder(s, val.Field(f.index))
@@ -328,10 +337,7 @@ func makeStructDecoder(typ reflect.Type) (decoder, error) {
 				return err
 			}
 		}
-		if err = s.ListEnd(); err == errNotAtEOL {
-			err = decodeError{"input list has too many elements", typ}
-		}
-		return err
+		return wrapStreamError(s.ListEnd(), typ)
 	}
 	return dec, nil
 }

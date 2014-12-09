@@ -213,8 +213,8 @@ var decodeTests = []decodeTest{
 	{input: "820505", ptr: new(uint32), value: uint32(0x0505)},
 	{input: "83050505", ptr: new(uint32), value: uint32(0x050505)},
 	{input: "8405050505", ptr: new(uint32), value: uint32(0x05050505)},
-	{input: "850505050505", ptr: new(uint32), error: "rlp: input string too big for uint32"},
-	{input: "C0", ptr: new(uint32), error: ErrExpectedString.Error()},
+	{input: "850505050505", ptr: new(uint32), error: "rlp: input string too long for uint32"},
+	{input: "C0", ptr: new(uint32), error: "rlp: expected input string or byte for uint32"},
 
 	// slices
 	{input: "C0", ptr: new([]uint), value: []uint{}},
@@ -231,7 +231,7 @@ var decodeTests = []decodeTest{
 	{input: "8D6162636465666768696A6B6C6D", ptr: new([]byte), value: []byte("abcdefghijklm")},
 	{input: "C0", ptr: new([]byte), value: []byte{}},
 	{input: "C3010203", ptr: new([]byte), value: []byte{1, 2, 3}},
-	{input: "C3820102", ptr: new([]byte), error: "rlp: input string too big for uint8"},
+	{input: "C3820102", ptr: new([]byte), error: "rlp: input string too long for uint8"},
 
 	// byte arrays
 	{input: "01", ptr: new([5]byte), value: [5]byte{1}},
@@ -239,8 +239,8 @@ var decodeTests = []decodeTest{
 	{input: "850102030405", ptr: new([5]byte), value: [5]byte{1, 2, 3, 4, 5}},
 	{input: "C0", ptr: new([5]byte), value: [5]byte{}},
 	{input: "C3010203", ptr: new([5]byte), value: [5]byte{1, 2, 3, 0, 0}},
-	{input: "C3820102", ptr: new([5]byte), error: "rlp: input string too big for uint8"},
-	{input: "86010203040506", ptr: new([5]byte), error: "rlp: input string too big for [5]uint8"},
+	{input: "C3820102", ptr: new([5]byte), error: "rlp: input string too long for uint8"},
+	{input: "86010203040506", ptr: new([5]byte), error: "rlp: input string too long for [5]uint8"},
 	{input: "850101", ptr: new([5]byte), error: io.ErrUnexpectedEOF.Error()},
 
 	// byte array reuse (should be zeroed)
@@ -254,19 +254,19 @@ var decodeTests = []decodeTest{
 	// zero sized byte arrays
 	{input: "80", ptr: new([0]byte), value: [0]byte{}},
 	{input: "C0", ptr: new([0]byte), value: [0]byte{}},
-	{input: "01", ptr: new([0]byte), error: "rlp: input string too big for [0]uint8"},
-	{input: "8101", ptr: new([0]byte), error: "rlp: input string too big for [0]uint8"},
+	{input: "01", ptr: new([0]byte), error: "rlp: input string too long for [0]uint8"},
+	{input: "8101", ptr: new([0]byte), error: "rlp: input string too long for [0]uint8"},
 
 	// strings
 	{input: "00", ptr: new(string), value: "\000"},
 	{input: "8D6162636465666768696A6B6C6D", ptr: new(string), value: "abcdefghijklm"},
-	{input: "C0", ptr: new(string), error: ErrExpectedString.Error()},
+	{input: "C0", ptr: new(string), error: "rlp: expected input string or byte for string"},
 
 	// big ints
 	{input: "01", ptr: new(*big.Int), value: big.NewInt(1)},
 	{input: "89FFFFFFFFFFFFFFFFFF", ptr: new(*big.Int), value: veryBigInt},
 	{input: "10", ptr: new(big.Int), value: *big.NewInt(16)}, // non-pointer also works
-	{input: "C0", ptr: new(*big.Int), error: ErrExpectedString.Error()},
+	{input: "C0", ptr: new(*big.Int), error: "rlp: expected input string or byte for *big.Int"},
 
 	// structs
 	{input: "C0", ptr: new(simplestruct), value: simplestruct{0, ""}},
