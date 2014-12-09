@@ -154,8 +154,6 @@ func decodeBigInt(s *Stream, val reflect.Value) error {
 	return nil
 }
 
-const maxInt = int(^uint(0) >> 1)
-
 func makeListDecoder(typ reflect.Type) (decoder, error) {
 	etype := typ.Elem()
 	if etype.Kind() == reflect.Uint8 && !reflect.PtrTo(etype).Implements(decoderInterface) {
@@ -169,55 +167,41 @@ func makeListDecoder(typ reflect.Type) (decoder, error) {
 	if err != nil {
 		return nil, err
 	}
-	var maxLen = maxInt
+
 	if typ.Kind() == reflect.Array {
-		maxLen = typ.Len()
+		return func(s *Stream, val reflect.Value) error {
+			return decodeListArray(s, val, etypeinfo.decoder)
+		}, nil
 	}
-	dec := func(s *Stream, val reflect.Value) error {
-		return decodeList(s, val, etypeinfo.decoder, maxLen)
-	}
-	return dec, nil
+	return func(s *Stream, val reflect.Value) error {
+		return decodeListSlice(s, val, etypeinfo.decoder)
+	}, nil
 }
 
-// decodeList decodes RLP list elements into slices and arrays.
-//
-// The approach here is stolen from package json, although we differ
-// in the semantics for arrays. package json discards remaining
-// elements that would not fit into the array. We generate an error in
-// this case because we'd be losing information.
-func decodeList(s *Stream, val reflect.Value, elemdec decoder, maxelem int) error {
+func decodeListSlice(s *Stream, val reflect.Value, elemdec decoder) error {
 	size, err := s.List()
 	if err != nil {
 		return err
 	}
 	if size == 0 {
-		if val.Kind() == reflect.Slice {
-			val.Set(reflect.MakeSlice(val.Type(), 0, 0))
-		} else {
-			zero(val, 0)
-		}
+		val.Set(reflect.MakeSlice(val.Type(), 0, 0))
 		return s.ListEnd()
 	}
 
 	i := 0
-	for {
-		if i > maxelem {
-			return decodeError{"input list has too many elements", val.Type()}
+	for ; ; i++ {
+		// grow slice if necessary
+		if i >= val.Cap() {
+			newcap := val.Cap() + val.Cap()/2
+			if newcap < 4 {
+				newcap = 4
+			}
+			newv := reflect.MakeSlice(val.Type(), val.Len(), newcap)
+			reflect.Copy(newv, val)
+			val.Set(newv)
 		}
-		if val.Kind() == reflect.Slice {
-			// grow slice if necessary
-			if i >= val.Cap() {
-				newcap := val.Cap() + val.Cap()/2
-				if newcap < 4 {
-					newcap = 4
-				}
-				newv := reflect.MakeSlice(val.Type(), val.Len(), newcap)
-				reflect.Copy(newv, val)
-				val.Set(newv)
-			}
-			if i >= val.Len() {
-				val.SetLen(i + 1)
-			}
+		if i >= val.Len() {
+			val.SetLen(i + 1)
 		}
 		// decode into element
 		if err := elemdec(s, val.Index(i)); err == EOL {
@@ -225,17 +209,45 @@ func decodeList(s *Stream, val reflect.Value, elemdec decoder, maxelem int) erro
 		} else if err != nil {
 			return err
 		}
-		i++
 	}
 	if i < val.Len() {
-		if val.Kind() == reflect.Array {
-			// zero the rest of the array.
-			zero(val, i)
-		} else {
-			val.SetLen(i)
-		}
+		val.SetLen(i)
 	}
 	return s.ListEnd()
+}
+
+func decodeListArray(s *Stream, val reflect.Value, elemdec decoder) error {
+	size, err := s.List()
+	if err != nil {
+		return err
+	}
+	if size == 0 {
+		zero(val, 0)
+		return s.ListEnd()
+	}
+
+	// The approach here is stolen from package json, although we differ
+	// in the semantics for arrays. package json discards remaining
+	// elements that would not fit into the array. We generate an error in
+	// this case because we'd be losing information.
+	vlen := val.Len()
+	i := 0
+	for ; i < vlen; i++ {
+		if err := elemdec(s, val.Index(i)); err == EOL {
+			break
+		} else if err != nil {
+			return err
+		}
+		if i == vlen {
+		}
+	}
+	if i < vlen {
+		zero(val, i)
+	}
+	if err = s.ListEnd(); err == errNotAtEOL {
+		return decodeError{"input list has too many elements", val.Type()}
+	}
+	return err
 }
 
 func decodeByteSlice(s *Stream, val reflect.Value) error {
@@ -244,7 +256,7 @@ func decodeByteSlice(s *Stream, val reflect.Value) error {
 		return err
 	}
 	if kind == List {
-		return decodeList(s, val, decodeUint, maxInt)
+		return decodeListSlice(s, val, decodeUint)
 	}
 	b, err := s.Bytes()
 	if err == nil {
@@ -276,14 +288,15 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 		}
 		zero(val, int(size))
 	case List:
-		return decodeList(s, val, decodeUint, val.Len())
+		return decodeListArray(s, val, decodeUint)
 	}
 	return nil
 }
 
 func zero(val reflect.Value, start int) {
 	z := reflect.Zero(val.Type().Elem())
-	for i := start; i < val.Len(); i++ {
+	end := val.Len()
+	for i := start; i < end; i++ {
 		val.Index(i).Set(z)
 	}
 }
@@ -358,7 +371,7 @@ func decodeInterface(s *Stream, val reflect.Value) error {
 	}
 	if kind == List {
 		slice := reflect.New(ifsliceType).Elem()
-		if err := decodeList(s, slice, decodeInterface, maxInt); err != nil {
+		if err := decodeListSlice(s, slice, decodeInterface); err != nil {
 			return err
 		}
 		val.Set(slice)
