@@ -254,9 +254,12 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			newMemSize.Mul(newMemSize, u256(32))
 
 			switch op {
-			// Additional gas usage on *CODPY
 			case CALLDATACOPY, CODECOPY, EXTCODECOPY:
 				addStepGasUsage(new(big.Int).Div(newMemSize, u256(32)))
+			case SHA3:
+				g := new(big.Int).Div(newMemSize, u256(32))
+				g.Mul(g, GasSha3Byte)
+				addStepGasUsage(g)
 			}
 
 			if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
@@ -833,8 +836,13 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 				self.Printf("CREATE err %v", err)
 			} else {
-				ref.SetCode(ret)
-				msg.Output = ret
+				// gas < len(ret) * CreateDataGas == NO_CODE
+				dataGas := big.NewInt(int64(len(ret)))
+				dataGas.Mul(dataGas, GasCreateByte)
+				if closure.UseGas(dataGas) {
+					ref.SetCode(ret)
+					msg.Output = ret
+				}
 
 				stack.Push(ethutil.BigD(addr))
 			}

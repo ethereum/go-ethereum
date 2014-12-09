@@ -12,7 +12,7 @@ type Address interface {
 }
 
 type PrecompiledAddress struct {
-	Gas *big.Int
+	Gas func(l int) *big.Int
 	fn  func(in []byte) []byte
 }
 
@@ -21,9 +21,19 @@ func (self PrecompiledAddress) Call(in []byte) []byte {
 }
 
 var Precompiled = map[uint64]*PrecompiledAddress{
-	1: &PrecompiledAddress{big.NewInt(500), ecrecoverFunc},
-	2: &PrecompiledAddress{big.NewInt(100), sha256Func},
-	3: &PrecompiledAddress{big.NewInt(100), ripemd160Func},
+	1: &PrecompiledAddress{func(l int) *big.Int {
+		return GasEcrecover
+	}, ecrecoverFunc},
+	2: &PrecompiledAddress{func(l int) *big.Int {
+		n := big.NewInt(int64(l+31)/32 + 1)
+		n.Mul(n, GasSha256)
+		return n
+	}, sha256Func},
+	3: &PrecompiledAddress{func(l int) *big.Int {
+		n := big.NewInt(int64(l+31)/32 + 1)
+		n.Mul(n, GasRipemd)
+		return n
+	}, ripemd160Func},
 }
 
 func sha256Func(in []byte) []byte {

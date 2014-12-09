@@ -34,8 +34,14 @@ func (self *Execution) Call(codeAddr []byte, caller vm.ClosureRef) ([]byte, erro
 
 func (self *Execution) exec(code, caddr []byte, caller vm.ClosureRef) (ret []byte, err error) {
 	env := self.vm.Env()
-
 	chainlogger.Debugf("pre state %x\n", env.State().Root())
+
+	from, to := env.State().GetStateObject(caller.Address()), env.State().GetOrNewStateObject(self.address)
+	// Skipping transfer is used on testing for the initial call
+	if !self.SkipTransfer {
+		err = env.Transfer(from, to, self.value)
+	}
+
 	snapshot := env.State().Copy()
 	defer func() {
 		if vm.IsDepthErr(err) || vm.IsOOGErr(err) {
@@ -43,12 +49,6 @@ func (self *Execution) exec(code, caddr []byte, caller vm.ClosureRef) (ret []byt
 		}
 		chainlogger.Debugf("post state %x\n", env.State().Root())
 	}()
-
-	from, to := env.State().GetStateObject(caller.Address()), env.State().GetOrNewStateObject(self.address)
-	// Skipping transfer is used on testing for the initial call
-	if !self.SkipTransfer {
-		err = env.Transfer(from, to, self.value)
-	}
 
 	if err != nil {
 		caller.ReturnGas(self.Gas, self.price)
@@ -59,7 +59,7 @@ func (self *Execution) exec(code, caddr []byte, caller vm.ClosureRef) (ret []byt
 		// Pre-compiled contracts (address.go) 1, 2 & 3.
 		naddr := ethutil.BigD(caddr).Uint64()
 		if p := vm.Precompiled[naddr]; p != nil {
-			if self.Gas.Cmp(p.Gas) >= 0 {
+			if self.Gas.Cmp(p.Gas(len(self.input))) >= 0 {
 				ret = p.Call(self.input)
 				self.vm.Printf("NATIVE_FUNC(%x) => %x", naddr, ret)
 				self.vm.Endl()
