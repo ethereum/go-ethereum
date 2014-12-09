@@ -57,6 +57,6 @@ func genTypeInfo(typ reflect.Type) (info *typeinfo, err error) {
 	return info, nil
 }
 
-func isInteger(k reflect.Kind) bool {
-	return k >= reflect.Int && k <= reflect.Uintptr
+func isUint(k reflect.Kind) bool {
+	return k >= reflect.Uint && k <= reflect.Uintptr
 }

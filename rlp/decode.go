@@ -54,7 +54,7 @@ type Decoder interface {
 // To decode into a Go string, the input must be an RLP string. The
 // bytes are taken as-is and will not necessarily be valid UTF-8.
 //
-// To decode into an integer type, the input must also be an RLP
+// To decode into an unsigned integer type, the input must also be an RLP
 // string. The bytes are interpreted as a big endian representation of
 // the integer. If the RLP string is larger than the bit size of the
 // type, Decode will return an error. Decode also supports *big.Int.
@@ -66,8 +66,9 @@ type Decoder interface {
 //	[]interface{}, for RLP lists
 //	[]byte, for RLP strings
 //
-// Non-empty interface types are not supported, nor are bool, float32,
-// float64, maps, channel types and functions.
+// Non-empty interface types are not supported, nor are booleans,
+// signed integers, floating point numbers, maps, channels and
+// functions.
 func Decode(r io.Reader, val interface{}) error {
 	return NewStream(r).Decode(val)
 }
@@ -97,8 +98,8 @@ func makeDecoder(typ reflect.Type) (dec decoder, err error) {
 		return decodeBigInt, nil
 	case typ.AssignableTo(bigInt):
 		return decodeBigIntNoPtr, nil
-	case isInteger(kind):
-		return makeNumDecoder(typ), nil
+	case isUint(kind):
+		return decodeUint, nil
 	case kind == reflect.String:
 		return decodeString, nil
 	case kind == reflect.Slice || kind == reflect.Array:
@@ -112,30 +113,6 @@ func makeDecoder(typ reflect.Type) (dec decoder, err error) {
 	default:
 		return nil, fmt.Errorf("rlp: type %v is not RLP-serializable", typ)
 	}
-}
-
-func makeNumDecoder(typ reflect.Type) decoder {
-	kind := typ.Kind()
-	switch {
-	case kind <= reflect.Int64:
-		return decodeInt
-	case kind <= reflect.Uint64:
-		return decodeUint
-	default:
-		panic("fallthrough")
-	}
-}
-
-func decodeInt(s *Stream, val reflect.Value) error {
-	typ := val.Type()
-	num, err := s.uint(typ.Bits())
-	if err == errUintOverflow {
-		return decodeError{"input string too long", typ}
-	} else if err != nil {
-		return err
-	}
-	val.SetInt(int64(num))
-	return nil
 }
 
 func decodeUint(s *Stream, val reflect.Value) error {
