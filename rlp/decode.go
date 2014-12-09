@@ -81,6 +81,39 @@ func (err decodeError) Error() string {
 	return fmt.Sprintf("rlp: %s for %v", err.msg, err.typ)
 }
 
+var (
+	decoderInterface = reflect.TypeOf(new(Decoder)).Elem()
+	bigInt           = reflect.TypeOf(big.Int{})
+)
+
+func makeDecoder(typ reflect.Type) (dec decoder, err error) {
+	kind := typ.Kind()
+	switch {
+	case typ.Implements(decoderInterface):
+		return decodeDecoder, nil
+	case kind != reflect.Ptr && reflect.PtrTo(typ).Implements(decoderInterface):
+		return decodeDecoderNoPtr, nil
+	case typ.AssignableTo(reflect.PtrTo(bigInt)):
+		return decodeBigInt, nil
+	case typ.AssignableTo(bigInt):
+		return decodeBigIntNoPtr, nil
+	case isInteger(kind):
+		return makeNumDecoder(typ), nil
+	case kind == reflect.String:
+		return decodeString, nil
+	case kind == reflect.Slice || kind == reflect.Array:
+		return makeListDecoder(typ)
+	case kind == reflect.Struct:
+		return makeStructDecoder(typ)
+	case kind == reflect.Ptr:
+		return makePtrDecoder(typ)
+	case kind == reflect.Interface && typ.NumMethod() == 0:
+		return decodeInterface, nil
+	default:
+		return nil, fmt.Errorf("rlp: type %v is not RLP-serializable", typ)
+	}
+}
+
 func makeNumDecoder(typ reflect.Type) decoder {
 	kind := typ.Kind()
 	switch {
