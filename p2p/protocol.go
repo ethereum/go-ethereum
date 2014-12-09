@@ -154,11 +154,11 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 		return newPeerError(errProtocolBreach, "extra handshake received")
 
 	case discMsg:
-		var reason DiscReason
+		var reason [1]DiscReason
 		if err := msg.Decode(&reason); err != nil {
 			return err
 		}
-		bp.peer.Disconnect(reason)
+		bp.peer.Disconnect(reason[0])
 		return nil
 
 	case pingMsg:
