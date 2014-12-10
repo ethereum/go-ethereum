@@ -411,3 +411,6 @@ func (self *Block) Size() ethutil.StorageSize {
 func (self *Block) RlpData() interface{} {
 	return self.Value().Val
 }
+
+// Implement pow.Block
+func (self *Block) N() []byte { return self.Nonce }

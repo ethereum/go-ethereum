@@ -14,6 +14,8 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/pow"
+	"github.com/ethereum/go-ethereum/pow/ezp"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/wire"
 )
@@ -55,7 +57,7 @@ type BlockManager struct {
 	// non-persistent key/value memory storage
 	mem map[string]*big.Int
 	// Proof of work used for validating
-	Pow PoW
+	Pow pow.PoW
 	// The ethereum manager interface
 	eth EthManager
 	// The managed states
@@ -78,7 +80,7 @@ type BlockManager struct {
 func NewBlockManager(ethereum EthManager) *BlockManager {
 	sm := &BlockManager{
 		mem: make(map[string]*big.Int),
-		Pow: &EasyPow{},
+		Pow: ezp.New(),
 		eth: ethereum,
 		bc:  ethereum.ChainManager(),
 	}
@@ -327,7 +329,7 @@ func (sm *BlockManager) ValidateBlock(block, parent *types.Block) error {
 	*/
 
 	// Verify the nonce of the block. Return an error if it's not valid
-	if !sm.Pow.Verify(block.HashNoNonce(), block.Difficulty, block.Nonce) {
+	if !sm.Pow.Verify(block /*block.HashNoNonce(), block.Difficulty, block.Nonce*/) {
 		return ValidationError("Block's nonce is invalid (= %v)", ethutil.Bytes2Hex(block.Nonce))
 	}
 

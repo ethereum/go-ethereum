@@ -29,6 +29,8 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/pow"
+	"github.com/ethereum/go-ethereum/pow/ezp"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -59,7 +61,7 @@ type Miner struct {
 	localTxs  map[int]*LocalTx
 	localTxId int
 
-	pow       core.PoW
+	pow       pow.PoW
 	quitCh    chan struct{}
 	powQuitCh chan struct{}
 
@@ -74,7 +76,7 @@ func New(coinbase []byte, eth *eth.Ethereum) *Miner {
 	return &Miner{
 		eth:                 eth,
 		powQuitCh:           make(chan struct{}),
-		pow:                 &core.EasyPow{},
+		pow:                 ezp.New(),
 		mining:              false,
 		localTxs:            make(map[int]*LocalTx),
 		MinAcceptedGasPrice: big.NewInt(10000000000000),
@@ -82,7 +84,7 @@ func New(coinbase []byte, eth *eth.Ethereum) *Miner {
 	}
 }
 
-func (self *Miner) GetPow() core.PoW {
+func (self *Miner) GetPow() pow.PoW {
 	return self.pow
 }
 
