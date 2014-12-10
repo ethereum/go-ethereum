@@ -18,19 +18,6 @@ func init() {
 	ecies.AddParamsForCurve(S256(), ecies.ECIES_AES128_SHA256)
 }
 
-func ToECDSA(prv []byte) *ecdsa.PrivateKey {
-	priv := new(ecdsa.PrivateKey)
-	priv.PublicKey.Curve = S256()
-	priv.D = ethutil.BigD(prv)
-	priv.PublicKey.X, priv.PublicKey.Y = S256().ScalarBaseMult(prv)
-	return priv
-}
-
-func FromECDSA(prv *ecdsa.PrivateKey) []byte {
-	return prv.D.Bytes()
-}
-
-// TODO refactor, remove (bin)
 func Sha3(data []byte) []byte {
 	d := sha3.NewKeccak256()
 	d.Write(data)
@@ -67,23 +54,45 @@ func Ecrecover(data []byte) []byte {
 	return r
 }
 
-func SigToPub(hash, sig []byte) []byte {
-	return Ecrecover(append(hash, sig...))
+// New methods using proper ecdsa keys from the stdlib
+func ToECDSA(prv []byte) *ecdsa.PrivateKey {
+	priv := new(ecdsa.PrivateKey)
+	priv.PublicKey.Curve = S256()
+	priv.D = ethutil.BigD(prv)
+	priv.PublicKey.X, priv.PublicKey.Y = S256().ScalarBaseMult(prv)
+	return priv
 }
 
-func Sign(hash, prv []byte) (sig []byte, err error) {
-	sig, err = secp256k1.Sign(hash, prv)
+func FromECDSA(prv *ecdsa.PrivateKey) []byte {
+	return prv.D.Bytes()
+}
+
+func PubToECDSA(pub []byte) *ecdsa.PublicKey {
+	x, y := elliptic.Unmarshal(S256(), pub)
+	return &ecdsa.PublicKey{S256(), x, y}
+}
+
+func GenerateKey() (*ecdsa.PrivateKey, error) {
+	return ecdsa.GenerateKey(S256(), rand.Reader)
+}
+
+func SigToPub(hash, sig []byte) *ecdsa.PublicKey {
+	s := Ecrecover(append(hash, sig...))
+	x, y := elliptic.Unmarshal(S256(), s)
+
+	return &ecdsa.PublicKey{S256(), x, y}
+}
+
+func Sign(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
+	sig, err = secp256k1.Sign(hash, prv.D.Bytes())
 	return
 }
 
-func Encrypt(pub, message []byte) ([]byte, error) {
-	x, y := elliptic.Unmarshal(S256(), pub)
-	epub := &ecdsa.PublicKey{S256(), x, y}
-
-	return ecies.Encrypt(rand.Reader, ecies.ImportECDSAPublic(epub), message, nil, nil)
+func Encrypt(pub *ecdsa.PublicKey, message []byte) ([]byte, error) {
+	return ecies.Encrypt(rand.Reader, ecies.ImportECDSAPublic(pub), message, nil, nil)
 }
 
-func Decrypt(prv, ct []byte) ([]byte, error) {
-	key := ecies.ImportECDSA(ToECDSA(prv))
+func Decrypt(prv *ecdsa.PrivateKey, ct []byte) ([]byte, error) {
+	key := ecies.ImportECDSA(prv)
 	return key.Decrypt(rand.Reader, ct, nil, nil)
 }
