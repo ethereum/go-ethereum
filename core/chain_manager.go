@@ -288,6 +288,8 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 
 			self.SetTotalDifficulty(td)
 			self.insert(block)
+			self.transState = self.State().Copy()
+			//sm.eth.TxPool().RemoveSet(block.Transactions())
 		}
 
 		self.eventMux.Post(NewBlockEvent{block})

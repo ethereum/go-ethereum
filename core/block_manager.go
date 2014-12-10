@@ -60,14 +60,6 @@ type BlockManager struct {
 	Pow pow.PoW
 	// The ethereum manager interface
 	eth EthManager
-	// The managed states
-	// Transiently state. The trans state isn't ever saved, validated and
-	// it could be used for setting account nonces without effecting
-	// the main states.
-	transState *state.StateDB
-	// Mining state. The mining state is used purely and solely by the mining
-	// operation.
-	miningState *state.StateDB
 
 	// The last attempted block is mainly used for debugging purposes
 	// This does not have to be a valid block and will be set during
@@ -75,14 +67,17 @@ type BlockManager struct {
 	lastAttemptedBlock *types.Block
 
 	events event.Subscription
+
+	eventMux *event.TypeMux
 }
 
 func NewBlockManager(ethereum EthManager) *BlockManager {
 	sm := &BlockManager{
-		mem: make(map[string]*big.Int),
-		Pow: ezp.New(),
-		eth: ethereum,
-		bc:  ethereum.ChainManager(),
+		mem:      make(map[string]*big.Int),
+		Pow:      ezp.New(),
+		eth:      ethereum,
+		bc:       ethereum.ChainManager(),
+		eventMux: ethereum.EventMux(),
 	}
 
 	return sm
@@ -151,7 +146,7 @@ done:
 
 		// Notify all subscribers
 		if !transientProcess {
-			go self.eth.EventMux().Post(TxPostEvent{tx})
+			go self.eventMux.Post(TxPostEvent{tx})
 		}
 
 		receipts = append(receipts, receipt)
@@ -244,8 +239,6 @@ func (sm *BlockManager) ProcessWithParent(block, parent *types.Block) (td *big.I
 		state.Manifest().Reset()
 
 		chainlogger.Infof("Processed block #%d (%x...)\n", block.Number, block.Hash()[0:4])
-
-		sm.transState = state.Copy()
 
 		sm.eth.TxPool().RemoveSet(block.Transactions())
 
