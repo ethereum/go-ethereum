@@ -8,8 +8,8 @@
             "currentTimestamp" : 1,
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
-        "logs" : {
-        },
+        "logs" : [
+        ],
         "out" : "0x",
         "post" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
