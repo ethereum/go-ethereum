@@ -133,7 +133,7 @@ func (self *VMEnv) Value() *big.Int       { return self.value }
 func (self *VMEnv) GasLimit() *big.Int    { return big.NewInt(1000000000) }
 func (self *VMEnv) Depth() int            { return 0 }
 func (self *VMEnv) SetDepth(i int)        { self.depth = i }
-func (self *VMEnv) AddLog(log *state.Log) {
+func (self *VMEnv) AddLog(log state.Log) {
 	self.state.AddLog(log)
 }
 func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) error {

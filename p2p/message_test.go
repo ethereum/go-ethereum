@@ -43,7 +43,7 @@ func TestEncodeDecodeMsg(t *testing.T) {
 	}
 
 	var data struct {
-		I int
+		I uint
 		S string
 	}
 	if err := decmsg.Decode(&data); err != nil {
