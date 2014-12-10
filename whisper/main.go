@@ -19,7 +19,7 @@ func main() {
 
 	pub, sec := secp256k1.GenerateKeyPair()
 
-	whisper := whisper.New(pub, sec)
+	whisper := whisper.New(sec)
 
 	srv := p2p.Server{
 		MaxPeers:   10,

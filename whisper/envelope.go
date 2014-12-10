@@ -2,7 +2,9 @@ package whisper
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"time"
 
@@ -57,6 +59,24 @@ func NewEnvelope(ttl time.Duration, topics [][]byte, data *Message) *Envelope {
 
 func (self *Envelope) Seal(pow time.Duration) {
 	self.proveWork(pow)
+}
+
+func (self *Envelope) Open(prv *ecdsa.PrivateKey) (*Message, error) {
+	data := self.Data
+	if data[0] > 0 && len(data) < 66 {
+		return nil, fmt.Errorf("unable to open envelope. First bit set but len(data) < 66")
+	}
+
+	if data[0] > 0 {
+		payload, err := crypto.Decrypt(prv, data[66:])
+		if err != nil {
+			return nil, fmt.Errorf("unable to open envelope. Decrypt failed: %v", err)
+		}
+
+		return NewMessage(payload), nil
+	}
+
+	return NewMessage(data[1:]), nil
 }
 
 func (self *Envelope) proveWork(dura time.Duration) {

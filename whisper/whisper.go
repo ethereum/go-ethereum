@@ -2,11 +2,13 @@ package whisper
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"gopkg.in/fatih/set.v0"
 )
@@ -39,7 +41,7 @@ const (
 const DefaultTtl = 50 * time.Second
 
 type Whisper struct {
-	pub, sec []byte
+	key      *ecdsa.PrivateKey
 	protocol p2p.Protocol
 
 	mmu      sync.RWMutex
@@ -49,10 +51,9 @@ type Whisper struct {
 	quit chan struct{}
 }
 
-func New(pub, sec []byte) *Whisper {
+func New(sec []byte) *Whisper {
 	whisper := &Whisper{
-		pub:      pub,
-		sec:      sec,
+		key:      crypto.ToECDSA(sec),
 		messages: make(map[Hash]*Envelope),
 		expiry:   make(map[uint32]*set.SetNonTS),
 		quit:     make(chan struct{}),
