@@ -90,34 +90,12 @@ func NewBlockManager(ethereum EthManager) *BlockManager {
 	return sm
 }
 
-func (self *BlockManager) Start() {
-	statelogger.Debugln("Starting block manager")
-}
-
-func (self *BlockManager) Stop() {
-	statelogger.Debugln("Stopping state manager")
-}
-
 func (sm *BlockManager) CurrentState() *state.StateDB {
 	return sm.eth.ChainManager().CurrentBlock.State()
 }
 
 func (sm *BlockManager) TransState() *state.StateDB {
 	return sm.transState
-}
-
-func (sm *BlockManager) MiningState() *state.StateDB {
-	return sm.miningState
-}
-
-func (sm *BlockManager) NewMiningState() *state.StateDB {
-	sm.miningState = sm.eth.ChainManager().CurrentBlock.State().Copy()
-
-	return sm.miningState
-}
-
-func (sm *BlockManager) ChainManager() *ChainManager {
-	return sm.bc
 }
 
 func (sm *BlockManager) TransitionState(statedb *state.StateDB, parent, block *types.Block) (receipts types.Receipts, err error) {

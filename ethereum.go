@@ -393,7 +393,6 @@ func (s *Ethereum) reapDeadPeerHandler() {
 // Start the ethereum
 func (s *Ethereum) Start(seed bool) {
 	s.blockPool.Start()
-	s.blockManager.Start()
 
 	// Bind to addr and port
 	ln, err := net.Listen("tcp", ":"+s.Port)
@@ -517,7 +516,6 @@ func (s *Ethereum) Stop() {
 		s.RpcServer.Stop()
 	}
 	s.txPool.Stop()
-	s.blockManager.Stop()
 	s.blockPool.Stop()
 
 	loggerger.Infoln("Server stopped")
