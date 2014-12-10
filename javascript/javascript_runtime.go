@@ -150,7 +150,7 @@ func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
 
 		state = block.State()
 	} else {
-		state = self.ethereum.BlockManager().CurrentState()
+		state = self.ethereum.ChainManager().State()
 	}
 
 	v, _ := self.Vm.ToValue(state.Dump())

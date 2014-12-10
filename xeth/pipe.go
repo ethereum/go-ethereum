@@ -22,7 +22,7 @@ type VmVars struct {
 type XEth struct {
 	obj          core.EthManager
 	blockManager *core.BlockManager
-	blockChain   *core.ChainManager
+	chainManager *core.ChainManager
 	world        *World
 
 	Vm VmVars
@@ -32,7 +32,7 @@ func New(obj core.EthManager) *XEth {
 	pipe := &XEth{
 		obj:          obj,
 		blockManager: obj.BlockManager(),
-		blockChain:   obj.ChainManager(),
+		chainManager: obj.ChainManager(),
 	}
 	pipe.world = NewWorld(pipe)
 
@@ -51,7 +51,7 @@ func (self *XEth) Nonce(addr []byte) uint64 {
 }
 
 func (self *XEth) Block(hash []byte) *types.Block {
-	return self.blockChain.GetBlock(hash)
+	return self.chainManager.GetBlock(hash)
 }
 
 func (self *XEth) Storage(addr, storageAddr []byte) *ethutil.Value {
@@ -82,7 +82,7 @@ func (self *XEth) Execute(addr []byte, data []byte, value, gas, price *ethutil.V
 func (self *XEth) ExecuteObject(object *Object, data []byte, value, gas, price *ethutil.Value) ([]byte, error) {
 	var (
 		initiator = state.NewStateObject(self.obj.KeyManager().KeyPair().Address())
-		block     = self.blockChain.CurrentBlock
+		block     = self.chainManager.CurrentBlock
 	)
 
 	self.Vm.State = self.World().State().Copy()
@@ -131,14 +131,14 @@ func (self *XEth) Transact(key *crypto.KeyPair, to []byte, value, gas, price *et
 		tx = types.NewTransactionMessage(hash, value.BigInt(), gas.BigInt(), price.BigInt(), data)
 	}
 
-	state := self.blockManager.TransState()
+	state := self.chainManager.TransState()
 	nonce := state.GetNonce(key.Address())
 
 	tx.Nonce = nonce
 	tx.Sign(key.PrivateKey)
 
 	// Do some pre processing for our "pre" events  and hooks
-	block := self.blockChain.NewBlock(key.Address())
+	block := self.chainManager.NewBlock(key.Address())
 	coinbase := state.GetStateObject(key.Address())
 	coinbase.SetGasPool(block.GasLimit)
 	self.blockManager.ApplyTransactions(coinbase, state, block, types.Transactions{tx}, true)

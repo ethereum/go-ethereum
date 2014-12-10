@@ -232,7 +232,7 @@ func (self *Miner) finiliseTxs() types.Transactions {
 	actualSize := len(self.localTxs) // See copy below
 	txs := make(types.Transactions, actualSize+self.eth.TxPool().Size())
 
-	state := self.eth.BlockManager().TransState()
+	state := self.eth.ChainManager().TransState()
 	// XXX This has to change. Coinbase is, for new, same as key.
 	key := self.eth.KeyManager()
 	for i, ltx := range self.localTxs {

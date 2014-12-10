@@ -84,18 +84,8 @@ func NewBlockManager(ethereum EthManager) *BlockManager {
 		eth: ethereum,
 		bc:  ethereum.ChainManager(),
 	}
-	sm.transState = ethereum.ChainManager().CurrentBlock.State().Copy()
-	sm.miningState = ethereum.ChainManager().CurrentBlock.State().Copy()
 
 	return sm
-}
-
-func (sm *BlockManager) CurrentState() *state.StateDB {
-	return sm.eth.ChainManager().CurrentBlock.State()
-}
-
-func (sm *BlockManager) TransState() *state.StateDB {
-	return sm.transState
 }
 
 func (sm *BlockManager) TransitionState(statedb *state.StateDB, parent, block *types.Block) (receipts types.Receipts, err error) {

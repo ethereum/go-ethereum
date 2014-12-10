@@ -116,7 +116,7 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 	}
 
 	// Get the sender
-	sender := pool.Ethereum.BlockManager().CurrentState().GetAccount(tx.Sender())
+	sender := pool.Ethereum.ChainManager().State().GetAccount(tx.Sender())
 
 	totAmount := new(big.Int).Set(tx.Value)
 	// Make sure there's enough in the sender's account. Having insufficient
