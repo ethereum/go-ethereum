@@ -20,9 +20,21 @@ type Account struct {
 }
 
 type Log struct {
-	Address string
-	Data    string
-	Topics  []string
+	AddressF string   `json:"address"`
+	DataF    string   `json:"data"`
+	TopicsF  []string `json:"topics"`
+	BloomF   string   `json:"bloom"`
+}
+
+func (self Log) Address() []byte      { return ethutil.Hex2Bytes(self.AddressF) }
+func (self Log) Data() []byte         { return ethutil.Hex2Bytes(self.DataF) }
+func (self Log) RlpData() interface{} { return nil }
+func (self Log) Topics() [][]byte {
+	t := make([][]byte, len(self.TopicsF))
+	for i, topic := range self.TopicsF {
+		t[i] = ethutil.Hex2Bytes(topic)
+	}
+	return t
 }
 
 func StateObjectFromAccount(addr string, account Account) *state.StateObject {
@@ -53,7 +65,7 @@ type VmTest struct {
 	Env         Env
 	Exec        map[string]string
 	Transaction map[string]string
-	Logs        map[string]Log
+	Logs        []Log
 	Gas         string
 	Out         string
 	Post        map[string]Account
@@ -128,10 +140,10 @@ func RunVmTest(p string, t *testing.T) {
 		}
 
 		if len(test.Logs) > 0 {
-			genBloom := ethutil.LeftPadBytes(types.LogsBloom(logs).Bytes(), 64)
 			// Logs within the test itself aren't correct, missing empty fields (32 0s)
-			for bloom /*logs*/, _ := range test.Logs {
-				if !bytes.Equal(genBloom, ethutil.Hex2Bytes(bloom)) {
+			for i, log := range test.Logs {
+				genBloom := ethutil.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 64)
+				if !bytes.Equal(genBloom, ethutil.Hex2Bytes(log.BloomF)) {
 					t.Errorf("bloom mismatch")
 				}
 			}

@@ -98,7 +98,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			} else {
 				nop := OpCode(closure.GetOp(p))
 				if !(nop == JUMPDEST || destinations[from] != nil) {
-					panic(fmt.Sprintf("JUMP missed JUMPDEST (%v) %v", nop, p))
+					panic(fmt.Sprintf("invalid jump destination (%v) %v", nop, p))
 				} else if nop == JUMP || nop == JUMPI {
 					panic(fmt.Sprintf("not allowed to JUMP(I) in to JUMP"))
 				}
@@ -611,10 +611,10 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			self.Printf(" => %d", l)
 		case CALLDATACOPY:
 			var (
-				size = int64(len(callData))
-				mOff = stack.Pop().Int64()
-				cOff = stack.Pop().Int64()
-				l    = stack.Pop().Int64()
+				size = uint64(len(callData))
+				mOff = stack.Pop().Uint64()
+				cOff = stack.Pop().Uint64()
+				l    = stack.Pop().Uint64()
 			)
 
 			if cOff > size {
@@ -654,10 +654,10 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			}
 
 			var (
-				size = int64(len(code))
-				mOff = stack.Pop().Int64()
-				cOff = stack.Pop().Int64()
-				l    = stack.Pop().Int64()
+				size = uint64(len(code))
+				mOff = stack.Pop().Uint64()
+				cOff = stack.Pop().Uint64()
+				l    = stack.Pop().Uint64()
 			)
 
 			if cOff > size {
@@ -760,7 +760,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		case MSTORE: // Store the value at stack top-1 in to memory at location stack top
 			// Pop value of the stack
 			val, mStart := stack.Popn()
-			mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(val, 256))
+			mem.Set(mStart.Uint64(), 32, ethutil.BigToBytes(val, 256))
 
 			self.Printf(" => 0x%x", val)
 		case MSTORE8:
@@ -883,7 +883,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 				stack.Push(ethutil.BigTrue)
 				msg.Output = ret
 
-				mem.Set(retOffset.Int64(), retSize.Int64(), ret)
+				mem.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 			}
 			self.Printf("resume %x", closure.Address())
 
