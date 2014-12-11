@@ -76,10 +76,10 @@ REFERENCES
 
 * SEC (Standard for Efficient Cryptography) 1, version 2.0: Elliptic
   Curve Cryptography; Certicom, May 2009.
-  http://www.secg.org/download/aid-780/sec1-v2.pdf
+  http://www.secg.org/sec1-v2.pdf
 * GEC (Guidelines for Efficient Cryptography) 2, version 0.3: Test
   Vectors for SEC 1; Certicom, September 1999.
-  http://www.secg.org/collateral/gec2.pdf
+  http://read.pudn.com/downloads168/doc/772358/TestVectorsforSEC%201-gec2.pdf
 * NIST SP 800-56a: Recommendation for Pair-Wise Key Establishment Schemes
   Using Discrete Logarithm Cryptography. National Institute of Standards
   and Technology, May 2007.
