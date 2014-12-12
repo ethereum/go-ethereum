@@ -33,7 +33,7 @@ RUN go install -v
 RUN go get -v -d github.com/ethereum/go-ethereum/...
 WORKDIR $GOPATH/src/github.com/ethereum/go-ethereum
 RUN git checkout poc8
-RUN ETH_DEPS=$(go list -f '{{.Imports}} {{.TestImports}} {{.XTestImports}}' github.com/ethereum/go-ethereum/... | sed -e 's/\[//g' | sed -e 's/\]//g' | sed -e 's/C //g'); if [ "$ETH_DEPS" ]; then go get $TEST_DEPS; fi
+RUN ETH_DEPS=$(go list -f '{{.Imports}} {{.TestImports}} {{.XTestImports}}' github.com/ethereum/go-ethereum/... | sed -e 's/\[//g' | sed -e 's/\]//g' | sed -e 's/C //g'); if [ "$ETH_DEPS" ]; then go get $ETH_DEPS; fi
 RUN go install -v ./cmd/ethereum
 
 # Run JSON RPC
