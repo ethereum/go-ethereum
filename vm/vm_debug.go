@@ -49,8 +49,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 	closure := NewClosure(msg, caller, me, code, gas, price)
 
 	if self.env.Depth() == MaxCallDepth {
-		closure.UseGas(gas)
-
+		//closure.UseGas(gas)
 		return closure.Return(nil), DepthError{}
 	}
 
@@ -885,7 +884,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 				mem.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 			}
-			self.Printf("resume %x", closure.Address())
+			self.Printf("resume %x (%v)", closure.Address(), closure.Gas)
 
 			// Debug hook
 			if self.Dbg != nil {
