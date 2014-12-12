@@ -24,6 +24,7 @@
 #include "Stack.h"
 #include "Type.h"
 #include "Compiler.h"
+#include "Cache.h"
 
 namespace dev
 {
@@ -34,8 +35,7 @@ namespace jit
 
 ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _env)
 {
-	Compiler::Options defaultOptions;
-	auto module = Compiler(defaultOptions).compile(_code);
+	auto module = Compiler({}).compile(_code);
 	return run(std::move(module), _data, _env);
 }
 
@@ -71,41 +71,51 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 		triple.setObjectFormat(llvm::Triple::ObjectFormatType::ELF);    // MCJIT does not support COFF format
 	module->setTargetTriple(triple.str());
 
-	auto exec = std::unique_ptr<llvm::ExecutionEngine>(builder.create());
-	if (!exec)
+	ExecBundle exec;
+	exec.engine.reset(builder.create());
+	if (!exec.engine)
 		return ReturnCode::LLVMConfigError;
 	_module.release();  // Successfully created llvm::ExecutionEngine takes ownership of the module
 
 	auto finalizationStartTime = std::chrono::high_resolution_clock::now();
-	exec->finalizeObject();
+	exec.engine->finalizeObject();
 	auto finalizationEndTime = std::chrono::high_resolution_clock::now();
 	clog(JIT) << " + " << std::chrono::duration_cast<std::chrono::milliseconds>(finalizationEndTime - finalizationStartTime).count();
 
 	auto executionStartTime = std::chrono::high_resolution_clock::now();
 
-	auto entryFunc = module->getFunction("main");
-	if (!entryFunc)
+	exec.entryFunc = module->getFunction("main");
+	if (!exec.entryFunc)
 		return ReturnCode::LLVMLinkError;
 
+	auto returnCode = run(exec, _data, _env);
+
+	auto executionEndTime = std::chrono::high_resolution_clock::now();
+	clog(JIT) << " + " << std::chrono::duration_cast<std::chrono::milliseconds>(executionEndTime - executionStartTime).count() << " ms ";
+	//clog(JIT) << "Max stack size: " << Stack::maxStackSize;
+
+	clog(JIT) << "\n";
+
+	return returnCode;
+}
+
+ReturnCode ExecutionEngine::run(ExecBundle const& _exec, RuntimeData* _data, Env* _env)
+{
 	ReturnCode returnCode;
 	std::jmp_buf buf;
 	Runtime runtime(_data, _env, buf);
 	auto r = setjmp(buf);
 	if (r == 0)
 	{
-		auto result = exec->runFunction(entryFunc, {{}, llvm::GenericValue(&runtime)});
+		auto result = _exec.engine->runFunction(_exec.entryFunc, {{}, llvm::GenericValue(&runtime)});
 		returnCode = static_cast<ReturnCode>(result.IntVal.getZExtValue());
 	}
 	else
 		returnCode = static_cast<ReturnCode>(r);
-	
-	auto executionEndTime = std::chrono::high_resolution_clock::now();
-	clog(JIT) << " + " << std::chrono::duration_cast<std::chrono::milliseconds>(executionEndTime - executionStartTime).count() << " ms ";
-	//clog(JIT) << "Max stack size: " << Stack::maxStackSize;
 
 	if (returnCode == ReturnCode::Return)
 	{
-		returnData = runtime.getReturnData(); // TODO: It might be better to place is in Runtime interface
+		returnData = runtime.getReturnData();
 
 		auto&& log = clog(JIT);
 		log << "RETURN [ ";
@@ -115,8 +125,6 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 	}
 	else
 		clog(JIT) << "RETURN " << (int)returnCode;
-
-	clog(JIT) << "\n";
 
 	return returnCode;
 }

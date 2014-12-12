@@ -13,6 +13,7 @@ namespace eth
 {
 namespace jit
 {
+class ExecBundle;
 
 class ExecutionEngine
 {
@@ -25,6 +26,9 @@ public:
 	ReturnCode run(std::unique_ptr<llvm::Module> module, RuntimeData* _data, Env* _env);
 
 	bytes returnData;
+
+private:
+	ReturnCode run(ExecBundle const& _exec, RuntimeData* _data, Env* _env);
 };
 
 }
