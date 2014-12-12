@@ -56,6 +56,10 @@ func Ecrecover(data []byte) []byte {
 
 // New methods using proper ecdsa keys from the stdlib
 func ToECDSA(prv []byte) *ecdsa.PrivateKey {
+	if len(prv) == 0 {
+		return nil
+	}
+
 	priv := new(ecdsa.PrivateKey)
 	priv.PublicKey.Curve = S256()
 	priv.D = ethutil.BigD(prv)
@@ -64,12 +68,25 @@ func ToECDSA(prv []byte) *ecdsa.PrivateKey {
 }
 
 func FromECDSA(prv *ecdsa.PrivateKey) []byte {
+	if prv == nil {
+		return nil
+	}
 	return prv.D.Bytes()
 }
 
-func PubToECDSA(pub []byte) *ecdsa.PublicKey {
+func ToECDSAPub(pub []byte) *ecdsa.PublicKey {
+	if len(pub) == 0 {
+		return nil
+	}
 	x, y := elliptic.Unmarshal(S256(), pub)
 	return &ecdsa.PublicKey{S256(), x, y}
+}
+
+func FromECDSAPub(pub *ecdsa.PublicKey) []byte {
+	if pub == nil {
+		return nil
+	}
+	return elliptic.Marshal(S256(), pub.X, pub.Y)
 }
 
 func GenerateKey() (*ecdsa.PrivateKey, error) {
