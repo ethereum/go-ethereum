@@ -158,8 +158,7 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 		if err := msg.Decode(&reason); err != nil {
 			return err
 		}
-		bp.peer.Disconnect(reason[0])
-		return nil
+		return discRequestedError(reason[0])
 
 	case pingMsg:
 		return bp.rw.EncodeMsg(pongMsg)

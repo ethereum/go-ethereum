@@ -100,7 +100,16 @@ func (d DiscReason) String() string {
 	return discReasonToString[d]
 }
 
+type discRequestedError DiscReason
+
+func (err discRequestedError) Error() string {
+	return fmt.Sprintf("disconnect requested: %v", DiscReason(err))
+}
+
 func discReasonForError(err error) DiscReason {
+	if reason, ok := err.(discRequestedError); ok {
+		return DiscReason(reason)
+	}
 	peerError, ok := err.(*peerError)
 	if !ok {
 		return DiscSubprotocolError
