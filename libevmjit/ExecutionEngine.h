@@ -13,7 +13,7 @@ namespace eth
 {
 namespace jit
 {
-struct ExecBundle;
+class ExecBundle;
 
 class ExecutionEngine
 {
@@ -23,7 +23,7 @@ public:
 	void operator=(ExecutionEngine) = delete;
 
 	ReturnCode run(bytes const& _code, RuntimeData* _data, Env* _env);
-	ReturnCode run(std::unique_ptr<llvm::Module> module, RuntimeData* _data, Env* _env);
+	ReturnCode run(std::unique_ptr<llvm::Module> module, RuntimeData* _data, Env* _env, bytes const& _code);
 
 	bytes returnData;
 

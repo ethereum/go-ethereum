@@ -196,7 +196,7 @@ int main(int argc, char** argv)
 			data.code = bytecode.data();
 
 			// BROKEN: env_* functions must be implemented & RuntimeData struct created
-			auto result = engine.run(std::move(module), &data, nullptr);
+			auto result = engine.run(std::move(module), &data, nullptr, bytecode);
 			return static_cast<int>(result);
 		}
 	}

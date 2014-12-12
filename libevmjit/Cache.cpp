@@ -27,7 +27,7 @@ ExecBundle& Cache::registerExec(Cache::Key _key, ExecBundle&& _exec)
 	auto& map = getCacheMap();
 	auto r = map.insert(std::make_pair(_key, std::move(_exec)));
 	assert(r.second && "Updating cached objects not supported");
-	LOG() << "add  " << _key << "\n";
+	LOG() << "add\n";
 	return r.first->second;  // return exec, now owned by cache
 }
 
@@ -37,10 +37,10 @@ ExecBundle* Cache::findExec(Cache::Key _key)
 	auto it = map.find(_key);
 	if (it != map.end())
 	{
-		LOG() << "hit  " << _key << "\n";
+		LOG() << "hit\n";
 		return &it->second;
 	}
-	LOG() << "miss " << _key << "\n";
+	LOG() << "miss\n";
 	return nullptr;
 }
 
