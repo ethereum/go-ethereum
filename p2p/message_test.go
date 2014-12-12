@@ -2,8 +2,11 @@ package p2p
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
+	"runtime"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/ethutil"
 )
@@ -66,5 +69,65 @@ func TestDecodeRealMsg(t *testing.T) {
 
 	if msg.Code != 0 {
 		t.Errorf("incorrect code %d, want %d", msg.Code, 0)
+	}
+}
+
+func ExampleMsgPipe() {
+	rw1, rw2 := MsgPipe()
+	go func() {
+		rw1.EncodeMsg(8, []byte{0, 0})
+		rw1.EncodeMsg(5, []byte{1, 1})
+		rw1.Close()
+	}()
+
+	for {
+		msg, err := rw2.ReadMsg()
+		if err != nil {
+			break
+		}
+		var data [1][]byte
+		msg.Decode(&data)
+		fmt.Printf("msg: %d, %x\n", msg.Code, data[0])
+	}
+	// Output:
+	// msg: 8, 0000
+	// msg: 5, 0101
+}
+
+func TestMsgPipeUnblockWrite(t *testing.T) {
+loop:
+	for i := 0; i < 100; i++ {
+		rw1, rw2 := MsgPipe()
+		done := make(chan struct{})
+		go func() {
+			if err := rw1.EncodeMsg(1); err == nil {
+				t.Error("EncodeMsg returned nil error")
+			} else if err != ErrPipeClosed {
+				t.Error("EncodeMsg returned wrong error: got %v, want %v", err, ErrPipeClosed)
+			}
+			close(done)
+		}()
+
+		// this call should ensure that EncodeMsg is waiting to
+		// deliver sometimes. if this isn't done, Close is likely to
+		// be executed before EncodeMsg starts and then we won't test
+		// all the cases.
+		runtime.Gosched()
+
+		rw2.Close()
+		select {
+		case <-done:
+		case <-time.After(200 * time.Millisecond):
+			t.Errorf("write didn't unblock")
+			break loop
+		}
+	}
+}
+
+// This test should panic if concurrent close isn't implemented correctly.
+func TestMsgPipeConcurrentClose(t *testing.T) {
+	rw1, _ := MsgPipe()
+	for i := 0; i < 10; i++ {
+		go rw1.Close()
 	}
 }
