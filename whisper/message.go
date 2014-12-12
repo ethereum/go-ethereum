@@ -28,15 +28,11 @@ func (self *Message) sign(key *ecdsa.PrivateKey) (err error) {
 }
 
 func (self *Message) Recover() *ecdsa.PublicKey {
+	defer func() { recover() }() // in case of invalid sig
 	return crypto.SigToPub(self.hash(), self.Signature)
 }
 
-func (self *Message) Encrypt(from *ecdsa.PrivateKey, to *ecdsa.PublicKey) (err error) {
-	err = self.sign(from)
-	if err != nil {
-		return err
-	}
-
+func (self *Message) Encrypt(to *ecdsa.PublicKey) (err error) {
 	self.Payload, err = crypto.Encrypt(to, self.Payload)
 	if err != nil {
 		return err
@@ -57,8 +53,16 @@ type Opts struct {
 }
 
 func (self *Message) Seal(pow time.Duration, opts Opts) (*Envelope, error) {
-	if opts.To != nil && opts.From != nil {
-		if err := self.Encrypt(opts.From, opts.To); err != nil {
+	if opts.From != nil {
+		err := self.sign(opts.From)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if opts.To != nil {
+		err := self.Encrypt(opts.To)
+		if err != nil {
 			return nil, err
 		}
 	}

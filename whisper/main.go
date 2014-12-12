@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/whisper"
@@ -17,9 +18,9 @@ import (
 func main() {
 	logger.AddLogSystem(logger.NewStdLogSystem(os.Stdout, log.LstdFlags, logger.InfoLevel))
 
-	pub, sec := secp256k1.GenerateKeyPair()
+	pub, _ := secp256k1.GenerateKeyPair()
 
-	whisper := whisper.New(sec)
+	whisper := whisper.New(&event.TypeMux{})
 
 	srv := p2p.Server{
 		MaxPeers:   10,

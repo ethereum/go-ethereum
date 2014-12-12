@@ -61,22 +61,27 @@ func (self *Envelope) Seal(pow time.Duration) {
 	self.proveWork(pow)
 }
 
-func (self *Envelope) Open(prv *ecdsa.PrivateKey) (*Message, error) {
+func (self *Envelope) Open(prv *ecdsa.PrivateKey) (msg *Message, err error) {
 	data := self.Data
-	if data[0] > 0 && len(data) < 66 {
-		return nil, fmt.Errorf("unable to open envelope. First bit set but len(data) < 66")
-	}
-
+	var message Message
+	dataStart := 1
 	if data[0] > 0 {
-		payload, err := crypto.Decrypt(prv, data[66:])
+		if len(data) < 66 {
+			return nil, fmt.Errorf("unable to open envelope. First bit set but len(data) < 66")
+		}
+		dataStart = 66
+		message.Flags = data[0]
+		message.Signature = data[1:66]
+	}
+	message.Payload = data[dataStart:]
+	if prv != nil {
+		message.Payload, err = crypto.Decrypt(prv, message.Payload)
 		if err != nil {
 			return nil, fmt.Errorf("unable to open envelope. Decrypt failed: %v", err)
 		}
-
-		return NewMessage(payload), nil
 	}
 
-	return NewMessage(data[1:]), nil
+	return &message, nil
 }
 
 func (self *Envelope) proveWork(dura time.Duration) {
