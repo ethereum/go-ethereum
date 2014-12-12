@@ -35,18 +35,18 @@ namespace jit
 
 ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _env)
 {
+	std::string key{reinterpret_cast<char const*>(_code.data()), _code.size()};
+	if (auto cachedExec = Cache::findExec(key))
+	{
+		return run(*cachedExec, _data, _env);
+	}
+
 	auto module = Compiler({}).compile(_code);
 	return run(std::move(module), _data, _env, _code);
 }
 
 ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeData* _data, Env* _env, bytes const& _code)
 {
-	std::string key{reinterpret_cast<char const*>(_code.data()), _code.size()};
-	if (auto cachedExec = Cache::findExec(std::move(key)))
-	{
-		return run(*cachedExec, _data, _env);
-	}
-
 	auto module = _module.get(); // Keep ownership of the module in _module
 
 	llvm::sys::PrintStackTraceOnErrorSignal();
@@ -94,6 +94,7 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 	if (!exec.entryFunc)
 		return ReturnCode::LLVMLinkError;
 
+	std::string key{reinterpret_cast<char const*>(_code.data()), _code.size()};
 	auto& cachedExec = Cache::registerExec(key, std::move(exec));
 	auto returnCode = run(cachedExec, _data, _env);
 

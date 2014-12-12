@@ -19,7 +19,10 @@ public:
 	llvm::Function* entryFunc = nullptr;
 
 	ExecBundle() = default;
-	ExecBundle(ExecBundle&&) = default;
+	ExecBundle(ExecBundle&& _other):
+		engine(std::move(_other.engine)),
+		entryFunc(_other.entryFunc) {}
+
 	ExecBundle(ExecBundle const&) = delete;
 	void operator=(ExecBundle) = delete;
 };
