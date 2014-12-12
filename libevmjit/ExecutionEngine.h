@@ -13,7 +13,7 @@ namespace eth
 {
 namespace jit
 {
-class ExecBundle;
+struct ExecBundle;
 
 class ExecutionEngine
 {

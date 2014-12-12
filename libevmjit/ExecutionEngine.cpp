@@ -41,6 +41,12 @@ ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _en
 
 ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeData* _data, Env* _env)
 {
+	auto key = _data->code;  // TODO: Change cache key
+	if (auto cachedExec = Cache::findExec(key))
+	{
+		return run(*cachedExec, _data, _env);
+	}
+
 	auto module = _module.get(); // Keep ownership of the module in _module
 
 	llvm::sys::PrintStackTraceOnErrorSignal();
@@ -88,7 +94,8 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 	if (!exec.entryFunc)
 		return ReturnCode::LLVMLinkError;
 
-	auto returnCode = run(exec, _data, _env);
+	auto& cachedExec = Cache::registerExec(_data->code, std::move(exec));
+	auto returnCode = run(cachedExec, _data, _env);
 
 	auto executionEndTime = std::chrono::high_resolution_clock::now();
 	clog(JIT) << " + " << std::chrono::duration_cast<std::chrono::milliseconds>(executionEndTime - executionStartTime).count() << " ms ";

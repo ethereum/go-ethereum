@@ -1,5 +1,9 @@
 #pragma once
 
+#include <memory>
+#include <llvm/ExecutionEngine/ExecutionEngine.h>
+
+
 namespace dev
 {
 namespace eth
@@ -17,7 +21,10 @@ struct ExecBundle
 class Cache
 {
 public:
+	using Key = void const*;
 
+	static ExecBundle& registerExec(Key _key, ExecBundle&& _exec);
+	static ExecBundle* findExec(Key _key);
 };
 
 }
