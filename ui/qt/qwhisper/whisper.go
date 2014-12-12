@@ -3,7 +3,7 @@ package qwhisper
 import (
 	"time"
 
-	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
