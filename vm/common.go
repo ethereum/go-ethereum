@@ -20,7 +20,7 @@ const (
 
 var (
 	GasStep         = big.NewInt(1)
-	GasSha          = big.NewInt(20)
+	GasSha          = big.NewInt(10)
 	GasSLoad        = big.NewInt(20)
 	GasSStore       = big.NewInt(100)
 	GasSStoreRefund = big.NewInt(100)

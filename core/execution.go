@@ -32,7 +32,7 @@ func (self *Execution) Call(codeAddr []byte, caller vm.ClosureRef) ([]byte, erro
 	return self.exec(code, codeAddr, caller)
 }
 
-func (self *Execution) exec(code, caddr []byte, caller vm.ClosureRef) (ret []byte, err error) {
+func (self *Execution) exec(code, contextAddr []byte, caller vm.ClosureRef) (ret []byte, err error) {
 	env := self.vm.Env()
 	chainlogger.Debugf("pre state %x\n", env.State().Root())
 
@@ -57,7 +57,7 @@ func (self *Execution) exec(code, caddr []byte, caller vm.ClosureRef) (ret []byt
 	} else {
 		self.object = to
 		// Pre-compiled contracts (address.go) 1, 2 & 3.
-		naddr := ethutil.BigD(caddr).Uint64()
+		naddr := ethutil.BigD(contextAddr).Uint64()
 		if p := vm.Precompiled[naddr]; p != nil {
 			if self.Gas.Cmp(p.Gas(len(self.input))) >= 0 {
 				ret = p.Call(self.input)

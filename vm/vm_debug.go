@@ -25,8 +25,6 @@ type DebugVm struct {
 	Fn          string
 
 	Recoverable bool
-
-	depth int
 }
 
 func NewDebugVm(env Environment) *DebugVm {
@@ -116,7 +114,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		return closure.Return(nil), nil
 	}
 
-	vmlogger.Debugf("(%d) %x gas: %v (d) %x\n", self.depth, closure.Address(), closure.Gas, callData)
+	vmlogger.Debugf("(%d) %x gas: %v (d) %x\n", self.env.Depth(), closure.Address(), closure.Gas, callData)
 
 	for {
 		prevStep = step
@@ -867,14 +865,16 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 
-			var executeAddr []byte
+			var (
+				ret []byte
+				err error
+			)
 			if op == CALLCODE {
-				executeAddr = closure.Address()
+				ret, err = self.env.CallCode(closure, addr.Bytes(), args, gas, price, value)
 			} else {
-				executeAddr = addr.Bytes()
+				ret, err = self.env.Call(closure, addr.Bytes(), args, gas, price, value)
 			}
 
-			ret, err := self.env.Call(closure, executeAddr, args, gas, price, value)
 			if err != nil {
 				stack.Push(ethutil.BigFalse)
 
@@ -914,7 +914,6 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		default:
 			vmlogger.Debugf("(pc) %-3v Invalid opcode %x\n", pc, op)
 
-			//panic(fmt.Sprintf("Invalid opcode %x", op))
 			closure.ReturnGas(big.NewInt(1), nil)
 
 			return closure.Return(nil), fmt.Errorf("Invalid opcode %x", op)
@@ -962,8 +961,4 @@ func (self *DebugVm) Endl() VirtualMachine {
 
 func (self *DebugVm) Env() Environment {
 	return self.env
-}
-
-func (self *DebugVm) Depth() int {
-	return self.depth
 }
