@@ -3,6 +3,7 @@ package qwhisper
 import (
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/whisper"
 )
@@ -27,7 +28,7 @@ func (self *Whisper) Post(data string, pow, ttl uint32, to, from string) {
 	msg := whisper.NewMessage(fromHex(data))
 	envelope, err := msg.Seal(time.Duration(pow), whisper.Opts{
 		Ttl:  time.Duration(ttl),
-		To:   crypto.PubTECDSA(fromHex(to)),
+		To:   crypto.ToECDSAPub(fromHex(to)),
 		From: crypto.ToECDSA(fromHex(from)),
 	})
 	if err != nil {
@@ -35,7 +36,7 @@ func (self *Whisper) Post(data string, pow, ttl uint32, to, from string) {
 		return
 	}
 
-	if err := self.Whisper.Send(envolpe); err != nil {
+	if err := self.Whisper.Send(envelope); err != nil {
 		// handle error
 		return
 	}
@@ -51,20 +52,19 @@ func (self *Whisper) HasIdentify(key string) bool {
 
 func (self *Whisper) Watch(opts map[string]interface{}) {
 	filter := filterFromMap(opts)
-	filter.Fn = func(msg *Message) {
+	filter.Fn = func(msg *whisper.Message) {
 		// TODO POST TO QT WINDOW
 	}
-	self.Watch(filter)
+	self.Whisper.Watch(filter)
 }
 
-func filterFromMap(opts map[string]interface{}) whisper.Filter {
-	var f Filter
+func filterFromMap(opts map[string]interface{}) (f whisper.Filter) {
 	if to, ok := opts["to"].(string); ok {
-		f.To = ToECDSA(fromHex(to))
+		f.To = crypto.ToECDSA(fromHex(to))
 	}
 	if from, ok := opts["from"].(string); ok {
-		f.From = ToECDSAPub(fromHex(from))
+		f.From = crypto.ToECDSAPub(fromHex(from))
 	}
 
-	return f
+	return
 }
