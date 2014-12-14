@@ -14,6 +14,8 @@ const (
 	ErrNoStatusMsg
 	ErrExtraStatusMsg
 	ErrInvalidBlock
+	ErrInvalidPoW
+	ErrUnrequestedBlock
 )
 
 var errorToString = map[int]string{
@@ -26,6 +28,8 @@ var errorToString = map[int]string{
 	ErrNoStatusMsg:             "No status message",
 	ErrExtraStatusMsg:          "Extra status message",
 	ErrInvalidBlock:            "Invalid block",
+	ErrInvalidPoW:              "Invalid PoW",
+	ErrUnrequestedBlock:        "Unrequested block",
 }
 
 type protocolError struct {
