@@ -7,12 +7,12 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	ethlogger "github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/pow/ezp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/state"
 )
@@ -111,9 +111,8 @@ func New(db ethutil.Database, identity p2p.ClientIdentity, keyManager *crypto.Ke
 
 	hasBlock := eth.chainManager.HasBlock
 	insertChain := eth.chainManager.InsertChain
-	// pow := ezp.New()
-	// verifyPoW := pow.Verify
-	verifyPoW := func(*types.Block) bool { return true }
+	pow := ezp.New()
+	verifyPoW := pow.Verify
 	eth.blockPool = NewBlockPool(hasBlock, insertChain, verifyPoW)
 
 	// Start the tx pool
