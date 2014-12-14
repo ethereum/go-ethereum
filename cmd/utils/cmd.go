@@ -154,13 +154,22 @@ func NatType(natType string, gateway string) (nat p2p.NAT) {
 		nat = p2p.UPNP()
 	case "PMP":
 		ip := net.ParseIP(gateway)
+<<<<<<< HEAD
 		if ip != nil {
 			clilogger.Fatalf("bad PMP gateway '%s'", gateway)
+=======
+		if ip == nil {
+			clilogger.Fatalln("cannot resolve PMP gateway IP %s", gateway)
+>>>>>>> adapt cmd/cli to new backend
 		}
 		nat = p2p.PMP(ip)
 	case "":
 	default:
+<<<<<<< HEAD
 		clilogger.Fatalf("unrecognised NAT type '%s'", natType)
+=======
+		clilogger.Fatalln("unrecognised NAT type %s", natType)
+>>>>>>> adapt cmd/cli to new backend
 	}
 	return
 }
