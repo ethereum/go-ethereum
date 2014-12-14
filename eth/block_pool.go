@@ -55,7 +55,11 @@ type BlockPool struct {
 	// the minimal interface with blockchain
 	hasBlock    func(hash []byte) bool
 	insertChain func(types.Blocks) error
+<<<<<<< HEAD
 	verifyPoW   func(pow.Block) bool
+=======
+	verifyPoW   func(*types.Block) bool
+>>>>>>> blockpool rewritten , tests broken FIXME
 }
 
 type peerInfo struct {
@@ -74,7 +78,11 @@ type peerInfo struct {
 	quitC    chan bool
 }
 
+<<<<<<< HEAD
 func NewBlockPool(hasBlock func(hash []byte) bool, insertChain func(types.Blocks) error, verifyPoW func(pow.Block) bool,
+=======
+func NewBlockPool(hasBlock func(hash []byte) bool, insertChain func(types.Blocks) error, verifyPoW func(*types.Block) bool,
+>>>>>>> blockpool rewritten , tests broken FIXME
 ) *BlockPool {
 	return &BlockPool{
 		hasBlock:    hasBlock,
