@@ -69,9 +69,9 @@ func main() {
 	// create, import, export keys
 	utils.KeyTasks(keyManager, KeyRing, GenAddr, SecretFile, ExportDir, NonInteractive)
 
-	clientIdentity := utils.NewClientIdentity(ClientIdentifier, Version, Identifier)
+	clientIdentity := utils.NewClientIdentity(ClientIdentifier, Version, Identifier, string(keyManager.PublicKey()))
 
-	ethereum := utils.NewEthereum(db, clientIdentity, keyManager, UseUPnP, OutboundPort, MaxPeer)
+	ethereum := utils.NewEthereum(db, clientIdentity, keyManager, utils.NatType(NatType, PMPGateway), OutboundPort, MaxPeer)
 
 	if Dump {
 		var block *types.Block

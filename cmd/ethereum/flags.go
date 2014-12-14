@@ -38,7 +38,8 @@ var (
 	StartRpc        bool
 	StartWebSockets bool
 	RpcPort         int
-	UseUPnP         bool
+	NatType         string
+	PMPGateway      string
 	OutboundPort    string
 	ShowGenesis     bool
 	AddPeer         string
@@ -84,7 +85,8 @@ func Init() {
 	flag.StringVar(&KeyRing, "keyring", "", "identifier for keyring to use")
 	flag.StringVar(&KeyStore, "keystore", "db", "system to store keyrings: db|file (db)")
 	flag.StringVar(&OutboundPort, "port", "30303", "listening port")
-	flag.BoolVar(&UseUPnP, "upnp", false, "enable UPnP support")
+	flag.StringVar(&NatType, "nat", "", "nat support (UPNP|PMP)")
+	flag.StringVar(&PMPGateway, "gateway", "", "PMP gateway IP")
 	flag.IntVar(&MaxPeer, "maxpeer", 10, "maximum desired peers")
 	flag.IntVar(&RpcPort, "rpcport", 8080, "port to start json-rpc server on")
 	flag.BoolVar(&StartRpc, "rpc", false, "start rpc server")
