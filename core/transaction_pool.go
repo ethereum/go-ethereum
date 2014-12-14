@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
-	"github.com/ethereum/go-ethereum/wire"
 )
 
 var txplogger = logger.NewLogger("TXP")
@@ -18,18 +17,15 @@ var txplogger = logger.NewLogger("TXP")
 const txPoolQueueSize = 50
 
 type TxPoolHook chan *types.Transaction
-type TxMsgTy byte
+type TxMsg struct {
+	Tx *types.Transaction
+}
 
 const (
 	minGasPrice = 1000000
 )
 
 var MinGasPrice = big.NewInt(10000000000000)
-
-type TxMsg struct {
-	Tx   *types.Transaction
-	Type TxMsgTy
-}
 
 func EachTx(pool *list.List, it func(*types.Transaction, *list.Element) bool) {
 	for e := pool.Front(); e != nil; e = e.Next() {
@@ -94,7 +90,7 @@ func (pool *TxPool) addTransaction(tx *types.Transaction) {
 	pool.pool.PushBack(tx)
 
 	// Broadcast the transaction to the rest of the peers
-	pool.Ethereum.Broadcast(wire.MsgTxTy, []interface{}{tx.RlpData()})
+	pool.Ethereum.EventMux().Post(TxPreEvent{tx})
 }
 
 func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
@@ -169,7 +165,17 @@ func (self *TxPool) Size() int {
 	return self.pool.Len()
 }
 
-func (pool *TxPool) CurrentTransactions() []*types.Transaction {
+func (self *TxPool) AddTransactions(txs []*types.Transaction) {
+	for _, tx := range txs {
+		if err := self.Add(tx); err != nil {
+			txplogger.Infoln(err)
+		} else {
+			txplogger.Infof("tx %x\n", tx.Hash()[0:4])
+		}
+	}
+}
+
+func (pool *TxPool) GetTransactions() []*types.Transaction {
 	pool.mutex.Lock()
 	defer pool.mutex.Unlock()
 
@@ -216,7 +222,7 @@ func (self *TxPool) RemoveSet(txs types.Transactions) {
 }
 
 func (pool *TxPool) Flush() []*types.Transaction {
-	txList := pool.CurrentTransactions()
+	txList := pool.GetTransactions()
 
 	// Recreate a new list all together
 	// XXX Is this the fastest way?
