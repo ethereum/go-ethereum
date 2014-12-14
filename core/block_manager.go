@@ -2,7 +2,6 @@ package core
 
 import (
 	"bytes"
-	"container/list"
 	"errors"
 	"fmt"
 	"math/big"
@@ -14,10 +13,10 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/pow/ezp"
 	"github.com/ethereum/go-ethereum/state"
-	"github.com/ethereum/go-ethereum/wire"
 )
 
 var statelogger = logger.NewLogger("BLOCK")
@@ -38,13 +37,12 @@ type EthManager interface {
 	BlockManager() *BlockManager
 	ChainManager() *ChainManager
 	TxPool() *TxPool
-	Broadcast(msgType wire.MsgType, data []interface{})
 	PeerCount() int
 	IsMining() bool
 	IsListening() bool
-	Peers() *list.List
+	Peers() []*p2p.Peer
 	KeyManager() *crypto.KeyManager
-	ClientIdentity() wire.ClientIdentity
+	ClientIdentity() p2p.ClientIdentity
 	Db() ethutil.Database
 	EventMux() *event.TypeMux
 }
