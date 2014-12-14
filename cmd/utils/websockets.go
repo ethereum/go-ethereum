@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/websocket"
 	"github.com/ethereum/go-ethereum/xeth"
