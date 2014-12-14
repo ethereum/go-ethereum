@@ -137,10 +137,6 @@ func (bc *ChainManager) NewBlock(coinbase []byte) *types.Block {
 	return block
 }
 
-func (self *ChainManager) Status() (td *big.Int, currentBlock []byte, genesisBlock []byte) {
-	return self.TD, self.CurrentBlock.Hash(), self.Genesis().Hash()
-}
-
 func (bc *ChainManager) Reset() {
 	AddTestNetFunds(bc.genesisBlock)
 

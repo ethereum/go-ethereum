@@ -85,13 +85,8 @@ func Init() {
 	flag.StringVar(&KeyRing, "keyring", "", "identifier for keyring to use")
 	flag.StringVar(&KeyStore, "keystore", "db", "system to store keyrings: db|file (db)")
 	flag.StringVar(&OutboundPort, "port", "30303", "listening port")
-<<<<<<< HEAD
-	flag.StringVar(&NatType, "nat", "", "nat support (UPNP|PMP)")
-	flag.StringVar(&PMPGateway, "gateway", "", "PMP gateway IP")
-=======
 	flag.StringVar(&NatType, "nat", "", "NAT support (UPNP|PMP) (none)")
 	flag.StringVar(&PMPGateway, "pmp", "", "Gateway IP for PMP")
->>>>>>> adapt cmd/cli to new backend
 	flag.IntVar(&MaxPeer, "maxpeer", 10, "maximum desired peers")
 	flag.IntVar(&RpcPort, "rpcport", 8080, "port to start json-rpc server on")
 	flag.BoolVar(&StartRpc, "rpc", false, "start rpc server")
