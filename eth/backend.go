@@ -194,7 +194,6 @@ func (s *Ethereum) Start(seed bool) error {
 		return err
 	}
 	s.blockPool.Start()
-	s.blockManager.Start()
 
 	go s.filterLoop()
 
@@ -244,7 +243,6 @@ func (s *Ethereum) Stop() {
 		s.RpcServer.Stop()
 	}
 	s.txPool.Stop()
-	s.blockManager.Stop()
 	s.eventMux.Stop()
 	s.blockPool.Stop()
 
