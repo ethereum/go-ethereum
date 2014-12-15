@@ -123,6 +123,10 @@ func (s *Ethereum) BlockPool() *BlockPool {
 	return s.blockPool
 }
 
+func (s *Ethereum) Whisper() *whisper.Whisper {
+	return s.whisper
+}
+
 func (s *Ethereum) EventMux() *event.TypeMux {
 	return s.eventMux
 }
