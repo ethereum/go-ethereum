@@ -2,6 +2,7 @@ package eth
 
 import (
 	"bytes"
+	"fmt"
 	"math"
 	"math/big"
 
@@ -98,15 +99,14 @@ func runEthProtocol(txPool txPool, chainManager chainManager, blockPool blockPoo
 	}
 	err = self.handleStatus()
 	if err == nil {
-		go func() {
-			for {
-				err = self.handle()
-				if err != nil {
-					self.blockPool.RemovePeer(self.id)
-					break
-				}
+		for {
+			err = self.handle()
+			if err != nil {
+				fmt.Println(err)
+				self.blockPool.RemovePeer(self.id)
+				break
 			}
-		}()
+		}
 	}
 	return
 }
