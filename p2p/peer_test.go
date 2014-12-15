@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/hex"
+	"io"
 	"io/ioutil"
 	"net"
 	"reflect"
@@ -236,4 +237,59 @@ func TestNewPeer(t *testing.T) {
 	}
 	// Should not hang.
 	p.Disconnect(DiscAlreadyConnected)
+}
+
+func TestEOFSignal(t *testing.T) {
+	rb := make([]byte, 10)
+
+	// empty reader
+	eof := make(chan struct{}, 1)
+	sig := &eofSignal{new(bytes.Buffer), 0, eof}
+	if n, err := sig.Read(rb); n != 0 || err != io.EOF {
+		t.Errorf("Read returned unexpected values: (%v, %v)", n, err)
+	}
+	select {
+	case <-eof:
+	default:
+		t.Error("EOF chan not signaled")
+	}
+
+	// count before error
+	eof = make(chan struct{}, 1)
+	sig = &eofSignal{bytes.NewBufferString("aaaaaaaa"), 4, eof}
+	if n, err := sig.Read(rb); n != 8 || err != nil {
+		t.Errorf("Read returned unexpected values: (%v, %v)", n, err)
+	}
+	select {
+	case <-eof:
+	default:
+		t.Error("EOF chan not signaled")
+	}
+
+	// error before count
+	eof = make(chan struct{}, 1)
+	sig = &eofSignal{bytes.NewBufferString("aaaa"), 999, eof}
+	if n, err := sig.Read(rb); n != 4 || err != nil {
+		t.Errorf("Read returned unexpected values: (%v, %v)", n, err)
+	}
+	if n, err := sig.Read(rb); n != 0 || err != io.EOF {
+		t.Errorf("Read returned unexpected values: (%v, %v)", n, err)
+	}
+	select {
+	case <-eof:
+	default:
+		t.Error("EOF chan not signaled")
+	}
+
+	// no signal if neither occurs
+	eof = make(chan struct{}, 1)
+	sig = &eofSignal{bytes.NewBufferString("aaaaaaaaaaaaaaaaaaaaa"), 999, eof}
+	if n, err := sig.Read(rb); n != 10 || err != nil {
+		t.Errorf("Read returned unexpected values: (%v, %v)", n, err)
+	}
+	select {
+	case <-eof:
+		t.Error("unexpected EOF signal")
+	default:
+	}
 }
