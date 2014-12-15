@@ -90,7 +90,7 @@ func New(db ethutil.Database, identity p2p.ClientIdentity, keyManager *crypto.Ke
 	eth.txPool.Start()
 
 	ethProto := EthProtocol(eth.txPool, eth.chainManager, eth.blockPool)
-	protocols := []p2p.Protocol{ethProto}
+	protocols := []p2p.Protocol{ethProto, eth.whisper.Protocol()}
 
 	server := &p2p.Server{
 		Identity:   identity,
