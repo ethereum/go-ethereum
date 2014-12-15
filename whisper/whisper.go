@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/obscuren/ecies"
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -229,7 +230,7 @@ func (self *Whisper) envelopes() (envelopes []*Envelope) {
 
 func (self *Whisper) postEvent(envelope *Envelope) {
 	for _, key := range self.keys {
-		if message, err := envelope.Open(key); err == nil {
+		if message, err := envelope.Open(key); err == nil || (err != nil && err == ecies.ErrInvalidPublicKey) {
 			// Create a custom filter?
 			self.filters.Notify(filter.Generic{
 				Str1: string(crypto.FromECDSA(key)), Str2: string(crypto.FromECDSAPub(message.Recover())),
