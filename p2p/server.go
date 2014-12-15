@@ -246,12 +246,7 @@ func (srv *Server) Stop() {
 
 func (srv *Server) discLoop() {
 	for peer := range srv.peerDisconnect {
-		// peer has just disconnected. free up its slot.
-		srvlog.Infof("%v is gone", peer)
-		srv.peerSlots <- peer.slot
-		srv.lock.Lock()
-		srv.peers[peer.slot] = nil
-		srv.lock.Unlock()
+		srv.removePeer(peer)
 	}
 }
 
@@ -384,7 +379,7 @@ func (srv *Server) addPeer(conn net.Conn, desc *peerAddr, slot int) *Peer {
 func (srv *Server) removePeer(peer *Peer) {
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
-	srvlog.Debugf("Removing peer %v %v (slot %v)\n", peer, peer.slot)
+	srvlog.Debugf("Removing %v (slot %v)\n", peer, peer.slot)
 	if srv.peers[peer.slot] != peer {
 		srvlog.Warnln("Invalid peer to remove:", peer)
 		return
