@@ -67,7 +67,7 @@ extern "C"
 
 	EXPORT bool env_call(ExtVMFace* _env, i256* io_gas, h256* _receiveAddress, i256* _value, byte* _inBeg, uint64_t _inSize, byte* _outBeg, uint64_t _outSize, h256* _codeAddress)
 	{
-		assert(_env->depth < 32);	// TODO: Handle call depth
+		assert(_env->depth < 1024);	// TODO: Handle call depth
 
 		auto value = llvm2eth(*_value);
 		if (_env->balance(_env->myAddress) >= value)

@@ -20,7 +20,8 @@ namespace
 	}
 }
 
-#define LOG(...) std::cerr << "CACHE "
+//#define LOG(...) std::cerr << "CACHE "
+#define LOG(...) std::ostream(nullptr)
 
 ExecBundle& Cache::registerExec(Cache::Key _key, ExecBundle&& _exec)
 {
