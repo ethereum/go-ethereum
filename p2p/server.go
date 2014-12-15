@@ -416,6 +416,7 @@ func (srv *Server) verifyPeer(addr *peerAddr) error {
 	return nil
 }
 
+// TODO replace with "Set"
 type Blacklist interface {
 	Get([]byte) (bool, error)
 	Put([]byte) error

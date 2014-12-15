@@ -30,14 +30,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/wire"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/xeth"
 	"gopkg.in/qml.v1"
 )
@@ -97,7 +97,7 @@ type Gui struct {
 	pipe *xeth.JSXEth
 
 	Session        string
-	clientIdentity *wire.SimpleClientIdentity
+	clientIdentity *p2p.SimpleClientIdentity
 	config         *ethutil.ConfigManager
 
 	plugins map[string]plugin
@@ -107,7 +107,7 @@ type Gui struct {
 }
 
 // Create GUI, but doesn't start it
-func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIdentity *wire.SimpleClientIdentity, session string, logLevel int) *Gui {
+func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIdentity *p2p.SimpleClientIdentity, session string, logLevel int) *Gui {
 	db, err := ethdb.NewLDBDatabase("tx_database")
 	if err != nil {
 		panic(err)
@@ -409,8 +409,7 @@ func (gui *Gui) update() {
 	miningLabel := gui.getObjectByName("miningLabel")
 
 	events := gui.eth.EventMux().Subscribe(
-		eth.ChainSyncEvent{},
-		eth.PeerListEvent{},
+		//eth.PeerListEvent{},
 		core.NewBlockEvent{},
 		core.TxPreEvent{},
 		core.TxPostEvent{},
@@ -460,9 +459,6 @@ func (gui *Gui) update() {
 
 					gui.setWalletValue(object.Balance(), nil)
 					state.UpdateStateObject(object)
-
-				case eth.PeerListEvent:
-					gui.setPeerInfo()
 				}
 
 			case <-peerUpdateTicker.C:
@@ -472,16 +468,18 @@ func (gui *Gui) update() {
 				lastBlockLabel.Set("text", statusText)
 				miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.miner.GetPow().GetHashrate(), 10)+"Khash")
 
-				blockLength := gui.eth.BlockPool().BlocksProcessed
-				chainLength := gui.eth.BlockPool().ChainLength
+				/*
+					blockLength := gui.eth.BlockPool().BlocksProcessed
+					chainLength := gui.eth.BlockPool().ChainLength
 
-				var (
-					pct      float64 = 1.0 / float64(chainLength) * float64(blockLength)
-					dlWidget         = gui.win.Root().ObjectByName("downloadIndicator")
-					dlLabel          = gui.win.Root().ObjectByName("downloadLabel")
-				)
-				dlWidget.Set("value", pct)
-				dlLabel.Set("text", fmt.Sprintf("%d / %d", blockLength, chainLength))
+					var (
+						pct      float64 = 1.0 / float64(chainLength) * float64(blockLength)
+						dlWidget         = gui.win.Root().ObjectByName("downloadIndicator")
+						dlLabel          = gui.win.Root().ObjectByName("downloadLabel")
+					)
+					dlWidget.Set("value", pct)
+					dlLabel.Set("text", fmt.Sprintf("%d / %d", blockLength, chainLength))
+				*/
 
 			case <-statsUpdateTicker.C:
 				gui.setStatsPane()
@@ -509,7 +507,7 @@ Heap Alloc: %d
 CGNext:     %x
 NumGC:      %d
 `, Version, runtime.Version(),
-		eth.ProtocolVersion, eth.P2PVersion,
+		eth.ProtocolVersion, 2,
 		runtime.NumCPU, runtime.NumGoroutine(), runtime.NumCgoCall(),
 		memStats.Alloc, memStats.HeapAlloc,
 		memStats.NextGC, memStats.NumGC,

@@ -147,6 +147,10 @@ func (s *Ethereum) Peers() []*p2p.Peer {
 	return s.server.Peers()
 }
 
+func (s *Ethereum) MaxPeers() int {
+	return s.server.MaxPeers
+}
+
 // Start the ethereum
 func (s *Ethereum) Start(seed bool) error {
 	err := s.server.Start()

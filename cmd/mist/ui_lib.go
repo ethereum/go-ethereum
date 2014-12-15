@@ -27,7 +27,9 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/state"
@@ -56,6 +58,7 @@ type UiLib struct {
 	jsEngine *javascript.JSRE
 
 	filterCallbacks map[int][]int
+	filterManager   *filter.FilterManager
 
 	miner *miner.Miner
 }
@@ -63,7 +66,7 @@ type UiLib struct {
 func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
 	lib := &UiLib{JSXEth: xeth.NewJSXEth(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth), filterCallbacks: make(map[int][]int)} //, filters: make(map[int]*xeth.JSFilter)}
 	lib.miner = miner.New(eth.KeyManager().Address(), eth)
-	//eth.filterManager = filter.NewFilterManager(eth.EventMux())
+	lib.filterManager = filter.NewFilterManager(eth.EventMux())
 
 	return lib
 }
@@ -123,7 +126,8 @@ func (self *UiLib) LookupAddress(name string) string {
 }
 
 func (self *UiLib) PastPeers() *ethutil.List {
-	return ethutil.NewList(eth.PastPeers())
+	return ethutil.NewList([]string{})
+	//return ethutil.NewList(eth.PastPeers())
 }
 
 func (self *UiLib) ImportTx(rlpTx string) {
@@ -191,7 +195,7 @@ func (ui *UiLib) Connect(button qml.Object) {
 }
 
 func (ui *UiLib) ConnectToPeer(addr string) {
-	ui.eth.ConnectToPeer(addr)
+	ui.eth.SuggestPeer(addr)
 }
 
 func (ui *UiLib) AssetPath(p string) string {
@@ -226,7 +230,7 @@ func (self *UiLib) NewFilter(object map[string]interface{}) (id int) {
 	filter.MessageCallback = func(messages state.Messages) {
 		self.win.Root().Call("invokeFilterCallback", xeth.ToJSMessages(messages), id)
 	}
-	id = self.eth.InstallFilter(filter)
+	id = self.filterManager.InstallFilter(filter)
 	return id
 }
 
@@ -239,12 +243,12 @@ func (self *UiLib) NewFilterString(typ string) (id int) {
 			fmt.Println("QML is lagging")
 		}
 	}
-	id = self.eth.InstallFilter(filter)
+	id = self.filterManager.InstallFilter(filter)
 	return id
 }
 
 func (self *UiLib) Messages(id int) *ethutil.List {
-	filter := self.eth.GetFilter(id)
+	filter := self.filterManager.GetFilter(id)
 	if filter != nil {
 		messages := xeth.ToJSMessages(filter.Find())
 
@@ -255,7 +259,7 @@ func (self *UiLib) Messages(id int) *ethutil.List {
 }
 
 func (self *UiLib) UninstallFilter(id int) {
-	self.eth.UninstallFilter(id)
+	self.filterManager.UninstallFilter(id)
 }
 
 func mapToTxParams(object map[string]interface{}) map[string]string {
