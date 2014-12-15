@@ -58,7 +58,7 @@ extern "C"
 			_env->subBalance(endowment);
 			u256 gas;   // TODO: Handle gas
 			OnOpFunc onOp {}; // TODO: Handle that thing
-			h256 address(_env->create(endowment, &gas, {_initBeg, _initSize}, onOp), h256::AlignRight);
+			h256 address(_env->create(endowment, gas, {_initBeg, _initSize}, onOp), h256::AlignRight);
 			*o_address = address;
 		}
 		else
@@ -79,7 +79,7 @@ extern "C"
 			OnOpFunc onOp {}; // TODO: Handle that thing
 			auto codeAddress = right160(*_codeAddress);
 			auto gas = llvm2eth(*io_gas);
-			auto ret = _env->call(receiveAddress, value, inRef, &gas, outRef, onOp, {}, codeAddress);
+			auto ret = _env->call(receiveAddress, value, inRef, gas, outRef, onOp, {}, codeAddress);
 			*io_gas = eth2llvm(gas);
 			return ret;
 		}
