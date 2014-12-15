@@ -21,9 +21,9 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/cmd/ethereum/repl"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/javascript"
 )
 

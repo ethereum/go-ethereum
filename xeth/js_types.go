@@ -1,14 +1,13 @@
 package xeth
 
 import (
-	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -155,38 +154,36 @@ func NewPReciept(contractCreation bool, creationAddress, hash, address []byte) *
 // Peer interface exposed to QML
 
 type JSPeer struct {
-	ref          *core.Peer
-	Inbound      bool   `json:"isInbound"`
-	LastSend     int64  `json:"lastSend"`
-	LastPong     int64  `json:"lastPong"`
-	Ip           string `json:"ip"`
-	Port         int    `json:"port"`
-	Version      string `json:"version"`
-	LastResponse string `json:"lastResponse"`
-	Latency      string `json:"latency"`
-	Caps         string `json:"caps"`
+	ref *p2p.Peer
+	// Inbound      bool   `json:"isInbound"`
+	// LastSend     int64  `json:"lastSend"`
+	// LastPong     int64  `json:"lastPong"`
+	// Ip           string `json:"ip"`
+	// Port         int    `json:"port"`
+	// Version      string `json:"version"`
+	// LastResponse string `json:"lastResponse"`
+	// Latency      string `json:"latency"`
+	// Caps         string `json:"caps"`
 }
 
-func NewJSPeer(peer core.Peer) *JSPeer {
-	if peer == nil {
-		return nil
-	}
+func NewJSPeer(peer *p2p.Peer) *JSPeer {
 
-	var ip []string
-	for _, i := range peer.Host() {
-		ip = append(ip, strconv.Itoa(int(i)))
-	}
-	ipAddress := strings.Join(ip, ".")
+	// var ip []string
+	// for _, i := range peer.Host() {
+	//   ip = append(ip, strconv.Itoa(int(i)))
+	// }
+	// ipAddress := strings.Join(ip, ".")
 
-	var caps []string
-	capsIt := peer.Caps().NewIterator()
-	for capsIt.Next() {
-		cap := capsIt.Value().Get(0).Str()
-		ver := capsIt.Value().Get(1).Uint()
-		caps = append(caps, fmt.Sprintf("%s/%d", cap, ver))
-	}
+	// var caps []string
+	// capsIt := peer.Caps().NewIterator()
+	// for capsIt.Next() {
+	//   cap := capsIt.Value().Get(0).Str()
+	//   ver := capsIt.Value().Get(1).Uint()
+	//   caps = append(caps, fmt.Sprintf("%s/%d", cap, ver))
+	// }
 
-	return &JSPeer{ref: &peer, Inbound: peer.Inbound(), LastSend: peer.LastSend().Unix(), LastPong: peer.LastPong(), Version: peer.Version(), Ip: ipAddress, Port: int(peer.Port()), Latency: peer.PingTime(), Caps: "[" + strings.Join(caps, ", ") + "]"}
+	return &JSPeer{ref: peer}
+	// return &JSPeer{ref: &peer, Inbound: peer.Inbound(), LastSend: peer.LastSend().Unix(), LastPong: peer.LastPong(), Version: peer.Version(), Ip: ipAddress, Port: int(peer.Port()), Latency: peer.PingTime(), Caps: "[" + strings.Join(caps, ", ") + "]"}
 }
 
 type JSReceipt struct {

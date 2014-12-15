@@ -72,6 +72,10 @@ func NewChainManager(mux *event.TypeMux) *ChainManager {
 	return bc
 }
 
+func (self *ChainManager) Status() (td *big.Int, currentBlock []byte, genesisBlock []byte) {
+	return self.TD, self.CurrentBlock.Hash(), self.Genesis().Hash()
+}
+
 func (self *ChainManager) SetProcessor(proc types.BlockProcessor) {
 	self.processor = proc
 }
@@ -173,7 +177,7 @@ func (bc *ChainManager) HasBlock(hash []byte) bool {
 	return len(data) != 0
 }
 
-func (self *ChainManager) GetChainHashesFromHash(hash []byte, max uint64) (chain [][]byte) {
+func (self *ChainManager) GetBlockHashesFromHash(hash []byte, max uint64) (chain [][]byte) {
 	block := self.GetBlock(hash)
 	if block == nil {
 		return

@@ -3,7 +3,7 @@ package javascript
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/ui"

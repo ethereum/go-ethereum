@@ -3,7 +3,6 @@ package xeth
 import (
 	"bytes"
 	"encoding/json"
-	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -63,12 +62,8 @@ func (self *JSXEth) PeerCount() int {
 
 func (self *JSXEth) Peers() []JSPeer {
 	var peers []JSPeer
-	for peer := self.obj.Peers().Front(); peer != nil; peer = peer.Next() {
-		p := peer.Value.(core.Peer)
-		// we only want connected peers
-		if atomic.LoadInt32(p.Connected()) != 0 {
-			peers = append(peers, *NewJSPeer(p))
-		}
+	for _, peer := range self.obj.Peers() {
+		peers = append(peers, *NewJSPeer(peer))
 	}
 
 	return peers
