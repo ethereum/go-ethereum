@@ -11,6 +11,25 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+const (
+	ProtocolVersion    = 49
+	NetworkId          = 0
+	ProtocolLength     = uint64(8)
+	ProtocolMaxMsgSize = 10 * 1024 * 1024
+)
+
+// eth protocol message codes
+const (
+	StatusMsg = iota
+	GetTxMsg  // unused
+	TxMsg
+	GetBlockHashesMsg
+	BlockHashesMsg
+	GetBlocksMsg
+	BlocksMsg
+	NewBlockMsg
+)
+
 // ethProtocol represents the ethereum wire protocol
 // instance is running on each peer
 type ethProtocol struct {
@@ -40,25 +59,6 @@ type blockPool interface {
 	AddPeer(td *big.Int, currentBlock []byte, peerId string, requestHashes func([]byte) error, requestBlocks func([][]byte) error, peerError func(int, string, ...interface{})) (best bool)
 	RemovePeer(peerId string)
 }
-
-const (
-	ProtocolVersion    = 43
-	NetworkId          = 0
-	ProtocolLength     = uint64(8)
-	ProtocolMaxMsgSize = 10 * 1024 * 1024
-)
-
-// eth protocol message codes
-const (
-	StatusMsg = iota
-	GetTxMsg  // unused
-	TxMsg
-	GetBlockHashesMsg
-	BlockHashesMsg
-	GetBlocksMsg
-	BlocksMsg
-	NewBlockMsg
-)
 
 // message structs used for rlp decoding
 type newBlockMsgData struct {
@@ -279,9 +279,10 @@ func (self *ethProtocol) handleStatus() error {
 		return ProtocolError(ErrProtocolVersionMismatch, "%d (!= %d)", status.ProtocolVersion, ProtocolVersion)
 	}
 
-	self.peer.Infof("Peer is [eth] capable (%d/%d). TD = %v ~ %x", status.ProtocolVersion, status.NetworkId, status.CurrentBlock)
+	self.peer.Infof("Peer is [eth] capable (%d/%d). TD=%v H=%x\n", status.ProtocolVersion, status.NetworkId, status.TD, status.CurrentBlock[:4])
 
-	self.blockPool.AddPeer(status.TD, status.CurrentBlock, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect)
+	//self.blockPool.AddPeer(status.TD, status.CurrentBlock, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect)
+	self.peer.Infoln("AddPeer(IGNORED)")
 
 	return nil
 }

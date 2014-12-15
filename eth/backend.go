@@ -9,7 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/event/filter"
 	ethlogger "github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/pow/ezp"
@@ -53,11 +52,6 @@ type Ethereum struct {
 	synclock  sync.Mutex
 	syncGroup sync.WaitGroup
 
-	filterManager *filter.FilterManager
-	//filterMu      sync.RWMutex
-	//filterId      int
-	//filters       map[int]*core.Filter
-
 	Mining bool
 }
 
@@ -81,7 +75,6 @@ func New(db ethutil.Database, identity p2p.ClientIdentity, keyManager *crypto.Ke
 	eth.blockManager = core.NewBlockManager(eth)
 	eth.chainManager.SetProcessor(eth.blockManager)
 	eth.whisper = whisper.New()
-	eth.filterManager = filter.NewFilterManager(eth.EventMux())
 
 	hasBlock := eth.chainManager.HasBlock
 	insertChain := eth.chainManager.InsertChain
@@ -163,7 +156,6 @@ func (s *Ethereum) Start(seed bool) error {
 	}
 	s.blockPool.Start()
 	s.whisper.Start()
-	s.filterManager.Start()
 
 	// broadcast transactions
 	s.txSub = s.eventMux.Subscribe(core.TxPreEvent{})
@@ -264,10 +256,3 @@ func saveProtocolVersion(db ethutil.Database) {
 		db.Put([]byte("ProtocolVersion"), ethutil.NewValue(ProtocolVersion).Bytes())
 	}
 }
-
-// XXX Refactor me & MOVE
-func (self *Ethereum) InstallFilter(filter *core.Filter) (id int) {
-	return self.filterManager.InstallFilter(filter)
-}
-func (self *Ethereum) UninstallFilter(id int)        { self.filterManager.UninstallFilter(id) }
-func (self *Ethereum) GetFilter(id int) *core.Filter { return self.filterManager.GetFilter(id) }

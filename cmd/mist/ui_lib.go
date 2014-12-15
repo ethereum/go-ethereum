@@ -24,7 +24,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -64,6 +63,7 @@ type UiLib struct {
 func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
 	lib := &UiLib{JSXEth: xeth.NewJSXEth(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth), filterCallbacks: make(map[int][]int)} //, filters: make(map[int]*xeth.JSFilter)}
 	lib.miner = miner.New(eth.KeyManager().Address(), eth)
+	//eth.filterManager = filter.NewFilterManager(eth.EventMux())
 
 	return lib
 }
@@ -372,3 +372,12 @@ func (self *UiLib) ToggleMining() bool {
 		return false
 	}
 }
+
+/*
+// XXX Refactor me & MOVE
+func (self *Ethereum) InstallFilter(filter *core.Filter) (id int) {
+	return self.filterManager.InstallFilter(filter)
+}
+func (self *Ethereum) UninstallFilter(id int)        { self.filterManager.UninstallFilter(id) }
+func (self *Ethereum) GetFilter(id int) *core.Filter { return self.filterManager.GetFilter(id) }
+*/
