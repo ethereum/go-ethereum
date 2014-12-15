@@ -13,28 +13,25 @@ bytesConstRef JitVM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 {
 	using namespace jit;
 
-	RuntimeData data;
-	data.set(RuntimeData::Gas, m_gas);
-	data.set(RuntimeData::Address, fromAddress(_ext.myAddress));
-	data.set(RuntimeData::Caller, fromAddress(_ext.caller));
-	data.set(RuntimeData::Origin, fromAddress(_ext.origin));
-	data.set(RuntimeData::CallValue, _ext.value);
-	data.set(RuntimeData::CallDataSize, _ext.data.size());
-	data.set(RuntimeData::GasPrice, _ext.gasPrice);
-	data.set(RuntimeData::PrevHash, _ext.previousBlock.hash);
-	data.set(RuntimeData::CoinBase, fromAddress(_ext.currentBlock.coinbaseAddress));
-	data.set(RuntimeData::TimeStamp, _ext.currentBlock.timestamp);
-	data.set(RuntimeData::Number, _ext.currentBlock.number);
-	data.set(RuntimeData::Difficulty, _ext.currentBlock.difficulty);
-	data.set(RuntimeData::GasLimit, _ext.currentBlock.gasLimit);
-	data.set(RuntimeData::CodeSize, _ext.code.size());
-	data.callData = _ext.data.data();
-	data.code = _ext.code.data();
+	m_data.set(RuntimeData::Gas, m_gas);
+	m_data.set(RuntimeData::Address, fromAddress(_ext.myAddress));
+	m_data.set(RuntimeData::Caller, fromAddress(_ext.caller));
+	m_data.set(RuntimeData::Origin, fromAddress(_ext.origin));
+	m_data.set(RuntimeData::CallValue, _ext.value);
+	m_data.set(RuntimeData::CallDataSize, _ext.data.size());
+	m_data.set(RuntimeData::GasPrice, _ext.gasPrice);
+	m_data.set(RuntimeData::PrevHash, _ext.previousBlock.hash);
+	m_data.set(RuntimeData::CoinBase, fromAddress(_ext.currentBlock.coinbaseAddress));
+	m_data.set(RuntimeData::TimeStamp, _ext.currentBlock.timestamp);
+	m_data.set(RuntimeData::Number, _ext.currentBlock.number);
+	m_data.set(RuntimeData::Difficulty, _ext.currentBlock.difficulty);
+	m_data.set(RuntimeData::GasLimit, _ext.currentBlock.gasLimit);
+	m_data.set(RuntimeData::CodeSize, _ext.code.size());
+	m_data.callData = _ext.data.data();
+	m_data.code = _ext.code.data();
 
-	ExecutionEngine engine;
 	auto env = reinterpret_cast<Env*>(&_ext);
-	auto exitCode = engine.run(_ext.code, &data, env);
-
+	auto exitCode = m_engine.run(_ext.code, &m_data, env);
 	switch (exitCode)
 	{
 	case ReturnCode::BadJumpDestination:
@@ -49,9 +46,8 @@ bytesConstRef JitVM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 		break;
 	}
 
-	m_gas = llvm2eth(data.elems[RuntimeData::Gas]);
-	m_output = std::move(engine.returnData);
-	return {m_output.data(), m_output.size()};  // TODO: This all bytesConstRef stuff sucks
+	m_gas = llvm2eth(m_data.elems[RuntimeData::Gas]);
+	return {m_engine.returnData.data(), m_engine.returnData.size()};  // TODO: This all bytesConstRef is problematic, review.
 }
 
 }

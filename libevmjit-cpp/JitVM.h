@@ -1,6 +1,7 @@
 #pragma once
 
 #include <libevm/VMFace.h>
+#include <evmjit/libevmjit/ExecutionEngine.h>
 
 namespace dev
 {
@@ -18,7 +19,8 @@ private:
 	friend class VMFactory;
 	explicit JitVM(u256 _gas = 0) : VMFace(_gas) {}
 
-	bytes m_output;
+	jit::RuntimeData m_data;
+	jit::ExecutionEngine m_engine;
 };
 
 
