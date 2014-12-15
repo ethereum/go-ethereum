@@ -69,6 +69,10 @@ func run() error {
 		utils.StartRpc(ethereum, RpcPort)
 	}
 
+	if StartWebSockets {
+		utils.StartWebSockets(ethereum)
+	}
+
 	gui := NewWindow(ethereum, config, clientIdentity, KeyRing, LogLevel)
 	gui.stdLog = stdLog
 
@@ -100,16 +104,10 @@ func main() {
 
 	utils.HandleInterrupt()
 
-	if StartWebSockets {
-		utils.StartWebSockets(ethereum)
-	}
-
 	// we need to run the interrupt callbacks in case gui is closed
 	// this skips if we got here by actual interrupt stopping the GUI
 	if !interrupted {
 		utils.RunInterruptCallbacks(os.Interrupt)
 	}
-	// this blocks the thread
-	ethereum.WaitForShutdown()
 	logger.Flush()
 }
