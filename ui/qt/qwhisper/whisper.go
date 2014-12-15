@@ -56,7 +56,7 @@ func (self *Whisper) NewIdentity() string {
 	return toHex(self.Whisper.NewIdentity().D.Bytes())
 }
 
-func (self *Whisper) HasIdentify(key string) bool {
+func (self *Whisper) HasIdentity(key string) bool {
 	return self.Whisper.HasIdentity(crypto.ToECDSA(fromHex(key)))
 }
 
