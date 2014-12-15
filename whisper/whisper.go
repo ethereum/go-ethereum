@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event/filter"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"gopkg.in/fatih/set.v0"
 )
@@ -47,6 +47,8 @@ type MessageEvent struct {
 
 const DefaultTtl = 50 * time.Second
 
+var wlogger = logger.NewLogger("SHH")
+
 type Whisper struct {
 	protocol p2p.Protocol
 	filters  *filter.Filters
@@ -68,16 +70,15 @@ func New() *Whisper {
 		quit:     make(chan struct{}),
 	}
 	whisper.filters.Start()
-	go whisper.update()
 
 	// XXX TODO REMOVE TESTING CODE
-	msg := NewMessage([]byte(fmt.Sprintf("Hello world. This is whisper-go. Incase you're wondering; the time is %v", time.Now())))
-	envelope, _ := msg.Seal(DefaultPow, Opts{
-		Ttl: DefaultTtl,
-	})
-	if err := whisper.Send(envelope); err != nil {
-		fmt.Println(err)
-	}
+	//msg := NewMessage([]byte(fmt.Sprintf("Hello world. This is whisper-go. Incase you're wondering; the time is %v", time.Now())))
+	//envelope, _ := msg.Seal(DefaultPow, Opts{
+	//	Ttl: DefaultTtl,
+	//})
+	//if err := whisper.Send(envelope); err != nil {
+	//	fmt.Println(err)
+	//}
 	// XXX TODO REMOVE TESTING CODE
 
 	// p2p whisper sub protocol handler
@@ -89,6 +90,11 @@ func New() *Whisper {
 	}
 
 	return whisper
+}
+
+func (self *Whisper) Start() {
+	wlogger.Infoln("Whisper started")
+	go self.update()
 }
 
 func (self *Whisper) Stop() {
@@ -236,7 +242,7 @@ func (self *Whisper) postEvent(envelope *Envelope) {
 				Str1: string(crypto.FromECDSA(key)), Str2: string(crypto.FromECDSAPub(message.Recover())),
 			}, message)
 		} else {
-			fmt.Println(err)
+			wlogger.Infoln(err)
 		}
 	}
 }

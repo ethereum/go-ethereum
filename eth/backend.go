@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/pow/ezp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/whisper"
 )
 
 const (
@@ -28,26 +29,23 @@ type Ethereum struct {
 	quit         chan bool
 
 	// DB interface
-	db ethutil.Database
+	db        ethutil.Database
+	blacklist p2p.Blacklist
+
+	//*** SERVICES ***
 	// State manager for processing new blocks and managing the over all states
 	blockManager *core.BlockManager
-	// The transaction pool. Transaction can be pushed on this pool
-	// for later including in the blocks
-	txPool *core.TxPool
-	// The canonical chain
+	txPool       *core.TxPool
 	chainManager *core.ChainManager
-	// The block pool
-	blockPool *BlockPool
-	// Event
+	blockPool    *BlockPool
+	whisper      *whisper.Whisper
+
+	server   *p2p.Server
 	eventMux *event.TypeMux
+	txSub    event.Subscription
+	blockSub event.Subscription
 
-	blacklist p2p.Blacklist
-	server    *p2p.Server
-	txSub     event.Subscription
-	blockSub  event.Subscription
-
-	RpcServer *rpc.JsonRpcServer
-
+	RpcServer  *rpc.JsonRpcServer
 	keyManager *crypto.KeyManager
 
 	clientIdentity p2p.ClientIdentity
@@ -73,7 +71,7 @@ func New(db ethutil.Database, identity p2p.ClientIdentity, keyManager *crypto.Ke
 		db:             db,
 		keyManager:     keyManager,
 		clientIdentity: identity,
-		blacklist:      p2p.NewBlocklist(),
+		blacklist:      p2p.NewBlacklist(),
 		eventMux:       &event.TypeMux{},
 		filters:        make(map[int]*core.Filter),
 	}
@@ -82,12 +80,13 @@ func New(db ethutil.Database, identity p2p.ClientIdentity, keyManager *crypto.Ke
 	eth.chainManager = core.NewChainManager(eth.EventMux())
 	eth.blockManager = core.NewBlockManager(eth)
 	eth.chainManager.SetProcessor(eth.blockManager)
+	eth.whisper = whisper.New()
 
 	hasBlock := eth.chainManager.HasBlock
 	insertChain := eth.chainManager.InsertChain
 	eth.blockPool = NewBlockPool(hasBlock, insertChain, ezp.Verify)
 
-	// Start the tx pool
+	// Start services
 	eth.txPool.Start()
 
 	ethProto := EthProtocol(eth.txPool, eth.chainManager, eth.blockPool)
@@ -98,7 +97,7 @@ func New(db ethutil.Database, identity p2p.ClientIdentity, keyManager *crypto.Ke
 		MaxPeers:   maxPeers,
 		Protocols:  protocols,
 		ListenAddr: ":" + port,
-		Blacklist:  blacklist,
+		Blacklist:  eth.blacklist,
 		NAT:        nat,
 	}
 
@@ -162,6 +161,7 @@ func (s *Ethereum) Start(seed bool) error {
 		return err
 	}
 	s.blockPool.Start()
+	s.whisper.Start()
 
 	go s.filterLoop()
 
@@ -211,6 +211,7 @@ func (s *Ethereum) Stop() {
 	s.txPool.Stop()
 	s.eventMux.Stop()
 	s.blockPool.Stop()
+	s.whisper.Stop()
 
 	logger.Infoln("Server stopped")
 	close(s.shutdownChan)
