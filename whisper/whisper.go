@@ -177,7 +177,6 @@ func (self *Whisper) add(envelope *Envelope) error {
 	if !self.expiry[envelope.Expiry].Has(hash) {
 		self.expiry[envelope.Expiry].Add(hash)
 		self.postEvent(envelope)
-		fmt.Println("envelope added", envelope)
 	}
 
 	return nil
