@@ -1,11 +1,13 @@
 package qwhisper
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/whisper"
+	"gopkg.in/qml.v1"
 )
 
 func fromHex(s string) []byte {
@@ -18,25 +20,33 @@ func toHex(b []byte) string { return "0x" + ethutil.Bytes2Hex(b) }
 
 type Whisper struct {
 	*whisper.Whisper
+	view qml.Object
 }
 
 func New(w *whisper.Whisper) *Whisper {
-	return &Whisper{w}
+	return &Whisper{w, nil}
 }
 
-func (self *Whisper) Post(data string, pow, ttl uint32, to, from string) {
+func (self *Whisper) SetView(view qml.Object) {
+	self.view = view
+}
+
+func (self *Whisper) Post(data string, to, from string, topics []string, pow, ttl uint32) {
 	msg := whisper.NewMessage(fromHex(data))
 	envelope, err := msg.Seal(time.Duration(pow), whisper.Opts{
-		Ttl:  time.Duration(ttl),
-		To:   crypto.ToECDSAPub(fromHex(to)),
-		From: crypto.ToECDSA(fromHex(from)),
+		Ttl:    time.Duration(ttl),
+		To:     crypto.ToECDSAPub(fromHex(to)),
+		From:   crypto.ToECDSA(fromHex(from)),
+		Topics: whisper.TopicsFromString(topics),
 	})
 	if err != nil {
+		fmt.Println(err)
 		// handle error
 		return
 	}
 
 	if err := self.Whisper.Send(envelope); err != nil {
+		fmt.Println(err)
 		// handle error
 		return
 	}

@@ -377,6 +377,10 @@ func (self *UiLib) ToggleMining() bool {
 	}
 }
 
+func (self *UiLib) ToHex(data string) string {
+	return "0x" + ethutil.Bytes2Hex([]byte(data))
+}
+
 /*
 // XXX Refactor me & MOVE
 func (self *Ethereum) InstallFilter(filter *core.Filter) (id int) {

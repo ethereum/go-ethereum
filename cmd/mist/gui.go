@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/ui/qt/qwhisper"
 	"github.com/ethereum/go-ethereum/xeth"
 	"gopkg.in/qml.v1"
 )
@@ -87,7 +88,8 @@ type Gui struct {
 	eth *eth.Ethereum
 
 	// The public Ethereum library
-	uiLib *UiLib
+	uiLib   *UiLib
+	whisper *qwhisper.Whisper
 
 	txDb *ethdb.LDBDatabase
 
@@ -138,10 +140,12 @@ func (gui *Gui) Start(assetPath string) {
 	gui.engine = qml.NewEngine()
 	context := gui.engine.Context()
 	gui.uiLib = NewUiLib(gui.engine, gui.eth, assetPath)
+	gui.whisper = qwhisper.New(gui.eth.Whisper())
 
 	// Expose the eth library and the ui library to QML
 	context.SetVar("gui", gui)
 	context.SetVar("eth", gui.uiLib)
+	context.SetVar("shh", gui.whisper)
 
 	// Load the main QML interface
 	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
@@ -390,6 +394,8 @@ func (gui *Gui) update() {
 		gui.loadMergedMiningOptions()
 		gui.setPeerInfo()
 	}()
+
+	gui.whisper.SetView(gui.win.Root().ObjectByName("whisperView"))
 
 	for _, plugin := range gui.plugins {
 		guilogger.Infoln("Loading plugin ", plugin.Name)

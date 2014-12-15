@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -70,16 +71,6 @@ func New() *Whisper {
 		quit:     make(chan struct{}),
 	}
 	whisper.filters.Start()
-
-	// XXX TODO REMOVE TESTING CODE
-	//msg := NewMessage([]byte(fmt.Sprintf("Hello world. This is whisper-go. Incase you're wondering; the time is %v", time.Now())))
-	//envelope, _ := msg.Seal(DefaultPow, Opts{
-	//	Ttl: DefaultTtl,
-	//})
-	//if err := whisper.Send(envelope); err != nil {
-	//	fmt.Println(err)
-	//}
-	// XXX TODO REMOVE TESTING CODE
 
 	// p2p whisper sub protocol handler
 	whisper.protocol = p2p.Protocol{
@@ -158,6 +149,7 @@ func (self *Whisper) msgHandler(peer *p2p.Peer, ws p2p.MsgReadWriter) error {
 			continue
 		}
 
+		fmt.Println("recv")
 		if err := self.add(envelope); err != nil {
 			// TODO Punish peer here. Invalid envelope.
 			peer.Infoln(err)
@@ -184,6 +176,7 @@ func (self *Whisper) add(envelope *Envelope) error {
 	if !self.expiry[envelope.Expiry].Has(hash) {
 		self.expiry[envelope.Expiry].Add(hash)
 		self.postEvent(envelope)
+		fmt.Println("envelope added", envelope)
 	}
 
 	return nil

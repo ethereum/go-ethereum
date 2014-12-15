@@ -50,6 +50,7 @@ ApplicationWindow {
 		addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: true});
 
 		addPlugin("./views/transaction.qml", {noAdd: true, close: false, section: "legacy"});
+		addPlugin("./views/whisper.qml", {noAdd: true, close: false, section: "legacy"});
 		addPlugin("./views/chain.qml", {noAdd: true, close: false, section: "legacy"});
 		addPlugin("./views/pending_tx.qml", {noAdd: true, close: false, section: "legacy"});
 		addPlugin("./views/info.qml", {noAdd: true, close: false, section: "legacy"});
