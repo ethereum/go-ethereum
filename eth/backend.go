@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/event/filter"
 	ethlogger "github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/pow/ezp"
@@ -53,9 +54,10 @@ type Ethereum struct {
 	synclock  sync.Mutex
 	syncGroup sync.WaitGroup
 
-	filterMu sync.RWMutex
-	filterId int
-	filters  map[int]*core.Filter
+	filterManager *filter.FilterManager
+	//filterMu      sync.RWMutex
+	//filterId      int
+	//filters       map[int]*core.Filter
 
 	Mining bool
 }
