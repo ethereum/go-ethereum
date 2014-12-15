@@ -3,7 +3,6 @@ package eth
 import (
 	"encoding/json"
 	"net"
-	"path"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -32,7 +31,6 @@ type Ethereum struct {
 	db ethutil.Database
 	// State manager for processing new blocks and managing the over all states
 	blockManager *core.BlockManager
-
 	// The transaction pool. Transaction can be pushed on this pool
 	// for later including in the blocks
 	txPool *core.TxPool
@@ -43,21 +41,10 @@ type Ethereum struct {
 	// Event
 	eventMux *event.TypeMux
 
-	// Nonce
-	Nonce uint64
-
-	ListenAddr string
-
 	blacklist p2p.Blacklist
 	server    *p2p.Server
 	txSub     event.Subscription
 	blockSub  event.Subscription
-
-	// Capabilities for outgoing peers
-	// serverCaps Caps
-	peersFile string
-
-	Mining bool
 
 	RpcServer *rpc.JsonRpcServer
 
@@ -71,6 +58,8 @@ type Ethereum struct {
 	filterMu sync.RWMutex
 	filterId int
 	filters  map[int]*core.Filter
+
+	Mining bool
 }
 
 func New(db ethutil.Database, identity p2p.ClientIdentity, keyManager *crypto.KeyManager, nat p2p.NAT, port string, maxPeers int) (*Ethereum, error) {
@@ -78,28 +67,13 @@ func New(db ethutil.Database, identity p2p.ClientIdentity, keyManager *crypto.Ke
 	saveProtocolVersion(db)
 	ethutil.Config.Db = db
 
-	// FIXME:
-	blacklist := p2p.NewBlacklist()
-	// Sorry Py person. I must blacklist. you perform badly
-	blacklist.Put(ethutil.Hex2Bytes("64656330303561383532336435376331616537643864663236623336313863373537353163636634333530626263396330346237336262623931383064393031"))
-
-	peersFile := path.Join(ethutil.Config.ExecPath, "known_peers.json")
-
-	nonce, _ := ethutil.RandomUint64()
-
-	listenAddr := ":" + port
-
 	eth := &Ethereum{
-		shutdownChan: make(chan bool),
-		quit:         make(chan bool),
-		db:           db,
-		Nonce:        nonce,
-		// serverCaps:     caps,
-		peersFile:      peersFile,
-		ListenAddr:     listenAddr,
+		shutdownChan:   make(chan bool),
+		quit:           make(chan bool),
+		db:             db,
 		keyManager:     keyManager,
 		clientIdentity: identity,
-		blacklist:      blacklist,
+		blacklist:      p2p.NewBlocklist(),
 		eventMux:       &event.TypeMux{},
 		filters:        make(map[int]*core.Filter),
 	}
@@ -111,9 +85,7 @@ func New(db ethutil.Database, identity p2p.ClientIdentity, keyManager *crypto.Ke
 
 	hasBlock := eth.chainManager.HasBlock
 	insertChain := eth.chainManager.InsertChain
-	pow := ezp.New()
-	verifyPoW := pow.Verify
-	eth.blockPool = NewBlockPool(hasBlock, insertChain, verifyPoW)
+	eth.blockPool = NewBlockPool(hasBlock, insertChain, ezp.Verify)
 
 	// Start the tx pool
 	eth.txPool.Start()
@@ -125,7 +97,7 @@ func New(db ethutil.Database, identity p2p.ClientIdentity, keyManager *crypto.Ke
 		Identity:   identity,
 		MaxPeers:   maxPeers,
 		Protocols:  protocols,
-		ListenAddr: listenAddr,
+		ListenAddr: ":" + port,
 		Blacklist:  blacklist,
 		NAT:        nat,
 	}
@@ -171,11 +143,8 @@ func (s *Ethereum) IsMining() bool {
 }
 
 func (s *Ethereum) IsListening() bool {
-	if s.ListenAddr == "" {
-		return false
-	} else {
-		return true
-	}
+	// XXX TODO
+	return false
 }
 
 func (s *Ethereum) PeerCount() int {
@@ -231,8 +200,6 @@ func (s *Ethereum) Stop() {
 	// Close the database
 	defer s.db.Close()
 
-	//
-	// WritePeers(s.peersFile, s.server.PeerAddresses())
 	close(s.quit)
 
 	s.txSub.Unsubscribe()    // quits txBroadcastLoop
