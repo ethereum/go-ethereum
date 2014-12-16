@@ -80,7 +80,7 @@ RuntimeManager::RuntimeManager(llvm::IRBuilder<>& _builder): CompilerHelper(_bui
 
 	// Export data
 	auto mainFunc = getMainFunction();
-	llvm::Value* rtPtr = &mainFunc->getArgumentList().back();
+	llvm::Value* rtPtr = &mainFunc->getArgumentList().front();
 	m_builder.CreateStore(rtPtr, m_rtPtr);
 	auto dataPtr = m_builder.CreateStructGEP(rtPtr, 0, "dataPtr");
 	auto data = m_builder.CreateLoad(dataPtr, "data");
@@ -95,7 +95,7 @@ llvm::Value* RuntimeManager::getRuntimePtr()
 {
 	// FIXME: Data ptr
 	//if (auto mainFunc = getMainFunction())
-	//	return mainFunc->arg_begin()->getNextNode();    // Runtime is the second parameter of main function
+	//	return mainFunc->arg_begin();    // Runtime is the parameter of main function
 	return m_builder.CreateLoad(m_rtPtr, "rt");
 }
 
@@ -103,7 +103,7 @@ llvm::Value* RuntimeManager::getDataPtr()
 {
 	// FIXME: Data ptr
 	//if (auto mainFunc = getMainFunction())
-	//	return mainFunc->arg_begin()->getNextNode();    // Runtime is the second parameter of main function
+	//	return mainFunc->arg_begin();    // Runtime is the parameter of main function
 	return m_builder.CreateLoad(m_dataPtr, "data");
 }
 

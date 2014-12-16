@@ -111,14 +111,14 @@ namespace
 {
 ReturnCode runEntryFunc(ExecBundle const& _exec, Runtime* _runtime)
 {
-	typedef ReturnCode(*EntryFuncPtr)(int, Runtime*);
+	typedef ReturnCode(*EntryFuncPtr)(Runtime*);
 	auto entryFuncVoidPtr = _exec.engine->getPointerToFunction(_exec.entryFunc);
 	auto entryFuncPtr = static_cast<EntryFuncPtr>(entryFuncVoidPtr);
 
 	ReturnCode returnCode{};
 	auto sj = setjmp(_runtime->getJmpBuf());
 	if (sj == 0)
-		returnCode = entryFuncPtr(0, _runtime);	// FIXME: Remove int argument
+		returnCode = entryFuncPtr(_runtime);
 	else
 		returnCode = static_cast<ReturnCode>(sj);
 

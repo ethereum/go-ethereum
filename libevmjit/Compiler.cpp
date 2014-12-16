@@ -157,10 +157,9 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode)
 	auto module = std::unique_ptr<llvm::Module>(new llvm::Module("main", m_builder.getContext()));
 
 	// Create main function
-	llvm::Type* mainFuncArgTypes[] = {m_builder.getInt32Ty(), Type::RuntimePtr};    // There must be int in first place because LLVM does not support other signatures
-	auto mainFuncType = llvm::FunctionType::get(Type::MainReturn, mainFuncArgTypes, false);
+	auto mainFuncType = llvm::FunctionType::get(Type::MainReturn, Type::RuntimePtr, false);
 	m_mainFunc = llvm::Function::Create(mainFuncType, llvm::Function::ExternalLinkage, "main", module.get());
-	m_mainFunc->arg_begin()->getNextNode()->setName("rt");
+	m_mainFunc->getArgumentList().front().setName("rt");
 
 	// Create the basic blocks.
 	auto entryBlock = llvm::BasicBlock::Create(m_builder.getContext(), "entry", m_mainFunc);
