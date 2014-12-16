@@ -5,8 +5,6 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IntrinsicInst.h>
 
-#include <iostream>
-
 namespace dev
 {
 namespace eth
@@ -30,12 +28,10 @@ Runtime::Runtime(RuntimeData* _data, Env* _env):
 	m_prevJmpBuf(g_currJmpBuf)
 {
 	g_currJmpBuf = m_jmpBuf;
-	std::cerr << "JB push " << g_currJmpBuf << "\n";
 }
 
 Runtime::~Runtime()
 {
-	std::cerr << "JB pop  " << g_currJmpBuf << "\n";
 	g_currJmpBuf = m_prevJmpBuf;
 }
 
