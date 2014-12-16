@@ -332,9 +332,10 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 
 		case Instruction::EXP:
 		{
-			auto left = stack.pop();
-			auto right = stack.pop();
-			auto ret = _arith.exp(left, right);
+			auto base = stack.pop();
+			auto exponent = stack.pop();
+			_gasMeter.countExp(exponent);
+			auto ret = _arith.exp(base, exponent);
 			stack.push(ret);
 			break;
 		}

@@ -23,6 +23,9 @@ public:
 	/// Calculate & count gas cost for SSTORE instruction
 	void countSStore(class Ext& _ext, llvm::Value* _index, llvm::Value* _newValue);
 
+	/// Calculate & count additional gas cost for EXP instruction
+	void countExp(llvm::Value* _exponent);
+
 	/// Count gas cost of LOG data
 	void countLogData(llvm::Value* _dataLength);
 

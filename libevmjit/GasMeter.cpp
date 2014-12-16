@@ -144,6 +144,21 @@ void GasMeter::count(Instruction _inst)
 		commitCostBlock();
 }
 
+void GasMeter::countExp(llvm::Value* _exponent)
+{
+	// Additional cost is 1 per significant byte of exponent
+	// lz - leading zeros
+	// cost = ((256 - lz) + 7) / 8
+
+	// OPT: All calculations can be done on 32/64 bits
+
+	auto ctlz = llvm::Intrinsic::getDeclaration(getModule(), llvm::Intrinsic::ctlz, Type::Word);
+	auto lz = m_builder.CreateCall2(ctlz, _exponent, m_builder.getInt1(false));
+	auto sigBits = m_builder.CreateSub(Constant::get(256), lz);
+	auto sigBytes = m_builder.CreateUDiv(m_builder.CreateAdd(sigBits, Constant::get(7)), Constant::get(8));
+	createCall(m_gasCheckFunc, sigBytes);
+}
+
 void GasMeter::countSStore(Ext& _ext, llvm::Value* _index, llvm::Value* _newValue)
 {
 	assert(!m_checkCall); // Everything should've been commited before
