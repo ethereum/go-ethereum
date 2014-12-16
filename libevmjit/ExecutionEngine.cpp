@@ -110,9 +110,9 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 ReturnCode ExecutionEngine::run(ExecBundle const& _exec, RuntimeData* _data, Env* _env)
 {
 	ReturnCode returnCode;
-	std::jmp_buf buf;
-	Runtime runtime(_data, _env, buf);
-	auto r = setjmp(buf);
+	Runtime runtime(_data, _env);
+
+	auto r = setjmp(runtime.getJmpBuf());
 	if (r == 0)
 	{
 		auto result = _exec.engine->runFunction(_exec.entryFunc, {{}, llvm::GenericValue(&runtime)});

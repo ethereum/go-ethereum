@@ -26,12 +26,13 @@ namespace jit
 
 using StackImpl = std::vector<i256>;
 using MemoryImpl = bytes;
-using JmpBufRef = decltype(&jmp_buf{}[0]);
+using jmp_buf_ref = decltype(&std::jmp_buf{}[0]);
 
 class Runtime
 {
 public:
-	Runtime(RuntimeData* _data, Env* _env, JmpBufRef _jmpBuf);
+	Runtime(RuntimeData* _data, Env* _env);
+	~Runtime();
 
 	Runtime(const Runtime&) = delete;
 	void operator=(const Runtime&) = delete;
@@ -42,12 +43,15 @@ public:
 
 	u256 getGas() const;
 	bytes getReturnData() const;
-	JmpBufRef getJmpBuf() { return m_jmpBuf; }
+	jmp_buf_ref getJmpBuf() { return m_jmpBuf; }
+	static jmp_buf_ref getCurrJmpBuf();
 
 private:
-	RuntimeData& m_data;
-	Env& m_env;
-	JmpBufRef m_jmpBuf;
+	RuntimeData& m_data;		///< Pointer to data. Expected by compiled contract.
+	Env& m_env;					///< Pointer to environment proxy. Expected by compiled contract.
+	jmp_buf_ref m_currJmpBuf;	///< Pointer to jump buffer. Expected by compiled contract.
+	jmp_buf_ref m_prevJmpBuf;
+	std::jmp_buf m_jmpBuf;
 	StackImpl m_stack;
 	MemoryImpl m_memory;
 };
