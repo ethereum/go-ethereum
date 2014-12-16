@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -120,6 +119,7 @@ func (self *Whisper) Watch(opts Filter) int {
 	return self.filters.Install(filter.Generic{
 		Str1: string(crypto.FromECDSA(opts.To)),
 		Str2: string(crypto.FromECDSAPub(opts.From)),
+		Data: bytesToMap(opts.Topics),
 		Fn: func(data interface{}) {
 			opts.Fn(data.(*Message))
 		},
@@ -150,7 +150,6 @@ func (self *Whisper) msgHandler(peer *p2p.Peer, ws p2p.MsgReadWriter) error {
 			continue
 		}
 
-		fmt.Println("recv")
 		if err := self.add(envelope); err != nil {
 			// TODO Punish peer here. Invalid envelope.
 			peer.Infoln(err)
@@ -233,6 +232,7 @@ func (self *Whisper) postEvent(envelope *Envelope) {
 			// Create a custom filter?
 			self.filters.Notify(filter.Generic{
 				Str1: string(crypto.FromECDSA(key)), Str2: string(crypto.FromECDSAPub(message.Recover())),
+				Data: bytesToMap(envelope.Topics),
 			}, message)
 		} else {
 			wlogger.Infoln(err)

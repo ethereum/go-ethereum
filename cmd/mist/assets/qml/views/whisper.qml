@@ -20,6 +20,8 @@ Rectangle {
 	Component.onCompleted: {
 		identity = shh.newIdentity()
 		console.log("New identity:", identity)
+
+		var t = shh.watch({topics: ["chat"]})
 	}
 
 	RowLayout {
@@ -35,7 +37,6 @@ Rectangle {
 			id: topics
 			placeholderText: "topic1, topic2, topic3, ..."
 		}
-
 		Button {
 			text: "Send"
 			onClicked: {

@@ -74,11 +74,13 @@ func (self *Envelope) Open(prv *ecdsa.PrivateKey) (msg *Message, err error) {
 		message.Flags = data[0]
 		message.Signature = data[1:66]
 	}
-	message.Payload = data[dataStart:]
+
+	payload := data[dataStart:]
 	if prv != nil {
-		message.Payload, err = crypto.Decrypt(prv, message.Payload)
+		message.Payload, err = crypto.Decrypt(prv, payload)
 		switch err {
 		case ecies.ErrInvalidPublicKey: // Payload isn't encrypted
+			message.Payload = payload
 			return &message, err
 		default:
 			return nil, fmt.Errorf("unable to open envelope. Decrypt failed: %v", err)

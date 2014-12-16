@@ -18,10 +18,19 @@ func Topics(data [][]byte) [][]byte {
 	return d
 }
 
-func TopicsFromString(data []string) [][]byte {
+func TopicsFromString(data ...string) [][]byte {
 	d := make([][]byte, len(data))
 	for i, str := range data {
 		d[i] = hashTopic([]byte(str))
 	}
 	return d
+}
+
+func bytesToMap(s [][]byte) map[string]struct{} {
+	m := make(map[string]struct{})
+	for _, topic := range s {
+		m[string(topic)] = struct{}{}
+	}
+
+	return m
 }

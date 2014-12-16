@@ -3,6 +3,7 @@ package qwhisper
 import (
 	"fmt"
 	"time"
+	"unsafe"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -18,13 +19,22 @@ func fromHex(s string) []byte {
 }
 func toHex(b []byte) string { return "0x" + ethutil.Bytes2Hex(b) }
 
+type Watch struct {
+}
+
+func (self *Watch) Arrived(v unsafe.Pointer) {
+	fmt.Println(v)
+}
+
 type Whisper struct {
 	*whisper.Whisper
 	view qml.Object
+
+	watches map[int]*Watch
 }
 
 func New(w *whisper.Whisper) *Whisper {
-	return &Whisper{w, nil}
+	return &Whisper{w, nil, make(map[int]*Watch)}
 }
 
 func (self *Whisper) SetView(view qml.Object) {
@@ -37,7 +47,7 @@ func (self *Whisper) Post(data string, to, from string, topics []string, pow, tt
 		Ttl:    time.Duration(ttl),
 		To:     crypto.ToECDSAPub(fromHex(to)),
 		From:   crypto.ToECDSA(fromHex(from)),
-		Topics: whisper.TopicsFromString(topics),
+		Topics: whisper.TopicsFromString(topics...),
 	})
 	if err != nil {
 		fmt.Println(err)
@@ -60,12 +70,15 @@ func (self *Whisper) HasIdentity(key string) bool {
 	return self.Whisper.HasIdentity(crypto.ToECDSA(fromHex(key)))
 }
 
-func (self *Whisper) Watch(opts map[string]interface{}) {
+func (self *Whisper) Watch(opts map[string]interface{}) *Watch {
 	filter := filterFromMap(opts)
 	filter.Fn = func(msg *whisper.Message) {
-		// TODO POST TO QT WINDOW
+		fmt.Println(msg)
 	}
-	self.Whisper.Watch(filter)
+	i := self.Whisper.Watch(filter)
+	self.watches[i] = &Watch{}
+
+	return self.watches[i]
 }
 
 func filterFromMap(opts map[string]interface{}) (f whisper.Filter) {
@@ -74,6 +87,11 @@ func filterFromMap(opts map[string]interface{}) (f whisper.Filter) {
 	}
 	if from, ok := opts["from"].(string); ok {
 		f.From = crypto.ToECDSAPub(fromHex(from))
+	}
+	if topicList, ok := opts["topics"].(*qml.List); ok {
+		var topics []string
+		topicList.Convert(&topics)
+		f.Topics = whisper.TopicsFromString(topics...)
 	}
 
 	return
