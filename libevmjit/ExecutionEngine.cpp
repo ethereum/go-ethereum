@@ -111,6 +111,14 @@ namespace
 {
 ReturnCode runEntryFunc(ExecBundle const& _exec, Runtime* _runtime)
 {
+	// That function uses long jumps to handle "execeptions".
+	// Do not create any non-POD objects here
+
+	// TODO:
+	// Getting pointer to function seems to be cachable,
+	// but it looks like getPointerToFunction() method does something special
+	// to allow function to be executed.
+	// That might be related to memory manager. Can we share one?
 	typedef ReturnCode(*EntryFuncPtr)(Runtime*);
 	auto entryFuncVoidPtr = _exec.engine->getPointerToFunction(_exec.entryFunc);
 	auto entryFuncPtr = static_cast<EntryFuncPtr>(entryFuncVoidPtr);
