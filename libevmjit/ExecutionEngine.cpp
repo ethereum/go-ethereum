@@ -112,11 +112,19 @@ ReturnCode ExecutionEngine::run(ExecBundle const& _exec, RuntimeData* _data, Env
 	ReturnCode returnCode;
 	Runtime runtime(_data, _env);
 
+
+	std::vector<llvm::GenericValue> args{{}, llvm::GenericValue(&runtime)};
+	llvm::GenericValue result;
+
+	typedef ReturnCode(*EntryFuncPtr)(int, Runtime*);
+
+	auto entryFuncVoidPtr = _exec.engine->getPointerToFunction(_exec.entryFunc);
+	auto entryFuncPtr = static_cast<EntryFuncPtr>(entryFuncVoidPtr);
+
 	auto r = setjmp(runtime.getJmpBuf());
 	if (r == 0)
 	{
-		auto result = _exec.engine->runFunction(_exec.entryFunc, {{}, llvm::GenericValue(&runtime)});
-		returnCode = static_cast<ReturnCode>(result.IntVal.getZExtValue());
+		returnCode = entryFuncPtr(0, &runtime);
 	}
 	else
 		returnCode = static_cast<ReturnCode>(r);
