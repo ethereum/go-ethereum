@@ -107,41 +107,31 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 	return returnCode;
 }
 
-ReturnCode ExecutionEngine::run(ExecBundle const& _exec, RuntimeData* _data, Env* _env)
+namespace
 {
-	ReturnCode returnCode;
-	Runtime runtime(_data, _env);
-
-
-	std::vector<llvm::GenericValue> args{{}, llvm::GenericValue(&runtime)};
-	llvm::GenericValue result;
-
+ReturnCode runEntryFunc(ExecBundle const& _exec, Runtime* _runtime)
+{
 	typedef ReturnCode(*EntryFuncPtr)(int, Runtime*);
-
 	auto entryFuncVoidPtr = _exec.engine->getPointerToFunction(_exec.entryFunc);
 	auto entryFuncPtr = static_cast<EntryFuncPtr>(entryFuncVoidPtr);
 
-	auto r = setjmp(runtime.getJmpBuf());
-	if (r == 0)
-	{
-		returnCode = entryFuncPtr(0, &runtime);
-	}
+	ReturnCode returnCode{};
+	auto sj = setjmp(_runtime->getJmpBuf());
+	if (sj == 0)
+		returnCode = entryFuncPtr(0, _runtime);	// FIXME: Remove int argument
 	else
-		returnCode = static_cast<ReturnCode>(r);
+		returnCode = static_cast<ReturnCode>(sj);
 
+	return returnCode;
+}
+}
+
+ReturnCode ExecutionEngine::run(ExecBundle const& _exec, RuntimeData* _data, Env* _env)
+{
+	Runtime runtime(_data, _env);
+	auto returnCode = runEntryFunc(_exec, &runtime);
 	if (returnCode == ReturnCode::Return)
-	{
-		returnData = runtime.getReturnData();
-
-		auto&& log = clog(JIT);
-		log << "RETURN [ ";
-		for (auto it = returnData.begin(), end = returnData.end(); it != end; ++it)
-			log << std::hex << std::setw(2) << std::setfill('0') << (int)*it << " ";
-		log << "]";
-	}
-	else
-		clog(JIT) << "RETURN " << (int)returnCode;
-
+		this->returnData = runtime.getReturnData();
 	return returnCode;
 }
 
