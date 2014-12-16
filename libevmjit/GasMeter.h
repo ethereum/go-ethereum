@@ -20,6 +20,9 @@ public:
 	/// Count step cost of instruction
 	void count(Instruction _inst);
 
+	/// Count additional cost
+	void count(llvm::Value* _cost);
+
 	/// Calculate & count gas cost for SSTORE instruction
 	void countSStore(class Ext& _ext, llvm::Value* _index, llvm::Value* _newValue);
 
@@ -37,7 +40,10 @@ public:
 	void giveBack(llvm::Value* _gas);
 
 	/// Generate code that checks the cost of additional memory used by program
-	void checkMemory(llvm::Value* _additionalMemoryInWords);
+	void countMemory(llvm::Value* _additionalMemoryInWords);
+
+	/// Count addional gas cost for memory copy
+	void countCopy(llvm::Value* _copyWords);
 
 private:
 	/// Cumulative gas cost of a block of instructions

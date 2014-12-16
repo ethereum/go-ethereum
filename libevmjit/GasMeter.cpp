@@ -43,10 +43,15 @@ uint64_t getStepCost(Instruction inst) // TODO: Add this function to FeeSructure
 {
 	switch (inst)
 	{
+	default: // Assumes instruction code is valid
+		return 1;
+
 	case Instruction::STOP:
 	case Instruction::SUICIDE:
 	case Instruction::SSTORE: // Handle cost of SSTORE separately in GasMeter::countSStore()
 		return 0;
+
+	case Instruction::EXP:		return c_expGas;
 
 	case Instruction::SLOAD:	return c_sloadGas;
 
@@ -68,9 +73,6 @@ uint64_t getStepCost(Instruction inst) // TODO: Add this function to FeeSructure
 		auto numTopics = static_cast<uint64_t>(inst) - static_cast<uint64_t>(Instruction::LOG0);
 		return c_logGas + numTopics * c_logTopicGas;
 	}
-
-	default: // Assumes instruction code is valid
-		return 1;
 	}
 }
 
@@ -144,6 +146,11 @@ void GasMeter::count(Instruction _inst)
 		commitCostBlock();
 }
 
+void GasMeter::count(llvm::Value* _cost)
+{
+	createCall(m_gasCheckFunc, _cost);
+}
+
 void GasMeter::countExp(llvm::Value* _exponent)
 {
 	// Additional cost is 1 per significant byte of exponent
@@ -156,7 +163,7 @@ void GasMeter::countExp(llvm::Value* _exponent)
 	auto lz = m_builder.CreateCall2(ctlz, _exponent, m_builder.getInt1(false));
 	auto sigBits = m_builder.CreateSub(Constant::get(256), lz);
 	auto sigBytes = m_builder.CreateUDiv(m_builder.CreateAdd(sigBits, Constant::get(7)), Constant::get(8));
-	createCall(m_gasCheckFunc, sigBytes);
+	count(sigBytes);
 }
 
 void GasMeter::countSStore(Ext& _ext, llvm::Value* _index, llvm::Value* _newValue)
@@ -172,15 +179,15 @@ void GasMeter::countSStore(Ext& _ext, llvm::Value* _index, llvm::Value* _newValu
 	auto isDelete = m_builder.CreateAnd(oldValueIsntZero, newValueIsZero, "isDelete");
 	auto cost = m_builder.CreateSelect(isInsert, Constant::get(c_sstoreSetGas), Constant::get(c_sstoreResetGas), "cost");
 	cost = m_builder.CreateSelect(isDelete, Constant::get(0), cost, "cost");
-	createCall(m_gasCheckFunc, cost);
+	count(cost);
 }
 
 void GasMeter::countLogData(llvm::Value* _dataLength)
 {
 	assert(m_checkCall);
 	assert(m_blockCost > 0); // LOGn instruction is already counted
-	auto cost = m_builder.CreateMul(_dataLength, Constant::get(c_logDataGas), "logdata_cost");
-	commitCostBlock(cost);
+	static_assert(c_logDataGas == 1, "Log data gas cost has changed. Update GasMeter.");
+	commitCostBlock(_dataLength);	// TODO: commit is not necessary 
 }
 
 void GasMeter::giveBack(llvm::Value* _gas)
@@ -207,17 +214,21 @@ void GasMeter::commitCostBlock(llvm::Value* _additionalCost)
 		m_blockCost = 0;
 
 		if (_additionalCost)
-		{
-			m_builder.CreateCall(m_gasCheckFunc, _additionalCost);
-		}
+			count(_additionalCost);
 	}
 	assert(m_blockCost == 0);
 }
 
-void GasMeter::checkMemory(llvm::Value* _additionalMemoryInWords)
+void GasMeter::countMemory(llvm::Value* _additionalMemoryInWords)
 {
-	auto cost = m_builder.CreateNUWMul(_additionalMemoryInWords, Constant::get(static_cast<uint64_t>(c_memoryGas)), "memcost");
-	m_builder.CreateCall(m_gasCheckFunc, cost);
+	static_assert(c_memoryGas == 1, "Memory gas cost has changed. Update GasMeter.");
+	count(_additionalMemoryInWords);
+}
+
+void GasMeter::countCopy(llvm::Value* _copyWords)
+{
+	static_assert(c_copyGas == 1, "Copy gas cost has changed. Update GasMeter.");
+	count(_copyWords);
 }
 
 }

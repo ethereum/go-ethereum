@@ -8,11 +8,12 @@ namespace eth
 {
 namespace jit
 {
+class GasMeter;
 
 class Memory : public RuntimeHelper
 {
 public:
-	Memory(RuntimeManager& _runtimeManager, class GasMeter& _gasMeter);
+	Memory(RuntimeManager& _runtimeManager, GasMeter& _gasMeter);
 
 	llvm::Value* loadWord(llvm::Value* _addr);
 	void storeWord(llvm::Value* _addr, llvm::Value* _word);
@@ -27,6 +28,8 @@ public:
 	void require(llvm::Value* _offset, llvm::Value* _size);
 
 private:
+	GasMeter& m_gasMeter;
+
 	llvm::Function* createFunc(bool _isStore, llvm::Type* _type, GasMeter& _gasMeter);
 	llvm::Function* createRequireFunc(GasMeter& _gasMeter, RuntimeManager& _runtimeManager);
 
