@@ -21,12 +21,14 @@ namespace // Helper functions
 
 uint64_t const c_stepGas = 1;
 uint64_t const c_balanceGas = 20;
-uint64_t const c_sha3Gas = 20;
+uint64_t const c_sha3Gas = 10;
+uint64_t const c_sha3WordGas = 10;
 uint64_t const c_sloadGas = 20;
 uint64_t const c_sstoreSetGas = 300;
 uint64_t const c_sstoreResetGas = 100;
 uint64_t const c_sstoreRefundGas = 100;
 uint64_t const c_createGas = 100;
+uint64_t const c_createDataGas = 5;
 uint64_t const c_callGas = 20;
 uint64_t const c_expGas = 1;
 uint64_t const c_expByteGas = 1;
@@ -44,7 +46,7 @@ uint64_t getStepCost(Instruction inst) // TODO: Add this function to FeeSructure
 	switch (inst)
 	{
 	default: // Assumes instruction code is valid
-		return 1;
+		return c_stepGas;
 
 	case Instruction::STOP:
 	case Instruction::SUICIDE:
@@ -188,6 +190,19 @@ void GasMeter::countLogData(llvm::Value* _dataLength)
 	assert(m_blockCost > 0); // LOGn instruction is already counted
 	static_assert(c_logDataGas == 1, "Log data gas cost has changed. Update GasMeter.");
 	commitCostBlock(_dataLength);	// TODO: commit is not necessary 
+}
+
+void GasMeter::countSha3Data(llvm::Value* _dataLength)
+{
+	assert(m_checkCall);
+	assert(m_blockCost > 0); // SHA3 instruction is already counted
+
+	// TODO: This round ups to 32 happens in many places
+	// FIXME: Overflow possible but Memory::require() also called. Probably 64-bit arith can be used.
+	static_assert(c_sha3WordGas != 1, "SHA3 data cost has changed. Update GasMeter");
+	auto words = m_builder.CreateUDiv(m_builder.CreateAdd(_dataLength, Constant::get(31)), Constant::get(32));
+	auto cost = m_builder.CreateNUWMul(Constant::get(c_sha3WordGas), words);
+	count(cost);
 }
 
 void GasMeter::giveBack(llvm::Value* _gas)

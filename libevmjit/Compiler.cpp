@@ -504,6 +504,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 			auto inOff = stack.pop();
 			auto inSize = stack.pop();
 			_memory.require(inOff, inSize);
+			_gasMeter.countSha3Data(inSize);
 			auto hash = _ext.sha3(inOff, inSize);
 			stack.push(hash);
 			break;

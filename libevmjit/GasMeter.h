@@ -32,6 +32,9 @@ public:
 	/// Count gas cost of LOG data
 	void countLogData(llvm::Value* _dataLength);
 
+	/// Count gas cost of SHA3 data
+	void countSha3Data(llvm::Value* _dataLength);
+
 	/// Finalize cost-block by checking gas needed for the block before the block
 	/// @param _additionalCost adds additional cost to cost-block before commit
 	void commitCostBlock(llvm::Value* _additionalCost = nullptr);
