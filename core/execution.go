@@ -40,6 +40,12 @@ func (self *Execution) exec(code, contextAddr []byte, caller vm.ClosureRef) (ret
 	// Skipping transfer is used on testing for the initial call
 	if !self.SkipTransfer {
 		err = env.Transfer(from, to, self.value)
+		if err != nil {
+			caller.ReturnGas(self.Gas, self.price)
+
+			err = fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, from.Balance)
+			return
+		}
 	}
 
 	snapshot := env.State().Copy()
@@ -50,23 +56,17 @@ func (self *Execution) exec(code, contextAddr []byte, caller vm.ClosureRef) (ret
 		chainlogger.Debugf("post state %x\n", env.State().Root())
 	}()
 
-	if err != nil {
-		caller.ReturnGas(self.Gas, self.price)
-
-		err = fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, from.Balance)
-	} else {
-		self.object = to
-		// Pre-compiled contracts (address.go) 1, 2 & 3.
-		naddr := ethutil.BigD(contextAddr).Uint64()
-		if p := vm.Precompiled[naddr]; p != nil {
-			if self.Gas.Cmp(p.Gas(len(self.input))) >= 0 {
-				ret = p.Call(self.input)
-				self.vm.Printf("NATIVE_FUNC(%x) => %x", naddr, ret)
-				self.vm.Endl()
-			}
-		} else {
-			ret, err = self.vm.Run(to, caller, code, self.value, self.Gas, self.price, self.input)
+	self.object = to
+	// Pre-compiled contracts (address.go) 1, 2 & 3.
+	naddr := ethutil.BigD(contextAddr).Uint64()
+	if p := vm.Precompiled[naddr]; p != nil {
+		if self.Gas.Cmp(p.Gas(len(self.input))) >= 0 {
+			ret = p.Call(self.input)
+			self.vm.Printf("NATIVE_FUNC(%x) => %x", naddr, ret)
+			self.vm.Endl()
 		}
+	} else {
+		ret, err = self.vm.Run(to, caller, code, self.value, self.Gas, self.price, self.input)
 	}
 
 	return
