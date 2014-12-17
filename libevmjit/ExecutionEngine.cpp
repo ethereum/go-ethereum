@@ -36,10 +36,10 @@ namespace jit
 ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _env)
 {
 	std::string key{reinterpret_cast<char const*>(_code.data()), _code.size()};
-	if (auto cachedExec = Cache::findExec(key))
+	/*if (auto cachedExec = Cache::findExec(key))
 	{
 		return run(*cachedExec, _data, _env);
-	}
+	}*/
 
 	auto module = Compiler({}).compile(_code);
 	return run(std::move(module), _data, _env, _code);
@@ -95,8 +95,8 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 		return ReturnCode::LLVMLinkError;
 
 	std::string key{reinterpret_cast<char const*>(_code.data()), _code.size()};
-	auto& cachedExec = Cache::registerExec(key, std::move(exec));
-	auto returnCode = run(cachedExec, _data, _env);
+	//auto& cachedExec = Cache::registerExec(key, std::move(exec));
+	auto returnCode = run(exec, _data, _env);
 
 	auto executionEndTime = std::chrono::high_resolution_clock::now();
 	clog(JIT) << " + " << std::chrono::duration_cast<std::chrono::milliseconds>(executionEndTime - executionStartTime).count() << " ms ";
