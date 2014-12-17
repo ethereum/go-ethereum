@@ -70,7 +70,7 @@ extern "C"
 		if (_env->depth == 1024)
 			jit::terminate(jit::ReturnCode::OutOfGas);
 
-		assert(_env->depth < 1024);	// TODO: Handle call depth
+		assert(_env->depth < 1024);
 
 		auto value = llvm2eth(*_value);
 		if (_env->balance(_env->myAddress) >= value)
