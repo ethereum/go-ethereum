@@ -60,11 +60,17 @@ llvm::Function* Memory::createRequireFunc(GasMeter& _gasMeter, RuntimeManager& _
 	auto size = offset->getNextNode();
 	size->setName("size");
 
+	auto preBB = llvm::BasicBlock::Create(func->getContext(), "Pre", func);
 	auto checkBB = llvm::BasicBlock::Create(func->getContext(), "Check", func);
 	auto resizeBB = llvm::BasicBlock::Create(func->getContext(), "Resize", func);
 	auto returnBB = llvm::BasicBlock::Create(func->getContext(), "Return", func);
 
 	InsertPointGuard guard(m_builder); // Restores insert point at function exit
+
+	// BB "Pre": Ignore checks with size 0
+	m_builder.SetInsertPoint(preBB);
+	auto sizeIsZero = m_builder.CreateICmpEQ(size, Constant::get(0));
+	m_builder.CreateCondBr(sizeIsZero, returnBB, checkBB);
 
 	// BB "Check"
 	m_builder.SetInsertPoint(checkBB);
