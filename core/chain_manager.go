@@ -152,6 +152,16 @@ func (bc *ChainManager) Reset() {
 	bc.TD = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
 }
 
+func (self *ChainManager) Export() []byte {
+	chainlogger.Infoln("exporting", self.CurrentBlock.Number, "blocks")
+
+	blocks := make(types.Blocks, int(self.CurrentBlock.Number.Int64())+1)
+	for block := self.CurrentBlock; block != nil; block = self.GetBlock(block.PrevHash) {
+		blocks[block.Number.Int64()] = block
+	}
+	return ethutil.Encode(blocks)
+}
+
 func (bc *ChainManager) insert(block *types.Block) {
 	encodedBlock := block.RlpEncode()
 	ethutil.Config.Db.Put([]byte("LastBlock"), encodedBlock)
@@ -185,7 +195,6 @@ func (self *ChainManager) GetBlockHashesFromHash(hash []byte, max uint64) (chain
 
 	// XXX Could be optimised by using a different database which only holds hashes (i.e., linked list)
 	for i := uint64(0); i < max; i++ {
-
 		chain = append(chain, block.Hash())
 
 		if block.Number.Cmp(ethutil.Big0) <= 0 {

@@ -2,8 +2,10 @@ package ethutil
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/big"
+	"reflect"
 )
 
 type RlpEncode interface {
@@ -97,6 +99,14 @@ var (
 	zeroRlp   = big.NewInt(0x0)
 )
 
+func intlen(i int64) (length int) {
+	for i > 0 {
+		i = i >> 8
+		length++
+	}
+	return
+}
+
 func Encode(object interface{}) []byte {
 	var buff bytes.Buffer
 
@@ -168,6 +178,26 @@ func Encode(object interface{}) []byte {
 			}
 			WriteSliceHeader(len(b.Bytes()))
 			buff.Write(b.Bytes())
+		default:
+			// This is how it should have been from the start
+			// needs refactoring (@fjl)
+			v := reflect.ValueOf(t)
+			switch v.Kind() {
+			case reflect.Slice:
+				var b bytes.Buffer
+				for i := 0; i < v.Len(); i++ {
+					b.Write(Encode(v.Index(i).Interface()))
+				}
+
+				blen := b.Len()
+				if blen < 56 {
+					buff.WriteByte(byte(blen) + 0xc0)
+				} else {
+					buff.WriteByte(byte(intlen(int64(blen))) + 0xf7)
+					binary.Write(&buff, binary.BigEndian, int64(blen))
+				}
+				buff.ReadFrom(&b)
+			}
 		}
 	} else {
 		// Empty list for nil

@@ -48,9 +48,8 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 	})
 	closure := NewClosure(msg, caller, me, code, gas, price)
 
-	if self.env.Depth() == MaxCallDepth {
-		//closure.UseGas(gas)
-		return closure.Return(nil), DepthError{}
+	if p := Precompiled[string(me.Address())]; p != nil {
+		return self.RunPrecompiled(p, callData, closure)
 	}
 
 	if self.Recoverable {
@@ -938,6 +937,25 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			}
 		}
 
+	}
+}
+
+func (self *DebugVm) RunPrecompiled(p *PrecompiledAccount, callData []byte, closure *Closure) (ret []byte, err error) {
+	gas := p.Gas(len(callData))
+	if closure.UseGas(gas) {
+		ret = p.Call(callData)
+		self.Printf("NATIVE_FUNC => %x", ret)
+		self.Endl()
+
+		return closure.Return(ret), nil
+	} else {
+		self.Endl()
+
+		tmp := new(big.Int).Set(closure.Gas)
+
+		closure.UseGas(closure.Gas)
+
+		return closure.Return(nil), OOG(gas, tmp)
 	}
 }
 

@@ -48,7 +48,7 @@ var (
 	S256 = ethutil.S256
 )
 
-const MaxCallDepth = 1025
+const MaxCallDepth = 1024
 
 func calcMemSize(off, l *big.Int) *big.Int {
 	if l.Cmp(ethutil.Big0) == 0 {
