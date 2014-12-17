@@ -47,7 +47,7 @@ extern "C"
 		_env->suicide(right160(*_address));
 	}
 
-	EXPORT void env_create(ExtVMFace* _env, i256* _endowment, byte* _initBeg, uint64_t _initSize, h256* o_address)
+	EXPORT void env_create(ExtVMFace* _env, i256* io_gas, i256* _endowment, byte* _initBeg, uint64_t _initSize, h256* o_address)
 	{
 		assert(_env->depth < 1024);	// TODO: Handle call depth
 
@@ -56,9 +56,10 @@ extern "C"
 		if (_env->balance(_env->myAddress) >= endowment)
 		{
 			_env->subBalance(endowment);
-			u256 gas;   // TODO: Handle gas
+			auto gas = llvm2eth(*io_gas);
 			OnOpFunc onOp {}; // TODO: Handle that thing
 			h256 address(_env->create(endowment, gas, {_initBeg, _initSize}, onOp), h256::AlignRight);
+			*io_gas = eth2llvm(gas);
 			*o_address = address;
 		}
 		else

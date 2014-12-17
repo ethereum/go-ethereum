@@ -52,7 +52,7 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 	llvm::Type* sha3ArgsTypes[] = {Type::BytePtr, Type::Size, Type::WordPtr};
 	m_sha3 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, sha3ArgsTypes, false), Linkage::ExternalLinkage, "env_sha3", module);
 
-	llvm::Type* createArgsTypes[] = {Type::EnvPtr, Type::WordPtr, Type::BytePtr, Type::Size, Type::WordPtr};
+	llvm::Type* createArgsTypes[] = {Type::EnvPtr, Type::WordPtr, Type::WordPtr, Type::BytePtr, Type::Size, Type::WordPtr};
 	m_create = llvm::Function::Create(llvm::FunctionType::get(Type::Void, createArgsTypes, false), Linkage::ExternalLinkage, "env_create", module);
 
 	llvm::Type* callArgsTypes[] = {Type::EnvPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::BytePtr, Type::Size, Type::BytePtr, Type::Size, Type::WordPtr};
@@ -106,12 +106,14 @@ void Ext::suicide(llvm::Value* _address)
 	m_builder.CreateCall2(m_suicide, getRuntimeManager().getEnv(), m_args[0]);
 }
 
-llvm::Value* Ext::create(llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* _initSize)
+llvm::Value* Ext::create(llvm::Value*& _gas, llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* _initSize)
 {
-	m_builder.CreateStore(_endowment, m_args[0]);
+	m_builder.CreateStore(_gas, m_args[0]);
+	m_builder.CreateStore(_endowment, m_arg2);
 	auto begin = m_memoryMan.getBytePtr(_initOff);
 	auto size = m_builder.CreateTrunc(_initSize, Type::Size, "size");
-	createCall(m_create, getRuntimeManager().getEnv(), m_args[0], begin, size, m_args[1]);
+	createCall(m_create, getRuntimeManager().getEnv(), m_args[0], m_arg2, begin, size, m_args[1]);
+	_gas = m_builder.CreateLoad(m_args[0]); // Return gas
 	llvm::Value* address = m_builder.CreateLoad(m_args[1]);
 	address = Endianness::toNative(m_builder, address);
 	return address;

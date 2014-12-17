@@ -741,7 +741,11 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 			auto initSize = stack.pop();
 			_memory.require(initOff, initSize);
 
-			auto address = _ext.create(endowment, initOff, initSize);
+			_gasMeter.commitCostBlock();
+
+			auto gas = _runtimeManager.getGas();
+			auto address = _ext.create(gas, endowment, initOff, initSize);
+			_runtimeManager.setGas(gas);
 			stack.push(address);
 			break;
 		}

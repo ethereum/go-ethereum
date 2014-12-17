@@ -29,7 +29,7 @@ public:
 	llvm::Value* balance(llvm::Value* _address);
 	void suicide(llvm::Value* _address);
 	llvm::Value* calldataload(llvm::Value* _index);
-	llvm::Value* create(llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* _initSize);
+	llvm::Value* create(llvm::Value*& _gas, llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* _initSize);
 	llvm::Value* call(llvm::Value*& _gas, llvm::Value* _receiveAddress, llvm::Value* _value, llvm::Value* _inOff, llvm::Value* _inSize, llvm::Value* _outOff, llvm::Value* _outSize, llvm::Value* _codeAddress);
 
 	llvm::Value* sha3(llvm::Value* _inOff, llvm::Value* _inSize);
