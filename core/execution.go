@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
 )
@@ -36,6 +35,11 @@ func (self *Execution) exec(code, contextAddr []byte, caller vm.ClosureRef) (ret
 	env := self.vm.Env()
 	chainlogger.Debugf("pre state %x\n", env.State().Root())
 
+	if self.vm.Env().Depth() == vm.MaxCallDepth {
+		// Consume all gas (by not returning it) and return a depth error
+		return nil, vm.DepthError{}
+	}
+
 	from, to := env.State().GetStateObject(caller.Address()), env.State().GetOrNewStateObject(self.address)
 	// Skipping transfer is used on testing for the initial call
 	if !self.SkipTransfer {
@@ -50,24 +54,14 @@ func (self *Execution) exec(code, contextAddr []byte, caller vm.ClosureRef) (ret
 
 	snapshot := env.State().Copy()
 	defer func() {
-		if vm.IsDepthErr(err) || vm.IsOOGErr(err) {
+		if /*vm.IsDepthErr(err) ||*/ vm.IsOOGErr(err) {
 			env.State().Set(snapshot)
 		}
 		chainlogger.Debugf("post state %x\n", env.State().Root())
 	}()
 
 	self.object = to
-	// Pre-compiled contracts (address.go) 1, 2 & 3.
-	naddr := ethutil.BigD(contextAddr).Uint64()
-	if p := vm.Precompiled[naddr]; p != nil {
-		if self.Gas.Cmp(p.Gas(len(self.input))) >= 0 {
-			ret = p.Call(self.input)
-			self.vm.Printf("NATIVE_FUNC(%x) => %x", naddr, ret)
-			self.vm.Endl()
-		}
-	} else {
-		ret, err = self.vm.Run(to, caller, code, self.value, self.Gas, self.price, self.input)
-	}
+	ret, err = self.vm.Run(to, caller, code, self.value, self.Gas, self.price, self.input)
 
 	return
 }
