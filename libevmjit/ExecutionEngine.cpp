@@ -53,46 +53,36 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 	static const auto program = "EVM JIT";
 	llvm::PrettyStackTraceProgram X(1, &program);
 
-	auto&& context = llvm::getGlobalContext();
-
 	llvm::InitializeNativeTarget();
 	llvm::InitializeNativeTargetAsmPrinter();
 	llvm::InitializeNativeTargetAsmParser();
 
-	std::string errorMsg;
 	llvm::EngineBuilder builder(module);
-	//builder.setMArch(MArch);
-	//builder.setMCPU(MCPU);
-	//builder.setMAttrs(MAttrs);
-	//builder.setRelocationModel(RelocModel);
-	//builder.setCodeModel(CMModel);
-	builder.setErrorStr(&errorMsg);
 	builder.setEngineKind(llvm::EngineKind::JIT);
 	builder.setUseMCJIT(true);
-	builder.setMCJITMemoryManager(new llvm::SectionMemoryManager());
+	std::unique_ptr<llvm::SectionMemoryManager> memoryManager(new llvm::SectionMemoryManager);
+	builder.setMCJITMemoryManager(memoryManager.get());
 	builder.setOptLevel(llvm::CodeGenOpt::None);
 
 	auto triple = llvm::Triple(llvm::sys::getProcessTriple());
 	if (triple.getOS() == llvm::Triple::OSType::Win32)
-		triple.setObjectFormat(llvm::Triple::ObjectFormatType::ELF);    // MCJIT does not support COFF format
+		triple.setObjectFormat(llvm::Triple::ObjectFormatType::ELF);  // MCJIT does not support COFF format
 	module->setTargetTriple(triple.str());
 
 	ExecBundle exec;
 	exec.engine.reset(builder.create());
 	if (!exec.engine)
 		return ReturnCode::LLVMConfigError;
-	_module.release();  // Successfully created llvm::ExecutionEngine takes ownership of the module
+	_module.release();        // Successfully created llvm::ExecutionEngine takes ownership of the module
+	memoryManager.release();  // and memory manager
 
-	auto finalizationStartTime = std::chrono::high_resolution_clock::now();
-	exec.engine->finalizeObject();
-	auto finalizationEndTime = std::chrono::high_resolution_clock::now();
-	clog(JIT) << " + " << std::chrono::duration_cast<std::chrono::milliseconds>(finalizationEndTime - finalizationStartTime).count();
+	// TODO: Finalization not needed when llvm::ExecutionEngine::getFunctionAddress used
+	//auto finalizationStartTime = std::chrono::high_resolution_clock::now();
+	//exec.engine->finalizeObject();
+	//auto finalizationEndTime = std::chrono::high_resolution_clock::now();
+	//clog(JIT) << " + " << std::chrono::duration_cast<std::chrono::milliseconds>(finalizationEndTime - finalizationStartTime).count();
 
 	auto executionStartTime = std::chrono::high_resolution_clock::now();
-
-	exec.entryFunc = module->getFunction("main");
-	if (!exec.entryFunc)
-		return ReturnCode::LLVMLinkError;
 
 	std::string key{reinterpret_cast<char const*>(_code.data()), _code.size()};
 	//auto& cachedExec = Cache::registerExec(key, std::move(exec));
@@ -120,8 +110,7 @@ ReturnCode runEntryFunc(ExecBundle const& _exec, Runtime* _runtime)
 	// to allow function to be executed.
 	// That might be related to memory manager. Can we share one?
 	typedef ReturnCode(*EntryFuncPtr)(Runtime*);
-	auto entryFuncVoidPtr = _exec.engine->getPointerToFunction(_exec.entryFunc);
-	auto entryFuncPtr = static_cast<EntryFuncPtr>(entryFuncVoidPtr);
+	auto entryFuncPtr = (EntryFuncPtr)_exec.engine->getFunctionAddress("main");
 
 	ReturnCode returnCode{};
 	auto sj = setjmp(_runtime->getJmpBuf());

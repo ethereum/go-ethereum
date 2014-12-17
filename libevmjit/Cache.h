@@ -16,12 +16,11 @@ class ExecBundle
 {
 public:
 	std::unique_ptr<llvm::ExecutionEngine> engine;
-	llvm::Function* entryFunc = nullptr;
 
 	ExecBundle() = default;
 	ExecBundle(ExecBundle&& _other):
-		engine(std::move(_other.engine)),
-		entryFunc(_other.entryFunc) {}
+		engine(std::move(_other.engine))
+	{}
 
 	ExecBundle(ExecBundle const&) = delete;
 	void operator=(ExecBundle) = delete;
