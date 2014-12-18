@@ -77,11 +77,11 @@ func RunVmTest(p string, t *testing.T) {
 	tests := make(map[string]VmTest)
 	helper.CreateFileTests(t, p, &tests)
 
-	//helper.Logger.SetLogLevel(5)
+	helper.Logger.SetLogLevel(5)
 	for name, test := range tests {
-		//	if name != "refund50_1" {
-		//		continue
-		//	}
+		if name != "CallRecursiveBomb0" {
+			continue
+		}
 		statedb := state.New(helper.NewTrie())
 		for addr, account := range test.Pre {
 			obj := StateObjectFromAccount(addr, account)
