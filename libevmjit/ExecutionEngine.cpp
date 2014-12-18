@@ -52,14 +52,11 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 	static const auto program = "EVM JIT";
 	llvm::PrettyStackTraceProgram X(1, &program);
 
-	llvm::InitializeNativeTarget();
 	llvm::InitializeNativeTargetAsmPrinter();
 
 	llvm::EngineBuilder builder(_module.get());
 	builder.setEngineKind(llvm::EngineKind::JIT);
 	builder.setUseMCJIT(true);
-	std::unique_ptr<llvm::SectionMemoryManager> memoryManager(new llvm::SectionMemoryManager);
-	builder.setMCJITMemoryManager(memoryManager.get());
 	builder.setOptLevel(llvm::CodeGenOpt::None);
 
 	auto triple = llvm::Triple(llvm::sys::getProcessTriple());
@@ -72,7 +69,6 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 	if (!exec.engine)
 		return ReturnCode::LLVMConfigError;
 	_module.release();        // Successfully created llvm::ExecutionEngine takes ownership of the module
-	memoryManager.release();  // and memory manager
 
 	exec.engine->setObjectCache(Cache::getObjectCache());
 

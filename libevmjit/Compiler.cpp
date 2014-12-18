@@ -1,6 +1,7 @@
 
 #include "Compiler.h"
 
+#include <functional>
 #include <fstream>
 #include <chrono>
 
@@ -153,8 +154,13 @@ void Compiler::createBasicBlocks(bytes const& _bytecode)
 
 std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode)
 {
+	// TODO: Better hash of code needed, probably SHA3
+	std::string code{reinterpret_cast<char const*>(_bytecode.data()), _bytecode.size()};
+	auto hash = std::hash<std::string>{}(code);
+	auto strHash = std::to_string(hash);
+
 	auto compilationStartTime = std::chrono::high_resolution_clock::now();
-	auto module = std::unique_ptr<llvm::Module>(new llvm::Module("main", m_builder.getContext()));
+	auto module = std::unique_ptr<llvm::Module>(new llvm::Module(strHash, m_builder.getContext()));
 
 	// Create main function
 	auto mainFuncType = llvm::FunctionType::get(Type::MainReturn, Type::RuntimePtr, false);
@@ -741,7 +747,11 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 			auto initSize = stack.pop();
 			_memory.require(initOff, initSize);
 
-			auto address = _ext.create(endowment, initOff, initSize);
+			_gasMeter.commitCostBlock();
+
+			auto gas = _runtimeManager.getGas();
+			auto address = _ext.create(gas, endowment, initOff, initSize);
+			_runtimeManager.setGas(gas);
 			stack.push(address);
 			break;
 		}

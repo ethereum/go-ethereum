@@ -83,7 +83,7 @@ bool isCostBlockEnd(Instruction _inst)
 	// Basic block terminators like STOP are not needed on the list
 	// as cost will be commited at the end of basic block
 
-	// CALL & CALLCODE are commited manually
+	// CALL, CALLCODE & CREATE are commited manually
 
 	switch (_inst)
 	{
@@ -94,7 +94,6 @@ bool isCostBlockEnd(Instruction _inst)
 	case Instruction::MSTORE8:
 	case Instruction::SSTORE:
 	case Instruction::GAS:
-	case Instruction::CREATE:
 		return true;
 
 	default:
