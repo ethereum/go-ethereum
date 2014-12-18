@@ -68,8 +68,7 @@ func (self *Env) Transfer(from, to vm.Account, amount *big.Int) error {
 }
 
 func (self *Env) vm(addr, data []byte, gas, price, value *big.Int) *core.Execution {
-	evm := vm.New(self, vm.DebugVmTy)
-	exec := core.NewExecution(evm, addr, data, gas, price, value)
+	exec := core.NewExecution(self, addr, data, gas, price, value)
 	exec.SkipTransfer = self.skipTransfer
 
 	return exec
