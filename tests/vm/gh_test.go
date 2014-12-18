@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/tests/helper"
 )
@@ -81,6 +82,9 @@ func RunVmTest(p string, t *testing.T) {
 		for addr, account := range test.Pre {
 			obj := StateObjectFromAccount(addr, account)
 			statedb.SetStateObject(obj)
+			for a, v := range account.Storage {
+				obj.SetState(helper.FromHex(a), ethutil.NewValue(helper.FromHex(v)))
+			}
 		}
 
 		// XXX Yeah, yeah...
@@ -129,6 +133,16 @@ func RunVmTest(p string, t *testing.T) {
 
 		for addr, account := range test.Post {
 			obj := statedb.GetStateObject(helper.FromHex(addr))
+			if obj == nil {
+				continue
+			}
+
+			if len(test.Exec) == 0 {
+				if obj.Balance().Cmp(ethutil.Big(account.Balance)) != 0 {
+					t.Errorf("%s's : (%x) balance failed. Expected %v, got %v => %v\n", name, obj.Address()[:4], account.Balance, obj.Balance(), new(big.Int).Sub(ethutil.Big(account.Balance), obj.Balance()))
+				}
+			}
+
 			for addr, value := range account.Storage {
 				v := obj.GetState(helper.FromHex(addr)).Bytes()
 				vexp := helper.FromHex(value)
@@ -149,6 +163,7 @@ func RunVmTest(p string, t *testing.T) {
 			}
 		}
 	}
+	logger.Flush()
 }
 
 // I've created a new function for each tests so it's easier to identify where the problem lies if any of them fail.
@@ -212,7 +227,12 @@ func TestStateRecursiveCreate(t *testing.T) {
 	RunVmTest(fn, t)
 }
 
-func TestStateSpecialTest(t *testing.T) {
+func TestStateSpecial(t *testing.T) {
 	const fn = "../files/StateTests/stSpecialTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestStateRefund(t *testing.T) {
+	const fn = "../files/StateTests/stRefundTest.json"
 	RunVmTest(fn, t)
 }

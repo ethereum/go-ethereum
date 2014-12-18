@@ -109,11 +109,11 @@ done:
 		// If we are mining this block and validating we want to set the logs back to 0
 		state.EmptyLogs()
 
-		txGas := new(big.Int).Set(tx.Gas)
+		txGas := new(big.Int).Set(tx.Gas())
 
 		cb := state.GetStateObject(coinbase.Address())
 		st := NewStateTransition(cb, tx, state, block)
-		err = st.TransitionState()
+		_, err = st.TransitionState()
 		if err != nil {
 			switch {
 			case IsNonceErr(err):
@@ -132,7 +132,7 @@ done:
 		}
 
 		txGas.Sub(txGas, st.gas)
-		cumulativeSum.Add(cumulativeSum, new(big.Int).Mul(txGas, tx.GasPrice))
+		cumulativeSum.Add(cumulativeSum, new(big.Int).Mul(txGas, tx.GasPrice()))
 
 		// Update the state with pending changes
 		state.Update(txGas)

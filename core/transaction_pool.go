@@ -106,8 +106,8 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 		return fmt.Errorf("No last block on the block chain")
 	}
 
-	if len(tx.Recipient) != 0 && len(tx.Recipient) != 20 {
-		return fmt.Errorf("Invalid recipient. len = %d", len(tx.Recipient))
+	if len(tx.To()) != 0 && len(tx.To()) != 20 {
+		return fmt.Errorf("Invalid recipient. len = %d", len(tx.To()))
 	}
 
 	v, _, _ := tx.Curve()
@@ -118,17 +118,11 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 	// Get the sender
 	sender := pool.chainManager.State().GetAccount(tx.Sender())
 
-	totAmount := new(big.Int).Set(tx.Value)
+	totAmount := new(big.Int).Set(tx.Value())
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.
 	if sender.Balance().Cmp(totAmount) < 0 {
-		return fmt.Errorf("Insufficient amount in sender's (%x) account", tx.Sender())
-	}
-
-	if tx.IsContract() {
-		if tx.GasPrice.Cmp(big.NewInt(minGasPrice)) < 0 {
-			return fmt.Errorf("Gasprice too low, %s given should be at least %d.", tx.GasPrice, minGasPrice)
-		}
+		return fmt.Errorf("Insufficient amount in sender's (%x) account", tx.From())
 	}
 
 	// Increment the nonce making each tx valid only once to prevent replay
@@ -154,10 +148,7 @@ func (self *TxPool) Add(tx *types.Transaction) error {
 
 	self.addTransaction(tx)
 
-	tmp := make([]byte, 4)
-	copy(tmp, tx.Recipient)
-
-	txplogger.Debugf("(t) %x => %x (%v) %x\n", tx.Sender()[:4], tmp, tx.Value, tx.Hash())
+	txplogger.Debugf("(t) %x => %x (%v) %x\n", tx.From()[:4], tx.To()[:4], tx.Value, tx.Hash())
 
 	// Notify the subscribers
 	go self.eventMux.Post(TxPreEvent{tx})
@@ -204,7 +195,7 @@ func (pool *TxPool) RemoveInvalid(state *state.StateDB) {
 		tx := e.Value.(*types.Transaction)
 		sender := state.GetAccount(tx.Sender())
 		err := pool.ValidateTransaction(tx)
-		if err != nil || sender.Nonce >= tx.Nonce {
+		if err != nil || sender.Nonce >= tx.Nonce() {
 			pool.pool.Remove(e)
 		}
 	}

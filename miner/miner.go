@@ -236,8 +236,8 @@ func (self *Miner) finiliseTxs() types.Transactions {
 	key := self.eth.KeyManager()
 	for i, ltx := range self.localTxs {
 		tx := types.NewTransactionMessage(ltx.To, ethutil.Big(ltx.Value), ethutil.Big(ltx.Gas), ethutil.Big(ltx.GasPrice), ltx.Data)
-		tx.Nonce = state.GetNonce(self.Coinbase)
-		state.SetNonce(self.Coinbase, tx.Nonce+1)
+		tx.SetNonce(state.GetNonce(self.Coinbase))
+		state.SetNonce(self.Coinbase, tx.Nonce()+1)
 
 		tx.Sign(key.PrivateKey())
 
@@ -246,7 +246,7 @@ func (self *Miner) finiliseTxs() types.Transactions {
 
 	// Faster than append
 	for _, tx := range self.eth.TxPool().GetTransactions() {
-		if tx.GasPrice.Cmp(self.MinAcceptedGasPrice) >= 0 {
+		if tx.GasPrice().Cmp(self.MinAcceptedGasPrice) >= 0 {
 			txs[actualSize] = tx
 			actualSize++
 		}

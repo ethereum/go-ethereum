@@ -44,6 +44,7 @@ func NewEnvFromMap(state *state.StateDB, envValues map[string]string, exeValues 
 	env.time = ethutil.Big(envValues["currentTimestamp"]).Int64()
 	env.difficulty = ethutil.Big(envValues["currentDifficulty"])
 	env.gasLimit = ethutil.Big(envValues["currentGasLimit"])
+	env.Gas = new(big.Int)
 
 	return env
 }
@@ -110,7 +111,7 @@ func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, state.Log
 	return ret, vmenv.logs, vmenv.Gas, err
 }
 
-func RunState(state *state.StateDB, env, tx map[string]string) ([]byte, state.Logs, *big.Int, error) {
+func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.Logs, *big.Int, error) {
 	var (
 		keyPair, _ = crypto.NewKeyPairFromSec([]byte(ethutil.Hex2Bytes(tx["secretKey"])))
 		to         = FromHex(tx["to"])
@@ -118,13 +119,39 @@ func RunState(state *state.StateDB, env, tx map[string]string) ([]byte, state.Lo
 		gas        = ethutil.Big(tx["gasLimit"])
 		price      = ethutil.Big(tx["gasPrice"])
 		value      = ethutil.Big(tx["value"])
+		caddr      = FromHex(env["currentCoinbase"])
 	)
 
-	caller := state.GetOrNewStateObject(keyPair.Address())
+	coinbase := statedb.GetOrNewStateObject(caddr)
+	coinbase.SetGasPool(ethutil.Big(env["currentGasLimit"]))
 
-	vmenv := NewEnvFromMap(state, env, tx)
-	vmenv.origin = caller.Address()
-	ret, err := vmenv.Call(caller, to, data, gas, price, value)
+	message := NewMessage(keyPair.Address(), to, data, value, gas, price)
+	Log.DebugDetailf("message{ to: %x, from %x, value: %v, gas: %v, price: %v }\n", message.to[:4], message.from[:4], message.value, message.gas, message.price)
+	st := core.NewStateTransition(coinbase, message, statedb, nil)
+	vmenv := NewEnvFromMap(statedb, env, tx)
+	vmenv.origin = keyPair.Address()
+	st.Env = vmenv
+	ret, err := st.TransitionState()
+	statedb.Update(vmenv.Gas)
 
 	return ret, vmenv.logs, vmenv.Gas, err
 }
+
+type Message struct {
+	from, to          []byte
+	value, gas, price *big.Int
+	data              []byte
+}
+
+func NewMessage(from, to, data []byte, value, gas, price *big.Int) Message {
+	return Message{from, to, value, gas, price, data}
+}
+
+func (self Message) Hash() []byte       { return nil }
+func (self Message) From() []byte       { return self.from }
+func (self Message) To() []byte         { return self.to }
+func (self Message) GasPrice() *big.Int { return self.price }
+func (self Message) Gas() *big.Int      { return self.gas }
+func (self Message) Value() *big.Int    { return self.value }
+func (self Message) Nonce() uint64      { return 0 }
+func (self Message) Data() []byte       { return self.data }

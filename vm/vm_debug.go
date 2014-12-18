@@ -2,6 +2,7 @@ package vm
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -112,7 +113,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		return closure.Return(nil), nil
 	}
 
-	vmlogger.Debugf("(%d) %x gas: %v (d) %x\n", self.env.Depth(), closure.Address(), closure.Gas, callData)
+	vmlogger.Debugf("(%d) (%x) %x gas: %v (d) %x\n", self.env.Depth(), caller.Address()[:4], closure.Address(), closure.Gas, callData)
 
 	for {
 		prevStep = step
@@ -180,16 +181,17 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 			var mult *big.Int
 			y, x := stack.Peekn()
-			val := closure.GetStorage(x)
-			if val.BigInt().Cmp(ethutil.Big0) == 0 && len(y.Bytes()) > 0 {
+			//val := closure.GetStorage(x)
+			val := statedb.GetState(closure.Address(), x.Bytes())
+			if len(val) == 0 && len(y.Bytes()) > 0 {
 				// 0 => non 0
 				mult = ethutil.Big3
-			} else if val.BigInt().Cmp(ethutil.Big0) != 0 && len(y.Bytes()) == 0 {
-				statedb.Refund(closure.caller.Address(), GasSStoreRefund, closure.Price)
+			} else if len(val) > 0 && len(y.Bytes()) == 0 {
+				statedb.Refund(caller.Address(), GasSStoreRefund)
 
 				mult = ethutil.Big0
 			} else {
-				// non 0 => non 0
+				// non 0 => non 0 (or 0 => 0)
 				mult = ethutil.Big1
 			}
 			gas.Set(new(big.Int).Mul(mult, GasSStore))
@@ -660,7 +662,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 				cOff = 0
 				l = 0
 			} else if cOff+l > size {
-				l = 0
+				l = uint64(math.Min(float64(cOff+l), float64(size)))
 			}
 
 			codeCopy := code[cOff : cOff+l]
@@ -776,10 +778,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			val, loc := stack.Popn()
 			statedb.SetState(closure.Address(), loc.Bytes(), val)
 
-			// Debug sessions are allowed to run without message
-			if closure.message != nil {
-				closure.message.AddStorageChange(loc.Bytes())
-			}
+			closure.message.AddStorageChange(loc.Bytes())
 
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case JUMP:
@@ -898,10 +897,12 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 			return closure.Return(ret), nil
 		case SUICIDE:
-
 			receiver := statedb.GetOrNewStateObject(stack.Pop().Bytes())
+			balance := statedb.GetBalance(closure.Address())
 
-			receiver.AddAmount(statedb.GetBalance(closure.Address()))
+			self.Printf(" => (%x) %v", receiver.Address()[:4], balance)
+
+			receiver.AddAmount(balance)
 			statedb.Delete(closure.Address())
 
 			fallthrough
