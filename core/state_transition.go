@@ -44,8 +44,6 @@ type StateTransition struct {
 type Message interface {
 	Hash() []byte
 
-	CreatesContract() bool
-
 	From() []byte
 	To() []byte
 
@@ -61,6 +59,10 @@ type Message interface {
 func AddressFromMessage(msg Message) []byte {
 	// Generate a new address
 	return crypto.Sha3(ethutil.NewValue([]interface{}{msg.From(), msg.Nonce()}).Encode())[12:]
+}
+
+func MessageCreatesContract(msg Message) bool {
+	return len(msg.To()) == 0
 }
 
 func NewStateTransition(coinbase *state.StateObject, msg Message, state *state.StateDB, block *types.Block) *StateTransition {
@@ -93,7 +95,7 @@ func (self *StateTransition) From() *state.StateObject {
 	return self.sen
 }
 func (self *StateTransition) To() *state.StateObject {
-	if self.msg != nil && self.msg.CreatesContract() {
+	if self.msg != nil && MessageCreatesContract(self.msg) {
 		return nil
 	}
 
@@ -205,7 +207,7 @@ func (self *StateTransition) TransitionState() (err error) {
 	var ret []byte
 	vmenv := self.VmEnv()
 	var ref vm.ClosureRef
-	if msg.CreatesContract() {
+	if MessageCreatesContract(msg) {
 		self.rec = MakeContract(msg, self.state)
 
 		ret, err, ref = vmenv.Create(sender, self.rec.Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)

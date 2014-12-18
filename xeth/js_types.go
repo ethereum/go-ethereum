@@ -102,16 +102,16 @@ func NewJSTx(tx *types.Transaction, state *state.StateDB) *JSTransaction {
 		receiver = ethutil.Bytes2Hex(core.AddressFromMessage(tx))
 	}
 	sender := ethutil.Bytes2Hex(tx.Sender())
-	createsContract := tx.CreatesContract()
+	createsContract := core.MessageCreatesContract(tx)
 
 	var data string
-	if tx.CreatesContract() {
+	if createsContract {
 		data = strings.Join(core.Disassemble(tx.Data()), "\n")
 	} else {
 		data = ethutil.Bytes2Hex(tx.Data())
 	}
 
-	return &JSTransaction{ref: tx, Hash: hash, Value: ethutil.CurrencyToString(tx.Value()), Address: receiver, Contract: tx.CreatesContract(), Gas: tx.Gas().String(), GasPrice: tx.GasPrice().String(), Data: data, Sender: sender, CreatesContract: createsContract, RawData: ethutil.Bytes2Hex(tx.Data())}
+	return &JSTransaction{ref: tx, Hash: hash, Value: ethutil.CurrencyToString(tx.Value()), Address: receiver, Contract: createsContract, Gas: tx.Gas().String(), GasPrice: tx.GasPrice().String(), Data: data, Sender: sender, CreatesContract: createsContract, RawData: ethutil.Bytes2Hex(tx.Data())}
 }
 
 func (self *JSTransaction) ToString() string {

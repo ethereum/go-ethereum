@@ -310,7 +310,7 @@ func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 		s, r string
 	)
 
-	if tx.CreatesContract() {
+	if core.MessageCreatesContract(tx) {
 		rec = nameReg.Storage(core.AddressFromMessage(tx))
 	}
 
@@ -322,7 +322,7 @@ func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 	if rec.Len() != 0 {
 		r = strings.Trim(rec.Str(), "\x00")
 	} else {
-		if tx.CreatesContract() {
+		if core.MessageCreatesContract(tx) {
 			r = ethutil.Bytes2Hex(core.AddressFromMessage(tx))
 		} else {
 			r = ethutil.Bytes2Hex(tx.To())

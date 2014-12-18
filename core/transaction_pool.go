@@ -131,12 +131,6 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 		return fmt.Errorf("Insufficient amount in sender's (%x) account", tx.From())
 	}
 
-	if tx.IsContract() {
-		if tx.GasPrice().Cmp(big.NewInt(minGasPrice)) < 0 {
-			return fmt.Errorf("Gasprice too low, %s given should be at least %d.", tx.GasPrice, minGasPrice)
-		}
-	}
-
 	// Increment the nonce making each tx valid only once to prevent replay
 	// attacks
 

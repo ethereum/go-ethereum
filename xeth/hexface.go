@@ -229,7 +229,7 @@ func (self *JSXEth) PushTx(txStr string) (*JSReceipt, error) {
 		return nil, err
 	}
 
-	return NewJSReciept(tx.CreatesContract(), core.AddressFromMessage(tx), tx.Hash(), tx.From()), nil
+	return NewJSReciept(core.MessageCreatesContract(tx), core.AddressFromMessage(tx), tx.Hash(), tx.From()), nil
 }
 
 func (self *JSXEth) CompileMutan(code string) string {

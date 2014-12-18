@@ -9,11 +9,8 @@ import (
 	"github.com/obscuren/secp256k1-go"
 )
 
-var ContractAddr = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-
 func IsContractAddr(addr []byte) bool {
 	return len(addr) == 0
-	//return bytes.Compare(addr, ContractAddr) == 0
 }
 
 type Transaction struct {
@@ -25,17 +22,14 @@ type Transaction struct {
 	data      []byte
 	v         byte
 	r, s      []byte
-
-	// Indicates whether this tx is a contract creation transaction
-	contractCreation bool
 }
 
 func NewContractCreationTx(value, gas, gasPrice *big.Int, script []byte) *Transaction {
-	return &Transaction{recipient: nil, value: value, gas: gas, gasPrice: gasPrice, data: script, contractCreation: true}
+	return &Transaction{recipient: nil, value: value, gas: gas, gasPrice: gasPrice, data: script}
 }
 
 func NewTransactionMessage(to []byte, value, gas, gasPrice *big.Int, data []byte) *Transaction {
-	return &Transaction{recipient: to, value: value, gasPrice: gasPrice, gas: gas, data: data, contractCreation: IsContractAddr(to)}
+	return &Transaction{recipient: to, value: value, gasPrice: gasPrice, gas: gas, data: data}
 }
 
 func NewTransactionFromBytes(data []byte) *Transaction {
@@ -97,15 +91,6 @@ func (self *Transaction) From() []byte {
 
 func (self *Transaction) To() []byte {
 	return self.recipient
-}
-
-func (tx *Transaction) CreatesContract() bool {
-	return tx.contractCreation
-}
-
-/* Deprecated */
-func (tx *Transaction) IsContract() bool {
-	return tx.CreatesContract()
 }
 
 func (tx *Transaction) Curve() (v byte, r []byte, s []byte) {
@@ -192,10 +177,6 @@ func (tx *Transaction) RlpValueDecode(decoder *ethutil.Value) {
 
 	tx.r = decoder.Get(7).Bytes()
 	tx.s = decoder.Get(8).Bytes()
-
-	if IsContractAddr(tx.recipient) {
-		tx.contractCreation = true
-	}
 }
 
 func (tx *Transaction) String() string {
