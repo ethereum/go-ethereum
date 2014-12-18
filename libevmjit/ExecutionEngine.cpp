@@ -47,17 +47,14 @@ ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _en
 
 ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeData* _data, Env* _env, bytes const& _code)
 {
-	auto module = _module.get(); // Keep ownership of the module in _module
-
 	llvm::sys::PrintStackTraceOnErrorSignal();
 	static const auto program = "EVM JIT";
 	llvm::PrettyStackTraceProgram X(1, &program);
 
 	llvm::InitializeNativeTarget();
 	llvm::InitializeNativeTargetAsmPrinter();
-	llvm::InitializeNativeTargetAsmParser();
 
-	llvm::EngineBuilder builder(module);
+	llvm::EngineBuilder builder(_module.get());
 	builder.setEngineKind(llvm::EngineKind::JIT);
 	builder.setUseMCJIT(true);
 	std::unique_ptr<llvm::SectionMemoryManager> memoryManager(new llvm::SectionMemoryManager);
@@ -67,7 +64,7 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 	auto triple = llvm::Triple(llvm::sys::getProcessTriple());
 	if (triple.getOS() == llvm::Triple::OSType::Win32)
 		triple.setObjectFormat(llvm::Triple::ObjectFormatType::ELF);  // MCJIT does not support COFF format
-	module->setTargetTriple(triple.str());
+	_module->setTargetTriple(triple.str());
 
 	ExecBundle exec;
 	exec.engine.reset(builder.create());
