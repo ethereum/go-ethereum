@@ -116,7 +116,11 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 	}
 
 	// Get the sender
-	sender := pool.chainManager.State().GetAccount(tx.Sender())
+	senderAddr := tx.From()
+	if senderAddr == nil {
+		return fmt.Errorf("invalid sender")
+	}
+	sender := pool.chainManager.State().GetAccount(senderAddr)
 
 	totAmount := new(big.Int).Set(tx.Value())
 	// Make sure there's enough in the sender's account. Having insufficient
@@ -193,7 +197,7 @@ func (pool *TxPool) RemoveInvalid(state *state.StateDB) {
 
 	for e := pool.pool.Front(); e != nil; e = e.Next() {
 		tx := e.Value.(*types.Transaction)
-		sender := state.GetAccount(tx.Sender())
+		sender := state.GetAccount(tx.From())
 		err := pool.ValidateTransaction(tx)
 		if err != nil || sender.Nonce >= tx.Nonce() {
 			pool.pool.Remove(e)

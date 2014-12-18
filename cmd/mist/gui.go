@@ -301,7 +301,7 @@ func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 	addr := gui.address()
 
 	var inout string
-	if bytes.Compare(tx.Sender(), addr) == 0 {
+	if bytes.Compare(tx.From(), addr) == 0 {
 		inout = "send"
 	} else {
 		inout = "recv"
@@ -321,7 +321,7 @@ func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 	if send.Len() != 0 {
 		s = strings.Trim(send.Str(), "\x00")
 	} else {
-		s = ethutil.Bytes2Hex(tx.Sender())
+		s = ethutil.Bytes2Hex(tx.From())
 	}
 	if rec.Len() != 0 {
 		r = strings.Trim(rec.Str(), "\x00")
@@ -453,7 +453,7 @@ func (gui *Gui) update() {
 					tx := ev.Tx
 					object := state.GetAccount(gui.address())
 
-					if bytes.Compare(tx.Sender(), gui.address()) == 0 {
+					if bytes.Compare(tx.From(), gui.address()) == 0 {
 						object.SubAmount(tx.Value())
 
 						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
