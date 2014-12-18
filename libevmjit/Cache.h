@@ -42,7 +42,7 @@ public:
 	virtual llvm::MemoryBuffer* getObject(llvm::Module const* _module) final override;
 
 private:
-	std::unordered_map<std::string, llvm::MemoryBuffer*> m_map;
+	std::unordered_map<std::string, std::unique_ptr<llvm::MemoryBuffer>> m_map;
 };
 
 

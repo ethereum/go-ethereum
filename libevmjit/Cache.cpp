@@ -56,8 +56,8 @@ ObjectCache* Cache::getObjectCache()
 void ObjectCache::notifyObjectCompiled(llvm::Module const* _module, llvm::MemoryBuffer const* _object)
 {
 	auto&& key = _module->getModuleIdentifier();
-	auto obj = llvm::MemoryBuffer::getMemBufferCopy(_object->getBuffer());
-	m_map.insert(std::make_pair(key, obj));
+	std::unique_ptr<llvm::MemoryBuffer> obj(llvm::MemoryBuffer::getMemBufferCopy(_object->getBuffer()));
+	m_map.insert(std::make_pair(key, std::move(obj)));
 }
 
 llvm::MemoryBuffer* ObjectCache::getObject(llvm::Module const* _module)
