@@ -77,7 +77,7 @@ func (self *Transaction) SetNonce(nonce uint64) {
 }
 
 func (self *Transaction) From() []byte {
-	return self.Sender()
+	return self.sender()
 }
 
 func (self *Transaction) To() []byte {
@@ -114,12 +114,12 @@ func (tx *Transaction) PublicKey() []byte {
 	return pubkey
 }
 
-func (tx *Transaction) Sender() []byte {
+func (tx *Transaction) sender() []byte {
 	pubkey := tx.PublicKey()
 
 	// Validate the returned key.
 	// Return nil if public key isn't in full format
-	if len(pubkey) != 0 && pubkey[0] != 4 {
+	if len(pubkey) == 0 || pubkey[0] != 4 {
 		return nil
 	}
 
@@ -187,7 +187,7 @@ func (tx *Transaction) String() string {
 	`,
 		tx.Hash(),
 		len(tx.recipient) == 0,
-		tx.Sender(),
+		tx.From(),
 		tx.recipient,
 		tx.nonce,
 		tx.gasPrice,

@@ -100,7 +100,7 @@ func NewJSTx(tx *types.Transaction, state *state.StateDB) *JSTransaction {
 	if receiver == "0000000000000000000000000000000000000000" {
 		receiver = ethutil.Bytes2Hex(core.AddressFromMessage(tx))
 	}
-	sender := ethutil.Bytes2Hex(tx.Sender())
+	sender := ethutil.Bytes2Hex(tx.From())
 	createsContract := core.MessageCreatesContract(tx)
 
 	var data string
