@@ -181,11 +181,12 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 			var mult *big.Int
 			y, x := stack.Peekn()
-			val := closure.GetStorage(x)
-			if val.BigInt().Cmp(ethutil.Big0) == 0 && len(y.Bytes()) > 0 {
+			//val := closure.GetStorage(x)
+			val := statedb.GetState(closure.Address(), x.Bytes())
+			if len(val) == 0 && len(y.Bytes()) > 0 {
 				// 0 => non 0
 				mult = ethutil.Big3
-			} else if val.BigInt().Cmp(ethutil.Big0) != 0 && len(y.Bytes()) == 0 {
+			} else if len(val) > 0 && len(y.Bytes()) == 0 {
 				statedb.Refund(caller.Address(), GasSStoreRefund)
 
 				mult = ethutil.Big0
