@@ -8,12 +8,17 @@ module.exports = {
   trietestnextprev: require('./TrieTests/trietestnextprev'),
   txtest: require('./BasicTests/txtest'),
   StateTests: {
+    stExample: require('./StateTests/stExample.json'),
+    stInitCodeTest: require('./StateTests/stInitCodeTest.json'),
+    stLogTests: require('./StateTests/stLogTests.json'),
     stPreCompiledContracts: require('./StateTests/stPreCompiledContracts'),
     stRecursiveCreate: require('./StateTests/stRecursiveCreate'),
     stSpecial: require('./StateTests/stSpecialTest'),
     stSystemOperationsTest: require('./StateTests/stSystemOperationsTest'),
+    stTransactionTest: require('./StateTests/stTransactionTest')
   },
   VMTests: {
+    vmRandom: require('./VMTests/RandomTests/randomTest'),
     vmArithmeticTest: require('./VMTests/vmArithmeticTest'),
     vmBitwiseLogicOperationTest: require('./VMTests/vmBitwiseLogicOperationTest'),
     vmBlockInfoTest: require('./VMTests/vmBlockInfoTest'),
@@ -22,6 +27,6 @@ module.exports = {
     vmLogTest: require('./VMTests/vmLogTest'),
     vmPushDupSwapTest: require('./VMTests/vmPushDupSwapTest'),
     vmSha3Test: require('./VMTests/vmSha3Test'),
-    vmtests: require('./VMTests/vmtests'),
+    vmtests: require('./VMTests/vmtests')
   }
 };
