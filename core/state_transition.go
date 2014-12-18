@@ -213,12 +213,10 @@ func MakeContract(msg Message, state *state.StateDB) *state.StateObject {
 func (self *StateTransition) RefundGas() {
 	coinbaseSub := new(big.Int).Set(self.gas)
 	uhalf := new(big.Int).Div(self.GasUsed(), ethutil.Big2)
-	for addr, refs := range self.state.Refunds() {
-		for _, ref := range refs {
-			coinbaseSub.Add(self.gas, ref)
-			refund := ethutil.BigMin(uhalf, ref)
-			self.state.AddBalance([]byte(addr), refund.Mul(refund, self.msg.GasPrice()))
-		}
+	for addr, ref := range self.state.Refunds() {
+		refund := ethutil.BigMin(uhalf, ref)
+		coinbaseSub.Add(self.gas, refund)
+		self.state.AddBalance([]byte(addr), refund.Mul(refund, self.msg.GasPrice()))
 	}
 
 	coinbase, sender := self.Coinbase(), self.From()

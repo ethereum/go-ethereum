@@ -23,14 +23,14 @@ type StateDB struct {
 
 	manifest *Manifest
 
-	refund map[string][]*big.Int
+	refund map[string]*big.Int
 
 	logs Logs
 }
 
 // Create a new state from a given trie
 func New(trie *trie.Trie) *StateDB {
-	return &StateDB{Trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest(), refund: make(map[string][]*big.Int)}
+	return &StateDB{Trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest(), refund: make(map[string]*big.Int)}
 }
 
 func (self *StateDB) EmptyLogs() {
@@ -56,7 +56,10 @@ func (self *StateDB) GetBalance(addr []byte) *big.Int {
 }
 
 func (self *StateDB) Refund(addr []byte, gas *big.Int) {
-	self.refund[string(addr)] = append(self.refund[string(addr)], gas)
+	if self.refund[string(addr)] == nil {
+		self.refund[string(addr)] = new(big.Int)
+	}
+	self.refund[string(addr)].Add(self.refund[string(addr)], gas)
 }
 
 func (self *StateDB) AddBalance(addr []byte, amount *big.Int) {
@@ -207,7 +210,7 @@ func (self *StateDB) Copy() *StateDB {
 		}
 
 		for addr, refund := range self.refund {
-			state.refund[addr] = refund
+			state.refund[addr] = new(big.Int).Set(refund)
 		}
 
 		logs := make(Logs, len(self.logs))
@@ -269,17 +272,17 @@ func (s *StateDB) Sync() {
 
 func (self *StateDB) Empty() {
 	self.stateObjects = make(map[string]*StateObject)
-	self.refund = make(map[string][]*big.Int)
+	self.refund = make(map[string]*big.Int)
 }
 
-func (self *StateDB) Refunds() map[string][]*big.Int {
+func (self *StateDB) Refunds() map[string]*big.Int {
 	return self.refund
 }
 
 func (self *StateDB) Update(gasUsed *big.Int) {
 	var deleted bool
 
-	self.refund = make(map[string][]*big.Int)
+	self.refund = make(map[string]*big.Int)
 
 	for _, stateObject := range self.stateObjects {
 		if stateObject.remove {
