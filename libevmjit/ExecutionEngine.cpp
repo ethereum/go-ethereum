@@ -42,6 +42,7 @@ ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _en
 	}*/
 
 	auto module = Compiler({}).compile(_code);
+	//module->dump();
 	return run(std::move(module), _data, _env, _code);
 }
 
@@ -72,6 +73,8 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 		return ReturnCode::LLVMConfigError;
 	_module.release();        // Successfully created llvm::ExecutionEngine takes ownership of the module
 	memoryManager.release();  // and memory manager
+
+	exec.engine->setObjectCache(Cache::getObjectCache());
 
 	// TODO: Finalization not needed when llvm::ExecutionEngine::getFunctionAddress used
 	//auto finalizationStartTime = std::chrono::high_resolution_clock::now();

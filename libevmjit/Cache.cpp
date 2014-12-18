@@ -2,6 +2,7 @@
 #include <unordered_map>
 #include <cassert>
 #include <iostream>
+#include <llvm/IR/Module.h>
 
 namespace dev
 {
@@ -42,6 +43,28 @@ ExecBundle* Cache::findExec(Cache::Key _key)
 		return &it->second;
 	}
 	LOG() << "miss\n";
+	return nullptr;
+}
+
+ObjectCache* Cache::getObjectCache()
+{
+	static ObjectCache objectCache;
+	return &objectCache;
+}
+
+
+void ObjectCache::notifyObjectCompiled(llvm::Module const* _module, llvm::MemoryBuffer const* _object)
+{
+	auto&& key = _module->getModuleIdentifier();
+	auto obj = llvm::MemoryBuffer::getMemBufferCopy(_object->getBuffer());
+	m_map.insert(std::make_pair(key, obj));
+}
+
+llvm::MemoryBuffer* ObjectCache::getObject(llvm::Module const* _module)
+{
+	auto it = m_map.find(_module->getModuleIdentifier());
+	if (it != m_map.end())
+		return llvm::MemoryBuffer::getMemBufferCopy(it->second->getBuffer());
 	return nullptr;
 }
 
