@@ -16,8 +16,10 @@ type Execution struct {
 	SkipTransfer      bool
 }
 
-func NewExecution(vm vm.VirtualMachine, address, input []byte, gas, gasPrice, value *big.Int) *Execution {
-	return &Execution{vm: vm, address: address, input: input, Gas: gas, price: gasPrice, value: value}
+func NewExecution(env vm.Environment, address, input []byte, gas, gasPrice, value *big.Int) *Execution {
+	evm := vm.New(env, vm.DebugVmTy)
+
+	return &Execution{vm: evm, address: address, input: input, Gas: gas, price: gasPrice, value: value}
 }
 
 func (self *Execution) Addr() []byte {

@@ -181,7 +181,6 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 			var mult *big.Int
 			y, x := stack.Peekn()
-			//val := closure.GetStorage(x)
 			val := statedb.GetState(closure.Address(), x.Bytes())
 			if len(val) == 0 && len(y.Bytes()) > 0 {
 				// 0 => non 0
@@ -714,8 +713,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			//a := big.NewInt(int64(op) - int64(PUSH1) + 1)
 			a := uint64(op - PUSH1 + 1)
 			//pc.Add(pc, ethutil.Big1)
-			data := closure.GetRangeValue(pc+1, a)
-			val := ethutil.BigD(data.Bytes())
+			val := ethutil.BigD(closure.GetRangeValue(pc+1, a))
 			// Push value to stack
 			stack.Push(val)
 			pc += a
@@ -723,7 +721,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 			step += int(op) - int(PUSH1) + 1
 
-			self.Printf(" => 0x%x", data.Bytes())
+			self.Printf(" => 0x%x", val.Bytes())
 		case POP:
 			stack.Pop()
 		case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:

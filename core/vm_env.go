@@ -43,9 +43,7 @@ func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) error {
 }
 
 func (self *VMEnv) vm(addr, data []byte, gas, price, value *big.Int) *Execution {
-	evm := vm.New(self, vm.DebugVmTy)
-
-	return NewExecution(evm, addr, data, gas, price, value)
+	return NewExecution(self, addr, data, gas, price, value)
 }
 
 func (self *VMEnv) Call(me vm.ClosureRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error) {
