@@ -2,7 +2,6 @@ package ethutil
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -193,8 +192,13 @@ func Encode(object interface{}) []byte {
 				if blen < 56 {
 					buff.WriteByte(byte(blen) + 0xc0)
 				} else {
-					buff.WriteByte(byte(intlen(int64(blen))) + 0xf7)
-					binary.Write(&buff, binary.BigEndian, int64(blen))
+					ilen := byte(intlen(int64(blen)))
+					buff.WriteByte(ilen + 0xf7)
+					t := make([]byte, ilen)
+					for i := byte(0); i < ilen; i++ {
+						t[ilen-i-1] = byte(blen >> (i * 8))
+					}
+					buff.Write(t)
 				}
 				buff.ReadFrom(&b)
 			}
