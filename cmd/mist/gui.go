@@ -246,7 +246,7 @@ func (gui *Gui) CreateAndSetPrivKey() (string, string, string, string) {
 }
 
 func (gui *Gui) setInitialChain(ancientBlocks bool) {
-	sBlk := gui.eth.ChainManager().LastBlockHash
+	sBlk := gui.eth.ChainManager().LastBlockHash()
 	blk := gui.eth.ChainManager().GetBlock(sBlk)
 	for ; blk != nil; blk = gui.eth.ChainManager().GetBlock(sBlk) {
 		sBlk = blk.PrevHash
@@ -468,7 +468,7 @@ func (gui *Gui) update() {
 			case <-peerUpdateTicker.C:
 				gui.setPeerInfo()
 			case <-generalUpdateTicker.C:
-				statusText := "#" + gui.eth.ChainManager().CurrentBlock.Number.String()
+				statusText := "#" + gui.eth.ChainManager().CurrentBlock().Number.String()
 				lastBlockLabel.Set("text", statusText)
 				miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.miner.GetPow().GetHashrate(), 10)+"Khash")
 

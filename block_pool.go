@@ -66,7 +66,7 @@ func (self *BlockPool) HasLatestHash() bool {
 	self.mut.Lock()
 	defer self.mut.Unlock()
 
-	return self.pool[string(self.eth.ChainManager().CurrentBlock.Hash())] != nil
+	return self.pool[string(self.eth.ChainManager().CurrentBlock().Hash())] != nil
 }
 
 func (self *BlockPool) HasCommonHash(hash []byte) bool {

@@ -77,7 +77,7 @@ func main() {
 		var block *types.Block
 
 		if len(DumpHash) == 0 && DumpNumber == -1 {
-			block = ethereum.ChainManager().CurrentBlock
+			block = ethereum.ChainManager().CurrentBlock()
 		} else if len(DumpHash) > 0 {
 			block = ethereum.ChainManager().GetBlock(ethutil.Hex2Bytes(DumpHash))
 		} else {

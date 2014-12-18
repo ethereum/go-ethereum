@@ -74,6 +74,13 @@ func (self *ChainManager) LastBlockNumber() uint64 {
 	return self.lastBlockNumber
 }
 
+func (self *ChainManager) LastBlockHash() []byte {
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+
+	return self.lastBlockHash
+}
+
 func (self *ChainManager) CurrentBlock() *types.Block {
 	self.mu.RLock()
 	defer self.mu.RUnlock()

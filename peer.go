@@ -666,8 +666,8 @@ func (self *Peer) pushStatus() {
 	msg := wire.NewMessage(wire.MsgStatusTy, []interface{}{
 		uint32(ProtocolVersion),
 		uint32(NetVersion),
-		self.ethereum.ChainManager().TD,
-		self.ethereum.ChainManager().CurrentBlock.Hash(),
+		self.ethereum.ChainManager().Td(),
+		self.ethereum.ChainManager().CurrentBlock().Hash(),
 		self.ethereum.ChainManager().Genesis().Hash(),
 	})
 
