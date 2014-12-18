@@ -128,9 +128,9 @@ func New(db ethutil.Database, clientIdentity wire.ClientIdentity, keyManager *cr
 	}
 
 	ethereum.blockPool = NewBlockPool(ethereum)
-	ethereum.txPool = core.NewTxPool(ethereum)
 	ethereum.blockChain = core.NewChainManager(ethereum.EventMux())
-	ethereum.blockManager = core.NewBlockManager(ethereum)
+	ethereum.txPool = core.NewTxPool(ethereum.blockChain, ethereum, ethereum.EventMux())
+	ethereum.blockManager = core.NewBlockManager(ethereum.txPool, ethereum.blockChain, ethereum.EventMux())
 	ethereum.blockChain.SetProcessor(ethereum.blockManager)
 
 	// Start the tx pool

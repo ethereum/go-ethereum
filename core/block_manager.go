@@ -256,12 +256,12 @@ func (sm *BlockManager) CalculateTD(block *types.Block) (*big.Int, bool) {
 
 	// TD(genesis_block) = 0 and TD(B) = TD(B.parent) + sum(u.difficulty for u in B.uncles) + B.difficulty
 	td := new(big.Int)
-	td = td.Add(sm.bc.TD, uncleDiff)
+	td = td.Add(sm.bc.Td(), uncleDiff)
 	td = td.Add(td, block.Difficulty)
 
 	// The new TD will only be accepted if the new difficulty is
 	// is greater than the previous.
-	if td.Cmp(sm.bc.TD) > 0 {
+	if td.Cmp(sm.bc.Td()) > 0 {
 		return td, true
 	}
 
@@ -279,7 +279,7 @@ func (sm *BlockManager) ValidateBlock(block, parent *types.Block) error {
 
 	diff := block.Time - parent.Time
 	if diff < 0 {
-		return ValidationError("Block timestamp less then prev block %v (%v - %v)", diff, block.Time, sm.bc.CurrentBlock.Time)
+		return ValidationError("Block timestamp less then prev block %v (%v - %v)", diff, block.Time, sm.bc.CurrentBlock().Time)
 	}
 
 	/* XXX
