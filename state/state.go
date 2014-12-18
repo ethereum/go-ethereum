@@ -23,14 +23,14 @@ type StateDB struct {
 
 	manifest *Manifest
 
-	refund map[string][]refund
+	refund map[string][]*big.Int
 
 	logs Logs
 }
 
 // Create a new state from a given trie
 func New(trie *trie.Trie) *StateDB {
-	return &StateDB{Trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest(), refund: make(map[string][]refund)}
+	return &StateDB{Trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest(), refund: make(map[string][]*big.Int)}
 }
 
 func (self *StateDB) EmptyLogs() {
@@ -55,12 +55,8 @@ func (self *StateDB) GetBalance(addr []byte) *big.Int {
 	return ethutil.Big0
 }
 
-type refund struct {
-	gas, price *big.Int
-}
-
-func (self *StateDB) Refund(addr []byte, gas, price *big.Int) {
-	self.refund[string(addr)] = append(self.refund[string(addr)], refund{gas, price})
+func (self *StateDB) Refund(addr []byte, gas *big.Int) {
+	self.refund[string(addr)] = append(self.refund[string(addr)], gas)
 }
 
 func (self *StateDB) AddBalance(addr []byte, amount *big.Int) {
@@ -273,23 +269,17 @@ func (s *StateDB) Sync() {
 
 func (self *StateDB) Empty() {
 	self.stateObjects = make(map[string]*StateObject)
-	self.refund = make(map[string][]refund)
+	self.refund = make(map[string][]*big.Int)
+}
+
+func (self *StateDB) Refunds() map[string][]*big.Int {
+	return self.refund
 }
 
 func (self *StateDB) Update(gasUsed *big.Int) {
 	var deleted bool
 
-	// Refund any gas that's left
-	// XXX THIS WILL CHANGE IN POC8
-	uhalf := new(big.Int).Div(gasUsed, ethutil.Big2)
-	for addr, refs := range self.refund {
-		for _, ref := range refs {
-			refund := ethutil.BigMin(uhalf, ref.gas)
-
-			self.GetStateObject([]byte(addr)).AddBalance(refund.Mul(refund, ref.price))
-		}
-	}
-	self.refund = make(map[string][]refund)
+	self.refund = make(map[string][]*big.Int)
 
 	for _, stateObject := range self.stateObjects {
 		if stateObject.remove {

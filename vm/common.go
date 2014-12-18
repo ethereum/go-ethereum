@@ -37,7 +37,7 @@ var (
 	GasLog          = big.NewInt(32)
 	GasSha256       = big.NewInt(50)
 	GasRipemd       = big.NewInt(50)
-	GasEcrecover    = big.NewInt(100)
+	GasEcrecover    = big.NewInt(500)
 
 	Pow256 = ethutil.BigPow(2, 256)
 

@@ -46,15 +46,6 @@ func NewTransactionFromValue(val *ethutil.Value) *Transaction {
 	return tx
 }
 
-func (self *Transaction) GasValue() *big.Int {
-	return new(big.Int).Mul(self.gas, self.gasPrice)
-}
-
-func (self *Transaction) TotalValue() *big.Int {
-	v := self.GasValue()
-	return v.Add(v, self.value)
-}
-
 func (tx *Transaction) Hash() []byte {
 	data := []interface{}{tx.Nonce, tx.gasPrice, tx.gas, tx.recipient, tx.Value, tx.Data}
 

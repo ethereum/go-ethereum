@@ -115,7 +115,7 @@ done:
 
 		cb := state.GetStateObject(coinbase.Address())
 		st := NewStateTransition(cb, tx, state, block)
-		err = st.TransitionState()
+		_, err = st.TransitionState()
 		if err != nil {
 			switch {
 			case IsNonceErr(err):

@@ -31,6 +31,7 @@ type StateTransition struct {
 	coinbase, receiver []byte
 	msg                Message
 	gas, gasPrice      *big.Int
+	initialGas         *big.Int
 	value              *big.Int
 	data               []byte
 	state              *state.StateDB
@@ -47,7 +48,6 @@ type Message interface {
 	From() []byte
 	To() []byte
 
-	GasValue() *big.Int
 	GasPrice() *big.Int
 	Gas() *big.Int
 	Value() *big.Int
@@ -65,8 +65,12 @@ func MessageCreatesContract(msg Message) bool {
 	return len(msg.To()) == 0
 }
 
+func MessageGasValue(msg Message) *big.Int {
+	return new(big.Int).Mul(msg.Gas(), msg.GasPrice())
+}
+
 func NewStateTransition(coinbase *state.StateObject, msg Message, state *state.StateDB, block *types.Block) *StateTransition {
-	return &StateTransition{coinbase.Address(), msg.To(), msg, new(big.Int), new(big.Int).Set(msg.GasPrice()), msg.Value(), msg.Data(), state, block, coinbase, nil, nil, nil}
+	return &StateTransition{coinbase.Address(), msg.To(), msg, new(big.Int), new(big.Int).Set(msg.GasPrice()), new(big.Int), msg.Value(), msg.Data(), state, block, coinbase, nil, nil, nil}
 }
 
 func (self *StateTransition) VmEnv() vm.Environment {
@@ -78,33 +82,16 @@ func (self *StateTransition) VmEnv() vm.Environment {
 }
 
 func (self *StateTransition) Coinbase() *state.StateObject {
-	if self.cb != nil {
-		return self.cb
-	}
-
-	self.cb = self.state.GetOrNewStateObject(self.coinbase)
-	return self.cb
+	return self.state.GetOrNewStateObject(self.coinbase)
 }
 func (self *StateTransition) From() *state.StateObject {
-	if self.sen != nil {
-		return self.sen
-	}
-
-	self.sen = self.state.GetOrNewStateObject(self.msg.From())
-
-	return self.sen
+	return self.state.GetOrNewStateObject(self.msg.From())
 }
 func (self *StateTransition) To() *state.StateObject {
 	if self.msg != nil && MessageCreatesContract(self.msg) {
 		return nil
 	}
-
-	if self.rec != nil {
-		return self.rec
-	}
-
-	self.rec = self.state.GetOrNewStateObject(self.msg.To())
-	return self.rec
+	return self.state.GetOrNewStateObject(self.msg.To())
 }
 
 func (self *StateTransition) UseGas(amount *big.Int) error {
@@ -124,8 +111,8 @@ func (self *StateTransition) BuyGas() error {
 	var err error
 
 	sender := self.From()
-	if sender.Balance().Cmp(self.msg.GasValue()) < 0 {
-		return fmt.Errorf("Insufficient funds to pre-pay gas. Req %v, has %v", self.msg.GasValue(), sender.Balance())
+	if sender.Balance().Cmp(MessageGasValue(self.msg)) < 0 {
+		return fmt.Errorf("Insufficient funds to pre-pay gas. Req %v, has %v", MessageGasValue(self.msg), sender.Balance())
 	}
 
 	coinbase := self.Coinbase()
@@ -135,18 +122,10 @@ func (self *StateTransition) BuyGas() error {
 	}
 
 	self.AddGas(self.msg.Gas())
-	sender.SubAmount(self.msg.GasValue())
+	self.initialGas.Set(self.msg.Gas())
+	sender.SubAmount(MessageGasValue(self.msg))
 
 	return nil
-}
-
-func (self *StateTransition) RefundGas() {
-	coinbase, sender := self.Coinbase(), self.From()
-	coinbase.RefundGas(self.gas, self.msg.GasPrice())
-
-	// Return remaining gas
-	remaining := new(big.Int).Mul(self.gas, self.msg.GasPrice())
-	sender.AddAmount(remaining)
 }
 
 func (self *StateTransition) preCheck() (err error) {
@@ -168,7 +147,7 @@ func (self *StateTransition) preCheck() (err error) {
 	return nil
 }
 
-func (self *StateTransition) TransitionState() (err error) {
+func (self *StateTransition) TransitionState() (ret []byte, err error) {
 	statelogger.Debugf("(~) %x\n", self.msg.Hash())
 
 	// XXX Transactions after this point are considered valid.
@@ -204,7 +183,6 @@ func (self *StateTransition) TransitionState() (err error) {
 		return
 	}
 
-	var ret []byte
 	vmenv := self.VmEnv()
 	var ref vm.ClosureRef
 	if MessageCreatesContract(msg) {
@@ -230,4 +208,27 @@ func MakeContract(msg Message, state *state.StateDB) *state.StateObject {
 	contract.InitCode = msg.Data()
 
 	return contract
+}
+
+func (self *StateTransition) RefundGas() {
+	coinbaseSub := new(big.Int).Set(self.gas)
+	uhalf := new(big.Int).Div(self.GasUsed(), ethutil.Big2)
+	for addr, refs := range self.state.Refunds() {
+		for _, ref := range refs {
+			coinbaseSub.Add(self.gas, ref)
+			refund := ethutil.BigMin(uhalf, ref)
+			self.state.AddBalance([]byte(addr), refund.Mul(refund, self.msg.GasPrice()))
+		}
+	}
+
+	coinbase, sender := self.Coinbase(), self.From()
+	coinbase.RefundGas(coinbaseSub, self.msg.GasPrice())
+
+	// Return remaining gas
+	remaining := new(big.Int).Mul(self.gas, self.msg.GasPrice())
+	sender.AddAmount(remaining)
+}
+
+func (self *StateTransition) GasUsed() *big.Int {
+	return new(big.Int).Sub(self.initialGas, self.gas)
 }
