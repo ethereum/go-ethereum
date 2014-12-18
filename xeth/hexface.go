@@ -216,7 +216,7 @@ func (self *JSXEth) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr 
 		return "", err
 	}
 	if types.IsContractAddr(to) {
-		return ethutil.Bytes2Hex(tx.CreationAddress(nil)), nil
+		return ethutil.Bytes2Hex(core.AddressFromMessage(tx)), nil
 	}
 
 	return ethutil.Bytes2Hex(tx.Hash()), nil
@@ -229,7 +229,7 @@ func (self *JSXEth) PushTx(txStr string) (*JSReceipt, error) {
 		return nil, err
 	}
 
-	return NewJSReciept(tx.CreatesContract(), tx.CreationAddress(self.World().State()), tx.Hash(), tx.Sender()), nil
+	return NewJSReciept(tx.CreatesContract(), core.AddressFromMessage(tx), tx.Hash(), tx.From()), nil
 }
 
 func (self *JSXEth) CompileMutan(code string) string {

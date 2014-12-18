@@ -5,6 +5,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
 )
@@ -27,7 +29,7 @@ import (
  */
 type StateTransition struct {
 	coinbase, receiver []byte
-	tx                 *types.Transaction
+	msg                Message
 	gas, gasPrice      *big.Int
 	value              *big.Int
 	data               []byte
@@ -35,10 +37,42 @@ type StateTransition struct {
 	block              *types.Block
 
 	cb, rec, sen *state.StateObject
+
+	Env vm.Environment
 }
 
-func NewStateTransition(coinbase *state.StateObject, tx *types.Transaction, state *state.StateDB, block *types.Block) *StateTransition {
-	return &StateTransition{coinbase.Address(), tx.Recipient, tx, new(big.Int), new(big.Int).Set(tx.GasPrice), tx.Value, tx.Data, state, block, coinbase, nil, nil}
+type Message interface {
+	Hash() []byte
+
+	CreatesContract() bool
+
+	From() []byte
+	To() []byte
+
+	GasValue() *big.Int
+	GasPrice() *big.Int
+	Gas() *big.Int
+	Value() *big.Int
+
+	Nonce() uint64
+	Data() []byte
+}
+
+func AddressFromMessage(msg Message) []byte {
+	// Generate a new address
+	return crypto.Sha3(ethutil.NewValue([]interface{}{msg.From(), msg.Nonce()}).Encode())[12:]
+}
+
+func NewStateTransition(coinbase *state.StateObject, msg Message, state *state.StateDB, block *types.Block) *StateTransition {
+	return &StateTransition{coinbase.Address(), msg.To(), msg, new(big.Int), new(big.Int).Set(msg.GasPrice()), msg.Value(), msg.Data(), state, block, coinbase, nil, nil, nil}
+}
+
+func (self *StateTransition) VmEnv() vm.Environment {
+	if self.Env == nil {
+		self.Env = NewEnv(self.state, self.msg, self.block)
+	}
+
+	return self.Env
 }
 
 func (self *StateTransition) Coinbase() *state.StateObject {
@@ -49,17 +83,17 @@ func (self *StateTransition) Coinbase() *state.StateObject {
 	self.cb = self.state.GetOrNewStateObject(self.coinbase)
 	return self.cb
 }
-func (self *StateTransition) Sender() *state.StateObject {
+func (self *StateTransition) From() *state.StateObject {
 	if self.sen != nil {
 		return self.sen
 	}
 
-	self.sen = self.state.GetOrNewStateObject(self.tx.Sender())
+	self.sen = self.state.GetOrNewStateObject(self.msg.From())
 
 	return self.sen
 }
-func (self *StateTransition) Receiver() *state.StateObject {
-	if self.tx != nil && self.tx.CreatesContract() {
+func (self *StateTransition) To() *state.StateObject {
+	if self.msg != nil && self.msg.CreatesContract() {
 		return nil
 	}
 
@@ -67,7 +101,7 @@ func (self *StateTransition) Receiver() *state.StateObject {
 		return self.rec
 	}
 
-	self.rec = self.state.GetOrNewStateObject(self.tx.Recipient)
+	self.rec = self.state.GetOrNewStateObject(self.msg.To())
 	return self.rec
 }
 
@@ -87,41 +121,41 @@ func (self *StateTransition) AddGas(amount *big.Int) {
 func (self *StateTransition) BuyGas() error {
 	var err error
 
-	sender := self.Sender()
-	if sender.Balance().Cmp(self.tx.GasValue()) < 0 {
-		return fmt.Errorf("Insufficient funds to pre-pay gas. Req %v, has %v", self.tx.GasValue(), sender.Balance())
+	sender := self.From()
+	if sender.Balance().Cmp(self.msg.GasValue()) < 0 {
+		return fmt.Errorf("Insufficient funds to pre-pay gas. Req %v, has %v", self.msg.GasValue(), sender.Balance())
 	}
 
 	coinbase := self.Coinbase()
-	err = coinbase.BuyGas(self.tx.Gas, self.tx.GasPrice)
+	err = coinbase.BuyGas(self.msg.Gas(), self.msg.GasPrice())
 	if err != nil {
 		return err
 	}
 
-	self.AddGas(self.tx.Gas)
-	sender.SubAmount(self.tx.GasValue())
+	self.AddGas(self.msg.Gas())
+	sender.SubAmount(self.msg.GasValue())
 
 	return nil
 }
 
 func (self *StateTransition) RefundGas() {
-	coinbase, sender := self.Coinbase(), self.Sender()
-	coinbase.RefundGas(self.gas, self.tx.GasPrice)
+	coinbase, sender := self.Coinbase(), self.From()
+	coinbase.RefundGas(self.gas, self.msg.GasPrice())
 
 	// Return remaining gas
-	remaining := new(big.Int).Mul(self.gas, self.tx.GasPrice)
+	remaining := new(big.Int).Mul(self.gas, self.msg.GasPrice())
 	sender.AddAmount(remaining)
 }
 
 func (self *StateTransition) preCheck() (err error) {
 	var (
-		tx     = self.tx
-		sender = self.Sender()
+		msg    = self.msg
+		sender = self.From()
 	)
 
 	// Make sure this transaction's nonce is correct
-	if sender.Nonce != tx.Nonce {
-		return NonceError(tx.Nonce, sender.Nonce)
+	if sender.Nonce != msg.Nonce() {
+		return NonceError(msg.Nonce(), sender.Nonce)
 	}
 
 	// Pre-pay gas / Buy gas of the coinbase account
@@ -133,7 +167,7 @@ func (self *StateTransition) preCheck() (err error) {
 }
 
 func (self *StateTransition) TransitionState() (err error) {
-	statelogger.Debugf("(~) %x\n", self.tx.Hash())
+	statelogger.Debugf("(~) %x\n", self.msg.Hash())
 
 	// XXX Transactions after this point are considered valid.
 	if err = self.preCheck(); err != nil {
@@ -141,8 +175,8 @@ func (self *StateTransition) TransitionState() (err error) {
 	}
 
 	var (
-		tx     = self.tx
-		sender = self.Sender()
+		msg    = self.msg
+		sender = self.From()
 	)
 
 	defer self.RefundGas()
@@ -169,15 +203,15 @@ func (self *StateTransition) TransitionState() (err error) {
 	}
 
 	var ret []byte
-	vmenv := NewEnv(self.state, self.tx, self.block)
+	vmenv := self.VmEnv()
 	var ref vm.ClosureRef
-	if tx.CreatesContract() {
-		self.rec = MakeContract(tx, self.state)
+	if msg.CreatesContract() {
+		self.rec = MakeContract(msg, self.state)
 
-		ret, err, ref = vmenv.Create(sender, self.rec.Address(), self.tx.Data, self.gas, self.gasPrice, self.value)
+		ret, err, ref = vmenv.Create(sender, self.rec.Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
 		ref.SetCode(ret)
 	} else {
-		ret, err = vmenv.Call(self.Sender(), self.Receiver().Address(), self.tx.Data, self.gas, self.gasPrice, self.value)
+		ret, err = vmenv.Call(self.From(), self.To().Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
 	}
 	if err != nil {
 		statelogger.Debugln(err)
@@ -187,11 +221,11 @@ func (self *StateTransition) TransitionState() (err error) {
 }
 
 // Converts an transaction in to a state object
-func MakeContract(tx *types.Transaction, state *state.StateDB) *state.StateObject {
-	addr := tx.CreationAddress(state)
+func MakeContract(msg Message, state *state.StateDB) *state.StateObject {
+	addr := AddressFromMessage(msg)
 
 	contract := state.GetOrNewStateObject(addr)
-	contract.InitCode = tx.Data
+	contract.InitCode = msg.Data()
 
 	return contract
 }

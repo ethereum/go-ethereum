@@ -6,7 +6,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/state"
 	"github.com/obscuren/secp256k1-go"
 )
 
@@ -18,12 +17,12 @@ func IsContractAddr(addr []byte) bool {
 }
 
 type Transaction struct {
-	Nonce     uint64
-	Recipient []byte
-	Value     *big.Int
-	Gas       *big.Int
-	GasPrice  *big.Int
-	Data      []byte
+	nonce     uint64
+	recipient []byte
+	value     *big.Int
+	gas       *big.Int
+	gasPrice  *big.Int
+	data      []byte
 	v         byte
 	r, s      []byte
 
@@ -32,11 +31,11 @@ type Transaction struct {
 }
 
 func NewContractCreationTx(value, gas, gasPrice *big.Int, script []byte) *Transaction {
-	return &Transaction{Recipient: nil, Value: value, Gas: gas, GasPrice: gasPrice, Data: script, contractCreation: true}
+	return &Transaction{recipient: nil, value: value, gas: gas, gasPrice: gasPrice, data: script, contractCreation: true}
 }
 
 func NewTransactionMessage(to []byte, value, gas, gasPrice *big.Int, data []byte) *Transaction {
-	return &Transaction{Recipient: to, Value: value, GasPrice: gasPrice, Gas: gas, Data: data, contractCreation: IsContractAddr(to)}
+	return &Transaction{recipient: to, value: value, gasPrice: gasPrice, gas: gas, data: data, contractCreation: IsContractAddr(to)}
 }
 
 func NewTransactionFromBytes(data []byte) *Transaction {
@@ -54,18 +53,50 @@ func NewTransactionFromValue(val *ethutil.Value) *Transaction {
 }
 
 func (self *Transaction) GasValue() *big.Int {
-	return new(big.Int).Mul(self.Gas, self.GasPrice)
+	return new(big.Int).Mul(self.gas, self.gasPrice)
 }
 
 func (self *Transaction) TotalValue() *big.Int {
 	v := self.GasValue()
-	return v.Add(v, self.Value)
+	return v.Add(v, self.value)
 }
 
 func (tx *Transaction) Hash() []byte {
-	data := []interface{}{tx.Nonce, tx.GasPrice, tx.Gas, tx.Recipient, tx.Value, tx.Data}
+	data := []interface{}{tx.Nonce, tx.gasPrice, tx.gas, tx.recipient, tx.Value, tx.Data}
 
 	return crypto.Sha3(ethutil.NewValue(data).Encode())
+}
+
+func (self *Transaction) Data() []byte {
+	return self.data
+}
+
+func (self *Transaction) Gas() *big.Int {
+	return self.gas
+}
+
+func (self *Transaction) GasPrice() *big.Int {
+	return self.gasPrice
+}
+
+func (self *Transaction) Value() *big.Int {
+	return self.value
+}
+
+func (self *Transaction) Nonce() uint64 {
+	return self.nonce
+}
+
+func (self *Transaction) SetNonce(nonce uint64) {
+	self.nonce = nonce
+}
+
+func (self *Transaction) From() []byte {
+	return self.Sender()
+}
+
+func (self *Transaction) To() []byte {
+	return self.recipient
 }
 
 func (tx *Transaction) CreatesContract() bool {
@@ -75,11 +106,6 @@ func (tx *Transaction) CreatesContract() bool {
 /* Deprecated */
 func (tx *Transaction) IsContract() bool {
 	return tx.CreatesContract()
-}
-
-func (tx *Transaction) CreationAddress(state *state.StateDB) []byte {
-	// Generate a new address
-	return crypto.Sha3(ethutil.NewValue([]interface{}{tx.Sender(), tx.Nonce}).Encode())[12:]
 }
 
 func (tx *Transaction) Curve() (v byte, r []byte, s []byte) {
@@ -136,7 +162,7 @@ func (tx *Transaction) Sign(privk []byte) error {
 }
 
 func (tx *Transaction) RlpData() interface{} {
-	data := []interface{}{tx.Nonce, tx.GasPrice, tx.Gas, tx.Recipient, tx.Value, tx.Data}
+	data := []interface{}{tx.Nonce, tx.GasPrice, tx.Gas, tx.recipient, tx.Value, tx.Data}
 
 	// TODO Remove prefixing zero's
 
@@ -156,18 +182,18 @@ func (tx *Transaction) RlpDecode(data []byte) {
 }
 
 func (tx *Transaction) RlpValueDecode(decoder *ethutil.Value) {
-	tx.Nonce = decoder.Get(0).Uint()
-	tx.GasPrice = decoder.Get(1).BigInt()
-	tx.Gas = decoder.Get(2).BigInt()
-	tx.Recipient = decoder.Get(3).Bytes()
-	tx.Value = decoder.Get(4).BigInt()
-	tx.Data = decoder.Get(5).Bytes()
+	tx.nonce = decoder.Get(0).Uint()
+	tx.gasPrice = decoder.Get(1).BigInt()
+	tx.gas = decoder.Get(2).BigInt()
+	tx.recipient = decoder.Get(3).Bytes()
+	tx.value = decoder.Get(4).BigInt()
+	tx.data = decoder.Get(5).Bytes()
 	tx.v = byte(decoder.Get(6).Uint())
 
 	tx.r = decoder.Get(7).Bytes()
 	tx.s = decoder.Get(8).Bytes()
 
-	if IsContractAddr(tx.Recipient) {
+	if IsContractAddr(tx.recipient) {
 		tx.contractCreation = true
 	}
 }
@@ -188,12 +214,12 @@ func (tx *Transaction) String() string {
 	S:        0x%x
 	`,
 		tx.Hash(),
-		len(tx.Recipient) == 0,
+		len(tx.recipient) == 0,
 		tx.Sender(),
-		tx.Recipient,
-		tx.Nonce,
-		tx.GasPrice,
-		tx.Gas,
+		tx.recipient,
+		tx.nonce,
+		tx.gasPrice,
+		tx.gas,
 		tx.Value,
 		tx.Data,
 		tx.v,
@@ -221,5 +247,5 @@ func (s Transactions) GetRlp(i int) []byte { return ethutil.Rlp(s[i]) }
 type TxByNonce struct{ Transactions }
 
 func (s TxByNonce) Less(i, j int) bool {
-	return s.Transactions[i].Nonce < s.Transactions[j].Nonce
+	return s.Transactions[i].nonce < s.Transactions[j].nonce
 }

@@ -134,7 +134,7 @@ func (self *XEth) Transact(key *crypto.KeyPair, to []byte, value, gas, price *et
 	state := self.chainManager.TransState()
 	nonce := state.GetNonce(key.Address())
 
-	tx.Nonce = nonce
+	tx.SetNonce(nonce)
 	tx.Sign(key.PrivateKey)
 
 	// Do some pre processing for our "pre" events  and hooks
@@ -150,7 +150,7 @@ func (self *XEth) Transact(key *crypto.KeyPair, to []byte, value, gas, price *et
 	state.SetNonce(key.Address(), nonce+1)
 
 	if contractCreation {
-		addr := tx.CreationAddress(self.World().State())
+		addr := core.AddressFromMessage(tx)
 		pipelogger.Infof("Contract addr %x\n", addr)
 	}
 
@@ -163,8 +163,8 @@ func (self *XEth) PushTx(tx *types.Transaction) ([]byte, error) {
 		return nil, err
 	}
 
-	if tx.Recipient == nil {
-		addr := tx.CreationAddress(self.World().State())
+	if tx.To() == nil {
+		addr := core.AddressFromMessage(tx)
 		pipelogger.Infof("Contract addr %x\n", addr)
 		return addr, nil
 	}

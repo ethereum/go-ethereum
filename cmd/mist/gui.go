@@ -305,13 +305,13 @@ func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 
 	var (
 		ptx  = xeth.NewJSTx(tx, pipe.World().State())
-		send = nameReg.Storage(tx.Sender())
-		rec  = nameReg.Storage(tx.Recipient)
+		send = nameReg.Storage(tx.From())
+		rec  = nameReg.Storage(tx.To())
 		s, r string
 	)
 
 	if tx.CreatesContract() {
-		rec = nameReg.Storage(tx.CreationAddress(pipe.World().State()))
+		rec = nameReg.Storage(core.AddressFromMessage(tx))
 	}
 
 	if send.Len() != 0 {
@@ -323,9 +323,9 @@ func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 		r = strings.Trim(rec.Str(), "\x00")
 	} else {
 		if tx.CreatesContract() {
-			r = ethutil.Bytes2Hex(tx.CreationAddress(pipe.World().State()))
+			r = ethutil.Bytes2Hex(core.AddressFromMessage(tx))
 		} else {
-			r = ethutil.Bytes2Hex(tx.Recipient)
+			r = ethutil.Bytes2Hex(tx.To())
 		}
 	}
 	ptx.Sender = s
@@ -449,11 +449,11 @@ func (gui *Gui) update() {
 					object := state.GetAccount(gui.address())
 
 					if bytes.Compare(tx.Sender(), gui.address()) == 0 {
-						object.SubAmount(tx.Value)
+						object.SubAmount(tx.Value())
 
 						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-					} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
-						object.AddAmount(tx.Value)
+					} else if bytes.Compare(tx.To(), gui.address()) == 0 {
+						object.AddAmount(tx.Value())
 
 						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 					}
