@@ -72,19 +72,17 @@ type TxPool struct {
 
 	subscribers []chan TxMsg
 
-	broadcaster  types.Broadcaster
 	chainManager *ChainManager
 	eventMux     *event.TypeMux
 }
 
-func NewTxPool(chainManager *ChainManager, broadcaster types.Broadcaster, eventMux *event.TypeMux) *TxPool {
+func NewTxPool(chainManager *ChainManager, eventMux *event.TypeMux) *TxPool {
 	return &TxPool{
 		pool:         list.New(),
 		queueChan:    make(chan *types.Transaction, txPoolQueueSize),
 		quit:         make(chan bool),
 		chainManager: chainManager,
 		eventMux:     eventMux,
-		broadcaster:  broadcaster,
 	}
 }
 
@@ -96,7 +94,7 @@ func (pool *TxPool) addTransaction(tx *types.Transaction) {
 	pool.pool.PushBack(tx)
 
 	// Broadcast the transaction to the rest of the peers
-	pool.Ethereum.EventMux().Post(TxPreEvent{tx})
+	pool.eventMux.Post(TxPreEvent{tx})
 }
 
 func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {

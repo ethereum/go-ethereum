@@ -101,7 +101,10 @@ func NewChainManager(mux *event.TypeMux) *ChainManager {
 }
 
 func (self *ChainManager) Status() (td *big.Int, currentBlock []byte, genesisBlock []byte) {
-	return self.TD, self.CurrentBlock.Hash(), self.Genesis().Hash()
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+
+	return self.td, self.currentBlock.Hash(), self.Genesis().Hash()
 }
 
 func (self *ChainManager) SetProcessor(proc types.BlockProcessor) {
