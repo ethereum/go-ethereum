@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 )
@@ -57,7 +58,6 @@ type TxProcessor interface {
 // pool is being drained or synced for whatever reason the transactions
 // will simple queue up and handled when the mutex is freed.
 type TxPool struct {
-	Ethereum EthManager
 	// The mutex for accessing the Tx pool.
 	mutex sync.Mutex
 	// Queueing channel for reading and writing incoming
@@ -71,14 +71,20 @@ type TxPool struct {
 	SecondaryProcessor TxProcessor
 
 	subscribers []chan TxMsg
+
+	broadcaster  types.Broadcaster
+	chainManager *ChainManager
+	eventMux     *event.TypeMux
 }
 
-func NewTxPool(ethereum EthManager) *TxPool {
+func NewTxPool(chainManager *ChainManager, broadcaster types.Broadcaster, eventMux *event.TypeMux) *TxPool {
 	return &TxPool{
-		pool:      list.New(),
-		queueChan: make(chan *types.Transaction, txPoolQueueSize),
-		quit:      make(chan bool),
-		Ethereum:  ethereum,
+		pool:         list.New(),
+		queueChan:    make(chan *types.Transaction, txPoolQueueSize),
+		quit:         make(chan bool),
+		chainManager: chainManager,
+		eventMux:     eventMux,
+		broadcaster:  broadcaster,
 	}
 }
 
@@ -96,7 +102,7 @@ func (pool *TxPool) addTransaction(tx *types.Transaction) {
 func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 	// Get the last block so we can retrieve the sender and receiver from
 	// the merkle trie
-	block := pool.Ethereum.ChainManager().CurrentBlock
+	block := pool.chainManager.CurrentBlock
 	// Something has gone horribly wrong if this happens
 	if block == nil {
 		return fmt.Errorf("No last block on the block chain")
@@ -112,7 +118,7 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 	}
 
 	// Get the sender
-	sender := pool.Ethereum.ChainManager().State().GetAccount(tx.Sender())
+	sender := pool.chainManager.State().GetAccount(tx.Sender())
 
 	totAmount := new(big.Int).Set(tx.Value)
 	// Make sure there's enough in the sender's account. Having insufficient
@@ -156,7 +162,7 @@ func (self *TxPool) Add(tx *types.Transaction) error {
 	txplogger.Debugf("(t) %x => %x (%v) %x\n", tx.Sender()[:4], tmp, tx.Value, tx.Hash())
 
 	// Notify the subscribers
-	go self.Ethereum.EventMux().Post(TxPreEvent{tx})
+	go self.eventMux.Post(TxPreEvent{tx})
 
 	return nil
 }

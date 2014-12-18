@@ -78,11 +78,11 @@ func (self *Filter) SetSkip(skip int) {
 func (self *Filter) Find() []*state.Message {
 	var earliestBlockNo uint64 = uint64(self.earliest)
 	if self.earliest == -1 {
-		earliestBlockNo = self.eth.ChainManager().CurrentBlock.Number.Uint64()
+		earliestBlockNo = self.eth.ChainManager().CurrentBlock().Number.Uint64()
 	}
 	var latestBlockNo uint64 = uint64(self.latest)
 	if self.latest == -1 {
-		latestBlockNo = self.eth.ChainManager().CurrentBlock.Number.Uint64()
+		latestBlockNo = self.eth.ChainManager().CurrentBlock().Number.Uint64()
 	}
 
 	var (

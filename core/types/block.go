@@ -409,7 +409,7 @@ func (self *Block) Size() ethutil.StorageSize {
 
 // Implement RlpEncodable
 func (self *Block) RlpData() interface{} {
-	return self.Value().Val
+	return []interface{}{self.header(), self.transactions, self.rlpUncles()}
 }
 
 // Implement pow.Block

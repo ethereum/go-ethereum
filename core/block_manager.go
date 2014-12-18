@@ -56,8 +56,8 @@ type BlockManager struct {
 	mem map[string]*big.Int
 	// Proof of work used for validating
 	Pow pow.PoW
-	// The ethereum manager interface
-	eth EthManager
+
+	txpool *TxPool
 
 	// The last attempted block is mainly used for debugging purposes
 	// This does not have to be a valid block and will be set during
@@ -69,13 +69,13 @@ type BlockManager struct {
 	eventMux *event.TypeMux
 }
 
-func NewBlockManager(ethereum EthManager) *BlockManager {
+func NewBlockManager(txpool *TxPool, chainManager *ChainManager, eventMux *event.TypeMux) *BlockManager {
 	sm := &BlockManager{
 		mem:      make(map[string]*big.Int),
 		Pow:      ezp.New(),
-		eth:      ethereum,
-		bc:       ethereum.ChainManager(),
-		eventMux: ethereum.EventMux(),
+		bc:       chainManager,
+		eventMux: eventMux,
+		txpool:   txpool,
 	}
 
 	return sm
@@ -238,7 +238,7 @@ func (sm *BlockManager) ProcessWithParent(block, parent *types.Block) (td *big.I
 
 		chainlogger.Infof("Processed block #%d (%x...)\n", block.Number, block.Hash()[0:4])
 
-		sm.eth.TxPool().RemoveSet(block.Transactions())
+		sm.txpool.RemoveSet(block.Transactions())
 
 		return td, messages, nil
 	} else {
@@ -254,12 +254,12 @@ func (sm *BlockManager) CalculateTD(block *types.Block) (*big.Int, bool) {
 
 	// TD(genesis_block) = 0 and TD(B) = TD(B.parent) + sum(u.difficulty for u in B.uncles) + B.difficulty
 	td := new(big.Int)
-	td = td.Add(sm.bc.TD, uncleDiff)
+	td = td.Add(sm.bc.Td(), uncleDiff)
 	td = td.Add(td, block.Difficulty)
 
 	// The new TD will only be accepted if the new difficulty is
 	// is greater than the previous.
-	if td.Cmp(sm.bc.TD) > 0 {
+	if td.Cmp(sm.bc.Td()) > 0 {
 		return td, true
 	}
 
@@ -277,7 +277,7 @@ func (sm *BlockManager) ValidateBlock(block, parent *types.Block) error {
 
 	diff := block.Time - parent.Time
 	if diff < 0 {
-		return ValidationError("Block timestamp less then prev block %v (%v - %v)", diff, block.Time, sm.bc.CurrentBlock.Time)
+		return ValidationError("Block timestamp less then prev block %v (%v - %v)", diff, block.Time, sm.bc.CurrentBlock().Time)
 	}
 
 	/* XXX

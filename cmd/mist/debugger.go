@@ -149,7 +149,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 
 	self.SetAsm(script)
 
-	block := self.lib.eth.ChainManager().CurrentBlock
+	block := self.lib.eth.ChainManager().CurrentBlock()
 
 	env := utils.NewEnv(statedb, block, account.Address(), value)
 
