@@ -4,8 +4,11 @@ module.exports = {
   hexencode: require('./BasicTests/hexencodetest'),
   keyaddrtests: require('./BasicTests/keyaddrtest'),
   rlptest: require('./BasicTests/rlptest'),
-  trietest: require('./TrieTests/trietest'),
-  trietestnextprev: require('./TrieTests/trietestnextprev'),
+  trieTests: {
+    trietest: require('./TrieTests/trietest'),
+    trietestnextprev: require('./TrieTests/trietestnextprev'),
+    trieanyorder: require('./TrieTests/trieanyorder')
+  },
   txtest: require('./BasicTests/txtest'),
   StateTests: {
     stExample: require('./StateTests/stExample.json'),
