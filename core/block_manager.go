@@ -129,7 +129,6 @@ done:
 				statelogger.Infoln(err)
 				erroneous = append(erroneous, tx)
 				err = nil
-				continue
 			}
 		}
 
@@ -215,6 +214,7 @@ func (sm *BlockManager) ProcessWithParent(block, parent *types.Block) (td *big.I
 
 	receiptSha := types.DeriveSha(receipts)
 	if bytes.Compare(receiptSha, block.ReceiptSha) != 0 {
+		chainlogger.Debugln(receipts)
 		err = fmt.Errorf("validating receipt root. received=%x got=%x", block.ReceiptSha, receiptSha)
 		return
 	}

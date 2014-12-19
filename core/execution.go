@@ -56,9 +56,7 @@ func (self *Execution) exec(code, contextAddr []byte, caller vm.ClosureRef) (ret
 
 	snapshot := env.State().Copy()
 	defer func() {
-		if vm.IsOOGErr(err) {
-			env.State().Set(snapshot)
-		}
+		env.State().Set(snapshot)
 		chainlogger.Debugf("post state %x\n", env.State().Root())
 	}()
 

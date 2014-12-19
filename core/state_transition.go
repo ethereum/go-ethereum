@@ -189,12 +189,19 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 		self.rec = MakeContract(msg, self.state)
 
 		ret, err, ref = vmenv.Create(sender, self.rec.Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
-		ref.SetCode(ret)
+		if err == nil {
+			dataGas := big.NewInt(int64(len(ret)))
+			dataGas.Mul(dataGas, vm.GasCreateByte)
+			if err = self.UseGas(dataGas); err == nil {
+				ref.SetCode(ret)
+			}
+		}
 	} else {
 		ret, err = vmenv.Call(self.From(), self.To().Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
 	}
+
 	if err != nil {
-		statelogger.Debugln(err)
+		self.UseGas(self.gas)
 	}
 
 	return
