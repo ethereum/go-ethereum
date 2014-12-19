@@ -112,7 +112,7 @@ func (self *StateTransition) BuyGas() error {
 
 	sender := self.From()
 	if sender.Balance().Cmp(MessageGasValue(self.msg)) < 0 {
-		return fmt.Errorf("Insufficient funds to pre-pay gas. Req %v, has %v", MessageGasValue(self.msg), sender.Balance())
+		return fmt.Errorf("insufficient ETH for gas (%x). Req %v, has %v", sender.Address()[:4], MessageGasValue(self.msg), sender.Balance())
 	}
 
 	coinbase := self.Coinbase()

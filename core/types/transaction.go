@@ -47,7 +47,7 @@ func NewTransactionFromValue(val *ethutil.Value) *Transaction {
 }
 
 func (tx *Transaction) Hash() []byte {
-	data := []interface{}{tx.Nonce, tx.gasPrice, tx.gas, tx.recipient, tx.Value, tx.Data}
+	data := []interface{}{tx.nonce, tx.gasPrice, tx.gas, tx.recipient, tx.value, tx.data}
 
 	return crypto.Sha3(ethutil.NewValue(data).Encode())
 }
@@ -108,8 +108,8 @@ func (tx *Transaction) PublicKey() []byte {
 	sig := append(r, s...)
 	sig = append(sig, v-27)
 
-	pubkey := crypto.Ecrecover(append(hash, sig...))
-	//pubkey, _ := secp256k1.RecoverPubkey(hash, sig)
+	//pubkey := crypto.Ecrecover(append(hash, sig...))
+	pubkey, _ := secp256k1.RecoverPubkey(hash, sig)
 
 	return pubkey
 }
@@ -138,9 +138,7 @@ func (tx *Transaction) Sign(privk []byte) error {
 }
 
 func (tx *Transaction) RlpData() interface{} {
-	data := []interface{}{tx.Nonce, tx.GasPrice, tx.Gas, tx.recipient, tx.Value, tx.Data}
-
-	// TODO Remove prefixing zero's
+	data := []interface{}{tx.nonce, tx.gasPrice, tx.gas, tx.recipient, tx.value, tx.data}
 
 	return append(data, tx.v, new(big.Int).SetBytes(tx.r).Bytes(), new(big.Int).SetBytes(tx.s).Bytes())
 }
@@ -184,6 +182,7 @@ func (tx *Transaction) String() string {
 	V:        0x%x
 	R:        0x%x
 	S:        0x%x
+	Hex:      %x
 	`,
 		tx.Hash(),
 		len(tx.recipient) == 0,
@@ -192,11 +191,13 @@ func (tx *Transaction) String() string {
 		tx.nonce,
 		tx.gasPrice,
 		tx.gas,
-		tx.Value,
-		tx.Data,
+		tx.value,
+		tx.data,
 		tx.v,
 		tx.r,
-		tx.s)
+		tx.s,
+		ethutil.Encode(tx),
+	)
 }
 
 // Transaction slice type for basic sorting
