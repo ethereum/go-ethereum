@@ -1,7 +1,7 @@
 // disk storage layer for the package blockhash
 // inefficient work-in-progress version
 
-package blockhash
+package bzz
 
 import (
 	//	"crypto/sha256"

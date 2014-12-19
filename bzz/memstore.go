@@ -1,6 +1,6 @@
 // memory storage layer for the package blockhash
 
-package blockhash
+package bzz
 
 const MaxEntries = 500 // max number of stored (cached) blocks
 const MemTreeLW = 2    // log2(subtree count) of the subtrees

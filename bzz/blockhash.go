@@ -12,7 +12,7 @@ The block hash of a byte array is defined as follows:
   blockhash = sha256(int64(size) + blockhash(slice0) + blockhash(slice1) + ...)
 */
 
-package blockhash
+package bzz
 
 import (
 	"bytes"
