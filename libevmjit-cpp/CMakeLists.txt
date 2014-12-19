@@ -1,17 +1,16 @@
-project(evmjit-cpp CXX)
+set(TARGET_NAME evmjit-cpp)
 
 set(SOURCES
     Env.cpp     
     JitVM.cpp   JitVM.h
 )
+source_group("" FILES ${SOURCES})
 
-add_library(${PROJECT_NAME} ${SOURCES})
+add_library(${TARGET_NAME} ${SOURCES})
+set_property(TARGET ${TARGET_NAME} PROPERTY FOLDER "libs")
 
 include_directories(../..)
-
-find_package(LLVM REQUIRED CONFIG)
 include_directories(${LLVM_INCLUDE_DIRS})
-add_definitions(${LLVM_DEFINITIONS})
+include_directories(${Boost_INCLUDE_DIRS})
 
-source_group("" FILES ${SOURCES})
-set_property(TARGET ${PROJECT_NAME} PROPERTY FOLDER "libs")
+target_link_libraries(${TARGET_NAME} evmjit)
