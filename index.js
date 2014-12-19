@@ -16,6 +16,7 @@ module.exports = {
     stLogTests: require('./StateTests/stLogTests.json'),
     stPreCompiledContracts: require('./StateTests/stPreCompiledContracts'),
     stRecursiveCreate: require('./StateTests/stRecursiveCreate'),
+    stRefundTest: require('./StateTests/stRefundTest'),
     stSpecial: require('./StateTests/stSpecialTest'),
     stSystemOperationsTest: require('./StateTests/stSystemOperationsTest'),
     stTransactionTest: require('./StateTests/stTransactionTest')
