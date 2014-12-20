@@ -5,6 +5,11 @@ file(GLOB HEADERS "*.h")
 source_group("" FILES ${HEADERS})
 source_group("" FILES ${SOURCES})
 
+if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+	# Disable rtti for Cache as LLVM has no rtti
+	set_source_files_properties(Cache.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
+endif ()
+
 add_library(${TARGET_NAME} ${SOURCES} ${HEADERS})
 set_property(TARGET ${TARGET_NAME} PROPERTY FOLDER "libs")
 
@@ -14,6 +19,8 @@ add_definitions(${LLVM_DEFINITIONS})
 
 llvm_map_components_to_libnames(LLVM_LIBS core support mcjit x86asmparser x86codegen)
 target_link_libraries(${TARGET_NAME} ${LLVM_LIBS})
+
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
 
 #install( TARGETS ${EXECUTABLE} ARCHIVE DESTINATION lib LIBRARY DESTINATION lib )
 #install( FILES ${HEADERS} DESTINATION include/${EXECUTABLE} )
