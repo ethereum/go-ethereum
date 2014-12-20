@@ -108,12 +108,12 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		}
 	)
 
+	vmlogger.Debugf("(%d) (%x) %x (code=%d) gas: %v (d) %x\n", self.env.Depth(), caller.Address()[:4], closure.Address(), len(code), closure.Gas, callData)
+
 	// Don't bother with the execution if there's no code.
 	if len(code) == 0 {
 		return closure.Return(nil), nil
 	}
-
-	vmlogger.Debugf("(%d) (%x) %x gas: %v (d) %x\n", self.env.Depth(), caller.Address()[:4], closure.Address(), closure.Gas, callData)
 
 	for {
 		prevStep = step
@@ -134,6 +134,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		addStepGasUsage(GasStep)
 
 		var newMemSize *big.Int = ethutil.Big0
+		var additionalGas *big.Int = new(big.Int)
 		// Stack Check, memory resize & gas phase
 		switch op {
 		// Stack checks only
@@ -213,22 +214,24 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-2])
 		case SHA3:
 			require(2)
-
 			gas.Set(GasSha)
-
 			newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-2])
+			additionalGas.Set(stack.data[stack.Len()-2])
 		case CALLDATACOPY:
 			require(2)
 
 			newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-3])
+			additionalGas.Set(stack.data[stack.Len()-3])
 		case CODECOPY:
 			require(3)
 
 			newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-3])
+			additionalGas.Set(stack.data[stack.Len()-3])
 		case EXTCODECOPY:
 			require(4)
 
 			newMemSize = calcMemSize(stack.data[stack.Len()-2], stack.data[stack.Len()-4])
+			additionalGas.Set(stack.data[stack.Len()-4])
 		case CALL, CALLCODE:
 			require(7)
 			gas.Set(GasCall)
@@ -245,19 +248,22 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			newMemSize = calcMemSize(stack.data[stack.Len()-2], stack.data[stack.Len()-3])
 		}
 
+		switch op {
+		case CALLDATACOPY, CODECOPY, EXTCODECOPY:
+			additionalGas.Add(additionalGas, u256(31))
+			additionalGas.Div(additionalGas, u256(32))
+			addStepGasUsage(additionalGas)
+		case SHA3:
+			additionalGas.Add(additionalGas, u256(31))
+			additionalGas.Div(additionalGas, u256(32))
+			additionalGas.Mul(additionalGas, GasSha3Byte)
+			addStepGasUsage(additionalGas)
+		}
+
 		if newMemSize.Cmp(ethutil.Big0) > 0 {
 			newMemSize.Add(newMemSize, u256(31))
 			newMemSize.Div(newMemSize, u256(32))
 			newMemSize.Mul(newMemSize, u256(32))
-
-			switch op {
-			case CALLDATACOPY, CODECOPY, EXTCODECOPY:
-				addStepGasUsage(new(big.Int).Div(newMemSize, u256(32)))
-			case SHA3:
-				g := new(big.Int).Div(newMemSize, u256(32))
-				g.Mul(g, GasSha3Byte)
-				addStepGasUsage(g)
-			}
 
 			if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
 				memGasUsage := new(big.Int).Sub(newMemSize, u256(int64(mem.Len())))
@@ -643,9 +649,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		case CODECOPY, EXTCODECOPY:
 			var code []byte
 			if op == EXTCODECOPY {
-				addr := stack.Pop().Bytes()
-
-				code = statedb.GetCode(addr)
+				code = statedb.GetCode(stack.Pop().Bytes())
 			} else {
 				code = closure.Code
 			}
@@ -663,12 +667,11 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			} else if cOff+l > size {
 				l = uint64(math.Min(float64(cOff+l), float64(size)))
 			}
-
 			codeCopy := code[cOff : cOff+l]
 
 			mem.Set(mOff, l, codeCopy)
 
-			self.Printf(" => [%v, %v, %v] %x", mOff, cOff, l, code[cOff:cOff+l])
+			self.Printf(" => [%v, %v, %v] %x", mOff, cOff, l, codeCopy)
 		case GASPRICE:
 			stack.Push(closure.Price)
 
@@ -891,7 +894,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			size, offset := stack.Popn()
 			ret := mem.Get(offset.Int64(), size.Int64())
 
-			self.Printf(" => (%d) 0x%x", len(ret), ret).Endl()
+			self.Printf(" => [%v, %v] (%d) 0x%x", offset, size, len(ret), ret).Endl()
 
 			return closure.Return(ret), nil
 		case SUICIDE:

@@ -129,7 +129,6 @@ done:
 				statelogger.Infoln(err)
 				erroneous = append(erroneous, tx)
 				err = nil
-				continue
 			}
 		}
 
@@ -143,6 +142,7 @@ done:
 		receipt := types.NewReceipt(state.Root(), cumulative)
 		receipt.SetLogs(state.Logs())
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+		chainlogger.Debugln(receipt)
 
 		// Notify all subscribers
 		if !transientProcess {
@@ -215,6 +215,8 @@ func (sm *BlockManager) ProcessWithParent(block, parent *types.Block) (td *big.I
 
 	receiptSha := types.DeriveSha(receipts)
 	if bytes.Compare(receiptSha, block.ReceiptSha) != 0 {
+		//chainlogger.Debugf("validating receipt root. received=%x got=%x", block.ReceiptSha, receiptSha)
+		fmt.Printf("%x\n", ethutil.Encode(receipts))
 		err = fmt.Errorf("validating receipt root. received=%x got=%x", block.ReceiptSha, receiptSha)
 		return
 	}
