@@ -7,27 +7,26 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/ethereum/eth-go"
-	"github.com/ethereum/eth-go/ethchain"
-	"github.com/ethereum/eth-go/ethlog"
-	"github.com/ethereum/eth-go/ethpipe"
-	"github.com/ethereum/eth-go/ethreact"
-	"github.com/ethereum/eth-go/ethstate"
-	"github.com/ethereum/eth-go/ethutil"
-	"github.com/ethereum/go-ethereum/utils"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/obscuren/otto"
 )
 
-var jsrelogger = ethlog.NewLogger("JSRE")
+var jsrelogger = logger.NewLogger("JSRE")
 
 type JSRE struct {
 	ethereum *eth.Ethereum
 	Vm       *otto.Otto
-	pipe     *ethpipe.JSPipe
+	pipe     *xeth.JSXEth
 
-	blockChan  chan ethreact.Event
-	changeChan chan ethreact.Event
-	quitChan   chan bool
+	events event.Subscription
 
 	objectCb map[string][]otto.Value
 }
@@ -42,7 +41,7 @@ func (jsre *JSRE) LoadExtFile(path string) {
 }
 
 func (jsre *JSRE) LoadIntFile(file string) {
-	assetPath := path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "mist", "assets", "ext")
+	assetPath := path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist", "assets", "ext")
 	jsre.LoadExtFile(path.Join(assetPath, file))
 }
 
@@ -50,10 +49,8 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	re := &JSRE{
 		ethereum,
 		otto.New(),
-		ethpipe.NewJSPipe(ethereum),
-		make(chan ethreact.Event, 10),
-		make(chan ethreact.Event, 10),
-		make(chan bool),
+		xeth.NewJSXEth(ethereum),
+		nil,
 		make(map[string][]otto.Value),
 	}
 
@@ -64,12 +61,12 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	re.LoadIntFile("string.js")
 	re.LoadIntFile("big.js")
 
+	// Subscribe to events
+	mux := ethereum.EventMux()
+	re.events = mux.Subscribe(core.NewBlockEvent{})
+
 	// We have to make sure that, whoever calls this, calls "Stop"
 	go re.mainLoop()
-
-	// Subscribe to events
-	reactor := ethereum.Reactor()
-	reactor.Subscribe("newBlock", re.blockChan)
 
 	re.Bind("eth", &JSEthereum{re.pipe, re.Vm, ethereum})
 
@@ -105,25 +102,12 @@ func (self *JSRE) Require(file string) error {
 }
 
 func (self *JSRE) Stop() {
-	// Kill the main loop
-	self.quitChan <- true
-
-	close(self.blockChan)
-	close(self.quitChan)
-	close(self.changeChan)
+	self.events.Unsubscribe()
 	jsrelogger.Infoln("stopped")
 }
 
 func (self *JSRE) mainLoop() {
-out:
-	for {
-		select {
-		case <-self.quitChan:
-			break out
-		case block := <-self.blockChan:
-			if _, ok := block.Resource.(*ethchain.Block); ok {
-			}
-		}
+	for _ = range self.events.Chan() {
 	}
 }
 
@@ -137,6 +121,7 @@ func (self *JSRE) initStdFuncs() {
 	eth.Set("startMining", self.startMining)
 	eth.Set("execBlock", self.execBlock)
 	eth.Set("dump", self.dump)
+	eth.Set("export", self.export)
 }
 
 /*
@@ -144,16 +129,16 @@ func (self *JSRE) initStdFuncs() {
  */
 
 func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
-	var state *ethstate.State
+	var state *state.StateDB
 
 	if len(call.ArgumentList) > 0 {
-		var block *ethchain.Block
+		var block *types.Block
 		if call.Argument(0).IsNumber() {
 			num, _ := call.Argument(0).ToInteger()
-			block = self.ethereum.BlockChain().GetBlockByNumber(uint64(num))
+			block = self.ethereum.ChainManager().GetBlockByNumber(uint64(num))
 		} else if call.Argument(0).IsString() {
 			hash, _ := call.Argument(0).ToString()
-			block = self.ethereum.BlockChain().GetBlock(ethutil.Hex2Bytes(hash))
+			block = self.ethereum.ChainManager().GetBlock(ethutil.Hex2Bytes(hash))
 		} else {
 			fmt.Println("invalid argument for dump. Either hex string or number")
 		}
@@ -166,7 +151,7 @@ func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
 
 		state = block.State()
 	} else {
-		state = self.ethereum.StateManager().CurrentState()
+		state = self.ethereum.ChainManager().State()
 	}
 
 	v, _ := self.Vm.ToValue(state.Dump())
@@ -201,13 +186,13 @@ func (self *JSRE) watch(call otto.FunctionCall) otto.Value {
 	if storageCallback {
 		self.objectCb[addr+storageAddr] = append(self.objectCb[addr+storageAddr], cb)
 
-		event := "storage:" + string(ethutil.Hex2Bytes(addr)) + ":" + string(ethutil.Hex2Bytes(storageAddr))
-		self.ethereum.Reactor().Subscribe(event, self.changeChan)
+		// event := "storage:" + string(ethutil.Hex2Bytes(addr)) + ":" + string(ethutil.Hex2Bytes(storageAddr))
+		// self.ethereum.EventMux().Subscribe(event, self.changeChan)
 	} else {
 		self.objectCb[addr] = append(self.objectCb[addr], cb)
 
-		event := "object:" + string(ethutil.Hex2Bytes(addr))
-		self.ethereum.Reactor().Subscribe(event, self.changeChan)
+		// event := "object:" + string(ethutil.Hex2Bytes(addr))
+		// self.ethereum.EventMux().Subscribe(event, self.changeChan)
 	}
 
 	return otto.UndefinedValue()
@@ -246,6 +231,23 @@ func (self *JSRE) execBlock(call otto.FunctionCall) otto.Value {
 
 	err = utils.BlockDo(self.ethereum, ethutil.Hex2Bytes(hash))
 	if err != nil {
+		fmt.Println(err)
+		return otto.FalseValue()
+	}
+
+	return otto.TrueValue()
+}
+
+func (self *JSRE) export(call otto.FunctionCall) otto.Value {
+	fn, err := call.Argument(0).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.FalseValue()
+	}
+
+	data := self.ethereum.ChainManager().Export()
+
+	if err := ethutil.WriteFile(fn, data); err != nil {
 		fmt.Println(err)
 		return otto.FalseValue()
 	}

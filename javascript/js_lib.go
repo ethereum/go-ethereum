@@ -44,9 +44,11 @@ function pp(object) {
 
 function prettyPrint(/* */) {
     var args = arguments;
+    var ret = "";
     for(var i = 0, l = args.length; i < l; i++) {
-	    console.log(pp(args[i]))
+	    ret += pp(args[i]) + "\n";
     }
+    return ret;
 }
 
 var print = prettyPrint;

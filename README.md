@@ -1,4 +1,8 @@
+[![Bugs](https://badge.waffle.io/ethereum/go-ethereum.png?label=bug&title=Bugs)](https://waffle.io/ethereum/go-ethereum)
 [![Stories in Ready](https://badge.waffle.io/ethereum/go-ethereum.png?label=ready&title=Ready)](https://waffle.io/ethereum/go-ethereum)
+[![Stories in
+Progress](https://badge.waffle.io/ethereum/go-ethereum.svg?label=in%20progress&title=In Progress)](http://waffle.io/ethereum/go-ethereum)
+
 Ethereum
 ========
 
@@ -8,38 +12,64 @@ Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20
 
 Ethereum Go Client © 2014 Jeffrey Wilcke.
 
-Current state: Proof of Concept 0.6.7.
+Current state: Proof of Concept 0.7
 
-For the development package please see the [eth-go package](https://github.com/ethereum/eth-go).
+Ethereum is currently in its testing phase. 
 
 Build
-=======
+=====
 
-To build Ethereal (GUI):
+To build Mist (GUI):
 
-`go get github.com/ethereum/go-ethereum/ethereal`
+`go get github.com/ethereum/go-ethereum/cmd/mist`
 
 To build the node (CLI):
 
-`go get github.com/ethereum/go-ethereum/ethereum`
+`go get github.com/ethereum/go-ethereum/cmd/ethereum`
 
 For further, detailed, build instruction please see the [Wiki](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum(Go))
 
+Automated (dev) builds
+======================
+
+* [[OS X](http://build.ethdev.com/builds/OSX%20Go%20develop%20branch/latest/app/)]
+* [Windows] Coming soon&trade;
+* [Linux] Coming soon&trade;
+
+Binaries
+========
+
+Go Ethereum comes with several binaries found in
+[cmd](https://github.com/ethereum/go-ethereum/tree/master/cmd):
+
+* `mist` Official Ethereum Browser
+* `ethereum` Ethereum CLI
+* `ethtest` test tool which runs with the [tests](https://github.com/ethereum/testes) suit: 
+  `ethtest "`cat myfile.json`"`.
+* `evm` is a generic Ethereum Virtual Machine: `evm -code 60ff60ff -gas
+  10000 -price 0 -dump`. See `-h` for a detailed description.
+
 General command line options
-====================
+============================
 
 ```
-Shared between ethereum and ethereal
+== Shared between ethereum and Mist ==
+
+= Settings
 -id      Set the custom identifier of the client (shows up on other clients)
 -port    Port on which the server will accept incomming connections
 -upnp    Enable UPnP
 -maxpeer Desired amount of peers
 -rpc     Start JSON RPC
-
 -dir     Data directory used to store configs and databases
--import  Import a private key
--genaddr Generates a new address and private key (destructive action)
--h       This
+
+= Utility 
+-h         This
+-import    Import a private key
+-genaddr   Generates a new address and private key (destructive action)
+-dump      Dump a specific state of a block to stdout given the -number or -hash
+-difftool  Supress all output and prints VM output to stdout
+-diff      vm=only vm output, all=all output including state storage
 
 Ethereum only
 ethereum [options] [filename]
@@ -47,31 +77,34 @@ ethereum [options] [filename]
 filename   Load the given file and interpret as JavaScript
 -m       Start mining blocks
 
-Etheral only
+== Mist only ==
+
 -asset_path    absolute path to GUI assets directory
 ```
 
 Contribution
 ============
 
-If you would like to contribute to Ethereum Go, please fork, fix, commit and
-send a pull request to the main repository. Commits which do not comply with the coding standards explained below
-will be ignored. If you send a pull request, make sure that you
-commit to the `develop` branch and that you do not merge to `master`.
-Commits that are directly based off of the `master` branch instead of the `develop` branch will be ignored.
+If you'd like to contribute to Ethereum please fork, fix, commit and
+send a pull request. Commits who do not comply with the coding standards
+are ignored (use gofmt!). If you send pull requests make absolute sure that you
+commit on the `develop` branch and that you do not merge to master.
+Commits that are directly based on master are simply ignored.
 
-To make this process simpler try following the [git flow](http://nvie.com/posts/a-successful-git-branching-model/) branching model, as it sets this process up and streamlines work flow.
+To make life easier try [git flow](http://nvie.com/posts/a-successful-git-branching-model/) it sets
+this all up and streamlines your work flow.
 
 Coding standards
 ================
 
-Code should be formatted according to the [Go Formatting
+Sources should be formatted according to the [Go Formatting
 Style](http://golang.org/doc/effective_go.html#formatting).
 
-Unless struct fields are supposed to be directly accessible, provide
-getters and hide the fields through Go's exporting facility.
+Unless structs fields are supposed to be directly accesible, provide
+Getters and hide the fields through Go's exporting facility.
 
-Make comments in your code meaningful and only use them when necessary. Describe in detail what your code is trying to achieve. For example, this would be redundant and unnecessary commenting:
+When you comment put meaningfull comments. Describe in detail what you
+want to achieve.
 
 *wrong*
 
@@ -82,7 +115,12 @@ if x > y {
 }
 ```
 
-Everyone reading the source code should know what this code snippet was meant to achieve, and so those are **not** meaningful comments.
+Everyone reading the source probably know what you wanted to achieve
+with above code. Those are **not** meaningful comments.
 
-While this project is constantly tested and run, code tests should be written regardless. There is not time to evaluate every person's code specifically, so it is expected of you to write tests for the code so that it does not have to be tested manually. In fact, contributing by simply writing tests is perfectly fine!
+While the project isn't 100% tested I want you to write tests non the
+less. I haven't got time to evaluate everyone's code in detail so I
+expect you to write tests for me so I don't have to test your code
+manually. (If you want to contribute by just writing tests that's fine
+too!)
 

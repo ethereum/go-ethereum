@@ -3,16 +3,16 @@ package javascript
 import (
 	"fmt"
 
-	"github.com/ethereum/eth-go"
-	"github.com/ethereum/eth-go/ethchain"
-	"github.com/ethereum/eth-go/ethpipe"
-	"github.com/ethereum/eth-go/ethstate"
-	"github.com/ethereum/eth-go/ethutil"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/ui"
+	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/obscuren/otto"
 )
 
 type JSStateObject struct {
-	*ethpipe.JSObject
+	*xeth.JSObject
 	eth *JSEthereum
 }
 
@@ -30,7 +30,7 @@ func (self *JSStateObject) EachStorage(call otto.FunctionCall) otto.Value {
 // The JSEthereum object attempts to wrap the PEthereum object and returns
 // meaningful javascript objects
 type JSBlock struct {
-	*ethpipe.JSBlock
+	*xeth.JSBlock
 	eth *JSEthereum
 }
 
@@ -51,7 +51,7 @@ type JSMessage struct {
 	Number    int32  `json:"number"`
 }
 
-func NewJSMessage(message *ethstate.Message) JSMessage {
+func NewJSMessage(message *state.Message) JSMessage {
 	return JSMessage{
 		To:        ethutil.Bytes2Hex(message.To),
 		From:      ethutil.Bytes2Hex(message.From),
@@ -67,33 +67,33 @@ func NewJSMessage(message *ethstate.Message) JSMessage {
 }
 
 type JSEthereum struct {
-	*ethpipe.JSPipe
+	*xeth.JSXEth
 	vm       *otto.Otto
 	ethereum *eth.Ethereum
 }
 
 func (self *JSEthereum) GetBlock(hash string) otto.Value {
-	return self.toVal(&JSBlock{self.JSPipe.BlockByHash(hash), self})
+	return self.toVal(&JSBlock{self.JSXEth.BlockByHash(hash), self})
 }
 
 func (self *JSEthereum) GetPeers() otto.Value {
-	return self.toVal(self.JSPipe.Peers())
+	return self.toVal(self.JSXEth.Peers())
 }
 
 func (self *JSEthereum) GetKey() otto.Value {
-	return self.toVal(self.JSPipe.Key())
+	return self.toVal(self.JSXEth.Key())
 }
 
 func (self *JSEthereum) GetStateObject(addr string) otto.Value {
-	return self.toVal(&JSStateObject{ethpipe.NewJSObject(self.JSPipe.World().SafeGet(ethutil.Hex2Bytes(addr))), self})
+	return self.toVal(&JSStateObject{xeth.NewJSObject(self.JSXEth.World().SafeGet(ethutil.Hex2Bytes(addr))), self})
 }
 
 func (self *JSEthereum) Peers() otto.Value {
-	return self.toVal(self.JSPipe.Peers())
+	return self.toVal(self.JSXEth.Peers())
 }
 
 func (self *JSEthereum) Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr string) otto.Value {
-	r, err := self.JSPipe.Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr)
+	r, err := self.JSXEth.Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr)
 	if err != nil {
 		fmt.Println(err)
 
@@ -104,7 +104,7 @@ func (self *JSEthereum) Transact(key, recipient, valueStr, gasStr, gasPriceStr, 
 }
 
 func (self *JSEthereum) Create(key, valueStr, gasStr, gasPriceStr, scriptStr string) otto.Value {
-	r, err := self.JSPipe.Transact(key, "", valueStr, gasStr, gasPriceStr, scriptStr)
+	r, err := self.JSXEth.Transact(key, "", valueStr, gasStr, gasPriceStr, scriptStr)
 
 	if err != nil {
 		fmt.Println(err)
@@ -128,7 +128,7 @@ func (self *JSEthereum) toVal(v interface{}) otto.Value {
 }
 
 func (self *JSEthereum) Messages(object map[string]interface{}) otto.Value {
-	filter := ethchain.NewFilterFromMap(object, self.ethereum)
+	filter := ui.NewFilterFromMap(object, self.ethereum)
 
 	messages := filter.Find()
 	var msgs []JSMessage
