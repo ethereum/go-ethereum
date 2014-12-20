@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
@@ -12,7 +13,6 @@ type Execution struct {
 	env               vm.Environment
 	address, input    []byte
 	Gas, price, value *big.Int
-	object            *state.StateObject
 	SkipTransfer      bool
 }
 
@@ -35,8 +35,6 @@ func (self *Execution) exec(code, contextAddr []byte, caller vm.ClosureRef) (ret
 	env := self.env
 	evm := vm.New(env, vm.DebugVmTy)
 
-	chainlogger.Debugf("pre state %x\n", env.State().Root())
-
 	if env.Depth() == vm.MaxCallDepth {
 		// Consume all gas (by not returning it) and return a depth error
 		return nil, vm.DepthError{}
@@ -55,13 +53,12 @@ func (self *Execution) exec(code, contextAddr []byte, caller vm.ClosureRef) (ret
 	}
 
 	snapshot := env.State().Copy()
-	defer func() {
-		env.State().Set(snapshot)
-		chainlogger.Debugf("post state %x\n", env.State().Root())
-	}()
-
-	self.object = to
+	start := time.Now()
 	ret, err = evm.Run(to, caller, code, self.value, self.Gas, self.price, self.input)
+	if err != nil {
+		env.State().Set(snapshot)
+	}
+	chainlogger.Debugf("vm took %v\n", time.Since(start))
 
 	return
 }

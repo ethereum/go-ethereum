@@ -186,13 +186,13 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 	vmenv := self.VmEnv()
 	var ref vm.ClosureRef
 	if MessageCreatesContract(msg) {
-		self.rec = MakeContract(msg, self.state)
-
-		ret, err, ref = vmenv.Create(sender, self.rec.Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
+		contract := MakeContract(msg, self.state)
+		ret, err, ref = vmenv.Create(sender, contract.Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
 		if err == nil {
 			dataGas := big.NewInt(int64(len(ret)))
 			dataGas.Mul(dataGas, vm.GasCreateByte)
 			if err = self.UseGas(dataGas); err == nil {
+				//self.state.SetCode(ref.Address(), ret)
 				ref.SetCode(ret)
 			}
 		}
@@ -218,20 +218,19 @@ func MakeContract(msg Message, state *state.StateDB) *state.StateObject {
 }
 
 func (self *StateTransition) RefundGas() {
-	coinbaseSub := new(big.Int).Set(self.gas)
-	uhalf := new(big.Int).Div(self.GasUsed(), ethutil.Big2)
-	for addr, ref := range self.state.Refunds() {
-		refund := ethutil.BigMin(uhalf, ref)
-		coinbaseSub.Add(self.gas, refund)
-		self.state.AddBalance([]byte(addr), refund.Mul(refund, self.msg.GasPrice()))
-	}
-
 	coinbase, sender := self.Coinbase(), self.From()
-	coinbase.RefundGas(coinbaseSub, self.msg.GasPrice())
-
 	// Return remaining gas
 	remaining := new(big.Int).Mul(self.gas, self.msg.GasPrice())
 	sender.AddAmount(remaining)
+
+	uhalf := new(big.Int).Div(self.GasUsed(), ethutil.Big2)
+	for addr, ref := range self.state.Refunds() {
+		refund := ethutil.BigMin(uhalf, ref)
+		self.gas.Add(self.gas, refund)
+		self.state.AddBalance([]byte(addr), refund.Mul(refund, self.msg.GasPrice()))
+	}
+
+	coinbase.RefundGas(self.gas, self.msg.GasPrice())
 }
 
 func (self *StateTransition) GasUsed() *big.Int {
