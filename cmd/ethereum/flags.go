@@ -87,7 +87,7 @@ func Init() {
 	flag.StringVar(&OutboundPort, "port", "30303", "listening port")
 	flag.StringVar(&NatType, "nat", "", "NAT support (UPNP|PMP) (none)")
 	flag.StringVar(&PMPGateway, "pmp", "", "Gateway IP for PMP")
-	flag.IntVar(&MaxPeer, "maxpeer", 10, "maximum desired peers")
+	flag.IntVar(&MaxPeer, "maxpeer", 30, "maximum desired peers")
 	flag.IntVar(&RpcPort, "rpcport", 8080, "port to start json-rpc server on")
 	flag.BoolVar(&StartRpc, "rpc", false, "start rpc server")
 	flag.BoolVar(&StartWebSockets, "ws", false, "start websocket server")

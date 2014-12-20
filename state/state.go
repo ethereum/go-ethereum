@@ -94,6 +94,13 @@ func (self *StateDB) GetCode(addr []byte) []byte {
 	return nil
 }
 
+func (self *StateDB) SetCode(addr, code []byte) {
+	stateObject := self.GetStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetCode(code)
+	}
+}
+
 func (self *StateDB) GetState(a, b []byte) []byte {
 	stateObject := self.GetStateObject(a)
 	if stateObject != nil {
