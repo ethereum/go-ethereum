@@ -29,6 +29,8 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/pow"
+	"github.com/ethereum/go-ethereum/pow/ezp"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -59,7 +61,7 @@ type Miner struct {
 	localTxs  map[int]*LocalTx
 	localTxId int
 
-	pow       core.PoW
+	pow       pow.PoW
 	quitCh    chan struct{}
 	powQuitCh chan struct{}
 
@@ -74,7 +76,7 @@ func New(coinbase []byte, eth *eth.Ethereum) *Miner {
 	return &Miner{
 		eth:                 eth,
 		powQuitCh:           make(chan struct{}),
-		pow:                 &core.EasyPow{},
+		pow:                 ezp.New(),
 		mining:              false,
 		localTxs:            make(map[int]*LocalTx),
 		MinAcceptedGasPrice: big.NewInt(10000000000000),
@@ -82,7 +84,7 @@ func New(coinbase []byte, eth *eth.Ethereum) *Miner {
 	}
 }
 
-func (self *Miner) GetPow() core.PoW {
+func (self *Miner) GetPow() pow.PoW {
 	return self.pow
 }
 
@@ -167,7 +169,6 @@ out:
 }
 
 func (self *Miner) reset() {
-	println("reset")
 	close(self.powQuitCh)
 	self.powQuitCh = make(chan struct{})
 }
@@ -192,7 +193,7 @@ func (self *Miner) mine() {
 
 	// Accumulate all valid transactions and apply them to the new state
 	// Error may be ignored. It's not important during mining
-	receipts, txs, _, erroneous, err := blockManager.ProcessTransactions(coinbase, block.State(), block, block, transactions)
+	receipts, txs, _, erroneous, err := blockManager.ApplyTransactions(coinbase, block.State(), block, transactions, true)
 	if err != nil {
 		minerlogger.Debugln(err)
 	}
@@ -228,23 +229,33 @@ func (self *Miner) mine() {
 
 func (self *Miner) finiliseTxs() types.Transactions {
 	// Sort the transactions by nonce in case of odd network propagation
-	var txs types.Transactions
+	actualSize := len(self.localTxs) // See copy below
+	txs := make(types.Transactions, actualSize+self.eth.TxPool().Size())
 
-	state := self.eth.BlockManager().TransState()
+	state := self.eth.ChainManager().TransState()
 	// XXX This has to change. Coinbase is, for new, same as key.
 	key := self.eth.KeyManager()
-	for _, ltx := range self.localTxs {
+	for i, ltx := range self.localTxs {
 		tx := types.NewTransactionMessage(ltx.To, ethutil.Big(ltx.Value), ethutil.Big(ltx.Gas), ethutil.Big(ltx.GasPrice), ltx.Data)
-		tx.Nonce = state.GetNonce(self.Coinbase)
-		state.SetNonce(self.Coinbase, tx.Nonce+1)
+		tx.SetNonce(state.GetNonce(self.Coinbase))
+		state.SetNonce(self.Coinbase, tx.Nonce()+1)
 
 		tx.Sign(key.PrivateKey())
 
-		txs = append(txs, tx)
+		txs[i] = tx
 	}
 
-	txs = append(txs, self.eth.TxPool().CurrentTransactions()...)
-	sort.Sort(types.TxByNonce{txs})
+	// Faster than append
+	for _, tx := range self.eth.TxPool().CurrentTransactions() {
+		if tx.GasPrice().Cmp(self.MinAcceptedGasPrice) >= 0 {
+			txs[actualSize] = tx
+			actualSize++
+		}
+	}
 
-	return txs
+	newTransactions := make(types.Transactions, actualSize)
+	copy(newTransactions, txs[:actualSize])
+	sort.Sort(types.TxByNonce{newTransactions})
+
+	return newTransactions
 }

@@ -11,26 +11,26 @@ import (
 type VMEnv struct {
 	state *state.StateDB
 	block *types.Block
-	tx    *types.Transaction
+	msg   Message
 	depth int
 }
 
-func NewEnv(state *state.StateDB, tx *types.Transaction, block *types.Block) *VMEnv {
+func NewEnv(state *state.StateDB, msg Message, block *types.Block) *VMEnv {
 	return &VMEnv{
 		state: state,
 		block: block,
-		tx:    tx,
+		msg:   msg,
 	}
 }
 
-func (self *VMEnv) Origin() []byte        { return self.tx.Sender() }
+func (self *VMEnv) Origin() []byte        { return self.msg.From() }
 func (self *VMEnv) BlockNumber() *big.Int { return self.block.Number }
 func (self *VMEnv) PrevHash() []byte      { return self.block.PrevHash }
 func (self *VMEnv) Coinbase() []byte      { return self.block.Coinbase }
 func (self *VMEnv) Time() int64           { return self.block.Time }
 func (self *VMEnv) Difficulty() *big.Int  { return self.block.Difficulty }
 func (self *VMEnv) BlockHash() []byte     { return self.block.Hash() }
-func (self *VMEnv) Value() *big.Int       { return self.tx.Value }
+func (self *VMEnv) Value() *big.Int       { return self.msg.Value() }
 func (self *VMEnv) State() *state.StateDB { return self.state }
 func (self *VMEnv) GasLimit() *big.Int    { return self.block.GasLimit }
 func (self *VMEnv) Depth() int            { return self.depth }
@@ -43,9 +43,7 @@ func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) error {
 }
 
 func (self *VMEnv) vm(addr, data []byte, gas, price, value *big.Int) *Execution {
-	evm := vm.New(self, vm.DebugVmTy)
-
-	return NewExecution(evm, addr, data, gas, price, value)
+	return NewExecution(self, addr, data, gas, price, value)
 }
 
 func (self *VMEnv) Call(me vm.ClosureRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error) {

@@ -145,7 +145,6 @@ func NewDatabase() ethutil.Database {
 }
 
 func NewClientIdentity(clientIdentifier, version, customIdentifier string) *wire.SimpleClientIdentity {
-	clilogger.Infoln("identity created")
 	return wire.NewSimpleClientIdentity(clientIdentifier, version, customIdentifier)
 }
 
@@ -240,6 +239,7 @@ func KeyTasks(keyManager *crypto.KeyManager, KeyRing string, GenAddr bool, Secre
 			exit(err)
 		}
 	}
+	clilogger.Infof("Main address %x\n", keyManager.Address())
 }
 
 func StartRpc(ethereum *eth.Ethereum, RpcPort int) {

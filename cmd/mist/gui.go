@@ -246,7 +246,7 @@ func (gui *Gui) CreateAndSetPrivKey() (string, string, string, string) {
 }
 
 func (gui *Gui) setInitialChain(ancientBlocks bool) {
-	sBlk := gui.eth.ChainManager().LastBlockHash
+	sBlk := gui.eth.ChainManager().LastBlockHash()
 	blk := gui.eth.ChainManager().GetBlock(sBlk)
 	for ; blk != nil; blk = gui.eth.ChainManager().GetBlock(sBlk) {
 		sBlk = blk.PrevHash
@@ -305,13 +305,13 @@ func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 
 	var (
 		ptx  = xeth.NewJSTx(tx, pipe.World().State())
-		send = nameReg.Storage(tx.Sender())
-		rec  = nameReg.Storage(tx.Recipient)
+		send = nameReg.Storage(tx.From())
+		rec  = nameReg.Storage(tx.To())
 		s, r string
 	)
 
-	if tx.CreatesContract() {
-		rec = nameReg.Storage(tx.CreationAddress(pipe.World().State()))
+	if core.MessageCreatesContract(tx) {
+		rec = nameReg.Storage(core.AddressFromMessage(tx))
 	}
 
 	if send.Len() != 0 {
@@ -322,10 +322,10 @@ func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 	if rec.Len() != 0 {
 		r = strings.Trim(rec.Str(), "\x00")
 	} else {
-		if tx.CreatesContract() {
-			r = ethutil.Bytes2Hex(tx.CreationAddress(pipe.World().State()))
+		if core.MessageCreatesContract(tx) {
+			r = ethutil.Bytes2Hex(core.AddressFromMessage(tx))
 		} else {
-			r = ethutil.Bytes2Hex(tx.Recipient)
+			r = ethutil.Bytes2Hex(tx.To())
 		}
 	}
 	ptx.Sender = s
@@ -389,7 +389,6 @@ func (gui *Gui) update() {
 		gui.loadAddressBook()
 		gui.loadMergedMiningOptions()
 		gui.setPeerInfo()
-		//gui.readPreviousTransactions()
 	}()
 
 	for _, plugin := range gui.plugins {
@@ -402,9 +401,8 @@ func (gui *Gui) update() {
 	generalUpdateTicker := time.NewTicker(500 * time.Millisecond)
 	statsUpdateTicker := time.NewTicker(5 * time.Second)
 
-	state := gui.eth.BlockManager().TransState()
+	state := gui.eth.ChainManager().TransState()
 
-	unconfirmedFunds := new(big.Int)
 	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetAccount(gui.address()).Balance())))
 
 	lastBlockLabel := gui.getObjectByName("lastBlockLabel")
@@ -418,9 +416,6 @@ func (gui *Gui) update() {
 		core.TxPostEvent{},
 	)
 
-	// nameReg := gui.pipe.World().Config().Get("NameReg")
-	// mux.Subscribe("object:"+string(nameReg.Address()), objectChan)
-
 	go func() {
 		defer events.Unsubscribe()
 		for {
@@ -433,20 +428,20 @@ func (gui *Gui) update() {
 				case core.NewBlockEvent:
 					gui.processBlock(ev.Block, false)
 					if bytes.Compare(ev.Block.Coinbase, gui.address()) == 0 {
-						gui.setWalletValue(gui.eth.BlockManager().CurrentState().GetAccount(gui.address()).Balance(), nil)
+						gui.setWalletValue(gui.eth.ChainManager().State().GetBalance(gui.address()), nil)
 					}
 
 				case core.TxPreEvent:
 					tx := ev.Tx
-					object := state.GetAccount(gui.address())
 
-					if bytes.Compare(tx.Sender(), gui.address()) == 0 {
-						unconfirmedFunds.Sub(unconfirmedFunds, tx.Value)
-					} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
-						unconfirmedFunds.Add(unconfirmedFunds, tx.Value)
-					}
+					tstate := gui.eth.ChainManager().TransState()
+					cstate := gui.eth.ChainManager().State()
 
-					gui.setWalletValue(object.Balance(), unconfirmedFunds)
+					taccount := tstate.GetAccount(gui.address())
+					caccount := cstate.GetAccount(gui.address())
+					unconfirmedFunds := new(big.Int).Sub(taccount.Balance(), caccount.Balance())
+
+					gui.setWalletValue(taccount.Balance(), unconfirmedFunds)
 					gui.insertTransaction("pre", tx)
 
 				case core.TxPostEvent:
@@ -454,40 +449,26 @@ func (gui *Gui) update() {
 					object := state.GetAccount(gui.address())
 
 					if bytes.Compare(tx.Sender(), gui.address()) == 0 {
-						object.SubAmount(tx.Value)
+						object.SubAmount(tx.Value())
 
-						//gui.getObjectByName("transactionView").Call("addTx", xeth.NewJSTx(tx), "send")
 						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-					} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
-						object.AddAmount(tx.Value)
+					} else if bytes.Compare(tx.To(), gui.address()) == 0 {
+						object.AddAmount(tx.Value())
 
-						//gui.getObjectByName("transactionView").Call("addTx", xeth.NewJSTx(tx), "recv")
 						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 					}
 
 					gui.setWalletValue(object.Balance(), nil)
 					state.UpdateStateObject(object)
 
-				// case object:
-				// 	gui.loadAddressBook()
-
 				case eth.PeerListEvent:
 					gui.setPeerInfo()
-
-					/*
-						case miner.Event:
-							if ev.Type == miner.Started {
-								gui.miner = ev.Miner
-							} else {
-								gui.miner = nil
-							}
-					*/
 				}
 
 			case <-peerUpdateTicker.C:
 				gui.setPeerInfo()
 			case <-generalUpdateTicker.C:
-				statusText := "#" + gui.eth.ChainManager().CurrentBlock.Number.String()
+				statusText := "#" + gui.eth.ChainManager().CurrentBlock().Number.String()
 				lastBlockLabel.Set("text", statusText)
 				miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.miner.GetPow().GetHashrate(), 10)+"Khash")
 

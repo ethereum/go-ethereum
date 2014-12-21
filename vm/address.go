@@ -11,19 +11,29 @@ type Address interface {
 	Call(in []byte) []byte
 }
 
-type PrecompiledAddress struct {
-	Gas *big.Int
+type PrecompiledAccount struct {
+	Gas func(l int) *big.Int
 	fn  func(in []byte) []byte
 }
 
-func (self PrecompiledAddress) Call(in []byte) []byte {
+func (self PrecompiledAccount) Call(in []byte) []byte {
 	return self.fn(in)
 }
 
-var Precompiled = map[uint64]*PrecompiledAddress{
-	1: &PrecompiledAddress{big.NewInt(500), ecrecoverFunc},
-	2: &PrecompiledAddress{big.NewInt(100), sha256Func},
-	3: &PrecompiledAddress{big.NewInt(100), ripemd160Func},
+var Precompiled = map[string]*PrecompiledAccount{
+	string(ethutil.LeftPadBytes([]byte{1}, 20)): &PrecompiledAccount{func(l int) *big.Int {
+		return GasEcrecover
+	}, ecrecoverFunc},
+	string(ethutil.LeftPadBytes([]byte{2}, 20)): &PrecompiledAccount{func(l int) *big.Int {
+		n := big.NewInt(int64(l+31)/32 + 1)
+		n.Mul(n, GasSha256)
+		return n
+	}, sha256Func},
+	string(ethutil.LeftPadBytes([]byte{3}, 20)): &PrecompiledAccount{func(l int) *big.Int {
+		n := big.NewInt(int64(l+31)/32 + 1)
+		n.Mul(n, GasRipemd)
+		return n
+	}, ripemd160Func},
 }
 
 func sha256Func(in []byte) []byte {

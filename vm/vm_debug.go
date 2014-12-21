@@ -2,6 +2,7 @@ package vm
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -25,8 +26,6 @@ type DebugVm struct {
 	Fn          string
 
 	Recoverable bool
-
-	depth int
 }
 
 func NewDebugVm(env Environment) *DebugVm {
@@ -50,10 +49,8 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 	})
 	closure := NewClosure(msg, caller, me, code, gas, price)
 
-	if self.env.Depth() == MaxCallDepth {
-		closure.UseGas(gas)
-
-		return closure.Return(nil), DepthError{}
+	if p := Precompiled[string(me.Address())]; p != nil {
+		return self.RunPrecompiled(p, callData, closure)
 	}
 
 	if self.Recoverable {
@@ -98,7 +95,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			} else {
 				nop := OpCode(closure.GetOp(p))
 				if !(nop == JUMPDEST || destinations[from] != nil) {
-					panic(fmt.Sprintf("JUMP missed JUMPDEST (%v) %v", nop, p))
+					panic(fmt.Sprintf("invalid jump destination (%v) %v", nop, p))
 				} else if nop == JUMP || nop == JUMPI {
 					panic(fmt.Sprintf("not allowed to JUMP(I) in to JUMP"))
 				}
@@ -111,12 +108,12 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		}
 	)
 
+	vmlogger.Debugf("(%d) (%x) %x (code=%d) gas: %v (d) %x\n", self.env.Depth(), caller.Address()[:4], closure.Address(), len(code), closure.Gas, callData)
+
 	// Don't bother with the execution if there's no code.
 	if len(code) == 0 {
 		return closure.Return(nil), nil
 	}
-
-	vmlogger.Debugf("(%d) %x gas: %v (d) %x\n", self.depth, closure.Address(), closure.Gas, callData)
 
 	for {
 		prevStep = step
@@ -137,6 +134,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		addStepGasUsage(GasStep)
 
 		var newMemSize *big.Int = ethutil.Big0
+		var additionalGas *big.Int = new(big.Int)
 		// Stack Check, memory resize & gas phase
 		switch op {
 		// Stack checks only
@@ -166,13 +164,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		case EXP:
 			require(2)
 
-			exp := new(big.Int).Set(stack.data[stack.Len()-2])
-			nbytes := 0
-			for exp.Cmp(ethutil.Big0) > 0 {
-				nbytes += 1
-				exp.Rsh(exp, 8)
-			}
-			gas.Set(big.NewInt(int64(nbytes + 1)))
+			gas.Set(big.NewInt(int64(len(stack.data[stack.Len()-2].Bytes()) + 1)))
 		// Gas only
 		case STOP:
 			gas.Set(ethutil.Big0)
@@ -190,16 +182,16 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 			var mult *big.Int
 			y, x := stack.Peekn()
-			val := closure.GetStorage(x)
-			if val.BigInt().Cmp(ethutil.Big0) == 0 && len(y.Bytes()) > 0 {
+			val := statedb.GetState(closure.Address(), x.Bytes())
+			if len(val) == 0 && len(y.Bytes()) > 0 {
 				// 0 => non 0
 				mult = ethutil.Big3
-			} else if val.BigInt().Cmp(ethutil.Big0) != 0 && len(y.Bytes()) == 0 {
-				statedb.Refund(closure.caller.Address(), GasSStoreRefund, closure.Price)
+			} else if len(val) > 0 && len(y.Bytes()) == 0 {
+				statedb.Refund(caller.Address(), GasSStoreRefund)
 
 				mult = ethutil.Big0
 			} else {
-				// non 0 => non 0
+				// non 0 => non 0 (or 0 => 0)
 				mult = ethutil.Big1
 			}
 			gas.Set(new(big.Int).Mul(mult, GasSStore))
@@ -222,22 +214,24 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-2])
 		case SHA3:
 			require(2)
-
 			gas.Set(GasSha)
-
 			newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-2])
+			additionalGas.Set(stack.data[stack.Len()-2])
 		case CALLDATACOPY:
 			require(2)
 
 			newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-3])
+			additionalGas.Set(stack.data[stack.Len()-3])
 		case CODECOPY:
 			require(3)
 
 			newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-3])
+			additionalGas.Set(stack.data[stack.Len()-3])
 		case EXTCODECOPY:
 			require(4)
 
 			newMemSize = calcMemSize(stack.data[stack.Len()-2], stack.data[stack.Len()-4])
+			additionalGas.Set(stack.data[stack.Len()-4])
 		case CALL, CALLCODE:
 			require(7)
 			gas.Set(GasCall)
@@ -254,16 +248,22 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			newMemSize = calcMemSize(stack.data[stack.Len()-2], stack.data[stack.Len()-3])
 		}
 
+		switch op {
+		case CALLDATACOPY, CODECOPY, EXTCODECOPY:
+			additionalGas.Add(additionalGas, u256(31))
+			additionalGas.Div(additionalGas, u256(32))
+			addStepGasUsage(additionalGas)
+		case SHA3:
+			additionalGas.Add(additionalGas, u256(31))
+			additionalGas.Div(additionalGas, u256(32))
+			additionalGas.Mul(additionalGas, GasSha3Byte)
+			addStepGasUsage(additionalGas)
+		}
+
 		if newMemSize.Cmp(ethutil.Big0) > 0 {
 			newMemSize.Add(newMemSize, u256(31))
 			newMemSize.Div(newMemSize, u256(32))
 			newMemSize.Mul(newMemSize, u256(32))
-
-			switch op {
-			// Additional gas usage on *CODPY
-			case CALLDATACOPY, CODECOPY, EXTCODECOPY:
-				addStepGasUsage(new(big.Int).Div(newMemSize, u256(32)))
-			}
 
 			if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
 				memGasUsage := new(big.Int).Sub(newMemSize, u256(int64(mem.Len())))
@@ -614,10 +614,10 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			self.Printf(" => %d", l)
 		case CALLDATACOPY:
 			var (
-				size = int64(len(callData))
-				mOff = stack.Pop().Int64()
-				cOff = stack.Pop().Int64()
-				l    = stack.Pop().Int64()
+				size = uint64(len(callData))
+				mOff = stack.Pop().Uint64()
+				cOff = stack.Pop().Uint64()
+				l    = stack.Pop().Uint64()
 			)
 
 			if cOff > size {
@@ -649,32 +649,29 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		case CODECOPY, EXTCODECOPY:
 			var code []byte
 			if op == EXTCODECOPY {
-				addr := stack.Pop().Bytes()
-
-				code = statedb.GetCode(addr)
+				code = statedb.GetCode(stack.Pop().Bytes())
 			} else {
 				code = closure.Code
 			}
 
 			var (
-				size = int64(len(code))
-				mOff = stack.Pop().Int64()
-				cOff = stack.Pop().Int64()
-				l    = stack.Pop().Int64()
+				size = uint64(len(code))
+				mOff = stack.Pop().Uint64()
+				cOff = stack.Pop().Uint64()
+				l    = stack.Pop().Uint64()
 			)
 
 			if cOff > size {
 				cOff = 0
 				l = 0
 			} else if cOff+l > size {
-				l = 0
+				l = uint64(math.Min(float64(cOff+l), float64(size)))
 			}
-
 			codeCopy := code[cOff : cOff+l]
 
 			mem.Set(mOff, l, codeCopy)
 
-			self.Printf(" => [%v, %v, %v] %x", mOff, cOff, l, code[cOff:cOff+l])
+			self.Printf(" => [%v, %v, %v] %x", mOff, cOff, l, codeCopy)
 		case GASPRICE:
 			stack.Push(closure.Price)
 
@@ -719,8 +716,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			//a := big.NewInt(int64(op) - int64(PUSH1) + 1)
 			a := uint64(op - PUSH1 + 1)
 			//pc.Add(pc, ethutil.Big1)
-			data := closure.GetRangeValue(pc+1, a)
-			val := ethutil.BigD(data.Bytes())
+			val := ethutil.BigD(closure.GetRangeValue(pc+1, a))
 			// Push value to stack
 			stack.Push(val)
 			pc += a
@@ -728,7 +724,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 			step += int(op) - int(PUSH1) + 1
 
-			self.Printf(" => 0x%x", data.Bytes())
+			self.Printf(" => 0x%x", val.Bytes())
 		case POP:
 			stack.Pop()
 		case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:
@@ -744,12 +740,12 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		case LOG0, LOG1, LOG2, LOG3, LOG4:
 			n := int(op - LOG0)
 			topics := make([][]byte, n)
-			mSize, mStart := stack.Pop().Int64(), stack.Pop().Int64()
-			data := mem.Geti(mStart, mSize)
+			mSize, mStart := stack.Popn()
 			for i := 0; i < n; i++ {
 				topics[i] = ethutil.LeftPadBytes(stack.Pop().Bytes(), 32)
 			}
 
+			data := mem.Geti(mStart.Int64(), mSize.Int64())
 			log := &Log{closure.Address(), topics, data}
 			self.env.AddLog(log)
 
@@ -763,7 +759,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		case MSTORE: // Store the value at stack top-1 in to memory at location stack top
 			// Pop value of the stack
 			val, mStart := stack.Popn()
-			mem.Set(mStart.Int64(), 32, ethutil.BigToBytes(val, 256))
+			mem.Set(mStart.Uint64(), 32, ethutil.BigToBytes(val, 256))
 
 			self.Printf(" => 0x%x", val)
 		case MSTORE8:
@@ -783,10 +779,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			val, loc := stack.Popn()
 			statedb.SetState(closure.Address(), loc.Bytes(), val)
 
-			// Debug sessions are allowed to run without message
-			if closure.message != nil {
-				closure.message.AddStorageChange(loc.Bytes())
-			}
+			closure.message.AddStorageChange(loc.Bytes())
 
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case JUMP:
@@ -839,8 +832,13 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 				self.Printf("CREATE err %v", err)
 			} else {
-				ref.SetCode(ret)
-				msg.Output = ret
+				// gas < len(ret) * CreateDataGas == NO_CODE
+				dataGas := big.NewInt(int64(len(ret)))
+				dataGas.Mul(dataGas, GasCreateByte)
+				if closure.UseGas(dataGas) {
+					ref.SetCode(ret)
+					msg.Output = ret
+				}
 
 				stack.Push(ethutil.BigD(addr))
 			}
@@ -865,14 +863,16 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 
-			var executeAddr []byte
+			var (
+				ret []byte
+				err error
+			)
 			if op == CALLCODE {
-				executeAddr = closure.Address()
+				ret, err = self.env.CallCode(closure, addr.Bytes(), args, gas, price, value)
 			} else {
-				executeAddr = addr.Bytes()
+				ret, err = self.env.Call(closure, addr.Bytes(), args, gas, price, value)
 			}
 
-			ret, err := self.env.Call(closure, executeAddr, args, gas, price, value)
 			if err != nil {
 				stack.Push(ethutil.BigFalse)
 
@@ -881,9 +881,9 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 				stack.Push(ethutil.BigTrue)
 				msg.Output = ret
 
-				mem.Set(retOffset.Int64(), retSize.Int64(), ret)
+				mem.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 			}
-			self.Printf("resume %x", closure.Address())
+			self.Printf("resume %x (%v)", closure.Address(), closure.Gas)
 
 			// Debug hook
 			if self.Dbg != nil {
@@ -894,14 +894,16 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			size, offset := stack.Popn()
 			ret := mem.Get(offset.Int64(), size.Int64())
 
-			self.Printf(" => (%d) 0x%x", len(ret), ret).Endl()
+			self.Printf(" => [%v, %v] (%d) 0x%x", offset, size, len(ret), ret).Endl()
 
 			return closure.Return(ret), nil
 		case SUICIDE:
-
 			receiver := statedb.GetOrNewStateObject(stack.Pop().Bytes())
+			balance := statedb.GetBalance(closure.Address())
 
-			receiver.AddAmount(statedb.GetBalance(closure.Address()))
+			self.Printf(" => (%x) %v", receiver.Address()[:4], balance)
+
+			receiver.AddAmount(balance)
 			statedb.Delete(closure.Address())
 
 			fallthrough
@@ -912,7 +914,6 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		default:
 			vmlogger.Debugf("(pc) %-3v Invalid opcode %x\n", pc, op)
 
-			//panic(fmt.Sprintf("Invalid opcode %x", op))
 			closure.ReturnGas(big.NewInt(1), nil)
 
 			return closure.Return(nil), fmt.Errorf("Invalid opcode %x", op)
@@ -941,6 +942,25 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 	}
 }
 
+func (self *DebugVm) RunPrecompiled(p *PrecompiledAccount, callData []byte, closure *Closure) (ret []byte, err error) {
+	gas := p.Gas(len(callData))
+	if closure.UseGas(gas) {
+		ret = p.Call(callData)
+		self.Printf("NATIVE_FUNC => %x", ret)
+		self.Endl()
+
+		return closure.Return(ret), nil
+	} else {
+		self.Endl()
+
+		tmp := new(big.Int).Set(closure.Gas)
+
+		closure.UseGas(closure.Gas)
+
+		return closure.Return(nil), OOG(gas, tmp)
+	}
+}
+
 func (self *DebugVm) Printf(format string, v ...interface{}) VirtualMachine {
 	if self.logTy == LogTyPretty {
 		self.logStr += fmt.Sprintf(format, v...)
@@ -960,8 +980,4 @@ func (self *DebugVm) Endl() VirtualMachine {
 
 func (self *DebugVm) Env() Environment {
 	return self.env
-}
-
-func (self *DebugVm) Depth() int {
-	return self.depth
 }

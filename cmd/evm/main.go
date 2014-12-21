@@ -133,7 +133,7 @@ func (self *VMEnv) Value() *big.Int       { return self.value }
 func (self *VMEnv) GasLimit() *big.Int    { return big.NewInt(1000000000) }
 func (self *VMEnv) Depth() int            { return 0 }
 func (self *VMEnv) SetDepth(i int)        { self.depth = i }
-func (self *VMEnv) AddLog(log *state.Log) {
+func (self *VMEnv) AddLog(log state.Log) {
 	self.state.AddLog(log)
 }
 func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) error {
@@ -141,9 +141,7 @@ func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) error {
 }
 
 func (self *VMEnv) vm(addr, data []byte, gas, price, value *big.Int) *core.Execution {
-	evm := vm.New(self, vm.DebugVmTy)
-
-	return core.NewExecution(evm, addr, data, gas, price, value)
+	return core.NewExecution(self, addr, data, gas, price, value)
 }
 
 func (self *VMEnv) Call(caller vm.ClosureRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error) {
