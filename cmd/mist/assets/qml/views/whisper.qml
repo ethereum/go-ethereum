@@ -9,7 +9,7 @@ import Ethereum 1.0
 
 Rectangle {
 	id: root
-	property var title: "Whisper"
+	property var title: "Whisper Traffic"
 	property var iconSource: "../facet.png"
 	property var menuItem
 
@@ -21,10 +21,22 @@ Rectangle {
 		identity = shh.newIdentity()
 		console.log("New identity:", identity)
 
-		var t = shh.watch({topics: ["chat"]})
+		var t = shh.watch({}, root)
+	}
+
+	function onMessage(message) {
+		whisperModel.insert(0, {data: JSON.stringify({from: message.from, payload: eth.toAscii(message.payload)})})
 	}
 
 	RowLayout {
+		id: input
+		anchors {
+			left: parent.left
+			leftMargin: 20
+			top: parent.top
+			topMargin: 20
+		}
+
 		TextField {
 			id: to
 			placeholderText: "To"
@@ -42,6 +54,22 @@ Rectangle {
 			onClicked: {
 				shh.post(eth.toHex(data.text), "", identity, topics.text.split(","), 500, 50)
 			}
+		}
+	}
+
+	TableView {
+		id: txTableView
+		anchors {
+			top: input.bottom
+			topMargin: 10
+			bottom: parent.bottom
+			left: parent.left
+			right: parent.right
+		}
+		TableViewColumn{ role: "data" ; title: "Data" ; width: parent.width - 2 }
+
+		model: ListModel {
+			id: whisperModel
 		}
 	}
 }

@@ -381,6 +381,14 @@ func (self *UiLib) ToHex(data string) string {
 	return "0x" + ethutil.Bytes2Hex([]byte(data))
 }
 
+func (self *UiLib) ToAscii(data string) string {
+	start := 0
+	if len(data) > 1 && data[0:2] == "0x" {
+		start = 2
+	}
+	return string(ethutil.Hex2Bytes(data[start:]))
+}
+
 /*
 // XXX Refactor me & MOVE
 func (self *Ethereum) InstallFilter(filter *core.Filter) (id int) {
