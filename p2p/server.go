@@ -62,6 +62,9 @@ type Server struct {
 	// If NoDial is true, the server will not dial any peers.
 	NoDial bool
 
+	// peer selector
+	PeerSelector PeerSelector
+
 	// Hook for testing. This is useful because we can inhibit
 	// the whole protocol stack.
 	newPeerFunc peerFunc
@@ -104,6 +107,10 @@ func (srv *Server) Peers() (peers []*Peer) {
 	return
 }
 
+func (srv *Server) GetPeers(target []byte) (peers []*Peer) {
+	// delegate to selector
+}
+
 // PeerCount returns the number of connected peers.
 func (srv *Server) PeerCount() int {
 	srv.lock.RLock()
@@ -113,9 +120,13 @@ func (srv *Server) PeerCount() int {
 
 // SuggestPeer injects an address into the outbound address pool.
 func (srv *Server) SuggestPeer(ip net.IP, port int, nodeID []byte) {
-	select {
-	case srv.peerConnect <- &peerAddr{ip, uint64(port), nodeID}:
-	default: // don't block
+	addr := &peerAddr{ip, uint64(port), nodeID, time.Now()}
+	ok := srv.PeerSelector.SuggestPeer(addr)
+	if ok {
+		select {
+		case srv.peerConnect <- addr:
+		default: // don't block
+		}
 	}
 }
 
@@ -183,6 +194,10 @@ func (srv *Server) Start() (err error) {
 	}
 	if srv.NoDial && srv.ListenAddr == "" {
 		srvlog.Warnln("I will be kind-of useless, neither dialing nor listening.")
+	}
+
+	if srv.PeerSelector == nil {
+		srv.PeerSelector = &BaseSelector{}
 	}
 
 	// make all slots available
