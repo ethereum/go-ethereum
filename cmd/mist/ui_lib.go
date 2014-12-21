@@ -200,7 +200,7 @@ func (ui *UiLib) AssetPath(p string) string {
 
 func (self *UiLib) StartDbWithContractAndData(contractHash, data string) {
 	dbWindow := NewDebuggerWindow(self)
-	object := self.eth.BlockManager().CurrentState().GetStateObject(ethutil.Hex2Bytes(contractHash))
+	object := self.eth.ChainManager().State().GetStateObject(ethutil.Hex2Bytes(contractHash))
 	if len(object.Code) > 0 {
 		dbWindow.SetCode("0x" + ethutil.Bytes2Hex(object.Code))
 	}

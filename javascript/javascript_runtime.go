@@ -121,6 +121,7 @@ func (self *JSRE) initStdFuncs() {
 	eth.Set("startMining", self.startMining)
 	eth.Set("execBlock", self.execBlock)
 	eth.Set("dump", self.dump)
+	eth.Set("export", self.export)
 }
 
 /*
@@ -150,7 +151,7 @@ func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
 
 		state = block.State()
 	} else {
-		state = self.ethereum.BlockManager().CurrentState()
+		state = self.ethereum.ChainManager().State()
 	}
 
 	v, _ := self.Vm.ToValue(state.Dump())
@@ -230,6 +231,23 @@ func (self *JSRE) execBlock(call otto.FunctionCall) otto.Value {
 
 	err = utils.BlockDo(self.ethereum, ethutil.Hex2Bytes(hash))
 	if err != nil {
+		fmt.Println(err)
+		return otto.FalseValue()
+	}
+
+	return otto.TrueValue()
+}
+
+func (self *JSRE) export(call otto.FunctionCall) otto.Value {
+	fn, err := call.Argument(0).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.FalseValue()
+	}
+
+	data := self.ethereum.ChainManager().Export()
+
+	if err := ethutil.WriteFile(fn, data); err != nil {
 		fmt.Println(err)
 		return otto.FalseValue()
 	}

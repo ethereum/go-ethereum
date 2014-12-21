@@ -24,7 +24,7 @@ const (
 	// The size of the output buffer for writing messages
 	outputBufferSize = 50
 	// Current protocol version
-	ProtocolVersion = 47
+	ProtocolVersion = 49
 	// Current P2P version
 	P2PVersion = 2
 	// Ethereum network version
@@ -129,9 +129,11 @@ type Peer struct {
 	statusKnown  bool
 
 	// Last received pong message
-	lastPong           int64
-	lastBlockReceived  time.Time
-	doneFetchingHashes bool
+	lastPong            int64
+	lastBlockReceived   time.Time
+	doneFetchingHashes  bool
+	lastHashAt          time.Time
+	lastHashRequestedAt time.Time
 
 	host             []byte
 	port             uint16
@@ -327,19 +329,16 @@ out:
 				}
 			}
 
+			switch msg.Type {
+			case wire.MsgGetBlockHashesTy:
+				p.lastHashRequestedAt = time.Now()
+			}
+
 			p.writeMessage(msg)
 			p.lastSend = time.Now()
 
 		// Ping timer
 		case <-pingTimer.C:
-			/*
-				timeSince := time.Since(time.Unix(p.lastPong, 0))
-				if !p.pingStartTime.IsZero() && p.lastPong != 0 && timeSince > (pingPongTimer+30*time.Second) {
-					peerlogger.Infof("Peer did not respond to latest pong fast enough, it took %s, disconnecting.\n", timeSince)
-					p.Stop()
-					return
-				}
-			*/
 			p.writeMessage(wire.NewMessage(wire.MsgPingTy, ""))
 			p.pingStartTime = time.Now()
 
@@ -462,18 +461,6 @@ func (p *Peer) HandleInbound() {
 			// TMP
 			if p.statusKnown {
 				switch msg.Type {
-				/*
-					case wire.MsgGetTxsTy:
-						// Get the current transactions of the pool
-						txs := p.ethereum.TxPool().CurrentTransactions()
-						// Get the RlpData values from the txs
-						txsInterface := make([]interface{}, len(txs))
-						for i, tx := range txs {
-							txsInterface[i] = tx.RlpData()
-						}
-						// Broadcast it back to the peer
-						p.QueueMessage(wire.NewMessage(wire.MsgTxTy, txsInterface))
-				*/
 
 				case wire.MsgGetBlockHashesTy:
 					if msg.Data.Len() < 2 {
@@ -508,6 +495,7 @@ func (p *Peer) HandleInbound() {
 					blockPool := p.ethereum.blockPool
 
 					foundCommonHash := false
+					p.lastHashAt = time.Now()
 
 					it := msg.Data.NewIterator()
 					for it.Next() {
@@ -524,9 +512,6 @@ func (p *Peer) HandleInbound() {
 					}
 
 					if !foundCommonHash {
-						//if !p.FetchHashes() {
-						//	p.doneFetchingHashes = true
-						//}
 						p.FetchHashes()
 					} else {
 						peerlogger.Infof("Found common hash (%x...)\n", p.lastReceivedHash[0:4])
@@ -681,8 +666,8 @@ func (self *Peer) pushStatus() {
 	msg := wire.NewMessage(wire.MsgStatusTy, []interface{}{
 		uint32(ProtocolVersion),
 		uint32(NetVersion),
-		self.ethereum.ChainManager().TD,
-		self.ethereum.ChainManager().CurrentBlock.Hash(),
+		self.ethereum.ChainManager().Td(),
+		self.ethereum.ChainManager().CurrentBlock().Hash(),
 		self.ethereum.ChainManager().Genesis().Hash(),
 	})
 
@@ -756,7 +741,6 @@ func (p *Peer) handleHandshake(msg *wire.Msg) {
 
 	// Check correctness of p2p protocol version
 	if p2pVersion != P2PVersion {
-		fmt.Println(p)
 		peerlogger.Debugf("Invalid P2P version. Require protocol %d, received %d\n", P2PVersion, p2pVersion)
 		p.Stop()
 		return

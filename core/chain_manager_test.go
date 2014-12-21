@@ -2,115 +2,76 @@ package core
 
 import (
 	"fmt"
-	"math/big"
+	"path"
+	"runtime"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/event"
+	//logpkg "github.com/ethereum/go-ethereum/logger"
 )
 
-var TD *big.Int
+//var Logger logpkg.LogSystem
+//var Log = logpkg.NewLogger("TEST")
 
 func init() {
-	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")
-	ethutil.Config.Db, _ = ethdb.NewMemDatabase()
+	runtime.GOMAXPROCS(runtime.NumCPU())
+	//Logger = logpkg.NewStdLogSystem(os.Stdout, log.LstdFlags, logpkg.InfoLevel)
+	//logpkg.AddLogSystem(Logger)
+
+	ethutil.ReadConfig("/tmp/ethtest", "/tmp/ethtest", "ETH")
+
+	db, err := ethdb.NewMemDatabase()
+	if err != nil {
+		panic("Could not create mem-db, failing")
+	}
+	ethutil.Config.Db = db
 }
 
-type fakeproc struct {
+func loadChain(fn string, t *testing.T) types.Blocks {
+	c1, err := ethutil.ReadAllFile(path.Join("..", "_data", fn))
+	if err != nil {
+		fmt.Println(err)
+		t.FailNow()
+	}
+	value := ethutil.NewValueFromBytes([]byte(c1))
+	blocks := make(types.Blocks, value.Len())
+	it := value.NewIterator()
+	for it.Next() {
+		blocks[it.Idx()] = types.NewBlockFromRlpValue(it.Value())
+	}
+
+	return blocks
 }
 
-func (self fakeproc) ProcessWithParent(a, b *types.Block) (*big.Int, state.Messages, error) {
-	TD = new(big.Int).Add(TD, big.NewInt(1))
-	return TD, nil, nil
+func insertChain(done chan bool, chainMan *ChainManager, chain types.Blocks, t *testing.T) {
+	err := chainMan.InsertChain(chain)
+	if err != nil {
+		fmt.Println(err)
+		t.FailNow()
+	}
+	done <- true
 }
 
-func makechain(cman *ChainManager, max int) *BlockChain {
-	blocks := make(types.Blocks, max)
+func TestChainInsertions(t *testing.T) {
+	chain1 := loadChain("chain1", t)
+	chain2 := loadChain("chain2", t)
+	var eventMux event.TypeMux
+	chainMan := NewChainManager(&eventMux)
+	txPool := NewTxPool(chainMan, nil, &eventMux)
+	blockMan := NewBlockManager(txPool, chainMan, &eventMux)
+	chainMan.SetProcessor(blockMan)
+
+	const max = 2
+	done := make(chan bool, max)
+
+	go insertChain(done, chainMan, chain1, t)
+	go insertChain(done, chainMan, chain2, t)
+
 	for i := 0; i < max; i++ {
-		addr := ethutil.LeftPadBytes([]byte{byte(i)}, 20)
-		block := cman.NewBlock(addr)
-		if i != 0 {
-			cman.CurrentBlock = blocks[i-1]
-		}
-		blocks[i] = block
+		<-done
 	}
-	return NewChain(blocks)
-}
-
-func TestLongerFork(t *testing.T) {
-	cman := NewChainManager()
-	cman.SetProcessor(fakeproc{})
-
-	TD = big.NewInt(1)
-	chainA := makechain(cman, 5)
-
-	TD = big.NewInt(1)
-	chainB := makechain(cman, 10)
-
-	td, err := cman.TestChain(chainA)
-	if err != nil {
-		t.Error("unable to create new TD from chainA:", err)
-	}
-	cman.TD = td
-
-	_, err = cman.TestChain(chainB)
-	if err != nil {
-		t.Error("expected chainB not to give errors:", err)
-	}
-}
-
-func TestEqualFork(t *testing.T) {
-	cman := NewChainManager()
-	cman.SetProcessor(fakeproc{})
-
-	TD = big.NewInt(1)
-	chainA := makechain(cman, 5)
-
-	TD = big.NewInt(2)
-	chainB := makechain(cman, 5)
-
-	td, err := cman.TestChain(chainA)
-	if err != nil {
-		t.Error("unable to create new TD from chainA:", err)
-	}
-	cman.TD = td
-
-	_, err = cman.TestChain(chainB)
-	if err != nil {
-		t.Error("expected chainB not to give errors:", err)
-	}
-}
-
-func TestBrokenChain(t *testing.T) {
-	cman := NewChainManager()
-	cman.SetProcessor(fakeproc{})
-
-	TD = big.NewInt(1)
-	chain := makechain(cman, 5)
-	chain.Remove(chain.Front())
-
-	_, err := cman.TestChain(chain)
-	if err == nil {
-		t.Error("expected broken chain to return error")
-	}
-}
-
-func BenchmarkChainTesting(b *testing.B) {
-	const chainlen = 1000
-
-	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")
-	ethutil.Config.Db, _ = ethdb.NewMemDatabase()
-
-	cman := NewChainManager()
-	cman.SetProcessor(fakeproc{})
-
-	TD = big.NewInt(1)
-	chain := makechain(cman, chainlen)
-
-	stime := time.Now()
-	cman.TestChain(chain)
-	fmt.Println(chainlen, "took", time.Since(stime))
+	fmt.Println(chainMan.CurrentBlock())
 }

@@ -141,15 +141,15 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 		keyPair = self.lib.eth.KeyManager().KeyPair()
 	)
 
-	statedb := self.lib.eth.BlockManager().TransState()
-	account := self.lib.eth.BlockManager().TransState().GetAccount(keyPair.Address())
+	statedb := self.lib.eth.ChainManager().TransState()
+	account := self.lib.eth.ChainManager().TransState().GetAccount(keyPair.Address())
 	contract := statedb.NewStateObject([]byte{0})
 	contract.SetCode(script)
 	contract.SetBalance(value)
 
 	self.SetAsm(script)
 
-	block := self.lib.eth.ChainManager().CurrentBlock
+	block := self.lib.eth.ChainManager().CurrentBlock()
 
 	env := utils.NewEnv(statedb, block, account.Address(), value)
 

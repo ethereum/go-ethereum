@@ -111,10 +111,10 @@ func NewMemory() *Memory {
 	return &Memory{nil}
 }
 
-func (m *Memory) Set(offset, size int64, value []byte) {
+func (m *Memory) Set(offset, size uint64, value []byte) {
 	if len(value) > 0 {
 		totSize := offset + size
-		lenSize := int64(len(m.store) - 1)
+		lenSize := uint64(len(m.store) - 1)
 		if totSize > lenSize {
 			// Calculate the diff between the sizes
 			diff := totSize - lenSize

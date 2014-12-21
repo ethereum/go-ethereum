@@ -128,9 +128,9 @@ func New(db ethutil.Database, clientIdentity wire.ClientIdentity, keyManager *cr
 	}
 
 	ethereum.blockPool = NewBlockPool(ethereum)
-	ethereum.txPool = core.NewTxPool(ethereum)
 	ethereum.blockChain = core.NewChainManager(ethereum.EventMux())
-	ethereum.blockManager = core.NewBlockManager(ethereum)
+	ethereum.txPool = core.NewTxPool(ethereum.blockChain, ethereum, ethereum.EventMux())
+	ethereum.blockManager = core.NewBlockManager(ethereum.txPool, ethereum.blockChain, ethereum.EventMux())
 	ethereum.blockChain.SetProcessor(ethereum.blockManager)
 
 	// Start the tx pool
@@ -393,7 +393,6 @@ func (s *Ethereum) reapDeadPeerHandler() {
 // Start the ethereum
 func (s *Ethereum) Start(seed bool) {
 	s.blockPool.Start()
-	s.blockManager.Start()
 
 	// Bind to addr and port
 	ln, err := net.Listen("tcp", ":"+s.Port)
@@ -517,7 +516,6 @@ func (s *Ethereum) Stop() {
 		s.RpcServer.Stop()
 	}
 	s.txPool.Stop()
-	s.blockManager.Stop()
 	s.blockPool.Stop()
 
 	loggerger.Infoln("Server stopped")

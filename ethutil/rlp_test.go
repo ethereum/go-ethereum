@@ -7,6 +7,16 @@ import (
 	"testing"
 )
 
+func TestNonInterfaceSlice(t *testing.T) {
+	vala := []string{"value1", "value2", "value3"}
+	valb := []interface{}{"value1", "value2", "value3"}
+	resa := Encode(vala)
+	resb := Encode(valb)
+	if !bytes.Equal(resa, resb) {
+		t.Errorf("expected []string & []interface{} to be equal")
+	}
+}
+
 func TestRlpValueEncoding(t *testing.T) {
 	val := EmptyValue()
 	val.AppendList().Append(1).Append(2).Append(3)

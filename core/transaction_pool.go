@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/wire"
@@ -61,7 +62,6 @@ type TxProcessor interface {
 // pool is being drained or synced for whatever reason the transactions
 // will simple queue up and handled when the mutex is freed.
 type TxPool struct {
-	Ethereum EthManager
 	// The mutex for accessing the Tx pool.
 	mutex sync.Mutex
 	// Queueing channel for reading and writing incoming
@@ -75,14 +75,20 @@ type TxPool struct {
 	SecondaryProcessor TxProcessor
 
 	subscribers []chan TxMsg
+
+	broadcaster  types.Broadcaster
+	chainManager *ChainManager
+	eventMux     *event.TypeMux
 }
 
-func NewTxPool(ethereum EthManager) *TxPool {
+func NewTxPool(chainManager *ChainManager, broadcaster types.Broadcaster, eventMux *event.TypeMux) *TxPool {
 	return &TxPool{
-		pool:      list.New(),
-		queueChan: make(chan *types.Transaction, txPoolQueueSize),
-		quit:      make(chan bool),
-		Ethereum:  ethereum,
+		pool:         list.New(),
+		queueChan:    make(chan *types.Transaction, txPoolQueueSize),
+		quit:         make(chan bool),
+		chainManager: chainManager,
+		eventMux:     eventMux,
+		broadcaster:  broadcaster,
 	}
 }
 
@@ -94,20 +100,20 @@ func (pool *TxPool) addTransaction(tx *types.Transaction) {
 	pool.pool.PushBack(tx)
 
 	// Broadcast the transaction to the rest of the peers
-	pool.Ethereum.Broadcast(wire.MsgTxTy, []interface{}{tx.RlpData()})
+	pool.broadcaster.Broadcast(wire.MsgTxTy, []interface{}{tx.RlpData()})
 }
 
 func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 	// Get the last block so we can retrieve the sender and receiver from
 	// the merkle trie
-	block := pool.Ethereum.ChainManager().CurrentBlock
+	block := pool.chainManager.CurrentBlock
 	// Something has gone horribly wrong if this happens
 	if block == nil {
 		return fmt.Errorf("No last block on the block chain")
 	}
 
-	if len(tx.Recipient) != 0 && len(tx.Recipient) != 20 {
-		return fmt.Errorf("Invalid recipient. len = %d", len(tx.Recipient))
+	if len(tx.To()) != 0 && len(tx.To()) != 20 {
+		return fmt.Errorf("Invalid recipient. len = %d", len(tx.To()))
 	}
 
 	v, _, _ := tx.Curve()
@@ -115,24 +121,14 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 		return fmt.Errorf("tx.v != (28 || 27)")
 	}
 
-	if tx.GasPrice.Cmp(MinGasPrice) < 0 {
-		return fmt.Errorf("Gas price to low. Require %v > Got %v", MinGasPrice, tx.GasPrice)
-	}
-
 	// Get the sender
-	sender := pool.Ethereum.BlockManager().CurrentState().GetAccount(tx.Sender())
+	sender := pool.chainManager.State().GetAccount(tx.Sender())
 
-	totAmount := new(big.Int).Set(tx.Value)
+	totAmount := new(big.Int).Set(tx.Value())
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.
 	if sender.Balance().Cmp(totAmount) < 0 {
-		return fmt.Errorf("Insufficient amount in sender's (%x) account", tx.Sender())
-	}
-
-	if tx.IsContract() {
-		if tx.GasPrice.Cmp(big.NewInt(minGasPrice)) < 0 {
-			return fmt.Errorf("Gasprice too low, %s given should be at least %d.", tx.GasPrice, minGasPrice)
-		}
+		return fmt.Errorf("Insufficient amount in sender's (%x) account", tx.From())
 	}
 
 	// Increment the nonce making each tx valid only once to prevent replay
@@ -158,15 +154,16 @@ func (self *TxPool) Add(tx *types.Transaction) error {
 
 	self.addTransaction(tx)
 
-	tmp := make([]byte, 4)
-	copy(tmp, tx.Recipient)
-
-	txplogger.Debugf("(t) %x => %x (%v) %x\n", tx.Sender()[:4], tmp, tx.Value, tx.Hash())
+	txplogger.Debugf("(t) %x => %x (%v) %x\n", tx.From()[:4], tx.To()[:4], tx.Value, tx.Hash())
 
 	// Notify the subscribers
-	self.Ethereum.EventMux().Post(TxPreEvent{tx})
+	go self.eventMux.Post(TxPreEvent{tx})
 
 	return nil
+}
+
+func (self *TxPool) Size() int {
+	return self.pool.Len()
 }
 
 func (pool *TxPool) CurrentTransactions() []*types.Transaction {
@@ -194,7 +191,7 @@ func (pool *TxPool) RemoveInvalid(state *state.StateDB) {
 		tx := e.Value.(*types.Transaction)
 		sender := state.GetAccount(tx.Sender())
 		err := pool.ValidateTransaction(tx)
-		if err != nil || sender.Nonce >= tx.Nonce {
+		if err != nil || sender.Nonce >= tx.Nonce() {
 			pool.pool.Remove(e)
 		}
 	}

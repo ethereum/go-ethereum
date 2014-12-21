@@ -66,7 +66,7 @@ func (self *BlockPool) HasLatestHash() bool {
 	self.mut.Lock()
 	defer self.mut.Unlock()
 
-	return self.pool[string(self.eth.ChainManager().CurrentBlock.Hash())] != nil
+	return self.pool[string(self.eth.ChainManager().CurrentBlock().Hash())] != nil
 }
 
 func (self *BlockPool) HasCommonHash(hash []byte) bool {
@@ -88,7 +88,7 @@ func (self *BlockPool) FetchHashes(peer *Peer) bool {
 
 	if (self.peer == nil && peer.td.Cmp(highestTd) >= 0) || (self.peer != nil && peer.td.Cmp(self.peer.td) > 0) || self.peer == peer {
 		if self.peer != peer {
-			poollogger.Debugf("Found better suitable peer (%v vs %v)\n", self.td, peer.td)
+			poollogger.Infof("Found better suitable peer (%v vs %v)\n", self.td, peer.td)
 
 			if self.peer != nil {
 				self.peer.doneFetchingHashes = true
@@ -99,17 +99,23 @@ func (self *BlockPool) FetchHashes(peer *Peer) bool {
 		self.td = peer.td
 
 		if !self.HasLatestHash() {
-			peer.doneFetchingHashes = false
-
-			const amount = 256
-			peerlogger.Debugf("Fetching hashes (%d) %x...\n", amount, peer.lastReceivedHash[0:4])
-			peer.QueueMessage(wire.NewMessage(wire.MsgGetBlockHashesTy, []interface{}{peer.lastReceivedHash, uint32(amount)}))
+			self.fetchHashes()
 		}
 
 		return true
 	}
 
 	return false
+}
+
+func (self *BlockPool) fetchHashes() {
+	peer := self.peer
+
+	peer.doneFetchingHashes = false
+
+	const amount = 256
+	peerlogger.Debugf("Fetching hashes (%d) %x...\n", amount, peer.lastReceivedHash[0:4])
+	peer.QueueMessage(wire.NewMessage(wire.MsgGetBlockHashesTy, []interface{}{peer.lastReceivedHash, uint32(amount)}))
 }
 
 func (self *BlockPool) AddHash(hash []byte, peer *Peer) {
@@ -148,7 +154,7 @@ func (self *BlockPool) addBlock(b *types.Block, peer *Peer, newBlock bool) {
 			fmt.Println("1.", !self.eth.ChainManager().HasBlock(b.PrevHash), ethutil.Bytes2Hex(b.Hash()[0:4]), ethutil.Bytes2Hex(b.PrevHash[0:4]))
 			fmt.Println("2.", self.pool[string(b.PrevHash)] == nil)
 			fmt.Println("3.", !self.fetchingHashes)
-			if !self.eth.ChainManager().HasBlock(b.PrevHash) && self.pool[string(b.PrevHash)] == nil && !self.fetchingHashes {
+			if !self.eth.ChainManager().HasBlock(b.PrevHash) /*&& self.pool[string(b.PrevHash)] == nil*/ && !self.fetchingHashes {
 				poollogger.Infof("Unknown chain, requesting (%x...)\n", b.PrevHash[0:4])
 				peer.QueueMessage(wire.NewMessage(wire.MsgGetBlockHashesTy, []interface{}{b.Hash(), uint32(256)}))
 			}
@@ -257,6 +263,13 @@ out:
 
 			if self.ChainLength < len(self.hashes) {
 				self.ChainLength = len(self.hashes)
+			}
+
+			if self.peer != nil &&
+				!self.peer.doneFetchingHashes &&
+				time.Since(self.peer.lastHashAt) > 10*time.Second &&
+				time.Since(self.peer.lastHashRequestedAt) > 5*time.Second {
+				self.fetchHashes()
 			}
 
 			/*

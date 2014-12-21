@@ -2,6 +2,7 @@ package vm
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -73,4 +74,8 @@ func (self *Log) Data() []byte {
 
 func (self *Log) RlpData() interface{} {
 	return []interface{}{self.address, ethutil.ByteSliceToInterface(self.topics), self.data}
+}
+
+func (self *Log) String() string {
+	return fmt.Sprintf("[A=%x T=%x D=%x]", self.address, self.topics, self.data)
 }

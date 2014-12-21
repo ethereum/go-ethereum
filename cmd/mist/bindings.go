@@ -103,7 +103,7 @@ func (self *Gui) DumpState(hash, path string) {
 	var stateDump []byte
 
 	if len(hash) == 0 {
-		stateDump = self.eth.BlockManager().CurrentState().Dump()
+		stateDump = self.eth.ChainManager().State().Dump()
 	} else {
 		var block *types.Block
 		if hash[0] == '#' {

@@ -21,7 +21,7 @@ func New(env Environment, typ Type) VirtualMachine {
 }
 
 func (self *Vm) Run(me, caller ClosureRef, code []byte, value, gas, price *big.Int, data []byte) (ret []byte, err error) {
-	return nil, nil
+	panic("not implemented")
 }
 
 func (self *Vm) Env() Environment {

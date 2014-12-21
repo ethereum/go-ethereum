@@ -9,7 +9,7 @@ import (
 )
 
 type StateSuite struct {
-	state *State
+	state *StateDB
 }
 
 var _ = checker.Suite(&StateSuite{})
