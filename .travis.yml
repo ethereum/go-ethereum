@@ -19,7 +19,7 @@ before_script:
   # - go vet ./...
   # - go test -race ./...
 script:
-  - ./gocoverage.sh && goveralls -coverprofile=profile.cov -service=travis-ci -repotoken $COVERALLS_TOKEN
+  - ./gocoverage.sh
 env:
   - secure: "U2U1AmkU4NJBgKR/uUAebQY87cNL0+1JHjnLOmmXwxYYyj5ralWb1aSuSH3qSXiT93qLBmtaUkuv9fberHVqrbAeVlztVdUsKAq7JMQH+M99iFkC9UiRMqHmtjWJ0ok4COD1sRYixxi21wb/JrMe3M1iL4QJVS61iltjHhVdM64="
 
