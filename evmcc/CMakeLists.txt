@@ -14,7 +14,5 @@ include_directories(${Boost_INCLUDE_DIRS})
 
 target_link_libraries(${TARGET_NAME} ethereum)
 target_link_libraries(${TARGET_NAME} ${Boost_PROGRAM_OPTIONS_LIBRARIES})
-llvm_map_components_to_libnames(LLVM_LIBS bitwriter)
-target_link_libraries(${TARGET_NAME} ${LLVM_LIBS})
 
 install(TARGETS ${TARGET_NAME} DESTINATION bin )
