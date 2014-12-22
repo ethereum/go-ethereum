@@ -58,7 +58,6 @@ private:
 	llvm::Function* m_create;
 	llvm::Function* m_call;
 	llvm::Function* m_sha3;
-	llvm::Function* m_exp;
 	llvm::Function* m_getExtCode;
 	llvm::Function* m_log;
 };

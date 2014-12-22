@@ -24,20 +24,17 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 	RuntimeHelper(_runtimeManager),
 	m_memoryMan(_memoryMan)
 {
-	auto&& ctx = m_builder.getContext();
 	auto module = getModule();
 
-	auto i256Ty = m_builder.getIntNTy(256);
-
-	m_args[0] = m_builder.CreateAlloca(i256Ty, nullptr, "ext.index");
-	m_args[1] = m_builder.CreateAlloca(i256Ty, nullptr, "ext.value");
-	m_arg2 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg2");
-	m_arg3 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg3");
-	m_arg4 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg4");
-	m_arg5 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg5");
-	m_arg6 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg6");
-	m_arg7 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg7");
-	m_arg8 = m_builder.CreateAlloca(i256Ty, nullptr, "ext.arg8");
+	m_args[0] = m_builder.CreateAlloca(Type::Word, nullptr, "ext.index");
+	m_args[1] = m_builder.CreateAlloca(Type::Word, nullptr, "ext.value");
+	m_arg2 = m_builder.CreateAlloca(Type::Word, nullptr, "ext.arg2");
+	m_arg3 = m_builder.CreateAlloca(Type::Word, nullptr, "ext.arg3");
+	m_arg4 = m_builder.CreateAlloca(Type::Word, nullptr, "ext.arg4");
+	m_arg5 = m_builder.CreateAlloca(Type::Word, nullptr, "ext.arg5");
+	m_arg6 = m_builder.CreateAlloca(Type::Word, nullptr, "ext.arg6");
+	m_arg7 = m_builder.CreateAlloca(Type::Word, nullptr, "ext.arg7");
+	m_arg8 = m_builder.CreateAlloca(Type::Word, nullptr, "ext.arg8");
 	m_size = m_builder.CreateAlloca(Type::Size, nullptr, "env.size");
 
 	using Linkage = llvm::GlobalValue::LinkageTypes;
