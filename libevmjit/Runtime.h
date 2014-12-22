@@ -41,7 +41,6 @@ public:
 	MemoryImpl& getMemory() { return m_memory; }
 	Env* getEnvPtr() { return &m_env; }
 
-	u256 getGas() const;
 	bytes getReturnData() const;
 	jmp_buf_ref getJmpBuf() { return m_jmpBuf; }
 	static jmp_buf_ref getCurrJmpBuf();

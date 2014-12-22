@@ -35,11 +35,6 @@ Runtime::~Runtime()
 	g_currJmpBuf = m_prevJmpBuf;
 }
 
-u256 Runtime::getGas() const
-{
-	return llvm2eth(m_data.elems[RuntimeData::Gas]);
-}
-
 bytes Runtime::getReturnData() const	// FIXME: Reconsider returning by copy
 {
 	// TODO: Handle large indexes
