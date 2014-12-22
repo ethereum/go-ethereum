@@ -10,6 +10,10 @@ if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 	set_source_files_properties(Cache.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
 endif ()
 
+# Needed by LLVM
+# TODO: If LLVMConfig.cmake is fixed, ${LLVM_DEFINITIONS} var can be used
+add_definitions(-D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS)
+
 add_library(${TARGET_NAME} ${SOURCES} ${HEADERS})
 set_property(TARGET ${TARGET_NAME} PROPERTY FOLDER "libs")
 
