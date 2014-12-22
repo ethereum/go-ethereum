@@ -27,7 +27,7 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 	auto&& ctx = m_builder.getContext();
 	auto module = getModule();
 
-	auto i256Ty = m_builder.getIntNTy(256);
+	auto i256Ty = Type::Word;
 
 	m_args[0] = m_builder.CreateAlloca(i256Ty, nullptr, "ext.index");
 	m_args[1] = m_builder.CreateAlloca(i256Ty, nullptr, "ext.value");

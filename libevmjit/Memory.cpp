@@ -42,7 +42,7 @@ Memory::Memory(RuntimeManager& _runtimeManager, GasMeter& _gasMeter):
 	llvm::Type* resizeArgs[] = {Type::RuntimePtr, Type::WordPtr};
 	m_resize = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, resizeArgs, false), llvm::Function::ExternalLinkage, "mem_resize", module);
 	llvm::AttrBuilder attrBuilder;
-	attrBuilder.addAttribute(llvm::Attribute::NoAlias).addAttribute(llvm::Attribute::NoCapture).addAttribute(llvm::Attribute::NonNull).addAttribute(llvm::Attribute::ReadOnly);
+	attrBuilder.addAttribute(llvm::Attribute::NoAlias).addAttribute(llvm::Attribute::NoCapture).addAttribute(llvm::Attribute::ReadOnly);
 	m_resize->setAttributes(llvm::AttributeSet::get(m_resize->getContext(), 1, attrBuilder));
 
 	m_require = createRequireFunc(_gasMeter, _runtimeManager);

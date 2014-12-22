@@ -8,12 +8,17 @@
 #include <boost/dynamic_bitset.hpp>
 
 #include <llvm/ADT/PostOrderIterator.h>
-#include <llvm/IR/CFG.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IntrinsicInst.h>
 
 #include <llvm/PassManager.h>
 #include <llvm/Transforms/Scalar.h>
+
+#if defined(LLVM_VERSION_PATCH)  // Correct llvm-3.5
+#include <llvm/IR/CFG.h>
+#else  // Ubuntu 14.04 crap
+#include <llvm/Support/CFG.h>
+#endif
 
 #include "Instruction.h"
 #include "Type.h"
@@ -481,7 +486,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 			auto idx = stack.pop();
 			auto word = stack.pop();
 
-			auto k32_ = m_builder.CreateTrunc(idx, m_builder.getIntNTy(5), "k_32");
+			auto k32_ = m_builder.CreateTrunc(idx, llvm::IntegerType::get(m_builder.getContext(), 5), "k_32");
 			auto k32 = m_builder.CreateZExt(k32_, Type::Word);
 			auto k32x8 = m_builder.CreateMul(k32, Constant::get(8), "kx8");
 

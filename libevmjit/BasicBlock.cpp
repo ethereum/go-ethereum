@@ -3,11 +3,16 @@
 
 #include <iostream>
 
-#include <llvm/IR/CFG.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/Support/raw_os_ostream.h>
+
+#if defined(LLVM_VERSION_PATCH)  // Correct llvm-3.5
+#include <llvm/IR/CFG.h>
+#else  // Ubuntu 14.04 crap
+#include <llvm/Support/CFG.h>
+#endif
 
 #include "Type.h"
 
