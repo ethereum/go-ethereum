@@ -63,10 +63,8 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 	builder.setOptLevel(llvm::CodeGenOpt::None);
 
 	auto triple = llvm::Triple(llvm::sys::getProcessTriple());
-	#if defined(LLVM_VERSION_PATCH)  // Not available in llvm-3.5-dev on Ubuntu 14.04
 	if (triple.getOS() == llvm::Triple::OSType::Win32)
 		triple.setObjectFormat(llvm::Triple::ObjectFormatType::ELF);  // MCJIT does not support COFF format
-	#endif
 	_module->setTargetTriple(triple.str());
 
 	ExecBundle exec;
