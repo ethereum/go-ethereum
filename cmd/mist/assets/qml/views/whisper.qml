@@ -25,7 +25,7 @@ Rectangle {
 	}
 
 	function onMessage(message) {
-		whisperModel.insert(0, {data: JSON.stringify({from: message.from, payload: eth.toAscii(message.payload)})})
+		whisperModel.insert(0, {from: message.from, payload: eth.toAscii(message.payload)})
 	}
 
 	RowLayout {
@@ -66,7 +66,8 @@ Rectangle {
 			left: parent.left
 			right: parent.right
 		}
-		TableViewColumn{ role: "data" ; title: "Data" ; width: parent.width - 2 }
+		TableViewColumn{ id: fromRole; role: "from" ; title: "From"; width: 300 }
+		TableViewColumn{ role: "payload" ; title: "Payload" ; width: parent.width -  fromRole.width - 2 }
 
 		model: ListModel {
 			id: whisperModel
