@@ -49,7 +49,10 @@ extern "C"
 
 	EXPORT void env_create(ExtVMFace* _env, i256* io_gas, i256* _endowment, byte* _initBeg, uint64_t _initSize, h256* o_address)
 	{
-		assert(_env->depth < 1024);	// TODO: Handle call depth
+		if (_env->depth == 1024)
+			jit::terminate(jit::ReturnCode::OutOfGas);
+
+		assert(_env->depth < 1024);
 
 		auto endowment = llvm2eth(*_endowment);
 
