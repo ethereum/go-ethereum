@@ -9,6 +9,7 @@ Ethereum
 [![Build
 Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20master%20branch)](http://build.ethdev.com:8010/builders/Linux%20Go%20master%20branch/builds/-1) master [![Build
 Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20branch)](http://build.ethdev.com:8010/builders/Linux%20Go%20develop%20branch/builds/-1) develop
+[![Coverage Status](https://coveralls.io/repos/ethereum/go-ethereum/badge.png?branch=tests)](https://coveralls.io/r/ethereum/go-ethereum?branch=tests) tests
 
 Ethereum Go Client © 2014 Jeffrey Wilcke.
 
