@@ -45,7 +45,7 @@ ApplicationWindow {
 	// Takes care of loading all default plugins
 	Component.onCompleted: {
 		var wallet = addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "ethereum", active: true});
-		var browser = addPlugin("./webapp.qml", {noAdd: true, close: false, section: "ethereum", active: true});
+		var browser = addPlugin("./browser.qml", {noAdd: true, close: false, section: "ethereum", active: true});
 		root.browser = browser;
 		addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: true});
 

@@ -59,7 +59,8 @@ Rectangle {
     }
 
     Component.onCompleted: {
-        webview.url = "http://etherian.io"
+        //webview.url = "http://etherian.io"
+	webview.url = "file:///Users/jeffrey/test.html"
     }
 
     signal messages(var messages, int id);
