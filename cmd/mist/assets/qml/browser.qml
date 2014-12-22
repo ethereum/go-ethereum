@@ -59,7 +59,8 @@ Rectangle {
     }
 
     Component.onCompleted: {
-        webview.url = "http://etherian.io"
+        //webview.url = "http://etherian.io"
+	webview.url = "file:///Users/jeffrey/test.html"
     }
 
     signal messages(var messages, int id);
@@ -350,7 +351,7 @@ Rectangle {
 			for(var i = 0; i < fields.length; i++) {
 				params[fields[i]] = params[fields[i]] || "";
 			}
-			if(typeof params.payload === "object") { params.payload = params.payload.join(""); }
+			if(typeof params.payload !== "object") { params.payload = [params.payload]; } //params.payload = params.payload.join(""); }
 			params.topics = params.topics || [];
 			params.priority = params.priority || 1000;
 			params.ttl = params.ttl || 100;

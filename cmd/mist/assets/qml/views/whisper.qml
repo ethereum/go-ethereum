@@ -52,7 +52,7 @@ Rectangle {
 		Button {
 			text: "Send"
 			onClicked: {
-				shh.post(eth.toHex(data.text), "", identity, topics.text.split(","), 500, 50)
+				shh.post([eth.toHex(data.text)], "", identity, topics.text.split(","), 500, 50)
 			}
 		}
 	}

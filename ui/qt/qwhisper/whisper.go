@@ -33,8 +33,13 @@ func (self *Whisper) SetView(view qml.Object) {
 	self.view = view
 }
 
-func (self *Whisper) Post(data, to, from string, topics []string, priority, ttl uint32) {
-	msg := whisper.NewMessage(fromHex(data))
+func (self *Whisper) Post(payload []string, to, from string, topics []string, priority, ttl uint32) {
+	var data []byte
+	for _, d := range payload {
+		data = append(data, fromHex(d)...)
+	}
+
+	msg := whisper.NewMessage(data)
 	envelope, err := msg.Seal(time.Duration(priority*100000), whisper.Opts{
 		Ttl:    time.Duration(ttl),
 		To:     crypto.ToECDSAPub(fromHex(to)),
