@@ -25,14 +25,14 @@ RUN apt-get install -y qtbase5-private-dev qtdeclarative5-private-dev libqt5open
 ## Fetch and install serpent-go
 RUN go get -v -d github.com/ethereum/serpent-go
 WORKDIR $GOPATH/src/github.com/ethereum/serpent-go
-RUN git checkout master
+# RUN git checkout master
 RUN git submodule update --init
 RUN go install -v
 
 # Fetch and install go-ethereum
 RUN go get -v -d github.com/ethereum/go-ethereum/...
 WORKDIR $GOPATH/src/github.com/ethereum/go-ethereum
-RUN git checkout poc8
+# RUN git checkout develop
 RUN ETH_DEPS=$(go list -f '{{.Imports}} {{.TestImports}} {{.XTestImports}}' github.com/ethereum/go-ethereum/... | sed -e 's/\[//g' | sed -e 's/\]//g' | sed -e 's/C //g'); if [ "$ETH_DEPS" ]; then go get $ETH_DEPS; fi
 RUN go install -v ./cmd/ethereum
 
