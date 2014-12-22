@@ -208,7 +208,7 @@ void Memory::copyBytes(llvm::Value* _srcPtr, llvm::Value* _srcSize, llvm::Value*
 	auto isOutsideData = m_builder.CreateICmpUGE(_srcIdx, _srcSize);
 	auto idx64 = m_builder.CreateTrunc(_srcIdx, Type::lowPrecision);
 	auto size64 = m_builder.CreateTrunc(_srcSize, Type::lowPrecision);
-	auto dataLeftSize = m_builder.CreateSub(size64, idx64);
+	auto dataLeftSize = m_builder.CreateNUWSub(size64, idx64);
 	auto reqBytes64 = m_builder.CreateTrunc(_reqBytes, Type::lowPrecision);
 	auto outOfBound = m_builder.CreateICmpUGT(reqBytes64, dataLeftSize);
 	auto bytesToCopyInner = m_builder.CreateSelect(outOfBound, dataLeftSize, reqBytes64);
