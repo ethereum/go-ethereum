@@ -71,7 +71,7 @@ void Compiler::createBasicBlocks(bytes const& _bytecode)
 			if (nextInst == Instruction::JUMP || nextInst == Instruction::JUMPI)
 			{
 				// Create a block for the JUMP target.
-				ProgramCounter targetPC = val < _bytecode.size() ? val.convert_to<ProgramCounter>() : _bytecode.size();
+				ProgramCounter targetPC = val.ult(_bytecode.size()) ? val.getZExtValue() : _bytecode.size();
 				splitPoints.insert(targetPC);
 
 				ProgramCounter jumpPC = (next - _bytecode.begin());

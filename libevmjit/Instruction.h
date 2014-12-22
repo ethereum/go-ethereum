@@ -2,6 +2,11 @@
 
 #include "Common.h"
 
+namespace llvm
+{
+	class APInt;
+}
+
 namespace dev
 {
 namespace eth
@@ -156,7 +161,7 @@ enum class Instruction: uint8_t
 /// Reads PUSH data from pointed fragment of bytecode and constructs number out of it
 /// Reading out of bytecode means reading 0
 /// @param _curr is updates and points the last real byte read
-u256 readPushData(bytes::const_iterator& _curr, bytes::const_iterator _end);
+llvm::APInt readPushData(bytes::const_iterator& _curr, bytes::const_iterator _end);
 
 #define ANY_PUSH	  PUSH1:  \
 	case Instruction::PUSH2:  \

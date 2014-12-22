@@ -51,11 +51,9 @@ llvm::ConstantInt* Constant::get(int64_t _n)
 	return llvm::ConstantInt::getSigned(Type::Word, _n);
 }
 
-llvm::ConstantInt* Constant::get(u256 _n)
+llvm::ConstantInt* Constant::get(llvm::APInt const& _n)
 {
-	llvm::APInt n(256, _n.str(0, std::ios_base::hex), 16);
-	assert(n.toString(10, false) == _n.str());
-	return static_cast<llvm::ConstantInt*>(llvm::ConstantInt::get(Type::Word, n));
+	return llvm::ConstantInt::get(Type::Word->getContext(), _n);
 }
 
 llvm::ConstantInt* Constant::get(ReturnCode _returnCode)
