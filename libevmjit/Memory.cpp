@@ -189,8 +189,6 @@ void Memory::require(llvm::Value* _offset, llvm::Value* _size)
 void Memory::copyBytes(llvm::Value* _srcPtr, llvm::Value* _srcSize, llvm::Value* _srcIdx,
 					   llvm::Value* _destMemIdx, llvm::Value* _reqBytes)
 {
-	auto zero256 = llvm::ConstantInt::get(Type::Word, 0);
-
 	require(_destMemIdx, _reqBytes);
 
 	// Additional copy cost
@@ -198,20 +196,28 @@ void Memory::copyBytes(llvm::Value* _srcPtr, llvm::Value* _srcSize, llvm::Value*
 	auto copyWords = m_builder.CreateUDiv(m_builder.CreateAdd(_reqBytes, Constant::get(31)), Constant::get(32));
 	m_gasMeter.countCopy(copyWords);
 
-	auto srcPtr = m_builder.CreateGEP(_srcPtr, _srcIdx, "src_idx");
+	// Algorithm:
+	// isOutsideData = idx256 >= size256
+	// idx64  = trunc idx256
+	// size64 = trunc size256
+	// dataLeftSize = size64 - idx64  // safe if not isOutsideData
+	// reqBytes64 = trunc _reqBytes   // require() handles large values
+	// bytesToCopy0 = select(reqBytes64 > dataLeftSize, dataSizeLeft, reqBytes64)  // min
+	// bytesToCopy = select(isOutsideData, 0, bytesToCopy0)
 
-	auto memPtr = getData();
-	auto destPtr = m_builder.CreateGEP(memPtr, _destMemIdx, "dest_mem_ptr");
+	auto isOutsideData = m_builder.CreateICmpUGE(_srcIdx, _srcSize);
+	auto idx64 = m_builder.CreateTrunc(_srcIdx, Type::lowPrecision);
+	auto size64 = m_builder.CreateTrunc(_srcSize, Type::lowPrecision);
+	auto dataLeftSize = m_builder.CreateSub(size64, idx64);
+	auto reqBytes64 = m_builder.CreateTrunc(_reqBytes, Type::lowPrecision);
+	auto outOfBound = m_builder.CreateICmpUGT(reqBytes64, dataLeftSize);
+	auto bytesToCopyInner = m_builder.CreateSelect(outOfBound, dataLeftSize, reqBytes64);
+	auto zero64 = llvm::ConstantInt::get(Type::lowPrecision, 0);	// TODO: Cache common constants
+	auto bytesToCopy = m_builder.CreateSelect(isOutsideData, zero64, bytesToCopyInner);
 
-	// remaining source bytes:
-	auto remSrcSize = m_builder.CreateSub(_srcSize, _srcIdx);
-	auto remSizeNegative = m_builder.CreateICmpSLT(remSrcSize, zero256);
-	auto remSrcBytes = m_builder.CreateSelect(remSizeNegative, zero256, remSrcSize, "rem_src_bytes");
-
-	auto tooFewSrcBytes = m_builder.CreateICmpULT(remSrcBytes, _reqBytes);
-	auto bytesToCopy = m_builder.CreateSelect(tooFewSrcBytes, remSrcBytes, _reqBytes, "bytes_to_copy");
-
-	m_builder.CreateMemCpy(destPtr, srcPtr, bytesToCopy, 0);
+	auto src = m_builder.CreateGEP(_srcPtr, idx64, "src");
+	auto dst = m_builder.CreateGEP(getData(), _destMemIdx, "dst");
+	m_builder.CreateMemCpy(dst, src, bytesToCopy, 0);
 }
 
 }
