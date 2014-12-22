@@ -24,7 +24,7 @@ Rectangle {
 		var t = shh.watch({}, root)
 	}
 
-	function onMessage(message) {
+	function onShhMessage(message, i) {
 		whisperModel.insert(0, {from: message.from, payload: eth.toAscii(message.payload)})
 	}
 

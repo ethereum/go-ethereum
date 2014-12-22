@@ -59,15 +59,18 @@ Rectangle {
     }
 
     Component.onCompleted: {
-        //webview.url = "http://etherian.io"
-	webview.url = "file:///Users/jeffrey/test.html"
+        webview.url = "http://etherian.io"
     }
 
     signal messages(var messages, int id);
     onMessages: {
         // Bit of a cheat to get proper JSON
         var m = JSON.parse(JSON.parse(JSON.stringify(messages)))
-        webview.postEvent("messages", [m, id]);
+        webview.postEvent("messages", id, m);
+    }
+
+    function onShhMessage(message, id) {
+	    webview.postEvent("shhChanged", id, message)
     }
 
     Item {
@@ -328,6 +331,33 @@ Rectangle {
                         require(1);
                         eth.uninstallFilter(data.args[0])
                         break;
+
+
+			case "shhNewFilter":
+			require(1);
+			var id = shh.watch(data.args[0], window);
+			postData(data._id, id);
+			break;
+
+			case "newIdentity":
+			postData(data._id, shh.newIdentity())
+			break
+
+			case "post":
+			require(1);
+			var params = data.args[0];
+			var fields = ["payload", "to", "from"];
+			for(var i = 0; i < fields.length; i++) {
+				params[fields[i]] = params[fields[i]] || "";
+			}
+			if(typeof params.payload === "object") { params.payload = params.payload.join(""); }
+			params.topics = params.topics || [];
+			params.priority = params.priority || 1000;
+			params.ttl = params.ttl || 100;
+
+			console.log(JSON.stringify(params))
+			shh.post(params.payload, params.to, params.from, params.topics, params.priority, params.ttl);
+			break;
                     }
                 } catch(e) {
                     console.log(data.call + ": " + e)
@@ -349,8 +379,8 @@ Rectangle {
             function postData(seed, data) {
                 webview.experimental.postMessage(JSON.stringify({data: data, _id: seed}))
             }
-            function postEvent(event, data) {
-                webview.experimental.postMessage(JSON.stringify({data: data, _event: event}))
+            function postEvent(event, id, data) {
+                webview.experimental.postMessage(JSON.stringify({data: data, _id: id, _event: event}))
             }
 
             function onWatchedCb(data, id) {

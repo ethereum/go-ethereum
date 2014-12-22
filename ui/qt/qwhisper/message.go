@@ -8,7 +8,7 @@ import (
 
 type Message struct {
 	ref     *whisper.Message
-	Flags   byte
+	Flags   int32
 	Payload string
 	From    string
 }
@@ -16,7 +16,7 @@ type Message struct {
 func ToQMessage(msg *whisper.Message) *Message {
 	return &Message{
 		ref:     msg,
-		Flags:   msg.Flags,
+		Flags:   int32(msg.Flags),
 		Payload: ethutil.Bytes2Hex(msg.Payload),
 		From:    ethutil.Bytes2Hex(crypto.FromECDSAPub(msg.Recover())),
 	}

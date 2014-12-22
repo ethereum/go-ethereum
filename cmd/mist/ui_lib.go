@@ -225,6 +225,83 @@ func (self *UiLib) StartDebugger() {
 	dbWindow.Show()
 }
 
+func (self *UiLib) Transact(params map[string]interface{}) (string, error) {
+	object := mapToTxParams(params)
+
+	return self.JSXEth.Transact(
+		object["from"],
+		object["to"],
+		object["value"],
+		object["gas"],
+		object["gasPrice"],
+		object["data"],
+	)
+}
+
+func (self *UiLib) Compile(code string) (string, error) {
+	bcode, err := ethutil.Compile(code, false)
+	if err != nil {
+		return err.Error(), err
+	}
+
+	return ethutil.Bytes2Hex(bcode), err
+}
+
+func (self *UiLib) Call(params map[string]interface{}) (string, error) {
+	object := mapToTxParams(params)
+
+	return self.JSXEth.Execute(
+		object["to"],
+		object["value"],
+		object["gas"],
+		object["gasPrice"],
+		object["data"],
+	)
+}
+
+func (self *UiLib) AddLocalTransaction(to, data, gas, gasPrice, value string) int {
+	return self.miner.AddLocalTx(&miner.LocalTx{
+		To:       ethutil.Hex2Bytes(to),
+		Data:     ethutil.Hex2Bytes(data),
+		Gas:      gas,
+		GasPrice: gasPrice,
+		Value:    value,
+	}) - 1
+}
+
+func (self *UiLib) RemoveLocalTransaction(id int) {
+	self.miner.RemoveLocalTx(id)
+}
+
+func (self *UiLib) SetGasPrice(price string) {
+	self.miner.MinAcceptedGasPrice = ethutil.Big(price)
+}
+
+func (self *UiLib) ToggleMining() bool {
+	if !self.miner.Mining() {
+		self.miner.Start()
+
+		return true
+	} else {
+		self.miner.Stop()
+
+		return false
+	}
+}
+
+func (self *UiLib) ToHex(data string) string {
+	return "0x" + ethutil.Bytes2Hex([]byte(data))
+}
+
+func (self *UiLib) ToAscii(data string) string {
+	start := 0
+	if len(data) > 1 && data[0:2] == "0x" {
+		start = 2
+	}
+	return string(ethutil.Hex2Bytes(data[start:]))
+}
+
+/// Ethereum filter methods
 func (self *UiLib) NewFilter(object map[string]interface{}) (id int) {
 	filter := qt.NewFilterFromMap(object, self.eth)
 	filter.MessageCallback = func(messages state.Messages) {
@@ -312,88 +389,3 @@ func mapToTxParams(object map[string]interface{}) map[string]string {
 
 	return conv
 }
-
-func (self *UiLib) Transact(params map[string]interface{}) (string, error) {
-	object := mapToTxParams(params)
-
-	return self.JSXEth.Transact(
-		object["from"],
-		object["to"],
-		object["value"],
-		object["gas"],
-		object["gasPrice"],
-		object["data"],
-	)
-}
-
-func (self *UiLib) Compile(code string) (string, error) {
-	bcode, err := ethutil.Compile(code, false)
-	if err != nil {
-		return err.Error(), err
-	}
-
-	return ethutil.Bytes2Hex(bcode), err
-}
-
-func (self *UiLib) Call(params map[string]interface{}) (string, error) {
-	object := mapToTxParams(params)
-
-	return self.JSXEth.Execute(
-		object["to"],
-		object["value"],
-		object["gas"],
-		object["gasPrice"],
-		object["data"],
-	)
-}
-
-func (self *UiLib) AddLocalTransaction(to, data, gas, gasPrice, value string) int {
-	return self.miner.AddLocalTx(&miner.LocalTx{
-		To:       ethutil.Hex2Bytes(to),
-		Data:     ethutil.Hex2Bytes(data),
-		Gas:      gas,
-		GasPrice: gasPrice,
-		Value:    value,
-	}) - 1
-}
-
-func (self *UiLib) RemoveLocalTransaction(id int) {
-	self.miner.RemoveLocalTx(id)
-}
-
-func (self *UiLib) SetGasPrice(price string) {
-	self.miner.MinAcceptedGasPrice = ethutil.Big(price)
-}
-
-func (self *UiLib) ToggleMining() bool {
-	if !self.miner.Mining() {
-		self.miner.Start()
-
-		return true
-	} else {
-		self.miner.Stop()
-
-		return false
-	}
-}
-
-func (self *UiLib) ToHex(data string) string {
-	return "0x" + ethutil.Bytes2Hex([]byte(data))
-}
-
-func (self *UiLib) ToAscii(data string) string {
-	start := 0
-	if len(data) > 1 && data[0:2] == "0x" {
-		start = 2
-	}
-	return string(ethutil.Hex2Bytes(data[start:]))
-}
-
-/*
-// XXX Refactor me & MOVE
-func (self *Ethereum) InstallFilter(filter *core.Filter) (id int) {
-	return self.filterManager.InstallFilter(filter)
-}
-func (self *Ethereum) UninstallFilter(id int)        { self.filterManager.UninstallFilter(id) }
-func (self *Ethereum) GetFilter(id int) *core.Filter { return self.filterManager.GetFilter(id) }
-*/

@@ -43,38 +43,6 @@ import (
 	"gopkg.in/qml.v1"
 )
 
-/*
-func LoadExtension(path string) (uintptr, error) {
-	lib, err := ffi.NewLibrary(path)
-	if err != nil {
-		return 0, err
-	}
-
-	so, err := lib.Fct("sharedObject", ffi.Pointer, nil)
-	if err != nil {
-		return 0, err
-	}
-
-	ptr := so()
-
-		err = lib.Close()
-		if err != nil {
-			return 0, err
-		}
-
-	return ptr.Interface().(uintptr), nil
-}
-*/
-/*
-	vec, errr := LoadExtension("/Users/jeffrey/Desktop/build-libqmltest-Desktop_Qt_5_2_1_clang_64bit-Debug/liblibqmltest_debug.dylib")
-	fmt.Printf("Fetched vec with addr: %#x\n", vec)
-	if errr != nil {
-		fmt.Println(errr)
-	} else {
-		context.SetVar("vec", (unsafe.Pointer)(vec))
-	}
-*/
-
 var guilogger = logger.NewLogger("GUI")
 
 type Gui struct {
@@ -535,3 +503,35 @@ func (gui *Gui) privateKey() string {
 func (gui *Gui) address() []byte {
 	return gui.eth.KeyManager().Address()
 }
+
+/*
+func LoadExtension(path string) (uintptr, error) {
+	lib, err := ffi.NewLibrary(path)
+	if err != nil {
+		return 0, err
+	}
+
+	so, err := lib.Fct("sharedObject", ffi.Pointer, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	ptr := so()
+
+		err = lib.Close()
+		if err != nil {
+			return 0, err
+		}
+
+	return ptr.Interface().(uintptr), nil
+}
+*/
+/*
+	vec, errr := LoadExtension("/Users/jeffrey/Desktop/build-libqmltest-Desktop_Qt_5_2_1_clang_64bit-Debug/liblibqmltest_debug.dylib")
+	fmt.Printf("Fetched vec with addr: %#x\n", vec)
+	if errr != nil {
+		fmt.Println(errr)
+	} else {
+		context.SetVar("vec", (unsafe.Pointer)(vec))
+	}
+*/

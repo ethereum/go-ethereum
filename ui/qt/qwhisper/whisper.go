@@ -33,9 +33,9 @@ func (self *Whisper) SetView(view qml.Object) {
 	self.view = view
 }
 
-func (self *Whisper) Post(data string, to, from string, topics []string, pow, ttl uint32) {
+func (self *Whisper) Post(data, to, from string, topics []string, priority, ttl uint32) {
 	msg := whisper.NewMessage(fromHex(data))
-	envelope, err := msg.Seal(time.Duration(pow), whisper.Opts{
+	envelope, err := msg.Seal(time.Duration(priority*100000), whisper.Opts{
 		Ttl:    time.Duration(ttl),
 		To:     crypto.ToECDSAPub(fromHex(to)),
 		From:   crypto.ToECDSA(fromHex(from)),
@@ -64,13 +64,14 @@ func (self *Whisper) HasIdentity(key string) bool {
 
 func (self *Whisper) Watch(opts map[string]interface{}, view *qml.Common) int {
 	filter := filterFromMap(opts)
+	var i int
 	filter.Fn = func(msg *whisper.Message) {
 		if view != nil {
-			view.Call("onMessage", ToQMessage(msg))
+			view.Call("onShhMessage", ToQMessage(msg), i)
 		}
 	}
 
-	i := self.Whisper.Watch(filter)
+	i = self.Whisper.Watch(filter)
 	self.watches[i] = &Watch{}
 
 	return i
