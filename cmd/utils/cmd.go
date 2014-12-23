@@ -325,7 +325,7 @@ func BlockDo(ethereum *eth.Ethereum, hash []byte) error {
 		return fmt.Errorf("unknown block %x", hash)
 	}
 
-	parent := ethereum.ChainManager().GetBlock(block.PrevHash)
+	parent := ethereum.ChainManager().GetBlock(block.ParentHash())
 
 	_, err := ethereum.BlockManager().TransitionState(parent.State(), parent, block)
 	if err != nil {

@@ -86,12 +86,6 @@ func (self *JSRepl) Stop() {
 }
 
 func (self *JSRepl) parseInput(code string) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("[native] error", r)
-		}
-	}()
-
 	value, err := self.re.Run(code)
 	if err != nil {
 		fmt.Println(err)

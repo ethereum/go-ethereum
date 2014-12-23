@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"sync"
@@ -9,11 +10,13 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/state"
 )
 
 var chainlogger = logger.NewLogger("CHAIN")
 
+/*
 func AddTestNetFunds(block *types.Block) {
 	for _, addr := range []string{
 		"51ba59315b3a95761d0863b05ccc7a7f54703d99",
@@ -31,18 +34,39 @@ func AddTestNetFunds(block *types.Block) {
 		block.State().UpdateStateObject(account)
 	}
 }
+*/
 
 func CalcDifficulty(block, parent *types.Block) *big.Int {
 	diff := new(big.Int)
 
-	adjust := new(big.Int).Rsh(parent.Difficulty, 10)
-	if block.Time >= parent.Time+5 {
-		diff.Sub(parent.Difficulty, adjust)
+	bh, ph := block.Header(), parent.Header()
+	adjust := new(big.Int).Rsh(ph.Difficulty, 10)
+	if bh.Time >= ph.Time+5 {
+		diff.Sub(ph.Difficulty, adjust)
 	} else {
-		diff.Add(parent.Difficulty, adjust)
+		diff.Add(ph.Difficulty, adjust)
 	}
 
 	return diff
+}
+
+func CalcGasLimit(parent, block *types.Block) *big.Int {
+	if block.Number().Cmp(big.NewInt(0)) == 0 {
+		return ethutil.BigPow(10, 6)
+	}
+
+	// ((1024-1) * parent.gasLimit + (gasUsed * 6 / 5)) / 1024
+
+	previous := new(big.Int).Mul(big.NewInt(1024-1), parent.GasLimit())
+	current := new(big.Rat).Mul(new(big.Rat).SetInt(parent.GasUsed()), big.NewRat(6, 5))
+	curInt := new(big.Int).Div(current.Num(), current.Denom())
+
+	result := new(big.Int).Add(previous, curInt)
+	result.Div(result, big.NewInt(1024))
+
+	min := big.NewInt(125000)
+
+	return ethutil.BigMax(min, result)
 }
 
 type ChainManager struct {
@@ -90,7 +114,7 @@ func (self *ChainManager) CurrentBlock() *types.Block {
 
 func NewChainManager(mux *event.TypeMux) *ChainManager {
 	bc := &ChainManager{}
-	bc.genesisBlock = types.NewBlockFromBytes(ethutil.Encode(Genesis))
+	bc.genesisBlock = GenesisBlock()
 	bc.eventMux = mux
 
 	bc.setLastBlock()
@@ -112,7 +136,7 @@ func (self *ChainManager) SetProcessor(proc types.BlockProcessor) {
 }
 
 func (self *ChainManager) State() *state.StateDB {
-	return self.CurrentBlock().State()
+	return state.New(self.CurrentBlock().Trie())
 }
 
 func (self *ChainManager) TransState() *state.StateDB {
@@ -122,13 +146,11 @@ func (self *ChainManager) TransState() *state.StateDB {
 func (bc *ChainManager) setLastBlock() {
 	data, _ := ethutil.Config.Db.Get([]byte("LastBlock"))
 	if len(data) != 0 {
-		// Prep genesis
-		AddTestNetFunds(bc.genesisBlock)
-
-		block := types.NewBlockFromBytes(data)
-		bc.currentBlock = block
+		var block types.Block
+		rlp.Decode(bytes.NewReader(data), &block)
+		bc.currentBlock = &block
 		bc.lastBlockHash = block.Hash()
-		bc.lastBlockNumber = block.Number.Uint64()
+		bc.lastBlockNumber = block.Header().Number.Uint64()
 
 		// Set the last know difficulty (might be 0x0 as initial value, Genesis)
 		bc.td = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
@@ -144,27 +166,28 @@ func (bc *ChainManager) NewBlock(coinbase []byte) *types.Block {
 	bc.mu.RLock()
 	defer bc.mu.RUnlock()
 
-	var root interface{}
-	hash := ZeroHash256
+	var root []byte
+	parentHash := ZeroHash256
 
 	if bc.CurrentBlock != nil {
-		root = bc.currentBlock.Root()
-		hash = bc.lastBlockHash
+		root = bc.currentBlock.Header().Root
+		parentHash = bc.lastBlockHash
 	}
 
-	block := types.CreateBlock(
-		root,
-		hash,
+	block := types.NewBlock(
+		parentHash,
 		coinbase,
+		root,
 		ethutil.BigPow(2, 32),
 		nil,
 		"")
 
 	parent := bc.currentBlock
 	if parent != nil {
-		block.Difficulty = CalcDifficulty(block, parent)
-		block.Number = new(big.Int).Add(bc.currentBlock.Number, ethutil.Big1)
-		block.GasLimit = block.CalcGasLimit(bc.currentBlock)
+		header := block.Header()
+		header.Difficulty = CalcDifficulty(block, parent)
+		header.Number = new(big.Int).Add(parent.Header().Number, ethutil.Big1)
+		header.GasLimit = CalcGasLimit(parent, block)
 
 	}
 
@@ -175,9 +198,6 @@ func (bc *ChainManager) Reset() {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
-	AddTestNetFunds(bc.genesisBlock)
-
-	bc.genesisBlock.Trie().Sync()
 	// Prepare the genesis block
 	bc.write(bc.genesisBlock)
 	bc.insert(bc.genesisBlock)
@@ -193,18 +213,20 @@ func (self *ChainManager) Export() []byte {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
-	chainlogger.Infof("exporting %v blocks...\n", self.currentBlock.Number)
+	chainlogger.Infof("exporting %v blocks...\n", self.currentBlock.Header().Number)
 
-	blocks := make([]*types.Block, int(self.currentBlock.Number.Int64())+1)
-	for block := self.currentBlock; block != nil; block = self.GetBlock(block.PrevHash) {
-		blocks[block.Number.Int64()] = block
+	blocks := make([]*types.Block, int(self.currentBlock.NumberU64())+1)
+	for block := self.currentBlock; block != nil; block = self.GetBlock(block.Header().ParentHash) {
+		blocks[block.NumberU64()] = block
 	}
+	//fmt.Println(blocks)
 
+	return nil
 	return ethutil.Encode(blocks)
 }
 
 func (bc *ChainManager) insert(block *types.Block) {
-	encodedBlock := block.RlpEncode()
+	encodedBlock := ethutil.Encode(block)
 	ethutil.Config.Db.Put([]byte("LastBlock"), encodedBlock)
 	bc.currentBlock = block
 	bc.lastBlockHash = block.Hash()
@@ -213,7 +235,7 @@ func (bc *ChainManager) insert(block *types.Block) {
 func (bc *ChainManager) write(block *types.Block) {
 	bc.writeBlockInfo(block)
 
-	encodedBlock := block.RlpEncode()
+	encodedBlock := ethutil.Encode(block)
 	ethutil.Config.Db.Put(block.Hash(), encodedBlock)
 }
 
@@ -238,11 +260,11 @@ func (self *ChainManager) GetBlockHashesFromHash(hash []byte, max uint64) (chain
 	for i := uint64(0); i < max; i++ {
 		chain = append(chain, block.Hash())
 
-		if block.Number.Cmp(ethutil.Big0) <= 0 {
+		if block.Header().Number.Cmp(ethutil.Big0) <= 0 {
 			break
 		}
 
-		block = self.GetBlock(block.PrevHash)
+		block = self.GetBlock(block.Header().ParentHash)
 	}
 
 	return
@@ -253,8 +275,13 @@ func (self *ChainManager) GetBlock(hash []byte) *types.Block {
 	if len(data) == 0 {
 		return nil
 	}
+	var block types.Block
+	if err := rlp.Decode(bytes.NewReader(data), &block); err != nil {
+		fmt.Println(err)
+		return nil
+	}
 
-	return types.NewBlockFromBytes(data)
+	return &block
 }
 
 func (self *ChainManager) GetBlockByNumber(num uint64) *types.Block {
@@ -262,13 +289,13 @@ func (self *ChainManager) GetBlockByNumber(num uint64) *types.Block {
 	defer self.mu.RUnlock()
 
 	block := self.currentBlock
-	for ; block != nil; block = self.GetBlock(block.PrevHash) {
-		if block.Number.Uint64() == num {
+	for ; block != nil; block = self.GetBlock(block.Header().ParentHash) {
+		if block.Header().Number.Uint64() == num {
 			break
 		}
 	}
 
-	if block != nil && block.Number.Uint64() == 0 && num != 0 {
+	if block != nil && block.Header().Number.Uint64() == 0 && num != 0 {
 		return nil
 	}
 
@@ -281,40 +308,28 @@ func (bc *ChainManager) setTotalDifficulty(td *big.Int) {
 }
 
 func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
-	parent := self.GetBlock(block.PrevHash)
+	parent := self.GetBlock(block.Header().ParentHash)
 	if parent == nil {
-		return nil, fmt.Errorf("Unable to calculate total diff without known parent %x", block.PrevHash)
+		return nil, fmt.Errorf("Unable to calculate total diff without known parent %x", block.Header().ParentHash)
 	}
 
-	parentTd := parent.BlockInfo().TD
+	parentTd := parent.Td
 
 	uncleDiff := new(big.Int)
-	for _, uncle := range block.Uncles {
+	for _, uncle := range block.Uncles() {
 		uncleDiff = uncleDiff.Add(uncleDiff, uncle.Difficulty)
 	}
 
 	td := new(big.Int)
 	td = td.Add(parentTd, uncleDiff)
-	td = td.Add(td, block.Difficulty)
+	td = td.Add(td, block.Header().Difficulty)
 
 	return td, nil
-}
-
-func (bc *ChainManager) BlockInfo(block *types.Block) types.BlockInfo {
-	bi := types.BlockInfo{}
-	data, _ := ethutil.Config.Db.Get(append(block.Hash(), []byte("Info")...))
-	bi.RlpDecode(data)
-
-	return bi
 }
 
 // Unexported method for writing extra non-essential block info to the db
 func (bc *ChainManager) writeBlockInfo(block *types.Block) {
 	bc.lastBlockNumber++
-	bi := types.BlockInfo{Number: bc.lastBlockNumber, Hash: block.Hash(), Parent: block.PrevHash, TD: bc.td}
-
-	// For now we use the block hash with the words "info" appended as key
-	ethutil.Config.Db.Put(append(block.Hash(), []byte("Info")...), bi.RlpEncode())
 }
 
 func (bc *ChainManager) Stop() {
@@ -331,7 +346,8 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 				continue
 			}
 
-			chainlogger.Infof("block #%v process failed (%x)\n", block.Number, block.Hash()[:4])
+			h := block.Header()
+			chainlogger.Infof("block #%v process failed (%x)\n", h.Number, h.Hash()[:4])
 			chainlogger.Infoln(block)
 			chainlogger.Infoln(err)
 			return err
@@ -339,16 +355,16 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 
 		self.mu.Lock()
 		{
-
 			self.write(block)
+			cblock := self.currentBlock
 			if td.Cmp(self.td) > 0 {
-				if block.Number.Cmp(new(big.Int).Add(self.currentBlock.Number, ethutil.Big1)) < 0 {
-					chainlogger.Infof("Split detected. New head #%v (%x), was #%v (%x)\n", block.Number, block.Hash()[:4], self.currentBlock.Number, self.currentBlock.Hash()[:4])
+				if block.Header().Number.Cmp(new(big.Int).Add(cblock.Header().Number, ethutil.Big1)) < 0 {
+					chainlogger.Infof("Split detected. New head #%v (%x), was #%v (%x)\n", block.Header().Number, block.Hash()[:4], cblock.Header().Number, cblock.Hash()[:4])
 				}
 
 				self.setTotalDifficulty(td)
 				self.insert(block)
-				self.transState = self.currentBlock.State().Copy()
+				self.transState = state.New(cblock.Trie().Copy())
 			}
 
 		}

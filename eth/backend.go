@@ -235,7 +235,7 @@ func (self *Ethereum) blockBroadcastLoop() {
 	// automatically stops if unsubscribe
 	for obj := range self.txSub.Chan() {
 		event := obj.(core.NewMinedBlockEvent)
-		self.server.Broadcast("eth", NewBlockMsg, event.Block.Value().Val)
+		self.server.Broadcast("eth", NewBlockMsg, event.Block.RlpData())
 	}
 }
 

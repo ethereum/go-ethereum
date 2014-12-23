@@ -172,7 +172,7 @@ func (self *ethProtocol) handle() error {
 			}
 			block := self.chainManager.GetBlock(hash)
 			if block != nil {
-				blocks = append(blocks, block.Value().Raw())
+				blocks = append(blocks, block.RlpData())
 			}
 		}
 		return self.rw.EncodeMsg(BlocksMsg, blocks...)

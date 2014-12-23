@@ -56,7 +56,7 @@ type Miner struct {
 	eth    *eth.Ethereum
 	events event.Subscription
 
-	uncles    types.Blocks
+	uncles    []*types.Header
 	localTxs  map[int]*LocalTx
 	localTxId int
 
@@ -184,9 +184,9 @@ func (self *Miner) mine() {
 		block.SetUncles(self.uncles)
 	}
 
-	parent := chainMan.GetBlock(block.PrevHash)
-	coinbase := block.State().GetOrNewStateObject(block.Coinbase)
-	coinbase.SetGasPool(block.CalcGasLimit(parent))
+	parent := chainMan.GetBlock(block.ParentHash())
+	coinbase := block.State().GetOrNewStateObject(block.Coinbase())
+	coinbase.SetGasPool(core.CalcGasLimit(parent, block))
 
 	transactions := self.finiliseTxs()
 
@@ -211,7 +211,7 @@ func (self *Miner) mine() {
 	// Find a valid nonce
 	nonce := self.pow.Search(block, self.powQuitCh)
 	if nonce != nil {
-		block.Nonce = nonce
+		block.Header().Nonce = nonce
 		err := chainMan.InsertChain(types.Blocks{block})
 		if err != nil {
 			minerlogger.Infoln(err)
