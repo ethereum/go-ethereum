@@ -18,7 +18,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"runtime"
@@ -120,13 +119,13 @@ func main() {
 
 	if len(ImportChain) > 0 {
 		clilogger.Infof("importing chain '%s'\n", ImportChain)
-		c, err := ethutil.ReadAllFile(ImportChain)
+		fh, err := os.OpenFile(ImportChain, os.O_RDONLY, os.ModePerm)
 		if err != nil {
 			clilogger.Infoln(err)
 			return
 		}
 		var chain types.Blocks
-		if err := rlp.Decode(bytes.NewReader([]byte(c)), &chain); err != nil {
+		if err := rlp.Decode(fh, &chain); err != nil {
 			clilogger.Infoln(err)
 			return
 		}
