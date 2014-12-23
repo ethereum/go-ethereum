@@ -221,7 +221,7 @@ func (gui *Gui) setInitialChain(ancientBlocks bool) {
 	sBlk := gui.eth.ChainManager().LastBlockHash()
 	blk := gui.eth.ChainManager().GetBlock(sBlk)
 	for ; blk != nil; blk = gui.eth.ChainManager().GetBlock(sBlk) {
-		sBlk = blk.PrevHash
+		sBlk = blk.ParentHash()
 
 		gui.processBlock(blk, true)
 	}
@@ -322,7 +322,7 @@ func (gui *Gui) readPreviousTransactions() {
 }
 
 func (gui *Gui) processBlock(block *types.Block, initial bool) {
-	name := strings.Trim(gui.pipe.World().Config().Get("NameReg").Storage(block.Coinbase).Str(), "\x00")
+	name := strings.Trim(gui.pipe.World().Config().Get("NameReg").Storage(block.Coinbase()).Str(), "\x00")
 	b := xeth.NewJSBlock(block)
 	b.Name = name
 
@@ -400,7 +400,7 @@ func (gui *Gui) update() {
 				switch ev := ev.(type) {
 				case core.NewBlockEvent:
 					gui.processBlock(ev.Block, false)
-					if bytes.Compare(ev.Block.Coinbase, gui.address()) == 0 {
+					if bytes.Compare(ev.Block.Coinbase(), gui.address()) == 0 {
 						gui.setWalletValue(gui.eth.ChainManager().State().GetBalance(gui.address()), nil)
 					}
 
@@ -438,7 +438,7 @@ func (gui *Gui) update() {
 			case <-peerUpdateTicker.C:
 				gui.setPeerInfo()
 			case <-generalUpdateTicker.C:
-				statusText := "#" + gui.eth.ChainManager().CurrentBlock().Number.String()
+				statusText := "#" + gui.eth.ChainManager().CurrentBlock().Number().String()
 				lastBlockLabel.Set("text", statusText)
 				miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.miner.GetPow().GetHashrate(), 10)+"Khash")
 

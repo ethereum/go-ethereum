@@ -139,7 +139,7 @@ func (app *HtmlApplication) Window() *qml.Window {
 }
 
 func (app *HtmlApplication) NewBlock(block *types.Block) {
-	b := &xeth.JSBlock{Number: int(block.BlockInfo().Number), Hash: ethutil.Bytes2Hex(block.Hash())}
+	b := &xeth.JSBlock{Number: int(block.NumberU64()), Hash: ethutil.Bytes2Hex(block.Hash())}
 	app.webView.Call("onNewBlockCb", b)
 }
 
