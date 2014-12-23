@@ -124,6 +124,8 @@ func main() {
 			clilogger.Infoln(err)
 			return
 		}
+		defer fh.Close()
+
 		var chain types.Blocks
 		if err := rlp.Decode(fh, &chain); err != nil {
 			clilogger.Infoln(err)
