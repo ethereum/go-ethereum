@@ -339,7 +339,7 @@ func BlockDo(ethereum *eth.Ethereum, hash []byte) error {
 }
 
 func ImportChain(ethereum *eth.Ethereum, fn string) error {
-	clilogger.Infof("importing chain '%s'\n", ImportChain)
+	clilogger.Infof("importing chain '%s'\n", fn)
 	fh, err := os.OpenFile(fn, os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		return err

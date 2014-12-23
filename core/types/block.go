@@ -9,9 +9,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/ptrie"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/state"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 type Header struct {
@@ -196,7 +196,7 @@ func (self *Block) Time() int64               { return int64(self.header.Time) }
 func (self *Block) GasLimit() *big.Int        { return self.header.GasLimit }
 func (self *Block) GasUsed() *big.Int         { return self.header.GasUsed }
 func (self *Block) Hash() []byte              { return self.header.Hash() }
-func (self *Block) Trie() *trie.Trie          { return trie.New(ethutil.Config.Db, self.header.Root) }
+func (self *Block) Trie() *ptrie.Trie         { return ptrie.New(self.header.Root, ethutil.Config.Db) }
 func (self *Block) State() *state.StateDB     { return state.New(self.Trie()) }
 func (self *Block) Size() ethutil.StorageSize { return ethutil.StorageSize(len(ethutil.Encode(self))) }
 

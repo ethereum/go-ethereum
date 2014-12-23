@@ -6,7 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/ptrie"
 )
 
 type Code []byte
@@ -62,7 +62,7 @@ func NewStateObject(addr []byte) *StateObject {
 	address := ethutil.Address(addr)
 
 	object := &StateObject{address: address, balance: new(big.Int), gasPool: new(big.Int)}
-	object.State = New(trie.New(ethutil.Config.Db, ""))
+	object.State = New(ptrie.New(nil, ethutil.Config.Db)) //New(trie.New(ethutil.Config.Db, ""))
 	object.storage = make(Storage)
 	object.gasPool = new(big.Int)
 
@@ -72,7 +72,7 @@ func NewStateObject(addr []byte) *StateObject {
 func NewContract(address []byte, balance *big.Int, root []byte) *StateObject {
 	contract := NewStateObject(address)
 	contract.balance = balance
-	contract.State = New(trie.New(ethutil.Config.Db, string(root)))
+	contract.State = New(ptrie.New(nil, ethutil.Config.Db)) //New(trie.New(ethutil.Config.Db, string(root)))
 
 	return contract
 }
@@ -89,12 +89,12 @@ func (self *StateObject) MarkForDeletion() {
 	statelogger.DebugDetailf("%x: #%d %v (deletion)\n", self.Address(), self.Nonce, self.balance)
 }
 
-func (c *StateObject) GetAddr(addr []byte) *ethutil.Value {
-	return ethutil.NewValueFromBytes([]byte(c.State.Trie.Get(string(addr))))
+func (c *StateObject) getAddr(addr []byte) *ethutil.Value {
+	return ethutil.NewValueFromBytes([]byte(c.State.trie.Get(addr)))
 }
 
-func (c *StateObject) SetAddr(addr []byte, value interface{}) {
-	c.State.Trie.Update(string(addr), string(ethutil.NewValue(value).Encode()))
+func (c *StateObject) setAddr(addr []byte, value interface{}) {
+	c.State.trie.Update(addr, ethutil.Encode(value))
 }
 
 func (self *StateObject) GetStorage(key *big.Int) *ethutil.Value {
@@ -113,7 +113,7 @@ func (self *StateObject) GetState(k []byte) *ethutil.Value {
 
 	value := self.storage[string(key)]
 	if value == nil {
-		value = self.GetAddr(key)
+		value = self.getAddr(key)
 
 		if !value.IsNil() {
 			self.storage[string(key)] = value
@@ -128,6 +128,7 @@ func (self *StateObject) SetState(k []byte, value *ethutil.Value) {
 	self.storage[string(key)] = value.Copy()
 }
 
+/*
 // Iterate over each storage address and yield callback
 func (self *StateObject) EachStorage(cb trie.EachCallback) {
 	// First loop over the uncommit/cached values in storage
@@ -145,23 +146,26 @@ func (self *StateObject) EachStorage(cb trie.EachCallback) {
 		}
 	})
 }
+*/
 
 func (self *StateObject) Sync() {
 	for key, value := range self.storage {
 		if value.Len() == 0 {
-			self.State.Trie.Delete(string(key))
+			self.State.trie.Delete([]byte(key))
 			continue
 		}
 
-		self.SetAddr([]byte(key), value)
+		self.setAddr([]byte(key), value)
 	}
 
-	valid, t2 := trie.ParanoiaCheck(self.State.Trie)
-	if !valid {
-		statelogger.Infof("Warn: PARANOIA: Different state storage root during copy %x vs %x\n", self.State.Root(), t2.GetRoot())
+	/*
+		valid, t2 := ptrie.ParanoiaCheck(self.State.trie, ethutil.Config.Db)
+		if !valid {
+			statelogger.Infof("Warn: PARANOIA: Different state storage root during copy %x vs %x\n", self.State.Root(), t2.Root())
 
-		self.State.Trie = t2
-	}
+			self.State.trie = t2
+		}
+	*/
 }
 
 func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
@@ -276,8 +280,12 @@ func (c *StateObject) Init() Code {
 	return c.InitCode
 }
 
+func (self *StateObject) Trie() *ptrie.Trie {
+	return self.State.trie
+}
+
 func (self *StateObject) Root() []byte {
-	return self.State.Trie.GetRoot()
+	return self.Trie().Root()
 }
 
 func (self *StateObject) SetCode(code []byte) {
@@ -302,7 +310,7 @@ func (c *StateObject) RlpDecode(data []byte) {
 
 	c.Nonce = decoder.Get(0).Uint()
 	c.balance = decoder.Get(1).BigInt()
-	c.State = New(trie.New(ethutil.Config.Db, decoder.Get(2).Interface()))
+	c.State = New(ptrie.New(decoder.Get(2).Bytes(), ethutil.Config.Db)) //New(trie.New(ethutil.Config.Db, decoder.Get(2).Interface()))
 	c.storage = make(map[string]*ethutil.Value)
 	c.gasPool = new(big.Int)
 

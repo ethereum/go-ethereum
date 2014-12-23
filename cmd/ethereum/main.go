@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -97,9 +98,6 @@ func main() {
 			os.Exit(1)
 		}
 
-		// block.GetRoot() does not exist
-		//fmt.Printf("RLP: %x\nstate: %x\nhash: %x\n", ethutil.Rlp(block), block.GetRoot(), block.Hash())
-
 		// Leave the Println. This needs clean output for piping
 		fmt.Printf("%s\n", block.State().Dump())
 
@@ -117,10 +115,12 @@ func main() {
 	}
 
 	if len(ImportChain) > 0 {
+		start := time.Now()
 		err := utils.ImportChain(ethereum, ImportChain)
 		if err != nil {
 			clilogger.Infoln(err)
 		}
+		clilogger.Infoln("export done in", time.Since(start))
 		return
 	}
 

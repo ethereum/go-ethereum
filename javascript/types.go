@@ -18,11 +18,11 @@ type JSStateObject struct {
 
 func (self *JSStateObject) EachStorage(call otto.FunctionCall) otto.Value {
 	cb := call.Argument(0)
-	self.JSObject.EachStorage(func(key string, value *ethutil.Value) {
-		value.Decode()
 
-		cb.Call(self.eth.toVal(self), self.eth.toVal(key), self.eth.toVal(ethutil.Bytes2Hex(value.Bytes())))
-	})
+	it := self.JSObject.Trie().Iterator()
+	for it.Next() {
+		cb.Call(self.eth.toVal(self), self.eth.toVal(ethutil.Bytes2Hex(it.Key)), self.eth.toVal(ethutil.Bytes2Hex(it.Value)))
+	}
 
 	return otto.UndefinedValue()
 }

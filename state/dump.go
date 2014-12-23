@@ -22,22 +22,23 @@ type World struct {
 
 func (self *StateDB) Dump() []byte {
 	world := World{
-		Root:     ethutil.Bytes2Hex(self.Trie.GetRoot()),
+		Root:     ethutil.Bytes2Hex(self.trie.Root()),
 		Accounts: make(map[string]Account),
 	}
 
-	self.Trie.NewIterator().Each(func(key string, value *ethutil.Value) {
-		stateObject := NewStateObjectFromBytes([]byte(key), value.Bytes())
+	it := self.trie.Iterator()
+	for it.Next() {
+		stateObject := NewStateObjectFromBytes(it.Key, it.Value)
 
 		account := Account{Balance: stateObject.balance.String(), Nonce: stateObject.Nonce, Root: ethutil.Bytes2Hex(stateObject.Root()), CodeHash: ethutil.Bytes2Hex(stateObject.codeHash)}
 		account.Storage = make(map[string]string)
 
-		stateObject.EachStorage(func(key string, value *ethutil.Value) {
-			value.Decode()
-			account.Storage[ethutil.Bytes2Hex([]byte(key))] = ethutil.Bytes2Hex(value.Bytes())
-		})
-		world.Accounts[ethutil.Bytes2Hex([]byte(key))] = account
-	})
+		storageIt := stateObject.State.trie.Iterator()
+		for storageIt.Next() {
+			account.Storage[ethutil.Bytes2Hex(it.Key)] = ethutil.Bytes2Hex(it.Value)
+		}
+		world.Accounts[ethutil.Bytes2Hex(it.Key)] = account
+	}
 
 	json, err := json.MarshalIndent(world, "", "    ")
 	if err != nil {
@@ -50,7 +51,8 @@ func (self *StateDB) Dump() []byte {
 // Debug stuff
 func (self *StateObject) CreateOutputForDiff() {
 	fmt.Printf("%x %x %x %x\n", self.Address(), self.State.Root(), self.balance.Bytes(), self.Nonce)
-	self.EachStorage(func(addr string, value *ethutil.Value) {
-		fmt.Printf("%x %x\n", addr, value.Bytes())
-	})
+	it := self.State.trie.Iterator()
+	for it.Next() {
+		fmt.Printf("%x %x\n", it.Key, it.Value)
+	}
 }
