@@ -69,6 +69,10 @@ func run() error {
 		utils.StartRpc(ethereum, RpcPort)
 	}
 
+	if StartWebSockets {
+		utils.StartWebSockets(ethereum)
+	}
+
 	gui := NewWindow(ethereum, config, clientIdentity, KeyRing, LogLevel)
 	gui.stdLog = stdLog
 
