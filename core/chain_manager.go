@@ -204,9 +204,6 @@ func (bc *ChainManager) Reset() {
 	bc.currentBlock = bc.genesisBlock
 
 	bc.setTotalDifficulty(ethutil.Big("0"))
-
-	// Set the last know difficulty (might be 0x0 as initial value, Genesis)
-	bc.td = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
 }
 
 func (self *ChainManager) Export() []byte {
@@ -219,9 +216,7 @@ func (self *ChainManager) Export() []byte {
 	for block := self.currentBlock; block != nil; block = self.GetBlock(block.Header().ParentHash) {
 		blocks[block.NumberU64()] = block
 	}
-	//fmt.Println(blocks)
 
-	return nil
 	return ethutil.Encode(blocks)
 }
 

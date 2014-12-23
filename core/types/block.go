@@ -209,28 +209,34 @@ func (self *Block) HashNoNonce() []byte {
 
 func (self *Block) String() string {
 	return fmt.Sprintf(`BLOCK(%x): Size: %v {
+Header:
+[
 %v
+]
+Transactions:
 %v
+Uncles:
 %v
 }
-`, self.header.Hash(), self.Size(), self.header, self.uncles, self.transactions)
+`, self.header.Hash(), self.Size(), self.header, self.transactions, self.uncles)
 }
 
 func (self *Header) String() string {
-	return fmt.Sprintf(`ParentHash:	    %x
-UncleHash:	    %x
-Coinbase:	    %x
-Root:		    %x
-TxSha		    %x
-ReceiptSha:	    %x
-Bloom:		    %x
-Difficulty:	    %v
-Number:		    %v
-GasLimit:	    %v
-GasUsed:	    %v
-Time:		    %v
-Extra:		    %v
-Nonce:		    %x
+	return fmt.Sprintf(`
+	ParentHash:	    %x
+	UncleHash:	    %x
+	Coinbase:	    %x
+	Root:		    %x
+	TxSha		    %x
+	ReceiptSha:	    %x
+	Bloom:		    %x
+	Difficulty:	    %v
+	Number:		    %v
+	GasLimit:	    %v
+	GasUsed:	    %v
+	Time:		    %v
+	Extra:		    %v
+	Nonce:		    %x
 `, self.ParentHash, self.UncleHash, self.Coinbase, self.Root, self.TxHash, self.ReceiptHash, self.Bloom, self.Difficulty, self.Number, self.GasLimit, self.GasUsed, self.Time, self.Extra, self.Nonce)
 }
 

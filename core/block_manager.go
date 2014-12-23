@@ -304,7 +304,7 @@ func (sm *BlockManager) AccumelateRewards(statedb *state.StateDB, block, parent 
 
 	knownUncles := set.New()
 	for _, uncle := range parent.Uncles() {
-		knownUncles.Add(uncle.Hash())
+		knownUncles.Add(string(uncle.Hash()))
 	}
 
 	nonces := ethutil.NewSet(block.Header().Nonce)
@@ -323,7 +323,7 @@ func (sm *BlockManager) AccumelateRewards(statedb *state.StateDB, block, parent 
 			return UncleError("Uncle too old")
 		}
 
-		if knownUncles.Has(uncle.Hash()) {
+		if knownUncles.Has(string(uncle.Hash())) {
 			return UncleError("Uncle in chain")
 		}
 

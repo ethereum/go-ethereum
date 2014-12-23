@@ -58,6 +58,7 @@ var (
 	DumpHash        string
 	DumpNumber      int
 	VmType          int
+	ImportChain     string
 )
 
 // flags specific to cli client
@@ -104,6 +105,7 @@ func Init() {
 	flag.BoolVar(&DiffTool, "difftool", false, "creates output for diff'ing. Sets LogLevel=0")
 	flag.StringVar(&DiffType, "diff", "all", "sets the level of diff output [vm, all]. Has no effect if difftool=false")
 	flag.BoolVar(&ShowGenesis, "genesis", false, "Dump the genesis block")
+	flag.StringVar(&ImportChain, "chain", "", "Imports fiven chain")
 
 	flag.BoolVar(&Dump, "dump", false, "output the ethereum state in JSON format. Sub args [number, hash]")
 	flag.StringVar(&DumpHash, "hash", "", "specify arg in hex")

@@ -17,10 +17,10 @@ func IsContractAddr(addr []byte) bool {
 
 type Transaction struct {
 	AccountNonce uint64
+	Price        *big.Int
+	GasLimit     *big.Int
 	Recipient    []byte
 	Amount       *big.Int
-	GasAmount    *big.Int
-	Price        *big.Int
 	Payload      []byte
 	V            uint64
 	R, S         []byte
@@ -31,7 +31,7 @@ func NewContractCreationTx(Amount, gasAmount, price *big.Int, data []byte) *Tran
 }
 
 func NewTransactionMessage(to []byte, Amount, gasAmount, price *big.Int, data []byte) *Transaction {
-	return &Transaction{Recipient: to, Amount: Amount, Price: price, GasAmount: gasAmount, Payload: data}
+	return &Transaction{Recipient: to, Amount: Amount, Price: price, GasLimit: gasAmount, Payload: data}
 }
 
 func NewTransactionFromBytes(data []byte) *Transaction {
@@ -49,7 +49,7 @@ func NewTransactionFromAmount(val *ethutil.Value) *Transaction {
 }
 
 func (tx *Transaction) Hash() []byte {
-	data := []interface{}{tx.AccountNonce, tx.Price, tx.GasAmount, tx.Recipient, tx.Amount, tx.Payload}
+	data := []interface{}{tx.AccountNonce, tx.Price, tx.GasLimit, tx.Recipient, tx.Amount, tx.Payload}
 
 	return crypto.Sha3(ethutil.Encode(data))
 }
@@ -59,7 +59,7 @@ func (self *Transaction) Data() []byte {
 }
 
 func (self *Transaction) Gas() *big.Int {
-	return self.GasAmount
+	return self.GasLimit
 }
 
 func (self *Transaction) GasPrice() *big.Int {
@@ -140,7 +140,7 @@ func (tx *Transaction) Sign(privk []byte) error {
 }
 
 func (tx *Transaction) RlpData() interface{} {
-	data := []interface{}{tx.AccountNonce, tx.Price, tx.GasAmount, tx.Recipient, tx.Amount, tx.Payload}
+	data := []interface{}{tx.AccountNonce, tx.Price, tx.GasLimit, tx.Recipient, tx.Amount, tx.Payload}
 
 	return append(data, tx.V, new(big.Int).SetBytes(tx.R).Bytes(), new(big.Int).SetBytes(tx.S).Bytes())
 }
@@ -156,7 +156,7 @@ func (tx *Transaction) RlpDecode(data []byte) {
 func (tx *Transaction) RlpValueDecode(decoder *ethutil.Value) {
 	tx.AccountNonce = decoder.Get(0).Uint()
 	tx.Price = decoder.Get(1).BigInt()
-	tx.GasAmount = decoder.Get(2).BigInt()
+	tx.GasLimit = decoder.Get(2).BigInt()
 	tx.Recipient = decoder.Get(3).Bytes()
 	tx.Amount = decoder.Get(4).BigInt()
 	tx.Payload = decoder.Get(5).Bytes()
@@ -171,23 +171,23 @@ func (tx *Transaction) String() string {
 	Contract: %v
 	From:     %x
 	To:       %x
-	AccountNonce:    %v
-	GasAmountPrice: %v
-	GasAmount:      %v
-	Amount:    %v
+	Nonce:    %v
+	GasPrice: %v
+	GasLimit  %v
+	Value:    %v
 	Data:     0x%x
 	V:        0x%x
 	R:        0x%x
 	S:        0x%x
 	Hex:      %x
-	`,
+`,
 		tx.Hash(),
 		len(tx.Recipient) == 0,
 		tx.From(),
-		tx.Recipient,
+		tx.To(),
 		tx.AccountNonce,
 		tx.Price,
-		tx.GasAmount,
+		tx.GasLimit,
 		tx.Amount,
 		tx.Payload,
 		tx.V,

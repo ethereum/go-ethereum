@@ -18,6 +18,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"runtime"
@@ -26,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
@@ -37,6 +39,10 @@ var clilogger = logger.NewLogger("CLI")
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	defer func() {
+		logger.Flush()
+	}()
 
 	utils.HandleInterrupt()
 
@@ -112,6 +118,27 @@ func main() {
 		utils.StartMining(ethereum)
 	}
 
+	if len(ImportChain) > 0 {
+		clilogger.Infof("importing chain '%s'\n", ImportChain)
+		c, err := ethutil.ReadAllFile(ImportChain)
+		if err != nil {
+			clilogger.Infoln(err)
+			return
+		}
+		var chain types.Blocks
+		if err := rlp.Decode(bytes.NewReader([]byte(c)), &chain); err != nil {
+			clilogger.Infoln(err)
+			return
+		}
+
+		ethereum.ChainManager().Reset()
+		if err := ethereum.ChainManager().InsertChain(chain); err != nil {
+			clilogger.Infoln(err)
+			return
+		}
+		clilogger.Infof("imported %d blocks\n", len(chain))
+	}
+
 	// better reworked as cases
 	if StartJsConsole {
 		InitJsConsole(ethereum)
@@ -131,5 +158,4 @@ func main() {
 
 	// this blocks the thread
 	ethereum.WaitForShutdown()
-	logger.Flush()
 }
