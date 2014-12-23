@@ -198,6 +198,10 @@ func (bc *ChainManager) Reset() {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
+	for block := bc.currentBlock; block != nil; block = bc.GetBlock(block.Header().ParentHash) {
+		ethutil.Config.Db.Delete(block.Hash())
+	}
+
 	// Prepare the genesis block
 	bc.write(bc.genesisBlock)
 	bc.insert(bc.genesisBlock)
