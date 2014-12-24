@@ -185,12 +185,6 @@ func (sm *BlockManager) ProcessWithParent(block, parent *types.Block) (td *big.I
 
 	state := state.New(parent.Trie().Copy())
 
-	// Defer the Undo on the Trie. If the block processing happened
-	// we don't want to undo but since undo only happens on dirty
-	// nodes this won't happen because Commit would have been called
-	// before that.
-	defer state.Reset()
-
 	// Block validation
 	if err = sm.ValidateBlock(block, parent); err != nil {
 		return
