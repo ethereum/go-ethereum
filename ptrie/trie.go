@@ -215,7 +215,7 @@ func (self *Trie) get(node Node, key []byte) Node {
 }
 
 func (self *Trie) delete(node Node, key []byte) Node {
-	if len(key) == 0 {
+	if len(key) == 0 && node == nil {
 		return nil
 	}
 
@@ -234,7 +234,9 @@ func (self *Trie) delete(node Node, key []byte) Node {
 				nkey := append(k, child.Key()...)
 				n = NewShortNode(self, nkey, child.Value())
 			case *FullNode:
-				n = NewShortNode(self, node.key, child)
+				sn := NewShortNode(self, node.Key(), child)
+				sn.key = node.key
+				n = sn
 			}
 
 			return n
@@ -275,9 +277,10 @@ func (self *Trie) delete(node Node, key []byte) Node {
 		}
 
 		return nnode
-
+	case nil:
+		return nil
 	default:
-		panic("Invalid node")
+		panic(fmt.Sprintf("%T: invalid node: %v (%v)", node, node, key))
 	}
 }
 
@@ -288,7 +291,10 @@ func (self *Trie) mknode(value *ethutil.Value) Node {
 	case 0:
 		return nil
 	case 2:
-		return NewShortNode(self, trie.CompactDecode(string(value.Get(0).Bytes())), self.mknode(value.Get(1)))
+		// A value node may consists of 2 bytes.
+		if value.Get(0).Len() != 0 {
+			return NewShortNode(self, trie.CompactDecode(string(value.Get(0).Bytes())), self.mknode(value.Get(1)))
+		}
 	case 17:
 		fnode := NewFullNode(self)
 		for i := 0; i < l; i++ {
@@ -297,9 +303,9 @@ func (self *Trie) mknode(value *ethutil.Value) Node {
 		return fnode
 	case 32:
 		return &HashNode{value.Bytes()}
-	default:
-		return &ValueNode{self, value.Bytes()}
 	}
+
+	return &ValueNode{self, value.Bytes()}
 }
 
 func (self *Trie) trans(node Node) Node {
@@ -322,4 +328,8 @@ func (self *Trie) store(node Node) interface{} {
 	}
 
 	return node.RlpData()
+}
+
+func (self *Trie) PrintRoot() {
+	fmt.Println(self.root)
 }
