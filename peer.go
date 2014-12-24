@@ -412,6 +412,12 @@ func (p *Peer) HandleInbound() {
 				//}
 
 			case wire.MsgDiscTy:
+				blockPool := p.ethereum.blockPool
+				if blockPool.peer == p {
+					blockPool.peer = nil
+					blockPool.td = ethutil.Big0
+				}
+
 				p.Stop()
 				peerlogger.Infoln("Disconnect peer: ", DiscReason(msg.Data.Get(0).Uint()))
 			case wire.MsgPingTy:
