@@ -120,7 +120,7 @@ func main() {
 		if err != nil {
 			clilogger.Infoln(err)
 		}
-		clilogger.Infoln("export done in", time.Since(start))
+		clilogger.Infoln("import done in", time.Since(start))
 		return
 	}
 
