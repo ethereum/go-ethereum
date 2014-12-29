@@ -181,10 +181,8 @@ void GasMeter::giveBack(llvm::Value* _gas)
 	m_runtimeManager.setGas(m_builder.CreateAdd(m_runtimeManager.getGas(), _gas));
 }
 
-void GasMeter::commitCostBlock(llvm::Value* _additionalCost)
+void GasMeter::commitCostBlock()
 {
-	assert(!_additionalCost || m_checkCall); // _additionalCost => m_checkCall; Must be inside cost-block
-
 	// If any uncommited block
 	if (m_checkCall)
 	{
@@ -198,9 +196,6 @@ void GasMeter::commitCostBlock(llvm::Value* _additionalCost)
 		m_checkCall->setArgOperand(0, Constant::get(m_blockCost)); // Update block cost in gas check call
 		m_checkCall = nullptr; // End cost-block
 		m_blockCost = 0;
-
-		if (_additionalCost)
-			count(_additionalCost);
 	}
 	assert(m_blockCost == 0);
 }

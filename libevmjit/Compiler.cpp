@@ -773,7 +773,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 			auto outOff = stack.pop();
 			auto outSize = stack.pop();
 
-			_gasMeter.commitCostBlock(gas);
+			_gasMeter.commitCostBlock();
 
 			// Require memory for in and out buffers
 			_memory.require(outOff, outSize);	// Out buffer first as we guess it will be after the in one
@@ -783,6 +783,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 			if (inst == Instruction::CALLCODE)
 				receiveAddress = _runtimeManager.get(RuntimeData::Address);
 
+			_gasMeter.count(gas);
 			auto ret = _ext.call(gas, receiveAddress, value, inOff, inSize, outOff, outSize, codeAddress);
 			_gasMeter.giveBack(gas);
 			stack.push(ret);
