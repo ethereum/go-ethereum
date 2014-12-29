@@ -160,7 +160,7 @@ void GasMeter::countLogData(llvm::Value* _dataLength)
 	assert(m_checkCall);
 	assert(m_blockCost > 0); // LOGn instruction is already counted
 	static_assert(c_logDataGas == 1, "Log data gas cost has changed. Update GasMeter.");
-	commitCostBlock(_dataLength);	// TODO: commit is not necessary 
+	count(_dataLength);
 }
 
 void GasMeter::countSha3Data(llvm::Value* _dataLength)
