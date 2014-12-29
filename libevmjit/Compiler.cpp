@@ -658,6 +658,12 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 		}
 
 		case Instruction::GAS:
+		{
+			_gasMeter.commitCostBlock();
+			stack.push(_runtimeManager.getGas());
+			break;
+		}
+
 		case Instruction::ADDRESS:
 		case Instruction::CALLER:
 		case Instruction::ORIGIN:

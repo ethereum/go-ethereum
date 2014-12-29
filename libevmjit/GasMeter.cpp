@@ -78,23 +78,6 @@ uint64_t getStepCost(Instruction inst) // TODO: Add this function to FeeSructure
 	}
 }
 
-bool isCostBlockEnd(Instruction _inst)
-{
-	// Basic block terminators like STOP are not needed on the list
-	// as cost will be commited at the end of basic block
-
-	// CALL, CALLCODE & CREATE are commited manually
-
-	switch (_inst)
-	{
-	case Instruction::GAS:
-		return true;
-
-	default:
-		return false;
-	}
-}
-
 }
 
 GasMeter::GasMeter(llvm::IRBuilder<>& _builder, RuntimeManager& _runtimeManager) :
@@ -136,9 +119,6 @@ void GasMeter::count(Instruction _inst)
 	}
 
 	m_blockCost += getStepCost(_inst);
-
-	if (isCostBlockEnd(_inst))
-		commitCostBlock();
 }
 
 void GasMeter::count(llvm::Value* _cost)
