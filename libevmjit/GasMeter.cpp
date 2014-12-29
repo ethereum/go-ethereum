@@ -87,11 +87,6 @@ bool isCostBlockEnd(Instruction _inst)
 
 	switch (_inst)
 	{
-	case Instruction::CALLDATACOPY:
-	case Instruction::CODECOPY:
-	case Instruction::MLOAD:
-	case Instruction::MSTORE:
-	case Instruction::MSTORE8:
 	case Instruction::SSTORE:
 	case Instruction::GAS:
 		return true;
