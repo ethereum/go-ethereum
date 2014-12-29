@@ -87,7 +87,6 @@ bool isCostBlockEnd(Instruction _inst)
 
 	switch (_inst)
 	{
-	case Instruction::SSTORE:
 	case Instruction::GAS:
 		return true;
 
@@ -164,8 +163,6 @@ void GasMeter::countExp(llvm::Value* _exponent)
 
 void GasMeter::countSStore(Ext& _ext, llvm::Value* _index, llvm::Value* _newValue)
 {
-	assert(!m_checkCall); // Everything should've been commited before
-
 	auto oldValue = _ext.sload(_index);
 	auto oldValueIsZero = m_builder.CreateICmpEQ(oldValue, Constant::get(0), "oldValueIsZero");
 	auto newValueIsZero = m_builder.CreateICmpEQ(_newValue, Constant::get(0), "newValueIsZero");
