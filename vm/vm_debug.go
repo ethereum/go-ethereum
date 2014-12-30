@@ -713,15 +713,11 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 			// 0x50 range
 		case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
-			//a := big.NewInt(int64(op) - int64(PUSH1) + 1)
 			a := uint64(op - PUSH1 + 1)
-			//pc.Add(pc, ethutil.Big1)
 			byts := closure.GetRangeValue(pc+1, a)
-			val := ethutil.BigD(byts)
 			// Push value to stack
-			stack.Push(val)
+			stack.Push(ethutil.BigD(byts))
 			pc += a
-			//pc.Add(pc, a.Sub(a, big.NewInt(1)))
 
 			step += int(op) - int(PUSH1) + 1
 
