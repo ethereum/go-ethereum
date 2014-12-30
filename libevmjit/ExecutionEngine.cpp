@@ -48,34 +48,68 @@ ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _en
 
 ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeData* _data, Env* _env, bytes const& _code)
 {
-	llvm::sys::PrintStackTraceOnErrorSignal();
-	static const auto program = "EVM JIT";
-	llvm::PrettyStackTraceProgram X(1, &program);
+	// TODO: Use it in evmcc
+	//llvm::sys::PrintStackTraceOnErrorSignal();
+	//static const auto program = "EVM JIT";
+	//llvm::PrettyStackTraceProgram X(1, &program);
 
-	llvm::InitializeNativeTarget();
-	llvm::InitializeNativeTargetAsmPrinter();
+	static std::unique_ptr<llvm::ExecutionEngine> ee;  // TODO: Use Managed Objects from LLVM?
 
-	llvm::EngineBuilder builder(_module.get());
-	builder.setEngineKind(llvm::EngineKind::JIT);
-	builder.setUseMCJIT(true);
-	std::unique_ptr<llvm::SectionMemoryManager> memoryManager(new llvm::SectionMemoryManager);
-	builder.setMCJITMemoryManager(memoryManager.get());
-	builder.setOptLevel(llvm::CodeGenOpt::None);
+	typedef ReturnCode(*EntryFuncPtr)(Runtime*);
+	EntryFuncPtr entryFuncPtr{};
 
-	auto triple = llvm::Triple(llvm::sys::getProcessTriple());
-	if (triple.getOS() == llvm::Triple::OSType::Win32)
-		triple.setObjectFormat(llvm::Triple::ObjectFormatType::ELF);  // MCJIT does not support COFF format
-	_module->setTargetTriple(triple.str());
 
 	ExecBundle exec;
 	exec.mainFuncName = _module->getModuleIdentifier();
-	exec.engine.reset(builder.create());
-	if (!exec.engine)
-		return ReturnCode::LLVMConfigError;
-	_module.release();        // Successfully created llvm::ExecutionEngine takes ownership of the module
-	memoryManager.release();  // and memory manager
 
-	exec.engine->setObjectCache(Cache::getObjectCache());
+	if (!ee)
+	{
+		llvm::InitializeNativeTarget();
+		llvm::InitializeNativeTargetAsmPrinter();
+
+		llvm::EngineBuilder builder(_module.get());
+		builder.setEngineKind(llvm::EngineKind::JIT);
+		builder.setUseMCJIT(true);
+		std::unique_ptr<llvm::SectionMemoryManager> memoryManager(new llvm::SectionMemoryManager);
+		builder.setMCJITMemoryManager(memoryManager.get());
+		builder.setOptLevel(llvm::CodeGenOpt::None);
+
+		auto triple = llvm::Triple(llvm::sys::getProcessTriple());
+		if (triple.getOS() == llvm::Triple::OSType::Win32)
+			triple.setObjectFormat(llvm::Triple::ObjectFormatType::ELF);  // MCJIT does not support COFF format
+		_module->setTargetTriple(triple.str());
+
+		ee.reset(builder.create());
+		if (!ee)
+			return ReturnCode::LLVMConfigError;
+
+		_module.release();        // Successfully created llvm::ExecutionEngine takes ownership of the module
+		memoryManager.release();  // and memory manager
+
+		//ee->setObjectCache(Cache::getObjectCache());
+	}
+	else
+	{
+		if (entryFuncPtr = (EntryFuncPtr)ee->getFunctionAddress(_module->getModuleIdentifier()))
+		{
+			entryFuncPtr = nullptr;
+		}
+		else
+		{
+			ee->addModule(_module.get());
+			//std::cerr << _module->getModuleIdentifier() << "\n";
+			_module.release();
+		}
+	}
+
+	assert(ee);
+
+	//ExecBundle exec;
+	//exec.engine.reset(builder.create());
+	//if (!exec.engine)
+	//	return ReturnCode::LLVMConfigError;
+
+	exec.engine = ee.get();
 
 	// TODO: Finalization not needed when llvm::ExecutionEngine::getFunctionAddress used
 	//auto finalizationStartTime = std::chrono::high_resolution_clock::now();
@@ -113,13 +147,16 @@ ReturnCode runEntryFunc(ExecBundle const& _exec, Runtime* _runtime)
 	typedef ReturnCode(*EntryFuncPtr)(Runtime*);
 	auto entryFuncPtr = (EntryFuncPtr)_exec.engine->getFunctionAddress(_exec.mainFuncName);
 
+	//std::cerr << _exec.mainFuncName << "  F: " << entryFuncPtr << "\n";
 	ReturnCode returnCode{};
+	//std::cerr << _exec.mainFuncName << " +S: " << &returnCode << "\n";
 	auto sj = setjmp(_runtime->getJmpBuf());
 	if (sj == 0)
 		returnCode = entryFuncPtr(_runtime);
 	else
 		returnCode = static_cast<ReturnCode>(sj);
 
+	//std::cerr << _exec.mainFuncName << " -S: " << &returnCode << "\n";
 	return returnCode;
 }
 }

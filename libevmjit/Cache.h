@@ -17,7 +17,7 @@ namespace jit
 class ExecBundle
 {
 public:
-	std::unique_ptr<llvm::ExecutionEngine> engine;
+	llvm::ExecutionEngine* engine = nullptr;
 	std::string mainFuncName;
 
 	ExecBundle() = default;
