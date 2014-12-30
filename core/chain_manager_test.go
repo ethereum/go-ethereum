@@ -6,6 +6,7 @@ import (
 	"path"
 	"reflect"
 	"runtime"
+	"strconv"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -13,15 +14,15 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rlp"
-	//logpkg "github.com/ethereum/go-ethereum/logger"
 )
 
 //var Logger logpkg.LogSystem
+
 //var Log = logpkg.NewLogger("TEST")
 
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	//Logger = logpkg.NewStdLogSystem(os.Stdout, log.LstdFlags, logpkg.InfoLevel)
+	//Logger = logpkg.NewStdLogSystem(os.Stdout, log.LstdFlags, logpkg.DebugLevel)
 	//logpkg.AddLogSystem(Logger)
 
 	ethutil.ReadConfig("/tmp/ethtest", "/tmp/ethtest", "ETH")
@@ -50,21 +51,22 @@ func loadChain(fn string, t *testing.T) (types.Blocks, error) {
 
 func insertChain(done chan bool, chainMan *ChainManager, chain types.Blocks, t *testing.T) {
 	err := chainMan.InsertChain(chain)
+	done <- true
 	if err != nil {
 		fmt.Println(err)
 		t.FailNow()
 	}
-	done <- true
 }
 
 func TestChainInsertions(t *testing.T) {
-	chain1, err := loadChain("chain1", t)
+	chain1, err := loadChain("valid1", t)
 	if err != nil {
 		fmt.Println(err)
 		t.FailNow()
 	}
+	fmt.Println(len(chain1))
 
-	chain2, err := loadChain("chain2", t)
+	chain2, err := loadChain("valid2", t)
 	if err != nil {
 		fmt.Println(err)
 		t.FailNow()
@@ -92,5 +94,46 @@ func TestChainInsertions(t *testing.T) {
 
 	if !reflect.DeepEqual(chain1[len(chain1)-1], chainMan.CurrentBlock()) {
 		t.Error("chain1 isn't canonical and should be")
+	}
+}
+
+func TestChainMultipleInsertions(t *testing.T) {
+	const max = 4
+	chains := make([]types.Blocks, max)
+	var longest int
+	for i := 0; i < max; i++ {
+		var err error
+		name := "valid" + strconv.Itoa(i+1)
+		chains[i], err = loadChain(name, t)
+		if len(chains[i]) >= len(chains[longest]) {
+			longest = i
+		}
+		fmt.Println("loaded", name, "with a length of", len(chains[i]))
+		if err != nil {
+			fmt.Println(err)
+			t.FailNow()
+		}
+	}
+
+	var eventMux event.TypeMux
+	chainMan := NewChainManager(&eventMux)
+	txPool := NewTxPool(chainMan, &eventMux)
+	blockMan := NewBlockManager(txPool, chainMan, &eventMux)
+	chainMan.SetProcessor(blockMan)
+	done := make(chan bool, max)
+	for i, chain := range chains {
+		var i int = i
+		go func() {
+			insertChain(done, chainMan, chain, t)
+			fmt.Println(i, "done")
+		}()
+	}
+
+	for i := 0; i < max; i++ {
+		<-done
+	}
+
+	if !reflect.DeepEqual(chains[longest][len(chains[longest])-1], chainMan.CurrentBlock()) {
+		t.Error("Invalid canonical chain")
 	}
 }
