@@ -107,7 +107,9 @@ func RunVmTest(p string, t *testing.T) {
 			logs state.Logs
 		)
 
-		if len(test.Exec) > 0 {
+		isVmTest := len(test.Exec) > 0
+
+		if isVmTest {
 			ret, logs, gas, err = helper.RunVm(statedb, env, test.Exec)
 		} else {
 			ret, logs, gas, err = helper.RunState(statedb, env, test.Transaction)
@@ -124,10 +126,14 @@ func RunVmTest(p string, t *testing.T) {
 			t.Errorf("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
 		}
 
-		if len(test.Gas) > 0 {
-			gexp := ethutil.Big(test.Gas)
-			if gexp.Cmp(gas) != 0 {
-				t.Errorf("%s's gas failed. Expected %v, got %v\n", name, gexp, gas)
+		if isVmTest {
+			if len(test.Gas) == 0 && err == nil {
+				t.Errorf("%s's gas unspecified, indicating an error. VM returned (incorrectly) successfull")
+			} else {
+				gexp := ethutil.Big(test.Gas)
+				if gexp.Cmp(gas) != 0 {
+					t.Errorf("%s's gas failed. Expected %v, got %v\n", name, gexp, gas)
+				}
 			}
 		}
 
