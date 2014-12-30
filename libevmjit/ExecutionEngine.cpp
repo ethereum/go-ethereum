@@ -68,6 +68,7 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 	_module->setTargetTriple(triple.str());
 
 	ExecBundle exec;
+	exec.mainFuncName = _module->getModuleIdentifier();
 	exec.engine.reset(builder.create());
 	if (!exec.engine)
 		return ReturnCode::LLVMConfigError;
@@ -110,7 +111,7 @@ ReturnCode runEntryFunc(ExecBundle const& _exec, Runtime* _runtime)
 	// to allow function to be executed.
 	// That might be related to memory manager. Can we share one?
 	typedef ReturnCode(*EntryFuncPtr)(Runtime*);
-	auto entryFuncPtr = (EntryFuncPtr)_exec.engine->getFunctionAddress("main");
+	auto entryFuncPtr = (EntryFuncPtr)_exec.engine->getFunctionAddress(_exec.mainFuncName);
 
 	ReturnCode returnCode{};
 	auto sj = setjmp(_runtime->getJmpBuf());

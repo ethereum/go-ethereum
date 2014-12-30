@@ -18,10 +18,12 @@ class ExecBundle
 {
 public:
 	std::unique_ptr<llvm::ExecutionEngine> engine;
+	std::string mainFuncName;
 
 	ExecBundle() = default;
 	ExecBundle(ExecBundle&& _other):
-		engine(std::move(_other.engine))
+		engine(std::move(_other.engine)),
+		mainFuncName(std::move(_other.mainFuncName))
 	{}
 
 	ExecBundle(ExecBundle const&) = delete;

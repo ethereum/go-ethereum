@@ -2,6 +2,7 @@
 #include "CompilerHelper.h"
 
 #include <llvm/IR/Function.h>
+#include <llvm/IR/Module.h>
 
 #include "RuntimeManager.h"
 
@@ -25,10 +26,11 @@ llvm::Module* CompilerHelper::getModule()
 
 llvm::Function* CompilerHelper::getMainFunction()
 {
+	// TODO: Rename or change semantics of getMainFunction() function
 	assert(m_builder.GetInsertBlock());
 	auto mainFunc = m_builder.GetInsertBlock()->getParent();
 	assert(mainFunc);
-	if (mainFunc->getName() == "main")
+	if (mainFunc == &mainFunc->getParent()->getFunctionList().front())  // Main function is the first one in module
 		return mainFunc;
 	return nullptr;
 }

@@ -164,7 +164,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode)
 
 	// Create main function
 	auto mainFuncType = llvm::FunctionType::get(Type::MainReturn, Type::RuntimePtr, false);
-	m_mainFunc = llvm::Function::Create(mainFuncType, llvm::Function::ExternalLinkage, "main", module.get());
+	m_mainFunc = llvm::Function::Create(mainFuncType, llvm::Function::ExternalLinkage, strHash, module.get());
 	m_mainFunc->getArgumentList().front().setName("rt");
 
 	// Create the basic blocks.
