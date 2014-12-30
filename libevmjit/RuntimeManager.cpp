@@ -40,7 +40,9 @@ llvm::StructType* RuntimeManager::getRuntimeType()
 		{
 			Type::RuntimeDataPtr,	// data
 			Type::EnvPtr,			// Env*
-			Type::BytePtr			// jmpbuf
+			Type::BytePtr,			// jmpbuf
+			Type::BytePtr,			// memory data
+			Type::Word,				// memory size
 		};
 		type = llvm::StructType::create(elems, "Runtime");
 	}

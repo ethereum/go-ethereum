@@ -49,6 +49,8 @@ private:
 	RuntimeData& m_data;		///< Pointer to data. Expected by compiled contract.
 	Env& m_env;					///< Pointer to environment proxy. Expected by compiled contract.
 	jmp_buf_ref m_currJmpBuf;	///< Pointer to jump buffer. Expected by compiled contract.
+	byte* m_memoryData = nullptr;
+	i256 m_memorySize = {};
 	jmp_buf_ref m_prevJmpBuf;
 	std::jmp_buf m_jmpBuf;
 	StackImpl m_stack;

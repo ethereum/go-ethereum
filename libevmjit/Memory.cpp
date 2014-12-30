@@ -33,12 +33,6 @@ Memory::Memory(RuntimeManager& _runtimeManager, GasMeter& _gasMeter):
 	m_memDump = llvm::Function::Create(dumpTy, llvm::GlobalValue::LinkageTypes::ExternalLinkage,
 									   "evmccrt_memory_dump", module);
 
-	m_data = new llvm::GlobalVariable(*module, Type::BytePtr, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(Type::BytePtr), "mem.data");
-	m_data->setUnnamedAddr(true); // Address is not important
-
-	m_size = new llvm::GlobalVariable(*module, Type::Word, false, llvm::GlobalVariable::PrivateLinkage, Constant::get(0), "mem.size");
-	m_size->setUnnamedAddr(true); // Address is not important
-
 	llvm::Type* resizeArgs[] = {Type::RuntimePtr, Type::WordPtr};
 	m_resize = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, resizeArgs, false), llvm::Function::ExternalLinkage, "mem_resize", module);
 	llvm::AttrBuilder attrBuilder;
@@ -80,7 +74,9 @@ llvm::Function* Memory::createRequireFunc(GasMeter& _gasMeter)
 	auto uaddRes = m_builder.CreateCall2(uaddWO, offset, size, "res");
 	auto sizeRequired = m_builder.CreateExtractValue(uaddRes, 0, "sizeReq");
 	auto overflow1 = m_builder.CreateExtractValue(uaddRes, 1, "overflow1");
-	auto currSize = m_builder.CreateLoad(m_size, "currSize");
+	auto rtPtr = getRuntimeManager().getRuntimePtr();
+	auto sizePtr = m_builder.CreateStructGEP(rtPtr, 4);
+	auto currSize = m_builder.CreateLoad(sizePtr, "currSize");
 	auto tooSmall = m_builder.CreateICmpULE(currSize, sizeRequired, "tooSmall");
 	auto resizeNeeded = m_builder.CreateOr(tooSmall, overflow1, "resizeNeeded");
 	m_builder.CreateCondBr(resizeNeeded, resizeBB, returnBB); // OPT branch weights?
@@ -99,9 +95,10 @@ llvm::Function* Memory::createRequireFunc(GasMeter& _gasMeter)
 	auto newWords = m_builder.CreateSub(wordsRequired, words, "addtionalWords");
 	_gasMeter.countMemory(newWords);
 	// Resize
-	m_builder.CreateStore(sizeRequired, m_size);
-	auto newData = m_builder.CreateCall2(m_resize, rt, m_size, "newData");
-	m_builder.CreateStore(newData, m_data);
+	m_builder.CreateStore(sizeRequired, sizePtr);
+	auto newData = m_builder.CreateCall2(m_resize, rt, sizePtr, "newData");
+	auto dataPtr = m_builder.CreateStructGEP(rtPtr, 3);
+	m_builder.CreateStore(newData, dataPtr);
 	m_builder.CreateBr(returnBB);
 
 	// BB "Return"
@@ -171,18 +168,21 @@ void Memory::storeByte(llvm::Value* _addr, llvm::Value* _word)
 
 llvm::Value* Memory::getData()
 {
-	return m_builder.CreateLoad(m_data);
+	auto rtPtr = getRuntimeManager().getRuntimePtr();
+	auto dataPtr = m_builder.CreateStructGEP(rtPtr, 3);
+	return m_builder.CreateLoad(dataPtr, "data");
 }
 
 llvm::Value* Memory::getSize()
 {
-	return m_builder.CreateLoad(m_size);
+	auto rtPtr = getRuntimeManager().getRuntimePtr();
+	auto sizePtr = m_builder.CreateStructGEP(rtPtr, 4);
+	return m_builder.CreateLoad(sizePtr, "size");
 }
 
 llvm::Value* Memory::getBytePtr(llvm::Value* _index)
 {
-	auto data = m_builder.CreateLoad(m_data, "data");
-	return m_builder.CreateGEP(data, _index, "ptr");
+	return m_builder.CreateGEP(getData(), _index, "ptr");
 }
 
 void Memory::require(llvm::Value* _offset, llvm::Value* _size)

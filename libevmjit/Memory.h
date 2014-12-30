@@ -33,9 +33,6 @@ private:
 	llvm::Function* createFunc(bool _isStore, llvm::Type* _type, GasMeter& _gasMeter);
 	llvm::Function* createRequireFunc(GasMeter& _gasMeter);
 
-	llvm::GlobalVariable* m_data;
-	llvm::GlobalVariable* m_size;
-
 	llvm::Function* m_resize;
 	llvm::Function* m_require;
 	llvm::Function* m_loadWord;
