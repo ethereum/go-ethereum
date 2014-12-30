@@ -509,7 +509,7 @@ func ExampleStream() {
 }
 
 func BenchmarkDecode(b *testing.B) {
-	enc := encTest(90000)
+	enc := encodeTestSlice(90000)
 	b.SetBytes(int64(len(enc)))
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -524,7 +524,7 @@ func BenchmarkDecode(b *testing.B) {
 }
 
 func BenchmarkDecodeIntSliceReuse(b *testing.B) {
-	enc := encTest(100000)
+	enc := encodeTestSlice(100000)
 	b.SetBytes(int64(len(enc)))
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -538,7 +538,7 @@ func BenchmarkDecodeIntSliceReuse(b *testing.B) {
 	}
 }
 
-func encTest(n int) []byte {
+func encodeTestSlice(n int) []byte {
 	s := make([]interface{}, n)
 	for i := 0; i < n; i++ {
 		s[i] = i
