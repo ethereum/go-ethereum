@@ -2,7 +2,9 @@ package core
 
 import (
 	"fmt"
+	"os"
 	"path"
+	"reflect"
 	"runtime"
 	"testing"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/rlp"
 	//logpkg "github.com/ethereum/go-ethereum/logger"
 )
 
@@ -30,20 +33,19 @@ func init() {
 	ethutil.Config.Db = db
 }
 
-func loadChain(fn string, t *testing.T) types.Blocks {
-	c1, err := ethutil.ReadAllFile(path.Join("..", "_data", fn))
+func loadChain(fn string, t *testing.T) (types.Blocks, error) {
+	fh, err := os.OpenFile(path.Join("..", "_data", fn), os.O_RDONLY, os.ModePerm)
 	if err != nil {
-		fmt.Println(err)
-		t.FailNow()
+		return nil, err
 	}
-	value := ethutil.NewValueFromBytes([]byte(c1))
-	blocks := make(types.Blocks, value.Len())
-	it := value.NewIterator()
-	for it.Next() {
-		blocks[it.Idx()] = types.NewBlockFromRlpValue(it.Value())
+	defer fh.Close()
+
+	var chain types.Blocks
+	if err := rlp.Decode(fh, &chain); err != nil {
+		return nil, err
 	}
 
-	return blocks
+	return chain, nil
 }
 
 func insertChain(done chan bool, chainMan *ChainManager, chain types.Blocks, t *testing.T) {
@@ -56,11 +58,21 @@ func insertChain(done chan bool, chainMan *ChainManager, chain types.Blocks, t *
 }
 
 func TestChainInsertions(t *testing.T) {
-	chain1 := loadChain("chain1", t)
-	chain2 := loadChain("chain2", t)
+	chain1, err := loadChain("chain1", t)
+	if err != nil {
+		fmt.Println(err)
+		t.FailNow()
+	}
+
+	chain2, err := loadChain("chain2", t)
+	if err != nil {
+		fmt.Println(err)
+		t.FailNow()
+	}
+
 	var eventMux event.TypeMux
 	chainMan := NewChainManager(&eventMux)
-	txPool := NewTxPool(chainMan, nil, &eventMux)
+	txPool := NewTxPool(chainMan, &eventMux)
 	blockMan := NewBlockManager(txPool, chainMan, &eventMux)
 	chainMan.SetProcessor(blockMan)
 
@@ -73,5 +85,12 @@ func TestChainInsertions(t *testing.T) {
 	for i := 0; i < max; i++ {
 		<-done
 	}
-	fmt.Println(chainMan.CurrentBlock())
+
+	if reflect.DeepEqual(chain2[len(chain2)-1], chainMan.CurrentBlock()) {
+		t.Error("chain2 is canonical and shouldn't be")
+	}
+
+	if !reflect.DeepEqual(chain1[len(chain1)-1], chainMan.CurrentBlock()) {
+		t.Error("chain1 isn't canonical and should be")
+	}
 }

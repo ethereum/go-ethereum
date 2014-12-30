@@ -199,6 +199,7 @@ func (self *Block) Hash() []byte              { return self.header.Hash() }
 func (self *Block) Trie() *ptrie.Trie         { return ptrie.New(self.header.Root, ethutil.Config.Db) }
 func (self *Block) State() *state.StateDB     { return state.New(self.Trie()) }
 func (self *Block) Size() ethutil.StorageSize { return ethutil.StorageSize(len(ethutil.Encode(self))) }
+func (self *Block) SetRoot(root []byte)       { self.header.Root = root }
 
 // Implement block.Pow
 func (self *Block) Difficulty() *big.Int { return self.header.Difficulty }
