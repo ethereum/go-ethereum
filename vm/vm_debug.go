@@ -716,7 +716,8 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			//a := big.NewInt(int64(op) - int64(PUSH1) + 1)
 			a := uint64(op - PUSH1 + 1)
 			//pc.Add(pc, ethutil.Big1)
-			val := ethutil.BigD(closure.GetRangeValue(pc+1, a))
+			byts := closure.GetRangeValue(pc+1, a)
+			val := ethutil.BigD(byts)
 			// Push value to stack
 			stack.Push(val)
 			pc += a
@@ -724,7 +725,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 			step += int(op) - int(PUSH1) + 1
 
-			self.Printf(" => 0x%x", val.Bytes())
+			self.Printf(" => 0x%x", byts)
 		case POP:
 			stack.Pop()
 		case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:
