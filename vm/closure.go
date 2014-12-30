@@ -1,8 +1,10 @@
 package vm
 
 import (
+	"math"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -51,19 +53,14 @@ func (c *Closure) GetByte(x uint64) byte {
 }
 
 func (c *Closure) GetBytes(x, y int) []byte {
-	if x >= len(c.Code) || y >= len(c.Code) {
-		return nil
-	}
-
-	return c.Code[x : x+y]
+	return c.GetRangeValue(uint64(x), uint64(y))
 }
 
-func (c *Closure) GetRangeValue(x, y uint64) []byte {
-	if x >= uint64(len(c.Code)) || y >= uint64(len(c.Code)) {
-		return nil
-	}
+func (c *Closure) GetRangeValue(x, size uint64) []byte {
+	x = uint64(math.Min(float64(x), float64(len(c.Code))))
+	y := uint64(math.Min(float64(x+size), float64(len(c.Code))))
 
-	return c.Code[x : x+y]
+	return ethutil.LeftPadBytes(c.Code[x:y], int(size))
 }
 
 func (c *Closure) Return(ret []byte) []byte {
