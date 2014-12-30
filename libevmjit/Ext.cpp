@@ -69,7 +69,7 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 llvm::Value* Ext::sload(llvm::Value* _index)
 {
 	m_builder.CreateStore(_index, m_args[0]);
-	m_builder.CreateCall3(m_sload, getRuntimeManager().getEnv(), m_args[0], m_args[1]); // Uses native endianness
+	m_builder.CreateCall3(m_sload, getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]); // Uses native endianness
 	return m_builder.CreateLoad(m_args[1]);
 }
 
@@ -77,7 +77,7 @@ void Ext::sstore(llvm::Value* _index, llvm::Value* _value)
 {
 	m_builder.CreateStore(_index, m_args[0]);
 	m_builder.CreateStore(_value, m_args[1]);
-	m_builder.CreateCall3(m_sstore, getRuntimeManager().getEnv(), m_args[0], m_args[1]); // Uses native endianness
+	m_builder.CreateCall3(m_sstore, getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]); // Uses native endianness
 }
 
 llvm::Value* Ext::calldataload(llvm::Value* _index)
@@ -92,7 +92,7 @@ llvm::Value* Ext::balance(llvm::Value* _address)
 {
 	auto address = Endianness::toBE(m_builder, _address);
 	m_builder.CreateStore(address, m_args[0]);
-	m_builder.CreateCall3(m_balance, getRuntimeManager().getEnv(), m_args[0], m_args[1]);
+	m_builder.CreateCall3(m_balance, getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]);
 	return m_builder.CreateLoad(m_args[1]);
 }
 
@@ -100,7 +100,7 @@ void Ext::suicide(llvm::Value* _address)
 {
 	auto address = Endianness::toBE(m_builder, _address);
 	m_builder.CreateStore(address, m_args[0]);
-	m_builder.CreateCall2(m_suicide, getRuntimeManager().getEnv(), m_args[0]);
+	m_builder.CreateCall2(m_suicide, getRuntimeManager().getEnvPtr(), m_args[0]);
 }
 
 llvm::Value* Ext::create(llvm::Value*& _gas, llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* _initSize)
@@ -109,7 +109,7 @@ llvm::Value* Ext::create(llvm::Value*& _gas, llvm::Value* _endowment, llvm::Valu
 	m_builder.CreateStore(_endowment, m_arg2);
 	auto begin = m_memoryMan.getBytePtr(_initOff);
 	auto size = m_builder.CreateTrunc(_initSize, Type::Size, "size");
-	createCall(m_create, getRuntimeManager().getEnv(), m_args[0], m_arg2, begin, size, m_args[1]);
+	createCall(m_create, getRuntimeManager().getEnvPtr(), m_args[0], m_arg2, begin, size, m_args[1]);
 	_gas = m_builder.CreateLoad(m_args[0]); // Return gas
 	llvm::Value* address = m_builder.CreateLoad(m_args[1]);
 	address = Endianness::toNative(m_builder, address);
@@ -128,7 +128,7 @@ llvm::Value* Ext::call(llvm::Value*& _gas, llvm::Value* _receiveAddress, llvm::V
 	auto outSize = m_builder.CreateTrunc(_outSize, Type::Size, "out.size");
 	auto codeAddress = Endianness::toBE(m_builder, _codeAddress);
 	m_builder.CreateStore(codeAddress, m_arg8);
-	auto ret = createCall(m_call, getRuntimeManager().getEnv(), m_args[0], m_arg2, m_arg3, inBeg, inSize, outBeg, outSize, m_arg8);
+	auto ret = createCall(m_call, getRuntimeManager().getEnvPtr(), m_args[0], m_arg2, m_arg3, inBeg, inSize, outBeg, outSize, m_arg8);
 	_gas = m_builder.CreateLoad(m_args[0]); // Return gas
 	return m_builder.CreateZExt(ret, Type::Word, "ret");
 }
@@ -147,7 +147,7 @@ MemoryRef Ext::getExtCode(llvm::Value* _addr)
 {
 	auto addr = Endianness::toBE(m_builder, _addr);
 	m_builder.CreateStore(addr, m_args[0]);
-	auto code = createCall(m_getExtCode, getRuntimeManager().getEnv(), m_args[0], m_size);
+	auto code = createCall(m_getExtCode, getRuntimeManager().getEnvPtr(), m_args[0], m_size);
 	auto codeSize = m_builder.CreateLoad(m_size);
 	auto codeSize256 = m_builder.CreateZExt(codeSize, Type::Word);
 	return {code, codeSize256};
@@ -157,7 +157,7 @@ void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, std::array<llvm::Val
 {
 	auto begin = m_memoryMan.getBytePtr(_memIdx);
 	auto size = m_builder.CreateTrunc(_numBytes, Type::Size, "size");
-	llvm::Value* args[] = {getRuntimeManager().getEnv(), begin, size, m_arg2, m_arg3, m_arg4, m_arg5};
+	llvm::Value* args[] = {getRuntimeManager().getEnvPtr(), begin, size, m_arg2, m_arg3, m_arg4, m_arg5};
 
 	auto topicArgPtr = &args[3];
 	for (auto&& topic : _topics)

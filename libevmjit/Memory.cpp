@@ -24,7 +24,7 @@ namespace jit
 {
 
 Memory::Memory(RuntimeManager& _runtimeManager, GasMeter& _gasMeter):
-	RuntimeHelper(_runtimeManager),
+	RuntimeHelper(_runtimeManager),  // TODO: RuntimeHelper not needed
 	m_gasMeter(_gasMeter)
 {
 	auto module = getModule();
@@ -45,17 +45,19 @@ Memory::Memory(RuntimeManager& _runtimeManager, GasMeter& _gasMeter):
 	attrBuilder.addAttribute(llvm::Attribute::NoAlias).addAttribute(llvm::Attribute::NoCapture).addAttribute(llvm::Attribute::NonNull).addAttribute(llvm::Attribute::ReadOnly);
 	m_resize->setAttributes(llvm::AttributeSet::get(m_resize->getContext(), 1, attrBuilder));
 
-	m_require = createRequireFunc(_gasMeter, _runtimeManager);
+	m_require = createRequireFunc(_gasMeter);
 	m_loadWord = createFunc(false, Type::Word, _gasMeter);
 	m_storeWord = createFunc(true, Type::Word, _gasMeter);
 	m_storeByte = createFunc(true, Type::Byte,  _gasMeter);
 }
 
-llvm::Function* Memory::createRequireFunc(GasMeter& _gasMeter, RuntimeManager& _runtimeManager)
+llvm::Function* Memory::createRequireFunc(GasMeter& _gasMeter)
 {
-	llvm::Type* argTypes[] = {Type::Word, Type::Word};
+	llvm::Type* argTypes[] = {Type::RuntimePtr, Type::Word, Type::Word};
 	auto func = llvm::Function::Create(llvm::FunctionType::get(Type::Void, argTypes, false), llvm::Function::PrivateLinkage, "mem.require", getModule());
-	auto offset = func->arg_begin();
+	auto rt = func->arg_begin();
+	rt->setName("rt");
+	auto offset = rt->getNextNode();
 	offset->setName("offset");
 	auto size = offset->getNextNode();
 	size->setName("size");
@@ -98,7 +100,7 @@ llvm::Function* Memory::createRequireFunc(GasMeter& _gasMeter, RuntimeManager& _
 	_gasMeter.countMemory(newWords);
 	// Resize
 	m_builder.CreateStore(sizeRequired, m_size);
-	auto newData = m_builder.CreateCall2(m_resize, _runtimeManager.getRuntimePtr(), m_size, "newData");
+	auto newData = m_builder.CreateCall2(m_resize, rt, m_size, "newData");
 	m_builder.CreateStore(newData, m_data);
 	m_builder.CreateBr(returnBB);
 
@@ -112,15 +114,18 @@ llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, GasMet
 {
 	auto isWord = _valueType == Type::Word;
 
-	llvm::Type* storeArgs[] = {Type::Word, _valueType};
+	llvm::Type* storeArgs[] = {Type::RuntimePtr, Type::Word, _valueType};
+	llvm::Type* loadArgs[] = {Type::RuntimePtr, Type::Word};
 	auto name = _isStore ? isWord ? "mstore" : "mstore8" : "mload";
-	auto funcType = _isStore ? llvm::FunctionType::get(Type::Void, storeArgs, false) : llvm::FunctionType::get(Type::Word, Type::Word, false);
+	auto funcType = _isStore ? llvm::FunctionType::get(Type::Void, storeArgs, false) : llvm::FunctionType::get(Type::Word, loadArgs, false);
 	auto func = llvm::Function::Create(funcType, llvm::Function::PrivateLinkage, name, getModule());
 
 	InsertPointGuard guard(m_builder); // Restores insert point at function exit
 
 	m_builder.SetInsertPoint(llvm::BasicBlock::Create(func->getContext(), {}, func));
-	llvm::Value* index = func->arg_begin();
+	auto rt = func->arg_begin();
+	rt->setName("rt");
+	auto index = rt->getNextNode();
 	index->setName("index");
 
 	auto valueSize = _valueType->getPrimitiveSizeInBits() / 8;
@@ -130,7 +135,7 @@ llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, GasMet
 		ptr = m_builder.CreateBitCast(ptr, Type::WordPtr, "wordPtr");
 	if (_isStore)
 	{
-		llvm::Value* value = ++func->arg_begin();
+		llvm::Value* value = index->getNextNode();
 		value->setName("value");
 		if (isWord)
 			value = Endianness::toBE(m_builder, value);
@@ -150,19 +155,18 @@ llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, GasMet
 
 llvm::Value* Memory::loadWord(llvm::Value* _addr)
 {
-	auto value = m_builder.CreateCall(m_loadWord, _addr);
-	return value;
+	return createCall(m_loadWord, getRuntimeManager().getRuntimePtr(), _addr);
 }
 
 void Memory::storeWord(llvm::Value* _addr, llvm::Value* _word)
 {
-	m_builder.CreateCall2(m_storeWord, _addr, _word);
+	createCall(m_storeWord, getRuntimeManager().getRuntimePtr(), _addr, _word);
 }
 
 void Memory::storeByte(llvm::Value* _addr, llvm::Value* _word)
 {
 	auto byte = m_builder.CreateTrunc(_word, Type::Byte, "byte");
-	m_builder.CreateCall2(m_storeByte, _addr, byte);
+	createCall(m_storeByte, getRuntimeManager().getRuntimePtr(), _addr, byte);
 }
 
 llvm::Value* Memory::getData()
@@ -183,7 +187,7 @@ llvm::Value* Memory::getBytePtr(llvm::Value* _index)
 
 void Memory::require(llvm::Value* _offset, llvm::Value* _size)
 {
-	m_builder.CreateCall2(m_require, _offset, _size);
+	createCall(m_require, getRuntimeManager().getRuntimePtr(), _offset, _size);
 }
 
 void Memory::copyBytes(llvm::Value* _srcPtr, llvm::Value* _srcSize, llvm::Value* _srcIdx,

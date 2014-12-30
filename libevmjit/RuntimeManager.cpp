@@ -74,43 +74,38 @@ llvm::Twine getName(RuntimeData::Index _index)
 
 RuntimeManager::RuntimeManager(llvm::IRBuilder<>& _builder): CompilerHelper(_builder)
 {
-	m_rtPtr = new llvm::GlobalVariable(*getModule(), Type::RuntimePtr, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(Type::RuntimePtr), "rt");
-	m_dataPtr = new llvm::GlobalVariable(*getModule(), Type::RuntimeDataPtr, false, llvm::GlobalVariable::PrivateLinkage, llvm::UndefValue::get(Type::RuntimeDataPtr), "data");
 	m_longjmp = llvm::Intrinsic::getDeclaration(getModule(), llvm::Intrinsic::longjmp);
 
-	// Export data
-	auto mainFunc = getMainFunction();
-	llvm::Value* rtPtr = &mainFunc->getArgumentList().front();
-	m_builder.CreateStore(rtPtr, m_rtPtr);
-	auto dataPtr = m_builder.CreateStructGEP(rtPtr, 0, "dataPtr");
-	auto data = m_builder.CreateLoad(dataPtr, "data");
-	m_builder.CreateStore(data, m_dataPtr);
-
-	auto envPtr = m_builder.CreateStructGEP(rtPtr, 1, "envPtr");
-	m_env = m_builder.CreateLoad(envPtr, "env");
-	assert(m_env->getType() == Type::EnvPtr);
+	// Unpack data
+	auto rtPtr = getRuntimePtr();
+	m_dataPtr = m_builder.CreateLoad(m_builder.CreateStructGEP(rtPtr, 0), "data");
+	assert(m_dataPtr->getType() == Type::RuntimeDataPtr);
+	m_envPtr = m_builder.CreateLoad(m_builder.CreateStructGEP(rtPtr, 1), "env");
+	assert(m_envPtr->getType() == Type::EnvPtr);
 }
 
 llvm::Value* RuntimeManager::getRuntimePtr()
 {
-	// FIXME: Data ptr
-	//if (auto mainFunc = getMainFunction())
-	//	return mainFunc->arg_begin();    // Runtime is the parameter of main function
-	return m_builder.CreateLoad(m_rtPtr, "rt");
+	// Expect first argument of a function to be a pointer to Runtime
+	auto func = m_builder.GetInsertBlock()->getParent();
+	auto rtPtr = &func->getArgumentList().front();
+	assert(rtPtr->getType() == Type::RuntimePtr);
+	return rtPtr;
 }
 
 llvm::Value* RuntimeManager::getDataPtr()
 {
-	// FIXME: Data ptr
-	//if (auto mainFunc = getMainFunction())
-	//	return mainFunc->arg_begin();    // Runtime is the parameter of main function
-	return m_builder.CreateLoad(m_dataPtr, "data");
+	if (getMainFunction())
+		return m_dataPtr;
+
+	auto rtPtr = getRuntimePtr();
+	return m_builder.CreateLoad(m_builder.CreateStructGEP(rtPtr, 0), "data");
 }
 
-llvm::Value* RuntimeManager::getEnv()
+llvm::Value* RuntimeManager::getEnvPtr()
 {
 	assert(getMainFunction());	// Available only in main function
-	return m_env;
+	return m_envPtr;
 }
 
 llvm::Value* RuntimeManager::getPtr(RuntimeData::Index _index)

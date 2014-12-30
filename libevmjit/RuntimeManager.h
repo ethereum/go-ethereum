@@ -19,7 +19,7 @@ public:
 
 	llvm::Value* getRuntimePtr();
 	llvm::Value* getDataPtr();
-	llvm::Value* getEnv();
+	llvm::Value* getEnvPtr();	// TODO: Can we make it const?
 
 	llvm::Value* get(RuntimeData::Index _index);
 	llvm::Value* get(Instruction _inst);
@@ -40,10 +40,9 @@ private:
 	void set(RuntimeData::Index _index, llvm::Value* _value);
 	llvm::Value* getJmpBuf();
 
-	llvm::GlobalVariable* m_rtPtr = nullptr;
-	llvm::GlobalVariable* m_dataPtr = nullptr;
 	llvm::Function* m_longjmp = nullptr;
-	llvm::Value* m_env = nullptr;
+	llvm::Value* m_dataPtr = nullptr;
+	llvm::Value* m_envPtr = nullptr;
 };
 
 }
