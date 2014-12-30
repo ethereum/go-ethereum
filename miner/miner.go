@@ -190,9 +190,11 @@ func (self *Miner) mine() {
 
 	transactions := self.finiliseTxs()
 
+	state := block.State()
+
 	// Accumulate all valid transactions and apply them to the new state
 	// Error may be ignored. It's not important during mining
-	receipts, txs, _, erroneous, err := blockManager.ApplyTransactions(coinbase, block.State(), block, transactions, true)
+	receipts, txs, _, erroneous, err := blockManager.ApplyTransactions(coinbase, state, block, transactions, true)
 	if err != nil {
 		minerlogger.Debugln(err)
 	}
@@ -202,9 +204,10 @@ func (self *Miner) mine() {
 	block.SetReceipts(receipts)
 
 	// Accumulate the rewards included for this block
-	blockManager.AccumelateRewards(block.State(), block, parent)
+	blockManager.AccumelateRewards(state, block, parent)
 
-	block.State().Update(ethutil.Big0)
+	state.Update(ethutil.Big0)
+	block.SetRoot(state.Root())
 
 	minerlogger.Infof("Mining on block. Includes %v transactions", len(transactions))
 
