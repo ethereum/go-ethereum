@@ -95,10 +95,15 @@ func RunVmTest(js string) (failed int) {
 			failed = 1
 		}
 
-		gexp := ethutil.Big(test.Gas)
-		if gexp.Cmp(gas) != 0 {
-			log.Printf("%s's gas failed. Expected %v, got %v\n", name, gexp, gas)
+		if len(test.Gas) == 0 && err == nil {
+			log.Printf("0 gas indicates error but no error given by VM")
 			failed = 1
+		} else {
+			gexp := ethutil.Big(test.Gas)
+			if gexp.Cmp(gas) != 0 {
+				log.Printf("%s's gas failed. Expected %v, got %v\n", name, gexp, gas)
+				failed = 1
+			}
 		}
 
 		for addr, account := range test.Post {
