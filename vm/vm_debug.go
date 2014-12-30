@@ -140,7 +140,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		// Stack checks only
 		case ISZERO, CALLDATALOAD, POP, JUMP, NOT: // 1
 			require(1)
-		case ADD, SUB, DIV, SDIV, MOD, SMOD, LT, GT, SLT, SGT, EQ, AND, OR, XOR, BYTE: // 2
+		case ADD, SUB, DIV, SDIV, MOD, SMOD, LT, GT, SLT, SGT, EQ, AND, OR, XOR, BYTE, SIGNEXTEND: // 2
 			require(2)
 		case ADDMOD, MULMOD: // 3
 			require(3)
