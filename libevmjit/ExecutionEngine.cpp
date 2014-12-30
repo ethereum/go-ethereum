@@ -46,6 +46,30 @@ ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _en
 	return run(std::move(module), _data, _env, _code);
 }
 
+namespace
+{
+ReturnCode runEntryFunc(ExecBundle const& _exec, Runtime* _runtime)
+{
+	// That function uses long jumps to handle "execeptions".
+	// Do not create any non-POD objects here
+
+	typedef ReturnCode(*EntryFuncPtr)(Runtime*);
+	auto entryFuncPtr = (EntryFuncPtr)_exec.engine->getFunctionAddress(_exec.mainFuncName);
+
+	//std::cerr << _exec.mainFuncName << "  F: " << entryFuncPtr << "\n";
+	ReturnCode returnCode{};
+	//std::cerr << _exec.mainFuncName << " +S: " << &returnCode << "\n";
+	auto sj = setjmp(_runtime->getJmpBuf());
+	if (sj == 0)
+		returnCode = entryFuncPtr(_runtime);
+	else
+		returnCode = static_cast<ReturnCode>(sj);
+
+	//std::cerr << _exec.mainFuncName << " -S: " << &returnCode << "\n";
+	return returnCode;
+}
+}
+
 ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeData* _data, Env* _env, bytes const& _code)
 {
 	// TODO: Use it in evmcc
@@ -121,7 +145,10 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 
 	std::string key{reinterpret_cast<char const*>(_code.data()), _code.size()};
 	//auto& cachedExec = Cache::registerExec(key, std::move(exec));
-	auto returnCode = run(exec, _data, _env);
+	Runtime runtime(_data, _env);
+	auto returnCode = runEntryFunc(exec, &runtime);
+	if (returnCode == ReturnCode::Return)
+		this->returnData = runtime.getReturnData();
 
 	auto executionEndTime = std::chrono::high_resolution_clock::now();
 	clog(JIT) << " + " << std::chrono::duration_cast<std::chrono::milliseconds>(executionEndTime - executionStartTime).count() << " ms ";
@@ -132,43 +159,6 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 	return returnCode;
 }
 
-namespace
-{
-ReturnCode runEntryFunc(ExecBundle const& _exec, Runtime* _runtime)
-{
-	// That function uses long jumps to handle "execeptions".
-	// Do not create any non-POD objects here
-
-	// TODO:
-	// Getting pointer to function seems to be cachable,
-	// but it looks like getPointerToFunction() method does something special
-	// to allow function to be executed.
-	// That might be related to memory manager. Can we share one?
-	typedef ReturnCode(*EntryFuncPtr)(Runtime*);
-	auto entryFuncPtr = (EntryFuncPtr)_exec.engine->getFunctionAddress(_exec.mainFuncName);
-
-	//std::cerr << _exec.mainFuncName << "  F: " << entryFuncPtr << "\n";
-	ReturnCode returnCode{};
-	//std::cerr << _exec.mainFuncName << " +S: " << &returnCode << "\n";
-	auto sj = setjmp(_runtime->getJmpBuf());
-	if (sj == 0)
-		returnCode = entryFuncPtr(_runtime);
-	else
-		returnCode = static_cast<ReturnCode>(sj);
-
-	//std::cerr << _exec.mainFuncName << " -S: " << &returnCode << "\n";
-	return returnCode;
-}
-}
-
-ReturnCode ExecutionEngine::run(ExecBundle const& _exec, RuntimeData* _data, Env* _env)
-{
-	Runtime runtime(_data, _env);
-	auto returnCode = runEntryFunc(_exec, &runtime);
-	if (returnCode == ReturnCode::Return)
-		this->returnData = runtime.getReturnData();
-	return returnCode;
-}
 
 }
 }
