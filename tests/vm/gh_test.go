@@ -108,17 +108,16 @@ func RunVmTest(p string, t *testing.T) {
 		)
 
 		isVmTest := len(test.Exec) > 0
-
 		if isVmTest {
 			ret, logs, gas, err = helper.RunVm(statedb, env, test.Exec)
 		} else {
 			ret, logs, gas, err = helper.RunState(statedb, env, test.Transaction)
 		}
 
-		// When an error is returned it doesn't always mean the tests fails.
-		// Have to come up with some conditional failing mechanism.
+		// Log the error if there is one. Error does not mean failing test.
+		// A test fails if err != nil and post params are specified in the test.
 		if err != nil {
-			helper.Log.Infoln(err)
+			helper.Log.Infof("%s's: %v\n", name, err)
 		}
 
 		rexp := helper.FromHex(test.Out)
@@ -160,7 +159,6 @@ func RunVmTest(p string, t *testing.T) {
 		}
 
 		if len(test.Logs) > 0 {
-			// Logs within the test itself aren't correct, missing empty fields (32 0s)
 			for i, log := range test.Logs {
 				genBloom := ethutil.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 64)
 				if !bytes.Equal(genBloom, ethutil.Hex2Bytes(log.BloomF)) {
