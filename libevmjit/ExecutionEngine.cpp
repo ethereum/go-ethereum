@@ -48,26 +48,24 @@ ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _en
 
 namespace
 {
-ReturnCode runEntryFunc(ExecBundle const& _exec, Runtime* _runtime)
+
+typedef ReturnCode(*EntryFuncPtr)(Runtime*);
+
+ReturnCode runEntryFunc(EntryFuncPtr _mainFunc, Runtime* _runtime)
 {
 	// That function uses long jumps to handle "execeptions".
 	// Do not create any non-POD objects here
 
-	typedef ReturnCode(*EntryFuncPtr)(Runtime*);
-	auto entryFuncPtr = (EntryFuncPtr)_exec.engine->getFunctionAddress(_exec.mainFuncName);
-
-	//std::cerr << _exec.mainFuncName << "  F: " << entryFuncPtr << "\n";
 	ReturnCode returnCode{};
-	//std::cerr << _exec.mainFuncName << " +S: " << &returnCode << "\n";
 	auto sj = setjmp(_runtime->getJmpBuf());
 	if (sj == 0)
-		returnCode = entryFuncPtr(_runtime);
+		returnCode = _mainFunc(_runtime);
 	else
 		returnCode = static_cast<ReturnCode>(sj);
 
-	//std::cerr << _exec.mainFuncName << " -S: " << &returnCode << "\n";
 	return returnCode;
 }
+
 }
 
 ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeData* _data, Env* _env, bytes const& _code)
@@ -83,8 +81,7 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 	EntryFuncPtr entryFuncPtr{};
 
 
-	ExecBundle exec;
-	exec.mainFuncName = _module->getModuleIdentifier();
+	auto&& mainFuncName = _module->getModuleIdentifier();
 
 	if (!ee)
 	{
@@ -133,8 +130,6 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 	//if (!exec.engine)
 	//	return ReturnCode::LLVMConfigError;
 
-	exec.engine = ee.get();
-
 	// TODO: Finalization not needed when llvm::ExecutionEngine::getFunctionAddress used
 	//auto finalizationStartTime = std::chrono::high_resolution_clock::now();
 	//exec.engine->finalizeObject();
@@ -146,7 +141,8 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 	std::string key{reinterpret_cast<char const*>(_code.data()), _code.size()};
 	//auto& cachedExec = Cache::registerExec(key, std::move(exec));
 	Runtime runtime(_data, _env);
-	auto returnCode = runEntryFunc(exec, &runtime);
+	auto mainFunc = (EntryFuncPtr)ee->getFunctionAddress(mainFuncName);
+	auto returnCode = runEntryFunc(mainFunc, &runtime);
 	if (returnCode == ReturnCode::Return)
 		this->returnData = runtime.getReturnData();
 
