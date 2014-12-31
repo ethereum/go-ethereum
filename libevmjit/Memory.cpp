@@ -27,14 +27,8 @@ Memory::Memory(RuntimeManager& _runtimeManager, GasMeter& _gasMeter):
 	RuntimeHelper(_runtimeManager),  // TODO: RuntimeHelper not needed
 	m_gasMeter(_gasMeter)
 {
-	auto module = getModule();
-	llvm::Type* argTypes[] = {Type::Word, Type::Word};
-	auto dumpTy = llvm::FunctionType::get(m_builder.getVoidTy(), llvm::ArrayRef<llvm::Type*>(argTypes), false);
-	m_memDump = llvm::Function::Create(dumpTy, llvm::GlobalValue::LinkageTypes::ExternalLinkage,
-									   "evmccrt_memory_dump", module);
-
 	llvm::Type* resizeArgs[] = {Type::RuntimePtr, Type::WordPtr};
-	m_resize = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, resizeArgs, false), llvm::Function::ExternalLinkage, "mem_resize", module);
+	m_resize = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, resizeArgs, false), llvm::Function::ExternalLinkage, "mem_resize", getModule());
 	llvm::AttrBuilder attrBuilder;
 	attrBuilder.addAttribute(llvm::Attribute::NoAlias).addAttribute(llvm::Attribute::NoCapture).addAttribute(llvm::Attribute::NonNull).addAttribute(llvm::Attribute::ReadOnly);
 	m_resize->setAttributes(llvm::AttributeSet::get(m_resize->getContext(), 1, attrBuilder));

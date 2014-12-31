@@ -38,8 +38,6 @@ private:
 	llvm::Function* m_loadWord;
 	llvm::Function* m_storeWord;
 	llvm::Function* m_storeByte;
-
-	llvm::Function* m_memDump;
 };
 
 }
