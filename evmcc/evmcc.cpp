@@ -11,6 +11,8 @@
 
 #include <llvm/Bitcode/ReaderWriter.h>
 #include <llvm/Support/raw_os_ostream.h>
+#include <llvm/Support/Signals.h>
+#include <llvm/Support/PrettyStackTrace.h>
 
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
@@ -85,6 +87,9 @@ void parseProgramOptions(int _argc, char** _argv, boost::program_options::variab
 
 int main(int argc, char** argv)
 {
+	llvm::sys::PrintStackTraceOnErrorSignal();
+	llvm::PrettyStackTraceProgram X(argc, argv);
+
 	boost::program_options::variables_map options;
 	parseProgramOptions(argc, argv, options);
 

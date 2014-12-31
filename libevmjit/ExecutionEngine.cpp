@@ -6,15 +6,11 @@
 #include <llvm/ADT/Triple.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
-#include <llvm/ExecutionEngine/GenericValue.h>
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/Host.h>
 
 #include "Runtime.h"
-#include "Memory.h"
-#include "Stack.h"
-#include "Type.h"
 #include "Compiler.h"
 #include "Cache.h"
 
@@ -54,11 +50,6 @@ ReturnCode runEntryFunc(EntryFuncPtr _mainFunc, Runtime* _runtime)
 
 ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeData* _data, Env* _env, bytes const& _code)
 {
-	// TODO: Use it in evmcc
-	//llvm::sys::PrintStackTraceOnErrorSignal();
-	//static const auto program = "EVM JIT";
-	//llvm::PrettyStackTraceProgram X(1, &program);
-
 	static std::unique_ptr<llvm::ExecutionEngine> ee;  // TODO: Use Managed Objects from LLVM?
 
 	EntryFuncPtr entryFuncPtr{};
