@@ -35,12 +35,6 @@ namespace jit
 
 ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _env)
 {
-	std::string key{reinterpret_cast<char const*>(_code.data()), _code.size()};
-	/*if (auto cachedExec = Cache::findExec(key))
-	{
-		return run(*cachedExec, _data, _env);
-	}*/
-
 	auto module = Compiler({}).compile(_code);
 	//module->dump();
 	return run(std::move(module), _data, _env, _code);
@@ -77,9 +71,11 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 
 	static std::unique_ptr<llvm::ExecutionEngine> ee;  // TODO: Use Managed Objects from LLVM?
 
-	typedef ReturnCode(*EntryFuncPtr)(Runtime*);
 	EntryFuncPtr entryFuncPtr{};
 
+
+
+	Runtime runtime(_data, _env);
 
 	auto&& mainFuncName = _module->getModuleIdentifier();
 
@@ -108,47 +104,29 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 		memoryManager.release();  // and memory manager
 
 		//ee->setObjectCache(Cache::getObjectCache());
+		entryFuncPtr = (EntryFuncPtr)ee->getFunctionAddress(mainFuncName);
 	}
 	else
 	{
-		if (entryFuncPtr = (EntryFuncPtr)ee->getFunctionAddress(_module->getModuleIdentifier()))
-		{
-			entryFuncPtr = nullptr;
-		}
-		else
+		entryFuncPtr = (EntryFuncPtr)ee->getFunctionAddress(mainFuncName);
+		if (!entryFuncPtr)
 		{
 			ee->addModule(_module.get());
-			//std::cerr << _module->getModuleIdentifier() << "\n";
 			_module.release();
+			entryFuncPtr = (EntryFuncPtr)ee->getFunctionAddress(mainFuncName);
 		}
 	}
+	assert(entryFuncPtr);
 
-	assert(ee);
-
-	//ExecBundle exec;
-	//exec.engine.reset(builder.create());
-	//if (!exec.engine)
-	//	return ReturnCode::LLVMConfigError;
-
-	// TODO: Finalization not needed when llvm::ExecutionEngine::getFunctionAddress used
-	//auto finalizationStartTime = std::chrono::high_resolution_clock::now();
-	//exec.engine->finalizeObject();
-	//auto finalizationEndTime = std::chrono::high_resolution_clock::now();
-	//clog(JIT) << " + " << std::chrono::duration_cast<std::chrono::milliseconds>(finalizationEndTime - finalizationStartTime).count();
 
 	auto executionStartTime = std::chrono::high_resolution_clock::now();
-
-	std::string key{reinterpret_cast<char const*>(_code.data()), _code.size()};
-	//auto& cachedExec = Cache::registerExec(key, std::move(exec));
-	Runtime runtime(_data, _env);
-	auto mainFunc = (EntryFuncPtr)ee->getFunctionAddress(mainFuncName);
-	auto returnCode = runEntryFunc(mainFunc, &runtime);
+	//auto mainFunc = (EntryFuncPtr)ee->getFunctionAddress(mainFuncName);
+	auto returnCode = runEntryFunc(entryFuncPtr, &runtime);
 	if (returnCode == ReturnCode::Return)
 		this->returnData = runtime.getReturnData();
 
 	auto executionEndTime = std::chrono::high_resolution_clock::now();
 	clog(JIT) << " + " << std::chrono::duration_cast<std::chrono::milliseconds>(executionEndTime - executionStartTime).count() << " ms ";
-	//clog(JIT) << "Max stack size: " << Stack::maxStackSize;
 
 	clog(JIT) << "\n";
 
