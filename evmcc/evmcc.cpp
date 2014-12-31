@@ -132,7 +132,7 @@ int main(int argc, char** argv)
 		compilerOptions.rewriteSwitchToBranches = optimize || options.count("rewrite-switch") > 0;
 
 		auto compiler = eth::jit::Compiler(compilerOptions);
-		auto module = compiler.compile(bytecode);
+		auto module = compiler.compile(bytecode, "main");
 
 		auto compilationEndTime = std::chrono::high_resolution_clock::now();
 
@@ -201,7 +201,8 @@ int main(int argc, char** argv)
 			data.code = bytecode.data();
 
 			// BROKEN: env_* functions must be implemented & RuntimeData struct created
-			auto result = engine.run(std::move(module), &data, nullptr, bytecode);
+			// TODO: Do not compile module again
+			auto result = engine.run(bytecode, &data, nullptr);
 			return static_cast<int>(result);
 		}
 	}

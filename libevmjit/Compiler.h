@@ -39,7 +39,7 @@ public:
 
 	Compiler(Options const& _options);
 
-	std::unique_ptr<llvm::Module> compile(bytes const& _bytecode);
+	std::unique_ptr<llvm::Module> compile(bytes const& _bytecode, std::string const& _id);
 
 private:
 

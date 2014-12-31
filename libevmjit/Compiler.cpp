@@ -152,19 +152,14 @@ void Compiler::createBasicBlocks(bytes const& _bytecode)
 		m_indirectJumpTargets.push_back(&basicBlocks.find(*it)->second);
 }
 
-std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode)
+std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode, std::string const& _id)
 {
-	// TODO: Better hash of code needed, probably SHA3
-	std::string code{reinterpret_cast<char const*>(_bytecode.data()), _bytecode.size()};
-	auto hash = std::hash<std::string>{}(code);
-	auto strHash = std::to_string(hash);
-
 	auto compilationStartTime = std::chrono::high_resolution_clock::now();
-	auto module = std::unique_ptr<llvm::Module>(new llvm::Module(strHash, m_builder.getContext()));
+	auto module = std::unique_ptr<llvm::Module>(new llvm::Module(_id, m_builder.getContext()));
 
 	// Create main function
 	auto mainFuncType = llvm::FunctionType::get(Type::MainReturn, Type::RuntimePtr, false);
-	m_mainFunc = llvm::Function::Create(mainFuncType, llvm::Function::ExternalLinkage, strHash, module.get());
+	m_mainFunc = llvm::Function::Create(mainFuncType, llvm::Function::ExternalLinkage, _id, module.get());
 	m_mainFunc->getArgumentList().front().setName("rt");
 
 	// Create the basic blocks.

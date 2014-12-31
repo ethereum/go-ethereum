@@ -21,13 +21,6 @@ namespace eth
 namespace jit
 {
 
-ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _env)
-{
-	auto module = Compiler({}).compile(_code);
-	//module->dump();
-	return run(std::move(module), _data, _env, _code);
-}
-
 namespace
 {
 typedef ReturnCode(*EntryFuncPtr)(Runtime*);
@@ -48,49 +41,60 @@ ReturnCode runEntryFunc(EntryFuncPtr _mainFunc, Runtime* _runtime)
 }
 }
 
-ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeData* _data, Env* _env, bytes const& _code)
+ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _env)
 {
 	static std::unique_ptr<llvm::ExecutionEngine> ee;  // TODO: Use Managed Objects from LLVM?
 
+
+	// TODO: Better hash of code needed, probably SHA3
+	std::string code{reinterpret_cast<char const*>(_code.data()), _code.size()};
+	auto hash = std::hash<std::string>{}(code);
+	auto mainFuncName = std::to_string(hash);
+
 	EntryFuncPtr entryFuncPtr{};
-	auto&& mainFuncName = _module->getModuleIdentifier();
 	Runtime runtime(_data, _env);	// TODO: I don't know why but it must be created before getFunctionAddress() calls
 
-	if (!ee)
+	if (ee && (entryFuncPtr = (EntryFuncPtr)ee->getFunctionAddress(mainFuncName)))
 	{
-		llvm::InitializeNativeTarget();
-		llvm::InitializeNativeTargetAsmPrinter();
-
-		llvm::EngineBuilder builder(_module.get());
-		builder.setEngineKind(llvm::EngineKind::JIT);
-		builder.setUseMCJIT(true);
-		std::unique_ptr<llvm::SectionMemoryManager> memoryManager(new llvm::SectionMemoryManager);
-		builder.setMCJITMemoryManager(memoryManager.get());
-		builder.setOptLevel(llvm::CodeGenOpt::None);
-
-		auto triple = llvm::Triple(llvm::sys::getProcessTriple());
-		if (triple.getOS() == llvm::Triple::OSType::Win32)
-			triple.setObjectFormat(llvm::Triple::ObjectFormatType::ELF);  // MCJIT does not support COFF format
-		_module->setTargetTriple(triple.str());
-
-		ee.reset(builder.create());
-		if (!ee)
-			return ReturnCode::LLVMConfigError;
-
-		_module.release();        // Successfully created llvm::ExecutionEngine takes ownership of the module
-		memoryManager.release();  // and memory manager
-
-		//ee->setObjectCache(Cache::getObjectCache());
-		entryFuncPtr = (EntryFuncPtr)ee->getFunctionAddress(mainFuncName);
 	}
 	else
 	{
-		entryFuncPtr = (EntryFuncPtr)ee->getFunctionAddress(mainFuncName);
-		if (!entryFuncPtr)
+		auto module = Compiler({}).compile(_code, mainFuncName);
+		if (!ee)
 		{
-			ee->addModule(_module.get());
-			_module.release();
+			llvm::InitializeNativeTarget();
+			llvm::InitializeNativeTargetAsmPrinter();
+
+			llvm::EngineBuilder builder(module.get());
+			builder.setEngineKind(llvm::EngineKind::JIT);
+			builder.setUseMCJIT(true);
+			std::unique_ptr<llvm::SectionMemoryManager> memoryManager(new llvm::SectionMemoryManager);
+			builder.setMCJITMemoryManager(memoryManager.get());
+			builder.setOptLevel(llvm::CodeGenOpt::None);
+
+			auto triple = llvm::Triple(llvm::sys::getProcessTriple());
+			if (triple.getOS() == llvm::Triple::OSType::Win32)
+				triple.setObjectFormat(llvm::Triple::ObjectFormatType::ELF);  // MCJIT does not support COFF format
+			module->setTargetTriple(triple.str());
+
+			ee.reset(builder.create());
+			if (!ee)
+				return ReturnCode::LLVMConfigError;
+
+			module.release();         // Successfully created llvm::ExecutionEngine takes ownership of the module
+			memoryManager.release();  // and memory manager
+
+			//ee->setObjectCache(Cache::getObjectCache());
 			entryFuncPtr = (EntryFuncPtr)ee->getFunctionAddress(mainFuncName);
+		}
+		else
+		{
+			if (!entryFuncPtr)
+			{
+				ee->addModule(module.get());
+				module.release();
+				entryFuncPtr = (EntryFuncPtr)ee->getFunctionAddress(mainFuncName);
+			}
 		}
 	}
 	assert(entryFuncPtr);
