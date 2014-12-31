@@ -2,10 +2,6 @@
 
 #include <chrono>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-
-#include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/ADT/Triple.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
@@ -13,11 +9,7 @@
 #include <llvm/ExecutionEngine/GenericValue.h>
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/Support/TargetSelect.h>
-#include <llvm/Support/Signals.h>
-#include <llvm/Support/PrettyStackTrace.h>
 #include <llvm/Support/Host.h>
-
-#pragma GCC diagnostic pop
 
 #include "Runtime.h"
 #include "Memory.h"
@@ -42,7 +34,6 @@ ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _en
 
 namespace
 {
-
 typedef ReturnCode(*EntryFuncPtr)(Runtime*);
 
 ReturnCode runEntryFunc(EntryFuncPtr _mainFunc, Runtime* _runtime)
@@ -59,7 +50,6 @@ ReturnCode runEntryFunc(EntryFuncPtr _mainFunc, Runtime* _runtime)
 
 	return returnCode;
 }
-
 }
 
 ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeData* _data, Env* _env, bytes const& _code)
@@ -72,12 +62,8 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 	static std::unique_ptr<llvm::ExecutionEngine> ee;  // TODO: Use Managed Objects from LLVM?
 
 	EntryFuncPtr entryFuncPtr{};
-
-
-
-	Runtime runtime(_data, _env);
-
 	auto&& mainFuncName = _module->getModuleIdentifier();
+	Runtime runtime(_data, _env);	// TODO: I don't know why but it must be created before getFunctionAddress() calls
 
 	if (!ee)
 	{
@@ -118,21 +104,17 @@ ReturnCode ExecutionEngine::run(std::unique_ptr<llvm::Module> _module, RuntimeDa
 	}
 	assert(entryFuncPtr);
 
-
 	auto executionStartTime = std::chrono::high_resolution_clock::now();
-	//auto mainFunc = (EntryFuncPtr)ee->getFunctionAddress(mainFuncName);
+
 	auto returnCode = runEntryFunc(entryFuncPtr, &runtime);
 	if (returnCode == ReturnCode::Return)
 		this->returnData = runtime.getReturnData();
 
 	auto executionEndTime = std::chrono::high_resolution_clock::now();
-	clog(JIT) << " + " << std::chrono::duration_cast<std::chrono::milliseconds>(executionEndTime - executionStartTime).count() << " ms ";
-
-	clog(JIT) << "\n";
+	clog(JIT) << " + " << std::chrono::duration_cast<std::chrono::milliseconds>(executionEndTime - executionStartTime).count() << " ms\n";
 
 	return returnCode;
 }
-
 
 }
 }

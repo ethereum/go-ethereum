@@ -13,24 +13,6 @@ namespace eth
 namespace jit
 {
 
-/// A bundle of objects and information needed for a contract execution
-class ExecBundle
-{
-public:
-	llvm::ExecutionEngine* engine = nullptr;
-	std::string mainFuncName;
-
-	ExecBundle() = default;
-	ExecBundle(ExecBundle&& _other):
-		engine(std::move(_other.engine)),
-		mainFuncName(std::move(_other.mainFuncName))
-	{}
-
-	ExecBundle(ExecBundle const&) = delete;
-	void operator=(ExecBundle) = delete;
-};
-
-
 class ObjectCache : public llvm::ObjectCache
 {
 public:
@@ -51,11 +33,6 @@ private:
 class Cache
 {
 public:
-	using Key = std::string;
-
-	static ExecBundle& registerExec(Key _key, ExecBundle&& _exec);
-	static ExecBundle* findExec(Key _key);
-
 	static ObjectCache* getObjectCache();
 };
 
