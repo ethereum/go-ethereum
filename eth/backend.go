@@ -86,12 +86,15 @@ func New(db ethutil.Database, identity p2p.ClientIdentity, keyManager *crypto.Ke
 	protocols := []p2p.Protocol{ethProto, eth.whisper.Protocol()}
 
 	server := &p2p.Server{
-		Identity:   identity,
-		MaxPeers:   maxPeers,
-		Protocols:  protocols,
-		ListenAddr: ":" + port,
-		Blacklist:  eth.blacklist,
-		NAT:        nat,
+		Identity:  identity,
+		MaxPeers:  maxPeers,
+		Protocols: protocols,
+		Blacklist: eth.blacklist,
+		NAT:       nat,
+	}
+
+	if len(port) > 0 {
+		server.ListenAddr = ":" + port
 	}
 
 	eth.server = server
