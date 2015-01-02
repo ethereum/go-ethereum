@@ -16,6 +16,10 @@ import (
 
 var chainlogger = logger.NewLogger("CHAIN")
 
+type StateQuery interface {
+	GetAccount(addr []byte) *state.StateObject
+}
+
 /*
 func AddTestNetFunds(block *types.Block) {
 	for _, addr := range []string{
@@ -375,4 +379,9 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 	}
 
 	return nil
+}
+
+// Satisfy state query interface
+func (self *ChainManager) GetAccount(addr []byte) *state.StateObject {
+	return self.State().GetAccount(addr)
 }
