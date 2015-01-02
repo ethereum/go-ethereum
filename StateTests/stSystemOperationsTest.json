@@ -552,14 +552,14 @@
                 }
             },
             "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
-                "balance" : "261077",
+                "balance" : "261097",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "999999999999638923",
+                "balance" : "999999999999638903",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
@@ -584,7 +584,7 @@
         },
         "transaction" : {
             "data" : "",
-            "gasLimit" : "365223",
+            "gasLimit" : "365243",
             "gasPrice" : "1",
             "nonce" : "0",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
@@ -610,19 +610,19 @@
                 "code" : "0x600160005401600055600060006000600060003060e05a03f1600155",
                 "nonce" : "0",
                 "storage" : {
-                    "0x" : "0x03ff",
+                    "0x" : "0x0400",
                     "0x01" : "0x01"
                 }
             },
             "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
-                "balance" : "261078",
+                "balance" : "260996",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "999999999999638922",
+                "balance" : "999999999999639004",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
@@ -647,7 +647,7 @@
         },
         "transaction" : {
             "data" : "",
-            "gasLimit" : "365224",
+            "gasLimit" : "365244",
             "gasPrice" : "1",
             "nonce" : "0",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
