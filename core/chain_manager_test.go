@@ -16,17 +16,9 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-//var Logger logpkg.LogSystem
-
-//var Log = logpkg.NewLogger("TEST")
-
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	//Logger = logpkg.NewStdLogSystem(os.Stdout, log.LstdFlags, logpkg.DebugLevel)
-	//logpkg.AddLogSystem(Logger)
-
 	ethutil.ReadConfig("/tmp/ethtest", "/tmp/ethtest", "ETH")
-
 }
 
 func reset() {
@@ -38,7 +30,7 @@ func reset() {
 }
 
 func loadChain(fn string, t *testing.T) (types.Blocks, error) {
-	fh, err := os.OpenFile(path.Join("..", "_data", fn), os.O_RDONLY, os.ModePerm)
+	fh, err := os.OpenFile(path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "_data", fn), os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		return nil, err
 	}
