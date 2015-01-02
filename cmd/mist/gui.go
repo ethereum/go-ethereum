@@ -231,35 +231,33 @@ func (gui *Gui) loadAddressBook() {
 	view := gui.getObjectByName("infoView")
 	nameReg := gui.pipe.World().Config().Get("NameReg")
 	if nameReg != nil {
-		nameReg.EachStorage(func(name string, value *ethutil.Value) {
-			if name[0] != 0 {
-				value.Decode()
-
-				view.Call("addAddress", struct{ Name, Address string }{name, ethutil.Bytes2Hex(value.Bytes())})
+		it := nameReg.Trie().Iterator()
+		for it.Next() {
+			if it.Key[0] != 0 {
+				view.Call("addAddress", struct{ Name, Address string }{string(it.Key), ethutil.Bytes2Hex(it.Value)})
 			}
-		})
+
+		}
 	}
 }
 
 func (self *Gui) loadMergedMiningOptions() {
 	view := self.getObjectByName("mergedMiningModel")
 
-	nameReg := self.pipe.World().Config().Get("MergeMining")
-	if nameReg != nil {
+	mergeMining := self.pipe.World().Config().Get("MergeMining")
+	if mergeMining != nil {
 		i := 0
-		nameReg.EachStorage(func(name string, value *ethutil.Value) {
-			if name[0] != 0 {
-				value.Decode()
+		it := mergeMining.Trie().Iterator()
+		for it.Next() {
+			view.Call("addMergedMiningOption", struct {
+				Checked       bool
+				Name, Address string
+				Id, ItemId    int
+			}{false, string(it.Key), ethutil.Bytes2Hex(it.Value), 0, i})
 
-				view.Call("addMergedMiningOption", struct {
-					Checked       bool
-					Name, Address string
-					Id, ItemId    int
-				}{false, name, ethutil.Bytes2Hex(value.Bytes()), 0, i})
+			i++
 
-				i++
-			}
-		})
+		}
 	}
 }
 

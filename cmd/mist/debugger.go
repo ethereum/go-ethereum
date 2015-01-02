@@ -309,9 +309,11 @@ func (d *Debugger) halting(pc int, op vm.OpCode, mem *vm.Memory, stack *vm.Stack
 		d.win.Root().Call("setStack", val.String())
 	}
 
-	stateObject.EachStorage(func(key string, node *ethutil.Value) {
-		d.win.Root().Call("setStorage", storeVal{fmt.Sprintf("% x", key), fmt.Sprintf("% x", node.Str())})
-	})
+	it := stateObject.Trie().Iterator()
+	for it.Next() {
+		d.win.Root().Call("setStorage", storeVal{fmt.Sprintf("% x", it.Key), fmt.Sprintf("% x", it.Value)})
+
+	}
 
 	stackFrameAt := new(big.Int).SetBytes(mem.Get(0, 32))
 	psize := mem.Len() - int(new(big.Int).SetBytes(mem.Get(0, 32)).Uint64())
