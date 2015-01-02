@@ -27,6 +27,9 @@ func init() {
 
 	ethutil.ReadConfig("/tmp/ethtest", "/tmp/ethtest", "ETH")
 
+}
+
+func reset() {
 	db, err := ethdb.NewMemDatabase()
 	if err != nil {
 		panic("Could not create mem-db, failing")
@@ -51,20 +54,21 @@ func loadChain(fn string, t *testing.T) (types.Blocks, error) {
 
 func insertChain(done chan bool, chainMan *ChainManager, chain types.Blocks, t *testing.T) {
 	err := chainMan.InsertChain(chain)
-	done <- true
 	if err != nil {
 		fmt.Println(err)
 		t.FailNow()
 	}
+	done <- true
 }
 
 func TestChainInsertions(t *testing.T) {
+	reset()
+
 	chain1, err := loadChain("valid1", t)
 	if err != nil {
 		fmt.Println(err)
 		t.FailNow()
 	}
-	fmt.Println(len(chain1))
 
 	chain2, err := loadChain("valid2", t)
 	if err != nil {
@@ -98,6 +102,8 @@ func TestChainInsertions(t *testing.T) {
 }
 
 func TestChainMultipleInsertions(t *testing.T) {
+	reset()
+
 	const max = 4
 	chains := make([]types.Blocks, max)
 	var longest int
@@ -114,7 +120,6 @@ func TestChainMultipleInsertions(t *testing.T) {
 			t.FailNow()
 		}
 	}
-
 	var eventMux event.TypeMux
 	chainMan := NewChainManager(&eventMux)
 	txPool := NewTxPool(chainMan, &eventMux)
@@ -122,7 +127,9 @@ func TestChainMultipleInsertions(t *testing.T) {
 	chainMan.SetProcessor(blockMan)
 	done := make(chan bool, max)
 	for i, chain := range chains {
-		var i int = i
+		// XXX the go routine would otherwise reference the same (chain[3]) variable and fail
+		i := i
+		chain := chain
 		go func() {
 			insertChain(done, chainMan, chain, t)
 			fmt.Println(i, "done")
