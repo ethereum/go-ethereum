@@ -142,12 +142,15 @@ func New(config *Config) (*Ethereum, error) {
 	}
 
 	eth.net = &p2p.Server{
-		Identity:   clientId,
-		MaxPeers:   config.MaxPeers,
-		Protocols:  protocols,
-		ListenAddr: ":" + config.Port,
-		Blacklist:  eth.blacklist,
-		NAT:        nat,
+		Identity:  clientId,
+		MaxPeers:  config.MaxPeers,
+		Protocols: protocols,
+		Blacklist: eth.blacklist,
+		NAT:       nat,
+	}
+
+	if len(config.Port) > 0 {
+		eth.net.ListenAddr = ":" + config.Port
 	}
 
 	return eth, nil
