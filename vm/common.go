@@ -37,7 +37,7 @@ var (
 	GasLog          = big.NewInt(32)
 	GasSha256       = big.NewInt(50)
 	GasRipemd       = big.NewInt(50)
-	GasEcrecover    = big.NewInt(100)
+	GasEcrecover    = big.NewInt(500)
 
 	Pow256 = ethutil.BigPow(2, 256)
 
@@ -48,7 +48,7 @@ var (
 	S256 = ethutil.S256
 )
 
-const MaxCallDepth = 1025
+const MaxCallDepth = 1024
 
 func calcMemSize(off, l *big.Int) *big.Int {
 	if l.Cmp(ethutil.Big0) == 0 {

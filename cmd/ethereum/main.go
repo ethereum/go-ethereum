@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -30,13 +31,17 @@ import (
 
 const (
 	ClientIdentifier = "Ethereum(G)"
-	Version          = "0.7.9"
+	Version          = "0.7.11"
 )
 
 var clilogger = logger.NewLogger("CLI")
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	defer func() {
+		logger.Flush()
+	}()
 
 	utils.HandleInterrupt()
 
@@ -69,15 +74,15 @@ func main() {
 	// create, import, export keys
 	utils.KeyTasks(keyManager, KeyRing, GenAddr, SecretFile, ExportDir, NonInteractive)
 
-	clientIdentity := utils.NewClientIdentity(ClientIdentifier, Version, Identifier)
+	clientIdentity := utils.NewClientIdentity(ClientIdentifier, Version, Identifier, string(keyManager.PublicKey()))
 
-	ethereum := utils.NewEthereum(db, clientIdentity, keyManager, UseUPnP, OutboundPort, MaxPeer)
+	ethereum := utils.NewEthereum(db, clientIdentity, keyManager, utils.NatType(NatType, PMPGateway), OutboundPort, MaxPeer)
 
 	if Dump {
 		var block *types.Block
 
 		if len(DumpHash) == 0 && DumpNumber == -1 {
-			block = ethereum.ChainManager().CurrentBlock
+			block = ethereum.ChainManager().CurrentBlock()
 		} else if len(DumpHash) > 0 {
 			block = ethereum.ChainManager().GetBlock(ethutil.Hex2Bytes(DumpHash))
 		} else {
@@ -93,9 +98,6 @@ func main() {
 			os.Exit(1)
 		}
 
-		// block.GetRoot() does not exist
-		//fmt.Printf("RLP: %x\nstate: %x\nhash: %x\n", ethutil.Rlp(block), block.GetRoot(), block.Hash())
-
 		// Leave the Println. This needs clean output for piping
 		fmt.Printf("%s\n", block.State().Dump())
 
@@ -110,6 +112,16 @@ func main() {
 
 	if StartMining {
 		utils.StartMining(ethereum)
+	}
+
+	if len(ImportChain) > 0 {
+		start := time.Now()
+		err := utils.ImportChain(ethereum, ImportChain)
+		if err != nil {
+			clilogger.Infoln(err)
+		}
+		clilogger.Infoln("import done in", time.Since(start))
+		return
 	}
 
 	// better reworked as cases
@@ -131,5 +143,4 @@ func main() {
 
 	// this blocks the thread
 	ethereum.WaitForShutdown()
-	logger.Flush()
 }

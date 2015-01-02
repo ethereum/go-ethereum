@@ -82,7 +82,7 @@ func (self *XEth) Execute(addr []byte, data []byte, value, gas, price *ethutil.V
 func (self *XEth) ExecuteObject(object *Object, data []byte, value, gas, price *ethutil.Value) ([]byte, error) {
 	var (
 		initiator = state.NewStateObject(self.obj.KeyManager().KeyPair().Address())
-		block     = self.chainManager.CurrentBlock
+		block     = self.chainManager.CurrentBlock()
 	)
 
 	self.Vm.State = self.World().State().Copy()
@@ -134,13 +134,13 @@ func (self *XEth) Transact(key *crypto.KeyPair, to []byte, value, gas, price *et
 	state := self.chainManager.TransState()
 	nonce := state.GetNonce(key.Address())
 
-	tx.Nonce = nonce
+	tx.SetNonce(nonce)
 	tx.Sign(key.PrivateKey)
 
 	// Do some pre processing for our "pre" events  and hooks
 	block := self.chainManager.NewBlock(key.Address())
 	coinbase := state.GetStateObject(key.Address())
-	coinbase.SetGasPool(block.GasLimit)
+	coinbase.SetGasPool(block.GasLimit())
 	self.blockManager.ApplyTransactions(coinbase, state, block, types.Transactions{tx}, true)
 
 	err := self.obj.TxPool().Add(tx)
@@ -150,7 +150,7 @@ func (self *XEth) Transact(key *crypto.KeyPair, to []byte, value, gas, price *et
 	state.SetNonce(key.Address(), nonce+1)
 
 	if contractCreation {
-		addr := tx.CreationAddress(self.World().State())
+		addr := core.AddressFromMessage(tx)
 		pipelogger.Infof("Contract addr %x\n", addr)
 	}
 
@@ -163,8 +163,8 @@ func (self *XEth) PushTx(tx *types.Transaction) ([]byte, error) {
 		return nil, err
 	}
 
-	if tx.Recipient == nil {
-		addr := tx.CreationAddress(self.World().State())
+	if tx.To() == nil {
+		addr := core.AddressFromMessage(tx)
 		pipelogger.Infof("Contract addr %x\n", addr)
 		return addr, nil
 	}

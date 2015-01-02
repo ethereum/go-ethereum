@@ -36,10 +36,12 @@ var (
 	Identifier      string
 	KeyRing         string
 	KeyStore        string
+	PMPGateway      string
 	StartRpc        bool
 	StartWebSockets bool
 	RpcPort         int
 	UseUPnP         bool
+	NatType         string
 	OutboundPort    string
 	ShowGenesis     bool
 	AddPeer         string
@@ -104,17 +106,19 @@ func Init() {
 	flag.StringVar(&KeyStore, "keystore", "db", "system to store keyrings: db|file (db)")
 	flag.StringVar(&OutboundPort, "port", "30303", "listening port")
 	flag.BoolVar(&UseUPnP, "upnp", true, "enable UPnP support")
-	flag.IntVar(&MaxPeer, "maxpeer", 10, "maximum desired peers")
+	flag.IntVar(&MaxPeer, "maxpeer", 30, "maximum desired peers")
 	flag.IntVar(&RpcPort, "rpcport", 8080, "port to start json-rpc server on")
 	flag.BoolVar(&StartRpc, "rpc", false, "start rpc server")
 	flag.BoolVar(&StartWebSockets, "ws", false, "start websocket server")
 	flag.BoolVar(&NonInteractive, "y", false, "non-interactive mode (say yes to confirmations)")
 	flag.BoolVar(&UseSeed, "seed", true, "seed peers")
 	flag.BoolVar(&GenAddr, "genaddr", false, "create a new priv/pub key")
+	flag.StringVar(&NatType, "nat", "", "NAT support (UPNP|PMP) (none)")
 	flag.StringVar(&SecretFile, "import", "", "imports the file given (hex or mnemonic formats)")
 	flag.StringVar(&ExportDir, "export", "", "exports the session keyring to files in the directory given")
 	flag.StringVar(&LogFile, "logfile", "", "log file (defaults to standard output)")
 	flag.StringVar(&Datadir, "datadir", defaultDataDir(), "specifies the datadir to use")
+	flag.StringVar(&PMPGateway, "pmp", "", "Gateway IP for PMP")
 	flag.StringVar(&ConfigFile, "conf", defaultConfigFile, "config file")
 	flag.StringVar(&DebugFile, "debug", "", "debug file (no debugging if not set)")
 	flag.IntVar(&LogLevel, "loglevel", int(logger.InfoLevel), "loglevel: 0-5: silent,error,warn,info,debug,debug detail)")

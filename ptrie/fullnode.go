@@ -1,5 +1,7 @@
 package ptrie
 
+import "fmt"
+
 type FullNode struct {
 	trie  *Trie
 	nodes [17]Node
@@ -21,7 +23,9 @@ func (self *FullNode) Branches() []Node {
 func (self *FullNode) Copy() Node {
 	nnode := NewFullNode(self.trie)
 	for i, node := range self.nodes {
-		nnode.nodes[i] = node
+		if node != nil {
+			nnode.nodes[i] = node
+		}
 	}
 
 	return nnode
@@ -56,6 +60,10 @@ func (self *FullNode) RlpData() interface{} {
 }
 
 func (self *FullNode) set(k byte, value Node) {
+	if _, ok := value.(*ValueNode); ok && k != 16 {
+		fmt.Println(value, k)
+	}
+
 	self.nodes[int(k)] = value
 }
 

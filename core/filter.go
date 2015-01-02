@@ -76,13 +76,14 @@ func (self *Filter) SetSkip(skip int) {
 
 // Run filters messages with the current parameters set
 func (self *Filter) Find() []*state.Message {
+	earliestBlock := self.eth.ChainManager().CurrentBlock()
 	var earliestBlockNo uint64 = uint64(self.earliest)
 	if self.earliest == -1 {
-		earliestBlockNo = self.eth.ChainManager().CurrentBlock.Number.Uint64()
+		earliestBlockNo = earliestBlock.NumberU64()
 	}
 	var latestBlockNo uint64 = uint64(self.latest)
 	if self.latest == -1 {
-		latestBlockNo = self.eth.ChainManager().CurrentBlock.Number.Uint64()
+		latestBlockNo = earliestBlock.NumberU64()
 	}
 
 	var (
@@ -93,7 +94,7 @@ func (self *Filter) Find() []*state.Message {
 	for i := 0; !quit && block != nil; i++ {
 		// Quit on latest
 		switch {
-		case block.Number.Uint64() == earliestBlockNo, block.Number.Uint64() == 0:
+		case block.NumberU64() == earliestBlockNo, block.NumberU64() == 0:
 			quit = true
 		case self.max <= len(messages):
 			break
@@ -113,7 +114,7 @@ func (self *Filter) Find() []*state.Message {
 			messages = append(messages, self.FilterMessages(msgs)...)
 		}
 
-		block = self.eth.ChainManager().GetBlock(block.PrevHash)
+		block = self.eth.ChainManager().GetBlock(block.ParentHash())
 	}
 
 	skip := int(math.Min(float64(len(messages)), float64(self.skip)))
@@ -176,7 +177,7 @@ func (self *Filter) bloomFilter(block *types.Block) bool {
 	var fromIncluded, toIncluded bool
 	if len(self.from) > 0 {
 		for _, from := range self.from {
-			if types.BloomLookup(block.LogsBloom, from) || bytes.Equal(block.Coinbase, from) {
+			if types.BloomLookup(block.Bloom(), from) || bytes.Equal(block.Coinbase(), from) {
 				fromIncluded = true
 				break
 			}
@@ -187,7 +188,7 @@ func (self *Filter) bloomFilter(block *types.Block) bool {
 
 	if len(self.to) > 0 {
 		for _, to := range self.to {
-			if types.BloomLookup(block.LogsBloom, ethutil.U256(new(big.Int).Add(ethutil.Big1, ethutil.BigD(to))).Bytes()) || bytes.Equal(block.Coinbase, to) {
+			if types.BloomLookup(block.Bloom(), ethutil.U256(new(big.Int).Add(ethutil.Big1, ethutil.BigD(to))).Bytes()) || bytes.Equal(block.Coinbase(), to) {
 				toIncluded = true
 				break
 			}

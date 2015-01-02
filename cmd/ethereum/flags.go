@@ -38,7 +38,8 @@ var (
 	StartRpc        bool
 	StartWebSockets bool
 	RpcPort         int
-	UseUPnP         bool
+	NatType         string
+	PMPGateway      string
 	OutboundPort    string
 	ShowGenesis     bool
 	AddPeer         string
@@ -57,6 +58,7 @@ var (
 	DumpHash        string
 	DumpNumber      int
 	VmType          int
+	ImportChain     string
 )
 
 // flags specific to cli client
@@ -84,8 +86,9 @@ func Init() {
 	flag.StringVar(&KeyRing, "keyring", "", "identifier for keyring to use")
 	flag.StringVar(&KeyStore, "keystore", "db", "system to store keyrings: db|file (db)")
 	flag.StringVar(&OutboundPort, "port", "30303", "listening port")
-	flag.BoolVar(&UseUPnP, "upnp", false, "enable UPnP support")
-	flag.IntVar(&MaxPeer, "maxpeer", 10, "maximum desired peers")
+	flag.StringVar(&NatType, "nat", "", "NAT support (UPNP|PMP) (none)")
+	flag.StringVar(&PMPGateway, "pmp", "", "Gateway IP for PMP")
+	flag.IntVar(&MaxPeer, "maxpeer", 30, "maximum desired peers")
 	flag.IntVar(&RpcPort, "rpcport", 8080, "port to start json-rpc server on")
 	flag.BoolVar(&StartRpc, "rpc", false, "start rpc server")
 	flag.BoolVar(&StartWebSockets, "ws", false, "start websocket server")
@@ -102,6 +105,7 @@ func Init() {
 	flag.BoolVar(&DiffTool, "difftool", false, "creates output for diff'ing. Sets LogLevel=0")
 	flag.StringVar(&DiffType, "diff", "all", "sets the level of diff output [vm, all]. Has no effect if difftool=false")
 	flag.BoolVar(&ShowGenesis, "genesis", false, "Dump the genesis block")
+	flag.StringVar(&ImportChain, "chain", "", "Imports fiven chain")
 
 	flag.BoolVar(&Dump, "dump", false, "output the ethereum state in JSON format. Sub args [number, hash]")
 	flag.StringVar(&DumpHash, "hash", "", "specify arg in hex")

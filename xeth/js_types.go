@@ -1,14 +1,13 @@
 package xeth
 
 import (
-	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -43,21 +42,21 @@ func NewJSBlock(block *types.Block) *JSBlock {
 	}
 	txlist := ethutil.NewList(ptxs)
 
-	puncles := make([]*JSBlock, len(block.Uncles))
-	for i, uncle := range block.Uncles {
-		puncles[i] = NewJSBlock(uncle)
+	puncles := make([]*JSBlock, len(block.Uncles()))
+	for i, uncle := range block.Uncles() {
+		puncles[i] = NewJSBlock(types.NewBlockWithHeader(uncle))
 	}
 	ulist := ethutil.NewList(puncles)
 
 	return &JSBlock{
 		ref: block, Size: block.Size().String(),
-		Number: int(block.Number.Uint64()), GasUsed: block.GasUsed.String(),
-		GasLimit: block.GasLimit.String(), Hash: ethutil.Bytes2Hex(block.Hash()),
+		Number: int(block.NumberU64()), GasUsed: block.GasUsed().String(),
+		GasLimit: block.GasLimit().String(), Hash: ethutil.Bytes2Hex(block.Hash()),
 		Transactions: txlist, Uncles: ulist,
-		Time:     block.Time,
-		Coinbase: ethutil.Bytes2Hex(block.Coinbase),
-		PrevHash: ethutil.Bytes2Hex(block.PrevHash),
-		Bloom:    ethutil.Bytes2Hex(block.LogsBloom),
+		Time:     block.Time(),
+		Coinbase: ethutil.Bytes2Hex(block.Coinbase()),
+		PrevHash: ethutil.Bytes2Hex(block.ParentHash()),
+		Bloom:    ethutil.Bytes2Hex(block.Bloom()),
 		Raw:      block.String(),
 	}
 }
@@ -71,7 +70,7 @@ func (self *JSBlock) ToString() string {
 }
 
 func (self *JSBlock) GetTransaction(hash string) *JSTransaction {
-	tx := self.ref.GetTransaction(ethutil.Hex2Bytes(hash))
+	tx := self.ref.Transaction(ethutil.Hex2Bytes(hash))
 	if tx == nil {
 		return nil
 	}
@@ -97,21 +96,21 @@ type JSTransaction struct {
 
 func NewJSTx(tx *types.Transaction, state *state.StateDB) *JSTransaction {
 	hash := ethutil.Bytes2Hex(tx.Hash())
-	receiver := ethutil.Bytes2Hex(tx.Recipient)
+	receiver := ethutil.Bytes2Hex(tx.To())
 	if receiver == "0000000000000000000000000000000000000000" {
-		receiver = ethutil.Bytes2Hex(tx.CreationAddress(state))
+		receiver = ethutil.Bytes2Hex(core.AddressFromMessage(tx))
 	}
-	sender := ethutil.Bytes2Hex(tx.Sender())
-	createsContract := tx.CreatesContract()
+	sender := ethutil.Bytes2Hex(tx.From())
+	createsContract := core.MessageCreatesContract(tx)
 
 	var data string
-	if tx.CreatesContract() {
-		data = strings.Join(core.Disassemble(tx.Data), "\n")
+	if createsContract {
+		data = strings.Join(core.Disassemble(tx.Data()), "\n")
 	} else {
-		data = ethutil.Bytes2Hex(tx.Data)
+		data = ethutil.Bytes2Hex(tx.Data())
 	}
 
-	return &JSTransaction{ref: tx, Hash: hash, Value: ethutil.CurrencyToString(tx.Value), Address: receiver, Contract: tx.CreatesContract(), Gas: tx.Gas.String(), GasPrice: tx.GasPrice.String(), Data: data, Sender: sender, CreatesContract: createsContract, RawData: ethutil.Bytes2Hex(tx.Data)}
+	return &JSTransaction{ref: tx, Hash: hash, Value: ethutil.CurrencyToString(tx.Value()), Address: receiver, Contract: createsContract, Gas: tx.Gas().String(), GasPrice: tx.GasPrice().String(), Data: data, Sender: sender, CreatesContract: createsContract, RawData: ethutil.Bytes2Hex(tx.Data())}
 }
 
 func (self *JSTransaction) ToString() string {
@@ -155,38 +154,36 @@ func NewPReciept(contractCreation bool, creationAddress, hash, address []byte) *
 // Peer interface exposed to QML
 
 type JSPeer struct {
-	ref          *core.Peer
-	Inbound      bool   `json:"isInbound"`
-	LastSend     int64  `json:"lastSend"`
-	LastPong     int64  `json:"lastPong"`
-	Ip           string `json:"ip"`
-	Port         int    `json:"port"`
-	Version      string `json:"version"`
-	LastResponse string `json:"lastResponse"`
-	Latency      string `json:"latency"`
-	Caps         string `json:"caps"`
+	ref *p2p.Peer
+	// Inbound      bool   `json:"isInbound"`
+	// LastSend     int64  `json:"lastSend"`
+	// LastPong     int64  `json:"lastPong"`
+	// Ip           string `json:"ip"`
+	// Port         int    `json:"port"`
+	// Version      string `json:"version"`
+	// LastResponse string `json:"lastResponse"`
+	// Latency      string `json:"latency"`
+	// Caps         string `json:"caps"`
 }
 
-func NewJSPeer(peer core.Peer) *JSPeer {
-	if peer == nil {
-		return nil
-	}
+func NewJSPeer(peer *p2p.Peer) *JSPeer {
 
-	var ip []string
-	for _, i := range peer.Host() {
-		ip = append(ip, strconv.Itoa(int(i)))
-	}
-	ipAddress := strings.Join(ip, ".")
+	// var ip []string
+	// for _, i := range peer.Host() {
+	//   ip = append(ip, strconv.Itoa(int(i)))
+	// }
+	// ipAddress := strings.Join(ip, ".")
 
-	var caps []string
-	capsIt := peer.Caps().NewIterator()
-	for capsIt.Next() {
-		cap := capsIt.Value().Get(0).Str()
-		ver := capsIt.Value().Get(1).Uint()
-		caps = append(caps, fmt.Sprintf("%s/%d", cap, ver))
-	}
+	// var caps []string
+	// capsIt := peer.Caps().NewIterator()
+	// for capsIt.Next() {
+	//   cap := capsIt.Value().Get(0).Str()
+	//   ver := capsIt.Value().Get(1).Uint()
+	//   caps = append(caps, fmt.Sprintf("%s/%d", cap, ver))
+	// }
 
-	return &JSPeer{ref: &peer, Inbound: peer.Inbound(), LastSend: peer.LastSend().Unix(), LastPong: peer.LastPong(), Version: peer.Version(), Ip: ipAddress, Port: int(peer.Port()), Latency: peer.PingTime(), Caps: "[" + strings.Join(caps, ", ") + "]"}
+	return &JSPeer{ref: peer}
+	// return &JSPeer{ref: &peer, Inbound: peer.Inbound(), LastSend: peer.LastSend().Unix(), LastPong: peer.LastPong(), Version: peer.Version(), Ip: ipAddress, Port: int(peer.Port()), Latency: peer.PingTime(), Caps: "[" + strings.Join(caps, ", ") + "]"}
 }
 
 type JSReceipt struct {

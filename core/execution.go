@@ -3,22 +3,21 @@ package core
 import (
 	"fmt"
 	"math/big"
+	"time"
 
-	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
 )
 
 type Execution struct {
-	vm                vm.VirtualMachine
+	env               vm.Environment
 	address, input    []byte
 	Gas, price, value *big.Int
-	object            *state.StateObject
 	SkipTransfer      bool
 }
 
-func NewExecution(vm vm.VirtualMachine, address, input []byte, gas, gasPrice, value *big.Int) *Execution {
-	return &Execution{vm: vm, address: address, input: input, Gas: gas, price: gasPrice, value: value}
+func NewExecution(env vm.Environment, address, input []byte, gas, gasPrice, value *big.Int) *Execution {
+	return &Execution{env: env, address: address, input: input, Gas: gas, price: gasPrice, value: value}
 }
 
 func (self *Execution) Addr() []byte {
@@ -27,14 +26,19 @@ func (self *Execution) Addr() []byte {
 
 func (self *Execution) Call(codeAddr []byte, caller vm.ClosureRef) ([]byte, error) {
 	// Retrieve the executing code
-	code := self.vm.Env().State().GetCode(codeAddr)
+	code := self.env.State().GetCode(codeAddr)
 
 	return self.exec(code, codeAddr, caller)
 }
 
 func (self *Execution) exec(code, contextAddr []byte, caller vm.ClosureRef) (ret []byte, err error) {
-	env := self.vm.Env()
-	chainlogger.Debugf("pre state %x\n", env.State().Root())
+	env := self.env
+	evm := vm.New(env, vm.DebugVmTy)
+
+	if env.Depth() == vm.MaxCallDepth {
+		// Consume all gas (by not returning it) and return a depth error
+		return nil, vm.DepthError{}
+	}
 
 	from, to := env.State().GetStateObject(caller.Address()), env.State().GetOrNewStateObject(self.address)
 	// Skipping transfer is used on testing for the initial call
@@ -49,32 +53,19 @@ func (self *Execution) exec(code, contextAddr []byte, caller vm.ClosureRef) (ret
 	}
 
 	snapshot := env.State().Copy()
-	defer func() {
-		if vm.IsDepthErr(err) || vm.IsOOGErr(err) {
-			env.State().Set(snapshot)
-		}
-		chainlogger.Debugf("post state %x\n", env.State().Root())
-	}()
-
-	self.object = to
-	// Pre-compiled contracts (address.go) 1, 2 & 3.
-	naddr := ethutil.BigD(contextAddr).Uint64()
-	if p := vm.Precompiled[naddr]; p != nil {
-		if self.Gas.Cmp(p.Gas(len(self.input))) >= 0 {
-			ret = p.Call(self.input)
-			self.vm.Printf("NATIVE_FUNC(%x) => %x", naddr, ret)
-			self.vm.Endl()
-		}
-	} else {
-		ret, err = self.vm.Run(to, caller, code, self.value, self.Gas, self.price, self.input)
+	start := time.Now()
+	ret, err = evm.Run(to, caller, code, self.value, self.Gas, self.price, self.input)
+	if err != nil {
+		env.State().Set(snapshot)
 	}
+	chainlogger.Debugf("vm took %v\n", time.Since(start))
 
 	return
 }
 
 func (self *Execution) Create(caller vm.ClosureRef) (ret []byte, err error, account *state.StateObject) {
 	ret, err = self.exec(self.input, nil, caller)
-	account = self.vm.Env().State().GetStateObject(self.address)
+	account = self.env.State().GetStateObject(self.address)
 
 	return
 }

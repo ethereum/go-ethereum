@@ -30,49 +30,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/wire"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/ui/qt/qwhisper"
 	"github.com/ethereum/go-ethereum/xeth"
 	"gopkg.in/qml.v1"
 )
-
-/*
-func LoadExtension(path string) (uintptr, error) {
-	lib, err := ffi.NewLibrary(path)
-	if err != nil {
-		return 0, err
-	}
-
-	so, err := lib.Fct("sharedObject", ffi.Pointer, nil)
-	if err != nil {
-		return 0, err
-	}
-
-	ptr := so()
-
-		err = lib.Close()
-		if err != nil {
-			return 0, err
-		}
-
-	return ptr.Interface().(uintptr), nil
-}
-*/
-/*
-	vec, errr := LoadExtension("/Users/jeffrey/Desktop/build-libqmltest-Desktop_Qt_5_2_1_clang_64bit-Debug/liblibqmltest_debug.dylib")
-	fmt.Printf("Fetched vec with addr: %#x\n", vec)
-	if errr != nil {
-		fmt.Println(errr)
-	} else {
-		context.SetVar("vec", (unsafe.Pointer)(vec))
-	}
-*/
 
 var guilogger = logger.NewLogger("GUI")
 
@@ -87,7 +56,8 @@ type Gui struct {
 	eth *eth.Ethereum
 
 	// The public Ethereum library
-	uiLib *UiLib
+	uiLib   *UiLib
+	whisper *qwhisper.Whisper
 
 	txDb *ethdb.LDBDatabase
 
@@ -97,7 +67,7 @@ type Gui struct {
 	pipe *xeth.JSXEth
 
 	Session        string
-	clientIdentity *wire.SimpleClientIdentity
+	clientIdentity *p2p.SimpleClientIdentity
 	config         *ethutil.ConfigManager
 
 	plugins map[string]plugin
@@ -107,7 +77,7 @@ type Gui struct {
 }
 
 // Create GUI, but doesn't start it
-func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIdentity *wire.SimpleClientIdentity, session string, logLevel int) *Gui {
+func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIdentity *p2p.SimpleClientIdentity, session string, logLevel int) *Gui {
 	db, err := ethdb.NewLDBDatabase("tx_database")
 	if err != nil {
 		panic(err)
@@ -138,10 +108,12 @@ func (gui *Gui) Start(assetPath string) {
 	gui.engine = qml.NewEngine()
 	context := gui.engine.Context()
 	gui.uiLib = NewUiLib(gui.engine, gui.eth, assetPath)
+	gui.whisper = qwhisper.New(gui.eth.Whisper())
 
 	// Expose the eth library and the ui library to QML
 	context.SetVar("gui", gui)
 	context.SetVar("eth", gui.uiLib)
+	context.SetVar("shh", gui.whisper)
 
 	// Load the main QML interface
 	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
@@ -246,10 +218,10 @@ func (gui *Gui) CreateAndSetPrivKey() (string, string, string, string) {
 }
 
 func (gui *Gui) setInitialChain(ancientBlocks bool) {
-	sBlk := gui.eth.ChainManager().LastBlockHash
+	sBlk := gui.eth.ChainManager().LastBlockHash()
 	blk := gui.eth.ChainManager().GetBlock(sBlk)
 	for ; blk != nil; blk = gui.eth.ChainManager().GetBlock(sBlk) {
-		sBlk = blk.PrevHash
+		sBlk = blk.ParentHash()
 
 		gui.processBlock(blk, true)
 	}
@@ -297,7 +269,7 @@ func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 	addr := gui.address()
 
 	var inout string
-	if bytes.Compare(tx.Sender(), addr) == 0 {
+	if bytes.Compare(tx.From(), addr) == 0 {
 		inout = "send"
 	} else {
 		inout = "recv"
@@ -305,27 +277,27 @@ func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 
 	var (
 		ptx  = xeth.NewJSTx(tx, pipe.World().State())
-		send = nameReg.Storage(tx.Sender())
-		rec  = nameReg.Storage(tx.Recipient)
+		send = nameReg.Storage(tx.From())
+		rec  = nameReg.Storage(tx.To())
 		s, r string
 	)
 
-	if tx.CreatesContract() {
-		rec = nameReg.Storage(tx.CreationAddress(pipe.World().State()))
+	if core.MessageCreatesContract(tx) {
+		rec = nameReg.Storage(core.AddressFromMessage(tx))
 	}
 
 	if send.Len() != 0 {
 		s = strings.Trim(send.Str(), "\x00")
 	} else {
-		s = ethutil.Bytes2Hex(tx.Sender())
+		s = ethutil.Bytes2Hex(tx.From())
 	}
 	if rec.Len() != 0 {
 		r = strings.Trim(rec.Str(), "\x00")
 	} else {
-		if tx.CreatesContract() {
-			r = ethutil.Bytes2Hex(tx.CreationAddress(pipe.World().State()))
+		if core.MessageCreatesContract(tx) {
+			r = ethutil.Bytes2Hex(core.AddressFromMessage(tx))
 		} else {
-			r = ethutil.Bytes2Hex(tx.Recipient)
+			r = ethutil.Bytes2Hex(tx.To())
 		}
 	}
 	ptx.Sender = s
@@ -350,7 +322,7 @@ func (gui *Gui) readPreviousTransactions() {
 }
 
 func (gui *Gui) processBlock(block *types.Block, initial bool) {
-	name := strings.Trim(gui.pipe.World().Config().Get("NameReg").Storage(block.Coinbase).Str(), "\x00")
+	name := strings.Trim(gui.pipe.World().Config().Get("NameReg").Storage(block.Coinbase()).Str(), "\x00")
 	b := xeth.NewJSBlock(block)
 	b.Name = name
 
@@ -391,6 +363,8 @@ func (gui *Gui) update() {
 		gui.setPeerInfo()
 	}()
 
+	gui.whisper.SetView(gui.win.Root().ObjectByName("whisperView"))
+
 	for _, plugin := range gui.plugins {
 		guilogger.Infoln("Loading plugin ", plugin.Name)
 
@@ -409,8 +383,7 @@ func (gui *Gui) update() {
 	miningLabel := gui.getObjectByName("miningLabel")
 
 	events := gui.eth.EventMux().Subscribe(
-		eth.ChainSyncEvent{},
-		eth.PeerListEvent{},
+		//eth.PeerListEvent{},
 		core.NewBlockEvent{},
 		core.TxPreEvent{},
 		core.TxPostEvent{},
@@ -427,7 +400,7 @@ func (gui *Gui) update() {
 				switch ev := ev.(type) {
 				case core.NewBlockEvent:
 					gui.processBlock(ev.Block, false)
-					if bytes.Compare(ev.Block.Coinbase, gui.address()) == 0 {
+					if bytes.Compare(ev.Block.Coinbase(), gui.address()) == 0 {
 						gui.setWalletValue(gui.eth.ChainManager().State().GetBalance(gui.address()), nil)
 					}
 
@@ -448,40 +421,39 @@ func (gui *Gui) update() {
 					tx := ev.Tx
 					object := state.GetAccount(gui.address())
 
-					if bytes.Compare(tx.Sender(), gui.address()) == 0 {
-						object.SubAmount(tx.Value)
+					if bytes.Compare(tx.From(), gui.address()) == 0 {
+						object.SubAmount(tx.Value())
 
 						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-					} else if bytes.Compare(tx.Recipient, gui.address()) == 0 {
-						object.AddAmount(tx.Value)
+					} else if bytes.Compare(tx.To(), gui.address()) == 0 {
+						object.AddAmount(tx.Value())
 
 						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
 					}
 
 					gui.setWalletValue(object.Balance(), nil)
 					state.UpdateStateObject(object)
-
-				case eth.PeerListEvent:
-					gui.setPeerInfo()
 				}
 
 			case <-peerUpdateTicker.C:
 				gui.setPeerInfo()
 			case <-generalUpdateTicker.C:
-				statusText := "#" + gui.eth.ChainManager().CurrentBlock.Number.String()
+				statusText := "#" + gui.eth.ChainManager().CurrentBlock().Number().String()
 				lastBlockLabel.Set("text", statusText)
 				miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.miner.GetPow().GetHashrate(), 10)+"Khash")
 
-				blockLength := gui.eth.BlockPool().BlocksProcessed
-				chainLength := gui.eth.BlockPool().ChainLength
+				/*
+					blockLength := gui.eth.BlockPool().BlocksProcessed
+					chainLength := gui.eth.BlockPool().ChainLength
 
-				var (
-					pct      float64 = 1.0 / float64(chainLength) * float64(blockLength)
-					dlWidget         = gui.win.Root().ObjectByName("downloadIndicator")
-					dlLabel          = gui.win.Root().ObjectByName("downloadLabel")
-				)
-				dlWidget.Set("value", pct)
-				dlLabel.Set("text", fmt.Sprintf("%d / %d", blockLength, chainLength))
+					var (
+						pct      float64 = 1.0 / float64(chainLength) * float64(blockLength)
+						dlWidget         = gui.win.Root().ObjectByName("downloadIndicator")
+						dlLabel          = gui.win.Root().ObjectByName("downloadLabel")
+					)
+					dlWidget.Set("value", pct)
+					dlLabel.Set("text", fmt.Sprintf("%d / %d", blockLength, chainLength))
+				*/
 
 			case <-statsUpdateTicker.C:
 				gui.setStatsPane()
@@ -509,7 +481,7 @@ Heap Alloc: %d
 CGNext:     %x
 NumGC:      %d
 `, Version, runtime.Version(),
-		eth.ProtocolVersion, eth.P2PVersion,
+		eth.ProtocolVersion, 2,
 		runtime.NumCPU, runtime.NumGoroutine(), runtime.NumCgoCall(),
 		memStats.Alloc, memStats.HeapAlloc,
 		memStats.NextGC, memStats.NumGC,
@@ -531,3 +503,35 @@ func (gui *Gui) privateKey() string {
 func (gui *Gui) address() []byte {
 	return gui.eth.KeyManager().Address()
 }
+
+/*
+func LoadExtension(path string) (uintptr, error) {
+	lib, err := ffi.NewLibrary(path)
+	if err != nil {
+		return 0, err
+	}
+
+	so, err := lib.Fct("sharedObject", ffi.Pointer, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	ptr := so()
+
+		err = lib.Close()
+		if err != nil {
+			return 0, err
+		}
+
+	return ptr.Interface().(uintptr), nil
+}
+*/
+/*
+	vec, errr := LoadExtension("/Users/jeffrey/Desktop/build-libqmltest-Desktop_Qt_5_2_1_clang_64bit-Debug/liblibqmltest_debug.dylib")
+	fmt.Printf("Fetched vec with addr: %#x\n", vec)
+	if errr != nil {
+		fmt.Println(errr)
+	} else {
+		context.SetVar("vec", (unsafe.Pointer)(vec))
+	}
+*/

@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -11,8 +12,6 @@ type ClosureRef interface {
 	ReturnGas(*big.Int, *big.Int)
 	Address() []byte
 	SetCode([]byte)
-	GetStorage(*big.Int) *ethutil.Value
-	SetStorage(*big.Int, *ethutil.Value)
 }
 
 type Closure struct {
@@ -41,10 +40,6 @@ func NewClosure(msg *state.Message, caller ClosureRef, object ClosureRef, code [
 	return c
 }
 
-func (c *Closure) GetValue(x uint64) *ethutil.Value {
-	return c.GetRangeValue(x, 1)
-}
-
 func (c *Closure) GetOp(x uint64) OpCode {
 	return OpCode(c.GetByte(x))
 }
@@ -58,37 +53,14 @@ func (c *Closure) GetByte(x uint64) byte {
 }
 
 func (c *Closure) GetBytes(x, y int) []byte {
-	if x >= len(c.Code) || y >= len(c.Code) {
-		return nil
-	}
-
-	return c.Code[x : x+y]
+	return c.GetRangeValue(uint64(x), uint64(y))
 }
 
-func (c *Closure) GetRangeValue(x, y uint64) *ethutil.Value {
-	if x >= uint64(len(c.Code)) || y >= uint64(len(c.Code)) {
-		return ethutil.NewValue(0)
-	}
+func (c *Closure) GetRangeValue(x, size uint64) []byte {
+	x = uint64(math.Min(float64(x), float64(len(c.Code))))
+	y := uint64(math.Min(float64(x+size), float64(len(c.Code))))
 
-	partial := c.Code[x : x+y]
-
-	return ethutil.NewValue(partial)
-}
-
-/*
- * State storage functions
- */
-func (c *Closure) SetStorage(x *big.Int, val *ethutil.Value) {
-	c.object.SetStorage(x, val)
-}
-
-func (c *Closure) GetStorage(x *big.Int) *ethutil.Value {
-	m := c.object.GetStorage(x)
-	if m == nil {
-		return ethutil.EmptyValue()
-	}
-
-	return m
+	return ethutil.LeftPadBytes(c.Code[x:y], int(size))
 }
 
 func (c *Closure) Return(ret []byte) []byte {
@@ -123,10 +95,6 @@ func (c *Closure) ReturnGas(gas, price *big.Int) {
 /*
  * Set / Get
  */
-func (c *Closure) Caller() ClosureRef {
-	return c.caller
-}
-
 func (c *Closure) Address() []byte {
 	return c.object.Address()
 }

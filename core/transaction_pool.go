@@ -8,9 +8,9 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
-	"github.com/ethereum/go-ethereum/wire"
 )
 
 var txplogger = logger.NewLogger("TXP")
@@ -18,18 +18,15 @@ var txplogger = logger.NewLogger("TXP")
 const txPoolQueueSize = 50
 
 type TxPoolHook chan *types.Transaction
-type TxMsgTy byte
+type TxMsg struct {
+	Tx *types.Transaction
+}
 
 const (
 	minGasPrice = 1000000
 )
 
 var MinGasPrice = big.NewInt(10000000000000)
-
-type TxMsg struct {
-	Tx   *types.Transaction
-	Type TxMsgTy
-}
 
 func EachTx(pool *list.List, it func(*types.Transaction, *list.Element) bool) {
 	for e := pool.Front(); e != nil; e = e.Next() {
@@ -61,7 +58,6 @@ type TxProcessor interface {
 // pool is being drained or synced for whatever reason the transactions
 // will simple queue up and handled when the mutex is freed.
 type TxPool struct {
-	Ethereum EthManager
 	// The mutex for accessing the Tx pool.
 	mutex sync.Mutex
 	// Queueing channel for reading and writing incoming
@@ -75,14 +71,18 @@ type TxPool struct {
 	SecondaryProcessor TxProcessor
 
 	subscribers []chan TxMsg
+
+	chainManager *ChainManager
+	eventMux     *event.TypeMux
 }
 
-func NewTxPool(ethereum EthManager) *TxPool {
+func NewTxPool(chainManager *ChainManager, eventMux *event.TypeMux) *TxPool {
 	return &TxPool{
-		pool:      list.New(),
-		queueChan: make(chan *types.Transaction, txPoolQueueSize),
-		quit:      make(chan bool),
-		Ethereum:  ethereum,
+		pool:         list.New(),
+		queueChan:    make(chan *types.Transaction, txPoolQueueSize),
+		quit:         make(chan bool),
+		chainManager: chainManager,
+		eventMux:     eventMux,
 	}
 }
 
@@ -94,20 +94,20 @@ func (pool *TxPool) addTransaction(tx *types.Transaction) {
 	pool.pool.PushBack(tx)
 
 	// Broadcast the transaction to the rest of the peers
-	pool.Ethereum.Broadcast(wire.MsgTxTy, []interface{}{tx.RlpData()})
+	pool.eventMux.Post(TxPreEvent{tx})
 }
 
 func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 	// Get the last block so we can retrieve the sender and receiver from
 	// the merkle trie
-	block := pool.Ethereum.ChainManager().CurrentBlock
+	block := pool.chainManager.CurrentBlock
 	// Something has gone horribly wrong if this happens
 	if block == nil {
 		return fmt.Errorf("No last block on the block chain")
 	}
 
-	if len(tx.Recipient) != 0 && len(tx.Recipient) != 20 {
-		return fmt.Errorf("Invalid recipient. len = %d", len(tx.Recipient))
+	if len(tx.To()) != 0 && len(tx.To()) != 20 {
+		return fmt.Errorf("Invalid recipient. len = %d", len(tx.To()))
 	}
 
 	v, _, _ := tx.Curve()
@@ -116,19 +116,17 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 	}
 
 	// Get the sender
-	sender := pool.Ethereum.ChainManager().State().GetAccount(tx.Sender())
+	senderAddr := tx.From()
+	if senderAddr == nil {
+		return fmt.Errorf("invalid sender")
+	}
+	sender := pool.chainManager.State().GetAccount(senderAddr)
 
-	totAmount := new(big.Int).Set(tx.Value)
+	totAmount := new(big.Int).Set(tx.Value())
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.
 	if sender.Balance().Cmp(totAmount) < 0 {
-		return fmt.Errorf("Insufficient amount in sender's (%x) account", tx.Sender())
-	}
-
-	if tx.IsContract() {
-		if tx.GasPrice.Cmp(big.NewInt(minGasPrice)) < 0 {
-			return fmt.Errorf("Gasprice too low, %s given should be at least %d.", tx.GasPrice, minGasPrice)
-		}
+		return fmt.Errorf("Insufficient amount in sender's (%x) account", tx.From())
 	}
 
 	// Increment the nonce making each tx valid only once to prevent replay
@@ -154,13 +152,10 @@ func (self *TxPool) Add(tx *types.Transaction) error {
 
 	self.addTransaction(tx)
 
-	tmp := make([]byte, 4)
-	copy(tmp, tx.Recipient)
-
-	txplogger.Debugf("(t) %x => %x (%v) %x\n", tx.Sender()[:4], tmp, tx.Value, tx.Hash())
+	txplogger.Debugf("(t) %x => %x (%v) %x\n", tx.From()[:4], tx.To()[:4], tx.Value, tx.Hash())
 
 	// Notify the subscribers
-	go self.Ethereum.EventMux().Post(TxPreEvent{tx})
+	go self.eventMux.Post(TxPreEvent{tx})
 
 	return nil
 }
@@ -169,7 +164,17 @@ func (self *TxPool) Size() int {
 	return self.pool.Len()
 }
 
-func (pool *TxPool) CurrentTransactions() []*types.Transaction {
+func (self *TxPool) AddTransactions(txs []*types.Transaction) {
+	for _, tx := range txs {
+		if err := self.Add(tx); err != nil {
+			txplogger.Infoln(err)
+		} else {
+			txplogger.Infof("tx %x\n", tx.Hash()[0:4])
+		}
+	}
+}
+
+func (pool *TxPool) GetTransactions() []*types.Transaction {
 	pool.mutex.Lock()
 	defer pool.mutex.Unlock()
 
@@ -192,9 +197,9 @@ func (pool *TxPool) RemoveInvalid(state *state.StateDB) {
 
 	for e := pool.pool.Front(); e != nil; e = e.Next() {
 		tx := e.Value.(*types.Transaction)
-		sender := state.GetAccount(tx.Sender())
+		sender := state.GetAccount(tx.From())
 		err := pool.ValidateTransaction(tx)
-		if err != nil || sender.Nonce >= tx.Nonce {
+		if err != nil || sender.Nonce >= tx.Nonce() {
 			pool.pool.Remove(e)
 		}
 	}
@@ -216,7 +221,7 @@ func (self *TxPool) RemoveSet(txs types.Transactions) {
 }
 
 func (pool *TxPool) Flush() []*types.Transaction {
-	txList := pool.CurrentTransactions()
+	txList := pool.GetTransactions()
 
 	// Recreate a new list all together
 	// XXX Is this the fastest way?

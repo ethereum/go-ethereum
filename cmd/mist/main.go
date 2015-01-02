@@ -23,15 +23,15 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
 	"gopkg.in/qml.v1"
 )
 
 const (
 	ClientIdentifier = "Mist"
-	Version          = "0.7.9"
+	Version          = "0.7.11"
 )
 
 var ethereum *eth.Ethereum
@@ -58,8 +58,8 @@ func run() error {
 
 	// create, import, export keys
 	utils.KeyTasks(keyManager, KeyRing, GenAddr, SecretFile, ExportDir, NonInteractive)
-	clientIdentity := utils.NewClientIdentity(ClientIdentifier, Version, Identifier)
-	ethereum = utils.NewEthereum(db, clientIdentity, keyManager, UseUPnP, OutboundPort, MaxPeer)
+	clientIdentity := utils.NewClientIdentity(ClientIdentifier, Version, Identifier, string(keyManager.PublicKey()))
+	ethereum := utils.NewEthereum(db, clientIdentity, keyManager, utils.NatType(NatType, PMPGateway), OutboundPort, MaxPeer)
 
 	if ShowGenesis {
 		utils.ShowGenesis(ethereum)
@@ -67,6 +67,10 @@ func run() error {
 
 	if StartRpc {
 		utils.StartRpc(ethereum, RpcPort)
+	}
+
+	if StartWebSockets {
+		utils.StartWebSockets(ethereum)
 	}
 
 	gui := NewWindow(ethereum, config, clientIdentity, KeyRing, LogLevel)
@@ -100,16 +104,10 @@ func main() {
 
 	utils.HandleInterrupt()
 
-	if StartWebSockets {
-		utils.StartWebSockets(ethereum)
-	}
-
 	// we need to run the interrupt callbacks in case gui is closed
 	// this skips if we got here by actual interrupt stopping the GUI
 	if !interrupted {
 		utils.RunInterruptCallbacks(os.Interrupt)
 	}
-	// this blocks the thread
-	ethereum.WaitForShutdown()
 	logger.Flush()
 }

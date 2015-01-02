@@ -27,7 +27,7 @@ import (
 	"math/big"
 	"sort"
 
-	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/pow/ezp"
@@ -36,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/wire"
 )
 
 type LocalTx struct {
@@ -57,7 +56,7 @@ type Miner struct {
 	eth    *eth.Ethereum
 	events event.Subscription
 
-	uncles    types.Blocks
+	uncles    []*types.Header
 	localTxs  map[int]*LocalTx
 	localTxId int
 
@@ -185,15 +184,17 @@ func (self *Miner) mine() {
 		block.SetUncles(self.uncles)
 	}
 
-	parent := chainMan.GetBlock(block.PrevHash)
-	coinbase := block.State().GetOrNewStateObject(block.Coinbase)
-	coinbase.SetGasPool(block.CalcGasLimit(parent))
+	parent := chainMan.GetBlock(block.ParentHash())
+	coinbase := block.State().GetOrNewStateObject(block.Coinbase())
+	coinbase.SetGasPool(core.CalcGasLimit(parent, block))
 
 	transactions := self.finiliseTxs()
 
+	state := block.State()
+
 	// Accumulate all valid transactions and apply them to the new state
 	// Error may be ignored. It's not important during mining
-	receipts, txs, _, erroneous, err := blockManager.ApplyTransactions(coinbase, block.State(), block, transactions, true)
+	receipts, txs, _, erroneous, err := blockManager.ApplyTransactions(coinbase, state, block, transactions, true)
 	if err != nil {
 		minerlogger.Debugln(err)
 	}
@@ -203,21 +204,22 @@ func (self *Miner) mine() {
 	block.SetReceipts(receipts)
 
 	// Accumulate the rewards included for this block
-	blockManager.AccumelateRewards(block.State(), block, parent)
+	blockManager.AccumelateRewards(state, block, parent)
 
-	block.State().Update(ethutil.Big0)
+	state.Update(ethutil.Big0)
+	block.SetRoot(state.Root())
 
 	minerlogger.Infof("Mining on block. Includes %v transactions", len(transactions))
 
 	// Find a valid nonce
 	nonce := self.pow.Search(block, self.powQuitCh)
 	if nonce != nil {
-		block.Nonce = nonce
+		block.Header().Nonce = nonce
 		err := chainMan.InsertChain(types.Blocks{block})
 		if err != nil {
 			minerlogger.Infoln(err)
 		} else {
-			self.eth.Broadcast(wire.MsgBlockTy, []interface{}{block.Value().Val})
+			self.eth.EventMux().Post(core.NewMinedBlockEvent{block})
 
 			minerlogger.Infof("🔨  Mined block %x\n", block.Hash())
 			minerlogger.Infoln(block)
@@ -237,8 +239,8 @@ func (self *Miner) finiliseTxs() types.Transactions {
 	key := self.eth.KeyManager()
 	for i, ltx := range self.localTxs {
 		tx := types.NewTransactionMessage(ltx.To, ethutil.Big(ltx.Value), ethutil.Big(ltx.Gas), ethutil.Big(ltx.GasPrice), ltx.Data)
-		tx.Nonce = state.GetNonce(self.Coinbase)
-		state.SetNonce(self.Coinbase, tx.Nonce+1)
+		tx.SetNonce(state.GetNonce(self.Coinbase))
+		state.SetNonce(self.Coinbase, tx.Nonce()+1)
 
 		tx.Sign(key.PrivateKey())
 
@@ -246,8 +248,8 @@ func (self *Miner) finiliseTxs() types.Transactions {
 	}
 
 	// Faster than append
-	for _, tx := range self.eth.TxPool().CurrentTransactions() {
-		if tx.GasPrice.Cmp(self.MinAcceptedGasPrice) >= 0 {
+	for _, tx := range self.eth.TxPool().GetTransactions() {
+		if tx.GasPrice().Cmp(self.MinAcceptedGasPrice) >= 0 {
 			txs[actualSize] = tx
 			actualSize++
 		}

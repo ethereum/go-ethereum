@@ -4,23 +4,25 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"time"
 
 	"bitbucket.org/kardianos/osext"
-	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/wire"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -144,17 +146,32 @@ func NewDatabase() ethutil.Database {
 	return db
 }
 
-func NewClientIdentity(clientIdentifier, version, customIdentifier string) *wire.SimpleClientIdentity {
-	return wire.NewSimpleClientIdentity(clientIdentifier, version, customIdentifier)
+func NewClientIdentity(clientIdentifier, version, customIdentifier string, pubkey string) *p2p.SimpleClientIdentity {
+	return p2p.NewSimpleClientIdentity(clientIdentifier, version, customIdentifier, pubkey)
 }
 
-func NewEthereum(db ethutil.Database, clientIdentity wire.ClientIdentity, keyManager *crypto.KeyManager, usePnp bool, OutboundPort string, MaxPeer int) *eth.Ethereum {
-	ethereum, err := eth.New(db, clientIdentity, keyManager, eth.CapDefault, usePnp)
+func NatType(natType string, gateway string) (nat p2p.NAT) {
+	switch natType {
+	case "UPNP":
+		nat = p2p.UPNP()
+	case "PMP":
+		ip := net.ParseIP(gateway)
+		if ip == nil {
+			clilogger.Fatalf("cannot resolve PMP gateway IP %s", gateway)
+		}
+		nat = p2p.PMP(ip)
+	case "":
+	default:
+		clilogger.Fatalf("unrecognised NAT type '%s'", natType)
+	}
+	return
+}
+
+func NewEthereum(db ethutil.Database, clientIdentity p2p.ClientIdentity, keyManager *crypto.KeyManager, nat p2p.NAT, OutboundPort string, MaxPeer int) *eth.Ethereum {
+	ethereum, err := eth.New(db, clientIdentity, keyManager, nat, OutboundPort, MaxPeer)
 	if err != nil {
 		clilogger.Fatalln("eth start err:", err)
 	}
-	ethereum.Port = OutboundPort
-	ethereum.MaxPeers = MaxPeer
 	return ethereum
 }
 
@@ -268,11 +285,6 @@ func StartMining(ethereum *eth.Ethereum) bool {
 			if gminer == nil {
 				gminer = miner.New(addr, ethereum)
 			}
-			// Give it some time to connect with peers
-			time.Sleep(3 * time.Second)
-			for !ethereum.IsUpToDate() {
-				time.Sleep(5 * time.Second)
-			}
 			gminer.Start()
 		}()
 		RegisterInterrupt(func(os.Signal) {
@@ -315,7 +327,7 @@ func BlockDo(ethereum *eth.Ethereum, hash []byte) error {
 		return fmt.Errorf("unknown block %x", hash)
 	}
 
-	parent := ethereum.ChainManager().GetBlock(block.PrevHash)
+	parent := ethereum.ChainManager().GetBlock(block.ParentHash())
 
 	_, err := ethereum.BlockManager().TransitionState(parent.State(), parent, block)
 	if err != nil {
@@ -324,4 +336,26 @@ func BlockDo(ethereum *eth.Ethereum, hash []byte) error {
 
 	return nil
 
+}
+
+func ImportChain(ethereum *eth.Ethereum, fn string) error {
+	clilogger.Infof("importing chain '%s'\n", fn)
+	fh, err := os.OpenFile(fn, os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	var chain types.Blocks
+	if err := rlp.Decode(fh, &chain); err != nil {
+		return err
+	}
+
+	ethereum.ChainManager().Reset()
+	if err := ethereum.ChainManager().InsertChain(chain); err != nil {
+		return err
+	}
+	clilogger.Infof("imported %d blocks\n", len(chain))
+
+	return nil
 }

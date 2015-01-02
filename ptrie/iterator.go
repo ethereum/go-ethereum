@@ -14,7 +14,7 @@ type Iterator struct {
 }
 
 func NewIterator(trie *Trie) *Iterator {
-	return &Iterator{trie: trie, Key: []byte{0}}
+	return &Iterator{trie: trie, Key: make([]byte, 32)}
 }
 
 func (self *Iterator) Next() bool {

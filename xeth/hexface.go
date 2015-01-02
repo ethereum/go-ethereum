@@ -3,7 +3,6 @@ package xeth
 import (
 	"bytes"
 	"encoding/json"
-	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -29,7 +28,7 @@ func (self *JSXEth) BlockByHash(strHash string) *JSBlock {
 
 func (self *JSXEth) BlockByNumber(num int32) *JSBlock {
 	if num == -1 {
-		return NewJSBlock(self.obj.ChainManager().CurrentBlock)
+		return NewJSBlock(self.obj.ChainManager().CurrentBlock())
 	}
 
 	return NewJSBlock(self.obj.ChainManager().GetBlockByNumber(uint64(num)))
@@ -63,12 +62,8 @@ func (self *JSXEth) PeerCount() int {
 
 func (self *JSXEth) Peers() []JSPeer {
 	var peers []JSPeer
-	for peer := self.obj.Peers().Front(); peer != nil; peer = peer.Next() {
-		p := peer.Value.(core.Peer)
-		// we only want connected peers
-		if atomic.LoadInt32(p.Connected()) != 0 {
-			peers = append(peers, *NewJSPeer(p))
-		}
+	for _, peer := range self.obj.Peers() {
+		peers = append(peers, *NewJSPeer(peer))
 	}
 
 	return peers
@@ -143,10 +138,10 @@ type KeyVal struct {
 func (self *JSXEth) EachStorage(addr string) string {
 	var values []KeyVal
 	object := self.World().SafeGet(ethutil.Hex2Bytes(addr))
-	object.EachStorage(func(name string, value *ethutil.Value) {
-		value.Decode()
-		values = append(values, KeyVal{ethutil.Bytes2Hex([]byte(name)), ethutil.Bytes2Hex(value.Bytes())})
-	})
+	it := object.Trie().Iterator()
+	for it.Next() {
+		values = append(values, KeyVal{ethutil.Bytes2Hex(it.Key), ethutil.Bytes2Hex(it.Value)})
+	}
 
 	valuesJson, err := json.Marshal(values)
 	if err != nil {
@@ -216,7 +211,7 @@ func (self *JSXEth) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr 
 		return "", err
 	}
 	if types.IsContractAddr(to) {
-		return ethutil.Bytes2Hex(tx.CreationAddress(nil)), nil
+		return ethutil.Bytes2Hex(core.AddressFromMessage(tx)), nil
 	}
 
 	return ethutil.Bytes2Hex(tx.Hash()), nil
@@ -229,7 +224,7 @@ func (self *JSXEth) PushTx(txStr string) (*JSReceipt, error) {
 		return nil, err
 	}
 
-	return NewJSReciept(tx.CreatesContract(), tx.CreationAddress(self.World().State()), tx.Hash(), tx.Sender()), nil
+	return NewJSReciept(core.MessageCreatesContract(tx), core.AddressFromMessage(tx), tx.Hash(), tx.From()), nil
 }
 
 func (self *JSXEth) CompileMutan(code string) string {

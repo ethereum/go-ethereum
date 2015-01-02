@@ -45,11 +45,12 @@ ApplicationWindow {
 	// Takes care of loading all default plugins
 	Component.onCompleted: {
 		var wallet = addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "ethereum", active: true});
-		var browser = addPlugin("./webapp.qml", {noAdd: true, close: false, section: "ethereum", active: true});
+		var browser = addPlugin("./browser.qml", {noAdd: true, close: false, section: "ethereum", active: true});
 		root.browser = browser;
 		addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: true});
 
 		addPlugin("./views/transaction.qml", {noAdd: true, close: false, section: "legacy"});
+		addPlugin("./views/whisper.qml", {noAdd: true, close: false, section: "legacy"});
 		addPlugin("./views/chain.qml", {noAdd: true, close: false, section: "legacy"});
 		addPlugin("./views/pending_tx.qml", {noAdd: true, close: false, section: "legacy"});
 		addPlugin("./views/info.qml", {noAdd: true, close: false, section: "legacy"});
@@ -786,8 +787,8 @@ ApplicationWindow {
 		     title: "About"
 		     minimumWidth: 350
 		     maximumWidth: 350
-		     maximumHeight: 200
-		     minimumHeight: 200
+		     maximumHeight: 280
+		     minimumHeight: 280
 
 		     Image {
 			     id: aboutIcon
@@ -797,7 +798,7 @@ ApplicationWindow {
 			     smooth: true
 			     source: "../facet.png"
 			     x: 10
-			     y: 10
+			     y: 30
 		     }
 
 		     Text {
@@ -806,7 +807,7 @@ ApplicationWindow {
 			     anchors.top: parent.top
 			     anchors.topMargin: 30
 			     font.pointSize: 12
-			     text: "<h2>Mist (0.6.5)</h2><h4>Amalthea</h4><br><h3>Development</h3>Jeffrey Wilcke<br>Viktor Trón<br><h3>Building</h3>Maran Hidskes"
+			     text: "<h2>Mist (0.7.10)</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Viktor Trón<br>Felix Lange<br>Taylor Gerring<br>Daniel Nagy<br><h3>UX</h3>Alex van de Sande<br>"
 		     }
 	     }
 

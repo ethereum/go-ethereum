@@ -7,10 +7,10 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
@@ -203,7 +203,7 @@ func (self *JSRE) addPeer(call otto.FunctionCall) otto.Value {
 	if err != nil {
 		return otto.FalseValue()
 	}
-	self.ethereum.ConnectToPeer(host)
+	self.ethereum.SuggestPeer(host)
 
 	return otto.TrueValue()
 }

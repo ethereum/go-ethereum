@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/wire"
+	"github.com/ethereum/go-ethereum/p2p"
 )
 
 // Implement our EthTest Manager
@@ -54,11 +54,11 @@ func (tm *TestManager) TxPool() *TxPool {
 func (tm *TestManager) EventMux() *event.TypeMux {
 	return tm.eventMux
 }
-func (tm *TestManager) Broadcast(msgType wire.MsgType, data []interface{}) {
+func (tm *TestManager) Broadcast(msgType p2p.Msg, data []interface{}) {
 	fmt.Println("Broadcast not implemented")
 }
 
-func (tm *TestManager) ClientIdentity() wire.ClientIdentity {
+func (tm *TestManager) ClientIdentity() p2p.ClientIdentity {
 	return nil
 }
 func (tm *TestManager) KeyManager() *crypto.KeyManager {

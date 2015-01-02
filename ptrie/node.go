@@ -17,7 +17,7 @@ type Node interface {
 func (self *ValueNode) String() string            { return self.fstring("") }
 func (self *FullNode) String() string             { return self.fstring("") }
 func (self *ShortNode) String() string            { return self.fstring("") }
-func (self *ValueNode) fstring(ind string) string { return fmt.Sprintf("%s ", self.data) }
+func (self *ValueNode) fstring(ind string) string { return fmt.Sprintf("%x ", self.data) }
 func (self *HashNode) fstring(ind string) string  { return fmt.Sprintf("%x ", self.key) }
 
 // Full node
@@ -36,5 +36,5 @@ func (self *FullNode) fstring(ind string) string {
 
 // Short node
 func (self *ShortNode) fstring(ind string) string {
-	return fmt.Sprintf("[ %s: %v ] ", self.key, self.value.fstring(ind+"  "))
+	return fmt.Sprintf("[ %x: %v ] ", self.key, self.value.fstring(ind+"  "))
 }

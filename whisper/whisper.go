@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event/filter"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/obscuren/ecies"
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -47,6 +48,8 @@ type MessageEvent struct {
 
 const DefaultTtl = 50 * time.Second
 
+var wlogger = logger.NewLogger("SHH")
+
 type Whisper struct {
 	protocol p2p.Protocol
 	filters  *filter.Filters
@@ -68,17 +71,6 @@ func New() *Whisper {
 		quit:     make(chan struct{}),
 	}
 	whisper.filters.Start()
-	go whisper.update()
-
-	// XXX TODO REMOVE TESTING CODE
-	msg := NewMessage([]byte(fmt.Sprintf("Hello world. This is whisper-go. Incase you're wondering; the time is %v", time.Now())))
-	envelope, _ := msg.Seal(DefaultPow, Opts{
-		Ttl: DefaultTtl,
-	})
-	if err := whisper.Send(envelope); err != nil {
-		fmt.Println(err)
-	}
-	// XXX TODO REMOVE TESTING CODE
 
 	// p2p whisper sub protocol handler
 	whisper.protocol = p2p.Protocol{
@@ -89,6 +81,11 @@ func New() *Whisper {
 	}
 
 	return whisper
+}
+
+func (self *Whisper) Start() {
+	wlogger.Infoln("Whisper started")
+	go self.update()
 }
 
 func (self *Whisper) Stop() {
@@ -122,6 +119,7 @@ func (self *Whisper) Watch(opts Filter) int {
 	return self.filters.Install(filter.Generic{
 		Str1: string(crypto.FromECDSA(opts.To)),
 		Str2: string(crypto.FromECDSAPub(opts.From)),
+		Data: bytesToMap(opts.Topics),
 		Fn: func(data interface{}) {
 			opts.Fn(data.(*Message))
 		},
@@ -177,7 +175,7 @@ func (self *Whisper) add(envelope *Envelope) error {
 
 	if !self.expiry[envelope.Expiry].Has(hash) {
 		self.expiry[envelope.Expiry].Add(hash)
-		self.postEvent(envelope)
+		go self.postEvent(envelope)
 	}
 
 	return nil
@@ -230,13 +228,14 @@ func (self *Whisper) envelopes() (envelopes []*Envelope) {
 
 func (self *Whisper) postEvent(envelope *Envelope) {
 	for _, key := range self.keys {
-		if message, err := envelope.Open(key); err == nil {
+		if message, err := envelope.Open(key); err == nil || (err != nil && err == ecies.ErrInvalidPublicKey) {
 			// Create a custom filter?
 			self.filters.Notify(filter.Generic{
 				Str1: string(crypto.FromECDSA(key)), Str2: string(crypto.FromECDSAPub(message.Recover())),
+				Data: bytesToMap(envelope.Topics),
 			}, message)
 		} else {
-			fmt.Println(err)
+			wlogger.Infoln(err)
 		}
 	}
 }

@@ -91,6 +91,12 @@ func (st *Stack) Get(amount *big.Int) []*big.Int {
 	return nil
 }
 
+func (st *Stack) require(n int) {
+	if st.Len() < n {
+		panic(fmt.Sprintf("stack underflow (%d <=> %d)", st.Len(), n))
+	}
+}
+
 func (st *Stack) Print() {
 	fmt.Println("### stack ###")
 	if len(st.data) > 0 {

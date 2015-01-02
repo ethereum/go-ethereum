@@ -24,7 +24,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/ethereum/go-ethereum/logger"
@@ -86,12 +86,6 @@ func (self *JSRepl) Stop() {
 }
 
 func (self *JSRepl) parseInput(code string) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("[native] error", r)
-		}
-	}()
-
 	value, err := self.re.Run(code)
 	if err != nil {
 		fmt.Println(err)

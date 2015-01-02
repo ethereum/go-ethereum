@@ -21,7 +21,7 @@ type EasyPow struct {
 }
 
 func New() *EasyPow {
-	return &EasyPow{}
+	return &EasyPow{turbo: true}
 }
 
 func (pow *EasyPow) GetHashrate() int64 {
@@ -35,7 +35,7 @@ func (pow *EasyPow) Turbo(on bool) {
 func (pow *EasyPow) Search(block pow.Block, stop <-chan struct{}) []byte {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	hash := block.HashNoNonce()
-	diff := block.Diff()
+	diff := block.Difficulty()
 	i := int64(0)
 	start := time.Now().UnixNano()
 	t := time.Now()
@@ -59,7 +59,7 @@ func (pow *EasyPow) Search(block pow.Block, stop <-chan struct{}) []byte {
 			}
 
 			sha := crypto.Sha3(big.NewInt(r.Int63()).Bytes())
-			if pow.verify(hash, diff, sha) {
+			if verify(hash, diff, sha) {
 				return sha
 			}
 		}
@@ -72,7 +72,11 @@ func (pow *EasyPow) Search(block pow.Block, stop <-chan struct{}) []byte {
 	return nil
 }
 
-func (pow *EasyPow) verify(hash []byte, diff *big.Int, nonce []byte) bool {
+func (pow *EasyPow) Verify(block pow.Block) bool {
+	return Verify(block)
+}
+
+func verify(hash []byte, diff *big.Int, nonce []byte) bool {
 	sha := sha3.NewKeccak256()
 
 	d := append(hash, nonce...)
@@ -84,6 +88,6 @@ func (pow *EasyPow) verify(hash []byte, diff *big.Int, nonce []byte) bool {
 	return res.Cmp(verification) <= 0
 }
 
-func (pow *EasyPow) Verify(block pow.Block) bool {
-	return pow.verify(block.HashNoNonce(), block.Diff(), block.N())
+func Verify(block pow.Block) bool {
+	return verify(block.HashNoNonce(), block.Difficulty(), block.N())
 }

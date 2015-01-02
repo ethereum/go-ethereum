@@ -1,18 +1,22 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/state"
 )
 
 var chainlogger = logger.NewLogger("CHAIN")
 
+/*
 func AddTestNetFunds(block *types.Block) {
 	for _, addr := range []string{
 		"51ba59315b3a95761d0863b05ccc7a7f54703d99",
@@ -30,18 +34,39 @@ func AddTestNetFunds(block *types.Block) {
 		block.State().UpdateStateObject(account)
 	}
 }
+*/
 
 func CalcDifficulty(block, parent *types.Block) *big.Int {
 	diff := new(big.Int)
 
-	adjust := new(big.Int).Rsh(parent.Difficulty, 10)
-	if block.Time >= parent.Time+5 {
-		diff.Sub(parent.Difficulty, adjust)
+	bh, ph := block.Header(), parent.Header()
+	adjust := new(big.Int).Rsh(ph.Difficulty, 10)
+	if bh.Time >= ph.Time+5 {
+		diff.Sub(ph.Difficulty, adjust)
 	} else {
-		diff.Add(parent.Difficulty, adjust)
+		diff.Add(ph.Difficulty, adjust)
 	}
 
 	return diff
+}
+
+func CalcGasLimit(parent, block *types.Block) *big.Int {
+	if block.Number().Cmp(big.NewInt(0)) == 0 {
+		return ethutil.BigPow(10, 6)
+	}
+
+	// ((1024-1) * parent.gasLimit + (gasUsed * 6 / 5)) / 1024
+
+	previous := new(big.Int).Mul(big.NewInt(1024-1), parent.GasLimit())
+	current := new(big.Rat).Mul(new(big.Rat).SetInt(parent.GasUsed()), big.NewRat(6, 5))
+	curInt := new(big.Int).Div(current.Num(), current.Denom())
+
+	result := new(big.Int).Add(previous, curInt)
+	result.Div(result, big.NewInt(1024))
+
+	min := big.NewInt(125000)
+
+	return ethutil.BigMax(min, result)
 }
 
 type ChainManager struct {
@@ -50,19 +75,46 @@ type ChainManager struct {
 	eventMux     *event.TypeMux
 	genesisBlock *types.Block
 	// Last known total difficulty
-	TD *big.Int
-
-	LastBlockNumber uint64
-
-	CurrentBlock  *types.Block
-	LastBlockHash []byte
+	mu              sync.RWMutex
+	td              *big.Int
+	lastBlockNumber uint64
+	currentBlock    *types.Block
+	lastBlockHash   []byte
 
 	transState *state.StateDB
 }
 
+func (self *ChainManager) Td() *big.Int {
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+
+	return self.td
+}
+
+func (self *ChainManager) LastBlockNumber() uint64 {
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+
+	return self.lastBlockNumber
+}
+
+func (self *ChainManager) LastBlockHash() []byte {
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+
+	return self.lastBlockHash
+}
+
+func (self *ChainManager) CurrentBlock() *types.Block {
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+
+	return self.currentBlock
+}
+
 func NewChainManager(mux *event.TypeMux) *ChainManager {
 	bc := &ChainManager{}
-	bc.genesisBlock = types.NewBlockFromBytes(ethutil.Encode(Genesis))
+	bc.genesisBlock = GenesisBlock()
 	bc.eventMux = mux
 
 	bc.setLastBlock()
@@ -72,12 +124,19 @@ func NewChainManager(mux *event.TypeMux) *ChainManager {
 	return bc
 }
 
+func (self *ChainManager) Status() (td *big.Int, currentBlock []byte, genesisBlock []byte) {
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+
+	return self.td, self.currentBlock.Hash(), self.Genesis().Hash()
+}
+
 func (self *ChainManager) SetProcessor(proc types.BlockProcessor) {
 	self.processor = proc
 }
 
 func (self *ChainManager) State() *state.StateDB {
-	return self.CurrentBlock.State()
+	return state.New(self.CurrentBlock().Trie())
 }
 
 func (self *ChainManager) TransState() *state.StateDB {
@@ -87,46 +146,48 @@ func (self *ChainManager) TransState() *state.StateDB {
 func (bc *ChainManager) setLastBlock() {
 	data, _ := ethutil.Config.Db.Get([]byte("LastBlock"))
 	if len(data) != 0 {
-		// Prep genesis
-		AddTestNetFunds(bc.genesisBlock)
-
-		block := types.NewBlockFromBytes(data)
-		bc.CurrentBlock = block
-		bc.LastBlockHash = block.Hash()
-		bc.LastBlockNumber = block.Number.Uint64()
+		var block types.Block
+		rlp.Decode(bytes.NewReader(data), &block)
+		bc.currentBlock = &block
+		bc.lastBlockHash = block.Hash()
+		bc.lastBlockNumber = block.Header().Number.Uint64()
 
 		// Set the last know difficulty (might be 0x0 as initial value, Genesis)
-		bc.TD = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
+		bc.td = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
 	} else {
 		bc.Reset()
 	}
 
-	chainlogger.Infof("Last block (#%d) %x\n", bc.LastBlockNumber, bc.CurrentBlock.Hash())
+	chainlogger.Infof("Last block (#%d) %x\n", bc.lastBlockNumber, bc.currentBlock.Hash())
 }
 
 // Block creation & chain handling
 func (bc *ChainManager) NewBlock(coinbase []byte) *types.Block {
-	var root interface{}
-	hash := ZeroHash256
+	bc.mu.RLock()
+	defer bc.mu.RUnlock()
+
+	var root []byte
+	parentHash := ZeroHash256
 
 	if bc.CurrentBlock != nil {
-		root = bc.CurrentBlock.Root()
-		hash = bc.LastBlockHash
+		root = bc.currentBlock.Header().Root
+		parentHash = bc.lastBlockHash
 	}
 
-	block := types.CreateBlock(
-		root,
-		hash,
+	block := types.NewBlock(
+		parentHash,
 		coinbase,
+		root,
 		ethutil.BigPow(2, 32),
 		nil,
 		"")
 
-	parent := bc.CurrentBlock
+	parent := bc.currentBlock
 	if parent != nil {
-		block.Difficulty = CalcDifficulty(block, parent)
-		block.Number = new(big.Int).Add(bc.CurrentBlock.Number, ethutil.Big1)
-		block.GasLimit = block.CalcGasLimit(bc.CurrentBlock)
+		header := block.Header()
+		header.Difficulty = CalcDifficulty(block, parent)
+		header.Number = new(big.Int).Add(parent.Header().Number, ethutil.Big1)
+		header.GasLimit = CalcGasLimit(parent, block)
 
 	}
 
@@ -134,41 +195,46 @@ func (bc *ChainManager) NewBlock(coinbase []byte) *types.Block {
 }
 
 func (bc *ChainManager) Reset() {
-	AddTestNetFunds(bc.genesisBlock)
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
 
-	bc.genesisBlock.Trie().Sync()
+	for block := bc.currentBlock; block != nil; block = bc.GetBlock(block.Header().ParentHash) {
+		ethutil.Config.Db.Delete(block.Hash())
+	}
+
 	// Prepare the genesis block
 	bc.write(bc.genesisBlock)
 	bc.insert(bc.genesisBlock)
-	bc.CurrentBlock = bc.genesisBlock
+	bc.currentBlock = bc.genesisBlock
 
-	bc.SetTotalDifficulty(ethutil.Big("0"))
-
-	// Set the last know difficulty (might be 0x0 as initial value, Genesis)
-	bc.TD = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
+	bc.setTotalDifficulty(ethutil.Big("0"))
 }
 
 func (self *ChainManager) Export() []byte {
-	chainlogger.Infoln("exporting", self.CurrentBlock.Number, "blocks")
+	self.mu.RLock()
+	defer self.mu.RUnlock()
 
-	blocks := make(types.Blocks, int(self.CurrentBlock.Number.Int64())+1)
-	for block := self.CurrentBlock; block != nil; block = self.GetBlock(block.PrevHash) {
-		blocks[block.Number.Int64()] = block
+	chainlogger.Infof("exporting %v blocks...\n", self.currentBlock.Header().Number)
+
+	blocks := make([]*types.Block, int(self.currentBlock.NumberU64())+1)
+	for block := self.currentBlock; block != nil; block = self.GetBlock(block.Header().ParentHash) {
+		blocks[block.NumberU64()] = block
 	}
+
 	return ethutil.Encode(blocks)
 }
 
 func (bc *ChainManager) insert(block *types.Block) {
-	encodedBlock := block.RlpEncode()
+	encodedBlock := ethutil.Encode(block)
 	ethutil.Config.Db.Put([]byte("LastBlock"), encodedBlock)
-	bc.CurrentBlock = block
-	bc.LastBlockHash = block.Hash()
+	bc.currentBlock = block
+	bc.lastBlockHash = block.Hash()
 }
 
 func (bc *ChainManager) write(block *types.Block) {
 	bc.writeBlockInfo(block)
 
-	encodedBlock := block.RlpEncode()
+	encodedBlock := ethutil.Encode(block)
 	ethutil.Config.Db.Put(block.Hash(), encodedBlock)
 }
 
@@ -183,7 +249,7 @@ func (bc *ChainManager) HasBlock(hash []byte) bool {
 	return len(data) != 0
 }
 
-func (self *ChainManager) GetChainHashesFromHash(hash []byte, max uint64) (chain [][]byte) {
+func (self *ChainManager) GetBlockHashesFromHash(hash []byte, max uint64) (chain [][]byte) {
 	block := self.GetBlock(hash)
 	if block == nil {
 		return
@@ -193,11 +259,11 @@ func (self *ChainManager) GetChainHashesFromHash(hash []byte, max uint64) (chain
 	for i := uint64(0); i < max; i++ {
 		chain = append(chain, block.Hash())
 
-		if block.Number.Cmp(ethutil.Big0) <= 0 {
+		if block.Header().Number.Cmp(ethutil.Big0) <= 0 {
 			break
 		}
 
-		block = self.GetBlock(block.PrevHash)
+		block = self.GetBlock(block.Header().ParentHash)
 	}
 
 	return
@@ -208,65 +274,61 @@ func (self *ChainManager) GetBlock(hash []byte) *types.Block {
 	if len(data) == 0 {
 		return nil
 	}
+	var block types.Block
+	if err := rlp.Decode(bytes.NewReader(data), &block); err != nil {
+		fmt.Println(err)
+		return nil
+	}
 
-	return types.NewBlockFromBytes(data)
+	return &block
 }
 
 func (self *ChainManager) GetBlockByNumber(num uint64) *types.Block {
-	block := self.CurrentBlock
-	for ; block != nil; block = self.GetBlock(block.PrevHash) {
-		if block.Number.Uint64() == num {
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+
+	block := self.currentBlock
+	for ; block != nil; block = self.GetBlock(block.Header().ParentHash) {
+		if block.Header().Number.Uint64() == num {
 			break
 		}
 	}
 
-	if block != nil && block.Number.Uint64() == 0 && num != 0 {
+	if block != nil && block.Header().Number.Uint64() == 0 && num != 0 {
 		return nil
 	}
 
 	return block
 }
 
-func (bc *ChainManager) SetTotalDifficulty(td *big.Int) {
+func (bc *ChainManager) setTotalDifficulty(td *big.Int) {
 	ethutil.Config.Db.Put([]byte("LTD"), td.Bytes())
-	bc.TD = td
+	bc.td = td
 }
 
 func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
-	parent := self.GetBlock(block.PrevHash)
+	parent := self.GetBlock(block.Header().ParentHash)
 	if parent == nil {
-		return nil, fmt.Errorf("Unable to calculate total diff without known parent %x", block.PrevHash)
+		return nil, fmt.Errorf("Unable to calculate total diff without known parent %x", block.Header().ParentHash)
 	}
 
-	parentTd := parent.BlockInfo().TD
+	parentTd := parent.Td
 
 	uncleDiff := new(big.Int)
-	for _, uncle := range block.Uncles {
+	for _, uncle := range block.Uncles() {
 		uncleDiff = uncleDiff.Add(uncleDiff, uncle.Difficulty)
 	}
 
 	td := new(big.Int)
 	td = td.Add(parentTd, uncleDiff)
-	td = td.Add(td, block.Difficulty)
+	td = td.Add(td, block.Header().Difficulty)
 
 	return td, nil
 }
 
-func (bc *ChainManager) BlockInfo(block *types.Block) types.BlockInfo {
-	bi := types.BlockInfo{}
-	data, _ := ethutil.Config.Db.Get(append(block.Hash(), []byte("Info")...))
-	bi.RlpDecode(data)
-
-	return bi
-}
-
 // Unexported method for writing extra non-essential block info to the db
 func (bc *ChainManager) writeBlockInfo(block *types.Block) {
-	bc.LastBlockNumber++
-	bi := types.BlockInfo{Number: bc.LastBlockNumber, Hash: block.Hash(), Parent: block.PrevHash, TD: bc.TD}
-
-	// For now we use the block hash with the words "info" appended as key
-	ethutil.Config.Db.Put(append(block.Hash(), []byte("Info")...), bi.RlpEncode())
+	bc.lastBlockNumber++
 }
 
 func (bc *ChainManager) Stop() {
@@ -283,23 +345,29 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 				continue
 			}
 
-			chainlogger.Infof("block #%v process failed (%x)\n", block.Number, block.Hash()[:4])
+			h := block.Header()
+			chainlogger.Infof("block #%v process failed (%x)\n", h.Number, h.Hash()[:4])
 			chainlogger.Infoln(block)
 			chainlogger.Infoln(err)
 			return err
 		}
 
-		self.write(block)
-		if td.Cmp(self.TD) > 0 {
-			if block.Number.Cmp(new(big.Int).Add(self.CurrentBlock.Number, ethutil.Big1)) < 0 {
-				chainlogger.Infof("Split detected. New head #%v (%x), was #%v (%x)\n", block.Number, block.Hash()[:4], self.CurrentBlock.Number, self.CurrentBlock.Hash()[:4])
+		self.mu.Lock()
+		{
+			self.write(block)
+			cblock := self.currentBlock
+			if td.Cmp(self.td) > 0 {
+				if block.Header().Number.Cmp(new(big.Int).Add(cblock.Header().Number, ethutil.Big1)) < 0 {
+					chainlogger.Infof("Split detected. New head #%v (%x), was #%v (%x)\n", block.Header().Number, block.Hash()[:4], cblock.Header().Number, cblock.Hash()[:4])
+				}
+
+				self.setTotalDifficulty(td)
+				self.insert(block)
+				self.transState = state.New(cblock.Trie().Copy())
 			}
 
-			self.SetTotalDifficulty(td)
-			self.insert(block)
-			self.transState = self.State().Copy()
-			//sm.eth.TxPool().RemoveSet(block.Transactions())
 		}
+		self.mu.Unlock()
 
 		self.eventMux.Post(NewBlockEvent{block})
 		self.eventMux.Post(messages)

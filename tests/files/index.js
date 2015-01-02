@@ -4,16 +4,25 @@ module.exports = {
   hexencode: require('./BasicTests/hexencodetest'),
   keyaddrtests: require('./BasicTests/keyaddrtest'),
   rlptest: require('./BasicTests/rlptest'),
-  trietest: require('./TrieTests/trietest'),
-  trietestnextprev: require('./TrieTests/trietestnextprev'),
+  trieTests: {
+    trietest: require('./TrieTests/trietest'),
+    trietestnextprev: require('./TrieTests/trietestnextprev'),
+    trieanyorder: require('./TrieTests/trieanyorder')
+  },
   txtest: require('./BasicTests/txtest'),
   StateTests: {
+    stExample: require('./StateTests/stExample.json'),
+    stInitCodeTest: require('./StateTests/stInitCodeTest.json'),
+    stLogTests: require('./StateTests/stLogTests.json'),
     stPreCompiledContracts: require('./StateTests/stPreCompiledContracts'),
     stRecursiveCreate: require('./StateTests/stRecursiveCreate'),
+    stRefundTest: require('./StateTests/stRefundTest'),
     stSpecial: require('./StateTests/stSpecialTest'),
     stSystemOperationsTest: require('./StateTests/stSystemOperationsTest'),
+    stTransactionTest: require('./StateTests/stTransactionTest')
   },
   VMTests: {
+    vmRandom: require('./VMTests/RandomTests/randomTest'),
     vmArithmeticTest: require('./VMTests/vmArithmeticTest'),
     vmBitwiseLogicOperationTest: require('./VMTests/vmBitwiseLogicOperationTest'),
     vmBlockInfoTest: require('./VMTests/vmBlockInfoTest'),
@@ -22,6 +31,6 @@ module.exports = {
     vmLogTest: require('./VMTests/vmLogTest'),
     vmPushDupSwapTest: require('./VMTests/vmPushDupSwapTest'),
     vmSha3Test: require('./VMTests/vmSha3Test'),
-    vmtests: require('./VMTests/vmtests'),
+    vmtests: require('./VMTests/vmtests')
   }
 };

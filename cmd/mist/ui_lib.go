@@ -24,11 +24,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/state"
@@ -57,6 +58,7 @@ type UiLib struct {
 	jsEngine *javascript.JSRE
 
 	filterCallbacks map[int][]int
+	filterManager   *filter.FilterManager
 
 	miner *miner.Miner
 }
@@ -64,6 +66,7 @@ type UiLib struct {
 func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
 	lib := &UiLib{JSXEth: xeth.NewJSXEth(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth), filterCallbacks: make(map[int][]int)} //, filters: make(map[int]*xeth.JSFilter)}
 	lib.miner = miner.New(eth.KeyManager().Address(), eth)
+	lib.filterManager = filter.NewFilterManager(eth.EventMux())
 
 	return lib
 }
@@ -123,7 +126,8 @@ func (self *UiLib) LookupAddress(name string) string {
 }
 
 func (self *UiLib) PastPeers() *ethutil.List {
-	return ethutil.NewList(eth.PastPeers())
+	return ethutil.NewList([]string{})
+	//return ethutil.NewList(eth.PastPeers())
 }
 
 func (self *UiLib) ImportTx(rlpTx string) {
@@ -191,7 +195,7 @@ func (ui *UiLib) Connect(button qml.Object) {
 }
 
 func (ui *UiLib) ConnectToPeer(addr string) {
-	ui.eth.ConnectToPeer(addr)
+	ui.eth.SuggestPeer(addr)
 }
 
 func (ui *UiLib) AssetPath(p string) string {
@@ -219,94 +223,6 @@ func (self *UiLib) StartDebugger() {
 	dbWindow := NewDebuggerWindow(self)
 
 	dbWindow.Show()
-}
-
-func (self *UiLib) NewFilter(object map[string]interface{}) (id int) {
-	filter := qt.NewFilterFromMap(object, self.eth)
-	filter.MessageCallback = func(messages state.Messages) {
-		self.win.Root().Call("invokeFilterCallback", xeth.ToJSMessages(messages), id)
-	}
-	id = self.eth.InstallFilter(filter)
-	return id
-}
-
-func (self *UiLib) NewFilterString(typ string) (id int) {
-	filter := core.NewFilter(self.eth)
-	filter.BlockCallback = func(block *types.Block) {
-		if self.win != nil && self.win.Root() != nil {
-			self.win.Root().Call("invokeFilterCallback", "{}", id)
-		} else {
-			fmt.Println("QML is lagging")
-		}
-	}
-	id = self.eth.InstallFilter(filter)
-	return id
-}
-
-func (self *UiLib) Messages(id int) *ethutil.List {
-	filter := self.eth.GetFilter(id)
-	if filter != nil {
-		messages := xeth.ToJSMessages(filter.Find())
-
-		return messages
-	}
-
-	return ethutil.EmptyList()
-}
-
-func (self *UiLib) UninstallFilter(id int) {
-	self.eth.UninstallFilter(id)
-}
-
-func mapToTxParams(object map[string]interface{}) map[string]string {
-	// Default values
-	if object["from"] == nil {
-		object["from"] = ""
-	}
-	if object["to"] == nil {
-		object["to"] = ""
-	}
-	if object["value"] == nil {
-		object["value"] = ""
-	}
-	if object["gas"] == nil {
-		object["gas"] = ""
-	}
-	if object["gasPrice"] == nil {
-		object["gasPrice"] = ""
-	}
-
-	var dataStr string
-	var data []string
-	if list, ok := object["data"].(*qml.List); ok {
-		list.Convert(&data)
-	} else if str, ok := object["data"].(string); ok {
-		data = []string{str}
-	}
-
-	for _, str := range data {
-		if ethutil.IsHex(str) {
-			str = str[2:]
-
-			if len(str) != 64 {
-				str = ethutil.LeftPadString(str, 64)
-			}
-		} else {
-			str = ethutil.Bytes2Hex(ethutil.LeftPadBytes(ethutil.Big(str).Bytes(), 32))
-		}
-
-		dataStr += str
-	}
-	object["data"] = dataStr
-
-	conv := make(map[string]string)
-	for key, value := range object {
-		if v, ok := value.(string); ok {
-			conv[key] = v
-		}
-	}
-
-	return conv
 }
 
 func (self *UiLib) Transact(params map[string]interface{}) (string, error) {
@@ -371,4 +287,105 @@ func (self *UiLib) ToggleMining() bool {
 
 		return false
 	}
+}
+
+func (self *UiLib) ToHex(data string) string {
+	return "0x" + ethutil.Bytes2Hex([]byte(data))
+}
+
+func (self *UiLib) ToAscii(data string) string {
+	start := 0
+	if len(data) > 1 && data[0:2] == "0x" {
+		start = 2
+	}
+	return string(ethutil.Hex2Bytes(data[start:]))
+}
+
+/// Ethereum filter methods
+func (self *UiLib) NewFilter(object map[string]interface{}) (id int) {
+	filter := qt.NewFilterFromMap(object, self.eth)
+	filter.MessageCallback = func(messages state.Messages) {
+		self.win.Root().Call("invokeFilterCallback", xeth.ToJSMessages(messages), id)
+	}
+	id = self.filterManager.InstallFilter(filter)
+	return id
+}
+
+func (self *UiLib) NewFilterString(typ string) (id int) {
+	filter := core.NewFilter(self.eth)
+	filter.BlockCallback = func(block *types.Block) {
+		if self.win != nil && self.win.Root() != nil {
+			self.win.Root().Call("invokeFilterCallback", "{}", id)
+		} else {
+			fmt.Println("QML is lagging")
+		}
+	}
+	id = self.filterManager.InstallFilter(filter)
+	return id
+}
+
+func (self *UiLib) Messages(id int) *ethutil.List {
+	filter := self.filterManager.GetFilter(id)
+	if filter != nil {
+		messages := xeth.ToJSMessages(filter.Find())
+
+		return messages
+	}
+
+	return ethutil.EmptyList()
+}
+
+func (self *UiLib) UninstallFilter(id int) {
+	self.filterManager.UninstallFilter(id)
+}
+
+func mapToTxParams(object map[string]interface{}) map[string]string {
+	// Default values
+	if object["from"] == nil {
+		object["from"] = ""
+	}
+	if object["to"] == nil {
+		object["to"] = ""
+	}
+	if object["value"] == nil {
+		object["value"] = ""
+	}
+	if object["gas"] == nil {
+		object["gas"] = ""
+	}
+	if object["gasPrice"] == nil {
+		object["gasPrice"] = ""
+	}
+
+	var dataStr string
+	var data []string
+	if list, ok := object["data"].(*qml.List); ok {
+		list.Convert(&data)
+	} else if str, ok := object["data"].(string); ok {
+		data = []string{str}
+	}
+
+	for _, str := range data {
+		if ethutil.IsHex(str) {
+			str = str[2:]
+
+			if len(str) != 64 {
+				str = ethutil.LeftPadString(str, 64)
+			}
+		} else {
+			str = ethutil.Bytes2Hex(ethutil.LeftPadBytes(ethutil.Big(str).Bytes(), 32))
+		}
+
+		dataStr += str
+	}
+	object["data"] = dataStr
+
+	conv := make(map[string]string)
+	for key, value := range object {
+		if v, ok := value.(string); ok {
+			conv[key] = v
+		}
+	}
+
+	return conv
 }
