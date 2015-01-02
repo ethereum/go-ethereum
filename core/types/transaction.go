@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"fmt"
 	"math/big"
 
@@ -137,6 +138,10 @@ func (tx *Transaction) Sign(privk []byte) error {
 	tx.V = uint64(sig[64] + 27)
 
 	return nil
+}
+
+func (tx *Transaction) SignECDSA(key *ecdsa.PrivateKey) error {
+	return tx.Sign(crypto.FromECDSA(key))
 }
 
 func (tx *Transaction) RlpData() interface{} {

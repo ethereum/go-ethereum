@@ -209,7 +209,7 @@ func (self *Block) HashNoNonce() []byte {
 }
 
 func (self *Block) String() string {
-	return fmt.Sprintf(`BLOCK(%x): Size: %v {
+	return fmt.Sprintf(`BLOCK(%x): Size: %v TD: %v {
 Header:
 [
 %v
@@ -219,7 +219,7 @@ Transactions:
 Uncles:
 %v
 }
-`, self.header.Hash(), self.Size(), self.header, self.transactions, self.uncles)
+`, self.header.Hash(), self.Size(), self.Td, self.header, self.transactions, self.uncles)
 }
 
 func (self *Header) String() string {
