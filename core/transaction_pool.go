@@ -2,7 +2,6 @@ package core
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
@@ -73,7 +72,7 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 
 	v, _, _ := tx.Curve()
 	if v > 28 || v < 27 {
-		return fmt.Errorf("tx.v != (28 || 27)")
+		return fmt.Errorf("tx.v != (28 || 27) => %v", v)
 	}
 
 	// Get the sender
@@ -83,12 +82,17 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 	}
 	sender := pool.stateQuery.GetAccount(senderAddr)
 
+	/* XXX this kind of validation needs to happen elsewhere in the gui when sending txs.
+	   Other clients should do their own validation. Value transfer could be throw error
+	   but doesn't necessarily invalidate the tx. Gas can still be payed for and miner
+	   can still be rewarded for their inclusion and processing.
 	totAmount := new(big.Int).Set(tx.Value())
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.
 	if sender.Balance().Cmp(totAmount) < 0 {
 		return fmt.Errorf("Insufficient amount in sender's (%x) account", tx.From())
 	}
+	*/
 
 	return nil
 }
