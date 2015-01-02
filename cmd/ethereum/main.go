@@ -112,13 +112,6 @@ func main() {
 		return
 	}
 
-	// better reworked as cases
-	if StartJsConsole {
-		InitJsConsole(ethereum)
-	} else if len(InputFile) > 0 {
-		ExecJsFile(ethereum, InputFile)
-	}
-
 	if StartRpc {
 		utils.StartRpc(ethereum, RpcPort)
 	}
@@ -129,6 +122,11 @@ func main() {
 
 	utils.StartEthereum(ethereum, UseSeed)
 
+	if StartJsConsole {
+		InitJsConsole(ethereum)
+	} else if len(InputFile) > 0 {
+		ExecJsFile(ethereum, InputFile)
+	}
 	// this blocks the thread
 	ethereum.WaitForShutdown()
 }
