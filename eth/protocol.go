@@ -95,7 +95,7 @@ func runEthProtocol(txPool txPool, chainManager chainManager, blockPool blockPoo
 		blockPool:    blockPool,
 		rw:           rw,
 		peer:         peer,
-		id:           (string)(peer.Identity().Pubkey()),
+		id:           fmt.Sprintf("%x", peer.Identity().Pubkey()),
 	}
 	err = self.handleStatus()
 	if err == nil {
