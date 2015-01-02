@@ -139,7 +139,7 @@ func (self *XEth) Transact(key *crypto.KeyPair, to []byte, value, gas, price *et
 
 	// Do some pre processing for our "pre" events  and hooks
 	block := self.chainManager.NewBlock(key.Address())
-	coinbase := state.GetStateObject(key.Address())
+	coinbase := state.GetOrNewStateObject(key.Address())
 	coinbase.SetGasPool(block.GasLimit())
 	self.blockManager.ApplyTransactions(coinbase, state, block, types.Transactions{tx}, true)
 
