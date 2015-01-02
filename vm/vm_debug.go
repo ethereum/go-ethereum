@@ -83,29 +83,13 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 		jump = func(from uint64, to *big.Int) {
 			p := to.Uint64()
 
-			self.Printf(" ~> %v", to)
-			/* NOTE: new model. Will change soon
 			nop := OpCode(context.GetOp(p))
-			if nop != JUMPDEST {
+			if !destinations.Has(p) {
 				panic(fmt.Sprintf("invalid jump destination (%v) %v", nop, p))
 			}
 
+			self.Printf(" ~> %v", to)
 			pc = to.Uint64()
-			*/
-			// Return to start
-			if p == 0 {
-				pc = 0
-			} else {
-				nop := OpCode(context.GetOp(p))
-				if !(nop == JUMPDEST || destinations[from] != nil) {
-					panic(fmt.Sprintf("invalid jump destination (%v) %v", nop, p))
-				} else if nop == JUMP || nop == JUMPI {
-					panic(fmt.Sprintf("not allowed to JUMP(I) in to JUMP"))
-				}
-
-				pc = to.Uint64()
-
-			}
 
 			self.Endl()
 		}

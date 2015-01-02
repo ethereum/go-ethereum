@@ -78,6 +78,12 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
+		/*
+			helper.Logger.SetLogLevel(5)
+			if name != "jump0_jumpdest2" {
+				continue
+			}
+		*/
 		statedb := state.New(helper.NewTrie())
 		for addr, account := range test.Pre {
 			obj := StateObjectFromAccount(addr, account)
@@ -127,7 +133,7 @@ func RunVmTest(p string, t *testing.T) {
 
 		if isVmTest {
 			if len(test.Gas) == 0 && err == nil {
-				t.Errorf("%s's gas unspecified, indicating an error. VM returned (incorrectly) successfull")
+				t.Errorf("%s's gas unspecified, indicating an error. VM returned (incorrectly) successfull", name)
 			} else {
 				gexp := ethutil.Big(test.Gas)
 				if gexp.Cmp(gas) != 0 {
