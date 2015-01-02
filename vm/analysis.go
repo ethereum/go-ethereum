@@ -12,7 +12,6 @@ func analyseJumpDests(code []byte) (dests *set.Set) {
 			a := uint64(op) - uint64(PUSH1) + 1
 
 			pc += a
-			//lp = true
 		case JUMPDEST:
 			dests.Add(pc)
 		}

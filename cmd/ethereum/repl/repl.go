@@ -86,6 +86,7 @@ func (self *JSRepl) Stop() {
 }
 
 func (self *JSRepl) parseInput(code string) {
+
 	value, err := self.re.Run(code)
 	if err != nil {
 		fmt.Println(err)
