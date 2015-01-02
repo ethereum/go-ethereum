@@ -132,6 +132,11 @@ void RuntimeManager::registerReturnData(llvm::Value* _offset, llvm::Value* _size
 	set(RuntimeData::ReturnDataSize, _size);
 }
 
+void RuntimeManager::registerSuicide(llvm::Value* _balanceAddress)
+{
+	set(RuntimeData::SuicideDestAddress, _balanceAddress);
+}
+
 void RuntimeManager::raiseException(ReturnCode _returnCode)
 {
 	m_builder.CreateCall2(m_longjmp, getJmpBuf(), Constant::get(_returnCode));

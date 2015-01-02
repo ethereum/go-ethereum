@@ -29,6 +29,7 @@ public:
 	void setGas(llvm::Value* _gas);
 
 	void registerReturnData(llvm::Value* _index, llvm::Value* _size);
+	void registerSuicide(llvm::Value* _balanceAddress);
 
 	void raiseException(ReturnCode _returnCode);
 

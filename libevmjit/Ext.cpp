@@ -44,7 +44,6 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 	m_sload = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "env_sload", module);
 	m_sstore = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "env_sstore", module);
 	m_balance = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_balance", module);
-	m_suicide = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 2}, false), Linkage::ExternalLinkage, "ext_suicide", module);
 
 	llvm::Type* sha3ArgsTypes[] = {Type::BytePtr, Type::Size, Type::WordPtr};
 	m_sha3 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, sha3ArgsTypes, false), Linkage::ExternalLinkage, "env_sha3", module);
@@ -94,13 +93,6 @@ llvm::Value* Ext::balance(llvm::Value* _address)
 	m_builder.CreateStore(address, m_args[0]);
 	m_builder.CreateCall3(m_balance, getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]);
 	return m_builder.CreateLoad(m_args[1]);
-}
-
-void Ext::suicide(llvm::Value* _address)
-{
-	auto address = Endianness::toBE(m_builder, _address);
-	m_builder.CreateStore(address, m_args[0]);
-	m_builder.CreateCall2(m_suicide, getRuntimeManager().getEnvPtr(), m_args[0]);
 }
 
 llvm::Value* Ext::create(llvm::Value*& _gas, llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* _initSize)

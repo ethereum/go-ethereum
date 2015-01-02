@@ -42,11 +42,6 @@ extern "C"
 		*o_value = eth2llvm(u);
 	}
 
-	EXPORT void ext_suicide(ExtVMFace* _env, h256 const* _address)
-	{
-		_env->suicide(right160(*_address));
-	}
-
 	EXPORT void env_create(ExtVMFace* _env, i256* io_gas, i256* _endowment, byte* _initBeg, uint64_t _initSize, h256* o_address)
 	{
 		if (_env->depth == 1024)

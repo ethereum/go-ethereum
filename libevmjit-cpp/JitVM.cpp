@@ -34,6 +34,10 @@ bytesConstRef JitVM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 	auto exitCode = m_engine.run(_ext.code, &m_data, env);
 	switch (exitCode)
 	{
+	case ReturnCode::Suicide:
+		_ext.suicide(right160(m_data.get(RuntimeData::SuicideDestAddress)));
+		break;
+
 	case ReturnCode::BadJumpDestination:
 		BOOST_THROW_EXCEPTION(BadJumpDestination());
 	case ReturnCode::OutOfGas:

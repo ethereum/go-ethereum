@@ -798,14 +798,15 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 		}
 
 		case Instruction::SUICIDE:
+		{
+			_runtimeManager.registerSuicide(stack.pop());
+			m_builder.CreateRet(Constant::get(ReturnCode::Suicide));
+			break;
+		}
+
+
 		case Instruction::STOP:
 		{
-			if (inst == Instruction::SUICIDE)
-			{
-				auto address = stack.pop();
-				_ext.suicide(address);
-			}
-
 			m_builder.CreateRet(Constant::get(ReturnCode::Stop));
 			break;
 		}
