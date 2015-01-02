@@ -20,26 +20,6 @@ type StateQuery interface {
 	GetAccount(addr []byte) *state.StateObject
 }
 
-/*
-func AddTestNetFunds(block *types.Block) {
-	for _, addr := range []string{
-		"51ba59315b3a95761d0863b05ccc7a7f54703d99",
-		"e4157b34ea9615cfbde6b4fda419828124b70c78",
-		"b9c015918bdaba24b4ff057a92a3873d6eb201be",
-		"6c386a4b26f73c802f34673f7248bb118f97424a",
-		"cd2a3d9f938e13cd947ec05abc7fe734df8dd826",
-		"2ef47100e0787b915105fd5e3f4ff6752079d5cb",
-		"e6716f9544a56c530d868e4bfbacb172315bdead",
-		"1a26338f0d905e295fccb71fa9ea849ffa12aaf4",
-	} {
-		codedAddr := ethutil.Hex2Bytes(addr)
-		account := block.State().GetAccount(codedAddr)
-		account.SetBalance(ethutil.Big("1606938044258990275541962092341162602522202993782792835301376")) //ethutil.BigPow(2, 200)
-		block.State().UpdateStateObject(account)
-	}
-}
-*/
-
 func CalcDifficulty(block, parent *types.Block) *big.Int {
 	diff := new(big.Int)
 

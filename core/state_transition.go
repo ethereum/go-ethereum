@@ -184,7 +184,7 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 	}
 
 	vmenv := self.VmEnv()
-	var ref vm.ClosureRef
+	var ref vm.ContextRef
 	if MessageCreatesContract(msg) {
 		contract := MakeContract(msg, self.state)
 		ret, err, ref = vmenv.Create(sender, contract.Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)

@@ -26,9 +26,9 @@ type Environment interface {
 	Depth() int
 	SetDepth(i int)
 
-	Call(me ClosureRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error)
-	CallCode(me ClosureRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error)
-	Create(me ClosureRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error, ClosureRef)
+	Call(me ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error)
+	CallCode(me ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error)
+	Create(me ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error, ContextRef)
 }
 
 type Object interface {

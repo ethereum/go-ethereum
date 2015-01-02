@@ -24,14 +24,14 @@ func (self *Execution) Addr() []byte {
 	return self.address
 }
 
-func (self *Execution) Call(codeAddr []byte, caller vm.ClosureRef) ([]byte, error) {
+func (self *Execution) Call(codeAddr []byte, caller vm.ContextRef) ([]byte, error) {
 	// Retrieve the executing code
 	code := self.env.State().GetCode(codeAddr)
 
 	return self.exec(code, codeAddr, caller)
 }
 
-func (self *Execution) exec(code, contextAddr []byte, caller vm.ClosureRef) (ret []byte, err error) {
+func (self *Execution) exec(code, contextAddr []byte, caller vm.ContextRef) (ret []byte, err error) {
 	env := self.env
 	evm := vm.New(env, vm.DebugVmTy)
 
@@ -63,7 +63,7 @@ func (self *Execution) exec(code, contextAddr []byte, caller vm.ClosureRef) (ret
 	return
 }
 
-func (self *Execution) Create(caller vm.ClosureRef) (ret []byte, err error, account *state.StateObject) {
+func (self *Execution) Create(caller vm.ContextRef) (ret []byte, err error, account *state.StateObject) {
 	ret, err = self.exec(self.input, nil, caller)
 	account = self.env.State().GetStateObject(self.address)
 

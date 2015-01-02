@@ -37,7 +37,7 @@ func NewDebugVm(env Environment) *DebugVm {
 	return &DebugVm{env: env, logTy: lt, Recoverable: true}
 }
 
-func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
+func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
 	self.env.SetDepth(self.env.Depth() + 1)
 
 	msg := self.env.State().Manifest().AddMessage(&state.Message{
@@ -47,7 +47,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		Block:  self.env.BlockHash(), Timestamp: self.env.Time(), Coinbase: self.env.Coinbase(), Number: self.env.BlockNumber(),
 		Value: value,
 	})
-	closure := NewClosure(msg, caller, me, code, gas, price)
+	context := NewContext(msg, caller, me, code, gas, price)
 
 	if self.Recoverable {
 		// Recover from any require exception
@@ -55,9 +55,9 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			if r := recover(); r != nil {
 				self.Printf(" %v", r).Endl()
 
-				closure.UseGas(closure.Gas)
+				context.UseGas(context.Gas)
 
-				ret = closure.Return(nil)
+				ret = context.Return(nil)
 
 				err = fmt.Errorf("%v", r)
 
@@ -66,13 +66,13 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 	}
 
 	if p := Precompiled[string(me.Address())]; p != nil {
-		return self.RunPrecompiled(p, callData, closure)
+		return self.RunPrecompiled(p, callData, context)
 	}
 
 	var (
 		op OpCode
 
-		destinations        = analyseJumpDests(closure.Code)
+		destinations        = analyseJumpDests(context.Code)
 		mem                 = NewMemory()
 		stack               = NewStack()
 		pc           uint64 = 0
@@ -84,11 +84,19 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			p := to.Uint64()
 
 			self.Printf(" ~> %v", to)
+			/* NOTE: new model. Will change soon
+			nop := OpCode(context.GetOp(p))
+			if nop != JUMPDEST {
+				panic(fmt.Sprintf("invalid jump destination (%v) %v", nop, p))
+			}
+
+			pc = to.Uint64()
+			*/
 			// Return to start
 			if p == 0 {
 				pc = 0
 			} else {
-				nop := OpCode(closure.GetOp(p))
+				nop := OpCode(context.GetOp(p))
 				if !(nop == JUMPDEST || destinations[from] != nil) {
 					panic(fmt.Sprintf("invalid jump destination (%v) %v", nop, p))
 				} else if nop == JUMP || nop == JUMPI {
@@ -103,11 +111,11 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		}
 	)
 
-	vmlogger.Debugf("(%d) (%x) %x (code=%d) gas: %v (d) %x\n", self.env.Depth(), caller.Address()[:4], closure.Address(), len(code), closure.Gas, callData)
+	vmlogger.Debugf("(%d) (%x) %x (code=%d) gas: %v (d) %x\n", self.env.Depth(), caller.Address()[:4], context.Address(), len(code), context.Gas, callData)
 
 	// Don't bother with the execution if there's no code.
 	if len(code) == 0 {
-		return closure.Return(nil), nil
+		return context.Return(nil), nil
 	}
 
 	for {
@@ -117,22 +125,22 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 		step++
 		// Get the memory location of pc
-		op = closure.GetOp(pc)
+		op = context.GetOp(pc)
 
 		self.Printf("(pc) %-3d -o- %-14s (m) %-4d (s) %-4d ", pc, op.String(), mem.Len(), stack.Len())
 
-		newMemSize, gas := self.calculateGasAndSize(closure, caller, op, statedb, mem, stack)
+		newMemSize, gas := self.calculateGasAndSize(context, caller, op, statedb, mem, stack)
 
-		self.Printf("(g) %-3v (%v)", gas, closure.Gas)
+		self.Printf("(g) %-3v (%v)", gas, context.Gas)
 
-		if !closure.UseGas(gas) {
+		if !context.UseGas(gas) {
 			self.Endl()
 
-			tmp := new(big.Int).Set(closure.Gas)
+			tmp := new(big.Int).Set(context.Gas)
 
-			closure.UseGas(closure.Gas)
+			context.UseGas(context.Gas)
 
-			return closure.Return(nil), OOG(gas, tmp)
+			return context.Return(nil), OOG(gas, tmp)
 		}
 
 		mem.Resize(newMemSize.Uint64())
@@ -410,9 +418,9 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			self.Printf(" => %x", data)
 			// 0x30 range
 		case ADDRESS:
-			stack.Push(ethutil.BigD(closure.Address()))
+			stack.Push(ethutil.BigD(context.Address()))
 
-			self.Printf(" => %x", closure.Address())
+			self.Printf(" => %x", context.Address())
 		case BALANCE:
 
 			addr := stack.Pop().Bytes()
@@ -428,7 +436,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 			self.Printf(" => %x", origin)
 		case CALLER:
-			caller := closure.caller.Address()
+			caller := context.caller.Address()
 			stack.Push(ethutil.BigD(caller))
 
 			self.Printf(" => %x", caller)
@@ -485,7 +493,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 				code = statedb.GetCode(addr)
 			} else {
-				code = closure.Code
+				code = context.Code
 			}
 
 			l := big.NewInt(int64(len(code)))
@@ -497,7 +505,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			if op == EXTCODECOPY {
 				code = statedb.GetCode(stack.Pop().Bytes())
 			} else {
-				code = closure.Code
+				code = context.Code
 			}
 
 			var (
@@ -519,9 +527,9 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 			self.Printf(" => [%v, %v, %v] %x", mOff, cOff, l, codeCopy)
 		case GASPRICE:
-			stack.Push(closure.Price)
+			stack.Push(context.Price)
 
-			self.Printf(" => %v", closure.Price)
+			self.Printf(" => %v", context.Price)
 
 			// 0x40 range
 		case PREVHASH:
@@ -560,7 +568,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			// 0x50 range
 		case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
 			a := uint64(op - PUSH1 + 1)
-			byts := closure.GetRangeValue(pc+1, a)
+			byts := context.GetRangeValue(pc+1, a)
 			// Push value to stack
 			stack.Push(ethutil.BigD(byts))
 			pc += a
@@ -589,7 +597,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			}
 
 			data := mem.Geti(mStart.Int64(), mSize.Int64())
-			log := &Log{closure.Address(), topics, data}
+			log := &Log{context.Address(), topics, data}
 			self.env.AddLog(log)
 
 			self.Printf(" => %v", log)
@@ -614,15 +622,15 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			self.Printf(" => [%v] 0x%x", off, val)
 		case SLOAD:
 			loc := stack.Pop()
-			val := ethutil.BigD(statedb.GetState(closure.Address(), loc.Bytes()))
+			val := ethutil.BigD(statedb.GetState(context.Address(), loc.Bytes()))
 			stack.Push(val)
 
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case SSTORE:
 			val, loc := stack.Popn()
-			statedb.SetState(closure.Address(), loc.Bytes(), val)
+			statedb.SetState(context.Address(), loc.Bytes(), val)
 
-			closure.message.AddStorageChange(loc.Bytes())
+			context.message.AddStorageChange(loc.Bytes())
 
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case JUMP:
@@ -644,7 +652,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		case MSIZE:
 			stack.Push(big.NewInt(int64(mem.Len())))
 		case GAS:
-			stack.Push(closure.Gas)
+			stack.Push(context.Gas)
 			// 0x60 range
 		case CREATE:
 
@@ -653,7 +661,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 				value        = stack.Pop()
 				size, offset = stack.Popn()
 				input        = mem.Get(offset.Int64(), size.Int64())
-				gas          = new(big.Int).Set(closure.Gas)
+				gas          = new(big.Int).Set(context.Gas)
 
 				// Snapshot the current stack so we are able to
 				// revert back to it later.
@@ -661,15 +669,15 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			)
 
 			// Generate a new address
-			n := statedb.GetNonce(closure.Address())
-			addr := crypto.CreateAddress(closure.Address(), n)
-			statedb.SetNonce(closure.Address(), n+1)
+			n := statedb.GetNonce(context.Address())
+			addr := crypto.CreateAddress(context.Address(), n)
+			statedb.SetNonce(context.Address(), n+1)
 
 			self.Printf(" (*) %x", addr).Endl()
 
-			closure.UseGas(closure.Gas)
+			context.UseGas(context.Gas)
 
-			ret, err, ref := self.env.Create(closure, addr, input, gas, price, value)
+			ret, err, ref := self.env.Create(context, addr, input, gas, price, value)
 			if err != nil {
 				stack.Push(ethutil.BigFalse)
 
@@ -678,7 +686,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 				// gas < len(ret) * CreateDataGas == NO_CODE
 				dataGas := big.NewInt(int64(len(ret)))
 				dataGas.Mul(dataGas, GasCreateByte)
-				if closure.UseGas(dataGas) {
+				if context.UseGas(dataGas) {
 					ref.SetCode(ret)
 					msg.Output = ret
 				}
@@ -690,7 +698,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 			// Debug hook
 			if self.Dbg != nil {
-				self.Dbg.SetCode(closure.Code)
+				self.Dbg.SetCode(context.Code)
 			}
 		case CALL, CALLCODE:
 			self.Endl()
@@ -711,9 +719,9 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 				err error
 			)
 			if op == CALLCODE {
-				ret, err = self.env.CallCode(closure, addr.Bytes(), args, gas, price, value)
+				ret, err = self.env.CallCode(context, addr.Bytes(), args, gas, price, value)
 			} else {
-				ret, err = self.env.Call(closure, addr.Bytes(), args, gas, price, value)
+				ret, err = self.env.Call(context, addr.Bytes(), args, gas, price, value)
 			}
 
 			if err != nil {
@@ -726,11 +734,11 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 				mem.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 			}
-			self.Printf("resume %x (%v)", closure.Address(), closure.Gas)
+			self.Printf("resume %x (%v)", context.Address(), context.Gas)
 
 			// Debug hook
 			if self.Dbg != nil {
-				self.Dbg.SetCode(closure.Code)
+				self.Dbg.SetCode(context.Code)
 			}
 
 		case RETURN:
@@ -739,27 +747,27 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 			self.Printf(" => [%v, %v] (%d) 0x%x", offset, size, len(ret), ret).Endl()
 
-			return closure.Return(ret), nil
+			return context.Return(ret), nil
 		case SUICIDE:
 			receiver := statedb.GetOrNewStateObject(stack.Pop().Bytes())
-			balance := statedb.GetBalance(closure.Address())
+			balance := statedb.GetBalance(context.Address())
 
 			self.Printf(" => (%x) %v", receiver.Address()[:4], balance)
 
 			receiver.AddAmount(balance)
-			statedb.Delete(closure.Address())
+			statedb.Delete(context.Address())
 
 			fallthrough
-		case STOP: // Stop the closure
+		case STOP: // Stop the context
 			self.Endl()
 
-			return closure.Return(nil), nil
+			return context.Return(nil), nil
 		default:
 			vmlogger.Debugf("(pc) %-3v Invalid opcode %x\n", pc, op)
 
-			closure.ReturnGas(big.NewInt(1), nil)
+			context.ReturnGas(big.NewInt(1), nil)
 
-			return closure.Return(nil), fmt.Errorf("Invalid opcode %x", op)
+			return context.Return(nil), fmt.Errorf("Invalid opcode %x", op)
 		}
 
 		pc++
@@ -771,11 +779,11 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 				if pc == uint64(instrNo) {
 					self.Stepping = true
 
-					if !self.Dbg.BreakHook(prevStep, op, mem, stack, statedb.GetStateObject(closure.Address())) {
+					if !self.Dbg.BreakHook(prevStep, op, mem, stack, statedb.GetStateObject(context.Address())) {
 						return nil, nil
 					}
 				} else if self.Stepping {
-					if !self.Dbg.StepHook(prevStep, op, mem, stack, statedb.GetStateObject(closure.Address())) {
+					if !self.Dbg.StepHook(prevStep, op, mem, stack, statedb.GetStateObject(context.Address())) {
 						return nil, nil
 					}
 				}
@@ -785,7 +793,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 	}
 }
 
-func (self *DebugVm) calculateGasAndSize(closure *Closure, caller ClosureRef, op OpCode, statedb *state.StateDB, mem *Memory, stack *Stack) (*big.Int, *big.Int) {
+func (self *DebugVm) calculateGasAndSize(context *Context, caller ContextRef, op OpCode, statedb *state.StateDB, mem *Memory, stack *Stack) (*big.Int, *big.Int) {
 	gas := new(big.Int)
 	addStepGasUsage := func(amount *big.Int) {
 		if amount.Cmp(ethutil.Big0) >= 0 {
@@ -844,7 +852,7 @@ func (self *DebugVm) calculateGasAndSize(closure *Closure, caller ClosureRef, op
 
 		var mult *big.Int
 		y, x := stack.Peekn()
-		val := statedb.GetState(closure.Address(), x.Bytes())
+		val := statedb.GetState(context.Address(), x.Bytes())
 		if len(val) == 0 && len(y.Bytes()) > 0 {
 			// 0 => non 0
 			mult = ethutil.Big3
@@ -940,22 +948,22 @@ func (self *DebugVm) calculateGasAndSize(closure *Closure, caller ClosureRef, op
 	return newMemSize, gas
 }
 
-func (self *DebugVm) RunPrecompiled(p *PrecompiledAccount, callData []byte, closure *Closure) (ret []byte, err error) {
+func (self *DebugVm) RunPrecompiled(p *PrecompiledAccount, callData []byte, context *Context) (ret []byte, err error) {
 	gas := p.Gas(len(callData))
-	if closure.UseGas(gas) {
+	if context.UseGas(gas) {
 		ret = p.Call(callData)
 		self.Printf("NATIVE_FUNC => %x", ret)
 		self.Endl()
 
-		return closure.Return(ret), nil
+		return context.Return(ret), nil
 	} else {
 		self.Endl()
 
-		tmp := new(big.Int).Set(closure.Gas)
+		tmp := new(big.Int).Set(context.Gas)
 
-		closure.UseGas(closure.Gas)
+		context.UseGas(context.Gas)
 
-		return closure.Return(nil), OOG(gas, tmp)
+		return context.Return(nil), OOG(gas, tmp)
 	}
 }
 

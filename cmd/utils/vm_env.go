@@ -52,19 +52,19 @@ func (self *VMEnv) vm(addr, data []byte, gas, price, value *big.Int) *core.Execu
 	return core.NewExecution(self, addr, data, gas, price, value)
 }
 
-func (self *VMEnv) Call(caller vm.ClosureRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error) {
+func (self *VMEnv) Call(caller vm.ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error) {
 	exe := self.vm(addr, data, gas, price, value)
 	ret, err := exe.Call(addr, caller)
 	self.Gas = exe.Gas
 
 	return ret, err
 }
-func (self *VMEnv) CallCode(caller vm.ClosureRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error) {
+func (self *VMEnv) CallCode(caller vm.ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error) {
 	exe := self.vm(caller.Address(), data, gas, price, value)
 	return exe.Call(addr, caller)
 }
 
-func (self *VMEnv) Create(caller vm.ClosureRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error, vm.ClosureRef) {
+func (self *VMEnv) Create(caller vm.ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error, vm.ContextRef) {
 	exe := self.vm(addr, data, gas, price, value)
 	return exe.Create(caller)
 }

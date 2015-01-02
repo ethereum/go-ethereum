@@ -8,15 +8,15 @@ import (
 	"github.com/ethereum/go-ethereum/state"
 )
 
-type ClosureRef interface {
+type ContextRef interface {
 	ReturnGas(*big.Int, *big.Int)
 	Address() []byte
 	SetCode([]byte)
 }
 
-type Closure struct {
-	caller  ClosureRef
-	object  ClosureRef
+type Context struct {
+	caller  ContextRef
+	object  ContextRef
 	Code    []byte
 	message *state.Message
 
@@ -25,9 +25,9 @@ type Closure struct {
 	Args []byte
 }
 
-// Create a new closure for the given data items
-func NewClosure(msg *state.Message, caller ClosureRef, object ClosureRef, code []byte, gas, price *big.Int) *Closure {
-	c := &Closure{message: msg, caller: caller, object: object, Code: code, Args: nil}
+// Create a new context for the given data items
+func NewContext(msg *state.Message, caller ContextRef, object ContextRef, code []byte, gas, price *big.Int) *Context {
+	c := &Context{message: msg, caller: caller, object: object, Code: code, Args: nil}
 
 	// Gas should be a pointer so it can safely be reduced through the run
 	// This pointer will be off the state transition
@@ -40,11 +40,11 @@ func NewClosure(msg *state.Message, caller ClosureRef, object ClosureRef, code [
 	return c
 }
 
-func (c *Closure) GetOp(x uint64) OpCode {
+func (c *Context) GetOp(x uint64) OpCode {
 	return OpCode(c.GetByte(x))
 }
 
-func (c *Closure) GetByte(x uint64) byte {
+func (c *Context) GetByte(x uint64) byte {
 	if x < uint64(len(c.Code)) {
 		return c.Code[x]
 	}
@@ -52,18 +52,18 @@ func (c *Closure) GetByte(x uint64) byte {
 	return 0
 }
 
-func (c *Closure) GetBytes(x, y int) []byte {
+func (c *Context) GetBytes(x, y int) []byte {
 	return c.GetRangeValue(uint64(x), uint64(y))
 }
 
-func (c *Closure) GetRangeValue(x, size uint64) []byte {
+func (c *Context) GetRangeValue(x, size uint64) []byte {
 	x = uint64(math.Min(float64(x), float64(len(c.Code))))
 	y := uint64(math.Min(float64(x+size), float64(len(c.Code))))
 
 	return ethutil.LeftPadBytes(c.Code[x:y], int(size))
 }
 
-func (c *Closure) Return(ret []byte) []byte {
+func (c *Context) Return(ret []byte) []byte {
 	// Return the remaining gas to the caller
 	c.caller.ReturnGas(c.Gas, c.Price)
 
@@ -73,7 +73,7 @@ func (c *Closure) Return(ret []byte) []byte {
 /*
  * Gas functions
  */
-func (c *Closure) UseGas(gas *big.Int) bool {
+func (c *Context) UseGas(gas *big.Int) bool {
 	if c.Gas.Cmp(gas) < 0 {
 		return false
 	}
@@ -86,8 +86,8 @@ func (c *Closure) UseGas(gas *big.Int) bool {
 }
 
 // Implement the caller interface
-func (c *Closure) ReturnGas(gas, price *big.Int) {
-	// Return the gas to the closure
+func (c *Context) ReturnGas(gas, price *big.Int) {
+	// Return the gas to the context
 	c.Gas.Add(c.Gas, gas)
 	c.UsedGas.Sub(c.UsedGas, gas)
 }
@@ -95,10 +95,10 @@ func (c *Closure) ReturnGas(gas, price *big.Int) {
 /*
  * Set / Get
  */
-func (c *Closure) Address() []byte {
+func (c *Context) Address() []byte {
 	return c.object.Address()
 }
 
-func (self *Closure) SetCode(code []byte) {
+func (self *Context) SetCode(code []byte) {
 	self.Code = code
 }
