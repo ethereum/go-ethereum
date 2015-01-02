@@ -43,7 +43,6 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 
 	m_sload = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "env_sload", module);
 	m_sstore = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "env_sstore", module);
-	m_balance = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "ext_balance", module);
 
 	llvm::Type* sha3ArgsTypes[] = {Type::BytePtr, Type::Size, Type::WordPtr};
 	m_sha3 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, sha3ArgsTypes, false), Linkage::ExternalLinkage, "env_sha3", module);
@@ -63,6 +62,16 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 	// Helper function, not client Env interface
 	llvm::Type* callDataLoadArgsTypes[] = {Type::RuntimeDataPtr, Type::WordPtr, Type::WordPtr};
 	m_calldataload = llvm::Function::Create(llvm::FunctionType::get(Type::Void, callDataLoadArgsTypes, false), Linkage::ExternalLinkage, "ext_calldataload", module);
+}
+
+llvm::Function* Ext::getBalanceFunc()
+{
+	if (!m_balance)
+	{
+		llvm::Type* argsTypes[] = {Type::EnvPtr, Type::WordPtr, Type::WordPtr};
+		m_balance = llvm::Function::Create(llvm::FunctionType::get(Type::Void, argsTypes, false), llvm::Function::ExternalLinkage, "env_balance", getModule());
+	}
+	return m_balance;
 }
 
 llvm::Value* Ext::sload(llvm::Value* _index)
@@ -91,7 +100,7 @@ llvm::Value* Ext::balance(llvm::Value* _address)
 {
 	auto address = Endianness::toBE(m_builder, _address);
 	m_builder.CreateStore(address, m_args[0]);
-	m_builder.CreateCall3(m_balance, getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]);
+	createCall(getBalanceFunc(), getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]);
 	return m_builder.CreateLoad(m_args[1]);
 }
 

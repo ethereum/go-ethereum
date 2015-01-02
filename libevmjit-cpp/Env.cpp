@@ -36,7 +36,7 @@ extern "C"
 		_env->setStore(index, value);	// Interface uses native endianness
 	}
 
-	EXPORT void ext_balance(ExtVMFace* _env, h256* _address, i256* o_value)
+	EXPORT void env_balance(ExtVMFace* _env, h256* _address, i256* o_value)
 	{
 		auto u = _env->balance(right160(*_address));
 		*o_value = eth2llvm(u);

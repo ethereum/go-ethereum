@@ -52,12 +52,14 @@ private:
 	llvm::Function* m_sload;
 	llvm::Function* m_sstore;
 	llvm::Function* m_calldataload;
-	llvm::Function* m_balance;
+	llvm::Function* m_balance = nullptr;
 	llvm::Function* m_create;
 	llvm::Function* m_call;
 	llvm::Function* m_sha3;
 	llvm::Function* m_getExtCode;
 	llvm::Function* m_log;
+
+	llvm::Function* getBalanceFunc();
 };
 
 
