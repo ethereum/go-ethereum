@@ -43,22 +43,19 @@ type TxPool struct {
 
 	subscribers []chan TxMsg
 
-	stateQuery StateQuery
-	eventMux   *event.TypeMux
+	eventMux *event.TypeMux
 }
 
-func NewTxPool(stateQuery StateQuery, eventMux *event.TypeMux) *TxPool {
+func NewTxPool(eventMux *event.TypeMux) *TxPool {
 	return &TxPool{
-		pool:       set.New(),
-		queueChan:  make(chan *types.Transaction, txPoolQueueSize),
-		quit:       make(chan bool),
-		stateQuery: stateQuery,
-		eventMux:   eventMux,
+		pool:      set.New(),
+		queueChan: make(chan *types.Transaction, txPoolQueueSize),
+		quit:      make(chan bool),
+		eventMux:  eventMux,
 	}
 }
 
 func (pool *TxPool) addTransaction(tx *types.Transaction) {
-
 	pool.pool.Add(tx)
 
 	// Broadcast the transaction to the rest of the peers
@@ -75,6 +72,10 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 		return fmt.Errorf("tx.v != (28 || 27) => %v", v)
 	}
 
+	/* XXX this kind of validation needs to happen elsewhere in the gui when sending txs.
+	   Other clients should do their own validation. Value transfer could throw error
+	   but doesn't necessarily invalidate the tx. Gas can still be payed for and miner
+	   can still be rewarded for their inclusion and processing.
 	// Get the sender
 	senderAddr := tx.From()
 	if senderAddr == nil {
@@ -82,10 +83,6 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 	}
 	sender := pool.stateQuery.GetAccount(senderAddr)
 
-	/* XXX this kind of validation needs to happen elsewhere in the gui when sending txs.
-	   Other clients should do their own validation. Value transfer could be throw error
-	   but doesn't necessarily invalidate the tx. Gas can still be payed for and miner
-	   can still be rewarded for their inclusion and processing.
 	totAmount := new(big.Int).Set(tx.Value())
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.

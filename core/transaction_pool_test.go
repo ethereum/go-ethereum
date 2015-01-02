@@ -25,7 +25,7 @@ func transaction() *types.Transaction {
 func setup() (*TxPool, *ecdsa.PrivateKey) {
 	var m event.TypeMux
 	key, _ := crypto.GenerateKey()
-	return NewTxPool(stateQuery{}, &m), key
+	return NewTxPool(&m), key
 }
 
 func TestTxAdding(t *testing.T) {

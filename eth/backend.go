@@ -70,7 +70,7 @@ func New(db ethutil.Database, identity p2p.ClientIdentity, keyManager *crypto.Ke
 	}
 
 	eth.chainManager = core.NewChainManager(eth.EventMux())
-	eth.txPool = core.NewTxPool(eth.chainManager, eth.EventMux())
+	eth.txPool = core.NewTxPool(eth.EventMux())
 	eth.blockManager = core.NewBlockManager(eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockManager)
 	eth.whisper = whisper.New()
