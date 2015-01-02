@@ -351,6 +351,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			chainlogger.Infoln(err)
 			return err
 		}
+		block.Td = td
 
 		self.mu.Lock()
 		{
