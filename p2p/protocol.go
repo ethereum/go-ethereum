@@ -3,8 +3,6 @@ package p2p
 import (
 	"bytes"
 	"time"
-
-	"github.com/ethereum/go-ethereum/ethutil"
 )
 
 // Protocol represents a P2P subprotocol implementation.
@@ -89,20 +87,26 @@ type baseProtocol struct {
 
 func runBaseProtocol(peer *Peer, rw MsgReadWriter) error {
 	bp := &baseProtocol{rw, peer}
-	if err := bp.doHandshake(rw); err != nil {
+	errc := make(chan error, 1)
+	go func() { errc <- rw.WriteMsg(bp.handshakeMsg()) }()
+	if err := bp.readHandshake(); err != nil {
 		return err
 	}
+	// handle write error
+	if err := <-errc; err != nil {
+		return err
+	}
+
 	// run main loop
-	quit := make(chan error, 1)
 	go func() {
 		for {
 			if err := bp.handle(rw); err != nil {
-				quit <- err
+				errc <- err
 				break
 			}
 		}
 	}()
-	return bp.loop(quit)
+	return bp.loop(errc)
 }
 
 var pingTimeout = 2 * time.Second
@@ -174,7 +178,7 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 		//
 		// TODO: add event mechanism to notify baseProtocol for new peers
 		if len(peers) > 0 {
-			return bp.rw.EncodeMsg(peersMsg, peers)
+			return bp.rw.EncodeMsg(peersMsg, peers...)
 		}
 
 	case peersMsg:
@@ -193,14 +197,9 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 	return nil
 }
 
-func (bp *baseProtocol) doHandshake(rw MsgReadWriter) error {
-	// send our handshake
-	if err := rw.WriteMsg(bp.handshakeMsg()); err != nil {
-		return err
-	}
-
+func (bp *baseProtocol) readHandshake() error {
 	// read and handle remote handshake
-	msg, err := rw.ReadMsg()
+	msg, err := bp.rw.ReadMsg()
 	if err != nil {
 		return err
 	}
@@ -271,9 +270,9 @@ func (bp *baseProtocol) handshakeMsg() Msg {
 	)
 }
 
-func (bp *baseProtocol) peerList() []ethutil.RlpEncodable {
+func (bp *baseProtocol) peerList() []interface{} {
 	peers := bp.peer.otherPeers()
-	ds := make([]ethutil.RlpEncodable, 0, len(peers))
+	ds := make([]interface{}, 0, len(peers))
 	for _, p := range peers {
 		p.infolock.Lock()
 		addr := p.listenAddr

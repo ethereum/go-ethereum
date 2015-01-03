@@ -2,6 +2,8 @@ package p2p
 
 import (
 	"fmt"
+	"net"
+	"reflect"
 	"testing"
 )
 
@@ -41,6 +43,52 @@ func TestBaseProtocolDisconnect(t *testing.T) {
 		t.Errorf("base protocol returned wrong error: %v", err)
 	}
 	<-done
+}
+
+func TestBaseProtocolPeers(t *testing.T) {
+	id1 := NewSimpleClientIdentity("p1", "", "", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	id2 := NewSimpleClientIdentity("p2", "", "", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+	cannedPeerList := []*peerAddr{
+		{IP: net.ParseIP("1.2.3.4"), Port: 2222, Pubkey: []byte{}},
+		{IP: net.ParseIP("5.6.7.8"), Port: 3333, Pubkey: []byte{}},
+	}
+	rw1, rw2 := MsgPipe()
+
+	// run matcher, close pipe when addresses have arrived
+	addrChan := make(chan *peerAddr, len(cannedPeerList))
+	go func() {
+		for _, want := range cannedPeerList {
+			got := <-addrChan
+			t.Logf("got peer: %+v", got)
+			if !reflect.DeepEqual(want, got) {
+				t.Errorf("mismatch: got %#v, want %#v", got, want)
+			}
+		}
+		rw1.Close()
+	}()
+
+	// run first peer
+	peer1 := NewPeer(id2, nil)
+	peer1.ourID = id1
+	peer1.pubkeyHook = func(*peerAddr) error { return nil }
+	peer1.otherPeers = func() []*Peer {
+		pl := make([]*Peer, len(cannedPeerList))
+		for i, addr := range cannedPeerList {
+			pl[i] = &Peer{listenAddr: addr}
+		}
+		return pl
+	}
+	go runBaseProtocol(peer1, rw2)
+
+	// run second peer
+	peer2 := NewPeer(id1, nil)
+	peer2.ourID = id2
+	peer2.pubkeyHook = func(*peerAddr) error { return nil }
+	peer2.otherPeers = func() []*Peer { return nil }
+	peer2.newPeerAddr = addrChan // feed peer suggestions into matcher
+	if err := runBaseProtocol(peer2, rw1); err != ErrPipeClosed {
+		t.Errorf("peer2 terminated with unexpected error: %v", err)
+	}
 }
 
 func expectMsg(r MsgReader, code uint64) error {
