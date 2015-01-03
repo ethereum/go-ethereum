@@ -463,7 +463,6 @@ func (r *eofSignal) Read(buf []byte) (int, error) {
 
 func (peer *Peer) PeerList() []interface{} {
 	peers := peer.otherPeers()
-	fmt.Printf("address length: %v\n", len(peers))
 	ds := make([]interface{}, 0, len(peers))
 	for _, p := range peers {
 		p.infolock.Lock()
@@ -482,6 +481,5 @@ func (peer *Peer) PeerList() []interface{} {
 		// if ourAddr != nil && !ourAddr.IP.IsLoopback() && !ourAddr.IP.IsUnspecified() {
 		ds = append(ds, ourAddr)
 	}
-	fmt.Printf("address length: %v\n", len(ds))
 	return ds
 }
