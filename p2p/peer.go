@@ -46,7 +46,7 @@ func (d peerAddr) String() string {
 }
 
 func (d *peerAddr) RlpData() interface{} {
-	return []interface{}{d.IP, d.Port, d.Pubkey}
+	return []interface{}{string(d.IP), d.Port, d.Pubkey}
 }
 
 // Peer represents a remote peer.
