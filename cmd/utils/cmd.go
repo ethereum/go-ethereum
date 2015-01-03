@@ -167,8 +167,8 @@ func NatType(natType string, gateway string) (nat p2p.NAT) {
 	return
 }
 
-func NewEthereum(db ethutil.Database, clientIdentity p2p.ClientIdentity, keyManager *crypto.KeyManager, nat p2p.NAT, OutboundPort string, MaxPeer int) *eth.Ethereum {
-	ethereum, err := eth.New(db, clientIdentity, keyManager, nat, OutboundPort, MaxPeer)
+func NewEthereum(db ethutil.Database, clientIdentity p2p.ClientIdentity, keyManager *crypto.KeyManager, nat p2p.NAT, OutboundPort string, MaxPeer int, SHH bool) *eth.Ethereum {
+	ethereum, err := eth.New(db, clientIdentity, keyManager, nat, OutboundPort, MaxPeer, SHH)
 	if err != nil {
 		clilogger.Fatalln("eth start err:", err)
 	}

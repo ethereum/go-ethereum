@@ -54,7 +54,7 @@ type Ethereum struct {
 	Mining bool
 }
 
-func New(db ethutil.Database, identity p2p.ClientIdentity, keyManager *crypto.KeyManager, nat p2p.NAT, port string, maxPeers int) (*Ethereum, error) {
+func New(db ethutil.Database, identity p2p.ClientIdentity, keyManager *crypto.KeyManager, nat p2p.NAT, port string, maxPeers int, shh bool) (*Ethereum, error) {
 
 	saveProtocolVersion(db)
 	ethutil.Config.Db = db
@@ -73,7 +73,6 @@ func New(db ethutil.Database, identity p2p.ClientIdentity, keyManager *crypto.Ke
 	eth.txPool = core.NewTxPool(eth.chainManager, eth.EventMux())
 	eth.blockManager = core.NewBlockManager(eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockManager)
-	eth.whisper = whisper.New()
 
 	hasBlock := eth.chainManager.HasBlock
 	insertChain := eth.chainManager.InsertChain
@@ -83,7 +82,12 @@ func New(db ethutil.Database, identity p2p.ClientIdentity, keyManager *crypto.Ke
 	eth.txPool.Start()
 
 	ethProto := EthProtocol(eth.txPool, eth.chainManager, eth.blockPool)
-	protocols := []p2p.Protocol{ethProto, eth.whisper.Protocol()}
+	protocols := []p2p.Protocol{ethProto}
+
+	if shh {
+		eth.whisper = whisper.New()
+		protocols = append(protocols, eth.whisper.Protocol())
+	}
 
 	server := &p2p.Server{
 		Identity:  identity,
@@ -165,7 +169,9 @@ func (s *Ethereum) Start(seed bool) error {
 		return err
 	}
 	s.blockPool.Start()
-	s.whisper.Start()
+	if s.whisper != nil {
+		s.whisper.Start()
+	}
 
 	// broadcast transactions
 	s.txSub = s.eventMux.Subscribe(core.TxPreEvent{})
@@ -213,7 +219,9 @@ func (s *Ethereum) Stop() {
 	s.txPool.Stop()
 	s.eventMux.Stop()
 	s.blockPool.Stop()
-	s.whisper.Stop()
+	if s.whisper != nil {
+		s.whisper.Stop()
+	}
 
 	ethlogger.Infoln("Server stopped")
 	close(s.shutdownChan)
