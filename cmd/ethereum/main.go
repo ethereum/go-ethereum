@@ -64,10 +64,13 @@ func main() {
 		NATType:    PMPGateway,
 		PMPGateway: PMPGateway,
 		KeyRing:    KeyRing,
+		Shh:        SHH,
 	})
+
 	if err != nil {
 		clilogger.Fatalln(err)
 	}
+
 	utils.KeyTasks(ethereum.KeyManager(), KeyRing, GenAddr, SecretFile, ExportDir, NonInteractive)
 
 	if Dump {
