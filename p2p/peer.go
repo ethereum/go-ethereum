@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 )
@@ -462,9 +461,10 @@ func (r *eofSignal) Read(buf []byte) (int, error) {
 	return n, err
 }
 
-func (peer *Peer) PeerList() []ethutil.RlpEncodable {
+func (peer *Peer) PeerList() []interface{} {
 	peers := peer.otherPeers()
-	ds := make([]ethutil.RlpEncodable, 0, len(peers))
+	fmt.Printf("address length: %v\n", len(peers))
+	ds := make([]interface{}, 0, len(peers))
 	for _, p := range peers {
 		p.infolock.Lock()
 		addr := p.listenAddr
@@ -478,7 +478,8 @@ func (peer *Peer) PeerList() []ethutil.RlpEncodable {
 		ds = append(ds, addr)
 	}
 	ourAddr := peer.ourListenAddr
-	if ourAddr != nil && !ourAddr.IP.IsLoopback() && !ourAddr.IP.IsUnspecified() {
+	if ourAddr != nil && !ourAddr.IP.IsUnspecified() {
+		// if ourAddr != nil && !ourAddr.IP.IsLoopback() && !ourAddr.IP.IsUnspecified() {
 		ds = append(ds, ourAddr)
 	}
 	fmt.Printf("address length: %v\n", len(ds))

@@ -88,20 +88,25 @@ type baseProtocol struct {
 
 func runBaseProtocol(peer *Peer, rw MsgReadWriter) error {
 	bp := &baseProtocol{rw, peer}
-	if err := bp.doHandshake(rw); err != nil {
+	errc := make(chan error, 1)
+	go func() { errc <- rw.WriteMsg(bp.handshakeMsg()) }()
+	if err := bp.readHandshake(); err != nil {
+		return err
+	}
+	// handle write error
+	if err := <-errc; err != nil {
 		return err
 	}
 	// run main loop
-	quit := make(chan error, 1)
 	go func() {
 		for {
 			if err := bp.handle(rw); err != nil {
-				quit <- err
+				errc <- err
 				break
 			}
 		}
 	}()
-	return bp.loop(quit)
+	return bp.loop(errc)
 }
 
 var pingTimeout = 2 * time.Second
@@ -175,7 +180,7 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 		//
 		// TODO: add event mechanism to notify baseProtocol for new peers
 		if len(peers) > 0 {
-			return bp.rw.EncodeMsg(peersMsg, peers)
+			return bp.rw.EncodeMsg(peersMsg, peers...)
 		}
 
 	case peersMsg:
@@ -194,14 +199,9 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 	return nil
 }
 
-func (bp *baseProtocol) doHandshake(rw MsgReadWriter) error {
-	// send our handshake
-	if err := rw.WriteMsg(bp.handshakeMsg()); err != nil {
-		return err
-	}
-
+func (bp *baseProtocol) readHandshake() error {
 	// read and handle remote handshake
-	msg, err := rw.ReadMsg()
+	msg, err := bp.rw.ReadMsg()
 	if err != nil {
 		return err
 	}
@@ -211,12 +211,10 @@ func (bp *baseProtocol) doHandshake(rw MsgReadWriter) error {
 	if msg.Size > baseProtocolMaxMsgSize {
 		return newPeerError(errMisc, "message too big")
 	}
-
 	var hs handshake
 	if err := msg.Decode(&hs); err != nil {
 		return err
 	}
-
 	// validate handshake info
 	if hs.Version != baseProtocolVersion {
 		return newPeerError(errP2PVersionMismatch, "Require protocol %d, received %d\n",
@@ -239,9 +237,7 @@ func (bp *baseProtocol) doHandshake(rw MsgReadWriter) error {
 	if err := bp.peer.pubkeyHook(pa); err != nil {
 		return newPeerError(errPubkeyForbidden, "%v", err)
 	}
-
 	// TODO: remove Caps with empty name
-
 	var addr *peerAddr
 	if hs.ListenPort != 0 {
 		addr = newPeerAddr(bp.peer.conn.RemoteAddr(), hs.NodeID)
