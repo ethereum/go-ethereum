@@ -199,7 +199,7 @@ func (self *ethProtocol) handle() error {
 		msgStream := rlp.NewStream(msg.Payload)
 		msgStream.List()
 		for {
-			var block *types.Block
+			var block types.Block
 			if err := msgStream.Decode(&block); err != nil {
 				if err == rlp.EOL {
 					break
