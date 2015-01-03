@@ -2,7 +2,6 @@ package p2p
 
 import (
 	"bytes"
-	"fmt"
 	"time"
 )
 
@@ -171,8 +170,6 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 
 	case getPeersMsg:
 		peers := bp.peer.PeerList()
-		fmt.Printf("get Peers Msg: peers length:%v\n", len(peers))
-
 		// this is dangerous. the spec says that we should _delay_
 		// sending the response if no new information is available.
 		// this means that would need to send a response later when
@@ -186,7 +183,7 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 	case peersMsg:
 		var peers []*peerAddr
 		if err := msg.Decode(&peers); err != nil {
-			return newPeerError(errInvalidMsg, "msg %v : %v", msg, err)
+			return err
 		}
 		for _, addr := range peers {
 			bp.peer.Debugf("received peer suggestion: %v", addr)
