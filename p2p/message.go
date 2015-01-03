@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -50,6 +51,10 @@ func encodePayload(params ...interface{}) []byte {
 func (msg Msg) Decode(val interface{}) error {
 	s := rlp.NewListStream(msg.Payload, uint64(msg.Size))
 	return s.Decode(val)
+}
+
+func (msg Msg) String() string {
+	return fmt.Sprintf("msg #%v (%v bytes)", msg.Code, msg.Size)
 }
 
 // Discard reads any remaining payload data into a black hole.

@@ -131,16 +131,16 @@ func (self *ethProtocol) handle() error {
 		// TODO: rework using lazy RLP stream
 		var txs []*types.Transaction
 		if err := msg.Decode(&txs); err != nil {
-			return self.protoError(ErrDecode, "%v", err)
+			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 		}
 		self.txPool.AddTransactions(txs)
 
 	case GetBlockHashesMsg:
-		var request getBlockHashesMsgData
+		var request [1]getBlockHashesMsgData
 		if err := msg.Decode(&request); err != nil {
-			return self.protoError(ErrDecode, "%v", err)
+			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
-		hashes := self.chainManager.GetBlockHashesFromHash(request.Hash, request.Amount)
+		hashes := self.chainManager.GetBlockHashesFromHash(request[0].Hash, request[0].Amount)
 		return self.rw.EncodeMsg(BlockHashesMsg, ethutil.ByteSliceToInterface(hashes)...)
 
 	case BlockHashesMsg:
@@ -156,13 +156,13 @@ func (self *ethProtocol) handle() error {
 		}
 		self.blockPool.AddBlockHashes(iter, self.id)
 		if err != nil && err != rlp.EOL {
-			return self.protoError(ErrDecode, "%v", err)
+			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 		}
 
 	case GetBlocksMsg:
 		var blockHashes [][]byte
 		if err := msg.Decode(&blockHashes); err != nil {
-			return self.protoError(ErrDecode, "%v", err)
+			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 		}
 		max := int(math.Min(float64(len(blockHashes)), blockHashesBatchSize))
 		var blocks []interface{}
@@ -185,7 +185,7 @@ func (self *ethProtocol) handle() error {
 				if err == rlp.EOL {
 					break
 				} else {
-					return self.protoError(ErrDecode, "%v", err)
+					return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 				}
 			}
 			self.blockPool.AddBlock(block, self.id)
@@ -194,7 +194,7 @@ func (self *ethProtocol) handle() error {
 	case NewBlockMsg:
 		var request newBlockMsgData
 		if err := msg.Decode(&request); err != nil {
-			return self.protoError(ErrDecode, "%v", err)
+			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 		}
 		hash := request.Block.Hash()
 		// to simplify backend interface adding a new block
@@ -221,8 +221,8 @@ func (self *ethProtocol) handle() error {
 }
 
 type statusMsgData struct {
-	ProtocolVersion uint
-	NetworkId       uint
+	ProtocolVersion uint32
+	NetworkId       uint32
 	TD              *big.Int
 	CurrentBlock    []byte
 	GenesisBlock    []byte
@@ -262,7 +262,7 @@ func (self *ethProtocol) handleStatus() error {
 
 	var status statusMsgData
 	if err := msg.Decode(&status); err != nil {
-		return self.protoError(ErrDecode, "%v", err)
+		return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 	}
 
 	_, _, genesisBlock := self.chainManager.Status()
@@ -288,7 +288,7 @@ func (self *ethProtocol) handleStatus() error {
 
 func (self *ethProtocol) requestBlockHashes(from []byte) error {
 	self.peer.Debugf("fetching hashes (%d) %x...\n", blockHashesBatchSize, from[0:4])
-	return self.rw.EncodeMsg(GetBlockHashesMsg, from, blockHashesBatchSize)
+	return self.rw.EncodeMsg(GetBlockHashesMsg, interface{}(from), uint64(blockHashesBatchSize))
 }
 
 func (self *ethProtocol) requestBlocks(hashes [][]byte) error {
