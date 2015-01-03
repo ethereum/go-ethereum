@@ -3,7 +3,7 @@
 # launched by run.sh
 function peer {
   rm -rf $DIR/$1
-  ARGS="-datadir $DIR/$1 -debug debug -seed=false -id test$1"
+  ARGS="-datadir $DIR/$1 -debug debug -seed=false -shh=false -id test$1"
   if [ "" != "$2" ]; then
     chain="chains/$2.chain"
     echo "import chain $chain"
