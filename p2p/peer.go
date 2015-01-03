@@ -46,7 +46,7 @@ func (d peerAddr) String() string {
 }
 
 func (d *peerAddr) RlpData() interface{} {
-	return []interface{}{d.IP, d.Port, d.Pubkey}
+	return []interface{}{string(d.IP), d.Port, d.Pubkey}
 }
 
 // Peer represents a remote peer.
@@ -426,7 +426,7 @@ func (rw *proto) WriteMsg(msg Msg) error {
 }
 
 func (rw *proto) EncodeMsg(code uint64, data ...interface{}) error {
-	return rw.WriteMsg(NewMsg(code, data))
+	return rw.WriteMsg(NewMsg(code, data...))
 }
 
 func (rw *proto) ReadMsg() (Msg, error) {
@@ -463,7 +463,6 @@ func (r *eofSignal) Read(buf []byte) (int, error) {
 
 func (peer *Peer) PeerList() []interface{} {
 	peers := peer.otherPeers()
-	fmt.Printf("address length: %v\n", len(peers))
 	ds := make([]interface{}, 0, len(peers))
 	for _, p := range peers {
 		p.infolock.Lock()
@@ -482,6 +481,5 @@ func (peer *Peer) PeerList() []interface{} {
 		// if ourAddr != nil && !ourAddr.IP.IsLoopback() && !ourAddr.IP.IsUnspecified() {
 		ds = append(ds, ourAddr)
 	}
-	fmt.Printf("address length: %v\n", len(ds))
 	return ds
 }
