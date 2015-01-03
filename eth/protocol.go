@@ -186,7 +186,7 @@ func (self *ethProtocol) handle() error {
 			}
 			block := self.chainManager.GetBlock(hash)
 			if block != nil {
-				blocks = append(blocks, block.RlpData())
+				blocks = append(blocks, block)
 			}
 			if i == blockHashesBatchSize {
 				break
@@ -198,7 +198,7 @@ func (self *ethProtocol) handle() error {
 		msgStream := rlp.NewStream(msg.Payload)
 		msgStream.List()
 		for {
-			var block [1]*types.Block
+			var block *types.Block
 			if err := msgStream.Decode(&block); err != nil {
 				if err == rlp.EOL {
 					break
@@ -206,7 +206,7 @@ func (self *ethProtocol) handle() error {
 					return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 				}
 			}
-			self.blockPool.AddBlock(block[0], self.id)
+			self.blockPool.AddBlock(block, self.id)
 		}
 
 	case NewBlockMsg:
