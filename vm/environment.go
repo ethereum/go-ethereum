@@ -30,11 +30,6 @@ type Environment interface {
 	Create(me ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error, ContextRef)
 }
 
-type Object interface {
-	GetStorage(key *big.Int) *ethutil.Value
-	SetStorage(key *big.Int, value *ethutil.Value)
-}
-
 type Account interface {
 	SubBalance(amount *big.Int)
 	AddBalance(amount *big.Int)

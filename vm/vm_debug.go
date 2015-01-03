@@ -47,7 +47,7 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 		Timestamp: self.env.Time(), Coinbase: self.env.Coinbase(), Number: self.env.BlockNumber(),
 		Value: value,
 	})
-	context := NewContext(msg, caller, me, code, gas, price)
+	context := NewContext(caller, me, code, gas, price)
 
 	if self.Recoverable {
 		// Recover from any require exception
@@ -617,7 +617,7 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 			val, loc := stack.Popn()
 			statedb.SetState(context.Address(), loc.Bytes(), val)
 
-			context.message.AddStorageChange(loc.Bytes())
+			msg.AddStorageChange(loc.Bytes())
 
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case JUMP:
