@@ -3,7 +3,6 @@ package eth
 import (
 	"bytes"
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -171,27 +170,35 @@ func (self *ethProtocol) handle() error {
 		self.blockPool.AddBlockHashes(iter, self.id)
 
 	case GetBlocksMsg:
-		var blockHashes [][]byte
-		if err := msg.Decode(&blockHashes); err != nil {
-			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
-		}
-		max := int(math.Min(float64(len(blockHashes)), blockHashesBatchSize))
+		msgStream := rlp.NewStream(msg.Payload)
+		msgStream.List()
 		var blocks []interface{}
-		for i, hash := range blockHashes {
-			if i >= max {
-				break
+		var i int
+		for {
+			i++
+			var hash []byte
+			if err := msgStream.Decode(&hash); err != nil {
+				if err == rlp.EOL {
+					break
+				} else {
+					return self.protoError(ErrDecode, "msg %v: %v", msg, err)
+				}
 			}
 			block := self.chainManager.GetBlock(hash)
 			if block != nil {
 				blocks = append(blocks, block.RlpData())
 			}
+			if i == blockHashesBatchSize {
+				break
+			}
 		}
 		return self.rw.EncodeMsg(BlocksMsg, blocks...)
 
 	case BlocksMsg:
-		msgStream := rlp.NewListStream(msg.Payload, uint64(msg.Size))
+		msgStream := rlp.NewStream(msg.Payload)
+		msgStream.List()
 		for {
-			var block *types.Block
+			var block [1]*types.Block
 			if err := msgStream.Decode(&block); err != nil {
 				if err == rlp.EOL {
 					break
@@ -199,7 +206,7 @@ func (self *ethProtocol) handle() error {
 					return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 				}
 			}
-			self.blockPool.AddBlock(block, self.id)
+			self.blockPool.AddBlock(block[0], self.id)
 		}
 
 	case NewBlockMsg:
@@ -304,7 +311,7 @@ func (self *ethProtocol) requestBlockHashes(from []byte) error {
 
 func (self *ethProtocol) requestBlocks(hashes [][]byte) error {
 	self.peer.Debugf("fetching %v blocks", len(hashes))
-	return self.rw.EncodeMsg(GetBlocksMsg, ethutil.ByteSliceToInterface(hashes))
+	return self.rw.EncodeMsg(GetBlocksMsg, ethutil.ByteSliceToInterface(hashes)...)
 }
 
 func (self *ethProtocol) protoError(code int, format string, params ...interface{}) (err *protocolError) {
