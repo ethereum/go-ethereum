@@ -130,7 +130,7 @@ func TestPeerProtoEncodeMsg(t *testing.T) {
 			if err := rw.EncodeMsg(2); err == nil {
 				t.Error("expected error for out-of-range msg code, got nil")
 			}
-			if err := rw.EncodeMsg(1); err != nil {
+			if err := rw.EncodeMsg(1, "foo", "bar"); err != nil {
 				t.Errorf("write error: %v", err)
 			}
 			return nil
@@ -147,6 +147,13 @@ func TestPeerProtoEncodeMsg(t *testing.T) {
 	}
 	if msg.Code != 17 {
 		t.Errorf("incorrect message code: got %d, expected %d", msg.Code, 17)
+	}
+	var data []string
+	if err := msg.Decode(&data); err != nil {
+		t.Errorf("payload decode error: %v", err)
+	}
+	if !reflect.DeepEqual(data, []string{"foo", "bar"}) {
+		t.Errorf("payload RLP mismatch, got %#v, want %#v", data, []string{"foo", "bar"})
 	}
 }
 
