@@ -322,118 +322,118 @@ func (self *BlockPool) AddBlockHashes(next func() ([]byte, bool), peerId string)
 	// peer is still the best
 	poolLogger.Debugf("adding hashes for best peer %s", peerId)
 
-	self.wg.Add(1)
-	self.procWg.Add(1)
+	// self.wg.Add(1)
+	// self.procWg.Add(1)
 
-	go func() {
-		var size, n int
-		var hash []byte
-		var ok bool = true
-		var section, child, parent *section
-		var entry *poolEntry
-		var nodes []*poolNode
+	// go func() {
+	var size, n int
+	var hash []byte
+	var ok bool = true
+	var section, child, parent *section
+	var entry *poolEntry
+	var nodes []*poolNode
 
-	LOOP:
-		// iterate using next (rlp stream lazy decoder) feeding hashesC
-		for hash, ok = next(); ok; hash, ok = next() {
-			n++
-			select {
-			case <-self.quit:
-				break LOOP
-			case <-peer.quitC:
-				// if the peer is demoted, no more hashes taken
-				break LOOP
-			default:
-			}
-			if self.hasBlock(hash) {
-				// check if known block connecting the downloaded chain to our blockchain
-				poolLogger.Debugf("[%s] known block", name(hash))
-				// mark child as absolute pool root with parent known to blockchain
-				if section != nil {
-					self.connectToBlockChain(section)
-				} else {
-					if child != nil {
-						self.connectToBlockChain(child)
-					}
+LOOP:
+	// iterate using next (rlp stream lazy decoder) feeding hashesC
+	for hash, ok = next(); ok; hash, ok = next() {
+		n++
+		select {
+		case <-self.quit:
+			break LOOP
+		case <-peer.quitC:
+			// if the peer is demoted, no more hashes taken
+			break LOOP
+		default:
+		}
+		if self.hasBlock(hash) {
+			// check if known block connecting the downloaded chain to our blockchain
+			poolLogger.Debugf("[%s] known block", name(hash))
+			// mark child as absolute pool root with parent known to blockchain
+			if section != nil {
+				self.connectToBlockChain(section)
+			} else {
+				if child != nil {
+					self.connectToBlockChain(child)
 				}
-				break LOOP
 			}
-			// look up node in pool
-			entry = self.get(hash)
-			if entry != nil {
-				poolLogger.Debugf("[%s] found block", name(hash))
-				// reached a known chain in the pool
-				if entry.node == entry.section.bottom && n == 1 {
-					// the first block hash received is an orphan in the pool, so rejoice and continue
-					poolLogger.Debugf("[%s] first hash is orphan block, keep building", name(hash))
-					child = entry.section
-					continue LOOP
-				}
-				poolLogger.Debugf("[%s] reached blockpool chain", name(hash))
-				parent = entry.section
-				break LOOP
+			break LOOP
+		}
+		// look up node in pool
+		entry = self.get(hash)
+		if entry != nil {
+			poolLogger.Debugf("[%s] found block", name(hash))
+			// reached a known chain in the pool
+			if entry.node == entry.section.bottom && n == 1 {
+				// the first block hash received is an orphan in the pool, so rejoice and continue
+				poolLogger.Debugf("[%s] first hash is orphan block, keep building", name(hash))
+				child = entry.section
+				continue LOOP
 			}
-			// if node for block hash does not exist, create it and index in the pool
-			poolLogger.Debugf("[%s] create node %v", name(hash), size)
-			node := &poolNode{
-				hash: hash,
-				peer: peerId,
-			}
-			if size == 0 {
-				section = newSection()
-			}
-			nodes = append(nodes, node)
-			size++
-		} //for
-
-		self.chainLock.Lock()
-		poolLogger.Debugf("lock chain lock")
-
-		poolLogger.Debugf("read %v hashes added by %s", n, peerId)
-
-		if parent != nil && entry != nil && entry.node != parent.top {
-			poolLogger.Debugf("[%s] fork section", sectionName(parent))
-			parent.controlC <- false
-			waiter := make(chan bool)
-			parent.forkC <- waiter
-			chain := parent.nodes
-			parent.nodes = chain[entry.index:]
-			parent.top = parent.nodes[0]
-			orphan := newSection()
-			self.link(orphan, parent.child)
-			self.processSection(orphan, chain[0:entry.index])
-			orphan.controlC <- false
-			close(waiter)
+			poolLogger.Debugf("[%s] reached blockpool chain", name(hash))
+			parent = entry.section
+			break LOOP
 		}
-
-		if size > 0 {
-			self.processSection(section, nodes)
-			poolLogger.Debugf("[%s]->[%s](%v)->[%s] new chain section", sectionName(parent), sectionName(section), size, sectionName(child))
-			self.link(parent, section)
-			self.link(section, child)
-		} else {
-			poolLogger.Debugf("[%s]->[%s] connecting known sections", sectionName(parent), sectionName(child))
-			self.link(parent, child)
+		// if node for block hash does not exist, create it and index in the pool
+		poolLogger.Debugf("[%s] create node %v", name(hash), size)
+		node := &poolNode{
+			hash: hash,
+			peer: peerId,
 		}
-
-		self.chainLock.Unlock()
-		poolLogger.Debugf("[%s] unlock chain lock", sectionName(section))
-
-		if parent != nil {
-			poolLogger.Debugf("[%s] activating parent chain [%s]...", name(parent.top.hash), sectionName(parent))
-			self.activateChain(parent, peer)
-			poolLogger.Debugf("[%s] activated parent chain [%s]. done", name(parent.top.hash), sectionName(parent))
+		if size == 0 {
+			section = newSection()
 		}
+		nodes = append(nodes, node)
+		size++
+	} //for
 
-		if section != nil {
-			poolLogger.Debugf("[%s] activate new section process", sectionName(section))
-			peer.addSection(section.top.hash, section)
-			section.controlC <- true
-		}
-		self.procWg.Done()
-		self.wg.Done()
+	self.chainLock.Lock()
+	poolLogger.Debugf("lock chain lock")
 
-	}()
+	poolLogger.Debugf("read %v hashes added by %s", n, peerId)
+
+	if parent != nil && entry != nil && entry.node != parent.top {
+		poolLogger.Debugf("[%s] fork section", sectionName(parent))
+		parent.controlC <- false
+		waiter := make(chan bool)
+		parent.forkC <- waiter
+		chain := parent.nodes
+		parent.nodes = chain[entry.index:]
+		parent.top = parent.nodes[0]
+		orphan := newSection()
+		self.link(orphan, parent.child)
+		self.processSection(orphan, chain[0:entry.index])
+		orphan.controlC <- false
+		close(waiter)
+	}
+
+	if size > 0 {
+		self.processSection(section, nodes)
+		poolLogger.Debugf("[%s]->[%s](%v)->[%s] new chain section", sectionName(parent), sectionName(section), size, sectionName(child))
+		self.link(parent, section)
+		self.link(section, child)
+	} else {
+		poolLogger.Debugf("[%s]->[%s] connecting known sections", sectionName(parent), sectionName(child))
+		self.link(parent, child)
+	}
+
+	self.chainLock.Unlock()
+	poolLogger.Debugf("[%s] unlock chain lock", sectionName(section))
+
+	if parent != nil {
+		poolLogger.Debugf("[%s] activating parent chain [%s]...", name(parent.top.hash), sectionName(parent))
+		self.activateChain(parent, peer)
+		poolLogger.Debugf("[%s] activated parent chain [%s]. done", name(parent.top.hash), sectionName(parent))
+	}
+
+	if section != nil {
+		poolLogger.Debugf("[%s] activate new section process", sectionName(section))
+		peer.addSection(section.top.hash, section)
+		section.controlC <- true
+	}
+	// 	self.procWg.Done()
+	// 	self.wg.Done()
+
+	// }()
 }
 
 func name(hash []byte) (name string) {
