@@ -3,6 +3,7 @@ package eth
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -139,11 +140,11 @@ func (self *ethProtocol) handle() error {
 		self.txPool.AddTransactions(txs)
 
 	case GetBlockHashesMsg:
-		var request [1]getBlockHashesMsgData
+		var request getBlockHashesMsgData
 		if err := msg.Decode(&request); err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
-		hashes := self.chainManager.GetBlockHashesFromHash(request[0].Hash, request[0].Amount)
+		hashes := self.chainManager.GetBlockHashesFromHash(request.Hash, request.Amount)
 		protologger.Debugf("hashes length %v", len(hashes))
 		return self.rw.EncodeMsg(BlockHashesMsg, ethutil.ByteSliceToInterface(hashes)...)
 
@@ -151,7 +152,6 @@ func (self *ethProtocol) handle() error {
 		// TODO: redo using lazy decode , this way very inefficient on known chains
 		protologger.Debugf("payload size %v", msg.Size)
 		msgStream := rlp.NewStream(msg.Payload)
-		msgStream.List()
 		var err error
 		var i int
 
@@ -161,7 +161,7 @@ func (self *ethProtocol) handle() error {
 				i++
 				ok = true
 			} else {
-				if err != rlp.EOL {
+				if err != io.EOF {
 					self.protoError(ErrDecode, "msg %v: after %v hashes : %v", msg, i, err)
 				}
 			}
@@ -172,14 +172,13 @@ func (self *ethProtocol) handle() error {
 
 	case GetBlocksMsg:
 		msgStream := rlp.NewStream(msg.Payload)
-		msgStream.List()
 		var blocks []interface{}
 		var i int
 		for {
 			i++
 			var hash []byte
 			if err := msgStream.Decode(&hash); err != nil {
-				if err == rlp.EOL {
+				if err == io.EOF {
 					break
 				} else {
 					return self.protoError(ErrDecode, "msg %v: %v", msg, err)
@@ -197,11 +196,10 @@ func (self *ethProtocol) handle() error {
 
 	case BlocksMsg:
 		msgStream := rlp.NewStream(msg.Payload)
-		msgStream.List()
 		for {
 			var block types.Block
 			if err := msgStream.Decode(&block); err != nil {
-				if err == rlp.EOL {
+				if err == io.EOF {
 					break
 				} else {
 					return self.protoError(ErrDecode, "msg %v: %v", msg, err)
@@ -211,15 +209,15 @@ func (self *ethProtocol) handle() error {
 		}
 
 	case NewBlockMsg:
-		var request [1]newBlockMsgData
+		var request newBlockMsgData
 		if err := msg.Decode(&request); err != nil {
 			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 		}
-		hash := request[0].Block.Hash()
+		hash := request.Block.Hash()
 		// to simplify backend interface adding a new block
 		// uses AddPeer followed by AddHashes, AddBlock only if peer is the best peer
 		// (or selected as new best peer)
-		if self.blockPool.AddPeer(request[0].TD, hash, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect) {
+		if self.blockPool.AddPeer(request.TD, hash, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect) {
 			called := true
 			iter := func() (hash []byte, ok bool) {
 				if called {
@@ -230,7 +228,7 @@ func (self *ethProtocol) handle() error {
 				}
 			}
 			self.blockPool.AddBlockHashes(iter, self.id)
-			self.blockPool.AddBlock(request[0].Block, self.id)
+			self.blockPool.AddBlock(request.Block, self.id)
 		}
 
 	default:
