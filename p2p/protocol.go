@@ -3,8 +3,6 @@ package p2p
 import (
 	"bytes"
 	"time"
-
-	"github.com/ethereum/go-ethereum/ethutil"
 )
 
 // Protocol represents a P2P subprotocol implementation.
@@ -180,7 +178,7 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 		//
 		// TODO: add event mechanism to notify baseProtocol for new peers
 		if len(peers) > 0 {
-			return bp.rw.EncodeMsg(peersMsg, peers)
+			return bp.rw.EncodeMsg(peersMsg, peers...)
 		}
 
 	case peersMsg:
@@ -272,9 +270,9 @@ func (bp *baseProtocol) handshakeMsg() Msg {
 	)
 }
 
-func (bp *baseProtocol) peerList() []ethutil.RlpEncodable {
+func (bp *baseProtocol) peerList() []interface{} {
 	peers := bp.peer.otherPeers()
-	ds := make([]ethutil.RlpEncodable, 0, len(peers))
+	ds := make([]interface{}, 0, len(peers))
 	for _, p := range peers {
 		p.infolock.Lock()
 		addr := p.listenAddr
