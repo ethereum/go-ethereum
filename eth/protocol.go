@@ -8,9 +8,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+var protologger = logger.NewLogger("ETH")
 
 const (
 	ProtocolVersion    = 49
@@ -141,23 +144,31 @@ func (self *ethProtocol) handle() error {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
 		hashes := self.chainManager.GetBlockHashesFromHash(request[0].Hash, request[0].Amount)
+		protologger.Debugf("hashes length %v", len(hashes))
 		return self.rw.EncodeMsg(BlockHashesMsg, ethutil.ByteSliceToInterface(hashes)...)
 
 	case BlockHashesMsg:
 		// TODO: redo using lazy decode , this way very inefficient on known chains
-		msgStream := rlp.NewListStream(msg.Payload, uint64(msg.Size))
+		protologger.Debugf("payload size %v", msg.Size)
+		msgStream := rlp.NewStream(msg.Payload)
+		msgStream.List()
 		var err error
+		var i int
+
 		iter := func() (hash []byte, ok bool) {
 			hash, err = msgStream.Bytes()
 			if err == nil {
+				i++
 				ok = true
+			} else {
+				if err != rlp.EOL {
+					self.protoError(ErrDecode, "msg %v: after %v hashes : %v", msg, i, err)
+				}
 			}
 			return
 		}
+
 		self.blockPool.AddBlockHashes(iter, self.id)
-		if err != nil && err != rlp.EOL {
-			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
-		}
 
 	case GetBlocksMsg:
 		var blockHashes [][]byte
@@ -192,15 +203,15 @@ func (self *ethProtocol) handle() error {
 		}
 
 	case NewBlockMsg:
-		var request newBlockMsgData
+		var request [1]newBlockMsgData
 		if err := msg.Decode(&request); err != nil {
 			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 		}
-		hash := request.Block.Hash()
+		hash := request[0].Block.Hash()
 		// to simplify backend interface adding a new block
 		// uses AddPeer followed by AddHashes, AddBlock only if peer is the best peer
 		// (or selected as new best peer)
-		if self.blockPool.AddPeer(request.TD, hash, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect) {
+		if self.blockPool.AddPeer(request[0].TD, hash, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect) {
 			called := true
 			iter := func() (hash []byte, ok bool) {
 				if called {
@@ -211,7 +222,7 @@ func (self *ethProtocol) handle() error {
 				}
 			}
 			self.blockPool.AddBlockHashes(iter, self.id)
-			self.blockPool.AddBlock(request.Block, self.id)
+			self.blockPool.AddBlock(request[0].Block, self.id)
 		}
 
 	default:
