@@ -102,41 +102,19 @@ func NewBlockWithHeader(header *Header) *Block {
 }
 
 func (self *Block) DecodeRLP(s *rlp.Stream) error {
-	if _, err := s.List(); err != nil {
+	var extblock struct {
+		Header
+		Txs    []*Transaction
+		Uncles *Header
+		TD     *big.Int // optional
+	}
+	if err := s.Decode(&extblock); err != nil {
 		return err
 	}
-
-	var header Header
-	if err := s.Decode(&header); err != nil {
-		return err
-	}
-
-	var transactions []*Transaction
-	if err := s.Decode(&transactions); err != nil {
-		return err
-	}
-
-	var uncleHeaders []*Header
-	if err := s.Decode(&uncleHeaders); err != nil {
-		return err
-	}
-
-	var tdBytes []byte
-	if err := s.Decode(&tdBytes); err != nil {
-		// If this block comes from the network that's fine. If loaded from disk it should be there
-		// Blocks don't store their Td when propagated over the network
-	} else {
-		self.Td = ethutil.BigD(tdBytes)
-	}
-
-	if err := s.ListEnd(); err != nil {
-		return err
-	}
-
-	self.header = &header
-	self.uncles = uncleHeaders
-	self.transactions = transactions
-
+	self.header = extblock.Header
+	self.uncles = extblock.Uncles
+	self.transactions = extblock.Txs
+	self.TD = extblock.TD
 	return nil
 }
 
