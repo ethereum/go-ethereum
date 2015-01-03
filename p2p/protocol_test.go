@@ -29,108 +29,52 @@ func testPeerFree() (peer *Peer) {
 	peer.pubkeyHook = func(*peerAddr) error { return nil }
 	peer.ourID = &peerId{}
 	peer.listenAddr = &peerAddr{}
+	peer.otherPeers = func() []*Peer { return nil }
 	return
 }
 
-func TestPeersMsg(t *testing.T) {
-	var peers []*Peer
-	for i := 0; i < 3; i++ {
-		peers = append(peers, testPeerFree())
+func TestBaseProtocolPeers(t *testing.T) {
+	cannedPeerList := []*peerAddr{
+		{IP: net.ParseIP("1.2.3.4"), Port: 2222, Pubkey: []byte{}},
+		{IP: net.ParseIP("5.6.7.8"), Port: 3333, Pubkey: []byte{}},
 	}
-	peer1 := testPeerFree()
-	peer1.newPeerAddr = make(chan *peerAddr)
-	peer1.otherPeers = func() []*Peer {
-		return peers
-	}
-
-	peer2 := testPeerFree()
-	peer2.newPeerAddr = make(chan *peerAddr)
-	peer2.otherPeers = func() []*Peer {
-		return peers
-	}
-
 	rw1, rw2 := MsgPipe()
-	fmt.Printf("all set up\n	")
-
-	done := make(chan struct{})
+	// run matcher, close pipe when addresses have arrived
+	addrChan := make(chan *peerAddr, len(cannedPeerList))
 	go func() {
-		fmt.Printf("expect handshake\n	")
-
-		if err := expectMsg(rw2, handshakeMsg); err != nil {
-			t.Error(err)
-		}
-		fmt.Printf("send handshake\n	")
-
-		err := rw2.EncodeMsg(handshakeMsg,
-			baseProtocolVersion,
-			"",
-			[]interface{}{},
-			0,
-			make([]byte, 64),
-		)
-		if err != nil {
-			t.Error(err)
-		}
-		fmt.Printf("send getPeers msg\n")
-
-		if err := rw2.EncodeMsg(getPeersMsg); err != nil {
-			t.Error(err)
-		}
-		fmt.Printf("expecting peersMsg\n")
-		var msg Msg
-		if msg, err = rw2.ReadMsg(); err != nil {
-			t.Error(err)
-			return
-		}
-
-		var addrs []*peerAddr
-		fmt.Printf("got peersMsg\n")
-		if err := msg.Decode(&addrs); err != nil {
-			t.Errorf("msg %v : %v", msg, err)
-		}
-		fmt.Printf("decoding done\n")
-
-		if len(addrs) != 3 {
-			t.Errorf("too few peer addresses, expected %v, got %v", 3, len(addrs))
-		}
-		fmt.Printf("count ok\n")
-
-		for i, p := range peers {
-			if i == len(addrs) {
-				break
-			}
-			addr := addrs[i]
-			fmt.Printf("addr %v: %v\n", i, addr)
-			if addr != p.listenAddr {
-				t.Errorf("incorrect peer address %v (%v)", addr, i)
-			}
-			if addr == nil {
-				t.Errorf("no processing %v", i)
+		for _, want := range cannedPeerList {
+			got := <-addrChan
+			t.Logf("got peer: %+v", got)
+			if !reflect.DeepEqual(want, got) {
+				t.Errorf("mismatch:  got %#v, want %#v", got, want)
 			}
 		}
-		fmt.Printf("complete\n")
-		if err := expectMsg(rw2, peersMsg); err != nil {
-			t.Error(err)
+		close(addrChan)
+		var own []*peerAddr
+		for _, got = range addrChan {
+			own = append(own, got)
 		}
-
-		if err := rw2.EncodeMsg(discMsg, DiscQuitting); err != nil {
-			t.Error(err)
+		if len(own) != 1 || !reflect.DeepEqual(own[0], ourAddr) {
+			t.Errorf("mismatch: peers own address is incorrectly or not given, got %v, want %#v", ownAddr, own)
 		}
-
-		close(done)
-		fmt.Printf("done channel closed")
+		rw2.Close()
 	}()
-
-	fmt.Printf("proto")
-
-	if err := runBaseProtocol(peer1, rw1); err == nil {
-		t.Errorf("base protocol returned without error")
-	} else if reason, ok := err.(discRequestedError); !ok || reason != DiscQuitting {
-		t.Errorf("base protocol returned wrong error: %v", err)
+	// run first peer
+	peer1 := testPeer()
+	peer1.otherPeers = func() []*Peer {
+		pl := make([]*Peer, len(cannedPeerList))
+		for i, addr := range cannedPeerList {
+			pl[i] = &Peer{listenAddr: addr}
+		}
+		return pl
 	}
-
-	<-done
-	t.Error("oops")
+	go runBaseProtocol(peer1, rw1)
+	// run second peer
+	peer2 := testPeer()
+	peer2.newPeerAddr = addrChan // feed peer suggestions into matcher
+	if err := runBaseProtocol(peer2, rw2); err != ErrPipeClosed {
+		t.Errorf("peer2 terminated with unexpected error: %v", err)
+	}
 }
 
 func TestBaseProtocolDisconnect(t *testing.T) {
