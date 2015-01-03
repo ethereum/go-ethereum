@@ -727,7 +727,7 @@ func TestPeerSwitchBack(t *testing.T) {
 	peer2.AddPeer()
 	go peer2.AddBlockHashes(8, 7, 6)
 	go peer2.AddBlockHashes(6, 5, 4)
-	peer2.AddBlocks(5, 6)                  // section partially complete
+	peer2.AddBlocks(4, 5)                  // section partially complete
 	peer1.AddPeer()                        // peer1 is promoted as best peer
 	go peer1.AddBlockHashes(11, 10)        // only gives useless results
 	blockPool.RemovePeer("peer1")          // peer1 disconnects
