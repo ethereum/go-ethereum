@@ -426,7 +426,7 @@ func (rw *proto) WriteMsg(msg Msg) error {
 }
 
 func (rw *proto) EncodeMsg(code uint64, data ...interface{}) error {
-	return rw.WriteMsg(NewMsg(code, data))
+	return rw.WriteMsg(NewMsg(code, data...))
 }
 
 func (rw *proto) ReadMsg() (Msg, error) {
