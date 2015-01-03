@@ -103,9 +103,9 @@ func NewBlockWithHeader(header *Header) *Block {
 
 func (self *Block) DecodeRLP(s *rlp.Stream) error {
 	var extblock struct {
-		Header
+		Header *Header
 		Txs    []*Transaction
-		Uncles *Header
+		Uncles []*Header
 		TD     *big.Int // optional
 	}
 	if err := s.Decode(&extblock); err != nil {
@@ -114,7 +114,7 @@ func (self *Block) DecodeRLP(s *rlp.Stream) error {
 	self.header = extblock.Header
 	self.uncles = extblock.Uncles
 	self.transactions = extblock.Txs
-	self.TD = extblock.TD
+	self.Td = extblock.TD
 	return nil
 }
 
