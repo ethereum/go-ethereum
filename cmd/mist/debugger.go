@@ -151,7 +151,7 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 
 	block := self.lib.eth.ChainManager().CurrentBlock()
 
-	env := utils.NewEnv(statedb, block, account.Address(), value)
+	env := utils.NewEnv(self.lib.eth.ChainManager(), statedb, block, account.Address(), value)
 
 	self.Logf("callsize %d", len(script))
 	go func() {

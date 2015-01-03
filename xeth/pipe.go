@@ -87,7 +87,7 @@ func (self *XEth) ExecuteObject(object *Object, data []byte, value, gas, price *
 
 	self.Vm.State = self.World().State().Copy()
 
-	vmenv := NewEnv(self.Vm.State, block, value.BigInt(), initiator.Address())
+	vmenv := NewEnv(self.chainManager, self.Vm.State, block, value.BigInt(), initiator.Address())
 	return vmenv.Call(initiator, object.Address(), data, gas.BigInt(), price.BigInt(), value.BigInt())
 }
 

@@ -14,11 +14,10 @@ type Environment interface {
 
 	Origin() []byte
 	BlockNumber() *big.Int
-	PrevHash() []byte
+	GetHash(n uint64) []byte
 	Coinbase() []byte
 	Time() int64
 	Difficulty() *big.Int
-	BlockHash() []byte
 	GasLimit() *big.Int
 	Transfer(from, to Account, amount *big.Int) error
 	AddLog(state.Log)
