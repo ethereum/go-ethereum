@@ -89,20 +89,26 @@ type baseProtocol struct {
 
 func runBaseProtocol(peer *Peer, rw MsgReadWriter) error {
 	bp := &baseProtocol{rw, peer}
-	if err := bp.doHandshake(rw); err != nil {
+	errc := make(chan error, 1)
+	go func() { errc <- rw.WriteMsg(bp.handshakeMsg()) }()
+	if err := bp.readHandshake(); err != nil {
 		return err
 	}
+	// handle write error
+	if err := <-errc; err != nil {
+		return err
+	}
+
 	// run main loop
-	quit := make(chan error, 1)
 	go func() {
 		for {
 			if err := bp.handle(rw); err != nil {
-				quit <- err
+				errc <- err
 				break
 			}
 		}
 	}()
-	return bp.loop(quit)
+	return bp.loop(errc)
 }
 
 var pingTimeout = 2 * time.Second
@@ -193,14 +199,9 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 	return nil
 }
 
-func (bp *baseProtocol) doHandshake(rw MsgReadWriter) error {
-	// send our handshake
-	if err := rw.WriteMsg(bp.handshakeMsg()); err != nil {
-		return err
-	}
-
+func (bp *baseProtocol) readHandshake() error {
 	// read and handle remote handshake
-	msg, err := rw.ReadMsg()
+	msg, err := bp.rw.ReadMsg()
 	if err != nil {
 		return err
 	}
