@@ -2,9 +2,8 @@ package p2p
 
 import (
 	"bytes"
+	"fmt"
 	"time"
-
-	"github.com/ethereum/go-ethereum/ethutil"
 )
 
 // Protocol represents a P2P subprotocol implementation.
@@ -166,7 +165,9 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 	case pongMsg:
 
 	case getPeersMsg:
-		peers := bp.peerList()
+		peers := bp.peer.PeerList()
+		fmt.Printf("get Peers Msg: peers length:%v\n", len(peers))
+
 		// this is dangerous. the spec says that we should _delay_
 		// sending the response if no new information is available.
 		// this means that would need to send a response later when
@@ -180,7 +181,7 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 	case peersMsg:
 		var peers []*peerAddr
 		if err := msg.Decode(&peers); err != nil {
-			return err
+			return newPeerError(errInvalidMsg, "msg %v : %v", msg, err)
 		}
 		for _, addr := range peers {
 			bp.peer.Debugf("received peer suggestion: %v", addr)
@@ -269,26 +270,4 @@ func (bp *baseProtocol) handshakeMsg() Msg {
 		port,
 		bp.peer.ourID.Pubkey()[1:],
 	)
-}
-
-func (bp *baseProtocol) peerList() []ethutil.RlpEncodable {
-	peers := bp.peer.otherPeers()
-	ds := make([]ethutil.RlpEncodable, 0, len(peers))
-	for _, p := range peers {
-		p.infolock.Lock()
-		addr := p.listenAddr
-		p.infolock.Unlock()
-		// filter out this peer and peers that are not listening or
-		// have not completed the handshake.
-		// TODO: track previously sent peers and exclude them as well.
-		if p == bp.peer || addr == nil {
-			continue
-		}
-		ds = append(ds, addr)
-	}
-	ourAddr := bp.peer.ourListenAddr
-	if ourAddr != nil && !ourAddr.IP.IsLoopback() && !ourAddr.IP.IsUnspecified() {
-		ds = append(ds, ourAddr)
-	}
-	return ds
 }
