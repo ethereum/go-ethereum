@@ -97,14 +97,14 @@ func runEthProtocol(txPool txPool, chainManager chainManager, blockPool blockPoo
 		blockPool:    blockPool,
 		rw:           rw,
 		peer:         peer,
-		id:           fmt.Sprintf("%x", peer.Identity().Pubkey()),
+		id:           fmt.Sprintf("%x", peer.Identity().Pubkey()[:8]),
 	}
 	err = self.handleStatus()
 	if err == nil {
 		for {
 			err = self.handle()
 			if err != nil {
-				fmt.Println(err)
+				fmt.Printf("handle err %v", err)
 				self.blockPool.RemovePeer(self.id)
 				break
 			}
@@ -118,6 +118,7 @@ func (self *ethProtocol) handle() error {
 	if err != nil {
 		return err
 	}
+	fmt.Printf("handle err %v", err)
 	if msg.Size > ProtocolMaxMsgSize {
 		return self.protoError(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
 	}
