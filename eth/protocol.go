@@ -207,7 +207,7 @@ func (self *ethProtocol) handle() error {
 					return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 				}
 			}
-			self.blockPool.AddBlock(block, self.id)
+			self.blockPool.AddBlock(&block, self.id)
 		}
 
 	case NewBlockMsg:
