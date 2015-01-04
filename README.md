@@ -13,7 +13,7 @@ Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20
 
 Ethereum Go Client © 2014 Jeffrey Wilcke.
 
-Current state: Proof of Concept 0.7
+Current state: Proof of Concept 0.8
 
 Ethereum is currently in its testing phase. 
 
