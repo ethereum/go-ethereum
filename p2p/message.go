@@ -50,7 +50,10 @@ func encodePayload(params ...interface{}) []byte {
 // For the decoding rules, please see package rlp.
 func (msg Msg) Decode(val interface{}) error {
 	s := rlp.NewListStream(msg.Payload, uint64(msg.Size))
-	return s.Decode(val)
+	if err := s.Decode(val); err != nil {
+		return newPeerError(errInvalidMsg, "(code %#x) (size %d) %v", msg.Code, msg.Size, err)
+	}
+	return nil
 }
 
 func (msg Msg) String() string {
