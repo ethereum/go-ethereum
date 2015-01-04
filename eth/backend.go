@@ -52,11 +52,11 @@ type Ethereum struct {
 
 	//*** SERVICES ***
 	// State manager for processing new blocks and managing the over all states
-	blockManager *core.BlockManager
-	txPool       *core.TxPool
-	chainManager *core.ChainManager
-	blockPool    *BlockPool
-	whisper      *whisper.Whisper
+	blockProcessor *core.BlockProcessor
+	txPool         *core.TxPool
+	chainManager   *core.ChainManager
+	blockPool      *BlockPool
+	whisper        *whisper.Whisper
 
 	net      *p2p.Server
 	eventMux *event.TypeMux
@@ -122,8 +122,8 @@ func New(config *Config) (*Ethereum, error) {
 
 	eth.chainManager = core.NewChainManager(eth.EventMux())
 	eth.txPool = core.NewTxPool(eth.EventMux())
-	eth.blockManager = core.NewBlockManager(eth.txPool, eth.chainManager, eth.EventMux())
-	eth.chainManager.SetProcessor(eth.blockManager)
+	eth.blockProcessor = core.NewBlockProcessor(eth.txPool, eth.chainManager, eth.EventMux())
+	eth.chainManager.SetProcessor(eth.blockProcessor)
 	eth.whisper = whisper.New()
 
 	hasBlock := eth.chainManager.HasBlock
@@ -169,8 +169,8 @@ func (s *Ethereum) ChainManager() *core.ChainManager {
 	return s.chainManager
 }
 
-func (s *Ethereum) BlockManager() *core.BlockManager {
-	return s.blockManager
+func (s *Ethereum) BlockProcessor() *core.BlockProcessor {
+	return s.blockProcessor
 }
 
 func (s *Ethereum) TxPool() *core.TxPool {

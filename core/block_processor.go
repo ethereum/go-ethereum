@@ -22,7 +22,7 @@ import (
 var statelogger = logger.NewLogger("BLOCK")
 
 type EthManager interface {
-	BlockManager() *BlockManager
+	BlockProcessor() *BlockProcessor
 	ChainManager() *ChainManager
 	TxPool() *TxPool
 	PeerCount() int
@@ -35,7 +35,7 @@ type EthManager interface {
 	EventMux() *event.TypeMux
 }
 
-type BlockManager struct {
+type BlockProcessor struct {
 	// Mutex for locking the block processor. Blocks can only be handled one at a time
 	mutex sync.Mutex
 	// Canonical block chain
@@ -57,8 +57,8 @@ type BlockManager struct {
 	eventMux *event.TypeMux
 }
 
-func NewBlockManager(txpool *TxPool, chainManager *ChainManager, eventMux *event.TypeMux) *BlockManager {
-	sm := &BlockManager{
+func NewBlockProcessor(txpool *TxPool, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
+	sm := &BlockProcessor{
 		mem:      make(map[string]*big.Int),
 		Pow:      ezp.New(),
 		bc:       chainManager,
@@ -69,7 +69,7 @@ func NewBlockManager(txpool *TxPool, chainManager *ChainManager, eventMux *event
 	return sm
 }
 
-func (sm *BlockManager) TransitionState(statedb *state.StateDB, parent, block *types.Block) (receipts types.Receipts, err error) {
+func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block *types.Block) (receipts types.Receipts, err error) {
 	coinbase := statedb.GetOrNewStateObject(block.Header().Coinbase)
 	coinbase.SetGasPool(CalcGasLimit(parent, block))
 
@@ -82,7 +82,7 @@ func (sm *BlockManager) TransitionState(statedb *state.StateDB, parent, block *t
 	return receipts, nil
 }
 
-func (self *BlockManager) ApplyTransactions(coinbase *state.StateObject, state *state.StateDB, block *types.Block, txs types.Transactions, transientProcess bool) (types.Receipts, types.Transactions, types.Transactions, types.Transactions, error) {
+func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state *state.StateDB, block *types.Block, txs types.Transactions, transientProcess bool) (types.Receipts, types.Transactions, types.Transactions, types.Transactions, error) {
 	var (
 		receipts           types.Receipts
 		handled, unhandled types.Transactions
@@ -149,7 +149,7 @@ done:
 	return receipts, handled, unhandled, erroneous, err
 }
 
-func (sm *BlockManager) Process(block *types.Block) (td *big.Int, msgs state.Messages, err error) {
+func (sm *BlockProcessor) Process(block *types.Block) (td *big.Int, msgs state.Messages, err error) {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
@@ -167,7 +167,7 @@ func (sm *BlockManager) Process(block *types.Block) (td *big.Int, msgs state.Mes
 	return sm.ProcessWithParent(block, parent)
 }
 
-func (sm *BlockManager) ProcessWithParent(block, parent *types.Block) (td *big.Int, messages state.Messages, err error) {
+func (sm *BlockProcessor) ProcessWithParent(block, parent *types.Block) (td *big.Int, messages state.Messages, err error) {
 	sm.lastAttemptedBlock = block
 
 	state := state.New(parent.Trie().Copy())
@@ -234,7 +234,7 @@ func (sm *BlockManager) ProcessWithParent(block, parent *types.Block) (td *big.I
 	}
 }
 
-func (sm *BlockManager) CalculateTD(block *types.Block) (*big.Int, bool) {
+func (sm *BlockProcessor) CalculateTD(block *types.Block) (*big.Int, bool) {
 	uncleDiff := new(big.Int)
 	for _, uncle := range block.Uncles() {
 		uncleDiff = uncleDiff.Add(uncleDiff, uncle.Difficulty)
@@ -257,7 +257,7 @@ func (sm *BlockManager) CalculateTD(block *types.Block) (*big.Int, bool) {
 // Validates the current block. Returns an error if the block was invalid,
 // an uncle or anything that isn't on the current block chain.
 // Validation validates easy over difficult (dagger takes longer time = difficult)
-func (sm *BlockManager) ValidateBlock(block, parent *types.Block) error {
+func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 	expd := CalcDifficulty(block, parent)
 	if expd.Cmp(block.Header().Difficulty) < 0 {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Header().Difficulty, expd)
@@ -283,7 +283,7 @@ func (sm *BlockManager) ValidateBlock(block, parent *types.Block) error {
 	return nil
 }
 
-func (sm *BlockManager) AccumelateRewards(statedb *state.StateDB, block, parent *types.Block) error {
+func (sm *BlockProcessor) AccumelateRewards(statedb *state.StateDB, block, parent *types.Block) error {
 	reward := new(big.Int).Set(BlockReward)
 
 	knownUncles := set.New()
@@ -338,7 +338,7 @@ func (sm *BlockManager) AccumelateRewards(statedb *state.StateDB, block, parent 
 	return nil
 }
 
-func (sm *BlockManager) GetMessages(block *types.Block) (messages []*state.Message, err error) {
+func (sm *BlockProcessor) GetMessages(block *types.Block) (messages []*state.Message, err error) {
 	if !sm.bc.HasBlock(block.Header().ParentHash) {
 		return nil, ParentError(block.Header().ParentHash)
 	}

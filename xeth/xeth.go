@@ -20,19 +20,19 @@ type VmVars struct {
 }
 
 type XEth struct {
-	obj          core.EthManager
-	blockManager *core.BlockManager
-	chainManager *core.ChainManager
-	world        *World
+	obj            core.EthManager
+	blockProcessor *core.BlockProcessor
+	chainManager   *core.ChainManager
+	world          *World
 
 	Vm VmVars
 }
 
 func New(obj core.EthManager) *XEth {
 	pipe := &XEth{
-		obj:          obj,
-		blockManager: obj.BlockManager(),
-		chainManager: obj.ChainManager(),
+		obj:            obj,
+		blockProcessor: obj.BlockProcessor(),
+		chainManager:   obj.ChainManager(),
 	}
 	pipe.world = NewWorld(pipe)
 
@@ -141,7 +141,7 @@ func (self *XEth) Transact(key *crypto.KeyPair, to []byte, value, gas, price *et
 	block := self.chainManager.NewBlock(key.Address())
 	coinbase := state.GetOrNewStateObject(key.Address())
 	coinbase.SetGasPool(block.GasLimit())
-	self.blockManager.ApplyTransactions(coinbase, state, block, types.Transactions{tx}, true)
+	self.blockProcessor.ApplyTransactions(coinbase, state, block, types.Transactions{tx}, true)
 
 	err := self.obj.TxPool().Add(tx)
 	if err != nil {

@@ -174,9 +174,9 @@ func (self *Miner) reset() {
 
 func (self *Miner) mine() {
 	var (
-		blockManager = self.eth.BlockManager()
-		chainMan     = self.eth.ChainManager()
-		block        = chainMan.NewBlock(self.Coinbase)
+		blockProcessor = self.eth.BlockProcessor()
+		chainMan       = self.eth.ChainManager()
+		block          = chainMan.NewBlock(self.Coinbase)
 	)
 
 	// Apply uncles
@@ -194,7 +194,7 @@ func (self *Miner) mine() {
 
 	// Accumulate all valid transactions and apply them to the new state
 	// Error may be ignored. It's not important during mining
-	receipts, txs, _, erroneous, err := blockManager.ApplyTransactions(coinbase, state, block, transactions, true)
+	receipts, txs, _, erroneous, err := blockProcessor.ApplyTransactions(coinbase, state, block, transactions, true)
 	if err != nil {
 		minerlogger.Debugln(err)
 	}
@@ -204,7 +204,7 @@ func (self *Miner) mine() {
 	block.SetReceipts(receipts)
 
 	// Accumulate the rewards included for this block
-	blockManager.AccumelateRewards(state, block, parent)
+	blockProcessor.AccumelateRewards(state, block, parent)
 
 	state.Update(ethutil.Big0)
 	block.SetRoot(state.Root())

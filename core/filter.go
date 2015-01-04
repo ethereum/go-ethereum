@@ -104,7 +104,7 @@ func (self *Filter) Find() []*state.Message {
 		// current parameters
 		if self.bloomFilter(block) {
 			// Get the messages of the block
-			msgs, err := self.eth.BlockManager().GetMessages(block)
+			msgs, err := self.eth.BlockProcessor().GetMessages(block)
 			if err != nil {
 				chainlogger.Warnln("err: filter get messages ", err)
 
