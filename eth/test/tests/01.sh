@@ -1,7 +1,7 @@
 #!/bin/bash
 . `dirname $BASH_SOURCE`/common.sh
 
-TIMEOUT=10
+TIMEOUT=20
 ID=01
 JSFILE="$DIR/js/$ID.js"
 
@@ -9,10 +9,10 @@ echo $JSFILE
 cat > $JSFILE <<EOF
 eth.addPeer("localhost:30311");
 var now = new Date().getTime();
-while(new Date().getTime() < now + 100){}
+while(new Date().getTime() < now + 1000){}
 eth.addPeer("localhost:30310");
 var now = new Date().getTime();
-while(new Date().getTime() < now + 2000){}
+while(new Date().getTime() < now + 4000){}
 eth.export("$CHAIN_TEST");
 EOF
 
