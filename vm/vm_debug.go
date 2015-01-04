@@ -42,12 +42,12 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 
 	msg := self.env.State().Manifest().AddMessage(&state.Message{
 		To: me.Address(), From: caller.Address(),
-		Input:  callData,
-		Origin: self.env.Origin(),
-		Block:  self.env.BlockHash(), Timestamp: self.env.Time(), Coinbase: self.env.Coinbase(), Number: self.env.BlockNumber(),
+		Input:     callData,
+		Origin:    self.env.Origin(),
+		Timestamp: self.env.Time(), Coinbase: self.env.Coinbase(), Number: self.env.BlockNumber(),
 		Value: value,
 	})
-	context := NewContext(msg, caller, me, code, gas, price)
+	context := NewContext(caller, me, code, gas, price)
 
 	if self.Recoverable {
 		// Recover from any require exception
@@ -83,7 +83,7 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 		jump = func(from uint64, to *big.Int) {
 			p := to.Uint64()
 
-			nop := OpCode(context.GetOp(p))
+			nop := context.GetOp(p)
 			if !destinations.Has(p) {
 				panic(fmt.Sprintf("invalid jump destination (%v) %v", nop, p))
 			}
@@ -516,12 +516,15 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 			self.Printf(" => %v", context.Price)
 
 			// 0x40 range
-		case PREVHASH:
-			prevHash := self.env.PrevHash()
+		case BLOCKHASH:
+			num := stack.Pop()
+			if num.Cmp(new(big.Int).Sub(self.env.BlockNumber(), ethutil.Big256)) < 0 {
+				stack.Push(ethutil.Big0)
+			} else {
+				stack.Push(ethutil.BigD(self.env.GetHash(num.Uint64())))
+			}
 
-			stack.Push(ethutil.BigD(prevHash))
-
-			self.Printf(" => 0x%x", prevHash)
+			self.Printf(" => 0x%x", stack.Peek().Bytes())
 		case COINBASE:
 			coinbase := self.env.Coinbase()
 
@@ -614,7 +617,7 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 			val, loc := stack.Popn()
 			statedb.SetState(context.Address(), loc.Bytes(), val)
 
-			context.message.AddStorageChange(loc.Bytes())
+			msg.AddStorageChange(loc.Bytes())
 
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case JUMP:

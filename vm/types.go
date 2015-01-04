@@ -59,7 +59,7 @@ const (
 const (
 
 	// 0x40 range - block operations
-	PREVHASH OpCode = 0x40 + iota
+	BLOCKHASH OpCode = 0x40 + iota
 	COINBASE
 	TIMESTAMP
 	NUMBER
@@ -216,7 +216,7 @@ var opCodeToString = map[OpCode]string{
 	GASPRICE:     "TXGASPRICE",
 
 	// 0x40 range - block operations
-	PREVHASH:    "PREVHASH",
+	BLOCKHASH:   "BLOCKHASH",
 	COINBASE:    "COINBASE",
 	TIMESTAMP:   "TIMESTAMP",
 	NUMBER:      "NUMBER",

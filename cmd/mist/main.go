@@ -26,15 +26,17 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/p2p"
 	"gopkg.in/qml.v1"
 )
 
 const (
 	ClientIdentifier = "Mist"
-	Version          = "0.7.11"
+	Version          = "0.8.0"
 )
 
 var ethereum *eth.Ethereum
+var mainlogger = logger.NewLogger("MAIN")
 
 func run() error {
 	// precedence: code-internal flag default < config file < environment variables < command line
@@ -43,27 +45,24 @@ func run() error {
 	tstart := time.Now()
 	config := utils.InitConfig(VmType, ConfigFile, Datadir, "ETH")
 
-	utils.InitDataDir(Datadir)
-
-	stdLog := utils.InitLogging(Datadir, LogFile, LogLevel, DebugFile)
-
-	db := utils.NewDatabase()
-	err := utils.DBSanityCheck(db)
+	ethereum, err := eth.New(&eth.Config{
+		Name:       ClientIdentifier,
+		Version:    Version,
+		KeyStore:   KeyStore,
+		DataDir:    Datadir,
+		LogFile:    LogFile,
+		LogLevel:   LogLevel,
+		Identifier: Identifier,
+		MaxPeers:   MaxPeer,
+		Port:       OutboundPort,
+		NATType:    PMPGateway,
+		PMPGateway: PMPGateway,
+		KeyRing:    KeyRing,
+	})
 	if err != nil {
-		ErrorWindow(err)
-
-		os.Exit(1)
+		mainlogger.Fatalln(err)
 	}
-	keyManager := utils.NewKeyManager(KeyStore, Datadir, db)
-
-	// create, import, export keys
-	utils.KeyTasks(keyManager, KeyRing, GenAddr, SecretFile, ExportDir, NonInteractive)
-	clientIdentity := utils.NewClientIdentity(ClientIdentifier, Version, Identifier, string(keyManager.PublicKey()))
-	ethereum := utils.NewEthereum(db, clientIdentity, keyManager, utils.NatType(NatType, PMPGateway), OutboundPort, MaxPeer)
-
-	if ShowGenesis {
-		utils.ShowGenesis(ethereum)
-	}
+	utils.KeyTasks(ethereum.KeyManager(), KeyRing, GenAddr, SecretFile, ExportDir, NonInteractive)
 
 	if StartRpc {
 		utils.StartRpc(ethereum, RpcPort)
@@ -73,8 +72,7 @@ func run() error {
 		utils.StartWebSockets(ethereum)
 	}
 
-	gui := NewWindow(ethereum, config, clientIdentity, KeyRing, LogLevel)
-	gui.stdLog = stdLog
+	gui := NewWindow(ethereum, config, ethereum.ClientIdentity().(*p2p.SimpleClientIdentity), KeyRing, LogLevel)
 
 	utils.RegisterInterrupt(func(os.Signal) {
 		gui.Stop()

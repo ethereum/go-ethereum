@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -21,18 +20,6 @@ import (
 )
 
 var statelogger = logger.NewLogger("BLOCK")
-
-type Peer interface {
-	Inbound() bool
-	LastSend() time.Time
-	LastPong() int64
-	Host() []byte
-	Port() uint16
-	Version() string
-	PingTime() string
-	Connected() *int32
-	Caps() *ethutil.Value
-}
 
 type EthManager interface {
 	BlockManager() *BlockManager
@@ -113,7 +100,7 @@ done:
 		txGas := new(big.Int).Set(tx.Gas())
 
 		cb := state.GetStateObject(coinbase.Address())
-		st := NewStateTransition(cb, tx, state, block)
+		st := NewStateTransition(NewEnv(state, self.bc, tx, block), tx, cb)
 		_, err = st.TransitionState()
 		if err != nil {
 			switch {
@@ -232,6 +219,8 @@ func (sm *BlockManager) ProcessWithParent(block, parent *types.Block) (td *big.I
 		// Sync the current block's state to the database and cancelling out the deferred Undo
 		state.Sync()
 
+		state.Manifest().SetHash(block.Hash())
+
 		messages := state.Manifest().Messages
 		state.Manifest().Reset()
 
@@ -339,10 +328,10 @@ func (sm *BlockManager) AccumelateRewards(statedb *state.StateDB, block, parent 
 	account.AddAmount(reward)
 
 	statedb.Manifest().AddMessage(&state.Message{
-		To:     block.Header().Coinbase,
-		Input:  nil,
-		Origin: nil,
-		Block:  block.Hash(), Timestamp: int64(block.Header().Time), Coinbase: block.Header().Coinbase, Number: block.Header().Number,
+		To:        block.Header().Coinbase,
+		Input:     nil,
+		Origin:    nil,
+		Timestamp: int64(block.Header().Time), Coinbase: block.Header().Coinbase, Number: block.Header().Number,
 		Value: new(big.Int).Add(reward, block.Reward),
 	})
 

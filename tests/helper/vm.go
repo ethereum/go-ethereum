@@ -55,9 +55,11 @@ func (self *Env) PrevHash() []byte      { return self.parent }
 func (self *Env) Coinbase() []byte      { return self.coinbase }
 func (self *Env) Time() int64           { return self.time }
 func (self *Env) Difficulty() *big.Int  { return self.difficulty }
-func (self *Env) BlockHash() []byte     { return nil }
 func (self *Env) State() *state.StateDB { return self.state }
 func (self *Env) GasLimit() *big.Int    { return self.gasLimit }
+func (self *Env) GetHash(n uint64) []byte {
+	return nil
+}
 func (self *Env) AddLog(log state.Log) {
 	self.logs = append(self.logs, log)
 }
@@ -126,10 +128,9 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.
 
 	message := NewMessage(keyPair.Address(), to, data, value, gas, price)
 	Log.DebugDetailf("message{ to: %x, from %x, value: %v, gas: %v, price: %v }\n", message.to[:4], message.from[:4], message.value, message.gas, message.price)
-	st := core.NewStateTransition(coinbase, message, statedb, nil)
 	vmenv := NewEnvFromMap(statedb, env, tx)
+	st := core.NewStateTransition(vmenv, message, coinbase)
 	vmenv.origin = keyPair.Address()
-	st.Env = vmenv
 	ret, err := st.TransitionState()
 	statedb.Update(vmenv.Gas)
 

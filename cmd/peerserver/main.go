@@ -18,7 +18,7 @@ func main() {
 	marshaled := elliptic.Marshal(crypto.S256(), key.PublicKey.X, key.PublicKey.Y)
 
 	srv := p2p.Server{
-		MaxPeers:   10,
+		MaxPeers:   100,
 		Identity:   p2p.NewSimpleClientIdentity("Ethereum(G)", "0.1", "Peer Server Two", string(marshaled)),
 		ListenAddr: ":30301",
 		NAT:        p2p.UPNP(),
@@ -29,12 +29,12 @@ func main() {
 	}
 
 	// add seed peers
-	seed, err := net.ResolveTCPAddr("tcp", "poc-7.ethdev.com:30300")
+	seed, err := net.ResolveTCPAddr("tcp", "poc-8.ethdev.com:30303")
 	if err != nil {
 		fmt.Println("couldn't resolve:", err)
-		os.Exit(1)
+	} else {
+		srv.SuggestPeer(seed.IP, seed.Port, nil)
 	}
-	srv.SuggestPeer(seed.IP, seed.Port, nil)
 
 	select {}
 }

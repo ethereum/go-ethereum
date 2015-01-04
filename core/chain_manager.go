@@ -271,15 +271,15 @@ func (self *ChainManager) GetBlockByNumber(num uint64) *types.Block {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
-	block := self.currentBlock
-	for ; block != nil; block = self.GetBlock(block.Header().ParentHash) {
-		if block.Header().Number.Uint64() == num {
-			break
-		}
-	}
+	var block *types.Block
 
-	if block != nil && block.Header().Number.Uint64() == 0 && num != 0 {
-		return nil
+	if num <= self.currentBlock.Number().Uint64() {
+		block = self.currentBlock
+		for ; block != nil; block = self.GetBlock(block.Header().ParentHash) {
+			if block.Header().Number.Uint64() == num {
+				break
+			}
+		}
 	}
 
 	return block

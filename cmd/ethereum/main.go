@@ -25,13 +25,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 )
 
 const (
 	ClientIdentifier = "Ethereum(G)"
-	Version          = "0.7.11"
+	Version          = "0.8.0"
 )
 
 var clilogger = logger.NewLogger("CLI")
@@ -48,35 +49,26 @@ func main() {
 	// precedence: code-internal flag default < config file < environment variables < command line
 	Init() // parsing command line
 
-	// If the difftool option is selected ignore all other log output
-	if DiffTool || Dump {
-		LogLevel = 0
-	}
-
 	utils.InitConfig(VmType, ConfigFile, Datadir, "ETH")
-	ethutil.Config.Diff = DiffTool
-	ethutil.Config.DiffType = DiffType
 
-	utils.InitDataDir(Datadir)
-
-	utils.InitLogging(Datadir, LogFile, LogLevel, DebugFile)
-
-	db := utils.NewDatabase()
-	err := utils.DBSanityCheck(db)
+	ethereum, err := eth.New(&eth.Config{
+		Name:       ClientIdentifier,
+		Version:    Version,
+		KeyStore:   KeyStore,
+		DataDir:    Datadir,
+		LogFile:    LogFile,
+		LogLevel:   LogLevel,
+		Identifier: Identifier,
+		MaxPeers:   MaxPeer,
+		Port:       OutboundPort,
+		NATType:    PMPGateway,
+		PMPGateway: PMPGateway,
+		KeyRing:    KeyRing,
+	})
 	if err != nil {
-		fmt.Println(err)
-
-		os.Exit(1)
+		clilogger.Fatalln(err)
 	}
-
-	keyManager := utils.NewKeyManager(KeyStore, Datadir, db)
-
-	// create, import, export keys
-	utils.KeyTasks(keyManager, KeyRing, GenAddr, SecretFile, ExportDir, NonInteractive)
-
-	clientIdentity := utils.NewClientIdentity(ClientIdentifier, Version, Identifier, string(keyManager.PublicKey()))
-
-	ethereum := utils.NewEthereum(db, clientIdentity, keyManager, utils.NatType(NatType, PMPGateway), OutboundPort, MaxPeer)
+	utils.KeyTasks(ethereum.KeyManager(), KeyRing, GenAddr, SecretFile, ExportDir, NonInteractive)
 
 	if Dump {
 		var block *types.Block
@@ -103,11 +95,7 @@ func main() {
 
 		fmt.Println(block)
 
-		os.Exit(0)
-	}
-
-	if ShowGenesis {
-		utils.ShowGenesis(ethereum)
+		return
 	}
 
 	if StartMining {

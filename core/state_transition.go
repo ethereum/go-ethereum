@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
@@ -28,18 +27,17 @@ import (
  * 6) Derive new state root
  */
 type StateTransition struct {
-	coinbase, receiver []byte
-	msg                Message
-	gas, gasPrice      *big.Int
-	initialGas         *big.Int
-	value              *big.Int
-	data               []byte
-	state              *state.StateDB
-	block              *types.Block
+	coinbase      []byte
+	msg           Message
+	gas, gasPrice *big.Int
+	initialGas    *big.Int
+	value         *big.Int
+	data          []byte
+	state         *state.StateDB
 
 	cb, rec, sen *state.StateObject
 
-	Env vm.Environment
+	env vm.Environment
 }
 
 type Message interface {
@@ -69,16 +67,19 @@ func MessageGasValue(msg Message) *big.Int {
 	return new(big.Int).Mul(msg.Gas(), msg.GasPrice())
 }
 
-func NewStateTransition(coinbase *state.StateObject, msg Message, state *state.StateDB, block *types.Block) *StateTransition {
-	return &StateTransition{coinbase.Address(), msg.To(), msg, new(big.Int), new(big.Int).Set(msg.GasPrice()), new(big.Int), msg.Value(), msg.Data(), state, block, coinbase, nil, nil, nil}
-}
-
-func (self *StateTransition) VmEnv() vm.Environment {
-	if self.Env == nil {
-		self.Env = NewEnv(self.state, self.msg, self.block)
+func NewStateTransition(env vm.Environment, msg Message, coinbase *state.StateObject) *StateTransition {
+	return &StateTransition{
+		coinbase:   coinbase.Address(),
+		env:        env,
+		msg:        msg,
+		gas:        new(big.Int),
+		gasPrice:   new(big.Int).Set(msg.GasPrice()),
+		initialGas: new(big.Int),
+		value:      msg.Value(),
+		data:       msg.Data(),
+		state:      env.State(),
+		cb:         coinbase,
 	}
-
-	return self.Env
 }
 
 func (self *StateTransition) Coinbase() *state.StateObject {
@@ -183,7 +184,7 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 		return
 	}
 
-	vmenv := self.VmEnv()
+	vmenv := self.env
 	var ref vm.ContextRef
 	if MessageCreatesContract(msg) {
 		contract := MakeContract(msg, self.state)

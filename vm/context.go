@@ -5,7 +5,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/state"
 )
 
 type ContextRef interface {
@@ -15,10 +14,9 @@ type ContextRef interface {
 }
 
 type Context struct {
-	caller  ContextRef
-	object  ContextRef
-	Code    []byte
-	message *state.Message
+	caller ContextRef
+	object ContextRef
+	Code   []byte
 
 	Gas, UsedGas, Price *big.Int
 
@@ -26,8 +24,8 @@ type Context struct {
 }
 
 // Create a new context for the given data items
-func NewContext(msg *state.Message, caller ContextRef, object ContextRef, code []byte, gas, price *big.Int) *Context {
-	c := &Context{message: msg, caller: caller, object: object, Code: code, Args: nil}
+func NewContext(caller ContextRef, object ContextRef, code []byte, gas, price *big.Int) *Context {
+	c := &Context{caller: caller, object: object, Code: code, Args: nil}
 
 	// Gas should be a pointer so it can safely be reduced through the run
 	// This pointer will be off the state transition
@@ -40,13 +38,13 @@ func NewContext(msg *state.Message, caller ContextRef, object ContextRef, code [
 	return c
 }
 
-func (c *Context) GetOp(x uint64) OpCode {
-	return OpCode(c.GetByte(x))
+func (c *Context) GetOp(n uint64) OpCode {
+	return OpCode(c.GetByte(n))
 }
 
-func (c *Context) GetByte(x uint64) byte {
-	if x < uint64(len(c.Code)) {
-		return c.Code[x]
+func (c *Context) GetByte(n uint64) byte {
+	if n < uint64(len(c.Code)) {
+		return c.Code[n]
 	}
 
 	return 0

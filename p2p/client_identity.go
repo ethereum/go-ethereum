@@ -17,10 +17,10 @@ type SimpleClientIdentity struct {
 	customIdentifier string
 	os               string
 	implementation   string
-	pubkey           string
+	pubkey           []byte
 }
 
-func NewSimpleClientIdentity(clientIdentifier string, version string, customIdentifier string, pubkey string) *SimpleClientIdentity {
+func NewSimpleClientIdentity(clientIdentifier string, version string, customIdentifier string, pubkey []byte) *SimpleClientIdentity {
 	clientIdentity := &SimpleClientIdentity{
 		clientIdentifier: clientIdentifier,
 		version:          version,
