@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
+	ethlogger "github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/pow/ezp"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -41,7 +41,7 @@ type Config struct {
 	KeyManager *crypto.KeyManager
 }
 
-var ethlogger = logger.NewLogger("SERV")
+var logger = ethlogger.NewLogger("SERV")
 
 type Ethereum struct {
 	// Channel for shutting down the ethereum
@@ -244,20 +244,20 @@ func (s *Ethereum) Start(seed bool) error {
 
 	// TODO: read peers here
 	if seed {
-		ethlogger.Infof("Connect to seed node %v", seedNodeAddress)
+		logger.Infof("Connect to seed node %v", seedNodeAddress)
 		if err := s.SuggestPeer(seedNodeAddress); err != nil {
 			return err
 		}
 	}
 
-	ethlogger.Infoln("Server started")
+	logger.Infoln("Server started")
 	return nil
 }
 
 func (self *Ethereum) SuggestPeer(addr string) error {
 	netaddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
-		ethlogger.Errorf("couldn't resolve %s:", addr, err)
+		logger.Errorf("couldn't resolve %s:", addr, err)
 		return err
 	}
 
@@ -284,7 +284,7 @@ func (s *Ethereum) Stop() {
 		s.whisper.Stop()
 	}
 
-	ethlogger.Infoln("Server stopped")
+	logger.Infoln("Server stopped")
 	close(s.shutdownChan)
 }
 
