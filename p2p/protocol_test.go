@@ -83,8 +83,8 @@ func TestBaseProtocolPeers(t *testing.T) {
 }
 
 func TestBaseProtocolDisconnect(t *testing.T) {
-	peer := NewPeer(NewSimpleClientIdentity("p1", "", "", "foo"), nil)
-	peer.ourID = NewSimpleClientIdentity("p2", "", "", "bar")
+	peer := NewPeer(&peerId{}, nil)
+	peer.ourID = &peerId{}
 	peer.pubkeyHook = func(*peerAddr) error { return nil }
 
 	rw1, rw2 := MsgPipe()

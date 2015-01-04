@@ -30,9 +30,8 @@ var discard = Protocol{
 
 func testPeer(protos []Protocol) (net.Conn, *Peer, <-chan error) {
 	conn1, conn2 := net.Pipe()
-	id := NewSimpleClientIdentity("test", "0", "0", "public key")
 	peer := newPeer(conn1, protos, nil)
-	peer.ourID = id
+	peer.ourID = &peerId{}
 	peer.pubkeyHook = func(*peerAddr) error { return nil }
 	errc := make(chan error, 1)
 	go func() {
@@ -233,8 +232,8 @@ func TestPeerActivity(t *testing.T) {
 }
 
 func TestNewPeer(t *testing.T) {
-	id := NewSimpleClientIdentity("clientid", "version", "customid", "pubkey")
 	caps := []Cap{{"foo", 2}, {"bar", 3}}
+	id := &peerId{}
 	p := NewPeer(id, caps)
 	if !reflect.DeepEqual(p.Caps(), caps) {
 		t.Errorf("Caps mismatch: got %v, expected %v", p.Caps(), caps)
