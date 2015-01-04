@@ -12,11 +12,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/logger"
+	ethlogger "github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 )
 
-var sys = logger.NewStdLogSystem(os.Stdout, log.LstdFlags, logger.LogLevel(logger.DebugDetailLevel))
+var sys = ethlogger.NewStdLogSystem(os.Stdout, log.LstdFlags, ethlogger.LogLevel(ethlogger.DebugDetailLevel))
 
 type testMsgReadWriter struct {
 	in  chan p2p.Msg
@@ -227,7 +227,7 @@ func (self *ethProtocolTester) run() {
 }
 
 func TestStatusMsgErrors(t *testing.T) {
-	logger.AddLogSystem(sys)
+	logInit()
 	eth := newEth(t)
 	td := ethutil.Big1
 	currentBlock := []byte{1}
