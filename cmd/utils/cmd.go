@@ -2,9 +2,6 @@ package utils
 
 import (
 	"fmt"
-	"io"
-	"log"
-	"net"
 	"os"
 	"os/signal"
 	"path"
@@ -16,11 +13,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/xeth"
@@ -52,15 +47,8 @@ func RunInterruptCallbacks(sig os.Signal) {
 	}
 }
 
-func AbsolutePath(Datadir string, filename string) string {
-	if path.IsAbs(filename) {
-		return filename
-	}
-	return path.Join(Datadir, filename)
-}
-
 func openLogFile(Datadir string, filename string) *os.File {
-	path := AbsolutePath(Datadir, filename)
+	path := ethutil.AbsolutePath(Datadir, filename)
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		panic(fmt.Sprintf("error opening log file '%s': %v", filename, err))
@@ -76,23 +64,13 @@ func confirm(message string) bool {
 		if r == "n" || r == "y" {
 			break
 		} else {
-			fmt.Printf("Yes or no?", r)
+			fmt.Printf("Yes or no? (%s)", r)
 		}
 	}
 	return r == "y"
 }
 
-func DBSanityCheck(db ethutil.Database) error {
-	d, _ := db.Get([]byte("ProtocolVersion"))
-	protov := ethutil.NewValue(d).Uint()
-	if protov != eth.ProtocolVersion && protov != 0 {
-		return fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, eth.ProtocolVersion, ethutil.Config.ExecPath+"/database")
-	}
-
-	return nil
-}
-
-func InitDataDir(Datadir string) {
+func initDataDir(Datadir string) {
 	_, err := os.Stat(Datadir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -102,26 +80,8 @@ func InitDataDir(Datadir string) {
 	}
 }
 
-func InitLogging(Datadir string, LogFile string, LogLevel int, DebugFile string) logger.LogSystem {
-	var writer io.Writer
-	if LogFile == "" {
-		writer = os.Stdout
-	} else {
-		writer = openLogFile(Datadir, LogFile)
-	}
-
-	sys := logger.NewStdLogSystem(writer, log.LstdFlags, logger.LogLevel(LogLevel))
-	logger.AddLogSystem(sys)
-	if DebugFile != "" {
-		writer = openLogFile(Datadir, DebugFile)
-		logger.AddLogSystem(logger.NewStdLogSystem(writer, log.LstdFlags, logger.DebugLevel))
-	}
-
-	return sys
-}
-
 func InitConfig(vmType int, ConfigFile string, Datadir string, EnvPrefix string) *ethutil.ConfigManager {
-	InitDataDir(Datadir)
+	initDataDir(Datadir)
 	cfg := ethutil.ReadConfig(ConfigFile, Datadir, EnvPrefix)
 	cfg.VmType = vmType
 
@@ -138,43 +98,6 @@ func exit(err error) {
 	os.Exit(status)
 }
 
-func NewDatabase() ethutil.Database {
-	db, err := ethdb.NewLDBDatabase("database")
-	if err != nil {
-		exit(err)
-	}
-	return db
-}
-
-func NewClientIdentity(clientIdentifier, version, customIdentifier string, pubkey string) *p2p.SimpleClientIdentity {
-	return p2p.NewSimpleClientIdentity(clientIdentifier, version, customIdentifier, pubkey)
-}
-
-func NatType(natType string, gateway string) (nat p2p.NAT) {
-	switch natType {
-	case "UPNP":
-		nat = p2p.UPNP()
-	case "PMP":
-		ip := net.ParseIP(gateway)
-		if ip == nil {
-			clilogger.Fatalf("cannot resolve PMP gateway IP %s", gateway)
-		}
-		nat = p2p.PMP(ip)
-	case "":
-	default:
-		clilogger.Fatalf("unrecognised NAT type '%s'", natType)
-	}
-	return
-}
-
-func NewEthereum(db ethutil.Database, clientIdentity p2p.ClientIdentity, keyManager *crypto.KeyManager, nat p2p.NAT, OutboundPort string, MaxPeer int) *eth.Ethereum {
-	ethereum, err := eth.New(db, clientIdentity, keyManager, nat, OutboundPort, MaxPeer)
-	if err != nil {
-		clilogger.Fatalln("eth start err:", err)
-	}
-	return ethereum
-}
-
 func StartEthereum(ethereum *eth.Ethereum, UseSeed bool) {
 	clilogger.Infof("Starting %s", ethereum.ClientIdentity())
 	ethereum.Start(UseSeed)
@@ -182,24 +105,6 @@ func StartEthereum(ethereum *eth.Ethereum, UseSeed bool) {
 		ethereum.Stop()
 		logger.Flush()
 	})
-}
-
-func ShowGenesis(ethereum *eth.Ethereum) {
-	clilogger.Infoln(ethereum.ChainManager().Genesis())
-	exit(nil)
-}
-
-func NewKeyManager(KeyStore string, Datadir string, db ethutil.Database) *crypto.KeyManager {
-	var keyManager *crypto.KeyManager
-	switch {
-	case KeyStore == "db":
-		keyManager = crypto.NewDBKeyManager(db)
-	case KeyStore == "file":
-		keyManager = crypto.NewFileKeyManager(Datadir)
-	default:
-		exit(fmt.Errorf("unknown keystore type: %s", KeyStore))
-	}
-	return keyManager
 }
 
 func DefaultAssetPath() string {

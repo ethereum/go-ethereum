@@ -20,7 +20,7 @@ Rectangle {
 	}
 
 	function setBalance() {
-		balance.text = "<b>Balance</b>: " + eth.numberToHuman(eth.balanceAt(eth.key().address))
+		//balance.text = "<b>Balance</b>: " + eth.numberToHuman(eth.balanceAt(eth.key().address))
 		if(menuItem)
 			menuItem.secondaryTitle = eth.numberToHuman(eth.balanceAt(eth.key().address))
 	}

@@ -1,11 +1,13 @@
 package eth
 
 import (
+	"fmt"
 	"net"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	ethlogger "github.com/ethereum/go-ethereum/logger"
@@ -18,6 +20,24 @@ import (
 const (
 	seedNodeAddress = "poc-7.ethdev.com:30300"
 )
+
+type Config struct {
+	Name       string
+	Version    string
+	Identifier string
+	KeyStore   string
+	DataDir    string
+	LogFile    string
+	LogLevel   int
+	KeyRing    string
+
+	MaxPeers   int
+	Port       string
+	NATType    string
+	PMPGateway string
+
+	KeyManager *crypto.KeyManager
+}
 
 var logger = ethlogger.NewLogger("SERV")
 
@@ -38,7 +58,7 @@ type Ethereum struct {
 	blockPool    *BlockPool
 	whisper      *whisper.Whisper
 
-	server   *p2p.Server
+	net      *p2p.Server
 	eventMux *event.TypeMux
 	txSub    event.Subscription
 	blockSub event.Subscription
@@ -47,6 +67,7 @@ type Ethereum struct {
 	keyManager *crypto.KeyManager
 
 	clientIdentity p2p.ClientIdentity
+	logger         ethlogger.LogSystem
 
 	synclock  sync.Mutex
 	syncGroup sync.WaitGroup
@@ -54,7 +75,36 @@ type Ethereum struct {
 	Mining bool
 }
 
-func New(db ethutil.Database, identity p2p.ClientIdentity, keyManager *crypto.KeyManager, nat p2p.NAT, port string, maxPeers int) (*Ethereum, error) {
+func New(config *Config) (*Ethereum, error) {
+	// Boostrap database
+	logger := ethlogger.New(config.DataDir, config.LogFile, config.LogLevel)
+	db, err := ethdb.NewLDBDatabase("database")
+	if err != nil {
+		return nil, err
+	}
+
+	// Perform database sanity checks
+	d, _ := db.Get([]byte("ProtocolVersion"))
+	protov := ethutil.NewValue(d).Uint()
+	if protov != ProtocolVersion && protov != 0 {
+		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, ProtocolVersion, ethutil.Config.ExecPath+"/database")
+	}
+
+	// Create new keymanager
+	var keyManager *crypto.KeyManager
+	switch config.KeyStore {
+	case "db":
+		keyManager = crypto.NewDBKeyManager(db)
+	case "file":
+		keyManager = crypto.NewFileKeyManager(config.DataDir)
+	default:
+		return nil, fmt.Errorf("unknown keystore type: %s", config.KeyStore)
+	}
+	// Initialise the keyring
+	keyManager.Init(config.KeyRing, 0, false)
+
+	// Create a new client id for this instance. This will help identifying the node on the network
+	clientId := p2p.NewSimpleClientIdentity(config.Name, config.Version, config.Identifier, keyManager.PublicKey())
 
 	saveProtocolVersion(db)
 	ethutil.Config.Db = db
@@ -64,9 +114,10 @@ func New(db ethutil.Database, identity p2p.ClientIdentity, keyManager *crypto.Ke
 		quit:           make(chan bool),
 		db:             db,
 		keyManager:     keyManager,
-		clientIdentity: identity,
+		clientIdentity: clientId,
 		blacklist:      p2p.NewBlacklist(),
 		eventMux:       &event.TypeMux{},
+		logger:         logger,
 	}
 
 	eth.chainManager = core.NewChainManager(eth.EventMux())
@@ -85,22 +136,29 @@ func New(db ethutil.Database, identity p2p.ClientIdentity, keyManager *crypto.Ke
 	ethProto := EthProtocol(eth.txPool, eth.chainManager, eth.blockPool)
 	protocols := []p2p.Protocol{ethProto, eth.whisper.Protocol()}
 
-	server := &p2p.Server{
-		Identity:   identity,
-		MaxPeers:   maxPeers,
+	nat, err := p2p.ParseNAT(config.NATType, config.PMPGateway)
+	if err != nil {
+		return nil, err
+	}
+
+	eth.net = &p2p.Server{
+		Identity:   clientId,
+		MaxPeers:   config.MaxPeers,
 		Protocols:  protocols,
-		ListenAddr: ":" + port,
+		ListenAddr: ":" + config.Port,
 		Blacklist:  eth.blacklist,
 		NAT:        nat,
 	}
-
-	eth.server = server
 
 	return eth, nil
 }
 
 func (s *Ethereum) KeyManager() *crypto.KeyManager {
 	return s.keyManager
+}
+
+func (s *Ethereum) Logger() ethlogger.LogSystem {
+	return s.logger
 }
 
 func (s *Ethereum) ClientIdentity() p2p.ClientIdentity {
@@ -144,20 +202,20 @@ func (s *Ethereum) IsListening() bool {
 }
 
 func (s *Ethereum) PeerCount() int {
-	return s.server.PeerCount()
+	return s.net.PeerCount()
 }
 
 func (s *Ethereum) Peers() []*p2p.Peer {
-	return s.server.Peers()
+	return s.net.Peers()
 }
 
 func (s *Ethereum) MaxPeers() int {
-	return s.server.MaxPeers
+	return s.net.MaxPeers
 }
 
 // Start the ethereum
 func (s *Ethereum) Start(seed bool) error {
-	err := s.server.Start()
+	err := s.net.Start()
 	if err != nil {
 		return err
 	}
@@ -191,7 +249,7 @@ func (self *Ethereum) SuggestPeer(addr string) error {
 		return err
 	}
 
-	self.server.SuggestPeer(netaddr.IP, netaddr.Port, nil)
+	self.net.SuggestPeer(netaddr.IP, netaddr.Port, nil)
 	return nil
 }
 
@@ -227,7 +285,7 @@ func (self *Ethereum) txBroadcastLoop() {
 	// automatically stops if unsubscribe
 	for obj := range self.txSub.Chan() {
 		event := obj.(core.TxPreEvent)
-		self.server.Broadcast("eth", TxMsg, []interface{}{event.Tx.RlpData()})
+		self.net.Broadcast("eth", TxMsg, []interface{}{event.Tx.RlpData()})
 	}
 }
 
@@ -236,7 +294,7 @@ func (self *Ethereum) blockBroadcastLoop() {
 	for obj := range self.txSub.Chan() {
 		switch ev := obj.(type) {
 		case core.NewMinedBlockEvent:
-			self.server.Broadcast("eth", NewBlockMsg, ev.Block.RlpData())
+			self.net.Broadcast("eth", NewBlockMsg, ev.Block.RlpData())
 		}
 	}
 }

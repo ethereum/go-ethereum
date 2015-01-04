@@ -83,7 +83,7 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 		jump = func(from uint64, to *big.Int) {
 			p := to.Uint64()
 
-			nop := OpCode(context.GetOp(p))
+			nop := context.GetOp(p)
 			if !destinations.Has(p) {
 				panic(fmt.Sprintf("invalid jump destination (%v) %v", nop, p))
 			}

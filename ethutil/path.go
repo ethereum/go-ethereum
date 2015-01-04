@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/user"
+	"path"
 	"strings"
 )
 
@@ -57,4 +58,11 @@ func WriteFile(filePath string, content []byte) error {
 	}
 
 	return nil
+}
+
+func AbsolutePath(Datadir string, filename string) string {
+	if path.IsAbs(filename) {
+		return filename
+	}
+	return path.Join(Datadir, filename)
 }

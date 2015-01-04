@@ -38,13 +38,13 @@ func NewContext(caller ContextRef, object ContextRef, code []byte, gas, price *b
 	return c
 }
 
-func (c *Context) GetOp(x uint64) OpCode {
-	return OpCode(c.GetByte(x))
+func (c *Context) GetOp(n uint64) OpCode {
+	return OpCode(c.GetByte(n))
 }
 
-func (c *Context) GetByte(x uint64) byte {
-	if x < uint64(len(c.Code)) {
-		return c.Code[x]
+func (c *Context) GetByte(n uint64) byte {
+	if n < uint64(len(c.Code)) {
+		return c.Code[n]
 	}
 
 	return 0

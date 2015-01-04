@@ -1,4 +1,4 @@
-package core
+package dagger
 
 import (
 	"math/big"
