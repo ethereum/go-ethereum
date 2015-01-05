@@ -95,7 +95,7 @@ type section struct {
 	suicideC    chan bool
 	blockChainC chan bool
 	forkC       chan chan bool
-	off         bool
+	offC        chan bool
 }
 
 func NewBlockPool(hasBlock func(hash []byte) bool, insertChain func(types.Blocks) error, verifyPoW func(pow.Block) bool,
@@ -472,12 +472,12 @@ func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
 }
 
 func (self *BlockPool) connectToBlockChain(section *section) {
-	section.lock.RLock()
 	poolLogger.Debugf("connect to blockchain...")
-	defer section.lock.RUnlock()
-	if section.off {
+	select {
+	case <-section.offC:
 		self.addSectionToBlockChain(section)
-	} else {
+	case <-section.blockChainC:
+	default:
 		close(section.blockChainC)
 	}
 	poolLogger.Debugf("connect to blockchain done")
@@ -531,7 +531,10 @@ LOOP:
 		poolLogger.Debugf("[%s] register section with peer %s", sectionName(section), peer.id)
 		peer.addSection(section.top.hash, section)
 		poolLogger.Debugf("[%s] activate section process", sectionName(section))
-		section.controlC <- peer
+		select {
+		case section.controlC <- peer:
+		case <-section.offC:
+		}
 		i++
 		section = self.getParent(section)
 		select {
@@ -879,11 +882,8 @@ func (self *BlockPool) processSection(section *section, nodes []*poolNode) {
 		} // for
 		poolLogger.Debugf("[%s] quit: %v block hashes requests - %v block requests - missing %v/%v/%v", sectionName(section), blockHashesRequests, blocksRequests, missing, total, depth)
 
-		poolLogger.Debugf("[%s] process complete...", sectionName(section))
-		section.lock.Lock()
-		section.off = true
-		section.lock.Unlock()
-		poolLogger.Debugf("[%s] process complete done", sectionName(section))
+		close(section.offC)
+		poolLogger.Debugf("[%s] process complete", sectionName(section))
 
 		self.wg.Done()
 		if peer != nil {
@@ -971,15 +971,14 @@ func (self *BlockPool) switchPeer(oldPeer, newPeer *peerInfo) {
 		}
 		poolLogger.Debugf("[%s] activate section processes", newPeer.id)
 		for hash, section := range newPeer.sections {
-			if section.off {
+			// this will block if section process is waiting for peer lock
+			select {
+			case <-section.offC:
 				poolLogger.Debugf("[%s][%x] section process complete - remove", newPeer.id, hash[:4])
 				delete(newPeer.sections, hash)
-				continue
+			case section.controlC <- newPeer:
+				poolLogger.Debugf("[%s][%x] registered peer with section", newPeer.id, hash[:4])
 			}
-			// this will block if section process is waiting for peer lock
-			poolLogger.Debugf("[%s][%x] registering peer with section", newPeer.id, hash[:4])
-			section.controlC <- newPeer
-			poolLogger.Debugf("[%s][%x] registered peer with section", newPeer.id, hash[:4])
 		}
 		newPeer.quitC = make(chan bool)
 	}
@@ -1007,6 +1006,7 @@ func newSection() (sec *section) {
 		controlC:    make(chan *peerInfo),
 		suicideC:    make(chan bool),
 		blockChainC: make(chan bool),
+		offC:        make(chan bool),
 		forkC:       make(chan chan bool),
 	}
 	return
