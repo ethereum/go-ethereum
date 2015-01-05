@@ -73,7 +73,7 @@ func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block 
 	coinbase := statedb.GetOrNewStateObject(block.Header().Coinbase)
 	coinbase.SetGasPool(CalcGasLimit(parent, block))
 
-	// Process the transactions on to current block
+	// Process the transactions on to parent state
 	receipts, _, _, _, err = sm.ApplyTransactions(coinbase, statedb, block, block.Transactions(), false)
 	if err != nil {
 		return nil, err
@@ -224,7 +224,7 @@ func (sm *BlockProcessor) ProcessWithParent(block, parent *types.Block) (td *big
 		messages := state.Manifest().Messages
 		state.Manifest().Reset()
 
-		chainlogger.Infof("Processed block #%d (%x...)\n", header.Number, block.Hash()[0:4])
+		chainlogger.Infof("processed block #%d (%x...)\n", header.Number, block.Hash()[0:4])
 
 		sm.txpool.RemoveSet(block.Transactions())
 
