@@ -5,10 +5,12 @@
 
 . tests/common.sh
 
+TESTS=
+
 if [ "$#" -eq 0 ]; then
-  for file in tests/*.sh; do
-    i=`basename $file .sh`
-    TESTS="$TESTS $NAME"
+  for NAME in tests/??.sh; do
+    i=`basename $NAME .sh`
+    TESTS="$TESTS $i"
   done
 else
   TESTS=$@
