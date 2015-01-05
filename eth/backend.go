@@ -36,6 +36,9 @@ type Config struct {
 	NATType    string
 	PMPGateway string
 
+	Shh  bool
+	Dial bool
+
 	KeyManager *crypto.KeyManager
 }
 
@@ -130,11 +133,13 @@ func New(config *Config) (*Ethereum, error) {
 	insertChain := eth.chainManager.InsertChain
 	eth.blockPool = NewBlockPool(hasBlock, insertChain, ezp.Verify)
 
-	// Start services
-	eth.txPool.Start()
-
 	ethProto := EthProtocol(eth.txPool, eth.chainManager, eth.blockPool)
-	protocols := []p2p.Protocol{ethProto, eth.whisper.Protocol()}
+	protocols := []p2p.Protocol{ethProto}
+
+	if config.Shh {
+		eth.whisper = whisper.New()
+		protocols = append(protocols, eth.whisper.Protocol())
+	}
 
 	nat, err := p2p.ParseNAT(config.NATType, config.PMPGateway)
 	if err != nil {
@@ -142,12 +147,16 @@ func New(config *Config) (*Ethereum, error) {
 	}
 
 	eth.net = &p2p.Server{
-		Identity:   clientId,
-		MaxPeers:   config.MaxPeers,
-		Protocols:  protocols,
-		ListenAddr: ":" + config.Port,
-		Blacklist:  eth.blacklist,
-		NAT:        nat,
+		Identity:  clientId,
+		MaxPeers:  config.MaxPeers,
+		Protocols: protocols,
+		Blacklist: eth.blacklist,
+		NAT:       nat,
+		NoDial:    !config.Dial,
+	}
+
+	if len(config.Port) > 0 {
+		eth.net.ListenAddr = ":" + config.Port
 	}
 
 	return eth, nil
@@ -219,8 +228,14 @@ func (s *Ethereum) Start(seed bool) error {
 	if err != nil {
 		return err
 	}
+
+	// Start services
+	s.txPool.Start()
 	s.blockPool.Start()
-	s.whisper.Start()
+
+	if s.whisper != nil {
+		s.whisper.Start()
+	}
 
 	// broadcast transactions
 	s.txSub = s.eventMux.Subscribe(core.TxPreEvent{})
@@ -268,7 +283,9 @@ func (s *Ethereum) Stop() {
 	s.txPool.Stop()
 	s.eventMux.Stop()
 	s.blockPool.Stop()
-	s.whisper.Stop()
+	if s.whisper != nil {
+		s.whisper.Stop()
+	}
 
 	logger.Infoln("Server stopped")
 	close(s.shutdownChan)
@@ -285,16 +302,16 @@ func (self *Ethereum) txBroadcastLoop() {
 	// automatically stops if unsubscribe
 	for obj := range self.txSub.Chan() {
 		event := obj.(core.TxPreEvent)
-		self.net.Broadcast("eth", TxMsg, []interface{}{event.Tx.RlpData()})
+		self.net.Broadcast("eth", TxMsg, event.Tx.RlpData())
 	}
 }
 
 func (self *Ethereum) blockBroadcastLoop() {
 	// automatically stops if unsubscribe
-	for obj := range self.txSub.Chan() {
+	for obj := range self.blockSub.Chan() {
 		switch ev := obj.(type) {
 		case core.NewMinedBlockEvent:
-			self.net.Broadcast("eth", NewBlockMsg, ev.Block.RlpData())
+			self.net.Broadcast("eth", NewBlockMsg, ev.Block.RlpData(), ev.Block.Td)
 		}
 	}
 }

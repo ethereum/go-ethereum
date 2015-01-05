@@ -195,7 +195,9 @@ func (ui *UiLib) Connect(button qml.Object) {
 }
 
 func (ui *UiLib) ConnectToPeer(addr string) {
-	ui.eth.SuggestPeer(addr)
+	if err := ui.eth.SuggestPeer(addr); err != nil {
+		guilogger.Infoln(err)
+	}
 }
 
 func (ui *UiLib) AssetPath(p string) string {

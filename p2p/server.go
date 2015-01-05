@@ -120,13 +120,11 @@ func (srv *Server) PeerCount() int {
 
 // SuggestPeer injects an address into the outbound address pool.
 func (srv *Server) SuggestPeer(ip net.IP, port int, nodeID []byte) {
-	addr := &peerAddr{ip, uint64(port), nodeID, time.Now()}
-	ok := srv.PeerSelector.SuggestPeer(addr)
-	if ok {
-		select {
-		case srv.peerConnect <- addr:
-		default: // don't block
-		}
+	addr := &peerAddr{IP: ip, Port: uint64(port), Pubkey: nodeID}
+	select {
+	case srv.peerConnect <- addr:
+	default: // don't block
+		srvlog.Warnf("peer suggestion %v ignored", addr)
 	}
 }
 
@@ -273,6 +271,7 @@ func (srv *Server) listenLoop() {
 	for {
 		select {
 		case slot := <-srv.peerSlots:
+			srvlog.Debugf("grabbed slot %v for listening", slot)
 			conn, err := srv.listener.Accept()
 			if err != nil {
 				srv.peerSlots <- slot
@@ -345,6 +344,7 @@ func (srv *Server) dialLoop() {
 		case desc := <-suggest:
 			// candidate peer found, will dial out asyncronously
 			// if connection fails slot will be released
+			srvlog.Infof("dial %v (%v)", desc, *slot)
 			go srv.dialPeer(desc, *slot)
 			// we can watch if more peers needed in the next loop
 			slots = srv.peerSlots

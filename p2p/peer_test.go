@@ -30,9 +30,8 @@ var discard = Protocol{
 
 func testPeer(protos []Protocol) (net.Conn, *Peer, <-chan error) {
 	conn1, conn2 := net.Pipe()
-	id := NewSimpleClientIdentity("test", "0", "0", "public key")
 	peer := newPeer(conn1, protos, nil)
-	peer.ourID = id
+	peer.ourID = &peerId{}
 	peer.pubkeyHook = func(*peerAddr) error { return nil }
 	errc := make(chan error, 1)
 	go func() {
@@ -130,7 +129,7 @@ func TestPeerProtoEncodeMsg(t *testing.T) {
 			if err := rw.EncodeMsg(2); err == nil {
 				t.Error("expected error for out-of-range msg code, got nil")
 			}
-			if err := rw.EncodeMsg(1); err != nil {
+			if err := rw.EncodeMsg(1, "foo", "bar"); err != nil {
 				t.Errorf("write error: %v", err)
 			}
 			return nil
@@ -147,6 +146,13 @@ func TestPeerProtoEncodeMsg(t *testing.T) {
 	}
 	if msg.Code != 17 {
 		t.Errorf("incorrect message code: got %d, expected %d", msg.Code, 17)
+	}
+	var data []string
+	if err := msg.Decode(&data); err != nil {
+		t.Errorf("payload decode error: %v", err)
+	}
+	if !reflect.DeepEqual(data, []string{"foo", "bar"}) {
+		t.Errorf("payload RLP mismatch, got %#v, want %#v", data, []string{"foo", "bar"})
 	}
 }
 
@@ -226,8 +232,8 @@ func TestPeerActivity(t *testing.T) {
 }
 
 func TestNewPeer(t *testing.T) {
-	id := NewSimpleClientIdentity("clientid", "version", "customid", "pubkey")
 	caps := []Cap{{"foo", 2}, {"bar", 3}}
+	id := &peerId{}
 	p := NewPeer(id, caps)
 	if !reflect.DeepEqual(p.Caps(), caps) {
 		t.Errorf("Caps mismatch: got %v, expected %v", p.Caps(), caps)

@@ -512,18 +512,17 @@ ApplicationWindow {
 				 var section;
 				 switch(options.section) {
 					 case "ethereum":
-					 section = menuDefault;
-					 break;
+						section = menuDefault;
+						break;
 					 case "legacy":
-					 section = menuLegacy;
-					 break;
+						section = menuLegacy;
+						break;
 					 default:
-					 section = menuApps;
-					 break;
+						section = menuApps;
+						break;
 				 }
 
 				 var comp = menuItemTemplate.createObject(section)
-
 				 comp.view = view
 				 comp.title = view.title
 
@@ -771,12 +770,9 @@ ApplicationWindow {
 				     anchors.fill: parent
 				     id: peerTable
 				     model: peerModel
-				     TableViewColumn{width: 100; role: "ip" ; title: "IP" }
-				     TableViewColumn{width: 60;  role: "port" ; title: "Port" }
-				     TableViewColumn{width: 140; role: "lastResponse"; title: "Last event" }
-				     TableViewColumn{width: 100; role: "latency"; title: "Latency" }
+				     TableViewColumn{width: 200; role: "ip" ; title: "IP" }
 				     TableViewColumn{width: 260; role: "version" ; title: "Version" }
-				     TableViewColumn{width: 80;  role: "caps" ; title: "Capabilities" }
+				     TableViewColumn{width: 180;  role: "caps" ; title: "Capabilities" }
 			     }
 		     }
 	     }
@@ -866,6 +862,7 @@ ApplicationWindow {
 			     model: ListModel { id: pastPeers }
 
 			     Component.onCompleted: {
+				     pastPeers.insert(0, {text: "poc-8.ethdev.com:30303"})
 				     /*
 				     var ips = eth.pastPeers()
 				     for(var i = 0; i < ips.length; i++) {

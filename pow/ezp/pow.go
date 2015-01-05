@@ -21,7 +21,7 @@ type EasyPow struct {
 }
 
 func New() *EasyPow {
-	return &EasyPow{turbo: true}
+	return &EasyPow{turbo: false}
 }
 
 func (pow *EasyPow) GetHashrate() int64 {

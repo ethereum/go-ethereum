@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
-	"gopkg.in/fatih/set.v0"
 )
 
 var txplogger = logger.NewLogger("TXP")
@@ -38,7 +37,7 @@ type TxPool struct {
 	quit chan bool
 	// The actual pool
 	//pool *list.List
-	pool *set.Set
+	txs map[string]*types.Transaction
 
 	SecondaryProcessor TxProcessor
 
@@ -49,21 +48,19 @@ type TxPool struct {
 
 func NewTxPool(eventMux *event.TypeMux) *TxPool {
 	return &TxPool{
-		pool:      set.New(),
+		txs:       make(map[string]*types.Transaction),
 		queueChan: make(chan *types.Transaction, txPoolQueueSize),
 		quit:      make(chan bool),
 		eventMux:  eventMux,
 	}
 }
 
-func (pool *TxPool) addTransaction(tx *types.Transaction) {
-	pool.pool.Add(tx)
-
-	// Broadcast the transaction to the rest of the peers
-	pool.eventMux.Post(TxPreEvent{tx})
-}
-
 func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
+	hash := tx.Hash()
+	if pool.txs[string(hash)] != nil {
+		return fmt.Errorf("Known transaction (%x)", hash[0:4])
+	}
+
 	if len(tx.To()) != 0 && len(tx.To()) != 20 {
 		return fmt.Errorf("Invalid recipient. len = %d", len(tx.To()))
 	}
@@ -95,18 +92,17 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 	return nil
 }
 
-func (self *TxPool) Add(tx *types.Transaction) error {
-	hash := tx.Hash()
-	if self.pool.Has(tx) {
-		return fmt.Errorf("Known transaction (%x)", hash[0:4])
-	}
+func (self *TxPool) addTx(tx *types.Transaction) {
+	self.txs[string(tx.Hash())] = tx
+}
 
+func (self *TxPool) Add(tx *types.Transaction) error {
 	err := self.ValidateTransaction(tx)
 	if err != nil {
 		return err
 	}
 
-	self.addTransaction(tx)
+	self.addTx(tx)
 
 	var to string
 	if len(tx.To()) > 0 {
@@ -124,7 +120,7 @@ func (self *TxPool) Add(tx *types.Transaction) error {
 }
 
 func (self *TxPool) Size() int {
-	return self.pool.Size()
+	return len(self.txs)
 }
 
 func (self *TxPool) AddTransactions(txs []*types.Transaction) {
@@ -137,43 +133,39 @@ func (self *TxPool) AddTransactions(txs []*types.Transaction) {
 	}
 }
 
-func (pool *TxPool) GetTransactions() []*types.Transaction {
-	txList := make([]*types.Transaction, pool.Size())
+func (self *TxPool) GetTransactions() (txs types.Transactions) {
+	txs = make(types.Transactions, self.Size())
 	i := 0
-	pool.pool.Each(func(v interface{}) bool {
-		txList[i] = v.(*types.Transaction)
+	for _, tx := range self.txs {
+		txs[i] = tx
 		i++
+	}
 
-		return true
-	})
-
-	return txList
+	return
 }
 
 func (pool *TxPool) RemoveInvalid(query StateQuery) {
 	var removedTxs types.Transactions
-	pool.pool.Each(func(v interface{}) bool {
-		tx := v.(*types.Transaction)
+	for _, tx := range pool.txs {
 		sender := query.GetAccount(tx.From())
 		err := pool.ValidateTransaction(tx)
 		if err != nil || sender.Nonce >= tx.Nonce() {
 			removedTxs = append(removedTxs, tx)
 		}
+	}
 
-		return true
-	})
 	pool.RemoveSet(removedTxs)
 }
 
 func (self *TxPool) RemoveSet(txs types.Transactions) {
 	for _, tx := range txs {
-		self.pool.Remove(tx)
+		delete(self.txs, string(tx.Hash()))
 	}
 }
 
 func (pool *TxPool) Flush() []*types.Transaction {
 	txList := pool.GetTransactions()
-	pool.pool.Clear()
+	pool.txs = make(map[string]*types.Transaction)
 
 	return txList
 }

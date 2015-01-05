@@ -36,7 +36,8 @@ func (self *Execution) exec(code, contextAddr []byte, caller vm.ContextRef) (ret
 	evm := vm.New(env, vm.DebugVmTy)
 
 	if env.Depth() == vm.MaxCallDepth {
-		// Consume all gas (by not returning it) and return a depth error
+		caller.ReturnGas(self.Gas, self.price)
+
 		return nil, vm.DepthError{}
 	}
 

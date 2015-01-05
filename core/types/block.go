@@ -67,10 +67,13 @@ func (self *Header) HashNoNonce() []byte {
 }
 
 type Block struct {
-	header       *Header
-	uncles       []*Header
-	transactions Transactions
-	Td           *big.Int
+	// Preset Hash for mock
+	HeaderHash       []byte
+	ParentHeaderHash []byte
+	header           *Header
+	uncles           []*Header
+	transactions     Transactions
+	Td               *big.Int
 
 	receipts Receipts
 	Reward   *big.Int
@@ -99,41 +102,19 @@ func NewBlockWithHeader(header *Header) *Block {
 }
 
 func (self *Block) DecodeRLP(s *rlp.Stream) error {
-	if _, err := s.List(); err != nil {
+	var extblock struct {
+		Header *Header
+		Txs    []*Transaction
+		Uncles []*Header
+		TD     *big.Int // optional
+	}
+	if err := s.Decode(&extblock); err != nil {
 		return err
 	}
-
-	var header Header
-	if err := s.Decode(&header); err != nil {
-		return err
-	}
-
-	var transactions []*Transaction
-	if err := s.Decode(&transactions); err != nil {
-		return err
-	}
-
-	var uncleHeaders []*Header
-	if err := s.Decode(&uncleHeaders); err != nil {
-		return err
-	}
-
-	var tdBytes []byte
-	if err := s.Decode(&tdBytes); err != nil {
-		// If this block comes from the network that's fine. If loaded from disk it should be there
-		// Blocks don't store their Td when propagated over the network
-	} else {
-		self.Td = ethutil.BigD(tdBytes)
-	}
-
-	if err := s.ListEnd(); err != nil {
-		return err
-	}
-
-	self.header = &header
-	self.uncles = uncleHeaders
-	self.transactions = transactions
-
+	self.header = extblock.Header
+	self.uncles = extblock.Uncles
+	self.transactions = extblock.Txs
+	self.Td = extblock.TD
 	return nil
 }
 
@@ -189,23 +170,35 @@ func (self *Block) RlpDataForStorage() interface{} {
 // Header accessors (add as you need them)
 func (self *Block) Number() *big.Int          { return self.header.Number }
 func (self *Block) NumberU64() uint64         { return self.header.Number.Uint64() }
-func (self *Block) ParentHash() []byte        { return self.header.ParentHash }
 func (self *Block) Bloom() []byte             { return self.header.Bloom }
 func (self *Block) Coinbase() []byte          { return self.header.Coinbase }
 func (self *Block) Time() int64               { return int64(self.header.Time) }
 func (self *Block) GasLimit() *big.Int        { return self.header.GasLimit }
 func (self *Block) GasUsed() *big.Int         { return self.header.GasUsed }
-func (self *Block) Hash() []byte              { return self.header.Hash() }
 func (self *Block) Trie() *ptrie.Trie         { return ptrie.New(self.header.Root, ethutil.Config.Db) }
+func (self *Block) SetRoot(root []byte)       { self.header.Root = root }
 func (self *Block) State() *state.StateDB     { return state.New(self.Trie()) }
 func (self *Block) Size() ethutil.StorageSize { return ethutil.StorageSize(len(ethutil.Encode(self))) }
-func (self *Block) SetRoot(root []byte)       { self.header.Root = root }
 
-// Implement block.Pow
+// Implement pow.Block
 func (self *Block) Difficulty() *big.Int { return self.header.Difficulty }
 func (self *Block) N() []byte            { return self.header.Nonce }
-func (self *Block) HashNoNonce() []byte {
-	return crypto.Sha3(ethutil.Encode(self.header.rlpData(false)))
+func (self *Block) HashNoNonce() []byte  { return self.header.HashNoNonce() }
+
+func (self *Block) Hash() []byte {
+	if self.HeaderHash != nil {
+		return self.HeaderHash
+	} else {
+		return self.header.Hash()
+	}
+}
+
+func (self *Block) ParentHash() []byte {
+	if self.ParentHeaderHash != nil {
+		return self.ParentHeaderHash
+	} else {
+		return self.header.ParentHash
+	}
 }
 
 func (self *Block) String() string {
