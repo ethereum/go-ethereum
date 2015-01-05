@@ -310,7 +310,7 @@ func (self *Ethereum) blockBroadcastLoop() {
 	for obj := range self.blockSub.Chan() {
 		switch ev := obj.(type) {
 		case core.NewMinedBlockEvent:
-			self.net.Broadcast("eth", NewBlockMsg, ev.Block.RlpData())
+			self.net.Broadcast("eth", NewBlockMsg, ev.Block.RlpData(), ev.Block.Td)
 		}
 	}
 }
