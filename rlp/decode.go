@@ -76,22 +76,37 @@ func Decode(r io.Reader, val interface{}) error {
 type decodeError struct {
 	msg string
 	typ reflect.Type
+	ctx []string
 }
 
-func (err decodeError) Error() string {
-	return fmt.Sprintf("rlp: %s for %v", err.msg, err.typ)
+func (err *decodeError) Error() string {
+	ctx := ""
+	if len(err.ctx) > 0 {
+		ctx = ", decoding into "
+		for i := len(err.ctx) - 1; i >= 0; i-- {
+			ctx += err.ctx[i]
+		}
+	}
+	return fmt.Sprintf("rlp: %s for %v%s", err.msg, err.typ, ctx)
 }
 
 func wrapStreamError(err error, typ reflect.Type) error {
 	switch err {
 	case ErrExpectedList:
-		return decodeError{"expected input list", typ}
+		return &decodeError{msg: "expected input list", typ: typ}
 	case ErrExpectedString:
-		return decodeError{"expected input string or byte", typ}
+		return &decodeError{msg: "expected input string or byte", typ: typ}
 	case errUintOverflow:
-		return decodeError{"input string too long", typ}
+		return &decodeError{msg: "input string too long", typ: typ}
 	case errNotAtEOL:
-		return decodeError{"input list has too many elements", typ}
+		return &decodeError{msg: "input list has too many elements", typ: typ}
+	}
+	return err
+}
+
+func addErrorContext(err error, ctx string) error {
+	if decErr, ok := err.(*decodeError); ok {
+		decErr.ctx = append(decErr.ctx, ctx)
 	}
 	return err
 }
@@ -180,13 +195,13 @@ func makeListDecoder(typ reflect.Type) (decoder, error) {
 		return nil, err
 	}
 
-	if typ.Kind() == reflect.Array {
-		return func(s *Stream, val reflect.Value) error {
-			return decodeListArray(s, val, etypeinfo.decoder)
-		}, nil
-	}
+	isArray := typ.Kind() == reflect.Array
 	return func(s *Stream, val reflect.Value) error {
-		return decodeListSlice(s, val, etypeinfo.decoder)
+		if isArray {
+			return decodeListArray(s, val, etypeinfo.decoder)
+		} else {
+			return decodeListSlice(s, val, etypeinfo.decoder)
+		}
 	}, nil
 }
 
@@ -219,7 +234,7 @@ func decodeListSlice(s *Stream, val reflect.Value, elemdec decoder) error {
 		if err := elemdec(s, val.Index(i)); err == EOL {
 			break
 		} else if err != nil {
-			return err
+			return addErrorContext(err, fmt.Sprint("[", i, "]"))
 		}
 	}
 	if i < val.Len() {
@@ -248,7 +263,7 @@ func decodeListArray(s *Stream, val reflect.Value, elemdec decoder) error {
 		if err := elemdec(s, val.Index(i)); err == EOL {
 			break
 		} else if err != nil {
-			return err
+			return addErrorContext(err, fmt.Sprint("[", i, "]"))
 		}
 	}
 	if i < vlen {
@@ -280,14 +295,14 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 	switch kind {
 	case Byte:
 		if val.Len() == 0 {
-			return decodeError{"input string too long", val.Type()}
+			return &decodeError{msg: "input string too long", typ: val.Type()}
 		}
 		bv, _ := s.Uint()
 		val.Index(0).SetUint(bv)
 		zero(val, 1)
 	case String:
 		if uint64(val.Len()) < size {
-			return decodeError{"input string too long", val.Type()}
+			return &decodeError{msg: "input string too long", typ: val.Type()}
 		}
 		slice := val.Slice(0, int(size)).Interface().([]byte)
 		if err := s.readFull(slice); err != nil {
@@ -334,7 +349,7 @@ func makeStructDecoder(typ reflect.Type) (decoder, error) {
 				// too few elements. leave the rest at their zero value.
 				break
 			} else if err != nil {
-				return err
+				return addErrorContext(err, "."+typ.Field(f.index).Name)
 			}
 		}
 		return wrapStreamError(s.ListEnd(), typ)
@@ -599,7 +614,13 @@ func (s *Stream) Decode(val interface{}) error {
 	if err != nil {
 		return err
 	}
-	return info.decoder(s, rval.Elem())
+
+	err = info.decoder(s, rval.Elem())
+	if decErr, ok := err.(*decodeError); ok && len(decErr.ctx) > 0 {
+		// add decode target type to error so context has more meaning
+		decErr.ctx = append(decErr.ctx, fmt.Sprint("(", rtyp.Elem(), ")"))
+	}
+	return err
 }
 
 // Reset discards any information about the current decoding context

@@ -7,7 +7,7 @@ import (
 )
 
 func TestClientIdentity(t *testing.T) {
-	clientIdentity := NewSimpleClientIdentity("Ethereum(G)", "0.5.16", "test", "pubkey")
+	clientIdentity := NewSimpleClientIdentity("Ethereum(G)", "0.5.16", "test", []byte("pubkey"))
 	clientString := clientIdentity.String()
 	expected := fmt.Sprintf("Ethereum(G)/v0.5.16/test/%s/%s", runtime.GOOS, runtime.Version())
 	if clientString != expected {
