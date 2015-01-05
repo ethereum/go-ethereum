@@ -105,7 +105,6 @@ func runEthProtocol(txPool txPool, chainManager chainManager, blockPool blockPoo
 		for {
 			err = self.handle()
 			if err != nil {
-				fmt.Printf("handle err %v", err)
 				self.blockPool.RemovePeer(self.id)
 				break
 			}
@@ -119,7 +118,6 @@ func (self *ethProtocol) handle() error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("handle err %v", err)
 	if msg.Size > ProtocolMaxMsgSize {
 		return self.protoError(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
 	}
@@ -150,7 +148,6 @@ func (self *ethProtocol) handle() error {
 
 	case BlockHashesMsg:
 		// TODO: redo using lazy decode , this way very inefficient on known chains
-		protologger.Debugf("payload size %v", msg.Size)
 		msgStream := rlp.NewStream(msg.Payload)
 		var err error
 		var i int
