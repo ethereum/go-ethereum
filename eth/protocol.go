@@ -8,12 +8,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
-	ethlogger "github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 )
-
-var protologger = ethlogger.NewLogger("ETH")
 
 const (
 	ProtocolVersion    = 51
@@ -143,7 +140,6 @@ func (self *ethProtocol) handle() error {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
 		hashes := self.chainManager.GetBlockHashesFromHash(request.Hash, request.Amount)
-		protologger.Debugf("hashes length %v", len(hashes))
 		return self.rw.EncodeMsg(BlockHashesMsg, ethutil.ByteSliceToInterface(hashes)...)
 
 	case BlockHashesMsg:
