@@ -141,7 +141,7 @@ func TestReplication(t *testing.T) {
 
 	trie2 := New(trie.roothash, trie.cache.backend)
 	if string(trie2.GetString("horse")) != "stallion" {
-		t.Error("expected to have harse => stallion")
+		t.Error("expected to have horse => stallion")
 	}
 
 	hash := trie2.Hash()

@@ -138,10 +138,10 @@ type KeyVal struct {
 func (self *JSXEth) EachStorage(addr string) string {
 	var values []KeyVal
 	object := self.World().SafeGet(ethutil.Hex2Bytes(addr))
-	object.EachStorage(func(name string, value *ethutil.Value) {
-		value.Decode()
-		values = append(values, KeyVal{ethutil.Bytes2Hex([]byte(name)), ethutil.Bytes2Hex(value.Bytes())})
-	})
+	it := object.Trie().Iterator()
+	for it.Next() {
+		values = append(values, KeyVal{ethutil.Bytes2Hex(it.Key), ethutil.Bytes2Hex(it.Value)})
+	}
 
 	valuesJson, err := json.Marshal(values)
 	if err != nil {

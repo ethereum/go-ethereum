@@ -2,27 +2,26 @@ package core
 
 import (
 	"fmt"
+	"os"
 	"path"
+	"reflect"
 	"runtime"
+	"strconv"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
-	//logpkg "github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/rlp"
 )
-
-//var Logger logpkg.LogSystem
-//var Log = logpkg.NewLogger("TEST")
 
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	//Logger = logpkg.NewStdLogSystem(os.Stdout, log.LstdFlags, logpkg.InfoLevel)
-	//logpkg.AddLogSystem(Logger)
-
 	ethutil.ReadConfig("/tmp/ethtest", "/tmp/ethtest", "ETH")
+}
 
+func reset() {
 	db, err := ethdb.NewMemDatabase()
 	if err != nil {
 		panic("Could not create mem-db, failing")
@@ -30,20 +29,19 @@ func init() {
 	ethutil.Config.Db = db
 }
 
-func loadChain(fn string, t *testing.T) types.Blocks {
-	c1, err := ethutil.ReadAllFile(path.Join("..", "_data", fn))
+func loadChain(fn string, t *testing.T) (types.Blocks, error) {
+	fh, err := os.OpenFile(path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "_data", fn), os.O_RDONLY, os.ModePerm)
 	if err != nil {
-		fmt.Println(err)
-		t.FailNow()
+		return nil, err
 	}
-	value := ethutil.NewValueFromBytes([]byte(c1))
-	blocks := make(types.Blocks, value.Len())
-	it := value.NewIterator()
-	for it.Next() {
-		blocks[it.Idx()] = types.NewBlockFromRlpValue(it.Value())
+	defer fh.Close()
+
+	var chain types.Blocks
+	if err := rlp.Decode(fh, &chain); err != nil {
+		return nil, err
 	}
 
-	return blocks
+	return chain, nil
 }
 
 func insertChain(done chan bool, chainMan *ChainManager, chain types.Blocks, t *testing.T) {
@@ -56,11 +54,23 @@ func insertChain(done chan bool, chainMan *ChainManager, chain types.Blocks, t *
 }
 
 func TestChainInsertions(t *testing.T) {
-	chain1 := loadChain("chain1", t)
-	chain2 := loadChain("chain2", t)
+	reset()
+
+	chain1, err := loadChain("valid1", t)
+	if err != nil {
+		fmt.Println(err)
+		t.FailNow()
+	}
+
+	chain2, err := loadChain("valid2", t)
+	if err != nil {
+		fmt.Println(err)
+		t.FailNow()
+	}
+
 	var eventMux event.TypeMux
 	chainMan := NewChainManager(&eventMux)
-	txPool := NewTxPool(chainMan, nil, &eventMux)
+	txPool := NewTxPool(&eventMux)
 	blockMan := NewBlockManager(txPool, chainMan, &eventMux)
 	chainMan.SetProcessor(blockMan)
 
@@ -73,5 +83,56 @@ func TestChainInsertions(t *testing.T) {
 	for i := 0; i < max; i++ {
 		<-done
 	}
-	fmt.Println(chainMan.CurrentBlock())
+
+	if reflect.DeepEqual(chain2[len(chain2)-1], chainMan.CurrentBlock()) {
+		t.Error("chain2 is canonical and shouldn't be")
+	}
+
+	if !reflect.DeepEqual(chain1[len(chain1)-1], chainMan.CurrentBlock()) {
+		t.Error("chain1 isn't canonical and should be")
+	}
+}
+
+func TestChainMultipleInsertions(t *testing.T) {
+	reset()
+
+	const max = 4
+	chains := make([]types.Blocks, max)
+	var longest int
+	for i := 0; i < max; i++ {
+		var err error
+		name := "valid" + strconv.Itoa(i+1)
+		chains[i], err = loadChain(name, t)
+		if len(chains[i]) >= len(chains[longest]) {
+			longest = i
+		}
+		fmt.Println("loaded", name, "with a length of", len(chains[i]))
+		if err != nil {
+			fmt.Println(err)
+			t.FailNow()
+		}
+	}
+	var eventMux event.TypeMux
+	chainMan := NewChainManager(&eventMux)
+	txPool := NewTxPool(&eventMux)
+	blockMan := NewBlockManager(txPool, chainMan, &eventMux)
+	chainMan.SetProcessor(blockMan)
+	done := make(chan bool, max)
+	for i, chain := range chains {
+		// XXX the go routine would otherwise reference the same (chain[3]) variable and fail
+		i := i
+		chain := chain
+		go func() {
+			insertChain(done, chainMan, chain, t)
+			fmt.Println(i, "done")
+		}()
+	}
+
+	for i := 0; i < max; i++ {
+		<-done
+	}
+
+	if !reflect.DeepEqual(chains[longest][len(chains[longest])-1], chainMan.CurrentBlock()) {
+		t.Error("Invalid canonical chain")
+	}
 }

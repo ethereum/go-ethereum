@@ -43,38 +43,6 @@ import (
 	"gopkg.in/qml.v1"
 )
 
-/*
-func LoadExtension(path string) (uintptr, error) {
-	lib, err := ffi.NewLibrary(path)
-	if err != nil {
-		return 0, err
-	}
-
-	so, err := lib.Fct("sharedObject", ffi.Pointer, nil)
-	if err != nil {
-		return 0, err
-	}
-
-	ptr := so()
-
-		err = lib.Close()
-		if err != nil {
-			return 0, err
-		}
-
-	return ptr.Interface().(uintptr), nil
-}
-*/
-/*
-	vec, errr := LoadExtension("/Users/jeffrey/Desktop/build-libqmltest-Desktop_Qt_5_2_1_clang_64bit-Debug/liblibqmltest_debug.dylib")
-	fmt.Printf("Fetched vec with addr: %#x\n", vec)
-	if errr != nil {
-		fmt.Println(errr)
-	} else {
-		context.SetVar("vec", (unsafe.Pointer)(vec))
-	}
-*/
-
 var guilogger = logger.NewLogger("GUI")
 
 type Gui struct {
@@ -104,8 +72,7 @@ type Gui struct {
 
 	plugins map[string]plugin
 
-	miner  *miner.Miner
-	stdLog logger.LogSystem
+	miner *miner.Miner
 }
 
 // Create GUI, but doesn't start it
@@ -145,7 +112,7 @@ func (gui *Gui) Start(assetPath string) {
 	// Expose the eth library and the ui library to QML
 	context.SetVar("gui", gui)
 	context.SetVar("eth", gui.uiLib)
-	context.SetVar("shh", gui.whisper)
+	//context.SetVar("shh", gui.whisper)
 
 	// Load the main QML interface
 	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
@@ -253,7 +220,7 @@ func (gui *Gui) setInitialChain(ancientBlocks bool) {
 	sBlk := gui.eth.ChainManager().LastBlockHash()
 	blk := gui.eth.ChainManager().GetBlock(sBlk)
 	for ; blk != nil; blk = gui.eth.ChainManager().GetBlock(sBlk) {
-		sBlk = blk.PrevHash
+		sBlk = blk.ParentHash()
 
 		gui.processBlock(blk, true)
 	}
@@ -263,35 +230,33 @@ func (gui *Gui) loadAddressBook() {
 	view := gui.getObjectByName("infoView")
 	nameReg := gui.pipe.World().Config().Get("NameReg")
 	if nameReg != nil {
-		nameReg.EachStorage(func(name string, value *ethutil.Value) {
-			if name[0] != 0 {
-				value.Decode()
-
-				view.Call("addAddress", struct{ Name, Address string }{name, ethutil.Bytes2Hex(value.Bytes())})
+		it := nameReg.Trie().Iterator()
+		for it.Next() {
+			if it.Key[0] != 0 {
+				view.Call("addAddress", struct{ Name, Address string }{string(it.Key), ethutil.Bytes2Hex(it.Value)})
 			}
-		})
+
+		}
 	}
 }
 
 func (self *Gui) loadMergedMiningOptions() {
 	view := self.getObjectByName("mergedMiningModel")
 
-	nameReg := self.pipe.World().Config().Get("MergeMining")
-	if nameReg != nil {
+	mergeMining := self.pipe.World().Config().Get("MergeMining")
+	if mergeMining != nil {
 		i := 0
-		nameReg.EachStorage(func(name string, value *ethutil.Value) {
-			if name[0] != 0 {
-				value.Decode()
+		it := mergeMining.Trie().Iterator()
+		for it.Next() {
+			view.Call("addMergedMiningOption", struct {
+				Checked       bool
+				Name, Address string
+				Id, ItemId    int
+			}{false, string(it.Key), ethutil.Bytes2Hex(it.Value), 0, i})
 
-				view.Call("addMergedMiningOption", struct {
-					Checked       bool
-					Name, Address string
-					Id, ItemId    int
-				}{false, name, ethutil.Bytes2Hex(value.Bytes()), 0, i})
+			i++
 
-				i++
-			}
-		})
+		}
 	}
 }
 
@@ -354,7 +319,7 @@ func (gui *Gui) readPreviousTransactions() {
 }
 
 func (gui *Gui) processBlock(block *types.Block, initial bool) {
-	name := strings.Trim(gui.pipe.World().Config().Get("NameReg").Storage(block.Coinbase).Str(), "\x00")
+	name := strings.Trim(gui.pipe.World().Config().Get("NameReg").Storage(block.Coinbase()).Str(), "\x00")
 	b := xeth.NewJSBlock(block)
 	b.Name = name
 
@@ -432,7 +397,7 @@ func (gui *Gui) update() {
 				switch ev := ev.(type) {
 				case core.NewBlockEvent:
 					gui.processBlock(ev.Block, false)
-					if bytes.Compare(ev.Block.Coinbase, gui.address()) == 0 {
+					if bytes.Compare(ev.Block.Coinbase(), gui.address()) == 0 {
 						gui.setWalletValue(gui.eth.ChainManager().State().GetBalance(gui.address()), nil)
 					}
 
@@ -470,7 +435,7 @@ func (gui *Gui) update() {
 			case <-peerUpdateTicker.C:
 				gui.setPeerInfo()
 			case <-generalUpdateTicker.C:
-				statusText := "#" + gui.eth.ChainManager().CurrentBlock().Number.String()
+				statusText := "#" + gui.eth.ChainManager().CurrentBlock().Number().String()
 				lastBlockLabel.Set("text", statusText)
 				miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.miner.GetPow().GetHashrate(), 10)+"Khash")
 
@@ -535,3 +500,35 @@ func (gui *Gui) privateKey() string {
 func (gui *Gui) address() []byte {
 	return gui.eth.KeyManager().Address()
 }
+
+/*
+func LoadExtension(path string) (uintptr, error) {
+	lib, err := ffi.NewLibrary(path)
+	if err != nil {
+		return 0, err
+	}
+
+	so, err := lib.Fct("sharedObject", ffi.Pointer, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	ptr := so()
+
+		err = lib.Close()
+		if err != nil {
+			return 0, err
+		}
+
+	return ptr.Interface().(uintptr), nil
+}
+*/
+/*
+	vec, errr := LoadExtension("/Users/jeffrey/Desktop/build-libqmltest-Desktop_Qt_5_2_1_clang_64bit-Debug/liblibqmltest_debug.dylib")
+	fmt.Printf("Fetched vec with addr: %#x\n", vec)
+	if errr != nil {
+		fmt.Println(errr)
+	} else {
+		context.SetVar("vec", (unsafe.Pointer)(vec))
+	}
+*/

@@ -35,7 +35,7 @@ func (pow *EasyPow) Turbo(on bool) {
 func (pow *EasyPow) Search(block pow.Block, stop <-chan struct{}) []byte {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	hash := block.HashNoNonce()
-	diff := block.Diff()
+	diff := block.Difficulty()
 	i := int64(0)
 	start := time.Now().UnixNano()
 	t := time.Now()
@@ -89,5 +89,5 @@ func verify(hash []byte, diff *big.Int, nonce []byte) bool {
 }
 
 func Verify(block pow.Block) bool {
-	return verify(block.HashNoNonce(), block.Diff(), block.N())
+	return verify(block.HashNoNonce(), block.Difficulty(), block.N())
 }

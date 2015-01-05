@@ -19,7 +19,7 @@ func ParanoiaCheck(t1 *Trie, backend Backend) (bool, *Trie) {
 		t2.Update(it.Key, it.Value)
 	}
 
-	return bytes.Compare(t2.Hash(), t1.Hash()) == 0, t2
+	return bytes.Equal(t2.Hash(), t1.Hash()), t2
 }
 
 type Trie struct {
@@ -49,14 +49,17 @@ func (self *Trie) Iterator() *Iterator {
 	return NewIterator(self)
 }
 
+func (self *Trie) Copy() *Trie {
+	return New(self.roothash, self.cache.backend)
+}
+
 // Legacy support
 func (self *Trie) Root() []byte { return self.Hash() }
 func (self *Trie) Hash() []byte {
 	var hash []byte
 	if self.root != nil {
-		//hash = self.root.Hash().([]byte)
 		t := self.root.Hash()
-		if byts, ok := t.([]byte); ok {
+		if byts, ok := t.([]byte); ok && len(byts) > 0 {
 			hash = byts
 		} else {
 			hash = crypto.Sha3(ethutil.Encode(self.root.RlpData()))
@@ -73,6 +76,9 @@ func (self *Trie) Hash() []byte {
 	return hash
 }
 func (self *Trie) Commit() {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
 	// Hash first
 	self.Hash()
 
@@ -81,10 +87,15 @@ func (self *Trie) Commit() {
 
 // Reset should only be called if the trie has been hashed
 func (self *Trie) Reset() {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
 	self.cache.Reset()
 
-	revision := self.revisions.Remove(self.revisions.Back()).([]byte)
-	self.roothash = revision
+	if self.revisions.Len() > 0 {
+		revision := self.revisions.Remove(self.revisions.Back()).([]byte)
+		self.roothash = revision
+	}
 	value := ethutil.NewValueFromBytes(self.cache.Get(self.roothash))
 	self.root = self.mknode(value)
 }
@@ -173,7 +184,7 @@ func (self *Trie) insert(node Node, key []byte, value Node) Node {
 		return cpy
 
 	default:
-		panic("Invalid node")
+		panic(fmt.Sprintf("%T: invalid node: %v", node, node))
 	}
 }
 
@@ -204,7 +215,7 @@ func (self *Trie) get(node Node, key []byte) Node {
 }
 
 func (self *Trie) delete(node Node, key []byte) Node {
-	if len(key) == 0 {
+	if len(key) == 0 && node == nil {
 		return nil
 	}
 
@@ -223,7 +234,9 @@ func (self *Trie) delete(node Node, key []byte) Node {
 				nkey := append(k, child.Key()...)
 				n = NewShortNode(self, nkey, child.Value())
 			case *FullNode:
-				n = NewShortNode(self, node.key, child)
+				sn := NewShortNode(self, node.Key(), child)
+				sn.key = node.key
+				n = sn
 			}
 
 			return n
@@ -264,9 +277,10 @@ func (self *Trie) delete(node Node, key []byte) Node {
 		}
 
 		return nnode
-
+	case nil:
+		return nil
 	default:
-		panic("Invalid node")
+		panic(fmt.Sprintf("%T: invalid node: %v (%v)", node, node, key))
 	}
 }
 
@@ -274,8 +288,13 @@ func (self *Trie) delete(node Node, key []byte) Node {
 func (self *Trie) mknode(value *ethutil.Value) Node {
 	l := value.Len()
 	switch l {
+	case 0:
+		return nil
 	case 2:
-		return NewShortNode(self, trie.CompactDecode(string(value.Get(0).Bytes())), self.mknode(value.Get(1)))
+		// A value node may consists of 2 bytes.
+		if value.Get(0).Len() != 0 {
+			return NewShortNode(self, trie.CompactDecode(string(value.Get(0).Bytes())), self.mknode(value.Get(1)))
+		}
 	case 17:
 		fnode := NewFullNode(self)
 		for i := 0; i < l; i++ {
@@ -284,9 +303,9 @@ func (self *Trie) mknode(value *ethutil.Value) Node {
 		return fnode
 	case 32:
 		return &HashNode{value.Bytes()}
-	default:
-		return &ValueNode{self, value.Bytes()}
 	}
+
+	return &ValueNode{self, value.Bytes()}
 }
 
 func (self *Trie) trans(node Node) Node {
@@ -309,4 +328,8 @@ func (self *Trie) store(node Node) interface{} {
 	}
 
 	return node.RlpData()
+}
+
+func (self *Trie) PrintRoot() {
+	fmt.Println(self.root)
 }

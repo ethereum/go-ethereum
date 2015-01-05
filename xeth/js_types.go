@@ -42,21 +42,21 @@ func NewJSBlock(block *types.Block) *JSBlock {
 	}
 	txlist := ethutil.NewList(ptxs)
 
-	puncles := make([]*JSBlock, len(block.Uncles))
-	for i, uncle := range block.Uncles {
-		puncles[i] = NewJSBlock(uncle)
+	puncles := make([]*JSBlock, len(block.Uncles()))
+	for i, uncle := range block.Uncles() {
+		puncles[i] = NewJSBlock(types.NewBlockWithHeader(uncle))
 	}
 	ulist := ethutil.NewList(puncles)
 
 	return &JSBlock{
 		ref: block, Size: block.Size().String(),
-		Number: int(block.Number.Uint64()), GasUsed: block.GasUsed.String(),
-		GasLimit: block.GasLimit.String(), Hash: ethutil.Bytes2Hex(block.Hash()),
+		Number: int(block.NumberU64()), GasUsed: block.GasUsed().String(),
+		GasLimit: block.GasLimit().String(), Hash: ethutil.Bytes2Hex(block.Hash()),
 		Transactions: txlist, Uncles: ulist,
-		Time:     block.Time,
-		Coinbase: ethutil.Bytes2Hex(block.Coinbase),
-		PrevHash: ethutil.Bytes2Hex(block.PrevHash),
-		Bloom:    ethutil.Bytes2Hex(block.LogsBloom),
+		Time:     block.Time(),
+		Coinbase: ethutil.Bytes2Hex(block.Coinbase()),
+		PrevHash: ethutil.Bytes2Hex(block.ParentHash()),
+		Bloom:    ethutil.Bytes2Hex(block.Bloom()),
 		Raw:      block.String(),
 	}
 }
@@ -70,7 +70,7 @@ func (self *JSBlock) ToString() string {
 }
 
 func (self *JSBlock) GetTransaction(hash string) *JSTransaction {
-	tx := self.ref.GetTransaction(ethutil.Hex2Bytes(hash))
+	tx := self.ref.Transaction(ethutil.Hex2Bytes(hash))
 	if tx == nil {
 		return nil
 	}

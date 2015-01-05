@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	ProtocolVersion    = 49
+	ProtocolVersion    = 51
 	NetworkId          = 0
 	ProtocolLength     = uint64(8)
 	ProtocolMaxMsgSize = 10 * 1024 * 1024
@@ -172,7 +172,7 @@ func (self *ethProtocol) handle() error {
 			}
 			block := self.chainManager.GetBlock(hash)
 			if block != nil {
-				blocks = append(blocks, block.Value().Raw())
+				blocks = append(blocks, block.RlpData())
 			}
 		}
 		return self.rw.EncodeMsg(BlocksMsg, blocks...)

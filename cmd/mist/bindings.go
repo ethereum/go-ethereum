@@ -72,7 +72,7 @@ func (gui *Gui) GetCustomIdentifier() string {
 // functions that allow Gui to implement interface guilogger.LogSystem
 func (gui *Gui) SetLogLevel(level logger.LogLevel) {
 	gui.logLevel = level
-	gui.stdLog.SetLogLevel(level)
+	gui.eth.Logger().SetLogLevel(level)
 	gui.config.Save("loglevel", level)
 }
 
