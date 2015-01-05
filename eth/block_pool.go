@@ -585,7 +585,7 @@ func (self *BlockPool) processSection(section *section, nodes []*poolNode) {
 		// container for missing block hashes
 		var hashes [][]byte
 
-		var i, total, missing, lastMissing, depth int
+		var i, missing, lastMissing, depth int
 		var idle int
 		var init, done, same, ready bool
 		var insertChain bool
@@ -622,14 +622,14 @@ func (self *BlockPool) processSection(section *section, nodes []*poolNode) {
 				// went through all blocks in section
 				if missing == 0 {
 					// no missing blocks
-					poolLogger.Debugf("[%s] got all blocks. process complete (%v total blocksRequests): missing %v/%v/%v", sectionName(section), blocksRequests, missing, total, depth)
+					poolLogger.Debugf("[%s] got all blocks. process complete (%v total blocksRequests): missing %v/%v/%v", sectionName(section), blocksRequests, missing, lastMissing, depth)
 					blocksRequestsComplete = true
 					blocksRequestTimer = nil
 					blocksRequestTime = false
 				} else {
 					// some missing blocks
 					blocksRequests++
-					poolLogger.Debugf("[%s] block request attempt %v: missing %v/%v/%v", sectionName(section), blocksRequests, missing, total, depth)
+					poolLogger.Debugf("[%s] block request attempt %v: missing %v/%v/%v", sectionName(section), blocksRequests, missing, lastMissing, depth)
 					if len(hashes) > 0 {
 						// send block requests to peers
 						self.requestBlocks(blocksRequests, hashes)
@@ -643,7 +643,7 @@ func (self *BlockPool) processSection(section *section, nodes []*poolNode) {
 							idle++
 							// too many idle rounds
 							if idle >= blocksRequestMaxIdleRounds {
-								poolLogger.Debugf("[%s] block requests had %v idle rounds (%v total attempts): missing %v/%v/%v\ngiving up...", sectionName(section), idle, blocksRequests, missing, total, depth)
+								poolLogger.Debugf("[%s] block requests had %v idle rounds (%v total attempts): missing %v/%v/%v\ngiving up...", sectionName(section), idle, blocksRequests, missing, lastMissing, depth)
 								close(section.suicideC)
 							}
 						} else {
@@ -668,7 +668,7 @@ func (self *BlockPool) processSection(section *section, nodes []*poolNode) {
 			//
 
 			if ready && blocksRequestTime && !blocksRequestsComplete {
-				poolLogger.Debugf("[%s] check if new blocks arrived (attempt %v): missing %v/%v/%v", sectionName(section), blocksRequests, missing, total, depth)
+				poolLogger.Debugf("[%s] check if new blocks arrived (attempt %v): missing %v/%v/%v", sectionName(section), blocksRequests, missing, lastMissing, depth)
 				blocksRequestTimer = time.After(blocksRequestInterval * time.Millisecond)
 				blocksRequestTime = false
 				processC = offC
@@ -710,7 +710,7 @@ func (self *BlockPool) processSection(section *section, nodes []*poolNode) {
 
 			case <-suicideTimer:
 				close(section.suicideC)
-				poolLogger.Debugf("[%s] timeout. (%v total attempts): missing %v/%v/%v", sectionName(section), blocksRequests, missing, total, depth)
+				poolLogger.Debugf("[%s] timeout. (%v total attempts): missing %v/%v/%v", sectionName(section), blocksRequests, missing, lastMissing, depth)
 
 			case <-section.suicideC:
 				poolLogger.Debugf("[%s] suicide", sectionName(section))
@@ -744,7 +744,7 @@ func (self *BlockPool) processSection(section *section, nodes []*poolNode) {
 					self.procWg.Done()
 					poolLogger.Debugf("[%s] idle mode", sectionName(section))
 					if init {
-						poolLogger.Debugf("[%s] off (%v total attempts): missing %v/%v/%v", sectionName(section), blocksRequests, missing, total, depth)
+						poolLogger.Debugf("[%s] off (%v total attempts): missing %v/%v/%v", sectionName(section), blocksRequests, missing, lastMissing, depth)
 					}
 
 					blocksRequestTime = false
@@ -777,12 +777,10 @@ func (self *BlockPool) processSection(section *section, nodes []*poolNode) {
 						poolLogger.Debugf("[%s] initialise section", sectionName(section))
 						i = 0
 						missing = 0
-						total = 0
-						lastMissing = 0
-						depth = 0
 						self.wg.Add(1)
 						self.procWg.Add(1)
 						depth = len(section.nodes)
+						lastMissing = depth
 						// if not run at least once fully, launch iterator
 						go func() {
 							var node *poolNode
@@ -824,10 +822,7 @@ func (self *BlockPool) processSection(section *section, nodes []*poolNode) {
 					init = true
 					done = true
 					processC = make(chan *poolNode, missing)
-
-					total = missing
-
-					poolLogger.Debugf("[%s] section initalised: missing %v/%v/%v", sectionName(section), missing, total, depth)
+					poolLogger.Debugf("[%s] section initalised: missing %v/%v/%v", sectionName(section), missing, lastMissing, depth)
 					continue LOOP
 				}
 				if ready {
@@ -857,8 +852,8 @@ func (self *BlockPool) processSection(section *section, nodes []*poolNode) {
 						insertChain = true
 					}
 				}
-				poolLogger.Debugf("[%s] %v/%v/%v/%v", sectionName(section), i, missing, total, depth)
-				if i == lastMissing {
+				poolLogger.Debugf("[%s] %v/%v/%v/%v", sectionName(section), i, missing, lastMissing, depth)
+				if i == lastMissing && init {
 					poolLogger.Debugf("[%s] done", sectionName(section))
 					done = true
 				}
@@ -880,7 +875,7 @@ func (self *BlockPool) processSection(section *section, nodes []*poolNode) {
 
 			} // select
 		} // for
-		poolLogger.Debugf("[%s] quit: %v block hashes requests - %v block requests - missing %v/%v/%v", sectionName(section), blockHashesRequests, blocksRequests, missing, total, depth)
+		poolLogger.Debugf("[%s] quit: %v block hashes requests - %v block requests - missing %v/%v/%v", sectionName(section), blockHashesRequests, blocksRequests, missing, lastMissing, depth)
 
 		close(section.offC)
 		poolLogger.Debugf("[%s] process complete", sectionName(section))
