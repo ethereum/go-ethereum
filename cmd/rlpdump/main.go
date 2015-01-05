@@ -19,7 +19,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/hex"
 	"flag"
@@ -67,7 +66,7 @@ func main() {
 			die(err)
 		}
 		defer fd.Close()
-		r = bufio.NewReader(fd)
+		r = fd
 
 	default:
 		fmt.Fprintln(os.Stderr, "Error: too many arguments")
