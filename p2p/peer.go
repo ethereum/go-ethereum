@@ -477,8 +477,7 @@ func (peer *Peer) PeerList() []interface{} {
 		ds = append(ds, addr)
 	}
 	ourAddr := peer.ourListenAddr
-	if ourAddr != nil && !ourAddr.IP.IsUnspecified() {
-		// if ourAddr != nil && !ourAddr.IP.IsLoopback() && !ourAddr.IP.IsUnspecified() {
+	if ourAddr != nil && !ourAddr.IP.IsLoopback() && !ourAddr.IP.IsUnspecified() {
 		ds = append(ds, ourAddr)
 	}
 	return ds
