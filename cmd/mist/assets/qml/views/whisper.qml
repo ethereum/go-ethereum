@@ -10,7 +10,6 @@ import Ethereum 1.0
 Rectangle {
 	id: root
 	property var title: "Whisper Traffic"
-	property var iconSource: "../facet.png"
 	property var menuItem
 
 	objectName: "whisperView"

@@ -32,7 +32,7 @@ import (
 
 const (
 	ClientIdentifier = "Ethereum(G)"
-	Version          = "0.8.0"
+	Version          = "0.8.1"
 )
 
 var clilogger = logger.NewLogger("CLI")

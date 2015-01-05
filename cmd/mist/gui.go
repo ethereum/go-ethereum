@@ -64,7 +64,7 @@ type Gui struct {
 	logLevel logger.LogLevel
 	open     bool
 
-	pipe *xeth.JSXEth
+	xeth *xeth.JSXEth
 
 	Session        string
 	clientIdentity *p2p.SimpleClientIdentity
@@ -82,8 +82,8 @@ func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIden
 		panic(err)
 	}
 
-	pipe := xeth.NewJSXEth(ethereum)
-	gui := &Gui{eth: ethereum, txDb: db, pipe: pipe, logLevel: logger.LogLevel(logLevel), Session: session, open: false, clientIdentity: clientIdentity, config: config, plugins: make(map[string]plugin)}
+	xeth := xeth.NewJSXEth(ethereum)
+	gui := &Gui{eth: ethereum, txDb: db, xeth: xeth, logLevel: logger.LogLevel(logLevel), Session: session, open: false, clientIdentity: clientIdentity, config: config, plugins: make(map[string]plugin)}
 	data, _ := ethutil.ReadAllFile(path.Join(ethutil.Config.ExecPath, "plugins.json"))
 	json.Unmarshal([]byte(data), &gui.plugins)
 
@@ -228,7 +228,7 @@ func (gui *Gui) setInitialChain(ancientBlocks bool) {
 
 func (gui *Gui) loadAddressBook() {
 	view := gui.getObjectByName("infoView")
-	nameReg := gui.pipe.World().Config().Get("NameReg")
+	nameReg := gui.xeth.World().Config().Get("NameReg")
 	if nameReg != nil {
 		it := nameReg.Trie().Iterator()
 		for it.Next() {
@@ -243,7 +243,7 @@ func (gui *Gui) loadAddressBook() {
 func (self *Gui) loadMergedMiningOptions() {
 	view := self.getObjectByName("mergedMiningModel")
 
-	mergeMining := self.pipe.World().Config().Get("MergeMining")
+	mergeMining := self.xeth.World().Config().Get("MergeMining")
 	if mergeMining != nil {
 		i := 0
 		it := mergeMining.Trie().Iterator()
@@ -261,8 +261,7 @@ func (self *Gui) loadMergedMiningOptions() {
 }
 
 func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
-	pipe := xeth.New(gui.eth)
-	nameReg := pipe.World().Config().Get("NameReg")
+	nameReg := gui.xeth.World().Config().Get("NameReg")
 	addr := gui.address()
 
 	var inout string
@@ -273,7 +272,7 @@ func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 	}
 
 	var (
-		ptx  = xeth.NewJSTx(tx, pipe.World().State())
+		ptx  = xeth.NewJSTx(tx, gui.xeth.World().State())
 		send = nameReg.Storage(tx.From())
 		rec  = nameReg.Storage(tx.To())
 		s, r string
@@ -319,7 +318,7 @@ func (gui *Gui) readPreviousTransactions() {
 }
 
 func (gui *Gui) processBlock(block *types.Block, initial bool) {
-	name := strings.Trim(gui.pipe.World().Config().Get("NameReg").Storage(block.Coinbase()).Str(), "\x00")
+	name := strings.Trim(gui.xeth.World().Config().Get("NameReg").Storage(block.Coinbase()).Str(), "\x00")
 	b := xeth.NewJSBlock(block)
 	b.Name = name
 
@@ -488,7 +487,7 @@ NumGC:      %d
 func (gui *Gui) setPeerInfo() {
 	gui.win.Root().Call("setPeers", fmt.Sprintf("%d / %d", gui.eth.PeerCount(), gui.eth.MaxPeers))
 	gui.win.Root().Call("resetPeers")
-	for _, peer := range gui.pipe.Peers() {
+	for _, peer := range gui.xeth.Peers() {
 		gui.win.Root().Call("addPeer", peer)
 	}
 }

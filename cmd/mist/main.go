@@ -32,7 +32,7 @@ import (
 
 const (
 	ClientIdentifier = "Mist"
-	Version          = "0.8.0"
+	Version          = "0.8.1"
 )
 
 var ethereum *eth.Ethereum
@@ -58,6 +58,7 @@ func run() error {
 		NATType:    PMPGateway,
 		PMPGateway: PMPGateway,
 		KeyRing:    KeyRing,
+		Dial:       true,
 	})
 	if err != nil {
 		mainlogger.Fatalln(err)
