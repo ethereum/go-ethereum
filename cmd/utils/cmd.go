@@ -100,7 +100,11 @@ func exit(err error) {
 
 func StartEthereum(ethereum *eth.Ethereum, UseSeed bool) {
 	clilogger.Infof("Starting %s", ethereum.ClientIdentity())
-	ethereum.Start(UseSeed)
+	err := ethereum.Start(UseSeed)
+	if err != nil {
+		exit(err)
+	}
+
 	RegisterInterrupt(func(sig os.Signal) {
 		ethereum.Stop()
 		logger.Flush()

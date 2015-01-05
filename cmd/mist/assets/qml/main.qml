@@ -866,6 +866,7 @@ ApplicationWindow {
 			     model: ListModel { id: pastPeers }
 
 			     Component.onCompleted: {
+				     pastPeers.insert(0, {text: "poc-8.ethdev.com:30303"})
 				     /*
 				     var ips = eth.pastPeers()
 				     for(var i = 0; i < ips.length; i++) {

@@ -112,7 +112,7 @@ func (gui *Gui) Start(assetPath string) {
 	// Expose the eth library and the ui library to QML
 	context.SetVar("gui", gui)
 	context.SetVar("eth", gui.uiLib)
-	//context.SetVar("shh", gui.whisper)
+	context.SetVar("shh", gui.whisper)
 
 	// Load the main QML interface
 	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
