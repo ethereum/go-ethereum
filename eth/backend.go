@@ -307,7 +307,7 @@ func (self *Ethereum) txBroadcastLoop() {
 
 func (self *Ethereum) blockBroadcastLoop() {
 	// automatically stops if unsubscribe
-	for obj := range self.txSub.Chan() {
+	for obj := range self.blockSub.Chan() {
 		switch ev := obj.(type) {
 		case core.NewMinedBlockEvent:
 			self.net.Broadcast("eth", NewBlockMsg, ev.Block.RlpData())
