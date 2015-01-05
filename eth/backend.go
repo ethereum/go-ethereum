@@ -36,7 +36,8 @@ type Config struct {
 	NATType    string
 	PMPGateway string
 
-	Shh bool
+	Shh  bool
+	Dial bool
 
 	KeyManager *crypto.KeyManager
 }
@@ -150,6 +151,7 @@ func New(config *Config) (*Ethereum, error) {
 		Protocols: protocols,
 		Blacklist: eth.blacklist,
 		NAT:       nat,
+		NoDial:    !config.Dial,
 	}
 
 	if len(config.Port) > 0 {

@@ -65,6 +65,7 @@ func main() {
 		PMPGateway: PMPGateway,
 		KeyRing:    KeyRing,
 		Shh:        SHH,
+		Dial:       Dial,
 	})
 
 	if err != nil {

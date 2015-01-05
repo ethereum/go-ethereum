@@ -60,6 +60,7 @@ var (
 	VmType          int
 	ImportChain     string
 	SHH             bool
+	Dial            bool
 )
 
 // flags specific to cli client
@@ -96,6 +97,7 @@ func Init() {
 	flag.BoolVar(&NonInteractive, "y", false, "non-interactive mode (say yes to confirmations)")
 	flag.BoolVar(&UseSeed, "seed", true, "seed peers")
 	flag.BoolVar(&SHH, "shh", true, "whisper protocol (on)")
+	flag.BoolVar(&Dial, "dial", true, "dial out connections (on)")
 	flag.BoolVar(&GenAddr, "genaddr", false, "create a new priv/pub key")
 	flag.StringVar(&SecretFile, "import", "", "imports the file given (hex or mnemonic formats)")
 	flag.StringVar(&ExportDir, "export", "", "exports the session keyring to files in the directory given")
