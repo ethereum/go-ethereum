@@ -231,7 +231,12 @@ var decodeTests = []decodeTest{
 	{input: "8D6162636465666768696A6B6C6D", ptr: new([]byte), value: []byte("abcdefghijklm")},
 	{input: "C0", ptr: new([]byte), value: []byte{}},
 	{input: "C3010203", ptr: new([]byte), value: []byte{1, 2, 3}},
-	{input: "C3820102", ptr: new([]byte), error: "rlp: input string too long for uint8"},
+
+	{
+		input: "C3820102",
+		ptr:   new([]byte),
+		error: "rlp: input string too long for uint8, decoding into ([]uint8)[0]",
+	},
 
 	// byte arrays
 	{input: "01", ptr: new([5]byte), value: [5]byte{1}},
@@ -239,9 +244,22 @@ var decodeTests = []decodeTest{
 	{input: "850102030405", ptr: new([5]byte), value: [5]byte{1, 2, 3, 4, 5}},
 	{input: "C0", ptr: new([5]byte), value: [5]byte{}},
 	{input: "C3010203", ptr: new([5]byte), value: [5]byte{1, 2, 3, 0, 0}},
-	{input: "C3820102", ptr: new([5]byte), error: "rlp: input string too long for uint8"},
-	{input: "86010203040506", ptr: new([5]byte), error: "rlp: input string too long for [5]uint8"},
-	{input: "850101", ptr: new([5]byte), error: io.ErrUnexpectedEOF.Error()},
+
+	{
+		input: "C3820102",
+		ptr:   new([5]byte),
+		error: "rlp: input string too long for uint8, decoding into ([5]uint8)[0]",
+	},
+	{
+		input: "86010203040506",
+		ptr:   new([5]byte),
+		error: "rlp: input string too long for [5]uint8",
+	},
+	{
+		input: "850101",
+		ptr:   new([5]byte),
+		error: io.ErrUnexpectedEOF.Error(),
+	},
 
 	// byte array reuse (should be zeroed)
 	{input: "850102030405", ptr: &sharedByteArray, value: [5]byte{1, 2, 3, 4, 5}},
@@ -272,11 +290,21 @@ var decodeTests = []decodeTest{
 	{input: "C0", ptr: new(simplestruct), value: simplestruct{0, ""}},
 	{input: "C105", ptr: new(simplestruct), value: simplestruct{5, ""}},
 	{input: "C50583343434", ptr: new(simplestruct), value: simplestruct{5, "444"}},
-	{input: "C3010101", ptr: new(simplestruct), error: "rlp: input list has too many elements for rlp.simplestruct"},
 	{
 		input: "C501C302C103",
 		ptr:   new(recstruct),
 		value: recstruct{1, &recstruct{2, &recstruct{3, nil}}},
+	},
+
+	{
+		input: "C3010101",
+		ptr:   new(simplestruct),
+		error: "rlp: input list has too many elements for rlp.simplestruct",
+	},
+	{
+		input: "C501C3C00000",
+		ptr:   new(recstruct),
+		error: "rlp: expected input string or byte for uint, decoding into (rlp.recstruct).Child.I",
 	},
 
 	// pointers

@@ -45,8 +45,8 @@ func (d peerAddr) String() string {
 	return fmt.Sprintf("%v:%d", d.IP, d.Port)
 }
 
-func (d peerAddr) RlpData() interface{} {
-	return []interface{}{d.IP, d.Port, d.Pubkey}
+func (d *peerAddr) RlpData() interface{} {
+	return []interface{}{string(d.IP), d.Port, d.Pubkey}
 }
 
 // Peer represents a remote peer.
@@ -426,7 +426,7 @@ func (rw *proto) WriteMsg(msg Msg) error {
 }
 
 func (rw *proto) EncodeMsg(code uint64, data ...interface{}) error {
-	return rw.WriteMsg(NewMsg(code, data))
+	return rw.WriteMsg(NewMsg(code, data...))
 }
 
 func (rw *proto) ReadMsg() (Msg, error) {
@@ -459,4 +459,26 @@ func (r *eofSignal) Read(buf []byte) (int, error) {
 		r.eof = nil
 	}
 	return n, err
+}
+
+func (peer *Peer) PeerList() []interface{} {
+	peers := peer.otherPeers()
+	ds := make([]interface{}, 0, len(peers))
+	for _, p := range peers {
+		p.infolock.Lock()
+		addr := p.listenAddr
+		p.infolock.Unlock()
+		// filter out this peer and peers that are not listening or
+		// have not completed the handshake.
+		// TODO: track previously sent peers and exclude them as well.
+		if p == peer || addr == nil {
+			continue
+		}
+		ds = append(ds, addr)
+	}
+	ourAddr := peer.ourListenAddr
+	if ourAddr != nil && !ourAddr.IP.IsLoopback() && !ourAddr.IP.IsUnspecified() {
+		ds = append(ds, ourAddr)
+	}
+	return ds
 }

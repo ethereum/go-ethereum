@@ -64,10 +64,14 @@ func main() {
 		NATType:    PMPGateway,
 		PMPGateway: PMPGateway,
 		KeyRing:    KeyRing,
+		Shh:        SHH,
+		Dial:       Dial,
 	})
+
 	if err != nil {
 		clilogger.Fatalln(err)
 	}
+
 	utils.KeyTasks(ethereum.KeyManager(), KeyRing, GenAddr, SecretFile, ExportDir, NonInteractive)
 
 	if Dump {
@@ -112,13 +116,6 @@ func main() {
 		return
 	}
 
-	// better reworked as cases
-	if StartJsConsole {
-		InitJsConsole(ethereum)
-	} else if len(InputFile) > 0 {
-		ExecJsFile(ethereum, InputFile)
-	}
-
 	if StartRpc {
 		utils.StartRpc(ethereum, RpcPort)
 	}
@@ -129,6 +126,11 @@ func main() {
 
 	utils.StartEthereum(ethereum, UseSeed)
 
+	if StartJsConsole {
+		InitJsConsole(ethereum)
+	} else if len(InputFile) > 0 {
+		ExecJsFile(ethereum, InputFile)
+	}
 	// this blocks the thread
 	ethereum.WaitForShutdown()
 }

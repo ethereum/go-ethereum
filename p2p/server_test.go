@@ -11,7 +11,7 @@ import (
 
 func startTestServer(t *testing.T, pf peerFunc) *Server {
 	server := &Server{
-		Identity:    NewSimpleClientIdentity("clientIdentifier", "version", "customIdentifier", "pubkey"),
+		Identity:    &peerId{},
 		MaxPeers:    10,
 		ListenAddr:  "127.0.0.1:0",
 		newPeerFunc: pf,
