@@ -527,9 +527,11 @@ func (self *BlockPool) activateChain(section *section, peer *peerInfo) {
 	i := 0
 LOOP:
 	for section != nil {
-		// register this section with the peer
+		// register this section with the peer and quit if registered
 		poolLogger.Debugf("[%s] register section with peer %s", sectionName(section), peer.id)
-		peer.addSection(section.top.hash, section)
+		if peer.addSection(section.top.hash, section) == section {
+			return
+		}
 		poolLogger.Debugf("[%s] activate section process", sectionName(section))
 		select {
 		case section.controlC <- peer:
@@ -947,11 +949,14 @@ func (self *BlockPool) getPeer(peerId string) (*peerInfo, bool) {
 	return info, false
 }
 
-func (self *peerInfo) addSection(hash []byte, section *section) {
+func (self *peerInfo) addSection(hash []byte, section *section) (found *section) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
+	key := string(hash)
+	found = self.sections[key]
 	poolLogger.Debugf("section process %s added to %s", sectionName(section), self.id)
-	self.sections[string(hash)] = section
+	self.sections[key] = section
+	return
 }
 
 func (self *BlockPool) switchPeer(oldPeer, newPeer *peerInfo) {
