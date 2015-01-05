@@ -38,6 +38,7 @@ var (
 	GasSha256       = big.NewInt(50)
 	GasRipemd       = big.NewInt(50)
 	GasEcrecover    = big.NewInt(500)
+	GasMemCpy       = big.NewInt(1)
 
 	Pow256 = ethutil.BigPow(2, 256)
 
