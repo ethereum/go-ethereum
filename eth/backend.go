@@ -301,7 +301,7 @@ func (self *Ethereum) txBroadcastLoop() {
 	// automatically stops if unsubscribe
 	for obj := range self.txSub.Chan() {
 		event := obj.(core.TxPreEvent)
-		self.net.Broadcast("eth", TxMsg, []interface{}{event.Tx.RlpData()})
+		self.net.Broadcast("eth", TxMsg, event.Tx.RlpData())
 	}
 }
 
