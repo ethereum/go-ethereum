@@ -16,5 +16,5 @@ function test_node {
 }
 
 function peer {
-  test_node $@ -loglevel 0 -maxpeer 1 -dial=false
+  test_node $@ -loglevel 5 -logfile debug.log -maxpeer 1 -dial=false
 }
