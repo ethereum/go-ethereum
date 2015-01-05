@@ -279,6 +279,10 @@ func (self *UiLib) SetGasPrice(price string) {
 	self.miner.MinAcceptedGasPrice = ethutil.Big(price)
 }
 
+func (self *UiLib) SetExtra(extra string) {
+	self.miner.Extra = extra
+}
+
 func (self *UiLib) ToggleMining() bool {
 	if !self.miner.Mining() {
 		self.miner.Start()
