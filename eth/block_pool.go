@@ -142,7 +142,7 @@ func (self *BlockPool) Stop() {
 	poolLogger.Infoln("Stopping...")
 
 	close(self.quit)
-	self.wg.Wait()
+	//self.wg.Wait()
 
 	self.peersLock.Lock()
 	self.peers = nil
