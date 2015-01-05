@@ -189,7 +189,6 @@ func (srv *Server) Start() (err error) {
 
 	// make all slots available
 	for i := range srv.peers {
-		srvlog.Debugf("add slot %v", i)
 		srv.peerSlots <- i
 	}
 	// note: discLoop is not part of WaitGroup
