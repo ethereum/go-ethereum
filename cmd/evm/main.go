@@ -17,8 +17,6 @@
 /**
  * @authors
  * 	Jeffrey Wilcke <i@jev.io>
- * @date 2014
- *
  */
 
 package main
