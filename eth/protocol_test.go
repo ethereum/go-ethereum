@@ -41,10 +41,6 @@ func (self *testMsgReadWriter) WriteMsg(msg p2p.Msg) error {
 	return nil
 }
 
-func (self *testMsgReadWriter) EncodeMsg(code uint64, data ...interface{}) error {
-	return self.WriteMsg(p2p.NewMsg(code, data...))
-}
-
 func (self *testMsgReadWriter) ReadMsg() (p2p.Msg, error) {
 	msg, ok := <-self.in
 	if !ok {

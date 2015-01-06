@@ -119,14 +119,14 @@ func (bp *baseProtocol) loop(quit <-chan error) error {
 
 	getPeersTick := time.NewTicker(10 * time.Second)
 	defer getPeersTick.Stop()
-	err := bp.rw.EncodeMsg(getPeersMsg)
+	err := EncodeMsg(bp.rw, getPeersMsg)
 
 	for err == nil {
 		select {
 		case err = <-quit:
 			return err
 		case <-getPeersTick.C:
-			err = bp.rw.EncodeMsg(getPeersMsg)
+			err = EncodeMsg(bp.rw, getPeersMsg)
 		case event := <-activity.Chan():
 			ping.Reset(pingTimeout)
 			lastActive = event.(time.Time)
@@ -134,7 +134,7 @@ func (bp *baseProtocol) loop(quit <-chan error) error {
 			if lastActive.Add(pingTimeout * 2).Before(t) {
 				err = newPeerError(errPingTimeout, "")
 			} else if lastActive.Add(pingTimeout).Before(t) {
-				err = bp.rw.EncodeMsg(pingMsg)
+				err = EncodeMsg(bp.rw, pingMsg)
 			}
 		}
 	}
@@ -164,7 +164,7 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 		return discRequestedError(reason[0])
 
 	case pingMsg:
-		return bp.rw.EncodeMsg(pongMsg)
+		return EncodeMsg(bp.rw, pongMsg)
 
 	case pongMsg:
 
@@ -177,7 +177,7 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 		//
 		// TODO: add event mechanism to notify baseProtocol for new peers
 		if len(peers) > 0 {
-			return bp.rw.EncodeMsg(peersMsg, peers...)
+			return EncodeMsg(bp.rw, peersMsg, peers...)
 		}
 
 	case peersMsg:

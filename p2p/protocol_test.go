@@ -93,7 +93,7 @@ func TestBaseProtocolDisconnect(t *testing.T) {
 		if err := expectMsg(rw2, handshakeMsg); err != nil {
 			t.Error(err)
 		}
-		err := rw2.EncodeMsg(handshakeMsg,
+		err := EncodeMsg(rw2, handshakeMsg,
 			baseProtocolVersion,
 			"",
 			[]interface{}{},
@@ -106,7 +106,7 @@ func TestBaseProtocolDisconnect(t *testing.T) {
 		if err := expectMsg(rw2, getPeersMsg); err != nil {
 			t.Error(err)
 		}
-		if err := rw2.EncodeMsg(discMsg, DiscQuitting); err != nil {
+		if err := EncodeMsg(rw2, discMsg, DiscQuitting); err != nil {
 			t.Error(err)
 		}
 

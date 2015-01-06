@@ -75,8 +75,8 @@ func TestDecodeRealMsg(t *testing.T) {
 func ExampleMsgPipe() {
 	rw1, rw2 := MsgPipe()
 	go func() {
-		rw1.EncodeMsg(8, []byte{0, 0})
-		rw1.EncodeMsg(5, []byte{1, 1})
+		EncodeMsg(rw1, 8, []byte{0, 0})
+		EncodeMsg(rw1, 5, []byte{1, 1})
 		rw1.Close()
 	}()
 
@@ -100,7 +100,7 @@ loop:
 		rw1, rw2 := MsgPipe()
 		done := make(chan struct{})
 		go func() {
-			if err := rw1.EncodeMsg(1); err == nil {
+			if err := EncodeMsg(rw1, 1); err == nil {
 				t.Error("EncodeMsg returned nil error")
 			} else if err != ErrPipeClosed {
 				t.Error("EncodeMsg returned wrong error: got %v, want %v", err, ErrPipeClosed)
