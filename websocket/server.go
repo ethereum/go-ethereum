@@ -81,8 +81,6 @@ func (s *Server) MessageFunc(f MsgFunc) {
 // Listen and serve.
 // It serves client connection and broadcast request.
 func (s *Server) Listen() {
-	wslogger.Debugln("Listening server...")
-
 	// ws handler
 	onConnected := func(ws *ws.Conn) {
 		defer func() {
