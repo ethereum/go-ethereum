@@ -1,3 +1,1 @@
-Define peer address' time field and lastSeen function.
-Overwrite time field when connect and disconnect.
 Change protocol getPeers message response conditional on target. peerList if noTarget else server.getPeers

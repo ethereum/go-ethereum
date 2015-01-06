@@ -31,7 +31,7 @@ func newTestPeer() (peer *Peer) {
 	peer.pubkeyHook = func(*peerAddr) error { return nil }
 	peer.ourID = &peerId{}
 	peer.listenAddr = &peerAddr{}
-	peer.otherPeers = func() []*Peer { return nil }
+	peer.getPeers = func(...[]byte) []*peerAddr { return nil }
 	return
 }
 
@@ -58,25 +58,32 @@ func TestBaseProtocolPeers(t *testing.T) {
 		for got = range addrChan {
 			own = append(own, got)
 		}
-		if len(own) != 1 || !reflect.DeepEqual(ownAddr, own[0]) {
-			t.Errorf("mismatch: peers own address is incorrectly or not given, got %v, want %#v", ownAddr)
+		if len(own) < 1 {
+			t.Errorf("mismatch: peers own address not given")
+		} else {
+			if !reflect.DeepEqual(ownAddr, own[0]) {
+				t.Errorf("mismatch: peers own address is incorrectly or not given, got %v, want %#v", own[0], ownAddr)
+			}
 		}
 		rw2.Close()
 	}()
 	// run first peer
 	peer1 := newTestPeer()
 	peer1.ourListenAddr = ownAddr
-	peer1.otherPeers = func() []*Peer {
-		pl := make([]*Peer, len(cannedPeerList))
+	peer1.getPeers = func(...[]byte) []*peerAddr {
+		pl := make([]*peerAddr, len(cannedPeerList))
 		for i, addr := range cannedPeerList {
-			pl[i] = &Peer{listenAddr: addr}
+			pl[i] = addr
 		}
 		return pl
 	}
 	go runBaseProtocol(peer1, rw1)
 	// run second peer
 	peer2 := newTestPeer()
-	peer2.newPeerAddr = addrChan // feed peer suggestions into matcher
+	peer2.addPeer = func(addr *peerAddr) error {
+		addrChan <- addr // feed peer suggestions into matcher
+		return nil
+	}
 	if err := runBaseProtocol(peer2, rw2); err != ErrPipeClosed {
 		t.Errorf("peer2 terminated with unexpected error: %v", err)
 	}

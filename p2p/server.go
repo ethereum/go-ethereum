@@ -63,7 +63,7 @@ type Server struct {
 	NoDial bool
 
 	// peer selector
-	PeerSelector PeerSelector
+	PeerSelector peerSelector
 
 	// Hook for testing. This is useful because we can inhibit
 	// the whole protocol stack.
@@ -107,8 +107,34 @@ func (srv *Server) Peers() (peers []*Peer) {
 	return
 }
 
-func (srv *Server) GetPeers(target []byte) (peers []*Peer) {
-	// delegate to selector
+// GetActivePeers returns addresses of all connected peers.
+func (srv *Server) GetActivePeers() (peers []*peerAddr) {
+	for _, peer := range srv.Peers() {
+		if peer != nil {
+			peer.infolock.Lock()
+			addr := peer.listenAddr
+			peer.infolock.Unlock()
+			// filter out this peer and peers that are not listening or
+			// have not completed the handshake.
+			// TODO: track previously sent peers and exclude them as well.
+			if addr == nil {
+				continue
+			}
+			peers = append(peers, addr)
+		}
+	}
+	return peers
+}
+
+// GetPeers returns addresses near target if given or supported by the client
+// or falls back to all actively connected peers
+func (srv *Server) GetPeers(target ...[]byte) (peers []*peerAddr) {
+	if len(target) == 1 { // delegate to selector
+		srv.PeerSelector.GetPeers(target[0])
+		return peers
+	} else {
+		return srv.GetActivePeers()
+	}
 }
 
 // PeerCount returns the number of connected peers.
@@ -118,14 +144,30 @@ func (srv *Server) PeerCount() int {
 	return srv.peerCount
 }
 
-// SuggestPeer injects an address into the outbound address pool.
-func (srv *Server) SuggestPeer(ip net.IP, port int, nodeID []byte) {
-	addr := &peerAddr{IP: ip, Port: uint64(port), Pubkey: nodeID}
-	select {
-	case srv.peerConnect <- addr:
-	default: // don't block
-		srvlog.Warnf("peer suggestion %v ignored", addr)
+// SuggestPeer is a convenient method that does dns resolution
+// and passes on the request to AddPeer
+func (srv *Server) SuggestPeer(addr string, pubkey []byte) error {
+	netaddr, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		srvlog.Errorf("couldn't resolve %s:", addr, err)
+		return err
 	}
+	peerAddr := &peerAddr{IP: netaddr.IP, Port: uint64(netaddr.Port), Pubkey: pubkey}
+	return srv.AddPeer(peerAddr)
+}
+
+// AddPeer takes a peerAddr address as argument.
+// If not found among connected peers turns to the peerSelector
+// to decide if it is a worthwhile connection
+func (srv *Server) AddPeer(addr *peerAddr) (err error) {
+	// need to look up nodeID first
+	peer := &peerRecord{addr: addr}
+	if err = srv.PeerSelector.AddPeer(peer); err == nil {
+		srvlog.Infof("peer %v accepted by peer selection", peer)
+	} else {
+		srvlog.Infof("peer %v rejected by peer selection", peer)
+	}
+	return
 }
 
 // Broadcast sends an RLP-encoded message to all connected peers.

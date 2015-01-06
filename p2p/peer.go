@@ -45,8 +45,48 @@ func (d peerAddr) String() string {
 	return fmt.Sprintf("%v:%d", d.IP, d.Port)
 }
 
-func (d *peerAddr) RlpData() interface{} {
-	return []interface{}{string(d.IP), d.Port, d.Pubkey}
+func (d peerAddr) RlpData() interface{} {
+	return []interface{}{d.IP, d.Port, d.Pubkey}
+}
+
+type peerRecord struct {
+	addr        *peerAddr
+	hash        []byte
+	lastActive  time.Time
+	lastActiveC chan time.Time
+	peer        *Peer
+}
+
+func (self *peerRecord) Addr() *peerAddr {
+	return self.addr
+}
+
+func (self *peerRecord) Hash() []byte {
+	if self.hash == nil {
+		self.hash = Hash(self.addr.Pubkey)
+	}
+	return self.hash
+}
+
+func (self *peerRecord) LastActive() (lastActive time.Time) {
+	var ok bool
+	select {
+	case lastActive, ok = <-self.lastActiveC:
+		if ok {
+			self.lastActive = lastActive
+		}
+	default:
+		lastActive = self.lastActive
+	}
+	return
+}
+
+func (self *peerRecord) Connect() error {
+	return nil
+}
+
+func (self *peerRecord) Disconnect() error {
+	return nil
 }
 
 // Peer represents a remote peer.
@@ -85,11 +125,11 @@ type Peer struct {
 
 	// These fields are kept so base protocol can access them.
 	// TODO: this should be one or more interfaces
-	ourID         ClientIdentity        // client id of the Server
-	ourListenAddr *peerAddr             // listen addr of Server, nil if not listening
-	newPeerAddr   chan<- *peerAddr      // tell server about received peers
-	otherPeers    func() []*Peer        // should return the list of all peers
-	pubkeyHook    func(*peerAddr) error // called at end of handshake to validate pubkey
+	ourID         ClientIdentity              // client id of the Server
+	ourListenAddr *peerAddr                   // listen addr of Server, nil if not listening
+	addPeer       func(*peerAddr) error       // tell server about received peers
+	getPeers      func(...[]byte) []*peerAddr // should return the list of all peers
+	pubkeyHook    func(*peerAddr) error       // called at end of handshake to validate pubkey
 }
 
 // NewPeer returns a peer for testing purposes.
@@ -104,8 +144,8 @@ func NewPeer(id ClientIdentity, caps []Cap) *Peer {
 func newServerPeer(server *Server, conn net.Conn, dialAddr *peerAddr) *Peer {
 	p := newPeer(conn, server.Protocols, dialAddr)
 	p.ourID = server.Identity
-	p.newPeerAddr = server.peerConnect
-	p.otherPeers = server.Peers
+	p.addPeer = server.AddPeer
+	p.getPeers = server.GetPeers
 	p.pubkeyHook = server.verifyPeer
 	p.runBaseProtocol = true
 
@@ -459,26 +499,4 @@ func (r *eofSignal) Read(buf []byte) (int, error) {
 		r.eof = nil
 	}
 	return n, err
-}
-
-func (peer *Peer) PeerList() []interface{} {
-	peers := peer.otherPeers()
-	ds := make([]interface{}, 0, len(peers))
-	for _, p := range peers {
-		p.infolock.Lock()
-		addr := p.listenAddr
-		p.infolock.Unlock()
-		// filter out this peer and peers that are not listening or
-		// have not completed the handshake.
-		// TODO: track previously sent peers and exclude them as well.
-		if p == peer || addr == nil {
-			continue
-		}
-		ds = append(ds, addr)
-	}
-	ourAddr := peer.ourListenAddr
-	if ourAddr != nil && !ourAddr.IP.IsLoopback() && !ourAddr.IP.IsUnspecified() {
-		ds = append(ds, ourAddr)
-	}
-	return ds
 }

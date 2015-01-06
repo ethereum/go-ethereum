@@ -1,23 +1,85 @@
 package p2p
 
 import (
+	"encoding/json"
+	"fmt"
+	"path"
+	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/ethutil"
 )
 
-type PeerSelector interface {
-	SuggestPeer(addr *peerAddr) (ok bool)
-	// AddPeer(addr *peerAddr) (ok bool)
-	GetPeers(target []byte) []*peerAddr
-	Start()
-	Stop()
+type peerInfo interface {
+	Addr() *peerAddr
+	Hash() []byte
+	// Pubkey() []byte
+	LastActive() time.Time
+	Disconnect() error
+	Connect() error
+}
+
+type peerSelector interface {
+	AddPeer(peer peerInfo) error
+	GetPeers(target ...[]byte) []*peerAddr
+	Start() error
+	Stop() error
 }
 
 type BaseSelector struct {
-	DirPath string
+	DirPath  string
+	getPeers func() []*peerAddr
+	peers    []peerInfo
 }
 
-func (self *BaseSelector) SuggestPeer(addr *peerAddr) bool {
-	return true
+func (self *BaseSelector) AddPeer(peer peerInfo) error {
+	return nil
+}
+
+func (self *BaseSelector) GetPeers(target ...[]byte) []*peerAddr {
+	return self.getPeers()
+}
+
+func (self *BaseSelector) Start() error {
+	if len(self.DirPath) > 0 {
+		path := path.Join(self.DirPath, "peers.json")
+		peers, err := ReadPeers(path)
+		if err != nil {
+			return err
+		}
+		self.peers = peers
+	}
+	return nil
+}
+
+func (self *BaseSelector) Stop() error {
+	if len(self.DirPath) > 0 {
+		path := path.Join(self.DirPath, "peers.json")
+		if err := WritePeers(path, self.peers); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func WritePeers(path string, addresses []peerInfo) error {
+	if len(addresses) > 0 {
+		data, err := json.MarshalIndent(addresses, "", "    ")
+		if err == nil {
+			ethutil.WriteFile(path, data)
+		}
+		return err
+	}
+	return nil
+}
+
+func ReadPeers(path string) (peers []peerInfo, err error) {
+	var data string
+	data, err = ethutil.ReadAllFile(path)
+	if err == nil {
+		json.Unmarshal([]byte(data), &peers)
+	}
+	return
 }
 
 const (
@@ -27,36 +89,102 @@ const (
 )
 
 type Cademlia struct {
-	rows      [hashBits]*row
+	hash      []byte
 	hashBits  int
 	rowLength int
-	maxAge    time.Duration
-	index     map[string]*peerData
+	// index     map[string]peerInfo
+	rows [hashBits]*row
+
+	depth int
+
+	maxAge        time.Duration
+	purgeInterval time.Duration
+
+	lock  sync.RWMutex
+	quitC chan bool
 }
 
-type row struct {
-	length int
-	row    []*peerData
-	lock   sync.RWMutex
+func newCademlia(hash []byte) *Cademlia {
+	return &Cademlia{
+		hash:      hash,
+		hashBits:  hashBits,
+		rowLength: rowLength,
+		maxAge:    maxAge * time.Second,
+		rows:      [hashBits]*row{},
+		// index:     make(map[string]peerInfo),
+	}
 }
 
-func (self *row) addresses() (addrs []*peerAddr) {
-	self.lock.RLock()
-	defer self.lock.RUnlock()
-	for _, p := range self.row {
-		addrs = append(addrs, p.addr)
+func (self *Cademlia) Start() error {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	if self.quitC != nil {
+		return nil
+	}
+	self.quitC = make(chan bool)
+	go self.purgeLoop()
+	return nil
+}
+
+func (self *Cademlia) Stop() {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	if self.quitC == nil {
+		return
+	}
+	close(self.quitC)
+	self.quitC = nil
+}
+
+func (self *Cademlia) AddPeer(peer peerInfo) (err error) {
+	index := self.commonPrefixLength(peer.Hash())
+	row := self.rows[index]
+	needed := row.insert(&entry{peer: peer})
+	if needed {
+		if index >= self.depth {
+			self.updateDepth()
+		}
+	} else {
+		err = fmt.Errorf("no worse peer found")
 	}
 	return
 }
 
-func (self *row) insert(addr *peerAddr) (ok bool) {
+func (self *Cademlia) GetPeers(target []byte) (peers []*peerAddr) {
+	index := self.commonPrefixLength(target)
+	var entries []*entry
+	if index >= self.depth {
+		for i := self.depth; i < self.hashBits; i++ {
+			entries = append(entries, self.rows[i].row...)
+		}
+	} else {
+		entries = self.rows[index].row
+	}
+
+	for _, entry := range entries {
+		peers = append(peers, entry.peer.Addr())
+	}
+	return
+}
+
+type entry struct {
+	peer peerInfo
+	// metadata
+}
+
+type row struct {
+	length int
+	row    []*entry
+	lock   sync.RWMutex
+}
+
+func (self *row) insert(entry *entry) (ok bool) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	peerData := &peerData{addr: addr}
 	if len(self.row) >= self.length {
-		self.row[self.worst()] = peerData
+		self.row[self.worst()] = entry
 	} else {
-		self.row = append(self.row, peerData)
+		self.row = append(self.row, entry)
 		ok = true
 	}
 	return
@@ -64,83 +192,45 @@ func (self *row) insert(addr *peerAddr) (ok bool) {
 
 func (self *row) worst() (index int) {
 	var oldest time.Time
-	for i, p := range self.row {
-		if oldest == nil || p.addr.LastSeen().Before(oldest) {
-			oldest = p.addr.LastSeen
+	for i, entry := range self.row {
+		if (oldest == time.Time{}) || entry.peer.LastActive().Before(oldest) {
+			oldest = entry.peer.LastActive()
 			index = i
 		}
 	}
 	return
 }
 
-func (self *row) purge(maxAge time.Time) {
-	var newRow []*peerData
-	for _, p := range self.row {
-		if !p.addr.LastSeen().Before(maxAge) {
-			newRow = append(newRow, p)
+func (self *row) purge(recently time.Time) {
+	var newRow []*entry
+	for _, entry := range self.row {
+		if !entry.peer.LastActive().Before(recently) {
+			newRow = append(newRow, entry)
+		} else {
+			entry.peer.Disconnect()
 		}
 	}
 }
 
-type peerData struct {
-	addr *peerAddr
-	hash []byte
+func Hash(key []byte) []byte {
+	return key
 }
 
-func Hash([]byte) []byte {
-
-}
-
-func (self *Cademlia) prefixLength(other []byte) {
-
-}
-
-func newCademlia() *Cademlia {
-	return &Cademlia{
-		hashBits:  hashBits,
-		rowLength: rowLength,
-		maxAge:    maxAge * time.Second,
-		rows:      make([hashBits]*row),
-		index:     make(map[string]*peerData),
-	}
-}
-
-func (self *Cademlia) Start() {
-	go self.purgeLoop()
+func (self *Cademlia) updateDepth() {
 }
 
 func (self *Cademlia) purgeLoop() {
 	ticker := time.Tick(self.purgeInterval)
 	for {
 		select {
+		case <-self.quitC:
+			return
 		case <-ticker:
 			for _, r := range self.rows {
-				r.purge(time.Since(self.maxAge))
+				r.purge(time.Now().Add(-self.maxAge))
 			}
 		}
 	}
-}
-
-func (self *Cademlia) SuggestPeer(addr *peerAddr) bool {
-	index := self.commonPrefixLength(Hash(addr.Pubkey))
-	row := self.rows[index]
-	longer := row.insert(addr)
-	if index >= self.depth && longer {
-		self.updateDepth()
-	}
-	return longer
-}
-
-func (self *Cademlia) GetPeers(target []byte) (peers []*peerAddr) {
-	index := self.prefixLength(target)
-	if index >= self.depth {
-		for i := self.depth; i < hashBits; i++ {
-			peers = append(peers, self.rows[i].addresses())
-		}
-	} else {
-		peers = self.rows[index].addresses()
-	}
-	return
 }
 
 func Xor(one, other []byte) (xor []byte) {
@@ -152,12 +242,12 @@ func Xor(one, other []byte) (xor []byte) {
 
 func (self *Cademlia) commonPrefixLength(other []byte) (ret int) {
 	xor := Xor(self.hash, other)
-	for i := 0; i < len(self.hash); i++ {
+	for i := 0; i < self.hashBits; i++ {
 		for j := 0; j < 8; j++ {
 			if (xor[i]>>uint8(7-j))&0x1 != 0 {
 				return i*8 + j
 			}
 		}
 	}
-	return len(self.hash)*8 - 1
+	return self.hashBits*8 - 1
 }

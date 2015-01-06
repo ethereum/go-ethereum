@@ -195,7 +195,7 @@ func (ui *UiLib) Connect(button qml.Object) {
 }
 
 func (ui *UiLib) ConnectToPeer(addr string) {
-	if err := ui.eth.SuggestPeer(addr); err != nil {
+	if err := ui.eth.SuggestPeer(addr, []byte{}); err != nil {
 		guilogger.Infoln(err)
 	}
 }

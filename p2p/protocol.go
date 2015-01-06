@@ -105,12 +105,16 @@ func runBaseProtocol(peer *Peer, rw MsgReadWriter) error {
 			}
 		}
 	}()
-	return bp.loop(errc)
+	var lastActiveC chan time.Time
+	if bp.peer.listenAddr != nil {
+		lastActiveC = bp.peer.listenAddr.lastActiveC
+	}
+	return bp.loop(errc, lastActiveC)
 }
 
 var pingTimeout = 2 * time.Second
 
-func (bp *baseProtocol) loop(quit <-chan error) error {
+func (bp *baseProtocol) loop(quit <-chan error, lastActiveC chan time.Time) error {
 	ping := time.NewTimer(pingTimeout)
 	activity := bp.peer.activity.Subscribe(time.Time{})
 	lastActive := time.Time{}
@@ -125,6 +129,7 @@ func (bp *baseProtocol) loop(quit <-chan error) error {
 		select {
 		case err = <-quit:
 			return err
+		case lastActiveC <- lastActive:
 		case <-getPeersTick.C:
 			err = bp.rw.EncodeMsg(getPeersMsg)
 		case event := <-activity.Chan():
@@ -169,15 +174,29 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 	case pongMsg:
 
 	case getPeersMsg:
-		peers := bp.peer.PeerList()
-		// this is dangerous. the spec says that we should _delay_
-		// sending the response if no new information is available.
-		// this means that would need to send a response later when
-		// new peers become available.
-		//
-		// TODO: add event mechanism to notify baseProtocol for new peers
-		if len(peers) > 0 {
-			return bp.rw.EncodeMsg(peersMsg, peers...)
+		var target [][]byte
+		if err := msg.Decode(&target); err != nil {
+			return newPeerError(errInvalidMsg, "%v", err)
+		}
+
+		peers := bp.peer.getPeers(target...)
+		if len(target) == 0 {
+			// then add ourselves to the list
+			ourAddr := bp.peer.ourListenAddr
+			if ourAddr != nil && !ourAddr.IP.IsLoopback() && !ourAddr.IP.IsUnspecified() {
+				peers = append(peers, ourAddr)
+			}
+		}
+		ds := make([]interface{}, 0, len(peers))
+		// encode and filter out requesting peer
+		for _, addr := range peers {
+			if addr != bp.peer.listenAddr {
+				ds = append(ds, addr)
+			}
+		}
+
+		if len(ds) > 0 {
+			return bp.rw.EncodeMsg(peersMsg, ds...)
 		}
 
 	case peersMsg:
@@ -187,7 +206,7 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 		}
 		for _, addr := range peers {
 			bp.peer.Debugf("received peer suggestion: %v", addr)
-			bp.peer.newPeerAddr <- addr
+			bp.peer.addPeer(addr)
 		}
 
 	default:
