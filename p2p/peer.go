@@ -49,53 +49,16 @@ func (d peerAddr) RlpData() interface{} {
 	return []interface{}{d.IP, d.Port, d.Pubkey}
 }
 
-type peerRecord struct {
-	addr        *peerAddr
-	hash        []byte
-	lastActive  time.Time
-	lastActiveC chan time.Time
-	peer        *Peer
-}
-
-func (self *peerRecord) Addr() *peerAddr {
-	return self.addr
-}
-
-func (self *peerRecord) Hash() []byte {
-	if self.hash == nil {
-		self.hash = Hash(self.addr.Pubkey)
-	}
-	return self.hash
-}
-
-func (self *peerRecord) LastActive() (lastActive time.Time) {
-	var ok bool
-	select {
-	case lastActive, ok = <-self.lastActiveC:
-		if ok {
-			self.lastActive = lastActive
-		}
-	default:
-		lastActive = self.lastActive
-	}
-	return
-}
-
-func (self *peerRecord) Connect() error {
-	return nil
-}
-
-func (self *peerRecord) Disconnect() error {
-	return nil
-}
-
 // Peer represents a remote peer.
 type Peer struct {
 	// Peers have all the log methods.
 	// Use them to display messages related to the peer.
 	*logger.Logger
 
-	infolock   sync.Mutex
+	lastActive  time.Time      // updated persisted
+	lastActiveC chan time.Time // for constant querying
+
+	infolock   sync.RWMutex
 	identity   ClientIdentity
 	caps       []Cap
 	listenAddr *peerAddr // what remote peer is listening on
@@ -125,6 +88,7 @@ type Peer struct {
 
 	// These fields are kept so base protocol can access them.
 	// TODO: this should be one or more interfaces
+	hash          []byte                      // hash of pubkey used as address
 	ourID         ClientIdentity              // client id of the Server
 	ourListenAddr *peerAddr                   // listen addr of Server, nil if not listening
 	addPeer       func(*peerAddr) error       // tell server about received peers
@@ -135,41 +99,96 @@ type Peer struct {
 // NewPeer returns a peer for testing purposes.
 func NewPeer(id ClientIdentity, caps []Cap) *Peer {
 	conn, _ := net.Pipe()
-	peer := newPeer(conn, nil, nil)
+	peer := &Peer{}
+	peer.init(conn)
 	peer.setHandshakeInfo(id, nil, caps)
 	close(peer.closed)
 	return peer
 }
 
-func newServerPeer(server *Server, conn net.Conn, dialAddr *peerAddr) *Peer {
-	p := newPeer(conn, server.Protocols, dialAddr)
+func (self *Peer) init(conn net.Conn) {
+	self.conn = conn
+	self.Logger = logger.NewLogger("P2P " + conn.RemoteAddr().String())
+	self.bufconn = bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
+	self.running = make(map[string]*proto)
+	self.disc = make(chan DiscReason)
+	self.protoErr = make(chan error)
+	self.closed = make(chan struct{})
+}
+
+func (p *Peer) connect(server *Server, conn net.Conn) {
+	p.init(conn)
 	p.ourID = server.Identity
 	p.addPeer = server.AddPeer
 	p.getPeers = server.GetPeers
 	p.pubkeyHook = server.verifyPeer
 	p.runBaseProtocol = true
+	p.protocols = server.Protocols
 
 	// laddr can be updated concurrently by NAT traversal.
 	// newServerPeer must be called with the server lock held.
 	if server.laddr != nil {
 		p.ourListenAddr = newPeerAddr(server.laddr, server.Identity.Pubkey())
 	}
-	return p
 }
 
-func newPeer(conn net.Conn, protocols []Protocol, dialAddr *peerAddr) *Peer {
-	p := &Peer{
-		Logger:    logger.NewLogger("P2P " + conn.RemoteAddr().String()),
-		conn:      conn,
-		dialAddr:  dialAddr,
-		bufconn:   bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn)),
-		protocols: protocols,
-		running:   make(map[string]*proto),
-		disc:      make(chan DiscReason),
-		protoErr:  make(chan error),
-		closed:    make(chan struct{}),
+// ActiveAddresses returns addresses of all connected peers.
+// Actually if the peer selector keeps historical info , then once active peers
+// will be included too.
+func ActiveAddresses(peers ...peerInfo) (addrs []*peerAddr) {
+	for _, peer := range peers {
+		if peer != nil {
+			addr := peer.Addr()
+			// filter out peers that are not listening or
+			// have not completed the handshake.
+			// the peer selector can track previously sent peers and exclude them as well.
+			if addr == nil {
+				continue
+			}
+			addrs = append(addrs, addr)
+		}
 	}
-	return p
+	return addrs
+}
+
+// implements the peerInfo interface
+func (self *Peer) Addr() *peerAddr {
+	self.infolock.RLock()
+	defer self.infolock.RUnlock()
+	return self.listenAddr
+}
+
+func (self *Peer) Hash() []byte {
+	if self.hash == nil {
+		self.hash = Hash(self.Pubkey())
+	}
+	return self.hash
+}
+
+func (self *Peer) Pubkey() (pubkey []byte) {
+	self.infolock.Lock()
+	defer self.infolock.Unlock()
+	if self.dialAddr != nil {
+		pubkey = self.dialAddr.Pubkey
+	} else {
+		if self.listenAddr != nil {
+			pubkey = self.listenAddr.Pubkey
+		}
+	}
+	return
+}
+
+func (self *Peer) LastActive() (lastActive time.Time) {
+	var ok bool
+	select {
+	case lastActive, ok = <-self.lastActiveC:
+		if ok {
+			self.lastActive = lastActive
+		}
+	default:
+		lastActive = self.lastActive
+	}
+	return
 }
 
 // Identity returns the client identity of the remote peer. The
