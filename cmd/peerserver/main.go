@@ -18,9 +18,8 @@ package main
 
 import (
 	"crypto/elliptic"
-	"fmt"
+	"flag"
 	"log"
-	"net"
 	"os"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -28,29 +27,32 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 )
 
+var (
+	natType    = flag.String("nat", "", "NAT traversal implementation")
+	pmpGateway = flag.String("gateway", "", "gateway address for NAT-PMP")
+	listenAddr = flag.String("addr", ":30301", "listen address")
+)
+
 func main() {
+	flag.Parse()
+	nat, err := p2p.ParseNAT(*natType, *pmpGateway)
+	if err != nil {
+		log.Fatal("invalid nat:", err)
+	}
+
 	logger.AddLogSystem(logger.NewStdLogSystem(os.Stdout, log.LstdFlags, logger.InfoLevel))
 	key, _ := crypto.GenerateKey()
 	marshaled := elliptic.Marshal(crypto.S256(), key.PublicKey.X, key.PublicKey.Y)
 
 	srv := p2p.Server{
 		MaxPeers:   100,
-		Identity:   p2p.NewSimpleClientIdentity("Ethereum(G)", "0.1", "Peer Server Two", string(marshaled)),
-		ListenAddr: ":30301",
-		NAT:        p2p.UPNP(),
+		Identity:   p2p.NewSimpleClientIdentity("Ethereum(G)", "0.1", "Peer Server Two", marshaled),
+		ListenAddr: *listenAddr,
+		NAT:        nat,
+		NoDial:     true,
 	}
 	if err := srv.Start(); err != nil {
-		fmt.Println("could not start server:", err)
-		os.Exit(1)
+		log.Fatal("could not start server:", err)
 	}
-
-	// add seed peers
-	seed, err := net.ResolveTCPAddr("tcp", "poc-8.ethdev.com:30303")
-	if err != nil {
-		fmt.Println("couldn't resolve:", err)
-	} else {
-		srv.SuggestPeer(seed.IP, seed.Port, nil)
-	}
-
 	select {}
 }

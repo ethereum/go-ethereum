@@ -131,6 +131,12 @@ func (self *VMEnv) Value() *big.Int       { return self.value }
 func (self *VMEnv) GasLimit() *big.Int    { return big.NewInt(1000000000) }
 func (self *VMEnv) Depth() int            { return 0 }
 func (self *VMEnv) SetDepth(i int)        { self.depth = i }
+func (self *VMEnv) GetHash(n uint64) []byte {
+	if self.block.Number().Cmp(big.NewInt(int64(n))) == 0 {
+		return self.block.Hash()
+	}
+	return nil
+}
 func (self *VMEnv) AddLog(log state.Log) {
 	self.state.AddLog(log)
 }
