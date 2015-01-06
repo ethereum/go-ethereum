@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	seedNodeAddress = "poc-7.ethdev.com:30300"
+	seedNodeAddress = "poc-8.ethdev.com:30303"
 )
 
 var seednodeId []byte = nil

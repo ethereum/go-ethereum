@@ -258,6 +258,10 @@ func (sm *BlockProcessor) CalculateTD(block *types.Block) (*big.Int, bool) {
 // an uncle or anything that isn't on the current block chain.
 // Validation validates easy over difficult (dagger takes longer time = difficult)
 func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
+	if len(block.Header().Extra) > 1024 {
+		return fmt.Errorf("Block extra data too long (%d)", len(block.Header().Extra))
+	}
+
 	expd := CalcDifficulty(block, parent)
 	if expd.Cmp(block.Header().Difficulty) < 0 {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Header().Difficulty, expd)

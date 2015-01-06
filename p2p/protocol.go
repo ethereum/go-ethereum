@@ -105,25 +105,22 @@ func runBaseProtocol(peer *Peer, rw MsgReadWriter) error {
 			}
 		}
 	}()
-	var lastActiveC chan time.Time
-	if bp.peer.listenAddr != nil {
-		lastActiveC = bp.peer.listenAddr.lastActiveC
-	}
-	return bp.loop(errc, lastActiveC)
+	return bp.loop(errc)
 }
 
 var pingTimeout = 2 * time.Second
 
-func (bp *baseProtocol) loop(quit <-chan error, lastActiveC chan time.Time) error {
+func (bp *baseProtocol) loop(quit <-chan error) error {
 	ping := time.NewTimer(pingTimeout)
 	activity := bp.peer.activity.Subscribe(time.Time{})
 	lastActive := time.Time{}
+	lastActiveC := bp.peer.lastActiveC
 	defer ping.Stop()
 	defer activity.Unsubscribe()
 
 	getPeersTick := time.NewTicker(10 * time.Second)
 	defer getPeersTick.Stop()
-	err := bp.rw.EncodeMsg(getPeersMsg)
+	err := EncodeMsg(bp.rw, getPeersMsg)
 
 	for err == nil {
 		select {
@@ -131,7 +128,7 @@ func (bp *baseProtocol) loop(quit <-chan error, lastActiveC chan time.Time) erro
 			return err
 		case lastActiveC <- lastActive:
 		case <-getPeersTick.C:
-			err = bp.rw.EncodeMsg(getPeersMsg)
+			err = EncodeMsg(bp.rw, getPeersMsg)
 		case event := <-activity.Chan():
 			ping.Reset(pingTimeout)
 			lastActive = event.(time.Time)
@@ -139,7 +136,7 @@ func (bp *baseProtocol) loop(quit <-chan error, lastActiveC chan time.Time) erro
 			if lastActive.Add(pingTimeout * 2).Before(t) {
 				err = newPeerError(errPingTimeout, "")
 			} else if lastActive.Add(pingTimeout).Before(t) {
-				err = bp.rw.EncodeMsg(pingMsg)
+				err = EncodeMsg(bp.rw, pingMsg)
 			}
 		}
 	}
@@ -169,7 +166,7 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 		return discRequestedError(reason[0])
 
 	case pingMsg:
-		return bp.rw.EncodeMsg(pongMsg)
+		return EncodeMsg(bp.rw, pongMsg)
 
 	case pongMsg:
 
@@ -187,16 +184,22 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 				peers = append(peers, ourAddr)
 			}
 		}
-		ds := make([]interface{}, 0, len(peers))
+		addrs := make([]interface{}, 0, len(peers))
 		// encode and filter out requesting peer
 		for _, addr := range peers {
-			if addr != bp.peer.listenAddr {
-				ds = append(ds, addr)
+			if addr != bp.peer.Addr() {
+				addrs = append(addrs, addr)
 			}
 		}
 
-		if len(ds) > 0 {
-			return bp.rw.EncodeMsg(peersMsg, ds...)
+		// this is dangerous. the spec says that we should _delay_
+		// sending the response if no new information is available.
+		// this means that would need to send a response later when
+		// new peers become available.
+		//
+		// TODO: add event mechanism to notify baseProtocol for new peers
+		if len(addrs) > 0 {
+			return EncodeMsg(bp.rw, peersMsg, addrs...)
 		}
 
 	case peersMsg:

@@ -69,6 +69,7 @@ type Miner struct {
 	mining bool
 
 	MinAcceptedGasPrice *big.Int
+	Extra               string
 }
 
 func New(coinbase []byte, eth *eth.Ethereum) *Miner {
@@ -178,6 +179,7 @@ func (self *Miner) mine() {
 		chainMan       = self.eth.ChainManager()
 		block          = chainMan.NewBlock(self.Coinbase)
 	)
+	block.Header().Extra = self.Extra
 
 	// Apply uncles
 	if len(self.uncles) > 0 {

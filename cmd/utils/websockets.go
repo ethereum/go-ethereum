@@ -1,3 +1,23 @@
+/*
+	This file is part of go-ethereum
+
+	go-ethereum is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	go-ethereum is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/**
+ * @authors
+ * 	Jeffrey Wilcke <i@jev.io>
+ */
 package utils
 
 import (
@@ -33,73 +53,73 @@ func (self *WebSocketServer) Serv() {
 			data := ethutil.NewValue(msg.Args)
 			bcode, err := ethutil.Compile(data.Get(0).Str(), false)
 			if err != nil {
-				c.Write(args(nil, err.Error()), msg.Seed)
+				c.Write(args(nil, err.Error()), msg.Id)
 			}
 
 			code := ethutil.Bytes2Hex(bcode)
-			c.Write(args(code, nil), msg.Seed)
-		case "getBlockByNumber":
+			c.Write(args(code, nil), msg.Id)
+		case "eth_blockByNumber":
 			args := msg.Arguments()
 
 			block := pipe.BlockByNumber(int32(args.Get(0).Uint()))
-			c.Write(block, msg.Seed)
+			c.Write(block, msg.Id)
 
-		case "getKey":
-			c.Write(pipe.Key().PrivateKey, msg.Seed)
-		case "transact":
+		case "eth_blockByHash":
+			args := msg.Arguments()
+
+			c.Write(pipe.BlockByHash(args.Get(0).Str()), msg.Id)
+
+		case "eth_transact":
 			if mp, ok := msg.Args[0].(map[string]interface{}); ok {
 				object := mapToTxParams(mp)
 				c.Write(
-					args(pipe.Transact(object["from"], object["to"], object["value"], object["gas"], object["gasPrice"], object["data"])),
-					msg.Seed,
+					args(pipe.Transact(pipe.Key().PrivateKey, object["to"], object["value"], object["gas"], object["gasPrice"], object["data"])),
+					msg.Id,
 				)
 
 			}
-		case "getCoinBase":
-			c.Write(pipe.CoinBase(), msg.Seed)
+		case "eth_gasPrice":
+			c.Write("10000000000000", msg.Id)
+		case "eth_coinbase":
+			c.Write(pipe.CoinBase(), msg.Id)
 
-		case "getIsListening":
-			c.Write(pipe.IsListening(), msg.Seed)
+		case "eth_listening":
+			c.Write(pipe.IsListening(), msg.Id)
 
-		case "getIsMining":
-			c.Write(pipe.IsMining(), msg.Seed)
+		case "eth_mining":
+			c.Write(pipe.IsMining(), msg.Id)
 
-		case "getPeerCoint":
-			c.Write(pipe.PeerCount(), msg.Seed)
+		case "eth_peerCount":
+			c.Write(pipe.PeerCount(), msg.Id)
 
-		case "getCountAt":
+		case "eth_countAt":
 			args := msg.Arguments()
 
-			c.Write(pipe.TxCountAt(args.Get(0).Str()), msg.Seed)
+			c.Write(pipe.TxCountAt(args.Get(0).Str()), msg.Id)
 
-		case "getCodeAt":
+		case "eth_codeAt":
 			args := msg.Arguments()
 
-			c.Write(len(pipe.CodeAt(args.Get(0).Str())), msg.Seed)
+			c.Write(len(pipe.CodeAt(args.Get(0).Str())), msg.Id)
 
-		case "getBlockByHash":
+		case "eth_storageAt":
 			args := msg.Arguments()
 
-			c.Write(pipe.BlockByHash(args.Get(0).Str()), msg.Seed)
+			c.Write(pipe.StorageAt(args.Get(0).Str(), args.Get(1).Str()), msg.Id)
 
-		case "getStorageAt":
+		case "eth_balanceAt":
 			args := msg.Arguments()
 
-			c.Write(pipe.StorageAt(args.Get(0).Str(), args.Get(1).Str()), msg.Seed)
+			c.Write(pipe.BalanceAt(args.Get(0).Str()), msg.Id)
 
-		case "getBalanceAt":
+		case "eth_secretToAddress":
 			args := msg.Arguments()
 
-			c.Write(pipe.BalanceAt(args.Get(0).Str()), msg.Seed)
+			c.Write(pipe.SecretToAddress(args.Get(0).Str()), msg.Id)
 
-		case "getSecretToAddress":
-			args := msg.Arguments()
-
-			c.Write(pipe.SecretToAddress(args.Get(0).Str()), msg.Seed)
-
-		case "newFilter":
-		case "newFilterString":
-		case "messages":
+		case "eth_newFilter":
+		case "eth_newFilterString":
+		case "eth_messages":
 			// TODO
 		}
 

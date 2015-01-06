@@ -140,7 +140,7 @@ func (self *ethProtocol) handle() error {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
 		hashes := self.chainManager.GetBlockHashesFromHash(request.Hash, request.Amount)
-		return self.rw.EncodeMsg(BlockHashesMsg, ethutil.ByteSliceToInterface(hashes)...)
+		return p2p.EncodeMsg(self.rw, BlockHashesMsg, ethutil.ByteSliceToInterface(hashes)...)
 
 	case BlockHashesMsg:
 		// TODO: redo using lazy decode , this way very inefficient on known chains
@@ -185,7 +185,7 @@ func (self *ethProtocol) handle() error {
 				break
 			}
 		}
-		return self.rw.EncodeMsg(BlocksMsg, blocks...)
+		return p2p.EncodeMsg(self.rw, BlocksMsg, blocks...)
 
 	case BlocksMsg:
 		msgStream := rlp.NewStream(msg.Payload)
@@ -298,12 +298,12 @@ func (self *ethProtocol) handleStatus() error {
 
 func (self *ethProtocol) requestBlockHashes(from []byte) error {
 	self.peer.Debugf("fetching hashes (%d) %x...\n", blockHashesBatchSize, from[0:4])
-	return self.rw.EncodeMsg(GetBlockHashesMsg, interface{}(from), uint64(blockHashesBatchSize))
+	return p2p.EncodeMsg(self.rw, GetBlockHashesMsg, interface{}(from), uint64(blockHashesBatchSize))
 }
 
 func (self *ethProtocol) requestBlocks(hashes [][]byte) error {
 	self.peer.Debugf("fetching %v blocks", len(hashes))
-	return self.rw.EncodeMsg(GetBlocksMsg, ethutil.ByteSliceToInterface(hashes)...)
+	return p2p.EncodeMsg(self.rw, GetBlocksMsg, ethutil.ByteSliceToInterface(hashes)...)
 }
 
 func (self *ethProtocol) protoError(code int, format string, params ...interface{}) (err *protocolError) {
