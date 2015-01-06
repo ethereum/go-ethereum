@@ -264,6 +264,7 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 
 	expd := CalcDifficulty(block, parent)
 	if expd.Cmp(block.Header().Difficulty) < 0 {
+		fmt.Println("parent\n", parent)
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Header().Difficulty, expd)
 	}
 

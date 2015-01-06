@@ -25,7 +25,7 @@ func CalcDifficulty(block, parent *types.Block) *big.Int {
 
 	bh, ph := block.Header(), parent.Header()
 	adjust := new(big.Int).Rsh(ph.Difficulty, 10)
-	if bh.Time >= ph.Time+5 {
+	if bh.Time >= ph.Time+13 {
 		diff.Sub(ph.Difficulty, adjust)
 	} else {
 		diff.Add(ph.Difficulty, adjust)
