@@ -18,9 +18,7 @@ package main
 
 import (
 	"crypto/elliptic"
-	"fmt"
 	"log"
-	"net"
 	"os"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -38,19 +36,10 @@ func main() {
 		Identity:   p2p.NewSimpleClientIdentity("Ethereum(G)", "0.1", "Peer Server Two", marshaled),
 		ListenAddr: ":30301",
 		NAT:        p2p.UPNP(),
+		NoDial:     true,
 	}
 	if err := srv.Start(); err != nil {
-		fmt.Println("could not start server:", err)
-		os.Exit(1)
+		log.Fatal("could not start server:", err)
 	}
-
-	// add seed peers
-	seed, err := net.ResolveTCPAddr("tcp", "poc-8.ethdev.com:30303")
-	if err != nil {
-		fmt.Println("couldn't resolve:", err)
-	} else {
-		srv.SuggestPeer(seed.IP, seed.Port, nil)
-	}
-
 	select {}
 }
