@@ -22,7 +22,6 @@ const (
 // eth protocol message codes
 const (
 	StatusMsg = iota
-	GetTxMsg  // unused
 	TxMsg
 	GetBlockHashesMsg
 	BlockHashesMsg
