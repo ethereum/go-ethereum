@@ -169,8 +169,8 @@ func NewJSPeer(peer *p2p.Peer) *JSPeer {
 
 	return &JSPeer{
 		ref:     peer,
-		Ip:      peer.RemoteAddr().String(),
-		Version: peer.Identity().String(),
+		Ip:      fmt.Sprintf("%v", peer.RemoteAddr()),
+		Version: fmt.Sprintf("%v", peer.Identity()),
 		Caps:    fmt.Sprintf("%v", caps),
 	}
 }
