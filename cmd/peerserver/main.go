@@ -35,7 +35,7 @@ func main() {
 
 	srv := p2p.Server{
 		MaxPeers:   100,
-		Identity:   p2p.NewSimpleClientIdentity("Ethereum(G)", "0.1", "Peer Server Two", string(marshaled)),
+		Identity:   p2p.NewSimpleClientIdentity("Ethereum(G)", "0.1", "Peer Server Two", marshaled),
 		ListenAddr: ":30301",
 		NAT:        p2p.UPNP(),
 	}
