@@ -169,7 +169,7 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 	case pongMsg:
 
 	case getPeersMsg:
-		peers := bp.peer.PeerList()
+		peers := bp.peerList()
 		// this is dangerous. the spec says that we should _delay_
 		// sending the response if no new information is available.
 		// this means that would need to send a response later when
@@ -263,4 +263,26 @@ func (bp *baseProtocol) handshakeMsg() Msg {
 		port,
 		bp.peer.ourID.Pubkey()[1:],
 	)
+}
+
+func (bp *baseProtocol) peerList() []interface{} {
+	peers := bp.peer.otherPeers()
+	ds := make([]interface{}, 0, len(peers))
+	for _, p := range peers {
+		p.infolock.Lock()
+		addr := p.listenAddr
+		p.infolock.Unlock()
+		// filter out this peer and peers that are not listening or
+		// have not completed the handshake.
+		// TODO: track previously sent peers and exclude them as well.
+		if p == bp.peer || addr == nil {
+			continue
+		}
+		ds = append(ds, addr)
+	}
+	ourAddr := bp.peer.ourListenAddr
+	if ourAddr != nil && !ourAddr.IP.IsLoopback() && !ourAddr.IP.IsUnspecified() {
+		ds = append(ds, ourAddr)
+	}
+	return ds
 }
