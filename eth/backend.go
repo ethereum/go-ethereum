@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	seedNodeAddress = "poc-8.ethdev.com:30300"
+	seedNodeAddress = "poc-8.ethdev.com:30303"
 )
 
 type Config struct {
