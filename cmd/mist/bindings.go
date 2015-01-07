@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/state"
 )
 
 type plugin struct {
@@ -121,7 +122,7 @@ func (self *Gui) DumpState(hash, path string) {
 			return
 		}
 
-		stateDump = block.State().Dump()
+		stateDump = state.New(block.Root(), self.eth.Db()).Dump()
 	}
 
 	file, err := os.OpenFile(path[7:], os.O_CREATE|os.O_RDWR, os.ModePerm)

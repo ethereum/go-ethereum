@@ -17,7 +17,7 @@ var statelogger = logger.NewLogger("STATE")
 // * Contracts
 // * Accounts
 type StateDB struct {
-	//Trie *trie.Trie
+	db   ethutil.Database
 	trie *ptrie.Trie
 
 	stateObjects map[string]*StateObject
@@ -30,8 +30,10 @@ type StateDB struct {
 }
 
 // Create a new state from a given trie
-func New(trie *ptrie.Trie) *StateDB {
-	return &StateDB{trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest(), refund: make(map[string]*big.Int)}
+//func New(trie *ptrie.Trie) *StateDB {
+func New(root []byte, db ethutil.Database) *StateDB {
+	trie := ptrie.New(root, db)
+	return &StateDB{db: db, trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest(), refund: make(map[string]*big.Int)}
 }
 
 func (self *StateDB) EmptyLogs() {
@@ -138,7 +140,7 @@ func (self *StateDB) UpdateStateObject(stateObject *StateObject) {
 	addr := stateObject.Address()
 
 	if len(stateObject.CodeHash()) > 0 {
-		ethutil.Config.Db.Put(stateObject.CodeHash(), stateObject.Code)
+		self.db.Put(stateObject.CodeHash(), stateObject.Code)
 	}
 
 	self.trie.Update(addr, stateObject.RlpEncode())
@@ -165,7 +167,7 @@ func (self *StateDB) GetStateObject(addr []byte) *StateObject {
 		return nil
 	}
 
-	stateObject = NewStateObjectFromBytes(addr, []byte(data))
+	stateObject = NewStateObjectFromBytes(addr, []byte(data), self.db)
 	self.SetStateObject(stateObject)
 
 	return stateObject
@@ -191,7 +193,7 @@ func (self *StateDB) NewStateObject(addr []byte) *StateObject {
 
 	statelogger.Debugf("(+) %x\n", addr)
 
-	stateObject := NewStateObject(addr)
+	stateObject := NewStateObject(addr, self.db)
 	self.stateObjects[string(addr)] = stateObject
 
 	return stateObject
@@ -212,7 +214,8 @@ func (s *StateDB) Cmp(other *StateDB) bool {
 
 func (self *StateDB) Copy() *StateDB {
 	if self.trie != nil {
-		state := New(self.trie.Copy())
+		state := New(nil, self.db)
+		state.trie = self.trie.Copy()
 		for k, stateObject := range self.stateObjects {
 			state.stateObjects[k] = stateObject.Copy()
 		}
@@ -305,7 +308,7 @@ func (self *StateDB) Update(gasUsed *big.Int) {
 
 	// FIXME trie delete is broken
 	if deleted {
-		valid, t2 := ptrie.ParanoiaCheck(self.trie, ethutil.Config.Db)
+		valid, t2 := ptrie.ParanoiaCheck(self.trie, self.db)
 		if !valid {
 			statelogger.Infof("Warn: PARANOIA: Different state root during copy %x vs %x\n", self.trie.Root(), t2.Root())
 

@@ -81,7 +81,7 @@ func (self *XEth) Execute(addr []byte, data []byte, value, gas, price *ethutil.V
 
 func (self *XEth) ExecuteObject(object *Object, data []byte, value, gas, price *ethutil.Value) ([]byte, error) {
 	var (
-		initiator = state.NewStateObject(self.obj.KeyManager().KeyPair().Address())
+		initiator = state.NewStateObject(self.obj.KeyManager().KeyPair().Address(), self.obj.Db())
 		block     = self.chainManager.CurrentBlock()
 	)
 

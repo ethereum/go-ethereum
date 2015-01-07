@@ -81,7 +81,7 @@ type Ethereum struct {
 func New(config *Config) (*Ethereum, error) {
 	// Boostrap database
 	logger := ethlogger.New(config.DataDir, config.LogFile, config.LogLevel)
-	db, err := ethdb.NewLDBDatabase("database")
+	db, err := ethdb.NewLDBDatabase("blockchain")
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +110,7 @@ func New(config *Config) (*Ethereum, error) {
 	clientId := p2p.NewSimpleClientIdentity(config.Name, config.Version, config.Identifier, keyManager.PublicKey())
 
 	saveProtocolVersion(db)
-	ethutil.Config.Db = db
+	//ethutil.Config.Db = db
 
 	eth := &Ethereum{
 		shutdownChan:   make(chan bool),
@@ -123,9 +123,9 @@ func New(config *Config) (*Ethereum, error) {
 		logger:         logger,
 	}
 
-	eth.chainManager = core.NewChainManager(eth.EventMux())
+	eth.chainManager = core.NewChainManager(db, eth.EventMux())
 	eth.txPool = core.NewTxPool(eth.EventMux())
-	eth.blockProcessor = core.NewBlockProcessor(eth.txPool, eth.chainManager, eth.EventMux())
+	eth.blockProcessor = core.NewBlockProcessor(db, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
 	eth.whisper = whisper.New()
 

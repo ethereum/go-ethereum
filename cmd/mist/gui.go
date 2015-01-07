@@ -117,18 +117,7 @@ func (gui *Gui) Start(assetPath string) {
 	context.SetVar("eth", gui.uiLib)
 	context.SetVar("shh", gui.whisper)
 
-	// Load the main QML interface
-	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-
-	var win *qml.Window
-	var err error
-	var addlog = false
-	if len(data) == 0 {
-		win, err = gui.showKeyImport(context)
-	} else {
-		win, err = gui.showWallet(context)
-		addlog = true
-	}
+	win, err := gui.showWallet(context)
 	if err != nil {
 		guilogger.Errorln("asset not found: you can set an alternative asset path on the command line using option 'asset_path'", err)
 
@@ -139,9 +128,7 @@ func (gui *Gui) Start(assetPath string) {
 	win.Show()
 
 	// only add the gui guilogger after window is shown otherwise slider wont be shown
-	if addlog {
-		logger.AddLogSystem(gui)
-	}
+	logger.AddLogSystem(gui)
 	win.Wait()
 
 	// need to silence gui guilogger after window closed otherwise logsystem hangs (but do not save loglevel)
@@ -275,7 +262,7 @@ func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 	}
 
 	var (
-		ptx  = xeth.NewJSTx(tx, gui.xeth.World().State())
+		ptx  = xeth.NewJSTx(tx)
 		send = nameReg.Storage(tx.From())
 		rec  = nameReg.Storage(tx.To())
 		s, r string

@@ -1,5 +1,6 @@
 package trie
 
+/*
 import (
 	"bytes"
 	"fmt"
@@ -174,11 +175,9 @@ func New(db ethutil.Database, Root interface{}) *Trie {
 func (self *Trie) setRoot(root interface{}) {
 	switch t := root.(type) {
 	case string:
-		/*
-			if t == "" {
-				root = crypto.Sha3(ethutil.Encode(""))
-			}
-		*/
+		//if t == "" {
+		//	root = crypto.Sha3(ethutil.Encode(""))
+		//}
 		self.Root = []byte(t)
 	case []byte:
 		self.Root = root
@@ -186,10 +185,6 @@ func (self *Trie) setRoot(root interface{}) {
 		self.Root = self.cache.PutValue(root, true)
 	}
 }
-
-/*
- * Public (query) interface functions
- */
 
 func (t *Trie) Update(key, value string) {
 	t.mut.Lock()
@@ -629,3 +624,4 @@ func (it *TrieIterator) iterateNode(key []byte, currentNode *ethutil.Value, cb E
 		}
 	}
 }
+*/

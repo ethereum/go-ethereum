@@ -36,7 +36,7 @@ func (self *World) SafeGet(addr []byte) *Object {
 func (self *World) safeGet(addr []byte) *state.StateObject {
 	object := self.State().GetStateObject(addr)
 	if object == nil {
-		object = state.NewStateObject(addr)
+		object = state.NewStateObject(addr, self.pipe.obj.Db())
 	}
 
 	return object

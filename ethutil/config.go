@@ -10,8 +10,6 @@ import (
 
 // Config struct
 type ConfigManager struct {
-	Db Database
-
 	ExecPath string
 	Debug    bool
 	Diff     bool

@@ -36,6 +36,7 @@ type EthManager interface {
 }
 
 type BlockProcessor struct {
+	db ethutil.Database
 	// Mutex for locking the block processor. Blocks can only be handled one at a time
 	mutex sync.Mutex
 	// Canonical block chain
@@ -57,8 +58,9 @@ type BlockProcessor struct {
 	eventMux *event.TypeMux
 }
 
-func NewBlockProcessor(txpool *TxPool, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
+func NewBlockProcessor(db ethutil.Database, txpool *TxPool, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
 	sm := &BlockProcessor{
+		db:       db,
 		mem:      make(map[string]*big.Int),
 		Pow:      ezp.New(),
 		bc:       chainManager,
@@ -170,7 +172,8 @@ func (sm *BlockProcessor) Process(block *types.Block) (td *big.Int, msgs state.M
 func (sm *BlockProcessor) ProcessWithParent(block, parent *types.Block) (td *big.Int, messages state.Messages, err error) {
 	sm.lastAttemptedBlock = block
 
-	state := state.New(parent.Trie().Copy())
+	state := state.New(parent.Root(), sm.db)
+	//state := state.New(parent.Trie().Copy())
 
 	// Block validation
 	if err = sm.ValidateBlock(block, parent); err != nil {
@@ -352,7 +355,8 @@ func (sm *BlockProcessor) GetMessages(block *types.Block) (messages []*state.Mes
 
 	var (
 		parent = sm.bc.GetBlock(block.Header().ParentHash)
-		state  = state.New(parent.Trie().Copy())
+		//state  = state.New(parent.Trie().Copy())
+		state = state.New(parent.Root(), sm.db)
 	)
 
 	defer state.Reset()

@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/state"
 )
 
 const (
@@ -103,7 +104,8 @@ func main() {
 		}
 
 		// Leave the Println. This needs clean output for piping
-		fmt.Printf("%s\n", block.State().Dump())
+		statedb := state.New(block.Root(), ethereum.Db())
+		fmt.Printf("%s\n", statedb.Dump())
 
 		fmt.Println(block)
 

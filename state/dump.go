@@ -28,7 +28,7 @@ func (self *StateDB) Dump() []byte {
 
 	it := self.trie.Iterator()
 	for it.Next() {
-		stateObject := NewStateObjectFromBytes(it.Key, it.Value)
+		stateObject := NewStateObjectFromBytes(it.Key, it.Value, self.db)
 
 		account := Account{Balance: stateObject.balance.String(), Nonce: stateObject.Nonce, Root: ethutil.Bytes2Hex(stateObject.Root()), CodeHash: ethutil.Bytes2Hex(stateObject.codeHash)}
 		account.Storage = make(map[string]string)

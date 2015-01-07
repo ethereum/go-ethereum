@@ -21,14 +21,6 @@ func init() {
 	ethutil.ReadConfig("/tmp/ethtest", "/tmp/ethtest", "ETH")
 }
 
-func reset() {
-	db, err := ethdb.NewMemDatabase()
-	if err != nil {
-		panic("Could not create mem-db, failing")
-	}
-	ethutil.Config.Db = db
-}
-
 func loadChain(fn string, t *testing.T) (types.Blocks, error) {
 	fh, err := os.OpenFile(path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "_data", fn), os.O_RDONLY, os.ModePerm)
 	if err != nil {
@@ -54,7 +46,7 @@ func insertChain(done chan bool, chainMan *ChainManager, chain types.Blocks, t *
 }
 
 func TestChainInsertions(t *testing.T) {
-	reset()
+	db, _ := ethdb.NewMemDatabase()
 
 	chain1, err := loadChain("valid1", t)
 	if err != nil {
@@ -69,9 +61,9 @@ func TestChainInsertions(t *testing.T) {
 	}
 
 	var eventMux event.TypeMux
-	chainMan := NewChainManager(&eventMux)
+	chainMan := NewChainManager(db, &eventMux)
 	txPool := NewTxPool(&eventMux)
-	blockMan := NewBlockProcessor(txPool, chainMan, &eventMux)
+	blockMan := NewBlockProcessor(db, txPool, chainMan, &eventMux)
 	chainMan.SetProcessor(blockMan)
 
 	const max = 2
@@ -94,7 +86,7 @@ func TestChainInsertions(t *testing.T) {
 }
 
 func TestChainMultipleInsertions(t *testing.T) {
-	reset()
+	db, _ := ethdb.NewMemDatabase()
 
 	const max = 4
 	chains := make([]types.Blocks, max)
@@ -113,9 +105,9 @@ func TestChainMultipleInsertions(t *testing.T) {
 		}
 	}
 	var eventMux event.TypeMux
-	chainMan := NewChainManager(&eventMux)
+	chainMan := NewChainManager(db, &eventMux)
 	txPool := NewTxPool(&eventMux)
-	blockMan := NewBlockProcessor(txPool, chainMan, &eventMux)
+	blockMan := NewBlockProcessor(db, txPool, chainMan, &eventMux)
 	chainMan.SetProcessor(blockMan)
 	done := make(chan bool, max)
 	for i, chain := range chains {
