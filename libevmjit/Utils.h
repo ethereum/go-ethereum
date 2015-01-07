@@ -17,8 +17,6 @@ struct JIT: public NoteChannel  { static const char* name() { return "JIT"; } };
 u256 llvm2eth(i256);
 i256 eth2llvm(u256);
 
-void terminate(ReturnCode _returnCode);
-
 }
 }
 }

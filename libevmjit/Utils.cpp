@@ -1,8 +1,7 @@
 
-#include <csetjmp>
+#include <llvm/ADT/APInt.h>
 #include "Utils.h"
 #include "Instruction.h"
-#include "Runtime.h"
 
 namespace dev
 {
@@ -53,12 +52,6 @@ llvm::APInt readPushData(bytes::const_iterator& _curr, bytes::const_iterator _en
 	}
 	--_curr;	// Point the last real byte read
 	return value;
-}
-
-void terminate(ReturnCode _returnCode)
-{
-	auto jmpBuf = Runtime::getCurrJmpBuf();
-	std::longjmp(jmpBuf, static_cast<int>(_returnCode));
 }
 
 }

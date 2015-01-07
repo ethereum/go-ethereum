@@ -11,29 +11,12 @@ namespace eth
 {
 namespace jit
 {
-namespace
-{
-	jmp_buf_ref g_currJmpBuf;
-}
 
-jmp_buf_ref Runtime::getCurrJmpBuf()
-{
-	return g_currJmpBuf;
-}
-
-Runtime::Runtime(RuntimeData* _data, Env* _env):
+Runtime::Runtime(RuntimeData* _data, Env* _env) :
 	m_data(*_data),
 	m_env(*_env),
-	m_currJmpBuf(m_jmpBuf),
-	m_prevJmpBuf(g_currJmpBuf)
-{
-	g_currJmpBuf = m_jmpBuf;
-}
-
-Runtime::~Runtime()
-{
-	g_currJmpBuf = m_prevJmpBuf;
-}
+	m_currJmpBuf(m_jmpBuf)
+{}
 
 bytes Runtime::getReturnData() const	// FIXME: Reconsider returning by copy
 {
