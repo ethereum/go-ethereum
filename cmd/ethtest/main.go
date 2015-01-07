@@ -24,10 +24,10 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -65,10 +65,10 @@ type VmTest struct {
 	Pre         map[string]Account
 }
 
-func RunVmTest(js string) (failed int) {
+func RunVmTest(r io.Reader) (failed int) {
 	tests := make(map[string]VmTest)
 
-	data, _ := ioutil.ReadAll(strings.NewReader(js))
+	data, _ := ioutil.ReadAll(r)
 	err := json.Unmarshal(data, &tests)
 	if err != nil {
 		log.Fatalln(err)
@@ -125,9 +125,6 @@ func RunVmTest(js string) (failed int) {
 
 func main() {
 	helper.Logger.SetLogLevel(5)
-	if len(os.Args) == 1 {
-		log.Fatalln("no json supplied")
-	}
 
-	os.Exit(RunVmTest(os.Args[1]))
+	os.Exit(RunVmTest(os.Stdin))
 }
