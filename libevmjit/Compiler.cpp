@@ -5,8 +5,6 @@
 #include <fstream>
 #include <chrono>
 
-#include <boost/dynamic_bitset.hpp>
-
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Module.h>
@@ -44,17 +42,13 @@ void Compiler::createBasicBlocks(bytes const& _bytecode)
 {
 	std::set<ProgramCounter> splitPoints; // Sorted collections of instruction indices where basic blocks start/end
 
-	std::map<ProgramCounter, ProgramCounter> directJumpTargets;
 	std::vector<ProgramCounter> indirectJumpTargets;
-	boost::dynamic_bitset<> validJumpTargets(std::max(_bytecode.size(), size_t(1)));
 
 	splitPoints.insert(0);  // First basic block
-	validJumpTargets[0] = true;
 
 	for (auto curr = _bytecode.begin(); curr != _bytecode.end(); ++curr)
 	{
 		ProgramCounter currentPC = curr - _bytecode.begin();
-		validJumpTargets[currentPC] = true;
 
 		auto inst = Instruction(*curr);
 		switch (inst)
@@ -62,21 +56,7 @@ void Compiler::createBasicBlocks(bytes const& _bytecode)
 
 		case Instruction::ANY_PUSH:
 		{
-			auto val = readPushData(curr, _bytecode.end());
-			auto next = curr + 1;
-			if (next == _bytecode.end())
-				break;
-
-			auto nextInst = Instruction(*next);
-			if (nextInst == Instruction::JUMP || nextInst == Instruction::JUMPI)
-			{
-				// Create a block for the JUMP target.
-				ProgramCounter targetPC = val.ult(_bytecode.size()) ? val.getZExtValue() : _bytecode.size();
-				splitPoints.insert(targetPC);
-
-				ProgramCounter jumpPC = (next - _bytecode.begin());
-				directJumpTargets[jumpPC] = targetPC;
-			}
+			readPushData(curr, _bytecode.end());
 			break;
 		}
 
@@ -105,15 +85,6 @@ void Compiler::createBasicBlocks(bytes const& _bytecode)
 		}
 	}
 
-	// Remove split points generated from jumps out of code or into data.
-	for (auto it = splitPoints.cbegin(); it != splitPoints.cend();)
-	{
-		if (*it > _bytecode.size() || !validJumpTargets[*it])
-			it = splitPoints.erase(it);
-		else
-			++it;
-	}
-
 	for (auto it = splitPoints.cbegin(); it != splitPoints.cend();)
 	{
 		auto beginInstIdx = *it;
@@ -126,30 +97,8 @@ void Compiler::createBasicBlocks(bytes const& _bytecode)
 	m_badJumpBlock = std::unique_ptr<BasicBlock>(new BasicBlock("BadJumpBlock", m_mainFunc, m_builder));
 	m_jumpTableBlock = std::unique_ptr<BasicBlock>(new BasicBlock("JumpTableBlock", m_mainFunc, m_builder));
 
-	for (auto it = directJumpTargets.cbegin(); it != directJumpTargets.cend(); ++it)
-	{
-		if (it->second >= _bytecode.size())
-		{
-			// Jumping out of code means STOP
-			m_directJumpTargets[it->first] = m_stopBB;
-			continue;
-		}
-
-		auto blockIter = basicBlocks.find(it->second);
-		if (blockIter != basicBlocks.end())
-		{
-			m_directJumpTargets[it->first] = blockIter->second.llvm();
-		}
-		else
-		{
-			clog(JIT) << "Bad JUMP at PC " << it->first
-					  << ": " << it->second << " is not a valid PC";
-			m_directJumpTargets[it->first] = m_badJumpBlock->llvm();
-		}
-	}
-
 	for (auto it = indirectJumpTargets.cbegin(); it != indirectJumpTargets.cend(); ++it)
-		m_indirectJumpTargets.push_back(&basicBlocks.find(*it)->second);
+		m_jumpDests[*it] = basicBlocks.find(*it)->second.llvm();
 }
 
 std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode, std::string const& _id)
@@ -196,16 +145,15 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode, std::str
 	m_builder.CreateRet(Constant::get(ReturnCode::BadJumpDestination));
 
 	m_builder.SetInsertPoint(m_jumpTableBlock->llvm());
-	if (m_indirectJumpTargets.size() > 0)
+	if (m_jumpDests.size() > 0)
 	{
 		auto dest = m_jumpTableBlock->localStack().pop();
-		auto switchInstr =  m_builder.CreateSwitch(dest, m_badJumpBlock->llvm(),
-							m_indirectJumpTargets.size());
-		for (auto it = m_indirectJumpTargets.cbegin(); it != m_indirectJumpTargets.cend(); ++it)
+		auto switchInstr = m_builder.CreateSwitch(dest, m_badJumpBlock->llvm(), m_jumpDests.size());
+		for (auto it = m_jumpDests.cbegin(); it != m_jumpDests.cend(); ++it)
 		{
 			auto& bb = *it;
-			auto dest = Constant::get(bb->begin());
-			switchInstr->addCase(dest, bb->llvm());
+			auto dest = Constant::get(it->first);
+			switchInstr->addCase(dest, it->second);
 		}
 	}
 	else
@@ -596,16 +544,23 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 		case Instruction::JUMP:
 		case Instruction::JUMPI:
 		{
-			// Generate direct jump iff:
-			// 1. this is not the first instruction in the block
-			// 2. m_directJumpTargets[currentPC] is defined (meaning that the previous instruction is a PUSH)
-			// Otherwise generate a indirect jump (a switch).
 			llvm::BasicBlock* targetBlock = nullptr;
-			if (currentPC != _basicBlock.begin())
+			auto target = stack.pop();
+			if (auto constant = llvm::dyn_cast<llvm::ConstantInt>(target))
 			{
-				auto pairIter = m_directJumpTargets.find(currentPC);
-				if (pairIter != m_directJumpTargets.end())
-					targetBlock = pairIter->second;
+				auto&& c = constant->getValue();
+				if (c.ult(_bytecode.size()))
+				{
+					auto v = c.getZExtValue();
+					auto it = m_jumpDests.find(v);
+					if (it != m_jumpDests.end())
+						targetBlock = it->second;
+				}
+
+				if (!targetBlock)
+				{
+					targetBlock = m_badJumpBlock->llvm();
+				}
 			}
 
 			if (inst == Instruction::JUMP)
@@ -614,26 +569,30 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 				{
 					// The target address is computed at compile time,
 					// just pop it without looking...
-					stack.pop();
 					m_builder.CreateBr(targetBlock);
 				}
 				else
+				{
+					stack.push(target);
 					m_builder.CreateBr(m_jumpTableBlock->llvm());
+				}
 			}
 			else // JUMPI
 			{
-				stack.swap(1);
 				auto val = stack.pop();
 				auto zero = Constant::get(0);
 				auto cond = m_builder.CreateICmpNE(val, zero, "nonzero");
 
 				if (targetBlock)
 				{
-					stack.pop();
 					m_builder.CreateCondBr(cond, targetBlock, _nextBasicBlock);
 				}
 				else
+				{
+					UNTESTED;
+					stack.push(target);
 					m_builder.CreateCondBr(cond, m_jumpTableBlock->llvm(), _nextBasicBlock);
+				}
 			}
 
 			break;

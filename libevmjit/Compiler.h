@@ -67,11 +67,8 @@ private:
 	/// Maps a program counter pc to a basic block that starts at pc (if any).
 	std::map<ProgramCounter, BasicBlock> basicBlocks = {};
 
-	/// Maps a pc at which there is a JUMP or JUMPI to the target block of the jump.
-	std::map<ProgramCounter, llvm::BasicBlock*> m_directJumpTargets = {};
-
-	/// A list of possible blocks to which there may be indirect jumps.
-	std::vector<BasicBlock*> m_indirectJumpTargets = {};
+	/// Map of jump destinations
+	std::map<ProgramCounter, llvm::BasicBlock*> m_jumpDests = {};
 
 	/// Stop basic block - terminates execution with STOP code (0)
 	llvm::BasicBlock* m_stopBB = nullptr;

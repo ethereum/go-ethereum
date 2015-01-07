@@ -44,6 +44,8 @@ struct i256
 };
 static_assert(sizeof(i256) == 32, "Wrong i265 size");
 
+#define UNTESTED assert(false)
+
 }
 }
 }
