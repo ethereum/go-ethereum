@@ -41,7 +41,7 @@ type KeyStore2 interface {
 	DeleteKey(*uuid.UUID, string) error      // delete key by id and auth string
 }
 
-type KeyStorePlaintext struct {
+type keyStorePlain struct {
 	keysDirPath string
 }
 
@@ -51,9 +51,14 @@ func DefaultDataDir() string {
 	return path.Join(usr.HomeDir, ".ethereum")
 }
 
-func (ks KeyStorePlaintext) GenerateNewKey(auth string) (key *Key, err error) {
-	key, err = GenerateNewKeyDefault(ks, auth)
-	return
+func NewKeyStorePlain(path string) KeyStore2 {
+	ks := new(keyStorePlain)
+	ks.keysDirPath = path
+	return ks
+}
+
+func (ks keyStorePlain) GenerateNewKey(auth string) (key *Key, err error) {
+	return GenerateNewKeyDefault(ks, auth)
 }
 
 func GenerateNewKeyDefault(ks KeyStore2, auth string) (key *Key, err error) {
@@ -64,50 +69,46 @@ func GenerateNewKeyDefault(ks KeyStore2, auth string) (key *Key, err error) {
 	}()
 	key = NewKey()
 	err = ks.StoreKey(key, auth)
-	return
+	return key, err
 }
 
-func (ks KeyStorePlaintext) GetKey(keyId *uuid.UUID, auth string) (key *Key, err error) {
+func (ks keyStorePlain) GetKey(keyId *uuid.UUID, auth string) (key *Key, err error) {
 	fileContent, err := GetKeyFile(ks.keysDirPath, keyId)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	key = new(Key)
 	err = json.Unmarshal(fileContent, key)
-	return
+	return key, err
 }
 
-func (ks KeyStorePlaintext) StoreKey(key *Key, auth string) (err error) {
+func (ks keyStorePlain) StoreKey(key *Key, auth string) (err error) {
 	keyJSON, err := json.Marshal(key)
 	if err != nil {
-		return
+		return err
 	}
 	err = WriteKeyFile(key.Id.String(), ks.keysDirPath, keyJSON)
-	return
+	return err
 }
 
-func (ks KeyStorePlaintext) DeleteKey(keyId *uuid.UUID, auth string) (err error) {
+func (ks keyStorePlain) DeleteKey(keyId *uuid.UUID, auth string) (err error) {
 	keyDirPath := path.Join(ks.keysDirPath, keyId.String())
 	err = os.RemoveAll(keyDirPath)
-	return
+	return err
 }
 
 func GetKeyFile(keysDirPath string, keyId *uuid.UUID) (fileContent []byte, err error) {
-	idString := keyId.String()
-	keyDirPath := path.Join(keysDirPath, idString)
-	keyFilePath := path.Join(keyDirPath, idString)
-	fileContent, err = ioutil.ReadFile(keyFilePath)
-	return
+	id := keyId.String()
+	return ioutil.ReadFile(path.Join(keysDirPath, id, id))
 }
 
-func WriteKeyFile(idString string, keysDirPath string, content []byte) (err error) {
-	keyDirPath := path.Join(keysDirPath, idString)
-	keyFilePath := path.Join(keyDirPath, idString)
+func WriteKeyFile(id string, keysDirPath string, content []byte) (err error) {
+	keyDirPath := path.Join(keysDirPath, id)
+	keyFilePath := path.Join(keyDirPath, id)
 	err = os.MkdirAll(keyDirPath, 0700) // read, write and dir search for user
 	if err != nil {
-		return
+		return err
 	}
-	err = ioutil.WriteFile(keyFilePath, content, 0600) // read, write for user
-	return
+	return ioutil.WriteFile(keyFilePath, content, 0600) // read, write for user
 }

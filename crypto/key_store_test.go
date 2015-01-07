@@ -6,20 +6,19 @@ import (
 	"testing"
 )
 
-func TestKeyStorePlaintext(t *testing.T) {
-	ks := new(KeyStorePlaintext)
-	ks.keysDirPath = DefaultDataDir()
+func TestKeyStorePlain(t *testing.T) {
+	ks := NewKeyStorePlain(DefaultDataDir())
 	pass := "" // not used but required by API
 	k1, err := ks.GenerateNewKey(pass)
 	if err != nil {
-		fmt.Println(err.Error())
+		t.Error(err)
 		t.FailNow()
 	}
 
 	k2 := new(Key)
 	k2, err = ks.GetKey(k1.Id, pass)
 	if err != nil {
-		fmt.Println(err.Error())
+		t.Error(err)
 		t.FailNow()
 	}
 
@@ -40,25 +39,24 @@ func TestKeyStorePlaintext(t *testing.T) {
 
 	err = ks.DeleteKey(k2.Id, pass)
 	if err != nil {
-		fmt.Println(err.Error())
+		t.Error(err)
 		t.FailNow()
 	}
 }
 
 func TestKeyStorePassphrase(t *testing.T) {
-	ks := new(KeyStorePassphrase)
-	ks.keysDirPath = DefaultDataDir()
+	ks := NewKeyStorePassphrase(DefaultDataDir())
 	pass := "foo"
 	k1, err := ks.GenerateNewKey(pass)
 	if err != nil {
-		fmt.Println(err.Error())
+		t.Error(err)
 		t.FailNow()
 	}
 
 	k2 := new(Key)
 	k2, err = ks.GetKey(k1.Id, pass)
 	if err != nil {
-		fmt.Println(err.Error())
+		t.Error(err)
 		t.FailNow()
 	}
 
@@ -79,36 +77,35 @@ func TestKeyStorePassphrase(t *testing.T) {
 
 	err = ks.DeleteKey(k2.Id, pass) // also to clean up created files
 	if err != nil {
-		fmt.Println(err.Error())
+		t.Error(err)
 		t.FailNow()
 	}
 }
 
 func TestKeyStorePassphraseDecryptionFail(t *testing.T) {
-	ks := new(KeyStorePassphrase)
-	ks.keysDirPath = DefaultDataDir()
+	ks := NewKeyStorePassphrase(DefaultDataDir())
 	pass := "foo"
 	k1, err := ks.GenerateNewKey(pass)
 	if err != nil {
-		fmt.Println(err.Error())
+		t.Error(err)
 		t.FailNow()
 	}
 
 	_, err = ks.GetKey(k1.Id, "bar") // wrong passphrase
-	// fmt.Println(err.Error())
+	// t.Error(err)
 	if err == nil {
 		t.FailNow()
 	}
 
 	err = ks.DeleteKey(k1.Id, "bar") // wrong passphrase
 	if err == nil {
-		fmt.Println(err.Error())
+		t.Error(err)
 		t.FailNow()
 	}
 
 	err = ks.DeleteKey(k1.Id, pass) // to clean up
 	if err != nil {
-		fmt.Println(err.Error())
+		t.Error(err)
 		t.FailNow()
 	}
 }

@@ -49,7 +49,7 @@ type Key struct {
 	PrivateKey *ecdsa.PrivateKey
 }
 
-type KeyPlainJSON struct {
+type PlainKeyJSON struct {
 	Id         string
 	Flags      string
 	PrivateKey string
@@ -61,7 +61,7 @@ type CipherJSON struct {
 	CipherText string
 }
 
-type KeyProtectedJSON struct {
+type EncryptedKeyJSON struct {
 	Id     string
 	Flags  string
 	Crypto CipherJSON
@@ -73,44 +73,44 @@ func (k *Key) Address() []byte {
 }
 
 func (k *Key) MarshalJSON() (j []byte, err error) {
-	stringStruct := KeyPlainJSON{
+	stringStruct := PlainKeyJSON{
 		k.Id.String(),
 		hex.EncodeToString(k.Flags[:]),
 		hex.EncodeToString(FromECDSA(k.PrivateKey)),
 	}
-	j, _ = json.Marshal(stringStruct)
-	return
+	j, err = json.Marshal(stringStruct)
+	return j, err
 }
 
 func (k *Key) UnmarshalJSON(j []byte) (err error) {
-	keyJSON := new(KeyPlainJSON)
+	keyJSON := new(PlainKeyJSON)
 	err = json.Unmarshal(j, &keyJSON)
 	if err != nil {
-		return
+		return err
 	}
 
 	u := new(uuid.UUID)
 	*u = uuid.Parse(keyJSON.Id)
 	if *u == nil {
 		err = errors.New("UUID parsing failed")
-		return
+		return err
 	}
 	k.Id = u
 
 	flagsBytes, err := hex.DecodeString(keyJSON.Flags)
 	if err != nil {
-		return
+		return err
 	}
 
 	PrivateKeyBytes, err := hex.DecodeString(keyJSON.PrivateKey)
 	if err != nil {
-		return
+		return err
 	}
 
 	copy(k.Flags[:], flagsBytes[0:4])
 	k.PrivateKey = ToECDSA(PrivateKeyBytes)
 
-	return
+	return err
 }
 
 func NewKey() *Key {
