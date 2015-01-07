@@ -1,11 +1,10 @@
 // +build none
-
 /*
 This command generates GPL license headers on top of all source files.
 You can run it once per month, before cutting a release or just
 whenever you feel like it.
 
-	go run update-licenses.go
+	go run update-license.go
 
 The copyright in each file is assigned to any authors for which git
 can find commits in the file's history. It will try to follow renames
@@ -199,12 +198,13 @@ func fileInfo(file string) (*info, error) {
 	return info, err
 }
 
-func writeLicenses(infos <-chan *info) error {
+func writeLicenses(infos <-chan *info) {
 	buf := new(bytes.Buffer)
 	for info := range infos {
 		content, err := ioutil.ReadFile(info.file)
 		if err != nil {
 			fmt.Printf("ERROR: couldn't read %s: %v\n", info.file, err)
+			continue
 		}
 
 		// construct new file content
@@ -219,11 +219,10 @@ func writeLicenses(infos <-chan *info) error {
 		if !bytes.Equal(content, buf.Bytes()) {
 			fmt.Println("writing", info.ShortLicense(), info.file)
 			if err := ioutil.WriteFile(info.file, buf.Bytes(), info.mode); err != nil {
-				return err
+				fmt.Printf("ERROR: couldn't write %s: %v", info.file, err)
 			}
 		}
 	}
-	return nil
 }
 
 func doLines(cmd *exec.Cmd, f func(string)) error {
