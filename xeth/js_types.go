@@ -39,7 +39,7 @@ func NewJSBlock(block *types.Block) *JSBlock {
 
 	ptxs := make([]*JSTransaction, len(block.Transactions()))
 	for i, tx := range block.Transactions() {
-		ptxs[i] = NewJSTx(tx, block.State())
+		ptxs[i] = NewJSTx(tx)
 	}
 	txlist := ethutil.NewList(ptxs)
 
@@ -76,7 +76,7 @@ func (self *JSBlock) GetTransaction(hash string) *JSTransaction {
 		return nil
 	}
 
-	return NewJSTx(tx, self.ref.State())
+	return NewJSTx(tx)
 }
 
 type JSTransaction struct {
@@ -95,7 +95,7 @@ type JSTransaction struct {
 	Confirmations   int    `json:"confirmations"`
 }
 
-func NewJSTx(tx *types.Transaction, state *state.StateDB) *JSTransaction {
+func NewJSTx(tx *types.Transaction) *JSTransaction {
 	hash := ethutil.Bytes2Hex(tx.Hash())
 	receiver := ethutil.Bytes2Hex(tx.To())
 	if receiver == "0000000000000000000000000000000000000000" {

@@ -77,7 +77,6 @@ func NewTestManager() *TestManager {
 		fmt.Println("Could not create mem-db, failing")
 		return nil
 	}
-	ethutil.Config.Db = db
 
 	testManager := &TestManager{}
 	testManager.eventMux = new(event.TypeMux)

@@ -64,6 +64,7 @@ var (
 	ImportChain     string
 	SHH             bool
 	Dial            bool
+	PrintVersion    bool
 )
 
 // flags specific to cli client
@@ -120,6 +121,7 @@ func Init() {
 
 	flag.BoolVar(&StartMining, "mine", false, "start dagger mining")
 	flag.BoolVar(&StartJsConsole, "js", false, "launches javascript console")
+	flag.BoolVar(&PrintVersion, "version", false, "prints version number")
 
 	flag.Parse()
 

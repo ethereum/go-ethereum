@@ -122,7 +122,7 @@ func (self *ethProtocol) handle() error {
 	defer msg.Discard()
 
 	switch msg.Code {
-
+	case GetTxMsg: // ignore
 	case StatusMsg:
 		return self.protoError(ErrExtraStatusMsg, "")
 

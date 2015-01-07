@@ -56,11 +56,6 @@ func NewTxPool(eventMux *event.TypeMux) *TxPool {
 }
 
 func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
-	hash := tx.Hash()
-	if pool.txs[string(hash)] != nil {
-		return fmt.Errorf("Known transaction (%x)", hash[0:4])
-	}
-
 	if len(tx.To()) != 0 && len(tx.To()) != 20 {
 		return fmt.Errorf("Invalid recipient. len = %d", len(tx.To()))
 	}
@@ -97,6 +92,10 @@ func (self *TxPool) addTx(tx *types.Transaction) {
 }
 
 func (self *TxPool) Add(tx *types.Transaction) error {
+	if self.txs[string(tx.Hash())] != nil {
+		return fmt.Errorf("Known transaction (%x)", tx.Hash()[0:4])
+	}
+
 	err := self.ValidateTransaction(tx)
 	if err != nil {
 		return err
@@ -149,6 +148,7 @@ func (pool *TxPool) RemoveInvalid(query StateQuery) {
 	for _, tx := range pool.txs {
 		sender := query.GetAccount(tx.From())
 		err := pool.ValidateTransaction(tx)
+		fmt.Println(err, sender.Nonce, tx.Nonce())
 		if err != nil || sender.Nonce >= tx.Nonce() {
 			removedTxs = append(removedTxs, tx)
 		}

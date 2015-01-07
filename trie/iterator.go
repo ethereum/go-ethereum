@@ -1,5 +1,6 @@
 package trie
 
+/*
 import (
 	"bytes"
 
@@ -141,3 +142,4 @@ func (self *Iterator) Next(key string) []byte {
 
 	return self.Key
 }
+*/

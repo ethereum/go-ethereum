@@ -19,7 +19,7 @@ var ZeroHash512 = make([]byte, 64)
 var EmptyShaList = crypto.Sha3(ethutil.Encode([]interface{}{}))
 var EmptyListRoot = crypto.Sha3(ethutil.Encode(""))
 
-func GenesisBlock() *types.Block {
+func GenesisBlock(db ethutil.Database) *types.Block {
 	genesis := types.NewBlock(ZeroHash256, ZeroHash160, nil, big.NewInt(131072), crypto.Sha3(big.NewInt(42).Bytes()), "")
 	genesis.Header().Number = ethutil.Big0
 	genesis.Header().GasLimit = big.NewInt(1000000)
@@ -30,7 +30,8 @@ func GenesisBlock() *types.Block {
 	genesis.SetTransactions(types.Transactions{})
 	genesis.SetReceipts(types.Receipts{})
 
-	statedb := state.New(genesis.Trie())
+	statedb := state.New(genesis.Root(), db)
+	//statedb := state.New(genesis.Trie())
 	for _, addr := range []string{
 		"51ba59315b3a95761d0863b05ccc7a7f54703d99",
 		"e4157b34ea9615cfbde6b4fda419828124b70c78",

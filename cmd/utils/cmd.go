@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -259,7 +260,8 @@ func BlockDo(ethereum *eth.Ethereum, hash []byte) error {
 
 	parent := ethereum.ChainManager().GetBlock(block.ParentHash())
 
-	_, err := ethereum.BlockProcessor().TransitionState(parent.State(), parent, block)
+	statedb := state.New(parent.Root(), ethereum.Db())
+	_, err := ethereum.BlockProcessor().TransitionState(statedb, parent, block)
 	if err != nil {
 		return err
 	}
