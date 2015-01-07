@@ -309,8 +309,6 @@
         }
     },
     "DynamicJumpInsidePushWithJumpDest" : {
-        "callcreates" : [
-        ],
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "256",
@@ -328,20 +326,6 @@
             "gasPrice" : "100000000000000",
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
-        },
-        "gas" : "9693",
-        "logs" : [
-        ],
-        "out" : "0x",
-        "post" : {
-            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
-                "balance" : "1000000000000000000",
-                "code" : "0x600460030156655b6001600155",
-                "nonce" : "0",
-                "storage" : {
-                    "0x01" : "0x01"
-                }
-            }
         },
         "pre" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
@@ -560,8 +544,6 @@
         }
     },
     "DynamicJumpifInsidePushWithJumpDest" : {
-        "callcreates" : [
-        ],
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "256",
@@ -579,20 +561,6 @@
             "gasPrice" : "100000000000000",
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
-        },
-        "gas" : "9692",
-        "logs" : [
-        ],
-        "out" : "0x",
-        "post" : {
-            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
-                "balance" : "1000000000000000000",
-                "code" : "0x6001600660030157655b6001600155",
-                "nonce" : "0",
-                "storage" : {
-                    "0x01" : "0x01"
-                }
-            }
         },
         "pre" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
@@ -1122,8 +1090,6 @@
         }
     },
     "jumpInsidePushWithJumpDest" : {
-        "callcreates" : [
-        ],
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "256",
@@ -1141,20 +1107,6 @@
             "gasPrice" : "100000000000000",
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
-        },
-        "gas" : "9695",
-        "logs" : [
-        ],
-        "out" : "0x",
-        "post" : {
-            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
-                "balance" : "1000000000000000000",
-                "code" : "0x600456655b6001600155",
-                "nonce" : "0",
-                "storage" : {
-                    "0x01" : "0x01"
-                }
-            }
         },
         "pre" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
@@ -1402,8 +1354,6 @@
         }
     },
     "jumpifInsidePushWithJumpDest" : {
-        "callcreates" : [
-        ],
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "256",
@@ -1421,20 +1371,6 @@
             "gasPrice" : "100000000000000",
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
-        },
-        "gas" : "9694",
-        "logs" : [
-        ],
-        "out" : "0x",
-        "post" : {
-            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
-                "balance" : "1000000000000000000",
-                "code" : "0x6001600657655b6001600155",
-                "nonce" : "0",
-                "storage" : {
-                    "0x01" : "0x01"
-                }
-            }
         },
         "pre" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
