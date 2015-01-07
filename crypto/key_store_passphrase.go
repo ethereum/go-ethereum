@@ -76,35 +76,46 @@ import (
 	"path"
 )
 
-const scryptN int = 262144 // 2^18
-const scryptr int = 8
-const scryptp int = 1
-const scryptdkLen int = 32
+const (
+	// 2^18 / 8 / 1 uses 256MB memory and approx 1s CPU time on a modern CPU.
+	scryptN     = 1 << 18
+	scryptr     = 8
+	scryptp     = 1
+	scryptdkLen = 32
+)
 
-type KeyStorePassphrase struct {
+type keyStorePassphrase struct {
 	keysDirPath string
 }
 
-func (ks KeyStorePassphrase) GenerateNewKey(auth string) (key *Key, err error) {
-	key, err = GenerateNewKeyDefault(ks, auth)
-	return
+func NewKeyStorePassphrase(path string) KeyStore2 {
+	ks := new(keyStorePassphrase)
+	ks.keysDirPath = path
+	return ks
 }
 
-func (ks KeyStorePassphrase) GetKey(keyId *uuid.UUID, auth string) (key *Key, err error) {
+func (ks keyStorePassphrase) GenerateNewKey(auth string) (key *Key, err error) {
+	return GenerateNewKeyDefault(ks, auth)
+}
+
+func (ks keyStorePassphrase) GetKey(keyId *uuid.UUID, auth string) (key *Key, err error) {
 	keyBytes, flags, err := DecryptKey(ks, keyId, auth)
+	if err != nil {
+		return nil, err
+	}
 	key = new(Key)
 	key.Id = keyId
 	copy(key.Flags[:], flags[0:4])
 	key.PrivateKey = ToECDSA(keyBytes)
-	return
+	return key, err
 }
 
-func (ks KeyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
+func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 	authArray := []byte(auth)
 	salt := GetEntropyCSPRNG(32)
 	derivedKey, err := scrypt.Key(authArray, salt, scryptN, scryptr, scryptp, scryptdkLen)
 	if err != nil {
-		return
+		return err
 	}
 
 	keyBytes := FromECDSA(key.PrivateKey)
@@ -113,7 +124,7 @@ func (ks KeyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 
 	AES256Block, err := aes.NewCipher(derivedKey)
 	if err != nil {
-		return
+		return err
 	}
 
 	iv := GetEntropyCSPRNG(aes.BlockSize) // 16
@@ -126,70 +137,68 @@ func (ks KeyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 		hex.EncodeToString(iv),
 		hex.EncodeToString(cipherText),
 	}
-	keyStruct := KeyProtectedJSON{
+	keyStruct := EncryptedKeyJSON{
 		key.Id.String(),
 		hex.EncodeToString(key.Flags[:]),
 		cipherStruct,
 	}
 	keyJSON, err := json.Marshal(keyStruct)
 	if err != nil {
-		return
+		return err
 	}
 
-	err = WriteKeyFile(key.Id.String(), ks.keysDirPath, keyJSON)
-	return
+	return WriteKeyFile(key.Id.String(), ks.keysDirPath, keyJSON)
 }
 
-func (ks KeyStorePassphrase) DeleteKey(keyId *uuid.UUID, auth string) (err error) {
+func (ks keyStorePassphrase) DeleteKey(keyId *uuid.UUID, auth string) (err error) {
 	// only delete if correct passphrase is given
 	_, _, err = DecryptKey(ks, keyId, auth)
 	if err != nil {
-		return
+		return err
 	}
 
 	keyDirPath := path.Join(ks.keysDirPath, keyId.String())
-	err = os.RemoveAll(keyDirPath)
-	return
+	return os.RemoveAll(keyDirPath)
 }
 
-func DecryptKey(ks KeyStorePassphrase, keyId *uuid.UUID, auth string) (keyBytes []byte, flags []byte, err error) {
+func DecryptKey(ks keyStorePassphrase, keyId *uuid.UUID, auth string) (keyBytes []byte, flags []byte, err error) {
 	fileContent, err := GetKeyFile(ks.keysDirPath, keyId)
 	if err != nil {
-		return
+		return nil, nil, err
 	}
 
-	keyProtected := new(KeyProtectedJSON)
+	keyProtected := new(EncryptedKeyJSON)
 	err = json.Unmarshal(fileContent, keyProtected)
 
 	flags, err = hex.DecodeString(keyProtected.Flags)
 	if err != nil {
-		return
+		return nil, nil, err
 	}
 
 	salt, err := hex.DecodeString(keyProtected.Crypto.Salt)
 	if err != nil {
-		return
+		return nil, nil, err
 	}
 
 	iv, err := hex.DecodeString(keyProtected.Crypto.IV)
 	if err != nil {
-		return
+		return nil, nil, err
 	}
 
 	cipherText, err := hex.DecodeString(keyProtected.Crypto.CipherText)
 	if err != nil {
-		return
+		return nil, nil, err
 	}
 
 	authArray := []byte(auth)
 	derivedKey, err := scrypt.Key(authArray, salt, scryptN, scryptr, scryptp, scryptdkLen)
 	if err != nil {
-		return
+		return nil, nil, err
 	}
 
 	AES256Block, err := aes.NewCipher(derivedKey)
 	if err != nil {
-		return
+		return nil, nil, err
 	}
 
 	AES256CBCDecrypter := cipher.NewCBCDecrypter(AES256Block, iv)
@@ -199,14 +208,14 @@ func DecryptKey(ks KeyStorePassphrase, keyId *uuid.UUID, auth string) (keyBytes 
 	plainText := PKCS7Unpad(paddedPlainText)
 	if plainText == nil {
 		err = errors.New("Decryption failed: PKCS7Unpad failed after decryption")
-		return
+		return nil, nil, err
 	}
 
 	keyBytes = plainText[:len(plainText)-32]
 	keyBytesHash := plainText[len(plainText)-32:]
 	if !bytes.Equal(Sha3(keyBytes), keyBytesHash) {
 		err = errors.New("Decryption failed: checksum mismatch")
-		return
+		return nil, nil, err
 	}
 	return keyBytes, flags, err
 }
