@@ -52,6 +52,11 @@ func main() {
 	// precedence: code-internal flag default < config file < environment variables < command line
 	Init() // parsing command line
 
+	if PrintVersion {
+		printVersion()
+		return
+	}
+
 	utils.InitConfig(VmType, ConfigFile, Datadir, "ETH")
 
 	ethereum, err := eth.New(&eth.Config{
@@ -136,4 +141,14 @@ func main() {
 	}
 	// this blocks the thread
 	ethereum.WaitForShutdown()
+}
+
+func printVersion() {
+	fmt.Printf(`%v %v
+PV=%d
+GOOS=%s
+GO=%s
+GOPATH=%s
+GOROOT=%s
+`, ClientIdentifier, Version, eth.ProtocolVersion, runtime.GOOS, runtime.Version(), os.Getenv("GOPATH"), runtime.GOROOT())
 }
