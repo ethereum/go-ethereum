@@ -24,8 +24,6 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 	RuntimeHelper(_runtimeManager),
 	m_memoryMan(_memoryMan)
 {
-	auto module = getModule();
-
 	m_args[0] = m_builder.CreateAlloca(Type::Word, nullptr, "ext.index");
 	m_args[1] = m_builder.CreateAlloca(Type::Word, nullptr, "ext.value");
 	m_arg2 = m_builder.CreateAlloca(Type::Word, nullptr, "ext.arg2");
@@ -36,27 +34,6 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 	m_arg7 = m_builder.CreateAlloca(Type::Word, nullptr, "ext.arg7");
 	m_arg8 = m_builder.CreateAlloca(Type::Word, nullptr, "ext.arg8");
 	m_size = m_builder.CreateAlloca(Type::Size, nullptr, "env.size");
-
-	using Linkage = llvm::GlobalValue::LinkageTypes;
-
-	llvm::Type* sha3ArgsTypes[] = {Type::BytePtr, Type::Size, Type::WordPtr};
-	m_sha3 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, sha3ArgsTypes, false), Linkage::ExternalLinkage, "env_sha3", module);
-
-	llvm::Type* createArgsTypes[] = {Type::EnvPtr, Type::WordPtr, Type::WordPtr, Type::BytePtr, Type::Size, Type::WordPtr};
-	m_create = llvm::Function::Create(llvm::FunctionType::get(Type::Void, createArgsTypes, false), Linkage::ExternalLinkage, "env_create", module);
-
-	llvm::Type* callArgsTypes[] = {Type::EnvPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::BytePtr, Type::Size, Type::BytePtr, Type::Size, Type::WordPtr};
-	m_call = llvm::Function::Create(llvm::FunctionType::get(Type::Bool, callArgsTypes, false), Linkage::ExternalLinkage, "env_call", module);
-
-	llvm::Type* logArgsTypes[] = {Type::EnvPtr, Type::BytePtr, Type::Size, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr};
-	m_log = llvm::Function::Create(llvm::FunctionType::get(Type::Void, logArgsTypes, false), Linkage::ExternalLinkage, "env_log", module);
-
-	llvm::Type* getExtCodeArgsTypes[] = {Type::EnvPtr, Type::WordPtr, Type::Size->getPointerTo()};
-	m_getExtCode = llvm::Function::Create(llvm::FunctionType::get(Type::BytePtr, getExtCodeArgsTypes, false), Linkage::ExternalLinkage, "env_getExtCode", module);
-
-	// Helper function, not client Env interface
-	llvm::Type* callDataLoadArgsTypes[] = {Type::RuntimeDataPtr, Type::WordPtr, Type::WordPtr};
-	m_calldataload = llvm::Function::Create(llvm::FunctionType::get(Type::Void, callDataLoadArgsTypes, false), Linkage::ExternalLinkage, "ext_calldataload", module);
 }
 
 
@@ -72,7 +49,13 @@ std::array<FuncDesc, sizeOf<EnvFunc>::value> const& getEnvFuncDescs()
 	static std::array<FuncDesc, sizeOf<EnvFunc>::value> descs{{
 		FuncDesc{"env_sload",   getFunctionType(Type::Void, {Type::EnvPtr, Type::WordPtr, Type::WordPtr})},
 		FuncDesc{"env_sstore",  getFunctionType(Type::Void, {Type::EnvPtr, Type::WordPtr, Type::WordPtr})},
+		FuncDesc{"env_sha3", getFunctionType(Type::Void, {Type::BytePtr, Type::Size, Type::WordPtr})},
 		FuncDesc{"env_balance", getFunctionType(Type::Void, {Type::EnvPtr, Type::WordPtr, Type::WordPtr})},
+		FuncDesc{"env_create", getFunctionType(Type::Void, {Type::EnvPtr, Type::WordPtr, Type::WordPtr, Type::BytePtr, Type::Size, Type::WordPtr})},
+		FuncDesc{"env_call", getFunctionType(Type::Bool, {Type::EnvPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::BytePtr, Type::Size, Type::BytePtr, Type::Size, Type::WordPtr})},
+		FuncDesc{"env_log", getFunctionType(Type::Void, {Type::EnvPtr, Type::BytePtr, Type::Size, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr})},
+		FuncDesc{"env_getExtCode", getFunctionType(Type::BytePtr, {Type::EnvPtr, Type::WordPtr, Type::Size->getPointerTo()})},
+		FuncDesc{"ext_calldataload", getFunctionType(Type::Void, {Type::RuntimeDataPtr, Type::WordPtr, Type::WordPtr})},
 	}};
 
 	return descs;
@@ -84,22 +67,19 @@ llvm::Function* createFunc(EnvFunc _id, llvm::Module* _module)
 	return llvm::Function::Create(std::get<1>(desc), llvm::Function::ExternalLinkage, std::get<0>(desc), _module);
 }
 
-template<typename... _Args>
-llvm::CallInst* Ext::createCall(EnvFunc _funcId, _Args*... _args)
+llvm::CallInst* Ext::createCall(EnvFunc _funcId, std::initializer_list<llvm::Value*> const& _args)
 {
 	auto& func = m_funcs[static_cast<size_t>(_funcId)];
 	if (!func)
-	{
 		func = createFunc(_funcId, getModule());
-	}
-	llvm::Value* args[] = {_args...};
-	return getBuilder().CreateCall(func, args);
+
+	return getBuilder().CreateCall(func, {_args.begin(), _args.size()});
 }
 
 llvm::Value* Ext::sload(llvm::Value* _index)
 {
 	m_builder.CreateStore(_index, m_args[0]);
-	createCall(EnvFunc::sload, getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]); // Uses native endianness
+	createCall(EnvFunc::sload, {getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]}); // Uses native endianness
 	return m_builder.CreateLoad(m_args[1]);
 }
 
@@ -107,13 +87,13 @@ void Ext::sstore(llvm::Value* _index, llvm::Value* _value)
 {
 	m_builder.CreateStore(_index, m_args[0]);
 	m_builder.CreateStore(_value, m_args[1]);
-	createCall(EnvFunc::sstore, getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]); // Uses native endianness
+	createCall(EnvFunc::sstore, {getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]}); // Uses native endianness
 }
 
 llvm::Value* Ext::calldataload(llvm::Value* _index)
 {
 	m_builder.CreateStore(_index, m_args[0]);
-	createCall(m_calldataload, getRuntimeManager().getDataPtr(), m_args[0], m_args[1]);
+	createCall(EnvFunc::calldataload, {getRuntimeManager().getDataPtr(), m_args[0], m_args[1]});
 	auto ret = m_builder.CreateLoad(m_args[1]);
 	return Endianness::toNative(m_builder, ret);
 }
@@ -122,7 +102,7 @@ llvm::Value* Ext::balance(llvm::Value* _address)
 {
 	auto address = Endianness::toBE(m_builder, _address);
 	m_builder.CreateStore(address, m_args[0]);
-	createCall(EnvFunc::balance, getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]);
+	createCall(EnvFunc::balance, {getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]});
 	return m_builder.CreateLoad(m_args[1]);
 }
 
@@ -132,7 +112,7 @@ llvm::Value* Ext::create(llvm::Value*& _gas, llvm::Value* _endowment, llvm::Valu
 	m_builder.CreateStore(_endowment, m_arg2);
 	auto begin = m_memoryMan.getBytePtr(_initOff);
 	auto size = m_builder.CreateTrunc(_initSize, Type::Size, "size");
-	createCall(m_create, getRuntimeManager().getEnvPtr(), m_args[0], m_arg2, begin, size, m_args[1]);
+	createCall(EnvFunc::create, {getRuntimeManager().getEnvPtr(), m_args[0], m_arg2, begin, size, m_args[1]});
 	_gas = m_builder.CreateLoad(m_args[0]); // Return gas
 	llvm::Value* address = m_builder.CreateLoad(m_args[1]);
 	address = Endianness::toNative(m_builder, address);
@@ -151,7 +131,7 @@ llvm::Value* Ext::call(llvm::Value*& _gas, llvm::Value* _receiveAddress, llvm::V
 	auto outSize = m_builder.CreateTrunc(_outSize, Type::Size, "out.size");
 	auto codeAddress = Endianness::toBE(m_builder, _codeAddress);
 	m_builder.CreateStore(codeAddress, m_arg8);
-	auto ret = createCall(m_call, getRuntimeManager().getEnvPtr(), m_args[0], m_arg2, m_arg3, inBeg, inSize, outBeg, outSize, m_arg8);
+	auto ret = createCall(EnvFunc::call, {getRuntimeManager().getEnvPtr(), m_args[0], m_arg2, m_arg3, inBeg, inSize, outBeg, outSize, m_arg8});
 	_gas = m_builder.CreateLoad(m_args[0]); // Return gas
 	return m_builder.CreateZExt(ret, Type::Word, "ret");
 }
@@ -160,7 +140,7 @@ llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
 {
 	auto begin = m_memoryMan.getBytePtr(_inOff);
 	auto size = m_builder.CreateTrunc(_inSize, Type::Size, "size");
-	createCall(m_sha3, begin, size, m_args[1]);
+	createCall(EnvFunc::sha3, {begin, size, m_args[1]});
 	llvm::Value* hash = m_builder.CreateLoad(m_args[1]);
 	hash = Endianness::toNative(m_builder, hash);
 	return hash;
@@ -170,7 +150,7 @@ MemoryRef Ext::getExtCode(llvm::Value* _addr)
 {
 	auto addr = Endianness::toBE(m_builder, _addr);
 	m_builder.CreateStore(addr, m_args[0]);
-	auto code = createCall(m_getExtCode, getRuntimeManager().getEnvPtr(), m_args[0], m_size);
+	auto code = createCall(EnvFunc::getExtCode, {getRuntimeManager().getEnvPtr(), m_args[0], m_size});
 	auto codeSize = m_builder.CreateLoad(m_size);
 	auto codeSize256 = m_builder.CreateZExt(codeSize, Type::Word);
 	return {code, codeSize256};
@@ -192,7 +172,7 @@ void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, std::array<llvm::Val
 		++topicArgPtr;
 	}
 
-	m_builder.CreateCall(m_log, args);
+	createCall(EnvFunc::log, {args[0], args[1], args[2], args[3], args[4], args[5], args[6]});  // TODO: use std::initializer_list<>
 }
 
 }
