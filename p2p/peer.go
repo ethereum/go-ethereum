@@ -116,22 +116,6 @@ func (self *Peer) init(conn net.Conn) {
 	self.closed = make(chan struct{})
 }
 
-func (p *Peer) connect(server *Server, conn net.Conn) {
-	p.init(conn)
-	p.ourID = server.Identity
-	p.addPeer = server.AddPeer
-	p.getPeers = server.GetPeers
-	p.pubkeyHook = server.verifyPeer
-	p.runBaseProtocol = true
-	p.protocols = server.Protocols
-
-	// laddr can be updated concurrently by NAT traversal.
-	// newServerPeer must be called with the server lock held.
-	if server.laddr != nil {
-		p.ourListenAddr = newPeerAddr(server.laddr, server.Identity.Pubkey())
-	}
-}
-
 // ActiveAddresses returns addresses of all connected peers.
 // Actually if the peer selector keeps historical info , then once active peers
 // will be included too.

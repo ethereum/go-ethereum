@@ -30,7 +30,9 @@ var discard = Protocol{
 
 func testPeer(protos []Protocol) (net.Conn, *Peer, <-chan error) {
 	conn1, conn2 := net.Pipe()
-	peer := newPeer(conn1, protos, nil)
+	peer := &Peer{}
+	peer.init(conn1)
+	peer.protocols = protos
 	peer.ourID = &peerId{}
 	peer.pubkeyHook = func(*peerAddr) error { return nil }
 	errc := make(chan error, 1)

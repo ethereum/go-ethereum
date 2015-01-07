@@ -77,6 +77,8 @@ type Server struct {
 	peerSlots chan int
 	peerCount int
 
+	connectFunc func(*Peer, net.Conn)
+
 	quit           chan struct{}
 	wg             sync.WaitGroup
 	peerDisconnect chan *Peer
@@ -91,8 +93,6 @@ type NAT interface {
 	// Should return name of the method.
 	String() string
 }
-
-type peerFunc func(srv *Server, c net.Conn, dialAddr *peerAddr) *Peer
 
 // Peers returns all currently connected peers.
 func (srv *Server) Peers() (peers []*Peer) {
@@ -145,6 +145,8 @@ func (srv *Server) SuggestPeer(addr string, pubkey []byte) error {
 // to decide if it is a worthwhile connection
 func (srv *Server) AddPeer(addr *peerAddr) (err error) {
 	// need to look up nodeID first
+	srvlog.Infof("checking peer %v", addr)
+
 	peer := &Peer{
 		dialAddr:    addr,
 		lastActiveC: make(chan time.Time),
@@ -173,13 +175,28 @@ func (srv *Server) dialPeer(peer *Peer) (err error) {
 			srv.peerSlots <- slot
 			return
 		}
+		srvlog.Debugf("Connected to %v (slot %d)\n", peer.dialAddr, slot)
 		peer.slot = slot
-		peer.connect(srv, conn)
-		srv.wg.Add(1)
+		srv.connectFunc(peer, conn)
 		go srv.addPeer(peer)
 	}
 	return
 
+}
+
+func (srv *Server) connect(p *Peer, conn net.Conn) {
+	p.init(conn)
+	p.ourID = srv.Identity
+	p.addPeer = srv.AddPeer
+	p.getPeers = srv.GetPeers
+	p.pubkeyHook = srv.verifyPeer
+	p.runBaseProtocol = true
+	p.protocols = srv.Protocols
+
+	// laddr can be updated concurrently by NAT traversal.
+	if srv.laddr != nil {
+		p.ourListenAddr = newPeerAddr(srv.laddr, srv.Identity.Pubkey())
+	}
 }
 
 // Broadcast sends an RLP-encoded message to all connected peers.
@@ -249,6 +266,10 @@ func (srv *Server) Start() (err error) {
 
 	if srv.PeerSelector == nil {
 		srv.PeerSelector = &BaseSelector{}
+	}
+
+	if srv.connectFunc == nil {
+		srv.connectFunc = srv.connect
 	}
 
 	// make all slots available
@@ -332,7 +353,7 @@ func (srv *Server) listenLoop() {
 			}
 			srvlog.Debugf("Accepted conn %v (slot %d) - peer selector check after handshake", conn.RemoteAddr(), slot)
 			peer := &Peer{slot: slot}
-			peer.connect(srv, conn)
+			srv.connectFunc(peer, conn)
 			srv.addPeer(peer)
 		case <-srv.quit:
 			return
