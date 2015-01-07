@@ -60,6 +60,8 @@ type Server struct {
 	Dialer *net.Dialer
 
 	// If NoDial is true, the server will not dial any peers.
+	// this maybe used in test environments where we want to prevent a node from
+	// connecting (and synchronising) with other nodes
 	NoDial bool
 
 	// peer selector
@@ -144,9 +146,10 @@ func (srv *Server) SuggestPeer(addr string, pubkey []byte) error {
 // If not found among connected peers turns to the peerSelector
 // to decide if it is a worthwhile connection
 func (srv *Server) AddPeer(addr *peerAddr) (err error) {
+	if srv.NoDial {
+		return fmt.Errorln("no dial out")
+	}
 	// need to look up nodeID first
-	srvlog.Infof("checking peer %v", addr)
-
 	peer := &Peer{
 		dialAddr:    addr,
 		lastActiveC: make(chan time.Time),
@@ -255,13 +258,6 @@ func (srv *Server) Start() (err error) {
 		if err := srv.startListening(); err != nil {
 			return err
 		}
-	}
-	// if !srv.NoDial {
-	// 	srv.wg.Add(1)
-	// 	go srv.dialLoop()
-	// }
-	if srv.NoDial && srv.ListenAddr == "" {
-		srvlog.Warnln("I will be kind-of useless, neither dialing nor listening.")
 	}
 
 	if srv.PeerSelector == nil {
