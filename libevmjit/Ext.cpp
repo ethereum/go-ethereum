@@ -67,27 +67,47 @@ llvm::Function* createFunc(EnvFunc _id, llvm::Module* _module)
 	return llvm::Function::Create(std::get<1>(desc), llvm::Function::ExternalLinkage, std::get<0>(desc), _module);
 }
 
+llvm::Value* Ext::getArgAlloca()
+{
+	auto& a = m_argAllocas[m_argCounter++];
+	if (!a)
+	{
+		// FIXME: Improve order and names
+		InsertPointGuard g{getBuilder()};
+		getBuilder().SetInsertPoint(getMainFunction()->front().getFirstNonPHI());
+		a = getBuilder().CreateAlloca(Type::Word, nullptr, "arg");
+	}
+		
+	return a;
+}
+
+llvm::Value* Ext::byPtr(llvm::Value* _value)
+{
+	auto a = getArgAlloca();
+	getBuilder().CreateStore(_value, a);
+	return a;
+}
+
 llvm::CallInst* Ext::createCall(EnvFunc _funcId, std::initializer_list<llvm::Value*> const& _args)
 {
 	auto& func = m_funcs[static_cast<size_t>(_funcId)];
 	if (!func)
 		func = createFunc(_funcId, getModule());
 
+	m_argCounter = 0;
 	return getBuilder().CreateCall(func, {_args.begin(), _args.size()});
 }
 
 llvm::Value* Ext::sload(llvm::Value* _index)
 {
-	m_builder.CreateStore(_index, m_args[0]);
-	createCall(EnvFunc::sload, {getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]}); // Uses native endianness
-	return m_builder.CreateLoad(m_args[1]);
+	auto ret = getArgAlloca();
+	createCall(EnvFunc::sload, {getRuntimeManager().getEnvPtr(), byPtr(_index), ret}); // Uses native endianness
+	return m_builder.CreateLoad(ret);
 }
 
 void Ext::sstore(llvm::Value* _index, llvm::Value* _value)
 {
-	m_builder.CreateStore(_index, m_args[0]);
-	m_builder.CreateStore(_value, m_args[1]);
-	createCall(EnvFunc::sstore, {getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]}); // Uses native endianness
+	createCall(EnvFunc::sstore, {getRuntimeManager().getEnvPtr(), byPtr(_index), byPtr(_value)}); // Uses native endianness
 }
 
 llvm::Value* Ext::calldataload(llvm::Value* _index)
@@ -101,9 +121,9 @@ llvm::Value* Ext::calldataload(llvm::Value* _index)
 llvm::Value* Ext::balance(llvm::Value* _address)
 {
 	auto address = Endianness::toBE(m_builder, _address);
-	m_builder.CreateStore(address, m_args[0]);
-	createCall(EnvFunc::balance, {getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]});
-	return m_builder.CreateLoad(m_args[1]);
+	auto ret = getArgAlloca();
+	createCall(EnvFunc::balance, {getRuntimeManager().getEnvPtr(), byPtr(address), ret});
+	return m_builder.CreateLoad(ret);
 }
 
 llvm::Value* Ext::create(llvm::Value*& _gas, llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* _initSize)
@@ -149,8 +169,7 @@ llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
 MemoryRef Ext::getExtCode(llvm::Value* _addr)
 {
 	auto addr = Endianness::toBE(m_builder, _addr);
-	m_builder.CreateStore(addr, m_args[0]);
-	auto code = createCall(EnvFunc::getExtCode, {getRuntimeManager().getEnvPtr(), m_args[0], m_size});
+	auto code = createCall(EnvFunc::getExtCode, {getRuntimeManager().getEnvPtr(), byPtr(addr), m_size});
 	auto codeSize = m_builder.CreateLoad(m_size);
 	auto codeSize256 = m_builder.CreateZExt(codeSize, Type::Word);
 	return {code, codeSize256};
