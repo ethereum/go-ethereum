@@ -60,14 +60,6 @@ public:
 private:
 	Memory& m_memoryMan;
 
-	llvm::Value* m_args[2];
-	llvm::Value* m_arg2;
-	llvm::Value* m_arg3;
-	llvm::Value* m_arg4;
-	llvm::Value* m_arg5;
-	llvm::Value* m_arg6;
-	llvm::Value* m_arg7;
-	llvm::Value* m_arg8;
 	llvm::Value* m_size;
 	llvm::Value* m_data = nullptr;
 

@@ -24,15 +24,6 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 	RuntimeHelper(_runtimeManager),
 	m_memoryMan(_memoryMan)
 {
-	m_args[0] = m_builder.CreateAlloca(Type::Word, nullptr, "ext.index");
-	m_args[1] = m_builder.CreateAlloca(Type::Word, nullptr, "ext.value");
-	m_arg2 = m_builder.CreateAlloca(Type::Word, nullptr, "ext.arg2");
-	m_arg3 = m_builder.CreateAlloca(Type::Word, nullptr, "ext.arg3");
-	m_arg4 = m_builder.CreateAlloca(Type::Word, nullptr, "ext.arg4");
-	m_arg5 = m_builder.CreateAlloca(Type::Word, nullptr, "ext.arg5");
-	m_arg6 = m_builder.CreateAlloca(Type::Word, nullptr, "ext.arg6");
-	m_arg7 = m_builder.CreateAlloca(Type::Word, nullptr, "ext.arg7");
-	m_arg8 = m_builder.CreateAlloca(Type::Word, nullptr, "ext.arg8");
 	m_size = m_builder.CreateAlloca(Type::Size, nullptr, "env.size");
 }
 
@@ -112,9 +103,9 @@ void Ext::sstore(llvm::Value* _index, llvm::Value* _value)
 
 llvm::Value* Ext::calldataload(llvm::Value* _index)
 {
-	m_builder.CreateStore(_index, m_args[0]);
-	createCall(EnvFunc::calldataload, {getRuntimeManager().getDataPtr(), m_args[0], m_args[1]});
-	auto ret = m_builder.CreateLoad(m_args[1]);
+	auto ret = getArgAlloca();
+	createCall(EnvFunc::calldataload, {getRuntimeManager().getDataPtr(), byPtr(_index), ret});
+	ret = m_builder.CreateLoad(ret);
 	return Endianness::toNative(m_builder, ret);
 }
 
@@ -128,31 +119,28 @@ llvm::Value* Ext::balance(llvm::Value* _address)
 
 llvm::Value* Ext::create(llvm::Value*& _gas, llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* _initSize)
 {
-	m_builder.CreateStore(_gas, m_args[0]);
-	m_builder.CreateStore(_endowment, m_arg2);
+	auto gas = byPtr(_gas);
+	auto ret = getArgAlloca();
 	auto begin = m_memoryMan.getBytePtr(_initOff);
 	auto size = m_builder.CreateTrunc(_initSize, Type::Size, "size");
-	createCall(EnvFunc::create, {getRuntimeManager().getEnvPtr(), m_args[0], m_arg2, begin, size, m_args[1]});
-	_gas = m_builder.CreateLoad(m_args[0]); // Return gas
-	llvm::Value* address = m_builder.CreateLoad(m_args[1]);
+	createCall(EnvFunc::create, {getRuntimeManager().getEnvPtr(), gas, byPtr(_endowment), begin, size, ret});
+	_gas = m_builder.CreateLoad(gas); // Return gas
+	llvm::Value* address = m_builder.CreateLoad(ret);
 	address = Endianness::toNative(m_builder, address);
 	return address;
 }
 
 llvm::Value* Ext::call(llvm::Value*& _gas, llvm::Value* _receiveAddress, llvm::Value* _value, llvm::Value* _inOff, llvm::Value* _inSize, llvm::Value* _outOff, llvm::Value* _outSize, llvm::Value* _codeAddress)
 {
-	m_builder.CreateStore(_gas, m_args[0]);
+	auto gas = byPtr(_gas);
 	auto receiveAddress = Endianness::toBE(m_builder, _receiveAddress);
-	m_builder.CreateStore(receiveAddress, m_arg2);
-	m_builder.CreateStore(_value, m_arg3);
 	auto inBeg = m_memoryMan.getBytePtr(_inOff);
 	auto inSize = m_builder.CreateTrunc(_inSize, Type::Size, "in.size");
 	auto outBeg = m_memoryMan.getBytePtr(_outOff);
 	auto outSize = m_builder.CreateTrunc(_outSize, Type::Size, "out.size");
 	auto codeAddress = Endianness::toBE(m_builder, _codeAddress);
-	m_builder.CreateStore(codeAddress, m_arg8);
-	auto ret = createCall(EnvFunc::call, {getRuntimeManager().getEnvPtr(), m_args[0], m_arg2, m_arg3, inBeg, inSize, outBeg, outSize, m_arg8});
-	_gas = m_builder.CreateLoad(m_args[0]); // Return gas
+	auto ret = createCall(EnvFunc::call, {getRuntimeManager().getEnvPtr(), gas, byPtr(receiveAddress), byPtr(_value), inBeg, inSize, outBeg, outSize, byPtr(codeAddress)});
+	_gas = m_builder.CreateLoad(gas); // Return gas
 	return m_builder.CreateZExt(ret, Type::Word, "ret");
 }
 
@@ -160,8 +148,9 @@ llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
 {
 	auto begin = m_memoryMan.getBytePtr(_inOff);
 	auto size = m_builder.CreateTrunc(_inSize, Type::Size, "size");
-	createCall(EnvFunc::sha3, {begin, size, m_args[1]});
-	llvm::Value* hash = m_builder.CreateLoad(m_args[1]);
+	auto ret = getArgAlloca();
+	createCall(EnvFunc::sha3, {begin, size, ret});
+	llvm::Value* hash = m_builder.CreateLoad(ret);
 	hash = Endianness::toNative(m_builder, hash);
 	return hash;
 }
@@ -179,7 +168,7 @@ void Ext::log(llvm::Value* _memIdx, llvm::Value* _numBytes, std::array<llvm::Val
 {
 	auto begin = m_memoryMan.getBytePtr(_memIdx);
 	auto size = m_builder.CreateTrunc(_numBytes, Type::Size, "size");
-	llvm::Value* args[] = {getRuntimeManager().getEnvPtr(), begin, size, m_arg2, m_arg3, m_arg4, m_arg5};
+	llvm::Value* args[] = {getRuntimeManager().getEnvPtr(), begin, size, getArgAlloca(), getArgAlloca(), getArgAlloca(), getArgAlloca()};
 
 	auto topicArgPtr = &args[3];
 	for (auto&& topic : _topics)
