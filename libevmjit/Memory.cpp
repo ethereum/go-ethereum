@@ -146,18 +146,18 @@ llvm::Function* Memory::createFunc(bool _isStore, llvm::Type* _valueType, GasMet
 
 llvm::Value* Memory::loadWord(llvm::Value* _addr)
 {
-	return createCall(m_loadWord, getRuntimeManager().getRuntimePtr(), _addr);
+	return createCall(m_loadWord, {getRuntimeManager().getRuntimePtr(), _addr});
 }
 
 void Memory::storeWord(llvm::Value* _addr, llvm::Value* _word)
 {
-	createCall(m_storeWord, getRuntimeManager().getRuntimePtr(), _addr, _word);
+	createCall(m_storeWord, {getRuntimeManager().getRuntimePtr(), _addr, _word});
 }
 
 void Memory::storeByte(llvm::Value* _addr, llvm::Value* _word)
 {
 	auto byte = m_builder.CreateTrunc(_word, Type::Byte, "byte");
-	createCall(m_storeByte, getRuntimeManager().getRuntimePtr(), _addr, byte);
+	createCall(m_storeByte, {getRuntimeManager().getRuntimePtr(), _addr, byte});
 }
 
 llvm::Value* Memory::getData()
@@ -181,7 +181,7 @@ llvm::Value* Memory::getBytePtr(llvm::Value* _index)
 
 void Memory::require(llvm::Value* _offset, llvm::Value* _size)
 {
-	createCall(m_require, getRuntimeManager().getRuntimePtr(), _offset, _size);
+	createCall(m_require, {getRuntimeManager().getRuntimePtr(), _offset, _size});
 }
 
 void Memory::copyBytes(llvm::Value* _srcPtr, llvm::Value* _srcSize, llvm::Value* _srcIdx,

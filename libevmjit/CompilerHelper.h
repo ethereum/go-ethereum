@@ -31,12 +31,7 @@ protected:
 	llvm::IRBuilder<>& m_builder;
 	llvm::IRBuilder<>& getBuilder() { return m_builder; }
 
-	template<typename ..._Args>
-	llvm::CallInst* createCall(llvm::Function* _func, _Args*... _args)
-	{
-		llvm::Value* args[] = {_args...};
-		return getBuilder().CreateCall(_func, args);
-	}
+	llvm::CallInst* createCall(llvm::Function* _func, std::initializer_list<llvm::Value*> const& _args);
 
 	friend class RuntimeHelper;
 };
