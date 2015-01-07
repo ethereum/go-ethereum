@@ -167,7 +167,7 @@ func (srv *Server) dialPeer(peer *Peer) (err error) {
 	case <-timeout:
 		err = fmt.Errorf("Too many connections. No slot available")
 	case slot := <-srv.peerSlots: // there is a slot available
-		srvlog.Debugf("Dialing %v (slot %d)\n", peer.dialAddr, slot)
+		srvlog.Infof("Dialing %v (slot %d)\n", peer.dialAddr, slot)
 		conn, dialErr := srv.Dialer.Dial(peer.dialAddr.Network(), peer.dialAddr.String())
 		if dialErr != nil {
 			err = fmt.Errorf("Dial error: %v", dialErr)
@@ -175,7 +175,7 @@ func (srv *Server) dialPeer(peer *Peer) (err error) {
 			srv.peerSlots <- slot
 			return
 		}
-		srvlog.Debugf("Connected to %v (slot %d)\n", peer.dialAddr, slot)
+		srvlog.Infof("Connected to %v (slot %d)\n", peer.dialAddr, slot)
 		peer.slot = slot
 		srv.connectFunc(peer, conn)
 		go srv.addPeer(peer)
