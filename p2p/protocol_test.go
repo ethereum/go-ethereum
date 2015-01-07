@@ -81,7 +81,7 @@ func TestBaseProtocolPeers(t *testing.T) {
 	peer1.ourListenAddr = listenAddr
 	peer1.getPeers = func(...[]byte) []*peerAddr {
 		pl := make([]*peerAddr, len(peerList))
-		for i, addr := range cannedPeerList {
+		for i, addr := range peerList {
 			pl[i] = addr
 		}
 		return pl
