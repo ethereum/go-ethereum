@@ -18,6 +18,21 @@ struct MemoryRef
 	llvm::Value* size;
 };
 
+template<typename _EnumT>
+struct sizeOf
+{
+	static const size_t value = static_cast<size_t>(_EnumT::_size);
+};
+
+enum class EnvFunc
+{
+	sload,
+	sstore,
+	balance,
+
+	_size
+};
+
 class Ext : public RuntimeHelper
 {
 public:
@@ -49,8 +64,6 @@ private:
 	llvm::Value* m_arg8;
 	llvm::Value* m_size;
 	llvm::Value* m_data = nullptr;
-	llvm::Function* m_sload;
-	llvm::Function* m_sstore;
 	llvm::Function* m_calldataload;
 	llvm::Function* m_balance = nullptr;
 	llvm::Function* m_create;
@@ -59,7 +72,12 @@ private:
 	llvm::Function* m_getExtCode;
 	llvm::Function* m_log;
 
-	llvm::Function* getBalanceFunc();
+	std::array<llvm::Function*, sizeOf<EnvFunc>::value> m_funcs = {};
+
+	template<typename... _Args>
+	llvm::CallInst* createCall(EnvFunc _funcId, _Args*... _args);
+
+	using CompilerHelper::createCall;
 };
 
 

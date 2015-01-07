@@ -39,11 +39,6 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 
 	using Linkage = llvm::GlobalValue::LinkageTypes;
 
-	llvm::Type* argsTypes[] = {Type::EnvPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr};
-
-	m_sload = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "env_sload", module);
-	m_sstore = llvm::Function::Create(llvm::FunctionType::get(Type::Void, {argsTypes, 3}, false), Linkage::ExternalLinkage, "env_sstore", module);
-
 	llvm::Type* sha3ArgsTypes[] = {Type::BytePtr, Type::Size, Type::WordPtr};
 	m_sha3 = llvm::Function::Create(llvm::FunctionType::get(Type::Void, sha3ArgsTypes, false), Linkage::ExternalLinkage, "env_sha3", module);
 
@@ -64,20 +59,47 @@ Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 	m_calldataload = llvm::Function::Create(llvm::FunctionType::get(Type::Void, callDataLoadArgsTypes, false), Linkage::ExternalLinkage, "ext_calldataload", module);
 }
 
-llvm::Function* Ext::getBalanceFunc()
+
+using FuncDesc = std::tuple<char const*, llvm::FunctionType*>;
+
+llvm::FunctionType* getFunctionType(llvm::Type* _returnType, std::initializer_list<llvm::Type*> const& _argsTypes)
 {
-	if (!m_balance)
+	return llvm::FunctionType::get(_returnType, llvm::ArrayRef<llvm::Type*>{_argsTypes.begin(), _argsTypes.size()}, false);
+}
+
+std::array<FuncDesc, sizeOf<EnvFunc>::value> const& getEnvFuncDescs()
+{
+	static std::array<FuncDesc, sizeOf<EnvFunc>::value> descs{{
+		FuncDesc{"env_sload",   getFunctionType(Type::Void, {Type::EnvPtr, Type::WordPtr, Type::WordPtr})},
+		FuncDesc{"env_sstore",  getFunctionType(Type::Void, {Type::EnvPtr, Type::WordPtr, Type::WordPtr})},
+		FuncDesc{"env_balance", getFunctionType(Type::Void, {Type::EnvPtr, Type::WordPtr, Type::WordPtr})},
+	}};
+
+	return descs;
+}
+
+llvm::Function* createFunc(EnvFunc _id, llvm::Module* _module)
+{
+	auto&& desc = getEnvFuncDescs()[static_cast<size_t>(_id)];
+	return llvm::Function::Create(std::get<1>(desc), llvm::Function::ExternalLinkage, std::get<0>(desc), _module);
+}
+
+template<typename... _Args>
+llvm::CallInst* Ext::createCall(EnvFunc _funcId, _Args*... _args)
+{
+	auto& func = m_funcs[static_cast<size_t>(_funcId)];
+	if (!func)
 	{
-		llvm::Type* argsTypes[] = {Type::EnvPtr, Type::WordPtr, Type::WordPtr};
-		m_balance = llvm::Function::Create(llvm::FunctionType::get(Type::Void, argsTypes, false), llvm::Function::ExternalLinkage, "env_balance", getModule());
+		func = createFunc(_funcId, getModule());
 	}
-	return m_balance;
+	llvm::Value* args[] = {_args...};
+	return getBuilder().CreateCall(func, args);
 }
 
 llvm::Value* Ext::sload(llvm::Value* _index)
 {
 	m_builder.CreateStore(_index, m_args[0]);
-	m_builder.CreateCall3(m_sload, getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]); // Uses native endianness
+	createCall(EnvFunc::sload, getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]); // Uses native endianness
 	return m_builder.CreateLoad(m_args[1]);
 }
 
@@ -85,7 +107,7 @@ void Ext::sstore(llvm::Value* _index, llvm::Value* _value)
 {
 	m_builder.CreateStore(_index, m_args[0]);
 	m_builder.CreateStore(_value, m_args[1]);
-	m_builder.CreateCall3(m_sstore, getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]); // Uses native endianness
+	createCall(EnvFunc::sstore, getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]); // Uses native endianness
 }
 
 llvm::Value* Ext::calldataload(llvm::Value* _index)
@@ -100,7 +122,7 @@ llvm::Value* Ext::balance(llvm::Value* _address)
 {
 	auto address = Endianness::toBE(m_builder, _address);
 	m_builder.CreateStore(address, m_args[0]);
-	createCall(getBalanceFunc(), getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]);
+	createCall(EnvFunc::balance, getRuntimeManager().getEnvPtr(), m_args[0], m_args[1]);
 	return m_builder.CreateLoad(m_args[1]);
 }
 
