@@ -44,14 +44,8 @@ extern "C"
 
 	EXPORT void env_create(ExtVMFace* _env, i256* io_gas, i256* _endowment, byte* _initBeg, uint64_t _initSize, h256* o_address)
 	{
-		if (_env->depth == 1024)
-			jit::terminate(jit::ReturnCode::OutOfGas);
-
-		assert(_env->depth < 1024);
-
 		auto endowment = llvm2eth(*_endowment);
-
-		if (_env->balance(_env->myAddress) >= endowment)
+		if (_env->balance(_env->myAddress) >= endowment && _env->depth < 1024)
 		{
 			_env->subBalance(endowment);
 			auto gas = llvm2eth(*io_gas);
@@ -66,13 +60,8 @@ extern "C"
 
 	EXPORT bool env_call(ExtVMFace* _env, i256* io_gas, h256* _receiveAddress, i256* _value, byte* _inBeg, uint64_t _inSize, byte* _outBeg, uint64_t _outSize, h256* _codeAddress)
 	{
-		if (_env->depth == 1024)
-			jit::terminate(jit::ReturnCode::OutOfGas);
-
-		assert(_env->depth < 1024);
-
 		auto value = llvm2eth(*_value);
-		if (_env->balance(_env->myAddress) >= value)
+		if (_env->balance(_env->myAddress) >= value && _env->depth < 1024)
 		{
 			_env->subBalance(value);
 			auto receiveAddress = right160(*_receiveAddress);
