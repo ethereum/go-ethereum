@@ -190,7 +190,6 @@ int main(int argc, char** argv)
 			data.set(RuntimeData::CallValue, 0xabcd);
 			data.set(RuntimeData::CallDataSize, 3);
 			data.set(RuntimeData::GasPrice, 1003);
-			data.set(RuntimeData::PrevHash, 1003);
 			data.set(RuntimeData::CoinBase, (u160)Address(101010101010101015));
 			data.set(RuntimeData::TimeStamp, 1005);
 			data.set(RuntimeData::Number, 1006);
