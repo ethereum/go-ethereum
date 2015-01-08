@@ -394,7 +394,7 @@ module.exports = AutoProvider;
 
 // TODO: is these line is supposed to be here? 
 if ("build" !== 'build') {/*
-    var web3 = require('./web3'); 
+    var web3 = require('./web3'); // jshint ignore:line
 */}
 
 var abi = require('./abi');
