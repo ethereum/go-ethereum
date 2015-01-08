@@ -67,6 +67,9 @@ public:
 	ProgramCounter begin() { return m_beginInstIdx; }
 	ProgramCounter end() { return m_endInstIdx; }
 
+	bool isJumpDest() const { return m_isJumpDest; }
+	void markAsJumpDest() { m_isJumpDest = true; }
+
 	LocalStack& localStack() { return m_stack; }
 
 	/// Optimization: propagates values between local stacks in basic blocks
@@ -109,6 +112,10 @@ private:
 	/// How many items higher is the current stack than the initial one.
 	/// May be negative.
 	int m_tosOffset = 0;
+
+	/// Is the basic block a valid jump destination.
+	/// JUMPDEST is the first instruction of the basic block.
+	bool m_isJumpDest = false;
 };
 
 }

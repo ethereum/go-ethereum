@@ -95,10 +95,27 @@ void Compiler::createBasicBlocks(bytes const& _bytecode)
 
 	m_stopBB = llvm::BasicBlock::Create(m_mainFunc->getContext(), "Stop", m_mainFunc);
 	m_badJumpBlock = std::unique_ptr<BasicBlock>(new BasicBlock("BadJumpBlock", m_mainFunc, m_builder));
-	m_jumpTableBlock = std::unique_ptr<BasicBlock>(new BasicBlock("JumpTableBlock", m_mainFunc, m_builder));
 
 	for (auto it = indirectJumpTargets.cbegin(); it != indirectJumpTargets.cend(); ++it)
-		m_jumpDests[*it] = basicBlocks.find(*it)->second.llvm();
+		basicBlocks.find(*it)->second.markAsJumpDest();
+}
+
+BasicBlock& Compiler::getJumpTableBlock()
+{
+	if (!m_jumpTableBlock)
+	{
+		m_jumpTableBlock.reset(new BasicBlock("JumpTable", m_mainFunc, m_builder));
+		InsertPointGuard g{m_builder};
+		m_builder.SetInsertPoint(m_jumpTableBlock->llvm());
+		auto dest = m_jumpTableBlock->localStack().pop();
+		auto switchInstr = m_builder.CreateSwitch(dest, m_badJumpBlock->llvm());
+		for (auto&& p : basicBlocks)
+		{
+			if (p.second.isJumpDest())
+				switchInstr->addCase(Constant::get(p.first), p.second.llvm());
+		}
+	}
+	return *m_jumpTableBlock;
 }
 
 std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode, std::string const& _id)
@@ -142,22 +159,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode, std::str
 	m_builder.CreateRet(Constant::get(ReturnCode::Stop));
 
 	m_builder.SetInsertPoint(m_badJumpBlock->llvm());
-	m_builder.CreateRet(Constant::get(ReturnCode::BadJumpDestination));
-
-	m_builder.SetInsertPoint(m_jumpTableBlock->llvm());
-	if (m_jumpDests.size() > 0)
-	{
-		auto dest = m_jumpTableBlock->localStack().pop();
-		auto switchInstr = m_builder.CreateSwitch(dest, m_badJumpBlock->llvm(), m_jumpDests.size());
-		for (auto it = m_jumpDests.cbegin(); it != m_jumpDests.cend(); ++it)
-		{
-			auto& bb = *it;
-			auto dest = Constant::get(it->first);
-			switchInstr->addCase(dest, it->second);
-		}
-	}
-	else
-		m_builder.CreateBr(m_badJumpBlock->llvm());
+	m_builder.CreateRet(Constant::get(ReturnCode::BadJumpDestination));	
 
 	removeDeadBlocks();
 
@@ -552,15 +554,13 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 				if (c.ult(_bytecode.size()))
 				{
 					auto v = c.getZExtValue();
-					auto it = m_jumpDests.find(v);
-					if (it != m_jumpDests.end())
-						targetBlock = it->second;
+					auto it = basicBlocks.find(v);
+					if (it != basicBlocks.end() && it->second.isJumpDest())
+						targetBlock = it->second.llvm();
 				}
 
 				if (!targetBlock)
-				{
 					targetBlock = m_badJumpBlock->llvm();
-				}
 			}
 
 			if (inst == Instruction::JUMP)
@@ -574,7 +574,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 				else
 				{
 					stack.push(target);
-					m_builder.CreateBr(m_jumpTableBlock->llvm());
+					m_builder.CreateBr(getJumpTableBlock().llvm());
 				}
 			}
 			else // JUMPI
@@ -594,7 +594,6 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 					m_builder.CreateCondBr(cond, m_jumpTableBlock->llvm(), _nextBasicBlock);
 				}
 			}
-
 			break;
 		}
 
@@ -830,13 +829,6 @@ void Compiler::removeDeadBlocks()
 		}
 	}
 	while (sthErased);
-
-	// Remove jump table block if no predecessors
-	if (llvm::pred_begin(m_jumpTableBlock->llvm()) == llvm::pred_end(m_jumpTableBlock->llvm()))
-	{
-		m_jumpTableBlock->llvm()->eraseFromParent();
-		m_jumpTableBlock.reset();
-	}
 }
 
 void Compiler::dumpCFGifRequired(std::string const& _dotfilePath)

@@ -47,6 +47,8 @@ private:
 
 	void compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode, class RuntimeManager& _runtimeManager, class Arith256& _arith, class Memory& _memory, class Ext& _ext, class GasMeter& _gasMeter, llvm::BasicBlock* _nextBasicBlock);
 
+	BasicBlock& getJumpTableBlock();
+
 	void removeDeadBlocks();
 
 	/// Dumps basic block graph in graphviz format to a file, if option dumpCFG is enabled.
@@ -65,10 +67,7 @@ private:
 	llvm::IRBuilder<> m_builder;
 
 	/// Maps a program counter pc to a basic block that starts at pc (if any).
-	std::map<ProgramCounter, BasicBlock> basicBlocks = {};
-
-	/// Map of jump destinations
-	std::map<ProgramCounter, llvm::BasicBlock*> m_jumpDests = {};
+	std::map<ProgramCounter, BasicBlock> basicBlocks;
 
 	/// Stop basic block - terminates execution with STOP code (0)
 	llvm::BasicBlock* m_stopBB = nullptr;
