@@ -37,10 +37,10 @@ enum class ReturnCode
 // TODO: Replace with h256
 struct i256
 {
-	uint64_t a;
-	uint64_t b;
-	uint64_t c;
-	uint64_t d;
+	uint64_t a = 0;
+	uint64_t b = 0;
+	uint64_t c = 0;
+	uint64_t d = 0;
 };
 static_assert(sizeof(i256) == 32, "Wrong i265 size");
 
