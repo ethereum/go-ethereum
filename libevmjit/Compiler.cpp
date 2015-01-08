@@ -599,7 +599,6 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 				}
 				else
 				{
-					UNTESTED;
 					stack.push(target);
 					m_builder.CreateCondBr(cond, getJumpTableBlock(), _nextBasicBlock);
 				}
