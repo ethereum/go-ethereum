@@ -59,7 +59,7 @@ Rectangle {
     }
 
     Component.onCompleted: {
-        webview.url = "http://etherian.io"
+        webview.url = "/Users/jeffrey/test.html"
     }
 
     signal messages(var messages, int id);
@@ -109,7 +109,8 @@ Rectangle {
                     leftMargin: 5
                     rightMargin: 5
                 }
-                text: "http://etherian.io"
+                //text: "http://etherian.io"
+		text: webview.url;
                 id: uriNav
                 y: parent.height / 2 - this.height / 2
 
@@ -151,6 +152,10 @@ Rectangle {
                 window.open(request.url.toString());					
             }
 
+	    function injectJs(js) {
+		experimental.evaluateJavaScript(js)
+	    }
+
             function sendMessage(data) {
                 webview.experimental.postMessage(JSON.stringify(data))
             }
@@ -159,8 +164,7 @@ Rectangle {
             experimental.preferences.javascriptEnabled: true
             experimental.preferences.navigatorQtObjectEnabled: true
             experimental.preferences.developerExtrasEnabled: true
-            //experimental.userScripts: ["../ext/qt_messaging_adapter.js", "../ext/q.js", "../ext/big.js", "../ext/string.js", "../ext/html_messaging.js"]
-            experimental.userScripts: ["../ext/q.js", "../ext/eth.js/main.js", "../ext/eth.js/qt.js", "../ext/setup.js"]
+            //experimental.userScripts: ["../ext/q.js", "../ext/eth.js/main.js", "../ext/eth.js/qt.js", "../ext/setup.js"]
             experimental.onMessageReceived: {
                 console.log("[onMessageReceived]: ", message.data)
                 // TODO move to messaging.js

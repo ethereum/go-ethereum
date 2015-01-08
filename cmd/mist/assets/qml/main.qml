@@ -59,8 +59,8 @@ ApplicationWindow {
 
 		mainSplit.setView(wallet.view, wallet.menuItem);
 
-		// Call the ready handler
-		gui.done();
+		// Command setup
+		gui.sendCommand(0)
 	}
 
 	function addViews(view, path, options) {
