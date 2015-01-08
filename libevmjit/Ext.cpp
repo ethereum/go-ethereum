@@ -45,6 +45,7 @@ std::array<FuncDesc, sizeOf<EnvFunc>::value> const& getEnvFuncDescs()
 		FuncDesc{"env_create", getFunctionType(Type::Void, {Type::EnvPtr, Type::WordPtr, Type::WordPtr, Type::BytePtr, Type::Size, Type::WordPtr})},
 		FuncDesc{"env_call", getFunctionType(Type::Bool, {Type::EnvPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::BytePtr, Type::Size, Type::BytePtr, Type::Size, Type::WordPtr})},
 		FuncDesc{"env_log", getFunctionType(Type::Void, {Type::EnvPtr, Type::BytePtr, Type::Size, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr})},
+		FuncDesc{"env_blockhash", getFunctionType(Type::Void, {Type::EnvPtr, Type::WordPtr, Type::WordPtr})},
 		FuncDesc{"env_getExtCode", getFunctionType(Type::BytePtr, {Type::EnvPtr, Type::WordPtr, Type::Size->getPointerTo()})},
 		FuncDesc{"ext_calldataload", getFunctionType(Type::Void, {Type::RuntimeDataPtr, Type::WordPtr, Type::WordPtr})},
 	}};
@@ -115,6 +116,14 @@ llvm::Value* Ext::balance(llvm::Value* _address)
 	auto ret = getArgAlloca();
 	createCall(EnvFunc::balance, {getRuntimeManager().getEnvPtr(), byPtr(address), ret});
 	return m_builder.CreateLoad(ret);
+}
+
+llvm::Value* Ext::blockhash(llvm::Value* _number)
+{
+	auto hash = getArgAlloca();
+	createCall(EnvFunc::blockhash, {getRuntimeManager().getEnvPtr(), byPtr(_number), hash});
+	hash =  m_builder.CreateLoad(hash);
+	return Endianness::toNative(getBuilder(), hash);
 }
 
 llvm::Value* Ext::create(llvm::Value*& _gas, llvm::Value* _endowment, llvm::Value* _initOff, llvm::Value* _initSize)

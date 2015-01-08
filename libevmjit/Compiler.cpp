@@ -645,6 +645,14 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 			break;
 		}
 
+		case Instruction::BLOCKHASH:
+		{
+			auto number = stack.pop();
+			auto hash = _ext.blockhash(number);
+			stack.push(hash);
+			break;
+		}
+
 		case Instruction::BALANCE:
 		{
 			auto address = stack.pop();
