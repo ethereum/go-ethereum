@@ -298,7 +298,7 @@ module.exports = {
 // TODO: is these line is supposed to be here? 
 if ("build" !== 'build') {/*
     var WebSocket = require('ws'); // jshint ignore:line
-    var web3 = require('./main.js'); // jshint ignore:line
+    var web3 = require('./web3'); // jshint ignore:line
 */}
 
 var AutoProvider = function (userOptions) {
@@ -394,7 +394,7 @@ module.exports = AutoProvider;
 
 // TODO: is these line is supposed to be here? 
 if ("build" !== 'build') {/*
-    var web3 = require('./web3'); // jshint ignore:line
+    var web3 = require('./web3'); 
 */}
 
 var abi = require('./abi');
@@ -533,6 +533,53 @@ Object.defineProperty(HttpRpcProvider.prototype, "onmessage", {
 module.exports = HttpRpcProvider;
 
 },{}],5:[function(require,module,exports){
+/*
+    This file is part of ethereum.js.
+
+    ethereum.js is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    ethereum.js is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/** @file qt.js
+ * @authors:
+ *   Jeffrey Wilcke <jeff@ethdev.com>
+ *   Marek Kotewicz <marek@ethdev.com>
+ * @date 2014
+ */
+
+var QtProvider = function() {
+    this.handlers = [];
+
+    var self = this;
+    navigator.qt.onmessage = function (message) {
+        self.handlers.forEach(function (handler) {
+            handler.call(self, JSON.parse(message.data));
+        });
+    };
+};
+
+QtProvider.prototype.send = function(payload) {
+    navigator.qt.postMessage(JSON.stringify(payload));
+};
+
+Object.defineProperty(QtProvider.prototype, "onmessage", {
+    set: function(handler) {
+        this.handlers.push(handler);
+    }
+});
+
+module.exports = QtProvider;
+
+},{}],6:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1042,53 +1089,6 @@ function messageHandler(data) {
 
 module.exports = web3;
 
-},{}],6:[function(require,module,exports){
-/*
-    This file is part of ethereum.js.
-
-    ethereum.js is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Lesser General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    ethereum.js is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU Lesser General Public License for more details.
-
-    You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
-*/
-/** @file qt.js
- * @authors:
- *   Jeffrey Wilcke <jeff@ethdev.com>
- *   Marek Kotewicz <marek@ethdev.com>
- * @date 2014
- */
-
-var QtProvider = function() {
-    this.handlers = [];
-
-    var self = this;
-    navigator.qt.onmessage = function (message) {
-        self.handlers.forEach(function (handler) {
-            handler.call(self, JSON.parse(message.data));
-        });
-    };
-};
-
-QtProvider.prototype.send = function(payload) {
-    navigator.qt.postMessage(JSON.stringify(payload));
-};
-
-Object.defineProperty(QtProvider.prototype, "onmessage", {
-    set: function(handler) {
-        this.handlers.push(handler);
-    }
-});
-
-module.exports = QtProvider;
-
 },{}],7:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
@@ -1169,7 +1169,7 @@ Object.defineProperty(WebSocketProvider.prototype, "onmessage", {
 module.exports = WebSocketProvider;
 
 },{}],"web3":[function(require,module,exports){
-var web3 = require('./lib/main');
+var web3 = require('./lib/web3');
 web3.providers.WebSocketProvider = require('./lib/websocket');
 web3.providers.HttpRpcProvider = require('./lib/httprpc');
 web3.providers.QtProvider = require('./lib/qt');
@@ -1178,7 +1178,7 @@ web3.contract = require('./lib/contract');
 
 module.exports = web3;
 
-},{"./lib/autoprovider":2,"./lib/contract":3,"./lib/httprpc":4,"./lib/main":5,"./lib/qt":6,"./lib/websocket":7}]},{},["web3"])
+},{"./lib/autoprovider":2,"./lib/contract":3,"./lib/httprpc":4,"./lib/qt":5,"./lib/web3":6,"./lib/websocket":7}]},{},["web3"])
 
 
 //# sourceMappingURL=ethereum.js.map

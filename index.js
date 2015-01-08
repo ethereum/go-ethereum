@@ -1,4 +1,4 @@
-var web3 = require('./lib/main');
+var web3 = require('./lib/web3');
 web3.providers.WebSocketProvider = require('./lib/websocket');
 web3.providers.HttpRpcProvider = require('./lib/httprpc');
 web3.providers.QtProvider = require('./lib/qt');
