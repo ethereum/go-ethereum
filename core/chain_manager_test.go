@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path"
@@ -76,11 +77,11 @@ func TestChainInsertions(t *testing.T) {
 		<-done
 	}
 
-	if reflect.DeepEqual(chain2[len(chain2)-1], chainMan.CurrentBlock()) {
+	if bytes.Equal(chain2[len(chain2)-1].Hash(), chainMan.CurrentBlock().Hash()) {
 		t.Error("chain2 is canonical and shouldn't be")
 	}
 
-	if !reflect.DeepEqual(chain1[len(chain1)-1], chainMan.CurrentBlock()) {
+	if !bytes.Equal(chain1[len(chain1)-1].Hash(), chainMan.CurrentBlock().Hash()) {
 		t.Error("chain1 isn't canonical and should be")
 	}
 }
