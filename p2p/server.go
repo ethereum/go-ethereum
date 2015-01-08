@@ -152,7 +152,7 @@ func (srv *Server) AddPeer(addr *peerAddr) (err error) {
 		lastActiveC: make(chan time.Time),
 		lastActive:  time.Now().Add(-24 * time.Hour),
 	}
-	if srv.PeerSelector.AddPeer(peer) {
+	if err = srv.PeerSelector.AddPeer(peer); err == nil {
 		srvlog.Infof("peer %v accepted by peer selection", addr)
 		err = srv.dialPeer(peer)
 	} else {
@@ -436,13 +436,18 @@ func (srv *Server) verifyPeer(peer *Peer) error {
 		return newPeerError(errSelfConnection, "")
 	}
 	srv.lock.RLock()
-	defer srv.lock.RUnlock()
 	for _, peer := range srv.peers {
 		if peer != nil {
 			id := peer.Identity()
 			if id != nil && bytes.Equal(id.Pubkey(), pubkey) {
 				return newPeerError(errConnectedPeer, "")
 			}
+		}
+	}
+	srv.lock.RUnlock()
+	if peer.dialAddr == nil {
+		if err := srv.PeerSelector.AddPeer(peer); err != nil {
+			return newPeerError(errRejectedPeer, "%v", err)
 		}
 	}
 	return nil

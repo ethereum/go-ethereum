@@ -16,7 +16,7 @@ type peerInfo interface {
 }
 
 type peerSelector interface {
-	AddPeer(peer peerInfo) bool
+	AddPeer(peer peerInfo) error
 	GetPeers(target ...[]byte) []peerInfo
 	Start() error
 	Stop() error
@@ -28,8 +28,8 @@ type BaseSelector struct {
 	peers    []peerInfo
 }
 
-func (self *BaseSelector) AddPeer(peer peerInfo) bool {
-	return true
+func (self *BaseSelector) AddPeer(peer peerInfo) error {
+	return nil
 }
 
 func (self *BaseSelector) GetPeers(target ...[]byte) []peerInfo {

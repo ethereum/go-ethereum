@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -61,17 +62,18 @@ func (self *Cademlia) Stop() {
 	self.quitC = nil
 }
 
-func (self *Cademlia) AddPeer(peer peerInfo) (needed bool) {
+func (self *Cademlia) AddPeer(peer peerInfo) (err error) {
 	index := self.commonPrefixLength(peer.Hash())
 	row := self.rows[index]
-	needed = row.insert(&entry{peer: peer})
+	needed := row.insert(&entry{peer: peer})
 	if needed {
 		if index >= self.depth {
 			go self.updateDepth()
 		}
 		cadlogger.Infof("accept peer %x...", peer.Hash()[:8])
 	} else {
-		cadlogger.Infof("reject peer %x... no worse peer found", peer.Hash()[:8])
+		err = fmt.Errorf("no worse peer found")
+		cadlogger.Infof("reject peer %x..: %v", peer.Hash()[:8], err)
 	}
 	return
 }
