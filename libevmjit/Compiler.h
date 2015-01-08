@@ -47,7 +47,9 @@ private:
 
 	void compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode, class RuntimeManager& _runtimeManager, class Arith256& _arith, class Memory& _memory, class Ext& _ext, class GasMeter& _gasMeter, llvm::BasicBlock* _nextBasicBlock);
 
-	BasicBlock& getJumpTableBlock();
+	llvm::BasicBlock* getJumpTableBlock();
+
+	llvm::BasicBlock* getBadJumpBlock();
 
 	void removeDeadBlocks();
 
@@ -73,10 +75,10 @@ private:
 	llvm::BasicBlock* m_stopBB = nullptr;
 
 	/// Block with a jump table.
-	std::unique_ptr<BasicBlock> m_jumpTableBlock = nullptr;
+	std::unique_ptr<BasicBlock> m_jumpTableBlock;
 
-	/// Default destination for indirect jumps.
-	std::unique_ptr<BasicBlock> m_badJumpBlock = nullptr;
+	/// Destination for invalid jumps
+	std::unique_ptr<BasicBlock> m_badJumpBlock;
 
 	/// Main program function
 	llvm::Function* m_mainFunc = nullptr;
