@@ -6,7 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/ptrie"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var statelogger = logger.NewLogger("STATE")
@@ -18,7 +18,7 @@ var statelogger = logger.NewLogger("STATE")
 // * Accounts
 type StateDB struct {
 	db   ethutil.Database
-	trie *ptrie.Trie
+	trie *trie.Trie
 
 	stateObjects map[string]*StateObject
 
@@ -30,9 +30,8 @@ type StateDB struct {
 }
 
 // Create a new state from a given trie
-//func New(trie *ptrie.Trie) *StateDB {
 func New(root []byte, db ethutil.Database) *StateDB {
-	trie := ptrie.New(root, db)
+	trie := trie.New(root, db)
 	return &StateDB{db: db, trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest(), refund: make(map[string]*big.Int)}
 }
 
@@ -308,7 +307,7 @@ func (self *StateDB) Update(gasUsed *big.Int) {
 
 	// FIXME trie delete is broken
 	if deleted {
-		valid, t2 := ptrie.ParanoiaCheck(self.trie, self.db)
+		valid, t2 := trie.ParanoiaCheck(self.trie, self.db)
 		if !valid {
 			statelogger.Infof("Warn: PARANOIA: Different state root during copy %x vs %x\n", self.trie.Root(), t2.Root())
 

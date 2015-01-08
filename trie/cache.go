@@ -1,4 +1,4 @@
-package ptrie
+package trie
 
 type Backend interface {
 	Get([]byte) ([]byte, error)

@@ -1,4 +1,4 @@
-package ptrie
+package trie
 
 import "testing"
 

@@ -1,6 +1,4 @@
-package ptrie
-
-import "github.com/ethereum/go-ethereum/trie"
+package trie
 
 type ShortNode struct {
 	trie  *Trie
@@ -9,7 +7,7 @@ type ShortNode struct {
 }
 
 func NewShortNode(t *Trie, key []byte, value Node) *ShortNode {
-	return &ShortNode{t, []byte(trie.CompactEncode(key)), value}
+	return &ShortNode{t, []byte(CompactEncode(key)), value}
 }
 func (self *ShortNode) Value() Node {
 	self.value = self.trie.trans(self.value)
@@ -27,5 +25,5 @@ func (self *ShortNode) Hash() interface{} {
 }
 
 func (self *ShortNode) Key() []byte {
-	return trie.CompactDecode(string(self.key))
+	return CompactDecode(string(self.key))
 }
