@@ -34,7 +34,7 @@ func testPeer(protos []Protocol) (net.Conn, *Peer, <-chan error) {
 	peer.init(conn1)
 	peer.protocols = protos
 	peer.ourID = &peerId{}
-	peer.pubkeyHook = func(*peerAddr) error { return nil }
+	peer.verifyPeerHook = func(*Peer) error { return nil }
 	errc := make(chan error, 1)
 	go func() {
 		_, err := peer.loop()

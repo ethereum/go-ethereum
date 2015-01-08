@@ -29,7 +29,7 @@ func (self *peerId) Pubkey() (pubkey []byte) {
 
 func newTestPeer() (peer *Peer) {
 	peer = NewPeer(&peerId{}, []Cap{})
-	peer.pubkeyHook = func(*peerAddr) error { return nil }
+	peer.verifyPeerHook = func(*Peer) error { return nil }
 	peer.ourID = &peerId{}
 	peer.listenAddr = &peerAddr{}
 	peer.getPeers = func(...[]byte) []*peerAddr { return nil }
@@ -110,7 +110,7 @@ func TestBaseProtocolPeers(t *testing.T) {
 func TestBaseProtocolDisconnect(t *testing.T) {
 	peer := NewPeer(&peerId{}, nil)
 	peer.ourID = &peerId{}
-	peer.pubkeyHook = func(*peerAddr) error { return nil }
+	peer.verifyPeerHook = func(*Peer) error { return nil }
 
 	rw1, rw2 := MsgPipe()
 	done := make(chan struct{})

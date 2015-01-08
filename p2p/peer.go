@@ -88,12 +88,12 @@ type Peer struct {
 
 	// These fields are kept so base protocol can access them.
 	// TODO: this should be one or more interfaces
-	hash          []byte                      // hash of pubkey used as address
-	ourID         ClientIdentity              // client id of the Server
-	ourListenAddr *peerAddr                   // listen addr of Server, nil if not listening
-	addPeer       func(*peerAddr) error       // tell server about received peers
-	getPeers      func(...[]byte) []*peerAddr // should return the list of all peers
-	pubkeyHook    func(*peerAddr) error       // called at end of handshake to validate pubkey
+	hash           []byte                      // hash of pubkey used as address
+	ourID          ClientIdentity              // client id of the Server
+	ourListenAddr  *peerAddr                   // listen addr of Server, nil if not listening
+	addPeer        func(*peerAddr) error       // tell server about received peers
+	getPeers       func(...[]byte) []*peerAddr // should return the list of all peers
+	verifyPeerHook func(*Peer) error           // called at end of handshake to validate peer
 }
 
 // NewPeer returns a peer for testing purposes.
@@ -152,12 +152,13 @@ func (self *Peer) Hash() []byte {
 func (self *Peer) Pubkey() (pubkey []byte) {
 	self.infolock.Lock()
 	defer self.infolock.Unlock()
-	if self.dialAddr != nil {
+	switch {
+	case self.identity != nil:
+		pubkey = self.identity.Pubkey()
+	case self.dialAddr != nil:
 		pubkey = self.dialAddr.Pubkey
-	} else {
-		if self.listenAddr != nil {
-			pubkey = self.listenAddr.Pubkey
-		}
+	case self.listenAddr != nil:
+		pubkey = self.listenAddr.Pubkey
 	}
 	return
 }

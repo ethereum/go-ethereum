@@ -249,12 +249,8 @@ func (bp *baseProtocol) readHandshake() error {
 		// verify that the peer we wanted to connect to
 		// actually holds the target public key.
 		if da.Pubkey != nil && !bytes.Equal(da.Pubkey, hs.NodeID) {
-			return newPeerError(errPubkeyForbidden, "dial address pubkey mismatch")
+			return newPeerError(errPubkeyMismatch, "dial address pubkey mismatch: %x vs %x", da.Pubkey, hs.NodeID)
 		}
-	}
-	pa := newPeerAddr(bp.peer.conn.RemoteAddr(), hs.NodeID)
-	if err := bp.peer.pubkeyHook(pa); err != nil {
-		return newPeerError(errPubkeyForbidden, "%v", err)
 	}
 	// TODO: remove Caps with empty name
 	var addr *peerAddr
@@ -263,6 +259,9 @@ func (bp *baseProtocol) readHandshake() error {
 		addr.Port = hs.ListenPort
 	}
 	bp.peer.setHandshakeInfo(&hs, addr, hs.Caps)
+	if err := bp.peer.verifyPeerHook(bp.peer); err != nil {
+		return err
+	}
 	bp.peer.startSubprotocols(hs.Caps)
 	return nil
 }

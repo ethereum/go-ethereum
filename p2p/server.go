@@ -189,7 +189,7 @@ func (srv *Server) connect(p *Peer, conn net.Conn) {
 	p.ourID = srv.Identity
 	p.addPeer = srv.AddPeer
 	p.getPeers = srv.GetPeers
-	p.pubkeyHook = srv.verifyPeer
+	p.verifyPeerHook = srv.verifyPeer
 	p.runBaseProtocol = true
 	p.protocols = srv.Protocols
 
@@ -427,20 +427,21 @@ func (srv *Server) removePeer(peer *Peer) {
 	srv.peerSlots <- peer.slot
 }
 
-func (srv *Server) verifyPeer(addr *peerAddr) error {
-	if srv.Blacklist.Exists(addr.Pubkey) {
-		return errors.New("blacklisted")
+func (srv *Server) verifyPeer(peer *Peer) error {
+	pubkey := peer.Pubkey()
+	if srv.Blacklist.Exists(pubkey) {
+		return newPeerError(errBlacklistedPeer, "")
 	}
-	if bytes.Equal(srv.Identity.Pubkey()[1:], addr.Pubkey) {
-		return newPeerError(errPubkeyForbidden, "not allowed to connect to srv")
+	if bytes.Equal(srv.Identity.Pubkey()[1:], pubkey) {
+		return newPeerError(errSelfConnection, "")
 	}
 	srv.lock.RLock()
 	defer srv.lock.RUnlock()
 	for _, peer := range srv.peers {
 		if peer != nil {
 			id := peer.Identity()
-			if id != nil && bytes.Equal(id.Pubkey(), addr.Pubkey) {
-				return errors.New("already connected")
+			if id != nil && bytes.Equal(id.Pubkey(), pubkey) {
+				return newPeerError(errConnectedPeer, "")
 			}
 		}
 	}
