@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"reflect"
 	"runtime"
 	"strconv"
 	"testing"
@@ -125,7 +124,7 @@ func TestChainMultipleInsertions(t *testing.T) {
 		<-done
 	}
 
-	if !reflect.DeepEqual(chains[longest][len(chains[longest])-1], chainMan.CurrentBlock()) {
+	if !bytes.Equal(chains[longest][len(chains[longest])-1].Hash(), chainMan.CurrentBlock().Hash()) {
 		t.Error("Invalid canonical chain")
 	}
 }
