@@ -59,7 +59,7 @@ Rectangle {
     }
 
     Component.onCompleted: {
-        webview.url = "/Users/jeffrey/test.html"
+        webview.url = "http://etherian.io"
     }
 
     signal messages(var messages, int id);
@@ -153,7 +153,9 @@ Rectangle {
             }
 
 	    function injectJs(js) {
-		experimental.evaluateJavaScript(js)
+		//webview.experimental.navigatorQtObjectEnabled = true;
+		//webview.experimental.evaluateJavaScript(js)
+		//webview.experimental.javascriptEnabled = true;
 	    }
 
             function sendMessage(data) {
@@ -164,7 +166,7 @@ Rectangle {
             experimental.preferences.javascriptEnabled: true
             experimental.preferences.navigatorQtObjectEnabled: true
             experimental.preferences.developerExtrasEnabled: true
-            //experimental.userScripts: ["../ext/q.js", "../ext/eth.js/main.js", "../ext/eth.js/qt.js", "../ext/setup.js"]
+            experimental.userScripts: ["../ext/q.js", "../ext/eth.js/main.js", "../ext/eth.js/qt.js", "../ext/setup.js"]
             experimental.onMessageReceived: {
                 console.log("[onMessageReceived]: ", message.data)
                 // TODO move to messaging.js
@@ -344,24 +346,28 @@ Rectangle {
 			break;
 
 			case "newIdentity":
-			postData(data._id, shh.newIdentity())
-			break
+				var id = shh.newIdentity()
+				console.log("newIdentity", id)
+				postData(data._id, id)
+
+				break
 
 			case "post":
-			require(1);
-			var params = data.args[0];
-			var fields = ["payload", "to", "from"];
-			for(var i = 0; i < fields.length; i++) {
-				params[fields[i]] = params[fields[i]] || "";
-			}
-			if(typeof params.payload !== "object") { params.payload = [params.payload]; } //params.payload = params.payload.join(""); }
-			params.topics = params.topics || [];
-			params.priority = params.priority || 1000;
-			params.ttl = params.ttl || 100;
+				require(1);
 
-			console.log(JSON.stringify(params))
-			shh.post(params.payload, params.to, params.from, params.topics, params.priority, params.ttl);
-			break;
+				var params = data.args[0];
+				var fields = ["payload", "to", "from"];
+				for(var i = 0; i < fields.length; i++) {
+					params[fields[i]] = params[fields[i]] || "";
+				}
+				if(typeof params.payload !== "object") { params.payload = [params.payload]; } //params.payload = params.payload.join(""); }
+				params.topics = params.topics || [];
+				params.priority = params.priority || 1000;
+				params.ttl = params.ttl || 100;
+
+				shh.post(params.payload, params.to, params.from, params.topics, params.priority, params.ttl);
+
+				break;
                     }
                 } catch(e) {
                     console.log(data.call + ": " + e)

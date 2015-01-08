@@ -352,6 +352,7 @@
     web3.provider = new ProviderManager();
 
     web3.setProvider = function(provider) {
+	console.log("setprovider", provider)
         provider.onmessage = messageHandler;
         web3.provider.set(provider);
         web3.provider.sendQueued();
