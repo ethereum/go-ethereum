@@ -44,7 +44,7 @@ extern "C"
 
 	EXPORT void env_blockhash(ExtVMFace* _env, i256* _number, h256* o_hash)
 	{
-		*o_hash = _env->prevhash(llvm2eth(*_number));
+		*o_hash = _env->blockhash(llvm2eth(*_number));
 	}
 
 	EXPORT void env_create(ExtVMFace* _env, i256* io_gas, i256* _endowment, byte* _initBeg, uint64_t _initSize, h256* o_address)
