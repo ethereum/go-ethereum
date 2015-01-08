@@ -102,12 +102,12 @@ private:
 	/// the item below the top and so on. The stack grows as the code
 	/// accesses more items on the EVM stack but once a value is put on
 	/// the stack, it will never be replaced.
-	std::vector<llvm::Value*> m_initialStack = {};
+	std::vector<llvm::Value*> m_initialStack;
 
 	/// This stack tracks the contents of the EVM stack as the basic block
 	/// executes. It may grow on both sides, as the code pushes items on
 	/// top of the stack or changes existing items.
-	std::vector<llvm::Value*> m_currentStack = {};
+	std::vector<llvm::Value*> m_currentStack;
 
 	/// How many items higher is the current stack than the initial one.
 	/// May be negative.

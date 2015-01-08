@@ -65,8 +65,8 @@ private:
 	llvm::Value* m_size;
 	llvm::Value* m_data = nullptr;
 
-	std::array<llvm::Function*, sizeOf<EnvFunc>::value> m_funcs = {};
-	std::array<llvm::Value*, 8> m_argAllocas = {};
+	std::array<llvm::Function*, sizeOf<EnvFunc>::value> m_funcs = {{}};
+	std::array<llvm::Value*, 8> m_argAllocas = {{}};
 	size_t m_argCounter = 0;
 
 	llvm::CallInst* createCall(EnvFunc _funcId, std::initializer_list<llvm::Value*> const& _args);

@@ -4,8 +4,13 @@
 
 #include <llvm/IR/Module.h>
 #include <llvm/ADT/Triple.h>
+#pragma warning(push)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
+#pragma warning(pop)
+#pragma GCC diagnostic pop
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/Host.h>
