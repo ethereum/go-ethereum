@@ -57,10 +57,8 @@ void Compiler::createBasicBlocks(bytes const& _bytecode)
 		{
 
 		case Instruction::ANY_PUSH:
-		{
-			readPushData(curr, _bytecode.end());
+			skipPushData(curr, _bytecode.end());
 			break;
-		}
 
 		case Instruction::JUMPDEST:
 		{

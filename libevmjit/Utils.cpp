@@ -1,7 +1,5 @@
 
-#include <llvm/ADT/APInt.h>
 #include "Utils.h"
-#include "Instruction.h"
 
 namespace dev
 {
@@ -35,23 +33,6 @@ i256 eth2llvm(u256 _u)
 	_u >>= 64;
 	i.d = static_cast<uint64_t>(_u & mask);
 	return i;
-}
-
-llvm::APInt readPushData(bytes::const_iterator& _curr, bytes::const_iterator _end)
-{
-	auto pushInst = *_curr;
-	assert(Instruction(pushInst) >= Instruction::PUSH1 && Instruction(pushInst) <= Instruction::PUSH32);
-	auto numBytes = pushInst - static_cast<size_t>(Instruction::PUSH1) + 1;
-	llvm::APInt value(256, 0);
-	++_curr;	// Point the data
-	for (decltype(numBytes) i = 0; i < numBytes; ++i)
-	{
-		byte b = (_curr != _end) ? *_curr++ : 0;
-		value <<= 8;
-		value |= b;
-	}
-	--_curr;	// Point the last real byte read
-	return value;
 }
 
 }
