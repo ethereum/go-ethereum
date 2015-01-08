@@ -63,7 +63,6 @@ llvm::Twine getName(RuntimeData::Index _index)
 	case RuntimeData::CallValue:	return "callvalue";
 	case RuntimeData::CallDataSize:	return "calldatasize";
 	case RuntimeData::GasPrice:		return "gasprice";
-	case RuntimeData::PrevHash:		return "prevhash";
 	case RuntimeData::CoinBase:		return "coinbase";
 	case RuntimeData::TimeStamp:	return "timestamp";
 	case RuntimeData::Number:		return "number";
@@ -154,7 +153,6 @@ llvm::Value* RuntimeManager::get(Instruction _inst)
 	case Instruction::CALLVALUE:	return get(RuntimeData::CallValue);
 	case Instruction::CALLDATASIZE:	return get(RuntimeData::CallDataSize);
 	case Instruction::GASPRICE:		return get(RuntimeData::GasPrice);
-	case Instruction::PREVHASH:		return get(RuntimeData::PrevHash);
 	case Instruction::COINBASE:		return get(RuntimeData::CoinBase);
 	case Instruction::TIMESTAMP:	return get(RuntimeData::TimeStamp);
 	case Instruction::NUMBER:		return get(RuntimeData::Number);

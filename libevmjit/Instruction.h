@@ -58,7 +58,7 @@ enum class Instruction: uint8_t
 	EXTCODESIZE,		///< get external code size (from another contract)
 	EXTCODECOPY,		///< copy external code (from another contract)
 
-	PREVHASH = 0x40,	///< get hash of most recent complete block
+	BLOCKHASH = 0x40,	///< get hash of most recent complete block
 	COINBASE,			///< get the block's coinbase address
 	TIMESTAMP,			///< get the block's timestamp
 	NUMBER,				///< get the block's number

@@ -20,7 +20,6 @@ bytesConstRef JitVM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 	m_data.set(RuntimeData::CallValue, _ext.value);
 	m_data.set(RuntimeData::CallDataSize, _ext.data.size());
 	m_data.set(RuntimeData::GasPrice, _ext.gasPrice);
-	m_data.set(RuntimeData::PrevHash, _ext.previousBlock.hash);
 	m_data.set(RuntimeData::CoinBase, fromAddress(_ext.currentBlock.coinbaseAddress));
 	m_data.set(RuntimeData::TimeStamp, _ext.currentBlock.timestamp);
 	m_data.set(RuntimeData::Number, _ext.currentBlock.number);

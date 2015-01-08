@@ -40,6 +40,8 @@ Compiler::Compiler(Options const& _options):
 
 void Compiler::createBasicBlocks(bytes const& _bytecode)
 {
+	// FIXME: Simplify this algorithm. All can be done in one pass
+
 	std::set<ProgramCounter> splitPoints; // Sorted collections of instruction indices where basic blocks start/end
 
 	std::vector<ProgramCounter> indirectJumpTargets;
@@ -632,7 +634,6 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 		case Instruction::CALLDATASIZE:
 		case Instruction::CODESIZE:
 		case Instruction::GASPRICE:
-		case Instruction::PREVHASH:
 		case Instruction::COINBASE:
 		case Instruction::TIMESTAMP:
 		case Instruction::NUMBER:
@@ -801,6 +802,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 
 		default: // Invalid instruction - runtime exception
 		{
+			// TODO: Replace with return statement
 			_runtimeManager.raiseException(ReturnCode::BadInstruction);
 		}
 

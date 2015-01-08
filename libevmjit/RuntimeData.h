@@ -21,7 +21,6 @@ struct RuntimeData
 		CallValue,
 		CallDataSize,
 		GasPrice,
-		PrevHash,
 		CoinBase,
 		TimeStamp,
 		Number,
