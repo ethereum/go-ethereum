@@ -12,8 +12,8 @@ EOF
 
 peer 11 01
 peer 12 02
-P13ID=$PID
+P12ID=$PID
 test_node $NAME "" -loglevel 5 $JSFILE
-sleep 0.5
-kill $P13ID
+sleep 0.3
+kill $P12ID
 

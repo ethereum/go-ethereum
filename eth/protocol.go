@@ -211,16 +211,6 @@ func (self *ethProtocol) handle() error {
 		// uses AddPeer followed by AddHashes, AddBlock only if peer is the best peer
 		// (or selected as new best peer)
 		if self.blockPool.AddPeer(request.TD, hash, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect) {
-			called := true
-			iter := func() ([]byte, bool) {
-				if called {
-					called = false
-					return hash, true
-				} else {
-					return nil, false
-				}
-			}
-			self.blockPool.AddBlockHashes(iter, self.id)
 			self.blockPool.AddBlock(request.Block, self.id)
 		}
 
