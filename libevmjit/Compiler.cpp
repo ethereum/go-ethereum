@@ -40,63 +40,58 @@ Compiler::Compiler(Options const& _options):
 
 void Compiler::createBasicBlocks(bytes const& _bytecode)
 {
-	// FIXME: Simplify this algorithm. All can be done in one pass
-
-	std::set<ProgramCounter> splitPoints; // Sorted collections of instruction indices where basic blocks start/end
-
-	std::vector<ProgramCounter> indirectJumpTargets;
-
-	splitPoints.insert(0);  // First basic block
-
-	for (auto curr = _bytecode.begin(); curr != _bytecode.end(); ++curr)
+	/// Helper function that skips push data and finds next iterator (can be the end)
+	auto skipPushDataAndGetNext = [](bytes::const_iterator _curr, bytes::const_iterator _end)
 	{
-		ProgramCounter currentPC = curr - _bytecode.begin();
+		static const auto push1  = static_cast<size_t>(Instruction::PUSH1);
+		static const auto push32 = static_cast<size_t>(Instruction::PUSH32);
+		size_t offset = 1;
+		if (*_curr >= push1 && *_curr <= push32)
+			offset += std::min<size_t>(*_curr - push1 + 1, (_end - _curr) - 1);
+		return _curr + offset;
+	};
 
-		auto inst = Instruction(*curr);
-		switch (inst)
+	ProgramCounter beginIdx = 0;
+	bool nextJumpDest = false;
+	for (auto curr = _bytecode.begin(), next = curr; curr != _bytecode.end(); curr = next)
+	{
+		next = skipPushDataAndGetNext(curr, _bytecode.end());
+
+		bool isEnd = false;
+		switch (Instruction(*curr))
 		{
-
-		case Instruction::ANY_PUSH:
-			skipPushData(curr, _bytecode.end());
-			break;
-
-		case Instruction::JUMPDEST:
-		{
-			// A basic block starts here.
-			splitPoints.insert(currentPC);
-			indirectJumpTargets.push_back(currentPC);
-			break;
-		}
-
 		case Instruction::JUMP:
 		case Instruction::JUMPI:
 		case Instruction::RETURN:
 		case Instruction::STOP:
 		case Instruction::SUICIDE:
-		{
-			// Create a basic block starting at the following instruction.
-			if (curr + 1 < _bytecode.end())
-				splitPoints.insert(currentPC + 1);
+			isEnd = true;
 			break;
-		}
+
+		case Instruction::JUMPDEST:
+			nextJumpDest = true;
+			break;
 
 		default:
 			break;
 		}
-	}
 
-	for (auto it = splitPoints.cbegin(); it != splitPoints.cend();)
-	{
-		auto beginInstIdx = *it;
-		++it;
-		auto endInstIdx = it != splitPoints.cend() ? *it : _bytecode.size();
-		basicBlocks.emplace(std::piecewise_construct, std::forward_as_tuple(beginInstIdx), std::forward_as_tuple(beginInstIdx, endInstIdx, m_mainFunc, m_builder));
+		assert(next <= _bytecode.end());
+		if (next == _bytecode.end() || Instruction(*next) == Instruction::JUMPDEST)
+			isEnd = true;
+
+		if (isEnd)
+		{
+			auto nextIdx = next - _bytecode.begin();
+			auto p = basicBlocks.emplace(std::piecewise_construct, std::forward_as_tuple(beginIdx), std::forward_as_tuple(beginIdx, nextIdx, m_mainFunc, m_builder));
+			if (nextJumpDest)
+				p.first->second.markAsJumpDest();
+			nextJumpDest = false;
+			beginIdx = nextIdx;
+		}
 	}
 
 	m_stopBB = llvm::BasicBlock::Create(m_mainFunc->getContext(), "Stop", m_mainFunc);
-
-	for (auto it = indirectJumpTargets.cbegin(); it != indirectJumpTargets.cend(); ++it)
-		basicBlocks.find(*it)->second.markAsJumpDest();
 }
 
 llvm::BasicBlock* Compiler::getJumpTableBlock()
@@ -153,7 +148,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode, std::str
 	Stack stack(m_builder, runtimeManager);
 	Arith256 arith(m_builder);
 
-	m_builder.CreateBr(basicBlocks.begin()->second);
+	m_builder.CreateBr(basicBlocks.empty() ? m_stopBB : basicBlocks.begin()->second);
 
 	for (auto basicBlockPairIt = basicBlocks.begin(); basicBlockPairIt != basicBlocks.end(); ++basicBlockPairIt)
 	{
