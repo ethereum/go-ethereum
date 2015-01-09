@@ -12,7 +12,7 @@ func ExpandHomePath(p string) (path string) {
 	path = p
 
 	// Check in case of paths like "/something/~/something/"
-	if path[:2] == "~/" {
+	if len(path) > 1 && path[:2] == "~/" {
 		usr, _ := user.Current()
 		dir := usr.HomeDir
 

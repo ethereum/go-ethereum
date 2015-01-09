@@ -55,7 +55,7 @@ out:
 		case <-relay.C:
 			err := self.broadcast(self.host.envelopes())
 			if err != nil {
-				self.peer.Infoln(err)
+				self.peer.Infoln("broadcast err:", err)
 				break out
 			}
 

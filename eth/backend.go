@@ -134,24 +134,20 @@ func New(config *Config) (*Ethereum, error) {
 	eth.blockPool = NewBlockPool(hasBlock, insertChain, ezp.Verify)
 
 	ethProto := EthProtocol(eth.txPool, eth.chainManager, eth.blockPool)
-	protocols := []p2p.Protocol{ethProto}
-
-	if config.Shh {
-		eth.whisper = whisper.New()
-		protocols = append(protocols, eth.whisper.Protocol())
-	}
+	protocols := []p2p.Protocol{ethProto, eth.whisper.Protocol()}
 
 	nat, err := p2p.ParseNAT(config.NATType, config.PMPGateway)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println(nat)
 
 	eth.net = &p2p.Server{
 		Identity:  clientId,
 		MaxPeers:  config.MaxPeers,
 		Protocols: protocols,
 		Blacklist: eth.blacklist,
-		NAT:       nat,
+		NAT:       p2p.UPNP(),
 		NoDial:    !config.Dial,
 	}
 

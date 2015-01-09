@@ -109,7 +109,8 @@ Rectangle {
                     leftMargin: 5
                     rightMargin: 5
                 }
-                text: "http://etherian.io"
+                //text: "http://etherian.io"
+		text: webview.url;
                 id: uriNav
                 y: parent.height / 2 - this.height / 2
 
@@ -151,6 +152,12 @@ Rectangle {
                 window.open(request.url.toString());					
             }
 
+	    function injectJs(js) {
+		//webview.experimental.navigatorQtObjectEnabled = true;
+		//webview.experimental.evaluateJavaScript(js)
+		//webview.experimental.javascriptEnabled = true;
+	    }
+
             function sendMessage(data) {
                 webview.experimental.postMessage(JSON.stringify(data))
             }
@@ -159,7 +166,6 @@ Rectangle {
             experimental.preferences.javascriptEnabled: true
             experimental.preferences.navigatorQtObjectEnabled: true
             experimental.preferences.developerExtrasEnabled: true
-            //experimental.userScripts: ["../ext/qt_messaging_adapter.js", "../ext/q.js", "../ext/big.js", "../ext/string.js", "../ext/html_messaging.js"]
             experimental.userScripts: ["../ext/q.js", "../ext/eth.js/main.js", "../ext/eth.js/qt.js", "../ext/setup.js"]
             experimental.onMessageReceived: {
                 console.log("[onMessageReceived]: ", message.data)
@@ -340,24 +346,28 @@ Rectangle {
 			break;
 
 			case "newIdentity":
-			postData(data._id, shh.newIdentity())
-			break
+				var id = shh.newIdentity()
+				console.log("newIdentity", id)
+				postData(data._id, id)
+
+				break
 
 			case "post":
-			require(1);
-			var params = data.args[0];
-			var fields = ["payload", "to", "from"];
-			for(var i = 0; i < fields.length; i++) {
-				params[fields[i]] = params[fields[i]] || "";
-			}
-			if(typeof params.payload !== "object") { params.payload = [params.payload]; } //params.payload = params.payload.join(""); }
-			params.topics = params.topics || [];
-			params.priority = params.priority || 1000;
-			params.ttl = params.ttl || 100;
+				require(1);
 
-			console.log(JSON.stringify(params))
-			shh.post(params.payload, params.to, params.from, params.topics, params.priority, params.ttl);
-			break;
+				var params = data.args[0];
+				var fields = ["payload", "to", "from"];
+				for(var i = 0; i < fields.length; i++) {
+					params[fields[i]] = params[fields[i]] || "";
+				}
+				if(typeof params.payload !== "object") { params.payload = [params.payload]; } //params.payload = params.payload.join(""); }
+				params.topics = params.topics || [];
+				params.priority = params.priority || 1000;
+				params.ttl = params.ttl || 100;
+
+				shh.post(params.payload, params.to, params.from, params.topics, params.priority, params.ttl);
+
+				break;
                     }
                 } catch(e) {
                     console.log(data.call + ": " + e)
