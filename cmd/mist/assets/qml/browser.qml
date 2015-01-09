@@ -66,7 +66,7 @@ Rectangle {
     onMessages: {
         // Bit of a cheat to get proper JSON
         var m = JSON.parse(JSON.parse(JSON.stringify(messages)))
-        webview.postEvent("messages", id, m);
+        webview.postEvent("eth_changed", id, m);
     }
 
     function onShhMessage(message, id) {

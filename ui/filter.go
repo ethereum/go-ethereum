@@ -5,6 +5,16 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 )
 
+func fromHex(s string) []byte {
+	if len(s) > 1 {
+		if s[0:2] == "0x" {
+			s = s[2:]
+		}
+		return ethutil.Hex2Bytes(s)
+	}
+	return nil
+}
+
 func NewFilterFromMap(object map[string]interface{}, eth core.EthManager) *core.Filter {
 	filter := core.NewFilter(eth)
 
@@ -20,12 +30,12 @@ func NewFilterFromMap(object map[string]interface{}, eth core.EthManager) *core.
 
 	if object["to"] != nil {
 		val := ethutil.NewValue(object["to"])
-		filter.AddTo(ethutil.Hex2Bytes(val.Str()))
+		filter.AddTo(fromHex(val.Str()))
 	}
 
 	if object["from"] != nil {
 		val := ethutil.NewValue(object["from"])
-		filter.AddFrom(ethutil.Hex2Bytes(val.Str()))
+		filter.AddFrom(fromHex(val.Str()))
 	}
 
 	if object["max"] != nil {
@@ -48,11 +58,11 @@ func NewFilterFromMap(object map[string]interface{}, eth core.EthManager) *core.
 // Conversion methodn
 func mapToAccountChange(m map[string]interface{}) (d core.AccountChange) {
 	if str, ok := m["id"].(string); ok {
-		d.Address = ethutil.Hex2Bytes(str)
+		d.Address = fromHex(str)
 	}
 
 	if str, ok := m["at"].(string); ok {
-		d.StateAddress = ethutil.Hex2Bytes(str)
+		d.StateAddress = fromHex(str)
 	}
 
 	return
@@ -62,7 +72,7 @@ func mapToAccountChange(m map[string]interface{}) (d core.AccountChange) {
 // ["aabbccdd", {id: "ccddee", at: "11223344"}], "aabbcc", {id: "ccddee", at: "1122"}
 func makeAltered(v interface{}) (d []core.AccountChange) {
 	if str, ok := v.(string); ok {
-		d = append(d, core.AccountChange{ethutil.Hex2Bytes(str), nil})
+		d = append(d, core.AccountChange{fromHex(str), nil})
 	} else if obj, ok := v.(map[string]interface{}); ok {
 		d = append(d, mapToAccountChange(obj))
 	} else if slice, ok := v.([]interface{}); ok {

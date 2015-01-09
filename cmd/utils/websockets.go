@@ -21,9 +21,14 @@
 package utils
 
 import (
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/ui/qt"
 	"github.com/ethereum/go-ethereum/websocket"
 	"github.com/ethereum/go-ethereum/xeth"
 )
@@ -35,16 +40,19 @@ func args(v ...interface{}) []interface{} {
 }
 
 type WebSocketServer struct {
-	ethereum        *eth.Ethereum
-	filterCallbacks map[int][]int
+	eth           *eth.Ethereum
+	filterManager *filter.FilterManager
 }
 
 func NewWebSocketServer(eth *eth.Ethereum) *WebSocketServer {
-	return &WebSocketServer{eth, make(map[int][]int)}
+	filterManager := filter.NewFilterManager(eth.EventMux())
+	go filterManager.Start()
+
+	return &WebSocketServer{eth, filterManager}
 }
 
 func (self *WebSocketServer) Serv() {
-	pipe := xeth.NewJSXEth(self.ethereum)
+	pipe := xeth.NewJSXEth(self.eth)
 
 	wsServ := websocket.NewServer("/eth", ":40404")
 	wsServ.MessageFunc(func(c *websocket.Client, msg *websocket.Message) {
@@ -112,20 +120,46 @@ func (self *WebSocketServer) Serv() {
 
 			c.Write(pipe.BalanceAt(args.Get(0).Str()), msg.Id)
 
-		case "eth_secretToAddress":
-			args := msg.Arguments()
-
-			c.Write(pipe.SecretToAddress(args.Get(0).Str()), msg.Id)
+		case "eth_accounts":
+			c.Write(pipe.Accounts(), msg.Id)
 
 		case "eth_newFilter":
+			if mp, ok := msg.Args[0].(map[string]interface{}); ok {
+				var id int
+				filter := qt.NewFilterFromMap(mp, self.eth)
+				filter.MessageCallback = func(messages state.Messages) {
+					c.Event(toMessages(messages), "eth_changed", id)
+				}
+				id = self.filterManager.InstallFilter(filter)
+				c.Write(id, msg.Id)
+			}
 		case "eth_newFilterString":
-		case "eth_messages":
-			// TODO
+			var id int
+			filter := core.NewFilter(self.eth)
+			filter.BlockCallback = func(block *types.Block) {
+				c.Event(nil, "eth_changed", id)
+			}
+			id = self.filterManager.InstallFilter(filter)
+			c.Write(id, msg.Id)
+		case "eth_filterLogs":
+			filter := self.filterManager.GetFilter(int(msg.Arguments().Get(0).Uint()))
+			if filter != nil {
+				c.Write(toMessages(filter.Find()), msg.Id)
+			}
 		}
 
 	})
 
 	wsServ.Listen()
+}
+
+func toMessages(messages state.Messages) (msgs []xeth.JSMessage) {
+	msgs = make([]xeth.JSMessage, len(messages))
+	for i, msg := range messages {
+		msgs[i] = xeth.NewJSMessage(msg)
+	}
+
+	return
 }
 
 func StartWebSockets(eth *eth.Ethereum) {

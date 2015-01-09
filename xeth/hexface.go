@@ -20,7 +20,7 @@ func NewJSXEth(eth core.EthManager) *JSXEth {
 }
 
 func (self *JSXEth) BlockByHash(strHash string) *JSBlock {
-	hash := ethutil.Hex2Bytes(strHash)
+	hash := fromHex(strHash)
 	block := self.obj.ChainManager().GetBlock(hash)
 
 	return NewJSBlock(block)
@@ -50,8 +50,12 @@ func (self *JSXEth) Key() *JSKey {
 	return NewJSKey(self.obj.KeyManager().KeyPair())
 }
 
+func (self *JSXEth) Accounts() []string {
+	return []string{toHex(self.obj.KeyManager().Address())}
+}
+
 func (self *JSXEth) StateObject(addr string) *JSObject {
-	object := &Object{self.World().safeGet(ethutil.Hex2Bytes(addr))}
+	object := &Object{self.World().safeGet(fromHex(addr))}
 
 	return NewJSObject(object)
 }
@@ -78,7 +82,7 @@ func (self *JSXEth) IsListening() bool {
 }
 
 func (self *JSXEth) CoinBase() string {
-	return ethutil.Bytes2Hex(self.obj.KeyManager().Address())
+	return toHex(self.obj.KeyManager().Address())
 }
 
 func (self *JSXEth) NumberToHuman(balance string) string {
@@ -88,46 +92,46 @@ func (self *JSXEth) NumberToHuman(balance string) string {
 }
 
 func (self *JSXEth) StorageAt(addr, storageAddr string) string {
-	storage := self.World().SafeGet(ethutil.Hex2Bytes(addr)).Storage(ethutil.Hex2Bytes(storageAddr))
+	storage := self.World().SafeGet(fromHex(addr)).Storage(fromHex(storageAddr))
 
-	return ethutil.Bytes2Hex(storage.Bytes())
+	return toHex(storage.Bytes())
 }
 
 func (self *JSXEth) BalanceAt(addr string) string {
-	return self.World().SafeGet(ethutil.Hex2Bytes(addr)).Balance().String()
+	return self.World().SafeGet(fromHex(addr)).Balance().String()
 }
 
 func (self *JSXEth) TxCountAt(address string) int {
-	return int(self.World().SafeGet(ethutil.Hex2Bytes(address)).Nonce)
+	return int(self.World().SafeGet(fromHex(address)).Nonce)
 }
 
 func (self *JSXEth) CodeAt(address string) string {
-	return ethutil.Bytes2Hex(self.World().SafeGet(ethutil.Hex2Bytes(address)).Code)
+	return toHex(self.World().SafeGet(fromHex(address)).Code)
 }
 
 func (self *JSXEth) IsContract(address string) bool {
-	return len(self.World().SafeGet(ethutil.Hex2Bytes(address)).Code) > 0
+	return len(self.World().SafeGet(fromHex(address)).Code) > 0
 }
 
 func (self *JSXEth) SecretToAddress(key string) string {
-	pair, err := crypto.NewKeyPairFromSec(ethutil.Hex2Bytes(key))
+	pair, err := crypto.NewKeyPairFromSec(fromHex(key))
 	if err != nil {
 		return ""
 	}
 
-	return ethutil.Bytes2Hex(pair.Address())
+	return toHex(pair.Address())
 }
 
 func (self *JSXEth) Execute(addr, value, gas, price, data string) (string, error) {
 	ret, err := self.ExecuteObject(&Object{
-		self.World().safeGet(ethutil.Hex2Bytes(addr))},
-		ethutil.Hex2Bytes(data),
+		self.World().safeGet(fromHex(addr))},
+		fromHex(data),
 		ethutil.NewValue(value),
 		ethutil.NewValue(gas),
 		ethutil.NewValue(price),
 	)
 
-	return ethutil.Bytes2Hex(ret), err
+	return toHex(ret), err
 }
 
 type KeyVal struct {
@@ -137,10 +141,10 @@ type KeyVal struct {
 
 func (self *JSXEth) EachStorage(addr string) string {
 	var values []KeyVal
-	object := self.World().SafeGet(ethutil.Hex2Bytes(addr))
+	object := self.World().SafeGet(fromHex(addr))
 	it := object.Trie().Iterator()
 	for it.Next() {
-		values = append(values, KeyVal{ethutil.Bytes2Hex(it.Key), ethutil.Bytes2Hex(it.Value)})
+		values = append(values, KeyVal{toHex(it.Key), toHex(it.Value)})
 	}
 
 	valuesJson, err := json.Marshal(values)
@@ -154,7 +158,7 @@ func (self *JSXEth) EachStorage(addr string) string {
 func (self *JSXEth) ToAscii(str string) string {
 	padded := ethutil.RightPadBytes([]byte(str), 32)
 
-	return "0x" + ethutil.Bytes2Hex(padded)
+	return "0x" + toHex(padded)
 }
 
 func (self *JSXEth) FromAscii(str string) string {
@@ -162,7 +166,7 @@ func (self *JSXEth) FromAscii(str string) string {
 		str = str[2:]
 	}
 
-	return string(bytes.Trim(ethutil.Hex2Bytes(str), "\x00"))
+	return string(bytes.Trim(fromHex(str), "\x00"))
 }
 
 func (self *JSXEth) FromNumber(str string) string {
@@ -170,7 +174,7 @@ func (self *JSXEth) FromNumber(str string) string {
 		str = str[2:]
 	}
 
-	return ethutil.BigD(ethutil.Hex2Bytes(str)).String()
+	return ethutil.BigD(fromHex(str)).String()
 }
 
 func (self *JSXEth) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
@@ -182,26 +186,11 @@ func (self *JSXEth) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr 
 		data     []byte
 	)
 
-	if ethutil.IsHex(codeStr) {
-		data = ethutil.Hex2Bytes(codeStr[2:])
-	} else {
-		data = ethutil.Hex2Bytes(codeStr)
-	}
+	data = fromHex(codeStr)
 
-	if ethutil.IsHex(toStr) {
-		to = ethutil.Hex2Bytes(toStr[2:])
-	} else {
-		to = ethutil.Hex2Bytes(toStr)
-	}
+	to = fromHex(toStr)
 
-	var keyPair *crypto.KeyPair
-	var err error
-	if ethutil.IsHex(key) {
-		keyPair, err = crypto.NewKeyPairFromSec([]byte(ethutil.Hex2Bytes(key[2:])))
-	} else {
-		keyPair, err = crypto.NewKeyPairFromSec([]byte(ethutil.Hex2Bytes(key)))
-	}
-
+	keyPair, err := crypto.NewKeyPairFromSec([]byte(fromHex(key)))
 	if err != nil {
 		return "", err
 	}
@@ -211,14 +200,14 @@ func (self *JSXEth) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr 
 		return "", err
 	}
 	if types.IsContractAddr(to) {
-		return ethutil.Bytes2Hex(core.AddressFromMessage(tx)), nil
+		return toHex(core.AddressFromMessage(tx)), nil
 	}
 
-	return ethutil.Bytes2Hex(tx.Hash()), nil
+	return toHex(tx.Hash()), nil
 }
 
 func (self *JSXEth) PushTx(txStr string) (*JSReceipt, error) {
-	tx := types.NewTransactionFromBytes(ethutil.Hex2Bytes(txStr))
+	tx := types.NewTransactionFromBytes(fromHex(txStr))
 	err := self.obj.TxPool().Add(tx)
 	if err != nil {
 		return nil, err
@@ -233,11 +222,11 @@ func (self *JSXEth) CompileMutan(code string) string {
 		return err.Error()
 	}
 
-	return ethutil.Bytes2Hex(data)
+	return toHex(data)
 }
 
 func (self *JSXEth) FindInConfig(str string) string {
-	return ethutil.Bytes2Hex(self.World().Config().Get(str).Address())
+	return toHex(self.World().Config().Get(str).Address())
 }
 
 func ToJSMessages(messages state.Messages) *ethutil.List {
