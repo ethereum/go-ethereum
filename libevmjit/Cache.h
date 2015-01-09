@@ -33,6 +33,7 @@ class Cache
 {
 public:
 	static ObjectCache* getObjectCache();
+	static std::unique_ptr<llvm::Module> getObject(std::string const& id);
 };
 
 }
