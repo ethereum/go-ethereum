@@ -153,9 +153,9 @@ Rectangle {
             }
 
 	    function injectJs(js) {
-		//webview.experimental.navigatorQtObjectEnabled = true;
-		//webview.experimental.evaluateJavaScript(js)
-		//webview.experimental.javascriptEnabled = true;
+		webview.experimental.navigatorQtObjectEnabled = true;
+		webview.experimental.evaluateJavaScript(js)
+		webview.experimental.javascriptEnabled = true;
 	    }
 
             function sendMessage(data) {
@@ -166,7 +166,7 @@ Rectangle {
             experimental.preferences.javascriptEnabled: true
             experimental.preferences.navigatorQtObjectEnabled: true
             experimental.preferences.developerExtrasEnabled: true
-            experimental.userScripts: ["../ext/q.js", "../ext/eth.js/main.js", "../ext/eth.js/qt.js", "../ext/setup.js"]
+            experimental.userScripts: ["../ext/q.js", "../ext/ethereum.js/lib/web3.js", "../ext/ethereum.js/lib/qt.js", "../ext/setup.js"]
             experimental.onMessageReceived: {
                 console.log("[onMessageReceived]: ", message.data)
                 // TODO move to messaging.js
