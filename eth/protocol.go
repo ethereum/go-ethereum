@@ -67,6 +67,8 @@ type newBlockMsgData struct {
 	TD    *big.Int
 }
 
+const maxHashes = 255
+
 type getBlockHashesMsgData struct {
 	Hash   []byte
 	Amount uint64
@@ -138,6 +140,11 @@ func (self *ethProtocol) handle() error {
 		var request getBlockHashesMsgData
 		if err := msg.Decode(&request); err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
+		}
+
+		//request.Amount = uint64(math.Min(float64(maxHashes), float64(request.Amount)))
+		if request.Amount > maxHashes {
+			request.Amount = maxHashes
 		}
 		hashes := self.chainManager.GetBlockHashesFromHash(request.Hash, request.Amount)
 		return p2p.EncodeMsg(self.rw, BlockHashesMsg, ethutil.ByteSliceToInterface(hashes)...)
