@@ -20,17 +20,16 @@ namespace jit
 
 const char* BasicBlock::NamePrefix = "Instr.";
 
-BasicBlock::BasicBlock(ProgramCounter _beginInstIdx, ProgramCounter _endInstIdx, llvm::Function* _mainFunc, llvm::IRBuilder<>& _builder) :
-	m_beginInstIdx(_beginInstIdx),
-	m_endInstIdx(_endInstIdx),
-	m_llvmBB(llvm::BasicBlock::Create(_mainFunc->getContext(), {NamePrefix, std::to_string(_beginInstIdx)}, _mainFunc)),
+BasicBlock::BasicBlock(bytes::const_iterator _begin, bytes::const_iterator _end, llvm::Function* _mainFunc, llvm::IRBuilder<>& _builder) :
+	m_begin(_begin),
+	m_end(_end),
+	// TODO: Add begin index to name
+	m_llvmBB(llvm::BasicBlock::Create(_mainFunc->getContext(), NamePrefix, _mainFunc)),
 	m_stack(*this),
 	m_builder(_builder)
 {}
 
 BasicBlock::BasicBlock(std::string _name, llvm::Function* _mainFunc, llvm::IRBuilder<>& _builder) :
-	m_beginInstIdx(0),
-	m_endInstIdx(0),
 	m_llvmBB(llvm::BasicBlock::Create(_mainFunc->getContext(), _name, _mainFunc)),
 	m_stack(*this),
 	m_builder(_builder)

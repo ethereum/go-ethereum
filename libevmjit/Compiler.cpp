@@ -51,9 +51,9 @@ void Compiler::createBasicBlocks(bytes const& _bytecode)
 		return _curr + offset;
 	};
 
-	ProgramCounter beginIdx = 0;
+	auto begin = _bytecode.begin();
 	bool nextJumpDest = false;
-	for (auto curr = _bytecode.begin(), next = curr; curr != _bytecode.end(); curr = next)
+	for (auto curr = begin, next = begin; curr != _bytecode.end(); curr = next)
 	{
 		next = skipPushDataAndGetNext(curr, _bytecode.end());
 
@@ -82,12 +82,12 @@ void Compiler::createBasicBlocks(bytes const& _bytecode)
 
 		if (isEnd)
 		{
-			auto nextIdx = next - _bytecode.begin();
-			auto p = m_basicBlocks.emplace(std::piecewise_construct, std::forward_as_tuple(beginIdx), std::forward_as_tuple(beginIdx, nextIdx, m_mainFunc, m_builder));
+			auto beginIdx = begin - _bytecode.begin();
+			auto p = m_basicBlocks.emplace(std::piecewise_construct, std::forward_as_tuple(beginIdx), std::forward_as_tuple(begin, next, m_mainFunc, m_builder));
 			if (nextJumpDest)
 				p.first->second.markAsJumpDest();
 			nextJumpDest = false;
-			beginIdx = nextIdx;
+			begin = next;
 		}
 	}
 
@@ -212,10 +212,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 	m_builder.SetInsertPoint(_basicBlock.llvm());
 	auto& stack = _basicBlock.localStack();
 
-	auto begin = _bytecode.begin() + _basicBlock.begin();
-	auto end = _bytecode.begin() + _basicBlock.end();
-
-	for (auto it = begin; it != end; ++it)
+	for (auto it = _basicBlock.begin(); it != _basicBlock.end(); ++it)
 	{
 		auto inst = Instruction(*it);
 
@@ -479,7 +476,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 
 		case Instruction::ANY_PUSH:
 		{
-			auto value = readPushData(it, end);
+			auto value = readPushData(it, _basicBlock.end());
 			stack.push(Constant::get(value));
 			break;
 		}

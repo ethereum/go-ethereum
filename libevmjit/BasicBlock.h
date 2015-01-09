@@ -1,9 +1,7 @@
 #pragma once
-
 #include <vector>
-
 #include <llvm/IR/BasicBlock.h>
-
+#include "Common.h"
 #include "Stack.h"
 
 namespace dev
@@ -52,10 +50,10 @@ public:
 		BasicBlock& m_bblock;
 	};
 
-	/// Basic block name prefix. The rest is beging instruction index.
+	/// Basic block name prefix. The rest is instruction index.
 	static const char* NamePrefix;
 
-	explicit BasicBlock(ProgramCounter _beginInstIdx, ProgramCounter _endInstIdx, llvm::Function* _mainFunc, llvm::IRBuilder<>& _builder);
+	explicit BasicBlock(bytes::const_iterator _begin, bytes::const_iterator _end, llvm::Function* _mainFunc, llvm::IRBuilder<>& _builder);
 	explicit BasicBlock(std::string _name, llvm::Function* _mainFunc, llvm::IRBuilder<>& _builder);
 
 	BasicBlock(const BasicBlock&) = delete;
@@ -64,8 +62,8 @@ public:
 	operator llvm::BasicBlock*() { return m_llvmBB; }  // TODO: Remove it
 	llvm::BasicBlock* llvm() { return m_llvmBB; }
 
-	ProgramCounter begin() { return m_beginInstIdx; }
-	ProgramCounter end() { return m_endInstIdx; }
+	bytes::const_iterator begin() { return m_begin; }
+	bytes::const_iterator end() { return m_end; }
 
 	bool isJumpDest() const { return m_isJumpDest; }
 	void markAsJumpDest() { m_isJumpDest = true; }
@@ -85,8 +83,8 @@ public:
 	void dump(std::ostream& os, bool _dotOutput = false);
 
 private:
-	ProgramCounter const m_beginInstIdx;
-	ProgramCounter const m_endInstIdx;
+	bytes::const_iterator const m_begin;
+	bytes::const_iterator const m_end;
 
 	llvm::BasicBlock* const m_llvmBB;
 
