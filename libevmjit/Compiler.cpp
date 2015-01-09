@@ -83,9 +83,8 @@ void Compiler::createBasicBlocks(bytes const& _bytecode)
 		if (isEnd)
 		{
 			auto beginIdx = begin - _bytecode.begin();
-			auto p = m_basicBlocks.emplace(std::piecewise_construct, std::forward_as_tuple(beginIdx), std::forward_as_tuple(begin, next, m_mainFunc, m_builder));
-			if (nextJumpDest)
-				p.first->second.markAsJumpDest();
+			m_basicBlocks.emplace(std::piecewise_construct, std::forward_as_tuple(beginIdx),
+					std::forward_as_tuple(begin, next, m_mainFunc, m_builder, nextJumpDest));
 			nextJumpDest = false;
 			begin = next;
 		}
@@ -98,7 +97,7 @@ llvm::BasicBlock* Compiler::getJumpTableBlock()
 {
 	if (!m_jumpTableBlock)
 	{
-		m_jumpTableBlock.reset(new BasicBlock("JumpTable", m_mainFunc, m_builder));
+		m_jumpTableBlock.reset(new BasicBlock("JumpTable", m_mainFunc, m_builder, true));
 		InsertPointGuard g{m_builder};
 		m_builder.SetInsertPoint(m_jumpTableBlock->llvm());
 		auto dest = m_jumpTableBlock->localStack().pop();
@@ -116,7 +115,7 @@ llvm::BasicBlock* Compiler::getBadJumpBlock()
 {
 	if (!m_badJumpBlock)
 	{
-		m_badJumpBlock.reset(new BasicBlock("BadJump", m_mainFunc, m_builder));
+		m_badJumpBlock.reset(new BasicBlock("BadJump", m_mainFunc, m_builder, true));
 		InsertPointGuard g{m_builder};
 		m_builder.SetInsertPoint(m_badJumpBlock->llvm());
 		m_builder.CreateRet(Constant::get(ReturnCode::BadJumpDestination));

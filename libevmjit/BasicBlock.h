@@ -53,8 +53,8 @@ public:
 	/// Basic block name prefix. The rest is instruction index.
 	static const char* NamePrefix;
 
-	explicit BasicBlock(bytes::const_iterator _begin, bytes::const_iterator _end, llvm::Function* _mainFunc, llvm::IRBuilder<>& _builder);
-	explicit BasicBlock(std::string _name, llvm::Function* _mainFunc, llvm::IRBuilder<>& _builder);
+	explicit BasicBlock(bytes::const_iterator _begin, bytes::const_iterator _end, llvm::Function* _mainFunc, llvm::IRBuilder<>& _builder, bool isJumpDest);
+	explicit BasicBlock(std::string _name, llvm::Function* _mainFunc, llvm::IRBuilder<>& _builder, bool isJumpDest);
 
 	BasicBlock(const BasicBlock&) = delete;
 	void operator=(const BasicBlock&) = delete;
@@ -66,7 +66,6 @@ public:
 	bytes::const_iterator end() { return m_end; }
 
 	bool isJumpDest() const { return m_isJumpDest; }
-	void markAsJumpDest() { m_isJumpDest = true; }
 
 	LocalStack& localStack() { return m_stack; }
 
@@ -113,7 +112,7 @@ private:
 
 	/// Is the basic block a valid jump destination.
 	/// JUMPDEST is the first instruction of the basic block.
-	bool m_isJumpDest = false;
+	bool const m_isJumpDest = false;
 };
 
 }
