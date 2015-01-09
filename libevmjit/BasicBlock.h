@@ -61,7 +61,7 @@ public:
 	BasicBlock(const BasicBlock&) = delete;
 	void operator=(const BasicBlock&) = delete;
 
-	operator llvm::BasicBlock*() { return m_llvmBB; }
+	operator llvm::BasicBlock*() { return m_llvmBB; }  // TODO: Remove it
 	llvm::BasicBlock* llvm() { return m_llvmBB; }
 
 	ProgramCounter begin() { return m_beginInstIdx; }

@@ -83,7 +83,7 @@ void Compiler::createBasicBlocks(bytes const& _bytecode)
 		if (isEnd)
 		{
 			auto nextIdx = next - _bytecode.begin();
-			auto p = basicBlocks.emplace(std::piecewise_construct, std::forward_as_tuple(beginIdx), std::forward_as_tuple(beginIdx, nextIdx, m_mainFunc, m_builder));
+			auto p = m_basicBlocks.emplace(std::piecewise_construct, std::forward_as_tuple(beginIdx), std::forward_as_tuple(beginIdx, nextIdx, m_mainFunc, m_builder));
 			if (nextJumpDest)
 				p.first->second.markAsJumpDest();
 			nextJumpDest = false;
@@ -103,7 +103,7 @@ llvm::BasicBlock* Compiler::getJumpTableBlock()
 		m_builder.SetInsertPoint(m_jumpTableBlock->llvm());
 		auto dest = m_jumpTableBlock->localStack().pop();
 		auto switchInstr = m_builder.CreateSwitch(dest, getBadJumpBlock());
-		for (auto&& p : basicBlocks)
+		for (auto&& p : m_basicBlocks)
 		{
 			if (p.second.isJumpDest())
 				switchInstr->addCase(Constant::get(p.first), p.second.llvm());
@@ -148,14 +148,14 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode, std::str
 	Stack stack(m_builder, runtimeManager);
 	Arith256 arith(m_builder);
 
-	m_builder.CreateBr(basicBlocks.empty() ? m_stopBB : basicBlocks.begin()->second);
+	m_builder.CreateBr(m_basicBlocks.empty() ? m_stopBB : m_basicBlocks.begin()->second);
 
-	for (auto basicBlockPairIt = basicBlocks.begin(); basicBlockPairIt != basicBlocks.end(); ++basicBlockPairIt)
+	for (auto basicBlockPairIt = m_basicBlocks.begin(); basicBlockPairIt != m_basicBlocks.end(); ++basicBlockPairIt)
 	{
 		auto& basicBlock = basicBlockPairIt->second;
 		auto iterCopy = basicBlockPairIt;
 		++iterCopy;
-		auto nextBasicBlock = (iterCopy != basicBlocks.end()) ? iterCopy->second.llvm() : nullptr;
+		auto nextBasicBlock = (iterCopy != m_basicBlocks.end()) ? iterCopy->second.llvm() : nullptr;
 		compileBasicBlock(basicBlock, _bytecode, runtimeManager, arith, memory, ext, gasMeter, nextBasicBlock);
 	}
 
@@ -171,7 +171,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode, std::str
 	if (m_options.optimizeStack)
 	{
 		std::vector<BasicBlock*> blockList;
-		for	(auto& entry : basicBlocks)
+		for	(auto& entry : m_basicBlocks)
 			blockList.push_back(&entry.second);
 
 		if (m_jumpTableBlock)
@@ -182,7 +182,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode, std::str
 		dumpCFGifRequired("blocks-opt.dot");
 	}
 
-	for (auto& entry : basicBlocks)
+	for (auto& entry : m_basicBlocks)
 		entry.second.synchronizeLocalStack(stack);
 	if (m_jumpTableBlock)
 		m_jumpTableBlock->synchronizeLocalStack(stack);
@@ -557,8 +557,8 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 				if (c.ult(_bytecode.size()))
 				{
 					auto v = c.getZExtValue();
-					auto it = basicBlocks.find(v);
-					if (it != basicBlocks.end() && it->second.isJumpDest())
+					auto it = m_basicBlocks.find(v);
+					if (it != m_basicBlocks.end() && it->second.isJumpDest())
 						targetBlock = it->second.llvm();
 				}
 
@@ -825,13 +825,13 @@ void Compiler::removeDeadBlocks()
 	do
 	{
 		sthErased = false;
-		for (auto it = basicBlocks.begin(); it != basicBlocks.end();)
+		for (auto it = m_basicBlocks.begin(); it != m_basicBlocks.end();)
 		{
 			auto llvmBB = it->second.llvm();
 			if (llvm::pred_begin(llvmBB) == llvm::pred_end(llvmBB))
 			{
 				llvmBB->eraseFromParent();
-				basicBlocks.erase(it++);
+				m_basicBlocks.erase(it++);
 				sthErased = true;
 			}
 			else
@@ -859,7 +859,7 @@ void Compiler::dumpCFGtoStream(std::ostream& _out)
 		 << "  entry [share=record, label=\"entry block\"];\n";
 
 	std::vector<BasicBlock*> blocks;
-	for (auto& pair : basicBlocks)
+	for (auto& pair : m_basicBlocks)
 		blocks.push_back(&pair.second);
 	if (m_jumpTableBlock)
 		blocks.push_back(m_jumpTableBlock.get());
@@ -898,7 +898,7 @@ void Compiler::dumpCFGtoStream(std::ostream& _out)
 
 void Compiler::dump()
 {
-	for (auto& entry : basicBlocks)
+	for (auto& entry : m_basicBlocks)
 		entry.second.dump();
 	if (m_jumpTableBlock != nullptr)
 		m_jumpTableBlock->dump();
