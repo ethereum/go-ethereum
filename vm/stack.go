@@ -152,6 +152,10 @@ func (m *Memory) Get(offset, size int64) []byte {
 }
 
 func (self *Memory) Geti(offset, size int64) (cpy []byte) {
+	if size == 0 {
+		return nil
+	}
+
 	if len(self.store) > int(offset) {
 		cpy = make([]byte, size)
 		copy(cpy, self.store[offset:offset+size])

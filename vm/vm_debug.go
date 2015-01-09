@@ -34,7 +34,7 @@ func NewDebugVm(env Environment) *DebugVm {
 		lt = LogTyDiff
 	}
 
-	return &DebugVm{env: env, logTy: lt, Recoverable: true}
+	return &DebugVm{env: env, logTy: lt, Recoverable: false}
 }
 
 func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
