@@ -147,7 +147,7 @@ func (srv *Server) SuggestPeer(addr string, pubkey []byte) error {
 // to decide if it is a worthwhile connection
 func (srv *Server) AddPeer(addr *peerAddr) (err error) {
 	if srv.NoDial {
-		return fmt.Errorln("no dial out")
+		return fmt.Errorf("no dial out")
 	}
 	// need to look up nodeID first
 	peer := &Peer{
