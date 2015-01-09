@@ -174,51 +174,51 @@ Rectangle {
 
                 try {
                     switch(data.call) {
-                        case "compile":
+                        case "eth_compile":
                         postData(data._id, eth.compile(data.args[0]))
                         break
 
-                        case "coinbase":
+                        case "eth_coinbase":
                         postData(data._id, eth.coinBase())
 
-                        case "account":
+                        case "eth_account":
                         postData(data._id, eth.key().address);
 
-                        case "isListening":
+                        case "eth_istening":
                         postData(data._id, eth.isListening())
 
                         break
 
-                        case "isMining":
+                        case "eth_mining":
                         postData(data._id, eth.isMining())
 
                         break
 
-                        case "peerCount":
+                        case "eth_peerCount":
                         postData(data._id, eth.peerCount())
 
                         break
 
-                        case "countAt":
+                        case "eth_countAt":
                         require(1)
                         postData(data._id, eth.txCountAt(data.args[0]))
 
                         break
 
-                        case "codeAt":
+                        case "eth_codeAt":
                         require(1)
                         var code = eth.codeAt(data.args[0])
                         postData(data._id, code);
 
                         break
 
-                        case "blockByNumber":
+                        case "eth_blockByNumber":
                         require(1)
                         var block = eth.blockByNumber(data.args[0])
                         postData(data._id, block)
                         break
 
-                        case "blockByHash":
+                        case "eth_blockByHash":
                         require(1)
                         var block = eth.blockByHash(data.args[0])
                         postData(data._id, block)
@@ -229,8 +229,8 @@ Rectangle {
                         postData(data._id, block.transactions[data.args[1]])
                         break
 
-                        case "transactionByHash":
-                        case "transactionByNumber":
+                        case "eth_transactionByHash":
+                        case "eth_transactionByNumber":
                         require(2)
 
                         var block;
@@ -244,8 +244,8 @@ Rectangle {
                         postData(data._id, tx)
                         break
 
-                        case "uncleByHash":
-                        case "uncleByNumber":
+                        case "eth_uncleByHash":
+                        case "eth_uncleByNumber":
                         require(2)
 
                         var block;
@@ -268,7 +268,7 @@ Rectangle {
 
                         break
 
-                        case "stateAt":
+                        case "eth_stateAt":
                         require(2);
 
                         var storage = eth.storageAt(data.args[0], data.args[1]);
@@ -276,55 +276,41 @@ Rectangle {
 
                         break
 
-                        case "call":
+                        case "eth_call":
                         require(1);
                         var ret = eth.call(data.args)
                         postData(data._id, ret)
                         break
 
-                        case "balanceAt":
+                        case "eth_balanceAt":
                         require(1);
 
                         postData(data._id, eth.balanceAt(data.args[0]));
                         break
 
-                        case "watch":
+                        case "eth_watch":
                         require(2)
                         eth.watch(data.args[0], data.args[1])
 
-                        case "disconnect":
+                        case "eth_disconnect":
                         require(1)
                         postData(data._id, null)
                         break;
 
-                        case "messages":
-                        require(1);
-
-                        var messages = JSON.parse(eth.getMessages(data.args[0]))
-                        postData(data._id, messages)
-                        break
-
-                        case "mutan":
-                        require(1)
-
-                        var code = eth.compileMutan(data.args[0])
-                        postData(data._id, "0x"+code)
-                        break;
-
-                        case "newFilterString":
+                        case "eth_newFilterString":
                         require(1)
                         var id = eth.newFilterString(data.args[0])
                         postData(data._id, id);
                         break;
 
-                        case "newFilter":
+                        case "eth_newFilter":
                         require(1)
                         var id = eth.newFilter(data.args[0])
 
                         postData(data._id, id);
                         break;
 
-                        case "getMessages":
+                        case "eth_messages":
                         require(1);
 
                         var messages = eth.messages(data.args[0]);
@@ -333,26 +319,26 @@ Rectangle {
 
                         break;
 
-                        case "deleteFilter":
+                        case "eth_deleteFilter":
                         require(1);
                         eth.uninstallFilter(data.args[0])
                         break;
 
 
-			case "shhNewFilter":
+			case "shh_newFilter":
 			require(1);
 			var id = shh.watch(data.args[0], window);
 			postData(data._id, id);
 			break;
 
-			case "newIdentity":
+			case "shh_newIdentity":
 				var id = shh.newIdentity()
 				console.log("newIdentity", id)
 				postData(data._id, id)
 
 				break
 
-			case "post":
+			case "shh_post":
 				require(1);
 
 				var params = data.args[0];
