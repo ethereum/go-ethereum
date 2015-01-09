@@ -20,19 +20,13 @@ public:
 	struct Options
 	{
 		/// Optimize stack operations between basic blocks
-		bool optimizeStack;
+		bool optimizeStack = true;
 
 		/// Rewrite switch instructions to sequences of branches
-		bool rewriteSwitchToBranches;
+		bool rewriteSwitchToBranches = true;
 
 		/// Dump CFG as a .dot file for graphviz
-		bool dumpCFG;
-
-		Options():
-			optimizeStack(true),
-			rewriteSwitchToBranches(true),
-			dumpCFG(false)
-		{}
+		bool dumpCFG = false;
 	};
 
 	using ProgramCounter = uint64_t;

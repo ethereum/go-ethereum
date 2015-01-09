@@ -147,7 +147,7 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode, std::str
 	Stack stack(m_builder, runtimeManager);
 	Arith256 arith(m_builder);
 
-	m_builder.CreateBr(m_basicBlocks.empty() ? m_stopBB : m_basicBlocks.begin()->second);
+	m_builder.CreateBr(m_basicBlocks.empty() ? m_stopBB : m_basicBlocks.begin()->second.llvm());
 
 	for (auto basicBlockPairIt = m_basicBlocks.begin(); basicBlockPairIt != m_basicBlocks.end(); ++basicBlockPairIt)
 	{

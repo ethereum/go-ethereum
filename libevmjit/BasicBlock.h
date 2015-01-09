@@ -59,7 +59,6 @@ public:
 	BasicBlock(const BasicBlock&) = delete;
 	void operator=(const BasicBlock&) = delete;
 
-	operator llvm::BasicBlock*() { return m_llvmBB; }  // TODO: Remove it
 	llvm::BasicBlock* llvm() { return m_llvmBB; }
 
 	bytes::const_iterator begin() { return m_begin; }
