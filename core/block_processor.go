@@ -308,7 +308,7 @@ func (sm *BlockProcessor) AccumelateRewards(statedb *state.StateDB, block, paren
 		}
 		uncles.Add(string(uncle.Hash()))
 
-		if !ancestors.Has(uncle.ParentHash) {
+		if !ancestors.Has(string(uncle.ParentHash)) {
 			return UncleError(fmt.Sprintf("Uncle's parent unknown (%x)", uncle.ParentHash[0:4]))
 		}
 
