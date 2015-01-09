@@ -269,7 +269,6 @@ var methodSignature = function (json, name) {
     result += ')';
 
     return web3.sha3(web3.fromAscii(result));
-    //return web3.sha3(result);
 };
 
 module.exports = {
