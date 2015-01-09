@@ -3,7 +3,7 @@ package types
 import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/ptrie"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 type DerivableList interface {
@@ -13,7 +13,7 @@ type DerivableList interface {
 
 func DeriveSha(list DerivableList) []byte {
 	db, _ := ethdb.NewMemDatabase()
-	trie := ptrie.New(nil, db)
+	trie := trie.New(nil, db)
 	for i := 0; i < list.Len(); i++ {
 		trie.Update(ethutil.Encode(i), list.GetRlp(i))
 	}

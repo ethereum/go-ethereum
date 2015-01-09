@@ -6,9 +6,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/whisper"
 	"gopkg.in/qml.v1"
 )
+
+var qlogger = logger.NewLogger("QSHH")
 
 func fromHex(s string) []byte {
 	if len(s) > 1 {
@@ -36,9 +39,10 @@ func (self *Whisper) SetView(view qml.Object) {
 func (self *Whisper) Post(payload []string, to, from string, topics []string, priority, ttl uint32) {
 	var data []byte
 	for _, d := range payload {
-		data = append(data, fromHex(d)...)
+		data = append(data, ethutil.Hex2Bytes(d)...)
 	}
 
+	fmt.Println(payload, data, "from", from, fromHex(from), crypto.ToECDSA(fromHex(from)))
 	msg := whisper.NewMessage(data)
 	envelope, err := msg.Seal(time.Duration(priority*100000), whisper.Opts{
 		Ttl:    time.Duration(ttl),
@@ -47,13 +51,13 @@ func (self *Whisper) Post(payload []string, to, from string, topics []string, pr
 		Topics: whisper.TopicsFromString(topics...),
 	})
 	if err != nil {
-		fmt.Println(err)
+		qlogger.Infoln(err)
 		// handle error
 		return
 	}
 
 	if err := self.Whisper.Send(envelope); err != nil {
-		fmt.Println(err)
+		qlogger.Infoln(err)
 		// handle error
 		return
 	}

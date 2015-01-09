@@ -25,6 +25,7 @@ func GenesisBlock(db ethutil.Database) *types.Block {
 	genesis.Header().GasLimit = big.NewInt(1000000)
 	genesis.Header().GasUsed = ethutil.Big0
 	genesis.Header().Time = 0
+	genesis.Td = ethutil.Big0
 
 	genesis.SetUncles([]*types.Header{})
 	genesis.SetTransactions(types.Transactions{})

@@ -16,6 +16,7 @@ const (
 	ErrInvalidBlock
 	ErrInvalidPoW
 	ErrUnrequestedBlock
+	ErrInsufficientChainInfo
 )
 
 var errorToString = map[int]string{
@@ -30,6 +31,7 @@ var errorToString = map[int]string{
 	ErrInvalidBlock:            "Invalid block",
 	ErrInvalidPoW:              "Invalid PoW",
 	ErrUnrequestedBlock:        "Unrequested block",
+	ErrInsufficientChainInfo:   "Insufficient chain info",
 }
 
 type protocolError struct {
