@@ -212,9 +212,12 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 	m_builder.SetInsertPoint(_basicBlock.llvm());
 	auto& stack = _basicBlock.localStack();
 
-	for (auto currentPC = _basicBlock.begin(); currentPC != _basicBlock.end(); ++currentPC)
+	auto begin = _bytecode.begin() + _basicBlock.begin();
+	auto end = _bytecode.begin() + _basicBlock.end();
+
+	for (auto it = begin; it != end; ++it)
 	{
-		auto inst = static_cast<Instruction>(_bytecode[currentPC]);
+		auto inst = Instruction(*it);
 
 		_gasMeter.count(inst);
 
@@ -476,10 +479,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 
 		case Instruction::ANY_PUSH:
 		{
-			auto curr = _bytecode.begin() + currentPC;	// TODO: replace currentPC with iterator
-			auto value = readPushData(curr, _bytecode.end());
-			currentPC = curr - _bytecode.begin();
-
+			auto value = readPushData(it, end);
 			stack.push(Constant::get(value));
 			break;
 		}
@@ -554,24 +554,16 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 			if (auto constant = llvm::dyn_cast<llvm::ConstantInt>(target))
 			{
 				auto&& c = constant->getValue();
-				if (c.ult(_bytecode.size()))
-				{
-					auto v = c.getZExtValue();
-					auto it = m_basicBlocks.find(v);
-					if (it != m_basicBlocks.end() && it->second.isJumpDest())
-						targetBlock = it->second.llvm();
-				}
-
-				if (!targetBlock)
-					targetBlock = getBadJumpBlock();
+				auto targetIdx = c.getActiveBits() <= 64 ? c.getZExtValue() : -1;
+				auto it = m_basicBlocks.find(targetIdx);
+				targetBlock = (it != m_basicBlocks.end() && it->second.isJumpDest()) ? it->second.llvm() : getBadJumpBlock();
 			}
 
+			// TODO: Improve; check for constants
 			if (inst == Instruction::JUMP)
 			{
 				if (targetBlock)
 				{
-					// The target address is computed at compile time,
-					// just pop it without looking...
 					m_builder.CreateBr(targetBlock);
 				}
 				else
@@ -607,7 +599,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 
 		case Instruction::PC:
 		{
-			auto value = Constant::get(currentPC);
+			auto value = Constant::get(it - _bytecode.begin());
 			stack.push(value);
 			break;
 		}
