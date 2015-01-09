@@ -1,8 +1,0 @@
-
-
-- make sure lastActive is saved at disconnect
-- put peer selection loop for inbound connections into verifyPeer
-- use peerError in peer selector
-
-
-
