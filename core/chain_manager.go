@@ -34,6 +34,20 @@ func CalcDifficulty(block, parent *types.Block) *big.Int {
 	return diff
 }
 
+func CalculateTD(block, parent *types.Block) *big.Int {
+	uncleDiff := new(big.Int)
+	for _, uncle := range block.Uncles() {
+		uncleDiff = uncleDiff.Add(uncleDiff, uncle.Difficulty)
+	}
+
+	// TD(genesis_block) = 0 and TD(B) = TD(B.parent) + sum(u.difficulty for u in B.uncles) + B.difficulty
+	td := new(big.Int)
+	td = td.Add(parent.Td, uncleDiff)
+	td = td.Add(td, block.Header().Difficulty)
+
+	return td
+}
+
 func CalcGasLimit(parent, block *types.Block) *big.Int {
 	if block.Number().Cmp(big.NewInt(0)) == 0 {
 		return ethutil.BigPow(10, 6)
@@ -360,7 +374,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			cblock := self.currentBlock
 			if td.Cmp(self.td) > 0 {
 				if block.Header().Number.Cmp(new(big.Int).Add(cblock.Header().Number, ethutil.Big1)) < 0 {
-					chainlogger.Infof("Split detected. New head #%v (%x), was #%v (%x)\n", block.Header().Number, block.Hash()[:4], cblock.Header().Number, cblock.Hash()[:4])
+					chainlogger.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, block.Hash()[:4], td, cblock.Header().Number, cblock.Hash()[:4], self.td)
 				}
 
 				self.setTotalDifficulty(td)

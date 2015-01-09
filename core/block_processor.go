@@ -2,7 +2,6 @@ package core
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -217,44 +216,21 @@ func (sm *BlockProcessor) ProcessWithParent(block, parent *types.Block) (td *big
 		return
 	}
 
-	// Calculate the new total difficulty and sync back to the db
-	if td, ok := sm.CalculateTD(block); ok {
-		// Sync the current block's state to the database and cancelling out the deferred Undo
-		state.Sync()
+	// Calculate the td for this block
+	td = CalculateTD(block, parent)
+	// Sync the current block's state to the database and cancelling out the deferred Undo
+	state.Sync()
+	// Set the block hashes for the current messages
+	state.Manifest().SetHash(block.Hash())
+	messages = state.Manifest().Messages
+	// Reset the manifest XXX We need this?
+	state.Manifest().Reset()
+	// Remove transactions from the pool
+	sm.txpool.RemoveSet(block.Transactions())
 
-		state.Manifest().SetHash(block.Hash())
+	chainlogger.Infof("processed block #%d (%x...)\n", header.Number, block.Hash()[0:4])
 
-		messages := state.Manifest().Messages
-		state.Manifest().Reset()
-
-		chainlogger.Infof("processed block #%d (%x...)\n", header.Number, block.Hash()[0:4])
-
-		sm.txpool.RemoveSet(block.Transactions())
-
-		return td, messages, nil
-	} else {
-		return nil, nil, errors.New("total diff failed")
-	}
-}
-
-func (sm *BlockProcessor) CalculateTD(block *types.Block) (*big.Int, bool) {
-	uncleDiff := new(big.Int)
-	for _, uncle := range block.Uncles() {
-		uncleDiff = uncleDiff.Add(uncleDiff, uncle.Difficulty)
-	}
-
-	// TD(genesis_block) = 0 and TD(B) = TD(B.parent) + sum(u.difficulty for u in B.uncles) + B.difficulty
-	td := new(big.Int)
-	td = td.Add(sm.bc.Td(), uncleDiff)
-	td = td.Add(td, block.Header().Difficulty)
-
-	// The new TD will only be accepted if the new difficulty is
-	// is greater than the previous.
-	if td.Cmp(sm.bc.Td()) > 0 {
-		return td, true
-	}
-
-	return nil, false
+	return td, messages, nil
 }
 
 // Validates the current block. Returns an error if the block was invalid,

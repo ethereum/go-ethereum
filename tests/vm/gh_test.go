@@ -81,7 +81,7 @@ func RunVmTest(p string, t *testing.T) {
 	for name, test := range tests {
 		/*
 			helper.Logger.SetLogLevel(5)
-			if name != "jump0_jumpdest2" {
+			if name != "createNameRegistratorZeroMem" {
 				continue
 			}
 		*/
