@@ -13,31 +13,33 @@ var cadlogger = ethlogger.NewLogger("CAD")
 const (
 	hashBits  = 160
 	rowLength = 10
-	maxAge    = 1
 )
 
+var maxAge = 180 * time.Nanosecond
+var purgeInterval = 300 * time.Second
+
 type Cademlia struct {
-	hash      []byte
-	hashBits  int
-	rowLength int
-	rows      [hashBits]*row
+	Hash      []byte
+	HashBits  int
+	RowLength int
 
-	depth int
+	MaxProxSize int
 
-	maxAge        time.Duration
-	purgeInterval time.Duration
+	MaxAge        time.Duration
+	PurgeInterval time.Duration
+
+	proxLimit int
+	proxSize  int
+
+	rows []*row
 
 	lock  sync.RWMutex
 	quitC chan bool
 }
 
-func newCademlia(hash []byte) *Cademlia {
+func NewCademlia(hash []byte) *Cademlia {
 	return &Cademlia{
-		hash:      hash,
-		hashBits:  hashBits,
-		rowLength: rowLength,
-		maxAge:    maxAge * time.Second,
-		rows:      [hashBits]*row{},
+		Hash: hash, // compulsory fields without default
 	}
 }
 
@@ -46,6 +48,28 @@ func (self *Cademlia) Start() error {
 	defer self.lock.Unlock()
 	if self.quitC != nil {
 		return nil
+	}
+	// these + self.Hash can and should be checked against the
+	// saved file/db
+	if self.HashBits == 0 {
+		self.HashBits = hashBits
+	}
+	if self.RowLength == 0 {
+		self.RowLength = rowLength
+	}
+	// runtime parameters
+	if self.MaxProxSize == 0 {
+		self.MaxProxSize = self.RowLength
+	}
+	if self.MaxAge == time.Duration(0) {
+		self.MaxAge = maxAge
+	}
+	if self.PurgeInterval == time.Duration(0) {
+		self.PurgeInterval = purgeInterval
+	}
+	self.rows = make([]*row, self.HashBits)
+	for i, _ := range self.rows {
+		self.rows[i] = &row{} // will initialise row{int(0),[]*entry(nil),sync.Mutex}
 	}
 	self.quitC = make(chan bool)
 	go self.purgeLoop()
@@ -63,12 +87,14 @@ func (self *Cademlia) Stop() {
 }
 
 func (self *Cademlia) AddPeer(peer peerInfo) (err error) {
-	index := self.commonPrefixLength(peer.Hash())
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	index := self.DistanceTo(peer.Hash())
 	row := self.rows[index]
-	needed := row.insert(&entry{peer: peer})
-	if needed {
-		if index >= self.depth {
-			go self.updateDepth()
+	added := row.insert(&entry{peer: peer})
+	if added {
+		if index >= self.proxLimit {
+			go self.adjustProx(index, 1)
 		}
 		cadlogger.Infof("accept peer %x...", peer.Hash()[:8])
 	} else {
@@ -78,15 +104,42 @@ func (self *Cademlia) AddPeer(peer peerInfo) (err error) {
 	return
 }
 
+func (self *Cademlia) adjustProx(r int, add int) {
+	if self.proxSize+add > self.MaxProxSize &&
+		self.rows[r].len() > 0 {
+		self.proxLimit--
+	} else {
+		self.proxSize += add
+	}
+}
+
+func (self *Cademlia) updateProx() {
+	var sum, proxSize int
+	for _, r := range self.rows {
+		sum += r.len()
+		if sum <= self.MaxProxSize || r.len() == 0 {
+			proxSize = sum
+		}
+	}
+	self.lock.Lock()
+	self.proxSize = proxSize
+	self.lock.Unlock()
+}
+
 func (self *Cademlia) GetPeers(target []byte) (peers []peerInfo) {
-	index := self.commonPrefixLength(target)
+	self.lock.RLock()
+	defer self.lock.RUnlock()
+	index := self.DistanceTo(target)
 	var entries []*entry
-	if index >= self.depth {
-		for i := self.depth; i < self.hashBits; i++ {
+	if index >= self.proxLimit {
+		for i := self.proxLimit; i < self.HashBits; i++ {
 			entries = append(entries, self.rows[i].row...)
 		}
 	} else {
 		entries = self.rows[index].row
+	}
+	for _, entry := range entries {
+		peers = append(peers, entry.peer)
 	}
 	return
 }
@@ -102,16 +155,23 @@ type row struct {
 	lock   sync.RWMutex
 }
 
-func (self *row) insert(entry *entry) (ok bool) {
+func (self *row) len() int {
+	self.lock.RLock()
+	defer self.lock.RUnlock()
+	return self.length
+}
+
+func (self *row) insert(entry *entry) (added bool) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	if len(self.row) >= self.length {
+	if len(self.row) >= self.length { // >= allows us to add peers beyond the Rowlength limitation
 		worst := self.worst()
-		// err = diconnectF(self.row[worst])
+		self.row[worst].peer.Disconnect(DiscSubprotocolError)
 		self.row[worst] = entry
 	} else {
 		self.row = append(self.row, entry)
-		ok = true
+		added = true
+		self.length++
 	}
 	return
 }
@@ -128,33 +188,37 @@ func (self *row) worst() (index int) {
 }
 
 func (self *row) purge(recently time.Time) {
+	self.lock.Lock()
 	var newRow []*entry
 	for _, entry := range self.row {
 		if !entry.peer.LastActive().Before(recently) {
 			newRow = append(newRow, entry)
 		} else {
-			// self.DisconnectF(entry.peer)
+			entry.peer.Disconnect(DiscSubprotocolError)
 		}
 	}
+	self.row = newRow
+	self.length = len(newRow)
+	self.lock.Unlock()
 }
 
 func Hash(key []byte) []byte {
 	return key
 }
 
-func (self *Cademlia) updateDepth() {
-}
-
 func (self *Cademlia) purgeLoop() {
-	ticker := time.Tick(self.purgeInterval)
+	ticker := time.Tick(self.PurgeInterval)
 	for {
 		select {
 		case <-self.quitC:
 			return
 		case <-ticker:
+			self.lock.Lock()
 			for _, r := range self.rows {
-				r.purge(time.Now().Add(-self.maxAge))
+				r.purge(time.Now().Add(-self.MaxAge))
 			}
+			self.updateProx()
+			self.lock.Unlock()
 		}
 	}
 }
@@ -166,14 +230,18 @@ func Xor(one, other []byte) (xor []byte) {
 	return
 }
 
-func (self *Cademlia) commonPrefixLength(other []byte) (ret int) {
-	xor := Xor(self.hash, other)
-	for i := 0; i < self.hashBits; i++ {
+func (self *Cademlia) DistanceTo(other []byte) (ret int) {
+	return self.Distance(self.Hash, other)
+}
+
+func (self *Cademlia) Distance(one, other []byte) (ret int) {
+	xor := Xor(one, other)
+	for i := 0; i < self.HashBits; i++ {
 		for j := 0; j < 8; j++ {
 			if (xor[i]>>uint8(7-j))&0x1 != 0 {
 				return i*8 + j
 			}
 		}
 	}
-	return self.hashBits*8 - 1
+	return self.HashBits*8 - 1
 }
