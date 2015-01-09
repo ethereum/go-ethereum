@@ -41,7 +41,7 @@ uint64_t const c_logDataGas = 1;
 uint64_t const c_logTopicGas = 32;
 uint64_t const c_copyGas = 1;
 
-uint64_t getStepCost(Instruction inst) // TODO: Add this function to FeeSructure (pull request submitted)
+uint64_t getStepCost(Instruction inst)
 {
 	switch (inst)
 	{
