@@ -1,7 +1,6 @@
 package qwhisper
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -42,7 +41,6 @@ func (self *Whisper) Post(payload []string, to, from string, topics []string, pr
 		data = append(data, ethutil.Hex2Bytes(d)...)
 	}
 
-	fmt.Println(payload, data, "from", from, fromHex(from), crypto.ToECDSA(fromHex(from)))
 	msg := whisper.NewMessage(data)
 	envelope, err := msg.Seal(time.Duration(priority*100000), whisper.Opts{
 		Ttl:    time.Duration(ttl),

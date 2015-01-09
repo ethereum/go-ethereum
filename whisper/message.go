@@ -2,7 +2,6 @@ package whisper
 
 import (
 	"crypto/ecdsa"
-	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -54,7 +53,6 @@ type Opts struct {
 }
 
 func (self *Message) Seal(pow time.Duration, opts Opts) (*Envelope, error) {
-	fmt.Println(opts)
 	if opts.From != nil {
 		err := self.sign(opts.From)
 		if err != nil {

@@ -333,7 +333,6 @@ Rectangle {
 
 			case "shh_newIdentity":
 				var id = shh.newIdentity()
-				console.log("newIdentity", id)
 				postData(data._id, id)
 
 				break
