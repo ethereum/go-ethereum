@@ -129,10 +129,9 @@ func (self *JSRE) initStdFuncs() {
  */
 
 func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
-	var state *state.StateDB
+	var block *types.Block
 
 	if len(call.ArgumentList) > 0 {
-		var block *types.Block
 		if call.Argument(0).IsNumber() {
 			num, _ := call.Argument(0).ToInteger()
 			block = self.ethereum.ChainManager().GetBlockByNumber(uint64(num))
@@ -149,12 +148,12 @@ func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
 			return otto.UndefinedValue()
 		}
 
-		state = block.State()
 	} else {
-		state = self.ethereum.ChainManager().State()
+		block = self.ethereum.ChainManager().CurrentBlock()
 	}
 
-	v, _ := self.Vm.ToValue(state.Dump())
+	statedb := state.New(block.Root(), self.ethereum.Db())
+	v, _ := self.Vm.ToValue(statedb.Dump())
 
 	return v
 }

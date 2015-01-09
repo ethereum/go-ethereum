@@ -3,8 +3,6 @@ package p2p
 import (
 	"bytes"
 	"time"
-
-	"github.com/ethereum/go-ethereum/ethutil"
 )
 
 // Protocol represents a P2P subprotocol implementation.
@@ -89,20 +87,25 @@ type baseProtocol struct {
 
 func runBaseProtocol(peer *Peer, rw MsgReadWriter) error {
 	bp := &baseProtocol{rw, peer}
-	if err := bp.doHandshake(rw); err != nil {
+	errc := make(chan error, 1)
+	go func() { errc <- rw.WriteMsg(bp.handshakeMsg()) }()
+	if err := bp.readHandshake(); err != nil {
+		return err
+	}
+	// handle write error
+	if err := <-errc; err != nil {
 		return err
 	}
 	// run main loop
-	quit := make(chan error, 1)
 	go func() {
 		for {
 			if err := bp.handle(rw); err != nil {
-				quit <- err
+				errc <- err
 				break
 			}
 		}
 	}()
-	return bp.loop(quit)
+	return bp.loop(errc)
 }
 
 var pingTimeout = 2 * time.Second
@@ -116,14 +119,14 @@ func (bp *baseProtocol) loop(quit <-chan error) error {
 
 	getPeersTick := time.NewTicker(10 * time.Second)
 	defer getPeersTick.Stop()
-	err := bp.rw.EncodeMsg(getPeersMsg)
+	err := EncodeMsg(bp.rw, getPeersMsg)
 
 	for err == nil {
 		select {
 		case err = <-quit:
 			return err
 		case <-getPeersTick.C:
-			err = bp.rw.EncodeMsg(getPeersMsg)
+			err = EncodeMsg(bp.rw, getPeersMsg)
 		case event := <-activity.Chan():
 			ping.Reset(pingTimeout)
 			lastActive = event.(time.Time)
@@ -131,7 +134,7 @@ func (bp *baseProtocol) loop(quit <-chan error) error {
 			if lastActive.Add(pingTimeout * 2).Before(t) {
 				err = newPeerError(errPingTimeout, "")
 			} else if lastActive.Add(pingTimeout).Before(t) {
-				err = bp.rw.EncodeMsg(pingMsg)
+				err = EncodeMsg(bp.rw, pingMsg)
 			}
 		}
 	}
@@ -161,7 +164,7 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 		return discRequestedError(reason[0])
 
 	case pingMsg:
-		return bp.rw.EncodeMsg(pongMsg)
+		return EncodeMsg(bp.rw, pongMsg)
 
 	case pongMsg:
 
@@ -174,7 +177,7 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 		//
 		// TODO: add event mechanism to notify baseProtocol for new peers
 		if len(peers) > 0 {
-			return bp.rw.EncodeMsg(peersMsg, peers)
+			return EncodeMsg(bp.rw, peersMsg, peers...)
 		}
 
 	case peersMsg:
@@ -193,14 +196,9 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 	return nil
 }
 
-func (bp *baseProtocol) doHandshake(rw MsgReadWriter) error {
-	// send our handshake
-	if err := rw.WriteMsg(bp.handshakeMsg()); err != nil {
-		return err
-	}
-
+func (bp *baseProtocol) readHandshake() error {
 	// read and handle remote handshake
-	msg, err := rw.ReadMsg()
+	msg, err := bp.rw.ReadMsg()
 	if err != nil {
 		return err
 	}
@@ -210,12 +208,10 @@ func (bp *baseProtocol) doHandshake(rw MsgReadWriter) error {
 	if msg.Size > baseProtocolMaxMsgSize {
 		return newPeerError(errMisc, "message too big")
 	}
-
 	var hs handshake
 	if err := msg.Decode(&hs); err != nil {
 		return err
 	}
-
 	// validate handshake info
 	if hs.Version != baseProtocolVersion {
 		return newPeerError(errP2PVersionMismatch, "Require protocol %d, received %d\n",
@@ -238,9 +234,7 @@ func (bp *baseProtocol) doHandshake(rw MsgReadWriter) error {
 	if err := bp.peer.pubkeyHook(pa); err != nil {
 		return newPeerError(errPubkeyForbidden, "%v", err)
 	}
-
 	// TODO: remove Caps with empty name
-
 	var addr *peerAddr
 	if hs.ListenPort != 0 {
 		addr = newPeerAddr(bp.peer.conn.RemoteAddr(), hs.NodeID)
@@ -271,9 +265,9 @@ func (bp *baseProtocol) handshakeMsg() Msg {
 	)
 }
 
-func (bp *baseProtocol) peerList() []ethutil.RlpEncodable {
+func (bp *baseProtocol) peerList() []interface{} {
 	peers := bp.peer.otherPeers()
-	ds := make([]ethutil.RlpEncodable, 0, len(peers))
+	ds := make([]interface{}, 0, len(peers))
 	for _, p := range peers {
 		p.infolock.Lock()
 		addr := p.listenAddr

@@ -79,6 +79,7 @@ func (self *Envelope) Open(prv *ecdsa.PrivateKey) (msg *Message, err error) {
 	if prv != nil {
 		message.Payload, err = crypto.Decrypt(prv, payload)
 		switch err {
+		case nil: // OK
 		case ecies.ErrInvalidPublicKey: // Payload isn't encrypted
 			message.Payload = payload
 			return &message, err

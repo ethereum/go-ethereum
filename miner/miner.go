@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/pow/ezp"
+	"github.com/ethereum/go-ethereum/state"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -56,7 +57,7 @@ type Miner struct {
 	eth    *eth.Ethereum
 	events event.Subscription
 
-	uncles    types.Blocks
+	uncles    []*types.Header
 	localTxs  map[int]*LocalTx
 	localTxId int
 
@@ -69,6 +70,7 @@ type Miner struct {
 	mining bool
 
 	MinAcceptedGasPrice *big.Int
+	Extra               string
 }
 
 func New(coinbase []byte, eth *eth.Ethereum) *Miner {
@@ -174,25 +176,27 @@ func (self *Miner) reset() {
 
 func (self *Miner) mine() {
 	var (
-		blockManager = self.eth.BlockManager()
-		chainMan     = self.eth.ChainManager()
-		block        = chainMan.NewBlock(self.Coinbase)
+		blockProcessor = self.eth.BlockProcessor()
+		chainMan       = self.eth.ChainManager()
+		block          = chainMan.NewBlock(self.Coinbase)
+		state          = state.New(block.Root(), self.eth.Db())
 	)
+	block.Header().Extra = self.Extra
 
 	// Apply uncles
 	if len(self.uncles) > 0 {
 		block.SetUncles(self.uncles)
 	}
 
-	parent := chainMan.GetBlock(block.PrevHash)
-	coinbase := block.State().GetOrNewStateObject(block.Coinbase)
-	coinbase.SetGasPool(block.CalcGasLimit(parent))
+	parent := chainMan.GetBlock(block.ParentHash())
+	coinbase := state.GetOrNewStateObject(block.Coinbase())
+	coinbase.SetGasPool(core.CalcGasLimit(parent, block))
 
 	transactions := self.finiliseTxs()
 
 	// Accumulate all valid transactions and apply them to the new state
 	// Error may be ignored. It's not important during mining
-	receipts, txs, _, erroneous, err := blockManager.ApplyTransactions(coinbase, block.State(), block, transactions, true)
+	receipts, txs, _, erroneous, err := blockProcessor.ApplyTransactions(coinbase, state, block, transactions, true)
 	if err != nil {
 		minerlogger.Debugln(err)
 	}
@@ -202,16 +206,17 @@ func (self *Miner) mine() {
 	block.SetReceipts(receipts)
 
 	// Accumulate the rewards included for this block
-	blockManager.AccumelateRewards(block.State(), block, parent)
+	blockProcessor.AccumelateRewards(state, block, parent)
 
-	block.State().Update(ethutil.Big0)
+	state.Update(ethutil.Big0)
+	block.SetRoot(state.Root())
 
 	minerlogger.Infof("Mining on block. Includes %v transactions", len(transactions))
 
 	// Find a valid nonce
 	nonce := self.pow.Search(block, self.powQuitCh)
 	if nonce != nil {
-		block.Nonce = nonce
+		block.Header().Nonce = nonce
 		err := chainMan.InsertChain(types.Blocks{block})
 		if err != nil {
 			minerlogger.Infoln(err)

@@ -137,7 +137,7 @@ func Encode(object interface{}) []byte {
 		case byte:
 			buff.Write(Encode(big.NewInt(int64(t))))
 		case *big.Int:
-			// Not sure how this is possible while we check for
+			// Not sure how this is possible while we check for nil
 			if t == nil {
 				buff.WriteByte(0xc0)
 			} else {

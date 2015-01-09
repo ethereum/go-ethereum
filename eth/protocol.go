@@ -3,7 +3,7 @@ package eth
 import (
 	"bytes"
 	"fmt"
-	"math"
+	"io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	ProtocolVersion    = 49
+	ProtocolVersion    = 51
 	NetworkId          = 0
 	ProtocolLength     = uint64(8)
 	ProtocolMaxMsgSize = 10 * 1024 * 1024
@@ -67,6 +67,8 @@ type newBlockMsgData struct {
 	TD    *big.Int
 }
 
+const maxHashes = 255
+
 type getBlockHashesMsgData struct {
 	Hash   []byte
 	Amount uint64
@@ -95,14 +97,13 @@ func runEthProtocol(txPool txPool, chainManager chainManager, blockPool blockPoo
 		blockPool:    blockPool,
 		rw:           rw,
 		peer:         peer,
-		id:           (string)(peer.Identity().Pubkey()),
+		id:           fmt.Sprintf("%x", peer.Identity().Pubkey()[:8]),
 	}
 	err = self.handleStatus()
 	if err == nil {
 		for {
 			err = self.handle()
 			if err != nil {
-				fmt.Println(err)
 				self.blockPool.RemovePeer(self.id)
 				break
 			}
@@ -117,112 +118,118 @@ func (self *ethProtocol) handle() error {
 		return err
 	}
 	if msg.Size > ProtocolMaxMsgSize {
-		return ProtocolError(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
+		return self.protoError(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
 	}
 	// make sure that the payload has been fully consumed
 	defer msg.Discard()
 
 	switch msg.Code {
-
+	case GetTxMsg: // ignore
 	case StatusMsg:
-		return ProtocolError(ErrExtraStatusMsg, "")
+		return self.protoError(ErrExtraStatusMsg, "")
 
 	case TxMsg:
 		// TODO: rework using lazy RLP stream
 		var txs []*types.Transaction
 		if err := msg.Decode(&txs); err != nil {
-			return ProtocolError(ErrDecode, "%v", err)
+			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 		}
 		self.txPool.AddTransactions(txs)
 
 	case GetBlockHashesMsg:
 		var request getBlockHashesMsgData
 		if err := msg.Decode(&request); err != nil {
-			return ProtocolError(ErrDecode, "%v", err)
+			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
+		}
+
+		//request.Amount = uint64(math.Min(float64(maxHashes), float64(request.Amount)))
+		if request.Amount > maxHashes {
+			request.Amount = maxHashes
 		}
 		hashes := self.chainManager.GetBlockHashesFromHash(request.Hash, request.Amount)
-		return self.rw.EncodeMsg(BlockHashesMsg, ethutil.ByteSliceToInterface(hashes)...)
+		return p2p.EncodeMsg(self.rw, BlockHashesMsg, ethutil.ByteSliceToInterface(hashes)...)
 
 	case BlockHashesMsg:
 		// TODO: redo using lazy decode , this way very inefficient on known chains
-		msgStream := rlp.NewListStream(msg.Payload, uint64(msg.Size))
+		msgStream := rlp.NewStream(msg.Payload)
 		var err error
+		var i int
+
 		iter := func() (hash []byte, ok bool) {
 			hash, err = msgStream.Bytes()
 			if err == nil {
+				i++
 				ok = true
+			} else {
+				if err != io.EOF {
+					self.protoError(ErrDecode, "msg %v: after %v hashes : %v", msg, i, err)
+				}
 			}
 			return
 		}
+
 		self.blockPool.AddBlockHashes(iter, self.id)
-		if err != nil && err != rlp.EOL {
-			return ProtocolError(ErrDecode, "%v", err)
-		}
 
 	case GetBlocksMsg:
-		var blockHashes [][]byte
-		if err := msg.Decode(&blockHashes); err != nil {
-			return ProtocolError(ErrDecode, "%v", err)
-		}
-		max := int(math.Min(float64(len(blockHashes)), blockHashesBatchSize))
+		msgStream := rlp.NewStream(msg.Payload)
 		var blocks []interface{}
-		for i, hash := range blockHashes {
-			if i >= max {
-				break
+		var i int
+		for {
+			i++
+			var hash []byte
+			if err := msgStream.Decode(&hash); err != nil {
+				if err == io.EOF {
+					break
+				} else {
+					return self.protoError(ErrDecode, "msg %v: %v", msg, err)
+				}
 			}
 			block := self.chainManager.GetBlock(hash)
 			if block != nil {
-				blocks = append(blocks, block.Value().Raw())
+				blocks = append(blocks, block)
+			}
+			if i == blockHashesBatchSize {
+				break
 			}
 		}
-		return self.rw.EncodeMsg(BlocksMsg, blocks...)
+		return p2p.EncodeMsg(self.rw, BlocksMsg, blocks...)
 
 	case BlocksMsg:
-		msgStream := rlp.NewListStream(msg.Payload, uint64(msg.Size))
+		msgStream := rlp.NewStream(msg.Payload)
 		for {
-			var block *types.Block
+			var block types.Block
 			if err := msgStream.Decode(&block); err != nil {
-				if err == rlp.EOL {
+				if err == io.EOF {
 					break
 				} else {
-					return ProtocolError(ErrDecode, "%v", err)
+					return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 				}
 			}
-			self.blockPool.AddBlock(block, self.id)
+			self.blockPool.AddBlock(&block, self.id)
 		}
 
 	case NewBlockMsg:
 		var request newBlockMsgData
 		if err := msg.Decode(&request); err != nil {
-			return ProtocolError(ErrDecode, "%v", err)
+			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 		}
 		hash := request.Block.Hash()
 		// to simplify backend interface adding a new block
 		// uses AddPeer followed by AddHashes, AddBlock only if peer is the best peer
 		// (or selected as new best peer)
 		if self.blockPool.AddPeer(request.TD, hash, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect) {
-			called := true
-			iter := func() (hash []byte, ok bool) {
-				if called {
-					called = false
-					return hash, true
-				} else {
-					return
-				}
-			}
-			self.blockPool.AddBlockHashes(iter, self.id)
 			self.blockPool.AddBlock(request.Block, self.id)
 		}
 
 	default:
-		return ProtocolError(ErrInvalidMsgCode, "%v", msg.Code)
+		return self.protoError(ErrInvalidMsgCode, "%v", msg.Code)
 	}
 	return nil
 }
 
 type statusMsgData struct {
-	ProtocolVersion uint
-	NetworkId       uint
+	ProtocolVersion uint32
+	NetworkId       uint32
 	TD              *big.Int
 	CurrentBlock    []byte
 	GenesisBlock    []byte
@@ -253,56 +260,56 @@ func (self *ethProtocol) handleStatus() error {
 	}
 
 	if msg.Code != StatusMsg {
-		return ProtocolError(ErrNoStatusMsg, "first msg has code %x (!= %x)", msg.Code, StatusMsg)
+		return self.protoError(ErrNoStatusMsg, "first msg has code %x (!= %x)", msg.Code, StatusMsg)
 	}
 
 	if msg.Size > ProtocolMaxMsgSize {
-		return ProtocolError(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
+		return self.protoError(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
 	}
 
 	var status statusMsgData
 	if err := msg.Decode(&status); err != nil {
-		return ProtocolError(ErrDecode, "%v", err)
+		return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 	}
 
 	_, _, genesisBlock := self.chainManager.Status()
 
 	if bytes.Compare(status.GenesisBlock, genesisBlock) != 0 {
-		return ProtocolError(ErrGenesisBlockMismatch, "%x (!= %x)", status.GenesisBlock, genesisBlock)
+		return self.protoError(ErrGenesisBlockMismatch, "%x (!= %x)", status.GenesisBlock, genesisBlock)
 	}
 
 	if status.NetworkId != NetworkId {
-		return ProtocolError(ErrNetworkIdMismatch, "%d (!= %d)", status.NetworkId, NetworkId)
+		return self.protoError(ErrNetworkIdMismatch, "%d (!= %d)", status.NetworkId, NetworkId)
 	}
 
 	if ProtocolVersion != status.ProtocolVersion {
-		return ProtocolError(ErrProtocolVersionMismatch, "%d (!= %d)", status.ProtocolVersion, ProtocolVersion)
+		return self.protoError(ErrProtocolVersionMismatch, "%d (!= %d)", status.ProtocolVersion, ProtocolVersion)
 	}
 
 	self.peer.Infof("Peer is [eth] capable (%d/%d). TD=%v H=%x\n", status.ProtocolVersion, status.NetworkId, status.TD, status.CurrentBlock[:4])
 
-	//self.blockPool.AddPeer(status.TD, status.CurrentBlock, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect)
-	self.peer.Infoln("AddPeer(IGNORED)")
+	self.blockPool.AddPeer(status.TD, status.CurrentBlock, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect)
 
 	return nil
 }
 
 func (self *ethProtocol) requestBlockHashes(from []byte) error {
 	self.peer.Debugf("fetching hashes (%d) %x...\n", blockHashesBatchSize, from[0:4])
-	return self.rw.EncodeMsg(GetBlockHashesMsg, from, blockHashesBatchSize)
+	return p2p.EncodeMsg(self.rw, GetBlockHashesMsg, interface{}(from), uint64(blockHashesBatchSize))
 }
 
 func (self *ethProtocol) requestBlocks(hashes [][]byte) error {
 	self.peer.Debugf("fetching %v blocks", len(hashes))
-	return self.rw.EncodeMsg(GetBlocksMsg, ethutil.ByteSliceToInterface(hashes))
+	return p2p.EncodeMsg(self.rw, GetBlocksMsg, ethutil.ByteSliceToInterface(hashes)...)
 }
 
 func (self *ethProtocol) protoError(code int, format string, params ...interface{}) (err *protocolError) {
 	err = ProtocolError(code, format, params...)
 	if err.Fatal() {
-		self.peer.Errorln(err)
+		self.peer.Errorln("err %v", err)
+		// disconnect
 	} else {
-		self.peer.Debugln(err)
+		self.peer.Debugf("fyi %v", err)
 	}
 	return
 }
@@ -310,10 +317,10 @@ func (self *ethProtocol) protoError(code int, format string, params ...interface
 func (self *ethProtocol) protoErrorDisconnect(code int, format string, params ...interface{}) {
 	err := ProtocolError(code, format, params...)
 	if err.Fatal() {
-		self.peer.Errorln(err)
+		self.peer.Errorln("err %v", err)
 		// disconnect
 	} else {
-		self.peer.Debugln(err)
+		self.peer.Debugf("fyi %v", err)
 	}
 
 }

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
@@ -28,18 +27,17 @@ import (
  * 6) Derive new state root
  */
 type StateTransition struct {
-	coinbase, receiver []byte
-	msg                Message
-	gas, gasPrice      *big.Int
-	initialGas         *big.Int
-	value              *big.Int
-	data               []byte
-	state              *state.StateDB
-	block              *types.Block
+	coinbase      []byte
+	msg           Message
+	gas, gasPrice *big.Int
+	initialGas    *big.Int
+	value         *big.Int
+	data          []byte
+	state         *state.StateDB
 
 	cb, rec, sen *state.StateObject
 
-	Env vm.Environment
+	env vm.Environment
 }
 
 type Message interface {
@@ -69,16 +67,19 @@ func MessageGasValue(msg Message) *big.Int {
 	return new(big.Int).Mul(msg.Gas(), msg.GasPrice())
 }
 
-func NewStateTransition(coinbase *state.StateObject, msg Message, state *state.StateDB, block *types.Block) *StateTransition {
-	return &StateTransition{coinbase.Address(), msg.To(), msg, new(big.Int), new(big.Int).Set(msg.GasPrice()), new(big.Int), msg.Value(), msg.Data(), state, block, coinbase, nil, nil, nil}
-}
-
-func (self *StateTransition) VmEnv() vm.Environment {
-	if self.Env == nil {
-		self.Env = NewEnv(self.state, self.msg, self.block)
+func NewStateTransition(env vm.Environment, msg Message, coinbase *state.StateObject) *StateTransition {
+	return &StateTransition{
+		coinbase:   coinbase.Address(),
+		env:        env,
+		msg:        msg,
+		gas:        new(big.Int),
+		gasPrice:   new(big.Int).Set(msg.GasPrice()),
+		initialGas: new(big.Int),
+		value:      msg.Value(),
+		data:       msg.Data(),
+		state:      env.State(),
+		cb:         coinbase,
 	}
-
-	return self.Env
 }
 
 func (self *StateTransition) Coinbase() *state.StateObject {
@@ -112,7 +113,7 @@ func (self *StateTransition) BuyGas() error {
 
 	sender := self.From()
 	if sender.Balance().Cmp(MessageGasValue(self.msg)) < 0 {
-		return fmt.Errorf("Insufficient funds to pre-pay gas. Req %v, has %v", MessageGasValue(self.msg), sender.Balance())
+		return fmt.Errorf("insufficient ETH for gas (%x). Req %v, has %v", sender.Address()[:4], MessageGasValue(self.msg), sender.Balance())
 	}
 
 	coinbase := self.Coinbase()
@@ -183,18 +184,25 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 		return
 	}
 
-	vmenv := self.VmEnv()
-	var ref vm.ClosureRef
+	vmenv := self.env
+	var ref vm.ContextRef
 	if MessageCreatesContract(msg) {
-		self.rec = MakeContract(msg, self.state)
-
-		ret, err, ref = vmenv.Create(sender, self.rec.Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
-		ref.SetCode(ret)
+		contract := MakeContract(msg, self.state)
+		ret, err, ref = vmenv.Create(sender, contract.Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
+		if err == nil {
+			dataGas := big.NewInt(int64(len(ret)))
+			dataGas.Mul(dataGas, vm.GasCreateByte)
+			if err = self.UseGas(dataGas); err == nil {
+				//self.state.SetCode(ref.Address(), ret)
+				ref.SetCode(ret)
+			}
+		}
 	} else {
 		ret, err = vmenv.Call(self.From(), self.To().Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
 	}
+
 	if err != nil {
-		statelogger.Debugln(err)
+		self.UseGas(self.gas)
 	}
 
 	return
@@ -211,20 +219,19 @@ func MakeContract(msg Message, state *state.StateDB) *state.StateObject {
 }
 
 func (self *StateTransition) RefundGas() {
-	coinbaseSub := new(big.Int).Set(self.gas)
-	uhalf := new(big.Int).Div(self.GasUsed(), ethutil.Big2)
-	for addr, ref := range self.state.Refunds() {
-		refund := ethutil.BigMin(uhalf, ref)
-		coinbaseSub.Add(self.gas, refund)
-		self.state.AddBalance([]byte(addr), refund.Mul(refund, self.msg.GasPrice()))
-	}
-
 	coinbase, sender := self.Coinbase(), self.From()
-	coinbase.RefundGas(coinbaseSub, self.msg.GasPrice())
-
 	// Return remaining gas
 	remaining := new(big.Int).Mul(self.gas, self.msg.GasPrice())
 	sender.AddAmount(remaining)
+
+	uhalf := new(big.Int).Div(self.GasUsed(), ethutil.Big2)
+	for addr, ref := range self.state.Refunds() {
+		refund := ethutil.BigMin(uhalf, ref)
+		self.gas.Add(self.gas, refund)
+		self.state.AddBalance([]byte(addr), refund.Mul(refund, self.msg.GasPrice()))
+	}
+
+	coinbase.RefundGas(self.gas, self.msg.GasPrice())
 }
 
 func (self *StateTransition) GasUsed() *big.Int {

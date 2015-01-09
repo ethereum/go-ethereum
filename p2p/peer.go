@@ -45,8 +45,8 @@ func (d peerAddr) String() string {
 	return fmt.Sprintf("%v:%d", d.IP, d.Port)
 }
 
-func (d peerAddr) RlpData() interface{} {
-	return []interface{}{d.IP, d.Port, d.Pubkey}
+func (d *peerAddr) RlpData() interface{} {
+	return []interface{}{string(d.IP), d.Port, d.Pubkey}
 }
 
 // Peer represents a remote peer.
@@ -426,7 +426,7 @@ func (rw *proto) WriteMsg(msg Msg) error {
 }
 
 func (rw *proto) EncodeMsg(code uint64, data ...interface{}) error {
-	return rw.WriteMsg(NewMsg(code, data))
+	return rw.WriteMsg(NewMsg(code, data...))
 }
 
 func (rw *proto) ReadMsg() (Msg, error) {

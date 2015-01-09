@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -49,7 +50,14 @@ func encodePayload(params ...interface{}) []byte {
 // For the decoding rules, please see package rlp.
 func (msg Msg) Decode(val interface{}) error {
 	s := rlp.NewListStream(msg.Payload, uint64(msg.Size))
-	return s.Decode(val)
+	if err := s.Decode(val); err != nil {
+		return newPeerError(errInvalidMsg, "(code %#x) (size %d) %v", msg.Code, msg.Size, err)
+	}
+	return nil
+}
+
+func (msg Msg) String() string {
+	return fmt.Sprintf("msg #%v (%v bytes)", msg.Code, msg.Size)
 }
 
 // Discard reads any remaining payload data into a black hole.
@@ -63,20 +71,23 @@ type MsgReader interface {
 }
 
 type MsgWriter interface {
-	// WriteMsg sends an existing message.
-	// The Payload reader of the message is consumed.
+	// WriteMsg sends a message. It will block until the message's
+	// Payload has been consumed by the other end.
+	//
 	// Note that messages can be sent only once.
 	WriteMsg(Msg) error
-
-	// EncodeMsg writes an RLP-encoded message with the given
-	// code and data elements.
-	EncodeMsg(code uint64, data ...interface{}) error
 }
 
 // MsgReadWriter provides reading and writing of encoded messages.
 type MsgReadWriter interface {
 	MsgReader
 	MsgWriter
+}
+
+// EncodeMsg writes an RLP-encoded message with the given code and
+// data elements.
+func EncodeMsg(w MsgWriter, code uint64, data ...interface{}) error {
+	return w.WriteMsg(NewMsg(code, data...))
 }
 
 var magicToken = []byte{34, 64, 8, 145}
@@ -199,11 +210,6 @@ func (p *MsgPipeRW) WriteMsg(msg Msg) error {
 		}
 	}
 	return ErrPipeClosed
-}
-
-// EncodeMsg is a convenient shorthand for sending an RLP-encoded message.
-func (p *MsgPipeRW) EncodeMsg(code uint64, data ...interface{}) error {
-	return p.WriteMsg(NewMsg(code, data...))
 }
 
 // ReadMsg returns a message sent on the other end of the pipe.

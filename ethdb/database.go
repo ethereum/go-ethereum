@@ -71,6 +71,10 @@ func (self *LDBDatabase) NewIterator() iterator.Iterator {
 	return self.db.NewIterator(nil, nil)
 }
 
+func (self *LDBDatabase) Write(batch *leveldb.Batch) error {
+	return self.db.Write(batch, nil)
+}
+
 func (self *LDBDatabase) Close() {
 	// Close the leveldb database
 	self.db.Close()

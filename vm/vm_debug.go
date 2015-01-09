@@ -37,31 +37,27 @@ func NewDebugVm(env Environment) *DebugVm {
 	return &DebugVm{env: env, logTy: lt, Recoverable: true}
 }
 
-func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
+func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
 	self.env.SetDepth(self.env.Depth() + 1)
 
 	msg := self.env.State().Manifest().AddMessage(&state.Message{
 		To: me.Address(), From: caller.Address(),
-		Input:  callData,
-		Origin: self.env.Origin(),
-		Block:  self.env.BlockHash(), Timestamp: self.env.Time(), Coinbase: self.env.Coinbase(), Number: self.env.BlockNumber(),
+		Input:     callData,
+		Origin:    self.env.Origin(),
+		Timestamp: self.env.Time(), Coinbase: self.env.Coinbase(), Number: self.env.BlockNumber(),
 		Value: value,
 	})
-	closure := NewClosure(msg, caller, me, code, gas, price)
-
-	if p := Precompiled[string(me.Address())]; p != nil {
-		return self.RunPrecompiled(p, callData, closure)
-	}
+	context := NewContext(caller, me, code, gas, price)
 
 	if self.Recoverable {
 		// Recover from any require exception
 		defer func() {
 			if r := recover(); r != nil {
-				self.Endl()
+				self.Printf(" %v", r).Endl()
 
-				closure.UseGas(closure.Gas)
+				context.UseGas(context.Gas)
 
-				ret = closure.Return(nil)
+				ret = context.Return(nil)
 
 				err = fmt.Errorf("%v", r)
 
@@ -69,51 +65,42 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		}()
 	}
 
+	if p := Precompiled[string(me.Address())]; p != nil {
+		return self.RunPrecompiled(p, callData, context)
+	}
+
 	var (
 		op OpCode
 
-		destinations        = analyseJumpDests(closure.Code)
+		destinations        = analyseJumpDests(context.Code)
 		mem                 = NewMemory()
 		stack               = NewStack()
 		pc           uint64 = 0
 		step                = 0
 		prevStep            = 0
 		statedb             = self.env.State()
-		require             = func(m int) {
-			if stack.Len() < m {
-				panic(fmt.Sprintf("%04v (%v) stack err size = %d, required = %d", pc, op, stack.Len(), m))
-			}
-		}
 
 		jump = func(from uint64, to *big.Int) {
 			p := to.Uint64()
 
-			self.Printf(" ~> %v", to)
-			// Return to start
-			if p == 0 {
-				pc = 0
-			} else {
-				nop := OpCode(closure.GetOp(p))
-				if !(nop == JUMPDEST || destinations[from] != nil) {
-					panic(fmt.Sprintf("invalid jump destination (%v) %v", nop, p))
-				} else if nop == JUMP || nop == JUMPI {
-					panic(fmt.Sprintf("not allowed to JUMP(I) in to JUMP"))
-				}
-
-				pc = to.Uint64()
-
+			nop := context.GetOp(p)
+			if !destinations.Has(p) {
+				panic(fmt.Sprintf("invalid jump destination (%v) %v", nop, p))
 			}
+
+			self.Printf(" ~> %v", to)
+			pc = to.Uint64()
 
 			self.Endl()
 		}
 	)
 
+	vmlogger.Debugf("(%d) (%x) %x (code=%d) gas: %v (d) %x\n", self.env.Depth(), caller.Address()[:4], context.Address(), len(code), context.Gas, callData)
+
 	// Don't bother with the execution if there's no code.
 	if len(code) == 0 {
-		return closure.Return(nil), nil
+		return context.Return(nil), nil
 	}
-
-	vmlogger.Debugf("(%d) (%x) %x gas: %v (d) %x\n", self.env.Depth(), caller.Address()[:4], closure.Address(), closure.Gas, callData)
 
 	for {
 		prevStep = step
@@ -122,165 +109,22 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 		step++
 		// Get the memory location of pc
-		op = closure.GetOp(pc)
+		op = context.GetOp(pc)
 
-		gas := new(big.Int)
-		addStepGasUsage := func(amount *big.Int) {
-			if amount.Cmp(ethutil.Big0) >= 0 {
-				gas.Add(gas, amount)
-			}
-		}
+		self.Printf("(pc) %-3d -o- %-14s (m) %-4d (s) %-4d ", pc, op.String(), mem.Len(), stack.Len())
 
-		addStepGasUsage(GasStep)
+		newMemSize, gas := self.calculateGasAndSize(context, caller, op, statedb, mem, stack)
 
-		var newMemSize *big.Int = ethutil.Big0
-		// Stack Check, memory resize & gas phase
-		switch op {
-		// Stack checks only
-		case ISZERO, CALLDATALOAD, POP, JUMP, NOT: // 1
-			require(1)
-		case ADD, SUB, DIV, SDIV, MOD, SMOD, LT, GT, SLT, SGT, EQ, AND, OR, XOR, BYTE: // 2
-			require(2)
-		case ADDMOD, MULMOD: // 3
-			require(3)
-		case SWAP1, SWAP2, SWAP3, SWAP4, SWAP5, SWAP6, SWAP7, SWAP8, SWAP9, SWAP10, SWAP11, SWAP12, SWAP13, SWAP14, SWAP15, SWAP16:
-			n := int(op - SWAP1 + 2)
-			require(n)
-		case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:
-			n := int(op - DUP1 + 1)
-			require(n)
-		case LOG0, LOG1, LOG2, LOG3, LOG4:
-			n := int(op - LOG0)
-			require(n + 2)
+		self.Printf("(g) %-3v (%v)", gas, context.Gas)
 
-			gas.Set(GasLog)
-			addStepGasUsage(new(big.Int).Mul(big.NewInt(int64(n)), GasLog))
-
-			mSize, mStart := stack.Peekn()
-			addStepGasUsage(mSize)
-
-			newMemSize = calcMemSize(mStart, mSize)
-		case EXP:
-			require(2)
-
-			gas.Set(big.NewInt(int64(len(stack.data[stack.Len()-2].Bytes()) + 1)))
-		// Gas only
-		case STOP:
-			gas.Set(ethutil.Big0)
-		case SUICIDE:
-			require(1)
-
-			gas.Set(ethutil.Big0)
-		case SLOAD:
-			require(1)
-
-			gas.Set(GasSLoad)
-		// Memory resize & Gas
-		case SSTORE:
-			require(2)
-
-			var mult *big.Int
-			y, x := stack.Peekn()
-			val := statedb.GetState(closure.Address(), x.Bytes())
-			if len(val) == 0 && len(y.Bytes()) > 0 {
-				// 0 => non 0
-				mult = ethutil.Big3
-			} else if len(val) > 0 && len(y.Bytes()) == 0 {
-				statedb.Refund(caller.Address(), GasSStoreRefund)
-
-				mult = ethutil.Big0
-			} else {
-				// non 0 => non 0 (or 0 => 0)
-				mult = ethutil.Big1
-			}
-			gas.Set(new(big.Int).Mul(mult, GasSStore))
-		case BALANCE:
-			require(1)
-			gas.Set(GasBalance)
-		case MSTORE:
-			require(2)
-			newMemSize = calcMemSize(stack.Peek(), u256(32))
-		case MLOAD:
-			require(1)
-
-			newMemSize = calcMemSize(stack.Peek(), u256(32))
-		case MSTORE8:
-			require(2)
-			newMemSize = calcMemSize(stack.Peek(), u256(1))
-		case RETURN:
-			require(2)
-
-			newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-2])
-		case SHA3:
-			require(2)
-
-			gas.Set(GasSha)
-
-			newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-2])
-		case CALLDATACOPY:
-			require(2)
-
-			newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-3])
-		case CODECOPY:
-			require(3)
-
-			newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-3])
-		case EXTCODECOPY:
-			require(4)
-
-			newMemSize = calcMemSize(stack.data[stack.Len()-2], stack.data[stack.Len()-4])
-		case CALL, CALLCODE:
-			require(7)
-			gas.Set(GasCall)
-			addStepGasUsage(stack.data[stack.Len()-1])
-
-			x := calcMemSize(stack.data[stack.Len()-6], stack.data[stack.Len()-7])
-			y := calcMemSize(stack.data[stack.Len()-4], stack.data[stack.Len()-5])
-
-			newMemSize = ethutil.BigMax(x, y)
-		case CREATE:
-			require(3)
-			gas.Set(GasCreate)
-
-			newMemSize = calcMemSize(stack.data[stack.Len()-2], stack.data[stack.Len()-3])
-		}
-
-		if newMemSize.Cmp(ethutil.Big0) > 0 {
-			newMemSize.Add(newMemSize, u256(31))
-			newMemSize.Div(newMemSize, u256(32))
-			newMemSize.Mul(newMemSize, u256(32))
-
-			switch op {
-			case CALLDATACOPY, CODECOPY, EXTCODECOPY:
-				addStepGasUsage(new(big.Int).Div(newMemSize, u256(32)))
-			case SHA3:
-				g := new(big.Int).Div(newMemSize, u256(32))
-				g.Mul(g, GasSha3Byte)
-				addStepGasUsage(g)
-			}
-
-			if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
-				memGasUsage := new(big.Int).Sub(newMemSize, u256(int64(mem.Len())))
-				memGasUsage.Mul(GasMemory, memGasUsage)
-				memGasUsage.Div(memGasUsage, u256(32))
-
-				addStepGasUsage(memGasUsage)
-
-			}
-
-		}
-
-		self.Printf("(pc) %-3d -o- %-14s", pc, op.String())
-		self.Printf(" (m) %-4d (s) %-4d (g) %-3v (%v)", mem.Len(), stack.Len(), gas, closure.Gas)
-
-		if !closure.UseGas(gas) {
+		if !context.UseGas(gas) {
 			self.Endl()
 
-			tmp := new(big.Int).Set(closure.Gas)
+			tmp := new(big.Int).Set(context.Gas)
 
-			closure.UseGas(closure.Gas)
+			context.UseGas(context.Gas)
 
-			return closure.Return(nil), OOG(gas, tmp)
+			return context.Return(nil), OOG(gas, tmp)
 		}
 
 		mem.Resize(newMemSize.Uint64())
@@ -558,9 +402,9 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			self.Printf(" => %x", data)
 			// 0x30 range
 		case ADDRESS:
-			stack.Push(ethutil.BigD(closure.Address()))
+			stack.Push(ethutil.BigD(context.Address()))
 
-			self.Printf(" => %x", closure.Address())
+			self.Printf(" => %x", context.Address())
 		case BALANCE:
 
 			addr := stack.Pop().Bytes()
@@ -576,7 +420,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 			self.Printf(" => %x", origin)
 		case CALLER:
-			caller := closure.caller.Address()
+			caller := context.caller.Address()
 			stack.Push(ethutil.BigD(caller))
 
 			self.Printf(" => %x", caller)
@@ -633,7 +477,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 				code = statedb.GetCode(addr)
 			} else {
-				code = closure.Code
+				code = context.Code
 			}
 
 			l := big.NewInt(int64(len(code)))
@@ -643,11 +487,9 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		case CODECOPY, EXTCODECOPY:
 			var code []byte
 			if op == EXTCODECOPY {
-				addr := stack.Pop().Bytes()
-
-				code = statedb.GetCode(addr)
+				code = statedb.GetCode(stack.Pop().Bytes())
 			} else {
-				code = closure.Code
+				code = context.Code
 			}
 
 			var (
@@ -663,24 +505,26 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			} else if cOff+l > size {
 				l = uint64(math.Min(float64(cOff+l), float64(size)))
 			}
-
 			codeCopy := code[cOff : cOff+l]
 
 			mem.Set(mOff, l, codeCopy)
 
-			self.Printf(" => [%v, %v, %v] %x", mOff, cOff, l, code[cOff:cOff+l])
+			self.Printf(" => [%v, %v, %v] %x", mOff, cOff, l, codeCopy)
 		case GASPRICE:
-			stack.Push(closure.Price)
+			stack.Push(context.Price)
 
-			self.Printf(" => %v", closure.Price)
+			self.Printf(" => %v", context.Price)
 
 			// 0x40 range
-		case PREVHASH:
-			prevHash := self.env.PrevHash()
+		case BLOCKHASH:
+			num := stack.Pop()
+			if num.Cmp(new(big.Int).Sub(self.env.BlockNumber(), ethutil.Big256)) < 0 {
+				stack.Push(ethutil.Big0)
+			} else {
+				stack.Push(ethutil.BigD(self.env.GetHash(num.Uint64())))
+			}
 
-			stack.Push(ethutil.BigD(prevHash))
-
-			self.Printf(" => 0x%x", prevHash)
+			self.Printf(" => 0x%x", stack.Peek().Bytes())
 		case COINBASE:
 			coinbase := self.env.Coinbase()
 
@@ -710,18 +554,15 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 			// 0x50 range
 		case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
-			//a := big.NewInt(int64(op) - int64(PUSH1) + 1)
 			a := uint64(op - PUSH1 + 1)
-			//pc.Add(pc, ethutil.Big1)
-			val := ethutil.BigD(closure.GetRangeValue(pc+1, a))
+			byts := context.GetRangeValue(pc+1, a)
 			// Push value to stack
-			stack.Push(val)
+			stack.Push(ethutil.BigD(byts))
 			pc += a
-			//pc.Add(pc, a.Sub(a, big.NewInt(1)))
 
 			step += int(op) - int(PUSH1) + 1
 
-			self.Printf(" => 0x%x", val.Bytes())
+			self.Printf(" => 0x%x", byts)
 		case POP:
 			stack.Pop()
 		case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:
@@ -743,7 +584,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			}
 
 			data := mem.Geti(mStart.Int64(), mSize.Int64())
-			log := &Log{closure.Address(), topics, data}
+			log := &Log{context.Address(), topics, data}
 			self.env.AddLog(log)
 
 			self.Printf(" => %v", log)
@@ -768,15 +609,15 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			self.Printf(" => [%v] 0x%x", off, val)
 		case SLOAD:
 			loc := stack.Pop()
-			val := ethutil.BigD(statedb.GetState(closure.Address(), loc.Bytes()))
+			val := ethutil.BigD(statedb.GetState(context.Address(), loc.Bytes()))
 			stack.Push(val)
 
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case SSTORE:
 			val, loc := stack.Popn()
-			statedb.SetState(closure.Address(), loc.Bytes(), val)
+			statedb.SetState(context.Address(), loc.Bytes(), val)
 
-			closure.message.AddStorageChange(loc.Bytes())
+			msg.AddStorageChange(loc.Bytes())
 
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case JUMP:
@@ -798,7 +639,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 		case MSIZE:
 			stack.Push(big.NewInt(int64(mem.Len())))
 		case GAS:
-			stack.Push(closure.Gas)
+			stack.Push(context.Gas)
 			// 0x60 range
 		case CREATE:
 
@@ -807,7 +648,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 				value        = stack.Pop()
 				size, offset = stack.Popn()
 				input        = mem.Get(offset.Int64(), size.Int64())
-				gas          = new(big.Int).Set(closure.Gas)
+				gas          = new(big.Int).Set(context.Gas)
 
 				// Snapshot the current stack so we are able to
 				// revert back to it later.
@@ -815,15 +656,15 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 			)
 
 			// Generate a new address
-			n := statedb.GetNonce(closure.Address())
-			addr := crypto.CreateAddress(closure.Address(), n)
-			statedb.SetNonce(closure.Address(), n+1)
+			n := statedb.GetNonce(context.Address())
+			addr := crypto.CreateAddress(context.Address(), n)
+			statedb.SetNonce(context.Address(), n+1)
 
 			self.Printf(" (*) %x", addr).Endl()
 
-			closure.UseGas(closure.Gas)
+			context.UseGas(context.Gas)
 
-			ret, err, ref := self.env.Create(closure, addr, input, gas, price, value)
+			ret, err, ref := self.env.Create(context, addr, input, gas, price, value)
 			if err != nil {
 				stack.Push(ethutil.BigFalse)
 
@@ -832,7 +673,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 				// gas < len(ret) * CreateDataGas == NO_CODE
 				dataGas := big.NewInt(int64(len(ret)))
 				dataGas.Mul(dataGas, GasCreateByte)
-				if closure.UseGas(dataGas) {
+				if context.UseGas(dataGas) {
 					ref.SetCode(ret)
 					msg.Output = ret
 				}
@@ -844,7 +685,7 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 			// Debug hook
 			if self.Dbg != nil {
-				self.Dbg.SetCode(closure.Code)
+				self.Dbg.SetCode(context.Code)
 			}
 		case CALL, CALLCODE:
 			self.Endl()
@@ -865,9 +706,9 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 				err error
 			)
 			if op == CALLCODE {
-				ret, err = self.env.CallCode(closure, addr.Bytes(), args, gas, price, value)
+				ret, err = self.env.CallCode(context, addr.Bytes(), args, gas, price, value)
 			} else {
-				ret, err = self.env.Call(closure, addr.Bytes(), args, gas, price, value)
+				ret, err = self.env.Call(context, addr.Bytes(), args, gas, price, value)
 			}
 
 			if err != nil {
@@ -880,40 +721,40 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 
 				mem.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 			}
-			self.Printf("resume %x (%v)", closure.Address(), closure.Gas)
+			self.Printf("resume %x (%v)", context.Address(), context.Gas)
 
 			// Debug hook
 			if self.Dbg != nil {
-				self.Dbg.SetCode(closure.Code)
+				self.Dbg.SetCode(context.Code)
 			}
 
 		case RETURN:
 			size, offset := stack.Popn()
 			ret := mem.Get(offset.Int64(), size.Int64())
 
-			self.Printf(" => (%d) 0x%x", len(ret), ret).Endl()
+			self.Printf(" => [%v, %v] (%d) 0x%x", offset, size, len(ret), ret).Endl()
 
-			return closure.Return(ret), nil
+			return context.Return(ret), nil
 		case SUICIDE:
 			receiver := statedb.GetOrNewStateObject(stack.Pop().Bytes())
-			balance := statedb.GetBalance(closure.Address())
+			balance := statedb.GetBalance(context.Address())
 
 			self.Printf(" => (%x) %v", receiver.Address()[:4], balance)
 
 			receiver.AddAmount(balance)
-			statedb.Delete(closure.Address())
+			statedb.Delete(context.Address())
 
 			fallthrough
-		case STOP: // Stop the closure
+		case STOP: // Stop the context
 			self.Endl()
 
-			return closure.Return(nil), nil
+			return context.Return(nil), nil
 		default:
 			vmlogger.Debugf("(pc) %-3v Invalid opcode %x\n", pc, op)
 
-			closure.ReturnGas(big.NewInt(1), nil)
+			context.ReturnGas(big.NewInt(1), nil)
 
-			return closure.Return(nil), fmt.Errorf("Invalid opcode %x", op)
+			return context.Return(nil), fmt.Errorf("Invalid opcode %x", op)
 		}
 
 		pc++
@@ -925,11 +766,11 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 				if pc == uint64(instrNo) {
 					self.Stepping = true
 
-					if !self.Dbg.BreakHook(prevStep, op, mem, stack, statedb.GetStateObject(closure.Address())) {
+					if !self.Dbg.BreakHook(prevStep, op, mem, stack, statedb.GetStateObject(context.Address())) {
 						return nil, nil
 					}
 				} else if self.Stepping {
-					if !self.Dbg.StepHook(prevStep, op, mem, stack, statedb.GetStateObject(closure.Address())) {
+					if !self.Dbg.StepHook(prevStep, op, mem, stack, statedb.GetStateObject(context.Address())) {
 						return nil, nil
 					}
 				}
@@ -939,22 +780,177 @@ func (self *DebugVm) Run(me, caller ClosureRef, code []byte, value, gas, price *
 	}
 }
 
-func (self *DebugVm) RunPrecompiled(p *PrecompiledAccount, callData []byte, closure *Closure) (ret []byte, err error) {
+func (self *DebugVm) calculateGasAndSize(context *Context, caller ContextRef, op OpCode, statedb *state.StateDB, mem *Memory, stack *Stack) (*big.Int, *big.Int) {
+	gas := new(big.Int)
+	addStepGasUsage := func(amount *big.Int) {
+		if amount.Cmp(ethutil.Big0) >= 0 {
+			gas.Add(gas, amount)
+		}
+	}
+
+	addStepGasUsage(GasStep)
+
+	var newMemSize *big.Int = ethutil.Big0
+	var additionalGas *big.Int = new(big.Int)
+	// Stack Check, memory resize & gas phase
+	switch op {
+	// Stack checks only
+	case ISZERO, CALLDATALOAD, POP, JUMP, NOT: // 1
+		stack.require(1)
+	case JUMPI, ADD, SUB, DIV, SDIV, MOD, SMOD, LT, GT, SLT, SGT, EQ, AND, OR, XOR, BYTE, SIGNEXTEND: // 2
+		stack.require(2)
+	case ADDMOD, MULMOD: // 3
+		stack.require(3)
+	case SWAP1, SWAP2, SWAP3, SWAP4, SWAP5, SWAP6, SWAP7, SWAP8, SWAP9, SWAP10, SWAP11, SWAP12, SWAP13, SWAP14, SWAP15, SWAP16:
+		n := int(op - SWAP1 + 2)
+		stack.require(n)
+	case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:
+		n := int(op - DUP1 + 1)
+		stack.require(n)
+	case LOG0, LOG1, LOG2, LOG3, LOG4:
+		n := int(op - LOG0)
+		stack.require(n + 2)
+
+		gas.Set(GasLog)
+		addStepGasUsage(new(big.Int).Mul(big.NewInt(int64(n)), GasLog))
+
+		mSize, mStart := stack.Peekn()
+		addStepGasUsage(mSize)
+
+		newMemSize = calcMemSize(mStart, mSize)
+	case EXP:
+		stack.require(2)
+
+		gas.Set(big.NewInt(int64(len(stack.data[stack.Len()-2].Bytes()) + 1)))
+	// Gas only
+	case STOP:
+		gas.Set(ethutil.Big0)
+	case SUICIDE:
+		stack.require(1)
+
+		gas.Set(ethutil.Big0)
+	case SLOAD:
+		stack.require(1)
+
+		gas.Set(GasSLoad)
+	// Memory resize & Gas
+	case SSTORE:
+		stack.require(2)
+
+		var mult *big.Int
+		y, x := stack.Peekn()
+		val := statedb.GetState(context.Address(), x.Bytes())
+		if len(val) == 0 && len(y.Bytes()) > 0 {
+			// 0 => non 0
+			mult = ethutil.Big3
+		} else if len(val) > 0 && len(y.Bytes()) == 0 {
+			statedb.Refund(caller.Address(), GasSStoreRefund)
+
+			mult = ethutil.Big0
+		} else {
+			// non 0 => non 0 (or 0 => 0)
+			mult = ethutil.Big1
+		}
+		gas.Set(new(big.Int).Mul(mult, GasSStore))
+	case BALANCE:
+		stack.require(1)
+		gas.Set(GasBalance)
+	case MSTORE:
+		stack.require(2)
+		newMemSize = calcMemSize(stack.Peek(), u256(32))
+	case MLOAD:
+		stack.require(1)
+
+		newMemSize = calcMemSize(stack.Peek(), u256(32))
+	case MSTORE8:
+		stack.require(2)
+		newMemSize = calcMemSize(stack.Peek(), u256(1))
+	case RETURN:
+		stack.require(2)
+
+		newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-2])
+	case SHA3:
+		stack.require(2)
+		gas.Set(GasSha)
+		newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-2])
+		additionalGas.Set(stack.data[stack.Len()-2])
+	case CALLDATACOPY:
+		stack.require(2)
+
+		newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-3])
+		additionalGas.Set(stack.data[stack.Len()-3])
+	case CODECOPY:
+		stack.require(3)
+
+		newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-3])
+		additionalGas.Set(stack.data[stack.Len()-3])
+	case EXTCODECOPY:
+		stack.require(4)
+
+		newMemSize = calcMemSize(stack.data[stack.Len()-2], stack.data[stack.Len()-4])
+		additionalGas.Set(stack.data[stack.Len()-4])
+	case CALL, CALLCODE:
+		stack.require(7)
+		gas.Set(GasCall)
+		addStepGasUsage(stack.data[stack.Len()-1])
+
+		x := calcMemSize(stack.data[stack.Len()-6], stack.data[stack.Len()-7])
+		y := calcMemSize(stack.data[stack.Len()-4], stack.data[stack.Len()-5])
+
+		newMemSize = ethutil.BigMax(x, y)
+	case CREATE:
+		stack.require(3)
+		gas.Set(GasCreate)
+
+		newMemSize = calcMemSize(stack.data[stack.Len()-2], stack.data[stack.Len()-3])
+	}
+
+	switch op {
+	case CALLDATACOPY, CODECOPY, EXTCODECOPY:
+		additionalGas.Add(additionalGas, u256(31))
+		additionalGas.Div(additionalGas, u256(32))
+		addStepGasUsage(additionalGas)
+	case SHA3:
+		additionalGas.Add(additionalGas, u256(31))
+		additionalGas.Div(additionalGas, u256(32))
+		additionalGas.Mul(additionalGas, GasSha3Byte)
+		addStepGasUsage(additionalGas)
+	}
+
+	if newMemSize.Cmp(ethutil.Big0) > 0 {
+		newMemSize.Add(newMemSize, u256(31))
+		newMemSize.Div(newMemSize, u256(32))
+		newMemSize.Mul(newMemSize, u256(32))
+
+		if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
+			memGasUsage := new(big.Int).Sub(newMemSize, u256(int64(mem.Len())))
+			memGasUsage.Mul(GasMemory, memGasUsage)
+			memGasUsage.Div(memGasUsage, u256(32))
+
+			addStepGasUsage(memGasUsage)
+		}
+
+	}
+
+	return newMemSize, gas
+}
+
+func (self *DebugVm) RunPrecompiled(p *PrecompiledAccount, callData []byte, context *Context) (ret []byte, err error) {
 	gas := p.Gas(len(callData))
-	if closure.UseGas(gas) {
+	if context.UseGas(gas) {
 		ret = p.Call(callData)
 		self.Printf("NATIVE_FUNC => %x", ret)
 		self.Endl()
 
-		return closure.Return(ret), nil
+		return context.Return(ret), nil
 	} else {
 		self.Endl()
 
-		tmp := new(big.Int).Set(closure.Gas)
+		tmp := new(big.Int).Set(context.Gas)
 
-		closure.UseGas(closure.Gas)
+		context.UseGas(context.Gas)
 
-		return closure.Return(nil), OOG(gas, tmp)
+		return context.Return(nil), OOG(gas, tmp)
 	}
 }
 

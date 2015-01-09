@@ -16,6 +16,7 @@ const (
 	ErrInvalidBlock
 	ErrInvalidPoW
 	ErrUnrequestedBlock
+	ErrInsufficientChainInfo
 )
 
 var errorToString = map[int]string{
@@ -30,6 +31,7 @@ var errorToString = map[int]string{
 	ErrInvalidBlock:            "Invalid block",
 	ErrInvalidPoW:              "Invalid PoW",
 	ErrUnrequestedBlock:        "Unrequested block",
+	ErrInsufficientChainInfo:   "Insufficient chain info",
 }
 
 type protocolError struct {
@@ -52,18 +54,17 @@ func ProtocolError(code int, format string, params ...interface{}) (err *protoco
 }
 
 func (self protocolError) Error() (message string) {
-	message = self.message
-	if message == "" {
-		message, ok := errorToString[self.Code]
+	if len(message) == 0 {
+		var ok bool
+		self.message, ok = errorToString[self.Code]
 		if !ok {
 			panic("invalid error code")
 		}
 		if self.format != "" {
-			message += ": " + fmt.Sprintf(self.format, self.params...)
+			self.message += ": " + fmt.Sprintf(self.format, self.params...)
 		}
-		self.message = message
 	}
-	return
+	return self.message
 }
 
 func (self *protocolError) Fatal() bool {

@@ -1,6 +1,6 @@
 language: go
 go:
-  - 1.3
+  - tip
 before_install:
   - sudo add-apt-repository ppa:ubuntu-sdk-team/ppa -y
   - sudo apt-get update -qq
@@ -8,10 +8,10 @@ before_install:
 install:
   - go get code.google.com/p/go.tools/cmd/goimports
   - go get github.com/golang/lint/golint
-  # - go get code.google.com/p/go.tools/cmd/vet
-  - go get code.google.com/p/go.tools/cmd/cover
+  # - go get golang.org/x/tools/cmd/vet 
+  - if ! go get code.google.com/p/go.tools/cmd/cover; then go get golang.org/x/tools/cmd/cover; fi
   - go get github.com/mattn/goveralls
-  - ./install_deps.sh
+  - ETH_DEPS=$(go list -f '{{.Imports}} {{.TestImports}} {{.XTestImports}}' github.com/ethereum/go-ethereum/... | sed -e 's/\[//g' | sed -e 's/\]//g' | sed -e 's/C //g'); if [ "$ETH_DEPS" ]; then go get $ETH_DEPS; fi
 before_script:
   - gofmt -l -w .
   - goimports -l -w .
@@ -19,7 +19,7 @@ before_script:
   # - go vet ./...
   # - go test -race ./...
 script:
-  - ./gocoverage.sh && goveralls -coverprofile=profile.cov -service=travis-ci -repotoken $COVERALLS_TOKEN
+  - ./gocoverage.sh
 env:
   - secure: "U2U1AmkU4NJBgKR/uUAebQY87cNL0+1JHjnLOmmXwxYYyj5ralWb1aSuSH3qSXiT93qLBmtaUkuv9fberHVqrbAeVlztVdUsKAq7JMQH+M99iFkC9UiRMqHmtjWJ0ok4COD1sRYixxi21wb/JrMe3M1iL4QJVS61iltjHhVdM64="
 

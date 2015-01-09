@@ -21,19 +21,31 @@ func (self PrecompiledAccount) Call(in []byte) []byte {
 }
 
 var Precompiled = map[string]*PrecompiledAccount{
+	// ECRECOVER
 	string(ethutil.LeftPadBytes([]byte{1}, 20)): &PrecompiledAccount{func(l int) *big.Int {
 		return GasEcrecover
 	}, ecrecoverFunc},
+
+	// SHA256
 	string(ethutil.LeftPadBytes([]byte{2}, 20)): &PrecompiledAccount{func(l int) *big.Int {
 		n := big.NewInt(int64(l+31)/32 + 1)
 		n.Mul(n, GasSha256)
 		return n
 	}, sha256Func},
+
+	// RIPEMD160
 	string(ethutil.LeftPadBytes([]byte{3}, 20)): &PrecompiledAccount{func(l int) *big.Int {
 		n := big.NewInt(int64(l+31)/32 + 1)
 		n.Mul(n, GasRipemd)
 		return n
 	}, ripemd160Func},
+
+	string(ethutil.LeftPadBytes([]byte{4}, 20)): &PrecompiledAccount{func(l int) *big.Int {
+		n := big.NewInt(int64(l+31)/32 + 1)
+		n.Mul(n, GasMemCpy)
+
+		return n
+	}, memCpy},
 }
 
 func sha256Func(in []byte) []byte {
@@ -53,4 +65,8 @@ func ecrecoverFunc(in []byte) []byte {
 	sig := append(in[64:], v)
 
 	return ethutil.LeftPadBytes(crypto.Sha3(crypto.Ecrecover(append(hash, sig...))[1:])[12:], 32)
+}
+
+func memCpy(in []byte) []byte {
+	return in
 }

@@ -1,20 +1,23 @@
-// Copyright (c) 2013-2014, Jeffrey Wilcke. All rights reserved.
-//
-// This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-//
-// This library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-// General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this library; if not, write to the Free Software
-// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
-// MA 02110-1301  USA
+/*
+	This file is part of go-ethereum
 
+	go-ethereum is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	go-ethereum is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/**
+ * @authors
+ * 	Jeffrey Wilcke <i@jev.io>
+ */
 package main
 
 import (
@@ -195,7 +198,9 @@ func (ui *UiLib) Connect(button qml.Object) {
 }
 
 func (ui *UiLib) ConnectToPeer(addr string) {
-	ui.eth.SuggestPeer(addr)
+	if err := ui.eth.SuggestPeer(addr); err != nil {
+		guilogger.Infoln(err)
+	}
 }
 
 func (ui *UiLib) AssetPath(p string) string {
@@ -225,6 +230,87 @@ func (self *UiLib) StartDebugger() {
 	dbWindow.Show()
 }
 
+func (self *UiLib) Transact(params map[string]interface{}) (string, error) {
+	object := mapToTxParams(params)
+
+	return self.JSXEth.Transact(
+		object["from"],
+		object["to"],
+		object["value"],
+		object["gas"],
+		object["gasPrice"],
+		object["data"],
+	)
+}
+
+func (self *UiLib) Compile(code string) (string, error) {
+	bcode, err := ethutil.Compile(code, false)
+	if err != nil {
+		return err.Error(), err
+	}
+
+	return ethutil.Bytes2Hex(bcode), err
+}
+
+func (self *UiLib) Call(params map[string]interface{}) (string, error) {
+	object := mapToTxParams(params)
+
+	return self.JSXEth.Execute(
+		object["to"],
+		object["value"],
+		object["gas"],
+		object["gasPrice"],
+		object["data"],
+	)
+}
+
+func (self *UiLib) AddLocalTransaction(to, data, gas, gasPrice, value string) int {
+	return self.miner.AddLocalTx(&miner.LocalTx{
+		To:       ethutil.Hex2Bytes(to),
+		Data:     ethutil.Hex2Bytes(data),
+		Gas:      gas,
+		GasPrice: gasPrice,
+		Value:    value,
+	}) - 1
+}
+
+func (self *UiLib) RemoveLocalTransaction(id int) {
+	self.miner.RemoveLocalTx(id)
+}
+
+func (self *UiLib) SetGasPrice(price string) {
+	self.miner.MinAcceptedGasPrice = ethutil.Big(price)
+}
+
+func (self *UiLib) SetExtra(extra string) {
+	self.miner.Extra = extra
+}
+
+func (self *UiLib) ToggleMining() bool {
+	if !self.miner.Mining() {
+		self.miner.Start()
+
+		return true
+	} else {
+		self.miner.Stop()
+
+		return false
+	}
+}
+
+func (self *UiLib) ToHex(data string) string {
+	return "0x" + ethutil.Bytes2Hex([]byte(data))
+}
+
+func (self *UiLib) ToAscii(data string) string {
+	start := 0
+	if len(data) > 1 && data[0:2] == "0x" {
+		start = 2
+	}
+	return string(ethutil.Hex2Bytes(data[start:]))
+}
+
+/// Ethereum filter methods
 func (self *UiLib) NewFilter(object map[string]interface{}) (id int) {
 	filter := qt.NewFilterFromMap(object, self.eth)
 	filter.MessageCallback = func(messages state.Messages) {
@@ -312,80 +398,3 @@ func mapToTxParams(object map[string]interface{}) map[string]string {
 
 	return conv
 }
-
-func (self *UiLib) Transact(params map[string]interface{}) (string, error) {
-	object := mapToTxParams(params)
-
-	return self.JSXEth.Transact(
-		object["from"],
-		object["to"],
-		object["value"],
-		object["gas"],
-		object["gasPrice"],
-		object["data"],
-	)
-}
-
-func (self *UiLib) Compile(code string) (string, error) {
-	bcode, err := ethutil.Compile(code, false)
-	if err != nil {
-		return err.Error(), err
-	}
-
-	return ethutil.Bytes2Hex(bcode), err
-}
-
-func (self *UiLib) Call(params map[string]interface{}) (string, error) {
-	object := mapToTxParams(params)
-
-	return self.JSXEth.Execute(
-		object["to"],
-		object["value"],
-		object["gas"],
-		object["gasPrice"],
-		object["data"],
-	)
-}
-
-func (self *UiLib) AddLocalTransaction(to, data, gas, gasPrice, value string) int {
-	return self.miner.AddLocalTx(&miner.LocalTx{
-		To:       ethutil.Hex2Bytes(to),
-		Data:     ethutil.Hex2Bytes(data),
-		Gas:      gas,
-		GasPrice: gasPrice,
-		Value:    value,
-	}) - 1
-}
-
-func (self *UiLib) RemoveLocalTransaction(id int) {
-	self.miner.RemoveLocalTx(id)
-}
-
-func (self *UiLib) SetGasPrice(price string) {
-	self.miner.MinAcceptedGasPrice = ethutil.Big(price)
-}
-
-func (self *UiLib) ToggleMining() bool {
-	if !self.miner.Mining() {
-		self.miner.Start()
-
-		return true
-	} else {
-		self.miner.Stop()
-
-		return false
-	}
-}
-
-func (self *UiLib) ToHex(data string) string {
-	return "0x" + ethutil.Bytes2Hex([]byte(data))
-}
-
-/*
-// XXX Refactor me & MOVE
-func (self *Ethereum) InstallFilter(filter *core.Filter) (id int) {
-	return self.filterManager.InstallFilter(filter)
-}
-func (self *Ethereum) UninstallFilter(id int)        { self.filterManager.UninstallFilter(id) }
-func (self *Ethereum) GetFilter(id int) *core.Filter { return self.filterManager.GetFilter(id) }
-*/
