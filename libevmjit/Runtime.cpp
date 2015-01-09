@@ -24,8 +24,10 @@ bytes Runtime::getReturnData() const	// FIXME: Reconsider returning by copy
 	auto offset = static_cast<size_t>(llvm2eth(m_data.elems[RuntimeData::ReturnDataOffset]));
 	auto size = static_cast<size_t>(llvm2eth(m_data.elems[RuntimeData::ReturnDataSize]));
 
-	assert(offset + size <= m_memory.size());
-	// TODO: Handle invalid data access by returning empty ref
+	assert(offset + size <= m_memory.size() || size == 0);
+	if (offset + size > m_memory.size())
+		return {};
+
 	auto dataBeg = m_memory.begin() + offset;
 	return {dataBeg, dataBeg + size};
 }
