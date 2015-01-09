@@ -38,7 +38,7 @@ func (self *Whisper) SetView(view qml.Object) {
 func (self *Whisper) Post(payload []string, to, from string, topics []string, priority, ttl uint32) {
 	var data []byte
 	for _, d := range payload {
-		data = append(data, ethutil.Hex2Bytes(d)...)
+		data = append(data, fromHex(d)...)
 	}
 
 	msg := whisper.NewMessage(data)

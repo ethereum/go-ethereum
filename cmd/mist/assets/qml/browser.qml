@@ -70,7 +70,7 @@ Rectangle {
     }
 
     function onShhMessage(message, id) {
-	    webview.postEvent("shhChanged", id, message)
+	    webview.postEvent("shh_changed", id, message)
     }
 
     Item {
