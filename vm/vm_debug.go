@@ -583,7 +583,7 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 				topics[i] = ethutil.LeftPadBytes(stack.Pop().Bytes(), 32)
 			}
 
-			data := mem.Geti(mStart.Int64(), mSize.Int64())
+			data := mem.Get(mStart.Int64(), mSize.Int64())
 			log := &Log{context.Address(), topics, data}
 			self.env.AddLog(log)
 
