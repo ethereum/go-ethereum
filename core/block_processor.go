@@ -294,32 +294,38 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 func (sm *BlockProcessor) AccumelateRewards(statedb *state.StateDB, block, parent *types.Block) error {
 	reward := new(big.Int).Set(BlockReward)
 
-	knownUncles := set.New()
-	for _, uncle := range parent.Uncles() {
-		knownUncles.Add(string(uncle.Hash()))
+	ancestors := set.New()
+	for _, ancestor := range sm.bc.GetAncestors(block, 6) {
+		ancestors.Add(string(ancestor.Hash()))
 	}
 
-	nonces := ethutil.NewSet(block.Header().Nonce)
+	uncles := set.New()
+	uncles.Add(string(block.Hash()))
 	for _, uncle := range block.Uncles() {
-		if nonces.Include(uncle.Nonce) {
+		if uncles.Has(string(uncle.Hash())) {
 			// Error not unique
 			return UncleError("Uncle not unique")
 		}
+		uncles.Add(string(uncle.Hash()))
 
-		uncleParent := sm.bc.GetBlock(uncle.ParentHash)
-		if uncleParent == nil {
+		if !ancestors.Has(uncle.ParentHash) {
 			return UncleError(fmt.Sprintf("Uncle's parent unknown (%x)", uncle.ParentHash[0:4]))
 		}
 
-		if uncleParent.Header().Number.Cmp(new(big.Int).Sub(parent.Header().Number, big.NewInt(6))) < 0 {
-			return UncleError("Uncle too old")
-		}
+		/*
+			uncleParent := sm.bc.GetBlock(uncle.ParentHash)
+			if uncleParent == nil {
+				return UncleError(fmt.Sprintf("Uncle's parent unknown (%x)", uncle.ParentHash[0:4]))
+			}
 
-		if knownUncles.Has(string(uncle.Hash())) {
-			return UncleError("Uncle in chain")
-		}
+			if uncleParent.Number().Cmp(new(big.Int).Sub(parent.Number(), big.NewInt(6))) < 0 {
+				return UncleError("Uncle too old")
+			}
 
-		nonces.Insert(uncle.Nonce)
+			if knownUncles.Has(string(uncle.Hash())) {
+				return UncleError("Uncle in chain")
+			}
+		*/
 
 		r := new(big.Int)
 		r.Mul(BlockReward, big.NewInt(15)).Div(r, big.NewInt(16))

@@ -142,6 +142,10 @@ func (m *Memory) Resize(size uint64) {
 }
 
 func (m *Memory) Get(offset, size int64) []byte {
+	if size == 0 {
+		return nil
+	}
+
 	if len(m.store) > int(offset) {
 		end := int(math.Min(float64(len(m.store)), float64(offset+size)))
 
