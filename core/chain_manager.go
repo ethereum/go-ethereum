@@ -238,13 +238,11 @@ func (self *ChainManager) GetBlockHashesFromHash(hash []byte, max uint64) (chain
 
 	// XXX Could be optimised by using a different database which only holds hashes (i.e., linked list)
 	for i := uint64(0); i < max; i++ {
+		block = self.GetBlock(block.Header().ParentHash)
 		chain = append(chain, block.Hash())
-
 		if block.Header().Number.Cmp(ethutil.Big0) <= 0 {
 			break
 		}
-
-		block = self.GetBlock(block.Header().ParentHash)
 	}
 
 	return
