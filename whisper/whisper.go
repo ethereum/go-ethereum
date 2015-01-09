@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -144,7 +143,6 @@ func (self *Whisper) msgHandler(peer *p2p.Peer, ws p2p.MsgReadWriter) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println("reading message")
 
 		envelope, err := NewEnvelopeFromReader(msg.Payload)
 		if err != nil {
@@ -162,7 +160,6 @@ func (self *Whisper) msgHandler(peer *p2p.Peer, ws p2p.MsgReadWriter) error {
 
 // takes care of adding envelopes to the messages pool. At this moment no sanity checks are being performed.
 func (self *Whisper) add(envelope *Envelope) error {
-	fmt.Println("adding")
 	if !envelope.valid() {
 		return errors.New("invalid pow provided for envelope")
 	}

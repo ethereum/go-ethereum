@@ -262,6 +262,28 @@ func (self *ChainManager) GetBlock(hash []byte) *types.Block {
 	return &block
 }
 
+func (self *ChainManager) GetUnclesInChain(block *types.Block, length int) (uncles []*types.Header) {
+	for i := 0; block != nil && i < length; i++ {
+		uncles = append(uncles, block.Uncles()...)
+		block = self.GetBlock(block.ParentHash())
+	}
+
+	return
+}
+
+func (self *ChainManager) GetAncestors(block *types.Block, length int) (blocks []*types.Block) {
+	for i := 0; i < length; i++ {
+		block = self.GetBlock(block.ParentHash())
+		if block == nil {
+			break
+		}
+
+		blocks = append(blocks, block)
+	}
+
+	return
+}
+
 func (self *ChainManager) GetBlockByNumber(num uint64) *types.Block {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
