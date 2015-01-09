@@ -28,6 +28,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -126,5 +127,9 @@ func RunVmTest(r io.Reader) (failed int) {
 func main() {
 	helper.Logger.SetLogLevel(5)
 
-	os.Exit(RunVmTest(os.Stdin))
+	if len(os.Args) > 1 {
+		os.Exit(RunVmTest(strings.NewReader(os.Args[1])))
+	} else {
+		os.Exit(RunVmTest(os.Stdin))
+	}
 }
