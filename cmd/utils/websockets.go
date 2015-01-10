@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
-	"github.com/ethereum/go-ethereum/ui/qt"
+	"github.com/ethereum/go-ethereum/ui"
 	"github.com/ethereum/go-ethereum/websocket"
 	"github.com/ethereum/go-ethereum/xeth"
 )
@@ -126,7 +126,7 @@ func (self *WebSocketServer) Serv() {
 		case "eth_newFilter":
 			if mp, ok := msg.Args[0].(map[string]interface{}); ok {
 				var id int
-				filter := qt.NewFilterFromMap(mp, self.eth)
+				filter := ui.NewFilterFromMap(mp, self.eth)
 				filter.MessageCallback = func(messages state.Messages) {
 					c.Event(toMessages(messages), "eth_changed", id)
 				}
