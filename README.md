@@ -7,22 +7,6 @@ which implements the [Generic JSON RPC](https://github.com/ethereum/wiki/wiki/Ge
 
 <!-- [![browser support](https://ci.testling.com/ethereum/ethereum.js.png)](https://ci.testling.com/ethereum/ethereum.js) -->
 
-## Requirements
-
-* Node.js
-* npm
-* gulp (build)
-* mocha (tests)
-
-```bash
-sudo apt-get update
-sudo apt-get install nodejs
-sudo apt-get install npm
-sudo apt-get install nodejs-legacy
-sudo npm install -g gulp
-sudo npm install -g mocha
-```
-
 ## Installation
 
 ### Node.js
@@ -66,12 +50,36 @@ web3.eth.coinbase.then(function(result){
 
 For another example see `example/index.html`.
 
+## Contribute!
+
+### Requirements
+
+* Node.js
+* npm
+* gulp (build)
+* mocha (tests)
+
+```bash
+sudo apt-get update
+sudo apt-get install nodejs
+sudo apt-get install npm
+sudo apt-get install nodejs-legacy
+sudo npm install -g gulp
+sudo npm install -g mocha
+```
+
 ## Building
 
-* `gulp build`
+```bash
+gulp
+```
 
 
 ### Testing
+
+```bash
+mocha
+```
 
 **Please note this repo is in it's early stage.**
 
