@@ -68,14 +68,14 @@ sudo apt-get install nodejs-legacy
 
 ## Building
 
-```bash
+```bash (gulp)
 npm run-script build
 ```
 
 
 ### Testing
 
-```bash
+```bash (mocha)
 npm test
 ```
 
