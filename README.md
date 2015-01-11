@@ -7,6 +7,22 @@ which implements the [Generic JSON RPC](https://github.com/ethereum/wiki/wiki/Ge
 
 <!-- [![browser support](https://ci.testling.com/ethereum/ethereum.js.png)](https://ci.testling.com/ethereum/ethereum.js) -->
 
+## Requirements
+
+* Node.js
+* npm
+* gulp (build)
+* mocha (tests)
+
+```bash
+sudo apt-get update
+sudo apt-get install nodejs
+sudo apt-get install npm
+sudo apt-get install nodejs-legacy
+sudo npm install -g gulp
+sudo npm install -g mocha
+```
+
 ## Installation
 
 ### Node.js
