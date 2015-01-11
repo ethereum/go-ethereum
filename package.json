@@ -31,7 +31,8 @@
   "scripts": {
     "build": "gulp",
     "watch": "gulp watch",
-    "lint": "gulp lint"
+    "lint": "gulp lint",
+    "test": "mocha"
   },
   "repository": {
     "type": "git",
