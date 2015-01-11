@@ -93,6 +93,12 @@ var setupInputTypes = function () {
             }
 
             var padding = calcPadding(type, expected);
+            if (padding > 32)
+                return false;   // not allowed to be so big.
+            padding = 32;   // override as per the new ABI.
+
+            if (prefix === "string")
+                return web3.fromAscii(value, padding).substr(2);
             if (typeof value === "number")
                 value = value.toString(16);
             else if (typeof value === "string")
@@ -110,6 +116,8 @@ var setupInputTypes = function () {
             if (type !== name) {
                 return false;
             }
+
+            padding = 32;   //override as per the new ABI.
 
             return padLeft(formatter ? formatter(value) : value, padding * 2);
         };
@@ -166,12 +174,16 @@ var setupOutputTypes = function () {
             }
 
             var padding = calcPadding(type, expected);
+            if (padding > 32)
+                return -1;   // not allowed to be so big.
+            padding = 32;  // override as per the new ABI.
             return padding * 2;
         };
     };
 
     var namedType = function (name, padding) {
         return function (type) {
+            padding = 32;  // override as per the new ABI.
             return name === type ? padding * 2 : -1;
         };
     };

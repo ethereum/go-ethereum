@@ -25,12 +25,14 @@
     "jshint": ">=2.5.0",
     "uglifyify": "^2.6.0",
     "unreachable-branch-transform": "^0.1.0",
-    "vinyl-source-stream": "^1.0.0"
+    "vinyl-source-stream": "^1.0.0",
+    "mocha": ">=2.1.0"
   },
   "scripts": {
     "build": "gulp",
     "watch": "gulp watch",
-    "lint": "gulp lint"
+    "lint": "gulp lint",
+    "test": "mocha"
   },
   "repository": {
     "type": "git",

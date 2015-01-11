@@ -50,12 +50,34 @@ web3.eth.coinbase.then(function(result){
 
 For another example see `example/index.html`.
 
+## Contribute!
+
+### Requirements
+
+* Node.js
+* npm
+* gulp (build)
+* mocha (tests)
+
+```bash
+sudo apt-get update
+sudo apt-get install nodejs
+sudo apt-get install npm
+sudo apt-get install nodejs-legacy
+```
+
 ## Building
 
-* `gulp build`
+```bash (gulp)
+npm run-script build
+```
 
 
 ### Testing
+
+```bash (mocha)
+npm test
+```
 
 **Please note this repo is in it's early stage.**
 
