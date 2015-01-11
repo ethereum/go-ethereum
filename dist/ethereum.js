@@ -277,6 +277,7 @@ module.exports = {
     methodSignature: methodSignature
 };
 
+
 },{}],2:[function(require,module,exports){
 /*
     This file is part of ethereum.js.

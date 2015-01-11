@@ -8,4 +8,6 @@ before_script:
 script:
    - "jshint *.js lib"
 after_script:
-  - npm run-script gulp
+  - npm run-script build
+  - npm test
+
