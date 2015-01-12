@@ -2,12 +2,17 @@
 
 package bzz
 
-const MaxEntries = 500 // max number of stored (cached) blocks
-const MemTreeLW = 2    // log2(subtree count) of the subtrees
-const MemTreeFLW = 14  // log2(subtree count) of the root layer
+import (
+	"bytes"
+)
+
+const (
+	maxEntries = 500 // max number of stored (cached) blocks
+	memTreeLW  = 2   // log2(subtree count) of the subtrees
+	memTreeFLW = 14  // log2(subtree count) of the root layer
+)
 
 type dpaMemStorage struct {
-	dpaStorage
 	memtree    *dpaMemTree
 	entry_cnt  uint   // stored entries
 	access_cnt uint64 // access counter; oldest is thrown away when full
@@ -26,6 +31,42 @@ a hash prefix subtree containing subtrees or one storage entry (but never both)
   (access[] is a binary tree inside the multi-bit leveled hash tree)
 */
 
+func (x Key) Size() uint {
+	return uint(len(x))
+}
+
+func (x Key) isEqual(y Key) bool {
+	return bytes.Compare(x, y) == 0
+}
+
+func (h Key) bits(i, j uint) uint {
+
+	ii := i >> 3
+	jj := i & 7
+	if ii >= h.Size() {
+		return 0
+	}
+
+	if jj+j <= 8 {
+		return uint((h[ii] >> jj) & ((1 << j) - 1))
+	}
+
+	res := uint(h[ii] >> jj)
+	jj = 8 - jj
+	j -= jj
+	for j != 0 {
+		ii++
+		if j < 8 {
+			res += uint(h[ii]&((1<<j)-1)) << jj
+			return res
+		}
+		res += uint(h[ii]) << jj
+		jj += 8
+		j -= 8
+	}
+	return res
+}
+
 type dpaMemTree struct {
 	subtree    []*dpaMemTree
 	parent     *dpaMemTree
@@ -34,7 +75,7 @@ type dpaMemTree struct {
 	bits  uint // log2(subtree count)
 	width uint // subtree count
 
-	entry  *dpaStoreReq // if subtrees are present, entry should be nil
+	entry  *Chunk // if subtrees are present, entry should be nil
 	access []uint64
 }
 
@@ -87,17 +128,17 @@ func (node *dpaMemTree) update_access(a uint64) {
 
 }
 
-func (s *dpaMemStorage) add(entry *dpaStoreReq) {
+func (s *dpaMemStorage) add(entry *Chunk) {
 
 	s.access_cnt++
 
 	node := s.memtree
 	bitpos := uint(0)
 	for node.entry == nil {
-		l := entry.hash.bits(bitpos, node.bits)
+		l := entry.Key.bits(bitpos, node.bits)
 		st := node.subtree[l]
 		if st == nil {
-			st = newTreeNode(MemTreeLW, node, l)
+			st = newTreeNode(memTreeLW, node, l)
 			bitpos += node.bits
 			node = st
 			break
@@ -108,26 +149,26 @@ func (s *dpaMemStorage) add(entry *dpaStoreReq) {
 
 	if node.entry != nil {
 
-		if node.entry.hash.isEqual(entry.hash) {
+		if node.entry.Key.isEqual(entry.Key) {
 			node.update_access(s.access_cnt)
 			return
 		}
 
 		for node.entry != nil {
 
-			l := node.entry.hash.bits(bitpos, node.bits)
+			l := node.entry.Key.bits(bitpos, node.bits)
 			st := node.subtree[l]
 			if st == nil {
-				st = newTreeNode(MemTreeLW, node, l)
+				st = newTreeNode(memTreeLW, node, l)
 			}
 			st.entry = node.entry
 			node.entry = nil
 			st.update_access(node.access[0])
 
-			l = entry.hash.bits(bitpos, node.bits)
+			l = entry.Key.bits(bitpos, node.bits)
 			st = node.subtree[l]
 			if st == nil {
-				st = newTreeNode(MemTreeLW, node, l)
+				st = newTreeNode(memTreeLW, node, l)
 			}
 			bitpos += node.bits
 			node = st
@@ -141,7 +182,7 @@ func (s *dpaMemStorage) add(entry *dpaStoreReq) {
 
 }
 
-func (s *dpaMemStorage) find(hash HashType) (entry *dpaStoreReq) {
+func (s *dpaMemStorage) find(hash Key) (entry *Chunk) {
 
 	node := s.memtree
 	bitpos := uint(0)
@@ -155,7 +196,7 @@ func (s *dpaMemStorage) find(hash HashType) (entry *dpaStoreReq) {
 		node = st
 	}
 
-	if node.entry.hash.isEqual(hash) {
+	if node.entry.Key.isEqual(hash) {
 		s.access_cnt++
 		node.update_access(s.access_cnt)
 		return node.entry
@@ -233,70 +274,26 @@ func (s *dpaMemStorage) remove_oldest() {
 
 }
 
-// process store channel requests
-
-func (s *dpaMemStorage) process_store(req *dpaStoreReq) {
-
-	if s.entry_cnt >= MaxEntries {
+func (s *dpaMemStorage) Put(req *Chunk) error {
+	if s.entry_cnt >= maxEntries {
 		s.remove_oldest()
 	}
 	s.add(req)
-
-	if s.chain != nil {
-		s.chain.store_chn <- req
-	}
-
+	return nil
 }
 
 // process retrieve channel requests
 
-func (s *dpaMemStorage) process_retrieve(req *dpaRetrieveReq) {
+func (s *dpaMemStorage) Get(req *Chunk) {
 
-	entry := s.find(req.hash)
+	entry := s.find(req.Key)
 	if entry == nil {
-		if s.chain != nil {
-			s.chain.retrieve_chn <- req
-			return
-		}
 	}
-
-	res := new(dpaRetrieveRes)
-	if entry != nil {
-		res.dpaNode = entry.dpaNode
-	}
-	res.req_id = req.req_id
-	req.result_chn <- res
 
 }
 
-func (s *dpaMemStorage) Init(ch *dpaStorage) {
+func (s *dpaMemStorage) Init() {
 
-	s.dpaStorage.Init()
-	s.memtree = newTreeNode(MemTreeFLW, nil, 0)
-	s.chain = ch
-
-}
-
-// storage main goroutine; always processes store messages first
-
-func (s *dpaMemStorage) Run() {
-
-	for {
-		bb := true
-		for bb {
-			select {
-			case store := <-s.store_chn:
-				s.process_store(store)
-			default:
-				bb = false
-			}
-		}
-		select {
-		case store := <-s.store_chn:
-			s.process_store(store)
-		case retrv := <-s.retrieve_chn:
-			s.process_retrieve(retrv)
-		}
-	}
+	s.memtree = newTreeNode(memTreeFLW, nil, 0)
 
 }
