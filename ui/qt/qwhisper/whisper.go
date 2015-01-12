@@ -84,6 +84,10 @@ func (self *Whisper) Watch(opts map[string]interface{}, view *qml.Common) int {
 	return i
 }
 
+func (self *Whisper) Trigger(id int) {
+	go self.Whisper.Trigger(id)
+}
+
 func filterFromMap(opts map[string]interface{}) (f whisper.Filter) {
 	if to, ok := opts["to"].(string); ok {
 		f.To = crypto.ToECDSA(fromHex(to))

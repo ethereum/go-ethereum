@@ -310,7 +310,7 @@ Rectangle {
                         postData(data._id, id);
                         break;
 
-                        case "eth_messages":
+                        case "eth_filterLogs":
                         require(1);
 
                         var messages = eth.messages(data.args[0]);
@@ -351,6 +351,13 @@ Rectangle {
 				params.ttl = params.ttl || 100;
 
 				shh.post(params.payload, params.to, params.from, params.topics, params.priority, params.ttl);
+
+				break;
+
+			case "shh_getMessages":
+				require(1);
+
+				shh.trigger(data.args[0]);
 
 				break;
                     }

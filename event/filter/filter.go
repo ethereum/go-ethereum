@@ -68,3 +68,11 @@ out:
 		}
 	}
 }
+
+func (self *Filters) Match(a, b Filter) bool {
+	return reflect.TypeOf(a) == reflect.TypeOf(b) && a.Compare(b)
+}
+
+func (self *Filters) Get(i int) Filter {
+	return self.watchers[i]
+}
