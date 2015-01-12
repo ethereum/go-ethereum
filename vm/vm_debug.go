@@ -48,6 +48,12 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 	})
 	context := NewContext(caller, me, code, gas, price)
 
+	vmlogger.Debugf("(%d) (%x) %x (code=%d) gas: %v (d) %x\n", self.env.Depth(), caller.Address()[:4], context.Address(), len(code), context.Gas, callData)
+
+	if p := Precompiled[string(me.Address())]; p != nil {
+		return self.RunPrecompiled(p, callData, context)
+	}
+
 	if self.Recoverable {
 		// Recover from any require exception
 		defer func() {
@@ -62,10 +68,6 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 
 			}
 		}()
-	}
-
-	if p := Precompiled[string(me.Address())]; p != nil {
-		return self.RunPrecompiled(p, callData, context)
 	}
 
 	var (
@@ -93,8 +95,6 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 			self.Endl()
 		}
 	)
-
-	vmlogger.Debugf("(%d) (%x) %x (code=%d) gas: %v (d) %x\n", self.env.Depth(), caller.Address()[:4], context.Address(), len(code), context.Gas, callData)
 
 	// Don't bother with the execution if there's no code.
 	if len(code) == 0 {
@@ -368,12 +368,14 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 			y := stack.Pop()
 			z := stack.Pop()
 
-			base.Add(x, y)
-			base.Mod(base, z)
+			add := new(big.Int).Add(x, y)
+			if len(z.Bytes()) > 0 { // NOT 0x0
+				base.Mod(add, z)
 
-			U256(base)
+				U256(base)
+			}
 
-			self.Printf(" = %v", base)
+			self.Printf(" %v + %v %% %v = %v", x, y, z, base)
 
 			stack.Push(base)
 		case MULMOD:
@@ -382,12 +384,14 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 			y := stack.Pop()
 			z := stack.Pop()
 
-			base.Mul(x, y)
-			base.Mod(base, z)
+			mul := new(big.Int).Mul(x, y)
+			if len(z.Bytes()) > 0 { // NOT 0x0
+				base.Mod(mul, z)
 
-			U256(base)
+				U256(base)
+			}
 
-			self.Printf(" = %v", base)
+			self.Printf(" %v + %v %% %v = %v", x, y, z, base)
 
 			stack.Push(base)
 
@@ -541,6 +545,8 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 
 			self.Printf(" => 0x%x", difficulty.Bytes())
 		case GASLIMIT:
+			self.Printf(" => %v", self.env.GasLimit())
+
 			stack.Push(self.env.GasLimit())
 
 			// 0x50 range
@@ -933,13 +939,11 @@ func (self *DebugVm) RunPrecompiled(p *PrecompiledAccount, callData []byte, cont
 
 		return context.Return(ret), nil
 	} else {
-		self.Endl()
+		self.Printf("NATIVE_FUNC => failed").Endl()
 
 		tmp := new(big.Int).Set(context.Gas)
 
-		context.UseGas(context.Gas)
-
-		return context.Return(nil), OOG(gas, tmp)
+		panic(OOG(gas, tmp).Error())
 	}
 }
 
