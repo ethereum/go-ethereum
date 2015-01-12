@@ -743,9 +743,7 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 		default:
 			vmlogger.Debugf("(pc) %-3v Invalid opcode %x\n", pc, op)
 
-			context.ReturnGas(big.NewInt(1), nil)
-
-			return context.Return(nil), fmt.Errorf("Invalid opcode %x", op)
+			panic(fmt.Errorf("Invalid opcode %x", op))
 		}
 
 		pc++

@@ -1,6 +1,7 @@
 package helper
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -66,12 +67,16 @@ func (self *Env) AddLog(log state.Log) {
 func (self *Env) Depth() int     { return self.depth }
 func (self *Env) SetDepth(i int) { self.depth = i }
 func (self *Env) Transfer(from, to vm.Account, amount *big.Int) error {
+	if self.skipTransfer {
+		if from.Balance().Cmp(amount) < 0 {
+			return errors.New("Insufficient balance in account")
+		}
+	}
 	return vm.Transfer(from, to, amount)
 }
 
 func (self *Env) vm(addr, data []byte, gas, price, value *big.Int) *core.Execution {
 	exec := core.NewExecution(self, addr, data, gas, price, value)
-	exec.SkipTransfer = self.skipTransfer
 
 	return exec
 }
@@ -104,6 +109,7 @@ func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, state.Log
 	)
 
 	caller := state.GetOrNewStateObject(from)
+	caller.SetBalance(ethutil.Big("1000000000000000000"))
 
 	vmenv := NewEnvFromMap(state, env, exec)
 	vmenv.skipTransfer = true

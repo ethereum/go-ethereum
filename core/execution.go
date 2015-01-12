@@ -13,7 +13,6 @@ type Execution struct {
 	env               vm.Environment
 	address, input    []byte
 	Gas, price, value *big.Int
-	SkipTransfer      bool
 }
 
 func NewExecution(env vm.Environment, address, input []byte, gas, gasPrice, value *big.Int) *Execution {
@@ -43,14 +42,12 @@ func (self *Execution) exec(code, contextAddr []byte, caller vm.ContextRef) (ret
 
 	from, to := env.State().GetStateObject(caller.Address()), env.State().GetOrNewStateObject(self.address)
 	// Skipping transfer is used on testing for the initial call
-	if !self.SkipTransfer {
-		err = env.Transfer(from, to, self.value)
-		if err != nil {
-			caller.ReturnGas(self.Gas, self.price)
+	err = env.Transfer(from, to, self.value)
+	if err != nil {
+		caller.ReturnGas(self.Gas, self.price)
 
-			err = fmt.Errorf("Insufficient funds to transfer value. Req %v, has %v", self.value, from.Balance)
-			return
-		}
+		err = fmt.Errorf("insufficient funds to transfer value. Req %v, has %v", self.value, from.Balance())
+		return
 	}
 
 	snapshot := env.State().Copy()
