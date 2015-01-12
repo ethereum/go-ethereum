@@ -3,7 +3,9 @@ package crypto
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"testing"
+	"time"
 )
 
 // These tests are sanity checks.
@@ -33,4 +35,15 @@ func checkhash(t *testing.T, name string, f func([]byte) []byte, msg, exp []byte
 	if bytes.Compare(exp, sum) != 0 {
 		t.Errorf("hash %s returned wrong result.\ngot:  %x\nwant: %x", name, sum, exp)
 	}
+}
+
+func BenchmarkSha3(b *testing.B) {
+	a := []byte("hello world")
+	amount := 1000000
+	start := time.Now()
+	for i := 0; i < amount; i++ {
+		Sha3(a)
+	}
+
+	fmt.Println(amount, ":", time.Since(start))
 }

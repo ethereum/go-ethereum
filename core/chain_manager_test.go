@@ -128,3 +128,21 @@ func TestChainMultipleInsertions(t *testing.T) {
 		t.Error("Invalid canonical chain")
 	}
 }
+
+func TestGetAncestors(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	var eventMux event.TypeMux
+	chainMan := NewChainManager(db, &eventMux)
+	chain, err := loadChain("valid1", t)
+	if err != nil {
+		fmt.Println(err)
+		t.FailNow()
+	}
+
+	for _, block := range chain {
+		chainMan.write(block)
+	}
+
+	ancestors := chainMan.GetAncestors(chain[len(chain)-1], 4)
+	fmt.Println(ancestors)
+}

@@ -2,7 +2,6 @@
 package filter
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -79,7 +78,6 @@ out:
 				self.filterMu.RUnlock()
 
 			case state.Messages:
-				fmt.Println("got messages")
 				self.filterMu.RLock()
 				for _, filter := range self.filters {
 					if filter.MessageCallback != nil {
