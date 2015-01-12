@@ -178,7 +178,10 @@ extern "C"
 		auto arg1 = llvm2eth(*_arg1);
 		auto arg2 = llvm2eth(*_arg2);
 		auto arg3 = llvm2eth(*_arg3);
-		*o_result = eth2llvm(u256((bigint(arg1) * bigint(arg2)) % arg3));
+		if (arg3 != 0)
+			*o_result = eth2llvm(u256((bigint(arg1) * bigint(arg2)) % arg3));
+		else
+			*o_result = {};
 	}
 
 	EXPORT void arith_addmod(i256* _arg1, i256* _arg2, i256* _arg3, i256* o_result)
@@ -186,7 +189,10 @@ extern "C"
 		auto arg1 = llvm2eth(*_arg1);
 		auto arg2 = llvm2eth(*_arg2);
 		auto arg3 = llvm2eth(*_arg3);
-		*o_result = eth2llvm(u256((bigint(arg1) + bigint(arg2)) % arg3));
+		if (arg3 != 0)
+			*o_result = eth2llvm(u256((bigint(arg1) + bigint(arg2)) % arg3));
+		else
+			*o_result = {};
 	}
 
 }
