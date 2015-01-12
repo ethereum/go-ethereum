@@ -79,12 +79,6 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
-		/*
-			helper.Logger.SetLogLevel(5)
-			if name != "createNameRegistratorZeroMem" {
-				continue
-			}
-		*/
 		db, _ := ethdb.NewMemDatabase()
 		statedb := state.New(nil, db)
 		for addr, account := range test.Pre {

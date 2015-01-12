@@ -15,6 +15,7 @@ type Env struct {
 	depth        int
 	state        *state.StateDB
 	skipTransfer bool
+	initial      bool
 	Gas          *big.Int
 
 	origin   []byte
@@ -68,9 +69,17 @@ func (self *Env) Depth() int     { return self.depth }
 func (self *Env) SetDepth(i int) { self.depth = i }
 func (self *Env) Transfer(from, to vm.Account, amount *big.Int) error {
 	if self.skipTransfer {
+		// ugly hack
+		if self.initial {
+			self.initial = false
+			return nil
+		}
+
 		if from.Balance().Cmp(amount) < 0 {
 			return errors.New("Insufficient balance in account")
 		}
+
+		return nil
 	}
 	return vm.Transfer(from, to, amount)
 }
@@ -109,10 +118,10 @@ func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, state.Log
 	)
 
 	caller := state.GetOrNewStateObject(from)
-	caller.SetBalance(ethutil.Big("1000000000000000000"))
 
 	vmenv := NewEnvFromMap(state, env, exec)
 	vmenv.skipTransfer = true
+	vmenv.initial = true
 	ret, err := vmenv.Call(caller, to, data, gas, price, value)
 
 	return ret, vmenv.logs, vmenv.Gas, err

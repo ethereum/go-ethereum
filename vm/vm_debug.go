@@ -50,10 +50,6 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 
 	vmlogger.Debugf("(%d) (%x) %x (code=%d) gas: %v (d) %x\n", self.env.Depth(), caller.Address()[:4], context.Address(), len(code), context.Gas, callData)
 
-	if p := Precompiled[string(me.Address())]; p != nil {
-		return self.RunPrecompiled(p, callData, context)
-	}
-
 	if self.Recoverable {
 		// Recover from any require exception
 		defer func() {
@@ -68,6 +64,10 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 
 			}
 		}()
+	}
+
+	if p := Precompiled[string(me.Address())]; p != nil {
+		return self.RunPrecompiled(p, callData, context)
 	}
 
 	var (
@@ -513,10 +513,12 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 			// 0x40 range
 		case BLOCKHASH:
 			num := stack.Pop()
-			if num.Cmp(new(big.Int).Sub(self.env.BlockNumber(), ethutil.Big256)) < 0 {
-				stack.Push(ethutil.Big0)
-			} else {
+
+			n := U256(new(big.Int).Sub(self.env.BlockNumber(), ethutil.Big257))
+			if num.Cmp(n) > 0 && num.Cmp(self.env.BlockNumber()) < 0 {
 				stack.Push(ethutil.BigD(self.env.GetHash(num.Uint64())))
+			} else {
+				stack.Push(ethutil.Big0)
 			}
 
 			self.Printf(" => 0x%x", stack.Peek().Bytes())
