@@ -2,7 +2,6 @@ package vm
 
 import (
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -491,21 +490,13 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 			} else {
 				code = context.Code
 			}
-
+			context := NewContext(nil, nil, code, ethutil.Big0, ethutil.Big0)
 			var (
-				size = uint64(len(code))
 				mOff = stack.Pop().Uint64()
 				cOff = stack.Pop().Uint64()
 				l    = stack.Pop().Uint64()
 			)
-
-			if cOff > size {
-				cOff = 0
-				l = 0
-			} else if cOff+l > size {
-				l = uint64(math.Min(float64(cOff+l), float64(size)))
-			}
-			codeCopy := code[cOff : cOff+l]
+			codeCopy := context.GetCode(cOff, l)
 
 			mem.Set(mOff, l, codeCopy)
 

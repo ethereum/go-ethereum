@@ -11,7 +11,7 @@
         "exec" : {
             "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
             "caller" : "cd1722f3947def4cf144679da39c4c32bdc35681",
-            "code" : "0x583438f0",
+            "code" : "0x6303376d4056f107",
             "data" : "0x",
             "gas" : "10000",
             "gasPrice" : "100000000000000",
@@ -21,7 +21,7 @@
         "pre" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
                 "balance" : "1000000000000000000",
-                "code" : "0x583438f0",
+                "code" : "0x6303376d4056f107",
                 "nonce" : "0",
                 "storage" : {
                 }

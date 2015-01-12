@@ -58,7 +58,7 @@ func (self *Env) Difficulty() *big.Int  { return self.difficulty }
 func (self *Env) State() *state.StateDB { return self.state }
 func (self *Env) GasLimit() *big.Int    { return self.gasLimit }
 func (self *Env) GetHash(n uint64) []byte {
-	return nil
+	return crypto.Sha3([]byte(big.NewInt(int64(n)).String()))
 }
 func (self *Env) AddLog(log state.Log) {
 	self.logs = append(self.logs, log)
