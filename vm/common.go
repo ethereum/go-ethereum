@@ -14,6 +14,7 @@ type Type int
 const (
 	StandardVmTy Type = iota
 	DebugVmTy
+	JitVmTy
 
 	MaxVmTy
 )
