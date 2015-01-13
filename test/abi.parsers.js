@@ -196,8 +196,45 @@ describe('abi', function() {
             assert.equal(parser.test('world'), "776f726c64000000000000000000000000000000000000000000000000000000");
         });
 
-    });
+        it('should use proper method name', function () {
+        
+            // given
+            var d = clone(description);
+            d[0].name = 'helloworld';
+            d[0].inputs = [
+                { type: "int" }
+            ];
 
+            // when
+            var parser = abi.inputParser(d);
+
+            // then
+            assert.equal(parser.helloworld(1), "0000000000000000000000000000000000000000000000000000000000000001");
+
+        });
+        
+        it('should parse multiple methods', function () {
+            
+            // given
+            var d =  [{
+                name: "test",
+                inputs: [{ type: "int" }],
+                outputs: [{ type: "int" }]
+            },{
+                name: "test2",
+                inputs: [{ type: "string" }],
+                outputs: [{ type: "string" }]
+            }];
+
+            // when
+            var parser = abi.inputParser(d);
+
+            //then
+            assert.equal(parser.test(1), "0000000000000000000000000000000000000000000000000000000000000001");
+            assert.equal(parser.test2('hello'), "68656c6c6f000000000000000000000000000000000000000000000000000000");
+
+        });
+    });
 
     describe('outputParser', function() {
         it('should parse output string', function() {
@@ -218,7 +255,7 @@ describe('abi', function() {
 
         });
 
-        it('should parse multiplt output strings', function() {
+        it('should parse multiple output strings', function() {
 
             // given
             var d = clone(description);
@@ -236,6 +273,47 @@ describe('abi', function() {
             assert.equal(parser.test("0x68656c6c6f000000000000000000000000000000000000000000000000000000776f726c64000000000000000000000000000000000000000000000000000000")[1], 'world');
 
         });
+        
+        it('should use proper method name', function () {
+        
+            // given
+            var d = clone(description);
+            d[0].name = 'helloworld';
+            d[0].outputs = [
+                { type: "int" }
+            ];
+
+            // when
+            var parser = abi.outputParser(d);
+
+            // then
+            assert.equal(parser.helloworld("0x0000000000000000000000000000000000000000000000000000000000000001")[0], 1);
+
+        });
+
+
+        it('should parse multiple methods', function () {
+            
+            // given
+            var d =  [{
+                name: "test",
+                inputs: [{ type: "int" }],
+                outputs: [{ type: "int" }]
+            },{
+                name: "test2",
+                inputs: [{ type: "string" }],
+                outputs: [{ type: "string" }]
+            }];
+
+            // when
+            var parser = abi.outputParser(d);
+
+            //then
+            assert.equal(parser.test("0000000000000000000000000000000000000000000000000000000000000001")[0], 1);
+            assert.equal(parser.test2("0x68656c6c6f000000000000000000000000000000000000000000000000000000")[0], "hello");
+
+        });
+
     });
 });
 
