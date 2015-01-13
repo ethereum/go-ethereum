@@ -216,27 +216,29 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 			Data: data,
 			Size: size,
 		}
-	case size < treeSize*self.Branches:
+	case size < treeSize:
 		// last item on this level (== size % self.Branches ^ (depth + 1) )
 		self.split(depth-1, treeSize/self.Branches, key, data, chunkC, errc, parentWg)
 		return
 	default:
 		// intermediate chunk containing child nodes hashes
-		branches := int64(size/treeSize) + 1
+		branches := int64((size-1)/treeSize) + 1
 		dpaLogger.Debugf("intermediate node: setting branches: %v, depth: %v, max subtree size: %v, data size: %v", branches, depth, treeSize, size)
 
 		var chunk []byte = make([]byte, branches*self.hashSize)
 		var pos, i int64
 
 		childrenWg := &sync.WaitGroup{}
-
+		var secSize int64
 		for i < branches {
 			// the last item can have shorter data
-			if size-pos < treeSize*self.Branches {
-				treeSize = size - pos
+			if size-pos < treeSize {
+				secSize = size - pos
+			} else {
+				secSize = treeSize
 			}
 			// take the section of the data corresponding encoded in the subTree
-			subTreeData := NewChunkReader(data, pos, treeSize)
+			subTreeData := NewChunkReader(data, pos, secSize)
 			// the hash of that data
 			subTreeKey := chunk[i*self.hashSize : (i+1)*self.hashSize]
 
