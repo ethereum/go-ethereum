@@ -130,17 +130,14 @@ func (self *chunkerTester) Join(t *testing.T, chunker *TreeChunker, key Key) (da
 
 			case chunk, ok := <-chunkC:
 				if chunk != nil {
-					t.Logf("got request %v", chunk)
 					// this just mocks the behaviour of a chunk store retrieval
 					var found bool
 					for _, ch := range self.chunks {
 						if bytes.Compare(chunk.Key, ch.Key) == 0 {
 							found = true
-							t.Logf("found data %v", ch)
 							// ch.Data.Seek(0, 0) // the reader has to be reset
 							chunk.Data = ch.Data
 							chunk.Size = ch.Size
-							t.Logf("updated chunk %v", chunk)
 							close(chunk.C)
 							break
 						}
@@ -166,43 +163,31 @@ func (self *chunkerTester) Join(t *testing.T, chunker *TreeChunker, key Key) (da
 	}()
 	<-quitC // waiting for it to finish
 	w.Seek(0, 0)
-	t.Logf("reader size %v", w.Size())
 	return w.Slice(0, w.Size())
 }
 
-func TestChunker0(t *testing.T) {
-	defer testlog(t).detach()
-
-	chunker := &TreeChunker{
-		Branches:     2,
-		SplitTimeout: 100 * time.Millisecond,
-	}
-	chunker.Init()
-	tester := &chunkerTester{}
-	key, input := tester.Split(chunker, 32)
-	tester.checkChunks(t, 1)
+func testRandomData(chunker *TreeChunker, tester *chunkerTester, n int, chunks int, t *testing.T) {
+	key, input := tester.Split(chunker, n)
+	tester.checkChunks(t, chunks)
 	t.Logf("chunks: %v", tester.chunks)
 	output := tester.Join(t, chunker, key)
+	t.Logf(" IN: %x\nOUT: %x\n", input, output)
 	if bytes.Compare(output, input) != 0 {
 		t.Errorf("input and output mismatch\n IN: %x\nOUT: %x\n", input, output)
 	}
 }
 
-func TestChunker1(t *testing.T) {
+func TestRandomData(t *testing.T) {
 	defer testlog(t).detach()
-
 	chunker := &TreeChunker{
 		Branches:     2,
-		SplitTimeout: 100 * time.Millisecond,
+		SplitTimeout: 10 * time.Second,
+		JoinTimeout:  10 * time.Second,
 	}
 	chunker.Init()
 	tester := &chunkerTester{}
-	key, input := tester.Split(chunker, 170)
-	tester.checkChunks(t, 3)
-	t.Logf("chunks %x -> %x", key, input)
-	// t.Logf("chunks: %v", tester.chunks)
-	// output := tester.Join(t, chunker, key)
-	// if bytes.Compare(output, input) != 0 {
-	// 	t.Errorf("input and output mismatch\n IN: %x\nOUT: %x\n", input, output)
-	// }
+	testRandomData(chunker, tester, 70, 3, t)
+	// testRandomData(chunker, tester, 179, 5, t)
+	// testRandomData(chunker, tester, 253, 7, t)
+	t.Logf("chunks %v", tester.chunks)
 }
