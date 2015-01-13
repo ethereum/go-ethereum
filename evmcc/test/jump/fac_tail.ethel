@@ -1,0 +1,5 @@
+let fac a n = 
+    if n == 0 then a	
+    else fac (a*n) (n-1)
+
+return fac 1 60

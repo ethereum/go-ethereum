@@ -1,0 +1,14 @@
+;; Indirect JUMP
+
+(asm 
+1        ;; 0
+4	 ;; 2
+5    	 ;; 4
+ADD  	 ;; 6
+JUMPI 	 ;; 7
+STOP   	 ;; 8
+JUMPDEST ;; 9
+1
+0
+MSTORE
+)

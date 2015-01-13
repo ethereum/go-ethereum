@@ -1,0 +1,27 @@
+;; Produces 1 2 3 4 5 6 7 8 9 10 on the stack and exits
+
+(asm
+10     
+
+;; 2
+1
+DUP2        
+SUB
+DUP1
+2    
+JUMPI  
+
+;; stack = 1 2 3 4 5 6 7 8 9 10
+0
+MSTORE
+1 
+MSTORE
+2 
+MSTORE
+;;3 
+;;MSTORE
+
+STOP
+)
+
+

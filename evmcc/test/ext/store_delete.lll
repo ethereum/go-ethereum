@@ -1,0 +1,9 @@
+
+(asm 
+1234
+99
+SSTORE
+0
+99
+SSTORE
+)

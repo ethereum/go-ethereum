@@ -1,0 +1,15 @@
+
+(asm 
+1
+100
+MSTORE
+2
+132
+MSTORE
+3
+164
+MSTORE
+96
+100
+RETURN
+)

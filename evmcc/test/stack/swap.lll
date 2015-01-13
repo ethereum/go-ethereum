@@ -1,0 +1,31 @@
+(asm
+5      ;; 0
+2      ;; 2
+1      ;; 4
+12     ;; 6
+JUMPI  ;; 8
+
+POP    ;; 9
+POP    ;; 10
+STOP   ;; 11
+
+;; stack = 2,1
+SWAP1  ;; 12
+1      ;; 13
+21     ;; 15
+JUMPI  ;; 17
+
+POP    ;; 18
+POP    ;; 19
+STOP   ;; 20
+
+;; stack = 1,2
+SUB    ;; 21
+0
+MSTORE
+1
+31
+RETURN ;; returns 03
+) 
+
+

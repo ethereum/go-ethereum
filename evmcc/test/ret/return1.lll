@@ -1,0 +1,6 @@
+;; code should return 39
+;; i should remain 1
+{
+  [i] 1
+  ( if (> @i 0) { (return 39) [i] 2 } (return 1) )
+}

@@ -1,0 +1,12 @@
+;; Should return (27 * 37) `mod` 100  = 99 = 0x63
+(asm
+100
+27
+37
+MULMOD
+0 
+MSTORE8 
+0
+1
+RETURN
+)

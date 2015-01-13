@@ -1,0 +1,13 @@
+(asm
+100           ;; byte count
+1000000000000 ;; source index in calldata array
+0             ;; dest index in memory
+CALLDATACOPY
+
+0
+MLOAD ;; to dump memory
+
+0
+10
+RETURN
+)
