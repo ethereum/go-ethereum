@@ -72,8 +72,12 @@ func (self jsonWrapper) GetRequestReply(xeth *EthereumApi, req *RpcRequest, repl
 			return err
 		}
 		return xeth.GetTxCountAt(args, reply)
-	// case "eth_codeAt":
-	// return nil
+	case "eth_codeAt":
+		args, err := req.ToGetCodeAtArgs()
+		if err != nil {
+			return err
+		}
+		return xeth.GetCodeAt(args, reply)
 	case "eth_balanceAt":
 		args, err := req.ToGetBalanceArgs()
 		if err != nil {

@@ -147,6 +147,21 @@ func (req *RpcRequest) ToGetBalanceArgs() (*GetBalanceArgs, error) {
 	return args, nil
 }
 
+func (req *RpcRequest) ToGetCodeAtArgs() (*GetCodeAtArgs, error) {
+	if len(req.Params) < 1 {
+		return nil, NewErrorResponse(ErrorArguments)
+	}
+
+	args := new(GetCodeAtArgs)
+	r := bytes.NewReader(req.Params[0])
+	err := json.NewDecoder(r).Decode(args)
+	if err != nil {
+		return nil, NewErrorResponse(ErrorDecodeArgs)
+	}
+	jsonlogger.DebugDetailf("%T %v", args, args)
+	return args, nil
+}
+
 // func NewSuccessRes(object JsonResponse) string {
 // 	e := SuccessRes{Error: false, Result: object}
 // 	res, err := json.Marshal(e)

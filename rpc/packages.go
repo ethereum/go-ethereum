@@ -149,6 +149,15 @@ func (p *EthereumApi) GetBalanceAt(args *GetBalanceArgs, reply *interface{}) err
 	return nil
 }
 
+func (p *EthereumApi) GetCodeAt(args *GetCodeAtArgs, reply *interface{}) error {
+	err := args.requirements()
+	if err != nil {
+		return err
+	}
+	*reply = p.pipe.CodeAt(args.Address)
+	return nil
+}
+
 type GetBlockArgs struct {
 	BlockNumber int32
 	Hash        string
@@ -236,6 +245,15 @@ type GetStorageArgs struct {
 	Key     string
 }
 
+func (obj *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
+	arg0 := ""
+	if err = json.Unmarshal(b, arg0); err == nil {
+		obj.Address = arg0
+		return
+	}
+	return NewErrorResponse(ErrorDecodeArgs)
+}
+
 func (a *GetStorageArgs) requirements() error {
 	if a.Address == "" {
 		return NewErrorResponse("GetStorageAt requires an 'address' value as argument")
@@ -315,4 +333,23 @@ func (a *GetBalanceArgs) requirements() error {
 type BalanceRes struct {
 	Balance string `json:"balance"`
 	Address string `json:"address"`
+}
+type GetCodeAtArgs struct {
+	Address string
+}
+
+func (obj *GetCodeAtArgs) UnmarshalJSON(b []byte) (err error) {
+	arg0 := ""
+	if err = json.Unmarshal(b, &arg0); err == nil {
+		obj.Address = arg0
+		return
+	}
+	return NewErrorResponse(ErrorDecodeArgs)
+}
+
+func (a *GetCodeAtArgs) requirements() error {
+	if a.Address == "" {
+		return NewErrorResponse("GetCodeAt requires an 'address' value as argument")
+	}
+	return nil
 }
