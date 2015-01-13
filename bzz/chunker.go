@@ -158,7 +158,7 @@ func (self *TreeChunker) Split(key Key, data SectionReader) (chunkC chan *Chunk,
 		dpaLogger.Debugf("split request received for data (%v bytes, depth: %v)", size, depth)
 
 		//launch actual recursive function passing the workgroup
-		self.split(depth, treeSize, key, data, chunkC, rerrC, wg)
+		self.split(depth, treeSize/self.Branches, key, data, chunkC, rerrC, wg)
 	}()
 
 	// closes internal error channel if all subprocesses in the workgroup finished
@@ -205,7 +205,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 
 	switch {
 	case depth == 0:
-		if size > treeSize {
+		if size > self.chunkSize {
 			panic("ouch")
 		}
 		// leaf nodes -> content chunks
@@ -216,12 +216,11 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 			Data: data,
 			Size: size,
 		}
-	case size < treeSize:
+	case size < treeSize*self.Branches:
 		// last item on this level (== size % self.Branches ^ (depth + 1) )
-		self.split(depth-1, int64(treeSize/self.Branches), key, data, chunkC, errc, parentWg)
+		self.split(depth-1, treeSize/self.Branches, key, data, chunkC, errc, parentWg)
 		return
 	default:
-		treeSize /= self.Branches
 		// intermediate chunk containing child nodes hashes
 		branches := int64(size/treeSize) + 1
 		dpaLogger.Debugf("intermediate node: setting branches: %v, depth: %v, max subtree size: %v, data size: %v", branches, depth, treeSize, size)
@@ -242,7 +241,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 			subTreeKey := chunk[i*self.hashSize : (i+1)*self.hashSize]
 
 			childrenWg.Add(1)
-			go self.split(depth-1, treeSize, subTreeKey, subTreeData, chunkC, errc, childrenWg)
+			go self.split(depth-1, treeSize/self.Branches, subTreeKey, subTreeData, chunkC, errc, childrenWg)
 
 			i++
 			pos += treeSize
