@@ -252,11 +252,11 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 		childrenWg.Wait()
 		// now we got the hashes in the chunk, then hash the chunk
 		chunkReader := NewChunkReaderFromBytes(chunk) // bytes.Reader almost implements SectionReader
-		hash = self.Hash(treeSize, chunkReader)
+		hash = self.Hash(size, chunkReader)
 		newChunk = &Chunk{
 			Key:  hash,
 			Data: chunkReader,
-			Size: treeSize,
+			Size: size,
 		}
 	}
 	// send off new chunk to storage
@@ -329,7 +329,7 @@ func (self *TreeChunker) Join(key Key, data SectionWriter) (chunkC chan *Chunk, 
 			depth++
 		}
 		// launch recursive call on root chunk
-		self.join(depth, treeSize, chunk, data, chunkC, rerrC, wg, quitC)
+		self.join(depth, treeSize/self.Branches, chunk, data, chunkC, rerrC, wg, quitC)
 	}()
 
 	// waits for all the processes to finish and signals by closing internal rerrc
@@ -365,7 +365,10 @@ func (self *TreeChunker) join(depth int, treeSize int64, chunk *Chunk, data Sect
 	case <-chunk.C: // bells are ringing, data have been delivered
 		dpaLogger.Debugf("received chunk data: %v", chunk)
 		switch {
-		case chunk.Size <= treeSize && depth == 0:
+		case depth == 0:
+			if chunk.Size > self.chunkSize {
+				panic("oops")
+			}
 			dpaLogger.Debugf("reading into data")
 			// we received a chunk for a leaf node representing actual content
 			if _, err := data.ReadFrom(chunk.Data); err != nil {
@@ -394,7 +397,7 @@ func (self *TreeChunker) join(depth int, treeSize int64, chunk *Chunk, data Sect
 				// submit request
 				chunkC <- subtree
 				i++
-				pos += subtree.Size
+				pos += treeSize
 			}
 
 		}

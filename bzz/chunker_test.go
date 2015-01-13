@@ -198,7 +198,7 @@ func TestChunker1(t *testing.T) {
 	chunker.Init()
 	tester := &chunkerTester{}
 	key, input := tester.Split(chunker, 70)
-	tester.checkChunks(t, 2)
+	tester.checkChunks(t, 3)
 	t.Logf("chunks: %v", tester.chunks)
 	output := tester.Join(t, chunker, key)
 	if bytes.Compare(output, input) != 0 {
