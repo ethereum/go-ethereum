@@ -57,7 +57,7 @@ public:
 	explicit BasicBlock(std::string _name, llvm::Function* _mainFunc, llvm::IRBuilder<>& _builder, bool isJumpDest);
 
 	BasicBlock(const BasicBlock&) = delete;
-	void operator=(const BasicBlock&) = delete;
+	BasicBlock& operator=(const BasicBlock&) = delete;
 
 	llvm::BasicBlock* llvm() { return m_llvmBB; }
 

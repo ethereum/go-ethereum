@@ -34,7 +34,7 @@ public:
 	Runtime(RuntimeData* _data, Env* _env);
 
 	Runtime(const Runtime&) = delete;
-	void operator=(const Runtime&) = delete;
+	Runtime& operator=(const Runtime&) = delete;
 
 	StackImpl& getStack() { return m_stack; }
 	MemoryImpl& getMemory() { return m_memory; }
