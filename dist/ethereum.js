@@ -450,6 +450,97 @@ module.exports = contract;
     You should have received a copy of the GNU Lesser General Public License
     along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
 */
+/** @file filter.js
+ * @authors:
+ *   Jeffrey Wilcke <jeff@ethdev.com>
+ *   Marek Kotewicz <marek@ethdev.com>
+ *   Marian Oancea <marian@ethdev.com>
+ *   Gav Wood <g@ethdev.com>
+ * @date 2014
+ */
+
+// TODO: is these line is supposed to be here? 
+if ("build" !== 'build') {/*
+    var web3 = require('./web3'); // jshint ignore:line
+*/}
+
+/// should be used when we want to watch something
+/// it's using inner polling mechanism and is notified about changes
+var Filter = function(options, impl) {
+    this.impl = impl;
+    this.callbacks = [];
+
+    var self = this;
+    this.promise = impl.newFilter(options);
+    this.promise.then(function (id) {
+        self.id = id;
+        web3.on(impl.changed, id, self.trigger.bind(self));
+        web3.provider.startPolling({call: impl.changed, args: [id]}, id);
+    });
+};
+
+/// alias for changed*
+Filter.prototype.arrived = function(callback) {
+    this.changed(callback);
+};
+
+/// gets called when there is new eth/shh message
+Filter.prototype.changed = function(callback) {
+    var self = this;
+    this.promise.then(function(id) {
+        self.callbacks.push(callback);
+    });
+};
+
+/// trigger calling new message from people
+Filter.prototype.trigger = function(messages) {
+    for(var i = 0; i < this.callbacks.length; i++) {
+        this.callbacks[i].call(this, messages);
+    }
+};
+
+/// should be called to uninstall current filter
+Filter.prototype.uninstall = function() {
+    var self = this;
+    this.promise.then(function (id) {
+        self.impl.uninstallFilter(id);
+        web3.provider.stopPolling(id);
+        web3.off(impl.changed, id);
+    });
+};
+
+/// should be called to manually trigger getting latest messages from the client
+Filter.prototype.messages = function() {
+    var self = this;
+    return this.promise.then(function (id) {
+        return self.impl.getMessages(id);
+    });
+};
+
+/// alias for messages
+Filter.prototype.logs = function () {
+    return this.messages();
+};
+
+module.exports = Filter;
+
+},{}],5:[function(require,module,exports){
+/*
+    This file is part of ethereum.js.
+
+    ethereum.js is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    ethereum.js is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+*/
 /** @file httprpc.js
  * @authors:
  *   Marek Kotewicz <marek@ethdev.com>
@@ -529,7 +620,7 @@ Object.defineProperty(HttpRpcProvider.prototype, "onmessage", {
 
 module.exports = HttpRpcProvider;
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -576,7 +667,7 @@ Object.defineProperty(QtProvider.prototype, "onmessage", {
 
 module.exports = QtProvider;
 
-},{}],6:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -593,7 +684,7 @@ module.exports = QtProvider;
     You should have received a copy of the GNU Lesser General Public License
     along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file main.js
+/** @file web3.js
  * @authors:
  *   Jeffrey Wilcke <jeff@ethdev.com>
  *   Marek Kotewicz <marek@ethdev.com>
@@ -602,6 +693,11 @@ module.exports = QtProvider;
  * @date 2014
  */
 
+var Filter = require('./filter');
+
+/// Recursively resolves all promises in given object and replaces the resolved values with promises
+/// @param any object/array/promise/anything else..
+/// @returns (resolves) object with replaced promises with their result 
 function flattenPromise (obj) {
     if (obj instanceof Promise) {
         return Promise.resolve(obj);
@@ -641,12 +737,14 @@ function flattenPromise (obj) {
     return Promise.resolve(obj);
 }
 
+/// @returns an array of objects describing web3 api methods
 var web3Methods = function () {
     return [
     { name: 'sha3', call: 'web3_sha3' }
     ];
 };
 
+/// @returns an array of objects describing web3.eth api methods
 var ethMethods = function () {
     var blockCall = function (args) {
         return typeof args[0] === "string" ? "eth_blockByHash" : "eth_blockByNumber";
@@ -680,6 +778,7 @@ var ethMethods = function () {
     return methods;
 };
 
+/// @returns an array of objects describing web3.eth api properties
 var ethProperties = function () {
     return [
     { name: 'coinbase', getter: 'eth_coinbase', setter: 'eth_setCoinbase' },
@@ -694,6 +793,7 @@ var ethProperties = function () {
     ];
 };
 
+/// @returns an array of objects describing web3.db api methods
 var dbMethods = function () {
     return [
     { name: 'put', call: 'db_put' },
@@ -703,6 +803,7 @@ var dbMethods = function () {
     ];
 };
 
+/// @returns an array of objects describing web3.shh api methods
 var shhMethods = function () {
     return [
     { name: 'post', call: 'shh_post' },
@@ -713,6 +814,7 @@ var shhMethods = function () {
     ];
 };
 
+/// @returns an array of objects describing web3.eth.watch api methods
 var ethWatchMethods = function () {
     var newFilter = function (args) {
         return typeof args[0] === 'string' ? 'eth_newFilterString' : 'eth_newFilter';
@@ -725,6 +827,7 @@ var ethWatchMethods = function () {
     ];
 };
 
+/// @returns an array of objects describing web3.shh.watch api methods
 var shhWatchMethods = function () {
     return [
     { name: 'newFilter', call: 'shh_newFilter' },
@@ -733,6 +836,8 @@ var shhWatchMethods = function () {
     ];
 };
 
+/// creates methods in a given object based on method description on input
+/// setups api calls for these methods
 var setupMethods = function (obj, methods) {
     methods.forEach(function (method) {
         obj[method.name] = function () {
@@ -756,6 +861,8 @@ var setupMethods = function (obj, methods) {
     });
 };
 
+/// creates properties in a given object based on properties description on input
+/// setups api calls for these properties
 var setupProperties = function (obj, properties) {
     properties.forEach(function (property) {
         var proto = {};
@@ -800,7 +907,7 @@ var decToHex = function (dec) {
     return parseInt(dec).toString(16);
 };
 
-
+/// setups web3 object, and it's in-browser executed methods
 var web3 = {
     _callbacks: {},
     _events: {},
@@ -918,6 +1025,7 @@ var web3 = {
     }
 };
 
+/// setups all api methods
 setupMethods(web3, web3Methods());
 setupMethods(web3.eth, ethMethods());
 setupProperties(web3.eth, ethProperties());
@@ -927,12 +1035,16 @@ setupMethods(web3.shh, shhMethods());
 var ethWatch = {
     changed: 'eth_changed'
 };
+
 setupMethods(ethWatch, ethWatchMethods());
+
 var shhWatch = {
     changed: 'shh_changed'
 };
+
 setupMethods(shhWatch, shhWatchMethods());
 
+/// Provider manager object prototype
 var ProviderManager = function() {
     this.queued = [];
     this.polls = [];
@@ -954,6 +1066,7 @@ var ProviderManager = function() {
     poll();
 };
 
+/// sends outgoing requests, if provider is not available, enqueue the request
 ProviderManager.prototype.send = function(data, cb) {
     data._id = this.id;
     if (cb) {
@@ -971,6 +1084,7 @@ ProviderManager.prototype.send = function(data, cb) {
     }
 };
 
+/// setups provider, which will be used for sending messages
 ProviderManager.prototype.set = function(provider) {
     if(this.provider !== undefined && this.provider.unload !== undefined) {
         this.provider.unload();
@@ -980,6 +1094,7 @@ ProviderManager.prototype.set = function(provider) {
     this.ready = true;
 };
 
+/// resends queued messages
 ProviderManager.prototype.sendQueued = function() {
     for(var i = 0; this.queued.length; i++) {
         // Resend
@@ -987,10 +1102,13 @@ ProviderManager.prototype.sendQueued = function() {
     }
 };
 
+/// @returns true if the provider i properly set
 ProviderManager.prototype.installed = function() {
     return this.provider !== undefined;
 };
 
+/// this method is only used, when we do not have native qt bindings and have to do polling on our own
+/// should be callled, on start watching for eth/shh changes
 ProviderManager.prototype.startPolling = function (data, pollId) {
     if (!this.provider || !this.provider.poll) {
         return;
@@ -998,6 +1116,7 @@ ProviderManager.prototype.startPolling = function (data, pollId) {
     this.polls.push({data: data, id: pollId});
 };
 
+/// should be called to stop polling for certain watch changes
 ProviderManager.prototype.stopPolling = function (pollId) {
     for (var i = this.polls.length; i--;) {
         var poll = this.polls[i];
@@ -1015,60 +1134,14 @@ web3.setProvider = function(provider) {
     web3.provider.sendQueued();
 };
 
+/// returns true if provider is installed
 web3.haveProvider = function() {
     return !!web3.provider.provider;
 };
 
-var Filter = function(options, impl) {
-    this.impl = impl;
-    this.callbacks = [];
 
-    var self = this;
-    this.promise = impl.newFilter(options);
-    this.promise.then(function (id) {
-        self.id = id;
-        web3.on(impl.changed, id, self.trigger.bind(self));
-        web3.provider.startPolling({call: impl.changed, args: [id]}, id);
-    });
-};
 
-Filter.prototype.arrived = function(callback) {
-    this.changed(callback);
-};
-
-Filter.prototype.changed = function(callback) {
-    var self = this;
-    this.promise.then(function(id) {
-        self.callbacks.push(callback);
-    });
-};
-
-Filter.prototype.trigger = function(messages) {
-    for(var i = 0; i < this.callbacks.length; i++) {
-        this.callbacks[i].call(this, messages);
-    }
-};
-
-Filter.prototype.uninstall = function() {
-    var self = this;
-    this.promise.then(function (id) {
-        self.impl.uninstallFilter(id);
-        web3.provider.stopPolling(id);
-        web3.off(impl.changed, id);
-    });
-};
-
-Filter.prototype.messages = function() {
-    var self = this;
-    return this.promise.then(function (id) {
-        return self.impl.getMessages(id);
-    });
-};
-
-Filter.prototype.logs = function () {
-    return this.messages();
-};
-
+/// callled when there is new incoming message
 function messageHandler(data) {
     if(data._event !== undefined) {
         web3.trigger(data._event, data._id, data.data);
@@ -1087,7 +1160,7 @@ function messageHandler(data) {
 if (typeof(module) !== "undefined")
     module.exports = web3;
 
-},{}],7:[function(require,module,exports){
+},{"./filter":4}],8:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1177,7 +1250,7 @@ web3.eth.contract = require('./lib/contract');
 
 module.exports = web3;
 
-},{"./lib/autoprovider":2,"./lib/contract":3,"./lib/httprpc":4,"./lib/qt":5,"./lib/web3":6,"./lib/websocket":7}]},{},["web3"])
+},{"./lib/autoprovider":2,"./lib/contract":3,"./lib/httprpc":5,"./lib/qt":6,"./lib/web3":7,"./lib/websocket":8}]},{},["web3"])
 
 
 //# sourceMappingURL=ethereum.js.map
