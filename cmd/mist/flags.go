@@ -92,7 +92,7 @@ func defaultAssetPath() string {
 }
 func defaultDataDir() string {
 	usr, _ := user.Current()
-	return path.Join(usr.HomeDir, ".mist")
+	return path.Join(usr.HomeDir, ".ethereum")
 }
 
 var defaultConfigFile = path.Join(defaultDataDir(), "conf.ini")
