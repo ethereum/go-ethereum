@@ -4,39 +4,29 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"time"
 )
 
 type Bounded interface {
 	Size() int64
 }
 
-type Resizeable interface {
-	Bounded
-	Resize(int64) error
-}
-
 type Sliced interface {
-	Slice(int64, int64) []byte
+	Slice(int64, int64) (b []byte, err error)
 }
 
-// Size, Seek, Read, ReadAt and WriteTo
+// Size, Seek, Read, ReadAt
 type SectionReader interface {
 	Bounded
-	Sliced
 	io.Seeker
 	io.Reader
 	io.ReaderAt
-	io.WriterTo
 }
 
-// Size, Seek, Write, WriteAt and ReaderFrom
-type SectionWriter interface {
-	Bounded
-	Sliced
-	io.Seeker
-	io.Writer
-	io.WriterAt
-	io.ReaderFrom
+type LazySectionReader interface {
+	SectionReader
+	GetTimeout() time.Time
+	SetTimeout(time.Time) error
 }
 
 // ChunkReader implements SectionReader on a section
@@ -48,98 +38,45 @@ type ChunkReader struct {
 	limit int64
 }
 
-// ChunkWriter implements SectionWriter on a section
-// of an underlying WriterAt.
-type ChunkWriter struct {
-	w     io.WriterAt
-	base  int64
-	off   int64
-	limit int64
-}
-
-type SectionReadWriter struct {
-	Bounded
-	Sliced
-	io.Seeker
-	io.Reader
-	io.ReaderAt
-	io.WriterTo
-	io.Writer
-	io.WriterAt
-	io.ReaderFrom
-}
-
 // NewChunkReader returns a ChunkReader that reads from r
 // starting at offset off and stops with EOF after n bytes.
 func NewChunkReader(r io.ReaderAt, off int64, n int64) *ChunkReader {
 	return &ChunkReader{r: r, base: off, off: off, limit: off + n}
 }
 
+// ByteSliceReader just extends byte.Reader to make base slice accessible
+type ByteSliceReader struct {
+	*bytes.Reader
+	base []byte
+}
+
+func NewByteSliceReader(b []byte) *ByteSliceReader {
+	return &ByteSliceReader{
+		base:   b,
+		Reader: bytes.NewReader(b),
+	}
+}
+
+// ByteSliceReader implements the Sliced interface
+func (self *ByteSliceReader) Slice(from, to int64) (b []byte, err error) {
+	if from < 0 || to >= int64(self.Len()) {
+		err = io.EOF
+	} else {
+		b = self.base[from:to]
+	}
+	return
+}
+
+// NewChunkReaderFromBytes is a convenience shortcut to get a SectionReader over a byte slice
 func NewChunkReaderFromBytes(b []byte) *ChunkReader {
-	return NewChunkReader(bytes.NewReader(b), 0, int64(len(b)))
+	return NewChunkReader(NewByteSliceReader(b), 0, int64(len(b)))
 }
 
-// NewChunkWriter returns a ChunkWriter that writes to w
-// starting at offset off and stops with EOF if write would go past off+n
-func NewChunkWriter(w io.WriterAt, off int64, n int64) *ChunkWriter {
-	return &ChunkWriter{w: w, base: off, off: off, limit: off + n}
-}
+/*
+The following is adapted from io.SectionReader
+*/
 
-func NewChunkWriterFromBytes(b []byte) *ChunkWriter {
-	return NewChunkWriter(NewByteSliceWriter(b), 0, int64(len(b)))
-}
-
-// the write equivalent of bytes.NewReader(b)
-func NewByteSliceWriter(b []byte) *ByteSliceWriter {
-	return &ByteSliceWriter{b: b, off: 0, limit: int64(len(b))}
-}
-
-type ByteSliceWriter struct {
-	b     []byte
-	off   int64
-	limit int64
-}
-
-func (self *ByteSliceWriter) Slice(from, to int64) (slice []byte) {
-	dpaLogger.DebugDetailf("bottom line %v:%v  (%v-%v)", from, to, self.off, self.limit)
-	if from >= 0 && to <= self.limit {
-		slice = self.b[from:to]
-	}
-	return
-}
-
-func (self *ByteSliceWriter) WriteAt(b []byte, off int64) (n int, err error) {
-	if off < 0 || off >= self.limit {
-		return 0, io.ErrShortWrite
-	}
-	if n = int(self.limit - off); len(b) > n {
-		err = io.ErrShortWrite
-	} else {
-		n = len(b)
-	}
-	copy(self.b[off:], b)
-	return
-}
-
-func (self *ByteSliceWriter) Size() (size int64) {
-	return self.limit
-}
-
-var errUnableToResize = errors.New("unable to resize")
-
-func (self *ByteSliceWriter) Resize(size int64) (err error) {
-	if self.Size() != 0 {
-		err = errUnableToResize
-	} else {
-		self.b = make([]byte, size)
-		self.limit = size
-	}
-	return
-}
-
-// Size returns the size of the section in bytes.
 func (s *ChunkReader) Size() int64 { return s.limit - s.base }
-func (s *ChunkWriter) Size() int64 { return s.limit - s.base }
 
 var errWhence = errors.New("Seek: invalid whence")
 var errOffset = errors.New("Seek: invalid offset")
@@ -162,41 +99,6 @@ func (s *ChunkReader) Seek(offset int64, whence int) (int64, error) {
 	return offset - s.base, nil
 }
 
-func (s *ChunkWriter) Seek(offset int64, whence int) (int64, error) {
-	switch whence {
-	default:
-		return 0, errWhence
-	case 0:
-		offset += s.base
-	case 1:
-		offset += s.off
-	case 2:
-		offset += s.limit
-	}
-	if offset < s.base {
-		return 0, errOffset
-	}
-	s.off = offset
-	return offset - s.base, nil
-}
-
-func (self *ChunkWriter) Resize(size int64) (err error) {
-	err = errUnableToResize
-	if self.Size() >= size {
-		err = nil
-	} else {
-		if self.Size() == 0 {
-			if ws, ok := self.w.(Resizeable); ok {
-				err = ws.Resize(size)
-				if err == nil {
-					self.limit = size
-				}
-			}
-		}
-	}
-	return
-}
-
 func (s *ChunkReader) Read(p []byte) (n int, err error) {
 	if s.off >= s.limit {
 		return 0, io.EOF
@@ -209,37 +111,6 @@ func (s *ChunkReader) Read(p []byte) (n int, err error) {
 	return
 }
 
-func (s *ChunkWriter) Write(p []byte) (n int, err error) {
-	if s.off >= s.limit {
-		return 0, io.EOF
-	}
-	if max := s.limit - s.off; int64(len(p)) > max {
-		p = p[0:max]
-	}
-	n, err = s.w.WriteAt(p, s.off)
-	s.off += int64(n)
-	return
-}
-
-func (s *ChunkReader) Slice(from, to int64) []byte {
-	dpaLogger.DebugDetailf("%v %v %v", s.base, s.off, s.limit)
-	if sl, ok := s.r.(Sliced); ok {
-		dpaLogger.DebugDetailf("%v-%v", s.base+from, s.base+to)
-		return sl.Slice(s.base+from, s.base+to)
-	}
-	return nil
-}
-
-func (s *ChunkWriter) Slice(from, to int64) (b []byte) {
-	dpaLogger.DebugDetailf("base: %v %v %v", s.base, s.off, s.limit)
-	if sl, ok := s.w.(Sliced); ok {
-		dpaLogger.DebugDetailf("%v-%v", s.base+from, s.base+to)
-		b = sl.Slice(s.base+from, s.base+to)
-	}
-	return
-}
-
-//
 func (s *ChunkReader) ReadAt(p []byte, off int64) (n int, err error) {
 	if off < 0 || off >= s.limit-s.base {
 		return 0, io.EOF
@@ -256,43 +127,27 @@ func (s *ChunkReader) ReadAt(p []byte, off int64) (n int, err error) {
 	return s.r.ReadAt(p, off)
 }
 
-//
-func (s *ChunkWriter) WriteAt(p []byte, off int64) (n int, err error) {
-	if off < 0 || off >= s.limit-s.base {
-		return 0, io.EOF
-	}
-	off += s.base
-	if max := s.limit - off; int64(len(p)) > max {
-		p = p[0:max]
-		n, err = s.w.WriteAt(p, off)
-		return n, err
-	}
-	return s.w.WriteAt(p, off)
-}
-
-func (s *ChunkWriter) ReadFrom(r io.Reader) (n int64, err error) {
-	var m int
-	// if byte slice is available
-	if slice := s.Slice(s.off-s.base, s.limit-s.base); slice != nil {
-		dpaLogger.DebugDetailf("readfrom %v + %v-%v", s.base, s.off-s.base, s.limit-s.base)
-		m, err = r.Read(slice)
-		if err != nil {
-			dpaLogger.Debugf("%v (m%v)", err, m)
-		}
-		dpaLogger.DebugDetailf("read slice %x", slice)
+// added methods to that ChunkReader implements the Sliced interface
+func (s *ChunkReader) Slice(from, to int64) (b []byte, err error) {
+	if from < 0 || to >= s.Size() {
+		err = io.EOF
 	} else {
-		b := make([]byte, s.limit-s.off)
-		_, err = r.Read(b)
-		m, err = s.Write(b)
+		if sl, ok := s.r.(Sliced); ok {
+			b, err = sl.Slice(s.base+from, s.base+to)
+		} else {
+			err = errors.New("not sliceable base")
+		}
 	}
-	n = int64(m)
 	return
 }
 
+// added method so that ChunkReader implements the io.WriterTo interface
+// WriteTo method is used by io.Copy
+// This is so that we avoid one extra step of allocation (if the underlying initial Reader implements Sliced
 func (r *ChunkReader) WriteTo(w io.Writer) (n int64, err error) {
 	var b []byte
 	var m int
-	if b := r.Slice(r.off, r.limit); b == nil {
+	if b, _ := r.Slice(r.off-r.base, r.limit-r.base); b == nil {
 		// if slices not available we do it with extra allocation
 		b = make([]byte, r.limit-r.off)
 		m, err = r.Read(b)
@@ -311,4 +166,106 @@ func (r *ChunkReader) WriteTo(w io.Writer) (n int64, err error) {
 	}
 	// w
 	return
+}
+
+// LazyChunkReader implements LazySectionReader
+type LazyChunkReader struct {
+	sections []LazySectionReader
+	readerFs [](func() LazySectionReader)
+	size     int64
+	treeSize int64
+	off      int64
+}
+
+func (self *LazyChunkReader) GetTimeout() (t time.Time) {
+	return
+}
+
+func (self *LazyChunkReader) SetTimeout(t time.Time) error {
+	return nil
+}
+
+func (self *LazyChunkReader) Size() (n int64) {
+	return self.size
+}
+
+func (self *LazyChunkReader) Read(b []byte) (read int, err error) {
+	read, err = self.ReadAt(b, self.off)
+	self.off += int64(read)
+	return
+}
+
+func (s *LazyChunkReader) Seek(offset int64, whence int) (int64, error) {
+	switch whence {
+	default:
+		return 0, errWhence
+	case 0:
+		offset += 0
+	case 1:
+		offset += s.off
+	case 2:
+		offset += s.size
+	}
+	if offset < 0 {
+		return 0, errOffset
+	}
+	s.off = offset
+	return offset, nil
+}
+
+func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
+	if off < 0 || off > self.size {
+		err = io.EOF
+		return
+	}
+	want := len(b)
+	got := int(self.size - off)
+	if want > got {
+		err = io.EOF
+	}
+	var index int
+	if off > 0 {
+		index = int((off - 1) / self.treeSize)
+	}
+	off -= int64(index) * self.treeSize
+	var limit int
+	var reader LazySectionReader
+
+	for i := index; i < len(self.sections) || want == 0; i++ {
+		if reader = self.sections[i]; reader == nil {
+			reader = self.readerFs[i]() // this hooks into the go routines and does a wg.Done once the needed chunks are fetched and processed
+			self.sections[i] = reader   // memoize this reader
+		}
+		if want > int(self.size-off) {
+			limit = int(self.size)
+		} else {
+			limit = int(off) + want
+		}
+		if got, err = reader.ReadAt(b[off:limit], off); err != nil {
+			return
+		}
+		read += got
+		want -= got
+	}
+	return
+}
+
+// just a wrapper to make a SectionReader conform to LazySectionReader
+// with dummy implementation
+type lazyReader struct {
+	SectionReader
+}
+
+func LazyReader(r SectionReader) (l LazySectionReader) {
+	return &lazyReader{
+		SectionReader: r,
+	}
+}
+
+func (self *lazyReader) GetTimeout() (t time.Time) {
+	return
+}
+
+func (self *lazyReader) SetTimeout(t time.Time) error {
+	return nil
 }

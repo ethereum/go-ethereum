@@ -19,6 +19,7 @@ import (
 	"crypto"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 )
@@ -56,21 +57,21 @@ type Chunker interface {
 	Split(key Key, data SectionReader) (chan *Chunk, chan error)
 	/*
 		Join reconstructs original content based on a root key
-		When joining, data is given as a SectionWriter preallocation for which is taken care of by the caller.
-		If the size of the SectionWriter is found 0 Chunker will resize it once the entire data size is known from the root chunk. If resize is not supported by the writer, an error is given.
-		Any other size value is checked and if it does not fit the actual datasize, an error will be reported.
-		New chunks to retrieve are coming to caller via the Chunk channel (first return parameter)
-		If an error is encountered during joining, it is fed to errC error channel (second return parameter)
+		When joining, the caller gets returned a LazySectionReader , a chunk channel and an error channel.
+		New chunks to retrieve are coming to caller via the Chunk channel.
+		If an error is encountered during joining, it is fed to errC error channel.
 		A closed error and chunk channel signal process completion at which point the data can be considered final if there were no errors.
+		The LazySectionReader provides on-demand fetching of content including chunks.
+		Lifecycle of the reader can be modified with SetTimeout()
 	*/
-	Join(key Key, data SectionWriter) (chan *Chunk, chan error)
+	Join(key Key) (LazySectionReader, chan *Chunk, chan error)
 }
 
 /*
 Tree chunker is a concrete implementation of data chunking.
 This chunker works in a simple way, it builds a tree out of the document so that each node either represents a chunk of real data or a chunk of data representing an branching non-leaf node of the tree. In particular each such non-leaf chunk will represent is a concatenation of the hash of its respective children. This scheme simultaneously guarantees data integrity as well as self addressing. Abstract nodes are transparent since their represented size component is strictly greater than their maximum data size, since they encode a subtree.
 
-If all is well it is possible to implement this by simply composing readers and writers so that no extra allocation or buffering is necessary for the data splitting. This means that in principle there can be direct IO between : memory, file system, network socket (bzz peers storage request is read from the socket ). In practice there may be need for several stages of internal buffering.
+If all is well it is possible to implement this by simply composing readers so that no extra allocation or buffering is necessary for the data splitting and joining. This means that in principle there can be direct IO between : memory, file system, network socket (bzz peers storage request is read from the socket ). In practice there may be need for several stages of internal buffering.
 Unfortunately the hashing itself does use extra copies and allocatetion though since it does need it.
 */
 type TreeChunker struct {
@@ -126,7 +127,7 @@ func (self *Chunk) String() string {
 func (self *TreeChunker) Hash(size int64, input SectionReader) []byte {
 	hasher := self.HashFunc.New()
 	binary.Write(hasher, binary.LittleEndian, size)
-	input.WriteTo(hasher) // SectionReader implements io.WriterTo
+	io.Copy(hasher, input) // it uses WriteTo if available, ChunkReader implements io.WriterTo
 	return hasher.Sum(nil)
 }
 
@@ -257,7 +258,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 
 }
 
-func (self *TreeChunker) Join(key Key, data SectionWriter) (chunkC chan *Chunk, errC chan error) {
+func (self *TreeChunker) Join(key Key) (data LazySectionReader, chunkC chan *Chunk, errC chan error) {
 	// initialise return parameters
 	errC = make(chan error)
 	chunkC = make(chan *Chunk)
@@ -268,53 +269,8 @@ func (self *TreeChunker) Join(key Key, data SectionWriter) (chunkC chan *Chunk, 
 	rerrC := make(chan error)
 	quitC := make(chan bool)
 
-	wg.Add(1)
-	go func() {
-		// create the 'chunk' for root chunk of the data tree
-		chunk := &Chunk{
-			Key: key,
-			C:   make(chan bool, 1),
-		}
-		// request data
-		dpaLogger.Debugf("request root chunk for key %x", key[:4])
-		chunkC <- chunk
-		// wait for reponse, if no root, we cannot go on
-
-		select {
-		case <-chunk.C: // bells ringing data delivered
-			dpaLogger.Debugf("request root chunk data has come, size %v", chunk.Size)
-		case <-timeout:
-			err := fmt.Errorf("join time out waiting for root")
-			rerrC <- err
-			return
-		}
-
-		if data.Size() < chunk.Size {
-			dpaLogger.Debugf("trying to resize writer to size %v for join data", chunk.Size)
-
-			var err error
-			if resizeable, ok := data.(Resizeable); ok {
-				err = resizeable.Resize(chunk.Size)
-			} else {
-				err = fmt.Errorf("writer does not support resizing and has insufficient size %v (need %v)", data.Size(), chunk.Size)
-			}
-			if err != nil {
-				dpaLogger.Debugf("%v", err)
-				rerrC <- err
-				wg.Done()
-				return
-			}
-		}
-		// calculate depth and max treeSize
-		var depth int
-		var treeSize int64 = self.chunkSize
-
-		for ; treeSize < chunk.Size; treeSize *= self.Branches {
-			depth++
-		}
-		// launch recursive call on root chunk
-		self.join(depth, treeSize/self.Branches, chunk, data, chunkC, rerrC, wg, quitC)
-	}()
+	// launch lazy recursive call on root chunk
+	data = self.join(0, 0, key, chunkC, rerrC, wg, quitC)()
 
 	// waits for all the processes to finish and signals by closing internal rerrc
 	go func() {
@@ -340,57 +296,80 @@ func (self *TreeChunker) Join(key Key, data SectionWriter) (chunkC chan *Chunk, 
 	return
 }
 
-func (self *TreeChunker) join(depth int, treeSize int64, chunk *Chunk, data SectionWriter, chunkC chan *Chunk, errC chan error, wg *sync.WaitGroup, quitC chan bool) {
-
-	defer wg.Done()
-	select {
-	case <-quitC:
-	case <-chunk.C: // bells are ringing, data have been delivered
-		switch {
-		case depth == 0:
-			if _, err := data.ReadFrom(chunk.Data); err != nil {
-				errC <- err
-			}
-
-		case chunk.Size < treeSize:
-			// this must be a last item on its level
-			wg.Add(1)
-			self.join(depth-1, treeSize/self.Branches, chunk, data, chunkC, errC, wg, quitC)
-
-		default:
-			// intermediate chunk, chunk containing hashes of child nodes
-			var pos, i int64
-			var secSize int64
-			dpaLogger.DebugDetailf("tree %v", chunk.Size)
-			branches := int64((chunk.Size-1)/treeSize) + 1
-			for i < branches {
-				if chunk.Size-pos < treeSize {
-					secSize = chunk.Size - pos
-					dpaLogger.DebugDetailf("last section %v", secSize)
-				} else {
-					secSize = treeSize
-				}
-				// create partial Chunk in order to send a retrieval request
-				subtree := &Chunk{
-					Key: make([]byte, self.hashSize), // preallocate hashSize long slice for key
-					C:   make(chan bool, 1),          // close channel to signal data delivery
-				}
-				// read the Hash of the subtree from the relevant section of the Chunk into the allocated byte slice in subtree.Key
-				if _, err := chunk.Data.ReadAt(subtree.Key, i*self.hashSize); err != nil {
-					dpaLogger.DebugDetailf("Read error: %v", err)
-					errC <- err
-					break
-				}
-				// call recursively on the subtree
-				subTreeData := NewChunkWriter(data, pos, secSize)
-				wg.Add(1)
-				go self.join(depth-1, treeSize/self.Branches, subtree, subTreeData, chunkC, errC, wg, quitC)
-				// submit request
-				chunkC <- subtree
-				i++
-				pos += treeSize
-			}
-
+func (self *TreeChunker) join(depth int, treeSize int64, key Key, chunkC chan *Chunk, errC chan error, wg *sync.WaitGroup, quitC chan bool) (readerF func() LazySectionReader) {
+	wg.Add(1)
+	readerF = func() (r LazySectionReader) {
+		defer wg.Done()
+		chunk := &Chunk{
+			Key: key,
+			C:   make(chan bool, 1), // close channel to signal data delivery
 		}
+		chunkC <- chunk // submit retrieval request, someone should be listening on the other side (or we will time out globally)
+
+		// waiting for the chunk retrieval
+		select {
+		case <-quitC:
+			// this is how we control process leakage (quitC is closed once join is finished (after timeout))
+			return
+		case <-chunk.C: // bells are ringing, data have been delivered
+		}
+
+		// calculate depth and max treeSize
+		var depth int
+		var treeSize int64 = self.hashSize
+		for ; treeSize*self.Branches < chunk.Size; treeSize *= self.Branches {
+			depth++
+		}
+
+		if depth == 0 {
+			return LazyReader(chunk.Data) // simply give back the chunks reader for content chunks
+		}
+
+		// find appropriate block level
+		for chunk.Size < treeSize {
+			treeSize /= self.Branches
+			depth--
+		}
+		// boooo
+		// intermediate chunk, chunk containing hashes of child nodes
+		var pos, i, secSize int64
+		var childKey Key
+		var readerF func() (r LazySectionReader)
+		var readerFs [](func() (r LazySectionReader))
+		dpaLogger.DebugDetailf("tree %v", chunk.Size)
+		branches := int64((chunk.Size-1)/treeSize) + 1
+
+		// iterate through the chunk containing the keys of children
+		// create lazy init functions that give back readers
+		for i < branches {
+			if chunk.Size-pos < treeSize {
+				secSize = chunk.Size - pos
+				dpaLogger.DebugDetailf("last section %v", secSize)
+			} else {
+				secSize = treeSize
+			}
+			// create partial Chunk in order to send a retrieval request
+			childKey = make([]byte, self.hashSize) // preallocate hashSize long slice for key
+			// read the Hash of the subtree from the relevant section of the Chunk into the allocated byte slice in subtree.Key
+			if _, err := chunk.Data.ReadAt(childKey, i*self.hashSize); err != nil {
+				dpaLogger.DebugDetailf("Read error: %v", err)
+				errC <- err
+				break
+			}
+			// call lazy reader function recursively on the subtree
+			readerF = self.join(depth-1, treeSize/self.Branches, childKey, chunkC, errC, wg, quitC)
+			readerFs = append(readerFs, readerF)
+			i++
+			pos += treeSize
+		}
+		// new reader created on demand:
+		r = &LazyChunkReader{
+			readerFs: readerFs,
+			sections: make([]LazySectionReader, branches),
+			size:     chunk.Size,
+			treeSize: treeSize,
+		}
+		return
 	}
+	return
 }

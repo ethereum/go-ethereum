@@ -109,13 +109,13 @@ func (self *chunkerTester) Split(chunker *TreeChunker, l int) (key Key, input []
 	return
 }
 
-func (self *chunkerTester) Join(t *testing.T, chunker *TreeChunker, key Key) (data []byte) {
+func (self *chunkerTester) Join(t *testing.T, chunker *TreeChunker, key Key) LazySectionReader {
 	// reset but not the chunks
 	self.errors = nil
 	self.timeout = false
 
-	w := NewChunkWriterFromBytes(nil)
-	chunkC, errC := chunker.Join(key, w)
+	reader, chunkC, errC := chunker.Join(key)
+
 	quitC := make(chan bool)
 	timeout := time.After(60 * time.Second)
 
@@ -162,15 +162,19 @@ func (self *chunkerTester) Join(t *testing.T, chunker *TreeChunker, key Key) (da
 		close(quitC)
 	}()
 	<-quitC // waiting for it to finish
-	w.Seek(0, 0)
-	return w.Slice(0, w.Size())
+	return reader
 }
 
 func testRandomData(chunker *TreeChunker, tester *chunkerTester, n int, chunks int, t *testing.T) {
 	key, input := tester.Split(chunker, n)
 	tester.checkChunks(t, chunks)
 	t.Logf("chunks: %v", tester.chunks)
-	output := tester.Join(t, chunker, key)
+	reader := tester.Join(t, chunker, key)
+	output := make([]byte, reader.Size())
+	_, err := reader.Read(output)
+	if err != nil {
+		t.Errorf("read error %v\n", err)
+	}
 	t.Logf(" IN: %x\nOUT: %x\n", input, output)
 	if bytes.Compare(output, input) != 0 {
 		t.Errorf("input and output mismatch\n IN: %x\nOUT: %x\n", input, output)

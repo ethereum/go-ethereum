@@ -44,7 +44,7 @@ BytesToReader(data []byte) (SectionReader, error)
 // 	return NewChunkReaderFromBytes(rlp.Encode(data)), nil
 // }
 
-func (self *DPA) Retrieve(key Key, data SectionReadWriter) (err error) {
+func (self *DPA) Retrieve(key Key) (data LazySectionReader, err error) {
 	joinC := make(chan bool)
 	reqsC := make(chan bool)
 	var requests int
@@ -61,11 +61,12 @@ func (self *DPA) Retrieve(key Key, data SectionReadWriter) (err error) {
 	// a SectionReadWriter based on a byte slice equal to the stored object image's bytes
 
 	dpaLogger.Debugf("bzz honey retrieve")
+	reader, chunkC, errC := self.Chunker.Join(key)
+	data = reader
 
 	go func() {
 
 		var ok bool
-		chunkC, errC := self.Chunker.Join(key, data)
 
 	LOOP:
 		for {
