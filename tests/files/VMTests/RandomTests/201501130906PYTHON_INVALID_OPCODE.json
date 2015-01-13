@@ -1,7 +1,5 @@
 {
     "randomVMtest" : {
-        "callcreates" : [
-        ],
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "115792089237316195423570985008687907853269984665640564039457584007913129639935",
@@ -13,31 +11,17 @@
         "exec" : {
             "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
             "caller" : "cd1722f3947def4cf144679da39c4c32bdc35681",
-            "code" : "0x4241455544414443385908069c9e8955",
+            "code" : "0x434545430c737040877855",
             "data" : "0x",
             "gas" : "10000",
             "gasPrice" : "100000000000000",
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "0",
-        "logs" : [
-        ],
-        "out" : "0x",
-        "post" : {
-            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
-                "balance" : "1000000000000000000",
-                "code" : "0x4241455544414443385908069c9e8955",
-                "nonce" : "0",
-                "storage" : {
-                    "0x0f4240" : "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba"
-                }
-            }
-        },
         "pre" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
                 "balance" : "1000000000000000000",
-                "code" : "0x4241455544414443385908069c9e8955",
+                "code" : "0x434545430c737040877855",
                 "nonce" : "0",
                 "storage" : {
                 }
