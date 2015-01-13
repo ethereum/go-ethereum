@@ -79,6 +79,7 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
+		//helper.Log.Infoln("Running", name)
 		db, _ := ethdb.NewMemDatabase()
 		statedb := state.New(nil, db)
 		for addr, account := range test.Pre {
@@ -116,12 +117,6 @@ func RunVmTest(p string, t *testing.T) {
 			ret, logs, gas, err = helper.RunState(statedb, env, test.Transaction)
 		}
 
-		// Log the error if there is one. Error does not mean failing test.
-		// A test fails if err != nil and post params are specified in the test.
-		if err != nil {
-			helper.Log.Infof("%s's: %v\n", name, err)
-		}
-
 		rexp := helper.FromHex(test.Out)
 		if bytes.Compare(rexp, ret) != 0 {
 			t.Errorf("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
@@ -129,10 +124,14 @@ func RunVmTest(p string, t *testing.T) {
 
 		if isVmTest {
 			if len(test.Gas) == 0 && err == nil {
+				// Log VM err
+				helper.Log.Infof("%s's: %v\n", name, err)
 				t.Errorf("%s's gas unspecified, indicating an error. VM returned (incorrectly) successfull", name)
 			} else {
 				gexp := ethutil.Big(test.Gas)
 				if gexp.Cmp(gas) != 0 {
+					// Log VM err
+					helper.Log.Infof("%s's: %v\n", name, err)
 					t.Errorf("%s's gas failed. Expected %v, got %v\n", name, gexp, gas)
 				}
 			}

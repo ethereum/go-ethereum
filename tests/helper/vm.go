@@ -116,6 +116,8 @@ func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, state.Log
 		price = ethutil.Big(exec["gasPrice"])
 		value = ethutil.Big(exec["value"])
 	)
+	// Reset the pre-compiled contracts for VM tests.
+	vm.Precompiled = make(map[string]*vm.PrecompiledAccount)
 
 	caller := state.GetOrNewStateObject(from)
 
@@ -137,6 +139,9 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.
 		value      = ethutil.Big(tx["value"])
 		caddr      = FromHex(env["currentCoinbase"])
 	)
+
+	// Set pre compiled contracts
+	vm.Precompiled = vm.PrecompiledContracts()
 
 	coinbase := statedb.GetOrNewStateObject(caddr)
 	coinbase.SetGasPool(ethutil.Big(env["currentGasLimit"]))
