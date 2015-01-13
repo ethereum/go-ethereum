@@ -141,8 +141,6 @@ func (self *TreeChunker) Split(key Key, data SectionReader) (chunkC chan *Chunk,
 		return
 	}
 	wg.Add(1)
-	dpaLogger.Debugf("add one")
-
 	go func() {
 
 		depth := 0
@@ -163,25 +161,16 @@ func (self *TreeChunker) Split(key Key, data SectionReader) (chunkC chan *Chunk,
 
 	// closes internal error channel if all subprocesses in the workgroup finished
 	go func() {
-
-		dpaLogger.Debugf("waiting for splitter to finish")
 		wg.Wait()
-		dpaLogger.Debugf("splitter finished. closing rerrC")
 		close(rerrC)
 
 	}()
 
 	// waiting for request to end with wg finishing, error, or timeout
 	go func() {
-		dpaLogger.Debugf("waiting for rerrC to close")
-
 		select {
 		case err := <-rerrC:
-			dpaLogger.Debugf("action on rerrC")
-
 			if err != nil {
-				dpaLogger.Debugf("error on rerrC")
-
 				errC <- err
 			} // otherwise splitting is complete
 		case <-timeout:
@@ -206,7 +195,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 	switch {
 	case depth == 0:
 		if size > self.chunkSize {
-			panic("ouch")
+			// panic("ouch")
 		}
 		// leaf nodes -> content chunks
 		hash = self.Hash(size, data)
@@ -217,9 +206,11 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 			Size: size,
 		}
 	case size < treeSize:
+		parentWg.Add(1)
 		// last item on this level (== size % self.Branches ^ (depth + 1) )
 		self.split(depth-1, treeSize/self.Branches, key, data, chunkC, errc, parentWg)
 		return
+
 	default:
 		// intermediate chunk containing child nodes hashes
 		branches := int64((size-1)/treeSize) + 1
@@ -260,16 +251,9 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 		}
 	}
 	// send off new chunk to storage
-	dpaLogger.Debugf("sending chunk on chunk channel")
-
 	chunkC <- newChunk
-	dpaLogger.Debugf("sent chunk on chunk channel")
-
-	// report hash of this chunk one level up (keys corresponds to the proper subslice of the parent chunk)
-	dpaLogger.Debugf("copying parent key ")
-
+	// report hash of this chunk one level up (keys corresponds to the proper subslice of the parent chunk)x
 	copy(key, hash)
-	dpaLogger.Debugf("copied parent key ")
 
 }
 
@@ -295,13 +279,13 @@ func (self *TreeChunker) Join(key Key, data SectionWriter) (chunkC chan *Chunk, 
 		dpaLogger.Debugf("request root chunk for key %x", key[:4])
 		chunkC <- chunk
 		// wait for reponse, if no root, we cannot go on
+
 		select {
 		case <-chunk.C: // bells ringing data delivered
 			dpaLogger.Debugf("request root chunk data has come, size %v", chunk.Size)
 		case <-timeout:
-			err := fmt.Errorf("split time out waiting for root")
+			err := fmt.Errorf("join time out waiting for root")
 			rerrC <- err
-			wg.Done()
 			return
 		}
 
@@ -359,39 +343,46 @@ func (self *TreeChunker) Join(key Key, data SectionWriter) (chunkC chan *Chunk, 
 func (self *TreeChunker) join(depth int, treeSize int64, chunk *Chunk, data SectionWriter, chunkC chan *Chunk, errC chan error, wg *sync.WaitGroup, quitC chan bool) {
 
 	defer wg.Done()
-
 	select {
 	case <-quitC:
 	case <-chunk.C: // bells are ringing, data have been delivered
-		dpaLogger.Debugf("received chunk data: %v", chunk)
 		switch {
 		case depth == 0:
-			if chunk.Size > self.chunkSize {
-				panic("oops")
-			}
-			dpaLogger.Debugf("reading into data")
-			// we received a chunk for a leaf node representing actual content
 			if _, err := data.ReadFrom(chunk.Data); err != nil {
 				errC <- err
 			}
-			return
+
 		case chunk.Size < treeSize:
 			// this must be a last item on its level
+			wg.Add(1)
 			self.join(depth-1, treeSize/self.Branches, chunk, data, chunkC, errC, wg, quitC)
-			return
+
 		default:
 			// intermediate chunk, chunk containing hashes of child nodes
 			var pos, i int64
-			for pos < chunk.Size {
+			var secSize int64
+			dpaLogger.DebugDetailf("tree %v", chunk.Size)
+			branches := int64((chunk.Size-1)/treeSize) + 1
+			for i < branches {
+				if chunk.Size-pos < treeSize {
+					secSize = chunk.Size - pos
+					dpaLogger.DebugDetailf("last section %v", secSize)
+				} else {
+					secSize = treeSize
+				}
 				// create partial Chunk in order to send a retrieval request
 				subtree := &Chunk{
 					Key: make([]byte, self.hashSize), // preallocate hashSize long slice for key
 					C:   make(chan bool, 1),          // close channel to signal data delivery
 				}
 				// read the Hash of the subtree from the relevant section of the Chunk into the allocated byte slice in subtree.Key
-				chunk.Data.ReadAt(subtree.Key, i*self.hashSize)
+				if _, err := chunk.Data.ReadAt(subtree.Key, i*self.hashSize); err != nil {
+					dpaLogger.DebugDetailf("Read error: %v", err)
+					errC <- err
+					break
+				}
 				// call recursively on the subtree
-				subTreeData := NewChunkWriter(data, pos, treeSize)
+				subTreeData := NewChunkWriter(data, pos, secSize)
 				wg.Add(1)
 				go self.join(depth-1, treeSize/self.Branches, subtree, subTreeData, chunkC, errC, wg, quitC)
 				// submit request
