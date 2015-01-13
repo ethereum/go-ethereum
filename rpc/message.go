@@ -162,18 +162,6 @@ func (req *RpcRequest) ToGetCodeAtArgs() (*GetCodeAtArgs, error) {
 	return args, nil
 }
 
-// func NewSuccessRes(object JsonResponse) string {
-// 	e := SuccessRes{Error: false, Result: object}
-// 	res, err := json.Marshal(e)
-// 	if err != nil {
-// 		// This should never happen
-// 		panic("Creating json error response failed, help")
-// 	}
-// 	success := string(res)
-// 	return success
-// 	// return res
-// }
-
 func NewErrorResponse(msg string) error {
 	return errors.New(msg)
 }

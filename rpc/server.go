@@ -58,7 +58,7 @@ func (s *JsonRpcServer) Start() {
 	http.Handle("/", h)
 
 	err := http.Serve(s.listener, nil)
-	// TODO Complains on shutdown due to listner already being closed
+	// FIX Complains on shutdown due to listner already being closed
 	if err != nil {
 		jsonlogger.Errorln("Error on JSON-RPC interface:", err)
 	}

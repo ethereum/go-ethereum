@@ -55,7 +55,7 @@ func (self jsonWrapper) ParseRequestBody(req *http.Request) (RpcRequest, error) 
 }
 
 func (self jsonWrapper) GetRequestReply(xeth *EthereumApi, req *RpcRequest, reply *interface{}) error {
-	// call function for request method
+	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
 	jsonlogger.DebugDetailf("%T %s", req.Params, req.Params)
 	switch req.Method {
 	case "eth_coinbase":

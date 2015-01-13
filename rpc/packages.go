@@ -20,7 +20,7 @@ For each request type, define the following:
 
 1. RpcRequest "To" method [message.go], which does basic validation and conversion to "Args" type via json.Decoder()
 2. json.Decoder() calls "UnmarshalJSON" defined on each "Args" struct
-3. EthereumApi "Get" method, taking the "Args" type and replying with an interface to be marshalled to JSON
+3. EthereumApi method, taking the "Args" type and replying with an interface to be marshalled to JSON
 
 */
 package rpc
@@ -173,7 +173,7 @@ func (obj *GetBlockArgs) UnmarshalJSON(b []byte) (err error) {
 		obj.Hash = argstr
 		return
 	}
-	return NewErrorResponse("Could not determine JSON parameters")
+	return NewErrorResponse(ErrorDecodeArgs)
 }
 
 func (obj *GetBlockArgs) requirements() error {
@@ -334,6 +334,7 @@ type BalanceRes struct {
 	Balance string `json:"balance"`
 	Address string `json:"address"`
 }
+
 type GetCodeAtArgs struct {
 	Address string
 }
