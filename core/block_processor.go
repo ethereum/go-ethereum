@@ -271,7 +271,7 @@ func (sm *BlockProcessor) AccumelateRewards(statedb *state.StateDB, block, paren
 	reward := new(big.Int).Set(BlockReward)
 
 	ancestors := set.New()
-	for _, ancestor := range sm.bc.GetAncestors(block, 6) {
+	for _, ancestor := range sm.bc.GetAncestors(block, 7) {
 		ancestors.Add(string(ancestor.Hash()))
 	}
 

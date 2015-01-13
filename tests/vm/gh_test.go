@@ -79,7 +79,6 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
-		//helper.Log.Infoln("Running", name)
 		db, _ := ethdb.NewMemDatabase()
 		statedb := state.New(nil, db)
 		for addr, account := range test.Pre {

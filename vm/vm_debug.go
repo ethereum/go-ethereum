@@ -663,8 +663,8 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 
 			context.UseGas(context.Gas)
 
-			ret, err, ref := self.env.Create(context, addr, input, gas, price, value)
-			if err != nil {
+			ret, suberr, ref := self.env.Create(context, addr, input, gas, price, value)
+			if suberr != nil {
 				stack.Push(ethutil.BigFalse)
 
 				self.Printf("CREATE err %v", err)
