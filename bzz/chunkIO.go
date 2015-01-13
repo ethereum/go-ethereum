@@ -101,6 +101,7 @@ type ByteSliceWriter struct {
 }
 
 func (self *ByteSliceWriter) Slice(from, to int64) (slice []byte) {
+	dpaLogger.DebugDetailf("bottom line %v:%v  (%v-%v)", from, to, self.off, self.limit)
 	if from >= 0 && to <= self.limit {
 		slice = self.b[from:to]
 	}
@@ -221,15 +222,19 @@ func (s *ChunkWriter) Write(p []byte) (n int, err error) {
 }
 
 func (s *ChunkReader) Slice(from, to int64) []byte {
+	dpaLogger.DebugDetailf("%v %v %v", s.base, s.off, s.limit)
 	if sl, ok := s.r.(Sliced); ok {
-		return sl.Slice(from, to)
+		dpaLogger.DebugDetailf("%v-%v", s.base+from, s.base+to)
+		return sl.Slice(s.base+from, s.base+to)
 	}
 	return nil
 }
 
 func (s *ChunkWriter) Slice(from, to int64) (b []byte) {
+	dpaLogger.DebugDetailf("base: %v %v %v", s.base, s.off, s.limit)
 	if sl, ok := s.w.(Sliced); ok {
-		b = sl.Slice(from, to)
+		dpaLogger.DebugDetailf("%v-%v", s.base+from, s.base+to)
+		b = sl.Slice(s.base+from, s.base+to)
 	}
 	return
 }
@@ -268,8 +273,13 @@ func (s *ChunkWriter) WriteAt(p []byte, off int64) (n int, err error) {
 func (s *ChunkWriter) ReadFrom(r io.Reader) (n int64, err error) {
 	var m int
 	// if byte slice is available
-	if slice := s.Slice(s.off, s.limit); slice != nil {
+	if slice := s.Slice(s.off-s.base, s.limit-s.base); slice != nil {
+		dpaLogger.DebugDetailf("readfrom %v + %v-%v", s.base, s.off-s.base, s.limit-s.base)
 		m, err = r.Read(slice)
+		if err != nil {
+			dpaLogger.Debugf("%v (m%v)", err, m)
+		}
+		dpaLogger.DebugDetailf("read slice %x", slice)
 	} else {
 		b := make([]byte, s.limit-s.off)
 		_, err = r.Read(b)
@@ -299,5 +309,6 @@ func (r *ChunkReader) WriteTo(w io.Writer) (n int64, err error) {
 	if m != len(b) && err == nil {
 		err = io.ErrShortWrite
 	}
+	// w
 	return
 }
