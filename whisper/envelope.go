@@ -1,11 +1,9 @@
 package whisper
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"encoding/binary"
 	"fmt"
-	"io"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -26,22 +24,6 @@ type Envelope struct {
 	Nonce  uint32
 
 	hash Hash
-}
-
-func NewEnvelopeFromReader(reader io.Reader) (*Envelope, error) {
-	var envelope Envelope
-
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(reader)
-
-	h := H(crypto.Sha3(buf.Bytes()))
-	if err := rlp.Decode(buf, &envelope); err != nil {
-		return nil, err
-	}
-
-	envelope.hash = h
-
-	return &envelope, nil
 }
 
 func (self *Envelope) Hash() Hash {
@@ -125,4 +107,28 @@ func (self *Envelope) withoutNonce() interface{} {
 
 func (self *Envelope) RlpData() interface{} {
 	return []interface{}{self.Expiry, self.Ttl, ethutil.ByteSliceToInterface(self.Topics), self.Data, self.Nonce}
+}
+
+func (self *Envelope) DecodeRLP(s *rlp.Stream) error {
+	var extenv struct {
+		Expiry uint32
+		Ttl    uint32
+		Topics [][]byte
+		Data   []byte
+		Nonce  uint32
+	}
+	if err := s.Decode(&extenv); err != nil {
+		return err
+	}
+
+	self.Expiry = extenv.Expiry
+	self.Ttl = extenv.Ttl
+	self.Topics = extenv.Topics
+	self.Data = extenv.Data
+	self.Nonce = extenv.Nonce
+
+	// TODO We should use the stream directly here.
+	self.hash = H(crypto.Sha3(ethutil.Encode(self)))
+
+	return nil
 }

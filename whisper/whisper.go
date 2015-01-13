@@ -126,18 +126,20 @@ func (self *Whisper) Watch(opts Filter) int {
 	})
 }
 
-func (self *Whisper) Trigger(id int) {
+func (self *Whisper) Messages(id int) (messages []*Message) {
 	filter := self.filters.Get(id)
 	if filter != nil {
 		for _, e := range self.messages {
 			if msg, key := self.open(e); msg != nil {
 				f := createFilter(msg, e.Topics, key)
 				if self.filters.Match(filter, f) {
-					self.filters.Notify(f, msg)
+					messages = append(messages, msg)
 				}
 			}
 		}
 	}
+
+	return
 }
 
 // Main handler for passing whisper messages to whisper peer objects
@@ -158,17 +160,19 @@ func (self *Whisper) msgHandler(peer *p2p.Peer, ws p2p.MsgReadWriter) error {
 			return err
 		}
 
-		envelope, err := NewEnvelopeFromReader(msg.Payload)
-		if err != nil {
+		var envelopes []*Envelope
+		if err := msg.Decode(&envelopes); err != nil {
 			peer.Infoln(err)
 			continue
 		}
 
-		if err := self.add(envelope); err != nil {
-			// TODO Punish peer here. Invalid envelope.
-			peer.Infoln(err)
+		for _, envelope := range envelopes {
+			if err := self.add(envelope); err != nil {
+				// TODO Punish peer here. Invalid envelope.
+				peer.Infoln(err)
+			}
+			wpeer.addKnown(envelope)
 		}
-		wpeer.addKnown(envelope)
 	}
 }
 
@@ -191,6 +195,8 @@ func (self *Whisper) add(envelope *Envelope) error {
 		self.expiry[envelope.Expiry].Add(hash)
 		go self.postEvent(envelope)
 	}
+
+	wlogger.DebugDetailln("added whisper message")
 
 	return nil
 }
