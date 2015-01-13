@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"sync"
 	"time"
 )
 
@@ -112,6 +113,7 @@ func (s *ChunkReader) Read(p []byte) (n int, err error) {
 }
 
 func (s *ChunkReader) ReadAt(p []byte, off int64) (n int, err error) {
+	dpaLogger.DebugDetailf("chunk reader: slicelen: %v off: %v base %v limit %v", len(p), off, s.base, s.limit)
 	if off < 0 || off >= s.limit-s.base {
 		return 0, io.EOF
 	}
@@ -190,8 +192,10 @@ func (self *LazyChunkReader) Size() (n int64) {
 }
 
 func (self *LazyChunkReader) Read(b []byte) (read int, err error) {
+	dpaLogger.DebugDetailf("%v bytes to read %v - %v ", len(b), self.off, self.Size())
 	read, err = self.ReadAt(b, self.off)
 	self.off += int64(read)
+	dpaLogger.DebugDetailf("%v bytes to read %v - %v: %v %v", len(b), self.off, self.Size(), read, err)
 	return
 }
 
@@ -214,13 +218,15 @@ func (s *LazyChunkReader) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
-	if off < 0 || off > self.size {
+	dpaLogger.DebugDetailf("%v - %v", off, self.size)
+	if off < 0 || off >= self.size {
 		err = io.EOF
 		return
 	}
 	want := len(b)
 	got := int(self.size - off)
 	if want > got {
+		dpaLogger.DebugDetailf("%v > %v", want, got)
 		err = io.EOF
 	}
 	var index int
@@ -231,23 +237,56 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 	var limit int
 	var reader LazySectionReader
 
-	for i := index; i < len(self.sections) || want == 0; i++ {
+	for i := index; i < len(self.sections) || want > 0; i++ {
 		if reader = self.sections[i]; reader == nil {
 			reader = self.readerFs[i]() // this hooks into the go routines and does a wg.Done once the needed chunks are fetched and processed
 			self.sections[i] = reader   // memoize this reader
 		}
-		if want > int(self.size-off) {
-			limit = int(self.size)
+		if want > int(reader.Size()-off) {
+			limit = int(reader.Size())
 		} else {
 			limit = int(off) + want
 		}
+		dpaLogger.DebugDetailf("%v - %v (%v) want %v, got %v, read %v", off, limit, reader.Size(), want, got, read)
+		reader.Seek(0, 0)
 		if got, err = reader.ReadAt(b[off:limit], off); err != nil {
+			dpaLogger.DebugDetailf("oh oh oh oh")
 			return
 		}
 		read += got
 		want -= got
 	}
 	return
+}
+
+type EmbeddedReader struct {
+	LazySectionReader
+	lock sync.Mutex
+}
+
+type NotReadyReader struct {
+	initF func()
+	r     LazySectionReader
+}
+
+func (self *NotReadyReader) Size() (n int64) {
+	self.initF()
+	return self.r.Size()
+}
+
+func (self *NotReadyReader) Read(b []byte) (read int, err error) {
+	self.initF()
+	return self.r.Read(b)
+}
+
+func (self *NotReadyReader) ReadAt(b []byte, off int64) (read int, err error) {
+	self.initF()
+	return self.r.ReadAt(b, off)
+}
+
+func (self *NotReadyReader) Seek(offset int64, whence int) (int64, error) {
+	self.initF()
+	return self.r.Seek(offset, whence)
 }
 
 // just a wrapper to make a SectionReader conform to LazySectionReader

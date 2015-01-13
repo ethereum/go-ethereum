@@ -109,7 +109,7 @@ func (self *chunkerTester) Split(chunker *TreeChunker, l int) (key Key, input []
 	return
 }
 
-func (self *chunkerTester) Join(t *testing.T, chunker *TreeChunker, key Key) LazySectionReader {
+func (self *chunkerTester) Join(t *testing.T, chunker *TreeChunker, key Key) (LazySectionReader, chan bool) {
 	// reset but not the chunks
 	self.errors = nil
 	self.timeout = false
@@ -124,6 +124,9 @@ func (self *chunkerTester) Join(t *testing.T, chunker *TreeChunker, key Key) Laz
 		for {
 			t.Logf("waiting to mock Chunk Store")
 			select {
+			case <-quitC:
+				break LOOP
+
 			case <-timeout:
 				self.timeout = true
 				break LOOP
@@ -159,17 +162,15 @@ func (self *chunkerTester) Join(t *testing.T, chunker *TreeChunker, key Key) Laz
 				}
 			}
 		}
-		close(quitC)
 	}()
-	<-quitC // waiting for it to finish
-	return reader
+	return reader, quitC
 }
 
 func testRandomData(chunker *TreeChunker, tester *chunkerTester, n int, chunks int, t *testing.T) {
 	key, input := tester.Split(chunker, n)
 	tester.checkChunks(t, chunks)
 	t.Logf("chunks: %v", tester.chunks)
-	reader := tester.Join(t, chunker, key)
+	reader, quitC := tester.Join(t, chunker, key)
 	output := make([]byte, reader.Size())
 	_, err := reader.Read(output)
 	if err != nil {
@@ -179,6 +180,7 @@ func testRandomData(chunker *TreeChunker, tester *chunkerTester, n int, chunks i
 	if bytes.Compare(output, input) != 0 {
 		t.Errorf("input and output mismatch\n IN: %x\nOUT: %x\n", input, output)
 	}
+	close(quitC)
 }
 
 func TestRandomData(t *testing.T) {
@@ -194,4 +196,5 @@ func TestRandomData(t *testing.T) {
 	// testRandomData(chunker, tester, 179, 5, t)
 	// testRandomData(chunker, tester, 253, 7, t)
 	t.Logf("chunks %v", tester.chunks)
+	time.Sleep(2 * time.Second)
 }

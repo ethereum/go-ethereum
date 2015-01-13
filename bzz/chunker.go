@@ -25,8 +25,9 @@ import (
 )
 
 const (
-	hasherfunc crypto.Hash = crypto.SHA256 // http://golang.org/pkg/hash/#Hash
-	branches   int64       = 4
+	hasherfunc        crypto.Hash = crypto.SHA256 // http://golang.org/pkg/hash/#Hash
+	branches          int64       = 4
+	chunkChanCapacity             = 10
 )
 
 var (
@@ -115,10 +116,13 @@ type Chunk struct {
 
 func (self *Chunk) String() string {
 	var size int64
+	var slice []byte
 	if self.Data != nil {
 		size = self.Data.Size()
+		slice = make([]byte, size)
+		self.Data.Read(slice)
 	}
-	return fmt.Sprintf("Key: [%x..] TreeSize: %v Chunksize: %v", self.Key[:4], self.Size, size)
+	return fmt.Sprintf("Key: [%x..] TreeSize: %v Chunksize: %v Data: %x\n", self.Key[:4], self.Size, size, slice)
 }
 
 // The treeChunkers own Hash hashes together
@@ -133,7 +137,7 @@ func (self *TreeChunker) Hash(size int64, input SectionReader) []byte {
 
 func (self *TreeChunker) Split(key Key, data SectionReader) (chunkC chan *Chunk, errC chan error) {
 	wg := &sync.WaitGroup{}
-	chunkC = make(chan *Chunk)
+	chunkC = make(chan *Chunk, chunkChanCapacity)
 	errC = make(chan error)
 	rerrC := make(chan error)
 	timeout := time.After(splitTimeout)
@@ -195,9 +199,6 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 
 	switch {
 	case depth == 0:
-		if size > self.chunkSize {
-			// panic("ouch")
-		}
 		// leaf nodes -> content chunks
 		hash = self.Hash(size, data)
 		dpaLogger.Debugf("content chunk: max subtree size: %v, data size: %v", treeSize, size)
@@ -261,7 +262,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 func (self *TreeChunker) Join(key Key) (data LazySectionReader, chunkC chan *Chunk, errC chan error) {
 	// initialise return parameters
 	errC = make(chan error)
-	chunkC = make(chan *Chunk)
+	chunkC = make(chan *Chunk, chunkChanCapacity)
 	// timer to time out the operation (needed within so as to avoid process leakage)
 	timeout := time.After(joinTimeout)
 	wg := &sync.WaitGroup{}
@@ -270,7 +271,25 @@ func (self *TreeChunker) Join(key Key) (data LazySectionReader, chunkC chan *Chu
 	quitC := make(chan bool)
 
 	// launch lazy recursive call on root chunk
-	data = self.join(0, 0, key, chunkC, rerrC, wg, quitC)()
+	notReadyReader := &NotReadyReader{}
+	reader := &EmbeddedReader{
+		LazySectionReader: &lazyReader{notReadyReader},
+	}
+	fun := self.join(0, 0, key, chunkC, rerrC, wg, quitC)
+	data = reader
+
+	// processing is triggered by reads on the LazySectionReader
+	wg.Add(1)
+	notReadyReader.r = reader
+	notReadyReader.initF = func() {
+		reader.lock.Lock()
+		if fun != nil {
+			reader.LazySectionReader = fun() // replace the reader while caller is waiting
+			wg.Done()                        // just to have one in waitgroup until reader funcs are called
+			fun = nil                        // to be only called once
+		}
+		reader.lock.Unlock()
+	}
 
 	// waits for all the processes to finish and signals by closing internal rerrc
 	go func() {
@@ -336,21 +355,22 @@ func (self *TreeChunker) join(depth int, treeSize int64, key Key, chunkC chan *C
 		var childKey Key
 		var readerF func() (r LazySectionReader)
 		var readerFs [](func() (r LazySectionReader))
-		dpaLogger.DebugDetailf("tree %v", chunk.Size)
 		branches := int64((chunk.Size-1)/treeSize) + 1
+		dpaLogger.DebugDetailf("tree node - size %v, chunk size: %v, subtreeSize %v, branches %v", chunk.Size, chunk.Data.Size(), treeSize, branches)
 
 		// iterate through the chunk containing the keys of children
 		// create lazy init functions that give back readers
 		for i < branches {
 			if chunk.Size-pos < treeSize {
 				secSize = chunk.Size - pos
-				dpaLogger.DebugDetailf("last section %v", secSize)
+				dpaLogger.DebugDetailf("tree node section %v: size %v", i, secSize)
 			} else {
 				secSize = treeSize
 			}
 			// create partial Chunk in order to send a retrieval request
 			childKey = make([]byte, self.hashSize) // preallocate hashSize long slice for key
 			// read the Hash of the subtree from the relevant section of the Chunk into the allocated byte slice in subtree.Key
+			chunk.Data.Seek(0, 0)
 			if _, err := chunk.Data.ReadAt(childKey, i*self.hashSize); err != nil {
 				dpaLogger.DebugDetailf("Read error: %v", err)
 				errC <- err
