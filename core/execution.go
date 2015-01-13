@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
 )
@@ -40,14 +41,22 @@ func (self *Execution) exec(code, contextAddr []byte, caller vm.ContextRef) (ret
 		return nil, vm.DepthError{}
 	}
 
+	vsnapshot := env.State().Copy()
+	if len(self.address) == 0 {
+		// Generate a new address
+		nonce := env.State().GetNonce(caller.Address())
+		self.address = crypto.CreateAddress(caller.Address(), nonce)
+		env.State().SetNonce(caller.Address(), nonce+1)
+	}
+
 	from, to := env.State().GetStateObject(caller.Address()), env.State().GetOrNewStateObject(self.address)
-	// Skipping transfer is used on testing for the initial call
 	err = env.Transfer(from, to, self.value)
 	if err != nil {
+		env.State().Set(vsnapshot)
+
 		caller.ReturnGas(self.Gas, self.price)
 
-		err = fmt.Errorf("insufficient funds to transfer value. Req %v, has %v", self.value, from.Balance())
-		return
+		return nil, fmt.Errorf("insufficient funds to transfer value. Req %v, has %v", self.value, from.Balance())
 	}
 
 	snapshot := env.State().Copy()

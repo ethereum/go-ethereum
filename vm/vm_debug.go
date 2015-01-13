@@ -643,32 +643,21 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 		case CREATE:
 
 			var (
-				err          error
 				value        = stack.Pop()
 				size, offset = stack.Popn()
 				input        = mem.Get(offset.Int64(), size.Int64())
 				gas          = new(big.Int).Set(context.Gas)
-
-				// Snapshot the current stack so we are able to
-				// revert back to it later.
-				//snapshot = self.env.State().Copy()
+				addr         []byte
 			)
 
-			// Generate a new address
-			n := statedb.GetNonce(context.Address())
-			addr := crypto.CreateAddress(context.Address(), n)
-			statedb.SetNonce(context.Address(), n+1)
-
-			self.Printf(" (*) %x", addr).Endl()
-
 			context.UseGas(context.Gas)
-
-			ret, suberr, ref := self.env.Create(context, addr, input, gas, price, value)
+			ret, suberr, ref := self.env.Create(context, nil, input, gas, price, value)
 			if suberr != nil {
 				stack.Push(ethutil.BigFalse)
 
-				self.Printf("CREATE err %v", err)
+				self.Printf(" (*) 0x0 %v", suberr)
 			} else {
+
 				// gas < len(ret) * CreateDataGas == NO_CODE
 				dataGas := big.NewInt(int64(len(ret)))
 				dataGas.Mul(dataGas, GasCreateByte)
@@ -676,11 +665,12 @@ func (self *DebugVm) Run(me, caller ContextRef, code []byte, value, gas, price *
 					ref.SetCode(ret)
 					msg.Output = ret
 				}
+				addr = ref.Address()
 
 				stack.Push(ethutil.BigD(addr))
-			}
 
-			self.Endl()
+				self.Printf(" (*) %x", addr)
+			}
 
 			// Debug hook
 			if self.Dbg != nil {
