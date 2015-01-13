@@ -55,47 +55,16 @@ var padLeft = function (string, chars) {
     return new Array(chars - string.length + 1).join("0") + string;
 };
 
-var calcBitPadding = function (type, expected) {
-    var value = type.slice(expected.length);
-    if (value === "") {
-        return 32;
-    }
-    return parseInt(value) / 8;
-};
-
-var calcBytePadding = function (type, expected) {
-    var value = type.slice(expected.length);
-    if (value === "") {
-        return 32;
-    }
-    return parseInt(value);
-};
-
-var calcRealPadding = function (type, expected) {
-    var value = type.slice(expected.length);
-    if (value === "") {
-        return 32;
-    }
-    var sizes = value.split('x');
-    for (var padding = 0, i = 0; i < sizes; i++) {
-        padding += (sizes[i] / 8);
-    }
-    return padding;
-};
-
 var setupInputTypes = function () {
     
-    var prefixedType = function (prefix, calcPadding) {
+    var prefixedType = function (prefix) {
         return function (type, value) {
             var expected = prefix;
             if (type.indexOf(expected) !== 0) {
                 return false;
             }
 
-            var padding = calcPadding(type, expected);
-            if (padding > 32)
-                return false;   // not allowed to be so big.
-            padding = 32;   // override as per the new ABI.
+            var padding = 32;   // override as per the new ABI.
 
             if (prefix === "string")
                 return web3.fromAscii(value, padding).substr(2);
@@ -111,13 +80,13 @@ var setupInputTypes = function () {
         };
     };
 
-    var namedType = function (name, padding, formatter) {
+    var namedType = function (name, formatter) {
         return function (type, value) {
             if (type !== name) {
                 return false;
             }
 
-            padding = 32;   //override as per the new ABI.
+            var padding = 32;   //override as per the new ABI.
 
             return padLeft(formatter ? formatter(value) : value, padding * 2);
         };
@@ -128,14 +97,14 @@ var setupInputTypes = function () {
     };
 
     return [
-        prefixedType('uint', calcBitPadding),
-        prefixedType('int', calcBitPadding),
-        prefixedType('hash', calcBitPadding),
-        prefixedType('string', calcBytePadding),
-        prefixedType('real', calcRealPadding),
-        prefixedType('ureal', calcRealPadding),
-        namedType('address', 20),
-        namedType('bool', 1, formatBool),
+        prefixedType('uint'),
+        prefixedType('int'),
+        prefixedType('hash'),
+        prefixedType('string'),
+        prefixedType('real'),
+        prefixedType('ureal'),
+        namedType('address'),
+        namedType('bool', formatBool),
     ];
 };
 
@@ -166,24 +135,20 @@ var toAbiInput = function (json, methodName, params) {
 
 var setupOutputTypes = function () {
 
-    var prefixedType = function (prefix, calcPadding) {
+    var prefixedType = function (prefix) {
         return function (type) {
             var expected = prefix;
             if (type.indexOf(expected) !== 0) {
                 return -1;
             }
-
-            var padding = calcPadding(type, expected);
-            if (padding > 32)
-                return -1;   // not allowed to be so big.
-            padding = 32;  // override as per the new ABI.
+            var padding = 32;  // override as per the new ABI.
             return padding * 2;
         };
     };
 
-    var namedType = function (name, padding) {
+    var namedType = function (name) {
         return function (type) {
-            padding = 32;  // override as per the new ABI.
+            var padding = 32;  // override as per the new ABI.
             return name === type ? padding * 2 : -1;
         };
     };
@@ -205,14 +170,14 @@ var setupOutputTypes = function () {
     };
 
     return [
-    { padding: prefixedType('uint', calcBitPadding), format: formatInt },
-    { padding: prefixedType('int', calcBitPadding), format: formatInt },
-    { padding: prefixedType('hash', calcBitPadding), format: formatHash },
-    { padding: prefixedType('string', calcBytePadding), format: formatString },
-    { padding: prefixedType('real', calcRealPadding), format: formatInt },
-    { padding: prefixedType('ureal', calcRealPadding), format: formatInt },
-    { padding: namedType('address', 20) },
-    { padding: namedType('bool', 1), format: formatBool }
+    { padding: prefixedType('uint'), format: formatInt },
+    { padding: prefixedType('int'), format: formatInt },
+    { padding: prefixedType('hash'), format: formatHash },
+    { padding: prefixedType('string'), format: formatString },
+    { padding: prefixedType('real'), format: formatInt },
+    { padding: prefixedType('ureal'), format: formatInt },
+    { padding: namedType('address') },
+    { padding: namedType('bool'), format: formatBool }
     ];
 };
 
