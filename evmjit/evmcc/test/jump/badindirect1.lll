@@ -1,0 +1,9 @@
+;; Indirect jump out of code
+
+(asm
+27
+37
+MUL
+JUMP
+JUMPDEST
+)

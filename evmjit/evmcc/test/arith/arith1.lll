@@ -1,0 +1,37 @@
+
+(asm 
+1
+1
+SWAP1
+ADD	;; 2
+7
+MUL	;; 14
+5
+ADD	;; 19
+2
+SWAP1
+DIV	;; 9
+4
+SWAP1
+MOD ;; 1
+33
+SWAP1
+SDIV;; 0
+21
+ADD	;; 21
+3
+MUL	;; 63
+5
+SWAP1
+SMOD;; 3
+3
+SUB ;; 0
+9
+17
+EXP ;; 17^9
+0
+MSTORE
+8
+0
+RETURN
+)

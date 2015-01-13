@@ -1,0 +1,6 @@
+;; Direct jump out of code.
+
+(asm
+999
+JUMP
+)
