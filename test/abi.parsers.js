@@ -1,5 +1,3 @@
-# vim: et
-
 var assert = require('assert');
 var abi = require('../lib/abi.js');
 var clone = function (object) { return JSON.parse(JSON.stringify(object)); };
