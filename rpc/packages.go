@@ -1,12 +1,19 @@
+/*
+
+For each request type, define the following:
+
+1. RpcRequest "To" method [message.go], which does basic validation and conversion to "Args" type via json.Decoder()
+2. json.Decoder() calls "UnmarshalJSON" defined on each "Args" struct
+3. EthereumApi "Get" method, taking the "Args" type and replying with an interface to be marshalled to JSON
+
+*/
 package rpc
 
 import (
-	// "bytes"
 	"encoding/json"
 	"math/big"
 	"strings"
 
-	// "errors"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/xeth"
 )
@@ -21,12 +28,9 @@ func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *interface{}) error {
 		return err
 	}
 
-	// var block xeth.JSBlock
 	if args.BlockNumber > 0 {
-		// block := p.pipe.BlockByNumber(int32(args.BlockNumber))
 		*reply = p.pipe.BlockByNumber(args.BlockNumber)
 	} else {
-		// block := p.pipe.BlockByHash(args.Hash)
 		*reply = p.pipe.BlockByHash(args.Hash)
 	}
 	return nil
@@ -97,13 +101,11 @@ func (p *EthereumApi) GetPeerCount(reply *interface{}) error {
 
 func (p *EthereumApi) GetIsListening(reply *interface{}) error {
 	*reply = p.pipe.IsListening()
-	// *reply = NewSuccessRes(GetListeningRes{IsListening: p.pipe.IsListening()})
 	return nil
 }
 
 func (p *EthereumApi) GetCoinbase(reply *interface{}) error {
 	*reply = p.pipe.CoinBase()
-	// *reply = p.pipe.CoinBase()
 	return nil
 }
 
@@ -130,14 +132,6 @@ func (p *EthereumApi) GetBalanceAt(args *GetBalanceArgs, reply *interface{}) err
 	*reply = BalanceRes{Balance: state.Balance().String(), Address: args.Address}
 	return nil
 }
-
-// type JsonArgs interface {
-// 	requirements() error
-// }
-
-// type BlockResponse struct {
-// 	JsonResponse
-// }
 
 type GetBlockArgs struct {
 	BlockNumber int32
@@ -306,13 +300,3 @@ type BalanceRes struct {
 	Balance string `json:"balance"`
 	Address string `json:"address"`
 }
-
-// type TestRes struct {
-// 	JsonResponse `json:"-"`
-// 	Answer       int `json:"answer"`
-// }
-
-// func (p *EthereumApi) Test(args *GetBlockArgs, reply *interface{}) error {
-// 	*reply = NewSuccessRes(TestRes{Answer: 15})
-// 	return nil
-// }

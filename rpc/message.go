@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-
-	// "github.com/ethereum/go-ethereum/ethutil"
 )
 
 const (
@@ -16,29 +14,10 @@ const (
 	ErrorDecodeArgs     = "Error: Could not decode arguments"
 )
 
-// type JsonResponse interface {
-// }
-
 type ErrorResponse struct {
 	Error     bool   `json:"error"`
 	ErrorText string `json:"errorText"`
 }
-
-// type SuccessRes struct {
-// 	Error bool `json:"error"`
-// 	Result JsonResponse `json:"result"`
-// }
-
-// type Message struct {
-// 	Call string        `json:"call"`
-// 	Args []interface{} `json:"args"`
-// 	Id   int           `json:"_id"`
-// 	Data interface{}   `json:"data"`
-// }
-
-// func (self *Message) Arguments() *ethutil.Value {
-// 	return ethutil.NewValue(self.Args)
-// }
 
 type RpcSuccessResponse struct {
 	ID      int         `json:"id"`
