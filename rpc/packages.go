@@ -1,11 +1,12 @@
 package rpc
 
 import (
+	// "bytes"
 	"encoding/json"
-	"errors"
 	"math/big"
 	"strings"
 
+	// "errors"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/xeth"
 )
@@ -14,83 +15,168 @@ type EthereumApi struct {
 	pipe *xeth.JSXEth
 }
 
-type JsonArgs interface {
-	requirements() error
-}
-
-type BlockResponse struct {
-	JsonResponse
-}
-type GetBlockArgs struct {
-	BlockNumber int
-	Hash        string
-}
-
-type ErrorResponse struct {
-	Error     bool   `json:"error"`
-	ErrorText string `json:"errorText"`
-}
-
-type JsonResponse interface {
-}
-
-type SuccessRes struct {
-	Error  bool         `json:"error"`
-	Result JsonResponse `json:"result"`
-}
-
-func NewSuccessRes(object JsonResponse) string {
-	e := SuccessRes{Error: false, Result: object}
-	res, err := json.Marshal(e)
-	if err != nil {
-		// This should never happen
-		panic("Creating json error response failed, help")
-	}
-	success := string(res)
-	return success
-}
-
-func NewErrorResponse(msg string) error {
-	e := ErrorResponse{Error: true, ErrorText: msg}
-	res, err := json.Marshal(e)
-	if err != nil {
-		// This should never happen
-		panic("Creating json error response failed, help")
-	}
-	newErr := errors.New(string(res))
-	return newErr
-}
-
-func (b *GetBlockArgs) requirements() error {
-	if b.BlockNumber == 0 && b.Hash == "" {
-		return NewErrorResponse("GetBlock requires either a block 'number' or a block 'hash' as argument")
-	}
-	return nil
-}
-
-func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *string) error {
+func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *interface{}) error {
 	err := args.requirements()
 	if err != nil {
 		return err
 	}
 
-	block := p.pipe.BlockByHash(args.Hash)
-	*reply = NewSuccessRes(block)
+	// var block xeth.JSBlock
+	if args.BlockNumber > 0 {
+		// block := p.pipe.BlockByNumber(int32(args.BlockNumber))
+		*reply = p.pipe.BlockByNumber(args.BlockNumber)
+	} else {
+		// block := p.pipe.BlockByHash(args.Hash)
+		*reply = p.pipe.BlockByHash(args.Hash)
+	}
+	return nil
+}
+
+func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
+	err := args.requirements()
+	if err != nil {
+		return err
+	}
+	result, _ := p.pipe.Transact(p.pipe.Key().PrivateKey, args.Recipient, args.Value, args.Gas, args.GasPrice, args.Body)
+	*reply = result
+	return nil
+}
+
+func (p *EthereumApi) Create(args *NewTxArgs, reply *interface{}) error {
+	err := args.requirementsContract()
+	if err != nil {
+		return err
+	}
+
+	result, _ := p.pipe.Transact(p.pipe.Key().PrivateKey, "", args.Value, args.Gas, args.GasPrice, args.Body)
+	*reply = result
+	return nil
+}
+
+func (p *EthereumApi) PushTx(args *PushTxArgs, reply *interface{}) error {
+	err := args.requirementsPushTx()
+	if err != nil {
+		return err
+	}
+	result, _ := p.pipe.PushTx(args.Tx)
+	*reply = result
+	return nil
+}
+
+func (p *EthereumApi) GetKey(args interface{}, reply *interface{}) error {
+	*reply = p.pipe.Key()
+	return nil
+}
+
+func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *interface{}) error {
+	err := args.requirements()
+	if err != nil {
+		return err
+	}
+
+	state := p.pipe.World().SafeGet(ethutil.Hex2Bytes(args.Address))
+
+	var hx string
+	if strings.Index(args.Key, "0x") == 0 {
+		hx = string([]byte(args.Key)[2:])
+	} else {
+		// Convert the incoming string (which is a bigint) into hex
+		i, _ := new(big.Int).SetString(args.Key, 10)
+		hx = ethutil.Bytes2Hex(i.Bytes())
+	}
+	jsonlogger.Debugf("GetStorageAt(%s, %s)\n", args.Address, hx)
+	value := state.Storage(ethutil.Hex2Bytes(hx))
+	*reply = GetStorageAtRes{Address: args.Address, Key: args.Key, Value: value.Str()}
+	return nil
+}
+
+func (p *EthereumApi) GetPeerCount(reply *interface{}) error {
+	*reply = p.pipe.PeerCount()
+	return nil
+}
+
+func (p *EthereumApi) GetIsListening(reply *interface{}) error {
+	*reply = p.pipe.IsListening()
+	// *reply = NewSuccessRes(GetListeningRes{IsListening: p.pipe.IsListening()})
+	return nil
+}
+
+func (p *EthereumApi) GetCoinbase(reply *interface{}) error {
+	*reply = p.pipe.CoinBase()
+	// *reply = p.pipe.CoinBase()
+	return nil
+}
+
+func (p *EthereumApi) GetIsMining(reply *interface{}) error {
+	*reply = p.pipe.IsMining()
+	return nil
+}
+
+func (p *EthereumApi) GetTxCountAt(args *GetTxCountArgs, reply *interface{}) error {
+	err := args.requirements()
+	if err != nil {
+		return err
+	}
+	*reply = p.pipe.TxCountAt(args.Address)
+	return nil
+}
+
+func (p *EthereumApi) GetBalanceAt(args *GetBalanceArgs, reply *interface{}) error {
+	err := args.requirements()
+	if err != nil {
+		return err
+	}
+	state := p.pipe.World().SafeGet(ethutil.Hex2Bytes(args.Address))
+	*reply = BalanceRes{Balance: state.Balance().String(), Address: args.Address}
+	return nil
+}
+
+// type JsonArgs interface {
+// 	requirements() error
+// }
+
+// type BlockResponse struct {
+// 	JsonResponse
+// }
+
+type GetBlockArgs struct {
+	BlockNumber int32
+	Hash        string
+}
+
+func (obj *GetBlockArgs) UnmarshalJSON(b []byte) (err error) {
+	argint, argstr := int32(0), ""
+	if err = json.Unmarshal(b, &argint); err == nil {
+		obj.BlockNumber = argint
+		return
+	}
+	if err = json.Unmarshal(b, &argstr); err == nil {
+		obj.Hash = argstr
+		return
+	}
+	return NewErrorResponse("Could not determine JSON parameters")
+}
+
+func (obj *GetBlockArgs) requirements() error {
+	if obj.BlockNumber == 0 && obj.Hash == "" {
+		return NewErrorResponse("GetBlock requires either a block 'number' or a block 'hash' as argument")
+	}
 	return nil
 }
 
 type NewTxArgs struct {
-	Sec       string
-	Recipient string
-	Value     string
-	Gas       string
-	GasPrice  string
-	Init      string
-	Body      string
+	Sec       string `json:"sec"`
+	Recipient string `json:"recipient"`
+	Value     string `json:"value"`
+	Gas       string `json:"gas"`
+	GasPrice  string `json:"gasprice"`
+	Init      string `json:"init"`
+	Body      string `json:"body"`
 }
-type TxResponse struct {
-	Hash string
-}
+
+// type TxResponse struct {
+// 	Hash string
+// }
 
 func (a *NewTxArgs) requirements() error {
 	if a.Recipient == "" {
@@ -124,50 +210,14 @@ func (a *NewTxArgs) requirementsContract() error {
 	return nil
 }
 
-func (p *EthereumApi) Transact(args *NewTxArgs, reply *string) error {
-	err := args.requirements()
-	if err != nil {
-		return err
-	}
-	result, _ := p.pipe.Transact(p.pipe.Key().PrivateKey, args.Recipient, args.Value, args.Gas, args.GasPrice, args.Body)
-	*reply = NewSuccessRes(result)
-	return nil
-}
-
-func (p *EthereumApi) Create(args *NewTxArgs, reply *string) error {
-	err := args.requirementsContract()
-	if err != nil {
-		return err
-	}
-
-	result, _ := p.pipe.Transact(p.pipe.Key().PrivateKey, "", args.Value, args.Gas, args.GasPrice, args.Body)
-	*reply = NewSuccessRes(result)
-	return nil
-}
-
 type PushTxArgs struct {
-	Tx string
+	Tx string `json:"tx"`
 }
 
 func (a *PushTxArgs) requirementsPushTx() error {
 	if a.Tx == "" {
 		return NewErrorResponse("PushTx requires a 'tx' as argument")
 	}
-	return nil
-}
-
-func (p *EthereumApi) PushTx(args *PushTxArgs, reply *string) error {
-	err := args.requirementsPushTx()
-	if err != nil {
-		return err
-	}
-	result, _ := p.pipe.PushTx(args.Tx)
-	*reply = NewSuccessRes(result)
-	return nil
-}
-
-func (p *EthereumApi) GetKey(args interface{}, reply *string) error {
-	*reply = NewSuccessRes(p.pipe.Key())
 	return nil
 }
 
@@ -192,33 +242,21 @@ type GetStorageAtRes struct {
 	Address string `json:"address"`
 }
 
-func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *string) error {
-	err := args.requirements()
-	if err != nil {
-		return err
-	}
-
-	state := p.pipe.World().SafeGet(ethutil.Hex2Bytes(args.Address))
-
-	var hx string
-	if strings.Index(args.Key, "0x") == 0 {
-		hx = string([]byte(args.Key)[2:])
-	} else {
-		// Convert the incoming string (which is a bigint) into hex
-		i, _ := new(big.Int).SetString(args.Key, 10)
-		hx = ethutil.Bytes2Hex(i.Bytes())
-	}
-	jsonlogger.Debugf("GetStorageAt(%s, %s)\n", args.Address, hx)
-	value := state.Storage(ethutil.Hex2Bytes(hx))
-	*reply = NewSuccessRes(GetStorageAtRes{Address: args.Address, Key: args.Key, Value: value.Str()})
-	return nil
-}
-
 type GetTxCountArgs struct {
 	Address string `json:"address"`
 }
-type GetTxCountRes struct {
-	Nonce int `json:"nonce"`
+
+// type GetTxCountRes struct {
+// 	Nonce int `json:"nonce"`
+// }
+
+func (obj *GetTxCountArgs) UnmarshalJSON(b []byte) (err error) {
+	arg0 := ""
+	if err = json.Unmarshal(b, arg0); err == nil {
+		obj.Address = arg0
+		return
+	}
+	return NewErrorResponse("Could not determine JSON parameters")
 }
 
 func (a *GetTxCountArgs) requirements() error {
@@ -228,54 +266,33 @@ func (a *GetTxCountArgs) requirements() error {
 	return nil
 }
 
-type GetPeerCountRes struct {
-	PeerCount int `json:"peerCount"`
-}
+// type GetPeerCountRes struct {
+// 	PeerCount int `json:"peerCount"`
+// }
 
-func (p *EthereumApi) GetPeerCount(args *interface{}, reply *string) error {
-	*reply = NewSuccessRes(GetPeerCountRes{PeerCount: p.pipe.PeerCount()})
-	return nil
-}
+// type GetListeningRes struct {
+// 	IsListening bool `json:"isListening"`
+// }
 
-type GetListeningRes struct {
-	IsListening bool `json:"isListening"`
-}
+// type GetCoinbaseRes struct {
+// 	Coinbase string `json:"coinbase"`
+// }
 
-func (p *EthereumApi) GetIsListening(args *interface{}, reply *string) error {
-	*reply = NewSuccessRes(GetListeningRes{IsListening: p.pipe.IsListening()})
-	return nil
-}
-
-type GetCoinbaseRes struct {
-	Coinbase string `json:"coinbase"`
-}
-
-func (p *EthereumApi) GetCoinbase(args *interface{}, reply *string) error {
-	*reply = NewSuccessRes(GetCoinbaseRes{Coinbase: p.pipe.CoinBase()})
-	return nil
-}
-
-type GetMiningRes struct {
-	IsMining bool `json:"isMining"`
-}
-
-func (p *EthereumApi) GetIsMining(args *interface{}, reply *string) error {
-	*reply = NewSuccessRes(GetMiningRes{IsMining: p.pipe.IsMining()})
-	return nil
-}
-
-func (p *EthereumApi) GetTxCountAt(args *GetTxCountArgs, reply *string) error {
-	err := args.requirements()
-	if err != nil {
-		return err
-	}
-	state := p.pipe.TxCountAt(args.Address)
-	*reply = NewSuccessRes(GetTxCountRes{Nonce: state})
-	return nil
-}
+// type GetMiningRes struct {
+// 	IsMining bool `json:"isMining"`
+// }
 
 type GetBalanceArgs struct {
 	Address string
+}
+
+func (obj *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
+	arg0 := ""
+	if err = json.Unmarshal(b, &arg0); err == nil {
+		obj.Address = arg0
+		return
+	}
+	return NewErrorResponse("Could not determine JSON parameters")
 }
 
 func (a *GetBalanceArgs) requirements() error {
@@ -290,22 +307,12 @@ type BalanceRes struct {
 	Address string `json:"address"`
 }
 
-func (p *EthereumApi) GetBalanceAt(args *GetBalanceArgs, reply *string) error {
-	err := args.requirements()
-	if err != nil {
-		return err
-	}
-	state := p.pipe.World().SafeGet(ethutil.Hex2Bytes(args.Address))
-	*reply = NewSuccessRes(BalanceRes{Balance: state.Balance().String(), Address: args.Address})
-	return nil
-}
+// type TestRes struct {
+// 	JsonResponse `json:"-"`
+// 	Answer       int `json:"answer"`
+// }
 
-type TestRes struct {
-	JsonResponse `json:"-"`
-	Answer       int `json:"answer"`
-}
-
-func (p *EthereumApi) Test(args *GetBlockArgs, reply *string) error {
-	*reply = NewSuccessRes(TestRes{Answer: 15})
-	return nil
-}
+// func (p *EthereumApi) Test(args *GetBlockArgs, reply *interface{}) error {
+// 	*reply = NewSuccessRes(TestRes{Answer: 15})
+// 	return nil
+// }
