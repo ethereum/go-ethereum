@@ -197,6 +197,13 @@ type NewTxArgs struct {
 // 	Hash string
 // }
 
+func (obj *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
+	if err = json.Unmarshal(b, obj); err == nil {
+		return
+	}
+	return NewErrorResponse(ErrorDecodeArgs)
+}
+
 func (a *NewTxArgs) requirements() error {
 	if a.Recipient == "" {
 		return NewErrorResponse("Transact requires a 'recipient' address as argument")
@@ -231,6 +238,15 @@ func (a *NewTxArgs) requirementsContract() error {
 
 type PushTxArgs struct {
 	Tx string `json:"tx"`
+}
+
+func (obj *PushTxArgs) UnmarshalJSON(b []byte) (err error) {
+	arg0 := ""
+	if err = json.Unmarshal(b, arg0); err == nil {
+		obj.Tx = arg0
+		return
+	}
+	return NewErrorResponse(ErrorDecodeArgs)
 }
 
 func (a *PushTxArgs) requirementsPushTx() error {
