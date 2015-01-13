@@ -21,29 +21,53 @@ describe('abi', function() {
     describe('inputParser', function() {
         it('should parse input uint', function() {
 
+            // given
             var d = clone(description);
 
             d[0].inputs = [
-                { type: "uint256" }
+                { type: "uint" }
             ];
             
+            // when
             var parser = abi.inputParser(d);
+
+            // then
             assert.equal(parser.test(1), "0000000000000000000000000000000000000000000000000000000000000001");
             assert.equal(parser.test(10), "000000000000000000000000000000000000000000000000000000000000000a");
+
+        });
+
+        it('should parse input uint128', function() {
+
+            // given
+            var d = clone(description);
 
             d[0].inputs = [
                 { type: "uint128" }
             ];
 
+            // when
             var parser = abi.inputParser(d);
+
+            // then
             assert.equal(parser.test(1), "0000000000000000000000000000000000000000000000000000000000000001");
             assert.equal(parser.test(10), "000000000000000000000000000000000000000000000000000000000000000a");
 
+        });
+        
+        it('should parse input uint', function() {
+
+            // given
+            var d = clone(description);
+
             d[0].inputs = [
-                { type: "uint" }
+                { type: "uint256" }
             ];
 
+            // when
             var parser = abi.inputParser(d);
+
+            // then
             assert.equal(parser.test(1), "0000000000000000000000000000000000000000000000000000000000000001");
             assert.equal(parser.test(10), "000000000000000000000000000000000000000000000000000000000000000a");
             
@@ -51,70 +75,123 @@ describe('abi', function() {
 
         it('should parse input int', function() {
 
+            // given
             var d = clone(description);
 
             d[0].inputs = [
-                { type: "int256" }
+                { type: "int" }
             ];
             
+            // when
             var parser = abi.inputParser(d);
+
+            // then
             assert.equal(parser.test(1), "0000000000000000000000000000000000000000000000000000000000000001");
             assert.equal(parser.test(10), "000000000000000000000000000000000000000000000000000000000000000a");
+
+        });
+
+        it('should parse input int128', function() {
+
+            // given
+            var d = clone(description);
 
             d[0].inputs = [
                 { type: "int128" }
             ];
 
+            // when
             var parser = abi.inputParser(d);
+
+            // then
             assert.equal(parser.test(1), "0000000000000000000000000000000000000000000000000000000000000001");
             assert.equal(parser.test(10), "000000000000000000000000000000000000000000000000000000000000000a");
 
+        });
+
+        it('should parse input int256', function() {
+        
+            // given
+            var d = clone(description);
+
             d[0].inputs = [
-                { type: "int" }
+                { type: "int256" }
             ];
 
+            // when
             var parser = abi.inputParser(d);
+
+            // then
             assert.equal(parser.test(1), "0000000000000000000000000000000000000000000000000000000000000001");
             assert.equal(parser.test(10), "000000000000000000000000000000000000000000000000000000000000000a");
             
         });
 
         it('should parse input hash', function() {
-
+/*
+            // given
             var d = clone(description);
 
             d[0].inputs = [
-                { type: "hash256" }
+                { type: "hash" }
             ];
             
+            // when
             var parser = abi.inputParser(d);
+
+            // then
             assert.equal(parser.test(1), "0000000000000000000000000000000000000000000000000000000000000001");
+*/
+        }); 
+
+        it('should parse input hash128', function() {
+/*
+            // given
+            var d = clone(description);
 
             d[0].inputs = [
                 { type: "hash128" }
             ];
 
+            // when
             var parser = abi.inputParser(d);
+
+            // then
             assert.equal(parser.test(1), "0000000000000000000000000000000000000000000000000000000000000001");
+*/
+        });
+
+
+        it('should parse input hash', function() {
+/*
+            // given
+            var d = clone(description);
 
             d[0].inputs = [
                 { type: "hash" }
             ];
 
+            // when
             var parser = abi.inputParser(d);
-            assert.equal(parser.test(1), "0000000000000000000000000000000000000000000000000000000000000001");
             
+            // then
+            assert.equal(parser.test(1), "0000000000000000000000000000000000000000000000000000000000000001");
+*/          
         });
 
         it('should parse input string', function() {
             
+            // given
             var d = clone(description);
 
             d[0].inputs = [
                 { type: "string" }
             ];
 
+            // when
             var parser = abi.inputParser(d);
+
+            // then
             assert.equal(parser.test('hello'), "68656c6c6f000000000000000000000000000000000000000000000000000000");
             assert.equal(parser.test('world'), "776f726c64000000000000000000000000000000000000000000000000000000");
         });
@@ -123,17 +200,40 @@ describe('abi', function() {
 
 
     describe('outputParser', function() {
-        it('parse ...', function() {
-            
+        it('should parse output string', function() {
+
+            // given
             var d = clone(description);
 
             d[0].outputs = [
                 { type: "string" }
             ];
 
+            // when
             var parser = abi.outputParser(d);
-            assert.equal(parser.test("0x68656c6c6f00000000000000000000000000000000000000000000000000000")[0], 'hello');
-            assert.equal(parser.test("0x776f726c6400000000000000000000000000000000000000000000000000000")[0], 'world');
+            
+            // then
+            assert.equal(parser.test("0x68656c6c6f000000000000000000000000000000000000000000000000000000")[0], 'hello');
+            assert.equal(parser.test("0x776f726c64000000000000000000000000000000000000000000000000000000")[0], 'world');
+
+        });
+
+        it('should parse multiplt output strings', function() {
+
+            // given
+            var d = clone(description);
+
+            d[0].outputs = [
+                { type: "string" },
+                { type: "string" }
+            ];
+
+            // when
+            var parser = abi.outputParser(d);
+
+            // then
+            assert.equal(parser.test("0x68656c6c6f000000000000000000000000000000000000000000000000000000776f726c64000000000000000000000000000000000000000000000000000000")[0], 'hello');
+            assert.equal(parser.test("0x68656c6c6f000000000000000000000000000000000000000000000000000000776f726c64000000000000000000000000000000000000000000000000000000")[1], 'world');
 
         });
     });
