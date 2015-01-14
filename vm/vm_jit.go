@@ -195,7 +195,6 @@ func env_blockhash(_vm unsafe.Pointer, _number unsafe.Pointer, _result unsafe.Po
 //export env_call
 func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Pointer, _value unsafe.Pointer, inDataPtr *byte, inDataLen uint64, outDataPtr *byte, outDataLen uint64, _codeAddr unsafe.Pointer) bool {
 	vm := (*JitVm)(_vm)
-	llvmGas := (*i256)(_gas)
 	
 	balance := vm.Env().State().GetBalance(vm.me.Address())
 	value := llvm2big((*i256)(_value))
@@ -205,11 +204,12 @@ func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Point
 		receiveAddr := llvm2hash((*i256)(_receiveAddr))
 		inData := llvm2bytes(inDataPtr, inDataLen)
 		outData := llvm2bytes(outDataPtr, outDataLen)
-		//codeAddr := llvm2hash((*i256)(_codeAddr))
+		//codeAddr := llvm2hash((*i256)(_codeAddr)) //TODO: Handle CallCode
+		llvmGas := (*i256)(_gas)
 		gas := llvm2big(llvmGas)
-		price := big.NewInt(0) // TODO
-		
+		price := big.NewInt(0) // TODO		
 		out, err := vm.env.Call(vm.me, receiveAddr, inData, gas, price, value)
+		*llvmGas = big2llvm(gas)
 		if err == nil {
 			copy(outData, out)
 			return true
@@ -217,6 +217,28 @@ func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Point
 	}
 
 	return false;
+}
+
+//export env_create
+func env_create(_vm unsafe.Pointer, _gas unsafe.Pointer, _value unsafe.Pointer, initDataPtr *byte, initDataLen uint64, _result unsafe.Pointer) {
+	vm := (*JitVm)(_vm)
+	
+	balance := vm.Env().State().GetBalance(vm.me.Address())
+	value := llvm2big((*i256)(_value))
+	result := (*i256)(_result)
+	
+	if vm.env.Depth() < 1024 && balance.Cmp(value) >= 0 {
+		vm.env.State().AddBalance(vm.me.Address(), value.Neg(value))
+		initData := llvm2bytes(initDataPtr, initDataLen)
+		llvmGas := (*i256)(_gas)
+		gas := llvm2big(llvmGas)
+		price := big.NewInt(0) // TODO
+		addr, _, _ := vm.Env().Create(vm.me, vm.me.Address(), initData, gas, price, value)
+		*llvmGas = big2llvm(gas)
+		*result = hash2llvm(addr)
+	} else {
+		*result = i256{}
+	}
 }
 
 //export env_log
