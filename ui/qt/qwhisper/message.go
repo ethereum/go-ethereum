@@ -17,7 +17,7 @@ func ToQMessage(msg *whisper.Message) *Message {
 	return &Message{
 		ref:     msg,
 		Flags:   int32(msg.Flags),
-		Payload: ethutil.Bytes2Hex(msg.Payload),
-		From:    ethutil.Bytes2Hex(crypto.FromECDSAPub(msg.Recover())),
+		Payload: "0x" + ethutil.Bytes2Hex(msg.Payload),
+		From:    "0x" + ethutil.Bytes2Hex(crypto.FromECDSAPub(msg.Recover())),
 	}
 }

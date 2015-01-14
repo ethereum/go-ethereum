@@ -60,7 +60,7 @@ type Whisper struct {
 
 	quit chan struct{}
 
-	keys []*ecdsa.PrivateKey
+	keys map[string]*ecdsa.PrivateKey
 }
 
 func New() *Whisper {
@@ -69,6 +69,7 @@ func New() *Whisper {
 		filters:  filter.New(),
 		expiry:   make(map[uint32]*set.SetNonTS),
 		quit:     make(chan struct{}),
+		keys:     make(map[string]*ecdsa.PrivateKey),
 	}
 	whisper.filters.Start()
 
@@ -101,18 +102,18 @@ func (self *Whisper) NewIdentity() *ecdsa.PrivateKey {
 	if err != nil {
 		panic(err)
 	}
-	self.keys = append(self.keys, key)
+
+	self.keys[string(crypto.FromECDSAPub(&key.PublicKey))] = key
 
 	return key
 }
 
-func (self *Whisper) HasIdentity(key *ecdsa.PrivateKey) bool {
-	for _, key := range self.keys {
-		if key.D.Cmp(key.D) == 0 {
-			return true
-		}
-	}
-	return false
+func (self *Whisper) HasIdentity(key *ecdsa.PublicKey) bool {
+	return self.keys[string(crypto.FromECDSAPub(key))] != nil
+}
+
+func (self *Whisper) GetIdentity(key *ecdsa.PublicKey) *ecdsa.PrivateKey {
+	return self.keys[string(crypto.FromECDSAPub(key))]
 }
 
 func (self *Whisper) Watch(opts Filter) int {
