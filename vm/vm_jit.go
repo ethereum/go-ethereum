@@ -4,6 +4,7 @@ package vm
 
 import "math/big"
 import "github.com/ethereum/go-ethereum/crypto"
+import "github.com/ethereum/go-ethereum/state"
 
 /*
 #include "../evmjit/libevmjit/interface.h"
@@ -18,7 +19,7 @@ import "reflect"
 
 type JitVm struct {
 	env Environment
-	myAddress []byte
+	me ContextRef
 	backup *DebugVm
 }
 
@@ -58,7 +59,7 @@ func hash2llvm(h []byte) i256 {
 	return m
 }
 
-func llvm2hash(m *i256) []byte {
+func llvm2hash(m *i256) []byte { //TODO: It should copy data
 	hdr := reflect.SliceHeader{
 		Data: uintptr(unsafe.Pointer(m)),
 		Len:  int(len(m)),
@@ -86,17 +87,26 @@ func llvm2big(m *i256) *big.Int {
 	return n
 }
 
+func llvm2bytes(data *byte, length uint64) []byte {
+	hdr := reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(data)),
+		Len:  int(length),
+		Cap:  int(length),
+	}
+	return *(*[]byte)(unsafe.Pointer(&hdr))
+}
+
 func NewJitVm(env Environment) *JitVm {
 	backupVm := NewDebugVm(env)
 	return &JitVm{env: env, backup: backupVm}
 }
 
 func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
-	self.myAddress = me.Address()
+	self.me = me
 	
 	var data RuntimeData
 	data.elems[Gas] = big2llvm(gas)
-	data.elems[address] = hash2llvm(self.myAddress)
+	data.elems[address] = hash2llvm(self.me.Address())
 	data.elems[Caller] = hash2llvm(caller.Address())
 	data.elems[Origin] = hash2llvm(self.env.Origin())
 	data.elems[CallValue] = big2llvm(value)
@@ -133,15 +143,10 @@ func (self *JitVm) Env() Environment {
 }
 
 //export env_sha3
-func env_sha3(dataPtr unsafe.Pointer, length uint64, hashPtr unsafe.Pointer) {
+func env_sha3(dataPtr *byte, length uint64, hashPtr unsafe.Pointer) {
 	fmt.Printf("env_sha3(%p, %d, %p)\n", dataPtr, length, hashPtr);
 	
-	dataHdr := reflect.SliceHeader{
-		Data: uintptr(dataPtr),
-		Len:  int(length),
-		Cap:  int(length),
-	}
-	data := *(*[]byte)(unsafe.Pointer(&dataHdr))
+	data := llvm2bytes(dataPtr, length)
 	fmt.Printf("\tdata: %x\n", data)
 	
 	hash := crypto.Sha3(data);
@@ -164,16 +169,66 @@ func env_sstore(vmPtr unsafe.Pointer, indexPtr unsafe.Pointer, valuePtr unsafe.P
 	vm := (*JitVm)(vmPtr)
 	index := llvm2hash((*i256)(indexPtr))
 	value := llvm2hash((*i256)(valuePtr))
-	vm.env.State().SetState(vm.myAddress, index, value)
+	vm.env.State().SetState(vm.me.Address(), index, value)
 }
 
 //export env_sload
 func env_sload(vmPtr unsafe.Pointer, indexPtr unsafe.Pointer, resultPtr unsafe.Pointer) {
 	vm := (*JitVm)(vmPtr)
 	index := llvm2hash((*i256)(indexPtr))
-	value := vm.env.State().GetState(vm.myAddress, index)
+	value := vm.env.State().GetState(vm.me.Address(), index)
 	result := (*i256)(resultPtr)
 	*result = hash2llvm(value)
 }
 
-//go is nice
+//export env_call
+func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Pointer, _value unsafe.Pointer, inDataPtr *byte, inDataLen uint64, outDataPtr *byte, outDataLen uint64, _codeAddr unsafe.Pointer) bool {
+	vm := (*JitVm)(_vm)
+	llvmGas := (*i256)(_gas)
+	
+	balance := vm.Env().State().GetBalance(vm.me.Address())
+	value := llvm2big((*i256)(_value))
+	
+	if vm.env.Depth() < 1024 && balance.Cmp(value) >= 0 {
+		vm.env.State().AddBalance(vm.me.Address(), value.Neg(value))
+		receiveAddr := llvm2hash((*i256)(_receiveAddr))
+		inData := llvm2bytes(inDataPtr, inDataLen)
+		outData := llvm2bytes(outDataPtr, outDataLen)
+		//codeAddr := llvm2hash((*i256)(_codeAddr))
+		gas := llvm2big(llvmGas)
+		price := big.NewInt(0) // TODO
+		
+		out, err := vm.env.Call(vm.me, receiveAddr, inData, gas, price, value)
+		if err == nil {
+			copy(outData, out)
+			return true
+		}
+	}
+
+	return false;
+}
+
+//export env_log
+func env_log(_vm unsafe.Pointer, dataPtr *byte, dataLen uint64, _topic1 unsafe.Pointer,  _topic2 unsafe.Pointer,  _topic3 unsafe.Pointer,  _topic4 unsafe.Pointer) {
+	vm := (*JitVm)(_vm)
+	
+	dataRef := llvm2bytes(dataPtr, dataLen)
+	data := make([]byte, len(dataRef))
+	copy(data, dataRef)
+	
+	topics := make([][]byte, 0, 4)
+	if _topic1 != nil {
+		topics = append(topics, llvm2hash((*i256)(_topic1)))
+	}
+	if _topic2 != nil {
+		topics = append(topics, llvm2hash((*i256)(_topic2)))
+	}
+	if _topic3 != nil {
+		topics = append(topics, llvm2hash((*i256)(_topic3)))
+	}
+	if _topic4 != nil {
+		topics = append(topics, llvm2hash((*i256)(_topic4)))
+	}
+	
+	vm.Env().AddLog(state.NewLog(vm.me.Address(), topics, data))
+}
