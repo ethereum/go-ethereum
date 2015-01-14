@@ -291,6 +291,16 @@ if ("build" !== 'build') {/*
     var web3 = require('./web3'); // jshint ignore:line
 */}
 
+/**
+ * AutoProvider object prototype is implementing 'provider protocol'
+ * Automatically tries to setup correct provider(Qt, WebSockets or HttpRpc)
+ * First it checkes if we are ethereum browser (if navigator.qt object is available)
+ * if yes, we are using QtProvider
+ * if no, we check if it is possible to establish websockets connection with ethereum (ws://localhost:40404/eth is default)
+ * if it's not possible, we are using httprpc provider (http://localhost:8080)
+ * The constructor allows you to specify uris on which we are trying to connect over http or websockets
+ * You can do that by passing objects with fields httrpc and websockets
+ */
 var AutoProvider = function (userOptions) {
     if (web3.haveProvider()) {
         return;
@@ -339,6 +349,8 @@ var AutoProvider = function (userOptions) {
     };
 };
 
+/// Sends message forward to the provider, that is being used
+/// if provider is not yet set, enqueues the message
 AutoProvider.prototype.send = function (payload) {
     if (this.provider) {
         this.provider.send(payload);
@@ -347,6 +359,7 @@ AutoProvider.prototype.send = function (payload) {
     this.sendQueue.push(payload);
 };
 
+/// On incoming message sends the message to the provider that is currently being used
 Object.defineProperty(AutoProvider.prototype, 'onmessage', {
     set: function (handler) {
         if (this.provider) {
@@ -389,9 +402,29 @@ if ("build" !== 'build') {/*
 
 var abi = require('./abi');
 
-// method signature length in bytes
+/// method signature length in bytes
 var ETH_METHOD_SIGNATURE_LENGTH = 4;
 
+/**
+ * This method should be called when we want to call / transact some solidity method from javascript
+ * it returns an object which has same methods available as solidity contract description
+ * usage example: 
+ *
+ * var abi = [{
+ *      name: 'myMethod',
+ *      inputs: [{ name: 'a', type: 'string' }],
+ *      outputs: [{name 'd', type: 'string' }]
+ * }];  // contract abi
+ *
+ * var myContract = web3.eth.contract('0x0123123121', abi); // creation of contract object
+ *
+ * myContract.myMethod('this is test string param for call').cal(); // myMethod call
+ * myContract.myMethod('this is test string param for transact').transact() // myMethod transact
+ *
+ * @param address - address of the contract, which should be called
+ * @param desc - abi json description of the contract, which is being created
+ * @returns contract object
+ */
 var contract = function (address, desc) {
     var inputParser = abi.inputParser(desc);
     var outputParser = abi.outputParser(desc);
@@ -432,6 +465,7 @@ var contract = function (address, desc) {
 };
 
 module.exports = contract;
+
 
 },{"./abi":1}],4:[function(require,module,exports){
 /*
@@ -553,11 +587,21 @@ if ("build" !== 'build') {/*
     var XMLHttpRequest = require('xmlhttprequest').XMLHttpRequest; // jshint ignore:line
 */}
 
+/**
+ * HttpRpcProvider object prototype is implementing 'provider protocol'
+ * Should be used when we want to connect to ethereum backend over http && jsonrpc
+ * It's compatible with cpp client
+ * The contructor allows to specify host uri
+ * This provider is using in-browser polling mechanism
+ */
 var HttpRpcProvider = function (host) {
     this.handlers = [];
     this.host = host;
 };
 
+/// Transforms inner message to proper jsonrpc object
+/// @param inner message object
+/// @returns jsonrpc object
 function formatJsonRpcObject(object) {
     return {
         jsonrpc: '2.0',
@@ -567,6 +611,9 @@ function formatJsonRpcObject(object) {
     };
 }
 
+/// Transforms jsonrpc object to inner message
+/// @param incoming jsonrpc message 
+/// @returns inner message object
 function formatJsonRpcMessage(message) {
     var object = JSON.parse(message);
 
@@ -577,6 +624,10 @@ function formatJsonRpcMessage(message) {
     };
 }
 
+/// Prototype object method 
+/// Asynchronously sends request to server
+/// @param payload is inner message object
+/// @param cb is callback which is being called when response is comes back
 HttpRpcProvider.prototype.sendRequest = function (payload, cb) {
     var data = formatJsonRpcObject(payload);
 
@@ -590,6 +641,11 @@ HttpRpcProvider.prototype.sendRequest = function (payload, cb) {
     };
 };
 
+/// Prototype object method
+/// Should be called when we want to send single api request to server
+/// Asynchronous
+/// On response it passes message to handlers
+/// @param payload is inner message object
 HttpRpcProvider.prototype.send = function (payload) {
     var self = this;
     this.sendRequest(payload, function (request) {
@@ -599,6 +655,13 @@ HttpRpcProvider.prototype.send = function (payload) {
     });
 };
 
+/// Prototype object method
+/// Should be called only for polling requests
+/// Asynchronous
+/// On response it passege message to handlers, but only if message's result is true or not empty array
+/// Otherwise response is being silently ignored
+/// @param payload is inner message object
+/// @id is id of poll that we are calling
 HttpRpcProvider.prototype.poll = function (payload, id) {
     var self = this;
     this.sendRequest(payload, function (request) {
@@ -612,6 +675,8 @@ HttpRpcProvider.prototype.poll = function (payload, id) {
     });
 };
 
+/// Prototype object property
+/// Should be used to set message handlers for this provider
 Object.defineProperty(HttpRpcProvider.prototype, "onmessage", {
     set: function (handler) {
         this.handlers.push(handler);
@@ -619,6 +684,7 @@ Object.defineProperty(HttpRpcProvider.prototype, "onmessage", {
 });
 
 module.exports = HttpRpcProvider;
+
 
 },{}],6:[function(require,module,exports){
 /*
@@ -651,7 +717,15 @@ if ("build" !== 'build') {/*
     var web3 = require('./web3'); // jshint ignore:line
 */}
 
-/// Provider manager object prototype
+/**
+ * Provider manager object prototype
+ * It's responsible for passing messages to providers
+ * If no provider is set it's responsible for queuing requests
+ * It's also responsible for polling the ethereum node for incoming messages
+ * Default poll timeout is 12 seconds
+ * If we are running ethereum.js inside ethereum browser, there are backend based tools responsible for polling,
+ * and provider manager polling mechanism is not used
+ */
 var ProviderManager = function() {
     this.queued = [];
     this.polls = [];
@@ -735,6 +809,7 @@ ProviderManager.prototype.stopPolling = function (pollId) {
 
 module.exports = ProviderManager;
 
+
 },{}],7:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
@@ -759,6 +834,11 @@ module.exports = ProviderManager;
  * @date 2014
  */
 
+/**
+ * QtProvider object prototype is implementing 'provider protocol'
+ * Should be used inside ethereum browser. It's compatible with cpp and go clients.
+ * It uses navigator.qt object to pass the messages to native bindings
+ */
 var QtProvider = function() {
     this.handlers = [];
 
@@ -770,10 +850,17 @@ var QtProvider = function() {
     };
 };
 
+/// Prototype object method
+/// Should be called when we want to send single api request to native bindings
+/// Asynchronous
+/// Response will be received by navigator.qt.onmessage method and passed to handlers
+/// @param payload is inner message object
 QtProvider.prototype.send = function(payload) {
     navigator.qt.postMessage(JSON.stringify(payload));
 };
 
+/// Prototype object property
+/// Should be used to set message handlers for this provider
 Object.defineProperty(QtProvider.prototype, "onmessage", {
     set: function(handler) {
         this.handlers.push(handler);
@@ -1039,6 +1126,7 @@ var web3 = {
         return hex;
     },
 
+    /// @returns ascii string representation of hex value prefixed with 0x
     toAscii: function(hex) {
         // Find termination
         var str = "";
@@ -1057,6 +1145,7 @@ var web3 = {
         return str;
     },
 
+    /// @returns hex representation (prefixed by 0x) of ascii string
     fromAscii: function(str, pad) {
         pad = pad === undefined ? 0 : pad;
         var hex = this.toHex(str);
@@ -1065,14 +1154,17 @@ var web3 = {
         return "0x" + hex;
     },
 
+    /// @returns decimal representaton of hex value prefixed by 0x
     toDecimal: function (val) {
         return hexToDec(val.substring(2));
     },
 
+    /// @returns hex representation (prefixed by 0x) of decimal value
     fromDecimal: function (val) {
         return "0x" + decToHex(val);
     },
 
+    /// used to transform value/string to eth string
     toEth: function(str) {
         var val = typeof str === "string" ? str.indexOf('0x') === 0 ? parseInt(str.substr(2), 16) : parseInt(str) : str;
         var unit = 0;
@@ -1096,24 +1188,24 @@ var web3 = {
         return s + ' ' + units[unit];
     },
 
+    /// eth object prototype
     eth: {
-        prototype: Object(), // jshint ignore:line
         watch: function (params) {
             return new Filter(params, ethWatch);
         }
     },
 
-    db: {
-        prototype: Object() // jshint ignore:line
-    },
+    /// db object prototype
+    db: {},
 
+    /// shh object prototype
     shh: {
-        prototype: Object(), // jshint ignore:line
         watch: function (params) {
             return new Filter(params, shhWatch);
         }
     },
 
+    /// used by filter to register callback with given id
     on: function(event, id, cb) {
         if(web3._events[event] === undefined) {
             web3._events[event] = {};
@@ -1123,6 +1215,7 @@ var web3 = {
         return this;
     },
 
+    /// used by filter to unregister callback with given id
     off: function(event, id) {
         if(web3._events[event] !== undefined) {
             delete web3._events[event][id];
@@ -1131,6 +1224,7 @@ var web3 = {
         return this;
     },
 
+    /// used to trigger callback registered by filter
     trigger: function(event, id, data) {
         var callbacks = web3._events[event];
         if (!callbacks || !callbacks[id]) {
@@ -1138,6 +1232,11 @@ var web3 = {
         }
         var cb = callbacks[id];
         cb(data);
+    },
+
+    /// @returns true if provider is installed
+    haveProvider: function() {
+        return !!web3.provider.provider;
     }
 };
 
@@ -1160,7 +1259,6 @@ var shhWatch = {
 
 setupMethods(shhWatch, shhWatchMethods());
 
-
 web3.provider = new ProviderManager();
 
 web3.setProvider = function(provider) {
@@ -1168,13 +1266,6 @@ web3.setProvider = function(provider) {
     web3.provider.set(provider);
     web3.provider.sendQueued();
 };
-
-/// returns true if provider is installed
-web3.haveProvider = function() {
-    return !!web3.provider.provider;
-};
-
-
 
 /// callled when there is new incoming message
 function messageHandler(data) {
@@ -1225,9 +1316,17 @@ if ("build" !== 'build') {/*
     var WebSocket = require('ws'); // jshint ignore:line
 */}
 
+/**
+ * WebSocketProvider object prototype is implementing 'provider protocol'
+ * Should be used when we want to connect to ethereum backend over websockets
+ * It's compatible with go client
+ * The constructor allows to specify host uri
+ */
 var WebSocketProvider = function(host) {
+
     // onmessage handlers
     this.handlers = [];
+
     // queue will be filled with messages if send is invoked before the ws is ready
     this.queued = [];
     this.ready = false;
@@ -1244,15 +1343,20 @@ var WebSocketProvider = function(host) {
     this.ws.onopen = function() {
         self.ready = true;
 
-        for(var i = 0; i < self.queued.length; i++) {
+        for (var i = 0; i < self.queued.length; i++) {
             // Resend
             self.send(self.queued[i]);
         }
     };
 };
 
+/// Prototype object method
+/// Should be called when we want to send single api request to server
+/// Asynchronous, it's using websockets
+/// Response for the call will be received by ws.onmessage
+/// @param payload is inner message object
 WebSocketProvider.prototype.send = function(payload) {
-    if(this.ready) {
+    if (this.ready) {
         var data = JSON.stringify(payload);
 
         this.ws.send(data);
@@ -1261,13 +1365,20 @@ WebSocketProvider.prototype.send = function(payload) {
     }
 };
 
+/// Prototype object method
+/// Should be called to add handlers
 WebSocketProvider.prototype.onMessage = function(handler) {
     this.handlers.push(handler);
 };
 
+/// Prototype object method
+/// Should be called to close websockets connection
 WebSocketProvider.prototype.unload = function() {
     this.ws.close();
 };
+
+/// Prototype object property
+/// Should be used to set message handlers for this provider
 Object.defineProperty(WebSocketProvider.prototype, "onmessage", {
     set: function(provider) { this.onMessage(provider); }
 });
