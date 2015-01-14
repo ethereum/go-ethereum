@@ -111,7 +111,7 @@ var setupInputTypes = function () {
         { type: prefixedType('string'), format: formatString }, 
         { type: prefixedType('real'), format: formatInt },
         { type: prefixedType('ureal'), format: formatInt },
-        { type: namedType('address') },
+        { type: namedType('address'), format: formatInt },
         { type: namedType('bool'), format: formatBool }
     ];
 };
@@ -173,6 +173,10 @@ var setupOutputTypes = function () {
         return web3.toAscii(value);
     };
 
+    var formatAddress = function (value) {
+        return "0x" + value.slice(value.length - 40, value.length);
+    };
+
     return [
         { type: prefixedType('uint'), format: formatInt },
         { type: prefixedType('int'), format: formatInt },
@@ -180,7 +184,7 @@ var setupOutputTypes = function () {
         { type: prefixedType('string'), format: formatString },
         { type: prefixedType('real'), format: formatInt },
         { type: prefixedType('ureal'), format: formatInt },
-        { type: namedType('address') },
+        { type: namedType('address'), format: formatAddress },
         { type: namedType('bool'), format: formatBool }
     ];
 };

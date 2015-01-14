@@ -146,7 +146,7 @@ describe('abi', function() {
         });
 
         it('should parse input hash', function() {
-/*
+
             // given
             var d = clone(description);
 
@@ -158,46 +158,61 @@ describe('abi', function() {
             var parser = abi.inputParser(d);
 
             // then
-            assert.equal(parser.test(1), "0000000000000000000000000000000000000000000000000000000000000001");
-*/
+            assert.equal(parser.test("0x407d73d8a49eeb85d32cf465507dd71d507100c1"), "000000000000000000000000407d73d8a49eeb85d32cf465507dd71d507100c1");
+
         }); 
 
-        it('should parse input hash128', function() {
-/*
+        it('should parse input hash256', function() {
+
             // given
             var d = clone(description);
 
             d[0].inputs = [
-                { type: "hash128" }
+                { type: "hash256" }
             ];
 
             // when
             var parser = abi.inputParser(d);
 
             // then
-            assert.equal(parser.test(1), "0000000000000000000000000000000000000000000000000000000000000001");
-*/
+            assert.equal(parser.test("0x407d73d8a49eeb85d32cf465507dd71d507100c1"), "000000000000000000000000407d73d8a49eeb85d32cf465507dd71d507100c1");
+
         });
 
 
-        it('should parse input hash', function() {
-/*
+        it('should parse input hash160', function() {
             // given
             var d = clone(description);
 
             d[0].inputs = [
-                { type: "hash" }
+                { type: "hash160" }
             ];
 
             // when
             var parser = abi.inputParser(d);
             
             // then
-            assert.equal(parser.test(1), "0000000000000000000000000000000000000000000000000000000000000001");
-*/          
+            assert.equal(parser.test("0x407d73d8a49eeb85d32cf465507dd71d507100c1"), "000000000000000000000000407d73d8a49eeb85d32cf465507dd71d507100c1");
         });
 
-        it('should parse input string', function() {
+        it('should parse input address', function () {
+
+            // given
+            var d = clone(description);
+
+            d[0].inputs = [
+                { type: "address" }
+            ];
+            
+            // when
+            var parser = abi.inputParser(d)
+            
+            // then
+            assert.equal(parser.test("0x407d73d8a49eeb85d32cf465507dd71d507100c1"), "000000000000000000000000407d73d8a49eeb85d32cf465507dd71d507100c1");
+
+        });
+
+        it('should parse input string', function () {
             
             // given
             var d = clone(description);
@@ -272,7 +287,174 @@ describe('abi', function() {
             assert.equal(parser.test("0x776f726c64000000000000000000000000000000000000000000000000000000")[0], 'world');
 
         });
+
+        it('should parse output uint', function() {
+
+            // given
+            var d = clone(description);
+
+            d[0].outputs = [
+                { type: 'uint' }
+            ];
+
+            // when
+            var parser = abi.outputParser(d);
+
+            // then
+            assert.equal(parser.test("0x0000000000000000000000000000000000000000000000000000000000000001")[0], 1);
+            assert.equal(parser.test("0x000000000000000000000000000000000000000000000000000000000000000a")[0], 10);
+        });
         
+        it('should parse output uint256', function() {
+
+            // given
+            var d = clone(description);
+
+            d[0].outputs = [
+                { type: 'uint256' }
+            ];
+
+            // when
+            var parser = abi.outputParser(d);
+
+            // then
+            assert.equal(parser.test("0x0000000000000000000000000000000000000000000000000000000000000001")[0], 1);
+            assert.equal(parser.test("0x000000000000000000000000000000000000000000000000000000000000000a")[0], 10);
+        });
+
+        it('should parse output uint128', function() {
+
+            // given
+            var d = clone(description);
+
+            d[0].outputs = [
+                { type: 'uinti128' }
+            ];
+
+            // when
+            var parser = abi.outputParser(d);
+
+            // then
+            assert.equal(parser.test("0x0000000000000000000000000000000000000000000000000000000000000001")[0], 1);
+            assert.equal(parser.test("0x000000000000000000000000000000000000000000000000000000000000000a")[0], 10);
+        });
+
+        it('should parse output int', function() {
+
+            // given
+            var d = clone(description);
+
+            d[0].outputs = [
+                { type: 'int' }
+            ];
+
+            // when
+            var parser = abi.outputParser(d);
+
+            // then
+            assert.equal(parser.test("0x0000000000000000000000000000000000000000000000000000000000000001")[0], 1);
+            assert.equal(parser.test("0x000000000000000000000000000000000000000000000000000000000000000a")[0], 10);
+        });
+        
+        it('should parse output int256', function() {
+
+            // given
+            var d = clone(description);
+
+            d[0].outputs = [
+                { type: 'int256' }
+            ];
+
+            // when
+            var parser = abi.outputParser(d);
+
+            // then
+            assert.equal(parser.test("0x0000000000000000000000000000000000000000000000000000000000000001")[0], 1);
+            assert.equal(parser.test("0x000000000000000000000000000000000000000000000000000000000000000a")[0], 10);
+        });
+
+        it('should parse output int128', function() {
+
+            // given
+            var d = clone(description);
+
+            d[0].outputs = [
+                { type: 'inti128' }
+            ];
+
+            // when
+            var parser = abi.outputParser(d);
+
+            // then
+            assert.equal(parser.test("0x0000000000000000000000000000000000000000000000000000000000000001")[0], 1);
+            assert.equal(parser.test("0x000000000000000000000000000000000000000000000000000000000000000a")[0], 10);
+        });
+
+        it('should parse output hash', function() {
+            
+            // given
+            var d = clone(description);
+
+            d[0].outputs = [
+                { type: 'hash' }
+            ];
+
+            // when
+            var parser = abi.outputParser(d);
+
+            // then
+            assert.equal(parser.test("0x000000000000000000000000407d73d8a49eeb85d32cf465507dd71d507100c1")[0], "0x000000000000000000000000407d73d8a49eeb85d32cf465507dd71d507100c1")
+        });
+        
+        it('should parse output hash256', function() {
+        
+            // given
+            var d = clone(description);
+
+            d[0].outputs = [
+                { type: 'hash256' }
+            ];
+
+            // when
+            var parser = abi.outputParser(d);
+
+            // then
+            assert.equal(parser.test("0x000000000000000000000000407d73d8a49eeb85d32cf465507dd71d507100c1")[0], "0x000000000000000000000000407d73d8a49eeb85d32cf465507dd71d507100c1")
+        });
+
+        it('should parse output hash160', function() {
+            
+            // given
+            var d = clone(description);
+
+            d[0].outputs = [
+                { type: 'hash256' }
+            ];
+
+            // when
+            var parser = abi.outputParser(d);
+
+            // then
+            assert.equal(parser.test("0x000000000000000000000000407d73d8a49eeb85d32cf465507dd71d507100c1")[0], "0x000000000000000000000000407d73d8a49eeb85d32cf465507dd71d507100c1")
+            // TODO shouldnt' the expected hash be shorter?
+        });
+
+        it('should parse output address', function() {
+            
+            // given
+            var d = clone(description);
+
+            d[0].outputs = [
+                { type: 'address' }
+            ];
+
+            // when
+            var parser = abi.outputParser(d);
+
+            // then
+            assert.equal(parser.test("0x000000000000000000000000407d73d8a49eeb85d32cf465507dd71d507100c1")[0], "0x407d73d8a49eeb85d32cf465507dd71d507100c1")
+        });
+
         it('should parse output bool', function() {
             
             // given
