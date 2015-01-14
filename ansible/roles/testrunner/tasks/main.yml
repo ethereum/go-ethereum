@@ -1,6 +1,16 @@
 ---
+- name: update C++ client
+  docker_image:
+      path: git/ansible/test-files/docker-cpp
+      name: cpp
+      state: build
+
 - name: update Go client
   docker_image:
       path: git/ansible/test-files/docker-go
       name: go
       state: build
+
+- name: Run infinite tests (press ^C to stop)
+  sudo: true
+  shell: git/ansible/test-files/testrunner.sh
