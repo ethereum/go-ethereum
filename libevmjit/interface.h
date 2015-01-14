@@ -1,4 +1,10 @@
-#include <stdint.h>
+#include <stddef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+int evmjit_run();
 
 // JIT object opaque type
 typedef struct evm_jit evm_jit;
@@ -8,6 +14,11 @@ typedef int evm_jit_return_code;
 
 // Host-endian 256-bit integer type
 typedef struct i256 i256;
+
+struct h256
+{
+	char b[33];
+};
 
 // Big-endian right aligned 256-bit hash
 typedef struct h256 h256;
@@ -28,3 +39,7 @@ evm_jit_return_code evm_jit_execute(evm_jit* _jit);
 void evm_jit_get_return_data(evm_jit* _jit, char* _return_data_offset, size_t* _return_data_size);
 
 void evm_jit_destroy(evm_jit* _jit);
+
+#ifdef __cplusplus
+}
+#endif

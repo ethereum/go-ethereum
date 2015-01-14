@@ -10,7 +10,8 @@ if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 	set_source_files_properties(Cache.cpp PROPERTIES COMPILE_FLAGS -fno-rtti)
 endif ()
 
-add_library(${TARGET_NAME} ${SOURCES} ${HEADERS})
+link_directories(/usr/lib/llvm-3.5/lib)
+add_library(${TARGET_NAME} SHARED ${SOURCES} ${HEADERS})
 set_property(TARGET ${TARGET_NAME} PROPERTY FOLDER "libs")
 
 include_directories(${LLVM_INCLUDE_DIRS})
