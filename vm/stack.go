@@ -2,7 +2,6 @@ package vm
 
 import (
 	"fmt"
-	"math"
 	"math/big"
 )
 
@@ -141,21 +140,7 @@ func (m *Memory) Resize(size uint64) {
 	}
 }
 
-func (m *Memory) Get(offset, size int64) []byte {
-	if size == 0 {
-		return nil
-	}
-
-	if len(m.store) > int(offset) {
-		end := int(math.Min(float64(len(m.store)), float64(offset+size)))
-
-		return m.store[offset:end]
-	}
-
-	return nil
-}
-
-func (self *Memory) Geti(offset, size int64) (cpy []byte) {
+func (self *Memory) Get(offset, size int64) (cpy []byte) {
 	if size == 0 {
 		return nil
 	}

@@ -1,6 +1,7 @@
 package helper
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -14,6 +15,7 @@ type Env struct {
 	depth        int
 	state        *state.StateDB
 	skipTransfer bool
+	initial      bool
 	Gas          *big.Int
 
 	origin   []byte
@@ -58,7 +60,7 @@ func (self *Env) Difficulty() *big.Int  { return self.difficulty }
 func (self *Env) State() *state.StateDB { return self.state }
 func (self *Env) GasLimit() *big.Int    { return self.gasLimit }
 func (self *Env) GetHash(n uint64) []byte {
-	return nil
+	return crypto.Sha3([]byte(big.NewInt(int64(n)).String()))
 }
 func (self *Env) AddLog(log state.Log) {
 	self.logs = append(self.logs, log)
@@ -66,12 +68,24 @@ func (self *Env) AddLog(log state.Log) {
 func (self *Env) Depth() int     { return self.depth }
 func (self *Env) SetDepth(i int) { self.depth = i }
 func (self *Env) Transfer(from, to vm.Account, amount *big.Int) error {
+	if self.skipTransfer {
+		// ugly hack
+		if self.initial {
+			self.initial = false
+			return nil
+		}
+
+		if from.Balance().Cmp(amount) < 0 {
+			return errors.New("Insufficient balance in account")
+		}
+
+		return nil
+	}
 	return vm.Transfer(from, to, amount)
 }
 
 func (self *Env) vm(addr, data []byte, gas, price, value *big.Int) *core.Execution {
 	exec := core.NewExecution(self, addr, data, gas, price, value)
-	exec.SkipTransfer = self.skipTransfer
 
 	return exec
 }
@@ -102,11 +116,14 @@ func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, state.Log
 		price = ethutil.Big(exec["gasPrice"])
 		value = ethutil.Big(exec["value"])
 	)
+	// Reset the pre-compiled contracts for VM tests.
+	vm.Precompiled = make(map[string]*vm.PrecompiledAccount)
 
 	caller := state.GetOrNewStateObject(from)
 
 	vmenv := NewEnvFromMap(state, env, exec)
 	vmenv.skipTransfer = true
+	vmenv.initial = true
 	ret, err := vmenv.Call(caller, to, data, gas, price, value)
 
 	return ret, vmenv.logs, vmenv.Gas, err
@@ -122,6 +139,9 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.
 		value      = ethutil.Big(tx["value"])
 		caddr      = FromHex(env["currentCoinbase"])
 	)
+
+	// Set pre compiled contracts
+	vm.Precompiled = vm.PrecompiledContracts()
 
 	coinbase := statedb.GetOrNewStateObject(caddr)
 	coinbase.SetGasPool(ethutil.Big(env["currentGasLimit"]))

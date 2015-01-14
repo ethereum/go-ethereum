@@ -66,7 +66,7 @@ Rectangle {
     onMessages: {
         // Bit of a cheat to get proper JSON
         var m = JSON.parse(JSON.parse(JSON.stringify(messages)))
-        webview.postEvent("messages", id, m);
+        webview.postEvent("eth_changed", id, m);
     }
 
     function onShhMessage(message, id) {
@@ -310,7 +310,7 @@ Rectangle {
                         postData(data._id, id);
                         break;
 
-                        case "eth_messages":
+                        case "eth_filterLogs":
                         require(1);
 
                         var messages = eth.messages(data.args[0]);
@@ -351,6 +351,15 @@ Rectangle {
 				params.ttl = params.ttl || 100;
 
 				shh.post(params.payload, params.to, params.from, params.topics, params.priority, params.ttl);
+
+				break;
+
+			case "shh_getMessages":
+				require(1);
+
+				var m = shh.messages(data.args[0]);
+				var messages = JSON.parse(JSON.parse(JSON.stringify(m)));
+				postData(data._id, messages);
 
 				break;
                     }

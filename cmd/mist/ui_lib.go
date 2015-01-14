@@ -70,6 +70,7 @@ func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
 	lib := &UiLib{JSXEth: xeth.NewJSXEth(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth), filterCallbacks: make(map[int][]int)} //, filters: make(map[int]*xeth.JSFilter)}
 	lib.miner = miner.New(eth.KeyManager().Address(), eth)
 	lib.filterManager = filter.NewFilterManager(eth.EventMux())
+	go lib.filterManager.Start()
 
 	return lib
 }

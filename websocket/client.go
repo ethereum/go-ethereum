@@ -51,7 +51,13 @@ func (c *Client) Conn() *ws.Conn {
 }
 
 func (c *Client) Write(data interface{}, id int) {
-	msg := &Message{Id: id, Data: data}
+	c.write(&Message{Id: id, Data: data})
+}
+func (c *Client) Event(data interface{}, ev string, id int) {
+	c.write(&Message{Id: id, Data: data, Event: ev})
+}
+
+func (c *Client) write(msg *Message) {
 	select {
 	case c.ch <- msg:
 	default:

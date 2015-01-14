@@ -15,6 +15,8 @@ func New(env Environment, typ Type) VirtualMachine {
 	switch typ {
 	case DebugVmTy:
 		return NewDebugVm(env)
+	case JitVmTy:
+		return NewJitVm(env)
 	default:
 		return &Vm{env: env}
 	}

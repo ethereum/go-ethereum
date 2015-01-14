@@ -20,32 +20,37 @@ func (self PrecompiledAccount) Call(in []byte) []byte {
 	return self.fn(in)
 }
 
-var Precompiled = map[string]*PrecompiledAccount{
-	// ECRECOVER
-	string(ethutil.LeftPadBytes([]byte{1}, 20)): &PrecompiledAccount{func(l int) *big.Int {
-		return GasEcrecover
-	}, ecrecoverFunc},
+var Precompiled = PrecompiledContracts()
 
-	// SHA256
-	string(ethutil.LeftPadBytes([]byte{2}, 20)): &PrecompiledAccount{func(l int) *big.Int {
-		n := big.NewInt(int64(l+31)/32 + 1)
-		n.Mul(n, GasSha256)
-		return n
-	}, sha256Func},
+// XXX Could set directly. Testing requires resetting and setting of pre compiled contracts.
+func PrecompiledContracts() map[string]*PrecompiledAccount {
+	return map[string]*PrecompiledAccount{
+		// ECRECOVER
+		string(ethutil.LeftPadBytes([]byte{1}, 20)): &PrecompiledAccount{func(l int) *big.Int {
+			return GasEcrecover
+		}, ecrecoverFunc},
 
-	// RIPEMD160
-	string(ethutil.LeftPadBytes([]byte{3}, 20)): &PrecompiledAccount{func(l int) *big.Int {
-		n := big.NewInt(int64(l+31)/32 + 1)
-		n.Mul(n, GasRipemd)
-		return n
-	}, ripemd160Func},
+		// SHA256
+		string(ethutil.LeftPadBytes([]byte{2}, 20)): &PrecompiledAccount{func(l int) *big.Int {
+			n := big.NewInt(int64(l+31)/32 + 1)
+			n.Mul(n, GasSha256)
+			return n
+		}, sha256Func},
 
-	string(ethutil.LeftPadBytes([]byte{4}, 20)): &PrecompiledAccount{func(l int) *big.Int {
-		n := big.NewInt(int64(l+31)/32 + 1)
-		n.Mul(n, GasMemCpy)
+		// RIPEMD160
+		string(ethutil.LeftPadBytes([]byte{3}, 20)): &PrecompiledAccount{func(l int) *big.Int {
+			n := big.NewInt(int64(l+31)/32 + 1)
+			n.Mul(n, GasRipemd)
+			return n
+		}, ripemd160Func},
 
-		return n
-	}, memCpy},
+		string(ethutil.LeftPadBytes([]byte{4}, 20)): &PrecompiledAccount{func(l int) *big.Int {
+			n := big.NewInt(int64(l+31)/32 + 1)
+			n.Mul(n, GasMemCpy)
+
+			return n
+		}, memCpy},
+	}
 }
 
 func sha256Func(in []byte) []byte {

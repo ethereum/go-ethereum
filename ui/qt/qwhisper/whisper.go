@@ -43,7 +43,7 @@ func (self *Whisper) Post(payload []string, to, from string, topics []string, pr
 
 	msg := whisper.NewMessage(data)
 	envelope, err := msg.Seal(time.Duration(priority*100000), whisper.Opts{
-		Ttl:    time.Duration(ttl),
+		Ttl:    time.Duration(ttl) * time.Second,
 		To:     crypto.ToECDSAPub(fromHex(to)),
 		From:   crypto.ToECDSA(fromHex(from)),
 		Topics: whisper.TopicsFromString(topics...),
@@ -82,6 +82,16 @@ func (self *Whisper) Watch(opts map[string]interface{}, view *qml.Common) int {
 	self.watches[i] = &Watch{}
 
 	return i
+}
+
+func (self *Whisper) Messages(id int) (messages *ethutil.List) {
+	msgs := self.Whisper.Messages(id)
+	messages = ethutil.EmptyList()
+	for _, message := range msgs {
+		messages.Append(ToQMessage(message))
+	}
+
+	return
 }
 
 func filterFromMap(opts map[string]interface{}) (f whisper.Filter) {

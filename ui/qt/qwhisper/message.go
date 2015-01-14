@@ -8,9 +8,9 @@ import (
 
 type Message struct {
 	ref     *whisper.Message
-	Flags   int32
-	Payload string
-	From    string
+	Flags   int32  `json:"flags"`
+	Payload string `json:"payload"`
+	From    string `json:"from"`
 }
 
 func ToQMessage(msg *whisper.Message) *Message {
