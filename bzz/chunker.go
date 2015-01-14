@@ -120,7 +120,7 @@ func (self *Chunk) String() string {
 	if self.Data != nil {
 		size = self.Data.Size()
 		slice = make([]byte, size)
-		self.Data.Read(slice)
+		self.Data.ReadAt(slice, 0)
 	}
 	return fmt.Sprintf("Key: [%x..] TreeSize: %v Chunksize: %v Data: %x\n", self.Key[:4], self.Size, size, slice)
 }
@@ -370,7 +370,6 @@ func (self *TreeChunker) join(depth int, treeSize int64, key Key, chunkC chan *C
 			// create partial Chunk in order to send a retrieval request
 			childKey = make([]byte, self.hashSize) // preallocate hashSize long slice for key
 			// read the Hash of the subtree from the relevant section of the Chunk into the allocated byte slice in subtree.Key
-			chunk.Data.Seek(0, 0)
 			if _, err := chunk.Data.ReadAt(childKey, i*self.hashSize); err != nil {
 				dpaLogger.DebugDetailf("Read error: %v", err)
 				errC <- err
