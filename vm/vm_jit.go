@@ -1,3 +1,5 @@
+// +build evmjit
+
 package vm
 
 import "math/big"
