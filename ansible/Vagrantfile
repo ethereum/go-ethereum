@@ -60,7 +60,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   		# see http://askubuntu.com/questions/238040/how-do-i-fix-name-service-for-vagrant-client
 	    vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
 
-        vb.customize ["modifyvm", :id, "--memory", "1024"]
+		# cpp client needs a lot of RAM to build
+        vb.customize ["modifyvm", :id, "--memory", "2048"]
   end
   
   #

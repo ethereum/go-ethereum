@@ -4,7 +4,7 @@
 #cd ~/software/Ethereum/pyethereum (python has local dependencies so only works from within the directory)
 while [ 1 ]
 do	
-	TEST="$(~/software/Ethereum/cpp-ethereum/build/test/createRandomTest)"
+	TEST="$(docker run --rm cpp)"
 	# echo "$TEST"
 
 	# test pyethereum
@@ -13,7 +13,7 @@ do
 	 #RESULT_PYTHON=$?
 
 	# test go
-	 OUTPUT_GO="$(ethtest "$TEST")"
+	 OUTPUT_GO="$(docker run --rm go "$TEST")"
 	 RESULT_GO=$?
 
 	# test cpp-jit
