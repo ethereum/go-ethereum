@@ -11,8 +11,8 @@ import (
 /*
 DPA provides the client API entrypoints Store and Retrieve to store and retrieve
 It can store anything that has a byte slice representation, so files or serialised objects etc.
-Storage: DPA calls the Chunker to segment the input datastream of any size to a merkle hashed tree of blocks. The key of the root block is returned to the client.
-Retrieval: given the key of the root block, the DPA retrieves the block chunks and reconstructs the original data.
+Storage: DPA calls the Chunker to segment the input datastream of any size to a merkle hashed tree of chunks. The key of the root block is returned to the client.
+Retrieval: given the key of the root block, the DPA retrieves the block chunks and reconstructs the original data and passes it back as a lazy reader. A lazy reader is a reader with on-demand delayed processing, i.e. the chunks needed to reconstruct a large file are only fetched and processed if that particular part of the document is actually read.
 
 As the chunker produces chunks, DPA dispatches them to the chunk stores for storage or retrieval. The chunk stores are typically sequenced as memory cache, local disk/db store, cloud/distributed/dht storage. Storage requests will reach to all 3 components while retrieval requests stop after the first successful retrieval.
 */
@@ -31,44 +31,13 @@ type DPA struct {
 	quitC     chan bool
 	storeC    chan *Chunk
 	retrieveC chan *Chunk
+	lock      sync.Mutex
+	running   bool
 }
 
 type ChunkStore interface {
 	Put(*Chunk) error
 	Get(*Chunk) error
-}
-
-/*
-convenience methods to help convert various typical data inputs to the canonical input to DPA storage: SectionReader
-BytesToReader(data []byte) (SectionReader, error)
-*/
-
-// func BytesToReader(data []byte) (SectionReader, error) {
-// 	return NewChunkReaderFromBytes(data), nil
-// }
-
-// func AnythingToReader(data interface{}) (SectionReader, error) {
-// 	return NewChunkReaderFromBytes(rlp.Encode(data)), nil
-// }
-
-func (self *DPA) retrieveLoop() {
-	self.retrieveC = make(chan *Chunk, retrieveChanCapacity)
-
-	go func() {
-	LOOP:
-		for chunk := range self.retrieveC {
-			for _, store := range self.Stores {
-				if err := store.Get(chunk); err != nil { // no waiting/blocking here
-					dpaLogger.DebugDetailf("%v retrieving chunk %x: %v", store, chunk.Key, err)
-				}
-			}
-			select {
-			case <-self.quitC:
-				break LOOP
-			default:
-			}
-		}
-	}()
 }
 
 func (self *DPA) Retrieve(key Key) (data LazySectionReader, err error) {
@@ -96,25 +65,6 @@ func (self *DPA) Retrieve(key Key) (data LazySectionReader, err error) {
 	return
 }
 
-func (self *DPA) storeLoop() {
-	self.storeC = make(chan *Chunk)
-	go func() {
-	LOOP:
-		for chunk := range self.storeC {
-			for _, store := range self.Stores {
-				if err := store.Put(chunk); err != nil { // no waiting/blocking here
-					dpaLogger.DebugDetailf("%v storing chunk %x: %v", store, chunk.Key, err)
-				} // no waiting/blocking here
-			}
-			select {
-			case <-self.quitC:
-				break LOOP
-			default:
-			}
-		}
-	}()
-}
-
 func (self *DPA) Store(data SectionReader) (key Key, err error) {
 
 	dpaLogger.Debugf("bzz honey store")
@@ -138,4 +88,77 @@ func (self *DPA) Store(data SectionReader) (key Key, err error) {
 	}()
 	return
 
+}
+
+// DPA is itself a chunk store , to stores a chunk only
+// its integrity is checked ?
+func (self *DPA) Put(*Chunk) (found bool, err error) {
+	return
+}
+
+// RetrieveChunk looks up Chunk in the local stores
+// This method is blocking until the chunk is retrieved so additional timeout is needed to wrap this call
+func (self *DPA) Get(*Chunk) (found bool, err error) {
+	return
+}
+
+func (self *DPA) Start() {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	if self.running {
+		return
+	}
+	self.running = true
+	self.quitC = make(chan bool)
+	self.storeLoop()
+	self.retrieveLoop()
+}
+
+func (self *DPA) Stop() {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	if !self.running {
+		return
+	}
+	self.running = false
+	close(self.quitC)
+}
+
+func (self *DPA) retrieveLoop() {
+	self.retrieveC = make(chan *Chunk, retrieveChanCapacity)
+
+	go func() {
+	LOOP:
+		for chunk := range self.retrieveC {
+			for _, store := range self.Stores {
+				if err := store.Get(chunk); err != nil { // no waiting/blocking here
+					dpaLogger.DebugDetailf("%v retrieving chunk %x: %v", store, chunk.Key, err)
+				}
+			}
+			select {
+			case <-self.quitC:
+				break LOOP
+			default:
+			}
+		}
+	}()
+}
+
+func (self *DPA) storeLoop() {
+	self.storeC = make(chan *Chunk)
+	go func() {
+	LOOP:
+		for chunk := range self.storeC {
+			for _, store := range self.Stores {
+				if err := store.Put(chunk); err != nil { // no waiting/blocking here
+					dpaLogger.DebugDetailf("%v storing chunk %x: %v", store, chunk.Key, err)
+				} // no waiting/blocking here
+			}
+			select {
+			case <-self.quitC:
+				break LOOP
+			default:
+			}
+		}
+	}()
 }
