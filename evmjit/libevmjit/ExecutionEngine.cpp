@@ -49,7 +49,7 @@ ReturnCode runEntryFunc(EntryFuncPtr _mainFunc, Runtime* _runtime)
 
 std::string codeHash(bytes const& _code)
 {
-	std::array<dev::eth::jit::byte, 32> binHash;
+	std::array<byte, 32> binHash;
 	env_sha3(_code.data(), _code.size(), &binHash);
 
 	std::ostringstream os;
