@@ -113,7 +113,6 @@ func (s *ChunkReader) Read(p []byte) (n int, err error) {
 }
 
 func (s *ChunkReader) ReadAt(p []byte, off int64) (n int, err error) {
-	dpaLogger.DebugDetailf("chunk reader: slicelen: %v off: %v base %v limit %v", len(p), off, s.base, s.limit)
 	if off < 0 || off >= s.limit-s.base {
 		return 0, io.EOF
 	}
@@ -127,7 +126,6 @@ func (s *ChunkReader) ReadAt(p []byte, off int64) (n int, err error) {
 		return n, err
 	}
 	n, err = s.r.ReadAt(p, off)
-	dpaLogger.DebugDetailf("READ! %v, %v: %x", n, err, p)
 	return
 }
 
@@ -194,10 +192,8 @@ func (self *LazyChunkReader) Size() (n int64) {
 }
 
 func (self *LazyChunkReader) Read(b []byte) (read int, err error) {
-	dpaLogger.DebugDetailf("%v bytes to read %v - %v ", len(b), self.off, self.Size())
 	read, err = self.ReadAt(b, self.off)
 	self.off += int64(read)
-	dpaLogger.DebugDetailf("%v bytes to read %v - %v: %v %v", len(b), self.off, self.Size(), read, err)
 	return
 }
 
@@ -220,7 +216,6 @@ func (s *LazyChunkReader) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
-	dpaLogger.DebugDetailf("%v - %v", off, self.size)
 	if off < 0 || off >= self.size {
 		err = io.EOF
 		return
@@ -228,7 +223,6 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 	want := len(b)
 	got := int(self.size - off)
 	if want > got {
-		dpaLogger.DebugDetailf("%v > %v", want, got)
 		err = io.EOF
 	}
 	var index int
@@ -248,13 +242,11 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 			limit = want
 		}
 		if got, err = reader.ReadAt(b[read:read+limit], off); err != nil {
-			dpaLogger.DebugDetailf("oh oh oh oh")
 			return
 		}
 		read += got
 		want -= got
 		off = 0
-		dpaLogger.DebugDetailf("%v - %v (%v) want %v, got %v, read %v: %x", off, limit, reader.Size(), want, got, read, b[off:limit])
 	}
 	return
 }
