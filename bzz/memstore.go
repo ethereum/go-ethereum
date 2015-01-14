@@ -282,8 +282,6 @@ func (s *dpaMemStorage) Put(req *Chunk) error {
 	return nil
 }
 
-// process retrieve channel requests
-
 func (s *dpaMemStorage) Get(req *Chunk) {
 
 	entry := s.find(req.Key)
