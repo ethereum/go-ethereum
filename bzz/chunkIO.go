@@ -126,7 +126,9 @@ func (s *ChunkReader) ReadAt(p []byte, off int64) (n int, err error) {
 		}
 		return n, err
 	}
-	return s.r.ReadAt(p, off)
+	n, err = s.r.ReadAt(p, off)
+	dpaLogger.DebugDetailf("READ! %v, %v: %x", n, err, p)
+	return
 }
 
 // added methods to that ChunkReader implements the Sliced interface
@@ -149,14 +151,14 @@ func (s *ChunkReader) Slice(from, to int64) (b []byte, err error) {
 func (r *ChunkReader) WriteTo(w io.Writer) (n int64, err error) {
 	var b []byte
 	var m int
-	if b, _ := r.Slice(r.off-r.base, r.limit-r.base); b == nil {
-		// if slices not available we do it with extra allocation
-		b = make([]byte, r.limit-r.off)
-		m, err = r.Read(b)
-		if err != nil {
-			return
-		}
+	// if b, _ := r.Slice(r.off-r.base, r.limit-r.base); b == nil {
+	// if slices not available we do it with extra allocation
+	b = make([]byte, r.limit-r.off)
+	m, err = r.Read(b)
+	if err != nil {
+		return
 	}
+	// }
 	m, err = w.Write(b)
 	if m > len(b) {
 		panic("bytes.Reader.WriteTo: invalid Write count")
@@ -230,9 +232,7 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		err = io.EOF
 	}
 	var index int
-	if off > 0 {
-		index = int((off - 1) / self.treeSize)
-	}
+	index = int(off / self.treeSize)
 	off -= int64(index) * self.treeSize
 	var limit int
 	var reader LazySectionReader
@@ -243,18 +243,18 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 			self.sections[i] = reader   // memoize this reader
 		}
 		if want > int(reader.Size()-off) {
-			limit = int(reader.Size())
+			limit = int(reader.Size() - off)
 		} else {
-			limit = int(off) + want
+			limit = want
 		}
-		dpaLogger.DebugDetailf("%v - %v (%v) want %v, got %v, read %v", off, limit, reader.Size(), want, got, read)
-		reader.Seek(0, 0)
-		if got, err = reader.ReadAt(b[off:limit], off); err != nil {
+		if got, err = reader.ReadAt(b[read:read+limit], off); err != nil {
 			dpaLogger.DebugDetailf("oh oh oh oh")
 			return
 		}
 		read += got
 		want -= got
+		off = 0
+		dpaLogger.DebugDetailf("%v - %v (%v) want %v, got %v, read %v: %x", off, limit, reader.Size(), want, got, read, b[off:limit])
 	}
 	return
 }
