@@ -144,13 +144,8 @@ func (self *JitVm) Env() Environment {
 
 //export env_sha3
 func env_sha3(dataPtr *byte, length uint64, hashPtr unsafe.Pointer) {
-	fmt.Printf("env_sha3(%p, %d, %p)\n", dataPtr, length, hashPtr);
-	
 	data := llvm2bytes(dataPtr, length)
-	fmt.Printf("\tdata: %x\n", data)
-	
 	hash := crypto.Sha3(data);
-	fmt.Printf("\thash: %x\n", hash)
 	
 	hashHdr := reflect.SliceHeader{
 		Data: uintptr(hashPtr),
@@ -158,10 +153,8 @@ func env_sha3(dataPtr *byte, length uint64, hashPtr unsafe.Pointer) {
 		Cap:  32,
 	}
 	oHash := *(*[]byte)(unsafe.Pointer(&hashHdr))
-	fmt.Printf("\tout0: %x\n", oHash)
 	
 	copy(oHash, hash)
-	fmt.Printf("\tout1: %x\n", oHash)
 }
 
 //export env_sstore
@@ -179,6 +172,24 @@ func env_sload(vmPtr unsafe.Pointer, indexPtr unsafe.Pointer, resultPtr unsafe.P
 	value := vm.env.State().GetState(vm.me.Address(), index)
 	result := (*i256)(resultPtr)
 	*result = hash2llvm(value)
+}
+
+//export env_balance
+func env_balance(_vm unsafe.Pointer, _addr unsafe.Pointer, _result unsafe.Pointer) {
+	vm := (*JitVm)(_vm)
+	addr := llvm2hash((*i256)(_addr))
+	balance := vm.Env().State().GetBalance(addr)
+	result := (*i256)(_result)
+	*result = big2llvm(balance)
+}
+
+//export env_blockhash
+func env_blockhash(_vm unsafe.Pointer, _number unsafe.Pointer, _result unsafe.Pointer) {
+	vm := (*JitVm)(_vm)
+	number := llvm2big((*i256)(_number))
+	hash := vm.Env().GetHash(uint64(number.Int64()))
+	result := (*i256)(_result)
+	*result = hash2llvm(hash)
 }
 
 //export env_call
