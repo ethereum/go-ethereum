@@ -9,6 +9,7 @@
   apt: name={{ item }}
   with_items:
       - python-pip
+      - htop
 
 - name: install python dependencies
   sudo: true

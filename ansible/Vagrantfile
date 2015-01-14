@@ -55,10 +55,12 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # end
   
 
-  # Ubuntu / Virtualbox workaround. 
-  # see http://askubuntu.com/questions/238040/how-do-i-fix-name-service-for-vagrant-client
   config.vm.provider "virtualbox" do |vb| 
+  		# Ubuntu / Virtualbox workaround. 
+  		# see http://askubuntu.com/questions/238040/how-do-i-fix-name-service-for-vagrant-client
 	    vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+
+        vb.customize ["modifyvm", :id, "--memory", "1024"]
   end
   
   #
@@ -68,7 +70,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   
   # Ansible
   config.vm.provision "ansible" do |ansible|
-    	ansible.playbook = "host-config.yml"
+    	ansible.playbook = "site.yml"
   end
 
 end

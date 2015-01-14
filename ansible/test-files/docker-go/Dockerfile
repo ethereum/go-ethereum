@@ -16,7 +16,7 @@ RUN apt-get install -y git mercurial build-essential software-properties-common 
 ## Build and install Go
 RUN hg clone -u release https://code.google.com/p/go
 RUN cd go && hg update go1.4
-RUN cd go/src && ./all.bash && go version
+RUN cd go/src && ./make.bash && go version
 
 ## Install GUI dependencies
 RUN add-apt-repository ppa:ubuntu-sdk-team/ppa -y

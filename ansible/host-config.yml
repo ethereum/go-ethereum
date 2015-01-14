@@ -1,8 +1,8 @@
 ---
-- name: Provision the operation system for buildslave
+- name: Provision the operation system for tests
   # testing
   hosts: all
   # live
-  # hosts: poc-8.ethdev.com
+  # hosts: TDB 
   roles:
       - common
