@@ -83,6 +83,8 @@ var namedType = function (name) {
 /// @returns an array of input formatters 
 var setupInputTypes = function () {
     
+    /// Formats input value to byte representation of int
+    /// @returns right-aligned byte representation of int
     var formatInt = function (value) {
         var padding = 32 * 2;
         if (typeof value === 'number')
@@ -96,10 +98,14 @@ var setupInputTypes = function () {
         return padLeft(value, padding);
     };
 
+    /// Formats input value to byte representation of string
+    /// @returns left-algined byte representation of string
     var formatString = function (value) {
         return web3.fromAscii(value, 32).substr(2);
     };
 
+    /// Formats input value to byte representation of bool
+    /// @returns right-aligned byte representation bool
     var formatBool = function (value) {
         return '000000000000000000000000000000000000000000000000000000000000000' + (value ?  '1' : '0');
     };
@@ -153,26 +159,28 @@ var toAbiInput = function (json, methodName, params) {
 /// @returns an array of output formatters
 var setupOutputTypes = function () {
 
-    /// @returns input bytes formatted to int
+    /// Formats input right-aligned input bytes to int
+    /// @returns right-aligned input bytes formatted to int
     var formatInt = function (value) {
         return value.length <= 8 ? +parseInt(value, 16) : hexToDec(value);
     };
 
-    /// @returns input bytes formatted to hex
+    /// @returns right-aligned input bytes formatted to hex
     var formatHash = function (value) {
         return "0x" + value;
     };
 
-    /// @returns input bytes formatted to bool
+    /// @returns right-aligned input bytes formatted to bool
     var formatBool = function (value) {
         return value === '0000000000000000000000000000000000000000000000000000000000000001' ? true : false;
     };
 
-    /// @returns input bytes formatted to ascii string
+    /// @returns left-aligned input bytes formatted to ascii string
     var formatString = function (value) {
         return web3.toAscii(value);
     };
 
+    /// @returns right-aligned input bytes formatted to address
     var formatAddress = function (value) {
         return "0x" + value.slice(value.length - 40, value.length);
     };
