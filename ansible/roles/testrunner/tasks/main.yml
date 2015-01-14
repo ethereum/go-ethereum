@@ -1,0 +1,6 @@
+---
+- name: update Go client
+  docker_image:
+      path: git/ansible/test-files/docker-go
+      name: go
+      state: build

@@ -1,0 +1,12 @@
+---
+- name: setting up buildslave configuration
+  # testing
+  hosts: all
+  # live
+  # hosts: poc-8.ethdev.com
+  
+  # TODO use the right user for configuring, until credentials set, stay with default vagrant user 
+  # remote_user: buildsalve
+  
+  roles:
+      - buildslave
