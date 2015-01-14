@@ -16,11 +16,11 @@ import "C"
 import "unsafe"
 import "fmt"
 import "reflect"
+import "errors"
 
 type JitVm struct {
 	env Environment
 	me ContextRef
-	backup *DebugVm
 }
 
 type i256 [32]byte
@@ -97,12 +97,11 @@ func llvm2bytes(data *byte, length uint64) []byte {
 }
 
 func NewJitVm(env Environment) *JitVm {
-	backupVm := NewDebugVm(env)
-	return &JitVm{env: env, backup: backupVm}
+	return &JitVm{env: env}
 }
 
 func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
-	self.me = me
+	self.me = me // FIXME: Make sure Run() is not used more than once
 	
 	var data RuntimeData
 	data.elems[Gas] = big2llvm(gas)
@@ -127,15 +126,19 @@ func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *bi
 	r := C.evmjit_run(unsafe.Pointer(&data), unsafe.Pointer(self));
 	fmt.Printf("JIT result: %d\n", r);
 	
-	return self.backup.Run(me, caller, code, value, gas, price, callData)
+	if r >= 100 {
+		err = errors.New("OOG from JIT")
+	}
+	
+	return ret, err
 }
 
 func (self *JitVm) Printf(format string, v ...interface{}) VirtualMachine {
-	return self.backup.Printf(format, v)
+	return self
 }
 
 func (self *JitVm) Endl() VirtualMachine {
-	return self.backup.Endl()
+	return self
 }
 
 func (self *JitVm) Env() Environment {
