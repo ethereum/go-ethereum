@@ -25,9 +25,8 @@ import (
 )
 
 const (
-	hasherfunc        crypto.Hash = crypto.SHA256 // http://golang.org/pkg/hash/#Hash
-	branches          int64       = 4
-	chunkChanCapacity             = 10
+	hasherfunc crypto.Hash = crypto.SHA256 // http://golang.org/pkg/hash/#Hash
+	branches   int64       = 4
 )
 
 var (
@@ -51,21 +50,21 @@ When calling Join with a root key, the data can be nil ponter in which case it w
 type Chunker interface {
 	/*
 	 	When splitting, data is given as a SectionReader, and the key is a hashSize long byte slice (Key), the root hash of the entire content will fill this once processing finishes.
-	 	New chunks to store are coming to caller via the chunk channel (first return parameter)
-	 	If an error is encountered during splitting, it is fed to errC error channel (second return parameter)
-	   A closed error and chunk channel signal process completion at which point the key can be considered final if there were no errors.
+	 	New chunks to store are coming to caller via the chunk storage channel, which the caller provides.
+	 	The caller gets returned an error channel, if an error is encountered during splitting, it is fed to errC error channel.
+	   A closed error signals process completion at which point the key can be considered final if there were no errors.
 	*/
-	Split(key Key, data SectionReader) (chan *Chunk, chan error)
+	Split(key Key, data SectionReader, chunkC chan *Chunk) chan error
 	/*
-		Join reconstructs original content based on a root key
-		When joining, the caller gets returned a LazySectionReader , a chunk channel and an error channel.
-		New chunks to retrieve are coming to caller via the Chunk channel.
+		Join reconstructs original content based on a root key.
+		When joining, the caller gets returned a LazySectionReader and an error channel.
+		New chunks to retrieve are coming to caller via the Chunk channel, which the caller provides.
 		If an error is encountered during joining, it is fed to errC error channel.
-		A closed error and chunk channel signal process completion at which point the data can be considered final if there were no errors.
+		A closed error signals process completion at which point the data can be considered final and fully reconstructed if there were no errors.
 		The LazySectionReader provides on-demand fetching of content including chunks.
 		Lifecycle of the reader can be modified with SetTimeout()
 	*/
-	Join(key Key) (LazySectionReader, chan *Chunk, chan error)
+	Join(key Key, chunkC chan *Chunk) (LazySectionReader, chan error)
 }
 
 /*
@@ -73,8 +72,9 @@ Tree chunker is a concrete implementation of data chunking.
 This chunker works in a simple way, it builds a tree out of the document so that each node either represents a chunk of real data or a chunk of data representing an branching non-leaf node of the tree. In particular each such non-leaf chunk will represent is a concatenation of the hash of its respective children. This scheme simultaneously guarantees data integrity as well as self addressing. Abstract nodes are transparent since their represented size component is strictly greater than their maximum data size, since they encode a subtree.
 
 If all is well it is possible to implement this by simply composing readers so that no extra allocation or buffering is necessary for the data splitting and joining. This means that in principle there can be direct IO between : memory, file system, network socket (bzz peers storage request is read from the socket ). In practice there may be need for several stages of internal buffering.
-Unfortunately the hashing itself does use extra copies and allocatetion though since it does need it.
+Unfortunately the hashing itself does use extra copies and allocation though since it does need it.
 */
+
 type TreeChunker struct {
 	Branches     int64
 	HashFunc     crypto.Hash
@@ -135,9 +135,8 @@ func (self *TreeChunker) Hash(size int64, input SectionReader) []byte {
 	return hasher.Sum(nil)
 }
 
-func (self *TreeChunker) Split(key Key, data SectionReader) (chunkC chan *Chunk, errC chan error) {
+func (self *TreeChunker) Split(key Key, data SectionReader, chunkC chan *Chunk) (errC chan error) {
 	wg := &sync.WaitGroup{}
-	chunkC = make(chan *Chunk, chunkChanCapacity)
 	errC = make(chan error)
 	rerrC := make(chan error)
 	timeout := time.After(splitTimeout)
@@ -181,7 +180,6 @@ func (self *TreeChunker) Split(key Key, data SectionReader) (chunkC chan *Chunk,
 		case <-timeout:
 			errC <- fmt.Errorf("split time out")
 		}
-		close(chunkC)
 		close(errC)
 	}()
 
@@ -259,10 +257,9 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 
 }
 
-func (self *TreeChunker) Join(key Key) (data LazySectionReader, chunkC chan *Chunk, errC chan error) {
+func (self *TreeChunker) Join(key Key, chunkC chan *Chunk) (data LazySectionReader, errC chan error) {
 	// initialise return parameters
 	errC = make(chan error)
-	chunkC = make(chan *Chunk, chunkChanCapacity)
 	// timer to time out the operation (needed within so as to avoid process leakage)
 	timeout := time.After(joinTimeout)
 	wg := &sync.WaitGroup{}

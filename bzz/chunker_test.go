@@ -74,7 +74,8 @@ func (self *chunkerTester) Split(chunker *TreeChunker, l int) (key Key, input []
 	data, slice := testDataReader(l)
 	input = slice
 	key = make([]byte, 32)
-	chunkC, errC := chunker.Split(key, data)
+	chunkC := make(chan *Chunk)
+	errC := chunker.Split(key, data, chunkC)
 	quitC := make(chan bool)
 	timeout := time.After(60 * time.Second)
 
@@ -113,8 +114,9 @@ func (self *chunkerTester) Join(t *testing.T, chunker *TreeChunker, key Key) (La
 	// reset but not the chunks
 	self.errors = nil
 	self.timeout = false
+	chunkC := make(chan *Chunk)
 
-	reader, chunkC, errC := chunker.Join(key)
+	reader, errC := chunker.Join(key, chunkC)
 
 	quitC := make(chan bool)
 	timeout := time.After(60 * time.Second)

@@ -17,13 +17,20 @@ Retrieval: given the key of the root block, the DPA retrieves the block chunks a
 As the chunker produces chunks, DPA dispatches them to the chunk stores for storage or retrieval. The chunk stores are typically sequenced as memory cache, local disk/db store, cloud/distributed/dht storage. Storage requests will reach to all 3 components while retrieval requests stop after the first successful retrieval.
 */
 
+const (
+	storeChanCapacity    = 100
+	retrieveChanCapacity = 100
+)
+
 var dpaLogger = ethlogger.NewLogger("BZZ")
 
 type DPA struct {
-	Chunker Chunker
-	Stores  []ChunkStore
-	wg      sync.WaitGroup
-	quitC   chan bool
+	Chunker   Chunker
+	Stores    []ChunkStore
+	wg        sync.WaitGroup
+	quitC     chan bool
+	storeC    chan *Chunk
+	retrieveC chan *Chunk
 }
 
 type ChunkStore interface {
@@ -44,105 +51,91 @@ BytesToReader(data []byte) (SectionReader, error)
 // 	return NewChunkReaderFromBytes(rlp.Encode(data)), nil
 // }
 
-func (self *DPA) Retrieve(key Key) (data LazySectionReader, err error) {
-	joinC := make(chan bool)
-	reqsC := make(chan bool)
-	var requests int
+func (self *DPA) retrieveLoop() {
+	self.retrieveC = make(chan *Chunk, retrieveChanCapacity)
 
-	self.wg.Add(1)
-	chunkWg := sync.WaitGroup{}
-
-	chunkWg.Add(1)
 	go func() {
-		chunkWg.Wait() // wait for all chunk retrieval requests to process
-		close(reqsC)   // signal to channel
+	LOOP:
+		for chunk := range self.retrieveC {
+			for _, store := range self.Stores {
+				if err := store.Get(chunk); err != nil { // no waiting/blocking here
+					dpaLogger.DebugDetailf("%v retrieving chunk %x: %v", store, chunk.Key, err)
+				}
+			}
+			select {
+			case <-self.quitC:
+				break LOOP
+			default:
+			}
+		}
 	}()
-	// r is potentially nil pointer, by default chunker allocates
-	// a SectionReadWriter based on a byte slice equal to the stored object image's bytes
+}
 
+func (self *DPA) Retrieve(key Key) (data LazySectionReader, err error) {
 	dpaLogger.Debugf("bzz honey retrieve")
-	reader, chunkC, errC := self.Chunker.Join(key)
+	reader, errC := self.Chunker.Join(key, self.retrieveC)
 	data = reader
-
+	// we can add subscriptions etc. or timeout here
 	go func() {
-
-		var ok bool
-
 	LOOP:
 		for {
 			select {
-
-			case chunk, ok := <-chunkC:
-				if chunk != nil { // game over
-					chunk.wg = chunkWg
-					chunkWg.Add(1) // need to call Done by any storage that first retrieves the data
-					for _, store := range self.Stores {
-						requests++
-						if err = store.Get(chunk); err != nil { // no waiting/blocking here
-							dpaLogger.DebugDetailf("%v retrieved chunk %x", store, chunk.Key)
-							break // the inner loop
-						}
-					}
+			case err, ok := <-errC:
+				if err != nil {
+					dpaLogger.Warnf("%v", err)
 				}
-				if !ok { // game over but need to continue to see errc still
-					chunkC = nil // make it block so no infinite loop
-					chunkWg.Done()
-				}
-
-			case err, ok = <-errC:
-				dpaLogger.Warnf("%v", err)
 				if !ok {
 					break LOOP
 				}
-				dpaLogger.DebugDetailf("%v", err)
-
-			case <-reqsC:
-				dpaLogger.DebugDetailf("processed all %v chunk retrieval requests for root key %x", requests, key)
-
 			case <-self.quitC:
-				break LOOP
+				return
 			}
 		}
-		close(joinC)
-		self.wg.Done()
 	}()
 
-	<-joinC
-
 	return
+}
+
+func (self *DPA) storeLoop() {
+	self.storeC = make(chan *Chunk)
+	go func() {
+	LOOP:
+		for chunk := range self.storeC {
+			for _, store := range self.Stores {
+				if err := store.Put(chunk); err != nil { // no waiting/blocking here
+					dpaLogger.DebugDetailf("%v storing chunk %x: %v", store, chunk.Key, err)
+				} // no waiting/blocking here
+			}
+			select {
+			case <-self.quitC:
+				break LOOP
+			default:
+			}
+		}
+	}()
 }
 
 func (self *DPA) Store(data SectionReader) (key Key, err error) {
 
 	dpaLogger.Debugf("bzz honey store")
 
-	chunkC, errC := self.Chunker.Split(key, data)
+	errC := self.Chunker.Split(key, data, self.storeC)
 
-LOOP:
-	for {
-		select {
-
-		case chunk, ok := <-chunkC:
-			if chunk != nil {
-				for _, store := range self.Stores {
-					store.Put(chunk) // no waiting/blocking here
+	go func() {
+	LOOP:
+		for {
+			select {
+			case err, ok := <-errC:
+				dpaLogger.Warnf("%v", err)
+				if !ok {
+					break LOOP
 				}
-			}
-			if !ok { // game over but need to continue to see errc still
-				chunkC = nil // make it block so no infinite loop
-			}
 
-		case err, ok := <-errC:
-			dpaLogger.Warnf("%v", err)
-			if !ok {
+			case <-self.quitC:
 				break LOOP
 			}
-			dpaLogger.DebugDetailf("%v", err)
-
-		case <-self.quitC:
-			break LOOP
 		}
-	}
+	}()
 	return
 
 }
