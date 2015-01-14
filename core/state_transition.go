@@ -192,8 +192,7 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 		if err == nil {
 			dataGas := big.NewInt(int64(len(ret)))
 			dataGas.Mul(dataGas, vm.GasCreateByte)
-			if err = self.UseGas(dataGas); err == nil {
-				//self.state.SetCode(ref.Address(), ret)
+			if err := self.UseGas(dataGas); err == nil {
 				ref.SetCode(ret)
 			}
 		}

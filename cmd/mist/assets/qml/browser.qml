@@ -357,7 +357,9 @@ Rectangle {
 			case "shh_getMessages":
 				require(1);
 
-				shh.trigger(data.args[0]);
+				var m = shh.messages(data.args[0]);
+				var messages = JSON.parse(JSON.parse(JSON.stringify(m)));
+				postData(data._id, messages);
 
 				break;
                     }
