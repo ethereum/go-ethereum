@@ -138,7 +138,6 @@ func (self *chunkerTester) Join(t *testing.T, chunker *TreeChunker, key Key) (La
 					for _, ch := range self.chunks {
 						if bytes.Compare(chunk.Key, ch.Key) == 0 {
 							found = true
-							// ch.Data.Seek(0, 0) // the reader has to be reset
 							chunk.Data = ch.Data
 							chunk.Size = ch.Size
 							close(chunk.C)
@@ -193,8 +192,7 @@ func TestRandomData(t *testing.T) {
 	chunker.Init()
 	tester := &chunkerTester{}
 	testRandomData(chunker, tester, 70, 3, t)
-	// testRandomData(chunker, tester, 179, 5, t)
-	// testRandomData(chunker, tester, 253, 7, t)
+	testRandomData(chunker, tester, 179, 5, t)
+	testRandomData(chunker, tester, 253, 7, t)
 	t.Logf("chunks %v", tester.chunks)
-	time.Sleep(2 * time.Second)
 }
