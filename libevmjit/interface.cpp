@@ -5,36 +5,22 @@
 extern "C"
 {
 
-int evmjit_run()
+int evmjit_run(void* _data, void* _env)
 {
 	using namespace dev::eth::jit;
 
+	auto data = static_cast<RuntimeData*>(_data);
+
+	std::cerr << "GAS: " << data->elems[RuntimeData::Gas].a << "\n";
+
 	ExecutionEngine engine;
-	u256 gas = 100000;
 
-	bytes bytecode = { 0x60, 0x01 };
+	auto codePtr = data->code;
+	auto codeSize = data->elems[RuntimeData::CodeSize].a;
+	bytes bytecode;
+	bytecode.insert(bytecode.end(), codePtr, codePtr + codeSize);
 
-	// Create random runtime data
-	RuntimeData data;
-	data.set(RuntimeData::Gas, gas);
-	data.set(RuntimeData::Address, 0);
-	data.set(RuntimeData::Caller, 0);
-	data.set(RuntimeData::Origin, 0);
-	data.set(RuntimeData::CallValue, 0xabcd);
-	data.set(RuntimeData::CallDataSize, 3);
-	data.set(RuntimeData::GasPrice, 1003);
-	data.set(RuntimeData::CoinBase, 0);
-	data.set(RuntimeData::TimeStamp, 1005);
-	data.set(RuntimeData::Number, 1006);
-	data.set(RuntimeData::Difficulty, 16);
-	data.set(RuntimeData::GasLimit, 1008);
-	data.set(RuntimeData::CodeSize, bytecode.size());
-	data.callData = (uint8_t*)"abc";
-	data.code = bytecode.data();
-
-	// BROKEN: env_* functions must be implemented & RuntimeData struct created
-	// TODO: Do not compile module again
-	auto result = engine.run(bytecode, &data, nullptr);
+	auto result = engine.run(bytecode, data, static_cast<Env*>(_env));
 	return static_cast<int>(result);
 }
 

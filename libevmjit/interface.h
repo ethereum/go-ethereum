@@ -4,7 +4,7 @@
 extern "C" {
 #endif
 
-int evmjit_run();
+int evmjit_run(void* _data, void* _env);
 
 // JIT object opaque type
 typedef struct evm_jit evm_jit;
@@ -15,7 +15,7 @@ typedef int evm_jit_return_code;
 // Host-endian 256-bit integer type
 typedef struct i256 i256;
 
-struct h256
+struct i256
 {
 	char b[33];
 };
