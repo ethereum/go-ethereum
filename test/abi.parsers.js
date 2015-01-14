@@ -127,6 +127,24 @@ describe('abi', function() {
             
         });
 
+        it('should parse input bool', function() {
+            
+            // given
+            var d = clone(description);
+
+            d[0].inputs = [
+                { type: 'bool' }
+            ];
+
+            // when
+            var parser = abi.inputParser(d);
+
+            // then
+            assert.equal(parser.test(true), "0000000000000000000000000000000000000000000000000000000000000001");
+            assert.equal(parser.test(false), "0000000000000000000000000000000000000000000000000000000000000000");
+
+        });
+
         it('should parse input hash', function() {
 /*
             // given
@@ -252,6 +270,25 @@ describe('abi', function() {
             // then
             assert.equal(parser.test("0x68656c6c6f000000000000000000000000000000000000000000000000000000")[0], 'hello');
             assert.equal(parser.test("0x776f726c64000000000000000000000000000000000000000000000000000000")[0], 'world');
+
+        });
+        
+        it('should parse output bool', function() {
+            
+            // given
+            var d = clone(description);
+
+            d[0].outputs = [
+                { type: 'bool' }
+            ];
+
+            // when
+            var parser = abi.outputParser(d);
+
+            // then
+            assert.equal(parser.test("000000000000000000000000000000000000000000000000000000000000000001")[0], true);
+            assert.equal(parser.test("000000000000000000000000000000000000000000000000000000000000000000")[0], false);
+            
 
         });
 

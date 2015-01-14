@@ -55,56 +55,52 @@ var padLeft = function (string, chars) {
     return new Array(chars - string.length + 1).join("0") + string;
 };
 
+/// Setups input formatters for solidity types
+/// @returns an array of input formatters 
 var setupInputTypes = function () {
     
     var prefixedType = function (prefix) {
         return function (type, value) {
-            var expected = prefix;
-            if (type.indexOf(expected) !== 0) {
-                return false;
-            }
-
-            var padding = 32;   // override as per the new ABI.
-
-            if (prefix === "string")
-                return web3.fromAscii(value, padding).substr(2);
-            if (typeof value === "number")
-                value = value.toString(16);
-            else if (typeof value === "string")
-                value = web3.toHex(value); 
-            else if (value.indexOf('0x') === 0)
-                value = value.substr(2);
-            else
-                value = (+value).toString(16);
-            return padLeft(value, padding * 2);
+            return type.indexOf(prefix) === 0;
         };
     };
 
     var namedType = function (name, formatter) {
         return function (type, value) {
-            if (type !== name) {
-                return false;
-            }
-
-            var padding = 32;   //override as per the new ABI.
-
-            return padLeft(formatter ? formatter(value) : value, padding * 2);
+            return type === name;
         };
+    };
+    
+    var formatInt = function (value) {
+        var padding = 32 * 2;
+        if (typeof value === 'number')
+            value = value.toString(16);
+        else if (value.indexOf('0x') === 0)
+            value = value.substr(2);
+        else if (typeof value === 'string')
+            value = value.toHex(value);
+        else
+            value = (+value).toString(16);
+        return padLeft(value, padding);
+    };
+
+    var formatString = function (value) {
+        return web3.fromAscii(value, 32).substr(2);
     };
 
     var formatBool = function (value) {
-        return value ? '0x1' : '0x0';
+        return '000000000000000000000000000000000000000000000000000000000000000' + (value ?  '1' : '0');
     };
 
     return [
-        prefixedType('uint'),
-        prefixedType('int'),
-        prefixedType('hash'),
-        prefixedType('string'),
-        prefixedType('real'),
-        prefixedType('ureal'),
-        namedType('address'),
-        namedType('bool', formatBool),
+        { type: prefixedType('uint'), format: formatInt },
+        { type: prefixedType('int'), format: formatInt },
+        { type: prefixedType('hash'), format: formatInt },
+        { type: prefixedType('string'), format: formatString }, 
+        { type: prefixedType('real'), format: formatInt },
+        { type: prefixedType('ureal'), format: formatInt },
+        { type: namedType('address') },
+        { type: namedType('bool'), format: formatBool }
     ];
 };
 
@@ -119,65 +115,73 @@ var toAbiInput = function (json, methodName, params) {
     }
 
     var method = json[index];
+    var padding = 32 * 2;
 
     for (var i = 0; i < method.inputs.length; i++) {
-        var found = false;
-        for (var j = 0; j < inputTypes.length && !found; j++) {
-            found = inputTypes[j](method.inputs[i].type, params[i]);
+        var typeMatch = false;
+        for (var j = 0; j < inputTypes.length && !typeMatch; j++) {
+            typeMatch = inputTypes[j].type(method.inputs[i].type, params[i]);
         }
-        if (!found) {
-            console.error('unsupported json type: ' + method.inputs[i].type);
+        if (!typeMatch) {
+            console.error('input parser does not support type: ' + method.inputs[i].type);
         }
-        bytes += found;
+
+        var formatter = inputTypes[j - 1].format;
+        bytes += (formatter ? formatter(params[i]) : params[i]);
     }
     return bytes;
 };
 
+/// Setups output formaters for solidity types
+/// @returns an array of output formatters
 var setupOutputTypes = function () {
 
+    /// @param expected type prefix (string)
+    /// @returns function which checks if type has matching prefix. if yes, returns true, otherwise false
     var prefixedType = function (prefix) {
         return function (type) {
             var expected = prefix;
-            if (type.indexOf(expected) !== 0) {
-                return -1;
-            }
-            var padding = 32;  // override as per the new ABI.
-            return padding * 2;
+            return type.indexOf(expected) === 0;
         };
     };
 
+    /// @param expected type name (string)
+    /// @returns function which checks if type is matching expected one. if yes, returns true, otherwise false
     var namedType = function (name) {
         return function (type) {
-            var padding = 32;  // override as per the new ABI.
-            return name === type ? padding * 2 : -1;
+            return name === type;
         };
     };
 
+    /// @returns input bytes formatted to int
     var formatInt = function (value) {
         return value.length <= 8 ? +parseInt(value, 16) : hexToDec(value);
     };
 
+    /// @returns input bytes formatted to hex
     var formatHash = function (value) {
         return "0x" + value;
     };
 
+    /// @returns input bytes formatted to bool
     var formatBool = function (value) {
-        return value === '1' ? true : false;
+        return value === '0000000000000000000000000000000000000000000000000000000000000001' ? true : false;
     };
 
+    /// @returns input bytes formatted to ascii string
     var formatString = function (value) {
         return web3.toAscii(value);
     };
 
     return [
-    { padding: prefixedType('uint'), format: formatInt },
-    { padding: prefixedType('int'), format: formatInt },
-    { padding: prefixedType('hash'), format: formatHash },
-    { padding: prefixedType('string'), format: formatString },
-    { padding: prefixedType('real'), format: formatInt },
-    { padding: prefixedType('ureal'), format: formatInt },
-    { padding: namedType('address') },
-    { padding: namedType('bool'), format: formatBool }
+        { type: prefixedType('uint'), format: formatInt },
+        { type: prefixedType('int'), format: formatInt },
+        { type: prefixedType('hash'), format: formatHash },
+        { type: prefixedType('string'), format: formatString },
+        { type: prefixedType('real'), format: formatInt },
+        { type: prefixedType('ureal'), format: formatInt },
+        { type: namedType('address') },
+        { type: namedType('bool'), format: formatBool }
     ];
 };
 
@@ -194,14 +198,16 @@ var fromAbiOutput = function (json, methodName, output) {
 
     var result = [];
     var method = json[index];
+    var padding = 32 * 2;
     for (var i = 0; i < method.outputs.length; i++) {
-        var padding = -1;
-        for (var j = 0; j < outputTypes.length && padding === -1; j++) {
-            padding = outputTypes[j].padding(method.outputs[i].type);
+        var typeMatch = false;
+        for (var j = 0; j < outputTypes.length && !typeMatch; j++) {
+            typeMatch = outputTypes[j].type(method.outputs[i].type);
         }
 
-        if (padding === -1) {
+        if (!typeMatch) {
             // not found output parsing
+            console.error('output parser does not support type: ' + method.outputs[i].type);
             continue;
         }
         var res = output.slice(0, padding);
@@ -213,6 +219,8 @@ var fromAbiOutput = function (json, methodName, output) {
     return result;
 };
 
+/// @param json abi for contract
+/// @returns input parser object for given json abi
 var inputParser = function (json) {
     var parser = {};
     json.forEach(function (method) {
@@ -225,6 +233,8 @@ var inputParser = function (json) {
     return parser;
 };
 
+/// @param json abi for contract
+/// @returns output parser for given json abi
 var outputParser = function (json) {
     var parser = {};
     json.forEach(function (method) {
@@ -236,6 +246,9 @@ var outputParser = function (json) {
     return parser;
 };
 
+/// @param json abi for contract
+/// @param method name for which we want to get method signature
+/// @returns (promise) contract method signature for method with given name
 var methodSignature = function (json, name) {
     var method = json[findMethodIndex(json, name)];
     var result = name + '(';
