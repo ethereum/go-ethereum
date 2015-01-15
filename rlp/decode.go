@@ -329,15 +329,9 @@ type field struct {
 }
 
 func makeStructDecoder(typ reflect.Type) (decoder, error) {
-	var fields []field
-	for i := 0; i < typ.NumField(); i++ {
-		if f := typ.Field(i); f.PkgPath == "" { // exported
-			info, err := cachedTypeInfo1(f.Type)
-			if err != nil {
-				return nil, err
-			}
-			fields = append(fields, field{i, info})
-		}
+	fields, err := structFields(typ)
+	if err != nil {
+		return nil, err
 	}
 	dec := func(s *Stream, val reflect.Value) (err error) {
 		if _, err = s.List(); err != nil {
