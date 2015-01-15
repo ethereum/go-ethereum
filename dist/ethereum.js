@@ -36,6 +36,10 @@ var decToHex = function (dec) {
     return parseInt(dec).toString(16);
 };
 
+/// Finds first index of array element matching pattern
+/// @param array
+/// @param callback pattern
+/// @returns index of element
 var findIndex = function (array, callback) {
     var end = false;
     var i = 0;
@@ -45,106 +49,96 @@ var findIndex = function (array, callback) {
     return end ? i - 1 : -1;
 };
 
+/// @returns a function that is used as a pattern for 'findIndex'
 var findMethodIndex = function (json, methodName) {
     return findIndex(json, function (method) {
         return method.name === methodName;
     });
 };
 
-var padLeft = function (string, chars) {
-    return new Array(chars - string.length + 1).join("0") + string;
+/// @param string string to be padded
+/// @param number of characters that result string should have
+/// @param sign, by default 0
+/// @returns right aligned string
+var padLeft = function (string, chars, sign) {
+    return new Array(chars - string.length + 1).join(sign ? sign : "0") + string;
 };
 
-var calcBitPadding = function (type, expected) {
-    var value = type.slice(expected.length);
-    if (value === "") {
-        return 32;
-    }
-    return parseInt(value) / 8;
+/// @param expected type prefix (string)
+/// @returns function which checks if type has matching prefix. if yes, returns true, otherwise false
+var prefixedType = function (prefix) {
+    return function (type) {
+        return type.indexOf(prefix) === 0;
+    };
 };
 
-var calcBytePadding = function (type, expected) {
-    var value = type.slice(expected.length);
-    if (value === "") {
-        return 32;
-    }
-    return parseInt(value);
+/// @param expected type name (string)
+/// @returns function which checks if type is matching expected one. if yes, returns true, otherwise false
+var namedType = function (name) {
+    return function (type) {
+        return name === type;
+    };
 };
 
-var calcRealPadding = function (type, expected) {
-    var value = type.slice(expected.length);
-    if (value === "") {
-        return 32;
-    }
-    var sizes = value.split('x');
-    for (var padding = 0, i = 0; i < sizes; i++) {
-        padding += (sizes[i] / 8);
-    }
-    return padding;
-};
-
+/// Setups input formatters for solidity types
+/// @returns an array of input formatters 
 var setupInputTypes = function () {
     
-    // convert from int, decimal-string, prefixed hex string whatever into a bare hex string.
-    var formatStandard = function (value) {
-        if (typeof value === "number")
-            return value.toString(16);
-        else if (typeof value === "string" && value.indexOf('0x') === 0)
-            return value.substr(2);
-        else if (typeof value === "string")
-            return web3.toHex(value);
+    /// Formats input value to byte representation of int
+    /// @returns right-aligned byte representation of int
+    var formatInt = function (value) {
+        var padding = 32 * 2;
+        if (typeof value === 'number') {
+            if (value < 0) {
+                
+                // two's complement
+                // TODO: fix big numbers support
+                value = ((value) >>> 0).toString(16);
+                return padLeft(value, padding, 'f');
+            }
+            value = value.toString(16);
+
+        }
+        else if (value.indexOf('0x') === 0)
+            value = value.substr(2);
+        else if (typeof value === 'string')
+            value = value.toHex(value);
         else
-            return (+value).toString(16);
+            value = (+value).toString(16);
+        return padLeft(value, padding);
     };
 
-    var prefixedType = function (prefix, calcPadding) {
-        return function (type, value) {
-            var expected = prefix;
-            if (type.indexOf(expected) !== 0) {
-                return false;
-            }
-
-            var padding = calcPadding(type, expected);
-            if (padding > 32)
-                return false;   // not allowed to be so big.
-            padding = 32;   // override as per the new ABI.
-
-            if (prefix === "string")
-                return web3.fromAscii(value, padding).substr(2);
-            return padLeft(formatStandard(value), padding * 2);
-        };
+    /// Formats input value to byte representation of string
+    /// @returns left-algined byte representation of string
+    var formatString = function (value) {
+        return web3.fromAscii(value, 32).substr(2);
     };
 
-    var namedType = function (name, padding, formatter) {
-        return function (type, value) {
-            if (type !== name) {
-                return false;
-            }
-
-            padding = 32;   //override as per the new ABI.
-
-            return padLeft(formatter ? formatter(value) : value, padding * 2);
-        };
-    };
-
+    /// Formats input value to byte representation of bool
+    /// @returns right-aligned byte representation bool
     var formatBool = function (value) {
-        return value ? '01' : '00';
+        return '000000000000000000000000000000000000000000000000000000000000000' + (value ?  '1' : '0');
     };
 
     return [
-        prefixedType('uint', calcBitPadding),
-        prefixedType('int', calcBitPadding),
-        prefixedType('hash', calcBitPadding),
-        prefixedType('string', calcBytePadding),
-        prefixedType('real', calcRealPadding),
-        prefixedType('ureal', calcRealPadding),
-        namedType('address', 20, formatStandard),
-        namedType('bool', 1, formatBool),
+        { type: prefixedType('uint'), format: formatInt },
+        { type: prefixedType('int'), format: formatInt },
+        { type: prefixedType('hash'), format: formatInt },
+        { type: prefixedType('string'), format: formatString }, 
+        { type: prefixedType('real'), format: formatInt },
+        { type: prefixedType('ureal'), format: formatInt },
+        { type: namedType('address'), format: formatInt },
+        { type: namedType('bool'), format: formatBool }
     ];
 };
 
 var inputTypes = setupInputTypes();
 
+/// Formats input params to bytes
+/// @param contract json abi
+/// @param name of the method that we want to use
+/// @param array of params that will be formatted to bytes
+/// @returns bytes representation of input params
 var toAbiInput = function (json, methodName, params) {
     var bytes = "";
     var index = findMethodIndex(json, methodName);
@@ -154,74 +148,72 @@ var toAbiInput = function (json, methodName, params) {
     }
 
     var method = json[index];
+    var padding = 32 * 2;
 
     for (var i = 0; i < method.inputs.length; i++) {
-        var found = false;
-        for (var j = 0; j < inputTypes.length && !found; j++) {
-            found = inputTypes[j](method.inputs[i].type, params[i]);
+        var typeMatch = false;
+        for (var j = 0; j < inputTypes.length && !typeMatch; j++) {
+            typeMatch = inputTypes[j].type(method.inputs[i].type, params[i]);
         }
-        if (!found) {
-            console.error('unsupported json type: ' + method.inputs[i].type);
+        if (!typeMatch) {
+            console.error('input parser does not support type: ' + method.inputs[i].type);
         }
-        bytes += found;
+
+        var formatter = inputTypes[j - 1].format;
+        bytes += (formatter ? formatter(params[i]) : params[i]);
     }
     return bytes;
 };
 
+/// Setups output formaters for solidity types
+/// @returns an array of output formatters
 var setupOutputTypes = function () {
 
-    var prefixedType = function (prefix, calcPadding) {
-        return function (type) {
-            var expected = prefix;
-            if (type.indexOf(expected) !== 0) {
-                return -1;
-            }
-
-            var padding = calcPadding(type, expected);
-            if (padding > 32)
-                return -1;   // not allowed to be so big.
-            padding = 32;  // override as per the new ABI.
-            return padding * 2;
-        };
-    };
-
-    var namedType = function (name, padding) {
-        return function (type) {
-            padding = 32;  // override as per the new ABI.
-            return name === type ? padding * 2 : -1;
-        };
-    };
-
+    /// Formats input right-aligned input bytes to int
+    /// @returns right-aligned input bytes formatted to int
     var formatInt = function (value) {
         return value.length <= 8 ? +parseInt(value, 16) : hexToDec(value);
     };
 
+    /// @returns right-aligned input bytes formatted to hex
     var formatHash = function (value) {
         return "0x" + value;
     };
 
+    /// @returns right-aligned input bytes formatted to bool
     var formatBool = function (value) {
-        return value === '1' ? true : false;
+        return value === '0000000000000000000000000000000000000000000000000000000000000001' ? true : false;
     };
 
+    /// @returns left-aligned input bytes formatted to ascii string
     var formatString = function (value) {
         return web3.toAscii(value);
     };
 
+    /// @returns right-aligned input bytes formatted to address
+    var formatAddress = function (value) {
+        return "0x" + value.slice(value.length - 40, value.length);
+    };
+
     return [
-    { padding: prefixedType('uint', calcBitPadding), format: formatInt },
-    { padding: prefixedType('int', calcBitPadding), format: formatInt },
-    { padding: prefixedType('hash', calcBitPadding), format: formatHash },
-    { padding: prefixedType('string', calcBytePadding), format: formatString },
-    { padding: prefixedType('real', calcRealPadding), format: formatInt },
-    { padding: prefixedType('ureal', calcRealPadding), format: formatInt },
-    { padding: namedType('address', 20) },
-    { padding: namedType('bool', 1), format: formatBool }
+        { type: prefixedType('uint'), format: formatInt },
+        { type: prefixedType('int'), format: formatInt },
+        { type: prefixedType('hash'), format: formatHash },
+        { type: prefixedType('string'), format: formatString },
+        { type: prefixedType('real'), format: formatInt },
+        { type: prefixedType('ureal'), format: formatInt },
+        { type: namedType('address'), format: formatAddress },
+        { type: namedType('bool'), format: formatBool }
     ];
 };
 
 var outputTypes = setupOutputTypes();
 
+/// Formats output bytes back to param list
+/// @param contract json abi
+/// @param name of the method that we want to use
+/// @param bytes representtion of output 
+/// @returns array of output params 
 var fromAbiOutput = function (json, methodName, output) {
     var index = findMethodIndex(json, methodName);
 
@@ -233,14 +225,16 @@ var fromAbiOutput = function (json, methodName, output) {
 
     var result = [];
     var method = json[index];
+    var padding = 32 * 2;
     for (var i = 0; i < method.outputs.length; i++) {
-        var padding = -1;
-        for (var j = 0; j < outputTypes.length && padding === -1; j++) {
-            padding = outputTypes[j].padding(method.outputs[i].type);
+        var typeMatch = false;
+        for (var j = 0; j < outputTypes.length && !typeMatch; j++) {
+            typeMatch = outputTypes[j].type(method.outputs[i].type);
         }
 
-        if (padding === -1) {
+        if (!typeMatch) {
             // not found output parsing
+            console.error('output parser does not support type: ' + method.outputs[i].type);
             continue;
         }
         var res = output.slice(0, padding);
@@ -252,6 +246,8 @@ var fromAbiOutput = function (json, methodName, output) {
     return result;
 };
 
+/// @param json abi for contract
+/// @returns input parser object for given json abi
 var inputParser = function (json) {
     var parser = {};
     json.forEach(function (method) {
@@ -264,6 +260,8 @@ var inputParser = function (json) {
     return parser;
 };
 
+/// @param json abi for contract
+/// @returns output parser for given json abi
 var outputParser = function (json) {
     var parser = {};
     json.forEach(function (method) {
@@ -275,6 +273,9 @@ var outputParser = function (json) {
     return parser;
 };
 
+/// @param json abi for contract
+/// @param method name for which we want to get method signature
+/// @returns (promise) contract method signature for method with given name
 var methodSignature = function (json, name) {
     var method = json[findMethodIndex(json, name)];
     var result = name + '(';
@@ -330,6 +331,16 @@ if ("build" !== 'build') {/*
     var web3 = require('./web3'); // jshint ignore:line
 */}
 
+/**
+ * AutoProvider object prototype is implementing 'provider protocol'
+ * Automatically tries to setup correct provider(Qt, WebSockets or HttpRpc)
+ * First it checkes if we are ethereum browser (if navigator.qt object is available)
+ * if yes, we are using QtProvider
+ * if no, we check if it is possible to establish websockets connection with ethereum (ws://localhost:40404/eth is default)
+ * if it's not possible, we are using httprpc provider (http://localhost:8080)
+ * The constructor allows you to specify uris on which we are trying to connect over http or websockets
+ * You can do that by passing objects with fields httrpc and websockets
+ */
 var AutoProvider = function (userOptions) {
     if (web3.haveProvider()) {
         return;
@@ -378,6 +389,8 @@ var AutoProvider = function (userOptions) {
     };
 };
 
+/// Sends message forward to the provider, that is being used
+/// if provider is not yet set, enqueues the message
 AutoProvider.prototype.send = function (payload) {
     if (this.provider) {
         this.provider.send(payload);
@@ -386,6 +399,7 @@ AutoProvider.prototype.send = function (payload) {
     this.sendQueue.push(payload);
 };
 
+/// On incoming message sends the message to the provider that is currently being used
 Object.defineProperty(AutoProvider.prototype, 'onmessage', {
     set: function (handler) {
         if (this.provider) {
@@ -428,9 +442,29 @@ if ("build" !== 'build') {/*
 
 var abi = require('./abi');
 
-// method signature length in bytes
+/// method signature length in bytes
 var ETH_METHOD_SIGNATURE_LENGTH = 4;
 
+/**
+ * This method should be called when we want to call / transact some solidity method from javascript
+ * it returns an object which has same methods available as solidity contract description
+ * usage example: 
+ *
+ * var abi = [{
+ *      name: 'myMethod',
+ *      inputs: [{ name: 'a', type: 'string' }],
+ *      outputs: [{name: 'd', type: 'string' }]
+ * }];  // contract abi
+ *
+ * var myContract = web3.eth.contract('0x0123123121', abi); // creation of contract object
+ *
+ * myContract.myMethod('this is test string param for call').call(); // myMethod call
+ * myContract.myMethod('this is test string param for transact').transact() // myMethod transact
+ *
+ * @param address - address of the contract, which should be called
+ * @param desc - abi json description of the contract, which is being created
+ * @returns contract object
+ */
 var contract = function (address, desc) {
     var inputParser = abi.inputParser(desc);
     var outputParser = abi.outputParser(desc);
@@ -472,7 +506,99 @@ var contract = function (address, desc) {
 
 module.exports = contract;
 
+
 },{"./abi":1}],4:[function(require,module,exports){
+/*
+    This file is part of ethereum.js.
+
+    ethereum.js is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    ethereum.js is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/** @file filter.js
+ * @authors:
+ *   Jeffrey Wilcke <jeff@ethdev.com>
+ *   Marek Kotewicz <marek@ethdev.com>
+ *   Marian Oancea <marian@ethdev.com>
+ *   Gav Wood <g@ethdev.com>
+ * @date 2014
+ */
+
+// TODO: is these line is supposed to be here? 
+if ("build" !== 'build') {/*
+    var web3 = require('./web3'); // jshint ignore:line
+*/}
+
+/// should be used when we want to watch something
+/// it's using inner polling mechanism and is notified about changes
+var Filter = function(options, impl) {
+    this.impl = impl;
+    this.callbacks = [];
+
+    var self = this;
+    this.promise = impl.newFilter(options);
+    this.promise.then(function (id) {
+        self.id = id;
+        web3.on(impl.changed, id, self.trigger.bind(self));
+        web3.provider.startPolling({call: impl.changed, args: [id]}, id);
+    });
+};
+
+/// alias for changed*
+Filter.prototype.arrived = function(callback) {
+    this.changed(callback);
+};
+
+/// gets called when there is new eth/shh message
+Filter.prototype.changed = function(callback) {
+    var self = this;
+    this.promise.then(function(id) {
+        self.callbacks.push(callback);
+    });
+};
+
+/// trigger calling new message from people
+Filter.prototype.trigger = function(messages) {
+    for(var i = 0; i < this.callbacks.length; i++) {
+        this.callbacks[i].call(this, messages);
+    }
+};
+
+/// should be called to uninstall current filter
+Filter.prototype.uninstall = function() {
+    var self = this;
+    this.promise.then(function (id) {
+        self.impl.uninstallFilter(id);
+        web3.provider.stopPolling(id);
+        web3.off(impl.changed, id);
+    });
+};
+
+/// should be called to manually trigger getting latest messages from the client
+Filter.prototype.messages = function() {
+    var self = this;
+    return this.promise.then(function (id) {
+        return self.impl.getMessages(id);
+    });
+};
+
+/// alias for messages
+Filter.prototype.logs = function () {
+    return this.messages();
+};
+
+module.exports = Filter;
+
+},{}],5:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -501,11 +627,21 @@ if ("build" !== 'build') {/*
     var XMLHttpRequest = require('xmlhttprequest').XMLHttpRequest; // jshint ignore:line
 */}
 
+/**
+ * HttpRpcProvider object prototype is implementing 'provider protocol'
+ * Should be used when we want to connect to ethereum backend over http && jsonrpc
+ * It's compatible with cpp client
+ * The contructor allows to specify host uri
+ * This provider is using in-browser polling mechanism
+ */
 var HttpRpcProvider = function (host) {
     this.handlers = [];
     this.host = host;
 };
 
+/// Transforms inner message to proper jsonrpc object
+/// @param inner message object
+/// @returns jsonrpc object
 function formatJsonRpcObject(object) {
     return {
         jsonrpc: '2.0',
@@ -515,6 +651,9 @@ function formatJsonRpcObject(object) {
     };
 }
 
+/// Transforms jsonrpc object to inner message
+/// @param incoming jsonrpc message 
+/// @returns inner message object
 function formatJsonRpcMessage(message) {
     var object = JSON.parse(message);
 
@@ -525,6 +664,10 @@ function formatJsonRpcMessage(message) {
     };
 }
 
+/// Prototype object method 
+/// Asynchronously sends request to server
+/// @param payload is inner message object
+/// @param cb is callback which is being called when response is comes back
 HttpRpcProvider.prototype.sendRequest = function (payload, cb) {
     var data = formatJsonRpcObject(payload);
 
@@ -538,6 +681,11 @@ HttpRpcProvider.prototype.sendRequest = function (payload, cb) {
     };
 };
 
+/// Prototype object method
+/// Should be called when we want to send single api request to server
+/// Asynchronous
+/// On response it passes message to handlers
+/// @param payload is inner message object
 HttpRpcProvider.prototype.send = function (payload) {
     var self = this;
     this.sendRequest(payload, function (request) {
@@ -547,6 +695,13 @@ HttpRpcProvider.prototype.send = function (payload) {
     });
 };
 
+/// Prototype object method
+/// Should be called only for polling requests
+/// Asynchronous
+/// On response it passege message to handlers, but only if message's result is true or not empty array
+/// Otherwise response is being silently ignored
+/// @param payload is inner message object
+/// @id is id of poll that we are calling
 HttpRpcProvider.prototype.poll = function (payload, id) {
     var self = this;
     this.sendRequest(payload, function (request) {
@@ -560,6 +715,8 @@ HttpRpcProvider.prototype.poll = function (payload, id) {
     });
 };
 
+/// Prototype object property
+/// Should be used to set message handlers for this provider
 Object.defineProperty(HttpRpcProvider.prototype, "onmessage", {
     set: function (handler) {
         this.handlers.push(handler);
@@ -568,7 +725,132 @@ Object.defineProperty(HttpRpcProvider.prototype, "onmessage", {
 
 module.exports = HttpRpcProvider;
 
-},{}],5:[function(require,module,exports){
+
+},{}],6:[function(require,module,exports){
+/*
+    This file is part of ethereum.js.
+
+    ethereum.js is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    ethereum.js is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/** @file providermanager.js
+ * @authors:
+ *   Jeffrey Wilcke <jeff@ethdev.com>
+ *   Marek Kotewicz <marek@ethdev.com>
+ *   Marian Oancea <marian@ethdev.com>
+ *   Gav Wood <g@ethdev.com>
+ * @date 2014
+ */
+
+// TODO: is these line is supposed to be here? 
+if ("build" !== 'build') {/*
+    var web3 = require('./web3'); // jshint ignore:line
+*/}
+
+/**
+ * Provider manager object prototype
+ * It's responsible for passing messages to providers
+ * If no provider is set it's responsible for queuing requests
+ * It's also responsible for polling the ethereum node for incoming messages
+ * Default poll timeout is 12 seconds
+ * If we are running ethereum.js inside ethereum browser, there are backend based tools responsible for polling,
+ * and provider manager polling mechanism is not used
+ */
+var ProviderManager = function() {
+    this.queued = [];
+    this.polls = [];
+    this.ready = false;
+    this.provider = undefined;
+    this.id = 1;
+
+    var self = this;
+    var poll = function () {
+        if (self.provider && self.provider.poll) {
+            self.polls.forEach(function (data) {
+                data.data._id = self.id;
+                self.id++;
+                self.provider.poll(data.data, data.id);
+            });
+        }
+        setTimeout(poll, 12000);
+    };
+    poll();
+};
+
+/// sends outgoing requests, if provider is not available, enqueue the request
+ProviderManager.prototype.send = function(data, cb) {
+    data._id = this.id;
+    if (cb) {
+        web3._callbacks[data._id] = cb;
+    }
+
+    data.args = data.args || [];
+    this.id++;
+
+    if(this.provider !== undefined) {
+        this.provider.send(data);
+    } else {
+        console.warn("provider is not set");
+        this.queued.push(data);
+    }
+};
+
+/// setups provider, which will be used for sending messages
+ProviderManager.prototype.set = function(provider) {
+    if(this.provider !== undefined && this.provider.unload !== undefined) {
+        this.provider.unload();
+    }
+
+    this.provider = provider;
+    this.ready = true;
+};
+
+/// resends queued messages
+ProviderManager.prototype.sendQueued = function() {
+    for(var i = 0; this.queued.length; i++) {
+        // Resend
+        this.send(this.queued[i]);
+    }
+};
+
+/// @returns true if the provider i properly set
+ProviderManager.prototype.installed = function() {
+    return this.provider !== undefined;
+};
+
+/// this method is only used, when we do not have native qt bindings and have to do polling on our own
+/// should be callled, on start watching for eth/shh changes
+ProviderManager.prototype.startPolling = function (data, pollId) {
+    if (!this.provider || !this.provider.poll) {
+        return;
+    }
+    this.polls.push({data: data, id: pollId});
+};
+
+/// should be called to stop polling for certain watch changes
+ProviderManager.prototype.stopPolling = function (pollId) {
+    for (var i = this.polls.length; i--;) {
+        var poll = this.polls[i];
+        if (poll.id === pollId) {
+            this.polls.splice(i, 1);
+        }
+    }
+};
+
+module.exports = ProviderManager;
+
+
+},{}],7:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -592,6 +874,11 @@ module.exports = HttpRpcProvider;
  * @date 2014
  */
 
+/**
+ * QtProvider object prototype is implementing 'provider protocol'
+ * Should be used inside ethereum browser. It's compatible with cpp and go clients.
+ * It uses navigator.qt object to pass the messages to native bindings
+ */
 var QtProvider = function() {
     this.handlers = [];
 
@@ -603,10 +890,17 @@ var QtProvider = function() {
     };
 };
 
+/// Prototype object method
+/// Should be called when we want to send single api request to native bindings
+/// Asynchronous
+/// Response will be received by navigator.qt.onmessage method and passed to handlers
+/// @param payload is inner message object
 QtProvider.prototype.send = function(payload) {
     navigator.qt.postMessage(JSON.stringify(payload));
 };
 
+/// Prototype object property
+/// Should be used to set message handlers for this provider
 Object.defineProperty(QtProvider.prototype, "onmessage", {
     set: function(handler) {
         this.handlers.push(handler);
@@ -615,7 +909,7 @@ Object.defineProperty(QtProvider.prototype, "onmessage", {
 
 module.exports = QtProvider;
 
-},{}],6:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -632,7 +926,7 @@ module.exports = QtProvider;
     You should have received a copy of the GNU Lesser General Public License
     along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file main.js
+/** @file web3.js
  * @authors:
  *   Jeffrey Wilcke <jeff@ethdev.com>
  *   Marek Kotewicz <marek@ethdev.com>
@@ -641,6 +935,12 @@ module.exports = QtProvider;
  * @date 2014
  */
 
+var Filter = require('./filter');
+var ProviderManager = require('./providermanager');
+
+/// Recursively resolves all promises in given object and replaces the resolved values with promises
+/// @param any object/array/promise/anything else..
+/// @returns (resolves) object with replaced promises with their result 
 function flattenPromise (obj) {
     if (obj instanceof Promise) {
         return Promise.resolve(obj);
@@ -680,12 +980,14 @@ function flattenPromise (obj) {
     return Promise.resolve(obj);
 }
 
+/// @returns an array of objects describing web3 api methods
 var web3Methods = function () {
     return [
     { name: 'sha3', call: 'web3_sha3' }
     ];
 };
 
+/// @returns an array of objects describing web3.eth api methods
 var ethMethods = function () {
     var blockCall = function (args) {
         return typeof args[0] === "string" ? "eth_blockByHash" : "eth_blockByNumber";
@@ -719,6 +1021,7 @@ var ethMethods = function () {
     return methods;
 };
 
+/// @returns an array of objects describing web3.eth api properties
 var ethProperties = function () {
     return [
     { name: 'coinbase', getter: 'eth_coinbase', setter: 'eth_setCoinbase' },
@@ -733,6 +1036,7 @@ var ethProperties = function () {
     ];
 };
 
+/// @returns an array of objects describing web3.db api methods
 var dbMethods = function () {
     return [
     { name: 'put', call: 'db_put' },
@@ -742,6 +1046,7 @@ var dbMethods = function () {
     ];
 };
 
+/// @returns an array of objects describing web3.shh api methods
 var shhMethods = function () {
     return [
     { name: 'post', call: 'shh_post' },
@@ -752,6 +1057,7 @@ var shhMethods = function () {
     ];
 };
 
+/// @returns an array of objects describing web3.eth.watch api methods
 var ethWatchMethods = function () {
     var newFilter = function (args) {
         return typeof args[0] === 'string' ? 'eth_newFilterString' : 'eth_newFilter';
@@ -764,6 +1070,7 @@ var ethWatchMethods = function () {
     ];
 };
 
+/// @returns an array of objects describing web3.shh.watch api methods
 var shhWatchMethods = function () {
     return [
     { name: 'newFilter', call: 'shh_newFilter' },
@@ -772,6 +1079,8 @@ var shhWatchMethods = function () {
     ];
 };
 
+/// creates methods in a given object based on method description on input
+/// setups api calls for these methods
 var setupMethods = function (obj, methods) {
     methods.forEach(function (method) {
         obj[method.name] = function () {
@@ -795,6 +1104,8 @@ var setupMethods = function (obj, methods) {
     });
 };
 
+/// creates properties in a given object based on properties description on input
+/// setups api calls for these properties
 var setupProperties = function (obj, properties) {
     properties.forEach(function (property) {
         var proto = {};
@@ -839,7 +1150,7 @@ var decToHex = function (dec) {
     return parseInt(dec).toString(16);
 };
 
-
+/// setups web3 object, and it's in-browser executed methods
 var web3 = {
     _callbacks: {},
     _events: {},
@@ -855,6 +1166,7 @@ var web3 = {
         return hex;
     },
 
+    /// @returns ascii string representation of hex value prefixed with 0x
     toAscii: function(hex) {
         // Find termination
         var str = "";
@@ -862,17 +1174,18 @@ var web3 = {
         if (hex.substring(0, 2) === '0x')
             i = 2;
         for(; i < l; i+=2) {
-            var code = hex.charCodeAt(i);
+            var code = parseInt(hex.substr(i, 2), 16);
             if(code === 0) {
                 break;
             }
 
-            str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+            str += String.fromCharCode(code);
         }
 
         return str;
     },
 
+    /// @returns hex representation (prefixed by 0x) of ascii string
     fromAscii: function(str, pad) {
         pad = pad === undefined ? 0 : pad;
         var hex = this.toHex(str);
@@ -881,14 +1194,17 @@ var web3 = {
         return "0x" + hex;
     },
 
+    /// @returns decimal representaton of hex value prefixed by 0x
     toDecimal: function (val) {
         return hexToDec(val.substring(2));
     },
 
+    /// @returns hex representation (prefixed by 0x) of decimal value
     fromDecimal: function (val) {
         return "0x" + decToHex(val);
     },
 
+    /// used to transform value/string to eth string
     toEth: function(str) {
         var val = typeof str === "string" ? str.indexOf('0x') === 0 ? parseInt(str.substr(2), 16) : parseInt(str) : str;
         var unit = 0;
@@ -912,24 +1228,24 @@ var web3 = {
         return s + ' ' + units[unit];
     },
 
+    /// eth object prototype
     eth: {
-        prototype: Object(), // jshint ignore:line
         watch: function (params) {
             return new Filter(params, ethWatch);
         }
     },
 
-    db: {
-        prototype: Object() // jshint ignore:line
-    },
+    /// db object prototype
+    db: {},
 
+    /// shh object prototype
     shh: {
-        prototype: Object(), // jshint ignore:line
         watch: function (params) {
             return new Filter(params, shhWatch);
         }
     },
 
+    /// used by filter to register callback with given id
     on: function(event, id, cb) {
         if(web3._events[event] === undefined) {
             web3._events[event] = {};
@@ -939,6 +1255,7 @@ var web3 = {
         return this;
     },
 
+    /// used by filter to unregister callback with given id
     off: function(event, id) {
         if(web3._events[event] !== undefined) {
             delete web3._events[event][id];
@@ -947,6 +1264,7 @@ var web3 = {
         return this;
     },
 
+    /// used to trigger callback registered by filter
     trigger: function(event, id, data) {
         var callbacks = web3._events[event];
         if (!callbacks || !callbacks[id]) {
@@ -954,9 +1272,15 @@ var web3 = {
         }
         var cb = callbacks[id];
         cb(data);
+    },
+
+    /// @returns true if provider is installed
+    haveProvider: function() {
+        return !!web3.provider.provider;
     }
 };
 
+/// setups all api methods
 setupMethods(web3, web3Methods());
 setupMethods(web3.eth, ethMethods());
 setupProperties(web3.eth, ethProperties());
@@ -966,85 +1290,14 @@ setupMethods(web3.shh, shhMethods());
 var ethWatch = {
     changed: 'eth_changed'
 };
+
 setupMethods(ethWatch, ethWatchMethods());
+
 var shhWatch = {
     changed: 'shh_changed'
 };
+
 setupMethods(shhWatch, shhWatchMethods());
-
-var ProviderManager = function() {
-    this.queued = [];
-    this.polls = [];
-    this.ready = false;
-    this.provider = undefined;
-    this.id = 1;
-
-    var self = this;
-    var poll = function () {
-        if (self.provider && self.provider.poll) {
-            self.polls.forEach(function (data) {
-                data.data._id = self.id;
-                self.id++;
-                self.provider.poll(data.data, data.id);
-            });
-        }
-        setTimeout(poll, 12000);
-    };
-    poll();
-};
-
-ProviderManager.prototype.send = function(data, cb) {
-    data._id = this.id;
-    if (cb) {
-        web3._callbacks[data._id] = cb;
-    }
-
-    data.args = data.args || [];
-    this.id++;
-
-    if(this.provider !== undefined) {
-        this.provider.send(data);
-    } else {
-        console.warn("provider is not set");
-        this.queued.push(data);
-    }
-};
-
-ProviderManager.prototype.set = function(provider) {
-    if(this.provider !== undefined && this.provider.unload !== undefined) {
-        this.provider.unload();
-    }
-
-    this.provider = provider;
-    this.ready = true;
-};
-
-ProviderManager.prototype.sendQueued = function() {
-    for(var i = 0; this.queued.length; i++) {
-        // Resend
-        this.send(this.queued[i]);
-    }
-};
-
-ProviderManager.prototype.installed = function() {
-    return this.provider !== undefined;
-};
-
-ProviderManager.prototype.startPolling = function (data, pollId) {
-    if (!this.provider || !this.provider.poll) {
-        return;
-    }
-    this.polls.push({data: data, id: pollId});
-};
-
-ProviderManager.prototype.stopPolling = function (pollId) {
-    for (var i = this.polls.length; i--;) {
-        var poll = this.polls[i];
-        if (poll.id === pollId) {
-            this.polls.splice(i, 1);
-        }
-    }
-};
 
 web3.provider = new ProviderManager();
 
@@ -1054,60 +1307,7 @@ web3.setProvider = function(provider) {
     web3.provider.sendQueued();
 };
 
-web3.haveProvider = function() {
-    return !!web3.provider.provider;
-};
-
-var Filter = function(options, impl) {
-    this.impl = impl;
-    this.callbacks = [];
-
-    var self = this;
-    this.promise = impl.newFilter(options);
-    this.promise.then(function (id) {
-        self.id = id;
-        web3.on(impl.changed, id, self.trigger.bind(self));
-        web3.provider.startPolling({call: impl.changed, args: [id]}, id);
-    });
-};
-
-Filter.prototype.arrived = function(callback) {
-    this.changed(callback);
-};
-
-Filter.prototype.changed = function(callback) {
-    var self = this;
-    this.promise.then(function(id) {
-        self.callbacks.push(callback);
-    });
-};
-
-Filter.prototype.trigger = function(messages) {
-    for(var i = 0; i < this.callbacks.length; i++) {
-        this.callbacks[i].call(this, messages);
-    }
-};
-
-Filter.prototype.uninstall = function() {
-    var self = this;
-    this.promise.then(function (id) {
-        self.impl.uninstallFilter(id);
-        web3.provider.stopPolling(id);
-        web3.off(impl.changed, id);
-    });
-};
-
-Filter.prototype.messages = function() {
-    var self = this;
-    return this.promise.then(function (id) {
-        return self.impl.getMessages(id);
-    });
-};
-
-Filter.prototype.logs = function () {
-    return this.messages();
-};
-
+/// callled when there is new incoming message
 function messageHandler(data) {
     if(data._event !== undefined) {
         web3.trigger(data._event, data._id, data.data);
@@ -1126,7 +1326,7 @@ function messageHandler(data) {
 if (typeof(module) !== "undefined")
     module.exports = web3;
 
-},{}],7:[function(require,module,exports){
+},{"./filter":4,"./providermanager":6}],9:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1156,9 +1356,17 @@ if ("build" !== 'build') {/*
     var WebSocket = require('ws'); // jshint ignore:line
 */}
 
+/**
+ * WebSocketProvider object prototype is implementing 'provider protocol'
+ * Should be used when we want to connect to ethereum backend over websockets
+ * It's compatible with go client
+ * The constructor allows to specify host uri
+ */
 var WebSocketProvider = function(host) {
+
     // onmessage handlers
     this.handlers = [];
+
     // queue will be filled with messages if send is invoked before the ws is ready
     this.queued = [];
     this.ready = false;
@@ -1175,15 +1383,20 @@ var WebSocketProvider = function(host) {
     this.ws.onopen = function() {
         self.ready = true;
 
-        for(var i = 0; i < self.queued.length; i++) {
+        for (var i = 0; i < self.queued.length; i++) {
             // Resend
             self.send(self.queued[i]);
         }
     };
 };
 
+/// Prototype object method
+/// Should be called when we want to send single api request to server
+/// Asynchronous, it's using websockets
+/// Response for the call will be received by ws.onmessage
+/// @param payload is inner message object
 WebSocketProvider.prototype.send = function(payload) {
-    if(this.ready) {
+    if (this.ready) {
         var data = JSON.stringify(payload);
 
         this.ws.send(data);
@@ -1192,13 +1405,20 @@ WebSocketProvider.prototype.send = function(payload) {
     }
 };
 
+/// Prototype object method
+/// Should be called to add handlers
 WebSocketProvider.prototype.onMessage = function(handler) {
     this.handlers.push(handler);
 };
 
+/// Prototype object method
+/// Should be called to close websockets connection
 WebSocketProvider.prototype.unload = function() {
     this.ws.close();
 };
+
+/// Prototype object property
+/// Should be used to set message handlers for this provider
 Object.defineProperty(WebSocketProvider.prototype, "onmessage", {
     set: function(provider) { this.onMessage(provider); }
 });
@@ -1212,11 +1432,11 @@ web3.providers.WebSocketProvider = require('./lib/websocket');
 web3.providers.HttpRpcProvider = require('./lib/httprpc');
 web3.providers.QtProvider = require('./lib/qt');
 web3.providers.AutoProvider = require('./lib/autoprovider');
-web3.contract = require('./lib/contract');
+web3.eth.contract = require('./lib/contract');
 
 module.exports = web3;
 
-},{"./lib/autoprovider":2,"./lib/contract":3,"./lib/httprpc":4,"./lib/qt":5,"./lib/web3":6,"./lib/websocket":7}]},{},["web3"])
+},{"./lib/autoprovider":2,"./lib/contract":3,"./lib/httprpc":5,"./lib/qt":7,"./lib/web3":8,"./lib/websocket":9}]},{},["web3"])
 
 
 //# sourceMappingURL=ethereum.js.map
