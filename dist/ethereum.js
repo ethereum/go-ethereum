@@ -58,9 +58,10 @@ var findMethodIndex = function (json, methodName) {
 
 /// @param string string to be padded
 /// @param number of characters that result string should have
+/// @param sign, by default 0
 /// @returns right aligned string
-var padLeft = function (string, chars) {
-    return new Array(chars - string.length + 1).join("0") + string;
+var padLeft = function (string, chars, sign) {
+    return new Array(chars - string.length + 1).join(sign ? sign : "0") + string;
 };
 
 /// @param expected type prefix (string)
@@ -87,8 +88,17 @@ var setupInputTypes = function () {
     /// @returns right-aligned byte representation of int
     var formatInt = function (value) {
         var padding = 32 * 2;
-        if (typeof value === 'number')
+        if (typeof value === 'number') {
+            if (value < 0) {
+                
+                // two's complement
+                // TODO: fix big numbers support
+                value = ((value) >>> 0).toString(16);
+                return padLeft(value, padding, 'f');
+            }
             value = value.toString(16);
+
+        }
         else if (value.indexOf('0x') === 0)
             value = value.substr(2);
         else if (typeof value === 'string')
