@@ -14,7 +14,8 @@ import "github.com/ethereum/go-ethereum/state"
 import "C"
 
 import "unsafe"
-import "fmt"
+
+//import "fmt"
 import "reflect"
 import "errors"
 
@@ -87,6 +88,14 @@ func trim(m []byte) []byte {
 	return m[skip:]
 }
 
+func getDataPtr(m []byte) *byte {
+	var p *byte
+	if len(m) > 0 {
+		p = &m[0]
+	}
+	return p
+}
+
 func big2llvm(n *big.Int) i256 {
 	m := hash2llvm(n.Bytes())
 	for i, l := 0, len(m); i < l/2; i++ {
@@ -134,15 +143,11 @@ func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *bi
 	data.elems[Difficulty] = big2llvm(self.env.Difficulty())
 	data.elems[GasLimit] = big2llvm(self.env.GasLimit())
 	data.elems[CodeSize] = big2llvm(big.NewInt(int64(len(code)))) // TODO: Keep code size as i64
-	if len(callData) > 0 {
-		data.callData = &callData[0]
-	}
-	if len(code) > 0 {
-		data.code = &code[0]
-	}
+	data.callData = getDataPtr(callData)
+	data.code = getDataPtr(code)
 
 	r := C.evmjit_run(unsafe.Pointer(&data), unsafe.Pointer(self))
-	fmt.Printf("JIT result: %d\n", r)
+	//fmt.Printf("JIT result: %d\n", r)
 
 	gasLeft := llvm2big(&data.elems[Gas]) // TODO: Set value directly to gas instance
 	gas.Set(gasLeft)
@@ -290,4 +295,13 @@ func env_log(_vm unsafe.Pointer, dataPtr *byte, dataLen uint64, _topic1 unsafe.P
 	}
 
 	vm.Env().AddLog(state.NewLog(vm.me.Address(), topics, data))
+}
+
+//export env_getExtCode
+func env_getExtCode(_vm unsafe.Pointer, _addr unsafe.Pointer, o_size *uint64) *byte {
+	vm := (*JitVm)(_vm)
+	addr := llvm2hash((*i256)(_addr))
+	code := vm.Env().State().GetCode(addr)
+	*o_size = uint64(len(code))
+	return getDataPtr(code)
 }
