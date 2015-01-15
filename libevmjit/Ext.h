@@ -34,7 +34,7 @@ enum class EnvFunc
 	call,
 	log,
 	blockhash,
-	getExtCode,
+	extcode,
 	calldataload,  // Helper function, not client Env interface
 
 	_size
@@ -55,7 +55,7 @@ public:
 	llvm::Value* blockhash(llvm::Value* _number);
 
 	llvm::Value* sha3(llvm::Value* _inOff, llvm::Value* _inSize);
-	MemoryRef getExtCode(llvm::Value* _addr);
+	MemoryRef extcode(llvm::Value* _addr);
 
 	void log(llvm::Value* _memIdx, llvm::Value* _numBytes, std::array<llvm::Value*,4> const& _topics);
 
