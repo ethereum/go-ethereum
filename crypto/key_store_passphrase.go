@@ -69,9 +69,10 @@ import (
 	"code.google.com/p/go.crypto/scrypt"
 	"crypto/aes"
 	"crypto/cipher"
-	"encoding/hex"
+	crand "crypto/rand"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path"
 )
@@ -94,25 +95,24 @@ func NewKeyStorePassphrase(path string) KeyStore2 {
 	return ks
 }
 
-func (ks keyStorePassphrase) GenerateNewKey(auth string) (key *Key, err error) {
-	return GenerateNewKeyDefault(ks, auth)
+func (ks keyStorePassphrase) GenerateNewKey(rand io.Reader, auth string) (key *Key, err error) {
+	return GenerateNewKeyDefault(ks, rand, auth)
 }
 
 func (ks keyStorePassphrase) GetKey(keyId *uuid.UUID, auth string) (key *Key, err error) {
-	keyBytes, flags, err := DecryptKey(ks, keyId, auth)
+	keyBytes, err := DecryptKey(ks, keyId, auth)
 	if err != nil {
 		return nil, err
 	}
 	key = new(Key)
 	key.Id = keyId
-	copy(key.Flags[:], flags[0:4])
 	key.PrivateKey = ToECDSA(keyBytes)
 	return key, err
 }
 
 func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 	authArray := []byte(auth)
-	salt := GetEntropyCSPRNG(32)
+	salt := getEntropyCSPRNG(32)
 	derivedKey, err := scrypt.Key(authArray, salt, scryptN, scryptr, scryptp, scryptdkLen)
 	if err != nil {
 		return err
@@ -127,19 +127,18 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 		return err
 	}
 
-	iv := GetEntropyCSPRNG(aes.BlockSize) // 16
+	iv := getEntropyCSPRNG(aes.BlockSize) // 16
 	AES256CBCEncrypter := cipher.NewCBCEncrypter(AES256Block, iv)
 	cipherText := make([]byte, len(toEncrypt))
 	AES256CBCEncrypter.CryptBlocks(cipherText, toEncrypt)
 
-	cipherStruct := CipherJSON{
-		hex.EncodeToString(salt),
-		hex.EncodeToString(iv),
-		hex.EncodeToString(cipherText),
+	cipherStruct := cipherJSON{
+		salt,
+		iv,
+		cipherText,
 	}
-	keyStruct := EncryptedKeyJSON{
-		key.Id.String(),
-		hex.EncodeToString(key.Flags[:]),
+	keyStruct := encryptedKeyJSON{
+		*key.Id,
 		cipherStruct,
 	}
 	keyJSON, err := json.Marshal(keyStruct)
@@ -152,7 +151,7 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 
 func (ks keyStorePassphrase) DeleteKey(keyId *uuid.UUID, auth string) (err error) {
 	// only delete if correct passphrase is given
-	_, _, err = DecryptKey(ks, keyId, auth)
+	_, err = DecryptKey(ks, keyId, auth)
 	if err != nil {
 		return err
 	}
@@ -161,44 +160,30 @@ func (ks keyStorePassphrase) DeleteKey(keyId *uuid.UUID, auth string) (err error
 	return os.RemoveAll(keyDirPath)
 }
 
-func DecryptKey(ks keyStorePassphrase, keyId *uuid.UUID, auth string) (keyBytes []byte, flags []byte, err error) {
+func DecryptKey(ks keyStorePassphrase, keyId *uuid.UUID, auth string) (keyBytes []byte, err error) {
 	fileContent, err := GetKeyFile(ks.keysDirPath, keyId)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	keyProtected := new(EncryptedKeyJSON)
+	keyProtected := new(encryptedKeyJSON)
 	err = json.Unmarshal(fileContent, keyProtected)
 
-	flags, err = hex.DecodeString(keyProtected.Flags)
-	if err != nil {
-		return nil, nil, err
-	}
+	salt := keyProtected.Crypto.Salt
 
-	salt, err := hex.DecodeString(keyProtected.Crypto.Salt)
-	if err != nil {
-		return nil, nil, err
-	}
+	iv := keyProtected.Crypto.IV
 
-	iv, err := hex.DecodeString(keyProtected.Crypto.IV)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	cipherText, err := hex.DecodeString(keyProtected.Crypto.CipherText)
-	if err != nil {
-		return nil, nil, err
-	}
+	cipherText := keyProtected.Crypto.CipherText
 
 	authArray := []byte(auth)
 	derivedKey, err := scrypt.Key(authArray, salt, scryptN, scryptr, scryptp, scryptdkLen)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	AES256Block, err := aes.NewCipher(derivedKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	AES256CBCDecrypter := cipher.NewCBCDecrypter(AES256Block, iv)
@@ -208,16 +193,26 @@ func DecryptKey(ks keyStorePassphrase, keyId *uuid.UUID, auth string) (keyBytes 
 	plainText := PKCS7Unpad(paddedPlainText)
 	if plainText == nil {
 		err = errors.New("Decryption failed: PKCS7Unpad failed after decryption")
-		return nil, nil, err
+		return nil, err
 	}
 
 	keyBytes = plainText[:len(plainText)-32]
 	keyBytesHash := plainText[len(plainText)-32:]
 	if !bytes.Equal(Sha3(keyBytes), keyBytesHash) {
 		err = errors.New("Decryption failed: checksum mismatch")
-		return nil, nil, err
+		return nil, err
 	}
-	return keyBytes, flags, err
+	return keyBytes, err
+}
+
+// plain crypto/rand. this is /dev/urandom on Unix-like systems.
+func getEntropyCSPRNG(n int) []byte {
+	mainBuff := make([]byte, n)
+	_, err := io.ReadFull(crand.Reader, mainBuff)
+	if err != nil {
+		panic("key generation: reading from crypto/rand failed: " + err.Error())
+	}
+	return mainBuff
 }
 
 // From https://leanpub.com/gocrypto/read#leanpub-auto-block-cipher-modes

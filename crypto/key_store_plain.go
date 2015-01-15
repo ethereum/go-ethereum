@@ -27,6 +27,7 @@ import (
 	"code.google.com/p/go-uuid/uuid"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/user"
@@ -35,7 +36,8 @@ import (
 
 // TODO: rename to KeyStore when replacing existing KeyStore
 type KeyStore2 interface {
-	GenerateNewKey(string) (*Key, error)     // create and store new key, optionally using auth string
+	// create new key using io.Reader entropy source and optionally using auth string
+	GenerateNewKey(io.Reader, string) (*Key, error)
 	GetKey(*uuid.UUID, string) (*Key, error) // key from id and auth string
 	StoreKey(*Key, string) error             // store key optionally using auth string
 	DeleteKey(*uuid.UUID, string) error      // delete key by id and auth string
@@ -57,17 +59,17 @@ func NewKeyStorePlain(path string) KeyStore2 {
 	return ks
 }
 
-func (ks keyStorePlain) GenerateNewKey(auth string) (key *Key, err error) {
-	return GenerateNewKeyDefault(ks, auth)
+func (ks keyStorePlain) GenerateNewKey(rand io.Reader, auth string) (key *Key, err error) {
+	return GenerateNewKeyDefault(ks, rand, auth)
 }
 
-func GenerateNewKeyDefault(ks KeyStore2, auth string) (key *Key, err error) {
+func GenerateNewKeyDefault(ks KeyStore2, rand io.Reader, auth string) (key *Key, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("GenerateNewKey error: %v", r)
 		}
 	}()
-	key = NewKey()
+	key = NewKey(rand)
 	err = ks.StoreKey(key, auth)
 	return key, err
 }

@@ -28,43 +28,31 @@ import (
 	"code.google.com/p/go-uuid/uuid"
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	crand "crypto/rand"
-	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io"
-	"os"
-	"runtime"
-	"strings"
-	"time"
 )
 
 type Key struct {
-	Id    *uuid.UUID // Version 4 "random" for unique id not derived from key data
-	Flags [4]byte    // RFU
+	Id *uuid.UUID // Version 4 "random" for unique id not derived from key data
 	// we only store privkey as pubkey/address can be derived from it
 	// privkey in this struct is always in plaintext
 	PrivateKey *ecdsa.PrivateKey
 }
 
-type PlainKeyJSON struct {
-	Id         string
-	Flags      string
-	PrivateKey string
+type plainKeyJSON struct {
+	Id         []byte
+	PrivateKey []byte
 }
 
-type CipherJSON struct {
-	Salt       string
-	IV         string
-	CipherText string
+type cipherJSON struct {
+	Salt       []byte
+	IV         []byte
+	CipherText []byte
 }
 
-type EncryptedKeyJSON struct {
-	Id     string
-	Flags  string
-	Crypto CipherJSON
+type encryptedKeyJSON struct {
+	Id     []byte
+	Crypto cipherJSON
 }
 
 func (k *Key) Address() []byte {
@@ -73,48 +61,40 @@ func (k *Key) Address() []byte {
 }
 
 func (k *Key) MarshalJSON() (j []byte, err error) {
-	stringStruct := PlainKeyJSON{
-		k.Id.String(),
-		hex.EncodeToString(k.Flags[:]),
-		hex.EncodeToString(FromECDSA(k.PrivateKey)),
+	jStruct := plainKeyJSON{
+		*k.Id,
+		FromECDSA(k.PrivateKey),
 	}
-	j, err = json.Marshal(stringStruct)
+	j, err = json.Marshal(jStruct)
 	return j, err
 }
 
 func (k *Key) UnmarshalJSON(j []byte) (err error) {
-	keyJSON := new(PlainKeyJSON)
+	keyJSON := new(plainKeyJSON)
 	err = json.Unmarshal(j, &keyJSON)
 	if err != nil {
 		return err
 	}
 
 	u := new(uuid.UUID)
-	*u = uuid.Parse(keyJSON.Id)
-	if *u == nil {
-		err = errors.New("UUID parsing failed")
-		return err
-	}
+	*u = keyJSON.Id
 	k.Id = u
 
-	flagsBytes, err := hex.DecodeString(keyJSON.Flags)
-	if err != nil {
-		return err
-	}
-
-	PrivateKeyBytes, err := hex.DecodeString(keyJSON.PrivateKey)
-	if err != nil {
-		return err
-	}
-
-	copy(k.Flags[:], flagsBytes[0:4])
-	k.PrivateKey = ToECDSA(PrivateKeyBytes)
+	k.PrivateKey = ToECDSA(keyJSON.PrivateKey)
 
 	return err
 }
 
-func NewKey() *Key {
-	randBytes := GetEntropyCSPRNG(32)
+func NewKey(rand io.Reader) *Key {
+	randBytes := make([]byte, 32)
+	n, err := rand.Read(randBytes)
+	if err != nil {
+		panic("key generation: could not read from random source: " + err.Error())
+	} else {
+		if n != 32 {
+			panic("key generation: read less than required bytes from random source: " + err.Error())
+		}
+	}
 	reader := bytes.NewReader(randBytes)
 	_, x, y, err := elliptic.GenerateKey(S256(), reader)
 	if err != nil {
@@ -126,80 +106,6 @@ func NewKey() *Key {
 	key := new(Key)
 	id := uuid.NewRandom()
 	key.Id = &id
-	// flags := new([4]byte)
-	// key.Flags = flags
 	key.PrivateKey = privateKeyECDSA
 	return key
-}
-
-// plain crypto/rand. this is /dev/urandom on Unix-like systems.
-func GetEntropyCSPRNG(n int) []byte {
-	mainBuff := make([]byte, n)
-	_, err := io.ReadFull(crand.Reader, mainBuff)
-	if err != nil {
-		panic("key generation: reading from crypto/rand failed: " + err.Error())
-	}
-	return mainBuff
-}
-
-// TODO: verify. Do not use until properly discussed.
-// we start with crypt/rand, then mix in additional sources of entropy.
-// These sources are from three types: OS, go runtime and ethereum client state.
-func GetEntropyTinFoilHat() []byte {
-	startTime := time.Now().UnixNano()
-	// for each source, we XOR in it's SHA3 hash.
-	mainBuff := GetEntropyCSPRNG(32)
-	// 1. OS entropy sources
-	startTimeBytes := make([]byte, 32)
-	binary.PutVarint(startTimeBytes, startTime)
-	startTimeHash := Sha3(startTimeBytes)
-	mix32Byte(mainBuff, startTimeHash)
-
-	pid := os.Getpid()
-	pidBytes := make([]byte, 32)
-	binary.PutUvarint(pidBytes, uint64(pid))
-	pidHash := Sha3(pidBytes)
-	mix32Byte(mainBuff, pidHash)
-
-	osEnv := os.Environ()
-	osEnvBytes := []byte(strings.Join(osEnv, ""))
-	osEnvHash := Sha3(osEnvBytes)
-	mix32Byte(mainBuff, osEnvHash)
-
-	// not all OS have hostname in env variables
-	osHostName, err := os.Hostname()
-	if err != nil {
-		osHostNameBytes := []byte(osHostName)
-		osHostNameHash := Sha3(osHostNameBytes)
-		mix32Byte(mainBuff, osHostNameHash)
-	}
-
-	// 2. go runtime entropy sources
-	memStats := new(runtime.MemStats)
-	runtime.ReadMemStats(memStats)
-	memStatsBytes := []byte(fmt.Sprintf("%v", memStats))
-	memStatsHash := Sha3(memStatsBytes)
-	mix32Byte(mainBuff, memStatsHash)
-
-	// 3. Mix in ethereum / client state
-	// TODO: list of network peers structs (IP, port, etc)
-	// TODO: merkle patricia tree root hash for world state and tx list
-
-	// 4. Yo dawg we heard you like entropy so we'll grab some entropy from how
-	//    long it took to grab the above entropy. And a yield, for good measure.
-	runtime.Gosched()
-	diffTime := time.Now().UnixNano() - startTime
-	diffTimeBytes := make([]byte, 32)
-	binary.PutVarint(diffTimeBytes, diffTime)
-	diffTimeHash := Sha3(diffTimeBytes)
-	mix32Byte(mainBuff, diffTimeHash)
-
-	return mainBuff
-}
-
-func mix32Byte(buff []byte, mixBuff []byte) []byte {
-	for i := 0; i < 32; i++ {
-		buff[i] ^= mixBuff[i]
-	}
-	return buff
 }
