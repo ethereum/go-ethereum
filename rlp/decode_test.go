@@ -8,8 +8,6 @@ import (
 	"math/big"
 	"reflect"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/ethutil"
 )
 
 func TestStreamKind(t *testing.T) {
@@ -515,7 +513,7 @@ func BenchmarkDecode(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		var s []int
+		var s []uint
 		r := bytes.NewReader(enc)
 		if err := Decode(r, &s); err != nil {
 			b.Fatalf("Decode error: %v", err)
@@ -529,7 +527,7 @@ func BenchmarkDecodeIntSliceReuse(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	var s []int
+	var s []uint
 	for i := 0; i < b.N; i++ {
 		r := bytes.NewReader(enc)
 		if err := Decode(r, &s); err != nil {
@@ -538,12 +536,16 @@ func BenchmarkDecodeIntSliceReuse(b *testing.B) {
 	}
 }
 
-func encodeTestSlice(n int) []byte {
-	s := make([]interface{}, n)
-	for i := 0; i < n; i++ {
+func encodeTestSlice(n uint) []byte {
+	s := make([]uint, n)
+	for i := uint(0); i < n; i++ {
 		s[i] = i
 	}
-	return ethutil.Encode(s)
+	b, err := EncodeToBytes(s)
+	if err != nil {
+		panic(fmt.Sprintf("encode error: %v", err))
+	}
+	return b
 }
 
 func unhex(str string) []byte {
