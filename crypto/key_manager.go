@@ -30,8 +30,8 @@ func (k *KeyManager) KeyPair() *KeyPair {
 	return k.keyPair
 }
 
-func (k *KeyManager) KeyRing() *KeyPair {
-	return k.keyPair
+func (k *KeyManager) KeyRing() *KeyRing {
+	return k.keyRing
 }
 
 func (k *KeyManager) PrivateKey() []byte {
