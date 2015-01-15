@@ -22,9 +22,8 @@
  */
 /*
 
-This key store behaves as KeyStorePlaintextFile with the difference that
-the private key is encrypted and encoded as a JSON object within the
-key JSON object.
+This key store behaves as KeyStorePlain with the difference that
+the private key is encrypted and on disk uses another JSON encoding.
 
 Cryptography:
 
@@ -39,9 +38,9 @@ Cryptography:
 
 Encoding:
 
-1. On disk, ciphertext, salt and IV are encoded as a JSON object.
+1. On disk, ciphertext, salt and IV are encoded in a nested JSON object.
    cat a key file to see the structure.
-2. byte arrays are ASCII HEX encoded as JSON strings.
+2. byte arrays are base64 JSON strings.
 3. The EC private key bytes are in uncompressed form [7].
    They are a big-endian byte slice of the absolute value of D [8][9].
 4. The checksum is the last 32 bytes of the plaintext byte array and the
@@ -205,7 +204,6 @@ func DecryptKey(ks keyStorePassphrase, keyId *uuid.UUID, auth string) (keyBytes 
 	return keyBytes, err
 }
 
-// plain crypto/rand. this is /dev/urandom on Unix-like systems.
 func getEntropyCSPRNG(n int) []byte {
 	mainBuff := make([]byte, n)
 	_, err := io.ReadFull(crand.Reader, mainBuff)
