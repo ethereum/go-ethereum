@@ -2,10 +2,6 @@
 
 package vm
 
-import "math/big"
-import "github.com/ethereum/go-ethereum/crypto"
-import "github.com/ethereum/go-ethereum/state"
-
 /*
 #include "../evmjit/libevmjit/interface.h"
 #include <stdlib.h>
@@ -14,11 +10,14 @@ import "github.com/ethereum/go-ethereum/state"
 */
 import "C"
 
-import "unsafe"
-
-//import "fmt"
-import "reflect"
-import "errors"
+import (
+	"errors"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/state"
+	"math/big"
+	"reflect"
+	"unsafe"
+)
 
 type JitVm struct {
 	env Environment
@@ -62,7 +61,7 @@ func hash2llvm(h []byte) i256 {
 }
 
 func llvm2hash(m *i256) []byte {
-	hash := make([]byte, len(m))
+	hash := make([]byte, len(m)) // TODO: Use C.GoBytes
 	hdr := reflect.SliceHeader{
 		Data: uintptr(unsafe.Pointer(m)),
 		Len:  int(len(m)),
@@ -70,6 +69,12 @@ func llvm2hash(m *i256) []byte {
 	}
 	copy(hash, *(*[]byte)(unsafe.Pointer(&hdr)))
 	return hash
+}
+
+func address2llvm(addr []byte) i256 {
+	n := hash2llvm(addr)
+	bswap(&n)
+	return n
 }
 
 func bswap(m *i256) *i256 {
@@ -135,12 +140,12 @@ func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *bi
 
 	var data RuntimeData
 	data.elems[Gas] = big2llvm(gas)
-	data.elems[address] = hash2llvm(self.me.Address())
-	data.elems[Caller] = hash2llvm(caller.Address())
-	data.elems[Origin] = hash2llvm(self.env.Origin())
+	data.elems[address] = address2llvm(self.me.Address())
+	data.elems[Caller] = address2llvm(caller.Address())
+	data.elems[Origin] = address2llvm(self.env.Origin())
 	data.elems[CallValue] = big2llvm(value)
 	data.elems[CallDataSize] = big2llvm(big.NewInt(int64(len(callData)))) // TODO: Keep call data size as i64
-	data.elems[CoinBase] = hash2llvm(self.env.Coinbase())
+	data.elems[CoinBase] = address2llvm(self.env.Coinbase())
 	data.elems[TimeStamp] = big2llvm(big.NewInt(self.env.Time())) // TODO: Keep timestamp as i64
 	data.elems[Number] = big2llvm(self.env.BlockNumber())
 	data.elems[Difficulty] = big2llvm(self.env.Difficulty())
@@ -228,9 +233,16 @@ func env_balance(_vm unsafe.Pointer, _addr unsafe.Pointer, _result unsafe.Pointe
 func env_blockhash(_vm unsafe.Pointer, _number unsafe.Pointer, _result unsafe.Pointer) {
 	vm := (*JitVm)(_vm)
 	number := llvm2big((*i256)(_number))
-	hash := vm.Env().GetHash(uint64(number.Int64()))
 	result := (*i256)(_result)
-	*result = hash2llvm(hash)
+
+	currNumber := vm.Env().BlockNumber()
+	limit := big.NewInt(0).Sub(currNumber, big.NewInt(256))
+	if number.Cmp(limit) >= 0 && number.Cmp(currNumber) < 0 {
+		hash := vm.Env().GetHash(uint64(number.Int64()))
+		*result = hash2llvm(hash)
+	} else {
+		*result = i256{}
+	}
 }
 
 //export env_call
