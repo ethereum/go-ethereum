@@ -149,11 +149,12 @@ func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *bi
 	r := C.evmjit_run(unsafe.Pointer(&data), unsafe.Pointer(self))
 	//fmt.Printf("JIT result: %d\n", r)
 
-	gasLeft := llvm2big(&data.elems[Gas]) // TODO: Set value directly to gas instance
-	gas.Set(gasLeft)
-
 	if r >= 100 {
 		err = errors.New("OOG from JIT")
+		gas.SetInt64(0) // Set gas to 0, JIT do not bother
+	} else {
+		gasLeft := llvm2big(&data.elems[Gas]) // TODO: Set value directly to gas instance
+		gas.Set(gasLeft)
 	}
 
 	return ret, err
