@@ -6,7 +6,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 else ()
-	set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wno-unknown-pragmas -Wextra -DSHAREDLIB -fPIC")
+	set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wno-unknown-pragmas -Wextra")
 endif()
 
 if(APPLE)
@@ -14,7 +14,7 @@ if(APPLE)
 endif()
 
 # LLVM
-if(LLVM_DIR)	# local LLVM build
+if(LLVM_DIR OR APPLE)	# local LLVM build
 	find_package(LLVM REQUIRED CONFIG)
 	message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 	message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
