@@ -68,12 +68,30 @@ func llvm2hash(m *i256) []byte { //TODO: It should copy data
 	return *(*[]byte)(unsafe.Pointer(&hdr))
 }
 
+func bswap(m *i256) *i256 {
+	for i, l := 0, len(m); i < l/2; i++ {
+		m[i], m[l-i-1] = m[l-i-1], m[i]
+	}
+	return m
+}
+
+func trim(m []byte) []byte {
+	skip := 0
+	for i := 0; i < len(m); i++ {
+		if m[i] == 0 {
+			skip++
+		} else {
+			break
+		}
+	}
+	return m[skip:]
+}
+
 func big2llvm(n *big.Int) i256 {
 	m := hash2llvm(n.Bytes())
 	for i, l := 0, len(m); i < l/2; i++ {
 		m[i], m[l-i-1] = m[l-i-1], m[i]
 	}
-
 	return m
 }
 
@@ -166,18 +184,20 @@ func env_sha3(dataPtr *byte, length uint64, hashPtr unsafe.Pointer) {
 //export env_sstore
 func env_sstore(vmPtr unsafe.Pointer, indexPtr unsafe.Pointer, valuePtr unsafe.Pointer) {
 	vm := (*JitVm)(vmPtr)
-	index := llvm2hash((*i256)(indexPtr))
-	value := llvm2hash((*i256)(valuePtr))
+	index := llvm2hash(bswap((*i256)(indexPtr)))
+	value := llvm2hash(bswap((*i256)(valuePtr)))
+	value = trim(value)
 	vm.env.State().SetState(vm.me.Address(), index, value)
 }
 
 //export env_sload
 func env_sload(vmPtr unsafe.Pointer, indexPtr unsafe.Pointer, resultPtr unsafe.Pointer) {
 	vm := (*JitVm)(vmPtr)
-	index := llvm2hash((*i256)(indexPtr))
+	index := llvm2hash(bswap((*i256)(indexPtr)))
 	value := vm.env.State().GetState(vm.me.Address(), index)
 	result := (*i256)(resultPtr)
 	*result = hash2llvm(value)
+	bswap(result)
 }
 
 //export env_balance
