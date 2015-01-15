@@ -9,6 +9,10 @@ else ()
 	set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wno-unknown-pragmas -Wextra -DSHAREDLIB -fPIC")
 endif()
 
+if(APPLE)
+	set(CMAKE_SHARED_LINKER_FLAGS "-undefined dynamic_lookup")
+endif()
+
 # LLVM
 if(LLVM_DIR)	# local LLVM build
 	find_package(LLVM REQUIRED CONFIG)
