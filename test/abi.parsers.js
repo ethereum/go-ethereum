@@ -328,7 +328,7 @@ describe('abi', function() {
             var d = clone(description);
 
             d[0].outputs = [
-                { type: 'uinti128' }
+                { type: 'uint128' }
             ];
 
             // when
@@ -379,7 +379,7 @@ describe('abi', function() {
             var d = clone(description);
 
             d[0].outputs = [
-                { type: 'inti128' }
+                { type: 'int128' }
             ];
 
             // when
@@ -428,7 +428,7 @@ describe('abi', function() {
             var d = clone(description);
 
             d[0].outputs = [
-                { type: 'hash256' }
+                { type: 'hash160' }
             ];
 
             // when
