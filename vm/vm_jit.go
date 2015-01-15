@@ -8,6 +8,7 @@ import "github.com/ethereum/go-ethereum/state"
 
 /*
 #include "../evmjit/libevmjit/interface.h"
+#include <stdlib.h>
 
 #cgo LDFLAGS: -L/home/chfast/go/src/github.com/ethereum/go-ethereum/evmjit/build/libevmjit -levmjit
 */
@@ -146,18 +147,24 @@ func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *bi
 	data.callData = getDataPtr(callData)
 	data.code = getDataPtr(code)
 
-	r := C.evmjit_run(unsafe.Pointer(&data), unsafe.Pointer(self))
+	result := C.evmjit_run(unsafe.Pointer(&data), unsafe.Pointer(self))
 	//fmt.Printf("JIT result: %d\n", r)
 
-	if r >= 100 {
+	if result.returnCode >= 100 {
 		err = errors.New("OOG from JIT")
-		gas.SetInt64(0) // Set gas to 0, JIT do not bother
+		gas.SetInt64(0) // Set gas to 0, JIT does not bother
 	} else {
 		gasLeft := llvm2big(&data.elems[Gas]) // TODO: Set value directly to gas instance
 		gas.Set(gasLeft)
+		if result.returnCode == 1 { // RETURN
+			returnData := llvm2bytes((*byte)(result.returnData), uint64(result.returnDataSize))
+			ret = make([]byte, len(returnData))
+			copy(ret, returnData)
+			C.free(result.returnData)
+		}
 	}
 
-	return ret, err
+	return
 }
 
 func (self *JitVm) Printf(format string, v ...interface{}) VirtualMachine {
