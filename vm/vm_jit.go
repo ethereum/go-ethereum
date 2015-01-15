@@ -20,42 +20,42 @@ import "errors"
 
 type JitVm struct {
 	env Environment
-	me ContextRef
+	me  ContextRef
 }
 
 type i256 [32]byte
 
 const (
-		Gas = iota
-		address
-		Caller
-		Origin
-		CallValue
-		CallDataSize
-		GasPrice
-		CoinBase
-		TimeStamp
-		Number
-		Difficulty
-		GasLimit
-		CodeSize
+	Gas = iota
+	address
+	Caller
+	Origin
+	CallValue
+	CallDataSize
+	GasPrice
+	CoinBase
+	TimeStamp
+	Number
+	Difficulty
+	GasLimit
+	CodeSize
 
-		_size
+	_size
 
-		ReturnDataOffset = CallValue	// Reuse 2 fields for return data reference
-		ReturnDataSize = CallDataSize
-		SuicideDestAddress = address	///< Suicide balance destination address
+	ReturnDataOffset   = CallValue // Reuse 2 fields for return data reference
+	ReturnDataSize     = CallDataSize
+	SuicideDestAddress = address ///< Suicide balance destination address
 )
 
 type RuntimeData struct {
-	elems [_size]i256
+	elems    [_size]i256
 	callData *byte
-	code *byte
+	code     *byte
 }
 
 func hash2llvm(h []byte) i256 {
 	var m i256
-	copy(m[len(m) - len(h):], h)  // right aligned copy
+	copy(m[len(m)-len(h):], h) // right aligned copy
 	return m
 }
 
@@ -70,10 +70,10 @@ func llvm2hash(m *i256) []byte { //TODO: It should copy data
 
 func big2llvm(n *big.Int) i256 {
 	m := hash2llvm(n.Bytes())
-	for i, l := 0, len(m); i < l / 2; i++ {
-		m[i], m[l - i - 1] = m[l - i - 1], m[i] 
-	} 
-	
+	for i, l := 0, len(m); i < l/2; i++ {
+		m[i], m[l-i-1] = m[l-i-1], m[i]
+	}
+
 	return m
 }
 
@@ -81,7 +81,7 @@ func llvm2big(m *i256) *big.Int {
 	n := big.NewInt(0)
 	for i := 0; i < len(m); i++ {
 		b := big.NewInt(int64(m[i]))
-		b.Lsh(b, uint(i) * 8)
+		b.Lsh(b, uint(i)*8)
 		n.Add(n, b)
 	}
 	return n
@@ -102,7 +102,7 @@ func NewJitVm(env Environment) *JitVm {
 
 func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
 	self.me = me // FIXME: Make sure Run() is not used more than once
-	
+
 	var data RuntimeData
 	data.elems[Gas] = big2llvm(gas)
 	data.elems[address] = hash2llvm(self.me.Address())
@@ -122,14 +122,14 @@ func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *bi
 	if len(code) > 0 {
 		data.code = &code[0]
 	}
-	
-	r := C.evmjit_run(unsafe.Pointer(&data), unsafe.Pointer(self));
-	fmt.Printf("JIT result: %d\n", r);
-	
+
+	r := C.evmjit_run(unsafe.Pointer(&data), unsafe.Pointer(self))
+	fmt.Printf("JIT result: %d\n", r)
+
 	if r >= 100 {
 		err = errors.New("OOG from JIT")
 	}
-	
+
 	return ret, err
 }
 
@@ -148,15 +148,15 @@ func (self *JitVm) Env() Environment {
 //export env_sha3
 func env_sha3(dataPtr *byte, length uint64, hashPtr unsafe.Pointer) {
 	data := llvm2bytes(dataPtr, length)
-	hash := crypto.Sha3(data);
-	
+	hash := crypto.Sha3(data)
+
 	hashHdr := reflect.SliceHeader{
 		Data: uintptr(hashPtr),
 		Len:  32,
 		Cap:  32,
 	}
 	oHash := *(*[]byte)(unsafe.Pointer(&hashHdr))
-	
+
 	copy(oHash, hash)
 }
 
@@ -198,10 +198,10 @@ func env_blockhash(_vm unsafe.Pointer, _number unsafe.Pointer, _result unsafe.Po
 //export env_call
 func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Pointer, _value unsafe.Pointer, inDataPtr *byte, inDataLen uint64, outDataPtr *byte, outDataLen uint64, _codeAddr unsafe.Pointer) bool {
 	vm := (*JitVm)(_vm)
-	
+
 	balance := vm.Env().State().GetBalance(vm.me.Address())
 	value := llvm2big((*i256)(_value))
-	
+
 	if vm.env.Depth() < 1024 && balance.Cmp(value) >= 0 {
 		vm.env.State().AddBalance(vm.me.Address(), value.Neg(value))
 		receiveAddr := llvm2hash((*i256)(_receiveAddr))
@@ -210,7 +210,7 @@ func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Point
 		//codeAddr := llvm2hash((*i256)(_codeAddr)) //TODO: Handle CallCode
 		llvmGas := (*i256)(_gas)
 		gas := llvm2big(llvmGas)
-		price := big.NewInt(0) // TODO		
+		price := big.NewInt(0) // TODO
 		out, err := vm.env.Call(vm.me, receiveAddr, inData, gas, price, value)
 		*llvmGas = big2llvm(gas)
 		if err == nil {
@@ -219,17 +219,17 @@ func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Point
 		}
 	}
 
-	return false;
+	return false
 }
 
 //export env_create
 func env_create(_vm unsafe.Pointer, _gas unsafe.Pointer, _value unsafe.Pointer, initDataPtr *byte, initDataLen uint64, _result unsafe.Pointer) {
 	vm := (*JitVm)(_vm)
-	
+
 	balance := vm.Env().State().GetBalance(vm.me.Address())
 	value := llvm2big((*i256)(_value))
 	result := (*i256)(_result)
-	
+
 	if vm.env.Depth() < 1024 && balance.Cmp(value) >= 0 {
 		vm.env.State().AddBalance(vm.me.Address(), value.Neg(value))
 		initData := llvm2bytes(initDataPtr, initDataLen)
@@ -245,13 +245,13 @@ func env_create(_vm unsafe.Pointer, _gas unsafe.Pointer, _value unsafe.Pointer, 
 }
 
 //export env_log
-func env_log(_vm unsafe.Pointer, dataPtr *byte, dataLen uint64, _topic1 unsafe.Pointer,  _topic2 unsafe.Pointer,  _topic3 unsafe.Pointer,  _topic4 unsafe.Pointer) {
+func env_log(_vm unsafe.Pointer, dataPtr *byte, dataLen uint64, _topic1 unsafe.Pointer, _topic2 unsafe.Pointer, _topic3 unsafe.Pointer, _topic4 unsafe.Pointer) {
 	vm := (*JitVm)(_vm)
-	
+
 	dataRef := llvm2bytes(dataPtr, dataLen)
 	data := make([]byte, len(dataRef))
 	copy(data, dataRef)
-	
+
 	topics := make([][]byte, 0, 4)
 	if _topic1 != nil {
 		topics = append(topics, llvm2hash((*i256)(_topic1)))
@@ -265,6 +265,6 @@ func env_log(_vm unsafe.Pointer, dataPtr *byte, dataLen uint64, _topic1 unsafe.P
 	if _topic4 != nil {
 		topics = append(topics, llvm2hash((*i256)(_topic4)))
 	}
-	
+
 	vm.Env().AddLog(state.NewLog(vm.me.Address(), topics, data))
 }
