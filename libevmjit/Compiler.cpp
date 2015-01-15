@@ -644,7 +644,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 		case Instruction::EXTCODESIZE:
 		{
 			auto addr = stack.pop();
-			auto codeRef = _ext.getExtCode(addr);
+			auto codeRef = _ext.extcode(addr);
 			stack.push(codeRef.size);
 			break;
 		}
@@ -682,7 +682,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 			auto srcIdx = stack.pop();
 			auto reqBytes = stack.pop();
 
-			auto codeRef = _ext.getExtCode(addr);
+			auto codeRef = _ext.extcode(addr);
 
 			_memory.copyBytes(codeRef.ptr, codeRef.size, srcIdx, destMemIdx, reqBytes);
 			break;

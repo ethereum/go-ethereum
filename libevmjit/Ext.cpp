@@ -51,7 +51,7 @@ std::array<FuncDesc, sizeOf<EnvFunc>::value> const& getEnvFuncDescs()
 		FuncDesc{"env_call", getFunctionType(Type::Bool, {Type::EnvPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::BytePtr, Type::Size, Type::BytePtr, Type::Size, Type::WordPtr})},
 		FuncDesc{"env_log", getFunctionType(Type::Void, {Type::EnvPtr, Type::BytePtr, Type::Size, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr})},
 		FuncDesc{"env_blockhash", getFunctionType(Type::Void, {Type::EnvPtr, Type::WordPtr, Type::WordPtr})},
-		FuncDesc{"env_getExtCode", getFunctionType(Type::BytePtr, {Type::EnvPtr, Type::WordPtr, Type::Size->getPointerTo()})},
+		FuncDesc{"env_extcode", getFunctionType(Type::BytePtr, {Type::EnvPtr, Type::WordPtr, Type::Size->getPointerTo()})},
 		FuncDesc{"ext_calldataload", getFunctionType(Type::Void, {Type::RuntimeDataPtr, Type::WordPtr, Type::WordPtr})},
 	}};
 
@@ -169,10 +169,10 @@ llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
 	return hash;
 }
 
-MemoryRef Ext::getExtCode(llvm::Value* _addr)
+MemoryRef Ext::extcode(llvm::Value* _addr)
 {
 	auto addr = Endianness::toBE(m_builder, _addr);
-	auto code = createCall(EnvFunc::getExtCode, {getRuntimeManager().getEnvPtr(), byPtr(addr), m_size});
+	auto code = createCall(EnvFunc::extcode, {getRuntimeManager().getEnvPtr(), byPtr(addr), m_size});
 	auto codeSize = m_builder.CreateLoad(m_size);
 	auto codeSize256 = m_builder.CreateZExt(codeSize, Type::Word);
 	return {code, codeSize256};
