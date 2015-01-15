@@ -55,7 +55,7 @@ describe('abi', function() {
 
         });
         
-        it('should parse input uint', function() {
+        it('should parse input uint256', function() {
 
             // given
             var d = clone(description);
@@ -88,6 +88,9 @@ describe('abi', function() {
             // then
             assert.equal(parser.test(1), "0000000000000000000000000000000000000000000000000000000000000001");
             assert.equal(parser.test(10), "000000000000000000000000000000000000000000000000000000000000000a");
+            assert.equal(parser.test(-1), "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+            assert.equal(parser.test(-2), "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe");
+            assert.equal(parser.test(-16), "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0");
 
         });
 
@@ -106,6 +109,9 @@ describe('abi', function() {
             // then
             assert.equal(parser.test(1), "0000000000000000000000000000000000000000000000000000000000000001");
             assert.equal(parser.test(10), "000000000000000000000000000000000000000000000000000000000000000a");
+            assert.equal(parser.test(-1), "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+            assert.equal(parser.test(-2), "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe");
+            assert.equal(parser.test(-16), "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0");
 
         });
 
@@ -124,6 +130,9 @@ describe('abi', function() {
             // then
             assert.equal(parser.test(1), "0000000000000000000000000000000000000000000000000000000000000001");
             assert.equal(parser.test(10), "000000000000000000000000000000000000000000000000000000000000000a");
+            assert.equal(parser.test(-1), "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+            assert.equal(parser.test(-2), "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe");
+            assert.equal(parser.test(-16), "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0");
             
         });
 
