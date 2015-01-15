@@ -61,13 +61,15 @@ func hash2llvm(h []byte) i256 {
 	return m
 }
 
-func llvm2hash(m *i256) []byte { //TODO: It should copy data
+func llvm2hash(m *i256) []byte {
+	hash := make([]byte, len(m))
 	hdr := reflect.SliceHeader{
 		Data: uintptr(unsafe.Pointer(m)),
 		Len:  int(len(m)),
 		Cap:  int(len(m)),
 	}
-	return *(*[]byte)(unsafe.Pointer(&hdr))
+	copy(hash, *(*[]byte)(unsafe.Pointer(&hdr)))
+	return hash
 }
 
 func bswap(m *i256) *i256 {
