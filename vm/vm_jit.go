@@ -145,6 +145,7 @@ func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *bi
 	data.elems[Origin] = address2llvm(self.env.Origin())
 	data.elems[CallValue] = big2llvm(value)
 	data.elems[CallDataSize] = big2llvm(big.NewInt(int64(len(callData)))) // TODO: Keep call data size as i64
+	data.elems[GasPrice] = big2llvm(price)
 	data.elems[CoinBase] = address2llvm(self.env.Coinbase())
 	data.elems[TimeStamp] = big2llvm(big.NewInt(self.env.Time())) // TODO: Keep timestamp as i64
 	data.elems[Number] = big2llvm(self.env.BlockNumber())
