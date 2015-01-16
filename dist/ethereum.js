@@ -90,7 +90,7 @@ var setupInputTypes = function () {
     
     /// Formats input value to byte representation of int
     /// If value is negative, return it's two's complement
-    /// If the value is floating point, it rounds it down
+    /// If the value is floating point, round it down
     /// @returns right-aligned byte representation of int
     var formatInt = function (value) {
         var padding = 32 * 2;
@@ -178,12 +178,15 @@ var setupOutputTypes = function () {
     var formatInt = function (value) {
         // check if it's negative number
         // it it is, return two's complement
-        if (value.substr(0, 1).toLowerCase() === 'f') {
+        var firstBit = new BigNumber(value.substr(0, 1), 16).toString(2).substr(0, 1);
+        if (firstBit === '1') {
             return new BigNumber(value, 16).minus(new BigNumber('ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', 16)).minus(1);
         }
         return new BigNumber(value, 16);
     };
 
+    /// Formats big right-aligned input bytes to uint
+    /// @returns right-aligned input bytes formatted to uint
     var formatUInt = function (value) {
         return new BigNumber(value, 16);
     };
