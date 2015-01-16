@@ -24,10 +24,10 @@ require=(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof requ
 
 // TODO: is these line is supposed to be here? 
 if ("build" !== 'build') {/*
-    var web3 = require('./web3'); // jshint ignore:line
+    var BigNumber = require('bignumber.js'); // jshint ignore:line
 */}
 
-var BigNumber = require('bignumber.js');
+var web3 = require('./web3'); // jshint ignore:line
 
 // TODO: make these be actually accurate instead of falling back onto JS's doubles.
 var hexToDec = function (hex) {
@@ -308,7 +308,7 @@ module.exports = {
 };
 
 
-},{"bignumber.js":undefined}],2:[function(require,module,exports){
+},{"./web3":8}],2:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -448,11 +448,7 @@ module.exports = AutoProvider;
  * @date 2014
  */
 
-// TODO: is these line is supposed to be here? 
-if ("build" !== 'build') {/*
-    var web3 = require('./web3'); // jshint ignore:line
-*/}
-
+var web3 = require('./web3'); // jshint ignore:line
 var abi = require('./abi');
 
 /// method signature length in bytes
@@ -520,7 +516,7 @@ var contract = function (address, desc) {
 module.exports = contract;
 
 
-},{"./abi":1}],4:[function(require,module,exports){
+},{"./abi":1,"./web3":8}],4:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -546,10 +542,7 @@ module.exports = contract;
  * @date 2014
  */
 
-// TODO: is these line is supposed to be here? 
-if ("build" !== 'build') {/*
-    var web3 = require('./web3'); // jshint ignore:line
-*/}
+var web3 = require('./web3'); // jshint ignore:line
 
 /// should be used when we want to watch something
 /// it's using inner polling mechanism and is notified about changes
@@ -611,7 +604,7 @@ Filter.prototype.logs = function () {
 
 module.exports = Filter;
 
-},{}],5:[function(require,module,exports){
+},{"./web3":8}],5:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -766,9 +759,7 @@ module.exports = HttpRpcProvider;
  */
 
 // TODO: is these line is supposed to be here? 
-if ("build" !== 'build') {/*
-    var web3 = require('./web3'); // jshint ignore:line
-*/}
+var web3 = require('./web3'); // jshint ignore:line
 
 /**
  * Provider manager object prototype
@@ -863,7 +854,7 @@ ProviderManager.prototype.stopPolling = function (pollId) {
 module.exports = ProviderManager;
 
 
-},{}],7:[function(require,module,exports){
+},{"./web3":8}],7:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -947,9 +938,6 @@ module.exports = QtProvider;
  *   Gav Wood <g@ethdev.com>
  * @date 2014
  */
-
-var Filter = require('./filter');
-var ProviderManager = require('./providermanager');
 
 /// Recursively resolves all promises in given object and replaces the resolved values with promises
 /// @param any object/array/promise/anything else..
@@ -1244,7 +1232,7 @@ var web3 = {
     /// eth object prototype
     eth: {
         watch: function (params) {
-            return new Filter(params, ethWatch);
+            return new web3.filter(params, ethWatch);
         }
     },
 
@@ -1254,7 +1242,7 @@ var web3 = {
     /// shh object prototype
     shh: {
         watch: function (params) {
-            return new Filter(params, shhWatch);
+            return new web3.filter(params, shhWatch);
         }
     },
 
@@ -1312,8 +1300,6 @@ var shhWatch = {
 
 setupMethods(shhWatch, shhWatchMethods());
 
-web3.provider = new ProviderManager();
-
 web3.setProvider = function(provider) {
     provider.onmessage = messageHandler;
     web3.provider.set(provider);
@@ -1336,10 +1322,10 @@ function messageHandler(data) {
     }
 }
 
-if (typeof(module) !== "undefined")
-    module.exports = web3;
+module.exports = web3;
 
-},{"./filter":4,"./providermanager":6}],9:[function(require,module,exports){
+
+},{}],9:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1441,6 +1427,9 @@ if (typeof(module) !== "undefined")
 
 },{}],"web3":[function(require,module,exports){
 var web3 = require('./lib/web3');
+var ProviderManager = require('./lib/providermanager');
+web3.provider = new ProviderManager();
+web3.filter = require('./lib/filter');
 web3.providers.WebSocketProvider = require('./lib/websocket');
 web3.providers.HttpRpcProvider = require('./lib/httprpc');
 web3.providers.QtProvider = require('./lib/qt');
@@ -1449,7 +1438,7 @@ web3.eth.contract = require('./lib/contract');
 
 module.exports = web3;
 
-},{"./lib/autoprovider":2,"./lib/contract":3,"./lib/httprpc":5,"./lib/qt":7,"./lib/web3":8,"./lib/websocket":9}]},{},["web3"])
+},{"./lib/autoprovider":2,"./lib/contract":3,"./lib/filter":4,"./lib/httprpc":5,"./lib/providermanager":6,"./lib/qt":7,"./lib/web3":8,"./lib/websocket":9}]},{},["web3"])
 
 
 //# sourceMappingURL=ethereum.js.map
