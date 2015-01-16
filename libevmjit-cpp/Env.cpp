@@ -89,7 +89,7 @@ extern "C"
 		*o_hash = hash;
 	}
 
-	EXPORT byte const* env_getExtCode(ExtVMFace* _env, h256* _addr256, uint64_t* o_size)
+	EXPORT byte const* env_extcode(ExtVMFace* _env, h256* _addr256, uint64_t* o_size)
 	{
 		auto addr = right160(*_addr256);
 		auto& code = _env->codeAt(addr);

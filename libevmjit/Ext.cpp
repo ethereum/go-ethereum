@@ -5,9 +5,6 @@
 #include <llvm/IR/TypeBuilder.h>
 #include <llvm/IR/IntrinsicInst.h>
 
-//#include <libdevcrypto/SHA3.h>
-//#include <libevm/FeeStructure.h>
-
 #include "RuntimeManager.h"
 #include "Memory.h"
 #include "Type.h"
@@ -71,7 +68,6 @@ llvm::Value* Ext::getArgAlloca()
 		getBuilder().SetInsertPoint(getMainFunction()->front().getFirstNonPHI());
 		a = getBuilder().CreateAlloca(Type::Word, nullptr, "arg");
 	}
-		
 	return a;
 }
 
