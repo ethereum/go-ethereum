@@ -10,7 +10,8 @@
   "dependencies": {
     "es6-promise": "*",
     "ws": "*",
-    "xmlhttprequest": "*"
+    "xmlhttprequest": "*",
+    "bignumber.js": ">=2.0.0"
   },
   "devDependencies": {
     "bower": ">=1.3.0",
