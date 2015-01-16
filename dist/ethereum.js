@@ -24,10 +24,14 @@ require=(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof requ
 
 // TODO: is these line is supposed to be here? 
 if ("build" !== 'build') {/*
-    var web3 = require('./web3'); // jshint ignore:line
+    var BigNumber = require('bignumber.js'); // jshint ignore:line
 */}
 
-var BigNumber = require('bignumber.js');
+var web3 = require('./web3'); // jshint ignore:line
+
+BigNumber.config({ ROUNDING_MODE: BigNumber.ROUND_DOWN });
+
+var ETH_PADDING = 32;
 
 // TODO: make these be actually accurate instead of falling back onto JS's doubles.
 var hexToDec = function (hex) {
@@ -88,25 +92,23 @@ var setupInputTypes = function () {
     
     /// Formats input value to byte representation of int
     /// If value is negative, return it's two's complement
+    /// If the value is floating point, round it down
     /// @returns right-aligned byte representation of int
     var formatInt = function (value) {
-        var padding = 32 * 2;
-        if (value instanceof BigNumber) {
+        var padding = ETH_PADDING * 2;
+        if (value instanceof BigNumber || typeof value === 'number') {
+            if (typeof value === 'number')
+                value = new BigNumber(value);
+            value = value.round();
+
             if (value.lessThan(0)) 
-                value = new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16).plus(value).plus(1).toString(16);
-            else 
-                value = value.toString(16);
-        }
-        else if (typeof value === 'number') {
-            if (value < 0)
-                value = new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16).plus(value).plus(1).toString(16);
-            else
-                value = new BigNumber(value).toString(16);
+                value = new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16).plus(value).plus(1);
+            value = value.toString(16);
         }
         else if (value.indexOf('0x') === 0)
             value = value.substr(2);
         else if (typeof value === 'string')
-            value = new BigNumber(value).toString(16); 
+            value = formatInt(new BigNumber(value));
         else
             value = (+value).toString(16);
         return padLeft(value, padding);
@@ -115,7 +117,7 @@ var setupInputTypes = function () {
     /// Formats input value to byte representation of string
     /// @returns left-algined byte representation of string
     var formatString = function (value) {
-        return web3.fromAscii(value, 32).substr(2);
+        return web3.fromAscii(value, ETH_PADDING).substr(2);
     };
 
     /// Formats input value to byte representation of bool
@@ -152,7 +154,7 @@ var toAbiInput = function (json, methodName, params) {
     }
 
     var method = json[index];
-    var padding = 32 * 2;
+    var padding = ETH_PADDING * 2;
 
     for (var i = 0; i < method.inputs.length; i++) {
         var typeMatch = false;
@@ -178,12 +180,15 @@ var setupOutputTypes = function () {
     var formatInt = function (value) {
         // check if it's negative number
         // it it is, return two's complement
-        if (value.substr(0, 1).toLowerCase() === 'f') {
+        var firstBit = new BigNumber(value.substr(0, 1), 16).toString(2).substr(0, 1);
+        if (firstBit === '1') {
             return new BigNumber(value, 16).minus(new BigNumber('ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', 16)).minus(1);
         }
         return new BigNumber(value, 16);
     };
 
+    /// Formats big right-aligned input bytes to uint
+    /// @returns right-aligned input bytes formatted to uint
     var formatUInt = function (value) {
         return new BigNumber(value, 16);
     };
@@ -238,7 +243,7 @@ var fromAbiOutput = function (json, methodName, output) {
 
     var result = [];
     var method = json[index];
-    var padding = 32 * 2;
+    var padding = ETH_PADDING * 2;
     for (var i = 0; i < method.outputs.length; i++) {
         var typeMatch = false;
         for (var j = 0; j < outputTypes.length && !typeMatch; j++) {
@@ -308,7 +313,7 @@ module.exports = {
 };
 
 
-},{"bignumber.js":undefined}],2:[function(require,module,exports){
+},{"./web3":8}],2:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -448,11 +453,7 @@ module.exports = AutoProvider;
  * @date 2014
  */
 
-// TODO: is these line is supposed to be here? 
-if ("build" !== 'build') {/*
-    var web3 = require('./web3'); // jshint ignore:line
-*/}
-
+var web3 = require('./web3'); // jshint ignore:line
 var abi = require('./abi');
 
 /// method signature length in bytes
@@ -520,7 +521,7 @@ var contract = function (address, desc) {
 module.exports = contract;
 
 
-},{"./abi":1}],4:[function(require,module,exports){
+},{"./abi":1,"./web3":8}],4:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -546,10 +547,7 @@ module.exports = contract;
  * @date 2014
  */
 
-// TODO: is these line is supposed to be here? 
-if ("build" !== 'build') {/*
-    var web3 = require('./web3'); // jshint ignore:line
-*/}
+var web3 = require('./web3'); // jshint ignore:line
 
 /// should be used when we want to watch something
 /// it's using inner polling mechanism and is notified about changes
@@ -611,7 +609,7 @@ Filter.prototype.logs = function () {
 
 module.exports = Filter;
 
-},{}],5:[function(require,module,exports){
+},{"./web3":8}],5:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -766,9 +764,7 @@ module.exports = HttpRpcProvider;
  */
 
 // TODO: is these line is supposed to be here? 
-if ("build" !== 'build') {/*
-    var web3 = require('./web3'); // jshint ignore:line
-*/}
+var web3 = require('./web3'); // jshint ignore:line
 
 /**
  * Provider manager object prototype
@@ -863,7 +859,7 @@ ProviderManager.prototype.stopPolling = function (pollId) {
 module.exports = ProviderManager;
 
 
-},{}],7:[function(require,module,exports){
+},{"./web3":8}],7:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -947,9 +943,6 @@ module.exports = QtProvider;
  *   Gav Wood <g@ethdev.com>
  * @date 2014
  */
-
-var Filter = require('./filter');
-var ProviderManager = require('./providermanager');
 
 /// Recursively resolves all promises in given object and replaces the resolved values with promises
 /// @param any object/array/promise/anything else..
@@ -1244,7 +1237,7 @@ var web3 = {
     /// eth object prototype
     eth: {
         watch: function (params) {
-            return new Filter(params, ethWatch);
+            return new web3.filter(params, ethWatch);
         }
     },
 
@@ -1254,7 +1247,7 @@ var web3 = {
     /// shh object prototype
     shh: {
         watch: function (params) {
-            return new Filter(params, shhWatch);
+            return new web3.filter(params, shhWatch);
         }
     },
 
@@ -1312,8 +1305,6 @@ var shhWatch = {
 
 setupMethods(shhWatch, shhWatchMethods());
 
-web3.provider = new ProviderManager();
-
 web3.setProvider = function(provider) {
     provider.onmessage = messageHandler;
     web3.provider.set(provider);
@@ -1336,10 +1327,10 @@ function messageHandler(data) {
     }
 }
 
-if (typeof(module) !== "undefined")
-    module.exports = web3;
+module.exports = web3;
 
-},{"./filter":4,"./providermanager":6}],9:[function(require,module,exports){
+
+},{}],9:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1441,6 +1432,9 @@ if (typeof(module) !== "undefined")
 
 },{}],"web3":[function(require,module,exports){
 var web3 = require('./lib/web3');
+var ProviderManager = require('./lib/providermanager');
+web3.provider = new ProviderManager();
+web3.filter = require('./lib/filter');
 web3.providers.WebSocketProvider = require('./lib/websocket');
 web3.providers.HttpRpcProvider = require('./lib/httprpc');
 web3.providers.QtProvider = require('./lib/qt');
@@ -1449,7 +1443,7 @@ web3.eth.contract = require('./lib/contract');
 
 module.exports = web3;
 
-},{"./lib/autoprovider":2,"./lib/contract":3,"./lib/httprpc":5,"./lib/qt":7,"./lib/web3":8,"./lib/websocket":9}]},{},["web3"])
+},{"./lib/autoprovider":2,"./lib/contract":3,"./lib/filter":4,"./lib/httprpc":5,"./lib/providermanager":6,"./lib/qt":7,"./lib/web3":8,"./lib/websocket":9}]},{},["web3"])
 
 
 //# sourceMappingURL=ethereum.js.map
