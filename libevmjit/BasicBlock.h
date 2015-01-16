@@ -66,6 +66,9 @@ public:
 
 	bool isJumpDest() const { return m_isJumpDest; }
 
+	llvm::Value* getJumpTarget() const { return m_jumpTarget; }
+	void setJumpTarget(llvm::Value* _jumpTarget) { m_jumpTarget = _jumpTarget; }
+
 	LocalStack& localStack() { return m_stack; }
 
 	/// Optimization: propagates values between local stacks in basic blocks
@@ -112,6 +115,9 @@ private:
 	/// Is the basic block a valid jump destination.
 	/// JUMPDEST is the first instruction of the basic block.
 	bool const m_isJumpDest = false;
+
+	/// If block finishes with dynamic jump target index is stored here
+	llvm::Value* m_jumpTarget = nullptr;
 };
 
 }

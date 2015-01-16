@@ -100,7 +100,7 @@ llvm::BasicBlock* Compiler::getJumpTableBlock()
 		m_jumpTableBlock.reset(new BasicBlock("JumpTable", m_mainFunc, m_builder, true));
 		InsertPointGuard g{m_builder};
 		m_builder.SetInsertPoint(m_jumpTableBlock->llvm());
-		auto dest = m_jumpTableBlock->localStack().pop();
+		auto dest = m_builder.CreatePHI(Type::Word, 8, "target");
 		auto switchInstr = m_builder.CreateSwitch(dest, getBadJumpBlock());
 		for (auto&& p : m_basicBlocks)
 		{
@@ -164,6 +164,26 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode, std::str
 	m_builder.CreateRet(Constant::get(ReturnCode::Stop));
 
 	removeDeadBlocks();
+
+	// Link jump table target index
+	if (m_jumpTableBlock)
+	{
+		auto phi = llvm::cast<llvm::PHINode>(&m_jumpTableBlock->llvm()->getInstList().front());
+		for (auto predIt = llvm::pred_begin(m_jumpTableBlock->llvm()); predIt != llvm::pred_end(m_jumpTableBlock->llvm()); ++predIt)
+		{
+			BasicBlock* pred = nullptr;
+			for (auto&& p : m_basicBlocks)
+			{
+				if (p.second.llvm() == *predIt)
+				{
+					pred = &p.second;
+					break;
+				}
+			}
+
+			phi->addIncoming(pred->getJumpTarget(), pred->llvm());
+		}
+	}
 
 	dumpCFGifRequired("blocks-init.dot");
 
@@ -565,7 +585,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 				}
 				else
 				{
-					stack.push(target);
+					_basicBlock.setJumpTarget(target);
 					m_builder.CreateBr(getJumpTableBlock());
 				}
 			}
@@ -581,7 +601,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 				}
 				else
 				{
-					stack.push(target);
+					_basicBlock.setJumpTarget(target);
 					m_builder.CreateCondBr(cond, getJumpTableBlock(), _nextBasicBlock);
 				}
 			}
