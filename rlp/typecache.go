@@ -5,16 +5,19 @@ import (
 	"sync"
 )
 
-type decoder func(*Stream, reflect.Value) error
-
-type typeinfo struct {
-	decoder
-}
-
 var (
 	typeCacheMutex sync.RWMutex
 	typeCache      = make(map[reflect.Type]*typeinfo)
 )
+
+type typeinfo struct {
+	decoder
+	writer
+}
+
+type decoder func(*Stream, reflect.Value) error
+
+type writer func(reflect.Value, *encbuf) error
 
 func cachedTypeInfo(typ reflect.Type) (*typeinfo, error) {
 	typeCacheMutex.RLock()
@@ -49,9 +52,25 @@ func cachedTypeInfo1(typ reflect.Type) (*typeinfo, error) {
 	return typeCache[typ], err
 }
 
+func structFields(typ reflect.Type) (fields []field, err error) {
+	for i := 0; i < typ.NumField(); i++ {
+		if f := typ.Field(i); f.PkgPath == "" { // exported
+			info, err := cachedTypeInfo1(f.Type)
+			if err != nil {
+				return nil, err
+			}
+			fields = append(fields, field{i, info})
+		}
+	}
+	return fields, nil
+}
+
 func genTypeInfo(typ reflect.Type) (info *typeinfo, err error) {
 	info = new(typeinfo)
 	if info.decoder, err = makeDecoder(typ); err != nil {
+		return nil, err
+	}
+	if info.writer, err = makeWriter(typ); err != nil {
 		return nil, err
 	}
 	return info, nil
