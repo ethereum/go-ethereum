@@ -4,13 +4,14 @@ project(evmjit)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-else ()
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+else()
 	set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wno-unknown-pragmas -Wextra -fPIC")
 endif()
 
-if(APPLE)
-	set(CMAKE_SHARED_LINKER_FLAGS "-undefined dynamic_lookup")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	# Do not allow unresovled symbols in shared library (default on linux)
+	set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-undefined")
 endif()
 
 # LLVM

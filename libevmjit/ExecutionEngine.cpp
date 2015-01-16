@@ -26,9 +26,6 @@
 #define DEBUG_ENV_OPTION(name) (std::getenv(#name) != nullptr)
 #endif
 
-
-extern "C" void env_sha3(dev::eth::jit::byte const* _begin, uint64_t _size, std::array<dev::eth::jit::byte, 32>* o_hash);
-
 namespace dev
 {
 namespace eth
@@ -57,14 +54,17 @@ ReturnCode runEntryFunc(EntryFuncPtr _mainFunc, Runtime* _runtime)
 
 std::string codeHash(bytes const& _code)
 {
-	std::array<byte, 32> binHash;
-	env_sha3(_code.data(), _code.size(), &binHash);
-
-	std::ostringstream os;
-	for (auto i: binHash)
-		os << std::hex << std::setfill('0') << std::setw(2) << (int)(std::make_unsigned<decltype(i)>::type)i;
-
-	return os.str();
+	uint32_t hash = 0;
+	for (auto b : _code)
+	{
+		hash += b;
+		hash += (hash << 10);
+		hash ^= (hash >> 6);
+	}
+	hash += (hash << 3);
+	hash ^= (hash >> 11);
+	hash += (hash << 15);
+	return std::to_string(hash);
 }
 
 }
