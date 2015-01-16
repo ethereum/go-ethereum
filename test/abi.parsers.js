@@ -43,6 +43,11 @@ describe('abi', function() {
                     parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
                     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                     );
+            assert.equal(parser.test(0.1), "0000000000000000000000000000000000000000000000000000000000000000");
+            assert.equal(parser.test(3.9), "0000000000000000000000000000000000000000000000000000000000000003");
+            assert.equal(parser.test('0.1'), "0000000000000000000000000000000000000000000000000000000000000000");
+            assert.equal(parser.test('3.9'), "0000000000000000000000000000000000000000000000000000000000000003");
+
 
         });
 
@@ -69,6 +74,10 @@ describe('abi', function() {
                     parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
                     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                     );
+            assert.equal(parser.test(0.1), "0000000000000000000000000000000000000000000000000000000000000000");
+            assert.equal(parser.test(3.9), "0000000000000000000000000000000000000000000000000000000000000003");
+            assert.equal(parser.test('0.1'), "0000000000000000000000000000000000000000000000000000000000000000");
+            assert.equal(parser.test('3.9'), "0000000000000000000000000000000000000000000000000000000000000003");
 
         });
         
@@ -95,6 +104,10 @@ describe('abi', function() {
                     parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
                     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                     );
+            assert.equal(parser.test(0.1), "0000000000000000000000000000000000000000000000000000000000000000");
+            assert.equal(parser.test(3.9), "0000000000000000000000000000000000000000000000000000000000000003");
+            assert.equal(parser.test('0.1'), "0000000000000000000000000000000000000000000000000000000000000000");
+            assert.equal(parser.test('3.9'), "0000000000000000000000000000000000000000000000000000000000000003");
             
         });
 
@@ -124,6 +137,10 @@ describe('abi', function() {
                     parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
                     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                     );
+            assert.equal(parser.test(0.1), "0000000000000000000000000000000000000000000000000000000000000000");
+            assert.equal(parser.test(3.9), "0000000000000000000000000000000000000000000000000000000000000003");
+            assert.equal(parser.test('0.1'), "0000000000000000000000000000000000000000000000000000000000000000");
+            assert.equal(parser.test('3.9'), "0000000000000000000000000000000000000000000000000000000000000003");
         });
 
         it('should parse input int128', function() {
@@ -152,6 +169,10 @@ describe('abi', function() {
                     parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
                     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                     );
+            assert.equal(parser.test(0.1), "0000000000000000000000000000000000000000000000000000000000000000");
+            assert.equal(parser.test(3.9), "0000000000000000000000000000000000000000000000000000000000000003");
+            assert.equal(parser.test('0.1'), "0000000000000000000000000000000000000000000000000000000000000000");
+            assert.equal(parser.test('3.9'), "0000000000000000000000000000000000000000000000000000000000000003");
 
         });
 
@@ -181,6 +202,10 @@ describe('abi', function() {
                     parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
                     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                     );
+            assert.equal(parser.test(0.1), "0000000000000000000000000000000000000000000000000000000000000000");
+            assert.equal(parser.test(3.9), "0000000000000000000000000000000000000000000000000000000000000003");
+            assert.equal(parser.test('0.1'), "0000000000000000000000000000000000000000000000000000000000000000");
+            assert.equal(parser.test('3.9'), "0000000000000000000000000000000000000000000000000000000000000003");
             
         });
 
