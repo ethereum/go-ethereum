@@ -27,6 +27,8 @@ if ("build" !== 'build') {/*
     var web3 = require('./web3'); // jshint ignore:line
 */}
 
+var BigNumber = require('bignumber.js');
+
 // TODO: make these be actually accurate instead of falling back onto JS's doubles.
 var hexToDec = function (hex) {
     return parseInt(hex, 16).toString();
@@ -85,24 +87,26 @@ var namedType = function (name) {
 var setupInputTypes = function () {
     
     /// Formats input value to byte representation of int
+    /// If value is negative, return it's two's complement
     /// @returns right-aligned byte representation of int
     var formatInt = function (value) {
         var padding = 32 * 2;
-        if (typeof value === 'number') {
-            if (value < 0) {
-                
-                // two's complement
-                // TODO: fix big numbers support
-                value = ((value) >>> 0).toString(16);
-                return padLeft(value, padding, 'f');
-            }
-            value = value.toString(16);
-
+        if (value instanceof BigNumber) {
+            if (value.lessThan(0)) 
+                value = new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16).plus(value).plus(1).toString(16);
+            else 
+                value = value.toString(16);
+        }
+        else if (typeof value === 'number') {
+            if (value < 0)
+                value = new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16).plus(value).plus(1).toString(16);
+            else
+                value = new BigNumber(value).toString(16);
         }
         else if (value.indexOf('0x') === 0)
             value = value.substr(2);
         else if (typeof value === 'string')
-            value = value.toHex(value);
+            value = new BigNumber(value).toString(16); 
         else
             value = (+value).toString(16);
         return padLeft(value, padding);
@@ -295,7 +299,7 @@ module.exports = {
 };
 
 
-},{}],2:[function(require,module,exports){
+},{"bignumber.js":undefined}],2:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
