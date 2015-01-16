@@ -4,12 +4,19 @@ Chunker is the interface to a component that is responsible for disassembling an
 
 TreeChunker implements a Chunker based on a tree structure defined as follows:
 
-1 if size is no more than chunksize, it is stored in a single chunk
+1 each node in the tree including the root and other branching nodes are stored as a chunk.
+
+2 branching nodes encode data contents that includes the size of the dataslice covered by its entire subtree under the node as well as the hash keys of all its children :
+data_{i} := size(subtree_{i}) || key_{j} || key_{j+1} .... || key_{j+n-1}
+
+3 Leaf nodes encode an actual subslice of the input data.
+
+4 if data size is not more than maximum chunksize, the data is stored in a single chunk
   key = sha256(int64(size) + data)
 
-2 if size is more than chunksize*HashCount^l, but no more than chunksize*
-  HashCount^(l+1), the data vector is split into slices of chunksize*
-  HashCount^l length (except the last one).
+2 if data size is more than chunksize*Branches^l, but no more than chunksize*
+  Branches^(l+1), the data vector is split into slices of chunksize*
+  Branches^l length (except the last one).
   key = sha256(int64(size) + key(slice0) + key(slice1) + ...)
 */
 
@@ -41,10 +48,10 @@ type Key []byte
 /*
 Chunker is the interface to a component that is responsible for disassembling and assembling larger data and indended to be the dependency of a DPA storage system with fixed maximum chunksize.
 It relies on the underlying chunking model.
-When calling Split, the caller gets returned a channel (chan *Chunk) on which it receives chunks to store. The DPA delegates to storage layers (implementing ChunkStore interface). NewChunkstore(DB) is a convenience wrapper with which all DBs (conforming to DB interface) can serve as ChunkStores. See chunkStore.go
-After getting notified that all the data has been split (the error channel and chunk channel are closed), the caller can safely read or save the root key. Optionally it times out if not all chunks get stored or not the entire stream of data has been processed. By inspecting the errc channel the caller can check if any explicit errors (typically IO read/write failures) occured during splitting.
+When calling Split, the caller provides a channel (chan *Chunk) on which it receives chunks to store. The DPA delegates to storage layers (implementing ChunkStore interface). NewChunkstore(DB) is a convenience wrapper with which all DBs (conforming to DB interface) can serve as ChunkStores. See chunkStore.go
+After getting notified that all the data has been split (the error channel is closed), the caller can safely read or save the root key. Optionally it times out if not all chunks get stored or not the entire stream of data has been processed. By inspecting the errc channel the caller can check if any explicit errors (typically IO read/write failures) occured during splitting.
 
-When calling Join with a root key, the data can be nil ponter in which case it will be initialized as a byte slice based reader corresponding the size of the entire subtree encoded in the chunk. The caller gets returned a channel and an error channel. The chunk channel is the one on which the caller receives placeholder chunks with missing data. The DPA is supposed to forward this to the chunk stores and notify the chunker if the data has been delivered (i.e. retrieved from memory cache, disk-persisted db or cloud based swarm delivery. The chunker then puts these together and notifies the DPA if data has been assembled by a closed error channel. Once the DPA finds the data has been joined, it is free to deliver it back to swarm in full (if the original request was via the bzz protocol) or save and serve if it it was a local client request.
+When calling Join with a root key, the caller gets returned a lazy reader. The caller again provides a channel and receives an error channel. The chunk channel is the one on which the caller receives placeholder chunks with missing data. The DPA is supposed to forward this to the chunk stores and notify the chunker if the data has been delivered (i.e. retrieved from memory cache, disk-persisted db or cloud based swarm delivery). The chunker then puts these together and notifies the DPA if data has been assembled by a closed error channel. Once the DPA finds the data has been joined, it is free to deliver it back to swarm in full (if the original request was via the bzz protocol) or save and serve if it it was a local client request.
 
 */
 type Chunker interface {
