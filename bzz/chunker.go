@@ -313,7 +313,6 @@ func (self *TreeChunker) Join(key Key, chunkC chan *Chunk) (data LazySectionRead
 		}
 		// this will indicate to the caller that processing is finished (with or without error)
 		close(errC)
-		close(chunkC)
 	}()
 
 	return
