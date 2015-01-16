@@ -31,6 +31,8 @@ var web3 = require('./web3'); // jshint ignore:line
 
 BigNumber.config({ ROUNDING_MODE: BigNumber.ROUND_DOWN });
 
+var ETH_PADDING = 32;
+
 // TODO: make these be actually accurate instead of falling back onto JS's doubles.
 var hexToDec = function (hex) {
     return parseInt(hex, 16).toString();
@@ -93,7 +95,7 @@ var setupInputTypes = function () {
     /// If the value is floating point, round it down
     /// @returns right-aligned byte representation of int
     var formatInt = function (value) {
-        var padding = 32 * 2;
+        var padding = ETH_PADDING * 2;
         if (value instanceof BigNumber || typeof value === 'number') {
             if (typeof value === 'number')
                 value = new BigNumber(value);
@@ -115,7 +117,7 @@ var setupInputTypes = function () {
     /// Formats input value to byte representation of string
     /// @returns left-algined byte representation of string
     var formatString = function (value) {
-        return web3.fromAscii(value, 32).substr(2);
+        return web3.fromAscii(value, ETH_PADDING).substr(2);
     };
 
     /// Formats input value to byte representation of bool
@@ -152,7 +154,7 @@ var toAbiInput = function (json, methodName, params) {
     }
 
     var method = json[index];
-    var padding = 32 * 2;
+    var padding = ETH_PADDING * 2;
 
     for (var i = 0; i < method.inputs.length; i++) {
         var typeMatch = false;
@@ -241,7 +243,7 @@ var fromAbiOutput = function (json, methodName, output) {
 
     var result = [];
     var method = json[index];
-    var padding = 32 * 2;
+    var padding = ETH_PADDING * 2;
     for (var i = 0; i < method.outputs.length; i++) {
         var typeMatch = false;
         for (var j = 0; j < outputTypes.length && !typeMatch; j++) {
