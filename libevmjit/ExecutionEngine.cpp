@@ -19,6 +19,14 @@
 #include "Compiler.h"
 #include "Cache.h"
 
+#if defined(NDEBUG)
+#define DEBUG_ENV_OPTION(name) false
+#else
+#include <cstdlib>
+#define DEBUG_ENV_OPTION(name) (std::getenv(#name) != nullptr)
+#endif
+
+
 extern "C" void env_sha3(dev::eth::jit::byte const* _begin, uint64_t _size, std::array<dev::eth::jit::byte, 32>* o_hash);
 
 namespace dev
@@ -64,6 +72,8 @@ std::string codeHash(bytes const& _code)
 ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _env)
 {
 	static std::unique_ptr<llvm::ExecutionEngine> ee;  // TODO: Use Managed Objects from LLVM?
+	static auto debugDumpModule = DEBUG_ENV_OPTION(EVMJIT_DUMP_MODULE);
+	static bool objectCacheEnabled = !DEBUG_ENV_OPTION(EVMJIT_CACHE_OFF);
 
 	auto mainFuncName = codeHash(_code);
 	EntryFuncPtr entryFuncPtr{};
@@ -74,14 +84,14 @@ ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _en
 	}
 	else
 	{
-		bool objectCacheEnabled = true;
 		auto objectCache = objectCacheEnabled ? Cache::getObjectCache() : nullptr;
 		std::unique_ptr<llvm::Module> module;
 		if (objectCache)
 			module = Cache::getObject(mainFuncName);
 		if (!module)
 			module = Compiler({}).compile(_code, mainFuncName);
-		//module->dump();
+		if (debugDumpModule)
+			module->dump();
 		if (!ee)
 		{
 			llvm::InitializeNativeTarget();
@@ -92,7 +102,7 @@ ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _en
 			builder.setUseMCJIT(true);
 			std::unique_ptr<llvm::SectionMemoryManager> memoryManager(new llvm::SectionMemoryManager);
 			builder.setMCJITMemoryManager(memoryManager.get());
-			builder.setOptLevel(llvm::CodeGenOpt::Default);
+			builder.setOptLevel(llvm::CodeGenOpt::None);
 
 			auto triple = llvm::Triple(llvm::sys::getProcessTriple());
 			if (triple.getOS() == llvm::Triple::OSType::Win32)
