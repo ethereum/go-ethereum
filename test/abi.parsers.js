@@ -1,4 +1,5 @@
 var assert = require('assert');
+var BigNumber = require('bignumber.js');
 var abi = require('../lib/abi.js');
 var clone = function (object) { return JSON.parse(JSON.stringify(object)); };
 
@@ -34,6 +35,14 @@ describe('abi', function() {
             // then
             assert.equal(parser.test(1), "0000000000000000000000000000000000000000000000000000000000000001");
             assert.equal(parser.test(10), "000000000000000000000000000000000000000000000000000000000000000a");
+            assert.equal(
+                parser.test("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), 
+                "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                );
+            assert.equal(
+                    parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
+                    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                    );
 
         });
 
@@ -52,6 +61,14 @@ describe('abi', function() {
             // then
             assert.equal(parser.test(1), "0000000000000000000000000000000000000000000000000000000000000001");
             assert.equal(parser.test(10), "000000000000000000000000000000000000000000000000000000000000000a");
+            assert.equal(
+                parser.test("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), 
+                "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                );
+            assert.equal(
+                    parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
+                    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                    );
 
         });
         
@@ -70,6 +87,14 @@ describe('abi', function() {
             // then
             assert.equal(parser.test(1), "0000000000000000000000000000000000000000000000000000000000000001");
             assert.equal(parser.test(10), "000000000000000000000000000000000000000000000000000000000000000a");
+            assert.equal(
+                parser.test("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), 
+                "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                );
+            assert.equal(
+                    parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
+                    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                    );
             
         });
 
@@ -91,7 +116,14 @@ describe('abi', function() {
             assert.equal(parser.test(-1), "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
             assert.equal(parser.test(-2), "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe");
             assert.equal(parser.test(-16), "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0");
-
+            assert.equal(
+                parser.test("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), 
+                "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                );
+            assert.equal(
+                    parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
+                    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                    );
         });
 
         it('should parse input int128', function() {
@@ -112,6 +144,14 @@ describe('abi', function() {
             assert.equal(parser.test(-1), "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
             assert.equal(parser.test(-2), "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe");
             assert.equal(parser.test(-16), "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0");
+            assert.equal(
+                parser.test("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), 
+                "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                );
+            assert.equal(
+                    parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
+                    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                    );
 
         });
 
@@ -133,6 +173,14 @@ describe('abi', function() {
             assert.equal(parser.test(-1), "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
             assert.equal(parser.test(-2), "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe");
             assert.equal(parser.test(-16), "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0");
+            assert.equal(
+                parser.test("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), 
+                "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                );
+            assert.equal(
+                    parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
+                    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                    );
             
         });
 
