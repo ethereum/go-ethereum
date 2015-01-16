@@ -17,7 +17,7 @@ set_property(TARGET ${TARGET_NAME} PROPERTY FOLDER "libs")
 include_directories(${LLVM_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS})
 
-target_link_libraries(${TARGET_NAME} ${LLVM_LIBS})
+target_link_libraries(${TARGET_NAME} PRIVATE ${LLVM_LIBS})
 
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
 
