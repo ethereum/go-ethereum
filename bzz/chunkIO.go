@@ -1,3 +1,4 @@
+//
 package bzz
 
 import (
@@ -231,7 +232,7 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 	var limit int
 	var reader LazySectionReader
 
-	for i := index; i < len(self.sections) || want > 0; i++ {
+	for i := index; i < len(self.sections) && want > 0; i++ {
 		if reader = self.sections[i]; reader == nil {
 			reader = self.readerFs[i]() // this hooks into the go routines and does a wg.Done once the needed chunks are fetched and processed
 			self.sections[i] = reader   // memoize this reader
