@@ -2,6 +2,7 @@ package bzz
 
 import (
 	"bytes"
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -22,6 +23,15 @@ func testlog(t *testing.T) testLogger {
 	return l
 }
 
+type benchLogger struct{ b *testing.B }
+
+func benchlog(b *testing.B) benchLogger {
+	logger.Reset()
+	l := benchLogger{b}
+	logger.AddLogSystem(l)
+	return l
+}
+
 func (testLogger) GetLogLevel() logger.LogLevel { return logger.DebugDetailLevel }
 func (testLogger) SetLogLevel(logger.LogLevel)  {}
 
@@ -30,6 +40,20 @@ func (l testLogger) LogPrint(level logger.LogLevel, msg string) {
 }
 
 func (testLogger) detach() {
+	logger.Flush()
+	logger.Reset()
+}
+
+func (benchLogger) GetLogLevel() logger.LogLevel { return logger.Silence }
+
+// func (benchLogger) GetLogLevel() logger.LogLevel { return logger.DebugLevel }
+func (benchLogger) SetLogLevel(logger.LogLevel) {}
+
+func (l benchLogger) LogPrint(level logger.LogLevel, msg string) {
+	l.b.Logf("%s", msg)
+}
+
+func (benchLogger) detach() {
 	logger.Flush()
 	logger.Reset()
 }
@@ -74,10 +98,10 @@ func (self *chunkerTester) Split(chunker *TreeChunker, l int) (key Key, input []
 	data, slice := testDataReader(l)
 	input = slice
 	key = make([]byte, 32)
-	chunkC := make(chan *Chunk)
+	chunkC := make(chan *Chunk, 1000)
 	errC := chunker.Split(key, data, chunkC)
 	quitC := make(chan bool)
-	timeout := time.After(60 * time.Second)
+	timeout := time.After(600 * time.Second)
 
 	go func() {
 	LOOP:
@@ -87,12 +111,11 @@ func (self *chunkerTester) Split(chunker *TreeChunker, l int) (key Key, input []
 				self.timeout = true
 				break LOOP
 
-			case chunk, ok := <-chunkC:
+			case chunk := <-chunkC:
 				if chunk != nil {
 					self.chunks = append(self.chunks, chunk)
-				}
-				if !ok { // game over but need to continue to see errc still
-					chunkC = nil // make it block so no infinite loop
+				} else {
+					break LOOP
 				}
 
 			case err, ok := <-errC:
@@ -100,7 +123,8 @@ func (self *chunkerTester) Split(chunker *TreeChunker, l int) (key Key, input []
 					self.errors = append(self.errors, err)
 				}
 				if !ok {
-					break LOOP
+					close(chunkC)
+					errC = nil
 				}
 			}
 		}
@@ -110,21 +134,20 @@ func (self *chunkerTester) Split(chunker *TreeChunker, l int) (key Key, input []
 	return
 }
 
-func (self *chunkerTester) Join(t *testing.T, chunker *TreeChunker, key Key) (LazySectionReader, chan bool) {
+func (self *chunkerTester) Join(chunker *TreeChunker, key Key, c int) (LazySectionReader, chan bool) {
 	// reset but not the chunks
 	self.errors = nil
 	self.timeout = false
-	chunkC := make(chan *Chunk)
+	chunkC := make(chan *Chunk, 1000)
 
 	reader, errC := chunker.Join(key, chunkC)
 
 	quitC := make(chan bool)
-	timeout := time.After(60 * time.Second)
-
+	timeout := time.After(600 * time.Second)
+	i := 0
 	go func() {
 	LOOP:
 		for {
-			t.Logf("waiting to mock Chunk Store")
 			select {
 			case <-quitC:
 				break LOOP
@@ -133,32 +156,30 @@ func (self *chunkerTester) Join(t *testing.T, chunker *TreeChunker, key Key) (La
 				self.timeout = true
 				break LOOP
 
-			case chunk, ok := <-chunkC:
-				if chunk != nil {
-					// this just mocks the behaviour of a chunk store retrieval
-					var found bool
-					for _, ch := range self.chunks {
-						if bytes.Compare(chunk.Key, ch.Key) == 0 {
-							found = true
-							chunk.Data = ch.Data
-							chunk.Size = ch.Size
-							close(chunk.C)
-							break
-						}
-					}
-					if !found {
-						t.Errorf("chunk request unknown for %x", chunk.Key[:4])
+			case chunk := <-chunkC:
+				i++
+				// this just mocks the behaviour of a chunk store retrieval
+				var found bool
+				for _, ch := range self.chunks {
+					if bytes.Compare(chunk.Key, ch.Key) == 0 {
+						found = true
+						chunk.Data = ch.Data
+						chunk.Size = ch.Size
+						close(chunk.C)
+						break
 					}
 				}
-				if !ok { // game over but need to continue to see errc still
-					chunkC = nil // make it block so no infinite loop
+				if !found {
+					fmt.Printf("chunk request unknown for %x", chunk.Key[:4])
 				}
-
 			case err, ok := <-errC:
 				if err != nil {
+					fmt.Printf("error %v", err)
 					self.errors = append(self.errors, err)
 				}
 				if !ok {
+					close(chunkC)
+					errC = nil
 					break LOOP
 				}
 			}
@@ -171,7 +192,7 @@ func testRandomData(chunker *TreeChunker, tester *chunkerTester, n int, chunks i
 	key, input := tester.Split(chunker, n)
 	tester.checkChunks(t, chunks)
 	t.Logf("chunks: %v", tester.chunks)
-	reader, quitC := tester.Join(t, chunker, key)
+	reader, quitC := tester.Join(chunker, key, 0)
 	output := make([]byte, reader.Size())
 	_, err := reader.Read(output)
 	if err != nil {
@@ -196,5 +217,64 @@ func TestRandomData(t *testing.T) {
 	testRandomData(chunker, tester, 70, 3, t)
 	testRandomData(chunker, tester, 179, 5, t)
 	testRandomData(chunker, tester, 253, 7, t)
+	// testRandomData(chunker, tester, 2530, 79, t)
+	// testRandomData(chunker, tester, 25300, 79, t)
 	t.Logf("chunks %v", tester.chunks)
 }
+
+func chunkerAndTester() (chunker *TreeChunker, tester *chunkerTester) {
+	chunker = &TreeChunker{
+		Branches:     2,
+		SplitTimeout: 10 * time.Second,
+		JoinTimeout:  10 * time.Second,
+	}
+	chunker.Init()
+	tester = &chunkerTester{}
+	return
+}
+
+func readAll(reader SectionReader) {
+	size := reader.Size()
+	output := make([]byte, 1000)
+	for pos := int64(0); pos < size; pos += 1000 {
+		reader.ReadAt(output, pos)
+	}
+}
+
+func benchmarkJoinRandomData(n int, chunks int, t *testing.B) {
+	for i := 0; i < t.N; i++ {
+		t.StopTimer()
+		chunker, tester := chunkerAndTester()
+		key, _ := tester.Split(chunker, n)
+		t.StartTimer()
+		reader, quitC := tester.Join(chunker, key, i)
+		readAll(reader)
+		close(quitC)
+	}
+}
+
+func benchmarkSplitRandomData(n int, chunks int, t *testing.B) {
+	defer benchlog(t).detach()
+	for i := 0; i < t.N; i++ {
+		chunker, tester := chunkerAndTester()
+		tester.Split(chunker, n)
+	}
+}
+
+func BenchmarkJoinRandomData_100_2(t *testing.B)       { benchmarkJoinRandomData(100, 3, t) }
+func BenchmarkJoinRandomData_1000_2(t *testing.B)      { benchmarkJoinRandomData(1000, 3, t) }
+func BenchmarkJoinRandomData_10000_2(t *testing.B)     { benchmarkJoinRandomData(10000, 3, t) }
+func BenchmarkJoinRandomData_100000_2(t *testing.B)    { benchmarkJoinRandomData(100000, 3, t) }
+func BenchmarkJoinRandomData_1000000_2(t *testing.B)   { benchmarkJoinRandomData(1000000, 3, t) }
+func BenchmarkJoinRandomData_10000000_2(t *testing.B)  { benchmarkJoinRandomData(10000000, 3, t) }
+func BenchmarkJoinRandomData_100000000_2(t *testing.B) { benchmarkJoinRandomData(100000000, 3, t) }
+
+func BenchmarkSplitRandomData_100_2(t *testing.B)       { benchmarkSplitRandomData(100, 3, t) }
+func BenchmarkSplitRandomData_1000_2(t *testing.B)      { benchmarkSplitRandomData(1000, 3, t) }
+func BenchmarkSplitRandomData_10000_2(t *testing.B)     { benchmarkSplitRandomData(10000, 3, t) }
+func BenchmarkSplitRandomData_100000_2(t *testing.B)    { benchmarkSplitRandomData(100000, 3, t) }
+func BenchmarkSplitRandomData_1000000_2(t *testing.B)   { benchmarkSplitRandomData(1000000, 3, t) }
+func BenchmarkSplitRandomData_10000000_2(t *testing.B)  { benchmarkSplitRandomData(10000000, 3, t) }
+func BenchmarkSplitRandomData_100000000_2(t *testing.B) { benchmarkSplitRandomData(100000000, 3, t) }
+
+// go test -bench ./bzz -cpuprofile cpu.out -memprofile mem.out
