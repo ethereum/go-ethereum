@@ -40,9 +40,9 @@ describe('abi', function() {
                 "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                 );
             assert.equal(
-                    parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
-                    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-                    );
+                parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
+                "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                );
             assert.equal(parser.test(0.1), "0000000000000000000000000000000000000000000000000000000000000000");
             assert.equal(parser.test(3.9), "0000000000000000000000000000000000000000000000000000000000000003");
             assert.equal(parser.test('0.1'), "0000000000000000000000000000000000000000000000000000000000000000");
@@ -71,9 +71,9 @@ describe('abi', function() {
                 "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                 );
             assert.equal(
-                    parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
-                    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-                    );
+                parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
+                "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                );
             assert.equal(parser.test(0.1), "0000000000000000000000000000000000000000000000000000000000000000");
             assert.equal(parser.test(3.9), "0000000000000000000000000000000000000000000000000000000000000003");
             assert.equal(parser.test('0.1'), "0000000000000000000000000000000000000000000000000000000000000000");
@@ -101,9 +101,9 @@ describe('abi', function() {
                 "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                 );
             assert.equal(
-                    parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
-                    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-                    );
+                parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
+                "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                );
             assert.equal(parser.test(0.1), "0000000000000000000000000000000000000000000000000000000000000000");
             assert.equal(parser.test(3.9), "0000000000000000000000000000000000000000000000000000000000000003");
             assert.equal(parser.test('0.1'), "0000000000000000000000000000000000000000000000000000000000000000");
@@ -134,9 +134,9 @@ describe('abi', function() {
                 "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                 );
             assert.equal(
-                    parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
-                    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-                    );
+                parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
+                "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                );
             assert.equal(parser.test(0.1), "0000000000000000000000000000000000000000000000000000000000000000");
             assert.equal(parser.test(3.9), "0000000000000000000000000000000000000000000000000000000000000003");
             assert.equal(parser.test('0.1'), "0000000000000000000000000000000000000000000000000000000000000000");
@@ -166,9 +166,9 @@ describe('abi', function() {
                 "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                 );
             assert.equal(
-                    parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
-                    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-                    );
+                parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
+                "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                );
             assert.equal(parser.test(0.1), "0000000000000000000000000000000000000000000000000000000000000000");
             assert.equal(parser.test(3.9), "0000000000000000000000000000000000000000000000000000000000000003");
             assert.equal(parser.test('0.1'), "0000000000000000000000000000000000000000000000000000000000000000");
@@ -199,9 +199,9 @@ describe('abi', function() {
                 "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                 );
             assert.equal(
-                    parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
-                    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-                    );
+                parser.test(new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16)),
+                "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                );
             assert.equal(parser.test(0.1), "0000000000000000000000000000000000000000000000000000000000000000");
             assert.equal(parser.test(3.9), "0000000000000000000000000000000000000000000000000000000000000003");
             assert.equal(parser.test('0.1'), "0000000000000000000000000000000000000000000000000000000000000000");
@@ -396,8 +396,18 @@ describe('abi', function() {
             var parser = abi.outputParser(d);
             
             // then
-            assert.equal(parser.test("0x68656c6c6f000000000000000000000000000000000000000000000000000000")[0], 'hello');
-            assert.equal(parser.test("0x776f726c64000000000000000000000000000000000000000000000000000000")[0], 'world');
+            assert.equal(
+                parser.test("0x" + 
+                    "0000000000000000000000000000000000000000000000000000000000000005" +
+                    "68656c6c6f000000000000000000000000000000000000000000000000000000")[0],
+                'hello'
+                );
+            assert.equal(
+                parser.test("0x" + 
+                    "0000000000000000000000000000000000000000000000000000000000000005" +
+                    "776f726c64000000000000000000000000000000000000000000000000000000")[0], 
+                'world'
+                );
 
         });
 
@@ -644,12 +654,21 @@ describe('abi', function() {
 
             // then
             assert.equal(
-                parser.test("0x68656c6c6f000000000000000000000000000000000000000000000000000000776f726c64000000000000000000000000000000000000000000000000000000")[0],
+                parser.test("0x" +
+                    "0000000000000000000000000000000000000000000000000000000000000005" +
+                    "0000000000000000000000000000000000000000000000000000000000000005" +
+                    "68656c6c6f000000000000000000000000000000000000000000000000000000" + 
+                    "776f726c64000000000000000000000000000000000000000000000000000000")[0],
                 'hello'
                 );
             assert.equal(
-                parser.test("0x68656c6c6f000000000000000000000000000000000000000000000000000000776f726c64000000000000000000000000000000000000000000000000000000")[1], 
-                'world');
+                parser.test("0x" +
+                    "0000000000000000000000000000000000000000000000000000000000000005" +
+                    "0000000000000000000000000000000000000000000000000000000000000005" +
+                    "68656c6c6f000000000000000000000000000000000000000000000000000000" + 
+                    "776f726c64000000000000000000000000000000000000000000000000000000")[1],
+                'world'
+                );
 
         });
         
@@ -689,7 +708,11 @@ describe('abi', function() {
 
             //then
             assert.equal(parser.test("0000000000000000000000000000000000000000000000000000000000000001")[0], 1);
-            assert.equal(parser.test2("0x68656c6c6f000000000000000000000000000000000000000000000000000000")[0], "hello");
+            assert.equal(parser.test2("0x" + 
+                    "0000000000000000000000000000000000000000000000000000000000000005" +
+                    "68656c6c6f000000000000000000000000000000000000000000000000000000")[0],
+                "hello"
+                );
 
         });
 
