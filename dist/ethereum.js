@@ -33,15 +33,6 @@ BigNumber.config({ ROUNDING_MODE: BigNumber.ROUND_DOWN });
 
 var ETH_PADDING = 32;
 
-// TODO: make these be actually accurate instead of falling back onto JS's doubles.
-var hexToDec = function (hex) {
-    return parseInt(hex, 16).toString();
-};
-
-var decToHex = function (dec) {
-    return parseInt(dec).toString(16);
-};
-
 /// Finds first index of array element matching pattern
 /// @param array
 /// @param callback pattern
@@ -86,55 +77,66 @@ var namedType = function (name) {
     };
 };
 
+var arrayType = function (type) {
+    return type.slice(-2) === '[]';
+};
+
+/// Formats input value to byte representation of int
+/// If value is negative, return it's two's complement
+/// If the value is floating point, round it down
+/// @returns right-aligned byte representation of int
+var formatInputInt = function (value) {
+    var padding = ETH_PADDING * 2;
+    if (value instanceof BigNumber || typeof value === 'number') {
+        if (typeof value === 'number')
+            value = new BigNumber(value);
+        value = value.round();
+
+        if (value.lessThan(0)) 
+            value = new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16).plus(value).plus(1);
+        value = value.toString(16);
+    }
+    else if (value.indexOf('0x') === 0)
+        value = value.substr(2);
+    else if (typeof value === 'string')
+        value = formatInputInt(new BigNumber(value));
+    else
+        value = (+value).toString(16);
+    return padLeft(value, padding);
+};
+
+/// Formats input value to byte representation of string
+/// @returns left-algined byte representation of string
+var formatInputString = function (value) {
+    return web3.fromAscii(value, ETH_PADDING).substr(2);
+};
+
+/// Formats input value to byte representation of bool
+/// @returns right-aligned byte representation bool
+var formatInputBool = function (value) {
+    return '000000000000000000000000000000000000000000000000000000000000000' + (value ?  '1' : '0');
+};
+
+var dynamicTypeBytes = function (type, value) {
+    // TODO: decide what to do with array of strings
+    if (arrayType(type) || prefixedType('string')(type))
+        return formatInputInt(value.length); 
+    return "";
+};
+
 /// Setups input formatters for solidity types
 /// @returns an array of input formatters 
 var setupInputTypes = function () {
     
-    /// Formats input value to byte representation of int
-    /// If value is negative, return it's two's complement
-    /// If the value is floating point, round it down
-    /// @returns right-aligned byte representation of int
-    var formatInt = function (value) {
-        var padding = ETH_PADDING * 2;
-        if (value instanceof BigNumber || typeof value === 'number') {
-            if (typeof value === 'number')
-                value = new BigNumber(value);
-            value = value.round();
-
-            if (value.lessThan(0)) 
-                value = new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16).plus(value).plus(1);
-            value = value.toString(16);
-        }
-        else if (value.indexOf('0x') === 0)
-            value = value.substr(2);
-        else if (typeof value === 'string')
-            value = formatInt(new BigNumber(value));
-        else
-            value = (+value).toString(16);
-        return padLeft(value, padding);
-    };
-
-    /// Formats input value to byte representation of string
-    /// @returns left-algined byte representation of string
-    var formatString = function (value) {
-        return web3.fromAscii(value, ETH_PADDING).substr(2);
-    };
-
-    /// Formats input value to byte representation of bool
-    /// @returns right-aligned byte representation bool
-    var formatBool = function (value) {
-        return '000000000000000000000000000000000000000000000000000000000000000' + (value ?  '1' : '0');
-    };
-
     return [
-        { type: prefixedType('uint'), format: formatInt },
-        { type: prefixedType('int'), format: formatInt },
-        { type: prefixedType('hash'), format: formatInt },
-        { type: prefixedType('string'), format: formatString }, 
-        { type: prefixedType('real'), format: formatInt },
-        { type: prefixedType('ureal'), format: formatInt },
-        { type: namedType('address'), format: formatInt },
-        { type: namedType('bool'), format: formatBool }
+        { type: prefixedType('uint'), format: formatInputInt },
+        { type: prefixedType('int'), format: formatInputInt },
+        { type: prefixedType('hash'), format: formatInputInt },
+        { type: prefixedType('string'), format: formatInputString }, 
+        { type: prefixedType('real'), format: formatInputInt },
+        { type: prefixedType('ureal'), format: formatInputInt },
+        { type: namedType('address'), format: formatInputInt },
+        { type: namedType('bool'), format: formatInputBool }
     ];
 };
 
@@ -156,7 +158,12 @@ var toAbiInput = function (json, methodName, params) {
     var method = json[index];
     var padding = ETH_PADDING * 2;
 
-    for (var i = 0; i < method.inputs.length; i++) {
+    /// first we iterate in search for dynamic 
+    method.inputs.forEach(function (input, index) {
+        bytes += dynamicTypeBytes(input.type, params[index]);
+    });
+
+    method.inputs.forEach(function (input, i) {
         var typeMatch = false;
         for (var j = 0; j < inputTypes.length && !typeMatch; j++) {
             typeMatch = inputTypes[j].type(method.inputs[i].type, params[i]);
@@ -166,62 +173,77 @@ var toAbiInput = function (json, methodName, params) {
         }
 
         var formatter = inputTypes[j - 1].format;
-        bytes += (formatter ? formatter(params[i]) : params[i]);
-    }
+        var toAppend = "";
+
+        if (arrayType(method.inputs[i].type))
+            toAppend = params[i].reduce(function (acc, curr) {
+                return acc + formatter(curr);
+            }, "");
+        else
+            toAppend = formatter(params[i]);
+
+        bytes += toAppend; 
+    });
     return bytes;
+};
+
+/// Formats input right-aligned input bytes to int
+/// @returns right-aligned input bytes formatted to int
+var formatOutputInt = function (value) {
+    // check if it's negative number
+    // it it is, return two's complement
+    var firstBit = new BigNumber(value.substr(0, 1), 16).toString(2).substr(0, 1);
+    if (firstBit === '1') {
+        return new BigNumber(value, 16).minus(new BigNumber('ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', 16)).minus(1);
+    }
+    return new BigNumber(value, 16);
+};
+
+/// Formats big right-aligned input bytes to uint
+/// @returns right-aligned input bytes formatted to uint
+var formatOutputUInt = function (value) {
+    return new BigNumber(value, 16);
+};
+
+/// @returns right-aligned input bytes formatted to hex
+var formatOutputHash = function (value) {
+    return "0x" + value;
+};
+
+/// @returns right-aligned input bytes formatted to bool
+var formatOutputBool = function (value) {
+    return value === '0000000000000000000000000000000000000000000000000000000000000001' ? true : false;
+};
+
+/// @returns left-aligned input bytes formatted to ascii string
+var formatOutputString = function (value) {
+    return web3.toAscii(value);
+};
+
+/// @returns right-aligned input bytes formatted to address
+var formatOutputAddress = function (value) {
+    return "0x" + value.slice(value.length - 40, value.length);
+};
+
+var dynamicBytesLength = function (type) {
+    if (arrayType(type) || prefixedType('string')(type))
+        return ETH_PADDING * 2;
+    return 0;
 };
 
 /// Setups output formaters for solidity types
 /// @returns an array of output formatters
 var setupOutputTypes = function () {
 
-    /// Formats input right-aligned input bytes to int
-    /// @returns right-aligned input bytes formatted to int
-    var formatInt = function (value) {
-        // check if it's negative number
-        // it it is, return two's complement
-        var firstBit = new BigNumber(value.substr(0, 1), 16).toString(2).substr(0, 1);
-        if (firstBit === '1') {
-            return new BigNumber(value, 16).minus(new BigNumber('ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', 16)).minus(1);
-        }
-        return new BigNumber(value, 16);
-    };
-
-    /// Formats big right-aligned input bytes to uint
-    /// @returns right-aligned input bytes formatted to uint
-    var formatUInt = function (value) {
-        return new BigNumber(value, 16);
-    };
-
-    /// @returns right-aligned input bytes formatted to hex
-    var formatHash = function (value) {
-        return "0x" + value;
-    };
-
-    /// @returns right-aligned input bytes formatted to bool
-    var formatBool = function (value) {
-        return value === '0000000000000000000000000000000000000000000000000000000000000001' ? true : false;
-    };
-
-    /// @returns left-aligned input bytes formatted to ascii string
-    var formatString = function (value) {
-        return web3.toAscii(value);
-    };
-
-    /// @returns right-aligned input bytes formatted to address
-    var formatAddress = function (value) {
-        return "0x" + value.slice(value.length - 40, value.length);
-    };
-
     return [
-        { type: prefixedType('uint'), format: formatUInt },
-        { type: prefixedType('int'), format: formatInt },
-        { type: prefixedType('hash'), format: formatHash },
-        { type: prefixedType('string'), format: formatString },
-        { type: prefixedType('real'), format: formatInt },
-        { type: prefixedType('ureal'), format: formatInt },
-        { type: namedType('address'), format: formatAddress },
-        { type: namedType('bool'), format: formatBool }
+        { type: prefixedType('uint'), format: formatOutputUInt },
+        { type: prefixedType('int'), format: formatOutputInt },
+        { type: prefixedType('hash'), format: formatOutputHash },
+        { type: prefixedType('string'), format: formatOutputString },
+        { type: prefixedType('real'), format: formatOutputInt },
+        { type: prefixedType('ureal'), format: formatOutputInt },
+        { type: namedType('address'), format: formatOutputAddress },
+        { type: namedType('bool'), format: formatOutputBool }
     ];
 };
 
@@ -244,22 +266,44 @@ var fromAbiOutput = function (json, methodName, output) {
     var result = [];
     var method = json[index];
     var padding = ETH_PADDING * 2;
-    for (var i = 0; i < method.outputs.length; i++) {
+
+    var dynamicPartLength = method.outputs.reduce(function (acc, curr) {
+        return acc + dynamicBytesLength(curr.type);
+    }, 0);
+    
+    var dynamicPart = output.slice(0, dynamicPartLength);
+    output = output.slice(dynamicPartLength);
+
+    method.outputs.forEach(function (out, i) {
         var typeMatch = false;
         for (var j = 0; j < outputTypes.length && !typeMatch; j++) {
             typeMatch = outputTypes[j].type(method.outputs[i].type);
         }
 
         if (!typeMatch) {
-            // not found output parsing
             console.error('output parser does not support type: ' + method.outputs[i].type);
-            continue;
         }
-        var res = output.slice(0, padding);
+
         var formatter = outputTypes[j - 1].format;
-        result.push(formatter ? formatter(res) : ("0x" + res));
-        output = output.slice(padding);
-    }
+        if (arrayType(method.outputs[i].type)) {
+            var size = formatOutputUInt(dynamicPart.slice(0, padding));
+            dynamicPart = dynamicPart.slice(padding);
+            var array = [];
+            for (var k = 0; k < size; k++) {
+                array.push(formatter(output.slice(0, padding))); 
+                output = output.slice(padding);
+            }
+            result.push(array);
+        }
+        else if (prefixedType('string')(method.outputs[i].type)) {
+            dynamicPart = dynamicPart.slice(padding); 
+            result.push(formatter(output.slice(0, padding)));
+            output = output.slice(padding);
+        } else {
+            result.push(formatter(output.slice(0, padding)));
+            output = output.slice(padding);
+        }
+    });
 
     return result;
 };
