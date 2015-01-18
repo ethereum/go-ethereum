@@ -136,7 +136,10 @@ ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _en
 
 	auto returnCode = runEntryFunc(entryFuncPtr, &runtime);
 	if (returnCode == ReturnCode::Return)
-		this->returnData = runtime.getReturnData();
+	{
+		returnData = runtime.getReturnData();     // Save reference to return data
+		std::swap(m_memory, runtime.getMemory()); // Take ownership of memory
+	}
 
 	auto executionEndTime = std::chrono::high_resolution_clock::now();
 	clog(JIT) << " + " << std::chrono::duration_cast<std::chrono::milliseconds>(executionEndTime - executionStartTime).count() << " ms\n";

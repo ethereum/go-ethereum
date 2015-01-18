@@ -12,6 +12,7 @@ namespace jit
 
 using byte = uint8_t;
 using bytes = std::vector<byte>;
+using bytes_ref = std::tuple<byte const*, size_t>;
 using u256 = boost::multiprecision::uint256_t;
 using bigint = boost::multiprecision::cpp_int;
 

@@ -18,7 +18,7 @@ Runtime::Runtime(RuntimeData* _data, Env* _env) :
 	m_currJmpBuf(m_jmpBuf)
 {}
 
-bytes Runtime::getReturnData() const	// FIXME: Reconsider returning by copy
+bytes_ref Runtime::getReturnData() const
 {
 	// TODO: Handle large indexes
 	auto offset = static_cast<size_t>(llvm2eth(m_data.elems[RuntimeData::ReturnDataOffset]));
@@ -28,8 +28,8 @@ bytes Runtime::getReturnData() const	// FIXME: Reconsider returning by copy
 	if (offset + size > m_memory.size())
 		return {};
 
-	auto dataBeg = m_memory.begin() + offset;
-	return {dataBeg, dataBeg + size};
+	auto dataBeg = m_memory.data() + offset;
+	return bytes_ref{dataBeg, size};
 }
 
 }

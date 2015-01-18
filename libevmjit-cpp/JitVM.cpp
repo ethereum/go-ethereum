@@ -50,7 +50,7 @@ bytesConstRef JitVM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 	}
 
 	m_gas = llvm2eth(m_data.elems[RuntimeData::Gas]);
-	return {m_engine.returnData.data(), m_engine.returnData.size()};  // TODO: This all bytesConstRef is problematic, review.
+	return {std::get<0>(m_engine.returnData), std::get<1>(m_engine.returnData)};
 }
 
 }
