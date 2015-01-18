@@ -64,6 +64,10 @@ func (h *handshake) Pubkey() []byte {
 	return h.NodeID
 }
 
+func (h *handshake) PrivKey() []byte {
+	return nil
+}
+
 // Cap is the structure of a peer capability.
 type Cap struct {
 	Name    string
