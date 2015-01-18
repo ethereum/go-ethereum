@@ -70,6 +70,7 @@ type Peer struct {
 	// These fields maintain the running protocols.
 	protocols       []Protocol
 	runBaseProtocol bool // for testing
+	cryptoHandshake bool // for testing
 
 	runlock sync.RWMutex // protects running
 	running map[string]*proto
@@ -141,6 +142,20 @@ func (p *Peer) Identity() ClientIdentity {
 	return p.identity
 }
 
+func (self *Peer) Pubkey() (pubkey []byte) {
+	self.infolock.Lock()
+	defer self.infolock.Unlock()
+	switch {
+	case self.identity != nil:
+		pubkey = self.identity.Pubkey()
+	case self.dialAddr != nil:
+		pubkey = self.dialAddr.Pubkey
+	case self.listenAddr != nil:
+		pubkey = self.listenAddr.Pubkey
+	}
+	return
+}
+
 // Caps returns the capabilities (supported subprotocols) of the remote peer.
 func (p *Peer) Caps() []Cap {
 	p.infolock.Lock()
@@ -206,6 +221,12 @@ func (p *Peer) loop() (reason DiscReason, err error) {
 	defer p.closeProtocols()
 	defer close(p.closed)
 	defer p.conn.Close()
+
+	if p.cryptoHandshake {
+		if err := p.handleCryptoHandshake(); err != nil {
+			return DiscProtocolError, err // no graceful disconnect
+		}
+	}
 
 	// read loop
 	readMsg := make(chan Msg)
@@ -305,6 +326,11 @@ func (p *Peer) dispatch(msg Msg, protoDone chan struct{}) (wait bool, err error)
 		proto.in <- msg
 	}
 	return wait, nil
+}
+
+func (p *Peer) handleCryptoHandshake() (err error) {
+
+	return nil
 }
 
 func (p *Peer) startBaseProtocol() {
