@@ -1,7 +1,7 @@
 package p2p
 
 import (
-	// "bytes"
+	"bytes"
 	"fmt"
 	"testing"
 
@@ -24,31 +24,32 @@ func TestCryptoHandshake(t *testing.T) {
 		return
 	}
 
-	auth, initNonce, _, _ := initiator.initAuth(responder.pubKeyDER, sessionToken)
+	auth, initNonce, randomPrvKey, randomPubKey, _ := initiator.initAuth(responder.pubKeyDER, sessionToken)
 
-	response, remoteRespNonce, remoteInitNonce, remoteRandomPubKey, _ := responder.verifyAuth(auth, sessionToken, pubInit)
+	response, remoteRespNonce, remoteInitNonce, remoteRandomPrivKey, _ := responder.verifyAuth(auth, sessionToken, pubInit)
 
-	respNonce, randomPubKey, _, _ := initiator.verifyAuthResp(response)
+	respNonce, remoteRandomPubKey, _, _ := initiator.verifyAuthResp(response)
 
-	fmt.Printf("%x\n%x\n%x\n%x\n%x\n%x\n%x\n%x\n", auth, initNonce, response, remoteRespNonce, remoteInitNonce, remoteRandomPubKey, respNonce, randomPubKey)
-	initSessionToken, initSecretRW, _ := initiator.newSession(initNonce, respNonce, auth, randomPubKey)
-	// respSessionToken, respSecretRW, _ := responder.newSession(remoteInitNonce, remoteRespNonce, auth, remoteRandomPubKey)
+	initSessionToken, initSecretRW, _ := initiator.newSession(initNonce, respNonce, auth, randomPrvKey, remoteRandomPubKey)
+	respSessionToken, respSecretRW, _ := responder.newSession(remoteInitNonce, remoteRespNonce, auth, remoteRandomPrivKey, randomPubKey)
 
-	// if !bytes.Equal(initSessionToken, respSessionToken) {
-	// 	t.Errorf("session tokens do not match")
-	// }
-	// // aesSecret, macSecret, egressMac, ingressMac
-	// if !bytes.Equal(initSecretRW.aesSecret, respSecretRW.aesSecret) {
-	// 	t.Errorf("AES secrets do not match")
-	// }
-	// if !bytes.Equal(initSecretRW.macSecret, respSecretRW.macSecret) {
-	// 	t.Errorf("macSecrets do not match")
-	// }
-	// if !bytes.Equal(initSecretRW.egressMac, respSecretRW.egressMac) {
-	// 	t.Errorf("egressMacs do not match")
-	// }
-	// if !bytes.Equal(initSecretRW.ingressMac, respSecretRW.ingressMac) {
-	// 	t.Errorf("ingressMacs do not match")
-	// }
+	fmt.Printf("%x\n%x\n%x\n%x\n%x\n%x\n%x\n%x\n%x\n%x\n", auth, initNonce, response, remoteRespNonce, remoteInitNonce, remoteRandomPubKey, respNonce, randomPubKey, initSessionToken, initSecretRW)
+
+	if !bytes.Equal(initSessionToken, respSessionToken) {
+		t.Errorf("session tokens do not match")
+	}
+	// aesSecret, macSecret, egressMac, ingressMac
+	if !bytes.Equal(initSecretRW.aesSecret, respSecretRW.aesSecret) {
+		t.Errorf("AES secrets do not match")
+	}
+	if !bytes.Equal(initSecretRW.macSecret, respSecretRW.macSecret) {
+		t.Errorf("macSecrets do not match")
+	}
+	if !bytes.Equal(initSecretRW.egressMac, respSecretRW.egressMac) {
+		t.Errorf("egressMacs do not match")
+	}
+	if !bytes.Equal(initSecretRW.ingressMac, respSecretRW.ingressMac) {
+		t.Errorf("ingressMacs do not match")
+	}
 
 }

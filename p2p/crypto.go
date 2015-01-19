@@ -53,10 +53,24 @@ func newCryptoId(id ClientIdentity) (self *cryptoId, err error) {
 	return
 }
 
-// initAuth is called by peer if it initiated the connection
-func (self *cryptoId) initAuth(remotePubKeyDER, sessionToken []byte) (auth []byte, initNonce []byte, remotePubKey *ecdsa.PublicKey, err error) {
+/* startHandshake is called by peer if it initiated the connection.
+ By protocol spec, the party who initiates the connection (initiator) will send an 'auth' packet
+New: authInitiator -> E(remote-pubk, S(ecdhe-random, ecdh-shared-secret^nonce) || H(ecdhe-random-pubk) || pubk || nonce || 0x0)
+     authRecipient -> E(remote-pubk, ecdhe-random-pubk || nonce || 0x0)
+
+Known: authInitiator = E(remote-pubk, S(ecdhe-random, token^nonce) || H(ecdhe-random-pubk) || pubk || nonce || 0x1)
+       authRecipient = E(remote-pubk, ecdhe-random-pubk || nonce || 0x1) // token found
+       authRecipient = E(remote-pubk, ecdhe-random-pubk || nonce || 0x0) // token not found
+
+The caller provides the public key of the peer as conjuctured from lookup based on IP:port, given as user input or proven by signatures. The caller must have access to persistant information about the peers, and pass the previous session token as an argument to cryptoId.
+
+The handshake is the process by which the peers establish their connection for a session.
+
+*/
+
+func (self *cryptoId) startHandshake(remotePubKeyDER, sessionToken []byte) (auth []byte, initNonce []byte, randomPrvKey *ecdsa.PrivateKey, randomPubKey *ecdsa.PublicKey, err error) {
 	// session init, common to both parties
-	remotePubKey = crypto.ToECDSAPub(remotePubKeyDER)
+	remotePubKey := crypto.ToECDSAPub(remotePubKeyDER)
 	if remotePubKey == nil {
 		err = fmt.Errorf("invalid remote public key")
 		return
@@ -70,6 +84,7 @@ func (self *cryptoId) initAuth(remotePubKeyDER, sessionToken []byte) (auth []byt
 		if sessionToken, err = ecies.ImportECDSA(self.prvKey).GenerateShared(ecies.ImportECDSAPublic(remotePubKey), sskLen, sskLen); err != nil {
 			return
 		}
+		// this will not stay here ;)
 		fmt.Printf("secret generated: %v %x", len(sessionToken), sessionToken)
 		// tokenFlag = 0x00 // redundant
 	} else {
@@ -93,15 +108,14 @@ func (self *cryptoId) initAuth(remotePubKeyDER, sessionToken []byte) (auth []byt
 	var sharedSecret = Xor(sessionToken, initNonce)
 
 	// generate random keypair to use for signing
-	var ecdsaRandomPrvKey *ecdsa.PrivateKey
-	if ecdsaRandomPrvKey, err = crypto.GenerateKey(); err != nil {
+	if randomPrvKey, err = crypto.GenerateKey(); err != nil {
 		return
 	}
 	// sign shared secret (message known to both parties): shared-secret
 	var signature []byte
 	// signature = sign(ecdhe-random, shared-secret)
 	// uses secp256k1.Sign
-	if signature, err = crypto.Sign(sharedSecret, ecdsaRandomPrvKey); err != nil {
+	if signature, err = crypto.Sign(sharedSecret, randomPrvKey); err != nil {
 		return
 	}
 	fmt.Printf("signature generated: %v %x", len(signature), signature)
@@ -110,7 +124,7 @@ func (self *cryptoId) initAuth(remotePubKeyDER, sessionToken []byte) (auth []byt
 	// signed-shared-secret || H(ecdhe-random-pubk) || pubk || nonce || 0x0
 	copy(msg, signature) // copy signed-shared-secret
 	// H(ecdhe-random-pubk)
-	copy(msg[sigLen:sigLen+keyLen], crypto.Sha3(crypto.FromECDSAPub(&ecdsaRandomPrvKey.PublicKey)))
+	copy(msg[sigLen:sigLen+keyLen], crypto.Sha3(crypto.FromECDSAPub(&randomPrvKey.PublicKey)))
 	// pubkey copied to the correct segment.
 	copy(msg[sigLen+keyLen:sigLen+2*keyLen], self.pubKeyDER)
 	// nonce is already in the slice
@@ -131,7 +145,7 @@ func (self *cryptoId) initAuth(remotePubKeyDER, sessionToken []byte) (auth []byt
 }
 
 // verifyAuth is called by peer if it accepted (but not initiated) the connection
-func (self *cryptoId) verifyAuth(auth, sessionToken []byte, remotePubKey *ecdsa.PublicKey) (authResp []byte, respNonce []byte, initNonce []byte, remoteRandomPubKey *ecdsa.PublicKey, err error) {
+func (self *cryptoId) respondToHandshake(auth, sessionToken []byte, remotePubKey *ecdsa.PublicKey) (authResp []byte, respNonce []byte, initNonce []byte, randomPrvKey *ecdsa.PrivateKey, err error) {
 	var msg []byte
 	fmt.Printf("encrypted message received: %v %x\n used pubkey: %x\n", len(auth), auth, crypto.FromECDSAPub(self.pubKey))
 	// they prove that msg is meant for me,
@@ -167,7 +181,7 @@ func (self *cryptoId) verifyAuth(auth, sessionToken []byte, remotePubKey *ecdsa.
 		return
 	}
 	// convert to ECDSA standard
-	remoteRandomPubKey = crypto.ToECDSAPub(remoteRandomPubKeyDER)
+	remoteRandomPubKey := crypto.ToECDSAPub(remoteRandomPubKeyDER)
 	if remoteRandomPubKey == nil {
 		err = fmt.Errorf("invalid remote public key")
 		return
@@ -181,13 +195,12 @@ func (self *cryptoId) verifyAuth(auth, sessionToken []byte, remotePubKey *ecdsa.
 		return
 	}
 	// generate random keypair for session
-	var ecdsaRandomPrvKey *ecdsa.PrivateKey
-	if ecdsaRandomPrvKey, err = crypto.GenerateKey(); err != nil {
+	if randomPrvKey, err = crypto.GenerateKey(); err != nil {
 		return
 	}
 	// responder auth message
 	// E(remote-pubk, ecdhe-random-pubk || nonce || 0x0)
-	copy(resp[:keyLen], crypto.FromECDSAPub(&ecdsaRandomPrvKey.PublicKey))
+	copy(resp[:keyLen], crypto.FromECDSAPub(&randomPrvKey.PublicKey))
 	// nonce is already in the slice
 	resp[resLen-1] = tokenFlag
 
@@ -200,7 +213,7 @@ func (self *cryptoId) verifyAuth(auth, sessionToken []byte, remotePubKey *ecdsa.
 	return
 }
 
-func (self *cryptoId) verifyAuthResp(auth []byte) (respNonce []byte, remoteRandomPubKey *ecdsa.PublicKey, tokenFlag bool, err error) {
+func (self *cryptoId) completeHandshake(auth []byte) (respNonce []byte, remoteRandomPubKey *ecdsa.PublicKey, tokenFlag bool, err error) {
 	var msg []byte
 	// they prove that msg is meant for me,
 	// I prove I possess private key if i can read it
@@ -221,12 +234,12 @@ func (self *cryptoId) verifyAuthResp(auth []byte) (respNonce []byte, remoteRando
 	return
 }
 
-func (self *cryptoId) newSession(initNonce, respNonce, auth []byte, remoteRandomPubKey *ecdsa.PublicKey) (sessionToken []byte, rw *secretRW, err error) {
+func (self *cryptoId) newSession(initNonce, respNonce, auth []byte, privKey *ecdsa.PrivateKey, remoteRandomPubKey *ecdsa.PublicKey) (sessionToken []byte, rw *secretRW, err error) {
 	// 3) Now we can trust ecdhe-random-pubk to derive new keys
 	//ecdhe-shared-secret = ecdh.agree(ecdhe-random, remote-ecdhe-random-pubk)
 	var dhSharedSecret []byte
-	dhSharedSecret, err = ecies.ImportECDSA(self.prvKey).GenerateShared(ecies.ImportECDSAPublic(remoteRandomPubKey), sskLen, sskLen)
-	if err != nil {
+	pubKey := ecies.ImportECDSAPublic(remoteRandomPubKey)
+	if dhSharedSecret, err = ecies.ImportECDSA(privKey).GenerateShared(pubKey, sskLen, sskLen); err != nil {
 		return
 	}
 	// shared-secret = crypto.Sha3(ecdhe-shared-secret || crypto.Sha3(nonce || initiator-nonce))
