@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"fmt"
+	"io"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/obscuren/ecies"
@@ -53,19 +54,35 @@ func newCryptoId(id ClientIdentity) (self *cryptoId, err error) {
 	return
 }
 
-func (self *cryptoId) Run(remotePubKeyDER []byte) (rw *secretRW) {
-	if self.initiator {
-		auth, initNonce, randomPrvKey, randomPubKey, err := initiator.initAuth(remotePubKeyDER, sessionToken)
-
-		respNonce, remoteRandomPubKey, _, _ := initiator.verifyAuthResp(response)
+func (self *cryptoId) Run(conn io.ReadWriter, remotePubKeyDER []byte, sessionToken []byte, initiator bool) (token []byte, rw *secretRW, err error) {
+	var auth, initNonce, recNonce []byte
+	var randomPrivKey *ecdsa.PrivateKey
+	var remoteRandomPubKey *ecdsa.PublicKey
+	if initiator {
+		if auth, initNonce, randomPrivKey, _, err = self.startHandshake(remotePubKeyDER, sessionToken); err != nil {
+			return
+		}
+		conn.Write(auth)
+		var response []byte
+		conn.Read(response)
+		// write out auth message
+		// wait for response, then call complete
+		if recNonce, remoteRandomPubKey, _, err = self.completeHandshake(response); err != nil {
+			return
+		}
 	} else {
-		// we are listening connection. we are responders in the haandshake.
+		conn.Read(auth)
+		// we are listening connection. we are responders in the handshake.
 		// Extract info from the authentication. The initiator starts by sending us a handshake that we need to respond to.
-		response, remoteRespNonce, remoteInitNonce, remoteRandomPrivKey, _ := responder.verifyAuth(auth, sessionToken, pubInit)
-
+		// so we read auth message first, then respond
+		var response []byte
+		if response, recNonce, initNonce, randomPrivKey, err = self.respondToHandshake(auth, remotePubKeyDER, sessionToken); err != nil {
+			return
+		}
+		remoteRandomPubKey = &randomPrivKey.PublicKey
+		conn.Write(response)
 	}
-	initSessionToken, initSecretRW, _ := initiator.newSession(initNonce, respNonce, auth, randomPrvKey, remoteRandomPubKey)
-	respSessionToken, respSecretRW, _ := responder.newSession(remoteInitNonce, remoteRespNonce, auth, remoteRandomPrivKey, randomPubKey)
+	return self.newSession(initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
 }
 
 /* startHandshake is called by peer if it initiated the connection.
@@ -83,9 +100,9 @@ The handshake is the process by which the peers establish their connection for a
 
 */
 
-func (self *cryptoId) startHandshake(remotePubKeyDER, sessionToken []byte) (auth []byte, initNonce []byte, randomPrvKey *ecdsa.PrivateKey, randomPubKey *ecdsa.PublicKey, err error) {
+func (self *cryptoId) startHandshake(remotePubKeyDER, sessionToken []byte) (auth []byte, initNonce []byte, randomPrvKey *ecdsa.PrivateKey, remotePubKey *ecdsa.PublicKey, err error) {
 	// session init, common to both parties
-	remotePubKey := crypto.ToECDSAPub(remotePubKeyDER)
+	remotePubKey = crypto.ToECDSAPub(remotePubKeyDER)
 	if remotePubKey == nil {
 		err = fmt.Errorf("invalid remote public key")
 		return
@@ -160,8 +177,14 @@ func (self *cryptoId) startHandshake(remotePubKeyDER, sessionToken []byte) (auth
 }
 
 // verifyAuth is called by peer if it accepted (but not initiated) the connection
-func (self *cryptoId) respondToHandshake(auth, sessionToken []byte, remotePubKey *ecdsa.PublicKey) (authResp []byte, respNonce []byte, initNonce []byte, randomPrvKey *ecdsa.PrivateKey, err error) {
+func (self *cryptoId) respondToHandshake(auth, remotePubKeyDER, sessionToken []byte) (authResp []byte, respNonce []byte, initNonce []byte, randomPrivKey *ecdsa.PrivateKey, err error) {
 	var msg []byte
+	remotePubKey := crypto.ToECDSAPub(remotePubKeyDER)
+	if remotePubKey == nil {
+		err = fmt.Errorf("invalid public key")
+		return
+	}
+
 	fmt.Printf("encrypted message received: %v %x\n used pubkey: %x\n", len(auth), auth, crypto.FromECDSAPub(self.pubKey))
 	// they prove that msg is meant for me,
 	// I prove I possess private key if i can read it
@@ -210,12 +233,12 @@ func (self *cryptoId) respondToHandshake(auth, sessionToken []byte, remotePubKey
 		return
 	}
 	// generate random keypair for session
-	if randomPrvKey, err = crypto.GenerateKey(); err != nil {
+	if randomPrivKey, err = crypto.GenerateKey(); err != nil {
 		return
 	}
 	// responder auth message
 	// E(remote-pubk, ecdhe-random-pubk || nonce || 0x0)
-	copy(resp[:keyLen], crypto.FromECDSAPub(&randomPrvKey.PublicKey))
+	copy(resp[:keyLen], crypto.FromECDSAPub(&randomPrivKey.PublicKey))
 	// nonce is already in the slice
 	resp[resLen-1] = tokenFlag
 
