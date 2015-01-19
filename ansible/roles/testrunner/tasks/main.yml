@@ -1,11 +1,13 @@
 ---
 - name: update C++ client
+  sudo: true  
   docker_image:
       path: git/ansible/test-files/docker-cpp
       name: cpp
       state: build
 
 - name: update Go client
+  sudo: true 
   docker_image:
       path: git/ansible/test-files/docker-go
       name: go
