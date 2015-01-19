@@ -1,11 +1,9 @@
 package p2p
 
 import (
-	// "bytes"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"fmt"
-	// "io"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/obscuren/ecies"
