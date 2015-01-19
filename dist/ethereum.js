@@ -117,6 +117,13 @@ var formatInputBool = function (value) {
     return '000000000000000000000000000000000000000000000000000000000000000' + (value ?  '1' : '0');
 };
 
+/// Formats input value to byte representation of real
+/// Values are multiplied by 2^m and encoded as integers
+/// @returns byte representation of real
+var formatInputReal = function (value) {
+    return formatInputInt(new BigNumber(value).times(new BigNumber(2).pow(128))); 
+};
+
 var dynamicTypeBytes = function (type, value) {
     // TODO: decide what to do with array of strings
     if (arrayType(type) || prefixedType('string')(type))
@@ -133,8 +140,8 @@ var setupInputTypes = function () {
         { type: prefixedType('int'), format: formatInputInt },
         { type: prefixedType('hash'), format: formatInputInt },
         { type: prefixedType('string'), format: formatInputString }, 
-        { type: prefixedType('real'), format: formatInputInt },
-        { type: prefixedType('ureal'), format: formatInputInt },
+        { type: prefixedType('real'), format: formatInputReal },
+        { type: prefixedType('ureal'), format: formatInputReal },
         { type: namedType('address'), format: formatInputInt },
         { type: namedType('bool'), format: formatInputBool }
     ];
@@ -187,13 +194,19 @@ var toAbiInput = function (json, methodName, params) {
     return bytes;
 };
 
+/// Check if input value is negative
+/// @param value is hex format
+/// @returns true if it is negative, otherwise false
+var signedIsNegative = function (value) {
+    return (new BigNumber(value.substr(0, 1), 16).toString(2).substr(0, 1)) === '1';
+};
+
 /// Formats input right-aligned input bytes to int
 /// @returns right-aligned input bytes formatted to int
 var formatOutputInt = function (value) {
     // check if it's negative number
     // it it is, return two's complement
-    var firstBit = new BigNumber(value.substr(0, 1), 16).toString(2).substr(0, 1);
-    if (firstBit === '1') {
+    if (signedIsNegative(value)) {
         return new BigNumber(value, 16).minus(new BigNumber('ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', 16)).minus(1);
     }
     return new BigNumber(value, 16);
@@ -203,6 +216,16 @@ var formatOutputInt = function (value) {
 /// @returns right-aligned input bytes formatted to uint
 var formatOutputUInt = function (value) {
     return new BigNumber(value, 16);
+};
+
+/// @returns input bytes formatted to real
+var formatOutputReal = function (value) {
+    return formatOutputInt(value).dividedBy(new BigNumber(2).pow(128)); 
+};
+
+/// @returns input bytes formatted to ureal
+var formatOutputUReal = function (value) {
+    return formatOutputUInt(value).dividedBy(new BigNumber(2).pow(128)); 
 };
 
 /// @returns right-aligned input bytes formatted to hex
@@ -240,8 +263,8 @@ var setupOutputTypes = function () {
         { type: prefixedType('int'), format: formatOutputInt },
         { type: prefixedType('hash'), format: formatOutputHash },
         { type: prefixedType('string'), format: formatOutputString },
-        { type: prefixedType('real'), format: formatOutputInt },
-        { type: prefixedType('ureal'), format: formatOutputInt },
+        { type: prefixedType('real'), format: formatOutputReal },
+        { type: prefixedType('ureal'), format: formatOutputUReal },
         { type: namedType('address'), format: formatOutputAddress },
         { type: namedType('bool'), format: formatOutputBool }
     ];
@@ -387,10 +410,9 @@ module.exports = {
  * if it fails, it uses HttpRpcProvider
  */
 
-// TODO: is these line is supposed to be here? 
+var web3 = require('./web3'); // jshint ignore:line
 if ("build" !== 'build') {/*
     var WebSocket = require('ws'); // jshint ignore:line
-    var web3 = require('./web3'); // jshint ignore:line
 */}
 
 /**
@@ -433,7 +455,7 @@ var AutoProvider = function (userOptions) {
             self.poll = self.provider.poll.bind(self.provider);
         }
         self.sendQueue.forEach(function (payload) {
-            self.provider(payload);
+            self.provider.send(payload);
         });
         self.onmessageQueue.forEach(function (handler) {
             self.provider.onmessage = handler;
@@ -474,7 +496,7 @@ Object.defineProperty(AutoProvider.prototype, 'onmessage', {
 
 module.exports = AutoProvider;
 
-},{}],3:[function(require,module,exports){
+},{"./web3":8}],3:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -807,7 +829,6 @@ module.exports = HttpRpcProvider;
  * @date 2014
  */
 
-// TODO: is these line is supposed to be here? 
 var web3 = require('./web3'); // jshint ignore:line
 
 /**
