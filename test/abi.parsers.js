@@ -380,6 +380,46 @@ describe('abi', function() {
                 );
         });
 
+        it('should parse input real', function () {
+            
+            // given
+            var d = clone(description);
+
+            d[0].inputs = [
+                { type: 'real' }
+            ];
+
+            // when
+            var parser = abi.inputParser(d);
+
+            // then
+            assert.equal(parser.test([1]),      "0000000000000000000000000000000100000000000000000000000000000000"); 
+            assert.equal(parser.test([2.125]),  "0000000000000000000000000000000220000000000000000000000000000000"); 
+            assert.equal(parser.test([8.5]),    "0000000000000000000000000000000880000000000000000000000000000000"); 
+            assert.equal(parser.test([-1]),     "ffffffffffffffffffffffffffffffff00000000000000000000000000000000"); 
+                
+        });
+        
+        it('should parse input ureal', function () {
+            
+            // given
+            var d = clone(description);
+
+            d[0].inputs = [
+                { type: 'ureal' }
+            ];
+
+            // when
+            var parser = abi.inputParser(d);
+
+            // then
+            assert.equal(parser.test([1]),      "0000000000000000000000000000000100000000000000000000000000000000"); 
+            assert.equal(parser.test([2.125]),  "0000000000000000000000000000000220000000000000000000000000000000"); 
+            assert.equal(parser.test([8.5]),    "0000000000000000000000000000000880000000000000000000000000000000"); 
+                
+        });
+
+
     });
 
     describe('outputParser', function() {

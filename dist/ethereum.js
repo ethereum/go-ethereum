@@ -117,6 +117,13 @@ var formatInputBool = function (value) {
     return '000000000000000000000000000000000000000000000000000000000000000' + (value ?  '1' : '0');
 };
 
+/// Formats input value to byte representation of real
+/// Values are multiplied by 2^m and encoded as integers
+/// @returns byte representation of real
+var formatInputReal = function (value) {
+    return formatInputInt(new BigNumber(value).times(new BigNumber(2).pow(128))); 
+};
+
 var dynamicTypeBytes = function (type, value) {
     // TODO: decide what to do with array of strings
     if (arrayType(type) || prefixedType('string')(type))
@@ -133,8 +140,8 @@ var setupInputTypes = function () {
         { type: prefixedType('int'), format: formatInputInt },
         { type: prefixedType('hash'), format: formatInputInt },
         { type: prefixedType('string'), format: formatInputString }, 
-        { type: prefixedType('real'), format: formatInputInt },
-        { type: prefixedType('ureal'), format: formatInputInt },
+        { type: prefixedType('real'), format: formatInputReal },
+        { type: prefixedType('ureal'), format: formatInputReal },
         { type: namedType('address'), format: formatInputInt },
         { type: namedType('bool'), format: formatInputBool }
     ];
