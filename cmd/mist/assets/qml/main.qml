@@ -446,6 +446,14 @@ ApplicationWindow {
 						 anchors.fill: parent
 						 onClicked: {
 							 mainSplit.setView(view, menuItem)
+                             console.log(view);
+                             if (view.objectName === "browserView") {
+                                urlPane.visible = false;
+                                mainView.anchors.top = rootView.top
+                            } else {
+                                urlPane.visible = true;
+                                mainView.anchors.top = divider.bottom
+                            }
 						 }
 					 }
 
@@ -606,6 +614,7 @@ ApplicationWindow {
 		  * Main view
 		  ********************/
 		  Rectangle {
+              id: rootView
 			  anchors.right: parent.right
 			  anchors.left: menu.right
 			  anchors.bottom: parent.bottom

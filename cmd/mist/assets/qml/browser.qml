@@ -9,6 +9,10 @@ import Ethereum 1.0
 
 Rectangle {
 	id: window
+    objectName: "browserView"
+    anchors.fill: parent
+    color: "#00000000"
+
 	property var title: "Browser"
 	property var iconSource: "../browser.png"
 	property var menuItem
@@ -106,10 +110,9 @@ Rectangle {
 				anchors {
 					left: back.right
 					right: toggleInspector.left
-					leftMargin: 5
-					rightMargin: 5
+					leftMargin: 10
+					rightMargin: 10
 				}
-				//text: "http://etherian.io"
 				text: webview.url;
 				id: uriNav
 				y: parent.height / 2 - this.height / 2
@@ -136,6 +139,18 @@ Rectangle {
 			}
 		}
 
+        // Border
+        Rectangle {
+            id: divider
+            anchors {
+                left: parent.left
+                right: parent.right
+                top: navBar.bottom
+            }
+            z: -1
+            height: 1
+            color: "#CCCCCC"
+        }
 
 		WebView {
 			objectName: "webView"
@@ -144,7 +159,7 @@ Rectangle {
 				left: parent.left
 				right: parent.right
 				bottom: parent.bottom
-				top: navBar.bottom
+				top: divider.bottom
 			}
 
 			//property var cleanPath: false

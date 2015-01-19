@@ -40,7 +40,7 @@ type DebuggerWindow struct {
 	engine *qml.Engine
 	lib    *UiLib
 
-	vm *vm.DebugVm
+	vm *vm.Vm
 	Db *Debugger
 
 	state *state.StateDB
@@ -57,7 +57,7 @@ func NewDebuggerWindow(lib *UiLib) *DebuggerWindow {
 
 	win := component.CreateWindow(nil)
 
-	w := &DebuggerWindow{engine: engine, win: win, lib: lib, vm: &vm.DebugVm{}}
+	w := &DebuggerWindow{engine: engine, win: win, lib: lib, vm: &vm.Vm{}}
 	w.Db = NewDebugger(w)
 
 	return w
