@@ -32,6 +32,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/tests/helper"
 )
@@ -119,6 +120,8 @@ func RunVmTest(r io.Reader) (failed int) {
 				}
 			}
 		}
+
+		logger.Flush()
 	}
 
 	return
