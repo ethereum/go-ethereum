@@ -3,12 +3,12 @@ package vm
 import "math/big"
 
 type JitVm struct {
-	env Environment
-	backup *DebugVm
+	env    Environment
+	backup *Vm
 }
 
 func NewJitVm(env Environment) *JitVm {
-	backupVm := NewDebugVm(env)
+	backupVm := NewVm(env)
 	return &JitVm{env: env, backup: backupVm}
 }
 
