@@ -419,7 +419,6 @@ describe('abi', function() {
                 
         });
 
-
     });
 
     describe('outputParser', function() {
@@ -673,11 +672,51 @@ describe('abi', function() {
             var parser = abi.outputParser(d);
 
             // then
-            assert.equal(parser.test("000000000000000000000000000000000000000000000000000000000000000001")[0], true);
-            assert.equal(parser.test("000000000000000000000000000000000000000000000000000000000000000000")[0], false);
+            assert.equal(parser.test("0x0000000000000000000000000000000000000000000000000000000000000001")[0], true);
+            assert.equal(parser.test("0x0000000000000000000000000000000000000000000000000000000000000000")[0], false);
             
 
         });
+
+        it('should parse output real', function() {
+            
+            // given
+            var d = clone(description); 
+
+            d[0].outputs = [
+                { type: 'real' }
+            ];
+
+            // when
+            var parser = abi.outputParser(d);
+
+            // then
+            assert.equal(parser.test("0x0000000000000000000000000000000100000000000000000000000000000000")[0], 1);
+            assert.equal(parser.test("0x0000000000000000000000000000000220000000000000000000000000000000")[0], 2.125); 
+            assert.equal(parser.test("0x0000000000000000000000000000000880000000000000000000000000000000")[0], 8.5); 
+            assert.equal(parser.test("0xffffffffffffffffffffffffffffffff00000000000000000000000000000000")[0], -1); 
+            
+        });
+
+        it('should parse output ureal', function() {
+
+            // given
+            var d = clone(description); 
+
+            d[0].outputs = [
+                { type: 'ureal' }
+            ];
+
+            // when
+            var parser = abi.outputParser(d);
+
+            // then
+            assert.equal(parser.test("0x0000000000000000000000000000000100000000000000000000000000000000")[0], 1);
+            assert.equal(parser.test("0x0000000000000000000000000000000220000000000000000000000000000000")[0], 2.125); 
+            assert.equal(parser.test("0x0000000000000000000000000000000880000000000000000000000000000000")[0], 8.5); 
+
+        });
+        
 
         it('should parse multiple output strings', function() {
 

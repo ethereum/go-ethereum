@@ -194,13 +194,19 @@ var toAbiInput = function (json, methodName, params) {
     return bytes;
 };
 
+/// Check if input value is negative
+/// @param value is hex format
+/// @returns true if it is negative, otherwise false
+var signedIsNegative = function (value) {
+    return (new BigNumber(value.substr(0, 1), 16).toString(2).substr(0, 1)) === '1';
+};
+
 /// Formats input right-aligned input bytes to int
 /// @returns right-aligned input bytes formatted to int
 var formatOutputInt = function (value) {
     // check if it's negative number
     // it it is, return two's complement
-    var firstBit = new BigNumber(value.substr(0, 1), 16).toString(2).substr(0, 1);
-    if (firstBit === '1') {
+    if (signedIsNegative(value)) {
         return new BigNumber(value, 16).minus(new BigNumber('ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', 16)).minus(1);
     }
     return new BigNumber(value, 16);
@@ -210,6 +216,16 @@ var formatOutputInt = function (value) {
 /// @returns right-aligned input bytes formatted to uint
 var formatOutputUInt = function (value) {
     return new BigNumber(value, 16);
+};
+
+/// @returns input bytes formatted to real
+var formatOutputReal = function (value) {
+    return formatOutputInt(value).dividedBy(new BigNumber(2).pow(128)); 
+};
+
+/// @returns input bytes formatted to ureal
+var formatOutputUReal = function (value) {
+    return formatOutputUInt(value).dividedBy(new BigNumber(2).pow(128)); 
 };
 
 /// @returns right-aligned input bytes formatted to hex
@@ -247,8 +263,8 @@ var setupOutputTypes = function () {
         { type: prefixedType('int'), format: formatOutputInt },
         { type: prefixedType('hash'), format: formatOutputHash },
         { type: prefixedType('string'), format: formatOutputString },
-        { type: prefixedType('real'), format: formatOutputInt },
-        { type: prefixedType('ureal'), format: formatOutputInt },
+        { type: prefixedType('real'), format: formatOutputReal },
+        { type: prefixedType('ureal'), format: formatOutputUReal },
         { type: namedType('address'), format: formatOutputAddress },
         { type: namedType('bool'), format: formatOutputBool }
     ];
