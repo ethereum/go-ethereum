@@ -10,18 +10,8 @@ module.exports = {
     trieanyorder: require('./TrieTests/trieanyorder')
   },
   txtest: require('./BasicTests/txtest'),
-  StateTests: {
-    stExample: require('./StateTests/stExample.json'),
-    stInitCodeTest: require('./StateTests/stInitCodeTest.json'),
-    stLogTests: require('./StateTests/stLogTests.json'),
-    stPreCompiledContracts: require('./StateTests/stPreCompiledContracts'),
-    stRecursiveCreate: require('./StateTests/stRecursiveCreate'),
-    stRefundTest: require('./StateTests/stRefundTest'),
-    stSpecial: require('./StateTests/stSpecialTest'),
-    stSystemOperationsTest: require('./StateTests/stSystemOperationsTest'),
-    stTransactionTest: require('./StateTests/stTransactionTest')
-  },
-  VMTests: {
+  stateTests: require('require-all')(__dirname + '/StateTests/'),
+  vmTests: {
     vmRandom: require('./VMTests/RandomTests/randomTest'),
     vmArithmeticTest: require('./VMTests/vmArithmeticTest'),
     vmBitwiseLogicOperationTest: require('./VMTests/vmBitwiseLogicOperationTest'),
