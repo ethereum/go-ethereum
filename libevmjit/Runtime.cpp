@@ -21,8 +21,8 @@ Runtime::Runtime(RuntimeData* _data, Env* _env) :
 bytes_ref Runtime::getReturnData() const
 {
 	// TODO: Handle large indexes
-	auto offset = static_cast<size_t>(llvm2eth(m_data.elems[RuntimeData::ReturnDataOffset]));
-	auto size = static_cast<size_t>(llvm2eth(m_data.elems[RuntimeData::ReturnDataSize]));
+	auto offset = static_cast<size_t>(m_data.elems[RuntimeData::ReturnDataOffset].a);
+	auto size = static_cast<size_t>(m_data.elems[RuntimeData::ReturnDataSize].a);
 
 	assert(offset + size <= m_memory.size() || size == 0);
 	if (offset + size > m_memory.size())

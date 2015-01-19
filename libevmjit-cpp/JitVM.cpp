@@ -2,7 +2,7 @@
 #include "JitVM.h"
 #include <libevm/VM.h>
 #include <evmjit/libevmjit/ExecutionEngine.h>
-#include <evmjit/libevmjit/Utils.h>
+#include "Utils.h"
 
 namespace dev
 {
@@ -13,28 +13,28 @@ bytesConstRef JitVM::go(ExtVMFace& _ext, OnOpFunc const&, uint64_t)
 {
 	using namespace jit;
 
-	m_data.set(RuntimeData::Gas, m_gas);
-	m_data.set(RuntimeData::Address, fromAddress(_ext.myAddress));
-	m_data.set(RuntimeData::Caller, fromAddress(_ext.caller));
-	m_data.set(RuntimeData::Origin, fromAddress(_ext.origin));
-	m_data.set(RuntimeData::CallValue, _ext.value);
-	m_data.set(RuntimeData::CallDataSize, _ext.data.size());
-	m_data.set(RuntimeData::GasPrice, _ext.gasPrice);
-	m_data.set(RuntimeData::CoinBase, fromAddress(_ext.currentBlock.coinbaseAddress));
-	m_data.set(RuntimeData::TimeStamp, _ext.currentBlock.timestamp);
-	m_data.set(RuntimeData::Number, _ext.currentBlock.number);
-	m_data.set(RuntimeData::Difficulty, _ext.currentBlock.difficulty);
-	m_data.set(RuntimeData::GasLimit, _ext.currentBlock.gasLimit);
-	m_data.set(RuntimeData::CodeSize, _ext.code.size());
+	m_data.elems[RuntimeData::Gas]          = eth2llvm(m_gas);
+	m_data.elems[RuntimeData::Address]      = eth2llvm(fromAddress(_ext.myAddress));
+	m_data.elems[RuntimeData::Caller]       = eth2llvm(fromAddress(_ext.caller));
+	m_data.elems[RuntimeData::Origin]       = eth2llvm(fromAddress(_ext.origin));
+	m_data.elems[RuntimeData::CallValue]    = eth2llvm(_ext.value);
+	m_data.elems[RuntimeData::CallDataSize] = eth2llvm(_ext.data.size());
+	m_data.elems[RuntimeData::GasPrice]     = eth2llvm(_ext.gasPrice);
+	m_data.elems[RuntimeData::CoinBase]     = eth2llvm(fromAddress(_ext.currentBlock.coinbaseAddress));
+	m_data.elems[RuntimeData::TimeStamp]    = eth2llvm(_ext.currentBlock.timestamp);
+	m_data.elems[RuntimeData::Number]       = eth2llvm(_ext.currentBlock.number);
+	m_data.elems[RuntimeData::Difficulty]   = eth2llvm(_ext.currentBlock.difficulty);
+	m_data.elems[RuntimeData::GasLimit]     = eth2llvm(_ext.currentBlock.gasLimit);
+	m_data.elems[RuntimeData::CodeSize]     = eth2llvm(_ext.code.size());
 	m_data.callData = _ext.data.data();
-	m_data.code = _ext.code.data();
+	m_data.code     = _ext.code.data();
 
 	auto env = reinterpret_cast<Env*>(&_ext);
 	auto exitCode = m_engine.run(_ext.code, &m_data, env);
 	switch (exitCode)
 	{
 	case ReturnCode::Suicide:
-		_ext.suicide(right160(m_data.get(RuntimeData::SuicideDestAddress)));
+		_ext.suicide(right160(llvm2eth(m_data.elems[RuntimeData::SuicideDestAddress])));
 		break;
 
 	case ReturnCode::BadJumpDestination:

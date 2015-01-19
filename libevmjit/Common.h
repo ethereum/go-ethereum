@@ -35,7 +35,6 @@ enum class ReturnCode
 };
 
 /// Representation of 256-bit value binary compatible with LLVM i256
-// TODO: Replace with h256
 struct i256
 {
 	uint64_t a = 0;

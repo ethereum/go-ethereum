@@ -102,27 +102,6 @@ llvm::Value* Arith256::mulmod(llvm::Value* _arg1, llvm::Value* _arg2, llvm::Valu
 
 namespace
 {
-	using s256 = boost::multiprecision::int256_t;
-
-	inline s256 u2s(u256 _u)
-	{
-		static const bigint c_end = (bigint)1 << 256;
-		static const u256 c_send = (u256)1 << 255;
-		if (_u < c_send)
-			return (s256)_u;
-		else
-			return (s256)-(c_end - _u);
-	}
-
-	inline u256 s2u(s256 _u)
-	{
-		static const bigint c_end = (bigint)1 << 256;
-		if (_u >= 0)
-			return (u256)_u;
-		else
-			return (u256)(c_end + _u);
-	}
-
 	using uint128 = __uint128_t;
 
 //	uint128 add(uint128 a, uint128 b) { return a + b; }
