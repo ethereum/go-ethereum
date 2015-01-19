@@ -87,13 +87,9 @@ func (k *Key) UnmarshalJSON(j []byte) (err error) {
 
 func NewKey(rand io.Reader) *Key {
 	randBytes := make([]byte, 32)
-	n, err := rand.Read(randBytes)
+	_, err := rand.Read(randBytes)
 	if err != nil {
 		panic("key generation: could not read from random source: " + err.Error())
-	} else {
-		if n != 32 {
-			panic("key generation: read less than required bytes from random source: " + err.Error())
-		}
 	}
 	reader := bytes.NewReader(randBytes)
 	_, x, y, err := elliptic.GenerateKey(S256(), reader)
