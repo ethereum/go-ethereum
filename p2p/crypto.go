@@ -17,7 +17,7 @@ var (
 	sigLen int = 65                    // elliptic S256
 	keyLen int = 32                    // ECDSA
 	msgLen int = sigLen + 3*keyLen + 1 // 162
-	resLen int = 65
+	resLen int = 65                    //
 )
 
 // aesSecret, macSecret, egressMac, ingress
@@ -133,7 +133,7 @@ func (self *cryptoId) initAuth(remotePubKeyDER, sessionToken []byte) (auth []byt
 }
 
 // verifyAuth is called by peer if it accepted (but not initiated) the connection
-func (self *cryptoId) verifyAuth(auth, sharedSecret []byte, remotePubKey *ecdsa.PublicKey) (authResp []byte, respNonce []byte, initNonce []byte, remoteRandomPubKey *ecdsa.PublicKey, err error) {
+func (self *cryptoId) verifyAuth(auth, sessionToken []byte, remotePubKey *ecdsa.PublicKey) (authResp []byte, respNonce []byte, initNonce []byte, remoteRandomPubKey *ecdsa.PublicKey, err error) {
 	var msg []byte
 	fmt.Printf("encrypted message received: %v %x\n used pubkey: %x\n", len(auth), auth, crypto.FromECDSAPub(self.pubKey))
 	// they prove that msg is meant for me,
@@ -141,50 +141,57 @@ func (self *cryptoId) verifyAuth(auth, sharedSecret []byte, remotePubKey *ecdsa.
 	if msg, err = crypto.Decrypt(self.prvKey, auth); err != nil {
 		return
 	}
+	fmt.Printf("\nplaintext message retrieved: %v %x\n", len(msg), msg)
 
-	// var remoteNonce []byte = msg[msgLen-skLen-1 : msgLen-1]
+	var tokenFlag byte
+	if sessionToken == nil {
+		// no session token found means we need to generate shared secret.
+		// ecies shared secret is used as initial session token for new peers
+		// generate shared key from prv and remote pubkey
+		if sessionToken, err = ecies.ImportECDSA(self.prvKey).GenerateShared(ecies.ImportECDSAPublic(remotePubKey), sskLen, sskLen); err != nil {
+			return
+		}
+		fmt.Printf("secret generated: %v %x", len(sessionToken), sessionToken)
+		// tokenFlag = 0x00 // redundant
+	} else {
+		// for known peers, we use stored token from the previous session
+		tokenFlag = 0x01
+	}
+
+	// the initiator nonce is read off the end of the message
 	initNonce = msg[msgLen-keyLen-1 : msgLen-1]
 	// I prove that i own prv key (to derive shared secret, and read nonce off encrypted msg) and that I own shared secret
 	// they prove they own the private key belonging to ecdhe-random-pubk
-	var signedMsg = Xor(sharedSecret, initNonce)
+	// we can now reconstruct the signed message and recover the peers pubkey
+	var signedMsg = Xor(sessionToken, initNonce)
 	var remoteRandomPubKeyDER []byte
 	if remoteRandomPubKeyDER, err = secp256k1.RecoverPubkey(signedMsg, msg[:sigLen]); err != nil {
 		return
 	}
+	// convert to ECDSA standard
 	remoteRandomPubKey = crypto.ToECDSAPub(remoteRandomPubKeyDER)
 	if remoteRandomPubKey == nil {
 		err = fmt.Errorf("invalid remote public key")
 		return
 	}
 
-	var resp = make([]byte, 2*keyLen+1)
-	// generate sskLen long nonce
-	respNonce = msg[msgLen-keyLen-1 : msgLen-1]
+	// now we find ourselves a long task too, fill it random
+	var resp = make([]byte, resLen)
+	// generate keyLen long nonce
+	respNonce = msg[resLen-keyLen-1 : msgLen-1]
 	if _, err = rand.Read(respNonce); err != nil {
 		return
 	}
-	// generate random keypair
+	// generate random keypair for session
 	var ecdsaRandomPrvKey *ecdsa.PrivateKey
 	if ecdsaRandomPrvKey, err = crypto.GenerateKey(); err != nil {
 		return
 	}
-	// var ecdsaRandomPubKey *ecdsa.PublicKey
-	//  ecdsaRandomPubKey= &ecdsaRandomPrvKey.PublicKey
-
-	// message
+	// responder auth message
 	// E(remote-pubk, ecdhe-random-pubk || nonce || 0x0)
 	copy(resp[:keyLen], crypto.FromECDSAPub(&ecdsaRandomPrvKey.PublicKey))
-	// pubkey copied to the correct segment.
-	copy(resp[keyLen:2*keyLen], self.pubKeyDER)
 	// nonce is already in the slice
-	// stick tokenFlag byte to the end
-	var tokenFlag byte
-	if sharedSecret == nil {
-	} else {
-		// for known peers, we use stored token from the previous session
-		tokenFlag = 0x01
-	}
-	resp[resLen] = tokenFlag
+	resp[resLen-1] = tokenFlag
 
 	// encrypt using remote-pubk
 	// auth = eciesEncrypt(remote-pubk, msg)
