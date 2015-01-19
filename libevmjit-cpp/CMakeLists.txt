@@ -1,5 +1,8 @@
 set(TARGET_NAME evmjit-cpp)
 
+# Boost
+find_package(Boost REQUIRED)
+
 set(SOURCES
     Env.cpp     
     JitVM.cpp   JitVM.h

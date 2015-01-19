@@ -4,6 +4,7 @@
 #include <functional>
 #include <fstream>
 #include <chrono>
+#include <sstream>
 
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/IR/CFG.h>
