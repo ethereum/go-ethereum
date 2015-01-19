@@ -118,6 +118,56 @@ namespace
 		else
 			return (u256)(c_end + _u);
 	}
+
+	using uint128 = __uint128_t;
+
+//	uint128 add(uint128 a, uint128 b) { return a + b; }
+//	uint128 mul(uint128 a, uint128 b) { return a * b; }
+//
+//	uint128 mulq(uint64_t x, uint64_t y)
+//	{
+//		return (uint128)x * (uint128)y;
+//	}
+//
+//	uint128 addc(uint64_t x, uint64_t y)
+//	{
+//		return (uint128)x * (uint128)y;
+//	}
+
+	struct uint256
+	{
+		uint64_t lo;
+		uint64_t mid;
+		uint128 hi;
+	};
+
+//	uint256 add(uint256 x, uint256 y)
+//	{
+//		auto lo = (uint128) x.lo + y.lo;
+//		auto mid = (uint128) x.mid + y.mid + (lo >> 64);
+//		return {lo, mid, x.hi + y.hi + (mid >> 64)};
+//	}
+
+	uint256 mul(uint256 x, uint256 y)
+	{
+		auto t1 = (uint128) x.lo * y.lo;
+		auto t2 = (uint128) x.lo * y.mid;
+		auto t3 = x.lo * y.hi;
+		auto t4 = (uint128) x.mid * y.lo;
+		auto t5 = (uint128) x.mid * y.mid;
+		auto t6 = x.mid * y.hi;
+		auto t7 = x.hi * y.lo;
+		auto t8 = x.hi * y.mid;
+
+		auto lo = (uint64_t) t1;
+		auto m1 = (t1 >> 64) + (uint64_t) t2;
+		auto m2 = (uint64_t) m1;
+		auto mid = (uint128) m2 + (uint64_t) t4;
+		auto hi = (t2 >> 64) + t3 + (t4 >> 64) + t5 + (t6 << 64) + t7
+			 + (t8 << 64) + (m1 >> 64) + (mid >> 64);
+
+		return {lo, (uint64_t)mid, hi};
+	}
 }
 
 }
@@ -130,11 +180,9 @@ extern "C"
 
 	using namespace dev::eth::jit;
 
-	EXPORT void arith_mul(i256* _arg1, i256* _arg2, i256* o_result)
+	EXPORT void arith_mul(uint256* _arg1, uint256* _arg2, uint256* o_result)
 	{
-		auto arg1 = llvm2eth(*_arg1);
-		auto arg2 = llvm2eth(*_arg2);
-		*o_result = eth2llvm(arg1 * arg2);
+		*o_result = mul(*_arg1, *_arg2);
 	}
 
 	EXPORT void arith_div(i256* _arg1, i256* _arg2, i256* o_result)
