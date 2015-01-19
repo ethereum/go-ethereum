@@ -387,10 +387,9 @@ module.exports = {
  * if it fails, it uses HttpRpcProvider
  */
 
-// TODO: is these line is supposed to be here? 
+var web3 = require('./web3'); // jshint ignore:line
 if ("build" !== 'build') {/*
     var WebSocket = require('ws'); // jshint ignore:line
-    var web3 = require('./web3'); // jshint ignore:line
 */}
 
 /**
@@ -433,7 +432,7 @@ var AutoProvider = function (userOptions) {
             self.poll = self.provider.poll.bind(self.provider);
         }
         self.sendQueue.forEach(function (payload) {
-            self.provider(payload);
+            self.provider.send(payload);
         });
         self.onmessageQueue.forEach(function (handler) {
             self.provider.onmessage = handler;
@@ -474,7 +473,7 @@ Object.defineProperty(AutoProvider.prototype, 'onmessage', {
 
 module.exports = AutoProvider;
 
-},{}],3:[function(require,module,exports){
+},{"./web3":8}],3:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -807,7 +806,6 @@ module.exports = HttpRpcProvider;
  * @date 2014
  */
 
-// TODO: is these line is supposed to be here? 
 var web3 = require('./web3'); // jshint ignore:line
 
 /**
