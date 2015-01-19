@@ -11,44 +11,43 @@ import (
 func TestCryptoHandshake(t *testing.T) {
 	var err error
 	var sessionToken []byte
-	prvInit, _ := crypto.GenerateKey()
-	pubInit := &prvInit.PublicKey
-	prvResp, _ := crypto.GenerateKey()
-	pubResp := &prvResp.PublicKey
+	prv0, _ := crypto.GenerateKey()
+	pub0 := &prv0.PublicKey
+	prv1, _ := crypto.GenerateKey()
+	pub1 := &prv1.PublicKey
 
-	var initiator, responder *cryptoId
-	if initiator, err = newCryptoId(&peerId{crypto.FromECDSA(prvInit), crypto.FromECDSAPub(pubInit)}); err != nil {
+	var initiator, receiver *cryptoId
+	if initiator, err = newCryptoId(&peerId{crypto.FromECDSA(prv0), crypto.FromECDSAPub(pub0)}); err != nil {
 		return
 	}
-	if responder, err = newCryptoId(&peerId{crypto.FromECDSA(prvResp), crypto.FromECDSAPub(pubResp)}); err != nil {
+	if receiver, err = newCryptoId(&peerId{crypto.FromECDSA(prv1), crypto.FromECDSAPub(pub1)}); err != nil {
 		return
 	}
 
-	auth, initNonce, randomPrvKey, randomPubKey, _ := initiator.initAuth(responder.pubKeyDER, sessionToken)
+	// simulate handshake by feeding output to input
+	auth, initNonce, randomPrivKey, _, _ := initiator.startHandshake(receiver.pubKeyDER, sessionToken)
+	response, remoteRecNonce, remoteInitNonce, remoteRandomPrivKey, _ := receiver.respondToHandshake(auth, crypto.FromECDSAPub(pub0), sessionToken)
+	recNonce, remoteRandomPubKey, _, _ := initiator.completeHandshake(response)
 
-	response, remoteRespNonce, remoteInitNonce, remoteRandomPrivKey, _ := responder.verifyAuth(auth, sessionToken, pubInit)
+	initSessionToken, initSecretRW, _ := initiator.newSession(initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
+	recSessionToken, recSecretRW, _ := receiver.newSession(remoteInitNonce, remoteRecNonce, auth, remoteRandomPrivKey, &randomPrivKey.PublicKey)
 
-	respNonce, remoteRandomPubKey, _, _ := initiator.verifyAuthResp(response)
+	fmt.Printf("%x\n%x\n%x\n%x\n%x\n%x\n%x\n%x\n%x\n%x\n", auth, initNonce, response, remoteRecNonce, remoteInitNonce, remoteRandomPubKey, recNonce, &randomPrivKey.PublicKey, initSessionToken, initSecretRW)
 
-	initSessionToken, initSecretRW, _ := initiator.newSession(initNonce, respNonce, auth, randomPrvKey, remoteRandomPubKey)
-	respSessionToken, respSecretRW, _ := responder.newSession(remoteInitNonce, remoteRespNonce, auth, remoteRandomPrivKey, randomPubKey)
-
-	fmt.Printf("%x\n%x\n%x\n%x\n%x\n%x\n%x\n%x\n%x\n%x\n", auth, initNonce, response, remoteRespNonce, remoteInitNonce, remoteRandomPubKey, respNonce, randomPubKey, initSessionToken, initSecretRW)
-
-	if !bytes.Equal(initSessionToken, respSessionToken) {
+	if !bytes.Equal(initSessionToken, recSessionToken) {
 		t.Errorf("session tokens do not match")
 	}
 	// aesSecret, macSecret, egressMac, ingressMac
-	if !bytes.Equal(initSecretRW.aesSecret, respSecretRW.aesSecret) {
+	if !bytes.Equal(initSecretRW.aesSecret, recSecretRW.aesSecret) {
 		t.Errorf("AES secrets do not match")
 	}
-	if !bytes.Equal(initSecretRW.macSecret, respSecretRW.macSecret) {
+	if !bytes.Equal(initSecretRW.macSecret, recSecretRW.macSecret) {
 		t.Errorf("macSecrets do not match")
 	}
-	if !bytes.Equal(initSecretRW.egressMac, respSecretRW.egressMac) {
+	if !bytes.Equal(initSecretRW.egressMac, recSecretRW.egressMac) {
 		t.Errorf("egressMacs do not match")
 	}
-	if !bytes.Equal(initSecretRW.ingressMac, respSecretRW.ingressMac) {
+	if !bytes.Equal(initSecretRW.ingressMac, recSecretRW.ingressMac) {
 		t.Errorf("ingressMacs do not match")
 	}
 

@@ -222,9 +222,9 @@ func (p *Peer) loop() (reason DiscReason, err error) {
 	defer close(p.closed)
 	defer p.conn.Close()
 
-	var readLoop func(chan Msg, chan error, chan bool)
+	var readLoop func(chan<- Msg, chan<- error, <-chan bool)
 	if p.cryptoHandshake {
-		if readLoop, err := p.handleCryptoHandshake(); err != nil {
+		if readLoop, err = p.handleCryptoHandshake(); err != nil {
 			// from here on everything can be encrypted, authenticated
 			return DiscProtocolError, err // no graceful disconnect
 		}
@@ -332,20 +332,33 @@ func (p *Peer) dispatch(msg Msg, protoDone chan struct{}) (wait bool, err error)
 	return wait, nil
 }
 
-func (p *Peer) handleCryptoHandshake() (err error) {
+type readLoop func(chan<- Msg, chan<- error, <-chan bool)
+
+func (p *Peer) handleCryptoHandshake() (loop readLoop, err error) {
 	// cryptoId is just created for the lifecycle of the handshake
 	// it is survived by an encrypted readwriter
-	if p.dialAddr != 0 { // this should have its own method Outgoing() bool
+	var initiator bool
+	var sessionToken []byte
+	if p.dialAddr != nil { // this should have its own method Outgoing() bool
 		initiator = true
 	}
 	// create crypto layer
-	cryptoId := newCryptoId(p.identity, initiator, sessionToken)
-	// run on peer
-	if rw, err := cryptoId.Run(p.Pubkey()); err != nil {
-		return err
+	// this could in principle run only once but maybe we want to allow
+	// identity switching
+	var crypto *cryptoId
+	if crypto, err = newCryptoId(p.ourID); err != nil {
+		return
 	}
-	p.conn = rw.Run(p.conn)
-
+	// run on peer
+	// this bit handles the handshake and creates a secure communications channel with
+	// var rw *secretRW
+	if sessionToken, _, err = crypto.Run(p.conn, p.Pubkey(), sessionToken, initiator); err != nil {
+		return
+	}
+	loop = func(msg chan<- Msg, err chan<- error, next <-chan bool) {
+		// this is the readloop :)
+	}
+	return
 }
 
 func (p *Peer) startBaseProtocol() {
