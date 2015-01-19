@@ -260,10 +260,17 @@ extern "C"
 
 	EXPORT void arith_exp(i256* _arg1, i256* _arg2, i256* o_result)
 	{
-		bigint left = llvm2eth(*_arg1);
-		bigint right = llvm2eth(*_arg2);
-		auto ret = static_cast<u256>(boost::multiprecision::powm(left, right, bigint(2) << 256));
-		*o_result = eth2llvm(ret);
+		*o_result = {};
+
+		static mp_limb_t mod_limbs[nLimbs + 1] = {};
+		mod_limbs[nLimbs] = 1;
+		static const mpz_t mod{nLimbs + 1, nLimbs + 1, &mod_limbs[0]};
+
+		mpz_t x{nLimbs, countLimbs(_arg1), reinterpret_cast<mp_limb_t*>(_arg1)};
+		mpz_t y{nLimbs, countLimbs(_arg2), reinterpret_cast<mp_limb_t*>(_arg2)};
+		mpz_t z{nLimbs, 0, reinterpret_cast<mp_limb_t*>(o_result)};
+
+		mpz_powm(z, x, y, mod);
 	}
 
 	EXPORT void arith_mulmod(i256* _arg1, i256* _arg2, i256* _arg3, i256* o_result)
