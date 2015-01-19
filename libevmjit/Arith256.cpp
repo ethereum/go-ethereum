@@ -180,6 +180,14 @@ namespace
 
 	const auto nLimbs = sizeof(i256) / sizeof(mp_limb_t);
 
+	// FIXME: Not thread-safe
+	static mp_limb_t mod_limbs[] = {0, 0, 0, 0, 1};
+	static_assert(sizeof(mod_limbs) / sizeof(mod_limbs[0]) == nLimbs + 1, "mp_limb_t size mismatch");
+	static const mpz_t mod{nLimbs + 1, nLimbs + 1, &mod_limbs[0]};
+
+	static mp_limb_t tmp_limbs[nLimbs + 2];
+	static mpz_t tmp{nLimbs + 2, 0, &tmp_limbs[0]};
+
 	int countLimbs(i256 const* _n)
 	{
 		static const auto limbsInWord = sizeof(_n->a) / sizeof(mp_limb_t);
@@ -194,6 +202,25 @@ namespace
 		l -= limbsInWord;
 		if (_n->a != 0) return l;
 		return 0;
+	}
+
+	void u2s(mpz_t _u)
+	{
+		if (static_cast<std::make_signed<mp_limb_t>::type>(_u->_mp_d[nLimbs - 1]) < 0)
+		{
+			mpz_sub(tmp, mod, _u);
+			mpz_set(_u, tmp);
+			_u->_mp_size = -_u->_mp_size;
+		}
+	}
+
+	void s2u(mpz_t _s)
+	{
+		if (_s->_mp_size < 0)
+		{
+			mpz_add(tmp, mod, _s);
+			mpz_set(_s, tmp);
+		}
 	}
 }
 
@@ -246,16 +273,32 @@ extern "C"
 
 	EXPORT void arith_sdiv(i256* _arg1, i256* _arg2, i256* o_result)
 	{
-		auto arg1 = llvm2eth(*_arg1);
-		auto arg2 = llvm2eth(*_arg2);
-		*o_result = eth2llvm(arg2 == 0 ? arg2 : s2u(u2s(arg1) / u2s(arg2)));
+		*o_result = {};
+		if (isZero(_arg2))
+			return;
+
+		mpz_t x{nLimbs, countLimbs(_arg1), reinterpret_cast<mp_limb_t*>(_arg1)};
+		mpz_t y{nLimbs, countLimbs(_arg2), reinterpret_cast<mp_limb_t*>(_arg2)};
+		mpz_t z{nLimbs, 0, reinterpret_cast<mp_limb_t*>(o_result)};
+		u2s(x);
+		u2s(y);
+		mpz_tdiv_q(z, x, y);
+		s2u(z);
 	}
 
 	EXPORT void arith_smod(i256* _arg1, i256* _arg2, i256* o_result)
 	{
-		auto arg1 = llvm2eth(*_arg1);
-		auto arg2 = llvm2eth(*_arg2);
-		*o_result = eth2llvm(arg2 == 0 ? arg2 : s2u(u2s(arg1) % u2s(arg2)));
+		*o_result = {};
+		if (isZero(_arg2))
+			return;
+
+		mpz_t x{nLimbs, countLimbs(_arg1), reinterpret_cast<mp_limb_t*>(_arg1)};
+		mpz_t y{nLimbs, countLimbs(_arg2), reinterpret_cast<mp_limb_t*>(_arg2)};
+		mpz_t z{nLimbs, 0, reinterpret_cast<mp_limb_t*>(o_result)};
+		u2s(x);
+		u2s(y);
+		mpz_tdiv_r(z, x, y);
+		s2u(z);
 	}
 
 	EXPORT void arith_exp(i256* _arg1, i256* _arg2, i256* o_result)
