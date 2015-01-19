@@ -275,24 +275,36 @@ extern "C"
 
 	EXPORT void arith_mulmod(i256* _arg1, i256* _arg2, i256* _arg3, i256* o_result)
 	{
-		auto arg1 = llvm2eth(*_arg1);
-		auto arg2 = llvm2eth(*_arg2);
-		auto arg3 = llvm2eth(*_arg3);
-		if (arg3 != 0)
-			*o_result = eth2llvm(u256((bigint(arg1) * bigint(arg2)) % arg3));
-		else
-			*o_result = {};
+		*o_result = {};
+		if (isZero(_arg3))
+			return;
+
+		mpz_t x{nLimbs, countLimbs(_arg1), reinterpret_cast<mp_limb_t*>(_arg1)};
+		mpz_t y{nLimbs, countLimbs(_arg2), reinterpret_cast<mp_limb_t*>(_arg2)};
+		mpz_t m{nLimbs, countLimbs(_arg3), reinterpret_cast<mp_limb_t*>(_arg3)};
+		mpz_t z{nLimbs, 0, reinterpret_cast<mp_limb_t*>(o_result)};
+		static mp_limb_t p_limbs[nLimbs * 2] = {};
+		static mpz_t p{nLimbs * 2, 0, &p_limbs[0]};
+
+		mpz_mul(p, x, y);
+		mpz_tdiv_r(z, p, m);
 	}
 
 	EXPORT void arith_addmod(i256* _arg1, i256* _arg2, i256* _arg3, i256* o_result)
 	{
-		auto arg1 = llvm2eth(*_arg1);
-		auto arg2 = llvm2eth(*_arg2);
-		auto arg3 = llvm2eth(*_arg3);
-		if (arg3 != 0)
-			*o_result = eth2llvm(u256((bigint(arg1) + bigint(arg2)) % arg3));
-		else
-			*o_result = {};
+		*o_result = {};
+		if (isZero(_arg3))
+			return;
+
+		mpz_t x{nLimbs, countLimbs(_arg1), reinterpret_cast<mp_limb_t*>(_arg1)};
+		mpz_t y{nLimbs, countLimbs(_arg2), reinterpret_cast<mp_limb_t*>(_arg2)};
+		mpz_t m{nLimbs, countLimbs(_arg3), reinterpret_cast<mp_limb_t*>(_arg3)};
+		mpz_t z{nLimbs, 0, reinterpret_cast<mp_limb_t*>(o_result)};
+		static mp_limb_t s_limbs[nLimbs + 1] = {};
+		static mpz_t s{nLimbs + 1, 0, &s_limbs[0]};
+
+		mpz_add(s, x, y);
+		mpz_tdiv_r(z, s, m);
 	}
 
 }
