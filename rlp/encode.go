@@ -280,7 +280,6 @@ func (r *encReader) next() []byte {
 
 var (
 	encoderInterface = reflect.TypeOf(new(Encoder)).Elem()
-	emptyInterface   = reflect.TypeOf(new(interface{})).Elem()
 	big0             = big.NewInt(0)
 )
 
@@ -292,7 +291,7 @@ func makeWriter(typ reflect.Type) (writer, error) {
 		return writeEncoder, nil
 	case kind != reflect.Ptr && reflect.PtrTo(typ).Implements(encoderInterface):
 		return writeEncoderNoPtr, nil
-	case typ == emptyInterface:
+	case kind == reflect.Interface:
 		return writeInterface, nil
 	case typ.AssignableTo(reflect.PtrTo(bigInt)):
 		return writeBigIntPtr, nil
