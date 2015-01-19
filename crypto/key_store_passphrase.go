@@ -89,10 +89,7 @@ type keyStorePassphrase struct {
 }
 
 func NewKeyStorePassphrase(path string) KeyStore2 {
-	ks := &keyStorePassphrase{
-		keysDirPath : path,
-	}
-	return ks
+	return &keyStorePassphrase{path}
 }
 
 func (ks keyStorePassphrase) GenerateNewKey(rand io.Reader, auth string) (key *Key, err error) {
@@ -105,8 +102,8 @@ func (ks keyStorePassphrase) GetKey(keyId *uuid.UUID, auth string) (key *Key, er
 		return nil, err
 	}
 	key = &Key{
-		Id : keyId,
-		PrivateKey : ToECDSA(keyBytes),
+		Id:         keyId,
+		PrivateKey: ToECDSA(keyBytes),
 	}
 	return key, err
 }

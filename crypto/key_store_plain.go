@@ -54,9 +54,7 @@ func DefaultDataDir() string {
 }
 
 func NewKeyStorePlain(path string) KeyStore2 {
-	ks := new(keyStorePlain)
-	ks.keysDirPath = path
-	return ks
+	return &keyStorePlain{path}
 }
 
 func (ks keyStorePlain) GenerateNewKey(rand io.Reader, auth string) (key *Key, err error) {
