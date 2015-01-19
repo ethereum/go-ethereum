@@ -53,6 +53,21 @@ func newCryptoId(id ClientIdentity) (self *cryptoId, err error) {
 	return
 }
 
+func (self *cryptoId) Run(remotePubKeyDER []byte) (rw *secretRW) {
+	if self.initiator {
+		auth, initNonce, randomPrvKey, randomPubKey, err := initiator.initAuth(remotePubKeyDER, sessionToken)
+
+		respNonce, remoteRandomPubKey, _, _ := initiator.verifyAuthResp(response)
+	} else {
+		// we are listening connection. we are responders in the haandshake.
+		// Extract info from the authentication. The initiator starts by sending us a handshake that we need to respond to.
+		response, remoteRespNonce, remoteInitNonce, remoteRandomPrivKey, _ := responder.verifyAuth(auth, sessionToken, pubInit)
+
+	}
+	initSessionToken, initSecretRW, _ := initiator.newSession(initNonce, respNonce, auth, randomPrvKey, remoteRandomPubKey)
+	respSessionToken, respSecretRW, _ := responder.newSession(remoteInitNonce, remoteRespNonce, auth, remoteRandomPrivKey, randomPubKey)
+}
+
 /* startHandshake is called by peer if it initiated the connection.
  By protocol spec, the party who initiates the connection (initiator) will send an 'auth' packet
 New: authInitiator -> E(remote-pubk, S(ecdhe-random, ecdh-shared-secret^nonce) || H(ecdhe-random-pubk) || pubk || nonce || 0x0)

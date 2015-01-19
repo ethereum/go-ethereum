@@ -222,10 +222,14 @@ func (p *Peer) loop() (reason DiscReason, err error) {
 	defer close(p.closed)
 	defer p.conn.Close()
 
+	var readLoop func(chan Msg, chan error, chan bool)
 	if p.cryptoHandshake {
-		if err := p.handleCryptoHandshake(); err != nil {
+		if readLoop, err := p.handleCryptoHandshake(); err != nil {
+			// from here on everything can be encrypted, authenticated
 			return DiscProtocolError, err // no graceful disconnect
 		}
+	} else {
+		readLoop = p.readLoop
 	}
 
 	// read loop
@@ -233,7 +237,7 @@ func (p *Peer) loop() (reason DiscReason, err error) {
 	readErr := make(chan error)
 	readNext := make(chan bool, 1)
 	protoDone := make(chan struct{}, 1)
-	go p.readLoop(readMsg, readErr, readNext)
+	go readLoop(readMsg, readErr, readNext)
 	readNext <- true
 
 	if p.runBaseProtocol {
@@ -329,8 +333,19 @@ func (p *Peer) dispatch(msg Msg, protoDone chan struct{}) (wait bool, err error)
 }
 
 func (p *Peer) handleCryptoHandshake() (err error) {
+	// cryptoId is just created for the lifecycle of the handshake
+	// it is survived by an encrypted readwriter
+	if p.dialAddr != 0 { // this should have its own method Outgoing() bool
+		initiator = true
+	}
+	// create crypto layer
+	cryptoId := newCryptoId(p.identity, initiator, sessionToken)
+	// run on peer
+	if rw, err := cryptoId.Run(p.Pubkey()); err != nil {
+		return err
+	}
+	p.conn = rw.Run(p.conn)
 
-	return nil
 }
 
 func (p *Peer) startBaseProtocol() {
