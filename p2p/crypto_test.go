@@ -31,7 +31,7 @@ func TestCryptoHandshake(t *testing.T) {
 	respNonce, randomPubKey, _, _ := initiator.verifyAuthResp(response)
 
 	fmt.Printf("%x\n%x\n%x\n%x\n%x\n%x\n%x\n%x\n", auth, initNonce, response, remoteRespNonce, remoteInitNonce, remoteRandomPubKey, respNonce, randomPubKey)
-	// initSessionToken, initSecretRW, _ := initiator.newSession(initNonce, respNonce, auth, randomPubKey)
+	initSessionToken, initSecretRW, _ := initiator.newSession(initNonce, respNonce, auth, randomPubKey)
 	// respSessionToken, respSecretRW, _ := responder.newSession(remoteInitNonce, remoteRespNonce, auth, remoteRandomPubKey)
 
 	// if !bytes.Equal(initSessionToken, respSessionToken) {
