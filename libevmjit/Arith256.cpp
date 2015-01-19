@@ -1,8 +1,10 @@
 #include "Arith256.h"
 #include "Runtime.h"
 #include "Type.h"
+#include "Endianness.h"
 
 #include <llvm/IR/Function.h>
+#include <gmp.h>
 
 namespace dev
 {
@@ -63,6 +65,8 @@ llvm::Value* Arith256::mul(llvm::Value* _arg1, llvm::Value* _arg2)
 
 llvm::Value* Arith256::div(llvm::Value* _arg1, llvm::Value* _arg2)
 {
+
+	//return Endianness::toNative(m_builder, binaryOp(m_div, Endianness::toBE(m_builder, _arg1), Endianness::toBE(m_builder, _arg2)));
 	return binaryOp(m_div, _arg1, _arg2);
 }
 
@@ -168,6 +172,29 @@ namespace
 
 		return {lo, (uint64_t)mid, hi};
 	}
+
+	bool isZero(i256 const* _n)
+	{
+		return _n->a == 0 && _n->b == 0 && _n->c == 0 && _n->d == 0;
+	}
+
+	const auto nLimbs = sizeof(i256) / sizeof(mp_limb_t);
+
+	int countLimbs(i256 const* _n)
+	{
+		static const auto limbsInWord = sizeof(_n->a) / sizeof(mp_limb_t);
+		static_assert(limbsInWord == 1, "E?");
+
+		int l = nLimbs;
+		if (_n->d != 0) return l;
+		l -= limbsInWord;
+		if (_n->c != 0) return l;
+		l -= limbsInWord;
+		if (_n->b != 0) return l;
+		l -= limbsInWord;
+		if (_n->a != 0) return l;
+		return 0;
+	}
 }
 
 }
@@ -187,16 +214,34 @@ extern "C"
 
 	EXPORT void arith_div(i256* _arg1, i256* _arg2, i256* o_result)
 	{
-		auto arg1 = llvm2eth(*_arg1);
-		auto arg2 = llvm2eth(*_arg2);
-		*o_result = eth2llvm(arg2 == 0 ? arg2 : arg1 / arg2);
+		*o_result = {};
+		if (isZero(_arg2))
+			return;
+
+		mpz_t x{nLimbs, countLimbs(_arg1), reinterpret_cast<mp_limb_t*>(_arg1)};
+		mpz_t y{nLimbs, countLimbs(_arg2), reinterpret_cast<mp_limb_t*>(_arg2)};
+		mpz_t z{nLimbs, 0, reinterpret_cast<mp_limb_t*>(o_result)};
+
+		mpz_tdiv_q(z, x, y);
+
+//		auto arg1 = llvm2eth(*_arg1);
+//		auto arg2 = llvm2eth(*_arg2);
+//		auto res = arg2 == 0 ? arg2 : arg1 / arg2;
+//		std::cout << "DIV " << arg1 << "/" << arg2 << " = " << res << std::endl;
+//		gmp_printf("GMP %Zd / %Zd = %Zd\n", x, y, z);
 	}
 
 	EXPORT void arith_mod(i256* _arg1, i256* _arg2, i256* o_result)
 	{
-		auto arg1 = llvm2eth(*_arg1);
-		auto arg2 = llvm2eth(*_arg2);
-		*o_result = eth2llvm(arg2 == 0 ? arg2 : arg1 % arg2);
+		*o_result = {};
+		if (isZero(_arg2))
+			return;
+
+		mpz_t x{nLimbs, countLimbs(_arg1), reinterpret_cast<mp_limb_t*>(_arg1)};
+		mpz_t y{nLimbs, countLimbs(_arg2), reinterpret_cast<mp_limb_t*>(_arg2)};
+		mpz_t z{nLimbs, 0, reinterpret_cast<mp_limb_t*>(o_result)};
+
+		mpz_tdiv_r(z, x, y);
 	}
 
 	EXPORT void arith_sdiv(i256* _arg1, i256* _arg2, i256* o_result)

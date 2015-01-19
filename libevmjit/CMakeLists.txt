@@ -18,6 +18,7 @@ include_directories(${LLVM_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS})
 
 target_link_libraries(${TARGET_NAME} PRIVATE ${LLVM_LIBS})
+target_link_libraries(${TARGET_NAME} PRIVATE gmp)
 
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
 
