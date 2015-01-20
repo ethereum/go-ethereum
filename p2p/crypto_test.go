@@ -38,6 +38,12 @@ func TestCryptoHandshake(t *testing.T) {
 
 	fmt.Printf("%x\n%x\n%x\n%x\n%x\n%x\n%x\n%x\n%x\n%x\n", auth, initNonce, response, remoteRecNonce, remoteInitNonce, remoteRandomPubKey, recNonce, &randomPrivKey.PublicKey, initSessionToken, initSecretRW)
 
+	if !bytes.Equal(initNonce, remoteInitNonce) {
+		t.Errorf("nonces do not match")
+	}
+	if !bytes.Equal(recNonce, remoteRecNonce) {
+		t.Errorf("receiver nonces do not match")
+	}
 	if !bytes.Equal(initSessionToken, recSessionToken) {
 		t.Errorf("session tokens do not match")
 	}
