@@ -29,10 +29,10 @@ func (self *peerId) Pubkey() (pubkey []byte) {
 
 func newTestPeer() (peer *Peer) {
 	peer = NewPeer(&peerId{}, []Cap{})
-	peer.pubkeyHook = func(*peerAddr) error { return nil }
+	peer.verifyPeerHook = func(*Peer) error { return nil }
 	peer.ourID = &peerId{}
 	peer.listenAddr = &peerAddr{}
-	peer.otherPeers = func() []*Peer { return nil }
+	peer.getPeers = func(...[]byte) []*peerAddr { return nil }
 	return
 }
 
@@ -79,10 +79,10 @@ func TestBaseProtocolPeers(t *testing.T) {
 	// run first peer (in background)
 	peer1 := newTestPeer()
 	peer1.ourListenAddr = listenAddr
-	peer1.otherPeers = func() []*Peer {
-		pl := make([]*Peer, len(peerList))
+	peer1.getPeers = func(...[]byte) []*peerAddr {
+		pl := make([]*peerAddr, len(peerList))
 		for i, addr := range peerList {
-			pl[i] = &Peer{listenAddr: addr}
+			pl[i] = addr
 		}
 		return pl
 	}
@@ -94,7 +94,10 @@ func TestBaseProtocolPeers(t *testing.T) {
 
 	// run second peer
 	peer2 := newTestPeer()
-	peer2.newPeerAddr = addrChan // feed peer suggestions into matcher
+	peer2.addPeer = func(addr *peerAddr) error {
+		addrChan <- addr // feed peer suggestions into matcher
+		return nil
+	}
 	if err := runBaseProtocol(peer2, rw2); err != ErrPipeClosed {
 		t.Errorf("peer2 terminated with unexpected error: %v", err)
 	}
@@ -107,7 +110,7 @@ func TestBaseProtocolPeers(t *testing.T) {
 func TestBaseProtocolDisconnect(t *testing.T) {
 	peer := NewPeer(&peerId{}, nil)
 	peer.ourID = &peerId{}
-	peer.pubkeyHook = func(*peerAddr) error { return nil }
+	peer.verifyPeerHook = func(*Peer) error { return nil }
 
 	rw1, rw2 := MsgPipe()
 	done := make(chan struct{})

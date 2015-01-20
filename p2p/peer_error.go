@@ -14,7 +14,11 @@ const (
 	errP2PVersionMismatch
 	errPubkeyMissing
 	errPubkeyInvalid
-	errPubkeyForbidden
+	errPubkeyMismatch
+	errBlacklistedPeer
+	errSelfConnection
+	errConnectedPeer
+	errRejectedPeer
 	errProtocolBreach
 	errPingTimeout
 	errInvalidNetworkId
@@ -31,7 +35,11 @@ var errorToString = map[int]string{
 	errP2PVersionMismatch:     "P2P Version Mismatch",
 	errPubkeyMissing:          "Public key missing",
 	errPubkeyInvalid:          "Public key invalid",
-	errPubkeyForbidden:        "Public key forbidden",
+	errPubkeyMismatch:         "Public key mismatch",
+	errBlacklistedPeer:        "Blacklisted peer",
+	errSelfConnection:         "Self connection",
+	errConnectedPeer:          "Connected peer",
+	errRejectedPeer:           "Rejected peer",
 	errProtocolBreach:         "Protocol Breach",
 	errPingTimeout:            "Ping timeout",
 	errInvalidNetworkId:       "Invalid network id",
@@ -117,9 +125,9 @@ func discReasonForError(err error) DiscReason {
 	switch peerError.Code {
 	case errP2PVersionMismatch:
 		return DiscIncompatibleVersion
-	case errPubkeyMissing, errPubkeyInvalid:
+	case errPubkeyMissing, errPubkeyMismatch, errPubkeyInvalid:
 		return DiscInvalidIdentity
-	case errPubkeyForbidden:
+	case errBlacklistedPeer, errSelfConnection, errConnectedPeer, errRejectedPeer:
 		return DiscUselessPeer
 	case errInvalidMsgCode, errMagicTokenMismatch, errProtocolBreach:
 		return DiscProtocolError

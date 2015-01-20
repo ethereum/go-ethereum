@@ -2,7 +2,6 @@ package eth
 
 import (
 	"fmt"
-	"net"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -20,6 +19,8 @@ import (
 const (
 	seedNodeAddress = "poc-8.ethdev.com:30303"
 )
+
+var seednodeId []byte = nil
 
 type Config struct {
 	Name       string
@@ -244,7 +245,7 @@ func (s *Ethereum) Start(seed bool) error {
 	// TODO: read peers here
 	if seed {
 		logger.Infof("Connect to seed node %v", seedNodeAddress)
-		if err := s.SuggestPeer(seedNodeAddress); err != nil {
+		if err := s.SuggestPeer(seedNodeAddress, seednodeId); err != nil {
 			return err
 		}
 	}
@@ -253,14 +254,8 @@ func (s *Ethereum) Start(seed bool) error {
 	return nil
 }
 
-func (self *Ethereum) SuggestPeer(addr string) error {
-	netaddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		logger.Errorf("couldn't resolve %s:", addr, err)
-		return err
-	}
-
-	self.net.SuggestPeer(netaddr.IP, netaddr.Port, nil)
+func (self *Ethereum) SuggestPeer(addr string, pubkey []byte) error {
+	self.net.SuggestPeer(addr, pubkey)
 	return nil
 }
 

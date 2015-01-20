@@ -114,6 +114,7 @@ func (bp *baseProtocol) loop(quit <-chan error) error {
 	ping := time.NewTimer(pingTimeout)
 	activity := bp.peer.activity.Subscribe(time.Time{})
 	lastActive := time.Time{}
+	lastActiveC := bp.peer.lastActiveC
 	defer ping.Stop()
 	defer activity.Unsubscribe()
 
@@ -125,6 +126,7 @@ func (bp *baseProtocol) loop(quit <-chan error) error {
 		select {
 		case err = <-quit:
 			return err
+		case lastActiveC <- lastActive:
 		case <-getPeersTick.C:
 			err = EncodeMsg(bp.rw, getPeersMsg)
 		case event := <-activity.Chan():
@@ -169,15 +171,35 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 	case pongMsg:
 
 	case getPeersMsg:
-		peers := bp.peerList()
+		var target [][]byte
+		if err := msg.Decode(&target); err != nil {
+			return newPeerError(errInvalidMsg, "%v", err)
+		}
+
+		peers := bp.peer.getPeers(target...)
+		if len(target) == 0 {
+			// then add ourselves to the list
+			ourAddr := bp.peer.ourListenAddr
+			if ourAddr != nil && !ourAddr.IP.IsLoopback() && !ourAddr.IP.IsUnspecified() {
+				peers = append(peers, ourAddr)
+			}
+		}
+		addrs := make([]interface{}, 0, len(peers))
+		// encode and filter out requesting peer
+		for _, addr := range peers {
+			if addr != bp.peer.Addr() {
+				addrs = append(addrs, addr)
+			}
+		}
+
 		// this is dangerous. the spec says that we should _delay_
 		// sending the response if no new information is available.
 		// this means that would need to send a response later when
 		// new peers become available.
 		//
 		// TODO: add event mechanism to notify baseProtocol for new peers
-		if len(peers) > 0 {
-			return EncodeMsg(bp.rw, peersMsg, peers...)
+		if len(addrs) > 0 {
+			return EncodeMsg(bp.rw, peersMsg, addrs...)
 		}
 
 	case peersMsg:
@@ -187,7 +209,7 @@ func (bp *baseProtocol) handle(rw MsgReadWriter) error {
 		}
 		for _, addr := range peers {
 			bp.peer.Debugf("received peer suggestion: %v", addr)
-			bp.peer.newPeerAddr <- addr
+			bp.peer.addPeer(addr)
 		}
 
 	default:
@@ -227,12 +249,8 @@ func (bp *baseProtocol) readHandshake() error {
 		// verify that the peer we wanted to connect to
 		// actually holds the target public key.
 		if da.Pubkey != nil && !bytes.Equal(da.Pubkey, hs.NodeID) {
-			return newPeerError(errPubkeyForbidden, "dial address pubkey mismatch")
+			return newPeerError(errPubkeyMismatch, "dial address pubkey mismatch: %x vs %x", da.Pubkey, hs.NodeID)
 		}
-	}
-	pa := newPeerAddr(bp.peer.conn.RemoteAddr(), hs.NodeID)
-	if err := bp.peer.pubkeyHook(pa); err != nil {
-		return newPeerError(errPubkeyForbidden, "%v", err)
 	}
 	// TODO: remove Caps with empty name
 	var addr *peerAddr
@@ -241,6 +259,9 @@ func (bp *baseProtocol) readHandshake() error {
 		addr.Port = hs.ListenPort
 	}
 	bp.peer.setHandshakeInfo(&hs, addr, hs.Caps)
+	if err := bp.peer.verifyPeerHook(bp.peer); err != nil {
+		return err
+	}
 	bp.peer.startSubprotocols(hs.Caps)
 	return nil
 }
@@ -263,26 +284,4 @@ func (bp *baseProtocol) handshakeMsg() Msg {
 		port,
 		bp.peer.ourID.Pubkey()[1:],
 	)
-}
-
-func (bp *baseProtocol) peerList() []interface{} {
-	peers := bp.peer.otherPeers()
-	ds := make([]interface{}, 0, len(peers))
-	for _, p := range peers {
-		p.infolock.Lock()
-		addr := p.listenAddr
-		p.infolock.Unlock()
-		// filter out this peer and peers that are not listening or
-		// have not completed the handshake.
-		// TODO: track previously sent peers and exclude them as well.
-		if p == bp.peer || addr == nil {
-			continue
-		}
-		ds = append(ds, addr)
-	}
-	ourAddr := bp.peer.ourListenAddr
-	if ourAddr != nil && !ourAddr.IP.IsLoopback() && !ourAddr.IP.IsUnspecified() {
-		ds = append(ds, ourAddr)
-	}
-	return ds
 }

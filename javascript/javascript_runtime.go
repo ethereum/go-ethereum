@@ -202,7 +202,7 @@ func (self *JSRE) addPeer(call otto.FunctionCall) otto.Value {
 	if err != nil {
 		return otto.FalseValue()
 	}
-	self.ethereum.SuggestPeer(host)
+	self.ethereum.SuggestPeer(host, nil)
 
 	return otto.TrueValue()
 }

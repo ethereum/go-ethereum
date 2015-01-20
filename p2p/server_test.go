@@ -9,12 +9,12 @@ import (
 	"time"
 )
 
-func startTestServer(t *testing.T, pf peerFunc) *Server {
+func startTestServer(t *testing.T, cb func(*Peer, net.Conn)) *Server {
 	server := &Server{
 		Identity:    &peerId{},
 		MaxPeers:    10,
 		ListenAddr:  "127.0.0.1:0",
-		newPeerFunc: pf,
+		connectFunc: cb,
 	}
 	if err := server.Start(); err != nil {
 		t.Fatalf("Could not start server: %v", err)
@@ -27,16 +27,9 @@ func TestServerListen(t *testing.T) {
 
 	// start the test server
 	connected := make(chan *Peer)
-	srv := startTestServer(t, func(srv *Server, conn net.Conn, dialAddr *peerAddr) *Peer {
-		if conn == nil {
-			t.Error("peer func called with nil conn")
-		}
-		if dialAddr != nil {
-			t.Error("peer func called with non-nil dialAddr")
-		}
-		peer := newPeer(conn, nil, dialAddr)
+	srv := startTestServer(t, func(peer *Peer, conn net.Conn) {
+		peer.init(conn)
 		connected <- peer
-		return peer
 	})
 	defer close(connected)
 	defer srv.Stop()
@@ -50,10 +43,18 @@ func TestServerListen(t *testing.T) {
 
 	select {
 	case peer := <-connected:
-		if peer.conn.LocalAddr().String() != conn.RemoteAddr().String() {
-			t.Errorf("peer started with wrong conn: got %v, want %v",
-				peer.conn.LocalAddr(), conn.RemoteAddr())
+		if peer.conn == nil {
+			t.Error("peer setup with nil conn")
+		} else {
+			if peer.conn.LocalAddr().String() != conn.RemoteAddr().String() {
+				t.Errorf("peer started with wrong conn: got %v, want %v",
+					peer.conn.LocalAddr(), conn.RemoteAddr())
+			}
 		}
+		if peer.dialAddr != nil {
+			t.Error("peer setup with non-nil dialAddr")
+		}
+
 	case <-time.After(1 * time.Second):
 		t.Error("server did not accept within one second")
 	}
@@ -72,7 +73,7 @@ func TestServerDial(t *testing.T) {
 	go func() {
 		conn, err := listener.Accept()
 		if err != nil {
-			t.Error("acccept error:", err)
+			t.Error("accept error:", err)
 		}
 		conn.Close()
 		accepted <- conn
@@ -80,28 +81,28 @@ func TestServerDial(t *testing.T) {
 
 	// start the test server
 	connected := make(chan *Peer)
-	srv := startTestServer(t, func(srv *Server, conn net.Conn, dialAddr *peerAddr) *Peer {
-		if conn == nil {
-			t.Error("peer func called with nil conn")
-		}
-		peer := newPeer(conn, nil, dialAddr)
-		connected <- peer
-		return peer
+	srv := startTestServer(t, func(peer *Peer, conn net.Conn) {
+		peer.init(conn)
+		go func() { connected <- peer }()
 	})
 	defer close(connected)
 	defer srv.Stop()
 
 	// tell the server to connect.
 	connAddr := newPeerAddr(listener.Addr(), nil)
-	srv.peerConnect <- connAddr
+	srv.AddPeer(connAddr)
 
 	select {
 	case conn := <-accepted:
 		select {
 		case peer := <-connected:
-			if peer.conn.RemoteAddr().String() != conn.LocalAddr().String() {
-				t.Errorf("peer started with wrong conn: got %v, want %v",
-					peer.conn.RemoteAddr(), conn.LocalAddr())
+			if conn == nil {
+				t.Error("peer func called with nil conn")
+			} else {
+				if peer.conn.RemoteAddr().String() != conn.LocalAddr().String() {
+					t.Errorf("peer started with wrong conn: got %v, want %v",
+						peer.conn.RemoteAddr(), conn.LocalAddr())
+				}
 			}
 			if peer.dialAddr != connAddr {
 				t.Errorf("peer started with wrong dialAddr: got %v, want %v",
@@ -119,11 +120,11 @@ func TestServerDial(t *testing.T) {
 func TestServerBroadcast(t *testing.T) {
 	defer testlog(t).detach()
 	var connected sync.WaitGroup
-	srv := startTestServer(t, func(srv *Server, c net.Conn, dialAddr *peerAddr) *Peer {
-		peer := newPeer(c, []Protocol{discard}, dialAddr)
+	srv := startTestServer(t, func(peer *Peer, conn net.Conn) {
+		peer.init(conn)
+		peer.protocols = []Protocol{discard}
 		peer.startSubprotocols([]Cap{discard.cap()})
 		connected.Done()
-		return peer
 	})
 	defer srv.Stop()
 

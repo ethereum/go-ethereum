@@ -60,11 +60,16 @@ type Server struct {
 	Dialer *net.Dialer
 
 	// If NoDial is true, the server will not dial any peers.
+	// this maybe used in test environments where we want to prevent a node from
+	// connecting (and synchronising) with other nodes
 	NoDial bool
+
+	// peer selector
+	PeerSelector peerSelector
 
 	// Hook for testing. This is useful because we can inhibit
 	// the whole protocol stack.
-	newPeerFunc peerFunc
+	// newPeerFunc peerFunc
 
 	lock      sync.RWMutex
 	running   bool
@@ -74,9 +79,10 @@ type Server struct {
 	peerSlots chan int
 	peerCount int
 
+	connectFunc func(*Peer, net.Conn)
+
 	quit           chan struct{}
 	wg             sync.WaitGroup
-	peerConnect    chan *peerAddr
 	peerDisconnect chan *Peer
 }
 
@@ -90,9 +96,7 @@ type NAT interface {
 	String() string
 }
 
-type peerFunc func(srv *Server, c net.Conn, dialAddr *peerAddr) *Peer
-
-// Peers returns all connected peers.
+// Peers returns all currently connected peers.
 func (srv *Server) Peers() (peers []*Peer) {
 	srv.lock.RLock()
 	defer srv.lock.RUnlock()
@@ -104,6 +108,21 @@ func (srv *Server) Peers() (peers []*Peer) {
 	return
 }
 
+// GetPeers returns addresses near target if given or supported by the client
+// or falls back to all actively connected peers
+func (srv *Server) GetPeers(target ...[]byte) []*peerAddr {
+	if len(target) == 1 { // delegate to selector
+		return ActiveAddresses(srv.PeerSelector.GetPeers(target[0])...)
+	} else {
+		// in fact it is not clear why the selector would not want to reply to this case as well
+		var peers []peerInfo
+		for _, peer := range srv.Peers() {
+			peers = append(peers, peer)
+		}
+		return ActiveAddresses(peers...)
+	}
+}
+
 // PeerCount returns the number of connected peers.
 func (srv *Server) PeerCount() int {
 	srv.lock.RLock()
@@ -111,13 +130,75 @@ func (srv *Server) PeerCount() int {
 	return srv.peerCount
 }
 
-// SuggestPeer injects an address into the outbound address pool.
-func (srv *Server) SuggestPeer(ip net.IP, port int, nodeID []byte) {
-	addr := &peerAddr{ip, uint64(port), nodeID}
+// SuggestPeer is a convenient method that does dns resolution
+// and passes on the request to AddPeer
+func (srv *Server) SuggestPeer(addr string, pubkey []byte) error {
+	netaddr, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		srvlog.Errorf("couldn't resolve %s:", addr, err)
+		return err
+	}
+	peerAddr := &peerAddr{netaddr.IP, uint64(netaddr.Port), pubkey}
+	return srv.AddPeer(peerAddr)
+}
+
+// AddPeer takes a peerAddr address as argument.
+// If not found among connected peers turns to the peerSelector
+// to decide if it is a worthwhile connection
+func (srv *Server) AddPeer(addr *peerAddr) (err error) {
+	if srv.NoDial {
+		return fmt.Errorf("no dial out")
+	}
+	// need to look up nodeID first
+	peer := &Peer{
+		dialAddr:    addr,
+		lastActiveC: make(chan time.Time),
+		lastActive:  time.Now().Add(-24 * time.Hour),
+	}
+	if err = srv.PeerSelector.AddPeer(peer); err == nil {
+		srvlog.Infof("peer %v accepted by peer selection", addr)
+		err = srv.dialPeer(peer)
+	} else {
+		srvlog.Infof("peer %v rejected by peer selection", addr)
+	}
+	return
+}
+
+func (srv *Server) dialPeer(peer *Peer) (err error) {
+	timeout := time.After(5 * time.Second)
 	select {
-	case srv.peerConnect <- addr:
-	default: // don't block
-		srvlog.Warnf("peer suggestion %v ignored", addr)
+	case <-timeout:
+		err = fmt.Errorf("Too many connections. No slot available")
+	case slot := <-srv.peerSlots: // there is a slot available
+		srvlog.Infof("Dialing %v (slot %d)\n", peer.dialAddr, slot)
+		conn, dialErr := srv.Dialer.Dial(peer.dialAddr.Network(), peer.dialAddr.String())
+		if dialErr != nil {
+			err = fmt.Errorf("Dial error: %v", dialErr)
+			srvlog.Errorln(err)
+			srv.peerSlots <- slot
+			return
+		}
+		srvlog.Infof("Connected to %v (slot %d)\n", peer.dialAddr, slot)
+		peer.slot = slot
+		srv.connectFunc(peer, conn)
+		go srv.addPeer(peer)
+	}
+	return
+
+}
+
+func (srv *Server) connect(p *Peer, conn net.Conn) {
+	p.init(conn)
+	p.ourID = srv.Identity
+	p.addPeer = srv.AddPeer
+	p.getPeers = srv.GetPeers
+	p.verifyPeerHook = srv.verifyPeer
+	p.runBaseProtocol = true
+	p.protocols = srv.Protocols
+
+	// laddr can be updated concurrently by NAT traversal.
+	if srv.laddr != nil {
+		p.ourListenAddr = newPeerAddr(srv.laddr, srv.Identity.Pubkey())
 	}
 }
 
@@ -162,11 +243,10 @@ func (srv *Server) Start() (err error) {
 	srv.quit = make(chan struct{})
 	srv.peers = make([]*Peer, srv.MaxPeers)
 	srv.peerSlots = make(chan int, srv.MaxPeers)
-	srv.peerConnect = make(chan *peerAddr, outboundAddressPoolSize)
 	srv.peerDisconnect = make(chan *Peer)
-	if srv.newPeerFunc == nil {
-		srv.newPeerFunc = newServerPeer
-	}
+	// if srv.newPeerFunc == nil {
+	// 	srv.newPeerFunc = newServerPeer
+	// }
 	if srv.Blacklist == nil {
 		srv.Blacklist = NewBlacklist()
 	}
@@ -179,12 +259,13 @@ func (srv *Server) Start() (err error) {
 			return err
 		}
 	}
-	if !srv.NoDial {
-		srv.wg.Add(1)
-		go srv.dialLoop()
+
+	if srv.PeerSelector == nil {
+		srv.PeerSelector = &BaseSelector{}
 	}
-	if srv.NoDial && srv.ListenAddr == "" {
-		srvlog.Warnln("I will be kind-of useless, neither dialing nor listening.")
+
+	if srv.connectFunc == nil {
+		srv.connectFunc = srv.connect
 	}
 
 	// make all slots available
@@ -266,8 +347,10 @@ func (srv *Server) listenLoop() {
 				srv.peerSlots <- slot
 				return
 			}
-			srvlog.Debugf("Accepted conn %v (slot %d)\n", conn.RemoteAddr(), slot)
-			srv.addPeer(conn, nil, slot)
+			srvlog.Debugf("Accepted conn %v (slot %d) - peer selector check after handshake", conn.RemoteAddr(), slot)
+			peer := &Peer{slot: slot}
+			srv.connectFunc(peer, conn)
+			srv.addPeer(peer)
 		case <-srv.quit:
 			return
 		}
@@ -313,77 +396,22 @@ func (srv *Server) removePortMapping(port int) {
 	srv.NAT.DeletePortMapping("tcp", port, port)
 }
 
-func (srv *Server) dialLoop() {
-	defer srv.wg.Done()
-	var (
-		suggest chan *peerAddr
-		slot    *int
-		slots   = srv.peerSlots
-	)
-	for {
-		select {
-		case i := <-slots:
-			// we need a peer in slot i, slot reserved
-			slot = &i
-			// now we can watch for candidate peers in the next loop
-			suggest = srv.peerConnect
-			// do not consume more until candidate peer is found
-			slots = nil
-
-		case desc := <-suggest:
-			// candidate peer found, will dial out asyncronously
-			// if connection fails slot will be released
-			srvlog.Infof("dial %v (%v)", desc, *slot)
-			go srv.dialPeer(desc, *slot)
-			// we can watch if more peers needed in the next loop
-			slots = srv.peerSlots
-			// until then we dont care about candidate peers
-			suggest = nil
-
-		case <-srv.quit:
-			// give back the currently reserved slot
-			if slot != nil {
-				srv.peerSlots <- *slot
-			}
-			return
-		}
-	}
-}
-
-// connect to peer via dial out
-func (srv *Server) dialPeer(desc *peerAddr, slot int) {
-	srvlog.Debugf("Dialing %v (slot %d)\n", desc, slot)
-	conn, err := srv.Dialer.Dial(desc.Network(), desc.String())
-	if err != nil {
-		srvlog.Errorf("Dial error: %v", err)
-		srv.peerSlots <- slot
-		return
-	}
-	go srv.addPeer(conn, desc, slot)
-}
-
 // creates the new peer object and inserts it into its slot
-func (srv *Server) addPeer(conn net.Conn, desc *peerAddr, slot int) *Peer {
+func (srv *Server) addPeer(peer *Peer) {
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
-	if !srv.running {
-		conn.Close()
-		srv.peerSlots <- slot // release slot
-		return nil
-	}
-	peer := srv.newPeerFunc(srv, conn, desc)
-	peer.slot = slot
-	srv.peers[slot] = peer
+	srvlog.Debugf("Add peer %v (slot %v)\n", peer, peer.slot)
+	srv.peers[peer.slot] = peer
 	srv.peerCount++
 	go func() { peer.loop(); srv.peerDisconnect <- peer }()
-	return peer
+	return
 }
 
 // removes peer: sending disconnect msg, stop peer, remove rom list/table, release slot
 func (srv *Server) removePeer(peer *Peer) {
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
-	srvlog.Debugf("Removing %v (slot %v)\n", peer, peer.slot)
+	srvlog.Debugf("Remove peer %v (slot %v)\n", peer, peer.slot)
 	if srv.peers[peer.slot] != peer {
 		srvlog.Warnln("Invalid peer to remove:", peer)
 		return
@@ -395,21 +423,27 @@ func (srv *Server) removePeer(peer *Peer) {
 	srv.peerSlots <- peer.slot
 }
 
-func (srv *Server) verifyPeer(addr *peerAddr) error {
-	if srv.Blacklist.Exists(addr.Pubkey) {
-		return errors.New("blacklisted")
+func (srv *Server) verifyPeer(peer *Peer) error {
+	pubkey := peer.Pubkey()
+	if srv.Blacklist.Exists(pubkey) {
+		return newPeerError(errBlacklistedPeer, "")
 	}
-	if bytes.Equal(srv.Identity.Pubkey()[1:], addr.Pubkey) {
-		return newPeerError(errPubkeyForbidden, "not allowed to connect to srv")
+	if bytes.Equal(srv.Identity.Pubkey()[1:], pubkey) {
+		return newPeerError(errSelfConnection, "")
 	}
 	srv.lock.RLock()
-	defer srv.lock.RUnlock()
 	for _, peer := range srv.peers {
 		if peer != nil {
 			id := peer.Identity()
-			if id != nil && bytes.Equal(id.Pubkey(), addr.Pubkey) {
-				return errors.New("already connected")
+			if id != nil && bytes.Equal(id.Pubkey(), pubkey) {
+				return newPeerError(errConnectedPeer, "")
 			}
+		}
+	}
+	srv.lock.RUnlock()
+	if peer.dialAddr == nil {
+		if err := srv.PeerSelector.AddPeer(peer); err != nil {
+			return newPeerError(errRejectedPeer, "%v", err)
 		}
 	}
 	return nil
