@@ -63,6 +63,17 @@ ApplicationWindow {
 		gui.sendCommand(0)
 	}
 
+	function activeView(view, menuItem) {
+		mainSplit.setView(view, menuItem)
+		if (view.objectName === "browserView") {
+			urlPane.visible = false;
+			mainView.anchors.top = rootView.top
+		} else {
+			urlPane.visible = true;
+			mainView.anchors.top = divider.bottom
+		}
+	}
+
 	function addViews(view, path, options) {
 		var views = mainSplit.addComponent(view, options)
 		views.menuItem.path = path
@@ -284,6 +295,7 @@ ApplicationWindow {
 		}
 
 		ProgressBar {
+			visible: false
 			id: downloadIndicator
 			value: 0
 			objectName: "downloadIndicator"
@@ -293,6 +305,7 @@ ApplicationWindow {
 		}
 
 		Label {
+			visible: false
 			objectName: "downloadLabel"
 			//y: 7
 			anchors.left: downloadIndicator.right
@@ -445,15 +458,7 @@ ApplicationWindow {
 					 MouseArea {
 						 anchors.fill: parent
 						 onClicked: {
-							 mainSplit.setView(view, menuItem)
-                             console.log(view);
-                             if (view.objectName === "browserView") {
-                                urlPane.visible = false;
-                                mainView.anchors.top = rootView.top
-                            } else {
-                                urlPane.visible = true;
-                                mainView.anchors.top = divider.bottom
-                            }
+							 activeView(view, menuItem);
 						 }
 					 }
 
@@ -520,14 +525,14 @@ ApplicationWindow {
 				 var section;
 				 switch(options.section) {
 					 case "ethereum":
-						section = menuDefault;
-						break;
+					 section = menuDefault;
+					 break;
 					 case "legacy":
-						section = menuLegacy;
-						break;
+					 section = menuLegacy;
+					 break;
 					 default:
-						section = menuApps;
-						break;
+					 section = menuApps;
+					 break;
 				 }
 
 				 var comp = menuItemTemplate.createObject(section)
@@ -614,7 +619,7 @@ ApplicationWindow {
 		  * Main view
 		  ********************/
 		  Rectangle {
-              id: rootView
+			  id: rootView
 			  anchors.right: parent.right
 			  anchors.left: menu.right
 			  anchors.bottom: parent.bottom
@@ -648,8 +653,7 @@ ApplicationWindow {
 
 					  Keys.onReturnPressed: {
 						  if(/^https?/.test(this.text)) {
-							  root.browser.view.open(this.text);
-							  mainSplit.setView(root.browser.view, root.browser.menuItem);
+							  activeView(root.browser.view, root.browser.menuItem);
 						  } else {
 							  addPlugin(this.text, {close: true, section: "apps"})
 						  }
@@ -873,13 +877,13 @@ ApplicationWindow {
 			     Component.onCompleted: {
 				     pastPeers.insert(0, {text: "poc-8.ethdev.com:30303"})
 				     /*
-				     var ips = eth.pastPeers()
-				     for(var i = 0; i < ips.length; i++) {
-					     pastPeers.append({text: ips.get(i)})
-				     }
+				      var ips = eth.pastPeers()
+				      for(var i = 0; i < ips.length; i++) {
+					      pastPeers.append({text: ips.get(i)})
+				      }
 
-				     pastPeers.insert(0, {text: "poc-7.ethdev.com:30303"})
-				     */
+				      pastPeers.insert(0, {text: "poc-7.ethdev.com:30303"})
+				      */
 			     }
 		     }
 
