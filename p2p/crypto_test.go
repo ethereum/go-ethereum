@@ -25,10 +25,14 @@ func TestCryptoHandshake(t *testing.T) {
 	}
 
 	// simulate handshake by feeding output to input
+	// initiator sends handshake 'auth'
 	auth, initNonce, randomPrivKey, _, _ := initiator.startHandshake(receiver.pubKeyDER, sessionToken)
+	// receiver reads auth and responds with response
 	response, remoteRecNonce, remoteInitNonce, remoteRandomPrivKey, _ := receiver.respondToHandshake(auth, crypto.FromECDSAPub(pub0), sessionToken)
+	// initiator reads receiver's response and the key exchange completes
 	recNonce, remoteRandomPubKey, _, _ := initiator.completeHandshake(response)
 
+	// now both parties should have the same session parameters
 	initSessionToken, initSecretRW, _ := initiator.newSession(initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
 	recSessionToken, recSecretRW, _ := receiver.newSession(remoteInitNonce, remoteRecNonce, auth, remoteRandomPrivKey, &randomPrivKey.PublicKey)
 
