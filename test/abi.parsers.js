@@ -48,7 +48,6 @@ describe('abi', function() {
             assert.equal(parser.test('0.1'), "0000000000000000000000000000000000000000000000000000000000000000");
             assert.equal(parser.test('3.9'), "0000000000000000000000000000000000000000000000000000000000000003");
 
-
         });
 
         it('should parse input uint128', function() {
@@ -321,7 +320,7 @@ describe('abi', function() {
         
             // given
             var d = clone(description);
-            d[0].name = 'helloworld';
+            d[0].name = 'helloworld(int)';
             d[0].inputs = [
                 { type: "int" }
             ];
@@ -331,6 +330,7 @@ describe('abi', function() {
 
             // then
             assert.equal(parser.helloworld(1), "0000000000000000000000000000000000000000000000000000000000000001");
+            assert.equal(parser.helloworld['int'](1), "0000000000000000000000000000000000000000000000000000000000000001");
 
         });
         
@@ -755,7 +755,7 @@ describe('abi', function() {
         
             // given
             var d = clone(description);
-            d[0].name = 'helloworld';
+            d[0].name = 'helloworld(int)';
             d[0].outputs = [
                 { type: "int" }
             ];
@@ -765,6 +765,7 @@ describe('abi', function() {
 
             // then
             assert.equal(parser.helloworld("0x0000000000000000000000000000000000000000000000000000000000000001")[0], 1);
+            assert.equal(parser.helloworld['int']("0x0000000000000000000000000000000000000000000000000000000000000001")[0], 1);
 
         });
 
