@@ -3,10 +3,10 @@
 package vm
 
 /*
-#include "../evmjit/libevmjit/interface.h"
+#include <evmjit/interface.h>
 #include <stdlib.h>
 
-#cgo LDFLAGS: -L/home/chfast/go/src/github.com/ethereum/go-ethereum/evmjit/build/libevmjit -levmjit
+#cgo LDFLAGS: -levmjit
 */
 import "C"
 
