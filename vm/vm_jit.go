@@ -20,8 +20,9 @@ import (
 )
 
 type JitVm struct {
-	env Environment
-	me  ContextRef
+	env   Environment
+	me    ContextRef
+	price *big.Int
 }
 
 type i256 [32]byte
@@ -133,6 +134,7 @@ func NewJitVm(env Environment) *JitVm {
 
 func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
 	self.me = me // FIXME: Make sure Run() is not used more than once
+	self.price = price
 
 	var data RuntimeData
 	data.elems[Gas] = big2llvm(gas)
@@ -257,8 +259,7 @@ func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Point
 		//codeAddr := llvm2hash((*i256)(_codeAddr)) //TODO: Handle CallCode
 		llvmGas := (*i256)(_gas)
 		gas := llvm2big(llvmGas)
-		price := big.NewInt(0) // TODO
-		out, err := vm.env.Call(vm.me, receiveAddr, inData, gas, price, value)
+		out, err := vm.env.Call(vm.me, receiveAddr, inData, gas, vm.price, value)
 		*llvmGas = big2llvm(gas)
 		if err == nil {
 			copy(outData, out)
@@ -282,8 +283,7 @@ func env_create(_vm unsafe.Pointer, _gas unsafe.Pointer, _value unsafe.Pointer, 
 		initData := llvm2bytes(initDataPtr, initDataLen)
 		llvmGas := (*i256)(_gas)
 		gas := llvm2big(llvmGas)
-		price := big.NewInt(0) // TODO
-		addr, _, _ := vm.Env().Create(vm.me, vm.me.Address(), initData, gas, price, value)
+		addr, _, _ := vm.Env().Create(vm.me, vm.me.Address(), initData, gas, vm.price, value)
 		*llvmGas = big2llvm(gas)
 		*result = hash2llvm(addr)
 	} else {
