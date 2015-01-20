@@ -61,14 +61,10 @@ func hash2llvm(h []byte) i256 {
 }
 
 func llvm2hash(m *i256) []byte {
-	hash := make([]byte, len(m)) // TODO: Use C.GoBytes
-	hdr := reflect.SliceHeader{
-		Data: uintptr(unsafe.Pointer(m)),
-		Len:  int(len(m)),
-		Cap:  int(len(m)),
+	if len(m) != 32 {
+		panic("I don't know Go!")
 	}
-	copy(hash, *(*[]byte)(unsafe.Pointer(&hdr)))
-	return hash
+	return C.GoBytes(unsafe.Pointer(m), 32)
 }
 
 func address2llvm(addr []byte) i256 {
