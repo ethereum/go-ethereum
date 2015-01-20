@@ -89,7 +89,7 @@ func apiHandler(xeth *EthereumApi) http.Handler {
 		}
 
 		var response interface{}
-		reserr := JSON.GetRequestReply(xeth, &reqParsed, &response)
+		reserr := xeth.GetRequestReply(&reqParsed, &response)
 		if reserr != nil {
 			jsonlogger.Errorln(reserr)
 			JSON.Send(w, &RpcErrorResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: true, ErrorText: reserr.Error()})

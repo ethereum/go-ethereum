@@ -157,5 +157,52 @@ func (p *EthereumApi) GetCodeAt(args *GetCodeAtArgs, reply *interface{}) error {
 	return nil
 }
 
+func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
+	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
+	jsonlogger.DebugDetailf("%T %s", req.Params, req.Params)
+	switch req.Method {
+	case "eth_coinbase":
+		return p.GetCoinbase(reply)
+	case "eth_listening":
+		return p.GetIsListening(reply)
+	case "eth_mining":
+		return p.GetIsMining(reply)
+	case "eth_peerCount":
+		return p.GetPeerCount(reply)
+	case "eth_countAt":
+		args, err := req.ToGetTxCountArgs()
+		if err != nil {
+			return err
+		}
+		return p.GetTxCountAt(args, reply)
+	case "eth_codeAt":
+		args, err := req.ToGetCodeAtArgs()
+		if err != nil {
+			return err
+		}
+		return p.GetCodeAt(args, reply)
+	case "eth_balanceAt":
+		args, err := req.ToGetBalanceArgs()
+		if err != nil {
+			return err
+		}
+		return p.GetBalanceAt(args, reply)
+	case "eth_stateAt":
+		args, err := req.ToGetStorageArgs()
+		if err != nil {
+			return err
+		}
+		return p.GetStorageAt(args, reply)
+	case "eth_blockByNumber", "eth_blockByHash":
+		args, err := req.ToGetBlockArgs()
+		if err != nil {
+			return err
+		}
+		return p.GetBlock(args, reply)
+	default:
+		return NewErrorResponse(ErrorNotImplemented)
+	}
+
+	jsonlogger.DebugDetailf("Reply: %T %s", reply, reply)
 	return nil
 }
