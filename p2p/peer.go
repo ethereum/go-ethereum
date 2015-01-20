@@ -147,7 +147,7 @@ func (self *Peer) Pubkey() (pubkey []byte) {
 	defer self.infolock.Unlock()
 	switch {
 	case self.identity != nil:
-		pubkey = self.identity.Pubkey()
+		pubkey = self.identity.Pubkey()[1:]
 	case self.dialAddr != nil:
 		pubkey = self.dialAddr.Pubkey
 	case self.listenAddr != nil:
