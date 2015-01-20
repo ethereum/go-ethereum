@@ -57,7 +57,7 @@ public:
 	explicit BasicBlock(std::string _name, llvm::Function* _mainFunc, llvm::IRBuilder<>& _builder, bool isJumpDest);
 
 	BasicBlock(const BasicBlock&) = delete;
-	void operator=(const BasicBlock&) = delete;
+	BasicBlock& operator=(const BasicBlock&) = delete;
 
 	llvm::BasicBlock* llvm() { return m_llvmBB; }
 
@@ -65,6 +65,9 @@ public:
 	bytes::const_iterator end() { return m_end; }
 
 	bool isJumpDest() const { return m_isJumpDest; }
+
+	llvm::Value* getJumpTarget() const { return m_jumpTarget; }
+	void setJumpTarget(llvm::Value* _jumpTarget) { m_jumpTarget = _jumpTarget; }
 
 	LocalStack& localStack() { return m_stack; }
 
@@ -112,6 +115,9 @@ private:
 	/// Is the basic block a valid jump destination.
 	/// JUMPDEST is the first instruction of the basic block.
 	bool const m_isJumpDest = false;
+
+	/// If block finishes with dynamic jump target index is stored here
+	llvm::Value* m_jumpTarget = nullptr;
 };
 
 }

@@ -3,7 +3,7 @@
 #include <libevm/FeeStructure.h>
 #include <libevm/ExtVMFace.h>
 
-#include <evmjit/libevmjit/Utils.h>
+#include "Utils.h"
 
 extern "C"
 {
@@ -16,7 +16,6 @@ extern "C"
 	using namespace dev;
 	using namespace dev::eth;
 	using jit::i256;
-	using jit::eth2llvm;
 
 	EXPORT void env_sload(ExtVMFace* _env, i256* _index, i256* o_value)
 	{
@@ -89,7 +88,7 @@ extern "C"
 		*o_hash = hash;
 	}
 
-	EXPORT byte const* env_getExtCode(ExtVMFace* _env, h256* _addr256, uint64_t* o_size)
+	EXPORT byte const* env_extcode(ExtVMFace* _env, h256* _addr256, uint64_t* o_size)
 	{
 		auto addr = right160(*_addr256);
 		auto& code = _env->codeAt(addr);

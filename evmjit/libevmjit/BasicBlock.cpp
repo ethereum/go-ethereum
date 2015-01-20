@@ -168,16 +168,13 @@ void BasicBlock::synchronizeLocalStack(Stack& _evmStack)
 		if (val == nullptr)
 			continue;
 
-		assert(llvm::isa<llvm::PHINode>(val));
 		llvm::PHINode* phi = llvm::cast<llvm::PHINode>(val);
-		if (! phi->use_empty())
-		{
-			// Insert call to get() just before the PHI node and replace
-			// the uses of PHI with the uses of this new instruction.
-			m_builder.SetInsertPoint(phi);
-			auto newVal = _evmStack.get(idx);
-			phi->replaceAllUsesWith(newVal);
-		}
+		// Insert call to get() just before the PHI node and replace
+		// the uses of PHI with the uses of this new instruction.
+		m_builder.SetInsertPoint(phi);
+		auto newVal = _evmStack.get(idx); // OPT: Value may be never user but we need to check stack heigth
+		                                  //      It is probably a good idea to keep heigth as a local variable accesible by LLVM directly
+		phi->replaceAllUsesWith(newVal);
 		phi->eraseFromParent();
 	}
 

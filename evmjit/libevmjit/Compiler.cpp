@@ -4,6 +4,7 @@
 #include <functional>
 #include <fstream>
 #include <chrono>
+#include <sstream>
 
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/IR/CFG.h>
@@ -100,7 +101,7 @@ llvm::BasicBlock* Compiler::getJumpTableBlock()
 		m_jumpTableBlock.reset(new BasicBlock("JumpTable", m_mainFunc, m_builder, true));
 		InsertPointGuard g{m_builder};
 		m_builder.SetInsertPoint(m_jumpTableBlock->llvm());
-		auto dest = m_jumpTableBlock->localStack().pop();
+		auto dest = m_builder.CreatePHI(Type::Word, 8, "target");
 		auto switchInstr = m_builder.CreateSwitch(dest, getBadJumpBlock());
 		for (auto&& p : m_basicBlocks)
 		{
@@ -164,6 +165,26 @@ std::unique_ptr<llvm::Module> Compiler::compile(bytes const& _bytecode, std::str
 	m_builder.CreateRet(Constant::get(ReturnCode::Stop));
 
 	removeDeadBlocks();
+
+	// Link jump table target index
+	if (m_jumpTableBlock)
+	{
+		auto phi = llvm::cast<llvm::PHINode>(&m_jumpTableBlock->llvm()->getInstList().front());
+		for (auto predIt = llvm::pred_begin(m_jumpTableBlock->llvm()); predIt != llvm::pred_end(m_jumpTableBlock->llvm()); ++predIt)
+		{
+			BasicBlock* pred = nullptr;
+			for (auto&& p : m_basicBlocks)
+			{
+				if (p.second.llvm() == *predIt)
+				{
+					pred = &p.second;
+					break;
+				}
+			}
+
+			phi->addIncoming(pred->getJumpTarget(), pred->llvm());
+		}
+	}
 
 	dumpCFGifRequired("blocks-init.dot");
 
@@ -394,7 +415,8 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 
 			value = Endianness::toBE(m_builder, value);
 			auto bytes = m_builder.CreateBitCast(value, llvm::VectorType::get(Type::Byte, 32), "bytes");
-			auto byte = m_builder.CreateExtractElement(bytes, byteNum, "byte");
+			auto safeByteNum = m_builder.CreateZExt(m_builder.CreateTrunc(byteNum, m_builder.getIntNTy(5)), Type::lowPrecision); // Trim index, large values can crash
+			auto byte = m_builder.CreateExtractElement(bytes, safeByteNum, "byte");
 			value = m_builder.CreateZExt(byte, Type::Word);
 
 			auto byteNumValid = m_builder.CreateICmpULT(byteNum, Constant::get(32));
@@ -564,7 +586,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 				}
 				else
 				{
-					stack.push(target);
+					_basicBlock.setJumpTarget(target);
 					m_builder.CreateBr(getJumpTableBlock());
 				}
 			}
@@ -580,7 +602,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 				}
 				else
 				{
-					stack.push(target);
+					_basicBlock.setJumpTarget(target);
 					m_builder.CreateCondBr(cond, getJumpTableBlock(), _nextBasicBlock);
 				}
 			}
@@ -644,7 +666,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 		case Instruction::EXTCODESIZE:
 		{
 			auto addr = stack.pop();
-			auto codeRef = _ext.getExtCode(addr);
+			auto codeRef = _ext.extcode(addr);
 			stack.push(codeRef.size);
 			break;
 		}
@@ -682,7 +704,7 @@ void Compiler::compileBasicBlock(BasicBlock& _basicBlock, bytes const& _bytecode
 			auto srcIdx = stack.pop();
 			auto reqBytes = stack.pop();
 
-			auto codeRef = _ext.getExtCode(addr);
+			auto codeRef = _ext.extcode(addr);
 
 			_memory.copyBytes(codeRef.ptr, codeRef.size, srcIdx, destMemIdx, reqBytes);
 			break;

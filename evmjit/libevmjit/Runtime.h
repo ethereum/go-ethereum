@@ -2,14 +2,7 @@
 #pragma once
 
 #include <csetjmp>
-#include <vector>
-
-#include "Instruction.h"
-#include "CompilerHelper.h"
-#include "Utils.h"
-#include "Type.h"
 #include "RuntimeData.h"
-
 
 #ifdef _MSC_VER
 	#define EXPORT __declspec(dllexport)
@@ -34,13 +27,13 @@ public:
 	Runtime(RuntimeData* _data, Env* _env);
 
 	Runtime(const Runtime&) = delete;
-	void operator=(const Runtime&) = delete;
+	Runtime& operator=(const Runtime&) = delete;
 
 	StackImpl& getStack() { return m_stack; }
 	MemoryImpl& getMemory() { return m_memory; }
 	Env* getEnvPtr() { return &m_env; }
 
-	bytes getReturnData() const;
+	bytes_ref getReturnData() const;
 	jmp_buf_ref getJmpBuf() { return m_jmpBuf; }
 
 private:

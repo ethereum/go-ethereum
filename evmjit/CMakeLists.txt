@@ -4,17 +4,18 @@ project(evmjit)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-else ()
-	set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wno-unknown-pragmas -Wextra -DSHAREDLIB -fPIC")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+else()
+	set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wno-unknown-pragmas -Wextra -fPIC")
 endif()
 
-if(APPLE)
-	set(CMAKE_SHARED_LINKER_FLAGS "-undefined dynamic_lookup")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	# Do not allow unresovled symbols in shared library (default on linux)
+	set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-undefined")
 endif()
 
 # LLVM
-if(LLVM_DIR)	# local LLVM build
+if(LLVM_DIR OR APPLE)	# local LLVM build
 	find_package(LLVM REQUIRED CONFIG)
 	message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 	message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
@@ -28,10 +29,8 @@ else()
 	message(STATUS "LLVM include dirs: ${LLVM_INCLUDE_DIRS}")
 	set(LLVM_LIBS "-lLLVMBitWriter -lLLVMX86CodeGen -lLLVMSelectionDAG -lLLVMAsmPrinter -lLLVMCodeGen -lLLVMScalarOpts -lLLVMInstCombine -lLLVMTransformUtils -lLLVMipa -lLLVMAnalysis -lLLVMX86AsmParser -lLLVMX86Desc -lLLVMX86Info -lLLVMX86AsmPrinter -lLLVMX86Utils -lLLVMMCJIT -lLLVMTarget -lLLVMRuntimeDyld -lLLVMObject -lLLVMMCParser -lLLVMBitReader -lLLVMExecutionEngine -lLLVMMC -lLLVMCore -lLLVMSupport -lz -lpthread -lffi -ltinfo -ldl -lm")
 	add_definitions(-D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS)
+	link_directories(/usr/lib/llvm-3.5/lib)
 endif()
-
-# Boost
-find_package(Boost REQUIRED)
 
 add_subdirectory(libevmjit)
 

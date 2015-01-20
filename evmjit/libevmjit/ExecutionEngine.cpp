@@ -19,7 +19,12 @@
 #include "Compiler.h"
 #include "Cache.h"
 
-extern "C" void env_sha3(dev::eth::jit::byte const* _begin, uint64_t _size, std::array<dev::eth::jit::byte, 32>* o_hash);
+#if defined(NDEBUG)
+#define DEBUG_ENV_OPTION(name) false
+#else
+#include <cstdlib>
+#define DEBUG_ENV_OPTION(name) (std::getenv(#name) != nullptr)
+#endif
 
 namespace dev
 {
@@ -49,14 +54,17 @@ ReturnCode runEntryFunc(EntryFuncPtr _mainFunc, Runtime* _runtime)
 
 std::string codeHash(bytes const& _code)
 {
-	std::array<byte, 32> binHash;
-	env_sha3(_code.data(), _code.size(), &binHash);
-
-	std::ostringstream os;
-	for (auto i: binHash)
-		os << std::hex << std::setfill('0') << std::setw(2) << (int)(std::make_unsigned<decltype(i)>::type)i;
-
-	return os.str();
+	uint32_t hash = 0;
+	for (auto b : _code)
+	{
+		hash += b;
+		hash += (hash << 10);
+		hash ^= (hash >> 6);
+	}
+	hash += (hash << 3);
+	hash ^= (hash >> 11);
+	hash += (hash << 15);
+	return std::to_string(hash);
 }
 
 }
@@ -64,6 +72,8 @@ std::string codeHash(bytes const& _code)
 ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _env)
 {
 	static std::unique_ptr<llvm::ExecutionEngine> ee;  // TODO: Use Managed Objects from LLVM?
+	static auto debugDumpModule = DEBUG_ENV_OPTION(EVMJIT_DUMP_MODULE);
+	static bool objectCacheEnabled = !DEBUG_ENV_OPTION(EVMJIT_CACHE_OFF);
 
 	auto mainFuncName = codeHash(_code);
 	EntryFuncPtr entryFuncPtr{};
@@ -74,14 +84,14 @@ ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _en
 	}
 	else
 	{
-		bool objectCacheEnabled = true;
 		auto objectCache = objectCacheEnabled ? Cache::getObjectCache() : nullptr;
 		std::unique_ptr<llvm::Module> module;
 		if (objectCache)
 			module = Cache::getObject(mainFuncName);
 		if (!module)
 			module = Compiler({}).compile(_code, mainFuncName);
-		//module->dump();
+		if (debugDumpModule)
+			module->dump();
 		if (!ee)
 		{
 			llvm::InitializeNativeTarget();
@@ -92,7 +102,7 @@ ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _en
 			builder.setUseMCJIT(true);
 			std::unique_ptr<llvm::SectionMemoryManager> memoryManager(new llvm::SectionMemoryManager);
 			builder.setMCJITMemoryManager(memoryManager.get());
-			builder.setOptLevel(llvm::CodeGenOpt::Default);
+			builder.setOptLevel(llvm::CodeGenOpt::None);
 
 			auto triple = llvm::Triple(llvm::sys::getProcessTriple());
 			if (triple.getOS() == llvm::Triple::OSType::Win32)
@@ -126,7 +136,10 @@ ReturnCode ExecutionEngine::run(bytes const& _code, RuntimeData* _data, Env* _en
 
 	auto returnCode = runEntryFunc(entryFuncPtr, &runtime);
 	if (returnCode == ReturnCode::Return)
-		this->returnData = runtime.getReturnData();
+	{
+		returnData = runtime.getReturnData();     // Save reference to return data
+		std::swap(m_memory, runtime.getMemory()); // Take ownership of memory
+	}
 
 	auto executionEndTime = std::chrono::high_resolution_clock::now();
 	clog(JIT) << " + " << std::chrono::duration_cast<std::chrono::milliseconds>(executionEndTime - executionStartTime).count() << " ms\n";

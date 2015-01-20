@@ -38,9 +38,6 @@ struct RuntimeData
 	i256 elems[_size] = {};
 	byte const* callData = nullptr;
 	byte const* code = nullptr;
-
-	void set(Index _index, u256 _value) { elems[_index] = eth2llvm(_value); }
-	u256 get(Index _index) { return llvm2eth(elems[_index]); }
 };
 
 /// VM Environment (ExtVM) opaque type

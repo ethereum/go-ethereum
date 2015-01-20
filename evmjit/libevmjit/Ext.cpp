@@ -5,9 +5,6 @@
 #include <llvm/IR/TypeBuilder.h>
 #include <llvm/IR/IntrinsicInst.h>
 
-//#include <libdevcrypto/SHA3.h>
-//#include <libevm/FeeStructure.h>
-
 #include "RuntimeManager.h"
 #include "Memory.h"
 #include "Type.h"
@@ -22,10 +19,10 @@ namespace jit
 
 Ext::Ext(RuntimeManager& _runtimeManager, Memory& _memoryMan):
 	RuntimeHelper(_runtimeManager),
-	m_memoryMan(_memoryMan),
-	m_funcs({}),  // The only std::array initialization that works in both Visual Studio & GCC
-	m_argAllocas({})
+	m_memoryMan(_memoryMan)
 {
+	m_funcs = decltype(m_funcs)();
+	m_argAllocas = decltype(m_argAllocas)();
 	m_size = m_builder.CreateAlloca(Type::Size, nullptr, "env.size");
 }
 
@@ -48,7 +45,7 @@ std::array<FuncDesc, sizeOf<EnvFunc>::value> const& getEnvFuncDescs()
 		FuncDesc{"env_call", getFunctionType(Type::Bool, {Type::EnvPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::BytePtr, Type::Size, Type::BytePtr, Type::Size, Type::WordPtr})},
 		FuncDesc{"env_log", getFunctionType(Type::Void, {Type::EnvPtr, Type::BytePtr, Type::Size, Type::WordPtr, Type::WordPtr, Type::WordPtr, Type::WordPtr})},
 		FuncDesc{"env_blockhash", getFunctionType(Type::Void, {Type::EnvPtr, Type::WordPtr, Type::WordPtr})},
-		FuncDesc{"env_getExtCode", getFunctionType(Type::BytePtr, {Type::EnvPtr, Type::WordPtr, Type::Size->getPointerTo()})},
+		FuncDesc{"env_extcode", getFunctionType(Type::BytePtr, {Type::EnvPtr, Type::WordPtr, Type::Size->getPointerTo()})},
 		FuncDesc{"ext_calldataload", getFunctionType(Type::Void, {Type::RuntimeDataPtr, Type::WordPtr, Type::WordPtr})},
 	}};
 
@@ -71,7 +68,6 @@ llvm::Value* Ext::getArgAlloca()
 		getBuilder().SetInsertPoint(getMainFunction()->front().getFirstNonPHI());
 		a = getBuilder().CreateAlloca(Type::Word, nullptr, "arg");
 	}
-		
 	return a;
 }
 
@@ -166,10 +162,10 @@ llvm::Value* Ext::sha3(llvm::Value* _inOff, llvm::Value* _inSize)
 	return hash;
 }
 
-MemoryRef Ext::getExtCode(llvm::Value* _addr)
+MemoryRef Ext::extcode(llvm::Value* _addr)
 {
 	auto addr = Endianness::toBE(m_builder, _addr);
-	auto code = createCall(EnvFunc::getExtCode, {getRuntimeManager().getEnvPtr(), byPtr(addr), m_size});
+	auto code = createCall(EnvFunc::extcode, {getRuntimeManager().getEnvPtr(), byPtr(addr), m_size});
 	auto codeSize = m_builder.CreateLoad(m_size);
 	auto codeSize256 = m_builder.CreateZExt(codeSize, Type::Word);
 	return {code, codeSize256};
