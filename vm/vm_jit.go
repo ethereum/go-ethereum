@@ -17,6 +17,7 @@ import (
 	"math/big"
 	"reflect"
 	"unsafe"
+	"bytes"
 )
 
 type JitVm struct {
@@ -235,7 +236,7 @@ func env_blockhash(_vm unsafe.Pointer, _number unsafe.Pointer, _result unsafe.Po
 }
 
 //export env_call
-func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Pointer, _value unsafe.Pointer, inDataPtr unsafe.Pointer, inDataLen uint64, outDataPtr unsafe.Pointer, outDataLen uint64, _codeAddr unsafe.Pointer) bool {
+func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Pointer, _value unsafe.Pointer, inDataPtr unsafe.Pointer, inDataLen uint64, outDataPtr *byte, outDataLen uint64, _codeAddr unsafe.Pointer) bool {
 	vm := (*JitVm)(_vm)
 
 	balance := vm.Env().State().GetBalance(vm.me.Address())
@@ -245,11 +246,17 @@ func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Point
 		vm.env.State().AddBalance(vm.me.Address(), value.Neg(value))
 		receiveAddr := llvm2hash((*i256)(_receiveAddr))
 		inData := C.GoBytes(inDataPtr, C.int(inDataLen))
-		outData := C.GoBytes(outDataPtr, C.int(outDataLen))
-		//codeAddr := llvm2hash((*i256)(_codeAddr)) //TODO: Handle CallCode
+		outData := llvm2bytes(outDataPtr, outDataLen)
+		codeAddr := llvm2hash((*i256)(_codeAddr)) //TODO: Handle CallCode
 		llvmGas := (*i256)(_gas)
 		gas := llvm2big(llvmGas)
-		out, err := vm.env.Call(vm.me, receiveAddr, inData, gas, vm.price, value)
+		var out []byte
+		var err error
+		if bytes.Equal(codeAddr, receiveAddr) {
+			out, err = vm.env.Call(vm.me, codeAddr, inData, gas, vm.price, value)
+		} else {
+			out, err = vm.env.CallCode(vm.me, codeAddr, inData, gas, vm.price, value)
+		}
 		*llvmGas = big2llvm(gas)
 		if err == nil {
 			copy(outData, out)
