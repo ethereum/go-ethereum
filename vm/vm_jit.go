@@ -163,9 +163,7 @@ func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *bi
 		gasLeft := llvm2big(&data.elems[Gas]) // TODO: Set value directly to gas instance
 		gas.Set(gasLeft)
 		if result.returnCode == 1 { // RETURN
-			returnData := llvm2bytes((*byte)(result.returnData), uint64(result.returnDataSize))
-			ret = make([]byte, len(returnData))
-			copy(ret, returnData)
+			ret = C.GoBytes(result.returnData, C.int(result.returnDataSize))
 			C.free(result.returnData)
 		}
 	}
