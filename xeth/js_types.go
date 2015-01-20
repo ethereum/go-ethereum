@@ -12,6 +12,19 @@ import (
 	"github.com/ethereum/go-ethereum/state"
 )
 
+func toHex(b []byte) string {
+	return "0x" + ethutil.Bytes2Hex(b)
+}
+func fromHex(s string) []byte {
+	if len(s) > 1 {
+		if s[0:2] == "0x" {
+			s = s[2:]
+		}
+		return ethutil.Hex2Bytes(s)
+	}
+	return nil
+}
+
 // Block interface exposed to QML
 type JSBlock struct {
 	//Transactions string `json:"transactions"`
@@ -39,7 +52,7 @@ func NewJSBlock(block *types.Block) *JSBlock {
 
 	ptxs := make([]*JSTransaction, len(block.Transactions()))
 	for i, tx := range block.Transactions() {
-		ptxs[i] = NewJSTx(tx, block.State())
+		ptxs[i] = NewJSTx(tx)
 	}
 	txlist := ethutil.NewList(ptxs)
 
@@ -52,12 +65,12 @@ func NewJSBlock(block *types.Block) *JSBlock {
 	return &JSBlock{
 		ref: block, Size: block.Size().String(),
 		Number: int(block.NumberU64()), GasUsed: block.GasUsed().String(),
-		GasLimit: block.GasLimit().String(), Hash: ethutil.Bytes2Hex(block.Hash()),
+		GasLimit: block.GasLimit().String(), Hash: toHex(block.Hash()),
 		Transactions: txlist, Uncles: ulist,
 		Time:     block.Time(),
-		Coinbase: ethutil.Bytes2Hex(block.Coinbase()),
-		PrevHash: ethutil.Bytes2Hex(block.ParentHash()),
-		Bloom:    ethutil.Bytes2Hex(block.Bloom()),
+		Coinbase: toHex(block.Coinbase()),
+		PrevHash: toHex(block.ParentHash()),
+		Bloom:    toHex(block.Bloom()),
 		Raw:      block.String(),
 	}
 }
@@ -71,12 +84,12 @@ func (self *JSBlock) ToString() string {
 }
 
 func (self *JSBlock) GetTransaction(hash string) *JSTransaction {
-	tx := self.ref.Transaction(ethutil.Hex2Bytes(hash))
+	tx := self.ref.Transaction(fromHex(hash))
 	if tx == nil {
 		return nil
 	}
 
-	return NewJSTx(tx, self.ref.State())
+	return NewJSTx(tx)
 }
 
 type JSTransaction struct {
@@ -95,23 +108,23 @@ type JSTransaction struct {
 	Confirmations   int    `json:"confirmations"`
 }
 
-func NewJSTx(tx *types.Transaction, state *state.StateDB) *JSTransaction {
-	hash := ethutil.Bytes2Hex(tx.Hash())
-	receiver := ethutil.Bytes2Hex(tx.To())
+func NewJSTx(tx *types.Transaction) *JSTransaction {
+	hash := toHex(tx.Hash())
+	receiver := toHex(tx.To())
 	if receiver == "0000000000000000000000000000000000000000" {
-		receiver = ethutil.Bytes2Hex(core.AddressFromMessage(tx))
+		receiver = toHex(core.AddressFromMessage(tx))
 	}
-	sender := ethutil.Bytes2Hex(tx.From())
+	sender := toHex(tx.From())
 	createsContract := core.MessageCreatesContract(tx)
 
 	var data string
 	if createsContract {
 		data = strings.Join(core.Disassemble(tx.Data()), "\n")
 	} else {
-		data = ethutil.Bytes2Hex(tx.Data())
+		data = toHex(tx.Data())
 	}
 
-	return &JSTransaction{ref: tx, Hash: hash, Value: ethutil.CurrencyToString(tx.Value()), Address: receiver, Contract: createsContract, Gas: tx.Gas().String(), GasPrice: tx.GasPrice().String(), Data: data, Sender: sender, CreatesContract: createsContract, RawData: ethutil.Bytes2Hex(tx.Data())}
+	return &JSTransaction{ref: tx, Hash: hash, Value: ethutil.CurrencyToString(tx.Value()), Address: receiver, Contract: createsContract, Gas: tx.Gas().String(), GasPrice: tx.GasPrice().String(), Data: data, Sender: sender, CreatesContract: createsContract, RawData: toHex(tx.Data())}
 }
 
 func (self *JSTransaction) ToString() string {
@@ -125,7 +138,7 @@ type JSKey struct {
 }
 
 func NewJSKey(key *crypto.KeyPair) *JSKey {
-	return &JSKey{ethutil.Bytes2Hex(key.Address()), ethutil.Bytes2Hex(key.PrivateKey), ethutil.Bytes2Hex(key.PublicKey)}
+	return &JSKey{toHex(key.Address()), toHex(key.PrivateKey), toHex(key.PublicKey)}
 }
 
 type JSObject struct {
@@ -146,9 +159,9 @@ type PReceipt struct {
 func NewPReciept(contractCreation bool, creationAddress, hash, address []byte) *PReceipt {
 	return &PReceipt{
 		contractCreation,
-		ethutil.Bytes2Hex(creationAddress),
-		ethutil.Bytes2Hex(hash),
-		ethutil.Bytes2Hex(address),
+		toHex(creationAddress),
+		toHex(hash),
+		toHex(address),
 	}
 }
 
@@ -169,8 +182,8 @@ func NewJSPeer(peer *p2p.Peer) *JSPeer {
 
 	return &JSPeer{
 		ref:     peer,
-		Ip:      peer.RemoteAddr().String(),
-		Version: peer.Identity().String(),
+		Ip:      fmt.Sprintf("%v", peer.RemoteAddr()),
+		Version: fmt.Sprintf("%v", peer.Identity()),
 		Caps:    fmt.Sprintf("%v", caps),
 	}
 }
@@ -185,9 +198,9 @@ type JSReceipt struct {
 func NewJSReciept(contractCreation bool, creationAddress, hash, address []byte) *JSReceipt {
 	return &JSReceipt{
 		contractCreation,
-		ethutil.Bytes2Hex(creationAddress),
-		ethutil.Bytes2Hex(hash),
-		ethutil.Bytes2Hex(address),
+		toHex(creationAddress),
+		toHex(hash),
+		toHex(address),
 	}
 }
 
@@ -207,15 +220,15 @@ type JSMessage struct {
 
 func NewJSMessage(message *state.Message) JSMessage {
 	return JSMessage{
-		To:        ethutil.Bytes2Hex(message.To),
-		From:      ethutil.Bytes2Hex(message.From),
-		Input:     ethutil.Bytes2Hex(message.Input),
-		Output:    ethutil.Bytes2Hex(message.Output),
+		To:        toHex(message.To),
+		From:      toHex(message.From),
+		Input:     toHex(message.Input),
+		Output:    toHex(message.Output),
 		Path:      int32(message.Path),
-		Origin:    ethutil.Bytes2Hex(message.Origin),
+		Origin:    toHex(message.Origin),
 		Timestamp: int32(message.Timestamp),
-		Coinbase:  ethutil.Bytes2Hex(message.Origin),
-		Block:     ethutil.Bytes2Hex(message.Block),
+		Coinbase:  toHex(message.Origin),
+		Block:     toHex(message.Block),
 		Number:    int32(message.Number.Int64()),
 		Value:     message.Value.String(),
 	}

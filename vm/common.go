@@ -9,11 +9,11 @@ import (
 
 var vmlogger = logger.NewLogger("VM")
 
-type Type int
+type Type byte
 
 const (
-	StandardVmTy Type = iota
-	DebugVmTy
+	StdVmTy Type = iota
+	JitVmTy
 
 	MaxVmTy
 )
@@ -49,7 +49,7 @@ var (
 	S256 = ethutil.S256
 )
 
-const MaxCallDepth = 1024
+const MaxCallDepth = 1025
 
 func calcMemSize(off, l *big.Int) *big.Int {
 	if l.Cmp(ethutil.Big0) == 0 {

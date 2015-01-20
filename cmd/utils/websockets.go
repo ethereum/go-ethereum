@@ -1,9 +1,34 @@
+/*
+	This file is part of go-ethereum
+
+	go-ethereum is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	go-ethereum is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/**
+ * @authors
+ * 	Jeffrey Wilcke <i@jev.io>
+ */
 package utils
 
 import (
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/ui"
 	"github.com/ethereum/go-ethereum/websocket"
 	"github.com/ethereum/go-ethereum/xeth"
 )
@@ -15,16 +40,19 @@ func args(v ...interface{}) []interface{} {
 }
 
 type WebSocketServer struct {
-	ethereum        *eth.Ethereum
-	filterCallbacks map[int][]int
+	eth           *eth.Ethereum
+	filterManager *filter.FilterManager
 }
 
 func NewWebSocketServer(eth *eth.Ethereum) *WebSocketServer {
-	return &WebSocketServer{eth, make(map[int][]int)}
+	filterManager := filter.NewFilterManager(eth.EventMux())
+	go filterManager.Start()
+
+	return &WebSocketServer{eth, filterManager}
 }
 
 func (self *WebSocketServer) Serv() {
-	pipe := xeth.NewJSXEth(self.ethereum)
+	pipe := xeth.NewJSXEth(self.eth)
 
 	wsServ := websocket.NewServer("/eth", ":40404")
 	wsServ.MessageFunc(func(c *websocket.Client, msg *websocket.Message) {
@@ -33,79 +61,105 @@ func (self *WebSocketServer) Serv() {
 			data := ethutil.NewValue(msg.Args)
 			bcode, err := ethutil.Compile(data.Get(0).Str(), false)
 			if err != nil {
-				c.Write(args(nil, err.Error()), msg.Seed)
+				c.Write(args(nil, err.Error()), msg.Id)
 			}
 
 			code := ethutil.Bytes2Hex(bcode)
-			c.Write(args(code, nil), msg.Seed)
-		case "getBlockByNumber":
+			c.Write(args(code, nil), msg.Id)
+		case "eth_blockByNumber":
 			args := msg.Arguments()
 
 			block := pipe.BlockByNumber(int32(args.Get(0).Uint()))
-			c.Write(block, msg.Seed)
+			c.Write(block, msg.Id)
 
-		case "getKey":
-			c.Write(pipe.Key().PrivateKey, msg.Seed)
-		case "transact":
+		case "eth_blockByHash":
+			args := msg.Arguments()
+
+			c.Write(pipe.BlockByHash(args.Get(0).Str()), msg.Id)
+
+		case "eth_transact":
 			if mp, ok := msg.Args[0].(map[string]interface{}); ok {
 				object := mapToTxParams(mp)
 				c.Write(
-					args(pipe.Transact(object["from"], object["to"], object["value"], object["gas"], object["gasPrice"], object["data"])),
-					msg.Seed,
+					args(pipe.Transact(pipe.Key().PrivateKey, object["to"], object["value"], object["gas"], object["gasPrice"], object["data"])),
+					msg.Id,
 				)
 
 			}
-		case "getCoinBase":
-			c.Write(pipe.CoinBase(), msg.Seed)
+		case "eth_gasPrice":
+			c.Write("10000000000000", msg.Id)
+		case "eth_coinbase":
+			c.Write(pipe.CoinBase(), msg.Id)
 
-		case "getIsListening":
-			c.Write(pipe.IsListening(), msg.Seed)
+		case "eth_listening":
+			c.Write(pipe.IsListening(), msg.Id)
 
-		case "getIsMining":
-			c.Write(pipe.IsMining(), msg.Seed)
+		case "eth_mining":
+			c.Write(pipe.IsMining(), msg.Id)
 
-		case "getPeerCoint":
-			c.Write(pipe.PeerCount(), msg.Seed)
+		case "eth_peerCount":
+			c.Write(pipe.PeerCount(), msg.Id)
 
-		case "getCountAt":
+		case "eth_countAt":
 			args := msg.Arguments()
 
-			c.Write(pipe.TxCountAt(args.Get(0).Str()), msg.Seed)
+			c.Write(pipe.TxCountAt(args.Get(0).Str()), msg.Id)
 
-		case "getCodeAt":
+		case "eth_codeAt":
 			args := msg.Arguments()
 
-			c.Write(len(pipe.CodeAt(args.Get(0).Str())), msg.Seed)
+			c.Write(len(pipe.CodeAt(args.Get(0).Str())), msg.Id)
 
-		case "getBlockByHash":
+		case "eth_storageAt":
 			args := msg.Arguments()
 
-			c.Write(pipe.BlockByHash(args.Get(0).Str()), msg.Seed)
+			c.Write(pipe.StorageAt(args.Get(0).Str(), args.Get(1).Str()), msg.Id)
 
-		case "getStorageAt":
+		case "eth_balanceAt":
 			args := msg.Arguments()
 
-			c.Write(pipe.StorageAt(args.Get(0).Str(), args.Get(1).Str()), msg.Seed)
+			c.Write(pipe.BalanceAt(args.Get(0).Str()), msg.Id)
 
-		case "getBalanceAt":
-			args := msg.Arguments()
+		case "eth_accounts":
+			c.Write(pipe.Accounts(), msg.Id)
 
-			c.Write(pipe.BalanceAt(args.Get(0).Str()), msg.Seed)
-
-		case "getSecretToAddress":
-			args := msg.Arguments()
-
-			c.Write(pipe.SecretToAddress(args.Get(0).Str()), msg.Seed)
-
-		case "newFilter":
-		case "newFilterString":
-		case "messages":
-			// TODO
+		case "eth_newFilter":
+			if mp, ok := msg.Args[0].(map[string]interface{}); ok {
+				var id int
+				filter := ui.NewFilterFromMap(mp, self.eth)
+				filter.MessageCallback = func(messages state.Messages) {
+					c.Event(toMessages(messages), "eth_changed", id)
+				}
+				id = self.filterManager.InstallFilter(filter)
+				c.Write(id, msg.Id)
+			}
+		case "eth_newFilterString":
+			var id int
+			filter := core.NewFilter(self.eth)
+			filter.BlockCallback = func(block *types.Block) {
+				c.Event(nil, "eth_changed", id)
+			}
+			id = self.filterManager.InstallFilter(filter)
+			c.Write(id, msg.Id)
+		case "eth_filterLogs":
+			filter := self.filterManager.GetFilter(int(msg.Arguments().Get(0).Uint()))
+			if filter != nil {
+				c.Write(toMessages(filter.Find()), msg.Id)
+			}
 		}
 
 	})
 
 	wsServ.Listen()
+}
+
+func toMessages(messages state.Messages) (msgs []xeth.JSMessage) {
+	msgs = make([]xeth.JSMessage, len(messages))
+	for i, msg := range messages {
+		msgs[i] = xeth.NewJSMessage(msg)
+	}
+
+	return
 }
 
 func StartWebSockets(eth *eth.Ethereum) {

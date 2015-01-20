@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/pow/ezp"
+	"github.com/ethereum/go-ethereum/state"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -69,6 +70,7 @@ type Miner struct {
 	mining bool
 
 	MinAcceptedGasPrice *big.Int
+	Extra               string
 }
 
 func New(coinbase []byte, eth *eth.Ethereum) *Miner {
@@ -177,7 +179,9 @@ func (self *Miner) mine() {
 		blockProcessor = self.eth.BlockProcessor()
 		chainMan       = self.eth.ChainManager()
 		block          = chainMan.NewBlock(self.Coinbase)
+		state          = state.New(block.Root(), self.eth.Db())
 	)
+	block.Header().Extra = self.Extra
 
 	// Apply uncles
 	if len(self.uncles) > 0 {
@@ -185,12 +189,10 @@ func (self *Miner) mine() {
 	}
 
 	parent := chainMan.GetBlock(block.ParentHash())
-	coinbase := block.State().GetOrNewStateObject(block.Coinbase())
+	coinbase := state.GetOrNewStateObject(block.Coinbase())
 	coinbase.SetGasPool(core.CalcGasLimit(parent, block))
 
 	transactions := self.finiliseTxs()
-
-	state := block.State()
 
 	// Accumulate all valid transactions and apply them to the new state
 	// Error may be ignored. It's not important during mining

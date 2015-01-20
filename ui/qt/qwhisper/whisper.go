@@ -1,14 +1,16 @@
 package qwhisper
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/whisper"
 	"gopkg.in/qml.v1"
 )
+
+var qlogger = logger.NewLogger("QSHH")
 
 func fromHex(s string) []byte {
 	if len(s) > 1 {
@@ -39,32 +41,41 @@ func (self *Whisper) Post(payload []string, to, from string, topics []string, pr
 		data = append(data, fromHex(d)...)
 	}
 
-	msg := whisper.NewMessage(data)
-	envelope, err := msg.Seal(time.Duration(priority*100000), whisper.Opts{
-		Ttl:    time.Duration(ttl),
-		To:     crypto.ToECDSAPub(fromHex(to)),
-		From:   crypto.ToECDSA(fromHex(from)),
-		Topics: whisper.TopicsFromString(topics...),
-	})
-	if err != nil {
-		fmt.Println(err)
-		// handle error
-		return
+	pk := crypto.ToECDSAPub(fromHex(from))
+	if key := self.Whisper.GetIdentity(pk); key != nil {
+		msg := whisper.NewMessage(data)
+		envelope, err := msg.Seal(time.Duration(priority*100000), whisper.Opts{
+			Ttl:    time.Duration(ttl) * time.Second,
+			To:     crypto.ToECDSAPub(fromHex(to)),
+			From:   key,
+			Topics: whisper.TopicsFromString(topics...),
+		})
+
+		if err != nil {
+			qlogger.Infoln(err)
+			// handle error
+			return
+		}
+
+		if err := self.Whisper.Send(envelope); err != nil {
+			qlogger.Infoln(err)
+			// handle error
+			return
+		}
+	} else {
+		qlogger.Infoln("unmatched pub / priv for seal")
 	}
 
-	if err := self.Whisper.Send(envelope); err != nil {
-		fmt.Println(err)
-		// handle error
-		return
-	}
 }
 
 func (self *Whisper) NewIdentity() string {
-	return toHex(self.Whisper.NewIdentity().D.Bytes())
+	key := self.Whisper.NewIdentity()
+
+	return toHex(crypto.FromECDSAPub(&key.PublicKey))
 }
 
 func (self *Whisper) HasIdentity(key string) bool {
-	return self.Whisper.HasIdentity(crypto.ToECDSA(fromHex(key)))
+	return self.Whisper.HasIdentity(crypto.ToECDSAPub(fromHex(key)))
 }
 
 func (self *Whisper) Watch(opts map[string]interface{}, view *qml.Common) int {
@@ -80,6 +91,16 @@ func (self *Whisper) Watch(opts map[string]interface{}, view *qml.Common) int {
 	self.watches[i] = &Watch{}
 
 	return i
+}
+
+func (self *Whisper) Messages(id int) (messages *ethutil.List) {
+	msgs := self.Whisper.Messages(id)
+	messages = ethutil.EmptyList()
+	for _, message := range msgs {
+		messages.Append(ToQMessage(message))
+	}
+
+	return
 }
 
 func filterFromMap(opts map[string]interface{}) (f whisper.Filter) {

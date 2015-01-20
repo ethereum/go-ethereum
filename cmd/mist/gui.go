@@ -1,20 +1,23 @@
-// Copyright (c) 2013-2014, Jeffrey Wilcke. All rights reserved.
-//
-// This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-//
-// This library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-// General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this library; if not, write to the Free Software
-// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
-// MA 02110-1301  USA
+/*
+	This file is part of go-ethereum
 
+	go-ethereum is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	go-ethereum is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/**
+ * @authors
+ * 	Jeffrey Wilcke <i@jev.io>
+ */
 package main
 
 import "C"
@@ -23,7 +26,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/big"
+	"os"
 	"path"
 	"runtime"
 	"strconv"
@@ -45,15 +50,22 @@ import (
 
 var guilogger = logger.NewLogger("GUI")
 
+type ServEv byte
+
+const (
+	setup ServEv = iota
+	update
+)
+
 type Gui struct {
 	// The main application window
 	win *qml.Window
 	// QML Engine
 	engine    *qml.Engine
 	component *qml.Common
-	qmlDone   bool
 	// The ethereum interface
-	eth *eth.Ethereum
+	eth           *eth.Ethereum
+	serviceEvents chan ServEv
 
 	// The public Ethereum library
 	uiLib   *UiLib
@@ -83,7 +95,17 @@ func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIden
 	}
 
 	xeth := xeth.NewJSXEth(ethereum)
-	gui := &Gui{eth: ethereum, txDb: db, xeth: xeth, logLevel: logger.LogLevel(logLevel), Session: session, open: false, clientIdentity: clientIdentity, config: config, plugins: make(map[string]plugin)}
+	gui := &Gui{eth: ethereum,
+		txDb:           db,
+		xeth:           xeth,
+		logLevel:       logger.LogLevel(logLevel),
+		Session:        session,
+		open:           false,
+		clientIdentity: clientIdentity,
+		config:         config,
+		plugins:        make(map[string]plugin),
+		serviceEvents:  make(chan ServEv, 1),
+	}
 	data, _ := ethutil.ReadAllFile(path.Join(ethutil.Config.ExecPath, "plugins.json"))
 	json.Unmarshal([]byte(data), &gui.plugins)
 
@@ -94,6 +116,8 @@ func (gui *Gui) Start(assetPath string) {
 	defer gui.txDb.Close()
 
 	guilogger.Infoln("Starting GUI")
+
+	go gui.service()
 
 	// Register ethereum functions
 	qml.RegisterTypes("Ethereum", 1, 0, []qml.TypeSpec{{
@@ -114,18 +138,7 @@ func (gui *Gui) Start(assetPath string) {
 	context.SetVar("eth", gui.uiLib)
 	context.SetVar("shh", gui.whisper)
 
-	// Load the main QML interface
-	data, _ := ethutil.Config.Db.Get([]byte("KeyRing"))
-
-	var win *qml.Window
-	var err error
-	var addlog = false
-	if len(data) == 0 {
-		win, err = gui.showKeyImport(context)
-	} else {
-		win, err = gui.showWallet(context)
-		addlog = true
-	}
+	win, err := gui.showWallet(context)
 	if err != nil {
 		guilogger.Errorln("asset not found: you can set an alternative asset path on the command line using option 'asset_path'", err)
 
@@ -136,9 +149,7 @@ func (gui *Gui) Start(assetPath string) {
 	win.Show()
 
 	// only add the gui guilogger after window is shown otherwise slider wont be shown
-	if addlog {
-		logger.AddLogSystem(gui)
-	}
+	logger.AddLogSystem(gui)
 	win.Wait()
 
 	// need to silence gui guilogger after window closed otherwise logsystem hangs (but do not save loglevel)
@@ -164,16 +175,9 @@ func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
 		return nil, err
 	}
 
-	gui.win = gui.createWindow(component)
-
-	gui.update()
+	gui.createWindow(component)
 
 	return gui.win, nil
-}
-
-// The done handler will be called by QML when all views have been loaded
-func (gui *Gui) Done() {
-	gui.qmlDone = true
 }
 
 func (gui *Gui) ImportKey(filePath string) {
@@ -189,10 +193,8 @@ func (gui *Gui) showKeyImport(context *qml.Context) (*qml.Window, error) {
 }
 
 func (gui *Gui) createWindow(comp qml.Object) *qml.Window {
-	win := comp.CreateWindow(nil)
-
-	gui.win = win
-	gui.uiLib.win = win
+	gui.win = comp.CreateWindow(nil)
+	gui.uiLib.win = gui.win
 
 	return gui.win
 }
@@ -272,7 +274,7 @@ func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 	}
 
 	var (
-		ptx  = xeth.NewJSTx(tx, gui.xeth.World().State())
+		ptx  = xeth.NewJSTx(tx)
 		send = nameReg.Storage(tx.From())
 		rec  = nameReg.Storage(tx.To())
 		s, r string
@@ -345,11 +347,48 @@ func (self *Gui) getObjectByName(objectName string) qml.Object {
 	return self.win.Root().ObjectByName(objectName)
 }
 
-// Simple go routine function that updates the list of peers in the GUI
-func (gui *Gui) update() {
-	// We have to wait for qml to be done loading all the windows.
-	for !gui.qmlDone {
-		time.Sleep(300 * time.Millisecond)
+func loadJavascriptAssets(gui *Gui) (jsfiles string) {
+	for _, fn := range []string{"ext/q.js", "ext/eth.js/main.js", "ext/eth.js/qt.js", "ext/setup.js"} {
+		f, err := os.Open(gui.uiLib.AssetPath(fn))
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+
+		content, err := ioutil.ReadAll(f)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		jsfiles += string(content)
+	}
+
+	return
+}
+
+func (gui *Gui) SendCommand(cmd ServEv) {
+	gui.serviceEvents <- cmd
+}
+
+func (gui *Gui) service() {
+	for ev := range gui.serviceEvents {
+		switch ev {
+		case setup:
+			go gui.setup()
+		case update:
+			go gui.update()
+		}
+	}
+}
+
+func (gui *Gui) setup() {
+	for gui.win == nil {
+		time.Sleep(time.Millisecond * 200)
+	}
+
+	for _, plugin := range gui.plugins {
+		guilogger.Infoln("Loading plugin ", plugin.Name)
+		gui.win.Root().Call("addPlugin", plugin.Path, "")
 	}
 
 	go func() {
@@ -359,14 +398,21 @@ func (gui *Gui) update() {
 		gui.setPeerInfo()
 	}()
 
-	gui.whisper.SetView(gui.win.Root().ObjectByName("whisperView"))
+	// Inject javascript files each time navigation is requested.
+	// Unfortunately webview.experimental.userScripts injects _after_
+	// the page has loaded which kind of renders it useless...
+	//jsfiles := loadJavascriptAssets(gui)
+	gui.getObjectByName("webView").On("navigationRequested", func() {
+		//gui.getObjectByName("webView").Call("injectJs", jsfiles)
+	})
 
-	for _, plugin := range gui.plugins {
-		guilogger.Infoln("Loading plugin ", plugin.Name)
+	gui.whisper.SetView(gui.getObjectByName("whisperView"))
 
-		gui.win.Root().Call("addPlugin", plugin.Path, "")
-	}
+	gui.SendCommand(update)
+}
 
+// Simple go routine function that updates the list of peers in the GUI
+func (gui *Gui) update() {
 	peerUpdateTicker := time.NewTicker(5 * time.Second)
 	generalUpdateTicker := time.NewTicker(500 * time.Millisecond)
 	statsUpdateTicker := time.NewTicker(5 * time.Second)
@@ -385,77 +431,75 @@ func (gui *Gui) update() {
 		core.TxPostEvent{},
 	)
 
-	go func() {
-		defer events.Unsubscribe()
-		for {
-			select {
-			case ev, isopen := <-events.Chan():
-				if !isopen {
-					return
-				}
-				switch ev := ev.(type) {
-				case core.NewBlockEvent:
-					gui.processBlock(ev.Block, false)
-					if bytes.Compare(ev.Block.Coinbase(), gui.address()) == 0 {
-						gui.setWalletValue(gui.eth.ChainManager().State().GetBalance(gui.address()), nil)
-					}
-
-				case core.TxPreEvent:
-					tx := ev.Tx
-
-					tstate := gui.eth.ChainManager().TransState()
-					cstate := gui.eth.ChainManager().State()
-
-					taccount := tstate.GetAccount(gui.address())
-					caccount := cstate.GetAccount(gui.address())
-					unconfirmedFunds := new(big.Int).Sub(taccount.Balance(), caccount.Balance())
-
-					gui.setWalletValue(taccount.Balance(), unconfirmedFunds)
-					gui.insertTransaction("pre", tx)
-
-				case core.TxPostEvent:
-					tx := ev.Tx
-					object := state.GetAccount(gui.address())
-
-					if bytes.Compare(tx.From(), gui.address()) == 0 {
-						object.SubAmount(tx.Value())
-
-						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-					} else if bytes.Compare(tx.To(), gui.address()) == 0 {
-						object.AddAmount(tx.Value())
-
-						gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-					}
-
-					gui.setWalletValue(object.Balance(), nil)
-					state.UpdateStateObject(object)
-				}
-
-			case <-peerUpdateTicker.C:
-				gui.setPeerInfo()
-			case <-generalUpdateTicker.C:
-				statusText := "#" + gui.eth.ChainManager().CurrentBlock().Number().String()
-				lastBlockLabel.Set("text", statusText)
-				miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.miner.GetPow().GetHashrate(), 10)+"Khash")
-
-				/*
-					blockLength := gui.eth.BlockPool().BlocksProcessed
-					chainLength := gui.eth.BlockPool().ChainLength
-
-					var (
-						pct      float64 = 1.0 / float64(chainLength) * float64(blockLength)
-						dlWidget         = gui.win.Root().ObjectByName("downloadIndicator")
-						dlLabel          = gui.win.Root().ObjectByName("downloadLabel")
-					)
-					dlWidget.Set("value", pct)
-					dlLabel.Set("text", fmt.Sprintf("%d / %d", blockLength, chainLength))
-				*/
-
-			case <-statsUpdateTicker.C:
-				gui.setStatsPane()
+	defer events.Unsubscribe()
+	for {
+		select {
+		case ev, isopen := <-events.Chan():
+			if !isopen {
+				return
 			}
+			switch ev := ev.(type) {
+			case core.NewBlockEvent:
+				gui.processBlock(ev.Block, false)
+				if bytes.Compare(ev.Block.Coinbase(), gui.address()) == 0 {
+					gui.setWalletValue(gui.eth.ChainManager().State().GetBalance(gui.address()), nil)
+				}
+
+			case core.TxPreEvent:
+				tx := ev.Tx
+
+				tstate := gui.eth.ChainManager().TransState()
+				cstate := gui.eth.ChainManager().State()
+
+				taccount := tstate.GetAccount(gui.address())
+				caccount := cstate.GetAccount(gui.address())
+				unconfirmedFunds := new(big.Int).Sub(taccount.Balance(), caccount.Balance())
+
+				gui.setWalletValue(taccount.Balance(), unconfirmedFunds)
+				gui.insertTransaction("pre", tx)
+
+			case core.TxPostEvent:
+				tx := ev.Tx
+				object := state.GetAccount(gui.address())
+
+				if bytes.Compare(tx.From(), gui.address()) == 0 {
+					object.SubAmount(tx.Value())
+
+					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
+				} else if bytes.Compare(tx.To(), gui.address()) == 0 {
+					object.AddAmount(tx.Value())
+
+					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
+				}
+
+				gui.setWalletValue(object.Balance(), nil)
+				state.UpdateStateObject(object)
+			}
+
+		case <-peerUpdateTicker.C:
+			gui.setPeerInfo()
+		case <-generalUpdateTicker.C:
+			statusText := "#" + gui.eth.ChainManager().CurrentBlock().Number().String()
+			lastBlockLabel.Set("text", statusText)
+			miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.miner.GetPow().GetHashrate(), 10)+"Khash")
+
+			/*
+				blockLength := gui.eth.BlockPool().BlocksProcessed
+				chainLength := gui.eth.BlockPool().ChainLength
+
+				var (
+					pct      float64 = 1.0 / float64(chainLength) * float64(blockLength)
+					dlWidget         = gui.win.Root().ObjectByName("downloadIndicator")
+					dlLabel          = gui.win.Root().ObjectByName("downloadLabel")
+				)
+				dlWidget.Set("value", pct)
+				dlLabel.Set("text", fmt.Sprintf("%d / %d", blockLength, chainLength))
+			*/
+
+		case <-statsUpdateTicker.C:
+			gui.setStatsPane()
 		}
-	}()
+	}
 }
 
 func (gui *Gui) setStatsPane() {

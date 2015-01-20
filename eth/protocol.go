@@ -67,6 +67,8 @@ type newBlockMsgData struct {
 	TD    *big.Int
 }
 
+const maxHashes = 255
+
 type getBlockHashesMsgData struct {
 	Hash   []byte
 	Amount uint64
@@ -122,7 +124,7 @@ func (self *ethProtocol) handle() error {
 	defer msg.Discard()
 
 	switch msg.Code {
-
+	case GetTxMsg: // ignore
 	case StatusMsg:
 		return self.protoError(ErrExtraStatusMsg, "")
 
@@ -139,8 +141,13 @@ func (self *ethProtocol) handle() error {
 		if err := msg.Decode(&request); err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
+
+		//request.Amount = uint64(math.Min(float64(maxHashes), float64(request.Amount)))
+		if request.Amount > maxHashes {
+			request.Amount = maxHashes
+		}
 		hashes := self.chainManager.GetBlockHashesFromHash(request.Hash, request.Amount)
-		return self.rw.EncodeMsg(BlockHashesMsg, ethutil.ByteSliceToInterface(hashes)...)
+		return p2p.EncodeMsg(self.rw, BlockHashesMsg, ethutil.ByteSliceToInterface(hashes)...)
 
 	case BlockHashesMsg:
 		// TODO: redo using lazy decode , this way very inefficient on known chains
@@ -185,7 +192,7 @@ func (self *ethProtocol) handle() error {
 				break
 			}
 		}
-		return self.rw.EncodeMsg(BlocksMsg, blocks...)
+		return p2p.EncodeMsg(self.rw, BlocksMsg, blocks...)
 
 	case BlocksMsg:
 		msgStream := rlp.NewStream(msg.Payload)
@@ -211,16 +218,6 @@ func (self *ethProtocol) handle() error {
 		// uses AddPeer followed by AddHashes, AddBlock only if peer is the best peer
 		// (or selected as new best peer)
 		if self.blockPool.AddPeer(request.TD, hash, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect) {
-			called := true
-			iter := func() ([]byte, bool) {
-				if called {
-					called = false
-					return hash, true
-				} else {
-					return nil, false
-				}
-			}
-			self.blockPool.AddBlockHashes(iter, self.id)
 			self.blockPool.AddBlock(request.Block, self.id)
 		}
 
@@ -298,12 +295,12 @@ func (self *ethProtocol) handleStatus() error {
 
 func (self *ethProtocol) requestBlockHashes(from []byte) error {
 	self.peer.Debugf("fetching hashes (%d) %x...\n", blockHashesBatchSize, from[0:4])
-	return self.rw.EncodeMsg(GetBlockHashesMsg, interface{}(from), uint64(blockHashesBatchSize))
+	return p2p.EncodeMsg(self.rw, GetBlockHashesMsg, interface{}(from), uint64(blockHashesBatchSize))
 }
 
 func (self *ethProtocol) requestBlocks(hashes [][]byte) error {
 	self.peer.Debugf("fetching %v blocks", len(hashes))
-	return self.rw.EncodeMsg(GetBlocksMsg, ethutil.ByteSliceToInterface(hashes)...)
+	return p2p.EncodeMsg(self.rw, GetBlocksMsg, ethutil.ByteSliceToInterface(hashes)...)
 }
 
 func (self *ethProtocol) protoError(code int, format string, params ...interface{}) (err *protocolError) {

@@ -1,8 +1,6 @@
 package qt
 
 import (
-	"fmt"
-
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ui"
 	"gopkg.in/qml.v1"
@@ -23,13 +21,10 @@ func makeAltered(v interface{}) (d []core.AccountChange) {
 		var s []interface{}
 		qList.Convert(&s)
 
-		fmt.Println(s)
-
 		d = makeAltered(s)
 	} else if qMap, ok := v.(*qml.Map); ok {
 		var m map[string]interface{}
 		qMap.Convert(&m)
-		fmt.Println(m)
 
 		d = makeAltered(m)
 	}

@@ -17,8 +17,6 @@
 /**
  * @authors:
  * 	Jeffrey Wilcke <i@jev.io>
- * @date 2014
- *
  */
 
 package main
@@ -26,12 +24,15 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/tests/helper"
 )
@@ -43,8 +44,8 @@ type Account struct {
 	Storage map[string]string
 }
 
-func StateObjectFromAccount(addr string, account Account) *state.StateObject {
-	obj := state.NewStateObject(ethutil.Hex2Bytes(addr))
+func StateObjectFromAccount(db ethutil.Database, addr string, account Account) *state.StateObject {
+	obj := state.NewStateObject(ethutil.Hex2Bytes(addr), db)
 	obj.SetBalance(ethutil.Big(account.Balance))
 
 	if ethutil.IsHex(account.Code) {
@@ -66,19 +67,20 @@ type VmTest struct {
 	Pre         map[string]Account
 }
 
-func RunVmTest(js string) (failed int) {
+func RunVmTest(r io.Reader) (failed int) {
 	tests := make(map[string]VmTest)
 
-	data, _ := ioutil.ReadAll(strings.NewReader(js))
+	data, _ := ioutil.ReadAll(r)
 	err := json.Unmarshal(data, &tests)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	for name, test := range tests {
-		state := state.New(helper.NewTrie())
+		db, _ := ethdb.NewMemDatabase()
+		state := state.New(nil, db)
 		for addr, account := range test.Pre {
-			obj := StateObjectFromAccount(addr, account)
+			obj := StateObjectFromAccount(db, addr, account)
 			state.SetStateObject(obj)
 		}
 
@@ -118,6 +120,8 @@ func RunVmTest(js string) (failed int) {
 				}
 			}
 		}
+
+		logger.Flush()
 	}
 
 	return
@@ -125,9 +129,10 @@ func RunVmTest(js string) (failed int) {
 
 func main() {
 	helper.Logger.SetLogLevel(5)
-	if len(os.Args) == 1 {
-		log.Fatalln("no json supplied")
-	}
 
-	os.Exit(RunVmTest(os.Args[1]))
+	if len(os.Args) > 1 {
+		os.Exit(RunVmTest(strings.NewReader(os.Args[1])))
+	} else {
+		os.Exit(RunVmTest(os.Stdin))
+	}
 }

@@ -126,10 +126,10 @@ func TestPeerProtoEncodeMsg(t *testing.T) {
 		Name:   "a",
 		Length: 2,
 		Run: func(peer *Peer, rw MsgReadWriter) error {
-			if err := rw.EncodeMsg(2); err == nil {
+			if err := EncodeMsg(rw, 2); err == nil {
 				t.Error("expected error for out-of-range msg code, got nil")
 			}
-			if err := rw.EncodeMsg(1, "foo", "bar"); err != nil {
+			if err := EncodeMsg(rw, 1, "foo", "bar"); err != nil {
 				t.Errorf("write error: %v", err)
 			}
 			return nil

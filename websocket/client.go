@@ -50,8 +50,14 @@ func (c *Client) Conn() *ws.Conn {
 	return c.ws
 }
 
-func (c *Client) Write(data interface{}, seed int) {
-	msg := &Message{Seed: seed, Data: data}
+func (c *Client) Write(data interface{}, id int) {
+	c.write(&Message{Id: id, Data: data})
+}
+func (c *Client) Event(data interface{}, ev string, id int) {
+	c.write(&Message{Id: id, Data: data, Event: ev})
+}
+
+func (c *Client) write(msg *Message) {
 	select {
 	case c.ch <- msg:
 	default:
@@ -73,7 +79,6 @@ func (c *Client) Listen() {
 
 // Listen write request via chanel
 func (c *Client) listenWrite() {
-	wslogger.Debugln("Listening write to client")
 	for {
 		select {
 
@@ -93,7 +98,6 @@ func (c *Client) listenWrite() {
 
 // Listen read request via chanel
 func (c *Client) listenRead() {
-	wslogger.Debugln("Listening read from client")
 	for {
 		select {
 

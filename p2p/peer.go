@@ -460,25 +460,3 @@ func (r *eofSignal) Read(buf []byte) (int, error) {
 	}
 	return n, err
 }
-
-func (peer *Peer) PeerList() []interface{} {
-	peers := peer.otherPeers()
-	ds := make([]interface{}, 0, len(peers))
-	for _, p := range peers {
-		p.infolock.Lock()
-		addr := p.listenAddr
-		p.infolock.Unlock()
-		// filter out this peer and peers that are not listening or
-		// have not completed the handshake.
-		// TODO: track previously sent peers and exclude them as well.
-		if p == peer || addr == nil {
-			continue
-		}
-		ds = append(ds, addr)
-	}
-	ourAddr := peer.ourListenAddr
-	if ourAddr != nil && !ourAddr.IP.IsLoopback() && !ourAddr.IP.IsUnspecified() {
-		ds = append(ds, ourAddr)
-	}
-	return ds
-}

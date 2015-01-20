@@ -1,20 +1,23 @@
-// Copyright (c) 2013-2014, Jeffrey Wilcke. All rights reserved.
-//
-// This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-//
-// This library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-// General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this library; if not, write to the Free Software
-// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
-// MA 02110-1301  USA
+/*
+	This file is part of go-ethereum
 
+	go-ethereum is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	go-ethereum is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/**
+ * @authors
+ * 	Jeffrey Wilcke <i@jev.io>
+ */
 package main
 
 import (
@@ -28,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/state"
 )
 
 const (
@@ -48,6 +52,11 @@ func main() {
 
 	// precedence: code-internal flag default < config file < environment variables < command line
 	Init() // parsing command line
+
+	if PrintVersion {
+		printVersion()
+		return
+	}
 
 	utils.InitConfig(VmType, ConfigFile, Datadir, "ETH")
 
@@ -95,7 +104,8 @@ func main() {
 		}
 
 		// Leave the Println. This needs clean output for piping
-		fmt.Printf("%s\n", block.State().Dump())
+		statedb := state.New(block.Root(), ethereum.Db())
+		fmt.Printf("%s\n", statedb.Dump())
 
 		fmt.Println(block)
 
@@ -133,4 +143,14 @@ func main() {
 	}
 	// this blocks the thread
 	ethereum.WaitForShutdown()
+}
+
+func printVersion() {
+	fmt.Printf(`%v %v
+PV=%d
+GOOS=%s
+GO=%s
+GOPATH=%s
+GOROOT=%s
+`, ClientIdentifier, Version, eth.ProtocolVersion, runtime.GOOS, runtime.Version(), os.Getenv("GOPATH"), runtime.GOROOT())
 }

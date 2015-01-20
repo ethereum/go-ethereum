@@ -23,15 +23,28 @@ type StateQuery interface {
 func CalcDifficulty(block, parent *types.Block) *big.Int {
 	diff := new(big.Int)
 
-	bh, ph := block.Header(), parent.Header()
-	adjust := new(big.Int).Rsh(ph.Difficulty, 10)
-	if bh.Time >= ph.Time+5 {
-		diff.Sub(ph.Difficulty, adjust)
+	adjust := new(big.Int).Rsh(parent.Difficulty(), 10)
+	if block.Time() >= parent.Time()+8 {
+		diff.Sub(parent.Difficulty(), adjust)
 	} else {
-		diff.Add(ph.Difficulty, adjust)
+		diff.Add(parent.Difficulty(), adjust)
 	}
 
 	return diff
+}
+
+func CalculateTD(block, parent *types.Block) *big.Int {
+	uncleDiff := new(big.Int)
+	for _, uncle := range block.Uncles() {
+		uncleDiff = uncleDiff.Add(uncleDiff, uncle.Difficulty)
+	}
+
+	// TD(genesis_block) = 0 and TD(B) = TD(B.parent) + sum(u.difficulty for u in B.uncles) + B.difficulty
+	td := new(big.Int)
+	td = td.Add(parent.Td, uncleDiff)
+	td = td.Add(td, block.Header().Difficulty)
+
+	return td
 }
 
 func CalcGasLimit(parent, block *types.Block) *big.Int {
@@ -55,6 +68,7 @@ func CalcGasLimit(parent, block *types.Block) *big.Int {
 
 type ChainManager struct {
 	//eth          EthManager
+	db           ethutil.Database
 	processor    types.BlockProcessor
 	eventMux     *event.TypeMux
 	genesisBlock *types.Block
@@ -96,13 +110,9 @@ func (self *ChainManager) CurrentBlock() *types.Block {
 	return self.currentBlock
 }
 
-func NewChainManager(mux *event.TypeMux) *ChainManager {
-	bc := &ChainManager{}
-	bc.genesisBlock = GenesisBlock()
-	bc.eventMux = mux
-
+func NewChainManager(db ethutil.Database, mux *event.TypeMux) *ChainManager {
+	bc := &ChainManager{db: db, genesisBlock: GenesisBlock(db), eventMux: mux}
 	bc.setLastBlock()
-
 	bc.transState = bc.State().Copy()
 
 	return bc
@@ -120,7 +130,7 @@ func (self *ChainManager) SetProcessor(proc types.BlockProcessor) {
 }
 
 func (self *ChainManager) State() *state.StateDB {
-	return state.New(self.CurrentBlock().Trie())
+	return state.New(self.CurrentBlock().Root(), self.db)
 }
 
 func (self *ChainManager) TransState() *state.StateDB {
@@ -128,7 +138,7 @@ func (self *ChainManager) TransState() *state.StateDB {
 }
 
 func (bc *ChainManager) setLastBlock() {
-	data, _ := ethutil.Config.Db.Get([]byte("LastBlock"))
+	data, _ := bc.db.Get([]byte("LastBlock"))
 	if len(data) != 0 {
 		var block types.Block
 		rlp.Decode(bytes.NewReader(data), &block)
@@ -137,12 +147,12 @@ func (bc *ChainManager) setLastBlock() {
 		bc.lastBlockNumber = block.Header().Number.Uint64()
 
 		// Set the last know difficulty (might be 0x0 as initial value, Genesis)
-		bc.td = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
+		bc.td = ethutil.BigD(bc.db.LastKnownTD())
 	} else {
 		bc.Reset()
 	}
 
-	chainlogger.Infof("Last block (#%d) %x\n", bc.lastBlockNumber, bc.currentBlock.Hash())
+	chainlogger.Infof("Last block (#%d) %x TD=%v\n", bc.lastBlockNumber, bc.currentBlock.Hash(), bc.td)
 }
 
 // Block creation & chain handling
@@ -183,7 +193,7 @@ func (bc *ChainManager) Reset() {
 	defer bc.mu.Unlock()
 
 	for block := bc.currentBlock; block != nil; block = bc.GetBlock(block.Header().ParentHash) {
-		ethutil.Config.Db.Delete(block.Hash())
+		bc.db.Delete(block.Hash())
 	}
 
 	// Prepare the genesis block
@@ -210,7 +220,7 @@ func (self *ChainManager) Export() []byte {
 
 func (bc *ChainManager) insert(block *types.Block) {
 	encodedBlock := ethutil.Encode(block)
-	ethutil.Config.Db.Put([]byte("LastBlock"), encodedBlock)
+	bc.db.Put([]byte("LastBlock"), encodedBlock)
 	bc.currentBlock = block
 	bc.lastBlockHash = block.Hash()
 }
@@ -218,8 +228,8 @@ func (bc *ChainManager) insert(block *types.Block) {
 func (bc *ChainManager) write(block *types.Block) {
 	bc.writeBlockInfo(block)
 
-	encodedBlock := ethutil.Encode(block)
-	ethutil.Config.Db.Put(block.Hash(), encodedBlock)
+	encodedBlock := ethutil.Encode(block.RlpDataForStorage())
+	bc.db.Put(block.Hash(), encodedBlock)
 }
 
 // Accessors
@@ -229,7 +239,7 @@ func (bc *ChainManager) Genesis() *types.Block {
 
 // Block fetching methods
 func (bc *ChainManager) HasBlock(hash []byte) bool {
-	data, _ := ethutil.Config.Db.Get(hash)
+	data, _ := bc.db.Get(hash)
 	return len(data) != 0
 }
 
@@ -241,20 +251,18 @@ func (self *ChainManager) GetBlockHashesFromHash(hash []byte, max uint64) (chain
 
 	// XXX Could be optimised by using a different database which only holds hashes (i.e., linked list)
 	for i := uint64(0); i < max; i++ {
+		block = self.GetBlock(block.Header().ParentHash)
 		chain = append(chain, block.Hash())
-
 		if block.Header().Number.Cmp(ethutil.Big0) <= 0 {
 			break
 		}
-
-		block = self.GetBlock(block.Header().ParentHash)
 	}
 
 	return
 }
 
 func (self *ChainManager) GetBlock(hash []byte) *types.Block {
-	data, _ := ethutil.Config.Db.Get(hash)
+	data, _ := self.db.Get(hash)
 	if len(data) == 0 {
 		return nil
 	}
@@ -265,6 +273,28 @@ func (self *ChainManager) GetBlock(hash []byte) *types.Block {
 	}
 
 	return &block
+}
+
+func (self *ChainManager) GetUnclesInChain(block *types.Block, length int) (uncles []*types.Header) {
+	for i := 0; block != nil && i < length; i++ {
+		uncles = append(uncles, block.Uncles()...)
+		block = self.GetBlock(block.ParentHash())
+	}
+
+	return
+}
+
+func (self *ChainManager) GetAncestors(block *types.Block, length int) (blocks []*types.Block) {
+	for i := 0; i < length; i++ {
+		block = self.GetBlock(block.ParentHash())
+		if block == nil {
+			break
+		}
+
+		blocks = append(blocks, block)
+	}
+
+	return
 }
 
 func (self *ChainManager) GetBlockByNumber(num uint64) *types.Block {
@@ -286,7 +316,7 @@ func (self *ChainManager) GetBlockByNumber(num uint64) *types.Block {
 }
 
 func (bc *ChainManager) setTotalDifficulty(td *big.Int) {
-	ethutil.Config.Db.Put([]byte("LTD"), td.Bytes())
+	bc.db.Put([]byte("LTD"), td.Bytes())
 	bc.td = td
 }
 
@@ -343,12 +373,12 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			cblock := self.currentBlock
 			if td.Cmp(self.td) > 0 {
 				if block.Header().Number.Cmp(new(big.Int).Add(cblock.Header().Number, ethutil.Big1)) < 0 {
-					chainlogger.Infof("Split detected. New head #%v (%x), was #%v (%x)\n", block.Header().Number, block.Hash()[:4], cblock.Header().Number, cblock.Hash()[:4])
+					chainlogger.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, block.Hash()[:4], td, cblock.Header().Number, cblock.Hash()[:4], self.td)
 				}
 
 				self.setTotalDifficulty(td)
 				self.insert(block)
-				self.transState = state.New(cblock.Trie().Copy())
+				self.transState = state.New(cblock.Root(), self.db) //state.New(cblock.Trie().Copy())
 			}
 
 		}

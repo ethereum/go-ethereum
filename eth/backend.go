@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	seedNodeAddress = "poc-7.ethdev.com:30300"
+	seedNodeAddress = "poc-8.ethdev.com:30303"
 )
 
 type Config struct {
@@ -81,7 +81,7 @@ type Ethereum struct {
 func New(config *Config) (*Ethereum, error) {
 	// Boostrap database
 	logger := ethlogger.New(config.DataDir, config.LogFile, config.LogLevel)
-	db, err := ethdb.NewLDBDatabase("database")
+	db, err := ethdb.NewLDBDatabase("blockchain")
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +110,7 @@ func New(config *Config) (*Ethereum, error) {
 	clientId := p2p.NewSimpleClientIdentity(config.Name, config.Version, config.Identifier, keyManager.PublicKey())
 
 	saveProtocolVersion(db)
-	ethutil.Config.Db = db
+	//ethutil.Config.Db = db
 
 	eth := &Ethereum{
 		shutdownChan:   make(chan bool),
@@ -123,9 +123,9 @@ func New(config *Config) (*Ethereum, error) {
 		logger:         logger,
 	}
 
-	eth.chainManager = core.NewChainManager(eth.EventMux())
+	eth.chainManager = core.NewChainManager(db, eth.EventMux())
 	eth.txPool = core.NewTxPool(eth.EventMux())
-	eth.blockProcessor = core.NewBlockProcessor(eth.txPool, eth.chainManager, eth.EventMux())
+	eth.blockProcessor = core.NewBlockProcessor(db, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
 	eth.whisper = whisper.New()
 
@@ -134,24 +134,20 @@ func New(config *Config) (*Ethereum, error) {
 	eth.blockPool = NewBlockPool(hasBlock, insertChain, ezp.Verify)
 
 	ethProto := EthProtocol(eth.txPool, eth.chainManager, eth.blockPool)
-	protocols := []p2p.Protocol{ethProto}
-
-	if config.Shh {
-		eth.whisper = whisper.New()
-		protocols = append(protocols, eth.whisper.Protocol())
-	}
+	protocols := []p2p.Protocol{ethProto, eth.whisper.Protocol()}
 
 	nat, err := p2p.ParseNAT(config.NATType, config.PMPGateway)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println(nat)
 
 	eth.net = &p2p.Server{
 		Identity:  clientId,
 		MaxPeers:  config.MaxPeers,
 		Protocols: protocols,
 		Blacklist: eth.blacklist,
-		NAT:       nat,
+		NAT:       p2p.UPNP(),
 		NoDial:    !config.Dial,
 	}
 
@@ -249,7 +245,7 @@ func (s *Ethereum) Start(seed bool) error {
 	if seed {
 		logger.Infof("Connect to seed node %v", seedNodeAddress)
 		if err := s.SuggestPeer(seedNodeAddress); err != nil {
-			return err
+			logger.Infoln(err)
 		}
 	}
 

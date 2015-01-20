@@ -14,6 +14,10 @@
 	You should have received a copy of the GNU General Public License
 	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
+/**
+ * @authors
+ * 	Felix Lange <felix@ethdev.com>
+ */
 
 // rlpdump is a pretty-printer for RLP data.
 package main
@@ -106,8 +110,7 @@ func dump(s *rlp.Stream, depth int) error {
 		s.List()
 		defer s.ListEnd()
 		if size == 0 {
-			fmt.Printf(ws(depth) + "[]")
-			return nil
+			fmt.Print(ws(depth) + "[]")
 		} else {
 			fmt.Println(ws(depth) + "[")
 			for i := 0; ; i++ {

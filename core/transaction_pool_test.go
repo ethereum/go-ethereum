@@ -6,16 +6,22 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/state"
 )
 
 // State query interface
-type stateQuery struct{}
+type stateQuery struct{ db ethutil.Database }
+
+func SQ() stateQuery {
+	db, _ := ethdb.NewMemDatabase()
+	return stateQuery{db: db}
+}
 
 func (self stateQuery) GetAccount(addr []byte) *state.StateObject {
-	return state.NewStateObject(addr)
+	return state.NewStateObject(addr, self.db)
 }
 
 func transaction() *types.Transaction {
@@ -55,7 +61,7 @@ func TestAddInvalidTx(t *testing.T) {
 func TestRemoveSet(t *testing.T) {
 	pool, _ := setup()
 	tx1 := transaction()
-	pool.pool.Add(tx1)
+	pool.addTx(tx1)
 	pool.RemoveSet(types.Transactions{tx1})
 	if pool.Size() > 0 {
 		t.Error("expected pool size to be 0")
@@ -65,16 +71,16 @@ func TestRemoveSet(t *testing.T) {
 func TestRemoveInvalid(t *testing.T) {
 	pool, key := setup()
 	tx1 := transaction()
-	pool.pool.Add(tx1)
-	pool.RemoveInvalid(stateQuery{})
+	pool.addTx(tx1)
+	pool.RemoveInvalid(SQ())
 	if pool.Size() > 0 {
 		t.Error("expected pool size to be 0")
 	}
 
 	tx1.SetNonce(1)
 	tx1.SignECDSA(key)
-	pool.pool.Add(tx1)
-	pool.RemoveInvalid(stateQuery{})
+	pool.addTx(tx1)
+	pool.RemoveInvalid(SQ())
 	if pool.Size() != 1 {
 		t.Error("expected pool size to be 1, is", pool.Size())
 	}

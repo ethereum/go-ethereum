@@ -2,7 +2,6 @@ package core
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -36,6 +35,7 @@ type EthManager interface {
 }
 
 type BlockProcessor struct {
+	db ethutil.Database
 	// Mutex for locking the block processor. Blocks can only be handled one at a time
 	mutex sync.Mutex
 	// Canonical block chain
@@ -57,8 +57,9 @@ type BlockProcessor struct {
 	eventMux *event.TypeMux
 }
 
-func NewBlockProcessor(txpool *TxPool, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
+func NewBlockProcessor(db ethutil.Database, txpool *TxPool, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
 	sm := &BlockProcessor{
+		db:       db,
 		mem:      make(map[string]*big.Int),
 		Pow:      ezp.New(),
 		bc:       chainManager,
@@ -170,7 +171,8 @@ func (sm *BlockProcessor) Process(block *types.Block) (td *big.Int, msgs state.M
 func (sm *BlockProcessor) ProcessWithParent(block, parent *types.Block) (td *big.Int, messages state.Messages, err error) {
 	sm.lastAttemptedBlock = block
 
-	state := state.New(parent.Trie().Copy())
+	state := state.New(parent.Root(), sm.db)
+	//state := state.New(parent.Trie().Copy())
 
 	// Block validation
 	if err = sm.ValidateBlock(block, parent); err != nil {
@@ -214,52 +216,33 @@ func (sm *BlockProcessor) ProcessWithParent(block, parent *types.Block) (td *big
 		return
 	}
 
-	// Calculate the new total difficulty and sync back to the db
-	if td, ok := sm.CalculateTD(block); ok {
-		// Sync the current block's state to the database and cancelling out the deferred Undo
-		state.Sync()
+	// Calculate the td for this block
+	td = CalculateTD(block, parent)
+	// Sync the current block's state to the database and cancelling out the deferred Undo
+	state.Sync()
+	// Set the block hashes for the current messages
+	state.Manifest().SetHash(block.Hash())
+	messages = state.Manifest().Messages
+	// Reset the manifest XXX We need this?
+	state.Manifest().Reset()
+	// Remove transactions from the pool
+	sm.txpool.RemoveSet(block.Transactions())
 
-		state.Manifest().SetHash(block.Hash())
+	chainlogger.Infof("processed block #%d (%x...)\n", header.Number, block.Hash()[0:4])
 
-		messages := state.Manifest().Messages
-		state.Manifest().Reset()
-
-		chainlogger.Infof("processed block #%d (%x...)\n", header.Number, block.Hash()[0:4])
-
-		sm.txpool.RemoveSet(block.Transactions())
-
-		return td, messages, nil
-	} else {
-		return nil, nil, errors.New("total diff failed")
-	}
-}
-
-func (sm *BlockProcessor) CalculateTD(block *types.Block) (*big.Int, bool) {
-	uncleDiff := new(big.Int)
-	for _, uncle := range block.Uncles() {
-		uncleDiff = uncleDiff.Add(uncleDiff, uncle.Difficulty)
-	}
-
-	// TD(genesis_block) = 0 and TD(B) = TD(B.parent) + sum(u.difficulty for u in B.uncles) + B.difficulty
-	td := new(big.Int)
-	td = td.Add(sm.bc.Td(), uncleDiff)
-	td = td.Add(td, block.Header().Difficulty)
-
-	// The new TD will only be accepted if the new difficulty is
-	// is greater than the previous.
-	if td.Cmp(sm.bc.Td()) > 0 {
-		return td, true
-	}
-
-	return nil, false
+	return td, messages, nil
 }
 
 // Validates the current block. Returns an error if the block was invalid,
 // an uncle or anything that isn't on the current block chain.
 // Validation validates easy over difficult (dagger takes longer time = difficult)
 func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
+	if len(block.Header().Extra) > 1024 {
+		return fmt.Errorf("Block extra data too long (%d)", len(block.Header().Extra))
+	}
+
 	expd := CalcDifficulty(block, parent)
-	if expd.Cmp(block.Header().Difficulty) < 0 {
+	if expd.Cmp(block.Header().Difficulty) != 0 {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Header().Difficulty, expd)
 	}
 
@@ -286,32 +269,38 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 func (sm *BlockProcessor) AccumelateRewards(statedb *state.StateDB, block, parent *types.Block) error {
 	reward := new(big.Int).Set(BlockReward)
 
-	knownUncles := set.New()
-	for _, uncle := range parent.Uncles() {
-		knownUncles.Add(string(uncle.Hash()))
+	ancestors := set.New()
+	for _, ancestor := range sm.bc.GetAncestors(block, 7) {
+		ancestors.Add(string(ancestor.Hash()))
 	}
 
-	nonces := ethutil.NewSet(block.Header().Nonce)
+	uncles := set.New()
+	uncles.Add(string(block.Hash()))
 	for _, uncle := range block.Uncles() {
-		if nonces.Include(uncle.Nonce) {
+		if uncles.Has(string(uncle.Hash())) {
 			// Error not unique
 			return UncleError("Uncle not unique")
 		}
+		uncles.Add(string(uncle.Hash()))
 
-		uncleParent := sm.bc.GetBlock(uncle.ParentHash)
-		if uncleParent == nil {
+		if !ancestors.Has(string(uncle.ParentHash)) {
 			return UncleError(fmt.Sprintf("Uncle's parent unknown (%x)", uncle.ParentHash[0:4]))
 		}
 
-		if uncleParent.Header().Number.Cmp(new(big.Int).Sub(parent.Header().Number, big.NewInt(6))) < 0 {
-			return UncleError("Uncle too old")
-		}
+		/*
+			uncleParent := sm.bc.GetBlock(uncle.ParentHash)
+			if uncleParent == nil {
+				return UncleError(fmt.Sprintf("Uncle's parent unknown (%x)", uncle.ParentHash[0:4]))
+			}
 
-		if knownUncles.Has(string(uncle.Hash())) {
-			return UncleError("Uncle in chain")
-		}
+			if uncleParent.Number().Cmp(new(big.Int).Sub(parent.Number(), big.NewInt(6))) < 0 {
+				return UncleError("Uncle too old")
+			}
 
-		nonces.Insert(uncle.Nonce)
+			if knownUncles.Has(string(uncle.Hash())) {
+				return UncleError("Uncle in chain")
+			}
+		*/
 
 		r := new(big.Int)
 		r.Mul(BlockReward, big.NewInt(15)).Div(r, big.NewInt(16))
@@ -347,7 +336,8 @@ func (sm *BlockProcessor) GetMessages(block *types.Block) (messages []*state.Mes
 
 	var (
 		parent = sm.bc.GetBlock(block.Header().ParentHash)
-		state  = state.New(parent.Trie().Copy())
+		//state  = state.New(parent.Trie().Copy())
+		state = state.New(parent.Root(), sm.db)
 	)
 
 	defer state.Reset()

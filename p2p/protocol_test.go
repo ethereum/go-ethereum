@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -36,50 +37,71 @@ func newTestPeer() (peer *Peer) {
 }
 
 func TestBaseProtocolPeers(t *testing.T) {
-	cannedPeerList := []*peerAddr{
+	peerList := []*peerAddr{
 		{IP: net.ParseIP("1.2.3.4"), Port: 2222, Pubkey: []byte{}},
 		{IP: net.ParseIP("5.6.7.8"), Port: 3333, Pubkey: []byte{}},
 	}
-	var ownAddr *peerAddr = &peerAddr{IP: net.ParseIP("1.3.5.7"), Port: 1111, Pubkey: []byte{}}
+	listenAddr := &peerAddr{IP: net.ParseIP("1.3.5.7"), Port: 1111, Pubkey: []byte{}}
 	rw1, rw2 := MsgPipe()
+	defer rw1.Close()
+	wg := new(sync.WaitGroup)
+
 	// run matcher, close pipe when addresses have arrived
-	addrChan := make(chan *peerAddr, len(cannedPeerList))
+	numPeers := len(peerList) + 1
+	addrChan := make(chan *peerAddr)
+	wg.Add(1)
 	go func() {
-		for _, want := range cannedPeerList {
-			got := <-addrChan
-			t.Logf("got peer: %+v", got)
+		i := 0
+		for got := range addrChan {
+			var want *peerAddr
+			switch {
+			case i < len(peerList):
+				want = peerList[i]
+			case i == len(peerList):
+				want = listenAddr // listenAddr should be the last thing sent
+			}
+			t.Logf("got peer %d/%d: %v", i+1, numPeers, got)
 			if !reflect.DeepEqual(want, got) {
-				t.Errorf("mismatch:  got %#v, want %#v", got, want)
+				t.Errorf("mismatch: got %+v, want %+v", got, want)
+			}
+			i++
+			if i == numPeers {
+				break
 			}
 		}
-		close(addrChan)
-		var own []*peerAddr
-		var got *peerAddr
-		for got = range addrChan {
-			own = append(own, got)
+		if i != numPeers {
+			t.Errorf("wrong number of peers received: got %d, want %d", i, numPeers)
 		}
-		if len(own) != 1 || !reflect.DeepEqual(ownAddr, own[0]) {
-			t.Errorf("mismatch: peers own address is incorrectly or not given, got %v, want %#v", ownAddr)
-		}
-		rw2.Close()
+		rw1.Close()
+		wg.Done()
 	}()
-	// run first peer
+
+	// run first peer (in background)
 	peer1 := newTestPeer()
-	peer1.ourListenAddr = ownAddr
+	peer1.ourListenAddr = listenAddr
 	peer1.otherPeers = func() []*Peer {
-		pl := make([]*Peer, len(cannedPeerList))
-		for i, addr := range cannedPeerList {
+		pl := make([]*Peer, len(peerList))
+		for i, addr := range peerList {
 			pl[i] = &Peer{listenAddr: addr}
 		}
 		return pl
 	}
-	go runBaseProtocol(peer1, rw1)
+	wg.Add(1)
+	go func() {
+		runBaseProtocol(peer1, rw1)
+		wg.Done()
+	}()
+
 	// run second peer
 	peer2 := newTestPeer()
 	peer2.newPeerAddr = addrChan // feed peer suggestions into matcher
 	if err := runBaseProtocol(peer2, rw2); err != ErrPipeClosed {
 		t.Errorf("peer2 terminated with unexpected error: %v", err)
 	}
+
+	// terminate matcher
+	close(addrChan)
+	wg.Wait()
 }
 
 func TestBaseProtocolDisconnect(t *testing.T) {
@@ -93,7 +115,7 @@ func TestBaseProtocolDisconnect(t *testing.T) {
 		if err := expectMsg(rw2, handshakeMsg); err != nil {
 			t.Error(err)
 		}
-		err := rw2.EncodeMsg(handshakeMsg,
+		err := EncodeMsg(rw2, handshakeMsg,
 			baseProtocolVersion,
 			"",
 			[]interface{}{},
@@ -106,7 +128,7 @@ func TestBaseProtocolDisconnect(t *testing.T) {
 		if err := expectMsg(rw2, getPeersMsg); err != nil {
 			t.Error(err)
 		}
-		if err := rw2.EncodeMsg(discMsg, DiscQuitting); err != nil {
+		if err := EncodeMsg(rw2, discMsg, DiscQuitting); err != nil {
 			t.Error(err)
 		}
 
