@@ -162,11 +162,6 @@ Rectangle {
 				top: divider.bottom
 			}
 
-			//property var cleanPath: false
-			onNavigationRequested: {
-				window.open(request.url.toString());					
-			}
-
 			function injectJs(js) {
 				webview.experimental.navigatorQtObjectEnabled = true;
 				webview.experimental.evaluateJavaScript(js)
