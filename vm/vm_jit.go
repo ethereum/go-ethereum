@@ -316,8 +316,8 @@ func env_log(_vm unsafe.Pointer, dataPtr *byte, dataLen uint64, _topic1 unsafe.P
 	vm.Env().AddLog(state.NewLog(vm.me.Address(), topics, data))
 }
 
-//export env_getExtCode
-func env_getExtCode(_vm unsafe.Pointer, _addr unsafe.Pointer, o_size *uint64) *byte {
+//export env_extcode
+func env_extcode(_vm unsafe.Pointer, _addr unsafe.Pointer, o_size *uint64) *byte {
 	vm := (*JitVm)(_vm)
 	addr := llvm2hash((*i256)(_addr))
 	code := vm.Env().State().GetCode(addr)
