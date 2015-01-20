@@ -8,7 +8,7 @@ type JitVm struct {
 }
 
 func NewJitVm(env Environment) *JitVm {
-	backupVm := NewVm(env)
+	backupVm := New(env)
 	return &JitVm{env: env, backup: backupVm}
 }
 

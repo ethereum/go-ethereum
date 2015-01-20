@@ -267,6 +267,9 @@ type storeVal struct {
 	Key, Value string
 }
 
+func (self *Debugger) Step(evm vm.VirtualMachine, op vm.OpCode, mem *vm.Memory, stack *vm.Stack, context *vm.Context) {
+}
+
 func (self *Debugger) BreakHook(pc int, op vm.OpCode, mem *vm.Memory, stack *vm.Stack, stateObject *state.StateObject) bool {
 	self.main.Logln("break on instr:", pc)
 

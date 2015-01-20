@@ -17,7 +17,6 @@ type Vm struct {
 
 	err error
 
-	// Debugging
 	Dbg Debugger
 
 	BreakPoints []int64
@@ -27,7 +26,7 @@ type Vm struct {
 	Recoverable bool
 }
 
-func NewVm(env Environment) *Vm {
+func New(env Environment) *Vm {
 	lt := LogTyPretty
 	if ethutil.Config.Diff {
 		lt = LogTyDiff
@@ -111,6 +110,9 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 		op = context.GetOp(pc)
 
 		self.Printf("(pc) %-3d -o- %-14s (m) %-4d (s) %-4d ", pc, op.String(), mem.Len(), stack.Len())
+		if self.Dbg != nil {
+			//self.Dbg.Step(self, op, mem, stack, context)
+		}
 
 		newMemSize, gas := self.calculateGasAndSize(context, caller, op, statedb, mem, stack)
 
