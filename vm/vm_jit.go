@@ -103,9 +103,7 @@ func getDataPtr(m []byte) *byte {
 
 func big2llvm(n *big.Int) i256 {
 	m := hash2llvm(n.Bytes())
-	for i, l := 0, len(m); i < l/2; i++ {
-		m[i], m[l-i-1] = m[l-i-1], m[i]
-	}
+	bswap(&m)
 	return m
 }
 
@@ -133,6 +131,7 @@ func NewJitVm(env Environment) *JitVm {
 }
 
 func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
+	self.env.SetDepth(self.env.Depth() + 1)
 	self.me = me // FIXME: Make sure Run() is not used more than once
 	self.price = price
 
@@ -184,18 +183,11 @@ func (self *JitVm) Env() Environment {
 }
 
 //export env_sha3
-func env_sha3(dataPtr *byte, length uint64, hashPtr unsafe.Pointer) {
-	data := llvm2bytes(dataPtr, length)
+func env_sha3(dataPtr unsafe.Pointer, length uint64, resultPtr unsafe.Pointer) {
+	data := C.GoBytes(dataPtr, C.int(length))
 	hash := crypto.Sha3(data)
-
-	hashHdr := reflect.SliceHeader{
-		Data: uintptr(hashPtr),
-		Len:  32,
-		Cap:  32,
-	}
-	oHash := *(*[]byte)(unsafe.Pointer(&hashHdr))
-
-	copy(oHash, hash)
+	result := (*i256)(resultPtr)
+	*result = hash2llvm(hash)
 }
 
 //export env_sstore
@@ -243,17 +235,17 @@ func env_blockhash(_vm unsafe.Pointer, _number unsafe.Pointer, _result unsafe.Po
 }
 
 //export env_call
-func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Pointer, _value unsafe.Pointer, inDataPtr *byte, inDataLen uint64, outDataPtr *byte, outDataLen uint64, _codeAddr unsafe.Pointer) bool {
+func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Pointer, _value unsafe.Pointer, inDataPtr unsafe.Pointer, inDataLen uint64, outDataPtr unsafe.Pointer, outDataLen uint64, _codeAddr unsafe.Pointer) bool {
 	vm := (*JitVm)(_vm)
 
 	balance := vm.Env().State().GetBalance(vm.me.Address())
 	value := llvm2big((*i256)(_value))
 
-	if vm.env.Depth() < 1024 && balance.Cmp(value) >= 0 {
+	if balance.Cmp(value) >= 0 {
 		vm.env.State().AddBalance(vm.me.Address(), value.Neg(value))
 		receiveAddr := llvm2hash((*i256)(_receiveAddr))
-		inData := llvm2bytes(inDataPtr, inDataLen)
-		outData := llvm2bytes(outDataPtr, outDataLen)
+		inData := C.GoBytes(inDataPtr, C.int(inDataLen))
+		outData := C.GoBytes(outDataPtr, C.int(outDataLen))
 		//codeAddr := llvm2hash((*i256)(_codeAddr)) //TODO: Handle CallCode
 		llvmGas := (*i256)(_gas)
 		gas := llvm2big(llvmGas)
@@ -269,16 +261,16 @@ func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Point
 }
 
 //export env_create
-func env_create(_vm unsafe.Pointer, _gas unsafe.Pointer, _value unsafe.Pointer, initDataPtr *byte, initDataLen uint64, _result unsafe.Pointer) {
+func env_create(_vm unsafe.Pointer, _gas unsafe.Pointer, _value unsafe.Pointer, initDataPtr unsafe.Pointer, initDataLen uint64, _result unsafe.Pointer) {
 	vm := (*JitVm)(_vm)
 
 	balance := vm.Env().State().GetBalance(vm.me.Address())
 	value := llvm2big((*i256)(_value))
 	result := (*i256)(_result)
 
-	if vm.env.Depth() < 1024 && balance.Cmp(value) >= 0 {
+	if balance.Cmp(value) >= 0 {
 		vm.env.State().AddBalance(vm.me.Address(), value.Neg(value))
-		initData := llvm2bytes(initDataPtr, initDataLen)
+		initData := C.GoBytes(initDataPtr, C.int(initDataLen))
 		llvmGas := (*i256)(_gas)
 		gas := llvm2big(llvmGas)
 		addr, _, _ := vm.Env().Create(vm.me, vm.me.Address(), initData, gas, vm.price, value)
@@ -290,12 +282,10 @@ func env_create(_vm unsafe.Pointer, _gas unsafe.Pointer, _value unsafe.Pointer, 
 }
 
 //export env_log
-func env_log(_vm unsafe.Pointer, dataPtr *byte, dataLen uint64, _topic1 unsafe.Pointer, _topic2 unsafe.Pointer, _topic3 unsafe.Pointer, _topic4 unsafe.Pointer) {
+func env_log(_vm unsafe.Pointer, dataPtr unsafe.Pointer, dataLen uint64, _topic1 unsafe.Pointer, _topic2 unsafe.Pointer, _topic3 unsafe.Pointer, _topic4 unsafe.Pointer) {
 	vm := (*JitVm)(_vm)
 
-	dataRef := llvm2bytes(dataPtr, dataLen)
-	data := make([]byte, len(dataRef))
-	copy(data, dataRef)
+	data := C.GoBytes(dataPtr, C.int(dataLen))
 
 	topics := make([][]byte, 0, 4)
 	if _topic1 != nil {
