@@ -301,18 +301,6 @@ loop:
 	return reason, err
 }
 
-func (p *Peer) readLoop(msgc chan<- Msg, errc chan<- error, unblock <-chan bool) {
-	for _ = range unblock {
-		p.conn.SetReadDeadline(time.Now().Add(msgReadTimeout))
-		if msg, err := readMsg(p.bufconn); err != nil {
-			errc <- err
-		} else {
-			msgc <- msg
-		}
-	}
-	close(errc)
-}
-
 func (p *Peer) dispatch(msg Msg, protoDone chan struct{}) (wait bool, err error) {
 	proto, err := p.getProto(msg.Code)
 	if err != nil {
@@ -445,81 +433,4 @@ func (p *Peer) closeProtocols() {
 	}
 	p.runlock.RUnlock()
 	p.protoWG.Wait()
-}
-
-// writeProtoMsg sends the given message on behalf of the given named protocol.
-func (p *Peer) writeProtoMsg(protoName string, msg Msg) error {
-	p.runlock.RLock()
-	proto, ok := p.running[protoName]
-	p.runlock.RUnlock()
-	if !ok {
-		return fmt.Errorf("protocol %s not handled by peer", protoName)
-	}
-	if msg.Code >= proto.maxcode {
-		return newPeerError(errInvalidMsgCode, "code %x is out of range for protocol %q", msg.Code, protoName)
-	}
-	msg.Code += proto.offset
-	return p.writeMsg(msg, msgWriteTimeout)
-}
-
-// writeMsg writes a message to the connection.
-func (p *Peer) writeMsg(msg Msg, timeout time.Duration) error {
-	p.writeMu.Lock()
-	defer p.writeMu.Unlock()
-	p.conn.SetWriteDeadline(time.Now().Add(timeout))
-	if err := writeMsg(p.bufconn, msg); err != nil {
-		return newPeerError(errWrite, "%v", err)
-	}
-	return p.bufconn.Flush()
-}
-
-type proto struct {
-	name            string
-	in              chan Msg
-	maxcode, offset uint64
-	peer            *Peer
-}
-
-func (rw *proto) WriteMsg(msg Msg) error {
-	if msg.Code >= rw.maxcode {
-		return newPeerError(errInvalidMsgCode, "not handled")
-	}
-	msg.Code += rw.offset
-	return rw.peer.writeMsg(msg, msgWriteTimeout)
-}
-
-func (rw *proto) EncodeMsg(code uint64, data ...interface{}) error {
-	return rw.WriteMsg(NewMsg(code, data...))
-}
-
-func (rw *proto) ReadMsg() (Msg, error) {
-	msg, ok := <-rw.in
-	if !ok {
-		return msg, io.EOF
-	}
-	msg.Code -= rw.offset
-	return msg, nil
-}
-
-// eofSignal wraps a reader with eof signaling. the eof channel is
-// closed when the wrapped reader returns an error or when count bytes
-// have been read.
-//
-type eofSignal struct {
-	wrapped io.Reader
-	count   int64
-	eof     chan<- struct{}
-}
-
-// note: when using eofSignal to detect whether a message payload
-// has been read, Read might not be called for zero sized messages.
-
-func (r *eofSignal) Read(buf []byte) (int, error) {
-	n, err := r.wrapped.Read(buf)
-	r.count -= int64(n)
-	if (err != nil || r.count <= 0) && r.eof != nil {
-		r.eof <- struct{}{} // tell Peer that msg has been consumed
-		r.eof = nil
-	}
-	return n, err
 }

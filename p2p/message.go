@@ -2,12 +2,10 @@ package p2p
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math/big"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -23,7 +21,7 @@ import (
 // separate Msg with a bytes.Reader as Payload for each send.
 type Msg struct {
 	Code    uint64
-	Size    uint32 // size of the paylod
+	Size    uint32 // size of the payload
 	Payload io.Reader
 }
 
@@ -36,6 +34,7 @@ func NewMsg(code uint64, params ...interface{}) Msg {
 	return Msg{Code: code, Size: uint32(buf.Len()), Payload: buf}
 }
 
+// this should probably use the new rlp encoding
 func encodePayload(params ...interface{}) []byte {
 	buf := new(bytes.Buffer)
 	for _, p := range params {
@@ -66,6 +65,11 @@ func (msg Msg) Discard() error {
 	return err
 }
 
+/*
+MsgReadWriter is an interface for reading and writing messages
+It is aware of message structure and knows how to encode/decode
+*/
+
 type MsgReader interface {
 	ReadMsg() (Msg, error)
 }
@@ -84,87 +88,13 @@ type MsgReadWriter interface {
 	MsgWriter
 }
 
+// EncodeMsg should be explicit in the interface and should have the MsgWriter
+// as receiver
+
 // EncodeMsg writes an RLP-encoded message with the given code and
 // data elements.
 func EncodeMsg(w MsgWriter, code uint64, data ...interface{}) error {
 	return w.WriteMsg(NewMsg(code, data...))
-}
-
-var magicToken = []byte{34, 64, 8, 145}
-
-func writeMsg(w io.Writer, msg Msg) error {
-	// TODO: handle case when Size + len(code) + len(listhdr) overflows uint32
-	code := ethutil.Encode(uint32(msg.Code))
-	listhdr := makeListHeader(msg.Size + uint32(len(code)))
-	payloadLen := uint32(len(listhdr)) + uint32(len(code)) + msg.Size
-
-	start := make([]byte, 8)
-	copy(start, magicToken)
-	binary.BigEndian.PutUint32(start[4:], payloadLen)
-
-	for _, b := range [][]byte{start, listhdr, code} {
-		if _, err := w.Write(b); err != nil {
-			return err
-		}
-	}
-	_, err := io.CopyN(w, msg.Payload, int64(msg.Size))
-	return err
-}
-
-func makeListHeader(length uint32) []byte {
-	if length < 56 {
-		return []byte{byte(length + 0xc0)}
-	}
-	enc := big.NewInt(int64(length)).Bytes()
-	lenb := byte(len(enc)) + 0xf7
-	return append([]byte{lenb}, enc...)
-}
-
-// readMsg reads a message header from r.
-// It takes an rlp.ByteReader to ensure that the decoding doesn't buffer.
-func readMsg(r rlp.ByteReader) (msg Msg, err error) {
-	// read magic and payload size
-	start := make([]byte, 8)
-	if _, err = io.ReadFull(r, start); err != nil {
-		return msg, newPeerError(errRead, "%v", err)
-	}
-	if !bytes.HasPrefix(start, magicToken) {
-		return msg, newPeerError(errMagicTokenMismatch, "got %x, want %x", start[:4], magicToken)
-	}
-	size := binary.BigEndian.Uint32(start[4:])
-
-	// decode start of RLP message to get the message code
-	posr := &postrack{r, 0}
-	s := rlp.NewStream(posr)
-	if _, err := s.List(); err != nil {
-		return msg, err
-	}
-	code, err := s.Uint()
-	if err != nil {
-		return msg, err
-	}
-	payloadsize := size - posr.p
-	return Msg{code, payloadsize, io.LimitReader(r, int64(payloadsize))}, nil
-}
-
-// postrack wraps an rlp.ByteReader with a position counter.
-type postrack struct {
-	r rlp.ByteReader
-	p uint32
-}
-
-func (r *postrack) Read(buf []byte) (int, error) {
-	n, err := r.r.Read(buf)
-	r.p += uint32(n)
-	return n, err
-}
-
-func (r *postrack) ReadByte() (byte, error) {
-	b, err := r.r.ReadByte()
-	if err == nil {
-		r.p++
-	}
-	return b, err
 }
 
 // MsgPipe creates a message pipe. Reads on one end are matched
@@ -184,6 +114,19 @@ func MsgPipe() (*MsgPipeRW, *MsgPipeRW) {
 // ErrPipeClosed is returned from pipe operations after the
 // pipe has been closed.
 var ErrPipeClosed = errors.New("p2p: read or write on closed message pipe")
+
+// Close unblocks any pending ReadMsg and WriteMsg calls on both ends
+// of the pipe. They will return ErrPipeClosed. Note that Close does
+// not interrupt any reads from a message payload.
+func (p *MsgPipeRW) Close() error {
+	if atomic.AddInt32(p.closed, 1) != 1 {
+		// someone else is already closing
+		atomic.StoreInt32(p.closed, 1) // avoid overflow
+		return nil
+	}
+	close(p.closing)
+	return nil
+}
 
 // MsgPipeRW is an endpoint of a MsgReadWriter pipe.
 type MsgPipeRW struct {
@@ -224,15 +167,25 @@ func (p *MsgPipeRW) ReadMsg() (Msg, error) {
 	return Msg{}, ErrPipeClosed
 }
 
-// Close unblocks any pending ReadMsg and WriteMsg calls on both ends
-// of the pipe. They will return ErrPipeClosed. Note that Close does
-// not interrupt any reads from a message payload.
-func (p *MsgPipeRW) Close() error {
-	if atomic.AddInt32(p.closed, 1) != 1 {
-		// someone else is already closing
-		atomic.StoreInt32(p.closed, 1) // avoid overflow
-		return nil
+// eofSignal wraps a reader with eof signaling. the eof channel is
+// closed when the wrapped reader returns an error or when count bytes
+// have been read.
+//
+type eofSignal struct {
+	wrapped io.Reader
+	count   int64
+	eof     chan<- struct{}
+}
+
+// note: when using eofSignal to detect whether a message payload
+// has been read, Read might not be called for zero sized messages.
+
+func (r *eofSignal) Read(buf []byte) (int, error) {
+	n, err := r.wrapped.Read(buf)
+	r.count -= int64(n)
+	if (err != nil || r.count <= 0) && r.eof != nil {
+		r.eof <- struct{}{} // tell Peer that msg has been consumed
+		r.eof = nil
 	}
-	close(p.closing)
-	return nil
+	return n, err
 }
