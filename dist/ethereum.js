@@ -804,6 +804,32 @@ module.exports = ProviderManager;
  * @date 2014
  */
 
+if ("build" !== 'build') {/*
+    var BigNumber = require('bignumber.js');
+*/}
+
+var ETH_UNITS = [ 
+    'wei', 
+    'Kwei', 
+    'Mwei', 
+    'Gwei', 
+    'szabo', 
+    'finney', 
+    'ether', 
+    'grand', 
+    'Mether', 
+    'Gether', 
+    'Tether', 
+    'Pether', 
+    'Eether', 
+    'Zether', 
+    'Yether', 
+    'Nether', 
+    'Dether', 
+    'Vether', 
+    'Uether' 
+];
+
 /// @returns an array of objects describing web3 api methods
 var web3Methods = function () {
     return [
@@ -941,16 +967,6 @@ var setupProperties = function (obj, properties) {
     });
 };
 
-// TODO: import from a dependency, don't duplicate.
-// TODO: use bignumber for that!
-var hexToDec = function (hex) {
-    return parseInt(hex, 16).toString();
-};
-
-var decToHex = function (dec) {
-    return parseInt(dec).toString(16);
-};
-
 /// setups web3 object, and it's in-browser executed methods
 var web3 = {
     _callbacks: {},
@@ -997,19 +1013,20 @@ var web3 = {
 
     /// @returns decimal representaton of hex value prefixed by 0x
     toDecimal: function (val) {
-        return hexToDec(val.substring(2));
+        return (new BigNumber(val.substring(2), 16).toString(10));
     },
 
     /// @returns hex representation (prefixed by 0x) of decimal value
     fromDecimal: function (val) {
-        return "0x" + decToHex(val);
+        return "0x" + (new BigNumber(val).toString(16));
     },
 
     /// used to transform value/string to eth string
+    /// TODO: use BigNumber.js to parse int
     toEth: function(str) {
         var val = typeof str === "string" ? str.indexOf('0x') === 0 ? parseInt(str.substr(2), 16) : parseInt(str) : str;
         var unit = 0;
-        var units = [ 'wei', 'Kwei', 'Mwei', 'Gwei', 'szabo', 'finney', 'ether', 'grand', 'Mether', 'Gether', 'Tether', 'Pether', 'Eether', 'Zether', 'Yether', 'Nether', 'Dether', 'Vether', 'Uether' ];
+        var units = ETH_UNITS;
         while (val > 3000 && unit < units.length - 1)
         {
             val /= 1000;
