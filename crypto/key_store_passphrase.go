@@ -178,7 +178,7 @@ func DecryptKey(ks keyStorePassphrase, keyId *uuid.UUID, auth string) (keyBytes 
 	if err != nil {
 		return nil, err
 	}
-	plainText, err := aes_cbc_decrypt(derivedKey, cipherText, iv)
+	plainText, err := aesCBCDecrypt(derivedKey, cipherText, iv)
 	if err != nil {
 		return nil, err
 	}

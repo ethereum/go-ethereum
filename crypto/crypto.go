@@ -156,7 +156,7 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 	*/
 	passBytes := []byte(password)
 	derivedKey := pbkdf2.Key(passBytes, passBytes, 2000, 16, sha256.New)
-	plainText, err := aes_cbc_decrypt(derivedKey, cipherText, iv)
+	plainText, err := aesCBCDecrypt(derivedKey, cipherText, iv)
 	ethPriv := Sha3(plainText)
 	ecKey := ToECDSA(ethPriv)
 	key = &Key{
@@ -171,7 +171,7 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 	return key, err
 }
 
-func aes_cbc_decrypt(key []byte, cipherText []byte, iv []byte) (plainText []byte, err error) {
+func aesCBCDecrypt(key []byte, cipherText []byte, iv []byte) (plainText []byte, err error) {
 	aesBlock, err := aes.NewCipher(key)
 	if err != nil {
 		return plainText, err
