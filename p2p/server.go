@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 )
 
@@ -19,6 +20,8 @@ const (
 )
 
 var srvlog = logger.NewLogger("P2P Server")
+
+var jsonlogger = logger.NewJsonLogger()
 
 // Server manages all peer connections.
 //
@@ -353,9 +356,25 @@ func (srv *Server) dialLoop() {
 // connect to peer via dial out
 func (srv *Server) dialPeer(desc *peerAddr, slot int) {
 	srvlog.Debugf("Dialing %v (slot %d)\n", desc, slot)
+	evd := map[string]interface{}{
+		"remote_id":       ethutil.Bytes2Hex(desc.Pubkey),
+		"remote_endpoint": desc.String(),
+		"level":           "debug",
+		"guid":            ethutil.Bytes2Hex(srv.Identity.Pubkey()),
+		"num_connections": srv.PeerCount(),
+	}
+	jsonlogger.LogJson("p2p.connecting", evd)
 	conn, err := srv.Dialer.Dial(desc.Network(), desc.String())
 	if err != nil {
 		srvlog.DebugDetailf("dial error: %v", err)
+		evd := map[string]interface{}{
+			"reason":          "dial error",
+			"remote_id":       desc.String(),
+			"level":           "debug",
+			"guid":            ethutil.Bytes2Hex(srv.Identity.Pubkey()),
+			"num_connections": srv.PeerCount(),
+		}
+		jsonlogger.LogJson("p2p.disconnecting", evd)
 		srv.peerSlots <- slot
 		return
 	}
@@ -375,7 +394,17 @@ func (srv *Server) addPeer(conn net.Conn, desc *peerAddr, slot int) *Peer {
 	peer.slot = slot
 	srv.peers[slot] = peer
 	srv.peerCount++
-	go func() { peer.loop(); srv.peerDisconnect <- peer }()
+	go func() {
+		evd := map[string]interface{}{
+			"guid":            ethutil.Bytes2Hex(srv.Identity.Pubkey()),
+			"num_connections": srv.PeerCount(),
+			"remote_id":       desc.String(),
+			"level":           "debug",
+		}
+		jsonlogger.LogJson("p2p.connected", evd)
+		peer.loop()
+		srv.peerDisconnect <- peer
+	}()
 	return peer
 }
 
@@ -393,13 +422,36 @@ func (srv *Server) removePeer(peer *Peer) {
 	srv.peers[peer.slot] = nil
 	// release slot to signal need for a new peer, last!
 	srv.peerSlots <- peer.slot
+	evd := map[string]interface{}{
+		"guid":            ethutil.Bytes2Hex(srv.Identity.Pubkey()),
+		"num_connections": srv.PeerCount(),
+		"remote_id":       ethutil.Bytes2Hex(peer.Identity().Pubkey()),
+		"level":           "debug",
+	}
+	jsonlogger.LogJson("p2p.disconnected", evd)
 }
 
 func (srv *Server) verifyPeer(addr *peerAddr) error {
 	if srv.Blacklist.Exists(addr.Pubkey) {
+		evd := map[string]interface{}{
+			"reason":          "blacklisted",
+			"remote_id":       addr.String(),
+			"level":           "debug",
+			"guid":            ethutil.Bytes2Hex(srv.Identity.Pubkey()),
+			"num_connections": srv.PeerCount(),
+		}
+		jsonlogger.LogJson("p2p.disconnecting.reputation", evd)
 		return errors.New("blacklisted")
 	}
 	if bytes.Equal(srv.Identity.Pubkey()[1:], addr.Pubkey) {
+		evd := map[string]interface{}{
+			"reason":          "not allowed to connect to srv",
+			"remote_id":       addr.String(),
+			"level":           "debug",
+			"guid":            ethutil.Bytes2Hex(srv.Identity.Pubkey()),
+			"num_connections": srv.PeerCount(),
+		}
+		jsonlogger.LogJson("p2p.disconnecting", evd)
 		return newPeerError(errPubkeyForbidden, "not allowed to connect to srv")
 	}
 	srv.lock.RLock()
@@ -408,6 +460,14 @@ func (srv *Server) verifyPeer(addr *peerAddr) error {
 		if peer != nil {
 			id := peer.Identity()
 			if id != nil && bytes.Equal(id.Pubkey(), addr.Pubkey) {
+				evd := map[string]interface{}{
+					"reason":          "already connected",
+					"remote_id":       addr.String(),
+					"level":           "debug",
+					"guid":            ethutil.Bytes2Hex(srv.Identity.Pubkey()),
+					"num_connections": srv.PeerCount(),
+				}
+				jsonlogger.LogJson("p2p.disconnecting", evd)
 				return errors.New("already connected")
 			}
 		}
