@@ -130,7 +130,6 @@ func llvm2bytes(data *byte, length uint64) []byte {
 	return (*[1 << 30]byte)(unsafe.Pointer(data))[:length:length]
 }
 
-//
 func untested(condition bool, message string) {
 	if condition {
 		panic("Condition `" + message + "` tested. Remove assert.")
@@ -175,6 +174,14 @@ func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *bi
 		if result.returnCode == 1 { // RETURN
 			ret = C.GoBytes(result.returnData, C.int(result.returnDataSize))
 			C.free(result.returnData)
+		} else if result.returnCode == 2 { // SUICIDE
+			state := self.Env().State()
+			receiverAddr := llvm2hash(bswap(&self.data.elems[address]))
+			receiverAddr = trim(receiverAddr) // TODO: trim all zeros or subslice 160bits?
+			receiver := state.GetOrNewStateObject(receiverAddr)
+			balance := state.GetBalance(me.Address())
+			receiver.AddAmount(balance)
+			state.Delete(me.Address())
 		}
 	}
 
@@ -255,6 +262,14 @@ func env_blockhash(_vm unsafe.Pointer, _number unsafe.Pointer, _result unsafe.Po
 //export env_call
 func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Pointer, _value unsafe.Pointer, inDataPtr unsafe.Pointer, inDataLen uint64, outDataPtr *byte, outDataLen uint64, _codeAddr unsafe.Pointer) bool {
 	vm := (*JitVm)(_vm)
+
+	//fmt.Printf("env_call (depth %d)\n", vm.Env().Depth())
+
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("Recovered in env_call (depth %d, out %p %d): %s\n", vm.Env().Depth(), outDataPtr, outDataLen, r)
+		}
+	}()
 
 	balance := vm.Env().State().GetBalance(vm.me.Address())
 	value := llvm2big((*i256)(_value))
