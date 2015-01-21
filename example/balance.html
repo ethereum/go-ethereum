@@ -8,7 +8,7 @@
 <script type="text/javascript">
    
     var web3 = require('web3');
-    web3.setProvider(new web3.providers.AutoProvider());
+    web3.setProvider(new web3.providers.HttpSyncProvider('http://localhost:8080'));
 
     function watchBalance() {
         var coinbase = web3.eth.coinbase;

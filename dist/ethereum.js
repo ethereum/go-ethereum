@@ -406,7 +406,7 @@ module.exports = {
 };
 
 
-},{"./web3":8}],2:[function(require,module,exports){
+},{"./web3":9}],2:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -522,7 +522,7 @@ Object.defineProperty(AutoProvider.prototype, 'onmessage', {
 
 module.exports = AutoProvider;
 
-},{"./web3":8}],3:[function(require,module,exports){
+},{"./web3":9}],3:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -625,7 +625,7 @@ var contract = function (address, desc) {
 module.exports = contract;
 
 
-},{"./abi":1,"./web3":8}],4:[function(require,module,exports){
+},{"./abi":1,"./web3":9}],4:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -713,7 +713,7 @@ Filter.prototype.logs = function () {
 
 module.exports = Filter;
 
-},{"./web3":8}],5:[function(require,module,exports){
+},{"./web3":9}],5:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -858,6 +858,74 @@ module.exports = HttpRpcProvider;
     You should have received a copy of the GNU Lesser General Public License
     along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
 */
+/** @file httpsync.js
+ * @authors:
+ *   Marek Kotewicz <marek@ethdev.com>
+ *   Marian Oancea <marian@ethdev.com>
+ * @date 2014
+ */
+
+var HttpSyncProvider = function (host) {
+    this.handlers = [];
+    this.host = host;
+};
+
+/// Transforms inner message to proper jsonrpc object
+/// @param inner message object
+/// @returns jsonrpc object
+function formatJsonRpcObject(object) {
+    return {
+        jsonrpc: '2.0',
+        method: object.call,
+        params: object.args,
+        id: object._id
+    };
+}
+
+/// Transforms jsonrpc object to inner message
+/// @param incoming jsonrpc message 
+/// @returns inner message object
+function formatJsonRpcMessage(message) {
+    var object = JSON.parse(message);
+
+    return {
+        _id: object.id,
+        data: object.result,
+        error: object.error
+    };
+}
+
+HttpSyncProvider.prototype.send = function (payload) {
+    var data = formatJsonRpcObject(payload);
+    
+    var request = new XMLHttpRequest();
+    request.open('POST', this.host, false);
+    request.send(JSON.stringify(data));
+    
+    // check request.status
+    return request.responseText;
+};
+
+module.exports = HttpSyncProvider;
+
+
+},{}],7:[function(require,module,exports){
+/*
+    This file is part of ethereum.js.
+
+    ethereum.js is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    ethereum.js is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+*/
 /** @file providermanager.js
  * @authors:
  *   Jeffrey Wilcke <jeff@ethdev.com>
@@ -900,21 +968,17 @@ var ProviderManager = function() {
 };
 
 /// sends outgoing requests, if provider is not available, enqueue the request
-ProviderManager.prototype.send = function(data, cb) {
+ProviderManager.prototype.send = function(data) {
     data._id = this.id;
-    if (cb) {
-        web3._callbacks[data._id] = cb;
-    }
 
     data.args = data.args || [];
     this.id++;
 
-    if(this.provider !== undefined) {
-        this.provider.send(data);
-    } else {
-        console.warn("provider is not set");
-        this.queued.push(data);
+    if (this.provider === undefined) {
+        console.error("provider is not set");
     }
+
+    return this.provider.send(data);
 };
 
 /// setups provider, which will be used for sending messages
@@ -962,7 +1026,7 @@ ProviderManager.prototype.stopPolling = function (pollId) {
 module.exports = ProviderManager;
 
 
-},{"./web3":8}],7:[function(require,module,exports){
+},{"./web3":9}],8:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1021,7 +1085,7 @@ Object.defineProperty(QtProvider.prototype, "onmessage", {
 
 module.exports = QtProvider;
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1193,22 +1257,32 @@ var shhWatchMethods = function () {
 var setupMethods = function (obj, methods) {
     methods.forEach(function (method) {
         obj[method.name] = function () {
-            return flattenPromise(Array.prototype.slice.call(arguments)).then(function (args) {
-                var call = typeof method.call === "function" ? method.call(args) : method.call;
-                return {call: call, args: args};
-            }).then(function (request) {
-                return new Promise(function (resolve, reject) {
-                    web3.provider.send(request, function (err, result) {
-                        if (!err) {
-                            resolve(result);
-                            return;
-                        }
-                        reject(err);
-                    });
-                });
-            }).catch(function(err) {
-                console.error(err);
+            var args = Array.prototype.slice.call(arguments);
+            var call = typeof method.call === 'function' ? method.call(args) : method.call;
+            var result = web3.provider.send({
+                call: call,
+                args: args
             });
+            
+            result = JSON.parse(result);
+            return result.result;
+
+            //return flattenPromise(Array.prototype.slice.call(arguments)).then(function (args) {
+                //var call = typeof method.call === "function" ? method.call(args) : method.call;
+                //return {call: call, args: args};
+            //}).then(function (request) {
+                //return new Promise(function (resolve, reject) {
+                    //web3.provider.send(request, function (err, result) {
+                        //if (!err) {
+                            //resolve(result);
+                            //return;
+                        //}
+                        //reject(err);
+                    //});
+                //});
+            //}).catch(function(err) {
+                //console.error(err);
+            //});
         };
     });
 };
@@ -1219,31 +1293,47 @@ var setupProperties = function (obj, properties) {
     properties.forEach(function (property) {
         var proto = {};
         proto.get = function () {
-            return new Promise(function(resolve, reject) {
-                web3.provider.send({call: property.getter}, function(err, result) {
-                    if (!err) {
-                        resolve(result);
-                        return;
-                    }
-                    reject(err);
-                });
+            var result = web3.provider.send({
+                call: property.getter
             });
+
+            result = JSON.parse(result);
+            return result.result;
+
+           
+            //return new Promise(function(resolve, reject) {
+                //web3.provider.send({call: property.getter}, function(err, result) {
+                    //if (!err) {
+                        //resolve(result);
+                        //return;
+                    //}
+                    //reject(err);
+                //});
+            //});
         };
         if (property.setter) {
             proto.set = function (val) {
-                return flattenPromise([val]).then(function (args) {
-                    return new Promise(function (resolve) {
-                        web3.provider.send({call: property.setter, args: args}, function (err, result) {
-                            if (!err) {
-                                resolve(result);
-                                return;
-                            }
-                            reject(err);
-                        });
-                    });
-                }).catch(function (err) {
-                    console.error(err);
+                var result = web3.provider.send({
+                    call: property.setter,
+                    args: [val]
                 });
+
+                result = JSON.parse(result);
+                return result.result;
+
+                //return flattenPromise([val]).then(function (args) {
+                    //return new Promise(function (resolve) {
+                        //web3.provider.send({call: property.setter, args: args}, function (err, result) {
+                            //if (!err) {
+                                //resolve(result);
+                                //return;
+                            //}
+                            //reject(err);
+                        //});
+                    //});
+                //}).catch(function (err) {
+                    //console.error(err);
+                //});
             };
         }
         Object.defineProperty(obj, property.name, proto);
@@ -1433,7 +1523,7 @@ function messageHandler(data) {
 module.exports = web3;
 
 
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1541,13 +1631,15 @@ web3.filter = require('./lib/filter');
 web3.providers.WebSocketProvider = require('./lib/websocket');
 web3.providers.HttpRpcProvider = require('./lib/httprpc');
 web3.providers.QtProvider = require('./lib/qt');
+web3.providers.HttpSyncProvider = require('./lib/httpsync');
 web3.providers.AutoProvider = require('./lib/autoprovider');
 web3.eth.contract = require('./lib/contract');
 web3.abi = require('./lib/abi');
 
+
 module.exports = web3;
 
-},{"./lib/abi":1,"./lib/autoprovider":2,"./lib/contract":3,"./lib/filter":4,"./lib/httprpc":5,"./lib/providermanager":6,"./lib/qt":7,"./lib/web3":8,"./lib/websocket":9}]},{},["web3"])
+},{"./lib/abi":1,"./lib/autoprovider":2,"./lib/contract":3,"./lib/filter":4,"./lib/httprpc":5,"./lib/httpsync":6,"./lib/providermanager":7,"./lib/qt":8,"./lib/web3":9,"./lib/websocket":10}]},{},["web3"])
 
 
 //# sourceMappingURL=ethereum.js.map
