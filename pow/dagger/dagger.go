@@ -6,9 +6,9 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/obscuren/sha3"
 )
 
 var powlogger = logger.NewLogger("POW")
