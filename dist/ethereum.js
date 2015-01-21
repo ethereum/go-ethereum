@@ -406,123 +406,7 @@ module.exports = {
 };
 
 
-},{"./web3":9}],2:[function(require,module,exports){
-/*
-    This file is part of ethereum.js.
-
-    ethereum.js is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Lesser General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    ethereum.js is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU Lesser General Public License for more details.
-
-    You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
-*/
-/** @file autoprovider.js
- * @authors:
- *   Marek Kotewicz <marek@ethdev.com>
- *   Marian Oancea <marian@ethdev.com>
- * @date 2014
- */
-
-/*
- * @brief if qt object is available, uses QtProvider,
- * if not tries to connect over websockets
- * if it fails, it uses HttpRpcProvider
- */
-
-var web3 = require('./web3'); // jshint ignore:line
-if ("build" !== 'build') {/*
-    var WebSocket = require('ws'); // jshint ignore:line
-*/}
-
-/**
- * AutoProvider object prototype is implementing 'provider protocol'
- * Automatically tries to setup correct provider(Qt, WebSockets or HttpRpc)
- * First it checkes if we are ethereum browser (if navigator.qt object is available)
- * if yes, we are using QtProvider
- * if no, we check if it is possible to establish websockets connection with ethereum (ws://localhost:40404/eth is default)
- * if it's not possible, we are using httprpc provider (http://localhost:8080)
- * The constructor allows you to specify uris on which we are trying to connect over http or websockets
- * You can do that by passing objects with fields httrpc and websockets
- */
-var AutoProvider = function (userOptions) {
-    if (web3.haveProvider()) {
-        return;
-    }
-
-    // before we determine what provider we are, we have to cache request
-    this.sendQueue = [];
-    this.onmessageQueue = [];
-
-    if (navigator.qt) {
-        this.provider = new web3.providers.QtProvider();
-        return;
-    }
-
-    userOptions = userOptions || {};
-    var options = {
-        httprpc: userOptions.httprpc || 'http://localhost:8080',
-        websockets: userOptions.websockets || 'ws://localhost:40404/eth'
-    };
-
-    var self = this;
-    var closeWithSuccess = function (success) {
-        ws.close();
-        if (success) {
-            self.provider = new web3.providers.WebSocketProvider(options.websockets);
-        } else {
-            self.provider = new web3.providers.HttpRpcProvider(options.httprpc);
-            self.poll = self.provider.poll.bind(self.provider);
-        }
-        self.sendQueue.forEach(function (payload) {
-            self.provider.send(payload);
-        });
-        self.onmessageQueue.forEach(function (handler) {
-            self.provider.onmessage = handler;
-        });
-    };
-
-    var ws = new WebSocket(options.websockets);
-
-    ws.onopen = function() {
-        closeWithSuccess(true);
-    };
-
-    ws.onerror = function() {
-        closeWithSuccess(false);
-    };
-};
-
-/// Sends message forward to the provider, that is being used
-/// if provider is not yet set, enqueues the message
-AutoProvider.prototype.send = function (payload) {
-    if (this.provider) {
-        this.provider.send(payload);
-        return;
-    }
-    this.sendQueue.push(payload);
-};
-
-/// On incoming message sends the message to the provider that is currently being used
-Object.defineProperty(AutoProvider.prototype, 'onmessage', {
-    set: function (handler) {
-        if (this.provider) {
-            this.provider.onmessage = handler;
-            return;
-        }
-        this.onmessageQueue.push(handler);
-    }
-});
-
-module.exports = AutoProvider;
-
-},{"./web3":9}],3:[function(require,module,exports){
+},{"./web3":6}],2:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -625,7 +509,7 @@ var contract = function (address, desc) {
 module.exports = contract;
 
 
-},{"./abi":1,"./web3":9}],4:[function(require,module,exports){
+},{"./abi":1,"./web3":6}],3:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -713,135 +597,7 @@ Filter.prototype.logs = function () {
 
 module.exports = Filter;
 
-},{"./web3":9}],5:[function(require,module,exports){
-/*
-    This file is part of ethereum.js.
-
-    ethereum.js is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Lesser General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    ethereum.js is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU Lesser General Public License for more details.
-
-    You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
-*/
-/** @file httprpc.js
- * @authors:
- *   Marek Kotewicz <marek@ethdev.com>
- *   Marian Oancea <marian@ethdev.com>
- * @date 2014
- */
-
-// TODO: is these line is supposed to be here? 
-if ("build" !== 'build') {/*
-    var XMLHttpRequest = require('xmlhttprequest').XMLHttpRequest; // jshint ignore:line
-*/}
-
-/**
- * HttpRpcProvider object prototype is implementing 'provider protocol'
- * Should be used when we want to connect to ethereum backend over http && jsonrpc
- * It's compatible with cpp client
- * The contructor allows to specify host uri
- * This provider is using in-browser polling mechanism
- */
-var HttpRpcProvider = function (host) {
-    this.handlers = [];
-    this.host = host;
-};
-
-/// Transforms inner message to proper jsonrpc object
-/// @param inner message object
-/// @returns jsonrpc object
-function formatJsonRpcObject(object) {
-    return {
-        jsonrpc: '2.0',
-        method: object.call,
-        params: object.args,
-        id: object._id
-    };
-}
-
-/// Transforms jsonrpc object to inner message
-/// @param incoming jsonrpc message 
-/// @returns inner message object
-function formatJsonRpcMessage(message) {
-    var object = JSON.parse(message);
-
-    return {
-        _id: object.id,
-        data: object.result,
-        error: object.error
-    };
-}
-
-/// Prototype object method 
-/// Asynchronously sends request to server
-/// @param payload is inner message object
-/// @param cb is callback which is being called when response is comes back
-HttpRpcProvider.prototype.sendRequest = function (payload, cb) {
-    var data = formatJsonRpcObject(payload);
-
-    var request = new XMLHttpRequest();
-    request.open("POST", this.host, true);
-    request.send(JSON.stringify(data));
-    request.onreadystatechange = function () {
-        if (request.readyState === 4 && cb) {
-            cb(request);
-        }
-    };
-};
-
-/// Prototype object method
-/// Should be called when we want to send single api request to server
-/// Asynchronous
-/// On response it passes message to handlers
-/// @param payload is inner message object
-HttpRpcProvider.prototype.send = function (payload) {
-    var self = this;
-    this.sendRequest(payload, function (request) {
-        self.handlers.forEach(function (handler) {
-            handler.call(self, formatJsonRpcMessage(request.responseText));
-        });
-    });
-};
-
-/// Prototype object method
-/// Should be called only for polling requests
-/// Asynchronous
-/// On response it passege message to handlers, but only if message's result is true or not empty array
-/// Otherwise response is being silently ignored
-/// @param payload is inner message object
-/// @id is id of poll that we are calling
-HttpRpcProvider.prototype.poll = function (payload, id) {
-    var self = this;
-    this.sendRequest(payload, function (request) {
-        var parsed = JSON.parse(request.responseText);
-        if (parsed.error || (parsed.result instanceof Array ? parsed.result.length === 0 : !parsed.result)) {
-            return;
-        }
-        self.handlers.forEach(function (handler) {
-            handler.call(self, {_event: payload.call, _id: id, data: parsed.result});
-        });
-    });
-};
-
-/// Prototype object property
-/// Should be used to set message handlers for this provider
-Object.defineProperty(HttpRpcProvider.prototype, "onmessage", {
-    set: function (handler) {
-        this.handlers.push(handler);
-    }
-});
-
-module.exports = HttpRpcProvider;
-
-
-},{}],6:[function(require,module,exports){
+},{"./web3":6}],4:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -909,7 +665,7 @@ HttpSyncProvider.prototype.send = function (payload) {
 module.exports = HttpSyncProvider;
 
 
-},{}],7:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1026,66 +782,7 @@ ProviderManager.prototype.stopPolling = function (pollId) {
 module.exports = ProviderManager;
 
 
-},{"./web3":9}],8:[function(require,module,exports){
-/*
-    This file is part of ethereum.js.
-
-    ethereum.js is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Lesser General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    ethereum.js is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU Lesser General Public License for more details.
-
-    You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
-*/
-/** @file qt.js
- * @authors:
- *   Jeffrey Wilcke <jeff@ethdev.com>
- *   Marek Kotewicz <marek@ethdev.com>
- * @date 2014
- */
-
-/**
- * QtProvider object prototype is implementing 'provider protocol'
- * Should be used inside ethereum browser. It's compatible with cpp and go clients.
- * It uses navigator.qt object to pass the messages to native bindings
- */
-var QtProvider = function() {
-    this.handlers = [];
-
-    var self = this;
-    navigator.qt.onmessage = function (message) {
-        self.handlers.forEach(function (handler) {
-            handler.call(self, JSON.parse(message.data));
-        });
-    };
-};
-
-/// Prototype object method
-/// Should be called when we want to send single api request to native bindings
-/// Asynchronous
-/// Response will be received by navigator.qt.onmessage method and passed to handlers
-/// @param payload is inner message object
-QtProvider.prototype.send = function(payload) {
-    navigator.qt.postMessage(JSON.stringify(payload));
-};
-
-/// Prototype object property
-/// Should be used to set message handlers for this provider
-Object.defineProperty(QtProvider.prototype, "onmessage", {
-    set: function(handler) {
-        this.handlers.push(handler);
-    }
-});
-
-module.exports = QtProvider;
-
-},{}],9:[function(require,module,exports){
+},{"./web3":6}],6:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1523,123 +1220,19 @@ function messageHandler(data) {
 module.exports = web3;
 
 
-},{}],10:[function(require,module,exports){
-/*
-    This file is part of ethereum.js.
-
-    ethereum.js is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Lesser General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    ethereum.js is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU Lesser General Public License for more details.
-
-    You should have received a copy of the GNU Lesser General Public License
-    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
-*/
-/** @file websocket.js
- * @authors:
- *   Jeffrey Wilcke <jeff@ethdev.com>
- *   Marek Kotewicz <marek@ethdev.com>
- *   Marian Oancea <marian@ethdev.com>
- * @date 2014
- */
-
-// TODO: is these line is supposed to be here? 
-if ("build" !== 'build') {/*
-    var WebSocket = require('ws'); // jshint ignore:line
-*/}
-
-/**
- * WebSocketProvider object prototype is implementing 'provider protocol'
- * Should be used when we want to connect to ethereum backend over websockets
- * It's compatible with go client
- * The constructor allows to specify host uri
- */
-var WebSocketProvider = function(host) {
-
-    // onmessage handlers
-    this.handlers = [];
-
-    // queue will be filled with messages if send is invoked before the ws is ready
-    this.queued = [];
-    this.ready = false;
-
-    this.ws = new WebSocket(host);
-
-    var self = this;
-    this.ws.onmessage = function(event) {
-        for(var i = 0; i < self.handlers.length; i++) {
-            self.handlers[i].call(self, JSON.parse(event.data), event);
-        }
-    };
-
-    this.ws.onopen = function() {
-        self.ready = true;
-
-        for (var i = 0; i < self.queued.length; i++) {
-            // Resend
-            self.send(self.queued[i]);
-        }
-    };
-};
-
-/// Prototype object method
-/// Should be called when we want to send single api request to server
-/// Asynchronous, it's using websockets
-/// Response for the call will be received by ws.onmessage
-/// @param payload is inner message object
-WebSocketProvider.prototype.send = function(payload) {
-    if (this.ready) {
-        var data = JSON.stringify(payload);
-
-        this.ws.send(data);
-    } else {
-        this.queued.push(payload);
-    }
-};
-
-/// Prototype object method
-/// Should be called to add handlers
-WebSocketProvider.prototype.onMessage = function(handler) {
-    this.handlers.push(handler);
-};
-
-/// Prototype object method
-/// Should be called to close websockets connection
-WebSocketProvider.prototype.unload = function() {
-    this.ws.close();
-};
-
-/// Prototype object property
-/// Should be used to set message handlers for this provider
-Object.defineProperty(WebSocketProvider.prototype, "onmessage", {
-    set: function(provider) { this.onMessage(provider); }
-});
-
-if (typeof(module) !== "undefined")
-    module.exports = WebSocketProvider;
-
 },{}],"web3":[function(require,module,exports){
 var web3 = require('./lib/web3');
 var ProviderManager = require('./lib/providermanager');
 web3.provider = new ProviderManager();
 web3.filter = require('./lib/filter');
-web3.providers.WebSocketProvider = require('./lib/websocket');
-web3.providers.HttpRpcProvider = require('./lib/httprpc');
-web3.providers.QtProvider = require('./lib/qt');
 web3.providers.HttpSyncProvider = require('./lib/httpsync');
-web3.providers.AutoProvider = require('./lib/autoprovider');
 web3.eth.contract = require('./lib/contract');
 web3.abi = require('./lib/abi');
 
 
 module.exports = web3;
 
-},{"./lib/abi":1,"./lib/autoprovider":2,"./lib/contract":3,"./lib/filter":4,"./lib/httprpc":5,"./lib/httpsync":6,"./lib/providermanager":7,"./lib/qt":8,"./lib/web3":9,"./lib/websocket":10}]},{},["web3"])
+},{"./lib/abi":1,"./lib/contract":2,"./lib/filter":3,"./lib/httpsync":4,"./lib/providermanager":5,"./lib/web3":6}]},{},["web3"])
 
 
 //# sourceMappingURL=ethereum.js.map
