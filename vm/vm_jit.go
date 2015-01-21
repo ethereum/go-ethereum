@@ -207,6 +207,13 @@ func env_sstore(vmPtr unsafe.Pointer, indexPtr unsafe.Pointer, valuePtr unsafe.P
 	index := llvm2hash(bswap((*i256)(indexPtr)))
 	value := llvm2hash(bswap((*i256)(valuePtr)))
 	value = trim(value)
+	if len(value) == 0 {
+		prevValue := vm.env.State().GetState(vm.me.Address(), index)
+		if len(prevValue) != 0 {
+			vm.Env().State().Refund(vm.callerAddr, GasSStoreRefund)
+		}
+	}
+
 	vm.env.State().SetState(vm.me.Address(), index, value)
 }
 
