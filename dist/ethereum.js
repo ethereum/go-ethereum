@@ -604,6 +604,8 @@ var contract = function (address, desc) {
                     extra.to = address;
                     return abi.methodSignature(desc, method.name).then(function (signature) {
                         extra.data = signature.slice(0, 2 + ETH_METHOD_SIGNATURE_LENGTH * 2) + parsed;
+                        web3._currentContractAbi = desc;
+                        web3._currentContractAddress = address;
                         return web3.eth.transact(extra).then(onSuccess);
                     });
                 }
@@ -1541,10 +1543,11 @@ web3.providers.HttpRpcProvider = require('./lib/httprpc');
 web3.providers.QtProvider = require('./lib/qt');
 web3.providers.AutoProvider = require('./lib/autoprovider');
 web3.eth.contract = require('./lib/contract');
+web3.abi = require('./lib/abi');
 
 module.exports = web3;
 
-},{"./lib/autoprovider":2,"./lib/contract":3,"./lib/filter":4,"./lib/httprpc":5,"./lib/providermanager":6,"./lib/qt":7,"./lib/web3":8,"./lib/websocket":9}]},{},["web3"])
+},{"./lib/abi":1,"./lib/autoprovider":2,"./lib/contract":3,"./lib/filter":4,"./lib/httprpc":5,"./lib/providermanager":6,"./lib/qt":7,"./lib/web3":8,"./lib/websocket":9}]},{},["web3"])
 
 
 //# sourceMappingURL=ethereum.js.map
