@@ -30,7 +30,7 @@ type message struct {
 	msg   string
 }
 
-type LogLevel uint8
+type LogLevel uint32
 
 const (
 	// Standard log levels
@@ -40,6 +40,7 @@ const (
 	InfoLevel
 	DebugLevel
 	DebugDetailLevel
+	JsonLevel = 1000
 )
 
 // A Logger prints messages prefixed by a given tag. It provides named
