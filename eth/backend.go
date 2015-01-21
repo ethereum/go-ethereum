@@ -229,7 +229,7 @@ func (s *Ethereum) Start(seed bool) error {
 		"coinbase":       ethutil.Bytes2Hex(s.KeyManager().Address()),
 		"eth_version":    ProtocolVersion,
 	}
-	jsonlogger.Log("starting", evd)
+	jsonlogger.LogJson("starting", evd)
 	err := s.net.Start()
 	if err != nil {
 		return err

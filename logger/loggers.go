@@ -121,7 +121,7 @@ func NewJsonLogger() *JsonLogger {
 	return &JsonLogger{}
 }
 
-func (logger *JsonLogger) Log(msgname string, dict map[string]interface{}) {
+func (logger *JsonLogger) LogJson(msgname string, dict map[string]interface{}) {
 	if _, ok := dict["ts"]; !ok {
 		dict["ts"] = time.Now().Local().Format(time.RFC3339Nano)
 	}
