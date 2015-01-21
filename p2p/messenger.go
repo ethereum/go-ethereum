@@ -12,6 +12,16 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+const (
+	// maximum amount of time allowed for reading a message
+	msgReadTimeout = 5 * time.Second
+	// maximum amount of time allowed for writing a message
+	msgWriteTimeout = 5 * time.Second
+	// messages smaller than this many bytes will be read at
+	// once before passing them to a protocol.
+	wholePayloadSize = 64 * 1024
+)
+
 var magicToken = []byte{34, 64, 8, 145}
 
 /*
@@ -35,6 +45,16 @@ func (p *Peer) readLoop(msgc chan<- Msg, errc chan<- error, unblock <-chan bool)
 		}
 	}
 	close(errc)
+}
+
+func (p *Peer) writeLoop(msgc <-chan Msg, errc chan<- error) {
+	p.conn.SetWriteDeadline(time.Now().Add(msgWriteTimeout))
+	for msg := range msgc {
+		if err := writeMsg(p.bufconn, msg); err != nil {
+			errc <- newPeerError(errWrite, "%v", err)
+		}
+		p.bufconn.Flush()
+	}
 }
 
 func writeMsg(w io.Writer, msg Msg) error {
@@ -151,9 +171,8 @@ func (p *Peer) writeMsg(msg Msg, timeout time.Duration) error {
 // no need to go through peer for writing , so do not need to embed peer as field
 type proto struct {
 	name            string
-	in              chan Msg
+	in, out         chan Msg
 	maxcode, offset uint64
-	peer            *Peer
 }
 
 func (rw *proto) WriteMsg(msg Msg) error {
@@ -161,7 +180,12 @@ func (rw *proto) WriteMsg(msg Msg) error {
 		return newPeerError(errInvalidMsgCode, "not handled")
 	}
 	msg.Code += rw.offset
-	return rw.peer.writeMsg(msg, msgWriteTimeout)
+	select {
+	case rw.out <- msg:
+		return nil
+	case <-time.After(msgWriteTimeout):
+		return newPeerError(errWrite, "messenger timeout")
+	}
 }
 
 func (rw *proto) EncodeMsg(code uint64, data ...interface{}) error {

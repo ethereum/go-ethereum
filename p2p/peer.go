@@ -64,9 +64,10 @@ type Peer struct {
 
 	// The mutex protects the connection
 	// so only one protocol can write at a time.
-	writeMu sync.Mutex
-	conn    net.Conn
-	bufconn *bufio.ReadWriter
+	writeMu      sync.Mutex
+	conn         net.Conn
+	bufconn      *bufio.ReadWriter
+	outgoingMsgC chan Msg
 
 	// These fields maintain the running protocols.
 	protocols       []Protocol
@@ -122,16 +123,17 @@ func newServerPeer(server *Server, conn net.Conn, dialAddr *peerAddr) *Peer {
 
 func newPeer(conn net.Conn, protocols []Protocol, dialAddr *peerAddr) *Peer {
 	p := &Peer{
-		Logger:      logger.NewLogger("P2P " + conn.RemoteAddr().String()),
-		conn:        conn,
-		dialAddr:    dialAddr,
-		bufconn:     bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn)),
-		protocols:   protocols,
-		running:     make(map[string]*proto),
-		disc:        make(chan DiscReason),
-		protoErr:    make(chan error),
-		closed:      make(chan struct{}),
-		cryptoReady: make(chan struct{}),
+		Logger:       logger.NewLogger("P2P " + conn.RemoteAddr().String()),
+		conn:         conn,
+		dialAddr:     dialAddr,
+		bufconn:      bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn)),
+		protocols:    protocols,
+		running:      make(map[string]*proto),
+		disc:         make(chan DiscReason),
+		protoErr:     make(chan error),
+		closed:       make(chan struct{}),
+		cryptoReady:  make(chan struct{}),
+		outgoingMsgC: make(chan Msg),
 	}
 	return p
 }
@@ -204,16 +206,6 @@ func (p *Peer) String() string {
 	return fmt.Sprintf("Peer(%p %v %s)", p, p.conn.RemoteAddr(), kind)
 }
 
-const (
-	// maximum amount of time allowed for reading a message
-	msgReadTimeout = 5 * time.Second
-	// maximum amount of time allowed for writing a message
-	msgWriteTimeout = 5 * time.Second
-	// messages smaller than this many bytes will be read at
-	// once before passing them to a protocol.
-	wholePayloadSize = 64 * 1024
-)
-
 var (
 	inactivityTimeout     = 2 * time.Second
 	disconnectGracePeriod = 2 * time.Second
@@ -237,10 +229,11 @@ func (p *Peer) loop() (reason DiscReason, err error) {
 
 	// read loop
 	readMsg := make(chan Msg)
-	readErr := make(chan error)
+	rwErr := make(chan error)
 	readNext := make(chan bool, 1)
 	protoDone := make(chan struct{}, 1)
-	go readLoop(readMsg, readErr, readNext)
+	go readLoop(readMsg, rwErr, readNext)
+	go p.writeLoop(p.outgoingMsgC, rwErr)
 	readNext <- true
 
 	close(p.cryptoReady)
@@ -269,8 +262,8 @@ loop:
 			// we can continue reading from the socket.
 			readNext <- true
 
-		case err := <-readErr:
-			// read failed. there is no need to run the
+		case err := <-rwErr:
+			// read or write failed. there is no need to run the
 			// polite disconnect sequence because the connection
 			// is probably dead anyway.
 			// TODO: handle write errors as well
@@ -284,8 +277,9 @@ loop:
 	}
 
 	// wait for read loop to return.
+	close(p.outgoingMsgC)
 	close(readNext)
-	<-readErr
+	<-rwErr
 	// tell the remote end to disconnect
 	done := make(chan struct{})
 	go func() {
@@ -391,9 +385,9 @@ outer:
 func (p *Peer) startProto(offset uint64, impl Protocol) *proto {
 	rw := &proto{
 		in:      make(chan Msg),
+		out:     p.outgoingMsgC,
 		offset:  offset,
 		maxcode: impl.Length,
-		peer:    p,
 	}
 	p.protoWG.Add(1)
 	go func() {
