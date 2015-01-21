@@ -103,6 +103,9 @@ func (self *cryptoId) Run(conn io.ReadWriter, remotePubKeyS []byte, sessionToken
 		if auth, initNonce, randomPrivKey, _, err = self.startHandshake(remotePubKeyS, sessionToken); err != nil {
 			return
 		}
+		if sessionToken != nil {
+			clogger.Debugf("session-token: %v", hexkey(sessionToken))
+		}
 		clogger.Debugf("initiator-nonce: %v", hexkey(initNonce))
 		clogger.Debugf("initiator-random-private-key: %v", hexkey(crypto.FromECDSA(randomPrivKey)))
 		randomPublicKeyS, _ := ExportPublicKey(&randomPrivKey.PublicKey)

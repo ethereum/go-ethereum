@@ -3,6 +3,7 @@ package p2p
 import (
 	"bufio"
 	"bytes"
+	"crypto/rand"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -342,6 +343,10 @@ func (p *Peer) handleCryptoHandshake() (loop readLoop, err error) {
 	// it is survived by an encrypted readwriter
 	var initiator bool
 	var sessionToken []byte
+	sessionToken = make([]byte, keyLen)
+	if _, err = rand.Read(sessionToken); err != nil {
+		return
+	}
 	if p.dialAddr != nil { // this should have its own method Outgoing() bool
 		initiator = true
 	}
