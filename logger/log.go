@@ -18,7 +18,7 @@ func openLogFile(datadir string, filename string) *os.File {
 	return file
 }
 
-func New(datadir string, logFile string, logLevel int) LogSystem {
+func New(datadir string, logFile string, logLevel int, logFormat string) LogSystem {
 	var writer io.Writer
 	if logFile == "" {
 		writer = os.Stdout
@@ -26,7 +26,13 @@ func New(datadir string, logFile string, logLevel int) LogSystem {
 		writer = openLogFile(datadir, logFile)
 	}
 
-	sys := NewStdLogSystem(writer, log.LstdFlags, LogLevel(logLevel))
+	var sys LogSystem
+	switch logFormat {
+	case "raw":
+		sys = NewRawLogSystem(writer, 0, LogLevel(logLevel))
+	default:
+		sys = NewStdLogSystem(writer, log.LstdFlags, LogLevel(logLevel))
+	}
 	AddLogSystem(sys)
 
 	return sys

@@ -29,6 +29,7 @@ type Config struct {
 	DataDir    string
 	LogFile    string
 	LogLevel   int
+	LogFormat  string
 	KeyRing    string
 
 	MaxPeers   int
@@ -80,7 +81,7 @@ type Ethereum struct {
 
 func New(config *Config) (*Ethereum, error) {
 	// Boostrap database
-	logger := ethlogger.New(config.DataDir, config.LogFile, config.LogLevel)
+	logger := ethlogger.New(config.DataDir, config.LogFile, config.LogLevel, config.LogFormat)
 	db, err := ethdb.NewLDBDatabase("blockchain")
 	if err != nil {
 		return nil, err
