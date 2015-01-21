@@ -731,7 +731,8 @@ ProviderManager.prototype.send = function(data) {
     this.id++;
 
     if (this.provider === undefined) {
-        console.error("provider is not set");
+        console.error('provider is not set');
+        return JSON.stringify({result: 'error, provider is not set'});
     }
 
     return this.provider.send(data);
@@ -807,48 +808,6 @@ module.exports = ProviderManager;
  *   Gav Wood <g@ethdev.com>
  * @date 2014
  */
-
-/// Recursively resolves all promises in given object and replaces the resolved values with promises
-/// @param any object/array/promise/anything else..
-/// @returns (resolves) object with replaced promises with their result 
-function flattenPromise (obj) {
-    if (obj instanceof Promise) {
-        return Promise.resolve(obj);
-    }
-
-    if (obj instanceof Array) {
-        return new Promise(function (resolve) {
-            var promises = obj.map(function (o) {
-                return flattenPromise(o);
-            });
-
-            return Promise.all(promises).then(function (res) {
-                for (var i = 0; i < obj.length; i++) {
-                    obj[i] = res[i];
-                }
-                resolve(obj);
-            });
-        });
-    }
-
-    if (obj instanceof Object) {
-        return new Promise(function (resolve) {
-            var keys = Object.keys(obj);
-            var promises = keys.map(function (key) {
-                return flattenPromise(obj[key]);
-            });
-
-            return Promise.all(promises).then(function (res) {
-                for (var i = 0; i < keys.length; i++) {
-                    obj[keys[i]] = res[i];
-                }
-                resolve(obj);
-            });
-        });
-    }
-
-    return Promise.resolve(obj);
-}
 
 /// @returns an array of objects describing web3 api methods
 var web3Methods = function () {
@@ -964,22 +923,6 @@ var setupMethods = function (obj, methods) {
             result = JSON.parse(result);
             return result.result;
 
-            //return flattenPromise(Array.prototype.slice.call(arguments)).then(function (args) {
-                //var call = typeof method.call === "function" ? method.call(args) : method.call;
-                //return {call: call, args: args};
-            //}).then(function (request) {
-                //return new Promise(function (resolve, reject) {
-                    //web3.provider.send(request, function (err, result) {
-                        //if (!err) {
-                            //resolve(result);
-                            //return;
-                        //}
-                        //reject(err);
-                    //});
-                //});
-            //}).catch(function(err) {
-                //console.error(err);
-            //});
         };
     });
 };
@@ -997,16 +940,6 @@ var setupProperties = function (obj, properties) {
             result = JSON.parse(result);
             return result.result;
 
-           
-            //return new Promise(function(resolve, reject) {
-                //web3.provider.send({call: property.getter}, function(err, result) {
-                    //if (!err) {
-                        //resolve(result);
-                        //return;
-                    //}
-                    //reject(err);
-                //});
-            //});
         };
         if (property.setter) {
             proto.set = function (val) {
@@ -1018,19 +951,6 @@ var setupProperties = function (obj, properties) {
                 result = JSON.parse(result);
                 return result.result;
 
-                //return flattenPromise([val]).then(function (args) {
-                    //return new Promise(function (resolve) {
-                        //web3.provider.send({call: property.setter, args: args}, function (err, result) {
-                            //if (!err) {
-                                //resolve(result);
-                                //return;
-                            //}
-                            //reject(err);
-                        //});
-                    //});
-                //}).catch(function (err) {
-                    //console.error(err);
-                //});
             };
         }
         Object.defineProperty(obj, property.name, proto);
