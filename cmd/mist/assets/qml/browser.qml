@@ -9,9 +9,9 @@ import Ethereum 1.0
 
 Rectangle {
 	id: window
-    objectName: "browserView"
-    anchors.fill: parent
-    color: "#00000000"
+	objectName: "browserView"
+	anchors.fill: parent
+	color: "#00000000"
 
 	property var title: "Browser"
 	property var iconSource: "../browser.png"
@@ -139,311 +139,324 @@ Rectangle {
 			}
 		}
 
-        // Border
-        Rectangle {
-            id: divider
-            anchors {
-                left: parent.left
-                right: parent.right
-                top: navBar.bottom
-            }
-            z: -1
-            height: 1
-            color: "#CCCCCC"
-        }
+		// Border
+		Rectangle {
+			id: divider
+			anchors {
+				left: parent.left
+				right: parent.right
+				top: navBar.bottom
+			}
+			z: -1
+			height: 1
+			color: "#CCCCCC"
+		}
 
-		WebView {
-			objectName: "webView"
-			id: webview
+		ScrollView {
 			anchors {
 				left: parent.left
 				right: parent.right
 				bottom: parent.bottom
 				top: divider.bottom
 			}
-
-			function injectJs(js) {
-				webview.experimental.navigatorQtObjectEnabled = true;
-				webview.experimental.evaluateJavaScript(js)
-				webview.experimental.javascriptEnabled = true;
-			}
-
-			function sendMessage(data) {
-				webview.experimental.postMessage(JSON.stringify(data))
-			}
-
-
-			experimental.preferences.javascriptEnabled: true
-			experimental.preferences.webGLEnabled: true
-			experimental.itemSelector:  MouseArea {
-				// To avoid conflicting with ListView.model when inside Initiator context.
-				property QtObject selectorModel: model
+			WebView {
+				objectName: "webView"
+				id: webview
 				anchors.fill: parent
-				onClicked: selectorModel.reject()
 
-				Menu {
-					visible: true
-					id: itemSelector
+				function injectJs(js) {
+					webview.experimental.navigatorQtObjectEnabled = true;
+					webview.experimental.evaluateJavaScript(js)
+					webview.experimental.javascriptEnabled = true;
+				}
 
-					Instantiator {
-						model: selectorModel.items
-						delegate: MenuItem {
-							text: model.text
-							onTriggered: {
-								selectorModel.accept(index)
-							}
-						}
-						onObjectAdded: itemSelector.insertItem(index, object)
-						onObjectRemoved: itemSelector.removeItem(object)
-					}
+				function sendMessage(data) {
+					webview.experimental.postMessage(JSON.stringify(data))
 				}
 
 				Component.onCompleted: {
-					itemSelector.popup()
-				}
-			}
-			experimental.preferences.webAudioEnabled: true
-			experimental.preferences.navigatorQtObjectEnabled: true
-			experimental.preferences.developerExtrasEnabled: true
-			experimental.userScripts: ["../ext/q.js", "../ext/ethereum.js/lib/web3.js", "../ext/ethereum.js/lib/qt.js", "../ext/setup.js"]
-			experimental.onMessageReceived: {
-				console.log("[onMessageReceived]: ", message.data)
-				// TODO move to messaging.js
-				var data = JSON.parse(message.data)
-
-				try {
-					switch(data.call) {
-						case "eth_compile":
-						postData(data._id, eth.compile(data.args[0]))
-						break
-
-						case "eth_coinbase":
-						postData(data._id, eth.coinBase())
-
-						case "eth_account":
-						postData(data._id, eth.key().address);
-
-						case "eth_istening":
-						postData(data._id, eth.isListening())
-
-						break
-
-						case "eth_mining":
-						postData(data._id, eth.isMining())
-
-						break
-
-						case "eth_peerCount":
-						postData(data._id, eth.peerCount())
-
-						break
-
-						case "eth_countAt":
-						require(1)
-						postData(data._id, eth.txCountAt(data.args[0]))
-
-						break
-
-						case "eth_codeAt":
-						require(1)
-						var code = eth.codeAt(data.args[0])
-						postData(data._id, code);
-
-						break
-
-						case "eth_blockByNumber":
-						require(1)
-						var block = eth.blockByNumber(data.args[0])
-						postData(data._id, block)
-						break
-
-						case "eth_blockByHash":
-						require(1)
-						var block = eth.blockByHash(data.args[0])
-						postData(data._id, block)
-						break
-
-						require(2)
-						var block = eth.blockByHash(data.args[0])
-						postData(data._id, block.transactions[data.args[1]])
-						break
-
-						case "eth_transactionByHash":
-						case "eth_transactionByNumber":
-						require(2)
-
-						var block;
-						if (data.call === "transactionByHash")
-						block = eth.blockByHash(data.args[0])
-						else
-						block = eth.blockByNumber(data.args[0])
-
-						var tx = block.transactions.get(data.args[1])
-
-						postData(data._id, tx)
-						break
-
-						case "eth_uncleByHash":
-						case "eth_uncleByNumber":
-						require(2)
-
-						var block;
-						if (data.call === "uncleByHash")
-						block = eth.blockByHash(data.args[0])
-						else
-						block = eth.blockByNumber(data.args[0])
-
-						var uncle = block.uncles.get(data.args[1])
-
-						postData(data._id, uncle)
-
-						break
-
-						case "transact":
-						require(5)
-
-						var tx = eth.transact(data.args)
-						postData(data._id, tx)
-
-						break
-
-						case "eth_stateAt":
-						require(2);
-
-						var storage = eth.storageAt(data.args[0], data.args[1]);
-						postData(data._id, storage)
-
-						break
-
-						case "eth_call":
-						require(1);
-						var ret = eth.call(data.args)
-						postData(data._id, ret)
-						break
-
-						case "eth_balanceAt":
-						require(1);
-
-						postData(data._id, eth.balanceAt(data.args[0]));
-						break
-
-						case "eth_watch":
-						require(2)
-						eth.watch(data.args[0], data.args[1])
-
-						case "eth_disconnect":
-						require(1)
-						postData(data._id, null)
-						break;
-
-						case "eth_newFilterString":
-						require(1)
-						var id = eth.newFilterString(data.args[0])
-						postData(data._id, id);
-						break;
-
-						case "eth_newFilter":
-						require(1)
-						var id = eth.newFilter(data.args[0])
-
-						postData(data._id, id);
-						break;
-
-						case "eth_filterLogs":
-						require(1);
-
-						var messages = eth.messages(data.args[0]);
-						var m = JSON.parse(JSON.parse(JSON.stringify(messages)))
-						postData(data._id, m);
-
-						break;
-
-						case "eth_deleteFilter":
-						require(1);
-						eth.uninstallFilter(data.args[0])
-						break;
-
-
-						case "shh_newFilter":
-						require(1);
-						var id = shh.watch(data.args[0], window);
-						postData(data._id, id);
-						break;
-
-						case "shh_newIdentity":
-						var id = shh.newIdentity()
-						postData(data._id, id)
-
-						break
-
-						case "shh_post":
-						require(1);
-
-						var params = data.args[0];
-						var fields = ["payload", "to", "from"];
-						for(var i = 0; i < fields.length; i++) {
-							params[fields[i]] = params[fields[i]] || "";
-						}
-						if(typeof params.payload !== "object") { params.payload = [params.payload]; } //params.payload = params.payload.join(""); }
-						params.topics = params.topics || [];
-						params.priority = params.priority || 1000;
-						params.ttl = params.ttl || 100;
-
-						shh.post(params.payload, params.to, params.from, params.topics, params.priority, params.ttl);
-
-						break;
-
-						case "shh_getMessages":
-						require(1);
-
-						var m = shh.messages(data.args[0]);
-						var messages = JSON.parse(JSON.parse(JSON.stringify(m)));
-						postData(data._id, messages);
-
-						break;
-
-						case "ssh_newGroup":
-						postData(data._id, "");
-						break;
+					for (var i in experimental.preferences) {
+						console.log(i)
 					}
-				} catch(e) {
-					console.log(data.call + ": " + e)
-
-					postData(data._id, null);
 				}
-			}
 
+				experimental.preferences.javascriptEnabled: true
+				experimental.preferences.webAudioEnabled: true
+				experimental.preferences.pluginsEnabled: true
+				experimental.preferences.navigatorQtObjectEnabled: true
+				experimental.preferences.developerExtrasEnabled: true
+				experimental.preferences.webGLEnabled: true
+				experimental.preferences.notificationsEnabled: true
+				experimental.preferences.localStorageEnabled: true
+				experimental.userAgent:"Mozilla/5.0 (Windows NT 6.2; Win64; x64) AppleWebKit/537.36  (KHTML, like Gecko) Mist/0.1 Safari/537.36"
 
-			function post(seed, data) {
-				postData(data._id, data)
-			}
+				experimental.itemSelector:  MouseArea {
+					// To avoid conflicting with ListView.model when inside Initiator context.
+					property QtObject selectorModel: model
+					anchors.fill: parent
+					onClicked: selectorModel.reject()
 
-			function require(args, num) {
-				if(args.length < num) {
-					throw("required argument count of "+num+" got "+args.length);
+					Menu {
+						visible: true
+						id: itemSelector
+
+						Instantiator {
+							model: selectorModel.items
+							delegate: MenuItem {
+								text: model.text
+								onTriggered: {
+									selectorModel.accept(index)
+								}
+							}
+							onObjectAdded: itemSelector.insertItem(index, object)
+							onObjectRemoved: itemSelector.removeItem(object)
+						}
+					}
+
+					Component.onCompleted: {
+						itemSelector.popup()
+					}
 				}
-			}
-			function postData(seed, data) {
-				webview.experimental.postMessage(JSON.stringify({data: data, _id: seed}))
-			}
-			function postEvent(event, id, data) {
-				webview.experimental.postMessage(JSON.stringify({data: data, _id: id, _event: event}))
-			}
+				experimental.userScripts: ["../ext/q.js", "../ext/ethereum.js/lib/web3.js", "../ext/ethereum.js/lib/qt.js", "../ext/setup.js"]
+				experimental.onMessageReceived: {
+					console.log("[onMessageReceived]: ", message.data)
+					// TODO move to messaging.js
+					var data = JSON.parse(message.data)
 
-			function onWatchedCb(data, id) {
-				var messages = JSON.parse(data)
-				postEvent("watched:"+id, messages)
-			}
+					try {
+						switch(data.call) {
+							case "eth_compile":
+							postData(data._id, eth.compile(data.args[0]))
+							break
 
-			function onNewBlockCb(block) {
-				postEvent("block:new", block)
-			}
-			function onObjectChangeCb(stateObject) {
-				postEvent("object:"+stateObject.address(), stateObject)
-			}
-			function onStorageChangeCb(storageObject) {
-				var ev = ["storage", storageObject.stateAddress, storageObject.address].join(":");
-				postEvent(ev, [storageObject.address, storageObject.value])
+							case "eth_coinbase":
+							postData(data._id, eth.coinBase())
+
+							case "eth_account":
+							postData(data._id, eth.key().address);
+
+							case "eth_istening":
+							postData(data._id, eth.isListening())
+
+							break
+
+							case "eth_mining":
+							postData(data._id, eth.isMining())
+
+							break
+
+							case "eth_peerCount":
+							postData(data._id, eth.peerCount())
+
+							break
+
+							case "eth_countAt":
+							require(1)
+							postData(data._id, eth.txCountAt(data.args[0]))
+
+							break
+
+							case "eth_codeAt":
+							require(1)
+							var code = eth.codeAt(data.args[0])
+							postData(data._id, code);
+
+							break
+
+							case "eth_blockByNumber":
+							require(1)
+							var block = eth.blockByNumber(data.args[0])
+							postData(data._id, block)
+							break
+
+							case "eth_blockByHash":
+							require(1)
+							var block = eth.blockByHash(data.args[0])
+							postData(data._id, block)
+							break
+
+							require(2)
+							var block = eth.blockByHash(data.args[0])
+							postData(data._id, block.transactions[data.args[1]])
+							break
+
+							case "eth_transactionByHash":
+							case "eth_transactionByNumber":
+							require(2)
+
+							var block;
+							if (data.call === "transactionByHash")
+							block = eth.blockByHash(data.args[0])
+							else
+							block = eth.blockByNumber(data.args[0])
+
+							var tx = block.transactions.get(data.args[1])
+
+							postData(data._id, tx)
+							break
+
+							case "eth_uncleByHash":
+							case "eth_uncleByNumber":
+							require(2)
+
+							var block;
+							if (data.call === "uncleByHash")
+							block = eth.blockByHash(data.args[0])
+							else
+							block = eth.blockByNumber(data.args[0])
+
+							var uncle = block.uncles.get(data.args[1])
+
+							postData(data._id, uncle)
+
+							break
+
+							case "transact":
+							require(5)
+
+							var tx = eth.transact(data.args)
+							postData(data._id, tx)
+
+							break
+
+							case "eth_stateAt":
+							require(2);
+
+							var storage = eth.storageAt(data.args[0], data.args[1]);
+							postData(data._id, storage)
+
+							break
+
+							case "eth_call":
+							require(1);
+							var ret = eth.call(data.args)
+							postData(data._id, ret)
+							break
+
+							case "eth_balanceAt":
+							require(1);
+
+							postData(data._id, eth.balanceAt(data.args[0]));
+							break
+
+							case "eth_watch":
+							require(2)
+							eth.watch(data.args[0], data.args[1])
+
+							case "eth_disconnect":
+							require(1)
+							postData(data._id, null)
+							break;
+
+							case "eth_newFilterString":
+							require(1)
+							var id = eth.newFilterString(data.args[0])
+							postData(data._id, id);
+							break;
+
+							case "eth_newFilter":
+							require(1)
+							var id = eth.newFilter(data.args[0])
+
+							postData(data._id, id);
+							break;
+
+							case "eth_filterLogs":
+							require(1);
+
+							var messages = eth.messages(data.args[0]);
+							var m = JSON.parse(JSON.parse(JSON.stringify(messages)))
+							postData(data._id, m);
+
+							break;
+
+							case "eth_deleteFilter":
+							require(1);
+							eth.uninstallFilter(data.args[0])
+							break;
+
+
+							case "shh_newFilter":
+							require(1);
+							var id = shh.watch(data.args[0], window);
+							postData(data._id, id);
+							break;
+
+							case "shh_newIdentity":
+							var id = shh.newIdentity()
+							postData(data._id, id)
+
+							break
+
+							case "shh_post":
+							require(1);
+
+							var params = data.args[0];
+							var fields = ["payload", "to", "from"];
+							for(var i = 0; i < fields.length; i++) {
+								params[fields[i]] = params[fields[i]] || "";
+							}
+							if(typeof params.payload !== "object") { params.payload = [params.payload]; } //params.payload = params.payload.join(""); }
+							params.topics = params.topics || [];
+							params.priority = params.priority || 1000;
+							params.ttl = params.ttl || 100;
+
+							shh.post(params.payload, params.to, params.from, params.topics, params.priority, params.ttl);
+
+							break;
+
+							case "shh_getMessages":
+							require(1);
+
+							var m = shh.messages(data.args[0]);
+							var messages = JSON.parse(JSON.parse(JSON.stringify(m)));
+							postData(data._id, messages);
+
+							break;
+
+							case "ssh_newGroup":
+							postData(data._id, "");
+							break;
+						}
+					} catch(e) {
+						console.log(data.call + ": " + e)
+
+						postData(data._id, null);
+					}
+				}
+
+
+				function post(seed, data) {
+					postData(data._id, data)
+				}
+
+				function require(args, num) {
+					if(args.length < num) {
+						throw("required argument count of "+num+" got "+args.length);
+					}
+				}
+				function postData(seed, data) {
+					webview.experimental.postMessage(JSON.stringify({data: data, _id: seed}))
+				}
+				function postEvent(event, id, data) {
+					webview.experimental.postMessage(JSON.stringify({data: data, _id: id, _event: event}))
+				}
+
+				function onWatchedCb(data, id) {
+					var messages = JSON.parse(data)
+					postEvent("watched:"+id, messages)
+				}
+
+				function onNewBlockCb(block) {
+					postEvent("block:new", block)
+				}
+				function onObjectChangeCb(stateObject) {
+					postEvent("object:"+stateObject.address(), stateObject)
+				}
+				function onStorageChangeCb(storageObject) {
+					var ev = ["storage", storageObject.stateAddress, storageObject.address].join(":");
+					postEvent(ev, [storageObject.address, storageObject.value])
+				}
 			}
 		}
 

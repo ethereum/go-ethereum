@@ -312,10 +312,11 @@ func (self *UiLib) ToAscii(data string) string {
 }
 
 /// Ethereum filter methods
-func (self *UiLib) NewFilter(object map[string]interface{}) (id int) {
+func (self *UiLib) NewFilter(object map[string]interface{}, view *qml.Common) (id int) {
 	filter := qt.NewFilterFromMap(object, self.eth)
 	filter.MessageCallback = func(messages state.Messages) {
-		self.win.Root().Call("invokeFilterCallback", xeth.ToJSMessages(messages), id)
+		view.Call("messages", xeth.ToJSMessages(messages), id)
+		//self.win.Root().Call("invokeFilterCallback", xeth.ToJSMessages(messages), id)
 	}
 	id = self.filterManager.InstallFilter(filter)
 	return id
