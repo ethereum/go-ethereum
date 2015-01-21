@@ -13,8 +13,10 @@ logging of mutable state.
 package logger
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 )
 
 type LogLevel uint32
@@ -111,4 +113,28 @@ func (logger *Logger) Fatalf(format string, v ...interface{}) {
 	logger.sendf(ErrorLevel, format, v...)
 	Flush()
 	os.Exit(0)
+}
+
+type JsonLogger struct{}
+
+func NewJsonLogger() *JsonLogger {
+	return &JsonLogger{}
+}
+
+func (logger *JsonLogger) Log(msgname string, dict map[string]interface{}) {
+	if _, ok := dict["ts"]; !ok {
+		dict["ts"] = time.Now().Local().Format(time.RFC3339Nano)
+	}
+
+	// FIX
+	if _, ok := dict["level"]; !ok {
+		dict["level"] = "debug"
+	}
+
+	obj := map[string]interface{}{
+		msgname: dict,
+	}
+
+	jsontxt, _ := json.Marshal(obj)
+	logMessageC <- message{JsonLevel, fmt.Sprintf("%s", jsontxt)}
 }

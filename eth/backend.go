@@ -44,6 +44,7 @@ type Config struct {
 }
 
 var logger = ethlogger.NewLogger("SERV")
+var jsonlogger = ethlogger.NewJsonLogger()
 
 type Ethereum struct {
 	// Channel for shutting down the ethereum
@@ -221,6 +222,14 @@ func (s *Ethereum) MaxPeers() int {
 
 // Start the ethereum
 func (s *Ethereum) Start(seed bool) error {
+	evd := map[string]interface{}{
+		"version_string": s.ClientIdentity().String(),
+		"guid":           ethutil.Bytes2Hex(s.ClientIdentity().Pubkey()),
+		"level":          "debug",
+		"coinbase":       ethutil.Bytes2Hex(s.KeyManager().Address()),
+		"eth_version":    ProtocolVersion,
+	}
+	jsonlogger.Log("starting", evd)
 	err := s.net.Start()
 	if err != nil {
 		return err
