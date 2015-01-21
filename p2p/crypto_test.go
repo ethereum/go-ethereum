@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/obscuren/ecies"
@@ -184,7 +185,17 @@ func TestPeersHandshake(t *testing.T) {
 		_, err := receiver.loop()
 		errc1 <- err
 	}()
+	ready := make(chan bool)
+	go func() {
+		<-initiator.cryptoReady
+		<-receiver.cryptoReady
+		close(ready)
+	}()
+	timeout := time.After(1 * time.Second)
 	select {
+	case <-ready:
+	case <-timeout:
+		t.Errorf("crypto handshake hanging for too long")
 	case err = <-errc0:
 		t.Errorf("peer 0 quit with error: %v", err)
 	case err = <-errc1:
