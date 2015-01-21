@@ -62,9 +62,6 @@ type Peer struct {
 	listenAddr *peerAddr // what remote peer is listening on
 	dialAddr   *peerAddr // non-nil if dialing
 
-	// The mutex protects the connection
-	// so only one protocol can write at a time.
-	writeMu      sync.Mutex
 	conn         net.Conn
 	bufconn      *bufio.ReadWriter
 	outgoingMsgC chan Msg
@@ -284,7 +281,7 @@ loop:
 	done := make(chan struct{})
 	go func() {
 		p.conn.SetDeadline(time.Now().Add(disconnectGracePeriod))
-		p.writeMsg(NewMsg(discMsg, reason), disconnectGracePeriod)
+		p.writeProtoMsg("", NewMsg(discMsg, reason))
 		io.Copy(ioutil.Discard, p.conn)
 		close(done)
 	}()

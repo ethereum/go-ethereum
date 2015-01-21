@@ -143,27 +143,7 @@ func (p *Peer) writeProtoMsg(protoName string, msg Msg) error {
 	if !ok {
 		return fmt.Errorf("protocol %s not handled by peer", protoName)
 	}
-	if msg.Code >= proto.maxcode {
-		return newPeerError(errInvalidMsgCode, "code %x is out of range for protocol %q", msg.Code, protoName)
-	}
-	msg.Code += proto.offset
-	return p.writeMsg(msg, msgWriteTimeout)
-}
-
-/*
-this function is not needed write will be done directly by the msgReadWriter
-with the connection attached
-if the interface is channel, then no write locking is needed for synchronous write
-*/
-// writeMsg writes a message to the connection.
-func (p *Peer) writeMsg(msg Msg, timeout time.Duration) error {
-	p.writeMu.Lock()
-	defer p.writeMu.Unlock()
-	p.conn.SetWriteDeadline(time.Now().Add(timeout))
-	if err := writeMsg(p.bufconn, msg); err != nil {
-		return newPeerError(errWrite, "%v", err)
-	}
-	return p.bufconn.Flush()
+	return proto.WriteMsg(msg)
 }
 
 // proto will embed the same writer channel as given to the readwriter
@@ -180,12 +160,8 @@ func (rw *proto) WriteMsg(msg Msg) error {
 		return newPeerError(errInvalidMsgCode, "not handled")
 	}
 	msg.Code += rw.offset
-	select {
-	case rw.out <- msg:
-		return nil
-	case <-time.After(msgWriteTimeout):
-		return newPeerError(errWrite, "messenger timeout")
-	}
+	rw.out <- msg
+	return nil
 }
 
 func (rw *proto) EncodeMsg(code uint64, data ...interface{}) error {
