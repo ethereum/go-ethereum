@@ -7,9 +7,12 @@ import (
 	"io"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	ethlogger "github.com/ethereum/go-ethereum/logger"
 	"github.com/obscuren/ecies"
 	"github.com/obscuren/secp256k1-go"
 )
+
+var clogger = ethlogger.NewLogger("CRYPTOID")
 
 var (
 	sskLen int = 16  // ecies.MaxSharedKeyLength(pubKey) / 2
@@ -62,8 +65,15 @@ func newCryptoId(id ClientIdentity) (self *cryptoId, err error) {
 		// to be created at server init shared between peers and sessions
 		// for reuse, call wth ReadAt, no reset seek needed
 	}
-	self.pubKeyS = id.Pubkey()
+	self.pubKeyS = id.Pubkey()[1:]
+	clogger.Debugf("crytoid starting for %v", hexkey(self.pubKeyS))
 	return
+}
+
+type hexkey []byte
+
+func (self hexkey) String() string {
+	return fmt.Sprintf("(%d) %x", len(self), []byte(self))
 }
 
 /*
