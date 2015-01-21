@@ -8,7 +8,7 @@ var methodExists = function (object, method) {
 
 var propertyExists = function (object, property) {
     it('should have property ' + property + ' implemented', function() {
-        assert.equal('object', typeof object[property], 'property ' + property + ' is not implemented');
+        assert.notEqual('undefined', typeof object[property], 'property ' + property + ' is not implemented');
     });
 };
 
