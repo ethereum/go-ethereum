@@ -726,17 +726,19 @@ var ProviderManager = function() {
 
 /// sends outgoing requests, if provider is not available, enqueue the request
 ProviderManager.prototype.send = function(data) {
-    data._id = this.id;
 
     data.args = data.args || [];
-    this.id++;
+    data._id = this.id++;
 
     if (this.provider === undefined) {
         console.error('provider is not set');
-        return JSON.stringify({result: 'error, provider is not set'});
+        return undefined;
     }
 
-    return this.provider.send(data);
+    //TODO: handle error here? 
+    var result = this.provider.send(data);
+    result = JSON.parse(result);
+    return result.result;
 };
 
 /// setups provider, which will be used for sending messages
@@ -747,14 +749,6 @@ ProviderManager.prototype.set = function(provider) {
 
     this.provider = provider;
     this.ready = true;
-};
-
-/// resends queued messages
-ProviderManager.prototype.sendQueued = function() {
-    for(var i = 0; this.queued.length; i++) {
-        // Resend
-        this.send(this.queued[i]);
-    }
 };
 
 /// @returns true if the provider i properly set
@@ -916,14 +910,10 @@ var setupMethods = function (obj, methods) {
         obj[method.name] = function () {
             var args = Array.prototype.slice.call(arguments);
             var call = typeof method.call === 'function' ? method.call(args) : method.call;
-            var result = web3.provider.send({
+            return web3.provider.send({
                 call: call,
                 args: args
             });
-            
-            result = JSON.parse(result);
-            return result.result;
-
         };
     });
 };
@@ -934,24 +924,17 @@ var setupProperties = function (obj, properties) {
     properties.forEach(function (property) {
         var proto = {};
         proto.get = function () {
-            var result = web3.provider.send({
+            return web3.provider.send({
                 call: property.getter
             });
-
-            result = JSON.parse(result);
-            return result.result;
-
         };
+
         if (property.setter) {
             proto.set = function (val) {
-                var result = web3.provider.send({
+                return web3.provider.send({
                     call: property.setter,
                     args: [val]
                 });
-
-                result = JSON.parse(result);
-                return result.result;
-
             };
         }
         Object.defineProperty(obj, property.name, proto);
@@ -959,6 +942,7 @@ var setupProperties = function (obj, properties) {
 };
 
 // TODO: import from a dependency, don't duplicate.
+// TODO: use bignumber for that!
 var hexToDec = function (hex) {
     return parseInt(hex, 16).toString();
 };
@@ -1117,9 +1101,8 @@ var shhWatch = {
 setupMethods(shhWatch, shhWatchMethods());
 
 web3.setProvider = function(provider) {
-    provider.onmessage = messageHandler;
+    //provider.onmessage = messageHandler; // there will be no async calls, to remove
     web3.provider.set(provider);
-    web3.provider.sendQueued();
 };
 
 /// callled when there is new incoming message
