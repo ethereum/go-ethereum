@@ -136,6 +136,12 @@ func untested(condition bool, message string) {
 	}
 }
 
+func assert(condition bool, message string) {
+	if !condition {
+		panic("Assert `" + message + "` failed!")
+	}
+}
+
 func NewJitVm(env Environment) *JitVm {
 	return &JitVm{env: env}
 }
@@ -302,20 +308,22 @@ func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Point
 func env_create(_vm unsafe.Pointer, _gas unsafe.Pointer, _value unsafe.Pointer, initDataPtr unsafe.Pointer, initDataLen uint64, _result unsafe.Pointer) {
 	vm := (*JitVm)(_vm)
 
-	balance := vm.Env().State().GetBalance(vm.me.Address())
 	value := llvm2big((*i256)(_value))
+	initData := C.GoBytes(initDataPtr, C.int(initDataLen)) // TODO: Unnecessary if low balance
 	result := (*i256)(_result)
+	*result = i256{}
 
-	if balance.Cmp(value) >= 0 {
-		initData := C.GoBytes(initDataPtr, C.int(initDataLen))
-		llvmGas := (*i256)(_gas)
-		gas := llvm2big(llvmGas)
-		addr, _, _ := vm.Env().Create(vm.me, vm.me.Address(), initData, gas, vm.price, value)
-		*llvmGas = big2llvm(gas)
-		*result = hash2llvm(addr)
-	} else {
-		*result = i256{}
+	llvmGas := (*i256)(_gas)
+	gas := llvm2big(llvmGas)
+
+	ret, suberr, ref := vm.env.Create(vm.me, nil, initData, gas, vm.price, value)
+	if suberr == nil {
+		dataGas := big.NewInt(int64(len(ret))) // TODO: Nto the best design. env.Create can do it, it has the reference to gas counter
+		dataGas.Mul(dataGas, GasCreateByte)
+		gas.Sub(gas, dataGas)
+		*result = hash2llvm(ref.Address())
 	}
+	*llvmGas = big2llvm(gas)
 }
 
 //export env_log
