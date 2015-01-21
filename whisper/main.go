@@ -7,10 +7,10 @@ import (
 	"log"
 	"os"
 
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/whisper"
-	"github.com/obscuren/secp256k1-go"
 )
 
 func main() {
