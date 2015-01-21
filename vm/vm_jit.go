@@ -11,19 +11,21 @@ package vm
 import "C"
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/state"
 	"math/big"
-	"reflect"
 	"unsafe"
-	"bytes"
 )
 
 type JitVm struct {
-	env   Environment
-	me    ContextRef
-	price *big.Int
+	env        Environment
+	me         ContextRef
+	callerAddr []byte
+	price      *big.Int
+	data       RuntimeData
 }
 
 type i256 [32]byte
@@ -128,6 +130,13 @@ func llvm2bytes(data *byte, length uint64) []byte {
 	return (*[1 << 30]byte)(unsafe.Pointer(data))[:length:length]
 }
 
+//
+func untested(condition bool, message string) {
+	if condition {
+		panic("Condition `" + message + "` tested. Remove assert.")
+	}
+}
+
 func NewJitVm(env Environment) *JitVm {
 	return &JitVm{env: env}
 }
@@ -135,33 +144,33 @@ func NewJitVm(env Environment) *JitVm {
 func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
 	self.env.SetDepth(self.env.Depth() + 1)
 	self.me = me // FIXME: Make sure Run() is not used more than once
+	self.callerAddr = caller.Address()
 	self.price = price
 
-	var data RuntimeData
-	data.elems[Gas] = big2llvm(gas)
-	data.elems[address] = address2llvm(self.me.Address())
-	data.elems[Caller] = address2llvm(caller.Address())
-	data.elems[Origin] = address2llvm(self.env.Origin())
-	data.elems[CallValue] = big2llvm(value)
-	data.elems[CallDataSize] = big2llvm(big.NewInt(int64(len(callData)))) // TODO: Keep call data size as i64
-	data.elems[GasPrice] = big2llvm(price)
-	data.elems[CoinBase] = address2llvm(self.env.Coinbase())
-	data.elems[TimeStamp] = big2llvm(big.NewInt(self.env.Time())) // TODO: Keep timestamp as i64
-	data.elems[Number] = big2llvm(self.env.BlockNumber())
-	data.elems[Difficulty] = big2llvm(self.env.Difficulty())
-	data.elems[GasLimit] = big2llvm(self.env.GasLimit())
-	data.elems[CodeSize] = big2llvm(big.NewInt(int64(len(code)))) // TODO: Keep code size as i64
-	data.callData = getDataPtr(callData)
-	data.code = getDataPtr(code)
+	self.data.elems[Gas] = big2llvm(gas)
+	self.data.elems[address] = address2llvm(self.me.Address())
+	self.data.elems[Caller] = address2llvm(caller.Address())
+	self.data.elems[Origin] = address2llvm(self.env.Origin())
+	self.data.elems[CallValue] = big2llvm(value)
+	self.data.elems[CallDataSize] = big2llvm(big.NewInt(int64(len(callData)))) // TODO: Keep call data size as i64
+	self.data.elems[GasPrice] = big2llvm(price)
+	self.data.elems[CoinBase] = address2llvm(self.env.Coinbase())
+	self.data.elems[TimeStamp] = big2llvm(big.NewInt(self.env.Time())) // TODO: Keep timestamp as i64
+	self.data.elems[Number] = big2llvm(self.env.BlockNumber())
+	self.data.elems[Difficulty] = big2llvm(self.env.Difficulty())
+	self.data.elems[GasLimit] = big2llvm(self.env.GasLimit())
+	self.data.elems[CodeSize] = big2llvm(big.NewInt(int64(len(code)))) // TODO: Keep code size as i64
+	self.data.callData = getDataPtr(callData)
+	self.data.code = getDataPtr(code)
 
-	result := C.evmjit_run(unsafe.Pointer(&data), unsafe.Pointer(self))
+	result := C.evmjit_run(unsafe.Pointer(&self.data), unsafe.Pointer(self))
 	//fmt.Printf("JIT result: %d\n", r)
 
 	if result.returnCode >= 100 {
 		err = errors.New("OOG from JIT")
 		gas.SetInt64(0) // Set gas to 0, JIT does not bother
 	} else {
-		gasLeft := llvm2big(&data.elems[Gas]) // TODO: Set value directly to gas instance
+		gasLeft := llvm2big(&self.data.elems[Gas]) // TODO: Set value directly to gas instance
 		gas.Set(gasLeft)
 		if result.returnCode == 1 { // RETURN
 			ret = C.GoBytes(result.returnData, C.int(result.returnDataSize))
@@ -247,7 +256,7 @@ func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Point
 		receiveAddr := llvm2hash((*i256)(_receiveAddr))
 		inData := C.GoBytes(inDataPtr, C.int(inDataLen))
 		outData := llvm2bytes(outDataPtr, outDataLen)
-		codeAddr := llvm2hash((*i256)(_codeAddr)) //TODO: Handle CallCode
+		codeAddr := llvm2hash((*i256)(_codeAddr))
 		llvmGas := (*i256)(_gas)
 		gas := llvm2big(llvmGas)
 		var out []byte
