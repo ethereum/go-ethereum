@@ -17,19 +17,6 @@ import (
 	"os"
 )
 
-// LogSystem is implemented by log output devices.
-// All methods can be called concurrently from multiple goroutines.
-type LogSystem interface {
-	GetLogLevel() LogLevel
-	SetLogLevel(i LogLevel)
-	LogPrint(LogLevel, string)
-}
-
-type message struct {
-	level LogLevel
-	msg   string
-}
-
 type LogLevel uint32
 
 const (

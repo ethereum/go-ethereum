@@ -4,6 +4,11 @@ import (
 	"sync"
 )
 
+type message struct {
+	level LogLevel
+	msg   string
+}
+
 var (
 	logMessageC = make(chan message)
 	addSystemC  = make(chan LogSystem)

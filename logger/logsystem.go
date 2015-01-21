@@ -6,6 +6,14 @@ import (
 	"sync/atomic"
 )
 
+// LogSystem is implemented by log output devices.
+// All methods can be called concurrently from multiple goroutines.
+type LogSystem interface {
+	GetLogLevel() LogLevel
+	SetLogLevel(i LogLevel)
+	LogPrint(LogLevel, string)
+}
+
 // NewStdLogSystem creates a LogSystem that prints to the given writer.
 // The flag values are defined package log.
 func NewStdLogSystem(writer io.Writer, flags int, level LogLevel) LogSystem {
