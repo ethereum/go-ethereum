@@ -243,7 +243,6 @@ func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Point
 	value := llvm2big((*i256)(_value))
 
 	if balance.Cmp(value) >= 0 {
-		vm.env.State().AddBalance(vm.me.Address(), value.Neg(value))
 		receiveAddr := llvm2hash((*i256)(_receiveAddr))
 		inData := C.GoBytes(inDataPtr, C.int(inDataLen))
 		outData := llvm2bytes(outDataPtr, outDataLen)
@@ -276,7 +275,6 @@ func env_create(_vm unsafe.Pointer, _gas unsafe.Pointer, _value unsafe.Pointer, 
 	result := (*i256)(_result)
 
 	if balance.Cmp(value) >= 0 {
-		vm.env.State().AddBalance(vm.me.Address(), value.Neg(value))
 		initData := C.GoBytes(initDataPtr, C.int(initDataLen))
 		llvmGas := (*i256)(_gas)
 		gas := llvm2big(llvmGas)
