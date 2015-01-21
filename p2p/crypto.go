@@ -21,6 +21,8 @@ var (
 	keyLen int = 32  // ECDSA
 	msgLen int = 194 // sigLen + keyLen + pubLen + keyLen + 1 = 194
 	resLen int = 97  // pubLen + keyLen + 1
+	iHSLen int = 307 // size of the final ECIES payload sent as initiator's handshake
+	rHSLen int = 210 // size of the final ECIES payload sent as receiver's handshake
 )
 
 // secretRW implements a message read writer with encryption and authentication
@@ -66,7 +68,8 @@ func newCryptoId(id ClientIdentity) (self *cryptoId, err error) {
 		// for reuse, call wth ReadAt, no reset seek needed
 	}
 	self.pubKeyS = id.Pubkey()[1:]
-	clogger.Debugf("crytoid starting for %v", hexkey(self.pubKeyS))
+	clogger.Debugf("initialise crypto for NodeId %v", hexkey(self.pubKeyS))
+	clogger.Debugf("private-key %v\npublic key %v", hexkey(prvKeyS), hexkey(self.pubKeyS))
 	return
 }
 
@@ -92,22 +95,51 @@ Run(connection, remotePublicKey, sessionToken) is called when the peer connectio
 
 func (self *cryptoId) Run(conn io.ReadWriter, remotePubKeyS []byte, sessionToken []byte, initiator bool) (token []byte, rw *secretRW, err error) {
 	var auth, initNonce, recNonce []byte
+	var read int
 	var randomPrivKey *ecdsa.PrivateKey
 	var remoteRandomPubKey *ecdsa.PublicKey
+	clogger.Debugf("attempting session with %v", hexkey(remotePubKeyS))
 	if initiator {
 		if auth, initNonce, randomPrivKey, _, err = self.startHandshake(remotePubKeyS, sessionToken); err != nil {
 			return
 		}
-		conn.Write(auth)
-		var response []byte
-		conn.Read(response)
+		clogger.Debugf("initiator-nonce: %v", hexkey(initNonce))
+		clogger.Debugf("initiator-random-private-key: %v", hexkey(crypto.FromECDSA(randomPrivKey)))
+		randomPublicKeyS, _ := ExportPublicKey(&randomPrivKey.PublicKey)
+		clogger.Debugf("initiator-random-public-key: %v", hexkey(randomPublicKeyS))
+
+		if _, err = conn.Write(auth); err != nil {
+			return
+		}
+		clogger.Debugf("initiator handshake (sent to %v):\n%v", hexkey(remotePubKeyS), hexkey(auth))
+		var response []byte = make([]byte, rHSLen)
+		if read, err = conn.Read(response); err != nil || read == 0 {
+			return
+		}
+		if read != rHSLen {
+			err = fmt.Errorf("remote receiver's handshake has invalid length. expect %v, got %v", rHSLen, read)
+			return
+		}
 		// write out auth message
 		// wait for response, then call complete
 		if recNonce, remoteRandomPubKey, _, err = self.completeHandshake(response); err != nil {
 			return
 		}
+		clogger.Debugf("receiver-nonce: %v", hexkey(recNonce))
+		remoteRandomPubKeyS, _ := ExportPublicKey(remoteRandomPubKey)
+		clogger.Debugf("receiver-random-public-key: %v", hexkey(remoteRandomPubKeyS))
+
 	} else {
-		conn.Read(auth)
+		auth = make([]byte, iHSLen)
+		clogger.Debugf("waiting for initiator handshake (from %v)", hexkey(remotePubKeyS))
+		if read, err = conn.Read(auth); err != nil {
+			return
+		}
+		if read != iHSLen {
+			err = fmt.Errorf("remote initiator's handshake has invalid length. expect %v, got %v", iHSLen, read)
+			return
+		}
+		clogger.Debugf("received initiator handshake (from %v):\n%v", hexkey(remotePubKeyS), hexkey(auth))
 		// we are listening connection. we are responders in the handshake.
 		// Extract info from the authentication. The initiator starts by sending us a handshake that we need to respond to.
 		// so we read auth message first, then respond
@@ -115,7 +147,12 @@ func (self *cryptoId) Run(conn io.ReadWriter, remotePubKeyS []byte, sessionToken
 		if response, recNonce, initNonce, randomPrivKey, remoteRandomPubKey, err = self.respondToHandshake(auth, remotePubKeyS, sessionToken); err != nil {
 			return
 		}
-		conn.Write(response)
+		clogger.Debugf("receiver-nonce: %v", hexkey(recNonce))
+		clogger.Debugf("receiver-random-priv-key: %v", hexkey(crypto.FromECDSA(randomPrivKey)))
+		if _, err = conn.Write(response); err != nil {
+			return
+		}
+		clogger.Debugf("receiver handshake (sent to %v):\n%v", hexkey(remotePubKeyS), hexkey(response))
 	}
 	return self.newSession(initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
 }
@@ -354,6 +391,10 @@ func (self *cryptoId) newSession(initNonce, respNonce, auth []byte, privKey *ecd
 		egressMac:  egressMac,
 		ingressMac: ingressMac,
 	}
+	clogger.Debugf("aes-secret: %v", hexkey(aesSecret))
+	clogger.Debugf("mac-secret: %v", hexkey(macSecret))
+	clogger.Debugf("egress-mac: %v", hexkey(egressMac))
+	clogger.Debugf("ingress-mac: %v", hexkey(ingressMac))
 	return
 }
 

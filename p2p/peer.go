@@ -71,6 +71,7 @@ type Peer struct {
 	protocols       []Protocol
 	runBaseProtocol bool // for testing
 	cryptoHandshake bool // for testing
+	cryptoReady     chan struct{}
 
 	runlock sync.RWMutex // protects running
 	running map[string]*proto
@@ -120,15 +121,16 @@ func newServerPeer(server *Server, conn net.Conn, dialAddr *peerAddr) *Peer {
 
 func newPeer(conn net.Conn, protocols []Protocol, dialAddr *peerAddr) *Peer {
 	p := &Peer{
-		Logger:    logger.NewLogger("P2P " + conn.RemoteAddr().String()),
-		conn:      conn,
-		dialAddr:  dialAddr,
-		bufconn:   bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn)),
-		protocols: protocols,
-		running:   make(map[string]*proto),
-		disc:      make(chan DiscReason),
-		protoErr:  make(chan error),
-		closed:    make(chan struct{}),
+		Logger:      logger.NewLogger("P2P " + conn.RemoteAddr().String()),
+		conn:        conn,
+		dialAddr:    dialAddr,
+		bufconn:     bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn)),
+		protocols:   protocols,
+		running:     make(map[string]*proto),
+		disc:        make(chan DiscReason),
+		protoErr:    make(chan error),
+		closed:      make(chan struct{}),
+		cryptoReady: make(chan struct{}),
 	}
 	return p
 }
@@ -240,6 +242,7 @@ func (p *Peer) loop() (reason DiscReason, err error) {
 	go readLoop(readMsg, readErr, readNext)
 	readNext <- true
 
+	close(p.cryptoReady)
 	if p.runBaseProtocol {
 		p.startBaseProtocol()
 	}
@@ -353,6 +356,7 @@ func (p *Peer) handleCryptoHandshake() (loop readLoop, err error) {
 	// this bit handles the handshake and creates a secure communications channel with
 	// var rw *secretRW
 	if sessionToken, _, err = crypto.Run(p.conn, p.Pubkey(), sessionToken, initiator); err != nil {
+		p.Debugf("unable to setup secure session: %v", err)
 		return
 	}
 	loop = func(msg chan<- Msg, err chan<- error, next <-chan bool) {
