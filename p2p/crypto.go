@@ -20,17 +20,27 @@ var (
 	resLen int = 97  // pubLen + keyLen + 1
 )
 
+// secretRW implements a message read writer with encryption and authentication
+// it is initialised by cryptoId.Run() after a successful crypto handshake
 // aesSecret, macSecret, egressMac, ingress
 type secretRW struct {
 	aesSecret, macSecret, egressMac, ingressMac []byte
 }
 
+/*
+cryptoId implements the crypto layer for the p2p networking
+It is initialised on the node's own identity (which has access to the node's private key) and run separately on a peer connection to set up a secure session after a crypto handshake
+After it performs a crypto handshake it returns
+*/
 type cryptoId struct {
 	prvKey  *ecdsa.PrivateKey
 	pubKey  *ecdsa.PublicKey
 	pubKeyS []byte
 }
 
+/*
+newCryptoId(id ClientIdentity) initialises a crypto layer manager. This object has a short lifecycle when the peer connection starts. It is survived by a secretRW (an message read writer with encryption and authentication) if the crypto handshake is successful.
+*/
 func newCryptoId(id ClientIdentity) (self *cryptoId, err error) {
 	// will be at server  init
 	var prvKeyS []byte = id.PrivKey()
@@ -55,6 +65,20 @@ func newCryptoId(id ClientIdentity) (self *cryptoId, err error) {
 	self.pubKeyS = id.Pubkey()
 	return
 }
+
+/*
+Run(connection, remotePublicKey, sessionToken) is called when the peer connection starts to set up a secure session by performing a crypto handshake.
+
+ connection is (a buffered) network connection.
+
+ remotePublicKey is the remote peer's node Id.
+
+ sessionToken is the token from the previous session with this same peer. Nil if no token is found.
+
+ initiator is a boolean flag. True if the node represented by cryptoId is the initiator of the connection (ie., remote is an outbound peer reached by dialing out). False if the connection was established by accepting a call from the remote peer via a listener.
+
+ It returns a secretRW which implements the MsgReadWriter interface.
+*/
 
 func (self *cryptoId) Run(conn io.ReadWriter, remotePubKeyS []byte, sessionToken []byte, initiator bool) (token []byte, rw *secretRW, err error) {
 	var auth, initNonce, recNonce []byte
@@ -86,21 +110,9 @@ func (self *cryptoId) Run(conn io.ReadWriter, remotePubKeyS []byte, sessionToken
 	return self.newSession(initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
 }
 
-/* startHandshake is called by peer if it initiated the connection.
- By protocol spec, the party who initiates the connection (initiator) will send an 'auth' packet
-New: authInitiator -> E(remote-pubk, S(ecdhe-random, ecdh-shared-secret^nonce) || H(ecdhe-random-pubk) || pubk || nonce || 0x0)
-     authRecipient -> E(remote-pubk, ecdhe-random-pubk || nonce || 0x0)
-
-Known: authInitiator = E(remote-pubk, S(ecdhe-random, token^nonce) || H(ecdhe-random-pubk) || pubk || nonce || 0x1)
-       authRecipient = E(remote-pubk, ecdhe-random-pubk || nonce || 0x1) // token found
-       authRecipient = E(remote-pubk, ecdhe-random-pubk || nonce || 0x0) // token not found
-
-The caller provides the public key of the peer as conjuctured from lookup based on IP:port, given as user input or proven by signatures. The caller must have access to persistant information about the peers, and pass the previous session token as an argument to cryptoId.
-
-The handshake is the process by which the peers establish their connection for a session.
-
+/*
+ImportPublicKey creates a 512 bit *ecsda.PublicKey from a byte slice. It accepts the simple 64 byte uncompressed format or the 65 byte format given by calling elliptic.Marshal on the EC point represented by the key. Any other length will result in an invalid public key error.
 */
-
 func ImportPublicKey(pubKey []byte) (pubKeyEC *ecdsa.PublicKey, err error) {
 	var pubKey65 []byte
 	switch len(pubKey) {
@@ -114,6 +126,9 @@ func ImportPublicKey(pubKey []byte) (pubKeyEC *ecdsa.PublicKey, err error) {
 	return crypto.ToECDSAPub(pubKey65), nil
 }
 
+/*
+ExportPublicKey exports a *ecdsa.PublicKey into a byte slice using a simple 64-byte format. and is used for simple serialisation in network communication
+*/
 func ExportPublicKey(pubKeyEC *ecdsa.PublicKey) (pubKey []byte, err error) {
 	if pubKeyEC == nil {
 		return nil, fmt.Errorf("no ECDSA public key given")
@@ -121,6 +136,12 @@ func ExportPublicKey(pubKeyEC *ecdsa.PublicKey) (pubKey []byte, err error) {
 	return crypto.FromECDSAPub(pubKeyEC)[1:], nil
 }
 
+/* startHandshake is called by if the node is the initiator of the connection.
+
+The caller provides the public key of the peer as conjuctured from lookup based on IP:port, given as user input or proven by signatures. The caller must have access to persistant information about the peers, and pass the previous session token as an argument to cryptoId.
+
+The first return value is the auth message that is to be sent out to the remote receiver.
+*/
 func (self *cryptoId) startHandshake(remotePubKeyS, sessionToken []byte) (auth []byte, initNonce []byte, randomPrvKey *ecdsa.PrivateKey, remotePubKey *ecdsa.PublicKey, err error) {
 	// session init, common to both parties
 	if remotePubKey, err = ImportPublicKey(remotePubKeyS); err != nil {
@@ -191,7 +212,11 @@ func (self *cryptoId) startHandshake(remotePubKeyS, sessionToken []byte) (auth [
 	return
 }
 
-// verifyAuth is called by peer if it accepted (but not initiated) the connection
+/*
+respondToHandshake is called by peer if it accepted (but not initiated) the connection from the remote. It is passed the initiator handshake received, the public key and session token belonging to the remote initiator.
+
+The first return value is the authentication response (aka receiver handshake) that is to be sent to the remote initiator.
+*/
 func (self *cryptoId) respondToHandshake(auth, remotePubKeyS, sessionToken []byte) (authResp []byte, respNonce []byte, initNonce []byte, randomPrivKey *ecdsa.PrivateKey, remoteRandomPubKey *ecdsa.PublicKey, err error) {
 	var msg []byte
 	var remotePubKey *ecdsa.PublicKey
@@ -264,6 +289,9 @@ func (self *cryptoId) respondToHandshake(auth, remotePubKeyS, sessionToken []byt
 	return
 }
 
+/*
+completeHandshake is called when the initiator receives an authentication response (aka receiver handshake). It completes the handshake by reading off parameters the remote peer provides needed to set up the secure session
+*/
 func (self *cryptoId) completeHandshake(auth []byte) (respNonce []byte, remoteRandomPubKey *ecdsa.PublicKey, tokenFlag bool, err error) {
 	var msg []byte
 	// they prove that msg is meant for me,
@@ -283,6 +311,9 @@ func (self *cryptoId) completeHandshake(auth []byte) (respNonce []byte, remoteRa
 	return
 }
 
+/*
+newSession is called after the handshake is completed. The arguments are values negotiated in the handshake and the return value is a new session : a new session Token to be remembered for the next time we connect with this peer. And a MsgReadWriter that implements an encrypted and authenticated connection with key material obtained from the crypto handshake key exchange
+*/
 func (self *cryptoId) newSession(initNonce, respNonce, auth []byte, privKey *ecdsa.PrivateKey, remoteRandomPubKey *ecdsa.PublicKey) (sessionToken []byte, rw *secretRW, err error) {
 	// 3) Now we can trust ecdhe-random-pubk to derive new keys
 	//ecdhe-shared-secret = ecdh.agree(ecdhe-random, remote-ecdhe-random-pubk)
@@ -316,6 +347,7 @@ func (self *cryptoId) newSession(initNonce, respNonce, auth []byte, privKey *ecd
 	return
 }
 
+// TODO: optimisation
 // should use cipher.xorBytes from crypto/cipher/xor.go for fast xor
 func Xor(one, other []byte) (xor []byte) {
 	xor = make([]byte, len(one))
