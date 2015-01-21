@@ -75,8 +75,16 @@ func dispatchLoop() {
 
 func sysLoop(sys LogSystem, in <-chan message, wg *sync.WaitGroup) {
 	for msg := range in {
-		if sys.GetLogLevel() >= msg.level {
-			sys.LogPrint(msg.level, msg.msg)
+		switch sys.(type) {
+		case *rawLogSystem:
+			// This is a semantic hack since rawLogSystem has little to do with JsonLevel
+			if msg.level == JsonLevel {
+				sys.LogPrint(msg.level, msg.msg)
+			}
+		default:
+			if sys.GetLogLevel() >= msg.level {
+				sys.LogPrint(msg.level, msg.msg)
+			}
 		}
 	}
 	wg.Done()
