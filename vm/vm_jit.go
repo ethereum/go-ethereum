@@ -119,12 +119,13 @@ func llvm2big(m *i256) *big.Int {
 }
 
 func llvm2bytes(data *byte, length uint64) []byte {
-	hdr := reflect.SliceHeader{
-		Data: uintptr(unsafe.Pointer(data)),
-		Len:  int(length),
-		Cap:  int(length),
+	if length == 0 {
+		return nil
 	}
-	return *(*[]byte)(unsafe.Pointer(&hdr))
+	if data == nil {
+		panic("llvm2bytes: nil pointer to data")
+	}
+	return (*[1 << 30]byte)(unsafe.Pointer(data))[:length:length]
 }
 
 func NewJitVm(env Environment) *JitVm {
