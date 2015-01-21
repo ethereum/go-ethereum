@@ -14,17 +14,15 @@
         var coinbase = web3.eth.coinbase;
         var originalBalance = 0;
 
-        web3.eth.balanceAt(coinbase).then(function (balance) {
-            originalBalance = web3.toDecimal(balance);
-            document.getElementById('original').innerText = 'original balance: ' + originalBalance + '    watching...';
-        });
+        var balance = web3.eth.balanceAt(coinbase);
+        var originalBalance = web3.toDecimal(balance);
+        document.getElementById('original').innerText = 'original balance: ' + originalBalance + '    watching...';
 
         web3.eth.watch({altered: coinbase}).changed(function() {
-            web3.eth.balanceAt(coinbase).then(function (balance) {
-                var currentBalance = web3.toDecimal(balance);
-                document.getElementById("current").innerText = 'current: ' + currentBalance;
-                document.getElementById("diff").innerText = 'diff:    ' + (currentBalance - originalBalance);
-            });
+            balance = web3.eth.balanceAt(coinbase)
+            var currentBalance = web3.toDecimal(balance);
+            document.getElementById("current").innerText = 'current: ' + currentBalance;
+            document.getElementById("diff").innerText = 'diff:    ' + (currentBalance - originalBalance);
         });
     }
 

@@ -33,6 +33,9 @@ BigNumber.config({ ROUNDING_MODE: BigNumber.ROUND_DOWN });
 
 var ETH_PADDING = 32;
 
+/// method signature length in bytes
+var ETH_METHOD_SIGNATURE_LENGTH = 4;
+
 /// Finds first index of array element matching pattern
 /// @param array
 /// @param callback pattern
@@ -390,11 +393,10 @@ var outputParser = function (json) {
     return parser;
 };
 
-/// @param json abi for contract
 /// @param method name for which we want to get method signature
 /// @returns (promise) contract method signature for method with given name
-var methodSignature = function (json, name) {
-    return web3.sha3(web3.fromAscii(name));
+var methodSignature = function (name) {
+    return web3.sha3(web3.fromAscii(name)).slice(0, 2 + ETH_METHOD_SIGNATURE_LENGTH * 2);
 };
 
 module.exports = {
@@ -432,8 +434,7 @@ module.exports = {
 var web3 = require('./web3'); // jshint ignore:line
 var abi = require('./abi');
 
-/// method signature length in bytes
-var ETH_METHOD_SIGNATURE_LENGTH = 4;
+
 
 /**
  * This method should be called when we want to call / transact some solidity method from javascript
@@ -469,29 +470,29 @@ var contract = function (address, desc) {
         var impl = function () {
             var params = Array.prototype.slice.call(arguments);
             var parsed = inputParser[displayName][typeName].apply(null, params);
-
-            var onSuccess = function (result) {
-                return outputParser[displayName][typeName](result);
-            };
+            var signature = abi.methodSignature(method.name);
 
             return {
                 call: function (extra) {
                     extra = extra || {};
                     extra.to = address;
-                    return abi.methodSignature(desc, method.name).then(function (signature) {
-                        extra.data = signature.slice(0, 2 + ETH_METHOD_SIGNATURE_LENGTH * 2) + parsed;
-                        return web3.eth.call(extra).then(onSuccess);
-                    });
+                    extra.data = signature + parsed;
+
+                    var result = web3.eth.call(extra);
+                    return outputParser[displayName][typeName](result);
                 },
                 transact: function (extra) {
                     extra = extra || {};
                     extra.to = address;
-                    return abi.methodSignature(desc, method.name).then(function (signature) {
-                        extra.data = signature.slice(0, 2 + ETH_METHOD_SIGNATURE_LENGTH * 2) + parsed;
-                        web3._currentContractAbi = desc;
-                        web3._currentContractAddress = address;
-                        return web3.eth.transact(extra).then(onSuccess);
-                    });
+                    extra.data = signature + parsed;
+
+                    /// it's used by natspec.js
+                    /// TODO: figure a better way to solve this
+                    web3._currentContractAbi = desc;
+                    web3._currentContractAddress = address;
+
+                    var result = web3.eth.transact(extra);
+                    return outputParser[displayName][typeName](result);
                 }
             };
         };
@@ -623,7 +624,7 @@ module.exports = Filter;
 
 var HttpSyncProvider = function (host) {
     this.handlers = [];
-    this.host = host;
+    this.host = host || 'http://localhost:8080';
 };
 
 /// Transforms inner message to proper jsonrpc object

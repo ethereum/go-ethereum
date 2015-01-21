@@ -8,7 +8,7 @@
 <script type="text/javascript">
 
     var web3 = require('web3');
-    web3.setProvider(new web3.providers.AutoProvider());
+    web3.setProvider(new web3.providers.HttpSyncProvider());
 
     // solidity source code
     var source = "" + 
@@ -43,10 +43,9 @@
         document.getElementById('source').innerText = source;
 
         // create contract
-        web3.eth.transact({code: web3.eth.solidity(source)}).then(function (address) {
-            contract = web3.eth.contract(address, desc);
-            document.getElementById('call').style.visibility = 'visible';
-        });
+        var address = web3.eth.transact({code: web3.eth.solidity(source)});
+        contract = web3.eth.contract(address, desc);
+        document.getElementById('call').style.visibility = 'visible';
     }
 
     function callExampleContract() {
@@ -54,9 +53,8 @@
         var param = parseInt(document.getElementById('value').value);
 
         // call the contract
-        contract.multiply(param).call().then(function(res) {
-            document.getElementById('result').innerText = res[0];
-        });
+        var res = contract.multiply(param).call();
+        document.getElementById('result').innerText = res[0];
     }
 
 </script>
