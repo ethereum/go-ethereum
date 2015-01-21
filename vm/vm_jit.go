@@ -148,6 +148,14 @@ func NewJitVm(env Environment) *JitVm {
 
 func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
 	self.env.SetDepth(self.env.Depth() + 1)
+
+	if Precompiled[string(me.Address())] != nil {
+		// if it's address of precopiled contract
+		// fallback to standard VM
+		stdVm := New(self.env)
+		return stdVm.Run(me, caller, code, value, gas, price, callData)
+	}
+
 	self.me = me // FIXME: Make sure Run() is not used more than once
 	self.callerAddr = caller.Address()
 	self.price = price
