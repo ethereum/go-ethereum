@@ -434,8 +434,6 @@ module.exports = {
 var web3 = require('./web3'); // jshint ignore:line
 var abi = require('./abi');
 
-
-
 /**
  * This method should be called when we want to call / transact some solidity method from javascript
  * it returns an object which has same methods available as solidity contract description
@@ -544,13 +542,9 @@ var Filter = function(options, impl) {
     this.impl = impl;
     this.callbacks = [];
 
-    var self = this;
-    this.promise = impl.newFilter(options);
-    this.promise.then(function (id) {
-        self.id = id;
-        web3.on(impl.changed, id, self.trigger.bind(self));
-        web3.provider.startPolling({call: impl.changed, args: [id]}, id);
-    });
+    this.id = impl.newFilter(options);
+    web3.on(impl.changed, this.id, this.trigger.bind(this));
+    web3.provider.startPolling({call: impl.changed, args: [this.id]}, this.id);
 };
 
 /// alias for changed*
@@ -560,10 +554,7 @@ Filter.prototype.arrived = function(callback) {
 
 /// gets called when there is new eth/shh message
 Filter.prototype.changed = function(callback) {
-    var self = this;
-    this.promise.then(function(id) {
-        self.callbacks.push(callback);
-    });
+    this.callbacks.push(callback);
 };
 
 /// trigger calling new message from people
@@ -575,20 +566,14 @@ Filter.prototype.trigger = function(messages) {
 
 /// should be called to uninstall current filter
 Filter.prototype.uninstall = function() {
-    var self = this;
-    this.promise.then(function (id) {
-        self.impl.uninstallFilter(id);
-        web3.provider.stopPolling(id);
-        web3.off(impl.changed, id);
-    });
+    this.impl.uninstallFilter(this.id);
+    web3.provider.stopPolling(this.id);
+    web3.off(impl.changed, this.id);
 };
 
 /// should be called to manually trigger getting latest messages from the client
 Filter.prototype.messages = function() {
-    var self = this;
-    return this.promise.then(function (id) {
-        return self.impl.getMessages(id);
-    });
+    return this.impl.getMessages(this.id);
 };
 
 /// alias for messages
