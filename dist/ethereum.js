@@ -1046,35 +1046,6 @@ var web3 = {
         }
     },
 
-    /// used by filter to register callback with given id
-    on: function(event, id, cb) {
-        if(web3._events[event] === undefined) {
-            web3._events[event] = {};
-        }
-
-        web3._events[event][id] = cb;
-        return this;
-    },
-
-    /// used by filter to unregister callback with given id
-    off: function(event, id) {
-        if(web3._events[event] !== undefined) {
-            delete web3._events[event][id];
-        }
-
-        return this;
-    },
-
-    /// used to trigger callback registered by filter
-    trigger: function(event, id, data) {
-        var callbacks = web3._events[event];
-        if (!callbacks || !callbacks[id]) {
-            return;
-        }
-        var cb = callbacks[id];
-        cb(data);
-    },
-
     /// @returns true if provider is installed
     haveProvider: function() {
         return !!web3.provider.provider;
@@ -1104,22 +1075,6 @@ web3.setProvider = function(provider) {
     //provider.onmessage = messageHandler; // there will be no async calls, to remove
     web3.provider.set(provider);
 };
-
-/// callled when there is new incoming message
-function messageHandler(data) {
-    if(data._event !== undefined) {
-        web3.trigger(data._event, data._id, data.data);
-        return;
-    }
-
-    if(data._id) {
-        var cb = web3._callbacks[data._id];
-        if (cb) {
-            cb.call(this, data.error, data.data);
-            delete web3._callbacks[data._id];
-        }
-    }
-}
 
 module.exports = web3;
 
