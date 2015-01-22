@@ -5,6 +5,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"fmt"
 
 	"code.google.com/p/go.crypto/ripemd160"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
@@ -101,7 +102,11 @@ func SigToPub(hash, sig []byte) *ecdsa.PublicKey {
 }
 
 func Sign(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
-	sig, err = secp256k1.Sign(hash, prv.D.Bytes())
+	if len(hash) != 32 {
+		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(hash))
+	}
+
+	sig, err = secp256k1.Sign(hash, ethutil.LeftPadBytes(prv.D.Bytes(), 32))
 	return
 }
 
