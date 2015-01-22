@@ -60,11 +60,11 @@ type handshake struct {
 func (h *handshake) String() string {
 	return h.ID
 }
-func (h *handshake) Pubkey() []byte {
+func (h *handshake) PublicKey() []byte {
 	return h.NodeID
 }
 
-func (h *handshake) PrivKey() []byte {
+func (h *handshake) PrivateKey() []byte {
 	return nil
 }
 
@@ -265,7 +265,7 @@ func (bp *baseProtocol) handshakeMsg() Msg {
 		bp.peer.ourID.String(),
 		caps,
 		port,
-		bp.peer.ourID.Pubkey()[1:],
+		bp.peer.ourID.PublicKey()[1:],
 	)
 }
 

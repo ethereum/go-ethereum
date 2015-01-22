@@ -11,14 +11,14 @@ import (
 )
 
 type peerId struct {
-	privKey, pubkey []byte
+	privkey, pubkey []byte
 }
 
 func (self *peerId) String() string {
-	return fmt.Sprintf("test peer %x", self.Pubkey()[:4])
+	return fmt.Sprintf("test peer %x", self.PublicKey()[:4])
 }
 
-func (self *peerId) Pubkey() (pubkey []byte) {
+func (self *peerId) PublicKey() (pubkey []byte) {
 	pubkey = self.pubkey
 	if len(pubkey) == 0 {
 		pubkey = crypto.GenerateNewKeyPair().PublicKey
@@ -27,11 +27,11 @@ func (self *peerId) Pubkey() (pubkey []byte) {
 	return
 }
 
-func (self *peerId) PrivKey() (privKey []byte) {
-	privKey = self.privKey
-	if len(privKey) == 0 {
-		privKey = crypto.GenerateNewKeyPair().PublicKey
-		self.privKey = privKey
+func (self *peerId) PrivateKey() (privkey []byte) {
+	privkey = self.privkey
+	if len(privkey) == 0 {
+		privkey = crypto.GenerateNewKeyPair().PublicKey
+		self.privkey = privkey
 	}
 	return
 }

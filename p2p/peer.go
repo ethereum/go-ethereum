@@ -110,7 +110,7 @@ func newServerPeer(server *Server, conn net.Conn, dialAddr *peerAddr) *Peer {
 	// laddr can be updated concurrently by NAT traversal.
 	// newServerPeer must be called with the server lock held.
 	if server.laddr != nil {
-		p.ourListenAddr = newPeerAddr(server.laddr, server.Identity.Pubkey())
+		p.ourListenAddr = newPeerAddr(server.laddr, server.Identity.PublicKey())
 	}
 	return p
 }
@@ -139,12 +139,12 @@ func (p *Peer) Identity() ClientIdentity {
 	return p.identity
 }
 
-func (self *Peer) Pubkey() (pubkey []byte) {
+func (self *Peer) PublicKey() (pubkey []byte) {
 	self.infolock.Lock()
 	defer self.infolock.Unlock()
 	switch {
 	case self.identity != nil:
-		pubkey = self.identity.Pubkey()[1:]
+		pubkey = self.identity.PublicKey()[1:]
 	case self.dialAddr != nil:
 		pubkey = self.dialAddr.Pubkey
 	case self.listenAddr != nil:
@@ -323,7 +323,7 @@ func (p *Peer) handleCryptoHandshake() (crw func(net.Conn) MsgChanReadWriter, er
 	// run on peer
 	// this bit handles the handshake and creates a secure communications channel with
 	// var rw *secretRW
-	if sessionToken, crw, err = crypto.NewSession(p.conn, p.Pubkey(), sessionToken, initiator); err != nil {
+	if sessionToken, crw, err = crypto.NewSession(p.conn, p.PublicKey(), sessionToken, initiator); err != nil {
 		p.Debugf("unable to setup secure session: %v", err)
 		return
 	}

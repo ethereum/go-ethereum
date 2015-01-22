@@ -8,9 +8,9 @@ import (
 	"net"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	ethlogger "github.com/ethereum/go-ethereum/logger"
 	"github.com/obscuren/ecies"
-	"github.com/obscuren/secp256k1-go"
 )
 
 var clogger = ethlogger.NewLogger("CRYPTOID")
@@ -49,7 +49,7 @@ newCryptoId(id ClientIdentity) initialises a crypto layer manager. This object h
 */
 func newCryptoId(id ClientIdentity) (self *cryptoId, err error) {
 	// will be at server  init
-	var prvKeyS []byte = id.PrivKey()
+	var prvKeyS []byte = id.PrivateKey()
 	if prvKeyS == nil {
 		err = fmt.Errorf("no private key for client")
 		return
@@ -68,7 +68,7 @@ func newCryptoId(id ClientIdentity) (self *cryptoId, err error) {
 		// to be created at server init shared between peers and sessions
 		// for reuse, call wth ReadAt, no reset seek needed
 	}
-	self.pubKeyS = id.Pubkey()[1:]
+	self.pubKeyS = id.PublicKey()[1:]
 	clogger.Debugf("initialise crypto for NodeId %v", hexkey(self.pubKeyS))
 	clogger.Debugf("private-key %v\npublic key %v", hexkey(prvKeyS), hexkey(self.pubKeyS))
 	return

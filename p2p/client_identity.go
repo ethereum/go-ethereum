@@ -7,9 +7,9 @@ import (
 
 // ClientIdentity represents the identity of a peer.
 type ClientIdentity interface {
-	String() string  // human readable identity
-	Pubkey() []byte  // 512-bit public key
-	PrivKey() []byte // 512-bit private key
+	String() string     // human readable identity
+	PublicKey() []byte  // 512-bit public key represented in 65 byte format as per golang/elliptic.Marshal, first byte encodes curve
+	PrivateKey() []byte // 256-bit private key
 }
 
 type SimpleClientIdentity struct {
@@ -53,11 +53,11 @@ func (c *SimpleClientIdentity) String() string {
 		c.implementation)
 }
 
-func (c *SimpleClientIdentity) Privkey() []byte {
+func (c *SimpleClientIdentity) PrivateKey() []byte {
 	return c.privkey
 }
 
-func (c *SimpleClientIdentity) Pubkey() []byte {
+func (c *SimpleClientIdentity) PublicKey() []byte {
 	return c.pubkey
 }
 

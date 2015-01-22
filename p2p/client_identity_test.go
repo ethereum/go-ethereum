@@ -9,11 +9,11 @@ import (
 
 func TestClientIdentity(t *testing.T) {
 	clientIdentity := NewSimpleClientIdentity("Ethereum(G)", "0.5.16", "test", []byte("privkey"), []byte("pubkey"))
-	key := clientIdentity.Privkey()
+	key := clientIdentity.PrivateKey()
 	if !bytes.Equal(key, []byte("privkey")) {
 		t.Errorf("Expected Privkey to be %x, got %x", key, []byte("privkey"))
 	}
-	key = clientIdentity.Pubkey()
+	key = clientIdentity.PublicKey()
 	if !bytes.Equal(key, []byte("pubkey")) {
 		t.Errorf("Expected Pubkey to be %x, got %x", key, []byte("pubkey"))
 	}
