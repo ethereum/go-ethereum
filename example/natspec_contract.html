@@ -56,7 +56,7 @@
 
         // transaction does not return any result, cause it's not synchronous and we don't know,
         // when it will be processed
-        contract.multiply(param).transact();
+        contract.transact().multiply(param);
         document.getElementById('result').innerText = 'transaction made';
     }
 
