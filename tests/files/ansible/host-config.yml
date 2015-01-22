@@ -1,0 +1,8 @@
+---
+- name: Provision the operation system for tests
+  # testing
+  hosts: all
+  # live
+  # hosts: TDB 
+  roles:
+      - common

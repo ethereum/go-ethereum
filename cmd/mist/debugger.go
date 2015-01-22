@@ -40,7 +40,7 @@ type DebuggerWindow struct {
 	engine *qml.Engine
 	lib    *UiLib
 
-	vm *vm.DebugVm
+	vm *vm.Vm
 	Db *Debugger
 
 	state *state.StateDB
@@ -57,7 +57,7 @@ func NewDebuggerWindow(lib *UiLib) *DebuggerWindow {
 
 	win := component.CreateWindow(nil)
 
-	w := &DebuggerWindow{engine: engine, win: win, lib: lib, vm: &vm.DebugVm{}}
+	w := &DebuggerWindow{engine: engine, win: win, lib: lib, vm: &vm.Vm{}}
 	w.Db = NewDebugger(w)
 
 	return w
@@ -265,6 +265,9 @@ func NewDebugger(main *DebuggerWindow) *Debugger {
 
 type storeVal struct {
 	Key, Value string
+}
+
+func (self *Debugger) Step(evm vm.VirtualMachine, op vm.OpCode, mem *vm.Memory, stack *vm.Stack, context *vm.Context) {
 }
 
 func (self *Debugger) BreakHook(pc int, op vm.OpCode, mem *vm.Memory, stack *vm.Stack, stateObject *state.StateObject) bool {

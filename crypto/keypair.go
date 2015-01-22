@@ -3,8 +3,8 @@ package crypto
 import (
 	"strings"
 
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/obscuren/secp256k1-go"
 )
 
 type KeyPair struct {

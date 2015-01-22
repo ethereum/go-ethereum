@@ -32,9 +32,19 @@ func (e byteEncoder) EncodeRLP(w io.Writer) error {
 	return nil
 }
 
+type encodableReader struct {
+	A, B uint
+}
+
+func (e *encodableReader) Read(b []byte) (int, error) {
+	panic("called")
+}
+
 var (
 	_ = Encoder(&testEncoder{})
 	_ = Encoder(byteEncoder(0))
+
+	reader io.Reader = &encodableReader{1, 2}
 )
 
 type encTest struct {
@@ -175,6 +185,9 @@ var encTests = []encTest{
 	{val: (*[]interface{})(nil), output: "C0"},
 	{val: (*[]struct{ uint })(nil), output: "C0"},
 	{val: (*interface{})(nil), output: "C0"},
+
+	// interfaces
+	{val: []io.Reader{reader}, output: "C3C20102"}, // the contained value is a struct
 
 	// Encoder
 	{val: (*testEncoder)(nil), output: "00000000"},
