@@ -106,12 +106,12 @@ func TestCryptoHandshake(t *testing.T) {
 	}
 
 	// now both parties should have the same session parameters
-	initSessionToken, initSecretRW, err := initiator.newSession(initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
+	initSessionToken, initSecretRWF, err := initiator.newSession(initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
 
-	recSessionToken, recSecretRW, err := receiver.newSession(remoteInitNonce, remoteRecNonce, auth, remoteRandomPrivKey, remoteInitRandomPubKey)
+	recSessionToken, recSecretRWF, err := receiver.newSession(remoteInitNonce, remoteRecNonce, auth, remoteRandomPrivKey, remoteInitRandomPubKey)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
@@ -129,6 +129,17 @@ func TestCryptoHandshake(t *testing.T) {
 	if !bytes.Equal(initSessionToken, recSessionToken) {
 		t.Errorf("session tokens do not match")
 	}
+
+	conn0, conn1 := net.Pipe()
+	initSecretRW, ok := initSecretRWF(conn0).(*SecureMessenger)
+	if !ok {
+		t.Errorf("incorrect return type. expected *SecureMessenger, got %T", initSecretRW)
+	}
+	recSecretRW, ok := recSecretRWF(conn1).(*SecureMessenger)
+	if !ok {
+		t.Errorf("incorrect return type. expected *SecureMessenger, got %T", initSecretRW)
+	}
+
 	// aesSecret, macSecret, egressMac, ingressMac
 	if !bytes.Equal(initSecretRW.aesSecret, recSecretRW.aesSecret) {
 		t.Errorf("AES secrets do not match")
@@ -191,7 +202,7 @@ func TestPeersHandshake(t *testing.T) {
 		<-receiver.cryptoReady
 		close(ready)
 	}()
-	timeout := time.After(1 * time.Second)
+	timeout := time.After(20 * time.Second)
 	select {
 	case <-ready:
 	case <-timeout:

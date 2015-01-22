@@ -1,11 +1,9 @@
 package p2p
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/rand"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net"
 	"sort"
@@ -62,9 +60,8 @@ type Peer struct {
 	listenAddr *peerAddr // what remote peer is listening on
 	dialAddr   *peerAddr // non-nil if dialing
 
-	conn         net.Conn
-	bufconn      *bufio.ReadWriter
-	outgoingMsgC chan Msg
+	conn net.Conn
+	crw  MsgChanReadWriter
 
 	// These fields maintain the running protocols.
 	protocols       []Protocol
@@ -120,17 +117,15 @@ func newServerPeer(server *Server, conn net.Conn, dialAddr *peerAddr) *Peer {
 
 func newPeer(conn net.Conn, protocols []Protocol, dialAddr *peerAddr) *Peer {
 	p := &Peer{
-		Logger:       logger.NewLogger("P2P " + conn.RemoteAddr().String()),
-		conn:         conn,
-		dialAddr:     dialAddr,
-		bufconn:      bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn)),
-		protocols:    protocols,
-		running:      make(map[string]*proto),
-		disc:         make(chan DiscReason),
-		protoErr:     make(chan error),
-		closed:       make(chan struct{}),
-		cryptoReady:  make(chan struct{}),
-		outgoingMsgC: make(chan Msg),
+		Logger:      logger.NewLogger("P2P " + conn.RemoteAddr().String()),
+		conn:        conn,
+		dialAddr:    dialAddr,
+		protocols:   protocols,
+		running:     make(map[string]*proto),
+		disc:        make(chan DiscReason),
+		protoErr:    make(chan error),
+		closed:      make(chan struct{}),
+		cryptoReady: make(chan struct{}),
 	}
 	return p
 }
@@ -214,26 +209,27 @@ func (p *Peer) loop() (reason DiscReason, err error) {
 	defer close(p.closed)
 	defer p.conn.Close()
 
-	var readLoop func(chan<- Msg, chan<- error, <-chan bool)
 	if p.cryptoHandshake {
-		if readLoop, err = p.handleCryptoHandshake(); err != nil {
+		if crwF, err := p.handleCryptoHandshake(); err != nil {
 			// from here on everything can be encrypted, authenticated
 			return DiscProtocolError, err // no graceful disconnect
+		} else {
+			p.crw = crwF(p.conn)
 		}
 	} else {
-		readLoop = p.readLoop
+		p.crw = NewMessenger(p.conn)
 	}
+	close(p.cryptoReady)
 
 	// read loop
-	readMsg := make(chan Msg)
-	rwErr := make(chan error)
-	readNext := make(chan bool, 1)
 	protoDone := make(chan struct{}, 1)
-	go readLoop(readMsg, rwErr, readNext)
-	go p.writeLoop(p.outgoingMsgC, rwErr)
-	readNext <- true
 
-	close(p.cryptoReady)
+	in := p.crw.ReadC()
+	errc := p.crw.ErrorC()
+	unblock := p.crw.ReadNextC()
+
+	unblock <- true
+
 	if p.runBaseProtocol {
 		p.startBaseProtocol()
 	}
@@ -241,7 +237,7 @@ func (p *Peer) loop() (reason DiscReason, err error) {
 loop:
 	for {
 		select {
-		case msg := <-readMsg:
+		case msg := <-in:
 			// a new message has arrived.
 			var wait bool
 			if wait, err = p.dispatch(msg, protoDone); err != nil {
@@ -251,15 +247,15 @@ loop:
 			}
 			if !wait {
 				// Msg has already been read completely, continue with next message.
-				readNext <- true
+				unblock <- true
 			}
 			p.activity.Post(time.Now())
 		case <-protoDone:
 			// protocol has consumed the message payload,
 			// we can continue reading from the socket.
-			readNext <- true
+			unblock <- true
 
-		case err := <-rwErr:
+		case err := <-errc:
 			// read or write failed. there is no need to run the
 			// polite disconnect sequence because the connection
 			// is probably dead anyway.
@@ -272,23 +268,11 @@ loop:
 			break loop
 		}
 	}
-
-	// wait for read loop to return.
-	close(p.outgoingMsgC)
-	close(readNext)
-	<-rwErr
 	// tell the remote end to disconnect
-	done := make(chan struct{})
-	go func() {
-		p.conn.SetDeadline(time.Now().Add(disconnectGracePeriod))
-		p.writeProtoMsg("", NewMsg(discMsg, reason))
-		io.Copy(ioutil.Discard, p.conn)
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(disconnectGracePeriod):
-	}
+	p.writeProtoMsg("", NewMsg(discMsg, reason))
+	// io.Copy(ioutil.Discard, p.conn)//??
+	p.crw.Close()
+	<-time.After(disconnectGracePeriod)
 	return reason, err
 }
 
@@ -317,7 +301,7 @@ func (p *Peer) dispatch(msg Msg, protoDone chan struct{}) (wait bool, err error)
 
 type readLoop func(chan<- Msg, chan<- error, <-chan bool)
 
-func (p *Peer) handleCryptoHandshake() (loop readLoop, err error) {
+func (p *Peer) handleCryptoHandshake() (crw func(net.Conn) MsgChanReadWriter, err error) {
 	// cryptoId is just created for the lifecycle of the handshake
 	// it is survived by an encrypted readwriter
 	var initiator bool
@@ -339,12 +323,9 @@ func (p *Peer) handleCryptoHandshake() (loop readLoop, err error) {
 	// run on peer
 	// this bit handles the handshake and creates a secure communications channel with
 	// var rw *secretRW
-	if sessionToken, _, err = crypto.Run(p.conn, p.Pubkey(), sessionToken, initiator); err != nil {
+	if sessionToken, crw, err = crypto.NewSession(p.conn, p.Pubkey(), sessionToken, initiator); err != nil {
 		p.Debugf("unable to setup secure session: %v", err)
 		return
-	}
-	loop = func(msg chan<- Msg, err chan<- error, next <-chan bool) {
-		// this is the readloop :)
 	}
 	return
 }
@@ -382,7 +363,7 @@ outer:
 func (p *Peer) startProto(offset uint64, impl Protocol) *proto {
 	rw := &proto{
 		in:      make(chan Msg),
-		out:     p.outgoingMsgC,
+		out:     p.crw.WriteC(),
 		offset:  offset,
 		maxcode: impl.Length,
 	}

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
+	"net"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	ethlogger "github.com/ethereum/go-ethereum/logger"
@@ -93,7 +94,7 @@ Run(connection, remotePublicKey, sessionToken) is called when the peer connectio
  It returns a secretRW which implements the MsgReadWriter interface.
 */
 
-func (self *cryptoId) Run(conn io.ReadWriter, remotePubKeyS []byte, sessionToken []byte, initiator bool) (token []byte, rw *secretRW, err error) {
+func (self *cryptoId) NewSession(conn io.ReadWriter, remotePubKeyS []byte, sessionToken []byte, initiator bool) (token []byte, rwF func(net.Conn) MsgChanReadWriter, err error) {
 	var auth, initNonce, recNonce []byte
 	var read int
 	var randomPrivKey *ecdsa.PrivateKey
@@ -364,7 +365,7 @@ func (self *cryptoId) completeHandshake(auth []byte) (respNonce []byte, remoteRa
 /*
 newSession is called after the handshake is completed. The arguments are values negotiated in the handshake and the return value is a new session : a new session Token to be remembered for the next time we connect with this peer. And a MsgReadWriter that implements an encrypted and authenticated connection with key material obtained from the crypto handshake key exchange
 */
-func (self *cryptoId) newSession(initNonce, respNonce, auth []byte, privKey *ecdsa.PrivateKey, remoteRandomPubKey *ecdsa.PublicKey) (sessionToken []byte, rw *secretRW, err error) {
+func (self *cryptoId) newSession(initNonce, respNonce, auth []byte, privKey *ecdsa.PrivateKey, remoteRandomPubKey *ecdsa.PublicKey) (sessionToken []byte, rwF func(net.Conn) MsgChanReadWriter, err error) {
 	// 3) Now we can trust ecdhe-random-pubk to derive new keys
 	//ecdhe-shared-secret = ecdh.agree(ecdhe-random, remote-ecdhe-random-pubk)
 	var dhSharedSecret []byte
@@ -388,16 +389,15 @@ func (self *cryptoId) newSession(initNonce, respNonce, auth []byte, privKey *ecd
 	// ingress-mac = crypto.Sha3(mac-secret^initiator-nonce || auth),
 	var ingressMac = crypto.Sha3(append(Xor(macSecret, initNonce), auth...))
 	// # destroy remote-nonce
-	rw = &secretRW{
-		aesSecret:  aesSecret,
-		macSecret:  macSecret,
-		egressMac:  egressMac,
-		ingressMac: ingressMac,
-	}
+
 	clogger.Debugf("aes-secret: %v", hexkey(aesSecret))
 	clogger.Debugf("mac-secret: %v", hexkey(macSecret))
 	clogger.Debugf("egress-mac: %v", hexkey(egressMac))
 	clogger.Debugf("ingress-mac: %v", hexkey(ingressMac))
+
+	rwF = func(conn net.Conn) MsgChanReadWriter {
+		return NewSecureMessenger(conn, aesSecret, macSecret, egressMac, ingressMac)
+	}
 	return
 }
 
@@ -409,4 +409,18 @@ func Xor(one, other []byte) (xor []byte) {
 		xor[i] = one[i] ^ other[i]
 	}
 	return
+}
+
+type SecureMessenger struct {
+	Messenger
+	aesSecret, macSecret, egressMac, ingressMac []byte
+}
+
+func NewSecureMessenger(conn net.Conn, aesSecret, macSecret, egressMac, ingressMac []byte) *SecureMessenger {
+	return &SecureMessenger{
+		aesSecret:  aesSecret,
+		macSecret:  macSecret,
+		egressMac:  egressMac,
+		ingressMac: ingressMac,
+	}
 }

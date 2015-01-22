@@ -33,7 +33,7 @@ func testPeer(protos []Protocol) (net.Conn, *Peer, <-chan error) {
 	peer := newPeer(conn1, protos, nil)
 	peer.ourID = &peerId{}
 	peer.pubkeyHook = func(*peerAddr) error { return nil }
-	peer.outgoingMsgC = make(chan Msg)
+	peer.crw = NewMessenger(conn1)
 	errc := make(chan error, 1)
 	go func() {
 		_, err := peer.loop()

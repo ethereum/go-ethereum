@@ -121,6 +121,7 @@ func TestServerBroadcast(t *testing.T) {
 	var connected sync.WaitGroup
 	srv := startTestServer(t, func(srv *Server, c net.Conn, dialAddr *peerAddr) *Peer {
 		peer := newPeer(c, []Protocol{discard}, dialAddr)
+		peer.crw = NewMessenger(peer.conn)
 		peer.startSubprotocols([]Cap{discard.cap()})
 		connected.Done()
 		return peer

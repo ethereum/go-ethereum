@@ -1,11 +1,13 @@
 package p2p
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"math/big"
+	"net"
 	"time"
 
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -35,25 +37,82 @@ var magicToken = []byte{34, 64, 8, 145}
 
   Because framing and header structure will change there will be hardly any overlap with the new code so I do not abstract readers any further.
 */
-func (p *Peer) readLoop(msgc chan<- Msg, errc chan<- error, unblock <-chan bool) {
-	for _ = range unblock {
-		p.conn.SetReadDeadline(time.Now().Add(msgReadTimeout))
-		if msg, err := readMsg(p.bufconn); err != nil {
-			errc <- err
-		} else {
-			msgc <- msg
-		}
-	}
-	close(errc)
+
+type MsgChanReadWriter interface {
+	ReadC() chan Msg
+	WriteC() chan Msg
+	ErrorC() chan error
+	ReadNextC() chan bool
+	Close()
 }
 
-func (p *Peer) writeLoop(msgc <-chan Msg, errc chan<- error) {
-	p.conn.SetWriteDeadline(time.Now().Add(msgWriteTimeout))
-	for msg := range msgc {
-		if err := writeMsg(p.bufconn, msg); err != nil {
-			errc <- newPeerError(errWrite, "%v", err)
+type Messenger struct {
+	msgReadTimeout  time.Duration
+	msgWriteTimeout time.Duration
+	in              chan Msg
+	out             chan Msg
+	errc            chan error
+	unblock         chan bool
+	conn            net.Conn
+	bufconn         *bufio.ReadWriter
+}
+
+func NewMessenger(conn net.Conn) *Messenger {
+	self := &Messenger{
+		msgReadTimeout:  msgReadTimeout,
+		msgWriteTimeout: msgWriteTimeout,
+		in:              make(chan Msg),
+		out:             make(chan Msg),
+		errc:            make(chan error),
+		unblock:         make(chan bool, 1),
+		conn:            conn,
+		bufconn:         bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn)),
+	}
+	go self.readLoop()
+	go self.writeLoop()
+	return self
+}
+
+func (self *Messenger) Close() {
+	close(self.unblock)
+	close(self.out)
+}
+
+func (self *Messenger) ReadC() chan Msg {
+	return self.in
+}
+
+func (self *Messenger) WriteC() chan Msg {
+	return self.out
+}
+
+func (self *Messenger) ErrorC() chan error {
+	return self.errc
+}
+
+func (self *Messenger) ReadNextC() chan bool {
+	return self.unblock
+}
+
+func (self *Messenger) readLoop() {
+	for _ = range self.unblock {
+		self.conn.SetReadDeadline(time.Now().Add(self.msgReadTimeout))
+		if msg, err := readMsg(self.bufconn); err != nil {
+			self.errc <- err
+		} else {
+			self.in <- msg
 		}
-		p.bufconn.Flush()
+	}
+	close(self.errc)
+}
+
+func (self *Messenger) writeLoop() {
+	for msg := range self.out {
+		self.conn.SetWriteDeadline(time.Now().Add(self.msgWriteTimeout))
+		if err := writeMsg(self.bufconn, msg); err != nil {
+			self.errc <- newPeerError(errWrite, "%v", err)
+		}
+		self.bufconn.Flush()
 	}
 }
 
