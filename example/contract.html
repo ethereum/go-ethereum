@@ -53,7 +53,7 @@
         var param = parseInt(document.getElementById('value').value);
 
         // call the contract
-        var res = contract.multiply(param).call();
+        var res = contract.multiply(param);
         document.getElementById('result').innerText = res[0];
     }
 
