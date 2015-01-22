@@ -408,7 +408,7 @@ module.exports = {
 };
 
 
-},{"./web3":6}],2:[function(require,module,exports){
+},{"./web3":7}],2:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -508,7 +508,7 @@ var contract = function (address, desc) {
 module.exports = contract;
 
 
-},{"./abi":1,"./web3":6}],3:[function(require,module,exports){
+},{"./abi":1,"./web3":7}],3:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -583,7 +583,7 @@ Filter.prototype.logs = function () {
 
 module.exports = Filter;
 
-},{"./web3":6}],4:[function(require,module,exports){
+},{"./web3":7}],4:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -763,7 +763,41 @@ ProviderManager.prototype.stopPolling = function (pollId) {
 module.exports = ProviderManager;
 
 
-},{"./web3":6}],6:[function(require,module,exports){
+},{"./web3":7}],6:[function(require,module,exports){
+/*
+    This file is part of ethereum.js.
+
+    ethereum.js is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    ethereum.js is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/** @file qtsync.js
+ * @authors:
+ *   Marek Kotewicz <marek@ethdev.com>
+ *   Marian Oancea <marian@ethdev.com>
+ * @date 2014
+ */
+
+var QtSyncProvider = function () {
+};
+
+QtSyncProvider.prototype.send = function (payload) {
+    return navigator.qt.callMethod(JSON.stringify(payload));
+};
+
+module.exports = QtSyncProvider;
+
+
+},{}],7:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1087,13 +1121,14 @@ var ProviderManager = require('./lib/providermanager');
 web3.provider = new ProviderManager();
 web3.filter = require('./lib/filter');
 web3.providers.HttpSyncProvider = require('./lib/httpsync');
+web3.providers.QtSyncProvider = require('./lib/qtsync');
 web3.eth.contract = require('./lib/contract');
 web3.abi = require('./lib/abi');
 
 
 module.exports = web3;
 
-},{"./lib/abi":1,"./lib/contract":2,"./lib/filter":3,"./lib/httpsync":4,"./lib/providermanager":5,"./lib/web3":6}]},{},["web3"])
+},{"./lib/abi":1,"./lib/contract":2,"./lib/filter":3,"./lib/httpsync":4,"./lib/providermanager":5,"./lib/qtsync":6,"./lib/web3":7}]},{},["web3"])
 
 
 //# sourceMappingURL=ethereum.js.map
