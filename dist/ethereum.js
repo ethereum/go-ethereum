@@ -456,11 +456,23 @@ var abi = require('./abi');
  * @returns contract object
  */
 
-var contract = function contract (address, desc) {
+var contract = function (address, desc) {
     var inputParser = abi.inputParser(desc);
     var outputParser = abi.outputParser(desc);
 
     var result = {};
+
+    result.call = function (options) {
+        result._isTransact = false;
+        result._options = options;
+        return result;
+    };
+
+    result.transact = function (options) {
+        result._isTransact = true;
+        result._options = options;
+        return result;
+    };
 
     desc.forEach(function (method) {
 
@@ -472,12 +484,12 @@ var contract = function contract (address, desc) {
             var signature = abi.methodSignature(method.name);
             var parsed = inputParser[displayName][typeName].apply(null, params);
 
-            var options = contract._options || {};
+            var options = result._options || {};
             options.to = address;
             options.data = signature + parsed;
 
             var output = "";
-            if (contract._isTransact) {
+            if (result._isTransact) {
                 // it's used byt natspec.js
                 // TODO: figure out better way to solve this
                 web3._currentContractAbi = desc;
@@ -487,6 +499,10 @@ var contract = function contract (address, desc) {
             } else {
                 output = web3.eth.call(options);
             }
+
+            // reset
+            result._options = {};
+            result._isTransact = false;
 
             return outputParser[displayName][typeName](output);
         };
@@ -498,23 +514,9 @@ var contract = function contract (address, desc) {
         result[displayName][typeName] = impl;
 
     });
+
     return result;
 };
-
-var transact = function (options) {
-    contract._isTransact = true;
-    contract._options = options;
-    return contract;
-};
-
-var call = function (options) {
-    contract._isTransact = false;
-    contract._options = options;
-    return contract;
-};
-
-contract.transact = transact;
-contract.call = call;
 
 module.exports = contract;
 
