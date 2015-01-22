@@ -18,7 +18,6 @@ Rectangle {
 	property var identity: ""
 	Component.onCompleted: {
 		identity = shh.newIdentity()
-		console.log("New identity:", identity)
 
 		var t = shh.watch({}, root)
 	}
