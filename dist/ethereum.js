@@ -558,8 +558,7 @@ var Filter = function(options, impl) {
     this.callbacks = [];
 
     this.id = impl.newFilter(options);
-    web3.on(impl.changed, this.id, this.trigger.bind(this));
-    web3.provider.startPolling({call: impl.changed, args: [this.id]}, this.id);
+    web3.provider.startPolling({call: impl.changed, args: [this.id]}, this.id, this.trigger.bind(this));
 };
 
 /// alias for changed*
@@ -583,7 +582,6 @@ Filter.prototype.trigger = function(messages) {
 Filter.prototype.uninstall = function() {
     this.impl.uninstallFilter(this.id);
     web3.provider.stopPolling(this.id);
-    web3.off(impl.changed, this.id);
 };
 
 /// should be called to manually trigger getting latest messages from the client
@@ -704,19 +702,26 @@ var web3 = require('./web3'); // jshint ignore:line
  * and provider manager polling mechanism is not used
  */
 var ProviderManager = function() {
-    this.queued = [];
     this.polls = [];
-    this.ready = false;
     this.provider = undefined;
     this.id = 1;
 
     var self = this;
     var poll = function () {
-        if (self.provider && self.provider.poll) {
+        if (self.provider) {
             self.polls.forEach(function (data) {
                 data.data._id = self.id;
                 self.id++;
-                self.provider.poll(data.data, data.id);
+                var result = self.provider.send(data.data);
+            
+                result = JSON.parse(result);
+                
+                // dont call the callback if result is an error, empty array or false
+                if (result.error || (result.result instanceof Array ? result.result.length === 0 : !result.result)) {
+                    return;
+                }
+
+                data.callback(result);
             });
         }
         setTimeout(poll, 12000);
@@ -724,7 +729,7 @@ var ProviderManager = function() {
     poll();
 };
 
-/// sends outgoing requests, if provider is not available, enqueue the request
+/// sends outgoing requests
 ProviderManager.prototype.send = function(data) {
 
     data.args = data.args || [];
@@ -743,26 +748,13 @@ ProviderManager.prototype.send = function(data) {
 
 /// setups provider, which will be used for sending messages
 ProviderManager.prototype.set = function(provider) {
-    if(this.provider !== undefined && this.provider.unload !== undefined) {
-        this.provider.unload();
-    }
-
     this.provider = provider;
-    this.ready = true;
-};
-
-/// @returns true if the provider i properly set
-ProviderManager.prototype.installed = function() {
-    return this.provider !== undefined;
 };
 
 /// this method is only used, when we do not have native qt bindings and have to do polling on our own
 /// should be callled, on start watching for eth/shh changes
-ProviderManager.prototype.startPolling = function (data, pollId) {
-    if (!this.provider || !this.provider.poll) {
-        return;
-    }
-    this.polls.push({data: data, id: pollId});
+ProviderManager.prototype.startPolling = function (data, pollId, callback) {
+    this.polls.push({data: data, id: pollId, callback: callback});
 };
 
 /// should be called to stop polling for certain watch changes
