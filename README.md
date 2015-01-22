@@ -46,7 +46,7 @@ Go Ethereum comes with several binaries found in
 * `mist` Official Ethereum Browser
 * `ethereum` Ethereum CLI
 * `ethtest` test tool which runs with the [tests](https://github.com/ethereum/testes) suit: 
-  `ethtest "`cat myfile.json`"`.
+  `cat file | ethtest`.
 * `evm` is a generic Ethereum Virtual Machine: `evm -code 60ff60ff -gas
   10000 -price 0 -dump`. See `-h` for a detailed description.
 

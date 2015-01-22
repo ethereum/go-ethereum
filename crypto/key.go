@@ -57,7 +57,7 @@ type encryptedKeyJSON struct {
 
 func (k *Key) Address() []byte {
 	pubBytes := FromECDSAPub(&k.PrivateKey.PublicKey)
-	return Sha3(pubBytes)[12:]
+	return Sha3(pubBytes[1:])[12:]
 }
 
 func (k *Key) MarshalJSON() (j []byte, err error) {
@@ -99,9 +99,10 @@ func NewKey(rand io.Reader) *Key {
 	privateKeyMarshalled := elliptic.Marshal(S256(), x, y)
 	privateKeyECDSA := ToECDSA(privateKeyMarshalled)
 
-	key := new(Key)
 	id := uuid.NewRandom()
-	key.Id = &id
-	key.PrivateKey = privateKeyECDSA
+	key := &Key{
+		Id:         &id,
+		PrivateKey: privateKeyECDSA,
+	}
 	return key
 }
