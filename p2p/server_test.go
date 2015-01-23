@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"bufio"
 	"bytes"
 	"io"
 	"net"
@@ -121,7 +122,8 @@ func TestServerBroadcast(t *testing.T) {
 	var connected sync.WaitGroup
 	srv := startTestServer(t, func(srv *Server, c net.Conn, dialAddr *peerAddr) *Peer {
 		peer := newPeer(c, []Protocol{discard}, dialAddr)
-		peer.crw = NewMessenger(peer.conn)
+		rw, _ := NewMsgRW(bufio.NewReader(c), c)
+		peer.crw = NewMessenger(rw)
 		peer.startSubprotocols([]Cap{discard.cap()})
 		connected.Done()
 		return peer
@@ -146,9 +148,10 @@ func TestServerBroadcast(t *testing.T) {
 
 	// broadcast one message
 	srv.Broadcast("discard", 0, "foo")
-	goldbuf := new(bytes.Buffer)
-	writeMsg(goldbuf, NewMsg(16, "foo"))
-	golden := goldbuf.Bytes()
+	buf := new(bytes.Buffer)
+	rw, _ := NewMsgRW(buf, buf)
+	rw.WriteMsg(NewMsg(16, "foo"))
+	golden := buf.Bytes()
 
 	// check that the message has been written everywhere
 	for i, conn := range conns {

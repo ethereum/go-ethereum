@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
-	"net"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
@@ -25,13 +24,6 @@ var (
 	iHSLen int = 307 // size of the final ECIES payload sent as initiator's handshake
 	rHSLen int = 210 // size of the final ECIES payload sent as receiver's handshake
 )
-
-// secretRW implements a message read writer with encryption and authentication
-// it is initialised by cryptoId.Run() after a successful crypto handshake
-// aesSecret, macSecret, egressMac, ingress
-type secretRW struct {
-	aesSecret, macSecret, egressMac, ingressMac []byte
-}
 
 /*
 cryptoId implements the crypto layer for the p2p networking
@@ -81,7 +73,7 @@ func (self hexkey) String() string {
 }
 
 /*
-Run(connection, remotePublicKey, sessionToken) is called when the peer connection starts to set up a secure session by performing a crypto handshake.
+NewSession is called when the peer connection starts to set up a secure session by performing a crypto handshake.
 
  connection is (a buffered) network connection.
 
@@ -94,7 +86,7 @@ Run(connection, remotePublicKey, sessionToken) is called when the peer connectio
  It returns a secretRW which implements the MsgReadWriter interface.
 */
 
-func (self *cryptoId) NewSession(conn io.ReadWriter, remotePubKeyS []byte, sessionToken []byte, initiator bool) (token []byte, rwF func(net.Conn) MsgChanReadWriter, err error) {
+func (self *cryptoId) NewSession(r io.Reader, w io.Writer, remotePubKeyS []byte, sessionToken []byte, initiator bool) (token []byte, rw MsgReadWriter, err error) {
 	var auth, initNonce, recNonce []byte
 	var read int
 	var randomPrivKey *ecdsa.PrivateKey
@@ -112,12 +104,12 @@ func (self *cryptoId) NewSession(conn io.ReadWriter, remotePubKeyS []byte, sessi
 		randomPublicKeyS, _ := ExportPublicKey(&randomPrivKey.PublicKey)
 		clogger.Debugf("initiator-random-public-key: %v", hexkey(randomPublicKeyS))
 
-		if _, err = conn.Write(auth); err != nil {
+		if _, err = w.Write(auth); err != nil {
 			return
 		}
 		clogger.Debugf("initiator handshake (sent to %v):\n%v", hexkey(remotePubKeyS), hexkey(auth))
 		var response []byte = make([]byte, rHSLen)
-		if read, err = conn.Read(response); err != nil || read == 0 {
+		if read, err = r.Read(response); err != nil || read == 0 {
 			return
 		}
 		if read != rHSLen {
@@ -136,7 +128,7 @@ func (self *cryptoId) NewSession(conn io.ReadWriter, remotePubKeyS []byte, sessi
 	} else {
 		auth = make([]byte, iHSLen)
 		clogger.Debugf("waiting for initiator handshake (from %v)", hexkey(remotePubKeyS))
-		if read, err = conn.Read(auth); err != nil {
+		if read, err = r.Read(auth); err != nil {
 			return
 		}
 		if read != iHSLen {
@@ -153,12 +145,12 @@ func (self *cryptoId) NewSession(conn io.ReadWriter, remotePubKeyS []byte, sessi
 		}
 		clogger.Debugf("receiver-nonce: %v", hexkey(recNonce))
 		clogger.Debugf("receiver-random-priv-key: %v", hexkey(crypto.FromECDSA(randomPrivKey)))
-		if _, err = conn.Write(response); err != nil {
+		if _, err = w.Write(response); err != nil {
 			return
 		}
 		clogger.Debugf("receiver handshake (sent to %v):\n%v", hexkey(remotePubKeyS), hexkey(response))
 	}
-	return self.newSession(initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
+	return self.newSession(r, w, initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
 }
 
 /*
@@ -365,7 +357,7 @@ func (self *cryptoId) completeHandshake(auth []byte) (respNonce []byte, remoteRa
 /*
 newSession is called after the handshake is completed. The arguments are values negotiated in the handshake and the return value is a new session : a new session Token to be remembered for the next time we connect with this peer. And a MsgReadWriter that implements an encrypted and authenticated connection with key material obtained from the crypto handshake key exchange
 */
-func (self *cryptoId) newSession(initNonce, respNonce, auth []byte, privKey *ecdsa.PrivateKey, remoteRandomPubKey *ecdsa.PublicKey) (sessionToken []byte, rwF func(net.Conn) MsgChanReadWriter, err error) {
+func (self *cryptoId) newSession(r io.Reader, w io.Writer, initNonce, respNonce, auth []byte, privKey *ecdsa.PrivateKey, remoteRandomPubKey *ecdsa.PublicKey) (sessionToken []byte, rw MsgReadWriter, err error) {
 	// 3) Now we can trust ecdhe-random-pubk to derive new keys
 	//ecdhe-shared-secret = ecdh.agree(ecdhe-random, remote-ecdhe-random-pubk)
 	var dhSharedSecret []byte
@@ -395,9 +387,7 @@ func (self *cryptoId) newSession(initNonce, respNonce, auth []byte, privKey *ecd
 	clogger.Debugf("egress-mac: %v", hexkey(egressMac))
 	clogger.Debugf("ingress-mac: %v", hexkey(ingressMac))
 
-	rwF = func(conn net.Conn) MsgChanReadWriter {
-		return NewSecureMessenger(conn, aesSecret, macSecret, egressMac, ingressMac)
-	}
+	rw, err = NewCryptoMsgRW(r, w, aesSecret, macSecret, egressMac, ingressMac)
 	return
 }
 
@@ -409,18 +399,4 @@ func Xor(one, other []byte) (xor []byte) {
 		xor[i] = one[i] ^ other[i]
 	}
 	return
-}
-
-type SecureMessenger struct {
-	Messenger
-	aesSecret, macSecret, egressMac, ingressMac []byte
-}
-
-func NewSecureMessenger(conn net.Conn, aesSecret, macSecret, egressMac, ingressMac []byte) *SecureMessenger {
-	return &SecureMessenger{
-		aesSecret:  aesSecret,
-		macSecret:  macSecret,
-		egressMac:  egressMac,
-		ingressMac: ingressMac,
-	}
 }

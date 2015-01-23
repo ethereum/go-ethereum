@@ -5,6 +5,7 @@ import (
 	// "crypto/ecdsa"
 	// "crypto/elliptic"
 	// "crypto/rand"
+	"bufio"
 	"fmt"
 	"net"
 	"testing"
@@ -105,13 +106,15 @@ func TestCryptoHandshake(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 
+	conn0, conn1 := net.Pipe()
+
 	// now both parties should have the same session parameters
-	initSessionToken, initSecretRWF, err := initiator.newSession(initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
+	initSessionToken, initRW, err := initiator.newSession(bufio.NewReader(conn0), conn0, initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
 
-	recSessionToken, recSecretRWF, err := receiver.newSession(remoteInitNonce, remoteRecNonce, auth, remoteRandomPrivKey, remoteInitRandomPubKey)
+	recSessionToken, recRW, err := receiver.newSession(bufio.NewReader(conn1), conn1, remoteInitNonce, remoteRecNonce, auth, remoteRandomPrivKey, remoteInitRandomPubKey)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
@@ -130,14 +133,13 @@ func TestCryptoHandshake(t *testing.T) {
 		t.Errorf("session tokens do not match")
 	}
 
-	conn0, conn1 := net.Pipe()
-	initSecretRW, ok := initSecretRWF(conn0).(*SecureMessenger)
+	initSecretRW, ok := initRW.(*CryptoMsgRW)
 	if !ok {
-		t.Errorf("incorrect return type. expected *SecureMessenger, got %T", initSecretRW)
+		t.Errorf("incorrect return type. expected *CryptoMsgRW, got %T", initRW)
 	}
-	recSecretRW, ok := recSecretRWF(conn1).(*SecureMessenger)
+	recSecretRW, ok := recRW.(*CryptoMsgRW)
 	if !ok {
-		t.Errorf("incorrect return type. expected *SecureMessenger, got %T", initSecretRW)
+		t.Errorf("incorrect return type. expected *CryptoMsgRW, got %T", recRW)
 	}
 
 	// aesSecret, macSecret, egressMac, ingressMac
@@ -184,8 +186,8 @@ func TestPeersHandshake(t *testing.T) {
 	initiator.pubkeyHook = func(*peerAddr) error { return nil }
 	receiver.pubkeyHook = func(*peerAddr) error { return nil }
 
-	initiator.cryptoHandshake = true
-	receiver.cryptoHandshake = true
+	initiator.CryptoType = EthCrypto
+	receiver.CryptoType = EthCrypto
 	errc0 := make(chan error, 1)
 	errc1 := make(chan error, 1)
 	go func() {

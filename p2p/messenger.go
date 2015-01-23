@@ -1,13 +1,10 @@
 package p2p
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"math/big"
-	"net"
 	"time"
 
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -27,15 +24,12 @@ const (
 var magicToken = []byte{34, 64, 8, 145}
 
 /*
- writeMsg, readMsg (makeListHeader) should all be internal to the default legacy
- MsgReadWriter implementation
+ A MsgChanReadWriter implementation will typically sit on a multiplexed peer connection and runs a single read and a write loop without need to use locking.
 
- A MsgReadWriter implementation will typically sit on a multiplexed peer connection and runs a single read and a write loop without need to use locking.
-
- It passes on incoming messages to its channel picked up by the interface methods Read
+ It passes on incoming messages to its channel ReadC()
  the peer runs a dispatch loop that figures out which protocol to forward the message to.
 
-  Because framing and header structure will change there will be hardly any overlap with the new code so I do not abstract readers any further.
+ The channel for outcgoing messages (WriteC) is simply shared between the individual MsgReadWriter instances for each protocol
 */
 
 type MsgChanReadWriter interface {
@@ -47,26 +41,24 @@ type MsgChanReadWriter interface {
 }
 
 type Messenger struct {
-	msgReadTimeout  time.Duration
-	msgWriteTimeout time.Duration
-	in              chan Msg
-	out             chan Msg
-	errc            chan error
-	unblock         chan bool
-	conn            net.Conn
-	bufconn         *bufio.ReadWriter
+	in      chan Msg
+	out     chan Msg
+	errc    chan error
+	unblock chan bool
+	rw      MsgReadWriter
 }
 
-func NewMessenger(conn net.Conn) *Messenger {
+/*
+Messenger is a simple implementation of a read and write loop using a MsgReadWriter to encode/decode individual messages
+This MsgReadWriter can implement parsing from/to any kind of packet structure and employ encryption and authentication
+*/
+func NewMessenger(rw MsgReadWriter) *Messenger {
 	self := &Messenger{
-		msgReadTimeout:  msgReadTimeout,
-		msgWriteTimeout: msgWriteTimeout,
-		in:              make(chan Msg),
-		out:             make(chan Msg),
-		errc:            make(chan error),
-		unblock:         make(chan bool, 1),
-		conn:            conn,
-		bufconn:         bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn)),
+		in:      make(chan Msg),
+		out:     make(chan Msg),
+		errc:    make(chan error),
+		unblock: make(chan bool, 1),
+		rw:      rw,
 	}
 	go self.readLoop()
 	go self.writeLoop()
@@ -90,14 +82,14 @@ func (self *Messenger) ErrorC() chan error {
 	return self.errc
 }
 
+// ReadNextC <- true must be called before the next read is attempted
 func (self *Messenger) ReadNextC() chan bool {
 	return self.unblock
 }
 
 func (self *Messenger) readLoop() {
 	for _ = range self.unblock {
-		self.conn.SetReadDeadline(time.Now().Add(self.msgReadTimeout))
-		if msg, err := readMsg(self.bufconn); err != nil {
+		if msg, err := self.rw.ReadMsg(); err != nil {
 			self.errc <- err
 		} else {
 			self.in <- msg
@@ -108,15 +100,35 @@ func (self *Messenger) readLoop() {
 
 func (self *Messenger) writeLoop() {
 	for msg := range self.out {
-		self.conn.SetWriteDeadline(time.Now().Add(self.msgWriteTimeout))
-		if err := writeMsg(self.bufconn, msg); err != nil {
+		if err := self.rw.WriteMsg(msg); err != nil {
 			self.errc <- newPeerError(errWrite, "%v", err)
 		}
-		self.bufconn.Flush()
+
 	}
 }
 
-func writeMsg(w io.Writer, msg Msg) error {
+/*
+MsgReadWriter is an interface for reading and writing messages
+It is aware of message structure and knows how to encode/decode
+
+MsgRW is a simple encoder implementing MsgReadWriter
+It complies with the legacy devp2p packet structure and no encryption or authentication
+*/
+type MsgRW struct {
+	r rlp.ByteReader // this is implemented by bufio.ReadWriter
+	// r io.Reader
+	w io.Writer
+}
+
+func NewMsgRW(r rlp.ByteReader, w io.Writer) (*MsgRW, error) {
+	return &MsgRW{
+		r: r,
+		w: w,
+	}, nil
+}
+
+func (self *MsgRW) WriteMsg(msg Msg) error {
+
 	// TODO: handle case when Size + len(code) + len(listhdr) overflows uint32
 	code := ethutil.Encode(uint32(msg.Code))
 	listhdr := makeListHeader(msg.Size + uint32(len(code)))
@@ -127,11 +139,11 @@ func writeMsg(w io.Writer, msg Msg) error {
 	binary.BigEndian.PutUint32(start[4:], payloadLen)
 
 	for _, b := range [][]byte{start, listhdr, code} {
-		if _, err := w.Write(b); err != nil {
+		if _, err := self.w.Write(b); err != nil {
 			return err
 		}
 	}
-	_, err := io.CopyN(w, msg.Payload, int64(msg.Size))
+	_, err := io.CopyN(self.w, msg.Payload, int64(msg.Size))
 	return err
 }
 
@@ -146,29 +158,19 @@ func makeListHeader(length uint32) []byte {
 
 // readMsg reads a message header from r.
 // It takes an rlp.ByteReader to ensure that the decoding doesn't buffer.
-func readMsg(r rlp.ByteReader) (msg Msg, err error) {
+func (self *MsgRW) ReadMsg() (msg Msg, err error) {
+
 	// read magic and payload size
 	start := make([]byte, 8)
-	if _, err = io.ReadFull(r, start); err != nil {
+	if _, err = io.ReadFull(self.r, start); err != nil {
 		return msg, newPeerError(errRead, "%v", err)
 	}
+
 	if !bytes.HasPrefix(start, magicToken) {
 		return msg, newPeerError(errMagicTokenMismatch, "got %x, want %x", start[:4], magicToken)
 	}
 	size := binary.BigEndian.Uint32(start[4:])
-
-	// decode start of RLP message to get the message code
-	posr := &postrack{r, 0}
-	s := rlp.NewStream(posr)
-	if _, err := s.List(); err != nil {
-		return msg, err
-	}
-	code, err := s.Uint()
-	if err != nil {
-		return msg, err
-	}
-	payloadsize := size - posr.p
-	return Msg{code, payloadsize, io.LimitReader(r, int64(payloadsize))}, nil
+	return NewMsgFromRLP(size, self.r)
 }
 
 // postrack wraps an rlp.ByteReader with a position counter.
@@ -191,20 +193,6 @@ func (r *postrack) ReadByte() (byte, error) {
 	return b, err
 }
 
-// this duplicates functionality of proto.WriteMsg
-// if we need this for broadcasting via a server interface then
-// simply call the appropriate Write function of the protocol RW
-// writeProtoMsg sends the given message on behalf of the given named protocol.
-func (p *Peer) writeProtoMsg(protoName string, msg Msg) error {
-	p.runlock.RLock()
-	proto, ok := p.running[protoName]
-	p.runlock.RUnlock()
-	if !ok {
-		return fmt.Errorf("protocol %s not handled by peer", protoName)
-	}
-	return proto.WriteMsg(msg)
-}
-
 // proto will embed the same writer channel as given to the readwriter
 // in the legacy code it knows about the code offset
 // no need to go through peer for writing , so do not need to embed peer as field
@@ -214,6 +202,7 @@ type proto struct {
 	maxcode, offset uint64
 }
 
+// WriteMsg proto implements MsgWriter interface
 func (rw *proto) WriteMsg(msg Msg) error {
 	if msg.Code >= rw.maxcode {
 		return newPeerError(errInvalidMsgCode, "not handled")

@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/rand"
 	"fmt"
@@ -65,8 +66,8 @@ type Peer struct {
 
 	// These fields maintain the running protocols.
 	protocols       []Protocol
-	runBaseProtocol bool // for testing
-	cryptoHandshake bool // for testing
+	runBaseProtocol bool       // for testing
+	CryptoType      CryptoType //
 	cryptoReady     chan struct{}
 
 	runlock sync.RWMutex // protects running
@@ -209,17 +210,12 @@ func (p *Peer) loop() (reason DiscReason, err error) {
 	defer close(p.closed)
 	defer p.conn.Close()
 
-	if p.cryptoHandshake {
-		if crwF, err := p.handleCryptoHandshake(); err != nil {
-			// from here on everything can be encrypted, authenticated
-			return DiscProtocolError, err // no graceful disconnect
-		} else {
-			p.crw = crwF(p.conn)
-		}
-	} else {
-		p.crw = NewMessenger(p.conn)
+	if err = p.handleCryptoHandshake(); err != nil {
+		// from here on everything can be encrypted, authenticated
+		return DiscProtocolError, err // no graceful disconnect
 	}
 	close(p.cryptoReady)
+	defer p.crw.Close()
 
 	// read loop
 	protoDone := make(chan struct{}, 1)
@@ -271,7 +267,6 @@ loop:
 	// tell the remote end to disconnect
 	p.writeProtoMsg("", NewMsg(discMsg, reason))
 	// io.Copy(ioutil.Discard, p.conn)//??
-	p.crw.Close()
 	<-time.After(disconnectGracePeriod)
 	return reason, err
 }
@@ -299,34 +294,62 @@ func (p *Peer) dispatch(msg Msg, protoDone chan struct{}) (wait bool, err error)
 	return wait, nil
 }
 
-type readLoop func(chan<- Msg, chan<- error, <-chan bool)
+type CryptoType byte
 
-func (p *Peer) handleCryptoHandshake() (crw func(net.Conn) MsgChanReadWriter, err error) {
-	// cryptoId is just created for the lifecycle of the handshake
-	// it is survived by an encrypted readwriter
-	var initiator bool
-	var sessionToken []byte
-	sessionToken = make([]byte, keyLen)
-	if _, err = rand.Read(sessionToken); err != nil {
-		return
+const (
+	NoCrypto CryptoType = iota
+	EthCrypto
+)
+
+var cryptoType = map[CryptoType]string{
+	NoCrypto:  "no encryption",
+	EthCrypto: "AES256 CTR HMAC SHA256",
+}
+
+func (self CryptoType) String() (s string) {
+	s = cryptoType[self]
+	if len(s) == 0 {
+		s = string([]byte{byte(self)})
 	}
-	if p.dialAddr != nil { // this should have its own method Outgoing() bool
-		initiator = true
+	return
+}
+
+func (p *Peer) handleCryptoHandshake() (err error) {
+	var crw MsgReadWriter
+	switch p.CryptoType {
+	case NoCrypto:
+		if crw, err = NewMsgRW(bufio.NewReader(p.conn), p.conn); err != nil {
+			return
+		}
+	case EthCrypto:
+		// cryptoId is just created for the lifecycle of the handshake
+		// it is survived by an encrypted readwriter
+		var initiator bool
+		var sessionToken []byte
+		sessionToken = make([]byte, keyLen)
+		if _, err = rand.Read(sessionToken); err != nil {
+			return
+		}
+		if p.dialAddr != nil { // this should have its own method Outgoing() bool
+			initiator = true
+		}
+		// create crypto layer
+		// this could in principle run only once but maybe we want to allow
+		// identity switching
+		var crypto *cryptoId
+		if crypto, err = newCryptoId(p.ourID); err != nil {
+			return
+		}
+		// run on peer
+		// this bit handles the handshake and creates a secure communications channel with
+		if sessionToken, crw, err = crypto.NewSession(bufio.NewReader(p.conn), p.conn, p.PublicKey(), sessionToken, initiator); err != nil {
+			p.Errorf("unable to setup secure session: %v", err)
+		}
+	default:
+		err = fmt.Errorf("unrecognised crypto type %v", p.CryptoType)
+		p.Errorf("%v", err)
 	}
-	// create crypto layer
-	// this could in principle run only once but maybe we want to allow
-	// identity switching
-	var crypto *cryptoId
-	if crypto, err = newCryptoId(p.ourID); err != nil {
-		return
-	}
-	// run on peer
-	// this bit handles the handshake and creates a secure communications channel with
-	// var rw *secretRW
-	if sessionToken, crw, err = crypto.NewSession(p.conn, p.PublicKey(), sessionToken, initiator); err != nil {
-		p.Debugf("unable to setup secure session: %v", err)
-		return
-	}
+	p.crw = NewMessenger(crw)
 	return
 }
 
@@ -405,4 +428,15 @@ func (p *Peer) closeProtocols() {
 	}
 	p.runlock.RUnlock()
 	p.protoWG.Wait()
+}
+
+// writeProtoMsg sends the given message on behalf of the given named protocol.
+func (p *Peer) writeProtoMsg(protoName string, msg Msg) error {
+	p.runlock.RLock()
+	proto, ok := p.running[protoName]
+	p.runlock.RUnlock()
+	if !ok {
+		return fmt.Errorf("protocol %s not handled by peer", protoName)
+	}
+	return proto.WriteMsg(msg)
 }

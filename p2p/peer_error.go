@@ -19,6 +19,8 @@ const (
 	errPingTimeout
 	errInvalidNetworkId
 	errInvalidProtocolVersion
+	errAuthentication
+	errEncryption
 )
 
 var errorToString = map[int]string{
@@ -36,6 +38,8 @@ var errorToString = map[int]string{
 	errPingTimeout:            "Ping timeout",
 	errInvalidNetworkId:       "Invalid network id",
 	errInvalidProtocolVersion: "Invalid protocol version",
+	errAuthentication:         "Authentication error",
+	errEncryption:             "Encryption error",
 }
 
 type peerError struct {

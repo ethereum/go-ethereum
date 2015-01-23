@@ -65,6 +65,21 @@ func (msg Msg) Discard() error {
 	return err
 }
 
+func NewMsgFromRLP(size uint32, r rlp.ByteReader) (msg Msg, err error) {
+	// decode start of RLP message to get the message code
+	posr := &postrack{r, 0}
+	s := rlp.NewStream(posr)
+	if _, err := s.List(); err != nil {
+		return msg, err
+	}
+	code, err := s.Uint()
+	if err != nil {
+		return msg, err
+	}
+	payloadsize := size - posr.p
+	return Msg{code, payloadsize, io.LimitReader(r, int64(payloadsize))}, nil
+}
+
 /*
 MsgReadWriter is an interface for reading and writing messages
 It is aware of message structure and knows how to encode/decode
