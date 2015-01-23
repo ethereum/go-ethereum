@@ -1,36 +1,6 @@
 module.exports = {
-  blockgenesis: require('./BasicTests/blockgenesistest'),
-  genesishashes: require('./BasicTests/genesishashestest'),
-  hexencode: require('./BasicTests/hexencodetest'),
-  keyaddrtests: require('./BasicTests/keyaddrtest'),
-  rlptest: require('./BasicTests/rlptest'),
-  trieTests: {
-    trietest: require('./TrieTests/trietest'),
-    trietestnextprev: require('./TrieTests/trietestnextprev'),
-    trieanyorder: require('./TrieTests/trieanyorder')
-  },
-  txtest: require('./BasicTests/txtest'),
-  StateTests: {
-    stExample: require('./StateTests/stExample.json'),
-    stInitCodeTest: require('./StateTests/stInitCodeTest.json'),
-    stLogTests: require('./StateTests/stLogTests.json'),
-    stPreCompiledContracts: require('./StateTests/stPreCompiledContracts'),
-    stRecursiveCreate: require('./StateTests/stRecursiveCreate'),
-    stRefundTest: require('./StateTests/stRefundTest'),
-    stSpecial: require('./StateTests/stSpecialTest'),
-    stSystemOperationsTest: require('./StateTests/stSystemOperationsTest'),
-    stTransactionTest: require('./StateTests/stTransactionTest')
-  },
-  VMTests: {
-    vmRandom: require('./VMTests/RandomTests/randomTest'),
-    vmArithmeticTest: require('./VMTests/vmArithmeticTest'),
-    vmBitwiseLogicOperationTest: require('./VMTests/vmBitwiseLogicOperationTest'),
-    vmBlockInfoTest: require('./VMTests/vmBlockInfoTest'),
-    vmEnvironmentalInfoTest: require('./VMTests/vmEnvironmentalInfoTest'),
-    vmIOandFlowOperationsTest: require('./VMTests/vmIOandFlowOperationsTest'),
-    vmLogTest: require('./VMTests/vmLogTest'),
-    vmPushDupSwapTest: require('./VMTests/vmPushDupSwapTest'),
-    vmSha3Test: require('./VMTests/vmSha3Test'),
-    vmtests: require('./VMTests/vmtests')
-  }
+  basicTests: require('require-all')(__dirname + '/BasicTests/'),
+  trieTests: require('require-all')(__dirname + '/TrieTests/'),
+  stateTests: require('require-all')(__dirname + '/StateTests/'),
+  vmTests: require('require-all')(__dirname + '/VMTests')
 };

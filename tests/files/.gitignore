@@ -1,0 +1,4 @@
+venv/
+*~
+*.swp
+.vagrant/
