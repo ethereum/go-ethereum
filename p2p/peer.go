@@ -107,6 +107,9 @@ func newServerPeer(server *Server, conn net.Conn, dialAddr *peerAddr) *Peer {
 	p.otherPeers = server.Peers
 	p.pubkeyHook = server.verifyPeer
 	p.runBaseProtocol = true
+	if server.Encryption {
+		p.CryptoType = EthCrypto
+	}
 
 	// laddr can be updated concurrently by NAT traversal.
 	// newServerPeer must be called with the server lock held.

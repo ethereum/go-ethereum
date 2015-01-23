@@ -62,6 +62,9 @@ type Server struct {
 	// If NoDial is true, the server will not dial any peers.
 	NoDial bool
 
+	// whether or not use encryption
+	Encryption bool
+
 	// Hook for testing. This is useful because we can inhibit
 	// the whole protocol stack.
 	newPeerFunc peerFunc

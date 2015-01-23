@@ -36,8 +36,9 @@ type Config struct {
 	NATType    string
 	PMPGateway string
 
-	Shh  bool
-	Dial bool
+	Shh        bool
+	Dial       bool
+	Encryption bool
 
 	KeyManager *crypto.KeyManager
 }
@@ -107,7 +108,7 @@ func New(config *Config) (*Ethereum, error) {
 	keyManager.Init(config.KeyRing, 0, false)
 
 	// Create a new client id for this instance. This will help identifying the node on the network
-	clientId := p2p.NewSimpleClientIdentity(config.Name, config.Version, config.Identifier, keyManager.PublicKey())
+	clientId := p2p.NewSimpleClientIdentity(config.Name, config.Version, config.Identifier, keyManager.PrivateKey(), keyManager.PublicKey())
 
 	saveProtocolVersion(db)
 	//ethutil.Config.Db = db
@@ -143,12 +144,13 @@ func New(config *Config) (*Ethereum, error) {
 	fmt.Println(nat)
 
 	eth.net = &p2p.Server{
-		Identity:  clientId,
-		MaxPeers:  config.MaxPeers,
-		Protocols: protocols,
-		Blacklist: eth.blacklist,
-		NAT:       p2p.UPNP(),
-		NoDial:    !config.Dial,
+		Identity:   clientId,
+		MaxPeers:   config.MaxPeers,
+		Protocols:  protocols,
+		Blacklist:  eth.blacklist,
+		NAT:        p2p.UPNP(),
+		NoDial:     !config.Dial,
+		Encryption: config.Encryption,
 	}
 
 	if len(config.Port) > 0 {
