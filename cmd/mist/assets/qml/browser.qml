@@ -9,15 +9,16 @@ import Ethereum 1.0
 
 Rectangle {
 	id: window
-	objectName: "browserView"
 	anchors.fill: parent
 	color: "#00000000"
 
-	property var title: "Browser"
+	property var title: "DApps"
 	property var iconSource: "../browser.png"
 	property var menuItem
+    property var hideUrl: true
 
 	property alias url: webview.url
+    property alias windowTitle: webview.title
 	property alias webView: webview
 
 	property var cleanPath: false
@@ -66,8 +67,7 @@ Rectangle {
 		webview.url = "http://etherian.io"
 	}
 
-	signal messages(var messages, int id);
-	onMessages: {
+    function messages(messages, id) {
 		// Bit of a cheat to get proper JSON
 		var m = JSON.parse(JSON.parse(JSON.stringify(messages)))
 		webview.postEvent("eth_changed", id, m);
@@ -164,20 +164,8 @@ Rectangle {
 				id: webview
 				anchors.fill: parent
 
-				function injectJs(js) {
-					webview.experimental.navigatorQtObjectEnabled = true;
-					webview.experimental.evaluateJavaScript(js)
-					webview.experimental.javascriptEnabled = true;
-				}
-
 				function sendMessage(data) {
 					webview.experimental.postMessage(JSON.stringify(data))
-				}
-
-				Component.onCompleted: {
-					for (var i in experimental.preferences) {
-						console.log(i)
-					}
 				}
 
 				experimental.preferences.javascriptEnabled: true
@@ -219,8 +207,7 @@ Rectangle {
 				}
 				experimental.userScripts: ["../ext/q.js", "../ext/ethereum.js/lib/web3.js", "../ext/ethereum.js/lib/qt.js", "../ext/setup.js"]
 				experimental.onMessageReceived: {
-					console.log("[onMessageReceived]: ", message.data)
-					// TODO move to messaging.js
+					//console.log("[onMessageReceived]: ", message.data)
 					var data = JSON.parse(message.data)
 
 					try {
@@ -350,13 +337,13 @@ Rectangle {
 
 							case "eth_newFilterString":
 							require(1)
-							var id = eth.newFilterString(data.args[0])
+							var id = eth.newFilterString(data.args[0], window)
 							postData(data._id, id);
 							break;
 
 							case "eth_newFilter":
 							require(1)
-							var id = eth.newFilter(data.args[0])
+							var id = eth.newFilter(data.args[0], window)
 
 							postData(data._id, id);
 							break;
@@ -425,11 +412,9 @@ Rectangle {
 					}
 				}
 
-
 				function post(seed, data) {
 					postData(data._id, data)
 				}
-
 				function require(args, num) {
 					if(args.length < num) {
 						throw("required argument count of "+num+" got "+args.length);
@@ -441,12 +426,10 @@ Rectangle {
 				function postEvent(event, id, data) {
 					webview.experimental.postMessage(JSON.stringify({data: data, _id: id, _event: event}))
 				}
-
 				function onWatchedCb(data, id) {
 					var messages = JSON.parse(data)
 					postEvent("watched:"+id, messages)
 				}
-
 				function onNewBlockCb(block) {
 					postEvent("block:new", block)
 				}
@@ -459,7 +442,6 @@ Rectangle {
 				}
 			}
 		}
-
 
 		Rectangle {
 			id: sizeGrip

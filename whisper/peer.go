@@ -81,7 +81,7 @@ func (self *peer) broadcast(envelopes []*Envelope) error {
 		if err := self.ws.WriteMsg(msg); err != nil {
 			return err
 		}
-		self.peer.Infoln("broadcasted", i, "message(s)")
+		self.peer.DebugDetailln("broadcasted", i, "message(s)")
 	}
 
 	return nil

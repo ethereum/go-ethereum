@@ -13,7 +13,6 @@ ApplicationWindow {
 	id: root
 
 	property var ethx : Eth.ethx
-	property var browser
 
 	width: 1200
 	height: 820
@@ -21,6 +20,7 @@ ApplicationWindow {
 
 	title: "Mist"
 
+    /*
 	// This signal is used by the filter API. The filter API connects using this signal handler from
 	// the different QML files and plugins.
 	signal messages(var messages, int id);
@@ -30,6 +30,7 @@ ApplicationWindow {
 		messages(data, receiverSeed);
 		root.browser.view.messages(data, receiverSeed);
 	}
+    */
 
 	TextField {
 		id: copyElementHax
@@ -45,8 +46,6 @@ ApplicationWindow {
 	// Takes care of loading all default plugins
 	Component.onCompleted: {
 		var wallet = addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "ethereum", active: true});
-		var browser = addPlugin("./browser.qml", {noAdd: true, close: false, section: "ethereum", active: true});
-		root.browser = browser;
 		addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: true});
 
 		addPlugin("./views/transaction.qml", {noAdd: true, close: false, section: "legacy"});
@@ -55,9 +54,9 @@ ApplicationWindow {
 		addPlugin("./views/pending_tx.qml", {noAdd: true, close: false, section: "legacy"});
 		addPlugin("./views/info.qml", {noAdd: true, close: false, section: "legacy"});
 
-		addPlugin("./views/jeffcoin/jeffcoin.qml", {noAdd: true, close: false, section: "apps"})
-
 		mainSplit.setView(wallet.view, wallet.menuItem);
+
+        newBrowserTab("http://etherian.io");
 
 		// Command setup
 		gui.sendCommand(0)
@@ -65,7 +64,7 @@ ApplicationWindow {
 
 	function activeView(view, menuItem) {
 		mainSplit.setView(view, menuItem)
-		if (view.objectName === "browserView") {
+        if (view.hideUrl) {
 			urlPane.visible = false;
 			mainView.anchors.top = rootView.top
 		} else {
@@ -119,6 +118,13 @@ ApplicationWindow {
 		}
 	}
 
+    function newBrowserTab(url) {
+		var window = addPlugin("./browser.qml", {noAdd: true, close: true, section: "apps", active: true});
+        window.view.url = url;
+        window.menuItem.title = "Browser Tab";
+        activeView(window.view, window.menuItem);
+    }
+
 	menuBar: MenuBar {
 		Menu {
 			title: "File"
@@ -130,13 +136,6 @@ ApplicationWindow {
 				}
 			}
 
-			/*
-			 MenuItem {
-				 text: "Browser"
-				 onTriggered: eth.openBrowser()
-			 }
-			 */
-
 			MenuItem {
 				text: "Add plugin"
 				onTriggered: {
@@ -145,6 +144,14 @@ ApplicationWindow {
 					})
 				}
 			}
+
+            MenuItem {
+                text: "New tab"
+                shortcut: "Ctrl+t"
+                onTriggered: {
+                    newBrowserTab("http://etherian.io");
+                }
+            }
 
 			MenuSeparator {}
 
@@ -205,21 +212,6 @@ ApplicationWindow {
 			}
 
 			MenuSeparator {}
-
-			/*
-			 MenuItem {
-				 id: miningSpeed
-				 text: "Mining: Turbo"
-				 onTriggered: {
-					 gui.toggleTurboMining()
-					 if(text == "Mining: Turbo") {
-						 text = "Mining: Normal";
-					 } else {
-						 text = "Mining: Turbo";
-					 }
-				 }
-			 }
-			 */
 		}
 
 		Menu {
@@ -350,9 +342,6 @@ ApplicationWindow {
 				views[i].menuItem.setSelection(false)
 			}
 			view.visible = true
-
-			//menu.border.color = "#CCCCCC"
-			//menu.color = "#FFFFFFFF"
 			menu.setSelection(true)
 		}
 
@@ -512,7 +501,15 @@ ApplicationWindow {
 
 						 this.view.destroy()
 						 this.destroy()
+                         for (var i = 0; i < mainSplit.views.length; i++) {
+                             var view = mainSplit.views[i];
+                             if (view.menuItem === this) {
+                                 mainSplit.views.splice(i, 1);
+                                 break;
+                             }
+                         }
 						 gui.removePlugin(this.path)
+                         activeView(mainSplit.views[0].view, mainSplit.views[0].menuItem);
 					 }
 				 }
 			 }
@@ -576,7 +573,7 @@ ApplicationWindow {
 
 
 				 Text {
-					 text: "APPS"
+					 text: "NET"
 					 font.bold: true
 					 anchors {
 						 left: parent.left
@@ -653,7 +650,7 @@ ApplicationWindow {
 
 					  Keys.onReturnPressed: {
 						  if(/^https?/.test(this.text)) {
-							  activeView(root.browser.view, root.browser.menuItem);
+                              newBrowserTab(this.text);
 						  } else {
 							  addPlugin(this.text, {close: true, section: "apps"})
 						  }

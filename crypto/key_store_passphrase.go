@@ -178,22 +178,10 @@ func DecryptKey(ks keyStorePassphrase, keyId *uuid.UUID, auth string) (keyBytes 
 	if err != nil {
 		return nil, err
 	}
-
-	AES256Block, err := aes.NewCipher(derivedKey)
+	plainText, err := aesCBCDecrypt(derivedKey, cipherText, iv)
 	if err != nil {
 		return nil, err
 	}
-
-	AES256CBCDecrypter := cipher.NewCBCDecrypter(AES256Block, iv)
-	paddedPlainText := make([]byte, len(cipherText))
-	AES256CBCDecrypter.CryptBlocks(paddedPlainText, cipherText)
-
-	plainText := PKCS7Unpad(paddedPlainText)
-	if plainText == nil {
-		err = errors.New("Decryption failed: PKCS7Unpad failed after decryption")
-		return nil, err
-	}
-
 	keyBytes = plainText[:len(plainText)-32]
 	keyBytesHash := plainText[len(plainText)-32:]
 	if !bytes.Equal(Sha3(keyBytes), keyBytesHash) {
@@ -210,36 +198,4 @@ func getEntropyCSPRNG(n int) []byte {
 		panic("key generation: reading from crypto/rand failed: " + err.Error())
 	}
 	return mainBuff
-}
-
-// From https://leanpub.com/gocrypto/read#leanpub-auto-block-cipher-modes
-func PKCS7Pad(in []byte) []byte {
-	padding := 16 - (len(in) % 16)
-	if padding == 0 {
-		padding = 16
-	}
-	for i := 0; i < padding; i++ {
-		in = append(in, byte(padding))
-	}
-	return in
-}
-
-func PKCS7Unpad(in []byte) []byte {
-	if len(in) == 0 {
-		return nil
-	}
-
-	padding := in[len(in)-1]
-	if int(padding) > len(in) || padding > aes.BlockSize {
-		return nil
-	} else if padding == 0 {
-		return nil
-	}
-
-	for i := len(in) - 1; i > len(in)-int(padding)-1; i-- {
-		if in[i] != padding {
-			return nil
-		}
-	}
-	return in[:len(in)-int(padding)]
 }
