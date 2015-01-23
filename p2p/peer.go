@@ -349,6 +349,7 @@ func (p *Peer) handleCryptoHandshake() (err error) {
 		// this bit handles the handshake and creates a secure communications channel with
 		if sessionToken, crw, err = crypto.NewSession(bufio.NewReader(p.conn), p.conn, p.PublicKey(), sessionToken, initiator); err != nil {
 			p.Errorf("unable to setup secure session: %v", err)
+			return
 		}
 	default:
 		err = fmt.Errorf("unrecognised crypto type %v", p.CryptoType)
