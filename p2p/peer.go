@@ -321,6 +321,8 @@ func (p *Peer) handleCryptoHandshake() (err error) {
 		if crw, err = NewMsgRW(bufio.NewReader(p.conn), p.conn); err != nil {
 			return
 		}
+		p.Infof("insecure connection using no encryption/authentication")
+
 	case EthCrypto:
 		// cryptoId is just created for the lifecycle of the handshake
 		// it is survived by an encrypted readwriter
@@ -350,6 +352,7 @@ func (p *Peer) handleCryptoHandshake() (err error) {
 		p.Errorf("%v", err)
 	}
 	p.crw = NewMessenger(crw)
+	p.Infof("secure connection using %v", p.CryptoType)
 	return
 }
 

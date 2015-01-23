@@ -7,11 +7,9 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/binary"
-	"fmt"
 	"hash"
 	"io"
 
-	// "github.com/ethereum/go-ethereum/crypto/sha256"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -82,11 +80,11 @@ func (self *CryptoMsgRW) WriteMsg(msg Msg) (err error) {
 	copy(plaintext[listhdrLen:], code)
 	msg.Payload.Read(plaintext[listhdrLen+codeLen:])
 	self.Encrypt(ciphertext, plaintext)
-	fmt.Printf("ENCRYPT:\npt: %v\nct: %v\n", hexkey(plaintext), hexkey(ciphertext))
 	if _, err = self.w.Write(ciphertext); err != nil {
 		return
 	}
-	if _, err = self.w.Write(self.egress.Sum(nil)); err != nil {
+	mac := self.egress.Sum(nil)
+	if _, err = self.w.Write(mac); err != nil {
 		return
 	}
 
@@ -130,18 +128,16 @@ func (self *CryptoMsgRW) readPayload(size uint32) (r rlp.ByteReader, err error) 
 	ciphertext := make([]byte, size)
 	self.r.Read(ciphertext)
 	self.Decrypt(plaintext, ciphertext)
-	fmt.Printf("DECRYPT:\npt: %v\nct: %v\n", hexkey(plaintext), hexkey(ciphertext))
 	mac := make([]byte, 32)
 	if _, err = self.r.Read(mac); err != nil {
 		err = newPeerError(errRead, "%v", err)
 		return
 	}
-	// var expectedMac = self.ingress.Sum(nil)
-	// if !hmac.Equal(expectedMac, mac) {
-	// 	err = newPeerError(errAuthentication, "ingress incorrect")
-	// 	return
-	// }
+	var expectedMac = self.ingress.Sum(nil)
+	if !hmac.Equal(expectedMac, mac) {
+		err = newPeerError(errAuthentication, "ingress incorrect:\nexp %v\ngot %v\n", hexkey(expectedMac), hexkey(mac))
+		return
+	}
 	r = bytes.NewReader(plaintext)
-	// r = io.LimitReader(bytes.NewReader(plaintext), int64(size))
 	return
 }

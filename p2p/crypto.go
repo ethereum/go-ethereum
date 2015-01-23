@@ -150,7 +150,7 @@ func (self *cryptoId) NewSession(r io.Reader, w io.Writer, remotePubKeyS []byte,
 		}
 		clogger.Debugf("receiver handshake (sent to %v):\n%v", hexkey(remotePubKeyS), hexkey(response))
 	}
-	return self.newSession(r, w, initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
+	return self.newSession(r, w, initiator, initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
 }
 
 /*
@@ -357,7 +357,7 @@ func (self *cryptoId) completeHandshake(auth []byte) (respNonce []byte, remoteRa
 /*
 newSession is called after the handshake is completed. The arguments are values negotiated in the handshake and the return value is a new session : a new session Token to be remembered for the next time we connect with this peer. And a MsgReadWriter that implements an encrypted and authenticated connection with key material obtained from the crypto handshake key exchange
 */
-func (self *cryptoId) newSession(r io.Reader, w io.Writer, initNonce, respNonce, auth []byte, privKey *ecdsa.PrivateKey, remoteRandomPubKey *ecdsa.PublicKey) (sessionToken []byte, rw MsgReadWriter, err error) {
+func (self *cryptoId) newSession(r io.Reader, w io.Writer, initiator bool, initNonce, respNonce, auth []byte, privKey *ecdsa.PrivateKey, remoteRandomPubKey *ecdsa.PublicKey) (sessionToken []byte, rw MsgReadWriter, err error) {
 	// 3) Now we can trust ecdhe-random-pubk to derive new keys
 	//ecdhe-shared-secret = ecdh.agree(ecdhe-random, remote-ecdhe-random-pubk)
 	var dhSharedSecret []byte
@@ -375,13 +375,14 @@ func (self *cryptoId) newSession(r io.Reader, w io.Writer, initNonce, respNonce,
 	// mac-secret = crypto.Sha3(ecdhe-shared-secret || aes-secret)
 	var macSecret = crypto.Sha3(append(dhSharedSecret, aesSecret...))
 	// # destroy ecdhe-shared-secret
-	// egress-mac = crypto.Sha3(mac-secret^nonce || auth)
-	var egressMac = crypto.Sha3(append(Xor(macSecret, respNonce), auth...))
-	// # destroy nonce
-	// ingress-mac = crypto.Sha3(mac-secret^initiator-nonce || auth),
-	var ingressMac = crypto.Sha3(append(Xor(macSecret, initNonce), auth...))
-	// # destroy remote-nonce
-
+	var egressMac, ingressMac []byte
+	if initiator {
+		egressMac = Xor(macSecret, respNonce)
+		ingressMac = Xor(macSecret, initNonce)
+	} else {
+		egressMac = Xor(macSecret, initNonce)
+		ingressMac = Xor(macSecret, respNonce)
+	}
 	clogger.Debugf("aes-secret: %v", hexkey(aesSecret))
 	clogger.Debugf("mac-secret: %v", hexkey(macSecret))
 	clogger.Debugf("egress-mac: %v", hexkey(egressMac))

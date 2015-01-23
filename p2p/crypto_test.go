@@ -109,12 +109,12 @@ func TestCryptoHandshake(t *testing.T) {
 	conn0, conn1 := net.Pipe()
 
 	// now both parties should have the same session parameters
-	initSessionToken, initRW, err := initiator.newSession(bufio.NewReader(conn0), conn0, initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
+	initSessionToken, initRW, err := initiator.newSession(bufio.NewReader(conn0), conn0, true, initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
 
-	recSessionToken, recRW, err := receiver.newSession(bufio.NewReader(conn1), conn1, remoteInitNonce, remoteRecNonce, auth, remoteRandomPrivKey, remoteInitRandomPubKey)
+	recSessionToken, recRW, err := receiver.newSession(bufio.NewReader(conn1), conn1, false, remoteInitNonce, remoteRecNonce, auth, remoteRandomPrivKey, remoteInitRandomPubKey)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
@@ -149,11 +149,11 @@ func TestCryptoHandshake(t *testing.T) {
 	if !bytes.Equal(initSecretRW.macSecret, recSecretRW.macSecret) {
 		t.Errorf("macSecrets do not match")
 	}
-	if !bytes.Equal(initSecretRW.egressMac, recSecretRW.egressMac) {
-		t.Errorf("egressMacs do not match")
+	if !bytes.Equal(initSecretRW.egressMac, recSecretRW.ingressMac) {
+		t.Errorf("initiator's egressMac do not match receiver's ingressMac")
 	}
-	if !bytes.Equal(initSecretRW.ingressMac, recSecretRW.ingressMac) {
-		t.Errorf("ingressMacs do not match")
+	if !bytes.Equal(initSecretRW.ingressMac, recSecretRW.egressMac) {
+		t.Errorf("initiator's inressMac do not match receiver's egressMac")
 	}
 
 }

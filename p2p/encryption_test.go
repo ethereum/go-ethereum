@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/rand"
-	// "fmt"
 	"io"
 	"net"
 	"testing"
@@ -47,7 +46,8 @@ func TestEncryption(t *testing.T) {
 	}
 	messenger0 := NewMessenger(rw0)
 
-	rw1, err := NewCryptoMsgRW(bufio.NewReader(conn1), conn1, args[0], args[1], args[2], args[3])
+	// note that args 3/2 swapped! ingress <-> egress MAC should reverse
+	rw1, err := NewCryptoMsgRW(bufio.NewReader(conn1), conn1, args[0], args[1], args[3], args[2])
 	if err != nil {
 		return
 	}
