@@ -16,21 +16,10 @@ ApplicationWindow {
 
 	width: 1200
 	height: 820
-	minimumHeight: 300
+	minimumHeight: 800
+	minimumWidth: 600
 
 	title: "Mist"
-
-    /*
-	// This signal is used by the filter API. The filter API connects using this signal handler from
-	// the different QML files and plugins.
-	signal messages(var messages, int id);
-	function invokeFilterCallback(data, receiverSeed) {
-		//var messages = JSON.parse(data)
-		// Signal handler
-		messages(data, receiverSeed);
-		root.browser.view.messages(data, receiverSeed);
-	}
-    */
 
 	TextField {
 		id: copyElementHax
@@ -56,7 +45,9 @@ ApplicationWindow {
 
 		mainSplit.setView(wallet.view, wallet.menuItem);
 
-        newBrowserTab("http://etherian.io");
+		try {
+			newBrowserTab("http://google.com");
+		} catch(e) { console.log(e); }
 
 		// Command setup
 		gui.sendCommand(0)
@@ -64,7 +55,7 @@ ApplicationWindow {
 
 	function activeView(view, menuItem) {
 		mainSplit.setView(view, menuItem)
-        if (view.hideUrl) {
+		if (view.hideUrl) {
 			urlPane.visible = false;
 			mainView.anchors.top = rootView.top
 		} else {
@@ -118,12 +109,12 @@ ApplicationWindow {
 		}
 	}
 
-    function newBrowserTab(url) {
-		var window = addPlugin("./browser.qml", {noAdd: true, close: true, section: "apps", active: true});
-        window.view.url = url;
-        window.menuItem.title = "Browser Tab";
-        activeView(window.view, window.menuItem);
-    }
+	function newBrowserTab(url) {
+		var window = addPlugin("./views/browser2.qml", {noAdd: true, close: true, section: "apps", active: true});
+		window.view.url = url;
+		window.menuItem.title = "Browser Tab";
+		activeView(window.view, window.menuItem);
+	}
 
 	menuBar: MenuBar {
 		Menu {
@@ -145,13 +136,13 @@ ApplicationWindow {
 				}
 			}
 
-            MenuItem {
-                text: "New tab"
-                shortcut: "Ctrl+t"
-                onTriggered: {
-                    newBrowserTab("http://etherian.io");
-                }
-            }
+			MenuItem {
+				text: "New tab"
+				shortcut: "Ctrl+t"
+				onTriggered: {
+					newBrowserTab("http://etherian.io");
+				}
+			}
 
 			MenuSeparator {}
 
@@ -501,15 +492,15 @@ ApplicationWindow {
 
 						 this.view.destroy()
 						 this.destroy()
-                         for (var i = 0; i < mainSplit.views.length; i++) {
-                             var view = mainSplit.views[i];
-                             if (view.menuItem === this) {
-                                 mainSplit.views.splice(i, 1);
-                                 break;
-                             }
-                         }
+						 for (var i = 0; i < mainSplit.views.length; i++) {
+							 var view = mainSplit.views[i];
+							 if (view.menuItem === this) {
+								 mainSplit.views.splice(i, 1);
+								 break;
+							 }
+						 }
 						 gui.removePlugin(this.path)
-                         activeView(mainSplit.views[0].view, mainSplit.views[0].menuItem);
+						 activeView(mainSplit.views[0].view, mainSplit.views[0].menuItem);
 					 }
 				 }
 			 }
@@ -650,7 +641,7 @@ ApplicationWindow {
 
 					  Keys.onReturnPressed: {
 						  if(/^https?/.test(this.text)) {
-                              newBrowserTab(this.text);
+							  newBrowserTab(this.text);
 						  } else {
 							  addPlugin(this.text, {close: true, section: "apps"})
 						  }
