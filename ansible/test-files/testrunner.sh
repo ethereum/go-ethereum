@@ -2,6 +2,7 @@
 
 # create random virtual machine test
 #cd ~/software/Ethereum/pyethereum (python has local dependencies so only works from within the directory)
+cd ~
 while [ 1 ]
 do	
 	TEST="$(docker run --rm --entrypoint="/cpp-ethereum/build/test/createRandomTest" cppjit)"
