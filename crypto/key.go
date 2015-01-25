@@ -33,7 +33,9 @@ import (
 )
 
 type Key struct {
-	Id *uuid.UUID // Version 4 "random" for unique id not derived from key data
+	Id uuid.UUID // Version 4 "random" for unique id not derived from key data
+	// to simplify lookups we also store the address
+	Address []byte
 	// we only store privkey as pubkey/address can be derived from it
 	// privkey in this struct is always in plaintext
 	PrivateKey *ecdsa.PrivateKey
@@ -41,6 +43,7 @@ type Key struct {
 
 type plainKeyJSON struct {
 	Id         []byte
+	Address    []byte
 	PrivateKey []byte
 }
 
@@ -51,18 +54,15 @@ type cipherJSON struct {
 }
 
 type encryptedKeyJSON struct {
-	Id     []byte
-	Crypto cipherJSON
-}
-
-func (k *Key) Address() []byte {
-	pubBytes := FromECDSAPub(&k.PrivateKey.PublicKey)
-	return Sha3(pubBytes[1:])[12:]
+	Id      []byte
+	Address []byte
+	Crypto  cipherJSON
 }
 
 func (k *Key) MarshalJSON() (j []byte, err error) {
 	jStruct := plainKeyJSON{
-		*k.Id,
+		k.Id,
+		k.Address,
 		FromECDSA(k.PrivateKey),
 	}
 	j, err = json.Marshal(jStruct)
@@ -78,8 +78,8 @@ func (k *Key) UnmarshalJSON(j []byte) (err error) {
 
 	u := new(uuid.UUID)
 	*u = keyJSON.Id
-	k.Id = u
-
+	k.Id = *u
+	k.Address = keyJSON.Address
 	k.PrivateKey = ToECDSA(keyJSON.PrivateKey)
 
 	return err
@@ -101,7 +101,8 @@ func NewKey(rand io.Reader) *Key {
 
 	id := uuid.NewRandom()
 	key := &Key{
-		Id:         &id,
+		Id:         id,
+		Address:    pubkeyToAddress(privateKeyECDSA.PublicKey),
 		PrivateKey: privateKeyECDSA,
 	}
 	return key
