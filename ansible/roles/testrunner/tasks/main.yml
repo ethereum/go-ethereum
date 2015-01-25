@@ -1,18 +1,35 @@
 ---
 - name: update C++ client
-  sudo: true  
   docker_image:
-      path: git/ansible/test-files/docker-cpp
-      name: cpp
+      path: /home/{{ ansible_ssh_user }}/git/ansible/test-files/docker-cppjit
+      name: cppjit
       state: build
+#  command: docker build -t cpp /home/{{ ansible_ssh_user }}/git/ansible/test-files/docker-cpp
+  async: 3600
+  poll: 5
 
 - name: update Go client
-  sudo: true 
   docker_image:
-      path: git/ansible/test-files/docker-go
+      path: /home/{{ ansible_ssh_user }}/git/ansible/test-files/docker-go
       name: go
       state: build
+#  command: docker build -t go /home/{{ ansible_ssh_user }}/git/ansible/test-files/docker-go 
+  async: 3600
+  poll: 5
 
-- name: Run infinite tests (press ^C to stop)
-  sudo: true
-  shell: git/ansible/test-files/testrunner.sh
+- name: update Python client
+  docker_image:
+      path: /home/{{ ansible_ssh_user }}/git/ansible/test-files/docker-python
+      name: python
+      state: build
+  async: 3600
+  poll: 5
+
+- name: Run infinite tests 
+  shell: seq {{ ansible_processor_vcpus }} | parallel --max-args=0 /home/{{ ansible_ssh_user }}/git/ansible/test-files/testrunner.sh
+  async: "{{ 3600 * 2 }}"
+  poll: 0
+  register: log_runner
+
+- name: verify previous task
+  async_status: jid={{ log_runner.ansible_job_id }}
