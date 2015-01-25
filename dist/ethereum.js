@@ -129,7 +129,7 @@ var formatInputReal = function (value) {
 
 var dynamicTypeBytes = function (type, value) {
     // TODO: decide what to do with array of strings
-    if (arrayType(type) || prefixedType('string')(type))
+    if (arrayType(type) || type == 'string')    // only string itself that is dynamic; stringX is static length.
         return formatInputInt(value.length); 
     return "";
 };
@@ -889,6 +889,7 @@ var ethMethods = function () {
     { name: 'transaction', call: transactionCall },
     { name: 'uncle', call: uncleCall },
     { name: 'compilers', call: 'eth_compilers' },
+    { name: 'flush', call: 'eth_flush' },
     { name: 'lll', call: 'eth_lll' },
     { name: 'solidity', call: 'eth_solidity' },
     { name: 'serpent', call: 'eth_serpent' },
