@@ -486,6 +486,15 @@ var contract = function (address, desc) {
         return result;
     };
 
+    result._options = {};
+    ['gas', 'gasPrice', 'value', 'from'].forEach(function(p) {
+        result[p] = function (v) {
+            result._options[p] = v;
+            return result;
+        };
+    });
+
+
     desc.forEach(function (method) {
 
         var displayName = abi.methodDisplayName(method.name);
@@ -1096,6 +1105,15 @@ var web3 = {
 
     /// eth object prototype
     eth: {
+        contractFromAbi: function (abi) {
+            return function(addr) {
+                // Default to address of Config. TODO: rremove prior to genesis.
+                addr = addr || '0xc6d9d2cd449a754c494264e1809c50e34d64562b';
+                var ret = web3.eth.contract(addr, abi);
+                ret.address = addr;
+                return ret;
+            };
+        },
         watch: function (params) {
             return new web3.filter(params, ethWatch);
         }
