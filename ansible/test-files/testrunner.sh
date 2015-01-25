@@ -51,6 +51,4 @@ do
 		echo "$TEST" > FailedTest.json
 		mv FailedTest.json $(date -d "today" +"%Y%m%d%H%M")CPPJIT.json
 	fi
-	exit
 done
-

@@ -5,7 +5,7 @@
       name: cppjit
       state: build
 #  command: docker build -t cpp /home/{{ ansible_ssh_user }}/git/ansible/test-files/docker-cpp
-  async: 3600
+  async: 1200
   poll: 5
 
 - name: update Go client
@@ -14,7 +14,7 @@
       name: go
       state: build
 #  command: docker build -t go /home/{{ ansible_ssh_user }}/git/ansible/test-files/docker-go 
-  async: 3600
+  async: 1200
   poll: 5
 
 - name: update Python client
