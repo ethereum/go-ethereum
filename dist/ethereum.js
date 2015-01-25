@@ -252,7 +252,7 @@ var formatOutputAddress = function (value) {
 };
 
 var dynamicBytesLength = function (type) {
-    if (arrayType(type) || prefixedType('string')(type))
+    if (arrayType(type) || type == 'string')   // only string itself that is dynamic; stringX is static length.
         return ETH_PADDING * 2;
     return 0;
 };
@@ -501,6 +501,7 @@ var contract = function (address, desc) {
             options.data = signature + parsed;
             
             var isTransact = result._isTransact === true || (result._isTransact !== false && !method.constant);
+            var collapse = options.collapse !== false;
             
             // reset
             result._options = {};
@@ -518,7 +519,15 @@ var contract = function (address, desc) {
             }
             
             var output = web3.eth.call(options);
-            return outputParser[displayName][typeName](output);
+            var ret = outputParser[displayName][typeName](output);
+            if (collapse)
+            {
+                if (ret.length == 1)
+                    ret = ret[0];
+                else if (ret.length == 0)
+                    ret = null;
+            }
+            return ret;
         };
 
         if (result[displayName] === undefined) {
