@@ -38,7 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
+	rpchttp "github.com/ethereum/go-ethereum/rpc/http"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/websocket"
 	"github.com/ethereum/go-ethereum/xeth"
@@ -193,7 +193,7 @@ func KeyTasks(keyManager *crypto.KeyManager, KeyRing string, GenAddr bool, Secre
 
 func StartRpc(ethereum *eth.Ethereum, RpcPort int) {
 	var err error
-	ethereum.RpcServer, err = rpc.NewJsonRpcServer(xeth.NewJSXEth(ethereum), RpcPort)
+	ethereum.RpcServer, err = rpchttp.NewRpcHttpServer(xeth.NewJSXEth(ethereum), RpcPort)
 	if err != nil {
 		clilogger.Errorf("Could not start RPC interface (port %v): %v", RpcPort, err)
 	} else {

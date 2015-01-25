@@ -67,7 +67,7 @@ func (req *RpcRequest) ToGetBlockArgs() (*GetBlockArgs, error) {
 	if err != nil {
 		return nil, NewErrorResponse(ErrorDecodeArgs)
 	}
-	jsonlogger.DebugDetailf("%T %v", args, args)
+	rpclogger.DebugDetailf("%T %v", args, args)
 	return args, nil
 }
 
@@ -82,7 +82,7 @@ func (req *RpcRequest) ToNewTxArgs() (*NewTxArgs, error) {
 	if err != nil {
 		return nil, NewErrorResponse(ErrorDecodeArgs)
 	}
-	jsonlogger.DebugDetailf("%T %v", args, args)
+	rpclogger.DebugDetailf("%T %v", args, args)
 	return args, nil
 }
 
@@ -97,7 +97,7 @@ func (req *RpcRequest) ToPushTxArgs() (*PushTxArgs, error) {
 	if err != nil {
 		return nil, NewErrorResponse(ErrorDecodeArgs)
 	}
-	jsonlogger.DebugDetailf("%T %v", args, args)
+	rpclogger.DebugDetailf("%T %v", args, args)
 	return args, nil
 }
 
@@ -113,7 +113,7 @@ func (req *RpcRequest) ToGetStorageArgs() (*GetStorageArgs, error) {
 	if err != nil {
 		return nil, NewErrorResponse(ErrorDecodeArgs)
 	}
-	jsonlogger.DebugDetailf("%T %v", args, args)
+	rpclogger.DebugDetailf("%T %v", args, args)
 	return args, nil
 }
 
@@ -128,7 +128,7 @@ func (req *RpcRequest) ToGetTxCountArgs() (*GetTxCountArgs, error) {
 	if err != nil {
 		return nil, NewErrorResponse(ErrorDecodeArgs)
 	}
-	jsonlogger.DebugDetailf("%T %v", args, args)
+	rpclogger.DebugDetailf("%T %v", args, args)
 	return args, nil
 }
 
@@ -143,7 +143,7 @@ func (req *RpcRequest) ToGetBalanceArgs() (*GetBalanceArgs, error) {
 	if err != nil {
 		return nil, NewErrorResponse(ErrorDecodeArgs)
 	}
-	jsonlogger.DebugDetailf("%T %v", args, args)
+	rpclogger.DebugDetailf("%T %v", args, args)
 	return args, nil
 }
 
@@ -158,7 +158,7 @@ func (req *RpcRequest) ToGetCodeAtArgs() (*GetCodeAtArgs, error) {
 	if err != nil {
 		return nil, NewErrorResponse(ErrorDecodeArgs)
 	}
-	jsonlogger.DebugDetailf("%T %v", args, args)
+	rpclogger.DebugDetailf("%T %v", args, args)
 	return args, nil
 }
 

@@ -18,25 +18,28 @@ package rpc
 
 import (
 	"encoding/json"
+	"github.com/ethereum/go-ethereum/logger"
 	"io"
 	"net/http"
 )
 
-type jsonWrapper struct{}
+var rpclogger = logger.NewLogger("RPC")
 
-func (self jsonWrapper) Send(writer io.Writer, v interface{}) (n int, err error) {
+type JsonWrapper struct{}
+
+func (self JsonWrapper) Send(writer io.Writer, v interface{}) (n int, err error) {
 	var payload []byte
 	payload, err = json.Marshal(v)
 	if err != nil {
-		jsonlogger.Fatalln("Error marshalling JSON", err)
+		rpclogger.Fatalln("Error marshalling JSON", err)
 		return 0, err
 	}
-	jsonlogger.Infof("Sending payload: %s", payload)
+	rpclogger.Infof("Sending payload: %s", payload)
 
 	return writer.Write(payload)
 }
 
-func (self jsonWrapper) ParseRequestBody(req *http.Request) (RpcRequest, error) {
+func (self JsonWrapper) ParseRequestBody(req *http.Request) (RpcRequest, error) {
 	var reqParsed RpcRequest
 
 	// Convert JSON to native types
@@ -46,12 +49,10 @@ func (self jsonWrapper) ParseRequestBody(req *http.Request) (RpcRequest, error) 
 	err := d.Decode(&reqParsed)
 
 	if err != nil {
-		jsonlogger.Errorln("Error decoding JSON: ", err)
+		rpclogger.Errorln("Error decoding JSON: ", err)
 		return reqParsed, err
 	}
-	jsonlogger.DebugDetailf("Parsed request: %s", reqParsed)
+	rpclogger.DebugDetailf("Parsed request: %s", reqParsed)
 
 	return reqParsed, nil
 }
-
-var JSON jsonWrapper
