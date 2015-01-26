@@ -3,17 +3,10 @@
 package vm
 
 /*
-#include <stdint.h>
-#include <stdlib.h>
 
-struct evmjit_result
-{
-	int32_t  returnCode;
-	uint64_t returnDataSize;
-	void*    returnData;
-};
-
-struct evmjit_result evmjit_run(void* _data, void* _env);
+void* evmjit_create();
+int   evmjit_run(void* _jit, void* _data, void* _env);
+void  evmjit_destroy(void* _jit);
 
 // Shared library evmjit (e.g. libevmjit.so) is expected to be installed in /usr/local/lib
 // More: https://github.com/ethereum/evmjit
@@ -188,17 +181,17 @@ func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *bi
 	self.data.code = getDataPtr(code)
 	self.data.codeSize = uint64(len(code))
 
-	result := C.evmjit_run(unsafe.Pointer(&self.data), unsafe.Pointer(self))
+	jit := C.evmjit_create()
+	retCode := C.evmjit_run(jit, unsafe.Pointer(&self.data), unsafe.Pointer(self))
 
-	if result.returnCode >= 100 {
+	if retCode < 0 {
 		err = errors.New("OOG from JIT")
 		gas.SetInt64(0) // Set gas to 0, JIT does not bother
 	} else {
 		gas.SetInt64(self.data.gas)
-		if result.returnCode == 1 { // RETURN
-			ret = C.GoBytes(result.returnData, C.int(result.returnDataSize))
-			C.free(result.returnData)
-		} else if result.returnCode == 2 { // SUICIDE
+		if retCode == 1 { // RETURN
+			ret = C.GoBytes(unsafe.Pointer(self.data.callData), C.int(self.data.callDataSize))
+		} else if retCode == 2 { // SUICIDE
 			// TODO: Suicide support logic should be moved to Env to be shared by VM implementations
 			state := self.Env().State()
 			receiverAddr := llvm2hashRef(bswap(&self.data.address))
@@ -208,7 +201,8 @@ func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *bi
 			state.Delete(me.Address())
 		}
 	}
-
+	
+	C.evmjit_destroy(jit);
 	return
 }
 
