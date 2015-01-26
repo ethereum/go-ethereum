@@ -9,11 +9,10 @@ import (
 
 var vmlogger = logger.NewLogger("VM")
 
-type Type int
+type Type byte
 
 const (
-	StandardVmTy Type = iota
-	DebugVmTy
+	StdVmTy Type = iota
 	JitVmTy
 
 	MaxVmTy

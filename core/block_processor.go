@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -251,15 +252,12 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 		return ValidationError("Block timestamp less then prev block %v (%v - %v)", diff, block.Header().Time, sm.bc.CurrentBlock().Header().Time)
 	}
 
-	/* XXX
-	// New blocks must be within the 15 minute range of the last block.
-	if diff > int64(15*time.Minute) {
-		return ValidationError("Block is too far in the future of last block (> 15 minutes)")
+	if block.Time() > time.Now().Unix() {
+		return fmt.Errorf("block time is in the future")
 	}
-	*/
 
 	// Verify the nonce of the block. Return an error if it's not valid
-	if !sm.Pow.Verify(block /*block.HashNoNonce(), block.Difficulty, block.Nonce*/) {
+	if !sm.Pow.Verify(block) {
 		return ValidationError("Block's nonce is invalid (= %v)", ethutil.Bytes2Hex(block.Header().Nonce))
 	}
 
@@ -286,21 +284,6 @@ func (sm *BlockProcessor) AccumelateRewards(statedb *state.StateDB, block, paren
 		if !ancestors.Has(string(uncle.ParentHash)) {
 			return UncleError(fmt.Sprintf("Uncle's parent unknown (%x)", uncle.ParentHash[0:4]))
 		}
-
-		/*
-			uncleParent := sm.bc.GetBlock(uncle.ParentHash)
-			if uncleParent == nil {
-				return UncleError(fmt.Sprintf("Uncle's parent unknown (%x)", uncle.ParentHash[0:4]))
-			}
-
-			if uncleParent.Number().Cmp(new(big.Int).Sub(parent.Number(), big.NewInt(6))) < 0 {
-				return UncleError("Uncle too old")
-			}
-
-			if knownUncles.Has(string(uncle.Hash())) {
-				return UncleError("Uncle in chain")
-			}
-		*/
 
 		r := new(big.Int)
 		r.Mul(BlockReward, big.NewInt(15)).Div(r, big.NewInt(16))

@@ -325,6 +325,11 @@ var decodeTests = []decodeTest{
 	{input: "850505050505", ptr: new(interface{}), value: []byte{5, 5, 5, 5, 5}},
 	{input: "C0", ptr: new(interface{}), value: []interface{}{}},
 	{input: "C50183040404", ptr: new(interface{}), value: []interface{}{[]byte{1}, []byte{4, 4, 4}}},
+	{
+		input: "C3010203",
+		ptr:   new([]io.Reader),
+		error: "rlp: type io.Reader is not RLP-serializable",
+	},
 }
 
 func uintp(i uint) *uint { return &i }

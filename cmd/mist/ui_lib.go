@@ -212,16 +212,16 @@ func (self *UiLib) StartDbWithContractAndData(contractHash, data string) {
 	dbWindow := NewDebuggerWindow(self)
 	object := self.eth.ChainManager().State().GetStateObject(ethutil.Hex2Bytes(contractHash))
 	if len(object.Code) > 0 {
-		dbWindow.SetCode("0x" + ethutil.Bytes2Hex(object.Code))
+		dbWindow.SetCode(ethutil.Bytes2Hex(object.Code))
 	}
-	dbWindow.SetData("0x" + data)
+	dbWindow.SetData(data)
 
 	dbWindow.Show()
 }
 
 func (self *UiLib) StartDbWithCode(code string) {
 	dbWindow := NewDebuggerWindow(self)
-	dbWindow.SetCode("0x" + code)
+	dbWindow.SetCode(code)
 	dbWindow.Show()
 }
 
@@ -312,23 +312,19 @@ func (self *UiLib) ToAscii(data string) string {
 }
 
 /// Ethereum filter methods
-func (self *UiLib) NewFilter(object map[string]interface{}) (id int) {
+func (self *UiLib) NewFilter(object map[string]interface{}, view *qml.Common) (id int) {
 	filter := qt.NewFilterFromMap(object, self.eth)
 	filter.MessageCallback = func(messages state.Messages) {
-		self.win.Root().Call("invokeFilterCallback", xeth.ToJSMessages(messages), id)
+		view.Call("messages", xeth.ToJSMessages(messages), id)
 	}
 	id = self.filterManager.InstallFilter(filter)
 	return id
 }
 
-func (self *UiLib) NewFilterString(typ string) (id int) {
+func (self *UiLib) NewFilterString(typ string, view *qml.Common) (id int) {
 	filter := core.NewFilter(self.eth)
 	filter.BlockCallback = func(block *types.Block) {
-		if self.win != nil && self.win.Root() != nil {
-			self.win.Root().Call("invokeFilterCallback", "{}", id)
-		} else {
-			fmt.Println("QML is lagging")
-		}
+		view.Call("messages", "{}", id)
 	}
 	id = self.filterManager.InstallFilter(filter)
 	return id

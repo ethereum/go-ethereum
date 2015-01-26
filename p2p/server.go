@@ -333,7 +333,7 @@ func (srv *Server) dialLoop() {
 		case desc := <-suggest:
 			// candidate peer found, will dial out asyncronously
 			// if connection fails slot will be released
-			srvlog.Infof("dial %v (%v)", desc, *slot)
+			srvlog.DebugDetailf("dial %v (%v)", desc, *slot)
 			go srv.dialPeer(desc, *slot)
 			// we can watch if more peers needed in the next loop
 			slots = srv.peerSlots
@@ -355,7 +355,7 @@ func (srv *Server) dialPeer(desc *peerAddr, slot int) {
 	srvlog.Debugf("Dialing %v (slot %d)\n", desc, slot)
 	conn, err := srv.Dialer.Dial(desc.Network(), desc.String())
 	if err != nil {
-		srvlog.Errorf("Dial error: %v", err)
+		srvlog.DebugDetailf("dial error: %v", err)
 		srv.peerSlots <- slot
 		return
 	}

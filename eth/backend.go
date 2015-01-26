@@ -245,7 +245,7 @@ func (s *Ethereum) Start(seed bool) error {
 	if seed {
 		logger.Infof("Connect to seed node %v", seedNodeAddress)
 		if err := s.SuggestPeer(seedNodeAddress); err != nil {
-			return err
+			logger.Infoln(err)
 		}
 	}
 
