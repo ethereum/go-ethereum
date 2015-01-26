@@ -38,6 +38,7 @@ func testPeer(protos []Protocol) (net.Conn, *Peer, <-chan error) {
 		_, err := peer.loop()
 		errc <- err
 	}()
+	<-peer.cryptoReady
 	return conn2, peer, errc
 }
 
@@ -71,9 +72,11 @@ func TestPeerProtoReadMsg(t *testing.T) {
 
 	net, peer, errc := testPeer([]Protocol{proto})
 	defer net.Close()
+
 	peer.startSubprotocols([]Cap{proto.cap()})
 
-	writeMsg(net, NewMsg(18, 1, "000"))
+	rw, _ := NewMsgRW(nil, net)
+	rw.WriteMsg(NewMsg(18, 1, "000"))
 	select {
 	case <-done:
 	case err := <-errc:
@@ -107,9 +110,11 @@ func TestPeerProtoReadLargeMsg(t *testing.T) {
 
 	net, peer, errc := testPeer([]Protocol{proto})
 	defer net.Close()
-	peer.startSubprotocols([]Cap{proto.cap()})
 
-	writeMsg(net, NewMsg(18, make([]byte, msgsize)))
+	rw, _ := NewMsgRW(nil, net)
+
+	peer.startSubprotocols([]Cap{proto.cap()})
+	rw.WriteMsg(NewMsg(18, make([]byte, msgsize)))
 	select {
 	case <-done:
 	case err := <-errc:
@@ -137,10 +142,11 @@ func TestPeerProtoEncodeMsg(t *testing.T) {
 	}
 	net, peer, _ := testPeer([]Protocol{proto})
 	defer net.Close()
-	peer.startSubprotocols([]Cap{proto.cap()})
 
 	bufr := bufio.NewReader(net)
-	msg, err := readMsg(bufr)
+	rw, _ := NewMsgRW(bufr, nil)
+	peer.startSubprotocols([]Cap{proto.cap()})
+	msg, err := rw.ReadMsg()
 	if err != nil {
 		t.Errorf("read error: %v", err)
 	}
@@ -177,7 +183,8 @@ func TestPeerWrite(t *testing.T) {
 	read := make(chan struct{})
 	go func() {
 		bufr := bufio.NewReader(net)
-		msg, err := readMsg(bufr)
+		rw, _ := NewMsgRW(bufr, nil)
+		msg, err := rw.ReadMsg()
 		if err != nil {
 			t.Errorf("read error: %v", err)
 		} else if msg.Code != 16 {
@@ -211,8 +218,9 @@ func TestPeerActivity(t *testing.T) {
 	sub := peer.activity.Subscribe(time.Time{})
 	defer sub.Unsubscribe()
 
+	rw, _ := NewMsgRW(nil, net)
 	for i := 0; i < 6; i++ {
-		writeMsg(net, NewMsg(16))
+		rw.WriteMsg(NewMsg(16))
 		select {
 		case <-sub.Chan():
 		case <-time.After(inactivityTimeout / 2):

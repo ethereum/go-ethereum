@@ -75,6 +75,7 @@ func main() {
 		KeyRing:    KeyRing,
 		Shh:        SHH,
 		Dial:       Dial,
+		Encryption: Encryption,
 	})
 
 	if err != nil {

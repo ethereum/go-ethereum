@@ -65,6 +65,7 @@ var (
 	SHH             bool
 	Dial            bool
 	PrintVersion    bool
+	Encryption      bool
 )
 
 // flags specific to cli client
@@ -115,6 +116,7 @@ func Init() {
 	flag.BoolVar(&ShowGenesis, "genesis", false, "Dump the genesis block")
 	flag.StringVar(&ImportChain, "chain", "", "Imports given chain")
 
+	flag.BoolVar(&Encryption, "crypto", false, "whether to use encryption (experimental, temporary)")
 	flag.BoolVar(&Dump, "dump", false, "output the ethereum state in JSON format. Sub args [number, hash]")
 	flag.StringVar(&DumpHash, "hash", "", "specify arg in hex")
 	flag.IntVar(&DumpNumber, "number", -1, "specify arg in number")

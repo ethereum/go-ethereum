@@ -62,6 +62,9 @@ type Server struct {
 	// If NoDial is true, the server will not dial any peers.
 	NoDial bool
 
+	// whether or not use encryption
+	Encryption bool
+
 	// Hook for testing. This is useful because we can inhibit
 	// the whole protocol stack.
 	newPeerFunc peerFunc
@@ -399,7 +402,7 @@ func (srv *Server) verifyPeer(addr *peerAddr) error {
 	if srv.Blacklist.Exists(addr.Pubkey) {
 		return errors.New("blacklisted")
 	}
-	if bytes.Equal(srv.Identity.Pubkey()[1:], addr.Pubkey) {
+	if bytes.Equal(srv.Identity.PublicKey()[1:], addr.Pubkey) {
 		return newPeerError(errPubkeyForbidden, "not allowed to connect to srv")
 	}
 	srv.lock.RLock()
@@ -407,7 +410,7 @@ func (srv *Server) verifyPeer(addr *peerAddr) error {
 	for _, peer := range srv.peers {
 		if peer != nil {
 			id := peer.Identity()
-			if id != nil && bytes.Equal(id.Pubkey(), addr.Pubkey) {
+			if id != nil && bytes.Equal(id.PublicKey(), addr.Pubkey) {
 				return errors.New("already connected")
 			}
 		}
