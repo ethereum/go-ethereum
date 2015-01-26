@@ -7,9 +7,8 @@ import (
 
 // ClientIdentity represents the identity of a peer.
 type ClientIdentity interface {
-	String() string  // human readable identity
-	Pubkey() []byte  // 512-bit public key
-	PrivKey() []byte // 512-bit private key
+	String() string // human readable identity
+	Pubkey() []byte // 512-bit public key
 }
 
 type SimpleClientIdentity struct {
@@ -22,7 +21,7 @@ type SimpleClientIdentity struct {
 	pubkey           []byte
 }
 
-func NewSimpleClientIdentity(clientIdentifier string, version string, customIdentifier string, privkey []byte, pubkey []byte) *SimpleClientIdentity {
+func NewSimpleClientIdentity(clientIdentifier string, version string, customIdentifier string, pubkey []byte) *SimpleClientIdentity {
 	clientIdentity := &SimpleClientIdentity{
 		clientIdentifier: clientIdentifier,
 		version:          version,
@@ -30,7 +29,6 @@ func NewSimpleClientIdentity(clientIdentifier string, version string, customIden
 		os:               runtime.GOOS,
 		implementation:   runtime.Version(),
 		pubkey:           pubkey,
-		privkey:          privkey,
 	}
 
 	return clientIdentity
