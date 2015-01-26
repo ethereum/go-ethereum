@@ -19,7 +19,6 @@ CryptoMsgRW implements MsgReadWriter a message read writer with encryption and a
 it is initialised by cryptoId.NewSession() after a successful crypto handshake on the same IO
 It uses the legacy devp2p packet structure (temporary)
 */
-
 type CryptoMsgRW struct {
 	r                     io.Reader
 	w                     io.Writer

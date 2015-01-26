@@ -217,8 +217,8 @@ func (p *Peer) loop() (reason DiscReason, err error) {
 		// from here on everything can be encrypted, authenticated
 		return DiscProtocolError, err // no graceful disconnect
 	}
-	close(p.cryptoReady)
 	defer p.crw.Close()
+	close(p.cryptoReady)
 
 	// read loop
 	protoDone := make(chan struct{}, 1)
@@ -258,7 +258,6 @@ loop:
 			// read or write failed. there is no need to run the
 			// polite disconnect sequence because the connection
 			// is probably dead anyway.
-			// TODO: handle write errors as well
 			return DiscNetworkError, err
 		case err = <-p.protoErr:
 			reason = discReasonForError(err)
@@ -330,6 +329,7 @@ func (p *Peer) handleCryptoHandshake() (err error) {
 		// cryptoId is just created for the lifecycle of the handshake
 		// it is survived by an encrypted readwriter
 		var initiator bool
+		// TODO: this is clearly a placeholder until we figure how we store session Token
 		var sessionToken []byte
 		sessionToken = make([]byte, keyLen)
 		if _, err = rand.Read(sessionToken); err != nil {
