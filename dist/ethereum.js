@@ -573,8 +573,10 @@ Filter.prototype.changed = function(callback) {
 
 /// trigger calling new message from people
 Filter.prototype.trigger = function(messages) {
-    for(var i = 0; i < this.callbacks.length; i++) {
-        this.callbacks[i].call(this, messages);
+    for (var i = 0; i < this.callbacks.length; i++) {
+        for (var j = 0; j < messages; j++) {
+            this.callbacks[i].call(this, messages[j]);
+        }
     }
 };
 
@@ -716,12 +718,12 @@ var ProviderManager = function() {
             
                 result = JSON.parse(result);
                 
-                // dont call the callback if result is an error, empty array or false
-                if (result.error || (result.result instanceof Array ? result.result.length === 0 : !result.result)) {
+                // dont call the callback if result is not an array, or empty one
+                if (result.error || !(result.result instanceof Array) || result.result.length === 0) {
                     return;
                 }
 
-                data.callback(result);
+                data.callback(result.result);
             });
         }
         setTimeout(poll, 12000);
