@@ -1,7 +1,7 @@
 {
   "name": "ethereum.js",
   "namespace": "ethereum",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "Ethereum Compatible JavaScript API",
   "main": "./index.js",
   "directories": {
