@@ -41,32 +41,22 @@ type JitVm struct {
 
 type i256 [32]byte
 
-const (
-	Gas = iota
-	address
-	Caller
-	Origin
-	CallValue
-	CallDataSize
-	GasPrice
-	CoinBase
-	TimeStamp
-	Number
-	Difficulty
-	GasLimit
-	CodeSize
-
-	_size
-
-	ReturnDataOffset   = CallValue // Reuse 2 fields for return data reference
-	ReturnDataSize     = CallDataSize
-	SuicideDestAddress = address ///< Suicide balance destination address
-)
-
 type RuntimeData struct {
-	elems    [_size]i256
-	callData *byte
-	code     *byte
+	gas          int64
+	gasPrice     int64
+	callData     *byte
+	callDataSize uint64
+	address      i256
+	caller       i256
+	origin       i256
+	callValue    i256
+	coinBase     i256
+	difficulty   i256
+	gasLimit     i256
+	number       uint64
+	timestamp    int64
+	code         *byte
+	codeSize     uint64
 }
 
 func hash2llvm(h []byte) i256 {
@@ -182,21 +172,21 @@ func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *bi
 	self.callerAddr = caller.Address()
 	self.price = price
 
-	self.data.elems[Gas] = big2llvm(gas)
-	self.data.elems[address] = address2llvm(self.me.Address())
-	self.data.elems[Caller] = address2llvm(caller.Address())
-	self.data.elems[Origin] = address2llvm(self.env.Origin())
-	self.data.elems[CallValue] = big2llvm(value)
-	self.data.elems[CallDataSize] = big2llvm(big.NewInt(int64(len(callData)))) // TODO: Keep call data size as i64
-	self.data.elems[GasPrice] = big2llvm(price)
-	self.data.elems[CoinBase] = address2llvm(self.env.Coinbase())
-	self.data.elems[TimeStamp] = big2llvm(big.NewInt(self.env.Time())) // TODO: Keep timestamp as i64
-	self.data.elems[Number] = big2llvm(self.env.BlockNumber())
-	self.data.elems[Difficulty] = big2llvm(self.env.Difficulty())
-	self.data.elems[GasLimit] = big2llvm(self.env.GasLimit())
-	self.data.elems[CodeSize] = big2llvm(big.NewInt(int64(len(code)))) // TODO: Keep code size as i64
+	self.data.gas = gas.Int64()
+	self.data.gasPrice = price.Int64()
 	self.data.callData = getDataPtr(callData)
+	self.data.callDataSize = uint64(len(callData))
+	self.data.address = address2llvm(self.me.Address())
+	self.data.caller = address2llvm(caller.Address())
+	self.data.origin = address2llvm(self.env.Origin())
+	self.data.callValue = big2llvm(value)
+	self.data.coinBase = address2llvm(self.env.Coinbase())
+	self.data.difficulty = big2llvm(self.env.Difficulty())
+	self.data.gasLimit = big2llvm(self.env.GasLimit())
+	self.data.number = self.env.BlockNumber().Uint64()
+	self.data.timestamp = self.env.Time()
 	self.data.code = getDataPtr(code)
+	self.data.codeSize = uint64(len(code))
 
 	result := C.evmjit_run(unsafe.Pointer(&self.data), unsafe.Pointer(self))
 
@@ -204,15 +194,14 @@ func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *bi
 		err = errors.New("OOG from JIT")
 		gas.SetInt64(0) // Set gas to 0, JIT does not bother
 	} else {
-		gasLeft := llvm2big(&self.data.elems[Gas]) // TODO: Set value directly to gas instance
-		gas.Set(gasLeft)
+		gas.SetInt64(self.data.gas)
 		if result.returnCode == 1 { // RETURN
 			ret = C.GoBytes(result.returnData, C.int(result.returnDataSize))
 			C.free(result.returnData)
 		} else if result.returnCode == 2 { // SUICIDE
 			// TODO: Suicide support logic should be moved to Env to be shared by VM implementations
 			state := self.Env().State()
-			receiverAddr := llvm2hashRef(bswap(&self.data.elems[address]))
+			receiverAddr := llvm2hashRef(bswap(&self.data.address))
 			receiver := state.GetOrNewStateObject(receiverAddr)
 			balance := state.GetBalance(me.Address())
 			receiver.AddAmount(balance)
