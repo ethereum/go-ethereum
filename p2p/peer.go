@@ -343,7 +343,7 @@ func (p *Peer) handleCryptoHandshake() (loop readLoop, err error) {
 	// it is survived by an encrypted readwriter
 	var initiator bool
 	var sessionToken []byte
-	sessionToken = make([]byte, keyLen)
+	sessionToken = make([]byte, shaLen)
 	if _, err = rand.Read(sessionToken); err != nil {
 		return
 	}

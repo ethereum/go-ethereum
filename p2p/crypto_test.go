@@ -106,12 +106,12 @@ func TestCryptoHandshake(t *testing.T) {
 	}
 
 	// now both parties should have the same session parameters
-	initSessionToken, initSecretRW, err := initiator.newSession(initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
+	initSessionToken, initSecretRW, err := initiator.newSession(true, initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
 
-	recSessionToken, recSecretRW, err := receiver.newSession(remoteInitNonce, remoteRecNonce, auth, remoteRandomPrivKey, remoteInitRandomPubKey)
+	recSessionToken, recSecretRW, err := receiver.newSession(false, remoteInitNonce, remoteRecNonce, auth, remoteRandomPrivKey, remoteInitRandomPubKey)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
@@ -136,11 +136,11 @@ func TestCryptoHandshake(t *testing.T) {
 	if !bytes.Equal(initSecretRW.macSecret, recSecretRW.macSecret) {
 		t.Errorf("macSecrets do not match")
 	}
-	if !bytes.Equal(initSecretRW.egressMac, recSecretRW.egressMac) {
-		t.Errorf("egressMacs do not match")
+	if !bytes.Equal(initSecretRW.egressMac, recSecretRW.ingressMac) {
+		t.Errorf("initiator's egressMac do not match receiver's ingressMac")
 	}
-	if !bytes.Equal(initSecretRW.ingressMac, recSecretRW.ingressMac) {
-		t.Errorf("ingressMacs do not match")
+	if !bytes.Equal(initSecretRW.ingressMac, recSecretRW.egressMac) {
+		t.Errorf("initiator's inressMac do not match receiver's egressMac")
 	}
 
 }
@@ -191,7 +191,7 @@ func TestPeersHandshake(t *testing.T) {
 		<-receiver.cryptoReady
 		close(ready)
 	}()
-	timeout := time.After(1 * time.Second)
+	timeout := time.After(10 * time.Second)
 	select {
 	case <-ready:
 	case <-timeout:
