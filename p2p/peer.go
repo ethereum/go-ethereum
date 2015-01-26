@@ -3,6 +3,7 @@ package p2p
 import (
 	"bufio"
 	"bytes"
+	"crypto/ecdsa"
 	"crypto/rand"
 	"fmt"
 	"io"
@@ -11,6 +12,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
@@ -73,6 +76,7 @@ type Peer struct {
 	runBaseProtocol bool // for testing
 	cryptoHandshake bool // for testing
 	cryptoReady     chan struct{}
+	privateKey      []byte
 
 	runlock sync.RWMutex // protects running
 	running map[string]*proto
@@ -338,6 +342,13 @@ func (p *Peer) dispatch(msg Msg, protoDone chan struct{}) (wait bool, err error)
 
 type readLoop func(chan<- Msg, chan<- error, <-chan bool)
 
+func (p *Peer) PrivateKey() (prv *ecdsa.PrivateKey, err error) {
+	if prv = crypto.ToECDSA(p.privateKey); prv == nil {
+		err = fmt.Errorf("invalid private key")
+	}
+	return
+}
+
 func (p *Peer) handleCryptoHandshake() (loop readLoop, err error) {
 	// cryptoId is just created for the lifecycle of the handshake
 	// it is survived by an encrypted readwriter
@@ -350,17 +361,17 @@ func (p *Peer) handleCryptoHandshake() (loop readLoop, err error) {
 	if p.dialAddr != nil { // this should have its own method Outgoing() bool
 		initiator = true
 	}
-	// create crypto layer
-	// this could in principle run only once but maybe we want to allow
-	// identity switching
-	var crypto *cryptoId
-	if crypto, err = newCryptoId(p.ourID); err != nil {
-		return
-	}
+
 	// run on peer
 	// this bit handles the handshake and creates a secure communications channel with
 	// var rw *secretRW
-	if sessionToken, _, err = crypto.Run(p.conn, p.Pubkey(), sessionToken, initiator); err != nil {
+	var prvKey *ecdsa.PrivateKey
+	if prvKey, err = p.PrivateKey(); err != nil {
+		err = fmt.Errorf("unable to access private key for client: %v", err)
+		return
+	}
+	// initialise a new secure session
+	if sessionToken, _, err = NewSecureSession(p.conn, prvKey, p.Pubkey(), sessionToken, initiator); err != nil {
 		p.Debugf("unable to setup secure session: %v", err)
 		return
 	}

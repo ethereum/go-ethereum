@@ -78,40 +78,35 @@ func TestCryptoHandshake(t *testing.T) {
 	prv1, _ := crypto.GenerateKey()
 	pub1 := &prv1.PublicKey
 
-	var initiator, receiver *cryptoId
-	if initiator, err = newCryptoId(&peerId{crypto.FromECDSA(prv0), crypto.FromECDSAPub(pub0)}); err != nil {
-		return
-	}
-	if receiver, err = newCryptoId(&peerId{crypto.FromECDSA(prv1), crypto.FromECDSAPub(pub1)}); err != nil {
-		return
-	}
+	pub0s := crypto.FromECDSAPub(pub0)
+	pub1s := crypto.FromECDSAPub(pub1)
 
 	// simulate handshake by feeding output to input
 	// initiator sends handshake 'auth'
-	auth, initNonce, randomPrivKey, _, err := initiator.startHandshake(receiver.pubKeyS, sessionToken)
+	auth, initNonce, randomPrivKey, _, err := startHandshake(prv0, pub1s, sessionToken)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
 
 	// receiver reads auth and responds with response
-	response, remoteRecNonce, remoteInitNonce, remoteRandomPrivKey, remoteInitRandomPubKey, err := receiver.respondToHandshake(auth, crypto.FromECDSAPub(pub0), sessionToken)
+	response, remoteRecNonce, remoteInitNonce, remoteRandomPrivKey, remoteInitRandomPubKey, err := respondToHandshake(auth, prv1, pub0s, sessionToken)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
 
 	// initiator reads receiver's response and the key exchange completes
-	recNonce, remoteRandomPubKey, _, err := initiator.completeHandshake(response)
+	recNonce, remoteRandomPubKey, _, err := completeHandshake(response, prv0)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
 
 	// now both parties should have the same session parameters
-	initSessionToken, initSecretRW, err := initiator.newSession(true, initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
+	initSessionToken, initSecretRW, err := newSession(true, initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
 
-	recSessionToken, recSecretRW, err := receiver.newSession(false, remoteInitNonce, remoteRecNonce, auth, remoteRandomPrivKey, remoteInitRandomPubKey)
+	recSessionToken, recSecretRW, err := newSession(false, remoteInitNonce, remoteRecNonce, auth, remoteRandomPrivKey, remoteInitRandomPubKey)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
@@ -163,12 +158,12 @@ func TestPeersHandshake(t *testing.T) {
 	initiator := newPeer(conn1, []Protocol{}, nil)
 	receiver := newPeer(conn2, []Protocol{}, nil)
 	initiator.dialAddr = &peerAddr{IP: net.ParseIP("1.2.3.4"), Port: 2222, Pubkey: pub1s[1:]}
-	initiator.ourID = &peerId{prv0s, pub0s}
+	initiator.privateKey = prv0s
 
 	// this is cheating. identity of initiator/dialler not available to listener/receiver
 	// its public key should be looked up based on IP address
-	receiver.identity = initiator.ourID
-	receiver.ourID = &peerId{prv1s, pub1s}
+	receiver.identity = &peerId{nil, pub0s}
+	receiver.privateKey = prv1s
 
 	initiator.pubkeyHook = func(*peerAddr) error { return nil }
 	receiver.pubkeyHook = func(*peerAddr) error { return nil }
