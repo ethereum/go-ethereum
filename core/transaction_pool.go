@@ -65,6 +65,11 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 		return fmt.Errorf("tx.v != (28 || 27) => %v", v)
 	}
 
+	senderAddr := tx.From()
+	if senderAddr == nil || len(senderAddr) != 20 {
+		return fmt.Errorf("invalid sender")
+	}
+
 	/* XXX this kind of validation needs to happen elsewhere in the gui when sending txs.
 	   Other clients should do their own validation. Value transfer could throw error
 	   but doesn't necessarily invalidate the tx. Gas can still be payed for and miner
