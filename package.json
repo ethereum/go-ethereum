@@ -1,14 +1,13 @@
 {
   "name": "ethereum.js",
   "namespace": "ethereum",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "Ethereum Compatible JavaScript API",
   "main": "./index.js",
   "directories": {
     "lib": "./lib"
   },
   "dependencies": {
-    "es6-promise": "*",
     "ws": "*",
     "xmlhttprequest": "*",
     "bignumber.js": ">=2.0.0"

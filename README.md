@@ -1,6 +1,6 @@
 # Ethereum JavaScript API
 
-This is the Ethereum compatible JavaScript API using `Promise`s
+This is the Ethereum compatible [JavaScript API](https://github.com/ethereum/wiki/wiki/JavaScript-API)
 which implements the [Generic JSON RPC](https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC) spec. It's available on npm as a node module and also for bower and component as an embeddable js
 
 [![NPM version][npm-image]][npm-url] [![Build Status][travis-image]][travis-url] [![dependency status][dep-image]][dep-url] [![dev dependency status][dep-dev-image]][dep-dev-url]
@@ -23,7 +23,7 @@ Component
 	component install ethereum/ethereum.js
 
 * Include `ethereum.min.js` in your html file.
-* Include [es6-promise](https://github.com/jakearchibald/es6-promise) or another ES6-Shim if your browser doesn't support ECMAScript 6.
+* Include [bignumber.js](https://github.com/MikeMcl/bignumber.js/)
 
 ## Usage
 Require the library:
@@ -37,14 +37,8 @@ Set a provider (QtProvider, WebSocketProvider, HttpRpcProvider)
 There you go, now you can use it:
 
 ```
-web3.eth.coinbase.then(function(result){
-  console.log(result);
-  return web3.eth.balanceAt(result);
-}).then(function(balance){
-  console.log(web3.toDecimal(balance));
-}).catch(function(err){
-  console.log(err);
-});
+var coinbase = web3.eth.coinbase;
+var balance = web3.eth.balanceAt(coinbase);
 ```
 
 
@@ -99,3 +93,4 @@ ethereum -ws -loglevel=4
 [dep-url]: https://david-dm.org/ethereum/ethereum.js
 [dep-dev-image]: https://david-dm.org/ethereum/ethereum.js/dev-status.svg
 [dep-dev-url]: https://david-dm.org/ethereum/ethereum.js#info=devDependencies
+

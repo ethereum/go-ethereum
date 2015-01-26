@@ -622,6 +622,10 @@ module.exports = Filter;
  * @date 2014
  */
 
+if ("build" !== 'build') {/*
+        var XMLHttpRequest = require('xmlhttprequest').XMLHttpRequest; // jshint ignore:line
+*/}
+
 var HttpSyncProvider = function (host) {
     this.handlers = [];
     this.host = host || 'http://localhost:8080';
