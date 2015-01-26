@@ -739,7 +739,7 @@ ProviderManager.prototype.send = function(data) {
 
     if (this.provider === undefined) {
         console.error('provider is not set');
-        return undefined;
+        return null; 
     }
 
     //TODO: handle error here? 
