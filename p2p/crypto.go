@@ -7,20 +7,20 @@ import (
 	"io"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	ethlogger "github.com/ethereum/go-ethereum/logger"
 	"github.com/obscuren/ecies"
-	"github.com/obscuren/secp256k1-go"
 )
 
 var clogger = ethlogger.NewLogger("CRYPTOID")
 
-var (
+const (
 	sskLen int = 16  // ecies.MaxSharedKeyLength(pubKey) / 2
 	sigLen int = 65  // elliptic S256
 	pubLen int = 64  // 512 bit pubkey in uncompressed representation without format byte
-	keyLen int = 32  // ECDSA
-	msgLen int = 194 // sigLen + keyLen + pubLen + keyLen + 1 = 194
-	resLen int = 97  // pubLen + keyLen + 1
+	shaLen int = 32  // hash length (for nonce etc)
+	msgLen int = 194 // sigLen + shaLen + pubLen + shaLen + 1 = 194
+	resLen int = 97  // pubLen + shaLen + 1
 	iHSLen int = 307 // size of the final ECIES payload sent as initiator's handshake
 	rHSLen int = 210 // size of the final ECIES payload sent as receiver's handshake
 )
@@ -157,7 +157,7 @@ func (self *cryptoId) Run(conn io.ReadWriter, remotePubKeyS []byte, sessionToken
 		}
 		clogger.Debugf("receiver handshake (sent to %v):\n%v", hexkey(remotePubKeyS), hexkey(response))
 	}
-	return self.newSession(initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
+	return self.newSession(initiator, initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
 }
 
 /*
@@ -198,7 +198,7 @@ func (self *cryptoId) startHandshake(remotePubKeyS, sessionToken []byte) (auth [
 		return
 	}
 
-	var tokenFlag byte
+	var tokenFlag byte // = 0x00
 	if sessionToken == nil {
 		// no session token found means we need to generate shared secret.
 		// ecies shared secret is used as initial session token for new peers
@@ -216,7 +216,7 @@ func (self *cryptoId) startHandshake(remotePubKeyS, sessionToken []byte) (auth [
 	// E(remote-pubk, S(ecdhe-random, token^nonce) || H(ecdhe-random-pubk) || pubk || nonce || 0x1)
 	// allocate msgLen long message,
 	var msg []byte = make([]byte, msgLen)
-	initNonce = msg[msgLen-keyLen-1 : msgLen-1]
+	initNonce = msg[msgLen-shaLen-1 : msgLen-1]
 	if _, err = rand.Read(initNonce); err != nil {
 		return
 	}
@@ -245,9 +245,9 @@ func (self *cryptoId) startHandshake(remotePubKeyS, sessionToken []byte) (auth [
 	if randomPubKey64, err = ExportPublicKey(&randomPrvKey.PublicKey); err != nil {
 		return
 	}
-	copy(msg[sigLen:sigLen+keyLen], crypto.Sha3(randomPubKey64))
+	copy(msg[sigLen:sigLen+shaLen], crypto.Sha3(randomPubKey64))
 	// pubkey copied to the correct segment.
-	copy(msg[sigLen+keyLen:sigLen+keyLen+pubLen], self.pubKeyS)
+	copy(msg[sigLen+shaLen:sigLen+shaLen+pubLen], self.pubKeyS)
 	// nonce is already in the slice
 	// stick tokenFlag byte to the end
 	msg[msgLen-1] = tokenFlag
@@ -295,7 +295,7 @@ func (self *cryptoId) respondToHandshake(auth, remotePubKeyS, sessionToken []byt
 	}
 
 	// the initiator nonce is read off the end of the message
-	initNonce = msg[msgLen-keyLen-1 : msgLen-1]
+	initNonce = msg[msgLen-shaLen-1 : msgLen-1]
 	// I prove that i own prv key (to derive shared secret, and read nonce off encrypted msg) and that I own shared secret
 	// they prove they own the private key belonging to ecdhe-random-pubk
 	// we can now reconstruct the signed message and recover the peers pubkey
@@ -311,8 +311,8 @@ func (self *cryptoId) respondToHandshake(auth, remotePubKeyS, sessionToken []byt
 
 	// now we find ourselves a long task too, fill it random
 	var resp = make([]byte, resLen)
-	// generate keyLen long nonce
-	respNonce = resp[pubLen : pubLen+keyLen]
+	// generate shaLen long nonce
+	respNonce = resp[pubLen : pubLen+shaLen]
 	if _, err = rand.Read(respNonce); err != nil {
 		return
 	}
@@ -350,7 +350,7 @@ func (self *cryptoId) completeHandshake(auth []byte) (respNonce []byte, remoteRa
 		return
 	}
 
-	respNonce = msg[pubLen : pubLen+keyLen]
+	respNonce = msg[pubLen : pubLen+shaLen]
 	var remoteRandomPubKeyS = msg[:pubLen]
 	if remoteRandomPubKey, err = ImportPublicKey(remoteRandomPubKeyS); err != nil {
 		return
@@ -364,7 +364,7 @@ func (self *cryptoId) completeHandshake(auth []byte) (respNonce []byte, remoteRa
 /*
 newSession is called after the handshake is completed. The arguments are values negotiated in the handshake and the return value is a new session : a new session Token to be remembered for the next time we connect with this peer. And a MsgReadWriter that implements an encrypted and authenticated connection with key material obtained from the crypto handshake key exchange
 */
-func (self *cryptoId) newSession(initNonce, respNonce, auth []byte, privKey *ecdsa.PrivateKey, remoteRandomPubKey *ecdsa.PublicKey) (sessionToken []byte, rw *secretRW, err error) {
+func (self *cryptoId) newSession(initiator bool, initNonce, respNonce, auth []byte, privKey *ecdsa.PrivateKey, remoteRandomPubKey *ecdsa.PublicKey) (sessionToken []byte, rw *secretRW, err error) {
 	// 3) Now we can trust ecdhe-random-pubk to derive new keys
 	//ecdhe-shared-secret = ecdh.agree(ecdhe-random, remote-ecdhe-random-pubk)
 	var dhSharedSecret []byte
@@ -382,12 +382,14 @@ func (self *cryptoId) newSession(initNonce, respNonce, auth []byte, privKey *ecd
 	// mac-secret = crypto.Sha3(ecdhe-shared-secret || aes-secret)
 	var macSecret = crypto.Sha3(append(dhSharedSecret, aesSecret...))
 	// # destroy ecdhe-shared-secret
-	// egress-mac = crypto.Sha3(mac-secret^nonce || auth)
-	var egressMac = crypto.Sha3(append(Xor(macSecret, respNonce), auth...))
-	// # destroy nonce
-	// ingress-mac = crypto.Sha3(mac-secret^initiator-nonce || auth),
-	var ingressMac = crypto.Sha3(append(Xor(macSecret, initNonce), auth...))
-	// # destroy remote-nonce
+	var egressMac, ingressMac []byte
+	if initiator {
+		egressMac = Xor(macSecret, respNonce)
+		ingressMac = Xor(macSecret, initNonce)
+	} else {
+		egressMac = Xor(macSecret, initNonce)
+		ingressMac = Xor(macSecret, respNonce)
+	}
 	rw = &secretRW{
 		aesSecret:  aesSecret,
 		macSecret:  macSecret,
