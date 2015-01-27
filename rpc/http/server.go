@@ -40,6 +40,7 @@ func NewRpcHttpServer(pipe *xeth.JSXEth, port int) (*RpcHttpServer, error) {
 		listener: l,
 		quit:     make(chan bool),
 		pipe:     pipe,
+		port:     port,
 	}, nil
 }
 
@@ -47,6 +48,7 @@ type RpcHttpServer struct {
 	quit     chan bool
 	listener net.Listener
 	pipe     *xeth.JSXEth
+	port     int
 }
 
 func (s *RpcHttpServer) exitHandler() {
@@ -67,7 +69,7 @@ func (s *RpcHttpServer) Stop() {
 }
 
 func (s *RpcHttpServer) Start() {
-	rpchttplogger.Infoln("Starting RPC-HTTP server")
+	rpchttplogger.Infof("Starting RPC-HTTP server on port %d", s.port)
 	go s.exitHandler()
 
 	api := rpc.NewEthereumApi(s.pipe)
