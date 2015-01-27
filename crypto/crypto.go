@@ -27,10 +27,11 @@ func init() {
 	ecies.AddParamsForCurve(S256(), ecies.ECIES_AES128_SHA256)
 }
 
-func Sha3(data []byte) []byte {
+func Sha3(data ...[]byte) []byte {
 	d := sha3.NewKeccak256()
-	d.Write(data)
-
+	for _, b := range data {
+		d.Write(b)
+	}
 	return d.Sum(nil)
 }
 
