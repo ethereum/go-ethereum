@@ -3,18 +3,13 @@
 package vm
 
 /*
-#include <stdint.h>
-#include <stdlib.h>
 
-struct evmjit_result
-{
-	int32_t  returnCode;
-	uint64_t returnDataSize;
-	void*    returnData;
-};
+void* evmjit_create();
+int   evmjit_run(void* _jit, void* _data, void* _env);
+void  evmjit_destroy(void* _jit);
 
-struct evmjit_result evmjit_run(void* _data, void* _env);
-
+// Shared library evmjit (e.g. libevmjit.so) is expected to be installed in /usr/local/lib
+// More: https://github.com/ethereum/evmjit
 #cgo LDFLAGS: -levmjit
 */
 import "C"
@@ -39,32 +34,22 @@ type JitVm struct {
 
 type i256 [32]byte
 
-const (
-	Gas = iota
-	address
-	Caller
-	Origin
-	CallValue
-	CallDataSize
-	GasPrice
-	CoinBase
-	TimeStamp
-	Number
-	Difficulty
-	GasLimit
-	CodeSize
-
-	_size
-
-	ReturnDataOffset   = CallValue // Reuse 2 fields for return data reference
-	ReturnDataSize     = CallDataSize
-	SuicideDestAddress = address ///< Suicide balance destination address
-)
-
 type RuntimeData struct {
-	elems    [_size]i256
-	callData *byte
-	code     *byte
+	gas          int64
+	gasPrice     int64
+	callData     *byte
+	callDataSize uint64
+	address      i256
+	caller       i256
+	origin       i256
+	callValue    i256
+	coinBase     i256
+	difficulty   i256
+	gasLimit     i256
+	number       uint64
+	timestamp    int64
+	code         *byte
+	codeSize     uint64
 }
 
 func hash2llvm(h []byte) i256 {
@@ -74,10 +59,11 @@ func hash2llvm(h []byte) i256 {
 }
 
 func llvm2hash(m *i256) []byte {
-	if len(m) != 32 {
-		panic("I don't know Go!")
-	}
-	return C.GoBytes(unsafe.Pointer(m), 32)
+	return C.GoBytes(unsafe.Pointer(m), C.int(len(m)))
+}
+
+func llvm2hashRef(m *i256) []byte {
+	return (*[1 << 30]byte)(unsafe.Pointer(m))[:len(m):len(m)]
 }
 
 func address2llvm(addr []byte) i256 {
@@ -86,6 +72,8 @@ func address2llvm(addr []byte) i256 {
 	return n
 }
 
+// bswap swap bytes of the 256-bit integer on LLVM side
+// TODO: Do not change memory on LLVM side, that can conflict with memory access optimizations
 func bswap(m *i256) *i256 {
 	for i, l := 0, len(m); i < l/2; i++ {
 		m[i], m[l-i-1] = m[l-i-1], m[i]
@@ -129,12 +117,14 @@ func llvm2big(m *i256) *big.Int {
 	return n
 }
 
-func llvm2bytes(data *byte, length uint64) []byte {
+// llvm2bytesRef creates a []byte slice that references byte buffer on LLVM side (as of that not controller by GC)
+// User must asure that referenced memory is available to Go until the data is copied or not needed any more
+func llvm2bytesRef(data *byte, length uint64) []byte {
 	if length == 0 {
 		return nil
 	}
 	if data == nil {
-		panic("llvm2bytes: nil pointer to data")
+		panic("Unexpected nil data pointer")
 	}
 	return (*[1 << 30]byte)(unsafe.Pointer(data))[:length:length]
 }
@@ -156,8 +146,10 @@ func NewJitVm(env Environment) *JitVm {
 }
 
 func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
+	// TODO: depth is increased but never checked by VM. VM should not know about it at all.
 	self.env.SetDepth(self.env.Depth() + 1)
 
+	// TODO: Move it to Env.Call() or sth
 	if Precompiled[string(me.Address())] != nil {
 		// if it's address of precopiled contract
 		// fallback to standard VM
@@ -165,49 +157,52 @@ func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *bi
 		return stdVm.Run(me, caller, code, value, gas, price, callData)
 	}
 
-	self.me = me // FIXME: Make sure Run() is not used more than once
+	if self.me != nil {
+		panic("JitVm.Run() can be called only once per JitVm instance")
+	}
+
+	self.me = me
 	self.callerAddr = caller.Address()
 	self.price = price
 
-	self.data.elems[Gas] = big2llvm(gas)
-	self.data.elems[address] = address2llvm(self.me.Address())
-	self.data.elems[Caller] = address2llvm(caller.Address())
-	self.data.elems[Origin] = address2llvm(self.env.Origin())
-	self.data.elems[CallValue] = big2llvm(value)
-	self.data.elems[CallDataSize] = big2llvm(big.NewInt(int64(len(callData)))) // TODO: Keep call data size as i64
-	self.data.elems[GasPrice] = big2llvm(price)
-	self.data.elems[CoinBase] = address2llvm(self.env.Coinbase())
-	self.data.elems[TimeStamp] = big2llvm(big.NewInt(self.env.Time())) // TODO: Keep timestamp as i64
-	self.data.elems[Number] = big2llvm(self.env.BlockNumber())
-	self.data.elems[Difficulty] = big2llvm(self.env.Difficulty())
-	self.data.elems[GasLimit] = big2llvm(self.env.GasLimit())
-	self.data.elems[CodeSize] = big2llvm(big.NewInt(int64(len(code)))) // TODO: Keep code size as i64
+	self.data.gas = gas.Int64()
+	self.data.gasPrice = price.Int64()
 	self.data.callData = getDataPtr(callData)
+	self.data.callDataSize = uint64(len(callData))
+	self.data.address = address2llvm(self.me.Address())
+	self.data.caller = address2llvm(caller.Address())
+	self.data.origin = address2llvm(self.env.Origin())
+	self.data.callValue = big2llvm(value)
+	self.data.coinBase = address2llvm(self.env.Coinbase())
+	self.data.difficulty = big2llvm(self.env.Difficulty())
+	self.data.gasLimit = big2llvm(self.env.GasLimit())
+	self.data.number = self.env.BlockNumber().Uint64()
+	self.data.timestamp = self.env.Time()
 	self.data.code = getDataPtr(code)
+	self.data.codeSize = uint64(len(code))
 
-	result := C.evmjit_run(unsafe.Pointer(&self.data), unsafe.Pointer(self))
-	//fmt.Printf("JIT result: %d\n", r)
+	jit := C.evmjit_create()
+	retCode := C.evmjit_run(jit, unsafe.Pointer(&self.data), unsafe.Pointer(self))
 
-	if result.returnCode >= 100 {
+	if retCode < 0 {
 		err = errors.New("OOG from JIT")
 		gas.SetInt64(0) // Set gas to 0, JIT does not bother
 	} else {
-		gasLeft := llvm2big(&self.data.elems[Gas]) // TODO: Set value directly to gas instance
-		gas.Set(gasLeft)
-		if result.returnCode == 1 { // RETURN
-			ret = C.GoBytes(result.returnData, C.int(result.returnDataSize))
-			C.free(result.returnData)
-		} else if result.returnCode == 2 { // SUICIDE
+		gas.SetInt64(self.data.gas)
+		if retCode == 1 { // RETURN
+			ret = C.GoBytes(unsafe.Pointer(self.data.callData), C.int(self.data.callDataSize))
+		} else if retCode == 2 { // SUICIDE
+			// TODO: Suicide support logic should be moved to Env to be shared by VM implementations
 			state := self.Env().State()
-			receiverAddr := llvm2hash(bswap(&self.data.elems[address]))
-			receiverAddr = trim(receiverAddr) // TODO: trim all zeros or subslice 160bits?
+			receiverAddr := llvm2hashRef(bswap(&self.data.address))
 			receiver := state.GetOrNewStateObject(receiverAddr)
 			balance := state.GetBalance(me.Address())
 			receiver.AddAmount(balance)
 			state.Delete(me.Address())
 		}
 	}
-
+	
+	C.evmjit_destroy(jit);
 	return
 }
 
@@ -224,8 +219,8 @@ func (self *JitVm) Env() Environment {
 }
 
 //export env_sha3
-func env_sha3(dataPtr unsafe.Pointer, length uint64, resultPtr unsafe.Pointer) {
-	data := C.GoBytes(dataPtr, C.int(length))
+func env_sha3(dataPtr *byte, length uint64, resultPtr unsafe.Pointer) {
+	data := llvm2bytesRef(dataPtr, length)
 	hash := crypto.Sha3(data)
 	result := (*i256)(resultPtr)
 	*result = hash2llvm(hash)
@@ -300,7 +295,7 @@ func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Point
 	if balance.Cmp(value) >= 0 {
 		receiveAddr := llvm2hash((*i256)(_receiveAddr))
 		inData := C.GoBytes(inDataPtr, C.int(inDataLen))
-		outData := llvm2bytes(outDataPtr, outDataLen)
+		outData := llvm2bytesRef(outDataPtr, outDataLen)
 		codeAddr := llvm2hash((*i256)(_codeAddr))
 		llvmGas := (*i256)(_gas)
 		gas := llvm2big(llvmGas)
