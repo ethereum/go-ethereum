@@ -67,6 +67,7 @@ type Ethereum struct {
 	blockSub event.Subscription
 
 	RpcServer  rpc.RpcServer
+	WsServer   rpc.RpcServer
 	keyManager *crypto.KeyManager
 
 	clientIdentity p2p.ClientIdentity
@@ -275,6 +276,9 @@ func (s *Ethereum) Stop() {
 
 	if s.RpcServer != nil {
 		s.RpcServer.Stop()
+	}
+	if s.WsServer != nil {
+		s.WsServer.Stop()
 	}
 	s.txPool.Stop()
 	s.eventMux.Stop()
