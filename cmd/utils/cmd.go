@@ -39,7 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/rlp"
 	rpchttp "github.com/ethereum/go-ethereum/rpc/http"
-	rpcws "github.com/ethereum/go-ethereum/rpc/websocket"
+	rpcws "github.com/ethereum/go-ethereum/rpc/ws"
 	"github.com/ethereum/go-ethereum/state"
 	// "github.com/ethereum/go-ethereum/websocket"
 	"github.com/ethereum/go-ethereum/xeth"

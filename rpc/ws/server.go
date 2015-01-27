@@ -14,14 +14,14 @@
   You should have received a copy of the GNU General Public License
   along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
-package websocket
+package ws
 
 import (
 	"fmt"
 	"net"
 	"net/http"
 
-	ws "code.google.com/p/go.net/websocket"
+	"code.google.com/p/go.net/websocket"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/logger"
@@ -88,23 +88,23 @@ func (self *WebSocketServer) Start() {
 func (s *WebSocketServer) apiHandler(xeth *rpc.EthereumApi) http.Handler {
 	fn := func(w http.ResponseWriter, req *http.Request) {
 		h := sockHandler(xeth)
-		s := ws.Server{Handler: h}
+		s := websocket.Server{Handler: h}
 		s.ServeHTTP(w, req)
 	}
 
 	return http.HandlerFunc(fn)
 }
 
-func sockHandler(xeth *rpc.EthereumApi) ws.Handler {
-	fn := func(conn *ws.Conn) {
+func sockHandler(xeth *rpc.EthereumApi) websocket.Handler {
+	fn := func(conn *websocket.Conn) {
 		for {
 			// FIX wslogger does not output to console
 			wslogger.Debugln("Handling request")
 			var reqParsed rpc.RpcRequest
 
-			if err := ws.JSON.Receive(conn, &reqParsed); err != nil {
+			if err := websocket.JSON.Receive(conn, &reqParsed); err != nil {
 				wslogger.Debugln(rpc.ErrorParseRequest)
-				ws.JSON.Send(conn, rpc.RpcErrorResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: true, ErrorText: rpc.ErrorParseRequest})
+				websocket.JSON.Send(conn, rpc.RpcErrorResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: true, ErrorText: rpc.ErrorParseRequest})
 				continue
 			}
 
@@ -112,12 +112,12 @@ func sockHandler(xeth *rpc.EthereumApi) ws.Handler {
 			reserr := xeth.GetRequestReply(&reqParsed, &response)
 			if reserr != nil {
 				wslogger.Errorln(reserr)
-				ws.JSON.Send(conn, rpc.RpcErrorResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: true, ErrorText: reserr.Error()})
+				websocket.JSON.Send(conn, rpc.RpcErrorResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: true, ErrorText: reserr.Error()})
 				continue
 			}
 
 			wslogger.Debugf("Generated response: %T %s", response, response)
-			ws.JSON.Send(conn, rpc.RpcSuccessResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: false, Result: response})
+			websocket.JSON.Send(conn, rpc.RpcSuccessResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: false, Result: response})
 		}
 	}
 	return fn
