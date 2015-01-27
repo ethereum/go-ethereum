@@ -24,7 +24,6 @@ describe('web3', function() {
         u.propertyExists(web3.eth, 'listening');
         u.propertyExists(web3.eth, 'mining');
         u.propertyExists(web3.eth, 'gasPrice');
-        u.propertyExists(web3.eth, 'account');
         u.propertyExists(web3.eth, 'accounts');
         u.propertyExists(web3.eth, 'peerCount');
         u.propertyExists(web3.eth, 'defaultBlock');
