@@ -1,4 +1,3 @@
-require('es6-promise').polyfill();
 
 var assert = require('assert');
 var web3 = require('../index.js');

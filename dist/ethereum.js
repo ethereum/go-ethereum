@@ -129,7 +129,7 @@ var formatInputReal = function (value) {
 
 var dynamicTypeBytes = function (type, value) {
     // TODO: decide what to do with array of strings
-    if (arrayType(type) || type == 'string')    // only string itself that is dynamic; stringX is static length.
+    if (arrayType(type) || type === 'string')    // only string itself that is dynamic; stringX is static length.
         return formatInputInt(value.length); 
     return "";
 };
@@ -252,7 +252,7 @@ var formatOutputAddress = function (value) {
 };
 
 var dynamicBytesLength = function (type) {
-    if (arrayType(type) || type == 'string')   // only string itself that is dynamic; stringX is static length.
+    if (arrayType(type) || type === 'string')   // only string itself that is dynamic; stringX is static length.
         return ETH_PADDING * 2;
     return 0;
 };
@@ -464,7 +464,7 @@ var contract = function (address, desc) {
         // prototype, so we make it so as a workaround.
         if (method.name.indexOf('(') === -1) {
             var displayName = method.name;
-            var typeName = method.inputs.map(function(i){return i.type}).join();
+            var typeName = method.inputs.map(function(i){return i.type; }).join();
             method.name = displayName + '(' + typeName + ')';
         }
     });
@@ -531,9 +531,9 @@ var contract = function (address, desc) {
             var ret = outputParser[displayName][typeName](output);
             if (collapse)
             {
-                if (ret.length == 1)
+                if (ret.length === 1)
                     ret = ret[0];
-                else if (ret.length == 0)
+                else if (ret.length === 0)
                     ret = null;
             }
             return ret;
@@ -603,8 +603,10 @@ Filter.prototype.changed = function(callback) {
 
 /// trigger calling new message from people
 Filter.prototype.trigger = function(messages) {
-    for(var i = 0; i < this.callbacks.length; i++) {
-        this.callbacks[i].call(this, messages);
+    for (var i = 0; i < this.callbacks.length; i++) {
+        for (var j = 0; j < messages; j++) {
+            this.callbacks[i].call(this, messages[j]);
+        }
     }
 };
 
@@ -649,6 +651,10 @@ module.exports = Filter;
  *   Marian Oancea <marian@ethdev.com>
  * @date 2014
  */
+
+if ("build" !== 'build') {/*
+        var XMLHttpRequest = require('xmlhttprequest').XMLHttpRequest; // jshint ignore:line
+*/}
 
 var HttpSyncProvider = function (host) {
     this.handlers = [];
@@ -746,15 +752,15 @@ var ProviderManager = function() {
             
                 result = JSON.parse(result);
                 
-                // dont call the callback if result is an error, empty array or false
-                if (result.error || (result.result instanceof Array ? result.result.length === 0 : !result.result)) {
+                // dont call the callback if result is not an array, or empty one
+                if (result.error || !(result.result instanceof Array) || result.result.length === 0) {
                     return;
                 }
 
-                data.callback(result);
+                data.callback(result.result);
             });
         }
-        setTimeout(poll, 12000);
+        setTimeout(poll, 1000);
     };
     poll();
 };
@@ -767,7 +773,7 @@ ProviderManager.prototype.send = function(data) {
 
     if (this.provider === undefined) {
         console.error('provider is not set');
-        return undefined;
+        return null; 
     }
 
     //TODO: handle error here? 
@@ -982,7 +988,7 @@ var shhWatchMethods = function () {
     return [
     { name: 'newFilter', call: 'shh_newFilter' },
     { name: 'uninstallFilter', call: 'shh_uninstallFilter' },
-    { name: 'getMessage', call: 'shh_getMessages' }
+    { name: 'getMessages', call: 'shh_getMessages' }
     ];
 };
 

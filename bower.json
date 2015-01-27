@@ -1,11 +1,10 @@
 {
   "name": "ethereum.js",
   "namespace": "ethereum",
-  "version": "0.0.8",
+  "version": "0.0.10",
   "description": "Ethereum Compatible JavaScript API",
   "main": ["./dist/ethereum.js", "./dist/ethereum.min.js"],
   "dependencies": {
-    "es6-promise": "#master",
     "bignumber.js": ">=2.0.0"
   },
   "repository": {
