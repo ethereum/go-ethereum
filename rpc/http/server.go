@@ -83,7 +83,7 @@ func (s *RpcHttpServer) Start() {
 	}
 }
 
-func (s *RpcHttpServer) apiHandler(xeth *rpc.EthereumApi) http.Handler {
+func (s *RpcHttpServer) apiHandler(api *rpc.EthereumApi) http.Handler {
 	fn := func(w http.ResponseWriter, req *http.Request) {
 		rpchttplogger.Debugln("Handling request")
 
@@ -94,7 +94,7 @@ func (s *RpcHttpServer) apiHandler(xeth *rpc.EthereumApi) http.Handler {
 		}
 
 		var response interface{}
-		reserr := xeth.GetRequestReply(&reqParsed, &response)
+		reserr := api.GetRequestReply(&reqParsed, &response)
 		if reserr != nil {
 			rpchttplogger.Errorln(reserr)
 			JSON.Send(w, &rpc.RpcErrorResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: true, ErrorText: reserr.Error()})

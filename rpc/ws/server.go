@@ -85,9 +85,9 @@ func (self *WebSocketServer) Start() {
 	}
 }
 
-func (s *WebSocketServer) apiHandler(xeth *rpc.EthereumApi) http.Handler {
+func (s *WebSocketServer) apiHandler(api *rpc.EthereumApi) http.Handler {
 	fn := func(w http.ResponseWriter, req *http.Request) {
-		h := sockHandler(xeth)
+		h := sockHandler(api)
 		s := websocket.Server{Handler: h}
 		s.ServeHTTP(w, req)
 	}
@@ -95,10 +95,9 @@ func (s *WebSocketServer) apiHandler(xeth *rpc.EthereumApi) http.Handler {
 	return http.HandlerFunc(fn)
 }
 
-func sockHandler(xeth *rpc.EthereumApi) websocket.Handler {
+func sockHandler(api *rpc.EthereumApi) websocket.Handler {
 	fn := func(conn *websocket.Conn) {
 		for {
-			// FIX wslogger does not output to console
 			wslogger.Debugln("Handling request")
 			var reqParsed rpc.RpcRequest
 
@@ -109,7 +108,7 @@ func sockHandler(xeth *rpc.EthereumApi) websocket.Handler {
 			}
 
 			var response interface{}
-			reserr := xeth.GetRequestReply(&reqParsed, &response)
+			reserr := api.GetRequestReply(&reqParsed, &response)
 			if reserr != nil {
 				wslogger.Errorln(reserr)
 				websocket.JSON.Send(conn, rpc.RpcErrorResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: true, ErrorText: reserr.Error()})
