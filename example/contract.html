@@ -52,8 +52,8 @@
         var param = parseInt(document.getElementById('value').value);
 
         // call the contract
-        var res = contract.multiply(param);
-        document.getElementById('result').innerText = res[0];
+        var res = contract.call().multiply(param);
+        document.getElementById('result').innerText = res.toString(10);
     }
 
 </script>
