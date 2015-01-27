@@ -521,6 +521,8 @@ var contract = function (address, desc) {
                 // TODO: figure out better way to solve this
                 web3._currentContractAbi = desc;
                 web3._currentContractAddress = address;
+                web3._currentContractMethodName = method.name;
+                web3._currentContractMethodParams = params;
 
                 // transactions do not have any output, cause we do not know, when they will be processed
                 web3.eth.transact(options);
