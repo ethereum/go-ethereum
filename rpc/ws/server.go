@@ -120,5 +120,5 @@ func sockHandler(xeth *rpc.EthereumApi) websocket.Handler {
 			websocket.JSON.Send(conn, rpc.RpcSuccessResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: false, Result: response})
 		}
 	}
-	return fn
+	return websocket.Handler(fn)
 }
