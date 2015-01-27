@@ -823,6 +823,38 @@ describe('abi', function() {
 
         });
 
+        it('should parse 0x value', function () {
+        
+            // given
+            var d = clone(description);
+            d[0].outputs = [
+                { type: 'int' }
+            ];
+
+            // when
+            var parser = abi.outputParser(d);
+
+            // then
+            assert.equal(parser.test("0x")[0], 0);
+
+        });
+        
+        it('should parse 0x value', function () {
+        
+            // given
+            var d = clone(description);
+            d[0].outputs = [
+                { type: 'uint' }
+            ];
+
+            // when
+            var parser = abi.outputParser(d);
+
+            // then
+            assert.equal(parser.test("0x")[0], 0);
+
+        });
+
     });
 });
 

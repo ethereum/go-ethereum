@@ -212,6 +212,7 @@ var signedIsNegative = function (value) {
 /// Formats input right-aligned input bytes to int
 /// @returns right-aligned input bytes formatted to int
 var formatOutputInt = function (value) {
+    value = value || "0";
     // check if it's negative number
     // it it is, return two's complement
     if (signedIsNegative(value)) {
@@ -223,6 +224,7 @@ var formatOutputInt = function (value) {
 /// Formats big right-aligned input bytes to uint
 /// @returns right-aligned input bytes formatted to uint
 var formatOutputUInt = function (value) {
+    value = value || "0";
     return new BigNumber(value, 16);
 };
 
@@ -1078,7 +1080,9 @@ var web3 = {
 
     /// @returns decimal representaton of hex value prefixed by 0x
     toDecimal: function (val) {
-        return (new BigNumber(val.substring(2), 16).toString(10));
+        // remove 0x and place 0, if it's required
+        val = val.length > 2 ? val.substring(2) : "0";
+        return (new BigNumber(val, 16).toString(10));
     },
 
     /// @returns hex representation (prefixed by 0x) of decimal value
