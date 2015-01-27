@@ -783,6 +783,12 @@ ProviderManager.prototype.send = function(data) {
     //TODO: handle error here? 
     var result = this.provider.send(data);
     result = JSON.parse(result);
+
+    if (result.error) {
+        console.log(result.error);
+        return null;
+    }
+
     return result.result;
 };
 
