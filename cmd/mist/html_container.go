@@ -34,7 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/howeyc/fsnotify"
-	"gopkg.in/qml.v1"
+	"github.com/obscuren/qml"
 )
 
 type HtmlApplication struct {

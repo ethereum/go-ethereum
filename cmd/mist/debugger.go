@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
-	"gopkg.in/qml.v1"
+	"github.com/obscuren/qml"
 )
 
 type DebuggerWindow struct {

@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/whisper"
-	"gopkg.in/qml.v1"
+	"github.com/obscuren/qml"
 )
 
 var qlogger = logger.NewLogger("QSHH")

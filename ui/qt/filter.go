@@ -3,7 +3,7 @@ package qt
 import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ui"
-	"gopkg.in/qml.v1"
+	"github.com/obscuren/qml"
 )
 
 func NewFilterFromMap(object map[string]interface{}, eth core.EthManager) *core.Filter {

@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
-	"gopkg.in/qml.v1"
+	"github.com/obscuren/qml"
 )
 
 const (
