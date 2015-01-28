@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	ProtocolVersion    = 51
+	ProtocolVersion    = 52
 	NetworkId          = 0
 	ProtocolLength     = uint64(8)
 	ProtocolMaxMsgSize = 10 * 1024 * 1024
