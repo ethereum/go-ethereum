@@ -35,12 +35,11 @@ package accounts
 import (
 	crand "crypto/rand"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 )
 
 // TODO: better name for this struct?
-type UserAccount struct {
-	Addr []byte
+type Account struct {
+	Address []byte
 }
 
 type AccountManager struct {
@@ -57,43 +56,40 @@ func NewAccountManager(keyStore crypto.KeyStore2) AccountManager {
 	return *am
 }
 
-func (am *AccountManager) Sign(fromAddr []byte, keyAuth string, toSign []byte) (signature []byte, err error) {
-	key, err := am.keyStore.GetKey(fromAddr, keyAuth)
+func (am *AccountManager) Sign(fromAccount *Account, keyAuth string, toSign []byte) (signature []byte, err error) {
+	key, err := am.keyStore.GetKey(fromAccount.Address, keyAuth)
 	if err != nil {
 		return nil, err
 	}
-	privKey := crypto.FromECDSA(key.PrivateKey)
-	// TODO: what is second value?
-	signature, err = secp256k1.Sign(toSign, privKey)
+	signature, err = crypto.Sign(toSign, key.PrivateKey)
 	return signature, err
 }
 
-func (am AccountManager) NewAccount(auth string) (*UserAccount, error) {
+func (am AccountManager) NewAccount(auth string) (*Account, error) {
 	key, err := am.keyStore.GenerateNewKey(crand.Reader, auth)
 	if err != nil {
 		return nil, err
 	}
-	ua := &UserAccount{
-		Addr: key.Address,
+	ua := &Account{
+		Address: key.Address,
 	}
 	return ua, err
 }
 
 // set of accounts == set of keys in given key store
 // TODO: do we need persistence of accounts as well?
-func (am *AccountManager) Accounts() ([]UserAccount, error) {
+func (am *AccountManager) Accounts() ([]Account, error) {
 	addresses, err := am.keyStore.GetKeyAddresses()
 	if err != nil {
 		return nil, err
 	}
 
-	accounts := make([]UserAccount, len(addresses))
+	accounts := make([]Account, len(addresses))
 
 	for i, addr := range addresses {
-		ua := &UserAccount{
-			Addr: addr,
+		accounts[i] = Account{
+			Address: addr,
 		}
-		accounts[i] = *ua
 	}
 	return accounts, err
 }
