@@ -21,15 +21,11 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"path"
-	"strconv"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event/filter"
@@ -77,56 +73,6 @@ func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
 
 func (self *UiLib) Notef(args []interface{}) {
 	guilogger.Infoln(args...)
-}
-
-func (self *UiLib) LookupDomain(domain string) string {
-	world := self.World()
-
-	if len(domain) > 32 {
-		domain = string(crypto.Sha3([]byte(domain)))
-	}
-	data := world.Config().Get("DnsReg").StorageString(domain).Bytes()
-
-	// Left padded = A record, Right padded = CNAME
-	if len(data) > 0 && data[0] == 0 {
-		data = bytes.TrimLeft(data, "\x00")
-		var ipSlice []string
-		for _, d := range data {
-			ipSlice = append(ipSlice, strconv.Itoa(int(d)))
-		}
-
-		return strings.Join(ipSlice, ".")
-	} else {
-		data = bytes.TrimRight(data, "\x00")
-
-		return string(data)
-	}
-}
-
-func (self *UiLib) LookupName(addr string) string {
-	var (
-		nameReg = self.World().Config().Get("NameReg")
-		lookup  = nameReg.Storage(ethutil.Hex2Bytes(addr))
-	)
-
-	if lookup.Len() != 0 {
-		return strings.Trim(lookup.Str(), "\x00")
-	}
-
-	return addr
-}
-
-func (self *UiLib) LookupAddress(name string) string {
-	var (
-		nameReg = self.World().Config().Get("NameReg")
-		lookup  = nameReg.Storage(ethutil.RightPadBytes([]byte(name), 32))
-	)
-
-	if lookup.Len() != 0 {
-		return ethutil.Bytes2Hex(lookup.Bytes())
-	}
-
-	return ""
 }
 
 func (self *UiLib) PastPeers() *ethutil.List {

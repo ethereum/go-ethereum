@@ -85,6 +85,8 @@ func (s *RpcHttpServer) Start() {
 
 func (s *RpcHttpServer) apiHandler(api *rpc.EthereumApi) http.Handler {
 	fn := func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
 		rpchttplogger.Debugln("Handling request")
 
 		reqParsed, reqerr := JSON.ParseRequestBody(req)

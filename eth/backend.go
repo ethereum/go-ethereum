@@ -219,6 +219,10 @@ func (s *Ethereum) MaxPeers() int {
 	return s.net.MaxPeers
 }
 
+func (s *Ethereum) Coinbase() []byte {
+	return nil // TODO
+}
+
 // Start the ethereum
 func (s *Ethereum) Start(seed bool) error {
 	err := s.net.Start()

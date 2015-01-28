@@ -1,5 +1,6 @@
 package xeth
 
+/*
 import "github.com/ethereum/go-ethereum/ethutil"
 
 var cnfCtr = ethutil.Hex2Bytes("661005d2720d855f1d9976f88bb10c1a3398c77f")
@@ -33,3 +34,4 @@ func (self *Config) Get(name string) *Object {
 func (self *Config) Exist() bool {
 	return self.pipe.World().Get(cnfCtr) != nil
 }
+*/
