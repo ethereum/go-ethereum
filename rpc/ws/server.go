@@ -14,7 +14,7 @@
   You should have received a copy of the GNU General Public License
   along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
-package ws
+package rpcws
 
 import (
 	"fmt"
@@ -30,6 +30,7 @@ import (
 )
 
 var wslogger = logger.NewLogger("RPC-WS")
+var JSON rpc.JsonWrapper
 
 type WebSocketServer struct {
 	eth           *eth.Ethereum
@@ -98,25 +99,28 @@ func (s *WebSocketServer) apiHandler(api *rpc.EthereumApi) http.Handler {
 func sockHandler(api *rpc.EthereumApi) websocket.Handler {
 	fn := func(conn *websocket.Conn) {
 		for {
-			wslogger.Debugln("Handling request")
+			wslogger.Debugln("Handling connection")
 			var reqParsed rpc.RpcRequest
 
+			// reqParsed, reqerr := JSON.ParseRequestBody(conn.Request())
 			if err := websocket.JSON.Receive(conn, &reqParsed); err != nil {
-				wslogger.Debugln(rpc.ErrorParseRequest)
-				websocket.JSON.Send(conn, rpc.RpcErrorResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: true, ErrorText: rpc.ErrorParseRequest})
+				// if reqerr != nil {
+				JSON.Send(conn, &rpc.RpcErrorResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: true, ErrorText: rpc.ErrorParseRequest})
+				// websocket.JSON.Send(conn, rpc.RpcErrorResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: true, ErrorText: rpc.ErrorParseRequest})
 				continue
 			}
 
 			var response interface{}
 			reserr := api.GetRequestReply(&reqParsed, &response)
 			if reserr != nil {
-				wslogger.Errorln(reserr)
-				websocket.JSON.Send(conn, rpc.RpcErrorResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: true, ErrorText: reserr.Error()})
+				// websocket.JSON.Send(conn, &rpc.RpcErrorResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: true, ErrorText: reserr.Error()})
+				JSON.Send(conn, &rpc.RpcErrorResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: true, ErrorText: reserr.Error()})
 				continue
 			}
 
 			wslogger.Debugf("Generated response: %T %s", response, response)
-			websocket.JSON.Send(conn, rpc.RpcSuccessResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: false, Result: response})
+			JSON.Send(conn, &rpc.RpcSuccessResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: false, Result: response})
+			// websocket.JSON.Send(conn, rpc.RpcSuccessResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: false, Result: response})
 		}
 	}
 	return websocket.Handler(fn)
