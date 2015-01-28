@@ -155,7 +155,7 @@ Rectangle {
 			onLoadingChanged: {
 				if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
 					webview.runJavaScript(eth.readFile("bignumber.min.js"));
-					webview.runJavaScript(eth.readFile("dist/ethereum.js"));
+					webview.runJavaScript(eth.readFile("ethereum.js/dist/ethereum.js"));
 				}
 			}
 			onJavaScriptConsoleMessage: {

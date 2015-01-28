@@ -26,9 +26,11 @@ For each request type, define the following:
 package rpc
 
 import (
+	"fmt"
 	"math/big"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/xeth"
 )
@@ -161,6 +163,11 @@ func (p *EthereumApi) GetCodeAt(args *GetCodeAtArgs, reply *interface{}) error {
 	return nil
 }
 
+func (p *EthereumApi) Sha3(args *Sha3Args, reply *interface{}) error {
+	*reply = ethutil.Bytes2Hex(crypto.Sha3(ethutil.Hex2Bytes(args.Data)))
+	return nil
+}
+
 func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
 	// Spec at https://github.com/ethereum/wiki/wiki/Generic-ON-RPC
 	rpclogger.DebugDetailf("%T %s", req.Params, req.Params)
@@ -203,8 +210,14 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.GetBlock(args, reply)
+	case "web3_sha3":
+		args, err := req.ToSha3Args()
+		if err != nil {
+			return err
+		}
+		return p.Sha3(args, reply)
 	default:
-		return NewErrorResponse(ErrorNotImplemented)
+		return NewErrorResponse(fmt.Sprintf("%v %s", ErrorNotImplemented, req.Method))
 	}
 
 	rpclogger.DebugDetailf("Reply: %T %s", reply, reply)

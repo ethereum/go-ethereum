@@ -56,6 +56,20 @@ type RpcRequest struct {
 	Params  []json.RawMessage `json:"params"`
 }
 
+func (req *RpcRequest) ToSha3Args() (*Sha3Args, error) {
+	if len(req.Params) < 1 {
+		return nil, NewErrorResponse(ErrorArguments)
+	}
+
+	args := new(Sha3Args)
+	r := bytes.NewReader(req.Params[0])
+	if err := json.NewDecoder(r).Decode(args); err != nil {
+		return nil, NewErrorResponse(ErrorDecodeArgs)
+	}
+	rpclogger.DebugDetailf("%T %v", args, args)
+	return args, nil
+}
+
 func (req *RpcRequest) ToGetBlockArgs() (*GetBlockArgs, error) {
 	if len(req.Params) < 1 {
 		return nil, NewErrorResponse(ErrorArguments)

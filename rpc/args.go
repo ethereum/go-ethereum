@@ -216,3 +216,14 @@ func (a *GetCodeAtArgs) requirements() error {
 	}
 	return nil
 }
+
+type Sha3Args struct {
+	Data string
+}
+
+func (obj *Sha3Args) UnmarshalJSON(b []byte) (err error) {
+	if err = json.Unmarshal(b, &obj.Data); err != nil {
+		return NewErrorResponse(ErrorDecodeArgs)
+	}
+	return
+}
