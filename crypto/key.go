@@ -102,7 +102,7 @@ func NewKey(rand io.Reader) *Key {
 	id := uuid.NewRandom()
 	key := &Key{
 		Id:         id,
-		Address:    pubkeyToAddress(privateKeyECDSA.PublicKey),
+		Address:    PubkeyToAddress(privateKeyECDSA.PublicKey),
 		PrivateKey: privateKeyECDSA,
 	}
 	return key

@@ -116,7 +116,7 @@ func (ks keyStorePassphrase) GetKeyAddresses() (addresses [][]byte, err error) {
 
 func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 	authArray := []byte(auth)
-	salt := getEntropyCSPRNG(32)
+	salt := GetEntropyCSPRNG(32)
 	derivedKey, err := scrypt.Key(authArray, salt, scryptN, scryptr, scryptp, scryptdkLen)
 	if err != nil {
 		return err
@@ -131,7 +131,7 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 		return err
 	}
 
-	iv := getEntropyCSPRNG(aes.BlockSize) // 16
+	iv := GetEntropyCSPRNG(aes.BlockSize) // 16
 	AES256CBCEncrypter := cipher.NewCBCEncrypter(AES256Block, iv)
 	cipherText := make([]byte, len(toEncrypt))
 	AES256CBCEncrypter.CryptBlocks(cipherText, toEncrypt)
@@ -197,7 +197,7 @@ func DecryptKey(ks keyStorePassphrase, keyAddr []byte, auth string) (keyBytes []
 	return keyBytes, keyId, err
 }
 
-func getEntropyCSPRNG(n int) []byte {
+func GetEntropyCSPRNG(n int) []byte {
 	mainBuff := make([]byte, n)
 	_, err := io.ReadFull(crand.Reader, mainBuff)
 	if err != nil {
