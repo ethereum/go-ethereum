@@ -75,7 +75,7 @@ type Gui struct {
 	logLevel logger.LogLevel
 	open     bool
 
-	xeth *xeth.JSXEth
+	xeth *xeth.XEth
 
 	Session        string
 	clientIdentity *p2p.SimpleClientIdentity
@@ -93,7 +93,7 @@ func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIden
 		panic(err)
 	}
 
-	xeth := xeth.NewJSXEth(ethereum)
+	xeth := xeth.New(ethereum)
 	gui := &Gui{eth: ethereum,
 		txDb:           db,
 		xeth:           xeth,
@@ -120,9 +120,9 @@ func (gui *Gui) Start(assetPath string) {
 
 	// Register ethereum functions
 	qml.RegisterTypes("Ethereum", 1, 0, []qml.TypeSpec{{
-		Init: func(p *xeth.JSBlock, obj qml.Object) { p.Number = 0; p.Hash = "" },
+		Init: func(p *xeth.Block, obj qml.Object) { p.Number = 0; p.Hash = "" },
 	}, {
-		Init: func(p *xeth.JSTransaction, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
+		Init: func(p *xeth.Transaction, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
 	}, {
 		Init: func(p *xeth.KeyVal, obj qml.Object) { p.Key = ""; p.Value = "" },
 	}})
@@ -276,7 +276,7 @@ func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 	}
 
 	var (
-		ptx  = xeth.NewJSTx(tx)
+		ptx  = xeth.NewTx(tx)
 		send = ethutil.Bytes2Hex(tx.From())
 		rec  = ethutil.Bytes2Hex(tx.To())
 	)
@@ -303,7 +303,7 @@ func (gui *Gui) readPreviousTransactions() {
 
 func (gui *Gui) processBlock(block *types.Block, initial bool) {
 	name := ethutil.Bytes2Hex(block.Coinbase())
-	b := xeth.NewJSBlock(block)
+	b := xeth.NewBlock(block)
 	b.Name = name
 
 	gui.getObjectByName("chainView").Call("addBlock", b, initial)

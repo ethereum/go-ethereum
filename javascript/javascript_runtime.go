@@ -24,7 +24,7 @@ var jsrelogger = logger.NewLogger("JSRE")
 type JSRE struct {
 	ethereum *eth.Ethereum
 	Vm       *otto.Otto
-	pipe     *xeth.JSXEth
+	pipe     *xeth.XEth
 
 	events event.Subscription
 
@@ -49,7 +49,7 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	re := &JSRE{
 		ethereum,
 		otto.New(),
-		xeth.NewJSXEth(ethereum),
+		xeth.New(ethereum),
 		nil,
 		make(map[string][]otto.Value),
 	}

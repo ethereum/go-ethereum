@@ -42,7 +42,7 @@ type memAddr struct {
 
 // UI Library that has some basic functionality exposed
 type UiLib struct {
-	*xeth.JSXEth
+	*xeth.XEth
 	engine    *qml.Engine
 	eth       *eth.Ethereum
 	connected bool
@@ -61,7 +61,7 @@ type UiLib struct {
 }
 
 func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
-	lib := &UiLib{JSXEth: xeth.NewJSXEth(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth), filterCallbacks: make(map[int][]int)} //, filters: make(map[int]*xeth.JSFilter)}
+	lib := &UiLib{XEth: xeth.New(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth), filterCallbacks: make(map[int][]int)} //, filters: make(map[int]*xeth.JSFilter)}
 	lib.miner = miner.New(eth.KeyManager().Address(), eth)
 	lib.filterManager = filter.NewFilterManager(eth.EventMux())
 	go lib.filterManager.Start()
@@ -178,7 +178,7 @@ func (self *UiLib) StartDebugger() {
 func (self *UiLib) Transact(params map[string]interface{}) (string, error) {
 	object := mapToTxParams(params)
 
-	return self.JSXEth.Transact(
+	return self.XEth.Transact(
 		object["from"],
 		object["to"],
 		object["value"],
@@ -200,7 +200,7 @@ func (self *UiLib) Compile(code string) (string, error) {
 func (self *UiLib) Call(params map[string]interface{}) (string, error) {
 	object := mapToTxParams(params)
 
-	return self.JSXEth.Execute(
+	return self.XEth.Execute(
 		object["to"],
 		object["value"],
 		object["gas"],
@@ -260,7 +260,7 @@ func (self *UiLib) NewFilter(object map[string]interface{}, view *qml.Common) (i
 	/* TODO remove me
 	filter := qt.NewFilterFromMap(object, self.eth)
 	filter.MessageCallback = func(messages state.Messages) {
-		view.Call("messages", xeth.ToJSMessages(messages), id)
+		view.Call("messages", xeth.ToMessages(messages), id)
 	}
 	id = self.filterManager.InstallFilter(filter)
 	return id
@@ -284,7 +284,7 @@ func (self *UiLib) Messages(id int) *ethutil.List {
 	/* TODO remove me
 	filter := self.filterManager.GetFilter(id)
 	if filter != nil {
-		messages := xeth.ToJSMessages(filter.Find())
+		messages := xeth.ToMessages(filter.Find())
 
 		return messages
 	}

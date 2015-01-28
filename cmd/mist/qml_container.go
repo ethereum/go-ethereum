@@ -70,7 +70,7 @@ func (app *QmlApplication) NewWatcher(quitChan chan bool) {
 
 // Events
 func (app *QmlApplication) NewBlock(block *types.Block) {
-	pblock := &xeth.JSBlock{Number: int(block.NumberU64()), Hash: ethutil.Bytes2Hex(block.Hash())}
+	pblock := &xeth.Block{Number: int(block.NumberU64()), Hash: ethutil.Bytes2Hex(block.Hash())}
 	app.win.Call("onNewBlockCb", pblock)
 }
 

@@ -29,7 +29,7 @@ import (
 var rpchttplogger = logger.NewLogger("RPC-HTTP")
 var JSON rpc.JsonWrapper
 
-func NewRpcHttpServer(pipe *xeth.JSXEth, port int) (*RpcHttpServer, error) {
+func NewRpcHttpServer(pipe *xeth.XEth, port int) (*RpcHttpServer, error) {
 	sport := fmt.Sprintf(":%d", port)
 	l, err := net.Listen("tcp", sport)
 	if err != nil {
@@ -47,7 +47,7 @@ func NewRpcHttpServer(pipe *xeth.JSXEth, port int) (*RpcHttpServer, error) {
 type RpcHttpServer struct {
 	quit     chan bool
 	listener net.Listener
-	pipe     *xeth.JSXEth
+	pipe     *xeth.XEth
 	port     int
 }
 

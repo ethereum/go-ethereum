@@ -3,10 +3,10 @@ package xeth
 import "github.com/ethereum/go-ethereum/state"
 
 type State struct {
-	xeth *JSXEth
+	xeth *XEth
 }
 
-func NewState(xeth *JSXEth) *State {
+func NewState(xeth *XEth) *State {
 	return &State{xeth}
 }
 
