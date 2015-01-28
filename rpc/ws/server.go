@@ -75,7 +75,7 @@ func (self *WebSocketServer) Start() {
 	wslogger.Infof("Starting RPC-WS server on port %d", self.port)
 	go self.handlerLoop()
 
-	api := rpc.NewEthereumApi(xeth.NewJSXEth(self.eth))
+	api := rpc.NewEthereumApi(xeth.New(self.eth))
 	h := self.apiHandler(api)
 	http.Handle("/ws", h)
 

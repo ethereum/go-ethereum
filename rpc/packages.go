@@ -19,8 +19,8 @@
 For each request type, define the following:
 
 1. RpcRequest "To" method [message.go], which does basic validation and conversion to "Args" type via json.Decoder()
-2. json.Decoder() calls "UnmarshalJSON" defined on each "Args" struct
-3. EthereumApi method, taking the "Args" type and replying with an interface to be marshalled to JSON
+2. json.Decoder() calls "UnmarshalON" defined on each "Args" struct
+3. EthereumApi method, taking the "Args" type and replying with an interface to be marshalled to ON
 
 */
 package rpc
@@ -38,12 +38,12 @@ type RpcServer interface {
 	Stop()
 }
 
-func NewEthereumApi(xeth *xeth.JSXEth) *EthereumApi {
+func NewEthereumApi(xeth *xeth.XEth) *EthereumApi {
 	return &EthereumApi{xeth: xeth}
 }
 
 type EthereumApi struct {
-	xeth *xeth.JSXEth
+	xeth *xeth.XEth
 }
 
 func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *interface{}) error {
@@ -162,7 +162,7 @@ func (p *EthereumApi) GetCodeAt(args *GetCodeAtArgs, reply *interface{}) error {
 }
 
 func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
-	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
+	// Spec at https://github.com/ethereum/wiki/wiki/Generic-ON-RPC
 	rpclogger.DebugDetailf("%T %s", req.Params, req.Params)
 	switch req.Method {
 	case "eth_coinbase":

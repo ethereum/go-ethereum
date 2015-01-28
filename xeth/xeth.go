@@ -31,15 +31,15 @@ type Backend interface {
 	TxPool() *core.TxPool
 }
 
-type JSXEth struct {
+type XEth struct {
 	eth            Backend
 	blockProcessor *core.BlockProcessor
 	chainManager   *core.ChainManager
 	world          *State
 }
 
-func NewJSXEth(eth Backend) *JSXEth {
-	xeth := &JSXEth{
+func New(eth Backend) *XEth {
+	xeth := &XEth{
 		eth:            eth,
 		blockProcessor: eth.BlockProcessor(),
 		chainManager:   eth.ChainManager(),
@@ -49,24 +49,24 @@ func NewJSXEth(eth Backend) *JSXEth {
 	return xeth
 }
 
-func (self *JSXEth) State() *State { return self.world }
+func (self *XEth) State() *State { return self.world }
 
-func (self *JSXEth) BlockByHash(strHash string) *JSBlock {
+func (self *XEth) BlockByHash(strHash string) *Block {
 	hash := fromHex(strHash)
 	block := self.chainManager.GetBlock(hash)
 
-	return NewJSBlock(block)
+	return NewBlock(block)
 }
 
-func (self *JSXEth) BlockByNumber(num int32) *JSBlock {
+func (self *XEth) BlockByNumber(num int32) *Block {
 	if num == -1 {
-		return NewJSBlock(self.chainManager.CurrentBlock())
+		return NewBlock(self.chainManager.CurrentBlock())
 	}
 
-	return NewJSBlock(self.chainManager.GetBlockByNumber(uint64(num)))
+	return NewBlock(self.chainManager.GetBlockByNumber(uint64(num)))
 }
 
-func (self *JSXEth) Block(v interface{}) *JSBlock {
+func (self *XEth) Block(v interface{}) *Block {
 	if n, ok := v.(int32); ok {
 		return self.BlockByNumber(n)
 	} else if str, ok := v.(string); ok {
@@ -78,63 +78,63 @@ func (self *JSXEth) Block(v interface{}) *JSBlock {
 	return nil
 }
 
-func (self *JSXEth) Accounts() []string {
+func (self *XEth) Accounts() []string {
 	return []string{toHex(self.eth.KeyManager().Address())}
 }
 
 /*
-func (self *JSXEth) StateObject(addr string) *JSObject {
+func (self *XEth) StateObject(addr string) *Object {
 	object := &Object{self.State().safeGet(fromHex(addr))}
 
-	return NewJSObject(object)
+	return NewObject(object)
 }
 */
 
-func (self *JSXEth) PeerCount() int {
+func (self *XEth) PeerCount() int {
 	return self.eth.PeerCount()
 }
 
-func (self *JSXEth) IsMining() bool {
+func (self *XEth) IsMining() bool {
 	return self.eth.IsMining()
 }
 
-func (self *JSXEth) IsListening() bool {
+func (self *XEth) IsListening() bool {
 	return self.eth.IsListening()
 }
 
-func (self *JSXEth) Coinbase() string {
+func (self *XEth) Coinbase() string {
 	return toHex(self.eth.KeyManager().Address())
 }
 
-func (self *JSXEth) NumberToHuman(balance string) string {
+func (self *XEth) NumberToHuman(balance string) string {
 	b := ethutil.Big(balance)
 
 	return ethutil.CurrencyToString(b)
 }
 
-func (self *JSXEth) StorageAt(addr, storageAddr string) string {
+func (self *XEth) StorageAt(addr, storageAddr string) string {
 	storage := self.State().SafeGet(addr).StorageString(storageAddr)
 
 	return toHex(storage.Bytes())
 }
 
-func (self *JSXEth) BalanceAt(addr string) string {
+func (self *XEth) BalanceAt(addr string) string {
 	return self.State().SafeGet(addr).Balance().String()
 }
 
-func (self *JSXEth) TxCountAt(address string) int {
+func (self *XEth) TxCountAt(address string) int {
 	return int(self.State().SafeGet(address).Nonce)
 }
 
-func (self *JSXEth) CodeAt(address string) string {
+func (self *XEth) CodeAt(address string) string {
 	return toHex(self.State().SafeGet(address).Code)
 }
 
-func (self *JSXEth) IsContract(address string) bool {
+func (self *XEth) IsContract(address string) bool {
 	return len(self.State().SafeGet(address).Code) > 0
 }
 
-func (self *JSXEth) SecretToAddress(key string) string {
+func (self *XEth) SecretToAddress(key string) string {
 	pair, err := crypto.NewKeyPairFromSec(fromHex(key))
 	if err != nil {
 		return ""
@@ -143,7 +143,7 @@ func (self *JSXEth) SecretToAddress(key string) string {
 	return toHex(pair.Address())
 }
 
-func (self *JSXEth) Execute(addr, value, gas, price, data string) (string, error) {
+func (self *XEth) Execute(addr, value, gas, price, data string) (string, error) {
 	return "", nil
 }
 
@@ -152,7 +152,7 @@ type KeyVal struct {
 	Value string `json:"value"`
 }
 
-func (self *JSXEth) EachStorage(addr string) string {
+func (self *XEth) EachStorage(addr string) string {
 	var values []KeyVal
 	object := self.State().SafeGet(addr)
 	it := object.Trie().Iterator()
@@ -168,13 +168,13 @@ func (self *JSXEth) EachStorage(addr string) string {
 	return string(valuesJson)
 }
 
-func (self *JSXEth) ToAscii(str string) string {
+func (self *XEth) ToAscii(str string) string {
 	padded := ethutil.RightPadBytes([]byte(str), 32)
 
 	return "0x" + toHex(padded)
 }
 
-func (self *JSXEth) FromAscii(str string) string {
+func (self *XEth) FromAscii(str string) string {
 	if ethutil.IsHex(str) {
 		str = str[2:]
 	}
@@ -182,7 +182,7 @@ func (self *JSXEth) FromAscii(str string) string {
 	return string(bytes.Trim(fromHex(str), "\x00"))
 }
 
-func (self *JSXEth) FromNumber(str string) string {
+func (self *XEth) FromNumber(str string) string {
 	if ethutil.IsHex(str) {
 		str = str[2:]
 	}
@@ -190,20 +190,20 @@ func (self *JSXEth) FromNumber(str string) string {
 	return ethutil.BigD(fromHex(str)).String()
 }
 
-func (self *JSXEth) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
+func (self *XEth) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
 	return "", nil
 }
 
-func ToJSMessages(messages state.Messages) *ethutil.List {
-	var msgs []JSMessage
+func ToMessages(messages state.Messages) *ethutil.List {
+	var msgs []Message
 	for _, m := range messages {
-		msgs = append(msgs, NewJSMessage(m))
+		msgs = append(msgs, NewMessage(m))
 	}
 
 	return ethutil.NewList(msgs)
 }
 
-func (self *JSXEth) PushTx(encodedTx string) (string, error) {
+func (self *XEth) PushTx(encodedTx string) (string, error) {
 	tx := types.NewTransactionFromBytes(fromHex(encodedTx))
 	err := self.eth.TxPool().Add(tx)
 	if err != nil {

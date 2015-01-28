@@ -47,7 +47,7 @@ type AppContainer interface {
 }
 
 type ExtApplication struct {
-	*xeth.JSXEth
+	*xeth.XEth
 	eth core.EthManager
 
 	events          event.Subscription
@@ -61,7 +61,7 @@ type ExtApplication struct {
 
 func NewExtApplication(container AppContainer, lib *UiLib) *ExtApplication {
 	return &ExtApplication{
-		JSXEth:          xeth.NewJSXEth(lib.eth),
+		XEth:            xeth.New(lib.eth),
 		eth:             lib.eth,
 		watcherQuitChan: make(chan bool),
 		filters:         make(map[string]*core.Filter),
