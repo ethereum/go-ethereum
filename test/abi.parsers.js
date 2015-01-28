@@ -5,6 +5,7 @@ var clone = function (object) { return JSON.parse(JSON.stringify(object)); };
 
 var description =  [{
     "name": "test",
+    "type": "function",
     "inputs": [{
         "name": "a",
         "type": "uint256"
@@ -339,10 +340,12 @@ describe('abi', function() {
             // given
             var d =  [{
                 name: "test",
+                type: "function",
                 inputs: [{ type: "int" }],
                 outputs: [{ type: "int" }]
             },{
                 name: "test2",
+                type: "function",
                 inputs: [{ type: "string" }],
                 outputs: [{ type: "string" }]
             }];
@@ -775,10 +778,12 @@ describe('abi', function() {
             // given
             var d =  [{
                 name: "test",
+                type: "function",
                 inputs: [{ type: "int" }],
                 outputs: [{ type: "int" }]
             },{
                 name: "test2",
+                type: "function",
                 inputs: [{ type: "string" }],
                 outputs: [{ type: "string" }]
             }];

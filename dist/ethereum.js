@@ -66,6 +66,14 @@ var getMethodWithName = function (json, methodName) {
     return json[index];
 };
 
+/// Filters all function from input abi
+/// @returns abi array with filtered objects of type 'function'
+var filterFunctions = function (json) {
+    return json.filter(function (current) {
+        return current.type === 'function'; 
+    }); 
+};
+
 /// @param string string to be padded
 /// @param number of characters that result string should have
 /// @param sign, by default 0
@@ -352,7 +360,7 @@ var methodTypeName = function (method) {
 /// @returns input parser object for given json abi
 var inputParser = function (json) {
     var parser = {};
-    json.forEach(function (method) {
+    filterFunctions(json).forEach(function (method) {
         var displayName = methodDisplayName(method.name); 
         var typeName = methodTypeName(method.name);
 
@@ -375,7 +383,7 @@ var inputParser = function (json) {
 /// @returns output parser for given json abi
 var outputParser = function (json) {
     var parser = {};
-    json.forEach(function (method) {
+    filterFunctions(json).forEach(function (method) {
 
         var displayName = methodDisplayName(method.name); 
         var typeName = methodTypeName(method.name);
@@ -406,7 +414,8 @@ module.exports = {
     methodSignature: methodSignature,
     methodDisplayName: methodDisplayName,
     methodTypeName: methodTypeName,
-    getMethodWithName: getMethodWithName
+    getMethodWithName: getMethodWithName,
+    filterFunctions: filterFunctions
 };
 
 
@@ -464,6 +473,7 @@ var contract = function (address, desc) {
         // workaround for invalid assumption that method.name is the full anonymous prototype of the method.
         // it's not. it's just the name. the rest of the code assumes it's actually the anonymous
         // prototype, so we make it so as a workaround.
+        // TODO: we may not want to modify input params, maybe use copy instead?
         if (method.name.indexOf('(') === -1) {
             var displayName = method.name;
             var typeName = method.inputs.map(function(i){return i.type; }).join();
@@ -497,7 +507,7 @@ var contract = function (address, desc) {
     });
 
 
-    desc.forEach(function (method) {
+    abi.filterFunctions(desc).forEach(function (method) {
 
         var displayName = abi.methodDisplayName(method.name);
         var typeName = abi.methodTypeName(method.name);
