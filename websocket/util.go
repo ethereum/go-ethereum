@@ -119,8 +119,8 @@ func (self *WebSocketServer) Serv() {
 			if mp, ok := msg.Args[0].(map[string]interface{}); ok {
 				var id int
 				filter := ui.NewFilterFromMap(mp, self.eth)
-				filter.MessageCallback = func(messages state.Messages) {
-					c.Event(toMessages(messages), "eth_changed", id)
+				filter.LogsCallback = func(logs state.Logs) {
+					//c.Event(toMessages(messages), "eth_changed", id)
 				}
 				id = self.filterManager.InstallFilter(filter)
 				c.Write(id, msg.Id)
@@ -136,7 +136,7 @@ func (self *WebSocketServer) Serv() {
 		case "eth_filterLogs":
 			filter := self.filterManager.GetFilter(int(msg.Arguments().Get(0).Uint()))
 			if filter != nil {
-				c.Write(toMessages(filter.Find()), msg.Id)
+				//c.Write(toMessages(filter.Find()), msg.Id)
 			}
 		}
 

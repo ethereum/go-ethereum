@@ -38,31 +38,19 @@ func (self *JSBlock) GetTransaction(hash string) otto.Value {
 	return self.eth.toVal(self.JSBlock.GetTransaction(hash))
 }
 
-type JSMessage struct {
-	To        string `json:"to"`
-	From      string `json:"from"`
-	Input     string `json:"input"`
-	Output    string `json:"output"`
-	Path      int    `json:"path"`
-	Origin    string `json:"origin"`
-	Timestamp int32  `json:"timestamp"`
-	Coinbase  string `json:"coinbase"`
-	Block     string `json:"block"`
-	Number    int32  `json:"number"`
+type JSLog struct {
+	Address string   `json:address`
+	Topics  []string `json:topics`
+	Number  int32    `json:number`
+	Data    string   `json:data`
 }
 
-func NewJSMessage(message *state.Message) JSMessage {
-	return JSMessage{
-		To:        ethutil.Bytes2Hex(message.To),
-		From:      ethutil.Bytes2Hex(message.From),
-		Input:     ethutil.Bytes2Hex(message.Input),
-		Output:    ethutil.Bytes2Hex(message.Output),
-		Path:      message.Path,
-		Origin:    ethutil.Bytes2Hex(message.Origin),
-		Timestamp: int32(message.Timestamp),
-		Coinbase:  ethutil.Bytes2Hex(message.Origin),
-		Block:     ethutil.Bytes2Hex(message.Block),
-		Number:    int32(message.Number.Int64()),
+func NewJSLog(log state.Log) JSLog {
+	return JSLog{
+		Address: ethutil.Bytes2Hex(log.Address()),
+		Topics:  nil, //ethutil.Bytes2Hex(log.Address()),
+		Number:  0,
+		Data:    ethutil.Bytes2Hex(log.Data()),
 	}
 }
 
@@ -120,13 +108,13 @@ func (self *JSEthereum) toVal(v interface{}) otto.Value {
 func (self *JSEthereum) Messages(object map[string]interface{}) otto.Value {
 	filter := ui.NewFilterFromMap(object, self.ethereum)
 
-	messages := filter.Find()
-	var msgs []JSMessage
-	for _, m := range messages {
-		msgs = append(msgs, NewJSMessage(m))
+	logs := filter.Find()
+	var jslogs []JSLog
+	for _, m := range logs {
+		jslogs = append(jslogs, NewJSLog(m))
 	}
 
-	v, _ := self.vm.ToValue(msgs)
+	v, _ := self.vm.ToValue(jslogs)
 
 	return v
 }
