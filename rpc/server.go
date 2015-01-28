@@ -80,6 +80,8 @@ func NewJsonRpcServer(pipe *xeth.JSXEth, port int) (*JsonRpcServer, error) {
 
 func apiHandler(xeth *EthereumApi) http.Handler {
 	fn := func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
 		jsonlogger.Debugln("Handling request")
 
 		reqParsed, reqerr := JSON.ParseRequestBody(req)
