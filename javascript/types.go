@@ -12,14 +12,14 @@ import (
 )
 
 type JSStateObject struct {
-	*xeth.JSObject
+	*xeth.Object
 	eth *JSEthereum
 }
 
 func (self *JSStateObject) EachStorage(call otto.FunctionCall) otto.Value {
 	cb := call.Argument(0)
 
-	it := self.JSObject.Trie().Iterator()
+	it := self.Object.Trie().Iterator()
 	for it.Next() {
 		cb.Call(self.eth.toVal(self), self.eth.toVal(ethutil.Bytes2Hex(it.Key)), self.eth.toVal(ethutil.Bytes2Hex(it.Value)))
 	}
@@ -30,12 +30,12 @@ func (self *JSStateObject) EachStorage(call otto.FunctionCall) otto.Value {
 // The JSEthereum object attempts to wrap the PEthereum object and returns
 // meaningful javascript objects
 type JSBlock struct {
-	*xeth.JSBlock
+	*xeth.Block
 	eth *JSEthereum
 }
 
 func (self *JSBlock) GetTransaction(hash string) otto.Value {
-	return self.eth.toVal(self.JSBlock.GetTransaction(hash))
+	return self.eth.toVal(self.Block.GetTransaction(hash))
 }
 
 type JSMessage struct {
@@ -67,35 +67,27 @@ func NewJSMessage(message *state.Message) JSMessage {
 }
 
 type JSEthereum struct {
-	*xeth.JSXEth
+	*xeth.XEth
 	vm       *otto.Otto
 	ethereum *eth.Ethereum
 }
 
 func (self *JSEthereum) Block(v interface{}) otto.Value {
 	if number, ok := v.(int64); ok {
-		return self.toVal(&JSBlock{self.JSXEth.BlockByNumber(int32(number)), self})
+		return self.toVal(&JSBlock{self.XEth.BlockByNumber(int32(number)), self})
 	} else if hash, ok := v.(string); ok {
-		return self.toVal(&JSBlock{self.JSXEth.BlockByHash(hash), self})
+		return self.toVal(&JSBlock{self.XEth.BlockByHash(hash), self})
 	}
 
 	return otto.UndefinedValue()
 }
 
-func (self *JSEthereum) Peers() otto.Value {
-	return self.toVal(self.JSXEth.Peers())
-}
-
-func (self *JSEthereum) Key() otto.Value {
-	return self.toVal(self.JSXEth.Key())
-}
-
 func (self *JSEthereum) GetStateObject(addr string) otto.Value {
-	return self.toVal(&JSStateObject{xeth.NewJSObject(self.JSXEth.World().SafeGet(ethutil.Hex2Bytes(addr))), self})
+	return self.toVal(&JSStateObject{self.XEth.State().SafeGet(addr), self})
 }
 
 func (self *JSEthereum) Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr string) otto.Value {
-	r, err := self.JSXEth.Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr)
+	r, err := self.XEth.Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr)
 	if err != nil {
 		fmt.Println(err)
 

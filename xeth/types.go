@@ -25,8 +25,32 @@ func fromHex(s string) []byte {
 	return nil
 }
 
+type Object struct {
+	*state.StateObject
+}
+
+func NewObject(state *state.StateObject) *Object {
+	return &Object{state}
+}
+
+func (self *Object) StorageString(str string) *ethutil.Value {
+	if ethutil.IsHex(str) {
+		return self.Storage(ethutil.Hex2Bytes(str[2:]))
+	} else {
+		return self.Storage(ethutil.RightPadBytes([]byte(str), 32))
+	}
+}
+
+func (self *Object) StorageValue(addr *ethutil.Value) *ethutil.Value {
+	return self.Storage(addr.Bytes())
+}
+
+func (self *Object) Storage(addr []byte) *ethutil.Value {
+	return self.StateObject.GetStorage(ethutil.BigD(addr))
+}
+
 // Block interface exposed to QML
-type JSBlock struct {
+type Block struct {
 	//Transactions string `json:"transactions"`
 	ref          *types.Block
 	Size         string        `json:"size"`
@@ -45,24 +69,24 @@ type JSBlock struct {
 }
 
 // Creates a new QML Block from a chain block
-func NewJSBlock(block *types.Block) *JSBlock {
+func NewBlock(block *types.Block) *Block {
 	if block == nil {
-		return &JSBlock{}
+		return &Block{}
 	}
 
-	ptxs := make([]*JSTransaction, len(block.Transactions()))
+	ptxs := make([]*Transaction, len(block.Transactions()))
 	for i, tx := range block.Transactions() {
-		ptxs[i] = NewJSTx(tx)
+		ptxs[i] = NewTx(tx)
 	}
 	txlist := ethutil.NewList(ptxs)
 
-	puncles := make([]*JSBlock, len(block.Uncles()))
+	puncles := make([]*Block, len(block.Uncles()))
 	for i, uncle := range block.Uncles() {
-		puncles[i] = NewJSBlock(types.NewBlockWithHeader(uncle))
+		puncles[i] = NewBlock(types.NewBlockWithHeader(uncle))
 	}
 	ulist := ethutil.NewList(puncles)
 
-	return &JSBlock{
+	return &Block{
 		ref: block, Size: block.Size().String(),
 		Number: int(block.NumberU64()), GasUsed: block.GasUsed().String(),
 		GasLimit: block.GasLimit().String(), Hash: toHex(block.Hash()),
@@ -75,7 +99,7 @@ func NewJSBlock(block *types.Block) *JSBlock {
 	}
 }
 
-func (self *JSBlock) ToString() string {
+func (self *Block) ToString() string {
 	if self.ref != nil {
 		return self.ref.String()
 	}
@@ -83,16 +107,16 @@ func (self *JSBlock) ToString() string {
 	return ""
 }
 
-func (self *JSBlock) GetTransaction(hash string) *JSTransaction {
+func (self *Block) GetTransaction(hash string) *Transaction {
 	tx := self.ref.Transaction(fromHex(hash))
 	if tx == nil {
 		return nil
 	}
 
-	return NewJSTx(tx)
+	return NewTx(tx)
 }
 
-type JSTransaction struct {
+type Transaction struct {
 	ref *types.Transaction
 
 	Value           string `json:"value"`
@@ -108,7 +132,7 @@ type JSTransaction struct {
 	Confirmations   int    `json:"confirmations"`
 }
 
-func NewJSTx(tx *types.Transaction) *JSTransaction {
+func NewTx(tx *types.Transaction) *Transaction {
 	hash := toHex(tx.Hash())
 	receiver := toHex(tx.To())
 	if receiver == "0000000000000000000000000000000000000000" {
@@ -124,29 +148,21 @@ func NewJSTx(tx *types.Transaction) *JSTransaction {
 		data = toHex(tx.Data())
 	}
 
-	return &JSTransaction{ref: tx, Hash: hash, Value: ethutil.CurrencyToString(tx.Value()), Address: receiver, Contract: createsContract, Gas: tx.Gas().String(), GasPrice: tx.GasPrice().String(), Data: data, Sender: sender, CreatesContract: createsContract, RawData: toHex(tx.Data())}
+	return &Transaction{ref: tx, Hash: hash, Value: ethutil.CurrencyToString(tx.Value()), Address: receiver, Contract: createsContract, Gas: tx.Gas().String(), GasPrice: tx.GasPrice().String(), Data: data, Sender: sender, CreatesContract: createsContract, RawData: toHex(tx.Data())}
 }
 
-func (self *JSTransaction) ToString() string {
+func (self *Transaction) ToString() string {
 	return self.ref.String()
 }
 
-type JSKey struct {
+type Key struct {
 	Address    string `json:"address"`
 	PrivateKey string `json:"privateKey"`
 	PublicKey  string `json:"publicKey"`
 }
 
-func NewJSKey(key *crypto.KeyPair) *JSKey {
-	return &JSKey{toHex(key.Address()), toHex(key.PrivateKey), toHex(key.PublicKey)}
-}
-
-type JSObject struct {
-	*Object
-}
-
-func NewJSObject(object *Object) *JSObject {
-	return &JSObject{object}
+func NewKey(key *crypto.KeyPair) *Key {
+	return &Key{toHex(key.Address()), toHex(key.PrivateKey), toHex(key.PublicKey)}
 }
 
 type PReceipt struct {
@@ -167,20 +183,20 @@ func NewPReciept(contractCreation bool, creationAddress, hash, address []byte) *
 
 // Peer interface exposed to QML
 
-type JSPeer struct {
+type Peer struct {
 	ref     *p2p.Peer
 	Ip      string `json:"ip"`
 	Version string `json:"version"`
 	Caps    string `json:"caps"`
 }
 
-func NewJSPeer(peer *p2p.Peer) *JSPeer {
+func NewPeer(peer *p2p.Peer) *Peer {
 	var caps []string
 	for _, cap := range peer.Caps() {
 		caps = append(caps, fmt.Sprintf("%s/%d", cap.Name, cap.Version))
 	}
 
-	return &JSPeer{
+	return &Peer{
 		ref:     peer,
 		Ip:      fmt.Sprintf("%v", peer.RemoteAddr()),
 		Version: fmt.Sprintf("%v", peer.Identity()),
@@ -188,15 +204,15 @@ func NewJSPeer(peer *p2p.Peer) *JSPeer {
 	}
 }
 
-type JSReceipt struct {
+type Receipt struct {
 	CreatedContract bool   `json:"createdContract"`
 	Address         string `json:"address"`
 	Hash            string `json:"hash"`
 	Sender          string `json:"sender"`
 }
 
-func NewJSReciept(contractCreation bool, creationAddress, hash, address []byte) *JSReceipt {
-	return &JSReceipt{
+func NewReciept(contractCreation bool, creationAddress, hash, address []byte) *Receipt {
+	return &Receipt{
 		contractCreation,
 		toHex(creationAddress),
 		toHex(hash),
@@ -204,7 +220,7 @@ func NewJSReciept(contractCreation bool, creationAddress, hash, address []byte) 
 	}
 }
 
-type JSMessage struct {
+type Message struct {
 	To        string `json:"to"`
 	From      string `json:"from"`
 	Input     string `json:"input"`
@@ -218,8 +234,8 @@ type JSMessage struct {
 	Value     string `json:"value"`
 }
 
-func NewJSMessage(message *state.Message) JSMessage {
-	return JSMessage{
+func NewMessage(message *state.Message) Message {
+	return Message{
 		To:        toHex(message.To),
 		From:      toHex(message.From),
 		Input:     toHex(message.Input),

@@ -5,6 +5,9 @@ package xeth
  */
 
 import (
+	"bytes"
+	"encoding/json"
+
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -15,167 +18,201 @@ import (
 
 var pipelogger = logger.NewLogger("XETH")
 
-type VmVars struct {
-	State *state.StateDB
+// to resolve the import cycle
+type Backend interface {
+	BlockProcessor() *core.BlockProcessor
+	ChainManager() *core.ChainManager
+	Coinbase() []byte
+	KeyManager() *crypto.KeyManager
+	IsMining() bool
+	IsListening() bool
+	PeerCount() int
+	Db() ethutil.Database
+	TxPool() *core.TxPool
 }
 
 type XEth struct {
-	obj            core.EthManager
+	eth            Backend
 	blockProcessor *core.BlockProcessor
 	chainManager   *core.ChainManager
-	world          *World
-
-	Vm VmVars
+	world          *State
 }
 
-func New(obj core.EthManager) *XEth {
-	pipe := &XEth{
-		obj:            obj,
-		blockProcessor: obj.BlockProcessor(),
-		chainManager:   obj.ChainManager(),
+func New(eth Backend) *XEth {
+	xeth := &XEth{
+		eth:            eth,
+		blockProcessor: eth.BlockProcessor(),
+		chainManager:   eth.ChainManager(),
 	}
-	pipe.world = NewWorld(pipe)
+	xeth.world = NewState(xeth)
 
-	return pipe
+	return xeth
+}
+
+func (self *XEth) State() *State { return self.world }
+
+func (self *XEth) BlockByHash(strHash string) *Block {
+	hash := fromHex(strHash)
+	block := self.chainManager.GetBlock(hash)
+
+	return NewBlock(block)
+}
+
+func (self *XEth) BlockByNumber(num int32) *Block {
+	if num == -1 {
+		return NewBlock(self.chainManager.CurrentBlock())
+	}
+
+	return NewBlock(self.chainManager.GetBlockByNumber(uint64(num)))
+}
+
+func (self *XEth) Block(v interface{}) *Block {
+	if n, ok := v.(int32); ok {
+		return self.BlockByNumber(n)
+	} else if str, ok := v.(string); ok {
+		return self.BlockByHash(str)
+	} else if f, ok := v.(float64); ok { // Don't ask ...
+		return self.BlockByNumber(int32(f))
+	}
+
+	return nil
+}
+
+func (self *XEth) Accounts() []string {
+	return []string{toHex(self.eth.KeyManager().Address())}
 }
 
 /*
- * State / Account accessors
- */
-func (self *XEth) Balance(addr []byte) *ethutil.Value {
-	return ethutil.NewValue(self.World().safeGet(addr).Balance)
+func (self *XEth) StateObject(addr string) *Object {
+	object := &Object{self.State().safeGet(fromHex(addr))}
+
+	return NewObject(object)
+}
+*/
+
+func (self *XEth) PeerCount() int {
+	return self.eth.PeerCount()
 }
 
-func (self *XEth) Nonce(addr []byte) uint64 {
-	return self.World().safeGet(addr).Nonce
+func (self *XEth) IsMining() bool {
+	return self.eth.IsMining()
 }
 
-func (self *XEth) Block(hash []byte) *types.Block {
-	return self.chainManager.GetBlock(hash)
+func (self *XEth) IsListening() bool {
+	return self.eth.IsListening()
 }
 
-func (self *XEth) Storage(addr, storageAddr []byte) *ethutil.Value {
-	return self.World().safeGet(addr).GetStorage(ethutil.BigD(storageAddr))
+func (self *XEth) Coinbase() string {
+	return toHex(self.eth.KeyManager().Address())
 }
 
-func (self *XEth) Exists(addr []byte) bool {
-	return self.World().Get(addr) != nil
+func (self *XEth) NumberToHuman(balance string) string {
+	b := ethutil.Big(balance)
+
+	return ethutil.CurrencyToString(b)
 }
 
-// Converts the given private key to an address
-func (self *XEth) ToAddress(priv []byte) []byte {
-	pair, err := crypto.NewKeyPairFromSec(priv)
+func (self *XEth) StorageAt(addr, storageAddr string) string {
+	storage := self.State().SafeGet(addr).StorageString(storageAddr)
+
+	return toHex(storage.Bytes())
+}
+
+func (self *XEth) BalanceAt(addr string) string {
+	return self.State().SafeGet(addr).Balance().String()
+}
+
+func (self *XEth) TxCountAt(address string) int {
+	return int(self.State().SafeGet(address).Nonce)
+}
+
+func (self *XEth) CodeAt(address string) string {
+	return toHex(self.State().SafeGet(address).Code)
+}
+
+func (self *XEth) IsContract(address string) bool {
+	return len(self.State().SafeGet(address).Code) > 0
+}
+
+func (self *XEth) SecretToAddress(key string) string {
+	pair, err := crypto.NewKeyPairFromSec(fromHex(key))
 	if err != nil {
-		return nil
+		return ""
 	}
 
-	return pair.Address()
+	return toHex(pair.Address())
 }
 
-/*
- * Execution helpers
- */
-func (self *XEth) Execute(addr []byte, data []byte, value, gas, price *ethutil.Value) ([]byte, error) {
-	return self.ExecuteObject(&Object{self.World().safeGet(addr)}, data, value, gas, price)
+func (self *XEth) Execute(addr, value, gas, price, data string) (string, error) {
+	return "", nil
 }
 
-func (self *XEth) ExecuteObject(object *Object, data []byte, value, gas, price *ethutil.Value) ([]byte, error) {
-	var (
-		initiator = state.NewStateObject(self.obj.KeyManager().KeyPair().Address(), self.obj.Db())
-		block     = self.chainManager.CurrentBlock()
-	)
-
-	self.Vm.State = self.World().State().Copy()
-
-	vmenv := NewEnv(self.chainManager, self.Vm.State, block, value.BigInt(), initiator.Address())
-	return vmenv.Call(initiator, object.Address(), data, gas.BigInt(), price.BigInt(), value.BigInt())
+type KeyVal struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
-/*
- * Transactional methods
- */
-func (self *XEth) TransactString(key *crypto.KeyPair, rec string, value, gas, price *ethutil.Value, data []byte) (*types.Transaction, error) {
-	// Check if an address is stored by this address
-	var hash []byte
-	addr := self.World().Config().Get("NameReg").StorageString(rec).Bytes()
-	if len(addr) > 0 {
-		hash = addr
-	} else if ethutil.IsHex(rec) {
-		hash = ethutil.Hex2Bytes(rec[2:])
-	} else {
-		hash = ethutil.Hex2Bytes(rec)
+func (self *XEth) EachStorage(addr string) string {
+	var values []KeyVal
+	object := self.State().SafeGet(addr)
+	it := object.Trie().Iterator()
+	for it.Next() {
+		values = append(values, KeyVal{toHex(it.Key), toHex(it.Value)})
 	}
 
-	return self.Transact(key, hash, value, gas, price, data)
-}
-
-func (self *XEth) Transact(key *crypto.KeyPair, to []byte, value, gas, price *ethutil.Value, data []byte) (*types.Transaction, error) {
-	var hash []byte
-	var contractCreation bool
-	if types.IsContractAddr(to) {
-		contractCreation = true
-	} else {
-		// Check if an address is stored by this address
-		addr := self.World().Config().Get("NameReg").Storage(to).Bytes()
-		if len(addr) > 0 {
-			hash = addr
-		} else {
-			hash = to
-		}
-	}
-
-	var tx *types.Transaction
-	if contractCreation {
-		tx = types.NewContractCreationTx(value.BigInt(), gas.BigInt(), price.BigInt(), data)
-	} else {
-		tx = types.NewTransactionMessage(hash, value.BigInt(), gas.BigInt(), price.BigInt(), data)
-	}
-
-	state := self.chainManager.TransState()
-	nonce := state.GetNonce(key.Address())
-
-	tx.SetNonce(nonce)
-	tx.Sign(key.PrivateKey)
-
-	// Do some pre processing for our "pre" events  and hooks
-	block := self.chainManager.NewBlock(key.Address())
-	coinbase := state.GetOrNewStateObject(key.Address())
-	coinbase.SetGasPool(block.GasLimit())
-	self.blockProcessor.ApplyTransactions(coinbase, state, block, types.Transactions{tx}, true)
-
-	err := self.obj.TxPool().Add(tx)
+	valuesJson, err := json.Marshal(values)
 	if err != nil {
-		return nil, err
-	}
-	state.SetNonce(key.Address(), nonce+1)
-
-	if contractCreation {
-		addr := core.AddressFromMessage(tx)
-		pipelogger.Infof("Contract addr %x\n", addr)
+		return ""
 	}
 
-	return tx, nil
+	return string(valuesJson)
 }
 
-func (self *XEth) PushTx(tx *types.Transaction) ([]byte, error) {
-	err := self.obj.TxPool().Add(tx)
+func (self *XEth) ToAscii(str string) string {
+	padded := ethutil.RightPadBytes([]byte(str), 32)
+
+	return "0x" + toHex(padded)
+}
+
+func (self *XEth) FromAscii(str string) string {
+	if ethutil.IsHex(str) {
+		str = str[2:]
+	}
+
+	return string(bytes.Trim(fromHex(str), "\x00"))
+}
+
+func (self *XEth) FromNumber(str string) string {
+	if ethutil.IsHex(str) {
+		str = str[2:]
+	}
+
+	return ethutil.BigD(fromHex(str)).String()
+}
+
+func (self *XEth) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
+	return "", nil
+}
+
+func ToMessages(messages state.Messages) *ethutil.List {
+	var msgs []Message
+	for _, m := range messages {
+		msgs = append(msgs, NewMessage(m))
+	}
+
+	return ethutil.NewList(msgs)
+}
+
+func (self *XEth) PushTx(encodedTx string) (string, error) {
+	tx := types.NewTransactionFromBytes(fromHex(encodedTx))
+	err := self.eth.TxPool().Add(tx)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	if tx.To() == nil {
 		addr := core.AddressFromMessage(tx)
-		pipelogger.Infof("Contract addr %x\n", addr)
-		return addr, nil
+		return toHex(addr), nil
 	}
-	return tx.Hash(), nil
-}
-
-func (self *XEth) CompileMutan(code string) ([]byte, error) {
-	data, err := ethutil.Compile(code, false)
-	if err != nil {
-		return nil, err
-	}
-
-	return data, nil
+	return toHex(tx.Hash()), nil
 }

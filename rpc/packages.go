@@ -19,8 +19,8 @@
 For each request type, define the following:
 
 1. RpcRequest "To" method [message.go], which does basic validation and conversion to "Args" type via json.Decoder()
-2. json.Decoder() calls "UnmarshalJSON" defined on each "Args" struct
-3. EthereumApi method, taking the "Args" type and replying with an interface to be marshalled to JSON
+2. json.Decoder() calls "UnmarshalON" defined on each "Args" struct
+3. EthereumApi method, taking the "Args" type and replying with an interface to be marshalled to ON
 
 */
 package rpc
@@ -38,12 +38,12 @@ type RpcServer interface {
 	Stop()
 }
 
-func NewEthereumApi(xeth *xeth.JSXEth) *EthereumApi {
-	return &EthereumApi{pipe: xeth}
+func NewEthereumApi(xeth *xeth.XEth) *EthereumApi {
+	return &EthereumApi{xeth: xeth}
 }
 
 type EthereumApi struct {
-	pipe *xeth.JSXEth
+	xeth *xeth.XEth
 }
 
 func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *interface{}) error {
@@ -53,9 +53,9 @@ func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *interface{}) error {
 	}
 
 	if args.BlockNumber > 0 {
-		*reply = p.pipe.BlockByNumber(args.BlockNumber)
+		*reply = p.xeth.BlockByNumber(args.BlockNumber)
 	} else {
-		*reply = p.pipe.BlockByHash(args.Hash)
+		*reply = p.xeth.BlockByHash(args.Hash)
 	}
 	return nil
 }
@@ -65,7 +65,7 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
 	if err != nil {
 		return err
 	}
-	result, _ := p.pipe.Transact(p.pipe.Key().PrivateKey, args.Recipient, args.Value, args.Gas, args.GasPrice, args.Body)
+	result, _ := p.xeth.Transact( /* TODO specify account */ "", args.Recipient, args.Value, args.Gas, args.GasPrice, args.Body)
 	*reply = result
 	return nil
 }
@@ -76,7 +76,7 @@ func (p *EthereumApi) Create(args *NewTxArgs, reply *interface{}) error {
 		return err
 	}
 
-	result, _ := p.pipe.Transact(p.pipe.Key().PrivateKey, "", args.Value, args.Gas, args.GasPrice, args.Body)
+	result, _ := p.xeth.Transact( /* TODO specify account */ "", "", args.Value, args.Gas, args.GasPrice, args.Body)
 	*reply = result
 	return nil
 }
@@ -86,13 +86,8 @@ func (p *EthereumApi) PushTx(args *PushTxArgs, reply *interface{}) error {
 	if err != nil {
 		return err
 	}
-	result, _ := p.pipe.PushTx(args.Tx)
+	result, _ := p.xeth.PushTx(args.Tx)
 	*reply = result
-	return nil
-}
-
-func (p *EthereumApi) GetKey(args interface{}, reply *interface{}) error {
-	*reply = p.pipe.Key()
 	return nil
 }
 
@@ -102,7 +97,7 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *interface{}) err
 		return err
 	}
 
-	state := p.pipe.World().SafeGet(ethutil.Hex2Bytes(args.Address))
+	state := p.xeth.State().SafeGet(args.Address)
 
 	var hx string
 	if strings.Index(args.Key, "0x") == 0 {
@@ -119,22 +114,22 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *interface{}) err
 }
 
 func (p *EthereumApi) GetPeerCount(reply *interface{}) error {
-	*reply = p.pipe.PeerCount()
+	*reply = p.xeth.PeerCount()
 	return nil
 }
 
 func (p *EthereumApi) GetIsListening(reply *interface{}) error {
-	*reply = p.pipe.IsListening()
+	*reply = p.xeth.IsListening()
 	return nil
 }
 
 func (p *EthereumApi) GetCoinbase(reply *interface{}) error {
-	*reply = p.pipe.CoinBase()
+	*reply = p.xeth.Coinbase()
 	return nil
 }
 
 func (p *EthereumApi) GetIsMining(reply *interface{}) error {
-	*reply = p.pipe.IsMining()
+	*reply = p.xeth.IsMining()
 	return nil
 }
 
@@ -143,7 +138,7 @@ func (p *EthereumApi) GetTxCountAt(args *GetTxCountArgs, reply *interface{}) err
 	if err != nil {
 		return err
 	}
-	*reply = p.pipe.TxCountAt(args.Address)
+	*reply = p.xeth.TxCountAt(args.Address)
 	return nil
 }
 
@@ -152,7 +147,7 @@ func (p *EthereumApi) GetBalanceAt(args *GetBalanceArgs, reply *interface{}) err
 	if err != nil {
 		return err
 	}
-	state := p.pipe.World().SafeGet(ethutil.Hex2Bytes(args.Address))
+	state := p.xeth.State().SafeGet(args.Address)
 	*reply = BalanceRes{Balance: state.Balance().String(), Address: args.Address}
 	return nil
 }
@@ -162,12 +157,12 @@ func (p *EthereumApi) GetCodeAt(args *GetCodeAtArgs, reply *interface{}) error {
 	if err != nil {
 		return err
 	}
-	*reply = p.pipe.CodeAt(args.Address)
+	*reply = p.xeth.CodeAt(args.Address)
 	return nil
 }
 
 func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
-	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
+	// Spec at https://github.com/ethereum/wiki/wiki/Generic-ON-RPC
 	rpclogger.DebugDetailf("%T %s", req.Params, req.Params)
 	switch req.Method {
 	case "eth_coinbase":
