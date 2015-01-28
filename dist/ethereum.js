@@ -74,6 +74,14 @@ var filterFunctions = function (json) {
     }); 
 };
 
+/// Filters all events form input abi
+/// @returns abi array with filtered objects of type 'event'
+var filterEvents = function (json) {
+    return json.filter(function (current) {
+        return current.type === 'event';
+    });
+};
+
 /// @param string string to be padded
 /// @param number of characters that result string should have
 /// @param sign, by default 0
@@ -415,7 +423,8 @@ module.exports = {
     methodDisplayName: methodDisplayName,
     methodTypeName: methodTypeName,
     getMethodWithName: getMethodWithName,
-    filterFunctions: filterFunctions
+    filterFunctions: filterFunctions,
+    filterEvents: filterEvents
 };
 
 
@@ -507,6 +516,7 @@ var contract = function (address, desc) {
     });
 
 
+    // create contract functions
     abi.filterFunctions(desc).forEach(function (method) {
 
         var displayName = abi.methodDisplayName(method.name);
@@ -551,6 +561,31 @@ var contract = function (address, desc) {
                     ret = null;
             }
             return ret;
+        };
+
+        if (result[displayName] === undefined) {
+            result[displayName] = impl;
+        }
+
+        result[displayName][typeName] = impl;
+
+    });
+
+
+    // create contract events
+    abi.filterEvents(desc).forEach(function (event) {
+    
+        // TODO: rename these methods, cause they are used not only for methods
+        var displayName = abi.methodDisplayName(event.name);
+        var typeName = abi.methodTypeName(event.name);
+
+        var impl = function (options) {
+            var o = options || {};
+            o.address = o.address || address;
+            o.topics = o.topics || [];
+            o.topics.push(abi.methodSignature(event.name));
+
+            return web3.eth.watch(o);  
         };
 
         if (result[displayName] === undefined) {
