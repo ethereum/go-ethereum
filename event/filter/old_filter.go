@@ -77,13 +77,13 @@ out:
 				}
 				self.filterMu.RUnlock()
 
-			case state.Messages:
+			case state.Logs:
 				self.filterMu.RLock()
 				for _, filter := range self.filters {
-					if filter.MessageCallback != nil {
-						msgs := filter.FilterMessages(event)
+					if filter.LogsCallback != nil {
+						msgs := filter.FilterLogs(event)
 						if len(msgs) > 0 {
-							filter.MessageCallback(msgs)
+							filter.LogsCallback(msgs)
 						}
 					}
 				}

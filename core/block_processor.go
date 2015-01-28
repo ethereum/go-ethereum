@@ -330,3 +330,24 @@ func (sm *BlockProcessor) GetMessages(block *types.Block) (messages []*state.Mes
 
 	return state.Manifest().Messages, nil
 }
+
+func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err error) {
+	if !sm.bc.HasBlock(block.Header().ParentHash) {
+		return nil, ParentError(block.Header().ParentHash)
+	}
+
+	sm.lastAttemptedBlock = block
+
+	var (
+		parent = sm.bc.GetBlock(block.Header().ParentHash)
+		//state  = state.New(parent.Trie().Copy())
+		state = state.New(parent.Root(), sm.db)
+	)
+
+	defer state.Reset()
+
+	sm.TransitionState(state, parent, block)
+	sm.AccumelateRewards(state, block, parent)
+
+	return state.Logs(), nil
+}
