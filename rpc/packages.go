@@ -1,8 +1,31 @@
+/*
+	This file is part of go-ethereum
+
+	go-ethereum is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	go-ethereum is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/*
+
+For each request type, define the following:
+
+1. RpcRequest "To" method [message.go], which does basic validation and conversion to "Args" type via json.Decoder()
+2. json.Decoder() calls "UnmarshalJSON" defined on each "Args" struct
+3. EthereumApi method, taking the "Args" type and replying with an interface to be marshalled to JSON
+
+*/
 package rpc
 
 import (
-	"encoding/json"
-	"errors"
 	"math/big"
 	"strings"
 
@@ -14,185 +37,57 @@ type EthereumApi struct {
 	pipe *xeth.JSXEth
 }
 
-type JsonArgs interface {
-	requirements() error
-}
-
-type BlockResponse struct {
-	JsonResponse
-}
-type GetBlockArgs struct {
-	BlockNumber int
-	Hash        string
-}
-
-type ErrorResponse struct {
-	Error     bool   `json:"error"`
-	ErrorText string `json:"errorText"`
-}
-
-type JsonResponse interface {
-}
-
-type SuccessRes struct {
-	Error  bool         `json:"error"`
-	Result JsonResponse `json:"result"`
-}
-
-func NewSuccessRes(object JsonResponse) string {
-	e := SuccessRes{Error: false, Result: object}
-	res, err := json.Marshal(e)
-	if err != nil {
-		// This should never happen
-		panic("Creating json error response failed, help")
-	}
-	success := string(res)
-	return success
-}
-
-func NewErrorResponse(msg string) error {
-	e := ErrorResponse{Error: true, ErrorText: msg}
-	res, err := json.Marshal(e)
-	if err != nil {
-		// This should never happen
-		panic("Creating json error response failed, help")
-	}
-	newErr := errors.New(string(res))
-	return newErr
-}
-
-func (b *GetBlockArgs) requirements() error {
-	if b.BlockNumber == 0 && b.Hash == "" {
-		return NewErrorResponse("GetBlock requires either a block 'number' or a block 'hash' as argument")
-	}
-	return nil
-}
-
-func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *string) error {
+func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *interface{}) error {
 	err := args.requirements()
 	if err != nil {
 		return err
 	}
 
-	block := p.pipe.BlockByHash(args.Hash)
-	*reply = NewSuccessRes(block)
-	return nil
-}
-
-type NewTxArgs struct {
-	Sec       string
-	Recipient string
-	Value     string
-	Gas       string
-	GasPrice  string
-	Init      string
-	Body      string
-}
-type TxResponse struct {
-	Hash string
-}
-
-func (a *NewTxArgs) requirements() error {
-	if a.Recipient == "" {
-		return NewErrorResponse("Transact requires a 'recipient' address as argument")
-	}
-	if a.Value == "" {
-		return NewErrorResponse("Transact requires a 'value' as argument")
-	}
-	if a.Gas == "" {
-		return NewErrorResponse("Transact requires a 'gas' value as argument")
-	}
-	if a.GasPrice == "" {
-		return NewErrorResponse("Transact requires a 'gasprice' value as argument")
+	if args.BlockNumber > 0 {
+		*reply = p.pipe.BlockByNumber(args.BlockNumber)
+	} else {
+		*reply = p.pipe.BlockByHash(args.Hash)
 	}
 	return nil
 }
 
-func (a *NewTxArgs) requirementsContract() error {
-	if a.Value == "" {
-		return NewErrorResponse("Create requires a 'value' as argument")
-	}
-	if a.Gas == "" {
-		return NewErrorResponse("Create requires a 'gas' value as argument")
-	}
-	if a.GasPrice == "" {
-		return NewErrorResponse("Create requires a 'gasprice' value as argument")
-	}
-	if a.Body == "" {
-		return NewErrorResponse("Create requires a 'body' value as argument")
-	}
-	return nil
-}
-
-func (p *EthereumApi) Transact(args *NewTxArgs, reply *string) error {
+func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
 	err := args.requirements()
 	if err != nil {
 		return err
 	}
 	result, _ := p.pipe.Transact(p.pipe.Key().PrivateKey, args.Recipient, args.Value, args.Gas, args.GasPrice, args.Body)
-	*reply = NewSuccessRes(result)
+	*reply = result
 	return nil
 }
 
-func (p *EthereumApi) Create(args *NewTxArgs, reply *string) error {
+func (p *EthereumApi) Create(args *NewTxArgs, reply *interface{}) error {
 	err := args.requirementsContract()
 	if err != nil {
 		return err
 	}
 
 	result, _ := p.pipe.Transact(p.pipe.Key().PrivateKey, "", args.Value, args.Gas, args.GasPrice, args.Body)
-	*reply = NewSuccessRes(result)
+	*reply = result
 	return nil
 }
 
-type PushTxArgs struct {
-	Tx string
-}
-
-func (a *PushTxArgs) requirementsPushTx() error {
-	if a.Tx == "" {
-		return NewErrorResponse("PushTx requires a 'tx' as argument")
-	}
-	return nil
-}
-
-func (p *EthereumApi) PushTx(args *PushTxArgs, reply *string) error {
+func (p *EthereumApi) PushTx(args *PushTxArgs, reply *interface{}) error {
 	err := args.requirementsPushTx()
 	if err != nil {
 		return err
 	}
 	result, _ := p.pipe.PushTx(args.Tx)
-	*reply = NewSuccessRes(result)
+	*reply = result
 	return nil
 }
 
-func (p *EthereumApi) GetKey(args interface{}, reply *string) error {
-	*reply = NewSuccessRes(p.pipe.Key())
+func (p *EthereumApi) GetKey(args interface{}, reply *interface{}) error {
+	*reply = p.pipe.Key()
 	return nil
 }
 
-type GetStorageArgs struct {
-	Address string
-	Key     string
-}
-
-func (a *GetStorageArgs) requirements() error {
-	if a.Address == "" {
-		return NewErrorResponse("GetStorageAt requires an 'address' value as argument")
-	}
-	if a.Key == "" {
-		return NewErrorResponse("GetStorageAt requires an 'key' value as argument")
-	}
-	return nil
-}
-
-type GetStorageAtRes struct {
-	Key     string `json:"key"`
-	Value   string `json:"value"`
-	Address string `json:"address"`
-}
-
-func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *string) error {
+func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *interface{}) error {
 	err := args.requirements()
 	if err != nil {
 		return err
@@ -210,102 +105,104 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *string) error {
 	}
 	jsonlogger.Debugf("GetStorageAt(%s, %s)\n", args.Address, hx)
 	value := state.Storage(ethutil.Hex2Bytes(hx))
-	*reply = NewSuccessRes(GetStorageAtRes{Address: args.Address, Key: args.Key, Value: value.Str()})
+	*reply = GetStorageAtRes{Address: args.Address, Key: args.Key, Value: value.Str()}
 	return nil
 }
 
-type GetTxCountArgs struct {
-	Address string `json:"address"`
-}
-type GetTxCountRes struct {
-	Nonce int `json:"nonce"`
-}
-
-func (a *GetTxCountArgs) requirements() error {
-	if a.Address == "" {
-		return NewErrorResponse("GetTxCountAt requires an 'address' value as argument")
-	}
+func (p *EthereumApi) GetPeerCount(reply *interface{}) error {
+	*reply = p.pipe.PeerCount()
 	return nil
 }
 
-type GetPeerCountRes struct {
-	PeerCount int `json:"peerCount"`
-}
-
-func (p *EthereumApi) GetPeerCount(args *interface{}, reply *string) error {
-	*reply = NewSuccessRes(GetPeerCountRes{PeerCount: p.pipe.PeerCount()})
+func (p *EthereumApi) GetIsListening(reply *interface{}) error {
+	*reply = p.pipe.IsListening()
 	return nil
 }
 
-type GetListeningRes struct {
-	IsListening bool `json:"isListening"`
-}
-
-func (p *EthereumApi) GetIsListening(args *interface{}, reply *string) error {
-	*reply = NewSuccessRes(GetListeningRes{IsListening: p.pipe.IsListening()})
+func (p *EthereumApi) GetCoinbase(reply *interface{}) error {
+	*reply = p.pipe.CoinBase()
 	return nil
 }
 
-type GetCoinbaseRes struct {
-	Coinbase string `json:"coinbase"`
-}
-
-func (p *EthereumApi) GetCoinbase(args *interface{}, reply *string) error {
-	*reply = NewSuccessRes(GetCoinbaseRes{Coinbase: p.pipe.CoinBase()})
+func (p *EthereumApi) GetIsMining(reply *interface{}) error {
+	*reply = p.pipe.IsMining()
 	return nil
 }
 
-type GetMiningRes struct {
-	IsMining bool `json:"isMining"`
-}
-
-func (p *EthereumApi) GetIsMining(args *interface{}, reply *string) error {
-	*reply = NewSuccessRes(GetMiningRes{IsMining: p.pipe.IsMining()})
-	return nil
-}
-
-func (p *EthereumApi) GetTxCountAt(args *GetTxCountArgs, reply *string) error {
+func (p *EthereumApi) GetTxCountAt(args *GetTxCountArgs, reply *interface{}) error {
 	err := args.requirements()
 	if err != nil {
 		return err
 	}
-	state := p.pipe.TxCountAt(args.Address)
-	*reply = NewSuccessRes(GetTxCountRes{Nonce: state})
+	*reply = p.pipe.TxCountAt(args.Address)
 	return nil
 }
 
-type GetBalanceArgs struct {
-	Address string
-}
-
-func (a *GetBalanceArgs) requirements() error {
-	if a.Address == "" {
-		return NewErrorResponse("GetBalanceAt requires an 'address' value as argument")
-	}
-	return nil
-}
-
-type BalanceRes struct {
-	Balance string `json:"balance"`
-	Address string `json:"address"`
-}
-
-func (p *EthereumApi) GetBalanceAt(args *GetBalanceArgs, reply *string) error {
+func (p *EthereumApi) GetBalanceAt(args *GetBalanceArgs, reply *interface{}) error {
 	err := args.requirements()
 	if err != nil {
 		return err
 	}
 	state := p.pipe.World().SafeGet(ethutil.Hex2Bytes(args.Address))
-	*reply = NewSuccessRes(BalanceRes{Balance: state.Balance().String(), Address: args.Address})
+	*reply = BalanceRes{Balance: state.Balance().String(), Address: args.Address}
 	return nil
 }
 
-type TestRes struct {
-	JsonResponse `json:"-"`
-	Answer       int `json:"answer"`
+func (p *EthereumApi) GetCodeAt(args *GetCodeAtArgs, reply *interface{}) error {
+	err := args.requirements()
+	if err != nil {
+		return err
+	}
+	*reply = p.pipe.CodeAt(args.Address)
+	return nil
 }
 
-func (p *EthereumApi) Test(args *GetBlockArgs, reply *string) error {
-	*reply = NewSuccessRes(TestRes{Answer: 15})
+func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
+	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
+	jsonlogger.DebugDetailf("%T %s", req.Params, req.Params)
+	switch req.Method {
+	case "eth_coinbase":
+		return p.GetCoinbase(reply)
+	case "eth_listening":
+		return p.GetIsListening(reply)
+	case "eth_mining":
+		return p.GetIsMining(reply)
+	case "eth_peerCount":
+		return p.GetPeerCount(reply)
+	case "eth_countAt":
+		args, err := req.ToGetTxCountArgs()
+		if err != nil {
+			return err
+		}
+		return p.GetTxCountAt(args, reply)
+	case "eth_codeAt":
+		args, err := req.ToGetCodeAtArgs()
+		if err != nil {
+			return err
+		}
+		return p.GetCodeAt(args, reply)
+	case "eth_balanceAt":
+		args, err := req.ToGetBalanceArgs()
+		if err != nil {
+			return err
+		}
+		return p.GetBalanceAt(args, reply)
+	case "eth_stateAt":
+		args, err := req.ToGetStorageArgs()
+		if err != nil {
+			return err
+		}
+		return p.GetStorageAt(args, reply)
+	case "eth_blockByNumber", "eth_blockByHash":
+		args, err := req.ToGetBlockArgs()
+		if err != nil {
+			return err
+		}
+		return p.GetBlock(args, reply)
+	default:
+		return NewErrorResponse(ErrorNotImplemented)
+	}
+
+	jsonlogger.DebugDetailf("Reply: %T %s", reply, reply)
 	return nil
 }

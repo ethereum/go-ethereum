@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/websocket"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -198,6 +199,13 @@ func StartRpc(ethereum *eth.Ethereum, RpcPort int) {
 	} else {
 		go ethereum.RpcServer.Start()
 	}
+}
+
+func StartWebSockets(eth *eth.Ethereum) {
+	clilogger.Infoln("Starting WebSockets")
+
+	sock := websocket.NewWebSocketServer(eth)
+	go sock.Serv()
 }
 
 var gminer *miner.Miner
