@@ -66,7 +66,8 @@ type Ethereum struct {
 	txSub    event.Subscription
 	blockSub event.Subscription
 
-	RpcServer  *rpc.JsonRpcServer
+	RpcServer  rpc.RpcServer
+	WsServer   rpc.RpcServer
 	keyManager *crypto.KeyManager
 
 	clientIdentity p2p.ClientIdentity
@@ -218,6 +219,10 @@ func (s *Ethereum) MaxPeers() int {
 	return s.net.MaxPeers
 }
 
+func (s *Ethereum) Coinbase() []byte {
+	return nil // TODO
+}
+
 // Start the ethereum
 func (s *Ethereum) Start(seed bool) error {
 	err := s.net.Start()
@@ -275,6 +280,9 @@ func (s *Ethereum) Stop() {
 
 	if s.RpcServer != nil {
 		s.RpcServer.Stop()
+	}
+	if s.WsServer != nil {
+		s.WsServer.Stop()
 	}
 	s.txPool.Stop()
 	s.eventMux.Stop()

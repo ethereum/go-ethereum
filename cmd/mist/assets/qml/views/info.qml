@@ -28,7 +28,7 @@ Rectangle {
 			text: "Address"
 		}
 		TextField {
-			text: eth.key().address
+			text: ""//eth.key().address
 			width: 500
 		}
 

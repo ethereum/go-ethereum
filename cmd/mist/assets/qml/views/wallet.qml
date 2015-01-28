@@ -22,7 +22,8 @@ Rectangle {
 	function setBalance() {
 		//balance.text = "<b>Balance</b>: " + eth.numberToHuman(eth.balanceAt(eth.key().address))
 		if(menuItem)
-			menuItem.secondaryTitle = eth.numberToHuman(eth.balanceAt(eth.key().address))
+			menuItem.secondaryTitle = eth.numberToHuman("0")
+			//menuItem.secondaryTitle = eth.numberToHuman(eth.balanceAt(eth.key().address))
 	}
 
 	ListModel {
@@ -155,16 +156,6 @@ Rectangle {
 				model: ListModel {
 					id: txModel
 					Component.onCompleted: {
-						/*
-						var me = eth.key().address;
-						var filterTo = ethx.watch({latest: -1, to: me});
-						var filterFrom = ethx.watch({latest: -1, from: me});
-						filterTo.changed(addTxs)
-						filterFrom.changed(addTxs)
-
-						addTxs(filterTo.messages())
-						addTxs(filterFrom.messages())
-						*/
 					}
 
 					function addTxs(messages) {

@@ -32,7 +32,6 @@ import (
 	"path"
 	"runtime"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -229,41 +228,44 @@ func (gui *Gui) setInitialChain(ancientBlocks bool) {
 }
 
 func (gui *Gui) loadAddressBook() {
-	view := gui.getObjectByName("infoView")
-	nameReg := gui.xeth.World().Config().Get("NameReg")
-	if nameReg != nil {
-		it := nameReg.Trie().Iterator()
-		for it.Next() {
-			if it.Key[0] != 0 {
-				view.Call("addAddress", struct{ Name, Address string }{string(it.Key), ethutil.Bytes2Hex(it.Value)})
-			}
+	/*
+		view := gui.getObjectByName("infoView")
+		nameReg := gui.xeth.World().Config().Get("NameReg")
+		if nameReg != nil {
+			it := nameReg.Trie().Iterator()
+			for it.Next() {
+				if it.Key[0] != 0 {
+					view.Call("addAddress", struct{ Name, Address string }{string(it.Key), ethutil.Bytes2Hex(it.Value)})
+				}
 
+			}
 		}
-	}
+	*/
 }
 
 func (self *Gui) loadMergedMiningOptions() {
-	view := self.getObjectByName("mergedMiningModel")
+	/*
+		view := self.getObjectByName("mergedMiningModel")
 
-	mergeMining := self.xeth.World().Config().Get("MergeMining")
-	if mergeMining != nil {
-		i := 0
-		it := mergeMining.Trie().Iterator()
-		for it.Next() {
-			view.Call("addMergedMiningOption", struct {
-				Checked       bool
-				Name, Address string
-				Id, ItemId    int
-			}{false, string(it.Key), ethutil.Bytes2Hex(it.Value), 0, i})
+		mergeMining := self.xeth.World().Config().Get("MergeMining")
+		if mergeMining != nil {
+			i := 0
+			it := mergeMining.Trie().Iterator()
+			for it.Next() {
+				view.Call("addMergedMiningOption", struct {
+					Checked       bool
+					Name, Address string
+					Id, ItemId    int
+				}{false, string(it.Key), ethutil.Bytes2Hex(it.Value), 0, i})
 
-			i++
+				i++
 
+			}
 		}
-	}
+	*/
 }
 
 func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
-	nameReg := gui.xeth.World().Config().Get("NameReg")
 	addr := gui.address()
 
 	var inout string
@@ -275,31 +277,11 @@ func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 
 	var (
 		ptx  = xeth.NewJSTx(tx)
-		send = nameReg.Storage(tx.From())
-		rec  = nameReg.Storage(tx.To())
-		s, r string
+		send = ethutil.Bytes2Hex(tx.From())
+		rec  = ethutil.Bytes2Hex(tx.To())
 	)
-
-	if core.MessageCreatesContract(tx) {
-		rec = nameReg.Storage(core.AddressFromMessage(tx))
-	}
-
-	if send.Len() != 0 {
-		s = strings.Trim(send.Str(), "\x00")
-	} else {
-		s = ethutil.Bytes2Hex(tx.From())
-	}
-	if rec.Len() != 0 {
-		r = strings.Trim(rec.Str(), "\x00")
-	} else {
-		if core.MessageCreatesContract(tx) {
-			r = ethutil.Bytes2Hex(core.AddressFromMessage(tx))
-		} else {
-			r = ethutil.Bytes2Hex(tx.To())
-		}
-	}
-	ptx.Sender = s
-	ptx.Address = r
+	ptx.Sender = send
+	ptx.Address = rec
 
 	if window == "post" {
 		//gui.getObjectByName("transactionView").Call("addTx", ptx, inout)
@@ -320,7 +302,7 @@ func (gui *Gui) readPreviousTransactions() {
 }
 
 func (gui *Gui) processBlock(block *types.Block, initial bool) {
-	name := strings.Trim(gui.xeth.World().Config().Get("NameReg").Storage(block.Coinbase()).Str(), "\x00")
+	name := ethutil.Bytes2Hex(block.Coinbase())
 	b := xeth.NewJSBlock(block)
 	b.Name = name
 
@@ -523,9 +505,9 @@ NumGC:      %d
 func (gui *Gui) setPeerInfo() {
 	gui.win.Root().Call("setPeers", fmt.Sprintf("%d / %d", gui.eth.PeerCount(), gui.eth.MaxPeers))
 	gui.win.Root().Call("resetPeers")
-	for _, peer := range gui.xeth.Peers() {
-		gui.win.Root().Call("addPeer", peer)
-	}
+	//for _, peer := range gui.xeth.Peers() {
+	//gui.win.Root().Call("addPeer", peer)
+	//}
 }
 
 func (gui *Gui) privateKey() string {

@@ -70,16 +70,8 @@ func (self *JSEthereum) Block(v interface{}) otto.Value {
 	return otto.UndefinedValue()
 }
 
-func (self *JSEthereum) Peers() otto.Value {
-	return self.toVal(self.JSXEth.Peers())
-}
-
-func (self *JSEthereum) Key() otto.Value {
-	return self.toVal(self.JSXEth.Key())
-}
-
 func (self *JSEthereum) GetStateObject(addr string) otto.Value {
-	return self.toVal(&JSStateObject{xeth.NewJSObject(self.JSXEth.World().SafeGet(ethutil.Hex2Bytes(addr))), self})
+	return self.toVal(&JSStateObject{xeth.NewJSObject(self.JSXEth.State().SafeGet(addr)), self})
 }
 
 func (self *JSEthereum) Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr string) otto.Value {

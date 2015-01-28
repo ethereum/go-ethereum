@@ -73,7 +73,7 @@ func run() error {
 	}
 
 	if StartWebSockets {
-		utils.StartWebSockets(ethereum)
+		utils.StartWebSockets(ethereum, WsPort)
 	}
 
 	gui := NewWindow(ethereum, config, ethereum.ClientIdentity().(*p2p.SimpleClientIdentity), KeyRing, LogLevel)

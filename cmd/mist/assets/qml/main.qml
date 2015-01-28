@@ -47,7 +47,6 @@ ApplicationWindow {
 
 		console.log("starting browser")
 		newBrowserTab("http://etherian.io");
-		console.log("done")
 
 		// Command setup
 		gui.sendCommand(0)
