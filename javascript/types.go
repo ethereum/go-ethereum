@@ -75,7 +75,7 @@ func (self *JSEthereum) GetStateObject(addr string) otto.Value {
 }
 
 func (self *JSEthereum) Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr string) otto.Value {
-	r, err := self.XEth.Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr)
+	r, err := self.XEth.Transact(recipient, valueStr, gasStr, gasPriceStr, dataStr)
 	if err != nil {
 		fmt.Println(err)
 

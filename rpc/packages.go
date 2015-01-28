@@ -65,7 +65,7 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
 	if err != nil {
 		return err
 	}
-	result, _ := p.xeth.Transact( /* TODO specify account */ "", args.Recipient, args.Value, args.Gas, args.GasPrice, args.Body)
+	result, _ := p.xeth.Transact( /* TODO specify account */ args.Recipient, args.Value, args.Gas, args.GasPrice, args.Body)
 	*reply = result
 	return nil
 }
@@ -76,7 +76,7 @@ func (p *EthereumApi) Create(args *NewTxArgs, reply *interface{}) error {
 		return err
 	}
 
-	result, _ := p.xeth.Transact( /* TODO specify account */ "", "", args.Value, args.Gas, args.GasPrice, args.Body)
+	result, _ := p.xeth.Transact( /* TODO specify account */ "", args.Value, args.Gas, args.GasPrice, args.Body)
 	*reply = result
 	return nil
 }

@@ -22,7 +22,6 @@ var pipelogger = logger.NewLogger("XETH")
 type Backend interface {
 	BlockProcessor() *core.BlockProcessor
 	ChainManager() *core.ChainManager
-	Coinbase() []byte
 	KeyManager() *crypto.KeyManager
 	IsMining() bool
 	IsListening() bool
@@ -81,14 +80,6 @@ func (self *XEth) Block(v interface{}) *Block {
 func (self *XEth) Accounts() []string {
 	return []string{toHex(self.eth.KeyManager().Address())}
 }
-
-/*
-func (self *XEth) StateObject(addr string) *Object {
-	object := &Object{self.State().safeGet(fromHex(addr))}
-
-	return NewObject(object)
-}
-*/
 
 func (self *XEth) PeerCount() int {
 	return self.eth.PeerCount()
@@ -190,10 +181,6 @@ func (self *XEth) FromNumber(str string) string {
 	return ethutil.BigD(fromHex(str)).String()
 }
 
-func (self *XEth) Transact(key, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
-	return "", nil
-}
-
 func ToMessages(messages state.Messages) *ethutil.List {
 	var msgs []Message
 	for _, m := range messages {
@@ -214,5 +201,60 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 		addr := core.AddressFromMessage(tx)
 		return toHex(addr), nil
 	}
+	return toHex(tx.Hash()), nil
+}
+
+func (self *XEth) Transact(toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
+
+	var (
+		to               []byte
+		value            = ethutil.NewValue(valueStr)
+		gas              = ethutil.NewValue(gasStr)
+		price            = ethutil.NewValue(gasPriceStr)
+		data             []byte
+		key              = self.eth.KeyManager().KeyPair()
+		contractCreation bool
+	)
+
+	data = fromHex(codeStr)
+	to = fromHex(toStr)
+	if len(to) == 0 {
+		contractCreation = true
+	}
+
+	var tx *types.Transaction
+	if contractCreation {
+		tx = types.NewContractCreationTx(value.BigInt(), gas.BigInt(), price.BigInt(), data)
+	} else {
+		tx = types.NewTransactionMessage(to, value.BigInt(), gas.BigInt(), price.BigInt(), data)
+	}
+
+	state := self.chainManager.TransState()
+	nonce := state.GetNonce(key.Address())
+
+	tx.SetNonce(nonce)
+	tx.Sign(key.PrivateKey)
+
+	// Do some pre processing for our "pre" events  and hooks
+	block := self.chainManager.NewBlock(key.Address())
+	coinbase := state.GetOrNewStateObject(key.Address())
+	coinbase.SetGasPool(block.GasLimit())
+	self.blockProcessor.ApplyTransactions(coinbase, state, block, types.Transactions{tx}, true)
+
+	err := self.eth.TxPool().Add(tx)
+	if err != nil {
+		return "", err
+	}
+	state.SetNonce(key.Address(), nonce+1)
+
+	if contractCreation {
+		addr := core.AddressFromMessage(tx)
+		pipelogger.Infof("Contract addr %x\n", addr)
+	}
+
+	if types.IsContractAddr(to) {
+		return toHex(core.AddressFromMessage(tx)), nil
+	}
+
 	return toHex(tx.Hash()), nil
 }

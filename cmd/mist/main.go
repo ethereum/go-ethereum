@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/ui/qt/webengine"
 	"github.com/obscuren/qml"
 )
 
@@ -42,6 +43,8 @@ var ethereum *eth.Ethereum
 var mainlogger = logger.NewLogger("MAIN")
 
 func run() error {
+	webengine.Initialize()
+
 	// precedence: code-internal flag default < config file < environment variables < command line
 	Init() // parsing command line
 

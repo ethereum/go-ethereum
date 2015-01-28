@@ -109,7 +109,7 @@ ApplicationWindow {
 	}
 
 	function newBrowserTab(url) {
-		var window = addPlugin("./views/browser2.qml", {noAdd: true, close: true, section: "apps", active: true});
+		var window = addPlugin("./views/browser.qml", {noAdd: true, close: true, section: "apps", active: true});
 		window.view.url = url;
 		window.menuItem.title = "Browser Tab";
 		activeView(window.view, window.menuItem);
