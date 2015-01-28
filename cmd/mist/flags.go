@@ -113,7 +113,7 @@ func Init() {
 	flag.IntVar(&MaxPeer, "maxpeer", 30, "maximum desired peers")
 	flag.IntVar(&RpcPort, "rpcport", 8080, "port to start json-rpc server on")
 	flag.IntVar(&WsPort, "wsport", 40404, "port to start websocket rpc server on")
-	flag.BoolVar(&StartRpc, "rpc", false, "start rpc server")
+	flag.BoolVar(&StartRpc, "rpc", true, "start rpc server")
 	flag.BoolVar(&StartWebSockets, "ws", false, "start websocket server")
 	flag.BoolVar(&NonInteractive, "y", false, "non-interactive mode (say yes to confirmations)")
 	flag.BoolVar(&UseSeed, "seed", true, "seed peers")
