@@ -131,7 +131,7 @@ func main() {
 	}
 
 	if StartWebSockets {
-		utils.StartWebSockets(ethereum)
+		utils.StartWebSockets(ethereum, WsPort)
 	}
 
 	utils.StartEthereum(ethereum, UseSeed)

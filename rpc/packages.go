@@ -33,6 +33,15 @@ import (
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
+type RpcServer interface {
+	Start()
+	Stop()
+}
+
+func NewEthereumApi(xeth *xeth.JSXEth) *EthereumApi {
+	return &EthereumApi{pipe: xeth}
+}
+
 type EthereumApi struct {
 	pipe *xeth.JSXEth
 }
@@ -103,7 +112,7 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *interface{}) err
 		i, _ := new(big.Int).SetString(args.Key, 10)
 		hx = ethutil.Bytes2Hex(i.Bytes())
 	}
-	jsonlogger.Debugf("GetStorageAt(%s, %s)\n", args.Address, hx)
+	rpclogger.Debugf("GetStorageAt(%s, %s)\n", args.Address, hx)
 	value := state.Storage(ethutil.Hex2Bytes(hx))
 	*reply = GetStorageAtRes{Address: args.Address, Key: args.Key, Value: value.Str()}
 	return nil
@@ -159,7 +168,7 @@ func (p *EthereumApi) GetCodeAt(args *GetCodeAtArgs, reply *interface{}) error {
 
 func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
 	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
-	jsonlogger.DebugDetailf("%T %s", req.Params, req.Params)
+	rpclogger.DebugDetailf("%T %s", req.Params, req.Params)
 	switch req.Method {
 	case "eth_coinbase":
 		return p.GetCoinbase(reply)
@@ -203,6 +212,6 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		return NewErrorResponse(ErrorNotImplemented)
 	}
 
-	jsonlogger.DebugDetailf("Reply: %T %s", reply, reply)
+	rpclogger.DebugDetailf("Reply: %T %s", reply, reply)
 	return nil
 }

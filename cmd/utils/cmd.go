@@ -38,9 +38,10 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
+	rpchttp "github.com/ethereum/go-ethereum/rpc/http"
+	rpcws "github.com/ethereum/go-ethereum/rpc/ws"
 	"github.com/ethereum/go-ethereum/state"
-	"github.com/ethereum/go-ethereum/websocket"
+	// "github.com/ethereum/go-ethereum/websocket"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -193,7 +194,7 @@ func KeyTasks(keyManager *crypto.KeyManager, KeyRing string, GenAddr bool, Secre
 
 func StartRpc(ethereum *eth.Ethereum, RpcPort int) {
 	var err error
-	ethereum.RpcServer, err = rpc.NewJsonRpcServer(xeth.NewJSXEth(ethereum), RpcPort)
+	ethereum.RpcServer, err = rpchttp.NewRpcHttpServer(xeth.NewJSXEth(ethereum), RpcPort)
 	if err != nil {
 		clilogger.Errorf("Could not start RPC interface (port %v): %v", RpcPort, err)
 	} else {
@@ -201,11 +202,18 @@ func StartRpc(ethereum *eth.Ethereum, RpcPort int) {
 	}
 }
 
-func StartWebSockets(eth *eth.Ethereum) {
+func StartWebSockets(eth *eth.Ethereum, wsPort int) {
 	clilogger.Infoln("Starting WebSockets")
 
-	sock := websocket.NewWebSocketServer(eth)
-	go sock.Serv()
+	// sock := websocket.NewWebSocketServer(eth)
+	// go sock.Serv()
+	var err error
+	eth.WsServer, err = rpcws.NewWebSocketServer(eth, wsPort)
+	if err != nil {
+		clilogger.Errorf("Could not start RPC interface (port %v): %v", wsPort, err)
+	} else {
+		go eth.WsServer.Start()
+	}
 }
 
 var gminer *miner.Miner
