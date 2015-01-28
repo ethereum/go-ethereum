@@ -15,7 +15,7 @@
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 // MA 02110-1301  USA
 
-var bigInt = (function () {
+var BigNumber = (function () {
     var base = 10000000, logBase = 7;
     var sign = {
         positive: false,
@@ -73,7 +73,7 @@ var bigInt = (function () {
         var isValid = (base == 16 ? /^[0-9A-F]*$/ : /^[0-9]+$/).test(text);
         if (!isValid) throw new Error("Invalid integer");
 	if (base == 16) {
-		var val = bigInt(0);
+		var val = BigNumber(0);
 		while (text.length) {
 			v = text.charCodeAt(0) - 48;
 			if (v > 9)
@@ -89,19 +89,19 @@ var bigInt = (function () {
 		    value.push(+text.slice(divider));
 		    text = text.slice(0, divider);
 		}
-	        var val = bigInt(value, s);
+	        var val = BigNumber(value, s);
 	        if (first) normalize(first, val);
         	return val;
 	}
     };
 
     var goesInto = function (a, b) {
-        var a = bigInt(a, sign.positive), b = bigInt(b, sign.positive);
+        var a = BigNumber(a, sign.positive), b = BigNumber(b, sign.positive);
         if (a.equals(0)) throw new Error("Cannot divide by 0");
         var n = 0;
         do {
             var inc = 1;
-            var c = bigInt(a.value, sign.positive), t = c.times(10);
+            var c = BigNumber(a.value, sign.positive), t = c.times(10);
             while (t.lesser(b)) {
                 c = t;
                 inc *= 10;
@@ -119,7 +119,7 @@ var bigInt = (function () {
         };
     };
 
-    var bigInt = function (value, s) {
+    var BigNumber = function (value, s) {
         var self = {
             value: value,
             sign: s
@@ -129,11 +129,11 @@ var bigInt = (function () {
             sign: s,
             negate: function (m) {
                 var first = m || self;
-                return bigInt(first.value, !first.sign);
+                return BigNumber(first.value, !first.sign);
             },
             abs: function (m) {
                 var first = m || self;
-                return bigInt(first.value, sign.positive);
+                return BigNumber(first.value, sign.positive);
             },
             add: function (n, m) {
                 var s, first = self, second;
@@ -141,8 +141,8 @@ var bigInt = (function () {
                 else second = parse(n, first);
                 s = first.sign;
                 if (first.sign !== second.sign) {
-                    first = bigInt(first.value, sign.positive);
-                    second = bigInt(second.value, sign.positive);
+                    first = BigNumber(first.value, sign.positive);
+                    second = BigNumber(second.value, sign.positive);
                     return s === sign.positive ?
 						o.subtract(first, second) :
 						o.subtract(second, first);
@@ -157,7 +157,7 @@ var bigInt = (function () {
                     sum -= carry * base;
                     result.push(sum);
                 }
-                return bigInt(result, s);
+                return BigNumber(result, s);
             },
             plus: function (n, m) {
                 return o.add(n, m);
@@ -178,7 +178,7 @@ var bigInt = (function () {
                     var minuend = (borrow * base) + tmp - b[i];
                     result.push(minuend);
                 }
-                return bigInt(result, sign.positive);
+                return BigNumber(result, sign.positive);
             },
             minus: function (n, m) {
                 return o.subtract(n, m);
@@ -223,7 +223,7 @@ var bigInt = (function () {
                     sum -= carry * base;
                     result.push(sum);
                 }
-                return bigInt(result, s);
+                return BigNumber(result, s);
             },
             times: function (n, m) {
                 return o.multiply(n, m);
@@ -233,9 +233,9 @@ var bigInt = (function () {
                 if (m) (first = parse(n)) && (second = parse(m));
                 else second = parse(n, first);
                 s = first.sign !== second.sign;
-                if (bigInt(first.value, first.sign).equals(0)) return {
-                    quotient: bigInt([0], sign.positive),
-                    remainder: bigInt([0], sign.positive)
+                if (BigNumber(first.value, first.sign).equals(0)) return {
+                    quotient: BigNumber([0], sign.positive),
+                    remainder: BigNumber([0], sign.positive)
                 };
                 if (second.equals(0)) throw new Error("Cannot divide by zero");
                 var a = first.value, b = second.value;
@@ -248,8 +248,8 @@ var bigInt = (function () {
                 }
                 result.reverse();
                 return {
-                    quotient: bigInt(result, s),
-                    remainder: bigInt(remainder, first.sign)
+                    quotient: BigNumber(result, s),
+                    remainder: BigNumber(remainder, first.sign)
                 };
             },
             divide: function (n, m) {
@@ -268,7 +268,7 @@ var bigInt = (function () {
                 var a = first, b = second;
                 if (b.lesser(0)) return ZERO;
                 if (b.equals(0)) return ONE;
-                var result = bigInt(a.value, a.sign);
+                var result = BigNumber(a.value, a.sign);
 
                 if (b.mod(2).equals(0)) {
                     var c = result.pow(b.over(2));
@@ -377,9 +377,9 @@ var bigInt = (function () {
         return o;
     };
 
-    var ZERO = bigInt([0], sign.positive);
-    var ONE = bigInt([1], sign.positive);
-    var MINUS_ONE = bigInt([1], sign.negative);
+    var ZERO = BigNumber([0], sign.positive);
+    var ONE = BigNumber([1], sign.positive);
+    var MINUS_ONE = BigNumber([1], sign.negative);
 
     var fnReturn = function (a) {
         if (typeof a === "undefined") return ZERO;
@@ -392,6 +392,6 @@ var bigInt = (function () {
 })();
 
 if (typeof module !== "undefined") {
-    module.exports = bigInt;
+    module.exports = BigNumber;
 }
 

@@ -398,14 +398,6 @@ func (gui *Gui) setup() {
 		gui.setPeerInfo()
 	}()
 
-	// Inject javascript files each time navigation is requested.
-	// Unfortunately webview.experimental.userScripts injects _after_
-	// the page has loaded which kind of renders it useless...
-	//jsfiles := loadJavascriptAssets(gui)
-	gui.getObjectByName("webView").On("navigationRequested", func() {
-		//gui.getObjectByName("webView").Call("injectJs", jsfiles)
-	})
-
 	gui.whisper.SetView(gui.getObjectByName("whisperView"))
 
 	gui.SendCommand(update)

@@ -2,11 +2,13 @@
 <html>
 
 <head>
-<script type="text/javascript" src="js/bignumber.js/bignumber.min.js"></script>
+<script type="text/javascript" src="../bignumber.min.js"></script>
 <script type="text/javascript" src="../dist/ethereum.js"></script>
 <script type="text/javascript">
    
+console.log("hello world");
     var web3 = require('web3');
+console.log(web3)
     web3.setProvider(new web3.providers.HttpSyncProvider('http://localhost:8080'));
 
     function watchBalance() {
@@ -24,6 +26,11 @@
             document.getElementById("diff").innerText = 'diff:    ' + (currentBalance - originalBalance);
         });
     }
+
+var request = new XMLHttpRequest();
+request.open('POST', "http://localhost:8080", false);
+request.send({});
+
 
 </script>
 </head>

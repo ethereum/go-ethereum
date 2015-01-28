@@ -21,7 +21,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -32,7 +31,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/howeyc/fsnotify"
@@ -147,6 +145,7 @@ func (app *HtmlApplication) NewBlock(block *types.Block) {
 }
 
 func (self *HtmlApplication) Messages(messages state.Messages, id string) {
+	/* TODO remove me
 	var msgs []javascript.JSMessage
 	for _, m := range messages {
 		msgs = append(msgs, javascript.NewJSMessage(m))
@@ -155,6 +154,7 @@ func (self *HtmlApplication) Messages(messages state.Messages, id string) {
 	b, _ := json.Marshal(msgs)
 
 	self.webView.Call("onWatchedCb", string(b), id)
+	*/
 }
 
 func (app *HtmlApplication) Destroy() {

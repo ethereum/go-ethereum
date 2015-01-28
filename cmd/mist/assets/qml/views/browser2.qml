@@ -1,11 +1,10 @@
 import QtQuick 2.0
-import QtWebEngine 1.0
-//import QtWebEngine.experimental 1.0
 import QtQuick.Controls 1.0;
 import QtQuick.Controls.Styles 1.0
 import QtQuick.Layouts 1.0;
+import QtWebEngine 1.0
+//import QtWebEngine.experimental 1.0
 import QtQuick.Window 2.0;
-import Ethereum 1.0
 
 Rectangle {
 	id: window
@@ -64,17 +63,6 @@ Rectangle {
 	}
 
 	Component.onCompleted: {
-		webview.url = "http://etherian.io"
-	}
-
-	function messages(messages, id) {
-		// Bit of a cheat to get proper JSON
-		var m = JSON.parse(JSON.parse(JSON.stringify(messages)))
-		webview.postEvent("eth_changed", id, m);
-	}
-
-	function onShhMessage(message, id) {
-		webview.postEvent("shh_changed", id, message)
 	}
 
 	Item {
@@ -129,6 +117,8 @@ Rectangle {
 				}
 				iconSource: "../../bug.png"
 				onClicked: {
+					// XXX soon
+					return
 					if(inspector.visible == true){
 						inspector.visible = false
 					}else{
@@ -155,12 +145,22 @@ Rectangle {
 		WebEngineView {
 			objectName: "webView"
 			id: webview
-			//	anchors.fill: parent
 			anchors {
 				left: parent.left
 				right: parent.right
 				bottom: parent.bottom
 				top: divider.bottom
+			}
+
+			onLoadingChanged: {
+				console.log(url)
+				if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
+					webview.runJavaScript(eth.readFile("bignumber.min.js"));
+					webview.runJavaScript(eth.readFile("dist/ethereum.js"));
+				}
+			}
+			onJavaScriptConsoleMessage: {
+				console.log(sourceID + ":" + lineNumber + ":" + JSON.stringify(message));
 			}
 		}
 
@@ -193,6 +193,7 @@ Rectangle {
 				top: sizeGrip.bottom
 				bottom: root.bottom
 			}
+
 		}
 
 		states: [
