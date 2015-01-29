@@ -146,7 +146,6 @@ describe('contract', function() {
         // given
         var description =  [{
             "name": "test(uint256)",
-            "type": "event",
             "inputs": [{
                 "name": "a",
                 "type": "uint256"
@@ -168,5 +167,35 @@ describe('contract', function() {
         assert.equal('undefined', typeof con.test); 
 
     });
+
+    it('should create contract with one event', function () {
+        
+        // given
+        var description =  [{
+            "name": "test",
+            "type": "event",
+            "inputs": [{
+                "name": "a",
+                "type": "uint256"
+            }
+            ],
+            "outputs": [
+            {
+                "name": "d",
+                "type": "uint256"
+            }
+            ]
+        }];
+
+
+        // when
+        var con = contract(null, description);
+
+        // then
+        assert.equal('function', typeof con.test); 
+        assert.equal('function', typeof con.test['uint256']); 
+
+    });
+
 });
 

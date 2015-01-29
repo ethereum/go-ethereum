@@ -451,7 +451,7 @@ module.exports = {
  * @date 2014
  */
 
-var web3 = require('./web3'); // jshint ignore:line
+var web3 = require('./web3'); 
 var abi = require('./abi');
 
 /**
@@ -493,7 +493,17 @@ var contract = function (address, desc) {
     var inputParser = abi.inputParser(desc);
     var outputParser = abi.outputParser(desc);
 
-    var result = {};
+    var result = {
+        address: address,
+    };
+
+    Object.defineProperty(result, 'topics', {
+        get: function() {
+            return abi.filterEvents(desc).map(function (event) {
+                return abi.methodSignature(event.name);
+            });
+        }
+    });
 
     result.call = function (options) {
         result._isTransact = false;
@@ -579,11 +589,13 @@ var contract = function (address, desc) {
         var displayName = abi.methodDisplayName(event.name);
         var typeName = abi.methodTypeName(event.name);
 
+
         var impl = function (options) {
+            var signature = abi.methodSignature(event.name);
             var o = options || {};
             o.address = o.address || address;
             o.topics = o.topics || [];
-            o.topics.push(abi.methodSignature(event.name));
+            o.topics.push(signature);
 
             return web3.eth.watch(o);  
         };
