@@ -609,19 +609,17 @@ var addEventsToContract = function (contract, desc, address) {
 
 var contract = function (address, desc) {
 
+    // workaround for invalid assumption that method.name is the full anonymous prototype of the method.
+    // it's not. it's just the name. the rest of the code assumes it's actually the anonymous
+    // prototype, so we make it so as a workaround.
+    // TODO: we may not want to modify input params, maybe use copy instead?
     desc.forEach(function (method) {
-        // workaround for invalid assumption that method.name is the full anonymous prototype of the method.
-        // it's not. it's just the name. the rest of the code assumes it's actually the anonymous
-        // prototype, so we make it so as a workaround.
-        // TODO: we may not want to modify input params, maybe use copy instead?
         if (method.name.indexOf('(') === -1) {
             var displayName = method.name;
             var typeName = method.inputs.map(function(i){return i.type; }).join();
             method.name = displayName + '(' + typeName + ')';
         }
     });
-
-
 
     var result = {};
     addFunctionRelatedPropertiesToContract(result);
