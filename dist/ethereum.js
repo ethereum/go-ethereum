@@ -541,7 +541,7 @@ var addFunctionsToContract = function (contract, desc, address) {
 var addEventRelatedPropertiesToContract = function (contract, desc, address) {
     contract.address = address;
     
-    Object.defineProperty(contract, 'topics', {
+    Object.defineProperty(contract, 'topic', {
         get: function() {
             return abi.filterEvents(desc).map(function (e) {
                 return abi.methodSignature(e.name);
@@ -565,7 +565,7 @@ var addEventsToContract = function (contract, desc, address) {
 
         impl.address = address;
 
-        Object.defineProperty(impl, 'topics', {
+        Object.defineProperty(impl, 'topic', {
             get: function() {
                 return [abi.methodSignature(e.name)];
             }
@@ -706,10 +706,13 @@ var Filter = function(options, impl) {
 
     if (typeof options !== "string") {
         // evaluate lazy properties
+        if (options.topics) {
+            console.warn('"topics" is deprecated, use "topic" instead');
+        }
+
         options = {
             to: options.to,
             topic: options.topic,
-            topics: options.topics,
             earliest: options.earliest,
             latest: options.latest,
             max: options.max,
