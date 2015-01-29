@@ -40,24 +40,6 @@ import (
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
-func toHex(b []byte) string {
-	return "0x" + ethutil.Bytes2Hex(b)
-}
-func fromHex(s string) []byte {
-	if len(s) > 1 {
-		if s[0:2] == "0x" {
-			s = s[2:]
-		}
-		return ethutil.Hex2Bytes(s)
-	}
-	return nil
-}
-
-type RpcServer interface {
-	Start()
-	Stop()
-}
-
 type EthereumApi struct {
 	xeth          *xeth.XEth
 	filterManager *filter.FilterManager
