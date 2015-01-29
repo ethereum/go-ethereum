@@ -428,7 +428,7 @@ module.exports = {
 };
 
 
-},{"./web3":7}],2:[function(require,module,exports){
+},{"./web3":8}],2:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -453,6 +453,129 @@ module.exports = {
 
 var web3 = require('./web3'); 
 var abi = require('./abi');
+var eventImplementation = require('./event');
+
+var addFunctionRelatedPropertiesToContract = function (contract) {
+    
+    contract.call = function (options) {
+        contract._isTransact = false;
+        contract._options = options;
+        return contract;
+    };
+
+    contract.transact = function (options) {
+        contract._isTransact = true;
+        contract._options = options;
+        return contract;
+    };
+
+    contract._options = {};
+    ['gas', 'gasPrice', 'value', 'from'].forEach(function(p) {
+        contract[p] = function (v) {
+            contract._options[p] = v;
+            return contract;
+        };
+    });
+
+};
+
+var addFunctionsToContract = function (contract, desc, address) {
+    var inputParser = abi.inputParser(desc);
+    var outputParser = abi.outputParser(desc);
+
+    // create contract functions
+    abi.filterFunctions(desc).forEach(function (method) {
+
+        var displayName = abi.methodDisplayName(method.name);
+        var typeName = abi.methodTypeName(method.name);
+
+        var impl = function () {
+            var params = Array.prototype.slice.call(arguments);
+            var signature = abi.methodSignature(method.name);
+            var parsed = inputParser[displayName][typeName].apply(null, params);
+
+            var options = contract._options || {};
+            options.to = address;
+            options.data = signature + parsed;
+            
+            var isTransact = contract._isTransact === true || (contract._isTransact !== false && !method.constant);
+            var collapse = options.collapse !== false;
+            
+            // reset
+            contract._options = {};
+            contract._isTransact = null;
+
+            if (isTransact) {
+                // it's used byt natspec.js
+                // TODO: figure out better way to solve this
+                web3._currentContractAbi = desc;
+                web3._currentContractAddress = address;
+                web3._currentContractMethodName = method.name;
+                web3._currentContractMethodParams = params;
+
+                // transactions do not have any output, cause we do not know, when they will be processed
+                web3.eth.transact(options);
+                return;
+            }
+            
+            var output = web3.eth.call(options);
+            var ret = outputParser[displayName][typeName](output);
+            if (collapse)
+            {
+                if (ret.length === 1)
+                    ret = ret[0];
+                else if (ret.length === 0)
+                    ret = null;
+            }
+            return ret;
+        };
+
+        if (contract[displayName] === undefined) {
+            contract[displayName] = impl;
+        }
+
+        contract[displayName][typeName] = impl;
+    });
+};
+
+var addEventRelatedPropertiesToContract = function (contract, desc, address) {
+    contract.address = address;
+    
+    Object.defineProperty(contract, 'topics', {
+        get: function() {
+            return abi.filterEvents(desc).map(function (e) {
+                return abi.methodSignature(e.name);
+            });
+        }
+    });
+
+};
+
+var addEventsToContract = function (contract, desc, address) {
+    // create contract events
+    abi.filterEvents(desc).forEach(function (e) {
+
+        var impl = function () {
+            var params = Array.prototype.slice.call(arguments);
+            var signature = abi.methodSignature(e.name);
+            var eventImpl = eventImplementation(address, signature);
+            var o = eventImpl.apply(null, params);
+            return web3.eth.watch(o);  
+        };
+        
+        // TODO: rename these methods, cause they are used not only for methods
+        var displayName = abi.methodDisplayName(e.name);
+        var typeName = abi.methodTypeName(e.name);
+
+        if (contract[displayName] === undefined) {
+            contract[displayName] = impl;
+        }
+
+        contract[displayName][typeName] = impl;
+
+    });
+};
+
 
 /**
  * This method should be called when we want to call / transact some solidity method from javascript
@@ -490,123 +613,13 @@ var contract = function (address, desc) {
         }
     });
 
-    var inputParser = abi.inputParser(desc);
-    var outputParser = abi.outputParser(desc);
-
-    var result = {
-        address: address,
-    };
-
-    Object.defineProperty(result, 'topics', {
-        get: function() {
-            return abi.filterEvents(desc).map(function (event) {
-                return abi.methodSignature(event.name);
-            });
-        }
-    });
-
-    result.call = function (options) {
-        result._isTransact = false;
-        result._options = options;
-        return result;
-    };
-
-    result.transact = function (options) {
-        result._isTransact = true;
-        result._options = options;
-        return result;
-    };
-
-    result._options = {};
-    ['gas', 'gasPrice', 'value', 'from'].forEach(function(p) {
-        result[p] = function (v) {
-            result._options[p] = v;
-            return result;
-        };
-    });
 
 
-    // create contract functions
-    abi.filterFunctions(desc).forEach(function (method) {
-
-        var displayName = abi.methodDisplayName(method.name);
-        var typeName = abi.methodTypeName(method.name);
-
-        var impl = function () {
-            var params = Array.prototype.slice.call(arguments);
-            var signature = abi.methodSignature(method.name);
-            var parsed = inputParser[displayName][typeName].apply(null, params);
-
-            var options = result._options || {};
-            options.to = address;
-            options.data = signature + parsed;
-            
-            var isTransact = result._isTransact === true || (result._isTransact !== false && !method.constant);
-            var collapse = options.collapse !== false;
-            
-            // reset
-            result._options = {};
-            result._isTransact = null;
-
-            if (isTransact) {
-                // it's used byt natspec.js
-                // TODO: figure out better way to solve this
-                web3._currentContractAbi = desc;
-                web3._currentContractAddress = address;
-                web3._currentContractMethodName = method.name;
-                web3._currentContractMethodParams = params;
-
-                // transactions do not have any output, cause we do not know, when they will be processed
-                web3.eth.transact(options);
-                return;
-            }
-            
-            var output = web3.eth.call(options);
-            var ret = outputParser[displayName][typeName](output);
-            if (collapse)
-            {
-                if (ret.length === 1)
-                    ret = ret[0];
-                else if (ret.length === 0)
-                    ret = null;
-            }
-            return ret;
-        };
-
-        if (result[displayName] === undefined) {
-            result[displayName] = impl;
-        }
-
-        result[displayName][typeName] = impl;
-
-    });
-
-
-    // create contract events
-    abi.filterEvents(desc).forEach(function (event) {
-    
-        // TODO: rename these methods, cause they are used not only for methods
-        var displayName = abi.methodDisplayName(event.name);
-        var typeName = abi.methodTypeName(event.name);
-
-
-        var impl = function (options) {
-            var signature = abi.methodSignature(event.name);
-            var o = options || {};
-            o.address = o.address || address;
-            o.topics = o.topics || [];
-            o.topics.push(signature);
-
-            return web3.eth.watch(o);  
-        };
-
-        if (result[displayName] === undefined) {
-            result[displayName] = impl;
-        }
-
-        result[displayName][typeName] = impl;
-
-    });
+    var result = {};
+    addFunctionRelatedPropertiesToContract(result);
+    addFunctionsToContract(result, desc, address);
+    addEventRelatedPropertiesToContract(result, desc, address);
+    addEventsToContract(result, desc, address);
 
     return result;
 };
@@ -614,7 +627,25 @@ var contract = function (address, desc) {
 module.exports = contract;
 
 
-},{"./abi":1,"./web3":7}],3:[function(require,module,exports){
+},{"./abi":1,"./event":3,"./web3":8}],3:[function(require,module,exports){
+
+var abi = require('./abi');
+
+var implementationOfEvent = function (address, signature) {
+    
+    return function (options) {
+        var o = options || {};
+        o.address = o.address || address;
+        o.topics = o.topics || [];
+        o.topics.push(signature);
+        return o;
+    };
+};
+
+module.exports = implementationOfEvent;
+
+
+},{"./abi":1}],4:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -689,7 +720,7 @@ Filter.prototype.logs = function () {
 
 module.exports = Filter;
 
-},{"./web3":7}],4:[function(require,module,exports){
+},{"./web3":8}],5:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -761,7 +792,7 @@ HttpSyncProvider.prototype.send = function (payload) {
 module.exports = HttpSyncProvider;
 
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -873,7 +904,7 @@ ProviderManager.prototype.stopPolling = function (pollId) {
 module.exports = ProviderManager;
 
 
-},{"./web3":7}],6:[function(require,module,exports){
+},{"./web3":8}],7:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -907,7 +938,7 @@ QtSyncProvider.prototype.send = function (payload) {
 module.exports = QtSyncProvider;
 
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1249,7 +1280,7 @@ web3.abi = require('./lib/abi');
 
 module.exports = web3;
 
-},{"./lib/abi":1,"./lib/contract":2,"./lib/filter":3,"./lib/httpsync":4,"./lib/providermanager":5,"./lib/qtsync":6,"./lib/web3":7}]},{},["web3"])
+},{"./lib/abi":1,"./lib/contract":2,"./lib/filter":4,"./lib/httpsync":5,"./lib/providermanager":6,"./lib/qtsync":7,"./lib/web3":8}]},{},["web3"])
 
 
 //# sourceMappingURL=ethereum.js.map

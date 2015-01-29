@@ -7,13 +7,9 @@ describe('event', function () {
         // given
         var address = '0x012345'; 
         var signature = '0x987654';
-        var e = {
-            name: 'test',
-            type: 'event',
-        };
 
         // when
-        var impl = event(e, address, signature);
+        var impl = event(address, signature);
         var result = impl();
 
         // then
@@ -23,3 +19,4 @@ describe('event', function () {
 
     });
 });
+
