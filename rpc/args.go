@@ -28,11 +28,12 @@ func (obj *GetBlockArgs) requirements() error {
 }
 
 type NewTxArgs struct {
-	Recipient string `json:"recipient"`
-	Value     string `json:"value"`
-	Gas       string `json:"gas"`
-	GasPrice  string `json:"gasprice"`
-	Data      string `json:"data"`
+	From     string `json:"from"`
+	To       string `json:"to"`
+	Value    string `json:"value"`
+	Gas      string `json:"gas"`
+	GasPrice string `json:"gasPrice"`
+	Data     string `json:"data"`
 }
 
 // type TxResponse struct {

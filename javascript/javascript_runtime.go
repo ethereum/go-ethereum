@@ -58,8 +58,7 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	re.Vm.Run(jsLib)
 
 	// Load extra javascript files
-	re.LoadIntFile("string.js")
-	re.LoadIntFile("big.js")
+	re.LoadIntFile("bignumber.min.js")
 
 	// Subscribe to events
 	mux := ethereum.EventMux()

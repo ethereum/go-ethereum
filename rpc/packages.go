@@ -67,8 +67,17 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
 	if err != nil {
 		return err
 	}
-	result, _ := p.xeth.Transact( /* TODO specify account */ args.Recipient, args.Value, args.Gas, args.GasPrice, args.Data)
-	fmt.Println("result:", result)
+	result, _ := p.xeth.Transact( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
+	*reply = result
+	return nil
+}
+
+func (p *EthereumApi) Call(args *NewTxArgs, reply *interface{}) error {
+	result, err := p.xeth.Call( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
+	if err != nil {
+		return err
+	}
+
 	*reply = result
 	return nil
 }
@@ -206,6 +215,12 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.Transact(args, reply)
+	case "eth_call":
+		args, err := req.ToNewTxArgs()
+		if err != nil {
+			return err
+		}
+		return p.Call(args, reply)
 	case "web3_sha3":
 		args, err := req.ToSha3Args()
 		if err != nil {
