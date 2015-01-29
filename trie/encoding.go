@@ -70,7 +70,7 @@ func DecodeCompact(key []byte) string {
 		}
 	}
 
-	res, err := hex.DecodeString(str)
+	res, _ := hex.DecodeString(str)
 
 	return string(res)
 }
