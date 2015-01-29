@@ -13,8 +13,8 @@ RUN apt-get update && apt-get upgrade -y
 RUN apt-get install -y git mercurial build-essential software-properties-common pkg-config libgmp3-dev libreadline6-dev libpcre3-dev libpcre++-dev
 
 ## Build and install Go
-RUN hg clone -u release https://code.google.com/p/go
-RUN cd go && hg update go1.4
+RUN git clone https://go.googlesource.com/go
+RUN cd go && git checkout go1.4.1
 RUN cd go/src && ./all.bash && go version
 
 ## Install GUI dependencies

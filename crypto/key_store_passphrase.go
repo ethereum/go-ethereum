@@ -69,6 +69,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	crand "crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -96,21 +97,26 @@ func (ks keyStorePassphrase) GenerateNewKey(rand io.Reader, auth string) (key *K
 	return GenerateNewKeyDefault(ks, rand, auth)
 }
 
-func (ks keyStorePassphrase) GetKey(keyId *uuid.UUID, auth string) (key *Key, err error) {
-	keyBytes, err := DecryptKey(ks, keyId, auth)
+func (ks keyStorePassphrase) GetKey(keyAddr []byte, auth string) (key *Key, err error) {
+	keyBytes, keyId, err := DecryptKey(ks, keyAddr, auth)
 	if err != nil {
 		return nil, err
 	}
 	key = &Key{
-		Id:         keyId,
+		Id:         uuid.UUID(keyId),
+		Address:    keyAddr,
 		PrivateKey: ToECDSA(keyBytes),
 	}
 	return key, err
 }
 
+func (ks keyStorePassphrase) GetKeyAddresses() (addresses [][]byte, err error) {
+	return GetKeyAddresses(ks.keysDirPath)
+}
+
 func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 	authArray := []byte(auth)
-	salt := getEntropyCSPRNG(32)
+	salt := GetEntropyCSPRNG(32)
 	derivedKey, err := scrypt.Key(authArray, salt, scryptN, scryptr, scryptp, scryptdkLen)
 	if err != nil {
 		return err
@@ -125,7 +131,7 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 		return err
 	}
 
-	iv := getEntropyCSPRNG(aes.BlockSize) // 16
+	iv := GetEntropyCSPRNG(aes.BlockSize) // 16
 	AES256CBCEncrypter := cipher.NewCBCEncrypter(AES256Block, iv)
 	cipherText := make([]byte, len(toEncrypt))
 	AES256CBCEncrypter.CryptBlocks(cipherText, toEncrypt)
@@ -136,7 +142,8 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 		cipherText,
 	}
 	keyStruct := encryptedKeyJSON{
-		*key.Id,
+		key.Id,
+		key.Address,
 		cipherStruct,
 	}
 	keyJSON, err := json.Marshal(keyStruct)
@@ -144,54 +151,53 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 		return err
 	}
 
-	return WriteKeyFile(key.Id.String(), ks.keysDirPath, keyJSON)
+	return WriteKeyFile(key.Address, ks.keysDirPath, keyJSON)
 }
 
-func (ks keyStorePassphrase) DeleteKey(keyId *uuid.UUID, auth string) (err error) {
+func (ks keyStorePassphrase) DeleteKey(keyAddr []byte, auth string) (err error) {
 	// only delete if correct passphrase is given
-	_, err = DecryptKey(ks, keyId, auth)
+	_, _, err = DecryptKey(ks, keyAddr, auth)
 	if err != nil {
 		return err
 	}
 
-	keyDirPath := path.Join(ks.keysDirPath, keyId.String())
+	keyDirPath := path.Join(ks.keysDirPath, hex.EncodeToString(keyAddr))
 	return os.RemoveAll(keyDirPath)
 }
 
-func DecryptKey(ks keyStorePassphrase, keyId *uuid.UUID, auth string) (keyBytes []byte, err error) {
-	fileContent, err := GetKeyFile(ks.keysDirPath, keyId)
+func DecryptKey(ks keyStorePassphrase, keyAddr []byte, auth string) (keyBytes []byte, keyId []byte, err error) {
+	fileContent, err := GetKeyFile(ks.keysDirPath, keyAddr)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	keyProtected := new(encryptedKeyJSON)
 	err = json.Unmarshal(fileContent, keyProtected)
 
+	keyId = keyProtected.Id
 	salt := keyProtected.Crypto.Salt
-
 	iv := keyProtected.Crypto.IV
-
 	cipherText := keyProtected.Crypto.CipherText
 
 	authArray := []byte(auth)
 	derivedKey, err := scrypt.Key(authArray, salt, scryptN, scryptr, scryptp, scryptdkLen)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	plainText, err := aesCBCDecrypt(derivedKey, cipherText, iv)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	keyBytes = plainText[:len(plainText)-32]
 	keyBytesHash := plainText[len(plainText)-32:]
 	if !bytes.Equal(Sha3(keyBytes), keyBytesHash) {
 		err = errors.New("Decryption failed: checksum mismatch")
-		return nil, err
+		return nil, nil, err
 	}
-	return keyBytes, err
+	return keyBytes, keyId, err
 }
 
-func getEntropyCSPRNG(n int) []byte {
+func GetEntropyCSPRNG(n int) []byte {
 	mainBuff := make([]byte, n)
 	_, err := io.ReadFull(crand.Reader, mainBuff)
 	if err != nil {

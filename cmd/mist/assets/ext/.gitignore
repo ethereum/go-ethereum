@@ -4,16 +4,15 @@
 # or operating system, you probably want to add a global ignore instead:
 #   git config --global core.excludesfile ~/.gitignore_global
 
+*.swp
 /tmp
 */**/*un~
 *un~
 .DS_Store
 */**/.DS_Store
-.ethtest
-
-#*
-.#*
-*#
-*~
-.project
-.settings
+ethereum/ethereum
+ethereal/ethereal
+example/js
+node_modules
+bower_components
+npm-debug.log

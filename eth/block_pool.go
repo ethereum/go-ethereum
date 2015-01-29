@@ -1098,7 +1098,7 @@ func (self *BlockPool) requestBlocks(attempts int, hashes [][]byte) {
 		poolLogger.Debugf("request %v missing blocks from %v/%v peers: chosen %v", len(hashes), repetitions, peerCount, indexes)
 		for _, peer := range self.peers {
 			if i == indexes[0] {
-				poolLogger.Debugf("request %v missing blocks from peer %s", len(hashes), peer.id)
+				poolLogger.Debugf("request %v missing blocks [%x/%x] from peer %s", len(hashes), hashes[0][:4], hashes[len(hashes)-1][:4], peer.id)
 				peer.requestBlocks(hashes)
 				indexes = indexes[1:]
 				if len(indexes) == 0 {

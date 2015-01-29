@@ -15,7 +15,7 @@ if ls $dir/*.go &> /dev/null; then
     # echo $dir
     if [[ $dir != "./tests/vm" ]]
     then
-        go test -covermode=count -coverprofile=$dir/profile.tmp $dir
+        $GOROOT/bin/go test -covermode=count -coverprofile=$dir/profile.tmp $dir
     fi
     if [ -f $dir/profile.tmp ]
     then
@@ -25,7 +25,7 @@ if ls $dir/*.go &> /dev/null; then
 fi
 done
 
-go tool cover -func profile.cov
+$GOROOT/bin/go tool cover -func profile.cov
 
 # To submit the test coverage result to coveralls.io,
 # use goveralls (https://github.com/mattn/goveralls)
