@@ -20,11 +20,10 @@
 		}]
 	}];
 	var address = web3.eth.transact({
-		data: "0x603880600c6000396000f3006001600060e060020a600035048063c6888fa114601857005b6021600435602b565b8060005260206000f35b6000816007029050",
+		data: "0x603880600c6000396000f3006001600060e060020a600035048063c6888fa114601857005b6021600435602b565b8060005260206000f35b600081600702905091905056",
 		gasprice: "1000000000000000",
 		gas: "10000",
 	});
-	console.log("created contract with addr:"+ address);
 	var contract = web3.eth.contract(address, desc);
 
 	function calculate() {
@@ -36,9 +35,21 @@
 </script>
 </head>
 <body>
+<h3>Contract content</h3>
+<textarea style="height:100px; width: 300px;" disabled="disabled">
+contract test {
+    function multiply(uint a) returns(uint d) {
+        return a * 7;
+    }
+}
+</textarea>
+<code><pre>
+603880600c6000396000f3006001600060e060020a600035048063c6888fa1140
+05b6021600435602b565b8060005260206000f35b600081600702905091905056</pre></code>
 
-<div><input type="number" id="value" onkeyup='calculate()'></input></div>
-<div id="result"></div>
+<hr>
+<div>7 x <input type="number" id="value" onkeyup='calculate()'></input> = 
+<span id="result"></spa>
 
 </body>
 </html>
