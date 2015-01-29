@@ -708,6 +708,7 @@ var Filter = function(options, impl) {
         // evaluate lazy properties
         options = {
             to: options.to,
+            topic: options.topic,
             topics: options.topics,
             earliest: options.earliest,
             latest: options.latest,
