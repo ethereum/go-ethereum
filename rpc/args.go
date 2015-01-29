@@ -1,6 +1,7 @@
 package rpc
 
 import "encoding/json"
+import "github.com/ethereum/go-ethereum/core"
 
 type GetBlockArgs struct {
 	BlockNumber int32
@@ -35,10 +36,6 @@ type NewTxArgs struct {
 	GasPrice string `json:"gasPrice"`
 	Data     string `json:"data"`
 }
-
-// type TxResponse struct {
-//  Hash string
-// }
 
 func (a *NewTxArgs) requirements() error {
 	if a.Gas == "" {
@@ -194,4 +191,30 @@ func (obj *Sha3Args) UnmarshalJSON(b []byte) (err error) {
 		return NewErrorResponse(ErrorDecodeArgs)
 	}
 	return
+}
+
+type FilterOptions struct {
+	Earliest int64
+	Latest   int64
+	Address  string
+	Topics   []string
+	Skip     int
+	Max      int
+}
+
+func toFilterOptions(options *FilterOptions) core.FilterOptions {
+	var opts core.FilterOptions
+	opts.Earliest = options.Earliest
+	opts.Latest = options.Latest
+	opts.Address = fromHex(options.Address)
+	opts.Topics = make([][]byte, len(options.Topics))
+	for i, topic := range options.Topics {
+		opts.Topics[i] = fromHex(topic)
+	}
+
+	return opts
+}
+
+type FilterChangedArgs struct {
+	n int
 }

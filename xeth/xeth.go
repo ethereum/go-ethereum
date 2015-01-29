@@ -12,7 +12,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -22,19 +24,22 @@ var pipelogger = logger.NewLogger("XETH")
 type Backend interface {
 	BlockProcessor() *core.BlockProcessor
 	ChainManager() *core.ChainManager
-	KeyManager() *crypto.KeyManager
+	TxPool() *core.TxPool
+	PeerCount() int
 	IsMining() bool
 	IsListening() bool
-	PeerCount() int
+	Peers() []*p2p.Peer
+	KeyManager() *crypto.KeyManager
+	ClientIdentity() p2p.ClientIdentity
 	Db() ethutil.Database
-	TxPool() *core.TxPool
+	EventMux() *event.TypeMux
 }
 
 type XEth struct {
 	eth            Backend
 	blockProcessor *core.BlockProcessor
 	chainManager   *core.ChainManager
-	world          *State
+	state          *State
 }
 
 func New(eth Backend) *XEth {
@@ -43,12 +48,16 @@ func New(eth Backend) *XEth {
 		blockProcessor: eth.BlockProcessor(),
 		chainManager:   eth.ChainManager(),
 	}
-	xeth.world = NewState(xeth)
+	xeth.state = NewState(xeth)
 
 	return xeth
 }
 
-func (self *XEth) State() *State { return self.world }
+func (self *XEth) Backend() Backend {
+	return self.eth
+}
+
+func (self *XEth) State() *State { return self.state }
 
 func (self *XEth) BlockByHash(strHash string) *Block {
 	hash := fromHex(strHash)

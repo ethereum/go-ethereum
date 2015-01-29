@@ -12,6 +12,17 @@ type AccountChange struct {
 	Address, StateAddress []byte
 }
 
+type FilterOptions struct {
+	Earliest int64
+	Latest   int64
+
+	Address []byte
+	Topics  [][]byte
+
+	Skip int
+	Max  int
+}
+
 // Filtering interface
 type Filter struct {
 	eth      EthManager
@@ -30,6 +41,16 @@ type Filter struct {
 // is interesting or not.
 func NewFilter(eth EthManager) *Filter {
 	return &Filter{eth: eth}
+}
+
+func (self *Filter) SetOptions(options FilterOptions) {
+	self.earliest = options.Earliest
+	self.latest = options.Latest
+	self.skip = options.Skip
+	self.max = options.Max
+	self.address = options.Address
+	self.topics = options.Topics
+
 }
 
 // Set the earliest and latest block for filtering.
