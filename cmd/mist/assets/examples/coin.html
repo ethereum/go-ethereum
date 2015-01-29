@@ -65,9 +65,10 @@
     }
 
 	var contract = web3.eth.contract(address, desc);
-	document.querySelector("#balance").innerHTML = contract.call().balance(eth.coinbase);
 
 	function reflesh() {
+        document.querySelector("#balance").innerHTML = contract.call().balance(eth.coinbase);
+
 		var table = document.querySelector("#table");
 		table.innerHTML = ""; // clear
 

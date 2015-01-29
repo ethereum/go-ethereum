@@ -1,6 +1,7 @@
 package xeth
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -54,8 +56,11 @@ func (self *Object) Storage() (storage map[string]string) {
 
 	it := self.StateObject.Trie().Iterator()
 	for it.Next() {
-		storage[toHex(it.Key)] = toHex(it.Value)
+		var data []byte
+		rlp.Decode(bytes.NewReader(it.Value), &data)
+		storage[toHex(it.Key)] = toHex(data)
 	}
+	self.StateObject.Trie().PrintRoot()
 
 	return
 }
