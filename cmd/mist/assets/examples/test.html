@@ -1,0 +1,44 @@
+<!doctype>
+<html>
+<head>
+<title>Hello world</title>
+<script src="../ext/bignumber.min.js"></script>
+<script src="../ext/ethereum.js/dist/ethereum.js"></script>
+<script>
+	var web3 = require('web3');
+	web3.setProvider(new web3.providers.HttpSyncProvider('http://localhost:8080'));
+	var eth = web3.eth;
+	var desc =  [{
+		"name": "multiply(uint256)",
+		"inputs": [{
+			"name": "a",
+			"type": "uint256"
+		}],
+		"outputs": [{
+			"name": "d",
+			"type": "uint256"
+		}]
+	}];
+	var address = web3.eth.transact({
+		data: "0x603880600c6000396000f3006001600060e060020a600035048063c6888fa114601857005b6021600435602b565b8060005260206000f35b6000816007029050",
+		gasprice: "1000000000000000",
+		gas: "10000",
+	});
+	console.log("created contract with addr:"+ address);
+	var contract = web3.eth.contract(address, desc);
+
+	function calculate() {
+		var param = parseInt(document.getElementById('value').value);
+
+		var res = contract.call().multiply(param);
+		document.getElementById('result').innerText = res.toString(10);
+	}
+</script>
+</head>
+<body>
+
+<div><input type="number" id="value" onkeyup='calculate()'></input></div>
+<div id="result"></div>
+
+</body>
+</html>
