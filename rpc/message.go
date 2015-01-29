@@ -126,13 +126,28 @@ func (req *RpcRequest) ToPushTxArgs() (*PushTxArgs, error) {
 	return args, nil
 }
 
-func (req *RpcRequest) ToGetStorageArgs() (*GetStorageArgs, error) {
-	if len(req.Params) < 2 {
+func (req *RpcRequest) ToGetStateArgs() (*GetStateArgs, error) {
+	if len(req.Params) < 1 {
+		return nil, NewErrorResponse(ErrorArguments)
+	}
+
+	args := new(GetStateArgs)
+	// TODO need to pass both arguments
+	r := bytes.NewReader(req.Params[0])
+	err := json.NewDecoder(r).Decode(args)
+	if err != nil {
+		return nil, NewErrorResponse(ErrorDecodeArgs)
+	}
+	rpclogger.DebugDetailf("%T %v", args, args)
+	return args, nil
+}
+
+func (req *RpcRequest) ToStorageAtArgs() (*GetStorageArgs, error) {
+	if len(req.Params) < 1 {
 		return nil, NewErrorResponse(ErrorArguments)
 	}
 
 	args := new(GetStorageArgs)
-	// TODO need to pass both arguments
 	r := bytes.NewReader(req.Params[0])
 	err := json.NewDecoder(r).Decode(args)
 	if err != nil {
@@ -238,4 +253,45 @@ func toLogs(logs state.Logs) (ls []Log) {
 	}
 
 	return
+}
+
+func (req *RpcRequest) ToDbPutArgs() (*DbArgs, error) {
+	if len(req.Params) < 3 {
+		return nil, NewErrorResponse(ErrorArguments)
+	}
+
+	var args DbArgs
+	err := json.Unmarshal(req.Params[0], &args.Database)
+	if err != nil {
+		return nil, NewErrorResponseWithError(ErrorDecodeArgs, err)
+	}
+	err = json.Unmarshal(req.Params[1], &args.Key)
+	if err != nil {
+		return nil, NewErrorResponseWithError(ErrorDecodeArgs, err)
+	}
+	err = json.Unmarshal(req.Params[2], &args.Value)
+	if err != nil {
+		return nil, NewErrorResponseWithError(ErrorDecodeArgs, err)
+	}
+	rpclogger.DebugDetailf("%T %v", args, args)
+	return &args, nil
+}
+
+func (req *RpcRequest) ToDbGetArgs() (*DbArgs, error) {
+	if len(req.Params) < 2 {
+		return nil, NewErrorResponse(ErrorArguments)
+	}
+
+	var args DbArgs
+	err := json.Unmarshal(req.Params[0], &args.Database)
+	if err != nil {
+		return nil, NewErrorResponseWithError(ErrorDecodeArgs, err)
+	}
+
+	err = json.Unmarshal(req.Params[1], &args.Key)
+	if err != nil {
+		return nil, NewErrorResponseWithError(ErrorDecodeArgs, err)
+	}
+	rpclogger.DebugDetailf("%T %v", args, args)
+	return &args, nil
 }

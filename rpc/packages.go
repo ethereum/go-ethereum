@@ -33,6 +33,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/state"
@@ -63,13 +64,17 @@ type EthereumApi struct {
 
 	mut  sync.RWMutex
 	logs map[int]state.Logs
+
+	db ethutil.Database
 }
 
 func NewEthereumApi(xeth *xeth.XEth) *EthereumApi {
+	db, _ := ethdb.NewLDBDatabase("dapps")
 	api := &EthereumApi{
 		xeth:          xeth,
 		filterManager: filter.NewFilterManager(xeth.Backend().EventMux()),
 		logs:          make(map[int]state.Logs),
+		db:            db,
 	}
 	go api.filterManager.Start()
 
@@ -89,29 +94,6 @@ func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) erro
 	*reply = id
 
 	return nil
-}
-
-type Log struct {
-	Address string   `json:"address"`
-	Topics  []string `json:"topics"`
-	Data    string   `json:"data"`
-}
-
-func toLogs(logs state.Logs) (ls []Log) {
-	ls = make([]Log, len(logs))
-
-	for i, log := range logs {
-		var l Log
-		l.Topics = make([]string, len(log.Topics()))
-		l.Address = toHex(log.Address())
-		l.Data = toHex(log.Data())
-		for j, topic := range log.Topics() {
-			l.Topics[j] = toHex(topic)
-		}
-		ls[i] = l
-	}
-
-	return
 }
 
 func (self *EthereumApi) FilterChanged(id int, reply *interface{}) error {
@@ -176,7 +158,7 @@ func (p *EthereumApi) PushTx(args *PushTxArgs, reply *interface{}) error {
 	return nil
 }
 
-func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *interface{}) error {
+func (p *EthereumApi) GetStateAt(args *GetStateArgs, reply *interface{}) error {
 	err := args.requirements()
 	if err != nil {
 		return err
@@ -184,6 +166,7 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *interface{}) err
 
 	state := p.xeth.State().SafeGet(args.Address)
 
+	value := state.StorageString(args.Key)
 	var hx string
 	if strings.Index(args.Key, "0x") == 0 {
 		hx = string([]byte(args.Key)[2:])
@@ -192,9 +175,18 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *interface{}) err
 		i, _ := new(big.Int).SetString(args.Key, 10)
 		hx = ethutil.Bytes2Hex(i.Bytes())
 	}
-	rpclogger.Debugf("GetStorageAt(%s, %s)\n", args.Address, hx)
-	value := state.Storage(ethutil.Hex2Bytes(hx))
-	*reply = GetStorageAtRes{Address: args.Address, Key: args.Key, Value: value.Str()}
+	rpclogger.Debugf("GetStateAt(%s, %s)\n", args.Address, hx)
+	*reply = map[string]string{args.Key: value.Str()}
+	return nil
+}
+
+func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *interface{}) error {
+	err := args.requirements()
+	if err != nil {
+		return err
+	}
+
+	*reply = p.xeth.State().SafeGet(args.Address).Storage()
 	return nil
 }
 
@@ -213,8 +205,18 @@ func (p *EthereumApi) GetCoinbase(reply *interface{}) error {
 	return nil
 }
 
+func (p *EthereumApi) Accounts(reply *interface{}) error {
+	*reply = p.xeth.Accounts()
+	return nil
+}
+
 func (p *EthereumApi) GetIsMining(reply *interface{}) error {
 	*reply = p.xeth.IsMining()
+	return nil
+}
+
+func (p *EthereumApi) BlockNumber(reply *interface{}) error {
+	*reply = p.xeth.Backend().ChainManager().CurrentBlock().Number()
 	return nil
 }
 
@@ -251,6 +253,28 @@ func (p *EthereumApi) Sha3(args *Sha3Args, reply *interface{}) error {
 	return nil
 }
 
+func (p *EthereumApi) DbPut(args *DbArgs, reply *interface{}) error {
+	err := args.requirements()
+	if err != nil {
+		return err
+	}
+
+	p.db.Put([]byte(args.Database+args.Key), []byte(args.Value))
+	*reply = true
+	return nil
+}
+
+func (p *EthereumApi) DbGet(args *DbArgs, reply *interface{}) error {
+	err := args.requirements()
+	if err != nil {
+		return err
+	}
+
+	res, _ := p.db.Get([]byte(args.Database + args.Key))
+	*reply = string(res)
+	return nil
+}
+
 func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
 	// Spec at https://github.com/ethereum/wiki/wiki/Generic-ON-RPC
 	rpclogger.DebugDetailf("%T %s", req.Params, req.Params)
@@ -263,6 +287,10 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		return p.GetIsMining(reply)
 	case "eth_peerCount":
 		return p.GetPeerCount(reply)
+	case "eth_number":
+		return p.BlockNumber(reply)
+	case "eth_accounts":
+		return p.Accounts(reply)
 	case "eth_countAt":
 		args, err := req.ToGetTxCountArgs()
 		if err != nil {
@@ -282,7 +310,13 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		return p.GetBalanceAt(args, reply)
 	case "eth_stateAt":
-		args, err := req.ToGetStorageArgs()
+		args, err := req.ToGetStateArgs()
+		if err != nil {
+			return err
+		}
+		return p.GetStateAt(args, reply)
+	case "eth_storageAt":
+		args, err := req.ToStorageAtArgs()
 		if err != nil {
 			return err
 		}
@@ -317,12 +351,27 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.FilterChanged(args, reply)
+	case "eth_gasPrice":
+		*reply = "1000000000000000"
+		return nil
 	case "web3_sha3":
 		args, err := req.ToSha3Args()
 		if err != nil {
 			return err
 		}
 		return p.Sha3(args, reply)
+	case "db_put":
+		args, err := req.ToDbPutArgs()
+		if err != nil {
+			return err
+		}
+		return p.DbPut(args, reply)
+	case "db_get":
+		args, err := req.ToDbGetArgs()
+		if err != nil {
+			return err
+		}
+		return p.DbGet(args, reply)
 	default:
 		return NewErrorResponse(fmt.Sprintf("%v %s", ErrorNotImplemented, req.Method))
 	}

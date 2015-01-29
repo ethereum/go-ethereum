@@ -69,10 +69,28 @@ func (a *PushTxArgs) requirementsPushTx() error {
 
 type GetStorageArgs struct {
 	Address string
-	Key     string
 }
 
 func (obj *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
+	if err = json.Unmarshal(b, &obj.Address); err != nil {
+		return NewErrorResponse(ErrorDecodeArgs)
+	}
+	return
+}
+
+func (a *GetStorageArgs) requirements() error {
+	if len(a.Address) == 0 {
+		return NewErrorResponse("GetStorageAt requires an 'address' value as argument")
+	}
+	return nil
+}
+
+type GetStateArgs struct {
+	Address string
+	Key     string
+}
+
+func (obj *GetStateArgs) UnmarshalJSON(b []byte) (err error) {
 	arg0 := ""
 	if err = json.Unmarshal(b, arg0); err == nil {
 		obj.Address = arg0
@@ -81,7 +99,7 @@ func (obj *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
 	return NewErrorResponse(ErrorDecodeArgs)
 }
 
-func (a *GetStorageArgs) requirements() error {
+func (a *GetStateArgs) requirements() error {
 	if a.Address == "" {
 		return NewErrorResponse("GetStorageAt requires an 'address' value as argument")
 	}
@@ -92,9 +110,8 @@ func (a *GetStorageArgs) requirements() error {
 }
 
 type GetStorageAtRes struct {
-	Key     string `json:"key"`
-	Value   string `json:"value"`
-	Address string `json:"address"`
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
 type GetTxCountArgs struct {
@@ -217,4 +234,20 @@ func toFilterOptions(options *FilterOptions) core.FilterOptions {
 
 type FilterChangedArgs struct {
 	n int
+}
+
+type DbArgs struct {
+	Database string
+	Key      string
+	Value    string
+}
+
+func (a *DbArgs) requirements() error {
+	if len(a.Database) == 0 {
+		return NewErrorResponse("DbPutArgs requires an 'Database' value as argument")
+	}
+	if len(a.Key) == 0 {
+		return NewErrorResponse("DbPutArgs requires an 'Key' value as argument")
+	}
+	return nil
 }

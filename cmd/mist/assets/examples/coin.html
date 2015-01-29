@@ -1,0 +1,89 @@
+<!doctype>
+<html>
+
+<head>
+<script type="text/javascript" src="../ext/bignumber.min.js"></script>
+<script type="text/javascript" src="../ext/ethereum.js/dist/ethereum.js"></script>
+</head>
+<body>
+
+<h1>JevCoin</h1>
+<div>
+	<strong>Balance</strong>
+	<span id="balance"></strong>
+</div>
+
+<div>
+	<span class="amount">Amount:</span>
+	<input type="text" id="address" style="width:200px">
+	<input type="text" id="amount" style="width:200px">
+	<button onclick="transact()">Send</button>
+</div>
+
+<table width="100%" id="table">
+</table>
+
+</body>
+
+<script type="text/javascript">
+	var web3 = require('web3');
+	var eth = web3.eth;
+
+	web3.setProvider(new web3.providers.HttpSyncProvider('http://localhost:8080'));
+	var desc =  [{
+		"name": "balance(address)",
+		"inputs": [{
+			"name": "who",
+			"type": "address"
+		}],
+		"const": true,
+		"outputs": [{
+			"name": "value",
+			"type": "uint256"
+		}]
+	}, {
+		"name": "send(address,uint256)",
+		"inputs": [{
+			"name": "to",
+			"type": "address"
+		}, {
+			"name": "value",
+			"type": "uint256"
+		}],
+		"outputs": []
+	}];
+
+	var code = "0x60056011565b60ae8060356000396000f35b64174876e800600033600160a060020a031660005260205260406000208190555056006001600060e060020a600035048063d0679d34146022578063e3d670d714603457005b602e6004356024356047565b60006000f35b603d600435608d565b8060005260206000f35b80600083600160a060020a0316600052602052604060002090815401908190555080600033600160a060020a031660005260205260406000209081540390819055505050565b6000600082600160a060020a0316600052602052604060002054905091905056";
+	var address = web3.eth.transact({
+		data: code,
+		gasprice: "1000000000000000",
+		gas: "10000",
+	});
+	var contract = web3.eth.contract(address, desc);
+	document.querySelector("#balance").innerHTML = contract.call().balance(eth.coinbase);
+
+	function reflesh() {
+		var table = document.querySelector("#table");
+		table.innerHTML = ""; // clear
+
+		var storage = eth.storageAt(address);
+		for( var item in storage ) {
+			table.innerHTML += "<tr><td>"+item+"</td><td>"+web3.toDecimal(storage[item])+"</td></tr>";
+		}
+	}
+
+	function transact() {
+		//var to = "0x"+document.querySelector("#address").value;
+		var to = "0x4205b06c2cfa0e30359edcab94543266cb6fa1d3";
+		console.log("to "+to);
+		var value = parseInt( document.querySelector("#amount").value );
+		console.log("value "+value);
+
+		contract.transact({gas: "10000", gasPrice: "1000000000000"}).send( to, value );
+	}
+
+	reflesh();
+</script>
+
+</html>
+
