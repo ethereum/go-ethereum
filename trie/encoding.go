@@ -49,7 +49,7 @@ func CompactDecode(str string) []byte {
 
 func CompactHexDecode(str string) []byte {
 	base := "0123456789abcdef"
-	hexSlice := make([]byte, 0)
+	var hexSlice []byte
 
 	enc := hex.EncodeToString([]byte(str))
 	for _, v := range enc {
@@ -61,7 +61,7 @@ func CompactHexDecode(str string) []byte {
 }
 
 func DecodeCompact(key []byte) string {
-	base := "0123456789abcdef"
+	const base = "0123456789abcdef"
 	var str string
 
 	for _, v := range key {
@@ -70,7 +70,7 @@ func DecodeCompact(key []byte) string {
 		}
 	}
 
-	res, _ := hex.DecodeString(str)
+	res, err := hex.DecodeString(str)
 
 	return string(res)
 }

@@ -53,12 +53,17 @@
 		"outputs": []
 	}];
 
-	var code = "0x60056011565b60ae8060356000396000f35b64174876e800600033600160a060020a031660005260205260406000208190555056006001600060e060020a600035048063d0679d34146022578063e3d670d714603457005b602e6004356024356047565b60006000f35b603d600435608d565b8060005260206000f35b80600083600160a060020a0316600052602052604060002090815401908190555080600033600160a060020a031660005260205260406000209081540390819055505050565b6000600082600160a060020a0316600052602052604060002054905091905056";
-	var address = web3.eth.transact({
-		data: code,
-		gasprice: "1000000000000000",
-		gas: "10000",
-	});
+    var address = web3.db.get("jevcoin", "address");
+    if( address.length == 0 ) {
+        var code = "0x60056011565b60ae8060356000396000f35b64174876e800600033600160a060020a031660005260205260406000208190555056006001600060e060020a600035048063d0679d34146022578063e3d670d714603457005b602e6004356024356047565b60006000f35b603d600435608d565b8060005260206000f35b80600083600160a060020a0316600052602052604060002090815401908190555080600033600160a060020a031660005260205260406000209081540390819055505050565b6000600082600160a060020a0316600052602052604060002054905091905056";
+        address = web3.eth.transact({
+            data: code,
+            gasprice: "1000000000000000",
+            gas: "10000",
+        });
+        web3.db.put("jevcoin", "address", address);
+    }
+
 	var contract = web3.eth.contract(address, desc);
 	document.querySelector("#balance").innerHTML = contract.call().balance(eth.coinbase);
 
@@ -73,13 +78,16 @@
 	}
 
 	function transact() {
-		//var to = "0x"+document.querySelector("#address").value;
-		var to = "0x4205b06c2cfa0e30359edcab94543266cb6fa1d3";
-		console.log("to "+to);
-		var value = parseInt( document.querySelector("#amount").value );
-		console.log("value "+value);
+		var to = document.querySelector("#address").value;
+        if( to.length == 0 ) {
+		    to = "0x4205b06c2cfa0e30359edcab94543266cb6fa1d3";
+        } else {
+            to = "0x"+to;
+        }
 
-		contract.transact({gas: "10000", gasPrice: "1000000000000"}).send( to, value );
+		var value = parseInt( document.querySelector("#amount").value );
+
+		contract.transact({gas: "10000", gasprice: eth.gasPrice}).send( to, value );
 	}
 
 	reflesh();

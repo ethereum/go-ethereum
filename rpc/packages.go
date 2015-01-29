@@ -334,7 +334,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		return p.FilterChanged(args, reply)
 	case "eth_gasPrice":
-		*reply = "1000000000000000"
+		*reply = "10000000000000"
 		return nil
 	case "web3_sha3":
 		args, err := req.ToSha3Args()
