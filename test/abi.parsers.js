@@ -5,6 +5,7 @@ var clone = function (object) { return JSON.parse(JSON.stringify(object)); };
 
 var description =  [{
     "name": "test",
+    "type": "function",
     "inputs": [{
         "name": "a",
         "type": "uint256"
@@ -339,10 +340,12 @@ describe('abi', function() {
             // given
             var d =  [{
                 name: "test",
+                type: "function",
                 inputs: [{ type: "int" }],
                 outputs: [{ type: "int" }]
             },{
                 name: "test2",
+                type: "function",
                 inputs: [{ type: "string" }],
                 outputs: [{ type: "string" }]
             }];
@@ -775,10 +778,12 @@ describe('abi', function() {
             // given
             var d =  [{
                 name: "test",
+                type: "function",
                 inputs: [{ type: "int" }],
                 outputs: [{ type: "int" }]
             },{
                 name: "test2",
+                type: "function",
                 inputs: [{ type: "string" }],
                 outputs: [{ type: "string" }]
             }];
@@ -820,6 +825,38 @@ describe('abi', function() {
                     "0000000000000000000000000000000000000000000000000000000000000006")[0][1],
                 6
                 );
+
+        });
+
+        it('should parse 0x value', function () {
+        
+            // given
+            var d = clone(description);
+            d[0].outputs = [
+                { type: 'int' }
+            ];
+
+            // when
+            var parser = abi.outputParser(d);
+
+            // then
+            assert.equal(parser.test("0x")[0], 0);
+
+        });
+        
+        it('should parse 0x value', function () {
+        
+            // given
+            var d = clone(description);
+            d[0].outputs = [
+                { type: 'uint' }
+            ];
+
+            // when
+            var parser = abi.outputParser(d);
+
+            // then
+            assert.equal(parser.test("0x")[0], 0);
 
         });
 

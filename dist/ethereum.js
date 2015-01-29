@@ -66,6 +66,22 @@ var getMethodWithName = function (json, methodName) {
     return json[index];
 };
 
+/// Filters all function from input abi
+/// @returns abi array with filtered objects of type 'function'
+var filterFunctions = function (json) {
+    return json.filter(function (current) {
+        return current.type === 'function'; 
+    }); 
+};
+
+/// Filters all events form input abi
+/// @returns abi array with filtered objects of type 'event'
+var filterEvents = function (json) {
+    return json.filter(function (current) {
+        return current.type === 'event';
+    });
+};
+
 /// @param string string to be padded
 /// @param number of characters that result string should have
 /// @param sign, by default 0
@@ -212,6 +228,7 @@ var signedIsNegative = function (value) {
 /// Formats input right-aligned input bytes to int
 /// @returns right-aligned input bytes formatted to int
 var formatOutputInt = function (value) {
+    value = value || "0";
     // check if it's negative number
     // it it is, return two's complement
     if (signedIsNegative(value)) {
@@ -223,6 +240,7 @@ var formatOutputInt = function (value) {
 /// Formats big right-aligned input bytes to uint
 /// @returns right-aligned input bytes formatted to uint
 var formatOutputUInt = function (value) {
+    value = value || "0";
     return new BigNumber(value, 16);
 };
 
@@ -350,7 +368,7 @@ var methodTypeName = function (method) {
 /// @returns input parser object for given json abi
 var inputParser = function (json) {
     var parser = {};
-    json.forEach(function (method) {
+    filterFunctions(json).forEach(function (method) {
         var displayName = methodDisplayName(method.name); 
         var typeName = methodTypeName(method.name);
 
@@ -373,7 +391,7 @@ var inputParser = function (json) {
 /// @returns output parser for given json abi
 var outputParser = function (json) {
     var parser = {};
-    json.forEach(function (method) {
+    filterFunctions(json).forEach(function (method) {
 
         var displayName = methodDisplayName(method.name); 
         var typeName = methodTypeName(method.name);
@@ -404,11 +422,13 @@ module.exports = {
     methodSignature: methodSignature,
     methodDisplayName: methodDisplayName,
     methodTypeName: methodTypeName,
-    getMethodWithName: getMethodWithName
+    getMethodWithName: getMethodWithName,
+    filterFunctions: filterFunctions,
+    filterEvents: filterEvents
 };
 
 
-},{"./web3":7}],2:[function(require,module,exports){
+},{"./web3":8}],2:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -431,71 +451,40 @@ module.exports = {
  * @date 2014
  */
 
-var web3 = require('./web3'); // jshint ignore:line
+var web3 = require('./web3'); 
 var abi = require('./abi');
+var eventImpl = require('./event');
 
-/**
- * This method should be called when we want to call / transact some solidity method from javascript
- * it returns an object which has same methods available as solidity contract description
- * usage example: 
- *
- * var abi = [{
- *      name: 'myMethod',
- *      inputs: [{ name: 'a', type: 'string' }],
- *      outputs: [{name: 'd', type: 'string' }]
- * }];  // contract abi
- *
- * var myContract = web3.eth.contract('0x0123123121', abi); // creation of contract object
- *
- * myContract.myMethod('this is test string param for call'); // myMethod call (implicit, default)
- * myContract.call().myMethod('this is test string param for call'); // myMethod call (explicit)
- * myContract.transact().myMethod('this is test string param for transact'); // myMethod transact
- *
- * @param address - address of the contract, which should be called
- * @param desc - abi json description of the contract, which is being created
- * @returns contract object
- */
-
-var contract = function (address, desc) {
-
-    desc.forEach(function (method) {
-        // workaround for invalid assumption that method.name is the full anonymous prototype of the method.
-        // it's not. it's just the name. the rest of the code assumes it's actually the anonymous
-        // prototype, so we make it so as a workaround.
-        if (method.name.indexOf('(') === -1) {
-            var displayName = method.name;
-            var typeName = method.inputs.map(function(i){return i.type; }).join();
-            method.name = displayName + '(' + typeName + ')';
-        }
-    });
-
-    var inputParser = abi.inputParser(desc);
-    var outputParser = abi.outputParser(desc);
-
-    var result = {};
-
-    result.call = function (options) {
-        result._isTransact = false;
-        result._options = options;
-        return result;
+var addFunctionRelatedPropertiesToContract = function (contract) {
+    
+    contract.call = function (options) {
+        contract._isTransact = false;
+        contract._options = options;
+        return contract;
     };
 
-    result.transact = function (options) {
-        result._isTransact = true;
-        result._options = options;
-        return result;
+    contract.transact = function (options) {
+        contract._isTransact = true;
+        contract._options = options;
+        return contract;
     };
 
-    result._options = {};
+    contract._options = {};
     ['gas', 'gasPrice', 'value', 'from'].forEach(function(p) {
-        result[p] = function (v) {
-            result._options[p] = v;
-            return result;
+        contract[p] = function (v) {
+            contract._options[p] = v;
+            return contract;
         };
     });
 
+};
 
-    desc.forEach(function (method) {
+var addFunctionsToContract = function (contract, desc, address) {
+    var inputParser = abi.inputParser(desc);
+    var outputParser = abi.outputParser(desc);
+
+    // create contract functions
+    abi.filterFunctions(desc).forEach(function (method) {
 
         var displayName = abi.methodDisplayName(method.name);
         var typeName = abi.methodTypeName(method.name);
@@ -505,16 +494,16 @@ var contract = function (address, desc) {
             var signature = abi.methodSignature(method.name);
             var parsed = inputParser[displayName][typeName].apply(null, params);
 
-            var options = result._options || {};
+            var options = contract._options || {};
             options.to = address;
             options.data = signature + parsed;
             
-            var isTransact = result._isTransact === true || (result._isTransact !== false && !method.constant);
+            var isTransact = contract._isTransact === true || (contract._isTransact !== false && !method.constant);
             var collapse = options.collapse !== false;
             
             // reset
-            result._options = {};
-            result._isTransact = null;
+            contract._options = {};
+            contract._isTransact = null;
 
             if (isTransact) {
                 // it's used byt natspec.js
@@ -541,13 +530,102 @@ var contract = function (address, desc) {
             return ret;
         };
 
-        if (result[displayName] === undefined) {
-            result[displayName] = impl;
+        if (contract[displayName] === undefined) {
+            contract[displayName] = impl;
         }
 
-        result[displayName][typeName] = impl;
+        contract[displayName][typeName] = impl;
+    });
+};
+
+var addEventRelatedPropertiesToContract = function (contract, desc, address) {
+    contract.address = address;
+    
+    Object.defineProperty(contract, 'topics', {
+        get: function() {
+            return abi.filterEvents(desc).map(function (e) {
+                return abi.methodSignature(e.name);
+            });
+        }
+    });
+
+};
+
+var addEventsToContract = function (contract, desc, address) {
+    // create contract events
+    abi.filterEvents(desc).forEach(function (e) {
+
+        var impl = function () {
+            var params = Array.prototype.slice.call(arguments);
+            var signature = abi.methodSignature(e.name);
+            var event = eventImpl(address, signature);
+            var o = event.apply(null, params);
+            return web3.eth.watch(o);  
+        };
+
+        impl.address = address;
+
+        Object.defineProperty(impl, 'topics', {
+            get: function() {
+                return [abi.methodSignature(e.name)];
+            }
+        });
+        
+        // TODO: rename these methods, cause they are used not only for methods
+        var displayName = abi.methodDisplayName(e.name);
+        var typeName = abi.methodTypeName(e.name);
+
+        if (contract[displayName] === undefined) {
+            contract[displayName] = impl;
+        }
+
+        contract[displayName][typeName] = impl;
 
     });
+};
+
+
+/**
+ * This method should be called when we want to call / transact some solidity method from javascript
+ * it returns an object which has same methods available as solidity contract description
+ * usage example: 
+ *
+ * var abi = [{
+ *      name: 'myMethod',
+ *      inputs: [{ name: 'a', type: 'string' }],
+ *      outputs: [{name: 'd', type: 'string' }]
+ * }];  // contract abi
+ *
+ * var myContract = web3.eth.contract('0x0123123121', abi); // creation of contract object
+ *
+ * myContract.myMethod('this is test string param for call'); // myMethod call (implicit, default)
+ * myContract.call().myMethod('this is test string param for call'); // myMethod call (explicit)
+ * myContract.transact().myMethod('this is test string param for transact'); // myMethod transact
+ *
+ * @param address - address of the contract, which should be called
+ * @param desc - abi json description of the contract, which is being created
+ * @returns contract object
+ */
+
+var contract = function (address, desc) {
+
+    // workaround for invalid assumption that method.name is the full anonymous prototype of the method.
+    // it's not. it's just the name. the rest of the code assumes it's actually the anonymous
+    // prototype, so we make it so as a workaround.
+    // TODO: we may not want to modify input params, maybe use copy instead?
+    desc.forEach(function (method) {
+        if (method.name.indexOf('(') === -1) {
+            var displayName = method.name;
+            var typeName = method.inputs.map(function(i){return i.type; }).join();
+            method.name = displayName + '(' + typeName + ')';
+        }
+    });
+
+    var result = {};
+    addFunctionRelatedPropertiesToContract(result);
+    addFunctionsToContract(result, desc, address);
+    addEventRelatedPropertiesToContract(result, desc, address);
+    addEventsToContract(result, desc, address);
 
     return result;
 };
@@ -555,7 +633,44 @@ var contract = function (address, desc) {
 module.exports = contract;
 
 
-},{"./abi":1,"./web3":7}],3:[function(require,module,exports){
+},{"./abi":1,"./event":3,"./web3":8}],3:[function(require,module,exports){
+/*
+    This file is part of ethereum.js.
+
+    ethereum.js is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    ethereum.js is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/** @file event.js
+ * @authors:
+ *   Marek Kotewicz <marek@ethdev.com>
+ * @date 2014
+ */
+
+var implementationOfEvent = function (address, signature) {
+    
+    return function (options) {
+        var o = options || {};
+        o.address = o.address || address;
+        o.topics = o.topics || [];
+        o.topics.push(signature);
+        return o;
+    };
+};
+
+module.exports = implementationOfEvent;
+
+
+},{}],4:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -589,6 +704,19 @@ var Filter = function(options, impl) {
     this.impl = impl;
     this.callbacks = [];
 
+    if (typeof options !== "string") {
+        // evaluate lazy properties
+        options = {
+            to: options.to,
+            topics: options.topics,
+            earliest: options.earliest,
+            latest: options.latest,
+            max: options.max,
+            skip: options.skip,
+            address: options.address
+        };
+    }
+
     this.id = impl.newFilter(options);
     web3.provider.startPolling({call: impl.changed, args: [this.id]}, this.id, this.trigger.bind(this));
 };
@@ -606,7 +734,7 @@ Filter.prototype.changed = function(callback) {
 /// trigger calling new message from people
 Filter.prototype.trigger = function(messages) {
     for (var i = 0; i < this.callbacks.length; i++) {
-        for (var j = 0; j < messages; j++) {
+        for (var j = 0; j < messages.length; j++) {
             this.callbacks[i].call(this, messages[j]);
         }
     }
@@ -630,7 +758,7 @@ Filter.prototype.logs = function () {
 
 module.exports = Filter;
 
-},{"./web3":7}],4:[function(require,module,exports){
+},{"./web3":8}],5:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -702,7 +830,7 @@ HttpSyncProvider.prototype.send = function (payload) {
 module.exports = HttpSyncProvider;
 
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -781,6 +909,12 @@ ProviderManager.prototype.send = function(data) {
     //TODO: handle error here? 
     var result = this.provider.send(data);
     result = JSON.parse(result);
+
+    if (result.error) {
+        console.log(result.error);
+        return null;
+    }
+
     return result.result;
 };
 
@@ -808,7 +942,7 @@ ProviderManager.prototype.stopPolling = function (pollId) {
 module.exports = ProviderManager;
 
 
-},{"./web3":7}],6:[function(require,module,exports){
+},{"./web3":8}],7:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -842,7 +976,7 @@ QtSyncProvider.prototype.send = function (payload) {
 module.exports = QtSyncProvider;
 
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -943,7 +1077,6 @@ var ethProperties = function () {
     { name: 'listening', getter: 'eth_listening', setter: 'eth_setListening' },
     { name: 'mining', getter: 'eth_mining', setter: 'eth_setMining' },
     { name: 'gasPrice', getter: 'eth_gasPrice' },
-    { name: 'account', getter: 'eth_account' },
     { name: 'accounts', getter: 'eth_accounts' },
     { name: 'peerCount', getter: 'eth_peerCount' },
     { name: 'defaultBlock', getter: 'eth_defaultBlock', setter: 'eth_setDefaultBlock' },
@@ -1078,7 +1211,9 @@ var web3 = {
 
     /// @returns decimal representaton of hex value prefixed by 0x
     toDecimal: function (val) {
-        return (new BigNumber(val.substring(2), 16).toString(10));
+        // remove 0x and place 0, if it's required
+        val = val.length > 2 ? val.substring(2) : "0";
+        return (new BigNumber(val, 16).toString(10));
     },
 
     /// @returns hex representation (prefixed by 0x) of decimal value
@@ -1183,7 +1318,7 @@ web3.abi = require('./lib/abi');
 
 module.exports = web3;
 
-},{"./lib/abi":1,"./lib/contract":2,"./lib/filter":3,"./lib/httpsync":4,"./lib/providermanager":5,"./lib/qtsync":6,"./lib/web3":7}]},{},["web3"])
+},{"./lib/abi":1,"./lib/contract":2,"./lib/filter":4,"./lib/httpsync":5,"./lib/providermanager":6,"./lib/qtsync":7,"./lib/web3":8}]},{},["web3"])
 
 
 //# sourceMappingURL=ethereum.js.map
