@@ -2,9 +2,7 @@ package p2p
 
 import (
 	"bytes"
-	// "crypto/ecdsa"
-	// "crypto/elliptic"
-	// "crypto/rand"
+	"crypto/ecdsa"
 	"fmt"
 	"net"
 	"testing"
@@ -71,11 +69,60 @@ func TestSharedSecret(t *testing.T) {
 }
 
 func TestCryptoHandshake(t *testing.T) {
+	testCryptoHandshakeWithGen(false, t)
+}
+
+func TestTokenCryptoHandshake(t *testing.T) {
+	testCryptoHandshakeWithGen(true, t)
+}
+
+func TestDetCryptoHandshake(t *testing.T) {
+	defer testlog(t).detach()
+	tmpkeyF := keyF
+	keyF = detkeyF
+	tmpnonceF := nonceF
+	nonceF = detnonceF
+	testCryptoHandshakeWithGen(false, t)
+	keyF = tmpkeyF
+	nonceF = tmpnonceF
+}
+
+func TestDetTokenCryptoHandshake(t *testing.T) {
+	defer testlog(t).detach()
+	tmpkeyF := keyF
+	keyF = detkeyF
+	tmpnonceF := nonceF
+	nonceF = detnonceF
+	testCryptoHandshakeWithGen(true, t)
+	keyF = tmpkeyF
+	nonceF = tmpnonceF
+}
+
+func testCryptoHandshakeWithGen(token bool, t *testing.T) {
+	fmt.Printf("init-private-key: ")
+	prv0, err := keyF()
+	if err != nil {
+		t.Errorf("%v", err)
+		return
+	}
+	fmt.Printf("rec-private-key: ")
+	prv1, err := keyF()
+	if err != nil {
+		t.Errorf("%v", err)
+		return
+	}
+	var nonce []byte
+	if token {
+		fmt.Printf("session-token: ")
+		nonce = make([]byte, shaLen)
+		nonceF(nonce)
+	}
+	testCryptoHandshake(prv0, prv1, nonce, t)
+}
+
+func testCryptoHandshake(prv0, prv1 *ecdsa.PrivateKey, sessionToken []byte, t *testing.T) {
 	var err error
-	var sessionToken []byte
-	prv0, _ := crypto.GenerateKey() // = ecdsa.GenerateKey(crypto.S256(), rand.Reader)
 	pub0 := &prv0.PublicKey
-	prv1, _ := crypto.GenerateKey()
 	pub1 := &prv1.PublicKey
 
 	pub0s := crypto.FromECDSAPub(pub0)
@@ -87,12 +134,14 @@ func TestCryptoHandshake(t *testing.T) {
 	if err != nil {
 		t.Errorf("%v", err)
 	}
+	fmt.Printf("-> %v\n", hexkey(auth))
 
 	// receiver reads auth and responds with response
 	response, remoteRecNonce, remoteInitNonce, remoteRandomPrivKey, remoteInitRandomPubKey, err := respondToHandshake(auth, prv1, pub0s, sessionToken)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
+	fmt.Printf("<- %v\n", hexkey(response))
 
 	// initiator reads receiver's response and the key exchange completes
 	recNonce, remoteRandomPubKey, _, err := completeHandshake(response, prv0)
@@ -111,7 +160,7 @@ func TestCryptoHandshake(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 
-	fmt.Printf("\nauth (%v) %x\n\nresp (%v) %x\n\n", len(auth), auth, len(response), response)
+	// fmt.Printf("\nauth (%v) %x\n\nresp (%v) %x\n\n", len(auth), auth, len(response), response)
 
 	// fmt.Printf("\nauth %x\ninitNonce %x\nresponse%x\nremoteRecNonce %x\nremoteInitNonce %x\nremoteRandomPubKey %x\nrecNonce %x\nremoteInitRandomPubKey %x\ninitSessionToken %x\n\n", auth, initNonce, response, remoteRecNonce, remoteInitNonce, remoteRandomPubKey, recNonce, remoteInitRandomPubKey, initSessionToken)
 
