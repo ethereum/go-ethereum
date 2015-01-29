@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 )
 
 const (
@@ -56,6 +57,14 @@ type RpcRequest struct {
 	Params  []json.RawMessage `json:"params"`
 }
 
+func NewErrorResponse(msg string) error {
+	return errors.New(msg)
+}
+
+func NewErrorResponseWithError(msg string, err error) error {
+	return fmt.Errorf("%s: %v", msg, err)
+}
+
 func (req *RpcRequest) ToSha3Args() (*Sha3Args, error) {
 	if len(req.Params) < 1 {
 		return nil, NewErrorResponse(ErrorArguments)
@@ -86,7 +95,7 @@ func (req *RpcRequest) ToGetBlockArgs() (*GetBlockArgs, error) {
 }
 
 func (req *RpcRequest) ToNewTxArgs() (*NewTxArgs, error) {
-	if len(req.Params) < 7 {
+	if len(req.Params) < 1 {
 		return nil, NewErrorResponse(ErrorArguments)
 	}
 
@@ -94,7 +103,7 @@ func (req *RpcRequest) ToNewTxArgs() (*NewTxArgs, error) {
 	r := bytes.NewReader(req.Params[0])
 	err := json.NewDecoder(r).Decode(args)
 	if err != nil {
-		return nil, NewErrorResponse(ErrorDecodeArgs)
+		return nil, NewErrorResponseWithError(ErrorDecodeArgs, err)
 	}
 	rpclogger.DebugDetailf("%T %v", args, args)
 	return args, nil
@@ -174,8 +183,4 @@ func (req *RpcRequest) ToGetCodeAtArgs() (*GetCodeAtArgs, error) {
 	}
 	rpclogger.DebugDetailf("%T %v", args, args)
 	return args, nil
-}
-
-func NewErrorResponse(msg string) error {
-	return errors.New(msg)
 }

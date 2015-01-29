@@ -550,9 +550,6 @@ var contract = function (address, desc) {
         result[displayName][typeName] = impl;
 
     });
-    console.log("call:")
-    console.log(result.call)
-    console.log(JSON.stringify(result));
 
     return result;
 };

@@ -1,8 +1,6 @@
 package rpc
 
-import (
-	"encoding/json"
-)
+import "encoding/json"
 
 type GetBlockArgs struct {
 	BlockNumber int32
@@ -30,54 +28,23 @@ func (obj *GetBlockArgs) requirements() error {
 }
 
 type NewTxArgs struct {
-	Sec       string `json:"sec"`
 	Recipient string `json:"recipient"`
 	Value     string `json:"value"`
 	Gas       string `json:"gas"`
 	GasPrice  string `json:"gasprice"`
-	Init      string `json:"init"`
-	Body      string `json:"body"`
+	Data      string `json:"data"`
 }
 
 // type TxResponse struct {
 //  Hash string
 // }
 
-func (obj *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
-	if err = json.Unmarshal(b, obj); err == nil {
-		return
-	}
-	return NewErrorResponse(ErrorDecodeArgs)
-}
-
 func (a *NewTxArgs) requirements() error {
-	if a.Recipient == "" {
-		return NewErrorResponse("Transact requires a 'recipient' address as argument")
-	}
-	if a.Value == "" {
-		return NewErrorResponse("Transact requires a 'value' as argument")
-	}
 	if a.Gas == "" {
 		return NewErrorResponse("Transact requires a 'gas' value as argument")
 	}
 	if a.GasPrice == "" {
 		return NewErrorResponse("Transact requires a 'gasprice' value as argument")
-	}
-	return nil
-}
-
-func (a *NewTxArgs) requirementsContract() error {
-	if a.Value == "" {
-		return NewErrorResponse("Create requires a 'value' as argument")
-	}
-	if a.Gas == "" {
-		return NewErrorResponse("Create requires a 'gas' value as argument")
-	}
-	if a.GasPrice == "" {
-		return NewErrorResponse("Create requires a 'gasprice' value as argument")
-	}
-	if a.Body == "" {
-		return NewErrorResponse("Create requires a 'body' value as argument")
 	}
 	return nil
 }
