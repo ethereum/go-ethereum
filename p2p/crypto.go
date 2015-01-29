@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	// "binary"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"fmt"
@@ -38,6 +39,33 @@ func (self hexkey) String() string {
 	return fmt.Sprintf("(%d) %x", len(self), []byte(self))
 }
 
+var nonceF = func(b []byte) (n int, err error) {
+	return rand.Read(b)
+}
+
+var step = 0
+var detnonceF = func(b []byte) (n int, err error) {
+	step++
+	copy(b, crypto.Sha3([]byte("privacy"+string(step))))
+	fmt.Printf("detkey %v: %v\n", step, hexkey(b))
+	return
+}
+
+var keyF = func() (priv *ecdsa.PrivateKey, err error) {
+	priv, err = ecdsa.GenerateKey(crypto.S256(), rand.Reader)
+	if err != nil {
+		return
+	}
+	return
+}
+
+var detkeyF = func() (priv *ecdsa.PrivateKey, err error) {
+	s := make([]byte, 32)
+	detnonceF(s)
+	priv = crypto.ToECDSA(s)
+	return
+}
+
 /*
 NewSecureSession(connection, privateKey, remotePublicKey, sessionToken, initiator) is called when the peer connection starts to set up a secure session by performing a crypto handshake.
 
@@ -53,7 +81,6 @@ NewSecureSession(connection, privateKey, remotePublicKey, sessionToken, initiato
 
  It returns a secretRW which implements the MsgReadWriter interface.
 */
-
 func NewSecureSession(conn io.ReadWriter, prvKey *ecdsa.PrivateKey, remotePubKeyS []byte, sessionToken []byte, initiator bool) (token []byte, rw *secretRW, err error) {
 	var auth, initNonce, recNonce []byte
 	var read int
@@ -178,7 +205,8 @@ func startHandshake(prvKey *ecdsa.PrivateKey, remotePubKeyS, sessionToken []byte
 	// allocate msgLen long message,
 	var msg []byte = make([]byte, msgLen)
 	initNonce = msg[msgLen-shaLen-1 : msgLen-1]
-	if _, err = rand.Read(initNonce); err != nil {
+	fmt.Printf("init-nonce: ")
+	if _, err = nonceF(initNonce); err != nil {
 		return
 	}
 	// create known message
@@ -187,7 +215,8 @@ func startHandshake(prvKey *ecdsa.PrivateKey, remotePubKeyS, sessionToken []byte
 	var sharedSecret = Xor(sessionToken, initNonce)
 
 	// generate random keypair to use for signing
-	if randomPrvKey, err = crypto.GenerateKey(); err != nil {
+	fmt.Printf("init-random-ecdhe-private-key: ")
+	if randomPrvKey, err = keyF(); err != nil {
 		return
 	}
 	// sign shared secret (message known to both parties): shared-secret
@@ -278,11 +307,13 @@ func respondToHandshake(auth []byte, prvKey *ecdsa.PrivateKey, remotePubKeyS, se
 	var resp = make([]byte, resLen)
 	// generate shaLen long nonce
 	respNonce = resp[pubLen : pubLen+shaLen]
-	if _, err = rand.Read(respNonce); err != nil {
+	fmt.Printf("rec-nonce: ")
+	if _, err = nonceF(respNonce); err != nil {
 		return
 	}
 	// generate random keypair for session
-	if randomPrivKey, err = crypto.GenerateKey(); err != nil {
+	fmt.Printf("rec-random-ecdhe-private-key: ")
+	if randomPrivKey, err = keyF(); err != nil {
 		return
 	}
 	// responder auth message
