@@ -1,0 +1,67 @@
+<!doctype>
+<html>
+    <head>
+    <script type="text/javascript" src="js/bignumber.js/bignumber.min.js"></script>
+    <script type="text/javascript" src="../dist/ethereum.js"></script>
+    <script type="text/javascript">
+        var web3 = require('web3');
+        web3.setProvider(new web3.providers.HttpSyncProvider('http://localhost:8080'));
+
+        var desc = [{
+            "type":"event",
+            "inputs": [{"name":"a","type":"uint256","indexed":true},{"name":"b","type":"hash256","indexed":false}],
+            "name":"Event"
+        }, {
+            "type":"event",
+            "inputs": [{"name":"a","type":"uint256","indexed":true},{"name":"b","type":"hash256","indexed":false}],
+            "name":"Event2"
+        }, {
+            "type":"function",
+            "inputs": [{"name":"a","type":"uint256"}],
+            "name":"foo",
+            "outputs": []
+        }];
+
+        var address = '0x01';
+
+        var contract = web3.eth.contract(address, desc); 
+
+        function test1() {
+            web3.eth.watch(contract).changed(function (res) {
+                
+            });
+        };
+
+        function test2() {
+            web3.eth.watch(contract.Event).changed(function (res) {
+                
+            });
+        };
+
+        function test3() {
+            contract.Event().changed(function (res) {
+                
+            });
+        };
+
+        // not valid
+        // function test4() {
+        //    web3.eth.watch([contract.Event, contract.Event2]).changed(function (res) {
+        //    });
+        // };
+
+    </script>
+    </head>
+
+    <body>
+        <div>
+            <button type="button" onClick="test1();">test1</button>
+        </div>
+        <div>
+            <button type="button" onClick="test2();">test2</button>
+        </div>
+        <div>
+            <button type="button" onClick="test3();">test3</button>
+        </div>
+    </body>
+</html>

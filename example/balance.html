@@ -17,7 +17,7 @@
         var originalBalance = web3.toDecimal(balance);
         document.getElementById('original').innerText = 'original balance: ' + originalBalance + '    watching...';
 
-        web3.eth.watch({altered: coinbase}).changed(function() {
+        web3.eth.watch({address: coinbase}).changed(function() {
             balance = web3.eth.balanceAt(coinbase)
             var currentBalance = web3.toDecimal(balance);
             document.getElementById("current").innerText = 'current: ' + currentBalance;

@@ -453,7 +453,7 @@ module.exports = {
 
 var web3 = require('./web3'); 
 var abi = require('./abi');
-var eventImplementation = require('./event');
+var eventImpl = require('./event');
 
 var addFunctionRelatedPropertiesToContract = function (contract) {
     
@@ -558,10 +558,18 @@ var addEventsToContract = function (contract, desc, address) {
         var impl = function () {
             var params = Array.prototype.slice.call(arguments);
             var signature = abi.methodSignature(e.name);
-            var eventImpl = eventImplementation(address, signature);
-            var o = eventImpl.apply(null, params);
+            var event = eventImpl(address, signature);
+            var o = event.apply(null, params);
             return web3.eth.watch(o);  
         };
+
+        impl.address = address;
+
+        Object.defineProperty(impl, 'topics', {
+            get: function() {
+                return [abi.methodSignature(e.name)];
+            }
+        });
         
         // TODO: rename these methods, cause they are used not only for methods
         var displayName = abi.methodDisplayName(e.name);
@@ -628,8 +636,27 @@ module.exports = contract;
 
 
 },{"./abi":1,"./event":3,"./web3":8}],3:[function(require,module,exports){
+/*
+    This file is part of ethereum.js.
 
-var abi = require('./abi');
+    ethereum.js is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    ethereum.js is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/** @file event.js
+ * @authors:
+ *   Marek Kotewicz <marek@ethdev.com>
+ * @date 2014
+ */
 
 var implementationOfEvent = function (address, signature) {
     
@@ -645,7 +672,7 @@ var implementationOfEvent = function (address, signature) {
 module.exports = implementationOfEvent;
 
 
-},{"./abi":1}],4:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -678,6 +705,19 @@ var web3 = require('./web3'); // jshint ignore:line
 var Filter = function(options, impl) {
     this.impl = impl;
     this.callbacks = [];
+
+    if (typeof options !== "string") {
+        // evaluate lazy properties
+        options = {
+            to: options.to,
+            topics: options.topics,
+            earliest: options.earliest,
+            latest: options.latest,
+            max: options.max,
+            skip: options.skip,
+            address: options.address
+        };
+    }
 
     this.id = impl.newFilter(options);
     web3.provider.startPolling({call: impl.changed, args: [this.id]}, this.id, this.trigger.bind(this));
