@@ -20,6 +20,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
+
+	"github.com/ethereum/go-ethereum/state"
 )
 
 const (
@@ -56,6 +59,28 @@ type RpcRequest struct {
 	Params  []json.RawMessage `json:"params"`
 }
 
+func NewErrorResponse(msg string) error {
+	return errors.New(msg)
+}
+
+func NewErrorResponseWithError(msg string, err error) error {
+	return fmt.Errorf("%s: %v", msg, err)
+}
+
+func (req *RpcRequest) ToSha3Args() (*Sha3Args, error) {
+	if len(req.Params) < 1 {
+		return nil, NewErrorResponse(ErrorArguments)
+	}
+
+	args := new(Sha3Args)
+	r := bytes.NewReader(req.Params[0])
+	if err := json.NewDecoder(r).Decode(args); err != nil {
+		return nil, NewErrorResponse(ErrorDecodeArgs)
+	}
+	rpclogger.DebugDetailf("%T %v", args, args)
+	return args, nil
+}
+
 func (req *RpcRequest) ToGetBlockArgs() (*GetBlockArgs, error) {
 	if len(req.Params) < 1 {
 		return nil, NewErrorResponse(ErrorArguments)
@@ -72,7 +97,7 @@ func (req *RpcRequest) ToGetBlockArgs() (*GetBlockArgs, error) {
 }
 
 func (req *RpcRequest) ToNewTxArgs() (*NewTxArgs, error) {
-	if len(req.Params) < 7 {
+	if len(req.Params) < 1 {
 		return nil, NewErrorResponse(ErrorArguments)
 	}
 
@@ -80,7 +105,7 @@ func (req *RpcRequest) ToNewTxArgs() (*NewTxArgs, error) {
 	r := bytes.NewReader(req.Params[0])
 	err := json.NewDecoder(r).Decode(args)
 	if err != nil {
-		return nil, NewErrorResponse(ErrorDecodeArgs)
+		return nil, NewErrorResponseWithError(ErrorDecodeArgs, err)
 	}
 	rpclogger.DebugDetailf("%T %v", args, args)
 	return args, nil
@@ -162,6 +187,55 @@ func (req *RpcRequest) ToGetCodeAtArgs() (*GetCodeAtArgs, error) {
 	return args, nil
 }
 
-func NewErrorResponse(msg string) error {
-	return errors.New(msg)
+func (req *RpcRequest) ToFilterArgs() (*FilterOptions, error) {
+	if len(req.Params) < 1 {
+		return nil, NewErrorResponse(ErrorArguments)
+	}
+
+	args := new(FilterOptions)
+	r := bytes.NewReader(req.Params[0])
+	err := json.NewDecoder(r).Decode(args)
+	if err != nil {
+		return nil, NewErrorResponse(ErrorDecodeArgs)
+	}
+	rpclogger.DebugDetailf("%T %v", args, args)
+	return args, nil
+}
+
+func (req *RpcRequest) ToFilterChangedArgs() (int, error) {
+	if len(req.Params) < 1 {
+		return 0, NewErrorResponse(ErrorArguments)
+	}
+
+	var id int
+	r := bytes.NewReader(req.Params[0])
+	err := json.NewDecoder(r).Decode(&id)
+	if err != nil {
+		return 0, NewErrorResponse(ErrorDecodeArgs)
+	}
+	rpclogger.DebugDetailf("%T %v", id, id)
+	return id, nil
+}
+
+type Log struct {
+	Address string   `json:"address"`
+	Topics  []string `json:"topics"`
+	Data    string   `json:"data"`
+}
+
+func toLogs(logs state.Logs) (ls []Log) {
+	ls = make([]Log, len(logs))
+
+	for i, log := range logs {
+		var l Log
+		l.Topics = make([]string, len(log.Topics()))
+		l.Address = toHex(log.Address())
+		l.Data = toHex(log.Data())
+		for j, topic := range log.Topics() {
+			l.Topics[j] = toHex(topic)
+		}
+		ls[i] = l
+	}
+
+	return
 }

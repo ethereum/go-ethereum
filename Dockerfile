@@ -13,9 +13,9 @@ RUN apt-get update && apt-get upgrade -y
 RUN apt-get install -y git mercurial build-essential software-properties-common pkg-config libgmp3-dev libreadline6-dev libpcre3-dev libpcre++-dev
 
 ## Build and install Go
-RUN git clone https://go.googlesource.com/go
-RUN cd go && git checkout go1.4.1
-RUN cd go/src && ./all.bash && go version
+RUN git clone https://go.googlesource.com/go golang
+RUN cd golang && git checkout go1.4.1
+RUN cd golang/src && ./all.bash && go version
 
 ## Install GUI dependencies
 RUN add-apt-repository ppa:ubuntu-sdk-team/ppa -y

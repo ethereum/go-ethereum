@@ -26,24 +26,110 @@ For each request type, define the following:
 package rpc
 
 import (
+	"fmt"
 	"math/big"
 	"strings"
+	"sync"
 
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/event/filter"
+	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
 )
+
+func toHex(b []byte) string {
+	return "0x" + ethutil.Bytes2Hex(b)
+}
+func fromHex(s string) []byte {
+	if len(s) > 1 {
+		if s[0:2] == "0x" {
+			s = s[2:]
+		}
+		return ethutil.Hex2Bytes(s)
+	}
+	return nil
+}
 
 type RpcServer interface {
 	Start()
 	Stop()
 }
 
-func NewEthereumApi(xeth *xeth.XEth) *EthereumApi {
-	return &EthereumApi{xeth: xeth}
+type EthereumApi struct {
+	xeth          *xeth.XEth
+	filterManager *filter.FilterManager
+
+	mut  sync.RWMutex
+	logs map[int]state.Logs
 }
 
-type EthereumApi struct {
-	xeth *xeth.XEth
+func NewEthereumApi(xeth *xeth.XEth) *EthereumApi {
+	api := &EthereumApi{
+		xeth:          xeth,
+		filterManager: filter.NewFilterManager(xeth.Backend().EventMux()),
+		logs:          make(map[int]state.Logs),
+	}
+	go api.filterManager.Start()
+
+	return api
+}
+
+func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) error {
+	var id int
+	filter := core.NewFilter(self.xeth.Backend())
+	filter.LogsCallback = func(logs state.Logs) {
+		self.mut.Lock()
+		defer self.mut.Unlock()
+
+		self.logs[id] = append(self.logs[id], logs...)
+	}
+	id = self.filterManager.InstallFilter(filter)
+	*reply = id
+
+	return nil
+}
+
+type Log struct {
+	Address string   `json:"address"`
+	Topics  []string `json:"topics"`
+	Data    string   `json:"data"`
+}
+
+func toLogs(logs state.Logs) (ls []Log) {
+	ls = make([]Log, len(logs))
+
+	for i, log := range logs {
+		var l Log
+		l.Topics = make([]string, len(log.Topics()))
+		l.Address = toHex(log.Address())
+		l.Data = toHex(log.Data())
+		for j, topic := range log.Topics() {
+			l.Topics[j] = toHex(topic)
+		}
+		ls[i] = l
+	}
+
+	return
+}
+
+func (self *EthereumApi) FilterChanged(id int, reply *interface{}) error {
+	self.mut.RLock()
+	defer self.mut.RUnlock()
+
+	*reply = toLogs(self.logs[id])
+
+	self.logs[id] = nil // empty the logs
+
+	return nil
+}
+
+func (self *EthereumApi) Logs(id int, reply *interface{}) error {
+	filter := self.filterManager.GetFilter(id)
+	*reply = toLogs(filter.Find())
+
+	return nil
 }
 
 func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *interface{}) error {
@@ -65,18 +151,17 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
 	if err != nil {
 		return err
 	}
-	result, _ := p.xeth.Transact( /* TODO specify account */ args.Recipient, args.Value, args.Gas, args.GasPrice, args.Body)
+	result, _ := p.xeth.Transact( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
 	*reply = result
 	return nil
 }
 
-func (p *EthereumApi) Create(args *NewTxArgs, reply *interface{}) error {
-	err := args.requirementsContract()
+func (p *EthereumApi) Call(args *NewTxArgs, reply *interface{}) error {
+	result, err := p.xeth.Call( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
 	if err != nil {
 		return err
 	}
 
-	result, _ := p.xeth.Transact( /* TODO specify account */ "", args.Value, args.Gas, args.GasPrice, args.Body)
 	*reply = result
 	return nil
 }
@@ -148,7 +233,7 @@ func (p *EthereumApi) GetBalanceAt(args *GetBalanceArgs, reply *interface{}) err
 		return err
 	}
 	state := p.xeth.State().SafeGet(args.Address)
-	*reply = BalanceRes{Balance: state.Balance().String(), Address: args.Address}
+	*reply = toHex(state.Balance().Bytes())
 	return nil
 }
 
@@ -158,6 +243,11 @@ func (p *EthereumApi) GetCodeAt(args *GetCodeAtArgs, reply *interface{}) error {
 		return err
 	}
 	*reply = p.xeth.CodeAt(args.Address)
+	return nil
+}
+
+func (p *EthereumApi) Sha3(args *Sha3Args, reply *interface{}) error {
+	*reply = toHex(crypto.Sha3(fromHex(args.Data)))
 	return nil
 }
 
@@ -203,8 +293,38 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.GetBlock(args, reply)
+	case "eth_transact":
+		args, err := req.ToNewTxArgs()
+		if err != nil {
+			return err
+		}
+		return p.Transact(args, reply)
+	case "eth_call":
+		args, err := req.ToNewTxArgs()
+		if err != nil {
+			return err
+		}
+		return p.Call(args, reply)
+	case "eth_newFilter":
+		args, err := req.ToFilterArgs()
+		if err != nil {
+			return err
+		}
+		return p.NewFilter(args, reply)
+	case "eth_changed":
+		args, err := req.ToFilterChangedArgs()
+		if err != nil {
+			return err
+		}
+		return p.FilterChanged(args, reply)
+	case "web3_sha3":
+		args, err := req.ToSha3Args()
+		if err != nil {
+			return err
+		}
+		return p.Sha3(args, reply)
 	default:
-		return NewErrorResponse(ErrorNotImplemented)
+		return NewErrorResponse(fmt.Sprintf("%v %s", ErrorNotImplemented, req.Method))
 	}
 
 	rpclogger.DebugDetailf("Reply: %T %s", reply, reply)

@@ -45,7 +45,6 @@ ApplicationWindow {
 
 		mainSplit.setView(wallet.view, wallet.menuItem);
 
-		console.log("starting browser")
 		newBrowserTab("http://etherian.io");
 
 		// Command setup

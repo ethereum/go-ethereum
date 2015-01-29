@@ -634,6 +634,8 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 				continue
 			}
 
+			self.Printf(" ~> false")
+
 		case JUMPDEST:
 		case PC:
 			stack.Push(big.NewInt(int64(pc)))

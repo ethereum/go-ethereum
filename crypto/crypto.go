@@ -133,8 +133,7 @@ func ImportPreSaleKey(keyStore KeyStore2, keyJSON []byte, password string) (*Key
 	if err != nil {
 		return nil, err
 	}
-	id := uuid.NewRandom()
-	key.Id = &id
+	key.Id = uuid.NewRandom()
 	err = keyStore.StoreKey(key, password)
 	return key, err
 }
@@ -167,9 +166,10 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 	ecKey := ToECDSA(ethPriv)
 	key = &Key{
 		Id:         nil,
+		Address:    PubkeyToAddress(ecKey.PublicKey),
 		PrivateKey: ecKey,
 	}
-	derivedAddr := ethutil.Bytes2Hex(key.Address())
+	derivedAddr := ethutil.Bytes2Hex(key.Address)
 	expectedAddr := preSaleKeyStruct.EthAddr
 	if derivedAddr != expectedAddr {
 		err = errors.New("decrypted addr not equal to expected addr")
@@ -222,4 +222,9 @@ func PKCS7Unpad(in []byte) []byte {
 		}
 	}
 	return in[:len(in)-int(padding)]
+}
+
+func PubkeyToAddress(p ecdsa.PublicKey) []byte {
+	pubBytes := FromECDSAPub(&p)
+	return Sha3(pubBytes[1:])[12:]
 }
