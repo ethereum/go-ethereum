@@ -39,24 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
-func toHex(b []byte) string {
-	return "0x" + ethutil.Bytes2Hex(b)
-}
-func fromHex(s string) []byte {
-	if len(s) > 1 {
-		if s[0:2] == "0x" {
-			s = s[2:]
-		}
-		return ethutil.Hex2Bytes(s)
-	}
-	return nil
-}
-
-type RpcServer interface {
-	Start()
-	Stop()
-}
-
 type EthereumApi struct {
 	xeth          *xeth.XEth
 	filterManager *filter.FilterManager
@@ -89,29 +71,6 @@ func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) erro
 	*reply = id
 
 	return nil
-}
-
-type Log struct {
-	Address string   `json:"address"`
-	Topics  []string `json:"topics"`
-	Data    string   `json:"data"`
-}
-
-func toLogs(logs state.Logs) (ls []Log) {
-	ls = make([]Log, len(logs))
-
-	for i, log := range logs {
-		var l Log
-		l.Topics = make([]string, len(log.Topics()))
-		l.Address = toHex(log.Address())
-		l.Data = toHex(log.Data())
-		for j, topic := range log.Topics() {
-			l.Topics[j] = toHex(topic)
-		}
-		ls[i] = l
-	}
-
-	return
 }
 
 func (self *EthereumApi) FilterChanged(id int, reply *interface{}) error {

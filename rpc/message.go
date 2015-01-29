@@ -21,8 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
-	"github.com/ethereum/go-ethereum/state"
 )
 
 const (
@@ -215,27 +213,4 @@ func (req *RpcRequest) ToFilterChangedArgs() (int, error) {
 	}
 	rpclogger.DebugDetailf("%T %v", id, id)
 	return id, nil
-}
-
-type Log struct {
-	Address string   `json:"address"`
-	Topics  []string `json:"topics"`
-	Data    string   `json:"data"`
-}
-
-func toLogs(logs state.Logs) (ls []Log) {
-	ls = make([]Log, len(logs))
-
-	for i, log := range logs {
-		var l Log
-		l.Topics = make([]string, len(log.Topics()))
-		l.Address = toHex(log.Address())
-		l.Data = toHex(log.Data())
-		for j, topic := range log.Topics() {
-			l.Topics[j] = toHex(topic)
-		}
-		ls[i] = l
-	}
-
-	return
 }
