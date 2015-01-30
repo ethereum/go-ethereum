@@ -13,8 +13,18 @@
 
 <table width="100%" id="table">
 	<tr>
+		<td>Count</td>
+		<td id="count"></td>
+	</tr>
+
+	<tr>
 		<td>ID</td>
 		<td id="id"></td>
+	</tr>
+
+	<tr>
+		<td>Has identity</td>
+		<td id="known"></td>
 	</tr>
 </table>
 </body>
@@ -27,13 +37,21 @@
 
 	var id = shh.newIdentity();
 	document.querySelector("#id").innerHTML = id;
+	document.querySelector("#known").innerHTML =  shh.haveIdentity(id);
 
-	shh.watch({topics: ["test"]}).arrived(function(message) {
+	var watch = shh.watch({topics: ["test"]})
+	watch.arrived(function(message) {
 		document.querySelector("#table").innerHTML += "<tr><td colspan='2'>"+JSON.stringify(message)+"</td></tr>";
 	});
 
 	function test() {
-		shh.post({topics: ["test"], payload: web3.fromAscii("test it")})
+		shh.post({topics: ["test"], payload: web3.fromAscii("test it")});
+		count();
+
+	}
+
+	function count() {
+		document.querySelector("#count").innerHTML = watch.messages().length;
 	}
 </script>
 

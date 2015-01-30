@@ -299,6 +299,16 @@ func (p *EthereumApi) WhisperPost(args *WhisperMessageArgs, reply *interface{}) 
 	return nil
 }
 
+func (p *EthereumApi) HasWhisperIdentity(args string, reply *interface{}) error {
+	*reply = p.xeth.Whisper().HasIdentity(args)
+	return nil
+}
+
+func (p *EthereumApi) WhisperMessages(id int, reply *interface{}) error {
+	*reply = p.xeth.Whisper().Messages(id)
+	return nil
+}
+
 func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
 	// Spec at https://github.com/ethereum/wiki/wiki/Generic-ON-RPC
 	rpclogger.DebugDetailf("%T %s", req.Params, req.Params)
@@ -405,7 +415,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		return p.NewWhisperFilter(args, reply)
 	case "shh_changed":
-		args, err := req.ToWhisperChangedArgs()
+		args, err := req.ToWhisperIdArgs()
 		if err != nil {
 			return err
 		}
@@ -413,9 +423,21 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 	case "shh_post":
 		args, err := req.ToWhisperPostArgs()
 		if err != nil {
-			return nil
+			return err
 		}
 		return p.WhisperPost(args, reply)
+	case "shh_haveIdentity":
+		args, err := req.ToWhisperHasIdentityArgs()
+		if err != nil {
+			return err
+		}
+		return p.HasWhisperIdentity(args, reply)
+	case "shh_getMessages":
+		args, err := req.ToWhisperIdArgs()
+		if err != nil {
+			return err
+		}
+		return p.WhisperMessages(args, reply)
 	default:
 		return NewErrorResponse(fmt.Sprintf("%v %s", ErrorNotImplemented, req.Method))
 	}

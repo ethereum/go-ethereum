@@ -287,7 +287,7 @@ func (req *RpcRequest) ToWhisperFilterArgs() (*xeth.Options, error) {
 	return &args, nil
 }
 
-func (req *RpcRequest) ToWhisperChangedArgs() (int, error) {
+func (req *RpcRequest) ToWhisperIdArgs() (int, error) {
 	if len(req.Params) < 1 {
 		return 0, NewErrorResponse(ErrorArguments)
 	}
@@ -313,4 +313,18 @@ func (req *RpcRequest) ToWhisperPostArgs() (*WhisperMessageArgs, error) {
 	}
 	rpclogger.DebugDetailf("%T %v", args, args)
 	return &args, nil
+}
+
+func (req *RpcRequest) ToWhisperHasIdentityArgs() (string, error) {
+	if len(req.Params) < 1 {
+		return "", NewErrorResponse(ErrorArguments)
+	}
+
+	var args string
+	err := json.Unmarshal(req.Params[0], &args)
+	if err != nil {
+		return "", err
+	}
+	rpclogger.DebugDetailf("%T %v", args, args)
+	return args, nil
 }
