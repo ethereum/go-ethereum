@@ -92,7 +92,7 @@ func ToECDSAPub(pub []byte) *ecdsa.PublicKey {
 }
 
 func FromECDSAPub(pub *ecdsa.PublicKey) []byte {
-	if pub == nil {
+	if pub == nil || pub.X == nil || pub.Y == nil {
 		return nil
 	}
 	return elliptic.Marshal(S256(), pub.X, pub.Y)

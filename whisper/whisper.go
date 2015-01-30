@@ -197,7 +197,7 @@ func (self *Whisper) add(envelope *Envelope) error {
 		go self.postEvent(envelope)
 	}
 
-	wlogger.DebugDetailln("added whisper message")
+	wlogger.DebugDetailf("added whisper envelope %x\n", envelope)
 
 	return nil
 }
