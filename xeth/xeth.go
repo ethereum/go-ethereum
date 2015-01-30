@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/whisper"
 )
 
 var pipelogger = logger.NewLogger("XETH")
@@ -33,6 +34,7 @@ type Backend interface {
 	ClientIdentity() p2p.ClientIdentity
 	Db() ethutil.Database
 	EventMux() *event.TypeMux
+	Whisper() *whisper.Whisper
 }
 
 type XEth struct {
@@ -40,6 +42,7 @@ type XEth struct {
 	blockProcessor *core.BlockProcessor
 	chainManager   *core.ChainManager
 	state          *State
+	whisper        *Whisper
 }
 
 func New(eth Backend) *XEth {
@@ -47,17 +50,16 @@ func New(eth Backend) *XEth {
 		eth:            eth,
 		blockProcessor: eth.BlockProcessor(),
 		chainManager:   eth.ChainManager(),
+		whisper:        NewWhisper(eth.Whisper()),
 	}
 	xeth.state = NewState(xeth)
 
 	return xeth
 }
 
-func (self *XEth) Backend() Backend {
-	return self.eth
-}
-
-func (self *XEth) State() *State { return self.state }
+func (self *XEth) Backend() Backend  { return self.eth }
+func (self *XEth) State() *State     { return self.state }
+func (self *XEth) Whisper() *Whisper { return self.whisper }
 
 func (self *XEth) BlockByHash(strHash string) *Block {
 	hash := fromHex(strHash)

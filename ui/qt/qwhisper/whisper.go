@@ -1,3 +1,4 @@
+// QWhisper package. This package is temporarily on hold until QML DApp dev will reemerge.
 package qwhisper
 
 import (

@@ -251,3 +251,12 @@ func (a *DbArgs) requirements() error {
 	}
 	return nil
 }
+
+type WhisperMessageArgs struct {
+	Payload  string
+	To       string
+	From     string
+	Topics   []string
+	Priority uint32
+	Ttl      uint32
+}

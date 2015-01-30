@@ -1,0 +1,42 @@
+<!doctype>
+<html>
+<title>Whisper test</title>
+<head>
+<script type="text/javascript" src="../ext/bignumber.min.js"></script>
+<script type="text/javascript" src="../ext/ethereum.js/dist/ethereum.js"></script>
+</head>
+<body>
+
+<h1>Whisper test</h1>
+
+<button onclick="test()">Send</button>
+
+<table width="100%" id="table">
+	<tr>
+		<td>ID</td>
+		<td id="id"></td>
+	</tr>
+</table>
+</body>
+
+<script type="text/javascript">
+	var web3 = require('web3');
+	web3.setProvider(new web3.providers.HttpSyncProvider('http://localhost:8080'));
+
+	var shh = web3.shh;
+
+	var id = shh.newIdentity();
+	document.querySelector("#id").innerHTML = id;
+
+	shh.watch({topics: ["test"]}).arrived(function(message) {
+		document.querySelector("#table").innerHTML += "<tr><td colspan='2'>"+JSON.stringify(message)+"</td></tr>";
+	});
+
+	function test() {
+		shh.post({topics: ["test"], payload: web3.fromAscii("test it")})
+	}
+</script>
+
+</html>
+
+

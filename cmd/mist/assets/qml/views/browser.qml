@@ -11,7 +11,7 @@ Rectangle {
 	anchors.fill: parent
 	color: "#00000000"
 
-	property var title: "DApps"
+	property var title: ""
 	property var iconSource: "../browser.png"
 	property var menuItem
 	property var hideUrl: true
@@ -154,6 +154,9 @@ Rectangle {
 
 			onLoadingChanged: {
 				if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
+					webview.runJavaScript("document.title", function(pageTitle) {
+						menuItem.title = pageTitle;	
+					});
 					webview.runJavaScript(eth.readFile("bignumber.min.js"));
 					webview.runJavaScript(eth.readFile("ethereum.js/dist/ethereum.js"));
 				}

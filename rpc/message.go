@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	"github.com/ethereum/go-ethereum/xeth"
 )
 
 const (
@@ -266,6 +268,48 @@ func (req *RpcRequest) ToDbGetArgs() (*DbArgs, error) {
 	err = json.Unmarshal(req.Params[1], &args.Key)
 	if err != nil {
 		return nil, NewErrorResponseWithError(ErrorDecodeArgs, err)
+	}
+	rpclogger.DebugDetailf("%T %v", args, args)
+	return &args, nil
+}
+
+func (req *RpcRequest) ToWhisperFilterArgs() (*xeth.Options, error) {
+	if len(req.Params) < 1 {
+		return nil, NewErrorResponse(ErrorArguments)
+	}
+
+	var args xeth.Options
+	err := json.Unmarshal(req.Params[0], &args)
+	if err != nil {
+		return nil, NewErrorResponseWithError(ErrorDecodeArgs, err)
+	}
+	rpclogger.DebugDetailf("%T %v", args, args)
+	return &args, nil
+}
+
+func (req *RpcRequest) ToWhisperChangedArgs() (int, error) {
+	if len(req.Params) < 1 {
+		return 0, NewErrorResponse(ErrorArguments)
+	}
+
+	var id int
+	err := json.Unmarshal(req.Params[0], &id)
+	if err != nil {
+		return 0, NewErrorResponse(ErrorDecodeArgs)
+	}
+	rpclogger.DebugDetailf("%T %v", id, id)
+	return id, nil
+}
+
+func (req *RpcRequest) ToWhisperPostArgs() (*WhisperMessageArgs, error) {
+	if len(req.Params) < 1 {
+		return nil, NewErrorResponse(ErrorArguments)
+	}
+
+	var args WhisperMessageArgs
+	err := json.Unmarshal(req.Params[0], &args)
+	if err != nil {
+		return nil, err
 	}
 	rpclogger.DebugDetailf("%T %v", args, args)
 	return &args, nil
