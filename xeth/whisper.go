@@ -2,7 +2,6 @@ package xeth
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -75,7 +74,6 @@ func (self *Whisper) Watch(opts *Options) int {
 	filter.Fn = func(msg *whisper.Message) {
 		opts.Fn(NewWhisperMessage(msg))
 	}
-	fmt.Println("new filter", filter)
 
 	i = self.Whisper.Watch(filter)
 
