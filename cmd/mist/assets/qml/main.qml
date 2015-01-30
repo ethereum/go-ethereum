@@ -103,7 +103,7 @@ ApplicationWindow {
 
 			return views
 		} catch(e) {
-			ethx.note(e)
+			console.log(e)
 		}
 	}
 
