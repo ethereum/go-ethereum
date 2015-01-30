@@ -48,6 +48,7 @@ Go Ethereum comes with several binaries found in
   10000 -price 0 -dump`. See `-h` for a detailed description.
 * `rlpdump` converts a rlp stream to `interface{}`.
 * `peerserver` simple P2P (noi-ethereum) peer server.
+* `disasm` disassembles EVM code: `echo "6001" | disasm`
 
 General command line options
 ============================
@@ -103,7 +104,7 @@ Style](http://golang.org/doc/effective_go.html#formatting).
 Unless structs fields are supposed to be directly accesible, provide
 Getters and hide the fields through Go's exporting facility.
 
-When you comment put meaningfull comments. Describe in detail what you
+When you comment put meaningful comments. Describe in detail what you
 want to achieve.
 
 *wrong*
