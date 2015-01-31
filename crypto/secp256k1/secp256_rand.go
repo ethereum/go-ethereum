@@ -49,7 +49,8 @@ func init() {
 	_rand = mrand.New(mrand.NewSource(int64(seed1 ^ seed2 ^ seed3)))
 }
 
-func saltByte(buff []byte) []byte {
+func saltByte(n int) []byte {
+	buff := make([]byte, n)
 	for i := 0; i < len(buff); i++ {
 		var v uint64 = uint64(_rand.Int63())
 		var b byte
