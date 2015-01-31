@@ -75,7 +75,13 @@
             });
         };
 
+        function test8() {
+            // "{"topic":["0x83c9849c","000000000000000000000000000000000000000000000000000000000000001e"],"max":100,"address":"0x01"}"
+            web3.eth.watch(contract.Event, {a: 30}, {max: 100}).changed(function (res) {
 
+            });
+        };
+        
         // not valid
         // function testX() {
         //    web3.eth.watch([contract.Event, contract.Event2]).changed(function (res) {
@@ -106,6 +112,9 @@
         </div>
         <div>
             <button type="button" onClick="test7();">test7</button>
+        </div>
+        <div>
+            <button type="button" onClick="test8();">test8</button>
         </div>
     </body>
 </html>

@@ -1441,10 +1441,11 @@ var web3 = {
         },
 
         /// @param filter may be a string, object or event
-        /// @param indexed is optional, this may be an object with optional event indexed params
-        watch: function (filter, indexed) {
+        /// @param indexed is optional, this is an object with optional event indexed params
+        /// @param options is optional, this is an object with optional event options ('max'...)
+        watch: function (filter, indexed, options) {
             if (filter._isEvent) {
-                return filter(indexed);
+                return filter(indexed, options);
             }
             return new web3.filter(filter, ethWatch);
         }
