@@ -562,7 +562,11 @@ var addEventsToContract = function (contract, desc, address) {
             var o = event.apply(null, params);
             return web3.eth.watch(o);  
         };
+        
+        // this property should be used by eth.filter to check if object is an event
+        impl._isEvent = true;
 
+        // TODO: we can remove address && topic properties, they are not used anymore since we introduced _isEvent
         impl.address = address;
 
         Object.defineProperty(impl, 'topic', {
@@ -656,13 +660,16 @@ module.exports = contract;
  * @date 2014
  */
 
+var abi = require('./abi');
+
 var implementationOfEvent = function (address, signature) {
     
-    return function (options) {
+    // valid options are 'earliest', 'latest', 'offset' and 'max', as defined for 'eth.watch'
+    return function (indexed, options) {
         var o = options || {};
-        o.address = o.address || address;
-        o.topics = o.topics || [];
-        o.topics.push(signature);
+        o.address = address;
+        o.topic = [];
+        o.topic.push(signature);
         return o;
     };
 };
@@ -670,7 +677,7 @@ var implementationOfEvent = function (address, signature) {
 module.exports = implementationOfEvent;
 
 
-},{}],4:[function(require,module,exports){
+},{"./abi":1}],4:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -700,16 +707,19 @@ var web3 = require('./web3'); // jshint ignore:line
 
 /// should be used when we want to watch something
 /// it's using inner polling mechanism and is notified about changes
-var Filter = function(options, impl) {
-    this.impl = impl;
-    this.callbacks = [];
+/// TODO: change 'options' name cause it may be not the best matching one, since we have events
+var Filter = function(options, indexed, impl) {
 
-    if (typeof options !== "string") {
-        // evaluate lazy properties
+    if (options._isEvent) {
+        return options(indexed);        
+    } else if (typeof options !== "string") {
+
+        // topics property is deprecated, warn about it!
         if (options.topics) {
             console.warn('"topics" is deprecated, use "topic" instead');
         }
 
+        // evaluate lazy properties
         options = {
             to: options.to,
             topic: options.topic,
@@ -719,7 +729,11 @@ var Filter = function(options, impl) {
             skip: options.skip,
             address: options.address
         };
+
     }
+    
+    this.impl = impl;
+    this.callbacks = [];
 
     this.id = impl.newFilter(options);
     web3.provider.startPolling({call: impl.changed, args: [this.id]}, this.id, this.trigger.bind(this));
@@ -1261,8 +1275,11 @@ var web3 = {
                 return ret;
             };
         },
-        watch: function (params) {
-            return new web3.filter(params, ethWatch);
+
+        /// @param filter may be a string, object or event
+        /// @param indexed is optional, this may be an object with optional event indexed params
+        watch: function (filter, indexed) {
+            return new web3.filter(filter, indexed, ethWatch);
         }
     },
 
@@ -1271,8 +1288,11 @@ var web3 = {
 
     /// shh object prototype
     shh: {
-        watch: function (params) {
-            return new web3.filter(params, shhWatch);
+        
+        /// @param filter may be a string, object or event
+        /// @param indexed is optional, this may be an object with optional event indexed params
+        watch: function (filter, indexed) {
+            return new web3.filter(filter, indexed, shhWatch);
         }
     },
 
