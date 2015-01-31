@@ -27,6 +27,8 @@ if ("build" !== 'build') {/*
 */}
 
 var web3 = require('./web3'); 
+var utils = require('./utils');
+var types = require('./types');
 var f = require('./formatters');
 
 BigNumber.config({ ROUNDING_MODE: BigNumber.ROUND_DOWN });
@@ -36,22 +38,9 @@ var ETH_PADDING = 32;
 /// method signature length in bytes
 var ETH_METHOD_SIGNATURE_LENGTH = 4;
 
-/// Finds first index of array element matching pattern
-/// @param array
-/// @param callback pattern
-/// @returns index of element
-var findIndex = function (array, callback) {
-    var end = false;
-    var i = 0;
-    for (; i < array.length && !end; i++) {
-        end = callback(array[i]);
-    }
-    return end ? i - 1 : -1;
-};
-
 /// @returns a function that is used as a pattern for 'findIndex'
 var findMethodIndex = function (json, methodName) {
-    return findIndex(json, function (method) {
+    return utils.findIndex(json, function (method) {
         return method.name === methodName;
     });
 };
@@ -82,31 +71,6 @@ var filterEvents = function (json) {
     });
 };
 
-/// @param string string to be padded
-/// @param number of characters that result string should have
-/// @param sign, by default 0
-/// @returns right aligned string
-/// TODO: remove, it was moved to formatters.js
-var padLeft = function (string, chars, sign) {
-    return new Array(chars - string.length + 1).join(sign ? sign : "0") + string;
-};
-
-/// @param expected type prefix (string)
-/// @returns function which checks if type has matching prefix. if yes, returns true, otherwise false
-var prefixedType = function (prefix) {
-    return function (type) {
-        return type.indexOf(prefix) === 0;
-    };
-};
-
-/// @param expected type name (string)
-/// @returns function which checks if type is matching expected one. if yes, returns true, otherwise false
-var namedType = function (name) {
-    return function (type) {
-        return name === type;
-    };
-};
-
 /// This method should be called if we want to check if givent type is an array type
 /// @returns true if it is, otherwise false
 var arrayType = function (type) {
@@ -120,23 +84,7 @@ var dynamicTypeBytes = function (type, value) {
     return "";
 };
 
-/// Setups input formatters for solidity types
-/// @returns an array of input formatters 
-var setupInputTypes = function () {
-    
-    return [
-        { type: prefixedType('uint'), format: f.formatInputInt },
-        { type: prefixedType('int'), format: f.formatInputInt },
-        { type: prefixedType('hash'), format: f.formatInputInt },
-        { type: prefixedType('string'), format: f.formatInputString }, 
-        { type: prefixedType('real'), format: f.formatInputReal },
-        { type: prefixedType('ureal'), format: f.formatInputReal },
-        { type: namedType('address'), format: f.formatInputInt },
-        { type: namedType('bool'), format: f.formatInputBool }
-    ];
-};
-
-var inputTypes = setupInputTypes();
+var inputTypes = types.inputTypes(); 
 
 /// Formats input params to bytes
 /// @param contract json abi
@@ -184,23 +132,7 @@ var dynamicBytesLength = function (type) {
     return 0;
 };
 
-/// Setups output formaters for solidity types
-/// @returns an array of output formatters
-var setupOutputTypes = function () {
-
-    return [
-        { type: prefixedType('uint'), format: f.formatOutputUInt },
-        { type: prefixedType('int'), format: f.formatOutputInt },
-        { type: prefixedType('hash'), format: f.formatOutputHash },
-        { type: prefixedType('string'), format: f.formatOutputString },
-        { type: prefixedType('real'), format: f.formatOutputReal },
-        { type: prefixedType('ureal'), format: f.formatOutputUReal },
-        { type: namedType('address'), format: f.formatOutputAddress },
-        { type: namedType('bool'), format: f.formatOutputBool }
-    ];
-};
-
-var outputTypes = setupOutputTypes();
+var outputTypes = types.outputTypes(); 
 
 /// Formats output bytes back to param list
 /// @param contract json abi
@@ -242,7 +174,7 @@ var fromAbiOutput = function (json, methodName, output) {
             }
             result.push(array);
         }
-        else if (prefixedType('string')(method.outputs[i].type)) {
+        else if (types.prefixedType('string')(method.outputs[i].type)) {
             dynamicPart = dynamicPart.slice(padding); 
             result.push(formatter(output.slice(0, padding)));
             output = output.slice(padding);
@@ -270,9 +202,10 @@ var methodTypeName = function (method) {
 
 /// @param json abi for contract
 /// @returns input parser object for given json abi
+/// TODO: refactor creating the parser, do not double logic from contract
 var inputParser = function (json) {
     var parser = {};
-    filterFunctions(json).forEach(function (method) {
+    json.forEach(function (method) {
         var displayName = methodDisplayName(method.name); 
         var typeName = methodTypeName(method.name);
 
@@ -295,7 +228,7 @@ var inputParser = function (json) {
 /// @returns output parser for given json abi
 var outputParser = function (json) {
     var parser = {};
-    filterFunctions(json).forEach(function (method) {
+    json.forEach(function (method) {
 
         var displayName = methodDisplayName(method.name); 
         var typeName = methodTypeName(method.name);
@@ -332,7 +265,7 @@ module.exports = {
 };
 
 
-},{"./formatters":5,"./web3":9}],2:[function(require,module,exports){
+},{"./formatters":5,"./types":9,"./utils":10,"./web3":11}],2:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -462,7 +395,7 @@ var addEventsToContract = function (contract, desc, address) {
         var impl = function () {
             var params = Array.prototype.slice.call(arguments);
             var signature = abi.methodSignature(e.name);
-            var event = eventImpl(address, signature);
+            var event = eventImpl(address, signature, e);
             var o = event.apply(null, params);
             return web3.eth.watch(o);  
         };
@@ -541,7 +474,7 @@ var contract = function (address, desc) {
 module.exports = contract;
 
 
-},{"./abi":1,"./event":3,"./web3":9}],3:[function(require,module,exports){
+},{"./abi":1,"./event":3,"./web3":11}],3:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -565,8 +498,31 @@ module.exports = contract;
  */
 
 var abi = require('./abi');
+var utils = require('./utils');
 
-var implementationOfEvent = function (address, signature) {
+var inputWithName = function (inputs, name) {
+    var index = utils.findIndex(inputs, function (input) {
+        return input.name === name; 
+    });
+    if (index === -1) {
+       console.error('indexed param ' + name + ' not found in the abi');
+       return undefined;
+    }
+    return inputs[index];
+};
+
+var indexedParamsToTopics = function (inputs, indexed) {
+    Object.keys(indexed).map(function (key) {
+        var inp = inputWithName(key); 
+        var value = indexed[key];
+        if (value instanceof Array) {
+            
+        }
+    });
+};
+
+var implementationOfEvent = function (address, signature, event) {
+
     
     // valid options are 'earliest', 'latest', 'offset' and 'max', as defined for 'eth.watch'
     return function (indexed, options) {
@@ -581,7 +537,7 @@ var implementationOfEvent = function (address, signature) {
 module.exports = implementationOfEvent;
 
 
-},{"./abi":1}],4:[function(require,module,exports){
+},{"./abi":1,"./utils":10}],4:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -680,7 +636,7 @@ Filter.prototype.logs = function () {
 
 module.exports = Filter;
 
-},{"./web3":9}],5:[function(require,module,exports){
+},{"./web3":11}],5:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -707,6 +663,7 @@ if ("build" !== 'build') {/*
     var BigNumber = require('bignumber.js'); // jshint ignore:line
 */}
 
+// TODO: remove web3 dependency from here!
 var web3 = require('./web3'); 
 
 BigNumber.config({ ROUNDING_MODE: BigNumber.ROUND_DOWN });
@@ -838,7 +795,7 @@ module.exports = {
 };
 
 
-},{"./web3":9}],6:[function(require,module,exports){
+},{"./web3":11}],6:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1022,7 +979,7 @@ ProviderManager.prototype.stopPolling = function (pollId) {
 module.exports = ProviderManager;
 
 
-},{"./web3":9}],8:[function(require,module,exports){
+},{"./web3":11}],8:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1057,6 +1014,128 @@ module.exports = QtSyncProvider;
 
 
 },{}],9:[function(require,module,exports){
+/*
+    This file is part of ethereum.js.
+
+    ethereum.js is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    ethereum.js is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/** @file types.js
+ * @authors:
+ *   Marek Kotewicz <marek@ethdev.com>
+ * @date 2015
+ */
+
+var f = require('./formatters');
+
+/// @param expected type prefix (string)
+/// @returns function which checks if type has matching prefix. if yes, returns true, otherwise false
+var prefixedType = function (prefix) {
+    return function (type) {
+        return type.indexOf(prefix) === 0;
+    };
+};
+
+/// @param expected type name (string)
+/// @returns function which checks if type is matching expected one. if yes, returns true, otherwise false
+var namedType = function (name) {
+    return function (type) {
+        return name === type;
+    };
+};
+
+/// Setups input formatters for solidity types
+/// @returns an array of input formatters 
+var inputTypes = function () {
+    
+    return [
+        { type: prefixedType('uint'), format: f.formatInputInt },
+        { type: prefixedType('int'), format: f.formatInputInt },
+        { type: prefixedType('hash'), format: f.formatInputInt },
+        { type: prefixedType('string'), format: f.formatInputString }, 
+        { type: prefixedType('real'), format: f.formatInputReal },
+        { type: prefixedType('ureal'), format: f.formatInputReal },
+        { type: namedType('address'), format: f.formatInputInt },
+        { type: namedType('bool'), format: f.formatInputBool }
+    ];
+};
+
+/// Setups output formaters for solidity types
+/// @returns an array of output formatters
+var outputTypes = function () {
+
+    return [
+        { type: prefixedType('uint'), format: f.formatOutputUInt },
+        { type: prefixedType('int'), format: f.formatOutputInt },
+        { type: prefixedType('hash'), format: f.formatOutputHash },
+        { type: prefixedType('string'), format: f.formatOutputString },
+        { type: prefixedType('real'), format: f.formatOutputReal },
+        { type: prefixedType('ureal'), format: f.formatOutputUReal },
+        { type: namedType('address'), format: f.formatOutputAddress },
+        { type: namedType('bool'), format: f.formatOutputBool }
+    ];
+};
+
+module.exports = {
+    prefixedType: prefixedType,
+    namedType: namedType,
+    inputTypes: inputTypes,
+    outputTypes: outputTypes
+};
+
+
+},{"./formatters":5}],10:[function(require,module,exports){
+/*
+    This file is part of ethereum.js.
+
+    ethereum.js is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    ethereum.js is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/** @file utils.js
+ * @authors:
+ *   Marek Kotewicz <marek@ethdev.com>
+ * @date 2015
+ */
+
+/// Finds first index of array element matching pattern
+/// @param array
+/// @param callback pattern
+/// @returns index of element
+var findIndex = function (array, callback) {
+    var end = false;
+    var i = 0;
+    for (; i < array.length && !end; i++) {
+        end = callback(array[i]);
+    }
+    return end ? i - 1 : -1;
+};
+
+module.exports = {
+    findIndex: findIndex
+};
+
+
+},{}],11:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1404,7 +1483,7 @@ web3.abi = require('./lib/abi');
 
 module.exports = web3;
 
-},{"./lib/abi":1,"./lib/contract":2,"./lib/filter":4,"./lib/httpsync":6,"./lib/providermanager":7,"./lib/qtsync":8,"./lib/web3":9}]},{},["web3"])
+},{"./lib/abi":1,"./lib/contract":2,"./lib/filter":4,"./lib/httpsync":6,"./lib/providermanager":7,"./lib/qtsync":8,"./lib/web3":11}]},{},["web3"])
 
 
 //# sourceMappingURL=ethereum.js.map
