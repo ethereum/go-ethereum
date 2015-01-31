@@ -28,22 +28,6 @@ var types = require('./types');
 var c = require('./const');
 var f = require('./formatters');
 
-/// Filters all function from input abi
-/// @returns abi array with filtered objects of type 'function'
-var filterFunctions = function (json) {
-    return json.filter(function (current) {
-        return current.type === 'function'; 
-    }); 
-};
-
-/// Filters all events form input abi
-/// @returns abi array with filtered objects of type 'event'
-var filterEvents = function (json) {
-    return json.filter(function (current) {
-        return current.type === 'event';
-    });
-};
-
 /// This method should be called if we want to check if givent type is an array type
 /// @returns true if it is, otherwise false
 var arrayType = function (type) {
@@ -155,27 +139,14 @@ var fromAbiOutput = function (method, output) {
     return result;
 };
 
-/// @returns display name for method eg. multiply(uint256) -> multiply
-var methodDisplayName = function (method) {
-    var length = method.indexOf('('); 
-    return length !== -1 ? method.substr(0, length) : method;
-};
-
-/// @returns overloaded part of method's name
-var methodTypeName = function (method) {
-    /// TODO: make it invulnerable
-    var length = method.indexOf('(');
-    return length !== -1 ? method.substr(length + 1, method.length - 1 - (length + 1)) : "";
-};
-
 /// @param json abi for contract
 /// @returns input parser object for given json abi
 /// TODO: refactor creating the parser, do not double logic from contract
 var inputParser = function (json) {
     var parser = {};
     json.forEach(function (method) {
-        var displayName = methodDisplayName(method.name); 
-        var typeName = methodTypeName(method.name);
+        var displayName = utils.extractDisplayName(method.name); 
+        var typeName = utils.extractTypeName(method.name);
 
         var impl = function () {
             var params = Array.prototype.slice.call(arguments);
@@ -198,8 +169,8 @@ var outputParser = function (json) {
     var parser = {};
     json.forEach(function (method) {
 
-        var displayName = methodDisplayName(method.name); 
-        var typeName = methodTypeName(method.name);
+        var displayName = utils.extractDisplayName(method.name); 
+        var typeName = utils.extractTypeName(method.name);
 
         var impl = function (output) {
             return fromAbiOutput(method, output);
@@ -215,20 +186,16 @@ var outputParser = function (json) {
     return parser;
 };
 
-/// @param method name for which we want to get method signature
-/// @returns (promise) contract method signature for method with given name
-var methodSignature = function (name) {
-    return web3.sha3(web3.fromAscii(name)).slice(0, 2 + c.ETH_METHOD_SIGNATURE_LENGTH * 2);
+/// @param function/event name for which we want to get signature
+/// @returns signature of function/event with given name
+var signatureFromAscii = function (name) {
+    return web3.sha3(web3.fromAscii(name)).slice(0, 2 + c.ETH_SIGNATURE_LENGTH * 2);
 };
 
 module.exports = {
     inputParser: inputParser,
     outputParser: outputParser,
-    methodSignature: methodSignature,
-    methodDisplayName: methodDisplayName,
-    methodTypeName: methodTypeName,
-    filterFunctions: filterFunctions,
-    filterEvents: filterEvents
+    signatureFromAscii: signatureFromAscii
 };
 
 
@@ -262,7 +229,7 @@ if ("build" !== 'build') {/*
 
 module.exports = {
     ETH_PADDING: 32,
-    ETH_METHOD_SIGNATURE_LENGTH: 4,
+    ETH_SIGNATURE_LENGTH: 4,
     ETH_BIGNUMBER_ROUNDING_MODE: { ROUNDING_MODE: BigNumber.ROUND_DOWN }
 };
 
@@ -292,7 +259,17 @@ module.exports = {
 
 var web3 = require('./web3'); 
 var abi = require('./abi');
+var utils = require('./utils');
 var eventImpl = require('./event');
+
+var exportNatspecGlobals = function (vars) {
+    // it's used byt natspec.js
+    // TODO: figure out better way to solve this
+    web3._currentContractAbi = vars.abi;
+    web3._currentContractAddress = vars.address;
+    web3._currentContractMethodName = vars.method;
+    web3._currentContractMethodParams = vars.params;
+};
 
 var addFunctionRelatedPropertiesToContract = function (contract) {
     
@@ -323,14 +300,14 @@ var addFunctionsToContract = function (contract, desc, address) {
     var outputParser = abi.outputParser(desc);
 
     // create contract functions
-    abi.filterFunctions(desc).forEach(function (method) {
+    utils.filterFunctions(desc).forEach(function (method) {
 
-        var displayName = abi.methodDisplayName(method.name);
-        var typeName = abi.methodTypeName(method.name);
+        var displayName = utils.extractDisplayName(method.name);
+        var typeName = utils.extractTypeName(method.name);
 
         var impl = function () {
             var params = Array.prototype.slice.call(arguments);
-            var signature = abi.methodSignature(method.name);
+            var signature = abi.signatureFromAscii(method.name);
             var parsed = inputParser[displayName][typeName].apply(null, params);
 
             var options = contract._options || {};
@@ -345,12 +322,13 @@ var addFunctionsToContract = function (contract, desc, address) {
             contract._isTransact = null;
 
             if (isTransact) {
-                // it's used byt natspec.js
-                // TODO: figure out better way to solve this
-                web3._currentContractAbi = desc;
-                web3._currentContractAddress = address;
-                web3._currentContractMethodName = method.name;
-                web3._currentContractMethodParams = params;
+                
+                exportNatspecGlobals({
+                    abi: desc,
+                    address: address,
+                    method: method.name,
+                    params: params
+                });
 
                 // transactions do not have any output, cause we do not know, when they will be processed
                 web3.eth.transact(options);
@@ -382,8 +360,8 @@ var addEventRelatedPropertiesToContract = function (contract, desc, address) {
     
     Object.defineProperty(contract, 'topic', {
         get: function() {
-            return abi.filterEvents(desc).map(function (e) {
-                return abi.methodSignature(e.name);
+            return utils.filterEvents(desc).map(function (e) {
+                return abi.signatureFromAscii(e.name);
             });
         }
     });
@@ -392,11 +370,11 @@ var addEventRelatedPropertiesToContract = function (contract, desc, address) {
 
 var addEventsToContract = function (contract, desc, address) {
     // create contract events
-    abi.filterEvents(desc).forEach(function (e) {
+    utils.filterEvents(desc).forEach(function (e) {
 
         var impl = function () {
             var params = Array.prototype.slice.call(arguments);
-            var signature = abi.methodSignature(e.name);
+            var signature = abi.signatureFromAscii(e.name);
             var event = eventImpl(address, signature, e);
             var o = event.apply(null, params);
             return web3.eth.watch(o);  
@@ -405,18 +383,8 @@ var addEventsToContract = function (contract, desc, address) {
         // this property should be used by eth.filter to check if object is an event
         impl._isEvent = true;
 
-        // TODO: we can remove address && topic properties, they are not used anymore since we introduced _isEvent
-        impl.address = address;
-
-        Object.defineProperty(impl, 'topic', {
-            get: function() {
-                return [abi.methodSignature(e.name)];
-            }
-        });
-        
-        // TODO: rename these methods, cause they are used not only for methods
-        var displayName = abi.methodDisplayName(e.name);
-        var typeName = abi.methodTypeName(e.name);
+        var displayName = utils.extractDisplayName(e.name);
+        var typeName = utils.extractTypeName(e.name);
 
         if (contract[displayName] === undefined) {
             contract[displayName] = impl;
@@ -476,7 +444,7 @@ var contract = function (address, desc) {
 module.exports = contract;
 
 
-},{"./abi":1,"./event":4,"./web3":12}],4:[function(require,module,exports){
+},{"./abi":1,"./event":4,"./utils":11,"./web3":12}],4:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -508,7 +476,7 @@ var inputWithName = function (inputs, name) {
     });
     
     if (index === -1) {
-        console.error('indexed paray with name ' + name + ' not found');
+        console.error('indexed param with name ' + name + ' not found');
         return undefined;
     }
     return inputs[index];
@@ -1178,11 +1146,43 @@ var fromAscii = function(str, pad) {
     return "0x" + hex;
 };
 
+/// @returns display name for function/event eg. multiply(uint256) -> multiply
+var extractDisplayName = function (name) {
+    var length = name.indexOf('('); 
+    return length !== -1 ? name.substr(0, length) : name;
+};
+
+/// @returns overloaded part of function/event name
+var extractTypeName = function (name) {
+    /// TODO: make it invulnerable
+    var length = name.indexOf('(');
+    return length !== -1 ? name.substr(length + 1, name.length - 1 - (length + 1)) : "";
+};
+
+/// Filters all function from input abi
+/// @returns abi array with filtered objects of type 'function'
+var filterFunctions = function (json) {
+    return json.filter(function (current) {
+        return current.type === 'function'; 
+    }); 
+};
+
+/// Filters all events form input abi
+/// @returns abi array with filtered objects of type 'event'
+var filterEvents = function (json) {
+    return json.filter(function (current) {
+        return current.type === 'event';
+    });
+};
 
 module.exports = {
     findIndex: findIndex,
     toAscii: toAscii,
-    fromAscii: fromAscii
+    fromAscii: fromAscii,
+    extractDisplayName: extractDisplayName,
+    extractTypeName: extractTypeName,
+    filterFunctions: filterFunctions,
+    filterEvents: filterEvents
 };
 
 

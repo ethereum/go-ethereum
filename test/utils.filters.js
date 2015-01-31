@@ -1,7 +1,7 @@
 var assert = require('assert');
-var abi = require('../lib/abi.js');
+var utils = require('../lib/utils.js');
 
-describe('abi', function() {
+describe('utils', function() {
     it('should filter functions and events from input array properly', function () {
 
         // given
@@ -36,8 +36,8 @@ describe('abi', function() {
         }];
         
         // when
-        var events = abi.filterEvents(description);
-        var functions = abi.filterFunctions(description);
+        var events = utils.filterEvents(description);
+        var functions = utils.filterFunctions(description);
 
         // then
         assert.equal(events.length, 1);
