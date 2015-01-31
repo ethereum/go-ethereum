@@ -196,12 +196,17 @@ var signatureFromAscii = function (name) {
     return web3.sha3(web3.fromAscii(name)).slice(0, 2 + c.ETH_SIGNATURE_LENGTH * 2);
 };
 
+var eventSignatureFromAscii = function (name) {
+    return web3.sha3(web3.fromAscii(name));
+};
+
 module.exports = {
     inputParser: inputParser,
     outputParser: outputParser,
     formatInput: formatInput,
     formatOutput: formatOutput,
-    signatureFromAscii: signatureFromAscii
+    signatureFromAscii: signatureFromAscii,
+    eventSignatureFromAscii: eventSignatureFromAscii
 };
 
 
@@ -367,7 +372,7 @@ var addEventRelatedPropertiesToContract = function (contract, desc, address) {
     Object.defineProperty(contract, 'topic', {
         get: function() {
             return utils.filterEvents(desc).map(function (e) {
-                return abi.signatureFromAscii(e.name);
+                return abi.eventSignatureFromAscii(e.name);
             });
         }
     });
@@ -380,7 +385,7 @@ var addEventsToContract = function (contract, desc, address) {
 
         var impl = function () {
             var params = Array.prototype.slice.call(arguments);
-            var signature = abi.signatureFromAscii(e.name);
+            var signature = abi.eventSignatureFromAscii(e.name);
             var event = eventImpl(address, signature, e);
             var o = event.apply(null, params);
             return web3.eth.watch(o);  
