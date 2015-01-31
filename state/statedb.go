@@ -290,28 +290,16 @@ func (self *StateDB) Refunds() map[string]*big.Int {
 }
 
 func (self *StateDB) Update(gasUsed *big.Int) {
-	var deleted bool
 
 	self.refund = make(map[string]*big.Int)
 
 	for _, stateObject := range self.stateObjects {
 		if stateObject.remove {
 			self.DeleteStateObject(stateObject)
-			deleted = true
 		} else {
 			stateObject.Sync()
 
 			self.UpdateStateObject(stateObject)
-		}
-	}
-
-	// FIXME trie delete is broken
-	if deleted {
-		valid, t2 := trie.ParanoiaCheck(self.trie, self.db)
-		if !valid {
-			statelogger.Infof("Warn: PARANOIA: Different state root during copy %x vs %x\n", self.trie.Root(), t2.Root())
-
-			self.trie = t2
 		}
 	}
 }
