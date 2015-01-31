@@ -38,23 +38,6 @@ var ETH_PADDING = 32;
 /// method signature length in bytes
 var ETH_METHOD_SIGNATURE_LENGTH = 4;
 
-/// @returns a function that is used as a pattern for 'findIndex'
-var findMethodIndex = function (json, methodName) {
-    return utils.findIndex(json, function (method) {
-        return method.name === methodName;
-    });
-};
-
-/// @returns method with given method name
-var getMethodWithName = function (json, methodName) {
-    var index = findMethodIndex(json, methodName);
-    if (index === -1) {
-        console.error('method ' + methodName + ' not found in the abi');
-        return undefined;
-    }
-    return json[index];
-};
-
 /// Filters all function from input abi
 /// @returns abi array with filtered objects of type 'function'
 var filterFunctions = function (json) {
@@ -87,14 +70,11 @@ var dynamicTypeBytes = function (type, value) {
 var inputTypes = types.inputTypes(); 
 
 /// Formats input params to bytes
-/// @param contract json abi
-/// @param name of the method that we want to use
+/// @param abi contract method
 /// @param array of params that will be formatted to bytes
 /// @returns bytes representation of input params
-var toAbiInput = function (json, methodName, params) {
+var toAbiInput = function (method, params) {
     var bytes = "";
-
-    var method = getMethodWithName(json, methodName);
     var padding = ETH_PADDING * 2;
 
     /// first we iterate in search for dynamic 
@@ -135,15 +115,13 @@ var dynamicBytesLength = function (type) {
 var outputTypes = types.outputTypes(); 
 
 /// Formats output bytes back to param list
-/// @param contract json abi
-/// @param name of the method that we want to use
+/// @param contract abi method
 /// @param bytes representtion of output 
 /// @returns array of output params 
-var fromAbiOutput = function (json, methodName, output) {
+var fromAbiOutput = function (method, output) {
     
     output = output.slice(2);
     var result = [];
-    var method = getMethodWithName(json, methodName);
     var padding = ETH_PADDING * 2;
 
     var dynamicPartLength = method.outputs.reduce(function (acc, curr) {
@@ -195,7 +173,7 @@ var methodDisplayName = function (method) {
 
 /// @returns overloaded part of method's name
 var methodTypeName = function (method) {
-    /// TODO: make it not vulnerable
+    /// TODO: make it invulnerable
     var length = method.indexOf('(');
     return length !== -1 ? method.substr(length + 1, method.length - 1 - (length + 1)) : "";
 };
@@ -211,7 +189,7 @@ var inputParser = function (json) {
 
         var impl = function () {
             var params = Array.prototype.slice.call(arguments);
-            return toAbiInput(json, method.name, params);
+            return toAbiInput(method, params);
         };
        
         if (parser[displayName] === undefined) {
@@ -234,7 +212,7 @@ var outputParser = function (json) {
         var typeName = methodTypeName(method.name);
 
         var impl = function (output) {
-            return fromAbiOutput(json, method.name, output);
+            return fromAbiOutput(method, output);
         };
 
         if (parser[displayName] === undefined) {
@@ -259,7 +237,6 @@ module.exports = {
     methodSignature: methodSignature,
     methodDisplayName: methodDisplayName,
     methodTypeName: methodTypeName,
-    getMethodWithName: getMethodWithName,
     filterFunctions: filterFunctions,
     filterEvents: filterEvents
 };
@@ -673,8 +650,7 @@ if ("build" !== 'build') {/*
     var BigNumber = require('bignumber.js'); // jshint ignore:line
 */}
 
-// TODO: remove web3 dependency from here!
-var web3 = require('./web3'); 
+var utils = require('./utils');
 
 BigNumber.config({ ROUNDING_MODE: BigNumber.ROUND_DOWN });
 
@@ -715,7 +691,7 @@ var formatInputInt = function (value) {
 /// Formats input value to byte representation of string
 /// @returns left-algined byte representation of string
 var formatInputString = function (value) {
-    return web3.fromAscii(value, ETH_PADDING).substr(2);
+    return utils.fromAscii(value, ETH_PADDING).substr(2);
 };
 
 /// Formats input value to byte representation of bool
@@ -780,7 +756,7 @@ var formatOutputBool = function (value) {
 
 /// @returns left-aligned input bytes formatted to ascii string
 var formatOutputString = function (value) {
-    return web3.toAscii(value);
+    return utils.toAscii(value);
 };
 
 /// @returns right-aligned input bytes formatted to address
@@ -805,7 +781,7 @@ module.exports = {
 };
 
 
-},{"./web3":11}],6:[function(require,module,exports){
+},{"./utils":10}],6:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1140,8 +1116,50 @@ var findIndex = function (array, callback) {
     return end ? i - 1 : -1;
 };
 
+/// @returns ascii string representation of hex value prefixed with 0x
+var toAscii = function(hex) {
+// Find termination
+    var str = "";
+    var i = 0, l = hex.length;
+    if (hex.substring(0, 2) === '0x') {
+        i = 2;
+    }
+    for (; i < l; i+=2) {
+        var code = parseInt(hex.substr(i, 2), 16);
+        if (code === 0) {
+            break;
+        }
+
+        str += String.fromCharCode(code);
+    }
+
+    return str;
+};
+    
+var toHex = function(str) {
+    var hex = "";
+    for(var i = 0; i < str.length; i++) {
+        var n = str.charCodeAt(i).toString(16);
+        hex += n.length < 2 ? '0' + n : n;
+    }
+
+    return hex;
+};
+
+/// @returns hex representation (prefixed by 0x) of ascii string
+var fromAscii = function(str, pad) {
+    pad = pad === undefined ? 0 : pad;
+    var hex = toHex(str);
+    while (hex.length < pad*2)
+        hex += "00";
+    return "0x" + hex;
+};
+
+
 module.exports = {
-    findIndex: findIndex
+    findIndex: findIndex,
+    toAscii: toAscii,
+    fromAscii: fromAscii
 };
 
 
@@ -1174,6 +1192,8 @@ module.exports = {
 if ("build" !== 'build') {/*
     var BigNumber = require('bignumber.js');
 */}
+
+var utils = require('./utils');
 
 var ETH_UNITS = [ 
     'wei', 
@@ -1340,43 +1360,11 @@ var web3 = {
     _events: {},
     providers: {},
 
-    toHex: function(str) {
-        var hex = "";
-        for(var i = 0; i < str.length; i++) {
-            var n = str.charCodeAt(i).toString(16);
-            hex += n.length < 2 ? '0' + n : n;
-        }
-
-        return hex;
-    },
-
     /// @returns ascii string representation of hex value prefixed with 0x
-    toAscii: function(hex) {
-        // Find termination
-        var str = "";
-        var i = 0, l = hex.length;
-        if (hex.substring(0, 2) === '0x')
-            i = 2;
-        for(; i < l; i+=2) {
-            var code = parseInt(hex.substr(i, 2), 16);
-            if(code === 0) {
-                break;
-            }
-
-            str += String.fromCharCode(code);
-        }
-
-        return str;
-    },
+    toAscii: utils.toAscii,
 
     /// @returns hex representation (prefixed by 0x) of ascii string
-    fromAscii: function(str, pad) {
-        pad = pad === undefined ? 0 : pad;
-        var hex = this.toHex(str);
-        while(hex.length < pad*2)
-            hex += "00";
-        return "0x" + hex;
-    },
+    fromAscii: utils.fromAscii,
 
     /// @returns decimal representaton of hex value prefixed by 0x
     toDecimal: function (val) {
@@ -1482,7 +1470,7 @@ web3.setProvider = function(provider) {
 module.exports = web3;
 
 
-},{}],"web3":[function(require,module,exports){
+},{"./utils":10}],"web3":[function(require,module,exports){
 var web3 = require('./lib/web3');
 var ProviderManager = require('./lib/providermanager');
 web3.provider = new ProviderManager();
