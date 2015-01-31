@@ -27,25 +27,57 @@
         var contract = web3.eth.contract(address, desc); 
 
         function test1() {
+            // "{"topic":["0x83c9849c","0xc4d76332"],"address":"0x01"}"
             web3.eth.watch(contract).changed(function (res) {
                 
             });
         };
 
         function test2() {
+            // "{"topic":["0x83c9849c"],"address":"0x01"}"
             web3.eth.watch(contract.Event).changed(function (res) {
                 
             });
         };
 
         function test3() {
+            // "{"topic":["0x83c9849c"],"address":"0x01"}"
             contract.Event().changed(function (res) {
                 
             });
         };
 
+        function test4() {
+            // "{"topic":["0x83c9849c","0000000000000000000000000000000000000000000000000000000000000045"],"address":"0x01"}"
+            contract.Event({a: 69}).changed(function (res) {
+                
+            });
+        };
+
+        function test5() {
+            // "{"topic":["0x83c9849c",["0000000000000000000000000000000000000000000000000000000000000045","000000000000000000000000000000000000000000000000000000000000002a"]],"address":"0x01"}"
+            contract.Event({a: [69, 42]}).changed(function (res) {
+                
+            });
+        };
+
+        function test6() {
+            // "{"topic":["0x83c9849c","000000000000000000000000000000000000000000000000000000000000001e"],"max":100,"address":"0x01"}"
+            contract.Event({a: 30}, {max: 100}).changed(function (res) {
+                
+            });
+        };
+
+        function test7() {
+            // "{"topic":["0x83c9849c","000000000000000000000000000000000000000000000000000000000000001e"],"address":"0x01"}"
+            web3.eth.watch(contract.Event, {a: 30}).changed(function (res) {
+
+            });
+        };
+
+
         // not valid
-        // function test4() {
+        // function testX() {
         //    web3.eth.watch([contract.Event, contract.Event2]).changed(function (res) {
         //    });
         // };
@@ -62,6 +94,18 @@
         </div>
         <div>
             <button type="button" onClick="test3();">test3</button>
+        </div>
+        <div>
+            <button type="button" onClick="test4();">test4</button>
+        </div>
+        <div>
+            <button type="button" onClick="test5();">test5</button>
+        </div>
+        <div>
+            <button type="button" onClick="test6();">test6</button>
+        </div>
+        <div>
+            <button type="button" onClick="test7();">test7</button>
         </div>
     </body>
 </html>

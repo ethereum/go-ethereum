@@ -580,11 +580,9 @@ var web3 = require('./web3'); // jshint ignore:line
 /// should be used when we want to watch something
 /// it's using inner polling mechanism and is notified about changes
 /// TODO: change 'options' name cause it may be not the best matching one, since we have events
-var Filter = function(options, indexed, impl) {
+var Filter = function(options, impl) {
 
-    if (options._isEvent) {
-        return options(indexed);        
-    } else if (typeof options !== "string") {
+    if (typeof options !== "string") {
 
         // topics property is deprecated, warn about it!
         if (options.topics) {
@@ -1432,7 +1430,10 @@ var web3 = {
         /// @param filter may be a string, object or event
         /// @param indexed is optional, this may be an object with optional event indexed params
         watch: function (filter, indexed) {
-            return new web3.filter(filter, indexed, ethWatch);
+            if (filter._isEvent) {
+                return filter(indexed);
+            }
+            return new web3.filter(filter, ethWatch);
         }
     },
 
@@ -1443,9 +1444,8 @@ var web3 = {
     shh: {
         
         /// @param filter may be a string, object or event
-        /// @param indexed is optional, this may be an object with optional event indexed params
         watch: function (filter, indexed) {
-            return new web3.filter(filter, indexed, shhWatch);
+            return new web3.filter(filter, shhWatch);
         }
     },
 
