@@ -75,7 +75,7 @@ func RandByte(n int) []byte {
 		return nil
 	}
 
-	buff2 := RandByteWeakCrypto(n)
+	buff2 := saltByte(n)
 	for i := 0; i < n; i++ {
 		buff[i] ^= buff2[2]
 	}
