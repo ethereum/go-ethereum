@@ -22,21 +22,11 @@ require=(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof requ
  * @date 2014
  */
 
-if ("build" !== 'build') {/*
-    var BigNumber = require('bignumber.js'); // jshint ignore:line
-*/}
-
 var web3 = require('./web3'); 
 var utils = require('./utils');
 var types = require('./types');
+var c = require('./const');
 var f = require('./formatters');
-
-BigNumber.config({ ROUNDING_MODE: BigNumber.ROUND_DOWN });
-
-var ETH_PADDING = 32;
-
-/// method signature length in bytes
-var ETH_METHOD_SIGNATURE_LENGTH = 4;
 
 /// Filters all function from input abi
 /// @returns abi array with filtered objects of type 'function'
@@ -75,7 +65,7 @@ var inputTypes = types.inputTypes();
 /// @returns bytes representation of input params
 var toAbiInput = function (method, params) {
     var bytes = "";
-    var padding = ETH_PADDING * 2;
+    var padding = c.ETH_PADDING * 2;
 
     /// first we iterate in search for dynamic 
     method.inputs.forEach(function (input, index) {
@@ -108,7 +98,7 @@ var toAbiInput = function (method, params) {
 
 var dynamicBytesLength = function (type) {
     if (arrayType(type) || type === 'string')   // only string itself that is dynamic; stringX is static length.
-        return ETH_PADDING * 2;
+        return c.ETH_PADDING * 2;
     return 0;
 };
 
@@ -122,7 +112,7 @@ var fromAbiOutput = function (method, output) {
     
     output = output.slice(2);
     var result = [];
-    var padding = ETH_PADDING * 2;
+    var padding = c.ETH_PADDING * 2;
 
     var dynamicPartLength = method.outputs.reduce(function (acc, curr) {
         return acc + dynamicBytesLength(curr.type);
@@ -228,7 +218,7 @@ var outputParser = function (json) {
 /// @param method name for which we want to get method signature
 /// @returns (promise) contract method signature for method with given name
 var methodSignature = function (name) {
-    return web3.sha3(web3.fromAscii(name)).slice(0, 2 + ETH_METHOD_SIGNATURE_LENGTH * 2);
+    return web3.sha3(web3.fromAscii(name)).slice(0, 2 + c.ETH_METHOD_SIGNATURE_LENGTH * 2);
 };
 
 module.exports = {
@@ -242,7 +232,42 @@ module.exports = {
 };
 
 
-},{"./formatters":5,"./types":9,"./utils":10,"./web3":11}],2:[function(require,module,exports){
+},{"./const":2,"./formatters":6,"./types":10,"./utils":11,"./web3":12}],2:[function(require,module,exports){
+/*
+    This file is part of ethereum.js.
+
+    ethereum.js is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    ethereum.js is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/** @file const.js
+ * @authors:
+ *   Marek Kotewicz <marek@ethdev.com>
+ * @date 2015
+ */
+
+/// required to define ETH_BIGNUMBER_ROUNDING_MODE
+if ("build" !== 'build') {/*
+    var BigNumber = require('bignumber.js'); // jshint ignore:line
+*/}
+
+module.exports = {
+    ETH_PADDING: 32,
+    ETH_METHOD_SIGNATURE_LENGTH: 4,
+    ETH_BIGNUMBER_ROUNDING_MODE: { ROUNDING_MODE: BigNumber.ROUND_DOWN }
+};
+
+
+},{}],3:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -451,7 +476,7 @@ var contract = function (address, desc) {
 module.exports = contract;
 
 
-},{"./abi":1,"./event":3,"./web3":11}],3:[function(require,module,exports){
+},{"./abi":1,"./event":4,"./web3":12}],4:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -526,7 +551,7 @@ var implementationOfEvent = function (address, signature, event) {
 module.exports = implementationOfEvent;
 
 
-},{"./abi":1,"./utils":10}],4:[function(require,module,exports){
+},{"./abi":1,"./utils":11}],5:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -623,7 +648,7 @@ Filter.prototype.logs = function () {
 
 module.exports = Filter;
 
-},{"./web3":11}],5:[function(require,module,exports){
+},{"./web3":12}],6:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -651,10 +676,7 @@ if ("build" !== 'build') {/*
 */}
 
 var utils = require('./utils');
-
-BigNumber.config({ ROUNDING_MODE: BigNumber.ROUND_DOWN });
-
-var ETH_PADDING = 32;
+var c = require('./const');
 
 /// @param string string to be padded
 /// @param number of characters that result string should have
@@ -669,10 +691,11 @@ var padLeft = function (string, chars, sign) {
 /// If the value is floating point, round it down
 /// @returns right-aligned byte representation of int
 var formatInputInt = function (value) {
-    var padding = ETH_PADDING * 2;
+    var padding = c.ETH_PADDING * 2;
     if (value instanceof BigNumber || typeof value === 'number') {
         if (typeof value === 'number')
             value = new BigNumber(value);
+        BigNumber.config(c.ETH_BIGNUMBER_ROUNDING_MODE);
         value = value.round();
 
         if (value.lessThan(0)) 
@@ -691,7 +714,7 @@ var formatInputInt = function (value) {
 /// Formats input value to byte representation of string
 /// @returns left-algined byte representation of string
 var formatInputString = function (value) {
-    return utils.fromAscii(value, ETH_PADDING).substr(2);
+    return utils.fromAscii(value, c.ETH_PADDING).substr(2);
 };
 
 /// Formats input value to byte representation of bool
@@ -781,7 +804,7 @@ module.exports = {
 };
 
 
-},{"./utils":10}],6:[function(require,module,exports){
+},{"./const":2,"./utils":11}],7:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -853,7 +876,7 @@ HttpSyncProvider.prototype.send = function (payload) {
 module.exports = HttpSyncProvider;
 
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -965,7 +988,7 @@ ProviderManager.prototype.stopPolling = function (pollId) {
 module.exports = ProviderManager;
 
 
-},{"./web3":11}],8:[function(require,module,exports){
+},{"./web3":12}],9:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -999,7 +1022,7 @@ QtSyncProvider.prototype.send = function (payload) {
 module.exports = QtSyncProvider;
 
 
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1080,7 +1103,7 @@ module.exports = {
 };
 
 
-},{"./formatters":5}],10:[function(require,module,exports){
+},{"./formatters":6}],11:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1163,7 +1186,7 @@ module.exports = {
 };
 
 
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1470,7 +1493,7 @@ web3.setProvider = function(provider) {
 module.exports = web3;
 
 
-},{"./utils":10}],"web3":[function(require,module,exports){
+},{"./utils":11}],"web3":[function(require,module,exports){
 var web3 = require('./lib/web3');
 var ProviderManager = require('./lib/providermanager');
 web3.provider = new ProviderManager();
@@ -1483,7 +1506,7 @@ web3.abi = require('./lib/abi');
 
 module.exports = web3;
 
-},{"./lib/abi":1,"./lib/contract":2,"./lib/filter":4,"./lib/httpsync":6,"./lib/providermanager":7,"./lib/qtsync":8,"./lib/web3":11}]},{},["web3"])
+},{"./lib/abi":1,"./lib/contract":3,"./lib/filter":5,"./lib/httpsync":7,"./lib/providermanager":8,"./lib/qtsync":9,"./lib/web3":12}]},{},["web3"])
 
 
 //# sourceMappingURL=ethereum.js.map
