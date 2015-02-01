@@ -1,6 +1,7 @@
 package bzz
 
 import (
+	"errors"
 	"sync"
 	// "time"
 
@@ -22,17 +23,22 @@ const (
 	retrieveChanCapacity = 100
 )
 
+var (
+	notFound = errors.New("not found")
+)
+
 var dpaLogger = ethlogger.NewLogger("BZZ")
 
 type DPA struct {
 	Chunker   Chunker
 	Stores    []ChunkStore
-	wg        sync.WaitGroup
-	quitC     chan bool
 	storeC    chan *Chunk
 	retrieveC chan *Chunk
-	lock      sync.Mutex
-	running   bool
+
+	lock    sync.Mutex
+	running bool
+	wg      sync.WaitGroup
+	quitC   chan bool
 }
 
 type ChunkStore interface {
@@ -92,13 +98,13 @@ func (self *DPA) Store(data SectionReader) (key Key, err error) {
 
 // DPA is itself a chunk store , to stores a chunk only
 // its integrity is checked ?
-func (self *DPA) Put(*Chunk) (found bool, err error) {
+func (self *DPA) Put(*Chunk) (err error) {
 	return
 }
 
-// RetrieveChunk looks up Chunk in the local stores
+// Get(chunk *Chunk) looks up a chunk in the local stores
 // This method is blocking until the chunk is retrieved so additional timeout is needed to wrap this call
-func (self *DPA) Get(*Chunk) (found bool, err error) {
+func (self *DPA) Get(*Chunk) (err error) {
 	return
 }
 
@@ -130,11 +136,17 @@ func (self *DPA) retrieveLoop() {
 	go func() {
 	LOOP:
 		for chunk := range self.retrieveC {
-			for _, store := range self.Stores {
-				if err := store.Get(chunk); err != nil { // no waiting/blocking here
-					dpaLogger.DebugDetailf("%v retrieving chunk %x: %v", store, chunk.Key, err)
+			go func() {
+				for _, store := range self.Stores {
+					if err := store.Get(chunk); err != nil { // no waiting/blocking here
+						dpaLogger.DebugDetailf("%v retrieving chunk %x: %v", store, chunk.Key, err)
+					} else {
+						if !chunk.update {
+							break
+						}
+					}
 				}
-			}
+			}()
 			select {
 			case <-self.quitC:
 				break LOOP
@@ -149,11 +161,13 @@ func (self *DPA) storeLoop() {
 	go func() {
 	LOOP:
 		for chunk := range self.storeC {
-			for _, store := range self.Stores {
-				if err := store.Put(chunk); err != nil { // no waiting/blocking here
-					dpaLogger.DebugDetailf("%v storing chunk %x: %v", store, chunk.Key, err)
-				} // no waiting/blocking here
-			}
+			go func() {
+				for _, store := range self.Stores {
+					if err := store.Put(chunk); err != nil { // no waiting/blocking here
+						dpaLogger.DebugDetailf("%v storing chunk %x: %v", store, chunk.Key, err)
+					} // no waiting/blocking here
+				}
+			}()
 			select {
 			case <-self.quitC:
 				break LOOP
