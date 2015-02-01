@@ -13,10 +13,10 @@ const (
 	dbForceUpdateAccessCnt = 1000
 )
 
-type dpaMemStorage struct {
-	memtree     *dpaMemTree
-	entry_cnt   uint   // stored entries
-	access_cnt  uint64 // access counter; oldest is thrown away when full
+type memStore struct {
+	memtree     *memTree
+	entryCnt    uint   // stored entries
+	accessCnt   uint64 // access counter; oldest is thrown away when full
 	dbAccessCnt uint64
 }
 
@@ -69,10 +69,10 @@ func (h Key) bits(i, j uint) uint {
 	return res
 }
 
-type dpaMemTree struct {
-	subtree    []*dpaMemTree
-	parent     *dpaMemTree
-	parent_idx uint
+type memTree struct {
+	subtree   []*memTree
+	parent    *memTree
+	parentIdx uint
 
 	bits  uint // log2(subtree count)
 	width uint // subtree count
@@ -82,15 +82,15 @@ type dpaMemTree struct {
 	access       []uint64
 }
 
-func newTreeNode(b uint, parent *dpaMemTree, pidx uint) (node *dpaMemTree) {
+func newMemTree(b uint, parent *memTree, pidx uint) (node *memTree) {
 
-	node = new(dpaMemTree)
+	node = new(memTree)
 	node.bits = b
 	node.width = 1 << uint(b)
-	node.subtree = make([]*dpaMemTree, node.width)
+	node.subtree = make([]*memTree, node.width)
 	node.access = make([]uint64, node.width-1)
 	node.parent = parent
-	node.parent_idx = pidx
+	node.parentIdx = pidx
 	if parent != nil {
 		parent.subtree[pidx] = node
 	}
@@ -99,7 +99,7 @@ func newTreeNode(b uint, parent *dpaMemTree, pidx uint) (node *dpaMemTree) {
 
 }
 
-func (node *dpaMemTree) update_access(a uint64) {
+func (node *memTree) updateAccess(a uint64) {
 
 	aidx := uint(0)
 	var aa uint64
@@ -110,7 +110,7 @@ func (node *dpaMemTree) update_access(a uint64) {
 			aa = node.access[((aidx-1)^1)+1]
 			aidx = (aidx - 1) >> 1
 		} else {
-			pidx := node.parent_idx
+			pidx := node.parentIdx
 			node = node.parent
 			if node == nil {
 				return
@@ -131,9 +131,12 @@ func (node *dpaMemTree) update_access(a uint64) {
 
 }
 
-func (s *dpaMemStorage) add(entry *Chunk) {
+func (s *memStore) Put(entry *Chunk) (err error) {
+	if s.entryCnt >= maxEntries {
+		s.removeOldest()
+	}
 
-	s.access_cnt++
+	s.accessCnt++
 
 	node := s.memtree
 	bitpos := uint(0)
@@ -141,7 +144,7 @@ func (s *dpaMemStorage) add(entry *Chunk) {
 		l := entry.Key.bits(bitpos, node.bits)
 		st := node.subtree[l]
 		if st == nil {
-			st = newTreeNode(memTreeLW, node, l)
+			st = newMemTree(memTreeLW, node, l)
 			bitpos += node.bits
 			node = st
 			break
@@ -153,7 +156,7 @@ func (s *dpaMemStorage) add(entry *Chunk) {
 	if node.entry != nil {
 
 		if node.entry.Key.isEqual(entry.Key) {
-			node.update_access(s.access_cnt)
+			node.updateAccess(s.accessCnt)
 			return
 		}
 
@@ -162,16 +165,16 @@ func (s *dpaMemStorage) add(entry *Chunk) {
 			l := node.entry.Key.bits(bitpos, node.bits)
 			st := node.subtree[l]
 			if st == nil {
-				st = newTreeNode(memTreeLW, node, l)
+				st = newMemTree(memTreeLW, node, l)
 			}
 			st.entry = node.entry
 			node.entry = nil
-			st.update_access(node.access[0])
+			st.updateAccess(node.access[0])
 
 			l = entry.Key.bits(bitpos, node.bits)
 			st = node.subtree[l]
 			if st == nil {
-				st = newTreeNode(memTreeLW, node, l)
+				st = newMemTree(memTreeLW, node, l)
 			}
 			bitpos += node.bits
 			node = st
@@ -181,13 +184,14 @@ func (s *dpaMemStorage) add(entry *Chunk) {
 
 	node.entry = entry
 	node.lastDBaccess = s.dbAccessCnt
-	node.update_access(s.access_cnt)
-	s.entry_cnt++
+	node.updateAccess(s.accessCnt)
+	s.entryCnt++
 
+	return
 }
 
-func (s *dpaMemStorage) find(hash Key) (entry *Chunk) {
-
+func (s *memStore) Get(chunk *Chunk) (err error) {
+	hash := chunk.Key
 	node := s.memtree
 	bitpos := uint(0)
 	for node.entry == nil {
@@ -201,15 +205,22 @@ func (s *dpaMemStorage) find(hash Key) (entry *Chunk) {
 	}
 
 	if node.entry.Key.isEqual(hash) {
-		s.access_cnt++
-		node.update_access(s.access_cnt)
-		return node.entry
+		s.accessCnt++
+		node.updateAccess(s.accessCnt)
+		if s.dbAccessCnt-node.lastDBaccess > dbForceUpdateAccessCnt {
+			s.dbAccessCnt++
+			node.lastDBaccess = s.dbAccessCnt
+			chunk.update = true
+		}
+		chunk.Data = node.entry.Data
+		chunk.Size = node.entry.Size
 	} else {
-		return nil
+		err = notFound
 	}
+	return
 }
 
-func (s *dpaMemStorage) remove_oldest() {
+func (s *memStore) removeOldest() {
 
 	node := s.memtree
 
@@ -253,7 +264,7 @@ func (s *dpaMemStorage) remove_oldest() {
 	}
 
 	node.entry = nil
-	s.entry_cnt--
+	s.entryCnt--
 	node.access[0] = 0
 
 	//---
@@ -264,7 +275,7 @@ func (s *dpaMemStorage) remove_oldest() {
 		if aidx > 0 {
 			aidx = (aidx - 1) >> 1
 		} else {
-			pidx := node.parent_idx
+			pidx := node.parentIdx
 			node = node.parent
 			if node == nil {
 				return
@@ -278,24 +289,8 @@ func (s *dpaMemStorage) remove_oldest() {
 
 }
 
-func (s *dpaMemStorage) Put(req *Chunk) error {
-	if s.entry_cnt >= maxEntries {
-		s.remove_oldest()
-	}
-	s.add(req)
-	return nil
-}
+func (s *memStore) Init() {
 
-func (s *dpaMemStorage) Get(req *Chunk) {
-
-	entry := s.find(req.Key)
-	if entry == nil {
-	}
-
-}
-
-func (s *dpaMemStorage) Init() {
-
-	s.memtree = newTreeNode(memTreeFLW, nil, 0)
+	s.memtree = newMemTree(memTreeFLW, nil, 0)
 
 }
