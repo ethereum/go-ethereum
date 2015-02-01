@@ -111,6 +111,10 @@ func (self *TreeChunker) Init() {
 
 }
 
+func (self *TreeChunker) HashSize() int64 {
+	return self.hashSize
+}
+
 type Chunk struct {
 	Data SectionReader // nil if request, to be supplied by dpa
 	Size int64         // size of the data covered by the subtree encoded in this chunk
@@ -258,7 +262,9 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 		}
 	}
 	// send off new chunk to storage
-	chunkC <- newChunk
+	if chunkC != nil {
+		chunkC <- newChunk
+	}
 	// report hash of this chunk one level up (keys corresponds to the proper subslice of the parent chunk)x
 	copy(key, hash)
 

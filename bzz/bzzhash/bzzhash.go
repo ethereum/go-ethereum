@@ -22,7 +22,17 @@ func main() {
 
 	stat, _ := f.Stat()
 	sr := io.NewSectionReader(f, 0, stat.Size())
-	hash := bzz.GetDPAhash(sr, nil)
-
-	fmt.Printf("%064x\n", hash)
+	chunker := &bzz.TreeChunker{
+		Branches: 128,
+	}
+	chunker.Init()
+	hash := make([]byte, chunker.HashSize())
+	errC := chunker.Split(hash, sr, nil)
+	err, ok := <-errC
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+	}
+	if !ok {
+		fmt.Printf("%064x\n", hash)
+	}
 }
