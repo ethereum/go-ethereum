@@ -7,15 +7,17 @@ import (
 )
 
 const (
-	maxEntries = 500 // max number of stored (cached) blocks
-	memTreeLW  = 2   // log2(subtree count) of the subtrees
-	memTreeFLW = 14  // log2(subtree count) of the root layer
+	maxEntries             = 500 // max number of stored (cached) blocks
+	memTreeLW              = 2   // log2(subtree count) of the subtrees
+	memTreeFLW             = 14  // log2(subtree count) of the root layer
+	dbForceUpdateAccessCnt = 1000
 )
 
 type dpaMemStorage struct {
-	memtree    *dpaMemTree
-	entry_cnt  uint   // stored entries
-	access_cnt uint64 // access counter; oldest is thrown away when full
+	memtree     *dpaMemTree
+	entry_cnt   uint   // stored entries
+	access_cnt  uint64 // access counter; oldest is thrown away when full
+	dbAccessCnt uint64
 }
 
 /*
@@ -75,8 +77,9 @@ type dpaMemTree struct {
 	bits  uint // log2(subtree count)
 	width uint // subtree count
 
-	entry  *Chunk // if subtrees are present, entry should be nil
-	access []uint64
+	entry        *Chunk // if subtrees are present, entry should be nil
+	lastDBaccess uint64
+	access       []uint64
 }
 
 func newTreeNode(b uint, parent *dpaMemTree, pidx uint) (node *dpaMemTree) {
@@ -177,6 +180,7 @@ func (s *dpaMemStorage) add(entry *Chunk) {
 	}
 
 	node.entry = entry
+	node.lastDBaccess = s.dbAccessCnt
 	node.update_access(s.access_cnt)
 	s.entry_cnt++
 
