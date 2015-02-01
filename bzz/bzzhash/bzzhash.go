@@ -6,9 +6,11 @@ import (
 	"github.com/ethereum/go-ethereum/bzz"
 	"io"
 	"os"
+	"runtime"
 )
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: bzzhash <file name>")
