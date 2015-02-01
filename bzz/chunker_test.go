@@ -217,8 +217,6 @@ func TestRandomData(t *testing.T) {
 	testRandomData(chunker, tester, 70, 3, t)
 	testRandomData(chunker, tester, 179, 5, t)
 	testRandomData(chunker, tester, 253, 7, t)
-	// testRandomData(chunker, tester, 2530, 79, t)
-	// testRandomData(chunker, tester, 25300, 79, t)
 	t.Logf("chunks %v", tester.chunks)
 }
 
