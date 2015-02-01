@@ -59,6 +59,7 @@ func (self *Env) Time() int64           { return self.time }
 func (self *Env) Difficulty() *big.Int  { return self.difficulty }
 func (self *Env) State() *state.StateDB { return self.state }
 func (self *Env) GasLimit() *big.Int    { return self.gasLimit }
+func (self *Env) VmType() vm.Type       { return vm.StdVmTy }
 func (self *Env) GetHash(n uint64) []byte {
 	return crypto.Sha3([]byte(big.NewInt(int64(n)).String()))
 }

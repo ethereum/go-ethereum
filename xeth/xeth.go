@@ -224,18 +224,22 @@ func (self *XEth) Call(toStr, valueStr, gasStr, gasPriceStr, dataStr string) (st
 	}
 
 	var (
-		statedb   = self.chainManager.TransState()
-		initiator = state.NewStateObject(self.eth.KeyManager().KeyPair().Address(), self.eth.Db())
-		block     = self.chainManager.CurrentBlock()
-		to        = statedb.GetOrNewStateObject(fromHex(toStr))
-		data      = fromHex(dataStr)
-		gas       = ethutil.Big(gasStr)
-		price     = ethutil.Big(gasPriceStr)
-		value     = ethutil.Big(valueStr)
+		statedb = self.chainManager.TransState()
+		key     = self.eth.KeyManager().KeyPair()
+		from    = state.NewStateObject(key.Address(), self.eth.Db())
+		block   = self.chainManager.CurrentBlock()
+		to      = statedb.GetOrNewStateObject(fromHex(toStr))
+		data    = fromHex(dataStr)
+		gas     = ethutil.Big(gasStr)
+		price   = ethutil.Big(gasPriceStr)
+		value   = ethutil.Big(valueStr)
 	)
 
-	vmenv := NewEnv(self.chainManager, statedb, block, value, initiator.Address())
-	res, err := vmenv.Call(initiator, to.Address(), data, gas, price, value)
+	msg := types.NewTransactionMessage(fromHex(toStr), value, gas, price, data)
+	msg.Sign(key.PrivateKey)
+	vmenv := core.NewEnv(statedb, self.chainManager, msg, block)
+
+	res, err := vmenv.Call(from, to.Address(), data, gas, price, value)
 	if err != nil {
 		return "", err
 	}
