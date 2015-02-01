@@ -115,25 +115,34 @@ func (self *TreeChunker) HashSize() int64 {
 	return self.hashSize
 }
 
+// Chunk serves also serves as a request object passed to ChunkStores
+// in case it is a retrieval request, Data is nil and Size is 0
+// Note that Size is not the size of the data chunk, which is Data.Size() see SectionReader
+// but the size of the subtree encoded in the chunk
+// 0 if request, to be supplied by the dpa
 type Chunk struct {
-	Data SectionReader // nil if request, to be supplied by dpa
-	Size int64         // size of the data covered by the subtree encoded in this chunk
-	// not the size of data, which is Data.Size() see SectionReader
-	// 0 if request, to be supplied by dpa
-	Key Key       // always
-	C   chan bool // to signal data delivery by the dpa
-	wg  sync.WaitGroup
+	Data   SectionReader // nil if request, to be supplied by dpa
+	Size   int64         // size of the data covered by the subtree encoded in this chunk
+	Key    Key           // always
+	C      chan bool     // to signal data delivery by the dpa
+	update bool          //
 }
 
+// String() for pretty printing
 func (self *Chunk) String() string {
 	var size int64
 	var slice []byte
+	var n int
+	var err error
 	if self.Data != nil {
-		size = self.Data.Size()
+		size = 32 // we are printing 32 bytes of the data
 		slice = make([]byte, size)
-		self.Data.ReadAt(slice, 0)
+		n, err = self.Data.ReadAt(slice, 0)
+		if err != nil && err != io.EOF {
+			slice = []byte(fmt.Sprintf("ERROR: %v", err))
+		}
 	}
-	return fmt.Sprintf("Key: [%x..] TreeSize: %v Chunksize: %v Data: %x\n", self.Key[:4], self.Size, size, slice)
+	return fmt.Sprintf("Key: [%x..] TreeSize: %v Chunksize: %v Data: %x\n", self.Key[:4], self.Size, size, slice[:n])
 }
 
 // The treeChunkers own Hash hashes together
@@ -206,6 +215,11 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 	var hash Key
 	dpaLogger.Debugf("depth: %v, max subtree size: %v, data size: %v", depth, treeSize, size)
 
+	for depth > 0 && size < treeSize {
+		treeSize /= self.Branches
+		depth--
+	}
+
 	if depth == 0 {
 		// leaf nodes -> content chunks
 		hash = self.Hash(size, data)
@@ -216,10 +230,6 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 			Size: size,
 		}
 	} else {
-		for size < treeSize {
-			treeSize /= self.Branches
-			depth--
-		}
 		// intermediate chunk containing child nodes hashes
 		branches := int64((size-1)/treeSize) + 1
 		dpaLogger.Debugf("intermediate node: setting branches: %v, depth: %v, max subtree size: %v, data size: %v", branches, depth, treeSize, size)
