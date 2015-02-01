@@ -14,6 +14,7 @@ type VMEnv struct {
 	msg   Message
 	depth int
 	chain *ChainManager
+	typ   vm.Type
 }
 
 func NewEnv(state *state.StateDB, chain *ChainManager, msg Message, block *types.Block) *VMEnv {
@@ -22,6 +23,7 @@ func NewEnv(state *state.StateDB, chain *ChainManager, msg Message, block *types
 		state: state,
 		block: block,
 		msg:   msg,
+		typ:   vm.StdVmTy,
 	}
 }
 
@@ -35,6 +37,8 @@ func (self *VMEnv) Value() *big.Int       { return self.msg.Value() }
 func (self *VMEnv) State() *state.StateDB { return self.state }
 func (self *VMEnv) Depth() int            { return self.depth }
 func (self *VMEnv) SetDepth(i int)        { self.depth = i }
+func (self *VMEnv) VmType() vm.Type       { return self.typ }
+func (self *VMEnv) SetVmType(t vm.Type)   { self.typ = t }
 func (self *VMEnv) GetHash(n uint64) []byte {
 	if block := self.chain.GetBlockByNumber(n); block != nil {
 		return block.Hash()

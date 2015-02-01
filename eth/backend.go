@@ -141,14 +141,13 @@ func New(config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(nat)
 
 	eth.net = &p2p.Server{
 		Identity:  clientId,
 		MaxPeers:  config.MaxPeers,
 		Protocols: protocols,
 		Blacklist: eth.blacklist,
-		NAT:       p2p.UPNP(),
+		NAT:       nat,
 		NoDial:    !config.Dial,
 	}
 
