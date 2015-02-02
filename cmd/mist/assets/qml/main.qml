@@ -360,10 +360,21 @@ ApplicationWindow {
          ********************/
          Rectangle {
              id: menu
-             Layout.minimumWidth: 210
-             Layout.maximumWidth: 210
+             Layout.minimumWidth: 192
+             Layout.maximumWidth: 192
              anchors.top: parent.top
-             color: "#ececec"
+             Rectangle {
+                     width: parent.height
+                     height: parent.width
+                     anchors.centerIn: parent
+                     rotation: 90
+
+                     gradient: Gradient {
+                         GradientStop { position: 0.0; color: "#F1ECEC" }
+                         GradientStop { position: 0.2; color: "#FAF5F5" }
+                         GradientStop { position: 1.0; color: "#FAF5F5" }
+                     }
+             }
 
              Component {
                  id: menuItemTemplate
@@ -380,8 +391,8 @@ ApplicationWindow {
                          sel.visible = on
                      }
 
-                     width: 206
-                     height: 28
+                     width: 192
+                     height: 55
                      color: "#00000000"
 
                      anchors {
@@ -397,8 +408,7 @@ ApplicationWindow {
                          Rectangle {
                              id: r
                              anchors.fill: parent
-                             border.color: "#CCCCCC"
-                             border.width: 1
+                             border.width: 0
                              radius: 5
                              color: "#FFFFFFFF"
                          }
@@ -410,25 +420,28 @@ ApplicationWindow {
                              }
                              width: 10
                              color: "#FFFFFFFF"
+                             border.width:0
 
                              Rectangle {
+                                // Small line on top of selection. What's this for?
                                  anchors {
                                      left: parent.left
                                      right: parent.right
                                      top: parent.top
                                  }
                                  height: 1
-                                 color: "#CCCCCC"
+                                 color: "#FFFFFF"
                              }
 
                              Rectangle {
+                                // Small line on bottom of selection. What's this for again?
                                  anchors {
                                      left: parent.left
                                      right: parent.right
                                      bottom: parent.bottom
                                  }
                                  height: 1
-                                 color: "#CCCCCC"
+                                 color: "#FFFFFF"
                              }
                          }
                      }
@@ -442,12 +455,12 @@ ApplicationWindow {
 
                      Image {
                          id: icon
-                         height: 20
-                         width: 20
+                         height: 24
+                         width: 24
                          anchors {
                              left: parent.left
                              verticalCenter: parent.verticalCenter
-                             leftMargin: 3
+                             leftMargin: 6
                          }
                          MouseArea {
                              anchors.fill: parent
@@ -462,11 +475,11 @@ ApplicationWindow {
                          anchors {
                              left: icon.right
                              verticalCenter: parent.verticalCenter
-                             leftMargin: 3
+                             leftMargin: 6
                          }
 
-                         color: "#0D0A01"
-                         font.pixelSize: 12
+                         color: "#665F5F"
+                         font.pixelSize: 14
                      }
 
                      Text {
@@ -476,7 +489,7 @@ ApplicationWindow {
                              rightMargin: 8
                              verticalCenter: parent.verticalCenter
                          }
-                         color: "#AEADBE"
+                         color: "#6691C2"
                          font.pixelSize: 12
                      }
 
@@ -540,6 +553,28 @@ ApplicationWindow {
                  anchors.left: parent.left
                  anchors.right: parent.right
                  spacing: 3
+                
+                 Rectangle {
+                     // New App Button
+                     id: newAppButton
+                     anchors {
+                         left: parent.left
+                         leftMargin: 6
+                     }
+                     border.width: 0
+                     radius: 5
+                     height: 56
+                     width: 180
+                     color: "#F6EEEE"
+
+                     Text {
+                         text: "GO TO NEW APP"
+                         font.bold: true
+                         anchors.horizontalCenter: parent.horizontalCenter
+                         anchors.verticalCenter: parent.verticalCenter
+                         color: "#AAA0A0"
+                     }
+                 }
 
                  Text {
                      text: "ETHEREUM"
@@ -548,7 +583,7 @@ ApplicationWindow {
                          left: parent.left
                          leftMargin: 5
                      }
-                     color: "#888888"
+                     color: "#AAA0A0"
                  }
 
                  ColumnLayout {
@@ -568,7 +603,7 @@ ApplicationWindow {
                          left: parent.left
                          leftMargin: 5
                      }
-                     color: "#888888"
+                     color: "#AAA0A0"
                  }
 
                  ColumnLayout {
@@ -587,7 +622,7 @@ ApplicationWindow {
                          left: parent.left
                          leftMargin: 5
                      }
-                     color: "#888888"
+                     color: "#AAA0A0"
                  }
 
                  ColumnLayout {
