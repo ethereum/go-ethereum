@@ -238,9 +238,32 @@ if ("build" !== 'build') {/*
     var BigNumber = require('bignumber.js'); // jshint ignore:line
 */}
 
+var ETH_UNITS = [ 
+    'wei', 
+    'Kwei', 
+    'Mwei', 
+    'Gwei', 
+    'szabo', 
+    'finney', 
+    'ether', 
+    'grand', 
+    'Mether', 
+    'Gether', 
+    'Tether', 
+    'Pether', 
+    'Eether', 
+    'Zether', 
+    'Yether', 
+    'Nether', 
+    'Dether', 
+    'Vether', 
+    'Uether' 
+];
+
 module.exports = {
     ETH_PADDING: 32,
     ETH_SIGNATURE_LENGTH: 4,
+    ETH_UNITS: ETH_UNITS,
     ETH_BIGNUMBER_ROUNDING_MODE: { ROUNDING_MODE: BigNumber.ROUND_DOWN }
 };
 
@@ -1101,6 +1124,8 @@ module.exports = {
  * @date 2015
  */
 
+var c = require('./const');
+
 /// Finds first index of array element matching pattern
 /// @param array
 /// @param callback pattern
@@ -1182,6 +1207,32 @@ var filterEvents = function (json) {
     });
 };
 
+/// used to transform value/string to eth string
+/// TODO: use BigNumber.js to parse int
+/// TODO: add tests for it!
+var toEth = function (str) {
+    var val = typeof str === "string" ? str.indexOf('0x') === 0 ? parseInt(str.substr(2), 16) : parseInt(str) : str;
+    var unit = 0;
+    var units = c.ETH_UNITS;
+    while (val > 3000 && unit < units.length - 1)
+    {
+        val /= 1000;
+        unit++;
+    }
+    var s = val.toString().length < val.toFixed(2).length ? val.toString() : val.toFixed(2);
+    var replaceFunction = function($0, $1, $2) {
+        return $1 + ',' + $2;
+    };
+
+    while (true) {
+        var o = s;
+        s = s.replace(/(\d)(\d\d\d[\.\,])/, replaceFunction);
+        if (o === s)
+            break;
+    }
+    return s + ' ' + units[unit];
+};
+
 module.exports = {
     findIndex: findIndex,
     toAscii: toAscii,
@@ -1189,11 +1240,12 @@ module.exports = {
     extractDisplayName: extractDisplayName,
     extractTypeName: extractTypeName,
     filterFunctions: filterFunctions,
-    filterEvents: filterEvents
+    filterEvents: filterEvents,
+    toEth: toEth
 };
 
 
-},{}],12:[function(require,module,exports){
+},{"./const":2}],12:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1224,28 +1276,6 @@ if ("build" !== 'build') {/*
 */}
 
 var utils = require('./utils');
-
-var ETH_UNITS = [ 
-    'wei', 
-    'Kwei', 
-    'Mwei', 
-    'Gwei', 
-    'szabo', 
-    'finney', 
-    'ether', 
-    'grand', 
-    'Mether', 
-    'Gether', 
-    'Tether', 
-    'Pether', 
-    'Eether', 
-    'Zether', 
-    'Yether', 
-    'Nether', 
-    'Dether', 
-    'Vether', 
-    'Uether' 
-];
 
 /// @returns an array of objects describing web3 api methods
 var web3Methods = function () {
@@ -1409,29 +1439,7 @@ var web3 = {
     },
 
     /// used to transform value/string to eth string
-    /// TODO: use BigNumber.js to parse int
-    toEth: function(str) {
-        var val = typeof str === "string" ? str.indexOf('0x') === 0 ? parseInt(str.substr(2), 16) : parseInt(str) : str;
-        var unit = 0;
-        var units = ETH_UNITS;
-        while (val > 3000 && unit < units.length - 1)
-        {
-            val /= 1000;
-            unit++;
-        }
-        var s = val.toString().length < val.toFixed(2).length ? val.toString() : val.toFixed(2);
-        var replaceFunction = function($0, $1, $2) {
-            return $1 + ',' + $2;
-        };
-
-        while (true) {
-            var o = s;
-            s = s.replace(/(\d)(\d\d\d[\.\,])/, replaceFunction);
-            if (o === s)
-                break;
-        }
-        return s + ' ' + units[unit];
-    },
+    toEth: utils.toEth,
 
     /// eth object prototype
     eth: {
@@ -1467,11 +1475,6 @@ var web3 = {
             return new web3.filter(filter, shhWatch);
         }
     },
-
-    /// @returns true if provider is installed
-    haveProvider: function() {
-        return !!web3.provider.provider;
-    }
 };
 
 /// setups all api methods
@@ -1494,7 +1497,6 @@ var shhWatch = {
 setupMethods(shhWatch, shhWatchMethods());
 
 web3.setProvider = function(provider) {
-    //provider.onmessage = messageHandler; // there will be no async calls, to remove
     web3.provider.set(provider);
 };
 
