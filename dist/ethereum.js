@@ -590,6 +590,9 @@ var Filter = function(options, impl) {
 Filter.prototype.arrived = function(callback) {
     this.changed(callback);
 };
+Filter.prototype.happened = function(callback) {
+    this.changed(callback);
+};
 
 /// gets called when there is new eth/shh message
 Filter.prototype.changed = function(callback) {
