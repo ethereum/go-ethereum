@@ -22,8 +22,6 @@ import (
 	"net/http"
 
 	"code.google.com/p/go.net/websocket"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/xeth"
@@ -32,25 +30,21 @@ import (
 var wslogger = logger.NewLogger("RPC-WS")
 
 type WebSocketServer struct {
-	eth           *eth.Ethereum
-	filterManager *filter.FilterManager
-	port          int
-	doneCh        chan bool
-	listener      net.Listener
+	pipe     *xeth.XEth
+	port     int
+	doneCh   chan bool
+	listener net.Listener
 }
 
-func NewWebSocketServer(eth *eth.Ethereum, port int) (*WebSocketServer, error) {
+func NewWebSocketServer(pipe *xeth.XEth, port int) (*WebSocketServer, error) {
 	sport := fmt.Sprintf(":%d", port)
 	l, err := net.Listen("tcp", sport)
 	if err != nil {
 		return nil, err
 	}
 
-	filterManager := filter.NewFilterManager(eth.EventMux())
-	go filterManager.Start()
-
-	return &WebSocketServer{eth,
-		filterManager,
+	return &WebSocketServer{
+		pipe,
 		port,
 		make(chan bool),
 		l,
@@ -75,7 +69,7 @@ func (self *WebSocketServer) Start() {
 	wslogger.Infof("Starting RPC-WS server on port %d", self.port)
 	go self.handlerLoop()
 
-	api := rpc.NewEthereumApi(xeth.New(self.eth))
+	api := rpc.NewEthereumApi(self.pipe)
 	h := self.apiHandler(api)
 	http.Handle("/ws", h)
 
