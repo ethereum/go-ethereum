@@ -73,12 +73,17 @@ Rectangle {
 
 		RowLayout {
 			id: navBar
-			height: 40
+			height: 74
 			anchors {
 				left: parent.left
 				right: parent.right
 				leftMargin: 7
 			}
+			gradient: Gradient {
+                         GradientStop { position: 0.0; color: "#F1ECEC" }
+                         GradientStop { position: 0.2; color: "#FAF5F5" }
+                         GradientStop { position: 1.0; color: "#FAF5F5" }
+                     }
 
 			Button {
 				id: back

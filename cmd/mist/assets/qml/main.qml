@@ -44,7 +44,7 @@ ApplicationWindow {
         addPlugin("./views/info.qml", {noAdd: true, close: false, section: "legacy"});
 
         mainSplit.setView(wallet.view, wallet.menuItem);
-s
+
         newBrowserTab("http://etherian.io");
 
         // Command setup
@@ -360,24 +360,10 @@ s
          ********************/
          Rectangle {
              id: menu
-             Layout.minimumWidth: 192
-             Layout.maximumWidth: 192
+             Layout.minimumWidth: 210
+             Layout.maximumWidth: 210
              anchors.top: parent.top
-             //color: "#FAF5F5"
-
-             Rectangle {
-                     width: parent.height
-                     height: parent.width
-                     anchors.centerIn: parent
-                     rotation: 90
-
-                     gradient: Gradient {
-                         GradientStop { position: 0.0; color: "#F1ECEC" }
-                         GradientStop { position: 0.2; color: "#FAF5F5" }
-                         GradientStop { position: 1.0; color: "#FAF5F5" }
-                     }
-             }
-
+             color: "#ececec"
 
              Component {
                  id: menuItemTemplate
@@ -394,8 +380,8 @@ s
                          sel.visible = on
                      }
 
-                     width: 192
-                     height: 55
+                     width: 206
+                     height: 28
                      color: "#00000000"
 
                      anchors {
@@ -404,7 +390,6 @@ s
                      }
 
                      Rectangle {
-                         // This is the selection rectangle
                          id: sel
                          visible: false
                          anchors.fill: parent
@@ -412,10 +397,10 @@ s
                          Rectangle {
                              id: r
                              anchors.fill: parent
-                             border.width: 0
+                             border.color: "#CCCCCC"
+                             border.width: 1
                              radius: 5
                              color: "#FFFFFFFF"
-                             // Background of selected tab
                          }
                          Rectangle {
                              anchors {
@@ -425,29 +410,25 @@ s
                              }
                              width: 10
                              color: "#FFFFFFFF"
-                             border.width:0
-                             //Little tiny rectangle to the right of selection. Not sure what's for
 
                              Rectangle {
-                                 // Small line on top of selection. What's this for?
                                  anchors {
                                      left: parent.left
                                      right: parent.right
                                      top: parent.top
                                  }
                                  height: 1
-                                 color: "#FFFFFFFF"
+                                 color: "#CCCCCC"
                              }
 
                              Rectangle {
-                                 // Small line on bottom of selection. What's this for again?
                                  anchors {
                                      left: parent.left
                                      right: parent.right
                                      bottom: parent.bottom
                                  }
                                  height: 1
-                                 color: "#FFFFFFFF"
+                                 color: "#CCCCCC"
                              }
                          }
                      }
@@ -460,14 +441,13 @@ s
                      }
 
                      Image {
-                         // Icon
                          id: icon
-                         height: 24
-                         width: 24
+                         height: 20
+                         width: 20
                          anchors {
                              left: parent.left
                              verticalCenter: parent.verticalCenter
-                             leftMargin: 6
+                             leftMargin: 3
                          }
                          MouseArea {
                              anchors.fill: parent
@@ -478,27 +458,25 @@ s
                      }
 
                      Text {
-                         // Main Text
                          id: label
                          anchors {
                              left: icon.right
                              verticalCenter: parent.verticalCenter
-                             leftMargin: 6
+                             leftMargin: 3
                          }
 
-                         color: "#665F5F"
-                         font.pixelSize: 14
+                         color: "#0D0A01"
+                         font.pixelSize: 12
                      }
 
                      Text {
-                         // Auxiliary Text
                          id: secondary
                          anchors {
                              right: parent.right
                              rightMargin: 8
                              verticalCenter: parent.verticalCenter
                          }
-                         color: "#6691C2"
+                         color: "#AEADBE"
                          font.pixelSize: 12
                      }
 
@@ -563,45 +541,14 @@ s
                  anchors.right: parent.right
                  spacing: 3
 
-
-                 Rectangle {
-                     // New App Button
-                     id: newAppButton
+                 Text {
+                     text: "ETHEREUM"
+                     font.bold: true
                      anchors {
                          left: parent.left
-                         leftMargin: 6
+                         leftMargin: 5
                      }
-                     border.width: 0
-                     radius: 5
-                     height: 56
-                     width: 180
-                     color: "#F6EEEE"
-
-                     Text {
-                         text: "GO TO NEW APP"
-                         font.bold: true
-                         anchors.horizontalCenter: parent.horizontalCenter
-                         anchors.verticalCenter: parent.verticalCenter
-                         color: "#AAA0A0"
-                     }
-                 }
-
-                 Rectangle {
-                     // Ethereum Title
-                     anchors {
-                         left: parent.left
-                         leftMargin: 6
-                     }
-                     border.width: 0
-                     height: 56
-                     width: 180
-                     color: "#00000000"
-                     Text {
-                         text: "ETHEREUM"
-                         font.bold: true
-                         anchors.verticalCenter: parent.verticalCenter
-                         color: "#AAA0A0"
-                     }
+                     color: "#888888"
                  }
 
                  ColumnLayout {
@@ -614,23 +561,14 @@ s
                  }
 
 
-
-                 Rectangle {
-                     // Apps
+                 Text {
+                     text: "NET"
+                     font.bold: true
                      anchors {
                          left: parent.left
-                         leftMargin: 6
+                         leftMargin: 5
                      }
-                     border.width: 0
-                     height: 56
-                     width: 180
-                     color: "#00000000"
-                     Text {
-                         text: "APPS"
-                         font.bold: true
-                         anchors.verticalCenter: parent.verticalCenter
-                         color: "#AAA0A0"
-                     }
+                     color: "#888888"
                  }
 
                  ColumnLayout {
@@ -639,28 +577,17 @@ s
                      anchors {
                          left: parent.left
                          right: parent.right
-                         bottomMargin: 18
                      }
                  }
 
-
-                 Rectangle {
-                     // Debug
+                 Text {
+                     text: "DEBUG"
+                     font.bold: true
                      anchors {
                          left: parent.left
-                         leftMargin: 6
+                         leftMargin: 5
                      }
-                     border.width: 0
-                     height: 56
-                     width: 180
-                     color: "#00000000"
-
-                     Text {
-                         text: "DEBUG"
-                         font.bold: true
-                         anchors.verticalCenter: parent.verticalCenter
-                         color: "#AAA0A0"
-                     }
+                     color: "#888888"
                  }
 
                  ColumnLayout {
@@ -671,7 +598,6 @@ s
                          right: parent.right
                      }
                  }
-
              }
          }
 
@@ -684,35 +610,31 @@ s
               anchors.left: menu.right
               anchors.bottom: parent.bottom
               anchors.top: parent.top
-              anchors.topMargin: 50
-              anchors.bottomMargin: 50
-              color: "#FF00FF" //magenta
-              // This is the background of the URL bar
+              color: "#00000000"
 
               Rectangle {
                   id: urlPane
-
-                  anchors.right: parent.right
-                  anchors.left: parent.left
-                  anchors.bottom: parent.bottom
-                  anchors.top: parent.top
-                  anchors.topMargin: 50
-                  anchors.bottomMargin: 50
-                  height: 10
-                  color: "#00FFFF" //cyan
-
+                  height: 40
+                  color: "#00000000"
+                  anchors {
+                      left: parent.left
+                      right: parent.right
+                      leftMargin: 5
+                      rightMargin: 5
+                      top: parent.top
+                      topMargin: 5
+                  }
                   TextField {
                       id: url
                       objectName: "url"
                       placeholderText: "DApp URL"
-
                       anchors {
-                          left:  parent.left
+                          left: parent.left
                           right: parent.right
-                          top:   parent.top
-                          topMargin:   5
+                          top: parent.top
+                          topMargin: 5
                           rightMargin: 5
-                          leftMargin:  5
+                          leftMargin: 5
                       }
 
                       Keys.onReturnPressed: {
@@ -726,7 +648,7 @@ s
 
               }
 
-              // Invisible divider between url bar and main view
+              // Border
               Rectangle {
                   id: divider
                   anchors {
@@ -734,19 +656,18 @@ s
                       right: parent.right
                       top: urlPane.bottom
                   }
-                  height: 10
-                  color: "#FFFF00"  //yellow
+                  z: -1
+                  height: 1
+                  color: "#CCCCCC"
               }
 
               Rectangle {
                   id: mainView
-                  color: "#0000FF"  //dark blue
+                  color: "#00000000"
                   anchors.right: parent.right
                   anchors.left: parent.left
                   anchors.bottom: parent.bottom
-                  anchors.top: divider.top
-                  anchors.topMargin: 100
-                  anchors.bottomMargin: 100
+                  anchors.top: divider.bottom
 
                   function createView(component) {
                       var view = component.createObject(mainView)
@@ -754,7 +675,6 @@ s
                       return view;
                   }
               }
-
           }
       }
 
