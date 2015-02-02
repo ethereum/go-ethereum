@@ -903,9 +903,8 @@ var ProviderManager = function() {
                 data.data._id = self.id;
                 self.id++;
                 var result = self.provider.send(data.data);
-            
-                result = JSON.parse(result);
-                
+				result = JSON.parse(result);
+
                 // dont call the callback if result is not an array, or empty one
                 if (result.error || !(result.result instanceof Array) || result.result.length === 0) {
                     return;
