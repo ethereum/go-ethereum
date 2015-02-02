@@ -1,29 +1,27 @@
 [![Bugs](https://badge.waffle.io/ethereum/go-ethereum.png?label=bug&title=Bugs)](https://waffle.io/ethereum/go-ethereum)
 [![Stories in Ready](https://badge.waffle.io/ethereum/go-ethereum.png?label=ready&title=Ready)](https://waffle.io/ethereum/go-ethereum)
-[![Stories in
-Progress](https://badge.waffle.io/ethereum/go-ethereum.svg?label=in%20progress&title=In Progress)](http://waffle.io/ethereum/go-ethereum)
+[![Stories in Progress](https://badge.waffle.io/ethereum/go-ethereum.svg?label=in%20progress&title=In Progress)](http://waffle.io/ethereum/go-ethereum)
+[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/ethereum/go-ethereum?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
-Ethereum
+
+Ethereum PoC-8
 ========
 
-[![Build
-Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20master%20branch)](http://build.ethdev.com:8010/builders/Linux%20Go%20master%20branch/builds/-1) master [![Build
-Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20branch)](http://build.ethdev.com:8010/builders/Linux%20Go%20develop%20branch/builds/-1) develop
+* [![Build Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20master%20branch)](http://build.ethdev.com:8010/builders/Linux%20Go%20master%20branch/builds/-1) master
+* [![Build Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20branch)](http://build.ethdev.com:8010/builders/Linux%20Go%20develop%20branch/builds/-1) develop
+* [![Travis-ci](https://api.travis-ci.org/ethereum/go-ethereum.svg)](https://travis-ci.org/ethereum/go-ethereum) travis-ci
+* [![Coverage Status](https://coveralls.io/repos/ethereum/go-ethereum/badge.png?branch=develop)](https://coveralls.io/r/ethereum/go-ethereum?branch=develop)
 
 Ethereum Go Client © 2014 Jeffrey Wilcke.
-
-Current state: Proof of Concept 0.7
-
-Ethereum is currently in its testing phase. 
 
 Build
 =====
 
-To build Mist (GUI):
+Mist (GUI):
 
 `go get github.com/ethereum/go-ethereum/cmd/mist`
 
-To build the node (CLI):
+Ethereum (CLI):
 
 `go get github.com/ethereum/go-ethereum/cmd/ethereum`
 
@@ -36,50 +34,43 @@ Automated (dev) builds
 * [Windows] Coming soon&trade;
 * [Linux] Coming soon&trade;
 
-Packages
+Binaries
 ========
 
-Ethereum Go is split up in several sub packages Please refer to each
-individual package for more information.
-  1. [eth](https://github.com/ethereum/go-ethereum)
-  2. [ethchain](https://github.com/ethereum/go-ethereum/tree/master/ethchain)
-  3. [ethwire](https://github.com/ethereum/go-ethereum/tree/master/ethwire)
-  4. [ethdb](https://github.com/ethereum/go-ethereum/tree/master/ethdb)
-  5. [ethutil](https://github.com/ethereum/go-ethereum/tree/master/ethutil)
-  6. [ethpipe](https://github.com/ethereum/go-ethereum/tree/master/ethpipe)
-  7. [ethvm](https://github.com/ethereum/go-ethereum/tree/master/ethvm)
-  8. [ethtrie](https://github.com/ethereum/go-ethereum/tree/master/ethtrie)
-  9. [ethreact](https://github.com/ethereum/go-ethereum/tree/master/ethreact)
-  10. [ethlog](https://github.com/ethereum/go-ethereum/tree/master/ethlog)
+Go Ethereum comes with several binaries found in
+[cmd](https://github.com/ethereum/go-ethereum/tree/master/cmd):
 
-The [eth](https://github.com/ethereum/go-ethereum) is the top-level package
-of the Ethereum protocol. It functions as the Ethereum bootstrapping and
-peer communication layer. The [ethchain](https://github.com/ethereum/go-ethereum/tree/master/ethchain)
-contains the Ethereum blockchain, block manager, transaction and
-transaction handlers. The [ethwire](https://github.com/ethereum/go-ethereum/tree/master/ethwire) contains
-the Ethereum [wire protocol](http://wiki.ethereum.org/index.php/Wire_Protocol) which can be used
-to hook in to the Ethereum network. [ethutil](https://github.com/ethereum/go-ethereum/tree/master/ethutil) contains
-utility functions which are not Ethereum specific. The utility package
-contains the [patricia trie](http://wiki.ethereum.org/index.php/Patricia_Tree),
-[RLP Encoding](http://wiki.ethereum.org/index.php/RLP) and hex encoding
-helpers. The [ethdb](https://github.com/ethereum/go-ethereum/tree/master/ethdb) package
-contains the LevelDB interface and memory DB interface.
+* `mist` Official Ethereum Browser
+* `ethereum` Ethereum CLI
+* `ethtest` test tool which runs with the [tests](https://github.com/ethereum/testes) suit: 
+  `cat file | ethtest`.
+* `evm` is a generic Ethereum Virtual Machine: `evm -code 60ff60ff -gas
+  10000 -price 0 -dump`. See `-h` for a detailed description.
+* `rlpdump` converts a rlp stream to `interface{}`.
+* `peerserver` simple P2P (noi-ethereum) peer server.
+* `disasm` disassembles EVM code: `echo "6001" | disasm`
 
 General command line options
 ============================
 
 ```
-Shared between ethereum and Mist
+== Shared between ethereum and Mist ==
+
+= Settings
 -id      Set the custom identifier of the client (shows up on other clients)
 -port    Port on which the server will accept incomming connections
 -upnp    Enable UPnP
 -maxpeer Desired amount of peers
 -rpc     Start JSON RPC
-
 -dir     Data directory used to store configs and databases
--import  Import a private key
--genaddr Generates a new address and private key (destructive action)
--h       This
+
+= Utility 
+-h         This
+-import    Import a private key
+-genaddr   Generates a new address and private key (destructive action)
+-dump      Dump a specific state of a block to stdout given the -number or -hash
+-difftool  Supress all output and prints VM output to stdout
+-diff      vm=only vm output, all=all output including state storage
 
 Ethereum only
 ethereum [options] [filename]
@@ -87,7 +78,8 @@ ethereum [options] [filename]
 filename   Load the given file and interpret as JavaScript
 -m       Start mining blocks
 
-Mist only
+== Mist only ==
+
 -asset_path    absolute path to GUI assets directory
 ```
 
@@ -112,7 +104,7 @@ Style](http://golang.org/doc/effective_go.html#formatting).
 Unless structs fields are supposed to be directly accesible, provide
 Getters and hide the fields through Go's exporting facility.
 
-When you comment put meaningfull comments. Describe in detail what you
+When you comment put meaningful comments. Describe in detail what you
 want to achieve.
 
 *wrong*
@@ -132,4 +124,5 @@ less. I haven't got time to evaluate everyone's code in detail so I
 expect you to write tests for me so I don't have to test your code
 manually. (If you want to contribute by just writing tests that's fine
 too!)
+
 

@@ -1,64 +1,32 @@
 package xeth
 
-import (
-	"container/list"
+import "github.com/ethereum/go-ethereum/state"
 
-	"github.com/ethereum/go-ethereum/state"
-)
-
-type World struct {
-	pipe *XEth
-	cfg  *Config
+type State struct {
+	xeth *XEth
 }
 
-func NewWorld(pipe *XEth) *World {
-	world := &World{pipe, nil}
-	world.cfg = &Config{pipe}
-
-	return world
+func NewState(xeth *XEth) *State {
+	return &State{xeth}
 }
 
-func (self *XEth) World() *World {
-	return self.world
+func (self *State) State() *state.StateDB {
+	return self.xeth.chainManager.TransState()
 }
 
-func (self *World) State() *state.State {
-	return self.pipe.blockManager.CurrentState()
+func (self *State) Get(addr string) *Object {
+	return &Object{self.State().GetStateObject(fromHex(addr))}
 }
 
-func (self *World) Get(addr []byte) *Object {
-	return &Object{self.State().GetStateObject(addr)}
-}
-
-func (self *World) SafeGet(addr []byte) *Object {
+func (self *State) SafeGet(addr string) *Object {
 	return &Object{self.safeGet(addr)}
 }
 
-func (self *World) safeGet(addr []byte) *state.StateObject {
-	object := self.State().GetStateObject(addr)
+func (self *State) safeGet(addr string) *state.StateObject {
+	object := self.State().GetStateObject(fromHex(addr))
 	if object == nil {
-		object = state.NewStateObject(addr)
+		object = state.NewStateObject(fromHex(addr), self.xeth.eth.Db())
 	}
 
 	return object
-}
-
-func (self *World) Coinbase() *state.StateObject {
-	return nil
-}
-
-func (self *World) IsMining() bool {
-	return self.pipe.obj.IsMining()
-}
-
-func (self *World) IsListening() bool {
-	return self.pipe.obj.IsListening()
-}
-
-func (self *World) Peers() *list.List {
-	return self.pipe.obj.Peers()
-}
-
-func (self *World) Config() *Config {
-	return self.cfg
 }

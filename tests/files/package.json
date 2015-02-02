@@ -19,5 +19,8 @@
   "bugs": {
     "url": "https://github.com/ethereum/tests/issues"
   },
-  "homepage": "https://github.com/ethereum/tests"
+  "homepage": "https://github.com/ethereum/tests",
+  "dependencies": {
+    "require-all": "^1.0.0"
+  }
 }

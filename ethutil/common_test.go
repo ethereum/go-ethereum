@@ -3,36 +3,39 @@ package ethutil
 import (
 	"math/big"
 	"os"
-	"testing"
+
+	checker "gopkg.in/check.v1"
 )
 
-func TestOS(t *testing.T) {
+type CommonSuite struct{}
+
+var _ = checker.Suite(&CommonSuite{})
+
+func (s *CommonSuite) TestOS(c *checker.C) {
+	expwin := (os.PathSeparator == '\\' && os.PathListSeparator == ';')
 	res := IsWindows()
 
-	if res && (os.PathSeparator != '\\' || os.PathListSeparator != ';') {
-		t.Error("IsWindows is", res, "but path is", os.PathSeparator)
-	}
-
-	if !res && (os.PathSeparator == '\\' && os.PathListSeparator == ';') {
-		t.Error("IsWindows is", res, "but path is", os.PathSeparator)
+	if !expwin {
+		c.Assert(res, checker.Equals, expwin, checker.Commentf("IsWindows is", res, "but path is", os.PathSeparator))
+	} else {
+		c.Assert(res, checker.Not(checker.Equals), expwin, checker.Commentf("IsWindows is", res, "but path is", os.PathSeparator))
 	}
 }
 
-func TestWindonziePath(t *testing.T) {
+func (s *CommonSuite) TestWindonziePath(c *checker.C) {
+	iswindowspath := os.PathSeparator == '\\'
 	path := "/opt/eth/test/file.ext"
 	res := WindonizePath(path)
-	iswindowspath := os.PathSeparator == '\\'
+	ressep := string(res[0])
 
-	if !iswindowspath && string(res[0]) != "/" {
-		t.Error("Got", res)
-	}
-
-	if iswindowspath && string(res[0]) == "/" {
-		t.Error("Got", res)
+	if !iswindowspath {
+		c.Assert(ressep, checker.Equals, "/")
+	} else {
+		c.Assert(ressep, checker.Not(checker.Equals), "/")
 	}
 }
 
-func TestCommon(t *testing.T) {
+func (s *CommonSuite) TestCommon(c *checker.C) {
 	douglas := CurrencyToString(BigPow(10, 43))
 	einstein := CurrencyToString(BigPow(10, 22))
 	ether := CurrencyToString(BigPow(10, 19))
@@ -43,57 +46,23 @@ func TestCommon(t *testing.T) {
 	ada := CurrencyToString(BigPow(10, 4))
 	wei := CurrencyToString(big.NewInt(10))
 
-	if douglas != "10 Douglas" {
-		t.Error("Got", douglas)
-	}
-
-	if einstein != "10 Einstein" {
-		t.Error("Got", einstein)
-	}
-
-	if ether != "10 Ether" {
-		t.Error("Got", ether)
-	}
-
-	if finney != "10 Finney" {
-		t.Error("Got", finney)
-	}
-
-	if szabo != "10 Szabo" {
-		t.Error("Got", szabo)
-	}
-
-	if shannon != "10 Shannon" {
-		t.Error("Got", shannon)
-	}
-
-	if babbage != "10 Babbage" {
-		t.Error("Got", babbage)
-	}
-
-	if ada != "10 Ada" {
-		t.Error("Got", ada)
-	}
-
-	if wei != "10 Wei" {
-		t.Error("Got", wei)
-	}
+	c.Assert(douglas, checker.Equals, "10 Douglas")
+	c.Assert(einstein, checker.Equals, "10 Einstein")
+	c.Assert(ether, checker.Equals, "10 Ether")
+	c.Assert(finney, checker.Equals, "10 Finney")
+	c.Assert(szabo, checker.Equals, "10 Szabo")
+	c.Assert(shannon, checker.Equals, "10 Shannon")
+	c.Assert(babbage, checker.Equals, "10 Babbage")
+	c.Assert(ada, checker.Equals, "10 Ada")
+	c.Assert(wei, checker.Equals, "10 Wei")
 }
 
-func TestLarge(t *testing.T) {
+func (s *CommonSuite) TestLarge(c *checker.C) {
 	douglaslarge := CurrencyToString(BigPow(100000000, 43))
 	adalarge := CurrencyToString(BigPow(100000000, 4))
 	weilarge := CurrencyToString(big.NewInt(100000000))
 
-	if douglaslarge != "10000E298 Douglas" {
-		t.Error("Got", douglaslarge)
-	}
-
-	if adalarge != "10000E7 Einstein" {
-		t.Error("Got", adalarge)
-	}
-
-	if weilarge != "100 Babbage" {
-		t.Error("Got", weilarge)
-	}
+	c.Assert(douglaslarge, checker.Equals, "10000E298 Douglas")
+	c.Assert(adalarge, checker.Equals, "10000E7 Einstein")
+	c.Assert(weilarge, checker.Equals, "100 Babbage")
 }

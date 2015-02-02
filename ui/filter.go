@@ -1,12 +1,22 @@
 package ui
 
 import (
-	"github.com/ethereum/go-ethereum/chain"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ethutil"
 )
 
-func NewFilterFromMap(object map[string]interface{}, eth chain.EthManager) *chain.Filter {
-	filter := chain.NewFilter(eth)
+func fromHex(s string) []byte {
+	if len(s) > 1 {
+		if s[0:2] == "0x" {
+			s = s[2:]
+		}
+		return ethutil.Hex2Bytes(s)
+	}
+	return nil
+}
+
+func NewFilterFromMap(object map[string]interface{}, eth core.EthManager) *core.Filter {
+	filter := core.NewFilter(eth)
 
 	if object["earliest"] != nil {
 		val := ethutil.NewValue(object["earliest"])
@@ -18,14 +28,9 @@ func NewFilterFromMap(object map[string]interface{}, eth chain.EthManager) *chai
 		filter.SetLatestBlock(val.Int())
 	}
 
-	if object["to"] != nil {
-		val := ethutil.NewValue(object["to"])
-		filter.AddTo(ethutil.Hex2Bytes(val.Str()))
-	}
-
-	if object["from"] != nil {
-		val := ethutil.NewValue(object["from"])
-		filter.AddFrom(ethutil.Hex2Bytes(val.Str()))
+	if object["address"] != nil {
+		val := ethutil.NewValue(object["address"])
+		filter.SetAddress(fromHex(val.Str()))
 	}
 
 	if object["max"] != nil {
@@ -38,21 +43,21 @@ func NewFilterFromMap(object map[string]interface{}, eth chain.EthManager) *chai
 		filter.SetSkip(int(val.Uint()))
 	}
 
-	if object["altered"] != nil {
-		filter.Altered = makeAltered(object["altered"])
+	if object["topics"] != nil {
+		filter.SetTopics(MakeTopics(object["topics"]))
 	}
 
 	return filter
 }
 
 // Conversion methodn
-func mapToAccountChange(m map[string]interface{}) (d chain.AccountChange) {
+func mapToAccountChange(m map[string]interface{}) (d core.AccountChange) {
 	if str, ok := m["id"].(string); ok {
-		d.Address = ethutil.Hex2Bytes(str)
+		d.Address = fromHex(str)
 	}
 
 	if str, ok := m["at"].(string); ok {
-		d.StateAddress = ethutil.Hex2Bytes(str)
+		d.StateAddress = fromHex(str)
 	}
 
 	return
@@ -60,16 +65,13 @@ func mapToAccountChange(m map[string]interface{}) (d chain.AccountChange) {
 
 // data can come in in the following formats:
 // ["aabbccdd", {id: "ccddee", at: "11223344"}], "aabbcc", {id: "ccddee", at: "1122"}
-func makeAltered(v interface{}) (d []chain.AccountChange) {
+func MakeTopics(v interface{}) (d [][]byte) {
 	if str, ok := v.(string); ok {
-		d = append(d, chain.AccountChange{ethutil.Hex2Bytes(str), nil})
-	} else if obj, ok := v.(map[string]interface{}); ok {
-		d = append(d, mapToAccountChange(obj))
-	} else if slice, ok := v.([]interface{}); ok {
+		d = append(d, fromHex(str))
+	} else if slice, ok := v.([]string); ok {
 		for _, item := range slice {
-			d = append(d, makeAltered(item)...)
+			d = append(d, fromHex(item))
 		}
 	}
-
 	return
 }

@@ -1,38 +1,38 @@
-// Copyright (c) 2013-2014, Jeffrey Wilcke. All rights reserved.
-//
-// This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-//
-// This library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-// General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this library; if not, write to the Free Software
-// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
-// MA 02110-1301  USA
+/*
+	This file is part of go-ethereum
 
+	go-ethereum is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	go-ethereum is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/**
+ * @authors
+ * 	Jeffrey Wilcke <i@jev.io>
+ */
 package main
 
 import (
-	"bytes"
 	"fmt"
+	"io/ioutil"
 	"path"
-	"strconv"
-	"strings"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/chain"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/javascript"
-	"github.com/ethereum/go-ethereum/state"
-	"github.com/ethereum/go-ethereum/ui/qt"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/xeth"
-	"gopkg.in/qml.v1"
+	"github.com/obscuren/qml"
 )
 
 type memAddr struct {
@@ -42,7 +42,7 @@ type memAddr struct {
 
 // UI Library that has some basic functionality exposed
 type UiLib struct {
-	*xeth.JSXEth
+	*xeth.XEth
 	engine    *qml.Engine
 	eth       *eth.Ethereum
 	connected bool
@@ -55,73 +55,35 @@ type UiLib struct {
 	jsEngine *javascript.JSRE
 
 	filterCallbacks map[int][]int
+	filterManager   *filter.FilterManager
+
+	miner *miner.Miner
 }
 
 func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
-	return &UiLib{JSXEth: xeth.NewJSXEth(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth), filterCallbacks: make(map[int][]int)} //, filters: make(map[int]*xeth.JSFilter)}
+	lib := &UiLib{XEth: xeth.New(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth), filterCallbacks: make(map[int][]int)} //, filters: make(map[int]*xeth.JSFilter)}
+	lib.miner = miner.New(eth.KeyManager().Address(), eth)
+	lib.filterManager = filter.NewFilterManager(eth.EventMux())
+	go lib.filterManager.Start()
+
+	return lib
 }
 
 func (self *UiLib) Notef(args []interface{}) {
 	guilogger.Infoln(args...)
 }
 
-func (self *UiLib) LookupDomain(domain string) string {
-	world := self.World()
-
-	if len(domain) > 32 {
-		domain = string(crypto.Sha3([]byte(domain)))
-	}
-	data := world.Config().Get("DnsReg").StorageString(domain).Bytes()
-
-	// Left padded = A record, Right padded = CNAME
-	if len(data) > 0 && data[0] == 0 {
-		data = bytes.TrimLeft(data, "\x00")
-		var ipSlice []string
-		for _, d := range data {
-			ipSlice = append(ipSlice, strconv.Itoa(int(d)))
-		}
-
-		return strings.Join(ipSlice, ".")
-	} else {
-		data = bytes.TrimRight(data, "\x00")
-
-		return string(data)
-	}
-}
-
-func (self *UiLib) LookupName(addr string) string {
-	var (
-		nameReg = self.World().Config().Get("NameReg")
-		lookup  = nameReg.Storage(ethutil.Hex2Bytes(addr))
-	)
-
-	if lookup.Len() != 0 {
-		return strings.Trim(lookup.Str(), "\x00")
-	}
-
-	return addr
-}
-
-func (self *UiLib) LookupAddress(name string) string {
-	var (
-		nameReg = self.World().Config().Get("NameReg")
-		lookup  = nameReg.Storage(ethutil.RightPadBytes([]byte(name), 32))
-	)
-
-	if lookup.Len() != 0 {
-		return ethutil.Bytes2Hex(lookup.Bytes())
-	}
-
-	return ""
-}
-
 func (self *UiLib) PastPeers() *ethutil.List {
-	return ethutil.NewList(eth.PastPeers())
+	return ethutil.NewList([]string{})
+	//return ethutil.NewList(eth.PastPeers())
 }
 
 func (self *UiLib) ImportTx(rlpTx string) {
-	tx := chain.NewTransactionFromBytes(ethutil.Hex2Bytes(rlpTx))
-	self.eth.TxPool().QueueTransaction(tx)
+	tx := types.NewTransactionFromBytes(ethutil.Hex2Bytes(rlpTx))
+	err := self.eth.TxPool().Add(tx)
+	if err != nil {
+		guilogger.Infoln("import tx failed ", err)
+	}
 }
 
 func (self *UiLib) EvalJavascriptFile(path string) {
@@ -181,7 +143,9 @@ func (ui *UiLib) Connect(button qml.Object) {
 }
 
 func (ui *UiLib) ConnectToPeer(addr string) {
-	ui.eth.ConnectToPeer(addr)
+	if err := ui.eth.SuggestPeer(addr); err != nil {
+		guilogger.Infoln(err)
+	}
 }
 
 func (ui *UiLib) AssetPath(p string) string {
@@ -190,18 +154,18 @@ func (ui *UiLib) AssetPath(p string) string {
 
 func (self *UiLib) StartDbWithContractAndData(contractHash, data string) {
 	dbWindow := NewDebuggerWindow(self)
-	object := self.eth.BlockManager().CurrentState().GetStateObject(ethutil.Hex2Bytes(contractHash))
+	object := self.eth.ChainManager().State().GetStateObject(ethutil.Hex2Bytes(contractHash))
 	if len(object.Code) > 0 {
-		dbWindow.SetCode("0x" + ethutil.Bytes2Hex(object.Code))
+		dbWindow.SetCode(ethutil.Bytes2Hex(object.Code))
 	}
-	dbWindow.SetData("0x" + data)
+	dbWindow.SetData(data)
 
 	dbWindow.Show()
 }
 
 func (self *UiLib) StartDbWithCode(code string) {
 	dbWindow := NewDebuggerWindow(self)
-	dbWindow.SetCode("0x" + code)
+	dbWindow.SetCode(code)
 	dbWindow.Show()
 }
 
@@ -211,37 +175,133 @@ func (self *UiLib) StartDebugger() {
 	dbWindow.Show()
 }
 
-func (self *UiLib) NewFilter(object map[string]interface{}) (id int) {
-	filter := qt.NewFilterFromMap(object, self.eth)
-	filter.MessageCallback = func(messages state.Messages) {
-		self.win.Root().Call("invokeFilterCallback", xeth.ToJSMessages(messages), id)
-	}
-	id = self.eth.InstallFilter(filter)
-	return id
+func (self *UiLib) Transact(params map[string]interface{}) (string, error) {
+	object := mapToTxParams(params)
+
+	return self.XEth.Transact(
+		object["to"],
+		object["value"],
+		object["gas"],
+		object["gasPrice"],
+		object["data"],
+	)
 }
 
-func (self *UiLib) NewFilterString(typ string) (id int) {
-	filter := chain.NewFilter(self.eth)
-	filter.BlockCallback = func(block *chain.Block) {
-		self.win.Root().Call("invokeFilterCallback", "{}", id)
+func (self *UiLib) Compile(code string) (string, error) {
+	bcode, err := ethutil.Compile(code, false)
+	if err != nil {
+		return err.Error(), err
 	}
-	id = self.eth.InstallFilter(filter)
+
+	return ethutil.Bytes2Hex(bcode), err
+}
+
+func (self *UiLib) Call(params map[string]interface{}) (string, error) {
+	object := mapToTxParams(params)
+
+	return self.XEth.Execute(
+		object["to"],
+		object["value"],
+		object["gas"],
+		object["gasPrice"],
+		object["data"],
+	)
+}
+
+func (self *UiLib) AddLocalTransaction(to, data, gas, gasPrice, value string) int {
+	return self.miner.AddLocalTx(&miner.LocalTx{
+		To:       ethutil.Hex2Bytes(to),
+		Data:     ethutil.Hex2Bytes(data),
+		Gas:      gas,
+		GasPrice: gasPrice,
+		Value:    value,
+	}) - 1
+}
+
+func (self *UiLib) RemoveLocalTransaction(id int) {
+	self.miner.RemoveLocalTx(id)
+}
+
+func (self *UiLib) SetGasPrice(price string) {
+	self.miner.MinAcceptedGasPrice = ethutil.Big(price)
+}
+
+func (self *UiLib) SetExtra(extra string) {
+	self.miner.Extra = extra
+}
+
+func (self *UiLib) ToggleMining() bool {
+	if !self.miner.Mining() {
+		self.miner.Start()
+
+		return true
+	} else {
+		self.miner.Stop()
+
+		return false
+	}
+}
+
+func (self *UiLib) ToHex(data string) string {
+	return "0x" + ethutil.Bytes2Hex([]byte(data))
+}
+
+func (self *UiLib) ToAscii(data string) string {
+	start := 0
+	if len(data) > 1 && data[0:2] == "0x" {
+		start = 2
+	}
+	return string(ethutil.Hex2Bytes(data[start:]))
+}
+
+/// Ethereum filter methods
+func (self *UiLib) NewFilter(object map[string]interface{}, view *qml.Common) (id int) {
+	/* TODO remove me
+	filter := qt.NewFilterFromMap(object, self.eth)
+	filter.MessageCallback = func(messages state.Messages) {
+		view.Call("messages", xeth.ToMessages(messages), id)
+	}
+	id = self.filterManager.InstallFilter(filter)
 	return id
+	*/
+	return 0
+}
+
+func (self *UiLib) NewFilterString(typ string, view *qml.Common) (id int) {
+	/* TODO remove me
+	filter := core.NewFilter(self.eth)
+	filter.BlockCallback = func(block *types.Block) {
+		view.Call("messages", "{}", id)
+	}
+	id = self.filterManager.InstallFilter(filter)
+	return id
+	*/
+	return 0
 }
 
 func (self *UiLib) Messages(id int) *ethutil.List {
-	filter := self.eth.GetFilter(id)
+	/* TODO remove me
+	filter := self.filterManager.GetFilter(id)
 	if filter != nil {
-		messages := xeth.ToJSMessages(filter.Find())
+		messages := xeth.ToMessages(filter.Find())
 
 		return messages
 	}
+	*/
 
 	return ethutil.EmptyList()
 }
 
+func (self *UiLib) ReadFile(p string) string {
+	content, err := ioutil.ReadFile(self.AssetPath(path.Join("ext", p)))
+	if err != nil {
+		guilogger.Infoln("error reading file", p, ":", err)
+	}
+	return string(content)
+}
+
 func (self *UiLib) UninstallFilter(id int) {
-	self.eth.UninstallFilter(id)
+	self.filterManager.UninstallFilter(id)
 }
 
 func mapToTxParams(object map[string]interface{}) map[string]string {
@@ -293,38 +353,4 @@ func mapToTxParams(object map[string]interface{}) map[string]string {
 	}
 
 	return conv
-}
-
-func (self *UiLib) Transact(params map[string]interface{}) (*xeth.JSReceipt, error) {
-	object := mapToTxParams(params)
-
-	return self.JSXEth.Transact(
-		object["from"],
-		object["to"],
-		object["value"],
-		object["gas"],
-		object["gasPrice"],
-		object["data"],
-	)
-}
-
-func (self *UiLib) Compile(code string) (string, error) {
-	bcode, err := ethutil.Compile(code, false)
-	if err != nil {
-		return err.Error(), err
-	}
-
-	return ethutil.Bytes2Hex(bcode), err
-}
-
-func (self *UiLib) Call(params map[string]interface{}) (string, error) {
-	object := mapToTxParams(params)
-
-	return self.JSXEth.Execute(
-		object["to"],
-		object["value"],
-		object["gas"],
-		object["gasPrice"],
-		object["data"],
-	)
 }

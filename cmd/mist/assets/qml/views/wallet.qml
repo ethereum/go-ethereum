@@ -16,7 +16,13 @@ Rectangle {
 	anchors.fill: parent
 
 	function onReady() {
-		menuItem.secondaryTitle = eth.numberToHuman(eth.balanceAt(eth.key().address))
+		setBalance()
+	}
+
+	function setBalance() {
+		balance.text = "<b>Balance</b>: " + eth.numberToHuman(eth.balanceAt(eth.coinbase()))
+		if(menuItem)
+			menuItem.secondaryTitle = eth.numberToHuman(eth.balanceAt(eth.coinbase()))
 	}
 
 	ListModel {
@@ -39,7 +45,6 @@ Rectangle {
 
 		Text {
 			id: balance
-			text: "<b>Balance</b>: " + eth.numberToHuman(eth.balanceAt(eth.key().address))
 			font.pixelSize: 24
 			anchors {
 				horizontalCenter: parent.horizontalCenter
@@ -125,8 +130,7 @@ Rectangle {
 					onClicked: {
 						var value = txValue.text + denomModel.get(valueDenom.currentIndex).zeros;
 						var gasPrice = "10000000000000"
-						var res = eth.transact({from: eth.key().privateKey, to: txTo.text, value: value, gas: "500", gasPrice: gasPrice})
-						console.log(res)
+						var res = eth.transact({from: eth.coinbase(), to: txTo.text, value: value, gas: "500", gasPrice: gasPrice})
 					}
 				}
 			}
@@ -144,26 +148,31 @@ Rectangle {
 				id: txTableView
 				anchors.fill : parent
 				TableViewColumn{ role: "num" ; title: "#" ; width: 30 }
-				TableViewColumn{ role: "from" ; title: "From" ; width: 280 }
-				TableViewColumn{ role: "to" ; title: "To" ; width: 280 }
+				TableViewColumn{ role: "from" ; title: "From" ; width: 340 }
+				TableViewColumn{ role: "to" ; title: "To" ; width: 340 }
 				TableViewColumn{ role: "value" ; title: "Amount" ; width: 100 }
 
 				model: ListModel {
 					id: txModel
 					Component.onCompleted: {
-						var filter = ethx.watch({latest: -1, from: eth.key().address});
-						filter.changed(addTxs)
-
-						addTxs(filter.messages())
 					}
 
 					function addTxs(messages) {
+						/*
+						setBalance()
+
 						for(var i = 0; i < messages.length; i++) {
 							var message = messages.get(i);
 							var to = eth.lookupName(message.to);
-							var from = eth.lookupName(message.from);
+							var from;
+							if(message.from.length == 0) {
+								from = "- MINED -";
+							} else {
+								from = eth.lookupName(message.from);
+							}
 							txModel.insert(0, {num: txModel.count, from: from, to: to, value: eth.numberToHuman(message.value)})
 						}
+						*/
 					}
 				}
 			}

@@ -9,28 +9,36 @@ import (
 
 var vmlogger = logger.NewLogger("VM")
 
-type Type int
+type Type byte
 
 const (
-	StandardVmTy Type = iota
-	DebugVmTy
+	StdVmTy Type = iota
+	JitVmTy
 
 	MaxVmTy
 )
 
 var (
 	GasStep         = big.NewInt(1)
-	GasSha          = big.NewInt(20)
+	GasSha          = big.NewInt(10)
 	GasSLoad        = big.NewInt(20)
 	GasSStore       = big.NewInt(100)
 	GasSStoreRefund = big.NewInt(100)
 	GasBalance      = big.NewInt(20)
 	GasCreate       = big.NewInt(100)
 	GasCall         = big.NewInt(20)
+	GasCreateByte   = big.NewInt(5)
+	GasSha3Byte     = big.NewInt(10)
+	GasSha256Byte   = big.NewInt(50)
+	GasRipemdByte   = big.NewInt(50)
 	GasMemory       = big.NewInt(1)
 	GasData         = big.NewInt(5)
 	GasTx           = big.NewInt(500)
 	GasLog          = big.NewInt(32)
+	GasSha256       = big.NewInt(50)
+	GasRipemd       = big.NewInt(50)
+	GasEcrecover    = big.NewInt(500)
+	GasMemCpy       = big.NewInt(1)
 
 	Pow256 = ethutil.BigPow(2, 256)
 

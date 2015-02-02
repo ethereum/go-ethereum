@@ -397,5 +397,5 @@ func (it *ValueIterator) Value() *Value {
 }
 
 func (it *ValueIterator) Idx() int {
-	return it.idx
+	return it.idx - 1
 }

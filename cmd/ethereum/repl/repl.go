@@ -24,7 +24,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/ethereum/go-ethereum/logger"

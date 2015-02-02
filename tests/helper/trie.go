@@ -27,5 +27,5 @@ func (db *MemDatabase) LastKnownTD() []byte { return nil }
 func NewTrie() *trie.Trie {
 	db, _ := NewMemDatabase()
 
-	return trie.New(db, "")
+	return trie.New(nil, db)
 }

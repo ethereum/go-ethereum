@@ -30,6 +30,12 @@ func (self *Manifest) AddMessage(msg *Message) *Message {
 	return msg
 }
 
+func (self *Manifest) SetHash(hash []byte) {
+	for _, message := range self.Messages {
+		message.Block = hash
+	}
+}
+
 type Messages []*Message
 type Message struct {
 	To, From  []byte

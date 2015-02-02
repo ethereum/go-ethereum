@@ -1,20 +1,23 @@
-// Copyright (c) 2013-2014, Jeffrey Wilcke. All rights reserved.
-//
-// This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-//
-// This library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-// General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this library; if not, write to the Free Software
-// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
-// MA 02110-1301  USA
+/*
+	This file is part of go-ethereum
 
+	go-ethereum is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	go-ethereum is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/**
+ * @authors
+ * 	Jeffrey Wilcke <i@jev.io>
+ */
 package main
 
 import (
@@ -22,11 +25,11 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/ethereum/go-ethereum/state"
 )
 
 type plugin struct {
@@ -46,19 +49,19 @@ func (gui *Gui) LogPrint(level logger.LogLevel, msg string) {
 		}
 	*/
 }
-func (gui *Gui) Transact(recipient, value, gas, gasPrice, d string) (*xeth.JSReceipt, error) {
+func (gui *Gui) Transact(recipient, value, gas, gasPrice, d string) (string, error) {
 	var data string
 	if len(recipient) == 0 {
 		code, err := ethutil.Compile(d, false)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		data = ethutil.Bytes2Hex(code)
 	} else {
 		data = ethutil.Bytes2Hex(utils.FormatTransactionData(d))
 	}
 
-	return gui.pipe.Transact(gui.privateKey(), recipient, value, gas, gasPrice, data)
+	return gui.xeth.Transact(recipient, value, gas, gasPrice, data)
 }
 
 func (gui *Gui) SetCustomIdentifier(customIdentifier string) {
@@ -70,14 +73,10 @@ func (gui *Gui) GetCustomIdentifier() string {
 	return gui.clientIdentity.GetCustomIdentifier()
 }
 
-func (gui *Gui) ToggleTurboMining() {
-	gui.miner.ToggleTurbo()
-}
-
 // functions that allow Gui to implement interface guilogger.LogSystem
 func (gui *Gui) SetLogLevel(level logger.LogLevel) {
 	gui.logLevel = level
-	gui.stdLog.SetLogLevel(level)
+	gui.eth.Logger().SetLogLevel(level)
 	gui.config.Save("loglevel", level)
 }
 
@@ -108,9 +107,9 @@ func (self *Gui) DumpState(hash, path string) {
 	var stateDump []byte
 
 	if len(hash) == 0 {
-		stateDump = self.eth.BlockManager().CurrentState().Dump()
+		stateDump = self.eth.ChainManager().State().Dump()
 	} else {
-		var block *chain.Block
+		var block *types.Block
 		if hash[0] == '#' {
 			i, _ := strconv.Atoi(hash[1:])
 			block = self.eth.ChainManager().GetBlockByNumber(uint64(i))
@@ -123,7 +122,7 @@ func (self *Gui) DumpState(hash, path string) {
 			return
 		}
 
-		stateDump = block.State().Dump()
+		stateDump = state.New(block.Root(), self.eth.Db()).Dump()
 	}
 
 	file, err := os.OpenFile(path[7:], os.O_CREATE|os.O_RDWR, os.ModePerm)
@@ -136,21 +135,4 @@ func (self *Gui) DumpState(hash, path string) {
 	guilogger.Infof("dumped state (%s) to %s\n", hash, path)
 
 	file.Write(stateDump)
-}
-func (gui *Gui) ToggleMining() {
-	var txt string
-	if gui.eth.Mining {
-		utils.StopMining(gui.eth)
-		txt = "Start mining"
-
-		gui.getObjectByName("miningLabel").Set("visible", false)
-	} else {
-		utils.StartMining(gui.eth)
-		gui.miner = utils.GetMiner()
-		txt = "Stop mining"
-
-		gui.getObjectByName("miningLabel").Set("visible", true)
-	}
-
-	gui.win.Root().Set("miningButtonText", txt)
 }

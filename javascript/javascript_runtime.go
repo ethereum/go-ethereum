@@ -7,9 +7,10 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
@@ -23,7 +24,7 @@ var jsrelogger = logger.NewLogger("JSRE")
 type JSRE struct {
 	ethereum *eth.Ethereum
 	Vm       *otto.Otto
-	pipe     *xeth.JSXEth
+	pipe     *xeth.XEth
 
 	events event.Subscription
 
@@ -48,7 +49,7 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	re := &JSRE{
 		ethereum,
 		otto.New(),
-		xeth.NewJSXEth(ethereum),
+		xeth.New(ethereum),
 		nil,
 		make(map[string][]otto.Value),
 	}
@@ -57,12 +58,11 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	re.Vm.Run(jsLib)
 
 	// Load extra javascript files
-	re.LoadIntFile("string.js")
-	re.LoadIntFile("big.js")
+	re.LoadIntFile("bignumber.min.js")
 
 	// Subscribe to events
 	mux := ethereum.EventMux()
-	re.events = mux.Subscribe(chain.NewBlockEvent{})
+	re.events = mux.Subscribe(core.NewBlockEvent{})
 
 	// We have to make sure that, whoever calls this, calls "Stop"
 	go re.mainLoop()
@@ -120,6 +120,7 @@ func (self *JSRE) initStdFuncs() {
 	eth.Set("startMining", self.startMining)
 	eth.Set("execBlock", self.execBlock)
 	eth.Set("dump", self.dump)
+	eth.Set("export", self.export)
 }
 
 /*
@@ -127,10 +128,9 @@ func (self *JSRE) initStdFuncs() {
  */
 
 func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
-	var state *state.State
+	var block *types.Block
 
 	if len(call.ArgumentList) > 0 {
-		var block *chain.Block
 		if call.Argument(0).IsNumber() {
 			num, _ := call.Argument(0).ToInteger()
 			block = self.ethereum.ChainManager().GetBlockByNumber(uint64(num))
@@ -147,12 +147,12 @@ func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
 			return otto.UndefinedValue()
 		}
 
-		state = block.State()
 	} else {
-		state = self.ethereum.BlockManager().CurrentState()
+		block = self.ethereum.ChainManager().CurrentBlock()
 	}
 
-	v, _ := self.Vm.ToValue(state.Dump())
+	statedb := state.New(block.Root(), self.ethereum.Db())
+	v, _ := self.Vm.ToValue(statedb.Dump())
 
 	return v
 }
@@ -201,7 +201,7 @@ func (self *JSRE) addPeer(call otto.FunctionCall) otto.Value {
 	if err != nil {
 		return otto.FalseValue()
 	}
-	self.ethereum.ConnectToPeer(host)
+	self.ethereum.SuggestPeer(host)
 
 	return otto.TrueValue()
 }
@@ -229,6 +229,23 @@ func (self *JSRE) execBlock(call otto.FunctionCall) otto.Value {
 
 	err = utils.BlockDo(self.ethereum, ethutil.Hex2Bytes(hash))
 	if err != nil {
+		fmt.Println(err)
+		return otto.FalseValue()
+	}
+
+	return otto.TrueValue()
+}
+
+func (self *JSRE) export(call otto.FunctionCall) otto.Value {
+	fn, err := call.Argument(0).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.FalseValue()
+	}
+
+	data := self.ethereum.ChainManager().Export()
+
+	if err := ethutil.WriteFile(fn, data); err != nil {
 		fmt.Println(err)
 		return otto.FalseValue()
 	}

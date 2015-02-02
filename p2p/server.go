@@ -2,21 +2,420 @@ package p2p
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net"
-	"sort"
-	"strconv"
 	"sync"
 	"time"
 
-	logpkg "github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger"
 )
 
 const (
-	outboundAddressPoolSize = 10
-	disconnectGracePeriod   = 2
+	outboundAddressPoolSize   = 500
+	defaultDialTimeout        = 10 * time.Second
+	portMappingUpdateInterval = 15 * time.Minute
+	portMappingTimeout        = 20 * time.Minute
 )
 
+var srvlog = logger.NewLogger("P2P Server")
+
+// Server manages all peer connections.
+//
+// The fields of Server are used as configuration parameters.
+// You should set them before starting the Server. Fields may not be
+// modified while the server is running.
+type Server struct {
+	// This field must be set to a valid client identity.
+	Identity ClientIdentity
+
+	// MaxPeers is the maximum number of peers that can be
+	// connected. It must be greater than zero.
+	MaxPeers int
+
+	// Protocols should contain the protocols supported
+	// by the server. Matching protocols are launched for
+	// each peer.
+	Protocols []Protocol
+
+	// If Blacklist is set to a non-nil value, the given Blacklist
+	// is used to verify peer connections.
+	Blacklist Blacklist
+
+	// If ListenAddr is set to a non-nil address, the server
+	// will listen for incoming connections.
+	//
+	// If the port is zero, the operating system will pick a port. The
+	// ListenAddr field will be updated with the actual address when
+	// the server is started.
+	ListenAddr string
+
+	// If set to a non-nil value, the given NAT port mapper
+	// is used to make the listening port available to the
+	// Internet.
+	NAT NAT
+
+	// If Dialer is set to a non-nil value, the given Dialer
+	// is used to dial outbound peer connections.
+	Dialer *net.Dialer
+
+	// If NoDial is true, the server will not dial any peers.
+	NoDial bool
+
+	// Hook for testing. This is useful because we can inhibit
+	// the whole protocol stack.
+	newPeerFunc peerFunc
+
+	lock      sync.RWMutex
+	running   bool
+	listener  net.Listener
+	laddr     *net.TCPAddr // real listen addr
+	peers     []*Peer
+	peerSlots chan int
+	peerCount int
+
+	quit           chan struct{}
+	wg             sync.WaitGroup
+	peerConnect    chan *peerAddr
+	peerDisconnect chan *Peer
+}
+
+// NAT is implemented by NAT traversal methods.
+type NAT interface {
+	GetExternalAddress() (net.IP, error)
+	AddPortMapping(protocol string, extport, intport int, name string, lifetime time.Duration) error
+	DeletePortMapping(protocol string, extport, intport int) error
+
+	// Should return name of the method.
+	String() string
+}
+
+type peerFunc func(srv *Server, c net.Conn, dialAddr *peerAddr) *Peer
+
+// Peers returns all connected peers.
+func (srv *Server) Peers() (peers []*Peer) {
+	srv.lock.RLock()
+	defer srv.lock.RUnlock()
+	for _, peer := range srv.peers {
+		if peer != nil {
+			peers = append(peers, peer)
+		}
+	}
+	return
+}
+
+// PeerCount returns the number of connected peers.
+func (srv *Server) PeerCount() int {
+	srv.lock.RLock()
+	defer srv.lock.RUnlock()
+	return srv.peerCount
+}
+
+// SuggestPeer injects an address into the outbound address pool.
+func (srv *Server) SuggestPeer(ip net.IP, port int, nodeID []byte) {
+	addr := &peerAddr{ip, uint64(port), nodeID}
+	select {
+	case srv.peerConnect <- addr:
+	default: // don't block
+		srvlog.Warnf("peer suggestion %v ignored", addr)
+	}
+}
+
+// Broadcast sends an RLP-encoded message to all connected peers.
+// This method is deprecated and will be removed later.
+func (srv *Server) Broadcast(protocol string, code uint64, data ...interface{}) {
+	var payload []byte
+	if data != nil {
+		payload = encodePayload(data...)
+	}
+	srv.lock.RLock()
+	defer srv.lock.RUnlock()
+	for _, peer := range srv.peers {
+		if peer != nil {
+			var msg = Msg{Code: code}
+			if data != nil {
+				msg.Payload = bytes.NewReader(payload)
+				msg.Size = uint32(len(payload))
+			}
+			peer.writeProtoMsg(protocol, msg)
+		}
+	}
+}
+
+// Start starts running the server.
+// Servers can be re-used and started again after stopping.
+func (srv *Server) Start() (err error) {
+	srv.lock.Lock()
+	defer srv.lock.Unlock()
+	if srv.running {
+		return errors.New("server already running")
+	}
+	srvlog.Infoln("Starting Server")
+
+	// initialize fields
+	if srv.Identity == nil {
+		return fmt.Errorf("Server.Identity must be set to a non-nil identity")
+	}
+	if srv.MaxPeers <= 0 {
+		return fmt.Errorf("Server.MaxPeers must be > 0")
+	}
+	srv.quit = make(chan struct{})
+	srv.peers = make([]*Peer, srv.MaxPeers)
+	srv.peerSlots = make(chan int, srv.MaxPeers)
+	srv.peerConnect = make(chan *peerAddr, outboundAddressPoolSize)
+	srv.peerDisconnect = make(chan *Peer)
+	if srv.newPeerFunc == nil {
+		srv.newPeerFunc = newServerPeer
+	}
+	if srv.Blacklist == nil {
+		srv.Blacklist = NewBlacklist()
+	}
+	if srv.Dialer == nil {
+		srv.Dialer = &net.Dialer{Timeout: defaultDialTimeout}
+	}
+
+	if srv.ListenAddr != "" {
+		if err := srv.startListening(); err != nil {
+			return err
+		}
+	}
+	if !srv.NoDial {
+		srv.wg.Add(1)
+		go srv.dialLoop()
+	}
+	if srv.NoDial && srv.ListenAddr == "" {
+		srvlog.Warnln("I will be kind-of useless, neither dialing nor listening.")
+	}
+
+	// make all slots available
+	for i := range srv.peers {
+		srv.peerSlots <- i
+	}
+	// note: discLoop is not part of WaitGroup
+	go srv.discLoop()
+	srv.running = true
+	return nil
+}
+
+func (srv *Server) startListening() error {
+	listener, err := net.Listen("tcp", srv.ListenAddr)
+	if err != nil {
+		return err
+	}
+	srv.ListenAddr = listener.Addr().String()
+	srv.laddr = listener.Addr().(*net.TCPAddr)
+	srv.listener = listener
+	srv.wg.Add(1)
+	go srv.listenLoop()
+	if !srv.laddr.IP.IsLoopback() && srv.NAT != nil {
+		srv.wg.Add(1)
+		go srv.natLoop(srv.laddr.Port)
+	}
+	return nil
+}
+
+// Stop terminates the server and all active peer connections.
+// It blocks until all active connections have been closed.
+func (srv *Server) Stop() {
+	srv.lock.Lock()
+	if !srv.running {
+		srv.lock.Unlock()
+		return
+	}
+	srv.running = false
+	srv.lock.Unlock()
+
+	srvlog.Infoln("Stopping server")
+	if srv.listener != nil {
+		// this unblocks listener Accept
+		srv.listener.Close()
+	}
+	close(srv.quit)
+	for _, peer := range srv.Peers() {
+		peer.Disconnect(DiscQuitting)
+	}
+	srv.wg.Wait()
+
+	// wait till they actually disconnect
+	// this is checked by claiming all peerSlots.
+	// slots become available as the peers disconnect.
+	for i := 0; i < cap(srv.peerSlots); i++ {
+		<-srv.peerSlots
+	}
+	// terminate discLoop
+	close(srv.peerDisconnect)
+}
+
+func (srv *Server) discLoop() {
+	for peer := range srv.peerDisconnect {
+		srv.removePeer(peer)
+	}
+}
+
+// main loop for adding connections via listening
+func (srv *Server) listenLoop() {
+	defer srv.wg.Done()
+
+	srvlog.Infoln("Listening on", srv.listener.Addr())
+	for {
+		select {
+		case slot := <-srv.peerSlots:
+			srvlog.Debugf("grabbed slot %v for listening", slot)
+			conn, err := srv.listener.Accept()
+			if err != nil {
+				srv.peerSlots <- slot
+				return
+			}
+			srvlog.Debugf("Accepted conn %v (slot %d)\n", conn.RemoteAddr(), slot)
+			srv.addPeer(conn, nil, slot)
+		case <-srv.quit:
+			return
+		}
+	}
+}
+
+func (srv *Server) natLoop(port int) {
+	defer srv.wg.Done()
+	for {
+		srv.updatePortMapping(port)
+		select {
+		case <-time.After(portMappingUpdateInterval):
+			// one more round
+		case <-srv.quit:
+			srv.removePortMapping(port)
+			return
+		}
+	}
+}
+
+func (srv *Server) updatePortMapping(port int) {
+	srvlog.Infoln("Attempting to map port", port, "with", srv.NAT)
+	err := srv.NAT.AddPortMapping("tcp", port, port, "ethereum p2p", portMappingTimeout)
+	if err != nil {
+		srvlog.Errorln("Port mapping error:", err)
+		return
+	}
+	extip, err := srv.NAT.GetExternalAddress()
+	if err != nil {
+		srvlog.Errorln("Error getting external IP:", err)
+		return
+	}
+	srv.lock.Lock()
+	extaddr := *(srv.listener.Addr().(*net.TCPAddr))
+	extaddr.IP = extip
+	srvlog.Infoln("Mapped port, external addr is", &extaddr)
+	srv.laddr = &extaddr
+	srv.lock.Unlock()
+}
+
+func (srv *Server) removePortMapping(port int) {
+	srvlog.Infoln("Removing port mapping for", port, "with", srv.NAT)
+	srv.NAT.DeletePortMapping("tcp", port, port)
+}
+
+func (srv *Server) dialLoop() {
+	defer srv.wg.Done()
+	var (
+		suggest chan *peerAddr
+		slot    *int
+		slots   = srv.peerSlots
+	)
+	for {
+		select {
+		case i := <-slots:
+			// we need a peer in slot i, slot reserved
+			slot = &i
+			// now we can watch for candidate peers in the next loop
+			suggest = srv.peerConnect
+			// do not consume more until candidate peer is found
+			slots = nil
+
+		case desc := <-suggest:
+			// candidate peer found, will dial out asyncronously
+			// if connection fails slot will be released
+			srvlog.DebugDetailf("dial %v (%v)", desc, *slot)
+			go srv.dialPeer(desc, *slot)
+			// we can watch if more peers needed in the next loop
+			slots = srv.peerSlots
+			// until then we dont care about candidate peers
+			suggest = nil
+
+		case <-srv.quit:
+			// give back the currently reserved slot
+			if slot != nil {
+				srv.peerSlots <- *slot
+			}
+			return
+		}
+	}
+}
+
+// connect to peer via dial out
+func (srv *Server) dialPeer(desc *peerAddr, slot int) {
+	srvlog.Debugf("Dialing %v (slot %d)\n", desc, slot)
+	conn, err := srv.Dialer.Dial(desc.Network(), desc.String())
+	if err != nil {
+		srvlog.DebugDetailf("dial error: %v", err)
+		srv.peerSlots <- slot
+		return
+	}
+	go srv.addPeer(conn, desc, slot)
+}
+
+// creates the new peer object and inserts it into its slot
+func (srv *Server) addPeer(conn net.Conn, desc *peerAddr, slot int) *Peer {
+	srv.lock.Lock()
+	defer srv.lock.Unlock()
+	if !srv.running {
+		conn.Close()
+		srv.peerSlots <- slot // release slot
+		return nil
+	}
+	peer := srv.newPeerFunc(srv, conn, desc)
+	peer.slot = slot
+	srv.peers[slot] = peer
+	srv.peerCount++
+	go func() { peer.loop(); srv.peerDisconnect <- peer }()
+	return peer
+}
+
+// removes peer: sending disconnect msg, stop peer, remove rom list/table, release slot
+func (srv *Server) removePeer(peer *Peer) {
+	srv.lock.Lock()
+	defer srv.lock.Unlock()
+	srvlog.Debugf("Removing %v (slot %v)\n", peer, peer.slot)
+	if srv.peers[peer.slot] != peer {
+		srvlog.Warnln("Invalid peer to remove:", peer)
+		return
+	}
+	// remove from list and index
+	srv.peerCount--
+	srv.peers[peer.slot] = nil
+	// release slot to signal need for a new peer, last!
+	srv.peerSlots <- peer.slot
+}
+
+func (srv *Server) verifyPeer(addr *peerAddr) error {
+	if srv.Blacklist.Exists(addr.Pubkey) {
+		return errors.New("blacklisted")
+	}
+	if bytes.Equal(srv.Identity.Pubkey()[1:], addr.Pubkey) {
+		return newPeerError(errPubkeyForbidden, "not allowed to connect to srv")
+	}
+	srv.lock.RLock()
+	defer srv.lock.RUnlock()
+	for _, peer := range srv.peers {
+		if peer != nil {
+			id := peer.Identity()
+			if id != nil && bytes.Equal(id.Pubkey(), addr.Pubkey) {
+				return errors.New("already connected")
+			}
+		}
+	}
+	return nil
+}
+
+// TODO replace with "Set"
 type Blacklist interface {
 	Get([]byte) (bool, error)
 	Put([]byte) error
@@ -64,421 +463,5 @@ func (self *BlacklistMap) Delete(pubkey []byte) error {
 	self.lock.RLock()
 	defer self.lock.RUnlock()
 	delete(self.blacklist, string(pubkey))
-	return nil
-}
-
-type Server struct {
-	network   Network
-	listening bool //needed?
-	dialing   bool //needed?
-	closed    bool
-	identity  ClientIdentity
-	addr      net.Addr
-	port      uint16
-	protocols []string
-
-	quit      chan chan bool
-	peersLock sync.RWMutex
-
-	maxPeers   int
-	peers      []*Peer
-	peerSlots  chan int
-	peersTable map[string]int
-	peersMsg   *Msg
-	peerCount  int
-
-	peerConnect    chan net.Addr
-	peerDisconnect chan DisconnectRequest
-	blacklist      Blacklist
-	handlers       Handlers
-}
-
-var logger = logpkg.NewLogger("P2P")
-
-func New(network Network, addr net.Addr, identity ClientIdentity, handlers Handlers, maxPeers int, blacklist Blacklist) *Server {
-	// get alphabetical list of protocol names from handlers map
-	protocols := []string{}
-	for protocol := range handlers {
-		protocols = append(protocols, protocol)
-	}
-	sort.Strings(protocols)
-
-	_, port, _ := net.SplitHostPort(addr.String())
-	intport, _ := strconv.Atoi(port)
-
-	self := &Server{
-		// NewSimpleClientIdentity(clientIdentifier, version, customIdentifier)
-		network:   network,
-		identity:  identity,
-		addr:      addr,
-		port:      uint16(intport),
-		protocols: protocols,
-
-		quit: make(chan chan bool),
-
-		maxPeers:   maxPeers,
-		peers:      make([]*Peer, maxPeers),
-		peerSlots:  make(chan int, maxPeers),
-		peersTable: make(map[string]int),
-
-		peerConnect:    make(chan net.Addr, outboundAddressPoolSize),
-		peerDisconnect: make(chan DisconnectRequest),
-		blacklist:      blacklist,
-
-		handlers: handlers,
-	}
-	for i := 0; i < maxPeers; i++ {
-		self.peerSlots <- i // fill up with indexes
-	}
-	return self
-}
-
-func (self *Server) NewAddr(host string, port int) (addr net.Addr, err error) {
-	addr, err = self.network.NewAddr(host, port)
-	return
-}
-
-func (self *Server) ParseAddr(address string) (addr net.Addr, err error) {
-	addr, err = self.network.ParseAddr(address)
-	return
-}
-
-func (self *Server) ClientIdentity() ClientIdentity {
-	return self.identity
-}
-
-func (self *Server) PeersMessage() (msg *Msg, err error) {
-	// TODO: memoize and reset when peers change
-	self.peersLock.RLock()
-	defer self.peersLock.RUnlock()
-	msg = self.peersMsg
-	if msg == nil {
-		var peerData []interface{}
-		for _, i := range self.peersTable {
-			peer := self.peers[i]
-			peerData = append(peerData, peer.Encode())
-		}
-		if len(peerData) == 0 {
-			err = fmt.Errorf("no peers")
-		} else {
-			msg, err = NewMsg(PeersMsg, peerData...)
-			self.peersMsg = msg //memoize
-		}
-	}
-	return
-}
-
-func (self *Server) Peers() (peers []*Peer) {
-	self.peersLock.RLock()
-	defer self.peersLock.RUnlock()
-	for _, peer := range self.peers {
-		if peer != nil {
-			peers = append(peers, peer)
-		}
-	}
-	return
-}
-
-func (self *Server) PeerCount() int {
-	self.peersLock.RLock()
-	defer self.peersLock.RUnlock()
-	return self.peerCount
-}
-
-var getPeersMsg, _ = NewMsg(GetPeersMsg)
-
-func (self *Server) PeerConnect(addr net.Addr) {
-	// TODO: should buffer, filter and uniq
-	// send GetPeersMsg if not blocking
-	select {
-	case self.peerConnect <- addr: // not enough peers
-		self.Broadcast("", getPeersMsg)
-	default: // we dont care
-	}
-}
-
-func (self *Server) PeerDisconnect() chan DisconnectRequest {
-	return self.peerDisconnect
-}
-
-func (self *Server) Blacklist() Blacklist {
-	return self.blacklist
-}
-
-func (self *Server) Handlers() Handlers {
-	return self.handlers
-}
-
-func (self *Server) Broadcast(protocol string, msg *Msg) {
-	self.peersLock.RLock()
-	defer self.peersLock.RUnlock()
-	for _, peer := range self.peers {
-		if peer != nil {
-			peer.Write(protocol, msg)
-		}
-	}
-}
-
-// Start the server
-func (self *Server) Start(listen bool, dial bool) {
-	self.network.Start()
-	if listen {
-		listener, err := self.network.Listener(self.addr)
-		if err != nil {
-			logger.Warnf("Error initializing listener: %v", err)
-			logger.Warnf("Connection listening disabled")
-			self.listening = false
-		} else {
-			self.listening = true
-			logger.Infoln("Listen on %v: ready and accepting connections", listener.Addr())
-			go self.inboundPeerHandler(listener)
-		}
-	}
-	if dial {
-		dialer, err := self.network.Dialer(self.addr)
-		if err != nil {
-			logger.Warnf("Error initializing dialer: %v", err)
-			logger.Warnf("Connection dialout disabled")
-			self.dialing = false
-		} else {
-			self.dialing = true
-			logger.Infoln("Dial peers watching outbound address pool")
-			go self.outboundPeerHandler(dialer)
-		}
-	}
-	logger.Infoln("server started")
-}
-
-func (self *Server) Stop() {
-	logger.Infoln("server stopping...")
-	// // quit one loop if dialing
-	if self.dialing {
-		logger.Infoln("stop dialout...")
-		dialq := make(chan bool)
-		self.quit <- dialq
-		<-dialq
-		fmt.Println("quit another")
-	}
-	// quit the other loop if listening
-	if self.listening {
-		logger.Infoln("stop listening...")
-		listenq := make(chan bool)
-		self.quit <- listenq
-		<-listenq
-		fmt.Println("quit one")
-	}
-
-	fmt.Println("quit waited")
-
-	logger.Infoln("stopping peers...")
-	peers := []net.Addr{}
-	self.peersLock.RLock()
-	self.closed = true
-	for _, peer := range self.peers {
-		if peer != nil {
-			peers = append(peers, peer.Address)
-		}
-	}
-	self.peersLock.RUnlock()
-	for _, address := range peers {
-		go self.removePeer(DisconnectRequest{
-			addr:   address,
-			reason: DiscQuitting,
-		})
-	}
-	// wait till they actually disconnect
-	// this is checked by draining the peerSlots (slots are released back if a peer is removed)
-	i := 0
-	fmt.Println("draining peers")
-
-FOR:
-	for {
-		select {
-		case slot := <-self.peerSlots:
-			i++
-			fmt.Printf("%v: found slot %v", i, slot)
-			if i == self.maxPeers {
-				break FOR
-			}
-		}
-	}
-	logger.Infoln("server stopped")
-}
-
-// main loop for adding connections via listening
-func (self *Server) inboundPeerHandler(listener net.Listener) {
-	for {
-		select {
-		case slot := <-self.peerSlots:
-			go self.connectInboundPeer(listener, slot)
-		case errc := <-self.quit:
-			listener.Close()
-			fmt.Println("quit listenloop")
-			errc <- true
-			return
-		}
-	}
-}
-
-// main loop for adding outbound peers based on peerConnect address pool
-// this same loop handles peer disconnect requests as well
-func (self *Server) outboundPeerHandler(dialer Dialer) {
-	// addressChan initially set to nil (only watches peerConnect if we need more peers)
-	var addressChan chan net.Addr
-	slots := self.peerSlots
-	var slot *int
-	for {
-		select {
-		case i := <-slots:
-			// we need a peer in slot i, slot reserved
-			slot = &i
-			// now we can watch for candidate peers in the next loop
-			addressChan = self.peerConnect
-			// do not consume more until candidate peer is found
-			slots = nil
-		case address := <-addressChan:
-			// candidate peer found, will dial out asyncronously
-			// if connection fails slot will be released
-			go self.connectOutboundPeer(dialer, address, *slot)
-			// we can watch if more peers needed in the next loop
-			slots = self.peerSlots
-			// until then we dont care about candidate peers
-			addressChan = nil
-		case request := <-self.peerDisconnect:
-			go self.removePeer(request)
-		case errc := <-self.quit:
-			if addressChan != nil && slot != nil {
-				self.peerSlots <- *slot
-			}
-			fmt.Println("quit dialloop")
-			errc <- true
-			return
-		}
-	}
-}
-
-// check if peer address already connected
-func (self *Server) connected(address net.Addr) (err error) {
-	self.peersLock.RLock()
-	defer self.peersLock.RUnlock()
-	// fmt.Printf("address: %v\n", address)
-	slot, found := self.peersTable[address.String()]
-	if found {
-		err = fmt.Errorf("already connected as peer %v (%v)", slot, address)
-	}
-	return
-}
-
-// connect to peer via listener.Accept()
-func (self *Server) connectInboundPeer(listener net.Listener, slot int) {
-	var address net.Addr
-	conn, err := listener.Accept()
-	if err == nil {
-		address = conn.RemoteAddr()
-		err = self.connected(address)
-		if err != nil {
-			conn.Close()
-		}
-	}
-	if err != nil {
-		logger.Debugln(err)
-		self.peerSlots <- slot
-	} else {
-		fmt.Printf("adding %v\n", address)
-		go self.addPeer(conn, address, true, slot)
-	}
-}
-
-// connect to peer via dial out
-func (self *Server) connectOutboundPeer(dialer Dialer, address net.Addr, slot int) {
-	var conn net.Conn
-	err := self.connected(address)
-	if err == nil {
-		conn, err = dialer.Dial(address.Network(), address.String())
-	}
-	if err != nil {
-		logger.Debugln(err)
-		self.peerSlots <- slot
-	} else {
-		go self.addPeer(conn, address, false, slot)
-	}
-}
-
-// creates the new peer object and inserts it into its slot
-func (self *Server) addPeer(conn net.Conn, address net.Addr, inbound bool, slot int) {
-	self.peersLock.Lock()
-	defer self.peersLock.Unlock()
-	if self.closed {
-		fmt.Println("oopsy, not no longer need peer")
-		conn.Close()           //oopsy our bad
-		self.peerSlots <- slot // release slot
-	} else {
-		peer := NewPeer(conn, address, inbound, self)
-		self.peers[slot] = peer
-		self.peersTable[address.String()] = slot
-		self.peerCount++
-		// reset peersmsg
-		self.peersMsg = nil
-		fmt.Printf("added peer %v %v (slot %v)\n", address, peer, slot)
-		peer.Start()
-	}
-}
-
-// removes peer: sending disconnect msg, stop peer, remove rom list/table, release slot
-func (self *Server) removePeer(request DisconnectRequest) {
-	self.peersLock.Lock()
-
-	address := request.addr
-	slot := self.peersTable[address.String()]
-	peer := self.peers[slot]
-	fmt.Printf("removing peer %v %v (slot %v)\n", address, peer, slot)
-	if peer == nil {
-		logger.Debugf("already removed peer on %v", address)
-		self.peersLock.Unlock()
-		return
-	}
-	// remove from list and index
-	self.peerCount--
-	self.peers[slot] = nil
-	delete(self.peersTable, address.String())
-	// reset peersmsg
-	self.peersMsg = nil
-	fmt.Printf("removed peer %v (slot %v)\n", peer, slot)
-	self.peersLock.Unlock()
-
-	// sending disconnect message
-	disconnectMsg, _ := NewMsg(DiscMsg, request.reason)
-	peer.Write("", disconnectMsg)
-	// be nice and wait
-	time.Sleep(disconnectGracePeriod * time.Second)
-	// switch off peer and close connections etc.
-	fmt.Println("stopping peer")
-	peer.Stop()
-	fmt.Println("stopped peer")
-	// release slot to signal need for a new peer, last!
-	self.peerSlots <- slot
-}
-
-// fix handshake message to push to peers
-func (self *Server) Handshake() *Msg {
-	fmt.Println(self.identity.Pubkey()[1:])
-	msg, _ := NewMsg(HandshakeMsg, P2PVersion, []byte(self.identity.String()), []interface{}{self.protocols}, self.port, self.identity.Pubkey()[1:])
-	return msg
-}
-
-func (self *Server) RegisterPubkey(candidate *Peer, pubkey []byte) error {
-	// Check for blacklisting
-	if self.blacklist.Exists(pubkey) {
-		return fmt.Errorf("blacklisted")
-	}
-
-	self.peersLock.RLock()
-	defer self.peersLock.RUnlock()
-	for _, peer := range self.peers {
-		if peer != nil && peer != candidate && bytes.Compare(peer.Pubkey, pubkey) == 0 {
-			return fmt.Errorf("already connected")
-		}
-	}
-	candidate.Pubkey = pubkey
 	return nil
 }

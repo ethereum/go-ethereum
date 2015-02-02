@@ -1,20 +1,23 @@
-// Copyright (c) 2013-2014, Jeffrey Wilcke. All rights reserved.
-//
-// This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-//
-// This library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-// General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this library; if not, write to the Free Software
-// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
-// MA 02110-1301  USA
+/*
+	This file is part of go-ethereum
 
+	go-ethereum is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	go-ethereum is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/**
+ * @authors
+ * 	Jeffrey Wilcke <i@jev.io>
+ */
 package main
 
 import (
@@ -24,12 +27,12 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/ethereum/go-ethereum/chain"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
-	"gopkg.in/qml.v1"
+	"github.com/obscuren/qml"
 )
 
 type DebuggerWindow struct {
@@ -37,10 +40,10 @@ type DebuggerWindow struct {
 	engine *qml.Engine
 	lib    *UiLib
 
-	vm *vm.DebugVm
+	vm *vm.Vm
 	Db *Debugger
 
-	state *state.State
+	state *state.StateDB
 }
 
 func NewDebuggerWindow(lib *UiLib) *DebuggerWindow {
@@ -54,7 +57,7 @@ func NewDebuggerWindow(lib *UiLib) *DebuggerWindow {
 
 	win := component.CreateWindow(nil)
 
-	w := &DebuggerWindow{engine: engine, win: win, lib: lib, vm: &vm.DebugVm{}}
+	w := &DebuggerWindow{engine: engine, win: win, lib: lib, vm: &vm.Vm{}}
 	w.Db = NewDebugger(w)
 
 	return w
@@ -81,7 +84,7 @@ func (self *DebuggerWindow) SetData(data string) {
 func (self *DebuggerWindow) SetAsm(data []byte) {
 	self.win.Root().Call("clearAsm")
 
-	dis := chain.Disassemble(data)
+	dis := core.Disassemble(data)
 	for _, str := range dis {
 		self.win.Root().Call("setAsm", str)
 	}
@@ -141,27 +144,24 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 		keyPair = self.lib.eth.KeyManager().KeyPair()
 	)
 
-	statedb := self.lib.eth.BlockManager().TransState()
-	account := self.lib.eth.BlockManager().TransState().GetAccount(keyPair.Address())
+	statedb := self.lib.eth.ChainManager().TransState()
+	account := self.lib.eth.ChainManager().TransState().GetAccount(keyPair.Address())
 	contract := statedb.NewStateObject([]byte{0})
+	contract.SetCode(script)
 	contract.SetBalance(value)
 
 	self.SetAsm(script)
 
-	block := self.lib.eth.ChainManager().CurrentBlock
+	block := self.lib.eth.ChainManager().CurrentBlock()
 
-	callerClosure := vm.NewClosure(&state.Message{}, account, contract, script, gas, gasPrice)
-	env := utils.NewEnv(statedb, block, account.Address(), value)
-	evm := vm.NewDebugVm(env)
-	evm.Dbg = self.Db
+	env := utils.NewEnv(self.lib.eth.ChainManager(), statedb, block, account.Address(), value)
 
-	self.vm = evm
-	self.Db.done = false
 	self.Logf("callsize %d", len(script))
 	go func() {
-		ret, g, err := callerClosure.Call(evm, data)
-		tot := new(big.Int).Mul(g, gasPrice)
-		self.Logf("gas usage %v total price = %v (%v)", g, tot, ethutil.CurrencyToString(tot))
+		ret, err := env.Call(account, contract.Address(), data, gas, gasPrice, ethutil.Big0)
+		//ret, g, err := callerClosure.Call(evm, data)
+		tot := new(big.Int).Mul(env.Gas, gasPrice)
+		self.Logf("gas usage %v total price = %v (%v)", env.Gas, tot, ethutil.CurrencyToString(tot))
 		if err != nil {
 			self.Logln("exited with errors:", err)
 		} else {
@@ -267,6 +267,9 @@ type storeVal struct {
 	Key, Value string
 }
 
+func (self *Debugger) Step(evm vm.VirtualMachine, op vm.OpCode, mem *vm.Memory, stack *vm.Stack, context *vm.Context) {
+}
+
 func (self *Debugger) BreakHook(pc int, op vm.OpCode, mem *vm.Memory, stack *vm.Stack, stateObject *state.StateObject) bool {
 	self.main.Logln("break on instr:", pc)
 
@@ -312,9 +315,11 @@ func (d *Debugger) halting(pc int, op vm.OpCode, mem *vm.Memory, stack *vm.Stack
 		d.win.Root().Call("setStack", val.String())
 	}
 
-	stateObject.EachStorage(func(key string, node *ethutil.Value) {
-		d.win.Root().Call("setStorage", storeVal{fmt.Sprintf("% x", key), fmt.Sprintf("% x", node.Str())})
-	})
+	it := stateObject.Trie().Iterator()
+	for it.Next() {
+		d.win.Root().Call("setStorage", storeVal{fmt.Sprintf("% x", it.Key), fmt.Sprintf("% x", it.Value)})
+
+	}
 
 	stackFrameAt := new(big.Int).SetBytes(mem.Get(0, 32))
 	psize := mem.Len() - int(new(big.Int).SetBytes(mem.Get(0, 32)).Uint64())

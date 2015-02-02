@@ -2,6 +2,7 @@ package vm
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -9,23 +10,24 @@ import (
 )
 
 type Environment interface {
-	State() *state.State
+	State() *state.StateDB
 
 	Origin() []byte
 	BlockNumber() *big.Int
-	PrevHash() []byte
+	GetHash(n uint64) []byte
 	Coinbase() []byte
 	Time() int64
 	Difficulty() *big.Int
-	BlockHash() []byte
 	GasLimit() *big.Int
 	Transfer(from, to Account, amount *big.Int) error
 	AddLog(state.Log)
-}
 
-type Object interface {
-	GetStorage(key *big.Int) *ethutil.Value
-	SetStorage(key *big.Int, value *ethutil.Value)
+	Depth() int
+	SetDepth(i int)
+
+	Call(me ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error)
+	CallCode(me ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error)
+	Create(me ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error, ContextRef)
 }
 
 type Account interface {
@@ -43,9 +45,31 @@ func Transfer(from, to Account, amount *big.Int) error {
 	from.SubBalance(amount)
 	to.AddBalance(amount)
 
-	// Add default LOG. Default = big(sender.addr) + 1
-	//addr := ethutil.BigD(receiver.Address())
-	//tx.addLog(vm.Log{sender.Address(), [][]byte{ethutil.U256(addr.Add(addr, ethutil.Big1)).Bytes()}, nil})
-
 	return nil
+}
+
+type Log struct {
+	address []byte
+	topics  [][]byte
+	data    []byte
+}
+
+func (self *Log) Address() []byte {
+	return self.address
+}
+
+func (self *Log) Topics() [][]byte {
+	return self.topics
+}
+
+func (self *Log) Data() []byte {
+	return self.data
+}
+
+func (self *Log) RlpData() interface{} {
+	return []interface{}{self.address, ethutil.ByteSliceToInterface(self.topics), self.data}
+}
+
+func (self *Log) String() string {
+	return fmt.Sprintf("[A=%x T=%x D=%x]", self.address, self.topics, self.data)
 }

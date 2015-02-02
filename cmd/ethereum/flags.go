@@ -1,20 +1,23 @@
-// Copyright (c) 2013-2014, Jeffrey Wilcke. All rights reserved.
-//
-// This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-//
-// This library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-// General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this library; if not, write to the Free Software
-// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
-// MA 02110-1301  USA
+/*
+	This file is part of go-ethereum
 
+	go-ethereum is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	go-ethereum is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/**
+ * @authors
+ * 	Jeffrey Wilcke <i@jev.io>
+ */
 package main
 
 import (
@@ -38,7 +41,9 @@ var (
 	StartRpc        bool
 	StartWebSockets bool
 	RpcPort         int
-	UseUPnP         bool
+	WsPort          int
+	NatType         string
+	PMPGateway      string
 	OutboundPort    string
 	ShowGenesis     bool
 	AddPeer         string
@@ -57,6 +62,10 @@ var (
 	DumpHash        string
 	DumpNumber      int
 	VmType          int
+	ImportChain     string
+	SHH             bool
+	Dial            bool
+	PrintVersion    bool
 )
 
 // flags specific to cli client
@@ -84,13 +93,17 @@ func Init() {
 	flag.StringVar(&KeyRing, "keyring", "", "identifier for keyring to use")
 	flag.StringVar(&KeyStore, "keystore", "db", "system to store keyrings: db|file (db)")
 	flag.StringVar(&OutboundPort, "port", "30303", "listening port")
-	flag.BoolVar(&UseUPnP, "upnp", false, "enable UPnP support")
-	flag.IntVar(&MaxPeer, "maxpeer", 10, "maximum desired peers")
+	flag.StringVar(&NatType, "nat", "", "NAT support (UPNP|PMP) (none)")
+	flag.StringVar(&PMPGateway, "pmp", "", "Gateway IP for PMP")
+	flag.IntVar(&MaxPeer, "maxpeer", 30, "maximum desired peers")
 	flag.IntVar(&RpcPort, "rpcport", 8080, "port to start json-rpc server on")
+	flag.IntVar(&WsPort, "wsport", 40404, "port to start websocket rpc server on")
 	flag.BoolVar(&StartRpc, "rpc", false, "start rpc server")
 	flag.BoolVar(&StartWebSockets, "ws", false, "start websocket server")
 	flag.BoolVar(&NonInteractive, "y", false, "non-interactive mode (say yes to confirmations)")
 	flag.BoolVar(&UseSeed, "seed", true, "seed peers")
+	flag.BoolVar(&SHH, "shh", true, "whisper protocol (on)")
+	flag.BoolVar(&Dial, "dial", true, "dial out connections (on)")
 	flag.BoolVar(&GenAddr, "genaddr", false, "create a new priv/pub key")
 	flag.StringVar(&SecretFile, "import", "", "imports the file given (hex or mnemonic formats)")
 	flag.StringVar(&ExportDir, "export", "", "exports the session keyring to files in the directory given")
@@ -102,6 +115,7 @@ func Init() {
 	flag.BoolVar(&DiffTool, "difftool", false, "creates output for diff'ing. Sets LogLevel=0")
 	flag.StringVar(&DiffType, "diff", "all", "sets the level of diff output [vm, all]. Has no effect if difftool=false")
 	flag.BoolVar(&ShowGenesis, "genesis", false, "Dump the genesis block")
+	flag.StringVar(&ImportChain, "chain", "", "Imports given chain")
 
 	flag.BoolVar(&Dump, "dump", false, "output the ethereum state in JSON format. Sub args [number, hash]")
 	flag.StringVar(&DumpHash, "hash", "", "specify arg in hex")
@@ -109,6 +123,7 @@ func Init() {
 
 	flag.BoolVar(&StartMining, "mine", false, "start dagger mining")
 	flag.BoolVar(&StartJsConsole, "js", false, "launches javascript console")
+	flag.BoolVar(&PrintVersion, "version", false, "prints version number")
 
 	flag.Parse()
 

@@ -12,25 +12,14 @@ import "../ext/http.js" as Http
 ApplicationWindow {
 	id: root
 
-	property alias miningButtonText: miningButton.text
 	property var ethx : Eth.ethx
-	property var browser
 
 	width: 1200
 	height: 820
-	minimumHeight: 300
+	minimumHeight: 800
+	minimumWidth: 600
 
 	title: "Mist"
-
-	// This signal is used by the filter API. The filter API connects using this signal handler from
-	// the different QML files and plugins.
-	signal messages(var messages, int id);
-	function invokeFilterCallback(data, receiverSeed) {
-		//var messages = JSON.parse(data)
-		// Signal handler
-		messages(data, receiverSeed);
-		root.browser.view.messages(data, receiverSeed);
-	}
 
 	TextField {
 		id: copyElementHax
@@ -46,20 +35,31 @@ ApplicationWindow {
 	// Takes care of loading all default plugins
 	Component.onCompleted: {
 		var wallet = addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "ethereum", active: true});
-		var browser = addPlugin("./webapp.qml", {noAdd: true, close: false, section: "ethereum", active: true});
-		root.browser = browser;
+		addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: true});
 
 		addPlugin("./views/transaction.qml", {noAdd: true, close: false, section: "legacy"});
+		addPlugin("./views/whisper.qml", {noAdd: true, close: false, section: "legacy"});
 		addPlugin("./views/chain.qml", {noAdd: true, close: false, section: "legacy"});
 		addPlugin("./views/pending_tx.qml", {noAdd: true, close: false, section: "legacy"});
 		addPlugin("./views/info.qml", {noAdd: true, close: false, section: "legacy"});
 
-		addPlugin("./views/jeffcoin/jeffcoin.qml", {noAdd: true, close: false, section: "apps"})
-
 		mainSplit.setView(wallet.view, wallet.menuItem);
 
-		// Call the ready handler
-		gui.done();
+		newBrowserTab("http://etherian.io");
+
+		// Command setup
+		gui.sendCommand(0)
+	}
+
+	function activeView(view, menuItem) {
+		mainSplit.setView(view, menuItem)
+		if (view.hideUrl) {
+			urlPane.visible = false;
+			mainView.anchors.top = rootView.top
+		} else {
+			urlPane.visible = true;
+			mainView.anchors.top = divider.bottom
+		}
 	}
 
 	function addViews(view, path, options) {
@@ -103,8 +103,15 @@ ApplicationWindow {
 
 			return views
 		} catch(e) {
-			ethx.note(e)
+			console.log(e)
 		}
+	}
+
+	function newBrowserTab(url) {
+		var window = addPlugin("./views/browser.qml", {noAdd: true, close: true, section: "apps", active: true});
+		window.view.url = url;
+		window.menuItem.title = "Mist";
+		activeView(window.view, window.menuItem);
 	}
 
 	menuBar: MenuBar {
@@ -118,19 +125,20 @@ ApplicationWindow {
 				}
 			}
 
-			/*
-			 MenuItem {
-				 text: "Browser"
-				 onTriggered: eth.openBrowser()
-			 }
-			 */
-
 			MenuItem {
 				text: "Add plugin"
 				onTriggered: {
 					generalFileDialog.show(true, function(path) {
 						addPlugin(path, {close: true, section: "apps"})
 					})
+				}
+			}
+
+			MenuItem {
+				text: "New tab"
+				shortcut: "Ctrl+t"
+				onTriggered: {
+					newBrowserTab("http://etherian.io");
 				}
 			}
 
@@ -193,21 +201,6 @@ ApplicationWindow {
 			}
 
 			MenuSeparator {}
-
-			/*
-			 MenuItem {
-				 id: miningSpeed
-				 text: "Mining: Turbo"
-				 onTriggered: {
-					 gui.toggleTurboMining()
-					 if(text == "Mining: Turbo") {
-						 text = "Mining: Normal";
-					 } else {
-						 text = "Mining: Turbo";
-					 }
-				 }
-			 }
-			 */
 		}
 
 		Menu {
@@ -252,29 +245,18 @@ ApplicationWindow {
 	}
 
 	statusBar: StatusBar {
-		height: 32
+		//height: 32
 		id: statusBar
-		RowLayout {
-			Button {
-				id: miningButton
-				text: "Start Mining"
-				onClicked: {
-					gui.toggleMining()
-				}
-			}
+		Label {
+			//y: 6
+			id: walletValueLabel
 
-			RowLayout {
-				Label {
-					id: walletValueLabel
-
-					font.pixelSize: 10
-					styleColor: "#797979"
-				}
-			}
+			font.pixelSize: 10
+			styleColor: "#797979"
 		}
 
 		Label {
-			y: 6
+			//y: 6
 			objectName: "miningLabel"
 			visible: true
 			font.pixelSize: 10
@@ -283,7 +265,7 @@ ApplicationWindow {
 		}
 
 		Label {
-			y: 6
+			//y: 6
 			id: lastBlockLabel
 			objectName: "lastBlockLabel"
 			visible: true
@@ -294,17 +276,19 @@ ApplicationWindow {
 		}
 
 		ProgressBar {
+			visible: false
 			id: downloadIndicator
 			value: 0
 			objectName: "downloadIndicator"
-			y: 3
+			y: -4
 			x: statusBar.width / 2 - this.width / 2
 			width: 160
 		}
 
 		Label {
+			visible: false
 			objectName: "downloadLabel"
-			y: 7
+			//y: 7
 			anchors.left: downloadIndicator.right
 			anchors.leftMargin: 5
 			font.pixelSize: 10
@@ -314,7 +298,7 @@ ApplicationWindow {
 
 		RowLayout {
 			id: peerGroup
-			y: 7
+			//y: 7
 			anchors.right: parent.right
 			MouseArea {
 				onDoubleClicked:  peerWindow.visible = true
@@ -323,13 +307,8 @@ ApplicationWindow {
 
 			Label {
 				id: peerLabel
-				font.pixelSize: 8
+				font.pixelSize: 10
 				text: "0 / 0"
-			}
-			Image {
-				id: peerImage
-				width: 10; height: 10
-				source: "../network.png"
 			}
 		}
 	}
@@ -352,9 +331,6 @@ ApplicationWindow {
 				views[i].menuItem.setSelection(false)
 			}
 			view.visible = true
-
-			//menu.border.color = "#CCCCCC"
-			//menu.color = "#FFFFFFFF"
 			menu.setSelection(true)
 		}
 
@@ -460,7 +436,7 @@ ApplicationWindow {
 					 MouseArea {
 						 anchors.fill: parent
 						 onClicked: {
-							 mainSplit.setView(view, menuItem)
+							 activeView(view, menuItem);
 						 }
 					 }
 
@@ -514,7 +490,15 @@ ApplicationWindow {
 
 						 this.view.destroy()
 						 this.destroy()
+						 for (var i = 0; i < mainSplit.views.length; i++) {
+							 var view = mainSplit.views[i];
+							 if (view.menuItem === this) {
+								 mainSplit.views.splice(i, 1);
+								 break;
+							 }
+						 }
 						 gui.removePlugin(this.path)
+						 activeView(mainSplit.views[0].view, mainSplit.views[0].menuItem);
 					 }
 				 }
 			 }
@@ -538,7 +522,6 @@ ApplicationWindow {
 				 }
 
 				 var comp = menuItemTemplate.createObject(section)
-
 				 comp.view = view
 				 comp.title = view.title
 
@@ -579,7 +562,7 @@ ApplicationWindow {
 
 
 				 Text {
-					 text: "APPS"
+					 text: "NET"
 					 font.bold: true
 					 anchors {
 						 left: parent.left
@@ -622,6 +605,7 @@ ApplicationWindow {
 		  * Main view
 		  ********************/
 		  Rectangle {
+			  id: rootView
 			  anchors.right: parent.right
 			  anchors.left: menu.right
 			  anchors.bottom: parent.bottom
@@ -655,8 +639,7 @@ ApplicationWindow {
 
 					  Keys.onReturnPressed: {
 						  if(/^https?/.test(this.text)) {
-							  root.browser.view.open(this.text);
-							  mainSplit.setView(root.browser.view, root.browser.menuItem);
+							  newBrowserTab(this.text);
 						  } else {
 							  addPlugin(this.text, {close: true, section: "apps"})
 						  }
@@ -786,12 +769,9 @@ ApplicationWindow {
 				     anchors.fill: parent
 				     id: peerTable
 				     model: peerModel
-				     TableViewColumn{width: 100; role: "ip" ; title: "IP" }
-				     TableViewColumn{width: 60;  role: "port" ; title: "Port" }
-				     TableViewColumn{width: 140; role: "lastResponse"; title: "Last event" }
-				     TableViewColumn{width: 100; role: "latency"; title: "Latency" }
+				     TableViewColumn{width: 200; role: "ip" ; title: "IP" }
 				     TableViewColumn{width: 260; role: "version" ; title: "Version" }
-				     TableViewColumn{width: 80;  role: "caps" ; title: "Capabilities" }
+				     TableViewColumn{width: 180;  role: "caps" ; title: "Capabilities" }
 			     }
 		     }
 	     }
@@ -802,8 +782,8 @@ ApplicationWindow {
 		     title: "About"
 		     minimumWidth: 350
 		     maximumWidth: 350
-		     maximumHeight: 200
-		     minimumHeight: 200
+		     maximumHeight: 280
+		     minimumHeight: 280
 
 		     Image {
 			     id: aboutIcon
@@ -813,7 +793,7 @@ ApplicationWindow {
 			     smooth: true
 			     source: "../facet.png"
 			     x: 10
-			     y: 10
+			     y: 30
 		     }
 
 		     Text {
@@ -822,7 +802,7 @@ ApplicationWindow {
 			     anchors.top: parent.top
 			     anchors.topMargin: 30
 			     font.pointSize: 12
-			     text: "<h2>Mist (0.6.5)</h2><h4>Amalthea</h4><br><h3>Development</h3>Jeffrey Wilcke<br>Viktor Trón<br><h3>Building</h3>Maran Hidskes"
+			     text: "<h2>Mist (0.7.10)</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Viktor Trón<br>Felix Lange<br>Taylor Gerring<br>Daniel Nagy<br><h3>UX</h3>Alex van de Sande<br>"
 		     }
 	     }
 
@@ -881,12 +861,15 @@ ApplicationWindow {
 			     model: ListModel { id: pastPeers }
 
 			     Component.onCompleted: {
-				     var ips = eth.pastPeers()
-				     for(var i = 0; i < ips.length; i++) {
-					     pastPeers.append({text: ips.get(i)})
-				     }
+				     pastPeers.insert(0, {text: "poc-8.ethdev.com:30303"})
+				     /*
+				      var ips = eth.pastPeers()
+				      for(var i = 0; i < ips.length; i++) {
+					      pastPeers.append({text: ips.get(i)})
+				      }
 
-				     pastPeers.insert(0, {text: "poc-7.ethdev.com:30303"})
+				      pastPeers.insert(0, {text: "poc-7.ethdev.com:30303"})
+				      */
 			     }
 		     }
 

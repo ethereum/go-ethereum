@@ -1,32 +1,33 @@
-// Copyright (c) 2013-2014, Jeffrey Wilcke. All rights reserved.
-//
-// This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-//
-// This library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-// General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this library; if not, write to the Free Software
-// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
-// MA 02110-1301  USA
+/*
+	This file is part of go-ethereum
 
+	go-ethereum is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	go-ethereum is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/**
+ * @authors
+ * 	Jeffrey Wilcke <i@jev.io>
+ */
 package main
 
 import (
-	"encoding/json"
-
-	"github.com/ethereum/go-ethereum/chain"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/ui/qt"
 	"github.com/ethereum/go-ethereum/xeth"
-	"gopkg.in/qml.v1"
+	"github.com/obscuren/qml"
 )
 
 type AppContainer interface {
@@ -36,20 +37,20 @@ type AppContainer interface {
 	Window() *qml.Window
 	Engine() *qml.Engine
 
-	NewBlock(*chain.Block)
+	NewBlock(*types.Block)
 	NewWatcher(chan bool)
 	Messages(state.Messages, string)
 	Post(string, int)
 }
 
 type ExtApplication struct {
-	*xeth.JSXEth
-	eth chain.EthManager
+	*xeth.XEth
+	eth core.EthManager
 
 	events          event.Subscription
 	watcherQuitChan chan bool
 
-	filters map[string]*chain.Filter
+	filters map[string]*core.Filter
 
 	container AppContainer
 	lib       *UiLib
@@ -57,10 +58,10 @@ type ExtApplication struct {
 
 func NewExtApplication(container AppContainer, lib *UiLib) *ExtApplication {
 	return &ExtApplication{
-		JSXEth:          xeth.NewJSXEth(lib.eth),
+		XEth:            xeth.New(lib.eth),
 		eth:             lib.eth,
 		watcherQuitChan: make(chan bool),
-		filters:         make(map[string]*chain.Filter),
+		filters:         make(map[string]*core.Filter),
 		container:       container,
 		lib:             lib,
 	}
@@ -80,7 +81,7 @@ func (app *ExtApplication) run() {
 
 	// Subscribe to events
 	mux := app.lib.eth.EventMux()
-	app.events = mux.Subscribe(chain.NewBlockEvent{}, state.Messages(nil))
+	app.events = mux.Subscribe(core.NewBlockEvent{}, state.Messages(nil))
 
 	// Call the main loop
 	go app.mainLoop()
@@ -106,16 +107,18 @@ func (app *ExtApplication) stop() {
 func (app *ExtApplication) mainLoop() {
 	for ev := range app.events.Chan() {
 		switch ev := ev.(type) {
-		case chain.NewBlockEvent:
+		case core.NewBlockEvent:
 			app.container.NewBlock(ev.Block)
 
-		case state.Messages:
-			for id, filter := range app.filters {
-				msgs := filter.FilterMessages(ev)
-				if len(msgs) > 0 {
-					app.container.Messages(msgs, id)
+			/* TODO remove
+			case state.Messages:
+				for id, filter := range app.filters {
+					msgs := filter.FilterMessages(ev)
+					if len(msgs) > 0 {
+						app.container.Messages(msgs, id)
+					}
 				}
-			}
+			*/
 		}
 	}
 }
@@ -125,6 +128,7 @@ func (self *ExtApplication) Watch(filterOptions map[string]interface{}, identifi
 }
 
 func (self *ExtApplication) GetMessages(object map[string]interface{}) string {
+	/* TODO remove me
 	filter := qt.NewFilterFromMap(object, self.eth)
 
 	messages := filter.Find()
@@ -139,4 +143,6 @@ func (self *ExtApplication) GetMessages(object map[string]interface{}) string {
 	}
 
 	return string(b)
+	*/
+	return ""
 }

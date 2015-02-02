@@ -3,6 +3,7 @@ package p2p
 import (
 	"fmt"
 	"net"
+	"time"
 
 	natpmp "github.com/jackpal/go-nat-pmp"
 )
@@ -13,38 +14,37 @@ import (
 //  + Register for changes to the external address.
 //  + Re-register port mapping when router reboots.
 //  + A mechanism for keeping a port mapping registered.
+//  + Discover gateway address automatically.
 
 type natPMPClient struct {
 	client *natpmp.Client
 }
 
-func NewNatPMP(gateway net.IP) (nat NAT) {
+// PMP returns a NAT traverser that uses NAT-PMP. The provided gateway
+// address should be the IP of your router.
+func PMP(gateway net.IP) (nat NAT) {
 	return &natPMPClient{natpmp.NewClient(gateway)}
 }
 
-func (n *natPMPClient) GetExternalAddress() (addr net.IP, err error) {
-	response, err := n.client.GetExternalAddress()
-	if err != nil {
-		return
-	}
-	ip := response.ExternalIPAddress
-	addr = net.IPv4(ip[0], ip[1], ip[2], ip[3])
-	return
+func (*natPMPClient) String() string {
+	return "NAT-PMP"
 }
 
-func (n *natPMPClient) AddPortMapping(protocol string, externalPort, internalPort int,
-	description string, timeout int) (mappedExternalPort int, err error) {
-	if timeout <= 0 {
-		err = fmt.Errorf("timeout must not be <= 0")
-		return
+func (n *natPMPClient) GetExternalAddress() (net.IP, error) {
+	response, err := n.client.GetExternalAddress()
+	if err != nil {
+		return nil, err
+	}
+	return response.ExternalIPAddress[:], nil
+}
+
+func (n *natPMPClient) AddPortMapping(protocol string, extport, intport int, name string, lifetime time.Duration) error {
+	if lifetime <= 0 {
+		return fmt.Errorf("lifetime must not be <= 0")
 	}
 	// Note order of port arguments is switched between our AddPortMapping and the client's AddPortMapping.
-	response, err := n.client.AddPortMapping(protocol, internalPort, externalPort, timeout)
-	if err != nil {
-		return
-	}
-	mappedExternalPort = int(response.MappedExternalPort)
-	return
+	_, err := n.client.AddPortMapping(protocol, intport, extport, int(lifetime/time.Second))
+	return err
 }
 
 func (n *natPMPClient) DeletePortMapping(protocol string, externalPort, internalPort int) (err error) {

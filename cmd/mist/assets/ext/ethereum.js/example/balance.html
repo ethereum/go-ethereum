@@ -1,0 +1,39 @@
+<!doctype>
+<html>
+
+<head>
+<script type="text/javascript" src="js/bignumber.js/bignumber.min.js"></script>
+<script type="text/javascript" src="../dist/ethereum.js"></script>
+<script type="text/javascript">
+   
+    var web3 = require('web3');
+    web3.setProvider(new web3.providers.HttpSyncProvider('http://localhost:8080'));
+
+    function watchBalance() {
+        var coinbase = web3.eth.coinbase;
+        var originalBalance = 0;
+
+        var balance = web3.eth.balanceAt(coinbase);
+        var originalBalance = web3.toDecimal(balance);
+        document.getElementById('original').innerText = 'original balance: ' + originalBalance + '    watching...';
+
+        var filter = web3.eth.watch({address: coinbase}).changed(function() {
+            balance = web3.eth.balanceAt(coinbase)
+            var currentBalance = web3.toDecimal(balance);
+            document.getElementById("current").innerText = 'current: ' + currentBalance;
+            document.getElementById("diff").innerText = 'diff:    ' + (currentBalance - originalBalance);
+        });
+    }
+
+</script>
+</head>
+<body>
+    <h1>coinbase balance</h1>
+    <button type="button" onClick="watchBalance();">watch balance</button>
+    <div></div>
+    <div id="original"></div>
+    <div id="current"></div>
+    <div id="diff"></div>
+</body>
+</html>
+

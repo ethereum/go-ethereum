@@ -1,9 +1,10 @@
 package vm
 
+import "math/big"
+
 type VirtualMachine interface {
 	Env() Environment
-	RunClosure(*Closure) ([]byte, error)
-	Depth() int
+	Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, data []byte) ([]byte, error)
 	Printf(string, ...interface{}) VirtualMachine
 	Endl() VirtualMachine
 }

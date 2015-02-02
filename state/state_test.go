@@ -5,11 +5,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 type StateSuite struct {
-	state *State
+	state *StateDB
 }
 
 var _ = checker.Suite(&StateSuite{})
@@ -18,18 +17,16 @@ var _ = checker.Suite(&StateSuite{})
 
 func (s *StateSuite) TestDump(c *checker.C) {
 	key := []byte{0x01}
-	value := "foo"
-	node := []interface{}{key, value}
-	s.state.Trie.Put(node)
+	value := []byte("foo")
+	s.state.trie.Update(key, value)
 	dump := s.state.Dump()
 	c.Assert(dump, checker.NotNil)
 }
 
 func (s *StateSuite) SetUpTest(c *checker.C) {
-	db, _ := ethdb.NewMemDatabase()
 	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")
-	ethutil.Config.Db = db
-	s.state = New(trie.New(db, ""))
+	db, _ := ethdb.NewMemDatabase()
+	s.state = New(nil, db)
 }
 
 func (s *StateSuite) TestSnapshot(c *checker.C) {

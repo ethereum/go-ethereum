@@ -84,4 +84,5 @@ var (
 	BigFalse = Big0
 	Big32    = big.NewInt(32)
 	Big256   = big.NewInt(0xff)
+	Big257   = big.NewInt(257)
 )

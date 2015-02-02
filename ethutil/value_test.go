@@ -1,8 +1,9 @@
 package ethutil
 
 import (
-	checker "gopkg.in/check.v1"
 	"math/big"
+
+	checker "gopkg.in/check.v1"
 )
 
 type ValueSuite struct{}
