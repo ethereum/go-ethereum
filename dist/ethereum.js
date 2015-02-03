@@ -683,7 +683,7 @@ var Filter = function(options, impl) {
     this.callbacks = [];
 
     this.id = impl.newFilter(options);
-    web3.provider.startPolling({call: impl.changed, args: [this.id]}, this.id, this.trigger.bind(this));
+    web3.provider.startPolling({method: impl.changed, params: [this.id]}, this.id, this.trigger.bind(this));
 };
 
 /// alias for changed*
@@ -916,37 +916,12 @@ var HttpSyncProvider = function (host) {
     this.host = host || 'http://localhost:8080';
 };
 
-/// Transforms inner message to proper jsonrpc object
-/// @param inner message object
-/// @returns jsonrpc object
-function formatJsonRpcObject(object) {
-    return {
-        jsonrpc: '2.0',
-        method: object.call,
-        params: object.args,
-        id: object._id
-    };
-}
-
-/// Transforms jsonrpc object to inner message
-/// @param incoming jsonrpc message 
-/// @returns inner message object
-function formatJsonRpcMessage(message) {
-    var object = JSON.parse(message);
-
-    return {
-        _id: object.id,
-        data: object.result,
-        error: object.error
-    };
-}
-
 HttpSyncProvider.prototype.send = function (payload) {
-    var data = formatJsonRpcObject(payload);
+    //var data = formatJsonRpcObject(payload);
     
     var request = new XMLHttpRequest();
     request.open('POST', this.host, false);
-    request.send(JSON.stringify(data));
+    request.send(JSON.stringify(payload));
     
     // check request.status
     return request.responseText;
@@ -1001,18 +976,14 @@ var ProviderManager = function() {
     var poll = function () {
         if (self.provider) {
             self.polls.forEach(function (data) {
-                data.data._id = self.id;
-                self.id++;
-                var result = self.provider.send(data.data);
+                var result = self.send(data.data);
             
-                result = JSON.parse(result);
-                
                 // dont call the callback if result is not an array, or empty one
-                if (result.error || !(result.result instanceof Array) || result.result.length === 0) {
+                if (!(result instanceof Array) || result.length === 0) {
                     return;
                 }
 
-                data.callback(result.result);
+                data.callback(result);
             });
         }
         setTimeout(poll, 1000);
@@ -1021,10 +992,12 @@ var ProviderManager = function() {
 };
 
 /// sends outgoing requests
+/// @params data - an object with at least 'method' property
 ProviderManager.prototype.send = function(data) {
 
-    data.args = data.args || [];
-    data._id = this.id++;
+    data.jsonrpc = '2.0';
+    data.params = data.params || [];
+    data.id = this.id++;
 
     if (this.provider === undefined) {
         console.error('provider is not set');
@@ -1465,8 +1438,8 @@ var setupMethods = function (obj, methods) {
             var args = Array.prototype.slice.call(arguments);
             var call = typeof method.call === 'function' ? method.call(args) : method.call;
             return web3.provider.send({
-                call: call,
-                args: args
+                method: call,
+                params: args
             });
         };
     });
@@ -1479,15 +1452,15 @@ var setupProperties = function (obj, properties) {
         var proto = {};
         proto.get = function () {
             return web3.provider.send({
-                call: property.getter
+                method: property.getter
             });
         };
 
         if (property.setter) {
             proto.set = function (val) {
                 return web3.provider.send({
-                    call: property.setter,
-                    args: [val]
+                    method: property.setter,
+                    params: [val]
                 });
             };
         }
