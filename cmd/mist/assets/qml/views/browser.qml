@@ -74,12 +74,14 @@ Rectangle {
 		RowLayout {
 			id: navBar
 			height: 74
+			
+
 			anchors {
 				left: parent.left
 				right: parent.right
 				leftMargin: 7
 			}
-
+           
 			Button {
 				id: back
 				onClicked: {

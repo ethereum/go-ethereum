@@ -11,6 +11,9 @@ import "../ext/http.js" as Http
 
 ApplicationWindow {
     id: root
+    
+    //flags: Qt.FramelessWindowHint
+    // Use this to make the window frameless. But then you'll need to do move and resize by hand
 
     property var ethx : Eth.ethx
 
@@ -34,9 +37,11 @@ ApplicationWindow {
 
     // Takes care of loading all default plugins
     Component.onCompleted: {
-        var wallet = addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "ethereum", active: true});
-        addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: true});
 
+        addPlugin("./views/catalog.qml", {noAdd: true, close: false, section: "begin"});
+        var wallet = addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "ethereum", active: true});
+
+        addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: true});
         addPlugin("./views/transaction.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/whisper.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/chain.qml", {noAdd: true, close: false, section: "legacy"});
@@ -370,9 +375,9 @@ ApplicationWindow {
                      rotation: 90
 
                      gradient: Gradient {
-                         GradientStop { position: 0.0; color: "#F1ECEC" }
-                         GradientStop { position: 0.2; color: "#FAF5F5" }
-                         GradientStop { position: 1.0; color: "#FAF5F5" }
+                         GradientStop { position: 0.0; color: "#D5D4D5" }
+                         GradientStop { position: 0.1; color: "#E7E5E7" }
+                         GradientStop { position: 1.0; color: "#E7E5E7" }
                      }
              }
 
@@ -391,6 +396,12 @@ ApplicationWindow {
                          sel.visible = on
                      }
 
+                     function setAsBigButton(on) {
+                        newAppButton.visible = on
+                        label.visible = !on
+                        buttonLabel.visible = on
+                     }
+
                      width: 192
                      height: 55
                      color: "#00000000"
@@ -398,6 +409,23 @@ ApplicationWindow {
                      anchors {
                          left: parent.left
                          leftMargin: 4
+                     }
+
+                     Rectangle {
+                         // New App Button
+                         id: newAppButton
+                         visible: false 
+                         anchors {
+                             top: parent.top
+                             left: parent.left
+                             leftMargin: 6
+                             topMargin: 9
+                         }
+                         border.width: 0
+                         radius: 5
+                         height: 37
+                         width: 180
+                         color: "#F3F1F3"
                      }
 
                      Rectangle {
@@ -481,6 +509,16 @@ ApplicationWindow {
                          color: "#665F5F"
                          font.pixelSize: 14
                      }
+                     
+                     Text {
+                        id: buttonLabel
+                        visible: false
+                        text: "GO TO NEW APP"
+                        font.bold: true
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: "#AAA0A0"
+                     }                     
 
                      Text {
                          id: secondary
@@ -523,6 +561,9 @@ ApplicationWindow {
 
                  var section;
                  switch(options.section) {
+                     case "begin":
+                     section = menuBegin
+                     break;
                      case "ethereum":
                      section = menuDefault;
                      break;
@@ -536,12 +577,16 @@ ApplicationWindow {
 
                  var comp = menuItemTemplate.createObject(section)
                  comp.view = view
-                 comp.title = view.title
+                 comp.title = options.section // view.title
 
                  if(view.hasOwnProperty("iconSource")) {
                      comp.icon = view.iconSource;
                  }
                  comp.closable = options.close;
+
+                 if (options.section === "begin") {
+                    comp.setAsBigButton(true)
+                 }
 
                  return comp
              }
@@ -554,25 +599,14 @@ ApplicationWindow {
                  anchors.right: parent.right
                  spacing: 3
                 
-                 Rectangle {
-                     // New App Button
-                     id: newAppButton
+
+
+                ColumnLayout {
+                     id: menuBegin
+                     spacing: 3
                      anchors {
                          left: parent.left
-                         leftMargin: 6
-                     }
-                     border.width: 0
-                     radius: 5
-                     height: 56
-                     width: 180
-                     color: "#F6EEEE"
-
-                     Text {
-                         text: "GO TO NEW APP"
-                         font.bold: true
-                         anchors.horizontalCenter: parent.horizontalCenter
-                         anchors.verticalCenter: parent.verticalCenter
-                         color: "#AAA0A0"
+                         right: parent.right
                      }
                  }
 
@@ -597,7 +631,7 @@ ApplicationWindow {
 
 
                  Text {
-                     text: "NET"
+                     text: "APPS"
                      font.bold: true
                      anchors {
                          left: parent.left
