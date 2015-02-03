@@ -391,6 +391,11 @@ var addFunctionsToContract = function (contract, desc, address) {
 
 var addEventRelatedPropertiesToContract = function (contract, desc, address) {
     contract.address = address;
+    contract._onWatchEventResult = function (data) {
+        var matchingEvent = event.getMatchingEvent(utils.filterEvents(desc));
+        var parser = eventImpl.outputParser(matchingEvent);
+        return parser(data);
+    };
     
     Object.defineProperty(contract, 'topic', {
         get: function() {
@@ -411,6 +416,10 @@ var addEventsToContract = function (contract, desc, address) {
             var signature = abi.eventSignatureFromAscii(e.name);
             var event = eventImpl.inputParser(address, signature, e);
             var o = event.apply(null, params);
+            o._onWatchEventResult = function (data) {
+                var parser = eventImpl.outputParser(e);
+                return parser(data);
+            };
             return web3.eth.watch(o);  
         };
         
@@ -571,14 +580,18 @@ var getArgumentsObject = function (inputs, indexed, notIndexed) {
     }, {}); 
 };
  
-
 var outputParser = function (event) {
     
     return function (output) {
         var result = {
             event: utils.extractDisplayName(event.name),
-            number: output.number
+            number: output.number,
+            args: {}
         };
+
+        if (!output.topic) {
+            return result;
+        }
        
         var indexedOutputs = filterInputs(event.inputs, true);
         var indexedData = "0x" + output.topic.slice(1, output.topic.length).map(function (topic) { return topic.slice(2); }).join("");
@@ -593,9 +606,21 @@ var outputParser = function (event) {
     };
 };
 
+var getMatchingEvent = function (events, payload) {
+    for (var i = 0; i < events.length; i++) {
+        var signature = abi.eventSignatureFromAscii(events[i].name); 
+        if (signature === payload.topic[0]) {
+            return events[i];
+        }
+    }
+    return undefined;
+};
+
+
 module.exports = {
     inputParser: inputParser,
-    outputParser: outputParser
+    outputParser: outputParser,
+    getMatchingEvent: getMatchingEvent
 };
 
 
@@ -638,6 +663,8 @@ var Filter = function(options, impl) {
         if (options.topics) {
             console.warn('"topics" is deprecated, use "topic" instead');
         }
+        
+        this._onWatchResult = options._onWatchEventResult;
 
         // evaluate lazy properties
         options = {
@@ -673,7 +700,8 @@ Filter.prototype.changed = function(callback) {
 Filter.prototype.trigger = function(messages) {
     for (var i = 0; i < this.callbacks.length; i++) {
         for (var j = 0; j < messages.length; j++) {
-            this.callbacks[i].call(this, messages[j]);
+            var message = this._onWatchResult ? this._onWatchResult(messages[j]) : messages[j];
+            this.callbacks[i].call(this, message);
         }
     }
 };
