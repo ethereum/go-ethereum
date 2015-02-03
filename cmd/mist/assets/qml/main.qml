@@ -16,8 +16,7 @@ ApplicationWindow {
 
 	width: 1200
 	height: 820
-	minimumHeight: 800
-	minimumWidth: 600
+	minimumWidth: 300
 
 	title: "Mist"
 
