@@ -973,9 +973,13 @@ var toPayload = function (method, params) {
 };
 
 /// Should be called to check if jsonrpc response is valid
-/// @returns true if response doesn't have error field
+/// @returns true if response is valid, otherwise false 
 var isValidResponse = function (response) {
-    return response && !response.error;
+    return !!response &&
+        !response.error &&
+        response.jsonrpc === '2.0' &&
+        typeof response.id === 'number' &&
+        (!!response.result || typeof response.result === 'boolean');
 };
 
 /// Should be called to create batch payload object
@@ -1051,6 +1055,7 @@ var ProviderManager = function() {
                 var result = results[index];
                 
                 if (!jsonrpc.isValidResponse(result)) {
+                    console.log(result);
                     return;
                 }
 
@@ -1083,7 +1088,7 @@ ProviderManager.prototype.send = function(data) {
     var result = this.provider.send(payload);
 
     if (!jsonrpc.isValidResponse(result)) {
-        console.log(result.error);
+        console.log(result);
         return null;
     }
 
