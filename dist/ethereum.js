@@ -510,7 +510,7 @@ var utils = require('./utils');
 /// @returns array of (not?) indexed params
 var filterInputs = function (inputs, indexed) {
     return inputs.filter(function (current) {
-        return inputs.indexed === indexed;
+        return current.indexed === indexed;
     });
 };
 
@@ -556,10 +556,40 @@ var inputParser = function (address, signature, event) {
     };
 };
 
+var getArgumentsObject = function (inputs, indexed, notIndexed) {
+    var indexedCopy = indexed.slice();
+    var notIndexedCopy = notIndexed.slice();
+    return inputs.reduce(function (acc, current) {
+        var value;
+        if (current.indexed)
+            value = indexed.splice(0, 1)[0];
+        else
+            value = notIndexed.splice(0, 1)[0];
+
+        acc[current.name] = value;
+        return acc;
+    }, {}); 
+};
+ 
+
 var outputParser = function (event) {
     
     return function (output) {
-         
+        var result = {
+            event: utils.extractDisplayName(event.name),
+            number: output.number
+        };
+       
+        var indexedOutputs = filterInputs(event.inputs, true);
+        var indexedData = "0x" + output.topic.slice(1, output.topic.length).map(function (topic) { return topic.slice(2); }).join("");
+        var indexedRes = abi.formatOutput(indexedOutputs, indexedData);
+
+        var notIndexedOutputs = filterInputs(event.inputs, false);
+        var notIndexedRes = abi.formatOutput(notIndexedOutputs, output.data);
+
+        result.args = getArgumentsObject(event.inputs, indexedRes, notIndexedRes);
+
+        return result;
     };
 };
 
