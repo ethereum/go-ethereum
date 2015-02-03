@@ -219,7 +219,7 @@ func (sm *BlockProcessor) ProcessWithParent(block, parent *types.Block) (td *big
 
 	// Calculate the td for this block
 	td = CalculateTD(block, parent)
-	// Sync the current block's state to the database and cancelling out the deferred Undo
+	// Sync the current block's state to the database
 	state.Sync()
 	// Set the block hashes for the current messages
 	state.Manifest().SetHash(block.Hash())
