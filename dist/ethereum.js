@@ -409,7 +409,7 @@ var addEventsToContract = function (contract, desc, address) {
         var impl = function () {
             var params = Array.prototype.slice.call(arguments);
             var signature = abi.eventSignatureFromAscii(e.name);
-            var event = eventImpl(address, signature, e);
+            var event = eventImpl.inputParser(address, signature, e);
             var o = event.apply(null, params);
             return web3.eth.watch(o);  
         };
@@ -504,6 +504,16 @@ module.exports = contract;
 var abi = require('./abi');
 var utils = require('./utils');
 
+/// filter inputs array && returns only indexed (or not) inputs
+/// @param inputs array
+/// @param bool if result should be an array of indexed params on not
+/// @returns array of (not?) indexed params
+var filterInputs = function (inputs, indexed) {
+    return inputs.filter(function (current) {
+        return inputs.indexed === indexed;
+    });
+};
+
 var inputWithName = function (inputs, name) {
     var index = utils.findIndex(inputs, function (input) {
         return input.name === name;
@@ -519,7 +529,7 @@ var inputWithName = function (inputs, name) {
 var indexedParamsToTopics = function (event, indexed) {
     // sort keys?
     return Object.keys(indexed).map(function (key) {
-        var inputs = [inputWithName(event.inputs, key)];
+        var inputs = [inputWithName(filterInputs(event.inputs, true), key)];
 
         var value = indexed[key];
         if (value instanceof Array) {
@@ -531,7 +541,7 @@ var indexedParamsToTopics = function (event, indexed) {
     });
 };
 
-var implementationOfEvent = function (address, signature, event) {
+var inputParser = function (address, signature, event) {
     
     // valid options are 'earliest', 'latest', 'offset' and 'max', as defined for 'eth.watch'
     return function (indexed, options) {
@@ -546,7 +556,17 @@ var implementationOfEvent = function (address, signature, event) {
     };
 };
 
-module.exports = implementationOfEvent;
+var outputParser = function (event) {
+    
+    return function (output) {
+         
+    };
+};
+
+module.exports = {
+    inputParser: inputParser,
+    outputParser: outputParser
+};
 
 
 },{"./abi":1,"./utils":11}],5:[function(require,module,exports){
