@@ -31,7 +31,7 @@ type StateDB struct {
 
 // Create a new state from a given trie
 func New(root []byte, db ethutil.Database) *StateDB {
-	trie := trie.New(root, db)
+	trie := trie.New(ethutil.CopyBytes(root), db)
 	return &StateDB{db: db, trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest(), refund: make(map[string]*big.Int)}
 }
 
@@ -234,12 +234,9 @@ func (self *StateDB) Copy() *StateDB {
 }
 
 func (self *StateDB) Set(state *StateDB) {
-	if state == nil {
-		panic("Tried setting 'state' to nil through 'Set'")
-	}
-
 	self.trie = state.trie
 	self.stateObjects = state.stateObjects
+
 	self.refund = state.refund
 	self.logs = state.logs
 }

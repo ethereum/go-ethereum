@@ -11,6 +11,7 @@ type Message struct {
 	Flags     byte
 	Signature []byte
 	Payload   []byte
+	Sent      uint64
 }
 
 func NewMessage(payload []byte) *Message {
