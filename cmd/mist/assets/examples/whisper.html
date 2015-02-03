@@ -10,6 +10,7 @@
 <h1>Whisper test</h1>
 
 <button onclick="test()">Send</button>
+<button onclick="test2()">Private send</button>
 
 <table width="100%" id="table">
 	<tr>
@@ -44,10 +45,19 @@
 		document.querySelector("#table").innerHTML += "<tr><td colspan='2'>"+JSON.stringify(message)+"</td></tr>";
 	});
 
+	var selfWatch = shh.watch({to: id, topics: ["test"]})
+	selfWatch.arrived(function(message) {
+		document.querySelector("#table").innerHTML += "<tr><td>To me</td><td>"+JSON.stringify(message)+"</td></tr>";
+	});
+
 	function test() {
 		shh.post({topics: ["test"], payload: web3.fromAscii("test it")});
 		count();
+	}
 
+	function test2() {
+		shh.post({to: id, topics: ["test"], payload: web3.fromAscii("Private")});
+		count();
 	}
 
 	function count() {

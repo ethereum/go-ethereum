@@ -2,6 +2,7 @@ package xeth
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -31,6 +32,7 @@ func (self *Whisper) Post(payload string, to, from string, topics []string, prio
 
 	pk := crypto.ToECDSAPub(fromHex(from))
 	if key := self.Whisper.GetIdentity(pk); key != nil || len(from) == 0 {
+		fmt.Println("POST:", to)
 		msg := whisper.NewMessage(fromHex(payload))
 		envelope, err := msg.Seal(time.Duration(priority*100000), whisper.Opts{
 			Ttl:    time.Duration(ttl) * time.Second,
@@ -101,7 +103,7 @@ type WhisperMessage struct {
 	ref     *whisper.Message
 	Payload string `json:"payload"`
 	From    string `json:"from"`
-	Sent    uint64 `json:"time"`
+	Sent    int64  `json:"time"`
 }
 
 func NewWhisperMessage(msg *whisper.Message) WhisperMessage {
