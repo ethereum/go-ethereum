@@ -1269,7 +1269,7 @@ var extractDisplayName = function (name) {
 var extractTypeName = function (name) {
     /// TODO: make it invulnerable
     var length = name.indexOf('(');
-    return length !== -1 ? name.substr(length + 1, name.length - 1 - (length + 1)) : "";
+    return length !== -1 ? name.substr(length + 1, name.length - 1 - (length + 1)).replace(' ', '') : "";
 };
 
 /// Filters all function from input abi
