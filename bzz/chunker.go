@@ -33,7 +33,7 @@ import (
 
 const (
 	hasherfunc crypto.Hash = crypto.SHA256 // http://golang.org/pkg/hash/#Hash
-	branches   int64       = 4
+	branches   int64       = 128
 )
 
 var (
