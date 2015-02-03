@@ -206,7 +206,7 @@ func (self *Miner) mine() {
 	block.SetReceipts(receipts)
 
 	// Accumulate the rewards included for this block
-	blockProcessor.AccumelateRewards(state, block, parent)
+	blockProcessor.AccumulateRewards(state, block, parent)
 
 	state.Update(ethutil.Big0)
 	block.SetRoot(state.Root())
