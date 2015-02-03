@@ -1,28 +1,13 @@
 ---
-- name: install docker
-  sudo: true
-  # install script from https://docs.docker.com/installation/ubuntulinux/
-  shell: curl -sSL https://get.docker.com/ubuntu/ | sudo sh  
-
 - name: install package dependencies
   sudo: true
   apt: name={{ item }}
   with_items:
-      - python-pip
-      - htop
-
-- name: install python dependencies
-  sudo: true
-  pip: name=docker-py
-
-
-- name: enable docker for standard user
-  sudo: true
-  # todo: how to logout after this command, otherwise won't be effective in this play
-  user: name=vagrant groups=docker append=yes
+    - parallel
+    - htop
 
 - name: checkout test repo
   git:
-      repo: https://github.com/sveneh/tests.git 
-      version: develop
-      dest: git
+    repo: https://github.com/ethereum/tests.git 
+    version: develop
+    dest: git

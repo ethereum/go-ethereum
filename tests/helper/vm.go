@@ -148,7 +148,6 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.
 	coinbase.SetGasPool(ethutil.Big(env["currentGasLimit"]))
 
 	message := NewMessage(keyPair.Address(), to, data, value, gas, price)
-	Log.DebugDetailf("message{ to: %x, from %x, value: %v, gas: %v, price: %v }\n", message.to[:4], message.from[:4], message.value, message.gas, message.price)
 	vmenv := NewEnvFromMap(statedb, env, tx)
 	st := core.NewStateTransition(vmenv, message, coinbase)
 	vmenv.origin = keyPair.Address()
