@@ -28,6 +28,7 @@ import (
 )
 
 var wslogger = logger.NewLogger("RPC-WS")
+var JSON rpc.JsonWrapper
 
 type WebSocketServer struct {
 	pipe     *xeth.XEth
@@ -90,27 +91,29 @@ func (s *WebSocketServer) apiHandler(api *rpc.EthereumApi) http.Handler {
 }
 
 func sockHandler(api *rpc.EthereumApi) websocket.Handler {
+	var jsonrpcver string = "2.0"
 	fn := func(conn *websocket.Conn) {
 		for {
 			wslogger.Debugln("Handling request")
 			var reqParsed rpc.RpcRequest
 
 			if err := websocket.JSON.Receive(conn, &reqParsed); err != nil {
-				wslogger.Debugln(rpc.ErrorParseRequest)
-				websocket.JSON.Send(conn, rpc.RpcErrorResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: true, ErrorText: rpc.ErrorParseRequest})
+				jsonerr := &rpc.RpcErrorObject{-32700, rpc.ErrorParseRequest}
+				JSON.Send(conn, &rpc.RpcErrorResponse{JsonRpc: jsonrpcver, ID: nil, Error: jsonerr})
 				continue
 			}
 
 			var response interface{}
 			reserr := api.GetRequestReply(&reqParsed, &response)
 			if reserr != nil {
-				wslogger.Errorln(reserr)
-				websocket.JSON.Send(conn, rpc.RpcErrorResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: true, ErrorText: reserr.Error()})
+				wslogger.Warnln(reserr)
+				jsonerr := &rpc.RpcErrorObject{-32603, reserr.Error()}
+				JSON.Send(conn, &rpc.RpcErrorResponse{JsonRpc: jsonrpcver, ID: &reqParsed.ID, Error: jsonerr})
 				continue
 			}
 
 			wslogger.Debugf("Generated response: %T %s", response, response)
-			websocket.JSON.Send(conn, rpc.RpcSuccessResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: false, Result: response})
+			JSON.Send(conn, &rpc.RpcSuccessResponse{JsonRpc: jsonrpcver, ID: reqParsed.ID, Result: response})
 		}
 	}
 	return websocket.Handler(fn)
