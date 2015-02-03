@@ -24,9 +24,7 @@ func main() {
 
 	stat, _ := f.Stat()
 	sr := io.NewSectionReader(f, 0, stat.Size())
-	chunker := &bzz.TreeChunker{
-		Branches: 128,
-	}
+	chunker := &bzz.TreeChunker{}
 	chunker.Init()
 	hash := make([]byte, chunker.HashSize())
 	errC := chunker.Split(hash, sr, nil)
