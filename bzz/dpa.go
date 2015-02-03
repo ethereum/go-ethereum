@@ -41,9 +41,23 @@ type DPA struct {
 	quitC   chan bool
 }
 
+// Chunk serves also serves as a request object passed to ChunkStores
+// in case it is a retrieval request, Data is nil and Size is 0
+// Note that Size is not the size of the data chunk, which is Data.Size() see SectionReader
+// but the size of the subtree encoded in the chunk
+// 0 if request, to be supplied by the dpa
+type Chunk struct {
+	Reader SectionReader // nil if request, to be supplied by dpa
+	Data   []byte        // nil if request, to be supplied by dpa
+	Size   int64         // size of the data covered by the subtree encoded in this chunk
+	Key    Key           // always
+	C      chan bool     // to signal data delivery by the dpa
+	update bool          //
+}
+
 type ChunkStore interface {
-	Put(*Chunk) error
-	Get(*Chunk) error
+	Put(*Chunk) // effectively there is no error even if there is no error
+	Get() (*Chunk, error)
 }
 
 func (self *DPA) Retrieve(key Key) (data LazySectionReader, err error) {
@@ -138,7 +152,7 @@ func (self *DPA) retrieveLoop() {
 		for chunk := range self.retrieveC {
 			go func() {
 				for _, store := range self.Stores {
-					if err := store.Get(chunk); err != nil { // no waiting/blocking here
+					if _, err := store.Get(); err != nil { // no waiting/blocking here
 						dpaLogger.DebugDetailf("%v retrieving chunk %x: %v", store, chunk.Key, err)
 					} else {
 						if !chunk.update {
@@ -163,9 +177,8 @@ func (self *DPA) storeLoop() {
 		for chunk := range self.storeC {
 			go func() {
 				for _, store := range self.Stores {
-					if err := store.Put(chunk); err != nil { // no waiting/blocking here
-						dpaLogger.DebugDetailf("%v storing chunk %x: %v", store, chunk.Key, err)
-					} // no waiting/blocking here
+					store.Put(chunk)
+					// no waiting/blocking here
 				}
 			}()
 			select {

@@ -2,76 +2,23 @@ package bzz
 
 import (
 	"bytes"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/bzz/test"
 )
 
 /*
 Tests TreeChunker by splitting and joining a random byte slice
 */
 
-type testLogger struct{ t *testing.T }
-
-func testlog(t *testing.T) testLogger {
-	logger.Reset()
-	l := testLogger{t}
-	logger.AddLogSystem(l)
-	return l
-}
-
-type benchLogger struct{ b *testing.B }
-
-func benchlog(b *testing.B) benchLogger {
-	logger.Reset()
-	l := benchLogger{b}
-	logger.AddLogSystem(l)
-	return l
-}
-
-func (testLogger) GetLogLevel() logger.LogLevel { return logger.DebugDetailLevel }
-func (testLogger) SetLogLevel(logger.LogLevel)  {}
-
-func (l testLogger) LogPrint(level logger.LogLevel, msg string) {
-	l.t.Logf("%s", msg)
-}
-
-func (testLogger) detach() {
-	logger.Flush()
-	logger.Reset()
-}
-
-func (benchLogger) GetLogLevel() logger.LogLevel { return logger.Silence }
-
-// func (benchLogger) GetLogLevel() logger.LogLevel { return logger.DebugLevel }
-func (benchLogger) SetLogLevel(logger.LogLevel) {}
-
-func (l benchLogger) LogPrint(level logger.LogLevel, msg string) {
-	l.b.Logf("%s", msg)
-}
-
-func (benchLogger) detach() {
-	logger.Flush()
-	logger.Reset()
-}
-
-func randomByteSlice(l int) (b []byte) {
-
-	r := rand.New(rand.NewSource(int64(l)))
-
-	b = make([]byte, l)
-	for i := 0; i < l; i++ {
-		b[i] = byte(r.Intn(256))
-	}
-
-	return
-}
-
 func testDataReader(l int) (r *ChunkReader, slice []byte) {
-	slice = randomByteSlice(l)
+	slice = make([]byte, l)
+	if _, err := rand.Read(slice); err != nil {
+		panic("rand error")
+	}
 	r = NewChunkReaderFromBytes(slice)
 	return
 }
@@ -163,7 +110,7 @@ func (self *chunkerTester) Join(chunker *TreeChunker, key Key, c int) (LazySecti
 				for _, ch := range self.chunks {
 					if bytes.Compare(chunk.Key, ch.Key) == 0 {
 						found = true
-						chunk.Data = ch.Data
+						chunk.Reader = ch.Reader
 						chunk.Size = ch.Size
 						close(chunk.C)
 						break
@@ -206,7 +153,7 @@ func testRandomData(chunker *TreeChunker, tester *chunkerTester, n int, chunks i
 }
 
 func TestRandomData(t *testing.T) {
-	defer testlog(t).detach()
+	defer test.Testlog(t).Detach()
 	chunker := &TreeChunker{
 		Branches:     2,
 		SplitTimeout: 10 * time.Second,
@@ -252,7 +199,7 @@ func benchmarkJoinRandomData(n int, chunks int, t *testing.B) {
 }
 
 func benchmarkSplitRandomData(n int, chunks int, t *testing.B) {
-	defer benchlog(t).detach()
+	defer test.Benchlog(t).Detach()
 	for i := 0; i < t.N; i++ {
 		chunker, tester := chunkerAndTester()
 		tester.Split(chunker, n)

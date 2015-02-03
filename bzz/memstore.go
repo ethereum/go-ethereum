@@ -33,6 +33,12 @@ a hash prefix subtree containing subtrees or one storage entry (but never both)
   (access[] is a binary tree inside the multi-bit leveled hash tree)
 */
 
+func newMemStore() (m *memStore) {
+	m = &memStore{}
+	m.memtree = newMemTree(memTreeFLW, nil, 0)
+	return
+}
+
 func (x Key) Size() uint {
 	return uint(len(x))
 }
@@ -132,6 +138,7 @@ func (node *memTree) updateAccess(a uint64) {
 }
 
 func (s *memStore) Put(entry *Chunk) (err error) {
+
 	if s.entryCnt >= maxEntries {
 		s.removeOldest()
 	}
@@ -192,13 +199,14 @@ func (s *memStore) Put(entry *Chunk) (err error) {
 
 func (s *memStore) Get(chunk *Chunk) (err error) {
 	hash := chunk.Key
+
 	node := s.memtree
 	bitpos := uint(0)
 	for node.entry == nil {
 		l := hash.bits(bitpos, node.bits)
 		st := node.subtree[l]
 		if st == nil {
-			return nil
+			return notFound
 		}
 		bitpos += node.bits
 		node = st
@@ -217,6 +225,7 @@ func (s *memStore) Get(chunk *Chunk) (err error) {
 	} else {
 		err = notFound
 	}
+
 	return
 }
 
@@ -286,11 +295,5 @@ func (s *memStore) removeOldest() {
 			node.access[aidx] = aa
 		}
 	}
-
-}
-
-func (s *memStore) Init() {
-
-	s.memtree = newMemTree(memTreeFLW, nil, 0)
 
 }

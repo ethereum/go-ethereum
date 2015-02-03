@@ -107,25 +107,12 @@ func (self *TreeChunker) Init() {
 	}
 	self.hashSize = int64(self.HashFunc.New().Size())
 	self.chunkSize = self.hashSize * self.Branches
-	//dpaLogger.Debugf("Chunker initialised: branches: %v, hashsize: %v, chunksize: %v, join timeout: %v , split timeout: %v", self.Branches, self.hashSize, self.chunkSize, self.JoinTimeout, self.SplitTimeout)
+	// dpaLogger.Debugf("Chunker initialised: branches: %v, hashsize: %v, chunksize: %v, join timeout: %v , split timeout: %v", self.Branches, self.hashSize, self.chunkSize, self.JoinTimeout, self.SplitTimeout)
 
 }
 
 func (self *TreeChunker) HashSize() int64 {
 	return self.hashSize
-}
-
-// Chunk serves also serves as a request object passed to ChunkStores
-// in case it is a retrieval request, Data is nil and Size is 0
-// Note that Size is not the size of the data chunk, which is Data.Size() see SectionReader
-// but the size of the subtree encoded in the chunk
-// 0 if request, to be supplied by the dpa
-type Chunk struct {
-	Data   SectionReader // nil if request, to be supplied by dpa
-	Size   int64         // size of the data covered by the subtree encoded in this chunk
-	Key    Key           // always
-	C      chan bool     // to signal data delivery by the dpa
-	update bool          //
 }
 
 // String() for pretty printing
@@ -134,10 +121,10 @@ func (self *Chunk) String() string {
 	var slice []byte
 	var n int
 	var err error
-	if self.Data != nil {
+	if self.Reader != nil {
 		size = 32 // we are printing 32 bytes of the data
 		slice = make([]byte, size)
-		n, err = self.Data.ReadAt(slice, 0)
+		n, err = self.Reader.ReadAt(slice, 0)
 		if err != nil && err != io.EOF {
 			slice = []byte(fmt.Sprintf("ERROR: %v", err))
 		}
@@ -159,9 +146,9 @@ func (self *TreeChunker) Split(key Key, data SectionReader, chunkC chan *Chunk) 
 	wg := &sync.WaitGroup{}
 	errC = make(chan error)
 	rerrC := make(chan error)
-	timeout := time.After(splitTimeout)
+	timeout := time.After(self.SplitTimeout)
 	if key == nil {
-		//dpaLogger.Debugf("please allocate byte slice for root key")
+		// dpaLogger.Debugf("please allocate byte slice for root key")
 		return
 	}
 	wg.Add(1)
@@ -173,11 +160,15 @@ func (self *TreeChunker) Split(key Key, data SectionReader, chunkC chan *Chunk) 
 		// takes lowest depth such that chunksize*HashCount^(depth+1) > size
 		// power series, will find the order of magnitude of the data size in base hashCount or numbers of levels of branching in the resulting tree.
 
+		if self.Branches <= 1 || self.chunkSize <= 0 {
+			panic("chunker must be initialised")
+		}
+
 		for ; treeSize < size; treeSize *= self.Branches {
 			depth++
 		}
 
-		//dpaLogger.Debugf("split request received for data (%v bytes, depth: %v)", size, depth)
+		// dpaLogger.Debugf("split request received for data (%v bytes, depth: %v)", size, depth)
 
 		//launch actual recursive function passing the workgroup
 		self.split(depth, treeSize/self.Branches, key, data, chunkC, rerrC, wg)
@@ -213,7 +204,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 	size := data.Size()
 	var newChunk *Chunk
 	var hash Key
-	//dpaLogger.Debugf("depth: %v, max subtree size: %v, data size: %v", depth, treeSize, size)
+	// dpaLogger.Debugf("depth: %v, max subtree size: %v, data size: %v", depth, treeSize, size)
 
 	for depth > 0 && size < treeSize {
 		treeSize /= self.Branches
@@ -223,16 +214,16 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 	if depth == 0 {
 		// leaf nodes -> content chunks
 		hash = self.Hash(size, data)
-		//dpaLogger.Debugf("content chunk: max subtree size: %v, data size: %v", treeSize, size)
+		// dpaLogger.Debugf("content chunk: max subtree size: %v, data size: %v", treeSize, size)
 		newChunk = &Chunk{
-			Key:  hash,
-			Data: data,
-			Size: size,
+			Key:    hash,
+			Reader: data,
+			Size:   size,
 		}
 	} else {
 		// intermediate chunk containing child nodes hashes
 		branches := int64((size-1)/treeSize) + 1
-		//dpaLogger.Debugf("intermediate node: setting branches: %v, depth: %v, max subtree size: %v, data size: %v", branches, depth, treeSize, size)
+		// dpaLogger.Debugf("intermediate node: setting branches: %v, depth: %v, max subtree size: %v, data size: %v", branches, depth, treeSize, size)
 
 		var chunk []byte = make([]byte, branches*self.hashSize)
 		var pos, i int64
@@ -263,9 +254,9 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 		chunkReader := NewChunkReaderFromBytes(chunk) // bytes.Reader almost implements SectionReader
 		hash = self.Hash(size, chunkReader)
 		newChunk = &Chunk{
-			Key:  hash,
-			Data: chunkReader,
-			Size: size,
+			Key:    hash,
+			Reader: chunkReader,
+			Size:   size,
 		}
 	}
 	// send off new chunk to storage
@@ -281,7 +272,7 @@ func (self *TreeChunker) Join(key Key, chunkC chan *Chunk) (data LazySectionRead
 	// initialise return parameters
 	errC = make(chan error)
 	// timer to time out the operation (needed within so as to avoid process leakage)
-	timeout := time.After(joinTimeout)
+	timeout := time.After(self.JoinTimeout)
 	wg := &sync.WaitGroup{}
 	// initialise internal error channel
 	rerrC := make(chan error)
@@ -357,7 +348,8 @@ func (self *TreeChunker) join(depth int, treeSize int64, key Key, chunkC chan *C
 		}
 
 		if depth == 0 {
-			return LazyReader(chunk.Data) // simply give back the chunks reader for content chunks
+			r = LazyReader(chunk.Reader)
+			return // simply give back the chunks reader for content chunks
 		}
 
 		// find appropriate block level
@@ -372,7 +364,7 @@ func (self *TreeChunker) join(depth int, treeSize int64, key Key, chunkC chan *C
 		var readerF func() (r LazySectionReader)
 		var readerFs [](func() (r LazySectionReader))
 		branches := int64((chunk.Size-1)/treeSize) + 1
-		//dpaLogger.DebugDetailf("tree node - size %v, chunk size: %v, subtreeSize %v, branches %v", chunk.Size, chunk.Data.Size(), treeSize, branches)
+		// dpaLogger.DebugDetailf("tree node - size %v, chunk size: %v, subtreeSize %v, branches %v", chunk.Size, chunk.Reader.Size(), treeSize, branches)
 
 		// iterate through the chunk containing the keys of children
 		// create lazy init functions that give back readers
@@ -380,8 +372,8 @@ func (self *TreeChunker) join(depth int, treeSize int64, key Key, chunkC chan *C
 			// create partial Chunk in order to send a retrieval request
 			childKey = make([]byte, self.hashSize) // preallocate hashSize long slice for key
 			// read the Hash of the subtree from the relevant section of the Chunk into the allocated byte slice in subtree.Key
-			if _, err := chunk.Data.ReadAt(childKey, i*self.hashSize); err != nil {
-				//dpaLogger.DebugDetailf("Read error: %v", err)
+			if _, err := chunk.Reader.ReadAt(childKey, i*self.hashSize); err != nil {
+				// dpaLogger.DebugDetailf("Read error: %v", err)
 				errC <- err
 				break
 			}

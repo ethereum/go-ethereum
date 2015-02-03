@@ -1,4 +1,3 @@
-//
 package bzz
 
 import (
@@ -78,7 +77,9 @@ func NewChunkReaderFromBytes(b []byte) *ChunkReader {
 The following is adapted from io.SectionReader
 */
 
-func (s *ChunkReader) Size() int64 { return s.limit - s.base }
+func (s *ChunkReader) Size() int64 {
+	return s.limit - s.base
+}
 
 var errWhence = errors.New("Seek: invalid whence")
 var errOffset = errors.New("Seek: invalid offset")
