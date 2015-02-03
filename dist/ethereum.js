@@ -238,9 +238,32 @@ if ("build" !== 'build') {/*
     var BigNumber = require('bignumber.js'); // jshint ignore:line
 */}
 
+var ETH_UNITS = [ 
+    'wei', 
+    'Kwei', 
+    'Mwei', 
+    'Gwei', 
+    'szabo', 
+    'finney', 
+    'ether', 
+    'grand', 
+    'Mether', 
+    'Gether', 
+    'Tether', 
+    'Pether', 
+    'Eether', 
+    'Zether', 
+    'Yether', 
+    'Nether', 
+    'Dether', 
+    'Vether', 
+    'Uether' 
+];
+
 module.exports = {
     ETH_PADDING: 32,
     ETH_SIGNATURE_LENGTH: 4,
+    ETH_UNITS: ETH_UNITS,
     ETH_BIGNUMBER_ROUNDING_MODE: { ROUNDING_MODE: BigNumber.ROUND_DOWN }
 };
 
@@ -368,6 +391,11 @@ var addFunctionsToContract = function (contract, desc, address) {
 
 var addEventRelatedPropertiesToContract = function (contract, desc, address) {
     contract.address = address;
+    contract._onWatchEventResult = function (data) {
+        var matchingEvent = event.getMatchingEvent(utils.filterEvents(desc));
+        var parser = eventImpl.outputParser(matchingEvent);
+        return parser(data);
+    };
     
     Object.defineProperty(contract, 'topic', {
         get: function() {
@@ -386,8 +414,12 @@ var addEventsToContract = function (contract, desc, address) {
         var impl = function () {
             var params = Array.prototype.slice.call(arguments);
             var signature = abi.eventSignatureFromAscii(e.name);
-            var event = eventImpl(address, signature, e);
+            var event = eventImpl.inputParser(address, signature, e);
             var o = event.apply(null, params);
+            o._onWatchEventResult = function (data) {
+                var parser = eventImpl.outputParser(e);
+                return parser(data);
+            };
             return web3.eth.watch(o);  
         };
         
@@ -481,6 +513,16 @@ module.exports = contract;
 var abi = require('./abi');
 var utils = require('./utils');
 
+/// filter inputs array && returns only indexed (or not) inputs
+/// @param inputs array
+/// @param bool if result should be an array of indexed params on not
+/// @returns array of (not?) indexed params
+var filterInputs = function (inputs, indexed) {
+    return inputs.filter(function (current) {
+        return current.indexed === indexed;
+    });
+};
+
 var inputWithName = function (inputs, name) {
     var index = utils.findIndex(inputs, function (input) {
         return input.name === name;
@@ -496,7 +538,7 @@ var inputWithName = function (inputs, name) {
 var indexedParamsToTopics = function (event, indexed) {
     // sort keys?
     return Object.keys(indexed).map(function (key) {
-        var inputs = [inputWithName(event.inputs, key)];
+        var inputs = [inputWithName(filterInputs(event.inputs, true), key)];
 
         var value = indexed[key];
         if (value instanceof Array) {
@@ -508,7 +550,7 @@ var indexedParamsToTopics = function (event, indexed) {
     });
 };
 
-var implementationOfEvent = function (address, signature, event) {
+var inputParser = function (address, signature, event) {
     
     // valid options are 'earliest', 'latest', 'offset' and 'max', as defined for 'eth.watch'
     return function (indexed, options) {
@@ -523,7 +565,63 @@ var implementationOfEvent = function (address, signature, event) {
     };
 };
 
-module.exports = implementationOfEvent;
+var getArgumentsObject = function (inputs, indexed, notIndexed) {
+    var indexedCopy = indexed.slice();
+    var notIndexedCopy = notIndexed.slice();
+    return inputs.reduce(function (acc, current) {
+        var value;
+        if (current.indexed)
+            value = indexed.splice(0, 1)[0];
+        else
+            value = notIndexed.splice(0, 1)[0];
+
+        acc[current.name] = value;
+        return acc;
+    }, {}); 
+};
+ 
+var outputParser = function (event) {
+    
+    return function (output) {
+        var result = {
+            event: utils.extractDisplayName(event.name),
+            number: output.number,
+            args: {}
+        };
+
+        if (!output.topic) {
+            return result;
+        }
+       
+        var indexedOutputs = filterInputs(event.inputs, true);
+        var indexedData = "0x" + output.topic.slice(1, output.topic.length).map(function (topic) { return topic.slice(2); }).join("");
+        var indexedRes = abi.formatOutput(indexedOutputs, indexedData);
+
+        var notIndexedOutputs = filterInputs(event.inputs, false);
+        var notIndexedRes = abi.formatOutput(notIndexedOutputs, output.data);
+
+        result.args = getArgumentsObject(event.inputs, indexedRes, notIndexedRes);
+
+        return result;
+    };
+};
+
+var getMatchingEvent = function (events, payload) {
+    for (var i = 0; i < events.length; i++) {
+        var signature = abi.eventSignatureFromAscii(events[i].name); 
+        if (signature === payload.topic[0]) {
+            return events[i];
+        }
+    }
+    return undefined;
+};
+
+
+module.exports = {
+    inputParser: inputParser,
+    outputParser: outputParser,
+    getMatchingEvent: getMatchingEvent
+};
 
 
 },{"./abi":1,"./utils":11}],5:[function(require,module,exports){
@@ -565,6 +663,8 @@ var Filter = function(options, impl) {
         if (options.topics) {
             console.warn('"topics" is deprecated, use "topic" instead');
         }
+        
+        this._onWatchResult = options._onWatchEventResult;
 
         // evaluate lazy properties
         options = {
@@ -603,7 +703,8 @@ Filter.prototype.changed = function(callback) {
 Filter.prototype.trigger = function(messages) {
     for (var i = 0; i < this.callbacks.length; i++) {
         for (var j = 0; j < messages.length; j++) {
-            this.callbacks[i].call(this, messages[j]);
+            var message = this._onWatchResult ? this._onWatchResult(messages[j]) : messages[j];
+            this.callbacks[i].call(this, message);
         }
     }
 };
@@ -1104,6 +1205,8 @@ module.exports = {
  * @date 2015
  */
 
+var c = require('./const');
+
 /// Finds first index of array element matching pattern
 /// @param array
 /// @param callback pattern
@@ -1185,6 +1288,32 @@ var filterEvents = function (json) {
     });
 };
 
+/// used to transform value/string to eth string
+/// TODO: use BigNumber.js to parse int
+/// TODO: add tests for it!
+var toEth = function (str) {
+    var val = typeof str === "string" ? str.indexOf('0x') === 0 ? parseInt(str.substr(2), 16) : parseInt(str) : str;
+    var unit = 0;
+    var units = c.ETH_UNITS;
+    while (val > 3000 && unit < units.length - 1)
+    {
+        val /= 1000;
+        unit++;
+    }
+    var s = val.toString().length < val.toFixed(2).length ? val.toString() : val.toFixed(2);
+    var replaceFunction = function($0, $1, $2) {
+        return $1 + ',' + $2;
+    };
+
+    while (true) {
+        var o = s;
+        s = s.replace(/(\d)(\d\d\d[\.\,])/, replaceFunction);
+        if (o === s)
+            break;
+    }
+    return s + ' ' + units[unit];
+};
+
 module.exports = {
     findIndex: findIndex,
     toAscii: toAscii,
@@ -1192,11 +1321,12 @@ module.exports = {
     extractDisplayName: extractDisplayName,
     extractTypeName: extractTypeName,
     filterFunctions: filterFunctions,
-    filterEvents: filterEvents
+    filterEvents: filterEvents,
+    toEth: toEth
 };
 
 
-},{}],12:[function(require,module,exports){
+},{"./const":2}],12:[function(require,module,exports){
 /*
     This file is part of ethereum.js.
 
@@ -1227,28 +1357,6 @@ if ("build" !== 'build') {/*
 */}
 
 var utils = require('./utils');
-
-var ETH_UNITS = [ 
-    'wei', 
-    'Kwei', 
-    'Mwei', 
-    'Gwei', 
-    'szabo', 
-    'finney', 
-    'ether', 
-    'grand', 
-    'Mether', 
-    'Gether', 
-    'Tether', 
-    'Pether', 
-    'Eether', 
-    'Zether', 
-    'Yether', 
-    'Nether', 
-    'Dether', 
-    'Vether', 
-    'Uether' 
-];
 
 /// @returns an array of objects describing web3 api methods
 var web3Methods = function () {
@@ -1412,29 +1520,7 @@ var web3 = {
     },
 
     /// used to transform value/string to eth string
-    /// TODO: use BigNumber.js to parse int
-    toEth: function(str) {
-        var val = typeof str === "string" ? str.indexOf('0x') === 0 ? parseInt(str.substr(2), 16) : parseInt(str) : str;
-        var unit = 0;
-        var units = ETH_UNITS;
-        while (val > 3000 && unit < units.length - 1)
-        {
-            val /= 1000;
-            unit++;
-        }
-        var s = val.toString().length < val.toFixed(2).length ? val.toString() : val.toFixed(2);
-        var replaceFunction = function($0, $1, $2) {
-            return $1 + ',' + $2;
-        };
-
-        while (true) {
-            var o = s;
-            s = s.replace(/(\d)(\d\d\d[\.\,])/, replaceFunction);
-            if (o === s)
-                break;
-        }
-        return s + ' ' + units[unit];
-    },
+    toEth: utils.toEth,
 
     /// eth object prototype
     eth: {
@@ -1470,11 +1556,6 @@ var web3 = {
             return new web3.filter(filter, shhWatch);
         }
     },
-
-    /// @returns true if provider is installed
-    haveProvider: function() {
-        return !!web3.provider.provider;
-    }
 };
 
 /// setups all api methods
@@ -1497,7 +1578,6 @@ var shhWatch = {
 setupMethods(shhWatch, shhWatchMethods());
 
 web3.setProvider = function(provider) {
-    //provider.onmessage = messageHandler; // there will be no async calls, to remove
     web3.provider.set(provider);
 };
 
