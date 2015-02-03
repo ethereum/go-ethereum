@@ -45,7 +45,7 @@ ApplicationWindow {
 
 		mainSplit.setView(wallet.view, wallet.menuItem);
 
-		newBrowserTab("http://etherian.io");
+		newBrowserTab(eth.assetPath("html/home.html"));
 
 		// Command setup
 		gui.sendCommand(0)
@@ -138,7 +138,7 @@ ApplicationWindow {
 				text: "New tab"
 				shortcut: "Ctrl+t"
 				onTriggered: {
-					newBrowserTab("http://etherian.io");
+					newBrowserTab("about:blank");
 				}
 			}
 
