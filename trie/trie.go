@@ -34,7 +34,9 @@ func New(root []byte, backend Backend) *Trie {
 	trie := &Trie{}
 	trie.revisions = list.New()
 	trie.roothash = root
-	trie.cache = NewCache(backend)
+	if backend != nil {
+		trie.cache = NewCache(backend)
+	}
 
 	if root != nil {
 		value := ethutil.NewValueFromBytes(trie.cache.Get(root))
@@ -49,7 +51,15 @@ func (self *Trie) Iterator() *Iterator {
 }
 
 func (self *Trie) Copy() *Trie {
-	return New(self.roothash, self.cache.backend)
+	cpy := make([]byte, 32)
+	copy(cpy, self.roothash)
+	trie := New(nil, nil)
+	trie.cache = self.cache.Copy()
+	if self.root != nil {
+		trie.root = self.root.Copy(trie)
+	}
+
+	return trie
 }
 
 // Legacy support
@@ -177,7 +187,7 @@ func (self *Trie) insert(node Node, key []byte, value Node) Node {
 		return NewShortNode(self, key[:matchlength], n)
 
 	case *FullNode:
-		cpy := node.Copy().(*FullNode)
+		cpy := node.Copy(self).(*FullNode)
 		cpy.set(key[0], self.insert(node.branch(key[0]), key[1:], value))
 
 		return cpy
@@ -244,7 +254,7 @@ func (self *Trie) delete(node Node, key []byte) Node {
 		}
 
 	case *FullNode:
-		n := node.Copy().(*FullNode)
+		n := node.Copy(self).(*FullNode)
 		n.set(key[0], self.delete(n.branch(key[0]), key[1:]))
 
 		pos := -1
@@ -301,7 +311,7 @@ func (self *Trie) mknode(value *ethutil.Value) Node {
 		}
 		return fnode
 	case 32:
-		return &HashNode{value.Bytes()}
+		return &HashNode{value.Bytes(), self}
 	}
 
 	return &ValueNode{self, value.Bytes()}
@@ -331,4 +341,5 @@ func (self *Trie) store(node Node) interface{} {
 
 func (self *Trie) PrintRoot() {
 	fmt.Println(self.root)
+	fmt.Printf("root=%x\n", self.Root())
 }
