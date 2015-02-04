@@ -33,30 +33,29 @@ const (
 	ErrorDecodeArgs     = "Error: Could not decode arguments"
 )
 
-type ErrorResponse struct {
-	Error     bool   `json:"error"`
-	ErrorText string `json:"errorText"`
-}
-
-type RpcSuccessResponse struct {
-	ID      int         `json:"id"`
-	JsonRpc string      `json:"jsonrpc"`
-	Error   bool        `json:"error"`
-	Result  interface{} `json:"result"`
-}
-
-type RpcErrorResponse struct {
-	ID        int    `json:"id"`
-	JsonRpc   string `json:"jsonrpc"`
-	Error     bool   `json:"error"`
-	ErrorText string `json:"errortext"`
-}
-
 type RpcRequest struct {
 	JsonRpc string            `json:"jsonrpc"`
 	ID      int               `json:"id"`
 	Method  string            `json:"method"`
 	Params  []json.RawMessage `json:"params"`
+}
+
+type RpcSuccessResponse struct {
+	ID      int         `json:"id"`
+	JsonRpc string      `json:"jsonrpc"`
+	Result  interface{} `json:"result"`
+}
+
+type RpcErrorResponse struct {
+	ID      *int            `json:"id"`
+	JsonRpc string          `json:"jsonrpc"`
+	Error   *RpcErrorObject `json:"error"`
+}
+
+type RpcErrorObject struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	// Data    interface{} `json:"data"`
 }
 
 func NewErrorResponse(msg string) error {
