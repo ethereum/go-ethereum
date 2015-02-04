@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"fmt"
 	"math"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -130,6 +131,7 @@ func (self *Filter) Find() state.Logs {
 
 func includes(addresses [][]byte, a []byte) (found bool) {
 	for _, addr := range addresses {
+		fmt.Println("INCLUDES", addr, a)
 		if bytes.Compare(addr, a) == 0 {
 			return true
 		}
@@ -139,20 +141,25 @@ func includes(addresses [][]byte, a []byte) (found bool) {
 }
 
 func (self *Filter) FilterLogs(logs state.Logs) state.Logs {
+	fmt.Println("FILTER LOGS", self.topics)
 	var ret state.Logs
 
 	// Filter the logs for interesting stuff
 	for _, log := range logs {
+		fmt.Println(log)
+
 		if len(self.address) > 0 && !bytes.Equal(self.address, log.Address()) {
 			continue
 		}
 
 		for _, topic := range self.topics {
+			fmt.Println("TOPIC:", topic)
 			if !includes(log.Topics(), topic) {
 				continue
 			}
 		}
 
+		fmt.Println("APPENDED")
 		ret = append(ret, log)
 	}
 

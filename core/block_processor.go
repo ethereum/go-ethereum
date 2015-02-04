@@ -110,6 +110,8 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, state 
 		go self.eventMux.Post(TxPostEvent{tx})
 	}
 
+	go self.eventMux.Post(state.Logs())
+
 	return receipt, txGas, err
 }
 
@@ -155,25 +157,25 @@ done:
 	return receipts, handled, unhandled, erroneous, err
 }
 
-func (sm *BlockProcessor) Process(block *types.Block) (td *big.Int, msgs state.Messages, err error) {
+func (sm *BlockProcessor) Process(block *types.Block) (td *big.Int, err error) {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
 	header := block.Header()
 	if sm.bc.HasBlock(header.Hash()) {
-		return nil, nil, &KnownBlockError{header.Number, header.Hash()}
+		return nil, &KnownBlockError{header.Number, header.Hash()}
 	}
 
 	if !sm.bc.HasBlock(header.ParentHash) {
-		return nil, nil, ParentError(header.ParentHash)
+		return nil, ParentError(header.ParentHash)
 	}
 	parent := sm.bc.GetBlock(header.ParentHash)
 
 	return sm.ProcessWithParent(block, parent)
 }
 
-func (sm *BlockProcessor) ProcessWithParent(block, parent *types.Block) (td *big.Int, messages state.Messages, err error) {
+func (sm *BlockProcessor) ProcessWithParent(block, parent *types.Block) (td *big.Int, err error) {
 	sm.lastAttemptedBlock = block
 
 	state := state.New(parent.Root(), sm.db)
@@ -227,7 +229,6 @@ func (sm *BlockProcessor) ProcessWithParent(block, parent *types.Block) (td *big
 	state.Sync()
 	// Set the block hashes for the current messages
 	state.Manifest().SetHash(block.Hash())
-	messages = state.Manifest().Messages
 	// Reset the manifest XXX We need this?
 	state.Manifest().Reset()
 	// Remove transactions from the pool
@@ -235,7 +236,7 @@ func (sm *BlockProcessor) ProcessWithParent(block, parent *types.Block) (td *big
 
 	chainlogger.Infof("processed block #%d (%x...)\n", header.Number, block.Hash()[0:4])
 
-	return td, messages, nil
+	return td, nil
 }
 
 // Validates the current block. Returns an error if the block was invalid,

@@ -41,6 +41,10 @@ func env(block *types.Block, eth *eth.Ethereum) *environment {
 	return env
 }
 
+type Agent interface {
+	Comms() chan<- *types.Block
+}
+
 type worker struct {
 	agents []chan<- *types.Block
 	mux    *event.TypeMux
@@ -68,11 +72,12 @@ out:
 		case event := <-events.Chan():
 			switch event := event.(type) {
 			case core.NewBlockEvent:
-				block := event.Block
-				if self.eth.ChainManager().HasBlock(block.Hash()) {
-				} else if true {
+				if self.eth.ChainManager().HasBlock(event.Block.Hash()) {
 				}
-			case core.TxPreEvent, *LocalTx:
+			case core.TxPreEvent:
+				if err := self.commitTransaction(event.Tx); err != nil {
+					self.commit()
+				}
 			}
 		case <-self.quit:
 			break out

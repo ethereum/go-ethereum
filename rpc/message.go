@@ -206,6 +206,7 @@ func (req *RpcRequest) ToFilterArgs() (*FilterOptions, error) {
 	if len(req.Params) < 1 {
 		return nil, NewErrorResponse(ErrorArguments)
 	}
+	fmt.Println("filter params", req.Params)
 
 	args := new(FilterOptions)
 	r := bytes.NewReader(req.Params[0])
