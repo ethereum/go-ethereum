@@ -50,7 +50,7 @@ ApplicationWindow {
 
         mainSplit.setView(wallet.view, wallet.menuItem);
 
-        newBrowserTab("http://etherian.io");
+        newBrowserTab("http://ethereum-dapp-whisper-client.meteor.com/chat/ethereum");
 
         // Command setup
         gui.sendCommand(0)
@@ -330,6 +330,7 @@ ApplicationWindow {
         anchors.fill: parent
         resizing: false
 
+
         function setView(view, menu) {
             for(var i = 0; i < views.length; i++) {
                 views[i].view.visible = false
@@ -367,6 +368,8 @@ ApplicationWindow {
              id: menu
              Layout.minimumWidth: 192
              Layout.maximumWidth: 192
+             border.width: 10
+
              anchors.top: parent.top
              Rectangle {
                      width: parent.height
@@ -680,6 +683,9 @@ ApplicationWindow {
               anchors.bottom: parent.bottom
               anchors.top: parent.top
               color: "#00000000"
+              border.width: 10
+              border.color: "#00FF0F"
+             
 
               Rectangle {
                   id: urlPane
