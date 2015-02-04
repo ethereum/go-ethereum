@@ -111,7 +111,7 @@ func Init() {
 	flag.StringVar(&OutboundPort, "port", "30303", "listening port")
 	flag.BoolVar(&UseUPnP, "upnp", true, "enable UPnP support")
 	flag.IntVar(&MaxPeer, "maxpeer", 30, "maximum desired peers")
-	flag.IntVar(&RpcPort, "rpcport", 8080, "port to start json-rpc server on")
+	flag.IntVar(&RpcPort, "rpcport", 8545, "port to start json-rpc server on")
 	flag.IntVar(&WsPort, "wsport", 40404, "port to start websocket rpc server on")
 	flag.BoolVar(&StartRpc, "rpc", true, "start rpc server")
 	flag.BoolVar(&StartWebSockets, "ws", false, "start websocket server")
