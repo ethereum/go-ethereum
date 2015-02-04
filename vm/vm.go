@@ -510,7 +510,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 		case GASPRICE:
 			stack.Push(context.Price)
 
-			self.Printf(" => %v", context.Price)
+			self.Printf(" => %x", context.Price)
 
 			// 0x40 range
 		case BLOCKHASH:
@@ -643,6 +643,8 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			stack.Push(big.NewInt(int64(mem.Len())))
 		case GAS:
 			stack.Push(context.Gas)
+
+			self.Printf(" => %x", context.Gas)
 			// 0x60 range
 		case CREATE:
 
@@ -653,6 +655,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 				gas          = new(big.Int).Set(context.Gas)
 				addr         []byte
 			)
+			self.Endl()
 
 			context.UseGas(context.Gas)
 			ret, suberr, ref := self.env.Create(context, nil, input, gas, price, value)
@@ -673,7 +676,6 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 
 				stack.Push(ethutil.BigD(addr))
 
-				self.Printf(" (*) %x", addr)
 			}
 
 			// Debug hook

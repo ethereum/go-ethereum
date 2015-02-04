@@ -20,8 +20,153 @@
  * @date 2014
  */
 
-var web3 = require('./web3'); // jshint ignore:line
+var web3 = require('./web3'); 
 var abi = require('./abi');
+var utils = require('./utils');
+var eventImpl = require('./event');
+
+var exportNatspecGlobals = function (vars) {
+    // it's used byt natspec.js
+    // TODO: figure out better way to solve this
+    web3._currentContractAbi = vars.abi;
+    web3._currentContractAddress = vars.address;
+    web3._currentContractMethodName = vars.method;
+    web3._currentContractMethodParams = vars.params;
+};
+
+var addFunctionRelatedPropertiesToContract = function (contract) {
+    
+    contract.call = function (options) {
+        contract._isTransact = false;
+        contract._options = options;
+        return contract;
+    };
+
+    contract.transact = function (options) {
+        contract._isTransact = true;
+        contract._options = options;
+        return contract;
+    };
+
+    contract._options = {};
+    ['gas', 'gasPrice', 'value', 'from'].forEach(function(p) {
+        contract[p] = function (v) {
+            contract._options[p] = v;
+            return contract;
+        };
+    });
+
+};
+
+var addFunctionsToContract = function (contract, desc, address) {
+    var inputParser = abi.inputParser(desc);
+    var outputParser = abi.outputParser(desc);
+
+    // create contract functions
+    utils.filterFunctions(desc).forEach(function (method) {
+
+        var displayName = utils.extractDisplayName(method.name);
+        var typeName = utils.extractTypeName(method.name);
+
+        var impl = function () {
+            var params = Array.prototype.slice.call(arguments);
+            var signature = abi.signatureFromAscii(method.name);
+            var parsed = inputParser[displayName][typeName].apply(null, params);
+
+            var options = contract._options || {};
+            options.to = address;
+            options.data = signature + parsed;
+            
+            var isTransact = contract._isTransact === true || (contract._isTransact !== false && !method.constant);
+            var collapse = options.collapse !== false;
+            
+            // reset
+            contract._options = {};
+            contract._isTransact = null;
+
+            if (isTransact) {
+                
+                exportNatspecGlobals({
+                    abi: desc,
+                    address: address,
+                    method: method.name,
+                    params: params
+                });
+
+                // transactions do not have any output, cause we do not know, when they will be processed
+                web3.eth.transact(options);
+                return;
+            }
+            
+            var output = web3.eth.call(options);
+            var ret = outputParser[displayName][typeName](output);
+            if (collapse)
+            {
+                if (ret.length === 1)
+                    ret = ret[0];
+                else if (ret.length === 0)
+                    ret = null;
+            }
+            return ret;
+        };
+
+        if (contract[displayName] === undefined) {
+            contract[displayName] = impl;
+        }
+
+        contract[displayName][typeName] = impl;
+    });
+};
+
+var addEventRelatedPropertiesToContract = function (contract, desc, address) {
+    contract.address = address;
+    contract._onWatchEventResult = function (data) {
+        var matchingEvent = event.getMatchingEvent(utils.filterEvents(desc));
+        var parser = eventImpl.outputParser(matchingEvent);
+        return parser(data);
+    };
+    
+    Object.defineProperty(contract, 'topic', {
+        get: function() {
+            return utils.filterEvents(desc).map(function (e) {
+                return abi.eventSignatureFromAscii(e.name);
+            });
+        }
+    });
+
+};
+
+var addEventsToContract = function (contract, desc, address) {
+    // create contract events
+    utils.filterEvents(desc).forEach(function (e) {
+
+        var impl = function () {
+            var params = Array.prototype.slice.call(arguments);
+            var signature = abi.eventSignatureFromAscii(e.name);
+            var event = eventImpl.inputParser(address, signature, e);
+            var o = event.apply(null, params);
+            o._onWatchEventResult = function (data) {
+                var parser = eventImpl.outputParser(e);
+                return parser(data);
+            };
+            return web3.eth.watch(o);  
+        };
+        
+        // this property should be used by eth.filter to check if object is an event
+        impl._isEvent = true;
+
+        var displayName = utils.extractDisplayName(e.name);
+        var typeName = utils.extractTypeName(e.name);
+
+        if (contract[displayName] === undefined) {
+            contract[displayName] = impl;
+        }
+
+        contract[displayName][typeName] = impl;
+
+    });
+};
+
 
 /**
  * This method should be called when we want to call / transact some solidity method from javascript
@@ -47,10 +192,11 @@ var abi = require('./abi');
 
 var contract = function (address, desc) {
 
+    // workaround for invalid assumption that method.name is the full anonymous prototype of the method.
+    // it's not. it's just the name. the rest of the code assumes it's actually the anonymous
+    // prototype, so we make it so as a workaround.
+    // TODO: we may not want to modify input params, maybe use copy instead?
     desc.forEach(function (method) {
-        // workaround for invalid assumption that method.name is the full anonymous prototype of the method.
-        // it's not. it's just the name. the rest of the code assumes it's actually the anonymous
-        // prototype, so we make it so as a workaround.
         if (method.name.indexOf('(') === -1) {
             var displayName = method.name;
             var typeName = method.inputs.map(function(i){return i.type; }).join();
@@ -58,85 +204,11 @@ var contract = function (address, desc) {
         }
     });
 
-    var inputParser = abi.inputParser(desc);
-    var outputParser = abi.outputParser(desc);
-
     var result = {};
-
-    result.call = function (options) {
-        result._isTransact = false;
-        result._options = options;
-        return result;
-    };
-
-    result.transact = function (options) {
-        result._isTransact = true;
-        result._options = options;
-        return result;
-    };
-
-    result._options = {};
-    ['gas', 'gasPrice', 'value', 'from'].forEach(function(p) {
-        result[p] = function (v) {
-            result._options[p] = v;
-            return result;
-        };
-    });
-
-
-    desc.forEach(function (method) {
-
-        var displayName = abi.methodDisplayName(method.name);
-        var typeName = abi.methodTypeName(method.name);
-
-        var impl = function () {
-            var params = Array.prototype.slice.call(arguments);
-            var signature = abi.methodSignature(method.name);
-            var parsed = inputParser[displayName][typeName].apply(null, params);
-
-            var options = result._options || {};
-            options.to = address;
-            options.data = signature + parsed;
-            
-            var isTransact = result._isTransact === true || (result._isTransact !== false && !method.constant);
-            var collapse = options.collapse !== false;
-            
-            // reset
-            result._options = {};
-            result._isTransact = null;
-
-            if (isTransact) {
-                // it's used byt natspec.js
-                // TODO: figure out better way to solve this
-                web3._currentContractAbi = desc;
-                web3._currentContractAddress = address;
-                web3._currentContractMethodName = method.name;
-                web3._currentContractMethodParams = params;
-
-                // transactions do not have any output, cause we do not know, when they will be processed
-                web3.eth.transact(options);
-                return;
-            }
-            
-            var output = web3.eth.call(options);
-            var ret = outputParser[displayName][typeName](output);
-            if (collapse)
-            {
-                if (ret.length === 1)
-                    ret = ret[0];
-                else if (ret.length === 0)
-                    ret = null;
-            }
-            return ret;
-        };
-
-        if (result[displayName] === undefined) {
-            result[displayName] = impl;
-        }
-
-        result[displayName][typeName] = impl;
-
-    });
+    addFunctionRelatedPropertiesToContract(result);
+    addFunctionsToContract(result, desc, address);
+    addEventRelatedPropertiesToContract(result, desc, address);
+    addEventsToContract(result, desc, address);
 
     return result;
 };

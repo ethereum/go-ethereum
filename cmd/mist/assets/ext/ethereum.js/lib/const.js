@@ -14,33 +14,43 @@
     You should have received a copy of the GNU Lesser General Public License
     along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file httpsync.js
+/** @file const.js
  * @authors:
  *   Marek Kotewicz <marek@ethdev.com>
- *   Marian Oancea <marian@ethdev.com>
- * @date 2014
+ * @date 2015
  */
 
+/// required to define ETH_BIGNUMBER_ROUNDING_MODE
 if (process.env.NODE_ENV !== 'build') {
-        var XMLHttpRequest = require('xmlhttprequest').XMLHttpRequest; // jshint ignore:line
+    var BigNumber = require('bignumber.js'); // jshint ignore:line
 }
 
-var HttpSyncProvider = function (host) {
-    this.handlers = [];
-    this.host = host || 'http://localhost:8080';
-};
+var ETH_UNITS = [ 
+    'wei', 
+    'Kwei', 
+    'Mwei', 
+    'Gwei', 
+    'szabo', 
+    'finney', 
+    'ether', 
+    'grand', 
+    'Mether', 
+    'Gether', 
+    'Tether', 
+    'Pether', 
+    'Eether', 
+    'Zether', 
+    'Yether', 
+    'Nether', 
+    'Dether', 
+    'Vether', 
+    'Uether' 
+];
 
-HttpSyncProvider.prototype.send = function (payload) {
-    //var data = formatJsonRpcObject(payload);
-    
-    var request = new XMLHttpRequest();
-    request.open('POST', this.host, false);
-    request.send(JSON.stringify(payload));
-    
-    // check request.status
-    var result = request.responseText;
-    return JSON.parse(result);
+module.exports = {
+    ETH_PADDING: 32,
+    ETH_SIGNATURE_LENGTH: 4,
+    ETH_UNITS: ETH_UNITS,
+    ETH_BIGNUMBER_ROUNDING_MODE: { ROUNDING_MODE: BigNumber.ROUND_DOWN }
 };
-
-module.exports = HttpSyncProvider;
 
