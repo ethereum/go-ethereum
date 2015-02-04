@@ -2,12 +2,12 @@ package bzz
 
 /*
 BZZ implements the bzz wire protocol of swarm
-routing decoded storage and retrieval requests to DPA
-and registering peers with the DHT
+routing decoded storage and retrieval requests
+registering peers with the DHT
 */
 
 import (
-	"fmt"
+	"net"
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
@@ -23,30 +23,17 @@ const (
 
 // bzz protocol message codes
 const (
-	StatusMsg          = iota // 0x01
-	StoreRequestMsg           // 0x02
-	RetrieveRequestMsg        // 0x03
-	GetBlockHashesMsg         // 0x04
-	PeersMsg                  // 0x05
-	DeliveryMsg               // 0x06
+	statusMsg          = iota // 0x01
+	storeRequestMsg           // 0x02
+	retrieveRequestMsg        // 0x03
+	peersMsg                  // 0x04
 )
-
-type BzzHive interface {
-	AddStoreRequest(*StoreRequestMsgData, *p2p.Peer) error
-	AddRetrieveRequest(*RetrieveRequestMsgData, *p2p.Peer) error
-	AddPeers([]*p2p.Peer) error
-	AddDelivery(*DeliveryMsgData, *p2p.Peer) error
-	RemovePeer(*p2p.Peer)
-}
 
 // bzzProtocol represents the swarm wire protocol
 // instance is running on each peer
 type bzzProtocol struct {
-	Hive BzzHive
-	DHT  *DHTStore
-	// CAD *p2p.Cademlia
+	hive *Hive
 	peer *p2p.Peer
-	id   string
 	rw   p2p.MsgReadWriter
 }
 
@@ -68,18 +55,15 @@ Peers
 
 [0x04, key: B_256, timeout: B_64, peers: [[peer], [peer], .... ]] the encoding of a peer is identical to that in the devp2p base protocol peers messages: [IP, Port, NodeID] note that a node's DPA address is not the NodeID but the hash of the NodeID. Timeout serves to indicate whether the responder is forwarding the query within the timeout or not.
 
-Delivery
-
-[0x05, key: B_256, metadata: [], data: B_4k]: the delivery response to retrieval queries.
 */
 
-type StatusMsgData struct {
+type statusMsgData struct {
 	Version   uint64
 	ID        string
 	NodeID    []byte
 	NetworkId uint64
 	Caps      []p2p.Cap
-	Strategy  uint64
+	// Strategy  uint64
 }
 
 /*
@@ -88,15 +72,17 @@ type StatusMsgData struct {
  if they are within our storage radius or have any incentive to store it then attach your nodeID to the metadata
  if the storage request is sufficiently close (within our proximity range (the last row of the routing table), then sending it to all peers will not guarantee convergence, so there needs to be an absolute expiry of the request too. Maybe the protocol should specify a forward probability exponentially declining with age.
 */
-type StoreRequestMsgData struct {
-	Key    Key           // hash of datasize | data
-	Size   uint64        // size of data in bytes
-	Data   []byte        // is this needed?
-	Reader SectionReader // is the underlying byte slice already buffered within the app somewhere?
+type storeRequestMsgData struct {
+	Key  Key    // hash of datasize | data
+	Size int64  // size of data in bytes
+	Data []byte // is this needed?
 	// optional
+	Id             uint64    //
 	RequestTimeout time.Time // expiry for forwarding
 	StorageTimeout time.Time // expiry of content
-	Metadata       MetaData
+	Metadata       metaData  //
+	//
+	peer peer
 }
 
 /*
@@ -106,75 +92,79 @@ MaxSize specifies the maximum size that the peer will accept. This is useful in 
 In the special case that the key is identical to the peers own address (hash of NodeID) the message is to be handled as a self lookup. The response is a PeersMsg with the peers in the cademlia proximity bin corresponding to the address.
 It is unclear if a retrieval request with an empty target is the same as a self lookup
 */
-type RetrieveRequestMsgData struct {
-	Key      Key
-	MaxSize  uint64    // optional maximum size of delivery accepted
-	Timeout  time.Time //optional, if missing or
-	Metadata MetaData
+type retrieveRequestMsgData struct {
+	Key Key
+	// optional
+	Id       uint64    //
+	MaxSize  int64     //  maximum size of delivery accepted
+	Timeout  time.Time //
+	Metadata metaData  //
+	//
+	peer peer
 }
 
-/* one response to retrieval, always encouraged after a retrieval request to respond with a list of peers in the same cademlia proximity bin.
+type peerAddr struct {
+	IP     net.IP
+	Port   uint64
+	Pubkey []byte
+}
+
+/*
+one response to retrieval, always encouraged after a retrieval request to respond with a list of peers in the same cademlia proximity bin.
 The encoding of a peer is identical to that in the devp2p base protocol peers messages: [IP, Port, NodeID]
 note that a node's DPA address is not the NodeID but the hash of the NodeID.
 Timeout serves to indicate whether the responder is forwarding the query within the timeout or not.
 The Key is the target (if response to a retrieval request) or peers address (hash of NodeID) if retrieval request was a self lookup.
 It is unclear if PeersMsg with an empty Key has a special meaning or just mean the same as with the peers address as Key (cademlia bin)
 */
-type PeersMsgData struct {
-	Peers []*p2p.Peer
-	Key   Key // if a response to a retrieval request
+type peersMsgData struct {
+	Peers   []*peerAddr //
+	Timeout time.Time   // indicate whether responder is expected to deliver content
+	Key     Key         // if a response to a retrieval request
+	Id      uint64      // if a response to a retrieval request
+	//
+	peer peer
 }
 
 /*
-Delivery and storeRequest messages could be lumped together or maybe distinguished by their request timeout ?
+metadata is as yet a placeholder
+it will likely contain info about hops or the entire forward chain of node IDs
+this may allow some interesting schemes to evolve optimal routing strategies
+metadata for storage and retrieval requests could specify format parameters relevant for the (blockhashing) chunking scheme used (for chunks corresponding to a treenode). For instance all runtime params for the chunker (hashing algorithm used, branching etc.)
+Finally metadata can hold info relevant to some reward or compensation scheme that may be used to incentivise peers.
 */
-// wonder if we should use Chunk here directly or keep loosely coupled
-type DeliveryMsgData struct {
-	Key      Key
-	Data     SectionReader
-	Metadata MetaData
-}
+type metaData struct{}
 
 /*
- metadata is as yet a placeholder
- it will likely contain info about hops or the entire forward chain of node IDs
- this may allow some interesting schemes to evolve optimal routing strategies
-  metadata for storage and retrieval requests could specify format parameters relevant for the (blockhashing) chunking scheme used (for chunks corresponding to a treenode). For instance all runtime params for the chunker (hashing algorithm used, branching etc.)
-  Finally metadata can hold info relevant to some reward or compensation scheme that may be used to incentivise peers.
+main entrypoint, wrappers starting a server running the bzz protocol
+use this constructor to attach the protocol ("class") to server caps
+the Dev p2p layer then runs the protocol instance on each peer
 */
-type MetaData struct{}
-
-// main entrypoint, wrappers starting a server running the bzz protocol
-// use this constructor to attach the protocol ("class") to server caps
-// the Dev p2p layer then runs the protocol instance on each peer
-func BzzProtocol(hive BzzHive) p2p.Protocol {
+func BzzProtocol(hive *Hive) p2p.Protocol {
 	return p2p.Protocol{
 		Name:    "bzz",
 		Version: Version,
 		Length:  ProtocolLength,
-		Run: func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
-			return runBzzProtocol(hive, peer, rw)
+		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+			return runBzzProtocol(hive, p, rw)
 		},
 	}
 }
 
 // the main loop that handles incoming messages
 // note RemovePeer in the post-disconnect hook
-func runBzzProtocol(hive BzzHive, peer *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+func runBzzProtocol(hive *Hive, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
 	self := &bzzProtocol{
-		Hive: hive,
-		// DHT: dht,
-		// CAD:  cad,
+		hive: hive,
 		rw:   rw,
-		peer: peer,
-		id:   fmt.Sprintf("%x", peer.Identity().Pubkey()[:8]),
+		peer: p,
 	}
 	err = self.handleStatus()
 	if err == nil {
 		for {
 			err = self.handle()
 			if err != nil {
-				self.Hive.RemovePeer(self.peer)
+				self.hive.removePeer(peer{self})
 				break
 			}
 		}
@@ -193,43 +183,38 @@ func (self *bzzProtocol) handle() error {
 	// make sure that the payload has been fully consumed
 	defer msg.Discard()
 	/*
-	   StatusMsg          = iota // 0x01
-	   StoreRequestMsg           // 0x02
-	   RetrieveRequestMsg        // 0x03
-	   PeersMsg                  // 0x04
-	   DeliveryMsg               // 0x05
+	   statusMsg          = iota // 0x01
+	   storeRequestMsg           // 0x02
+	   retrieveRequestMsg        // 0x03
+	   peersMsg                  // 0x04
 	*/
 	switch msg.Code {
-	case StatusMsg:
+	case statusMsg:
 		return self.protoError(ErrExtraStatusMsg, "")
 
-	case StoreRequestMsg:
-		var req StoreRequestMsgData
+	case storeRequestMsg:
+		var req storeRequestMsgData
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 		}
-		self.Hive.AddStoreRequest(&req, self.peer)
+		req.peer = peer{self}
+		self.hive.addStoreRequest(&req)
 
-	case RetrieveRequestMsg:
-		var req RetrieveRequestMsgData
+	case retrieveRequestMsg:
+		var req retrieveRequestMsgData
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
-		self.Hive.AddRetrieveRequest(&req, self.peer)
+		req.peer = peer{self}
+		self.hive.addRetrieveRequest(&req)
 
-	case PeersMsg:
-		var req PeersMsgData
+	case peersMsg:
+		var req peersMsgData
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
-		self.Hive.AddPeers(req.Peers)
-
-	case DeliveryMsg:
-		var req DeliveryMsgData
-		if err := msg.Decode(&req); err != nil {
-			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
-		}
-		self.Hive.AddDelivery(&req, self.peer)
+		req.peer = peer{self}
+		self.hive.addPeers(&req)
 
 	default:
 		return self.protoError(ErrInvalidMsgCode, "%v", msg.Code)
@@ -237,19 +222,9 @@ func (self *bzzProtocol) handle() error {
 	return nil
 }
 
-/*
-type StatusMsg struct {
-  Version  uint64
-  ID       string
-  NodeID   []byte
-  Caps     []Cap
-  Strategy uint64
-}
-*/
-
 func (self *bzzProtocol) statusMsg() p2p.Msg {
 
-	return p2p.NewMsg(StatusMsg,
+	return p2p.NewMsg(statusMsg,
 		uint32(Version),
 		uint32(NetworkId),
 		"honey",
@@ -270,15 +245,15 @@ func (self *bzzProtocol) handleStatus() error {
 		return err
 	}
 
-	if msg.Code != StatusMsg {
-		return self.protoError(ErrNoStatusMsg, "first msg has code %x (!= %x)", msg.Code, StatusMsg)
+	if msg.Code != statusMsg {
+		return self.protoError(ErrNoStatusMsg, "first msg has code %x (!= %x)", msg.Code, statusMsg)
 	}
 
 	if msg.Size > ProtocolMaxMsgSize {
 		return self.protoError(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
 	}
 
-	var status StatusMsgData
+	var status statusMsgData
 	if err := msg.Decode(&status); err != nil {
 		return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 	}
@@ -293,27 +268,32 @@ func (self *bzzProtocol) handleStatus() error {
 
 	self.peer.Infof("Peer is [bzz] capable (%d/%d)\n", status.Version, status.NetworkId)
 
-	self.Hive.AddPeers([]*p2p.Peer{self.peer})
+	req := &peersMsgData{
+		// Peers: []*peerAddr{self.peer.Address()}, // not implemented in p2p, should be the same as node discovery cademlia
+		// Key:   nil,
+		peer: peer{self},
+	}
+
+	self.hive.addPeers(req)
 
 	return nil
 }
 
-func (self *bzzProtocol) Retrieve(req RetrieveRequestMsgData) error {
-	return p2p.EncodeMsg(self.rw, RetrieveRequestMsg, req)
+// outgoing messages
+func (self *bzzProtocol) retrieve(req *retrieveRequestMsgData) {
+	p2p.EncodeMsg(self.rw, retrieveRequestMsg, req)
 }
 
-func (self *bzzProtocol) Store(req StoreRequestMsgData) error {
-	return p2p.EncodeMsg(self.rw, StoreRequestMsg, req)
+func (self *bzzProtocol) store(req *storeRequestMsgData) {
+	p2p.EncodeMsg(self.rw, storeRequestMsg, req)
 }
 
-func (self *bzzProtocol) DeliveryMsg(req DeliveryMsgData) error {
-	return p2p.EncodeMsg(self.rw, DeliveryMsg, req)
+func (self *bzzProtocol) peers(req *peersMsgData) {
+	p2p.EncodeMsg(self.rw, peersMsg, req)
 }
 
-func (self *bzzProtocol) Peers(req PeersMsgData) error {
-	return p2p.EncodeMsg(self.rw, PeersMsg, req)
-}
-
+// errors
+// TODO: should be reworked using errs pkg
 func (self *bzzProtocol) protoError(code int, format string, params ...interface{}) (err *protocolError) {
 	err = ProtocolError(code, format, params...)
 	if err.Fatal() {

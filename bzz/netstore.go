@@ -6,5 +6,5 @@ It accumulates requests from peers, keeping a request pool and does forwarding f
 */
 
 // it implements the ChunkStore interface
-type DHTStore struct {
+type netStore struct {
 }
