@@ -124,5 +124,20 @@ describe('jsonrpc', function () {
             assert.equal(valid, true);
         });
 
+        it('should validate jsonrpc response with result field === 0', function () {
+            
+            // given 
+            var response = {
+                jsonrpc: '2.0',
+                id: 1,
+                result: 0 
+            };
+
+            // when
+            var valid = jsonrpc.isValidResponse(response);
+
+            // then
+            assert.equal(valid, true);
+        });
     });
 });
