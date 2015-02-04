@@ -1,8 +1,8 @@
 var tests = module.exports = {};
 
 Object.defineProperties(tests, {
-  blockTests: {
-    get: require('require-all').bind(this, __dirname + '/BlockTests')
+  blockchainTests: {
+    get: require('require-all').bind(this, __dirname + '/BlockchainTests')
   },
   basicTests: {
     get: require('require-all').bind(this, __dirname + '/BasicTests/')
