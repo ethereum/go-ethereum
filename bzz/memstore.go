@@ -137,7 +137,7 @@ func (node *memTree) updateAccess(a uint64) {
 
 }
 
-func (s *memStore) Put(entry *Chunk) (err error) {
+func (s *memStore) Put(entry *Chunk) {
 
 	if s.entryCnt >= maxEntries {
 		s.removeOldest()
@@ -197,8 +197,7 @@ func (s *memStore) Put(entry *Chunk) (err error) {
 	return
 }
 
-func (s *memStore) Get(chunk *Chunk) (err error) {
-	hash := chunk.Key
+func (s *memStore) Get(hash Key) (chunk *Chunk, err error) {
 
 	node := s.memtree
 	bitpos := uint(0)
@@ -206,7 +205,7 @@ func (s *memStore) Get(chunk *Chunk) (err error) {
 		l := hash.bits(bitpos, node.bits)
 		st := node.subtree[l]
 		if st == nil {
-			return notFound
+			return nil, notFound
 		}
 		bitpos += node.bits
 		node = st
@@ -215,13 +214,16 @@ func (s *memStore) Get(chunk *Chunk) (err error) {
 	if node.entry.Key.isEqual(hash) {
 		s.accessCnt++
 		node.updateAccess(s.accessCnt)
+		chunk = &Chunk{
+			Key:  hash,
+			Data: node.entry.Data,
+			Size: node.entry.Size,
+		}
 		if s.dbAccessCnt-node.lastDBaccess > dbForceUpdateAccessCnt {
 			s.dbAccessCnt++
 			node.lastDBaccess = s.dbAccessCnt
 			chunk.update = true
 		}
-		chunk.Data = node.entry.Data
-		chunk.Size = node.entry.Size
 	} else {
 		err = notFound
 	}
