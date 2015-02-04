@@ -56,7 +56,7 @@ type Chunk struct {
 
 type ChunkStore interface {
 	Put(*Chunk) // effectively there is no error even if there is no error
-	Get() (*Chunk, error)
+	Get(Key) (*Chunk, error)
 }
 
 func (self *DPA) Retrieve(key Key) (data LazySectionReader, err error) {
@@ -151,7 +151,7 @@ func (self *DPA) retrieveLoop() {
 		for chunk := range self.retrieveC {
 			go func() {
 				for _, store := range self.Stores {
-					if _, err := store.Get(); err != nil { // no waiting/blocking here
+					if _, err := store.Get(chunk.Key); err != nil { // no waiting/blocking here
 						dpaLogger.DebugDetailf("%v retrieving chunk %x: %v", store, chunk.Key, err)
 					}
 				}
