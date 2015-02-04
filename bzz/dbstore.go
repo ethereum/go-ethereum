@@ -4,14 +4,13 @@
 package bzz
 
 import (
-	//	"crypto/sha256"
 	"bytes"
 	"encoding/binary"
+	"sync"
+
 	"github.com/ethereum/go-ethereum/ethdb"
-	//	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
-	//	"path"
 )
 
 const dbMaxEntries = 5000 // max number of stored (cached) blocks
@@ -42,6 +41,8 @@ type dbStore struct {
 
 	gcPos, gcStartPos []byte
 	gcArray           []*gcItem
+
+	lock sync.Mutex
 }
 
 type dpaDBIndex struct {
@@ -250,6 +251,9 @@ func (s *dbStore) collectGarbage() {
 
 func (s *dbStore) Put(chunk *Chunk) {
 
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	ikey := getIndexKey(chunk.Key)
 	var index dpaDBIndex
 
@@ -309,6 +313,9 @@ func (s *dbStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 
 func (s *dbStore) Get(key Key) (chunk *Chunk, err error) {
 
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	var index dpaDBIndex
 
 	if s.tryAccessIdx(getIndexKey(key), &index) {
@@ -330,6 +337,9 @@ func (s *dbStore) Get(key Key) (chunk *Chunk, err error) {
 }
 
 func (s *dbStore) updateAccessCnt(key Key) {
+
+	s.lock.Lock()
+	defer s.lock.Unlock()
 
 	var index dpaDBIndex
 	s.tryAccessIdx(getIndexKey(key), &index) // result_chn == nil, only update access cnt

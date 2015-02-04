@@ -4,6 +4,7 @@ package bzz
 
 import (
 	"bytes"
+	"sync"
 )
 
 const (
@@ -19,6 +20,7 @@ type memStore struct {
 	accessCnt   uint64 // access counter; oldest is thrown away when full
 	dbAccessCnt uint64
 	dbStore     *dbStore
+	lock        sync.Mutex
 }
 
 /*
@@ -141,6 +143,9 @@ func (node *memTree) updateAccess(a uint64) {
 
 func (s *memStore) Put(entry *Chunk) {
 
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	if s.entryCnt >= maxEntries {
 		s.removeOldest()
 	}
@@ -200,6 +205,9 @@ func (s *memStore) Put(entry *Chunk) {
 }
 
 func (s *memStore) Get(hash Key) (chunk *Chunk, err error) {
+
+	s.lock.Lock()
+	defer s.lock.Unlock()
 
 	node := s.memtree
 	bitpos := uint(0)
