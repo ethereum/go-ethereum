@@ -53,7 +53,7 @@ func (pow *EasyPow) Search(block pow.Block, stop <-chan struct{}) []byte {
 				elapsed := time.Now().UnixNano() - start
 				hashes := ((float64(1e9) / float64(elapsed)) * float64(i)) / 1000
 				pow.HashRate = int64(hashes)
-				powlogger.Infoln("Hashing @", pow.HashRate, "khash")
+				//powlogger.Infoln("Hashing @", pow.HashRate, "khash")
 
 				t = time.Now()
 			}
