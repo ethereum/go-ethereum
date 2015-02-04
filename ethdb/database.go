@@ -2,7 +2,6 @@ package ethdb
 
 import (
 	"fmt"
-	"path"
 
 	"github.com/ethereum/go-ethereum/compression/rle"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -15,16 +14,14 @@ type LDBDatabase struct {
 	Comp bool
 }
 
-func NewLDBDatabase(name string) (*LDBDatabase, error) {
-	dbPath := path.Join(ethutil.Config.ExecPath, name)
-
+func NewLDBDatabase(dbPath string) (*LDBDatabase, error) {
 	// Open the db
 	db, err := leveldb.OpenFile(dbPath, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	database := &LDBDatabase{DB: db, Comp: true}
+	database := &LDBDatabase{DB: db, Comp: false}
 
 	return database, nil
 }

@@ -52,7 +52,6 @@ type Chunk struct {
 	Size   int64         // size of the data covered by the subtree encoded in this chunk
 	Key    Key           // always
 	C      chan bool     // to signal data delivery by the dpa
-	update bool          //
 }
 
 type ChunkStore interface {
@@ -154,10 +153,6 @@ func (self *DPA) retrieveLoop() {
 				for _, store := range self.Stores {
 					if _, err := store.Get(); err != nil { // no waiting/blocking here
 						dpaLogger.DebugDetailf("%v retrieving chunk %x: %v", store, chunk.Key, err)
-					} else {
-						if !chunk.update {
-							break
-						}
 					}
 				}
 			}()

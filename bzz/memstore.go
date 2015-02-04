@@ -18,6 +18,7 @@ type memStore struct {
 	entryCnt    uint   // stored entries
 	accessCnt   uint64 // access counter; oldest is thrown away when full
 	dbAccessCnt uint64
+	dbStore     *dbStore
 }
 
 /*
@@ -33,9 +34,10 @@ a hash prefix subtree containing subtrees or one storage entry (but never both)
   (access[] is a binary tree inside the multi-bit leveled hash tree)
 */
 
-func newMemStore() (m *memStore) {
+func newMemStore(d *dbStore) (m *memStore) {
 	m = &memStore{}
 	m.memtree = newMemTree(memTreeFLW, nil, 0)
+	m.dbStore = d
 	return
 }
 
@@ -222,7 +224,9 @@ func (s *memStore) Get(hash Key) (chunk *Chunk, err error) {
 		if s.dbAccessCnt-node.lastDBaccess > dbForceUpdateAccessCnt {
 			s.dbAccessCnt++
 			node.lastDBaccess = s.dbAccessCnt
-			chunk.update = true
+			if s.dbStore != nil {
+				s.dbStore.updateAccessCnt(hash)
+			}
 		}
 	} else {
 		err = notFound

@@ -1,29 +1,20 @@
 package bzz
 
 import (
-	"crypto/rand"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/bzz/test"
 )
 
-func randomChunks(l int64, branches int64, chunkC chan *Chunk) (key Key, errC chan error) {
-	chunker := &TreeChunker{
-		Branches: branches,
-	}
-	chunker.Init()
-	key = make([]byte, 32)
-	b := make([]byte, l)
-	_, err := rand.Read(b)
-	if err != nil {
-		panic("no rand")
-	}
-	errC = chunker.Split(key, NewChunkReaderFromBytes(b), chunkC)
-	return
-}
+func testDbStore(l int64, branches int64, t *testing.T) {
 
-func testMemStore(l int64, branches int64, t *testing.T) {
-	m := newMemStore(nil)
+	os.RemoveAll("/tmp/bzz")
+	m, err := newDbStore("/tmp/bzz")
+	if err != nil {
+		panic("no dbStore")
+	}
+	defer m.close()
 	chunkC := make(chan *Chunk)
 	key, errC := randomChunks(l, branches, chunkC)
 
@@ -98,26 +89,26 @@ SPLIT:
 	}
 }
 
-func TestMemStore128_10000(t *testing.T) {
+func TestDbStore128_10000(t *testing.T) {
 	// defer test.Testlog(t).Detach()
 	test.LogInit()
-	testMemStore(10000, 128, t)
+	testDbStore(10000, 128, t)
 }
 
-func TestMemStore128_1000(t *testing.T) {
+func TestDbStore128_1000(t *testing.T) {
 	// defer test.Testlog(t).Detach()
 	test.LogInit()
-	testMemStore(1000, 128, t)
+	testDbStore(1000, 128, t)
 }
 
-func TestMemStore128_100(t *testing.T) {
+func TestDbStore128_100(t *testing.T) {
 	// defer test.Testlog(t).Detach()
 	test.LogInit()
-	testMemStore(100, 128, t)
+	testDbStore(100, 128, t)
 }
 
-func TestMemStore2_100(t *testing.T) {
+func TestDbStore2_100(t *testing.T) {
 	// defer test.Testlog(t).Detach()
 	test.LogInit()
-	testMemStore(100, 2, t)
+	testDbStore(100, 2, t)
 }

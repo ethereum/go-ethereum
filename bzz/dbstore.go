@@ -7,7 +7,6 @@ import (
 	//	"crypto/sha256"
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"github.com/ethereum/go-ethereum/ethdb"
 	//	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -35,8 +34,7 @@ type gcItem struct {
 	idxKey []byte
 }
 
-type dpaDBStorage struct {
-	dpaStorage
+type dbStore struct {
 	db *ethdb.LDBDatabase
 
 	// this should be stored in db, accessed transactionally
@@ -74,14 +72,15 @@ func getIndexGCValue(index *dpaDBIndex) uint64 {
 
 }
 
-func (s *dpaDBStorage) updateIndexAccess(index *dpaDBIndex) {
+func (s *dbStore) updateIndexAccess(index *dpaDBIndex) {
 
 	index.Access = s.accessCnt
 
 }
 
-func getIndexKey(hash HashType) []byte {
+func getIndexKey(hash Key) []byte {
 
+	HashSize := len(hash)
 	key := make([]byte, HashSize+1)
 	key[0] = 0
 	// db keys derived from hash:
@@ -108,15 +107,15 @@ func encodeIndex(index *dpaDBIndex) []byte {
 
 }
 
-func encodeData(entry *dpaNode) []byte {
+func encodeData(chunk *Chunk) []byte {
 
 	var rlpEntry struct {
 		Data []byte
 		Size uint64
 	}
 
-	rlpEntry.Data = entry.data
-	rlpEntry.Size = uint64(entry.size)
+	rlpEntry.Data = chunk.Data
+	rlpEntry.Size = uint64(chunk.Size)
 
 	data, _ := rlp.EncodeToBytes(rlpEntry)
 	return data
@@ -130,7 +129,7 @@ func decodeIndex(data []byte, index *dpaDBIndex) {
 
 }
 
-func decodeData(data []byte, entry *dpaNode) {
+func decodeData(data []byte, chunk *Chunk) {
 
 	var rlpEntry struct {
 		Data []byte
@@ -138,9 +137,12 @@ func decodeData(data []byte, entry *dpaNode) {
 	}
 
 	dec := rlp.NewStream(bytes.NewReader(data))
-	dec.Decode(&rlpEntry)
-	entry.data = rlpEntry.Data
-	entry.size = int64(rlpEntry.Size)
+	err := dec.Decode(&rlpEntry)
+	if err != nil {
+		panic(err.Error())
+	}
+	chunk.Data = rlpEntry.Data
+	chunk.Size = int64(rlpEntry.Size)
 }
 
 func gcListPartition(list []*gcItem, left int, right int, pivotIndex int) int {
@@ -180,7 +182,7 @@ func gcListSelect(list []*gcItem, left int, right int, n int) int {
 	}
 }
 
-func (s *dpaDBStorage) collectGarbage() {
+func (s *dbStore) collectGarbage() {
 
 	it := s.db.NewIterator()
 	it.Seek(s.gcPos)
@@ -246,16 +248,16 @@ func (s *dpaDBStorage) collectGarbage() {
 
 }
 
-func (s *dpaDBStorage) add(entry *dpaStoreReq) {
+func (s *dbStore) Put(chunk *Chunk) {
 
-	ikey := getIndexKey(entry.hash)
+	ikey := getIndexKey(chunk.Key)
 	var index dpaDBIndex
 
 	if s.tryAccessIdx(ikey, &index) {
 		return // already exists, only update access
 	}
 
-	data := encodeData(&entry.dpaNode)
+	data := encodeData(chunk)
 	//data := ethutil.Encode([]interface{}{entry})
 
 	if s.entryCnt >= dbMaxEntries {
@@ -284,7 +286,7 @@ func (s *dpaDBStorage) add(entry *dpaStoreReq) {
 }
 
 // try to find index; if found, update access cnt and return true
-func (s *dpaDBStorage) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
+func (s *dbStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 
 	idata, err := s.db.Get(ikey)
 	if err != nil {
@@ -305,74 +307,46 @@ func (s *dpaDBStorage) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 	return true
 }
 
-func (s *dpaDBStorage) find(hash HashType) (entry dpaNode) {
+func (s *dbStore) Get(key Key) (chunk *Chunk, err error) {
 
-	key := getIndexKey(hash)
 	var index dpaDBIndex
 
-	if s.tryAccessIdx(key, &index) {
-		data, _ := s.db.Get(getDataKey(index.Idx))
-		decodeData(data, &entry)
+	if s.tryAccessIdx(getIndexKey(key), &index) {
+		var data []byte
+		data, err = s.db.Get(getDataKey(index.Idx))
+		if err != nil {
+			return
+		}
+		chunk = &Chunk{
+			Key: key,
+		}
+		decodeData(data, chunk)
+	} else {
+		err = notFound
 	}
 
 	return
 
 }
 
-func (s *dpaDBStorage) process_store(req *dpaStoreReq) {
+func (s *dbStore) updateAccessCnt(key Key) {
 
-	s.add(req)
-
-	if s.chain != nil {
-		s.chain.store_chn <- req
-	}
+	var index dpaDBIndex
+	s.tryAccessIdx(getIndexKey(key), &index) // result_chn == nil, only update access cnt
 
 }
 
-func (s *dpaDBStorage) process_retrieve(req *dpaRetrieveReq) {
+func newDbStore(path string) (s *dbStore, err error) {
 
-	if req.result_chn == nil {
+	s = new(dbStore)
 
-		key := getIndexKey(req.hash)
-		var index dpaDBIndex
-		s.tryAccessIdx(key, &index) // result_chn == nil, only update access cnt
-
+	s.db, err = ethdb.NewLDBDatabase(path)
+	if err != nil {
 		return
 	}
 
-	entry := s.find(req.hash)
-
-	if entry.data == nil {
-		if s.chain != nil {
-			s.chain.retrieve_chn <- req
-			return
-		}
-	}
-
-	res := new(dpaRetrieveRes)
-	if entry.data != nil {
-		res.dpaNode = entry
-	}
-	res.req_id = req.req_id
-	req.result_chn <- res
-
-}
-
-func (s *dpaDBStorage) Init(ch *dpaStorage) {
-
-	s.dpaStorage.Init()
-
-	var err error
-	s.db, err = ethdb.NewLDBDatabase("/tmp/bzz")
-	if err != nil {
-		fmt.Println("/tmp/bzz error:")
-		fmt.Println(err)
-	}
-	if s.db == nil {
-		fmt.Println("LDBDatabase is nil")
-	}
-
-	s.gcStartPos = make([]byte, HashSize+1)
+	s.gcStartPos = make([]byte, 1)
+	s.gcStartPos[0] = kpIndex
 	s.gcArray = make([]*gcItem, gcArraySize)
 
 	data, _ := s.db.Get(keyEntryCnt)
@@ -385,31 +359,13 @@ func (s *dpaDBStorage) Init(ch *dpaStorage) {
 	if s.gcPos == nil {
 		s.gcPos = s.gcStartPos
 	}
-
+	return
 	//	fmt.Println(s.entryCnt)
 	//	fmt.Println(s.accessCnt)
 	//	fmt.Println(s.dataIdx)
 
 }
 
-func (s *dpaDBStorage) Run() {
-
-	for {
-		bb := true
-		for bb {
-			select {
-			case store := <-s.store_chn:
-				s.process_store(store)
-			default:
-				bb = false
-			}
-		}
-		select {
-		case store := <-s.store_chn:
-			s.process_store(store)
-		case retrv := <-s.retrieve_chn:
-			s.process_retrieve(retrv)
-		}
-	}
-
+func (s *dbStore) close() {
+	s.db.Close()
 }
