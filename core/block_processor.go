@@ -220,7 +220,7 @@ func (sm *BlockProcessor) ProcessWithParent(block, parent *types.Block) (td *big
 		return
 	}
 
-	if err = sm.AccumelateRewards(state, block, parent); err != nil {
+	if err = sm.AccumulateRewards(state, block, parent); err != nil {
 		return
 	}
 
@@ -261,8 +261,8 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 	}
 
 	diff := block.Header().Time - parent.Header().Time
-	if diff < 0 {
-		return ValidationError("Block timestamp less then prev block %v (%v - %v)", diff, block.Header().Time, sm.bc.CurrentBlock().Header().Time)
+	if diff <= 0 {
+		return ValidationError("Block timestamp not after prev block %v (%v - %v)", diff, block.Header().Time, sm.bc.CurrentBlock().Header().Time)
 	}
 
 	if block.Time() > time.Now().Unix() {
@@ -277,7 +277,7 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 	return nil
 }
 
-func (sm *BlockProcessor) AccumelateRewards(statedb *state.StateDB, block, parent *types.Block) error {
+func (sm *BlockProcessor) AccumulateRewards(statedb *state.StateDB, block, parent *types.Block) error {
 	reward := new(big.Int).Set(BlockReward)
 
 	ancestors := set.New()
@@ -335,7 +335,7 @@ func (sm *BlockProcessor) GetMessages(block *types.Block) (messages []*state.Mes
 	defer state.Reset()
 
 	sm.TransitionState(state, parent, block)
-	sm.AccumelateRewards(state, block, parent)
+	sm.AccumulateRewards(state, block, parent)
 
 	return state.Manifest().Messages, nil
 }
@@ -356,7 +356,7 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 	defer state.Reset()
 
 	sm.TransitionState(state, parent, block)
-	sm.AccumelateRewards(state, block, parent)
+	sm.AccumulateRewards(state, block, parent)
 
 	return state.Logs(), nil
 }
