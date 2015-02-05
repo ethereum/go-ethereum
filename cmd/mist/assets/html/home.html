@@ -74,7 +74,7 @@
         console.log("pending changed");
     });
     eth.watch('chain').changed(function() {
-        console.log("chain changed");
+        document.querySelector("#number").innerHTML = eth.number;
     });
 
 </script>
