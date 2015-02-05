@@ -24,20 +24,42 @@
 package miner
 
 import (
+	"fmt"
 	"math/big"
 	"sort"
 
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/pow"
-	"github.com/ethereum/go-ethereum/pow/ezp"
-	"github.com/ethereum/go-ethereum/state"
-
+	"github.com/ethereum/c-ethash/go-ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/pow"
+	"github.com/ethereum/go-ethereum/state"
 )
+
+var dx = []byte{0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42}
+var dy = []byte{0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43, 0x43}
+
+const epochLen = uint64(1000)
+
+func getSeed(chainMan *core.ChainManager, block *types.Block) (x []byte, y []byte) {
+	if block.Number().Uint64() == 0 {
+		return dx, dy
+	} else if block.Number().Uint64()%epochLen == 0 {
+		x, y = getSeed(chainMan, chainMan.GetBlock(block.ParentHash()))
+		if (block.Number().Uint64()/epochLen)%2 > 0 {
+			y = crypto.Sha3(append(y, block.ParentHash()...))
+		} else {
+			x = crypto.Sha3(append(x, block.ParentHash()...))
+		}
+		return x, y
+	} else {
+		return getSeed(chainMan, chainMan.GetBlock(block.ParentHash()))
+	}
+}
 
 type LocalTx struct {
 	To       []byte `json:"to"`
@@ -77,7 +99,6 @@ func New(coinbase []byte, eth *eth.Ethereum) *Miner {
 	return &Miner{
 		eth:                 eth,
 		powQuitCh:           make(chan struct{}),
-		pow:                 ezp.New(),
 		mining:              false,
 		localTxs:            make(map[int]*LocalTx),
 		MinAcceptedGasPrice: big.NewInt(10000000000000),
@@ -212,6 +233,13 @@ func (self *Miner) mine() {
 	block.SetRoot(state.Root())
 
 	minerlogger.Infof("Mining on block. Includes %v transactions", len(transactions))
+
+	x, y := getSeed(chainMan, block)
+	self.pow, err = ethash.New(append(x, y...), block)
+	if err != nil {
+		fmt.Println("err", err)
+		return
+	}
 
 	// Find a valid nonce
 	nonce := self.pow.Search(block, self.powQuitCh)

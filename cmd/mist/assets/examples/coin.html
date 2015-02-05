@@ -93,18 +93,18 @@
 	function transact() {
 		var to = document.querySelector("#address").value;
         if( to.length == 0 ) {
-		    to = "0x4205b06c2cfa0e30359edcab94543266cb6fa1d3";
+            to = "0x4205b06c2cfa0e30359edcab94543266cb6fa1d3";
         } else {
             to = "0x"+to;
         }
-
-		var value = parseInt( document.querySelector("#amount").value );
-
-		contract.transact({gas: "10000", gasprice: eth.gasPrice}).send( to, value );
-	}
-
-	reflesh();
-</script>
-
+        
+        var value = parseInt( document.querySelector("#amount").value );
+        
+        contract.transact({gas: "10000", gasprice: eth.gasPrice}).send( to, value );
+    }
+    
+    reflesh();
+        </script>
+    
 </html>
 
