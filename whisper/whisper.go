@@ -118,7 +118,7 @@ func (self *Whisper) GetIdentity(key *ecdsa.PublicKey) *ecdsa.PrivateKey {
 
 func (self *Whisper) Watch(opts Filter) int {
 	return self.filters.Install(filter.Generic{
-		Str1: string(crypto.FromECDSA(opts.To)),
+		Str1: string(crypto.FromECDSAPub(opts.To)),
 		Str2: string(crypto.FromECDSAPub(opts.From)),
 		Data: bytesToMap(opts.Topics),
 		Fn: func(data interface{}) {

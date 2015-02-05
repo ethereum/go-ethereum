@@ -29,7 +29,8 @@
 	var web3 = require('web3');
 	var eth = web3.eth;
 
-	web3.setProvider(new web3.providers.HttpSyncProvider('http://localhost:8080'));
+	web3.setProvider(new
+			web3.providers.HttpSyncProvider('http://localhost:8545'));
 	var desc =  [{
 		"name": "balance(address)",
 		"type": "function",

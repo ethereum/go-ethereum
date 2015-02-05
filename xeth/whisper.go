@@ -64,7 +64,7 @@ func (self *Whisper) HasIdentity(key string) bool {
 
 func (self *Whisper) Watch(opts *Options) int {
 	filter := whisper.Filter{
-		To:     crypto.ToECDSA(fromHex(opts.To)),
+		To:     crypto.ToECDSAPub(fromHex(opts.To)),
 		From:   crypto.ToECDSAPub(fromHex(opts.From)),
 		Topics: whisper.TopicsFromString(opts.Topics...),
 	}
