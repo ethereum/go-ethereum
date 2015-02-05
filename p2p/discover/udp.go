@@ -120,8 +120,8 @@ func ListenUDP(priv *ecdsa.PrivateKey, laddr string) (*Table, error) {
 	if err != nil {
 		return nil, err
 	}
-	net.Table = newTable(net, newNodeID(priv), realaddr)
-	log.DebugDetailf("Listening on %v, my ID %x\n", realaddr, net.self.ID[:])
+	net.Table = newTable(net, PubkeyID(&priv.PublicKey), realaddr)
+	log.Debugf("Listening on %v, my ID %x\n", realaddr, net.self.ID[:])
 	return net.Table, nil
 }
 

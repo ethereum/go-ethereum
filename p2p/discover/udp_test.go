@@ -19,8 +19,8 @@ func TestUDP_ping(t *testing.T) {
 
 	n1, _ := ListenUDP(newkey(), "127.0.0.1:0")
 	n2, _ := ListenUDP(newkey(), "127.0.0.1:0")
-	defer n1.net.close()
-	defer n2.net.close()
+	defer n1.Close()
+	defer n2.Close()
 
 	if err := n1.net.ping(n2.self); err != nil {
 		t.Fatalf("ping error: %v", err)
@@ -49,8 +49,8 @@ func TestUDP_findnode(t *testing.T) {
 
 	n1, _ := ListenUDP(newkey(), "127.0.0.1:0")
 	n2, _ := ListenUDP(newkey(), "127.0.0.1:0")
-	defer n1.net.close()
-	defer n2.net.close()
+	defer n1.Close()
+	defer n2.Close()
 
 	entry := &Node{ID: NodeID{1}, Addr: &net.UDPAddr{IP: net.IP{1, 2, 3, 4}, Port: 15}}
 	n2.add([]*Node{entry})
@@ -77,7 +77,7 @@ func TestUDP_replytimeout(t *testing.T) {
 	defer fd.Close()
 
 	n1, _ := ListenUDP(newkey(), "127.0.0.1:0")
-	defer n1.net.close()
+	defer n1.Close()
 	n2 := n1.bumpOrAdd(randomID(n1.self.ID, 10), fd.LocalAddr().(*net.UDPAddr))
 
 	if err := n1.net.ping(n2); err != errTimeout {
@@ -97,8 +97,8 @@ func TestUDP_findnodeMultiReply(t *testing.T) {
 	n1, _ := ListenUDP(newkey(), "127.0.0.1:0")
 	n2, _ := ListenUDP(newkey(), "127.0.0.1:0")
 	udp2 := n2.net.(*udp)
-	defer n1.net.close()
-	defer n2.net.close()
+	defer n1.Close()
+	defer n2.Close()
 
 	nodes := make([]*Node, bucketSize)
 	for i := range nodes {

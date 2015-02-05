@@ -87,6 +87,16 @@ func newTable(t transport, ourID NodeID, ourAddr *net.UDPAddr) *Table {
 	return tab
 }
 
+// Self returns the local node ID.
+func (tab *Table) Self() NodeID {
+	return tab.self.ID
+}
+
+// Close terminates the network listener.
+func (tab *Table) Close() {
+	tab.net.close()
+}
+
 // Bootstrap sets the bootstrap nodes. These nodes are used to connect
 // to the network if the table is empty. Bootstrap will also attempt to
 // fill the table by performing random lookup operations on the
@@ -319,27 +329,38 @@ func (n NodeID) GoString() string {
 
 // HexID converts a hex string to a NodeID.
 // The string may be prefixed with 0x.
-func HexID(in string) NodeID {
+func HexID(in string) (NodeID, error) {
 	if strings.HasPrefix(in, "0x") {
 		in = in[2:]
 	}
 	var id NodeID
 	b, err := hex.DecodeString(in)
 	if err != nil {
-		panic(err)
+		return id, err
 	} else if len(b) != len(id) {
-		panic("wrong length")
+		return id, fmt.Errorf("wrong length, need %d hex bytes", len(id))
 	}
 	copy(id[:], b)
+	return id, nil
+}
+
+// MustHexID converts a hex string to a NodeID.
+// It panics if the string is not a valid NodeID.
+func MustHexID(in string) NodeID {
+	id, err := HexID(in)
+	if err != nil {
+		panic(err)
+	}
 	return id
 }
 
-func newNodeID(priv *ecdsa.PrivateKey) (id NodeID) {
-	pubkey := elliptic.Marshal(priv.Curve, priv.X, priv.Y)
-	if len(pubkey)-1 != len(id) {
-		panic(fmt.Errorf("invalid key: need %d bit pubkey, got %d bits", (len(id)+1)*8, len(pubkey)))
+func PubkeyID(pub *ecdsa.PublicKey) NodeID {
+	var id NodeID
+	pbytes := elliptic.Marshal(pub.Curve, pub.X, pub.Y)
+	if len(pbytes)-1 != len(id) {
+		panic(fmt.Errorf("invalid key: need %d bit pubkey, got %d bits", (len(id)+1)*8, len(pbytes)))
 	}
-	copy(id[:], pubkey[1:])
+	copy(id[:], pbytes[1:])
 	return id
 }
 

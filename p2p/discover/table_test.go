@@ -22,8 +22,8 @@ var (
 
 func TestHexID(t *testing.T) {
 	ref := NodeID{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 106, 217, 182, 31, 165, 174, 1, 67, 7, 235, 220, 150, 66, 83, 173, 205, 159, 44, 10, 57, 42, 161, 26, 188}
-	id1 := HexID("0x000000000000000000000000000000000000000000000000000000000000000000000000000000806ad9b61fa5ae014307ebdc964253adcd9f2c0a392aa11abc")
-	id2 := HexID("000000000000000000000000000000000000000000000000000000000000000000000000000000806ad9b61fa5ae014307ebdc964253adcd9f2c0a392aa11abc")
+	id1 := MustHexID("0x000000000000000000000000000000000000000000000000000000000000000000000000000000806ad9b61fa5ae014307ebdc964253adcd9f2c0a392aa11abc")
+	id2 := MustHexID("000000000000000000000000000000000000000000000000000000000000000000000000000000806ad9b61fa5ae014307ebdc964253adcd9f2c0a392aa11abc")
 
 	if id1 != ref {
 		t.Errorf("wrong id1\ngot  %v\nwant %v", id1[:], ref[:])
@@ -41,7 +41,7 @@ func TestNodeID_recover(t *testing.T) {
 		t.Fatalf("signing error: %v", err)
 	}
 
-	pub := newNodeID(prv)
+	pub := PubkeyID(&prv.PublicKey)
 	recpub, err := recoverNodeID(hash, sig)
 	if err != nil {
 		t.Fatalf("recovery error: %v", err)
