@@ -2,19 +2,28 @@ package p2p
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"io"
+	"math/rand"
 	"net"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
-func startTestServer(t *testing.T, pf peerFunc) *Server {
+func startTestServer(t *testing.T, pf newPeerHook) *Server {
 	server := &Server{
-		Identity:    &peerId{},
+		Name:        "test",
 		MaxPeers:    10,
 		ListenAddr:  "127.0.0.1:0",
-		newPeerFunc: pf,
+		PrivateKey:  newkey(),
+		newPeerHook: pf,
+		handshakeFunc: func(io.ReadWriter, *ecdsa.PrivateKey, *discover.Node) (id discover.NodeID, st []byte, err error) {
+			return randomID(), nil, err
+		},
 	}
 	if err := server.Start(); err != nil {
 		t.Fatalf("Could not start server: %v", err)
@@ -27,16 +36,11 @@ func TestServerListen(t *testing.T) {
 
 	// start the test server
 	connected := make(chan *Peer)
-	srv := startTestServer(t, func(srv *Server, conn net.Conn, dialAddr *peerAddr) *Peer {
-		if conn == nil {
+	srv := startTestServer(t, func(p *Peer) {
+		if p == nil {
 			t.Error("peer func called with nil conn")
 		}
-		if dialAddr != nil {
-			t.Error("peer func called with non-nil dialAddr")
-		}
-		peer := newPeer(conn, nil, dialAddr)
-		connected <- peer
-		return peer
+		connected <- p
 	})
 	defer close(connected)
 	defer srv.Stop()
@@ -50,9 +54,9 @@ func TestServerListen(t *testing.T) {
 
 	select {
 	case peer := <-connected:
-		if peer.conn.LocalAddr().String() != conn.RemoteAddr().String() {
+		if peer.LocalAddr().String() != conn.RemoteAddr().String() {
 			t.Errorf("peer started with wrong conn: got %v, want %v",
-				peer.conn.LocalAddr(), conn.RemoteAddr())
+				peer.LocalAddr(), conn.RemoteAddr())
 		}
 	case <-time.After(1 * time.Second):
 		t.Error("server did not accept within one second")
@@ -62,7 +66,7 @@ func TestServerListen(t *testing.T) {
 func TestServerDial(t *testing.T) {
 	defer testlog(t).detach()
 
-	// run a fake TCP server to handle the connection.
+	// run a one-shot TCP server to handle the connection.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("could not setup listener: %v")
@@ -72,41 +76,33 @@ func TestServerDial(t *testing.T) {
 	go func() {
 		conn, err := listener.Accept()
 		if err != nil {
-			t.Error("acccept error:", err)
+			t.Error("accept error:", err)
+			return
 		}
 		conn.Close()
 		accepted <- conn
 	}()
 
-	// start the test server
+	// start the server
 	connected := make(chan *Peer)
-	srv := startTestServer(t, func(srv *Server, conn net.Conn, dialAddr *peerAddr) *Peer {
-		if conn == nil {
-			t.Error("peer func called with nil conn")
-		}
-		peer := newPeer(conn, nil, dialAddr)
-		connected <- peer
-		return peer
-	})
+	srv := startTestServer(t, func(p *Peer) { connected <- p })
 	defer close(connected)
 	defer srv.Stop()
 
-	// tell the server to connect.
-	connAddr := newPeerAddr(listener.Addr(), nil)
+	// tell the server to connect
+	tcpAddr := listener.Addr().(*net.TCPAddr)
+	connAddr := &discover.Node{Addr: &net.UDPAddr{IP: tcpAddr.IP, Port: tcpAddr.Port}}
 	srv.peerConnect <- connAddr
 
 	select {
 	case conn := <-accepted:
 		select {
 		case peer := <-connected:
-			if peer.conn.RemoteAddr().String() != conn.LocalAddr().String() {
+			if peer.RemoteAddr().String() != conn.LocalAddr().String() {
 				t.Errorf("peer started with wrong conn: got %v, want %v",
-					peer.conn.RemoteAddr(), conn.LocalAddr())
+					peer.RemoteAddr(), conn.LocalAddr())
 			}
-			if peer.dialAddr != connAddr {
-				t.Errorf("peer started with wrong dialAddr: got %v, want %v",
-					peer.dialAddr, connAddr)
-			}
+			// TODO: validate more fields
 		case <-time.After(1 * time.Second):
 			t.Error("server did not launch peer within one second")
 		}
@@ -118,16 +114,16 @@ func TestServerDial(t *testing.T) {
 
 func TestServerBroadcast(t *testing.T) {
 	defer testlog(t).detach()
+
 	var connected sync.WaitGroup
-	srv := startTestServer(t, func(srv *Server, c net.Conn, dialAddr *peerAddr) *Peer {
-		peer := newPeer(c, []Protocol{discard}, dialAddr)
-		peer.startSubprotocols([]Cap{discard.cap()})
+	srv := startTestServer(t, func(p *Peer) {
+		p.protocols = []Protocol{discard}
+		p.startSubprotocols([]Cap{discard.cap()})
 		connected.Done()
-		return peer
 	})
 	defer srv.Stop()
 
-	// dial a bunch of conns
+	// create a few peers
 	var conns = make([]net.Conn, 8)
 	connected.Add(len(conns))
 	deadline := time.Now().Add(3 * time.Second)
@@ -158,4 +154,19 @@ func TestServerBroadcast(t *testing.T) {
 			t.Errorf("conn %d: msg mismatch\ngot:  %x\nwant: %x", i, buf, golden)
 		}
 	}
+}
+
+func newkey() *ecdsa.PrivateKey {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		panic("couldn't generate key: " + err.Error())
+	}
+	return key
+}
+
+func randomID() (id discover.NodeID) {
+	for i := range id {
+		id[i] = byte(rand.Intn(255))
+	}
+	return id
 }

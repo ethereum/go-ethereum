@@ -3,10 +3,9 @@ package p2p
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"fmt"
+	"crypto/rand"
 	"net"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/obscuren/ecies"
@@ -16,7 +15,7 @@ func TestPublicKeyEncoding(t *testing.T) {
 	prv0, _ := crypto.GenerateKey() // = ecdsa.GenerateKey(crypto.S256(), rand.Reader)
 	pub0 := &prv0.PublicKey
 	pub0s := crypto.FromECDSAPub(pub0)
-	pub1, err := ImportPublicKey(pub0s)
+	pub1, err := importPublicKey(pub0s)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
@@ -24,18 +23,18 @@ func TestPublicKeyEncoding(t *testing.T) {
 	if eciesPub1 == nil {
 		t.Errorf("invalid ecdsa public key")
 	}
-	pub1s, err := ExportPublicKey(pub1)
+	pub1s, err := exportPublicKey(pub1)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
 	if len(pub1s) != 64 {
 		t.Errorf("wrong length expect 64, got", len(pub1s))
 	}
-	pub2, err := ImportPublicKey(pub1s)
+	pub2, err := importPublicKey(pub1s)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
-	pub2s, err := ExportPublicKey(pub2)
+	pub2s, err := exportPublicKey(pub2)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
@@ -69,95 +68,53 @@ func TestSharedSecret(t *testing.T) {
 }
 
 func TestCryptoHandshake(t *testing.T) {
-	testCryptoHandshakeWithGen(false, t)
+	testCryptoHandshake(newkey(), newkey(), nil, t)
 }
 
-func TestTokenCryptoHandshake(t *testing.T) {
-	testCryptoHandshakeWithGen(true, t)
-}
-
-func TestDetCryptoHandshake(t *testing.T) {
-	defer testlog(t).detach()
-	tmpkeyF := keyF
-	keyF = detkeyF
-	tmpnonceF := nonceF
-	nonceF = detnonceF
-	testCryptoHandshakeWithGen(false, t)
-	keyF = tmpkeyF
-	nonceF = tmpnonceF
-}
-
-func TestDetTokenCryptoHandshake(t *testing.T) {
-	defer testlog(t).detach()
-	tmpkeyF := keyF
-	keyF = detkeyF
-	tmpnonceF := nonceF
-	nonceF = detnonceF
-	testCryptoHandshakeWithGen(true, t)
-	keyF = tmpkeyF
-	nonceF = tmpnonceF
-}
-
-func testCryptoHandshakeWithGen(token bool, t *testing.T) {
-	fmt.Printf("init-private-key: ")
-	prv0, err := keyF()
-	if err != nil {
-		t.Errorf("%v", err)
-		return
-	}
-	fmt.Printf("rec-private-key: ")
-	prv1, err := keyF()
-	if err != nil {
-		t.Errorf("%v", err)
-		return
-	}
-	var nonce []byte
-	if token {
-		fmt.Printf("session-token: ")
-		nonce = make([]byte, shaLen)
-		nonceF(nonce)
-	}
-	testCryptoHandshake(prv0, prv1, nonce, t)
+func TestCryptoHandshakeWithToken(t *testing.T) {
+	sessionToken := make([]byte, shaLen)
+	rand.Read(sessionToken)
+	testCryptoHandshake(newkey(), newkey(), sessionToken, t)
 }
 
 func testCryptoHandshake(prv0, prv1 *ecdsa.PrivateKey, sessionToken []byte, t *testing.T) {
 	var err error
-	pub0 := &prv0.PublicKey
+	// pub0 := &prv0.PublicKey
 	pub1 := &prv1.PublicKey
 
-	pub0s := crypto.FromECDSAPub(pub0)
+	// pub0s := crypto.FromECDSAPub(pub0)
 	pub1s := crypto.FromECDSAPub(pub1)
 
 	// simulate handshake by feeding output to input
 	// initiator sends handshake 'auth'
-	auth, initNonce, randomPrivKey, _, err := startHandshake(prv0, pub1s, sessionToken)
+	auth, initNonce, randomPrivKey, err := authMsg(prv0, pub1s, sessionToken)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
-	fmt.Printf("-> %v\n", hexkey(auth))
+	t.Logf("-> %v", hexkey(auth))
 
 	// receiver reads auth and responds with response
-	response, remoteRecNonce, remoteInitNonce, remoteRandomPrivKey, remoteInitRandomPubKey, err := respondToHandshake(auth, prv1, pub0s, sessionToken)
+	response, remoteRecNonce, remoteInitNonce, _, remoteRandomPrivKey, remoteInitRandomPubKey, err := authResp(auth, sessionToken, prv1)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
-	fmt.Printf("<- %v\n", hexkey(response))
+	t.Logf("<- %v\n", hexkey(response))
 
 	// initiator reads receiver's response and the key exchange completes
 	recNonce, remoteRandomPubKey, _, err := completeHandshake(response, prv0)
 	if err != nil {
-		t.Errorf("%v", err)
+		t.Errorf("completeHandshake error: %v", err)
 	}
 
 	// now both parties should have the same session parameters
-	initSessionToken, initSecretRW, err := newSession(true, initNonce, recNonce, auth, randomPrivKey, remoteRandomPubKey)
+	initSessionToken, err := newSession(initNonce, recNonce, randomPrivKey, remoteRandomPubKey)
 	if err != nil {
-		t.Errorf("%v", err)
+		t.Errorf("newSession error: %v", err)
 	}
 
-	recSessionToken, recSecretRW, err := newSession(false, remoteInitNonce, remoteRecNonce, auth, remoteRandomPrivKey, remoteInitRandomPubKey)
+	recSessionToken, err := newSession(remoteInitNonce, remoteRecNonce, remoteRandomPrivKey, remoteInitRandomPubKey)
 	if err != nil {
-		t.Errorf("%v", err)
+		t.Errorf("newSession error: %v", err)
 	}
 
 	// fmt.Printf("\nauth (%v) %x\n\nresp (%v) %x\n\n", len(auth), auth, len(response), response)
@@ -173,76 +130,38 @@ func testCryptoHandshake(prv0, prv1 *ecdsa.PrivateKey, sessionToken []byte, t *t
 	if !bytes.Equal(initSessionToken, recSessionToken) {
 		t.Errorf("session tokens do not match")
 	}
-	// aesSecret, macSecret, egressMac, ingressMac
-	if !bytes.Equal(initSecretRW.aesSecret, recSecretRW.aesSecret) {
-		t.Errorf("AES secrets do not match")
-	}
-	if !bytes.Equal(initSecretRW.macSecret, recSecretRW.macSecret) {
-		t.Errorf("macSecrets do not match")
-	}
-	if !bytes.Equal(initSecretRW.egressMac, recSecretRW.ingressMac) {
-		t.Errorf("initiator's egressMac do not match receiver's ingressMac")
-	}
-	if !bytes.Equal(initSecretRW.ingressMac, recSecretRW.egressMac) {
-		t.Errorf("initiator's inressMac do not match receiver's egressMac")
-	}
-
 }
 
-func TestPeersHandshake(t *testing.T) {
+func TestHandshake(t *testing.T) {
 	defer testlog(t).detach()
-	var err error
-	// var sessionToken []byte
-	prv0, _ := crypto.GenerateKey() // = ecdsa.GenerateKey(crypto.S256(), rand.Reader)
-	pub0 := &prv0.PublicKey
+
+	prv0, _ := crypto.GenerateKey()
 	prv1, _ := crypto.GenerateKey()
-	pub1 := &prv1.PublicKey
+	pub0s, _ := exportPublicKey(&prv0.PublicKey)
+	pub1s, _ := exportPublicKey(&prv1.PublicKey)
+	rw0, rw1 := net.Pipe()
+	tokens := make(chan []byte)
 
-	prv0s := crypto.FromECDSA(prv0)
-	pub0s := crypto.FromECDSAPub(pub0)
-	prv1s := crypto.FromECDSA(prv1)
-	pub1s := crypto.FromECDSAPub(pub1)
-
-	conn1, conn2 := net.Pipe()
-	initiator := newPeer(conn1, []Protocol{}, nil)
-	receiver := newPeer(conn2, []Protocol{}, nil)
-	initiator.dialAddr = &peerAddr{IP: net.ParseIP("1.2.3.4"), Port: 2222, Pubkey: pub1s[1:]}
-	initiator.privateKey = prv0s
-
-	// this is cheating. identity of initiator/dialler not available to listener/receiver
-	// its public key should be looked up based on IP address
-	receiver.identity = &peerId{nil, pub0s}
-	receiver.privateKey = prv1s
-
-	initiator.pubkeyHook = func(*peerAddr) error { return nil }
-	receiver.pubkeyHook = func(*peerAddr) error { return nil }
-
-	initiator.cryptoHandshake = true
-	receiver.cryptoHandshake = true
-	errc0 := make(chan error, 1)
-	errc1 := make(chan error, 1)
 	go func() {
-		_, err := initiator.loop()
-		errc0 <- err
+		token, err := outboundEncHandshake(rw0, prv0, pub1s, nil)
+		if err != nil {
+			t.Errorf("outbound side error: %v", err)
+		}
+		tokens <- token
 	}()
 	go func() {
-		_, err := receiver.loop()
-		errc1 <- err
+		token, remotePubkey, err := inboundEncHandshake(rw1, prv1, nil)
+		if err != nil {
+			t.Errorf("inbound side error: %v", err)
+		}
+		if !bytes.Equal(remotePubkey, pub0s) {
+			t.Errorf("inbound side returned wrong remote pubkey\n  got:  %x\n  want: %x", remotePubkey, pub0s)
+		}
+		tokens <- token
 	}()
-	ready := make(chan bool)
-	go func() {
-		<-initiator.cryptoReady
-		<-receiver.cryptoReady
-		close(ready)
-	}()
-	timeout := time.After(10 * time.Second)
-	select {
-	case <-ready:
-	case <-timeout:
-		t.Errorf("crypto handshake hanging for too long")
-	case err = <-errc0:
-		t.Errorf("peer 0 quit with error: %v", err)
-	case err = <-errc1:
-		t.Errorf("peer 1 quit with error: %v", err)
+
+	t1, t2 := <-tokens, <-tokens
+	if !bytes.Equal(t1, t2) {
+		t.Error("session token mismatch")
 	}
 }

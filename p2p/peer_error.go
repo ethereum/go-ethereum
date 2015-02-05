@@ -12,7 +12,6 @@ const (
 	errInvalidMsgCode
 	errInvalidMsg
 	errP2PVersionMismatch
-	errPubkeyMissing
 	errPubkeyInvalid
 	errPubkeyForbidden
 	errProtocolBreach
@@ -22,20 +21,19 @@ const (
 )
 
 var errorToString = map[int]string{
-	errMagicTokenMismatch:     "Magic token mismatch",
-	errRead:                   "Read error",
-	errWrite:                  "Write error",
-	errMisc:                   "Misc error",
-	errInvalidMsgCode:         "Invalid message code",
-	errInvalidMsg:             "Invalid message",
+	errMagicTokenMismatch:     "magic token mismatch",
+	errRead:                   "read error",
+	errWrite:                  "write error",
+	errMisc:                   "misc error",
+	errInvalidMsgCode:         "invalid message code",
+	errInvalidMsg:             "invalid message",
 	errP2PVersionMismatch:     "P2P Version Mismatch",
-	errPubkeyMissing:          "Public key missing",
-	errPubkeyInvalid:          "Public key invalid",
-	errPubkeyForbidden:        "Public key forbidden",
-	errProtocolBreach:         "Protocol Breach",
-	errPingTimeout:            "Ping timeout",
-	errInvalidNetworkId:       "Invalid network id",
-	errInvalidProtocolVersion: "Invalid protocol version",
+	errPubkeyInvalid:          "public key invalid",
+	errPubkeyForbidden:        "public key forbidden",
+	errProtocolBreach:         "protocol Breach",
+	errPingTimeout:            "ping timeout",
+	errInvalidNetworkId:       "invalid network id",
+	errInvalidProtocolVersion: "invalid protocol version",
 }
 
 type peerError struct {
@@ -62,22 +60,22 @@ func (self *peerError) Error() string {
 type DiscReason byte
 
 const (
-	DiscRequested           DiscReason = 0x00
-	DiscNetworkError                   = 0x01
-	DiscProtocolError                  = 0x02
-	DiscUselessPeer                    = 0x03
-	DiscTooManyPeers                   = 0x04
-	DiscAlreadyConnected               = 0x05
-	DiscIncompatibleVersion            = 0x06
-	DiscInvalidIdentity                = 0x07
-	DiscQuitting                       = 0x08
-	DiscUnexpectedIdentity             = 0x09
-	DiscSelf                           = 0x0a
-	DiscReadTimeout                    = 0x0b
-	DiscSubprotocolError               = 0x10
+	DiscRequested DiscReason = iota
+	DiscNetworkError
+	DiscProtocolError
+	DiscUselessPeer
+	DiscTooManyPeers
+	DiscAlreadyConnected
+	DiscIncompatibleVersion
+	DiscInvalidIdentity
+	DiscQuitting
+	DiscUnexpectedIdentity
+	DiscSelf
+	DiscReadTimeout
+	DiscSubprotocolError
 )
 
-var discReasonToString = [DiscSubprotocolError + 1]string{
+var discReasonToString = [...]string{
 	DiscRequested:           "Disconnect requested",
 	DiscNetworkError:        "Network error",
 	DiscProtocolError:       "Breach of protocol",
@@ -117,7 +115,7 @@ func discReasonForError(err error) DiscReason {
 	switch peerError.Code {
 	case errP2PVersionMismatch:
 		return DiscIncompatibleVersion
-	case errPubkeyMissing, errPubkeyInvalid:
+	case errPubkeyInvalid:
 		return DiscInvalidIdentity
 	case errPubkeyForbidden:
 		return DiscUselessPeer
