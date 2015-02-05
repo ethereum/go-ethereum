@@ -329,11 +329,7 @@ ApplicationWindow {
         id: mainSplit
         anchors.fill: parent
         resizing: false
-        handleDelegate: Item {
-            Rectangle {
-                anchors.fill: parent
-            }
-         }
+
 
         function setView(view, menu) {
             for(var i = 0; i < views.length; i++) {
@@ -372,6 +368,7 @@ ApplicationWindow {
              id: menu
              Layout.minimumWidth: 192
              Layout.maximumWidth: 192
+             border.width: 10
 
              anchors.top: parent.top
              Rectangle {
@@ -421,11 +418,15 @@ ApplicationWindow {
                          // New App Button
                          id: newAppButton
                          visible: false 
-                         anchors.fill: parent
-                         anchors.rightMargin: 8
+                         anchors {
+                             top: parent.top
+                             left: parent.left
+                             leftMargin: 6
+                             topMargin: 9
+                         }
                          border.width: 0
                          radius: 5
-                         height: 55
+                         height: 37
                          width: 180
                          color: "#F3F1F3"
                      }
@@ -612,21 +613,15 @@ ApplicationWindow {
                      }
                  }
 
-                 Rectangle {
-                     height: 55
-                     color: "transparent"
-                     Text {
-                         text: "ETHEREUM"
-                         font.bold: true
-                         anchors {
-                             left: parent.left
-                             top: parent.verticalCenter
-                             leftMargin: 16
-                         }
-                         color: "#AAA0A0"
+                 Text {
+                     text: "ETHEREUM"
+                     font.bold: true
+                     anchors {
+                         left: parent.left
+                         leftMargin: 5
                      }
+                     color: "#AAA0A0"
                  }
-
 
                  ColumnLayout {
                      id: menuDefault
@@ -637,19 +632,15 @@ ApplicationWindow {
                      }
                  }
 
-                 Rectangle {
-                     height: 55
-                     color: "transparent"
-                     Text {
-                         text: "APPS"
-                         font.bold: true
-                         anchors {
-                             left: parent.left
-                             top: parent.verticalCenter
-                             leftMargin: 16
-                         }
-                         color: "#AAA0A0"
+
+                 Text {
+                     text: "APPS"
+                     font.bold: true
+                     anchors {
+                         left: parent.left
+                         leftMargin: 5
                      }
+                     color: "#AAA0A0"
                  }
 
                  ColumnLayout {
@@ -661,21 +652,15 @@ ApplicationWindow {
                      }
                  }
 
-                 Rectangle {
-                     height: 55
-                     color: "transparent"
-                     Text {
-                         text: "DEBUG"
-                         font.bold: true
-                         anchors {
-                             left: parent.left
-                             top: parent.verticalCenter
-                             leftMargin: 16
-                         }
-                         color: "#AAA0A0"
+                 Text {
+                     text: "DEBUG"
+                     font.bold: true
+                     anchors {
+                         left: parent.left
+                         leftMargin: 5
                      }
+                     color: "#AAA0A0"
                  }
-
 
                  ColumnLayout {
                      id: menuLegacy
@@ -697,7 +682,10 @@ ApplicationWindow {
               anchors.left: menu.right
               anchors.bottom: parent.bottom
               anchors.top: parent.top
-              color: "#00000000"             
+              color: "#00000000"
+              border.width: 10
+              border.color: "#00FF0F"
+             
 
               Rectangle {
                   id: urlPane
