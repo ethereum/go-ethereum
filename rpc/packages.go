@@ -40,6 +40,11 @@ import (
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
+const (
+	defaultGasPrice = "10000000000000"
+	defaultGas      = "10000"
+)
+
 type EthereumApi struct {
 	xeth          *xeth.XEth
 	filterManager *filter.FilterManager
@@ -116,10 +121,14 @@ func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *interface{}) error {
 }
 
 func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
-	err := args.requirements()
-	if err != nil {
-		return err
+	if len(args.Gas) == 0 {
+		args.Gas = defaultGas
 	}
+
+	if len(args.GasPrice) == 0 {
+		args.GasPrice = defaultGasPrice
+	}
+
 	result, _ := p.xeth.Transact( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
 	*reply = result
 	return nil
@@ -387,7 +396,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		return p.FilterChanged(args, reply)
 	case "eth_gasPrice":
-		*reply = "10000000000000"
+		*reply = defaultGasPrice
 		return nil
 	case "web3_sha3":
 		args, err := req.ToSha3Args()

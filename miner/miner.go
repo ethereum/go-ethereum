@@ -205,9 +205,7 @@ func (self *Miner) mine() {
 	block.Header().Extra = self.Extra
 
 	// Apply uncles
-	if len(self.uncles) > 0 {
-		block.SetUncles(self.uncles)
-	}
+	block.SetUncles(self.uncles)
 
 	parent := chainMan.GetBlock(block.ParentHash())
 	coinbase := state.GetOrNewStateObject(block.Coinbase())
@@ -234,10 +232,10 @@ func (self *Miner) mine() {
 
 	minerlogger.Infof("Mining on block. Includes %v transactions", len(transactions))
 
-	x, y := getSeed(chainMan, block)
-	self.pow, err = ethash.New(append(x, y...), block)
+	x, _ := getSeed(chainMan, block)
+	self.pow, err = ethash.New(x, block)
 	if err != nil {
-		fmt.Println("err", err)
+		fmt.Println("miner gave back err", err)
 		return
 	}
 
