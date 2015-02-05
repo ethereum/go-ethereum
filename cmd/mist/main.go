@@ -84,7 +84,7 @@ func run() error {
 	utils.RegisterInterrupt(func(os.Signal) {
 		gui.Stop()
 	})
-	go utils.StartEthereum(ethereum, SeedNode)
+	go utils.StartEthereum(ethereum, UseSeed)
 
 	fmt.Println("ETH stack took", time.Since(tstart))
 

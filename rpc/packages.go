@@ -40,11 +40,6 @@ import (
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
-const (
-	defaultGasPrice = "10000000000000"
-	defaultGas      = "10000"
-)
-
 type EthereumApi struct {
 	xeth          *xeth.XEth
 	filterManager *filter.FilterManager
@@ -75,7 +70,6 @@ func NewEthereumApi(eth *xeth.XEth) *EthereumApi {
 func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) error {
 	var id int
 	filter := core.NewFilter(self.xeth.Backend())
-	filter.SetOptions(toFilterOptions(args))
 	filter.LogsCallback = func(logs state.Logs) {
 		self.logMut.Lock()
 		defer self.logMut.Unlock()
@@ -121,14 +115,10 @@ func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *interface{}) error {
 }
 
 func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
-	if len(args.Gas) == 0 {
-		args.Gas = defaultGas
+	err := args.requirements()
+	if err != nil {
+		return err
 	}
-
-	if len(args.GasPrice) == 0 {
-		args.GasPrice = defaultGasPrice
-	}
-
 	result, _ := p.xeth.Transact( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
 	*reply = result
 	return nil
@@ -396,7 +386,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		return p.FilterChanged(args, reply)
 	case "eth_gasPrice":
-		*reply = defaultGasPrice
+		*reply = "10000000000000"
 		return nil
 	case "web3_sha3":
 		args, err := req.ToSha3Args()

@@ -33,7 +33,8 @@ func (self *Execution) Call(codeAddr []byte, caller vm.ContextRef) ([]byte, erro
 
 func (self *Execution) exec(code, contextAddr []byte, caller vm.ContextRef) (ret []byte, err error) {
 	env := self.env
-	evm := vm.NewVm(env)
+	evm := vm.New(env)
+
 	if env.Depth() == vm.MaxCallDepth {
 		caller.ReturnGas(self.Gas, self.price)
 

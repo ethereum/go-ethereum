@@ -87,7 +87,7 @@ func (s *RpcHttpServer) apiHandler(api *rpc.EthereumApi) http.Handler {
 	fn := func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
-		rpchttplogger.DebugDetailln("Handling request")
+		rpchttplogger.Debugln("Handling request")
 
 		reqParsed, reqerr := JSON.ParseRequestBody(req)
 		if reqerr != nil {
@@ -103,7 +103,7 @@ func (s *RpcHttpServer) apiHandler(api *rpc.EthereumApi) http.Handler {
 			return
 		}
 
-		rpchttplogger.DebugDetailf("Generated response: %T %s", response, response)
+		rpchttplogger.Debugf("Generated response: %T %s", response, response)
 		JSON.Send(w, &rpc.RpcSuccessResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: false, Result: response})
 	}
 

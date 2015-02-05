@@ -59,7 +59,7 @@ func (self *FilterManager) GetFilter(id int) *core.Filter {
 
 func (self *FilterManager) filterLoop() {
 	// Subscribe to events
-	events := self.eventMux.Subscribe(core.NewBlockEvent{}, state.Logs(nil))
+	events := self.eventMux.Subscribe(core.NewBlockEvent{}, state.Messages(nil))
 
 out:
 	for {
