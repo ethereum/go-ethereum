@@ -16,6 +16,26 @@ import (
 	"time"
 )
 
+// This is a mock implementation with a fixed peer pool with no distinction between peers
+type peerPool struct {
+	pool map[string]peer
+}
+
+func (self *peerPool) addPeer(p peer) {
+	self.pool[p.peer.identity.Pubkey()] = p
+}
+
+func (self *peerPool) removePeer(p peer) {
+	delete(self.pool, p.peer.identity.Pubkey)
+}
+
+func (self *peerPool) getPeers(target Key) (peers []peer) {
+	for key, value := range self.pool {
+		peers = append(peers, value)
+	}
+	return
+}
+
 type Hive struct {
 	dpa      *DPA
 	memstore *memStore
@@ -104,8 +124,40 @@ func (self *Hive) addStoreRequest(req *storeRequestMsgData) (err error) {
 
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	// TODO:
+	chunk, err := self.dpa.Get(req.Key)
+	// we assume that a returned chunk is the one stored in the memory cache
+	if err != nil {
+		s := new(storeRequestStatus)
+		chunk = &Chunk{
+			Key:                req.Key,
+			Data:               req.Data,
+			Size:               req.Size,
+			storeRequestStatus: s,
+		}
+		self.dpa.Put(chunk)
+		self.store(chunk)
+	} else {
+		// pending retrieval request
+		if chunk.Data != nil {
+			// update access counts not needed, Get takes care of it
+			return
+		}
+		chunk.Data = req.Data
+		chunk.Size = req.Size
+		// FIXME: breach of memstore contract data is put into storage without checking capacity
+		self.dpa.Put(chunk)
+		// only send responses once
+		if chunk.req.status == reqSearching {
+			chunk.req.status = reqFound
+			self.propagateResponse(chunk)
+		}
+	}
+
 	return
+}
+
+func (self *Hive) propagateResponse(chunk *Chunk) {
+	// send chunk to first requesterCount peer of each Id
 }
 
 func (self *Hive) addRetrieveRequest(req *retrieveRequestMsgData) {
@@ -152,6 +204,19 @@ func (self *Hive) deliver(req *retrieveRequestMsgData, chunk *Chunk) {
 		// Metadata       metaData
 	}
 	req.peer.store(storeReq)
+}
+
+func (self *Hive) store(chunk) {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	req := storeRequestMsgData{
+		Key:  chunk.Key,
+		Data: chunk.Data,
+		Id:   r.Int63(),
+		Size: chunk.Size,
+	}
+	for _, peer := range self.peerPool.GetPeers(chunk.Key) {
+		go peer.store(req)
+	}
 }
 
 func (self *Hive) peers(req *retrieveRequestMsgData, chunk *Chunk, timeout time.Time) {
