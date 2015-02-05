@@ -57,8 +57,8 @@
 		"name":"Changed",
 		"type":"event",
 		"inputs": [
-			{"name":"to","type":"address","indexed":false},
-			{"name":"amount","type":"uint256","indexed":true},
+			{"name":"to","type":"address","indexed":true},
+			{"name":"amount","type":"uint256","indexed":false},
 		],
 	}];
 
@@ -74,12 +74,12 @@
     }
 
 	var contract = web3.eth.contract(address, desc);
-	contract.Changed({to: "0xaabb"}).changed(function(e) {
+	contract.Changed({to: "0xaa"}).changed(function(e) {
 		console.log("e: " + JSON.stringify(e));
 	});
 	contract.transact({gas: "10000", gasprice: eth.gasPrice}).send( "0xaa", 10000 );
 	function reflesh() {
-        document.querySelector("#balance").innerHTML = contract.call().balance(eth.coinbase);
+        document.querySelector("#balance").innerHTML = contract.balance(eth.coinbase);
 
 		var table = document.querySelector("#table");
 		table.innerHTML = ""; // clear

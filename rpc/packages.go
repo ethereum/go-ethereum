@@ -70,6 +70,7 @@ func NewEthereumApi(eth *xeth.XEth) *EthereumApi {
 func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) error {
 	var id int
 	filter := core.NewFilter(self.xeth.Backend())
+	filter.SetOptions(toFilterOptions(args))
 	filter.LogsCallback = func(logs state.Logs) {
 		self.logMut.Lock()
 		defer self.logMut.Unlock()

@@ -214,7 +214,7 @@ type FilterOptions struct {
 	Earliest int64
 	Latest   int64
 	Address  string
-	Topics   []string
+	Topic    []string
 	Skip     int
 	Max      int
 }
@@ -224,8 +224,8 @@ func toFilterOptions(options *FilterOptions) core.FilterOptions {
 	opts.Earliest = options.Earliest
 	opts.Latest = options.Latest
 	opts.Address = fromHex(options.Address)
-	opts.Topics = make([][]byte, len(options.Topics))
-	for i, topic := range options.Topics {
+	opts.Topics = make([][]byte, len(options.Topic))
+	for i, topic := range options.Topic {
 		opts.Topics[i] = fromHex(topic)
 	}
 
