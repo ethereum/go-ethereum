@@ -128,6 +128,7 @@ func (self *VMEnv) Difficulty() *big.Int  { return ethutil.Big1 }
 func (self *VMEnv) BlockHash() []byte     { return make([]byte, 32) }
 func (self *VMEnv) Value() *big.Int       { return self.value }
 func (self *VMEnv) GasLimit() *big.Int    { return big.NewInt(1000000000) }
+func (self *VMEnv) VmType() vm.Type       { return vm.StdVmTy }
 func (self *VMEnv) Depth() int            { return 0 }
 func (self *VMEnv) SetDepth(i int)        { self.depth = i }
 func (self *VMEnv) GetHash(n uint64) []byte {

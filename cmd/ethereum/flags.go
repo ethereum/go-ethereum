@@ -49,7 +49,7 @@ var (
 	AddPeer         string
 	MaxPeer         int
 	GenAddr         bool
-	UseSeed         bool
+	SeedNode        string
 	SecretFile      string
 	ExportDir       string
 	NonInteractive  bool
@@ -101,7 +101,7 @@ func Init() {
 	flag.BoolVar(&StartRpc, "rpc", false, "start rpc server")
 	flag.BoolVar(&StartWebSockets, "ws", false, "start websocket server")
 	flag.BoolVar(&NonInteractive, "y", false, "non-interactive mode (say yes to confirmations)")
-	flag.BoolVar(&UseSeed, "seed", true, "seed peers")
+	flag.StringVar(&SeedNode, "seednode", "poc-8.ethdev.com:30303", "ip:port of seed node to connect to. Set to blank for skip")
 	flag.BoolVar(&SHH, "shh", true, "whisper protocol (on)")
 	flag.BoolVar(&Dial, "dial", true, "dial out connections (on)")
 	flag.BoolVar(&GenAddr, "genaddr", false, "create a new priv/pub key")

@@ -17,7 +17,11 @@
         var originalBalance = web3.toDecimal(balance);
         document.getElementById('original').innerText = 'original balance: ' + originalBalance + '    watching...';
 
+<<<<<<< HEAD:cmd/mist/assets/ext/ethereum.js/example/balance.html
         var filter = web3.eth.watch({address: coinbase}).changed(function() {
+=======
+        web3.eth.watch('pending').changed(function() {
+>>>>>>> 859a1999cb204d2c6fcb08d6569c738c5af5cd86:example/balance.html
             balance = web3.eth.balanceAt(coinbase)
             var currentBalance = web3.toDecimal(balance);
             document.getElementById("current").innerText = 'current: ' + currentBalance;

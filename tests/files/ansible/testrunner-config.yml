@@ -1,12 +1,12 @@
 ---
 - name: preparing and running tests
   # testing
-  hosts: all
+  # hosts: all
   # live
-  # hosts: TBD
+  hosts: tag_Name_test_runner
   
   # TODO use the right user for configuring, until credentials set, stay with default vagrant user 
-  # remote_user: ubuntu
+  remote_user: ubuntu
   
   roles:
       - testrunner

@@ -79,6 +79,10 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
+		helper.Logger.SetLogLevel(4)
+		if name != "TransactionNonceCheck2" {
+			continue
+		}
 		db, _ := ethdb.NewMemDatabase()
 		statedb := state.New(nil, db)
 		for addr, account := range test.Pre {
@@ -123,14 +127,10 @@ func RunVmTest(p string, t *testing.T) {
 
 		if isVmTest {
 			if len(test.Gas) == 0 && err == nil {
-				// Log VM err
-				helper.Log.Infof("%s's: %v\n", name, err)
 				t.Errorf("%s's gas unspecified, indicating an error. VM returned (incorrectly) successfull", name)
 			} else {
 				gexp := ethutil.Big(test.Gas)
 				if gexp.Cmp(gas) != 0 {
-					// Log VM err
-					helper.Log.Infof("%s's: %v\n", name, err)
 					t.Errorf("%s's gas failed. Expected %v, got %v\n", name, gexp, gas)
 				}
 			}
@@ -173,6 +173,11 @@ func RunVmTest(p string, t *testing.T) {
 // I've created a new function for each tests so it's easier to identify where the problem lies if any of them fail.
 func TestVMArithmetic(t *testing.T) {
 	const fn = "../files/VMTests/vmArithmeticTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestSystemOperations(t *testing.T) {
+	const fn = "../files/VMTests/vmSystemOperationsTest.json"
 	RunVmTest(fn, t)
 }
 
@@ -238,5 +243,25 @@ func TestStateSpecial(t *testing.T) {
 
 func TestStateRefund(t *testing.T) {
 	const fn = "../files/StateTests/stRefundTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestStateBlockHash(t *testing.T) {
+	const fn = "../files/StateTests/stBlockHashTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestStateInitCode(t *testing.T) {
+	const fn = "../files/StateTests/stInitCodeTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestStateLog(t *testing.T) {
+	const fn = "../files/StateTests/stLogTests.json"
+	RunVmTest(fn, t)
+}
+
+func TestStateTransaction(t *testing.T) {
+	const fn = "../files/StateTests/stTransactionTest.json"
 	RunVmTest(fn, t)
 }

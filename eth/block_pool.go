@@ -636,12 +636,12 @@ func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
 
 		// validate block for PoW
 		if !self.verifyPoW(block) {
-			poolLogger.Warnf("invalid pow on block [%s] by peer %s", name(hash), peerId)
+			poolLogger.Warnf("invalid pow on block [%s %v] by peer %s", name(hash), block.Number(), peerId)
 			self.peerError(peerId, ErrInvalidPoW, "%x", hash)
 			return
 		}
 	}
-	poolLogger.Debugf("added block [%s] sent by peer %s", name(hash), peerId)
+	poolLogger.DebugDetailf("added block [%s] sent by peer %s", name(hash), peerId)
 	node.block = block
 	node.blockBy = peerId
 

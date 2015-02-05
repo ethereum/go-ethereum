@@ -27,27 +27,7 @@ if (process.env.NODE_ENV !== 'build') {
     var BigNumber = require('bignumber.js');
 }
 
-var ETH_UNITS = [ 
-    'wei', 
-    'Kwei', 
-    'Mwei', 
-    'Gwei', 
-    'szabo', 
-    'finney', 
-    'ether', 
-    'grand', 
-    'Mether', 
-    'Gether', 
-    'Tether', 
-    'Pether', 
-    'Eether', 
-    'Zether', 
-    'Yether', 
-    'Nether', 
-    'Dether', 
-    'Vether', 
-    'Uether' 
-];
+var utils = require('./utils');
 
 /// @returns an array of objects describing web3 api methods
 var web3Methods = function () {
@@ -156,8 +136,8 @@ var setupMethods = function (obj, methods) {
             var args = Array.prototype.slice.call(arguments);
             var call = typeof method.call === 'function' ? method.call(args) : method.call;
             return web3.provider.send({
-                call: call,
-                args: args
+                method: call,
+                params: args
             });
         };
     });
@@ -170,15 +150,15 @@ var setupProperties = function (obj, properties) {
         var proto = {};
         proto.get = function () {
             return web3.provider.send({
-                call: property.getter
+                method: property.getter
             });
         };
 
         if (property.setter) {
             proto.set = function (val) {
                 return web3.provider.send({
-                    call: property.setter,
-                    args: [val]
+                    method: property.setter,
+                    params: [val]
                 });
             };
         }
@@ -192,43 +172,11 @@ var web3 = {
     _events: {},
     providers: {},
 
-    toHex: function(str) {
-        var hex = "";
-        for(var i = 0; i < str.length; i++) {
-            var n = str.charCodeAt(i).toString(16);
-            hex += n.length < 2 ? '0' + n : n;
-        }
-
-        return hex;
-    },
-
     /// @returns ascii string representation of hex value prefixed with 0x
-    toAscii: function(hex) {
-        // Find termination
-        var str = "";
-        var i = 0, l = hex.length;
-        if (hex.substring(0, 2) === '0x')
-            i = 2;
-        for(; i < l; i+=2) {
-            var code = parseInt(hex.substr(i, 2), 16);
-            if(code === 0) {
-                break;
-            }
-
-            str += String.fromCharCode(code);
-        }
-
-        return str;
-    },
+    toAscii: utils.toAscii,
 
     /// @returns hex representation (prefixed by 0x) of ascii string
-    fromAscii: function(str, pad) {
-        pad = pad === undefined ? 0 : pad;
-        var hex = this.toHex(str);
-        while(hex.length < pad*2)
-            hex += "00";
-        return "0x" + hex;
-    },
+    fromAscii: utils.fromAscii,
 
     /// @returns decimal representaton of hex value prefixed by 0x
     toDecimal: function (val) {
@@ -243,29 +191,7 @@ var web3 = {
     },
 
     /// used to transform value/string to eth string
-    /// TODO: use BigNumber.js to parse int
-    toEth: function(str) {
-        var val = typeof str === "string" ? str.indexOf('0x') === 0 ? parseInt(str.substr(2), 16) : parseInt(str) : str;
-        var unit = 0;
-        var units = ETH_UNITS;
-        while (val > 3000 && unit < units.length - 1)
-        {
-            val /= 1000;
-            unit++;
-        }
-        var s = val.toString().length < val.toFixed(2).length ? val.toString() : val.toFixed(2);
-        var replaceFunction = function($0, $1, $2) {
-            return $1 + ',' + $2;
-        };
-
-        while (true) {
-            var o = s;
-            s = s.replace(/(\d)(\d\d\d[\.\,])/, replaceFunction);
-            if (o === s)
-                break;
-        }
-        return s + ' ' + units[unit];
-    },
+    toEth: utils.toEth,
 
     /// eth object prototype
     eth: {
@@ -278,8 +204,15 @@ var web3 = {
                 return ret;
             };
         },
-        watch: function (params) {
-            return new web3.filter(params, ethWatch);
+
+        /// @param filter may be a string, object or event
+        /// @param indexed is optional, this is an object with optional event indexed params
+        /// @param options is optional, this is an object with optional event options ('max'...)
+        watch: function (filter, indexed, options) {
+            if (filter._isEvent) {
+                return filter(indexed, options);
+            }
+            return new web3.filter(filter, ethWatch);
         }
     },
 
@@ -288,15 +221,12 @@ var web3 = {
 
     /// shh object prototype
     shh: {
-        watch: function (params) {
-            return new web3.filter(params, shhWatch);
+        
+        /// @param filter may be a string, object or event
+        watch: function (filter, indexed) {
+            return new web3.filter(filter, shhWatch);
         }
     },
-
-    /// @returns true if provider is installed
-    haveProvider: function() {
-        return !!web3.provider.provider;
-    }
 };
 
 /// setups all api methods
@@ -319,7 +249,6 @@ var shhWatch = {
 setupMethods(shhWatch, shhWatchMethods());
 
 web3.setProvider = function(provider) {
-    //provider.onmessage = messageHandler; // there will be no async calls, to remove
     web3.provider.set(provider);
 };
 
