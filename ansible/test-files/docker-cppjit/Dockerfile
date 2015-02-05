@@ -40,7 +40,7 @@ ADD https://api.github.com/repos/ethereum/cpp-ethereum/git/refs/heads/develop un
 # Build Ethereum (HEADLESS)
 RUN git clone --depth=1 --branch develop https://github.com/ethereum/cpp-ethereum
 RUN mkdir -p cpp-ethereum/build
-RUN cd cpp-ethereum/build && cmake .. -DCMAKE_BUILD_TYPE=Release -DHEADLESS=1 -DEVMJIT=1 && make -j $(cat /proc/cpuinfo | grep processor | wc -l) && make install
+RUN cd cpp-ethereum/build && cmake .. -DCMAKE_BUILD_TYPE=Debug -DVMTRACE=1 -DPARANOIA=1 -DEVMJIT=1 && make -j $(cat /proc/cpuinfo | grep processor | wc -l) && make install
 RUN ldconfig
 
 ENTRYPOINT ["/cpp-ethereum/build/test/checkRandomTest"]
