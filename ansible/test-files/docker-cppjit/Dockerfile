@@ -34,6 +34,9 @@ RUN add-apt-repository ppa:ethereum/ethereum
 RUN apt-get update
 RUN apt-get install -qy libcryptopp-dev libjson-rpc-cpp-dev
 
+# this is a workaround, to make sure that docker's cache is invalidated whenever the git repo changes
+ADD https://api.github.com/repos/ethereum/cpp-ethereum/git/refs/heads/develop unused.txt 
+
 # Build Ethereum (HEADLESS)
 RUN git clone --depth=1 --branch develop https://github.com/ethereum/cpp-ethereum
 RUN mkdir -p cpp-ethereum/build
@@ -41,4 +44,3 @@ RUN cd cpp-ethereum/build && cmake .. -DCMAKE_BUILD_TYPE=Release -DHEADLESS=1 -D
 RUN ldconfig
 
 ENTRYPOINT ["/cpp-ethereum/build/test/checkRandomTest"]
-

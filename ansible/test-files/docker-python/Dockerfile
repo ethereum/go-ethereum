@@ -1,6 +1,15 @@
-FROM sveneh/pyethereum-base
+FROM ubuntu:14.04
 
-RUN git clone --branch master https://github.com/ethereum/pyethereum.git
+ENV DEBIAN_FRONTEND noninteractive
+RUN apt-get update
+RUN apt-get upgrade -y
+
+RUN apt-get install -qy curl git python2.7 python-pip python-dev
+
+# this is a workaround, to make sure that docker's cache is invalidated whenever the git repo changes
+ADD https://api.github.com/repos/ethereum/pyethereum/git/refs/heads/develop unused.txt 
+
+RUN git clone --branch develop https://github.com/ethereum/pyethereum.git
 
 RUN cd pyethereum && curl https://bootstrap.pypa.io/bootstrap-buildout.py | python
 
