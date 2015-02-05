@@ -134,7 +134,7 @@ func main() {
 		utils.StartWebSockets(ethereum, WsPort)
 	}
 
-	utils.StartEthereum(ethereum, SeedNode)
+	utils.StartEthereum(ethereum, UseSeed)
 
 	if StartJsConsole {
 		InitJsConsole(ethereum)

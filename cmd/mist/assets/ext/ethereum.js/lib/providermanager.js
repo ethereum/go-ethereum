@@ -23,9 +23,7 @@
  * @date 2014
  */
 
-var web3 = require('./web3'); 
-var jsonrpc = require('./jsonrpc');
-
+var web3 = require('./web3'); // jshint ignore:line
 
 /**
  * Provider manager object prototype
@@ -39,38 +37,48 @@ var jsonrpc = require('./jsonrpc');
 var ProviderManager = function() {
     this.polls = [];
     this.provider = undefined;
+    this.id = 1;
 
     var self = this;
     var poll = function () {
-        self.polls.forEach(function (data) {
-            var result = self.send(data.data);
+        if (self.provider) {
+            self.polls.forEach(function (data) {
+                data.data._id = self.id;
+                self.id++;
+                var result = self.provider.send(data.data);
+            
+                result = JSON.parse(result);
+                
+                // dont call the callback if result is not an array, or empty one
+                if (result.error || !(result.result instanceof Array) || result.result.length === 0) {
+                    return;
+                }
 
-            if (!(result instanceof Array) || result.length === 0) {
-                return;
-            }
-
-            data.callback(result);
-        });
-
+                data.callback(result.result);
+            });
+        }
         setTimeout(poll, 1000);
     };
     poll();
 };
 
 /// sends outgoing requests
-/// @params data - an object with at least 'method' property
 ProviderManager.prototype.send = function(data) {
-    var payload = jsonrpc.toPayload(data.method, data.params);
+
+    data.args = data.args || [];
+    data._id = this.id++;
 
     if (this.provider === undefined) {
         console.error('provider is not set');
         return null; 
     }
 
-    var result = this.provider.send(payload);
+    //TODO: handle error here? 
+    var result = this.provider.send(data);
+    result = JSON.parse(result);
 
-    if (!jsonrpc.isValidResponse(result)) {
-        console.log(result);
+    if (result.error) {
+        console.log(result.error);
         return null;
     }
 

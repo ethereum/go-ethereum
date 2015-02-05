@@ -27,3 +27,6 @@ done
 
 $GOROOT/bin/go tool cover -func profile.cov
 
+# To submit the test coverage result to coveralls.io,
+# use goveralls (https://github.com/mattn/goveralls)
+goveralls -coverprofile=profile.cov -service=travis-ci -repotoken $COVERALLS_TOKEN

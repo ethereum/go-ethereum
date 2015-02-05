@@ -37,6 +37,16 @@ type NewTxArgs struct {
 	Data     string `json:"data"`
 }
 
+func (a *NewTxArgs) requirements() error {
+	if a.Gas == "" {
+		return NewErrorResponse("Transact requires a 'gas' value as argument")
+	}
+	if a.GasPrice == "" {
+		return NewErrorResponse("Transact requires a 'gasprice' value as argument")
+	}
+	return nil
+}
+
 type PushTxArgs struct {
 	Tx string `json:"tx"`
 }
@@ -204,7 +214,7 @@ type FilterOptions struct {
 	Earliest int64
 	Latest   int64
 	Address  string
-	Topic    []string
+	Topics   []string
 	Skip     int
 	Max      int
 }
@@ -214,8 +224,8 @@ func toFilterOptions(options *FilterOptions) core.FilterOptions {
 	opts.Earliest = options.Earliest
 	opts.Latest = options.Latest
 	opts.Address = fromHex(options.Address)
-	opts.Topics = make([][]byte, len(options.Topic))
-	for i, topic := range options.Topic {
+	opts.Topics = make([][]byte, len(options.Topics))
+	for i, topic := range options.Topics {
 		opts.Topics[i] = fromHex(topic)
 	}
 

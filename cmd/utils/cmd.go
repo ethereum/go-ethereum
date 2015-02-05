@@ -121,9 +121,9 @@ func exit(err error) {
 	os.Exit(status)
 }
 
-func StartEthereum(ethereum *eth.Ethereum, SeedNode string) {
+func StartEthereum(ethereum *eth.Ethereum, UseSeed bool) {
 	clilogger.Infof("Starting %s", ethereum.ClientIdentity())
-	err := ethereum.Start(SeedNode)
+	err := ethereum.Start(UseSeed)
 	if err != nil {
 		exit(err)
 	}
@@ -205,7 +205,7 @@ func StartWebSockets(eth *eth.Ethereum, wsPort int) {
 	clilogger.Infoln("Starting WebSockets")
 
 	var err error
-	eth.WsServer, err = rpcws.NewWebSocketServer(xeth.New(eth), wsPort)
+	eth.WsServer, err = rpcws.NewWebSocketServer(eth, wsPort)
 	if err != nil {
 		clilogger.Errorf("Could not start RPC interface (port %v): %v", wsPort, err)
 	} else {
