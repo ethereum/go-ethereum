@@ -122,12 +122,10 @@ func exit(err error) {
 }
 
 func StartEthereum(ethereum *eth.Ethereum, SeedNode string) {
-	clilogger.Infof("Starting %s", ethereum.ClientIdentity())
-	err := ethereum.Start(SeedNode)
-	if err != nil {
+	clilogger.Infoln("Starting ", ethereum.Name())
+	if err := ethereum.Start(SeedNode); err != nil {
 		exit(err)
 	}
-
 	RegisterInterrupt(func(sig os.Signal) {
 		ethereum.Stop()
 		logger.Flush()

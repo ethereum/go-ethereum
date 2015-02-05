@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/obscuren/otto"
@@ -201,8 +202,15 @@ func (self *JSRE) addPeer(call otto.FunctionCall) otto.Value {
 	if err != nil {
 		return otto.FalseValue()
 	}
-	self.ethereum.SuggestPeer(host)
-
+	idstr, err := call.Argument(0).ToString()
+	if err != nil {
+		return otto.FalseValue()
+	}
+	id, err := discover.HexID(idstr)
+	if err != nil {
+		return otto.FalseValue()
+	}
+	self.ethereum.SuggestPeer(host, id)
 	return otto.TrueValue()
 }
 

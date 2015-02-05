@@ -52,13 +52,11 @@ func run() error {
 	config := utils.InitConfig(VmType, ConfigFile, Datadir, "ETH")
 
 	ethereum, err := eth.New(&eth.Config{
-		Name:       ClientIdentifier,
-		Version:    Version,
+		Name:       p2p.MakeName(ClientIdentifier, Version),
 		KeyStore:   KeyStore,
 		DataDir:    Datadir,
 		LogFile:    LogFile,
 		LogLevel:   LogLevel,
-		Identifier: Identifier,
 		MaxPeers:   MaxPeer,
 		Port:       OutboundPort,
 		NATType:    PMPGateway,
@@ -79,7 +77,7 @@ func run() error {
 		utils.StartWebSockets(ethereum, WsPort)
 	}
 
-	gui := NewWindow(ethereum, config, ethereum.ClientIdentity().(*p2p.SimpleClientIdentity), KeyRing, LogLevel)
+	gui := NewWindow(ethereum, config, KeyRing, LogLevel)
 
 	utils.RegisterInterrupt(func(os.Signal) {
 		gui.Stop()

@@ -844,6 +844,7 @@ ApplicationWindow {
 		     minimumHeight: 50
 		     title: "Connect to peer"
 
+
 		     ComboBox {
 			     id: addrField
 			     anchors.verticalCenter: parent.verticalCenter
@@ -872,6 +873,17 @@ ApplicationWindow {
 			     }
 		     }
 
+ 		     ComboBox {
+			     id: nodeidField
+			     anchors.verticalCenter: parent.verticalCenter
+			     anchors.left: parent.left
+			     anchors.right: addPeerButton.left
+			     anchors.leftMargin: 10
+			     anchors.rightMargin: 10
+			
+			     editable: true
+  			}
+
 		     Button {
 			     id: addPeerButton
 			     anchors.right: parent.right
@@ -879,7 +891,7 @@ ApplicationWindow {
 			     anchors.rightMargin: 10
 			     text: "Add"
 			     onClicked: {
-				     eth.connectToPeer(addrField.currentText)
+				     eth.connectToPeer(addrField.currentText, nodeidField.currentText)
 				     addPeerWin.visible = false
 			     }
 		     }

@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -61,13 +62,11 @@ func main() {
 	utils.InitConfig(VmType, ConfigFile, Datadir, "ETH")
 
 	ethereum, err := eth.New(&eth.Config{
-		Name:       ClientIdentifier,
-		Version:    Version,
+		Name:       p2p.MakeName(ClientIdentifier, Version),
 		KeyStore:   KeyStore,
 		DataDir:    Datadir,
 		LogFile:    LogFile,
 		LogLevel:   LogLevel,
-		Identifier: Identifier,
 		MaxPeers:   MaxPeer,
 		Port:       OutboundPort,
 		NATType:    PMPGateway,

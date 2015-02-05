@@ -12,20 +12,19 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	ethlogger "github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/pow/ezp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
 type Config struct {
-	Name       string
-	Version    string
-	Identifier string
-	KeyStore   string
-	DataDir    string
-	LogFile    string
-	LogLevel   int
-	KeyRing    string
+	Name     string
+	KeyStore string
+	DataDir  string
+	LogFile  string
+	LogLevel int
+	KeyRing  string
 
 	MaxPeers   int
 	Port       string
@@ -66,8 +65,7 @@ type Ethereum struct {
 	WsServer   rpc.RpcServer
 	keyManager *crypto.KeyManager
 
-	clientIdentity p2p.ClientIdentity
-	logger         ethlogger.LogSystem
+	logger ethlogger.LogSystem
 
 	synclock  sync.Mutex
 	syncGroup sync.WaitGroup
@@ -103,21 +101,17 @@ func New(config *Config) (*Ethereum, error) {
 	// Initialise the keyring
 	keyManager.Init(config.KeyRing, 0, false)
 
-	// Create a new client id for this instance. This will help identifying the node on the network
-	clientId := p2p.NewSimpleClientIdentity(config.Name, config.Version, config.Identifier, keyManager.PublicKey())
-
 	saveProtocolVersion(db)
 	//ethutil.Config.Db = db
 
 	eth := &Ethereum{
-		shutdownChan:   make(chan bool),
-		quit:           make(chan bool),
-		db:             db,
-		keyManager:     keyManager,
-		clientIdentity: clientId,
-		blacklist:      p2p.NewBlacklist(),
-		eventMux:       &event.TypeMux{},
-		logger:         logger,
+		shutdownChan: make(chan bool),
+		quit:         make(chan bool),
+		db:           db,
+		keyManager:   keyManager,
+		blacklist:    p2p.NewBlacklist(),
+		eventMux:     &event.TypeMux{},
+		logger:       logger,
 	}
 
 	eth.chainManager = core.NewChainManager(db, eth.EventMux())
@@ -132,21 +126,23 @@ func New(config *Config) (*Ethereum, error) {
 
 	ethProto := EthProtocol(eth.txPool, eth.chainManager, eth.blockPool)
 	protocols := []p2p.Protocol{ethProto, eth.whisper.Protocol()}
-
 	nat, err := p2p.ParseNAT(config.NATType, config.PMPGateway)
 	if err != nil {
 		return nil, err
 	}
-
-	eth.net = &p2p.Server{
-		Identity:  clientId,
-		MaxPeers:  config.MaxPeers,
-		Protocols: protocols,
-		Blacklist: eth.blacklist,
-		NAT:       nat,
-		NoDial:    !config.Dial,
+	netprv, err := crypto.GenerateKey()
+	if err != nil {
+		return nil, fmt.Errorf("could not generate server key: %v", err)
 	}
-
+	eth.net = &p2p.Server{
+		PrivateKey: netprv,
+		Name:       config.Name,
+		MaxPeers:   config.MaxPeers,
+		Protocols:  protocols,
+		Blacklist:  eth.blacklist,
+		NAT:        nat,
+		NoDial:     !config.Dial,
+	}
 	if len(config.Port) > 0 {
 		eth.net.ListenAddr = ":" + config.Port
 	}
@@ -162,8 +158,8 @@ func (s *Ethereum) Logger() ethlogger.LogSystem {
 	return s.logger
 }
 
-func (s *Ethereum) ClientIdentity() p2p.ClientIdentity {
-	return s.clientIdentity
+func (s *Ethereum) Name() string {
+	return s.net.Name
 }
 
 func (s *Ethereum) ChainManager() *core.ChainManager {
@@ -241,26 +237,17 @@ func (s *Ethereum) Start(seedNode string) error {
 	s.blockSub = s.eventMux.Subscribe(core.NewMinedBlockEvent{})
 	go s.blockBroadcastLoop()
 
-	// TODO: read peers here
-	if len(seedNode) > 0 {
-		logger.Infof("Connect to seed node %v", seedNode)
-		if err := s.SuggestPeer(seedNode); err != nil {
-			logger.Infoln(err)
-		}
-	}
-
 	logger.Infoln("Server started")
 	return nil
 }
 
-func (self *Ethereum) SuggestPeer(addr string) error {
+func (self *Ethereum) SuggestPeer(addr string, id discover.NodeID) error {
 	netaddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		logger.Errorf("couldn't resolve %s:", addr, err)
 		return err
 	}
-
-	self.net.SuggestPeer(netaddr.IP, netaddr.Port, nil)
+	self.net.SuggestPeer(netaddr.IP, netaddr.Port, id)
 	return nil
 }
 
