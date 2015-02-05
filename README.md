@@ -1,18 +1,18 @@
+Ethereum PoC-8
+========
+
+Ethereum Go Client © 2014 Jeffrey Wilcke.
+
+          | Linux   | OSX | Windows
+----------|---------|-----|--------
+develop   | [![Build+Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20branch)](http://build.ethdev.com/builders/Linux%20Go%20develop%20branch/builds/-1) | [![Build+Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20branch)](http://build.ethdev.com/builders/OSX%20Go%20develop%20branch/builds/-1) | N/A
+master    | [![Build+Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20master%20branch)](http://build.ethdev.com/builders/Linux%20Go%20master%20branch/builds/-1) | [![Build+Status](http://build.ethdev.com/buildstatusimage?builder=OSX%20Go%20master%20branch)](http://build.ethdev.com/builders/OSX%20Go%20master%20branch/builds/-1) | N/A
+
 [![Bugs](https://badge.waffle.io/ethereum/go-ethereum.png?label=bug&title=Bugs)](https://waffle.io/ethereum/go-ethereum)
 [![Stories in Ready](https://badge.waffle.io/ethereum/go-ethereum.png?label=ready&title=Ready)](https://waffle.io/ethereum/go-ethereum)
 [![Stories in Progress](https://badge.waffle.io/ethereum/go-ethereum.svg?label=in%20progress&title=In Progress)](http://waffle.io/ethereum/go-ethereum)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/ethereum/go-ethereum?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
-
-Ethereum PoC-8
-========
-
-* [![Build Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20master%20branch)](http://build.ethdev.com:8010/builders/Linux%20Go%20master%20branch/builds/-1) master
-* [![Build Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20branch)](http://build.ethdev.com:8010/builders/Linux%20Go%20develop%20branch/builds/-1) develop
-* [![Travis-ci](https://api.travis-ci.org/ethereum/go-ethereum.svg)](https://travis-ci.org/ethereum/go-ethereum) travis-ci
-* [![Coverage Status](https://coveralls.io/repos/ethereum/go-ethereum/badge.png?branch=develop)](https://coveralls.io/r/ethereum/go-ethereum?branch=develop)
-
-Ethereum Go Client © 2014 Jeffrey Wilcke.
 
 Build
 =====
