@@ -129,20 +129,14 @@ func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state
 		cumulativeSum      = new(big.Int)
 	)
 
-done:
-	for i, tx := range txs {
+	for _, tx := range txs {
 		receipt, txGas, err := self.ApplyTransaction(coinbase, state, block, tx, totalUsedGas, transientProcess)
 		if err != nil {
-			return nil, nil, nil, nil, err
-
 			switch {
 			case IsNonceErr(err):
-				err = nil // ignore error
-				continue
+				return nil, nil, nil, nil, err
 			case IsGasLimitErr(err):
-				unhandled = txs[i:]
-
-				break done
+				return nil, nil, nil, nil, err
 			default:
 				statelogger.Infoln(err)
 				erroneous = append(erroneous, tx)
@@ -260,9 +254,8 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Header().Difficulty, expd)
 	}
 
-	diff := block.Header().Time - parent.Header().Time
-	if diff <= 0 {
-		return ValidationError("Block timestamp not after prev block %v (%v - %v)", diff, block.Header().Time, sm.bc.CurrentBlock().Header().Time)
+	if block.Time() < parent.Time() {
+		return ValidationError("Block timestamp not after prev block (%v - %v)", block.Header().Time, parent.Header().Time)
 	}
 
 	if block.Time() > time.Now().Unix() {
