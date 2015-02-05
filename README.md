@@ -1,5 +1,4 @@
-Ethereum Go
-========
+## Ethereum Go
 
 Ethereum Go Client © 2014 Jeffrey Wilcke.
 
