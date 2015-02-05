@@ -205,7 +205,7 @@ func StartWebSockets(eth *eth.Ethereum, wsPort int) {
 	clilogger.Infoln("Starting WebSockets")
 
 	var err error
-	eth.WsServer, err = rpcws.NewWebSocketServer(eth, wsPort)
+	eth.WsServer, err = rpcws.NewWebSocketServer(xeth.New(eth), wsPort)
 	if err != nil {
 		clilogger.Errorf("Could not start RPC interface (port %v): %v", wsPort, err)
 	} else {
