@@ -184,9 +184,7 @@ func (self *Miner) mine() {
 	block.Header().Extra = self.Extra
 
 	// Apply uncles
-	if len(self.uncles) > 0 {
-		block.SetUncles(self.uncles)
-	}
+	block.SetUncles(self.uncles)
 
 	parent := chainMan.GetBlock(block.ParentHash())
 	coinbase := state.GetOrNewStateObject(block.Coinbase())

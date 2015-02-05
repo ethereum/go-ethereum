@@ -20,11 +20,11 @@ func (self *FullNode) Branches() []Node {
 	return self.nodes[:16]
 }
 
-func (self *FullNode) Copy() Node {
-	nnode := NewFullNode(self.trie)
+func (self *FullNode) Copy(t *Trie) Node {
+	nnode := NewFullNode(t)
 	for i, node := range self.nodes {
 		if node != nil {
-			nnode.nodes[i] = node
+			nnode.nodes[i] = node.Copy(t)
 		}
 	}
 

@@ -1,6 +1,19 @@
-module.exports = {
-  basicTests: require('require-all')(__dirname + '/BasicTests/'),
-  trieTests: require('require-all')(__dirname + '/TrieTests/'),
-  stateTests: require('require-all')(__dirname + '/StateTests/'),
-  vmTests: require('require-all')(__dirname + '/VMTests')
-};
+var tests = module.exports = {};
+
+Object.defineProperties(tests, {
+  blockchainTests: {
+    get: require('require-all').bind(this, __dirname + '/BlockchainTests')
+  },
+  basicTests: {
+    get: require('require-all').bind(this, __dirname + '/BasicTests/')
+  },
+  trieTests: {
+    get: require('require-all').bind(this, __dirname + '/TrieTests/')
+  },
+  stateTests: {
+    get: require('require-all').bind(this, __dirname + '/StateTests/')
+  },
+  vmTests: {
+    get: require('require-all').bind(this, __dirname + '/VMTests')
+  }
+});

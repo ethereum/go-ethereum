@@ -29,6 +29,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
@@ -154,14 +155,17 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 
 	block := self.lib.eth.ChainManager().CurrentBlock()
 
-	env := utils.NewEnv(self.lib.eth.ChainManager(), statedb, block, account.Address(), value)
+	msg := types.NewTransactionMessage(nil, value, gas, gasPrice, data)
+	env := core.NewEnv(statedb, self.lib.eth.ChainManager(), msg, block)
 
 	self.Logf("callsize %d", len(script))
 	go func() {
+		pgas := new(big.Int).Set(gas)
 		ret, err := env.Call(account, contract.Address(), data, gas, gasPrice, ethutil.Big0)
-		//ret, g, err := callerClosure.Call(evm, data)
-		tot := new(big.Int).Mul(env.Gas, gasPrice)
-		self.Logf("gas usage %v total price = %v (%v)", env.Gas, tot, ethutil.CurrencyToString(tot))
+
+		rgas := new(big.Int).Sub(pgas, gas)
+		tot := new(big.Int).Mul(rgas, gasPrice)
+		self.Logf("gas usage %v total price = %v (%v)", rgas, tot, ethutil.CurrencyToString(tot))
 		if err != nil {
 			self.Logln("exited with errors:", err)
 		} else {

@@ -18,6 +18,18 @@ const (
 	MaxVmTy
 )
 
+func NewVm(env Environment) VirtualMachine {
+	switch env.VmType() {
+	case JitVmTy:
+		return NewJitVm(env)
+	default:
+		vmlogger.Infoln("unsupported vm type %d", env.VmType())
+		fallthrough
+	case StdVmTy:
+		return New(env)
+	}
+}
+
 var (
 	GasStep         = big.NewInt(1)
 	GasSha          = big.NewInt(10)

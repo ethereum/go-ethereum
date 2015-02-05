@@ -269,7 +269,7 @@ func (self *Whisper) Protocol() p2p.Protocol {
 
 func createFilter(message *Message, topics [][]byte, key *ecdsa.PrivateKey) filter.Filter {
 	return filter.Generic{
-		Str1: string(crypto.FromECDSA(key)), Str2: string(crypto.FromECDSAPub(message.Recover())),
+		Str1: string(crypto.FromECDSAPub(&key.PublicKey)), Str2: string(crypto.FromECDSAPub(message.Recover())),
 		Data: bytesToMap(topics),
 	}
 }

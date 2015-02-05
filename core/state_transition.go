@@ -10,6 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/vm"
 )
 
+const tryJit = false
+
 /*
  * The State transitioning model
  *
@@ -184,6 +186,7 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 		return
 	}
 
+	//stateCopy := self.env.State().Copy()
 	vmenv := self.env
 	var ref vm.ContextRef
 	if MessageCreatesContract(msg) {
@@ -196,8 +199,34 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 				ref.SetCode(ret)
 			}
 		}
+
+		/*
+			if vmenv, ok := vmenv.(*VMEnv); ok && tryJit {
+				statelogger.Infof("CREATE: re-running using JIT (PH=%x)\n", stateCopy.Root()[:4])
+				// re-run using the JIT (validation for the JIT)
+				goodState := vmenv.State().Copy()
+				vmenv.state = stateCopy
+				vmenv.SetVmType(vm.JitVmTy)
+				vmenv.Create(sender, contract.Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
+				statelogger.Infof("DONE PH=%x STD_H=%x JIT_H=%x\n", stateCopy.Root()[:4], goodState.Root()[:4], vmenv.State().Root()[:4])
+				self.state.Set(goodState)
+			}
+		*/
 	} else {
 		ret, err = vmenv.Call(self.From(), self.To().Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
+
+		/*
+			if vmenv, ok := vmenv.(*VMEnv); ok && tryJit {
+				statelogger.Infof("CALL: re-running using JIT (PH=%x)\n", stateCopy.Root()[:4])
+				// re-run using the JIT (validation for the JIT)
+				goodState := vmenv.State().Copy()
+				vmenv.state = stateCopy
+				vmenv.SetVmType(vm.JitVmTy)
+				vmenv.Call(self.From(), self.To().Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
+				statelogger.Infof("DONE PH=%x STD_H=%x JIT_H=%x\n", stateCopy.Root()[:4], goodState.Root()[:4], vmenv.State().Root()[:4])
+				self.state.Set(goodState)
+			}
+		*/
 	}
 
 	if err != nil {
