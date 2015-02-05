@@ -11,7 +11,7 @@ import (
 )
 
 type peerId struct {
-	pubkey []byte
+	privKey, pubkey []byte
 }
 
 func (self *peerId) String() string {
@@ -23,6 +23,15 @@ func (self *peerId) Pubkey() (pubkey []byte) {
 	if len(pubkey) == 0 {
 		pubkey = crypto.GenerateNewKeyPair().PublicKey
 		self.pubkey = pubkey
+	}
+	return
+}
+
+func (self *peerId) PrivKey() (privKey []byte) {
+	privKey = self.privKey
+	if len(privKey) == 0 {
+		privKey = crypto.GenerateNewKeyPair().PublicKey
+		self.privKey = privKey
 	}
 	return
 }

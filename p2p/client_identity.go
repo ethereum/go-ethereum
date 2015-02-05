@@ -17,6 +17,7 @@ type SimpleClientIdentity struct {
 	customIdentifier string
 	os               string
 	implementation   string
+	privkey          []byte
 	pubkey           []byte
 }
 
@@ -50,8 +51,12 @@ func (c *SimpleClientIdentity) String() string {
 		c.implementation)
 }
 
+func (c *SimpleClientIdentity) Privkey() []byte {
+	return c.privkey
+}
+
 func (c *SimpleClientIdentity) Pubkey() []byte {
-	return []byte(c.pubkey)
+	return c.pubkey
 }
 
 func (c *SimpleClientIdentity) SetCustomIdentifier(customIdentifier string) {

@@ -3,6 +3,8 @@ package p2p
 import (
 	"bufio"
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/rand"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -10,6 +12,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
@@ -70,6 +74,9 @@ type Peer struct {
 	// These fields maintain the running protocols.
 	protocols       []Protocol
 	runBaseProtocol bool // for testing
+	cryptoHandshake bool // for testing
+	cryptoReady     chan struct{}
+	privateKey      []byte
 
 	runlock sync.RWMutex // protects running
 	running map[string]*proto
@@ -119,15 +126,16 @@ func newServerPeer(server *Server, conn net.Conn, dialAddr *peerAddr) *Peer {
 
 func newPeer(conn net.Conn, protocols []Protocol, dialAddr *peerAddr) *Peer {
 	p := &Peer{
-		Logger:    logger.NewLogger("P2P " + conn.RemoteAddr().String()),
-		conn:      conn,
-		dialAddr:  dialAddr,
-		bufconn:   bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn)),
-		protocols: protocols,
-		running:   make(map[string]*proto),
-		disc:      make(chan DiscReason),
-		protoErr:  make(chan error),
-		closed:    make(chan struct{}),
+		Logger:      logger.NewLogger("P2P " + conn.RemoteAddr().String()),
+		conn:        conn,
+		dialAddr:    dialAddr,
+		bufconn:     bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn)),
+		protocols:   protocols,
+		running:     make(map[string]*proto),
+		disc:        make(chan DiscReason),
+		protoErr:    make(chan error),
+		closed:      make(chan struct{}),
+		cryptoReady: make(chan struct{}),
 	}
 	return p
 }
@@ -139,6 +147,20 @@ func (p *Peer) Identity() ClientIdentity {
 	p.infolock.Lock()
 	defer p.infolock.Unlock()
 	return p.identity
+}
+
+func (self *Peer) Pubkey() (pubkey []byte) {
+	self.infolock.Lock()
+	defer self.infolock.Unlock()
+	switch {
+	case self.identity != nil:
+		pubkey = self.identity.Pubkey()[1:]
+	case self.dialAddr != nil:
+		pubkey = self.dialAddr.Pubkey
+	case self.listenAddr != nil:
+		pubkey = self.listenAddr.Pubkey
+	}
+	return
 }
 
 // Caps returns the capabilities (supported subprotocols) of the remote peer.
@@ -207,14 +229,25 @@ func (p *Peer) loop() (reason DiscReason, err error) {
 	defer close(p.closed)
 	defer p.conn.Close()
 
+	var readLoop func(chan<- Msg, chan<- error, <-chan bool)
+	if p.cryptoHandshake {
+		if readLoop, err = p.handleCryptoHandshake(); err != nil {
+			// from here on everything can be encrypted, authenticated
+			return DiscProtocolError, err // no graceful disconnect
+		}
+	} else {
+		readLoop = p.readLoop
+	}
+
 	// read loop
 	readMsg := make(chan Msg)
 	readErr := make(chan error)
 	readNext := make(chan bool, 1)
 	protoDone := make(chan struct{}, 1)
-	go p.readLoop(readMsg, readErr, readNext)
+	go readLoop(readMsg, readErr, readNext)
 	readNext <- true
 
+	close(p.cryptoReady)
 	if p.runBaseProtocol {
 		p.startBaseProtocol()
 	}
@@ -305,6 +338,47 @@ func (p *Peer) dispatch(msg Msg, protoDone chan struct{}) (wait bool, err error)
 		proto.in <- msg
 	}
 	return wait, nil
+}
+
+type readLoop func(chan<- Msg, chan<- error, <-chan bool)
+
+func (p *Peer) PrivateKey() (prv *ecdsa.PrivateKey, err error) {
+	if prv = crypto.ToECDSA(p.privateKey); prv == nil {
+		err = fmt.Errorf("invalid private key")
+	}
+	return
+}
+
+func (p *Peer) handleCryptoHandshake() (loop readLoop, err error) {
+	// cryptoId is just created for the lifecycle of the handshake
+	// it is survived by an encrypted readwriter
+	var initiator bool
+	var sessionToken []byte
+	sessionToken = make([]byte, shaLen)
+	if _, err = rand.Read(sessionToken); err != nil {
+		return
+	}
+	if p.dialAddr != nil { // this should have its own method Outgoing() bool
+		initiator = true
+	}
+
+	// run on peer
+	// this bit handles the handshake and creates a secure communications channel with
+	// var rw *secretRW
+	var prvKey *ecdsa.PrivateKey
+	if prvKey, err = p.PrivateKey(); err != nil {
+		err = fmt.Errorf("unable to access private key for client: %v", err)
+		return
+	}
+	// initialise a new secure session
+	if sessionToken, _, err = NewSecureSession(p.conn, prvKey, p.Pubkey(), sessionToken, initiator); err != nil {
+		p.Debugf("unable to setup secure session: %v", err)
+		return
+	}
+	loop = func(msg chan<- Msg, err chan<- error, next <-chan bool) {
+		// this is the readloop :)
+	}
+	return
 }
 
 func (p *Peer) startBaseProtocol() {
