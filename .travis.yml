@@ -19,7 +19,9 @@ before_script:
   # - go vet ./...
   # - go test -race ./...
 script:
-  - ./gocoverage.sh && if [ "$COVERALLS_TOKEN" ]; then goveralls -coverprofile=profile.cov -service=travis-ci -repotoken $COVERALLS_TOKEN; fi
+  - ./gocoverage.sh
+after_success:
+  - if [ "$COVERALLS_TOKEN" ]; then goveralls -coverprofile=profile.cov -service=travis-ci -repotoken $COVERALLS_TOKEN; fi
 env:
   global:
     - PKG_CONFIG_PATH=/opt/qt54/lib/pkgconfig
