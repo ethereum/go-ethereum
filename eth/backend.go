@@ -17,10 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
-const (
-	seedNodeAddress = "poc-8.ethdev.com:30303"
-)
-
 type Config struct {
 	Name       string
 	Version    string
@@ -223,7 +219,7 @@ func (s *Ethereum) Coinbase() []byte {
 }
 
 // Start the ethereum
-func (s *Ethereum) Start(seed bool) error {
+func (s *Ethereum) Start(seedNode string) error {
 	err := s.net.Start()
 	if err != nil {
 		return err
@@ -246,9 +242,9 @@ func (s *Ethereum) Start(seed bool) error {
 	go s.blockBroadcastLoop()
 
 	// TODO: read peers here
-	if seed {
-		logger.Infof("Connect to seed node %v", seedNodeAddress)
-		if err := s.SuggestPeer(seedNodeAddress); err != nil {
+	if len(seedNode) > 0 {
+		logger.Infof("Connect to seed node %v", seedNode)
+		if err := s.SuggestPeer(seedNode); err != nil {
 			logger.Infoln(err)
 		}
 	}
