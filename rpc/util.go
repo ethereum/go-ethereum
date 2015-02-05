@@ -18,10 +18,11 @@ package rpc
 
 import (
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/logger"
 	"io"
 	"net/http"
+
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -36,7 +37,7 @@ func (self JsonWrapper) Send(writer io.Writer, v interface{}) (n int, err error)
 		rpclogger.Fatalln("Error marshalling JSON", err)
 		return 0, err
 	}
-	rpclogger.Infof("Sending payload: %s", payload)
+	rpclogger.DebugDetailf("Sending payload: %s", payload)
 
 	return writer.Write(payload)
 }

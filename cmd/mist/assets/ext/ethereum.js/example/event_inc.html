@@ -1,0 +1,66 @@
+<!doctype>
+<html>
+    <head>
+    <script type="text/javascript" src="js/bignumber.js/bignumber.min.js"></script>
+    <script type="text/javascript" src="../dist/ethereum.js"></script>
+    <script type="text/javascript">
+        var web3 = require('web3');
+        web3.setProvider(new web3.providers.HttpSyncProvider('http://localhost:8080'));
+
+        var source = "" + 
+        "contract Contract { " +
+        "   event Incremented(bool indexed odd, uint x); " +
+        "   function Contract() { " +
+        "        x = 69; " +
+        "    } " +
+        "    function inc() { " +
+        "        ++x; " +
+        "        Incremented(x % 2 == 1, x); " +
+        "    } " +
+        "    uint x; " +
+        "}";
+
+        var desc = [{
+            "type":"event",
+            "name":"Incremented",
+            "inputs": [{"name":"odd","type":"bool","indexed":true},{"name":"x","type":"uint","indexed":false}],
+        }, {
+            "type":"function",
+            "name":"inc",
+            "inputs": [],
+            "outputs": []
+        }];
+
+        var address;
+        var contract;
+
+        var update = function (x) {
+            document.getElementById('result').innerText = JSON.stringify(x);
+        };
+    
+        var createContract = function () {
+            address = web3.eth.transact({code: web3.eth.solidity(source)});
+            contract = web3.eth.contract(address, desc); 
+            contract.Incremented({odd: true}).changed(update);
+            
+        };
+
+        var callContract = function () {
+            contract.call().inc();
+        };
+
+
+    </script>
+    </head>
+
+    <body>
+        <div>
+            <button type="button" onClick="createContract();">create contract</button>
+        </div>
+        <div>
+            <button type="button" onClick="callContract();">test1</button>
+        </div>
+        <div id="result">
+        </div>
+    </body>
+</html>

@@ -32,7 +32,6 @@ func GenesisBlock(db ethutil.Database) *types.Block {
 	genesis.SetReceipts(types.Receipts{})
 
 	statedb := state.New(genesis.Root(), db)
-	//statedb := state.New(genesis.Trie())
 	for _, addr := range []string{
 		"dbdbdb2cbd23b783741e8d7fcf51e459b497e4a6",
 		"e4157b34ea9615cfbde6b4fda419828124b70c78",

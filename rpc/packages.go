@@ -32,12 +32,18 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
+)
+
+const (
+	defaultGasPrice = "10000000000000"
+	defaultGas      = "10000"
 )
 
 type EthereumApi struct {
@@ -70,12 +76,32 @@ func NewEthereumApi(eth *xeth.XEth) *EthereumApi {
 func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) error {
 	var id int
 	filter := core.NewFilter(self.xeth.Backend())
+	filter.SetOptions(toFilterOptions(args))
 	filter.LogsCallback = func(logs state.Logs) {
 		self.logMut.Lock()
 		defer self.logMut.Unlock()
 
 		self.logs[id] = append(self.logs[id], logs...)
 	}
+	id = self.filterManager.InstallFilter(filter)
+	*reply = id
+
+	return nil
+}
+
+func (self *EthereumApi) NewFilterString(args string, reply *interface{}) error {
+	var id int
+	filter := core.NewFilter(self.xeth.Backend())
+
+	callback := func(block *types.Block) {
+		self.logs[id] = append(self.logs[id], &state.StateLog{})
+	}
+	if args == "pending" {
+		filter.PendingCallback = callback
+	} else if args == "chain" {
+		filter.BlockCallback = callback
+	}
+
 	id = self.filterManager.InstallFilter(filter)
 	*reply = id
 
@@ -115,10 +141,14 @@ func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *interface{}) error {
 }
 
 func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
-	err := args.requirements()
-	if err != nil {
-		return err
+	if len(args.Gas) == 0 {
+		args.Gas = defaultGas
 	}
+
+	if len(args.GasPrice) == 0 {
+		args.GasPrice = defaultGasPrice
+	}
+
 	result, _ := p.xeth.Transact( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
 	*reply = result
 	return nil
@@ -379,6 +409,12 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.NewFilter(args, reply)
+	case "eth_newFilterString":
+		args, err := req.ToFilterStringArgs()
+		if err != nil {
+			return err
+		}
+		return p.NewFilterString(args, reply)
 	case "eth_changed":
 		args, err := req.ToFilterChangedArgs()
 		if err != nil {
@@ -386,7 +422,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		return p.FilterChanged(args, reply)
 	case "eth_gasPrice":
-		*reply = "10000000000000"
+		*reply = defaultGasPrice
 		return nil
 	case "web3_sha3":
 		args, err := req.ToSha3Args()

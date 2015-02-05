@@ -136,7 +136,7 @@ func (ui *UiLib) Muted(content string) {
 
 func (ui *UiLib) Connect(button qml.Object) {
 	if !ui.connected {
-		ui.eth.Start(true)
+		ui.eth.Start(SeedNode)
 		ui.connected = true
 		button.Set("enabled", false)
 	}

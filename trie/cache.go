@@ -37,6 +37,14 @@ func (self *Cache) Flush() {
 	//self.Reset()
 }
 
+func (self *Cache) Copy() *Cache {
+	cache := NewCache(self.backend)
+	for k, v := range self.store {
+		cache.store[k] = v
+	}
+	return cache
+}
+
 func (self *Cache) Reset() {
-	self.store = make(map[string][]byte)
+	//self.store = make(map[string][]byte)
 }

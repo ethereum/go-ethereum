@@ -27,16 +27,43 @@ var web3 = require('./web3'); // jshint ignore:line
 
 /// should be used when we want to watch something
 /// it's using inner polling mechanism and is notified about changes
+/// TODO: change 'options' name cause it may be not the best matching one, since we have events
 var Filter = function(options, impl) {
+
+    if (typeof options !== "string") {
+
+        // topics property is deprecated, warn about it!
+        if (options.topics) {
+            console.warn('"topics" is deprecated, use "topic" instead');
+        }
+        
+        this._onWatchResult = options._onWatchEventResult;
+
+        // evaluate lazy properties
+        options = {
+            to: options.to,
+            topic: options.topic,
+            earliest: options.earliest,
+            latest: options.latest,
+            max: options.max,
+            skip: options.skip,
+            address: options.address
+        };
+
+    }
+    
     this.impl = impl;
     this.callbacks = [];
 
     this.id = impl.newFilter(options);
-    web3.provider.startPolling({call: impl.changed, args: [this.id]}, this.id, this.trigger.bind(this));
+    web3.provider.startPolling({method: impl.changed, params: [this.id]}, this.id, this.trigger.bind(this));
 };
 
 /// alias for changed*
 Filter.prototype.arrived = function(callback) {
+    this.changed(callback);
+};
+Filter.prototype.happened = function(callback) {
     this.changed(callback);
 };
 
@@ -49,7 +76,8 @@ Filter.prototype.changed = function(callback) {
 Filter.prototype.trigger = function(messages) {
     for (var i = 0; i < this.callbacks.length; i++) {
         for (var j = 0; j < messages.length; j++) {
-            this.callbacks[i].call(this, messages[j]);
+            var message = this._onWatchResult ? this._onWatchResult(messages[j]) : messages[j];
+            this.callbacks[i].call(this, message);
         }
     }
 };

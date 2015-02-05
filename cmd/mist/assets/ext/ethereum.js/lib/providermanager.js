@@ -23,7 +23,9 @@
  * @date 2014
  */
 
-var web3 = require('./web3'); // jshint ignore:line
+var web3 = require('./web3'); 
+var jsonrpc = require('./jsonrpc');
+
 
 /**
  * Provider manager object prototype
@@ -37,48 +39,38 @@ var web3 = require('./web3'); // jshint ignore:line
 var ProviderManager = function() {
     this.polls = [];
     this.provider = undefined;
-    this.id = 1;
 
     var self = this;
     var poll = function () {
-        if (self.provider) {
-            self.polls.forEach(function (data) {
-                data.data._id = self.id;
-                self.id++;
-                var result = self.provider.send(data.data);
-            
-                result = JSON.parse(result);
-                
-                // dont call the callback if result is not an array, or empty one
-                if (result.error || !(result.result instanceof Array) || result.result.length === 0) {
-                    return;
-                }
+        self.polls.forEach(function (data) {
+            var result = self.send(data.data);
 
-                data.callback(result.result);
-            });
-        }
+            if (!(result instanceof Array) || result.length === 0) {
+                return;
+            }
+
+            data.callback(result);
+        });
+
         setTimeout(poll, 1000);
     };
     poll();
 };
 
 /// sends outgoing requests
+/// @params data - an object with at least 'method' property
 ProviderManager.prototype.send = function(data) {
-
-    data.args = data.args || [];
-    data._id = this.id++;
+    var payload = jsonrpc.toPayload(data.method, data.params);
 
     if (this.provider === undefined) {
         console.error('provider is not set');
         return null; 
     }
 
-    //TODO: handle error here? 
-    var result = this.provider.send(data);
-    result = JSON.parse(result);
+    var result = this.provider.send(payload);
 
-    if (result.error) {
-        console.log(result.error);
+    if (!jsonrpc.isValidResponse(result)) {
+        console.log(result);
         return null;
     }
 
