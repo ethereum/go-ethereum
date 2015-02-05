@@ -1,7 +1,6 @@
 package ezp
 
 import (
-	"fmt"
 	"math/big"
 	"math/rand"
 	"time"
@@ -60,7 +59,6 @@ func (pow *EasyPow) Search(block pow.Block, stop <-chan struct{}) []byte {
 
 			sha := crypto.Sha3(big.NewInt(r.Int63()).Bytes())
 			if verify(hash, diff, sha) {
-				fmt.Printf("HASH: %x\nDIFF %v\nSHA %x\n", hash, diff, sha)
 				return sha
 			}
 		}

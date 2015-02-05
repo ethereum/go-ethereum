@@ -37,16 +37,6 @@ type NewTxArgs struct {
 	Data     string `json:"data"`
 }
 
-func (a *NewTxArgs) requirements() error {
-	if a.Gas == "" {
-		return NewErrorResponse("Transact requires a 'gas' value as argument")
-	}
-	if a.GasPrice == "" {
-		return NewErrorResponse("Transact requires a 'gasprice' value as argument")
-	}
-	return nil
-}
-
 type PushTxArgs struct {
 	Tx string `json:"tx"`
 }
