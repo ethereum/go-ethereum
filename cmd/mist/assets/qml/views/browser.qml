@@ -56,7 +56,6 @@ Rectangle {
 
 			//uriNav.text = uri.text.replace(/(^https?\:\/\/(?:www\.)?)([a-zA-Z0-9_\-]*\.\w{2,3})(.*)/, "$1$2<span style='color:#CCC'>$3</span>");
 			uriNav.text = uri;
-			appDomain.text = "some.thing"
 
 		} else {
 			// Prevent inf loop.
@@ -104,8 +103,6 @@ Rectangle {
 				}
 			}
 
-			
-
 			Rectangle {
 				id: appInfoPane
 			    height: 28
@@ -120,15 +117,7 @@ Rectangle {
 			    		uriNav.visible = true
 			    		appTitle.visible = false
 			    		appDomain.visible = false
-
 			    	}	    	
-			    	/*onExited: {
-			    		uriNav.visible = false
-			    		appTitle.visible = true
-			    		appDomain.visible = true
-
-			    	}*/
-
 			    }
 
 			    anchors {
@@ -140,7 +129,7 @@ Rectangle {
 
 				Text {
    					 id: appTitle
-                     text: webview.title
+                     text: "LOADING"
                      font.bold: true
                      font.capitalization: Font.AllUppercase 
                      horizontalAlignment: Text.AlignRight
@@ -158,7 +147,7 @@ Rectangle {
 
                  Text {
                  	 id: appDomain
-                     text: webview.url
+                     text: "loading domain"
                      font.bold: false
                      horizontalAlignment: Text.AlignLeft
                      verticalAlignment: Text.AlignVCenter
@@ -170,7 +159,7 @@ Rectangle {
                          bottom: parent.bottom
                          leftMargin: 10
                      }
-                     color: "#928484"
+                     color: "#C0AFAF"
                  }
 
 
@@ -195,11 +184,9 @@ Rectangle {
     				text: webview.url;
 				    y: parent.height / 2 - this.height / 2
 				    z: 20
+				    activeFocusOnPress: true
 				    Keys.onReturnPressed: {
 				    	webview.url = this.text;
-						uriNav.visible = false
-						appTitle.visible = true
-						appDomain.visible = true
 				    }
 
 			    }
@@ -297,6 +284,17 @@ Rectangle {
 					});
 					webview.runJavaScript(eth.readFile("bignumber.min.js"));
 					webview.runJavaScript(eth.readFile("ethereum.js/dist/ethereum.js"));
+
+					var cleanTitle = webview.url.toString()
+					var matches = cleanTitle.match(/^[a-z]*\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
+					var domain = matches && matches[1];
+
+					uriNav.visible = false
+			    	appDomain.visible = true
+			    	appDomain.text = domain //webview.url.replace("a", "z")
+
+			    	appTitle.visible = true
+			    	appTitle.text = webview.title
 				}
 			}
 			onJavaScriptConsoleMessage: {
