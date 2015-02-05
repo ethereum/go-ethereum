@@ -81,18 +81,19 @@ this is the most simplistic implementation:
  - respond with peers and timeout if still searching
 ! in the last case as well, we should respond with reject if already got requesterCount peers with that exact id
 */
-func (self *Hive) strategyUpdateRequest(rs *requestStatus, req *retrieveRequestMsgData) (send bool, timeout time.Time) {
+func (self *Hive) strategyUpdateRequest(rs *requestStatus, req *retrieveRequestMsgData) (msgTyp int, timeout time.Time) {
 
 	switch rs.status {
 	case reqSearching:
-		self.addRequester(rs, req)
-		timeout = self.searchTimeout(rs, req)
+		if self.addRequester(rs, req) {
+			msgTyp = peersMsg
+			timeout = self.searchTimeout(rs, req)
+		}
 	case reqTimedOut:
+		msgTyp = peersMsg
 	case reqFound:
 		if self.addRequester(rs, req) {
-			send = true
-		} else {
-			// timeout = time.Time(0)
+			msgTyp = storeRequestMsg
 		}
 	}
 	return
