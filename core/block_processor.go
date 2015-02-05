@@ -19,6 +19,10 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
+type PendingBlockEvent struct {
+	Block *types.Block
+}
+
 var statelogger = logger.NewLogger("BLOCK")
 
 type EthManager interface {
@@ -153,6 +157,10 @@ done:
 
 	block.Reward = cumulativeSum
 	block.Header().GasUsed = totalUsedGas
+
+	if transientProcess {
+		go self.eventMux.Post(PendingBlockEvent{block})
+	}
 
 	return receipts, handled, unhandled, erroneous, err
 }

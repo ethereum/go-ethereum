@@ -32,6 +32,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -82,6 +83,25 @@ func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) erro
 
 		self.logs[id] = append(self.logs[id], logs...)
 	}
+	id = self.filterManager.InstallFilter(filter)
+	*reply = id
+
+	return nil
+}
+
+func (self *EthereumApi) NewFilterString(args string, reply *interface{}) error {
+	var id int
+	filter := core.NewFilter(self.xeth.Backend())
+
+	callback := func(block *types.Block) {
+		self.logs[id] = append(self.logs[id], &state.StateLog{})
+	}
+	if args == "pending" {
+		filter.PendingCallback = callback
+	} else if args == "chain" {
+		filter.BlockCallback = callback
+	}
+
 	id = self.filterManager.InstallFilter(filter)
 	*reply = id
 
@@ -389,6 +409,12 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.NewFilter(args, reply)
+	case "eth_newFilterString":
+		args, err := req.ToFilterStringArgs()
+		if err != nil {
+			return err
+		}
+		return p.NewFilterString(args, reply)
 	case "eth_changed":
 		args, err := req.ToFilterChangedArgs()
 		if err != nil {

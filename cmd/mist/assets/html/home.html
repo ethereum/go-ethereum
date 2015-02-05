@@ -60,7 +60,7 @@
     var web3 = require('web3');
     var eth = web3.eth;
 
-    web3.setProvider(new web3.providers.HttpSyncProvider('http://localhost:8080'));
+    web3.setProvider(new web3.providers.HttpSyncProvider('http://localhost:8545'));
 
     document.querySelector("#number").innerHTML = eth.number;
     document.querySelector("#coinbase").innerHTML = eth.coinbase
@@ -69,6 +69,14 @@
     document.querySelector("#gas_price").innerHTML = eth.gasPrice;
     document.querySelector("#mining").innerHTML = eth.mining;
     document.querySelector("#listening").innerHTML = eth.listening;
+
+    eth.watch('pending').changed(function() {
+        console.log("pending changed");
+    });
+    eth.watch('chain').changed(function() {
+        console.log("chain changed");
+    });
+
 </script>
 
 </html>

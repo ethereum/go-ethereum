@@ -33,8 +33,9 @@ type Filter struct {
 	max      int
 	topics   [][]byte
 
-	BlockCallback func(*types.Block)
-	LogsCallback  func(state.Logs)
+	BlockCallback   func(*types.Block)
+	PendingCallback func(*types.Block)
+	LogsCallback    func(state.Logs)
 }
 
 // Create a new filter which uses a bloom filter on blocks to figure out whether a particular block

@@ -205,7 +205,6 @@ func (req *RpcRequest) ToFilterArgs() (*FilterOptions, error) {
 	if len(req.Params) < 1 {
 		return nil, NewErrorResponse(ErrorArguments)
 	}
-	fmt.Println("FILTER PARAMS", string(req.Params[0]))
 
 	args := new(FilterOptions)
 	r := bytes.NewReader(req.Params[0])
@@ -213,6 +212,21 @@ func (req *RpcRequest) ToFilterArgs() (*FilterOptions, error) {
 	if err != nil {
 		return nil, NewErrorResponse(ErrorDecodeArgs)
 	}
+	rpclogger.DebugDetailf("%T %v", args, args)
+	return args, nil
+}
+
+func (req *RpcRequest) ToFilterStringArgs() (string, error) {
+	if len(req.Params) < 1 {
+		return "", NewErrorResponse(ErrorArguments)
+	}
+
+	var args string
+	err := json.Unmarshal(req.Params[0], &args)
+	if err != nil {
+		return "", NewErrorResponse(ErrorDecodeArgs)
+	}
+
 	rpclogger.DebugDetailf("%T %v", args, args)
 	return args, nil
 }
