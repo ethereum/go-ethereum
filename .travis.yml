@@ -1,6 +1,6 @@
 language: go
 go:
-  - tip
+  - 1.4.1
 before_install:
   - sudo add-apt-repository ppa:beineri/opt-qt54 -y
   - sudo apt-get update -qq
