@@ -12,7 +12,7 @@ Rectangle {
 	color: "#00000000"
 
 	property var title: ""
-	property var iconSource: "../browser.png"
+	property var iconSource: ""
 	property var menuItem
 	property var hideUrl: true
 
