@@ -56,6 +56,7 @@ Rectangle {
 
 			//uriNav.text = uri.text.replace(/(^https?\:\/\/(?:www\.)?)([a-zA-Z0-9_\-]*\.\w{2,3})(.*)/, "$1$2<span style='color:#CCC'>$3</span>");
 			uriNav.text = uri;
+
 		} else {
 			// Prevent inf loop.
 			window.cleanPath = false;
@@ -73,43 +74,157 @@ Rectangle {
 
 		RowLayout {
 			id: navBar
-			height: 40
+			height: 74
+			
+
 			anchors {
 				left: parent.left
 				right: parent.right
-				leftMargin: 7
 			}
 
 			Button {
 				id: back
+
 				onClicked: {
 					webview.goBack()
 				}
+
+				anchors{
+					left: parent.left
+					leftMargin: 6
+				}
+
 				style: ButtonStyle {
 					background: Image {
-						source: "../../back.png"
-						width: 30
+						source: "../../backButton.png"
+						width: 20
 						height: 30
 					}
 				}
 			}
 
-			TextField {
-				anchors {
+			Rectangle {
+				id: appInfoPane
+			    height: 28
+			    color: "#FFFFFF"
+			    radius: 6
+
+			   MouseArea {
+			    	anchors.fill: parent
+			    	z: 10
+			    	hoverEnabled: true
+			    	onEntered: {
+			    		uriNav.visible = true
+			    		appTitle.visible = false
+			    		appDomain.visible = false
+			    	}	    	
+			    }
+
+			    anchors {
 					left: back.right
-					right: toggleInspector.left
+					right: parent.right
 					leftMargin: 10
 					rightMargin: 10
 				}
-				text: webview.url;
-				id: uriNav
-				y: parent.height / 2 - this.height / 2
 
-				Keys.onReturnPressed: {
-					webview.url = this.text;
-				}
+				Text {
+   					 id: appTitle
+                     text: "LOADING"
+                     font.bold: true
+                     font.capitalization: Font.AllUppercase 
+                     horizontalAlignment: Text.AlignRight
+                     verticalAlignment: Text.AlignVCenter
+                     
+                     anchors {
+                         left: parent.left
+                         right: parent.horizontalCenter
+                         top: parent.top
+                         bottom: parent.bottom
+                         rightMargin: 10
+                     }
+                     color: "#928484"
+                 }
+
+                 Text {
+                 	 id: appDomain
+                     text: "loading domain"
+                     font.bold: false
+                     horizontalAlignment: Text.AlignLeft
+                     verticalAlignment: Text.AlignVCenter
+                     
+                     anchors {
+                         left: parent.horizontalCenter
+                         right: parent.right
+                         top: parent.top
+                         bottom: parent.bottom
+                         leftMargin: 10
+                     }
+                     color: "#C0AFAF"
+                 }
+
+
+				TextField {
+				    id: uriNav
+				    visible: false
+				    anchors {
+				    	left: parent.left
+				    	right: parent.right
+				    	leftMargin: 16
+				    }
+
+				    horizontalAlignment: Text.AlignHCenter
+                    
+                    style: TextFieldStyle {
+                        textColor: "#928484"
+                        background: Rectangle {
+                            border.width: 0
+                            color: "transparent"
+                        }
+                    }
+    				text: webview.url;
+				    y: parent.height / 2 - this.height / 2
+				    z: 20
+				    activeFocusOnPress: true
+				    Keys.onReturnPressed: {
+				    	webview.url = this.text;
+				    }
+
+			    }
+   				
+   				
+
+
+
+                 			    /*text {
+			    	id: appTitle
+			    	anchors.left: parent.left
+			    	anchors.right: parent.horizontalCenter
+			    	text: "APP TITLE"
+			    	font.bold: true
+			    	color: "#928484"
+			    }*/
+			    z:2
 			}
+			
+			Rectangle {
+				id: appInfoPaneShadow
+			    width: 10
+			    height: 30
+			    color: "#BDB6B6"
+			    radius: 6
 
+			    anchors {
+					left: back.right
+					right: parent.right
+					leftMargin:10
+					rightMargin:10
+					top: parent.top 
+					topMargin: 23
+				}
+
+				z:1
+			}
+		/*
 			Button {
 				id: toggleInspector
 				anchors {
@@ -126,7 +241,17 @@ Rectangle {
 						inspector.url = webview.experimental.remoteInspectorUrl
 					}
 				}
-			}
+			}*/
+
+			Rectangle {
+                anchors.fill: parent
+                gradient: Gradient {
+                    GradientStop { position: 0.0; color: "#F6F1F2" }
+                    GradientStop { position: 1.0; color: "#DED5D5" }
+                }
+                z:-1
+            }
+
 		}
 
 		// Border
@@ -159,6 +284,17 @@ Rectangle {
 					});
 					webview.runJavaScript(eth.readFile("bignumber.min.js"));
 					webview.runJavaScript(eth.readFile("ethereum.js/dist/ethereum.js"));
+
+					var cleanTitle = webview.url.toString()
+					var matches = cleanTitle.match(/^[a-z]*\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
+					var domain = matches && matches[1];
+
+					uriNav.visible = false
+			    	appDomain.visible = true
+			    	appDomain.text = domain //webview.url.replace("a", "z")
+
+			    	appTitle.visible = true
+			    	appTitle.text = webview.title
 				}
 			}
 			onJavaScriptConsoleMessage: {
@@ -208,4 +344,3 @@ Rectangle {
 		]
 	}
 }
-
