@@ -22,35 +22,30 @@ import (
 	"net/http"
 
 	"code.google.com/p/go.net/websocket"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
 var wslogger = logger.NewLogger("RPC-WS")
+var JSON rpc.JsonWrapper
 
 type WebSocketServer struct {
-	eth           *eth.Ethereum
-	filterManager *filter.FilterManager
-	port          int
-	doneCh        chan bool
-	listener      net.Listener
+	pipe     *xeth.XEth
+	port     int
+	doneCh   chan bool
+	listener net.Listener
 }
 
-func NewWebSocketServer(eth *eth.Ethereum, port int) (*WebSocketServer, error) {
+func NewWebSocketServer(pipe *xeth.XEth, port int) (*WebSocketServer, error) {
 	sport := fmt.Sprintf(":%d", port)
 	l, err := net.Listen("tcp", sport)
 	if err != nil {
 		return nil, err
 	}
 
-	filterManager := filter.NewFilterManager(eth.EventMux())
-	go filterManager.Start()
-
-	return &WebSocketServer{eth,
-		filterManager,
+	return &WebSocketServer{
+		pipe,
 		port,
 		make(chan bool),
 		l,
@@ -75,7 +70,7 @@ func (self *WebSocketServer) Start() {
 	wslogger.Infof("Starting RPC-WS server on port %d", self.port)
 	go self.handlerLoop()
 
-	api := rpc.NewEthereumApi(xeth.New(self.eth))
+	api := rpc.NewEthereumApi(self.pipe)
 	h := self.apiHandler(api)
 	http.Handle("/ws", h)
 
@@ -96,27 +91,29 @@ func (s *WebSocketServer) apiHandler(api *rpc.EthereumApi) http.Handler {
 }
 
 func sockHandler(api *rpc.EthereumApi) websocket.Handler {
+	var jsonrpcver string = "2.0"
 	fn := func(conn *websocket.Conn) {
 		for {
 			wslogger.Debugln("Handling request")
 			var reqParsed rpc.RpcRequest
 
 			if err := websocket.JSON.Receive(conn, &reqParsed); err != nil {
-				wslogger.Debugln(rpc.ErrorParseRequest)
-				websocket.JSON.Send(conn, rpc.RpcErrorResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: true, ErrorText: rpc.ErrorParseRequest})
+				jsonerr := &rpc.RpcErrorObject{-32700, rpc.ErrorParseRequest}
+				JSON.Send(conn, &rpc.RpcErrorResponse{JsonRpc: jsonrpcver, ID: nil, Error: jsonerr})
 				continue
 			}
 
 			var response interface{}
 			reserr := api.GetRequestReply(&reqParsed, &response)
 			if reserr != nil {
-				wslogger.Errorln(reserr)
-				websocket.JSON.Send(conn, rpc.RpcErrorResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: true, ErrorText: reserr.Error()})
+				wslogger.Warnln(reserr)
+				jsonerr := &rpc.RpcErrorObject{-32603, reserr.Error()}
+				JSON.Send(conn, &rpc.RpcErrorResponse{JsonRpc: jsonrpcver, ID: &reqParsed.ID, Error: jsonerr})
 				continue
 			}
 
 			wslogger.Debugf("Generated response: %T %s", response, response)
-			websocket.JSON.Send(conn, rpc.RpcSuccessResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: false, Result: response})
+			JSON.Send(conn, &rpc.RpcSuccessResponse{JsonRpc: jsonrpcver, ID: reqParsed.ID, Result: response})
 		}
 	}
 	return websocket.Handler(fn)
