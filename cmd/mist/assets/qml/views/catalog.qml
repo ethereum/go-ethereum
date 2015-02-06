@@ -74,33 +74,11 @@ Rectangle {
 
 		RowLayout {
 			id: navBar
-			height: 74
-			
+			height: 184
 
 			anchors {
 				left: parent.left
 				right: parent.right
-			}
-
-			Button {
-				id: back
-
-				onClicked: {
-					webview.goBack()
-				}
-
-				anchors{
-					left: parent.left
-					leftMargin: 6
-				}
-
-				style: ButtonStyle {
-					background: Image {
-						source: "../../backButton.png"
-						width: 20
-						height: 30
-					}
-				}
 			}
 
 			Rectangle {
@@ -121,55 +99,22 @@ Rectangle {
 			    }
 
 			    anchors {
-					left: back.right
+					left: parent.left
 					right: parent.right
 					leftMargin: 10
 					rightMargin: 10
+					top: parent.verticalCenter 
+					topMargin: 23
 				}
-
-				Text {
-   					 id: appTitle
-                     text: "LOADING"
-                     font.bold: true
-                     font.capitalization: Font.AllUppercase 
-                     horizontalAlignment: Text.AlignRight
-                     verticalAlignment: Text.AlignVCenter
-                     
-                     anchors {
-                         left: parent.left
-                         right: parent.horizontalCenter
-                         top: parent.top
-                         bottom: parent.bottom
-                         rightMargin: 10
-                     }
-                     color: "#928484"
-                 }
-
-                 Text {
-                 	 id: appDomain
-                     text: "loading domain"
-                     font.bold: false
-                     horizontalAlignment: Text.AlignLeft
-                     verticalAlignment: Text.AlignVCenter
-                     
-                     anchors {
-                         left: parent.horizontalCenter
-                         right: parent.right
-                         top: parent.top
-                         bottom: parent.bottom
-                         leftMargin: 10
-                     }
-                     color: "#C0AFAF"
-                 }
-
 
 				TextField {
 				    id: uriNav
-				    visible: false
 				    anchors {
 				    	left: parent.left
 				    	right: parent.right
 				    	leftMargin: 16
+						top: parent.verticalCenter 
+						topMargin: -10
 				    }
 
 				    horizontalAlignment: Text.AlignHCenter
@@ -181,28 +126,17 @@ Rectangle {
                             color: "transparent"
                         }
                     }
-    				text: webview.url;
+    				text: "Type the address of a new Dapp";
 				    y: parent.height / 2 - this.height / 2
 				    z: 20
 				    activeFocusOnPress: true
 				    Keys.onReturnPressed: {
-				    	webview.url = this.text;
+        				newBrowserTab(this.text);
+        				this.text = "Type the address of a new Dapp";
 				    }
 
 			    }
    				
-   				
-
-
-
-                 			    /*text {
-			    	id: appTitle
-			    	anchors.left: parent.left
-			    	anchors.right: parent.horizontalCenter
-			    	text: "APP TITLE"
-			    	font.bold: true
-			    	color: "#928484"
-			    }*/
 			    z:2
 			}
 			
@@ -214,58 +148,19 @@ Rectangle {
 			    radius: 6
 
 			    anchors {
-					left: back.right
+					left: parent.left
 					right: parent.right
 					leftMargin:10
 					rightMargin:10
-					top: parent.top 
+					top: parent.verticalCenter 
 					topMargin: 23
 				}
 
 				z:1
 			}
-		/*
-			Button {
-				id: toggleInspector
-				anchors {
-					right: parent.right
-				}
-				iconSource: "../../bug.png"
-				onClicked: {
-					// XXX soon
-					return
-					if(inspector.visible == true){
-						inspector.visible = false
-					}else{
-						inspector.visible = true
-						inspector.url = webview.experimental.remoteInspectorUrl
-					}
-				}
-			}*/
-
-			Rectangle {
-                anchors.fill: parent
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: "#F6F1F2" }
-                    GradientStop { position: 1.0; color: "#DED5D5" }
-                }
-                z:-1
-            }
 
 		}
 
-		// Border
-		Rectangle {
-			id: divider
-			anchors {
-				left: parent.left
-				right: parent.right
-				top: navBar.bottom
-			}
-			z: -1
-			height: 1
-			color: "#CCCCCC"
-		}
 
 		WebEngineView {
 			objectName: "webView"
@@ -279,22 +174,8 @@ Rectangle {
 
 			onLoadingChanged: {
 				if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
-					webview.runJavaScript("document.title", function(pageTitle) {
-						menuItem.title = pageTitle;	
-					});
 					webview.runJavaScript(eth.readFile("bignumber.min.js"));
 					webview.runJavaScript(eth.readFile("ethereum.js/dist/ethereum.js"));
-
-					var cleanTitle = webview.url.toString()
-					var matches = cleanTitle.match(/^[a-z]*\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
-					var domain = matches && matches[1];
-
-					uriNav.visible = false
-			    	appDomain.visible = true
-			    	appDomain.text = domain //webview.url.replace("a", "z")
-
-			    	appTitle.visible = true
-			    	appTitle.text = webview.title
 				}
 			}
 			onJavaScriptConsoleMessage: {
@@ -302,25 +183,7 @@ Rectangle {
 			}
 		}
 
-		Rectangle {
-			id: sizeGrip
-			color: "gray"
-			visible: false
-			height: 10
-			anchors {
-				left: root.left
-				right: root.right
-			}
-			y: Math.round(root.height * 2 / 3)
 
-			MouseArea {
-				anchors.fill: parent
-				drag.target: sizeGrip
-				drag.minimumY: 0
-				drag.maximumY: root.height
-				drag.axis: Drag.YAxis
-			}
-		}
 
 		WebEngineView {
 			id: inspector

@@ -282,11 +282,11 @@ Rectangle {
 			onLoadingChanged: {
 				if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
 					webview.runJavaScript("document.title", function(pageTitle) {
-						//menuItem.title = pageTitle;	
+						menuItem.title = pageTitle;	
 					});
 
 					//var topBarStyle
-					webView.runJavaScript("$(\"meta[name='ethereum-dapp-url-bar-style']\").attr('content');", function(topBarStyle){
+					webView.runJavaScript("document.querySelector(\"meta[name='ethereum-dapp-url-bar-style']\").getAttribute(\"content\")", function(topBarStyle){
 						if (topBarStyle=="transparent") {
 
 							// Adjust for a transparent sidebar Dapp
@@ -295,7 +295,7 @@ Rectangle {
 							appInfoPane.anchors.leftMargin = -16;
 							appInfoPaneShadow.anchors.leftMargin = -16;
 							webview.anchors.topMargin = -74;
-							webview.runJavaScript("$('body').addClass('ethereum-dapp-url-bar-style-transparent')")
+							webview.runJavaScript("document.querySelector('body').classList.add('ethereum-dapp-url-bar-style-transparent')")
 
 						};	
 					});
