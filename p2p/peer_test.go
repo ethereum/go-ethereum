@@ -30,10 +30,10 @@ var discard = Protocol{
 	},
 }
 
-func testPeer(handshake bool, protos []Protocol) (*frameRW, *Peer, <-chan DiscReason) {
+func testPeer(noHandshake bool, protos []Protocol) (*frameRW, *Peer, <-chan DiscReason) {
 	conn1, conn2 := net.Pipe()
 	peer := newPeer(conn1, protos, "name", &discover.NodeID{}, &discover.NodeID{})
-	peer.protocolHandshakeEnabled = handshake
+	peer.noHandshake = noHandshake
 	errc := make(chan DiscReason, 1)
 	go func() { errc <- peer.run() }()
 	return newFrameRW(conn2, msgWriteTimeout), peer, errc
@@ -61,7 +61,7 @@ func TestPeerProtoReadMsg(t *testing.T) {
 		},
 	}
 
-	rw, peer, errc := testPeer(false, []Protocol{proto})
+	rw, peer, errc := testPeer(true, []Protocol{proto})
 	defer rw.Close()
 	peer.startSubprotocols([]Cap{proto.cap()})
 
@@ -100,7 +100,7 @@ func TestPeerProtoReadLargeMsg(t *testing.T) {
 		},
 	}
 
-	rw, peer, errc := testPeer(false, []Protocol{proto})
+	rw, peer, errc := testPeer(true, []Protocol{proto})
 	defer rw.Close()
 	peer.startSubprotocols([]Cap{proto.cap()})
 
@@ -130,7 +130,7 @@ func TestPeerProtoEncodeMsg(t *testing.T) {
 			return nil
 		},
 	}
-	rw, peer, _ := testPeer(false, []Protocol{proto})
+	rw, peer, _ := testPeer(true, []Protocol{proto})
 	defer rw.Close()
 	peer.startSubprotocols([]Cap{proto.cap()})
 
@@ -142,7 +142,7 @@ func TestPeerProtoEncodeMsg(t *testing.T) {
 func TestPeerWriteForBroadcast(t *testing.T) {
 	defer testlog(t).detach()
 
-	rw, peer, peerErr := testPeer(false, []Protocol{discard})
+	rw, peer, peerErr := testPeer(true, []Protocol{discard})
 	defer rw.Close()
 	peer.startSubprotocols([]Cap{discard.cap()})
 
@@ -179,7 +179,7 @@ func TestPeerWriteForBroadcast(t *testing.T) {
 func TestPeerPing(t *testing.T) {
 	defer testlog(t).detach()
 
-	rw, _, _ := testPeer(false, nil)
+	rw, _, _ := testPeer(true, nil)
 	defer rw.Close()
 	if err := EncodeMsg(rw, pingMsg); err != nil {
 		t.Fatal(err)
@@ -192,7 +192,7 @@ func TestPeerPing(t *testing.T) {
 func TestPeerDisconnect(t *testing.T) {
 	defer testlog(t).detach()
 
-	rw, _, disc := testPeer(false, nil)
+	rw, _, disc := testPeer(true, nil)
 	defer rw.Close()
 	if err := EncodeMsg(rw, discMsg, DiscQuitting); err != nil {
 		t.Fatal(err)
@@ -233,7 +233,7 @@ func TestPeerHandshake(t *testing.T) {
 		{Name: "c", Version: 3, Length: 1, Run: run},
 		{Name: "d", Version: 4, Length: 1, Run: run},
 	}
-	rw, p, disc := testPeer(true, protocols)
+	rw, p, disc := testPeer(false, protocols)
 	p.remoteID = remote.ourID
 	defer rw.Close()
 
@@ -269,6 +269,7 @@ func TestPeerHandshake(t *testing.T) {
 	}
 
 	close(stop)
+	expectMsg(rw, discMsg, nil)
 	t.Logf("disc reason: %v", <-disc)
 }
 

@@ -118,6 +118,7 @@ func TestServerBroadcast(t *testing.T) {
 	srv := startTestServer(t, func(p *Peer) {
 		p.protocols = []Protocol{discard}
 		p.startSubprotocols([]Cap{discard.cap()})
+		p.noHandshake = true
 		connected.Done()
 	})
 	defer srv.Stop()

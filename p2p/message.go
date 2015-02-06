@@ -174,10 +174,10 @@ func (rw *frameRW) ReadMsg() (msg Msg, err error) {
 	// read magic and payload size
 	start := make([]byte, 8)
 	if _, err = io.ReadFull(rw.bufconn, start); err != nil {
-		return msg, newPeerError(errRead, "%v", err)
+		return msg, err
 	}
 	if !bytes.HasPrefix(start, magicToken) {
-		return msg, newPeerError(errMagicTokenMismatch, "got %x, want %x", start[:4], magicToken)
+		return msg, fmt.Errorf("bad magic token %x", start[:4], magicToken)
 	}
 	size := binary.BigEndian.Uint32(start[4:])
 

@@ -408,7 +408,9 @@ func (srv *Server) startPeer(conn net.Conn, dest *discover.Node) {
 		return
 	}
 
-	srv.newPeerHook(p)
+	if srv.newPeerHook != nil {
+		srv.newPeerHook(p)
+	}
 	p.run()
 	srv.removePeer(p)
 }

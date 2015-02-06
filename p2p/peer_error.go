@@ -123,7 +123,7 @@ func discReasonForError(err error) DiscReason {
 		return DiscProtocolError
 	case errPingTimeout:
 		return DiscReadTimeout
-	case errRead, errWrite, errMisc:
+	case errRead, errWrite:
 		return DiscNetworkError
 	default:
 		return DiscSubprotocolError
