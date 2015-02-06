@@ -32,9 +32,9 @@ const (
 // bzzProtocol represents the swarm wire protocol
 // instance is running on each peer
 type bzzProtocol struct {
-	hive *Hive
-	peer *p2p.Peer
-	rw   p2p.MsgReadWriter
+	netStore *netStore
+	peer     *p2p.Peer
+	rw       p2p.MsgReadWriter
 }
 
 /*
@@ -77,7 +77,7 @@ type storeRequestMsgData struct {
 	Size int64  // size of data in bytes
 	Data []byte // is this needed?
 	// optional
-	Id             uint64    //
+	Id             int64     //
 	RequestTimeout time.Time // expiry for forwarding
 	StorageTimeout time.Time // expiry of content
 	Metadata       metaData  //
@@ -95,7 +95,7 @@ It is unclear if a retrieval request with an empty target is the same as a self 
 type retrieveRequestMsgData struct {
 	Key Key
 	// optional
-	Id       uint64    //
+	Id       int64     //
 	MaxSize  int64     //  maximum size of delivery accepted
 	Timeout  time.Time //
 	Metadata metaData  //
@@ -121,7 +121,7 @@ type peersMsgData struct {
 	Peers   []*peerAddr //
 	Timeout time.Time   // indicate whether responder is expected to deliver content
 	Key     Key         // if a response to a retrieval request
-	Id      uint64      // if a response to a retrieval request
+	Id      int64       // if a response to a retrieval request
 	//
 	peer peer
 }
@@ -140,31 +140,31 @@ main entrypoint, wrappers starting a server running the bzz protocol
 use this constructor to attach the protocol ("class") to server caps
 the Dev p2p layer then runs the protocol instance on each peer
 */
-func BzzProtocol(hive *Hive) p2p.Protocol {
+func BzzProtocol(netStore *netStore) p2p.Protocol {
 	return p2p.Protocol{
 		Name:    "bzz",
 		Version: Version,
 		Length:  ProtocolLength,
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			return runBzzProtocol(hive, p, rw)
+			return runBzzProtocol(netStore, p, rw)
 		},
 	}
 }
 
 // the main loop that handles incoming messages
 // note RemovePeer in the post-disconnect hook
-func runBzzProtocol(hive *Hive, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+func runBzzProtocol(netStore *netStore, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
 	self := &bzzProtocol{
-		hive: hive,
-		rw:   rw,
-		peer: p,
+		netStore: netStore,
+		rw:       rw,
+		peer:     p,
 	}
 	err = self.handleStatus()
 	if err == nil {
 		for {
 			err = self.handle()
 			if err != nil {
-				self.hive.removePeer(peer{self})
+				self.netStore.removePeer(peer{bzzProtocol: self})
 				break
 			}
 		}
@@ -197,24 +197,24 @@ func (self *bzzProtocol) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 		}
-		req.peer = peer{self}
-		self.hive.addStoreRequest(&req)
+		req.peer = peer{bzzProtocol: self}
+		self.netStore.addStoreRequest(&req)
 
 	case retrieveRequestMsg:
 		var req retrieveRequestMsgData
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
-		req.peer = peer{self}
-		self.hive.addRetrieveRequest(&req)
+		req.peer = peer{bzzProtocol: self}
+		self.netStore.addRetrieveRequest(&req)
 
 	case peersMsg:
 		var req peersMsgData
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
-		req.peer = peer{self}
-		self.hive.addPeers(&req)
+		req.peer = peer{bzzProtocol: self}
+		self.netStore.addPeers(&req)
 
 	default:
 		return self.protoError(ErrInvalidMsgCode, "%v", msg.Code)
@@ -271,10 +271,10 @@ func (self *bzzProtocol) handleStatus() error {
 	req := &peersMsgData{
 		// Peers: []*peerAddr{self.peer.Address()}, // not implemented in p2p, should be the same as node discovery cademlia
 		// Key:   nil,
-		peer: peer{self},
+		peer: peer{bzzProtocol: self, pubkey: status.NodeID},
 	}
 
-	self.hive.addPeers(req)
+	self.netStore.addPeers(req)
 
 	return nil
 }

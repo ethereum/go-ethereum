@@ -3,7 +3,7 @@ package bzz
 /*
 TODO:
 - put Data -> Reader logic to chunker
-- clarify dpa / hive / netstore naming and division of labour and entry points for local/remote requests
+- clarify dpa / localStore / hive / netstore naming and division of labour and entry points for local/remote requests
 - figure out if its a problem that peers on requester list may disconnect while searching
 - Id (nonce/requester map key) should probs be random byte slice or (hash of) originator's address to avoid collisions
 - rework protocol errors using errs after PR merged
@@ -12,6 +12,7 @@ TODO:
 */
 
 import (
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -22,24 +23,24 @@ type peerPool struct {
 }
 
 func (self *peerPool) addPeer(p peer) {
-	self.pool[p.peer.identity.Pubkey()] = p
+	self.pool[string(p.pubkey)] = p
 }
 
 func (self *peerPool) removePeer(p peer) {
-	delete(self.pool, p.peer.identity.Pubkey)
+	delete(self.pool, string(p.pubkey))
 }
 
 func (self *peerPool) getPeers(target Key) (peers []peer) {
-	for key, value := range self.pool {
+	for _, value := range self.pool {
 		peers = append(peers, value)
 	}
 	return
 }
 
-type Hive struct {
-	dpa      *DPA
-	memstore *memStore
-	lock     sync.Mutex
+type netStore struct {
+	localStore *localStore
+	lock       sync.Mutex
+	peerPool   *peerPool
 }
 
 /*
@@ -61,16 +62,17 @@ const requesterCount = 3
 
 type peer struct {
 	*bzzProtocol
+	pubkey []byte
 }
 
 type requestStatus struct {
 	key        Key
 	status     int
-	requesters map[uint64][]*retrieveRequestMsgData
+	requesters map[int64][]*retrieveRequestMsgData
 }
 
 // it's assumed that caller holds the lock
-func (self *Hive) startSearch(chunk *Chunk) {
+func (self *netStore) startSearch(chunk *Chunk) {
 	chunk.req.status = reqSearching
 	// implement search logic here
 }
@@ -80,13 +82,9 @@ adds a new peer to an existing open request
 only add if less than requesterCount peers forwarded the same request id so far
 note this is done irrespective of status (searching or found/timedOut)
 */
-func (self *Hive) addRequester(rs *requestStatus, req *retrieveRequestMsgData) (added bool) {
+func (self *netStore) addRequester(rs *requestStatus, req *retrieveRequestMsgData) {
 	list := rs.requesters[req.Id]
-	if len(list) < requesterCount {
-		rs.requesters[req.Id] = append(list, req)
-		added = true
-	}
-	return
+	rs.requesters[req.Id] = append(list, req)
 }
 
 /*
@@ -101,78 +99,81 @@ this is the most simplistic implementation:
  - respond with peers and timeout if still searching
 ! in the last case as well, we should respond with reject if already got requesterCount peers with that exact id
 */
-func (self *Hive) strategyUpdateRequest(rs *requestStatus, req *retrieveRequestMsgData) (msgTyp int, timeout time.Time) {
+func (self *netStore) strategyUpdateRequest(rs *requestStatus, req *retrieveRequestMsgData) (msgTyp int, timeout time.Time) {
 
 	switch rs.status {
 	case reqSearching:
-		if self.addRequester(rs, req) {
-			msgTyp = peersMsg
-			timeout = self.searchTimeout(rs, req)
-		}
+		msgTyp = peersMsg
+		timeout = self.searchTimeout(rs, req)
 	case reqTimedOut:
 		msgTyp = peersMsg
 	case reqFound:
-		if self.addRequester(rs, req) {
-			msgTyp = storeRequestMsg
-		}
+		msgTyp = storeRequestMsg
 	}
 	return
 
 }
 
-func (self *Hive) addStoreRequest(req *storeRequestMsgData) (err error) {
+func (self *netStore) put(entry *Chunk) {
+	self.localStore.Put(entry)
+	self.store(entry)
+	// only send responses once
+	if entry.req != nil && entry.req.status == reqSearching {
+		entry.req.status = reqFound
+		self.propagateResponse(entry)
+	}
+}
 
+func (self *netStore) Put(entry *Chunk) {
+	chunk, err := self.localStore.Get(entry.Key)
+	if err != nil {
+		chunk = entry
+	} else if chunk.Data == nil {
+		chunk.Data = entry.Data
+		chunk.Size = entry.Size
+	} else {
+		return
+	}
+	self.put(chunk)
+}
+
+func (self *netStore) addStoreRequest(req *storeRequestMsgData) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	chunk, err := self.dpa.Get(req.Key)
+	chunk, err := self.localStore.Get(req.Key)
 	// we assume that a returned chunk is the one stored in the memory cache
 	if err != nil {
-		s := new(storeRequestStatus)
 		chunk = &Chunk{
-			Key:                req.Key,
-			Data:               req.Data,
-			Size:               req.Size,
-			storeRequestStatus: s,
+			Key:  req.Key,
+			Data: req.Data,
+			Size: req.Size,
 		}
-		self.dpa.Put(chunk)
-		self.store(chunk)
-	} else {
-		// pending retrieval request
-		if chunk.Data != nil {
-			// update access counts not needed, Get takes care of it
-			return
-		}
+	} else if chunk.Data == nil {
 		chunk.Data = req.Data
 		chunk.Size = req.Size
-		// FIXME: breach of memstore contract data is put into storage without checking capacity
-		self.dpa.Put(chunk)
-		// only send responses once
-		if chunk.req.status == reqSearching {
-			chunk.req.status = reqFound
-			self.propagateResponse(chunk)
-		}
+	} else {
+		return
 	}
-
-	return
+	self.put(chunk)
 }
 
-func (self *Hive) propagateResponse(chunk *Chunk) {
+func (self *netStore) propagateResponse(chunk *Chunk) {
 	// send chunk to first requesterCount peer of each Id
 }
 
-func (self *Hive) addRetrieveRequest(req *retrieveRequestMsgData) {
+func (self *netStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
-	chunk, err := self.dpa.Get(req.Key)
+	chunk, err := self.localStore.Get(req.Key)
 	// we assume that a returned chunk is the one stored in the memory cache
 	if err != nil {
 		// no data and no request status
 		chunk = &Chunk{
 			Key: req.Key,
 		}
-		self.memstore.Put(chunk)
+		self.localStore.memStore.Put(chunk)
 	}
 
 	if chunk.req == nil {
@@ -184,7 +185,7 @@ func (self *Hive) addRetrieveRequest(req *retrieveRequestMsgData) {
 
 	send, timeout := self.strategyUpdateRequest(chunk.req, req) // may change req status
 
-	if send {
+	if send == storeRequestMsg {
 		self.deliver(req, chunk)
 	} else {
 		// we might need chunk.req to cache relevant peers response, or would it expire?
@@ -193,7 +194,7 @@ func (self *Hive) addRetrieveRequest(req *retrieveRequestMsgData) {
 
 }
 
-func (self *Hive) deliver(req *retrieveRequestMsgData, chunk *Chunk) {
+func (self *netStore) deliver(req *retrieveRequestMsgData, chunk *Chunk) {
 	storeReq := &storeRequestMsgData{
 		Key:            req.Key,
 		Id:             req.Id,
@@ -206,20 +207,20 @@ func (self *Hive) deliver(req *retrieveRequestMsgData, chunk *Chunk) {
 	req.peer.store(storeReq)
 }
 
-func (self *Hive) store(chunk) {
+func (self *netStore) store(chunk *Chunk) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	req := storeRequestMsgData{
+	req := &storeRequestMsgData{
 		Key:  chunk.Key,
 		Data: chunk.Data,
 		Id:   r.Int63(),
 		Size: chunk.Size,
 	}
-	for _, peer := range self.peerPool.GetPeers(chunk.Key) {
+	for _, peer := range self.peerPool.getPeers(chunk.Key) {
 		go peer.store(req)
 	}
 }
 
-func (self *Hive) peers(req *retrieveRequestMsgData, chunk *Chunk, timeout time.Time) {
+func (self *netStore) peers(req *retrieveRequestMsgData, chunk *Chunk, timeout time.Time) {
 	peersData := &peersMsgData{
 		Peers:   []*peerAddr{}, // get proximity bin from cademlia routing table
 		Key:     req.Key,
@@ -229,15 +230,15 @@ func (self *Hive) peers(req *retrieveRequestMsgData, chunk *Chunk, timeout time.
 	req.peer.peers(peersData)
 }
 
-func (self *Hive) searchTimeout(rs *requestStatus, req *retrieveRequestMsgData) (timeout time.Time) {
+func (self *netStore) searchTimeout(rs *requestStatus, req *retrieveRequestMsgData) (timeout time.Time) {
 	return
 }
 
 // these should go to cademlia
-func (self *Hive) addPeers(req *peersMsgData) (err error) {
+func (self *netStore) addPeers(req *peersMsgData) (err error) {
 	return
 }
 
-func (self *Hive) removePeer(p peer) {
+func (self *netStore) removePeer(p peer) {
 	return
 }

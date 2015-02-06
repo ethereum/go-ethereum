@@ -110,20 +110,6 @@ func (self *DPA) Store(data SectionReader) (key Key, err error) {
 
 }
 
-// DPA is itself a chunk store , to stores a chunk only
-// its integrity is checked ?
-func (self *DPA) Put(chunk *Chunk) {
-	// rely on storeC
-	return
-}
-
-// Get(chunk *Chunk) looks up a chunk in the local stores
-// This method is blocking until the chunk is retrieved so additional timeout is needed to wrap this call
-func (self *DPA) Get(key Key) (chunk *Chunk, err error) {
-	// rely on retrieveC
-	return
-}
-
 func (self *DPA) Start() {
 	self.lock.Lock()
 	defer self.lock.Unlock()
