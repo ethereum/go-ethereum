@@ -5,6 +5,15 @@ import (
 	"testing"
 )
 
+func testDataReader(l int) (r *ChunkReader, slice []byte) {
+	slice = make([]byte, l)
+	if _, err := rand.Read(slice); err != nil {
+		panic("rand error")
+	}
+	r = NewChunkReaderFromBytes(slice)
+	return
+}
+
 func randomChunks(l int64, branches int64, chunkC chan *Chunk) (key Key, errC chan error) {
 	chunker := &TreeChunker{
 		Branches: branches,

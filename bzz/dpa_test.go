@@ -1,5 +1,5 @@
-// test bench for the package blockhash
-
 package bzz
 
-import ()
+import (
+// "github.com/ethereum/go-ethereum/bzz/test"
+)

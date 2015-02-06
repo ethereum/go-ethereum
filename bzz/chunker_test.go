@@ -2,7 +2,6 @@ package bzz
 
 import (
 	"bytes"
-	"crypto/rand"
 	"fmt"
 	"testing"
 	"time"
@@ -13,15 +12,6 @@ import (
 /*
 Tests TreeChunker by splitting and joining a random byte slice
 */
-
-func testDataReader(l int) (r *ChunkReader, slice []byte) {
-	slice = make([]byte, l)
-	if _, err := rand.Read(slice); err != nil {
-		panic("rand error")
-	}
-	r = NewChunkReaderFromBytes(slice)
-	return
-}
 
 type chunkerTester struct {
 	errors  []error
