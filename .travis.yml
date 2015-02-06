@@ -11,6 +11,7 @@ install:
   # - go get golang.org/x/tools/cmd/vet 
   - if ! go get code.google.com/p/go.tools/cmd/cover; then go get golang.org/x/tools/cmd/cover; fi
   - go get github.com/mattn/goveralls
+  - go get gopkg.in/check.v1
   - DEPS=$(go list -f '{{.Imports}}' ./... | sed -e 's/\[//g' | sed -e 's/\]//g' | sed -e 's/C //g'); if [ "$DEPS" ]; then go get -d -v $DEPS; fi
 before_script:
   - gofmt -l -w .
