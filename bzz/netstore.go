@@ -58,7 +58,13 @@ const (
 	reqFound
 )
 
-const requesterCount = 3
+const (
+	requesterCount = 3
+)
+
+var (
+	searchTimeout = 3 * time.Second
+)
 
 type peer struct {
 	*bzzProtocol
@@ -69,6 +75,101 @@ type requestStatus struct {
 	key        Key
 	status     int
 	requesters map[int64][]*retrieveRequestMsgData
+	C          chan bool
+}
+
+func (self *netStore) Put(entry *Chunk) {
+	chunk, err := self.localStore.Get(entry.Key)
+	if err != nil {
+		chunk = entry
+	} else if chunk.Data == nil {
+		chunk.Data = entry.Data
+		chunk.Size = entry.Size
+	} else {
+		return
+	}
+	self.put(chunk)
+}
+
+func (self *netStore) put(entry *Chunk) {
+	self.localStore.Put(entry)
+	self.store(entry)
+	// only send responses once
+	if entry.req != nil && entry.req.status == reqSearching {
+		entry.req.status = reqFound
+		close(entry.req.C)
+		self.propagateResponse(entry)
+	}
+}
+
+func (self *netStore) addStoreRequest(req *storeRequestMsgData) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	chunk, err := self.localStore.Get(req.Key)
+	// we assume that a returned chunk is the one stored in the memory cache
+	if err != nil {
+		chunk = &Chunk{
+			Key:  req.Key,
+			Data: req.Data,
+			Size: req.Size,
+		}
+	} else if chunk.Data == nil {
+		chunk.Data = req.Data
+		chunk.Size = req.Size
+	} else {
+		return
+	}
+	self.put(chunk)
+}
+
+func (self *netStore) Get(key Key) (chunk *Chunk, err error) {
+	chunk = self.get(key)
+	timeout := time.After(searchTimeout)
+	select {
+	case <-timeout:
+		err = notFound
+	case <-chunk.req.C:
+	}
+	return
+}
+
+func (self *netStore) get(key Key) (chunk *Chunk) {
+	var err error
+	chunk, err = self.localStore.Get(key)
+	// we assume that a returned chunk is the one stored in the memory cache
+	if err != nil {
+		// no data and no request status
+		chunk = &Chunk{
+			Key: key,
+		}
+		self.localStore.memStore.Put(chunk)
+	}
+
+	if chunk.req == nil {
+		chunk.req = new(requestStatus)
+		if chunk.Data == nil {
+			self.startSearch(chunk)
+		}
+	}
+	return
+}
+
+func (self *netStore) addRetrieveRequest(req *retrieveRequestMsgData) {
+
+	self.lock.Lock()
+	defer self.lock.Unlock()
+
+	chunk := self.get(req.Key)
+
+	send, timeout := self.strategyUpdateRequest(chunk.req, req) // may change req status
+
+	if send == storeRequestMsg {
+		self.deliver(req, chunk)
+	} else {
+		// we might need chunk.req to cache relevant peers response, or would it expire?
+		self.peers(req, chunk, timeout)
+	}
+
 }
 
 // it's assumed that caller holds the lock
@@ -114,52 +215,9 @@ func (self *netStore) strategyUpdateRequest(rs *requestStatus, req *retrieveRequ
 
 }
 
-func (self *netStore) put(entry *Chunk) {
-	self.localStore.Put(entry)
-	self.store(entry)
-	// only send responses once
-	if entry.req != nil && entry.req.status == reqSearching {
-		entry.req.status = reqFound
-		self.propagateResponse(entry)
-	}
-}
-
-func (self *netStore) Put(entry *Chunk) {
-	chunk, err := self.localStore.Get(entry.Key)
-	if err != nil {
-		chunk = entry
-	} else if chunk.Data == nil {
-		chunk.Data = entry.Data
-		chunk.Size = entry.Size
-	} else {
-		return
-	}
-	self.put(chunk)
-}
-
-func (self *netStore) addStoreRequest(req *storeRequestMsgData) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	chunk, err := self.localStore.Get(req.Key)
-	// we assume that a returned chunk is the one stored in the memory cache
-	if err != nil {
-		chunk = &Chunk{
-			Key:  req.Key,
-			Data: req.Data,
-			Size: req.Size,
-		}
-	} else if chunk.Data == nil {
-		chunk.Data = req.Data
-		chunk.Size = req.Size
-	} else {
-		return
-	}
-	self.put(chunk)
-}
-
 func (self *netStore) propagateResponse(chunk *Chunk) {
 	for id, requesters := range chunk.req.requesters {
-		counter = requesterCount
+		counter := requesterCount
 		msg := &storeRequestMsgData{
 			Key:  chunk.Key,
 			Data: chunk.Data,
@@ -176,39 +234,6 @@ func (self *netStore) propagateResponse(chunk *Chunk) {
 			}
 		}
 	}
-}
-
-func (self *netStore) addRetrieveRequest(req *retrieveRequestMsgData) {
-
-	self.lock.Lock()
-	defer self.lock.Unlock()
-
-	chunk, err := self.localStore.Get(req.Key)
-	// we assume that a returned chunk is the one stored in the memory cache
-	if err != nil {
-		// no data and no request status
-		chunk = &Chunk{
-			Key: req.Key,
-		}
-		self.localStore.memStore.Put(chunk)
-	}
-
-	if chunk.req == nil {
-		chunk.req = new(requestStatus)
-		if chunk.Data == nil {
-			self.startSearch(chunk)
-		}
-	}
-
-	send, timeout := self.strategyUpdateRequest(chunk.req, req) // may change req status
-
-	if send == storeRequestMsg {
-		self.deliver(req, chunk)
-	} else {
-		// we might need chunk.req to cache relevant peers response, or would it expire?
-		self.peers(req, chunk, timeout)
-	}
-
 }
 
 func (self *netStore) deliver(req *retrieveRequestMsgData, chunk *Chunk) {
@@ -248,7 +273,7 @@ func (self *netStore) peers(req *retrieveRequestMsgData, chunk *Chunk, timeout t
 }
 
 func (self *netStore) searchTimeout(rs *requestStatus, req *retrieveRequestMsgData) (timeout time.Time) {
-	t := time.Now().Add(3 * time.Second)
+	t := time.Now().Add(searchTimeout)
 	if req.Timeout.Before(t) {
 		return req.Timeout
 	} else {
