@@ -175,15 +175,15 @@ func (self *DPA) storeLoop() {
 		fmt.Printf("StoreLoop started.\n")
 	STORE:
 		for {
-			chunk := <-self.storeC
-			fmt.Printf("StoreLoop reader size %d\n", chunk.Reader.Size())
-			chunk.Data = make([]byte, chunk.Reader.Size())
-			chunk.Reader.ReadAt(chunk.Data, 0)
-			self.ChunkStore.Put(chunk)
 			select {
+			case chunk := <-self.storeC:
+				fmt.Printf("StoreLoop reader size %d\n", chunk.Reader.Size())
+				chunk.Data = make([]byte, chunk.Reader.Size())
+				chunk.Reader.ReadAt(chunk.Data, 0)
+				self.ChunkStore.Put(chunk)
 			case <-self.quitC:
 				break STORE
-			default:
+				// default:
 			}
 		}
 	}()
