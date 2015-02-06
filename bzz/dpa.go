@@ -12,10 +12,19 @@ import (
 /*
 DPA provides the client API entrypoints Store and Retrieve to store and retrieve
 It can store anything that has a byte slice representation, so files or serialised objects etc.
+
 Storage: DPA calls the Chunker to segment the input datastream of any size to a merkle hashed tree of chunks. The key of the root block is returned to the client.
+
 Retrieval: given the key of the root block, the DPA retrieves the block chunks and reconstructs the original data and passes it back as a lazy reader. A lazy reader is a reader with on-demand delayed processing, i.e. the chunks needed to reconstruct a large file are only fetched and processed if that particular part of the document is actually read.
 
-As the chunker produces chunks, DPA dispatches them to the chunk stores for storage or retrieval. The chunk stores are typically sequenced as memory cache, local disk/db store, cloud/distributed/dht storage. Storage requests will reach to all 3 components while retrieval requests stop after the first successful retrieval.
+As the chunker produces chunks, DPA dispatches them to the chunk store for storage or retrieval.
+
+The ChunkStore interface is implemented by :
+
+- memStore: a memory cache
+- dbStore: local disk/db store
+- localStore: a combination (sequence of) memStoe and dbStoe
+- netStore: dht storage
 */
 
 const (
@@ -30,10 +39,10 @@ var (
 var dpaLogger = ethlogger.NewLogger("BZZ")
 
 type DPA struct {
-	Chunker   Chunker
-	Stores    []ChunkStore
-	storeC    chan *Chunk
-	retrieveC chan *Chunk
+	Chunker    Chunker
+	ChunkStore ChunkStore
+	storeC     chan *Chunk
+	retrieveC  chan *Chunk
 
 	lock    sync.Mutex
 	running bool
@@ -61,7 +70,7 @@ type ChunkStore interface {
 }
 
 func (self *DPA) Retrieve(key Key) (data LazySectionReader, err error) {
-	dpaLogger.Debugf("bzz honey retrieve")
+
 	reader, errC := self.Chunker.Join(key, self.retrieveC)
 	data = reader
 	// we can add subscriptions etc. or timeout here
@@ -86,8 +95,6 @@ func (self *DPA) Retrieve(key Key) (data LazySectionReader, err error) {
 }
 
 func (self *DPA) Store(data SectionReader) (key Key, err error) {
-
-	dpaLogger.Debugf("bzz honey store")
 
 	errC := self.Chunker.Split(key, data, self.storeC)
 
@@ -136,31 +143,25 @@ func (self *DPA) retrieveLoop() {
 	self.retrieveC = make(chan *Chunk, retrieveChanCapacity)
 
 	go func() {
-	LOOP:
+	RETRIEVE:
 		for chunk := range self.retrieveC {
 			go func() {
-				for i, store := range self.Stores {
-					storedChunk, err := store.Get(chunk.Key)
-					if err == notFound {
-						dpaLogger.DebugDetailf("%v retrieving chunk %x: NOT FOUND", store, chunk.Key)
-						return
-					}
-					if err != nil {
-						dpaLogger.DebugDetailf("%v retrieving chunk %x: %v", store, chunk.Key, err)
-						return
-					}
-					chunk.Reader = NewChunkReaderFromBytes(storedChunk.Data)
-					chunk.Size = storedChunk.Size
-					close(chunk.C)
-					// if not in cache, cache it in memstore
-					if i > 0 {
-						self.Stores[0].Put(chunk)
-					}
+				storedChunk, err := self.ChunkStore.Get(chunk.Key)
+				if err == notFound {
+					dpaLogger.DebugDetailf("chunk %x not found", chunk.Key)
+					return
 				}
+				if err != nil {
+					dpaLogger.DebugDetailf("error retrieving chunk %x: %v", chunk.Key, err)
+					return
+				}
+				chunk.Reader = NewChunkReaderFromBytes(storedChunk.Data)
+				chunk.Size = storedChunk.Size
+				close(chunk.C)
 			}()
 			select {
 			case <-self.quitC:
-				break LOOP
+				break RETRIEVE
 			default:
 			}
 		}
@@ -170,17 +171,12 @@ func (self *DPA) retrieveLoop() {
 func (self *DPA) storeLoop() {
 	self.storeC = make(chan *Chunk)
 	go func() {
-	LOOP:
+	STORE:
 		for chunk := range self.storeC {
-			go func() {
-				for _, store := range self.Stores {
-					store.Put(chunk)
-					// no waiting/blocking here
-				}
-			}()
+			go self.ChunkStore.Put(chunk)
 			select {
 			case <-self.quitC:
-				break LOOP
+				break STORE
 			default:
 			}
 		}
