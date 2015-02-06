@@ -106,7 +106,7 @@ func (self *Whisper) Messages(id int) (messages *ethutil.List) {
 
 func filterFromMap(opts map[string]interface{}) (f whisper.Filter) {
 	if to, ok := opts["to"].(string); ok {
-		f.To = crypto.ToECDSA(fromHex(to))
+		f.To = crypto.ToECDSAPub(fromHex(to))
 	}
 	if from, ok := opts["from"].(string); ok {
 		f.From = crypto.ToECDSAPub(fromHex(from))

@@ -11,7 +11,7 @@ func TestEvent(t *testing.T) {
 	whisper := New()
 	id := whisper.NewIdentity()
 	whisper.Watch(Filter{
-		To: id,
+		To: &id.PublicKey,
 		Fn: func(msg *Message) {
 			res <- msg
 		},
