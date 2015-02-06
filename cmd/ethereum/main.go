@@ -74,6 +74,7 @@ func main() {
 		KeyRing:    KeyRing,
 		Shh:        SHH,
 		Dial:       Dial,
+		BootNodes:  BootNodes,
 	})
 
 	if err != nil {
@@ -133,7 +134,7 @@ func main() {
 		utils.StartWebSockets(ethereum, WsPort)
 	}
 
-	utils.StartEthereum(ethereum, SeedNode)
+	utils.StartEthereum(ethereum)
 
 	if StartJsConsole {
 		InitJsConsole(ethereum)

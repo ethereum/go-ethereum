@@ -59,8 +59,9 @@ func run() error {
 		LogLevel:   LogLevel,
 		MaxPeers:   MaxPeer,
 		Port:       OutboundPort,
-		NATType:    PMPGateway,
+		NATType:    NatType,
 		PMPGateway: PMPGateway,
+		BootNodes:  BootNodes,
 		KeyRing:    KeyRing,
 		Dial:       true,
 	})
@@ -82,7 +83,7 @@ func run() error {
 	utils.RegisterInterrupt(func(os.Signal) {
 		gui.Stop()
 	})
-	go utils.StartEthereum(ethereum, SeedNode)
+	go utils.StartEthereum(ethereum)
 
 	fmt.Println("ETH stack took", time.Since(tstart))
 

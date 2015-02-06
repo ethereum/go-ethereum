@@ -50,7 +50,7 @@ type Server struct {
 
 	// Bootstrap nodes are used to establish connectivity
 	// with the rest of the network.
-	BootstrapNodes []discover.Node
+	BootstrapNodes []*discover.Node
 
 	// Protocols should contain the protocols supported
 	// by the server. Matching protocols are launched for

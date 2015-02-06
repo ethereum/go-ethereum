@@ -65,12 +65,12 @@ func (tab *Table) Close() {
 // to the network if the table is empty. Bootstrap will also attempt to
 // fill the table by performing random lookup operations on the
 // network.
-func (tab *Table) Bootstrap(nodes []Node) {
+func (tab *Table) Bootstrap(nodes []*Node) {
 	tab.mutex.Lock()
 	// TODO: maybe filter nodes with bad fields (nil, etc.) to avoid strange crashes
 	tab.nursery = make([]*Node, 0, len(nodes))
 	for _, n := range nodes {
-		cpy := n
+		cpy := *n
 		tab.nursery = append(tab.nursery, &cpy)
 	}
 	tab.mutex.Unlock()

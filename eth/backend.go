@@ -2,6 +2,7 @@ package eth
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -17,6 +18,8 @@ import (
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
+var logger = ethlogger.NewLogger("SERV")
+
 type Config struct {
 	Name     string
 	KeyStore string
@@ -30,13 +33,28 @@ type Config struct {
 	NATType    string
 	PMPGateway string
 
+	// This should be a space-separated list of
+	// discovery node URLs.
+	BootNodes string
+
 	Shh  bool
 	Dial bool
 
 	KeyManager *crypto.KeyManager
 }
 
-var logger = ethlogger.NewLogger("SERV")
+func (cfg *Config) parseBootNodes() []*discover.Node {
+	var ns []*discover.Node
+	for _, url := range strings.Split(cfg.BootNodes, " ") {
+		n, err := discover.ParseNode(url)
+		if err != nil {
+			logger.Errorf("Bootstrap URL %s: %v\n", url, err)
+			continue
+		}
+		ns = append(ns, n)
+	}
+	return ns
+}
 
 type Ethereum struct {
 	// Channel for shutting down the ethereum
@@ -134,13 +152,14 @@ func New(config *Config) (*Ethereum, error) {
 		return nil, fmt.Errorf("could not generate server key: %v", err)
 	}
 	eth.net = &p2p.Server{
-		PrivateKey: netprv,
-		Name:       config.Name,
-		MaxPeers:   config.MaxPeers,
-		Protocols:  protocols,
-		Blacklist:  eth.blacklist,
-		NAT:        nat,
-		NoDial:     !config.Dial,
+		PrivateKey:     netprv,
+		Name:           config.Name,
+		MaxPeers:       config.MaxPeers,
+		Protocols:      protocols,
+		Blacklist:      eth.blacklist,
+		NAT:            nat,
+		NoDial:         !config.Dial,
+		BootstrapNodes: config.parseBootNodes(),
 	}
 	if len(config.Port) > 0 {
 		eth.net.ListenAddr = ":" + config.Port
@@ -214,7 +233,7 @@ func (s *Ethereum) Coinbase() []byte {
 }
 
 // Start the ethereum
-func (s *Ethereum) Start(seedNode string) error {
+func (s *Ethereum) Start() error {
 	err := s.net.Start()
 	if err != nil {
 		return err
