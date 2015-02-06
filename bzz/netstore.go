@@ -158,7 +158,24 @@ func (self *netStore) addStoreRequest(req *storeRequestMsgData) {
 }
 
 func (self *netStore) propagateResponse(chunk *Chunk) {
-	// send chunk to first requesterCount peer of each Id
+	for id, requesters := range chunk.req.requesters {
+		counter = requesterCount
+		msg := &storeRequestMsgData{
+			Key:  chunk.Key,
+			Data: chunk.Data,
+			Size: chunk.Size,
+			Id:   id,
+		}
+		for _, req := range requesters {
+			if req.Timeout.After(time.Now()) {
+				go req.peer.store(msg)
+				counter--
+				if counter <= 0 {
+					break
+				}
+			}
+		}
+	}
 }
 
 func (self *netStore) addRetrieveRequest(req *retrieveRequestMsgData) {
@@ -231,7 +248,12 @@ func (self *netStore) peers(req *retrieveRequestMsgData, chunk *Chunk, timeout t
 }
 
 func (self *netStore) searchTimeout(rs *requestStatus, req *retrieveRequestMsgData) (timeout time.Time) {
-	return
+	t := time.Now().Add(3 * time.Second)
+	if req.Timeout.Before(t) {
+		return req.Timeout
+	} else {
+		return t
+	}
 }
 
 // these should go to cademlia
