@@ -136,7 +136,7 @@ func (srv *Server) PeerCount() int {
 // SuggestPeer creates a connection to the given Node if it
 // is not already connected.
 func (srv *Server) SuggestPeer(ip net.IP, port int, id discover.NodeID) {
-	srv.peerConnect <- &discover.Node{ID: id, Addr: &net.UDPAddr{IP: ip, Port: port}}
+	srv.peerConnect <- &discover.Node{ID: id, IP: ip, TCPPort: port}
 }
 
 // Broadcast sends an RLP-encoded message to all connected peers.
@@ -364,8 +364,9 @@ func (srv *Server) dialLoop() {
 }
 
 func (srv *Server) dialNode(dest *discover.Node) {
-	srvlog.Debugf("Dialing %v\n", dest.Addr)
-	conn, err := srv.Dialer.Dial("tcp", dest.Addr.String())
+	addr := &net.TCPAddr{IP: dest.IP, Port: dest.TCPPort}
+	srvlog.Debugf("Dialing %v\n", dest)
+	conn, err := srv.Dialer.Dial("tcp", addr.String())
 	if err != nil {
 		srvlog.DebugDetailf("dial error: %v", err)
 		return

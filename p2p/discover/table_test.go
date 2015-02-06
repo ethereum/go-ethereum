@@ -4,7 +4,6 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"math/big"
 	"math/rand"
 	"net"
 	"reflect"
@@ -15,107 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-var (
-	quickrand = rand.New(rand.NewSource(time.Now().Unix()))
-	quickcfg  = &quick.Config{MaxCount: 5000, Rand: quickrand}
-)
-
-func TestHexID(t *testing.T) {
-	ref := NodeID{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 106, 217, 182, 31, 165, 174, 1, 67, 7, 235, 220, 150, 66, 83, 173, 205, 159, 44, 10, 57, 42, 161, 26, 188}
-	id1 := MustHexID("0x000000000000000000000000000000000000000000000000000000000000000000000000000000806ad9b61fa5ae014307ebdc964253adcd9f2c0a392aa11abc")
-	id2 := MustHexID("000000000000000000000000000000000000000000000000000000000000000000000000000000806ad9b61fa5ae014307ebdc964253adcd9f2c0a392aa11abc")
-
-	if id1 != ref {
-		t.Errorf("wrong id1\ngot  %v\nwant %v", id1[:], ref[:])
-	}
-	if id2 != ref {
-		t.Errorf("wrong id2\ngot  %v\nwant %v", id2[:], ref[:])
-	}
-}
-
-func TestNodeID_recover(t *testing.T) {
-	prv := newkey()
-	hash := make([]byte, 32)
-	sig, err := crypto.Sign(hash, prv)
-	if err != nil {
-		t.Fatalf("signing error: %v", err)
-	}
-
-	pub := PubkeyID(&prv.PublicKey)
-	recpub, err := recoverNodeID(hash, sig)
-	if err != nil {
-		t.Fatalf("recovery error: %v", err)
-	}
-	if pub != recpub {
-		t.Errorf("recovered wrong pubkey:\ngot:  %v\nwant: %v", recpub, pub)
-	}
-}
-
-func TestNodeID_distcmp(t *testing.T) {
-	distcmpBig := func(target, a, b NodeID) int {
-		tbig := new(big.Int).SetBytes(target[:])
-		abig := new(big.Int).SetBytes(a[:])
-		bbig := new(big.Int).SetBytes(b[:])
-		return new(big.Int).Xor(tbig, abig).Cmp(new(big.Int).Xor(tbig, bbig))
-	}
-	if err := quick.CheckEqual(distcmp, distcmpBig, quickcfg); err != nil {
-		t.Error(err)
-	}
-}
-
-// the random tests is likely to miss the case where they're equal.
-func TestNodeID_distcmpEqual(t *testing.T) {
-	base := NodeID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
-	x := NodeID{15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
-	if distcmp(base, x, x) != 0 {
-		t.Errorf("distcmp(base, x, x) != 0")
-	}
-}
-
-func TestNodeID_logdist(t *testing.T) {
-	logdistBig := func(a, b NodeID) int {
-		abig, bbig := new(big.Int).SetBytes(a[:]), new(big.Int).SetBytes(b[:])
-		return new(big.Int).Xor(abig, bbig).BitLen()
-	}
-	if err := quick.CheckEqual(logdist, logdistBig, quickcfg); err != nil {
-		t.Error(err)
-	}
-}
-
-// the random tests is likely to miss the case where they're equal.
-func TestNodeID_logdistEqual(t *testing.T) {
-	x := NodeID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
-	if logdist(x, x) != 0 {
-		t.Errorf("logdist(x, x) != 0")
-	}
-}
-
-func TestNodeID_randomID(t *testing.T) {
-	// we don't use quick.Check here because its output isn't
-	// very helpful when the test fails.
-	for i := 0; i < quickcfg.MaxCount; i++ {
-		a := gen(NodeID{}, quickrand).(NodeID)
-		dist := quickrand.Intn(len(NodeID{}) * 8)
-		result := randomID(a, dist)
-		actualdist := logdist(result, a)
-
-		if dist != actualdist {
-			t.Log("a:     ", a)
-			t.Log("result:", result)
-			t.Fatalf("#%d: distance of result is %d, want %d", i, actualdist, dist)
-		}
-	}
-}
-
-func (NodeID) Generate(rand *rand.Rand, size int) reflect.Value {
-	var id NodeID
-	m := rand.Intn(len(id))
-	for i := len(id) - 1; i > m; i-- {
-		id[i] = byte(rand.Uint32())
-	}
-	return reflect.ValueOf(id)
-}
-
 func TestTable_bumpOrAddPingReplace(t *testing.T) {
 	pingC := make(pingC)
 	tab := newTable(pingC, NodeID{}, &net.UDPAddr{})
@@ -123,7 +21,7 @@ func TestTable_bumpOrAddPingReplace(t *testing.T) {
 
 	// this bumpOrAdd should not replace the last node
 	// because the node replies to ping.
-	new := tab.bumpOrAdd(randomID(tab.self.ID, 200), nil)
+	new := tab.bumpOrAdd(randomID(tab.self.ID, 200), &net.UDPAddr{})
 
 	pinged := <-pingC
 	if pinged != last.ID {
@@ -149,7 +47,7 @@ func TestTable_bumpOrAddPingTimeout(t *testing.T) {
 
 	// this bumpOrAdd should replace the last node
 	// because the node does not reply to ping.
-	new := tab.bumpOrAdd(randomID(tab.self.ID, 200), nil)
+	new := tab.bumpOrAdd(randomID(tab.self.ID, 200), &net.UDPAddr{})
 
 	// wait for async bucket update. damn. this needs to go away.
 	time.Sleep(2 * time.Millisecond)
@@ -329,19 +227,17 @@ type findnodeOracle struct {
 }
 
 func (t findnodeOracle) findnode(n *Node, target NodeID) ([]*Node, error) {
-	t.t.Logf("findnode query at dist %d", n.Addr.Port)
+	t.t.Logf("findnode query at dist %d", n.DiscPort)
 	// current log distance is encoded in port number
 	var result []*Node
-	switch port := n.Addr.Port; port {
+	switch n.DiscPort {
 	case 0:
 		panic("query to node at distance 0")
-	case 1:
-		result = append(result, &Node{ID: t.target, Addr: &net.UDPAddr{Port: 0}})
 	default:
 		// TODO: add more randomness to distances
-		port--
+		next := n.DiscPort - 1
 		for i := 0; i < bucketSize; i++ {
-			result = append(result, &Node{ID: randomID(t.target, port), Addr: &net.UDPAddr{Port: port}})
+			result = append(result, &Node{ID: randomID(t.target, next), DiscPort: next})
 		}
 	}
 	return result, nil

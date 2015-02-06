@@ -69,6 +69,12 @@ type (
 	}
 )
 
+type rpcNode struct {
+	IP   string
+	Port uint16
+	ID   NodeID
+}
+
 // udp implements the RPC protocol.
 type udp struct {
 	conn       *net.UDPConn
@@ -121,7 +127,7 @@ func ListenUDP(priv *ecdsa.PrivateKey, laddr string) (*Table, error) {
 		return nil, err
 	}
 	net.Table = newTable(net, PubkeyID(&priv.PublicKey), realaddr)
-	log.Debugf("Listening on %v, my ID %x\n", realaddr, net.self.ID[:])
+	log.Debugf("Listening, %v\n", net.self)
 	return net.Table, nil
 }
 
@@ -159,8 +165,8 @@ func (t *udp) ping(e *Node) error {
 	// TODO: maybe check for ReplyTo field in callback to measure RTT
 	errc := t.pending(e.ID, pongPacket, func(interface{}) bool { return true })
 	t.send(e, pingPacket, ping{
-		IP:         t.self.Addr.String(),
-		Port:       uint16(t.self.Addr.Port),
+		IP:         t.self.IP.String(),
+		Port:       uint16(t.self.TCPPort),
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
 	})
 	return <-errc
@@ -176,7 +182,7 @@ func (t *udp) findnode(to *Node, target NodeID) ([]*Node, error) {
 		for i := 0; i < len(reply.Nodes); i++ {
 			nreceived++
 			n := reply.Nodes[i]
-			if validAddr(n.Addr) && n.ID != t.self.ID {
+			if n.ID != t.self.ID && n.isValid() {
 				nodes = append(nodes, n)
 			}
 		}
@@ -189,10 +195,6 @@ func (t *udp) findnode(to *Node, target NodeID) ([]*Node, error) {
 	})
 	err := <-errc
 	return nodes, err
-}
-
-func validAddr(a *net.UDPAddr) bool {
-	return !a.IP.IsMulticast() && !a.IP.IsUnspecified() && a.Port != 0
 }
 
 // pending adds a reply callback to the pending reply queue.
@@ -302,8 +304,9 @@ func (t *udp) send(to *Node, ptype byte, req interface{}) error {
 	// the future.
 	copy(packet, crypto.Sha3(packet[macSize:]))
 
-	log.DebugDetailf(">>> %v %T %v\n", to.Addr, req, req)
-	if _, err = t.conn.WriteToUDP(packet, to.Addr); err != nil {
+	toaddr := &net.UDPAddr{IP: to.IP, Port: to.DiscPort}
+	log.DebugDetailf(">>> %v %T %v\n", toaddr, req, req)
+	if _, err = t.conn.WriteToUDP(packet, toaddr); err != nil {
 		log.DebugDetailln("UDP send failed:", err)
 	}
 	return err
@@ -365,11 +368,14 @@ func (req *ping) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) er
 		return errExpired
 	}
 	t.mutex.Lock()
-	// Note: we're ignoring the provided IP/Port right now.
-	e := t.bumpOrAdd(fromID, from)
+	// Note: we're ignoring the provided IP address right now
+	n := t.bumpOrAdd(fromID, from)
+	if req.Port != 0 {
+		n.TCPPort = int(req.Port)
+	}
 	t.mutex.Unlock()
 
-	t.send(e, pongPacket, pong{
+	t.send(n, pongPacket, pong{
 		ReplyTok:   mac,
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
 	})

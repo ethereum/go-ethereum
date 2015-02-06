@@ -91,8 +91,7 @@ func TestServerDial(t *testing.T) {
 
 	// tell the server to connect
 	tcpAddr := listener.Addr().(*net.TCPAddr)
-	connAddr := &discover.Node{Addr: &net.UDPAddr{IP: tcpAddr.IP, Port: tcpAddr.Port}}
-	srv.peerConnect <- connAddr
+	srv.peerConnect <- &discover.Node{IP: tcpAddr.IP, TCPPort: tcpAddr.Port}
 
 	select {
 	case conn := <-accepted:

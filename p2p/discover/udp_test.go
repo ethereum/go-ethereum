@@ -4,6 +4,7 @@ import (
 	logpkg "log"
 	"net"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 )
 
 func init() {
-	logger.AddLogSystem(logger.NewStdLogSystem(os.Stdout, logpkg.LstdFlags, logger.DebugLevel))
+	logger.AddLogSystem(logger.NewStdLogSystem(os.Stdout, logpkg.LstdFlags, logger.ErrorLevel))
 }
 
 func TestUDP_ping(t *testing.T) {
@@ -52,7 +53,7 @@ func TestUDP_findnode(t *testing.T) {
 	defer n1.Close()
 	defer n2.Close()
 
-	entry := &Node{ID: NodeID{1}, Addr: &net.UDPAddr{IP: net.IP{1, 2, 3, 4}, Port: 15}}
+	entry := MustParseNode("enode://9d8a19597e312ef32d76e6b4903bb43d7bcd892d17b769d30b404bd3a4c2dca6c86184b17d0fdeeafe3b01e0e912d990ddc853db3f325d5419f31446543c30be@127.0.0.1:54194")
 	n2.add([]*Node{entry})
 
 	target := randomID(n1.self.ID, 100)
@@ -60,7 +61,7 @@ func TestUDP_findnode(t *testing.T) {
 	if len(result) != 1 {
 		t.Fatalf("wrong number of results: got %d, want 1", len(result))
 	}
-	if result[0].ID != entry.ID {
+	if !reflect.DeepEqual(result[0], entry) {
 		t.Errorf("wrong result: got %v, want %v", result[0], entry)
 	}
 }
@@ -103,8 +104,10 @@ func TestUDP_findnodeMultiReply(t *testing.T) {
 	nodes := make([]*Node, bucketSize)
 	for i := range nodes {
 		nodes[i] = &Node{
-			Addr: &net.UDPAddr{IP: net.IP{1, 2, 3, 4}, Port: i + 1},
-			ID:   randomID(n2.self.ID, i+1),
+			IP:       net.IP{1, 2, 3, 4},
+			DiscPort: i + 1,
+			TCPPort:  i + 1,
+			ID:       randomID(n2.self.ID, i+1),
 		}
 	}
 
