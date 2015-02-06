@@ -75,8 +75,7 @@ Rectangle {
 		RowLayout {
 			id: navBar
 			height: 74
-			
-
+			z: 20
 			anchors {
 				left: parent.left
 				right: parent.right
@@ -108,6 +107,7 @@ Rectangle {
 			    height: 28
 			    color: "#FFFFFF"
 			    radius: 6
+
 
 			   MouseArea {
 			    	anchors.fill: parent
@@ -244,6 +244,7 @@ Rectangle {
 			}*/
 
 			Rectangle {
+				id: navBarBackground
                 anchors.fill: parent
                 gradient: Gradient {
                     GradientStop { position: 0.0; color: "#F6F1F2" }
@@ -276,12 +277,31 @@ Rectangle {
 				bottom: parent.bottom
 				top: divider.bottom
 			}
-
+			z: 10
+			
 			onLoadingChanged: {
 				if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
 					webview.runJavaScript("document.title", function(pageTitle) {
-						menuItem.title = pageTitle;	
+						//menuItem.title = pageTitle;	
 					});
+
+					//var topBarStyle
+					webView.runJavaScript("$(\"meta[name='ethereum-dapp-url-bar-style']\").attr('content');", function(topBarStyle){
+						if (topBarStyle=="transparent") {
+
+							// Adjust for a transparent sidebar Dapp
+							navBarBackground.visible = false;
+							back.visible = false;
+							appInfoPane.anchors.leftMargin = -16;
+							appInfoPaneShadow.anchors.leftMargin = -16;
+							webview.anchors.topMargin = -74;
+							webview.runJavaScript("$('body').addClass('ethereum-dapp-url-bar-style-transparent')")
+
+						};	
+					});
+
+					
+
 					webview.runJavaScript(eth.readFile("bignumber.min.js"));
 					webview.runJavaScript(eth.readFile("ethereum.js/dist/ethereum.js"));
 
