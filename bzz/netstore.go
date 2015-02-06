@@ -17,30 +17,10 @@ import (
 	"time"
 )
 
-// This is a mock implementation with a fixed peer pool with no distinction between peers
-type peerPool struct {
-	pool map[string]peer
-}
-
-func (self *peerPool) addPeer(p peer) {
-	self.pool[string(p.pubkey)] = p
-}
-
-func (self *peerPool) removePeer(p peer) {
-	delete(self.pool, string(p.pubkey))
-}
-
-func (self *peerPool) getPeers(target Key) (peers []peer) {
-	for _, value := range self.pool {
-		peers = append(peers, value)
-	}
-	return
-}
-
 type netStore struct {
 	localStore *localStore
 	lock       sync.Mutex
-	peerPool   *peerPool
+	hive       *hive
 }
 
 /*
@@ -65,11 +45,6 @@ const (
 var (
 	searchTimeout = 3 * time.Second
 )
-
-type peer struct {
-	*bzzProtocol
-	pubkey []byte
-}
 
 type requestStatus struct {
 	key        Key
@@ -257,7 +232,7 @@ func (self *netStore) store(chunk *Chunk) {
 		Id:   r.Int63(),
 		Size: chunk.Size,
 	}
-	for _, peer := range self.peerPool.getPeers(chunk.Key) {
+	for _, peer := range self.hive.getPeers(chunk.Key) {
 		go peer.store(req)
 	}
 }
@@ -279,13 +254,4 @@ func (self *netStore) searchTimeout(rs *requestStatus, req *retrieveRequestMsgDa
 	} else {
 		return t
 	}
-}
-
-// these should go to cademlia
-func (self *netStore) addPeers(req *peersMsgData) (err error) {
-	return
-}
-
-func (self *netStore) removePeer(p peer) {
-	return
 }

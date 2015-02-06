@@ -33,6 +33,7 @@ const (
 // instance is running on each peer
 type bzzProtocol struct {
 	netStore *netStore
+	hive     *hive
 	peer     *p2p.Peer
 	rw       p2p.MsgReadWriter
 }
@@ -164,7 +165,7 @@ func runBzzProtocol(netStore *netStore, p *p2p.Peer, rw p2p.MsgReadWriter) (err 
 		for {
 			err = self.handle()
 			if err != nil {
-				self.netStore.removePeer(peer{bzzProtocol: self})
+				self.hive.removePeer(peer{bzzProtocol: self})
 				break
 			}
 		}
@@ -214,7 +215,7 @@ func (self *bzzProtocol) handle() error {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
 		req.peer = peer{bzzProtocol: self}
-		self.netStore.addPeers(&req)
+		self.hive.addPeers(&req)
 
 	default:
 		return self.protoError(ErrInvalidMsgCode, "%v", msg.Code)
@@ -274,7 +275,7 @@ func (self *bzzProtocol) handleStatus() error {
 		peer: peer{bzzProtocol: self, pubkey: status.NodeID},
 	}
 
-	self.netStore.addPeers(req)
+	self.hive.addPeers(req)
 
 	return nil
 }
