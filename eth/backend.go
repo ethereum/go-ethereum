@@ -2,7 +2,6 @@ package eth
 
 import (
 	"fmt"
-	"net"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -241,13 +240,12 @@ func (s *Ethereum) Start(seedNode string) error {
 	return nil
 }
 
-func (self *Ethereum) SuggestPeer(addr string, id discover.NodeID) error {
-	netaddr, err := net.ResolveTCPAddr("tcp", addr)
+func (self *Ethereum) SuggestPeer(nodeURL string) error {
+	n, err := discover.ParseNode(nodeURL)
 	if err != nil {
-		logger.Errorf("couldn't resolve %s:", addr, err)
-		return err
+		return fmt.Errorf("invalid node URL: %v", err)
 	}
-	self.net.SuggestPeer(netaddr.IP, netaddr.Port, id)
+	self.net.SuggestPeer(n)
 	return nil
 }
 

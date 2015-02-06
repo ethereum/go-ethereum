@@ -135,8 +135,8 @@ func (srv *Server) PeerCount() int {
 
 // SuggestPeer creates a connection to the given Node if it
 // is not already connected.
-func (srv *Server) SuggestPeer(ip net.IP, port int, id discover.NodeID) {
-	srv.peerConnect <- &discover.Node{ID: id, IP: ip, TCPPort: port}
+func (srv *Server) SuggestPeer(n *discover.Node) {
+	srv.peerConnect <- n
 }
 
 // Broadcast sends an RLP-encoded message to all connected peers.

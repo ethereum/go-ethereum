@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/obscuren/qml"
 )
@@ -143,14 +142,9 @@ func (ui *UiLib) Connect(button qml.Object) {
 	}
 }
 
-func (ui *UiLib) ConnectToPeer(addr string, hexid string) {
-	id, err := discover.HexID(hexid)
-	if err != nil {
-		guilogger.Errorf("bad node ID: %v", err)
-		return
-	}
-	if err := ui.eth.SuggestPeer(addr, id); err != nil {
-		guilogger.Infoln(err)
+func (ui *UiLib) ConnectToPeer(nodeURL string) {
+	if err := ui.eth.SuggestPeer(nodeURL); err != nil {
+		guilogger.Infoln("SuggestPeer error: " + err.Error())
 	}
 }
 
