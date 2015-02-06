@@ -63,6 +63,27 @@ Rectangle {
 		}
 	}
 
+	function showFullUrlBar(on){
+    	if (on) {
+			//appTitle.visible = false
+			//appDomain.visible = false
+			
+			//uriNav.visible = true
+			clickAnywhereOnApp.visible = true
+
+			navBar.state = "fullUrlVisible"
+    	} else {
+			//appTitle.visible = true
+			//appDomain.visible = true
+			//uriNav.visible = false
+			clickAnywhereOnApp.visible = false
+
+			navBar.state = "titleVisible"
+
+   		}
+
+    }
+
 	Component.onCompleted: {
 	}
 
@@ -71,6 +92,23 @@ Rectangle {
 		id: root
 		anchors.fill: parent
 		state: "inspectorShown"
+
+		MouseArea {
+			id: clickAnywhereOnApp
+			z:15
+			hoverEnabled: true
+			anchors.fill: parent
+			/*hoverEnabled: true*/
+			
+			onClicked: {
+			  	showFullUrlBar(false);
+			}
+
+			/*Rectangle {
+			    anchors.fill: parent
+			    color: "#88888888"
+			}*/
+		}
 
 		RowLayout {
 			id: navBar
@@ -113,11 +151,11 @@ Rectangle {
 			    	anchors.fill: parent
 			    	z: 10
 			    	hoverEnabled: true
+			    	
 			    	onEntered: {
-			    		uriNav.visible = true
-			    		appTitle.visible = false
-			    		appDomain.visible = false
-			    	}	    	
+			    	  	showFullUrlBar(true);
+			    	}	 
+			    	   	
 			    }
 
 			    anchors {
@@ -165,7 +203,8 @@ Rectangle {
 
 				TextField {
 				    id: uriNav
-				    visible: false
+				    opacity: 0.0
+
 				    anchors {
 				    	left: parent.left
 				    	right: parent.right
@@ -188,21 +227,13 @@ Rectangle {
 				    Keys.onReturnPressed: {
 				    	webview.url = this.text;
 				    }
-
+				   /* onFocusedChanged: {
+   					     if (focused) {
+   					         //uriNav.selectAll();
+   					     }
+   					}*/
 			    }
    				
-   				
-
-
-
-                 			    /*text {
-			    	id: appTitle
-			    	anchors.left: parent.left
-			    	anchors.right: parent.horizontalCenter
-			    	text: "APP TITLE"
-			    	font.bold: true
-			    	color: "#928484"
-			    }*/
 			    z:2
 			}
 			
@@ -224,24 +255,6 @@ Rectangle {
 
 				z:1
 			}
-		/*
-			Button {
-				id: toggleInspector
-				anchors {
-					right: parent.right
-				}
-				iconSource: "../../bug.png"
-				onClicked: {
-					// XXX soon
-					return
-					if(inspector.visible == true){
-						inspector.visible = false
-					}else{
-						inspector.visible = true
-						inspector.url = webview.experimental.remoteInspectorUrl
-					}
-				}
-			}*/
 
 			Rectangle {
 				id: navBarBackground
@@ -253,19 +266,61 @@ Rectangle {
                 z:-1
             }
 
-		}
+            states: [
+            	State {
+            		name: "fullUrlVisible"
+            		PropertyChanges {
+                		target: appTitle
+                		anchors.rightMargin: -50
+                		opacity: 0.0
+            		}            		
+            		PropertyChanges {
+                		target: appDomain
+                		anchors.leftMargin: -50
+                		opacity: 0.0
+            		}
+            		PropertyChanges {
+                		target: uriNav
+                		anchors.leftMargin: 0
+                		opacity: 1.0
+            		}            		
+            	},           	
+            	State {
+            		name: "titleVisible"
 
-		// Border
-		Rectangle {
-			id: divider
-			anchors {
-				left: parent.left
-				right: parent.right
-				top: navBar.bottom
-			}
-			z: -1
-			height: 1
-			color: "#CCCCCC"
+            		PropertyChanges {
+            			target: appTitle
+                		anchors.rightMargin: 10
+                		opacity: 1.0
+            		}
+            		PropertyChanges {
+            			target: appDomain
+                		anchors.leftMargin: 10
+                		opacity: 1.0
+            		}
+            		PropertyChanges {
+                		target: uriNav
+                		anchors.leftMargin: -50
+                		opacity: 0.0
+            		}              		
+            	}
+
+            ]
+
+			transitions: [
+      		  // This adds a transition that defaults to applying to all state changes
+
+     		   Transition {
+		
+     		       // This applies a default NumberAnimation to any changes a state change makes to x or y properties
+     		       NumberAnimation { 
+     		       		properties: "anchors.leftMargin, anchors.rightMargin, opacity" 
+     		       		easing.type: Easing.InOutQuad //Easing.InOutBack
+     		       		duration: 300
+     		       }
+     		   }
+    		]            
+
 		}
 
 		WebEngineView {
@@ -275,7 +330,7 @@ Rectangle {
 				left: parent.left
 				right: parent.right
 				bottom: parent.bottom
-				top: divider.bottom
+				top: navBar.bottom
 			}
 			z: 10
 			
@@ -309,12 +364,10 @@ Rectangle {
 					var matches = cleanTitle.match(/^[a-z]*\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
 					var domain = matches && matches[1];
 
-					uriNav.visible = false
-			    	appDomain.visible = true
 			    	appDomain.text = domain //webview.url.replace("a", "z")
-
-			    	appTitle.visible = true
 			    	appTitle.text = webview.title
+
+			    	showFullUrlBar(false);
 				}
 			}
 			onJavaScriptConsoleMessage: {

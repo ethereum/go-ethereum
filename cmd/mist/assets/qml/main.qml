@@ -50,7 +50,7 @@ ApplicationWindow {
 
         mainSplit.setView(wallet.view, wallet.menuItem);
 
-        newBrowserTab("http://ethereum-dapp-whisper-client.meteor.com/chat/ethereum");
+        newBrowserTab("http://localhost:3000/chat/MfJhJuAamRS3JuGbu");
 
         // Command setup
         gui.sendCommand(0)
@@ -118,6 +118,8 @@ ApplicationWindow {
         window.menuItem.title = "Mist";
         activeView(window.view, window.menuItem);
     }
+
+
 
     menuBar: MenuBar {
         Menu {
