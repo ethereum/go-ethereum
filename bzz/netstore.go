@@ -97,11 +97,17 @@ func (self *netStore) addStoreRequest(req *storeRequestMsgData) {
 	self.put(chunk)
 }
 
+// waits for response or times  out
 func (self *netStore) Get(key Key) (chunk *Chunk, err error) {
 	chunk = self.get(key)
-	timeout := time.After(searchTimeout)
+	id := generateId()
+	timeout := time.Now().Add(searchTimeout)
+	if chunk.Data == nil {
+		self.startSearch(chunk, id, timeout)
+	}
+	timer := time.After(searchTimeout)
 	select {
-	case <-timeout:
+	case <-timer:
 		err = notFound
 	case <-chunk.req.C:
 	}
@@ -122,9 +128,6 @@ func (self *netStore) get(key Key) (chunk *Chunk) {
 
 	if chunk.req == nil {
 		chunk.req = new(requestStatus)
-		if chunk.Data == nil {
-			self.startSearch(chunk)
-		}
 	}
 	return
 }
@@ -142,15 +145,31 @@ func (self *netStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 		self.deliver(req, chunk)
 	} else {
 		// we might need chunk.req to cache relevant peers response, or would it expire?
-		self.peers(req, chunk, timeout)
+		self.peers(req, chunk, *timeout)
+		if timeout != nil {
+			self.startSearch(chunk, req.Id, *timeout)
+		}
 	}
 
 }
 
 // it's assumed that caller holds the lock
-func (self *netStore) startSearch(chunk *Chunk) {
+func (self *netStore) startSearch(chunk *Chunk, id int64, timeout time.Time) {
 	chunk.req.status = reqSearching
-	// implement search logic here
+	peers := self.hive.getPeers(chunk.Key)
+	req := &retrieveRequestMsgData{
+		Key:     chunk.Key,
+		Id:      id,
+		Timeout: timeout,
+	}
+	for _, peer := range peers {
+		peer.retrieve(req)
+	}
+}
+
+func generateId() int64 {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	return r.Int63()
 }
 
 /*
@@ -175,7 +194,7 @@ this is the most simplistic implementation:
  - respond with peers and timeout if still searching
 ! in the last case as well, we should respond with reject if already got requesterCount peers with that exact id
 */
-func (self *netStore) strategyUpdateRequest(rs *requestStatus, req *retrieveRequestMsgData) (msgTyp int, timeout time.Time) {
+func (self *netStore) strategyUpdateRequest(rs *requestStatus, req *retrieveRequestMsgData) (msgTyp int, timeout *time.Time) {
 
 	switch rs.status {
 	case reqSearching:
@@ -225,11 +244,11 @@ func (self *netStore) deliver(req *retrieveRequestMsgData, chunk *Chunk) {
 }
 
 func (self *netStore) store(chunk *Chunk) {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	id := generateId()
 	req := &storeRequestMsgData{
 		Key:  chunk.Key,
 		Data: chunk.Data,
-		Id:   r.Int63(),
+		Id:   id,
 		Size: chunk.Size,
 	}
 	for _, peer := range self.hive.getPeers(chunk.Key) {
@@ -247,11 +266,11 @@ func (self *netStore) peers(req *retrieveRequestMsgData, chunk *Chunk, timeout t
 	req.peer.peers(peersData)
 }
 
-func (self *netStore) searchTimeout(rs *requestStatus, req *retrieveRequestMsgData) (timeout time.Time) {
+func (self *netStore) searchTimeout(rs *requestStatus, req *retrieveRequestMsgData) (timeout *time.Time) {
 	t := time.Now().Add(searchTimeout)
 	if req.Timeout.Before(t) {
-		return req.Timeout
+		return &req.Timeout
 	} else {
-		return t
+		return &t
 	}
 }
