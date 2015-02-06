@@ -75,6 +75,7 @@ Rectangle {
 		RowLayout {
 			id: navBar
 			height: 184
+			z: 20
 
 			anchors {
 				left: parent.left
@@ -84,8 +85,9 @@ Rectangle {
 			Rectangle {
 				id: appInfoPane
 			    height: 28
-			    color: "#FFFFFF"
+			    color: "#efefef"
 			    radius: 6
+			    z:25
 
 			   MouseArea {
 			    	anchors.fill: parent
@@ -128,16 +130,14 @@ Rectangle {
                     }
     				text: "Type the address of a new Dapp";
 				    y: parent.height / 2 - this.height / 2
-				    z: 20
+				    z: 30
 				    activeFocusOnPress: true
 				    Keys.onReturnPressed: {
         				newBrowserTab(this.text);
         				this.text = "Type the address of a new Dapp";
 				    }
 
-			    }
-   				
-			    z:2
+			    }   				
 			}
 			
 			Rectangle {
@@ -146,6 +146,7 @@ Rectangle {
 			    height: 30
 			    color: "#BDB6B6"
 			    radius: 6
+			    z: 15
 
 			    anchors {
 					left: parent.left
@@ -156,7 +157,7 @@ Rectangle {
 					topMargin: 23
 				}
 
-				z:1
+				
 			}
 
 		}
@@ -165,12 +166,7 @@ Rectangle {
 		WebEngineView {
 			objectName: "webView"
 			id: webview
-			anchors {
-				left: parent.left
-				right: parent.right
-				bottom: parent.bottom
-				top: divider.bottom
-			}
+			anchors.fill: parent
 
 			onLoadingChanged: {
 				if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
@@ -188,6 +184,7 @@ Rectangle {
 		WebEngineView {
 			id: inspector
 			visible: false
+			z:10
 			anchors {
 				left: root.left
 				right: root.right
