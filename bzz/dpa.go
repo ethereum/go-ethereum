@@ -4,6 +4,7 @@ import (
 	"errors"
 	"sync"
 	// "time"
+	"fmt"
 
 	ethlogger "github.com/ethereum/go-ethereum/logger"
 	// "github.com/ethereum/go-ethereum/rlp"
@@ -69,7 +70,7 @@ type ChunkStore interface {
 	Get(Key) (*Chunk, error)
 }
 
-func (self *DPA) Retrieve(key Key) (data LazySectionReader, err error) {
+func (self *DPA) Retrieve(key Key) (data LazySectionReader) {
 
 	reader, errC := self.Chunker.Join(key, self.retrieveC)
 	data = reader
@@ -171,9 +172,14 @@ func (self *DPA) retrieveLoop() {
 func (self *DPA) storeLoop() {
 	self.storeC = make(chan *Chunk)
 	go func() {
+		fmt.Printf("StoreLoop started.\n")
 	STORE:
-		for chunk := range self.storeC {
-			go self.ChunkStore.Put(chunk)
+		for {
+			chunk := <-self.storeC
+			fmt.Printf("StoreLoop reader size %d\n", chunk.Reader.Size())
+			chunk.Data = make([]byte, chunk.Reader.Size())
+			chunk.Reader.ReadAt(chunk.Data, 0)
+			self.ChunkStore.Put(chunk)
 			select {
 			case <-self.quitC:
 				break STORE
