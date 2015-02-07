@@ -141,22 +141,23 @@ main entrypoint, wrappers starting a server running the bzz protocol
 use this constructor to attach the protocol ("class") to server caps
 the Dev p2p layer then runs the protocol instance on each peer
 */
-func BzzProtocol(netStore *netStore) p2p.Protocol {
+func BzzProtocol(netStore *netStore, hive *hive) p2p.Protocol {
 	return p2p.Protocol{
 		Name:    "bzz",
 		Version: Version,
 		Length:  ProtocolLength,
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			return runBzzProtocol(netStore, p, rw)
+			return runBzzProtocol(netStore, hive, p, rw)
 		},
 	}
 }
 
 // the main loop that handles incoming messages
 // note RemovePeer in the post-disconnect hook
-func runBzzProtocol(netStore *netStore, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+func runBzzProtocol(netStore *netStore, hive *hive, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
 	self := &bzzProtocol{
 		netStore: netStore,
+		hive:     hive,
 		rw:       rw,
 		peer:     p,
 	}
