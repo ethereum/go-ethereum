@@ -1,16 +1,5 @@
 package bzz
 
-/*
-TODO:
-- put Data -> Reader logic to chunker
-- clarify dpa / localStore / hive / netstore naming and division of labour and entry points for local/remote requests
-- figure out if its a problem that peers on requester list may disconnect while searching
-- Id (nonce/requester map key) should probs be random byte slice or (hash of) originator's address to avoid collisions
-- rework protocol errors using errs after PR merged
-- integrate cademlia as peer pool
-- finish the net/dht logic, startSearch and storage
-*/
-
 import (
 	"math/rand"
 	"sync"

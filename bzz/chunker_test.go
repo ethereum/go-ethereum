@@ -196,20 +196,17 @@ func benchmarkSplitRandomData(n int, chunks int, t *testing.B) {
 	}
 }
 
-func BenchmarkJoinRandomData_100_2(t *testing.B)       { benchmarkJoinRandomData(100, 3, t) }
-func BenchmarkJoinRandomData_1000_2(t *testing.B)      { benchmarkJoinRandomData(1000, 3, t) }
-func BenchmarkJoinRandomData_10000_2(t *testing.B)     { benchmarkJoinRandomData(10000, 3, t) }
-func BenchmarkJoinRandomData_100000_2(t *testing.B)    { benchmarkJoinRandomData(100000, 3, t) }
-func BenchmarkJoinRandomData_1000000_2(t *testing.B)   { benchmarkJoinRandomData(1000000, 3, t) }
-func BenchmarkJoinRandomData_10000000_2(t *testing.B)  { benchmarkJoinRandomData(10000000, 3, t) }
-func BenchmarkJoinRandomData_100000000_2(t *testing.B) { benchmarkJoinRandomData(100000000, 3, t) }
+func BenchmarkJoinRandomData_100_2(t *testing.B)     { benchmarkJoinRandomData(100, 3, t) }
+func BenchmarkJoinRandomData_1000_2(t *testing.B)    { benchmarkJoinRandomData(1000, 3, t) }
+func BenchmarkJoinRandomData_10000_2(t *testing.B)   { benchmarkJoinRandomData(10000, 3, t) }
+func BenchmarkJoinRandomData_100000_2(t *testing.B)  { benchmarkJoinRandomData(100000, 3, t) }
+func BenchmarkJoinRandomData_1000000_2(t *testing.B) { benchmarkJoinRandomData(1000000, 3, t) }
 
-func BenchmarkSplitRandomData_100_2(t *testing.B)       { benchmarkSplitRandomData(100, 3, t) }
-func BenchmarkSplitRandomData_1000_2(t *testing.B)      { benchmarkSplitRandomData(1000, 3, t) }
-func BenchmarkSplitRandomData_10000_2(t *testing.B)     { benchmarkSplitRandomData(10000, 3, t) }
-func BenchmarkSplitRandomData_100000_2(t *testing.B)    { benchmarkSplitRandomData(100000, 3, t) }
-func BenchmarkSplitRandomData_1000000_2(t *testing.B)   { benchmarkSplitRandomData(1000000, 3, t) }
-func BenchmarkSplitRandomData_10000000_2(t *testing.B)  { benchmarkSplitRandomData(10000000, 3, t) }
-func BenchmarkSplitRandomData_100000000_2(t *testing.B) { benchmarkSplitRandomData(100000000, 3, t) }
+func BenchmarkSplitRandomData_100_2(t *testing.B)      { benchmarkSplitRandomData(100, 3, t) }
+func BenchmarkSplitRandomData_1000_2(t *testing.B)     { benchmarkSplitRandomData(1000, 3, t) }
+func BenchmarkSplitRandomData_10000_2(t *testing.B)    { benchmarkSplitRandomData(10000, 3, t) }
+func BenchmarkSplitRandomData_100000_2(t *testing.B)   { benchmarkSplitRandomData(100000, 3, t) }
+func BenchmarkSplitRandomData_1000000_2(t *testing.B)  { benchmarkSplitRandomData(1000000, 3, t) }
+func BenchmarkSplitRandomData_10000000_2(t *testing.B) { benchmarkSplitRandomData(10000000, 3, t) }
 
 // go test -bench ./bzz -cpuprofile cpu.out -memprofile mem.out
