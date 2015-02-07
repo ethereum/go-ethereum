@@ -72,6 +72,9 @@ type Chunker interface {
 		Lifecycle of the reader can be modified with SetTimeout()
 	*/
 	Join(key Key, chunkC chan *Chunk) (LazySectionReader, chan error)
+
+	// returns the key length
+	KeySize() int64
 }
 
 /*
@@ -111,7 +114,7 @@ func (self *TreeChunker) Init() {
 
 }
 
-func (self *TreeChunker) HashSize() int64 {
+func (self *TreeChunker) KeySize() int64 {
 	return self.hashSize
 }
 
@@ -143,13 +146,20 @@ func (self *TreeChunker) Hash(size int64, input SectionReader) []byte {
 }
 
 func (self *TreeChunker) Split(key Key, data SectionReader, chunkC chan *Chunk) (errC chan error) {
+
+	if self.chunkSize <= 0 {
+		panic("chunker must be initialised")
+	}
+
+	if int64(len(key)) != self.hashSize {
+		panic(fmt.Sprintf("root key buffer must be allocated byte slice of length %d", self.hashSize))
+	}
+
 	wg := &sync.WaitGroup{}
 	errC = make(chan error)
 	rerrC := make(chan error)
 	timeout := time.After(self.SplitTimeout)
-	if key == nil {
-		key = make([]byte, self.hashSize)
-	}
+
 	wg.Add(1)
 	go func() {
 
@@ -158,10 +168,6 @@ func (self *TreeChunker) Split(key Key, data SectionReader, chunkC chan *Chunk) 
 		size := data.Size()
 		// takes lowest depth such that chunksize*HashCount^(depth+1) > size
 		// power series, will find the order of magnitude of the data size in base hashCount or numbers of levels of branching in the resulting tree.
-
-		if self.Branches <= 1 || self.chunkSize <= 0 {
-			panic("chunker must be initialised")
-		}
 
 		for ; treeSize < size; treeSize *= self.Branches {
 			depth++
