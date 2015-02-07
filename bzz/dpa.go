@@ -4,10 +4,9 @@ import (
 	"errors"
 	"sync"
 	// "time"
-	"fmt"
+	// "fmt"
 
 	ethlogger "github.com/ethereum/go-ethereum/logger"
-	// "github.com/ethereum/go-ethereum/rlp"
 )
 
 /*
@@ -70,50 +69,49 @@ type ChunkStore interface {
 	Get(Key) (*Chunk, error)
 }
 
-func (self *DPA) Retrieve(key Key) (data LazySectionReader) {
+func (self *DPA) Retrieve(key Key) LazySectionReader {
 
 	reader, errC := self.Chunker.Join(key, self.retrieveC)
-	data = reader
 	// we can add subscriptions etc. or timeout here
 	go func() {
-	LOOP:
+	JOIN:
 		for {
 			select {
 			case err, ok := <-errC:
 				if err != nil {
-					dpaLogger.Warnf("%v", err)
+					dpaLogger.Warnf("chunker join error: %v", err)
 				}
 				if !ok {
-					break LOOP
+					break JOIN
 				}
 			case <-self.quitC:
-				return
+				break JOIN
 			}
 		}
 	}()
 
-	return
+	return reader
 }
 
 func (self *DPA) Store(data SectionReader) (key Key, err error) {
-
+	key = make([]byte, self.Chunker.KeySize())
 	errC := self.Chunker.Split(key, data, self.storeC)
 
-	go func() {
-	LOOP:
-		for {
-			select {
-			case err, ok := <-errC:
-				dpaLogger.Warnf("%v", err)
-				if !ok {
-					break LOOP
-				}
-
-			case <-self.quitC:
-				break LOOP
+SPLIT:
+	for {
+		select {
+		case err, ok := <-errC:
+			if err != nil {
+				dpaLogger.Warnf("chunkner split error: %v", err)
 			}
+			if !ok {
+				break SPLIT
+			}
+
+		case <-self.quitC:
+			break SPLIT
 		}
-	}()
+	}
 	return
 
 }
@@ -146,18 +144,17 @@ func (self *DPA) retrieveLoop() {
 	go func() {
 	RETRIEVE:
 		for chunk := range self.retrieveC {
+
 			go func() {
 				storedChunk, err := self.ChunkStore.Get(chunk.Key)
 				if err == notFound {
-					dpaLogger.DebugDetailf("chunk %x not found", chunk.Key)
-					return
-				}
-				if err != nil {
+					dpaLogger.DebugDetailf("chunk '%x' not found", chunk.Key)
+				} else if err != nil {
 					dpaLogger.DebugDetailf("error retrieving chunk %x: %v", chunk.Key, err)
-					return
+				} else {
+					chunk.Reader = NewChunkReaderFromBytes(storedChunk.Data)
+					chunk.Size = storedChunk.Size
 				}
-				chunk.Reader = NewChunkReaderFromBytes(storedChunk.Data)
-				chunk.Size = storedChunk.Size
 				close(chunk.C)
 			}()
 			select {
@@ -172,18 +169,15 @@ func (self *DPA) retrieveLoop() {
 func (self *DPA) storeLoop() {
 	self.storeC = make(chan *Chunk)
 	go func() {
-		fmt.Printf("StoreLoop started.\n")
 	STORE:
-		for {
+		for chunk := range self.storeC {
+			chunk.Data = make([]byte, chunk.Reader.Size())
+			chunk.Reader.ReadAt(chunk.Data, 0)
+			self.ChunkStore.Put(chunk)
 			select {
-			case chunk := <-self.storeC:
-				fmt.Printf("StoreLoop reader size %d\n", chunk.Reader.Size())
-				chunk.Data = make([]byte, chunk.Reader.Size())
-				chunk.Reader.ReadAt(chunk.Data, 0)
-				self.ChunkStore.Put(chunk)
 			case <-self.quitC:
 				break STORE
-				// default:
+			default:
 			}
 		}
 	}()

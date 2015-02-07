@@ -6,7 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/bzz/test"
 	"os"
 	"testing"
-	"time"
+	// "time"
 )
 
 func TestDPA(t *testing.T) {
@@ -31,13 +31,13 @@ func TestDPA(t *testing.T) {
 	reader, slice := testDataReader(0x100)
 	fmt.Printf("Chunk size: %d.", len(slice))
 	key, err := dpa.Store(reader)
-	// _, err = dpa.Store(reader)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}
+	// time.Sleep(2 * time.Second)
 	resultReader := dpa.Retrieve(key)
 	resultSlice := make([]byte, len(slice))
-	n, err := resultReader.Read(resultSlice)
+	n, err := resultReader.ReadAt(resultSlice, 0)
 	if err != nil {
 		t.Errorf("Retrieve error: %v", err)
 	}
@@ -47,5 +47,5 @@ func TestDPA(t *testing.T) {
 	if !bytes.Equal(slice, resultSlice) {
 		t.Errorf("Comparison error.")
 	}
-	time.Sleep(time.Second)
+	// time.Sleep(time.Second)
 }

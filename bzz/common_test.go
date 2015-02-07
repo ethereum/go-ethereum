@@ -72,15 +72,13 @@ SPLIT:
 				go func() {
 					storedChunk, err := m.Get(chunk.Key)
 					if err == notFound {
-						t.Errorf("Chunk not found: %v", err)
-						return
+						dpaLogger.DebugDetailf("chunk '%x' not found", chunk.Key)
+					} else if err != nil {
+						dpaLogger.DebugDetailf("error retrieving chunk %x: %v", chunk.Key, err)
+					} else {
+						chunk.Reader = NewChunkReaderFromBytes(storedChunk.Data)
+						chunk.Size = storedChunk.Size
 					}
-					if err != nil {
-						t.Errorf("GET error: %v", err)
-						return
-					}
-					chunk.Reader = NewChunkReaderFromBytes(storedChunk.Data)
-					chunk.Size = storedChunk.Size
 					close(chunk.C)
 				}()
 			case err, ok := <-errC:
