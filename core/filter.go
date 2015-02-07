@@ -145,7 +145,7 @@ func (self *Filter) FilterLogs(logs state.Logs) state.Logs {
 	// Filter the logs for interesting stuff
 Logs:
 	for _, log := range logs {
-		if len(self.address) > 0 && !bytes.Equal(self.address, log.Address()) {
+		if !bytes.Equal(self.address, log.Address()) {
 			continue
 		}
 
