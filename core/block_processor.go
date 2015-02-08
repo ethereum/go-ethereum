@@ -8,11 +8,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/pow/ezp"
 	"github.com/ethereum/go-ethereum/state"
@@ -24,20 +22,6 @@ type PendingBlockEvent struct {
 }
 
 var statelogger = logger.NewLogger("BLOCK")
-
-type EthManager interface {
-	BlockProcessor() *BlockProcessor
-	ChainManager() *ChainManager
-	TxPool() *TxPool
-	PeerCount() int
-	IsMining() bool
-	IsListening() bool
-	Peers() []*p2p.Peer
-	KeyManager() *crypto.KeyManager
-	ClientIdentity() p2p.ClientIdentity
-	Db() ethutil.Database
-	EventMux() *event.TypeMux
-}
 
 type BlockProcessor struct {
 	db ethutil.Database
