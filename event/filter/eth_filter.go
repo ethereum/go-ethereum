@@ -1,5 +1,6 @@
-// XXX This is the old filter system specifically for messages. This is till in used and could use some refactoring
 package filter
+
+// TODO make use of the generic filtering system
 
 import (
 	"sync"
@@ -59,7 +60,7 @@ func (self *FilterManager) GetFilter(id int) *core.Filter {
 
 func (self *FilterManager) filterLoop() {
 	// Subscribe to events
-	events := self.eventMux.Subscribe(core.NewBlockEvent{}, state.Logs(nil))
+	events := self.eventMux.Subscribe(core.PendingBlockEvent{}, core.NewBlockEvent{}, state.Logs(nil))
 
 out:
 	for {
@@ -73,6 +74,15 @@ out:
 				for _, filter := range self.filters {
 					if filter.BlockCallback != nil {
 						filter.BlockCallback(event.Block)
+					}
+				}
+				self.filterMu.RUnlock()
+
+			case core.PendingBlockEvent:
+				self.filterMu.RLock()
+				for _, filter := range self.filters {
+					if filter.PendingCallback != nil {
+						filter.PendingCallback(event.Block)
 					}
 				}
 				self.filterMu.RUnlock()

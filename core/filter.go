@@ -33,8 +33,9 @@ type Filter struct {
 	max      int
 	topics   [][]byte
 
-	BlockCallback func(*types.Block)
-	LogsCallback  func(state.Logs)
+	BlockCallback   func(*types.Block)
+	PendingCallback func(*types.Block)
+	LogsCallback    func(state.Logs)
 }
 
 // Create a new filter which uses a bloom filter on blocks to figure out whether a particular block
@@ -144,7 +145,7 @@ func (self *Filter) FilterLogs(logs state.Logs) state.Logs {
 	// Filter the logs for interesting stuff
 Logs:
 	for _, log := range logs {
-		if len(self.address) > 0 && !bytes.Equal(self.address, log.Address()) {
+		if !bytes.Equal(self.address, log.Address()) {
 			continue
 		}
 

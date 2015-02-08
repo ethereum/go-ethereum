@@ -7,7 +7,7 @@
 </head>
 <body>
 
-<h1>JevCoin</h1>
+<h1>JevCoin <code id="address"></code></h1>
 <div>
 	<strong>Balance</strong>
 	<span id="balance"></strong>
@@ -20,7 +20,11 @@
 	<button onclick="transact()">Send</button>
 </div>
 
+<hr>
+
 <table width="100%" id="table">
+	<tr><td style="width:40%;">Address</td><td>Balance</td></tr>
+	<tbody id="table_body"></tbody>
 </table>
 
 </body>
@@ -29,8 +33,8 @@
 	var web3 = require('web3');
 	var eth = web3.eth;
 
-	web3.setProvider(new web3.providers.HttpSyncProvider('http://localhost:8080'));
-	var desc =  [{
+	web3.setProvider(new web3.providers.HttpSyncProvider('http://localhost:8545'));
+	var desc = [{
 		"name": "balance(address)",
 		"type": "function",
 		"inputs": [{
@@ -54,57 +58,89 @@
 		}],
 		"outputs": []
 	}, {
-		"name":"Changed",
+		"name":"changed",
 		"type":"event",
 		"inputs": [
 			{"name":"to","type":"address","indexed":true},
-			{"name":"amount","type":"uint256","indexed":false},
+			{"name":"from","type":"address","indexed":true},
 		],
 	}];
 
-    var address = web3.db.get("jevcoin", "address");
-    if( address.length == 0 ) {
-        var code = "0x60056011565b60b88060356000396000f35b64e8d4a51000600033600160a060020a0316600052602052604060002081905550560060e060020a6000350480637bb98a68146028578063d0679d34146034578063e3d670d714604657005b602e60b3565b60006000f35b60406004356024356059565b60006000f35b604f6004356091565b8060005260206000f35b8060005281600160a060020a03167fb52dda022b6c1a1f40905a85f257f689aa5d69d850e49cf939d688fbe5af594660206000a25050565b6000600082600160a060020a03166000526020526040600020549050919050565b5b60008156";
-        address = web3.eth.transact({
-            data: code,
-            gasPrice: "1000000000000000",
-            gas: "10000",
-        });
-        web3.db.put("jevcoin", "address", address);
-    }
+	var address = localStorage.getItem("address");
+	// deploy if not exist
+	if (address == null) {
+		var code = "0x60056013565b610132806100356000396000f35b620f4240600033600160a060020a0316600052602052604060002081905550560060e060020a6000350480637bb98a681461002b578063d0679d3414610039578063e3d670d71461004d57005b61003361012d565b60006000f35b610047600435602435610062565b60006000f35b61005860043561010b565b8060005260206000f35b80600033600160a060020a0316600052602052604060002054106100855761008a565b610107565b80600033600160a060020a0316600052602052604060002090815403908190555080600083600160a060020a0316600052602052604060002090815401908190555081600160a060020a031633600160a060020a03167f1863989b4bb7c5c3941722099764574df7a459f9f9c6b6cdca35ddc9731792b860006000a35b5050565b6000600082600160a060020a03166000526020526040600020549050919050565b5b60008156";
+		address = web3.eth.transact({
+			data: code,
+			gasPrice: "1000000000000000",
+			gas: "10000",
+		});
+        	localStorage.setItem("address", address);
+	}
+	document.querySelector("#address").innerHTML = address.toUpperCase();
 
 	var contract = web3.eth.contract(address, desc);
-	contract.Changed({to: "0xaa"}).changed(function(e) {
-		console.log("e: " + JSON.stringify(e));
+	contract.changed({from: eth.accounts[0]}).changed(function() {
+		refresh();
 	});
-	contract.send( "0xaa", 10000 );
-	function reflesh() {
-        document.querySelector("#balance").innerHTML = contract.balance(eth.coinbase);
+	eth.watch('chain').changed(function() {
+		refresh();
+	});
 
-		var table = document.querySelector("#table");
+	function refresh() {
+        	document.querySelector("#balance").innerHTML = contract.balance(eth.coinbase);
+
+		var table = document.querySelector("#table_body");
 		table.innerHTML = ""; // clear
 
 		var storage = eth.storageAt(address);
+		table.innerHTML = "";
 		for( var item in storage ) {
-			table.innerHTML += "<tr><td>"+item+"</td><td>"+web3.toDecimal(storage[item])+"</td></tr>";
+			table.innerHTML += "<tr><td>"+item.toUpperCase()+"</td><td>"+web3.toDecimal(storage[item])+"</td></tr>";
 		}
 	}
 
 	function transact() {
 		var to = document.querySelector("#address").value;
-        if( to.length == 0 ) {
-            to = "0x4205b06c2cfa0e30359edcab94543266cb6fa1d3";
-        } else {
-            to = "0x"+to;
-        }
-        
-        var value = parseInt( document.querySelector("#amount").value );
-        
-        contract.transact({gas: "10000", gasprice: eth.gasPrice}).send( to, value );
-    }
-    
-    reflesh();
-        </script>
-    
+
+		if( to.length == 0 ) {
+			to = "0x4205b06c2cfa0e30359edcab94543266cb6fa1d3";
+		} else {
+			to = "0x"+to;
+		}
+
+		var value = parseInt( document.querySelector("#amount").value );
+
+		contract.send( to, value );
+	}
+
+	refresh();
+</script>
 </html>
 
+<!--
+contract JevCoin {
+    function JevCoin()
+    {
+        balances[msg.sender] = 1000000;
+    }
+ 
+    event changed(address indexed from, address indexed to);
+    function send(address to, uint value)
+    {
+        if( balances[msg.sender] < value ) return;
+ 
+        balances[msg.sender] -= value;
+        balances[to] += value;
+ 
+        changed(msg.sender, to);
+    }
+ 
+    function balance(address who) constant returns(uint t)
+    {
+        t = balances[who];
+    }
+ 
+    mapping(address => uint256) balances;
+ }
+-!>

@@ -20,6 +20,10 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
+type PendingBlockEvent struct {
+	Block *types.Block
+}
+
 var statelogger = logger.NewLogger("BLOCK")
 
 type EthManager interface {
@@ -126,20 +130,14 @@ func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state
 		cumulativeSum      = new(big.Int)
 	)
 
-done:
-	for i, tx := range txs {
+	for _, tx := range txs {
 		receipt, txGas, err := self.ApplyTransaction(coinbase, state, block, tx, totalUsedGas, transientProcess)
 		if err != nil {
-			return nil, nil, nil, nil, err
-
 			switch {
 			case IsNonceErr(err):
-				err = nil // ignore error
-				continue
+				return nil, nil, nil, nil, err
 			case IsGasLimitErr(err):
-				unhandled = txs[i:]
-
-				break done
+				return nil, nil, nil, nil, err
 			default:
 				statelogger.Infoln(err)
 				erroneous = append(erroneous, tx)
@@ -154,6 +152,10 @@ done:
 
 	block.Reward = cumulativeSum
 	block.Header().GasUsed = totalUsedGas
+
+	if transientProcess {
+		go self.eventMux.Post(PendingBlockEvent{block})
+	}
 
 	return receipts, handled, unhandled, erroneous, err
 }
@@ -213,7 +215,7 @@ func (sm *BlockProcessor) ProcessWithParent(block, parent *types.Block) (td *big
 		return
 	}
 
-	if err = sm.AccumelateRewards(state, block, parent); err != nil {
+	if err = sm.AccumulateRewards(state, block, parent); err != nil {
 		return
 	}
 
@@ -253,9 +255,8 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Header().Difficulty, expd)
 	}
 
-	diff := block.Header().Time - parent.Header().Time
-	if diff < 0 {
-		return ValidationError("Block timestamp less then prev block %v (%v - %v)", diff, block.Header().Time, sm.bc.CurrentBlock().Header().Time)
+	if block.Time() < parent.Time() {
+		return ValidationError("Block timestamp not after prev block (%v - %v)", block.Header().Time, parent.Header().Time)
 	}
 
 	if block.Time() > time.Now().Unix() {
@@ -270,7 +271,7 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 	return nil
 }
 
-func (sm *BlockProcessor) AccumelateRewards(statedb *state.StateDB, block, parent *types.Block) error {
+func (sm *BlockProcessor) AccumulateRewards(statedb *state.StateDB, block, parent *types.Block) error {
 	reward := new(big.Int).Set(BlockReward)
 
 	ancestors := set.New()
@@ -328,7 +329,7 @@ func (sm *BlockProcessor) GetMessages(block *types.Block) (messages []*state.Mes
 	defer state.Reset()
 
 	sm.TransitionState(state, parent, block)
-	sm.AccumelateRewards(state, block, parent)
+	sm.AccumulateRewards(state, block, parent)
 
 	return state.Manifest().Messages, nil
 }
@@ -349,7 +350,7 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 	defer state.Reset()
 
 	sm.TransitionState(state, parent, block)
-	sm.AccumelateRewards(state, block, parent)
+	sm.AccumulateRewards(state, block, parent)
 
 	return state.Logs(), nil
 }
