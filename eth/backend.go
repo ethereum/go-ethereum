@@ -46,6 +46,9 @@ type Config struct {
 func (cfg *Config) parseBootNodes() []*discover.Node {
 	var ns []*discover.Node
 	for _, url := range strings.Split(cfg.BootNodes, " ") {
+		if url == "" {
+			continue
+		}
 		n, err := discover.ParseNode(url)
 		if err != nil {
 			logger.Errorf("Bootstrap URL %s: %v\n", url, err)
