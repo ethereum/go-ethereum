@@ -44,4 +44,19 @@ func TestDPA(t *testing.T) {
 	if !bytes.Equal(slice, resultSlice) {
 		t.Errorf("Comparison error.")
 	}
+	localStore.memStore = newMemStore(dbStore)
+	resultReader = dpa.Retrieve(key)
+	for i, _ := range resultSlice {
+		resultSlice[i] = 0
+	}
+	n, err = resultReader.ReadAt(resultSlice, 0)
+	if err != nil {
+		t.Errorf("Retrieve error after removing memStore: %v", err)
+	}
+	if n != len(slice) {
+		t.Errorf("Slice size error after removing memStore got %d, expected %d.", n, len(slice))
+	}
+	if !bytes.Equal(slice, resultSlice) {
+		t.Errorf("Comparison error after removing memStore.")
+	}
 }
