@@ -2,7 +2,6 @@ package bzz
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/ethereum/go-ethereum/bzz/test"
 	"os"
 	"testing"
@@ -16,25 +15,23 @@ func TestDPA(t *testing.T) {
 	if err != nil {
 		t.Errorf("DB error: %v", err)
 	}
-	//	memStore := newMemStore(dbStore)
-	//	localStore := &localStore{
-	//		memStore,
-	//		dbStore,
-	//	}
+	memStore := newMemStore(dbStore)
+	localStore := &localStore{
+		memStore,
+		dbStore,
+	}
 	chunker := &TreeChunker{}
 	chunker.Init()
 	dpa := &DPA{
 		Chunker:    chunker,
-		ChunkStore: dbStore,
+		ChunkStore: localStore,
 	}
 	dpa.Start()
-	reader, slice := testDataReader(0x100)
-	fmt.Printf("Chunk size: %d.", len(slice))
+	reader, slice := testDataReader(0x1000000)
 	key, err := dpa.Store(reader)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}
-	// time.Sleep(2 * time.Second)
 	resultReader := dpa.Retrieve(key)
 	resultSlice := make([]byte, len(slice))
 	n, err := resultReader.ReadAt(resultSlice, 0)
@@ -47,5 +44,4 @@ func TestDPA(t *testing.T) {
 	if !bytes.Equal(slice, resultSlice) {
 		t.Errorf("Comparison error.")
 	}
-	// time.Sleep(time.Second)
 }
