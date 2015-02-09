@@ -6,6 +6,7 @@ import QtWebEngine 1.0
 //import QtWebEngine.experimental 1.0
 import QtQuick.Window 2.0;
 
+
 Rectangle {
 	id: window
 	anchors.fill: parent
@@ -19,6 +20,8 @@ Rectangle {
 	property alias url: webview.url
 	property alias windowTitle: webview.title
 	property alias webView: webview
+
+
 
 	property var cleanPath: false
 	property var open: function(url) {

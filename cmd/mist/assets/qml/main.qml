@@ -9,6 +9,7 @@ import Ethereum 1.0
 import "../ext/filter.js" as Eth
 import "../ext/http.js" as Http
 
+
 ApplicationWindow {
     id: root
     
@@ -375,6 +376,25 @@ ApplicationWindow {
              Layout.minimumWidth: 192
              Layout.maximumWidth: 192
 
+            FontLoader { 
+               id: sourceSansPro
+               source: "fonts/SourceSansPro-Regular.ttf" 
+            }
+            FontLoader { 
+               source: "fonts/SourceSansPro-Semibold.ttf" 
+            }            
+            FontLoader { 
+               source: "fonts/SourceSansPro-Bold.ttf" 
+            } 
+            FontLoader { 
+               source: "fonts/SourceSansPro-Black.ttf" 
+            }            
+            FontLoader { 
+               source: "fonts/SourceSansPro-Light.ttf" 
+            }              
+            FontLoader { 
+               source: "fonts/SourceSansPro-ExtraLight.ttf" 
+            }  
              anchors.top: parent.top
              Rectangle {
                      width: parent.height
@@ -503,7 +523,21 @@ ApplicationWindow {
                      }
 
                      Text {
+                        id: buttonLabel
+                        visible: false
+                        text: "GO TO NEW APP"
+                        font.family: sourceSansPro.name 
+                        font.weight: Font.DemiBold
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: "#AAA0A0"
+                        //font.family: SourceSansProRegular.name
+                     }   
+
+                    Text {
                          id: label
+                         font.family: sourceSansPro.name 
+                         font.weight: Font.DemiBold
                          anchors {
                              left: icon.right
                              verticalCenter: parent.verticalCenter
@@ -513,19 +547,12 @@ ApplicationWindow {
                          color: "#665F5F"
                          font.pixelSize: 14
                      }
-                     
-                     Text {
-                        id: buttonLabel
-                        visible: false
-                        text: "GO TO NEW APP"
-                        font.bold: true
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        anchors.verticalCenter: parent.verticalCenter
-                        color: "#AAA0A0"
-                     }                     
+
 
                      Text {
                          id: secondary
+                         font.family: sourceSansPro.name 
+                         font.weight: Font.Light
                          anchors {
                              right: parent.right
                              rightMargin: 8
@@ -619,7 +646,8 @@ ApplicationWindow {
                      color: "transparent"
                      Text {
                          text: "ETHEREUM"
-                         font.bold: true
+                         font.family: sourceSansPro.name 
+                         font.weight: Font.DemiBold
                          anchors {
                              left: parent.left
                              top: parent.verticalCenter
@@ -644,7 +672,8 @@ ApplicationWindow {
                      color: "transparent"
                      Text {
                          text: "APPS"
-                         font.bold: true
+                         font.family: sourceSansPro.name 
+                         font.weight: Font.DemiBold
                          anchors {
                              left: parent.left
                              top: parent.verticalCenter
@@ -668,7 +697,8 @@ ApplicationWindow {
                      color: "transparent"
                      Text {
                          text: "DEBUG"
-                         font.bold: true
+                         font.family: sourceSansPro.name 
+                         font.weight: Font.DemiBold
                          anchors {
                              left: parent.left
                              top: parent.verticalCenter
