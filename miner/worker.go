@@ -42,11 +42,15 @@ func env(block *types.Block, eth *eth.Ethereum) *environment {
 }
 
 type Agent interface {
-	Comms() chan<- *types.Block
+	Work() chan<- *types.Block
+	SetNonceCh(chan<- []byte)
+	Stop()
+	Pow() pow.PoW
 }
 
 type worker struct {
-	agents []chan<- *types.Block
+	agents []Agent
+	recv   chan []byte
 	mux    *event.TypeMux
 	quit   chan struct{}
 	pow    pow.PoW
@@ -59,24 +63,44 @@ type worker struct {
 	current *environment
 }
 
-func (self *worker) register(agent chan<- *types.Block) {
+func newWorker(coinbase []byte, eth *eth.Ethereum) *worker {
+	return &worker{
+		eth:      eth,
+		mux:      eth.EventMux(),
+		recv:     make(chan []byte),
+		chain:    eth.ChainManager(),
+		proc:     eth.BlockProcessor(),
+		coinbase: coinbase,
+	}
+}
+
+func (self *worker) start() {
+	go self.update()
+	go self.wait()
+}
+
+func (self *worker) stop() {
+	close(self.quit)
+}
+
+func (self *worker) register(agent Agent) {
 	self.agents = append(self.agents, agent)
+	agent.SetNonceCh(self.recv)
 }
 
 func (self *worker) update() {
-	events := self.mux.Subscribe(core.NewBlockEvent{}, core.TxPreEvent{}, &LocalTx{})
+	events := self.mux.Subscribe(core.ChainEvent{}, core.TxPreEvent{})
 
 out:
 	for {
 		select {
 		case event := <-events.Chan():
 			switch event := event.(type) {
-			case core.NewBlockEvent:
-				if self.eth.ChainManager().HasBlock(event.Block.Hash()) {
-				}
+			case core.ChainEvent:
+				self.commitNewWork()
 			case core.TxPreEvent:
 				if err := self.commitTransaction(event.Tx); err != nil {
-					self.commit()
+					self.push()
 				}
 			}
 		case <-self.quit:
@@ -85,12 +109,24 @@ out:
 	}
 }
 
-func (self *worker) commit() {
+func (self *worker) wait() {
+	for {
+		for nonce := range self.recv {
+			self.current.block.Header().Nonce = nonce
+			fmt.Println(self.current.block)
+
+			self.chain.InsertChain(types.Blocks{self.current.block})
+			break
+		}
+	}
+}
+
+func (self *worker) push() {
 	self.current.state.Update(ethutil.Big0)
 	self.current.block.SetRoot(self.current.state.Root())
 
 	for _, agent := range self.agents {
-		agent <- self.current.block
+		agent.Work() <- self.current.block
 	}
 }
 
@@ -110,7 +146,8 @@ func (self *worker) commitNewWork() {
 		case core.IsNonceErr(err):
 			remove = append(remove, tx)
 		case core.IsGasLimitErr(err):
-			// ignore
+			// Break on gas limit
+			break
 		default:
 			minerlogger.Infoln(err)
 			remove = append(remove, tx)
@@ -120,7 +157,7 @@ func (self *worker) commitNewWork() {
 
 	self.current.coinbase.AddAmount(core.BlockReward)
 
-	self.commit()
+	self.push()
 }
 
 var (

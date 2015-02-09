@@ -60,7 +60,6 @@ func (self *Object) Storage() (storage map[string]string) {
 		rlp.Decode(bytes.NewReader(it.Value), &data)
 		storage[toHex(it.Key)] = toHex(data)
 	}
-	self.StateObject.Trie().PrintRoot()
 
 	return
 }
