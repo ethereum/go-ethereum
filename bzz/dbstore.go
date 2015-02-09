@@ -13,10 +13,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-const dbMaxEntries = 5000 // max number of stored (cached) blocks
-
-const gcArraySize = 500
-const gcArrayFreeRatio = 10
+const gcArraySize = 10000
+const gcArrayFreeRatio = 0.1
 
 // key prefixes for leveldb storage
 const kpIndex = 0
@@ -37,7 +35,7 @@ type dbStore struct {
 	db *ethdb.LDBDatabase
 
 	// this should be stored in db, accessed transactionally
-	entryCnt, accessCnt, dataIdx uint64
+	entryCnt, accessCnt, dataIdx, capacity uint64
 
 	gcPos, gcStartPos []byte
 	gcArray           []*gcItem
@@ -183,7 +181,7 @@ func gcListSelect(list []*gcItem, left int, right int, n int) int {
 	}
 }
 
-func (s *dbStore) collectGarbage() {
+func (s *dbStore) collectGarbage(ratio float32) {
 
 	it := s.db.NewIterator()
 	it.Seek(s.gcPos)
@@ -226,7 +224,7 @@ func (s *dbStore) collectGarbage() {
 		}
 	}
 
-	cutidx := gcListSelect(s.gcArray, 0, gcnt-1, gcnt/gcArrayFreeRatio)
+	cutidx := gcListSelect(s.gcArray, 0, gcnt-1, int(float32(gcnt)*ratio))
 	cutval := s.gcArray[cutidx].value
 
 	//fmt.Print(s.entryCnt, " ")
@@ -264,8 +262,8 @@ func (s *dbStore) Put(chunk *Chunk) {
 	data := encodeData(chunk)
 	//data := ethutil.Encode([]interface{}{entry})
 
-	if s.entryCnt >= dbMaxEntries {
-		s.collectGarbage()
+	if s.entryCnt >= s.capacity {
+		s.collectGarbage(gcArrayFreeRatio)
 	}
 
 	batch := new(leveldb.Batch)
@@ -346,6 +344,29 @@ func (s *dbStore) updateAccessCnt(key Key) {
 
 }
 
+func (s *dbStore) setCapacity(c uint64) {
+
+	s.capacity = c
+
+	if s.entryCnt > c {
+		var ratio float32
+		ratio = float32(0.99) - float32(c)/float32(s.entryCnt)
+		if ratio < 0 {
+			ratio = 0
+		}
+		for s.entryCnt > c {
+			s.collectGarbage(ratio)
+		}
+	}
+
+}
+
+func (s *dbStore) getEntryCnt() uint64 {
+
+	return s.entryCnt
+
+}
+
 func newDbStore(path string) (s *dbStore, err error) {
 
 	s = new(dbStore)
@@ -354,6 +375,8 @@ func newDbStore(path string) (s *dbStore, err error) {
 	if err != nil {
 		return
 	}
+
+	s.setCapacity(5000)
 
 	s.gcStartPos = make([]byte, 1)
 	s.gcStartPos[0] = kpIndex

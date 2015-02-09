@@ -8,19 +8,18 @@ import (
 )
 
 const (
-	maxEntries             = 500 // max number of stored (cached) blocks
-	memTreeLW              = 2   // log2(subtree count) of the subtrees
-	memTreeFLW             = 14  // log2(subtree count) of the root layer
+	memTreeLW              = 2  // log2(subtree count) of the subtrees
+	memTreeFLW             = 14 // log2(subtree count) of the root layer
 	dbForceUpdateAccessCnt = 1000
 )
 
 type memStore struct {
-	memtree     *memTree
-	entryCnt    uint   // stored entries
-	accessCnt   uint64 // access counter; oldest is thrown away when full
-	dbAccessCnt uint64
-	dbStore     *dbStore
-	lock        sync.Mutex
+	memtree            *memTree
+	entryCnt, capacity uint   // stored entries
+	accessCnt          uint64 // access counter; oldest is thrown away when full
+	dbAccessCnt        uint64
+	dbStore            *dbStore
+	lock               sync.Mutex
 }
 
 /*
@@ -40,6 +39,7 @@ func newMemStore(d *dbStore) (m *memStore) {
 	m = &memStore{}
 	m.memtree = newMemTree(memTreeFLW, nil, 0)
 	m.dbStore = d
+	m.setCapacity(500)
 	return
 }
 
@@ -141,12 +141,34 @@ func (node *memTree) updateAccess(a uint64) {
 
 }
 
-func (s *memStore) Put(entry *Chunk) {
+func (s *memStore) setCapacity(c uint) {
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	if s.entryCnt >= maxEntries {
+	for c < s.entryCnt {
+		s.removeOldest()
+	}
+	s.capacity = c
+
+}
+
+func (s *memStore) getEntryCnt() uint {
+
+	return s.entryCnt
+
+}
+
+func (s *memStore) Put(entry *Chunk) {
+
+	if s.capacity == 0 {
+		return
+	}
+
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	if s.entryCnt >= s.capacity {
 		s.removeOldest()
 	}
 
