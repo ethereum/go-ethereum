@@ -6,6 +6,7 @@ package bzz
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -192,7 +193,7 @@ func (s *dbStore) collectGarbage(ratio float32) {
 	}
 	gcnt := 0
 
-	for gcnt < gcArraySize {
+	for (gcnt < gcArraySize) && (uint64(gcnt) < s.entryCnt) {
 
 		if (s.gcPos == nil) || (s.gcPos[0] != kpIndex) {
 			it.Seek(s.gcStartPos)
@@ -227,11 +228,11 @@ func (s *dbStore) collectGarbage(ratio float32) {
 	cutidx := gcListSelect(s.gcArray, 0, gcnt-1, int(float32(gcnt)*ratio))
 	cutval := s.gcArray[cutidx].value
 
-	//fmt.Print(s.entryCnt, " ")
+	fmt.Print(gcnt, " ", s.entryCnt, " ")
 
 	// actual gc
 	for i := 0; i < gcnt; i++ {
-		if s.gcArray[i].value < cutval {
+		if s.gcArray[i].value <= cutval {
 			batch := new(leveldb.Batch)
 			batch.Delete(s.gcArray[i].idxKey)
 			batch.Delete(getDataKey(s.gcArray[i].idx))
@@ -241,7 +242,7 @@ func (s *dbStore) collectGarbage(ratio float32) {
 		}
 	}
 
-	//fmt.Println(s.entryCnt)
+	fmt.Println(s.entryCnt)
 
 	s.db.Put(keyGCPos, s.gcPos)
 
@@ -352,9 +353,12 @@ func (s *dbStore) setCapacity(c uint64) {
 
 	if s.entryCnt > c {
 		var ratio float32
-		ratio = float32(0.99) - float32(c)/float32(s.entryCnt)
-		if ratio < 0 {
-			ratio = 0
+		ratio = float32(1.01) - float32(c)/float32(s.entryCnt)
+		if ratio < gcArrayFreeRatio {
+			ratio = gcArrayFreeRatio
+		}
+		if ratio > 1 {
+			ratio = 1
 		}
 		for s.entryCnt > c {
 			s.collectGarbage(ratio)
