@@ -21,13 +21,16 @@ RUN apt-get install -y qt54quickcontrols qt54webengine
 ## Build and install latest Go
 RUN git clone https://go.googlesource.com/go golang
 RUN cd golang && git checkout go1.4.1
-RUN cd golang/src && ./all.bash && go version
+RUN cd golang/src && ./make.bash && go version
 
 ## Fetch and install QML
 RUN go get -u -v -d github.com/obscuren/qml
 WORKDIR $GOPATH/src/github.com/obscuren/qml
 RUN git checkout v1
 RUN go install -v
+
+# this is a workaround, to make sure that docker's cache is invalidated whenever the git repo changes
+ADD https://api.github.com/repos/ethereum/go-ethereum/git/refs/heads/develop file_does_not_exist
 
 ## Fetch and install go-ethereum
 RUN go get -u -v -d github.com/ethereum/go-ethereum/...
