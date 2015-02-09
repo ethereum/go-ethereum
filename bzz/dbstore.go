@@ -345,6 +345,9 @@ func (s *dbStore) updateAccessCnt(key Key) {
 
 func (s *dbStore) setCapacity(c uint64) {
 
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	s.capacity = c
 
 	if s.entryCnt > c {
