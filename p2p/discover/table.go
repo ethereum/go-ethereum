@@ -87,9 +87,10 @@ func (tab *Table) Lookup(target NodeID) []*Node {
 		reply          = make(chan []*Node, alpha)
 		pendingQueries = 0
 	)
-	// don't query further if we hit the target.
+	// don't query further if we hit the target or ourself.
 	// unlikely to happen often in practice.
 	asked[target] = true
+	asked[tab.self.ID] = true
 
 	tab.mutex.Lock()
 	// update last lookup stamp (for refresh logic)

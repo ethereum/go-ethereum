@@ -179,10 +179,9 @@ func (t *udp) findnode(to *Node, target NodeID) ([]*Node, error) {
 	nreceived := 0
 	errc := t.pending(to.ID, neighborsPacket, func(r interface{}) bool {
 		reply := r.(*neighbors)
-		for i := 0; i < len(reply.Nodes); i++ {
+		for _, n := range reply.Nodes {
 			nreceived++
-			n := reply.Nodes[i]
-			if n.ID != t.self.ID && n.isValid() {
+			if n.isValid() {
 				nodes = append(nodes, n)
 			}
 		}

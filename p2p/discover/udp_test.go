@@ -1,10 +1,10 @@
 package discover
 
 import (
+	"fmt"
 	logpkg "log"
 	"net"
 	"os"
-	"reflect"
 	"testing"
 	"time"
 
@@ -53,16 +53,37 @@ func TestUDP_findnode(t *testing.T) {
 	defer n1.Close()
 	defer n2.Close()
 
-	entry := MustParseNode("enode://9d8a19597e312ef32d76e6b4903bb43d7bcd892d17b769d30b404bd3a4c2dca6c86184b17d0fdeeafe3b01e0e912d990ddc853db3f325d5419f31446543c30be@127.0.0.1:54194")
-	n2.add([]*Node{entry})
-
+	// put a few nodes into n2. the exact distribution shouldn't
+	// matter much, altough we need to take care not to overflow
+	// any bucket.
 	target := randomID(n1.self.ID, 100)
-	result, _ := n1.net.findnode(n2.self, target)
-	if len(result) != 1 {
-		t.Fatalf("wrong number of results: got %d, want 1", len(result))
+	nodes := &nodesByDistance{target: target}
+	for i := 0; i < bucketSize; i++ {
+		n2.add([]*Node{&Node{
+			IP:       net.IP{1, 2, 3, byte(i)},
+			DiscPort: i + 2,
+			TCPPort:  i + 2,
+			ID:       randomID(n2.self.ID, i+2),
+		}})
 	}
-	if !reflect.DeepEqual(result[0], entry) {
-		t.Errorf("wrong result: got %v, want %v", result[0], entry)
+	n2.add(nodes.entries)
+	n2.bumpOrAdd(n1.self.ID, &net.UDPAddr{IP: n1.self.IP, Port: n1.self.DiscPort})
+	expected := n2.closest(target, bucketSize)
+
+	err := runUDP(10, func() error {
+		result, _ := n1.net.findnode(n2.self, target)
+		if len(result) != bucketSize {
+			return fmt.Errorf("wrong number of results: got %d, want %d", len(result), bucketSize)
+		}
+		for i := range result {
+			if result[i].ID != expected.entries[i].ID {
+				return fmt.Errorf("result mismatch at %d:\n  got:  %v\n  want: %v", i, result[i], expected.entries[i])
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Error(err)
 	}
 }
 
@@ -101,59 +122,90 @@ func TestUDP_findnodeMultiReply(t *testing.T) {
 	defer n1.Close()
 	defer n2.Close()
 
-	nodes := make([]*Node, bucketSize)
-	for i := range nodes {
-		nodes[i] = &Node{
-			IP:       net.IP{1, 2, 3, 4},
-			DiscPort: i + 1,
-			TCPPort:  i + 1,
-			ID:       randomID(n2.self.ID, i+1),
-		}
-	}
-
-	// ask N2 for neighbors. it will send an empty reply back.
-	// the request will wait for up to bucketSize replies.
-	resultC := make(chan []*Node)
-	go func() {
-		ns, err := n1.net.findnode(n2.self, n1.self.ID)
-		if err != nil {
-			t.Error("findnode error:", err)
-		}
-		resultC <- ns
-	}()
-
-	// send a few more neighbors packets to N1.
-	// it should collect those.
-	for end := 0; end < len(nodes); {
-		off := end
-		if end = end + 5; end > len(nodes) {
-			end = len(nodes)
-		}
-		udp2.send(n1.self, neighborsPacket, neighbors{
-			Nodes:      nodes[off:end],
-			Expiration: uint64(time.Now().Add(10 * time.Second).Unix()),
-		})
-	}
-
-	// check that they are all returned. we cannot just check for
-	// equality because they might not be returned in the order they
-	// were sent.
-	result := <-resultC
-	if hasDuplicates(result) {
-		t.Error("result slice contains duplicates")
-	}
-	if len(result) != len(nodes) {
-		t.Errorf("wrong number of nodes returned: got %d, want %d", len(result), len(nodes))
-	}
-	matched := make(map[NodeID]bool)
-	for _, n := range result {
-		for _, expn := range nodes {
-			if n.ID == expn.ID { // && bytes.Equal(n.Addr.IP, expn.Addr.IP) && n.Addr.Port == expn.Addr.Port {
-				matched[n.ID] = true
+	err := runUDP(10, func() error {
+		nodes := make([]*Node, bucketSize)
+		for i := range nodes {
+			nodes[i] = &Node{
+				IP:       net.IP{1, 2, 3, 4},
+				DiscPort: i + 1,
+				TCPPort:  i + 1,
+				ID:       randomID(n2.self.ID, i+1),
 			}
 		}
+
+		// ask N2 for neighbors. it will send an empty reply back.
+		// the request will wait for up to bucketSize replies.
+		resultc := make(chan []*Node)
+		errc := make(chan error)
+		go func() {
+			ns, err := n1.net.findnode(n2.self, n1.self.ID)
+			if err != nil {
+				errc <- err
+			} else {
+				resultc <- ns
+			}
+		}()
+
+		// send a few more neighbors packets to N1.
+		// it should collect those.
+		for end := 0; end < len(nodes); {
+			off := end
+			if end = end + 5; end > len(nodes) {
+				end = len(nodes)
+			}
+			udp2.send(n1.self, neighborsPacket, neighbors{
+				Nodes:      nodes[off:end],
+				Expiration: uint64(time.Now().Add(10 * time.Second).Unix()),
+			})
+		}
+
+		// check that they are all returned. we cannot just check for
+		// equality because they might not be returned in the order they
+		// were sent.
+		var result []*Node
+		select {
+		case result = <-resultc:
+		case err := <-errc:
+			return err
+		}
+		if hasDuplicates(result) {
+			return fmt.Errorf("result slice contains duplicates")
+		}
+		if len(result) != len(nodes) {
+			return fmt.Errorf("wrong number of nodes returned: got %d, want %d", len(result), len(nodes))
+		}
+		matched := make(map[NodeID]bool)
+		for _, n := range result {
+			for _, expn := range nodes {
+				if n.ID == expn.ID { // && bytes.Equal(n.Addr.IP, expn.Addr.IP) && n.Addr.Port == expn.Addr.Port {
+					matched[n.ID] = true
+				}
+			}
+		}
+		if len(matched) != len(nodes) {
+			return fmt.Errorf("wrong number of matching nodes: got %d, want %d", len(matched), len(nodes))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Error(err)
 	}
-	if len(matched) != len(nodes) {
-		t.Errorf("wrong number of matching nodes: got %d, want %d", len(matched), len(nodes))
+}
+
+// runUDP runs a test n times and returns an error if the test failed
+// in all n runs. This is necessary because UDP is unreliable even for
+// connections on the local machine, causing test failures.
+func runUDP(n int, test func() error) error {
+	errcount := 0
+	errors := ""
+	for i := 0; i < n; i++ {
+		if err := test(); err != nil {
+			errors += fmt.Sprintf("\n#%d: %v", i, err)
+			errcount++
+		}
 	}
+	if errcount == n {
+		return fmt.Errorf("failed on all %d iterations:%s", n, errors)
+	}
+	return nil
 }

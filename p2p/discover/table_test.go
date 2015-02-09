@@ -14,6 +14,18 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+func TestTable_bumpOrAddBucketAssign(t *testing.T) {
+	tab := newTable(nil, NodeID{}, &net.UDPAddr{})
+	for i := 1; i < len(tab.buckets); i++ {
+		tab.bumpOrAdd(randomID(tab.self.ID, i), &net.UDPAddr{})
+	}
+	for i, b := range tab.buckets {
+		if i > 0 && len(b.entries) != 1 {
+			t.Errorf("bucket %d has %d entries, want 1", i, len(b.entries))
+		}
+	}
+}
+
 func TestTable_bumpOrAddPingReplace(t *testing.T) {
 	pingC := make(pingC)
 	tab := newTable(pingC, NodeID{}, &net.UDPAddr{})
