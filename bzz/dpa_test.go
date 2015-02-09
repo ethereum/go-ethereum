@@ -100,7 +100,17 @@ func TestDPA_capacity(t *testing.T) {
 	if !bytes.Equal(slice, resultSlice) {
 		t.Errorf("Comparison error.")
 	}
+	// Clear memStore
 	localStore.memStore.setCapacity(0)
+	// check whether it is, indeed, empty
+	dpa.ChunkStore = memStore
+	resultReader = dpa.Retrieve(key)
+	n, err = resultReader.ReadAt(resultSlice, 0)
+	if err == nil {
+		t.Errorf("Was able to read %d bytes from an empty memStore.")
+	}
+	// check how it works with localStore
+	dpa.ChunkStore = localStore
 	//	localStore.dbStore.setCapacity(0)
 	resultReader = dpa.Retrieve(key)
 	for i, _ := range resultSlice {
@@ -108,12 +118,12 @@ func TestDPA_capacity(t *testing.T) {
 	}
 	n, err = resultReader.ReadAt(resultSlice, 0)
 	if err != nil {
-		t.Errorf("Retrieve error after removing memStore: %v", err)
+		t.Errorf("Retrieve error after clearing memStore: %v", err)
 	}
 	if n != len(slice) {
-		t.Errorf("Slice size error after removing memStore got %d, expected %d.", n, len(slice))
+		t.Errorf("Slice size error after clearing memStore got %d, expected %d.", n, len(slice))
 	}
 	if !bytes.Equal(slice, resultSlice) {
-		t.Errorf("Comparison error after removing memStore.")
+		t.Errorf("Comparison error after clearing memStore.")
 	}
 }
