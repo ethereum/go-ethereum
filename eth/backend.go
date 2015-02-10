@@ -4,7 +4,6 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -91,9 +90,6 @@ type Ethereum struct {
 	keyManager *crypto.KeyManager
 
 	logger ethlogger.LogSystem
-
-	synclock  sync.Mutex
-	syncGroup sync.WaitGroup
 
 	Mining bool
 }
