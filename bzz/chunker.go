@@ -26,7 +26,6 @@ import (
 	"crypto"
 	"encoding/binary"
 	"fmt"
-	"io"
 	"sync"
 	"time"
 )
@@ -124,24 +123,16 @@ func (self *Chunk) String() string {
 	var slice []byte
 	var n int
 	var err error
-	if self.Reader != nil {
-		size = 32 // we are printing 32 bytes of the data
-		slice = make([]byte, size)
-		n, err = self.Reader.ReadAt(slice, 0)
-		if err != nil && err != io.EOF {
-			slice = []byte(fmt.Sprintf("ERROR: %v", err))
-		}
-	}
-	return fmt.Sprintf("Key: [%x..] TreeSize: %v Chunksize: %v Data: %x\n", self.Key[:4], self.Size, size, slice[:n])
+	return fmt.Sprintf("Key: [%x..] TreeSize: %v Chunksize: %v Data: %x\n", self.Key[:4], self.Size, size, self.Data[:n])
 }
 
 // The treeChunkers own Hash hashes together
 // - the size (of the subtree encoded in the Chunk)
 // - the Chunk, ie. the contents read from the input reader
-func (self *TreeChunker) Hash(size int64, input SectionReader) []byte {
+func (self *TreeChunker) Hash(size int64, input []byte) []byte {
 	hasher := self.HashFunc.New()
 	binary.Write(hasher, binary.LittleEndian, size)
-	io.Copy(hasher, input) // it uses WriteTo if available, ChunkReader implements io.WriterTo
+	hasher.Write(input)
 	return hasher.Sum(nil)
 }
 
@@ -218,12 +209,14 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 
 	if depth == 0 {
 		// leaf nodes -> content chunks
-		hash = self.Hash(size, data)
+		chunkData := make([]byte, data.Size())
+		data.ReadAt(chunkData, 0)
+		hash = self.Hash(size, chunkData)
 		// dpaLogger.Debugf("content chunk: max subtree size: %v, data size: %v", treeSize, size)
 		newChunk = &Chunk{
-			Key:    hash,
-			Reader: data,
-			Size:   size,
+			Key:  hash,
+			Data: chunkData,
+			Size: size,
 		}
 	} else {
 		// intermediate chunk containing child nodes hashes
@@ -257,11 +250,14 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 		childrenWg.Wait()
 		// now we got the hashes in the chunk, then hash the chunk
 		chunkReader := NewChunkReaderFromBytes(chunk) // bytes.Reader almost implements SectionReader
-		hash = self.Hash(size, chunkReader)
+		chunkData := make([]byte, chunkReader.Size())
+		chunkReader.ReadAt(chunkData, 0)
+
+		hash = self.Hash(size, chunkData)
 		newChunk = &Chunk{
-			Key:    hash,
-			Reader: chunkReader,
-			Size:   size,
+			Key:  hash,
+			Data: chunkData,
+			Size: size,
 		}
 	}
 	// send off new chunk to storage
@@ -357,7 +353,7 @@ func (self *TreeChunker) join(depth int, treeSize int64, key Key, chunkC chan *C
 		}
 
 		if depth == 0 {
-			r = LazyReader(chunk.Reader)
+			r = LazyReader(NewByteSliceReader(chunk.Data))
 			return // simply give back the chunks reader for content chunks
 		}
 

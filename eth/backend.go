@@ -141,8 +141,14 @@ func New(config *Config) (*Ethereum, error) {
 		eth.whisper.Protocol(),
 		bzz.BzzProtocol(netStore),
 	}
-	// dpa :=
-	bzz.StartHttpServer(nil)
+	chunker := &bzz.TreeChunker{}
+	chunker.Init()
+	dpa := &bzz.DPA{
+		Chunker:    chunker,
+		ChunkStore: netStore,
+	}
+	dpa.Start()
+	bzz.StartHttpServer(dpa)
 
 	nat, err := p2p.ParseNAT(config.NATType, config.PMPGateway)
 	if err != nil {

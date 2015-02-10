@@ -56,12 +56,11 @@ type DPA struct {
 // but the size of the subtree encoded in the chunk
 // 0 if request, to be supplied by the dpa
 type Chunk struct {
-	Reader SectionReader  // nil if request, to be supplied by dpa
-	Data   []byte         // nil if request, to be supplied by dpa
-	Size   int64          // size of the data covered by the subtree encoded in this chunk
-	Key    Key            // always
-	C      chan bool      // to signal data delivery by the dpa
-	req    *requestStatus //
+	Data []byte         // nil if request, to be supplied by dpa
+	Size int64          // size of the data covered by the subtree encoded in this chunk
+	Key  Key            // always
+	C    chan bool      // to signal data delivery by the dpa
+	req  *requestStatus //
 }
 
 type ChunkStore interface {
@@ -171,8 +170,6 @@ func (self *DPA) storeLoop() {
 	go func() {
 	STORE:
 		for chunk := range self.storeC {
-			chunk.Data = make([]byte, chunk.Reader.Size())
-			chunk.Reader.ReadAt(chunk.Data, 0)
 			self.ChunkStore.Put(chunk)
 			select {
 			case <-self.quitC:
