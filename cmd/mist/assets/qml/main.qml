@@ -434,9 +434,9 @@ ApplicationWindow {
                      rotation: 90
 
                      gradient: Gradient {
-                         GradientStop { position: 0.0; color: "#D5D4D5" }
-                         GradientStop { position: 0.1; color: "#E7E5E7" }
-                         GradientStop { position: 1.0; color: "#E7E5E7" }
+                         GradientStop { position: 0.0; color: "#E2DEDE" }
+                         GradientStop { position: 0.1; color: "#EBE8E8" }
+                         GradientStop { position: 1.0; color: "#EBE8E8" }
                      }
              }
 
