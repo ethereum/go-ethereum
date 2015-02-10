@@ -222,14 +222,13 @@ func (s *Ethereum) MaxPeers() int {
 
 // Start the ethereum
 func (s *Ethereum) Start(seed bool) error {
-	evd := map[string]interface{}{
-		"version_string": s.ClientIdentity().String(),
-		"guid":           ethutil.Bytes2Hex(s.ClientIdentity().Pubkey()),
-		"level":          "debug",
-		"coinbase":       ethutil.Bytes2Hex(s.KeyManager().Address()),
-		"eth_version":    ProtocolVersion,
-	}
-	jsonlogger.LogJson("starting", evd)
+	jsonlogger.LogJson("starting", &ethlogger.LogStarting{
+		ClientString:    s.ClientIdentity().String(),
+		Guid:            ethutil.Bytes2Hex(s.ClientIdentity().Pubkey()),
+		Coinbase:        ethutil.Bytes2Hex(s.KeyManager().Address()),
+		ProtocolVersion: ProtocolVersion,
+	})
+
 	err := s.net.Start()
 	if err != nil {
 		return err

@@ -16,7 +16,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"time"
 )
 
 type LogLevel uint32
@@ -121,20 +120,12 @@ func NewJsonLogger() *JsonLogger {
 	return &JsonLogger{}
 }
 
-func (logger *JsonLogger) LogJson(msgname string, dict map[string]interface{}) {
-	if _, ok := dict["ts"]; !ok {
-		dict["ts"] = time.Now().Local().Format(time.RFC3339Nano)
-	}
-
-	// FIX
-	if _, ok := dict["level"]; !ok {
-		dict["level"] = "debug"
-	}
-
+func (logger *JsonLogger) LogJson(msgname string, v interface{}) {
 	obj := map[string]interface{}{
-		msgname: dict,
+		msgname: v,
 	}
 
 	jsontxt, _ := json.Marshal(obj)
-	logMessageC <- message{JsonLevel, fmt.Sprintf("%s", jsontxt)}
+	logMessageC <- message{JsonLevel, string(jsontxt)}
+
 }
