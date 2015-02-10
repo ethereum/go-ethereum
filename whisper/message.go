@@ -12,6 +12,8 @@ type Message struct {
 	Signature []byte
 	Payload   []byte
 	Sent      int64
+
+	To *ecdsa.PublicKey
 }
 
 func NewMessage(payload []byte) *Message {
