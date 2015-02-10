@@ -224,25 +224,24 @@ func (self *bzzProtocol) handle() error {
 	return nil
 }
 
-func (self *bzzProtocol) statusMsg() p2p.Msg {
-
-	return p2p.NewMsg(statusMsg,
-		uint32(Version),
-		uint32(NetworkId),
-		"honey",
-		[]p2p.Cap{},
-		strategy,
-	)
-}
-
-func (self *bzzProtocol) handleStatus() error {
+func (self *bzzProtocol) handleStatus() (err error) {
 	// send precanned status message
-	if err := self.rw.WriteMsg(self.statusMsg()); err != nil {
+	handshake := &statusMsgData{
+		Version:   uint64(Version),
+		ID:        "honey",
+		NodeID:    self.peer.OurPubkey(),
+		NetworkId: uint64(NetworkId),
+		Caps:      []p2p.Cap{},
+	}
+
+	//if err := self.rw.WriteMsg(self.statusMsg()); err != nil {
+	if err = p2p.EncodeMsg(self.rw, statusMsg, handshake); err != nil {
 		return err
 	}
 
 	// read and handle remote status
-	msg, err := self.rw.ReadMsg()
+	var msg p2p.Msg
+	msg, err = self.rw.ReadMsg()
 	if err != nil {
 		return err
 	}
@@ -270,13 +269,7 @@ func (self *bzzProtocol) handleStatus() error {
 
 	self.peer.Infof("Peer is [bzz] capable (%d/%d)\n", status.Version, status.NetworkId)
 
-	req := &peersMsgData{
-		// Peers: []*peerAddr{self.peer.Address()}, // not implemented in p2p, should be the same as node discovery cademlia
-		// Key:   nil,
-		peer: peer{bzzProtocol: self, pubkey: status.NodeID},
-	}
-
-	self.hive.addPeers(req)
+	self.hive.addPeer(peer{bzzProtocol: self, pubkey: status.NodeID})
 
 	return nil
 }

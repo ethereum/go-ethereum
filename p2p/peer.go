@@ -55,7 +55,7 @@ type Peer struct {
 	// Use them to display messages related to the peer.
 	*logger.Logger
 
-	infolock   sync.Mutex
+	infolock   sync.RWMutex
 	identity   ClientIdentity
 	caps       []Cap
 	listenAddr *peerAddr // what remote peer is listening on
@@ -130,6 +130,12 @@ func newPeer(conn net.Conn, protocols []Protocol, dialAddr *peerAddr) *Peer {
 		closed:    make(chan struct{}),
 	}
 	return p
+}
+
+func (self *Peer) OurPubkey() (pubkey []byte) {
+	self.infolock.RLock()
+	defer self.infolock.RUnlock()
+	return self.ourID.Pubkey()
 }
 
 // Identity returns the client identity of the remote peer. The

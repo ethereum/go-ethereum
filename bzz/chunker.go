@@ -345,6 +345,10 @@ func (self *TreeChunker) join(depth int, treeSize int64, key Key, chunkC chan *C
 		case <-chunk.C: // bells are ringing, data have been delivered
 		}
 
+		//		if data == nil {
+		//			return
+		//		}
+
 		// calculate depth and max treeSize
 		var depth int
 		var treeSize int64 = self.hashSize
