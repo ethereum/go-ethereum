@@ -23,7 +23,6 @@ func (self *Iterator) Next() bool {
 	self.Key = []byte(DecodeCompact(k))
 
 	return len(k) > 0
-
 }
 
 func (self *Iterator) next(node Node, key []byte) []byte {
@@ -67,7 +66,7 @@ func (self *Iterator) next(node Node, key []byte) []byte {
 			if BeginsWith(key, k) {
 				ret = self.next(cnode, skey)
 			} else if bytes.Compare(k, key[:len(k)]) > 0 {
-				ret = self.key(node)
+				return self.key(node)
 			}
 
 			if ret != nil {

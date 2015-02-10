@@ -101,14 +101,26 @@ type WhisperMessage struct {
 	ref     *whisper.Message
 	Flags   int32  `json:"flags"`
 	Payload string `json:"payload"`
+	To      string `json:"to"`
 	From    string `json:"from"`
+<<<<<<< HEAD
+=======
+	Sent    int64  `json:"sent"`
+>>>>>>> develop
 }
 
 func NewWhisperMessage(msg *whisper.Message) WhisperMessage {
 	return WhisperMessage{
 		ref:     msg,
+<<<<<<< HEAD
 		Flags:   int32(msg.Flags),
 		Payload: "0x" + ethutil.Bytes2Hex(msg.Payload),
 		From:    "0x" + ethutil.Bytes2Hex(crypto.FromECDSAPub(msg.Recover())),
+=======
+		Payload: toHex(msg.Payload),
+		From:    toHex(crypto.FromECDSAPub(msg.Recover())),
+		To:      toHex(crypto.FromECDSAPub(msg.To)),
+		Sent:    msg.Sent,
+>>>>>>> develop
 	}
 }

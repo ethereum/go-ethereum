@@ -103,8 +103,13 @@ func (s *RpcHttpServer) apiHandler(api *rpc.EthereumApi) http.Handler {
 			return
 		}
 
+<<<<<<< HEAD
 		rpchttplogger.Debugf("Generated response: %T %s", response, response)
 		JSON.Send(w, &rpc.RpcSuccessResponse{JsonRpc: reqParsed.JsonRpc, ID: reqParsed.ID, Error: false, Result: response})
+=======
+		rpchttplogger.DebugDetailf("Generated response: %T %s", response, response)
+		JSON.Send(w, &rpc.RpcSuccessResponse{JsonRpc: jsonrpcver, ID: reqParsed.ID, Result: response})
+>>>>>>> develop
 	}
 
 	return http.HandlerFunc(fn)

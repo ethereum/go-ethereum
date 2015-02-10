@@ -1,5 +1,6 @@
-// XXX This is the old filter system specifically for messages. This is till in used and could use some refactoring
 package filter
+
+// TODO make use of the generic filtering system
 
 import (
 	"sync"

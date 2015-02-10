@@ -256,6 +256,8 @@ func (self *Whisper) postEvent(envelope *Envelope) {
 func (self *Whisper) open(envelope *Envelope) (*Message, *ecdsa.PrivateKey) {
 	for _, key := range self.keys {
 		if message, err := envelope.Open(key); err == nil || (err != nil && err == ecies.ErrInvalidPublicKey) {
+			message.To = &key.PublicKey
+
 			return message, key
 		}
 	}

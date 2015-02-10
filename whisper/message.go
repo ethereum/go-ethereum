@@ -11,6 +11,12 @@ type Message struct {
 	Flags     byte
 	Signature []byte
 	Payload   []byte
+<<<<<<< HEAD
+=======
+	Sent      int64
+
+	To *ecdsa.PublicKey
+>>>>>>> develop
 }
 
 func NewMessage(payload []byte) *Message {
