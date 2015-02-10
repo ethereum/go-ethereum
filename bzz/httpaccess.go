@@ -90,19 +90,35 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 		}
 	case r.Method == "GET":
 		if uriMatcher.MatchString(uri) {
+			dpaLogger.Debugf("Swarm: Raw GET request %s received", uri)
 			name := uri[5:]
 			key := ethutil.Hex2Bytes(name)
 			http.ServeContent(w, r, name+".bin", time.Unix(0, 0), dpa.Retrieve(key))
+			dpaLogger.Debugf("Swarm: Object %s returned.", name)
 		} else if manifestMatcher.MatchString(uri) {
+			dpaLogger.Debugf("Swarm: Structured GET request %s received.", uri)
 			name := uri[1:65]
 			path := uri[65:] // typically begins with a /
 			key := ethutil.Hex2Bytes(name)
 			manifestReader := dpa.Retrieve(key)
 			// TODO check size for oversized manifests
 			manifest := make([]byte, manifestReader.Size())
-			manifestReader.Read(manifest)
+			n, err := manifestReader.Read(manifest)
+			if err != nil {
+				dpaLogger.Debugf("Swarm: Manifest %s not found.", name)
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			}
+			dpaLogger.Debugf("Swarm: Manifest %s retrieved.")
 			manifestEntries := make([]manifestEntry, 0)
-			json.Unmarshal(manifest, &manifestEntries)
+			err = json.Unmarshal(manifest, &manifestEntries)
+			if err != nil {
+				dpaLogger.Debugf("Swarm: Manifest %s is malformed.", name)
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			} else {
+				dpaLogger.Debugf("Swarm: Manifest %s has %d entries.", name, len(manifestEntries))
+			}
 			var mimeType string
 			key = nil
 			prefix := 0
@@ -132,8 +148,9 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 				http.Error(w, "Object "+uri+" not found.", http.StatusNotFound)
 			} else {
 				w.Header().Set("Content-Type", mimeType)
-				w.WriteHeader(status)
+				w.WriteHeader(int(status))
 				http.ServeContent(w, r, "", time.Unix(0, 0), dpa.Retrieve(key))
+				dpaLogger.Debugf("Swarm: Served %s as %s.", mimeType, uri)
 			}
 		} else {
 			http.Error(w, "Object "+uri+" not found.", http.StatusNotFound)
