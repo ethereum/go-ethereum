@@ -95,7 +95,7 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 			http.ServeContent(w, r, name+".bin", time.Unix(0, 0), dpa.Retrieve(key))
 		} else if manifestMatcher.MatchString(uri) {
 			name := uri[1:65]
-			path := uri[65:]
+			path := uri[65:] // typically begins with a /
 			key := ethutil.Hex2Bytes(name)
 			manifestReader := dpa.Retrieve(key)
 			// TODO check size for oversized manifests
@@ -103,8 +103,8 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 			manifestReader.Read(manifest)
 			manifestEntries := make([]manifestEntry, 0)
 			json.Unmarshal(manifest, &manifestEntries)
-			var hash []byte
 			var mimeType string
+			key = nil
 			prefix := 0
 			status := int16(404)
 			for i, entry := range manifestEntries {
@@ -123,16 +123,17 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 				pathLen := len(entry.Path)
 				if len(path) >= pathLen && path[:pathLen] == entry.Path && prefix < pathLen {
 					prefix = pathLen
-					hash = ethutil.Hex2Bytes(entry.Hash)
+					key = ethutil.Hex2Bytes(entry.Hash)
 					mimeType = entry.Content_type
 					status = entry.Status
 				}
 			}
-			if hash == nil {
+			if key == nil {
 				http.Error(w, "Object "+uri+" not found.", http.StatusNotFound)
 			} else {
 				w.Header().Set("Content-Type", mimeType)
-				http.ServeContent(w, r, "", time.Unix(0, 0), dpa.Retrieve(hash))
+				w.WriteHeader(status)
+				http.ServeContent(w, r, "", time.Unix(0, 0), dpa.Retrieve(key))
 			}
 		} else {
 			http.Error(w, "Object "+uri+" not found.", http.StatusNotFound)
