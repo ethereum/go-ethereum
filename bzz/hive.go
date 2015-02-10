@@ -10,6 +10,12 @@ type hive struct {
 	pool map[string]peer
 }
 
+func newHive() *hive {
+	return &hive{
+		pool: make(map[string]peer),
+	}
+}
+
 func (self *hive) addPeer(p peer) {
 	self.pool[string(p.pubkey)] = p
 }

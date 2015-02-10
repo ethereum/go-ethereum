@@ -138,7 +138,7 @@ func New(config *Config) (*Ethereum, error) {
 	protocols := []p2p.Protocol{
 		ethProto,
 		eth.whisper.Protocol(),
-		bzz.BzzProtocol(nil, nil),
+		bzz.BzzProtocol(bzz.NewNetStore(config.DataDir + "/bzz")),
 	}
 
 	nat, err := p2p.ParseNAT(config.NATType, config.PMPGateway)

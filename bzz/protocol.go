@@ -32,8 +32,7 @@ const (
 // bzzProtocol represents the swarm wire protocol
 // instance is running on each peer
 type bzzProtocol struct {
-	netStore *netStore
-	hive     *hive
+	netStore *NetStore
 	peer     *p2p.Peer
 	rw       p2p.MsgReadWriter
 }
@@ -141,23 +140,22 @@ main entrypoint, wrappers starting a server running the bzz protocol
 use this constructor to attach the protocol ("class") to server caps
 the Dev p2p layer then runs the protocol instance on each peer
 */
-func BzzProtocol(netStore *netStore, hive *hive) p2p.Protocol {
+func BzzProtocol(netStore *NetStore) p2p.Protocol {
 	return p2p.Protocol{
 		Name:    "bzz",
 		Version: Version,
 		Length:  ProtocolLength,
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			return runBzzProtocol(netStore, hive, p, rw)
+			return runBzzProtocol(netStore, p, rw)
 		},
 	}
 }
 
 // the main loop that handles incoming messages
 // note RemovePeer in the post-disconnect hook
-func runBzzProtocol(netStore *netStore, hive *hive, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+func runBzzProtocol(netStore *NetStore, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
 	self := &bzzProtocol{
 		netStore: netStore,
-		hive:     hive,
 		rw:       rw,
 		peer:     p,
 	}
@@ -166,7 +164,7 @@ func runBzzProtocol(netStore *netStore, hive *hive, p *p2p.Peer, rw p2p.MsgReadW
 		for {
 			err = self.handle()
 			if err != nil {
-				self.hive.removePeer(peer{bzzProtocol: self})
+				self.netStore.hive.removePeer(peer{bzzProtocol: self})
 				break
 			}
 		}
@@ -216,7 +214,7 @@ func (self *bzzProtocol) handle() error {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
 		req.peer = peer{bzzProtocol: self}
-		self.hive.addPeers(&req)
+		self.netStore.hive.addPeers(&req)
 
 	default:
 		return self.protoError(ErrInvalidMsgCode, "%v", msg.Code)
@@ -269,7 +267,7 @@ func (self *bzzProtocol) handleStatus() (err error) {
 
 	self.peer.Infof("Peer is [bzz] capable (%d/%d)\n", status.Version, status.NetworkId)
 
-	self.hive.addPeer(peer{bzzProtocol: self, pubkey: status.NodeID})
+	self.netStore.hive.addPeer(peer{bzzProtocol: self, pubkey: status.NodeID})
 
 	return nil
 }
