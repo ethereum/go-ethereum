@@ -1,6 +1,7 @@
 package eth
 
 import (
+	"crypto/ecdsa"
 	"fmt"
 	"strings"
 	"sync"
@@ -36,6 +37,10 @@ type Config struct {
 	// This should be a space-separated list of
 	// discovery node URLs.
 	BootNodes string
+
+	// This key is used to identify the node on the network.
+	// If nil, an ephemeral key is used.
+	NodeKey *ecdsa.PrivateKey
 
 	Shh  bool
 	Dial bool
@@ -150,9 +155,11 @@ func New(config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	netprv, err := crypto.GenerateKey()
-	if err != nil {
-		return nil, fmt.Errorf("could not generate server key: %v", err)
+	netprv := config.NodeKey
+	if netprv == nil {
+		if netprv, err = crypto.GenerateKey(); err != nil {
+			return nil, fmt.Errorf("could not generate server key: %v", err)
+		}
 	}
 	eth.net = &p2p.Server{
 		PrivateKey:     netprv,

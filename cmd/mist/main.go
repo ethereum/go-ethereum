@@ -62,6 +62,7 @@ func run() error {
 		NATType:    NatType,
 		PMPGateway: PMPGateway,
 		BootNodes:  BootNodes,
+		NodeKey:    NodeKey,
 		KeyRing:    KeyRing,
 		Dial:       true,
 	})

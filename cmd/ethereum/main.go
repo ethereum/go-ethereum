@@ -75,6 +75,7 @@ func main() {
 		Shh:        SHH,
 		Dial:       Dial,
 		BootNodes:  BootNodes,
+		NodeKey:    NodeKey,
 	})
 
 	if err != nil {
