@@ -8,6 +8,8 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
+	"io"
+	"os"
 
 	"encoding/hex"
 	"encoding/json"
@@ -97,6 +99,32 @@ func FromECDSAPub(pub *ecdsa.PublicKey) []byte {
 		return nil
 	}
 	return elliptic.Marshal(S256(), pub.X, pub.Y)
+}
+
+// HexToECDSA parses a secp256k1 private key.
+func HexToECDSA(hexkey string) (*ecdsa.PrivateKey, error) {
+	b, err := hex.DecodeString(hexkey)
+	if err != nil {
+		return nil, errors.New("invalid hex string")
+	}
+	if len(b) != 32 {
+		return nil, errors.New("invalid length, need 256 bits")
+	}
+	return ToECDSA(b), nil
+}
+
+// LoadECDSA loads a secp256k1 private key from the given file.
+func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
+	buf := make([]byte, 32)
+	fd, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer fd.Close()
+	if _, err := io.ReadFull(fd, buf); err != nil {
+		return nil, err
+	}
+	return ToECDSA(buf), nil
 }
 
 func GenerateKey() (*ecdsa.PrivateKey, error) {
