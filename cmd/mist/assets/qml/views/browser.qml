@@ -96,7 +96,7 @@ Rectangle {
 		MouseArea {
 			id: clickAnywhereOnApp
 			z:15
-			hoverEnabled: true
+			//hoverEnabled: true
 			anchors.fill: parent
 			/*hoverEnabled: true*/
 			

@@ -20,8 +20,8 @@ ApplicationWindow {
 
     width: 1200
     height: 820
-    minimumHeight: 800
-    minimumWidth: 600
+    minimumHeight: 600
+    minimumWidth: 800
 
     title: "Mist"
 
@@ -254,6 +254,8 @@ ApplicationWindow {
 
     statusBar: StatusBar {
         //height: 32
+        visible: false
+
         id: statusBar
         Label {
             //y: 6
@@ -273,11 +275,10 @@ ApplicationWindow {
         }
 
         Label {
-            //y: 6
             id: lastBlockLabel
             objectName: "lastBlockLabel"
             visible: true
-            text: ""
+            text: "---"
             font.pixelSize: 10
             anchors.right: peerGroup.left
             anchors.rightMargin: 5
@@ -395,6 +396,36 @@ ApplicationWindow {
             FontLoader { 
                source: "fonts/SourceSansPro-ExtraLight.ttf" 
             }  
+            FontLoader { 
+               id: simpleLineIcons
+               source: "fonts/Simple-Line-Icons.ttf" 
+            }
+
+            Rectangle {
+                color: "steelblue"
+                anchors.fill: parent
+
+                MouseArea {
+                    anchors.fill: parent
+                    property real lastMouseX: 0
+                    property real lastMouseY: 0
+                    onPressed: {
+                        lastMouseX = mouseX
+                        lastMouseY = mouseY
+                    }
+                    onPositionChanged: {
+                        root.x += (mouseX - lastMouseX)
+                        root.y += (mouseY - lastMouseY)
+                    }
+                    /*onDoubleClicked: {
+                        //!maximized ? view.set_max() : view.set_normal()}
+                        visibility = "Minimized"
+                    }*/
+                }
+            }
+
+
+
              anchors.top: parent.top
              Rectangle {
                      width: parent.height
@@ -422,6 +453,10 @@ ApplicationWindow {
                      property alias secondaryTitle: secondary.text
                      function setSelection(on) {
                          sel.visible = on
+                         
+                         if (this.closable == true) {
+                                closeIcon.visible = on
+                         }
                      }
 
                      function setAsBigButton(on) {
@@ -500,8 +535,18 @@ ApplicationWindow {
 
                      MouseArea {
                          anchors.fill: parent
+                         hoverEnabled: true
                          onClicked: {
                              activeView(view, menuItem);
+                         }
+                         onEntered: {
+                            if (parent.closable == true) {
+                                closeIcon.visible = sel.visible
+                            }
+                            
+                         }
+                         onExited:  {
+                            closeIcon.visible = false
                          }
                      }
 
@@ -514,12 +559,6 @@ ApplicationWindow {
                              verticalCenter: parent.verticalCenter
                              leftMargin: 6
                          }
-                         MouseArea {
-                             anchors.fill: parent
-                             onClicked: {
-                                 menuItem.closeApp()
-                             }
-                         }
                      }
 
                      Text {
@@ -531,7 +570,6 @@ ApplicationWindow {
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.verticalCenter: parent.verticalCenter
                         color: "#AAA0A0"
-                        //font.family: SourceSansProRegular.name
                      }   
 
                     Text {
@@ -542,8 +580,9 @@ ApplicationWindow {
                              left: icon.right
                              verticalCenter: parent.verticalCenter
                              leftMargin: 6
+                             // verticalCenterOffset: -10
                          }
-
+                         x:250
                          color: "#665F5F"
                          font.pixelSize: 14
                      }
@@ -554,13 +593,43 @@ ApplicationWindow {
                          font.family: sourceSansPro.name 
                          font.weight: Font.Light
                          anchors {
-                             right: parent.right
-                             rightMargin: 8
-                             verticalCenter: parent.verticalCenter
+                             left: icon.right
+                             leftMargin: 6
+                             top: label.bottom
                          }
                          color: "#6691C2"
                          font.pixelSize: 12
                      }
+
+                     Rectangle {
+                        id: closeIcon
+                        visible: false
+                        width: 10
+                        height: 10
+                        color: "#FFFFFF"
+                        anchors {
+                            fill: icon
+                        }
+
+                        MouseArea {
+                             anchors.fill: parent
+                             onClicked: {
+                                 menuItem.closeApp()
+                             }
+                         }
+
+                        Text {
+                             
+                             font.family: simpleLineIcons.name 
+                             anchors {
+                                 centerIn: parent
+                             }
+                             color: "#665F5F"
+                             font.pixelSize: 18
+                             text: "\ue082"
+                         }
+                     }
+                     
 
 
                      function closeApp() {
@@ -608,7 +677,7 @@ ApplicationWindow {
 
                  var comp = menuItemTemplate.createObject(section)
                  comp.view = view
-                 comp.title = options.section // view.title
+                 comp.title = view.title
 
                  if(view.hasOwnProperty("iconSource")) {
                      comp.icon = view.iconSource;
