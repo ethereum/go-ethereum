@@ -4,6 +4,7 @@ A simple http server interface to Swarm
 package bzz
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"io"
@@ -17,13 +18,22 @@ const (
 )
 
 var (
-	uriMatcher = regexp.MustCompile("^/raw/[0-9A-Fa-f]{64}$")
+	uriMatcher      = regexp.MustCompile("^/raw/[0-9A-Fa-f]{64}$")
+	manifestMatcher = regexp.MustCompile("^/[0-9A-Fa-f]{64}")
+	hashMatcher     = regexp.MustCompile("^[0-9A-Fa-f]{64}$")
 )
 
 type sequentialReader struct {
 	reader io.Reader
 	pos    int64
 	ahead  map[int64](chan bool)
+}
+
+type manifestEntry struct {
+	Path         string
+	Hash         string
+	Content_type string
+	Status       int16
 }
 
 func (self *sequentialReader) ReadAt(target []byte, off int64) (n int, err error) {
@@ -83,6 +93,47 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 			name := uri[5:]
 			key := ethutil.Hex2Bytes(name)
 			http.ServeContent(w, r, name+".bin", time.Unix(0, 0), dpa.Retrieve(key))
+		} else if manifestMatcher.MatchString(uri) {
+			name := uri[1:65]
+			path := uri[65:]
+			key := ethutil.Hex2Bytes(name)
+			manifestReader := dpa.Retrieve(key)
+			// TODO check size for oversized manifests
+			manifest := make([]byte, manifestReader.Size())
+			manifestReader.Read(manifest)
+			manifestEntries := make([]manifestEntry, 0)
+			json.Unmarshal(manifest, &manifestEntries)
+			var hash []byte
+			var mimeType string
+			prefix := 0
+			status := int16(404)
+			for i, entry := range manifestEntries {
+				if !hashMatcher.MatchString(entry.Hash) {
+					// hash is mandatory
+					break
+				}
+				if entry.Content_type == "" {
+					// content type defaults to manifest
+					entry.Content_type = "application/bzz-manifest+json"
+				}
+				if entry.Status == 0 {
+					// status defaults to 200
+					entry.Status = 200
+				}
+				pathLen := len(entry.Path)
+				if len(path) >= pathLen && path[:pathLen] == entry.Path && prefix < pathLen {
+					prefix = pathLen
+					hash = ethutil.Hex2Bytes(entry.Hash)
+					mimeType = entry.Content_type
+					status = entry.Status
+				}
+			}
+			if hash == nil {
+				http.Error(w, "Object "+uri+" not found.", http.StatusNotFound)
+			} else {
+				w.Header().Set("Content-Type", mimeType)
+				http.ServeContent(w, r, "", time.Unix(0, 0), dpa.Retrieve(hash))
+			}
 		} else {
 			http.Error(w, "Object "+uri+" not found.", http.StatusNotFound)
 		}
