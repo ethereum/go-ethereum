@@ -5,6 +5,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/bzz"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -18,7 +19,7 @@ import (
 )
 
 const (
-	seedNodeAddress = "poc-8.ethdev.com:30303"
+	seedNodeAddress = "10.0.1.41:30303"
 )
 
 type Config struct {
@@ -134,7 +135,11 @@ func New(config *Config) (*Ethereum, error) {
 	eth.blockPool = NewBlockPool(hasBlock, insertChain, ezp.Verify)
 
 	ethProto := EthProtocol(eth.txPool, eth.chainManager, eth.blockPool)
-	protocols := []p2p.Protocol{ethProto, eth.whisper.Protocol()}
+	protocols := []p2p.Protocol{
+		ethProto,
+		eth.whisper.Protocol(),
+		bzz.BzzProtocol(nil, nil),
+	}
 
 	nat, err := p2p.ParseNAT(config.NATType, config.PMPGateway)
 	if err != nil {

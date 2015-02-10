@@ -18,6 +18,7 @@ func (self *hive) removePeer(p peer) {
 	delete(self.pool, string(p.pubkey))
 }
 
+// Retrieve a list of live peers that are closer to target than us
 func (self *hive) getPeers(target Key) (peers []peer) {
 	for _, value := range self.pool {
 		peers = append(peers, value)
