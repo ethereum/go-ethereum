@@ -184,7 +184,9 @@ func (self *Miner) mine() {
 	block.Header().Extra = self.Extra
 
 	// Apply uncles
-	block.SetUncles(self.uncles)
+	if len(self.uncles) > 0 {
+		block.SetUncles(self.uncles)
+	}
 
 	parent := chainMan.GetBlock(block.ParentHash())
 	coinbase := state.GetOrNewStateObject(block.Coinbase())
@@ -204,7 +206,7 @@ func (self *Miner) mine() {
 	block.SetReceipts(receipts)
 
 	// Accumulate the rewards included for this block
-	blockProcessor.AccumulateRewards(state, block, parent)
+	blockProcessor.AccumelateRewards(state, block, parent)
 
 	state.Update(ethutil.Big0)
 	block.SetRoot(state.Root())

@@ -30,16 +30,40 @@ var HttpSyncProvider = function (host) {
     this.host = host || 'http://localhost:8080';
 };
 
+/// Transforms inner message to proper jsonrpc object
+/// @param inner message object
+/// @returns jsonrpc object
+function formatJsonRpcObject(object) {
+    return {
+        jsonrpc: '2.0',
+        method: object.call,
+        params: object.args,
+        id: object._id
+    };
+}
+
+/// Transforms jsonrpc object to inner message
+/// @param incoming jsonrpc message 
+/// @returns inner message object
+function formatJsonRpcMessage(message) {
+    var object = JSON.parse(message);
+
+    return {
+        _id: object.id,
+        data: object.result,
+        error: object.error
+    };
+}
+
 HttpSyncProvider.prototype.send = function (payload) {
-    //var data = formatJsonRpcObject(payload);
+    var data = formatJsonRpcObject(payload);
     
     var request = new XMLHttpRequest();
     request.open('POST', this.host, false);
-    request.send(JSON.stringify(payload));
+    request.send(JSON.stringify(data));
     
     // check request.status
-    var result = request.responseText;
-    return JSON.parse(result);
+    return request.responseText;
 };
 
 module.exports = HttpSyncProvider;

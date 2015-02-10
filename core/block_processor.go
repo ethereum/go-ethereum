@@ -17,10 +17,6 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
-type PendingBlockEvent struct {
-	Block *types.Block
-}
-
 var statelogger = logger.NewLogger("BLOCK")
 
 type BlockProcessor struct {
@@ -72,37 +68,6 @@ func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block 
 	return receipts, nil
 }
 
-func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, state *state.StateDB, block *types.Block, tx *types.Transaction, usedGas *big.Int, transientProcess bool) (*types.Receipt, *big.Int, error) {
-	// If we are mining this block and validating we want to set the logs back to 0
-	state.EmptyLogs()
-
-	txGas := new(big.Int).Set(tx.Gas())
-
-	cb := state.GetStateObject(coinbase.Address())
-	st := NewStateTransition(NewEnv(state, self.bc, tx, block), tx, cb)
-	_, err := st.TransitionState()
-
-	txGas.Sub(txGas, st.gas)
-
-	// Update the state with pending changes
-	state.Update(txGas)
-
-	cumulative := new(big.Int).Set(usedGas.Add(usedGas, txGas))
-	receipt := types.NewReceipt(state.Root(), cumulative)
-	receipt.SetLogs(state.Logs())
-	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
-	chainlogger.Debugln(receipt)
-
-	// Notify all subscribers
-	if !transientProcess {
-		go self.eventMux.Post(TxPostEvent{tx})
-	}
-
-	go self.eventMux.Post(state.Logs())
-
-	return receipt, txGas, err
-}
-
 func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state *state.StateDB, block *types.Block, txs types.Transactions, transientProcess bool) (types.Receipts, types.Transactions, types.Transactions, types.Transactions, error) {
 	var (
 		receipts           types.Receipts
@@ -113,55 +78,82 @@ func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state
 		cumulativeSum      = new(big.Int)
 	)
 
-	for _, tx := range txs {
-		receipt, txGas, err := self.ApplyTransaction(coinbase, state, block, tx, totalUsedGas, transientProcess)
+done:
+	for i, tx := range txs {
+		// If we are mining this block and validating we want to set the logs back to 0
+		state.EmptyLogs()
+
+		txGas := new(big.Int).Set(tx.Gas())
+
+		cb := state.GetStateObject(coinbase.Address())
+		st := NewStateTransition(NewEnv(state, self.bc, tx, block), tx, cb)
+		_, err = st.TransitionState()
 		if err != nil {
 			switch {
 			case IsNonceErr(err):
-				return nil, nil, nil, nil, err
+				err = nil // ignore error
+				continue
 			case IsGasLimitErr(err):
-				return nil, nil, nil, nil, err
+				unhandled = txs[i:]
+
+				break done
 			default:
 				statelogger.Infoln(err)
 				erroneous = append(erroneous, tx)
 				err = nil
 			}
 		}
+
+		txGas.Sub(txGas, st.gas)
+		cumulativeSum.Add(cumulativeSum, new(big.Int).Mul(txGas, tx.GasPrice()))
+
+		// Update the state with pending changes
+		state.Update(txGas)
+
+		cumulative := new(big.Int).Set(totalUsedGas.Add(totalUsedGas, txGas))
+		receipt := types.NewReceipt(state.Root(), cumulative)
+		receipt.SetLogs(state.Logs())
+		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+		chainlogger.Debugln(receipt)
+
+		// Notify all subscribers
+		if !transientProcess {
+			go self.eventMux.Post(TxPostEvent{tx})
+		}
+
 		receipts = append(receipts, receipt)
 		handled = append(handled, tx)
 
-		cumulativeSum.Add(cumulativeSum, new(big.Int).Mul(txGas, tx.GasPrice()))
+		if ethutil.Config.Diff && ethutil.Config.DiffType == "all" {
+			state.CreateOutputForDiff()
+		}
 	}
 
 	block.Reward = cumulativeSum
 	block.Header().GasUsed = totalUsedGas
 
-	if transientProcess {
-		go self.eventMux.Post(PendingBlockEvent{block})
-	}
-
 	return receipts, handled, unhandled, erroneous, err
 }
 
-func (sm *BlockProcessor) Process(block *types.Block) (td *big.Int, err error) {
+func (sm *BlockProcessor) Process(block *types.Block) (td *big.Int, msgs state.Messages, err error) {
 	// Processing a blocks may never happen simultaneously
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
 	header := block.Header()
 	if sm.bc.HasBlock(header.Hash()) {
-		return nil, &KnownBlockError{header.Number, header.Hash()}
+		return nil, nil, &KnownBlockError{header.Number, header.Hash()}
 	}
 
 	if !sm.bc.HasBlock(header.ParentHash) {
-		return nil, ParentError(header.ParentHash)
+		return nil, nil, ParentError(header.ParentHash)
 	}
 	parent := sm.bc.GetBlock(header.ParentHash)
 
 	return sm.ProcessWithParent(block, parent)
 }
 
-func (sm *BlockProcessor) ProcessWithParent(block, parent *types.Block) (td *big.Int, err error) {
+func (sm *BlockProcessor) ProcessWithParent(block, parent *types.Block) (td *big.Int, messages state.Messages, err error) {
 	sm.lastAttemptedBlock = block
 
 	state := state.New(parent.Root(), sm.db)
@@ -198,7 +190,7 @@ func (sm *BlockProcessor) ProcessWithParent(block, parent *types.Block) (td *big
 		return
 	}
 
-	if err = sm.AccumulateRewards(state, block, parent); err != nil {
+	if err = sm.AccumelateRewards(state, block, parent); err != nil {
 		return
 	}
 
@@ -211,10 +203,11 @@ func (sm *BlockProcessor) ProcessWithParent(block, parent *types.Block) (td *big
 
 	// Calculate the td for this block
 	td = CalculateTD(block, parent)
-	// Sync the current block's state to the database
+	// Sync the current block's state to the database and cancelling out the deferred Undo
 	state.Sync()
 	// Set the block hashes for the current messages
 	state.Manifest().SetHash(block.Hash())
+	messages = state.Manifest().Messages
 	// Reset the manifest XXX We need this?
 	state.Manifest().Reset()
 	// Remove transactions from the pool
@@ -222,7 +215,7 @@ func (sm *BlockProcessor) ProcessWithParent(block, parent *types.Block) (td *big
 
 	chainlogger.Infof("processed block #%d (%x...)\n", header.Number, block.Hash()[0:4])
 
-	return td, nil
+	return td, messages, nil
 }
 
 // Validates the current block. Returns an error if the block was invalid,
@@ -238,8 +231,9 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Header().Difficulty, expd)
 	}
 
-	if block.Time() < parent.Time() {
-		return ValidationError("Block timestamp not after prev block (%v - %v)", block.Header().Time, parent.Header().Time)
+	diff := block.Header().Time - parent.Header().Time
+	if diff < 0 {
+		return ValidationError("Block timestamp less then prev block %v (%v - %v)", diff, block.Header().Time, sm.bc.CurrentBlock().Header().Time)
 	}
 
 	if block.Time() > time.Now().Unix() {
@@ -254,7 +248,7 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 	return nil
 }
 
-func (sm *BlockProcessor) AccumulateRewards(statedb *state.StateDB, block, parent *types.Block) error {
+func (sm *BlockProcessor) AccumelateRewards(statedb *state.StateDB, block, parent *types.Block) error {
 	reward := new(big.Int).Set(BlockReward)
 
 	ancestors := set.New()
@@ -275,10 +269,6 @@ func (sm *BlockProcessor) AccumulateRewards(statedb *state.StateDB, block, paren
 			return UncleError(fmt.Sprintf("Uncle's parent unknown (%x)", uncle.ParentHash[0:4]))
 		}
 
-		if !sm.Pow.Verify(types.NewBlockWithHeader(uncle)) {
-			return ValidationError("Uncle's nonce is invalid (= %v)", ethutil.Bytes2Hex(uncle.Nonce))
-		}
-
 		r := new(big.Int)
 		r.Mul(BlockReward, big.NewInt(15)).Div(r, big.NewInt(16))
 
@@ -292,6 +282,14 @@ func (sm *BlockProcessor) AccumulateRewards(statedb *state.StateDB, block, paren
 	account := statedb.GetAccount(block.Header().Coinbase)
 	// Reward amount of ether to the coinbase address
 	account.AddAmount(reward)
+
+	statedb.Manifest().AddMessage(&state.Message{
+		To:        block.Header().Coinbase,
+		Input:     nil,
+		Origin:    nil,
+		Timestamp: int64(block.Header().Time), Coinbase: block.Header().Coinbase, Number: block.Header().Number,
+		Value: new(big.Int).Add(reward, block.Reward),
+	})
 
 	return nil
 }
@@ -312,7 +310,7 @@ func (sm *BlockProcessor) GetMessages(block *types.Block) (messages []*state.Mes
 	defer state.Reset()
 
 	sm.TransitionState(state, parent, block)
-	sm.AccumulateRewards(state, block, parent)
+	sm.AccumelateRewards(state, block, parent)
 
 	return state.Manifest().Messages, nil
 }
@@ -333,7 +331,7 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 	defer state.Reset()
 
 	sm.TransitionState(state, parent, block)
-	sm.AccumulateRewards(state, block, parent)
+	sm.AccumelateRewards(state, block, parent)
 
 	return state.Logs(), nil
 }

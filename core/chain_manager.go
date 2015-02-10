@@ -359,7 +359,7 @@ func (bc *ChainManager) Stop() {
 
 func (self *ChainManager) InsertChain(chain types.Blocks) error {
 	for _, block := range chain {
-		td, err := self.processor.Process(block)
+		td, messages, err := self.processor.Process(block)
 		if err != nil {
 			if IsKnownBlockErr(err) {
 				continue
@@ -391,6 +391,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 		self.mu.Unlock()
 
 		self.eventMux.Post(NewBlockEvent{block})
+		self.eventMux.Post(messages)
 	}
 
 	return nil

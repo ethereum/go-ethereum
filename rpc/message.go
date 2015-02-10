@@ -33,29 +33,30 @@ const (
 	ErrorDecodeArgs     = "Error: Could not decode arguments"
 )
 
-type RpcRequest struct {
-	JsonRpc string            `json:"jsonrpc"`
-	ID      int               `json:"id"`
-	Method  string            `json:"method"`
-	Params  []json.RawMessage `json:"params"`
+type ErrorResponse struct {
+	Error     bool   `json:"error"`
+	ErrorText string `json:"errorText"`
 }
 
 type RpcSuccessResponse struct {
 	ID      int         `json:"id"`
 	JsonRpc string      `json:"jsonrpc"`
+	Error   bool        `json:"error"`
 	Result  interface{} `json:"result"`
 }
 
 type RpcErrorResponse struct {
-	ID      *int            `json:"id"`
-	JsonRpc string          `json:"jsonrpc"`
-	Error   *RpcErrorObject `json:"error"`
+	ID        int    `json:"id"`
+	JsonRpc   string `json:"jsonrpc"`
+	Error     bool   `json:"error"`
+	ErrorText string `json:"errortext"`
 }
 
-type RpcErrorObject struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	// Data    interface{} `json:"data"`
+type RpcRequest struct {
+	JsonRpc string            `json:"jsonrpc"`
+	ID      int               `json:"id"`
+	Method  string            `json:"method"`
+	Params  []json.RawMessage `json:"params"`
 }
 
 func NewErrorResponse(msg string) error {
@@ -212,21 +213,6 @@ func (req *RpcRequest) ToFilterArgs() (*FilterOptions, error) {
 	if err != nil {
 		return nil, NewErrorResponse(ErrorDecodeArgs)
 	}
-	rpclogger.DebugDetailf("%T %v", args, args)
-	return args, nil
-}
-
-func (req *RpcRequest) ToFilterStringArgs() (string, error) {
-	if len(req.Params) < 1 {
-		return "", NewErrorResponse(ErrorArguments)
-	}
-
-	var args string
-	err := json.Unmarshal(req.Params[0], &args)
-	if err != nil {
-		return "", NewErrorResponse(ErrorDecodeArgs)
-	}
-
 	rpclogger.DebugDetailf("%T %v", args, args)
 	return args, nil
 }

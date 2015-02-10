@@ -46,7 +46,6 @@ type ethProtocol struct {
 // used as an argument to EthProtocol
 type txPool interface {
 	AddTransactions([]*types.Transaction)
-	GetTransactions() types.Transactions
 }
 
 type chainManager interface {
@@ -102,7 +101,6 @@ func runEthProtocol(txPool txPool, chainManager chainManager, blockPool blockPoo
 	}
 	err = self.handleStatus()
 	if err == nil {
-		self.propagateTxs()
 		for {
 			err = self.handle()
 			if err != nil {
@@ -325,14 +323,4 @@ func (self *ethProtocol) protoErrorDisconnect(code int, format string, params ..
 		self.peer.Debugf("fyi %v", err)
 	}
 
-}
-
-func (self *ethProtocol) propagateTxs() {
-	transactions := self.txPool.GetTransactions()
-	iface := make([]interface{}, len(transactions))
-	for i, transaction := range transactions {
-		iface[i] = transaction
-	}
-
-	self.rw.WriteMsg(p2p.NewMsg(TxMsg, iface...))
 }

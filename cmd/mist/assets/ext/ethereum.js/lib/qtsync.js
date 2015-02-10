@@ -25,8 +25,7 @@ var QtSyncProvider = function () {
 };
 
 QtSyncProvider.prototype.send = function (payload) {
-    var result = navigator.qt.callMethod(JSON.stringify(payload));
-    return JSON.parse(result);
+    return navigator.qt.callMethod(JSON.stringify(payload));
 };
 
 module.exports = QtSyncProvider;
