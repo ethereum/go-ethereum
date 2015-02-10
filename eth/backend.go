@@ -135,11 +135,14 @@ func New(config *Config) (*Ethereum, error) {
 	eth.blockPool = NewBlockPool(hasBlock, insertChain, ezp.Verify)
 
 	ethProto := EthProtocol(eth.txPool, eth.chainManager, eth.blockPool)
+	netStore := bzz.NewNetStore(config.DataDir + "/bzz")
 	protocols := []p2p.Protocol{
 		ethProto,
 		eth.whisper.Protocol(),
-		bzz.BzzProtocol(bzz.NewNetStore(config.DataDir + "/bzz")),
+		bzz.BzzProtocol(netStore),
 	}
+	// dpa :=
+	bzz.StartHttpServer(nil)
 
 	nat, err := p2p.ParseNAT(config.NATType, config.PMPGateway)
 	if err != nil {
