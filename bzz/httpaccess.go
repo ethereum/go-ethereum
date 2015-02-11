@@ -152,7 +152,7 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 				for _, entry := range manifestEntries {
 					if !hashMatcher.MatchString(entry.Hash) {
 						// hash is mandatory
-						break MANIFEST_ENTRIES
+						continue MANIFEST_ENTRIES
 					}
 					if entry.Content_type == "" {
 						// content type defaults to manifest
@@ -164,6 +164,7 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 					}
 					pathLen := len(entry.Path)
 					if len(path) >= pathLen && path[:pathLen] == entry.Path && prefix <= pathLen {
+						dpaLogger.Debugf("Swarm: \"%s\" matches \"%s\".", path, entry.Path)
 						prefix = pathLen
 						key = ethutil.Hex2Bytes(entry.Hash)
 						dpaLogger.Debugf("Swarm: Payload hash %064x", key)
