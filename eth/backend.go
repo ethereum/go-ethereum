@@ -148,7 +148,7 @@ func New(config *Config) (*Ethereum, error) {
 		ChunkStore: netStore,
 	}
 	dpa.Start()
-	bzz.StartHttpServer(dpa)
+	go bzz.StartHttpServer(dpa)
 
 	nat, err := p2p.ParseNAT(config.NATType, config.PMPGateway)
 	if err != nil {
