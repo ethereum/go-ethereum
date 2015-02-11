@@ -11,8 +11,8 @@ install:
   # - go get golang.org/x/tools/cmd/vet 
   - if ! go get code.google.com/p/go.tools/cmd/cover; then go get golang.org/x/tools/cmd/cover; fi
   - go get github.com/mattn/goveralls
-  - go get -d github.com/obscuren/qml && cd $HOME/gopath/src/github.com/obscuren/qml && git checkout v1 && cd $TRAVIS_BUILD_DIR
-  - ETH_DEPS=$(go list -f '{{.Imports}} {{.TestImports}} {{.XTestImports}}' github.com/ethereum/go-ethereum/... | sed -e 's/\[//g' | sed -e 's/\]//g' | sed -e 's/C //g'); if [ "$ETH_DEPS" ]; then go get -d $ETH_DEPS; fi
+  - go get gopkg.in/check.v1
+  - DEPS=$(go list -f '{{.Imports}}' ./... | sed -e 's/\[//g' | sed -e 's/\]//g' | sed -e 's/C //g'); if [ "$DEPS" ]; then go get -d -v $DEPS; fi
 before_script:
   - gofmt -l -w .
   - goimports -l -w .
@@ -20,7 +20,9 @@ before_script:
   # - go vet ./...
   # - go test -race ./...
 script:
-  - ./gocoverage.sh && if [ "$COVERALLS_TOKEN" ]; then goveralls -coverprofile=profile.cov -service=travis-ci -repotoken $COVERALLS_TOKEN; fi
+  - ./gocoverage.sh
+after_success:
+  - if [ "$COVERALLS_TOKEN" ]; then goveralls -coverprofile=profile.cov -service=travis-ci -repotoken $COVERALLS_TOKEN; fi
 env:
   global:
     - PKG_CONFIG_PATH=/opt/qt54/lib/pkgconfig
