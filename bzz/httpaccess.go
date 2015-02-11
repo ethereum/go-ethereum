@@ -103,7 +103,7 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 			manifestReader := dpa.Retrieve(key)
 			// TODO check size for oversized manifests
 			manifest := make([]byte, manifestReader.Size())
-			n, err := manifestReader.Read(manifest)
+			_, err := manifestReader.Read(manifest)
 			if err != nil {
 				dpaLogger.Debugf("Swarm: Manifest %s not found.", name)
 				http.Error(w, err.Error(), http.StatusNotFound)
@@ -123,7 +123,7 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 			key = nil
 			prefix := 0
 			status := int16(404)
-			for i, entry := range manifestEntries {
+			for _, entry := range manifestEntries {
 				if !hashMatcher.MatchString(entry.Hash) {
 					// hash is mandatory
 					break
