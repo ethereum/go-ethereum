@@ -4,7 +4,7 @@
         "sender" : "66c7b5c28121e4b66583d15481c92f5ad848fe1f",
         "transaction" : {
             "data" : "",
-            "gasLimit" : "",
+            "gasLimit" : "500",
             "gasPrice" : "",
             "nonce" : "",
             "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
