@@ -193,6 +193,13 @@ func (s *memStore) Put(entry *Chunk) {
 
 		if node.entry.Key.isEqual(entry.Key) {
 			node.updateAccess(s.accessCnt)
+			if node.entry.Data == nil {
+				node.entry.Size = entry.Size
+				node.entry.Data = entry.Data
+			}
+			if node.entry.req == nil {
+				node.entry.req = entry.req
+			}
 			return
 		}
 
