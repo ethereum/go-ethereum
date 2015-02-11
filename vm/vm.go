@@ -38,13 +38,6 @@ func New(env Environment) *Vm {
 func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
 	self.env.SetDepth(self.env.Depth() + 1)
 
-	msg := self.env.State().Manifest().AddMessage(&state.Message{
-		To: me.Address(), From: caller.Address(),
-		Input:     callData,
-		Origin:    self.env.Origin(),
-		Timestamp: self.env.Time(), Coinbase: self.env.Coinbase(), Number: self.env.BlockNumber(),
-		Value: value,
-	})
 	context := NewContext(caller, me, code, gas, price)
 
 	vmlogger.Debugf("(%d) (%x) %x (code=%d) gas: %v (d) %x\n", self.env.Depth(), caller.Address()[:4], context.Address(), len(code), context.Gas, callData)
@@ -618,8 +611,6 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			val, loc := stack.Popn()
 			statedb.SetState(context.Address(), loc.Bytes(), val)
 
-			msg.AddStorageChange(loc.Bytes())
-
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case JUMP:
 			jump(pc, stack.Pop())
@@ -670,7 +661,6 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 				dataGas.Mul(dataGas, GasCreateByte)
 				if context.UseGas(dataGas) {
 					ref.SetCode(ret)
-					msg.Output = ret
 				}
 				addr = ref.Address()
 
@@ -713,7 +703,6 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 				vmlogger.Debugln(err)
 			} else {
 				stack.Push(ethutil.BigTrue)
-				msg.Output = ret
 
 				mem.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 			}
