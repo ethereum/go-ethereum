@@ -174,6 +174,7 @@ func runBzzProtocol(netStore *NetStore, p *p2p.Peer, rw p2p.MsgReadWriter) (err 
 
 func (self *bzzProtocol) handle() error {
 	msg, err := self.rw.ReadMsg()
+	dpaLogger.Debugf("Incoming MSG: %v", msg)
 	if err != nil {
 		return err
 	}
