@@ -109,7 +109,7 @@ func sockHandler(api *rpc.EthereumApi) websocket.Handler {
 			if reserr != nil {
 				wslogger.Warnln(reserr)
 				jsonerr := &rpc.RpcErrorObject{-32603, reserr.Error()}
-				JSON.Send(conn, &rpc.RpcErrorResponse{JsonRpc: jsonrpcver, ID: &reqParsed.ID, Error: jsonerr})
+				JSON.Send(conn, &rpc.RpcErrorResponse{JsonRpc: jsonrpcver, ID: reqParsed.ID, Error: jsonerr})
 				continue
 			}
 
