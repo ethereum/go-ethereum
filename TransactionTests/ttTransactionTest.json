@@ -1,16 +1,49 @@
 {
-    "EmptyTransaction" : {
-        "rlp" : "0xf84b80808201f48080801ca03f0332f12ac0e47801af82ac677a3a081153624ea5f0d4985251433ee1d69cd4a025fdd406326f226375ba7cf660a75f1888f9420510615590ff142510f89a1a50",
-        "sender" : "be862ad9abfe6f22bcb087716c7d89a26051f74c",
+    "AddressLessThan20" : {
+        "rlp" : "0xf85280018207d0870b9331677e6ebf0a801ca098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3",
+        "sender" : "23f0d6e160851f7b435f743d2ec368449bb06c0f",
         "transaction" : {
             "data" : "",
-            "gasLimit" : "500",
+            "gasLimit" : "2000",
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "r" : "0x98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a",
+            "s" : "0x8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3",
+            "to" : "b9331677e6ebf",
+            "v" : "28",
+            "value" : "10"
+        }
+    },
+    "AddressLessThan20Prefixed0" : {
+        "rlp" : "0xf85f80018207d094000000000000000000000000000b9331677e6ebf0a801ca098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3",
+        "sender" : "23f0d6e160851f7b435f743d2ec368449bb06c0f",
+        "transaction" : {
+            "data" : "",
+            "gasLimit" : "2000",
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "r" : "0x98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a",
+            "s" : "0x8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3",
+            "to" : "0x000000000000000000000000000b9331677e6ebf",
+            "v" : "28",
+            "value" : "10"
+        }
+    },
+    "AddressMoreThan20" : {
+        "rlp" : "0xf86080018207d095b94f5374fce5edbc8e2a8697c15331677e6ebf0b1c0a801ca098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"
+    },
+    "EmptyTransaction" : {
+        "rlp" : "0xf85d80808094095e7baea6a6c7c4c2dfeb977efac326af552d8780801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
+        "sender" : "3e2ddf4fea89f584a735a1234cf20d8627421564",
+        "transaction" : {
+            "data" : "",
+            "gasLimit" : "",
             "gasPrice" : "",
             "nonce" : "",
-            "r" : "0x3f0332f12ac0e47801af82ac677a3a081153624ea5f0d4985251433ee1d69cd4",
-            "s" : "0x25fdd406326f226375ba7cf660a75f1888f9420510615590ff142510f89a1a50",
-            "to" : "",
-            "v" : "28",
+            "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
+            "s" : "0xefffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "v" : "27",
             "value" : ""
         }
     },
@@ -113,6 +146,21 @@
     },
     "TransactionWithTooManyRLPElements" : {
         "rlp" : "0xf865800182035294095e7baea6a6c7c4c2dfeb977efac326af552d870a801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804851de98d0edd"
+    },
+    "WrongAddress" : {
+        "rlp" : "0xf85d80808094095e7baea6a6c7c4c2dfeb977efac326af552d0080801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
+        "sender" : "eec5140a6015e75ac27053d81fc431c877958708",
+        "transaction" : {
+            "data" : "",
+            "gasLimit" : "",
+            "gasPrice" : "",
+            "nonce" : "",
+            "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
+            "s" : "0xefffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d8v",
+            "v" : "27",
+            "value" : ""
+        }
     },
     "WrongVRSTestVge31" : {
         "rlp" : "0xf85f80018207d094b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a801fa098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"
