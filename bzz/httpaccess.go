@@ -14,7 +14,8 @@ import (
 )
 
 const (
-	port = ":8500"
+	port          = ":8500"
+	manifest_type = "application/bzz-manifest+json"
 )
 
 var (
@@ -100,57 +101,66 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 			name := uri[1:65]
 			path := uri[65:] // typically begins with a /
 			key := ethutil.Hex2Bytes(name)
-			manifestReader := dpa.Retrieve(key)
-			// TODO check size for oversized manifests
-			manifest := make([]byte, manifestReader.Size())
-			_, err := manifestReader.Read(manifest)
-			if err != nil {
-				dpaLogger.Debugf("Swarm: Manifest %s not found.", name)
-				http.Error(w, err.Error(), http.StatusNotFound)
-				return
-			}
-			dpaLogger.Debugf("Swarm: Manifest %s retrieved.")
-			manifestEntries := make([]manifestEntry, 0)
-			err = json.Unmarshal(manifest, &manifestEntries)
-			if err != nil {
-				dpaLogger.Debugf("Swarm: Manifest %s is malformed.", name)
-				http.Error(w, err.Error(), http.StatusNotFound)
-				return
-			} else {
-				dpaLogger.Debugf("Swarm: Manifest %s has %d entries.", name, len(manifestEntries))
-			}
-			var mimeType string
-			key = nil
-			prefix := 0
-			status := int16(404)
-			for _, entry := range manifestEntries {
-				if !hashMatcher.MatchString(entry.Hash) {
-					// hash is mandatory
-					break
+		MANIFEST_RESOLUTION:
+			for {
+				manifestReader := dpa.Retrieve(key)
+				// TODO check size for oversized manifests
+				manifest := make([]byte, manifestReader.Size())
+				_, err := manifestReader.Read(manifest)
+				if err != nil {
+					dpaLogger.Debugf("Swarm: Manifest %s not found.", name)
+					http.Error(w, err.Error(), http.StatusNotFound)
+					return
 				}
-				if entry.Content_type == "" {
-					// content type defaults to manifest
-					entry.Content_type = "application/bzz-manifest+json"
+				dpaLogger.Debugf("Swarm: Manifest %s retrieved.")
+				manifestEntries := make([]manifestEntry, 0)
+				err = json.Unmarshal(manifest, &manifestEntries)
+				if err != nil {
+					dpaLogger.Debugf("Swarm: Manifest %s is malformed.", name)
+					http.Error(w, err.Error(), http.StatusNotFound)
+					return
+				} else {
+					dpaLogger.Debugf("Swarm: Manifest %s has %d entries.", name, len(manifestEntries))
 				}
-				if entry.Status == 0 {
-					// status defaults to 200
-					entry.Status = 200
+				var mimeType string
+				key = nil
+				prefix := 0
+				status := int16(404)
+			MANIFEST_ENTRIES:
+				for _, entry := range manifestEntries {
+					if !hashMatcher.MatchString(entry.Hash) {
+						// hash is mandatory
+						break MANIFEST_ENTRIES
+					}
+					if entry.Content_type == "" {
+						// content type defaults to manifest
+						entry.Content_type = manifest_type
+					}
+					if entry.Status == 0 {
+						// status defaults to 200
+						entry.Status = 200
+					}
+					pathLen := len(entry.Path)
+					if len(path) >= pathLen && path[:pathLen] == entry.Path && prefix < pathLen {
+						prefix = pathLen
+						key = ethutil.Hex2Bytes(entry.Hash)
+						mimeType = entry.Content_type
+						status = entry.Status
+					}
 				}
-				pathLen := len(entry.Path)
-				if len(path) >= pathLen && path[:pathLen] == entry.Path && prefix < pathLen {
-					prefix = pathLen
-					key = ethutil.Hex2Bytes(entry.Hash)
-					mimeType = entry.Content_type
-					status = entry.Status
+				if key == nil {
+					http.Error(w, "Object "+uri+" not found.", http.StatusNotFound)
+					break MANIFEST_RESOLUTION
+				} else if mimeType != manifest_type {
+					w.Header().Set("Content-Type", mimeType)
+					w.WriteHeader(int(status))
+					http.ServeContent(w, r, "", time.Unix(0, 0), dpa.Retrieve(key))
+					dpaLogger.Debugf("Swarm: Served %s as %s.", mimeType, uri)
+					break MANIFEST_RESOLUTION
+				} else {
+					path = path[prefix:]
+					// continue with manifest resolution
 				}
-			}
-			if key == nil {
-				http.Error(w, "Object "+uri+" not found.", http.StatusNotFound)
-			} else {
-				w.Header().Set("Content-Type", mimeType)
-				w.WriteHeader(int(status))
-				http.ServeContent(w, r, "", time.Unix(0, 0), dpa.Retrieve(key))
-				dpaLogger.Debugf("Swarm: Served %s as %s.", mimeType, uri)
 			}
 		} else {
 			http.Error(w, "Object "+uri+" not found.", http.StatusNotFound)
