@@ -1,6 +1,6 @@
 {
     "EmptyTransaction" : {
-        "rlp" : "0xf8498080808080801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
+        "rlp" : "0xf84b80808201f48080801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
         "sender" : "66c7b5c28121e4b66583d15481c92f5ad848fe1f",
         "transaction" : {
             "data" : "",
