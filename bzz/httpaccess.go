@@ -100,7 +100,9 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 			dpaLogger.Debugf("Swarm: Raw GET request %s received", uri)
 			name := uri[5:]
 			key := ethutil.Hex2Bytes(name)
-			http.ServeContent(w, r, name+".bin", time.Unix(0, 0), dpa.Retrieve(key))
+			reader := dpa.Retrieve(key)
+			dpaLogger.Debugf("Swarm: Reading %d bytes.", reader.Size())
+			http.ServeContent(w, r, name+".bin", time.Unix(0, 0), reader)
 			dpaLogger.Debugf("Swarm: Object %s returned.", name)
 		} else if manifestMatcher.MatchString(uri) {
 			dpaLogger.Debugf("Swarm: Structured GET request %s received.", uri)

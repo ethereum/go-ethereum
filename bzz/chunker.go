@@ -289,12 +289,13 @@ type LazyChunkReader struct {
 }
 
 func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
+	self.errC = make(chan error)
 	chunk := &Chunk{
 		Key: self.key,
 		C:   make(chan bool), // close channel to signal data delivery
 	}
 	self.chunkC <- chunk // submit retrieval request, someone should be listening on the other side (or we will time out globally)
-	dpaLogger.Debugf("readAt %x", chunk.Key[:4])
+	dpaLogger.Debugf("readAt %x into %d bytes at %d.", chunk.Key[:4], len(b), off)
 
 	// waiting for the chunk retrieval
 	select {
@@ -304,15 +305,19 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		return
 	case <-chunk.C: // bells are ringing, data have been delivered
 		dpaLogger.Debugf("chunk data received for %x", chunk.Key[:4])
-		fmt.Printf("chunk data received for %x\n", chunk.Key[:4])
 	}
 	if len(chunk.Data) == 0 {
+		dpaLogger.Debugf("No payload.")
 		return 0, notFound
 	}
-
+	self.size = chunk.Size
+	if b == nil {
+		dpaLogger.Debugf("Size query for %x.", chunk.Key[:4])
+		return
+	}
 	want := int64(len(b))
-	if off < 0 || want+off > chunk.Size {
-		return 0, io.EOF
+	if off+want > self.size {
+		want = self.size - off
 	}
 	var treeSize int64
 	var depth int
@@ -330,8 +335,14 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 	}()
 	select {
 	case err = <-self.errC:
-	case <-self.quitC:
+		dpaLogger.Debugf("ReadAt received %v.", err)
 		read = len(b)
+		if off+int64(read) == self.size {
+			err = io.EOF
+		}
+		dpaLogger.Debugf("ReadAt returning with %d, %v.", read, err)
+	case <-self.quitC:
+		dpaLogger.Debugf("ReadAt aborted with %d, %v.", read, err)
 	}
 	return
 }

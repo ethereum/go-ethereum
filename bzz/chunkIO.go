@@ -165,6 +165,7 @@ func (r *ChunkReader) WriteTo(w io.Writer) (n int64, err error) {
 }
 
 func (self *LazyChunkReader) Size() (n int64) {
+	self.ReadAt(nil, 0)
 	return self.size
 }
 

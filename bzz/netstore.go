@@ -55,6 +55,7 @@ func NewNetStore(path string) *NetStore {
 
 func (self *NetStore) Put(entry *Chunk) {
 	chunk, err := self.localStore.Get(entry.Key)
+	dpaLogger.Debugf("NetStore.Put: localStore.Get returned with %v.", err)
 	if err != nil {
 		chunk = entry
 	} else if chunk.Data == nil {
@@ -68,6 +69,7 @@ func (self *NetStore) Put(entry *Chunk) {
 
 func (self *NetStore) put(entry *Chunk) {
 	self.localStore.Put(entry)
+	dpaLogger.Debugf("NetStore.put: localStore.Put of %064x completed.", entry.Key)
 	self.store(entry)
 	// only send responses once
 	if entry.req != nil && entry.req.status == reqSearching {
@@ -104,6 +106,8 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 	timeout := time.Now().Add(searchTimeout)
 	if chunk.Data == nil {
 		self.startSearch(chunk, id, timeout)
+	} else {
+		return
 	}
 	timer := time.After(searchTimeout)
 	select {
@@ -117,6 +121,7 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 func (self *NetStore) get(key Key) (chunk *Chunk) {
 	var err error
 	chunk, err = self.localStore.Get(key)
+	dpaLogger.Debugf("NetStore.get: localStore.Get of %064x returned with %v.", key, err)
 	// we assume that a returned chunk is the one stored in the memory cache
 	if err != nil {
 		// no data and no request status
