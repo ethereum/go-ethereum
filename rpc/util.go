@@ -47,7 +47,6 @@ func (self JsonWrapper) ParseRequestBody(req *http.Request) (RpcRequest, error) 
 
 	// Convert JSON to native types
 	d := json.NewDecoder(req.Body)
-	// d.UseNumber()
 	defer req.Body.Close()
 	err := d.Decode(&reqParsed)
 
@@ -55,6 +54,7 @@ func (self JsonWrapper) ParseRequestBody(req *http.Request) (RpcRequest, error) 
 		rpclogger.Errorln("Error decoding JSON: ", err)
 		return reqParsed, err
 	}
+
 	rpclogger.DebugDetailf("Parsed request: %s", reqParsed)
 
 	return reqParsed, nil

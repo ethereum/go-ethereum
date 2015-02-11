@@ -12,7 +12,7 @@ Rectangle {
 	anchors.fill: parent
 	color: "#00000000"
 
-	property var title: ""
+	property var title: "Catalog"
 	property var iconSource: ""
 	property var menuItem
 	property var hideUrl: true
@@ -75,111 +75,57 @@ Rectangle {
 		anchors.fill: parent
 		state: "inspectorShown"
 
-		RowLayout {
-			id: navBar
-			height: 184
-			z: 20
-
-			anchors {
-				left: parent.left
-				right: parent.right
-			}
-
-			Rectangle {
-				id: appInfoPane
-			    height: 28
-			    color: "#efefef"
-			    radius: 6
-			    z:25
-
-			   MouseArea {
-			    	anchors.fill: parent
-			    	z: 10
-			    	hoverEnabled: true
-			    	onEntered: {
-			    		uriNav.visible = true
-			    		appTitle.visible = false
-			    		appDomain.visible = false
-			    	}	    	
-			    }
-
-			    anchors {
-					left: parent.left
-					right: parent.right
-					leftMargin: 10
-					rightMargin: 10
-					top: parent.verticalCenter 
-					topMargin: 23
-				}
-
-				TextField {
-				    id: uriNav
-				    anchors {
-				    	left: parent.left
-				    	right: parent.right
-				    	leftMargin: 16
-						top: parent.verticalCenter 
-						topMargin: -10
-				    }
-
-				    horizontalAlignment: Text.AlignHCenter
-                    
-                    style: TextFieldStyle {
-                        textColor: "#928484"
-                        background: Rectangle {
-                            border.width: 0
-                            color: "transparent"
-                        }
-                    }
-    				text: "Type the address of a new Dapp";
-				    y: parent.height / 2 - this.height / 2
-				    z: 30
-				    activeFocusOnPress: true
-				    Keys.onReturnPressed: {
-        				newBrowserTab(this.text);
-        				this.text = "Type the address of a new Dapp";
-				    }
-
-			    }   				
-			}
-			
-			Rectangle {
-				id: appInfoPaneShadow
-			    width: 10
-			    height: 30
-			    color: "#BDB6B6"
-			    radius: 6
-			    z: 15
-
-			    anchors {
-					left: parent.left
-					right: parent.right
-					leftMargin:10
-					rightMargin:10
-					top: parent.verticalCenter 
-					topMargin: 23
-				}
-
-				
-			}
-
-		}
-
-
 		WebEngineView {
 			objectName: "webView"
 			id: webview
 			anchors.fill: parent
 
-			onLoadingChanged: {
-				if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
-					webview.runJavaScript(eth.readFile("bignumber.min.js"));
-					webview.runJavaScript(eth.readFile("ethereum.js/dist/ethereum.js"));
-				}
-			}
+			property var protocol: "http://"
+			//property var domain: "localhost:3000"
+			property var domain: "ethereum-dapp-catalog.meteor.com"
+			url: protocol + domain
+
+			//navigationRequest: WebEngineView.IgnoreRequest
+		//	onLoadingChanged: {
+		//		if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
+		//			webview.runJavaScript(eth.readFile("bignumber.min.js"));
+		//			webview.runJavaScript(eth.readFile("ethereum.js/dist/ethereum.js"));
+		//		}
+		//	}
+
+			//onNavigationRequested: {
+	            // detect URL scheme prefix, most likely an external link
+	            //var schemaRE = /^\w+:/;
+	            //if (schemaRE.test(request.url)) {
+	            //    request.action = WebView.AcceptRequest;
+	            //} else {
+	            //request.action = WebView.IgnoreRequest;
+	                // delegate request.url here
+	            //}
+        	//}
+
 			onJavaScriptConsoleMessage: {
 				console.log(sourceID + ":" + lineNumber + ":" + JSON.stringify(message));
 			}
+
+			onNavigationRequested: {            
+				var cleanTitle = request.url.toString()
+				var matches = cleanTitle.match(/^[a-z]*\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
+				var requestedDomain = matches && matches[1];
+
+               console.debug ("NavigationRequested: " + request.url + " navigationType=" + request.navigationType)
+              
+                if(request.navigationType==0){
+
+                	if (requestedDomain === this.domain){
+                		request.action = WebEngineView.AcceptRequest;
+                	} else {
+                		request.action = WebEngineView.IgnoreRequest;
+		               	newBrowserTab(request.url);
+                	}
+                	
+                }
+            }
 		}
 
 

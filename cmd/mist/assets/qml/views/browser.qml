@@ -345,14 +345,21 @@ Rectangle {
 						if (topBarStyle=="transparent") {
 
 							// Adjust for a transparent sidebar Dapp
-							navBarBackground.visible = false;
-							back.visible = false;
-							appInfoPane.anchors.leftMargin = -16;
-							appInfoPaneShadow.anchors.leftMargin = -16;
-							webview.anchors.topMargin = -74;
+                            navBarBackground.visible = false;
+                            back.visible = false;
+                            appInfoPane.anchors.leftMargin = -16;
+                            appInfoPaneShadow.anchors.leftMargin = -16;
+                            webview.anchors.topMargin = -74;
 							webview.runJavaScript("document.querySelector('body').classList.add('ethereum-dapp-url-bar-style-transparent')")
 
-						};	
+						} else {
+                            navBarBackground.visible = true;
+                            back.visible = true;
+                            appInfoPane.anchors.leftMargin = 0;
+                            appInfoPaneShadow.anchors.leftMargin = 0;
+                            webview.anchors.topMargin = 0;
+
+                        };	
 					});
 
 					

@@ -39,7 +39,7 @@ ApplicationWindow {
     // Takes care of loading all default plugins
     Component.onCompleted: {
 
-        addPlugin("./views/catalog.qml", {noAdd: true, close: false, section: "begin"});
+        var catalog = addPlugin("./views/catalog.qml", {noAdd: true, close: false, section: "begin"});
         var wallet = addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "ethereum", active: true});
 
         addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: true});
@@ -49,9 +49,9 @@ ApplicationWindow {
         addPlugin("./views/pending_tx.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/info.qml", {noAdd: true, close: false, section: "legacy"});
 
-        mainSplit.setView(wallet.view, wallet.menuItem);
+        mainSplit.setView(catalog.view, catalog.menuItem);
 
-        newBrowserTab("http://ethereum-dapp-whisper-client.meteor.com/chat/amsteam");
+        //newBrowserTab("http://ethereum-dapp-catalog.meteor.com");
 
         // Command setup
         gui.sendCommand(0)
@@ -114,10 +114,33 @@ ApplicationWindow {
     }
 
     function newBrowserTab(url) {
-        var window = addPlugin("./views/browser.qml", {noAdd: true, close: true, section: "apps", active: true});
-        window.view.url = url;
-        window.menuItem.title = "Mist";
-        activeView(window.view, window.menuItem);
+        
+        var urlMatches = url.toString().match(/^[a-z]*\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
+        var requestedDomain = urlMatches && urlMatches[1];
+
+        var domainAlreadyOpen = false;
+
+        console.log("requested: " + requestedDomain )
+
+        for(var i = 0; i < mainSplit.views.length; i++) {
+            if (mainSplit.views[i].view.url) {
+                var matches = mainSplit.views[i].view.url.toString().match(/^[a-z]*\:\/\/(?:www\.)?([^\/?#]+)(?:[\/?#]|$)/i);
+                var existingDomain = matches && matches[1];
+                console.log("exists: " + existingDomain);
+                if (requestedDomain == existingDomain) {
+                    domainAlreadyOpen = true;
+                    mainSplit.views[i].view.url = url;
+                    activeView(mainSplit.views[i].view, mainSplit.views[i].menuItem);
+                }
+            }
+        }  
+
+        if (!domainAlreadyOpen) {            
+            var window = addPlugin("./views/browser.qml", {noAdd: true, close: true, section: "apps", active: true});
+            window.view.url = url;
+            window.menuItem.title = "Mist";
+            activeView(window.view, window.menuItem);
+        }
     }
 
 
@@ -332,8 +355,9 @@ ApplicationWindow {
 
         id: mainSplit
         anchors.fill: parent
-        resizing: false
+        //resizing: false  // this is NOT where we remove that damning resizing handle..
         handleDelegate: Item {
+            //This handle is a way to remove the line between the split views
             Rectangle {
                 anchors.fill: parent
             }
@@ -497,7 +521,7 @@ ApplicationWindow {
                              anchors.fill: parent
                              border.width: 0
                              radius: 5
-                             color: "#FFFFFFFF"
+                             color: "#FAFAFA"
                          }
                          Rectangle {
                              anchors {
@@ -506,7 +530,7 @@ ApplicationWindow {
                                  right: r.right
                              }
                              width: 10
-                             color: "#FFFFFFFF"
+                             color: "#FAFAFA"
                              border.width:0
 
                              Rectangle {
@@ -517,7 +541,7 @@ ApplicationWindow {
                                      top: parent.top
                                  }
                                  height: 1
-                                 color: "#FFFFFF"
+                                 color: "#FAFAFA"
                              }
 
                              Rectangle {
@@ -528,7 +552,7 @@ ApplicationWindow {
                                      bottom: parent.bottom
                                  }
                                  height: 1
-                                 color: "#FFFFFF"
+                                 color: "#FAFAFA"
                              }
                          }
                      }
@@ -800,7 +824,7 @@ ApplicationWindow {
               anchors.top: parent.top
               color: "#00000000"             
 
-              Rectangle {
+              /*Rectangle {
                   id: urlPane
                   height: 40
                   color: "#00000000"
@@ -847,7 +871,7 @@ ApplicationWindow {
                   z: -1
                   height: 1
                   color: "#CCCCCC"
-              }
+              }*/
 
               Rectangle {
                   id: mainView
@@ -855,7 +879,7 @@ ApplicationWindow {
                   anchors.right: parent.right
                   anchors.left: parent.left
                   anchors.bottom: parent.bottom
-                  anchors.top: divider.bottom
+                  anchors.top: parent.top
 
                   function createView(component) {
                       var view = component.createObject(mainView)

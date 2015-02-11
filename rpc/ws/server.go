@@ -94,9 +94,10 @@ func sockHandler(api *rpc.EthereumApi) websocket.Handler {
 	var jsonrpcver string = "2.0"
 	fn := func(conn *websocket.Conn) {
 		for {
-			wslogger.Debugln("Handling request")
+			wslogger.Debugln("Handling connection")
 			var reqParsed rpc.RpcRequest
 
+			// reqParsed, reqerr := JSON.ParseRequestBody(conn.Request())
 			if err := websocket.JSON.Receive(conn, &reqParsed); err != nil {
 				jsonerr := &rpc.RpcErrorObject{-32700, rpc.ErrorParseRequest}
 				JSON.Send(conn, &rpc.RpcErrorResponse{JsonRpc: jsonrpcver, ID: nil, Error: jsonerr})
@@ -108,7 +109,7 @@ func sockHandler(api *rpc.EthereumApi) websocket.Handler {
 			if reserr != nil {
 				wslogger.Warnln(reserr)
 				jsonerr := &rpc.RpcErrorObject{-32603, reserr.Error()}
-				JSON.Send(conn, &rpc.RpcErrorResponse{JsonRpc: jsonrpcver, ID: &reqParsed.ID, Error: jsonerr})
+				JSON.Send(conn, &rpc.RpcErrorResponse{JsonRpc: jsonrpcver, ID: reqParsed.ID, Error: jsonerr})
 				continue
 			}
 
