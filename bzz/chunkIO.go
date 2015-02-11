@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"sync"
-	"time"
 )
 
 type Bounded interface {
@@ -22,12 +20,6 @@ type SectionReader interface {
 	io.Seeker
 	io.Reader
 	io.ReaderAt
-}
-
-type LazySectionReader interface {
-	SectionReader
-	GetTimeout() time.Time
-	SetTimeout(time.Time) error
 }
 
 // ChunkReader implements SectionReader on a section
@@ -172,23 +164,6 @@ func (r *ChunkReader) WriteTo(w io.Writer) (n int64, err error) {
 	return
 }
 
-// LazyChunkReader implements LazySectionReader
-type LazyChunkReader struct {
-	sections []LazySectionReader
-	readerFs [](func() LazySectionReader)
-	size     int64
-	treeSize int64
-	off      int64
-}
-
-func (self *LazyChunkReader) GetTimeout() (t time.Time) {
-	return
-}
-
-func (self *LazyChunkReader) SetTimeout(t time.Time) error {
-	return nil
-}
-
 func (self *LazyChunkReader) Size() (n int64) {
 	return self.size
 }
@@ -215,90 +190,4 @@ func (s *LazyChunkReader) Seek(offset int64, whence int) (int64, error) {
 	}
 	s.off = offset
 	return offset, nil
-}
-
-func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
-	if off < 0 || off >= self.size {
-		err = io.EOF
-		return
-	}
-	want := len(b)
-	got := int(self.size - off)
-	if want > got {
-		err = io.EOF
-	}
-	var index int
-	index = int(off / self.treeSize)
-	off -= int64(index) * self.treeSize
-	var limit int
-	var reader LazySectionReader
-
-	for i := index; i < len(self.sections) && want > 0; i++ {
-		if reader = self.sections[i]; reader == nil {
-			reader = self.readerFs[i]() // this hooks into the go routines and does a wg.Done once the needed chunks are fetched and processed
-			self.sections[i] = reader   // memoize this reader
-		}
-		if want > int(reader.Size()-off) {
-			limit = int(reader.Size() - off)
-		} else {
-			limit = want
-		}
-		if got, err = reader.ReadAt(b[read:read+limit], off); err != nil {
-			return
-		}
-		read += got
-		want -= got
-		off = 0
-	}
-	return
-}
-
-type EmbeddedReader struct {
-	LazySectionReader
-	lock sync.Mutex
-}
-
-type NotReadyReader struct {
-	initF func()
-	r     LazySectionReader
-}
-
-func (self *NotReadyReader) Size() (n int64) {
-	self.initF()
-	return self.r.Size()
-}
-
-func (self *NotReadyReader) Read(b []byte) (read int, err error) {
-	self.initF()
-	return self.r.Read(b)
-}
-
-func (self *NotReadyReader) ReadAt(b []byte, off int64) (read int, err error) {
-	self.initF()
-	return self.r.ReadAt(b, off)
-}
-
-func (self *NotReadyReader) Seek(offset int64, whence int) (int64, error) {
-	self.initF()
-	return self.r.Seek(offset, whence)
-}
-
-// just a wrapper to make a SectionReader conform to LazySectionReader
-// with dummy implementation
-type lazyReader struct {
-	SectionReader
-}
-
-func LazyReader(r SectionReader) (l LazySectionReader) {
-	return &lazyReader{
-		SectionReader: r,
-	}
-}
-
-func (self *lazyReader) GetTimeout() (t time.Time) {
-	return
-}
-
-func (self *lazyReader) SetTimeout(t time.Time) error {
-	return nil
 }

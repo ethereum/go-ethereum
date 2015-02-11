@@ -26,6 +26,7 @@ import (
 	"crypto"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 )
@@ -63,14 +64,12 @@ type Chunker interface {
 	Split(key Key, data SectionReader, chunkC chan *Chunk) chan error
 	/*
 		Join reconstructs original content based on a root key.
-		When joining, the caller gets returned a LazySectionReader and an error channel.
+		When joining, the caller gets returned a Lazy SectionReader
 		New chunks to retrieve are coming to caller via the Chunk channel, which the caller provides.
-		If an error is encountered during joining, it is fed to errC error channel.
-		A closed error signals process completion at which point the data can be considered final and fully reconstructed if there were no errors.
-		The LazySectionReader provides on-demand fetching of content including chunks.
-		Lifecycle of the reader can be modified with SetTimeout()
+		If an error is encountered during joining, it appears as a reader error.
+		The SectionReader provides on-demand fetching of chunks.
 	*/
-	Join(key Key, chunkC chan *Chunk) (LazySectionReader, chan error)
+	Join(key Key, chunkC chan *Chunk) SectionReader
 
 	// returns the key length
 	KeySize() int64
@@ -109,7 +108,7 @@ func (self *TreeChunker) Init() {
 	}
 	self.hashSize = int64(self.HashFunc.New().Size())
 	self.chunkSize = self.hashSize * self.Branches
-	// dpaLogger.Debugf("Chunker initialised: branches: %v, hashsize: %v, chunksize: %v, join timeout: %v , split timeout: %v", self.Branches, self.hashSize, self.chunkSize, self.JoinTimeout, self.SplitTimeout)
+	dpaLogger.Debugf("Chunker initialised: branches: %v, hashsize: %v, chunksize: %v, join timeout: %v , split timeout: %v", self.Branches, self.hashSize, self.chunkSize, self.JoinTimeout, self.SplitTimeout)
 
 }
 
@@ -120,9 +119,7 @@ func (self *TreeChunker) KeySize() int64 {
 // String() for pretty printing
 func (self *Chunk) String() string {
 	var size int64
-	var slice []byte
 	var n int
-	var err error
 	return fmt.Sprintf("Key: [%x..] TreeSize: %v Chunksize: %v Data: %x\n", self.Key[:4], self.Size, size, self.Data[:n])
 }
 
@@ -164,7 +161,7 @@ func (self *TreeChunker) Split(key Key, data SectionReader, chunkC chan *Chunk) 
 			depth++
 		}
 
-		// dpaLogger.Debugf("split request received for data (%v bytes, depth: %v)", size, depth)
+		dpaLogger.Debugf("split request received for data (%v bytes, depth: %v)", size, depth)
 
 		//launch actual recursive function passing the workgroup
 		self.split(depth, treeSize/self.Branches, key, data, chunkC, rerrC, wg)
@@ -200,7 +197,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 	size := data.Size()
 	var newChunk *Chunk
 	var hash Key
-	// dpaLogger.Debugf("depth: %v, max subtree size: %v, data size: %v", depth, treeSize, size)
+	dpaLogger.Debugf("depth: %v, max subtree size: %v, data size: %v", depth, treeSize, size)
 
 	for depth > 0 && size < treeSize {
 		treeSize /= self.Branches
@@ -212,7 +209,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 		chunkData := make([]byte, data.Size())
 		data.ReadAt(chunkData, 0)
 		hash = self.Hash(size, chunkData)
-		// dpaLogger.Debugf("content chunk: max subtree size: %v, data size: %v", treeSize, size)
+		dpaLogger.Debugf("content chunk: max subtree size: %v, data size: %v", treeSize, size)
 		newChunk = &Chunk{
 			Key:  hash,
 			Data: chunkData,
@@ -220,15 +217,15 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 		}
 	} else {
 		// intermediate chunk containing child nodes hashes
-		branches := int64((size-1)/treeSize) + 1
-		// dpaLogger.Debugf("intermediate node: setting branches: %v, depth: %v, max subtree size: %v, data size: %v", branches, depth, treeSize, size)
+		branchCnt := int64((size-1)/treeSize) + 1
+		dpaLogger.Debugf("intermediate node: setting branches: %v, depth: %v, max subtree size: %v, data size: %v", branches, depth, treeSize, size)
 
 		var chunk []byte = make([]byte, branches*self.hashSize)
 		var pos, i int64
 
 		childrenWg := &sync.WaitGroup{}
 		var secSize int64
-		for i < branches {
+		for i < branchCnt {
 			// the last item can have shorter data
 			if size-pos < treeSize {
 				secSize = size - pos
@@ -269,132 +266,142 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 
 }
 
-func (self *TreeChunker) Join(key Key, chunkC chan *Chunk) (data LazySectionReader, errC chan error) {
-	// initialise return parameters
-	errC = make(chan error)
-	// timer to time out the operation (needed within so as to avoid process leakage)
-	timeout := time.After(self.JoinTimeout)
-	wg := &sync.WaitGroup{}
-	// initialise internal error channel
-	rerrC := make(chan error)
-	quitC := make(chan bool)
+func (self *TreeChunker) Join(key Key, chunkC chan *Chunk) SectionReader {
 
-	// launch lazy recursive call on root chunk
-	notReadyReader := &NotReadyReader{}
-	reader := &EmbeddedReader{
-		LazySectionReader: &lazyReader{notReadyReader},
+	return &LazyChunkReader{
+		key:     key,
+		chunkC:  chunkC,
+		quitC:   make(chan bool),
+		errC:    make(chan error),
+		chunker: self,
 	}
-	fun := self.join(0, 0, key, chunkC, rerrC, wg, quitC)
-	data = reader
+}
 
-	// processing is triggered by reads on the LazySectionReader
+// LazyChunkReader implements LazySectionReader
+type LazyChunkReader struct {
+	key     Key
+	chunkC  chan *Chunk
+	size    int64
+	off     int64
+	quitC   chan bool
+	errC    chan error
+	chunker *TreeChunker
+}
+
+func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
+	chunk := &Chunk{
+		Key: self.key,
+		C:   make(chan bool), // close channel to signal data delivery
+	}
+	self.chunkC <- chunk // submit retrieval request, someone should be listening on the other side (or we will time out globally)
+	dpaLogger.Debugf("readAt %x", chunk.Key[:4])
+
+	// waiting for the chunk retrieval
+	select {
+	case <-self.quitC:
+		// this is how we control process leakage (quitC is closed once join is finished (after timeout))
+		dpaLogger.Debugf("quit")
+		return
+	case <-chunk.C: // bells are ringing, data have been delivered
+		dpaLogger.Debugf("chunk data received for %x", chunk.Key[:4])
+		fmt.Printf("chunk data received for %x\n", chunk.Key[:4])
+	}
+	if chunk.Data == nil {
+		return 0, notFound
+	}
+
+	want := int64(len(b))
+	if off < 0 || want+off > chunk.Size {
+		return 0, io.EOF
+	}
+	var treeSize int64
+	var depth int
+	// calculate depth and max treeSize
+	treeSize = self.chunker.chunkSize
+	for ; treeSize < chunk.Size; treeSize *= self.chunker.Branches {
+		depth++
+	}
+	wg := sync.WaitGroup{}
 	wg.Add(1)
-	notReadyReader.r = reader
-	notReadyReader.initF = func() {
-		reader.lock.Lock()
-		if fun != nil {
-			reader.LazySectionReader = fun() // replace the reader while caller is waiting
-			wg.Done()                        // just to have one in waitgroup until reader funcs are called
-			fun = nil                        // to be only called once
-		}
-		reader.lock.Unlock()
-	}
-
-	// waits for all the processes to finish and signals by closing internal rerrc
+	go self.join(b, off, off+want, depth, treeSize/self.chunker.Branches, chunk, &wg)
 	go func() {
 		wg.Wait()
-		close(rerrC)
+		close(self.errC)
 	}()
-
-	go func() {
-		select {
-		case err := <-rerrC:
-			if err != nil {
-				errC <- err
-			} // otherwise channel is closed, data joining complete
-		case <-timeout:
-			errC <- fmt.Errorf("join time out")
-			close(quitC)
-		}
-		// this will indicate to the caller that processing is finished (with or without error)
-		close(errC)
-	}()
-
+	select {
+	case err = <-self.errC:
+	case <-self.quitC:
+		read = len(b)
+	}
 	return
 }
 
-func (self *TreeChunker) join(depth int, treeSize int64, key Key, chunkC chan *Chunk, errC chan error, wg *sync.WaitGroup, quitC chan bool) (readerF func() LazySectionReader) {
-	wg.Add(1)
-	readerF = func() (r LazySectionReader) {
-		defer wg.Done()
-		chunk := &Chunk{
-			Key: key,
-			C:   make(chan bool, 1), // close channel to signal data delivery
-		}
-		chunkC <- chunk // submit retrieval request, someone should be listening on the other side (or we will time out globally)
+func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeSize int64, chunk *Chunk, parentWg *sync.WaitGroup) {
+	defer parentWg.Done()
 
-		// waiting for the chunk retrieval
-		select {
-		case <-quitC:
-			// this is how we control process leakage (quitC is closed once join is finished (after timeout))
-			return
-		case <-chunk.C: // bells are ringing, data have been delivered
-		}
+	dpaLogger.Debugf("depth: %v, loff: %v, eoff: %v, chunk.Size: %v, treeSize: %v", depth, off, eoff, chunk.Size, treeSize)
+	fmt.Printf("depth: %v, loff: %v, eoff: %v, chunk.Size: %v, treeSize: %v\n", depth, off, eoff, chunk.Size, treeSize)
 
-		//		if data == nil {
-		//			return
-		//		}
-
-		// calculate depth and max treeSize
-		var depth int
-		var treeSize int64 = self.hashSize
-		for ; treeSize*self.Branches < chunk.Size; treeSize *= self.Branches {
-			depth++
-		}
-
-		if depth == 0 {
-			r = LazyReader(NewByteSliceReader(chunk.Data))
-			return // simply give back the chunks reader for content chunks
-		}
-
-		// find appropriate block level
-		for chunk.Size < treeSize {
-			treeSize /= self.Branches
-			depth--
-		}
-		// boooo
-		// intermediate chunk, chunk containing hashes of child nodes
-		var i int64
-		var childKey Key
-		var readerF func() (r LazySectionReader)
-		var readerFs [](func() (r LazySectionReader))
-		branches := int64((chunk.Size-1)/treeSize) + 1
-		// dpaLogger.DebugDetailf("tree node - size %v, chunk size: %v, subtreeSize %v, branches %v", chunk.Size, chunk.Reader.Size(), treeSize, branches)
-
-		// iterate through the chunk containing the keys of children
-		// create lazy init functions that give back readers
-		for i < branches {
-			// create partial Chunk in order to send a retrieval request
-			childKey = make([]byte, self.hashSize) // preallocate hashSize long slice for key
-			// read the Hash of the subtree from the relevant section of the Chunk into the allocated byte slice in subtree.Key
-			if _, err := chunk.Reader.ReadAt(childKey, i*self.hashSize); err != nil {
-				// dpaLogger.DebugDetailf("Read error: %v", err)
-				errC <- err
-				break
-			}
-			// call lazy reader function recursively on the subtree
-			readerF = self.join(depth-1, treeSize/self.Branches, childKey, chunkC, errC, wg, quitC)
-			readerFs = append(readerFs, readerF)
-			i++
-		}
-		// new reader created on demand:
-		r = &LazyChunkReader{
-			readerFs: readerFs,
-			sections: make([]LazySectionReader, branches),
-			size:     chunk.Size,
-			treeSize: treeSize,
-		}
-		return
+	// find appropriate block level
+	for chunk.Size < treeSize && depth > 0 {
+		treeSize /= self.chunker.Branches
+		depth--
 	}
-	return
+	dpaLogger.Debugf("-> depth: %v, loff: %v, eoff: %v, chunk.Size: %v, treeSize: %v", depth, off, eoff, chunk.Size, treeSize)
+	fmt.Printf("-> depth: %v, loff: %v, eoff: %v, chunk.Size: %v, treeSize: %v\n", depth, off, eoff, chunk.Size, treeSize)
+
+	if depth == 0 {
+		copy(b, chunk.Data[off:eoff])
+		return // simply give back the chunks reader for content chunks
+	}
+
+	// subtree index
+	start := off / treeSize
+	end := (eoff + treeSize - 1) / treeSize
+	wg := sync.WaitGroup{}
+
+	for i := start; i < end; i++ {
+
+		soff := i * treeSize
+		roff := soff
+		seoff := soff + treeSize
+
+		if soff < off {
+			soff = off
+		}
+		if seoff > eoff {
+			seoff = eoff
+		}
+
+		wg.Add(1)
+		go func(j int64) {
+			dpaLogger.Debugf("subtree index: %v", j)
+			childKey := chunk.Data[j*self.chunker.hashSize : (j+1)*self.chunker.hashSize]
+
+			chunk := &Chunk{
+				Key: childKey,
+				C:   make(chan bool, 1), // close channel to signal data delivery
+			}
+			dpaLogger.Debugf("chunk data sent for %x (key interval in chunk %v-%v)", chunk.Key[:4], j*self.chunker.hashSize, (j+1)*self.chunker.hashSize)
+			self.chunkC <- chunk // submit retrieval request, someone should be listening on the other side (or we will time out globally)
+
+			// waiting for the chunk retrieval
+			select {
+			case <-self.quitC:
+				// this is how we control process leakage (quitC is closed once join is finished (after timeout))
+				return
+			case <-chunk.C: // bells are ringing, data have been delivered
+				dpaLogger.Debugf("chunk data received")
+			}
+			if soff < off {
+				soff = off
+			}
+			if chunk.Data == nil {
+				self.errC <- fmt.Errorf("chunk %v-%v not found", off, off+treeSize)
+				return
+			}
+			self.join(b[soff-off:seoff-off], soff-roff, seoff-roff, depth-1, treeSize/self.chunker.Branches, chunk, &wg)
+		}(i)
+	} //for
+	wg.Wait()
 }

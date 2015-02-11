@@ -38,10 +38,7 @@ SPLIT:
 	for {
 		select {
 		case chunk := <-chunkC:
-			chunk.Data = make([]byte, chunk.Reader.Size())
-			chunk.Reader.ReadAt(chunk.Data, 0)
 			m.Put(chunk)
-
 		case err, ok := <-errC:
 			if err != nil {
 				t.Errorf("Chunker error: %v", err)
@@ -53,45 +50,30 @@ SPLIT:
 			}
 		}
 	}
-
 	chunker := &TreeChunker{
 		Branches: branches,
 	}
 	chunker.Init()
 	chunkC = make(chan *Chunk)
-	var r LazySectionReader
-	r, errC = chunker.Join(key, chunkC)
+	var r SectionReader
+	r = chunker.Join(key, chunkC)
 
 	quit := make(chan bool)
 
 	go func() {
-	JOIN:
-		for {
-			select {
-			case chunk := <-chunkC:
-				go func() {
-					storedChunk, err := m.Get(chunk.Key)
-					if err == notFound {
-						dpaLogger.DebugDetailf("chunk '%x' not found", chunk.Key)
-					} else if err != nil {
-						dpaLogger.DebugDetailf("error retrieving chunk %x: %v", chunk.Key, err)
-					} else {
-						chunk.Reader = NewChunkReaderFromBytes(storedChunk.Data)
-						chunk.Size = storedChunk.Size
-					}
-					close(chunk.C)
-				}()
-			case err, ok := <-errC:
-				if err != nil {
-					t.Errorf("Chunker error: %v", err)
-					return
+		for chunk := range chunkC {
+			go func() {
+				storedChunk, err := m.Get(chunk.Key)
+				if err == notFound {
+					dpaLogger.DebugDetailf("chunk '%x' not found", chunk.Key)
+				} else if err != nil {
+					dpaLogger.DebugDetailf("error retrieving chunk %x: %v", chunk.Key, err)
+				} else {
+					chunk.Data = storedChunk.Data
+					chunk.Size = storedChunk.Size
 				}
-				if !ok {
-					break JOIN
-				}
-			case <-quit:
-				break JOIN
-			}
+				close(chunk.C)
+			}()
 		}
 	}()
 

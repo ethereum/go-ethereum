@@ -68,28 +68,10 @@ type ChunkStore interface {
 	Get(Key) (*Chunk, error)
 }
 
-func (self *DPA) Retrieve(key Key) LazySectionReader {
+func (self *DPA) Retrieve(key Key) SectionReader {
 
-	reader, errC := self.Chunker.Join(key, self.retrieveC)
+	return self.Chunker.Join(key, self.retrieveC)
 	// we can add subscriptions etc. or timeout here
-	go func() {
-	JOIN:
-		for {
-			select {
-			case err, ok := <-errC:
-				if err != nil {
-					dpaLogger.Warnf("chunker join error: %v", err)
-				}
-				if !ok {
-					break JOIN
-				}
-			case <-self.quitC:
-				break JOIN
-			}
-		}
-	}()
-
-	return reader
 }
 
 func (self *DPA) Store(data SectionReader) (key Key, err error) {
@@ -151,7 +133,7 @@ func (self *DPA) retrieveLoop() {
 				} else if err != nil {
 					dpaLogger.DebugDetailf("error retrieving chunk %x: %v", chunk.Key, err)
 				} else {
-					chunk.Reader = NewChunkReaderFromBytes(storedChunk.Data)
+					chunk.Data = storedChunk.Data
 					chunk.Size = storedChunk.Size
 				}
 				close(chunk.C)

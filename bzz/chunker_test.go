@@ -59,6 +59,7 @@ func (self *chunkerTester) Split(chunker *TreeChunker, l int) (key Key, input []
 				if err != nil {
 					self.errors = append(self.errors, err)
 				}
+				fmt.Printf("err %v", err)
 				if !ok {
 					close(chunkC)
 					errC = nil
@@ -71,13 +72,13 @@ func (self *chunkerTester) Split(chunker *TreeChunker, l int) (key Key, input []
 	return
 }
 
-func (self *chunkerTester) Join(chunker *TreeChunker, key Key, c int) (LazySectionReader, chan bool) {
+func (self *chunkerTester) Join(chunker *TreeChunker, key Key, c int) SectionReader {
 	// reset but not the chunks
 	self.errors = nil
 	self.timeout = false
 	chunkC := make(chan *Chunk, 1000)
 
-	reader, errC := chunker.Join(key, chunkC)
+	reader := chunker.Join(key, chunkC)
 
 	quitC := make(chan bool)
 	timeout := time.After(600 * time.Second)
@@ -95,55 +96,50 @@ func (self *chunkerTester) Join(chunker *TreeChunker, key Key, c int) (LazySecti
 
 			case chunk := <-chunkC:
 				i++
+				dpaLogger.DebugDetailf("TESTER: chunk request %x", chunk.Key[:4])
 				// this just mocks the behaviour of a chunk store retrieval
 				var found bool
 				for _, ch := range self.chunks {
-					if bytes.Compare(chunk.Key, ch.Key) == 0 {
+					if bytes.Equal(chunk.Key, ch.Key) {
 						found = true
-						chunk.Reader = ch.Reader
+						chunk.Data = ch.Data
 						chunk.Size = ch.Size
-						close(chunk.C)
 						break
 					}
 				}
 				if !found {
-					fmt.Printf("chunk request unknown for %x", chunk.Key[:4])
+					fmt.Printf("TESTER: chunk unknown for %x", chunk.Key[:4])
 				}
-			case err, ok := <-errC:
-				if err != nil {
-					fmt.Printf("error %v", err)
-					self.errors = append(self.errors, err)
-				}
-				if !ok {
-					close(chunkC)
-					errC = nil
-					break LOOP
-				}
+				close(chunk.C)
+				dpaLogger.DebugDetailf("TESTER: chunk request served %x", chunk.Key[:4])
 			}
 		}
 	}()
-	return reader, quitC
+	return reader
 }
 
 func testRandomData(chunker *TreeChunker, tester *chunkerTester, n int, chunks int, t *testing.T) {
 	key, input := tester.Split(chunker, n)
+	fmt.Printf("split returned\n")
+	fmt.Printf("input\n%x\n", input)
+
 	tester.checkChunks(t, chunks)
 	t.Logf("chunks: %v", tester.chunks)
-	reader, quitC := tester.Join(chunker, key, 0)
-	output := make([]byte, reader.Size())
+	fmt.Printf("chunks: %v", tester.chunks)
+	reader := tester.Join(chunker, key, 0)
+	output := make([]byte, n)
 	_, err := reader.Read(output)
 	if err != nil {
 		t.Errorf("read error %v\n", err)
 	}
 	t.Logf(" IN: %x\nOUT: %x\n", input, output)
-	if bytes.Compare(output, input) != 0 {
+	if !bytes.Equal(output, input) {
 		t.Errorf("input and output mismatch\n IN: %x\nOUT: %x\n", input, output)
 	}
-	close(quitC)
 }
 
 func TestRandomData(t *testing.T) {
-	defer test.Testlog(t).Detach()
+	test.LogInit()
 	chunker := &TreeChunker{
 		Branches:     2,
 		SplitTimeout: 10 * time.Second,
@@ -168,11 +164,17 @@ func chunkerAndTester() (chunker *TreeChunker, tester *chunkerTester) {
 	return
 }
 
-func readAll(reader SectionReader) {
-	size := reader.Size()
-	output := make([]byte, 1000)
+func readAll(reader SectionReader, result []byte) {
+	size := int64(len(result))
+
+	var end int64
 	for pos := int64(0); pos < size; pos += 1000 {
-		reader.ReadAt(output, pos)
+		if pos+1000 > size {
+			end = size
+		} else {
+			end = pos + 1000
+		}
+		reader.ReadAt(result[pos:end], pos)
 	}
 }
 
@@ -182,9 +184,9 @@ func benchmarkJoinRandomData(n int, chunks int, t *testing.B) {
 		chunker, tester := chunkerAndTester()
 		key, _ := tester.Split(chunker, n)
 		t.StartTimer()
-		reader, quitC := tester.Join(chunker, key, i)
-		readAll(reader)
-		close(quitC)
+		reader := tester.Join(chunker, key, i)
+		result := make([]byte, n)
+		readAll(reader, result)
 	}
 }
 
