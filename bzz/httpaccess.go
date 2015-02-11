@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"sync"
 	"time"
 )
 
@@ -28,6 +29,7 @@ type sequentialReader struct {
 	reader io.Reader
 	pos    int64
 	ahead  map[int64](chan bool)
+	lock   sync.Mutex
 }
 
 type manifestEntry struct {
@@ -38,17 +40,26 @@ type manifestEntry struct {
 }
 
 func (self *sequentialReader) ReadAt(target []byte, off int64) (n int, err error) {
+	self.lock.Lock()
+	// assert self.pos <= off
+	if self.pos > off {
+		dpaLogger.Errorf("Swarm: non-sequential read attempted from sequentialReader; %d > %d",
+			self.pos, off)
+		panic("Non-sequential read attempt")
+	}
 	if self.pos != off {
 		dpaLogger.Debugf("Swarm: deferred read in POST at position %d, offset %d.",
 			self.pos, off)
 		wait := make(chan bool)
 		self.ahead[off] = wait
+		self.lock.Unlock()
 		if <-wait {
 			// failed read behind
 			n = 0
 			err = io.ErrUnexpectedEOF
 			return
 		}
+		self.lock.Lock()
 	}
 	localPos := 0
 	for localPos < len(target) {
@@ -60,9 +71,10 @@ func (self *sequentialReader) ReadAt(target []byte, off int64) (n int, err error
 			dpaLogger.Debugf("Swarm: POST stream's reading terminated with %v.", err)
 			for i := range self.ahead {
 				self.ahead[i] <- true
-				self.ahead[i] = nil
+				delete(self.ahead, i)
 			}
-			return
+			self.lock.Unlock()
+			return localPos, err
 		}
 		self.pos += int64(n)
 	}
@@ -70,10 +82,11 @@ func (self *sequentialReader) ReadAt(target []byte, off int64) (n int, err error
 	if wait != nil {
 		dpaLogger.Debugf("Swarm: deferred read in POST at position %d triggered.",
 			self.pos)
-		self.ahead[self.pos] = nil
+		delete(self.ahead, self.pos)
 		close(wait)
 	}
-	return
+	self.lock.Unlock()
+	return localPos, err
 }
 
 func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
@@ -108,19 +121,20 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 			dpaLogger.Debugf("Swarm: Structured GET request %s received.", uri)
 			name := uri[1:65]
 			path := uri[65:] // typically begins with a /
+			dpaLogger.Debugf("Swarm: path \"%s\" requested.", path)
 			key := ethutil.Hex2Bytes(name)
 		MANIFEST_RESOLUTION:
 			for {
 				manifestReader := dpa.Retrieve(key)
 				// TODO check size for oversized manifests
 				manifest := make([]byte, manifestReader.Size())
-				_, err := manifestReader.Read(manifest)
-				if err != nil {
+				size, err := manifestReader.Read(manifest)
+				if int64(size) < manifestReader.Size() {
 					dpaLogger.Debugf("Swarm: Manifest %s not found.", name)
 					http.Error(w, err.Error(), http.StatusNotFound)
 					return
 				}
-				dpaLogger.Debugf("Swarm: Manifest %s retrieved.")
+				dpaLogger.Debugf("Swarm: Manifest %s retrieved.", name)
 				manifestEntries := make([]manifestEntry, 0)
 				err = json.Unmarshal(manifest, &manifestEntries)
 				if err != nil {
@@ -149,9 +163,10 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 						entry.Status = 200
 					}
 					pathLen := len(entry.Path)
-					if len(path) >= pathLen && path[:pathLen] == entry.Path && prefix < pathLen {
+					if len(path) >= pathLen && path[:pathLen] == entry.Path && prefix <= pathLen {
 						prefix = pathLen
 						key = ethutil.Hex2Bytes(entry.Hash)
+						dpaLogger.Debugf("Swarm: Payload hash %064x", key)
 						mimeType = entry.Content_type
 						status = entry.Status
 					}
@@ -161,8 +176,11 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 					break MANIFEST_RESOLUTION
 				} else if mimeType != manifest_type {
 					w.Header().Set("Content-Type", mimeType)
+					dpaLogger.Debugf("Swarm: HTTP Status %d", status)
 					w.WriteHeader(int(status))
-					http.ServeContent(w, r, "", time.Unix(0, 0), dpa.Retrieve(key))
+					reader := dpa.Retrieve(key)
+					dpaLogger.Debugf("Swarm: Reading %d bytes.", reader.Size())
+					http.ServeContent(w, r, name, time.Unix(0, 0), reader)
 					dpaLogger.Debugf("Swarm: Served %s as %s.", mimeType, uri)
 					break MANIFEST_RESOLUTION
 				} else {
