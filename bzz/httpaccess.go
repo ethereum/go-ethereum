@@ -50,16 +50,22 @@ func (self *sequentialReader) ReadAt(target []byte, off int64) (n int, err error
 			return
 		}
 	}
-	n, err = self.reader.Read(target)
-	dpaLogger.Debugf("Swarm: Read %d bytes into buffer size %d from POST, error %v.",
-		n, len(target), err)
-	if err != nil {
-		for i := range self.ahead {
-			self.ahead[i] <- true
-			self.ahead[i] = nil
+	localPos := 0
+	for localPos < len(target) {
+		n, err = self.reader.Read(target[localPos:])
+		localPos += n
+		dpaLogger.Debugf("Swarm: Read %d bytes into buffer size %d from POST, error %v.",
+			n, len(target), err)
+		if err != nil {
+			dpaLogger.Debugf("Swarm: POST stream's reading terminated with %v.", err)
+			for i := range self.ahead {
+				self.ahead[i] <- true
+				self.ahead[i] = nil
+			}
+			return
 		}
+		self.pos += int64(n)
 	}
-	self.pos += int64(n)
 	wait := self.ahead[self.pos]
 	if wait != nil {
 		dpaLogger.Debugf("Swarm: deferred read in POST at position %d triggered.",
