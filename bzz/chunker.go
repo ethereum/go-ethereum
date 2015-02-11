@@ -306,7 +306,7 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		dpaLogger.Debugf("chunk data received for %x", chunk.Key[:4])
 		fmt.Printf("chunk data received for %x\n", chunk.Key[:4])
 	}
-	if chunk.Data == nil {
+	if len(chunk.Data) == 0 {
 		return 0, notFound
 	}
 
@@ -347,10 +347,11 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 		treeSize /= self.chunker.Branches
 		depth--
 	}
-	dpaLogger.Debugf("-> depth: %v, loff: %v, eoff: %v, chunk.Size: %v, treeSize: %v", depth, off, eoff, chunk.Size, treeSize)
-	fmt.Printf("-> depth: %v, loff: %v, eoff: %v, chunk.Size: %v, treeSize: %v\n", depth, off, eoff, chunk.Size, treeSize)
+	fmt.Printf("-> depth: %v, loff: %v, eoff: %v, len(chunk.Data): %v, chunk.Size: %v, treeSize: %v\n", depth, off, eoff, len(chunk.Data), chunk.Size, treeSize)
 
 	if depth == 0 {
+		dpaLogger.Debugf("len(b): %v, off: %v, eoff: %v, chunk.Size: %v, treeSize: %v", depth, len(b), off, eoff, chunk.Size, treeSize)
+
 		copy(b, chunk.Data[off:eoff])
 		return // simply give back the chunks reader for content chunks
 	}
@@ -375,32 +376,33 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 
 		wg.Add(1)
 		go func(j int64) {
-			dpaLogger.Debugf("subtree index: %v", j)
 			childKey := chunk.Data[j*self.chunker.hashSize : (j+1)*self.chunker.hashSize]
+			dpaLogger.Debugf("subtree index: %v -> %x", j, childKey[:4])
 
-			chunk := &Chunk{
+			ch := &Chunk{
 				Key: childKey,
-				C:   make(chan bool, 1), // close channel to signal data delivery
+				C:   make(chan bool), // close channel to signal data delivery
 			}
-			dpaLogger.Debugf("chunk data sent for %x (key interval in chunk %v-%v)", chunk.Key[:4], j*self.chunker.hashSize, (j+1)*self.chunker.hashSize)
-			self.chunkC <- chunk // submit retrieval request, someone should be listening on the other side (or we will time out globally)
+			dpaLogger.Debugf("chunk data sent for %x (key interval in chunk %v-%v)", ch.Key[:4], j*self.chunker.hashSize, (j+1)*self.chunker.hashSize)
+			fmt.Printf("chunk data sent for %x (key interval in chunk %v-%v)\n", ch.Key[:4], j*self.chunker.hashSize, (j+1)*self.chunker.hashSize)
+			self.chunkC <- ch // submit retrieval request, someone should be listening on the other side (or we will time out globally)
 
 			// waiting for the chunk retrieval
 			select {
 			case <-self.quitC:
 				// this is how we control process leakage (quitC is closed once join is finished (after timeout))
 				return
-			case <-chunk.C: // bells are ringing, data have been delivered
+			case <-ch.C: // bells are ringing, data have been delivered
 				dpaLogger.Debugf("chunk data received")
 			}
 			if soff < off {
 				soff = off
 			}
-			if chunk.Data == nil {
+			if len(ch.Data) == 0 {
 				self.errC <- fmt.Errorf("chunk %v-%v not found", off, off+treeSize)
 				return
 			}
-			self.join(b[soff-off:seoff-off], soff-roff, seoff-roff, depth-1, treeSize/self.chunker.Branches, chunk, &wg)
+			self.join(b[soff-off:seoff-off], soff-roff, seoff-roff, depth-1, treeSize/self.chunker.Branches, ch, &wg)
 		}(i)
 	} //for
 	wg.Wait()

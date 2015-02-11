@@ -22,6 +22,12 @@ func testDbStore(l int64, branches int64, t *testing.T) {
 	testStore(m, l, branches, t)
 }
 
+func TestDbStore128_0x1000000(t *testing.T) {
+	// defer test.Testlog(t).Detach()
+	test.LogInit()
+	testDbStore(0x1000000, 128, t)
+}
+
 func TestDbStore128_10000(t *testing.T) {
 	// defer test.Testlog(t).Detach()
 	test.LogInit()

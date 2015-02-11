@@ -14,6 +14,7 @@ func TestDPA(t *testing.T) {
 	test.LogInit()
 	os.RemoveAll("/tmp/bzz")
 	dbStore, err := newDbStore("/tmp/bzz")
+	// dbStore.setCapacity(50000)
 	if err != nil {
 		t.Errorf("DB error: %v", err)
 	}

@@ -61,8 +61,8 @@ SPLIT:
 	quit := make(chan bool)
 
 	go func() {
-		for chunk := range chunkC {
-			go func() {
+		for ch := range chunkC {
+			go func(chunk *Chunk) {
 				storedChunk, err := m.Get(chunk.Key)
 				if err == notFound {
 					dpaLogger.DebugDetailf("chunk '%x' not found", chunk.Key)
@@ -72,8 +72,9 @@ SPLIT:
 					chunk.Data = storedChunk.Data
 					chunk.Size = storedChunk.Size
 				}
+				dpaLogger.DebugDetailf("chunk '%x' not found", chunk.Key[:4])
 				close(chunk.C)
-			}()
+			}(ch)
 		}
 	}()
 

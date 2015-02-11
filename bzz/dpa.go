@@ -124,9 +124,9 @@ func (self *DPA) retrieveLoop() {
 
 	go func() {
 	RETRIEVE:
-		for chunk := range self.retrieveC {
+		for ch := range self.retrieveC {
 
-			go func() {
+			go func(chunk *Chunk) {
 				storedChunk, err := self.ChunkStore.Get(chunk.Key)
 				if err == notFound {
 					dpaLogger.DebugDetailf("chunk '%x' not found", chunk.Key)
@@ -137,7 +137,7 @@ func (self *DPA) retrieveLoop() {
 					chunk.Size = storedChunk.Size
 				}
 				close(chunk.C)
-			}()
+			}(ch)
 			select {
 			case <-self.quitC:
 				break RETRIEVE
@@ -151,8 +151,11 @@ func (self *DPA) storeLoop() {
 	self.storeC = make(chan *Chunk)
 	go func() {
 	STORE:
-		for chunk := range self.storeC {
-			self.ChunkStore.Put(chunk)
+		for ch := range self.storeC {
+			// go func(chunk *Chunk) {
+			self.ChunkStore.Put(ch)
+			// self.ChunkStore.Put(chunk)
+			// }(ch)
 			select {
 			case <-self.quitC:
 				break STORE
