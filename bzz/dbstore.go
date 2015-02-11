@@ -382,7 +382,7 @@ func newDbStore(path string) (s *dbStore, err error) {
 		return
 	}
 
-	s.setCapacity(5000)
+	s.setCapacity(50000) // TODO define default capacity as constant
 
 	s.gcStartPos = make([]byte, 1)
 	s.gcStartPos[0] = kpIndex
