@@ -11,7 +11,10 @@ func (utctime8601) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + time.Now().UTC().Format(time.RFC3339Nano)[:26] + `Z"`), nil
 }
 
-//"starting"
+type LogEvent interface {
+	EventName() string
+}
+
 type LogStarting struct {
 	ClientString    string      `json:"version_string"`
 	Guid            string      `json:"guid"`
@@ -20,7 +23,10 @@ type LogStarting struct {
 	Ts              utctime8601 `json:"ts"`
 }
 
-//"p2p.connecting"
+func (l *LogStarting) EventName() string {
+	return "starting"
+}
+
 type P2PConnecting struct {
 	RemoteId       string      `json:"remote_id"`
 	RemoteEndpoint string      `json:"remote_endpoint"`
@@ -29,7 +35,10 @@ type P2PConnecting struct {
 	Ts             utctime8601 `json:"ts"`
 }
 
-//"p2p.connected"
+func (l *P2PConnecting) EventName() string {
+	return "p2p.connecting"
+}
+
 type P2PConnected struct {
 	Guid           string      `json:"guid"`
 	NumConnections int         `json:"num_connections"`
@@ -37,7 +46,10 @@ type P2PConnected struct {
 	Ts             utctime8601 `json:"ts"`
 }
 
-//"p2p.handshaked"
+func (l *P2PConnected) EventName() string {
+	return "p2p.connected"
+}
+
 type P2PHandshaked struct {
 	RemoteCapabilities []string `json:"remote_capabilities"`
 	RemoteId           string   `json:"remote_id"`
@@ -46,7 +58,10 @@ type P2PHandshaked struct {
 	Ts                 string   `json:"ts"`
 }
 
-//"p2p.disconnected"
+func (l *P2PHandshaked) EventName() string {
+	return "p2p.handshaked"
+}
+
 type P2PDisconnected struct {
 	Guid           string      `json:"guid"`
 	NumConnections int         `json:"num_connections"`
@@ -54,7 +69,10 @@ type P2PDisconnected struct {
 	Ts             utctime8601 `json:"ts"`
 }
 
-//"p2p.disconnecting"
+func (l *P2PDisconnected) EventName() string {
+	return "p2p.disconnected"
+}
+
 type P2PDisconnecting struct {
 	Reason         string      `json:"reason"`
 	RemoteId       string      `json:"remote_id"`
@@ -63,7 +81,10 @@ type P2PDisconnecting struct {
 	Ts             utctime8601 `json:"ts"`
 }
 
-//"p2p.disconnecting.bad_handshake"
+func (l *P2PDisconnecting) EventName() string {
+	return "p2p.disconnecting"
+}
+
 type P2PDisconnectingBadHandshake struct {
 	Reason         string      `json:"reason"`
 	RemoteId       string      `json:"remote_id"`
@@ -72,7 +93,10 @@ type P2PDisconnectingBadHandshake struct {
 	Ts             utctime8601 `json:"ts"`
 }
 
-//"p2p.disconnecting.bad_protocol"
+func (l *P2PDisconnectingBadHandshake) EventName() string {
+	return "p2p.disconnecting.bad_handshake"
+}
+
 type P2PDisconnectingBadProtocol struct {
 	Reason         string      `json:"reason"`
 	RemoteId       string      `json:"remote_id"`
@@ -81,7 +105,10 @@ type P2PDisconnectingBadProtocol struct {
 	Ts             utctime8601 `json:"ts"`
 }
 
-//"p2p.disconnecting.reputation"
+func (l *P2PDisconnectingBadProtocol) EventName() string {
+	return "p2p.disconnecting.bad_protocol"
+}
+
 type P2PDisconnectingReputation struct {
 	Reason         string      `json:"reason"`
 	RemoteId       string      `json:"remote_id"`
@@ -90,7 +117,10 @@ type P2PDisconnectingReputation struct {
 	Ts             utctime8601 `json:"ts"`
 }
 
-//"p2p.disconnecting.dht"
+func (l *P2PDisconnectingReputation) EventName() string {
+	return "p2p.disconnecting.reputation"
+}
+
 type P2PDisconnectingDHT struct {
 	Reason         string      `json:"reason"`
 	RemoteId       string      `json:"remote_id"`
@@ -99,7 +129,10 @@ type P2PDisconnectingDHT struct {
 	Ts             utctime8601 `json:"ts"`
 }
 
-//"p2p.eth.disconnecting.bad_block"
+func (l *P2PDisconnectingDHT) EventName() string {
+	return "p2p.disconnecting.dht"
+}
+
 type P2PEthDisconnectingBadBlock struct {
 	Reason         string      `json:"reason"`
 	RemoteId       string      `json:"remote_id"`
@@ -108,7 +141,10 @@ type P2PEthDisconnectingBadBlock struct {
 	Ts             utctime8601 `json:"ts"`
 }
 
-//"p2p.eth.disconnecting.bad_tx"
+func (l *P2PEthDisconnectingBadBlock) EventName() string {
+	return "p2p.eth.disconnecting.bad_block"
+}
+
 type P2PEthDisconnectingBadTx struct {
 	Reason         string      `json:"reason"`
 	RemoteId       string      `json:"remote_id"`
@@ -117,7 +153,10 @@ type P2PEthDisconnectingBadTx struct {
 	Ts             utctime8601 `json:"ts"`
 }
 
-//"eth.newblock.mined"
+func (l *P2PEthDisconnectingBadTx) EventName() string {
+	return "p2p.eth.disconnecting.bad_tx"
+}
+
 type EthNewBlockMined struct {
 	BlockNumber     int         `json:"block_number"`
 	HeadHash        string      `json:"head_hash"`
@@ -129,7 +168,10 @@ type EthNewBlockMined struct {
 	Ts              utctime8601 `json:"ts"`
 }
 
-//"eth.newblock.broadcasted"
+func (l *EthNewBlockMined) EventName() string {
+	return "eth.newblock.mined"
+}
+
 type EthNewBlockBroadcasted struct {
 	BlockNumber     int         `json:"block_number"`
 	HeadHash        string      `json:"head_hash"`
@@ -140,7 +182,10 @@ type EthNewBlockBroadcasted struct {
 	Ts              utctime8601 `json:"ts"`
 }
 
-//"eth.newblock.received"
+func (l *EthNewBlockBroadcasted) EventName() string {
+	return "eth.newblock.broadcasted"
+}
+
 type EthNewBlockReceived struct {
 	BlockNumber     int         `json:"block_number"`
 	HeadHash        string      `json:"head_hash"`
@@ -151,7 +196,10 @@ type EthNewBlockReceived struct {
 	Ts              utctime8601 `json:"ts"`
 }
 
-//"eth.newblock.is_known"
+func (l *EthNewBlockReceived) EventName() string {
+	return "eth.newblock.received"
+}
+
 type EthNewBlockIsKnown struct {
 	BlockNumber     int         `json:"block_number"`
 	HeadHash        string      `json:"head_hash"`
@@ -162,7 +210,10 @@ type EthNewBlockIsKnown struct {
 	Ts              utctime8601 `json:"ts"`
 }
 
-//"eth.newblock.is_new"
+func (l *EthNewBlockIsKnown) EventName() string {
+	return "eth.newblock.is_known"
+}
+
 type EthNewBlockIsNew struct {
 	BlockNumber     int         `json:"block_number"`
 	HeadHash        string      `json:"head_hash"`
@@ -173,7 +224,10 @@ type EthNewBlockIsNew struct {
 	Ts              utctime8601 `json:"ts"`
 }
 
-//"eth.newblock.missing_parent"
+func (l *EthNewBlockIsNew) EventName() string {
+	return "eth.newblock.is_new"
+}
+
 type EthNewBlockMissingParent struct {
 	BlockNumber     int         `json:"block_number"`
 	HeadHash        string      `json:"head_hash"`
@@ -184,7 +238,10 @@ type EthNewBlockMissingParent struct {
 	Ts              utctime8601 `json:"ts"`
 }
 
-//"eth.newblock.is_invalid"
+func (l *EthNewBlockMissingParent) EventName() string {
+	return "eth.newblock.missing_parent"
+}
+
 type EthNewBlockIsInvalid struct {
 	BlockNumber     int         `json:"block_number"`
 	HeadHash        string      `json:"head_hash"`
@@ -195,7 +252,10 @@ type EthNewBlockIsInvalid struct {
 	Ts              utctime8601 `json:"ts"`
 }
 
-//"eth.newblock.chain.is_older"
+func (l *EthNewBlockIsInvalid) EventName() string {
+	return "eth.newblock.is_invalid"
+}
+
 type EthNewBlockChainIsOlder struct {
 	BlockNumber     int         `json:"block_number"`
 	HeadHash        string      `json:"head_hash"`
@@ -206,7 +266,10 @@ type EthNewBlockChainIsOlder struct {
 	Ts              utctime8601 `json:"ts"`
 }
 
-//"eth.newblock.chain.is_cannonical"
+func (l *EthNewBlockChainIsOlder) EventName() string {
+	return "eth.newblock.chain.is_older"
+}
+
 type EthNewBlockChainIsCanonical struct {
 	BlockNumber     int         `json:"block_number"`
 	HeadHash        string      `json:"head_hash"`
@@ -217,7 +280,10 @@ type EthNewBlockChainIsCanonical struct {
 	Ts              utctime8601 `json:"ts"`
 }
 
-//"eth.newblock.chain.not_cannonical"
+func (l *EthNewBlockChainIsCanonical) EventName() string {
+	return "eth.newblock.chain.is_cannonical"
+}
+
 type EthNewBlockChainNotCanonical struct {
 	BlockNumber     int         `json:"block_number"`
 	HeadHash        string      `json:"head_hash"`
@@ -228,7 +294,10 @@ type EthNewBlockChainNotCanonical struct {
 	Ts              utctime8601 `json:"ts"`
 }
 
-//"eth.newblock.chain.switched"
+func (l *EthNewBlockChainNotCanonical) EventName() string {
+	return "eth.newblock.chain.not_cannonical"
+}
+
 type EthNewBlockChainSwitched struct {
 	BlockNumber     int         `json:"block_number"`
 	HeadHash        string      `json:"head_hash"`
@@ -240,7 +309,10 @@ type EthNewBlockChainSwitched struct {
 	Ts              utctime8601 `json:"ts"`
 }
 
-//"eth.tx.created"
+func (l *EthNewBlockChainSwitched) EventName() string {
+	return "eth.newblock.chain.switched"
+}
+
 type EthTxCreated struct {
 	TxHash    string      `json:"tx_hash"`
 	TxSender  string      `json:"tx_sender"`
@@ -251,7 +323,10 @@ type EthTxCreated struct {
 	Ts        utctime8601 `json:"ts"`
 }
 
-//"eth.tx.received"
+func (l *EthTxCreated) EventName() string {
+	return "eth.tx.created"
+}
+
 type EthTxReceived struct {
 	TxHash    string      `json:"tx_hash"`
 	TxAddress string      `json:"tx_address"`
@@ -262,7 +337,10 @@ type EthTxReceived struct {
 	Ts        utctime8601 `json:"ts"`
 }
 
-//"eth.tx.broadcasted"
+func (l *EthTxReceived) EventName() string {
+	return "eth.tx.received"
+}
+
 type EthTxBroadcasted struct {
 	TxHash    string      `json:"tx_hash"`
 	TxSender  string      `json:"tx_sender"`
@@ -272,7 +350,10 @@ type EthTxBroadcasted struct {
 	Ts        utctime8601 `json:"ts"`
 }
 
-//"eth.tx.validated"
+func (l *EthTxBroadcasted) EventName() string {
+	return "eth.tx.broadcasted"
+}
+
 type EthTxValidated struct {
 	TxHash    string      `json:"tx_hash"`
 	TxSender  string      `json:"tx_sender"`
@@ -282,7 +363,10 @@ type EthTxValidated struct {
 	Ts        utctime8601 `json:"ts"`
 }
 
-//"eth.tx.is_invalid"
+func (l *EthTxValidated) EventName() string {
+	return "eth.tx.validated"
+}
+
 type EthTxIsInvalid struct {
 	TxHash    string      `json:"tx_hash"`
 	TxSender  string      `json:"tx_sender"`
@@ -291,4 +375,8 @@ type EthTxIsInvalid struct {
 	TxNonce   int         `json:"tx_nonce"`
 	Guid      string      `json:"guid"`
 	Ts        utctime8601 `json:"ts"`
+}
+
+func (l *EthTxIsInvalid) EventName() string {
+	return "eth.tx.is_invalid"
 }

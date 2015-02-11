@@ -222,7 +222,7 @@ func (s *Ethereum) MaxPeers() int {
 
 // Start the ethereum
 func (s *Ethereum) Start(seed bool) error {
-	jsonlogger.LogJson("starting", &ethlogger.LogStarting{
+	jsonlogger.LogJson(&ethlogger.LogStarting{
 		ClientString:    s.ClientIdentity().String(),
 		Guid:            ethutil.Bytes2Hex(s.ClientIdentity().Pubkey()),
 		Coinbase:        ethutil.Bytes2Hex(s.KeyManager().Address()),

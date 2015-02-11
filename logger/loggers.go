@@ -120,7 +120,8 @@ func NewJsonLogger() *JsonLogger {
 	return &JsonLogger{}
 }
 
-func (logger *JsonLogger) LogJson(msgname string, v interface{}) {
+func (logger *JsonLogger) LogJson(v LogEvent) {
+	msgname := v.EventName()
 	obj := map[string]interface{}{
 		msgname: v,
 	}
