@@ -74,10 +74,10 @@ type statusMsgData struct {
 */
 type storeRequestMsgData struct {
 	Key  Key    // hash of datasize | data
-	Size int64  // size of data in bytes
+	Size uint64 // size of data in bytes
 	Data []byte // is this needed?
 	// optional
-	Id             int64     //
+	Id             uint64    //
 	RequestTimeout time.Time // expiry for forwarding
 	StorageTimeout time.Time // expiry of content
 	Metadata       metaData  //
@@ -95,8 +95,8 @@ It is unclear if a retrieval request with an empty target is the same as a self 
 type retrieveRequestMsgData struct {
 	Key Key
 	// optional
-	Id       int64     //
-	MaxSize  int64     //  maximum size of delivery accepted
+	Id       uint64    //
+	MaxSize  uint64    //  maximum size of delivery accepted
 	Timeout  time.Time //
 	Metadata metaData  //
 	//
@@ -121,7 +121,7 @@ type peersMsgData struct {
 	Peers   []*peerAddr //
 	Timeout time.Time   // indicate whether responder is expected to deliver content
 	Key     Key         // if a response to a retrieval request
-	Id      int64       // if a response to a retrieval request
+	Id      uint64      // if a response to a retrieval request
 	//
 	peer peer
 }

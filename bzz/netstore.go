@@ -88,11 +88,11 @@ func (self *NetStore) addStoreRequest(req *storeRequestMsgData) {
 		chunk = &Chunk{
 			Key:  req.Key,
 			Data: req.Data,
-			Size: req.Size,
+			Size: int64(req.Size),
 		}
 	} else if chunk.Data == nil {
 		chunk.Data = req.Data
-		chunk.Size = req.Size
+		chunk.Size = int64(req.Size)
 	} else {
 		return
 	}
@@ -152,7 +152,7 @@ func (self *NetStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 		// we might need chunk.req to cache relevant peers response, or would it expire?
 		self.peers(req, chunk, *timeout)
 		if timeout != nil {
-			self.startSearch(chunk, req.Id, *timeout)
+			self.startSearch(chunk, int64(req.Id), *timeout)
 		}
 	}
 
@@ -164,7 +164,7 @@ func (self *NetStore) startSearch(chunk *Chunk, id int64, timeout time.Time) {
 	peers := self.hive.getPeers(chunk.Key)
 	req := &retrieveRequestMsgData{
 		Key:     chunk.Key,
-		Id:      id,
+		Id:      uint64(id),
 		Timeout: timeout,
 	}
 	for _, peer := range peers {
@@ -183,8 +183,8 @@ only add if less than requesterCount peers forwarded the same request id so far
 note this is done irrespective of status (searching or found/timedOut)
 */
 func (self *NetStore) addRequester(rs *requestStatus, req *retrieveRequestMsgData) {
-	list := rs.requesters[req.Id]
-	rs.requesters[req.Id] = append(list, req)
+	list := rs.requesters[int64(req.Id)]
+	rs.requesters[int64(req.Id)] = append(list, req)
 }
 
 /*
@@ -220,8 +220,8 @@ func (self *NetStore) propagateResponse(chunk *Chunk) {
 		msg := &storeRequestMsgData{
 			Key:  chunk.Key,
 			Data: chunk.Data,
-			Size: chunk.Size,
-			Id:   id,
+			Size: uint64(chunk.Size),
+			Id:   uint64(id),
 		}
 		for _, req := range requesters {
 			if req.Timeout.After(time.Now()) {
@@ -240,7 +240,7 @@ func (self *NetStore) deliver(req *retrieveRequestMsgData, chunk *Chunk) {
 		Key:            req.Key,
 		Id:             req.Id,
 		Data:           chunk.Data,
-		Size:           chunk.Size,
+		Size:           uint64(chunk.Size),
 		RequestTimeout: req.Timeout, //
 		// StorageTimeout time.Time // expiry of content
 		// Metadata       metaData
@@ -253,8 +253,8 @@ func (self *NetStore) store(chunk *Chunk) {
 	req := &storeRequestMsgData{
 		Key:  chunk.Key,
 		Data: chunk.Data,
-		Id:   id,
-		Size: chunk.Size,
+		Id:   uint64(id),
+		Size: uint64(chunk.Size),
 	}
 	for _, peer := range self.hive.getPeers(chunk.Key) {
 		go peer.store(req)
