@@ -124,11 +124,7 @@ int secp256k1_ecdsa_sign_compact(const unsigned char *msg, int msglen,
 */
 
 func Sign(msg []byte, seckey []byte) ([]byte, error) {
-	//var nonce []byte = RandByte(32)
-	nonce := make([]byte, 32)
-	for i := range msg {
-		nonce[i] = msg[i] ^ seckey[i]
-	}
+	nonce := RandByte(32)
 
 	var sig []byte = make([]byte, 65)
 	var recid C.int

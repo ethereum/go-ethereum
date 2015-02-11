@@ -41,7 +41,6 @@ import (
 	rpchttp "github.com/ethereum/go-ethereum/rpc/http"
 	rpcws "github.com/ethereum/go-ethereum/rpc/ws"
 	"github.com/ethereum/go-ethereum/state"
-	// "github.com/ethereum/go-ethereum/websocket"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -122,9 +121,9 @@ func exit(err error) {
 	os.Exit(status)
 }
 
-func StartEthereum(ethereum *eth.Ethereum, UseSeed bool) {
+func StartEthereum(ethereum *eth.Ethereum, SeedNode string) {
 	clilogger.Infof("Starting %s", ethereum.ClientIdentity())
-	err := ethereum.Start(UseSeed)
+	err := ethereum.Start(SeedNode)
 	if err != nil {
 		exit(err)
 	}
@@ -205,10 +204,8 @@ func StartRpc(ethereum *eth.Ethereum, RpcPort int) {
 func StartWebSockets(eth *eth.Ethereum, wsPort int) {
 	clilogger.Infoln("Starting WebSockets")
 
-	// sock := websocket.NewWebSocketServer(eth)
-	// go sock.Serv()
 	var err error
-	eth.WsServer, err = rpcws.NewWebSocketServer(eth, wsPort)
+	eth.WsServer, err = rpcws.NewWebSocketServer(xeth.New(eth), wsPort)
 	if err != nil {
 		clilogger.Errorf("Could not start RPC interface (port %v): %v", wsPort, err)
 	} else {

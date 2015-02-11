@@ -11,7 +11,7 @@ func NewState(xeth *XEth) *State {
 }
 
 func (self *State) State() *state.StateDB {
-	return self.xeth.chainManager.State()
+	return self.xeth.chainManager.TransState()
 }
 
 func (self *State) Get(addr string) *Object {

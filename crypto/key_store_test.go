@@ -15,12 +15,12 @@ func TestKeyStorePlain(t *testing.T) {
 	}
 
 	k2 := new(Key)
-	k2, err = ks.GetKey(k1.Id, pass)
+	k2, err = ks.GetKey(k1.Address, pass)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(k1.Id, k2.Id) {
+	if !reflect.DeepEqual(k1.Address, k2.Address) {
 		t.Fatal(err)
 	}
 
@@ -28,7 +28,7 @@ func TestKeyStorePlain(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = ks.DeleteKey(k2.Id, pass)
+	err = ks.DeleteKey(k2.Address, pass)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,11 +42,11 @@ func TestKeyStorePassphrase(t *testing.T) {
 		t.Fatal(err)
 	}
 	k2 := new(Key)
-	k2, err = ks.GetKey(k1.Id, pass)
+	k2, err = ks.GetKey(k1.Address, pass)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(k1.Id, k2.Id) {
+	if !reflect.DeepEqual(k1.Address, k2.Address) {
 		t.Fatal(err)
 	}
 
@@ -54,7 +54,7 @@ func TestKeyStorePassphrase(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = ks.DeleteKey(k2.Id, pass) // also to clean up created files
+	err = ks.DeleteKey(k2.Address, pass) // also to clean up created files
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,17 +68,17 @@ func TestKeyStorePassphraseDecryptionFail(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = ks.GetKey(k1.Id, "bar") // wrong passphrase
+	_, err = ks.GetKey(k1.Address, "bar") // wrong passphrase
 	if err == nil {
 		t.Fatal(err)
 	}
 
-	err = ks.DeleteKey(k1.Id, "bar") // wrong passphrase
+	err = ks.DeleteKey(k1.Address, "bar") // wrong passphrase
 	if err == nil {
 		t.Fatal(err)
 	}
 
-	err = ks.DeleteKey(k1.Id, pass) // to clean up
+	err = ks.DeleteKey(k1.Address, pass) // to clean up
 	if err != nil {
 		t.Fatal(err)
 	}

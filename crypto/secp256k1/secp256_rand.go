@@ -49,7 +49,8 @@ func init() {
 	_rand = mrand.New(mrand.NewSource(int64(seed1 ^ seed2 ^ seed3)))
 }
 
-func saltByte(buff []byte) []byte {
+func saltByte(n int) []byte {
+	buff := make([]byte, n)
 	for i := 0; i < len(buff); i++ {
 		var v uint64 = uint64(_rand.Int63())
 		var b byte
@@ -75,7 +76,7 @@ func RandByte(n int) []byte {
 		return nil
 	}
 
-	buff2 := RandByteWeakCrypto(n)
+	buff2 := saltByte(n)
 	for i := 0; i < n; i++ {
 		buff[i] ^= buff2[2]
 	}

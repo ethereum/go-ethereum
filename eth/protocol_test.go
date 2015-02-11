@@ -80,6 +80,8 @@ func (self *testTxPool) AddTransactions(txs []*types.Transaction) {
 	}
 }
 
+func (self *testTxPool) GetTransactions() types.Transactions { return nil }
+
 func (self *testChainManager) GetBlockHashesFromHash(hash []byte, amount uint64) (hashes [][]byte) {
 	if self.getBlockHashes != nil {
 		hashes = self.getBlockHashes(hash, amount)

@@ -1,6 +1,7 @@
 package xeth
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -35,18 +37,32 @@ func NewObject(state *state.StateObject) *Object {
 
 func (self *Object) StorageString(str string) *ethutil.Value {
 	if ethutil.IsHex(str) {
-		return self.Storage(ethutil.Hex2Bytes(str[2:]))
+		return self.storage(ethutil.Hex2Bytes(str[2:]))
 	} else {
-		return self.Storage(ethutil.RightPadBytes([]byte(str), 32))
+		return self.storage(ethutil.RightPadBytes([]byte(str), 32))
 	}
 }
 
 func (self *Object) StorageValue(addr *ethutil.Value) *ethutil.Value {
-	return self.Storage(addr.Bytes())
+	return self.storage(addr.Bytes())
 }
 
-func (self *Object) Storage(addr []byte) *ethutil.Value {
+func (self *Object) storage(addr []byte) *ethutil.Value {
 	return self.StateObject.GetStorage(ethutil.BigD(addr))
+}
+
+func (self *Object) Storage() (storage map[string]string) {
+	storage = make(map[string]string)
+
+	it := self.StateObject.Trie().Iterator()
+	for it.Next() {
+		var data []byte
+		rlp.Decode(bytes.NewReader(it.Value), &data)
+		storage[toHex(it.Key)] = toHex(data)
+	}
+	self.StateObject.Trie().PrintRoot()
+
+	return
 }
 
 // Block interface exposed to QML

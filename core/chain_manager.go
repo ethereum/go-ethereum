@@ -251,7 +251,13 @@ func (self *ChainManager) GetBlockHashesFromHash(hash []byte, max uint64) (chain
 
 	// XXX Could be optimised by using a different database which only holds hashes (i.e., linked list)
 	for i := uint64(0); i < max; i++ {
-		block = self.GetBlock(block.Header().ParentHash)
+		parentHash := block.Header().ParentHash
+		block = self.GetBlock(parentHash)
+		if block == nil {
+			chainlogger.Infof("GetBlockHashesFromHash Parent UNKNOWN %x\n", parentHash)
+			break
+		}
+
 		chain = append(chain, block.Hash())
 		if block.Header().Number.Cmp(ethutil.Big0) <= 0 {
 			break
@@ -353,7 +359,7 @@ func (bc *ChainManager) Stop() {
 
 func (self *ChainManager) InsertChain(chain types.Blocks) error {
 	for _, block := range chain {
-		td, messages, err := self.processor.Process(block)
+		td, err := self.processor.Process(block)
 		if err != nil {
 			if IsKnownBlockErr(err) {
 				continue
@@ -385,7 +391,6 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 		self.mu.Unlock()
 
 		self.eventMux.Post(NewBlockEvent{block})
-		self.eventMux.Post(messages)
 	}
 
 	return nil

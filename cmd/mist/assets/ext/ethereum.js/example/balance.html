@@ -2,28 +2,30 @@
 <html>
 
 <head>
-<script type="text/javascript" src="js/es6-promise/promise.min.js"></script>
+<script type="text/javascript" src="js/bignumber.js/bignumber.min.js"></script>
 <script type="text/javascript" src="../dist/ethereum.js"></script>
 <script type="text/javascript">
    
     var web3 = require('web3');
-    web3.setProvider(new web3.providers.AutoProvider());
+    web3.setProvider(new web3.providers.HttpSyncProvider('http://localhost:8080'));
 
     function watchBalance() {
         var coinbase = web3.eth.coinbase;
         var originalBalance = 0;
 
-        web3.eth.balanceAt(coinbase).then(function (balance) {
-            originalBalance = web3.toDecimal(balance);
-            document.getElementById('original').innerText = 'original balance: ' + originalBalance + '    watching...';
-        });
+        var balance = web3.eth.balanceAt(coinbase);
+        var originalBalance = web3.toDecimal(balance);
+        document.getElementById('original').innerText = 'original balance: ' + originalBalance + '    watching...';
 
-        web3.eth.watch({altered: coinbase}).changed(function() {
-            web3.eth.balanceAt(coinbase).then(function (balance) {
-                var currentBalance = web3.toDecimal(balance);
-                document.getElementById("current").innerText = 'current: ' + currentBalance;
-                document.getElementById("diff").innerText = 'diff:    ' + (currentBalance - originalBalance);
-            });
+<<<<<<< HEAD:cmd/mist/assets/ext/ethereum.js/example/balance.html
+        var filter = web3.eth.watch({address: coinbase}).changed(function() {
+=======
+        web3.eth.watch('pending').changed(function() {
+>>>>>>> 859a1999cb204d2c6fcb08d6569c738c5af5cd86:example/balance.html
+            balance = web3.eth.balanceAt(coinbase)
+            var currentBalance = web3.toDecimal(balance);
+            document.getElementById("current").innerText = 'current: ' + currentBalance;
+            document.getElementById("diff").innerText = 'diff:    ' + (currentBalance - originalBalance);
         });
     }
 

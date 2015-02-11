@@ -21,16 +21,13 @@
 package main
 
 import (
-	"encoding/json"
-
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/ui/qt"
 	"github.com/ethereum/go-ethereum/xeth"
-	"gopkg.in/qml.v1"
+	"github.com/obscuren/qml"
 )
 
 type AppContainer interface {
@@ -113,13 +110,15 @@ func (app *ExtApplication) mainLoop() {
 		case core.NewBlockEvent:
 			app.container.NewBlock(ev.Block)
 
-		case state.Messages:
-			for id, filter := range app.filters {
-				msgs := filter.FilterMessages(ev)
-				if len(msgs) > 0 {
-					app.container.Messages(msgs, id)
+			/* TODO remove
+			case state.Messages:
+				for id, filter := range app.filters {
+					msgs := filter.FilterMessages(ev)
+					if len(msgs) > 0 {
+						app.container.Messages(msgs, id)
+					}
 				}
-			}
+			*/
 		}
 	}
 }
@@ -129,6 +128,7 @@ func (self *ExtApplication) Watch(filterOptions map[string]interface{}, identifi
 }
 
 func (self *ExtApplication) GetMessages(object map[string]interface{}) string {
+	/* TODO remove me
 	filter := qt.NewFilterFromMap(object, self.eth)
 
 	messages := filter.Find()
@@ -143,4 +143,6 @@ func (self *ExtApplication) GetMessages(object map[string]interface{}) string {
 	}
 
 	return string(b)
+	*/
+	return ""
 }

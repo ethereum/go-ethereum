@@ -22,6 +22,8 @@ type Environment interface {
 	Transfer(from, to Account, amount *big.Int) error
 	AddLog(state.Log)
 
+	VmType() Type
+
 	Depth() int
 	SetDepth(i int)
 

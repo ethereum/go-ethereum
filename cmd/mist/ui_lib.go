@@ -22,19 +22,17 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"path"
 
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/state"
-	"github.com/ethereum/go-ethereum/ui/qt"
 	"github.com/ethereum/go-ethereum/xeth"
-	"gopkg.in/qml.v1"
+	"github.com/obscuren/qml"
 )
 
 type memAddr struct {
@@ -138,7 +136,7 @@ func (ui *UiLib) Muted(content string) {
 
 func (ui *UiLib) Connect(button qml.Object) {
 	if !ui.connected {
-		ui.eth.Start(true)
+		ui.eth.Start(SeedNode)
 		ui.connected = true
 		button.Set("enabled", false)
 	}
@@ -181,7 +179,6 @@ func (self *UiLib) Transact(params map[string]interface{}) (string, error) {
 	object := mapToTxParams(params)
 
 	return self.XEth.Transact(
-		object["from"],
 		object["to"],
 		object["value"],
 		object["gas"],
@@ -259,32 +256,48 @@ func (self *UiLib) ToAscii(data string) string {
 
 /// Ethereum filter methods
 func (self *UiLib) NewFilter(object map[string]interface{}, view *qml.Common) (id int) {
+	/* TODO remove me
 	filter := qt.NewFilterFromMap(object, self.eth)
 	filter.MessageCallback = func(messages state.Messages) {
 		view.Call("messages", xeth.ToMessages(messages), id)
 	}
 	id = self.filterManager.InstallFilter(filter)
 	return id
+	*/
+	return 0
 }
 
 func (self *UiLib) NewFilterString(typ string, view *qml.Common) (id int) {
+	/* TODO remove me
 	filter := core.NewFilter(self.eth)
 	filter.BlockCallback = func(block *types.Block) {
 		view.Call("messages", "{}", id)
 	}
 	id = self.filterManager.InstallFilter(filter)
 	return id
+	*/
+	return 0
 }
 
 func (self *UiLib) Messages(id int) *ethutil.List {
+	/* TODO remove me
 	filter := self.filterManager.GetFilter(id)
 	if filter != nil {
 		messages := xeth.ToMessages(filter.Find())
 
 		return messages
 	}
+	*/
 
 	return ethutil.EmptyList()
+}
+
+func (self *UiLib) ReadFile(p string) string {
+	content, err := ioutil.ReadFile(self.AssetPath(path.Join("ext", p)))
+	if err != nil {
+		guilogger.Infoln("error reading file", p, ":", err)
+	}
+	return string(content)
 }
 
 func (self *UiLib) UninstallFilter(id int) {
