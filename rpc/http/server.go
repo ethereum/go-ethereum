@@ -102,7 +102,7 @@ func (s *RpcHttpServer) apiHandler(api *rpc.EthereumApi) http.Handler {
 		if reserr != nil {
 			rpchttplogger.Warnln(reserr)
 			jsonerr := &rpc.RpcErrorObject{-32603, reserr.Error()}
-			JSON.Send(w, &rpc.RpcErrorResponse{JsonRpc: jsonrpcver, ID: &reqParsed.ID, Error: jsonerr})
+			JSON.Send(w, &rpc.RpcErrorResponse{JsonRpc: jsonrpcver, ID: reqParsed.ID, Error: jsonerr})
 			return
 		}
 

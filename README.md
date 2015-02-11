@@ -29,7 +29,7 @@ For further, detailed, build instruction please see the [Wiki](https://github.co
 Automated (dev) builds
 ======================
 
-* [[OS X](http://build.ethdev.com/builds/OSX%20Go%20develop%20branch/latest/app/)]
+* [[OS X](http://build.ethdev.com/builds/OSX%20Go%20develop%20branch/Mist-OSX-latest.dmg)]
 * [Windows] Coming soon&trade;
 * [Linux] Coming soon&trade;
 
