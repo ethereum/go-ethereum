@@ -52,19 +52,18 @@ func run() error {
 	config := utils.InitConfig(VmType, ConfigFile, Datadir, "ETH")
 
 	ethereum, err := eth.New(&eth.Config{
-		Name:       p2p.MakeName(ClientIdentifier, Version),
-		KeyStore:   KeyStore,
-		DataDir:    Datadir,
-		LogFile:    LogFile,
-		LogLevel:   LogLevel,
-		MaxPeers:   MaxPeer,
-		Port:       OutboundPort,
-		NATType:    NatType,
-		PMPGateway: PMPGateway,
-		BootNodes:  BootNodes,
-		NodeKey:    NodeKey,
-		KeyRing:    KeyRing,
-		Dial:       true,
+		Name:      p2p.MakeName(ClientIdentifier, Version),
+		KeyStore:  KeyStore,
+		DataDir:   Datadir,
+		LogFile:   LogFile,
+		LogLevel:  LogLevel,
+		MaxPeers:  MaxPeer,
+		Port:      OutboundPort,
+		NAT:       NAT,
+		BootNodes: BootNodes,
+		NodeKey:   NodeKey,
+		KeyRing:   KeyRing,
+		Dial:      true,
 	})
 	if err != nil {
 		mainlogger.Fatalln(err)

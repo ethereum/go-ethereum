@@ -13,13 +13,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/nat"
 )
 
 const (
-	defaultDialTimeout        = 10 * time.Second
-	refreshPeersInterval      = 30 * time.Second
-	portMappingUpdateInterval = 15 * time.Minute
-	portMappingTimeout        = 20 * time.Minute
+	defaultDialTimeout   = 10 * time.Second
+	refreshPeersInterval = 30 * time.Second
 )
 
 var srvlog = logger.NewLogger("P2P Server")
@@ -72,7 +71,7 @@ type Server struct {
 	// If set to a non-nil value, the given NAT port mapper
 	// is used to make the listening port available to the
 	// Internet.
-	NAT NAT
+	NAT nat.Interface
 
 	// If Dialer is set to a non-nil value, the given Dialer
 	// is used to dial outbound peer connections.
@@ -89,7 +88,6 @@ type Server struct {
 	lock     sync.RWMutex
 	running  bool
 	listener net.Listener
-	laddr    *net.TCPAddr // real listen addr
 	peers    map[discover.NodeID]*Peer
 
 	ntab *discover.Table
@@ -98,16 +96,6 @@ type Server struct {
 	loopWG      sync.WaitGroup // {dial,listen,nat}Loop
 	peerWG      sync.WaitGroup // active peer goroutines
 	peerConnect chan *discover.Node
-}
-
-// NAT is implemented by NAT traversal methods.
-type NAT interface {
-	GetExternalAddress() (net.IP, error)
-	AddPortMapping(protocol string, extport, intport int, name string, lifetime time.Duration) error
-	DeletePortMapping(protocol string, extport, intport int) error
-
-	// Should return name of the method.
-	String() string
 }
 
 type handshakeFunc func(io.ReadWriter, *ecdsa.PrivateKey, *discover.Node) (discover.NodeID, []byte, error)
@@ -220,14 +208,17 @@ func (srv *Server) startListening() error {
 	if err != nil {
 		return err
 	}
-	srv.ListenAddr = listener.Addr().String()
-	srv.laddr = listener.Addr().(*net.TCPAddr)
+	laddr := listener.Addr().(*net.TCPAddr)
+	srv.ListenAddr = laddr.String()
 	srv.listener = listener
 	srv.loopWG.Add(1)
 	go srv.listenLoop()
-	if !srv.laddr.IP.IsLoopback() && srv.NAT != nil {
+	if !laddr.IP.IsLoopback() && srv.NAT != nil {
 		srv.loopWG.Add(1)
-		go srv.natLoop(srv.laddr.Port)
+		go func() {
+			nat.Map(srv.NAT, srv.quit, "tcp", laddr.Port, laddr.Port, "ethereum p2p")
+			srv.loopWG.Done()
+		}()
 	}
 	return nil
 }
@@ -274,45 +265,6 @@ func (srv *Server) listenLoop() {
 		srv.peerWG.Add(1)
 		go srv.startPeer(conn, nil)
 	}
-}
-
-func (srv *Server) natLoop(port int) {
-	defer srv.loopWG.Done()
-	for {
-		srv.updatePortMapping(port)
-		select {
-		case <-time.After(portMappingUpdateInterval):
-			// one more round
-		case <-srv.quit:
-			srv.removePortMapping(port)
-			return
-		}
-	}
-}
-
-func (srv *Server) updatePortMapping(port int) {
-	srvlog.Infoln("Attempting to map port", port, "with", srv.NAT)
-	err := srv.NAT.AddPortMapping("tcp", port, port, "ethereum p2p", portMappingTimeout)
-	if err != nil {
-		srvlog.Errorln("Port mapping error:", err)
-		return
-	}
-	extip, err := srv.NAT.GetExternalAddress()
-	if err != nil {
-		srvlog.Errorln("Error getting external IP:", err)
-		return
-	}
-	srv.lock.Lock()
-	extaddr := *(srv.listener.Addr().(*net.TCPAddr))
-	extaddr.IP = extip
-	srvlog.Infoln("Mapped port, external addr is", &extaddr)
-	srv.laddr = &extaddr
-	srv.lock.Unlock()
-}
-
-func (srv *Server) removePortMapping(port int) {
-	srvlog.Infoln("Removing port mapping for", port, "with", srv.NAT)
-	srv.NAT.DeletePortMapping("tcp", port, port)
 }
 
 func (srv *Server) dialLoop() {

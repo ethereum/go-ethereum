@@ -34,6 +34,7 @@ import (
 	"bitbucket.org/kardianos/osext"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/vm"
 )
 
@@ -41,12 +42,10 @@ var (
 	Identifier      string
 	KeyRing         string
 	KeyStore        string
-	PMPGateway      string
 	StartRpc        bool
 	StartWebSockets bool
 	RpcPort         int
 	WsPort          int
-	NatType         string
 	OutboundPort    string
 	ShowGenesis     bool
 	AddPeer         string
@@ -54,6 +53,7 @@ var (
 	GenAddr         bool
 	BootNodes       string
 	NodeKey         *ecdsa.PrivateKey
+	NAT             nat.Interface
 	SecretFile      string
 	ExportDir       string
 	NonInteractive  bool
@@ -117,7 +117,6 @@ func Init() {
 	flag.BoolVar(&StartWebSockets, "ws", false, "start websocket server")
 	flag.BoolVar(&NonInteractive, "y", false, "non-interactive mode (say yes to confirmations)")
 	flag.BoolVar(&GenAddr, "genaddr", false, "create a new priv/pub key")
-	flag.StringVar(&NatType, "nat", "", "NAT support (UPNP|PMP) (none)")
 	flag.StringVar(&SecretFile, "import", "", "imports the file given (hex or mnemonic formats)")
 	flag.StringVar(&ExportDir, "export", "", "exports the session keyring to files in the directory given")
 	flag.StringVar(&LogFile, "logfile", "", "log file (defaults to standard output)")
@@ -132,15 +131,18 @@ func Init() {
 	var (
 		nodeKeyFile = flag.String("nodekey", "", "network private key file")
 		nodeKeyHex  = flag.String("nodekeyhex", "", "network private key (for testing)")
+		natstr      = flag.String("nat", "any", "port mapping mechanism (any|none|upnp|pmp|extip:<IP>)")
 	)
 	flag.StringVar(&OutboundPort, "port", "30303", "listening port")
-	flag.StringVar(&PMPGateway, "pmp", "", "Gateway IP for NAT-PMP")
 	flag.StringVar(&BootNodes, "bootnodes", "", "space-separated node URLs for discovery bootstrap")
 	flag.IntVar(&MaxPeer, "maxpeer", 30, "maximum desired peers")
 
 	flag.Parse()
 
 	var err error
+	if NAT, err = nat.Parse(*natstr); err != nil {
+		log.Fatalf("-nat: %v", err)
+	}
 	switch {
 	case *nodeKeyFile != "" && *nodeKeyHex != "":
 		log.Fatal("Options -nodekey and -nodekeyhex are mutually exclusive")

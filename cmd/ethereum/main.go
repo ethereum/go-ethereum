@@ -62,20 +62,19 @@ func main() {
 	utils.InitConfig(VmType, ConfigFile, Datadir, "ETH")
 
 	ethereum, err := eth.New(&eth.Config{
-		Name:       p2p.MakeName(ClientIdentifier, Version),
-		KeyStore:   KeyStore,
-		DataDir:    Datadir,
-		LogFile:    LogFile,
-		LogLevel:   LogLevel,
-		MaxPeers:   MaxPeer,
-		Port:       OutboundPort,
-		NATType:    PMPGateway,
-		PMPGateway: PMPGateway,
-		KeyRing:    KeyRing,
-		Shh:        SHH,
-		Dial:       Dial,
-		BootNodes:  BootNodes,
-		NodeKey:    NodeKey,
+		Name:      p2p.MakeName(ClientIdentifier, Version),
+		KeyStore:  KeyStore,
+		DataDir:   Datadir,
+		LogFile:   LogFile,
+		LogLevel:  LogLevel,
+		MaxPeers:  MaxPeer,
+		Port:      OutboundPort,
+		NAT:       NAT,
+		KeyRing:   KeyRing,
+		Shh:       SHH,
+		Dial:      Dial,
+		BootNodes: BootNodes,
+		NodeKey:   NodeKey,
 	})
 
 	if err != nil {

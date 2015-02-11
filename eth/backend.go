@@ -13,6 +13,7 @@ import (
 	ethlogger "github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/pow/ezp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/whisper"
@@ -28,10 +29,8 @@ type Config struct {
 	LogLevel int
 	KeyRing  string
 
-	MaxPeers   int
-	Port       string
-	NATType    string
-	PMPGateway string
+	MaxPeers int
+	Port     string
 
 	// This should be a space-separated list of
 	// discovery node URLs.
@@ -41,6 +40,7 @@ type Config struct {
 	// If nil, an ephemeral key is used.
 	NodeKey *ecdsa.PrivateKey
 
+	NAT  nat.Interface
 	Shh  bool
 	Dial bool
 
@@ -147,10 +147,6 @@ func New(config *Config) (*Ethereum, error) {
 
 	ethProto := EthProtocol(eth.txPool, eth.chainManager, eth.blockPool)
 	protocols := []p2p.Protocol{ethProto, eth.whisper.Protocol()}
-	nat, err := p2p.ParseNAT(config.NATType, config.PMPGateway)
-	if err != nil {
-		return nil, err
-	}
 	netprv := config.NodeKey
 	if netprv == nil {
 		if netprv, err = crypto.GenerateKey(); err != nil {
@@ -163,7 +159,7 @@ func New(config *Config) (*Ethereum, error) {
 		MaxPeers:       config.MaxPeers,
 		Protocols:      protocols,
 		Blacklist:      eth.blacklist,
-		NAT:            nat,
+		NAT:            config.NAT,
 		NoDial:         !config.Dial,
 		BootstrapNodes: config.parseBootNodes(),
 	}
