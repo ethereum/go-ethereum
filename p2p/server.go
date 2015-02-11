@@ -20,8 +20,6 @@ const (
 
 var srvlog = logger.NewLogger("P2P Server")
 
-var jsonlogger = logger.NewJsonLogger()
-
 // Server manages all peer connections.
 //
 // The fields of Server are used as configuration parameters.

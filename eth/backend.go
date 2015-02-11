@@ -224,9 +224,9 @@ func (s *Ethereum) MaxPeers() int {
 func (s *Ethereum) Start(seed bool) error {
 	jsonlogger.LogJson(&ethlogger.LogStarting{
 		ClientString:    s.ClientIdentity().String(),
-		Guid:            ethutil.Bytes2Hex(s.ClientIdentity().Pubkey()),
 		Coinbase:        ethutil.Bytes2Hex(s.KeyManager().Address()),
 		ProtocolVersion: ProtocolVersion,
+		LogEvent:        ethlogger.LogEvent{Guid: ethutil.Bytes2Hex(s.ClientIdentity().Pubkey())},
 	})
 
 	err := s.net.Start()

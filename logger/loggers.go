@@ -114,13 +114,15 @@ func (logger *Logger) Fatalf(format string, v ...interface{}) {
 	os.Exit(0)
 }
 
-type JsonLogger struct{}
+type JsonLogger struct {
+	Coinbase string
+}
 
 func NewJsonLogger() *JsonLogger {
 	return &JsonLogger{}
 }
 
-func (logger *JsonLogger) LogJson(v LogEvent) {
+func (logger *JsonLogger) LogJson(v JsonLog) {
 	msgname := v.EventName()
 	obj := map[string]interface{}{
 		msgname: v,
