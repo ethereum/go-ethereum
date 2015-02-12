@@ -95,10 +95,10 @@ It is unclear if a retrieval request with an empty target is the same as a self 
 type retrieveRequestMsgData struct {
 	Key Key
 	// optional
-	Id       uint64    //
-	MaxSize  uint64    //  maximum size of delivery accepted
-	Timeout  time.Time //
-	Metadata metaData  //
+	Id      uint64    //
+	MaxSize uint64    //  maximum size of delivery accepted
+	timeout time.Time //
+	//Metadata metaData  //
 	//
 	peer peer
 }
@@ -279,7 +279,10 @@ func (self *bzzProtocol) handleStatus() (err error) {
 // outgoing messages
 func (self *bzzProtocol) retrieve(req *retrieveRequestMsgData) {
 	dpaLogger.Warnf("Request message: %#v", req)
-	p2p.EncodeMsg(self.rw, retrieveRequestMsg, req)
+	err := p2p.EncodeMsg(self.rw, retrieveRequestMsg, req.Key, req.Id, req.MaxSize)
+	if err != nil {
+		dpaLogger.Errorf("EncodeMsg error: %v", err)
+	}
 }
 
 func (self *bzzProtocol) store(req *storeRequestMsgData) {

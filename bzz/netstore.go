@@ -143,6 +143,7 @@ func (self *NetStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 	defer self.lock.Unlock()
 
 	chunk := self.get(req.Key)
+	req.timeout = time.Now().Add(10 * time.Second)
 
 	send, timeout := self.strategyUpdateRequest(chunk.req, req) // may change req status
 
@@ -165,7 +166,7 @@ func (self *NetStore) startSearch(chunk *Chunk, id int64, timeout time.Time) {
 	req := &retrieveRequestMsgData{
 		Key:     chunk.Key,
 		Id:      uint64(id),
-		Timeout: timeout,
+		timeout: timeout,
 	}
 	for _, peer := range peers {
 		peer.retrieve(req)
@@ -224,7 +225,7 @@ func (self *NetStore) propagateResponse(chunk *Chunk) {
 			Id:   uint64(id),
 		}
 		for _, req := range requesters {
-			if req.Timeout.After(time.Now()) {
+			if req.timeout.After(time.Now()) {
 				go req.peer.store(msg)
 				counter--
 				if counter <= 0 {
@@ -241,7 +242,7 @@ func (self *NetStore) deliver(req *retrieveRequestMsgData, chunk *Chunk) {
 		Id:             req.Id,
 		Data:           chunk.Data,
 		Size:           uint64(chunk.Size),
-		RequestTimeout: req.Timeout, //
+		RequestTimeout: req.timeout, //
 		// StorageTimeout time.Time // expiry of content
 		// Metadata       metaData
 	}
@@ -273,8 +274,8 @@ func (self *NetStore) peers(req *retrieveRequestMsgData, chunk *Chunk, timeout t
 
 func (self *NetStore) searchTimeout(rs *requestStatus, req *retrieveRequestMsgData) (timeout *time.Time) {
 	t := time.Now().Add(searchTimeout)
-	if req.Timeout.Before(t) {
-		return &req.Timeout
+	if req.timeout.Before(t) {
+		return &req.timeout
 	} else {
 		return &t
 	}
