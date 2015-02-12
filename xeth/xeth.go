@@ -192,15 +192,6 @@ func (self *XEth) FromNumber(str string) string {
 	return ethutil.BigD(fromHex(str)).String()
 }
 
-func ToMessages(messages state.Messages) *ethutil.List {
-	var msgs []Message
-	for _, m := range messages {
-		msgs = append(msgs, NewMessage(m))
-	}
-
-	return ethutil.NewList(msgs)
-}
-
 func (self *XEth) PushTx(encodedTx string) (string, error) {
 	tx := types.NewTransactionFromBytes(fromHex(encodedTx))
 	err := self.eth.TxPool().Add(tx)
