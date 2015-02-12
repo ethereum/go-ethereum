@@ -2,6 +2,7 @@ package bzz
 
 import (
 	"crypto/rand"
+	"io"
 	"testing"
 )
 
@@ -80,7 +81,7 @@ SPLIT:
 
 	b := make([]byte, l)
 	n, err := r.ReadAt(b, 0)
-	if err != nil {
+	if err != io.EOF {
 		t.Errorf("read error (%v/%v) %v", n, l, err)
 		close(quit)
 	}
