@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	seedNodeAddress = "10.0.1.41:30303"
+	seedNodeAddress = "10.0.2.41:30303"
 )
 
 type Config struct {
