@@ -189,8 +189,10 @@ func (self *bzzProtocol) handle() error {
 	   retrieveRequestMsg        // 0x03
 	   peersMsg                  // 0x04
 	*/
+
 	switch msg.Code {
 	case statusMsg:
+		dpaLogger.Warnf("Status message: %#v", msg)
 		return self.protoError(ErrExtraStatusMsg, "")
 
 	case storeRequestMsg:
@@ -206,6 +208,7 @@ func (self *bzzProtocol) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
+		dpaLogger.Warnf("Request message: %#v", req)
 		req.peer = peer{bzzProtocol: self}
 		self.netStore.addRetrieveRequest(&req)
 
@@ -275,6 +278,7 @@ func (self *bzzProtocol) handleStatus() (err error) {
 
 // outgoing messages
 func (self *bzzProtocol) retrieve(req *retrieveRequestMsgData) {
+	dpaLogger.Warnf("Request message: %#v", req)
 	p2p.EncodeMsg(self.rw, retrieveRequestMsg, req)
 }
 
