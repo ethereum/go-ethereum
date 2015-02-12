@@ -46,7 +46,6 @@ SPLIT:
 				return
 			}
 			if !ok {
-				t.Logf("quitting SPLIT loop\n")
 				break SPLIT
 			}
 		}

@@ -3,6 +3,7 @@ package bzz
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"testing"
 	"time"
 
@@ -59,7 +60,7 @@ func (self *chunkerTester) Split(chunker *TreeChunker, l int) (key Key, input []
 				if err != nil {
 					self.errors = append(self.errors, err)
 				}
-				fmt.Printf("err %v", err)
+				// fmt.Printf("err %v", err)
 				if !ok {
 					close(chunkC)
 					errC = nil
@@ -96,7 +97,7 @@ func (self *chunkerTester) Join(chunker *TreeChunker, key Key, c int) SectionRea
 
 			case chunk := <-chunkC:
 				i++
-				dpaLogger.DebugDetailf("TESTER: chunk request %x", chunk.Key[:4])
+				// dpaLogger.DebugDetailf("TESTER: chunk request %x", chunk.Key[:4])
 				// this just mocks the behaviour of a chunk store retrieval
 				var found bool
 				for _, ch := range self.chunks {
@@ -108,10 +109,10 @@ func (self *chunkerTester) Join(chunker *TreeChunker, key Key, c int) SectionRea
 					}
 				}
 				if !found {
-					fmt.Printf("TESTER: chunk unknown for %x", chunk.Key[:4])
+					// fmt.Printf("TESTER: chunk unknown for %x", chunk.Key[:4])
 				}
 				close(chunk.C)
-				dpaLogger.DebugDetailf("TESTER: chunk request served %x", chunk.Key[:4])
+				// dpaLogger.DebugDetailf("TESTER: chunk request served %x", chunk.Key[:4])
 			}
 		}
 	}()
@@ -129,7 +130,7 @@ func testRandomData(chunker *TreeChunker, tester *chunkerTester, n int, chunks i
 	reader := tester.Join(chunker, key, 0)
 	output := make([]byte, n)
 	_, err := reader.Read(output)
-	if err != nil {
+	if err != io.EOF {
 		t.Errorf("read error %v\n", err)
 	}
 	t.Logf(" IN: %x\nOUT: %x\n", input, output)
