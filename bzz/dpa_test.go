@@ -6,8 +6,8 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"sync"
 	"testing"
-	// "time"
 )
 
 const testDataSize = 0x1000000
@@ -33,10 +33,12 @@ func TestDPArandom(t *testing.T) {
 	}
 	dpa.Start()
 	reader, slice := testDataReader(testDataSize)
-	key, err := dpa.Store(reader)
+	wg := &sync.WaitGroup{}
+	key, err := dpa.Store(reader, wg)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}
+	wg.Wait()
 	resultReader := dpa.Retrieve(key)
 	resultSlice := make([]byte, len(slice))
 	n, err := resultReader.ReadAt(resultSlice, 0)
@@ -46,9 +48,9 @@ func TestDPArandom(t *testing.T) {
 	if n != len(slice) {
 		t.Errorf("Slice size error got %d, expected %d.", n, len(slice))
 	}
-	// if !bytes.Equal(slice, resultSlice) {
-	// 	t.Errorf("Comparison error.")
-	// }
+	if !bytes.Equal(slice, resultSlice) {
+		t.Errorf("Comparison error.")
+	}
 	ioutil.WriteFile("/tmp/slice.bzz.16M", slice, 0666)
 	ioutil.WriteFile("/tmp/result.bzz.16M", resultSlice, 0666)
 	localStore.memStore = newMemStore(dbStore)
@@ -89,10 +91,12 @@ func TestDPA_capacity(t *testing.T) {
 	}
 	dpa.Start()
 	reader, slice := testDataReader(testDataSize)
-	key, err := dpa.Store(reader)
+	wg := &sync.WaitGroup{}
+	key, err := dpa.Store(reader, wg)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}
+	wg.Wait()
 	resultReader := dpa.Retrieve(key)
 	resultSlice := make([]byte, len(slice))
 	n, err := resultReader.ReadAt(resultSlice, 0)

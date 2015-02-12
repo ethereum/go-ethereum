@@ -3,6 +3,7 @@ package bzz
 import (
 	"crypto/rand"
 	"io"
+	"sync"
 	"testing"
 )
 
@@ -26,7 +27,9 @@ func randomChunks(l int64, branches int64, chunkC chan *Chunk) (key Key, errC ch
 	if err != nil {
 		panic("no rand")
 	}
-	errC = chunker.Split(key, NewChunkReaderFromBytes(b), chunkC)
+	wg := &sync.WaitGroup{}
+	errC = chunker.Split(key, NewChunkReaderFromBytes(b), chunkC, wg)
+	wg.Wait()
 	return
 }
 

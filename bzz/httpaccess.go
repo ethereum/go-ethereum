@@ -98,7 +98,7 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 			key, err := dpa.Store(io.NewSectionReader(&sequentialReader{
 				reader: r.Body,
 				ahead:  make(map[int64]chan bool),
-			}, 0, r.ContentLength))
+			}, 0, r.ContentLength), nil)
 			if err == nil {
 				fmt.Fprintf(w, "%064x", key)
 				dpaLogger.Debugf("Swarm: Object %064x stored", key)

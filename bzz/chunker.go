@@ -58,10 +58,11 @@ type Chunker interface {
 	/*
 	 	When splitting, data is given as a SectionReader, and the key is a hashSize long byte slice (Key), the root hash of the entire content will fill this once processing finishes.
 	 	New chunks to store are coming to caller via the chunk storage channel, which the caller provides.
+	 	wg is a Waitgroup (can be nil) that can be used to block until the local storage finishes
 	 	The caller gets returned an error channel, if an error is encountered during splitting, it is fed to errC error channel.
 	   A closed error signals process completion at which point the key can be considered final if there were no errors.
 	*/
-	Split(key Key, data SectionReader, chunkC chan *Chunk) chan error
+	Split(key Key, data SectionReader, chunkC chan *Chunk, wg *sync.WaitGroup) chan error
 	/*
 		Join reconstructs original content based on a root key.
 		When joining, the caller gets returned a Lazy SectionReader
@@ -133,7 +134,12 @@ func (self *TreeChunker) Hash(size int64, input []byte) []byte {
 	return hasher.Sum(nil)
 }
 
-func (self *TreeChunker) Split(key Key, data SectionReader, chunkC chan *Chunk) (errC chan error) {
+func (self *TreeChunker) Split(key Key, data SectionReader, chunkC chan *Chunk, swg *sync.WaitGroup) (errC chan error) {
+
+	if swg != nil {
+		swg.Add(1)
+		defer swg.Done()
+	}
 
 	if self.chunkSize <= 0 {
 		panic("chunker must be initialised")
@@ -164,7 +170,7 @@ func (self *TreeChunker) Split(key Key, data SectionReader, chunkC chan *Chunk) 
 		// dpaLogger.Debugf("split request received for data (%v bytes, depth: %v)", size, depth)
 
 		//launch actual recursive function passing the workgroup
-		self.split(depth, treeSize/self.Branches, key, data, chunkC, rerrC, wg)
+		self.split(depth, treeSize/self.Branches, key, data, chunkC, rerrC, wg, swg)
 	}()
 
 	// closes internal error channel if all subprocesses in the workgroup finished
@@ -190,7 +196,7 @@ func (self *TreeChunker) Split(key Key, data SectionReader, chunkC chan *Chunk) 
 	return
 }
 
-func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionReader, chunkC chan *Chunk, errc chan error, parentWg *sync.WaitGroup) {
+func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionReader, chunkC chan *Chunk, errc chan error, parentWg *sync.WaitGroup, swg *sync.WaitGroup) {
 
 	defer parentWg.Done()
 
@@ -238,7 +244,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 			subTreeKey := chunk[i*self.hashSize : (i+1)*self.hashSize]
 
 			childrenWg.Add(1)
-			go self.split(depth-1, treeSize/self.Branches, subTreeKey, subTreeData, chunkC, errc, childrenWg)
+			go self.split(depth-1, treeSize/self.Branches, subTreeKey, subTreeData, chunkC, errc, childrenWg, swg)
 
 			i++
 			pos += treeSize
@@ -255,6 +261,11 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 			Key:  hash,
 			Data: chunkData,
 			Size: size,
+			wg:   swg,
+		}
+
+		if swg != nil {
+			swg.Add(1)
 		}
 	}
 	// send off new chunk to storage

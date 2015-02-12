@@ -10,7 +10,15 @@ type localStore struct {
 // its integrity is checked ?
 func (self *localStore) Put(chunk *Chunk) {
 	self.memStore.Put(chunk)
-	go self.dbStore.Put(chunk)
+	if chunk.wg != nil {
+		chunk.wg.Add(1)
+	}
+	go func() {
+		self.dbStore.Put(chunk)
+		if chunk.wg != nil {
+			chunk.wg.Done()
+		}
+	}()
 }
 
 // Get(chunk *Chunk) looks up a chunk in the local stores

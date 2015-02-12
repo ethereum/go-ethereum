@@ -2,7 +2,7 @@ package bzz
 
 import (
 	"bytes"
-	"fmt"
+	// "fmt"
 	"io"
 	"testing"
 	"time"
@@ -37,7 +37,7 @@ func (self *chunkerTester) Split(chunker *TreeChunker, l int) (key Key, input []
 	input = slice
 	key = make([]byte, 32)
 	chunkC := make(chan *Chunk, 1000)
-	errC := chunker.Split(key, data, chunkC)
+	errC := chunker.Split(key, data, chunkC, nil)
 	quitC := make(chan bool)
 	timeout := time.After(600 * time.Second)
 
@@ -121,19 +121,17 @@ func (self *chunkerTester) Join(chunker *TreeChunker, key Key, c int) SectionRea
 
 func testRandomData(chunker *TreeChunker, tester *chunkerTester, n int, chunks int, t *testing.T) {
 	key, input := tester.Split(chunker, n)
-	fmt.Printf("split returned\n")
-	fmt.Printf("input\n%x\n", input)
 
 	tester.checkChunks(t, chunks)
-	t.Logf("chunks: %v", tester.chunks)
-	fmt.Printf("chunks: %v", tester.chunks)
+	time.Sleep(100 * time.Millisecond)
+
 	reader := tester.Join(chunker, key, 0)
 	output := make([]byte, n)
 	_, err := reader.Read(output)
 	if err != io.EOF {
 		t.Errorf("read error %v\n", err)
 	}
-	t.Logf(" IN: %x\nOUT: %x\n", input, output)
+	// t.Logf(" IN: %x\nOUT: %x\n", input, output)
 	if !bytes.Equal(output, input) {
 		t.Errorf("input and output mismatch\n IN: %x\nOUT: %x\n", input, output)
 	}
@@ -151,7 +149,7 @@ func TestRandomData(t *testing.T) {
 	testRandomData(chunker, tester, 70, 3, t)
 	testRandomData(chunker, tester, 179, 5, t)
 	testRandomData(chunker, tester, 253, 7, t)
-	t.Logf("chunks %v", tester.chunks)
+	// t.Logf("chunks %v", tester.chunks)
 }
 
 func chunkerAndTester() (chunker *TreeChunker, tester *chunkerTester) {

@@ -46,7 +46,7 @@ type DPA struct {
 
 	lock    sync.Mutex
 	running bool
-	wg      sync.WaitGroup
+	wg      *sync.WaitGroup
 	quitC   chan bool
 }
 
@@ -61,6 +61,7 @@ type Chunk struct {
 	Key  Key            // always
 	C    chan bool      // to signal data delivery by the dpa
 	req  *requestStatus //
+	wg   *sync.WaitGroup
 }
 
 type ChunkStore interface {
@@ -74,9 +75,9 @@ func (self *DPA) Retrieve(key Key) SectionReader {
 	// we can add subscriptions etc. or timeout here
 }
 
-func (self *DPA) Store(data SectionReader) (key Key, err error) {
+func (self *DPA) Store(data SectionReader, wg *sync.WaitGroup) (key Key, err error) {
 	key = make([]byte, self.Chunker.KeySize())
-	errC := self.Chunker.Split(key, data, self.storeC)
+	errC := self.Chunker.Split(key, data, self.storeC, wg)
 
 SPLIT:
 	for {
@@ -154,6 +155,9 @@ func (self *DPA) storeLoop() {
 		for ch := range self.storeC {
 			// go func(chunk *Chunk) {
 			self.ChunkStore.Put(ch)
+			if ch.wg != nil {
+				ch.wg.Done()
+			}
 			// self.ChunkStore.Put(chunk)
 			// }(ch)
 			select {
