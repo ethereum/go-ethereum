@@ -104,7 +104,7 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 	id := generateId()
 	timeout := time.Now().Add(searchTimeout)
 	if chunk.Data == nil {
-		self.startSearch(chunk, id, timeout)
+		self.startSearch(chunk, id, &timeout)
 	} else {
 		return
 	}
@@ -142,7 +142,8 @@ func (self *NetStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 	defer self.lock.Unlock()
 
 	chunk := self.get(req.Key)
-	req.timeout = time.Now().Add(10 * time.Second)
+	t := time.Now().Add(10 * time.Second)
+	req.timeout = &t
 
 	send, timeout := self.strategyUpdateRequest(chunk.req, req) // may change req status
 
@@ -150,9 +151,9 @@ func (self *NetStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 		self.deliver(req, chunk)
 	} else {
 		// we might need chunk.req to cache relevant peers response, or would it expire?
-		self.peers(req, chunk, *timeout)
+		self.peers(req, chunk, timeout)
 		if timeout != nil {
-			self.startSearch(chunk, int64(req.Id), *timeout)
+			self.startSearch(chunk, int64(req.Id), timeout)
 		}
 	}
 
@@ -273,8 +274,8 @@ func (self *NetStore) peers(req *retrieveRequestMsgData, chunk *Chunk, timeout *
 
 func (self *NetStore) searchTimeout(rs *requestStatus, req *retrieveRequestMsgData) (timeout *time.Time) {
 	t := time.Now().Add(searchTimeout)
-	if req.timeout.Before(t) {
-		return &req.timeout
+	if req.timeout != nil && req.timeout.Before(t) {
+		return req.timeout
 	} else {
 		return &t
 	}

@@ -78,8 +78,8 @@ type storeRequestMsgData struct {
 	Data []byte // is this needed?
 	// optional
 	Id             uint64     //
-	RequestTimeout *time.Time // expiry for forwarding
-	StorageTimeout *time.Time // expiry of content
+	requestTimeout *time.Time // expiry for forwarding
+	storageTimeout *time.Time // expiry of content
 	Metadata       metaData   //
 	//
 	peer peer
@@ -119,7 +119,7 @@ It is unclear if PeersMsg with an empty Key has a special meaning or just mean t
 */
 type peersMsgData struct {
 	Peers   []*peerAddr //
-	Timeout *time.Time  // indicate whether responder is expected to deliver content
+	timeout *time.Time  // indicate whether responder is expected to deliver content
 	Key     Key         // if a response to a retrieval request
 	Id      uint64      // if a response to a retrieval request
 	//
