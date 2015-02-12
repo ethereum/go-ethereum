@@ -210,7 +210,7 @@ func (self *bzzProtocol) handle() error {
 		}
 		dpaLogger.Warnf("Request message: %#v", req)
 		if req.Key == nil || req.Timeout == nil {
-			return self.protoError(ErrDecode, "protocol handler: req.Key == nil")
+			return self.protoError(ErrDecode, "protocol handler: req.Key == nil || req.Timeout == nil")
 		}
 		req.peer = peer{bzzProtocol: self}
 		self.netStore.addRetrieveRequest(&req)
