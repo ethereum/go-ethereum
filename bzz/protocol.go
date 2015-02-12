@@ -53,7 +53,7 @@ Retrieving
 
 Peers
 
-[0x04, key: B_256, timeout: B_64, peers: [[peer], [peer], .... ]] the encoding of a peer is identical to that in the devp2p base protocol peers messages: [IP, Port, NodeID] note that a node's DPA address is not the NodeID but the hash of the NodeID. timeout serves to indicate whether the responder is forwarding the query within the timeout or not.
+[0x04, key: B_256, timeout: B_64, peers: [[peer], [peer], .... ]] the encoding of a peer is identical to that in the devp2p base protocol peers messages: [IP, Port, NodeID] note that a node's DPA address is not the NodeID but the hash of the NodeID. Timeout serves to indicate whether the responder is forwarding the query within the timeout or not.
 
 */
 
@@ -77,17 +77,17 @@ type storeRequestMsgData struct {
 	Size uint64 // size of data in bytes
 	Data []byte // is this needed?
 	// optional
-	Id             uint64    //
-	requestTimeout time.Time // expiry for forwarding
-	storageTimeout time.Time // expiry of content
-	Metadata       metaData  //
+	Id             uint64     //
+	RequestTimeout *time.Time // expiry for forwarding
+	StorageTimeout *time.Time // expiry of content
+	Metadata       metaData   //
 	//
 	peer peer
 }
 
 /*
 Root key retrieve request
-timeout in milliseconds. Note that zero timeout retrieval requests do not request forwarding, but prompt for a peers message response. therefore they also serve also as messages to retrieve peers.
+Timeout in milliseconds. Note that zero timeout retrieval requests do not request forwarding, but prompt for a peers message response. therefore they also serve also as messages to retrieve peers.
 MaxSize specifies the maximum size that the peer will accept. This is useful in particular if we allow storage and delivery of multichunk payload representing the entire or partial subtree unfolding from the requested root key. So when only interested in limited part of a stream (infinite trees) or only testing chunk availability etc etc, we can indicate it by limiting the size here.
 In the special case that the key is identical to the peers own address (hash of NodeID) the message is to be handled as a self lookup. The response is a PeersMsg with the peers in the cademlia proximity bin corresponding to the address.
 It is unclear if a retrieval request with an empty target is the same as a self lookup
@@ -95,9 +95,9 @@ It is unclear if a retrieval request with an empty target is the same as a self 
 type retrieveRequestMsgData struct {
 	Key Key
 	// optional
-	Id      uint64    //
-	MaxSize uint64    //  maximum size of delivery accepted
-	timeout time.Time //
+	Id      uint64     //
+	MaxSize uint64     //  maximum size of delivery accepted
+	timeout *time.Time //
 	//Metadata metaData  //
 	//
 	peer peer
@@ -113,13 +113,13 @@ type peerAddr struct {
 one response to retrieval, always encouraged after a retrieval request to respond with a list of peers in the same cademlia proximity bin.
 The encoding of a peer is identical to that in the devp2p base protocol peers messages: [IP, Port, NodeID]
 note that a node's DPA address is not the NodeID but the hash of the NodeID.
-timeout serves to indicate whether the responder is forwarding the query within the timeout or not.
+Timeout serves to indicate whether the responder is forwarding the query within the timeout or not.
 The Key is the target (if response to a retrieval request) or peers address (hash of NodeID) if retrieval request was a self lookup.
 It is unclear if PeersMsg with an empty Key has a special meaning or just mean the same as with the peers address as Key (cademlia bin)
 */
 type peersMsgData struct {
 	Peers   []*peerAddr //
-	timeout time.Time   // indicate whether responder is expected to deliver content
+	Timeout *time.Time  // indicate whether responder is expected to deliver content
 	Key     Key         // if a response to a retrieval request
 	Id      uint64      // if a response to a retrieval request
 	//
@@ -210,7 +210,7 @@ func (self *bzzProtocol) handle() error {
 		}
 		dpaLogger.Warnf("Request message: %#v", req)
 		if req.Key == nil {
-			return self.protoError(ErrDecode, "protocol handler: req.Key == nil || req.timeout == nil")
+			return self.protoError(ErrDecode, "protocol handler: req.Key == nil || req.Timeout == nil")
 		}
 		req.peer = peer{bzzProtocol: self}
 		self.netStore.addRetrieveRequest(&req)

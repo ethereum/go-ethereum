@@ -48,8 +48,7 @@ func NewNetStore(path string) *NetStore {
 		localStore: &localStore{
 			memStore: newMemStore(dbStore),
 			dbStore:  dbStore,
-		},
-		hive: newHive(),
+		}, hive: newHive(),
 	}
 }
 
@@ -160,7 +159,7 @@ func (self *NetStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 }
 
 // it's assumed that caller holds the lock
-func (self *NetStore) startSearch(chunk *Chunk, id int64, timeout time.Time) {
+func (self *NetStore) startSearch(chunk *Chunk, id int64, timeout *time.Time) {
 	chunk.req.status = reqSearching
 	peers := self.hive.getPeers(chunk.Key)
 	req := &retrieveRequestMsgData{
@@ -243,7 +242,7 @@ func (self *NetStore) deliver(req *retrieveRequestMsgData, chunk *Chunk) {
 		Data:           chunk.Data,
 		Size:           uint64(chunk.Size),
 		requestTimeout: req.timeout, //
-		// StorageTimeout time.Time // expiry of content
+		// StorageTimeout *time.Time // expiry of content
 		// Metadata       metaData
 	}
 	req.peer.store(storeReq)
@@ -262,7 +261,7 @@ func (self *NetStore) store(chunk *Chunk) {
 	}
 }
 
-func (self *NetStore) peers(req *retrieveRequestMsgData, chunk *Chunk, timeout time.Time) {
+func (self *NetStore) peers(req *retrieveRequestMsgData, chunk *Chunk, timeout *time.Time) {
 	peersData := &peersMsgData{
 		Peers:   []*peerAddr{}, // get proximity bin from cademlia routing table
 		Key:     req.Key,
