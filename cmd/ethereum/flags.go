@@ -65,6 +65,7 @@ var (
 	SHH             bool
 	Dial            bool
 	PrintVersion    bool
+	Peers           string
 )
 
 // flags specific to cli client
@@ -103,6 +104,7 @@ func Init() {
 	flag.BoolVar(&SHH, "shh", true, "whisper protocol (on)")
 	flag.BoolVar(&Dial, "dial", true, "dial out connections (on)")
 	flag.BoolVar(&GenAddr, "genaddr", false, "create a new priv/pub key")
+	flag.StringVar(&Peers, "peers", "", "imports the file given (hex or mnemonic formats)")
 	flag.StringVar(&SecretFile, "import", "", "imports the file given (hex or mnemonic formats)")
 	flag.StringVar(&ExportDir, "export", "", "exports the session keyring to files in the directory given")
 	flag.StringVar(&LogFile, "logfile", "", "log file (defaults to standard output)")

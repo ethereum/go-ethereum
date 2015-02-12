@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	seedNodeAddress = "10.0.2.41:30303"
+	seedNodeAddress = "10.0.1.41:30303"
 )
 
 type Config struct {
@@ -233,7 +233,7 @@ func (s *Ethereum) MaxPeers() int {
 }
 
 // Start the ethereum
-func (s *Ethereum) Start(seed bool) error {
+func (s *Ethereum) Start(seed bool, p string) error {
 	err := s.net.Start()
 	if err != nil {
 		return err
@@ -254,6 +254,12 @@ func (s *Ethereum) Start(seed bool) error {
 	// broadcast mined blocks
 	s.blockSub = s.eventMux.Subscribe(core.NewMinedBlockEvent{})
 	go s.blockBroadcastLoop()
+
+	if len(p) > 0 {
+		if err := s.SuggestPeer(p); err != nil {
+			return err
+		}
+	}
 
 	// TODO: read peers here
 	if seed {
