@@ -242,7 +242,7 @@ func (self *NetStore) deliver(req *retrieveRequestMsgData, chunk *Chunk) {
 		Id:             req.Id,
 		Data:           chunk.Data,
 		Size:           uint64(chunk.Size),
-		RequestTimeout: req.timeout, //
+		requestTimeout: req.timeout, //
 		// StorageTimeout time.Time // expiry of content
 		// Metadata       metaData
 	}
@@ -267,7 +267,7 @@ func (self *NetStore) peers(req *retrieveRequestMsgData, chunk *Chunk, timeout t
 		Peers:   []*peerAddr{}, // get proximity bin from cademlia routing table
 		Key:     req.Key,
 		Id:      req.Id,
-		Timeout: timeout,
+		timeout: timeout,
 	}
 	req.peer.peers(peersData)
 }
