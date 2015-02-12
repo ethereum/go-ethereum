@@ -28,7 +28,7 @@ var (
 const (
 	respTimeout = 300 * time.Millisecond
 	sendTimeout = 300 * time.Millisecond
-	expiration  = 3 * time.Second
+	expiration  = 20 * time.Second
 
 	refreshInterval = 1 * time.Hour
 )
@@ -185,7 +185,7 @@ func (t *udp) findnode(to *Node, target NodeID) ([]*Node, error) {
 				nodes = append(nodes, n)
 			}
 		}
-		return nreceived == bucketSize
+		return nreceived >= bucketSize
 	})
 
 	t.send(to, findnodePacket, findnode{

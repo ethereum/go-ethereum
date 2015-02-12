@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	alpha      = 3                   // Kademlia concurrency factor
-	bucketSize = 16                  // Kademlia bucket size
-	nBuckets   = len(NodeID{})*8 + 1 // Number of buckets
+	alpha      = 3              // Kademlia concurrency factor
+	bucketSize = 16             // Kademlia bucket size
+	nBuckets   = nodeIDBits + 1 // Number of buckets
 )
 
 type Table struct {
@@ -100,7 +100,7 @@ func (tab *Table) Lookup(target NodeID) []*Node {
 	tab.mutex.Unlock()
 
 	for {
-		// ask the closest nodes that we haven't asked yet
+		// ask the alpha closest nodes that we haven't asked yet
 		for i := 0; i < len(result.entries) && pendingQueries < alpha; i++ {
 			n := result.entries[i]
 			if !asked[n.ID] {

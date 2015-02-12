@@ -18,6 +18,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+const nodeIDBits = 512
+
 // Node represents a host on the network.
 type Node struct {
 	ID NodeID
@@ -135,7 +137,7 @@ func (n *Node) DecodeRLP(s *rlp.Stream) (err error) {
 
 // NodeID is a unique identifier for each node.
 // The node identifier is a marshaled elliptic curve public key.
-type NodeID [512 / 8]byte
+type NodeID [nodeIDBits / 8]byte
 
 // NodeID prints as a long hexadecimal number.
 func (n NodeID) String() string {
