@@ -20,7 +20,7 @@ const (
 )
 
 var (
-	uriMatcher      = regexp.MustCompile("^/raw/[0-9A-Fa-f]{64}$")
+	uriMatcher      = regexp.MustCompile("^/raw/[0-9A-Fa-f]{64}(?:/[a-z]+/[-+0-9a-z]+)?$")
 	manifestMatcher = regexp.MustCompile("^/[0-9A-Fa-f]{64}")
 	hashMatcher     = regexp.MustCompile("^[0-9A-Fa-f]{64}$")
 )
@@ -111,11 +111,16 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 	case r.Method == "GET":
 		if uriMatcher.MatchString(uri) {
 			dpaLogger.Debugf("Swarm: Raw GET request %s received", uri)
-			name := uri[5:]
+			name := uri[5:69]
 			key := ethutil.Hex2Bytes(name)
 			reader := dpa.Retrieve(key)
 			dpaLogger.Debugf("Swarm: Reading %d bytes.", reader.Size())
-			http.ServeContent(w, r, name+".bin", time.Unix(0, 0), reader)
+			mimeType := "application/octet-stream"
+			if len(uri) > 70 {
+				mimeType = uri[70:]
+			}
+			w.Header().Set("Content-Type", mimeType)
+			http.ServeContent(w, r, name, time.Unix(0, 0), reader)
 			dpaLogger.Debugf("Swarm: Object %s returned.", name)
 		} else if manifestMatcher.MatchString(uri) {
 			dpaLogger.Debugf("Swarm: Structured GET request %s received.", uri)
