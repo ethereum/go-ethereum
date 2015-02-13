@@ -268,7 +268,7 @@ func (s *Ethereum) Start(seed bool, p string, pull string) error {
 	}
 
 	if len(pull) > 0 {
-		key := []byte(pull)
+		key := ethutil.Hex2Bytes(pull)
 		reader := s.dpa.Retrieve(key)
 		logger.Debugf("retrieved reader for %064x", key)
 		fo, err := os.OpenFile("/tmp/swarm.tmp", os.O_CREATE|os.O_RDWR, 0666)
