@@ -3,6 +3,7 @@ package eth
 import (
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/bzz"
@@ -256,8 +257,10 @@ func (s *Ethereum) Start(seed bool, p string) error {
 	go s.blockBroadcastLoop()
 
 	if len(p) > 0 {
-		if err := s.SuggestPeer(p); err != nil {
-			return err
+		for _, peer := range strings.Split(p, ",") {
+			if err := s.SuggestPeer(peer); err != nil {
+				return err
+			}
 		}
 	}
 
