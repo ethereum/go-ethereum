@@ -17,10 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
-const (
-	seedNodeAddress = "poc-8.ethdev.com:30303"
-)
-
 type Config struct {
 	Name       string
 	Version    string
@@ -68,7 +64,8 @@ type Ethereum struct {
 	txSub    event.Subscription
 	blockSub event.Subscription
 
-	RpcServer  *rpc.JsonRpcServer
+	RpcServer  rpc.RpcServer
+	WsServer   rpc.RpcServer
 	keyManager *crypto.KeyManager
 
 	clientIdentity p2p.ClientIdentity
@@ -142,14 +139,13 @@ func New(config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(nat)
 
 	eth.net = &p2p.Server{
 		Identity:  clientId,
 		MaxPeers:  config.MaxPeers,
 		Protocols: protocols,
 		Blacklist: eth.blacklist,
-		NAT:       p2p.UPNP(),
+		NAT:       nat,
 		NoDial:    !config.Dial,
 	}
 
@@ -220,8 +216,12 @@ func (s *Ethereum) MaxPeers() int {
 	return s.net.MaxPeers
 }
 
+func (s *Ethereum) Coinbase() []byte {
+	return nil // TODO
+}
+
 // Start the ethereum
-func (s *Ethereum) Start(seed bool) error {
+func (s *Ethereum) Start(seedNode string) error {
 	jsonlogger.LogJson(&ethlogger.LogStarting{
 		ClientString:    s.ClientIdentity().String(),
 		Coinbase:        ethutil.Bytes2Hex(s.KeyManager().Address()),
@@ -251,9 +251,9 @@ func (s *Ethereum) Start(seed bool) error {
 	go s.blockBroadcastLoop()
 
 	// TODO: read peers here
-	if seed {
-		logger.Infof("Connect to seed node %v", seedNodeAddress)
-		if err := s.SuggestPeer(seedNodeAddress); err != nil {
+	if len(seedNode) > 0 {
+		logger.Infof("Connect to seed node %v", seedNode)
+		if err := s.SuggestPeer(seedNode); err != nil {
 			logger.Infoln(err)
 		}
 	}
@@ -284,6 +284,9 @@ func (s *Ethereum) Stop() {
 
 	if s.RpcServer != nil {
 		s.RpcServer.Stop()
+	}
+	if s.WsServer != nil {
+		s.WsServer.Stop()
 	}
 	s.txPool.Stop()
 	s.eventMux.Stop()

@@ -36,7 +36,7 @@ import (
 
 const (
 	ClientIdentifier = "Ethereum(G)"
-	Version          = "0.8.1"
+	Version          = "0.8.2"
 )
 
 var clilogger = logger.NewLogger("CLI")
@@ -132,10 +132,10 @@ func main() {
 	}
 
 	if StartWebSockets {
-		utils.StartWebSockets(ethereum)
+		utils.StartWebSockets(ethereum, WsPort)
 	}
 
-	utils.StartEthereum(ethereum, UseSeed)
+	utils.StartEthereum(ethereum, SeedNode)
 
 	if StartJsConsole {
 		InitJsConsole(ethereum)

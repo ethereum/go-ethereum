@@ -1,0 +1,142 @@
+<!doctype>
+<html>
+<title>JevCoin</title>
+<head>
+<script type="text/javascript" src="../ext/bignumber.min.js"></script>
+<script type="text/javascript" src="../ext/ethereum.js/dist/ethereum.js"></script>
+</head>
+<body>
+
+<h1>JevCoin <code id="contract_addr"></code></h1>
+<div>
+	<strong>Balance</strong>
+	<span id="balance"></strong>
+</div>
+
+<div>
+	<span class="amount">Amount:</span>
+	<input type="text" id="address" style="width:200px">
+	<input type="text" id="amount" style="width:200px">
+	<button onclick="transact()">Send</button>
+</div>
+
+<hr>
+
+<table width="100%" id="table">
+	<tr><td style="width:40%;">Address</td><td>Balance</td></tr>
+	<tbody id="table_body"></tbody>
+</table>
+
+</body>
+
+<script type="text/javascript">
+	var web3 = require('web3');
+	var eth = web3.eth;
+
+	web3.setProvider(new web3.providers.HttpSyncProvider('http://localhost:8545'));
+	var desc = [{
+		"name": "balance(address)",
+		"type": "function",
+		"inputs": [{
+			"name": "who",
+			"type": "address"
+		}],
+		"constant": true,
+		"outputs": [{
+			"name": "value",
+			"type": "uint256"
+		}]
+	}, {
+		"name": "send(address,uint256)",
+		"type": "function",
+		"inputs": [{
+			"name": "to",
+			"type": "address"
+		}, {
+			"name": "value",
+			"type": "uint256"
+		}],
+		"outputs": []
+	}, {
+		"name":"received",
+		"type":"event",
+		"inputs": [
+			{"name":"from","type":"address","indexed":true},
+			{"name":"amount","type":"uint256","indexed":true},
+		],
+	}];
+
+	var address = localStorage.getItem("address");
+	// deploy if not exist
+	if (address == null) {
+		var code = "0x60056013565b61012b806100346000396000f35b6103e8600033600160a060020a0316600052602052604060002081905550560060e060020a6000350480637bb98a681461002b578063d0679d3414610039578063e3d670d71461004d57005b610033610126565b60006000f35b610047600435602435610062565b60006000f35b610058600435610104565b8060005260206000f35b80600033600160a060020a0316600052602052604060002054101561008657610100565b80600033600160a060020a0316600052602052604060002090815403908190555080600083600160a060020a0316600052602052604060002090815401908190555033600160a060020a0316600052806020527ff11e547d796cc64acdf758e7cee90439494fd886a19159454aa61e473fdbafef60406000a15b5050565b6000600082600160a060020a03166000526020526040600020549050919050565b5b60008156";
+		address = web3.eth.transact({data: code});
+        	localStorage.setItem("address", address);
+	}
+	document.querySelector("#contract_addr").innerHTML = address.toUpperCase();
+
+	var contract = web3.eth.contract(address, desc);
+	contract.received({from: eth.coinbase}).changed(function() {
+		refresh();
+	});
+	eth.watch('chain').changed(function() {
+		refresh();
+	});
+
+	function refresh() {
+        	document.querySelector("#balance").innerHTML = contract.balance(eth.coinbase);
+
+		var table = document.querySelector("#table_body");
+		table.innerHTML = ""; // clear
+
+		var storage = eth.storageAt(address);
+		table.innerHTML = "";
+		for( var item in storage ) {
+			table.innerHTML += "<tr><td>"+item.toUpperCase()+"</td><td>"+web3.toDecimal(storage[item])+"</td></tr>";
+		}
+	}
+
+	function transact() {
+		var to = document.querySelector("#address").value;
+		if( to.length == 0 ) {
+			to = "0x4205b06c2cfa0e30359edcab94543266cb6fa1d3";
+		} else {
+			to = "0x"+to;
+		}
+
+		var value = parseInt( document.querySelector("#amount").value );
+
+		contract.send( to, value );
+	}
+
+	refresh();
+</script>
+
+</html>
+
+<!--
+contract JevCoin {
+    function JevCoin()
+    {
+        balances[msg.sender] = 1000000;
+    }
+ 
+    event changed(address indexed from, address indexed to);
+    function send(address to, uint value)
+    {
+        if( balances[msg.sender] < value ) return;
+ 
+        balances[msg.sender] -= value;
+        balances[to] += value;
+ 
+        changed(msg.sender, to);
+    }
+ 
+    function balance(address who) constant returns(uint t)
+    {
+        t = balances[who];
+    }
+ 
+    mapping(address => uint256) balances;
+ }
+-!>

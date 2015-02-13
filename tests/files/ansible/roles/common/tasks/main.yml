@@ -1,0 +1,13 @@
+---
+- name: install package dependencies
+  sudo: true
+  apt: name={{ item }}
+  with_items:
+    - parallel
+    - htop
+
+- name: checkout test repo
+  git:
+    repo: https://github.com/ethereum/tests.git 
+    version: develop
+    dest: git

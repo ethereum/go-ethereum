@@ -1,30 +1,26 @@
-[![Bugs](https://badge.waffle.io/ethereum/go-ethereum.png?label=bug&title=Bugs)](https://waffle.io/ethereum/go-ethereum)
-[![Stories in Ready](https://badge.waffle.io/ethereum/go-ethereum.png?label=ready&title=Ready)](https://waffle.io/ethereum/go-ethereum)
-[![Stories in
-Progress](https://badge.waffle.io/ethereum/go-ethereum.svg?label=in%20progress&title=In Progress)](http://waffle.io/ethereum/go-ethereum)
-
-Ethereum
-========
-
-[![Build
-Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20master%20branch)](http://build.ethdev.com:8010/builders/Linux%20Go%20master%20branch/builds/-1) master [![Build
-Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20branch)](http://build.ethdev.com:8010/builders/Linux%20Go%20develop%20branch/builds/-1) develop
-[![Coverage Status](https://coveralls.io/repos/ethereum/go-ethereum/badge.png?branch=tests)](https://coveralls.io/r/ethereum/go-ethereum?branch=tests) tests
+## Ethereum Go
 
 Ethereum Go Client © 2014 Jeffrey Wilcke.
 
-Current state: Proof of Concept 0.8
+          | Linux   | OSX | Windows
+----------|---------|-----|--------
+develop   | [![Build+Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20branch)](http://build.ethdev.com/builders/Linux%20Go%20develop%20branch/builds/-1) | [![Build+Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20branch)](http://build.ethdev.com/builders/OSX%20Go%20develop%20branch/builds/-1) | N/A
+master    | [![Build+Status](http://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20master%20branch)](http://build.ethdev.com/builders/Linux%20Go%20master%20branch/builds/-1) | [![Build+Status](http://build.ethdev.com/buildstatusimage?builder=OSX%20Go%20master%20branch)](http://build.ethdev.com/builders/OSX%20Go%20master%20branch/builds/-1) | N/A
 
-Ethereum is currently in its testing phase. 
+[![Bugs](https://badge.waffle.io/ethereum/go-ethereum.png?label=bug&title=Bugs)](https://waffle.io/ethereum/go-ethereum)
+[![Stories in Ready](https://badge.waffle.io/ethereum/go-ethereum.png?label=ready&title=Ready)](https://waffle.io/ethereum/go-ethereum)
+[![Stories in Progress](https://badge.waffle.io/ethereum/go-ethereum.svg?label=in%20progress&title=In Progress)](http://waffle.io/ethereum/go-ethereum)
+[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/ethereum/go-ethereum?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+
 
 Build
 =====
 
-To build Mist (GUI):
+Mist (GUI):
 
 `go get github.com/ethereum/go-ethereum/cmd/mist`
 
-To build the node (CLI):
+Ethereum (CLI):
 
 `go get github.com/ethereum/go-ethereum/cmd/ethereum`
 
@@ -33,7 +29,7 @@ For further, detailed, build instruction please see the [Wiki](https://github.co
 Automated (dev) builds
 ======================
 
-* [[OS X](http://build.ethdev.com/builds/OSX%20Go%20develop%20branch/latest/app/)]
+* [[OS X](http://build.ethdev.com/builds/OSX%20Go%20develop%20branch/Mist-OSX-latest.dmg)]
 * [Windows] Coming soon&trade;
 * [Linux] Coming soon&trade;
 
@@ -46,9 +42,12 @@ Go Ethereum comes with several binaries found in
 * `mist` Official Ethereum Browser
 * `ethereum` Ethereum CLI
 * `ethtest` test tool which runs with the [tests](https://github.com/ethereum/testes) suit: 
-  `ethtest "`cat myfile.json`"`.
+  `cat file | ethtest`.
 * `evm` is a generic Ethereum Virtual Machine: `evm -code 60ff60ff -gas
   10000 -price 0 -dump`. See `-h` for a detailed description.
+* `rlpdump` converts a rlp stream to `interface{}`.
+* `peerserver` simple P2P (noi-ethereum) peer server.
+* `disasm` disassembles EVM code: `echo "6001" | disasm`
 
 General command line options
 ============================
@@ -104,7 +103,7 @@ Style](http://golang.org/doc/effective_go.html#formatting).
 Unless structs fields are supposed to be directly accesible, provide
 Getters and hide the fields through Go's exporting facility.
 
-When you comment put meaningfull comments. Describe in detail what you
+When you comment put meaningful comments. Describe in detail what you
 want to achieve.
 
 *wrong*
@@ -124,4 +123,5 @@ less. I haven't got time to evaluate everyone's code in detail so I
 expect you to write tests for me so I don't have to test your code
 manually. (If you want to contribute by just writing tests that's fine
 too!)
+
 
