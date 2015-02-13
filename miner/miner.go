@@ -38,22 +38,16 @@ func (self *Miner) Mining() bool {
 }
 
 func (self *Miner) Start() {
+	self.mining = true
+
 	self.worker.start()
 
 	self.worker.commitNewWork()
-
-	/*
-		timer := time.NewTicker(time.Second)
-		for {
-			select {
-			case <-timer.C:
-				fmt.Printf("%d workers. %d/Khash\n", len(self.worker.agents), self.HashRate())
-			}
-		}
-	*/
 }
 
 func (self *Miner) Stop() {
+	self.mining = false
+
 	self.worker.stop()
 }
 

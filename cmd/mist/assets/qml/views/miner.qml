@@ -14,6 +14,30 @@ Rectangle {
 
 	color: "#00000000"
 
+        Label {
+	    visible: false
+            id: lastBlockLabel
+            objectName: "lastBlockLabel"
+            text: "---"
+            font.pixelSize: 10
+            anchors.right: peerGroup.left
+            anchors.rightMargin: 5
+	    onTextChanged: {
+		//menuItem.secondaryTitle = text
+	    }
+        }
+
+        Label {
+            objectName: "miningLabel"
+            visible: false
+            font.pixelSize: 10
+            anchors.right: lastBlockLabel.left
+            anchors.rightMargin: 5
+	    onTextChanged: {
+		menuItem.secondaryTitle = text
+	    }
+        }
+
 	ColumnLayout {
 		spacing: 10
 		anchors.fill: parent

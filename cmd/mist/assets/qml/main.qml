@@ -289,6 +289,7 @@ ApplicationWindow {
             styleColor: "#797979"
         }
 
+	/*
         Label {
             //y: 6
             objectName: "miningLabel"
@@ -307,6 +308,7 @@ ApplicationWindow {
             anchors.right: peerGroup.left
             anchors.rightMargin: 5
         }
+	*/
 
         ProgressBar {
             visible: false

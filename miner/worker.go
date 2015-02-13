@@ -41,16 +41,21 @@ func env(block *types.Block, eth *eth.Ethereum) *environment {
 	return env
 }
 
+type Work struct {
+	Number uint64
+	Nonce  []byte
+}
+
 type Agent interface {
 	Work() chan<- *types.Block
-	SetNonceCh(chan<- []byte)
+	SetNonceCh(chan<- Work)
 	Stop()
 	Pow() pow.PoW
 }
 
 type worker struct {
 	agents []Agent
-	recv   chan []byte
+	recv   chan Work
 	mux    *event.TypeMux
 	quit   chan struct{}
 	pow    pow.PoW
@@ -61,13 +66,15 @@ type worker struct {
 	coinbase []byte
 
 	current *environment
+
+	mining bool
 }
 
 func newWorker(coinbase []byte, eth *eth.Ethereum) *worker {
 	return &worker{
 		eth:      eth,
 		mux:      eth.EventMux(),
-		recv:     make(chan []byte),
+		recv:     make(chan Work),
 		chain:    eth.ChainManager(),
 		proc:     eth.BlockProcessor(),
 		coinbase: coinbase,
@@ -75,11 +82,17 @@ func newWorker(coinbase []byte, eth *eth.Ethereum) *worker {
 }
 
 func (self *worker) start() {
+	self.mining = true
+
+	self.quit = make(chan struct{})
+
 	go self.update()
 	go self.wait()
 }
 
 func (self *worker) stop() {
+	self.mining = false
+
 	close(self.quit)
 }
 
@@ -107,26 +120,31 @@ out:
 			break out
 		}
 	}
+
+	events.Unsubscribe()
 }
 
 func (self *worker) wait() {
 	for {
-		for nonce := range self.recv {
-			self.current.block.Header().Nonce = nonce
-			fmt.Println(self.current.block)
+		for work := range self.recv {
+			if self.current.block.Number().Uint64() == work.Number {
+				self.current.block.Header().Nonce = work.Nonce
 
-			self.chain.InsertChain(types.Blocks{self.current.block})
+				self.chain.InsertChain(types.Blocks{self.current.block})
+			}
 			break
 		}
 	}
 }
 
 func (self *worker) push() {
-	self.current.state.Update(ethutil.Big0)
-	self.current.block.SetRoot(self.current.state.Root())
+	if self.mining {
+		self.current.state.Update(ethutil.Big0)
+		self.current.block.SetRoot(self.current.state.Root())
 
-	for _, agent := range self.agents {
-		agent.Work() <- self.current.block
+		for _, agent := range self.agents {
+			agent.Work() <- self.current.block
+		}
 	}
 }
 
