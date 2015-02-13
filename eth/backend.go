@@ -20,14 +20,16 @@ import (
 )
 
 var logger = ethlogger.NewLogger("SERV")
+var jsonlogger = ethlogger.NewJsonLogger()
 
 type Config struct {
-	Name     string
-	KeyStore string
-	DataDir  string
-	LogFile  string
-	LogLevel int
-	KeyRing  string
+	Name      string
+	KeyStore  string
+	DataDir   string
+	LogFile   string
+	LogLevel  int
+	KeyRing   string
+	LogFormat string
 
 	MaxPeers int
 	Port     string
@@ -46,9 +48,6 @@ type Config struct {
 
 	KeyManager *crypto.KeyManager
 }
-
-var logger = ethlogger.NewLogger("SERV")
-var jsonlogger = ethlogger.NewJsonLogger()
 
 func (cfg *Config) parseBootNodes() []*discover.Node {
 	var ns []*discover.Node
@@ -240,10 +239,10 @@ func (s *Ethereum) Coinbase() []byte {
 // Start the ethereum
 func (s *Ethereum) Start() error {
 	jsonlogger.LogJson(&ethlogger.LogStarting{
-		ClientString:    s.ClientIdentity().String(),
+		ClientString:    s.net.Name,
 		Coinbase:        ethutil.Bytes2Hex(s.KeyManager().Address()),
 		ProtocolVersion: ProtocolVersion,
-		LogEvent:        ethlogger.LogEvent{Guid: ethutil.Bytes2Hex(s.ClientIdentity().Pubkey())},
+		LogEvent:        ethlogger.LogEvent{Guid: ethutil.Bytes2Hex(crypto.FromECDSAPub(&s.net.PrivateKey.PublicKey))},
 	})
 
 	err := s.net.Start()

@@ -23,19 +23,6 @@ type PendingBlockEvent struct {
 
 var statelogger = logger.NewLogger("BLOCK")
 
-type EthManager interface {
-	BlockProcessor() *BlockProcessor
-	ChainManager() *ChainManager
-	TxPool() *TxPool
-	PeerCount() int
-	IsMining() bool
-	IsListening() bool
-	Peers() []*p2p.Peer
-	KeyManager() *crypto.KeyManager
-	Db() ethutil.Database
-	EventMux() *event.TypeMux
-}
-
 type BlockProcessor struct {
 	db ethutil.Database
 	// Mutex for locking the block processor. Blocks can only be handled one at a time
