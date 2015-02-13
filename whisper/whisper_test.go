@@ -6,21 +6,12 @@ import (
 	"time"
 )
 
-func TestKeyManagement(t *testing.T) {
-	whisper := New()
-
-	key := whisper.NewIdentity()
-	if !whisper.HasIdentity(key) {
-		t.Error("expected whisper to have identify")
-	}
-}
-
 func TestEvent(t *testing.T) {
 	res := make(chan *Message, 1)
 	whisper := New()
 	id := whisper.NewIdentity()
 	whisper.Watch(Filter{
-		To: id,
+		To: &id.PublicKey,
 		Fn: func(msg *Message) {
 			res <- msg
 		},

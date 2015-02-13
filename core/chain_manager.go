@@ -16,6 +16,11 @@ import (
 
 var chainlogger = logger.NewLogger("CHAIN")
 
+type ChainEvent struct {
+	Block *types.Block
+	Td    *big.Int
+}
+
 type StateQuery interface {
 	GetAccount(addr []byte) *state.StateObject
 }
@@ -23,12 +28,11 @@ type StateQuery interface {
 func CalcDifficulty(block, parent *types.Block) *big.Int {
 	diff := new(big.Int)
 
-	bh, ph := block.Header(), parent.Header()
-	adjust := new(big.Int).Rsh(ph.Difficulty, 10)
-	if bh.Time >= ph.Time+13 {
-		diff.Sub(ph.Difficulty, adjust)
+	adjust := new(big.Int).Rsh(parent.Difficulty(), 10)
+	if block.Time() >= parent.Time()+8 {
+		diff.Sub(parent.Difficulty(), adjust)
 	} else {
-		diff.Add(ph.Difficulty, adjust)
+		diff.Add(parent.Difficulty(), adjust)
 	}
 
 	return diff
@@ -176,6 +180,9 @@ func (bc *ChainManager) NewBlock(coinbase []byte) *types.Block {
 		ethutil.BigPow(2, 32),
 		nil,
 		"")
+	block.SetUncles(nil)
+	block.SetTransactions(nil)
+	block.SetReceipts(nil)
 
 	parent := bc.currentBlock
 	if parent != nil {
@@ -252,7 +259,13 @@ func (self *ChainManager) GetBlockHashesFromHash(hash []byte, max uint64) (chain
 
 	// XXX Could be optimised by using a different database which only holds hashes (i.e., linked list)
 	for i := uint64(0); i < max; i++ {
-		block = self.GetBlock(block.Header().ParentHash)
+		parentHash := block.Header().ParentHash
+		block = self.GetBlock(parentHash)
+		if block == nil {
+			chainlogger.Infof("GetBlockHashesFromHash Parent UNKNOWN %x\n", parentHash)
+			break
+		}
+
 		chain = append(chain, block.Hash())
 		if block.Header().Number.Cmp(ethutil.Big0) <= 0 {
 			break
@@ -354,7 +367,7 @@ func (bc *ChainManager) Stop() {
 
 func (self *ChainManager) InsertChain(chain types.Blocks) error {
 	for _, block := range chain {
-		td, messages, err := self.processor.Process(block)
+		td, err := self.processor.Process(block)
 		if err != nil {
 			if IsKnownBlockErr(err) {
 				continue
@@ -380,13 +393,13 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 				self.setTotalDifficulty(td)
 				self.insert(block)
 				self.transState = state.New(cblock.Root(), self.db) //state.New(cblock.Trie().Copy())
-			}
 
+				self.eventMux.Post(ChainEvent{block, td})
+			}
 		}
 		self.mu.Unlock()
 
 		self.eventMux.Post(NewBlockEvent{block})
-		self.eventMux.Post(messages)
 	}
 
 	return nil

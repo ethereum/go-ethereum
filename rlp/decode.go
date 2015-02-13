@@ -137,7 +137,7 @@ func makeDecoder(typ reflect.Type) (dec decoder, err error) {
 		return makeStructDecoder(typ)
 	case kind == reflect.Ptr:
 		return makePtrDecoder(typ)
-	case kind == reflect.Interface && typ.NumMethod() == 0:
+	case kind == reflect.Interface:
 		return decodeInterface, nil
 	default:
 		return nil, fmt.Errorf("rlp: type %v is not RLP-serializable", typ)
@@ -378,6 +378,9 @@ func makePtrDecoder(typ reflect.Type) (decoder, error) {
 var ifsliceType = reflect.TypeOf([]interface{}{})
 
 func decodeInterface(s *Stream, val reflect.Value) error {
+	if val.Type().NumMethod() != 0 {
+		return fmt.Errorf("rlp: type %v is not RLP-serializable", val.Type())
+	}
 	kind, _, err := s.Kind()
 	if err != nil {
 		return err

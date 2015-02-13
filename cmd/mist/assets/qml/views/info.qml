@@ -28,20 +28,8 @@ Rectangle {
 			text: "Address"
 		}
 		TextField {
-			text: eth.key().address
+			text: eth.coinbase()
 			width: 500
-		}
-
-		Label {
-			text: "Client ID"
-		}
-		TextField {
-			text: gui.getCustomIdentifier()
-			width: 500
-			placeholderText: "Anonymous"
-			onTextChanged: {
-				gui.setCustomIdentifier(text)
-			}
 		}
 
 		TextArea {

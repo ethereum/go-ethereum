@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	ethlogger "github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 var sys = ethlogger.NewStdLogSystem(os.Stdout, log.LstdFlags, ethlogger.LogLevel(ethlogger.DebugDetailLevel))
@@ -80,6 +81,8 @@ func (self *testTxPool) AddTransactions(txs []*types.Transaction) {
 	}
 }
 
+func (self *testTxPool) GetTransactions() types.Transactions { return nil }
+
 func (self *testChainManager) GetBlockHashesFromHash(hash []byte, amount uint64) (hashes [][]byte) {
 	if self.getBlockHashes != nil {
 		hashes = self.getBlockHashes(hash, amount)
@@ -126,26 +129,11 @@ func (self *testBlockPool) RemovePeer(peerId string) {
 	}
 }
 
-// TODO: refactor this into p2p/client_identity
-type peerId struct {
-	pubkey []byte
-}
-
-func (self *peerId) String() string {
-	return "test peer"
-}
-
-func (self *peerId) Pubkey() (pubkey []byte) {
-	pubkey = self.pubkey
-	if len(pubkey) == 0 {
-		pubkey = crypto.GenerateNewKeyPair().PublicKey
-		self.pubkey = pubkey
-	}
-	return
-}
-
 func testPeer() *p2p.Peer {
-	return p2p.NewPeer(&peerId{}, []p2p.Cap{})
+	var id discover.NodeID
+	pk := crypto.GenerateNewKeyPair().PublicKey
+	copy(id[:], pk)
+	return p2p.NewPeer(id, "test peer", []p2p.Cap{})
 }
 
 type ethProtocolTester struct {

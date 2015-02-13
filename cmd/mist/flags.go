@@ -21,6 +21,7 @@
 package main
 
 import (
+	"crypto/ecdsa"
 	"flag"
 	"fmt"
 	"log"
@@ -31,7 +32,9 @@ import (
 	"runtime"
 
 	"bitbucket.org/kardianos/osext"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/vm"
 )
 
@@ -39,18 +42,18 @@ var (
 	Identifier      string
 	KeyRing         string
 	KeyStore        string
-	PMPGateway      string
 	StartRpc        bool
 	StartWebSockets bool
 	RpcPort         int
-	UseUPnP         bool
-	NatType         string
+	WsPort          int
 	OutboundPort    string
 	ShowGenesis     bool
 	AddPeer         string
 	MaxPeer         int
 	GenAddr         bool
-	UseSeed         bool
+	BootNodes       string
+	NodeKey         *ecdsa.PrivateKey
+	NAT             nat.Interface
 	SecretFile      string
 	ExportDir       string
 	NonInteractive  bool
@@ -98,6 +101,7 @@ func defaultDataDir() string {
 var defaultConfigFile = path.Join(defaultDataDir(), "conf.ini")
 
 func Init() {
+	// TODO: move common flag processing to cmd/utils
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "%s [options] [filename]:\noptions precedence: default < config file < environment variables < command line\n", os.Args[0])
 		flag.PrintDefaults()
@@ -107,28 +111,50 @@ func Init() {
 	flag.StringVar(&Identifier, "id", "", "Custom client identifier")
 	flag.StringVar(&KeyRing, "keyring", "", "identifier for keyring to use")
 	flag.StringVar(&KeyStore, "keystore", "db", "system to store keyrings: db|file (db)")
-	flag.StringVar(&OutboundPort, "port", "30303", "listening port")
-	flag.BoolVar(&UseUPnP, "upnp", true, "enable UPnP support")
-	flag.IntVar(&MaxPeer, "maxpeer", 30, "maximum desired peers")
-	flag.IntVar(&RpcPort, "rpcport", 8080, "port to start json-rpc server on")
-	flag.BoolVar(&StartRpc, "rpc", false, "start rpc server")
+	flag.IntVar(&RpcPort, "rpcport", 8545, "port to start json-rpc server on")
+	flag.IntVar(&WsPort, "wsport", 40404, "port to start websocket rpc server on")
+	flag.BoolVar(&StartRpc, "rpc", true, "start rpc server")
 	flag.BoolVar(&StartWebSockets, "ws", false, "start websocket server")
 	flag.BoolVar(&NonInteractive, "y", false, "non-interactive mode (say yes to confirmations)")
-	flag.BoolVar(&UseSeed, "seed", true, "seed peers")
 	flag.BoolVar(&GenAddr, "genaddr", false, "create a new priv/pub key")
-	flag.StringVar(&NatType, "nat", "", "NAT support (UPNP|PMP) (none)")
 	flag.StringVar(&SecretFile, "import", "", "imports the file given (hex or mnemonic formats)")
 	flag.StringVar(&ExportDir, "export", "", "exports the session keyring to files in the directory given")
 	flag.StringVar(&LogFile, "logfile", "", "log file (defaults to standard output)")
 	flag.StringVar(&Datadir, "datadir", defaultDataDir(), "specifies the datadir to use")
-	flag.StringVar(&PMPGateway, "pmp", "", "Gateway IP for PMP")
 	flag.StringVar(&ConfigFile, "conf", defaultConfigFile, "config file")
 	flag.StringVar(&DebugFile, "debug", "", "debug file (no debugging if not set)")
 	flag.IntVar(&LogLevel, "loglevel", int(logger.InfoLevel), "loglevel: 0-5: silent,error,warn,info,debug,debug detail)")
 
 	flag.StringVar(&AssetPath, "asset_path", defaultAssetPath(), "absolute path to GUI assets directory")
 
+	// Network stuff
+	var (
+		nodeKeyFile = flag.String("nodekey", "", "network private key file")
+		nodeKeyHex  = flag.String("nodekeyhex", "", "network private key (for testing)")
+		natstr      = flag.String("nat", "any", "port mapping mechanism (any|none|upnp|pmp|extip:<IP>)")
+	)
+	flag.StringVar(&OutboundPort, "port", "30303", "listening port")
+	flag.StringVar(&BootNodes, "bootnodes", "", "space-separated node URLs for discovery bootstrap")
+	flag.IntVar(&MaxPeer, "maxpeer", 30, "maximum desired peers")
+
 	flag.Parse()
+
+	var err error
+	if NAT, err = nat.Parse(*natstr); err != nil {
+		log.Fatalf("-nat: %v", err)
+	}
+	switch {
+	case *nodeKeyFile != "" && *nodeKeyHex != "":
+		log.Fatal("Options -nodekey and -nodekeyhex are mutually exclusive")
+	case *nodeKeyFile != "":
+		if NodeKey, err = crypto.LoadECDSA(*nodeKeyFile); err != nil {
+			log.Fatalf("-nodekey: %v", err)
+		}
+	case *nodeKeyHex != "":
+		if NodeKey, err = crypto.HexToECDSA(*nodeKeyHex); err != nil {
+			log.Fatalf("-nodekeyhex: %v", err)
+		}
+	}
 
 	if VmType >= int(vm.MaxVmTy) {
 		log.Fatal("Invalid VM type ", VmType)

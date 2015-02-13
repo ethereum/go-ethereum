@@ -9,15 +9,26 @@ import (
 
 var vmlogger = logger.NewLogger("VM")
 
-type Type int
+type Type byte
 
 const (
-	StandardVmTy Type = iota
-	DebugVmTy
+	StdVmTy Type = iota
 	JitVmTy
 
 	MaxVmTy
 )
+
+func NewVm(env Environment) VirtualMachine {
+	switch env.VmType() {
+	case JitVmTy:
+		return NewJitVm(env)
+	default:
+		vmlogger.Infoln("unsupported vm type %d", env.VmType())
+		fallthrough
+	case StdVmTy:
+		return New(env)
+	}
+}
 
 var (
 	GasStep         = big.NewInt(1)

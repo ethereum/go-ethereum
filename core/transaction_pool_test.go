@@ -85,3 +85,13 @@ func TestRemoveInvalid(t *testing.T) {
 		t.Error("expected pool size to be 1, is", pool.Size())
 	}
 }
+
+func TestInvalidSender(t *testing.T) {
+	pool, _ := setup()
+	tx := new(types.Transaction)
+	tx.V = 28
+	err := pool.ValidateTransaction(tx)
+	if err != ErrInvalidSender {
+		t.Error("expected %v, got %v", ErrInvalidSender, err)
+	}
+}

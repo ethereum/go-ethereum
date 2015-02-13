@@ -11,10 +11,13 @@ type Message struct {
 	Flags     byte
 	Signature []byte
 	Payload   []byte
+	Sent      int64
+
+	To *ecdsa.PublicKey
 }
 
 func NewMessage(payload []byte) *Message {
-	return &Message{Flags: 0, Payload: payload}
+	return &Message{Flags: 0, Payload: payload, Sent: time.Now().Unix()}
 }
 
 func (self *Message) hash() []byte {

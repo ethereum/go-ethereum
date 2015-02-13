@@ -15,7 +15,7 @@ func testlog(t *testing.T) testLogger {
 	return l
 }
 
-func (testLogger) GetLogLevel() logger.LogLevel { return logger.DebugLevel }
+func (testLogger) GetLogLevel() logger.LogLevel { return logger.DebugDetailLevel }
 func (testLogger) SetLogLevel(logger.LogLevel)  {}
 
 func (l testLogger) LogPrint(level logger.LogLevel, msg string) {
