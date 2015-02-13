@@ -289,10 +289,13 @@ func (srv *Server) dialLoop() {
 			go srv.findPeers()
 
 		case dest := <-srv.peerConnect:
+			// avoid dialing nodes that are already connected.
+			// there is another check for this in addPeer,
+			// which runs after the handshake.
 			srv.lock.Lock()
 			_, isconnected := srv.peers[dest.ID]
 			srv.lock.Unlock()
-			if isconnected || dialing[dest.ID] {
+			if isconnected || dialing[dest.ID] || dest.ID == srv.ntab.Self() {
 				continue
 			}
 
