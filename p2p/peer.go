@@ -300,7 +300,7 @@ func (p *Peer) dispatch(msg Msg, protoDone chan struct{}) (wait bool, err error)
 		// of it and move on to the next message
 		buf, err := ioutil.ReadAll(msg.Payload)
 		if len(buf) > 0 {
-			p.Warnf("Received message %x", buf)
+			p.Debugf("Received message %x", buf)
 		}
 		if err != nil {
 			return false, err
