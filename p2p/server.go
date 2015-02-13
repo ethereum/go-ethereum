@@ -375,7 +375,10 @@ func (srv *Server) addPeer(conn net.Conn, desc *peerAddr, slot int) *Peer {
 	peer.slot = slot
 	srv.peers[slot] = peer
 	srv.peerCount++
-	go func() { peer.loop(); srv.peerDisconnect <- peer }()
+	go func() {
+		peer.loop()
+		srv.peerDisconnect <- peer
+	}()
 	return peer
 }
 

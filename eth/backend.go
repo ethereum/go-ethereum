@@ -25,6 +25,7 @@ type Config struct {
 	DataDir    string
 	LogFile    string
 	LogLevel   int
+	LogFormat  string
 	KeyRing    string
 
 	MaxPeers   int
@@ -39,6 +40,7 @@ type Config struct {
 }
 
 var logger = ethlogger.NewLogger("SERV")
+var jsonlogger = ethlogger.NewJsonLogger()
 
 type Ethereum struct {
 	// Channel for shutting down the ethereum
@@ -77,7 +79,7 @@ type Ethereum struct {
 
 func New(config *Config) (*Ethereum, error) {
 	// Boostrap database
-	logger := ethlogger.New(config.DataDir, config.LogFile, config.LogLevel)
+	logger := ethlogger.New(config.DataDir, config.LogFile, config.LogLevel, config.LogFormat)
 	db, err := ethdb.NewLDBDatabase("blockchain")
 	if err != nil {
 		return nil, err
@@ -220,6 +222,13 @@ func (s *Ethereum) Coinbase() []byte {
 
 // Start the ethereum
 func (s *Ethereum) Start(seedNode string) error {
+	jsonlogger.LogJson(&ethlogger.LogStarting{
+		ClientString:    s.ClientIdentity().String(),
+		Coinbase:        ethutil.Bytes2Hex(s.KeyManager().Address()),
+		ProtocolVersion: ProtocolVersion,
+		LogEvent:        ethlogger.LogEvent{Guid: ethutil.Bytes2Hex(s.ClientIdentity().Pubkey())},
+	})
+
 	err := s.net.Start()
 	if err != nil {
 		return err

@@ -58,6 +58,7 @@ var (
 	ConfigFile      string
 	DebugFile       string
 	LogLevel        int
+	LogFormat       string
 	Dump            bool
 	DumpHash        string
 	DumpNumber      int
@@ -112,6 +113,7 @@ func Init() {
 	flag.StringVar(&ConfigFile, "conf", defaultConfigFile, "config file")
 	flag.StringVar(&DebugFile, "debug", "", "debug file (no debugging if not set)")
 	flag.IntVar(&LogLevel, "loglevel", int(logger.InfoLevel), "loglevel: 0-5: silent,error,warn,info,debug,debug detail)")
+	flag.StringVar(&LogFormat, "logformat", "std", "logformat: std,raw)")
 	flag.BoolVar(&DiffTool, "difftool", false, "creates output for diff'ing. Sets LogLevel=0")
 	flag.StringVar(&DiffType, "diff", "all", "sets the level of diff output [vm, all]. Has no effect if difftool=false")
 	flag.BoolVar(&ShowGenesis, "genesis", false, "Dump the genesis block")

@@ -67,6 +67,7 @@ func main() {
 		DataDir:    Datadir,
 		LogFile:    LogFile,
 		LogLevel:   LogLevel,
+		LogFormat:  LogFormat,
 		Identifier: Identifier,
 		MaxPeers:   MaxPeer,
 		Port:       OutboundPort,
