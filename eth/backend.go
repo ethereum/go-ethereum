@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/bzz"
 	"github.com/ethereum/go-ethereum/core"
@@ -268,18 +268,25 @@ func (s *Ethereum) Start(seed bool, p string, pull string) error {
 	}
 
 	if len(pull) > 0 {
-		key := ethutil.Hex2Bytes(pull)
-		reader := s.dpa.Retrieve(key)
-		logger.Debugf("retrieved reader for %064x", key)
-		fo, err := os.OpenFile("/tmp/swarm.tmp", os.O_CREATE|os.O_RDWR, 0666)
-		if err != nil {
-			logger.Warnf("file open error %v", err)
-		} else {
-			n, err := io.Copy(fo, reader)
-			if err != nil && err != io.EOF {
-				logger.Debugf("read %v bytes. read error for %064x: %v", n, key, err)
+		go func() {
+			time.Sleep(30 * time.Second)
+			key := ethutil.Hex2Bytes(pull)
+			reader := s.dpa.Retrieve(key)
+			logger.Debugf("retrieved reader for %064x", key)
+			b := make([]byte, 0x1000)
+			var length int64
+			for {
+				n, err := reader.Read(b)
+				if err != nil {
+					if err != io.EOF {
+						logger.Debugf("read %v bytes. read error for %064x: %v", n, key, err)
+					}
+					return
+				}
+				length += int64(n)
 			}
-		}
+			logger.Debugf("read %v bytes from %064x: %v", length, key)
+		}()
 	}
 
 	// TODO: read peers here
