@@ -102,17 +102,22 @@ func writeMsg(w io.Writer, msg Msg) error {
 	copy(start, magicToken)
 	binary.BigEndian.PutUint32(start[4:], payloadLen)
 
-	srvlog.Debugf("Sending message:")
-
+	if msg.Size > 1 {
+		srvlog.Debugf("Sending message (size %v):", msg.Size)
+	}
 	for _, b := range [][]byte{start, listhdr, code} {
-		srvlog.Debugf("  %x", b)
+		if msg.Size > 1 {
+			srvlog.Debugf("  %x", b)
+		}
 		if _, err := w.Write(b); err != nil {
 			return err
 		}
 	}
 	b := make([]byte, msg.Size)
 	msg.Payload.Read(b)
-	srvlog.Debugf(" %x", b)
+	if msg.Size > 1 {
+		srvlog.Debugf(" %x", b)
+	}
 	_, err := w.Write(b)
 	return err
 }
