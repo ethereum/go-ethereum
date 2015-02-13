@@ -19,8 +19,14 @@ import (
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
-var logger = ethlogger.NewLogger("SERV")
-var jsonlogger = ethlogger.NewJsonLogger()
+var (
+	logger     = ethlogger.NewLogger("SERV")
+	jsonlogger = ethlogger.NewJsonLogger()
+
+	defaultBootNodes = []*discover.Node{
+		discover.MustParseNode("enode://6cdd090303f394a1cac34ecc9f7cda18127eafa2a3a06de39f6d920b0e583e062a7362097c7c65ee490a758b442acd5c80c6fce4b148c6a391e946b45131365b@54.169.166.226:30303"),
+	}
+)
 
 type Config struct {
 	Name      string
@@ -50,6 +56,9 @@ type Config struct {
 }
 
 func (cfg *Config) parseBootNodes() []*discover.Node {
+	if cfg.BootNodes == "" {
+		return defaultBootNodes
+	}
 	var ns []*discover.Node
 	for _, url := range strings.Split(cfg.BootNodes, " ") {
 		if url == "" {
