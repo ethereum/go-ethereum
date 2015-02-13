@@ -333,12 +333,24 @@ Rectangle {
 				top: navBar.bottom
 			}
 			z: 10
+
+   Timer {
+       interval: 500; running: true; repeat: true
+       onTriggered: {
+           webview.runJavaScript("document.querySelector('meta[name=badge]').getAttribute('content')", function(badge) {
+               if (badge) {
+                   menuItem.secondaryTitle = badge;
+               }
+           });
+        }
+   }
 			
 			onLoadingChanged: {
 				if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
 					webview.runJavaScript("document.title", function(pageTitle) {
 						menuItem.title = pageTitle;	
 					});
+
 
 					//var topBarStyle
 					webView.runJavaScript("document.querySelector(\"meta[name='ethereum-dapp-url-bar-style']\").getAttribute(\"content\")", function(topBarStyle){

@@ -8,10 +8,10 @@ import (
 	"io"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	ethlogger "github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/obscuren/ecies"
 )
 
 var clogger = ethlogger.NewLogger("CRYPTOID")
