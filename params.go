@@ -36,14 +36,8 @@ type ECIESParams struct {
 // * ECIES using AES256 and HMAC-SHA-256-32
 // * ECIES using AES256 and HMAC-SHA-384-48
 // * ECIES using AES256 and HMAC-SHA-512-64
-var (
-	ECIES_AES128_SHA256 *ECIESParams
-	ECIES_AES256_SHA256 *ECIESParams
-	ECIES_AES256_SHA384 *ECIESParams
-	ECIES_AES256_SHA512 *ECIESParams
-)
 
-func init() {
+var (
 	ECIES_AES128_SHA256 = &ECIESParams{
 		Hash:      sha256.New,
 		hashAlgo:  crypto.SHA256,
@@ -75,7 +69,7 @@ func init() {
 		BlockSize: aes.BlockSize,
 		KeyLen:    32,
 	}
-}
+)
 
 var paramsFromCurve = map[elliptic.Curve]*ECIESParams{
 	elliptic.P256(): ECIES_AES128_SHA256,
