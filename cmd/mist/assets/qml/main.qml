@@ -59,13 +59,13 @@ ApplicationWindow {
 
     function activeView(view, menuItem) {
         mainSplit.setView(view, menuItem)
-        if (view.hideUrl) {
+        /*if (view.hideUrl) {
             urlPane.visible = false;
             mainView.anchors.top = rootView.top
         } else {
             urlPane.visible = true;
             mainView.anchors.top = divider.bottom
-        }
+        }*/
     }
 
     function addViews(view, path, options) {
@@ -120,13 +120,10 @@ ApplicationWindow {
 
         var domainAlreadyOpen = false;
 
-        console.log("requested: " + requestedDomain )
-
         for(var i = 0; i < mainSplit.views.length; i++) {
             if (mainSplit.views[i].view.url) {
                 var matches = mainSplit.views[i].view.url.toString().match(/^[a-z]*\:\/\/(?:www\.)?([^\/?#]+)(?:[\/?#]|$)/i);
                 var existingDomain = matches && matches[1];
-                console.log("exists: " + existingDomain);
                 if (requestedDomain == existingDomain) {
                     domainAlreadyOpen = true;
                     mainSplit.views[i].view.url = url;
@@ -567,7 +564,9 @@ ApplicationWindow {
                             if (parent.closable == true) {
                                 closeIcon.visible = sel.visible
                             }
-                            
+                            /*if(view.hasOwnProperty("iconSource")) {
+                                icon.source = view.iconSource;
+                            }*/
                          }
                          onExited:  {
                             closeIcon.visible = false
@@ -600,10 +599,13 @@ ApplicationWindow {
                          id: label
                          font.family: sourceSansPro.name 
                          font.weight: Font.DemiBold
+                         elide: Text.ElideRight
                          anchors {
                              left: icon.right
+                             right: parent.right
                              verticalCenter: parent.verticalCenter
                              leftMargin: 6
+                             rightMargin: 8
                              // verticalCenterOffset: -10
                          }
                          x:250

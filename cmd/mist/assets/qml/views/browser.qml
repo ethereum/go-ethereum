@@ -64,23 +64,15 @@ Rectangle {
 	}
 
 	function showFullUrlBar(on){
-    	if (on) {
-			//appTitle.visible = false
-			//appDomain.visible = false
-			
-			//uriNav.visible = true
-			clickAnywhereOnApp.visible = true
-
-			navBar.state = "fullUrlVisible"
-    	} else {
-			//appTitle.visible = true
-			//appDomain.visible = true
-			//uriNav.visible = false
-			clickAnywhereOnApp.visible = false
-
-			navBar.state = "titleVisible"
-
-   		}
+        if (uriNav.focus == false ) {
+        	if (on == false) {
+                clickAnywhereOnApp.visible = false
+                navBar.state = "titleVisible"
+        	} else {
+                clickAnywhereOnApp.visible = true
+                navBar.state = "fullUrlVisible"
+       		}
+        }
 
     }
 
@@ -90,24 +82,40 @@ Rectangle {
 	Item {
 		objectName: "root"
 		id: root
-		anchors.fill: parent
+		anchors {
+            fill: parent
+        }
+
 		state: "inspectorShown"
 
 		MouseArea {
 			id: clickAnywhereOnApp
 			z:15
-			//hoverEnabled: true
-			anchors.fill: parent
-			/*hoverEnabled: true*/
+			// Using a secondary screen to catch on mouse exits for the area, because 
+            // there are many hover actions conflicting
+
+            anchors {
+                top: parent.top
+                topMargin: 50
+                right: parent.right
+                bottom: parent.bottom
+                left: parent.left
+            }
+			hoverEnabled: true
 			
-			onClicked: {
+			onEntered: {
 			  	showFullUrlBar(false);
 			}
 
-			/*Rectangle {
-			    anchors.fill: parent
-			    color: "#88888888"
-			}*/
+            onClicked: {
+                uriNav.focus = false
+                showFullUrlBar(false);
+            }
+
+			// Rectangle {
+			//     anchors.fill: parent
+			//     color: "#88888888"
+			// }
 		}
 
 		RowLayout {
@@ -126,7 +134,7 @@ Rectangle {
 					webview.goBack()
 				}
 
-				anchors{
+				anchors {
 					left: parent.left
 					leftMargin: 6
 				}
@@ -146,15 +154,17 @@ Rectangle {
 			    color: "#FFFFFF"
 			    radius: 6
 
-
 			   MouseArea {
 			    	anchors.fill: parent
 			    	z: 10
 			    	hoverEnabled: true
 			    	
 			    	onEntered: {
-			    	  	showFullUrlBar(true);
-			    	}	 
+                        showFullUrlBar(true);
+                    }
+                    /*onExited: {
+                        showFullUrlBar(false);
+                    }*/	 
 			    	   	
 			    }
 
@@ -171,14 +181,15 @@ Rectangle {
                      font.bold: true
                      font.capitalization: Font.AllUppercase 
                      horizontalAlignment: Text.AlignRight
-                     verticalAlignment: Text.AlignVCenter
-                     
+                     verticalAlignment: Text.AlignVCenter 
+                     elide: Text.ElideRight
+
                      anchors {
                          left: parent.left
                          right: parent.horizontalCenter
                          top: parent.top
                          bottom: parent.bottom
-                         rightMargin: 10
+                         leftMargin: 32
                      }
                      color: "#928484"
                  }
@@ -189,13 +200,15 @@ Rectangle {
                      font.bold: false
                      horizontalAlignment: Text.AlignLeft
                      verticalAlignment: Text.AlignVCenter
+                     elide: Text.ElideLeft
                      
                      anchors {
                          left: parent.horizontalCenter
                          right: parent.right
                          top: parent.top
                          bottom: parent.bottom
-                         leftMargin: 10
+                         leftMargin: 32
+
                      }
                      color: "#C0AFAF"
                  }
@@ -212,7 +225,7 @@ Rectangle {
 				    }
 
 				    horizontalAlignment: Text.AlignHCenter
-                    
+
                     style: TextFieldStyle {
                         textColor: "#928484"
                         background: Rectangle {
@@ -227,11 +240,6 @@ Rectangle {
 				    Keys.onReturnPressed: {
 				    	webview.url = this.text;
 				    }
-				   /* onFocusedChanged: {
-   					     if (focused) {
-   					         //uriNav.selectAll();
-   					     }
-   					}*/
 			    }
    				
 			    z:2
@@ -332,18 +340,19 @@ Rectangle {
 				bottom: parent.bottom
 				top: navBar.bottom
 			}
-			z: 10
-			
-			onLoadingChanged: {
+
+            z: 10
+            
+            onLoadingChanged: {
+
+                // this checks if your app has special header tags
 				if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
 					webview.runJavaScript("document.title", function(pageTitle) {
 						menuItem.title = pageTitle;	
 					});
 
-					//var topBarStyle
 					webView.runJavaScript("document.querySelector(\"meta[name='ethereum-dapp-url-bar-style']\").getAttribute(\"content\")", function(topBarStyle){
 						if (topBarStyle=="transparent") {
-
 							// Adjust for a transparent sidebar Dapp
                             navBarBackground.visible = false;
                             back.visible = false;
@@ -362,8 +371,13 @@ Rectangle {
                         };	
 					});
 
-					
-
+                    // webView.runJavaScript("document.querySelector(\"link[rel='icon']\").getAttribute(\"href\")", function(sideIcon){
+                    //         if(sideIcon){
+                    //             window.iconSource = "http://localhost:3000/whisper-icon@2x.png" //webview.url + sideIcon
+                    //             console.log(iconSource)
+                    //         }; 
+                    // });
+                    
 					webview.runJavaScript(eth.readFile("bignumber.min.js"));
 					webview.runJavaScript(eth.readFile("ethereum.js/dist/ethereum.js"));
 
@@ -371,7 +385,7 @@ Rectangle {
 					var matches = cleanTitle.match(/^[a-z]*\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
 					var domain = matches && matches[1];
 
-			    	appDomain.text = domain //webview.url.replace("a", "z")
+			    	appDomain.text = domain 
 			    	appTitle.text = webview.title
 
 			    	showFullUrlBar(false);
