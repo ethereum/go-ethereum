@@ -255,6 +255,13 @@ func readProtocolHandshake(p *Peer, rw MsgReadWriter) error {
 	if err != nil {
 		return err
 	}
+	if msg.Code == discMsg {
+		// disconnect before protocol handshake is valid according to the
+		// spec and we send it ourself if Server.addPeer fails.
+		var reason DiscReason
+		rlp.Decode(msg.Payload, &reason)
+		return discRequestedError(reason)
+	}
 	if msg.Code != handshakeMsg {
 		return newPeerError(errProtocolBreach, "expected handshake, got %x", msg.Code)
 	}
