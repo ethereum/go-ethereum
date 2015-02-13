@@ -124,35 +124,14 @@ type reply struct {
 
 // ListenUDP returns a new table that listens for UDP packets on laddr.
 func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface) (*Table, error) {
-	t, realaddr, err := listen(priv, laddr, natm)
+	addr, err := net.ResolveUDPAddr("udp", laddr)
 	if err != nil {
 		return nil, err
 	}
-	if natm != nil {
-		if !realaddr.IP.IsLoopback() {
-			go nat.Map(natm, t.closing, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
-		}
-		// TODO: react to external IP changes over time.
-		if ext, err := natm.ExternalIP(); err == nil {
-			realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
-		}
-	}
-	t.Table = newTable(t, PubkeyID(&priv.PublicKey), realaddr)
-	log.Infoln("Listening, ", t.self)
-	return t.Table, nil
-}
-
-func listen(priv *ecdsa.PrivateKey, laddr string, nat nat.Interface) (*udp, *net.UDPAddr, error) {
-	addr, err := net.ResolveUDPAddr("udp", laddr)
-	if err != nil {
-		return nil, nil, err
-	}
 	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	realaddr := conn.LocalAddr().(*net.UDPAddr)
-
 	udp := &udp{
 		conn:       conn,
 		priv:       priv,
@@ -160,9 +139,23 @@ func listen(priv *ecdsa.PrivateKey, laddr string, nat nat.Interface) (*udp, *net
 		addpending: make(chan *pending),
 		replies:    make(chan reply),
 	}
+
+	realaddr := conn.LocalAddr().(*net.UDPAddr)
+	if natm != nil {
+		if !realaddr.IP.IsLoopback() {
+			go nat.Map(natm, udp.closing, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
+		}
+		// TODO: react to external IP changes over time.
+		if ext, err := natm.ExternalIP(); err == nil {
+			realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
+		}
+	}
+	udp.Table = newTable(udp, PubkeyID(&priv.PublicKey), realaddr)
+
 	go udp.loop()
 	go udp.readLoop()
-	return udp, realaddr, nil
+	log.Infoln("Listening, ", udp.self)
+	return udp.Table, nil
 }
 
 func (t *udp) close() {
