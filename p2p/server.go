@@ -17,6 +17,7 @@ import (
 )
 
 const (
+	handshakeTimeout     = 5 * time.Second
 	defaultDialTimeout   = 10 * time.Second
 	refreshPeersInterval = 30 * time.Second
 )
@@ -344,7 +345,8 @@ func (srv *Server) findPeers() {
 }
 
 func (srv *Server) startPeer(conn net.Conn, dest *discover.Node) {
-	// TODO: I/O timeout, handle/store session token
+	// TODO: handle/store session token
+	conn.SetDeadline(time.Now().Add(handshakeTimeout))
 	remoteID, _, err := srv.handshakeFunc(conn, srv.PrivateKey, dest)
 	if err != nil {
 		conn.Close()
