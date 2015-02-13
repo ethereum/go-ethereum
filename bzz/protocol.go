@@ -73,9 +73,8 @@ type statusMsgData struct {
  if the storage request is sufficiently close (within our proximity range (the last row of the routing table), then sending it to all peers will not guarantee convergence, so there needs to be an absolute expiry of the request too. Maybe the protocol should specify a forward probability exponentially declining with age.
 */
 type storeRequestMsgData struct {
-	Key  Key    // hash of datasize | data
-	Size uint64 // size of data in bytes
-	Data []byte // is this needed?
+	Key   Key    // hash of datasize | data
+	SData []byte // is this needed?
 	// optional
 	Id             uint64     //
 	requestTimeout *time.Time // expiry for forwarding
@@ -289,7 +288,7 @@ func (self *bzzProtocol) retrieve(req *retrieveRequestMsgData) {
 }
 
 func (self *bzzProtocol) store(req *storeRequestMsgData) {
-	p2p.EncodeMsg(self.rw, storeRequestMsg, req.Key, req.Size, req.Data, req.Id)
+	p2p.EncodeMsg(self.rw, storeRequestMsg, req.Key, req.SData, req.Id)
 }
 
 func (self *bzzProtocol) peers(req *peersMsgData) {

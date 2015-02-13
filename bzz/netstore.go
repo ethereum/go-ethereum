@@ -1,6 +1,7 @@
 package bzz
 
 import (
+	"encoding/binary"
 	"math/rand"
 	"sync"
 	"time"
@@ -57,8 +58,8 @@ func (self *NetStore) Put(entry *Chunk) {
 	dpaLogger.Debugf("NetStore.Put: localStore.Get returned with %v.", err)
 	if err != nil {
 		chunk = entry
-	} else if chunk.Data == nil {
-		chunk.Data = entry.Data
+	} else if chunk.SData == nil {
+		chunk.SData = entry.SData
 		chunk.Size = entry.Size
 	} else {
 		return
@@ -85,13 +86,13 @@ func (self *NetStore) addStoreRequest(req *storeRequestMsgData) {
 	// we assume that a returned chunk is the one stored in the memory cache
 	if err != nil {
 		chunk = &Chunk{
-			Key:  req.Key,
-			Data: req.Data,
-			Size: int64(req.Size),
+			Key:   req.Key,
+			SData: req.SData,
+			Size:  int64(binary.LittleEndian.Uint64(req.SData[0:8])),
 		}
-	} else if chunk.Data == nil {
-		chunk.Data = req.Data
-		chunk.Size = int64(req.Size)
+	} else if chunk.SData == nil {
+		chunk.SData = req.SData
+		chunk.Size = int64(binary.LittleEndian.Uint64(req.SData[0:8]))
 	} else {
 		return
 	}
@@ -103,7 +104,7 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 	chunk = self.get(key)
 	id := generateId()
 	timeout := time.Now().Add(searchTimeout)
-	if chunk.Data == nil {
+	if chunk.SData == nil {
 		self.startSearch(chunk, id, &timeout)
 	} else {
 		return
@@ -146,7 +147,7 @@ func (self *NetStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 	defer self.lock.Unlock()
 
 	chunk := self.get(req.Key)
-	if chunk.Data == nil {
+	if chunk.SData == nil {
 		chunk.req.status = reqSearching
 	} else {
 		chunk.req.status = reqFound
@@ -240,10 +241,9 @@ func (self *NetStore) propagateResponse(chunk *Chunk) {
 		counter := requesterCount
 		dpaLogger.Debugf("NetStore.propagateResponse id %064x", id)
 		msg := &storeRequestMsgData{
-			Key:  chunk.Key,
-			Data: chunk.Data,
-			Size: uint64(chunk.Size),
-			Id:   uint64(id),
+			Key:   chunk.Key,
+			SData: chunk.SData,
+			Id:    uint64(id),
 		}
 		for _, req := range requesters {
 			if req.timeout.After(time.Now()) {
@@ -262,8 +262,7 @@ func (self *NetStore) deliver(req *retrieveRequestMsgData, chunk *Chunk) {
 	storeReq := &storeRequestMsgData{
 		Key:            req.Key,
 		Id:             req.Id,
-		Data:           chunk.Data,
-		Size:           uint64(chunk.Size),
+		SData:          chunk.SData,
 		requestTimeout: req.timeout, //
 		// StorageTimeout *time.Time // expiry of content
 		// Metadata       metaData
@@ -274,10 +273,9 @@ func (self *NetStore) deliver(req *retrieveRequestMsgData, chunk *Chunk) {
 func (self *NetStore) store(chunk *Chunk) {
 	id := generateId()
 	req := &storeRequestMsgData{
-		Key:  chunk.Key,
-		Data: chunk.Data,
-		Id:   uint64(id),
-		Size: uint64(chunk.Size),
+		Key:   chunk.Key,
+		SData: chunk.SData,
+		Id:    uint64(id),
 	}
 	for _, peer := range self.hive.getPeers(chunk.Key) {
 		go peer.store(req)

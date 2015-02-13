@@ -193,9 +193,9 @@ func (s *memStore) Put(entry *Chunk) {
 
 		if node.entry.Key.isEqual(entry.Key) {
 			node.updateAccess(s.accessCnt)
-			if node.entry.Data == nil {
+			if node.entry.SData == nil {
 				node.entry.Size = entry.Size
-				node.entry.Data = entry.Data
+				node.entry.SData = entry.SData
 			}
 			if node.entry.req == nil {
 				node.entry.req = entry.req
@@ -254,9 +254,9 @@ func (s *memStore) Get(hash Key) (chunk *Chunk, err error) {
 		s.accessCnt++
 		node.updateAccess(s.accessCnt)
 		chunk = &Chunk{
-			Key:  hash,
-			Data: node.entry.Data,
-			Size: node.entry.Size,
+			Key:   hash,
+			SData: node.entry.SData,
+			Size:  node.entry.Size,
 		}
 		if s.dbAccessCnt-node.lastDBaccess > dbForceUpdateAccessCnt {
 			s.dbAccessCnt++

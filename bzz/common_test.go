@@ -72,8 +72,7 @@ SPLIT:
 				} else if err != nil {
 					dpaLogger.DebugDetailf("error retrieving chunk %x: %v", chunk.Key, err)
 				} else {
-					chunk.Data = storedChunk.Data
-					chunk.Size = storedChunk.Size
+					chunk.SData = storedChunk.SData
 				}
 				dpaLogger.DebugDetailf("chunk '%x' not found", chunk.Key[:4])
 				close(chunk.C)

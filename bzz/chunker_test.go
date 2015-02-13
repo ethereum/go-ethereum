@@ -103,8 +103,7 @@ func (self *chunkerTester) Join(chunker *TreeChunker, key Key, c int) SectionRea
 				for _, ch := range self.chunks {
 					if bytes.Equal(chunk.Key, ch.Key) {
 						found = true
-						chunk.Data = ch.Data
-						chunk.Size = ch.Size
+						chunk.SData = ch.SData
 						break
 					}
 				}
@@ -122,14 +121,16 @@ func (self *chunkerTester) Join(chunker *TreeChunker, key Key, c int) SectionRea
 func testRandomData(chunker *TreeChunker, tester *chunkerTester, n int, chunks int, t *testing.T) {
 	key, input := tester.Split(chunker, n)
 
+	t.Logf(" Key = %x\n", key)
+
 	tester.checkChunks(t, chunks)
 	time.Sleep(100 * time.Millisecond)
 
 	reader := tester.Join(chunker, key, 0)
 	output := make([]byte, n)
-	_, err := reader.Read(output)
-	if err != io.EOF {
-		t.Errorf("read error %v\n", err)
+	r, err := reader.Read(output)
+	if r != n || err != io.EOF {
+		t.Errorf("read error  read: %v  n = %v  err = %v\n", r, n, err)
 	}
 	// t.Logf(" IN: %x\nOUT: %x\n", input, output)
 	if !bytes.Equal(output, input) {
@@ -146,7 +147,7 @@ func TestRandomData(t *testing.T) {
 	}
 	chunker.Init()
 	tester := &chunkerTester{}
-	testRandomData(chunker, tester, 70, 3, t)
+	testRandomData(chunker, tester, 60, 1, t)
 	testRandomData(chunker, tester, 179, 5, t)
 	testRandomData(chunker, tester, 253, 7, t)
 	// t.Logf("chunks %v", tester.chunks)

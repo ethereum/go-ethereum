@@ -32,8 +32,8 @@ import (
 )
 
 const (
-	hasherfunc crypto.Hash = crypto.SHA256 // http://golang.org/pkg/hash/#Hash
-	branches   int64       = 128
+	hasherfunc      crypto.Hash = crypto.SHA256 // http://golang.org/pkg/hash/#Hash
+	defaultBranches int64       = 128
 )
 
 var (
@@ -99,7 +99,7 @@ func (self *TreeChunker) Init() {
 		self.HashFunc = hasherfunc
 	}
 	if self.Branches == 0 {
-		self.Branches = branches
+		self.Branches = defaultBranches
 	}
 	if self.JoinTimeout == 0 {
 		self.JoinTimeout = joinTimeout
@@ -121,15 +121,14 @@ func (self *TreeChunker) KeySize() int64 {
 func (self *Chunk) String() string {
 	var size int64
 	var n int
-	return fmt.Sprintf("Key: [%x..] TreeSize: %v Chunksize: %v Data: %x\n", self.Key[:4], self.Size, size, self.Data[:n])
+	return fmt.Sprintf("Key: [%x..] TreeSize: %v Chunksize: %v Data: %x\n", self.Key[:4], self.Size, size, self.SData[:n])
 }
 
 // The treeChunkers own Hash hashes together
 // - the size (of the subtree encoded in the Chunk)
 // - the Chunk, ie. the contents read from the input reader
-func (self *TreeChunker) Hash(size int64, input []byte) []byte {
+func (self *TreeChunker) Hash(input []byte) []byte {
 	hasher := self.HashFunc.New()
-	binary.Write(hasher, binary.LittleEndian, size)
 	hasher.Write(input)
 	return hasher.Sum(nil)
 }
@@ -212,22 +211,25 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 
 	if depth == 0 {
 		// leaf nodes -> content chunks
-		chunkData := make([]byte, data.Size())
-		data.ReadAt(chunkData, 0)
-		hash = self.Hash(size, chunkData)
+		chunkData := make([]byte, data.Size()+8)
+		binary.LittleEndian.PutUint64(chunkData[0:8], uint64(size))
+		data.ReadAt(chunkData[8:], 0)
+		hash = self.Hash(chunkData)
 		// dpaLogger.Debugf("content chunk: max subtree size: %v, data size: %v", treeSize, size)
 		newChunk = &Chunk{
-			Key:  hash,
-			Data: chunkData,
-			Size: size,
+			Key:   hash,
+			SData: chunkData,
+			Size:  size,
 		}
 	} else {
 		// intermediate chunk containing child nodes hashes
-		branchCnt := int64((size-1)/treeSize) + 1
+		branchCnt := int64((size + treeSize - 1) / treeSize)
 		// dpaLogger.Debugf("intermediate node: setting branches: %v, depth: %v, max subtree size: %v, data size: %v", branches, depth, treeSize, size)
 
-		var chunk []byte = make([]byte, branches*self.hashSize)
+		var chunk []byte = make([]byte, branchCnt*self.hashSize+8)
 		var pos, i int64
+
+		binary.LittleEndian.PutUint64(chunk[0:8], uint64(size))
 
 		childrenWg := &sync.WaitGroup{}
 		var secSize int64
@@ -241,7 +243,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 			// take the section of the data corresponding encoded in the subTree
 			subTreeData := NewChunkReader(data, pos, secSize)
 			// the hash of that data
-			subTreeKey := chunk[i*self.hashSize : (i+1)*self.hashSize]
+			subTreeKey := chunk[8+i*self.hashSize : 8+(i+1)*self.hashSize]
 
 			childrenWg.Add(1)
 			go self.split(depth-1, treeSize/self.Branches, subTreeKey, subTreeData, chunkC, errc, childrenWg, swg)
@@ -252,22 +254,23 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 		// wait for all the children to complete calculating their hashes and copying them onto sections of the chunk
 		childrenWg.Wait()
 		// now we got the hashes in the chunk, then hash the chunk
-		chunkReader := NewChunkReaderFromBytes(chunk) // bytes.Reader almost implements SectionReader
-		chunkData := make([]byte, chunkReader.Size())
-		chunkReader.ReadAt(chunkData, 0)
+		/*		chunkReader := NewChunkReaderFromBytes(chunk) // bytes.Reader almost implements SectionReader
+				chunkData := make([]byte, chunkReader.Size())
+				chunkReader.ReadAt(chunkData, 0)*/
 
-		hash = self.Hash(size, chunkData)
+		hash = self.Hash(chunk)
 		newChunk = &Chunk{
-			Key:  hash,
-			Data: chunkData,
-			Size: size,
-			wg:   swg,
+			Key:   hash,
+			SData: chunk,
+			Size:  size,
+			wg:    swg,
 		}
 
 		if swg != nil {
 			swg.Add(1)
 		}
 	}
+
 	// send off new chunk to storage
 	if chunkC != nil {
 		chunkC <- newChunk
@@ -306,24 +309,25 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		C:   make(chan bool), // close channel to signal data delivery
 	}
 	self.chunkC <- chunk // submit retrieval request, someone should be listening on the other side (or we will time out globally)
-	// dpaLogger.Debugf("readAt %x into %d bytes at %d.", chunk.Key[:4], len(b), off)
+	dpaLogger.Debugf("readAt %x into %d bytes at %d.", chunk.Key[:4], len(b), off)
 
 	// waiting for the chunk retrieval
 	select {
 	case <-self.quitC:
 		// this is how we control process leakage (quitC is closed once join is finished (after timeout))
-		// dpaLogger.Debugf("quit")
+		dpaLogger.Debugf("quit")
 		return
 	case <-chunk.C: // bells are ringing, data have been delivered
-		// dpaLogger.Debugf("chunk data received for %x", chunk.Key[:4])
+		dpaLogger.Debugf("chunk data received for %x", chunk.Key[:4])
 	}
-	if len(chunk.Data) == 0 {
-		// dpaLogger.Debugf("No payload.")
+	if len(chunk.SData) == 0 {
+		dpaLogger.Debugf("No payload.")
 		return 0, notFound
 	}
+	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 	self.size = chunk.Size
 	if b == nil {
-		// dpaLogger.Debugf("Size query for %x.", chunk.Key[:4])
+		dpaLogger.Debugf("Size query for %x.", chunk.Key[:4])
 		return
 	}
 	want := int64(len(b))
@@ -346,14 +350,14 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 	}()
 	select {
 	case err = <-self.errC:
-		// dpaLogger.Debugf("ReadAt received %v.", err)
+		dpaLogger.Debugf("ReadAt received %v.", err)
 		read = len(b)
 		if off+int64(read) == self.size {
 			err = io.EOF
 		}
-		// dpaLogger.Debugf("ReadAt returning with %d, %v.", read, err)
+		dpaLogger.Debugf("ReadAt returning with %d, %v.", read, err)
 	case <-self.quitC:
-		// dpaLogger.Debugf("ReadAt aborted with %d, %v.", read, err)
+		dpaLogger.Debugf("ReadAt aborted with %d, %v.", read, err)
 	}
 	return
 }
@@ -361,7 +365,9 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeSize int64, chunk *Chunk, parentWg *sync.WaitGroup) {
 	defer parentWg.Done()
 
-	// dpaLogger.Debugf("depth: %v, loff: %v, eoff: %v, chunk.Size: %v, treeSize: %v", depth, off, eoff, chunk.Size, treeSize)
+	dpaLogger.Debugf("depth: %v, loff: %v, eoff: %v, chunk.Size: %v, treeSize: %v", depth, off, eoff, chunk.Size, treeSize)
+
+	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 
 	// find appropriate block level
 	for chunk.Size < treeSize && depth > 0 {
@@ -370,9 +376,13 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 	}
 
 	if depth == 0 {
-		// dpaLogger.Debugf("len(b): %v, off: %v, eoff: %v, chunk.Size: %v, treeSize: %v", depth, len(b), off, eoff, chunk.Size, treeSize)
+		dpaLogger.Debugf("len(b): %v, off: %v, eoff: %v, chunk.Size: %v, treeSize: %v", depth, len(b), off, eoff, chunk.Size, treeSize)
+		if int64(len(b)) != eoff-off {
+			//fmt.Printf("len(b) = %v  off = %v  eoff = %v", len(b), off, eoff)
+			panic("len(b) does not match")
+		}
 
-		copy(b, chunk.Data[off:eoff])
+		copy(b, chunk.SData[8+off:8+eoff])
 		return // simply give back the chunks reader for content chunks
 	}
 
@@ -396,14 +406,14 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 
 		wg.Add(1)
 		go func(j int64) {
-			childKey := chunk.Data[j*self.chunker.hashSize : (j+1)*self.chunker.hashSize]
-			// dpaLogger.Debugf("subtree index: %v -> %x", j, childKey[:4])
+			childKey := chunk.SData[8+j*self.chunker.hashSize : 8+(j+1)*self.chunker.hashSize]
+			dpaLogger.Debugf("subtree index: %v -> %x", j, childKey[:4])
 
 			ch := &Chunk{
 				Key: childKey,
 				C:   make(chan bool), // close channel to signal data delivery
 			}
-			// dpaLogger.Debugf("chunk data sent for %x (key interval in chunk %v-%v)", ch.Key[:4], j*self.chunker.hashSize, (j+1)*self.chunker.hashSize)
+			dpaLogger.Debugf("chunk data sent for %x (key interval in chunk %v-%v)", ch.Key[:4], j*self.chunker.hashSize, (j+1)*self.chunker.hashSize)
 			self.chunkC <- ch // submit retrieval request, someone should be listening on the other side (or we will time out globally)
 
 			// waiting for the chunk retrieval
@@ -412,12 +422,12 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 				// this is how we control process leakage (quitC is closed once join is finished (after timeout))
 				return
 			case <-ch.C: // bells are ringing, data have been delivered
-				// dpaLogger.Debugf("chunk data received")
+				dpaLogger.Debugf("chunk data received")
 			}
 			if soff < off {
 				soff = off
 			}
-			if len(ch.Data) == 0 {
+			if len(ch.SData) == 0 {
 				self.errC <- fmt.Errorf("chunk %v-%v not found", off, off+treeSize)
 				return
 			}

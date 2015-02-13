@@ -1,5 +1,4 @@
-// disk storage layer for the package blockhash
-// inefficient work-in-progress version
+// disk storage layer for the package bzz
 
 package bzz
 
@@ -109,16 +108,18 @@ func encodeIndex(index *dpaDBIndex) []byte {
 
 func encodeData(chunk *Chunk) []byte {
 
-	var rlpEntry struct {
-		Data []byte
-		Size uint64
-	}
+	/*	var rlpEntry struct {
+			Data []byte
+			Size uint64
+		}
 
-	rlpEntry.Data = chunk.Data
-	rlpEntry.Size = uint64(chunk.Size)
+		rlpEntry.Data = chunk.Data
+		rlpEntry.Size = uint64(chunk.Size)
 
-	data, _ := rlp.EncodeToBytes(rlpEntry)
-	return data
+		data, _ := rlp.EncodeToBytes(rlpEntry)
+		return data*/
+
+	return chunk.SData
 
 }
 
@@ -131,18 +132,21 @@ func decodeIndex(data []byte, index *dpaDBIndex) {
 
 func decodeData(data []byte, chunk *Chunk) {
 
-	var rlpEntry struct {
-		Data []byte
-		Size uint64
-	}
+	/*	var rlpEntry struct {
+			Data []byte
+			Size uint64
+		}
 
-	dec := rlp.NewStream(bytes.NewReader(data))
-	err := dec.Decode(&rlpEntry)
-	if err != nil {
-		panic(err.Error())
-	}
-	chunk.Data = rlpEntry.Data
-	chunk.Size = int64(rlpEntry.Size)
+		dec := rlp.NewStream(bytes.NewReader(data))
+		err := dec.Decode(&rlpEntry)
+		if err != nil {
+			panic(err.Error())
+		}
+		chunk.Data = rlpEntry.Data
+		chunk.Size = int64(rlpEntry.Size)*/
+
+	chunk.SData = data
+	chunk.Size = int64(binary.LittleEndian.Uint64(data[0:8]))
 }
 
 func gcListPartition(list []*gcItem, left int, right int, pivotIndex int) int {
