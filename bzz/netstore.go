@@ -71,7 +71,7 @@ func (self *NetStore) put(entry *Chunk) {
 	dpaLogger.Debugf("NetStore.put: localStore.Put of %064x completed.", entry.Key)
 	go self.store(entry)
 	// only send responses once
-	dpaLogger.Debugf("NetStore.put: req: %#v", entry.Key)
+	dpaLogger.Debugf("NetStore.put: req: %#v", entry.req)
 	if entry.req != nil && entry.req.status == reqSearching {
 		entry.req.status = reqFound
 		close(entry.req.C)
