@@ -73,11 +73,6 @@ func (self *UiLib) Notef(args []interface{}) {
 	guilogger.Infoln(args...)
 }
 
-func (self *UiLib) PastPeers() *ethutil.List {
-	return ethutil.NewList([]string{})
-	//return ethutil.NewList(eth.PastPeers())
-}
-
 func (self *UiLib) ImportTx(rlpTx string) {
 	tx := types.NewTransactionFromBytes(ethutil.Hex2Bytes(rlpTx))
 	err := self.eth.TxPool().Add(tx)
