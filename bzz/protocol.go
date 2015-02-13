@@ -191,7 +191,7 @@ func (self *bzzProtocol) handle() error {
 
 	switch msg.Code {
 	case statusMsg:
-		dpaLogger.Warnf("Status message: %#v", msg)
+		dpaLogger.Debugf("Status message: %#v", msg)
 		return self.protoError(ErrExtraStatusMsg, "")
 
 	case storeRequestMsg:
@@ -207,7 +207,7 @@ func (self *bzzProtocol) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
-		dpaLogger.Warnf("Request message: %#v", req)
+		dpaLogger.Debugf("Request message: %#v", req)
 		if req.Key == nil {
 			return self.protoError(ErrDecode, "protocol handler: req.Key == nil || req.Timeout == nil")
 		}
@@ -280,7 +280,7 @@ func (self *bzzProtocol) handleStatus() (err error) {
 
 // outgoing messages
 func (self *bzzProtocol) retrieve(req *retrieveRequestMsgData) {
-	dpaLogger.Warnf("Request message: %#v", req)
+	dpaLogger.Debugf("Request message: %#v", req)
 	err := p2p.EncodeMsg(self.rw, retrieveRequestMsg, req.Key, req.Id, req.MaxSize)
 	if err != nil {
 		dpaLogger.Errorf("EncodeMsg error: %v", err)
