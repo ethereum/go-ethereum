@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"sort"
 	"time"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -175,6 +176,7 @@ func (self *Block) RlpDataForStorage() interface{} {
 // Header accessors (add as you need them)
 func (self *Block) Number() *big.Int          { return self.header.Number }
 func (self *Block) NumberU64() uint64         { return self.header.Number.Uint64() }
+func (self *Block) Nonce() []byte             { return self.header.Nonce }
 func (self *Block) Bloom() []byte             { return self.header.Bloom }
 func (self *Block) Coinbase() []byte          { return self.header.Coinbase }
 func (self *Block) Time() int64               { return int64(self.header.Time) }

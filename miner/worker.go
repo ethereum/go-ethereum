@@ -127,7 +127,8 @@ out:
 func (self *worker) wait() {
 	for {
 		for work := range self.recv {
-			if self.current.block.Number().Uint64() == work.Number {
+			block := self.current.block
+			if block.Number().Uint64() == work.Number && block.Nonce() == nil {
 				self.current.block.Header().Nonce = work.Nonce
 
 				self.chain.InsertChain(types.Blocks{self.current.block})
