@@ -61,11 +61,11 @@ ApplicationWindow {
     function activeView(view, menuItem) {
         mainSplit.setView(view, menuItem)
         if (view.hideUrl) {
-            urlPane.visible = false;
-            mainView.anchors.top = rootView.top
+            //urlPane.visible = false;
+            //mainView.anchors.top = rootView.top
         } else {
-            urlPane.visible = true;
-            mainView.anchors.top = divider.bottom
+            //urlPane.visible = true;
+            //mainView.anchors.top = divider.bottom
         }
     }
 
@@ -1069,8 +1069,10 @@ ApplicationWindow {
                  anchors.rightMargin: 10
 		 placeholderText: "enode://<hex node id>:<IP address>:<port>"
                  onAccepted: {
-                     eth.connectToPeer(addrField.text)
-                     addPeerWin.visible = false
+	             if(addrField.text.length != 0) {
+			eth.connectToPeer(addrField.text)
+			addPeerWin.visible = false
+		     }
                  }
              }
 
@@ -1081,8 +1083,10 @@ ApplicationWindow {
                  anchors.rightMargin: 10
                  text: "Connect"
                  onClicked: {
-                     eth.connectToPeer(addrField.currentText)
-                     addPeerWin.visible = false
+	             if(addrField.text.length != 0) {
+			eth.connectToPeer(addrField.text)
+			addPeerWin.visible = false
+		     }
                  }
              }
              Component.onCompleted: {
