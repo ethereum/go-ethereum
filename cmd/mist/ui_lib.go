@@ -209,17 +209,20 @@ func (self *UiLib) Call(params map[string]interface{}) (string, error) {
 }
 
 func (self *UiLib) AddLocalTransaction(to, data, gas, gasPrice, value string) int {
-	return self.miner.AddLocalTx(&miner.LocalTx{
-		To:       ethutil.Hex2Bytes(to),
-		Data:     ethutil.Hex2Bytes(data),
-		Gas:      gas,
-		GasPrice: gasPrice,
-		Value:    value,
-	}) - 1
+	return 0
+	/*
+		return self.miner.AddLocalTx(&miner.LocalTx{
+			To:       ethutil.Hex2Bytes(to),
+			Data:     ethutil.Hex2Bytes(data),
+			Gas:      gas,
+			GasPrice: gasPrice,
+			Value:    value,
+		}) - 1
+	*/
 }
 
 func (self *UiLib) RemoveLocalTransaction(id int) {
-	self.miner.RemoveLocalTx(id)
+	//self.miner.RemoveLocalTx(id)
 }
 
 func (self *UiLib) SetGasPrice(price string) {

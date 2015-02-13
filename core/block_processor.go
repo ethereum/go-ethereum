@@ -48,8 +48,9 @@ type BlockProcessor struct {
 
 func NewBlockProcessor(db ethutil.Database, txpool *TxPool, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
 	sm := &BlockProcessor{
-		db:       db,
-		mem:      make(map[string]*big.Int),
+		db:  db,
+		mem: make(map[string]*big.Int),
+		//Pow:      &ethash.Ethash{},
 		Pow:      ezp.New(),
 		bc:       chainManager,
 		eventMux: eventMux,
