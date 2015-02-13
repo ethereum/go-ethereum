@@ -350,8 +350,10 @@ func makeWriter(typ reflect.Type) (writer, error) {
 		return writeUint, nil
 	case kind == reflect.String:
 		return writeString, nil
-	case kind == reflect.Slice && typ.Elem().Kind() == reflect.Uint8 && !typ.Elem().Implements(encoderInterface):
+	case kind == reflect.Slice && isByte(typ.Elem()):
 		return writeBytes, nil
+	case kind == reflect.Array && isByte(typ.Elem()):
+		return writeByteArray, nil
 	case kind == reflect.Slice || kind == reflect.Array:
 		return makeSliceWriter(typ)
 	case kind == reflect.Struct:
@@ -361,6 +363,10 @@ func makeWriter(typ reflect.Type) (writer, error) {
 	default:
 		return nil, fmt.Errorf("rlp: type %v is not RLP-serializable", typ)
 	}
+}
+
+func isByte(typ reflect.Type) bool {
+	return typ.Kind() == reflect.Uint8 && !typ.Implements(encoderInterface)
 }
 
 func writeUint(val reflect.Value, w *encbuf) error {
@@ -404,6 +410,20 @@ func writeBigInt(i *big.Int, w *encbuf) error {
 
 func writeBytes(val reflect.Value, w *encbuf) error {
 	w.encodeString(val.Bytes())
+	return nil
+}
+
+func writeByteArray(val reflect.Value, w *encbuf) error {
+	if !val.CanAddr() {
+		// Slice requires the value to be addressable.
+		// Make it addressable by copying.
+		copy := reflect.New(val.Type()).Elem()
+		copy.Set(val)
+		val = copy
+	}
+	size := val.Len()
+	slice := val.Slice(0, size).Bytes()
+	w.encodeString(slice)
 	return nil
 }
 
