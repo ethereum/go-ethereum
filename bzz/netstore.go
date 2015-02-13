@@ -142,10 +142,18 @@ func (self *NetStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 	defer self.lock.Unlock()
 
 	chunk := self.get(req.Key)
+	if chunk.Data == nil {
+		chunk.req.status = reqSearching
+	} else {
+		chunk.req.status = reqFound
+	}
+
 	t := time.Now().Add(10 * time.Second)
 	req.timeout = &t
 
 	send, timeout := self.strategyUpdateRequest(chunk.req, req) // may change req status
+
+	dpaLogger.Debugf("Is %v == %v?", send, storeRequestMsg)
 
 	if send == storeRequestMsg {
 		self.deliver(req, chunk)

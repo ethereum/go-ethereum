@@ -289,7 +289,7 @@ func (self *bzzProtocol) retrieve(req *retrieveRequestMsgData) {
 }
 
 func (self *bzzProtocol) store(req *storeRequestMsgData) {
-	p2p.EncodeMsg(self.rw, storeRequestMsg, req)
+	p2p.EncodeMsg(self.rw, storeRequestMsg, req.Key, req.Size, req.Data, req.Id)
 }
 
 func (self *bzzProtocol) peers(req *peersMsgData) {
