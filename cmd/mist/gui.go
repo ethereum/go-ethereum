@@ -31,6 +31,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"sort"
 	"strconv"
 	"time"
 
@@ -449,6 +450,7 @@ func (gui *Gui) update() {
 
 		case <-peerUpdateTicker.C:
 			gui.setPeerInfo()
+
 		case <-generalUpdateTicker.C:
 			statusText := "#" + gui.eth.ChainManager().CurrentBlock().Number().String()
 			lastBlockLabel.Set("text", statusText)
@@ -499,12 +501,34 @@ NumGC:      %d
 	))
 }
 
+type qmlpeer struct{ Addr, NodeID, Caps string }
+
+type peersByID []*qmlpeer
+
+func (s peersByID) Len() int           { return len(s) }
+func (s peersByID) Less(i, j int) bool { return s[i].NodeID < s[j].NodeID }
+func (s peersByID) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+
 func (gui *Gui) setPeerInfo() {
-	gui.win.Root().Call("setPeers", fmt.Sprintf("%d / %d", gui.eth.PeerCount(), gui.eth.MaxPeers))
-	gui.win.Root().Call("resetPeers")
-	//for _, peer := range gui.xeth.Peers() {
-	//gui.win.Root().Call("addPeer", peer)
-	//}
+	peers := gui.eth.Peers()
+	qpeers := make(peersByID, len(peers))
+	for i, p := range peers {
+		qpeers[i] = &qmlpeer{
+			NodeID: p.ID().String(),
+			Addr:   p.RemoteAddr().String(),
+			Caps:   fmt.Sprint(p.Caps()),
+		}
+	}
+	// we need to sort the peers because they jump around randomly
+	// otherwise. order returned by eth.Peers is random because they
+	// are taken from a map.
+	sort.Sort(qpeers)
+
+	gui.win.Root().Call("setPeerCounters", fmt.Sprintf("%d / %d", len(peers), gui.eth.MaxPeers()))
+	gui.win.Root().Call("clearPeers")
+	for _, p := range qpeers {
+		gui.win.Root().Call("addPeer", p)
+	}
 }
 
 func (gui *Gui) privateKey() string {
