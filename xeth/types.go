@@ -214,7 +214,7 @@ func NewPeer(peer *p2p.Peer) *Peer {
 	return &Peer{
 		ref:     peer,
 		Ip:      fmt.Sprintf("%v", peer.RemoteAddr()),
-		Version: fmt.Sprintf("%v", peer.Identity()),
+		Version: fmt.Sprintf("%v", peer.ID()),
 		Caps:    fmt.Sprintf("%v", caps),
 	}
 }
@@ -232,35 +232,5 @@ func NewReciept(contractCreation bool, creationAddress, hash, address []byte) *R
 		toHex(creationAddress),
 		toHex(hash),
 		toHex(address),
-	}
-}
-
-type Message struct {
-	To        string `json:"to"`
-	From      string `json:"from"`
-	Input     string `json:"input"`
-	Output    string `json:"output"`
-	Path      int32  `json:"path"`
-	Origin    string `json:"origin"`
-	Timestamp int32  `json:"timestamp"`
-	Coinbase  string `json:"coinbase"`
-	Block     string `json:"block"`
-	Number    int32  `json:"number"`
-	Value     string `json:"value"`
-}
-
-func NewMessage(message *state.Message) Message {
-	return Message{
-		To:        toHex(message.To),
-		From:      toHex(message.From),
-		Input:     toHex(message.Input),
-		Output:    toHex(message.Output),
-		Path:      int32(message.Path),
-		Origin:    toHex(message.Origin),
-		Timestamp: int32(message.Timestamp),
-		Coinbase:  toHex(message.Origin),
-		Block:     toHex(message.Block),
-		Number:    int32(message.Number.Int64()),
-		Value:     message.Value.String(),
 	}
 }

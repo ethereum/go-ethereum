@@ -64,15 +64,6 @@ func (gui *Gui) Transact(recipient, value, gas, gasPrice, d string) (string, err
 	return gui.xeth.Transact(recipient, value, gas, gasPrice, data)
 }
 
-func (gui *Gui) SetCustomIdentifier(customIdentifier string) {
-	gui.clientIdentity.SetCustomIdentifier(customIdentifier)
-	gui.config.Save("id", customIdentifier)
-}
-
-func (gui *Gui) GetCustomIdentifier() string {
-	return gui.clientIdentity.GetCustomIdentifier()
-}
-
 // functions that allow Gui to implement interface guilogger.LogSystem
 func (gui *Gui) SetLogLevel(level logger.LogLevel) {
 	gui.logLevel = level

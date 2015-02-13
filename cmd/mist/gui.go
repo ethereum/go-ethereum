@@ -41,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/ui/qt/qwhisper"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/obscuren/qml"
@@ -77,9 +76,8 @@ type Gui struct {
 
 	xeth *xeth.XEth
 
-	Session        string
-	clientIdentity *p2p.SimpleClientIdentity
-	config         *ethutil.ConfigManager
+	Session string
+	config  *ethutil.ConfigManager
 
 	plugins map[string]plugin
 
@@ -87,7 +85,7 @@ type Gui struct {
 }
 
 // Create GUI, but doesn't start it
-func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIdentity *p2p.SimpleClientIdentity, session string, logLevel int) *Gui {
+func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, session string, logLevel int) *Gui {
 	db, err := ethdb.NewLDBDatabase("tx_database")
 	if err != nil {
 		panic(err)
@@ -95,15 +93,14 @@ func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIden
 
 	xeth := xeth.New(ethereum)
 	gui := &Gui{eth: ethereum,
-		txDb:           db,
-		xeth:           xeth,
-		logLevel:       logger.LogLevel(logLevel),
-		Session:        session,
-		open:           false,
-		clientIdentity: clientIdentity,
-		config:         config,
-		plugins:        make(map[string]plugin),
-		serviceEvents:  make(chan ServEv, 1),
+		txDb:          db,
+		xeth:          xeth,
+		logLevel:      logger.LogLevel(logLevel),
+		Session:       session,
+		open:          false,
+		config:        config,
+		plugins:       make(map[string]plugin),
+		serviceEvents: make(chan ServEv, 1),
 	}
 	data, _ := ethutil.ReadAllFile(path.Join(ethutil.Config.ExecPath, "plugins.json"))
 	json.Unmarshal([]byte(data), &gui.plugins)

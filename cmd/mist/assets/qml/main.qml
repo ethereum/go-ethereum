@@ -17,6 +17,7 @@ ApplicationWindow {
     // Use this to make the window frameless. But then you'll need to do move and resize by hand
 
     property var ethx : Eth.ethx
+    property var catalog;
 
     width: 1200
     height: 820
@@ -39,7 +40,7 @@ ApplicationWindow {
     // Takes care of loading all default plugins
     Component.onCompleted: {
 
-        var catalog = addPlugin("./views/catalog.qml", {noAdd: true, close: false, section: "begin"});
+        catalog = addPlugin("./views/catalog.qml", {noAdd: true, close: false, section: "begin"});
         var wallet = addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "ethereum", active: true});
 
         addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: true});
@@ -169,7 +170,7 @@ ApplicationWindow {
                 text: "New tab"
                 shortcut: "Ctrl+t"
                 onTriggered: {
-                    newBrowserTab("http://etherian.io");
+	            activeView(catalog.view, catalog.menuItem);
                 }
             }
 

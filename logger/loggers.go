@@ -13,28 +13,12 @@ logging of mutable state.
 package logger
 
 import (
+	"encoding/json"
 	"fmt"
-	"io"
-	"log"
 	"os"
-	"sync"
-	"sync/atomic"
 )
 
-// LogSystem is implemented by log output devices.
-// All methods can be called concurrently from multiple goroutines.
-type LogSystem interface {
-	GetLogLevel() LogLevel
-	SetLogLevel(i LogLevel)
-	LogPrint(LogLevel, string)
-}
-
-type message struct {
-	level LogLevel
-	msg   string
-}
-
-type LogLevel uint8
+type LogLevel uint32
 
 const (
 	// Standard log levels
@@ -44,101 +28,8 @@ const (
 	InfoLevel
 	DebugLevel
 	DebugDetailLevel
+	JsonLevel = 1000
 )
-
-var (
-	logMessageC = make(chan message)
-	addSystemC  = make(chan LogSystem)
-	flushC      = make(chan chan struct{})
-	resetC      = make(chan chan struct{})
-)
-
-func init() {
-	go dispatchLoop()
-}
-
-// each system can buffer this many messages before
-// blocking incoming log messages.
-const sysBufferSize = 500
-
-func dispatchLoop() {
-	var (
-		systems  []LogSystem
-		systemIn []chan message
-		systemWG sync.WaitGroup
-	)
-	bootSystem := func(sys LogSystem) {
-		in := make(chan message, sysBufferSize)
-		systemIn = append(systemIn, in)
-		systemWG.Add(1)
-		go sysLoop(sys, in, &systemWG)
-	}
-
-	for {
-		select {
-		case msg := <-logMessageC:
-			for _, c := range systemIn {
-				c <- msg
-			}
-
-		case sys := <-addSystemC:
-			systems = append(systems, sys)
-			bootSystem(sys)
-
-		case waiter := <-resetC:
-			// reset means terminate all systems
-			for _, c := range systemIn {
-				close(c)
-			}
-			systems = nil
-			systemIn = nil
-			systemWG.Wait()
-			close(waiter)
-
-		case waiter := <-flushC:
-			// flush means reboot all systems
-			for _, c := range systemIn {
-				close(c)
-			}
-			systemIn = nil
-			systemWG.Wait()
-			for _, sys := range systems {
-				bootSystem(sys)
-			}
-			close(waiter)
-		}
-	}
-}
-
-func sysLoop(sys LogSystem, in <-chan message, wg *sync.WaitGroup) {
-	for msg := range in {
-		if sys.GetLogLevel() >= msg.level {
-			sys.LogPrint(msg.level, msg.msg)
-		}
-	}
-	wg.Done()
-}
-
-// Reset removes all active log systems.
-// It blocks until all current messages have been delivered.
-func Reset() {
-	waiter := make(chan struct{})
-	resetC <- waiter
-	<-waiter
-}
-
-// Flush waits until all current log messages have been dispatched to
-// the active log systems.
-func Flush() {
-	waiter := make(chan struct{})
-	flushC <- waiter
-	<-waiter
-}
-
-// AddLogSystem starts printing messages to the given LogSystem.
-func AddLogSystem(sys LogSystem) {
-	addSystemC <- sys
-}
 
 // A Logger prints messages prefixed by a given tag. It provides named
 // Printf and Println style methods for all loglevels. Each ethereum
@@ -223,26 +114,21 @@ func (logger *Logger) Fatalf(format string, v ...interface{}) {
 	os.Exit(0)
 }
 
-// NewStdLogSystem creates a LogSystem that prints to the given writer.
-// The flag values are defined package log.
-func NewStdLogSystem(writer io.Writer, flags int, level LogLevel) LogSystem {
-	logger := log.New(writer, "", flags)
-	return &stdLogSystem{logger, uint32(level)}
+type JsonLogger struct {
+	Coinbase string
 }
 
-type stdLogSystem struct {
-	logger *log.Logger
-	level  uint32
+func NewJsonLogger() *JsonLogger {
+	return &JsonLogger{}
 }
 
-func (t *stdLogSystem) LogPrint(level LogLevel, msg string) {
-	t.logger.Print(msg)
-}
+func (logger *JsonLogger) LogJson(v JsonLog) {
+	msgname := v.EventName()
+	obj := map[string]interface{}{
+		msgname: v,
+	}
 
-func (t *stdLogSystem) SetLogLevel(i LogLevel) {
-	atomic.StoreUint32(&t.level, uint32(i))
-}
+	jsontxt, _ := json.Marshal(obj)
+	logMessageC <- message{JsonLevel, string(jsontxt)}
 
-func (t *stdLogSystem) GetLogLevel() LogLevel {
-	return LogLevel(atomic.LoadUint32(&t.level))
 }
