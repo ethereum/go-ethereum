@@ -137,7 +137,7 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 				if int64(size) < manifestReader.Size() {
 					dpaLogger.Debugf("Swarm: Manifest %s not found.", name)
 					if err == nil {
-						http.Error(w, "Manifest retrieval cut short: "+string(size)+" "+string(manifestReader.Size()),
+						http.Error(w, "Manifest retrieval cut short: "+string(size)+"<"+string(manifestReader.Size()),
 							http.StatusNotFound)
 					} else {
 						http.Error(w, err.Error(), http.StatusNotFound)
