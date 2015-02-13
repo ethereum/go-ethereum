@@ -341,7 +341,7 @@ ApplicationWindow {
             }
 
             Label {
-                id: peerLabel
+                id: peerCounterLabel
                 font.pixelSize: 10
                 text: "0 / 0"
             }
@@ -926,7 +926,6 @@ ApplicationWindow {
             }
         }
 
-
         function setWalletValue(value) {
             walletValueLabel.text = value
         }
@@ -936,17 +935,11 @@ ApplicationWindow {
             var view = mainView.addPlugin(name)
         }
 
-        function setPeers(text) {
-            peerLabel.text = text
-        }
+        function clearPeers() { peerModel.clear() }
+        function addPeer(peer) { peerModel.append(peer) }
 
-        function addPeer(peer) {
-            // We could just append the whole peer object but it cries if you try to alter them
-            peerModel.append({ip: peer.ip, port: peer.port, lastResponse:timeAgo(peer.lastSend), latency: peer.latency, version: peer.version, caps: peer.caps})
-        }
-
-        function resetPeers(){
-            peerModel.clear()
+        function setPeerCounters(text) {
+            peerCounterLabel.text = text
         }
 
         function timeAgo(unixTs){
@@ -984,9 +977,9 @@ ApplicationWindow {
                      anchors.fill: parent
                      id: peerTable
                      model: peerModel
-                     TableViewColumn{width: 200; role: "ip" ; title: "IP" }
-                     TableViewColumn{width: 260; role: "version" ; title: "Version" }
-                     TableViewColumn{width: 180;  role: "caps" ; title: "Capabilities" }
+                     TableViewColumn{width: 180; role: "addr" ; title: "Remote Address" }
+                     TableViewColumn{width: 280; role: "nodeID" ; title: "Node ID" }
+                     TableViewColumn{width: 180; role: "caps" ; title: "Capabilities" }
                  }
              }
          }
