@@ -18,6 +18,28 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// parameters for frameRW
+const (
+	// maximum time allowed for reading a message header.
+	// this is effectively the amount of time a connection can be idle.
+	frameReadTimeout = 1 * time.Minute
+
+	// maximum time allowed for reading the payload data of a message.
+	// this is shorter than (and distinct from) frameReadTimeout because
+	// the connection is not considered idle while a message is transferred.
+	// this also limits the payload size of messages to how much the connection
+	// can transfer within the timeout.
+	payloadReadTimeout = 5 * time.Second
+
+	// maximum amount of time allowed for writing a complete message.
+	msgWriteTimeout = 5 * time.Second
+
+	// messages smaller than this many bytes will be read at
+	// once before passing them to a protocol. this increases
+	// concurrency in the processing.
+	wholePayloadSize = 64 * 1024
+)
+
 // Msg defines the structure of a p2p message.
 //
 // Note that a Msg can only be sent once since the Payload reader is
@@ -167,9 +189,7 @@ func makeListHeader(length uint32) []byte {
 func (rw *frameRW) ReadMsg() (msg Msg, err error) {
 	<-rw.rsync // wait until bufconn is ours
 
-	// this read timeout applies also to the payload.
-	// TODO: proper read timeout
-	rw.SetReadDeadline(time.Now().Add(msgReadTimeout))
+	rw.SetReadDeadline(time.Now().Add(frameReadTimeout))
 
 	// read magic and payload size
 	start := make([]byte, 8)
@@ -192,6 +212,8 @@ func (rw *frameRW) ReadMsg() (msg Msg, err error) {
 		return msg, err
 	}
 	msg.Size = size - posr.p
+
+	rw.SetReadDeadline(time.Now().Add(payloadReadTimeout))
 
 	if msg.Size <= wholePayloadSize {
 		// msg is small, read all of it and move on to the next message.

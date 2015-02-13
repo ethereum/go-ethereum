@@ -16,21 +16,11 @@ import (
 )
 
 const (
-	// maximum amount of time allowed for reading a message
-	msgReadTimeout = 5 * time.Second
-	// maximum amount of time allowed for writing a message
-	msgWriteTimeout = 5 * time.Second
-	// messages smaller than this many bytes will be read at
-	// once before passing them to a protocol.
-	wholePayloadSize = 64 * 1024
-
-	disconnectGracePeriod = 2 * time.Second
-)
-
-const (
 	baseProtocolVersion    = 2
 	baseProtocolLength     = uint64(16)
 	baseProtocolMaxMsgSize = 10 * 1024 * 1024
+
+	disconnectGracePeriod = 2 * time.Second
 )
 
 const (
