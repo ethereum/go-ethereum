@@ -32,18 +32,6 @@ Rectangle {
 			width: 500
 		}
 
-		Label {
-			text: "Client ID"
-		}
-		TextField {
-			text: gui.getCustomIdentifier()
-			width: 500
-			placeholderText: "Anonymous"
-			onTextChanged: {
-				gui.setCustomIdentifier(text)
-			}
-		}
-
 		TextArea {
 			objectName: "statsPane"
 			width: parent.width
