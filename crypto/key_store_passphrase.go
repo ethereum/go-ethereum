@@ -68,10 +68,10 @@ import (
 	"code.google.com/p/go.crypto/scrypt"
 	"crypto/aes"
 	"crypto/cipher"
-	crand "crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/ethereum/go-ethereum/crypto/randentropy"
 	"io"
 	"os"
 	"path"
@@ -116,7 +116,7 @@ func (ks keyStorePassphrase) GetKeyAddresses() (addresses [][]byte, err error) {
 
 func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 	authArray := []byte(auth)
-	salt := GetEntropyCSPRNG(32)
+	salt := randentropy.GetEntropyMixed(32)
 	derivedKey, err := scrypt.Key(authArray, salt, scryptN, scryptr, scryptp, scryptdkLen)
 	if err != nil {
 		return err
@@ -131,7 +131,7 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 		return err
 	}
 
-	iv := GetEntropyCSPRNG(aes.BlockSize) // 16
+	iv := randentropy.GetEntropyMixed(aes.BlockSize) // 16
 	AES256CBCEncrypter := cipher.NewCBCEncrypter(AES256Block, iv)
 	cipherText := make([]byte, len(toEncrypt))
 	AES256CBCEncrypter.CryptBlocks(cipherText, toEncrypt)
@@ -195,13 +195,4 @@ func DecryptKey(ks keyStorePassphrase, keyAddr []byte, auth string) (keyBytes []
 		return nil, nil, err
 	}
 	return keyBytes, keyId, err
-}
-
-func GetEntropyCSPRNG(n int) []byte {
-	mainBuff := make([]byte, n)
-	_, err := io.ReadFull(crand.Reader, mainBuff)
-	if err != nil {
-		panic("key generation: reading from crypto/rand failed: " + err.Error())
-	}
-	return mainBuff
 }
