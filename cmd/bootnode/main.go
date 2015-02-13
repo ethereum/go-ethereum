@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/nat"
 )
 
 func main() {
@@ -38,8 +39,10 @@ func main() {
 		genKey      = flag.String("genkey", "", "generate a node key and quit")
 		nodeKeyFile = flag.String("nodekey", "", "private key filename")
 		nodeKeyHex  = flag.String("nodekeyhex", "", "private key as hex (for testing)")
-		nodeKey     *ecdsa.PrivateKey
-		err         error
+		natdesc     = flag.String("nat", "none", "port mapping mechanism (any|none|upnp|pmp|extip:<IP>)")
+
+		nodeKey *ecdsa.PrivateKey
+		err     error
 	)
 	flag.Parse()
 	logger.AddLogSystem(logger.NewStdLogSystem(os.Stdout, log.LstdFlags, logger.DebugLevel))
@@ -49,6 +52,10 @@ func main() {
 		os.Exit(0)
 	}
 
+	natm, err := nat.Parse(*natdesc)
+	if err != nil {
+		log.Fatalf("-nat: %v", err)
+	}
 	switch {
 	case *nodeKeyFile == "" && *nodeKeyHex == "":
 		log.Fatal("Use -nodekey or -nodekeyhex to specify a private key")
@@ -64,7 +71,7 @@ func main() {
 		}
 	}
 
-	if _, err := discover.ListenUDP(nodeKey, *listenAddr); err != nil {
+	if _, err := discover.ListenUDP(nodeKey, *listenAddr, natm); err != nil {
 		log.Fatal(err)
 	}
 	select {}

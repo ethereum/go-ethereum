@@ -18,8 +18,8 @@ func init() {
 func TestUDP_ping(t *testing.T) {
 	t.Parallel()
 
-	n1, _ := ListenUDP(newkey(), "127.0.0.1:0")
-	n2, _ := ListenUDP(newkey(), "127.0.0.1:0")
+	n1, _ := ListenUDP(newkey(), "127.0.0.1:0", nil)
+	n2, _ := ListenUDP(newkey(), "127.0.0.1:0", nil)
 	defer n1.Close()
 	defer n2.Close()
 
@@ -48,8 +48,8 @@ func find(tab *Table, id NodeID) *Node {
 func TestUDP_findnode(t *testing.T) {
 	t.Parallel()
 
-	n1, _ := ListenUDP(newkey(), "127.0.0.1:0")
-	n2, _ := ListenUDP(newkey(), "127.0.0.1:0")
+	n1, _ := ListenUDP(newkey(), "127.0.0.1:0", nil)
+	n2, _ := ListenUDP(newkey(), "127.0.0.1:0", nil)
 	defer n1.Close()
 	defer n2.Close()
 
@@ -98,7 +98,7 @@ func TestUDP_replytimeout(t *testing.T) {
 	}
 	defer fd.Close()
 
-	n1, _ := ListenUDP(newkey(), "127.0.0.1:0")
+	n1, _ := ListenUDP(newkey(), "127.0.0.1:0", nil)
 	defer n1.Close()
 	n2 := n1.bumpOrAdd(randomID(n1.self.ID, 10), fd.LocalAddr().(*net.UDPAddr))
 
@@ -116,8 +116,8 @@ func TestUDP_replytimeout(t *testing.T) {
 func TestUDP_findnodeMultiReply(t *testing.T) {
 	t.Parallel()
 
-	n1, _ := ListenUDP(newkey(), "127.0.0.1:0")
-	n2, _ := ListenUDP(newkey(), "127.0.0.1:0")
+	n1, _ := ListenUDP(newkey(), "127.0.0.1:0", nil)
+	n2, _ := ListenUDP(newkey(), "127.0.0.1:0", nil)
 	udp2 := n2.net.(*udp)
 	defer n1.Close()
 	defer n2.Close()

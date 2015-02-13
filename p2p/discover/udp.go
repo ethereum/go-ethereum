@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -82,6 +83,7 @@ type udp struct {
 	addpending chan *pending
 	replies    chan reply
 	closing    chan struct{}
+	nat        nat.Interface
 
 	*Table
 }
@@ -121,17 +123,26 @@ type reply struct {
 }
 
 // ListenUDP returns a new table that listens for UDP packets on laddr.
-func ListenUDP(priv *ecdsa.PrivateKey, laddr string) (*Table, error) {
-	net, realaddr, err := listen(priv, laddr)
+func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface) (*Table, error) {
+	t, realaddr, err := listen(priv, laddr, natm)
 	if err != nil {
 		return nil, err
 	}
-	net.Table = newTable(net, PubkeyID(&priv.PublicKey), realaddr)
-	log.Debugf("Listening, %v\n", net.self)
-	return net.Table, nil
+	if natm != nil {
+		if !realaddr.IP.IsLoopback() {
+			go nat.Map(natm, t.closing, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
+		}
+		// TODO: react to external IP changes over time.
+		if ext, err := natm.ExternalIP(); err == nil {
+			realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
+		}
+	}
+	t.Table = newTable(t, PubkeyID(&priv.PublicKey), realaddr)
+	log.Infoln("Listening, ", t.self)
+	return t.Table, nil
 }
 
-func listen(priv *ecdsa.PrivateKey, laddr string) (*udp, *net.UDPAddr, error) {
+func listen(priv *ecdsa.PrivateKey, laddr string, nat nat.Interface) (*udp, *net.UDPAddr, error) {
 	addr, err := net.ResolveUDPAddr("udp", laddr)
 	if err != nil {
 		return nil, nil, err

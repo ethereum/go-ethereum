@@ -182,7 +182,7 @@ func (srv *Server) Start() (err error) {
 	}
 
 	// dial stuff
-	dt, err := discover.ListenUDP(srv.PrivateKey, srv.ListenAddr)
+	dt, err := discover.ListenUDP(srv.PrivateKey, srv.ListenAddr, srv.NAT)
 	if err != nil {
 		return err
 	}
@@ -194,7 +194,6 @@ func (srv *Server) Start() (err error) {
 		srv.loopWG.Add(1)
 		go srv.dialLoop()
 	}
-
 	if srv.NoDial && srv.ListenAddr == "" {
 		srvlog.Warnln("I will be kind-of useless, neither dialing nor listening.")
 	}
