@@ -268,7 +268,7 @@ func (s *Ethereum) Start(seed bool, p string, pull string) error {
 	}
 
 	if len(pull) > 0 {
-		reader := s.dpa.Retrieve(pull)
+		reader := s.dpa.Retrieve([]byte(pull))
 		fo, err := os.Open("/tmp/swarm.tmp")
 		if err != nil {
 			logger.Warnf("file open error %v", err)
