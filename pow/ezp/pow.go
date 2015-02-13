@@ -42,6 +42,8 @@ func (pow *EasyPow) Search(block pow.Block, stop <-chan struct{}) []byte {
 	starti := i
 	start := time.Now().UnixNano()
 
+	defer func() { pow.HashRate = 0 }()
+
 	// Make sure stop is empty
 empty:
 	for {
@@ -55,7 +57,6 @@ empty:
 	for {
 		select {
 		case <-stop:
-			pow.HashRate = 0
 			return nil
 		default:
 			i++
