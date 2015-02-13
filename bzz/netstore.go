@@ -108,11 +108,15 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 	} else {
 		return
 	}
+	// TODO: use self.timer time.Timer and reset with defer disableTimer
 	timer := time.After(searchTimeout)
 	select {
 	case <-timer:
+		dpaLogger.Debugf("NetStore.Get: %064x request time out ", key)
 		err = notFound
 	case <-chunk.req.C:
+		dpaLogger.Debugf("NetStore.get: %064x retrieved", key)
+
 	}
 	return
 }
@@ -156,10 +160,13 @@ func (self *NetStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 	dpaLogger.Debugf("Is %v == %v?", send, storeRequestMsg)
 
 	if send == storeRequestMsg {
+		dpaLogger.Debugf("NetStore.addRetrieveRequest: %064x - content found, delivering...", req.Key)
 		self.deliver(req, chunk)
 	} else {
 		// we might need chunk.req to cache relevant peers response, or would it expire?
 		self.peers(req, chunk, timeout)
+		dpaLogger.Debugf("NetStore.addRetrieveRequest: %064x - searching.... responding with peers...", req.Key)
+
 		if timeout != nil {
 			self.startSearch(chunk, int64(req.Id), timeout)
 		}
@@ -170,6 +177,7 @@ func (self *NetStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 // it's assumed that caller holds the lock
 func (self *NetStore) startSearch(chunk *Chunk, id int64, timeout *time.Time) {
 	chunk.req.status = reqSearching
+	dpaLogger.Debugf("NetStore.startSearch: %064x - getting peers from cademlia...", chunk.Key)
 	peers := self.hive.getPeers(chunk.Key)
 	req := &retrieveRequestMsgData{
 		Key:     chunk.Key,
@@ -177,6 +185,7 @@ func (self *NetStore) startSearch(chunk *Chunk, id int64, timeout *time.Time) {
 		timeout: timeout,
 	}
 	for _, peer := range peers {
+		dpaLogger.Debugf("NetStore.startSearch: sending retrieveRequests to peer [%064x]", req.Key)
 		peer.retrieve(req)
 	}
 }
@@ -192,6 +201,7 @@ only add if less than requesterCount peers forwarded the same request id so far
 note this is done irrespective of status (searching or found/timedOut)
 */
 func (self *NetStore) addRequester(rs *requestStatus, req *retrieveRequestMsgData) {
+	dpaLogger.Debugf("NetStore.addRequester: key %064x - add peer [%#v] to req.Id %064x", req.Key, req.peer, req.Id)
 	list := rs.requesters[int64(req.Id)]
 	rs.requesters[int64(req.Id)] = append(list, req)
 }
@@ -209,6 +219,7 @@ this is the most simplistic implementation:
 ! in the last case as well, we should respond with reject if already got requesterCount peers with that exact id
 */
 func (self *NetStore) strategyUpdateRequest(rs *requestStatus, req *retrieveRequestMsgData) (msgTyp int, timeout *time.Time) {
+	dpaLogger.Debugf("NetStore.strategyUpdateRequest: key %064x", req.Key)
 
 	switch rs.status {
 	case reqSearching:
@@ -224,8 +235,10 @@ func (self *NetStore) strategyUpdateRequest(rs *requestStatus, req *retrieveRequ
 }
 
 func (self *NetStore) propagateResponse(chunk *Chunk) {
+	dpaLogger.Debugf("NetStore.propagateResponse: key %064x", chunk.Key)
 	for id, requesters := range chunk.req.requesters {
 		counter := requesterCount
+		dpaLogger.Debugf("NetStore.propagateResponse id %064x", id)
 		msg := &storeRequestMsgData{
 			Key:  chunk.Key,
 			Data: chunk.Data,
@@ -234,6 +247,7 @@ func (self *NetStore) propagateResponse(chunk *Chunk) {
 		}
 		for _, req := range requesters {
 			if req.timeout.After(time.Now()) {
+				dpaLogger.Debugf("NetStore.propagateResponse store -> %064x with %v", req.Id, req.peer)
 				go req.peer.store(msg)
 				counter--
 				if counter <= 0 {

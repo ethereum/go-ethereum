@@ -153,13 +153,14 @@ func (self *DPA) storeLoop() {
 	go func() {
 	STORE:
 		for ch := range self.storeC {
-			// go func(chunk *Chunk) {
-			self.ChunkStore.Put(ch)
-			if ch.wg != nil {
-				ch.wg.Done()
-			}
-			// self.ChunkStore.Put(chunk)
-			// }(ch)
+			go func(chunk *Chunk) {
+				self.ChunkStore.Put(ch)
+				if ch.wg != nil {
+					dpaLogger.Debugf("DPA.storeLoop %064x", chunk.Key)
+					ch.wg.Done()
+				}
+				self.ChunkStore.Put(chunk)
+			}(ch)
 			select {
 			case <-self.quitC:
 				break STORE
