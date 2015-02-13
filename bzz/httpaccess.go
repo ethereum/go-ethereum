@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	port          = ":8500"
-	manifest_type = "application/bzz-manifest+json"
+	port         = ":8500"
+	manifestType = "application/bzz-manifest+json"
 )
 
 var (
@@ -32,11 +32,15 @@ type sequentialReader struct {
 	lock   sync.Mutex
 }
 
+type manifest struct {
+	Entries []manifestEntry
+}
+
 type manifestEntry struct {
-	Path         string
-	Hash         string
-	Content_type string
-	Status       int16
+	Path        string
+	Hash        string
+	ContentType string
+	Status      int16
 }
 
 func (self *sequentialReader) ReadAt(target []byte, off int64) (n int, err error) {
@@ -132,8 +136,8 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 			for {
 				manifestReader := dpa.Retrieve(key)
 				// TODO check size for oversized manifests
-				manifest := make([]byte, manifestReader.Size())
-				size, err := manifestReader.Read(manifest)
+				manifestData := make([]byte, manifestReader.Size())
+				size, err := manifestReader.Read(manifestData)
 				if int64(size) < manifestReader.Size() {
 					dpaLogger.Debugf("Swarm: Manifest %s not found.", name)
 					if err == nil {
@@ -145,28 +149,28 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 					return
 				}
 				dpaLogger.Debugf("Swarm: Manifest %s retrieved.", name)
-				manifestEntries := make([]manifestEntry, 0)
-				err = json.Unmarshal(manifest, &manifestEntries)
+				man := manifest{}
+				err = json.Unmarshal(manifestData, &man)
 				if err != nil {
 					dpaLogger.Debugf("Swarm: Manifest %s is malformed.", name)
 					http.Error(w, err.Error(), http.StatusNotFound)
 					return
 				} else {
-					dpaLogger.Debugf("Swarm: Manifest %s has %d entries.", name, len(manifestEntries))
+					dpaLogger.Debugf("Swarm: Manifest %s has %d entries.", name, len(man.Entries))
 				}
 				var mimeType string
 				key = nil
 				prefix := 0
 				status := int16(404)
 			MANIFEST_ENTRIES:
-				for _, entry := range manifestEntries {
+				for _, entry := range man.Entries {
 					if !hashMatcher.MatchString(entry.Hash) {
 						// hash is mandatory
 						continue MANIFEST_ENTRIES
 					}
-					if entry.Content_type == "" {
+					if entry.ContentType == "" {
 						// content type defaults to manifest
-						entry.Content_type = manifest_type
+						entry.ContentType = manifestType
 					}
 					if entry.Status == 0 {
 						// status defaults to 200
@@ -178,14 +182,14 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 						prefix = pathLen
 						key = ethutil.Hex2Bytes(entry.Hash)
 						dpaLogger.Debugf("Swarm: Payload hash %064x", key)
-						mimeType = entry.Content_type
+						mimeType = entry.ContentType
 						status = entry.Status
 					}
 				}
 				if key == nil {
 					http.Error(w, "Object "+uri+" not found.", http.StatusNotFound)
 					break MANIFEST_RESOLUTION
-				} else if mimeType != manifest_type {
+				} else if mimeType != manifestType {
 					w.Header().Set("Content-Type", mimeType)
 					dpaLogger.Debugf("Swarm: HTTP Status %d", status)
 					w.WriteHeader(int(status))
