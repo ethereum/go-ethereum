@@ -69,9 +69,10 @@ func (self *NetStore) Put(entry *Chunk) {
 
 func (self *NetStore) put(entry *Chunk) {
 	self.localStore.Put(entry)
-	dpaLogger.Debugf("NetStore.put: localStore.Put of %064x completed.", entry.Key)
-	self.store(entry)
+	dpaLogger.Debugf("NetStore.put: localStore.Put of %064x completed, %d bytes (%p).", entry.Key, len(entry.SData), entry)
+	go self.store(entry)
 	// only send responses once
+	dpaLogger.Debugf("NetStore.put: req: %#v", entry.req)
 	if entry.req != nil && entry.req.status == reqSearching {
 		entry.req.status = reqFound
 		close(entry.req.C)
@@ -82,7 +83,9 @@ func (self *NetStore) put(entry *Chunk) {
 func (self *NetStore) addStoreRequest(req *storeRequestMsgData) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
+	dpaLogger.Debugf("NetStore.addStoreRequest: req = %#v", req)
 	chunk, err := self.localStore.Get(req.Key)
+	dpaLogger.Debugf("NetStore.addStoreRequest: chunk reference %p", chunk)
 	// we assume that a returned chunk is the one stored in the memory cache
 	if err != nil {
 		chunk = &Chunk{
@@ -116,7 +119,7 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 		dpaLogger.Debugf("NetStore.Get: %064x request time out ", key)
 		err = notFound
 	case <-chunk.req.C:
-		dpaLogger.Debugf("NetStore.get: %064x retrieved", key)
+		dpaLogger.Debugf("NetStore.Get: %064x retrieved, %d bytes (%p)", key, len(chunk.SData), chunk)
 
 	}
 	return
@@ -137,6 +140,7 @@ func (self *NetStore) get(key Key) (chunk *Chunk) {
 
 	if chunk.req == nil {
 		chunk.req = new(requestStatus)
+		chunk.req.C = make(chan bool)
 	}
 	return
 }
@@ -157,8 +161,6 @@ func (self *NetStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 	req.timeout = &t
 
 	send, timeout := self.strategyUpdateRequest(chunk.req, req) // may change req status
-
-	dpaLogger.Debugf("Is %v == %v?", send, storeRequestMsg)
 
 	if send == storeRequestMsg {
 		dpaLogger.Debugf("NetStore.addRetrieveRequest: %064x - content found, delivering...", req.Key)

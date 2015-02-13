@@ -321,7 +321,7 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		dpaLogger.Debugf("chunk data received for %x", chunk.Key[:4])
 	}
 	if len(chunk.SData) == 0 {
-		dpaLogger.Debugf("No payload.")
+		dpaLogger.Debugf("No payload in %x.", chunk.Key)
 		return 0, notFound
 	}
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))

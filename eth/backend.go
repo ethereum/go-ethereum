@@ -2,9 +2,11 @@ package eth
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/bzz"
 	"github.com/ethereum/go-ethereum/core"
@@ -70,6 +72,7 @@ type Ethereum struct {
 
 	RpcServer  *rpc.JsonRpcServer
 	keyManager *crypto.KeyManager
+	dpa        *bzz.DPA
 
 	clientIdentity p2p.ClientIdentity
 	logger         ethlogger.LogSystem
@@ -144,12 +147,12 @@ func New(config *Config) (*Ethereum, error) {
 	}
 	chunker := &bzz.TreeChunker{}
 	chunker.Init()
-	dpa := &bzz.DPA{
+	eth.dpa = &bzz.DPA{
 		Chunker:    chunker,
 		ChunkStore: netStore,
 	}
-	dpa.Start()
-	go bzz.StartHttpServer(dpa)
+	eth.dpa.Start()
+	go bzz.StartHttpServer(eth.dpa)
 
 	nat, err := p2p.ParseNAT(config.NATType, config.PMPGateway)
 	if err != nil {
@@ -234,7 +237,7 @@ func (s *Ethereum) MaxPeers() int {
 }
 
 // Start the ethereum
-func (s *Ethereum) Start(seed bool, p string) error {
+func (s *Ethereum) Start(seed bool, p string, pull string) error {
 	err := s.net.Start()
 	if err != nil {
 		return err
@@ -262,6 +265,28 @@ func (s *Ethereum) Start(seed bool, p string) error {
 				return err
 			}
 		}
+	}
+
+	if len(pull) > 0 {
+		go func() {
+			time.Sleep(30 * time.Second)
+			key := ethutil.Hex2Bytes(pull)
+			reader := s.dpa.Retrieve(key)
+			logger.Debugf("retrieved reader for %064x", key)
+			b := make([]byte, 0x1000)
+			var length int64
+			for {
+				n, err := reader.Read(b)
+				if err != nil {
+					if err != io.EOF {
+						logger.Debugf("read %v bytes. read error for %064x: %v", n, key, err)
+					}
+					return
+				}
+				length += int64(n)
+			}
+			logger.Debugf("read %v bytes from %064x: %v", length, key)
+		}()
 	}
 
 	// TODO: read peers here
