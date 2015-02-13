@@ -3,6 +3,7 @@ package secp256k1
 import (
 	"bytes"
 	"fmt"
+	"github.com/ethereum/go-ethereum/crypto/randentropy"
 	"log"
 	"testing"
 )
@@ -12,7 +13,7 @@ const SigSize = 65  //64+1
 
 func Test_Secp256_00(t *testing.T) {
 
-	var nonce []byte = RandByte(32) //going to get bitcoins stolen!
+	var nonce []byte = randentropy.GetEntropyMixed(32) //going to get bitcoins stolen!
 
 	if len(nonce) != 32 {
 		t.Fatal()
@@ -50,7 +51,7 @@ func Test_Secp256_01(t *testing.T) {
 //test size of messages
 func Test_Secp256_02s(t *testing.T) {
 	pubkey, seckey := GenerateKeyPair()
-	msg := RandByte(32)
+	msg := randentropy.GetEntropyMixed(32)
 	sig, _ := Sign(msg, seckey)
 	CompactSigTest(sig)
 	if sig == nil {
@@ -73,7 +74,7 @@ func Test_Secp256_02s(t *testing.T) {
 //test signing message
 func Test_Secp256_02(t *testing.T) {
 	pubkey1, seckey := GenerateKeyPair()
-	msg := RandByte(32)
+	msg := randentropy.GetEntropyMixed(32)
 	sig, _ := Sign(msg, seckey)
 	if sig == nil {
 		t.Fatal("Signature nil")
@@ -96,7 +97,7 @@ func Test_Secp256_02(t *testing.T) {
 //test pubkey recovery
 func Test_Secp256_02a(t *testing.T) {
 	pubkey1, seckey1 := GenerateKeyPair()
-	msg := RandByte(32)
+	msg := randentropy.GetEntropyMixed(32)
 	sig, _ := Sign(msg, seckey1)
 
 	if sig == nil {
@@ -125,7 +126,7 @@ func Test_Secp256_02a(t *testing.T) {
 func Test_Secp256_03(t *testing.T) {
 	_, seckey := GenerateKeyPair()
 	for i := 0; i < TESTS; i++ {
-		msg := RandByte(32)
+		msg := randentropy.GetEntropyMixed(32)
 		sig, _ := Sign(msg, seckey)
 		CompactSigTest(sig)
 
@@ -141,7 +142,7 @@ func Test_Secp256_03(t *testing.T) {
 func Test_Secp256_04(t *testing.T) {
 	for i := 0; i < TESTS; i++ {
 		pubkey1, seckey := GenerateKeyPair()
-		msg := RandByte(32)
+		msg := randentropy.GetEntropyMixed(32)
 		sig, _ := Sign(msg, seckey)
 		CompactSigTest(sig)
 
@@ -164,7 +165,7 @@ func Test_Secp256_04(t *testing.T) {
 //	-SIPA look at this
 
 func randSig() []byte {
-	sig := RandByte(65)
+	sig := randentropy.GetEntropyMixed(65)
 	sig[32] &= 0x70
 	sig[64] %= 4
 	return sig
@@ -172,7 +173,7 @@ func randSig() []byte {
 
 func Test_Secp256_06a_alt0(t *testing.T) {
 	pubkey1, seckey := GenerateKeyPair()
-	msg := RandByte(32)
+	msg := randentropy.GetEntropyMixed(32)
 	sig, _ := Sign(msg, seckey)
 
 	if sig == nil {
@@ -203,12 +204,12 @@ func Test_Secp256_06a_alt0(t *testing.T) {
 
 func Test_Secp256_06b(t *testing.T) {
 	pubkey1, seckey := GenerateKeyPair()
-	msg := RandByte(32)
+	msg := randentropy.GetEntropyMixed(32)
 	sig, _ := Sign(msg, seckey)
 
 	fail_count := 0
 	for i := 0; i < TESTS; i++ {
-		msg = RandByte(32)
+		msg = randentropy.GetEntropyMixed(32)
 		pubkey2, _ := RecoverPubkey(msg, sig)
 		if bytes.Equal(pubkey1, pubkey2) == true {
 			t.Fail()
