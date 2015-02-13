@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
@@ -38,8 +39,8 @@ func (self Log) Topics() [][]byte {
 	return t
 }
 
-func StateObjectFromAccount(addr string, account Account) *state.StateObject {
-	obj := state.NewStateObject(ethutil.Hex2Bytes(addr))
+func StateObjectFromAccount(db ethutil.Database, addr string, account Account) *state.StateObject {
+	obj := state.NewStateObject(ethutil.Hex2Bytes(addr), db)
 	obj.SetBalance(ethutil.Big(account.Balance))
 
 	if ethutil.IsHex(account.Code) {
@@ -78,15 +79,14 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
-		/*
-			helper.Logger.SetLogLevel(5)
-			if name != "jump0_jumpdest2" {
-				continue
-			}
-		*/
-		statedb := state.New(helper.NewTrie())
+		helper.Logger.SetLogLevel(4)
+		if name != "TransactionNonceCheck2" {
+			continue
+		}
+		db, _ := ethdb.NewMemDatabase()
+		statedb := state.New(nil, db)
 		for addr, account := range test.Pre {
-			obj := StateObjectFromAccount(addr, account)
+			obj := StateObjectFromAccount(db, addr, account)
 			statedb.SetStateObject(obj)
 			for a, v := range account.Storage {
 				obj.SetState(helper.FromHex(a), ethutil.NewValue(helper.FromHex(v)))
@@ -118,12 +118,6 @@ func RunVmTest(p string, t *testing.T) {
 			ret, logs, gas, err = helper.RunVm(statedb, env, test.Exec)
 		} else {
 			ret, logs, gas, err = helper.RunState(statedb, env, test.Transaction)
-		}
-
-		// Log the error if there is one. Error does not mean failing test.
-		// A test fails if err != nil and post params are specified in the test.
-		if err != nil {
-			helper.Log.Infof("%s's: %v\n", name, err)
 		}
 
 		rexp := helper.FromHex(test.Out)
@@ -178,47 +172,52 @@ func RunVmTest(p string, t *testing.T) {
 
 // I've created a new function for each tests so it's easier to identify where the problem lies if any of them fail.
 func TestVMArithmetic(t *testing.T) {
-	const fn = "../files/vmtests/vmArithmeticTest.json"
+	const fn = "../files/VMTests/vmArithmeticTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestSystemOperations(t *testing.T) {
+	const fn = "../files/VMTests/vmSystemOperationsTest.json"
 	RunVmTest(fn, t)
 }
 
 func TestBitwiseLogicOperation(t *testing.T) {
-	const fn = "../files/vmtests/vmBitwiseLogicOperationTest.json"
+	const fn = "../files/VMTests/vmBitwiseLogicOperationTest.json"
 	RunVmTest(fn, t)
 }
 
 func TestBlockInfo(t *testing.T) {
-	const fn = "../files/vmtests/vmBlockInfoTest.json"
+	const fn = "../files/VMTests/vmBlockInfoTest.json"
 	RunVmTest(fn, t)
 }
 
 func TestEnvironmentalInfo(t *testing.T) {
-	const fn = "../files/vmtests/vmEnvironmentalInfoTest.json"
+	const fn = "../files/VMTests/vmEnvironmentalInfoTest.json"
 	RunVmTest(fn, t)
 }
 
 func TestFlowOperation(t *testing.T) {
-	const fn = "../files/vmtests/vmIOandFlowOperationsTest.json"
+	const fn = "../files/VMTests/vmIOandFlowOperationsTest.json"
 	RunVmTest(fn, t)
 }
 
 func TestPushDupSwap(t *testing.T) {
-	const fn = "../files/vmtests/vmPushDupSwapTest.json"
+	const fn = "../files/VMTests/vmPushDupSwapTest.json"
 	RunVmTest(fn, t)
 }
 
 func TestVMSha3(t *testing.T) {
-	const fn = "../files/vmtests/vmSha3Test.json"
+	const fn = "../files/VMTests/vmSha3Test.json"
 	RunVmTest(fn, t)
 }
 
 func TestVm(t *testing.T) {
-	const fn = "../files/vmtests/vmtests.json"
+	const fn = "../files/VMTests/vmtests.json"
 	RunVmTest(fn, t)
 }
 
 func TestVmLog(t *testing.T) {
-	const fn = "../files/vmtests/vmLogTest.json"
+	const fn = "../files/VMTests/vmLogTest.json"
 	RunVmTest(fn, t)
 }
 
@@ -244,5 +243,25 @@ func TestStateSpecial(t *testing.T) {
 
 func TestStateRefund(t *testing.T) {
 	const fn = "../files/StateTests/stRefundTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestStateBlockHash(t *testing.T) {
+	const fn = "../files/StateTests/stBlockHashTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestStateInitCode(t *testing.T) {
+	const fn = "../files/StateTests/stInitCodeTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestStateLog(t *testing.T) {
+	const fn = "../files/StateTests/stLogTests.json"
+	RunVmTest(fn, t)
+}
+
+func TestStateTransaction(t *testing.T) {
+	const fn = "../files/StateTests/stTransactionTest.json"
 	RunVmTest(fn, t)
 }

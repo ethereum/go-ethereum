@@ -1,20 +1,23 @@
-// Copyright (c) 2013-2014, Jeffrey Wilcke. All rights reserved.
-//
-// This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-//
-// This library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-// General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this library; if not, write to the Free Software
-// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
-// MA 02110-1301  USA
+/*
+	This file is part of go-ethereum
 
+	go-ethereum is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	go-ethereum is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/**
+ * @authors
+ * 	Jeffrey Wilcke <i@jev.io>
+ */
 package main
 
 import (
@@ -26,10 +29,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
-	"gopkg.in/qml.v1"
+	"github.com/obscuren/qml"
 )
 
 type DebuggerWindow struct {
@@ -37,7 +41,7 @@ type DebuggerWindow struct {
 	engine *qml.Engine
 	lib    *UiLib
 
-	vm *vm.DebugVm
+	vm *vm.Vm
 	Db *Debugger
 
 	state *state.StateDB
@@ -54,7 +58,7 @@ func NewDebuggerWindow(lib *UiLib) *DebuggerWindow {
 
 	win := component.CreateWindow(nil)
 
-	w := &DebuggerWindow{engine: engine, win: win, lib: lib, vm: &vm.DebugVm{}}
+	w := &DebuggerWindow{engine: engine, win: win, lib: lib, vm: &vm.Vm{}}
 	w.Db = NewDebugger(w)
 
 	return w
@@ -151,14 +155,17 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 
 	block := self.lib.eth.ChainManager().CurrentBlock()
 
-	env := utils.NewEnv(self.lib.eth.ChainManager(), statedb, block, account.Address(), value)
+	msg := types.NewTransactionMessage(nil, value, gas, gasPrice, data)
+	env := core.NewEnv(statedb, self.lib.eth.ChainManager(), msg, block)
 
 	self.Logf("callsize %d", len(script))
 	go func() {
+		pgas := new(big.Int).Set(gas)
 		ret, err := env.Call(account, contract.Address(), data, gas, gasPrice, ethutil.Big0)
-		//ret, g, err := callerClosure.Call(evm, data)
-		tot := new(big.Int).Mul(env.Gas, gasPrice)
-		self.Logf("gas usage %v total price = %v (%v)", env.Gas, tot, ethutil.CurrencyToString(tot))
+
+		rgas := new(big.Int).Sub(pgas, gas)
+		tot := new(big.Int).Mul(rgas, gasPrice)
+		self.Logf("gas usage %v total price = %v (%v)", rgas, tot, ethutil.CurrencyToString(tot))
 		if err != nil {
 			self.Logln("exited with errors:", err)
 		} else {
@@ -262,6 +269,9 @@ func NewDebugger(main *DebuggerWindow) *Debugger {
 
 type storeVal struct {
 	Key, Value string
+}
+
+func (self *Debugger) Step(evm vm.VirtualMachine, op vm.OpCode, mem *vm.Memory, stack *vm.Stack, context *vm.Context) {
 }
 
 func (self *Debugger) BreakHook(pc int, op vm.OpCode, mem *vm.Memory, stack *vm.Stack, stateObject *state.StateObject) bool {

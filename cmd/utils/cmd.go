@@ -1,3 +1,24 @@
+/*
+	This file is part of go-ethereum
+
+	go-ethereum is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	go-ethereum is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/**
+ * @authors
+ * 	Jeffrey Wilcke <i@jev.io>
+ * 	Viktor Tron <viktor@ethdev.com>
+ */
 package utils
 
 import (
@@ -17,7 +38,9 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
+	rpchttp "github.com/ethereum/go-ethereum/rpc/http"
+	rpcws "github.com/ethereum/go-ethereum/rpc/ws"
+	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -98,13 +121,11 @@ func exit(err error) {
 	os.Exit(status)
 }
 
-func StartEthereum(ethereum *eth.Ethereum, UseSeed bool) {
-	clilogger.Infof("Starting %s", ethereum.ClientIdentity())
-	err := ethereum.Start(UseSeed)
-	if err != nil {
+func StartEthereum(ethereum *eth.Ethereum) {
+	clilogger.Infoln("Starting ", ethereum.Name())
+	if err := ethereum.Start(); err != nil {
 		exit(err)
 	}
-
 	RegisterInterrupt(func(sig os.Signal) {
 		ethereum.Stop()
 		logger.Flush()
@@ -170,11 +191,23 @@ func KeyTasks(keyManager *crypto.KeyManager, KeyRing string, GenAddr bool, Secre
 
 func StartRpc(ethereum *eth.Ethereum, RpcPort int) {
 	var err error
-	ethereum.RpcServer, err = rpc.NewJsonRpcServer(xeth.NewJSXEth(ethereum), RpcPort)
+	ethereum.RpcServer, err = rpchttp.NewRpcHttpServer(xeth.New(ethereum), RpcPort)
 	if err != nil {
 		clilogger.Errorf("Could not start RPC interface (port %v): %v", RpcPort, err)
 	} else {
 		go ethereum.RpcServer.Start()
+	}
+}
+
+func StartWebSockets(eth *eth.Ethereum, wsPort int) {
+	clilogger.Infoln("Starting WebSockets")
+
+	var err error
+	eth.WsServer, err = rpcws.NewWebSocketServer(xeth.New(eth), wsPort)
+	if err != nil {
+		clilogger.Errorf("Could not start RPC interface (port %v): %v", wsPort, err)
+	} else {
+		go eth.WsServer.Start()
 	}
 }
 
@@ -238,7 +271,8 @@ func BlockDo(ethereum *eth.Ethereum, hash []byte) error {
 
 	parent := ethereum.ChainManager().GetBlock(block.ParentHash())
 
-	_, err := ethereum.BlockProcessor().TransitionState(parent.State(), parent, block)
+	statedb := state.New(parent.Root(), ethereum.Db())
+	_, err := ethereum.BlockProcessor().TransitionState(statedb, parent, block)
 	if err != nil {
 		return err
 	}

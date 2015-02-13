@@ -8,8 +8,6 @@ import (
 	"math/big"
 	"reflect"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/ethutil"
 )
 
 func TestStreamKind(t *testing.T) {
@@ -327,6 +325,11 @@ var decodeTests = []decodeTest{
 	{input: "850505050505", ptr: new(interface{}), value: []byte{5, 5, 5, 5, 5}},
 	{input: "C0", ptr: new(interface{}), value: []interface{}{}},
 	{input: "C50183040404", ptr: new(interface{}), value: []interface{}{[]byte{1}, []byte{4, 4, 4}}},
+	{
+		input: "C3010203",
+		ptr:   new([]io.Reader),
+		error: "rlp: type io.Reader is not RLP-serializable",
+	},
 }
 
 func uintp(i uint) *uint { return &i }
@@ -509,13 +512,13 @@ func ExampleStream() {
 }
 
 func BenchmarkDecode(b *testing.B) {
-	enc := encTest(90000)
+	enc := encodeTestSlice(90000)
 	b.SetBytes(int64(len(enc)))
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		var s []int
+		var s []uint
 		r := bytes.NewReader(enc)
 		if err := Decode(r, &s); err != nil {
 			b.Fatalf("Decode error: %v", err)
@@ -524,12 +527,12 @@ func BenchmarkDecode(b *testing.B) {
 }
 
 func BenchmarkDecodeIntSliceReuse(b *testing.B) {
-	enc := encTest(100000)
+	enc := encodeTestSlice(100000)
 	b.SetBytes(int64(len(enc)))
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	var s []int
+	var s []uint
 	for i := 0; i < b.N; i++ {
 		r := bytes.NewReader(enc)
 		if err := Decode(r, &s); err != nil {
@@ -538,12 +541,16 @@ func BenchmarkDecodeIntSliceReuse(b *testing.B) {
 	}
 }
 
-func encTest(n int) []byte {
-	s := make([]interface{}, n)
-	for i := 0; i < n; i++ {
+func encodeTestSlice(n uint) []byte {
+	s := make([]uint, n)
+	for i := uint(0); i < n; i++ {
 		s[i] = i
 	}
-	return ethutil.Encode(s)
+	b, err := EncodeToBytes(s)
+	if err != nil {
+		panic(fmt.Sprintf("encode error: %v", err))
+	}
+	return b
 }
 
 func unhex(str string) []byte {

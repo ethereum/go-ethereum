@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	ProtocolVersion    = 51
+	ProtocolVersion    = 52
 	NetworkId          = 0
 	ProtocolLength     = uint64(8)
 	ProtocolMaxMsgSize = 10 * 1024 * 1024
@@ -46,6 +46,7 @@ type ethProtocol struct {
 // used as an argument to EthProtocol
 type txPool interface {
 	AddTransactions([]*types.Transaction)
+	GetTransactions() types.Transactions
 }
 
 type chainManager interface {
@@ -66,6 +67,8 @@ type newBlockMsgData struct {
 	Block *types.Block
 	TD    *big.Int
 }
+
+const maxHashes = 255
 
 type getBlockHashesMsgData struct {
 	Hash   []byte
@@ -89,16 +92,18 @@ func EthProtocol(txPool txPool, chainManager chainManager, blockPool blockPool) 
 // the main loop that handles incoming messages
 // note RemovePeer in the post-disconnect hook
 func runEthProtocol(txPool txPool, chainManager chainManager, blockPool blockPool, peer *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+	id := peer.ID()
 	self := &ethProtocol{
 		txPool:       txPool,
 		chainManager: chainManager,
 		blockPool:    blockPool,
 		rw:           rw,
 		peer:         peer,
-		id:           fmt.Sprintf("%x", peer.Identity().Pubkey()[:8]),
+		id:           fmt.Sprintf("%x", id[:8]),
 	}
 	err = self.handleStatus()
 	if err == nil {
+		self.propagateTxs()
 		for {
 			err = self.handle()
 			if err != nil {
@@ -122,7 +127,7 @@ func (self *ethProtocol) handle() error {
 	defer msg.Discard()
 
 	switch msg.Code {
-
+	case GetTxMsg: // ignore
 	case StatusMsg:
 		return self.protoError(ErrExtraStatusMsg, "")
 
@@ -139,8 +144,13 @@ func (self *ethProtocol) handle() error {
 		if err := msg.Decode(&request); err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
+
+		//request.Amount = uint64(math.Min(float64(maxHashes), float64(request.Amount)))
+		if request.Amount > maxHashes {
+			request.Amount = maxHashes
+		}
 		hashes := self.chainManager.GetBlockHashesFromHash(request.Hash, request.Amount)
-		return self.rw.EncodeMsg(BlockHashesMsg, ethutil.ByteSliceToInterface(hashes)...)
+		return p2p.EncodeMsg(self.rw, BlockHashesMsg, ethutil.ByteSliceToInterface(hashes)...)
 
 	case BlockHashesMsg:
 		// TODO: redo using lazy decode , this way very inefficient on known chains
@@ -185,7 +195,7 @@ func (self *ethProtocol) handle() error {
 				break
 			}
 		}
-		return self.rw.EncodeMsg(BlocksMsg, blocks...)
+		return p2p.EncodeMsg(self.rw, BlocksMsg, blocks...)
 
 	case BlocksMsg:
 		msgStream := rlp.NewStream(msg.Payload)
@@ -211,16 +221,6 @@ func (self *ethProtocol) handle() error {
 		// uses AddPeer followed by AddHashes, AddBlock only if peer is the best peer
 		// (or selected as new best peer)
 		if self.blockPool.AddPeer(request.TD, hash, self.id, self.requestBlockHashes, self.requestBlocks, self.protoErrorDisconnect) {
-			called := true
-			iter := func() ([]byte, bool) {
-				if called {
-					called = false
-					return hash, true
-				} else {
-					return nil, false
-				}
-			}
-			self.blockPool.AddBlockHashes(iter, self.id)
 			self.blockPool.AddBlock(request.Block, self.id)
 		}
 
@@ -298,12 +298,12 @@ func (self *ethProtocol) handleStatus() error {
 
 func (self *ethProtocol) requestBlockHashes(from []byte) error {
 	self.peer.Debugf("fetching hashes (%d) %x...\n", blockHashesBatchSize, from[0:4])
-	return self.rw.EncodeMsg(GetBlockHashesMsg, interface{}(from), uint64(blockHashesBatchSize))
+	return p2p.EncodeMsg(self.rw, GetBlockHashesMsg, interface{}(from), uint64(blockHashesBatchSize))
 }
 
 func (self *ethProtocol) requestBlocks(hashes [][]byte) error {
 	self.peer.Debugf("fetching %v blocks", len(hashes))
-	return self.rw.EncodeMsg(GetBlocksMsg, ethutil.ByteSliceToInterface(hashes)...)
+	return p2p.EncodeMsg(self.rw, GetBlocksMsg, ethutil.ByteSliceToInterface(hashes)...)
 }
 
 func (self *ethProtocol) protoError(code int, format string, params ...interface{}) (err *protocolError) {
@@ -326,4 +326,14 @@ func (self *ethProtocol) protoErrorDisconnect(code int, format string, params ..
 		self.peer.Debugf("fyi %v", err)
 	}
 
+}
+
+func (self *ethProtocol) propagateTxs() {
+	transactions := self.txPool.GetTransactions()
+	iface := make([]interface{}, len(transactions))
+	for i, transaction := range transactions {
+		iface[i] = transaction
+	}
+
+	self.rw.WriteMsg(p2p.NewMsg(TxMsg, iface...))
 }

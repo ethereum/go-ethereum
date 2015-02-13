@@ -1,20 +1,23 @@
-// Copyright (c) 2013-2014, Jeffrey Wilcke. All rights reserved.
-//
-// This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-//
-// This library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-// General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this library; if not, write to the Free Software
-// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
-// MA 02110-1301  USA
+/*
+	This file is part of go-ethereum
 
+	go-ethereum is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	go-ethereum is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/**
+ * @authors
+ * 	Jeffrey Wilcke <i@jev.io>
+ */
 package main
 
 import (
@@ -27,18 +30,21 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
-	"gopkg.in/qml.v1"
+	"github.com/ethereum/go-ethereum/ui/qt/webengine"
+	"github.com/obscuren/qml"
 )
 
 const (
 	ClientIdentifier = "Mist"
-	Version          = "0.8.1"
+	Version          = "0.8.2"
 )
 
 var ethereum *eth.Ethereum
 var mainlogger = logger.NewLogger("MAIN")
 
 func run() error {
+	webengine.Initialize()
+
 	// precedence: code-internal flag default < config file < environment variables < command line
 	Init() // parsing command line
 
@@ -46,19 +52,18 @@ func run() error {
 	config := utils.InitConfig(VmType, ConfigFile, Datadir, "ETH")
 
 	ethereum, err := eth.New(&eth.Config{
-		Name:       ClientIdentifier,
-		Version:    Version,
-		KeyStore:   KeyStore,
-		DataDir:    Datadir,
-		LogFile:    LogFile,
-		LogLevel:   LogLevel,
-		Identifier: Identifier,
-		MaxPeers:   MaxPeer,
-		Port:       OutboundPort,
-		NATType:    PMPGateway,
-		PMPGateway: PMPGateway,
-		KeyRing:    KeyRing,
-		Dial:       true,
+		Name:      p2p.MakeName(ClientIdentifier, Version),
+		KeyStore:  KeyStore,
+		DataDir:   Datadir,
+		LogFile:   LogFile,
+		LogLevel:  LogLevel,
+		MaxPeers:  MaxPeer,
+		Port:      OutboundPort,
+		NAT:       NAT,
+		BootNodes: BootNodes,
+		NodeKey:   NodeKey,
+		KeyRing:   KeyRing,
+		Dial:      true,
 	})
 	if err != nil {
 		mainlogger.Fatalln(err)
@@ -70,15 +75,15 @@ func run() error {
 	}
 
 	if StartWebSockets {
-		utils.StartWebSockets(ethereum)
+		utils.StartWebSockets(ethereum, WsPort)
 	}
 
-	gui := NewWindow(ethereum, config, ethereum.ClientIdentity().(*p2p.SimpleClientIdentity), KeyRing, LogLevel)
+	gui := NewWindow(ethereum, config, KeyRing, LogLevel)
 
 	utils.RegisterInterrupt(func(os.Signal) {
 		gui.Stop()
 	})
-	go utils.StartEthereum(ethereum, UseSeed)
+	go utils.StartEthereum(ethereum)
 
 	fmt.Println("ETH stack took", time.Since(tstart))
 

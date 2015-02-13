@@ -17,8 +17,6 @@
 /**
  * @authors
  * 	Jeffrey Wilcke <i@jev.io>
- * @date 2014
- *
  */
 
 package main
@@ -37,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/ptrie"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
 )
@@ -65,7 +62,7 @@ func main() {
 	ethutil.ReadConfig("/tmp/evmtest", "/tmp/evm", "")
 
 	db, _ := ethdb.NewMemDatabase()
-	statedb := state.New(ptrie.New(nil, db))
+	statedb := state.New(nil, db)
 	sender := statedb.NewStateObject([]byte("sender"))
 	receiver := statedb.NewStateObject([]byte("receiver"))
 	//receiver.SetCode([]byte(*code))
@@ -131,8 +128,15 @@ func (self *VMEnv) Difficulty() *big.Int  { return ethutil.Big1 }
 func (self *VMEnv) BlockHash() []byte     { return make([]byte, 32) }
 func (self *VMEnv) Value() *big.Int       { return self.value }
 func (self *VMEnv) GasLimit() *big.Int    { return big.NewInt(1000000000) }
+func (self *VMEnv) VmType() vm.Type       { return vm.StdVmTy }
 func (self *VMEnv) Depth() int            { return 0 }
 func (self *VMEnv) SetDepth(i int)        { self.depth = i }
+func (self *VMEnv) GetHash(n uint64) []byte {
+	if self.block.Number().Cmp(big.NewInt(int64(n))) == 0 {
+		return self.block.Hash()
+	}
+	return nil
+}
 func (self *VMEnv) AddLog(log state.Log) {
 	self.state.AddLog(log)
 }

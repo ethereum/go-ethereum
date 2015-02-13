@@ -1,10 +1,10 @@
 #!/bin/bash
 
-TIMEOUT=35
+TIMEOUT=12
 
 cat >> $JSFILE <<EOF
 eth.addPeer("localhost:30311");
-sleep(30000);
+sleep(10000);
 eth.export("$CHAIN_TEST");
 EOF
 

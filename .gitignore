@@ -10,3 +10,10 @@
 .DS_Store
 */**/.DS_Store
 .ethtest
+
+#*
+.#*
+*#
+*~
+.project
+.settings

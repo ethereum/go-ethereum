@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
-	"github.com/obscuren/sha3"
 )
 
 var powlogger = logger.NewLogger("POW")
@@ -21,7 +21,7 @@ type EasyPow struct {
 }
 
 func New() *EasyPow {
-	return &EasyPow{turbo: false}
+	return &EasyPow{turbo: true}
 }
 
 func (pow *EasyPow) GetHashrate() int64 {
@@ -36,27 +36,33 @@ func (pow *EasyPow) Search(block pow.Block, stop <-chan struct{}) []byte {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	hash := block.HashNoNonce()
 	diff := block.Difficulty()
-	i := int64(0)
+	//i := int64(0)
+	// TODO fix offset
+	i := rand.Int63()
+	starti := i
 	start := time.Now().UnixNano()
-	t := time.Now()
+
+	// Make sure stop is empty
+empty:
+	for {
+		select {
+		case <-stop:
+		default:
+			break empty
+		}
+	}
 
 	for {
 		select {
 		case <-stop:
-			powlogger.Infoln("Breaking from mining")
 			pow.HashRate = 0
 			return nil
 		default:
 			i++
 
-			if time.Since(t) > (1 * time.Second) {
-				elapsed := time.Now().UnixNano() - start
-				hashes := ((float64(1e9) / float64(elapsed)) * float64(i)) / 1000
-				pow.HashRate = int64(hashes)
-				powlogger.Infoln("Hashing @", pow.HashRate, "khash")
-
-				t = time.Now()
-			}
+			elapsed := time.Now().UnixNano() - start
+			hashes := ((float64(1e9) / float64(elapsed)) * float64(i-starti)) / 1000
+			pow.HashRate = int64(hashes)
 
 			sha := crypto.Sha3(big.NewInt(r.Int63()).Bytes())
 			if verify(hash, diff, sha) {
@@ -83,7 +89,7 @@ func verify(hash []byte, diff *big.Int, nonce []byte) bool {
 	sha.Write(d)
 
 	verification := new(big.Int).Div(ethutil.BigPow(2, 256), diff)
-	res := ethutil.U256(ethutil.BigD(sha.Sum(nil)))
+	res := ethutil.BigD(sha.Sum(nil))
 
 	return res.Cmp(verification) <= 0
 }

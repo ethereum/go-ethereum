@@ -111,7 +111,7 @@ Rectangle {
 		if(initial){
 			blockModel.append({raw: block.raw, bloom: block.bloom, size: block.size, number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
 		} else {
-			blockModel.insert(0, {bloom: block.bloom, size: block.size, number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
+			blockModel.insert(0, {raw: block.raw, bloom: block.bloom, size: block.size, number: block.number, name: block.name, gasLimit: block.gasLimit, gasUsed: block.gasUsed, coinbase: block.coinbase, hash: block.hash, txs: txs, txAmount: amount, time: block.time, prettyTime: convertToPretty(block.time)})
 		}
 	}
 

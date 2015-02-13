@@ -6,12 +6,9 @@ import (
 	"math/big"
 	"sort"
 	"time"
-
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/ptrie"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/state"
 )
 
 type Header struct {
@@ -148,6 +145,10 @@ func (self *Block) SetTransactions(transactions Transactions) {
 	self.transactions = transactions
 	self.header.TxHash = DeriveSha(transactions)
 }
+func (self *Block) AddTransaction(transaction *Transaction) {
+	self.transactions = append(self.transactions, transaction)
+	self.SetTransactions(self.transactions)
+}
 
 func (self *Block) Receipts() Receipts {
 	return self.receipts
@@ -157,6 +158,10 @@ func (self *Block) SetReceipts(receipts Receipts) {
 	self.receipts = receipts
 	self.header.ReceiptHash = DeriveSha(receipts)
 	self.header.Bloom = CreateBloom(receipts)
+}
+func (self *Block) AddReceipt(receipt *Receipt) {
+	self.receipts = append(self.receipts, receipt)
+	self.SetReceipts(self.receipts)
 }
 
 func (self *Block) RlpData() interface{} {
@@ -175,9 +180,8 @@ func (self *Block) Coinbase() []byte          { return self.header.Coinbase }
 func (self *Block) Time() int64               { return int64(self.header.Time) }
 func (self *Block) GasLimit() *big.Int        { return self.header.GasLimit }
 func (self *Block) GasUsed() *big.Int         { return self.header.GasUsed }
-func (self *Block) Trie() *ptrie.Trie         { return ptrie.New(self.header.Root, ethutil.Config.Db) }
+func (self *Block) Root() []byte              { return self.header.Root }
 func (self *Block) SetRoot(root []byte)       { self.header.Root = root }
-func (self *Block) State() *state.StateDB     { return state.New(self.Trie()) }
 func (self *Block) Size() ethutil.StorageSize { return ethutil.StorageSize(len(ethutil.Encode(self))) }
 
 // Implement pow.Block

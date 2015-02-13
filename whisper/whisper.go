@@ -60,7 +60,7 @@ type Whisper struct {
 
 	quit chan struct{}
 
-	keys []*ecdsa.PrivateKey
+	keys map[string]*ecdsa.PrivateKey
 }
 
 func New() *Whisper {
@@ -69,6 +69,7 @@ func New() *Whisper {
 		filters:  filter.New(),
 		expiry:   make(map[uint32]*set.SetNonTS),
 		quit:     make(chan struct{}),
+		keys:     make(map[string]*ecdsa.PrivateKey),
 	}
 	whisper.filters.Start()
 
@@ -101,29 +102,45 @@ func (self *Whisper) NewIdentity() *ecdsa.PrivateKey {
 	if err != nil {
 		panic(err)
 	}
-	self.keys = append(self.keys, key)
+
+	self.keys[string(crypto.FromECDSAPub(&key.PublicKey))] = key
 
 	return key
 }
 
-func (self *Whisper) HasIdentity(key *ecdsa.PrivateKey) bool {
-	for _, key := range self.keys {
-		if key.D.Cmp(key.D) == 0 {
-			return true
-		}
-	}
-	return false
+func (self *Whisper) HasIdentity(key *ecdsa.PublicKey) bool {
+	return self.keys[string(crypto.FromECDSAPub(key))] != nil
+}
+
+func (self *Whisper) GetIdentity(key *ecdsa.PublicKey) *ecdsa.PrivateKey {
+	return self.keys[string(crypto.FromECDSAPub(key))]
 }
 
 func (self *Whisper) Watch(opts Filter) int {
 	return self.filters.Install(filter.Generic{
-		Str1: string(crypto.FromECDSA(opts.To)),
+		Str1: string(crypto.FromECDSAPub(opts.To)),
 		Str2: string(crypto.FromECDSAPub(opts.From)),
 		Data: bytesToMap(opts.Topics),
 		Fn: func(data interface{}) {
 			opts.Fn(data.(*Message))
 		},
 	})
+}
+
+func (self *Whisper) Messages(id int) (messages []*Message) {
+	filter := self.filters.Get(id)
+	if filter != nil {
+		for _, e := range self.messages {
+			if msg, key := self.open(e); msg != nil {
+				f := createFilter(msg, e.Topics, key)
+				if self.filters.Match(filter, f) {
+					messages = append(messages, msg)
+				}
+			}
+		}
+	}
+
+	return
 }
 
 // Main handler for passing whisper messages to whisper peer objects
@@ -144,17 +161,19 @@ func (self *Whisper) msgHandler(peer *p2p.Peer, ws p2p.MsgReadWriter) error {
 			return err
 		}
 
-		envelope, err := NewEnvelopeFromReader(msg.Payload)
-		if err != nil {
+		var envelopes []*Envelope
+		if err := msg.Decode(&envelopes); err != nil {
 			peer.Infoln(err)
 			continue
 		}
 
-		if err := self.add(envelope); err != nil {
-			// TODO Punish peer here. Invalid envelope.
-			peer.Infoln(err)
+		for _, envelope := range envelopes {
+			if err := self.add(envelope); err != nil {
+				// TODO Punish peer here. Invalid envelope.
+				peer.Infoln(err)
+			}
+			wpeer.addKnown(envelope)
 		}
-		wpeer.addKnown(envelope)
 	}
 }
 
@@ -177,6 +196,8 @@ func (self *Whisper) add(envelope *Envelope) error {
 		self.expiry[envelope.Expiry].Add(hash)
 		go self.postEvent(envelope)
 	}
+
+	wlogger.DebugDetailf("added whisper envelope %x\n", envelope)
 
 	return nil
 }
@@ -227,19 +248,30 @@ func (self *Whisper) envelopes() (envelopes []*Envelope) {
 }
 
 func (self *Whisper) postEvent(envelope *Envelope) {
+	if message, key := self.open(envelope); message != nil {
+		self.filters.Notify(createFilter(message, envelope.Topics, key), message)
+	}
+}
+
+func (self *Whisper) open(envelope *Envelope) (*Message, *ecdsa.PrivateKey) {
 	for _, key := range self.keys {
 		if message, err := envelope.Open(key); err == nil || (err != nil && err == ecies.ErrInvalidPublicKey) {
-			// Create a custom filter?
-			self.filters.Notify(filter.Generic{
-				Str1: string(crypto.FromECDSA(key)), Str2: string(crypto.FromECDSAPub(message.Recover())),
-				Data: bytesToMap(envelope.Topics),
-			}, message)
-		} else {
-			wlogger.Infoln(err)
+			message.To = &key.PublicKey
+
+			return message, key
 		}
 	}
+
+	return nil, nil
 }
 
 func (self *Whisper) Protocol() p2p.Protocol {
 	return self.protocol
+}
+
+func createFilter(message *Message, topics [][]byte, key *ecdsa.PrivateKey) filter.Filter {
+	return filter.Generic{
+		Str1: string(crypto.FromECDSAPub(&key.PublicKey)), Str2: string(crypto.FromECDSAPub(message.Recover())),
+		Data: bytesToMap(topics),
+	}
 }

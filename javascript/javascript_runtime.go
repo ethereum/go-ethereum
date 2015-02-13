@@ -24,7 +24,7 @@ var jsrelogger = logger.NewLogger("JSRE")
 type JSRE struct {
 	ethereum *eth.Ethereum
 	Vm       *otto.Otto
-	pipe     *xeth.JSXEth
+	pipe     *xeth.XEth
 
 	events event.Subscription
 
@@ -49,7 +49,7 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	re := &JSRE{
 		ethereum,
 		otto.New(),
-		xeth.NewJSXEth(ethereum),
+		xeth.New(ethereum),
 		nil,
 		make(map[string][]otto.Value),
 	}
@@ -58,8 +58,7 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	re.Vm.Run(jsLib)
 
 	// Load extra javascript files
-	re.LoadIntFile("string.js")
-	re.LoadIntFile("big.js")
+	re.LoadIntFile("bignumber.min.js")
 
 	// Subscribe to events
 	mux := ethereum.EventMux()
@@ -129,10 +128,9 @@ func (self *JSRE) initStdFuncs() {
  */
 
 func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
-	var state *state.StateDB
+	var block *types.Block
 
 	if len(call.ArgumentList) > 0 {
-		var block *types.Block
 		if call.Argument(0).IsNumber() {
 			num, _ := call.Argument(0).ToInteger()
 			block = self.ethereum.ChainManager().GetBlockByNumber(uint64(num))
@@ -149,12 +147,12 @@ func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
 			return otto.UndefinedValue()
 		}
 
-		state = block.State()
 	} else {
-		state = self.ethereum.ChainManager().State()
+		block = self.ethereum.ChainManager().CurrentBlock()
 	}
 
-	v, _ := self.Vm.ToValue(state.Dump())
+	statedb := state.New(block.Root(), self.ethereum.Db())
+	v, _ := self.Vm.ToValue(statedb.Dump())
 
 	return v
 }
@@ -199,12 +197,13 @@ func (self *JSRE) watch(call otto.FunctionCall) otto.Value {
 }
 
 func (self *JSRE) addPeer(call otto.FunctionCall) otto.Value {
-	host, err := call.Argument(0).ToString()
+	nodeURL, err := call.Argument(0).ToString()
 	if err != nil {
 		return otto.FalseValue()
 	}
-	self.ethereum.SuggestPeer(host)
-
+	if err := self.ethereum.SuggestPeer(nodeURL); err != nil {
+		return otto.FalseValue()
+	}
 	return otto.TrueValue()
 }
 

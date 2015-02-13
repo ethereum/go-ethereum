@@ -6,7 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/ptrie"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 type Code []byte
@@ -28,6 +28,7 @@ func (self Storage) Copy() Storage {
 }
 
 type StateObject struct {
+	db ethutil.Database
 	// Address of the object
 	address []byte
 	// Shared attributes
@@ -57,28 +58,20 @@ func (self *StateObject) Reset() {
 	self.State.Reset()
 }
 
-func NewStateObject(addr []byte) *StateObject {
+func NewStateObject(addr []byte, db ethutil.Database) *StateObject {
 	// This to ensure that it has 20 bytes (and not 0 bytes), thus left or right pad doesn't matter.
 	address := ethutil.Address(addr)
 
-	object := &StateObject{address: address, balance: new(big.Int), gasPool: new(big.Int)}
-	object.State = New(ptrie.New(nil, ethutil.Config.Db)) //New(trie.New(ethutil.Config.Db, ""))
+	object := &StateObject{db: db, address: address, balance: new(big.Int), gasPool: new(big.Int)}
+	object.State = New(nil, db) //New(trie.New(ethutil.Config.Db, ""))
 	object.storage = make(Storage)
 	object.gasPool = new(big.Int)
 
 	return object
 }
 
-func NewContract(address []byte, balance *big.Int, root []byte) *StateObject {
-	contract := NewStateObject(address)
-	contract.balance = balance
-	contract.State = New(ptrie.New(nil, ethutil.Config.Db)) //New(trie.New(ethutil.Config.Db, string(root)))
-
-	return contract
-}
-
-func NewStateObjectFromBytes(address, data []byte) *StateObject {
-	object := &StateObject{address: address}
+func NewStateObjectFromBytes(address, data []byte, db ethutil.Database) *StateObject {
+	object := &StateObject{address: address, db: db}
 	object.RlpDecode(data)
 
 	return object
@@ -128,26 +121,6 @@ func (self *StateObject) SetState(k []byte, value *ethutil.Value) {
 	self.storage[string(key)] = value.Copy()
 }
 
-/*
-// Iterate over each storage address and yield callback
-func (self *StateObject) EachStorage(cb trie.EachCallback) {
-	// First loop over the uncommit/cached values in storage
-	for key, value := range self.storage {
-		// XXX Most iterators Fns as it stands require encoded values
-		encoded := ethutil.NewValue(value.Encode())
-		cb(key, encoded)
-	}
-
-	it := self.State.Trie.NewIterator()
-	it.Each(func(key string, value *ethutil.Value) {
-		// If it's cached don't call the callback.
-		if self.storage[key] == nil {
-			cb(key, value)
-		}
-	})
-}
-*/
-
 func (self *StateObject) Sync() {
 	for key, value := range self.storage {
 		if value.Len() == 0 {
@@ -157,15 +130,6 @@ func (self *StateObject) Sync() {
 
 		self.setAddr([]byte(key), value)
 	}
-
-	/*
-		valid, t2 := ptrie.ParanoiaCheck(self.State.trie, ethutil.Config.Db)
-		if !valid {
-			statelogger.Infof("Warn: PARANOIA: Different state storage root during copy %x vs %x\n", self.State.Root(), t2.Root())
-
-			self.State.trie = t2
-		}
-	*/
 }
 
 func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
@@ -242,7 +206,7 @@ func (self *StateObject) RefundGas(gas, price *big.Int) {
 }
 
 func (self *StateObject) Copy() *StateObject {
-	stateObject := NewStateObject(self.Address())
+	stateObject := NewStateObject(self.Address(), self.db)
 	stateObject.balance.Set(self.balance)
 	stateObject.codeHash = ethutil.CopyBytes(self.codeHash)
 	stateObject.Nonce = self.Nonce
@@ -280,7 +244,7 @@ func (c *StateObject) Init() Code {
 	return c.InitCode
 }
 
-func (self *StateObject) Trie() *ptrie.Trie {
+func (self *StateObject) Trie() *trie.Trie {
 	return self.State.trie
 }
 
@@ -310,13 +274,13 @@ func (c *StateObject) RlpDecode(data []byte) {
 
 	c.Nonce = decoder.Get(0).Uint()
 	c.balance = decoder.Get(1).BigInt()
-	c.State = New(ptrie.New(decoder.Get(2).Bytes(), ethutil.Config.Db)) //New(trie.New(ethutil.Config.Db, decoder.Get(2).Interface()))
+	c.State = New(decoder.Get(2).Bytes(), c.db) //New(trie.New(ethutil.Config.Db, decoder.Get(2).Interface()))
 	c.storage = make(map[string]*ethutil.Value)
 	c.gasPool = new(big.Int)
 
 	c.codeHash = decoder.Get(3).Bytes()
 
-	c.Code, _ = ethutil.Config.Db.Get(c.codeHash)
+	c.Code, _ = c.db.Get(c.codeHash)
 }
 
 // Storage change object. Used by the manifest for notifying changes to

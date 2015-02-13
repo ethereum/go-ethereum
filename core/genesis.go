@@ -19,20 +19,21 @@ var ZeroHash512 = make([]byte, 64)
 var EmptyShaList = crypto.Sha3(ethutil.Encode([]interface{}{}))
 var EmptyListRoot = crypto.Sha3(ethutil.Encode(""))
 
-func GenesisBlock() *types.Block {
+func GenesisBlock(db ethutil.Database) *types.Block {
 	genesis := types.NewBlock(ZeroHash256, ZeroHash160, nil, big.NewInt(131072), crypto.Sha3(big.NewInt(42).Bytes()), "")
 	genesis.Header().Number = ethutil.Big0
 	genesis.Header().GasLimit = big.NewInt(1000000)
 	genesis.Header().GasUsed = ethutil.Big0
 	genesis.Header().Time = 0
+	genesis.Td = ethutil.Big0
 
 	genesis.SetUncles([]*types.Header{})
 	genesis.SetTransactions(types.Transactions{})
 	genesis.SetReceipts(types.Receipts{})
 
-	statedb := state.New(genesis.Trie())
+	statedb := state.New(genesis.Root(), db)
 	for _, addr := range []string{
-		"51ba59315b3a95761d0863b05ccc7a7f54703d99",
+		"dbdbdb2cbd23b783741e8d7fcf51e459b497e4a6",
 		"e4157b34ea9615cfbde6b4fda419828124b70c78",
 		"b9c015918bdaba24b4ff057a92a3873d6eb201be",
 		"6c386a4b26f73c802f34673f7248bb118f97424a",
