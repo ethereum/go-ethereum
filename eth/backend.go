@@ -268,12 +268,17 @@ func (s *Ethereum) Start(seed bool, p string, pull string) error {
 	}
 
 	if len(pull) > 0 {
-		reader := s.dpa.Retrieve([]byte(pull))
-		fo, err := os.Open("/tmp/swarm.tmp")
+		key := []byte(pull)
+		reader := s.dpa.Retrieve(key)
+		logger.Debugf("retrieved reader for %064x", key)
+		fo, err := os.OpenFile("/tmp/swarm.tmp", os.O_CREATE|os.O_RDWR, 0666)
 		if err != nil {
 			logger.Warnf("file open error %v", err)
 		} else {
-			io.Copy(fo, reader)
+			n, err := io.Copy(fo, reader)
+			if err != nil && err != io.EOF {
+				logger.Debugf("read %v bytes. read error for %064x: %v", n, key, err)
+			}
 		}
 	}
 
