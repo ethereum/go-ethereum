@@ -9,7 +9,7 @@ import (
 func TestKeyStorePlain(t *testing.T) {
 	ks := NewKeyStorePlain(DefaultDataDir())
 	pass := "" // not used but required by API
-	k1, err := ks.GenerateNewKey(new(randentropy.RandEntropy), pass)
+	k1, err := ks.GenerateNewKey(randentropy.Reader, pass)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestKeyStorePlain(t *testing.T) {
 func TestKeyStorePassphrase(t *testing.T) {
 	ks := NewKeyStorePassphrase(DefaultDataDir())
 	pass := "foo"
-	k1, err := ks.GenerateNewKey(new(randentropy.RandEntropy), pass)
+	k1, err := ks.GenerateNewKey(randentropy.Reader, pass)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestKeyStorePassphrase(t *testing.T) {
 func TestKeyStorePassphraseDecryptionFail(t *testing.T) {
 	ks := NewKeyStorePassphrase(DefaultDataDir())
 	pass := "foo"
-	k1, err := ks.GenerateNewKey(new(randentropy.RandEntropy), pass)
+	k1, err := ks.GenerateNewKey(randentropy.Reader, pass)
 	if err != nil {
 		t.Fatal(err)
 	}

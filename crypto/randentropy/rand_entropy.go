@@ -10,10 +10,12 @@ import (
 	"time"
 )
 
-type RandEntropy struct {
+var Reader io.Reader = &randEntropy{}
+
+type randEntropy struct {
 }
 
-func (*RandEntropy) Read(bytes []byte) (n int, err error) {
+func (*randEntropy) Read(bytes []byte) (n int, err error) {
 	readBytes := GetEntropyMixed(len(bytes))
 	copy(bytes, readBytes)
 	return len(bytes), nil
