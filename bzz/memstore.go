@@ -159,6 +159,7 @@ func (s *memStore) getEntryCnt() uint {
 
 }
 
+// entry (not its copy) is going to be in memStore
 func (s *memStore) Put(entry *Chunk) {
 
 	if s.capacity == 0 {
@@ -193,13 +194,15 @@ func (s *memStore) Put(entry *Chunk) {
 
 		if node.entry.Key.isEqual(entry.Key) {
 			node.updateAccess(s.accessCnt)
-			if node.entry.Data == nil {
-				node.entry.Size = entry.Size
-				node.entry.Data = entry.Data
+			if entry.Data == nil {
+				entry.Size = node.entry.Size
+				entry.Data = node.entry.Data
 			}
-			if node.entry.req == nil {
-				node.entry.req = entry.req
+			if entry.req == nil {
+				entry.req = node.entry.req
 			}
+			entry.C = node.entry.C
+			node.entry = entry
 			return
 		}
 
@@ -253,11 +256,7 @@ func (s *memStore) Get(hash Key) (chunk *Chunk, err error) {
 	if node.entry.Key.isEqual(hash) {
 		s.accessCnt++
 		node.updateAccess(s.accessCnt)
-		chunk = &Chunk{
-			Key:  hash,
-			Data: node.entry.Data,
-			Size: node.entry.Size,
-		}
+		chunk = node.entry
 		if s.dbAccessCnt-node.lastDBaccess > dbForceUpdateAccessCnt {
 			s.dbAccessCnt++
 			node.lastDBaccess = s.dbAccessCnt
