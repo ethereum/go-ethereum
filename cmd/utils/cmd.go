@@ -120,9 +120,9 @@ func exit(err error) {
 	os.Exit(status)
 }
 
-func StartEthereum(ethereum *eth.Ethereum, UseSeed bool, Peers string) {
+func StartEthereum(ethereum *eth.Ethereum, UseSeed bool, Peers string, Pull string) {
 	clilogger.Infof("Starting %s", ethereum.ClientIdentity())
-	err := ethereum.Start(UseSeed, Peers)
+	err := ethereum.Start(UseSeed, Peers, Pull)
 	if err != nil {
 		exit(err)
 	}

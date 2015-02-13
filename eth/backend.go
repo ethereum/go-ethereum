@@ -2,7 +2,9 @@ package eth
 
 import (
 	"fmt"
+	"io"
 	"net"
+	"os"
 	"strings"
 	"sync"
 
@@ -70,6 +72,7 @@ type Ethereum struct {
 
 	RpcServer  *rpc.JsonRpcServer
 	keyManager *crypto.KeyManager
+	dpa        *bzz.DPA
 
 	clientIdentity p2p.ClientIdentity
 	logger         ethlogger.LogSystem
@@ -144,12 +147,12 @@ func New(config *Config) (*Ethereum, error) {
 	}
 	chunker := &bzz.TreeChunker{}
 	chunker.Init()
-	dpa := &bzz.DPA{
+	eth.dpa = &bzz.DPA{
 		Chunker:    chunker,
 		ChunkStore: netStore,
 	}
-	dpa.Start()
-	go bzz.StartHttpServer(dpa)
+	eth.dpa.Start()
+	go bzz.StartHttpServer(eth.dpa)
 
 	nat, err := p2p.ParseNAT(config.NATType, config.PMPGateway)
 	if err != nil {
@@ -234,7 +237,7 @@ func (s *Ethereum) MaxPeers() int {
 }
 
 // Start the ethereum
-func (s *Ethereum) Start(seed bool, p string) error {
+func (s *Ethereum) Start(seed bool, p string, pull string) error {
 	err := s.net.Start()
 	if err != nil {
 		return err
@@ -261,6 +264,17 @@ func (s *Ethereum) Start(seed bool, p string) error {
 			if err := s.SuggestPeer(peer); err != nil {
 				return err
 			}
+		}
+	}
+
+	if len(pull) > 0 {
+		key := make([]byte, s.dpa.Chunker.KeySize())
+		reader := s.dpa.Retrieve(key)
+		fo, err := os.Open("/tmp/swarm.tmp")
+		if err != nil {
+			logger.Warnf("file open error %v", err)
+		} else {
+			io.Copy(fo, reader)
 		}
 	}
 

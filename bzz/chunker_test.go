@@ -178,14 +178,22 @@ func readAll(reader SectionReader, result []byte) {
 }
 
 func benchmarkJoinRandomData(n int, chunks int, t *testing.B) {
+	t.StopTimer()
 	for i := 0; i < t.N; i++ {
-		t.StopTimer()
+		// fmt.Printf("round %v\n", i)
 		chunker, tester := chunkerAndTester()
-		key, _ := tester.Split(chunker, n)
+		key, slice := tester.Split(chunker, n)
+		// fmt.Printf("split done %v, joining...\n", i)
 		t.StartTimer()
 		reader := tester.Join(chunker, key, i)
+		// fmt.Printf("join done %v, reading...\n", i)
 		result := make([]byte, n)
 		readAll(reader, result)
+		// fmt.Printf("read done %v\n", i)
+		t.StopTimer()
+		if !bytes.Equal(slice, result) {
+			t.Errorf("input output mismatch")
+		}
 	}
 }
 
