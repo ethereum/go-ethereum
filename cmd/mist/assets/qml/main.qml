@@ -1054,37 +1054,23 @@ ApplicationWindow {
          Window {
              id: addPeerWin
              visible: false
-             minimumWidth: 300
-             maximumWidth: 300
+             minimumWidth: 400
+             maximumWidth: 400
              maximumHeight: 50
              minimumHeight: 50
              title: "Connect to peer"
 
-             ComboBox {
+             TextField {
                  id: addrField
                  anchors.verticalCenter: parent.verticalCenter
                  anchors.left: parent.left
                  anchors.right: addPeerButton.left
                  anchors.leftMargin: 10
                  anchors.rightMargin: 10
+		 placeholderText: "enode://<hex node id>:<IP address>:<port>"
                  onAccepted: {
-                     eth.connectToPeer(addrField.currentText)
+                     eth.connectToPeer(addrField.text)
                      addPeerWin.visible = false
-                 }
-
-                 editable: true
-                 model: ListModel { id: pastPeers }
-
-                 Component.onCompleted: {
-                     pastPeers.insert(0, {text: "poc-8.ethdev.com:30303"})
-                     /*
-                      var ips = eth.pastPeers()
-                      for(var i = 0; i < ips.length; i++) {
-                          pastPeers.append({text: ips.get(i)})
-                      }
-
-                      pastPeers.insert(0, {text: "poc-7.ethdev.com:30303"})
-                      */
                  }
              }
 
@@ -1093,7 +1079,7 @@ ApplicationWindow {
                  anchors.right: parent.right
                  anchors.verticalCenter: parent.verticalCenter
                  anchors.rightMargin: 10
-                 text: "Add"
+                 text: "Connect"
                  onClicked: {
                      eth.connectToPeer(addrField.currentText)
                      addPeerWin.visible = false
