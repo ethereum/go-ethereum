@@ -131,6 +131,7 @@ func (self *worker) wait() {
 				self.current.block.Header().Nonce = work.Nonce
 
 				self.chain.InsertChain(types.Blocks{self.current.block})
+				self.mux.Post(core.NewMinedBlockEvent{self.current.block})
 			}
 			break
 		}

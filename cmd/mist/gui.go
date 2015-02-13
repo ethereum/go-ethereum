@@ -412,9 +412,7 @@ func (gui *Gui) update() {
 			switch ev := ev.(type) {
 			case core.NewBlockEvent:
 				gui.processBlock(ev.Block, false)
-				if bytes.Compare(ev.Block.Coinbase(), gui.address()) == 0 {
-					gui.setWalletValue(gui.eth.ChainManager().State().GetBalance(gui.address()), nil)
-				}
+				gui.setWalletValue(gui.eth.ChainManager().State().GetBalance(gui.address()), nil)
 
 			case core.TxPreEvent:
 				tx := ev.Tx
