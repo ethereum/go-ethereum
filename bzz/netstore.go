@@ -69,8 +69,9 @@ func (self *NetStore) Put(entry *Chunk) {
 func (self *NetStore) put(entry *Chunk) {
 	self.localStore.Put(entry)
 	dpaLogger.Debugf("NetStore.put: localStore.Put of %064x completed.", entry.Key)
-	self.store(entry)
+	go self.store(entry)
 	// only send responses once
+	dpaLogger.Debugf("NetStore.put: req: %#v", entry.Key)
 	if entry.req != nil && entry.req.status == reqSearching {
 		entry.req.status = reqFound
 		close(entry.req.C)
@@ -156,8 +157,6 @@ func (self *NetStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 	req.timeout = &t
 
 	send, timeout := self.strategyUpdateRequest(chunk.req, req) // may change req status
-
-	dpaLogger.Debugf("Is %v == %v?", send, storeRequestMsg)
 
 	if send == storeRequestMsg {
 		dpaLogger.Debugf("NetStore.addRetrieveRequest: %064x - content found, delivering...", req.Key)
