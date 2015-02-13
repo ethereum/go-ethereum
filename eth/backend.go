@@ -103,7 +103,7 @@ type Ethereum struct {
 func New(config *Config) (*Ethereum, error) {
 	// Boostrap database
 	logger := ethlogger.New(config.DataDir, config.LogFile, config.LogLevel, config.LogFormat)
-	db, err := ethdb.NewLDBDatabase("blockchain")
+	db, err := ethdb.NewLDBDatabase(config.DataDir + "/blockchain")
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +112,7 @@ func New(config *Config) (*Ethereum, error) {
 	d, _ := db.Get([]byte("ProtocolVersion"))
 	protov := ethutil.NewValue(d).Uint()
 	if protov != ProtocolVersion && protov != 0 {
-		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, ProtocolVersion, ethutil.Config.ExecPath+"/database")
+		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, ProtocolVersion, config.DataDir+"/blockchain")
 	}
 
 	// Create new keymanager
@@ -164,8 +164,6 @@ func New(config *Config) (*Ethereum, error) {
 		Chunker:    chunker,
 		ChunkStore: netStore,
 	}
-	eth.dpa.Start()
-	go bzz.StartHttpServer(eth.dpa)
 
 	netprv := config.NodeKey
 	if netprv == nil {
@@ -275,6 +273,9 @@ func (s *Ethereum) Start(p string, pull string) error {
 	if s.whisper != nil {
 		s.whisper.Start()
 	}
+
+	s.dpa.Start()
+	bzz.StartHttpServer(s.dpa)
 
 	// broadcast transactions
 	s.txSub = s.eventMux.Subscribe(core.TxPreEvent{})

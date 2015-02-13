@@ -141,7 +141,7 @@ func handler(w http.ResponseWriter, r *http.Request, dpa *DPA) {
 				if int64(size) < manifestReader.Size() {
 					dpaLogger.Debugf("Swarm: Manifest %s not found.", name)
 					if err == nil {
-						http.Error(w, "Manifest retrieval cut short: "+string(size)+"<"+string(manifestReader.Size()),
+						http.Error(w, "Manifest retrieval cut short: "+string(size)+"&lt;"+string(manifestReader.Size()),
 							http.StatusNotFound)
 					} else {
 						http.Error(w, err.Error(), http.StatusNotFound)
@@ -215,5 +215,6 @@ func StartHttpServer(dpa *DPA) {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		handler(w, r, dpa)
 	})
-	http.ListenAndServe(port, nil)
+	go http.ListenAndServe(port, nil)
+	dpaLogger.Infof("Swarm HTTP proxy started.")
 }

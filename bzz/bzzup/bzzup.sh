@@ -5,7 +5,7 @@ INDEX='index.html'
 bzzroot="$1"
 [ "_$1" = _ ] && bzzroot=.
 
-delimiter='[{'
+delimiter='{"entries":[{'
 
 pushd "$bzzroot" > /dev/null
 
@@ -16,11 +16,11 @@ name=`echo "$path" | cut -c2-`
 echo -n "$delimiter"
 hash=`wget -q -O- --post-file="$path" http://localhost:8500/raw`
 mime=`mimetype -b "$path"`
-echo -n "\"hash\":\"$hash\",\"path\":\"$name\",\"content_type\":\"$mime\""
+echo -n "\"hash\":\"$hash\",\"path\":\"$name\",\"contentType\":\"$mime\""
 delimiter='},{'
 
 done
-echo -n '}]') | wget -q -O- --post-data=`cat` http://localhost:8500/raw
+echo -n '}]}') | wget -q -O- --post-data=`cat` http://localhost:8500/raw
 
 echo
 

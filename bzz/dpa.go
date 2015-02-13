@@ -108,6 +108,7 @@ func (self *DPA) Start() {
 	self.quitC = make(chan bool)
 	self.storeLoop()
 	self.retrieveLoop()
+	dpaLogger.Infof("Swarm started.")
 }
 
 func (self *DPA) Stop() {
