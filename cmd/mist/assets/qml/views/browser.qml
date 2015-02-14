@@ -352,7 +352,15 @@ Rectangle {
 					});
 
 					webView.runJavaScript("try{document.querySelector(\"meta[name='ethereum-dapp-url-bar-style']\").getAttribute(\"content\")}catch(e){}", function(topBarStyle){
-						if (!topBarStyle) return;
+						if (!topBarStyle) {
+							showFullUrlBar(true);
+							navBarBackground.visible = true;
+							back.visible = true;
+							appInfoPane.anchors.leftMargin = 0;
+							appInfoPaneShadow.anchors.leftMargin = 0;
+							webview.anchors.topMargin = 0;
+							return;
+						}
 
 						if (topBarStyle=="transparent") {
 							// Adjust for a transparent sidebar Dapp
