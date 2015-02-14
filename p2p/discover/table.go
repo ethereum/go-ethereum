@@ -2,7 +2,7 @@
 //
 // The Node Discovery protocol provides a way to find RLPx nodes that
 // can be connected to. It uses a Kademlia-like protocol to maintain a
-// distributed database of the IDs and endpoints of all listening
+// distributed database of the PublicKeys and endpoints of all listening
 // nodes.
 package discover
 
@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	alpha      = 3              // Kademlia concurrency factor
-	bucketSize = 16             // Kademlia bucket size
-	nBuckets   = nodeIDBits + 1 // Number of buckets
+	alpha      = 3          // Kademlia concurrency factor
+	bucketSize = 16         // Kademlia bucket size
+	nBuckets   = idBits + 1 // Number of buckets
 )
 
 type Table struct {
@@ -43,17 +43,22 @@ type bucket struct {
 	entries    []*Node
 }
 
-func newTable(t transport, ourID NodeID, ourAddr *net.UDPAddr) *Table {
-	tab := &Table{net: t, self: newNode(ourID, ourAddr)}
+func newTable(t transport, ourPublicKey PublicKey, id NodeID, ourAddr *net.UDPAddr) *Table {
+	tab := &Table{net: t, self: newNode(ourPublicKey, id, ourAddr)}
 	for i := range tab.buckets {
 		tab.buckets[i] = new(bucket)
 	}
 	return tab
 }
 
-// Self returns the local node ID.
-func (tab *Table) Self() NodeID {
-	return tab.self.ID
+// PublicKey returns the local node PublicKey.
+func (tab *Table) PublicKey() PublicKey {
+	return tab.self.PublicKey
+}
+
+// NodeID returns the local node NodeID.
+func (tab *Table) NodeID() NodeID {
+	return tab.self.NodeID
 }
 
 // Close terminates the network listener.
@@ -90,11 +95,11 @@ func (tab *Table) Lookup(target NodeID) []*Node {
 	// don't query further if we hit the target or ourself.
 	// unlikely to happen often in practice.
 	asked[target] = true
-	asked[tab.self.ID] = true
+	asked[tab.self.NodeID] = true
 
 	tab.mutex.Lock()
 	// update last lookup stamp (for refresh logic)
-	tab.buckets[logdist(tab.self.ID, target)].lastLookup = time.Now()
+	tab.buckets[logdist(tab.self.NodeID, target)].lastLookup = time.Now()
 	// generate initial result set
 	result := tab.closest(target, bucketSize)
 	tab.mutex.Unlock()
@@ -103,8 +108,8 @@ func (tab *Table) Lookup(target NodeID) []*Node {
 		// ask the alpha closest nodes that we haven't asked yet
 		for i := 0; i < len(result.entries) && pendingQueries < alpha; i++ {
 			n := result.entries[i]
-			if !asked[n.ID] {
-				asked[n.ID] = true
+			if !asked[n.NodeID] {
+				asked[n.NodeID] = true
 				pendingQueries++
 				go func() {
 					result, _ := tab.net.findnode(n, target)
@@ -120,8 +125,8 @@ func (tab *Table) Lookup(target NodeID) []*Node {
 		// wait for the next reply
 		for _, n := range <-reply {
 			cn := n
-			if !seen[n.ID] {
-				seen[n.ID] = true
+			if !seen[n.NodeID] {
+				seen[n.NodeID] = true
 				result.push(cn, bucketSize)
 			}
 		}
@@ -142,13 +147,13 @@ func (tab *Table) refresh() {
 	}
 	tab.mutex.Unlock()
 
-	result := tab.Lookup(randomID(tab.self.ID, ld))
+	result := tab.Lookup(randomNodeID(tab.self.NodeID, ld))
 	if len(result) == 0 {
 		// bootstrap the table with a self lookup
 		tab.mutex.Lock()
 		tab.add(tab.nursery)
 		tab.mutex.Unlock()
-		tab.Lookup(tab.self.ID)
+		tab.Lookup(tab.self.NodeID)
 		// TODO: the Kademlia paper says that we're supposed to perform
 		// random lookups in all buckets further away than our closest neighbor.
 	}
@@ -179,10 +184,11 @@ func (tab *Table) len() (n int) {
 // bumpOrAdd updates the activity timestamp for the given node and
 // attempts to insert the node into a bucket. The returned Node might
 // not be part of the table. The caller must hold tab.mutex.
-func (tab *Table) bumpOrAdd(node NodeID, from *net.UDPAddr) (n *Node) {
-	b := tab.buckets[logdist(tab.self.ID, node)]
-	if n = b.bump(node); n == nil {
-		n = newNode(node, from)
+func (tab *Table) bumpOrAdd(pubkey PublicKey, from *net.UDPAddr) (n *Node) {
+	id := Hash(pubkey)
+	b := tab.buckets[logdist(tab.self.NodeID, id)]
+	if n = b.bump(id); n == nil {
+		n = newNode(pubkey, id, from)
 		if len(b.entries) == bucketSize {
 			tab.pingReplace(n, b)
 		} else {
@@ -213,8 +219,8 @@ func (tab *Table) pingReplace(n *Node, b *bucket) {
 
 // bump updates the activity timestamp for the given node.
 // The caller must hold tab.mutex.
-func (tab *Table) bump(node NodeID) {
-	tab.buckets[logdist(tab.self.ID, node)].bump(node)
+func (tab *Table) bump(id NodeID) {
+	tab.buckets[logdist(tab.self.NodeID, id)].bump(id)
 }
 
 // add puts the entries into the table if their corresponding
@@ -222,14 +228,14 @@ func (tab *Table) bump(node NodeID) {
 func (tab *Table) add(entries []*Node) {
 outer:
 	for _, n := range entries {
-		if n == nil || n.ID == tab.self.ID {
+		if n == nil || n.NodeID == tab.self.NodeID {
 			// skip bad entries. The RLP decoder returns nil for empty
 			// input lists.
 			continue
 		}
-		bucket := tab.buckets[logdist(tab.self.ID, n.ID)]
+		bucket := tab.buckets[logdist(tab.self.NodeID, n.NodeID)]
 		for i := range bucket.entries {
-			if bucket.entries[i].ID == n.ID {
+			if bucket.entries[i].NodeID == n.NodeID {
 				// already in bucket
 				continue outer
 			}
@@ -242,7 +248,7 @@ outer:
 
 func (b *bucket) bump(id NodeID) *Node {
 	for i, n := range b.entries {
-		if n.ID == id {
+		if n.NodeID == id {
 			n.active = time.Now()
 			// move it to the front
 			copy(b.entries[1:], b.entries[:i+1])
@@ -263,7 +269,7 @@ type nodesByDistance struct {
 // push adds the given node to the list, keeping the total size below maxElems.
 func (h *nodesByDistance) push(n *Node, maxElems int) {
 	ix := sort.Search(len(h.entries), func(i int) bool {
-		return distcmp(h.target, h.entries[i].ID, n.ID) > 0
+		return distcmp(h.target, h.entries[i].NodeID, n.NodeID) > 0
 	})
 	if len(h.entries) < maxElems {
 		h.entries = append(h.entries, n)

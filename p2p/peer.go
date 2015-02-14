@@ -39,7 +39,7 @@ type handshake struct {
 	Name       string
 	Caps       []Cap
 	ListenPort uint64
-	NodeID     discover.NodeID
+	PublicKey  discover.PublicKey
 }
 
 // Peer represents a connected remote node.
@@ -52,8 +52,9 @@ type Peer struct {
 	name   string
 	caps   []Cap
 
-	ourID, remoteID *discover.NodeID
-	ourName         string
+	ourPublicKey, remotePublicKey *discover.PublicKey
+	ourID, remoteID               *discover.NodeID
+	ourName                       string
 
 	rw *frameRW
 
@@ -72,17 +73,17 @@ type Peer struct {
 }
 
 // NewPeer returns a peer for testing purposes.
-func NewPeer(id discover.NodeID, name string, caps []Cap) *Peer {
+func NewPeer(remotePublicKey discover.PublicKey, name string, caps []Cap) *Peer {
 	conn, _ := net.Pipe()
-	peer := newPeer(conn, nil, "", nil, &id)
+	peer := newPeer(conn, nil, "", nil, nil, &remotePublicKey)
 	peer.setHandshakeInfo(name, caps)
 	close(peer.closed) // ensures Disconnect doesn't block
 	return peer
 }
 
-// ID returns the node's public key.
-func (p *Peer) ID() discover.NodeID {
-	return *p.remoteID
+// PublicKey returns the node's public key.
+func (p *Peer) PublicKey() discover.PublicKey {
+	return *p.remotePublicKey
 }
 
 // Name returns the node name that the remote node advertised.
@@ -115,6 +116,22 @@ func (p *Peer) LocalAddr() net.Addr {
 	return p.rw.LocalAddr()
 }
 
+func (p *Peer) OurPublicKey() *discover.PublicKey {
+	return p.ourPublicKey
+}
+
+func (p *Peer) OurID() *discover.NodeID {
+	return p.ourID
+}
+
+func (p *Peer) RemotePublicKey() *discover.PublicKey {
+	return p.remotePublicKey
+}
+
+func (p *Peer) RemoteID() *discover.NodeID {
+	return p.remoteID
+}
+
 // Disconnect terminates the peer connection with the given reason.
 // It returns immediately and does not wait until the connection is closed.
 func (p *Peer) Disconnect(reason DiscReason) {
@@ -126,22 +143,25 @@ func (p *Peer) Disconnect(reason DiscReason) {
 
 // String implements fmt.Stringer.
 func (p *Peer) String() string {
-	return fmt.Sprintf("Peer %.8x %v", p.remoteID[:], p.RemoteAddr())
+	return fmt.Sprintf("Peer %.8x %v", p.remotePublicKey[:], p.RemoteAddr())
 }
 
-func newPeer(conn net.Conn, protocols []Protocol, ourName string, ourID, remoteID *discover.NodeID) *Peer {
-	logtag := fmt.Sprintf("Peer %.8x %v", remoteID[:], conn.RemoteAddr())
+func newPeer(conn net.Conn, protocols []Protocol, ourName string, ourID *discover.NodeID, ourPublicKey, remotePublicKey *discover.PublicKey) *Peer {
+	remoteID := discover.Hash(*remotePublicKey)
+	logtag := fmt.Sprintf("Peer %.8x %v", remotePublicKey[:], conn.RemoteAddr())
 	return &Peer{
-		Logger:    logger.NewLogger(logtag),
-		rw:        newFrameRW(conn, msgWriteTimeout),
-		ourID:     ourID,
-		ourName:   ourName,
-		remoteID:  remoteID,
-		protocols: protocols,
-		running:   make(map[string]*proto),
-		disc:      make(chan DiscReason),
-		protoErr:  make(chan error),
-		closed:    make(chan struct{}),
+		Logger:          logger.NewLogger(logtag),
+		rw:              newFrameRW(conn, msgWriteTimeout),
+		ourPublicKey:    ourPublicKey,
+		ourName:         ourName,
+		ourID:           ourID,
+		remotePublicKey: remotePublicKey,
+		remoteID:        &remoteID,
+		protocols:       protocols,
+		running:         make(map[string]*proto),
+		disc:            make(chan DiscReason),
+		protoErr:        make(chan error),
+		closed:          make(chan struct{}),
 	}
 }
 
@@ -160,7 +180,7 @@ func (p *Peer) run() DiscReason {
 	go func() { readErr <- p.readLoop() }()
 
 	if !p.noHandshake {
-		if err := writeProtocolHandshake(p.rw, p.ourName, *p.ourID, p.protocols); err != nil {
+		if err := writeProtocolHandshake(p.rw, p.ourName, *p.ourPublicKey, p.protocols); err != nil {
 			p.DebugDetailf("Protocol handshake error: %v\n", err)
 			p.rw.Close()
 			return DiscProtocolError
@@ -277,8 +297,8 @@ func readProtocolHandshake(p *Peer, rw MsgReadWriter) error {
 		return newPeerError(errP2PVersionMismatch, "required version %d, received %d\n",
 			baseProtocolVersion, hs.Version)
 	}
-	if hs.NodeID == *p.remoteID {
-		return newPeerError(errPubkeyForbidden, "node ID mismatch")
+	if hs.PublicKey == *p.remotePublicKey {
+		return newPeerError(errPubkeyForbidden, "node PublicKey mismatch")
 	}
 	// TODO: remove Caps with empty name
 	p.setHandshakeInfo(hs.Name, hs.Caps)
@@ -286,12 +306,12 @@ func readProtocolHandshake(p *Peer, rw MsgReadWriter) error {
 	return nil
 }
 
-func writeProtocolHandshake(w MsgWriter, name string, id discover.NodeID, ps []Protocol) error {
+func writeProtocolHandshake(w MsgWriter, name string, PublicKey discover.PublicKey, ps []Protocol) error {
 	var caps []interface{}
 	for _, proto := range ps {
 		caps = append(caps, proto.cap())
 	}
-	return EncodeMsg(w, handshakeMsg, baseProtocolVersion, name, caps, 0, id)
+	return EncodeMsg(w, handshakeMsg, baseProtocolVersion, name, caps, 0, PublicKey)
 }
 
 // startProtocols starts matching named subprotocols.

@@ -89,7 +89,7 @@ type Server struct {
 	lock     sync.RWMutex
 	running  bool
 	listener net.Listener
-	peers    map[discover.NodeID]*Peer
+	peers    map[discover.PublicKey]*Peer
 
 	ntab *discover.Table
 
@@ -99,7 +99,7 @@ type Server struct {
 	peerConnect chan *discover.Node
 }
 
-type handshakeFunc func(io.ReadWriter, *ecdsa.PrivateKey, *discover.Node) (discover.NodeID, []byte, error)
+type handshakeFunc func(io.ReadWriter, *ecdsa.PrivateKey, *discover.Node) (discover.PublicKey, []byte, error)
 type newPeerHook func(*Peer)
 
 // Peers returns all connected peers.
@@ -167,7 +167,7 @@ func (srv *Server) Start() (err error) {
 		return fmt.Errorf("Server.MaxPeers must be > 0")
 	}
 	srv.quit = make(chan struct{})
-	srv.peers = make(map[discover.NodeID]*Peer)
+	srv.peers = make(map[discover.PublicKey]*Peer)
 	srv.peerConnect = make(chan *discover.Node)
 
 	if srv.handshakeFunc == nil {
@@ -276,7 +276,7 @@ func (srv *Server) dialLoop() {
 	go srv.findPeers()
 
 	dialed := make(chan *discover.Node)
-	dialing := make(map[discover.NodeID]bool)
+	dialing := make(map[discover.PublicKey]bool)
 
 	// TODO: limit number of active dials
 	// TODO: ensure only one findPeers goroutine is running
@@ -293,13 +293,13 @@ func (srv *Server) dialLoop() {
 			// there is another check for this in addPeer,
 			// which runs after the handshake.
 			srv.lock.Lock()
-			_, isconnected := srv.peers[dest.ID]
+			_, isconnected := srv.peers[dest.PublicKey]
 			srv.lock.Unlock()
-			if isconnected || dialing[dest.ID] || dest.ID == srv.ntab.Self() {
+			if isconnected || dialing[dest.PublicKey] || dest.PublicKey == srv.ntab.PublicKey() {
 				continue
 			}
 
-			dialing[dest.ID] = true
+			dialing[dest.PublicKey] = true
 			srv.peerWG.Add(1)
 			go func() {
 				srv.dialNode(dest)
@@ -309,7 +309,7 @@ func (srv *Server) dialLoop() {
 			}()
 
 		case dest := <-dialed:
-			delete(dialing, dest.ID)
+			delete(dialing, dest.PublicKey)
 
 		case <-srv.quit:
 			// TODO: maybe wait for active dials
@@ -330,11 +330,11 @@ func (srv *Server) dialNode(dest *discover.Node) {
 }
 
 func (srv *Server) findPeers() {
-	far := srv.ntab.Self()
+	far := srv.ntab.NodeID()
 	for i := range far {
 		far[i] = ^far[i]
 	}
-	closeToSelf := srv.ntab.Lookup(srv.ntab.Self())
+	closeToSelf := srv.ntab.Lookup(srv.ntab.NodeID())
 	farFromSelf := srv.ntab.Lookup(far)
 
 	for i := 0; i < len(closeToSelf) || i < len(farFromSelf); i++ {
@@ -350,15 +350,17 @@ func (srv *Server) findPeers() {
 func (srv *Server) startPeer(conn net.Conn, dest *discover.Node) {
 	// TODO: handle/store session token
 	conn.SetDeadline(time.Now().Add(handshakeTimeout))
-	remoteID, _, err := srv.handshakeFunc(conn, srv.PrivateKey, dest)
+	remotePublicKey, _, err := srv.handshakeFunc(conn, srv.PrivateKey, dest)
 	if err != nil {
 		conn.Close()
 		srvlog.Debugf("Encryption Handshake with %v failed: %v", conn.RemoteAddr(), err)
 		return
 	}
-	ourID := srv.ntab.Self()
-	p := newPeer(conn, srv.Protocols, srv.Name, &ourID, &remoteID)
-	if ok, reason := srv.addPeer(remoteID, p); !ok {
+	ourPublicKey := srv.ntab.PublicKey()
+	ourID := srv.ntab.NodeID()
+
+	p := newPeer(conn, srv.Protocols, srv.Name, &ourID, &ourPublicKey, &remotePublicKey)
+	if ok, reason := srv.addPeer(remotePublicKey, p); !ok {
 		srvlog.DebugDetailf("Not adding %v (%v)\n", p, reason)
 		p.politeDisconnect(reason)
 		return
@@ -373,7 +375,7 @@ func (srv *Server) startPeer(conn net.Conn, dest *discover.Node) {
 	srvlog.Debugf("Removed %v (%v)\n", p, discreason)
 }
 
-func (srv *Server) addPeer(id discover.NodeID, p *Peer) (bool, DiscReason) {
+func (srv *Server) addPeer(id discover.PublicKey, p *Peer) (bool, DiscReason) {
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
 	switch {
@@ -385,7 +387,7 @@ func (srv *Server) addPeer(id discover.NodeID, p *Peer) (bool, DiscReason) {
 		return false, DiscAlreadyConnected
 	case srv.Blacklist.Exists(id[:]):
 		return false, DiscUselessPeer
-	case id == srv.ntab.Self():
+	case id == srv.ntab.PublicKey():
 		return false, DiscSelf
 	}
 	srv.peers[id] = p
@@ -394,7 +396,7 @@ func (srv *Server) addPeer(id discover.NodeID, p *Peer) (bool, DiscReason) {
 
 func (srv *Server) removePeer(p *Peer) {
 	srv.lock.Lock()
-	delete(srv.peers, *p.remoteID)
+	delete(srv.peers, *p.remotePublicKey)
 	srv.lock.Unlock()
 	srv.peerWG.Done()
 }

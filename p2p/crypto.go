@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	// "binary"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"fmt"
@@ -37,26 +36,26 @@ func (self hexkey) String() string {
 }
 
 func encHandshake(conn io.ReadWriter, prv *ecdsa.PrivateKey, dial *discover.Node) (
-	remoteID discover.NodeID,
+	remotePublicKey discover.PublicKey,
 	sessionToken []byte,
 	err error,
 ) {
 	if dial == nil {
 		var remotePubkey []byte
 		sessionToken, remotePubkey, err = inboundEncHandshake(conn, prv, nil)
-		copy(remoteID[:], remotePubkey)
+		copy(remotePublicKey[:], remotePubkey)
 	} else {
-		remoteID = dial.ID
-		sessionToken, err = outboundEncHandshake(conn, prv, remoteID[:], nil)
+		remotePublicKey = dial.PublicKey
+		sessionToken, err = outboundEncHandshake(conn, prv, remotePublicKey[:], nil)
 	}
-	return remoteID, sessionToken, err
+	return remotePublicKey, sessionToken, err
 }
 
 // outboundEncHandshake negotiates a session token on conn.
 // it should be called on the dialing side of the connection.
 //
 // privateKey is the local client's private key
-// remotePublicKey is the remote peer's node ID
+// remotePublicKey is the remote peer's node PublicKey
 // sessionToken is the token from a previous session with this node.
 func outboundEncHandshake(conn io.ReadWriter, prvKey *ecdsa.PrivateKey, remotePublicKey []byte, sessionToken []byte) (
 	newSessionToken []byte,

@@ -71,9 +71,10 @@ type (
 )
 
 type rpcNode struct {
-	IP   string
-	Port uint16
-	ID   NodeID
+	IP        string
+	Port      uint16
+	PublicKey PublicKey
+	id        NodeID
 }
 
 // udp implements the RPC protocol.
@@ -99,7 +100,8 @@ type udp struct {
 // to all the callback functions for that node.
 type pending struct {
 	// these fields must match in the reply.
-	from  NodeID
+	from  PublicKey
+	id    NodeID
 	ptype byte
 
 	// time when the request must complete
@@ -117,7 +119,8 @@ type pending struct {
 }
 
 type reply struct {
-	from  NodeID
+	from  PublicKey
+	id    NodeID
 	ptype byte
 	data  interface{}
 }
@@ -150,7 +153,11 @@ func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface) (*Table
 			realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
 		}
 	}
-	udp.Table = newTable(udp, PubkeyID(&priv.PublicKey), realaddr)
+	pubkey := exportPublicKey(&priv.PublicKey)
+	hash := Hash(pubkey)
+	var id NodeID
+	copy(id[:], hash[:])
+	udp.Table = newTable(udp, pubkey, id, realaddr)
 
 	go udp.loop()
 	go udp.readLoop()
@@ -167,7 +174,7 @@ func (t *udp) close() {
 // ping sends a ping message to the given node and waits for a reply.
 func (t *udp) ping(e *Node) error {
 	// TODO: maybe check for ReplyTo field in callback to measure RTT
-	errc := t.pending(e.ID, pongPacket, func(interface{}) bool { return true })
+	errc := t.pending(e.PublicKey, pongPacket, func(interface{}) bool { return true })
 	t.send(e, pingPacket, ping{
 		IP:         t.self.IP.String(),
 		Port:       uint16(t.self.TCPPort),
@@ -181,7 +188,7 @@ func (t *udp) ping(e *Node) error {
 func (t *udp) findnode(to *Node, target NodeID) ([]*Node, error) {
 	nodes := make([]*Node, 0, bucketSize)
 	nreceived := 0
-	errc := t.pending(to.ID, neighborsPacket, func(r interface{}) bool {
+	errc := t.pending(to.PublicKey, neighborsPacket, func(r interface{}) bool {
 		reply := r.(*neighbors)
 		for _, n := range reply.Nodes {
 			nreceived++
@@ -202,9 +209,10 @@ func (t *udp) findnode(to *Node, target NodeID) ([]*Node, error) {
 
 // pending adds a reply callback to the pending reply queue.
 // see the documentation of type pending for a detailed explanation.
-func (t *udp) pending(id NodeID, ptype byte, callback func(interface{}) bool) <-chan error {
+func (t *udp) pending(pubkey PublicKey, ptype byte, callback func(interface{}) bool) <-chan error {
 	ch := make(chan error, 1)
-	p := &pending{from: id, ptype: ptype, callback: callback, errc: ch}
+	id := Hash(pubkey)
+	p := &pending{from: pubkey, id: id, ptype: ptype, callback: callback, errc: ch}
 	select {
 	case t.addpending <- p:
 		// loop will handle it
@@ -339,13 +347,13 @@ func (t *udp) packetIn(from *net.UDPAddr, buf []byte) error {
 	if !bytes.Equal(hash, shouldhash) {
 		return errBadHash
 	}
-	fromID, err := recoverNodeID(crypto.Sha3(buf[headSize:]), sig)
+	fromPublicKey, err := recoverPublicKey(crypto.Sha3(buf[headSize:]), sig)
 	if err != nil {
 		return err
 	}
 
 	var req interface {
-		handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) error
+		handle(t *udp, from *net.UDPAddr, fromPublicKey PublicKey, mac []byte) error
 	}
 	switch ptype := sigdata[0]; ptype {
 	case pingPacket:
@@ -363,16 +371,16 @@ func (t *udp) packetIn(from *net.UDPAddr, buf []byte) error {
 		return err
 	}
 	log.DebugDetailf("<<< %v %T %v\n", from, req, req)
-	return req.handle(t, from, fromID, hash)
+	return req.handle(t, from, fromPublicKey, hash)
 }
 
-func (req *ping) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) error {
+func (req *ping) handle(t *udp, from *net.UDPAddr, fromPublicKey PublicKey, mac []byte) error {
 	if expired(req.Expiration) {
 		return errExpired
 	}
 	t.mutex.Lock()
 	// Note: we're ignoring the provided IP address right now
-	n := t.bumpOrAdd(fromID, from)
+	n := t.bumpOrAdd(fromPublicKey, from)
 	if req.Port != 0 {
 		n.TCPPort = int(req.Port)
 	}
@@ -385,24 +393,26 @@ func (req *ping) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) er
 	return nil
 }
 
-func (req *pong) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) error {
+func (req *pong) handle(t *udp, from *net.UDPAddr, fromPublicKey PublicKey, mac []byte) error {
 	if expired(req.Expiration) {
 		return errExpired
 	}
+	id := Hash(fromPublicKey)
+
 	t.mutex.Lock()
-	t.bump(fromID)
+	t.bump(id)
 	t.mutex.Unlock()
 
-	t.replies <- reply{fromID, pongPacket, req}
+	t.replies <- reply{fromPublicKey, id, pongPacket, req}
 	return nil
 }
 
-func (req *findnode) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) error {
+func (req *findnode) handle(t *udp, from *net.UDPAddr, fromPublicKey PublicKey, mac []byte) error {
 	if expired(req.Expiration) {
 		return errExpired
 	}
 	t.mutex.Lock()
-	e := t.bumpOrAdd(fromID, from)
+	e := t.bumpOrAdd(fromPublicKey, from)
 	closest := t.closest(req.Target, bucketSize).entries
 	t.mutex.Unlock()
 
@@ -413,16 +423,17 @@ func (req *findnode) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte
 	return nil
 }
 
-func (req *neighbors) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) error {
+func (req *neighbors) handle(t *udp, from *net.UDPAddr, fromPublicKey PublicKey, mac []byte) error {
 	if expired(req.Expiration) {
 		return errExpired
 	}
+	id := Hash(fromPublicKey)
 	t.mutex.Lock()
-	t.bump(fromID)
+	t.bump(id)
 	t.add(req.Nodes)
 	t.mutex.Unlock()
 
-	t.replies <- reply{fromID, neighborsPacket, req}
+	t.replies <- reply{fromPublicKey, id, neighborsPacket, req}
 	return nil
 }
 
