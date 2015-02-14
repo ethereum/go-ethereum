@@ -334,16 +334,16 @@ Rectangle {
 			}
 			z: 10
 
-   Timer {
-       interval: 500; running: true; repeat: true
-       onTriggered: {
-           webview.runJavaScript("document.querySelector('meta[name=badge]').getAttribute('content')", function(badge) {
-               if (badge) {
-                   menuItem.secondaryTitle = badge;
-               }
-           });
-        }
-   }
+			Timer {
+				interval: 500; running: true; repeat: true
+				onTriggered: {
+					webview.runJavaScript("try{document.querySelector('meta[name=badge]').getAttribute('content')}catch(e){}", function(badge) {
+						if (badge) {
+							menuItem.secondaryTitle = badge;
+						}
+					});
+				}
+			}
 			
 			onLoadingChanged: {
 				if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
@@ -351,30 +351,26 @@ Rectangle {
 						menuItem.title = pageTitle;	
 					});
 
+					webView.runJavaScript("try{document.querySelector(\"meta[name='ethereum-dapp-url-bar-style']\").getAttribute(\"content\")}catch(e){}", function(topBarStyle){
+						if (!topBarStyle) return;
 
-					//var topBarStyle
-					webView.runJavaScript("document.querySelector(\"meta[name='ethereum-dapp-url-bar-style']\").getAttribute(\"content\")", function(topBarStyle){
 						if (topBarStyle=="transparent") {
-
 							// Adjust for a transparent sidebar Dapp
-                            navBarBackground.visible = false;
-                            back.visible = false;
-                            appInfoPane.anchors.leftMargin = -16;
-                            appInfoPaneShadow.anchors.leftMargin = -16;
-                            webview.anchors.topMargin = -74;
+							navBarBackground.visible = false;
+							back.visible = false;
+							appInfoPane.anchors.leftMargin = -16;
+							appInfoPaneShadow.anchors.leftMargin = -16;
+							webview.anchors.topMargin = -74;
 							webview.runJavaScript("document.querySelector('body').classList.add('ethereum-dapp-url-bar-style-transparent')")
 
 						} else {
-                            navBarBackground.visible = true;
-                            back.visible = true;
-                            appInfoPane.anchors.leftMargin = 0;
-                            appInfoPaneShadow.anchors.leftMargin = 0;
-                            webview.anchors.topMargin = 0;
-
-                        };	
+							navBarBackground.visible = true;
+							back.visible = true;
+							appInfoPane.anchors.leftMargin = 0;
+							appInfoPaneShadow.anchors.leftMargin = 0;
+							webview.anchors.topMargin = 0;
+						};	
 					});
-
-					
 
 					webview.runJavaScript(eth.readFile("bignumber.min.js"));
 					webview.runJavaScript(eth.readFile("ethereum.js/dist/ethereum.js"));
@@ -383,10 +379,12 @@ Rectangle {
 					var matches = cleanTitle.match(/^[a-z]*\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
 					var domain = matches && matches[1];
 
-			    	appDomain.text = domain //webview.url.replace("a", "z")
-			    	appTitle.text = webview.title
+					if (domain)
+						appDomain.text = domain //webview.url.replace("a", "z")
+					if (webview.title)
+						appTitle.text = webview.title
 
-			    	showFullUrlBar(false);
+					showFullUrlBar(false);
 				}
 			}
 			onJavaScriptConsoleMessage: {
