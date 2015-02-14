@@ -209,6 +209,7 @@ func (self *Block) ParentHash() []byte {
 
 func (self *Block) String() string {
 	return fmt.Sprintf(`BLOCK(%x): Size: %v TD: %v {
+NoNonce: %x
 Header:
 [
 %v
@@ -218,7 +219,7 @@ Transactions:
 Uncles:
 %v
 }
-`, self.header.Hash(), self.Size(), self.Td, self.header, self.transactions, self.uncles)
+`, self.header.Hash(), self.Size(), self.Td, self.header.HashNoNonce(), self.header, self.transactions, self.uncles)
 }
 
 func (self *Header) String() string {
