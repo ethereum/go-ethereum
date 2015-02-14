@@ -37,6 +37,16 @@ type NewTxArgs struct {
 	Data     string `json:"data"`
 }
 
+type NewTxArgs2 struct {
+	From     string `json:"from"`
+	Pass     string `json:"pass"`
+	To       string `json:"to"`
+	Value    string `json:"value"`
+	Gas      string `json:"gas"`
+	GasPrice string `json:"gasPrice"`
+	Data     string `json:"data"`
+}
+
 type PushTxArgs struct {
 	Tx string `json:"tx"`
 }

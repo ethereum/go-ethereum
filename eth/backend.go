@@ -5,6 +5,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -54,6 +55,7 @@ type Ethereum struct {
 	blockProcessor *core.BlockProcessor
 	txPool         *core.TxPool
 	chainManager   *core.ChainManager
+	accountManager *accounts.AccountManager
 	blockPool      *BlockPool
 	whisper        *whisper.Whisper
 
@@ -90,6 +92,7 @@ func New(config *Config) (*Ethereum, error) {
 		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, ProtocolVersion, ethutil.Config.ExecPath+"/database")
 	}
 
+	// TODO: remove keymanager & keyring once accountManager is integrated
 	// Create new keymanager
 	var keyManager *crypto.KeyManager
 	switch config.KeyStore {
@@ -121,6 +124,13 @@ func New(config *Config) (*Ethereum, error) {
 	}
 
 	eth.chainManager = core.NewChainManager(db, eth.EventMux())
+	// TODO: add config flag and case on plain/protected key store
+	ks := crypto.NewKeyStorePlain(crypto.DefaultDataDir())
+	am, err := accounts.NewAccountManager(ks)
+	if err != nil {
+		return nil, err
+	}
+	eth.accountManager = &am
 	eth.txPool = core.NewTxPool(eth.EventMux())
 	eth.blockProcessor = core.NewBlockProcessor(db, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
@@ -168,6 +178,10 @@ func (s *Ethereum) ClientIdentity() p2p.ClientIdentity {
 
 func (s *Ethereum) ChainManager() *core.ChainManager {
 	return s.chainManager
+}
+
+func (s *Ethereum) AccountManager() *accounts.AccountManager {
+	return s.accountManager
 }
 
 func (s *Ethereum) BlockProcessor() *core.BlockProcessor {
