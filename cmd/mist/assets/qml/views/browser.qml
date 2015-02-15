@@ -380,9 +380,6 @@ Rectangle {
 						};	
 					});
 
-					webview.runJavaScript(eth.readFile("bignumber.min.js"));
-					webview.runJavaScript(eth.readFile("ethereum.js/dist/ethereum.js"));
-
 					var cleanTitle = webview.url.toString()
 					var matches = cleanTitle.match(/^[a-z]*\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
 					var domain = matches && matches[1];

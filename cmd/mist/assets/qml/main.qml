@@ -150,23 +150,6 @@ ApplicationWindow {
         Menu {
             title: "File"
             MenuItem {
-                text: "Import App"
-                shortcut: "Ctrl+o"
-                onTriggered: {
-                    generalFileDialog.show(true, importApp)
-                }
-            }
-
-            MenuItem {
-                text: "Add plugin"
-                onTriggered: {
-                    generalFileDialog.show(true, function(path) {
-                        addPlugin(path, {close: true, section: "apps"})
-                    })
-                }
-            }
-
-            MenuItem {
                 text: "New tab"
                 shortcut: "Ctrl+t"
                 onTriggered: {
@@ -259,18 +242,6 @@ ApplicationWindow {
                 text: "About"
                 onTriggered: {
                     aboutWin.visible = true
-                }
-            }
-        }
-
-        Menu {
-            title: "GLOBAL SHORTCUTS"
-            visible: false
-            MenuItem {
-                visible: false
-                shortcut: "Ctrl+l"
-                onTriggered: {
-                    url.focus = true
                 }
             }
         }
