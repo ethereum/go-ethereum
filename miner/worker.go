@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -55,6 +56,7 @@ type Agent interface {
 }
 
 type worker struct {
+	mu     sync.Mutex
 	agents []Agent
 	recv   chan Work
 	mux    *event.TypeMux
@@ -115,9 +117,7 @@ out:
 		select {
 		case event := <-events.Chan():
 			switch event.(type) {
-			case core.ChainEvent:
-				self.commitNewWork()
-			case core.TxPreEvent:
+			case core.ChainEvent, core.TxPreEvent:
 				self.commitNewWork()
 			}
 		case <-self.quit:
@@ -163,6 +163,9 @@ func (self *worker) push() {
 }
 
 func (self *worker) commitNewWork() {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
 	self.current = env(self.chain.NewBlock(self.coinbase), self.eth)
 	parent := self.chain.GetBlock(self.current.block.ParentHash())
 	self.current.coinbase.SetGasPool(core.CalcGasLimit(parent, self.current.block))
@@ -176,12 +179,11 @@ func (self *worker) commitNewWork() {
 		err := self.commitTransaction(tx)
 		switch {
 		case core.IsNonceErr(err):
+			// Remove invalid transactions
 			remove = append(remove, tx)
 		case core.IsGasLimitErr(err):
 			// Break on gas limit
 			break
-		default:
-			remove = append(remove, tx)
 		}
 
 		if err != nil {
@@ -227,16 +229,13 @@ func (self *worker) commitUncle(uncle *types.Header) error {
 
 func (self *worker) commitTransaction(tx *types.Transaction) error {
 	snapshot := self.current.state.Copy()
-	receipt, txGas, err := self.proc.ApplyTransaction(self.current.coinbase, self.current.state, self.current.block, tx, self.current.totalUsedGas, true)
-	if err != nil {
-		if core.IsNonceErr(err) || core.IsGasLimitErr(err) {
-			self.current.state.Set(snapshot)
-		}
+	receipt, _, err := self.proc.ApplyTransaction(self.current.coinbase, self.current.state, self.current.block, tx, self.current.totalUsedGas, true)
+	if err != nil && (core.IsNonceErr(err) || core.IsGasLimitErr(err)) {
+		self.current.state.Set(snapshot)
 
 		return err
 	}
 
-	self.current.totalUsedGas.Add(self.current.totalUsedGas, txGas)
 	self.current.block.AddTransaction(tx)
 	self.current.block.AddReceipt(receipt)
 
