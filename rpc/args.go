@@ -43,7 +43,7 @@ type PushTxArgs struct {
 
 func (obj *PushTxArgs) UnmarshalJSON(b []byte) (err error) {
 	arg0 := ""
-	if err = json.Unmarshal(b, arg0); err == nil {
+	if err = json.Unmarshal(b, &arg0); err == nil {
 		obj.Tx = arg0
 		return
 	}
@@ -82,7 +82,7 @@ type GetStateArgs struct {
 
 func (obj *GetStateArgs) UnmarshalJSON(b []byte) (err error) {
 	arg0 := ""
-	if err = json.Unmarshal(b, arg0); err == nil {
+	if err = json.Unmarshal(b, &arg0); err == nil {
 		obj.Address = arg0
 		return
 	}
@@ -114,7 +114,7 @@ type GetTxCountArgs struct {
 
 func (obj *GetTxCountArgs) UnmarshalJSON(b []byte) (err error) {
 	arg0 := ""
-	if err = json.Unmarshal(b, arg0); err == nil {
+	if err = json.Unmarshal(b, &arg0); err == nil {
 		obj.Address = arg0
 		return
 	}
