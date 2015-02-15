@@ -1,6 +1,7 @@
 package discover
 
 import (
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"encoding/hex"
@@ -14,16 +15,28 @@ import (
 	"strings"
 	"time"
 
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const nodeIDBits = 512
+const (
+	PublicKeyBits = 512
+	idBits        = 256
+)
+
+var (
+	hashfunc = crypto.SHA256
+	// idSize = hashfunc.Size()
+)
+
+type NodeID [idBits / 8]byte
 
 // Node represents a host on the network.
 type Node struct {
-	ID NodeID
-	IP net.IP
+	PublicKey PublicKey
+	IP        net.IP
+	NodeID    NodeID
 
 	DiscPort int // UDP listening port for discovery protocol
 	TCPPort  int // TCP listening port for RLPx
@@ -31,14 +44,20 @@ type Node struct {
 	active time.Time
 }
 
-func newNode(id NodeID, addr *net.UDPAddr) *Node {
+func newNode(pubkey PublicKey, id NodeID, addr *net.UDPAddr) *Node {
 	return &Node{
-		ID:       id,
-		IP:       addr.IP,
-		DiscPort: addr.Port,
-		TCPPort:  addr.Port,
-		active:   time.Now(),
+		PublicKey: pubkey,
+		IP:        addr.IP,
+		DiscPort:  addr.Port,
+		TCPPort:   addr.Port,
+		active:    time.Now(),
+		NodeID:    id,
 	}
+}
+
+func Hash(id PublicKey) (a NodeID) {
+	copy(a[:], ethcrypto.Sha256(id[:]))
+	return
 }
 
 func (n *Node) isValid() bool {
@@ -52,7 +71,7 @@ func (n *Node) String() string {
 	addr := net.TCPAddr{IP: n.IP, Port: n.TCPPort}
 	u := url.URL{
 		Scheme: "enode",
-		User:   url.User(fmt.Sprintf("%x", n.ID[:])),
+		User:   url.User(fmt.Sprintf("%x", n.PublicKey[:])),
 		Host:   addr.String(),
 	}
 	if n.DiscPort != n.TCPPort {
@@ -65,7 +84,7 @@ func (n *Node) String() string {
 //
 // A node URL has scheme "enode".
 //
-// The hexadecimal node ID is encoded in the username portion of the
+// The hexadecimal node PublicKey is encoded in the username portion of the
 // URL, separated from the host by an @ sign. The hostname can only be
 // given as an IP address, DNS domain names are not allowed. The port
 // in the host name section is the TCP listening port. If the TCP and
@@ -84,11 +103,12 @@ func ParseNode(rawurl string) (*Node, error) {
 		return nil, errors.New("invalid URL scheme, want \"enode\"")
 	}
 	if u.User == nil {
-		return nil, errors.New("does not contain node ID")
+		return nil, errors.New("does not contain node PublicKey")
 	}
-	if n.ID, err = HexID(u.User.String()); err != nil {
-		return nil, fmt.Errorf("invalid node ID (%v)", err)
+	if n.PublicKey, err = HexPublicKey(u.User.String()); err != nil {
+		return nil, fmt.Errorf("invalid node PublicKey (%v)", err)
 	}
+	n.NodeID = Hash(n.PublicKey)
 	ip, port, err := net.SplitHostPort(u.Host)
 	if err != nil {
 		return nil, fmt.Errorf("invalid host: %v", err)
@@ -120,14 +140,14 @@ func MustParseNode(rawurl string) *Node {
 }
 
 func (n Node) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, rpcNode{IP: n.IP.String(), Port: uint16(n.TCPPort), ID: n.ID})
+	return rlp.Encode(w, rpcNode{IP: n.IP.String(), Port: uint16(n.TCPPort), PublicKey: n.PublicKey})
 }
 func (n *Node) DecodeRLP(s *rlp.Stream) (err error) {
 	var ext rpcNode
 	if err = s.Decode(&ext); err == nil {
 		n.TCPPort = int(ext.Port)
 		n.DiscPort = int(ext.Port)
-		n.ID = ext.ID
+		n.PublicKey = ext.PublicKey
 		if n.IP = net.ParseIP(ext.IP); n.IP == nil {
 			return errors.New("invalid IP string")
 		}
@@ -135,27 +155,27 @@ func (n *Node) DecodeRLP(s *rlp.Stream) (err error) {
 	return err
 }
 
-// NodeID is a unique identifier for each node.
+// PublicKey is a unique identifier for each node.
 // The node identifier is a marshaled elliptic curve public key.
-type NodeID [nodeIDBits / 8]byte
+type PublicKey [PublicKeyBits / 8]byte
 
-// NodeID prints as a long hexadecimal number.
-func (n NodeID) String() string {
+// PublicKey prints as a long hexadecimal number.
+func (n PublicKey) String() string {
 	return fmt.Sprintf("%#x", n[:])
 }
 
-// The Go syntax representation of a NodeID is a call to HexID.
-func (n NodeID) GoString() string {
-	return fmt.Sprintf("discover.HexID(\"%#x\")", n[:])
+// The Go syntax representation of a PublicKey is a call to HexPublicKey.
+func (n PublicKey) GoString() string {
+	return fmt.Sprintf("discover.HexPublicKey(\"%#x\")", n[:])
 }
 
-// HexID converts a hex string to a NodeID.
+// HexPublicKey converts a hex string to a PublicKey.
 // The string may be prefixed with 0x.
-func HexID(in string) (NodeID, error) {
+func HexPublicKey(in string) (PublicKey, error) {
 	if strings.HasPrefix(in, "0x") {
 		in = in[2:]
 	}
-	var id NodeID
+	var id PublicKey
 	b, err := hex.DecodeString(in)
 	if err != nil {
 		return id, err
@@ -166,19 +186,19 @@ func HexID(in string) (NodeID, error) {
 	return id, nil
 }
 
-// MustHexID converts a hex string to a NodeID.
-// It panics if the string is not a valid NodeID.
-func MustHexID(in string) NodeID {
-	id, err := HexID(in)
+// MustHexPublicKey converts a hex string to a PublicKey.
+// It panics if the string is not a valid PublicKey.
+func MustHexPublicKey(in string) PublicKey {
+	id, err := HexPublicKey(in)
 	if err != nil {
 		panic(err)
 	}
 	return id
 }
 
-// PubkeyID returns a marshaled representation of the given public key.
-func PubkeyID(pub *ecdsa.PublicKey) NodeID {
-	var id NodeID
+// PublicKey returns a marshaled representation of the given public key.
+func exportPublicKey(pub *ecdsa.PublicKey) PublicKey {
+	var id PublicKey
 	pbytes := elliptic.Marshal(pub.Curve, pub.X, pub.Y)
 	if len(pbytes)-1 != len(id) {
 		panic(fmt.Errorf("need %d bit pubkey, got %d bits", (len(id)+1)*8, len(pbytes)))
@@ -187,9 +207,9 @@ func PubkeyID(pub *ecdsa.PublicKey) NodeID {
 	return id
 }
 
-// recoverNodeID computes the public key used to sign the
+// recoverPublicKey computes the public key used to sign the
 // given hash from the signature.
-func recoverNodeID(hash, sig []byte) (id NodeID, err error) {
+func recoverPublicKey(hash, sig []byte) (id PublicKey, err error) {
 	pubkey, err := secp256k1.RecoverPubkey(hash, sig)
 	if err != nil {
 		return id, err
@@ -270,8 +290,8 @@ func logdist(a, b NodeID) int {
 	return len(a)*8 - lz
 }
 
-// randomID returns a random NodeID such that logdist(a, b) == n
-func randomID(a NodeID, n int) (b NodeID) {
+// randomNodeID returns a random NodeID such that logdist(a, b) == n
+func randomNodeID(a NodeID, n int) (b NodeID) {
 	if n == 0 {
 		return a
 	}

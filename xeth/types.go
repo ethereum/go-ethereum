@@ -214,7 +214,7 @@ func NewPeer(peer *p2p.Peer) *Peer {
 	return &Peer{
 		ref:     peer,
 		Ip:      fmt.Sprintf("%v", peer.RemoteAddr()),
-		Version: fmt.Sprintf("%v", peer.ID()),
+		Version: fmt.Sprintf("%v", peer.PublicKey()),
 		Caps:    fmt.Sprintf("%v", caps),
 	}
 }

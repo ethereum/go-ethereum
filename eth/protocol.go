@@ -92,7 +92,7 @@ func EthProtocol(txPool txPool, chainManager chainManager, blockPool blockPool) 
 // the main loop that handles incoming messages
 // note RemovePeer in the post-disconnect hook
 func runEthProtocol(txPool txPool, chainManager chainManager, blockPool blockPool, peer *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
-	id := peer.ID()
+	id := peer.PublicKey()
 	self := &ethProtocol{
 		txPool:       txPool,
 		chainManager: chainManager,
