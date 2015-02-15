@@ -109,8 +109,8 @@ func (self *EthereumApi) NewFilterString(args string, reply *interface{}) error 
 }
 
 func (self *EthereumApi) FilterChanged(id int, reply *interface{}) error {
-	self.logMut.RLock()
-	defer self.logMut.RUnlock()
+	self.logMut.Lock()
+	defer self.logMut.Unlock()
 
 	*reply = toLogs(self.logs[id])
 
@@ -309,8 +309,8 @@ func (p *EthereumApi) NewWhisperFilter(args *xeth.Options, reply *interface{}) e
 }
 
 func (self *EthereumApi) MessagesChanged(id int, reply *interface{}) error {
-	self.messagesMut.RLock()
-	defer self.messagesMut.RUnlock()
+	self.messagesMut.Lock()
+	defer self.messagesMut.Unlock()
 
 	*reply = self.messages[id]
 

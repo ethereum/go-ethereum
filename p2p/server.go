@@ -436,15 +436,15 @@ func (self *BlacklistMap) Exists(pubkey []byte) (ok bool) {
 }
 
 func (self *BlacklistMap) Put(pubkey []byte) error {
-	self.lock.RLock()
-	defer self.lock.RUnlock()
+	self.lock.Lock()
+	defer self.lock.Unlock()
 	self.blacklist[string(pubkey)] = true
 	return nil
 }
 
 func (self *BlacklistMap) Delete(pubkey []byte) error {
-	self.lock.RLock()
-	defer self.lock.RUnlock()
+	self.lock.Lock()
+	defer self.lock.Unlock()
 	delete(self.blacklist, string(pubkey))
 	return nil
 }
