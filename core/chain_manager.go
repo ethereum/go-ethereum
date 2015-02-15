@@ -168,7 +168,7 @@ func (bc *ChainManager) NewBlock(coinbase []byte) *types.Block {
 	var root []byte
 	parentHash := ZeroHash256
 
-	if bc.CurrentBlock != nil {
+	if bc.currentBlock != nil {
 		root = bc.currentBlock.Header().Root
 		parentHash = bc.lastBlockHash
 	}
