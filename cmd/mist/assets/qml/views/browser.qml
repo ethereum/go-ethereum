@@ -3,7 +3,7 @@ import QtQuick.Controls 1.0;
 import QtQuick.Controls.Styles 1.0
 import QtQuick.Layouts 1.0;
 import QtWebEngine 1.0
-//import QtWebEngine.experimental 1.0
+import QtWebEngine.experimental 1.0
 import QtQuick.Window 2.0;
 
 Rectangle {
@@ -326,6 +326,8 @@ Rectangle {
 		WebEngineView {
 			objectName: "webView"
 			id: webview
+			experimental.settings.javascriptCanAccessClipboard: true
+			experimental.settings.localContentCanAccessRemoteUrls: true
 			anchors {
 				left: parent.left
 				right: parent.right
