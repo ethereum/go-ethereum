@@ -238,7 +238,12 @@ Rectangle {
 				    z: 20
 				    activeFocusOnPress: true
 				    Keys.onReturnPressed: {
-				    	webview.url = this.text;
+                        // if there's no http, add it.
+                        var url = this.text,
+                        matches = url.match(/^([a-z]*\:\/\/)?([^\/.]+)(:?\/)(.*|$)/i),
+                        requestedProtocol = (matches && matches[1] != "undefined")? "" : "http://";
+
+                        webview.url = requestedProtocol + url;
 				    }
 			    }
    				
