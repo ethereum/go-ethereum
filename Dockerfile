@@ -1,4 +1,4 @@
-FROM ubuntu:14.04
+FROM ubuntu:14.04.1
 
 ## Environment setup
 ENV HOME /root
