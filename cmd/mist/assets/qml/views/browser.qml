@@ -3,7 +3,7 @@ import QtQuick.Controls 1.0;
 import QtQuick.Controls.Styles 1.0
 import QtQuick.Layouts 1.0;
 import QtWebEngine 1.0
-import QtWebEngine.experimental 1.0
+//import QtWebEngine.experimental 1.0
 import QtQuick.Window 2.0;
 
 Rectangle {
@@ -340,8 +340,8 @@ Rectangle {
 		WebEngineView {
 			objectName: "webView"
 			id: webview
-			experimental.settings.javascriptCanAccessClipboard: true
-			experimental.settings.localContentCanAccessRemoteUrls: true
+			//experimental.settings.javascriptCanAccessClipboard: true
+			//experimental.settings.localContentCanAccessRemoteUrls: true
 			anchors {
 				left: parent.left
 				right: parent.right
@@ -367,7 +367,12 @@ Rectangle {
 						menuItem.title = pageTitle;	
 					});
 
-
+                    webView.runJavaScript("document.querySelector(\"link[rel='icon']\").getAttribute(\"href\")", function(sideIcon){
+                            if(sideIcon){
+                                menuItem.icon = "http://localhost:3000/whisper-icon@2x.png"
+                            }; 
+                    });
+                    
 					webView.runJavaScript("try{document.querySelector(\"meta[name='ethereum-dapp-url-bar-style']\").getAttribute(\"content\")}catch(e){}", function(topBarStyle){
 						if (!topBarStyle) {
 							showFullUrlBar(true);
@@ -397,15 +402,9 @@ Rectangle {
 						};	
 					});
 
-                    // webView.runJavaScript("document.querySelector(\"link[rel='icon']\").getAttribute(\"href\")", function(sideIcon){
-                    //         if(sideIcon){
-                    //             window.iconSource = "http://localhost:3000/whisper-icon@2x.png" //webview.url + sideIcon
-                    //             console.log(iconSource)
-                    //         }; 
-                    // });
-                    
+
 					webview.runJavaScript(eth.readFile("bignumber.min.js"));
-					webview.runJavaScript(eth.readFile("ethereum.js/dist/ethereum.js"));
+                    webview.runJavaScript(eth.readFile("ethereum.js/dist/ethereum.js"));
 
 					var cleanTitle = webview.url.toString()
 					var matches = cleanTitle.match(/^[a-z]*\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);

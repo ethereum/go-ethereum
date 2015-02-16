@@ -85,7 +85,7 @@ Rectangle {
 			property var domain: "ethereum-dapp-catalog.meteor.com"
 			url: protocol + domain
 
-			
+			//experimental.settings.javascriptCanAccessClipboard: true
 
 
 			onJavaScriptConsoleMessage: {
@@ -112,7 +112,15 @@ Rectangle {
                 	
                 }
             }
+			// onLoadingChanged: {
+			// 	if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
+   //                  webview.runJavaScript(eth.readFile("mist.js"));
+			// 	}
+			// }
 		}
+
+
+
 
 
 
