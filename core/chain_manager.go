@@ -78,11 +78,10 @@ type ChainManager struct {
 	eventMux     *event.TypeMux
 	genesisBlock *types.Block
 	// Last known total difficulty
-	mu              sync.RWMutex
-	td              *big.Int
-	lastBlockNumber uint64
-	currentBlock    *types.Block
-	lastBlockHash   []byte
+	mu            sync.RWMutex
+	td            *big.Int
+	currentBlock  *types.Block
+	lastBlockHash []byte
 
 	transState *state.StateDB
 }
@@ -92,13 +91,6 @@ func (self *ChainManager) Td() *big.Int {
 	defer self.mu.RUnlock()
 
 	return self.td
-}
-
-func (self *ChainManager) LastBlockNumber() uint64 {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-
-	return self.lastBlockNumber
 }
 
 func (self *ChainManager) LastBlockHash() []byte {
@@ -149,7 +141,6 @@ func (bc *ChainManager) setLastBlock() {
 		rlp.Decode(bytes.NewReader(data), &block)
 		bc.currentBlock = &block
 		bc.lastBlockHash = block.Hash()
-		bc.lastBlockNumber = block.Header().Number.Uint64()
 
 		// Set the last know difficulty (might be 0x0 as initial value, Genesis)
 		bc.td = ethutil.BigD(bc.db.LastKnownTD())
@@ -157,7 +148,7 @@ func (bc *ChainManager) setLastBlock() {
 		bc.Reset()
 	}
 
-	chainlogger.Infof("Last block (#%d) %x TD=%v\n", bc.lastBlockNumber, bc.currentBlock.Hash(), bc.td)
+	chainlogger.Infof("Last block (#%v) %x TD=%v\n", bc.currentBlock.Number(), bc.currentBlock.Hash(), bc.td)
 }
 
 // Block creation & chain handling
@@ -234,8 +225,6 @@ func (bc *ChainManager) insert(block *types.Block) {
 }
 
 func (bc *ChainManager) write(block *types.Block) {
-	bc.writeBlockInfo(block)
-
 	encodedBlock := ethutil.Encode(block.RlpDataForStorage())
 	bc.db.Put(block.Hash(), encodedBlock)
 }
@@ -352,11 +341,6 @@ func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
 	td = td.Add(td, block.Header().Difficulty)
 
 	return td, nil
-}
-
-// Unexported method for writing extra non-essential block info to the db
-func (bc *ChainManager) writeBlockInfo(block *types.Block) {
-	bc.lastBlockNumber++
 }
 
 func (bc *ChainManager) Stop() {
