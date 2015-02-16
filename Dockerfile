@@ -4,19 +4,19 @@ FROM ubuntu:14.04
 ENV HOME /root
 ENV GOPATH /root/go
 ENV PATH /golang/bin:/root/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games
-ENV PKG_CONFIG_PATH /opt/qt54/lib/pkgconfig
 
 RUN mkdir -p /root/go
 ENV DEBIAN_FRONTEND noninteractive
 
 ## Install base dependencies
 RUN apt-get update && apt-get upgrade -y
-RUN apt-get install -y git mercurial build-essential software-properties-common pkg-config libgmp3-dev libreadline6-dev libpcre3-dev libpcre++-dev mesa-common-dev libglu1-mesa-dev
+RUN apt-get install -y git mercurial build-essential software-properties-common pkg-config libgmp3-dev libreadline6-dev libpcre3-dev libpcre++-dev
 
-## Install Qt5.4 dependencies from PPA
-RUN add-apt-repository ppa:beineri/opt-qt54-trusty -y
-RUN apt-get update -y
-RUN apt-get install -y qt54quickcontrols qt54webengine 
+## Install Qt5.4
+# RUN add-apt-repository ppa:beineri/opt-qt54-trusty -y
+# RUN apt-get update -y
+# RUN apt-get install -y qt54quickcontrols qt54webengine mesa-common-dev libglu1-mesa-dev
+# ENV PKG_CONFIG_PATH /opt/qt54/lib/pkgconfig
 
 ## Build and install latest Go
 RUN git clone https://go.googlesource.com/go golang
