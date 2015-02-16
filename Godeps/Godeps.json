@@ -67,7 +67,7 @@
 		},
 		{
 			"ImportPath": "github.com/obscuren/qml",
-			"Rev": "807b51d4104231784fa5e336ccd26d61759a3cb2"
+			"Rev": "c288002b52e905973b131089a8a7c761d4a2c36a"
 		},
 		{
 			"ImportPath": "github.com/rakyll/globalconf",
