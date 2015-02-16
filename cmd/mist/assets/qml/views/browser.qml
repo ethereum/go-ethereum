@@ -351,13 +351,50 @@ Rectangle {
 			z: 10
 
 			Timer {
-				interval: 500; running: true; repeat: true
+				interval: 2000; running: true; repeat: true
 				onTriggered: {
-					webview.runJavaScript("try{document.querySelector('meta[name=badge]').getAttribute('content')}catch(e){}", function(badge) {
-						if (badge) {
-							menuItem.secondaryTitle = badge;
-						}
-					});
+					webview.runJavaScript("try{document.querySelector('meta[name=ethereum-dapp-info]').getAttribute('content')}catch(e){}", function(extraInfo) {
+                        if (extraInfo) {
+                            menuItem.secondaryTitle = extraInfo;
+                        }
+                    });
+                    webview.runJavaScript("try{document.querySelector('meta[name=ethereum-dapp-badge]').getAttribute('content')}catch(e){}", function(badge) {
+                        if (badge) {
+                            if (Number(badge)>0 && Number(badge)<999) {
+                                menuItem.badgeNumber = Number(badge);
+                                menuItem.badgeContent = "number"
+                            } else if (badge == "warning") {
+                                menuItem.badgeIcon = "\ue00e"
+                                menuItem.badgeContent = "icon"
+
+                            } else if (badge == "ghost") {
+                                menuItem.badgeIcon = "\ue01a"
+                                menuItem.badgeContent = "icon"
+
+                            } else if (badge == "question") {
+                                menuItem.badgeIcon = "\ue05d"
+                                menuItem.badgeContent = "icon"
+
+                            } else if (badge == "info") {
+                                menuItem.badgeIcon = "\ue08b"
+                                menuItem.badgeContent = "icon"
+
+                            } else if (badge == "check") {
+                                menuItem.badgeIcon = "\ue080"
+                                menuItem.badgeContent = "icon"
+
+                            } else if (badge == "gear") {
+                                menuItem.badgeIcon = "\ue09a"
+                                menuItem.badgeContent = "icon"
+
+                            }
+
+
+                            console.log(menuItem.badgeContent);
+                        } else {
+                            menuItem.badgeContent = ""
+                        } 
+                    });
 				}
 			}
 			
@@ -367,10 +404,12 @@ Rectangle {
 						menuItem.title = pageTitle;	
 					});
 
-                    webView.runJavaScript("document.querySelector(\"link[rel='icon']\").getAttribute(\"href\")", function(sideIcon){
+                    webView.runJavaScript("try{document.querySelector(\"link[rel='icon']\").getAttribute(\"href\")}catch(e){}", function(sideIcon){
                             if(sideIcon){
-                                menuItem.icon = "http://localhost:3000/whisper-icon@2x.png"
+                                menuItem.icon = webview.url + sideIcon;
+                                console.log("icon: " + webview.url + sideIcon );
                             }; 
+                            console.log("no icon!" );
                     });
                     
 					webView.runJavaScript("try{document.querySelector(\"meta[name='ethereum-dapp-url-bar-style']\").getAttribute(\"content\")}catch(e){}", function(topBarStyle){

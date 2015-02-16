@@ -40,10 +40,14 @@ ApplicationWindow {
     // Takes care of loading all default plugins
     Component.onCompleted: {
 
-        catalog = addPlugin("./views/catalog.qml", {noAdd: true, close: false, section: "begin"});
-        var wallet = addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "ethereum", active: true});
+        catalog = addPlugin("./views/catalog.qml", {noAdd: true, close: false, section: "begin", active: true});
+        var wallet = addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "ethereum"});
 
-        addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: true});
+        var walletWeb = addPlugin("./views/browser.qml", {noAdd: true, close: false, section: "ethereum", active: false});
+        walletWeb.view.url = "http://ethereum-dapp-wallet.meteor.com/";
+        walletWeb.menuItem.title = "Wallet";
+        
+        addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: false});
         addPlugin("./views/transaction.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/whisper.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/chain.qml", {noAdd: true, close: false, section: "legacy"});
@@ -443,10 +447,14 @@ ApplicationWindow {
                      property var view;
                      property var path;
                      property var closable;
+                     property var badgeContent;
 
                      property alias title: label.text
                      property alias icon: icon.source
                      property alias secondaryTitle: secondary.text
+                     property alias badgeNumber: badgeNumberLabel.text
+                     property alias badgeIcon: badgeIconLabel.text
+
                      function setSelection(on) {
                          sel.visible = on
                          
@@ -539,9 +547,6 @@ ApplicationWindow {
                             if (parent.closable == true) {
                                 closeIcon.visible = sel.visible
                             }
-                            /*if(view.hasOwnProperty("iconSource")) {
-                                icon.source = view.iconSource;
-                            }*/
                          }
                          onExited:  {
                             closeIcon.visible = false
@@ -550,8 +555,8 @@ ApplicationWindow {
 
                      Image {
                          id: icon
-                         height: 24
-                         width: 24
+                         height: 28
+                         width: 28
                          anchors {
                              left: parent.left
                              verticalCenter: parent.verticalCenter
@@ -581,7 +586,7 @@ ApplicationWindow {
                              verticalCenter: parent.verticalCenter
                              leftMargin: 6
                              rightMargin: 8
-                             // verticalCenterOffset: -10
+                             verticalCenterOffset: (secondaryTitle == "") ? 0 : -10;
                          }
                          x:250
                          color: "#665F5F"
@@ -607,7 +612,7 @@ ApplicationWindow {
                         visible: false
                         width: 10
                         height: 10
-                        color: "#FFFFFF"
+                        color: "#FAFAFA"
                         anchors {
                             fill: icon
                         }
@@ -626,8 +631,48 @@ ApplicationWindow {
                                  centerIn: parent
                              }
                              color: "#665F5F"
-                             font.pixelSize: 18
+                             font.pixelSize: 20
                              text: "\ue082"
+                         }
+                     }                     
+
+                     Rectangle {
+                        id: badge
+                        visible: (badgeContent == "icon" || badgeContent == "number" )? true : false 
+                        width: 32
+                        color: "#05000000"
+                        anchors {
+                            right: parent.right;
+                            top: parent.top;
+                            bottom: parent.bottom;
+                            rightMargin: 4;
+                        }
+                                      
+                        Text {
+                             id: badgeIconLabel
+                             visible: (badgeContent == "icon") ? true : false;
+                             font.family: simpleLineIcons.name 
+                             anchors {
+                                 centerIn: parent
+                             }
+                             horizontalAlignment: Text.AlignCenter
+                             color: "#AAA0A0"
+                             font.pixelSize: 20
+                             text: badgeIcon
+                         }                       
+
+                        Text {
+                             id: badgeNumberLabel
+                             visible: (badgeContent == "number") ? true : false;
+                             anchors {
+                                 centerIn: parent
+                             }
+                             horizontalAlignment: Text.AlignCenter
+                             font.family: sourceSansPro.name 
+                             font.weight: Font.Light
+                             color: "#AAA0A0"
+                             font.pixelSize: 18
+                             text: badgeNumber
                          }
                      }
                      
