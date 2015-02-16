@@ -3,9 +3,10 @@ package secp256k1
 import (
 	"bytes"
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto/randentropy"
 	"log"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/crypto/randentropy"
 )
 
 const TESTS = 10000 // how many tests
@@ -225,5 +226,13 @@ func Test_Secp256_06b(t *testing.T) {
 	}
 	if fail_count != 0 {
 		fmt.Printf("ERROR: Accepted signature for %v of %v random messages\n", fail_count, TESTS)
+	}
+}
+
+func TestInvalidKey(t *testing.T) {
+	p1 := make([]byte, 32)
+	err := VerifySeckeyValidity(p1)
+	if err == nil {
+		t.Errorf("pvk %x varify sec key should have returned error", p1)
 	}
 }

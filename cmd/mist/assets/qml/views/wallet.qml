@@ -104,7 +104,7 @@ Rectangle {
 
 				ComboBox {
 					id: valueDenom
-					currentIndex: 6
+					currentIndex: 5
 					model: denomModel
 				}
 
