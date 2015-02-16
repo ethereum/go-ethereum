@@ -50,6 +50,7 @@ type RuntimeData struct {
 	timestamp    int64
 	code         *byte
 	codeSize     uint64
+	codeHash     i256
 }
 
 func hash2llvm(h []byte) i256 {
@@ -180,6 +181,7 @@ func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *bi
 	self.data.timestamp = self.env.Time()
 	self.data.code = getDataPtr(code)
 	self.data.codeSize = uint64(len(code))
+	self.data.codeHash = hash2llvm(crypto.Sha3(code)) // TODO: Get already computed hash?
 
 	jit := C.evmjit_create()
 	retCode := C.evmjit_run(jit, unsafe.Pointer(&self.data), unsafe.Pointer(self))
@@ -201,8 +203,8 @@ func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *bi
 			state.Delete(me.Address())
 		}
 	}
-	
-	C.evmjit_destroy(jit);
+
+	C.evmjit_destroy(jit)
 	return
 }
 
@@ -278,7 +280,7 @@ func env_blockhash(_vm unsafe.Pointer, _number unsafe.Pointer, _result unsafe.Po
 }
 
 //export env_call
-func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Pointer, _value unsafe.Pointer, inDataPtr unsafe.Pointer, inDataLen uint64, outDataPtr *byte, outDataLen uint64, _codeAddr unsafe.Pointer) bool {
+func env_call(_vm unsafe.Pointer, _gas *int64, _receiveAddr unsafe.Pointer, _value unsafe.Pointer, inDataPtr unsafe.Pointer, inDataLen uint64, outDataPtr *byte, outDataLen uint64, _codeAddr unsafe.Pointer) bool {
 	vm := (*JitVm)(_vm)
 
 	//fmt.Printf("env_call (depth %d)\n", vm.Env().Depth())
@@ -297,8 +299,7 @@ func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Point
 		inData := C.GoBytes(inDataPtr, C.int(inDataLen))
 		outData := llvm2bytesRef(outDataPtr, outDataLen)
 		codeAddr := llvm2hash((*i256)(_codeAddr))
-		llvmGas := (*i256)(_gas)
-		gas := llvm2big(llvmGas)
+		gas := big.NewInt(*_gas)
 		var out []byte
 		var err error
 		if bytes.Equal(codeAddr, receiveAddr) {
@@ -306,7 +307,7 @@ func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Point
 		} else {
 			out, err = vm.env.CallCode(vm.me, codeAddr, inData, gas, vm.price, value)
 		}
-		*llvmGas = big2llvm(gas)
+		*_gas = gas.Int64()
 		if err == nil {
 			copy(outData, out)
 			return true
@@ -317,7 +318,7 @@ func env_call(_vm unsafe.Pointer, _gas unsafe.Pointer, _receiveAddr unsafe.Point
 }
 
 //export env_create
-func env_create(_vm unsafe.Pointer, _gas unsafe.Pointer, _value unsafe.Pointer, initDataPtr unsafe.Pointer, initDataLen uint64, _result unsafe.Pointer) {
+func env_create(_vm unsafe.Pointer, _gas *int64, _value unsafe.Pointer, initDataPtr unsafe.Pointer, initDataLen uint64, _result unsafe.Pointer) {
 	vm := (*JitVm)(_vm)
 
 	value := llvm2big((*i256)(_value))
@@ -325,9 +326,7 @@ func env_create(_vm unsafe.Pointer, _gas unsafe.Pointer, _value unsafe.Pointer, 
 	result := (*i256)(_result)
 	*result = i256{}
 
-	llvmGas := (*i256)(_gas)
-	gas := llvm2big(llvmGas)
-
+	gas := big.NewInt(*_gas)
 	ret, suberr, ref := vm.env.Create(vm.me, nil, initData, gas, vm.price, value)
 	if suberr == nil {
 		dataGas := big.NewInt(int64(len(ret))) // TODO: Nto the best design. env.Create can do it, it has the reference to gas counter
@@ -335,7 +334,7 @@ func env_create(_vm unsafe.Pointer, _gas unsafe.Pointer, _value unsafe.Pointer, 
 		gas.Sub(gas, dataGas)
 		*result = hash2llvm(ref.Address())
 	}
-	*llvmGas = big2llvm(gas)
+	*_gas = gas.Int64()
 }
 
 //export env_log
