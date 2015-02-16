@@ -129,9 +129,9 @@ Rectangle {
 
 			Button {
 				id: back
-
-				onClicked: {
-					webview.goBack()
+                z: 30
+				onClicked: {					
+                    webview.goBack()
 				}
 
 				anchors {
@@ -140,21 +140,23 @@ Rectangle {
 				}
 
 				style: ButtonStyle {
-					background: Image {
-						source: "../../backButton.png"
-						width: 20
-						height: 30
-					}
+                    background: Image {
+                         source: (webview.canGoBack) ? 
+                            (control.hovered ? "../../backButtonHover.png" : "../../backButton.png") : 
+                            "../../backButtonDisabled.png"
+                         width: 20
+                         height: 30
+                    }
 				}
 			}
 
 			Rectangle {
-				id: appInfoPane
-			    height: 28
-			    color: "#FFFFFF"
-			    radius: 6
-
-			   MouseArea {
+                id: appInfoPane
+                height: 28
+                color: "#FFFFFF"
+                radius: 6
+                z:2
+	           MouseArea {
 			    	anchors.fill: parent
 			    	z: 10
 			    	hoverEnabled: true
@@ -247,7 +249,7 @@ Rectangle {
 				    }
 			    }
    				
-			    z:2
+			    
 			}
 			
 			Rectangle {
@@ -256,6 +258,7 @@ Rectangle {
 			    height: 30
 			    color: "#BDB6B6"
 			    radius: 6
+                z:1
 
 			    anchors {
 					left: back.right
@@ -264,19 +267,17 @@ Rectangle {
 					rightMargin:10
 					top: parent.top 
 					topMargin: 23
-				}
-
-				z:1
+				}				
 			}
 
 			Rectangle {
 				id: navBarBackground
                 anchors.fill: parent
+                z:-1
                 gradient: Gradient {
                     GradientStop { position: 0.0; color: "#F6F1F2" }
                     GradientStop { position: 1.0; color: "#DED5D5" }
                 }
-                z:-1
             }
 
             states: [

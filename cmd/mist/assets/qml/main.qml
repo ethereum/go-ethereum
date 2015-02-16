@@ -485,7 +485,7 @@ ApplicationWindow {
                         label.visible = !on
                         buttonLabel.visible = on
                      }
-
+ 
                      width: 192
                      height: 55
                      color: "#00000000"
