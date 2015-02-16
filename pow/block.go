@@ -6,4 +6,5 @@ type Block interface {
 	Difficulty() *big.Int
 	HashNoNonce() []byte
 	N() []byte
+	Number() *big.Int
 }

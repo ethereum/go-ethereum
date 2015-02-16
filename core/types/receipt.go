@@ -17,7 +17,7 @@ type Receipt struct {
 }
 
 func NewReceipt(root []byte, cumalativeGasUsed *big.Int) *Receipt {
-	return &Receipt{PostState: ethutil.CopyBytes(root), CumulativeGasUsed: cumalativeGasUsed}
+	return &Receipt{PostState: ethutil.CopyBytes(root), CumulativeGasUsed: new(big.Int).Set(cumalativeGasUsed)}
 }
 
 func NewRecieptFromValue(val *ethutil.Value) *Receipt {

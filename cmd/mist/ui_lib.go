@@ -73,11 +73,6 @@ func (self *UiLib) Notef(args []interface{}) {
 	guilogger.Infoln(args...)
 }
 
-func (self *UiLib) PastPeers() *ethutil.List {
-	return ethutil.NewList([]string{})
-	//return ethutil.NewList(eth.PastPeers())
-}
-
 func (self *UiLib) ImportTx(rlpTx string) {
 	tx := types.NewTransactionFromBytes(ethutil.Hex2Bytes(rlpTx))
 	err := self.eth.TxPool().Add(tx)
@@ -136,15 +131,15 @@ func (ui *UiLib) Muted(content string) {
 
 func (ui *UiLib) Connect(button qml.Object) {
 	if !ui.connected {
-		ui.eth.Start(SeedNode)
+		ui.eth.Start()
 		ui.connected = true
 		button.Set("enabled", false)
 	}
 }
 
-func (ui *UiLib) ConnectToPeer(addr string) {
-	if err := ui.eth.SuggestPeer(addr); err != nil {
-		guilogger.Infoln(err)
+func (ui *UiLib) ConnectToPeer(nodeURL string) {
+	if err := ui.eth.SuggestPeer(nodeURL); err != nil {
+		guilogger.Infoln("SuggestPeer error: " + err.Error())
 	}
 }
 
@@ -209,17 +204,20 @@ func (self *UiLib) Call(params map[string]interface{}) (string, error) {
 }
 
 func (self *UiLib) AddLocalTransaction(to, data, gas, gasPrice, value string) int {
-	return self.miner.AddLocalTx(&miner.LocalTx{
-		To:       ethutil.Hex2Bytes(to),
-		Data:     ethutil.Hex2Bytes(data),
-		Gas:      gas,
-		GasPrice: gasPrice,
-		Value:    value,
-	}) - 1
+	return 0
+	/*
+		return self.miner.AddLocalTx(&miner.LocalTx{
+			To:       ethutil.Hex2Bytes(to),
+			Data:     ethutil.Hex2Bytes(data),
+			Gas:      gas,
+			GasPrice: gasPrice,
+			Value:    value,
+		}) - 1
+	*/
 }
 
 func (self *UiLib) RemoveLocalTransaction(id int) {
-	self.miner.RemoveLocalTx(id)
+	//self.miner.RemoveLocalTx(id)
 }
 
 func (self *UiLib) SetGasPrice(price string) {

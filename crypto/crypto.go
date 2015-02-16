@@ -8,6 +8,8 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
+	"io"
+	"os"
 
 	"encoding/hex"
 	"encoding/json"
@@ -16,10 +18,10 @@ import (
 	"code.google.com/p/go-uuid/uuid"
 	"code.google.com/p/go.crypto/pbkdf2"
 	"code.google.com/p/go.crypto/ripemd160"
+	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/obscuren/ecies"
 )
 
 func init() {
@@ -27,10 +29,11 @@ func init() {
 	ecies.AddParamsForCurve(S256(), ecies.ECIES_AES128_SHA256)
 }
 
-func Sha3(data []byte) []byte {
+func Sha3(data ...[]byte) []byte {
 	d := sha3.NewKeccak256()
-	d.Write(data)
-
+	for _, b := range data {
+		d.Write(b)
+	}
 	return d.Sum(nil)
 }
 
@@ -96,6 +99,32 @@ func FromECDSAPub(pub *ecdsa.PublicKey) []byte {
 		return nil
 	}
 	return elliptic.Marshal(S256(), pub.X, pub.Y)
+}
+
+// HexToECDSA parses a secp256k1 private key.
+func HexToECDSA(hexkey string) (*ecdsa.PrivateKey, error) {
+	b, err := hex.DecodeString(hexkey)
+	if err != nil {
+		return nil, errors.New("invalid hex string")
+	}
+	if len(b) != 32 {
+		return nil, errors.New("invalid length, need 256 bits")
+	}
+	return ToECDSA(b), nil
+}
+
+// LoadECDSA loads a secp256k1 private key from the given file.
+func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
+	buf := make([]byte, 32)
+	fd, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer fd.Close()
+	if _, err := io.ReadFull(fd, buf); err != nil {
+		return nil, err
+	}
+	return ToECDSA(buf), nil
 }
 
 func GenerateKey() (*ecdsa.PrivateKey, error) {

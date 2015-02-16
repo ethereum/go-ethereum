@@ -30,7 +30,7 @@ var rpchttplogger = logger.NewLogger("RPC-HTTP")
 var JSON rpc.JsonWrapper
 
 func NewRpcHttpServer(pipe *xeth.XEth, port int) (*RpcHttpServer, error) {
-	sport := fmt.Sprintf(":%d", port)
+	sport := fmt.Sprintf("127.0.0.1:%d", port)
 	l, err := net.Listen("tcp", sport)
 	if err != nil {
 		return nil, err

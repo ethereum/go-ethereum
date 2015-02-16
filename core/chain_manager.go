@@ -16,6 +16,11 @@ import (
 
 var chainlogger = logger.NewLogger("CHAIN")
 
+type ChainEvent struct {
+	Block *types.Block
+	Td    *big.Int
+}
+
 type StateQuery interface {
 	GetAccount(addr []byte) *state.StateObject
 }
@@ -73,11 +78,10 @@ type ChainManager struct {
 	eventMux     *event.TypeMux
 	genesisBlock *types.Block
 	// Last known total difficulty
-	mu              sync.RWMutex
-	td              *big.Int
-	lastBlockNumber uint64
-	currentBlock    *types.Block
-	lastBlockHash   []byte
+	mu            sync.RWMutex
+	td            *big.Int
+	currentBlock  *types.Block
+	lastBlockHash []byte
 
 	transState *state.StateDB
 }
@@ -87,13 +91,6 @@ func (self *ChainManager) Td() *big.Int {
 	defer self.mu.RUnlock()
 
 	return self.td
-}
-
-func (self *ChainManager) LastBlockNumber() uint64 {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-
-	return self.lastBlockNumber
 }
 
 func (self *ChainManager) LastBlockHash() []byte {
@@ -144,7 +141,6 @@ func (bc *ChainManager) setLastBlock() {
 		rlp.Decode(bytes.NewReader(data), &block)
 		bc.currentBlock = &block
 		bc.lastBlockHash = block.Hash()
-		bc.lastBlockNumber = block.Header().Number.Uint64()
 
 		// Set the last know difficulty (might be 0x0 as initial value, Genesis)
 		bc.td = ethutil.BigD(bc.db.LastKnownTD())
@@ -152,7 +148,7 @@ func (bc *ChainManager) setLastBlock() {
 		bc.Reset()
 	}
 
-	chainlogger.Infof("Last block (#%d) %x TD=%v\n", bc.lastBlockNumber, bc.currentBlock.Hash(), bc.td)
+	chainlogger.Infof("Last block (#%v) %x TD=%v\n", bc.currentBlock.Number(), bc.currentBlock.Hash(), bc.td)
 }
 
 // Block creation & chain handling
@@ -163,7 +159,7 @@ func (bc *ChainManager) NewBlock(coinbase []byte) *types.Block {
 	var root []byte
 	parentHash := ZeroHash256
 
-	if bc.CurrentBlock != nil {
+	if bc.currentBlock != nil {
 		root = bc.currentBlock.Header().Root
 		parentHash = bc.lastBlockHash
 	}
@@ -175,6 +171,9 @@ func (bc *ChainManager) NewBlock(coinbase []byte) *types.Block {
 		ethutil.BigPow(2, 32),
 		nil,
 		"")
+	block.SetUncles(nil)
+	block.SetTransactions(nil)
+	block.SetReceipts(nil)
 
 	parent := bc.currentBlock
 	if parent != nil {
@@ -226,8 +225,6 @@ func (bc *ChainManager) insert(block *types.Block) {
 }
 
 func (bc *ChainManager) write(block *types.Block) {
-	bc.writeBlockInfo(block)
-
 	encodedBlock := ethutil.Encode(block.RlpDataForStorage())
 	bc.db.Put(block.Hash(), encodedBlock)
 }
@@ -346,11 +343,6 @@ func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
 	return td, nil
 }
 
-// Unexported method for writing extra non-essential block info to the db
-func (bc *ChainManager) writeBlockInfo(block *types.Block) {
-	bc.lastBlockNumber++
-}
-
 func (bc *ChainManager) Stop() {
 	if bc.CurrentBlock != nil {
 		chainlogger.Infoln("Stopped")
@@ -384,9 +376,10 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 
 				self.setTotalDifficulty(td)
 				self.insert(block)
-				self.transState = state.New(cblock.Root(), self.db) //state.New(cblock.Trie().Copy())
-			}
+				self.transState = state.New(cblock.Root(), self.db)
 
+				self.eventMux.Post(ChainEvent{block, td})
+			}
 		}
 		self.mu.Unlock()
 

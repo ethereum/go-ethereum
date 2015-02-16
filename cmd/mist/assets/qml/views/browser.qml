@@ -3,7 +3,7 @@ import QtQuick.Controls 1.0;
 import QtQuick.Controls.Styles 1.0
 import QtQuick.Layouts 1.0;
 import QtWebEngine 1.0
-//import QtWebEngine.experimental 1.0
+import QtWebEngine.experimental 1.0
 import QtQuick.Window 2.0;
 
 Rectangle {
@@ -340,41 +340,61 @@ Rectangle {
 		WebEngineView {
 			objectName: "webView"
 			id: webview
+			experimental.settings.javascriptCanAccessClipboard: true
+			experimental.settings.localContentCanAccessRemoteUrls: true
 			anchors {
 				left: parent.left
 				right: parent.right
 				bottom: parent.bottom
 				top: navBar.bottom
 			}
+			z: 10
 
-            z: 10
-            
-            onLoadingChanged: {
-
-                // this checks if your app has special header tags
+			Timer {
+				interval: 500; running: true; repeat: true
+				onTriggered: {
+					webview.runJavaScript("try{document.querySelector('meta[name=badge]').getAttribute('content')}catch(e){}", function(badge) {
+						if (badge) {
+							menuItem.secondaryTitle = badge;
+						}
+					});
+				}
+			}
+			
+			onLoadingChanged: {
 				if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
 					webview.runJavaScript("document.title", function(pageTitle) {
 						menuItem.title = pageTitle;	
 					});
 
-					webView.runJavaScript("document.querySelector(\"meta[name='ethereum-dapp-url-bar-style']\").getAttribute(\"content\")", function(topBarStyle){
+
+					webView.runJavaScript("try{document.querySelector(\"meta[name='ethereum-dapp-url-bar-style']\").getAttribute(\"content\")}catch(e){}", function(topBarStyle){
+						if (!topBarStyle) {
+							showFullUrlBar(true);
+							navBarBackground.visible = true;
+							back.visible = true;
+							appInfoPane.anchors.leftMargin = 0;
+							appInfoPaneShadow.anchors.leftMargin = 0;
+							webview.anchors.topMargin = 0;
+							return;
+						}
+
 						if (topBarStyle=="transparent") {
 							// Adjust for a transparent sidebar Dapp
-                            navBarBackground.visible = false;
-                            back.visible = false;
-                            appInfoPane.anchors.leftMargin = -16;
-                            appInfoPaneShadow.anchors.leftMargin = -16;
-                            webview.anchors.topMargin = -74;
+							navBarBackground.visible = false;
+							back.visible = false;
+							appInfoPane.anchors.leftMargin = -16;
+							appInfoPaneShadow.anchors.leftMargin = -16;
+							webview.anchors.topMargin = -74;
 							webview.runJavaScript("document.querySelector('body').classList.add('ethereum-dapp-url-bar-style-transparent')")
 
 						} else {
-                            navBarBackground.visible = true;
-                            back.visible = true;
-                            appInfoPane.anchors.leftMargin = 0;
-                            appInfoPaneShadow.anchors.leftMargin = 0;
-                            webview.anchors.topMargin = 0;
-
-                        };	
+							navBarBackground.visible = true;
+							back.visible = true;
+							appInfoPane.anchors.leftMargin = 0;
+							appInfoPaneShadow.anchors.leftMargin = 0;
+							webview.anchors.topMargin = 0;
+						};	
 					});
 
                     // webView.runJavaScript("document.querySelector(\"link[rel='icon']\").getAttribute(\"href\")", function(sideIcon){
@@ -391,10 +411,13 @@ Rectangle {
 					var matches = cleanTitle.match(/^[a-z]*\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
 					var domain = matches && matches[1];
 
-			    	appDomain.text = domain 
-			    	appTitle.text = webview.title
 
-			    	showFullUrlBar(false);
+					if (domain)
+						appDomain.text = domain //webview.url.replace("a", "z")
+					if (webview.title)
+						appTitle.text = webview.title
+
+					showFullUrlBar(false);
 				}
 			}
 			onJavaScriptConsoleMessage: {

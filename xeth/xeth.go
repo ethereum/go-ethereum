@@ -31,7 +31,6 @@ type Backend interface {
 	IsListening() bool
 	Peers() []*p2p.Peer
 	KeyManager() *crypto.KeyManager
-	ClientIdentity() p2p.ClientIdentity
 	Db() ethutil.Database
 	EventMux() *event.TypeMux
 	Whisper() *whisper.Whisper
@@ -190,15 +189,6 @@ func (self *XEth) FromNumber(str string) string {
 	}
 
 	return ethutil.BigD(fromHex(str)).String()
-}
-
-func ToMessages(messages state.Messages) *ethutil.List {
-	var msgs []Message
-	for _, m := range messages {
-		msgs = append(msgs, NewMessage(m))
-	}
-
-	return ethutil.NewList(msgs)
 }
 
 func (self *XEth) PushTx(encodedTx string) (string, error) {

@@ -31,6 +31,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"sort"
 	"strconv"
 	"time"
 
@@ -41,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/ui/qt/qwhisper"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/obscuren/qml"
@@ -77,9 +77,8 @@ type Gui struct {
 
 	xeth *xeth.XEth
 
-	Session        string
-	clientIdentity *p2p.SimpleClientIdentity
-	config         *ethutil.ConfigManager
+	Session string
+	config  *ethutil.ConfigManager
 
 	plugins map[string]plugin
 
@@ -87,7 +86,7 @@ type Gui struct {
 }
 
 // Create GUI, but doesn't start it
-func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIdentity *p2p.SimpleClientIdentity, session string, logLevel int) *Gui {
+func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, session string, logLevel int) *Gui {
 	db, err := ethdb.NewLDBDatabase("tx_database")
 	if err != nil {
 		panic(err)
@@ -95,15 +94,14 @@ func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIden
 
 	xeth := xeth.New(ethereum)
 	gui := &Gui{eth: ethereum,
-		txDb:           db,
-		xeth:           xeth,
-		logLevel:       logger.LogLevel(logLevel),
-		Session:        session,
-		open:           false,
-		clientIdentity: clientIdentity,
-		config:         config,
-		plugins:        make(map[string]plugin),
-		serviceEvents:  make(chan ServEv, 1),
+		txDb:          db,
+		xeth:          xeth,
+		logLevel:      logger.LogLevel(logLevel),
+		Session:       session,
+		open:          false,
+		config:        config,
+		plugins:       make(map[string]plugin),
+		serviceEvents: make(chan ServEv, 1),
 	}
 	data, _ := ethutil.ReadAllFile(path.Join(ethutil.Config.ExecPath, "plugins.json"))
 	json.Unmarshal([]byte(data), &gui.plugins)
@@ -415,9 +413,9 @@ func (gui *Gui) update() {
 			switch ev := ev.(type) {
 			case core.NewBlockEvent:
 				gui.processBlock(ev.Block, false)
-				if bytes.Compare(ev.Block.Coinbase(), gui.address()) == 0 {
-					gui.setWalletValue(gui.eth.ChainManager().State().GetBalance(gui.address()), nil)
-				}
+				//gui.setWalletValue(gui.eth.ChainManager().State().GetBalance(gui.address()), nil)
+				balance := ethutil.CurrencyToString(gui.eth.ChainManager().State().GetBalance(gui.address()))
+				gui.getObjectByName("balanceLabel").Set("text", fmt.Sprintf("%v", balance))
 
 			case core.TxPreEvent:
 				tx := ev.Tx
@@ -452,10 +450,11 @@ func (gui *Gui) update() {
 
 		case <-peerUpdateTicker.C:
 			gui.setPeerInfo()
+
 		case <-generalUpdateTicker.C:
 			statusText := "#" + gui.eth.ChainManager().CurrentBlock().Number().String()
 			lastBlockLabel.Set("text", statusText)
-			miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.miner.GetPow().GetHashrate(), 10)+"Khash")
+			miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.miner.HashRate(), 10)+"/Khash")
 
 			/*
 				blockLength := gui.eth.BlockPool().BlocksProcessed
@@ -502,12 +501,34 @@ NumGC:      %d
 	))
 }
 
+type qmlpeer struct{ Addr, NodeID, Caps string }
+
+type peersByID []*qmlpeer
+
+func (s peersByID) Len() int           { return len(s) }
+func (s peersByID) Less(i, j int) bool { return s[i].NodeID < s[j].NodeID }
+func (s peersByID) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+
 func (gui *Gui) setPeerInfo() {
-	gui.win.Root().Call("setPeers", fmt.Sprintf("%d / %d", gui.eth.PeerCount(), gui.eth.MaxPeers))
-	gui.win.Root().Call("resetPeers")
-	//for _, peer := range gui.xeth.Peers() {
-	//gui.win.Root().Call("addPeer", peer)
-	//}
+	peers := gui.eth.Peers()
+	qpeers := make(peersByID, len(peers))
+	for i, p := range peers {
+		qpeers[i] = &qmlpeer{
+			NodeID: p.ID().String(),
+			Addr:   p.RemoteAddr().String(),
+			Caps:   fmt.Sprint(p.Caps()),
+		}
+	}
+	// we need to sort the peers because they jump around randomly
+	// otherwise. order returned by eth.Peers is random because they
+	// are taken from a map.
+	sort.Sort(qpeers)
+
+	gui.win.Root().Call("setPeerCounters", fmt.Sprintf("%d / %d", len(peers), gui.eth.MaxPeers()))
+	gui.win.Root().Call("clearPeers")
+	for _, p := range qpeers {
+		gui.win.Root().Call("addPeer", p)
+	}
 }
 
 func (gui *Gui) privateKey() string {

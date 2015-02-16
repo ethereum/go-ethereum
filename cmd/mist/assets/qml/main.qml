@@ -17,6 +17,7 @@ ApplicationWindow {
     // Use this to make the window frameless. But then you'll need to do move and resize by hand
 
     property var ethx : Eth.ethx
+    property var catalog;
 
     width: 1200
     height: 820
@@ -39,7 +40,7 @@ ApplicationWindow {
     // Takes care of loading all default plugins
     Component.onCompleted: {
 
-        var catalog = addPlugin("./views/catalog.qml", {noAdd: true, close: false, section: "begin"});
+        catalog = addPlugin("./views/catalog.qml", {noAdd: true, close: false, section: "begin"});
         var wallet = addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "ethereum", active: true});
 
         addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: true});
@@ -66,6 +67,7 @@ ApplicationWindow {
             urlPane.visible = true;
             mainView.anchors.top = divider.bottom
         }*/
+
     }
 
     function addViews(view, path, options) {
@@ -146,27 +148,10 @@ ApplicationWindow {
         Menu {
             title: "File"
             MenuItem {
-                text: "Import App"
-                shortcut: "Ctrl+o"
-                onTriggered: {
-                    generalFileDialog.show(true, importApp)
-                }
-            }
-
-            MenuItem {
-                text: "Add plugin"
-                onTriggered: {
-                    generalFileDialog.show(true, function(path) {
-                        addPlugin(path, {close: true, section: "apps"})
-                    })
-                }
-            }
-
-            MenuItem {
                 text: "New tab"
                 shortcut: "Ctrl+t"
                 onTriggered: {
-                    newBrowserTab("http://etherian.io");
+	            activeView(catalog.view, catalog.menuItem);
                 }
             }
 
@@ -258,18 +243,6 @@ ApplicationWindow {
                 }
             }
         }
-
-        Menu {
-            title: "GLOBAL SHORTCUTS"
-            visible: false
-            MenuItem {
-                visible: false
-                shortcut: "Ctrl+l"
-                onTriggered: {
-                    url.focus = true
-                }
-            }
-        }
     }
 
     statusBar: StatusBar {
@@ -285,6 +258,7 @@ ApplicationWindow {
             styleColor: "#797979"
         }
 
+	/*
         Label {
             //y: 6
             objectName: "miningLabel"
@@ -303,6 +277,7 @@ ApplicationWindow {
             anchors.right: peerGroup.left
             anchors.rightMargin: 5
         }
+	*/
 
         ProgressBar {
             visible: false
@@ -335,7 +310,7 @@ ApplicationWindow {
             }
 
             Label {
-                id: peerLabel
+                id: peerCounterLabel
                 font.pixelSize: 10
                 text: "0 / 0"
             }
@@ -925,7 +900,6 @@ ApplicationWindow {
             }
         }
 
-
         function setWalletValue(value) {
             walletValueLabel.text = value
         }
@@ -935,17 +909,11 @@ ApplicationWindow {
             var view = mainView.addPlugin(name)
         }
 
-        function setPeers(text) {
-            peerLabel.text = text
-        }
+        function clearPeers() { peerModel.clear() }
+        function addPeer(peer) { peerModel.append(peer) }
 
-        function addPeer(peer) {
-            // We could just append the whole peer object but it cries if you try to alter them
-            peerModel.append({ip: peer.ip, port: peer.port, lastResponse:timeAgo(peer.lastSend), latency: peer.latency, version: peer.version, caps: peer.caps})
-        }
-
-        function resetPeers(){
-            peerModel.clear()
+        function setPeerCounters(text) {
+            peerCounterLabel.text = text
         }
 
         function timeAgo(unixTs){
@@ -983,9 +951,9 @@ ApplicationWindow {
                      anchors.fill: parent
                      id: peerTable
                      model: peerModel
-                     TableViewColumn{width: 200; role: "ip" ; title: "IP" }
-                     TableViewColumn{width: 260; role: "version" ; title: "Version" }
-                     TableViewColumn{width: 180;  role: "caps" ; title: "Capabilities" }
+                     TableViewColumn{width: 180; role: "addr" ; title: "Remote Address" }
+                     TableViewColumn{width: 280; role: "nodeID" ; title: "Node ID" }
+                     TableViewColumn{width: 180; role: "caps" ; title: "Capabilities" }
                  }
              }
          }
@@ -1053,37 +1021,25 @@ ApplicationWindow {
          Window {
              id: addPeerWin
              visible: false
-             minimumWidth: 300
-             maximumWidth: 300
+             minimumWidth: 400
+             maximumWidth: 400
              maximumHeight: 50
              minimumHeight: 50
              title: "Connect to peer"
 
-             ComboBox {
+             TextField {
                  id: addrField
                  anchors.verticalCenter: parent.verticalCenter
                  anchors.left: parent.left
                  anchors.right: addPeerButton.left
                  anchors.leftMargin: 10
                  anchors.rightMargin: 10
+		 placeholderText: "enode://<hex node id>:<IP address>:<port>"
                  onAccepted: {
-                     eth.connectToPeer(addrField.currentText)
-                     addPeerWin.visible = false
-                 }
-
-                 editable: true
-                 model: ListModel { id: pastPeers }
-
-                 Component.onCompleted: {
-                     pastPeers.insert(0, {text: "poc-8.ethdev.com:30303"})
-                     /*
-                      var ips = eth.pastPeers()
-                      for(var i = 0; i < ips.length; i++) {
-                          pastPeers.append({text: ips.get(i)})
-                      }
-
-                      pastPeers.insert(0, {text: "poc-7.ethdev.com:30303"})
-                      */
+	             if(addrField.text.length != 0) {
+			eth.connectToPeer(addrField.text)
+			addPeerWin.visible = false
+		     }
                  }
              }
 
@@ -1092,10 +1048,12 @@ ApplicationWindow {
                  anchors.right: parent.right
                  anchors.verticalCenter: parent.verticalCenter
                  anchors.rightMargin: 10
-                 text: "Add"
+                 text: "Connect"
                  onClicked: {
-                     eth.connectToPeer(addrField.currentText)
-                     addPeerWin.visible = false
+	             if(addrField.text.length != 0) {
+			eth.connectToPeer(addrField.text)
+			addPeerWin.visible = false
+		     }
                  }
              }
              Component.onCompleted: {

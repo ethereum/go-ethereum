@@ -36,7 +36,7 @@ import (
 
 const (
 	ClientIdentifier = "Mist"
-	Version          = "0.8.2"
+	Version          = "0.8.3"
 )
 
 var ethereum *eth.Ethereum
@@ -52,19 +52,18 @@ func run() error {
 	config := utils.InitConfig(VmType, ConfigFile, Datadir, "ETH")
 
 	ethereum, err := eth.New(&eth.Config{
-		Name:       ClientIdentifier,
-		Version:    Version,
-		KeyStore:   KeyStore,
-		DataDir:    Datadir,
-		LogFile:    LogFile,
-		LogLevel:   LogLevel,
-		Identifier: Identifier,
-		MaxPeers:   MaxPeer,
-		Port:       OutboundPort,
-		NATType:    PMPGateway,
-		PMPGateway: PMPGateway,
-		KeyRing:    KeyRing,
-		Dial:       true,
+		Name:      p2p.MakeName(ClientIdentifier, Version),
+		KeyStore:  KeyStore,
+		DataDir:   Datadir,
+		LogFile:   LogFile,
+		LogLevel:  LogLevel,
+		MaxPeers:  MaxPeer,
+		Port:      OutboundPort,
+		NAT:       NAT,
+		BootNodes: BootNodes,
+		NodeKey:   NodeKey,
+		KeyRing:   KeyRing,
+		Dial:      true,
 	})
 	if err != nil {
 		mainlogger.Fatalln(err)
@@ -79,12 +78,12 @@ func run() error {
 		utils.StartWebSockets(ethereum, WsPort)
 	}
 
-	gui := NewWindow(ethereum, config, ethereum.ClientIdentity().(*p2p.SimpleClientIdentity), KeyRing, LogLevel)
+	gui := NewWindow(ethereum, config, KeyRing, LogLevel)
 
 	utils.RegisterInterrupt(func(os.Signal) {
 		gui.Stop()
 	})
-	go utils.StartEthereum(ethereum, SeedNode)
+	go utils.StartEthereum(ethereum)
 
 	fmt.Println("ETH stack took", time.Since(tstart))
 

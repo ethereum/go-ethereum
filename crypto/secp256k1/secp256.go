@@ -16,6 +16,8 @@ import (
 	"bytes"
 	"errors"
 	"unsafe"
+
+	"github.com/ethereum/go-ethereum/crypto/randentropy"
 )
 
 //#define USE_FIELD_5X64
@@ -68,7 +70,7 @@ func GenerateKeyPair() ([]byte, []byte) {
 	const seckey_len = 32
 
 	var pubkey []byte = make([]byte, pubkey_len)
-	var seckey []byte = RandByte(seckey_len)
+	var seckey []byte = randentropy.GetEntropyMixed(seckey_len)
 
 	var pubkey_ptr *C.uchar = (*C.uchar)(unsafe.Pointer(&pubkey[0]))
 	var seckey_ptr *C.uchar = (*C.uchar)(unsafe.Pointer(&seckey[0]))
@@ -84,6 +86,10 @@ func GenerateKeyPair() ([]byte, []byte) {
 }
 
 func GeneratePubKey(seckey []byte) ([]byte, error) {
+	if err := VerifySeckeyValidity(seckey); err != nil {
+		return nil, err
+	}
+
 	pubkey_len := C.int(65)
 	const seckey_len = 32
 
@@ -124,7 +130,7 @@ int secp256k1_ecdsa_sign_compact(const unsigned char *msg, int msglen,
 */
 
 func Sign(msg []byte, seckey []byte) ([]byte, error) {
-	nonce := RandByte(32)
+	nonce := randentropy.GetEntropyMixed(32)
 
 	var sig []byte = make([]byte, 65)
 	var recid C.int
