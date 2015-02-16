@@ -48,8 +48,9 @@ type Work struct {
 
 type Agent interface {
 	Work() chan<- *types.Block
-	SetNonceCh(chan<- Work)
+	SetWorkCh(chan<- Work)
 	Stop()
+	Start()
 	Pow() pow.PoW
 }
 
@@ -86,6 +87,11 @@ func (self *worker) start() {
 
 	self.quit = make(chan struct{})
 
+	// spin up agents
+	for _, agent := range self.agents {
+		agent.Start()
+	}
+
 	go self.update()
 	go self.wait()
 }
@@ -98,7 +104,7 @@ func (self *worker) stop() {
 
 func (self *worker) register(agent Agent) {
 	self.agents = append(self.agents, agent)
-	agent.SetNonceCh(self.recv)
+	agent.SetWorkCh(self.recv)
 }
 
 func (self *worker) update() {
@@ -108,15 +114,17 @@ out:
 	for {
 		select {
 		case event := <-events.Chan():
-			switch event := event.(type) {
+			switch event.(type) {
 			case core.ChainEvent:
 				self.commitNewWork()
 			case core.TxPreEvent:
-				if err := self.commitTransaction(event.Tx); err != nil {
-					self.push()
-				}
+				self.commitNewWork()
 			}
 		case <-self.quit:
+			// stop all agents
+			for _, agent := range self.agents {
+				agent.Stop()
+			}
 			break out
 		}
 	}
@@ -131,8 +139,11 @@ func (self *worker) wait() {
 			if block.Number().Uint64() == work.Number && block.Nonce() == nil {
 				self.current.block.Header().Nonce = work.Nonce
 
-				self.chain.InsertChain(types.Blocks{self.current.block})
-				self.mux.Post(core.NewMinedBlockEvent{self.current.block})
+				if err := self.chain.InsertChain(types.Blocks{self.current.block}); err == nil {
+					self.mux.Post(core.NewMinedBlockEvent{self.current.block})
+				} else {
+					self.commitNewWork()
+				}
 			}
 			break
 		}
@@ -141,9 +152,10 @@ func (self *worker) wait() {
 
 func (self *worker) push() {
 	if self.mining {
-		self.current.state.Update(ethutil.Big0)
+		self.current.block.Header().GasUsed = self.current.totalUsedGas
 		self.current.block.SetRoot(self.current.state.Root())
 
+		// push new work to agents
 		for _, agent := range self.agents {
 			agent.Work() <- self.current.block
 		}
@@ -169,14 +181,18 @@ func (self *worker) commitNewWork() {
 			// Break on gas limit
 			break
 		default:
-			minerlogger.Infoln(err)
 			remove = append(remove, tx)
+		}
+
+		if err != nil {
+			minerlogger.Infoln(err)
 		}
 	}
 	self.eth.TxPool().RemoveSet(remove)
 
 	self.current.coinbase.AddAmount(core.BlockReward)
 
+	self.current.state.Update(ethutil.Big0)
 	self.push()
 }
 
@@ -213,7 +229,9 @@ func (self *worker) commitTransaction(tx *types.Transaction) error {
 	snapshot := self.current.state.Copy()
 	receipt, txGas, err := self.proc.ApplyTransaction(self.current.coinbase, self.current.state, self.current.block, tx, self.current.totalUsedGas, true)
 	if err != nil {
-		self.current.state.Set(snapshot)
+		if core.IsNonceErr(err) || core.IsGasLimitErr(err) {
+			self.current.state.Set(snapshot)
+		}
 
 		return err
 	}

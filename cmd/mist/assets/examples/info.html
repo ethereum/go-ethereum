@@ -1,8 +1,8 @@
 
 <!doctype>
 <html>
-
 <head>
+<meta name="badge" content="10">
 <script type="text/javascript" src="../ext/bignumber.min.js"></script>
 <script type="text/javascript" src="../ext/ethereum.js/dist/ethereum.js"></script>
 </head>
@@ -60,7 +60,7 @@
     var web3 = require('web3');
     var eth = web3.eth;
 
-    web3.setProvider(new web3.providers.HttpSyncProvider('http://localhost:8080'));
+    web3.setProvider(new web3.providers.HttpSyncProvider('http://localhost:8545'));
 
     document.querySelector("#number").innerHTML = eth.number;
     document.querySelector("#coinbase").innerHTML = eth.coinbase

@@ -19,9 +19,6 @@ Rectangle {
             id: lastBlockLabel
             objectName: "lastBlockLabel"
             text: "---"
-            font.pixelSize: 10
-            anchors.right: peerGroup.left
-            anchors.rightMargin: 5
 	    onTextChanged: {
 		//menuItem.secondaryTitle = text
 	    }

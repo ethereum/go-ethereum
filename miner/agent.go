@@ -17,24 +17,28 @@ type CpuMiner struct {
 
 func NewCpuMiner(index int, pow pow.PoW) *CpuMiner {
 	miner := &CpuMiner{
-		c:             make(chan *types.Block, 1),
-		quit:          make(chan struct{}),
-		quitCurrentOp: make(chan struct{}, 1),
-		pow:           pow,
-		index:         index,
+		pow:   pow,
+		index: index,
 	}
-	go miner.update()
 
 	return miner
 }
 
 func (self *CpuMiner) Work() chan<- *types.Block { return self.c }
 func (self *CpuMiner) Pow() pow.PoW              { return self.pow }
-func (self *CpuMiner) SetNonceCh(ch chan<- Work) { self.returnCh = ch }
+func (self *CpuMiner) SetWorkCh(ch chan<- Work)  { self.returnCh = ch }
 
 func (self *CpuMiner) Stop() {
 	close(self.quit)
 	close(self.quitCurrentOp)
+}
+
+func (self *CpuMiner) Start() {
+	self.quit = make(chan struct{})
+	self.quitCurrentOp = make(chan struct{}, 1)
+	self.c = make(chan *types.Block, 1)
+
+	go self.update()
 }
 
 func (self *CpuMiner) update() {
@@ -42,7 +46,6 @@ out:
 	for {
 		select {
 		case block := <-self.c:
-			// make sure it's open
 			self.quitCurrentOp <- struct{}{}
 
 			go self.mine(block)

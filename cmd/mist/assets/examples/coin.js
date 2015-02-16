@@ -1,64 +1,65 @@
-var contract = web3.eth.contractFromAbi([
+var walletABI = [
     {
-	"constant":false,
-	"inputs":[
-	    {"name":"_h","type":"hash256"}
-	],
-	"name":"confirm",
-	"outputs":[],
-	"type":"function"
+        "name":"confirm",
+        "type":"function",
+        "constant":false,
+        "inputs":[
+            {"name":"_h","type":"hash256"}
+        ],
+        "outputs":[]
     },{
-	"constant":false,
-	"inputs":[
-	    {"name":_to,"type":"address"},
-	    {"name":"_value","type":"uint256"},
-	    {"name":"_data","type":"bytes"}
-	],
-	"name":"execute",
-	"outputs":[
-	    {"name":"_r","type":"hash256"}
-	],
-	"type":"function"
+        "name":"execute",
+        "constant":false,
+        "type":"function",
+        "inputs":[
+            {"name":"_to","type":"address"},
+            {"name":"_value","type":"uint256"},
+            {"name":"_data","type":"bytes"}
+        ],
+        "outputs":[
+            {"name":"_r","type":"hash256"}
+        ]
     },{
-	"constant":false,
-	"inputs":[
-	    {"name":"_to","type":"address"}
-	],"name":"kill",
-	"outputs":[],
-	"type":"function"
+        "name":"kill",
+        "type":"function",
+        "constant":false,
+        "inputs":[
+            {"name":"_to","type":"address"}
+        ],
+        "outputs":[]
     },{
-	"constant":false,
-	"inputs":[
-	    {"name":"_from","type":"address"},
-	    {"name":"_to","type":"address"}
-	],
-	"name":"changeOwner",
-	"outputs":[],
-	"type":"function"
+        "name":"changeOwner",
+        "type":"function",
+        "constant":false,
+        "inputs":[
+            {"name":"_from","type":"address"},
+            {"name":"_to","type":"address"}
+        ],
+        "outputs":[]
     },{
-	"inputs":[
-	    {"indexed":false,"name":"value","type":"uint256"}
-	],
-	"name":"CashIn",
-	"type":"event"
+        "name":"CashIn",
+        "type":"event",
+        "inputs":[
+            {"indexed":false,"name":"value","type":"uint256"}
+        ]
     },{
-	"inputs":[
-	    {"indexed":true,"name":"out","type":"string32"},
-	    {"indexed":false,"name":"owner","type":"address"},
-	    {"indexed":false,"name":"value","type":"uint256"},
-	    {"indexed":false,"name":"to","type":"address"}
-	],
-	"name":"SingleTransact",
-	"type":"event"
+        "name":"SingleTransact",
+        "type":"event",
+        "inputs":[
+            {"indexed":true,"name":"out","type":"string32"},
+            {"indexed":false,"name":"owner","type":"address"},
+            {"indexed":false,"name":"value","type":"uint256"},
+            {"indexed":false,"name":"to","type":"address"}
+        ]
     },{
-	"inputs":[
-	    {"indexed":true,"name":"out","type":"string32"},
-	    {"indexed":false,"name":"owner","type":"address"},
-	    {"indexed":false,"name":"operation","type":"hash256"},
-	    {"indexed":false,"name":"value","type":"uint256"},
-	    {"indexed":false,"name":"to","type":"address"}
-	],
-	"name":"MultiTransact",
-	"type":"event"
+        "name":"MultiTransact",
+        "type":"event",
+        "inputs":[
+            {"indexed":true,"name":"out","type":"string32"},
+            {"indexed":false,"name":"owner","type":"address"},
+            {"indexed":false,"name":"operation","type":"hash256"},
+            {"indexed":false,"name":"value","type":"uint256"},
+            {"indexed":false,"name":"to","type":"address"}
+        ]
     }
-]);
+];

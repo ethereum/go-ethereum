@@ -18,10 +18,8 @@ Rectangle {
         Label {
             objectName: "balanceLabel"
             visible: false
-            font.pixelSize: 10
-            anchors.right: lastBlockLabel.left
-            anchors.rightMargin: 5
 	    onTextChanged: {
+		balance.text = text
 		menuItem.secondaryTitle = text
 	    }
         }

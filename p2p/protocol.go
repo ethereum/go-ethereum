@@ -1,5 +1,7 @@
 package p2p
 
+import "fmt"
+
 // Protocol represents a P2P subprotocol implementation.
 type Protocol struct {
 	// Name should contain the official protocol name,
@@ -35,6 +37,10 @@ type Cap struct {
 
 func (cap Cap) RlpData() interface{} {
 	return []interface{}{cap.Name, cap.Version}
+}
+
+func (cap Cap) String() string {
+	return fmt.Sprintf("%s/%d", cap.Name, cap.Version)
 }
 
 type capsByName []Cap

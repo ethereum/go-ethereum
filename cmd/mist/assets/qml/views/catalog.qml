@@ -137,7 +137,6 @@ Rectangle {
 			anchors {
 				left: root.left
 				right: root.right
-				top: sizeGrip.bottom
 				bottom: root.bottom
 			}
 
