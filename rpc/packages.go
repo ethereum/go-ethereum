@@ -9,7 +9,7 @@
 	go-ethereum is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+    GNU General Public License for more details.
 
 	You should have received a copy of the GNU General Public License
 	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
@@ -150,6 +150,20 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
 	}
 
 	result, _ := p.xeth.Transact( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
+	*reply = result
+	return nil
+}
+
+func (p *EthereumApi) Transact2(args *NewTxArgs2, reply *interface{}) error {
+	if len(args.Gas) == 0 {
+		args.Gas = defaultGas
+	}
+
+	if len(args.GasPrice) == 0 {
+		args.GasPrice = defaultGasPrice
+	}
+
+	result, _ := p.xeth.Transact2(args.From, args.Pass, args.To, args.Value, args.Gas, args.GasPrice, args.Data)
 	*reply = result
 	return nil
 }

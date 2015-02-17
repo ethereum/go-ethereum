@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/json"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -25,6 +26,7 @@ var pipelogger = logger.NewLogger("XETH")
 type Backend interface {
 	BlockProcessor() *core.BlockProcessor
 	ChainManager() *core.ChainManager
+	AccountManager() *accounts.AccountManager
 	TxPool() *core.TxPool
 	PeerCount() int
 	IsMining() bool
@@ -40,6 +42,7 @@ type XEth struct {
 	eth            Backend
 	blockProcessor *core.BlockProcessor
 	chainManager   *core.ChainManager
+	accountManager *accounts.AccountManager
 	state          *State
 	whisper        *Whisper
 }
@@ -49,6 +52,7 @@ func New(eth Backend) *XEth {
 		eth:            eth,
 		blockProcessor: eth.BlockProcessor(),
 		chainManager:   eth.ChainManager(),
+		accountManager: eth.AccountManager(),
 		whisper:        NewWhisper(eth.Whisper()),
 	}
 	xeth.state = NewState(xeth)
@@ -290,4 +294,80 @@ func (self *XEth) Transact(toStr, valueStr, gasStr, gasPriceStr, codeStr string)
 	}
 
 	return toHex(tx.Hash()), nil
+}
+
+func (self *XEth) Transact2(fromStr, fromPassStr, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
+
+	var (
+		from             []byte
+		to               []byte
+		value            = ethutil.NewValue(valueStr)
+		gas              = ethutil.NewValue(gasStr)
+		price            = ethutil.NewValue(gasPriceStr)
+		data             []byte
+		contractCreation bool
+	)
+
+	from = fromHex(fromStr)
+	data = fromHex(codeStr)
+	to = fromHex(toStr)
+	if len(to) == 0 {
+		contractCreation = true
+	}
+
+	var tx *types.Transaction
+	if contractCreation {
+		tx = types.NewContractCreationTx(value.BigInt(), gas.BigInt(), price.BigInt(), data)
+	} else {
+		tx = types.NewTransactionMessage(to, value.BigInt(), gas.BigInt(), price.BigInt(), data)
+	}
+
+	state := self.chainManager.TransState()
+	nonce := state.GetNonce(from)
+
+	tx.SetNonce(nonce)
+	sig, err := self.accountManager.Sign(from, fromPassStr, tx.Hash())
+	if err != nil {
+		return "", err
+	}
+	tx.SetSignatureValues(sig)
+	// Do some pre processing for our "pre" events  and hooks
+	block := self.chainManager.NewBlock(from)
+	coinbase := state.GetOrNewStateObject(from)
+	coinbase.SetGasPool(block.GasLimit())
+	self.blockProcessor.ApplyTransactions(coinbase, state, block, types.Transactions{tx}, true)
+
+	err = self.eth.TxPool().Add(tx)
+	if err != nil {
+		return "", err
+	}
+	state.SetNonce(from, nonce+1)
+
+	if contractCreation {
+		addr := core.AddressFromMessage(tx)
+		pipelogger.Infof("Contract addr %x\n", addr)
+	}
+
+	if types.IsContractAddr(to) {
+		return toHex(core.AddressFromMessage(tx)), nil
+	}
+
+	return toHex(tx.Hash()), nil
+}
+
+// TODO: clarify what is amount, gas and gas price when creating a new wallet contract?
+func (self *XEth) NewWallet(fromStr, fromPassStr, valueStr, gasStr, gasPriceStr, walletContractDataStr string) (newAddrHex string, newWalletContractAddrHex string, err error) {
+	from := fromHex(fromStr)
+	newAddr, err := self.accountManager.NewAccount(fromPassStr)
+	if err != nil {
+		return "", "", err
+	}
+	err = self.accountManager.AssociateContract(from, newAddr)
+	if err != nil {
+		return "", "", err
+	}
+
+	// TODO: how to add newAddr as authorised signer to the wallet contract code?
+	newWalletContractAddrHex, err = self.Transact2(fromStr, fromPassStr, "", valueStr, gasStr, gasPriceStr, walletContractDataStr)
+	return toHex(newAddr), newWalletContractAddrHex, nil
 }
