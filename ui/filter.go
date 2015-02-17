@@ -15,7 +15,7 @@ func fromHex(s string) []byte {
 	return nil
 }
 
-func NewFilterFromMap(object map[string]interface{}, eth core.EthManager) *core.Filter {
+func NewFilterFromMap(object map[string]interface{}, eth core.Backend) *core.Filter {
 	filter := core.NewFilter(eth)
 
 	if object["earliest"] != nil {

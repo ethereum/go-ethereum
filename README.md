@@ -29,6 +29,7 @@ For further, detailed, build instruction please see the [Wiki](https://github.co
 Automated (dev) builds
 ======================
 
+* [[Docker](https://registry.hub.docker.com/u/ethereum/client-go/)]
 * [[OS X](http://build.ethdev.com/builds/OSX%20Go%20develop%20branch/Mist-OSX-latest.dmg)]
 * [Windows] Coming soon&trade;
 * [Linux] Coming soon&trade;
@@ -90,6 +91,8 @@ send a pull request. Commits who do not comply with the coding standards
 are ignored (use gofmt!). If you send pull requests make absolute sure that you
 commit on the `develop` branch and that you do not merge to master.
 Commits that are directly based on master are simply ignored.
+
+For dependency management, we use [godep](https://github.com/tools/godep). After installing with `go get github.com/tools/godep`, run `godep restore` to ensure that changes to other repositories do not break the build. To update a dependency version (for example, to include a new upstream fix), run `go get -u <foo/bar>` then `godep update <foo/...>`. To track a new dependency, add it to the project as normal than run `godep save ./...`. Changes to the Godeps folder should be manually verified then commited.
 
 To make life easier try [git flow](http://nvie.com/posts/a-successful-git-branching-model/) it sets
 this all up and streamlines your work flow.

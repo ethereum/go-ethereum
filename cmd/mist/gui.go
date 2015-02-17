@@ -41,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/ui/qt/qwhisper"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/obscuren/qml"
@@ -81,8 +80,6 @@ type Gui struct {
 	config  *ethutil.ConfigManager
 
 	plugins map[string]plugin
-
-	miner *miner.Miner
 }
 
 // Create GUI, but doesn't start it
@@ -454,7 +451,7 @@ func (gui *Gui) update() {
 		case <-generalUpdateTicker.C:
 			statusText := "#" + gui.eth.ChainManager().CurrentBlock().Number().String()
 			lastBlockLabel.Set("text", statusText)
-			miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.miner.HashRate(), 10)+"/Khash")
+			miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.Miner().HashRate(), 10)+"/Khash")
 
 			/*
 				blockLength := gui.eth.BlockPool().BlocksProcessed

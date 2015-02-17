@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/javascript"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/obscuren/qml"
 )
@@ -56,13 +55,10 @@ type UiLib struct {
 
 	filterCallbacks map[int][]int
 	filterManager   *filter.FilterManager
-
-	miner *miner.Miner
 }
 
 func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
 	lib := &UiLib{XEth: xeth.New(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth), filterCallbacks: make(map[int][]int)} //, filters: make(map[int]*xeth.JSFilter)}
-	lib.miner = miner.New(eth.KeyManager().Address(), eth)
 	lib.filterManager = filter.NewFilterManager(eth.EventMux())
 	go lib.filterManager.Start()
 
@@ -221,20 +217,20 @@ func (self *UiLib) RemoveLocalTransaction(id int) {
 }
 
 func (self *UiLib) SetGasPrice(price string) {
-	self.miner.MinAcceptedGasPrice = ethutil.Big(price)
+	self.Miner().MinAcceptedGasPrice = ethutil.Big(price)
 }
 
 func (self *UiLib) SetExtra(extra string) {
-	self.miner.Extra = extra
+	self.Miner().Extra = extra
 }
 
 func (self *UiLib) ToggleMining() bool {
-	if !self.miner.Mining() {
-		self.miner.Start()
+	if !self.Miner().Mining() {
+		self.Miner().Start()
 
 		return true
 	} else {
-		self.miner.Stop()
+		self.Miner().Stop()
 
 		return false
 	}

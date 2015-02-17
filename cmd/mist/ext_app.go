@@ -43,7 +43,7 @@ type AppContainer interface {
 
 type ExtApplication struct {
 	*xeth.XEth
-	eth core.EthManager
+	eth core.Backend
 
 	events          event.Subscription
 	watcherQuitChan chan bool
