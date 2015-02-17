@@ -29,8 +29,8 @@ func NewFilterFromMap(object map[string]interface{}, eth core.Backend) *core.Fil
 	}
 
 	if object["address"] != nil {
-		val := ethutil.NewValue(object["address"])
-		filter.SetAddress(fromHex(val.Str()))
+		//val := ethutil.NewValue(object["address"])
+		//filter.SetAddress(fromHex(val.Str()))
 	}
 
 	if object["max"] != nil {

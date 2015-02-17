@@ -394,7 +394,6 @@ func (gui *Gui) update() {
 	miningLabel := gui.getObjectByName("miningLabel")
 
 	events := gui.eth.EventMux().Subscribe(
-		//eth.PeerListEvent{},
 		core.NewBlockEvent{},
 		core.TxPreEvent{},
 		core.TxPostEvent{},
@@ -410,7 +409,6 @@ func (gui *Gui) update() {
 			switch ev := ev.(type) {
 			case core.NewBlockEvent:
 				gui.processBlock(ev.Block, false)
-				//gui.setWalletValue(gui.eth.ChainManager().State().GetBalance(gui.address()), nil)
 				balance := ethutil.CurrencyToString(gui.eth.ChainManager().State().GetBalance(gui.address()))
 				gui.getObjectByName("balanceLabel").Set("text", fmt.Sprintf("%v", balance))
 

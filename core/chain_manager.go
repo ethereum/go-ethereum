@@ -79,6 +79,7 @@ type ChainManager struct {
 	genesisBlock *types.Block
 	// Last known total difficulty
 	mu            sync.RWMutex
+	tsmu          sync.RWMutex
 	td            *big.Int
 	currentBlock  *types.Block
 	lastBlockHash []byte
@@ -131,7 +132,17 @@ func (self *ChainManager) State() *state.StateDB {
 }
 
 func (self *ChainManager) TransState() *state.StateDB {
+	self.tsmu.RLock()
+	defer self.tsmu.RUnlock()
+	//tmp := self.transState
+
 	return self.transState
+}
+
+func (self *ChainManager) setTransState(statedb *state.StateDB) {
+	self.tsmu.Lock()
+	defer self.tsmu.Unlock()
+	self.transState = statedb
 }
 
 func (bc *ChainManager) setLastBlock() {
@@ -376,7 +387,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 
 				self.setTotalDifficulty(td)
 				self.insert(block)
-				self.transState = state.New(cblock.Root(), self.db)
+				self.setTransState(state.New(cblock.Root(), self.db))
 
 				self.eventMux.Post(ChainEvent{block, td})
 			}

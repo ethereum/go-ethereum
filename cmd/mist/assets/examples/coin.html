@@ -80,11 +80,6 @@
 		refresh();
 	});
 
-	var ev = contract.SingleTransact({})
-	ev.watch(function(log) {
-	someElement.innerHTML += "tnaheousnthaoeu";
-	});
-	
 	eth.watch('chain').changed(function() {
 		refresh();
 	});

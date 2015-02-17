@@ -26,6 +26,7 @@ var (
 
 	defaultBootNodes = []*discover.Node{
 		discover.MustParseNode("enode://6cdd090303f394a1cac34ecc9f7cda18127eafa2a3a06de39f6d920b0e583e062a7362097c7c65ee490a758b442acd5c80c6fce4b148c6a391e946b45131365b@54.169.166.226:30303"),
+		discover.MustParseNode("enode://d1760a33c2f25c3b419ee4f6787fb0ea148828f5e678f0450d4be978fef908b42fc47a4c0fbf19832754f17881d381e50364fa93be42f31801d60ac64933f0a5@127.0.0.1:30303"),
 	}
 )
 
