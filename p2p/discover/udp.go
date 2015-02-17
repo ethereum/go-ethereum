@@ -256,9 +256,7 @@ func (t *udp) loop() {
 			for i, p := range pending {
 				if reply.from == p.from && reply.ptype == p.ptype && p.callback(reply.data) {
 					p.errc <- nil
-					copy(pending[i:], pending[i+1:])
-					pending = pending[:len(pending)-1]
-					i--
+					pending = append(pending[:i], pending[i+1:]...)
 				}
 			}
 			rearmTimeout()
