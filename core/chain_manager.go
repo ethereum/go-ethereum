@@ -393,8 +393,6 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			}
 		}
 		self.mu.Unlock()
-
-		self.eventMux.Post(NewBlockEvent{block})
 	}
 
 	return nil

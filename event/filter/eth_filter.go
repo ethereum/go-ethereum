@@ -60,7 +60,10 @@ func (self *FilterManager) GetFilter(id int) *core.Filter {
 
 func (self *FilterManager) filterLoop() {
 	// Subscribe to events
-	events := self.eventMux.Subscribe(core.PendingBlockEvent{}, core.NewBlockEvent{}, state.Logs(nil))
+	events := self.eventMux.Subscribe(
+		core.PendingBlockEvent{},
+		core.ChainEvent{},
+		state.Logs(nil))
 
 out:
 	for {
@@ -69,7 +72,7 @@ out:
 			break out
 		case event := <-events.Chan():
 			switch event := event.(type) {
-			case core.NewBlockEvent:
+			case core.ChainEvent:
 				self.filterMu.RLock()
 				for _, filter := range self.filters {
 					if filter.BlockCallback != nil {

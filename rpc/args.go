@@ -38,6 +38,35 @@ type NewTxArgs struct {
 	Data     string `json:"data"`
 }
 
+func (obj *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
+	// Data can be either specified as "data" or "code" :-/
+	var ext struct {
+		From     string
+		To       string
+		Value    string
+		Gas      string
+		GasPrice string
+		Data     string
+		Code     string
+	}
+
+	if err = json.Unmarshal(b, &ext); err == nil {
+		if len(ext.Data) == 0 {
+			ext.Data = ext.Code
+		}
+		obj.From = ext.From
+		obj.To = ext.To
+		obj.Value = ext.Value
+		obj.Gas = ext.Gas
+		obj.GasPrice = ext.GasPrice
+		obj.Data = ext.Data
+
+		return
+	}
+
+	return NewErrorResponse(ErrorDecodeArgs)
+}
+
 type PushTxArgs struct {
 	Tx string `json:"tx"`
 }

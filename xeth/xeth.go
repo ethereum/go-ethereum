@@ -16,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
@@ -220,7 +219,7 @@ func (self *XEth) Call(toStr, valueStr, gasStr, gasPriceStr, dataStr string) (st
 	var (
 		statedb = self.chainManager.TransState()
 		key     = self.eth.KeyManager().KeyPair()
-		from    = state.NewStateObject(key.Address(), self.eth.Db())
+		from    = statedb.GetOrNewStateObject(key.Address())
 		block   = self.chainManager.CurrentBlock()
 		to      = statedb.GetOrNewStateObject(fromHex(toStr))
 		data    = fromHex(dataStr)

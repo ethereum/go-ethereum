@@ -127,6 +127,9 @@ func (self *EthereumApi) NewFilterString(args string, reply *interface{}) error 
 	filter := core.NewFilter(self.xeth.Backend())
 
 	callback := func(block *types.Block) {
+		self.logMut.Lock()
+		defer self.logMut.Unlock()
+
 		self.logs[id] = append(self.logs[id], &state.StateLog{})
 	}
 	if args == "pending" {
@@ -153,6 +156,9 @@ func (self *EthereumApi) FilterChanged(id int, reply *interface{}) error {
 }
 
 func (self *EthereumApi) Logs(id int, reply *interface{}) error {
+	self.logMut.Lock()
+	defer self.logMut.Unlock()
+
 	filter := self.filterManager.GetFilter(id)
 	*reply = toLogs(filter.Find())
 
