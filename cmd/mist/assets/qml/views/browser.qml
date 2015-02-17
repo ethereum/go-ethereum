@@ -387,10 +387,9 @@ Rectangle {
                                 menuItem.badgeIcon = "\ue09a"
                                 menuItem.badgeContent = "icon"
 
+                            } else {
+                                menuItem.badgeContent = ""
                             }
-
-
-                            console.log(menuItem.badgeContent);
                         } else {
                             menuItem.badgeContent = ""
                         } 
@@ -407,9 +406,7 @@ Rectangle {
                     webView.runJavaScript("try{document.querySelector(\"link[rel='icon']\").getAttribute(\"href\")}catch(e){}", function(sideIcon){
                             if(sideIcon){
                                 menuItem.icon = webview.url + sideIcon;
-                                console.log("icon: " + webview.url + sideIcon );
                             }; 
-                            console.log("no icon!" );
                     });
                     
 					webView.runJavaScript("try{document.querySelector(\"meta[name='ethereum-dapp-url-bar-style']\").getAttribute(\"content\")}catch(e){}", function(topBarStyle){

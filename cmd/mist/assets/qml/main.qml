@@ -580,6 +580,9 @@ ApplicationWindow {
                          font.family: sourceSansPro.name 
                          font.weight: Font.DemiBold
                          elide: Text.ElideRight
+                         x:250
+                         color: "#665F5F"
+                         font.pixelSize: 14
                          anchors {
                              left: icon.right
                              right: parent.right
@@ -588,11 +591,11 @@ ApplicationWindow {
                              rightMargin: 8
                              verticalCenterOffset: (secondaryTitle == "") ? 0 : -10;
                          }
-                         x:250
-                         color: "#665F5F"
-                         font.pixelSize: 14
-                     }
 
+
+                         
+                         
+                     }
 
                      Text {
                          id: secondary
