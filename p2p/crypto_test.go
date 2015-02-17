@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/obscuren/ecies"
+	"github.com/ethereum/go-ethereum/crypto/ecies"
 )
 
 func TestPublicKeyEncoding(t *testing.T) {

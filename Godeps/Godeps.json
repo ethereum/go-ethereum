@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/ethereum/go-ethereum",
-	"GoVersion": "go1.4",
+	"GoVersion": "go1.4.1",
 	"Packages": [
 		"./..."
 	],
@@ -56,10 +56,6 @@
 		{
 			"ImportPath": "github.com/jackpal/go-nat-pmp",
 			"Rev": "a45aa3d54aef73b504e15eb71bea0e5565b5e6e1"
-		},
-		{
-			"ImportPath": "github.com/obscuren/ecies",
-			"Rev": "d899334bba7bf4a157cab19d8ad836dcb1de0c34"
 		},
 		{
 			"ImportPath": "github.com/obscuren/otto",
