@@ -55,6 +55,9 @@ type EthereumApi struct {
 
 	messagesMut sync.RWMutex
 	messages    map[int][]xeth.WhisperMessage
+	// Register keeps a list of accounts and transaction data
+	regmut   sync.Mutex
+	register map[string][]*NewTxArgs
 
 	db ethutil.Database
 }
@@ -71,6 +74,36 @@ func NewEthereumApi(eth *xeth.XEth) *EthereumApi {
 	go api.filterManager.Start()
 
 	return api
+}
+
+func (self *EthereumApi) Register(args string, reply *interface{}) error {
+	self.regmut.Lock()
+	defer self.regmut.Unlock()
+
+	if _, ok := self.register[args]; ok {
+		self.register[args] = nil // register with empty
+	}
+	return nil
+}
+
+func (self *EthereumApi) Unregister(args string, reply *interface{}) error {
+	self.regmut.Lock()
+	defer self.regmut.Unlock()
+
+	delete(self.register, args)
+
+	return nil
+}
+
+func (self *EthereumApi) WatchTx(args string, reply *interface{}) error {
+	self.regmut.Lock()
+	defer self.regmut.Unlock()
+
+	txs := self.register[args]
+	self.register[args] = nil
+
+	*reply = txs
+	return nil
 }
 
 func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) error {
@@ -149,8 +182,13 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
 		args.GasPrice = defaultGasPrice
 	}
 
-	result, _ := p.xeth.Transact( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
-	*reply = result
+	// TODO if no_private_key then
+	if _, exists := p.register[args.From]; exists {
+		p.register[args.From] = append(p.register[args.From], args)
+	} else {
+		result, _ := p.xeth.Transact( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
+		*reply = result
+	}
 	return nil
 }
 
@@ -424,6 +462,24 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 	case "eth_gasPrice":
 		*reply = defaultGasPrice
 		return nil
+	case "eth_register":
+		args, err := req.ToRegisterArgs()
+		if err != nil {
+			return err
+		}
+		return p.Register(args, reply)
+	case "eth_unregister":
+		args, err := req.ToRegisterArgs()
+		if err != nil {
+			return err
+		}
+		return p.Unregister(args, reply)
+	case "eth_watchTx":
+		args, err := req.ToWatchTxArgs()
+		if err != nil {
+			return err
+		}
+		return p.WatchTx(args, reply)
 	case "web3_sha3":
 		args, err := req.ToSha3Args()
 		if err != nil {

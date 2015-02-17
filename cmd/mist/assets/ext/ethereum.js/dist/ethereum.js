@@ -1417,6 +1417,8 @@ var ethMethods = function () {
 
     var methods = [
     { name: 'balanceAt', call: 'eth_balanceAt' },
+    { name: 'register', call: 'eth_register' },
+    { name: 'unregister', call: 'eth_unregister' },
     { name: 'stateAt', call: 'eth_stateAt' },
     { name: 'storageAt', call: 'eth_storageAt' },
     { name: 'countAt', call: 'eth_countAt'},
