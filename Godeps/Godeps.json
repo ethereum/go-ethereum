@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/ethereum/go-ethereum",
-	"GoVersion": "go1.4",
+	"GoVersion": "go1.4.1",
 	"Packages": [
 		"./..."
 	],
@@ -16,26 +16,6 @@
 			"Rev": "7dda39b2e7d5e265014674c5af696ba4186679e9"
 		},
 		{
-			"ImportPath": "code.google.com/p/go.crypto/pbkdf2",
-			"Comment": "null-236",
-			"Rev": "69e2a90ed92d03812364aeb947b7068dc42e561e"
-		},
-		{
-			"ImportPath": "code.google.com/p/go.crypto/ripemd160",
-			"Comment": "null-236",
-			"Rev": "69e2a90ed92d03812364aeb947b7068dc42e561e"
-		},
-		{
-			"ImportPath": "code.google.com/p/go.crypto/scrypt",
-			"Comment": "null-236",
-			"Rev": "69e2a90ed92d03812364aeb947b7068dc42e561e"
-		},
-		{
-			"ImportPath": "code.google.com/p/go.net/websocket",
-			"Comment": "null-173",
-			"Rev": "4231557d7c726df4cf9a4e8cdd8a417c8c200bdb"
-		},
-		{
 			"ImportPath": "code.google.com/p/snappy-go/snappy",
 			"Comment": "null-15",
 			"Rev": "12e4b4183793ac4b061921e7980845e750679fd0"
@@ -45,21 +25,17 @@
 			"Rev": "5767a0dbd759d313df3f404dadb7f98d7ab51443"
 		},
 		{
-			"ImportPath": "github.com/fjl/goupnp",
-			"Rev": "fa95df6feb61e136b499d01711fcd410ccaf20c1"
-		},
-		{
 			"ImportPath": "github.com/howeyc/fsnotify",
 			"Comment": "v0.9.0-11-g6b1ef89",
 			"Rev": "6b1ef893dc11e0447abda6da20a5203481878dda"
 		},
 		{
-			"ImportPath": "github.com/jackpal/go-nat-pmp",
-			"Rev": "a45aa3d54aef73b504e15eb71bea0e5565b5e6e1"
+			"ImportPath": "github.com/huin/goupnp",
+			"Rev": "4191d8a85005844ea202fde52799681971b12dfe"
 		},
 		{
-			"ImportPath": "github.com/obscuren/ecies",
-			"Rev": "d899334bba7bf4a157cab19d8ad836dcb1de0c34"
+			"ImportPath": "github.com/jackpal/go-nat-pmp",
+			"Rev": "a45aa3d54aef73b504e15eb71bea0e5565b5e6e1"
 		},
 		{
 			"ImportPath": "github.com/obscuren/otto",
@@ -108,6 +84,18 @@
 		{
 			"ImportPath": "golang.org/x/crypto/pbkdf2",
 			"Rev": "4ed45ec682102c643324fae5dff8dab085b6c300"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/ripemd160",
+			"Rev": "4ed45ec682102c643324fae5dff8dab085b6c300"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/scrypt",
+			"Rev": "4ed45ec682102c643324fae5dff8dab085b6c300"
+		},
+		{
+			"ImportPath": "golang.org/x/net/websocket",
+			"Rev": "59b0df9b1f7abda5aab0495ee54f408daf182ce7"
 		},
 		{
 			"ImportPath": "gopkg.in/check.v1",
