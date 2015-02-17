@@ -31,11 +31,6 @@
 			"Rev": "69e2a90ed92d03812364aeb947b7068dc42e561e"
 		},
 		{
-			"ImportPath": "code.google.com/p/go.net/websocket",
-			"Comment": "null-173",
-			"Rev": "4231557d7c726df4cf9a4e8cdd8a417c8c200bdb"
-		},
-		{
 			"ImportPath": "code.google.com/p/snappy-go/snappy",
 			"Comment": "null-15",
 			"Rev": "12e4b4183793ac4b061921e7980845e750679fd0"
@@ -104,6 +99,10 @@
 		{
 			"ImportPath": "golang.org/x/crypto/pbkdf2",
 			"Rev": "4ed45ec682102c643324fae5dff8dab085b6c300"
+		},
+		{
+			"ImportPath": "golang.org/x/net/websocket",
+			"Rev": "59b0df9b1f7abda5aab0495ee54f408daf182ce7"
 		},
 		{
 			"ImportPath": "gopkg.in/check.v1",

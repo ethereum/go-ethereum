@@ -339,3 +339,76 @@ func TestSmallBuffer(t *testing.T) {
 	}
 	conn.Close()
 }
+
+var parseAuthorityTests = []struct {
+	in  *url.URL
+	out string
+}{
+	{
+		&url.URL{
+			Scheme: "ws",
+			Host:   "www.google.com",
+		},
+		"www.google.com:80",
+	},
+	{
+		&url.URL{
+			Scheme: "wss",
+			Host:   "www.google.com",
+		},
+		"www.google.com:443",
+	},
+	{
+		&url.URL{
+			Scheme: "ws",
+			Host:   "www.google.com:80",
+		},
+		"www.google.com:80",
+	},
+	{
+		&url.URL{
+			Scheme: "wss",
+			Host:   "www.google.com:443",
+		},
+		"www.google.com:443",
+	},
+	// some invalid ones for parseAuthority. parseAuthority doesn't
+	// concern itself with the scheme unless it actually knows about it
+	{
+		&url.URL{
+			Scheme: "http",
+			Host:   "www.google.com",
+		},
+		"www.google.com",
+	},
+	{
+		&url.URL{
+			Scheme: "http",
+			Host:   "www.google.com:80",
+		},
+		"www.google.com:80",
+	},
+	{
+		&url.URL{
+			Scheme: "asdf",
+			Host:   "127.0.0.1",
+		},
+		"127.0.0.1",
+	},
+	{
+		&url.URL{
+			Scheme: "asdf",
+			Host:   "www.google.com",
+		},
+		"www.google.com",
+	},
+}
+
+func TestParseAuthority(t *testing.T) {
+	for _, tt := range parseAuthorityTests {
+		out := parseAuthority(tt.in)
+		if out != tt.out {
+			t.Errorf("got %v; want %v", out, tt.out)
+		}
+	}
+}
