@@ -253,7 +253,8 @@ func (t *udp) loop() {
 
 		case reply := <-t.replies:
 			// run matching callbacks, remove if they return false.
-			for i, p := range pending {
+			for i := 0; i < len(pending); i++ {
+				p := pending[i]
 				if reply.from == p.from && reply.ptype == p.ptype && p.callback(reply.data) {
 					p.errc <- nil
 					copy(pending[i:], pending[i+1:])
