@@ -9,7 +9,6 @@ import Ethereum 1.0
 Rectangle {
 	id: root
 	property var title: "Wallet"
-	property var iconSource: "../facet.png"
 	property var menuItem
 
 	objectName: "walletView"

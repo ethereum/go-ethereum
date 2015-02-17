@@ -41,12 +41,12 @@ ApplicationWindow {
     Component.onCompleted: {
 
         catalog = addPlugin("./views/catalog.qml", {noAdd: true, close: false, section: "begin", active: true});
-        var wallet = addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "ethereum"});
 
         var walletWeb = addPlugin("./views/browser.qml", {noAdd: true, close: false, section: "ethereum", active: false});
         walletWeb.view.url = "http://ethereum-dapp-wallet.meteor.com/";
         walletWeb.menuItem.title = "Wallet";
-        
+
+        addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "legacy"});        
         addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: false});
         addPlugin("./views/transaction.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/whisper.qml", {noAdd: true, close: false, section: "legacy"});

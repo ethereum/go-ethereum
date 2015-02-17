@@ -9,7 +9,7 @@ import Ethereum 1.0
 Rectangle {
 	id: root
 	property var title: "Miner"
-	property var iconSource: "../miner.png"
+	property var iconSource: "../mining-icon.png"
 	property var menuItem
 
 	color: "#00000000"
