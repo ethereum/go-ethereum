@@ -1,21 +1,4 @@
 /*
-	This file is part of go-ethereum
-
-	go-ethereum is free software: you can redistribute it and/or modify
-	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation, either version 3 of the License, or
-	(at your option) any later version.
-
-	go-ethereum is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
-
-	You should have received a copy of the GNU General Public License
-	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
-*/
-/*
-
 For each request type, define the following:
 
 1. RpcRequest "To" method [message.go], which does basic validation and conversion to "Args" type via json.Decoder()
@@ -160,7 +143,9 @@ func (self *EthereumApi) Logs(id int, reply *interface{}) error {
 	defer self.logMut.Unlock()
 
 	filter := self.filterManager.GetFilter(id)
-	*reply = toLogs(filter.Find())
+	if filter != nil {
+		*reply = toLogs(filter.Find())
+	}
 
 	return nil
 }
@@ -465,6 +450,12 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.FilterChanged(args, reply)
+	case "eth_filterLogs":
+		args, err := req.ToFilterChangedArgs()
+		if err != nil {
+			return err
+		}
+		return p.Logs(args, reply)
 	case "eth_gasPrice":
 		*reply = defaultGasPrice
 		return nil
