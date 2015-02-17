@@ -1,11 +1,13 @@
 package state
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -71,8 +73,28 @@ func NewStateObject(addr []byte, db ethutil.Database) *StateObject {
 }
 
 func NewStateObjectFromBytes(address, data []byte, db ethutil.Database) *StateObject {
+	// TODO clean me up
+	var extobject struct {
+		Nonce    uint64
+		Balance  *big.Int
+		Root     []byte
+		CodeHash []byte
+	}
+	err := rlp.Decode(bytes.NewReader(data), &extobject)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+
 	object := &StateObject{address: address, db: db}
-	object.RlpDecode(data)
+	//object.RlpDecode(data)
+	object.Nonce = extobject.Nonce
+	object.balance = extobject.Balance
+	object.codeHash = extobject.CodeHash
+	object.State = New(extobject.Root, db)
+	object.storage = make(map[string]*ethutil.Value)
+	object.gasPool = new(big.Int)
+	object.Code, _ = db.Get(extobject.CodeHash)
 
 	return object
 }
@@ -271,7 +293,6 @@ func (c *StateObject) CodeHash() ethutil.Bytes {
 
 func (c *StateObject) RlpDecode(data []byte) {
 	decoder := ethutil.NewValueFromBytes(data)
-
 	c.Nonce = decoder.Get(0).Uint()
 	c.balance = decoder.Get(1).BigInt()
 	c.State = New(decoder.Get(2).Bytes(), c.db) //New(trie.New(ethutil.Config.Db, decoder.Get(2).Interface()))
