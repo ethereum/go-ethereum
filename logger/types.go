@@ -44,8 +44,10 @@ func (l *P2PConnecting) EventName() string {
 }
 
 type P2PConnected struct {
-	NumConnections int    `json:"num_connections"`
-	RemoteId       string `json:"remote_id"`
+	RemoteId            string `json:"remote_id"`
+	RemoteAddress       string `json:"remote_addr"`
+	RemoteVersionString string `json:"remote_version_string"`
+	NumConnections      int    `json:"num_connections"`
 	LogEvent
 }
 
