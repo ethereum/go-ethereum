@@ -46,7 +46,6 @@ ApplicationWindow {
         walletWeb.view.url = "http://ethereum-dapp-wallet.meteor.com/";
         walletWeb.menuItem.title = "Wallet";
 
-        addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "legacy"});        
         addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: false});
         addPlugin("./views/transaction.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/whisper.qml", {noAdd: true, close: false, section: "legacy"});
