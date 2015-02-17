@@ -27,9 +27,14 @@ document.onkeydown = function(evt) {
     } else if (evt.ctrlKey && evt.keyCode == 88) {
     	window.document.execCommand("cut");
         console.log("Ctrl-X");
-    } if (evt.ctrlKey && evt.keyCode == 86) {
+    } else if (evt.ctrlKey && evt.keyCode == 86) {
+        window.document.execCommand("paste");
         console.log("Ctrl-V");
-    } if (evt.ctrlKey && evt.keyCode == 90) {
+    } else if (evt.ctrlKey && evt.keyCode == 90) {
+        window.document.execCommand("undo");
+        console.log("Ctrl-Z");
+    } else if (evt.ctrlKey && evt.shiftKey && evt.keyCode == 90) {
+        window.document.execCommand("redo");
         console.log("Ctrl-Z");
     }
 };
