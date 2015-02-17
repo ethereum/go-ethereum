@@ -1,11 +1,11 @@
 // goupnp is an implementation of a client for various UPnP services.
 //
 // For most uses, it is recommended to use the code-generated packages under
-// github.com/fjl/goupnp/dcps. Example use is shown at
-// http://godoc.org/github.com/fjl/goupnp/example
+// github.com/huin/goupnp/dcps. Example use is shown at
+// http://godoc.org/github.com/huin/goupnp/example
 //
 // A commonly used client is internetgateway1.WANPPPConnection1:
-// http://godoc.org/github.com/fjl/goupnp/dcps/internetgateway1#WANPPPConnection1
+// http://godoc.org/github.com/huin/goupnp/dcps/internetgateway1#WANPPPConnection1
 //
 // Currently only a couple of schemas have code generated for them from the
 // UPnP example XML specifications. Not all methods will work on these clients,
@@ -20,8 +20,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/fjl/goupnp/httpu"
-	"github.com/fjl/goupnp/ssdp"
+	"github.com/huin/goupnp/httpu"
+	"github.com/huin/goupnp/ssdp"
 )
 
 // ContextError is an error that wraps an error with some context information.

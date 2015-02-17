@@ -17,8 +17,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/fjl/goupnp"
-	"github.com/fjl/goupnp/scpd"
+	"github.com/huin/goupnp"
+	"github.com/huin/goupnp/scpd"
 	"github.com/huin/goutil/codegen"
 	"github.com/jingweno/gotask/tasking"
 )
@@ -38,7 +38,7 @@ var (
 //   -s, --spec_filename=<upnpresources.zip>
 //     Path to the specification file, available from http://upnp.org/resources/upnpresources.zip
 //   -o, --out_dir=<output directory>
-//     Path to the output directory. This is is where the DCP source files will be placed. Should normally correspond to the directory for github.com/fjl/goupnp/dcps
+//     Path to the output directory. This is is where the DCP source files will be placed. Should normally correspond to the directory for github.com/huin/goupnp/dcps
 //   --nogofmt
 //     Disable passing the output through gofmt. Do this if debugging code output problems and needing to see the generated code prior to being passed through gofmt.
 func TaskSpecgen(t *tasking.T) {
@@ -445,8 +445,8 @@ package {{$name}}
 import (
 	"time"
 
-	"github.com/fjl/goupnp"
-	"github.com/fjl/goupnp/soap"
+	"github.com/huin/goupnp"
+	"github.com/huin/goupnp/soap"
 )
 
 // Hack to avoid Go complaining if time isn't used.

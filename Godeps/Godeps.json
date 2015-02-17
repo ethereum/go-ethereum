@@ -25,13 +25,13 @@
 			"Rev": "5767a0dbd759d313df3f404dadb7f98d7ab51443"
 		},
 		{
-			"ImportPath": "github.com/fjl/goupnp",
-			"Rev": "fa95df6feb61e136b499d01711fcd410ccaf20c1"
-		},
-		{
 			"ImportPath": "github.com/howeyc/fsnotify",
 			"Comment": "v0.9.0-11-g6b1ef89",
 			"Rev": "6b1ef893dc11e0447abda6da20a5203481878dda"
+		},
+		{
+			"ImportPath": "github.com/huin/goupnp",
+			"Rev": "4191d8a85005844ea202fde52799681971b12dfe"
 		},
 		{
 			"ImportPath": "github.com/jackpal/go-nat-pmp",

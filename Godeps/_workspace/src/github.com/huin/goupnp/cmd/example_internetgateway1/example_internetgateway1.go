@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/fjl/goupnp/dcps/internetgateway1"
+	"github.com/huin/goupnp/dcps/internetgateway1"
 )
 
 func main() {

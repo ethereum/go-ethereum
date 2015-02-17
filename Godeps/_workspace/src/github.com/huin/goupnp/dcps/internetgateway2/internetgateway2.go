@@ -1,18 +1,18 @@
-// Client for UPnP Device Control Protocol Internet Gateway Device v1.
+// Client for UPnP Device Control Protocol Internet Gateway Device v2.
 //
-// This DCP is documented in detail at: http://upnp.org/specs/gw/UPnP-gw-InternetGatewayDevice-v1-Device.pdf
+// This DCP is documented in detail at: http://upnp.org/specs/gw/UPnP-gw-InternetGatewayDevice-v2-Device.pdf
 //
 // Typically, use one of the New* functions to discover services on the local
 // network.
-package internetgateway1
+package internetgateway2
 
 // Generated file - do not edit by hand. See README.md
 
 import (
 	"time"
 
-	"github.com/fjl/goupnp"
-	"github.com/fjl/goupnp/soap"
+	"github.com/huin/goupnp"
+	"github.com/huin/goupnp/soap"
 )
 
 // Hack to avoid Go complaining if time isn't used.
@@ -22,7 +22,9 @@ var _ time.Time
 const (
 	URN_LANDevice_1           = "urn:schemas-upnp-org:device:LANDevice:1"
 	URN_WANConnectionDevice_1 = "urn:schemas-upnp-org:device:WANConnectionDevice:1"
+	URN_WANConnectionDevice_2 = "urn:schemas-upnp-org:device:WANConnectionDevice:2"
 	URN_WANDevice_1           = "urn:schemas-upnp-org:device:WANDevice:1"
+	URN_WANDevice_2           = "urn:schemas-upnp-org:device:WANDevice:2"
 )
 
 // Service URNs:
@@ -34,6 +36,8 @@ const (
 	URN_WANDSLLinkConfig_1         = "urn:schemas-upnp-org:service:WANDSLLinkConfig:1"
 	URN_WANEthernetLinkConfig_1    = "urn:schemas-upnp-org:service:WANEthernetLinkConfig:1"
 	URN_WANIPConnection_1          = "urn:schemas-upnp-org:service:WANIPConnection:1"
+	URN_WANIPConnection_2          = "urn:schemas-upnp-org:service:WANIPConnection:2"
+	URN_WANIPv6FirewallControl_1   = "urn:schemas-upnp-org:service:WANIPv6FirewallControl:1"
 	URN_WANPOTSLinkConfig_1        = "urn:schemas-upnp-org:service:WANPOTSLinkConfig:1"
 	URN_WANPPPConnection_1         = "urn:schemas-upnp-org:service:WANPPPConnection:1"
 )
@@ -2615,6 +2619,1316 @@ func (client *WANIPConnection1) GetExternalIPAddress() (NewExternalIPAddress str
 	// BEGIN Unmarshal arguments from response.
 
 	if NewExternalIPAddress, err = soap.UnmarshalString(response.NewExternalIPAddress); err != nil {
+		return
+	}
+	// END Unmarshal arguments from response.
+	return
+}
+
+// WANIPConnection2 is a client for UPnP SOAP service with URN "urn:schemas-upnp-org:service:WANIPConnection:2". See
+// goupnp.ServiceClient, which contains RootDevice and Service attributes which
+// are provided for informational value.
+type WANIPConnection2 struct {
+	goupnp.ServiceClient
+}
+
+// NewWANIPConnection2Clients discovers instances of the service on the network,
+// and returns clients to any that are found. errors will contain an error for
+// any devices that replied but which could not be queried, and err will be set
+// if the discovery process failed outright.
+//
+// This is a typical entry calling point into this package.
+func NewWANIPConnection2Clients() (clients []*WANIPConnection2, errors []error, err error) {
+	var genericClients []goupnp.ServiceClient
+	if genericClients, errors, err = goupnp.NewServiceClients(URN_WANIPConnection_2); err != nil {
+		return
+	}
+	clients = make([]*WANIPConnection2, len(genericClients))
+	for i := range genericClients {
+		clients[i] = &WANIPConnection2{genericClients[i]}
+	}
+	return
+}
+
+// Arguments:
+//
+// * NewConnectionType: allowed values: Unconfigured, IP_Routed, IP_Bridged
+//
+//
+func (client *WANIPConnection2) SetConnectionType(NewConnectionType string) (err error) {
+	// Request structure.
+	request := &struct {
+		NewConnectionType string
+	}{}
+	// BEGIN Marshal arguments into request.
+
+	if request.NewConnectionType, err = soap.MarshalString(NewConnectionType); err != nil {
+		return
+	}
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := interface{}(nil)
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "SetConnectionType", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	// END Unmarshal arguments from response.
+	return
+}
+
+//
+//
+// Return values:
+//
+// * NewConnectionType: allowed values: Unconfigured, IP_Routed, IP_Bridged
+//
+// * NewPossibleConnectionTypes:
+func (client *WANIPConnection2) GetConnectionTypeInfo() (NewConnectionType string, NewPossibleConnectionTypes string, err error) {
+	// Request structure.
+	request := interface{}(nil)
+	// BEGIN Marshal arguments into request.
+
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := &struct {
+		NewConnectionType string
+
+		NewPossibleConnectionTypes string
+	}{}
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "GetConnectionTypeInfo", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	if NewConnectionType, err = soap.UnmarshalString(response.NewConnectionType); err != nil {
+		return
+	}
+	if NewPossibleConnectionTypes, err = soap.UnmarshalString(response.NewPossibleConnectionTypes); err != nil {
+		return
+	}
+	// END Unmarshal arguments from response.
+	return
+}
+
+//
+//
+//
+func (client *WANIPConnection2) RequestConnection() (err error) {
+	// Request structure.
+	request := interface{}(nil)
+	// BEGIN Marshal arguments into request.
+
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := interface{}(nil)
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "RequestConnection", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	// END Unmarshal arguments from response.
+	return
+}
+
+//
+//
+//
+func (client *WANIPConnection2) RequestTermination() (err error) {
+	// Request structure.
+	request := interface{}(nil)
+	// BEGIN Marshal arguments into request.
+
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := interface{}(nil)
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "RequestTermination", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	// END Unmarshal arguments from response.
+	return
+}
+
+//
+//
+//
+func (client *WANIPConnection2) ForceTermination() (err error) {
+	// Request structure.
+	request := interface{}(nil)
+	// BEGIN Marshal arguments into request.
+
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := interface{}(nil)
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "ForceTermination", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	// END Unmarshal arguments from response.
+	return
+}
+
+// Arguments:
+//
+// * NewAutoDisconnectTime:
+//
+//
+func (client *WANIPConnection2) SetAutoDisconnectTime(NewAutoDisconnectTime uint32) (err error) {
+	// Request structure.
+	request := &struct {
+		NewAutoDisconnectTime string
+	}{}
+	// BEGIN Marshal arguments into request.
+
+	if request.NewAutoDisconnectTime, err = soap.MarshalUi4(NewAutoDisconnectTime); err != nil {
+		return
+	}
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := interface{}(nil)
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "SetAutoDisconnectTime", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	// END Unmarshal arguments from response.
+	return
+}
+
+// Arguments:
+//
+// * NewIdleDisconnectTime:
+//
+//
+func (client *WANIPConnection2) SetIdleDisconnectTime(NewIdleDisconnectTime uint32) (err error) {
+	// Request structure.
+	request := &struct {
+		NewIdleDisconnectTime string
+	}{}
+	// BEGIN Marshal arguments into request.
+
+	if request.NewIdleDisconnectTime, err = soap.MarshalUi4(NewIdleDisconnectTime); err != nil {
+		return
+	}
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := interface{}(nil)
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "SetIdleDisconnectTime", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	// END Unmarshal arguments from response.
+	return
+}
+
+// Arguments:
+//
+// * NewWarnDisconnectDelay:
+//
+//
+func (client *WANIPConnection2) SetWarnDisconnectDelay(NewWarnDisconnectDelay uint32) (err error) {
+	// Request structure.
+	request := &struct {
+		NewWarnDisconnectDelay string
+	}{}
+	// BEGIN Marshal arguments into request.
+
+	if request.NewWarnDisconnectDelay, err = soap.MarshalUi4(NewWarnDisconnectDelay); err != nil {
+		return
+	}
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := interface{}(nil)
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "SetWarnDisconnectDelay", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	// END Unmarshal arguments from response.
+	return
+}
+
+//
+//
+// Return values:
+//
+// * NewConnectionStatus: allowed values: Unconfigured, Connected, Disconnected
+//
+// * NewLastConnectionError: allowed values: ERROR_NONE
+//
+// * NewUptime:
+func (client *WANIPConnection2) GetStatusInfo() (NewConnectionStatus string, NewLastConnectionError string, NewUptime uint32, err error) {
+	// Request structure.
+	request := interface{}(nil)
+	// BEGIN Marshal arguments into request.
+
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := &struct {
+		NewConnectionStatus string
+
+		NewLastConnectionError string
+
+		NewUptime string
+	}{}
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "GetStatusInfo", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	if NewConnectionStatus, err = soap.UnmarshalString(response.NewConnectionStatus); err != nil {
+		return
+	}
+	if NewLastConnectionError, err = soap.UnmarshalString(response.NewLastConnectionError); err != nil {
+		return
+	}
+	if NewUptime, err = soap.UnmarshalUi4(response.NewUptime); err != nil {
+		return
+	}
+	// END Unmarshal arguments from response.
+	return
+}
+
+//
+//
+// Return values:
+//
+// * NewAutoDisconnectTime:
+func (client *WANIPConnection2) GetAutoDisconnectTime() (NewAutoDisconnectTime uint32, err error) {
+	// Request structure.
+	request := interface{}(nil)
+	// BEGIN Marshal arguments into request.
+
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := &struct {
+		NewAutoDisconnectTime string
+	}{}
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "GetAutoDisconnectTime", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	if NewAutoDisconnectTime, err = soap.UnmarshalUi4(response.NewAutoDisconnectTime); err != nil {
+		return
+	}
+	// END Unmarshal arguments from response.
+	return
+}
+
+//
+//
+// Return values:
+//
+// * NewIdleDisconnectTime:
+func (client *WANIPConnection2) GetIdleDisconnectTime() (NewIdleDisconnectTime uint32, err error) {
+	// Request structure.
+	request := interface{}(nil)
+	// BEGIN Marshal arguments into request.
+
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := &struct {
+		NewIdleDisconnectTime string
+	}{}
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "GetIdleDisconnectTime", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	if NewIdleDisconnectTime, err = soap.UnmarshalUi4(response.NewIdleDisconnectTime); err != nil {
+		return
+	}
+	// END Unmarshal arguments from response.
+	return
+}
+
+//
+//
+// Return values:
+//
+// * NewWarnDisconnectDelay:
+func (client *WANIPConnection2) GetWarnDisconnectDelay() (NewWarnDisconnectDelay uint32, err error) {
+	// Request structure.
+	request := interface{}(nil)
+	// BEGIN Marshal arguments into request.
+
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := &struct {
+		NewWarnDisconnectDelay string
+	}{}
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "GetWarnDisconnectDelay", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	if NewWarnDisconnectDelay, err = soap.UnmarshalUi4(response.NewWarnDisconnectDelay); err != nil {
+		return
+	}
+	// END Unmarshal arguments from response.
+	return
+}
+
+//
+//
+// Return values:
+//
+// * NewRSIPAvailable:
+//
+// * NewNATEnabled:
+func (client *WANIPConnection2) GetNATRSIPStatus() (NewRSIPAvailable bool, NewNATEnabled bool, err error) {
+	// Request structure.
+	request := interface{}(nil)
+	// BEGIN Marshal arguments into request.
+
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := &struct {
+		NewRSIPAvailable string
+
+		NewNATEnabled string
+	}{}
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "GetNATRSIPStatus", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	if NewRSIPAvailable, err = soap.UnmarshalBoolean(response.NewRSIPAvailable); err != nil {
+		return
+	}
+	if NewNATEnabled, err = soap.UnmarshalBoolean(response.NewNATEnabled); err != nil {
+		return
+	}
+	// END Unmarshal arguments from response.
+	return
+}
+
+// Arguments:
+//
+// * NewPortMappingIndex:
+//
+// Return values:
+//
+// * NewRemoteHost:
+//
+// * NewExternalPort:
+//
+// * NewProtocol: allowed values: TCP, UDP
+//
+// * NewInternalPort: allowed value range: minimum=1, maximum=65535
+//
+// * NewInternalClient:
+//
+// * NewEnabled:
+//
+// * NewPortMappingDescription:
+//
+// * NewLeaseDuration: allowed value range: minimum=0, maximum=604800
+func (client *WANIPConnection2) GetGenericPortMappingEntry(NewPortMappingIndex uint16) (NewRemoteHost string, NewExternalPort uint16, NewProtocol string, NewInternalPort uint16, NewInternalClient string, NewEnabled bool, NewPortMappingDescription string, NewLeaseDuration uint32, err error) {
+	// Request structure.
+	request := &struct {
+		NewPortMappingIndex string
+	}{}
+	// BEGIN Marshal arguments into request.
+
+	if request.NewPortMappingIndex, err = soap.MarshalUi2(NewPortMappingIndex); err != nil {
+		return
+	}
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := &struct {
+		NewRemoteHost string
+
+		NewExternalPort string
+
+		NewProtocol string
+
+		NewInternalPort string
+
+		NewInternalClient string
+
+		NewEnabled string
+
+		NewPortMappingDescription string
+
+		NewLeaseDuration string
+	}{}
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "GetGenericPortMappingEntry", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	if NewRemoteHost, err = soap.UnmarshalString(response.NewRemoteHost); err != nil {
+		return
+	}
+	if NewExternalPort, err = soap.UnmarshalUi2(response.NewExternalPort); err != nil {
+		return
+	}
+	if NewProtocol, err = soap.UnmarshalString(response.NewProtocol); err != nil {
+		return
+	}
+	if NewInternalPort, err = soap.UnmarshalUi2(response.NewInternalPort); err != nil {
+		return
+	}
+	if NewInternalClient, err = soap.UnmarshalString(response.NewInternalClient); err != nil {
+		return
+	}
+	if NewEnabled, err = soap.UnmarshalBoolean(response.NewEnabled); err != nil {
+		return
+	}
+	if NewPortMappingDescription, err = soap.UnmarshalString(response.NewPortMappingDescription); err != nil {
+		return
+	}
+	if NewLeaseDuration, err = soap.UnmarshalUi4(response.NewLeaseDuration); err != nil {
+		return
+	}
+	// END Unmarshal arguments from response.
+	return
+}
+
+// Arguments:
+//
+// * NewRemoteHost:
+//
+// * NewExternalPort:
+//
+// * NewProtocol: allowed values: TCP, UDP
+//
+// Return values:
+//
+// * NewInternalPort: allowed value range: minimum=1, maximum=65535
+//
+// * NewInternalClient:
+//
+// * NewEnabled:
+//
+// * NewPortMappingDescription:
+//
+// * NewLeaseDuration: allowed value range: minimum=0, maximum=604800
+func (client *WANIPConnection2) GetSpecificPortMappingEntry(NewRemoteHost string, NewExternalPort uint16, NewProtocol string) (NewInternalPort uint16, NewInternalClient string, NewEnabled bool, NewPortMappingDescription string, NewLeaseDuration uint32, err error) {
+	// Request structure.
+	request := &struct {
+		NewRemoteHost string
+
+		NewExternalPort string
+
+		NewProtocol string
+	}{}
+	// BEGIN Marshal arguments into request.
+
+	if request.NewRemoteHost, err = soap.MarshalString(NewRemoteHost); err != nil {
+		return
+	}
+	if request.NewExternalPort, err = soap.MarshalUi2(NewExternalPort); err != nil {
+		return
+	}
+	if request.NewProtocol, err = soap.MarshalString(NewProtocol); err != nil {
+		return
+	}
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := &struct {
+		NewInternalPort string
+
+		NewInternalClient string
+
+		NewEnabled string
+
+		NewPortMappingDescription string
+
+		NewLeaseDuration string
+	}{}
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "GetSpecificPortMappingEntry", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	if NewInternalPort, err = soap.UnmarshalUi2(response.NewInternalPort); err != nil {
+		return
+	}
+	if NewInternalClient, err = soap.UnmarshalString(response.NewInternalClient); err != nil {
+		return
+	}
+	if NewEnabled, err = soap.UnmarshalBoolean(response.NewEnabled); err != nil {
+		return
+	}
+	if NewPortMappingDescription, err = soap.UnmarshalString(response.NewPortMappingDescription); err != nil {
+		return
+	}
+	if NewLeaseDuration, err = soap.UnmarshalUi4(response.NewLeaseDuration); err != nil {
+		return
+	}
+	// END Unmarshal arguments from response.
+	return
+}
+
+// Arguments:
+//
+// * NewRemoteHost:
+//
+// * NewExternalPort:
+//
+// * NewProtocol: allowed values: TCP, UDP
+//
+// * NewInternalPort: allowed value range: minimum=1, maximum=65535
+//
+// * NewInternalClient:
+//
+// * NewEnabled:
+//
+// * NewPortMappingDescription:
+//
+// * NewLeaseDuration: allowed value range: minimum=0, maximum=604800
+//
+//
+func (client *WANIPConnection2) AddPortMapping(NewRemoteHost string, NewExternalPort uint16, NewProtocol string, NewInternalPort uint16, NewInternalClient string, NewEnabled bool, NewPortMappingDescription string, NewLeaseDuration uint32) (err error) {
+	// Request structure.
+	request := &struct {
+		NewRemoteHost string
+
+		NewExternalPort string
+
+		NewProtocol string
+
+		NewInternalPort string
+
+		NewInternalClient string
+
+		NewEnabled string
+
+		NewPortMappingDescription string
+
+		NewLeaseDuration string
+	}{}
+	// BEGIN Marshal arguments into request.
+
+	if request.NewRemoteHost, err = soap.MarshalString(NewRemoteHost); err != nil {
+		return
+	}
+	if request.NewExternalPort, err = soap.MarshalUi2(NewExternalPort); err != nil {
+		return
+	}
+	if request.NewProtocol, err = soap.MarshalString(NewProtocol); err != nil {
+		return
+	}
+	if request.NewInternalPort, err = soap.MarshalUi2(NewInternalPort); err != nil {
+		return
+	}
+	if request.NewInternalClient, err = soap.MarshalString(NewInternalClient); err != nil {
+		return
+	}
+	if request.NewEnabled, err = soap.MarshalBoolean(NewEnabled); err != nil {
+		return
+	}
+	if request.NewPortMappingDescription, err = soap.MarshalString(NewPortMappingDescription); err != nil {
+		return
+	}
+	if request.NewLeaseDuration, err = soap.MarshalUi4(NewLeaseDuration); err != nil {
+		return
+	}
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := interface{}(nil)
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "AddPortMapping", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	// END Unmarshal arguments from response.
+	return
+}
+
+// Arguments:
+//
+// * NewRemoteHost:
+//
+// * NewExternalPort:
+//
+// * NewProtocol: allowed values: TCP, UDP
+//
+//
+func (client *WANIPConnection2) DeletePortMapping(NewRemoteHost string, NewExternalPort uint16, NewProtocol string) (err error) {
+	// Request structure.
+	request := &struct {
+		NewRemoteHost string
+
+		NewExternalPort string
+
+		NewProtocol string
+	}{}
+	// BEGIN Marshal arguments into request.
+
+	if request.NewRemoteHost, err = soap.MarshalString(NewRemoteHost); err != nil {
+		return
+	}
+	if request.NewExternalPort, err = soap.MarshalUi2(NewExternalPort); err != nil {
+		return
+	}
+	if request.NewProtocol, err = soap.MarshalString(NewProtocol); err != nil {
+		return
+	}
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := interface{}(nil)
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "DeletePortMapping", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	// END Unmarshal arguments from response.
+	return
+}
+
+// Arguments:
+//
+// * NewStartPort:
+//
+// * NewEndPort:
+//
+// * NewProtocol: allowed values: TCP, UDP
+//
+// * NewManage:
+//
+//
+func (client *WANIPConnection2) DeletePortMappingRange(NewStartPort uint16, NewEndPort uint16, NewProtocol string, NewManage bool) (err error) {
+	// Request structure.
+	request := &struct {
+		NewStartPort string
+
+		NewEndPort string
+
+		NewProtocol string
+
+		NewManage string
+	}{}
+	// BEGIN Marshal arguments into request.
+
+	if request.NewStartPort, err = soap.MarshalUi2(NewStartPort); err != nil {
+		return
+	}
+	if request.NewEndPort, err = soap.MarshalUi2(NewEndPort); err != nil {
+		return
+	}
+	if request.NewProtocol, err = soap.MarshalString(NewProtocol); err != nil {
+		return
+	}
+	if request.NewManage, err = soap.MarshalBoolean(NewManage); err != nil {
+		return
+	}
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := interface{}(nil)
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "DeletePortMappingRange", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	// END Unmarshal arguments from response.
+	return
+}
+
+//
+//
+// Return values:
+//
+// * NewExternalIPAddress:
+func (client *WANIPConnection2) GetExternalIPAddress() (NewExternalIPAddress string, err error) {
+	// Request structure.
+	request := interface{}(nil)
+	// BEGIN Marshal arguments into request.
+
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := &struct {
+		NewExternalIPAddress string
+	}{}
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "GetExternalIPAddress", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	if NewExternalIPAddress, err = soap.UnmarshalString(response.NewExternalIPAddress); err != nil {
+		return
+	}
+	// END Unmarshal arguments from response.
+	return
+}
+
+// Arguments:
+//
+// * NewStartPort:
+//
+// * NewEndPort:
+//
+// * NewProtocol: allowed values: TCP, UDP
+//
+// * NewManage:
+//
+// * NewNumberOfPorts:
+//
+// Return values:
+//
+// * NewPortListing:
+func (client *WANIPConnection2) GetListOfPortMappings(NewStartPort uint16, NewEndPort uint16, NewProtocol string, NewManage bool, NewNumberOfPorts uint16) (NewPortListing string, err error) {
+	// Request structure.
+	request := &struct {
+		NewStartPort string
+
+		NewEndPort string
+
+		NewProtocol string
+
+		NewManage string
+
+		NewNumberOfPorts string
+	}{}
+	// BEGIN Marshal arguments into request.
+
+	if request.NewStartPort, err = soap.MarshalUi2(NewStartPort); err != nil {
+		return
+	}
+	if request.NewEndPort, err = soap.MarshalUi2(NewEndPort); err != nil {
+		return
+	}
+	if request.NewProtocol, err = soap.MarshalString(NewProtocol); err != nil {
+		return
+	}
+	if request.NewManage, err = soap.MarshalBoolean(NewManage); err != nil {
+		return
+	}
+	if request.NewNumberOfPorts, err = soap.MarshalUi2(NewNumberOfPorts); err != nil {
+		return
+	}
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := &struct {
+		NewPortListing string
+	}{}
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "GetListOfPortMappings", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	if NewPortListing, err = soap.UnmarshalString(response.NewPortListing); err != nil {
+		return
+	}
+	// END Unmarshal arguments from response.
+	return
+}
+
+// Arguments:
+//
+// * NewRemoteHost:
+//
+// * NewExternalPort:
+//
+// * NewProtocol: allowed values: TCP, UDP
+//
+// * NewInternalPort: allowed value range: minimum=1, maximum=65535
+//
+// * NewInternalClient:
+//
+// * NewEnabled:
+//
+// * NewPortMappingDescription:
+//
+// * NewLeaseDuration: allowed value range: minimum=0, maximum=604800
+//
+// Return values:
+//
+// * NewReservedPort:
+func (client *WANIPConnection2) AddAnyPortMapping(NewRemoteHost string, NewExternalPort uint16, NewProtocol string, NewInternalPort uint16, NewInternalClient string, NewEnabled bool, NewPortMappingDescription string, NewLeaseDuration uint32) (NewReservedPort uint16, err error) {
+	// Request structure.
+	request := &struct {
+		NewRemoteHost string
+
+		NewExternalPort string
+
+		NewProtocol string
+
+		NewInternalPort string
+
+		NewInternalClient string
+
+		NewEnabled string
+
+		NewPortMappingDescription string
+
+		NewLeaseDuration string
+	}{}
+	// BEGIN Marshal arguments into request.
+
+	if request.NewRemoteHost, err = soap.MarshalString(NewRemoteHost); err != nil {
+		return
+	}
+	if request.NewExternalPort, err = soap.MarshalUi2(NewExternalPort); err != nil {
+		return
+	}
+	if request.NewProtocol, err = soap.MarshalString(NewProtocol); err != nil {
+		return
+	}
+	if request.NewInternalPort, err = soap.MarshalUi2(NewInternalPort); err != nil {
+		return
+	}
+	if request.NewInternalClient, err = soap.MarshalString(NewInternalClient); err != nil {
+		return
+	}
+	if request.NewEnabled, err = soap.MarshalBoolean(NewEnabled); err != nil {
+		return
+	}
+	if request.NewPortMappingDescription, err = soap.MarshalString(NewPortMappingDescription); err != nil {
+		return
+	}
+	if request.NewLeaseDuration, err = soap.MarshalUi4(NewLeaseDuration); err != nil {
+		return
+	}
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := &struct {
+		NewReservedPort string
+	}{}
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPConnection_2, "AddAnyPortMapping", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	if NewReservedPort, err = soap.UnmarshalUi2(response.NewReservedPort); err != nil {
+		return
+	}
+	// END Unmarshal arguments from response.
+	return
+}
+
+// WANIPv6FirewallControl1 is a client for UPnP SOAP service with URN "urn:schemas-upnp-org:service:WANIPv6FirewallControl:1". See
+// goupnp.ServiceClient, which contains RootDevice and Service attributes which
+// are provided for informational value.
+type WANIPv6FirewallControl1 struct {
+	goupnp.ServiceClient
+}
+
+// NewWANIPv6FirewallControl1Clients discovers instances of the service on the network,
+// and returns clients to any that are found. errors will contain an error for
+// any devices that replied but which could not be queried, and err will be set
+// if the discovery process failed outright.
+//
+// This is a typical entry calling point into this package.
+func NewWANIPv6FirewallControl1Clients() (clients []*WANIPv6FirewallControl1, errors []error, err error) {
+	var genericClients []goupnp.ServiceClient
+	if genericClients, errors, err = goupnp.NewServiceClients(URN_WANIPv6FirewallControl_1); err != nil {
+		return
+	}
+	clients = make([]*WANIPv6FirewallControl1, len(genericClients))
+	for i := range genericClients {
+		clients[i] = &WANIPv6FirewallControl1{genericClients[i]}
+	}
+	return
+}
+
+//
+//
+// Return values:
+//
+// * FirewallEnabled:
+//
+// * InboundPinholeAllowed:
+func (client *WANIPv6FirewallControl1) GetFirewallStatus() (FirewallEnabled bool, InboundPinholeAllowed bool, err error) {
+	// Request structure.
+	request := interface{}(nil)
+	// BEGIN Marshal arguments into request.
+
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := &struct {
+		FirewallEnabled string
+
+		InboundPinholeAllowed string
+	}{}
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPv6FirewallControl_1, "GetFirewallStatus", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	if FirewallEnabled, err = soap.UnmarshalBoolean(response.FirewallEnabled); err != nil {
+		return
+	}
+	if InboundPinholeAllowed, err = soap.UnmarshalBoolean(response.InboundPinholeAllowed); err != nil {
+		return
+	}
+	// END Unmarshal arguments from response.
+	return
+}
+
+// Arguments:
+//
+// * RemoteHost:
+//
+// * RemotePort:
+//
+// * InternalClient:
+//
+// * InternalPort:
+//
+// * Protocol:
+//
+// Return values:
+//
+// * OutboundPinholeTimeout:
+func (client *WANIPv6FirewallControl1) GetOutboundPinholeTimeout(RemoteHost string, RemotePort uint16, InternalClient string, InternalPort uint16, Protocol uint16) (OutboundPinholeTimeout uint32, err error) {
+	// Request structure.
+	request := &struct {
+		RemoteHost string
+
+		RemotePort string
+
+		InternalClient string
+
+		InternalPort string
+
+		Protocol string
+	}{}
+	// BEGIN Marshal arguments into request.
+
+	if request.RemoteHost, err = soap.MarshalString(RemoteHost); err != nil {
+		return
+	}
+	if request.RemotePort, err = soap.MarshalUi2(RemotePort); err != nil {
+		return
+	}
+	if request.InternalClient, err = soap.MarshalString(InternalClient); err != nil {
+		return
+	}
+	if request.InternalPort, err = soap.MarshalUi2(InternalPort); err != nil {
+		return
+	}
+	if request.Protocol, err = soap.MarshalUi2(Protocol); err != nil {
+		return
+	}
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := &struct {
+		OutboundPinholeTimeout string
+	}{}
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPv6FirewallControl_1, "GetOutboundPinholeTimeout", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	if OutboundPinholeTimeout, err = soap.UnmarshalUi4(response.OutboundPinholeTimeout); err != nil {
+		return
+	}
+	// END Unmarshal arguments from response.
+	return
+}
+
+// Arguments:
+//
+// * RemoteHost:
+//
+// * RemotePort:
+//
+// * InternalClient:
+//
+// * InternalPort:
+//
+// * Protocol:
+//
+// * LeaseTime: allowed value range: minimum=1, maximum=86400
+//
+// Return values:
+//
+// * UniqueID:
+func (client *WANIPv6FirewallControl1) AddPinhole(RemoteHost string, RemotePort uint16, InternalClient string, InternalPort uint16, Protocol uint16, LeaseTime uint32) (UniqueID uint16, err error) {
+	// Request structure.
+	request := &struct {
+		RemoteHost string
+
+		RemotePort string
+
+		InternalClient string
+
+		InternalPort string
+
+		Protocol string
+
+		LeaseTime string
+	}{}
+	// BEGIN Marshal arguments into request.
+
+	if request.RemoteHost, err = soap.MarshalString(RemoteHost); err != nil {
+		return
+	}
+	if request.RemotePort, err = soap.MarshalUi2(RemotePort); err != nil {
+		return
+	}
+	if request.InternalClient, err = soap.MarshalString(InternalClient); err != nil {
+		return
+	}
+	if request.InternalPort, err = soap.MarshalUi2(InternalPort); err != nil {
+		return
+	}
+	if request.Protocol, err = soap.MarshalUi2(Protocol); err != nil {
+		return
+	}
+	if request.LeaseTime, err = soap.MarshalUi4(LeaseTime); err != nil {
+		return
+	}
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := &struct {
+		UniqueID string
+	}{}
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPv6FirewallControl_1, "AddPinhole", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	if UniqueID, err = soap.UnmarshalUi2(response.UniqueID); err != nil {
+		return
+	}
+	// END Unmarshal arguments from response.
+	return
+}
+
+// Arguments:
+//
+// * UniqueID:
+//
+// * NewLeaseTime: allowed value range: minimum=1, maximum=86400
+//
+//
+func (client *WANIPv6FirewallControl1) UpdatePinhole(UniqueID uint16, NewLeaseTime uint32) (err error) {
+	// Request structure.
+	request := &struct {
+		UniqueID string
+
+		NewLeaseTime string
+	}{}
+	// BEGIN Marshal arguments into request.
+
+	if request.UniqueID, err = soap.MarshalUi2(UniqueID); err != nil {
+		return
+	}
+	if request.NewLeaseTime, err = soap.MarshalUi4(NewLeaseTime); err != nil {
+		return
+	}
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := interface{}(nil)
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPv6FirewallControl_1, "UpdatePinhole", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	// END Unmarshal arguments from response.
+	return
+}
+
+// Arguments:
+//
+// * UniqueID:
+//
+//
+func (client *WANIPv6FirewallControl1) DeletePinhole(UniqueID uint16) (err error) {
+	// Request structure.
+	request := &struct {
+		UniqueID string
+	}{}
+	// BEGIN Marshal arguments into request.
+
+	if request.UniqueID, err = soap.MarshalUi2(UniqueID); err != nil {
+		return
+	}
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := interface{}(nil)
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPv6FirewallControl_1, "DeletePinhole", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	// END Unmarshal arguments from response.
+	return
+}
+
+// Arguments:
+//
+// * UniqueID:
+//
+// Return values:
+//
+// * PinholePackets:
+func (client *WANIPv6FirewallControl1) GetPinholePackets(UniqueID uint16) (PinholePackets uint32, err error) {
+	// Request structure.
+	request := &struct {
+		UniqueID string
+	}{}
+	// BEGIN Marshal arguments into request.
+
+	if request.UniqueID, err = soap.MarshalUi2(UniqueID); err != nil {
+		return
+	}
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := &struct {
+		PinholePackets string
+	}{}
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPv6FirewallControl_1, "GetPinholePackets", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	if PinholePackets, err = soap.UnmarshalUi4(response.PinholePackets); err != nil {
+		return
+	}
+	// END Unmarshal arguments from response.
+	return
+}
+
+// Arguments:
+//
+// * UniqueID:
+//
+// Return values:
+//
+// * IsWorking:
+func (client *WANIPv6FirewallControl1) CheckPinholeWorking(UniqueID uint16) (IsWorking bool, err error) {
+	// Request structure.
+	request := &struct {
+		UniqueID string
+	}{}
+	// BEGIN Marshal arguments into request.
+
+	if request.UniqueID, err = soap.MarshalUi2(UniqueID); err != nil {
+		return
+	}
+	// END Marshal arguments into request.
+
+	// Response structure.
+	response := &struct {
+		IsWorking string
+	}{}
+
+	// Perform the SOAP call.
+	if err = client.SOAPClient.PerformAction(URN_WANIPv6FirewallControl_1, "CheckPinholeWorking", request, response); err != nil {
+		return
+	}
+
+	// BEGIN Unmarshal arguments from response.
+
+	if IsWorking, err = soap.UnmarshalBoolean(response.IsWorking); err != nil {
 		return
 	}
 	// END Unmarshal arguments from response.

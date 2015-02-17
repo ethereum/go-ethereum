@@ -2,8 +2,7 @@ package goupnp
 
 import (
 	"fmt"
-
-	"github.com/fjl/goupnp/soap"
+	"github.com/huin/goupnp/soap"
 )
 
 // ServiceClient is a SOAP client, root device and the service for the SOAP

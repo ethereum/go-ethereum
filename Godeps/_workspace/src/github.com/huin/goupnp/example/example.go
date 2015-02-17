@@ -2,5 +2,5 @@
 //
 // To run examples and see the output for your local network, run the following
 // command (specifically including the -v flag):
-//     go test -v github.com/fjl/goupnp/example
+//     go test -v github.com/huin/goupnp/example
 package example
