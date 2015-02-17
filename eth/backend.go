@@ -25,8 +25,7 @@ var (
 	jsonlogger = ethlogger.NewJsonLogger()
 
 	defaultBootNodes = []*discover.Node{
-		//discover.MustParseNode("enode://6cdd090303f394a1cac34ecc9f7cda18127eafa2a3a06de39f6d920b0e583e062a7362097c7c65ee490a758b442acd5c80c6fce4b148c6a391e946b45131365b@54.169.166.226:30303"),
-		discover.MustParseNode("enode://364d179a050fb3192ea25ee2c4836cb808f13bb1a98a058e5bf215a597080edd742a00d6fd4b5f348a08024097f0b8f567610902dddf8db573362d8b22cabef5@127.0.0.1:30303"),
+		discover.MustParseNode("enode://6cdd090303f394a1cac34ecc9f7cda18127eafa2a3a06de39f6d920b0e583e062a7362097c7c65ee490a758b442acd5c80c6fce4b148c6a391e946b45131365b@54.169.166.226:30303"),
 	}
 )
 
