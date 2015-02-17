@@ -888,7 +888,7 @@ ApplicationWindow {
         function addPeer(peer) { peerModel.append(peer) }
 
         function setPeerCounters(text) {
-            peerCounterLabel.text = text
+            //peerCounterLabel.text = text
         }
 
         function timeAgo(unixTs){
