@@ -876,7 +876,7 @@ ApplicationWindow {
         }
 
         function setWalletValue(value) {
-            walletValueLabel.text = value
+            //walletValueLabel.text = value
         }
 
         function loadPlugin(name) {

@@ -407,34 +407,10 @@ func (gui *Gui) update() {
 			}
 			switch ev := ev.(type) {
 			case core.TxPreEvent:
-				tx := ev.Tx
-
-				tstate := gui.eth.ChainManager().TransState()
-				cstate := gui.eth.ChainManager().State()
-
-				taccount := tstate.GetAccount(gui.address())
-				caccount := cstate.GetAccount(gui.address())
-				unconfirmedFunds := new(big.Int).Sub(taccount.Balance(), caccount.Balance())
-
-				gui.setWalletValue(taccount.Balance(), unconfirmedFunds)
-				gui.insertTransaction("pre", tx)
+				gui.insertTransaction("pre", ev.Tx)
 
 			case core.TxPostEvent:
-				tx := ev.Tx
-				object := state.GetAccount(gui.address())
-
-				if bytes.Compare(tx.From(), gui.address()) == 0 {
-					object.SubAmount(tx.Value())
-
-					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-				} else if bytes.Compare(tx.To(), gui.address()) == 0 {
-					object.AddAmount(tx.Value())
-
-					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-				}
-
-				gui.setWalletValue(object.Balance(), nil)
-				state.UpdateStateObject(object)
+				gui.getObjectByName("pendingTxView").Call("removeTx", xeth.NewTx(ev.Tx))
 			}
 
 		case <-peerUpdateTicker.C:
