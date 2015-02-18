@@ -20,21 +20,18 @@
 console.log("loaded?");
 
 document.onkeydown = function(evt) {
+    // This functions keeps track of keyboard inputs in order to allow copy, paste and other features
+
     evt = evt || window.event;
     if (evt.ctrlKey && evt.keyCode == 67) {
     	window.document.execCommand("copy");
-        console.log("Ctrl-C");
     } else if (evt.ctrlKey && evt.keyCode == 88) {
     	window.document.execCommand("cut");
-        console.log("Ctrl-X");
     } else if (evt.ctrlKey && evt.keyCode == 86) {
         window.document.execCommand("paste");
-        console.log("Ctrl-V");
     } else if (evt.ctrlKey && evt.keyCode == 90) {
         window.document.execCommand("undo");
-        console.log("Ctrl-Z");
     } else if (evt.ctrlKey && evt.shiftKey && evt.keyCode == 90) {
         window.document.execCommand("redo");
-        console.log("Ctrl-Z");
     }
 };

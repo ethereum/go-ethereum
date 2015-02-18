@@ -132,7 +132,11 @@ ApplicationWindow {
                 var existingDomain = matches && matches[1];
                 if (requestedDomain == existingDomain) {
                     domainAlreadyOpen = true;
-                    mainSplit.views[i].view.url = url;
+                    
+                    if (mainSplit.views[i].view.url != url){
+                        mainSplit.views[i].view.url = url;
+                    }
+                    
                     activeView(mainSplit.views[i].view, mainSplit.views[i].menuItem);
                 }
             }
@@ -888,7 +892,7 @@ ApplicationWindow {
         function addPeer(peer) { peerModel.append(peer) }
 
         function setPeerCounters(text) {
-            peerCounterLabel.text = text
+            //peerCounterLabel.text = text
         }
 
         function timeAgo(unixTs){
