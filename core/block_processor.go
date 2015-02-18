@@ -250,7 +250,11 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 	}
 
 	if block.Time() > time.Now().Unix() {
-		return fmt.Errorf("block time is in the future")
+		return BlockFutureErr
+	}
+
+	if new(big.Int).Sub(block.Number(), parent.Number()).Cmp(big.NewInt(1)) != 0 {
+		return BlockNumberErr
 	}
 
 	// Verify the nonce of the block. Return an error if it's not valid

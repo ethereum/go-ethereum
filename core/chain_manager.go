@@ -87,6 +87,14 @@ type ChainManager struct {
 	transState *state.StateDB
 }
 
+func NewChainManager(db ethutil.Database, mux *event.TypeMux) *ChainManager {
+	bc := &ChainManager{db: db, genesisBlock: GenesisBlock(db), eventMux: mux}
+	bc.setLastBlock()
+	bc.transState = bc.State().Copy()
+
+	return bc
+}
+
 func (self *ChainManager) Td() *big.Int {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
@@ -106,14 +114,6 @@ func (self *ChainManager) CurrentBlock() *types.Block {
 	defer self.mu.RUnlock()
 
 	return self.currentBlock
-}
-
-func NewChainManager(db ethutil.Database, mux *event.TypeMux) *ChainManager {
-	bc := &ChainManager{db: db, genesisBlock: GenesisBlock(db), eventMux: mux}
-	bc.setLastBlock()
-	bc.transState = bc.State().Copy()
-
-	return bc
 }
 
 func (self *ChainManager) Status() (td *big.Int, currentBlock []byte, genesisBlock []byte) {
