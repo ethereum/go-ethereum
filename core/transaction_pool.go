@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -9,7 +10,11 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 )
 
-var txplogger = logger.NewLogger("TXP")
+var (
+	txplogger = logger.NewLogger("TXP")
+
+	ErrInvalidSender = errors.New("Invalid sender")
+)
 
 const txPoolQueueSize = 50
 
@@ -60,22 +65,23 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 		return fmt.Errorf("Invalid recipient. len = %d", len(tx.To()))
 	}
 
+	// Validate curve param
 	v, _, _ := tx.Curve()
 	if v > 28 || v < 27 {
 		return fmt.Errorf("tx.v != (28 || 27) => %v", v)
+	}
+
+	// Validate sender address
+	senderAddr := tx.From()
+	if senderAddr == nil || len(senderAddr) != 20 {
+		return ErrInvalidSender
 	}
 
 	/* XXX this kind of validation needs to happen elsewhere in the gui when sending txs.
 	   Other clients should do their own validation. Value transfer could throw error
 	   but doesn't necessarily invalidate the tx. Gas can still be payed for and miner
 	   can still be rewarded for their inclusion and processing.
-	// Get the sender
-	senderAddr := tx.From()
-	if senderAddr == nil {
-		return fmt.Errorf("invalid sender")
-	}
 	sender := pool.stateQuery.GetAccount(senderAddr)
-
 	totAmount := new(big.Int).Set(tx.Value())
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.

@@ -90,7 +90,7 @@ gulp.task('uglify', ['build'], function(){
     return uglifyFile('ethereum');
 });
 
-gulp.task('uglify', ['buildDev'], function(){
+gulp.task('uglifyDev', ['buildDev'], function(){
     return uglifyFile('ethereum');
 });
 
@@ -99,6 +99,6 @@ gulp.task('watch', function() {
 });
 
 gulp.task('release', ['bower', 'lint', 'build', 'uglify']);
-gulp.task('dev', ['bower', 'lint', 'buildDev', 'uglify']);
+gulp.task('dev', ['bower', 'lint', 'buildDev', 'uglifyDev']);
 gulp.task('default', ['dev']);
 

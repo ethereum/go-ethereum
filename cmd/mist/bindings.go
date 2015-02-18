@@ -61,16 +61,7 @@ func (gui *Gui) Transact(recipient, value, gas, gasPrice, d string) (string, err
 		data = ethutil.Bytes2Hex(utils.FormatTransactionData(d))
 	}
 
-	return gui.xeth.Transact(gui.privateKey(), recipient, value, gas, gasPrice, data)
-}
-
-func (gui *Gui) SetCustomIdentifier(customIdentifier string) {
-	gui.clientIdentity.SetCustomIdentifier(customIdentifier)
-	gui.config.Save("id", customIdentifier)
-}
-
-func (gui *Gui) GetCustomIdentifier() string {
-	return gui.clientIdentity.GetCustomIdentifier()
+	return gui.xeth.Transact(recipient, value, gas, gasPrice, data)
 }
 
 // functions that allow Gui to implement interface guilogger.LogSystem

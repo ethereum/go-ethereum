@@ -1,11 +1,7 @@
 package types
 
-import (
-	"math/big"
-
-	"github.com/ethereum/go-ethereum/state"
-)
+import "math/big"
 
 type BlockProcessor interface {
-	Process(*Block) (*big.Int, state.Messages, error)
+	Process(*Block) (*big.Int, error)
 }

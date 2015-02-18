@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"os"
 
-	"gopkg.in/qml.v1"
+	"github.com/obscuren/qml"
 )
 
 func ErrorWindow(err error) {

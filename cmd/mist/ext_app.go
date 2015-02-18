@@ -21,16 +21,12 @@
 package main
 
 import (
-	"encoding/json"
-
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/javascript"
-	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/ui/qt"
 	"github.com/ethereum/go-ethereum/xeth"
-	"gopkg.in/qml.v1"
+	"github.com/obscuren/qml"
 )
 
 type AppContainer interface {
@@ -42,13 +38,12 @@ type AppContainer interface {
 
 	NewBlock(*types.Block)
 	NewWatcher(chan bool)
-	Messages(state.Messages, string)
 	Post(string, int)
 }
 
 type ExtApplication struct {
-	*xeth.JSXEth
-	eth core.EthManager
+	*xeth.XEth
+	eth core.Backend
 
 	events          event.Subscription
 	watcherQuitChan chan bool
@@ -61,7 +56,7 @@ type ExtApplication struct {
 
 func NewExtApplication(container AppContainer, lib *UiLib) *ExtApplication {
 	return &ExtApplication{
-		JSXEth:          xeth.NewJSXEth(lib.eth),
+		XEth:            xeth.New(lib.eth),
 		eth:             lib.eth,
 		watcherQuitChan: make(chan bool),
 		filters:         make(map[string]*core.Filter),
@@ -81,10 +76,6 @@ func (app *ExtApplication) run() {
 		guilogger.Errorln(err)
 		return
 	}
-
-	// Subscribe to events
-	mux := app.lib.eth.EventMux()
-	app.events = mux.Subscribe(core.NewBlockEvent{}, state.Messages(nil))
 
 	// Call the main loop
 	go app.mainLoop()
@@ -113,34 +104,19 @@ func (app *ExtApplication) mainLoop() {
 		case core.NewBlockEvent:
 			app.container.NewBlock(ev.Block)
 
-		case state.Messages:
-			for id, filter := range app.filters {
-				msgs := filter.FilterMessages(ev)
-				if len(msgs) > 0 {
-					app.container.Messages(msgs, id)
+			/* TODO remove
+			case state.Messages:
+				for id, filter := range app.filters {
+					msgs := filter.FilterMessages(ev)
+					if len(msgs) > 0 {
+						app.container.Messages(msgs, id)
+					}
 				}
-			}
+			*/
 		}
 	}
 }
 
 func (self *ExtApplication) Watch(filterOptions map[string]interface{}, identifier string) {
 	self.filters[identifier] = qt.NewFilterFromMap(filterOptions, self.eth)
-}
-
-func (self *ExtApplication) GetMessages(object map[string]interface{}) string {
-	filter := qt.NewFilterFromMap(object, self.eth)
-
-	messages := filter.Find()
-	var msgs []javascript.JSMessage
-	for _, m := range messages {
-		msgs = append(msgs, javascript.NewJSMessage(m))
-	}
-
-	b, err := json.Marshal(msgs)
-	if err != nil {
-		return "{\"error\":" + err.Error() + "}"
-	}
-
-	return string(b)
 }

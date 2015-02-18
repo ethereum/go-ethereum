@@ -38,13 +38,6 @@ func New(env Environment) *Vm {
 func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
 	self.env.SetDepth(self.env.Depth() + 1)
 
-	msg := self.env.State().Manifest().AddMessage(&state.Message{
-		To: me.Address(), From: caller.Address(),
-		Input:     callData,
-		Origin:    self.env.Origin(),
-		Timestamp: self.env.Time(), Coinbase: self.env.Coinbase(), Number: self.env.BlockNumber(),
-		Value: value,
-	})
 	context := NewContext(caller, me, code, gas, price)
 
 	vmlogger.Debugf("(%d) (%x) %x (code=%d) gas: %v (d) %x\n", self.env.Depth(), caller.Address()[:4], context.Address(), len(code), context.Gas, callData)
@@ -510,13 +503,13 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 		case GASPRICE:
 			stack.Push(context.Price)
 
-			self.Printf(" => %v", context.Price)
+			self.Printf(" => %x", context.Price)
 
 			// 0x40 range
 		case BLOCKHASH:
 			num := stack.Pop()
 
-			n := U256(new(big.Int).Sub(self.env.BlockNumber(), ethutil.Big257))
+			n := new(big.Int).Sub(self.env.BlockNumber(), ethutil.Big257)
 			if num.Cmp(n) > 0 && num.Cmp(self.env.BlockNumber()) < 0 {
 				stack.Push(ethutil.BigD(self.env.GetHash(num.Uint64())))
 			} else {
@@ -618,8 +611,6 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			val, loc := stack.Popn()
 			statedb.SetState(context.Address(), loc.Bytes(), val)
 
-			msg.AddStorageChange(loc.Bytes())
-
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case JUMP:
 			jump(pc, stack.Pop())
@@ -634,6 +625,8 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 				continue
 			}
 
+			self.Printf(" ~> false")
+
 		case JUMPDEST:
 		case PC:
 			stack.Push(big.NewInt(int64(pc)))
@@ -641,6 +634,8 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			stack.Push(big.NewInt(int64(mem.Len())))
 		case GAS:
 			stack.Push(context.Gas)
+
+			self.Printf(" => %x", context.Gas)
 			// 0x60 range
 		case CREATE:
 
@@ -651,6 +646,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 				gas          = new(big.Int).Set(context.Gas)
 				addr         []byte
 			)
+			self.Endl()
 
 			context.UseGas(context.Gas)
 			ret, suberr, ref := self.env.Create(context, nil, input, gas, price, value)
@@ -665,13 +661,11 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 				dataGas.Mul(dataGas, GasCreateByte)
 				if context.UseGas(dataGas) {
 					ref.SetCode(ret)
-					msg.Output = ret
 				}
 				addr = ref.Address()
 
 				stack.Push(ethutil.BigD(addr))
 
-				self.Printf(" (*) %x", addr)
 			}
 
 			// Debug hook
@@ -679,8 +673,6 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 				self.Dbg.SetCode(context.Code)
 			}
 		case CALL, CALLCODE:
-			self.Endl()
-
 			gas := stack.Pop()
 			// Pop gas and value of the stack.
 			value, addr := stack.Popn()
@@ -688,6 +680,9 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			inSize, inOffset := stack.Popn()
 			// Pop return size and offset
 			retSize, retOffset := stack.Popn()
+
+			address := ethutil.Address(addr.Bytes())
+			self.Printf(" => %x", address).Endl()
 
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
@@ -697,9 +692,9 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 				err error
 			)
 			if op == CALLCODE {
-				ret, err = self.env.CallCode(context, addr.Bytes(), args, gas, price, value)
+				ret, err = self.env.CallCode(context, address, args, gas, price, value)
 			} else {
-				ret, err = self.env.Call(context, addr.Bytes(), args, gas, price, value)
+				ret, err = self.env.Call(context, address, args, gas, price, value)
 			}
 
 			if err != nil {
@@ -708,7 +703,6 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 				vmlogger.Debugln(err)
 			} else {
 				stack.Push(ethutil.BigTrue)
-				msg.Output = ret
 
 				mem.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 			}

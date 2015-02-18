@@ -31,8 +31,8 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -41,11 +41,9 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/ui/qt/qwhisper"
 	"github.com/ethereum/go-ethereum/xeth"
-	"gopkg.in/qml.v1"
+	"github.com/obscuren/qml"
 )
 
 var guilogger = logger.NewLogger("GUI")
@@ -76,35 +74,31 @@ type Gui struct {
 	logLevel logger.LogLevel
 	open     bool
 
-	xeth *xeth.JSXEth
+	xeth *xeth.XEth
 
-	Session        string
-	clientIdentity *p2p.SimpleClientIdentity
-	config         *ethutil.ConfigManager
+	Session string
+	config  *ethutil.ConfigManager
 
 	plugins map[string]plugin
-
-	miner *miner.Miner
 }
 
 // Create GUI, but doesn't start it
-func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIdentity *p2p.SimpleClientIdentity, session string, logLevel int) *Gui {
+func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, session string, logLevel int) *Gui {
 	db, err := ethdb.NewLDBDatabase("tx_database")
 	if err != nil {
 		panic(err)
 	}
 
-	xeth := xeth.NewJSXEth(ethereum)
+	xeth := xeth.New(ethereum)
 	gui := &Gui{eth: ethereum,
-		txDb:           db,
-		xeth:           xeth,
-		logLevel:       logger.LogLevel(logLevel),
-		Session:        session,
-		open:           false,
-		clientIdentity: clientIdentity,
-		config:         config,
-		plugins:        make(map[string]plugin),
-		serviceEvents:  make(chan ServEv, 1),
+		txDb:          db,
+		xeth:          xeth,
+		logLevel:      logger.LogLevel(logLevel),
+		Session:       session,
+		open:          false,
+		config:        config,
+		plugins:       make(map[string]plugin),
+		serviceEvents: make(chan ServEv, 1),
 	}
 	data, _ := ethutil.ReadAllFile(path.Join(ethutil.Config.ExecPath, "plugins.json"))
 	json.Unmarshal([]byte(data), &gui.plugins)
@@ -121,9 +115,9 @@ func (gui *Gui) Start(assetPath string) {
 
 	// Register ethereum functions
 	qml.RegisterTypes("Ethereum", 1, 0, []qml.TypeSpec{{
-		Init: func(p *xeth.JSBlock, obj qml.Object) { p.Number = 0; p.Hash = "" },
+		Init: func(p *xeth.Block, obj qml.Object) { p.Number = 0; p.Hash = "" },
 	}, {
-		Init: func(p *xeth.JSTransaction, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
+		Init: func(p *xeth.Transaction, obj qml.Object) { p.Value = ""; p.Hash = ""; p.Address = "" },
 	}, {
 		Init: func(p *xeth.KeyVal, obj qml.Object) { p.Key = ""; p.Value = "" },
 	}})
@@ -229,41 +223,44 @@ func (gui *Gui) setInitialChain(ancientBlocks bool) {
 }
 
 func (gui *Gui) loadAddressBook() {
-	view := gui.getObjectByName("infoView")
-	nameReg := gui.xeth.World().Config().Get("NameReg")
-	if nameReg != nil {
-		it := nameReg.Trie().Iterator()
-		for it.Next() {
-			if it.Key[0] != 0 {
-				view.Call("addAddress", struct{ Name, Address string }{string(it.Key), ethutil.Bytes2Hex(it.Value)})
-			}
+	/*
+		view := gui.getObjectByName("infoView")
+		nameReg := gui.xeth.World().Config().Get("NameReg")
+		if nameReg != nil {
+			it := nameReg.Trie().Iterator()
+			for it.Next() {
+				if it.Key[0] != 0 {
+					view.Call("addAddress", struct{ Name, Address string }{string(it.Key), ethutil.Bytes2Hex(it.Value)})
+				}
 
+			}
 		}
-	}
+	*/
 }
 
 func (self *Gui) loadMergedMiningOptions() {
-	view := self.getObjectByName("mergedMiningModel")
+	/*
+		view := self.getObjectByName("mergedMiningModel")
 
-	mergeMining := self.xeth.World().Config().Get("MergeMining")
-	if mergeMining != nil {
-		i := 0
-		it := mergeMining.Trie().Iterator()
-		for it.Next() {
-			view.Call("addMergedMiningOption", struct {
-				Checked       bool
-				Name, Address string
-				Id, ItemId    int
-			}{false, string(it.Key), ethutil.Bytes2Hex(it.Value), 0, i})
+		mergeMining := self.xeth.World().Config().Get("MergeMining")
+		if mergeMining != nil {
+			i := 0
+			it := mergeMining.Trie().Iterator()
+			for it.Next() {
+				view.Call("addMergedMiningOption", struct {
+					Checked       bool
+					Name, Address string
+					Id, ItemId    int
+				}{false, string(it.Key), ethutil.Bytes2Hex(it.Value), 0, i})
 
-			i++
+				i++
 
+			}
 		}
-	}
+	*/
 }
 
 func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
-	nameReg := gui.xeth.World().Config().Get("NameReg")
 	addr := gui.address()
 
 	var inout string
@@ -274,32 +271,12 @@ func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
 	}
 
 	var (
-		ptx  = xeth.NewJSTx(tx)
-		send = nameReg.Storage(tx.From())
-		rec  = nameReg.Storage(tx.To())
-		s, r string
+		ptx  = xeth.NewTx(tx)
+		send = ethutil.Bytes2Hex(tx.From())
+		rec  = ethutil.Bytes2Hex(tx.To())
 	)
-
-	if core.MessageCreatesContract(tx) {
-		rec = nameReg.Storage(core.AddressFromMessage(tx))
-	}
-
-	if send.Len() != 0 {
-		s = strings.Trim(send.Str(), "\x00")
-	} else {
-		s = ethutil.Bytes2Hex(tx.From())
-	}
-	if rec.Len() != 0 {
-		r = strings.Trim(rec.Str(), "\x00")
-	} else {
-		if core.MessageCreatesContract(tx) {
-			r = ethutil.Bytes2Hex(core.AddressFromMessage(tx))
-		} else {
-			r = ethutil.Bytes2Hex(tx.To())
-		}
-	}
-	ptx.Sender = s
-	ptx.Address = r
+	ptx.Sender = send
+	ptx.Address = rec
 
 	if window == "post" {
 		//gui.getObjectByName("transactionView").Call("addTx", ptx, inout)
@@ -320,8 +297,8 @@ func (gui *Gui) readPreviousTransactions() {
 }
 
 func (gui *Gui) processBlock(block *types.Block, initial bool) {
-	name := strings.Trim(gui.xeth.World().Config().Get("NameReg").Storage(block.Coinbase()).Str(), "\x00")
-	b := xeth.NewJSBlock(block)
+	name := ethutil.Bytes2Hex(block.Coinbase())
+	b := xeth.NewBlock(block)
 	b.Name = name
 
 	gui.getObjectByName("chainView").Call("addBlock", b, initial)
@@ -398,14 +375,6 @@ func (gui *Gui) setup() {
 		gui.setPeerInfo()
 	}()
 
-	// Inject javascript files each time navigation is requested.
-	// Unfortunately webview.experimental.userScripts injects _after_
-	// the page has loaded which kind of renders it useless...
-	//jsfiles := loadJavascriptAssets(gui)
-	gui.getObjectByName("webView").On("navigationRequested", func() {
-		//gui.getObjectByName("webView").Call("injectJs", jsfiles)
-	})
-
 	gui.whisper.SetView(gui.getObjectByName("whisperView"))
 
 	gui.SendCommand(update)
@@ -425,8 +394,6 @@ func (gui *Gui) update() {
 	miningLabel := gui.getObjectByName("miningLabel")
 
 	events := gui.eth.EventMux().Subscribe(
-		//eth.PeerListEvent{},
-		core.NewBlockEvent{},
 		core.TxPreEvent{},
 		core.TxPostEvent{},
 	)
@@ -439,49 +406,20 @@ func (gui *Gui) update() {
 				return
 			}
 			switch ev := ev.(type) {
-			case core.NewBlockEvent:
-				gui.processBlock(ev.Block, false)
-				if bytes.Compare(ev.Block.Coinbase(), gui.address()) == 0 {
-					gui.setWalletValue(gui.eth.ChainManager().State().GetBalance(gui.address()), nil)
-				}
-
 			case core.TxPreEvent:
-				tx := ev.Tx
-
-				tstate := gui.eth.ChainManager().TransState()
-				cstate := gui.eth.ChainManager().State()
-
-				taccount := tstate.GetAccount(gui.address())
-				caccount := cstate.GetAccount(gui.address())
-				unconfirmedFunds := new(big.Int).Sub(taccount.Balance(), caccount.Balance())
-
-				gui.setWalletValue(taccount.Balance(), unconfirmedFunds)
-				gui.insertTransaction("pre", tx)
+				gui.insertTransaction("pre", ev.Tx)
 
 			case core.TxPostEvent:
-				tx := ev.Tx
-				object := state.GetAccount(gui.address())
-
-				if bytes.Compare(tx.From(), gui.address()) == 0 {
-					object.SubAmount(tx.Value())
-
-					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-				} else if bytes.Compare(tx.To(), gui.address()) == 0 {
-					object.AddAmount(tx.Value())
-
-					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-				}
-
-				gui.setWalletValue(object.Balance(), nil)
-				state.UpdateStateObject(object)
+				gui.getObjectByName("pendingTxView").Call("removeTx", xeth.NewTx(ev.Tx))
 			}
 
 		case <-peerUpdateTicker.C:
 			gui.setPeerInfo()
+
 		case <-generalUpdateTicker.C:
 			statusText := "#" + gui.eth.ChainManager().CurrentBlock().Number().String()
 			lastBlockLabel.Set("text", statusText)
-			miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.miner.GetPow().GetHashrate(), 10)+"Khash")
+			miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.Miner().HashRate(), 10)+"/Khash")
 
 			/*
 				blockLength := gui.eth.BlockPool().BlocksProcessed
@@ -528,11 +466,33 @@ NumGC:      %d
 	))
 }
 
+type qmlpeer struct{ Addr, NodeID, Caps string }
+
+type peersByID []*qmlpeer
+
+func (s peersByID) Len() int           { return len(s) }
+func (s peersByID) Less(i, j int) bool { return s[i].NodeID < s[j].NodeID }
+func (s peersByID) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+
 func (gui *Gui) setPeerInfo() {
-	gui.win.Root().Call("setPeers", fmt.Sprintf("%d / %d", gui.eth.PeerCount(), gui.eth.MaxPeers))
-	gui.win.Root().Call("resetPeers")
-	for _, peer := range gui.xeth.Peers() {
-		gui.win.Root().Call("addPeer", peer)
+	peers := gui.eth.Peers()
+	qpeers := make(peersByID, len(peers))
+	for i, p := range peers {
+		qpeers[i] = &qmlpeer{
+			NodeID: p.ID().String(),
+			Addr:   p.RemoteAddr().String(),
+			Caps:   fmt.Sprint(p.Caps()),
+		}
+	}
+	// we need to sort the peers because they jump around randomly
+	// otherwise. order returned by eth.Peers is random because they
+	// are taken from a map.
+	sort.Sort(qpeers)
+
+	gui.win.Root().Call("setPeerCounters", fmt.Sprintf("%d / %d", len(peers), gui.eth.MaxPeers()))
+	gui.win.Root().Call("clearPeers")
+	for _, p := range qpeers {
+		gui.win.Root().Call("addPeer", p)
 	}
 }
 

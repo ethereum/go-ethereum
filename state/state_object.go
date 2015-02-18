@@ -1,11 +1,13 @@
 package state
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -71,8 +73,28 @@ func NewStateObject(addr []byte, db ethutil.Database) *StateObject {
 }
 
 func NewStateObjectFromBytes(address, data []byte, db ethutil.Database) *StateObject {
+	// TODO clean me up
+	var extobject struct {
+		Nonce    uint64
+		Balance  *big.Int
+		Root     []byte
+		CodeHash []byte
+	}
+	err := rlp.Decode(bytes.NewReader(data), &extobject)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+
 	object := &StateObject{address: address, db: db}
-	object.RlpDecode(data)
+	//object.RlpDecode(data)
+	object.Nonce = extobject.Nonce
+	object.balance = extobject.Balance
+	object.codeHash = extobject.CodeHash
+	object.State = New(extobject.Root, db)
+	object.storage = make(map[string]*ethutil.Value)
+	object.gasPool = new(big.Int)
+	object.Code, _ = db.Get(extobject.CodeHash)
 
 	return object
 }
@@ -121,26 +143,6 @@ func (self *StateObject) SetState(k []byte, value *ethutil.Value) {
 	self.storage[string(key)] = value.Copy()
 }
 
-/*
-// Iterate over each storage address and yield callback
-func (self *StateObject) EachStorage(cb trie.EachCallback) {
-	// First loop over the uncommit/cached values in storage
-	for key, value := range self.storage {
-		// XXX Most iterators Fns as it stands require encoded values
-		encoded := ethutil.NewValue(value.Encode())
-		cb(key, encoded)
-	}
-
-	it := self.State.Trie.NewIterator()
-	it.Each(func(key string, value *ethutil.Value) {
-		// If it's cached don't call the callback.
-		if self.storage[key] == nil {
-			cb(key, value)
-		}
-	})
-}
-*/
-
 func (self *StateObject) Sync() {
 	for key, value := range self.storage {
 		if value.Len() == 0 {
@@ -150,15 +152,6 @@ func (self *StateObject) Sync() {
 
 		self.setAddr([]byte(key), value)
 	}
-
-	/*
-		valid, t2 := trie.ParanoiaCheck(self.State.trie, ethutil.Config.Db)
-		if !valid {
-			statelogger.Infof("Warn: PARANOIA: Different state storage root during copy %x vs %x\n", self.State.Root(), t2.Root())
-
-			self.State.trie = t2
-		}
-	*/
 }
 
 func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
@@ -300,7 +293,6 @@ func (c *StateObject) CodeHash() ethutil.Bytes {
 
 func (c *StateObject) RlpDecode(data []byte) {
 	decoder := ethutil.NewValueFromBytes(data)
-
 	c.Nonce = decoder.Get(0).Uint()
 	c.balance = decoder.Get(1).BigInt()
 	c.State = New(decoder.Get(2).Bytes(), c.db) //New(trie.New(ethutil.Config.Db, decoder.Get(2).Interface()))

@@ -1,3 +1,4 @@
+// QWhisper package. This package is temporarily on hold until QML DApp dev will reemerge.
 package qwhisper
 
 import (
@@ -7,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/whisper"
-	"gopkg.in/qml.v1"
+	"github.com/obscuren/qml"
 )
 
 var qlogger = logger.NewLogger("QSHH")
@@ -105,7 +106,7 @@ func (self *Whisper) Messages(id int) (messages *ethutil.List) {
 
 func filterFromMap(opts map[string]interface{}) (f whisper.Filter) {
 	if to, ok := opts["to"].(string); ok {
-		f.To = crypto.ToECDSA(fromHex(to))
+		f.To = crypto.ToECDSAPub(fromHex(to))
 	}
 	if from, ok := opts["from"].(string); ok {
 		f.From = crypto.ToECDSAPub(fromHex(from))

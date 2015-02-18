@@ -15,3 +15,8 @@
 .#*
 *#
 *~
+.project
+.settings
+
+cmd/ethereum/ethereum
+cmd/mist/mist

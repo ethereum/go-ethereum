@@ -40,6 +40,8 @@ func (e *encodableReader) Read(b []byte) (int, error) {
 	panic("called")
 }
 
+type namedByteType byte
+
 var (
 	_ = Encoder(&testEncoder{})
 	_ = Encoder(byteEncoder(0))
@@ -102,6 +104,10 @@ var encTests = []encTest{
 	// byte slices, strings
 	{val: []byte{}, output: "80"},
 	{val: []byte{1, 2, 3}, output: "83010203"},
+
+	{val: []namedByteType{1, 2, 3}, output: "83010203"},
+	{val: [...]namedByteType{1, 2, 3}, output: "83010203"},
+
 	{val: "", output: "80"},
 	{val: "dog", output: "83646F67"},
 	{
@@ -176,6 +182,15 @@ var encTests = []encTest{
 	{val: simplestruct{A: 3, B: "foo"}, output: "C50383666F6F"},
 	{val: &recstruct{5, nil}, output: "C205C0"},
 	{val: &recstruct{5, &recstruct{4, &recstruct{3, nil}}}, output: "C605C404C203C0"},
+
+	// flat
+	{val: Flat(uint(1)), error: "rlp.Flat: uint did not encode as list"},
+	{val: Flat(simplestruct{A: 3, B: "foo"}), output: "0383666F6F"},
+	{
+		// value generates more list headers after the Flat
+		val:    []interface{}{"foo", []uint{1, 2}, Flat([]uint{3, 4}), []uint{5, 6}, "bar"},
+		output: "D083666F6FC201020304C2050683626172",
+	},
 
 	// nil
 	{val: (*uint)(nil), output: "80"},

@@ -16,6 +16,11 @@ import (
 
 var chainlogger = logger.NewLogger("CHAIN")
 
+type ChainEvent struct {
+	Block *types.Block
+	Td    *big.Int
+}
+
 type StateQuery interface {
 	GetAccount(addr []byte) *state.StateObject
 }
@@ -73,11 +78,11 @@ type ChainManager struct {
 	eventMux     *event.TypeMux
 	genesisBlock *types.Block
 	// Last known total difficulty
-	mu              sync.RWMutex
-	td              *big.Int
-	lastBlockNumber uint64
-	currentBlock    *types.Block
-	lastBlockHash   []byte
+	mu            sync.RWMutex
+	tsmu          sync.RWMutex
+	td            *big.Int
+	currentBlock  *types.Block
+	lastBlockHash []byte
 
 	transState *state.StateDB
 }
@@ -87,13 +92,6 @@ func (self *ChainManager) Td() *big.Int {
 	defer self.mu.RUnlock()
 
 	return self.td
-}
-
-func (self *ChainManager) LastBlockNumber() uint64 {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-
-	return self.lastBlockNumber
 }
 
 func (self *ChainManager) LastBlockHash() []byte {
@@ -134,7 +132,17 @@ func (self *ChainManager) State() *state.StateDB {
 }
 
 func (self *ChainManager) TransState() *state.StateDB {
+	self.tsmu.RLock()
+	defer self.tsmu.RUnlock()
+	//tmp := self.transState
+
 	return self.transState
+}
+
+func (self *ChainManager) setTransState(statedb *state.StateDB) {
+	self.tsmu.Lock()
+	defer self.tsmu.Unlock()
+	self.transState = statedb
 }
 
 func (bc *ChainManager) setLastBlock() {
@@ -144,7 +152,6 @@ func (bc *ChainManager) setLastBlock() {
 		rlp.Decode(bytes.NewReader(data), &block)
 		bc.currentBlock = &block
 		bc.lastBlockHash = block.Hash()
-		bc.lastBlockNumber = block.Header().Number.Uint64()
 
 		// Set the last know difficulty (might be 0x0 as initial value, Genesis)
 		bc.td = ethutil.BigD(bc.db.LastKnownTD())
@@ -152,7 +159,7 @@ func (bc *ChainManager) setLastBlock() {
 		bc.Reset()
 	}
 
-	chainlogger.Infof("Last block (#%d) %x TD=%v\n", bc.lastBlockNumber, bc.currentBlock.Hash(), bc.td)
+	chainlogger.Infof("Last block (#%v) %x TD=%v\n", bc.currentBlock.Number(), bc.currentBlock.Hash(), bc.td)
 }
 
 // Block creation & chain handling
@@ -163,7 +170,7 @@ func (bc *ChainManager) NewBlock(coinbase []byte) *types.Block {
 	var root []byte
 	parentHash := ZeroHash256
 
-	if bc.CurrentBlock != nil {
+	if bc.currentBlock != nil {
 		root = bc.currentBlock.Header().Root
 		parentHash = bc.lastBlockHash
 	}
@@ -175,6 +182,9 @@ func (bc *ChainManager) NewBlock(coinbase []byte) *types.Block {
 		ethutil.BigPow(2, 32),
 		nil,
 		"")
+	block.SetUncles(nil)
+	block.SetTransactions(nil)
+	block.SetReceipts(nil)
 
 	parent := bc.currentBlock
 	if parent != nil {
@@ -226,8 +236,6 @@ func (bc *ChainManager) insert(block *types.Block) {
 }
 
 func (bc *ChainManager) write(block *types.Block) {
-	bc.writeBlockInfo(block)
-
 	encodedBlock := ethutil.Encode(block.RlpDataForStorage())
 	bc.db.Put(block.Hash(), encodedBlock)
 }
@@ -251,7 +259,13 @@ func (self *ChainManager) GetBlockHashesFromHash(hash []byte, max uint64) (chain
 
 	// XXX Could be optimised by using a different database which only holds hashes (i.e., linked list)
 	for i := uint64(0); i < max; i++ {
-		block = self.GetBlock(block.Header().ParentHash)
+		parentHash := block.Header().ParentHash
+		block = self.GetBlock(parentHash)
+		if block == nil {
+			chainlogger.Infof("GetBlockHashesFromHash Parent UNKNOWN %x\n", parentHash)
+			break
+		}
+
 		chain = append(chain, block.Hash())
 		if block.Header().Number.Cmp(ethutil.Big0) <= 0 {
 			break
@@ -340,11 +354,6 @@ func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
 	return td, nil
 }
 
-// Unexported method for writing extra non-essential block info to the db
-func (bc *ChainManager) writeBlockInfo(block *types.Block) {
-	bc.lastBlockNumber++
-}
-
 func (bc *ChainManager) Stop() {
 	if bc.CurrentBlock != nil {
 		chainlogger.Infoln("Stopped")
@@ -353,7 +362,7 @@ func (bc *ChainManager) Stop() {
 
 func (self *ChainManager) InsertChain(chain types.Blocks) error {
 	for _, block := range chain {
-		td, messages, err := self.processor.Process(block)
+		td, err := self.processor.Process(block)
 		if err != nil {
 			if IsKnownBlockErr(err) {
 				continue
@@ -378,14 +387,12 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 
 				self.setTotalDifficulty(td)
 				self.insert(block)
-				self.transState = state.New(cblock.Root(), self.db) //state.New(cblock.Trie().Copy())
-			}
+				self.setTransState(state.New(cblock.Root(), self.db))
 
+				self.eventMux.Post(ChainEvent{block, td})
+			}
 		}
 		self.mu.Unlock()
-
-		self.eventMux.Post(NewBlockEvent{block})
-		self.eventMux.Post(messages)
 	}
 
 	return nil

@@ -1,11 +1,11 @@
 package ethdb
 
 import (
-	"fmt"
 	"path"
+	"fmt"
 
-	"github.com/ethereum/go-ethereum/compression/rle"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/compression/rle"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 )

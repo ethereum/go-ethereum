@@ -22,14 +22,12 @@
 package main
 
 import (
-	"fmt"
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
-	"gopkg.in/qml.v1"
+	"github.com/obscuren/qml"
 )
 
 type QmlApplication struct {
@@ -70,12 +68,8 @@ func (app *QmlApplication) NewWatcher(quitChan chan bool) {
 
 // Events
 func (app *QmlApplication) NewBlock(block *types.Block) {
-	pblock := &xeth.JSBlock{Number: int(block.NumberU64()), Hash: ethutil.Bytes2Hex(block.Hash())}
+	pblock := &xeth.Block{Number: int(block.NumberU64()), Hash: ethutil.Bytes2Hex(block.Hash())}
 	app.win.Call("onNewBlockCb", pblock)
-}
-
-func (self *QmlApplication) Messages(msgs state.Messages, id string) {
-	fmt.Println("IMPLEMENT QML APPLICATION MESSAGES METHOD")
 }
 
 // Getters

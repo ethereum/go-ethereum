@@ -24,7 +24,7 @@
 package crypto
 
 import (
-	"code.google.com/p/go-uuid/uuid"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -38,9 +38,10 @@ import (
 type KeyStore2 interface {
 	// create new key using io.Reader entropy source and optionally using auth string
 	GenerateNewKey(io.Reader, string) (*Key, error)
-	GetKey(*uuid.UUID, string) (*Key, error) // key from id and auth string
-	StoreKey(*Key, string) error             // store key optionally using auth string
-	DeleteKey(*uuid.UUID, string) error      // delete key by id and auth string
+	GetKey([]byte, string) (*Key, error) // key from addr and auth string
+	GetKeyAddresses() ([][]byte, error)  // get all addresses
+	StoreKey(*Key, string) error         // store key optionally using auth string
+	DeleteKey([]byte, string) error      // delete key by addr and auth string
 }
 
 type keyStorePlain struct {
@@ -72,8 +73,8 @@ func GenerateNewKeyDefault(ks KeyStore2, rand io.Reader, auth string) (key *Key,
 	return key, err
 }
 
-func (ks keyStorePlain) GetKey(keyId *uuid.UUID, auth string) (key *Key, err error) {
-	fileContent, err := GetKeyFile(ks.keysDirPath, keyId)
+func (ks keyStorePlain) GetKey(keyAddr []byte, auth string) (key *Key, err error) {
+	fileContent, err := GetKeyFile(ks.keysDirPath, keyAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -83,32 +84,50 @@ func (ks keyStorePlain) GetKey(keyId *uuid.UUID, auth string) (key *Key, err err
 	return key, err
 }
 
+func (ks keyStorePlain) GetKeyAddresses() (addresses [][]byte, err error) {
+	return GetKeyAddresses(ks.keysDirPath)
+}
+
 func (ks keyStorePlain) StoreKey(key *Key, auth string) (err error) {
 	keyJSON, err := json.Marshal(key)
 	if err != nil {
 		return err
 	}
-	err = WriteKeyFile(key.Id.String(), ks.keysDirPath, keyJSON)
+	err = WriteKeyFile(key.Address, ks.keysDirPath, keyJSON)
 	return err
 }
 
-func (ks keyStorePlain) DeleteKey(keyId *uuid.UUID, auth string) (err error) {
-	keyDirPath := path.Join(ks.keysDirPath, keyId.String())
+func (ks keyStorePlain) DeleteKey(keyAddr []byte, auth string) (err error) {
+	keyDirPath := path.Join(ks.keysDirPath, hex.EncodeToString(keyAddr))
 	err = os.RemoveAll(keyDirPath)
 	return err
 }
 
-func GetKeyFile(keysDirPath string, keyId *uuid.UUID) (fileContent []byte, err error) {
-	id := keyId.String()
-	return ioutil.ReadFile(path.Join(keysDirPath, id, id))
+func GetKeyFile(keysDirPath string, keyAddr []byte) (fileContent []byte, err error) {
+	fileName := hex.EncodeToString(keyAddr)
+	return ioutil.ReadFile(path.Join(keysDirPath, fileName, fileName))
 }
 
-func WriteKeyFile(id string, keysDirPath string, content []byte) (err error) {
-	keyDirPath := path.Join(keysDirPath, id)
-	keyFilePath := path.Join(keyDirPath, id)
+func WriteKeyFile(addr []byte, keysDirPath string, content []byte) (err error) {
+	addrHex := hex.EncodeToString(addr)
+	keyDirPath := path.Join(keysDirPath, addrHex)
+	keyFilePath := path.Join(keyDirPath, addrHex)
 	err = os.MkdirAll(keyDirPath, 0700) // read, write and dir search for user
 	if err != nil {
 		return err
 	}
 	return ioutil.WriteFile(keyFilePath, content, 0600) // read, write for user
+}
+
+func GetKeyAddresses(keysDirPath string) (addresses [][]byte, err error) {
+	fileInfos, err := ioutil.ReadDir(keysDirPath)
+	if err != nil {
+		return nil, err
+	}
+	addresses = make([][]byte, len(fileInfos))
+	for i, fileInfo := range fileInfos {
+		addresses[i] = make([]byte, 40)
+		addresses[i] = []byte(fileInfo.Name())
+	}
+	return addresses, err
 }
