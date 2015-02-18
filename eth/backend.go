@@ -160,7 +160,11 @@ func New(config *Config) (*Ethereum, error) {
 	eth.blockPool = NewBlockPool(hasBlock, insertChain, ezp.Verify)
 
 	ethProto := EthProtocol(eth.txPool, eth.chainManager, eth.blockPool)
-	protocols := []p2p.Protocol{ethProto, eth.whisper.Protocol()}
+	protocols := []p2p.Protocol{ethProto}
+	if config.Shh {
+		protocols = append(protocols, eth.whisper.Protocol())
+	}
+
 	netprv := config.NodeKey
 	if netprv == nil {
 		if netprv, err = crypto.GenerateKey(); err != nil {

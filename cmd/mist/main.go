@@ -60,6 +60,7 @@ func run() error {
 		MaxPeers:  MaxPeer,
 		Port:      OutboundPort,
 		NAT:       NAT,
+		Shh:       true,
 		BootNodes: BootNodes,
 		NodeKey:   NodeKey,
 		KeyRing:   KeyRing,

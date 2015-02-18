@@ -71,7 +71,7 @@ func main() {
 		Port:      OutboundPort,
 		NAT:       NAT,
 		KeyRing:   KeyRing,
-		Shh:       SHH,
+		Shh:       true,
 		Dial:      Dial,
 		BootNodes: BootNodes,
 		NodeKey:   NodeKey,

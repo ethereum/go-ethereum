@@ -132,7 +132,7 @@ func Init() {
 		natstr      = flag.String("nat", "any", "port mapping mechanism (any|none|upnp|pmp|extip:<IP>)")
 	)
 	flag.BoolVar(&Dial, "dial", true, "dial out connections (default on)")
-	flag.BoolVar(&SHH, "shh", true, "run whisper protocol (default on)")
+	//flag.BoolVar(&SHH, "shh", true, "run whisper protocol (default on)")
 	flag.StringVar(&OutboundPort, "port", "30303", "listening port")
 
 	flag.StringVar(&BootNodes, "bootnodes", "", "space-separated node URLs for discovery bootstrap")
