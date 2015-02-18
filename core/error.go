@@ -1,8 +1,14 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
+)
+
+var (
+	BlockNumberErr = errors.New("block number invalid")
+	BlockFutureErr = errors.New("block time is in the future")
 )
 
 // Parent error. In case a parent is unknown this error will be thrown
