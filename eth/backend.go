@@ -205,9 +205,7 @@ func (s *Ethereum) Coinbase() []byte                     { return nil } // TODO
 func (s *Ethereum) Start() error {
 	jsonlogger.LogJson(&ethlogger.LogStarting{
 		ClientString:    s.net.Name,
-		Coinbase:        ethutil.Bytes2Hex(s.KeyManager().Address()),
 		ProtocolVersion: ProtocolVersion,
-		LogEvent:        ethlogger.LogEvent{Guid: ethutil.Bytes2Hex(crypto.FromECDSAPub(&s.net.PrivateKey.PublicKey))},
 	})
 
 	err := s.net.Start()
