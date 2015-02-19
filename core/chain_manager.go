@@ -134,14 +134,11 @@ func (self *ChainManager) State() *state.StateDB {
 func (self *ChainManager) TransState() *state.StateDB {
 	self.tsmu.RLock()
 	defer self.tsmu.RUnlock()
-	//tmp := self.transState
 
 	return self.transState
 }
 
 func (self *ChainManager) setTransState(statedb *state.StateDB) {
-	self.tsmu.Lock()
-	defer self.tsmu.Unlock()
 	self.transState = statedb
 }
 
@@ -361,6 +358,9 @@ func (bc *ChainManager) Stop() {
 }
 
 func (self *ChainManager) InsertChain(chain types.Blocks) error {
+	self.tsmu.Lock()
+	defer self.tsmu.Unlock()
+
 	for _, block := range chain {
 		td, err := self.processor.Process(block)
 		if err != nil {
@@ -376,6 +376,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 		}
 		block.Td = td
 
+		var chain, split bool
 		self.mu.Lock()
 		{
 			self.write(block)
@@ -383,16 +384,26 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			if td.Cmp(self.td) > 0 {
 				if block.Header().Number.Cmp(new(big.Int).Add(cblock.Header().Number, ethutil.Big1)) < 0 {
 					chainlogger.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, block.Hash()[:4], td, cblock.Header().Number, cblock.Hash()[:4], self.td)
+					split = true
 				}
 
 				self.setTotalDifficulty(td)
 				self.insert(block)
-				self.setTransState(state.New(cblock.Root(), self.db))
 
-				self.eventMux.Post(ChainEvent{block, td})
+				chain = true
 			}
 		}
 		self.mu.Unlock()
+
+		if chain {
+			//self.setTransState(state.New(block.Root(), self.db))
+			self.eventMux.Post(ChainEvent{block, td})
+		}
+
+		if split {
+			self.setTransState(state.New(block.Root(), self.db))
+			self.eventMux.Post(ChainSplitEvent{block})
+		}
 	}
 
 	return nil
@@ -401,4 +412,8 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 // Satisfy state query interface
 func (self *ChainManager) GetAccount(addr []byte) *state.StateObject {
 	return self.State().GetAccount(addr)
+}
+
+func (self *ChainManager) TransMut() *sync.RWMutex {
+	return &self.tsmu
 }

@@ -53,6 +53,7 @@ type StateObject struct {
 	// When an object is marked for deletion it will be delete from the trie
 	// during the "update" phase of the state transition
 	remove bool
+	dirty  bool
 }
 
 func (self *StateObject) Reset() {
@@ -211,6 +212,8 @@ func (self *StateObject) BuyGas(gas, price *big.Int) error {
 		return GasLimitError(self.gasPool, gas)
 	}
 
+	self.gasPool.Sub(self.gasPool, gas)
+
 	rGas := new(big.Int).Set(gas)
 	rGas.Mul(rGas, price)
 
@@ -241,6 +244,7 @@ func (self *StateObject) Copy() *StateObject {
 	stateObject.storage = self.storage.Copy()
 	stateObject.gasPool.Set(self.gasPool)
 	stateObject.remove = self.remove
+	stateObject.dirty = self.dirty
 
 	return stateObject
 }

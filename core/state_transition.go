@@ -166,7 +166,8 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 	defer self.RefundGas()
 
 	// Increment the nonce for the next transaction
-	sender.Nonce += 1
+	self.state.SetNonce(sender.Address(), sender.Nonce+1)
+	//sender.Nonce += 1
 
 	// Transaction gas
 	if err = self.UseGas(vm.GasTx); err != nil {

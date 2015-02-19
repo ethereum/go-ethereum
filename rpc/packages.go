@@ -180,6 +180,7 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
 		result, _ := p.xeth.Transact( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
 		*reply = result
 	}
+
 	return nil
 }
 

@@ -7,6 +7,7 @@ package xeth
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -241,7 +242,6 @@ func (self *XEth) Call(toStr, valueStr, gasStr, gasPriceStr, dataStr string) (st
 }
 
 func (self *XEth) Transact(toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
-
 	var (
 		to               []byte
 		value            = ethutil.NewValue(valueStr)
@@ -265,28 +265,31 @@ func (self *XEth) Transact(toStr, valueStr, gasStr, gasPriceStr, codeStr string)
 		tx = types.NewTransactionMessage(to, value.BigInt(), gas.BigInt(), price.BigInt(), data)
 	}
 
-	state := self.chainManager.TransState()
+	var err error
+	state := self.eth.ChainManager().TransState()
+	if balance := state.GetBalance(key.Address()); balance.Cmp(tx.Value()) < 0 {
+		return "", fmt.Errorf("insufficient balance. balance=%v tx=%v", balance, tx.Value())
+	}
 	nonce := state.GetNonce(key.Address())
 
 	tx.SetNonce(nonce)
 	tx.Sign(key.PrivateKey)
 
-	// Do some pre processing for our "pre" events  and hooks
-	block := self.chainManager.NewBlock(key.Address())
-	coinbase := state.GetOrNewStateObject(key.Address())
-	coinbase.SetGasPool(block.GasLimit())
-	self.blockProcessor.ApplyTransactions(coinbase, state, block, types.Transactions{tx}, true)
+	//fmt.Printf("create tx: %x %v\n", tx.Hash()[:4], tx.Nonce())
 
-	err := self.eth.TxPool().Add(tx)
+	/*
+		// Do some pre processing for our "pre" events  and hooks
+		block := self.chainManager.NewBlock(key.Address())
+		coinbase := state.GetOrNewStateObject(key.Address())
+		coinbase.SetGasPool(block.GasLimit())
+		self.blockProcessor.ApplyTransactions(coinbase, state, block, types.Transactions{tx}, true)
+	*/
+
+	err = self.eth.TxPool().Add(tx)
 	if err != nil {
 		return "", err
 	}
 	state.SetNonce(key.Address(), nonce+1)
-
-	if contractCreation {
-		addr := core.AddressFromMessage(tx)
-		pipelogger.Infof("Contract addr %x\n", addr)
-	}
 
 	if types.IsContractAddr(to) {
 		return toHex(core.AddressFromMessage(tx)), nil

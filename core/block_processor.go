@@ -73,24 +73,27 @@ func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block 
 	return receipts, nil
 }
 
-func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, state *state.StateDB, block *types.Block, tx *types.Transaction, usedGas *big.Int, transientProcess bool) (*types.Receipt, *big.Int, error) {
+func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, statedb *state.StateDB, block *types.Block, tx *types.Transaction, usedGas *big.Int, transientProcess bool) (*types.Receipt, *big.Int, error) {
 	// If we are mining this block and validating we want to set the logs back to 0
-	state.EmptyLogs()
+	statedb.EmptyLogs()
 
 	txGas := new(big.Int).Set(tx.Gas())
 
-	cb := state.GetStateObject(coinbase.Address())
-	st := NewStateTransition(NewEnv(state, self.bc, tx, block), tx, cb)
+	cb := statedb.GetStateObject(coinbase.Address())
+	st := NewStateTransition(NewEnv(statedb, self.bc, tx, block), tx, cb)
 	_, err := st.TransitionState()
+	if err != nil && (IsNonceErr(err) || state.IsGasLimitErr(err)) {
+		return nil, nil, err
+	}
 
 	txGas.Sub(txGas, st.gas)
 
 	// Update the state with pending changes
-	state.Update(txGas)
+	statedb.Update(txGas)
 
 	cumulative := new(big.Int).Set(usedGas.Add(usedGas, txGas))
-	receipt := types.NewReceipt(state.Root(), cumulative)
-	receipt.SetLogs(state.Logs())
+	receipt := types.NewReceipt(statedb.Root(), cumulative)
+	receipt.SetLogs(statedb.Logs())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 	chainlogger.Debugln(receipt)
 
@@ -99,12 +102,12 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, state 
 		go self.eventMux.Post(TxPostEvent{tx})
 	}
 
-	go self.eventMux.Post(state.Logs())
+	go self.eventMux.Post(statedb.Logs())
 
 	return receipt, txGas, err
 }
 
-func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state *state.StateDB, block *types.Block, txs types.Transactions, transientProcess bool) (types.Receipts, types.Transactions, types.Transactions, types.Transactions, error) {
+func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, statedb *state.StateDB, block *types.Block, txs types.Transactions, transientProcess bool) (types.Receipts, types.Transactions, types.Transactions, types.Transactions, error) {
 	var (
 		receipts           types.Receipts
 		handled, unhandled types.Transactions
@@ -115,12 +118,12 @@ func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state
 	)
 
 	for _, tx := range txs {
-		receipt, txGas, err := self.ApplyTransaction(coinbase, state, block, tx, totalUsedGas, transientProcess)
+		receipt, txGas, err := self.ApplyTransaction(coinbase, statedb, block, tx, totalUsedGas, transientProcess)
 		if err != nil {
 			switch {
 			case IsNonceErr(err):
 				return nil, nil, nil, nil, err
-			case IsGasLimitErr(err):
+			case state.IsGasLimitErr(err):
 				return nil, nil, nil, nil, err
 			default:
 				statelogger.Infoln(err)
