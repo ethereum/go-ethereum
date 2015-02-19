@@ -231,21 +231,6 @@ func (req *RpcRequest) ToFilterStringArgs() (string, error) {
 	return args, nil
 }
 
-func (req *RpcRequest) ToFilterChangedArgs() (int, error) {
-	if len(req.Params) < 1 {
-		return 0, NewErrorResponse(ErrorArguments)
-	}
-
-	var id int
-	r := bytes.NewReader(req.Params[0])
-	err := json.NewDecoder(r).Decode(&id)
-	if err != nil {
-		return 0, NewErrorResponse(ErrorDecodeArgs)
-	}
-	rpclogger.DebugDetailf("%T %v", id, id)
-	return id, nil
-}
-
 func (req *RpcRequest) ToDbPutArgs() (*DbArgs, error) {
 	if len(req.Params) < 3 {
 		return nil, NewErrorResponse(ErrorArguments)
@@ -301,7 +286,7 @@ func (req *RpcRequest) ToWhisperFilterArgs() (*xeth.Options, error) {
 	return &args, nil
 }
 
-func (req *RpcRequest) ToWhisperIdArgs() (int, error) {
+func (req *RpcRequest) ToIdArgs() (int, error) {
 	if len(req.Params) < 1 {
 		return 0, NewErrorResponse(ErrorArguments)
 	}

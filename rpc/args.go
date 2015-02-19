@@ -289,7 +289,7 @@ type WhisperMessageArgs struct {
 	Payload  string
 	To       string
 	From     string
-	Topics   []string
+	Topic    []string
 	Priority uint32
 	Ttl      uint32
 }

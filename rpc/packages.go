@@ -349,7 +349,7 @@ func (self *EthereumApi) MessagesChanged(id int, reply *interface{}) error {
 }
 
 func (p *EthereumApi) WhisperPost(args *WhisperMessageArgs, reply *interface{}) error {
-	err := p.xeth.Whisper().Post(args.Payload, args.To, args.From, args.Topics, args.Priority, args.Ttl)
+	err := p.xeth.Whisper().Post(args.Payload, args.To, args.From, args.Topic, args.Priority, args.Ttl)
 	if err != nil {
 		return err
 	}
@@ -445,13 +445,13 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		return p.NewFilterString(args, reply)
 	case "eth_changed":
-		args, err := req.ToFilterChangedArgs()
+		args, err := req.ToIdArgs()
 		if err != nil {
 			return err
 		}
 		return p.FilterChanged(args, reply)
 	case "eth_filterLogs":
-		args, err := req.ToFilterChangedArgs()
+		args, err := req.ToIdArgs()
 		if err != nil {
 			return err
 		}
@@ -504,7 +504,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		return p.NewWhisperFilter(args, reply)
 	case "shh_changed":
-		args, err := req.ToWhisperIdArgs()
+		args, err := req.ToIdArgs()
 		if err != nil {
 			return err
 		}
@@ -522,7 +522,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		return p.HasWhisperIdentity(args, reply)
 	case "shh_getMessages":
-		args, err := req.ToWhisperIdArgs()
+		args, err := req.ToIdArgs()
 		if err != nil {
 			return err
 		}
