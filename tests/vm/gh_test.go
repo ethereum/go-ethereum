@@ -24,7 +24,7 @@ type Account struct {
 type Log struct {
 	AddressF string   `json:"address"`
 	DataF    string   `json:"data"`
-	TopicsF  []string `json:"topics"`
+	TopicsF  []string `json:"topic"`
 	BloomF   string   `json:"bloom"`
 }
 

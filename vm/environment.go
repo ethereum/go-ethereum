@@ -52,7 +52,7 @@ func Transfer(from, to Account, amount *big.Int) error {
 
 type Log struct {
 	address []byte
-	topics  [][]byte
+	topic  [][]byte
 	data    []byte
 }
 
@@ -61,7 +61,7 @@ func (self *Log) Address() []byte {
 }
 
 func (self *Log) Topics() [][]byte {
-	return self.topics
+	return self.topic
 }
 
 func (self *Log) Data() []byte {
@@ -69,9 +69,9 @@ func (self *Log) Data() []byte {
 }
 
 func (self *Log) RlpData() interface{} {
-	return []interface{}{self.address, ethutil.ByteSliceToInterface(self.topics), self.data}
+	return []interface{}{self.address, ethutil.ByteSliceToInterface(self.topic), self.data}
 }
 
 func (self *Log) String() string {
-	return fmt.Sprintf("[A=%x T=%x D=%x]", self.address, self.topics, self.data)
+	return fmt.Sprintf("[A=%x T=%x D=%x]", self.address, self.topic, self.data)
 }

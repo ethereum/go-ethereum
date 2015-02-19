@@ -344,21 +344,21 @@ func env_log(_vm unsafe.Pointer, dataPtr unsafe.Pointer, dataLen uint64, _topic1
 
 	data := C.GoBytes(dataPtr, C.int(dataLen))
 
-	topics := make([][]byte, 0, 4)
+	topic := make([][]byte, 0, 4)
 	if _topic1 != nil {
-		topics = append(topics, llvm2hash((*i256)(_topic1)))
+		topic = append(topic, llvm2hash((*i256)(_topic1)))
 	}
 	if _topic2 != nil {
-		topics = append(topics, llvm2hash((*i256)(_topic2)))
+		topic = append(topic, llvm2hash((*i256)(_topic2)))
 	}
 	if _topic3 != nil {
-		topics = append(topics, llvm2hash((*i256)(_topic3)))
+		topic = append(topic, llvm2hash((*i256)(_topic3)))
 	}
 	if _topic4 != nil {
-		topics = append(topics, llvm2hash((*i256)(_topic4)))
+		topic = append(topic, llvm2hash((*i256)(_topic4)))
 	}
 
-	vm.Env().AddLog(state.NewLog(vm.me.Address(), topics, data))
+	vm.Env().AddLog(state.NewLog(vm.me.Address(), topic, data))
 }
 
 //export env_extcode
