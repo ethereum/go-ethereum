@@ -105,6 +105,13 @@ func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) erro
 	return nil
 }
 
+func (self *EthereumApi) UninstallFilter(id int, reply *interface{}) error {
+	delete(self.logs, id)
+	self.filterManager.UninstallFilter(id)
+	*reply = true
+	return nil
+}
+
 func (self *EthereumApi) NewFilterString(args string, reply *interface{}) error {
 	var id int
 	filter := core.NewFilter(self.xeth.Backend())
@@ -444,6 +451,12 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.NewFilterString(args, reply)
+	case "eth_uninstallFilter":
+		args, err := req.ToUninstallFilterArgs()
+		if err != nil {
+			return err
+		}
+		return p.UninstallFilter(args, reply)
 	case "eth_changed":
 		args, err := req.ToFilterChangedArgs()
 		if err != nil {

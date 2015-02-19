@@ -231,6 +231,21 @@ func (req *RpcRequest) ToFilterStringArgs() (string, error) {
 	return args, nil
 }
 
+func (req *RpcRequest) ToUninstallFilterArgs() (int, error) {
+	if len(req.Params) < 1 {
+		return 0, NewErrorResponse(ErrorArguments)
+	}
+
+	var args int
+	err := json.Unmarshal(req.Params[0], &args)
+	if err != nil {
+		return 0, NewErrorResponse(ErrorDecodeArgs)
+	}
+
+	rpclogger.DebugDetailf("%T %v", args, args)
+	return args, nil
+}
+
 func (req *RpcRequest) ToFilterChangedArgs() (int, error) {
 	if len(req.Params) < 1 {
 		return 0, NewErrorResponse(ErrorArguments)
