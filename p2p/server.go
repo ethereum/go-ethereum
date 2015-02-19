@@ -160,7 +160,7 @@ func (srv *Server) Start() (err error) {
 	}
 	srvlog.Infoln("Starting Server")
 
-	// initialize all the fields
+	// static fields
 	if srv.PrivateKey == nil {
 		return fmt.Errorf("Server.PrivateKey must be set to a non-nil key")
 	}
@@ -170,31 +170,32 @@ func (srv *Server) Start() (err error) {
 	srv.quit = make(chan struct{})
 	srv.peers = make(map[discover.NodeID]*Peer)
 	srv.peerConnect = make(chan *discover.Node)
-
 	if srv.setupFunc == nil {
 		srv.setupFunc = setupConn
 	}
 	if srv.Blacklist == nil {
 		srv.Blacklist = NewBlacklist()
 	}
-	if srv.ListenAddr != "" {
-		if err := srv.startListening(); err != nil {
-			return err
-		}
-	}
 
-	// dial stuff
+	// node table
 	ntab, err := discover.ListenUDP(srv.PrivateKey, srv.ListenAddr, srv.NAT)
 	if err != nil {
 		return err
 	}
 	srv.ntab = ntab
 
+	// handshake
 	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: ntab.Self()}
 	for _, p := range srv.Protocols {
 		srv.ourHandshake.Caps = append(srv.ourHandshake.Caps, p.cap())
 	}
 
+	// listen/dial
+	if srv.ListenAddr != "" {
+		if err := srv.startListening(); err != nil {
+			return err
+		}
+	}
 	if srv.Dialer == nil {
 		srv.Dialer = &net.Dialer{Timeout: defaultDialTimeout}
 	}
