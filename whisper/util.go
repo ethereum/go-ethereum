@@ -8,7 +8,7 @@ func hashTopic(topic []byte) []byte {
 
 // NOTE this isn't DRY, but I don't want to iterate twice.
 
-// Returns a formatted topics byte slice.
+// Returns a formatted topic byte slice.
 // data: unformatted data (e.g., no hashes needed)
 func Topics(data [][]byte) [][]byte {
 	d := make([][]byte, len(data))

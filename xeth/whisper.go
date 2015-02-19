@@ -19,7 +19,7 @@ func NewWhisper(w *whisper.Whisper) *Whisper {
 	return &Whisper{w}
 }
 
-func (self *Whisper) Post(payload string, to, from string, topics []string, priority, ttl uint32) error {
+func (self *Whisper) Post(payload string, to, from string, topic []string, priority, ttl uint32) error {
 	if priority == 0 {
 		priority = 1000
 	}
@@ -35,7 +35,7 @@ func (self *Whisper) Post(payload string, to, from string, topics []string, prio
 			Ttl:    time.Duration(ttl) * time.Second,
 			To:     crypto.ToECDSAPub(fromHex(to)),
 			From:   key,
-			Topics: whisper.TopicsFromString(topics...),
+			Topics: whisper.TopicsFromString(topic...),
 		})
 
 		if err != nil {

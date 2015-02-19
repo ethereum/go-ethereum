@@ -16,12 +16,12 @@ type Log interface {
 
 type StateLog struct {
 	address []byte
-	topics  [][]byte
+	topic  [][]byte
 	data    []byte
 }
 
-func NewLog(address []byte, topics [][]byte, data []byte) *StateLog {
-	return &StateLog{address, topics, data}
+func NewLog(address []byte, topic [][]byte, data []byte) *StateLog {
+	return &StateLog{address, topic, data}
 }
 
 func (self *StateLog) Address() []byte {
@@ -29,7 +29,7 @@ func (self *StateLog) Address() []byte {
 }
 
 func (self *StateLog) Topics() [][]byte {
-	return self.topics
+	return self.topic
 }
 
 func (self *StateLog) Data() []byte {
@@ -44,18 +44,18 @@ func NewLogFromValue(decoder *ethutil.Value) *StateLog {
 
 	it := decoder.Get(1).NewIterator()
 	for it.Next() {
-		log.topics = append(log.topics, it.Value().Bytes())
+		log.topic = append(log.topic, it.Value().Bytes())
 	}
 
 	return log
 }
 
 func (self *StateLog) RlpData() interface{} {
-	return []interface{}{self.address, ethutil.ByteSliceToInterface(self.topics), self.data}
+	return []interface{}{self.address, ethutil.ByteSliceToInterface(self.topic), self.data}
 }
 
 func (self *StateLog) String() string {
-	return fmt.Sprintf(`log: %x %x %x`, self.address, self.topics, self.data)
+	return fmt.Sprintf(`log: %x %x %x`, self.address, self.topic, self.data)
 }
 
 type Logs []Log
