@@ -24,6 +24,7 @@ var web3 = require('./web3');
 var abi = require('./abi');
 var utils = require('./utils');
 var eventImpl = require('./event');
+var filter = require('./filter');
 
 var exportNatspecGlobals = function (vars) {
     // it's used byt natspec.js
@@ -145,11 +146,11 @@ var addEventsToContract = function (contract, desc, address) {
             var signature = abi.eventSignatureFromAscii(e.name);
             var event = eventImpl.inputParser(address, signature, e);
             var o = event.apply(null, params);
-            o._onWatchEventResult = function (data) {
+            var outputFormatter = function (data) {
                 var parser = eventImpl.outputParser(e);
                 return parser(data);
             };
-            return web3.eth.watch(o);  
+            return web3.eth.watch(o, undefined, undefined, outputFormatter);
         };
         
         // this property should be used by eth.filter to check if object is an event

@@ -80,7 +80,7 @@ type RpcServer interface {
 
 type Log struct {
 	Address string   `json:"address"`
-	Topics  []string `json:"topics"`
+	Topics  []string `json:"topic"`
 	Data    string   `json:"data"`
 }
 

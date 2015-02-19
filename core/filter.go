@@ -31,7 +31,7 @@ type Filter struct {
 	skip     int
 	address  [][]byte
 	max      int
-	topics   [][]byte
+	topic   [][]byte
 
 	BlockCallback   func(*types.Block)
 	PendingCallback func(*types.Block)
@@ -50,7 +50,7 @@ func (self *Filter) SetOptions(options FilterOptions) {
 	self.skip = options.Skip
 	self.max = options.Max
 	self.address = options.Address
-	self.topics = options.Topics
+	self.topic = options.Topics
 
 }
 
@@ -69,8 +69,8 @@ func (self *Filter) SetAddress(addr [][]byte) {
 	self.address = addr
 }
 
-func (self *Filter) SetTopics(topics [][]byte) {
-	self.topics = topics
+func (self *Filter) SetTopics(topic [][]byte) {
+	self.topic = topic
 }
 
 func (self *Filter) SetMax(max int) {
@@ -150,9 +150,9 @@ Logs:
 			continue
 		}
 
-		max := int(math.Min(float64(len(self.topics)), float64(len(log.Topics()))))
+		max := int(math.Min(float64(len(self.topic)), float64(len(log.Topics()))))
 		for i := 0; i < max; i++ {
-			if !bytes.Equal(log.Topics()[i], self.topics[i]) {
+			if !bytes.Equal(log.Topics()[i], self.topic[i]) {
 				continue Logs
 			}
 		}
@@ -178,7 +178,7 @@ func (self *Filter) bloomFilter(block *types.Block) bool {
 		}
 	}
 
-	for _, topic := range self.topics {
+	for _, topic := range self.topic {
 		if !types.BloomLookup(block.Bloom(), topic) {
 			return false
 		}
