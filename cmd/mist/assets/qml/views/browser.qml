@@ -3,7 +3,7 @@ import QtQuick.Controls 1.0;
 import QtQuick.Controls.Styles 1.0
 import QtQuick.Layouts 1.0;
 import QtWebEngine 1.0
-//import QtWebEngine.experimental 1.0
+import QtWebEngine.experimental 1.0
 import QtQuick.Window 2.0;
 
 Rectangle {
@@ -340,7 +340,7 @@ Rectangle {
 		WebEngineView {
 			objectName: "webView"
 			id: webview
-			//experimental.settings.javascriptCanAccessClipboard: true
+			experimental.settings.javascriptCanAccessClipboard: true
 			//experimental.settings.localContentCanAccessRemoteUrls: true
 			anchors {
 				left: parent.left
@@ -399,7 +399,8 @@ Rectangle {
 			
 			onLoadingChanged: {
 				if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
-					webview.runJavaScript("document.title", function(pageTitle) {
+				
+                	webview.runJavaScript("document.title", function(pageTitle) {
 						menuItem.title = pageTitle;	
 					});
 
@@ -441,7 +442,8 @@ Rectangle {
 
 					webview.runJavaScript(eth.readFile("bignumber.min.js"));
                     webview.runJavaScript(eth.readFile("ethereum.js/dist/ethereum.js"));
-
+                    webview.runJavaScript(eth.readFile("mist.js"));
+                    
 					var cleanTitle = webview.url.toString()
 					var matches = cleanTitle.match(/^[a-z]*\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
 					var domain = matches && matches[1];
