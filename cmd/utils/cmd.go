@@ -225,7 +225,7 @@ func StartMining(ethereum *eth.Ethereum) bool {
 		go func() {
 			clilogger.Infoln("Start mining")
 			if gminer == nil {
-				gminer = miner.New(addr, ethereum)
+				gminer = miner.New(addr, ethereum, 4)
 			}
 			gminer.Start()
 		}()
