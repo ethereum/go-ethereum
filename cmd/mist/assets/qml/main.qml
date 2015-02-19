@@ -131,7 +131,11 @@ ApplicationWindow {
                 var existingDomain = matches && matches[1];
                 if (requestedDomain == existingDomain) {
                     domainAlreadyOpen = true;
-                    mainSplit.views[i].view.url = url;
+                    
+                    if (mainSplit.views[i].view.url != url){
+                        mainSplit.views[i].view.url = url;
+                    }
+                    
                     activeView(mainSplit.views[i].view, mainSplit.views[i].menuItem);
                 }
             }
@@ -928,7 +932,8 @@ ApplicationWindow {
                      model: peerModel
                      TableViewColumn{width: 180; role: "addr" ; title: "Remote Address" }
                      TableViewColumn{width: 280; role: "nodeID" ; title: "Node ID" }
-                     TableViewColumn{width: 180; role: "caps" ; title: "Capabilities" }
+                     TableViewColumn{width: 100; role: "name" ; title: "Name" }
+                     TableViewColumn{width: 40; role: "caps" ; title: "Capabilities" }
                  }
              }
          }

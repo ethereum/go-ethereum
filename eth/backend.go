@@ -53,6 +53,8 @@ type Config struct {
 	Shh  bool
 	Dial bool
 
+	MinerThreads int
+
 	KeyManager *crypto.KeyManager
 }
 
@@ -153,7 +155,7 @@ func New(config *Config) (*Ethereum, error) {
 	eth.blockProcessor = core.NewBlockProcessor(db, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
 	eth.whisper = whisper.New()
-	eth.miner = miner.New(keyManager.Address(), eth)
+	eth.miner = miner.New(keyManager.Address(), eth, config.MinerThreads)
 
 	hasBlock := eth.chainManager.HasBlock
 	insertChain := eth.chainManager.InsertChain
@@ -209,9 +211,7 @@ func (s *Ethereum) Coinbase() []byte                     { return nil } // TODO
 func (s *Ethereum) Start() error {
 	jsonlogger.LogJson(&ethlogger.LogStarting{
 		ClientString:    s.net.Name,
-		Coinbase:        ethutil.Bytes2Hex(s.KeyManager().Address()),
 		ProtocolVersion: ProtocolVersion,
-		LogEvent:        ethlogger.LogEvent{Guid: ethutil.Bytes2Hex(crypto.FromECDSAPub(&s.net.PrivateKey.PublicKey))},
 	})
 
 	err := s.net.Start()

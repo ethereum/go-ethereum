@@ -453,7 +453,7 @@ NumGC:      %d
 	))
 }
 
-type qmlpeer struct{ Addr, NodeID, Caps string }
+type qmlpeer struct{ Addr, NodeID, Name, Caps string }
 
 type peersByID []*qmlpeer
 
@@ -468,6 +468,7 @@ func (gui *Gui) setPeerInfo() {
 		qpeers[i] = &qmlpeer{
 			NodeID: p.ID().String(),
 			Addr:   p.RemoteAddr().String(),
+			Name:   p.Name(),
 			Caps:   fmt.Sprint(p.Caps()),
 		}
 	}

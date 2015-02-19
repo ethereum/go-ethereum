@@ -1,20 +1,19 @@
 package p2p
 
 import (
-	// "binary"
 	"crypto/ecdsa"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
-	ethlogger "github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/rlp"
 )
-
-var clogger = ethlogger.NewLogger("CRYPTOID")
 
 const (
 	sskLen = 16 // ecies.MaxSharedKeyLength(pubKey) / 2
@@ -30,26 +29,76 @@ const (
 	rHSLen     = authRespLen + eciesBytes // size of the final ECIES payload sent as receiver's handshake
 )
 
-type hexkey []byte
-
-func (self hexkey) String() string {
-	return fmt.Sprintf("(%d) %x", len(self), []byte(self))
+type conn struct {
+	*frameRW
+	*protoHandshake
 }
 
-func encHandshake(conn io.ReadWriter, prv *ecdsa.PrivateKey, dial *discover.Node) (
-	remoteID discover.NodeID,
-	sessionToken []byte,
-	err error,
-) {
+func newConn(fd net.Conn, hs *protoHandshake) *conn {
+	return &conn{newFrameRW(fd, msgWriteTimeout), hs}
+}
+
+// encHandshake represents information about the remote end
+// of a connection that is negotiated during the encryption handshake.
+type encHandshake struct {
+	ID         discover.NodeID
+	IngressMAC []byte
+	EgressMAC  []byte
+	Token      []byte
+}
+
+// protoHandshake is the RLP structure of the protocol handshake.
+type protoHandshake struct {
+	Version    uint64
+	Name       string
+	Caps       []Cap
+	ListenPort uint64
+	ID         discover.NodeID
+}
+
+// setupConn starts a protocol session on the given connection.
+// It runs the encryption handshake and the protocol handshake.
+// If dial is non-nil, the connection the local node is the initiator.
+func setupConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, dial *discover.Node) (*conn, error) {
 	if dial == nil {
-		var remotePubkey []byte
-		sessionToken, remotePubkey, err = inboundEncHandshake(conn, prv, nil)
-		copy(remoteID[:], remotePubkey)
+		return setupInboundConn(fd, prv, our)
 	} else {
-		remoteID = dial.ID
-		sessionToken, err = outboundEncHandshake(conn, prv, remoteID[:], nil)
+		return setupOutboundConn(fd, prv, our, dial)
 	}
-	return remoteID, sessionToken, err
+}
+
+func setupInboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake) (*conn, error) {
+	// var remotePubkey []byte
+	// sessionToken, remotePubkey, err = inboundEncHandshake(fd, prv, nil)
+	// copy(remoteID[:], remotePubkey)
+
+	rw := newFrameRW(fd, msgWriteTimeout)
+	rhs, err := readProtocolHandshake(rw, our)
+	if err != nil {
+		return nil, err
+	}
+	if err := writeProtocolHandshake(rw, our); err != nil {
+		return nil, fmt.Errorf("protocol write error: %v", err)
+	}
+	return &conn{rw, rhs}, nil
+}
+
+func setupOutboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, dial *discover.Node) (*conn, error) {
+	// remoteID = dial.ID
+	// sessionToken, err = outboundEncHandshake(fd, prv, remoteID[:], nil)
+
+	rw := newFrameRW(fd, msgWriteTimeout)
+	if err := writeProtocolHandshake(rw, our); err != nil {
+		return nil, fmt.Errorf("protocol write error: %v", err)
+	}
+	rhs, err := readProtocolHandshake(rw, our)
+	if err != nil {
+		return nil, fmt.Errorf("protocol handshake read error: %v", err)
+	}
+	if rhs.ID != dial.ID {
+		return nil, errors.New("dialed node id mismatch")
+	}
+	return &conn{rw, rhs}, nil
 }
 
 // outboundEncHandshake negotiates a session token on conn.
@@ -66,18 +115,9 @@ func outboundEncHandshake(conn io.ReadWriter, prvKey *ecdsa.PrivateKey, remotePu
 	if err != nil {
 		return nil, err
 	}
-	if sessionToken != nil {
-		clogger.Debugf("session-token: %v", hexkey(sessionToken))
-	}
-
-	clogger.Debugf("initiator-nonce: %v", hexkey(initNonce))
-	clogger.Debugf("initiator-random-private-key: %v", hexkey(crypto.FromECDSA(randomPrivKey)))
-	randomPublicKeyS, _ := exportPublicKey(&randomPrivKey.PublicKey)
-	clogger.Debugf("initiator-random-public-key: %v", hexkey(randomPublicKeyS))
 	if _, err = conn.Write(auth); err != nil {
 		return nil, err
 	}
-	clogger.Debugf("initiator handshake: %v", hexkey(auth))
 
 	response := make([]byte, rHSLen)
 	if _, err = io.ReadFull(conn, response); err != nil {
@@ -88,9 +128,6 @@ func outboundEncHandshake(conn io.ReadWriter, prvKey *ecdsa.PrivateKey, remotePu
 		return nil, err
 	}
 
-	clogger.Debugf("receiver-nonce: %v", hexkey(recNonce))
-	remoteRandomPubKeyS, _ := exportPublicKey(remoteRandomPubKey)
-	clogger.Debugf("receiver-random-public-key: %v", hexkey(remoteRandomPubKeyS))
 	return newSession(initNonce, recNonce, randomPrivKey, remoteRandomPubKey)
 }
 
@@ -221,12 +258,9 @@ func inboundEncHandshake(conn io.ReadWriter, prvKey *ecdsa.PrivateKey, sessionTo
 	if err != nil {
 		return nil, nil, err
 	}
-	clogger.Debugf("receiver-nonce: %v", hexkey(recNonce))
-	clogger.Debugf("receiver-random-priv-key: %v", hexkey(crypto.FromECDSA(randomPrivKey)))
 	if _, err = conn.Write(response); err != nil {
 		return nil, nil, err
 	}
-	clogger.Debugf("receiver handshake:\n%v", hexkey(response))
 	token, err = newSession(initNonce, recNonce, randomPrivKey, remoteRandomPubKey)
 	return token, remotePubKey, err
 }
@@ -360,4 +394,41 @@ func xor(one, other []byte) (xor []byte) {
 		xor[i] = one[i] ^ other[i]
 	}
 	return xor
+}
+
+func writeProtocolHandshake(w MsgWriter, our *protoHandshake) error {
+	return EncodeMsg(w, handshakeMsg, our.Version, our.Name, our.Caps, our.ListenPort, our.ID[:])
+}
+
+func readProtocolHandshake(r MsgReader, our *protoHandshake) (*protoHandshake, error) {
+	// read and handle remote handshake
+	msg, err := r.ReadMsg()
+	if err != nil {
+		return nil, err
+	}
+	if msg.Code == discMsg {
+		// disconnect before protocol handshake is valid according to the
+		// spec and we send it ourself if Server.addPeer fails.
+		var reason DiscReason
+		rlp.Decode(msg.Payload, &reason)
+		return nil, discRequestedError(reason)
+	}
+	if msg.Code != handshakeMsg {
+		return nil, fmt.Errorf("expected handshake, got %x", msg.Code)
+	}
+	if msg.Size > baseProtocolMaxMsgSize {
+		return nil, fmt.Errorf("message too big (%d > %d)", msg.Size, baseProtocolMaxMsgSize)
+	}
+	var hs protoHandshake
+	if err := msg.Decode(&hs); err != nil {
+		return nil, err
+	}
+	// validate handshake info
+	if hs.Version != our.Version {
+		return nil, newPeerError(errP2PVersionMismatch, "required version %d, received %d\n", baseProtocolVersion, hs.Version)
+	}
+	if (hs.ID == discover.NodeID{}) {
+		return nil, newPeerError(errPubkeyInvalid, "missing")
+	}
+	return &hs, nil
 }
