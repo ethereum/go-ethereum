@@ -266,7 +266,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			base.Sub(Pow256, stack.Pop()).Sub(base, ethutil.Big1)
 
 			// Not needed
-			//base = U256(base)
+			base = U256(base)
 
 			stack.Push(base)
 		case LT:
@@ -532,7 +532,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 		case NUMBER:
 			number := self.env.BlockNumber()
 
-			stack.Push(number)
+			stack.Push(U256(number))
 
 			self.Printf(" => 0x%x", number.Bytes())
 		case DIFFICULTY:
@@ -676,6 +676,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			gas := stack.Pop()
 			// Pop gas and value of the stack.
 			value, addr := stack.Popn()
+			value = U256(value)
 			// Pop input size and offset
 			inSize, inOffset := stack.Popn()
 			// Pop return size and offset
