@@ -267,6 +267,11 @@ func (p *EthereumApi) GetIsMining(reply *interface{}) error {
 	return nil
 }
 
+func (p *EthereumApi) SetMining(shouldmine bool, reply *interface{}) error {
+	*reply = p.xeth.SetMining(shouldmine)
+	return nil
+}
+
 func (p *EthereumApi) BlockNumber(reply *interface{}) error {
 	*reply = p.xeth.Backend().ChainManager().CurrentBlock().Number()
 	return nil
@@ -400,6 +405,12 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		return p.GetIsListening(reply)
 	case "eth_mining":
 		return p.GetIsMining(reply)
+	case "eth_setMining":
+		args, err := req.ToBoolArgs()
+		if err != nil {
+			return err
+		}
+		return p.SetMining(args, reply)
 	case "eth_peerCount":
 		return p.GetPeerCount(reply)
 	case "eth_number":

@@ -201,6 +201,21 @@ func (req *RpcRequest) ToGetCodeAtArgs() (*GetCodeAtArgs, error) {
 	return args, nil
 }
 
+func (req *RpcRequest) ToBoolArgs() (bool, error) {
+	if len(req.Params) < 1 {
+		return false, NewErrorResponse(ErrorArguments)
+	}
+
+	var args bool
+	err := json.Unmarshal(req.Params[0], &args)
+	if err != nil {
+		return false, NewErrorResponse(ErrorDecodeArgs)
+	}
+
+	rpclogger.DebugDetailf("%T %v", args, args)
+	return args, nil
+}
+
 func (req *RpcRequest) ToCompileArgs() (string, error) {
 	if len(req.Params) < 1 {
 		return "", NewErrorResponse(ErrorArguments)
