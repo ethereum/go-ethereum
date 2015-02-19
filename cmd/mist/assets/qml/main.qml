@@ -246,6 +246,7 @@ ApplicationWindow {
                 }
             }
         }
+
     }
 
     property var blockModel: ListModel {

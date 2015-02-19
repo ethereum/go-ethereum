@@ -80,7 +80,7 @@ type RpcServer interface {
 
 type Log struct {
 	Address string   `json:"address"`
-	Topics  []string `json:"topics"`
+	Topic   []string `json:"topics"`
 	Data    string   `json:"data"`
 }
 
@@ -89,11 +89,11 @@ func toLogs(logs state.Logs) (ls []Log) {
 
 	for i, log := range logs {
 		var l Log
-		l.Topics = make([]string, len(log.Topics()))
+		l.Topic = make([]string, len(log.Topics()))
 		l.Address = toHex(log.Address())
 		l.Data = toHex(log.Data())
 		for j, topic := range log.Topics() {
-			l.Topics[j] = toHex(topic)
+			l.Topic[j] = toHex(topic)
 		}
 		ls[i] = l
 	}

@@ -150,7 +150,7 @@ type Transaction struct {
 func NewTx(tx *types.Transaction) *Transaction {
 	hash := toHex(tx.Hash())
 	receiver := toHex(tx.To())
-	if receiver == "0000000000000000000000000000000000000000" {
+	if len(receiver) == 0 {
 		receiver = toHex(core.AddressFromMessage(tx))
 	}
 	sender := toHex(tx.From())

@@ -131,6 +131,7 @@ func (gui *Gui) Start(assetPath string) {
 	context.SetVar("gui", gui)
 	context.SetVar("eth", gui.uiLib)
 	context.SetVar("shh", gui.whisper)
+	//clipboard.SetQMLClipboard(context)
 
 	win, err := gui.showWallet(context)
 	if err != nil {
