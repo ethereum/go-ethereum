@@ -22,6 +22,7 @@ const (
 )
 
 var srvlog = logger.NewLogger("P2P Server")
+var srvjslog = logger.NewJsonLogger()
 
 // MakeName creates a node name that follows the ethereum convention
 // for such names. It adds the operation system name and Go runtime version
@@ -370,14 +371,26 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 		p.politeDisconnect(reason)
 		return
 	}
+
 	srvlog.Debugf("Added %v\n", p)
+	srvjslog.LogJson(&logger.P2PConnected{
+		RemoteId:            fmt.Sprintf("%x", conn.ID[:]),
+		RemoteAddress:       conn.RemoteAddr().String(),
+		RemoteVersionString: conn.Name,
+		NumConnections:      srv.PeerCount(),
+	})
 
 	if srv.newPeerHook != nil {
 		srv.newPeerHook(p)
 	}
 	discreason := p.run()
 	srv.removePeer(p)
+
 	srvlog.Debugf("Removed %v (%v)\n", p, discreason)
+	srvjslog.LogJson(&logger.P2PDisconnected{
+		RemoteId:       fmt.Sprintf("%x", conn.ID[:]),
+		NumConnections: srv.PeerCount(),
+	})
 }
 
 func (srv *Server) addPeer(id discover.NodeID, p *Peer) (bool, DiscReason) {
