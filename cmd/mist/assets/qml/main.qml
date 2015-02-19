@@ -927,7 +927,8 @@ ApplicationWindow {
                      model: peerModel
                      TableViewColumn{width: 180; role: "addr" ; title: "Remote Address" }
                      TableViewColumn{width: 280; role: "nodeID" ; title: "Node ID" }
-                     TableViewColumn{width: 180; role: "caps" ; title: "Capabilities" }
+                     TableViewColumn{width: 100; role: "name" ; title: "Name" }
+                     TableViewColumn{width: 40; role: "caps" ; title: "Capabilities" }
                  }
              }
          }
