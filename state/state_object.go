@@ -152,6 +152,7 @@ func (self *StateObject) Sync() {
 
 		self.setAddr([]byte(key), value)
 	}
+	self.storage = make(Storage)
 }
 
 func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
