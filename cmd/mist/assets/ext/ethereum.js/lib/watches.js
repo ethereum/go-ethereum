@@ -14,35 +14,36 @@
     You should have received a copy of the GNU Lesser General Public License
     along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file httpsync.js
+/** @file watches.js
  * @authors:
  *   Marek Kotewicz <marek@ethdev.com>
- *   Marian Oancea <marian@ethdev.com>
- * @date 2014
+ * @date 2015
  */
 
-if (process.env.NODE_ENV !== 'build') {
-        var XMLHttpRequest = require('xmlhttprequest').XMLHttpRequest; // jshint ignore:line
-}
+/// @returns an array of objects describing web3.eth.watch api methods
+var eth = function () {
+    var newFilter = function (args) {
+        return typeof args[0] === 'string' ? 'eth_newFilterString' : 'eth_newFilter';
+    };
 
-var HttpSyncProvider = function (host) {
-    this.handlers = [];
-    this.host = host || 'http://localhost:8080';
+    return [
+    { name: 'newFilter', call: newFilter },
+    { name: 'uninstallFilter', call: 'eth_uninstallFilter' },
+    { name: 'getMessages', call: 'eth_filterLogs' }
+    ];
 };
 
-HttpSyncProvider.prototype.send = function (payload) {
-    //var data = formatJsonRpcObject(payload);
-
-    var request = new XMLHttpRequest();
-    request.open('POST', this.host, false);
-    request.send(JSON.stringify(payload));
-
-    var result = request.responseText;
-    // check request.status
-    if(request.status !== 200)
-        return;
-    return JSON.parse(result);
+/// @returns an array of objects describing web3.shh.watch api methods
+var shh = function () {
+    return [
+    { name: 'newFilter', call: 'shh_newFilter' },
+    { name: 'uninstallFilter', call: 'shh_uninstallFilter' },
+    { name: 'getMessages', call: 'shh_getMessages' }
+    ];
 };
 
-module.exports = HttpSyncProvider;
+module.exports = {
+    eth: eth,
+    shh: shh
+};
 

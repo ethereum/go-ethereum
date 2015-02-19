@@ -14,35 +14,22 @@
     You should have received a copy of the GNU Lesser General Public License
     along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file httpsync.js
+/** @file db.js
  * @authors:
  *   Marek Kotewicz <marek@ethdev.com>
- *   Marian Oancea <marian@ethdev.com>
- * @date 2014
+ * @date 2015
  */
 
-if (process.env.NODE_ENV !== 'build') {
-        var XMLHttpRequest = require('xmlhttprequest').XMLHttpRequest; // jshint ignore:line
-}
-
-var HttpSyncProvider = function (host) {
-    this.handlers = [];
-    this.host = host || 'http://localhost:8080';
+/// @returns an array of objects describing web3.db api methods
+var methods = function () {
+    return [
+    { name: 'put', call: 'db_put' },
+    { name: 'get', call: 'db_get' },
+    { name: 'putString', call: 'db_putString' },
+    { name: 'getString', call: 'db_getString' }
+    ];
 };
 
-HttpSyncProvider.prototype.send = function (payload) {
-    //var data = formatJsonRpcObject(payload);
-
-    var request = new XMLHttpRequest();
-    request.open('POST', this.host, false);
-    request.send(JSON.stringify(payload));
-
-    var result = request.responseText;
-    // check request.status
-    if(request.status !== 200)
-        return;
-    return JSON.parse(result);
+module.exports = {
+    methods: methods
 };
-
-module.exports = HttpSyncProvider;
-

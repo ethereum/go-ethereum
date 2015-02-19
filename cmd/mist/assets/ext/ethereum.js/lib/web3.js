@@ -27,104 +27,18 @@ if (process.env.NODE_ENV !== 'build') {
     var BigNumber = require('bignumber.js');
 }
 
+var eth = require('./eth');
+var db = require('./db');
+var shh = require('./shh');
+var watches = require('./watches');
+var filter = require('./filter');
 var utils = require('./utils');
+var requestManager = require('./requestmanager');
 
 /// @returns an array of objects describing web3 api methods
 var web3Methods = function () {
     return [
     { name: 'sha3', call: 'web3_sha3' }
-    ];
-};
-
-/// @returns an array of objects describing web3.eth api methods
-var ethMethods = function () {
-    var blockCall = function (args) {
-        return typeof args[0] === "string" ? "eth_blockByHash" : "eth_blockByNumber";
-    };
-
-    var transactionCall = function (args) {
-        return typeof args[0] === "string" ? 'eth_transactionByHash' : 'eth_transactionByNumber';
-    };
-
-    var uncleCall = function (args) {
-        return typeof args[0] === "string" ? 'eth_uncleByHash' : 'eth_uncleByNumber';
-    };
-
-    var methods = [
-    { name: 'balanceAt', call: 'eth_balanceAt' },
-    { name: 'stateAt', call: 'eth_stateAt' },
-    { name: 'storageAt', call: 'eth_storageAt' },
-    { name: 'countAt', call: 'eth_countAt'},
-    { name: 'codeAt', call: 'eth_codeAt' },
-    { name: 'transact', call: 'eth_transact' },
-    { name: 'call', call: 'eth_call' },
-    { name: 'block', call: blockCall },
-    { name: 'transaction', call: transactionCall },
-    { name: 'uncle', call: uncleCall },
-    { name: 'compilers', call: 'eth_compilers' },
-    { name: 'flush', call: 'eth_flush' },
-    { name: 'lll', call: 'eth_lll' },
-    { name: 'solidity', call: 'eth_solidity' },
-    { name: 'serpent', call: 'eth_serpent' },
-    { name: 'logs', call: 'eth_logs' }
-    ];
-    return methods;
-};
-
-/// @returns an array of objects describing web3.eth api properties
-var ethProperties = function () {
-    return [
-    { name: 'coinbase', getter: 'eth_coinbase', setter: 'eth_setCoinbase' },
-    { name: 'listening', getter: 'eth_listening', setter: 'eth_setListening' },
-    { name: 'mining', getter: 'eth_mining', setter: 'eth_setMining' },
-    { name: 'gasPrice', getter: 'eth_gasPrice' },
-    { name: 'accounts', getter: 'eth_accounts' },
-    { name: 'peerCount', getter: 'eth_peerCount' },
-    { name: 'defaultBlock', getter: 'eth_defaultBlock', setter: 'eth_setDefaultBlock' },
-    { name: 'number', getter: 'eth_number'}
-    ];
-};
-
-/// @returns an array of objects describing web3.db api methods
-var dbMethods = function () {
-    return [
-    { name: 'put', call: 'db_put' },
-    { name: 'get', call: 'db_get' },
-    { name: 'putString', call: 'db_putString' },
-    { name: 'getString', call: 'db_getString' }
-    ];
-};
-
-/// @returns an array of objects describing web3.shh api methods
-var shhMethods = function () {
-    return [
-    { name: 'post', call: 'shh_post' },
-    { name: 'newIdentity', call: 'shh_newIdentity' },
-    { name: 'haveIdentity', call: 'shh_haveIdentity' },
-    { name: 'newGroup', call: 'shh_newGroup' },
-    { name: 'addToGroup', call: 'shh_addToGroup' }
-    ];
-};
-
-/// @returns an array of objects describing web3.eth.watch api methods
-var ethWatchMethods = function () {
-    var newFilter = function (args) {
-        return typeof args[0] === 'string' ? 'eth_newFilterString' : 'eth_newFilter';
-    };
-
-    return [
-    { name: 'newFilter', call: newFilter },
-    { name: 'uninstallFilter', call: 'eth_uninstallFilter' },
-    { name: 'getMessages', call: 'eth_filterLogs' }
-    ];
-};
-
-/// @returns an array of objects describing web3.shh.watch api methods
-var shhWatchMethods = function () {
-    return [
-    { name: 'newFilter', call: 'shh_newFilter' },
-    { name: 'uninstallFilter', call: 'shh_uninstallFilter' },
-    { name: 'getMessages', call: 'shh_getMessages' }
     ];
 };
 
@@ -135,7 +49,7 @@ var setupMethods = function (obj, methods) {
         obj[method.name] = function () {
             var args = Array.prototype.slice.call(arguments);
             var call = typeof method.call === 'function' ? method.call(args) : method.call;
-            return web3.provider.send({
+            return web3.manager.send({
                 method: call,
                 params: args
             });
@@ -149,14 +63,14 @@ var setupProperties = function (obj, properties) {
     properties.forEach(function (property) {
         var proto = {};
         proto.get = function () {
-            return web3.provider.send({
+            return web3.manager.send({
                 method: property.getter
             });
         };
 
         if (property.setter) {
             proto.set = function (val) {
-                return web3.provider.send({
+                return web3.manager.send({
                     method: property.setter,
                     params: [val]
                 });
@@ -166,10 +80,30 @@ var setupProperties = function (obj, properties) {
     });
 };
 
+var startPolling = function (method, id, callback, uninstall) {
+    web3.manager.startPolling({
+        method: method, 
+        params: [id]
+    }, id,  callback, uninstall); 
+};
+
+var stopPolling = function (id) {
+    web3.manager.stopPolling(id);
+};
+
+var ethWatch = {
+    startPolling: startPolling.bind(null, 'eth_changed'), 
+    stopPolling: stopPolling
+};
+
+var shhWatch = {
+    startPolling: startPolling.bind(null, 'shh_changed'), 
+    stopPolling: stopPolling
+};
+
 /// setups web3 object, and it's in-browser executed methods
 var web3 = {
-    _callbacks: {},
-    _events: {},
+    manager: requestManager(),
     providers: {},
 
     /// @returns ascii string representation of hex value prefixed with 0x
@@ -208,11 +142,12 @@ var web3 = {
         /// @param filter may be a string, object or event
         /// @param indexed is optional, this is an object with optional event indexed params
         /// @param options is optional, this is an object with optional event options ('max'...)
-        watch: function (filter, indexed, options) {
-            if (filter._isEvent) {
-                return filter(indexed, options);
+        /// TODO: fix it, 4 params? no way
+        watch: function (fil, indexed, options, formatter) {
+            if (fil._isEvent) {
+                return fil(indexed, options);
             }
-            return new web3.filter(filter, ethWatch);
+            return filter(fil, ethWatch, formatter);
         }
     },
 
@@ -221,36 +156,30 @@ var web3 = {
 
     /// shh object prototype
     shh: {
-        
         /// @param filter may be a string, object or event
-        watch: function (filter, indexed) {
-            return new web3.filter(filter, shhWatch);
+        watch: function (fil) {
+            return filter(fil, shhWatch);
         }
     },
+    setProvider: function (provider) {
+        web3.manager.setProvider(provider);
+    },
+    
+    /// Should be called to reset state of web3 object
+    /// Resets everything except manager
+    reset: function () {
+        web3.manager.reset(); 
+    }
 };
 
 /// setups all api methods
 setupMethods(web3, web3Methods());
-setupMethods(web3.eth, ethMethods());
-setupProperties(web3.eth, ethProperties());
-setupMethods(web3.db, dbMethods());
-setupMethods(web3.shh, shhMethods());
-
-var ethWatch = {
-    changed: 'eth_changed'
-};
-
-setupMethods(ethWatch, ethWatchMethods());
-
-var shhWatch = {
-    changed: 'shh_changed'
-};
-
-setupMethods(shhWatch, shhWatchMethods());
-
-web3.setProvider = function(provider) {
-    web3.provider.set(provider);
-};
+setupMethods(web3.eth, eth.methods());
+setupProperties(web3.eth, eth.properties());
+setupMethods(web3.db, db.methods());
+setupMethods(web3.shh, shh.methods());
+setupMethods(ethWatch, watches.eth());
+setupMethods(shhWatch, watches.shh());
 
 module.exports = web3;
 

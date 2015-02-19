@@ -23,79 +23,91 @@
  * @date 2014
  */
 
-var web3 = require('./web3'); // jshint ignore:line
+/// Should be called to check if filter implementation is valid
+/// @returns true if it is, otherwise false
+var implementationIsValid = function (i) {
+    return !!i && 
+        typeof i.newFilter === 'function' && 
+        typeof i.getMessages === 'function' && 
+        typeof i.uninstallFilter === 'function' &&
+        typeof i.startPolling === 'function' &&
+        typeof i.stopPolling === 'function';
+};
 
-/// should be used when we want to watch something
+/// This method should be called on options object, to verify deprecated properties && lazy load dynamic ones
+/// @param should be string or object
+/// @returns options string or object
+var getOptions = function (options) {
+    if (typeof options === 'string') {
+        return options;
+    } 
+
+    options = options || {};
+
+    if (options.topics) {
+        console.warn('"topics" is deprecated, is "topic" instead');
+    }
+
+    // evaluate lazy properties
+    return {
+        to: options.to,
+        topic: options.topic,
+        earliest: options.earliest,
+        latest: options.latest,
+        max: options.max,
+        skip: options.skip,
+        address: options.address
+    };
+};
+
+/// Should be used when we want to watch something
 /// it's using inner polling mechanism and is notified about changes
-/// TODO: change 'options' name cause it may be not the best matching one, since we have events
-var Filter = function(options, impl) {
-
-    if (typeof options !== "string") {
-
-        // topics property is deprecated, warn about it!
-        if (options.topics) {
-            console.warn('"topics" is deprecated, use "topic" instead');
-        }
-        
-        this._onWatchResult = options._onWatchEventResult;
-
-        // evaluate lazy properties
-        options = {
-            to: options.to,
-            topic: options.topic,
-            earliest: options.earliest,
-            latest: options.latest,
-            max: options.max,
-            skip: options.skip,
-            address: options.address
-        };
-
+/// @param options are filter options
+/// @param implementation, an abstract polling implementation
+/// @param formatter (optional), callback function which formats output before 'real' callback 
+var filter = function(options, implementation, formatter) {
+    if (!implementationIsValid(implementation)) {
+        console.error('filter implemenation is invalid');
+        return;
     }
+
+    options = getOptions(options);
+    var callbacks = [];
+    var filterId = implementation.newFilter(options);
+    var onMessages = function (messages) {
+        messages.forEach(function (message) {
+            message = formatter ? formatter(message) : message;
+            callbacks.forEach(function (callback) {
+                callback(message);
+            });
+        });
+    };
+
+    implementation.startPolling(filterId, onMessages, implementation.uninstallFilter);
+
+    var changed = function (callback) {
+        callbacks.push(callback);
+    };
+
+    var messages = function () {
+        return implementation.getMessages(filterId);
+    };
     
-    this.impl = impl;
-    this.callbacks = [];
+    var uninstall = function (callback) {
+        implementation.stopPolling(filterId);
+        implementation.uninstallFilter(filterId);
+        callbacks = [];
+    };
 
-    this.id = impl.newFilter(options);
-    web3.provider.startPolling({method: impl.changed, params: [this.id]}, this.id, this.trigger.bind(this));
+    return {
+        changed: changed,
+        arrived: changed,
+        happened: changed,
+        messages: messages,
+        logs: messages,
+        uninstall: uninstall
+    };
 };
 
-/// alias for changed*
-Filter.prototype.arrived = function(callback) {
-    this.changed(callback);
-};
-Filter.prototype.happened = function(callback) {
-    this.changed(callback);
-};
+module.exports = filter;
 
-/// gets called when there is new eth/shh message
-Filter.prototype.changed = function(callback) {
-    this.callbacks.push(callback);
-};
-
-/// trigger calling new message from people
-Filter.prototype.trigger = function(messages) {
-    for (var i = 0; i < this.callbacks.length; i++) {
-        for (var j = 0; j < messages.length; j++) {
-            var message = this._onWatchResult ? this._onWatchResult(messages[j]) : messages[j];
-            this.callbacks[i].call(this, message);
-        }
-    }
-};
-
-/// should be called to uninstall current filter
-Filter.prototype.uninstall = function() {
-    this.impl.uninstallFilter(this.id);
-    web3.provider.stopPolling(this.id);
-};
-
-/// should be called to manually trigger getting latest messages from the client
-Filter.prototype.messages = function() {
-    return this.impl.getMessages(this.id);
-};
-
-/// alias for messages
-Filter.prototype.logs = function () {
-    return this.messages();
-};
-
-module.exports = Filter;

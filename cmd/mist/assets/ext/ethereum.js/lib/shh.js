@@ -14,35 +14,24 @@
     You should have received a copy of the GNU Lesser General Public License
     along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file httpsync.js
+/** @file shh.js
  * @authors:
  *   Marek Kotewicz <marek@ethdev.com>
- *   Marian Oancea <marian@ethdev.com>
- * @date 2014
+ * @date 2015
  */
 
-if (process.env.NODE_ENV !== 'build') {
-        var XMLHttpRequest = require('xmlhttprequest').XMLHttpRequest; // jshint ignore:line
-}
-
-var HttpSyncProvider = function (host) {
-    this.handlers = [];
-    this.host = host || 'http://localhost:8080';
+/// @returns an array of objects describing web3.shh api methods
+var methods = function () {
+    return [
+    { name: 'post', call: 'shh_post' },
+    { name: 'newIdentity', call: 'shh_newIdentity' },
+    { name: 'haveIdentity', call: 'shh_haveIdentity' },
+    { name: 'newGroup', call: 'shh_newGroup' },
+    { name: 'addToGroup', call: 'shh_addToGroup' }
+    ];
 };
 
-HttpSyncProvider.prototype.send = function (payload) {
-    //var data = formatJsonRpcObject(payload);
-
-    var request = new XMLHttpRequest();
-    request.open('POST', this.host, false);
-    request.send(JSON.stringify(payload));
-
-    var result = request.responseText;
-    // check request.status
-    if(request.status !== 200)
-        return;
-    return JSON.parse(result);
+module.exports = {
+    methods: methods
 };
-
-module.exports = HttpSyncProvider;
 
