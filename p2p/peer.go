@@ -21,6 +21,7 @@ const (
 	baseProtocolMaxMsgSize = 10 * 1024 * 1024
 
 	disconnectGracePeriod = 2 * time.Second
+	pingInterval          = 15 * time.Second
 )
 
 const (
@@ -118,19 +119,33 @@ func (p *Peer) run() DiscReason {
 	p.startProtocols()
 	go func() { readErr <- p.readLoop() }()
 
+	ping := time.NewTicker(pingInterval)
+	defer ping.Stop()
+
 	// Wait for an error or disconnect.
 	var reason DiscReason
-	select {
-	case err := <-readErr:
-		// We rely on protocols to abort if there is a write error. It
-		// might be more robust to handle them here as well.
-		p.DebugDetailf("Read error: %v\n", err)
-		p.rw.Close()
-		return DiscNetworkError
-
-	case err := <-p.protoErr:
-		reason = discReasonForError(err)
-	case reason = <-p.disc:
+loop:
+	for {
+		select {
+		case <-ping.C:
+			go func() {
+				if err := EncodeMsg(p.rw, pingMsg, nil); err != nil {
+					p.protoErr <- err
+					return
+				}
+			}()
+		case err := <-readErr:
+			// We rely on protocols to abort if there is a write error. It
+			// might be more robust to handle them here as well.
+			p.DebugDetailf("Read error: %v\n", err)
+			p.rw.Close()
+			return DiscNetworkError
+		case err := <-p.protoErr:
+			reason = discReasonForError(err)
+			break loop
+		case reason = <-p.disc:
+			break loop
+		}
 	}
 	p.politeDisconnect(reason)
 
