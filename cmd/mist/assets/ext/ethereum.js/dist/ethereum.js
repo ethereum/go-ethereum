@@ -659,9 +659,9 @@ var Filter = function(options, impl) {
 
     if (typeof options !== "string") {
 
-        // topics property is deprecated, warn about it!
-        if (options.topics) {
-            console.warn('"topics" is deprecated, use "topic" instead');
+        // topic property is deprecated, warn about it!
+        if (options.topic) {
+            console.warn('"topic" is deprecated, use "topic" instead');
         }
         
         this._onWatchResult = options._onWatchEventResult;
