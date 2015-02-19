@@ -9,8 +9,8 @@ import (
 func NewFilterFromMap(object map[string]interface{}, eth core.Backend) *core.Filter {
 	filter := ui.NewFilterFromMap(object, eth)
 
-	if object["topic"] != nil {
-		filter.SetTopics(makeTopics(object["topic"]))
+	if object["topics"] != nil {
+		filter.SetTopics(makeTopics(object["topics"]))
 	}
 
 	return filter

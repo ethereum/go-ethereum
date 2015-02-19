@@ -34,10 +34,10 @@ func (self *Envelope) Hash() Hash {
 	return self.hash
 }
 
-func NewEnvelope(ttl time.Duration, topic [][]byte, data *Message) *Envelope {
+func NewEnvelope(ttl time.Duration, topics [][]byte, data *Message) *Envelope {
 	exp := time.Now().Add(ttl)
 
-	return &Envelope{uint32(exp.Unix()), uint32(ttl.Seconds()), topic, data.Bytes(), 0, Hash{}}
+	return &Envelope{uint32(exp.Unix()), uint32(ttl.Seconds()), topics, data.Bytes(), 0, Hash{}}
 }
 
 func (self *Envelope) Seal(pow time.Duration) {

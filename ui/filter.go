@@ -43,8 +43,8 @@ func NewFilterFromMap(object map[string]interface{}, eth core.Backend) *core.Fil
 		filter.SetSkip(int(val.Uint()))
 	}
 
-	if object["topic"] != nil {
-		filter.SetTopics(MakeTopics(object["topic"]))
+	if object["topics"] != nil {
+		filter.SetTopics(MakeTopics(object["topics"]))
 	}
 
 	return filter

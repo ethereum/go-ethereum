@@ -384,11 +384,11 @@ Rectangle {
 								params[fields[i]] = params[fields[i]] || "";
 							}
 							if(typeof params.payload !== "object") { params.payload = [params.payload]; } //params.payload = params.payload.join(""); }
-							params.topic = params.topic || [];
+							params.topics = params.topics || [];
 							params.priority = params.priority || 1000;
 							params.ttl = params.ttl || 100;
 
-							shh.post(params.payload, params.to, params.from, params.topic, params.priority, params.ttl);
+							shh.post(params.payload, params.to, params.from, params.topics, params.priority, params.ttl);
 
 							break;
 

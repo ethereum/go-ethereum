@@ -40,7 +40,7 @@ func (self *JSBlock) GetTransaction(hash string) otto.Value {
 
 type JSLog struct {
 	Address string   `json:address`
-	Topics  []string `json:topic`
+	Topics  []string `json:topics`
 	Number  int32    `json:number`
 	Data    string   `json:data`
 }

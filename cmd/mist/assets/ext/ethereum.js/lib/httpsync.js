@@ -32,15 +32,13 @@ var HttpSyncProvider = function (host) {
 
 HttpSyncProvider.prototype.send = function (payload) {
     //var data = formatJsonRpcObject(payload);
-
+    
     var request = new XMLHttpRequest();
     request.open('POST', this.host, false);
     request.send(JSON.stringify(payload));
-
-    var result = request.responseText;
+    
     // check request.status
-    if(request.status !== 200)
-        return;
+    var result = request.responseText;
     return JSON.parse(result);
 };
 

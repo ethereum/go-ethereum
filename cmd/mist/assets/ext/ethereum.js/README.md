@@ -3,7 +3,7 @@
 This is the Ethereum compatible [JavaScript API](https://github.com/ethereum/wiki/wiki/JavaScript-API)
 which implements the [Generic JSON RPC](https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC) spec. It's available on npm as a node module and also for bower and component as an embeddable js
 
-[![NPM version][npm-image]][npm-url] [![Build Status][travis-image]][travis-url] [![dependency status][dep-image]][dep-url] [![dev dependency status][dep-dev-image]][dep-dev-url][![Coverage Status][coveralls-image]][coveralls-url]
+[![NPM version][npm-image]][npm-url] [![Build Status][travis-image]][travis-url] [![dependency status][dep-image]][dep-url] [![dev dependency status][dep-dev-image]][dep-dev-url]
 
 <!-- [![browser support](https://ci.testling.com/ethereum/ethereum.js.png)](https://ci.testling.com/ethereum/ethereum.js) -->
 
@@ -30,9 +30,9 @@ Require the library:
 
 	var web3 = require('web3');
 
-Set a provider (QtSyncProvider, HttpSyncProvider)
+Set a provider (QtProvider, WebSocketProvider, HttpRpcProvider)
 
-	web3.setProvider(new web3.providers.HttpSyncProvider());
+	var web3.setProvider(new web3.providers.WebSocketProvider('ws://localhost:40404/eth'));
 
 There you go, now you can use it:
 
@@ -93,6 +93,4 @@ ethereum -ws -loglevel=4
 [dep-url]: https://david-dm.org/ethereum/ethereum.js
 [dep-dev-image]: https://david-dm.org/ethereum/ethereum.js/dev-status.svg
 [dep-dev-url]: https://david-dm.org/ethereum/ethereum.js#info=devDependencies
-[coveralls-image]: https://coveralls.io/repos/ethereum/ethereum.js/badge.svg?branch=master
-[coveralls-url]: https://coveralls.io/r/ethereum/ethereum.js?branch=master
 

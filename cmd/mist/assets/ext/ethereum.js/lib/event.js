@@ -99,7 +99,6 @@ var outputParser = function (event) {
             args: {}
         };
 
-        output.topics = output.topic; // fallback for go-ethereum
         if (!output.topic) {
             return result;
         }

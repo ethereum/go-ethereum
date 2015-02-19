@@ -44,13 +44,13 @@ Rectangle {
 			placeholderText: "Data"
 		}
 		TextField {
-			id: topic
+			id: topics
 			placeholderText: "topic1, topic2, topic3, ..."
 		}
 		Button {
 			text: "Send"
 			onClicked: {
-				shh.post([eth.toHex(data.text)], "", identity, topic.text.split(","), 500, 50)
+				shh.post([eth.toHex(data.text)], "", identity, topics.text.split(","), 500, 50)
 			}
 		}
 	}

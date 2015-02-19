@@ -571,14 +571,14 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			self.Printf(" => [%d] %x [0] %x", n, x.Bytes(), y.Bytes())
 		case LOG0, LOG1, LOG2, LOG3, LOG4:
 			n := int(op - LOG0)
-			topic := make([][]byte, n)
+			topics := make([][]byte, n)
 			mSize, mStart := stack.Popn()
 			for i := 0; i < n; i++ {
-				topic[i] = ethutil.LeftPadBytes(stack.Pop().Bytes(), 32)
+				topics[i] = ethutil.LeftPadBytes(stack.Pop().Bytes(), 32)
 			}
 
 			data := mem.Get(mStart.Int64(), mSize.Int64())
-			log := &Log{context.Address(), topic, data}
+			log := &Log{context.Address(), topics, data}
 			self.env.AddLog(log)
 
 			self.Printf(" => %v", log)

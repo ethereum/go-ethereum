@@ -36,7 +36,7 @@ func (self *Whisper) SetView(view qml.Object) {
 	self.view = view
 }
 
-func (self *Whisper) Post(payload []string, to, from string, topic []string, priority, ttl uint32) {
+func (self *Whisper) Post(payload []string, to, from string, topics []string, priority, ttl uint32) {
 	var data []byte
 	for _, d := range payload {
 		data = append(data, fromHex(d)...)
@@ -49,7 +49,7 @@ func (self *Whisper) Post(payload []string, to, from string, topic []string, pri
 			Ttl:    time.Duration(ttl) * time.Second,
 			To:     crypto.ToECDSAPub(fromHex(to)),
 			From:   key,
-			Topics: whisper.TopicsFromString(topic...),
+			Topics: whisper.TopicsFromString(topics...),
 		})
 
 		if err != nil {
@@ -111,10 +111,10 @@ func filterFromMap(opts map[string]interface{}) (f whisper.Filter) {
 	if from, ok := opts["from"].(string); ok {
 		f.From = crypto.ToECDSAPub(fromHex(from))
 	}
-	if topicList, ok := opts["topic"].(*qml.List); ok {
-		var topic []string
-		topicList.Convert(&topic)
-		f.Topics = whisper.TopicsFromString(topic...)
+	if topicList, ok := opts["topics"].(*qml.List); ok {
+		var topics []string
+		topicList.Convert(&topics)
+		f.Topics = whisper.TopicsFromString(topics...)
 	}
 
 	return

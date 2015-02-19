@@ -40,23 +40,23 @@
 	document.querySelector("#id").innerHTML = id;
 	document.querySelector("#known").innerHTML =  shh.haveIdentity(id);
 
-	var watch = shh.watch({topic: ["test"]})
+	var watch = shh.watch({topics: ["test"]})
 	watch.arrived(function(message) {
 		document.querySelector("#table").innerHTML += "<tr><td colspan='2'>"+JSON.stringify(message)+"</td></tr>";
 	});
 
-	var selfWatch = shh.watch({to: id, topic: ["test"]})
+	var selfWatch = shh.watch({to: id, topics: ["test"]})
 	selfWatch.arrived(function(message) {
 		document.querySelector("#table").innerHTML += "<tr><td>To me</td><td>"+JSON.stringify(message)+"</td></tr>";
 	});
 
 	function test() {
-		shh.post({topic: ["test"], payload: web3.fromAscii("test it")});
+		shh.post({topics: ["test"], payload: web3.fromAscii("test it")});
 		count();
 	}
 
 	function test2() {
-		shh.post({to: id, topic: ["test"], payload: web3.fromAscii("Private")});
+		shh.post({to: id, topics: ["test"], payload: web3.fromAscii("Private")});
 		count();
 	}
 
