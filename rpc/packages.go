@@ -300,6 +300,21 @@ func (p *EthereumApi) GetCodeAt(args *GetCodeAtArgs, reply *interface{}) error {
 	return nil
 }
 
+func (p *EthereumApi) GetCompilers(reply *interface{}) error {
+	c := []string{"serpent"}
+	*reply = c
+	return nil
+}
+
+func (p *EthereumApi) CompileSerpent(script string, reply *interface{}) error {
+	res, err := ethutil.Compile(script, false)
+	if err != nil {
+		return err
+	}
+	*reply = res
+	return nil
+}
+
 func (p *EthereumApi) Sha3(args *Sha3Args, reply *interface{}) error {
 	*reply = toHex(crypto.Sha3(fromHex(args.Data)))
 	return nil
@@ -490,6 +505,14 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.WatchTx(args, reply)
+	case "eth_compilers":
+		return p.GetCompilers(reply)
+	case "eth_serpent":
+		args, err := req.ToCompileArgs()
+		if err != nil {
+			return err
+		}
+		return p.CompileSerpent(args, reply)
 	case "web3_sha3":
 		args, err := req.ToSha3Args()
 		if err != nil {
