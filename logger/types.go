@@ -42,6 +42,16 @@ func (l *P2PConnected) EventName() string {
 	return "p2p.connected"
 }
 
+type P2PDisconnected struct {
+	NumConnections int    `json:"num_connections"`
+	RemoteId       string `json:"remote_id"`
+	LogEvent
+}
+
+func (l *P2PDisconnected) EventName() string {
+	return "p2p.disconnected"
+}
+
 type EthMinerNewBlock struct {
 	BlockHash     string `json:"block_hash"`
 	BlockNumber   int    `json:"block_number"`
@@ -115,16 +125,6 @@ func (l *EthTxReceived) EventName() string {
 
 // func (l *P2PHandshaked) EventName() string {
 // 	return "p2p.handshaked"
-// }
-
-// type P2PDisconnected struct {
-// 	NumConnections int    `json:"num_connections"`
-// 	RemoteId       string `json:"remote_id"`
-// 	LogEvent
-// }
-
-// func (l *P2PDisconnected) EventName() string {
-// 	return "p2p.disconnected"
 // }
 
 // type P2PDisconnecting struct {
