@@ -169,7 +169,7 @@ func (pool *TxPool) RemoveInvalid(query StateQuery) {
 	for _, tx := range pool.txs {
 		sender := query.GetAccount(tx.From())
 		err := pool.ValidateTransaction(tx)
-		if err != nil || sender.Nonce >= tx.Nonce() {
+		if err != nil || sender.Nonce() >= tx.Nonce() {
 			removedTxs = append(removedTxs, tx)
 		}
 	}

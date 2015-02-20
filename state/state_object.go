@@ -36,11 +36,11 @@ type StateObject struct {
 	// Shared attributes
 	balance  *big.Int
 	codeHash []byte
-	Nonce    uint64
+	nonce    uint64
 	// Contract related attributes
 	State    *StateDB
-	Code     Code
-	InitCode Code
+	code     Code
+	initCode Code
 
 	storage Storage
 
@@ -89,20 +89,21 @@ func NewStateObjectFromBytes(address, data []byte, db ethutil.Database) *StateOb
 
 	object := &StateObject{address: address, db: db}
 	//object.RlpDecode(data)
-	object.Nonce = extobject.Nonce
+	object.nonce = extobject.Nonce
 	object.balance = extobject.Balance
 	object.codeHash = extobject.CodeHash
 	object.State = New(extobject.Root, db)
 	object.storage = make(map[string]*ethutil.Value)
 	object.gasPool = new(big.Int)
-	object.Code, _ = db.Get(extobject.CodeHash)
+	object.code, _ = db.Get(extobject.CodeHash)
 
 	return object
 }
 
 func (self *StateObject) MarkForDeletion() {
 	self.remove = true
-	statelogger.DebugDetailf("%x: #%d %v (deletion)\n", self.Address(), self.Nonce, self.balance)
+	self.dirty = true
+	statelogger.DebugDetailf("%x: #%d %v (deletion)\n", self.Address(), self.nonce, self.balance)
 }
 
 func (c *StateObject) getAddr(addr []byte) *ethutil.Value {
@@ -159,25 +160,24 @@ func (self *StateObject) Sync() {
 }
 
 func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
-	if int64(len(c.Code)-1) < pc.Int64() {
+	if int64(len(c.code)-1) < pc.Int64() {
 		return ethutil.NewValue(0)
 	}
 
-	return ethutil.NewValueFromBytes([]byte{c.Code[pc.Int64()]})
+	return ethutil.NewValueFromBytes([]byte{c.code[pc.Int64()]})
 }
 
 func (c *StateObject) AddBalance(amount *big.Int) {
 	c.SetBalance(new(big.Int).Add(c.balance, amount))
-	c.dirty = true
 
-	statelogger.Debugf("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce, c.balance, amount)
+	statelogger.Debugf("%x: #%d %v (+ %v)\n", c.Address(), c.nonce, c.balance, amount)
 }
 func (c *StateObject) AddAmount(amount *big.Int) { c.AddBalance(amount) }
 
 func (c *StateObject) SubBalance(amount *big.Int) {
 	c.SetBalance(new(big.Int).Sub(c.balance, amount))
 
-	statelogger.Debugf("%x: #%d %v (- %v)\n", c.Address(), c.Nonce, c.balance, amount)
+	statelogger.Debugf("%x: #%d %v (- %v)\n", c.Address(), c.nonce, c.balance, amount)
 }
 func (c *StateObject) SubAmount(amount *big.Int) { c.SubBalance(amount) }
 
@@ -185,8 +185,6 @@ func (c *StateObject) SetBalance(amount *big.Int) {
 	c.balance = amount
 	c.dirty = true
 }
-
-func (self *StateObject) Balance() *big.Int { return self.balance }
 
 //
 // Gas setters and getters
@@ -243,12 +241,12 @@ func (self *StateObject) Copy() *StateObject {
 	stateObject := NewStateObject(self.Address(), self.db)
 	stateObject.balance.Set(self.balance)
 	stateObject.codeHash = ethutil.CopyBytes(self.codeHash)
-	stateObject.Nonce = self.Nonce
+	stateObject.nonce = self.nonce
 	if self.State != nil {
 		stateObject.State = self.State.Copy()
 	}
-	stateObject.Code = ethutil.CopyBytes(self.Code)
-	stateObject.InitCode = ethutil.CopyBytes(self.InitCode)
+	stateObject.code = ethutil.CopyBytes(self.code)
+	stateObject.initCode = ethutil.CopyBytes(self.initCode)
 	stateObject.storage = self.storage.Copy()
 	stateObject.gasPool.Set(self.gasPool)
 	stateObject.remove = self.remove
@@ -265,8 +263,12 @@ func (self *StateObject) Set(stateObject *StateObject) {
 // Attribute accessors
 //
 
+func (self *StateObject) Balance() *big.Int {
+	return self.balance
+}
+
 func (c *StateObject) N() *big.Int {
-	return big.NewInt(int64(c.Nonce))
+	return big.NewInt(int64(c.nonce))
 }
 
 // Returns the address of the contract/account
@@ -276,7 +278,7 @@ func (c *StateObject) Address() []byte {
 
 // Returns the initialization Code
 func (c *StateObject) Init() Code {
-	return c.InitCode
+	return c.initCode
 }
 
 func (self *StateObject) Trie() *trie.Trie {
@@ -287,8 +289,27 @@ func (self *StateObject) Root() []byte {
 	return self.Trie().Root()
 }
 
+func (self *StateObject) Code() []byte {
+	return self.code
+}
+
 func (self *StateObject) SetCode(code []byte) {
-	self.Code = code
+	self.code = code
+	self.dirty = true
+}
+
+func (self *StateObject) SetInitCode(code []byte) {
+	self.initCode = code
+	self.dirty = true
+}
+
+func (self *StateObject) SetNonce(nonce uint64) {
+	self.nonce = nonce
+	self.dirty = true
+}
+
+func (self *StateObject) Nonce() uint64 {
+	return self.nonce
 }
 
 //
@@ -297,16 +318,16 @@ func (self *StateObject) SetCode(code []byte) {
 
 // State object encoding methods
 func (c *StateObject) RlpEncode() []byte {
-	return ethutil.Encode([]interface{}{c.Nonce, c.balance, c.Root(), c.CodeHash()})
+	return ethutil.Encode([]interface{}{c.nonce, c.balance, c.Root(), c.CodeHash()})
 }
 
 func (c *StateObject) CodeHash() ethutil.Bytes {
-	return crypto.Sha3(c.Code)
+	return crypto.Sha3(c.code)
 }
 
 func (c *StateObject) RlpDecode(data []byte) {
 	decoder := ethutil.NewValueFromBytes(data)
-	c.Nonce = decoder.Get(0).Uint()
+	c.nonce = decoder.Get(0).Uint()
 	c.balance = decoder.Get(1).BigInt()
 	c.State = New(decoder.Get(2).Bytes(), c.db) //New(trie.New(ethutil.Config.Db, decoder.Get(2).Interface()))
 	c.storage = make(map[string]*ethutil.Value)
@@ -314,7 +335,7 @@ func (c *StateObject) RlpDecode(data []byte) {
 
 	c.codeHash = decoder.Get(3).Bytes()
 
-	c.Code, _ = c.db.Get(c.codeHash)
+	c.code, _ = c.db.Get(c.codeHash)
 }
 
 // Storage change object. Used by the manifest for notifying changes to

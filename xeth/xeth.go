@@ -128,15 +128,15 @@ func (self *XEth) BalanceAt(addr string) string {
 }
 
 func (self *XEth) TxCountAt(address string) int {
-	return int(self.State().SafeGet(address).Nonce)
+	return int(self.State().SafeGet(address).Nonce())
 }
 
 func (self *XEth) CodeAt(address string) string {
-	return toHex(self.State().SafeGet(address).Code)
+	return toHex(self.State().SafeGet(address).Code())
 }
 
 func (self *XEth) IsContract(address string) bool {
-	return len(self.State().SafeGet(address).Code) > 0
+	return len(self.State().SafeGet(address).Code()) > 0
 }
 
 func (self *XEth) SecretToAddress(key string) string {

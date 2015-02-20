@@ -72,7 +72,7 @@ func (self *StateDB) AddBalance(addr []byte, amount *big.Int) {
 func (self *StateDB) GetNonce(addr []byte) uint64 {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
-		return stateObject.Nonce
+		return stateObject.nonce
 	}
 
 	return 0
@@ -81,7 +81,7 @@ func (self *StateDB) GetNonce(addr []byte) uint64 {
 func (self *StateDB) GetCode(addr []byte) []byte {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
-		return stateObject.Code
+		return stateObject.code
 	}
 
 	return nil
@@ -99,8 +99,7 @@ func (self *StateDB) GetState(a, b []byte) []byte {
 func (self *StateDB) SetNonce(addr []byte, nonce uint64) {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
-		stateObject.Nonce = nonce
-		stateObject.dirty = true
+		stateObject.SetNonce(nonce)
 	}
 }
 
@@ -108,7 +107,6 @@ func (self *StateDB) SetCode(addr, code []byte) {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetCode(code)
-		stateObject.dirty = true
 	}
 }
 
@@ -116,7 +114,6 @@ func (self *StateDB) SetState(addr, key []byte, value interface{}) {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetState(key, ethutil.NewValue(value))
-		stateObject.dirty = true
 	}
 }
 
@@ -124,7 +121,6 @@ func (self *StateDB) Delete(addr []byte) bool {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		stateObject.MarkForDeletion()
-		stateObject.dirty = true
 
 		return true
 	}
@@ -141,7 +137,7 @@ func (self *StateDB) UpdateStateObject(stateObject *StateObject) {
 	addr := stateObject.Address()
 
 	if len(stateObject.CodeHash()) > 0 {
-		self.db.Put(stateObject.CodeHash(), stateObject.Code)
+		self.db.Put(stateObject.CodeHash(), stateObject.code)
 	}
 
 	self.trie.Update(addr, stateObject.RlpEncode())
