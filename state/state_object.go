@@ -65,7 +65,7 @@ func NewStateObject(addr []byte, db ethutil.Database) *StateObject {
 	// This to ensure that it has 20 bytes (and not 0 bytes), thus left or right pad doesn't matter.
 	address := ethutil.Address(addr)
 
-	object := &StateObject{db: db, address: address, balance: new(big.Int), gasPool: new(big.Int)}
+	object := &StateObject{db: db, address: address, balance: new(big.Int), gasPool: new(big.Int), dirty: true}
 	object.State = New(nil, db) //New(trie.New(ethutil.Config.Db, ""))
 	object.storage = make(Storage)
 	object.gasPool = new(big.Int)
@@ -118,6 +118,7 @@ func (self *StateObject) GetStorage(key *big.Int) *ethutil.Value {
 }
 func (self *StateObject) SetStorage(key *big.Int, value *ethutil.Value) {
 	self.SetState(key.Bytes(), value)
+	self.dirty = true
 }
 
 func (self *StateObject) Storage() map[string]*ethutil.Value {
@@ -142,6 +143,7 @@ func (self *StateObject) GetState(k []byte) *ethutil.Value {
 func (self *StateObject) SetState(k []byte, value *ethutil.Value) {
 	key := ethutil.LeftPadBytes(k, 32)
 	self.storage[string(key)] = value.Copy()
+	self.dirty = true
 }
 
 func (self *StateObject) Sync() {
@@ -166,6 +168,7 @@ func (c *StateObject) GetInstr(pc *big.Int) *ethutil.Value {
 
 func (c *StateObject) AddBalance(amount *big.Int) {
 	c.SetBalance(new(big.Int).Add(c.balance, amount))
+	c.dirty = true
 
 	statelogger.Debugf("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce, c.balance, amount)
 }
@@ -180,6 +183,7 @@ func (c *StateObject) SubAmount(amount *big.Int) { c.SubBalance(amount) }
 
 func (c *StateObject) SetBalance(amount *big.Int) {
 	c.balance = amount
+	c.dirty = true
 }
 
 func (self *StateObject) Balance() *big.Int { return self.balance }
@@ -197,6 +201,8 @@ func (c *StateObject) ConvertGas(gas, price *big.Int) error {
 	}
 
 	c.SubAmount(total)
+
+	c.dirty = true
 
 	return nil
 }
@@ -218,6 +224,8 @@ func (self *StateObject) BuyGas(gas, price *big.Int) error {
 	rGas.Mul(rGas, price)
 
 	self.AddAmount(rGas)
+
+	self.dirty = true
 
 	return nil
 }

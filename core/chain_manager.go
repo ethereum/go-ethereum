@@ -397,7 +397,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 
 		if chain {
 			//self.setTransState(state.New(block.Root(), self.db))
-			self.eventMux.Post(ChainEvent{block, td})
+			//self.eventMux.Post(ChainEvent{block, td})
 		}
 
 		if split {

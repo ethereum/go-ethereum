@@ -296,16 +296,13 @@ func (sm *BlockProcessor) AccumulateRewards(statedb *state.StateDB, block, paren
 		r := new(big.Int)
 		r.Mul(BlockReward, big.NewInt(15)).Div(r, big.NewInt(16))
 
-		uncleAccount := statedb.GetAccount(uncle.Coinbase)
-		uncleAccount.AddAmount(r)
+		statedb.AddBalance(uncle.Coinbase, r)
 
 		reward.Add(reward, new(big.Int).Div(BlockReward, big.NewInt(32)))
 	}
 
 	// Get the account associated with the coinbase
-	account := statedb.GetAccount(block.Header().Coinbase)
-	// Reward amount of ether to the coinbase address
-	account.AddAmount(reward)
+	statedb.AddBalance(block.Header().Coinbase, reward)
 
 	return nil
 }
