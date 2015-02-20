@@ -617,6 +617,8 @@ done:
 					delete(self.messages, id)
 				}
 			}
+			self.logMut.Unlock()
+			self.messagesMut.Unlock()
 		case <-self.quit:
 			break done
 		}
