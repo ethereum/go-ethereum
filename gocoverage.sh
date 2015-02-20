@@ -13,7 +13,7 @@ for dir in $(find . -maxdepth 10 -not -path './.git*' -not -path '*/_*' -type d)
 do
 if ls $dir/*.go &> /dev/null; then
     # echo $dir
-    if [[ $dir != "./tests/vm" ]]
+    if [[ $dir != "./tests/vm" && $dir != "." ]]
     then
         go test -covermode=count -coverprofile=$dir/profile.tmp $dir
     fi
