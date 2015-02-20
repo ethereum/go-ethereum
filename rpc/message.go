@@ -201,6 +201,36 @@ func (req *RpcRequest) ToGetCodeAtArgs() (*GetCodeAtArgs, error) {
 	return args, nil
 }
 
+func (req *RpcRequest) ToBoolArgs() (bool, error) {
+	if len(req.Params) < 1 {
+		return false, NewErrorResponse(ErrorArguments)
+	}
+
+	var args bool
+	err := json.Unmarshal(req.Params[0], &args)
+	if err != nil {
+		return false, NewErrorResponse(ErrorDecodeArgs)
+	}
+
+	rpclogger.DebugDetailf("%T %v", args, args)
+	return args, nil
+}
+
+func (req *RpcRequest) ToCompileArgs() (string, error) {
+	if len(req.Params) < 1 {
+		return "", NewErrorResponse(ErrorArguments)
+	}
+
+	var args string
+	err := json.Unmarshal(req.Params[0], &args)
+	if err != nil {
+		return "", NewErrorResponse(ErrorDecodeArgs)
+	}
+
+	rpclogger.DebugDetailf("%T %v", args, args)
+	return args, nil
+}
+
 func (req *RpcRequest) ToFilterArgs() (*FilterOptions, error) {
 	if len(req.Params) < 1 {
 		return nil, NewErrorResponse(ErrorArguments)
@@ -229,6 +259,36 @@ func (req *RpcRequest) ToFilterStringArgs() (string, error) {
 
 	rpclogger.DebugDetailf("%T %v", args, args)
 	return args, nil
+}
+
+func (req *RpcRequest) ToUninstallFilterArgs() (int, error) {
+	if len(req.Params) < 1 {
+		return 0, NewErrorResponse(ErrorArguments)
+	}
+
+	var args int
+	err := json.Unmarshal(req.Params[0], &args)
+	if err != nil {
+		return 0, NewErrorResponse(ErrorDecodeArgs)
+	}
+
+	rpclogger.DebugDetailf("%T %v", args, args)
+	return args, nil
+}
+
+func (req *RpcRequest) ToFilterChangedArgs() (int, error) {
+	if len(req.Params) < 1 {
+		return 0, NewErrorResponse(ErrorArguments)
+	}
+
+	var id int
+	r := bytes.NewReader(req.Params[0])
+	err := json.NewDecoder(r).Decode(&id)
+	if err != nil {
+		return 0, NewErrorResponse(ErrorDecodeArgs)
+	}
+	rpclogger.DebugDetailf("%T %v", id, id)
+	return id, nil
 }
 
 func (req *RpcRequest) ToDbPutArgs() (*DbArgs, error) {

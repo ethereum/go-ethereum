@@ -113,6 +113,13 @@ func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) erro
 	return nil
 }
 
+func (self *EthereumApi) UninstallFilter(id int, reply *interface{}) error {
+	delete(self.logs, id)
+	self.filterManager.UninstallFilter(id)
+	*reply = true
+	return nil
+}
+
 func (self *EthereumApi) NewFilterString(args string, reply *interface{}) error {
 	var id int
 	filter := core.NewFilter(self.xeth.Backend())
@@ -273,6 +280,11 @@ func (p *EthereumApi) GetIsMining(reply *interface{}) error {
 	return nil
 }
 
+func (p *EthereumApi) SetMining(shouldmine bool, reply *interface{}) error {
+	*reply = p.xeth.SetMining(shouldmine)
+	return nil
+}
+
 func (p *EthereumApi) BlockNumber(reply *interface{}) error {
 	*reply = p.xeth.Backend().ChainManager().CurrentBlock().Number()
 	return nil
@@ -303,6 +315,21 @@ func (p *EthereumApi) GetCodeAt(args *GetCodeAtArgs, reply *interface{}) error {
 		return err
 	}
 	*reply = p.xeth.CodeAt(args.Address)
+	return nil
+}
+
+func (p *EthereumApi) GetCompilers(reply *interface{}) error {
+	c := []string{"serpent"}
+	*reply = c
+	return nil
+}
+
+func (p *EthereumApi) CompileSerpent(script string, reply *interface{}) error {
+	res, err := ethutil.Compile(script, false)
+	if err != nil {
+		return err
+	}
+	*reply = res
 	return nil
 }
 
@@ -394,6 +421,12 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		return p.GetIsListening(reply)
 	case "eth_mining":
 		return p.GetIsMining(reply)
+	case "eth_setMining":
+		args, err := req.ToBoolArgs()
+		if err != nil {
+			return err
+		}
+		return p.SetMining(args, reply)
 	case "eth_peerCount":
 		return p.GetPeerCount(reply)
 	case "eth_number":
@@ -460,6 +493,12 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.NewFilterString(args, reply)
+	case "eth_uninstallFilter":
+		args, err := req.ToUninstallFilterArgs()
+		if err != nil {
+			return err
+		}
+		return p.UninstallFilter(args, reply)
 	case "eth_changed":
 		args, err := req.ToIdArgs()
 		if err != nil {
@@ -493,6 +532,14 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.WatchTx(args, reply)
+	case "eth_compilers":
+		return p.GetCompilers(reply)
+	case "eth_serpent":
+		args, err := req.ToCompileArgs()
+		if err != nil {
+			return err
+		}
+		return p.CompileSerpent(args, reply)
 	case "web3_sha3":
 		args, err := req.ToSha3Args()
 		if err != nil {

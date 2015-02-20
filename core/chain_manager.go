@@ -396,8 +396,9 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 		self.mu.Unlock()
 
 		if chain {
-			//self.setTransState(state.New(block.Root(), self.db))
-			//self.eventMux.Post(ChainEvent{block, td})
+			fmt.Println("POST START")
+			self.eventMux.Post(ChainEvent{block, td})
+			fmt.Println("POST END")
 		}
 
 		if split {
@@ -412,8 +413,4 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 // Satisfy state query interface
 func (self *ChainManager) GetAccount(addr []byte) *state.StateObject {
 	return self.State().GetAccount(addr)
-}
-
-func (self *ChainManager) TransMut() *sync.RWMutex {
-	return &self.tsmu
 }

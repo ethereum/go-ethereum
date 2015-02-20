@@ -103,6 +103,17 @@ func (self *XEth) IsMining() bool {
 	return self.miner.Mining()
 }
 
+func (self *XEth) SetMining(shouldmine bool) bool {
+	ismining := self.miner.Mining()
+	if shouldmine && !ismining {
+		self.miner.Start()
+	}
+	if ismining && !shouldmine {
+		self.miner.Stop()
+	}
+	return self.miner.Mining()
+}
+
 func (self *XEth) IsListening() bool {
 	return self.eth.IsListening()
 }
