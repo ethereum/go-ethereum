@@ -964,7 +964,7 @@ ApplicationWindow {
                  anchors.top: parent.top
                  anchors.topMargin: 30
                  font.pointSize: 12
-                 text: "<h2>Mist (0.7.10)</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Viktor Trón<br>Felix Lange<br>Taylor Gerring<br>Daniel Nagy<br><h3>UX</h3>Alex van de Sande<br>"
+                 text: "<h2>Mist (0.9.0)</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Viktor Trón<br>Felix Lange<br>Taylor Gerring<br>Daniel Nagy<br>Gustav Simonsson<br><h3>UX/UI</h3>Alex van de Sande<br>Fabian Vogelsteller"
              }
          }
 

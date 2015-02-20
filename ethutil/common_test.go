@@ -39,7 +39,7 @@ func (s *CommonSuite) TestCommon(c *checker.C) {
 	douglas := CurrencyToString(BigPow(10, 43))
 	einstein := CurrencyToString(BigPow(10, 22))
 	ether := CurrencyToString(BigPow(10, 19))
-	finney := CurrencyToString(BigPow(10, 16))
+	finney := CurrencyToString(BigPow(10, 15))
 	szabo := CurrencyToString(BigPow(10, 13))
 	shannon := CurrencyToString(BigPow(10, 10))
 	babbage := CurrencyToString(BigPow(10, 7))
