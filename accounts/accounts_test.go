@@ -1,8 +1,10 @@
 package accounts
 
 import (
-	"github.com/ethereum/go-ethereum/crypto"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/randentropy"
 )
 
 func TestAccountManager(t *testing.T) {
@@ -10,7 +12,7 @@ func TestAccountManager(t *testing.T) {
 	am := NewAccountManager(ks)
 	pass := "" // not used but required by API
 	a1, err := am.NewAccount(pass)
-	toSign := crypto.GetEntropyCSPRNG(32)
+	toSign := randentropy.GetEntropyCSPRNG(32)
 	_, err = am.Sign(a1, pass, toSign)
 	if err != nil {
 		t.Fatal(err)
