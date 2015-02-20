@@ -20,10 +20,12 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/xeth"
 )
 
 var rpclogger = logger.NewLogger("RPC")
@@ -99,4 +101,35 @@ func toLogs(logs state.Logs) (ls []Log) {
 	}
 
 	return
+}
+
+type whisperFilter struct {
+	messages []xeth.WhisperMessage
+	timeout  time.Time
+}
+
+func (w *whisperFilter) add(msgs ...xeth.WhisperMessage) {
+	w.messages = append(w.messages, msgs...)
+}
+func (w *whisperFilter) get() []xeth.WhisperMessage {
+	w.timeout = time.Now()
+	tmp := w.messages
+	w.messages = nil
+	return tmp
+}
+
+type logFilter struct {
+	logs    state.Logs
+	timeout time.Time
+}
+
+func (l *logFilter) add(logs ...state.Log) {
+	l.logs = append(l.logs, logs...)
+}
+
+func (l *logFilter) get() state.Logs {
+	l.timeout = time.Now()
+	tmp := l.logs
+	l.logs = nil
+	return tmp
 }
