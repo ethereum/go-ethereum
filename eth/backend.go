@@ -25,7 +25,10 @@ var (
 	jsonlogger = ethlogger.NewJsonLogger()
 
 	defaultBootNodes = []*discover.Node{
+		// ETH/DEV cmd/bootnode
 		discover.MustParseNode("enode://6cdd090303f394a1cac34ecc9f7cda18127eafa2a3a06de39f6d920b0e583e062a7362097c7c65ee490a758b442acd5c80c6fce4b148c6a391e946b45131365b@54.169.166.226:30303"),
+		// ETH/DEV cpp-ethereum (poc-8.ethdev.com)
+		discover.MustParseNode("enode://4a44599974518ea5b0f14c31c4463692ac0329cb84851f3435e6d1b18ee4eae4aa495f846a0fa1219bd58035671881d44423876e57db2abd57254d0197da0ebe@5.1.83.226:30303"),
 	}
 )
 
