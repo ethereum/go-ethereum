@@ -1,36 +1,43 @@
-// Copyright (c) 2013-2014, Jeffrey Wilcke. All rights reserved.
-//
-// This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-//
-// This library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-// General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this library; if not, write to the Free Software
-// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
-// MA 02110-1301  USA
+/*
+	This file is part of go-ethereum
 
+	go-ethereum is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	go-ethereum is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/**
+ * @authors
+ * 	Jeffrey Wilcke <i@jev.io>
+ */
 package main
 
 import (
 	"fmt"
 	"os"
 	"runtime"
+	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/state"
 )
 
 const (
 	ClientIdentifier = "Ethereum(G)"
-	Version          = "0.7.11"
+	Version          = "0.9.0"
 )
 
 var clilogger = logger.NewLogger("CLI")
@@ -38,40 +45,44 @@ var clilogger = logger.NewLogger("CLI")
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
+	defer func() {
+		logger.Flush()
+	}()
+
 	utils.HandleInterrupt()
 
 	// precedence: code-internal flag default < config file < environment variables < command line
 	Init() // parsing command line
 
-	// If the difftool option is selected ignore all other log output
-	if DiffTool || Dump {
-		LogLevel = 0
+	if PrintVersion {
+		printVersion()
+		return
 	}
 
 	utils.InitConfig(VmType, ConfigFile, Datadir, "ETH")
-	ethutil.Config.Diff = DiffTool
-	ethutil.Config.DiffType = DiffType
 
-	utils.InitDataDir(Datadir)
+	ethereum, err := eth.New(&eth.Config{
+		Name:      p2p.MakeName(ClientIdentifier, Version),
+		KeyStore:  KeyStore,
+		DataDir:   Datadir,
+		LogFile:   LogFile,
+		LogLevel:  LogLevel,
+		LogFormat: LogFormat,
+		MaxPeers:  MaxPeer,
+		Port:      OutboundPort,
+		NAT:       NAT,
+		KeyRing:   KeyRing,
+		Shh:       true,
+		Dial:      Dial,
+		BootNodes: BootNodes,
+		NodeKey:   NodeKey,
+	})
 
-	utils.InitLogging(Datadir, LogFile, LogLevel, DebugFile)
-
-	db := utils.NewDatabase()
-	err := utils.DBSanityCheck(db)
 	if err != nil {
-		fmt.Println(err)
-
-		os.Exit(1)
+		clilogger.Fatalln(err)
 	}
 
-	keyManager := utils.NewKeyManager(KeyStore, Datadir, db)
-
-	// create, import, export keys
-	utils.KeyTasks(keyManager, KeyRing, GenAddr, SecretFile, ExportDir, NonInteractive)
-
-	clientIdentity := utils.NewClientIdentity(ClientIdentifier, Version, Identifier)
-
-	ethereum := utils.NewEthereum(db, clientIdentity, keyManager, UseUPnP, OutboundPort, MaxPeer)
+	utils.KeyTasks(ethereum.KeyManager(), KeyRing, GenAddr, SecretFile, ExportDir, NonInteractive)
 
 	if Dump {
 		var block *types.Block
@@ -93,30 +104,27 @@ func main() {
 			os.Exit(1)
 		}
 
-		// block.GetRoot() does not exist
-		//fmt.Printf("RLP: %x\nstate: %x\nhash: %x\n", ethutil.Rlp(block), block.GetRoot(), block.Hash())
-
 		// Leave the Println. This needs clean output for piping
-		fmt.Printf("%s\n", block.State().Dump())
+		statedb := state.New(block.Root(), ethereum.Db())
+		fmt.Printf("%s\n", statedb.Dump())
 
 		fmt.Println(block)
 
-		os.Exit(0)
-	}
-
-	if ShowGenesis {
-		utils.ShowGenesis(ethereum)
+		return
 	}
 
 	if StartMining {
 		utils.StartMining(ethereum)
 	}
 
-	// better reworked as cases
-	if StartJsConsole {
-		InitJsConsole(ethereum)
-	} else if len(InputFile) > 0 {
-		ExecJsFile(ethereum, InputFile)
+	if len(ImportChain) > 0 {
+		start := time.Now()
+		err := utils.ImportChain(ethereum, ImportChain)
+		if err != nil {
+			clilogger.Infoln(err)
+		}
+		clilogger.Infoln("import done in", time.Since(start))
+		return
 	}
 
 	if StartRpc {
@@ -124,12 +132,26 @@ func main() {
 	}
 
 	if StartWebSockets {
-		utils.StartWebSockets(ethereum)
+		utils.StartWebSockets(ethereum, WsPort)
 	}
 
-	utils.StartEthereum(ethereum, UseSeed)
+	utils.StartEthereum(ethereum)
 
+	if StartJsConsole {
+		InitJsConsole(ethereum)
+	} else if len(InputFile) > 0 {
+		ExecJsFile(ethereum, InputFile)
+	}
 	// this blocks the thread
 	ethereum.WaitForShutdown()
-	logger.Flush()
+}
+
+func printVersion() {
+	fmt.Printf(`%v %v
+PV=%d
+GOOS=%s
+GO=%s
+GOPATH=%s
+GOROOT=%s
+`, ClientIdentifier, Version, eth.ProtocolVersion, runtime.GOOS, runtime.Version(), os.Getenv("GOPATH"), runtime.GOROOT())
 }

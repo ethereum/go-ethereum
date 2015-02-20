@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
 )
+
+const tryJit = false
 
 /*
  * The State transitioning model
@@ -28,18 +29,17 @@ import (
  * 6) Derive new state root
  */
 type StateTransition struct {
-	coinbase, receiver []byte
-	msg                Message
-	gas, gasPrice      *big.Int
-	initialGas         *big.Int
-	value              *big.Int
-	data               []byte
-	state              *state.StateDB
-	block              *types.Block
+	coinbase      []byte
+	msg           Message
+	gas, gasPrice *big.Int
+	initialGas    *big.Int
+	value         *big.Int
+	data          []byte
+	state         *state.StateDB
 
 	cb, rec, sen *state.StateObject
 
-	Env vm.Environment
+	env vm.Environment
 }
 
 type Message interface {
@@ -69,16 +69,19 @@ func MessageGasValue(msg Message) *big.Int {
 	return new(big.Int).Mul(msg.Gas(), msg.GasPrice())
 }
 
-func NewStateTransition(coinbase *state.StateObject, msg Message, state *state.StateDB, block *types.Block) *StateTransition {
-	return &StateTransition{coinbase.Address(), msg.To(), msg, new(big.Int), new(big.Int).Set(msg.GasPrice()), new(big.Int), msg.Value(), msg.Data(), state, block, coinbase, nil, nil, nil}
-}
-
-func (self *StateTransition) VmEnv() vm.Environment {
-	if self.Env == nil {
-		self.Env = NewEnv(self.state, self.msg, self.block)
+func NewStateTransition(env vm.Environment, msg Message, coinbase *state.StateObject) *StateTransition {
+	return &StateTransition{
+		coinbase:   coinbase.Address(),
+		env:        env,
+		msg:        msg,
+		gas:        new(big.Int),
+		gasPrice:   new(big.Int).Set(msg.GasPrice()),
+		initialGas: new(big.Int),
+		value:      msg.Value(),
+		data:       msg.Data(),
+		state:      env.State(),
+		cb:         coinbase,
 	}
-
-	return self.Env
 }
 
 func (self *StateTransition) Coinbase() *state.StateObject {
@@ -135,8 +138,8 @@ func (self *StateTransition) preCheck() (err error) {
 	)
 
 	// Make sure this transaction's nonce is correct
-	if sender.Nonce != msg.Nonce() {
-		return NonceError(msg.Nonce(), sender.Nonce)
+	if sender.Nonce() != msg.Nonce() {
+		return NonceError(msg.Nonce(), sender.Nonce())
 	}
 
 	// Pre-pay gas / Buy gas of the coinbase account
@@ -163,7 +166,8 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 	defer self.RefundGas()
 
 	// Increment the nonce for the next transaction
-	sender.Nonce += 1
+	self.state.SetNonce(sender.Address(), sender.Nonce()+1)
+	//sender.Nonce += 1
 
 	// Transaction gas
 	if err = self.UseGas(vm.GasTx); err != nil {
@@ -183,21 +187,47 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 		return
 	}
 
-	vmenv := self.VmEnv()
-	var ref vm.ClosureRef
+	//stateCopy := self.env.State().Copy()
+	vmenv := self.env
+	var ref vm.ContextRef
 	if MessageCreatesContract(msg) {
 		contract := MakeContract(msg, self.state)
 		ret, err, ref = vmenv.Create(sender, contract.Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
 		if err == nil {
 			dataGas := big.NewInt(int64(len(ret)))
 			dataGas.Mul(dataGas, vm.GasCreateByte)
-			if err = self.UseGas(dataGas); err == nil {
-				//self.state.SetCode(ref.Address(), ret)
+			if err := self.UseGas(dataGas); err == nil {
 				ref.SetCode(ret)
 			}
 		}
+
+		/*
+			if vmenv, ok := vmenv.(*VMEnv); ok && tryJit {
+				statelogger.Infof("CREATE: re-running using JIT (PH=%x)\n", stateCopy.Root()[:4])
+				// re-run using the JIT (validation for the JIT)
+				goodState := vmenv.State().Copy()
+				vmenv.state = stateCopy
+				vmenv.SetVmType(vm.JitVmTy)
+				vmenv.Create(sender, contract.Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
+				statelogger.Infof("DONE PH=%x STD_H=%x JIT_H=%x\n", stateCopy.Root()[:4], goodState.Root()[:4], vmenv.State().Root()[:4])
+				self.state.Set(goodState)
+			}
+		*/
 	} else {
 		ret, err = vmenv.Call(self.From(), self.To().Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
+
+		/*
+			if vmenv, ok := vmenv.(*VMEnv); ok && tryJit {
+				statelogger.Infof("CALL: re-running using JIT (PH=%x)\n", stateCopy.Root()[:4])
+				// re-run using the JIT (validation for the JIT)
+				goodState := vmenv.State().Copy()
+				vmenv.state = stateCopy
+				vmenv.SetVmType(vm.JitVmTy)
+				vmenv.Call(self.From(), self.To().Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
+				statelogger.Infof("DONE PH=%x STD_H=%x JIT_H=%x\n", stateCopy.Root()[:4], goodState.Root()[:4], vmenv.State().Root()[:4])
+				self.state.Set(goodState)
+			}
+		*/
 	}
 
 	if err != nil {
@@ -212,7 +242,7 @@ func MakeContract(msg Message, state *state.StateDB) *state.StateObject {
 	addr := AddressFromMessage(msg)
 
 	contract := state.GetOrNewStateObject(addr)
-	contract.InitCode = msg.Data()
+	contract.SetInitCode(msg.Data())
 
 	return contract
 }

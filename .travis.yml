@@ -1,25 +1,24 @@
 language: go
 go:
-  - 1.3
+  - 1.4.1
 before_install:
-  - sudo add-apt-repository ppa:ubuntu-sdk-team/ppa -y
+  - sudo add-apt-repository ppa:beineri/opt-qt54 -y
   - sudo apt-get update -qq
-  - sudo apt-get install -yqq libgmp3-dev qtbase5-private-dev qtdeclarative5-private-dev libqt5opengl5-dev libreadline6-dev
+  - sudo apt-get install -yqq libgmp3-dev libreadline6-dev qt54quickcontrols qt54webengine
 install:
-  - go get code.google.com/p/go.tools/cmd/goimports
-  - go get github.com/golang/lint/golint
-  # - go get code.google.com/p/go.tools/cmd/vet
-  - go get code.google.com/p/go.tools/cmd/cover
+  # - go get golang.org/x/tools/cmd/vet 
+  - if ! go get code.google.com/p/go.tools/cmd/cover; then go get golang.org/x/tools/cmd/cover; fi
   - go get github.com/mattn/goveralls
-  - ./install_deps.sh
 before_script:
-  - gofmt -l -w .
-  - goimports -l -w .
-  - golint .
   # - go vet ./...
   # - go test -race ./...
 script:
-  - ./gocoverage.sh && goveralls -coverprofile=profile.cov -service=travis-ci -repotoken $COVERALLS_TOKEN
+  - ./gocoverage.sh
+after_success:
+  - if [ "$COVERALLS_TOKEN" ]; then goveralls -coverprofile=profile.cov -service=travis-ci -repotoken $COVERALLS_TOKEN; fi
 env:
-  - secure: "U2U1AmkU4NJBgKR/uUAebQY87cNL0+1JHjnLOmmXwxYYyj5ralWb1aSuSH3qSXiT93qLBmtaUkuv9fberHVqrbAeVlztVdUsKAq7JMQH+M99iFkC9UiRMqHmtjWJ0ok4COD1sRYixxi21wb/JrMe3M1iL4QJVS61iltjHhVdM64="
+  global:
+    - PKG_CONFIG_PATH=/opt/qt54/lib/pkgconfig
+    - LD_LIBRARY_PATH=/opt/qt54/lib
+    - secure: "U2U1AmkU4NJBgKR/uUAebQY87cNL0+1JHjnLOmmXwxYYyj5ralWb1aSuSH3qSXiT93qLBmtaUkuv9fberHVqrbAeVlztVdUsKAq7JMQH+M99iFkC9UiRMqHmtjWJ0ok4COD1sRYixxi21wb/JrMe3M1iL4QJVS61iltjHhVdM64="
 

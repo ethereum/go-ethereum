@@ -1,11 +1,11 @@
 package ethdb
 
 import (
-	"fmt"
 	"path"
+	"fmt"
 
-	"github.com/ethereum/go-ethereum/compression/rle"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/compression/rle"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 )
@@ -69,6 +69,10 @@ func (self *LDBDatabase) LastKnownTD() []byte {
 
 func (self *LDBDatabase) NewIterator() iterator.Iterator {
 	return self.db.NewIterator(nil, nil)
+}
+
+func (self *LDBDatabase) Write(batch *leveldb.Batch) error {
+	return self.db.Write(batch, nil)
 }
 
 func (self *LDBDatabase) Close() {

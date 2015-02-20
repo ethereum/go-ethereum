@@ -14,26 +14,22 @@ type Environment interface {
 
 	Origin() []byte
 	BlockNumber() *big.Int
-	PrevHash() []byte
+	GetHash(n uint64) []byte
 	Coinbase() []byte
 	Time() int64
 	Difficulty() *big.Int
-	BlockHash() []byte
 	GasLimit() *big.Int
 	Transfer(from, to Account, amount *big.Int) error
 	AddLog(state.Log)
 
+	VmType() Type
+
 	Depth() int
 	SetDepth(i int)
 
-	Call(me ClosureRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error)
-	CallCode(me ClosureRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error)
-	Create(me ClosureRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error, ClosureRef)
-}
-
-type Object interface {
-	GetStorage(key *big.Int) *ethutil.Value
-	SetStorage(key *big.Int, value *ethutil.Value)
+	Call(me ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error)
+	CallCode(me ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error)
+	Create(me ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error, ContextRef)
 }
 
 type Account interface {

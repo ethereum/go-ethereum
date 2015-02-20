@@ -9,10 +9,31 @@ import Ethereum 1.0
 Rectangle {
 	id: root
 	property var title: "Miner"
-	property var iconSource: "../miner.png"
+	property var iconSource: "../mining-icon.png"
 	property var menuItem
 
 	color: "#00000000"
+
+        Label {
+	    visible: false
+            id: lastBlockLabel
+            objectName: "lastBlockLabel"
+            text: "---"
+	    onTextChanged: {
+		//menuItem.secondaryTitle = text
+	    }
+        }
+
+        Label {
+            objectName: "miningLabel"
+            visible: false
+            font.pixelSize: 10
+            anchors.right: lastBlockLabel.left
+            anchors.rightMargin: 5
+	    onTextChanged: {
+		menuItem.secondaryTitle = text
+	    }
+        }
 
 	ColumnLayout {
 		spacing: 10
@@ -46,6 +67,7 @@ Rectangle {
 						text: "Start"
 						onClicked: {
 							eth.setGasPrice(minGasPrice.text || "10000000000000");
+							eth.setExtra(blockExtra.text)
 							if (eth.toggleMining()) {
 								this.text = "Stop";
 							} else {
@@ -55,6 +77,7 @@ Rectangle {
 					}
 
 					Rectangle {
+						id: minGasPriceRect
 						anchors.top: parent.top
 						anchors.topMargin: 2
 						width: 200
@@ -63,6 +86,23 @@ Rectangle {
 							placeholderText: "Min Gas: 10000000000000"
 							width: 200
 							validator: RegExpValidator { regExp: /\d*/ }
+						}
+					}
+
+					Rectangle {
+						width: 300
+						anchors {
+							left: minGasPriceRect.right
+							leftMargin: 5
+							top: parent.top
+							topMargin: 2
+						}
+
+						TextField {
+							id: blockExtra
+							placeholderText: "Extra"
+							width: parent.width
+							maximumLength: 1024
 						}
 					}
 				}

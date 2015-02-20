@@ -1,37 +1,29 @@
 package qt
 
 import (
-	"fmt"
-
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ui"
-	"gopkg.in/qml.v1"
+	"github.com/obscuren/qml"
 )
 
-func NewFilterFromMap(object map[string]interface{}, eth core.EthManager) *core.Filter {
+func NewFilterFromMap(object map[string]interface{}, eth core.Backend) *core.Filter {
 	filter := ui.NewFilterFromMap(object, eth)
 
-	if object["altered"] != nil {
-		filter.Altered = makeAltered(object["altered"])
+	if object["topics"] != nil {
+		filter.SetTopics(makeTopics(object["topics"]))
 	}
 
 	return filter
 }
 
-func makeAltered(v interface{}) (d []core.AccountChange) {
+func makeTopics(v interface{}) (d [][]byte) {
 	if qList, ok := v.(*qml.List); ok {
-		var s []interface{}
+		var s []string
 		qList.Convert(&s)
 
-		fmt.Println(s)
-
-		d = makeAltered(s)
-	} else if qMap, ok := v.(*qml.Map); ok {
-		var m map[string]interface{}
-		qMap.Convert(&m)
-		fmt.Println(m)
-
-		d = makeAltered(m)
+		d = ui.MakeTopics(s)
+	} else if str, ok := v.(string); ok {
+		d = ui.MakeTopics(str)
 	}
 
 	return

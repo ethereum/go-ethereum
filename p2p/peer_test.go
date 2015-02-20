@@ -1,15 +1,15 @@
 package p2p
 
 import (
-	"bufio"
 	"bytes"
-	"encoding/hex"
-	"io"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var discard = Protocol{
@@ -21,6 +21,7 @@ var discard = Protocol{
 			if err != nil {
 				return err
 			}
+			fmt.Printf("discarding %d\n", msg.Code)
 			if err = msg.Discard(); err != nil {
 				return err
 			}
@@ -28,18 +29,20 @@ var discard = Protocol{
 	},
 }
 
-func testPeer(protos []Protocol) (net.Conn, *Peer, <-chan error) {
-	conn1, conn2 := net.Pipe()
-	id := NewSimpleClientIdentity("test", "0", "0", "public key")
-	peer := newPeer(conn1, protos, nil)
-	peer.ourID = id
-	peer.pubkeyHook = func(*peerAddr) error { return nil }
-	errc := make(chan error, 1)
-	go func() {
-		_, err := peer.loop()
-		errc <- err
-	}()
-	return conn2, peer, errc
+func testPeer(protos []Protocol) (*conn, *Peer, <-chan DiscReason) {
+	fd1, fd2 := net.Pipe()
+	hs1 := &protoHandshake{ID: randomID(), Version: baseProtocolVersion}
+	hs2 := &protoHandshake{ID: randomID(), Version: baseProtocolVersion}
+	for _, p := range protos {
+		hs1.Caps = append(hs1.Caps, p.cap())
+		hs2.Caps = append(hs2.Caps, p.cap())
+	}
+
+	peer := newPeer(newConn(fd1, hs1), protos)
+	errc := make(chan DiscReason, 1)
+	go func() { errc <- peer.run() }()
+
+	return newConn(fd2, hs2), peer, errc
 }
 
 func TestPeerProtoReadMsg(t *testing.T) {
@@ -50,31 +53,27 @@ func TestPeerProtoReadMsg(t *testing.T) {
 		Name:   "a",
 		Length: 5,
 		Run: func(peer *Peer, rw MsgReadWriter) error {
-			msg, err := rw.ReadMsg()
-			if err != nil {
-				t.Errorf("read error: %v", err)
+			if err := expectMsg(rw, 2, []uint{1}); err != nil {
+				t.Error(err)
 			}
-			if msg.Code != 2 {
-				t.Errorf("incorrect msg code %d relayed to protocol", msg.Code)
+			if err := expectMsg(rw, 3, []uint{2}); err != nil {
+				t.Error(err)
 			}
-			data, err := ioutil.ReadAll(msg.Payload)
-			if err != nil {
-				t.Errorf("payload read error: %v", err)
-			}
-			expdata, _ := hex.DecodeString("0183303030")
-			if !bytes.Equal(expdata, data) {
-				t.Errorf("incorrect msg data %x", data)
+			if err := expectMsg(rw, 4, []uint{3}); err != nil {
+				t.Error(err)
 			}
 			close(done)
 			return nil
 		},
 	}
 
-	net, peer, errc := testPeer([]Protocol{proto})
-	defer net.Close()
-	peer.startSubprotocols([]Cap{proto.cap()})
+	rw, _, errc := testPeer([]Protocol{proto})
+	defer rw.Close()
 
-	writeMsg(net, NewMsg(18, 1, "000"))
+	EncodeMsg(rw, baseProtocolLength+2, 1)
+	EncodeMsg(rw, baseProtocolLength+3, 2)
+	EncodeMsg(rw, baseProtocolLength+4, 3)
+
 	select {
 	case <-done:
 	case err := <-errc:
@@ -106,11 +105,10 @@ func TestPeerProtoReadLargeMsg(t *testing.T) {
 		},
 	}
 
-	net, peer, errc := testPeer([]Protocol{proto})
-	defer net.Close()
-	peer.startSubprotocols([]Cap{proto.cap()})
+	rw, _, errc := testPeer([]Protocol{proto})
+	defer rw.Close()
 
-	writeMsg(net, NewMsg(18, make([]byte, msgsize)))
+	EncodeMsg(rw, 18, make([]byte, msgsize))
 	select {
 	case <-done:
 	case err := <-errc:
@@ -127,35 +125,28 @@ func TestPeerProtoEncodeMsg(t *testing.T) {
 		Name:   "a",
 		Length: 2,
 		Run: func(peer *Peer, rw MsgReadWriter) error {
-			if err := rw.EncodeMsg(2); err == nil {
+			if err := EncodeMsg(rw, 2); err == nil {
 				t.Error("expected error for out-of-range msg code, got nil")
 			}
-			if err := rw.EncodeMsg(1); err != nil {
+			if err := EncodeMsg(rw, 1, "foo", "bar"); err != nil {
 				t.Errorf("write error: %v", err)
 			}
 			return nil
 		},
 	}
-	net, peer, _ := testPeer([]Protocol{proto})
-	defer net.Close()
-	peer.startSubprotocols([]Cap{proto.cap()})
+	rw, _, _ := testPeer([]Protocol{proto})
+	defer rw.Close()
 
-	bufr := bufio.NewReader(net)
-	msg, err := readMsg(bufr)
-	if err != nil {
-		t.Errorf("read error: %v", err)
-	}
-	if msg.Code != 17 {
-		t.Errorf("incorrect message code: got %d, expected %d", msg.Code, 17)
+	if err := expectMsg(rw, 17, []string{"foo", "bar"}); err != nil {
+		t.Error(err)
 	}
 }
 
-func TestPeerWrite(t *testing.T) {
+func TestPeerWriteForBroadcast(t *testing.T) {
 	defer testlog(t).detach()
 
-	net, peer, peerErr := testPeer([]Protocol{discard})
-	defer net.Close()
-	peer.startSubprotocols([]Cap{discard.cap()})
+	rw, peer, peerErr := testPeer([]Protocol{discard})
+	defer rw.Close()
 
 	// test write errors
 	if err := peer.writeProtoMsg("b", NewMsg(3)); err == nil {
@@ -170,18 +161,13 @@ func TestPeerWrite(t *testing.T) {
 	// setup for reading the message on the other end
 	read := make(chan struct{})
 	go func() {
-		bufr := bufio.NewReader(net)
-		msg, err := readMsg(bufr)
-		if err != nil {
-			t.Errorf("read error: %v", err)
-		} else if msg.Code != 16 {
-			t.Errorf("wrong code, got %d, expected %d", msg.Code, 16)
+		if err := expectMsg(rw, 16, nil); err != nil {
+			t.Error(err)
 		}
-		msg.Discard()
 		close(read)
 	}()
 
-	// test succcessful write
+	// test successful write
 	if err := peer.writeProtoMsg("discard", NewMsg(0)); err != nil {
 		t.Errorf("expect no error for known protocol: %v", err)
 	}
@@ -192,104 +178,86 @@ func TestPeerWrite(t *testing.T) {
 	}
 }
 
-func TestPeerActivity(t *testing.T) {
-	// shorten inactivityTimeout while this test is running
-	oldT := inactivityTimeout
-	defer func() { inactivityTimeout = oldT }()
-	inactivityTimeout = 20 * time.Millisecond
+func TestPeerPing(t *testing.T) {
+	defer testlog(t).detach()
 
-	net, peer, peerErr := testPeer([]Protocol{discard})
-	defer net.Close()
-	peer.startSubprotocols([]Cap{discard.cap()})
-
-	sub := peer.activity.Subscribe(time.Time{})
-	defer sub.Unsubscribe()
-
-	for i := 0; i < 6; i++ {
-		writeMsg(net, NewMsg(16))
-		select {
-		case <-sub.Chan():
-		case <-time.After(inactivityTimeout / 2):
-			t.Fatal("no event within ", inactivityTimeout/2)
-		case err := <-peerErr:
-			t.Fatal("peer error", err)
-		}
+	rw, _, _ := testPeer(nil)
+	defer rw.Close()
+	if err := EncodeMsg(rw, pingMsg); err != nil {
+		t.Fatal(err)
 	}
+	if err := expectMsg(rw, pongMsg, nil); err != nil {
+		t.Error(err)
+	}
+}
 
-	select {
-	case <-time.After(inactivityTimeout * 2):
-	case <-sub.Chan():
-		t.Fatal("got activity event while connection was inactive")
-	case err := <-peerErr:
-		t.Fatal("peer error", err)
+func TestPeerDisconnect(t *testing.T) {
+	defer testlog(t).detach()
+
+	rw, _, disc := testPeer(nil)
+	defer rw.Close()
+	if err := EncodeMsg(rw, discMsg, DiscQuitting); err != nil {
+		t.Fatal(err)
+	}
+	if err := expectMsg(rw, discMsg, []interface{}{DiscRequested}); err != nil {
+		t.Error(err)
+	}
+	rw.Close() // make test end faster
+	if reason := <-disc; reason != DiscRequested {
+		t.Errorf("run returned wrong reason: got %v, want %v", reason, DiscRequested)
 	}
 }
 
 func TestNewPeer(t *testing.T) {
-	id := NewSimpleClientIdentity("clientid", "version", "customid", "pubkey")
+	name := "nodename"
 	caps := []Cap{{"foo", 2}, {"bar", 3}}
-	p := NewPeer(id, caps)
+	id := randomID()
+	p := NewPeer(id, name, caps)
+	if p.ID() != id {
+		t.Errorf("ID mismatch: got %v, expected %v", p.ID(), id)
+	}
+	if p.Name() != name {
+		t.Errorf("Name mismatch: got %v, expected %v", p.Name(), name)
+	}
 	if !reflect.DeepEqual(p.Caps(), caps) {
 		t.Errorf("Caps mismatch: got %v, expected %v", p.Caps(), caps)
 	}
-	if p.Identity() != id {
-		t.Errorf("Identity mismatch: got %v, expected %v", p.Identity(), id)
-	}
-	// Should not hang.
-	p.Disconnect(DiscAlreadyConnected)
+
+	p.Disconnect(DiscAlreadyConnected) // Should not hang
 }
 
-func TestEOFSignal(t *testing.T) {
-	rb := make([]byte, 10)
+// expectMsg reads a message from r and verifies that its
+// code and encoded RLP content match the provided values.
+// If content is nil, the payload is discarded and not verified.
+func expectMsg(r MsgReader, code uint64, content interface{}) error {
+	msg, err := r.ReadMsg()
+	if err != nil {
+		return err
+	}
+	if msg.Code != code {
+		return fmt.Errorf("message code mismatch: got %d, expected %d", msg.Code, code)
+	}
+	if content == nil {
+		return msg.Discard()
+	} else {
+		contentEnc, err := rlp.EncodeToBytes(content)
+		if err != nil {
+			panic("content encode error: " + err.Error())
+		}
+		// skip over list header in encoded value. this is temporary.
+		contentEncR := bytes.NewReader(contentEnc)
+		if k, _, err := rlp.NewStream(contentEncR).Kind(); k != rlp.List || err != nil {
+			panic("content must encode as RLP list")
+		}
+		contentEnc = contentEnc[len(contentEnc)-contentEncR.Len():]
 
-	// empty reader
-	eof := make(chan struct{}, 1)
-	sig := &eofSignal{new(bytes.Buffer), 0, eof}
-	if n, err := sig.Read(rb); n != 0 || err != io.EOF {
-		t.Errorf("Read returned unexpected values: (%v, %v)", n, err)
+		actualContent, err := ioutil.ReadAll(msg.Payload)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(actualContent, contentEnc) {
+			return fmt.Errorf("message payload mismatch:\ngot:  %x\nwant: %x", actualContent, contentEnc)
+		}
 	}
-	select {
-	case <-eof:
-	default:
-		t.Error("EOF chan not signaled")
-	}
-
-	// count before error
-	eof = make(chan struct{}, 1)
-	sig = &eofSignal{bytes.NewBufferString("aaaaaaaa"), 4, eof}
-	if n, err := sig.Read(rb); n != 8 || err != nil {
-		t.Errorf("Read returned unexpected values: (%v, %v)", n, err)
-	}
-	select {
-	case <-eof:
-	default:
-		t.Error("EOF chan not signaled")
-	}
-
-	// error before count
-	eof = make(chan struct{}, 1)
-	sig = &eofSignal{bytes.NewBufferString("aaaa"), 999, eof}
-	if n, err := sig.Read(rb); n != 4 || err != nil {
-		t.Errorf("Read returned unexpected values: (%v, %v)", n, err)
-	}
-	if n, err := sig.Read(rb); n != 0 || err != io.EOF {
-		t.Errorf("Read returned unexpected values: (%v, %v)", n, err)
-	}
-	select {
-	case <-eof:
-	default:
-		t.Error("EOF chan not signaled")
-	}
-
-	// no signal if neither occurs
-	eof = make(chan struct{}, 1)
-	sig = &eofSignal{bytes.NewBufferString("aaaaaaaaaaaaaaaaaaaaa"), 999, eof}
-	if n, err := sig.Read(rb); n != 10 || err != nil {
-		t.Errorf("Read returned unexpected values: (%v, %v)", n, err)
-	}
-	select {
-	case <-eof:
-		t.Error("unexpected EOF signal")
-	default:
-	}
+	return nil
 }

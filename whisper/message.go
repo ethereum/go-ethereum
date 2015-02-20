@@ -11,10 +11,13 @@ type Message struct {
 	Flags     byte
 	Signature []byte
 	Payload   []byte
+	Sent      int64
+
+	To *ecdsa.PublicKey
 }
 
 func NewMessage(payload []byte) *Message {
-	return &Message{Flags: 0, Payload: payload}
+	return &Message{Flags: 0, Payload: payload, Sent: time.Now().Unix()}
 }
 
 func (self *Message) hash() []byte {
@@ -67,7 +70,11 @@ func (self *Message) Seal(pow time.Duration, opts Opts) (*Envelope, error) {
 		}
 	}
 
-	envelope := NewEnvelope(DefaultTtl, opts.Topics, self)
+	if opts.Ttl == 0 {
+		opts.Ttl = DefaultTtl
+	}
+
+	envelope := NewEnvelope(opts.Ttl, opts.Topics, self)
 	envelope.Seal(pow)
 
 	return envelope, nil

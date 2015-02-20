@@ -2,7 +2,6 @@ package vm
 
 import (
 	"fmt"
-	"math"
 	"math/big"
 )
 
@@ -91,6 +90,12 @@ func (st *Stack) Get(amount *big.Int) []*big.Int {
 	return nil
 }
 
+func (st *Stack) require(n int) {
+	if st.Len() < n {
+		panic(fmt.Sprintf("stack underflow (%d <=> %d)", st.Len(), n))
+	}
+}
+
 func (st *Stack) Print() {
 	fmt.Println("### stack ###")
 	if len(st.data) > 0 {
@@ -135,17 +140,11 @@ func (m *Memory) Resize(size uint64) {
 	}
 }
 
-func (m *Memory) Get(offset, size int64) []byte {
-	if len(m.store) > int(offset) {
-		end := int(math.Min(float64(len(m.store)), float64(offset+size)))
-
-		return m.store[offset:end]
+func (self *Memory) Get(offset, size int64) (cpy []byte) {
+	if size == 0 {
+		return nil
 	}
 
-	return nil
-}
-
-func (self *Memory) Geti(offset, size int64) (cpy []byte) {
 	if len(self.store) > int(offset) {
 		cpy = make([]byte, size)
 		copy(cpy, self.store[offset:offset+size])

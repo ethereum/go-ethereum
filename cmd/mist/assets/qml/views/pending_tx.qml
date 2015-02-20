@@ -41,4 +41,13 @@ Rectangle {
 
 		pendingTxModel.insert(0, {hash: tx.hash, to: tx.address, from: tx.sender, value: tx.value, contract: isContract})
 	}
+
+	function removeTx(tx) {
+		for (var i = 0; i < pendingTxModel.count; i++) {
+			if (tx.hash === pendingTxModel.get(i).hash) {
+				pendingTxModel.remove(i);
+				break;
+			}
+		}
+	}
 }

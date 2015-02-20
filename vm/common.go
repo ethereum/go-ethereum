@@ -9,14 +9,26 @@ import (
 
 var vmlogger = logger.NewLogger("VM")
 
-type Type int
+type Type byte
 
 const (
-	StandardVmTy Type = iota
-	DebugVmTy
+	StdVmTy Type = iota
+	JitVmTy
 
 	MaxVmTy
 )
+
+func NewVm(env Environment) VirtualMachine {
+	switch env.VmType() {
+	case JitVmTy:
+		return NewJitVm(env)
+	default:
+		vmlogger.Infoln("unsupported vm type %d", env.VmType())
+		fallthrough
+	case StdVmTy:
+		return New(env)
+	}
+}
 
 var (
 	GasStep         = big.NewInt(1)
@@ -38,6 +50,7 @@ var (
 	GasSha256       = big.NewInt(50)
 	GasRipemd       = big.NewInt(50)
 	GasEcrecover    = big.NewInt(500)
+	GasMemCpy       = big.NewInt(1)
 
 	Pow256 = ethutil.BigPow(2, 256)
 
@@ -48,7 +61,7 @@ var (
 	S256 = ethutil.S256
 )
 
-const MaxCallDepth = 1024
+const MaxCallDepth = 1025
 
 func calcMemSize(off, l *big.Int) *big.Int {
 	if l.Cmp(ethutil.Big0) == 0 {

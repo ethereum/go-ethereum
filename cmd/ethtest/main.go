@@ -17,8 +17,6 @@
 /**
  * @authors:
  * 	Jeffrey Wilcke <i@jev.io>
- * @date 2014
- *
  */
 
 package main
@@ -26,12 +24,15 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/tests/helper"
 )
@@ -43,15 +44,15 @@ type Account struct {
 	Storage map[string]string
 }
 
-func StateObjectFromAccount(addr string, account Account) *state.StateObject {
-	obj := state.NewStateObject(ethutil.Hex2Bytes(addr))
+func StateObjectFromAccount(db ethutil.Database, addr string, account Account) *state.StateObject {
+	obj := state.NewStateObject(ethutil.Hex2Bytes(addr), db)
 	obj.SetBalance(ethutil.Big(account.Balance))
 
 	if ethutil.IsHex(account.Code) {
 		account.Code = account.Code[2:]
 	}
-	obj.Code = ethutil.Hex2Bytes(account.Code)
-	obj.Nonce = ethutil.Big(account.Nonce).Uint64()
+	obj.SetCode(ethutil.Hex2Bytes(account.Code))
+	obj.SetNonce(ethutil.Big(account.Nonce).Uint64())
 
 	return obj
 }
@@ -66,19 +67,20 @@ type VmTest struct {
 	Pre         map[string]Account
 }
 
-func RunVmTest(js string) (failed int) {
+func RunVmTest(r io.Reader) (failed int) {
 	tests := make(map[string]VmTest)
 
-	data, _ := ioutil.ReadAll(strings.NewReader(js))
+	data, _ := ioutil.ReadAll(r)
 	err := json.Unmarshal(data, &tests)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	for name, test := range tests {
-		state := state.New(helper.NewTrie())
+		db, _ := ethdb.NewMemDatabase()
+		state := state.New(nil, db)
 		for addr, account := range test.Pre {
-			obj := StateObjectFromAccount(addr, account)
+			obj := StateObjectFromAccount(db, addr, account)
 			state.SetStateObject(obj)
 		}
 
@@ -95,10 +97,15 @@ func RunVmTest(js string) (failed int) {
 			failed = 1
 		}
 
-		gexp := ethutil.Big(test.Gas)
-		if gexp.Cmp(gas) != 0 {
-			log.Printf("%s's gas failed. Expected %v, got %v\n", name, gexp, gas)
+		if len(test.Gas) == 0 && err == nil {
+			log.Printf("0 gas indicates error but no error given by VM")
 			failed = 1
+		} else {
+			gexp := ethutil.Big(test.Gas)
+			if gexp.Cmp(gas) != 0 {
+				log.Printf("%s's gas failed. Expected %v, got %v\n", name, gexp, gas)
+				failed = 1
+			}
 		}
 
 		for addr, account := range test.Post {
@@ -113,6 +120,8 @@ func RunVmTest(js string) (failed int) {
 				}
 			}
 		}
+
+		logger.Flush()
 	}
 
 	return
@@ -120,9 +129,10 @@ func RunVmTest(js string) (failed int) {
 
 func main() {
 	helper.Logger.SetLogLevel(5)
-	if len(os.Args) == 1 {
-		log.Fatalln("no json supplied")
-	}
 
-	os.Exit(RunVmTest(os.Args[1]))
+	if len(os.Args) > 1 {
+		os.Exit(RunVmTest(strings.NewReader(os.Args[1])))
+	} else {
+		os.Exit(RunVmTest(os.Stdin))
+	}
 }

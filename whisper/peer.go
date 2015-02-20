@@ -55,7 +55,7 @@ out:
 		case <-relay.C:
 			err := self.broadcast(self.host.envelopes())
 			if err != nil {
-				self.peer.Infoln(err)
+				self.peer.Infoln("broadcast err:", err)
 				break out
 			}
 
@@ -81,7 +81,7 @@ func (self *peer) broadcast(envelopes []*Envelope) error {
 		if err := self.ws.WriteMsg(msg); err != nil {
 			return err
 		}
-		self.peer.Infoln("broadcasted", i, "message(s)")
+		self.peer.DebugDetailln("broadcasted", i, "message(s)")
 	}
 
 	return nil

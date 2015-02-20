@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/user"
+	"path"
 	"strings"
 )
 
@@ -11,7 +12,7 @@ func ExpandHomePath(p string) (path string) {
 	path = p
 
 	// Check in case of paths like "/something/~/something/"
-	if path[:2] == "~/" {
+	if len(path) > 1 && path[:2] == "~/" {
 		usr, _ := user.Current()
 		dir := usr.HomeDir
 
@@ -57,4 +58,11 @@ func WriteFile(filePath string, content []byte) error {
 	}
 
 	return nil
+}
+
+func AbsolutePath(Datadir string, filename string) string {
+	if path.IsAbs(filename) {
+		return filename
+	}
+	return path.Join(Datadir, filename)
 }

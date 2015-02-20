@@ -103,7 +103,7 @@ Rectangle {
 
 			ComboBox {
 				id: valueDenom
-				currentIndex: 6
+				currentIndex: 5
 				model: denomModel
 			}
 		}
@@ -177,7 +177,7 @@ Rectangle {
 					mainContractColumn.state = "ERROR"
 				} else {
 					txResult.text = "Your transaction has been submitted:\n"
-					txOutput.text = res[0].address
+					txOutput.text = res.toString()
 					mainContractColumn.state = "DONE"
 
 					console.log(res)

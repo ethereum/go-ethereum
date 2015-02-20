@@ -3,10 +3,8 @@ package core
 import (
 	"bytes"
 	"math"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -14,29 +12,46 @@ type AccountChange struct {
 	Address, StateAddress []byte
 }
 
+type FilterOptions struct {
+	Earliest int64
+	Latest   int64
+
+	Address [][]byte
+	Topics  [][]byte
+
+	Skip int
+	Max  int
+}
+
 // Filtering interface
 type Filter struct {
-	eth      EthManager
+	eth      Backend
 	earliest int64
 	latest   int64
 	skip     int
-	from, to [][]byte
+	address  [][]byte
 	max      int
-
-	Altered []AccountChange
+	topics   [][]byte
 
 	BlockCallback   func(*types.Block)
-	MessageCallback func(state.Messages)
+	PendingCallback func(*types.Block)
+	LogsCallback    func(state.Logs)
 }
 
 // Create a new filter which uses a bloom filter on blocks to figure out whether a particular block
 // is interesting or not.
-func NewFilter(eth EthManager) *Filter {
+func NewFilter(eth Backend) *Filter {
 	return &Filter{eth: eth}
 }
 
-func (self *Filter) AddAltered(address, stateAddress []byte) {
-	self.Altered = append(self.Altered, AccountChange{address, stateAddress})
+func (self *Filter) SetOptions(options FilterOptions) {
+	self.earliest = options.Earliest
+	self.latest = options.Latest
+	self.skip = options.Skip
+	self.max = options.Max
+	self.address = options.Address
+	self.topics = options.Topics
+
 }
 
 // Set the earliest and latest block for filtering.
@@ -50,20 +65,12 @@ func (self *Filter) SetLatestBlock(latest int64) {
 	self.latest = latest
 }
 
-func (self *Filter) SetFrom(addr [][]byte) {
-	self.from = addr
+func (self *Filter) SetAddress(addr [][]byte) {
+	self.address = addr
 }
 
-func (self *Filter) AddFrom(addr []byte) {
-	self.from = append(self.from, addr)
-}
-
-func (self *Filter) SetTo(addr [][]byte) {
-	self.to = addr
-}
-
-func (self *Filter) AddTo(addr []byte) {
-	self.to = append(self.to, addr)
+func (self *Filter) SetTopics(topics [][]byte) {
+	self.topics = topics
 }
 
 func (self *Filter) SetMax(max int) {
@@ -74,127 +81,108 @@ func (self *Filter) SetSkip(skip int) {
 	self.skip = skip
 }
 
-// Run filters messages with the current parameters set
-func (self *Filter) Find() []*state.Message {
+// Run filters logs with the current parameters set
+func (self *Filter) Find() state.Logs {
+	earliestBlock := self.eth.ChainManager().CurrentBlock()
 	var earliestBlockNo uint64 = uint64(self.earliest)
 	if self.earliest == -1 {
-		earliestBlockNo = self.eth.ChainManager().CurrentBlock().Number.Uint64()
+		earliestBlockNo = earliestBlock.NumberU64()
 	}
 	var latestBlockNo uint64 = uint64(self.latest)
 	if self.latest == -1 {
-		latestBlockNo = self.eth.ChainManager().CurrentBlock().Number.Uint64()
+		latestBlockNo = earliestBlock.NumberU64()
 	}
 
 	var (
-		messages []*state.Message
-		block    = self.eth.ChainManager().GetBlockByNumber(latestBlockNo)
-		quit     bool
+		logs  state.Logs
+		block = self.eth.ChainManager().GetBlockByNumber(latestBlockNo)
+		quit  bool
 	)
 	for i := 0; !quit && block != nil; i++ {
 		// Quit on latest
 		switch {
-		case block.Number.Uint64() == earliestBlockNo, block.Number.Uint64() == 0:
+		case block.NumberU64() == earliestBlockNo, block.NumberU64() == 0:
 			quit = true
-		case self.max <= len(messages):
+		case self.max <= len(logs):
 			break
 		}
 
 		// Use bloom filtering to see if this block is interesting given the
 		// current parameters
 		if self.bloomFilter(block) {
-			// Get the messages of the block
-			msgs, err := self.eth.BlockManager().GetMessages(block)
+			// Get the logs of the block
+			logs, err := self.eth.BlockProcessor().GetLogs(block)
 			if err != nil {
-				chainlogger.Warnln("err: filter get messages ", err)
+				chainlogger.Warnln("err: filter get logs ", err)
 
 				break
 			}
 
-			messages = append(messages, self.FilterMessages(msgs)...)
+			logs = append(logs, self.FilterLogs(logs)...)
 		}
 
-		block = self.eth.ChainManager().GetBlock(block.PrevHash)
+		block = self.eth.ChainManager().GetBlock(block.ParentHash())
 	}
 
-	skip := int(math.Min(float64(len(messages)), float64(self.skip)))
+	skip := int(math.Min(float64(len(logs)), float64(self.skip)))
 
-	return messages[skip:]
+	return logs[skip:]
 }
 
-func includes(addresses [][]byte, a []byte) (found bool) {
+func includes(addresses [][]byte, a []byte) bool {
 	for _, addr := range addresses {
-		if bytes.Compare(addr, a) == 0 {
-			return true
+		if !bytes.Equal(addr, a) {
+			return false
 		}
 	}
 
-	return
+	return true
 }
 
-func (self *Filter) FilterMessages(msgs []*state.Message) []*state.Message {
-	var messages []*state.Message
+func (self *Filter) FilterLogs(logs state.Logs) state.Logs {
+	var ret state.Logs
 
-	// Filter the messages for interesting stuff
-	for _, message := range msgs {
-		if len(self.to) > 0 && !includes(self.to, message.To) {
+	// Filter the logs for interesting stuff
+Logs:
+	for _, log := range logs {
+		if !includes(self.address, log.Address()) {
+			//if !bytes.Equal(self.address, log.Address()) {
 			continue
 		}
 
-		if len(self.from) > 0 && !includes(self.from, message.From) {
-			continue
-		}
-
-		var match bool
-		if len(self.Altered) == 0 {
-			match = true
-		}
-
-		for _, accountChange := range self.Altered {
-			if len(accountChange.Address) > 0 && bytes.Compare(message.To, accountChange.Address) != 0 {
-				continue
+		max := int(math.Min(float64(len(self.topics)), float64(len(log.Topics()))))
+		for i := 0; i < max; i++ {
+			if !bytes.Equal(log.Topics()[i], self.topics[i]) {
+				continue Logs
 			}
-
-			if len(accountChange.StateAddress) > 0 && !includes(message.ChangedAddresses, accountChange.StateAddress) {
-				continue
-			}
-
-			match = true
-			break
 		}
 
-		if !match {
-			continue
-		}
-
-		messages = append(messages, message)
+		ret = append(ret, log)
 	}
 
-	return messages
+	return ret
 }
 
 func (self *Filter) bloomFilter(block *types.Block) bool {
-	var fromIncluded, toIncluded bool
-	if len(self.from) > 0 {
-		for _, from := range self.from {
-			if types.BloomLookup(block.LogsBloom, from) || bytes.Equal(block.Coinbase, from) {
-				fromIncluded = true
+	if len(self.address) > 0 {
+		var included bool
+		for _, addr := range self.address {
+			if types.BloomLookup(block.Bloom(), addr) {
+				included = true
 				break
 			}
 		}
-	} else {
-		fromIncluded = true
-	}
 
-	if len(self.to) > 0 {
-		for _, to := range self.to {
-			if types.BloomLookup(block.LogsBloom, ethutil.U256(new(big.Int).Add(ethutil.Big1, ethutil.BigD(to))).Bytes()) || bytes.Equal(block.Coinbase, to) {
-				toIncluded = true
-				break
-			}
+		if !included {
+			return false
 		}
-	} else {
-		toIncluded = true
 	}
 
-	return fromIncluded && toIncluded
+	for _, topic := range self.topics {
+		if !types.BloomLookup(block.Bloom(), topic) {
+			return false
+		}
+	}
+
+	return true
 }

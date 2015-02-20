@@ -1,0 +1,118 @@
+{
+	"ImportPath": "github.com/ethereum/go-ethereum",
+	"GoVersion": "go1.4.1",
+	"Packages": [
+		"./..."
+	],
+	"Deps": [
+		{
+			"ImportPath": "bitbucket.org/kardianos/osext",
+			"Comment": "null-13",
+			"Rev": "5d3ddcf53a508cc2f7404eaebf546ef2cb5cdb6e"
+		},
+		{
+			"ImportPath": "code.google.com/p/go-uuid/uuid",
+			"Comment": "null-12",
+			"Rev": "7dda39b2e7d5e265014674c5af696ba4186679e9"
+		},
+		{
+			"ImportPath": "code.google.com/p/snappy-go/snappy",
+			"Comment": "null-15",
+			"Rev": "12e4b4183793ac4b061921e7980845e750679fd0"
+		},
+		{
+			"ImportPath": "github.com/ethereum/serpent-go",
+			"Rev": "5767a0dbd759d313df3f404dadb7f98d7ab51443"
+		},
+		{
+			"ImportPath": "github.com/howeyc/fsnotify",
+			"Comment": "v0.9.0-11-g6b1ef89",
+			"Rev": "6b1ef893dc11e0447abda6da20a5203481878dda"
+		},
+		{
+			"ImportPath": "github.com/huin/goupnp",
+			"Rev": "4191d8a85005844ea202fde52799681971b12dfe"
+		},
+		{
+			"ImportPath": "github.com/jackpal/go-nat-pmp",
+			"Rev": "a45aa3d54aef73b504e15eb71bea0e5565b5e6e1"
+		},
+		{
+			"ImportPath": "github.com/obscuren/otto",
+			"Rev": "cf13cc4228c5e5ce0fe27a7aea90bc10091c4f19"
+		},
+		{
+			"ImportPath": "github.com/obscuren/qml",
+			"Rev": "c288002b52e905973b131089a8a7c761d4a2c36a"
+		},
+		{
+			"ImportPath": "github.com/rakyll/globalconf",
+			"Rev": "415abc325023f1a00cd2d9fa512e0e71745791a2"
+		},
+		{
+			"ImportPath": "github.com/rakyll/goini",
+			"Rev": "907cca0f578a5316fb864ec6992dc3d9730ec58c"
+		},
+		{
+			"ImportPath": "github.com/robertkrimen/otto/ast",
+			"Rev": "dea31a3d392779af358ec41f77a07fcc7e9d04ba"
+		},
+		{
+			"ImportPath": "github.com/robertkrimen/otto/dbg",
+			"Rev": "dea31a3d392779af358ec41f77a07fcc7e9d04ba"
+		},
+		{
+			"ImportPath": "github.com/robertkrimen/otto/file",
+			"Rev": "dea31a3d392779af358ec41f77a07fcc7e9d04ba"
+		},
+		{
+			"ImportPath": "github.com/robertkrimen/otto/parser",
+			"Rev": "dea31a3d392779af358ec41f77a07fcc7e9d04ba"
+		},
+		{
+			"ImportPath": "github.com/robertkrimen/otto/registry",
+			"Rev": "dea31a3d392779af358ec41f77a07fcc7e9d04ba"
+		},
+		{
+			"ImportPath": "github.com/robertkrimen/otto/token",
+			"Rev": "dea31a3d392779af358ec41f77a07fcc7e9d04ba"
+		},
+		{
+			"ImportPath": "github.com/syndtr/goleveldb/leveldb",
+			"Rev": "832fa7ed4d28545eab80f19e1831fc004305cade"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/pbkdf2",
+			"Rev": "4ed45ec682102c643324fae5dff8dab085b6c300"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/ripemd160",
+			"Rev": "4ed45ec682102c643324fae5dff8dab085b6c300"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/scrypt",
+			"Rev": "4ed45ec682102c643324fae5dff8dab085b6c300"
+		},
+		{
+			"ImportPath": "golang.org/x/net/websocket",
+			"Rev": "59b0df9b1f7abda5aab0495ee54f408daf182ce7"
+		},
+		{
+			"ImportPath": "gopkg.in/check.v1",
+			"Rev": "64131543e7896d5bcc6bd5a76287eb75ea96c673"
+		},
+		{
+			"ImportPath": "gopkg.in/fatih/set.v0",
+			"Comment": "v0.1.0-3-g27c4092",
+			"Rev": "27c40922c40b43fe04554d8223a402af3ea333f3"
+		},
+		{
+			"ImportPath": "gopkg.in/qml.v1/cdata",
+			"Rev": "1116cb9cd8dee23f8d444ded354eb53122739f99"
+		},
+		{
+			"ImportPath": "gopkg.in/qml.v1/gl/glbase",
+			"Rev": "1116cb9cd8dee23f8d444ded354eb53122739f99"
+		}
+	]
+}

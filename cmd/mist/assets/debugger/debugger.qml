@@ -19,7 +19,7 @@ ApplicationWindow {
     property alias dataText: rawDataField.text
 
     onClosing: {
-        dbg.Stop()
+        //dbg.Stop()
     }
 
     menuBar: MenuBar {
@@ -353,6 +353,7 @@ ApplicationWindow {
 
 
         ComboBox {
+		visible: false
             id: snippets
             anchors.right: parent.right
             model: ListModel {
