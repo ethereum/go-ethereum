@@ -1074,14 +1074,14 @@
                 }
             },
             "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
-                "balance" : "32684",
+                "balance" : "986358",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "999999999999867316",
+                "balance" : "999999999998913642",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
@@ -1631,14 +1631,14 @@
                 }
             },
             "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
-                "balance" : "32684",
+                "balance" : "986358",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "999999999999867316",
+                "balance" : "999999999998913642",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
