@@ -3,6 +3,8 @@ package eth
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"io/ioutil"
+	"path"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -78,6 +80,27 @@ func (cfg *Config) parseBootNodes() []*discover.Node {
 		ns = append(ns, n)
 	}
 	return ns
+}
+
+func (cfg *Config) nodeKey() (*ecdsa.PrivateKey, error) {
+	// use explicit key from command line args if set
+	if cfg.NodeKey != nil {
+		return cfg.NodeKey, nil
+	}
+	// use persistent key if present
+	keyfile := path.Join(cfg.DataDir, "nodekey")
+	key, err := crypto.LoadECDSA(keyfile)
+	if err == nil {
+		return key, nil
+	}
+	// no persistent key, generate and store a new one
+	if key, err = crypto.GenerateKey(); err != nil {
+		return nil, fmt.Errorf("could not generate server key: %v", err)
+	}
+	if err := ioutil.WriteFile(keyfile, crypto.FromECDSA(key), 0600); err != nil {
+		logger.Errorln("could not persist nodekey: ", err)
+	}
+	return key, nil
 }
 
 type Ethereum struct {
@@ -164,18 +187,16 @@ func New(config *Config) (*Ethereum, error) {
 	insertChain := eth.chainManager.InsertChain
 	eth.blockPool = NewBlockPool(hasBlock, insertChain, ezp.Verify)
 
+	netprv, err := config.nodeKey()
+	if err != nil {
+		return nil, err
+	}
 	ethProto := EthProtocol(eth.txPool, eth.chainManager, eth.blockPool)
 	protocols := []p2p.Protocol{ethProto}
 	if config.Shh {
 		protocols = append(protocols, eth.whisper.Protocol())
 	}
 
-	netprv := config.NodeKey
-	if netprv == nil {
-		if netprv, err = crypto.GenerateKey(); err != nil {
-			return nil, fmt.Errorf("could not generate server key: %v", err)
-		}
-	}
 	eth.net = &p2p.Server{
 		PrivateKey:     netprv,
 		Name:           config.Name,
