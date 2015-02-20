@@ -117,11 +117,9 @@ out:
 		case event := <-events.Chan():
 			switch ev := event.(type) {
 			case core.ChainEvent:
-				println("miner start")
 				if self.current.block != ev.Block {
 					self.commitNewWork()
 				}
-				println("miner end")
 			case core.NewMinedBlockEvent:
 				self.commitNewWork()
 			}

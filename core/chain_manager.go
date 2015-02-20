@@ -268,6 +268,7 @@ func (self *ChainManager) GetBlockHashesFromHash(hash []byte, max uint64) (chain
 			break
 		}
 	}
+	fmt.Printf("get hash %x (%d)\n", hash, len(chain))
 
 	return
 }
@@ -396,7 +397,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 		self.mu.Unlock()
 
 		if chain {
-			go self.eventMux.Post(ChainEvent{block, td})
+			self.eventMux.Post(ChainEvent{block, td})
 		}
 
 		if split {
