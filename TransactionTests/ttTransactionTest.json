@@ -32,6 +32,9 @@
     "AddressMoreThan20" : {
         "rlp" : "0xf86080018207d095b94f5374fce5edbc8e2a8697c15331677e6ebf0b1c0a801ca098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"
     },
+    "AddressMoreThan20PrefixedBy0" : {
+        "rlp" : "0xf867367b8203e89c0000000000000000095e7baea6a6c7c4c2dfeb977efac326af552d870b121ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804"
+    },
     "EmptyTransaction" : {
         "rlp" : "0xf85d80808094095e7baea6a6c7c4c2dfeb977efac326af552d8780801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
         "sender" : "3e2ddf4fea89f584a735a1234cf20d8627421564",
@@ -45,36 +48,6 @@
             "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
             "v" : "27",
             "value" : ""
-        }
-    },
-    "RLPElementsWithZeros" : {
-        "rlp" : "0xf8662c538203e894095e7baea6a6c7c4c2dfeb977efac326af552d870987000000112223331ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
-        "sender" : "f8cf3e78f097103c068225ce61e34f29078191a5",
-        "transaction" : {
-            "data" : "0x0000011222333",
-            "gasLimit" : "1000",
-            "gasPrice" : "00123",
-            "nonce" : "0054",
-            "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
-            "s" : "0xefffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
-            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
-            "v" : "27",
-            "value" : "00000011"
-        }
-    },
-    "RLPWrongHexElements" : {
-        "rlp" : "0xf864367b8203e894095e7baea6a6c7c4c2dfeb977efac326af552d870b8500000000121ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
-        "sender" : "65959aab09090881850fd56f8a1cacb3abc4e811",
-        "transaction" : {
-            "data" : "0x0000000012",
-            "gasLimit" : "1000",
-            "gasPrice" : "123",
-            "nonce" : "54",
-            "r" : "0x0048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
-            "s" : "0x00efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
-            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
-            "v" : "27",
-            "value" : "11"
         }
     },
     "RightVRSTest" : {
@@ -147,20 +120,38 @@
     "TransactionWithTooManyRLPElements" : {
         "rlp" : "0xf865800182035294095e7baea6a6c7c4c2dfeb977efac326af552d870a801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804851de98d0edd"
     },
-    "WrongAddress" : {
-        "rlp" : "0xf85d80808094095e7baea6a6c7c4c2dfeb977efac326af552d0080801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
-        "sender" : "eec5140a6015e75ac27053d81fc431c877958708",
+    "ValuesAsDec" : {
+        "rlp" : "0xf86a830ffdc50183adc05394b94f5374fce5edbc8e2a8697c15331677e6ebf0b870ffdc5fffdc12c801ca098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3",
+        "sender" : "3eb583df408b324b4ba3a8d63e6b2dba1c4f28f6",
         "transaction" : {
             "data" : "",
-            "gasLimit" : "",
-            "gasPrice" : "",
-            "nonce" : "",
-            "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
-            "s" : "0xefffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
-            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d8v",
-            "v" : "27",
-            "value" : ""
+            "gasLimit" : "11386963",
+            "gasPrice" : "1",
+            "nonce" : "1048005",
+            "r" : "0x98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a",
+            "s" : "0x8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3",
+            "to" : "b94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "v" : "28",
+            "value" : "4501151495864620"
         }
+    },
+    "ValuesAsHex" : {
+        "rlp" : "0xf867830ffdc50183adc05394b94f5374fce5edbc8e2a8697c15331677e6ebf0b84fffdc12c801ca098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3",
+        "sender" : "24ef2c911b7b98e481e4c97c201194ee7889501b",
+        "transaction" : {
+            "data" : "",
+            "gasLimit" : "0xadc053",
+            "gasPrice" : "1",
+            "nonce" : "0xffdc5",
+            "r" : "0x98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a",
+            "s" : "0x8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3",
+            "to" : "b94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "v" : "28",
+            "value" : "0xfffdc12c"
+        }
+    },
+    "WrongVRSTestIncorrectSize" : {
+        "rlp" : "0xf86380018207d094b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a801ca298ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a02c3a28887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a302c3"
     },
     "WrongVRSTestVge31" : {
         "rlp" : "0xf85f80018207d094b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a801fa098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"
