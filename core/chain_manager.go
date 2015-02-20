@@ -396,9 +396,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 		self.mu.Unlock()
 
 		if chain {
-			fmt.Println("POST START")
-			self.eventMux.Post(ChainEvent{block, td})
-			fmt.Println("POST END")
+			go self.eventMux.Post(ChainEvent{block, td})
 		}
 
 		if split {

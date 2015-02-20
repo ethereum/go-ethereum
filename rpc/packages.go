@@ -101,13 +101,11 @@ func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) erro
 		self.logMut.Lock()
 		defer self.logMut.Unlock()
 
-		if self.logs[id] == nil {
-			self.logs[id] = &logFilter{timeout: time.Now()}
-		}
-
 		self.logs[id].add(logs...)
 	}
 	id = self.filterManager.InstallFilter(filter)
+	self.logs[id] = &logFilter{timeout: time.Now()}
+
 	*reply = id
 
 	return nil
