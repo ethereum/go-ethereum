@@ -779,9 +779,9 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 	// Stack Check, memory resize & gas phase
 	switch op {
 	// Stack checks only
-	case ISZERO, CALLDATALOAD, POP, JUMP, NOT: // 1
+	case ISZERO, CALLDATALOAD, POP, JUMP, NOT, EXTCODESIZE, BLOCKHASH: // 1
 		stack.require(1)
-	case JUMPI, ADD, SUB, DIV, SDIV, MOD, SMOD, LT, GT, SLT, SGT, EQ, AND, OR, XOR, BYTE, SIGNEXTEND: // 2
+	case JUMPI, ADD, SUB, DIV, MUL, SDIV, MOD, SMOD, LT, GT, SLT, SGT, EQ, AND, OR, XOR, BYTE, SIGNEXTEND: // 2
 		stack.require(2)
 	case ADDMOD, MULMOD: // 3
 		stack.require(3)
@@ -859,7 +859,7 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 		newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-2])
 		additionalGas.Set(stack.data[stack.Len()-2])
 	case CALLDATACOPY:
-		stack.require(2)
+		stack.require(3)
 
 		newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-3])
 		additionalGas.Set(stack.data[stack.Len()-3])
