@@ -147,7 +147,7 @@
             "s" : "0x8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3",
             "to" : "b94f5374fce5edbc8e2a8697c15331677e6ebf0b",
             "v" : "28",
-            "value" : "0xfffdc12c"
+            "value" : "4294820140"
         }
     },
     "WrongVRSTestIncorrectSize" : {
