@@ -54,6 +54,7 @@ type Log struct {
 	address []byte
 	topics  [][]byte
 	data    []byte
+	log     uint64
 }
 
 func (self *Log) Address() []byte {
@@ -66,6 +67,10 @@ func (self *Log) Topics() [][]byte {
 
 func (self *Log) Data() []byte {
 	return self.data
+}
+
+func (self *Log) Number() uint64 {
+	return self.log
 }
 
 func (self *Log) RlpData() interface{} {
