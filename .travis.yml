@@ -6,10 +6,15 @@ before_install:
   - sudo apt-get update -qq
   - sudo apt-get install -yqq libgmp3-dev libreadline6-dev qt54quickcontrols qt54webengine
 install:
+  # - go get code.google.com/p/go.tools/cmd/goimports
+  # - go get github.com/golang/lint/golint
   # - go get golang.org/x/tools/cmd/vet 
   - if ! go get code.google.com/p/go.tools/cmd/cover; then go get golang.org/x/tools/cmd/cover; fi
   - go get github.com/mattn/goveralls
 before_script:
+  # - gofmt -l -w .
+  # - goimports -l -w .
+  # - golint .
   # - go vet ./...
   # - go test -race ./...
 script:
