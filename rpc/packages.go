@@ -167,6 +167,15 @@ func (self *EthereumApi) Logs(id int, reply *interface{}) error {
 	return nil
 }
 
+func (self *EthereumApi) AllLogs(args *FilterOptions, reply *interface{}) error {
+	filter := core.NewFilter(self.xeth.Backend())
+	filter.SetOptions(toFilterOptions(args))
+
+	*reply = toLogs(filter.Find())
+
+	return nil
+}
+
 func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *interface{}) error {
 	err := args.requirements()
 	if err != nil {
@@ -509,6 +518,12 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.Logs(args, reply)
+	case "eth_logs":
+		args, err := req.ToFilterArgs()
+		if err != nil {
+			return err
+		}
+		return p.AllLogs(args, reply)
 	case "eth_gasPrice":
 		*reply = defaultGasPrice
 		return nil

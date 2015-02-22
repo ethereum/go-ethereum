@@ -84,6 +84,7 @@ type Log struct {
 	Address string   `json:"address"`
 	Topic   []string `json:"topics"`
 	Data    string   `json:"data"`
+	Number  uint64   `json:"number"`
 }
 
 func toLogs(logs state.Logs) (ls []Log) {
@@ -94,6 +95,7 @@ func toLogs(logs state.Logs) (ls []Log) {
 		l.Topic = make([]string, len(log.Topics()))
 		l.Address = toHex(log.Address())
 		l.Data = toHex(log.Data())
+		l.Number = log.Number()
 		for j, topic := range log.Topics() {
 			l.Topic[j] = toHex(topic)
 		}
