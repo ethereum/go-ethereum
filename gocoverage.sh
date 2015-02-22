@@ -29,6 +29,3 @@ if ls $dir/*.go &> /dev/null; then
     fi
 fi
 done
-
-go tool cover -func profile.cov
-
