@@ -14,8 +14,9 @@
 </div>
 
 <div>
-	<span class="amount">Amount:</span>
+	<span>Address:</span>
 	<input type="text" id="address" style="width:200px">
+	<span>Amount:</span>
 	<input type="text" id="amount" style="width:200px">
 	<button onclick="transact()">Send</button>
 </div>
@@ -58,7 +59,7 @@
 		}],
 		"outputs": []
 	}, {
-		"name":"received",
+		"name":"Changed",
 		"type":"event",
 		"inputs": [
 			{"name":"from","type":"address","indexed":true},
@@ -69,18 +70,14 @@
 	var address = localStorage.getItem("address");
 	// deploy if not exist
 	if (address == null) {
-		var code = "0x60056013565b61012b806100346000396000f35b6103e8600033600160a060020a0316600052602052604060002081905550560060e060020a6000350480637bb98a681461002b578063d0679d3414610039578063e3d670d71461004d57005b610033610126565b60006000f35b610047600435602435610062565b60006000f35b610058600435610104565b8060005260206000f35b80600033600160a060020a0316600052602052604060002054101561008657610100565b80600033600160a060020a0316600052602052604060002090815403908190555080600083600160a060020a0316600052602052604060002090815401908190555033600160a060020a0316600052806020527ff11e547d796cc64acdf758e7cee90439494fd886a19159454aa61e473fdbafef60406000a15b5050565b6000600082600160a060020a03166000526020526040600020549050919050565b5b60008156";
+		var code = "0x60056013565b61014f8061003a6000396000f35b620f42406000600033600160a060020a0316815260200190815260200160002081905550560060e060020a600035048063d0679d3414610020578063e3d670d71461003457005b61002e600435602435610049565b60006000f35b61003f600435610129565b8060005260206000f35b806000600033600160a060020a03168152602001908152602001600020541061007157610076565b610125565b806000600033600160a060020a03168152602001908152602001600020908154039081905550806000600084600160a060020a031681526020019081526020016000209081540190819055508033600160a060020a03167fb52dda022b6c1a1f40905a85f257f689aa5d69d850e49cf939d688fbe5af594660006000a38082600160a060020a03167fb52dda022b6c1a1f40905a85f257f689aa5d69d850e49cf939d688fbe5af594660006000a35b5050565b60006000600083600160a060020a0316815260200190815260200160002054905091905056";
 		address = web3.eth.transact({data: code});
         	localStorage.setItem("address", address);
 	}
-	document.querySelector("#contract_addr").innerHTML = address.toUpperCase();
+	document.querySelector("#contract_addr").innerHTML = address;
 
 	var contract = web3.eth.contract(address, desc);
-	contract.received({from: eth.coinbase}).changed(function() {
-		refresh();
-	});
-
-	eth.watch('chain').changed(function() {
+	contract.Changed({from: eth.coinbase}).changed(function() {
 		refresh();
 	});
 
@@ -93,7 +90,7 @@
 		var storage = eth.storageAt(address);
 		table.innerHTML = "";
 		for( var item in storage ) {
-			table.innerHTML += "<tr><td>"+item.toUpperCase()+"</td><td>"+web3.toDecimal(storage[item])+"</td></tr>";
+			table.innerHTML += "<tr><td>"+item+"</td><td>"+web3.toDecimal(storage[item])+"</td></tr>";
 		}
 	}
 
@@ -106,6 +103,7 @@
 		}
 
 		var value = parseInt( document.querySelector("#amount").value );
+		console.log("transact: ", to, " => ", value)
 
 		contract.send( to, value );
 	}
@@ -121,7 +119,7 @@ contract JevCoin {
         balances[msg.sender] = 1000000;
     }
  
-    event changed(address indexed from, address indexed to);
+    event Changed(address indexed from, uint indexed amount);
     function send(address to, uint value)
     {
         if( balances[msg.sender] < value ) return;
@@ -129,7 +127,8 @@ contract JevCoin {
         balances[msg.sender] -= value;
         balances[to] += value;
  
-        changed(msg.sender, to);
+        Changed(msg.sender, value);
+        Changed(to, value);
     }
  
     function balance(address who) constant returns(uint t)

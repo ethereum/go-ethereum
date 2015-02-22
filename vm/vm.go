@@ -578,7 +578,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			}
 
 			data := mem.Get(mStart.Int64(), mSize.Int64())
-			log := &Log{context.Address(), topics, data}
+			log := &Log{context.Address(), topics, data, self.env.BlockNumber().Uint64()}
 			self.env.AddLog(log)
 
 			self.Printf(" => %v", log)
