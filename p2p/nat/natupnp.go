@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fjl/goupnp"
-	"github.com/fjl/goupnp/dcps/internetgateway1"
-	"github.com/fjl/goupnp/dcps/internetgateway2"
+	"github.com/huin/goupnp"
+	"github.com/huin/goupnp/dcps/internetgateway1"
+	"github.com/huin/goupnp/dcps/internetgateway2"
 )
 
 type upnp struct {

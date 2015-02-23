@@ -20,6 +20,7 @@
  * @date 2015
  *
  */
+
 /*
 
 This key store behaves as KeyStorePlain with the difference that
@@ -64,17 +65,18 @@ package crypto
 
 import (
 	"bytes"
-	"code.google.com/p/go-uuid/uuid"
-	"code.google.com/p/go.crypto/scrypt"
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"github.com/ethereum/go-ethereum/crypto/randentropy"
 	"io"
 	"os"
 	"path"
+
+	"code.google.com/p/go-uuid/uuid"
+	"github.com/ethereum/go-ethereum/crypto/randentropy"
+	"golang.org/x/crypto/scrypt"
 )
 
 const (

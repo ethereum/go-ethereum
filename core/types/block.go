@@ -185,6 +185,18 @@ func (self *Block) GasUsed() *big.Int         { return self.header.GasUsed }
 func (self *Block) Root() []byte              { return self.header.Root }
 func (self *Block) SetRoot(root []byte)       { self.header.Root = root }
 func (self *Block) Size() ethutil.StorageSize { return ethutil.StorageSize(len(ethutil.Encode(self))) }
+func (self *Block) GetTransaction(i int) *Transaction {
+	if len(self.transactions) > i {
+		return self.transactions[i]
+	}
+	return nil
+}
+func (self *Block) GetUncle(i int) *Header {
+	if len(self.uncles) > i {
+		return self.uncles[i]
+	}
+	return nil
+}
 
 // Implement pow.Block
 func (self *Block) Difficulty() *big.Int { return self.header.Difficulty }

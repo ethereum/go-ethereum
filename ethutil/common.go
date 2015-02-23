@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"runtime"
+	"time"
 )
 
 func IsWindows() bool {
@@ -86,3 +87,9 @@ var (
 	Big256   = big.NewInt(0xff)
 	Big257   = big.NewInt(257)
 )
+
+func Bench(pre string, cb func()) {
+	start := time.Now()
+	cb()
+	fmt.Println(pre, ": took:", time.Since(start))
+}

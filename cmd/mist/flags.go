@@ -63,6 +63,7 @@ var (
 	DebugFile       string
 	LogLevel        int
 	VmType          int
+	MinerThreads    int
 )
 
 // flags specific to gui client
@@ -136,6 +137,8 @@ func Init() {
 	flag.StringVar(&OutboundPort, "port", "30303", "listening port")
 	flag.StringVar(&BootNodes, "bootnodes", "", "space-separated node URLs for discovery bootstrap")
 	flag.IntVar(&MaxPeer, "maxpeer", 30, "maximum desired peers")
+
+	flag.IntVar(&MinerThreads, "minerthreads", runtime.NumCPU(), "number of miner threads")
 
 	flag.Parse()
 

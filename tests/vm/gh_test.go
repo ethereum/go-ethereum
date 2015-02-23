@@ -46,8 +46,8 @@ func StateObjectFromAccount(db ethutil.Database, addr string, account Account) *
 	if ethutil.IsHex(account.Code) {
 		account.Code = account.Code[2:]
 	}
-	obj.Code = ethutil.Hex2Bytes(account.Code)
-	obj.Nonce = ethutil.Big(account.Nonce).Uint64()
+	obj.SetCode(ethutil.Hex2Bytes(account.Code))
+	obj.SetNonce(ethutil.Big(account.Nonce).Uint64())
 
 	return obj
 }

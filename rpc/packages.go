@@ -1,21 +1,4 @@
 /*
-	This file is part of go-ethereum
-
-	go-ethereum is free software: you can redistribute it and/or modify
-	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation, either version 3 of the License, or
-	(at your option) any later version.
-
-	go-ethereum is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
-
-	You should have received a copy of the GNU General Public License
-	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
-*/
-/*
-
 For each request type, define the following:
 
 1. RpcRequest "To" method [message.go], which does basic validation and conversion to "Args" type via json.Decoder()
@@ -30,6 +13,7 @@ import (
 	"math/big"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -48,13 +32,17 @@ const (
 
 type EthereumApi struct {
 	xeth          *xeth.XEth
+	quit          chan struct{}
 	filterManager *filter.FilterManager
 
 	logMut sync.RWMutex
-	logs   map[int]state.Logs
+	logs   map[int]*logFilter
 
 	messagesMut sync.RWMutex
-	messages    map[int][]xeth.WhisperMessage
+	messages    map[int]*whisperFilter
+	// Register keeps a list of accounts and transaction data
+	regmut   sync.Mutex
+	register map[string][]*NewTxArgs
 
 	db ethutil.Database
 }
@@ -63,14 +51,46 @@ func NewEthereumApi(eth *xeth.XEth) *EthereumApi {
 	db, _ := ethdb.NewLDBDatabase("dapps")
 	api := &EthereumApi{
 		xeth:          eth,
+		quit:          make(chan struct{}),
 		filterManager: filter.NewFilterManager(eth.Backend().EventMux()),
-		logs:          make(map[int]state.Logs),
-		messages:      make(map[int][]xeth.WhisperMessage),
+		logs:          make(map[int]*logFilter),
+		messages:      make(map[int]*whisperFilter),
 		db:            db,
 	}
 	go api.filterManager.Start()
+	go api.start()
 
 	return api
+}
+
+func (self *EthereumApi) Register(args string, reply *interface{}) error {
+	self.regmut.Lock()
+	defer self.regmut.Unlock()
+
+	if _, ok := self.register[args]; ok {
+		self.register[args] = nil // register with empty
+	}
+	return nil
+}
+
+func (self *EthereumApi) Unregister(args string, reply *interface{}) error {
+	self.regmut.Lock()
+	defer self.regmut.Unlock()
+
+	delete(self.register, args)
+
+	return nil
+}
+
+func (self *EthereumApi) WatchTx(args string, reply *interface{}) error {
+	self.regmut.Lock()
+	defer self.regmut.Unlock()
+
+	txs := self.register[args]
+	self.register[args] = nil
+
+	*reply = txs
+	return nil
 }
 
 func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) error {
@@ -81,11 +101,20 @@ func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) erro
 		self.logMut.Lock()
 		defer self.logMut.Unlock()
 
-		self.logs[id] = append(self.logs[id], logs...)
+		self.logs[id].add(logs...)
 	}
 	id = self.filterManager.InstallFilter(filter)
+	self.logs[id] = &logFilter{timeout: time.Now()}
+
 	*reply = id
 
+	return nil
+}
+
+func (self *EthereumApi) UninstallFilter(id int, reply *interface{}) error {
+	delete(self.logs, id)
+	self.filterManager.UninstallFilter(id)
+	*reply = true
 	return nil
 }
 
@@ -94,7 +123,14 @@ func (self *EthereumApi) NewFilterString(args string, reply *interface{}) error 
 	filter := core.NewFilter(self.xeth.Backend())
 
 	callback := func(block *types.Block) {
-		self.logs[id] = append(self.logs[id], &state.StateLog{})
+		self.logMut.Lock()
+		defer self.logMut.Unlock()
+
+		if self.logs[id] == nil {
+			self.logs[id] = &logFilter{timeout: time.Now()}
+		}
+
+		self.logs[id].add(&state.StateLog{})
 	}
 	if args == "pending" {
 		filter.PendingCallback = callback
@@ -112,15 +148,29 @@ func (self *EthereumApi) FilterChanged(id int, reply *interface{}) error {
 	self.logMut.Lock()
 	defer self.logMut.Unlock()
 
-	*reply = toLogs(self.logs[id])
-
-	self.logs[id] = nil // empty the logs
+	if self.logs[id] != nil {
+		*reply = toLogs(self.logs[id].get())
+	}
 
 	return nil
 }
 
 func (self *EthereumApi) Logs(id int, reply *interface{}) error {
+	self.logMut.Lock()
+	defer self.logMut.Unlock()
+
 	filter := self.filterManager.GetFilter(id)
+	if filter != nil {
+		*reply = toLogs(filter.Find())
+	}
+
+	return nil
+}
+
+func (self *EthereumApi) AllLogs(args *FilterOptions, reply *interface{}) error {
+	filter := core.NewFilter(self.xeth.Backend())
+	filter.SetOptions(toFilterOptions(args))
+
 	*reply = toLogs(filter.Find())
 
 	return nil
@@ -149,8 +199,14 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
 		args.GasPrice = defaultGasPrice
 	}
 
-	result, _ := p.xeth.Transact( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
-	*reply = result
+	// TODO if no_private_key then
+	if _, exists := p.register[args.From]; exists {
+		p.register[args.From] = append(p.register[args.From], args)
+	} else {
+		result, _ := p.xeth.Transact( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
+		*reply = result
+	}
+
 	return nil
 }
 
@@ -231,6 +287,11 @@ func (p *EthereumApi) GetIsMining(reply *interface{}) error {
 	return nil
 }
 
+func (p *EthereumApi) SetMining(shouldmine bool, reply *interface{}) error {
+	*reply = p.xeth.SetMining(shouldmine)
+	return nil
+}
+
 func (p *EthereumApi) BlockNumber(reply *interface{}) error {
 	*reply = p.xeth.Backend().ChainManager().CurrentBlock().Number()
 	return nil
@@ -261,6 +322,21 @@ func (p *EthereumApi) GetCodeAt(args *GetCodeAtArgs, reply *interface{}) error {
 		return err
 	}
 	*reply = p.xeth.CodeAt(args.Address)
+	return nil
+}
+
+func (p *EthereumApi) GetCompilers(reply *interface{}) error {
+	c := []string{"serpent"}
+	*reply = c
+	return nil
+}
+
+func (p *EthereumApi) CompileSerpent(script string, reply *interface{}) error {
+	res, err := ethutil.Compile(script, false)
+	if err != nil {
+		return err
+	}
+	*reply = res
 	return nil
 }
 
@@ -301,7 +377,10 @@ func (p *EthereumApi) NewWhisperFilter(args *xeth.Options, reply *interface{}) e
 	args.Fn = func(msg xeth.WhisperMessage) {
 		p.messagesMut.Lock()
 		defer p.messagesMut.Unlock()
-		p.messages[id] = append(p.messages[id], msg)
+		if p.messages[id] == nil {
+			p.messages[id] = &whisperFilter{timeout: time.Now()}
+		}
+		p.messages[id].add(msg) // = append(p.messages[id], msg)
 	}
 	id = p.xeth.Whisper().Watch(args)
 	*reply = id
@@ -312,15 +391,15 @@ func (self *EthereumApi) MessagesChanged(id int, reply *interface{}) error {
 	self.messagesMut.Lock()
 	defer self.messagesMut.Unlock()
 
-	*reply = self.messages[id]
-
-	self.messages[id] = nil // empty the messages
+	if self.messages[id] != nil {
+		*reply = self.messages[id].get()
+	}
 
 	return nil
 }
 
 func (p *EthereumApi) WhisperPost(args *WhisperMessageArgs, reply *interface{}) error {
-	err := p.xeth.Whisper().Post(args.Payload, args.To, args.From, args.Topics, args.Priority, args.Ttl)
+	err := p.xeth.Whisper().Post(args.Payload, args.To, args.From, args.Topic, args.Priority, args.Ttl)
 	if err != nil {
 		return err
 	}
@@ -349,6 +428,12 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		return p.GetIsListening(reply)
 	case "eth_mining":
 		return p.GetIsMining(reply)
+	case "eth_setMining":
+		args, err := req.ToBoolArgs()
+		if err != nil {
+			return err
+		}
+		return p.SetMining(args, reply)
 	case "eth_peerCount":
 		return p.GetPeerCount(reply)
 	case "eth_number":
@@ -415,15 +500,59 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.NewFilterString(args, reply)
+	case "eth_uninstallFilter":
+		args, err := req.ToUninstallFilterArgs()
+		if err != nil {
+			return err
+		}
+		return p.UninstallFilter(args, reply)
 	case "eth_changed":
-		args, err := req.ToFilterChangedArgs()
+		args, err := req.ToIdArgs()
 		if err != nil {
 			return err
 		}
 		return p.FilterChanged(args, reply)
+	case "eth_filterLogs":
+		args, err := req.ToIdArgs()
+		if err != nil {
+			return err
+		}
+		return p.Logs(args, reply)
+	case "eth_logs":
+		args, err := req.ToFilterArgs()
+		if err != nil {
+			return err
+		}
+		return p.AllLogs(args, reply)
 	case "eth_gasPrice":
 		*reply = defaultGasPrice
 		return nil
+	case "eth_register":
+		args, err := req.ToRegisterArgs()
+		if err != nil {
+			return err
+		}
+		return p.Register(args, reply)
+	case "eth_unregister":
+		args, err := req.ToRegisterArgs()
+		if err != nil {
+			return err
+		}
+		return p.Unregister(args, reply)
+	case "eth_watchTx":
+		args, err := req.ToWatchTxArgs()
+		if err != nil {
+			return err
+		}
+		return p.WatchTx(args, reply)
+	case "eth_compilers":
+		return p.GetCompilers(reply)
+	case "eth_serpent":
+		args, err := req.ToCompileArgs()
+		if err != nil {
+			return err
+		}
+		return p.CompileSerpent(args, reply)
 	case "web3_sha3":
 		args, err := req.ToSha3Args()
 		if err != nil {
@@ -451,7 +580,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		return p.NewWhisperFilter(args, reply)
 	case "shh_changed":
-		args, err := req.ToWhisperIdArgs()
+		args, err := req.ToIdArgs()
 		if err != nil {
 			return err
 		}
@@ -469,7 +598,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		return p.HasWhisperIdentity(args, reply)
 	case "shh_getMessages":
-		args, err := req.ToWhisperIdArgs()
+		args, err := req.ToIdArgs()
 		if err != nil {
 			return err
 		}
@@ -480,4 +609,37 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 
 	rpclogger.DebugDetailf("Reply: %T %s", reply, reply)
 	return nil
+}
+
+var filterTickerTime = 15 * time.Second
+
+func (self *EthereumApi) start() {
+	timer := time.NewTicker(filterTickerTime)
+done:
+	for {
+		select {
+		case <-timer.C:
+			self.logMut.Lock()
+			self.messagesMut.Lock()
+			for id, filter := range self.logs {
+				if time.Since(filter.timeout) > 20*time.Second {
+					delete(self.logs, id)
+				}
+			}
+
+			for id, filter := range self.messages {
+				if time.Since(filter.timeout) > 20*time.Second {
+					delete(self.messages, id)
+				}
+			}
+			self.logMut.Unlock()
+			self.messagesMut.Unlock()
+		case <-self.quit:
+			break done
+		}
+	}
+}
+
+func (self *EthereumApi) stop() {
+	close(self.quit)
 }

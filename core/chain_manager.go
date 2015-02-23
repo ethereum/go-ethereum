@@ -79,11 +79,20 @@ type ChainManager struct {
 	genesisBlock *types.Block
 	// Last known total difficulty
 	mu            sync.RWMutex
+	tsmu          sync.RWMutex
 	td            *big.Int
 	currentBlock  *types.Block
 	lastBlockHash []byte
 
 	transState *state.StateDB
+}
+
+func NewChainManager(db ethutil.Database, mux *event.TypeMux) *ChainManager {
+	bc := &ChainManager{db: db, genesisBlock: GenesisBlock(db), eventMux: mux}
+	bc.setLastBlock()
+	bc.transState = bc.State().Copy()
+
+	return bc
 }
 
 func (self *ChainManager) Td() *big.Int {
@@ -107,14 +116,6 @@ func (self *ChainManager) CurrentBlock() *types.Block {
 	return self.currentBlock
 }
 
-func NewChainManager(db ethutil.Database, mux *event.TypeMux) *ChainManager {
-	bc := &ChainManager{db: db, genesisBlock: GenesisBlock(db), eventMux: mux}
-	bc.setLastBlock()
-	bc.transState = bc.State().Copy()
-
-	return bc
-}
-
 func (self *ChainManager) Status() (td *big.Int, currentBlock []byte, genesisBlock []byte) {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
@@ -131,7 +132,14 @@ func (self *ChainManager) State() *state.StateDB {
 }
 
 func (self *ChainManager) TransState() *state.StateDB {
+	self.tsmu.RLock()
+	defer self.tsmu.RUnlock()
+
 	return self.transState
+}
+
+func (self *ChainManager) setTransState(statedb *state.StateDB) {
+	self.transState = statedb
 }
 
 func (bc *ChainManager) setLastBlock() {
@@ -260,6 +268,7 @@ func (self *ChainManager) GetBlockHashesFromHash(hash []byte, max uint64) (chain
 			break
 		}
 	}
+	fmt.Printf("get hash %x (%d)\n", hash, len(chain))
 
 	return
 }
@@ -350,6 +359,9 @@ func (bc *ChainManager) Stop() {
 }
 
 func (self *ChainManager) InsertChain(chain types.Blocks) error {
+	self.tsmu.Lock()
+	defer self.tsmu.Unlock()
+
 	for _, block := range chain {
 		td, err := self.processor.Process(block)
 		if err != nil {
@@ -365,6 +377,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 		}
 		block.Td = td
 
+		var chain, split bool
 		self.mu.Lock()
 		{
 			self.write(block)
@@ -372,18 +385,25 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			if td.Cmp(self.td) > 0 {
 				if block.Header().Number.Cmp(new(big.Int).Add(cblock.Header().Number, ethutil.Big1)) < 0 {
 					chainlogger.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, block.Hash()[:4], td, cblock.Header().Number, cblock.Hash()[:4], self.td)
+					split = true
 				}
 
 				self.setTotalDifficulty(td)
 				self.insert(block)
-				self.transState = state.New(cblock.Root(), self.db)
 
-				self.eventMux.Post(ChainEvent{block, td})
+				chain = true
 			}
 		}
 		self.mu.Unlock()
 
-		self.eventMux.Post(NewBlockEvent{block})
+		if chain {
+			self.eventMux.Post(ChainEvent{block, td})
+		}
+
+		if split {
+			self.setTransState(state.New(block.Root(), self.db))
+			self.eventMux.Post(ChainSplitEvent{block})
+		}
 	}
 
 	return nil

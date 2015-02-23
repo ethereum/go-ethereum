@@ -7,6 +7,7 @@ package xeth
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -16,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
@@ -103,6 +103,17 @@ func (self *XEth) IsMining() bool {
 	return self.miner.Mining()
 }
 
+func (self *XEth) SetMining(shouldmine bool) bool {
+	ismining := self.miner.Mining()
+	if shouldmine && !ismining {
+		self.miner.Start()
+	}
+	if ismining && !shouldmine {
+		self.miner.Stop()
+	}
+	return self.miner.Mining()
+}
+
 func (self *XEth) IsListening() bool {
 	return self.eth.IsListening()
 }
@@ -128,15 +139,15 @@ func (self *XEth) BalanceAt(addr string) string {
 }
 
 func (self *XEth) TxCountAt(address string) int {
-	return int(self.State().SafeGet(address).Nonce)
+	return int(self.State().SafeGet(address).Nonce())
 }
 
 func (self *XEth) CodeAt(address string) string {
-	return toHex(self.State().SafeGet(address).Code)
+	return toHex(self.State().SafeGet(address).Code())
 }
 
 func (self *XEth) IsContract(address string) bool {
-	return len(self.State().SafeGet(address).Code) > 0
+	return len(self.State().SafeGet(address).Code()) > 0
 }
 
 func (self *XEth) SecretToAddress(key string) string {
@@ -220,7 +231,7 @@ func (self *XEth) Call(toStr, valueStr, gasStr, gasPriceStr, dataStr string) (st
 	var (
 		statedb = self.chainManager.TransState()
 		key     = self.eth.KeyManager().KeyPair()
-		from    = state.NewStateObject(key.Address(), self.eth.Db())
+		from    = statedb.GetOrNewStateObject(key.Address())
 		block   = self.chainManager.CurrentBlock()
 		to      = statedb.GetOrNewStateObject(fromHex(toStr))
 		data    = fromHex(dataStr)
@@ -242,7 +253,6 @@ func (self *XEth) Call(toStr, valueStr, gasStr, gasPriceStr, dataStr string) (st
 }
 
 func (self *XEth) Transact(toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
-
 	var (
 		to               []byte
 		value            = ethutil.NewValue(valueStr)
@@ -266,11 +276,17 @@ func (self *XEth) Transact(toStr, valueStr, gasStr, gasPriceStr, codeStr string)
 		tx = types.NewTransactionMessage(to, value.BigInt(), gas.BigInt(), price.BigInt(), data)
 	}
 
-	state := self.chainManager.TransState()
+	var err error
+	state := self.eth.ChainManager().TransState()
+	if balance := state.GetBalance(key.Address()); balance.Cmp(tx.Value()) < 0 {
+		return "", fmt.Errorf("insufficient balance. balance=%v tx=%v", balance, tx.Value())
+	}
 	nonce := state.GetNonce(key.Address())
 
 	tx.SetNonce(nonce)
 	tx.Sign(key.PrivateKey)
+
+	//fmt.Printf("create tx: %x %v\n", tx.Hash()[:4], tx.Nonce())
 
 	// Do some pre processing for our "pre" events  and hooks
 	block := self.chainManager.NewBlock(key.Address())
@@ -278,16 +294,11 @@ func (self *XEth) Transact(toStr, valueStr, gasStr, gasPriceStr, codeStr string)
 	coinbase.SetGasPool(block.GasLimit())
 	self.blockProcessor.ApplyTransactions(coinbase, state, block, types.Transactions{tx}, true)
 
-	err := self.eth.TxPool().Add(tx)
+	err = self.eth.TxPool().Add(tx)
 	if err != nil {
 		return "", err
 	}
 	state.SetNonce(key.Address(), nonce+1)
-
-	if contractCreation {
-		addr := core.AddressFromMessage(tx)
-		pipelogger.Infof("Contract addr %x\n", addr)
-	}
 
 	if types.IsContractAddr(to) {
 		return toHex(core.AddressFromMessage(tx)), nil

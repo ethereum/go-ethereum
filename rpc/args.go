@@ -1,6 +1,7 @@
 package rpc
 
 import "encoding/json"
+
 import "github.com/ethereum/go-ethereum/core"
 
 type GetBlockArgs struct {
@@ -35,6 +36,35 @@ type NewTxArgs struct {
 	Gas      string `json:"gas"`
 	GasPrice string `json:"gasPrice"`
 	Data     string `json:"data"`
+}
+
+func (obj *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
+	// Data can be either specified as "data" or "code" :-/
+	var ext struct {
+		From     string
+		To       string
+		Value    string
+		Gas      string
+		GasPrice string
+		Data     string
+		Code     string
+	}
+
+	if err = json.Unmarshal(b, &ext); err == nil {
+		if len(ext.Data) == 0 {
+			ext.Data = ext.Code
+		}
+		obj.From = ext.From
+		obj.To = ext.To
+		obj.Value = ext.Value
+		obj.Gas = ext.Gas
+		obj.GasPrice = ext.GasPrice
+		obj.Data = ext.Data
+
+		return
+	}
+
+	return NewErrorResponse(ErrorDecodeArgs)
 }
 
 type PushTxArgs struct {
@@ -203,7 +233,7 @@ func (obj *Sha3Args) UnmarshalJSON(b []byte) (err error) {
 type FilterOptions struct {
 	Earliest int64
 	Latest   int64
-	Address  string
+	Address  interface{}
 	Topic    []string
 	Skip     int
 	Max      int
@@ -211,9 +241,22 @@ type FilterOptions struct {
 
 func toFilterOptions(options *FilterOptions) core.FilterOptions {
 	var opts core.FilterOptions
+
+	// Convert optional address slice/string to byte slice
+	if str, ok := options.Address.(string); ok {
+		opts.Address = [][]byte{fromHex(str)}
+	} else if slice, ok := options.Address.([]interface{}); ok {
+		bslice := make([][]byte, len(slice))
+		for i, addr := range slice {
+			if saddr, ok := addr.(string); ok {
+				bslice[i] = fromHex(saddr)
+			}
+		}
+		opts.Address = bslice
+	}
+
 	opts.Earliest = options.Earliest
 	opts.Latest = options.Latest
-	opts.Address = fromHex(options.Address)
 	opts.Topics = make([][]byte, len(options.Topic))
 	for i, topic := range options.Topic {
 		opts.Topics[i] = fromHex(topic)
@@ -246,7 +289,7 @@ type WhisperMessageArgs struct {
 	Payload  string
 	To       string
 	From     string
-	Topics   []string
+	Topic    []string
 	Priority uint32
 	Ttl      uint32
 }
