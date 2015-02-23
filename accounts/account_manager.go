@@ -76,6 +76,10 @@ func (am AccountManager) NewAccount(auth string) (*Account, error) {
 	return ua, err
 }
 
+func (am AccountManager) DeleteAccount(address []byte, auth string) error {
+	return am.keyStore.DeleteKey(address, auth)
+}
+
 // set of accounts == set of keys in given key store
 // TODO: do we need persistence of accounts as well?
 func (am *AccountManager) Accounts() ([]Account, error) {
