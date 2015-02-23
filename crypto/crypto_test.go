@@ -18,7 +18,7 @@ import (
 func TestSha3(t *testing.T) {
 	msg := []byte("abc")
 	exp, _ := hex.DecodeString("4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45")
-	checkhash(t, "Sha3-256", Sha3, msg, exp)
+	checkhash(t, "Sha3-256", func(in []byte) []byte { return Sha3(in) }, msg, exp)
 }
 
 func TestSha256(t *testing.T) {

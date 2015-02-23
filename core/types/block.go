@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"sort"
 	"time"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -175,6 +176,7 @@ func (self *Block) RlpDataForStorage() interface{} {
 // Header accessors (add as you need them)
 func (self *Block) Number() *big.Int          { return self.header.Number }
 func (self *Block) NumberU64() uint64         { return self.header.Number.Uint64() }
+func (self *Block) Nonce() []byte             { return self.header.Nonce }
 func (self *Block) Bloom() []byte             { return self.header.Bloom }
 func (self *Block) Coinbase() []byte          { return self.header.Coinbase }
 func (self *Block) Time() int64               { return int64(self.header.Time) }
@@ -183,6 +185,18 @@ func (self *Block) GasUsed() *big.Int         { return self.header.GasUsed }
 func (self *Block) Root() []byte              { return self.header.Root }
 func (self *Block) SetRoot(root []byte)       { self.header.Root = root }
 func (self *Block) Size() ethutil.StorageSize { return ethutil.StorageSize(len(ethutil.Encode(self))) }
+func (self *Block) GetTransaction(i int) *Transaction {
+	if len(self.transactions) > i {
+		return self.transactions[i]
+	}
+	return nil
+}
+func (self *Block) GetUncle(i int) *Header {
+	if len(self.uncles) > i {
+		return self.uncles[i]
+	}
+	return nil
+}
 
 // Implement pow.Block
 func (self *Block) Difficulty() *big.Int { return self.header.Difficulty }
@@ -207,6 +221,7 @@ func (self *Block) ParentHash() []byte {
 
 func (self *Block) String() string {
 	return fmt.Sprintf(`BLOCK(%x): Size: %v TD: %v {
+NoNonce: %x
 Header:
 [
 %v
@@ -216,7 +231,7 @@ Transactions:
 Uncles:
 %v
 }
-`, self.header.Hash(), self.Size(), self.Td, self.header, self.transactions, self.uncles)
+`, self.header.Hash(), self.Size(), self.Td, self.header.HashNoNonce(), self.header, self.transactions, self.uncles)
 }
 
 func (self *Header) String() string {

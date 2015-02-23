@@ -17,6 +17,7 @@ ApplicationWindow {
     // Use this to make the window frameless. But then you'll need to do move and resize by hand
 
     property var ethx : Eth.ethx
+    property var catalog;
 
     width: 1200
     height: 820
@@ -39,19 +40,22 @@ ApplicationWindow {
     // Takes care of loading all default plugins
     Component.onCompleted: {
 
-        addPlugin("./views/catalog.qml", {noAdd: true, close: false, section: "begin"});
-        var wallet = addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "ethereum", active: true});
+        catalog = addPlugin("./views/catalog.qml", {noAdd: true, close: false, section: "begin", active: true});
 
-        addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: true});
+        var walletWeb = addPlugin("./views/browser.qml", {noAdd: true, close: false, section: "ethereum", active: false});
+        walletWeb.view.url = "http://ethereum-dapp-wallet.meteor.com/";
+        walletWeb.menuItem.title = "Wallet";
+
+        addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: false});
         addPlugin("./views/transaction.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/whisper.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/chain.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/pending_tx.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/info.qml", {noAdd: true, close: false, section: "legacy"});
 
-        mainSplit.setView(wallet.view, wallet.menuItem);
+        mainSplit.setView(catalog.view, catalog.menuItem);
 
-        newBrowserTab("http://ethereum-dapp-whisper-client.meteor.com/chat/amsteam");
+        //newBrowserTab("http://ethereum-dapp-catalog.meteor.com");
 
         // Command setup
         gui.sendCommand(0)
@@ -59,13 +63,14 @@ ApplicationWindow {
 
     function activeView(view, menuItem) {
         mainSplit.setView(view, menuItem)
-        if (view.hideUrl) {
+        /*if (view.hideUrl) {
             urlPane.visible = false;
             mainView.anchors.top = rootView.top
         } else {
             urlPane.visible = true;
             mainView.anchors.top = divider.bottom
-        }
+        }*/
+
     }
 
     function addViews(view, path, options) {
@@ -114,10 +119,34 @@ ApplicationWindow {
     }
 
     function newBrowserTab(url) {
-        var window = addPlugin("./views/browser.qml", {noAdd: true, close: true, section: "apps", active: true});
-        window.view.url = url;
-        window.menuItem.title = "Mist";
-        activeView(window.view, window.menuItem);
+        
+        var urlMatches = url.toString().match(/^[a-z]*\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
+        var requestedDomain = urlMatches && urlMatches[1];
+
+        var domainAlreadyOpen = false;
+
+        for(var i = 0; i < mainSplit.views.length; i++) {
+            if (mainSplit.views[i].view.url) {
+                var matches = mainSplit.views[i].view.url.toString().match(/^[a-z]*\:\/\/(?:www\.)?([^\/?#]+)(?:[\/?#]|$)/i);
+                var existingDomain = matches && matches[1];
+                if (requestedDomain == existingDomain) {
+                    domainAlreadyOpen = true;
+                    
+                    if (mainSplit.views[i].view.url != url){
+                        mainSplit.views[i].view.url = url;
+                    }
+                    
+                    activeView(mainSplit.views[i].view, mainSplit.views[i].menuItem);
+                }
+            }
+        }  
+
+        if (!domainAlreadyOpen) {            
+            var window = addPlugin("./views/browser.qml", {noAdd: true, close: true, section: "apps", active: true});
+            window.view.url = url;
+            window.menuItem.title = "Mist";
+            activeView(window.view, window.menuItem);
+        }
     }
 
 
@@ -126,27 +155,10 @@ ApplicationWindow {
         Menu {
             title: "File"
             MenuItem {
-                text: "Import App"
-                shortcut: "Ctrl+o"
-                onTriggered: {
-                    generalFileDialog.show(true, importApp)
-                }
-            }
-
-            MenuItem {
-                text: "Add plugin"
-                onTriggered: {
-                    generalFileDialog.show(true, function(path) {
-                        addPlugin(path, {close: true, section: "apps"})
-                    })
-                }
-            }
-
-            MenuItem {
                 text: "New tab"
                 shortcut: "Ctrl+t"
                 onTriggered: {
-                    newBrowserTab("http://etherian.io");
+	            activeView(catalog.view, catalog.menuItem);
                 }
             }
 
@@ -239,89 +251,7 @@ ApplicationWindow {
             }
         }
 
-        Menu {
-            title: "GLOBAL SHORTCUTS"
-            visible: false
-            MenuItem {
-                visible: false
-                shortcut: "Ctrl+l"
-                onTriggered: {
-                    url.focus = true
-                }
-            }
-        }
     }
-
-    statusBar: StatusBar {
-        //height: 32
-        visible: false
-
-        id: statusBar
-        Label {
-            //y: 6
-            id: walletValueLabel
-
-            font.pixelSize: 10
-            styleColor: "#797979"
-        }
-
-        Label {
-            //y: 6
-            objectName: "miningLabel"
-            visible: true
-            font.pixelSize: 10
-            anchors.right: lastBlockLabel.left
-            anchors.rightMargin: 5
-        }
-
-        Label {
-            id: lastBlockLabel
-            objectName: "lastBlockLabel"
-            visible: true
-            text: "---"
-            font.pixelSize: 10
-            anchors.right: peerGroup.left
-            anchors.rightMargin: 5
-        }
-
-        ProgressBar {
-            visible: false
-            id: downloadIndicator
-            value: 0
-            objectName: "downloadIndicator"
-            y: -4
-            x: statusBar.width / 2 - this.width / 2
-            width: 160
-        }
-
-        Label {
-            visible: false
-            objectName: "downloadLabel"
-            //y: 7
-            anchors.left: downloadIndicator.right
-            anchors.leftMargin: 5
-            font.pixelSize: 10
-            text: "0 / 0"
-        }
-
-
-        RowLayout {
-            id: peerGroup
-            //y: 7
-            anchors.right: parent.right
-            MouseArea {
-                onDoubleClicked:  peerWindow.visible = true
-                anchors.fill: parent
-            }
-
-            Label {
-                id: peerLabel
-                font.pixelSize: 10
-                text: "0 / 0"
-            }
-        }
-    }
-
 
     property var blockModel: ListModel {
         id: blockModel
@@ -332,8 +262,9 @@ ApplicationWindow {
 
         id: mainSplit
         anchors.fill: parent
-        resizing: false
+        //resizing: false  // this is NOT where we remove that damning resizing handle..
         handleDelegate: Item {
+            //This handle is a way to remove the line between the split views
             Rectangle {
                 anchors.fill: parent
             }
@@ -447,10 +378,14 @@ ApplicationWindow {
                      property var view;
                      property var path;
                      property var closable;
+                     property var badgeContent;
 
                      property alias title: label.text
                      property alias icon: icon.source
                      property alias secondaryTitle: secondary.text
+                     property alias badgeNumber: badgeNumberLabel.text
+                     property alias badgeIcon: badgeIconLabel.text
+
                      function setSelection(on) {
                          sel.visible = on
                          
@@ -464,7 +399,7 @@ ApplicationWindow {
                         label.visible = !on
                         buttonLabel.visible = on
                      }
-
+ 
                      width: 192
                      height: 55
                      color: "#00000000"
@@ -497,7 +432,7 @@ ApplicationWindow {
                              anchors.fill: parent
                              border.width: 0
                              radius: 5
-                             color: "#FFFFFFFF"
+                             color: "#FAFAFA"
                          }
                          Rectangle {
                              anchors {
@@ -506,7 +441,7 @@ ApplicationWindow {
                                  right: r.right
                              }
                              width: 10
-                             color: "#FFFFFFFF"
+                             color: "#FAFAFA"
                              border.width:0
 
                              Rectangle {
@@ -517,7 +452,7 @@ ApplicationWindow {
                                      top: parent.top
                                  }
                                  height: 1
-                                 color: "#FFFFFF"
+                                 color: "#FAFAFA"
                              }
 
                              Rectangle {
@@ -528,7 +463,7 @@ ApplicationWindow {
                                      bottom: parent.bottom
                                  }
                                  height: 1
-                                 color: "#FFFFFF"
+                                 color: "#FAFAFA"
                              }
                          }
                      }
@@ -543,7 +478,6 @@ ApplicationWindow {
                             if (parent.closable == true) {
                                 closeIcon.visible = sel.visible
                             }
-                            
                          }
                          onExited:  {
                             closeIcon.visible = false
@@ -552,8 +486,8 @@ ApplicationWindow {
 
                      Image {
                          id: icon
-                         height: 24
-                         width: 24
+                         height: 28
+                         width: 28
                          anchors {
                              left: parent.left
                              verticalCenter: parent.verticalCenter
@@ -576,17 +510,23 @@ ApplicationWindow {
                          id: label
                          font.family: sourceSansPro.name 
                          font.weight: Font.DemiBold
-                         anchors {
-                             left: icon.right
-                             verticalCenter: parent.verticalCenter
-                             leftMargin: 6
-                             // verticalCenterOffset: -10
-                         }
+                         elide: Text.ElideRight
                          x:250
                          color: "#665F5F"
                          font.pixelSize: 14
-                     }
+                         anchors {
+                             left: icon.right
+                             right: parent.right
+                             verticalCenter: parent.verticalCenter
+                             leftMargin: 6
+                             rightMargin: 8
+                             verticalCenterOffset: (secondaryTitle == "") ? 0 : -10;
+                         }
 
+
+                         
+                         
+                     }
 
                      Text {
                          id: secondary
@@ -606,7 +546,7 @@ ApplicationWindow {
                         visible: false
                         width: 10
                         height: 10
-                        color: "#FFFFFF"
+                        color: "#FAFAFA"
                         anchors {
                             fill: icon
                         }
@@ -625,8 +565,48 @@ ApplicationWindow {
                                  centerIn: parent
                              }
                              color: "#665F5F"
-                             font.pixelSize: 18
+                             font.pixelSize: 20
                              text: "\ue082"
+                         }
+                     }                     
+
+                     Rectangle {
+                        id: badge
+                        visible: (badgeContent == "icon" || badgeContent == "number" )? true : false 
+                        width: 32
+                        color: "#05000000"
+                        anchors {
+                            right: parent.right;
+                            top: parent.top;
+                            bottom: parent.bottom;
+                            rightMargin: 4;
+                        }
+                                      
+                        Text {
+                             id: badgeIconLabel
+                             visible: (badgeContent == "icon") ? true : false;
+                             font.family: simpleLineIcons.name 
+                             anchors {
+                                 centerIn: parent
+                             }
+                             horizontalAlignment: Text.AlignCenter
+                             color: "#AAA0A0"
+                             font.pixelSize: 20
+                             text: badgeIcon
+                         }                       
+
+                        Text {
+                             id: badgeNumberLabel
+                             visible: (badgeContent == "number") ? true : false;
+                             anchors {
+                                 centerIn: parent
+                             }
+                             horizontalAlignment: Text.AlignCenter
+                             font.family: sourceSansPro.name 
+                             font.weight: Font.Light
+                             color: "#AAA0A0"
+                             font.pixelSize: 18
+                             text: badgeNumber
                          }
                      }
                      
@@ -800,7 +780,7 @@ ApplicationWindow {
               anchors.top: parent.top
               color: "#00000000"             
 
-              Rectangle {
+              /*Rectangle {
                   id: urlPane
                   height: 40
                   color: "#00000000"
@@ -847,7 +827,7 @@ ApplicationWindow {
                   z: -1
                   height: 1
                   color: "#CCCCCC"
-              }
+              }*/
 
               Rectangle {
                   id: mainView
@@ -855,7 +835,7 @@ ApplicationWindow {
                   anchors.right: parent.right
                   anchors.left: parent.left
                   anchors.bottom: parent.bottom
-                  anchors.top: divider.bottom
+                  anchors.top: parent.top
 
                   function createView(component) {
                       var view = component.createObject(mainView)
@@ -899,9 +879,8 @@ ApplicationWindow {
             }
         }
 
-
         function setWalletValue(value) {
-            walletValueLabel.text = value
+            //walletValueLabel.text = value
         }
 
         function loadPlugin(name) {
@@ -909,17 +888,11 @@ ApplicationWindow {
             var view = mainView.addPlugin(name)
         }
 
-        function setPeers(text) {
-            peerLabel.text = text
-        }
+        function clearPeers() { peerModel.clear() }
+        function addPeer(peer) { peerModel.append(peer) }
 
-        function addPeer(peer) {
-            // We could just append the whole peer object but it cries if you try to alter them
-            peerModel.append({ip: peer.ip, port: peer.port, lastResponse:timeAgo(peer.lastSend), latency: peer.latency, version: peer.version, caps: peer.caps})
-        }
-
-        function resetPeers(){
-            peerModel.clear()
+        function setPeerCounters(text) {
+            //peerCounterLabel.text = text
         }
 
         function timeAgo(unixTs){
@@ -957,9 +930,10 @@ ApplicationWindow {
                      anchors.fill: parent
                      id: peerTable
                      model: peerModel
-                     TableViewColumn{width: 200; role: "ip" ; title: "IP" }
-                     TableViewColumn{width: 260; role: "version" ; title: "Version" }
-                     TableViewColumn{width: 180;  role: "caps" ; title: "Capabilities" }
+                     TableViewColumn{width: 180; role: "addr" ; title: "Remote Address" }
+                     TableViewColumn{width: 280; role: "nodeID" ; title: "Node ID" }
+                     TableViewColumn{width: 100; role: "name" ; title: "Name" }
+                     TableViewColumn{width: 40; role: "caps" ; title: "Capabilities" }
                  }
              }
          }
@@ -990,7 +964,7 @@ ApplicationWindow {
                  anchors.top: parent.top
                  anchors.topMargin: 30
                  font.pointSize: 12
-                 text: "<h2>Mist (0.7.10)</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Viktor Trón<br>Felix Lange<br>Taylor Gerring<br>Daniel Nagy<br><h3>UX</h3>Alex van de Sande<br>"
+                 text: "<h2>Mist (0.8.5)</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Viktor Trón<br>Felix Lange<br>Taylor Gerring<br>Daniel Nagy<br>Gustav Simonsson<br><h3>UX/UI</h3>Alex van de Sande<br>Fabian Vogelsteller"
              }
          }
 
@@ -1027,37 +1001,25 @@ ApplicationWindow {
          Window {
              id: addPeerWin
              visible: false
-             minimumWidth: 300
-             maximumWidth: 300
+             minimumWidth: 400
+             maximumWidth: 400
              maximumHeight: 50
              minimumHeight: 50
              title: "Connect to peer"
 
-             ComboBox {
+             TextField {
                  id: addrField
                  anchors.verticalCenter: parent.verticalCenter
                  anchors.left: parent.left
                  anchors.right: addPeerButton.left
                  anchors.leftMargin: 10
                  anchors.rightMargin: 10
+		 placeholderText: "enode://<hex node id>:<IP address>:<port>"
                  onAccepted: {
-                     eth.connectToPeer(addrField.currentText)
-                     addPeerWin.visible = false
-                 }
-
-                 editable: true
-                 model: ListModel { id: pastPeers }
-
-                 Component.onCompleted: {
-                     pastPeers.insert(0, {text: "poc-8.ethdev.com:30303"})
-                     /*
-                      var ips = eth.pastPeers()
-                      for(var i = 0; i < ips.length; i++) {
-                          pastPeers.append({text: ips.get(i)})
-                      }
-
-                      pastPeers.insert(0, {text: "poc-7.ethdev.com:30303"})
-                      */
+	             if(addrField.text.length != 0) {
+			eth.connectToPeer(addrField.text)
+			addPeerWin.visible = false
+		     }
                  }
              }
 
@@ -1066,10 +1028,12 @@ ApplicationWindow {
                  anchors.right: parent.right
                  anchors.verticalCenter: parent.verticalCenter
                  anchors.rightMargin: 10
-                 text: "Add"
+                 text: "Connect"
                  onClicked: {
-                     eth.connectToPeer(addrField.currentText)
-                     addPeerWin.visible = false
+	             if(addrField.text.length != 0) {
+			eth.connectToPeer(addrField.text)
+			addPeerWin.visible = false
+		     }
                  }
              }
              Component.onCompleted: {

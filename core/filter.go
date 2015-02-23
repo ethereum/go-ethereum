@@ -16,7 +16,7 @@ type FilterOptions struct {
 	Earliest int64
 	Latest   int64
 
-	Address []byte
+	Address [][]byte
 	Topics  [][]byte
 
 	Skip int
@@ -25,11 +25,11 @@ type FilterOptions struct {
 
 // Filtering interface
 type Filter struct {
-	eth      EthManager
+	eth      Backend
 	earliest int64
 	latest   int64
 	skip     int
-	address  []byte
+	address  [][]byte
 	max      int
 	topics   [][]byte
 
@@ -40,7 +40,7 @@ type Filter struct {
 
 // Create a new filter which uses a bloom filter on blocks to figure out whether a particular block
 // is interesting or not.
-func NewFilter(eth EthManager) *Filter {
+func NewFilter(eth Backend) *Filter {
 	return &Filter{eth: eth}
 }
 
@@ -65,7 +65,7 @@ func (self *Filter) SetLatestBlock(latest int64) {
 	self.latest = latest
 }
 
-func (self *Filter) SetAddress(addr []byte) {
+func (self *Filter) SetAddress(addr [][]byte) {
 	self.address = addr
 }
 
@@ -111,14 +111,14 @@ func (self *Filter) Find() state.Logs {
 		// current parameters
 		if self.bloomFilter(block) {
 			// Get the logs of the block
-			logs, err := self.eth.BlockProcessor().GetLogs(block)
+			unfiltered, err := self.eth.BlockProcessor().GetLogs(block)
 			if err != nil {
 				chainlogger.Warnln("err: filter get logs ", err)
 
 				break
 			}
 
-			logs = append(logs, self.FilterLogs(logs)...)
+			logs = append(logs, self.FilterLogs(unfiltered)...)
 		}
 
 		block = self.eth.ChainManager().GetBlock(block.ParentHash())
@@ -145,7 +145,7 @@ func (self *Filter) FilterLogs(logs state.Logs) state.Logs {
 	// Filter the logs for interesting stuff
 Logs:
 	for _, log := range logs {
-		if !bytes.Equal(self.address, log.Address()) {
+		if !includes(self.address, log.Address()) {
 			continue
 		}
 
@@ -163,8 +163,18 @@ Logs:
 }
 
 func (self *Filter) bloomFilter(block *types.Block) bool {
-	if len(self.address) > 0 && !types.BloomLookup(block.Bloom(), self.address) {
-		return false
+	if len(self.address) > 0 {
+		var included bool
+		for _, addr := range self.address {
+			if types.BloomLookup(block.Bloom(), addr) {
+				included = true
+				break
+			}
+		}
+
+		if !included {
+			return false
+		}
 	}
 
 	for _, topic := range self.topics {

@@ -31,7 +31,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/howeyc/fsnotify"
 	"github.com/obscuren/qml"
@@ -142,19 +141,6 @@ func (app *HtmlApplication) Window() *qml.Window {
 func (app *HtmlApplication) NewBlock(block *types.Block) {
 	b := &xeth.Block{Number: int(block.NumberU64()), Hash: ethutil.Bytes2Hex(block.Hash())}
 	app.webView.Call("onNewBlockCb", b)
-}
-
-func (self *HtmlApplication) Messages(messages state.Messages, id string) {
-	/* TODO remove me
-	var msgs []javascript.JSMessage
-	for _, m := range messages {
-		msgs = append(msgs, javascript.NewJSMessage(m))
-	}
-
-	b, _ := json.Marshal(msgs)
-
-	self.webView.Call("onWatchedCb", string(b), id)
-	*/
 }
 
 func (app *HtmlApplication) Destroy() {

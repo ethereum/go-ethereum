@@ -30,7 +30,7 @@ var rpchttplogger = logger.NewLogger("RPC-HTTP")
 var JSON rpc.JsonWrapper
 
 func NewRpcHttpServer(pipe *xeth.XEth, port int) (*RpcHttpServer, error) {
-	sport := fmt.Sprintf(":%d", port)
+	sport := fmt.Sprintf("127.0.0.1:%d", port)
 	l, err := net.Listen("tcp", sport)
 	if err != nil {
 		return nil, err
@@ -102,7 +102,7 @@ func (s *RpcHttpServer) apiHandler(api *rpc.EthereumApi) http.Handler {
 		if reserr != nil {
 			rpchttplogger.Warnln(reserr)
 			jsonerr := &rpc.RpcErrorObject{-32603, reserr.Error()}
-			JSON.Send(w, &rpc.RpcErrorResponse{JsonRpc: jsonrpcver, ID: &reqParsed.ID, Error: jsonerr})
+			JSON.Send(w, &rpc.RpcErrorResponse{JsonRpc: jsonrpcver, ID: reqParsed.ID, Error: jsonerr})
 			return
 		}
 

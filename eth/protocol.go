@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	ProtocolVersion    = 52
+	ProtocolVersion    = 54
 	NetworkId          = 0
 	ProtocolLength     = uint64(8)
 	ProtocolMaxMsgSize = 10 * 1024 * 1024
@@ -92,13 +92,14 @@ func EthProtocol(txPool txPool, chainManager chainManager, blockPool blockPool) 
 // the main loop that handles incoming messages
 // note RemovePeer in the post-disconnect hook
 func runEthProtocol(txPool txPool, chainManager chainManager, blockPool blockPool, peer *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+	id := peer.ID()
 	self := &ethProtocol{
 		txPool:       txPool,
 		chainManager: chainManager,
 		blockPool:    blockPool,
 		rw:           rw,
 		peer:         peer,
-		id:           fmt.Sprintf("%x", peer.Identity().Pubkey()[:8]),
+		id:           fmt.Sprintf("%x", id[:8]),
 	}
 	err = self.handleStatus()
 	if err == nil {

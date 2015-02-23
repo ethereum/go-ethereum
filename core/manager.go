@@ -7,16 +7,14 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 )
 
-type EthManager interface {
+type Backend interface {
 	BlockProcessor() *BlockProcessor
 	ChainManager() *ChainManager
 	TxPool() *TxPool
 	PeerCount() int
-	IsMining() bool
 	IsListening() bool
 	Peers() []*p2p.Peer
 	KeyManager() *crypto.KeyManager
-	ClientIdentity() p2p.ClientIdentity
 	Db() ethutil.Database
 	EventMux() *event.TypeMux
 }

@@ -20,10 +20,12 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/xeth"
 )
 
 var rpclogger = logger.NewLogger("RPC")
@@ -47,7 +49,6 @@ func (self JsonWrapper) ParseRequestBody(req *http.Request) (RpcRequest, error) 
 
 	// Convert JSON to native types
 	d := json.NewDecoder(req.Body)
-	// d.UseNumber()
 	defer req.Body.Close()
 	err := d.Decode(&reqParsed)
 
@@ -55,6 +56,7 @@ func (self JsonWrapper) ParseRequestBody(req *http.Request) (RpcRequest, error) 
 		rpclogger.Errorln("Error decoding JSON: ", err)
 		return reqParsed, err
 	}
+
 	rpclogger.DebugDetailf("Parsed request: %s", reqParsed)
 
 	return reqParsed, nil
@@ -80,8 +82,9 @@ type RpcServer interface {
 
 type Log struct {
 	Address string   `json:"address"`
-	Topics  []string `json:"topics"`
+	Topic   []string `json:"topics"`
 	Data    string   `json:"data"`
+	Number  uint64   `json:"number"`
 }
 
 func toLogs(logs state.Logs) (ls []Log) {
@@ -89,14 +92,46 @@ func toLogs(logs state.Logs) (ls []Log) {
 
 	for i, log := range logs {
 		var l Log
-		l.Topics = make([]string, len(log.Topics()))
+		l.Topic = make([]string, len(log.Topics()))
 		l.Address = toHex(log.Address())
 		l.Data = toHex(log.Data())
+		l.Number = log.Number()
 		for j, topic := range log.Topics() {
-			l.Topics[j] = toHex(topic)
+			l.Topic[j] = toHex(topic)
 		}
 		ls[i] = l
 	}
 
 	return
+}
+
+type whisperFilter struct {
+	messages []xeth.WhisperMessage
+	timeout  time.Time
+}
+
+func (w *whisperFilter) add(msgs ...xeth.WhisperMessage) {
+	w.messages = append(w.messages, msgs...)
+}
+func (w *whisperFilter) get() []xeth.WhisperMessage {
+	w.timeout = time.Now()
+	tmp := w.messages
+	w.messages = nil
+	return tmp
+}
+
+type logFilter struct {
+	logs    state.Logs
+	timeout time.Time
+}
+
+func (l *logFilter) add(logs ...state.Log) {
+	l.logs = append(l.logs, logs...)
+}
+
+func (l *logFilter) get() state.Logs {
+	l.timeout = time.Now()
+	tmp := l.logs
+	l.logs = nil
+	return tmp
 }

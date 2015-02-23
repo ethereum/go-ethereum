@@ -25,11 +25,12 @@ package crypto
 
 import (
 	"bytes"
-	"code.google.com/p/go-uuid/uuid"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"encoding/json"
 	"io"
+
+	"code.google.com/p/go-uuid/uuid"
 )
 
 type Key struct {

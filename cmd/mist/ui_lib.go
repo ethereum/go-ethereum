@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/javascript"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/obscuren/qml"
 )
@@ -56,13 +55,10 @@ type UiLib struct {
 
 	filterCallbacks map[int][]int
 	filterManager   *filter.FilterManager
-
-	miner *miner.Miner
 }
 
 func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
 	lib := &UiLib{XEth: xeth.New(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth), filterCallbacks: make(map[int][]int)} //, filters: make(map[int]*xeth.JSFilter)}
-	lib.miner = miner.New(eth.KeyManager().Address(), eth)
 	lib.filterManager = filter.NewFilterManager(eth.EventMux())
 	go lib.filterManager.Start()
 
@@ -71,11 +67,6 @@ func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
 
 func (self *UiLib) Notef(args []interface{}) {
 	guilogger.Infoln(args...)
-}
-
-func (self *UiLib) PastPeers() *ethutil.List {
-	return ethutil.NewList([]string{})
-	//return ethutil.NewList(eth.PastPeers())
 }
 
 func (self *UiLib) ImportTx(rlpTx string) {
@@ -136,15 +127,15 @@ func (ui *UiLib) Muted(content string) {
 
 func (ui *UiLib) Connect(button qml.Object) {
 	if !ui.connected {
-		ui.eth.Start(SeedNode)
+		ui.eth.Start()
 		ui.connected = true
 		button.Set("enabled", false)
 	}
 }
 
-func (ui *UiLib) ConnectToPeer(addr string) {
-	if err := ui.eth.SuggestPeer(addr); err != nil {
-		guilogger.Infoln(err)
+func (ui *UiLib) ConnectToPeer(nodeURL string) {
+	if err := ui.eth.SuggestPeer(nodeURL); err != nil {
+		guilogger.Infoln("SuggestPeer error: " + err.Error())
 	}
 }
 
@@ -155,8 +146,8 @@ func (ui *UiLib) AssetPath(p string) string {
 func (self *UiLib) StartDbWithContractAndData(contractHash, data string) {
 	dbWindow := NewDebuggerWindow(self)
 	object := self.eth.ChainManager().State().GetStateObject(ethutil.Hex2Bytes(contractHash))
-	if len(object.Code) > 0 {
-		dbWindow.SetCode(ethutil.Bytes2Hex(object.Code))
+	if len(object.Code()) > 0 {
+		dbWindow.SetCode(ethutil.Bytes2Hex(object.Code()))
 	}
 	dbWindow.SetData(data)
 
@@ -209,34 +200,37 @@ func (self *UiLib) Call(params map[string]interface{}) (string, error) {
 }
 
 func (self *UiLib) AddLocalTransaction(to, data, gas, gasPrice, value string) int {
-	return self.miner.AddLocalTx(&miner.LocalTx{
-		To:       ethutil.Hex2Bytes(to),
-		Data:     ethutil.Hex2Bytes(data),
-		Gas:      gas,
-		GasPrice: gasPrice,
-		Value:    value,
-	}) - 1
+	return 0
+	/*
+		return self.miner.AddLocalTx(&miner.LocalTx{
+			To:       ethutil.Hex2Bytes(to),
+			Data:     ethutil.Hex2Bytes(data),
+			Gas:      gas,
+			GasPrice: gasPrice,
+			Value:    value,
+		}) - 1
+	*/
 }
 
 func (self *UiLib) RemoveLocalTransaction(id int) {
-	self.miner.RemoveLocalTx(id)
+	//self.miner.RemoveLocalTx(id)
 }
 
 func (self *UiLib) SetGasPrice(price string) {
-	self.miner.MinAcceptedGasPrice = ethutil.Big(price)
+	self.Miner().MinAcceptedGasPrice = ethutil.Big(price)
 }
 
 func (self *UiLib) SetExtra(extra string) {
-	self.miner.Extra = extra
+	self.Miner().Extra = extra
 }
 
 func (self *UiLib) ToggleMining() bool {
-	if !self.miner.Mining() {
-		self.miner.Start()
+	if !self.Miner().Mining() {
+		self.Miner().Start()
 
 		return true
 	} else {
-		self.miner.Stop()
+		self.Miner().Stop()
 
 		return false
 	}

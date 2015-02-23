@@ -121,13 +121,11 @@ func exit(err error) {
 	os.Exit(status)
 }
 
-func StartEthereum(ethereum *eth.Ethereum, SeedNode string) {
-	clilogger.Infof("Starting %s", ethereum.ClientIdentity())
-	err := ethereum.Start(SeedNode)
-	if err != nil {
+func StartEthereum(ethereum *eth.Ethereum) {
+	clilogger.Infoln("Starting ", ethereum.Name())
+	if err := ethereum.Start(); err != nil {
 		exit(err)
 	}
-
 	RegisterInterrupt(func(sig os.Signal) {
 		ethereum.Stop()
 		logger.Flush()
@@ -227,7 +225,7 @@ func StartMining(ethereum *eth.Ethereum) bool {
 		go func() {
 			clilogger.Infoln("Start mining")
 			if gminer == nil {
-				gminer = miner.New(addr, ethereum)
+				gminer = miner.New(addr, ethereum, 4)
 			}
 			gminer.Start()
 		}()
@@ -274,7 +272,7 @@ func BlockDo(ethereum *eth.Ethereum, hash []byte) error {
 	parent := ethereum.ChainManager().GetBlock(block.ParentHash())
 
 	statedb := state.New(parent.Root(), ethereum.Db())
-	_, err := ethereum.BlockProcessor().TransitionState(statedb, parent, block)
+	_, err := ethereum.BlockProcessor().TransitionState(statedb, parent, block, true)
 	if err != nil {
 		return err
 	}

@@ -3,7 +3,7 @@ import QtQuick.Controls 1.0;
 import QtQuick.Controls.Styles 1.0
 import QtQuick.Layouts 1.0;
 import QtWebEngine 1.0
-//import QtWebEngine.experimental 1.0
+import QtWebEngine.experimental 1.0
 import QtQuick.Window 2.0;
 
 Rectangle {
@@ -64,23 +64,15 @@ Rectangle {
 	}
 
 	function showFullUrlBar(on){
-    	if (on) {
-			//appTitle.visible = false
-			//appDomain.visible = false
-			
-			//uriNav.visible = true
-			clickAnywhereOnApp.visible = true
-
-			navBar.state = "fullUrlVisible"
-    	} else {
-			//appTitle.visible = true
-			//appDomain.visible = true
-			//uriNav.visible = false
-			clickAnywhereOnApp.visible = false
-
-			navBar.state = "titleVisible"
-
-   		}
+        if (uriNav.focus == false ) {
+        	if (on == false) {
+                clickAnywhereOnApp.visible = false
+                navBar.state = "titleVisible"
+        	} else {
+                clickAnywhereOnApp.visible = true
+                navBar.state = "fullUrlVisible"
+       		}
+        }
 
     }
 
@@ -90,24 +82,40 @@ Rectangle {
 	Item {
 		objectName: "root"
 		id: root
-		anchors.fill: parent
+		anchors {
+            fill: parent
+        }
+
 		state: "inspectorShown"
 
 		MouseArea {
 			id: clickAnywhereOnApp
 			z:15
-			//hoverEnabled: true
-			anchors.fill: parent
-			/*hoverEnabled: true*/
+			// Using a secondary screen to catch on mouse exits for the area, because 
+            // there are many hover actions conflicting
+
+            anchors {
+                top: parent.top
+                topMargin: 50
+                right: parent.right
+                bottom: parent.bottom
+                left: parent.left
+            }
+			hoverEnabled: true
 			
-			onClicked: {
+			onEntered: {
 			  	showFullUrlBar(false);
 			}
 
-			/*Rectangle {
-			    anchors.fill: parent
-			    color: "#88888888"
-			}*/
+            onClicked: {
+                uriNav.focus = false
+                showFullUrlBar(false);
+            }
+
+			// Rectangle {
+			//     anchors.fill: parent
+			//     color: "#88888888"
+			// }
 		}
 
 		RowLayout {
@@ -121,40 +129,44 @@ Rectangle {
 
 			Button {
 				id: back
-
-				onClicked: {
-					webview.goBack()
+                z: 30
+				onClicked: {					
+                    webview.goBack()
 				}
 
-				anchors{
+				anchors {
 					left: parent.left
 					leftMargin: 6
 				}
 
 				style: ButtonStyle {
-					background: Image {
-						source: "../../backButton.png"
-						width: 20
-						height: 30
-					}
+                    background: Image {
+                         source: (webview.canGoBack) ? 
+                            (control.hovered ? "../../backButtonHover.png" : "../../backButton.png") : 
+                            "../../backButtonDisabled.png"
+                         width: 20
+                         height: 30
+                    }
 				}
 			}
 
 			Rectangle {
-				id: appInfoPane
-			    height: 28
-			    color: "#FFFFFF"
-			    radius: 6
-
-
-			   MouseArea {
+                id: appInfoPane
+                height: 28
+                color: "#FFFFFF"
+                radius: 6
+                z:2
+	           MouseArea {
 			    	anchors.fill: parent
 			    	z: 10
 			    	hoverEnabled: true
 			    	
 			    	onEntered: {
-			    	  	showFullUrlBar(true);
-			    	}	 
+                        showFullUrlBar(true);
+                    }
+                    /*onExited: {
+                        showFullUrlBar(false);
+                    }*/	 
 			    	   	
 			    }
 
@@ -171,14 +183,15 @@ Rectangle {
                      font.bold: true
                      font.capitalization: Font.AllUppercase 
                      horizontalAlignment: Text.AlignRight
-                     verticalAlignment: Text.AlignVCenter
-                     
+                     verticalAlignment: Text.AlignVCenter 
+                     elide: Text.ElideRight
+
                      anchors {
                          left: parent.left
                          right: parent.horizontalCenter
                          top: parent.top
                          bottom: parent.bottom
-                         rightMargin: 10
+                         leftMargin: 32
                      }
                      color: "#928484"
                  }
@@ -189,13 +202,15 @@ Rectangle {
                      font.bold: false
                      horizontalAlignment: Text.AlignLeft
                      verticalAlignment: Text.AlignVCenter
+                     elide: Text.ElideLeft
                      
                      anchors {
                          left: parent.horizontalCenter
                          right: parent.right
                          top: parent.top
                          bottom: parent.bottom
-                         leftMargin: 10
+                         leftMargin: 32
+
                      }
                      color: "#C0AFAF"
                  }
@@ -212,7 +227,7 @@ Rectangle {
 				    }
 
 				    horizontalAlignment: Text.AlignHCenter
-                    
+
                     style: TextFieldStyle {
                         textColor: "#928484"
                         background: Rectangle {
@@ -225,16 +240,16 @@ Rectangle {
 				    z: 20
 				    activeFocusOnPress: true
 				    Keys.onReturnPressed: {
-				    	webview.url = this.text;
+                        // if there's no http, add it.
+                        var url = this.text,
+                        matches = url.match(/^([a-z]*\:\/\/)?([^\/.]+)(:?\/)(.*|$)/i),
+                        requestedProtocol = (matches && matches[1] != "undefined")? "" : "http://";
+
+                        webview.url = requestedProtocol + url;
 				    }
-				   /* onFocusedChanged: {
-   					     if (focused) {
-   					         //uriNav.selectAll();
-   					     }
-   					}*/
 			    }
    				
-			    z:2
+			    
 			}
 			
 			Rectangle {
@@ -243,6 +258,7 @@ Rectangle {
 			    height: 30
 			    color: "#BDB6B6"
 			    radius: 6
+                z:1
 
 			    anchors {
 					left: back.right
@@ -251,19 +267,17 @@ Rectangle {
 					rightMargin:10
 					top: parent.top 
 					topMargin: 23
-				}
-
-				z:1
+				}				
 			}
 
 			Rectangle {
 				id: navBarBackground
                 anchors.fill: parent
+                z:-1
                 gradient: Gradient {
                     GradientStop { position: 0.0; color: "#F6F1F2" }
                     GradientStop { position: 1.0; color: "#DED5D5" }
                 }
-                z:-1
             }
 
             states: [
@@ -326,6 +340,8 @@ Rectangle {
 		WebEngineView {
 			objectName: "webView"
 			id: webview
+			experimental.settings.javascriptCanAccessClipboard: true
+			//experimental.settings.localContentCanAccessRemoteUrls: true
 			anchors {
 				left: parent.left
 				right: parent.right
@@ -333,17 +349,79 @@ Rectangle {
 				top: navBar.bottom
 			}
 			z: 10
+
+			Timer {
+				interval: 2000; running: true; repeat: true
+				onTriggered: {
+					webview.runJavaScript("try{document.querySelector('meta[name=ethereum-dapp-info]').getAttribute('content')}catch(e){}", function(extraInfo) {
+                        if (extraInfo) {
+                            menuItem.secondaryTitle = extraInfo;
+                        }
+                    });
+                    webview.runJavaScript("try{document.querySelector('meta[name=ethereum-dapp-badge]').getAttribute('content')}catch(e){}", function(badge) {
+                        if (badge) {
+                            if (Number(badge)>0 && Number(badge)<999) {
+                                menuItem.badgeNumber = Number(badge);
+                                menuItem.badgeContent = "number"
+                            } else if (badge == "warning") {
+                                menuItem.badgeIcon = "\ue00e"
+                                menuItem.badgeContent = "icon"
+
+                            } else if (badge == "ghost") {
+                                menuItem.badgeIcon = "\ue01a"
+                                menuItem.badgeContent = "icon"
+
+                            } else if (badge == "question") {
+                                menuItem.badgeIcon = "\ue05d"
+                                menuItem.badgeContent = "icon"
+
+                            } else if (badge == "info") {
+                                menuItem.badgeIcon = "\ue08b"
+                                menuItem.badgeContent = "icon"
+
+                            } else if (badge == "check") {
+                                menuItem.badgeIcon = "\ue080"
+                                menuItem.badgeContent = "icon"
+
+                            } else if (badge == "gear") {
+                                menuItem.badgeIcon = "\ue09a"
+                                menuItem.badgeContent = "icon"
+
+                            } else {
+                                menuItem.badgeContent = ""
+                            }
+                        } else {
+                            menuItem.badgeContent = ""
+                        } 
+                    });
+				}
+			}
 			
 			onLoadingChanged: {
 				if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
-					webview.runJavaScript("document.title", function(pageTitle) {
+				
+                	webview.runJavaScript("document.title", function(pageTitle) {
 						menuItem.title = pageTitle;	
 					});
 
-					//var topBarStyle
-					webView.runJavaScript("document.querySelector(\"meta[name='ethereum-dapp-url-bar-style']\").getAttribute(\"content\")", function(topBarStyle){
-						if (topBarStyle=="transparent") {
+                    webView.runJavaScript("try{document.querySelector(\"link[rel='icon']\").getAttribute(\"href\")}catch(e){}", function(sideIcon){
+                            if(sideIcon){
+                                menuItem.icon = webview.url + sideIcon;
+                            }; 
+                    });
+                    
+					webView.runJavaScript("try{document.querySelector(\"meta[name='ethereum-dapp-url-bar-style']\").getAttribute(\"content\")}catch(e){}", function(topBarStyle){
+						if (!topBarStyle) {
+							showFullUrlBar(true);
+							navBarBackground.visible = true;
+							back.visible = true;
+							appInfoPane.anchors.leftMargin = 0;
+							appInfoPaneShadow.anchors.leftMargin = 0;
+							webview.anchors.topMargin = 0;
+							return;
+						}
 
+						if (topBarStyle=="transparent") {
 							// Adjust for a transparent sidebar Dapp
 							navBarBackground.visible = false;
 							back.visible = false;
@@ -352,22 +430,31 @@ Rectangle {
 							webview.anchors.topMargin = -74;
 							webview.runJavaScript("document.querySelector('body').classList.add('ethereum-dapp-url-bar-style-transparent')")
 
+						} else {
+							navBarBackground.visible = true;
+							back.visible = true;
+							appInfoPane.anchors.leftMargin = 0;
+							appInfoPaneShadow.anchors.leftMargin = 0;
+							webview.anchors.topMargin = 0;
 						};	
 					});
 
-					
 
 					webview.runJavaScript(eth.readFile("bignumber.min.js"));
-					webview.runJavaScript(eth.readFile("ethereum.js/dist/ethereum.js"));
-
+                    webview.runJavaScript(eth.readFile("ethereum.js/dist/ethereum.js"));
+                    webview.runJavaScript(eth.readFile("mist.js"));
+                    
 					var cleanTitle = webview.url.toString()
 					var matches = cleanTitle.match(/^[a-z]*\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
 					var domain = matches && matches[1];
 
-			    	appDomain.text = domain //webview.url.replace("a", "z")
-			    	appTitle.text = webview.title
 
-			    	showFullUrlBar(false);
+					if (domain)
+						appDomain.text = domain //webview.url.replace("a", "z")
+					if (webview.title)
+						appTitle.text = webview.title
+
+					showFullUrlBar(false);
 				}
 			}
 			onJavaScriptConsoleMessage: {

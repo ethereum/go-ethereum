@@ -31,12 +31,13 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/state"
 )
 
 const (
 	ClientIdentifier = "Ethereum(G)"
-	Version          = "0.8.2"
+	Version          = "0.8.5"
 )
 
 var clilogger = logger.NewLogger("CLI")
@@ -61,20 +62,20 @@ func main() {
 	utils.InitConfig(VmType, ConfigFile, Datadir, "ETH")
 
 	ethereum, err := eth.New(&eth.Config{
-		Name:       ClientIdentifier,
-		Version:    Version,
-		KeyStore:   KeyStore,
-		DataDir:    Datadir,
-		LogFile:    LogFile,
-		LogLevel:   LogLevel,
-		Identifier: Identifier,
-		MaxPeers:   MaxPeer,
-		Port:       OutboundPort,
-		NATType:    PMPGateway,
-		PMPGateway: PMPGateway,
-		KeyRing:    KeyRing,
-		Shh:        SHH,
-		Dial:       Dial,
+		Name:      p2p.MakeName(ClientIdentifier, Version),
+		KeyStore:  KeyStore,
+		DataDir:   Datadir,
+		LogFile:   LogFile,
+		LogLevel:  LogLevel,
+		LogFormat: LogFormat,
+		MaxPeers:  MaxPeer,
+		Port:      OutboundPort,
+		NAT:       NAT,
+		KeyRing:   KeyRing,
+		Shh:       true,
+		Dial:      Dial,
+		BootNodes: BootNodes,
+		NodeKey:   NodeKey,
 	})
 
 	if err != nil {
@@ -134,7 +135,7 @@ func main() {
 		utils.StartWebSockets(ethereum, WsPort)
 	}
 
-	utils.StartEthereum(ethereum, SeedNode)
+	utils.StartEthereum(ethereum)
 
 	if StartJsConsole {
 		InitJsConsole(ethereum)

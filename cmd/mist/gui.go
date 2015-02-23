@@ -31,6 +31,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"sort"
 	"strconv"
 	"time"
 
@@ -40,8 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/ui/qt/qwhisper"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/obscuren/qml"
@@ -77,17 +76,14 @@ type Gui struct {
 
 	xeth *xeth.XEth
 
-	Session        string
-	clientIdentity *p2p.SimpleClientIdentity
-	config         *ethutil.ConfigManager
+	Session string
+	config  *ethutil.ConfigManager
 
 	plugins map[string]plugin
-
-	miner *miner.Miner
 }
 
 // Create GUI, but doesn't start it
-func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIdentity *p2p.SimpleClientIdentity, session string, logLevel int) *Gui {
+func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, session string, logLevel int) *Gui {
 	db, err := ethdb.NewLDBDatabase("tx_database")
 	if err != nil {
 		panic(err)
@@ -95,15 +91,14 @@ func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, clientIden
 
 	xeth := xeth.New(ethereum)
 	gui := &Gui{eth: ethereum,
-		txDb:           db,
-		xeth:           xeth,
-		logLevel:       logger.LogLevel(logLevel),
-		Session:        session,
-		open:           false,
-		clientIdentity: clientIdentity,
-		config:         config,
-		plugins:        make(map[string]plugin),
-		serviceEvents:  make(chan ServEv, 1),
+		txDb:          db,
+		xeth:          xeth,
+		logLevel:      logger.LogLevel(logLevel),
+		Session:       session,
+		open:          false,
+		config:        config,
+		plugins:       make(map[string]plugin),
+		serviceEvents: make(chan ServEv, 1),
 	}
 	data, _ := ethutil.ReadAllFile(path.Join(ethutil.Config.ExecPath, "plugins.json"))
 	json.Unmarshal([]byte(data), &gui.plugins)
@@ -136,6 +131,7 @@ func (gui *Gui) Start(assetPath string) {
 	context.SetVar("gui", gui)
 	context.SetVar("eth", gui.uiLib)
 	context.SetVar("shh", gui.whisper)
+	//clipboard.SetQMLClipboard(context)
 
 	win, err := gui.showWallet(context)
 	if err != nil {
@@ -391,16 +387,11 @@ func (gui *Gui) update() {
 	generalUpdateTicker := time.NewTicker(500 * time.Millisecond)
 	statsUpdateTicker := time.NewTicker(5 * time.Second)
 
-	state := gui.eth.ChainManager().TransState()
-
-	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetAccount(gui.address()).Balance())))
-
 	lastBlockLabel := gui.getObjectByName("lastBlockLabel")
 	miningLabel := gui.getObjectByName("miningLabel")
 
 	events := gui.eth.EventMux().Subscribe(
-		//eth.PeerListEvent{},
-		core.NewBlockEvent{},
+		core.ChainEvent{},
 		core.TxPreEvent{},
 		core.TxPostEvent{},
 	)
@@ -413,62 +404,22 @@ func (gui *Gui) update() {
 				return
 			}
 			switch ev := ev.(type) {
-			case core.NewBlockEvent:
+			case core.ChainEvent:
 				gui.processBlock(ev.Block, false)
-				if bytes.Compare(ev.Block.Coinbase(), gui.address()) == 0 {
-					gui.setWalletValue(gui.eth.ChainManager().State().GetBalance(gui.address()), nil)
-				}
-
 			case core.TxPreEvent:
-				tx := ev.Tx
-
-				tstate := gui.eth.ChainManager().TransState()
-				cstate := gui.eth.ChainManager().State()
-
-				taccount := tstate.GetAccount(gui.address())
-				caccount := cstate.GetAccount(gui.address())
-				unconfirmedFunds := new(big.Int).Sub(taccount.Balance(), caccount.Balance())
-
-				gui.setWalletValue(taccount.Balance(), unconfirmedFunds)
-				gui.insertTransaction("pre", tx)
+				gui.insertTransaction("pre", ev.Tx)
 
 			case core.TxPostEvent:
-				tx := ev.Tx
-				object := state.GetAccount(gui.address())
-
-				if bytes.Compare(tx.From(), gui.address()) == 0 {
-					object.SubAmount(tx.Value())
-
-					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-				} else if bytes.Compare(tx.To(), gui.address()) == 0 {
-					object.AddAmount(tx.Value())
-
-					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-				}
-
-				gui.setWalletValue(object.Balance(), nil)
-				state.UpdateStateObject(object)
+				gui.getObjectByName("pendingTxView").Call("removeTx", xeth.NewTx(ev.Tx))
 			}
 
 		case <-peerUpdateTicker.C:
 			gui.setPeerInfo()
+
 		case <-generalUpdateTicker.C:
 			statusText := "#" + gui.eth.ChainManager().CurrentBlock().Number().String()
 			lastBlockLabel.Set("text", statusText)
-			miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.miner.GetPow().GetHashrate(), 10)+"Khash")
-
-			/*
-				blockLength := gui.eth.BlockPool().BlocksProcessed
-				chainLength := gui.eth.BlockPool().ChainLength
-
-				var (
-					pct      float64 = 1.0 / float64(chainLength) * float64(blockLength)
-					dlWidget         = gui.win.Root().ObjectByName("downloadIndicator")
-					dlLabel          = gui.win.Root().ObjectByName("downloadLabel")
-				)
-				dlWidget.Set("value", pct)
-				dlLabel.Set("text", fmt.Sprintf("%d / %d", blockLength, chainLength))
-			*/
+			miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.Miner().HashRate(), 10)+"/Khash")
 
 		case <-statsUpdateTicker.C:
 			gui.setStatsPane()
@@ -502,12 +453,35 @@ NumGC:      %d
 	))
 }
 
+type qmlpeer struct{ Addr, NodeID, Name, Caps string }
+
+type peersByID []*qmlpeer
+
+func (s peersByID) Len() int           { return len(s) }
+func (s peersByID) Less(i, j int) bool { return s[i].NodeID < s[j].NodeID }
+func (s peersByID) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+
 func (gui *Gui) setPeerInfo() {
-	gui.win.Root().Call("setPeers", fmt.Sprintf("%d / %d", gui.eth.PeerCount(), gui.eth.MaxPeers))
-	gui.win.Root().Call("resetPeers")
-	//for _, peer := range gui.xeth.Peers() {
-	//gui.win.Root().Call("addPeer", peer)
-	//}
+	peers := gui.eth.Peers()
+	qpeers := make(peersByID, len(peers))
+	for i, p := range peers {
+		qpeers[i] = &qmlpeer{
+			NodeID: p.ID().String(),
+			Addr:   p.RemoteAddr().String(),
+			Name:   p.Name(),
+			Caps:   fmt.Sprint(p.Caps()),
+		}
+	}
+	// we need to sort the peers because they jump around randomly
+	// otherwise. order returned by eth.Peers is random because they
+	// are taken from a map.
+	sort.Sort(qpeers)
+
+	gui.win.Root().Call("setPeerCounters", fmt.Sprintf("%d / %d", len(peers), gui.eth.MaxPeers()))
+	gui.win.Root().Call("clearPeers")
+	for _, p := range qpeers {
+		gui.win.Root().Call("addPeer", p)
+	}
 }
 
 func (gui *Gui) privateKey() string {

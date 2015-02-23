@@ -38,13 +38,6 @@ func New(env Environment) *Vm {
 func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
 	self.env.SetDepth(self.env.Depth() + 1)
 
-	msg := self.env.State().Manifest().AddMessage(&state.Message{
-		To: me.Address(), From: caller.Address(),
-		Input:     callData,
-		Origin:    self.env.Origin(),
-		Timestamp: self.env.Time(), Coinbase: self.env.Coinbase(), Number: self.env.BlockNumber(),
-		Value: value,
-	})
 	context := NewContext(caller, me, code, gas, price)
 
 	vmlogger.Debugf("(%d) (%x) %x (code=%d) gas: %v (d) %x\n", self.env.Depth(), caller.Address()[:4], context.Address(), len(code), context.Gas, callData)
@@ -273,7 +266,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			base.Sub(Pow256, stack.Pop()).Sub(base, ethutil.Big1)
 
 			// Not needed
-			//base = U256(base)
+			base = U256(base)
 
 			stack.Push(base)
 		case LT:
@@ -539,7 +532,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 		case NUMBER:
 			number := self.env.BlockNumber()
 
-			stack.Push(number)
+			stack.Push(U256(number))
 
 			self.Printf(" => 0x%x", number.Bytes())
 		case DIFFICULTY:
@@ -585,7 +578,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			}
 
 			data := mem.Get(mStart.Int64(), mSize.Int64())
-			log := &Log{context.Address(), topics, data}
+			log := &Log{context.Address(), topics, data, self.env.BlockNumber().Uint64()}
 			self.env.AddLog(log)
 
 			self.Printf(" => %v", log)
@@ -617,8 +610,6 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 		case SSTORE:
 			val, loc := stack.Popn()
 			statedb.SetState(context.Address(), loc.Bytes(), val)
-
-			msg.AddStorageChange(loc.Bytes())
 
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case JUMP:
@@ -670,7 +661,6 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 				dataGas.Mul(dataGas, GasCreateByte)
 				if context.UseGas(dataGas) {
 					ref.SetCode(ret)
-					msg.Output = ret
 				}
 				addr = ref.Address()
 
@@ -686,6 +676,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			gas := stack.Pop()
 			// Pop gas and value of the stack.
 			value, addr := stack.Popn()
+			value = U256(value)
 			// Pop input size and offset
 			inSize, inOffset := stack.Popn()
 			// Pop return size and offset
@@ -713,7 +704,6 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 				vmlogger.Debugln(err)
 			} else {
 				stack.Push(ethutil.BigTrue)
-				msg.Output = ret
 
 				mem.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 			}
@@ -789,9 +779,9 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 	// Stack Check, memory resize & gas phase
 	switch op {
 	// Stack checks only
-	case ISZERO, CALLDATALOAD, POP, JUMP, NOT: // 1
+	case ISZERO, CALLDATALOAD, POP, JUMP, NOT, EXTCODESIZE, BLOCKHASH: // 1
 		stack.require(1)
-	case JUMPI, ADD, SUB, DIV, SDIV, MOD, SMOD, LT, GT, SLT, SGT, EQ, AND, OR, XOR, BYTE, SIGNEXTEND: // 2
+	case JUMPI, ADD, SUB, DIV, MUL, SDIV, MOD, SMOD, LT, GT, SLT, SGT, EQ, AND, OR, XOR, BYTE, SIGNEXTEND: // 2
 		stack.require(2)
 	case ADDMOD, MULMOD: // 3
 		stack.require(3)
@@ -869,7 +859,7 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 		newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-2])
 		additionalGas.Set(stack.data[stack.Len()-2])
 	case CALLDATACOPY:
-		stack.require(2)
+		stack.require(3)
 
 		newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-3])
 		additionalGas.Set(stack.data[stack.Len()-3])

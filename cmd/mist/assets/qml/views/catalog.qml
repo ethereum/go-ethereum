@@ -3,7 +3,7 @@ import QtQuick.Controls 1.0;
 import QtQuick.Controls.Styles 1.0
 import QtQuick.Layouts 1.0;
 import QtWebEngine 1.0
-//import QtWebEngine.experimental 1.0
+import QtWebEngine.experimental 1.0
 import QtQuick.Window 2.0;
 
 
@@ -12,7 +12,7 @@ Rectangle {
 	anchors.fill: parent
 	color: "#00000000"
 
-	property var title: ""
+	property var title: "Catalog"
 	property var iconSource: ""
 	property var menuItem
 	property var hideUrl: true
@@ -20,8 +20,6 @@ Rectangle {
 	property alias url: webview.url
 	property alias windowTitle: webview.title
 	property alias webView: webview
-
-
 
 	property var cleanPath: false
 	property var open: function(url) {
@@ -66,121 +64,58 @@ Rectangle {
 		}
 	}
 
-	Component.onCompleted: {
-	}
-
 	Item {
 		objectName: "root"
 		id: root
 		anchors.fill: parent
 		state: "inspectorShown"
 
-		RowLayout {
-			id: navBar
-			height: 184
-			z: 20
-
-			anchors {
-				left: parent.left
-				right: parent.right
-			}
-
-			Rectangle {
-				id: appInfoPane
-			    height: 28
-			    color: "#efefef"
-			    radius: 6
-			    z:25
-
-			   MouseArea {
-			    	anchors.fill: parent
-			    	z: 10
-			    	hoverEnabled: true
-			    	onEntered: {
-			    		uriNav.visible = true
-			    		appTitle.visible = false
-			    		appDomain.visible = false
-			    	}	    	
-			    }
-
-			    anchors {
-					left: parent.left
-					right: parent.right
-					leftMargin: 10
-					rightMargin: 10
-					top: parent.verticalCenter 
-					topMargin: 23
-				}
-
-				TextField {
-				    id: uriNav
-				    anchors {
-				    	left: parent.left
-				    	right: parent.right
-				    	leftMargin: 16
-						top: parent.verticalCenter 
-						topMargin: -10
-				    }
-
-				    horizontalAlignment: Text.AlignHCenter
-                    
-                    style: TextFieldStyle {
-                        textColor: "#928484"
-                        background: Rectangle {
-                            border.width: 0
-                            color: "transparent"
-                        }
-                    }
-    				text: "Type the address of a new Dapp";
-				    y: parent.height / 2 - this.height / 2
-				    z: 30
-				    activeFocusOnPress: true
-				    Keys.onReturnPressed: {
-        				newBrowserTab(this.text);
-        				this.text = "Type the address of a new Dapp";
-				    }
-
-			    }   				
-			}
-			
-			Rectangle {
-				id: appInfoPaneShadow
-			    width: 10
-			    height: 30
-			    color: "#BDB6B6"
-			    radius: 6
-			    z: 15
-
-			    anchors {
-					left: parent.left
-					right: parent.right
-					leftMargin:10
-					rightMargin:10
-					top: parent.verticalCenter 
-					topMargin: 23
-				}
-
-				
-			}
-
-		}
-
-
 		WebEngineView {
 			objectName: "webView"
 			id: webview
 			anchors.fill: parent
 
-			onLoadingChanged: {
-				if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
-					webview.runJavaScript(eth.readFile("bignumber.min.js"));
-					webview.runJavaScript(eth.readFile("ethereum.js/dist/ethereum.js"));
-				}
-			}
+			property var protocol: "http://"
+			//property var domain: "localhost:3000"
+			property var domain: "ethereum-dapp-catalog.meteor.com"
+			url: protocol + domain
+
+			experimental.settings.javascriptCanAccessClipboard: true
+
+
 			onJavaScriptConsoleMessage: {
 				console.log(sourceID + ":" + lineNumber + ":" + JSON.stringify(message));
 			}
+
+			onNavigationRequested: { 
+				// this checks if the domain of the requested link is the same as the catalog's
+				// If it is, it opens on the same window, if it's not it opens a new tab
+
+				var cleanTitle = request.url.toString()
+				var matches = cleanTitle.match(/^[a-z]*\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
+				var requestedDomain = matches && matches[1];
+
+              
+                if(request.navigationType==0){
+
+                	if (requestedDomain === this.domain){
+                		request.action = WebEngineView.AcceptRequest;
+                	} else {
+                		request.action = WebEngineView.IgnoreRequest;
+		               	newBrowserTab(request.url);
+                	}
+                	
+                }
+            }
+			onLoadingChanged: {
+				if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
+                    webview.runJavaScript(eth.readFile("mist.js"));
+				}
+			}
 		}
+
+
+
 
 
 
@@ -191,7 +126,7 @@ Rectangle {
 			anchors {
 				left: root.left
 				right: root.right
-				top: sizeGrip.bottom
+				top: root.top
 				bottom: root.bottom
 			}
 

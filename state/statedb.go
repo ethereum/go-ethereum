@@ -22,8 +22,6 @@ type StateDB struct {
 
 	stateObjects map[string]*StateObject
 
-	manifest *Manifest
-
 	refund map[string]*big.Int
 
 	logs Logs
@@ -32,7 +30,7 @@ type StateDB struct {
 // Create a new state from a given trie
 func New(root []byte, db ethutil.Database) *StateDB {
 	trie := trie.New(ethutil.CopyBytes(root), db)
-	return &StateDB{db: db, trie: trie, stateObjects: make(map[string]*StateObject), manifest: NewManifest(), refund: make(map[string]*big.Int)}
+	return &StateDB{db: db, trie: trie, stateObjects: make(map[string]*StateObject), refund: make(map[string]*big.Int)}
 }
 
 func (self *StateDB) EmptyLogs() {
@@ -47,6 +45,13 @@ func (self *StateDB) Logs() Logs {
 	return self.logs
 }
 
+func (self *StateDB) Refund(addr []byte, gas *big.Int) {
+	if self.refund[string(addr)] == nil {
+		self.refund[string(addr)] = new(big.Int)
+	}
+	self.refund[string(addr)].Add(self.refund[string(addr)], gas)
+}
+
 // Retrieve the balance from the given address or 0 if object not found
 func (self *StateDB) GetBalance(addr []byte) *big.Int {
 	stateObject := self.GetStateObject(addr)
@@ -55,13 +60,6 @@ func (self *StateDB) GetBalance(addr []byte) *big.Int {
 	}
 
 	return ethutil.Big0
-}
-
-func (self *StateDB) Refund(addr []byte, gas *big.Int) {
-	if self.refund[string(addr)] == nil {
-		self.refund[string(addr)] = new(big.Int)
-	}
-	self.refund[string(addr)].Add(self.refund[string(addr)], gas)
 }
 
 func (self *StateDB) AddBalance(addr []byte, amount *big.Int) {
@@ -74,33 +72,19 @@ func (self *StateDB) AddBalance(addr []byte, amount *big.Int) {
 func (self *StateDB) GetNonce(addr []byte) uint64 {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
-		return stateObject.Nonce
+		return stateObject.nonce
 	}
 
 	return 0
 }
 
-func (self *StateDB) SetNonce(addr []byte, nonce uint64) {
-	stateObject := self.GetStateObject(addr)
-	if stateObject != nil {
-		stateObject.Nonce = nonce
-	}
-}
-
 func (self *StateDB) GetCode(addr []byte) []byte {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
-		return stateObject.Code
+		return stateObject.code
 	}
 
 	return nil
-}
-
-func (self *StateDB) SetCode(addr, code []byte) {
-	stateObject := self.GetStateObject(addr)
-	if stateObject != nil {
-		stateObject.SetCode(code)
-	}
 }
 
 func (self *StateDB) GetState(a, b []byte) []byte {
@@ -110,6 +94,20 @@ func (self *StateDB) GetState(a, b []byte) []byte {
 	}
 
 	return nil
+}
+
+func (self *StateDB) SetNonce(addr []byte, nonce uint64) {
+	stateObject := self.GetStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetNonce(nonce)
+	}
+}
+
+func (self *StateDB) SetCode(addr, code []byte) {
+	stateObject := self.GetStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetCode(code)
+	}
 }
 
 func (self *StateDB) SetState(addr, key []byte, value interface{}) {
@@ -139,7 +137,7 @@ func (self *StateDB) UpdateStateObject(stateObject *StateObject) {
 	addr := stateObject.Address()
 
 	if len(stateObject.CodeHash()) > 0 {
-		self.db.Put(stateObject.CodeHash(), stateObject.Code)
+		self.db.Put(stateObject.CodeHash(), stateObject.code)
 	}
 
 	self.trie.Update(addr, stateObject.RlpEncode())
@@ -212,25 +210,21 @@ func (s *StateDB) Cmp(other *StateDB) bool {
 }
 
 func (self *StateDB) Copy() *StateDB {
-	if self.trie != nil {
-		state := New(nil, self.db)
-		state.trie = self.trie.Copy()
-		for k, stateObject := range self.stateObjects {
-			state.stateObjects[k] = stateObject.Copy()
-		}
-
-		for addr, refund := range self.refund {
-			state.refund[addr] = new(big.Int).Set(refund)
-		}
-
-		logs := make(Logs, len(self.logs))
-		copy(logs, self.logs)
-		state.logs = logs
-
-		return state
+	state := New(nil, self.db)
+	state.trie = self.trie.Copy()
+	for k, stateObject := range self.stateObjects {
+		state.stateObjects[k] = stateObject.Copy()
 	}
 
-	return nil
+	for addr, refund := range self.refund {
+		state.refund[addr] = new(big.Int).Set(refund)
+	}
+
+	logs := make(Logs, len(self.logs))
+	copy(logs, self.logs)
+	state.logs = logs
+
+	return state
 }
 
 func (self *StateDB) Set(state *StateDB) {
@@ -287,22 +281,20 @@ func (self *StateDB) Refunds() map[string]*big.Int {
 }
 
 func (self *StateDB) Update(gasUsed *big.Int) {
-
 	self.refund = make(map[string]*big.Int)
 
 	for _, stateObject := range self.stateObjects {
-		if stateObject.remove {
-			self.DeleteStateObject(stateObject)
-		} else {
-			stateObject.Sync()
+		if stateObject.dirty {
+			if stateObject.remove {
+				self.DeleteStateObject(stateObject)
+			} else {
+				stateObject.Sync()
 
-			self.UpdateStateObject(stateObject)
+				self.UpdateStateObject(stateObject)
+			}
+			stateObject.dirty = false
 		}
 	}
-}
-
-func (self *StateDB) Manifest() *Manifest {
-	return self.manifest
 }
 
 // Debug stuff
