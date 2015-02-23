@@ -22,13 +22,6 @@ func (obj *GetBlockArgs) UnmarshalJSON(b []byte) (err error) {
 	return NewErrorResponse(ErrorDecodeArgs)
 }
 
-func (obj *GetBlockArgs) requirements() error {
-	if obj.BlockNumber == 0 && obj.Hash == "" {
-		return NewErrorResponse("GetBlock requires either a block 'number' or a block 'hash' as argument")
-	}
-	return nil
-}
-
 type NewTxArgs struct {
 	From     string `json:"from"`
 	To       string `json:"to"`
