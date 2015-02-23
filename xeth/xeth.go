@@ -277,7 +277,7 @@ func (self *XEth) Transact(toStr, valueStr, gasStr, gasPriceStr, codeStr string)
 	}
 
 	var err error
-	state := self.eth.ChainManager().TransState()
+	state := self.eth.ChainManager().TxState()
 	if balance := state.GetBalance(key.Address()); balance.Cmp(tx.Value()) < 0 {
 		return "", fmt.Errorf("insufficient balance. balance=%v tx=%v", balance, tx.Value())
 	}
@@ -289,10 +289,10 @@ func (self *XEth) Transact(toStr, valueStr, gasStr, gasPriceStr, codeStr string)
 	//fmt.Printf("create tx: %x %v\n", tx.Hash()[:4], tx.Nonce())
 
 	// Do some pre processing for our "pre" events  and hooks
-	block := self.chainManager.NewBlock(key.Address())
-	coinbase := state.GetOrNewStateObject(key.Address())
-	coinbase.SetGasPool(block.GasLimit())
-	self.blockProcessor.ApplyTransactions(coinbase, state, block, types.Transactions{tx}, true)
+	//block := self.chainManager.NewBlock(key.Address())
+	//coinbase := state.GetOrNewStateObject(key.Address())
+	//coinbase.SetGasPool(block.GasLimit())
+	//self.blockProcessor.ApplyTransactions(coinbase, state, block, types.Transactions{tx}, true)
 
 	err = self.eth.TxPool().Add(tx)
 	if err != nil {

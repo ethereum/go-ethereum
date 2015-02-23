@@ -126,10 +126,6 @@ func (self *EthereumApi) NewFilterString(args string, reply *interface{}) error 
 		self.logMut.Lock()
 		defer self.logMut.Unlock()
 
-		if self.logs[id] == nil {
-			self.logs[id] = &logFilter{timeout: time.Now()}
-		}
-
 		self.logs[id].add(&state.StateLog{})
 	}
 	if args == "pending" {
@@ -139,6 +135,7 @@ func (self *EthereumApi) NewFilterString(args string, reply *interface{}) error 
 	}
 
 	id = self.filterManager.InstallFilter(filter)
+	self.logs[id] = &logFilter{timeout: time.Now()}
 	*reply = id
 
 	return nil
@@ -377,12 +374,10 @@ func (p *EthereumApi) NewWhisperFilter(args *xeth.Options, reply *interface{}) e
 	args.Fn = func(msg xeth.WhisperMessage) {
 		p.messagesMut.Lock()
 		defer p.messagesMut.Unlock()
-		if p.messages[id] == nil {
-			p.messages[id] = &whisperFilter{timeout: time.Now()}
-		}
 		p.messages[id].add(msg) // = append(p.messages[id], msg)
 	}
 	id = p.xeth.Whisper().Watch(args)
+	p.messages[id] = &whisperFilter{timeout: time.Now()}
 	*reply = id
 	return nil
 }
@@ -623,12 +618,14 @@ done:
 			self.messagesMut.Lock()
 			for id, filter := range self.logs {
 				if time.Since(filter.timeout) > 20*time.Second {
+					self.filterManager.UninstallFilter(id)
 					delete(self.logs, id)
 				}
 			}
 
 			for id, filter := range self.messages {
 				if time.Since(filter.timeout) > 20*time.Second {
+					self.xeth.Whisper().Unwatch(id)
 					delete(self.messages, id)
 				}
 			}

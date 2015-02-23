@@ -85,12 +85,14 @@ type ChainManager struct {
 	lastBlockHash []byte
 
 	transState *state.StateDB
+	txState    *state.StateDB
 }
 
 func NewChainManager(db ethutil.Database, mux *event.TypeMux) *ChainManager {
 	bc := &ChainManager{db: db, genesisBlock: GenesisBlock(db), eventMux: mux}
 	bc.setLastBlock()
 	bc.transState = bc.State().Copy()
+	bc.txState = bc.State().Copy()
 
 	return bc
 }
@@ -136,6 +138,19 @@ func (self *ChainManager) TransState() *state.StateDB {
 	defer self.tsmu.RUnlock()
 
 	return self.transState
+}
+
+func (self *ChainManager) TxState() *state.StateDB {
+	self.tsmu.RLock()
+	defer self.tsmu.RUnlock()
+
+	return self.txState
+}
+
+func (self *ChainManager) setTxState(state *state.StateDB) {
+	self.tsmu.Lock()
+	defer self.tsmu.Unlock()
+	self.txState = state
 }
 
 func (self *ChainManager) setTransState(statedb *state.StateDB) {
@@ -362,6 +377,8 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 	defer self.tsmu.Unlock()
 
 	for _, block := range chain {
+		// Call in to the block processor and check for errors. It's likely that if one block fails
+		// all others will fail too (unless a known block is returned).
 		td, err := self.processor.Process(block)
 		if err != nil {
 			if IsKnownBlockErr(err) {
@@ -376,11 +393,15 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 		}
 		block.Td = td
 
-		var chain, split bool
+		var canonical, split bool
 		self.mu.Lock()
 		{
+			// Write block to database. Eventually we'll have to improve on this and throw away blocks that are
+			// not in the canonical chain.
 			self.write(block)
 			cblock := self.currentBlock
+			// Compare the TD of the last known block in the canonical chain to make sure it's greater.
+			// At this point it's possible that a different chain (fork) becomes the new canonical chain.
 			if td.Cmp(self.td) > 0 {
 				if block.Header().Number.Cmp(new(big.Int).Add(cblock.Header().Number, ethutil.Big1)) < 0 {
 					chainlogger.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, block.Hash()[:4], td, cblock.Header().Number, cblock.Hash()[:4], self.td)
@@ -390,17 +411,18 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 				self.setTotalDifficulty(td)
 				self.insert(block)
 
-				chain = true
+				canonical = true
 			}
 		}
 		self.mu.Unlock()
 
-		if chain {
+		if canonical {
+			self.setTransState(state.New(block.Root(), self.db))
 			self.eventMux.Post(ChainEvent{block, td})
 		}
 
 		if split {
-			self.setTransState(state.New(block.Root(), self.db))
+			self.setTxState(state.New(block.Root(), self.db))
 			self.eventMux.Post(ChainSplitEvent{block})
 		}
 	}

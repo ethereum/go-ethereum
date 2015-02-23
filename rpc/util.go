@@ -108,6 +108,7 @@ func toLogs(logs state.Logs) (ls []Log) {
 type whisperFilter struct {
 	messages []xeth.WhisperMessage
 	timeout  time.Time
+	id       int
 }
 
 func (w *whisperFilter) add(msgs ...xeth.WhisperMessage) {
@@ -123,6 +124,7 @@ func (w *whisperFilter) get() []xeth.WhisperMessage {
 type logFilter struct {
 	logs    state.Logs
 	timeout time.Time
+	id      int
 }
 
 func (l *logFilter) add(logs ...state.Log) {

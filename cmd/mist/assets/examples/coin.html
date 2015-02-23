@@ -19,6 +19,7 @@
 	<span>Amount:</span>
 	<input type="text" id="amount" style="width:200px">
 	<button onclick="transact()">Send</button>
+	<span id="message"></span>
 </div>
 
 <hr>
@@ -95,17 +96,28 @@
 	}
 
 	function transact() {
-		var to = document.querySelector("#address").value;
-		if( to.length == 0 ) {
+		var to = document.querySelector("#address");
+		if( to.value.length == 0 ) {
 			to = "0x4205b06c2cfa0e30359edcab94543266cb6fa1d3";
 		} else {
-			to = "0x"+to;
+			if (to.value.substr(0,2) != "0x")
+				to.value = "0x"+to.value;
 		}
 
-		var value = parseInt( document.querySelector("#amount").value );
-		console.log("transact: ", to, " => ", value)
+		var value = document.querySelector("#amount");
+		var amount = parseInt( value.value );
+		console.log("transact: ", to.value, " => ", amount)
 
-		contract.send( to, value );
+		contract.send( to.value, amount );
+
+		to.value = "";
+		value.value = "";
+
+		var message = document.querySelector("#message")
+		message.innerHTML = "Submitted";
+		setTimeout(function() {
+			message.innerHTML = "";
+		}, 1000);
 	}
 
 	refresh();
