@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -26,6 +27,7 @@ var pipelogger = logger.NewLogger("XETH")
 type Backend interface {
 	BlockProcessor() *core.BlockProcessor
 	ChainManager() *core.ChainManager
+	AccountManager() *accounts.AccountManager
 	TxPool() *core.TxPool
 	PeerCount() int
 	IsListening() bool
@@ -41,6 +43,7 @@ type XEth struct {
 	eth            Backend
 	blockProcessor *core.BlockProcessor
 	chainManager   *core.ChainManager
+	accountManager *accounts.AccountManager
 	state          *State
 	whisper        *Whisper
 	miner          *miner.Miner
@@ -51,6 +54,7 @@ func New(eth Backend) *XEth {
 		eth:            eth,
 		blockProcessor: eth.BlockProcessor(),
 		chainManager:   eth.ChainManager(),
+		accountManager: eth.AccountManager(),
 		whisper:        NewWhisper(eth.Whisper()),
 		miner:          eth.Miner(),
 	}

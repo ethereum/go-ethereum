@@ -37,6 +37,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -175,7 +176,19 @@ func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
 	return gui.win, nil
 }
 
-func (gui *Gui) ImportKey(filePath string) {
+func (gui *Gui) ImportKey(fileURL string) {
+	filePath := fileURL[6:] // path after "file://"
+	pass := "bar"           // TODO: get from UI
+	fileContent, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		guilogger.Errorln("unable to import key: ", err)
+		// TODO: UI feedback
+	}
+	_, err = crypto.ImportPreSaleKey(gui.eth.AccountManager().KeyStore(), fileContent, pass)
+	if err != nil {
+		guilogger.Errorln("unable to import key: ", err)
+		// TODO: UI feedback
+	}
 }
 
 func (gui *Gui) showKeyImport(context *qml.Context) (*qml.Window, error) {

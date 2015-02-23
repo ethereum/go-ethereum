@@ -93,3 +93,7 @@ func (am *AccountManager) Accounts() ([]Account, error) {
 	}
 	return accounts, err
 }
+
+func (am *AccountManager) KeyStore() crypto.KeyStore2 {
+	return am.keyStore
+}
