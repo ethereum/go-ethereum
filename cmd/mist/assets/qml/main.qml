@@ -46,8 +46,13 @@ ApplicationWindow {
         walletWeb.view.url = "http://ethereum-dapp-wallet.meteor.com/";
         walletWeb.menuItem.title = "Wallet";
 
-        addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "legacy"});        
         addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: false});
+
+        var whisperTab = addPlugin("./views/browser.qml", {noAdd: true, close: true, section: "ethereum", active: false});
+        whisperTab.view.url = "http://ethereum-dapp-whisper-client.meteor.com/";
+        whisperTab.menuItem.title = "Whisper Chat";
+
+        addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "legacy"});        
         addPlugin("./views/transaction.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/whisper.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/chain.qml", {noAdd: true, close: false, section: "legacy"});
@@ -691,18 +696,23 @@ ApplicationWindow {
                  }
 
                  Rectangle {
-                     height: 55
+                     height: 19
                      color: "transparent"
                      Text {
                          text: "ETHEREUM"
                          font.family: sourceSansPro.name 
-                         font.weight: Font.DemiBold
-                         anchors {
-                             left: parent.left
-                             top: parent.verticalCenter
-                             leftMargin: 16
-                         }
-                         color: "#AAA0A0"
+                         font.weight: Font.Regular
+                         // anchors.top:  20
+                         // anchors.left:  16
+                        anchors {
+                            leftMargin: 12
+                            topMargin: 4
+                            fill: parent
+                        }
+                         // anchors.leftMargin: 16 
+                         // anchors.topMargin: 16 
+                        // anchors.verticalCenterOffset: 50
+                         color: "#AAA0A0" 
                      }
                  }
 
@@ -717,17 +727,20 @@ ApplicationWindow {
                  }
 
                  Rectangle {
-                     height: 55
-                     color: "transparent"
+                     height: 19
+                     color: "#00ff00"
                      Text {
                          text: "APPS"
                          font.family: sourceSansPro.name 
-                         font.weight: Font.DemiBold
-                         anchors {
-                             left: parent.left
-                             top: parent.verticalCenter
-                             leftMargin: 16
-                         }
+                         font.weight: Font.Regular
+                         anchors.fill: parent
+                         anchors.leftMargin: 16
+
+                         // anchors {
+                         //     left: parent.left
+                         //     top: parent.top
+                         //     leftMargin: 16
+                         // }
                          color: "#AAA0A0"
                      }
                  }
@@ -744,6 +757,7 @@ ApplicationWindow {
                  Rectangle {
                      height: 55
                      color: "transparent"
+                     visible:false
                      Text {
                          text: "DEBUG"
                          font.family: sourceSansPro.name 
@@ -760,6 +774,7 @@ ApplicationWindow {
 
                  ColumnLayout {
                      id: menuLegacy
+                     visible: false
                      spacing: 3
                      anchors {
                          left: parent.left
