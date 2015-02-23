@@ -26,13 +26,13 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/user"
 	"path"
 	"path/filepath"
 	"runtime"
 
 	"bitbucket.org/kardianos/osext"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/vm"
@@ -94,12 +94,8 @@ func defaultAssetPath() string {
 	}
 	return assetPath
 }
-func defaultDataDir() string {
-	usr, _ := user.Current()
-	return path.Join(usr.HomeDir, ".ethereum")
-}
 
-var defaultConfigFile = path.Join(defaultDataDir(), "conf.ini")
+var defaultConfigFile = path.Join(ethutil.DefaultDataDir(), "conf.ini")
 
 func Init() {
 	// TODO: move common flag processing to cmd/utils
@@ -121,7 +117,7 @@ func Init() {
 	flag.StringVar(&SecretFile, "import", "", "imports the file given (hex or mnemonic formats)")
 	flag.StringVar(&ExportDir, "export", "", "exports the session keyring to files in the directory given")
 	flag.StringVar(&LogFile, "logfile", "", "log file (defaults to standard output)")
-	flag.StringVar(&Datadir, "datadir", defaultDataDir(), "specifies the datadir to use")
+	flag.StringVar(&Datadir, "datadir", ethutil.DefaultDataDir(), "specifies the datadir to use")
 	flag.StringVar(&ConfigFile, "conf", defaultConfigFile, "config file")
 	flag.StringVar(&DebugFile, "debug", "", "debug file (no debugging if not set)")
 	flag.IntVar(&LogLevel, "loglevel", int(logger.InfoLevel), "loglevel: 0-5: silent,error,warn,info,debug,debug detail)")

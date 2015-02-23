@@ -3,10 +3,22 @@ package ethutil
 import (
 	"fmt"
 	"math/big"
+	"os/user"
+	"path"
 	"runtime"
 	"time"
 )
 
+func DefaultDataDir() string {
+	usr, _ := user.Current()
+	if runtime.GOOS == "darwin" {
+		return path.Join(usr.HomeDir, "Library/Ethereum")
+	} else if runtime.GOOS == "windows" {
+		return path.Join(usr.HomeDir, "AppData/Roaming/Ethereum")
+	} else {
+		return path.Join(usr.HomeDir, ".ethereum")
+	}
+}
 func IsWindows() bool {
 	return runtime.GOOS == "windows"
 }
