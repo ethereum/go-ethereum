@@ -56,6 +56,10 @@ func NewAccountManager(keyStore crypto.KeyStore2) AccountManager {
 	return *am
 }
 
+func (am AccountManager) DeleteAccount(address []byte, auth string) error {
+	return am.keyStore.DeleteKey(address, auth)
+}
+
 func (am *AccountManager) Sign(fromAccount *Account, keyAuth string, toSign []byte) (signature []byte, err error) {
 	key, err := am.keyStore.GetKey(fromAccount.Address, keyAuth)
 	if err != nil {
