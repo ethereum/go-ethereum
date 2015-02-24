@@ -1,5 +1,5 @@
 {
-    "AmbigiousMethod" : {
+    "AmbiguousMethod" : {
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "45678256",
@@ -200,14 +200,14 @@
                 }
             },
             "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
-                "balance" : "7000",
+                "balance" : "2000",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "92999",
+                "balance" : "97999",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
@@ -233,7 +233,7 @@
         "transaction" : {
             "//" : "testRecursiveMethods()",
             "data" : "0x981a3165",
-            "gasLimit" : "7000",
+            "gasLimit" : "2000",
             "gasPrice" : "1",
             "nonce" : "0",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
