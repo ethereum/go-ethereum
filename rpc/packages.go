@@ -25,6 +25,11 @@ import (
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
+var (
+	defaultGasPrice = big.NewInt(10000000000000)
+	defaultGas      = big.NewInt(10000)
+)
+
 type EthereumApi struct {
 	xeth          *xeth.XEth
 	quit          chan struct{}
@@ -40,22 +45,17 @@ type EthereumApi struct {
 	register map[string][]*NewTxArgs
 
 	db ethutil.Database
-
-	defaultGasPrice *big.Int
-	defaultGas      *big.Int
 }
 
 func NewEthereumApi(eth *xeth.XEth) *EthereumApi {
 	db, _ := ethdb.NewLDBDatabase("dapps")
 	api := &EthereumApi{
-		xeth:            eth,
-		quit:            make(chan struct{}),
-		filterManager:   filter.NewFilterManager(eth.Backend().EventMux()),
-		logs:            make(map[int]*logFilter),
-		messages:        make(map[int]*whisperFilter),
-		db:              db,
-		defaultGasPrice: big.NewInt(10000000000000),
-		defaultGas:      big.NewInt(10000),
+		xeth:          eth,
+		quit:          make(chan struct{}),
+		filterManager: filter.NewFilterManager(eth.Backend().EventMux()),
+		logs:          make(map[int]*logFilter),
+		messages:      make(map[int]*whisperFilter),
+		db:            db,
 	}
 	go api.filterManager.Start()
 	go api.start()
@@ -192,11 +192,11 @@ func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *interface{}) error {
 
 func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
 	if len(args.Gas) == 0 {
-		args.Gas = p.defaultGas.String()
+		args.Gas = defaultGas.String()
 	}
 
 	if len(args.GasPrice) == 0 {
-		args.GasPrice = p.defaultGasPrice.String()
+		args.GasPrice = defaultGasPrice.String()
 	}
 
 	// TODO if no_private_key then
@@ -525,7 +525,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		return p.AllLogs(args, reply)
 	case "eth_gasPrice":
-		*reply = toHex(p.defaultGasPrice.Bytes())
+		*reply = toHex(defaultGasPrice.Bytes())
 		return nil
 	case "eth_register":
 		args, err := req.ToRegisterArgs()
