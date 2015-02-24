@@ -525,7 +525,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		return p.AllLogs(args, reply)
 	case "eth_gasPrice":
-		*reply = "0x" + toHex(p.defaultGasPrice.Bytes())
+		*reply = toHex(p.defaultGasPrice.Bytes())
 		return nil
 	case "eth_register":
 		args, err := req.ToRegisterArgs()
