@@ -27,7 +27,7 @@ func main() {
 	chunker := &bzz.TreeChunker{}
 	chunker.Init()
 	hash := make([]byte, chunker.KeySize())
-	errC := chunker.Split(hash, sr, nil)
+	errC := chunker.Split(hash, sr, nil, nil)
 	err, ok := <-errC
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
