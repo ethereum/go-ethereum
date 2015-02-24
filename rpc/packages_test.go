@@ -7,6 +7,7 @@ import (
 )
 
 func TestFilterClose(t *testing.T) {
+	t.Skip()
 	api := &EthereumApi{
 		logs:     make(map[int]*logFilter),
 		messages: make(map[int]*whisperFilter),
