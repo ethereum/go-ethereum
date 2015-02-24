@@ -9,7 +9,6 @@ For each request type, define the following:
 package rpc
 
 import (
-	"fmt"
 	"math/big"
 	"strings"
 	"sync"
@@ -26,8 +25,9 @@ import (
 )
 
 var (
-	defaultGasPrice = big.NewInt(10000000000000)
-	defaultGas      = big.NewInt(10000)
+	defaultGasPrice  = big.NewInt(10000000000000)
+	defaultGas       = big.NewInt(10000)
+	filterTickerTime = 15 * time.Second
 )
 
 type EthereumApi struct {
@@ -61,6 +61,39 @@ func NewEthereumApi(eth *xeth.XEth) *EthereumApi {
 	go api.start()
 
 	return api
+}
+
+func (self *EthereumApi) start() {
+	timer := time.NewTicker(filterTickerTime)
+done:
+	for {
+		select {
+		case <-timer.C:
+			self.logMut.Lock()
+			self.messagesMut.Lock()
+			for id, filter := range self.logs {
+				if time.Since(filter.timeout) > 20*time.Second {
+					self.filterManager.UninstallFilter(id)
+					delete(self.logs, id)
+				}
+			}
+
+			for id, filter := range self.messages {
+				if time.Since(filter.timeout) > 20*time.Second {
+					self.xeth.Whisper().Unwatch(id)
+					delete(self.messages, id)
+				}
+			}
+			self.logMut.Unlock()
+			self.messagesMut.Unlock()
+		case <-self.quit:
+			break done
+		}
+	}
+}
+
+func (self *EthereumApi) stop() {
+	close(self.quit)
 }
 
 func (self *EthereumApi) Register(args string, reply *interface{}) error {
@@ -410,7 +443,7 @@ func (p *EthereumApi) WhisperMessages(id int, reply *interface{}) error {
 }
 
 func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
-	// Spec at https://github.com/ethereum/wiki/wiki/Generic-ON-RPC
+	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
 	rpclogger.DebugDetailf("%T %s", req.Params, req.Params)
 	switch req.Method {
 	case "eth_coinbase":
@@ -595,44 +628,9 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		return p.WhisperMessages(args, reply)
 	default:
-		return NewErrorResponse(fmt.Sprintf("%v %s", ErrorNotImplemented, req.Method))
+		return NewErrorWithMessage(errNotImplemented, req.Method)
 	}
 
 	rpclogger.DebugDetailf("Reply: %T %s", reply, reply)
 	return nil
-}
-
-var filterTickerTime = 15 * time.Second
-
-func (self *EthereumApi) start() {
-	timer := time.NewTicker(filterTickerTime)
-done:
-	for {
-		select {
-		case <-timer.C:
-			self.logMut.Lock()
-			self.messagesMut.Lock()
-			for id, filter := range self.logs {
-				if time.Since(filter.timeout) > 20*time.Second {
-					self.filterManager.UninstallFilter(id)
-					delete(self.logs, id)
-				}
-			}
-
-			for id, filter := range self.messages {
-				if time.Since(filter.timeout) > 20*time.Second {
-					self.xeth.Whisper().Unwatch(id)
-					delete(self.messages, id)
-				}
-			}
-			self.logMut.Unlock()
-			self.messagesMut.Unlock()
-		case <-self.quit:
-			break done
-		}
-	}
-}
-
-func (self *EthereumApi) stop() {
-	close(self.quit)
 }
