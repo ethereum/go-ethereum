@@ -174,15 +174,11 @@ func (self *EthereumApi) AllLogs(args *FilterOptions, reply *interface{}) error 
 }
 
 func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *interface{}) error {
-	err := args.requirements()
-	if err != nil {
-		return err
-	}
-
-	if args.BlockNumber > 0 {
-		*reply = p.xeth.BlockByNumber(args.BlockNumber)
-	} else {
+	// This seems a bit precarious Maybe worth splitting to discrete functions
+	if len(args.Hash) > 0 {
 		*reply = p.xeth.BlockByHash(args.Hash)
+	} else {
+		*reply = p.xeth.BlockByNumber(args.BlockNumber)
 	}
 	return nil
 }
