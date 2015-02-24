@@ -9,7 +9,6 @@ For each request type, define the following:
 package rpc
 
 import (
-	"fmt"
 	"math/big"
 	"strings"
 	"sync"
@@ -410,7 +409,7 @@ func (p *EthereumApi) WhisperMessages(id int, reply *interface{}) error {
 }
 
 func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
-	// Spec at https://github.com/ethereum/wiki/wiki/Generic-ON-RPC
+	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
 	rpclogger.DebugDetailf("%T %s", req.Params, req.Params)
 	switch req.Method {
 	case "eth_coinbase":
@@ -595,7 +594,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		return p.WhisperMessages(args, reply)
 	default:
-		return NewErrorResponse(fmt.Sprintf("%v %s", ErrorNotImplemented, req.Method))
+		return NewErrorWithMessage(errNotImplemented, req.Method)
 	}
 
 	rpclogger.DebugDetailf("Reply: %T %s", reply, reply)
