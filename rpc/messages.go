@@ -29,7 +29,6 @@ var (
 	errArguments      = errors.New("Error: Insufficient arguments")
 	errNotImplemented = errors.New("Error: Method not implemented")
 	errUnknown        = errors.New("Error: Unknown error")
-	errParseRequest   = errors.New("Error: Could not parse request")
 	errDecodeArgs     = errors.New("Error: Could not decode arguments")
 )
 
