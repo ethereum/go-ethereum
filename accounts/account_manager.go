@@ -48,19 +48,19 @@ type Account struct {
 }
 
 type AccountManager struct {
-	keyStore             crypto.KeyStore2
-	unlockedKeys         map[string]crypto.Key
-	unlockedMilliSeconds int
-	mutex                sync.Mutex
+	keyStore           crypto.KeyStore2
+	unlockedKeys       map[string]crypto.Key
+	unlockMilliseconds time.Duration
+	mutex              sync.RWMutex
 }
 
-func NewAccountManager(keyStore crypto.KeyStore2, unlockMilliSeconds int) AccountManager {
+func NewAccountManager(keyStore crypto.KeyStore2, unlockMilliseconds time.Duration) AccountManager {
 	keysMap := make(map[string]crypto.Key)
 	am := &AccountManager{
-		keyStore:             keyStore,
-		unlockedKeys:         keysMap,
-		unlockedMilliSeconds: unlockMilliSeconds,
-		mutex:                sync.Mutex{}, // for accessing unlockedKeys map
+		keyStore:           keyStore,
+		unlockedKeys:       keysMap,
+		unlockMilliseconds: unlockMilliseconds,
+		mutex:              sync.RWMutex{}, // for accessing unlockedKeys map
 	}
 	return *am
 }
@@ -70,9 +70,9 @@ func (am AccountManager) DeleteAccount(address []byte, auth string) error {
 }
 
 func (am *AccountManager) Sign(fromAccount *Account, toSign []byte) (signature []byte, err error) {
-	am.mutex.Lock()
+	am.mutex.RLock()
 	unlockedKey := am.unlockedKeys[string(fromAccount.Address)]
-	am.mutex.Unlock()
+	am.mutex.RUnlock()
 	if unlockedKey.Address == nil {
 		return nil, ErrLocked
 	}
@@ -85,9 +85,9 @@ func (am *AccountManager) SignLocked(fromAccount *Account, keyAuth string, toSig
 	if err != nil {
 		return nil, err
 	}
-	am.mutex.Lock()
+	am.mutex.RLock()
 	am.unlockedKeys[string(fromAccount.Address)] = *key
-	am.mutex.Unlock()
+	am.mutex.RUnlock()
 	go unlockLater(am, fromAccount.Address)
 	signature, err = crypto.Sign(toSign, key.PrivateKey)
 	return signature, err
@@ -121,9 +121,11 @@ func (am *AccountManager) Accounts() ([]Account, error) {
 }
 
 func unlockLater(am *AccountManager, addr []byte) {
-	time.Sleep(time.Millisecond * time.Duration(am.unlockedMilliSeconds))
-	am.mutex.Lock()
+	select {
+	case <-time.After(time.Millisecond * am.unlockMilliseconds):
+	}
+	am.mutex.RLock()
 	// TODO: how do we know the key is actually gone from memory?
 	delete(am.unlockedKeys, string(addr))
-	am.mutex.Unlock()
+	am.mutex.RUnlock()
 }

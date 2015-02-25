@@ -21,7 +21,7 @@ func TestAccountManager(t *testing.T) {
 	}
 
 	// Cleanup
-	time.Sleep(time.Millisecond * time.Duration(150)) // wait for locking
+	time.Sleep(time.Millisecond * 150) // wait for locking
 
 	accounts, err := am.Accounts()
 	if err != nil {
