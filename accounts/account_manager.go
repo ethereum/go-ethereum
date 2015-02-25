@@ -60,7 +60,6 @@ func NewAccountManager(keyStore crypto.KeyStore2, unlockMilliseconds time.Durati
 		keyStore:           keyStore,
 		unlockedKeys:       keysMap,
 		unlockMilliseconds: unlockMilliseconds,
-		mutex:              sync.RWMutex{}, // for accessing unlockedKeys map
 	}
 	return *am
 }
