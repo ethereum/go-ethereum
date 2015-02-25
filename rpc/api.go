@@ -45,6 +45,8 @@ type EthereumApi struct {
 	register map[string][]*NewTxArgs
 
 	db ethutil.Database
+
+	defaultBlockAge int
 }
 
 func NewEthereumApi(eth *xeth.XEth) *EthereumApi {
@@ -318,6 +320,17 @@ func (p *EthereumApi) SetMining(shouldmine bool, reply *interface{}) error {
 	return nil
 }
 
+func (p *EthereumApi) GetDefaultBlockAge(reply *interface{}) error {
+	*reply = p.defaultBlockAge
+	return nil
+}
+
+func (p *EthereumApi) SetDefaultBlockAge(defaultBlockAge int, reply *interface{}) error {
+	p.defaultBlockAge = defaultBlockAge
+	*reply = true
+	return nil
+}
+
 func (p *EthereumApi) BlockNumber(reply *interface{}) error {
 	*reply = p.xeth.Backend().ChainManager().CurrentBlock().Number()
 	return nil
@@ -458,6 +471,14 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.SetMining(args, reply)
+	case "eth_defaultBlock":
+		return p.GetDefaultBlockAge(reply)
+	case "eth_setDefaultBlock":
+		args, err := req.ToIntArgs()
+		if err != nil {
+			return err
+		}
+		return p.SetDefaultBlockAge(args, reply)
 	case "eth_peerCount":
 		return p.GetPeerCount(reply)
 	case "eth_number":
