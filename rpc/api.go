@@ -9,6 +9,7 @@ For each request type, define the following:
 package rpc
 
 import (
+	"fmt"
 	"math/big"
 	"strings"
 	"sync"
@@ -19,8 +20,10 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/ui"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -31,7 +34,10 @@ var (
 )
 
 type EthereumApi struct {
-	xeth          *xeth.XEth
+	eth    *xeth.XEth
+	xethMu sync.RWMutex
+	mux    *event.TypeMux
+
 	quit          chan struct{}
 	filterManager *filter.FilterManager
 
@@ -50,7 +56,8 @@ type EthereumApi struct {
 func NewEthereumApi(eth *xeth.XEth) *EthereumApi {
 	db, _ := ethdb.NewLDBDatabase("dapps")
 	api := &EthereumApi{
-		xeth:          eth,
+		eth:           eth,
+		mux:           eth.Backend().EventMux(),
 		quit:          make(chan struct{}),
 		filterManager: filter.NewFilterManager(eth.Backend().EventMux()),
 		logs:          make(map[int]*logFilter),
@@ -65,9 +72,25 @@ func NewEthereumApi(eth *xeth.XEth) *EthereumApi {
 
 func (self *EthereumApi) start() {
 	timer := time.NewTicker(filterTickerTime)
+	events := self.mux.Subscribe(core.ChainEvent{})
+
 done:
 	for {
 		select {
+		case ev := <-events.Chan():
+			switch ev.(type) {
+			case core.ChainEvent:
+				// fixme
+				const something = 1337
+				if something < 0 {
+					chain := self.xeth().Backend().ChainManager()
+					block := chain.GetBlockByNumber(chain.CurrentBlock().Number().Uint64() - something)
+					if block != nil {
+						statedb := state.New(block.Root(), self.db)
+						self.useState(statedb)
+					}
+				}
+			}
 		case <-timer.C:
 			self.logMut.Lock()
 			self.messagesMut.Lock()
@@ -80,7 +103,7 @@ done:
 
 			for id, filter := range self.messages {
 				if time.Since(filter.timeout) > 20*time.Second {
-					self.xeth.Whisper().Unwatch(id)
+					self.xeth().Whisper().Unwatch(id)
 					delete(self.messages, id)
 				}
 			}
@@ -128,7 +151,7 @@ func (self *EthereumApi) WatchTx(args string, reply *interface{}) error {
 
 func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) error {
 	var id int
-	filter := core.NewFilter(self.xeth.Backend())
+	filter := core.NewFilter(self.xeth().Backend())
 	filter.SetOptions(toFilterOptions(args))
 	filter.LogsCallback = func(logs state.Logs) {
 		self.logMut.Lock()
@@ -153,7 +176,7 @@ func (self *EthereumApi) UninstallFilter(id int, reply *interface{}) error {
 
 func (self *EthereumApi) NewFilterString(args string, reply *interface{}) error {
 	var id int
-	filter := core.NewFilter(self.xeth.Backend())
+	filter := core.NewFilter(self.xeth().Backend())
 
 	callback := func(block *types.Block) {
 		self.logMut.Lock()
@@ -198,7 +221,7 @@ func (self *EthereumApi) Logs(id int, reply *interface{}) error {
 }
 
 func (self *EthereumApi) AllLogs(args *FilterOptions, reply *interface{}) error {
-	filter := core.NewFilter(self.xeth.Backend())
+	filter := core.NewFilter(self.xeth().Backend())
 	filter.SetOptions(toFilterOptions(args))
 
 	*reply = toLogs(filter.Find())
@@ -209,12 +232,27 @@ func (self *EthereumApi) AllLogs(args *FilterOptions, reply *interface{}) error 
 func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *interface{}) error {
 	// This seems a bit precarious Maybe worth splitting to discrete functions
 	if len(args.Hash) > 0 {
-		*reply = p.xeth.BlockByHash(args.Hash)
+		*reply = p.xeth().BlockByHash(args.Hash)
 	} else {
-		*reply = p.xeth.BlockByNumber(args.BlockNumber)
+		*reply = p.xeth().BlockByNumber(args.BlockNumber)
 	}
 	return nil
 }
+
+/*
+func unlockAccount(server, account *Account) bool {
+	pwd, status := server.PasswordDialog()
+	switch status {
+	case Ok:
+		if !account.Unlock([]byte(pwd)) {
+			return unlockAccount(account)
+		}
+		return true
+	default:
+		return false
+	}
+}
+*/
 
 func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
 	if len(args.Gas) == 0 {
@@ -226,18 +264,35 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
 	}
 
 	// TODO if no_private_key then
-	if _, exists := p.register[args.From]; exists {
-		p.register[args.From] = append(p.register[args.From], args)
-	} else {
-		result, _ := p.xeth.Transact( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
-		*reply = result
-	}
+	//if _, exists := p.register[args.From]; exists {
+	//	p.register[args.From] = append(p.register[args.From], args)
+	//} else {
+	/*
+		account := accounts.Get(fromHex(args.From))
+		if account != nil {
+			if account.Unlocked() {
+				if !unlockAccount(account) {
+					return
+				}
+			}
+
+			result, _ := account.Transact(fromHex(args.To), fromHex(args.Value), fromHex(args.Gas), fromHex(args.GasPrice), fromHex(args.Data))
+			if len(result) > 0 {
+				*reply = toHex(result)
+			}
+		} else if _, exists := p.register[args.From]; exists {
+			p.register[ags.From] = append(p.register[args.From], args)
+		}
+	*/
+	result, _ := p.xeth().Transact( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
+	*reply = result
+	//}
 
 	return nil
 }
 
 func (p *EthereumApi) Call(args *NewTxArgs, reply *interface{}) error {
-	result, err := p.xeth.Call( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
+	result, err := p.xeth().Call( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
 	if err != nil {
 		return err
 	}
@@ -251,7 +306,7 @@ func (p *EthereumApi) PushTx(args *PushTxArgs, reply *interface{}) error {
 	if err != nil {
 		return err
 	}
-	result, _ := p.xeth.PushTx(args.Tx)
+	result, _ := p.xeth().PushTx(args.Tx)
 	*reply = result
 	return nil
 }
@@ -262,7 +317,7 @@ func (p *EthereumApi) GetStateAt(args *GetStateArgs, reply *interface{}) error {
 		return err
 	}
 
-	state := p.xeth.State().SafeGet(args.Address)
+	state := p.xeth().State().SafeGet(args.Address)
 
 	value := state.StorageString(args.Key)
 	var hx string
@@ -284,42 +339,42 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *interface{}) err
 		return err
 	}
 
-	*reply = p.xeth.State().SafeGet(args.Address).Storage()
+	*reply = p.xeth().State().SafeGet(args.Address).Storage()
 	return nil
 }
 
 func (p *EthereumApi) GetPeerCount(reply *interface{}) error {
-	*reply = p.xeth.PeerCount()
+	*reply = p.xeth().PeerCount()
 	return nil
 }
 
 func (p *EthereumApi) GetIsListening(reply *interface{}) error {
-	*reply = p.xeth.IsListening()
+	*reply = p.xeth().IsListening()
 	return nil
 }
 
 func (p *EthereumApi) GetCoinbase(reply *interface{}) error {
-	*reply = p.xeth.Coinbase()
+	*reply = p.xeth().Coinbase()
 	return nil
 }
 
 func (p *EthereumApi) Accounts(reply *interface{}) error {
-	*reply = p.xeth.Accounts()
+	*reply = p.xeth().Accounts()
 	return nil
 }
 
 func (p *EthereumApi) GetIsMining(reply *interface{}) error {
-	*reply = p.xeth.IsMining()
+	*reply = p.xeth().IsMining()
 	return nil
 }
 
 func (p *EthereumApi) SetMining(shouldmine bool, reply *interface{}) error {
-	*reply = p.xeth.SetMining(shouldmine)
+	*reply = p.xeth().SetMining(shouldmine)
 	return nil
 }
 
 func (p *EthereumApi) BlockNumber(reply *interface{}) error {
-	*reply = p.xeth.Backend().ChainManager().CurrentBlock().Number()
+	*reply = p.xeth().Backend().ChainManager().CurrentBlock().Number()
 	return nil
 }
 
@@ -328,7 +383,7 @@ func (p *EthereumApi) GetTxCountAt(args *GetTxCountArgs, reply *interface{}) err
 	if err != nil {
 		return err
 	}
-	*reply = p.xeth.TxCountAt(args.Address)
+	*reply = p.xeth().TxCountAt(args.Address)
 	return nil
 }
 
@@ -337,7 +392,7 @@ func (p *EthereumApi) GetBalanceAt(args *GetBalanceArgs, reply *interface{}) err
 	if err != nil {
 		return err
 	}
-	state := p.xeth.State().SafeGet(args.Address)
+	state := p.xeth().State().SafeGet(args.Address)
 	*reply = toHex(state.Balance().Bytes())
 	return nil
 }
@@ -347,7 +402,7 @@ func (p *EthereumApi) GetCodeAt(args *GetCodeAtArgs, reply *interface{}) error {
 	if err != nil {
 		return err
 	}
-	*reply = p.xeth.CodeAt(args.Address)
+	*reply = p.xeth().CodeAt(args.Address)
 	return nil
 }
 
@@ -394,7 +449,7 @@ func (p *EthereumApi) DbGet(args *DbArgs, reply *interface{}) error {
 }
 
 func (p *EthereumApi) NewWhisperIdentity(reply *interface{}) error {
-	*reply = p.xeth.Whisper().NewIdentity()
+	*reply = p.xeth().Whisper().NewIdentity()
 	return nil
 }
 
@@ -405,7 +460,7 @@ func (p *EthereumApi) NewWhisperFilter(args *xeth.Options, reply *interface{}) e
 		defer p.messagesMut.Unlock()
 		p.messages[id].add(msg) // = append(p.messages[id], msg)
 	}
-	id = p.xeth.Whisper().Watch(args)
+	id = p.xeth().Whisper().Watch(args)
 	p.messages[id] = &whisperFilter{timeout: time.Now()}
 	*reply = id
 	return nil
@@ -423,7 +478,7 @@ func (self *EthereumApi) MessagesChanged(id int, reply *interface{}) error {
 }
 
 func (p *EthereumApi) WhisperPost(args *WhisperMessageArgs, reply *interface{}) error {
-	err := p.xeth.Whisper().Post(args.Payload, args.To, args.From, args.Topic, args.Priority, args.Ttl)
+	err := p.xeth().Whisper().Post(args.Payload, args.To, args.From, args.Topic, args.Priority, args.Ttl)
 	if err != nil {
 		return err
 	}
@@ -433,12 +488,12 @@ func (p *EthereumApi) WhisperPost(args *WhisperMessageArgs, reply *interface{}) 
 }
 
 func (p *EthereumApi) HasWhisperIdentity(args string, reply *interface{}) error {
-	*reply = p.xeth.Whisper().HasIdentity(args)
+	*reply = p.xeth().Whisper().HasIdentity(args)
 	return nil
 }
 
 func (p *EthereumApi) WhisperMessages(id int, reply *interface{}) error {
-	*reply = p.xeth.Whisper().Messages(id)
+	*reply = p.xeth().Whisper().Messages(id)
 	return nil
 }
 
@@ -633,4 +688,29 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 
 	rpclogger.DebugDetailf("Reply: %T %s", reply, reply)
 	return nil
+}
+
+func (self *EthereumApi) xeth() *xeth.XEth {
+	self.xethMu.RLock()
+	defer self.xethMu.RUnlock()
+
+	return self.eth
+}
+
+func (self *EthereumApi) useState(statedb *state.StateDB) {
+	self.xethMu.Lock()
+	defer self.xethMu.Unlock()
+
+	self.eth = self.xeth().UseState(statedb)
+}
+
+func t(f ui.Frontend) {
+	// Call the password dialog
+	ret, err := f.Call("PasswordDialog")
+	if err != nil {
+		fmt.Println(err)
+	}
+	// Get the first argument
+	t, _ := ret.Get(0)
+	fmt.Println("return:", t)
 }
