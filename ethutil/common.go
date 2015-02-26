@@ -3,11 +3,40 @@ package ethutil
 import (
 	"fmt"
 	"math/big"
+	"os"
 	"os/user"
 	"path"
+	"path/filepath"
 	"runtime"
 	"time"
+
+	"github.com/kardianos/osext"
 )
+
+func DefaultAssetPath() string {
+	var assetPath string
+	// If the current working directory is the go-ethereum dir
+	// assume a debug build and use the source directory as
+	// asset directory.
+	pwd, _ := os.Getwd()
+	if pwd == path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist") {
+		assetPath = path.Join(pwd, "assets")
+	} else {
+		switch runtime.GOOS {
+		case "darwin":
+			// Get Binary Directory
+			exedir, _ := osext.ExecutableFolder()
+			assetPath = filepath.Join(exedir, "../Resources")
+		case "linux":
+			assetPath = "/usr/share/mist"
+		case "windows":
+			assetPath = "./assets"
+		default:
+			assetPath = "."
+		}
+	}
+	return assetPath
+}
 
 func DefaultDataDir() string {
 	usr, _ := user.Current()
