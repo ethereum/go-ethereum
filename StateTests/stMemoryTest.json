@@ -2501,7 +2501,7 @@
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "256",
-            "currentGasLimit" : "42949672960",
+            "currentGasLimit" : "17592320524892",
             "currentNumber" : "0",
             "currentTimestamp" : "1",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
@@ -2525,7 +2525,7 @@
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "429496722838",
+                "balance" : "175923205242158",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
@@ -2541,7 +2541,7 @@
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "429496729600",
+                "balance" : "175923205248920",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
@@ -2550,7 +2550,7 @@
         },
         "transaction" : {
             "data" : "",
-            "gasLimit" : "26520",
+            "gasLimit" : "17592320524892",
             "gasPrice" : "1",
             "nonce" : "0",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
@@ -2562,7 +2562,7 @@
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "256",
-            "currentGasLimit" : "42949672960",
+            "currentGasLimit" : "17592320524892",
             "currentNumber" : "0",
             "currentTimestamp" : "1",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
@@ -2579,14 +2579,14 @@
                 }
             },
             "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
-                "balance" : "1342183320",
+                "balance" : "17592320524892",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "428154546270",
+                "balance" : "158330884724018",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
@@ -2602,7 +2602,7 @@
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "429496729600",
+                "balance" : "175923205248920",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
@@ -2611,7 +2611,7 @@
         },
         "transaction" : {
             "data" : "",
-            "gasLimit" : "1342183320",
+            "gasLimit" : "17592320524892",
             "gasPrice" : "1",
             "nonce" : "0",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
@@ -2623,7 +2623,7 @@
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "256",
-            "currentGasLimit" : "42949672960",
+            "currentGasLimit" : "37791080412587",
             "currentNumber" : "0",
             "currentTimestamp" : "1",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
@@ -2640,14 +2640,14 @@
                 }
             },
             "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
-                "balance" : "1342183320",
+                "balance" : "37791080412587",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "428154546270",
+                "balance" : "340119723807253",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
@@ -2663,7 +2663,7 @@
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "429496729600",
+                "balance" : "377910804219850",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
@@ -2672,7 +2672,7 @@
         },
         "transaction" : {
             "data" : "",
-            "gasLimit" : "1342183320",
+            "gasLimit" : "37791080412587",
             "gasPrice" : "1",
             "nonce" : "0",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
