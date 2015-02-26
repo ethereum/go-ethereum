@@ -664,6 +664,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 				}
 				addr = ref.Address()
 
+				fmt.Printf("CREATE %X\n", addr)
 				stack.Push(ethutil.BigD(addr))
 
 			}
@@ -727,7 +728,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 
 			self.Printf(" => (%x) %v", receiver.Address()[:4], balance)
 
-			receiver.AddAmount(balance)
+			receiver.AddBalance(balance)
 			statedb.Delete(context.Address())
 
 			fallthrough
@@ -779,9 +780,9 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 	// Stack Check, memory resize & gas phase
 	switch op {
 	// Stack checks only
-	case ISZERO, CALLDATALOAD, POP, JUMP, NOT: // 1
+	case ISZERO, CALLDATALOAD, POP, JUMP, NOT, EXTCODESIZE, BLOCKHASH: // 1
 		stack.require(1)
-	case JUMPI, ADD, SUB, DIV, SDIV, MOD, SMOD, LT, GT, SLT, SGT, EQ, AND, OR, XOR, BYTE, SIGNEXTEND: // 2
+	case JUMPI, ADD, SUB, DIV, MUL, SDIV, MOD, SMOD, LT, GT, SLT, SGT, EQ, AND, OR, XOR, BYTE, SIGNEXTEND: // 2
 		stack.require(2)
 	case ADDMOD, MULMOD: // 3
 		stack.require(3)
@@ -828,7 +829,7 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 			// 0 => non 0
 			mult = ethutil.Big3
 		} else if len(val) > 0 && len(y.Bytes()) == 0 {
-			statedb.Refund(caller.Address(), GasSStoreRefund)
+			statedb.Refund(self.env.Origin(), GasSStoreRefund)
 
 			mult = ethutil.Big0
 		} else {
@@ -859,7 +860,7 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 		newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-2])
 		additionalGas.Set(stack.data[stack.Len()-2])
 	case CALLDATACOPY:
-		stack.require(2)
+		stack.require(3)
 
 		newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-3])
 		additionalGas.Set(stack.data[stack.Len()-3])

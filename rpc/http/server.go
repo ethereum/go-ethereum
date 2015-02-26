@@ -92,7 +92,7 @@ func (s *RpcHttpServer) apiHandler(api *rpc.EthereumApi) http.Handler {
 
 		reqParsed, reqerr := JSON.ParseRequestBody(req)
 		if reqerr != nil {
-			jsonerr := &rpc.RpcErrorObject{-32700, rpc.ErrorParseRequest}
+			jsonerr := &rpc.RpcErrorObject{-32700, "Error: Could not parse request"}
 			JSON.Send(w, &rpc.RpcErrorResponse{JsonRpc: jsonrpcver, ID: nil, Error: jsonerr})
 			return
 		}

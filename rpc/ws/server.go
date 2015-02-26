@@ -99,7 +99,7 @@ func sockHandler(api *rpc.EthereumApi) websocket.Handler {
 
 			// reqParsed, reqerr := JSON.ParseRequestBody(conn.Request())
 			if err := websocket.JSON.Receive(conn, &reqParsed); err != nil {
-				jsonerr := &rpc.RpcErrorObject{-32700, rpc.ErrorParseRequest}
+				jsonerr := &rpc.RpcErrorObject{-32700, "Error: Could not parse request"}
 				JSON.Send(conn, &rpc.RpcErrorResponse{JsonRpc: jsonrpcver, ID: nil, Error: jsonerr})
 				continue
 			}

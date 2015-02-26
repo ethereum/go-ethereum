@@ -34,8 +34,15 @@ package accounts
 
 import (
 	crand "crypto/rand"
+
+	"errors"
+	"sync"
+	"time"
+
 	"github.com/ethereum/go-ethereum/crypto"
 )
+
+var ErrLocked = errors.New("account is locked; please request passphrase")
 
 // TODO: better name for this struct?
 type Account struct {
@@ -43,24 +50,46 @@ type Account struct {
 }
 
 type AccountManager struct {
-	keyStore crypto.KeyStore2
+	keyStore           crypto.KeyStore2
+	unlockedKeys       map[string]crypto.Key
+	unlockMilliseconds time.Duration
+	mutex              sync.RWMutex
 }
 
-// TODO: get key by addr - modify KeyStore2 GetKey to work with addr
-
-// TODO: pass through passphrase for APIs which require access to private key?
-func NewAccountManager(keyStore crypto.KeyStore2) AccountManager {
+func NewAccountManager(keyStore crypto.KeyStore2, unlockMilliseconds time.Duration) AccountManager {
+	keysMap := make(map[string]crypto.Key)
 	am := &AccountManager{
-		keyStore: keyStore,
+		keyStore:           keyStore,
+		unlockedKeys:       keysMap,
+		unlockMilliseconds: unlockMilliseconds,
 	}
 	return *am
 }
 
-func (am *AccountManager) Sign(fromAccount *Account, keyAuth string, toSign []byte) (signature []byte, err error) {
+func (am AccountManager) DeleteAccount(address []byte, auth string) error {
+	return am.keyStore.DeleteKey(address, auth)
+}
+
+func (am *AccountManager) Sign(fromAccount *Account, toSign []byte) (signature []byte, err error) {
+	am.mutex.RLock()
+	unlockedKey := am.unlockedKeys[string(fromAccount.Address)]
+	am.mutex.RUnlock()
+	if unlockedKey.Address == nil {
+		return nil, ErrLocked
+	}
+	signature, err = crypto.Sign(toSign, unlockedKey.PrivateKey)
+	return signature, err
+}
+
+func (am *AccountManager) SignLocked(fromAccount *Account, keyAuth string, toSign []byte) (signature []byte, err error) {
 	key, err := am.keyStore.GetKey(fromAccount.Address, keyAuth)
 	if err != nil {
 		return nil, err
 	}
+	am.mutex.RLock()
+	am.unlockedKeys[string(fromAccount.Address)] = *key
+	am.mutex.RUnlock()
+	go unlockLater(am, fromAccount.Address)
 	signature, err = crypto.Sign(toSign, key.PrivateKey)
 	return signature, err
 }
@@ -76,8 +105,6 @@ func (am AccountManager) NewAccount(auth string) (*Account, error) {
 	return ua, err
 }
 
-// set of accounts == set of keys in given key store
-// TODO: do we need persistence of accounts as well?
 func (am *AccountManager) Accounts() ([]Account, error) {
 	addresses, err := am.keyStore.GetKeyAddresses()
 	if err != nil {
@@ -92,4 +119,14 @@ func (am *AccountManager) Accounts() ([]Account, error) {
 		}
 	}
 	return accounts, err
+}
+
+func unlockLater(am *AccountManager, addr []byte) {
+	select {
+	case <-time.After(time.Millisecond * am.unlockMilliseconds):
+	}
+	am.mutex.RLock()
+	// TODO: how do we know the key is actually gone from memory?
+	delete(am.unlockedKeys, string(addr))
+	am.mutex.RUnlock()
 }

@@ -283,7 +283,6 @@ func (self *ChainManager) GetBlockHashesFromHash(hash []byte, max uint64) (chain
 			break
 		}
 	}
-	fmt.Printf("get hash %x (%d)\n", hash, len(chain))
 
 	return
 }
