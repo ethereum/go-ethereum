@@ -126,7 +126,7 @@ func (self *StateTransition) BuyGas() error {
 
 	self.AddGas(self.msg.Gas())
 	self.initialGas.Set(self.msg.Gas())
-	sender.SubAmount(MessageGasValue(self.msg))
+	sender.SubBalance(MessageGasValue(self.msg))
 
 	return nil
 }
@@ -251,13 +251,16 @@ func (self *StateTransition) RefundGas() {
 	coinbase, sender := self.Coinbase(), self.From()
 	// Return remaining gas
 	remaining := new(big.Int).Mul(self.gas, self.msg.GasPrice())
-	sender.AddAmount(remaining)
+	fmt.Println("REFUND:", remaining)
+	sender.AddBalance(remaining)
 
 	uhalf := new(big.Int).Div(self.GasUsed(), ethutil.Big2)
 	for addr, ref := range self.state.Refunds() {
 		refund := ethutil.BigMin(uhalf, ref)
 		self.gas.Add(self.gas, refund)
-		self.state.AddBalance([]byte(addr), refund.Mul(refund, self.msg.GasPrice()))
+		addToIt := refund.Mul(refund, self.msg.GasPrice())
+		fmt.Println("ADD TO IT", addToIt)
+		self.state.AddBalance([]byte(addr), addToIt)
 	}
 
 	coinbase.RefundGas(self.gas, self.msg.GasPrice())
