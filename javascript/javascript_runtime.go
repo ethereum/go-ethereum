@@ -24,7 +24,7 @@ var jsrelogger = logger.NewLogger("JSRE")
 type JSRE struct {
 	ethereum *eth.Ethereum
 	Vm       *otto.Otto
-	pipe     *xeth.JSXEth
+	pipe     *xeth.XEth
 
 	events event.Subscription
 
@@ -49,7 +49,7 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	re := &JSRE{
 		ethereum,
 		otto.New(),
-		xeth.NewJSXEth(ethereum),
+		xeth.New(ethereum),
 		nil,
 		make(map[string][]otto.Value),
 	}
@@ -58,8 +58,7 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	re.Vm.Run(jsLib)
 
 	// Load extra javascript files
-	re.LoadIntFile("string.js")
-	re.LoadIntFile("big.js")
+	re.LoadIntFile("bignumber.min.js")
 
 	// Subscribe to events
 	mux := ethereum.EventMux()
@@ -198,12 +197,13 @@ func (self *JSRE) watch(call otto.FunctionCall) otto.Value {
 }
 
 func (self *JSRE) addPeer(call otto.FunctionCall) otto.Value {
-	host, err := call.Argument(0).ToString()
+	nodeURL, err := call.Argument(0).ToString()
 	if err != nil {
 		return otto.FalseValue()
 	}
-	self.ethereum.SuggestPeer(host)
-
+	if err := self.ethereum.SuggestPeer(nodeURL); err != nil {
+		return otto.FalseValue()
+	}
 	return otto.TrueValue()
 }
 

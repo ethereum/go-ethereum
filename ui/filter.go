@@ -15,7 +15,7 @@ func fromHex(s string) []byte {
 	return nil
 }
 
-func NewFilterFromMap(object map[string]interface{}, eth core.EthManager) *core.Filter {
+func NewFilterFromMap(object map[string]interface{}, eth core.Backend) *core.Filter {
 	filter := core.NewFilter(eth)
 
 	if object["earliest"] != nil {
@@ -28,14 +28,9 @@ func NewFilterFromMap(object map[string]interface{}, eth core.EthManager) *core.
 		filter.SetLatestBlock(val.Int())
 	}
 
-	if object["to"] != nil {
-		val := ethutil.NewValue(object["to"])
-		filter.AddTo(fromHex(val.Str()))
-	}
-
-	if object["from"] != nil {
-		val := ethutil.NewValue(object["from"])
-		filter.AddFrom(fromHex(val.Str()))
+	if object["address"] != nil {
+		//val := ethutil.NewValue(object["address"])
+		//filter.SetAddress(fromHex(val.Str()))
 	}
 
 	if object["max"] != nil {
@@ -48,8 +43,8 @@ func NewFilterFromMap(object map[string]interface{}, eth core.EthManager) *core.
 		filter.SetSkip(int(val.Uint()))
 	}
 
-	if object["altered"] != nil {
-		filter.Altered = makeAltered(object["altered"])
+	if object["topics"] != nil {
+		filter.SetTopics(MakeTopics(object["topics"]))
 	}
 
 	return filter
@@ -70,16 +65,13 @@ func mapToAccountChange(m map[string]interface{}) (d core.AccountChange) {
 
 // data can come in in the following formats:
 // ["aabbccdd", {id: "ccddee", at: "11223344"}], "aabbcc", {id: "ccddee", at: "1122"}
-func makeAltered(v interface{}) (d []core.AccountChange) {
+func MakeTopics(v interface{}) (d [][]byte) {
 	if str, ok := v.(string); ok {
-		d = append(d, core.AccountChange{fromHex(str), nil})
-	} else if obj, ok := v.(map[string]interface{}); ok {
-		d = append(d, mapToAccountChange(obj))
-	} else if slice, ok := v.([]interface{}); ok {
+		d = append(d, fromHex(str))
+	} else if slice, ok := v.([]string); ok {
 		for _, item := range slice {
-			d = append(d, makeAltered(item)...)
+			d = append(d, fromHex(item))
 		}
 	}
-
 	return
 }

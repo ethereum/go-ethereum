@@ -1,48 +1,110 @@
 package eth
 
 import (
+	"crypto/ecdsa"
 	"fmt"
-	"net"
-	"sync"
+	"io"
+	"io/ioutil"
+	"path"
+	"strings"
+	"time"
 
+	"github.com/ethereum/go-ethereum/bzz"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	ethlogger "github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/pow/ezp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
-const (
-	seedNodeAddress = "poc-8.ethdev.com:30303"
+var (
+	logger     = ethlogger.NewLogger("SERV")
+	jsonlogger = ethlogger.NewJsonLogger()
+
+	defaultBootNodes = []*discover.Node{
+		// ETH/DEV cmd/bootnode
+		discover.MustParseNode("enode://6cdd090303f394a1cac34ecc9f7cda18127eafa2a3a06de39f6d920b0e583e062a7362097c7c65ee490a758b442acd5c80c6fce4b148c6a391e946b45131365b@54.169.166.226:30303"),
+		// ETH/DEV cpp-ethereum (poc-8.ethdev.com)
+		discover.MustParseNode("enode://4a44599974518ea5b0f14c31c4463692ac0329cb84851f3435e6d1b18ee4eae4aa495f846a0fa1219bd58035671881d44423876e57db2abd57254d0197da0ebe@5.1.83.226:30303"),
+	}
 )
 
 type Config struct {
-	Name       string
-	Version    string
-	Identifier string
-	KeyStore   string
-	DataDir    string
-	LogFile    string
-	LogLevel   int
-	KeyRing    string
+	Name      string
+	KeyStore  string
+	DataDir   string
+	LogFile   string
+	LogLevel  int
+	KeyRing   string
+	LogFormat string
 
-	MaxPeers   int
-	Port       string
-	NATType    string
-	PMPGateway string
+	MaxPeers int
+	Port     string
 
+	// This should be a space-separated list of
+	// discovery node URLs.
+	BootNodes string
+
+	// This key is used to identify the node on the network.
+	// If nil, an ephemeral key is used.
+	NodeKey *ecdsa.PrivateKey
+
+	NAT  nat.Interface
 	Shh  bool
 	Dial bool
+
+	MinerThreads int
 
 	KeyManager *crypto.KeyManager
 }
 
-var logger = ethlogger.NewLogger("SERV")
+func (cfg *Config) parseBootNodes() []*discover.Node {
+	if cfg.BootNodes == "" {
+		return defaultBootNodes
+	}
+	var ns []*discover.Node
+	for _, url := range strings.Split(cfg.BootNodes, " ") {
+		if url == "" {
+			continue
+		}
+		n, err := discover.ParseNode(url)
+		if err != nil {
+			logger.Errorf("Bootstrap URL %s: %v\n", url, err)
+			continue
+		}
+		ns = append(ns, n)
+	}
+	return ns
+}
+
+func (cfg *Config) nodeKey() (*ecdsa.PrivateKey, error) {
+	// use explicit key from command line args if set
+	if cfg.NodeKey != nil {
+		return cfg.NodeKey, nil
+	}
+	// use persistent key if present
+	keyfile := path.Join(cfg.DataDir, "nodekey")
+	key, err := crypto.LoadECDSA(keyfile)
+	if err == nil {
+		return key, nil
+	}
+	// no persistent key, generate and store a new one
+	if key, err = crypto.GenerateKey(); err != nil {
+		return nil, fmt.Errorf("could not generate server key: %v", err)
+	}
+	if err := ioutil.WriteFile(keyfile, crypto.FromECDSA(key), 0600); err != nil {
+		logger.Errorln("could not persist nodekey: ", err)
+	}
+	return key, nil
+}
 
 type Ethereum struct {
 	// Channel for shutting down the ethereum
@@ -65,23 +127,22 @@ type Ethereum struct {
 	eventMux *event.TypeMux
 	txSub    event.Subscription
 	blockSub event.Subscription
+	miner    *miner.Miner
 
-	RpcServer  *rpc.JsonRpcServer
+	RpcServer  rpc.RpcServer
+	WsServer   rpc.RpcServer
 	keyManager *crypto.KeyManager
+	dpa        *bzz.DPA
 
-	clientIdentity p2p.ClientIdentity
-	logger         ethlogger.LogSystem
-
-	synclock  sync.Mutex
-	syncGroup sync.WaitGroup
+	logger ethlogger.LogSystem
 
 	Mining bool
 }
 
 func New(config *Config) (*Ethereum, error) {
 	// Boostrap database
-	logger := ethlogger.New(config.DataDir, config.LogFile, config.LogLevel)
-	db, err := ethdb.NewLDBDatabase("blockchain")
+	logger := ethlogger.New(config.DataDir, config.LogFile, config.LogLevel, config.LogFormat)
+	db, err := ethdb.NewLDBDatabase(config.DataDir + "/blockchain")
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +151,7 @@ func New(config *Config) (*Ethereum, error) {
 	d, _ := db.Get([]byte("ProtocolVersion"))
 	protov := ethutil.NewValue(d).Uint()
 	if protov != ProtocolVersion && protov != 0 {
-		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, ProtocolVersion, ethutil.Config.ExecPath+"/database")
+		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, ProtocolVersion, config.DataDir+"/blockchain")
 	}
 
 	// Create new keymanager
@@ -106,21 +167,17 @@ func New(config *Config) (*Ethereum, error) {
 	// Initialise the keyring
 	keyManager.Init(config.KeyRing, 0, false)
 
-	// Create a new client id for this instance. This will help identifying the node on the network
-	clientId := p2p.NewSimpleClientIdentity(config.Name, config.Version, config.Identifier, keyManager.PublicKey())
-
 	saveProtocolVersion(db)
 	//ethutil.Config.Db = db
 
 	eth := &Ethereum{
-		shutdownChan:   make(chan bool),
-		quit:           make(chan bool),
-		db:             db,
-		keyManager:     keyManager,
-		clientIdentity: clientId,
-		blacklist:      p2p.NewBlacklist(),
-		eventMux:       &event.TypeMux{},
-		logger:         logger,
+		shutdownChan: make(chan bool),
+		quit:         make(chan bool),
+		db:           db,
+		keyManager:   keyManager,
+		blacklist:    p2p.NewBlacklist(),
+		eventMux:     &event.TypeMux{},
+		logger:       logger,
 	}
 
 	eth.chainManager = core.NewChainManager(db, eth.EventMux())
@@ -128,29 +185,49 @@ func New(config *Config) (*Ethereum, error) {
 	eth.blockProcessor = core.NewBlockProcessor(db, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
 	eth.whisper = whisper.New()
+	eth.miner = miner.New(keyManager.Address(), eth, config.MinerThreads)
 
 	hasBlock := eth.chainManager.HasBlock
 	insertChain := eth.chainManager.InsertChain
 	eth.blockPool = NewBlockPool(hasBlock, insertChain, ezp.Verify)
 
-	ethProto := EthProtocol(eth.txPool, eth.chainManager, eth.blockPool)
-	protocols := []p2p.Protocol{ethProto, eth.whisper.Protocol()}
-
-	nat, err := p2p.ParseNAT(config.NATType, config.PMPGateway)
+	netprv, err := config.nodeKey()
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(nat)
-
-	eth.net = &p2p.Server{
-		Identity:  clientId,
-		MaxPeers:  config.MaxPeers,
-		Protocols: protocols,
-		Blacklist: eth.blacklist,
-		NAT:       p2p.UPNP(),
-		NoDial:    !config.Dial,
+	ethProto := EthProtocol(eth.txPool, eth.chainManager, eth.blockPool)
+	netStore := bzz.NewNetStore(config.DataDir + "/bzz")
+	protocols := []p2p.Protocol{
+		ethProto,
+		bzz.BzzProtocol(netStore),
+	}
+	if config.Shh {
+		protocols = append(protocols, eth.whisper.Protocol())
+	}
+	// TODO: if config.Bzz ...
+	chunker := &bzz.TreeChunker{}
+	chunker.Init()
+	eth.dpa = &bzz.DPA{
+		Chunker:    chunker,
+		ChunkStore: netStore,
 	}
 
+	if netprv == nil {
+		if netprv, err = crypto.GenerateKey(); err != nil {
+			return nil, fmt.Errorf("could not generate server key: %v", err)
+		}
+	}
+
+	eth.net = &p2p.Server{
+		PrivateKey:     netprv,
+		Name:           config.Name,
+		MaxPeers:       config.MaxPeers,
+		Protocols:      protocols,
+		Blacklist:      eth.blacklist,
+		NAT:            config.NAT,
+		NoDial:         !config.Dial,
+		BootstrapNodes: config.parseBootNodes(),
+	}
 	if len(config.Port) > 0 {
 		eth.net.ListenAddr = ":" + config.Port
 	}
@@ -158,68 +235,30 @@ func New(config *Config) (*Ethereum, error) {
 	return eth, nil
 }
 
-func (s *Ethereum) KeyManager() *crypto.KeyManager {
-	return s.keyManager
-}
-
-func (s *Ethereum) Logger() ethlogger.LogSystem {
-	return s.logger
-}
-
-func (s *Ethereum) ClientIdentity() p2p.ClientIdentity {
-	return s.clientIdentity
-}
-
-func (s *Ethereum) ChainManager() *core.ChainManager {
-	return s.chainManager
-}
-
-func (s *Ethereum) BlockProcessor() *core.BlockProcessor {
-	return s.blockProcessor
-}
-
-func (s *Ethereum) TxPool() *core.TxPool {
-	return s.txPool
-}
-
-func (s *Ethereum) BlockPool() *BlockPool {
-	return s.blockPool
-}
-
-func (s *Ethereum) Whisper() *whisper.Whisper {
-	return s.whisper
-}
-
-func (s *Ethereum) EventMux() *event.TypeMux {
-	return s.eventMux
-}
-func (self *Ethereum) Db() ethutil.Database {
-	return self.db
-}
-
-func (s *Ethereum) IsMining() bool {
-	return s.Mining
-}
-
-func (s *Ethereum) IsListening() bool {
-	// XXX TODO
-	return false
-}
-
-func (s *Ethereum) PeerCount() int {
-	return s.net.PeerCount()
-}
-
-func (s *Ethereum) Peers() []*p2p.Peer {
-	return s.net.Peers()
-}
-
-func (s *Ethereum) MaxPeers() int {
-	return s.net.MaxPeers
-}
+func (s *Ethereum) KeyManager() *crypto.KeyManager       { return s.keyManager }
+func (s *Ethereum) Logger() ethlogger.LogSystem          { return s.logger }
+func (s *Ethereum) Name() string                         { return s.net.Name }
+func (s *Ethereum) ChainManager() *core.ChainManager     { return s.chainManager }
+func (s *Ethereum) BlockProcessor() *core.BlockProcessor { return s.blockProcessor }
+func (s *Ethereum) TxPool() *core.TxPool                 { return s.txPool }
+func (s *Ethereum) BlockPool() *BlockPool                { return s.blockPool }
+func (s *Ethereum) Whisper() *whisper.Whisper            { return s.whisper }
+func (s *Ethereum) EventMux() *event.TypeMux             { return s.eventMux }
+func (s *Ethereum) Db() ethutil.Database                 { return s.db }
+func (s *Ethereum) Miner() *miner.Miner                  { return s.miner }
+func (s *Ethereum) IsListening() bool                    { return true } // Always listening
+func (s *Ethereum) PeerCount() int                       { return s.net.PeerCount() }
+func (s *Ethereum) Peers() []*p2p.Peer                   { return s.net.Peers() }
+func (s *Ethereum) MaxPeers() int                        { return s.net.MaxPeers }
+func (s *Ethereum) Coinbase() []byte                     { return nil } // TODO
 
 // Start the ethereum
-func (s *Ethereum) Start(seed bool) error {
+func (s *Ethereum) Start(p string, pull string) error {
+	jsonlogger.LogJson(&ethlogger.LogStarting{
+		ClientString:    s.net.Name,
+		ProtocolVersion: ProtocolVersion,
+	})
+
 	err := s.net.Start()
 	if err != nil {
 		return err
@@ -233,6 +272,9 @@ func (s *Ethereum) Start(seed bool) error {
 		s.whisper.Start()
 	}
 
+	s.dpa.Start()
+	bzz.StartHttpServer(s.dpa)
+
 	// broadcast transactions
 	s.txSub = s.eventMux.Subscribe(core.TxPreEvent{})
 	go s.txBroadcastLoop()
@@ -241,26 +283,46 @@ func (s *Ethereum) Start(seed bool) error {
 	s.blockSub = s.eventMux.Subscribe(core.NewMinedBlockEvent{})
 	go s.blockBroadcastLoop()
 
-	// TODO: read peers here
-	if seed {
-		logger.Infof("Connect to seed node %v", seedNodeAddress)
-		if err := s.SuggestPeer(seedNodeAddress); err != nil {
-			return err
+	if len(p) > 0 {
+		for _, peer := range strings.Split(p, ",") {
+			if err := s.SuggestPeer(peer); err != nil {
+				return err
+			}
 		}
+	}
+
+	if len(pull) > 0 {
+		go func() {
+			time.Sleep(30 * time.Second)
+			key := ethutil.Hex2Bytes(pull)
+			reader := s.dpa.Retrieve(key)
+			logger.Debugf("retrieved reader for %064x", key)
+			b := make([]byte, 0x1000)
+			var length int64
+			for {
+				n, err := reader.Read(b)
+				if err != nil {
+					if err != io.EOF {
+						logger.Debugf("read %v bytes. read error for %064x: %v", n, key, err)
+					}
+					return
+				}
+				length += int64(n)
+			}
+			logger.Debugf("read %v bytes from %064x: %v", length, key)
+		}()
 	}
 
 	logger.Infoln("Server started")
 	return nil
 }
 
-func (self *Ethereum) SuggestPeer(addr string) error {
-	netaddr, err := net.ResolveTCPAddr("tcp", addr)
+func (self *Ethereum) SuggestPeer(nodeURL string) error {
+	n, err := discover.ParseNode(nodeURL)
 	if err != nil {
-		logger.Errorf("couldn't resolve %s:", addr, err)
-		return err
+		return fmt.Errorf("invalid node URL: %v", err)
 	}
-
-	self.net.SuggestPeer(netaddr.IP, netaddr.Port, nil)
+	self.net.SuggestPeer(n)
 	return nil
 }
 
@@ -275,6 +337,9 @@ func (s *Ethereum) Stop() {
 
 	if s.RpcServer != nil {
 		s.RpcServer.Stop()
+	}
+	if s.WsServer != nil {
+		s.WsServer.Stop()
 	}
 	s.txPool.Stop()
 	s.eventMux.Stop()

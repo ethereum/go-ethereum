@@ -32,6 +32,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/tests/helper"
 )
@@ -50,8 +51,8 @@ func StateObjectFromAccount(db ethutil.Database, addr string, account Account) *
 	if ethutil.IsHex(account.Code) {
 		account.Code = account.Code[2:]
 	}
-	obj.Code = ethutil.Hex2Bytes(account.Code)
-	obj.Nonce = ethutil.Big(account.Nonce).Uint64()
+	obj.SetCode(ethutil.Hex2Bytes(account.Code))
+	obj.SetNonce(ethutil.Big(account.Nonce).Uint64())
 
 	return obj
 }
@@ -119,6 +120,8 @@ func RunVmTest(r io.Reader) (failed int) {
 				}
 			}
 		}
+
+		logger.Flush()
 	}
 
 	return

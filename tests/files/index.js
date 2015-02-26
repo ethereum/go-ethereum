@@ -1,36 +1,19 @@
-module.exports = {
-  blockgenesis: require('./BasicTests/blockgenesistest'),
-  genesishashes: require('./BasicTests/genesishashestest'),
-  hexencode: require('./BasicTests/hexencodetest'),
-  keyaddrtests: require('./BasicTests/keyaddrtest'),
-  rlptest: require('./BasicTests/rlptest'),
+var tests = module.exports = {};
+
+Object.defineProperties(tests, {
+  blockchainTests: {
+    get: require('require-all').bind(this, __dirname + '/BlockchainTests')
+  },
+  basicTests: {
+    get: require('require-all').bind(this, __dirname + '/BasicTests/')
+  },
   trieTests: {
-    trietest: require('./TrieTests/trietest'),
-    trietestnextprev: require('./TrieTests/trietestnextprev'),
-    trieanyorder: require('./TrieTests/trieanyorder')
+    get: require('require-all').bind(this, __dirname + '/TrieTests/')
   },
-  txtest: require('./BasicTests/txtest'),
-  StateTests: {
-    stExample: require('./StateTests/stExample.json'),
-    stInitCodeTest: require('./StateTests/stInitCodeTest.json'),
-    stLogTests: require('./StateTests/stLogTests.json'),
-    stPreCompiledContracts: require('./StateTests/stPreCompiledContracts'),
-    stRecursiveCreate: require('./StateTests/stRecursiveCreate'),
-    stRefundTest: require('./StateTests/stRefundTest'),
-    stSpecial: require('./StateTests/stSpecialTest'),
-    stSystemOperationsTest: require('./StateTests/stSystemOperationsTest'),
-    stTransactionTest: require('./StateTests/stTransactionTest')
+  stateTests: {
+    get: require('require-all').bind(this, __dirname + '/StateTests/')
   },
-  VMTests: {
-    vmRandom: require('./VMTests/RandomTests/randomTest'),
-    vmArithmeticTest: require('./VMTests/vmArithmeticTest'),
-    vmBitwiseLogicOperationTest: require('./VMTests/vmBitwiseLogicOperationTest'),
-    vmBlockInfoTest: require('./VMTests/vmBlockInfoTest'),
-    vmEnvironmentalInfoTest: require('./VMTests/vmEnvironmentalInfoTest'),
-    vmIOandFlowOperationsTest: require('./VMTests/vmIOandFlowOperationsTest'),
-    vmLogTest: require('./VMTests/vmLogTest'),
-    vmPushDupSwapTest: require('./VMTests/vmPushDupSwapTest'),
-    vmSha3Test: require('./VMTests/vmSha3Test'),
-    vmtests: require('./VMTests/vmtests')
+  vmTests: {
+    get: require('require-all').bind(this, __dirname + '/VMTests')
   }
-};
+});

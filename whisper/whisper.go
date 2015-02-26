@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/obscuren/ecies"
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -60,7 +60,7 @@ type Whisper struct {
 
 	quit chan struct{}
 
-	keys []*ecdsa.PrivateKey
+	keys map[string]*ecdsa.PrivateKey
 }
 
 func New() *Whisper {
@@ -69,6 +69,7 @@ func New() *Whisper {
 		filters:  filter.New(),
 		expiry:   make(map[uint32]*set.SetNonTS),
 		quit:     make(chan struct{}),
+		keys:     make(map[string]*ecdsa.PrivateKey),
 	}
 	whisper.filters.Start()
 
@@ -101,29 +102,33 @@ func (self *Whisper) NewIdentity() *ecdsa.PrivateKey {
 	if err != nil {
 		panic(err)
 	}
-	self.keys = append(self.keys, key)
+
+	self.keys[string(crypto.FromECDSAPub(&key.PublicKey))] = key
 
 	return key
 }
 
-func (self *Whisper) HasIdentity(key *ecdsa.PrivateKey) bool {
-	for _, key := range self.keys {
-		if key.D.Cmp(key.D) == 0 {
-			return true
-		}
-	}
-	return false
+func (self *Whisper) HasIdentity(key *ecdsa.PublicKey) bool {
+	return self.keys[string(crypto.FromECDSAPub(key))] != nil
+}
+
+func (self *Whisper) GetIdentity(key *ecdsa.PublicKey) *ecdsa.PrivateKey {
+	return self.keys[string(crypto.FromECDSAPub(key))]
 }
 
 func (self *Whisper) Watch(opts Filter) int {
 	return self.filters.Install(filter.Generic{
-		Str1: string(crypto.FromECDSA(opts.To)),
+		Str1: string(crypto.FromECDSAPub(opts.To)),
 		Str2: string(crypto.FromECDSAPub(opts.From)),
 		Data: bytesToMap(opts.Topics),
 		Fn: func(data interface{}) {
 			opts.Fn(data.(*Message))
 		},
 	})
+}
+
+func (self *Whisper) Unwatch(id int) {
+	self.filters.Uninstall(id)
 }
 
 func (self *Whisper) Messages(id int) (messages []*Message) {
@@ -196,7 +201,7 @@ func (self *Whisper) add(envelope *Envelope) error {
 		go self.postEvent(envelope)
 	}
 
-	wlogger.DebugDetailln("added whisper message")
+	wlogger.DebugDetailf("added whisper envelope %x\n", envelope)
 
 	return nil
 }
@@ -255,6 +260,8 @@ func (self *Whisper) postEvent(envelope *Envelope) {
 func (self *Whisper) open(envelope *Envelope) (*Message, *ecdsa.PrivateKey) {
 	for _, key := range self.keys {
 		if message, err := envelope.Open(key); err == nil || (err != nil && err == ecies.ErrInvalidPublicKey) {
+			message.To = &key.PublicKey
+
 			return message, key
 		}
 	}
@@ -268,7 +275,7 @@ func (self *Whisper) Protocol() p2p.Protocol {
 
 func createFilter(message *Message, topics [][]byte, key *ecdsa.PrivateKey) filter.Filter {
 	return filter.Generic{
-		Str1: string(crypto.FromECDSA(key)), Str2: string(crypto.FromECDSAPub(message.Recover())),
+		Str1: string(crypto.FromECDSAPub(&key.PublicKey)), Str2: string(crypto.FromECDSAPub(message.Recover())),
 		Data: bytesToMap(topics),
 	}
 }

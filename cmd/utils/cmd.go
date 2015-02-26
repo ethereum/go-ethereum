@@ -38,7 +38,8 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
+	rpchttp "github.com/ethereum/go-ethereum/rpc/http"
+	rpcws "github.com/ethereum/go-ethereum/rpc/ws"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
 )
@@ -120,13 +121,12 @@ func exit(err error) {
 	os.Exit(status)
 }
 
-func StartEthereum(ethereum *eth.Ethereum, UseSeed bool) {
-	clilogger.Infof("Starting %s", ethereum.ClientIdentity())
-	err := ethereum.Start(UseSeed)
+func StartEthereum(ethereum *eth.Ethereum, Peers string, Pull string) {
+	clilogger.Infof("Starting %s", ethereum.Name())
+	err := ethereum.Start(Peers, Pull)
 	if err != nil {
 		exit(err)
 	}
-
 	RegisterInterrupt(func(sig os.Signal) {
 		ethereum.Stop()
 		logger.Flush()
@@ -192,11 +192,23 @@ func KeyTasks(keyManager *crypto.KeyManager, KeyRing string, GenAddr bool, Secre
 
 func StartRpc(ethereum *eth.Ethereum, RpcPort int) {
 	var err error
-	ethereum.RpcServer, err = rpc.NewJsonRpcServer(xeth.NewJSXEth(ethereum), RpcPort)
+	ethereum.RpcServer, err = rpchttp.NewRpcHttpServer(xeth.New(ethereum), RpcPort)
 	if err != nil {
 		clilogger.Errorf("Could not start RPC interface (port %v): %v", RpcPort, err)
 	} else {
 		go ethereum.RpcServer.Start()
+	}
+}
+
+func StartWebSockets(eth *eth.Ethereum, wsPort int) {
+	clilogger.Infoln("Starting WebSockets")
+
+	var err error
+	eth.WsServer, err = rpcws.NewWebSocketServer(xeth.New(eth), wsPort)
+	if err != nil {
+		clilogger.Errorf("Could not start RPC interface (port %v): %v", wsPort, err)
+	} else {
+		go eth.WsServer.Start()
 	}
 }
 
@@ -214,7 +226,7 @@ func StartMining(ethereum *eth.Ethereum) bool {
 		go func() {
 			clilogger.Infoln("Start mining")
 			if gminer == nil {
-				gminer = miner.New(addr, ethereum)
+				gminer = miner.New(addr, ethereum, 4)
 			}
 			gminer.Start()
 		}()
@@ -261,7 +273,7 @@ func BlockDo(ethereum *eth.Ethereum, hash []byte) error {
 	parent := ethereum.ChainManager().GetBlock(block.ParentHash())
 
 	statedb := state.New(parent.Root(), ethereum.Db())
-	_, err := ethereum.BlockProcessor().TransitionState(statedb, parent, block)
+	_, err := ethereum.BlockProcessor().TransitionState(statedb, parent, block, true)
 	if err != nil {
 		return err
 	}

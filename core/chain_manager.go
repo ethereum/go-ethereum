@@ -16,6 +16,11 @@ import (
 
 var chainlogger = logger.NewLogger("CHAIN")
 
+type ChainEvent struct {
+	Block *types.Block
+	Td    *big.Int
+}
+
 type StateQuery interface {
 	GetAccount(addr []byte) *state.StateObject
 }
@@ -23,12 +28,11 @@ type StateQuery interface {
 func CalcDifficulty(block, parent *types.Block) *big.Int {
 	diff := new(big.Int)
 
-	bh, ph := block.Header(), parent.Header()
-	adjust := new(big.Int).Rsh(ph.Difficulty, 10)
-	if bh.Time >= ph.Time+13 {
-		diff.Sub(ph.Difficulty, adjust)
+	adjust := new(big.Int).Rsh(parent.Difficulty(), 10)
+	if block.Time() >= parent.Time()+8 {
+		diff.Sub(parent.Difficulty(), adjust)
 	} else {
-		diff.Add(ph.Difficulty, adjust)
+		diff.Add(parent.Difficulty(), adjust)
 	}
 
 	return diff
@@ -74,13 +78,23 @@ type ChainManager struct {
 	eventMux     *event.TypeMux
 	genesisBlock *types.Block
 	// Last known total difficulty
-	mu              sync.RWMutex
-	td              *big.Int
-	lastBlockNumber uint64
-	currentBlock    *types.Block
-	lastBlockHash   []byte
+	mu            sync.RWMutex
+	tsmu          sync.RWMutex
+	td            *big.Int
+	currentBlock  *types.Block
+	lastBlockHash []byte
 
 	transState *state.StateDB
+	txState    *state.StateDB
+}
+
+func NewChainManager(db ethutil.Database, mux *event.TypeMux) *ChainManager {
+	bc := &ChainManager{db: db, genesisBlock: GenesisBlock(db), eventMux: mux}
+	bc.setLastBlock()
+	bc.transState = bc.State().Copy()
+	bc.txState = bc.State().Copy()
+
+	return bc
 }
 
 func (self *ChainManager) Td() *big.Int {
@@ -88,13 +102,6 @@ func (self *ChainManager) Td() *big.Int {
 	defer self.mu.RUnlock()
 
 	return self.td
-}
-
-func (self *ChainManager) LastBlockNumber() uint64 {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-
-	return self.lastBlockNumber
 }
 
 func (self *ChainManager) LastBlockHash() []byte {
@@ -109,14 +116,6 @@ func (self *ChainManager) CurrentBlock() *types.Block {
 	defer self.mu.RUnlock()
 
 	return self.currentBlock
-}
-
-func NewChainManager(db ethutil.Database, mux *event.TypeMux) *ChainManager {
-	bc := &ChainManager{db: db, genesisBlock: GenesisBlock(db), eventMux: mux}
-	bc.setLastBlock()
-	bc.transState = bc.State().Copy()
-
-	return bc
 }
 
 func (self *ChainManager) Status() (td *big.Int, currentBlock []byte, genesisBlock []byte) {
@@ -135,7 +134,27 @@ func (self *ChainManager) State() *state.StateDB {
 }
 
 func (self *ChainManager) TransState() *state.StateDB {
+	self.tsmu.RLock()
+	defer self.tsmu.RUnlock()
+
 	return self.transState
+}
+
+func (self *ChainManager) TxState() *state.StateDB {
+	self.tsmu.RLock()
+	defer self.tsmu.RUnlock()
+
+	return self.txState
+}
+
+func (self *ChainManager) setTxState(state *state.StateDB) {
+	self.tsmu.Lock()
+	defer self.tsmu.Unlock()
+	self.txState = state
+}
+
+func (self *ChainManager) setTransState(statedb *state.StateDB) {
+	self.transState = statedb
 }
 
 func (bc *ChainManager) setLastBlock() {
@@ -145,7 +164,6 @@ func (bc *ChainManager) setLastBlock() {
 		rlp.Decode(bytes.NewReader(data), &block)
 		bc.currentBlock = &block
 		bc.lastBlockHash = block.Hash()
-		bc.lastBlockNumber = block.Header().Number.Uint64()
 
 		// Set the last know difficulty (might be 0x0 as initial value, Genesis)
 		bc.td = ethutil.BigD(bc.db.LastKnownTD())
@@ -153,7 +171,7 @@ func (bc *ChainManager) setLastBlock() {
 		bc.Reset()
 	}
 
-	chainlogger.Infof("Last block (#%d) %x TD=%v\n", bc.lastBlockNumber, bc.currentBlock.Hash(), bc.td)
+	chainlogger.Infof("Last block (#%v) %x TD=%v\n", bc.currentBlock.Number(), bc.currentBlock.Hash(), bc.td)
 }
 
 // Block creation & chain handling
@@ -164,7 +182,7 @@ func (bc *ChainManager) NewBlock(coinbase []byte) *types.Block {
 	var root []byte
 	parentHash := ZeroHash256
 
-	if bc.CurrentBlock != nil {
+	if bc.currentBlock != nil {
 		root = bc.currentBlock.Header().Root
 		parentHash = bc.lastBlockHash
 	}
@@ -176,6 +194,9 @@ func (bc *ChainManager) NewBlock(coinbase []byte) *types.Block {
 		ethutil.BigPow(2, 32),
 		nil,
 		"")
+	block.SetUncles(nil)
+	block.SetTransactions(nil)
+	block.SetReceipts(nil)
 
 	parent := bc.currentBlock
 	if parent != nil {
@@ -227,8 +248,6 @@ func (bc *ChainManager) insert(block *types.Block) {
 }
 
 func (bc *ChainManager) write(block *types.Block) {
-	bc.writeBlockInfo(block)
-
 	encodedBlock := ethutil.Encode(block.RlpDataForStorage())
 	bc.db.Put(block.Hash(), encodedBlock)
 }
@@ -252,7 +271,13 @@ func (self *ChainManager) GetBlockHashesFromHash(hash []byte, max uint64) (chain
 
 	// XXX Could be optimised by using a different database which only holds hashes (i.e., linked list)
 	for i := uint64(0); i < max; i++ {
-		block = self.GetBlock(block.Header().ParentHash)
+		parentHash := block.Header().ParentHash
+		block = self.GetBlock(parentHash)
+		if block == nil {
+			chainlogger.Infof("GetBlockHashesFromHash Parent UNKNOWN %x\n", parentHash)
+			break
+		}
+
 		chain = append(chain, block.Hash())
 		if block.Header().Number.Cmp(ethutil.Big0) <= 0 {
 			break
@@ -341,11 +366,6 @@ func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
 	return td, nil
 }
 
-// Unexported method for writing extra non-essential block info to the db
-func (bc *ChainManager) writeBlockInfo(block *types.Block) {
-	bc.lastBlockNumber++
-}
-
 func (bc *ChainManager) Stop() {
 	if bc.CurrentBlock != nil {
 		chainlogger.Infoln("Stopped")
@@ -353,8 +373,13 @@ func (bc *ChainManager) Stop() {
 }
 
 func (self *ChainManager) InsertChain(chain types.Blocks) error {
+	self.tsmu.Lock()
+	defer self.tsmu.Unlock()
+
 	for _, block := range chain {
-		td, messages, err := self.processor.Process(block)
+		// Call in to the block processor and check for errors. It's likely that if one block fails
+		// all others will fail too (unless a known block is returned).
+		td, err := self.processor.Process(block)
 		if err != nil {
 			if IsKnownBlockErr(err) {
 				continue
@@ -368,25 +393,38 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 		}
 		block.Td = td
 
+		var canonical, split bool
 		self.mu.Lock()
 		{
+			// Write block to database. Eventually we'll have to improve on this and throw away blocks that are
+			// not in the canonical chain.
 			self.write(block)
 			cblock := self.currentBlock
+			// Compare the TD of the last known block in the canonical chain to make sure it's greater.
+			// At this point it's possible that a different chain (fork) becomes the new canonical chain.
 			if td.Cmp(self.td) > 0 {
 				if block.Header().Number.Cmp(new(big.Int).Add(cblock.Header().Number, ethutil.Big1)) < 0 {
 					chainlogger.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, block.Hash()[:4], td, cblock.Header().Number, cblock.Hash()[:4], self.td)
+					split = true
 				}
 
 				self.setTotalDifficulty(td)
 				self.insert(block)
-				self.transState = state.New(cblock.Root(), self.db) //state.New(cblock.Trie().Copy())
-			}
 
+				canonical = true
+			}
 		}
 		self.mu.Unlock()
 
-		self.eventMux.Post(NewBlockEvent{block})
-		self.eventMux.Post(messages)
+		if canonical {
+			self.setTransState(state.New(block.Root(), self.db))
+			self.eventMux.Post(ChainEvent{block, td})
+		}
+
+		if split {
+			self.setTxState(state.New(block.Root(), self.db))
+			self.eventMux.Post(ChainSplitEvent{block})
+		}
 	}
 
 	return nil

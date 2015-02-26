@@ -1,0 +1,4 @@
+extern mul2: [double]
+  
+x = create("mul2.se")
+return(x.double(5))

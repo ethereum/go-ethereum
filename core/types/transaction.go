@@ -7,9 +7,9 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/obscuren/secp256k1-go"
 )
 
 func IsContractAddr(addr []byte) bool {

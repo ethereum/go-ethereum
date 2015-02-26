@@ -1,7 +1,9 @@
 package core
 
 import (
+	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -9,7 +11,11 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 )
 
-var txplogger = logger.NewLogger("TXP")
+var (
+	txplogger = logger.NewLogger("TXP")
+
+	ErrInvalidSender = errors.New("Invalid sender")
+)
 
 const txPoolQueueSize = 50
 
@@ -30,6 +36,7 @@ type TxProcessor interface {
 // guarantee a non blocking pool we use a queue channel which can be
 // independently read without needing access to the actual pool.
 type TxPool struct {
+	mu sync.RWMutex
 	// Queueing channel for reading and writing incoming
 	// transactions to
 	queueChan chan *types.Transaction
@@ -60,22 +67,23 @@ func (pool *TxPool) ValidateTransaction(tx *types.Transaction) error {
 		return fmt.Errorf("Invalid recipient. len = %d", len(tx.To()))
 	}
 
+	// Validate curve param
 	v, _, _ := tx.Curve()
 	if v > 28 || v < 27 {
 		return fmt.Errorf("tx.v != (28 || 27) => %v", v)
+	}
+
+	// Validate sender address
+	senderAddr := tx.From()
+	if senderAddr == nil || len(senderAddr) != 20 {
+		return ErrInvalidSender
 	}
 
 	/* XXX this kind of validation needs to happen elsewhere in the gui when sending txs.
 	   Other clients should do their own validation. Value transfer could throw error
 	   but doesn't necessarily invalidate the tx. Gas can still be payed for and miner
 	   can still be rewarded for their inclusion and processing.
-	// Get the sender
-	senderAddr := tx.From()
-	if senderAddr == nil {
-		return fmt.Errorf("invalid sender")
-	}
 	sender := pool.stateQuery.GetAccount(senderAddr)
-
 	totAmount := new(big.Int).Set(tx.Value())
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.
@@ -91,7 +99,7 @@ func (self *TxPool) addTx(tx *types.Transaction) {
 	self.txs[string(tx.Hash())] = tx
 }
 
-func (self *TxPool) Add(tx *types.Transaction) error {
+func (self *TxPool) add(tx *types.Transaction) error {
 	if self.txs[string(tx.Hash())] != nil {
 		return fmt.Errorf("Known transaction (%x)", tx.Hash()[0:4])
 	}
@@ -122,17 +130,28 @@ func (self *TxPool) Size() int {
 	return len(self.txs)
 }
 
+func (self *TxPool) Add(tx *types.Transaction) error {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	return self.add(tx)
+}
 func (self *TxPool) AddTransactions(txs []*types.Transaction) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
 	for _, tx := range txs {
-		if err := self.Add(tx); err != nil {
-			txplogger.Infoln(err)
+		if err := self.add(tx); err != nil {
+			txplogger.Debugln(err)
 		} else {
-			txplogger.Infof("tx %x\n", tx.Hash()[0:4])
+			txplogger.Debugf("tx %x\n", tx.Hash()[0:4])
 		}
 	}
 }
 
 func (self *TxPool) GetTransactions() (txs types.Transactions) {
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+
 	txs = make(types.Transactions, self.Size())
 	i := 0
 	for _, tx := range self.txs {
@@ -144,30 +163,32 @@ func (self *TxPool) GetTransactions() (txs types.Transactions) {
 }
 
 func (pool *TxPool) RemoveInvalid(query StateQuery) {
+	pool.mu.Lock()
+
 	var removedTxs types.Transactions
 	for _, tx := range pool.txs {
 		sender := query.GetAccount(tx.From())
 		err := pool.ValidateTransaction(tx)
-		fmt.Println(err, sender.Nonce, tx.Nonce())
-		if err != nil || sender.Nonce >= tx.Nonce() {
+		if err != nil || sender.Nonce() >= tx.Nonce() {
 			removedTxs = append(removedTxs, tx)
 		}
 	}
+	pool.mu.Unlock()
 
 	pool.RemoveSet(removedTxs)
 }
 
 func (self *TxPool) RemoveSet(txs types.Transactions) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
 	for _, tx := range txs {
 		delete(self.txs, string(tx.Hash()))
 	}
 }
 
-func (pool *TxPool) Flush() []*types.Transaction {
-	txList := pool.GetTransactions()
+func (pool *TxPool) Flush() {
 	pool.txs = make(map[string]*types.Transaction)
-
-	return txList
 }
 
 func (pool *TxPool) Start() {
