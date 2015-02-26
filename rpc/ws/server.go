@@ -21,10 +21,10 @@ import (
 	"net"
 	"net/http"
 
-	"code.google.com/p/go.net/websocket"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/xeth"
+	"golang.org/x/net/websocket"
 )
 
 var wslogger = logger.NewLogger("RPC-WS")
@@ -99,7 +99,7 @@ func sockHandler(api *rpc.EthereumApi) websocket.Handler {
 
 			// reqParsed, reqerr := JSON.ParseRequestBody(conn.Request())
 			if err := websocket.JSON.Receive(conn, &reqParsed); err != nil {
-				jsonerr := &rpc.RpcErrorObject{-32700, rpc.ErrorParseRequest}
+				jsonerr := &rpc.RpcErrorObject{-32700, "Error: Could not parse request"}
 				JSON.Send(conn, &rpc.RpcErrorResponse{JsonRpc: jsonrpcver, ID: nil, Error: jsonerr})
 				continue
 			}

@@ -230,10 +230,11 @@ func (self *bzzProtocol) handle() error {
 
 func (self *bzzProtocol) handleStatus() (err error) {
 	// send precanned status message
+	sliceNodeID := self.peer.ID()
 	handshake := &statusMsgData{
 		Version:   uint64(Version),
 		ID:        "honey",
-		NodeID:    self.peer.OurPubkey(),
+		NodeID:    sliceNodeID[:],
 		NetworkId: uint64(NetworkId),
 		Caps:      []p2p.Cap{},
 	}

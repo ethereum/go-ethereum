@@ -6,7 +6,7 @@ import (
 	"github.com/obscuren/qml"
 )
 
-func NewFilterFromMap(object map[string]interface{}, eth core.EthManager) *core.Filter {
+func NewFilterFromMap(object map[string]interface{}, eth core.Backend) *core.Filter {
 	filter := ui.NewFilterFromMap(object, eth)
 
 	if object["topics"] != nil {

@@ -1,6 +1,7 @@
 package rpc
 
 import "encoding/json"
+
 import "github.com/ethereum/go-ethereum/core"
 
 type GetBlockArgs struct {
@@ -18,14 +19,7 @@ func (obj *GetBlockArgs) UnmarshalJSON(b []byte) (err error) {
 		obj.Hash = argstr
 		return
 	}
-	return NewErrorResponse(ErrorDecodeArgs)
-}
-
-func (obj *GetBlockArgs) requirements() error {
-	if obj.BlockNumber == 0 && obj.Hash == "" {
-		return NewErrorResponse("GetBlock requires either a block 'number' or a block 'hash' as argument")
-	}
-	return nil
+	return errDecodeArgs
 }
 
 type NewTxArgs struct {
@@ -37,22 +31,51 @@ type NewTxArgs struct {
 	Data     string `json:"data"`
 }
 
+func (obj *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
+	// Data can be either specified as "data" or "code" :-/
+	var ext struct {
+		From     string
+		To       string
+		Value    string
+		Gas      string
+		GasPrice string
+		Data     string
+		Code     string
+	}
+
+	if err = json.Unmarshal(b, &ext); err == nil {
+		if len(ext.Data) == 0 {
+			ext.Data = ext.Code
+		}
+		obj.From = ext.From
+		obj.To = ext.To
+		obj.Value = ext.Value
+		obj.Gas = ext.Gas
+		obj.GasPrice = ext.GasPrice
+		obj.Data = ext.Data
+
+		return
+	}
+
+	return errDecodeArgs
+}
+
 type PushTxArgs struct {
 	Tx string `json:"tx"`
 }
 
 func (obj *PushTxArgs) UnmarshalJSON(b []byte) (err error) {
 	arg0 := ""
-	if err = json.Unmarshal(b, arg0); err == nil {
+	if err = json.Unmarshal(b, &arg0); err == nil {
 		obj.Tx = arg0
 		return
 	}
-	return NewErrorResponse(ErrorDecodeArgs)
+	return errDecodeArgs
 }
 
 func (a *PushTxArgs) requirementsPushTx() error {
 	if a.Tx == "" {
-		return NewErrorResponse("PushTx requires a 'tx' as argument")
+		return NewErrorWithMessage(errArguments, "PushTx requires a 'tx' as argument")
 	}
 	return nil
 }
@@ -63,14 +86,14 @@ type GetStorageArgs struct {
 
 func (obj *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
 	if err = json.Unmarshal(b, &obj.Address); err != nil {
-		return NewErrorResponse(ErrorDecodeArgs)
+		return errDecodeArgs
 	}
 	return
 }
 
 func (a *GetStorageArgs) requirements() error {
 	if len(a.Address) == 0 {
-		return NewErrorResponse("GetStorageAt requires an 'address' value as argument")
+		return NewErrorWithMessage(errArguments, "GetStorageAt requires an 'address' value as argument")
 	}
 	return nil
 }
@@ -82,67 +105,42 @@ type GetStateArgs struct {
 
 func (obj *GetStateArgs) UnmarshalJSON(b []byte) (err error) {
 	arg0 := ""
-	if err = json.Unmarshal(b, arg0); err == nil {
+	if err = json.Unmarshal(b, &arg0); err == nil {
 		obj.Address = arg0
 		return
 	}
-	return NewErrorResponse(ErrorDecodeArgs)
+	return errDecodeArgs
 }
 
 func (a *GetStateArgs) requirements() error {
 	if a.Address == "" {
-		return NewErrorResponse("GetStorageAt requires an 'address' value as argument")
+		return NewErrorWithMessage(errArguments, "GetStorageAt requires an 'address' value as argument")
 	}
 	if a.Key == "" {
-		return NewErrorResponse("GetStorageAt requires an 'key' value as argument")
+		return NewErrorWithMessage(errArguments, "GetStorageAt requires an 'key' value as argument")
 	}
 	return nil
-}
-
-type GetStorageAtRes struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
 }
 
 type GetTxCountArgs struct {
 	Address string `json:"address"`
 }
 
-// type GetTxCountRes struct {
-//  Nonce int `json:"nonce"`
-// }
-
 func (obj *GetTxCountArgs) UnmarshalJSON(b []byte) (err error) {
 	arg0 := ""
-	if err = json.Unmarshal(b, arg0); err == nil {
+	if err = json.Unmarshal(b, &arg0); err == nil {
 		obj.Address = arg0
 		return
 	}
-	return NewErrorResponse("Could not determine JSON parameters")
+	return errDecodeArgs
 }
 
 func (a *GetTxCountArgs) requirements() error {
 	if a.Address == "" {
-		return NewErrorResponse("GetTxCountAt requires an 'address' value as argument")
+		return NewErrorWithMessage(errArguments, "GetTxCountAt requires an 'address' value as argument")
 	}
 	return nil
 }
-
-// type GetPeerCountRes struct {
-//  PeerCount int `json:"peerCount"`
-// }
-
-// type GetListeningRes struct {
-//  IsListening bool `json:"isListening"`
-// }
-
-// type GetCoinbaseRes struct {
-//  Coinbase string `json:"coinbase"`
-// }
-
-// type GetMiningRes struct {
-//  IsMining bool `json:"isMining"`
-// }
 
 type GetBalanceArgs struct {
 	Address string
@@ -154,19 +152,14 @@ func (obj *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
 		obj.Address = arg0
 		return
 	}
-	return NewErrorResponse("Could not determine JSON parameters")
+	return errDecodeArgs
 }
 
 func (a *GetBalanceArgs) requirements() error {
 	if a.Address == "" {
-		return NewErrorResponse("GetBalanceAt requires an 'address' value as argument")
+		return NewErrorWithMessage(errArguments, "GetBalanceAt requires an 'address' value as argument")
 	}
 	return nil
-}
-
-type BalanceRes struct {
-	Balance string `json:"balance"`
-	Address string `json:"address"`
 }
 
 type GetCodeAtArgs struct {
@@ -179,12 +172,12 @@ func (obj *GetCodeAtArgs) UnmarshalJSON(b []byte) (err error) {
 		obj.Address = arg0
 		return
 	}
-	return NewErrorResponse(ErrorDecodeArgs)
+	return errDecodeArgs
 }
 
 func (a *GetCodeAtArgs) requirements() error {
 	if a.Address == "" {
-		return NewErrorResponse("GetCodeAt requires an 'address' value as argument")
+		return NewErrorWithMessage(errArguments, "GetCodeAt requires an 'address' value as argument")
 	}
 	return nil
 }
@@ -195,7 +188,7 @@ type Sha3Args struct {
 
 func (obj *Sha3Args) UnmarshalJSON(b []byte) (err error) {
 	if err = json.Unmarshal(b, &obj.Data); err != nil {
-		return NewErrorResponse(ErrorDecodeArgs)
+		return errDecodeArgs
 	}
 	return
 }
@@ -203,7 +196,7 @@ func (obj *Sha3Args) UnmarshalJSON(b []byte) (err error) {
 type FilterOptions struct {
 	Earliest int64
 	Latest   int64
-	Address  string
+	Address  interface{}
 	Topic    []string
 	Skip     int
 	Max      int
@@ -211,9 +204,22 @@ type FilterOptions struct {
 
 func toFilterOptions(options *FilterOptions) core.FilterOptions {
 	var opts core.FilterOptions
+
+	// Convert optional address slice/string to byte slice
+	if str, ok := options.Address.(string); ok {
+		opts.Address = [][]byte{fromHex(str)}
+	} else if slice, ok := options.Address.([]interface{}); ok {
+		bslice := make([][]byte, len(slice))
+		for i, addr := range slice {
+			if saddr, ok := addr.(string); ok {
+				bslice[i] = fromHex(saddr)
+			}
+		}
+		opts.Address = bslice
+	}
+
 	opts.Earliest = options.Earliest
 	opts.Latest = options.Latest
-	opts.Address = fromHex(options.Address)
 	opts.Topics = make([][]byte, len(options.Topic))
 	for i, topic := range options.Topic {
 		opts.Topics[i] = fromHex(topic)
@@ -234,10 +240,10 @@ type DbArgs struct {
 
 func (a *DbArgs) requirements() error {
 	if len(a.Database) == 0 {
-		return NewErrorResponse("DbPutArgs requires an 'Database' value as argument")
+		return NewErrorWithMessage(errArguments, "DbPutArgs requires an 'Database' value as argument")
 	}
 	if len(a.Key) == 0 {
-		return NewErrorResponse("DbPutArgs requires an 'Key' value as argument")
+		return NewErrorWithMessage(errArguments, "DbPutArgs requires an 'Key' value as argument")
 	}
 	return nil
 }
@@ -246,7 +252,7 @@ type WhisperMessageArgs struct {
 	Payload  string
 	To       string
 	From     string
-	Topics   []string
+	Topic    []string
 	Priority uint32
 	Ttl      uint32
 }

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/pow"
@@ -24,7 +24,7 @@ type environment struct {
 	uncles       *set.Set
 }
 
-func env(block *types.Block, eth *eth.Ethereum) *environment {
+func env(block *types.Block, eth core.Backend) *environment {
 	state := state.New(block.Root(), eth.Db())
 	env := &environment{
 		totalUsedGas: new(big.Int),
@@ -55,13 +55,14 @@ type Agent interface {
 }
 
 type worker struct {
+	mu     sync.Mutex
 	agents []Agent
 	recv   chan Work
 	mux    *event.TypeMux
 	quit   chan struct{}
 	pow    pow.PoW
 
-	eth      *eth.Ethereum
+	eth      core.Backend
 	chain    *core.ChainManager
 	proc     *core.BlockProcessor
 	coinbase []byte
@@ -71,7 +72,7 @@ type worker struct {
 	mining bool
 }
 
-func newWorker(coinbase []byte, eth *eth.Ethereum) *worker {
+func newWorker(coinbase []byte, eth core.Backend) *worker {
 	return &worker{
 		eth:      eth,
 		mux:      eth.EventMux(),
@@ -108,16 +109,18 @@ func (self *worker) register(agent Agent) {
 }
 
 func (self *worker) update() {
-	events := self.mux.Subscribe(core.ChainEvent{}, core.TxPreEvent{})
+	events := self.mux.Subscribe(core.ChainEvent{}, core.NewMinedBlockEvent{})
 
 out:
 	for {
 		select {
 		case event := <-events.Chan():
-			switch event.(type) {
+			switch ev := event.(type) {
 			case core.ChainEvent:
-				self.commitNewWork()
-			case core.TxPreEvent:
+				if self.current.block != ev.Block {
+					self.commitNewWork()
+				}
+			case core.NewMinedBlockEvent:
 				self.commitNewWork()
 			}
 		case <-self.quit:
@@ -163,6 +166,9 @@ func (self *worker) push() {
 }
 
 func (self *worker) commitNewWork() {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
 	self.current = env(self.chain.NewBlock(self.coinbase), self.eth)
 	parent := self.chain.GetBlock(self.current.block.ParentHash())
 	self.current.coinbase.SetGasPool(core.CalcGasLimit(parent, self.current.block))
@@ -170,18 +176,19 @@ func (self *worker) commitNewWork() {
 	transactions := self.eth.TxPool().GetTransactions()
 	sort.Sort(types.TxByNonce{transactions})
 
+	minerlogger.Infof("committing new work with %d txs\n", len(transactions))
 	// Keep track of transactions which return errors so they can be removed
 	var remove types.Transactions
+gasLimit:
 	for _, tx := range transactions {
 		err := self.commitTransaction(tx)
 		switch {
 		case core.IsNonceErr(err):
+			// Remove invalid transactions
 			remove = append(remove, tx)
-		case core.IsGasLimitErr(err):
+		case state.IsGasLimitErr(err):
 			// Break on gas limit
-			break
-		default:
-			remove = append(remove, tx)
+			break gasLimit
 		}
 
 		if err != nil {
@@ -226,17 +233,12 @@ func (self *worker) commitUncle(uncle *types.Header) error {
 }
 
 func (self *worker) commitTransaction(tx *types.Transaction) error {
-	snapshot := self.current.state.Copy()
-	receipt, txGas, err := self.proc.ApplyTransaction(self.current.coinbase, self.current.state, self.current.block, tx, self.current.totalUsedGas, true)
-	if err != nil {
-		if core.IsNonceErr(err) || core.IsGasLimitErr(err) {
-			self.current.state.Set(snapshot)
-		}
-
+	//fmt.Printf("proc %x %v\n", tx.Hash()[:3], tx.Nonce())
+	receipt, _, err := self.proc.ApplyTransaction(self.current.coinbase, self.current.state, self.current.block, tx, self.current.totalUsedGas, true)
+	if err != nil && (core.IsNonceErr(err) || state.IsGasLimitErr(err)) {
 		return err
 	}
 
-	self.current.totalUsedGas.Add(self.current.totalUsedGas, txGas)
 	self.current.block.AddTransaction(tx)
 	self.current.block.AddReceipt(receipt)
 

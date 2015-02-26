@@ -3,7 +3,7 @@ import QtQuick.Controls 1.0;
 import QtQuick.Controls.Styles 1.0
 import QtQuick.Layouts 1.0;
 import QtWebEngine 1.0
-//import QtWebEngine.experimental 1.0
+import QtWebEngine.experimental 1.0
 import QtQuick.Window 2.0;
 
 
@@ -20,8 +20,6 @@ Rectangle {
 	property alias url: webview.url
 	property alias windowTitle: webview.title
 	property alias webView: webview
-
-
 
 	property var cleanPath: false
 	property var open: function(url) {
@@ -66,9 +64,6 @@ Rectangle {
 		}
 	}
 
-	Component.onCompleted: {
-	}
-
 	Item {
 		objectName: "root"
 		id: root
@@ -85,35 +80,21 @@ Rectangle {
 			property var domain: "ethereum-dapp-catalog.meteor.com"
 			url: protocol + domain
 
-			//navigationRequest: WebEngineView.IgnoreRequest
-		//	onLoadingChanged: {
-		//		if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
-		//			webview.runJavaScript(eth.readFile("bignumber.min.js"));
-		//			webview.runJavaScript(eth.readFile("ethereum.js/dist/ethereum.js"));
-		//		}
-		//	}
+			experimental.settings.javascriptCanAccessClipboard: true
 
-			//onNavigationRequested: {
-	            // detect URL scheme prefix, most likely an external link
-	            //var schemaRE = /^\w+:/;
-	            //if (schemaRE.test(request.url)) {
-	            //    request.action = WebView.AcceptRequest;
-	            //} else {
-	            //request.action = WebView.IgnoreRequest;
-	                // delegate request.url here
-	            //}
-        	//}
 
 			onJavaScriptConsoleMessage: {
 				console.log(sourceID + ":" + lineNumber + ":" + JSON.stringify(message));
 			}
 
-			onNavigationRequested: {            
+			onNavigationRequested: { 
+				// this checks if the domain of the requested link is the same as the catalog's
+				// If it is, it opens on the same window, if it's not it opens a new tab
+
 				var cleanTitle = request.url.toString()
 				var matches = cleanTitle.match(/^[a-z]*\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
 				var requestedDomain = matches && matches[1];
 
-               console.debug ("NavigationRequested: " + request.url + " navigationType=" + request.navigationType)
               
                 if(request.navigationType==0){
 
@@ -126,7 +107,15 @@ Rectangle {
                 	
                 }
             }
+			onLoadingChanged: {
+				if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
+                    webview.runJavaScript(eth.readFile("mist.js"));
+				}
+			}
 		}
+
+
+
 
 
 
@@ -137,6 +126,7 @@ Rectangle {
 			anchors {
 				left: root.left
 				right: root.right
+				top: root.top
 				bottom: root.bottom
 			}
 

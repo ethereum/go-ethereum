@@ -9,7 +9,6 @@ import Ethereum 1.0
 Rectangle {
 	id: root
 	property var title: "Wallet"
-	property var iconSource: "../facet.png"
 	property var menuItem
 
 	objectName: "walletView"
@@ -104,7 +103,7 @@ Rectangle {
 
 				ComboBox {
 					id: valueDenom
-					currentIndex: 6
+					currentIndex: 5
 					model: denomModel
 				}
 

@@ -41,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/ui/qt/qwhisper"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/obscuren/qml"
@@ -81,8 +80,6 @@ type Gui struct {
 	config  *ethutil.ConfigManager
 
 	plugins map[string]plugin
-
-	miner *miner.Miner
 }
 
 // Create GUI, but doesn't start it
@@ -134,6 +131,7 @@ func (gui *Gui) Start(assetPath string) {
 	context.SetVar("gui", gui)
 	context.SetVar("eth", gui.uiLib)
 	context.SetVar("shh", gui.whisper)
+	//clipboard.SetQMLClipboard(context)
 
 	win, err := gui.showWallet(context)
 	if err != nil {
@@ -389,16 +387,11 @@ func (gui *Gui) update() {
 	generalUpdateTicker := time.NewTicker(500 * time.Millisecond)
 	statsUpdateTicker := time.NewTicker(5 * time.Second)
 
-	state := gui.eth.ChainManager().TransState()
-
-	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetAccount(gui.address()).Balance())))
-
 	lastBlockLabel := gui.getObjectByName("lastBlockLabel")
 	miningLabel := gui.getObjectByName("miningLabel")
 
 	events := gui.eth.EventMux().Subscribe(
-		//eth.PeerListEvent{},
-		core.NewBlockEvent{},
+		core.ChainEvent{},
 		core.TxPreEvent{},
 		core.TxPostEvent{},
 	)
@@ -411,41 +404,13 @@ func (gui *Gui) update() {
 				return
 			}
 			switch ev := ev.(type) {
-			case core.NewBlockEvent:
+			case core.ChainEvent:
 				gui.processBlock(ev.Block, false)
-				//gui.setWalletValue(gui.eth.ChainManager().State().GetBalance(gui.address()), nil)
-				balance := ethutil.CurrencyToString(gui.eth.ChainManager().State().GetBalance(gui.address()))
-				gui.getObjectByName("balanceLabel").Set("text", fmt.Sprintf("%v", balance))
-
 			case core.TxPreEvent:
-				tx := ev.Tx
-
-				tstate := gui.eth.ChainManager().TransState()
-				cstate := gui.eth.ChainManager().State()
-
-				taccount := tstate.GetAccount(gui.address())
-				caccount := cstate.GetAccount(gui.address())
-				unconfirmedFunds := new(big.Int).Sub(taccount.Balance(), caccount.Balance())
-
-				gui.setWalletValue(taccount.Balance(), unconfirmedFunds)
-				gui.insertTransaction("pre", tx)
+				gui.insertTransaction("pre", ev.Tx)
 
 			case core.TxPostEvent:
-				tx := ev.Tx
-				object := state.GetAccount(gui.address())
-
-				if bytes.Compare(tx.From(), gui.address()) == 0 {
-					object.SubAmount(tx.Value())
-
-					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-				} else if bytes.Compare(tx.To(), gui.address()) == 0 {
-					object.AddAmount(tx.Value())
-
-					gui.txDb.Put(tx.Hash(), tx.RlpEncode())
-				}
-
-				gui.setWalletValue(object.Balance(), nil)
-				state.UpdateStateObject(object)
+				gui.getObjectByName("pendingTxView").Call("removeTx", xeth.NewTx(ev.Tx))
 			}
 
 		case <-peerUpdateTicker.C:
@@ -454,20 +419,7 @@ func (gui *Gui) update() {
 		case <-generalUpdateTicker.C:
 			statusText := "#" + gui.eth.ChainManager().CurrentBlock().Number().String()
 			lastBlockLabel.Set("text", statusText)
-			miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.miner.HashRate(), 10)+"/Khash")
-
-			/*
-				blockLength := gui.eth.BlockPool().BlocksProcessed
-				chainLength := gui.eth.BlockPool().ChainLength
-
-				var (
-					pct      float64 = 1.0 / float64(chainLength) * float64(blockLength)
-					dlWidget         = gui.win.Root().ObjectByName("downloadIndicator")
-					dlLabel          = gui.win.Root().ObjectByName("downloadLabel")
-				)
-				dlWidget.Set("value", pct)
-				dlLabel.Set("text", fmt.Sprintf("%d / %d", blockLength, chainLength))
-			*/
+			miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.Miner().HashRate(), 10)+"/Khash")
 
 		case <-statsUpdateTicker.C:
 			gui.setStatsPane()
@@ -501,7 +453,7 @@ NumGC:      %d
 	))
 }
 
-type qmlpeer struct{ Addr, NodeID, Caps string }
+type qmlpeer struct{ Addr, NodeID, Name, Caps string }
 
 type peersByID []*qmlpeer
 
@@ -516,6 +468,7 @@ func (gui *Gui) setPeerInfo() {
 		qpeers[i] = &qmlpeer{
 			NodeID: p.ID().String(),
 			Addr:   p.RemoteAddr().String(),
+			Name:   p.Name(),
 			Caps:   fmt.Sprint(p.Caps()),
 		}
 	}

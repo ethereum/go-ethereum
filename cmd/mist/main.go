@@ -36,7 +36,7 @@ import (
 
 const (
 	ClientIdentifier = "Mist"
-	Version          = "0.8.3"
+	Version          = "0.8.5"
 )
 
 var ethereum *eth.Ethereum
@@ -52,18 +52,20 @@ func run() error {
 	config := utils.InitConfig(VmType, ConfigFile, Datadir, "ETH")
 
 	ethereum, err := eth.New(&eth.Config{
-		Name:      p2p.MakeName(ClientIdentifier, Version),
-		KeyStore:  KeyStore,
-		DataDir:   Datadir,
-		LogFile:   LogFile,
-		LogLevel:  LogLevel,
-		MaxPeers:  MaxPeer,
-		Port:      OutboundPort,
-		NAT:       NAT,
-		BootNodes: BootNodes,
-		NodeKey:   NodeKey,
-		KeyRing:   KeyRing,
-		Dial:      true,
+		Name:         p2p.MakeName(ClientIdentifier, Version),
+		KeyStore:     KeyStore,
+		DataDir:      Datadir,
+		LogFile:      LogFile,
+		LogLevel:     LogLevel,
+		MaxPeers:     MaxPeer,
+		Port:         OutboundPort,
+		NAT:          NAT,
+		Shh:          true,
+		BootNodes:    BootNodes,
+		NodeKey:      NodeKey,
+		KeyRing:      KeyRing,
+		Dial:         true,
+		MinerThreads: MinerThreads,
 	})
 	if err != nil {
 		mainlogger.Fatalln(err)
