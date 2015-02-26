@@ -52,24 +52,41 @@ type EthereumApi struct {
 
 	db ethutil.Database
 
-	defaultBlockAge int
+	defaultBlockAge int64
 }
 
 func NewEthereumApi(eth *xeth.XEth) *EthereumApi {
 	db, _ := ethdb.NewLDBDatabase("dapps")
 	api := &EthereumApi{
-		eth:           eth,
-		mux:           eth.Backend().EventMux(),
-		quit:          make(chan struct{}),
-		filterManager: filter.NewFilterManager(eth.Backend().EventMux()),
-		logs:          make(map[int]*logFilter),
-		messages:      make(map[int]*whisperFilter),
-		db:            db,
+		eth:             eth,
+		mux:             eth.Backend().EventMux(),
+		quit:            make(chan struct{}),
+		filterManager:   filter.NewFilterManager(eth.Backend().EventMux()),
+		logs:            make(map[int]*logFilter),
+		messages:        make(map[int]*whisperFilter),
+		db:              db,
+		defaultBlockAge: -1,
 	}
 	go api.filterManager.Start()
 	go api.start()
 
 	return api
+}
+
+func (self *EthereumApi) setStateByBlockNumber(num int64) {
+	chain := self.xeth().Backend().ChainManager()
+	var block *types.Block
+
+	if self.defaultBlockAge < 0 {
+		num = chain.CurrentBlock().Number().Int64() + num + 1
+	}
+	block = chain.GetBlockByNumber(uint64(num))
+
+	if block != nil {
+		self.useState(state.New(block.Root(), self.xeth().Backend().Db()))
+	} else {
+		self.useState(chain.State())
+	}
 }
 
 func (self *EthereumApi) start() {
@@ -83,12 +100,7 @@ done:
 			switch ev.(type) {
 			case core.ChainEvent:
 				if self.defaultBlockAge < 0 {
-					chain := self.xeth().Backend().ChainManager()
-					block := chain.GetBlockByNumber(chain.CurrentBlock().Number().Uint64() - uint64(self.defaultBlockAge))
-					if block != nil {
-						statedb := state.New(block.Root(), self.db)
-						self.useState(statedb)
-					}
+					self.setStateByBlockNumber(self.defaultBlockAge)
 				}
 			}
 		case <-timer.C:
@@ -239,21 +251,6 @@ func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *interface{}) error {
 	return nil
 }
 
-/*
-func unlockAccount(server, account *Account) bool {
-	pwd, status := server.PasswordDialog()
-	switch status {
-	case Ok:
-		if !account.Unlock([]byte(pwd)) {
-			return unlockAccount(account)
-		}
-		return true
-	default:
-		return false
-	}
-}
-*/
-
 func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
 	if len(args.Gas) == 0 {
 		args.Gas = defaultGas.String()
@@ -378,8 +375,10 @@ func (p *EthereumApi) GetDefaultBlockAge(reply *interface{}) error {
 	return nil
 }
 
-func (p *EthereumApi) SetDefaultBlockAge(defaultBlockAge int, reply *interface{}) error {
+func (p *EthereumApi) SetDefaultBlockAge(defaultBlockAge int64, reply *interface{}) error {
 	p.defaultBlockAge = defaultBlockAge
+	p.setStateByBlockNumber(p.defaultBlockAge)
+
 	*reply = true
 	return nil
 }
@@ -531,7 +530,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err != nil {
 			return err
 		}
-		return p.SetDefaultBlockAge(args, reply)
+		return p.SetDefaultBlockAge(int64(args), reply)
 	case "eth_peerCount":
 		return p.GetPeerCount(reply)
 	case "eth_number":
@@ -720,7 +719,7 @@ func (self *EthereumApi) useState(statedb *state.StateDB) {
 	self.xethMu.Lock()
 	defer self.xethMu.Unlock()
 
-	self.eth = self.xeth().UseState(statedb)
+	self.eth = self.eth.UseState(statedb)
 }
 
 func t(f ui.Frontend) {
