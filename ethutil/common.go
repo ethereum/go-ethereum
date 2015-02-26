@@ -36,13 +36,14 @@ func DefaultAssetPath() string {
 		default:
 			assetPath = "."
 		}
-
-		// Check if the assetPath exists. If not, try the source directory
-		// This happens when binary is run from outside cmd/mist directory
-		if _, err := os.Stat(assetPath); os.IsNotExist(err) {
-			assetPath = path.Join(srcdir, "assets")
-		}
 	}
+
+	// Check if the assetPath exists. If not, try the source directory
+	// This happens when binary is run from outside cmd/mist directory
+	if _, err := os.Stat(assetPath); os.IsNotExist(err) {
+		assetPath = path.Join(srcdir, "assets")
+	}
+
 	return assetPath
 }
 
