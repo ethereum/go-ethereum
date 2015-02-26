@@ -251,16 +251,13 @@ func (self *StateTransition) RefundGas() {
 	coinbase, sender := self.Coinbase(), self.From()
 	// Return remaining gas
 	remaining := new(big.Int).Mul(self.gas, self.msg.GasPrice())
-	fmt.Println("REFUND:", remaining)
 	sender.AddBalance(remaining)
 
 	uhalf := new(big.Int).Div(self.GasUsed(), ethutil.Big2)
 	for addr, ref := range self.state.Refunds() {
 		refund := ethutil.BigMin(uhalf, ref)
 		self.gas.Add(self.gas, refund)
-		addToIt := refund.Mul(refund, self.msg.GasPrice())
-		fmt.Println("ADD TO IT", addToIt)
-		self.state.AddBalance([]byte(addr), addToIt)
+		self.state.AddBalance([]byte(addr), refund.Mul(refund, self.msg.GasPrice()))
 	}
 
 	coinbase.RefundGas(self.gas, self.msg.GasPrice())
