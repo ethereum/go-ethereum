@@ -3,7 +3,6 @@ package filter
 // TODO make use of the generic filtering system
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -75,7 +74,6 @@ out:
 		case event := <-events.Chan():
 			switch event := event.(type) {
 			case core.ChainEvent:
-				fmt.Println("filter start")
 				self.filterMu.RLock()
 				for _, filter := range self.filters {
 					if filter.BlockCallback != nil {
@@ -83,7 +81,6 @@ out:
 					}
 				}
 				self.filterMu.RUnlock()
-				fmt.Println("filter stop")
 
 			case core.PendingBlockEvent:
 				self.filterMu.RLock()

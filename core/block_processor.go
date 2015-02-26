@@ -48,9 +48,8 @@ type BlockProcessor struct {
 
 func NewBlockProcessor(db ethutil.Database, txpool *TxPool, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
 	sm := &BlockProcessor{
-		db:  db,
-		mem: make(map[string]*big.Int),
-		//Pow:      &ethash.Ethash{},
+		db:       db,
+		mem:      make(map[string]*big.Int),
 		Pow:      ezp.New(),
 		bc:       chainManager,
 		eventMux: eventMux,
@@ -62,7 +61,7 @@ func NewBlockProcessor(db ethutil.Database, txpool *TxPool, chainManager *ChainM
 
 func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block *types.Block, transientProcess bool) (receipts types.Receipts, err error) {
 	coinbase := statedb.GetOrNewStateObject(block.Header().Coinbase)
-	coinbase.SetGasPool(CalcGasLimit(parent, block))
+	coinbase.SetGasPool(block.Header().GasLimit)
 
 	// Process the transactions on to parent state
 	receipts, _, _, _, err = sm.ApplyTransactions(coinbase, statedb, block, block.Transactions(), transientProcess)
@@ -100,7 +99,8 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 	// Notify all subscribers
 	if !transientProcess {
 		go self.eventMux.Post(TxPostEvent{tx})
-		go self.eventMux.Post(statedb.Logs())
+		logs := statedb.Logs()
+		go self.eventMux.Post(logs)
 	}
 
 	return receipt, txGas, err
@@ -245,6 +245,11 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 	expd := CalcDifficulty(block, parent)
 	if expd.Cmp(block.Header().Difficulty) != 0 {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Header().Difficulty, expd)
+	}
+
+	expl := CalcGasLimit(parent, block)
+	if expl.Cmp(block.Header().GasLimit) != 0 {
+		return fmt.Errorf("GasLimit check failed for block %v, %v", block.Header().GasLimit, expl)
 	}
 
 	if block.Time() < parent.Time() {
