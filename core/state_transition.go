@@ -126,7 +126,7 @@ func (self *StateTransition) BuyGas() error {
 
 	self.AddGas(self.msg.Gas())
 	self.initialGas.Set(self.msg.Gas())
-	sender.SubAmount(MessageGasValue(self.msg))
+	sender.SubBalance(MessageGasValue(self.msg))
 
 	return nil
 }
@@ -138,8 +138,8 @@ func (self *StateTransition) preCheck() (err error) {
 	)
 
 	// Make sure this transaction's nonce is correct
-	if sender.Nonce != msg.Nonce() {
-		return NonceError(msg.Nonce(), sender.Nonce)
+	if sender.Nonce() != msg.Nonce() {
+		return NonceError(msg.Nonce(), sender.Nonce())
 	}
 
 	// Pre-pay gas / Buy gas of the coinbase account
@@ -166,7 +166,8 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 	defer self.RefundGas()
 
 	// Increment the nonce for the next transaction
-	sender.Nonce += 1
+	self.state.SetNonce(sender.Address(), sender.Nonce()+1)
+	//sender.Nonce += 1
 
 	// Transaction gas
 	if err = self.UseGas(vm.GasTx); err != nil {
@@ -241,7 +242,7 @@ func MakeContract(msg Message, state *state.StateDB) *state.StateObject {
 	addr := AddressFromMessage(msg)
 
 	contract := state.GetOrNewStateObject(addr)
-	contract.InitCode = msg.Data()
+	contract.SetInitCode(msg.Data())
 
 	return contract
 }
@@ -250,7 +251,7 @@ func (self *StateTransition) RefundGas() {
 	coinbase, sender := self.Coinbase(), self.From()
 	// Return remaining gas
 	remaining := new(big.Int).Mul(self.gas, self.msg.GasPrice())
-	sender.AddAmount(remaining)
+	sender.AddBalance(remaining)
 
 	uhalf := new(big.Int).Div(self.GasUsed(), ethutil.Big2)
 	for addr, ref := range self.state.Refunds() {

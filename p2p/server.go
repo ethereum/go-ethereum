@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"runtime"
 	"sync"
@@ -23,6 +22,7 @@ const (
 )
 
 var srvlog = logger.NewLogger("P2P Server")
+var srvjslog = logger.NewJsonLogger()
 
 // MakeName creates a node name that follows the ethereum convention
 // for such names. It adds the operation system name and Go runtime version
@@ -83,8 +83,10 @@ type Server struct {
 
 	// Hooks for testing. These are useful because we can inhibit
 	// the whole protocol stack.
-	handshakeFunc
+	setupFunc
 	newPeerHook
+
+	ourHandshake *protoHandshake
 
 	lock     sync.RWMutex
 	running  bool
@@ -99,7 +101,7 @@ type Server struct {
 	peerConnect chan *discover.Node
 }
 
-type handshakeFunc func(io.ReadWriter, *ecdsa.PrivateKey, *discover.Node) (discover.NodeID, []byte, error)
+type setupFunc func(net.Conn, *ecdsa.PrivateKey, *protoHandshake, *discover.Node) (*conn, error)
 type newPeerHook func(*Peer)
 
 // Peers returns all connected peers.
@@ -159,7 +161,7 @@ func (srv *Server) Start() (err error) {
 	}
 	srvlog.Infoln("Starting Server")
 
-	// initialize all the fields
+	// static fields
 	if srv.PrivateKey == nil {
 		return fmt.Errorf("Server.PrivateKey must be set to a non-nil key")
 	}
@@ -169,25 +171,32 @@ func (srv *Server) Start() (err error) {
 	srv.quit = make(chan struct{})
 	srv.peers = make(map[discover.NodeID]*Peer)
 	srv.peerConnect = make(chan *discover.Node)
-
-	if srv.handshakeFunc == nil {
-		srv.handshakeFunc = encHandshake
+	if srv.setupFunc == nil {
+		srv.setupFunc = setupConn
 	}
 	if srv.Blacklist == nil {
 		srv.Blacklist = NewBlacklist()
 	}
+
+	// node table
+	ntab, err := discover.ListenUDP(srv.PrivateKey, srv.ListenAddr, srv.NAT)
+	if err != nil {
+		return err
+	}
+	srv.ntab = ntab
+
+	// handshake
+	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: ntab.Self()}
+	for _, p := range srv.Protocols {
+		srv.ourHandshake.Caps = append(srv.ourHandshake.Caps, p.cap())
+	}
+
+	// listen/dial
 	if srv.ListenAddr != "" {
 		if err := srv.startListening(); err != nil {
 			return err
 		}
 	}
-
-	// dial stuff
-	dt, err := discover.ListenUDP(srv.PrivateKey, srv.ListenAddr, srv.NAT)
-	if err != nil {
-		return err
-	}
-	srv.ntab = dt
 	if srv.Dialer == nil {
 		srv.Dialer = &net.Dialer{Timeout: defaultDialTimeout}
 	}
@@ -347,30 +356,41 @@ func (srv *Server) findPeers() {
 	}
 }
 
-func (srv *Server) startPeer(conn net.Conn, dest *discover.Node) {
+func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	// TODO: handle/store session token
-	conn.SetDeadline(time.Now().Add(handshakeTimeout))
-	remoteID, _, err := srv.handshakeFunc(conn, srv.PrivateKey, dest)
+	fd.SetDeadline(time.Now().Add(handshakeTimeout))
+	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest)
 	if err != nil {
-		conn.Close()
-		srvlog.Debugf("Encryption Handshake with %v failed: %v", conn.RemoteAddr(), err)
+		fd.Close()
+		srvlog.Debugf("Handshake with %v failed: %v", fd.RemoteAddr(), err)
 		return
 	}
-	ourID := srv.ntab.Self()
-	p := newPeer(conn, srv.Protocols, srv.Name, &ourID, &remoteID)
-	if ok, reason := srv.addPeer(remoteID, p); !ok {
+	p := newPeer(conn, srv.Protocols)
+	if ok, reason := srv.addPeer(conn.ID, p); !ok {
 		srvlog.DebugDetailf("Not adding %v (%v)\n", p, reason)
 		p.politeDisconnect(reason)
 		return
 	}
+
 	srvlog.Debugf("Added %v\n", p)
+	srvjslog.LogJson(&logger.P2PConnected{
+		RemoteId:            fmt.Sprintf("%x", conn.ID[:]),
+		RemoteAddress:       conn.RemoteAddr().String(),
+		RemoteVersionString: conn.Name,
+		NumConnections:      srv.PeerCount(),
+	})
 
 	if srv.newPeerHook != nil {
 		srv.newPeerHook(p)
 	}
 	discreason := p.run()
 	srv.removePeer(p)
+
 	srvlog.Debugf("Removed %v (%v)\n", p, discreason)
+	srvjslog.LogJson(&logger.P2PDisconnected{
+		RemoteId:       fmt.Sprintf("%x", conn.ID[:]),
+		NumConnections: srv.PeerCount(),
+	})
 }
 
 func (srv *Server) addPeer(id discover.NodeID, p *Peer) (bool, DiscReason) {
@@ -394,7 +414,7 @@ func (srv *Server) addPeer(id discover.NodeID, p *Peer) (bool, DiscReason) {
 
 func (srv *Server) removePeer(p *Peer) {
 	srv.lock.Lock()
-	delete(srv.peers, *p.remoteID)
+	delete(srv.peers, p.ID())
 	srv.lock.Unlock()
 	srv.peerWG.Done()
 }

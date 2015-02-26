@@ -131,6 +131,7 @@ func (gui *Gui) Start(assetPath string) {
 	context.SetVar("gui", gui)
 	context.SetVar("eth", gui.uiLib)
 	context.SetVar("shh", gui.whisper)
+	//clipboard.SetQMLClipboard(context)
 
 	win, err := gui.showWallet(context)
 	if err != nil {
@@ -386,14 +387,11 @@ func (gui *Gui) update() {
 	generalUpdateTicker := time.NewTicker(500 * time.Millisecond)
 	statsUpdateTicker := time.NewTicker(5 * time.Second)
 
-	state := gui.eth.ChainManager().TransState()
-
-	gui.win.Root().Call("setWalletValue", fmt.Sprintf("%v", ethutil.CurrencyToString(state.GetAccount(gui.address()).Balance())))
-
 	lastBlockLabel := gui.getObjectByName("lastBlockLabel")
 	miningLabel := gui.getObjectByName("miningLabel")
 
 	events := gui.eth.EventMux().Subscribe(
+		core.ChainEvent{},
 		core.TxPreEvent{},
 		core.TxPostEvent{},
 	)
@@ -406,6 +404,8 @@ func (gui *Gui) update() {
 				return
 			}
 			switch ev := ev.(type) {
+			case core.ChainEvent:
+				gui.processBlock(ev.Block, false)
 			case core.TxPreEvent:
 				gui.insertTransaction("pre", ev.Tx)
 
@@ -420,19 +420,6 @@ func (gui *Gui) update() {
 			statusText := "#" + gui.eth.ChainManager().CurrentBlock().Number().String()
 			lastBlockLabel.Set("text", statusText)
 			miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.Miner().HashRate(), 10)+"/Khash")
-
-			/*
-				blockLength := gui.eth.BlockPool().BlocksProcessed
-				chainLength := gui.eth.BlockPool().ChainLength
-
-				var (
-					pct      float64 = 1.0 / float64(chainLength) * float64(blockLength)
-					dlWidget         = gui.win.Root().ObjectByName("downloadIndicator")
-					dlLabel          = gui.win.Root().ObjectByName("downloadLabel")
-				)
-				dlWidget.Set("value", pct)
-				dlLabel.Set("text", fmt.Sprintf("%d / %d", blockLength, chainLength))
-			*/
 
 		case <-statsUpdateTicker.C:
 			gui.setStatsPane()
@@ -466,7 +453,7 @@ NumGC:      %d
 	))
 }
 
-type qmlpeer struct{ Addr, NodeID, Caps string }
+type qmlpeer struct{ Addr, NodeID, Name, Caps string }
 
 type peersByID []*qmlpeer
 
@@ -481,6 +468,7 @@ func (gui *Gui) setPeerInfo() {
 		qpeers[i] = &qmlpeer{
 			NodeID: p.ID().String(),
 			Addr:   p.RemoteAddr().String(),
+			Name:   p.Name(),
 			Caps:   fmt.Sprint(p.Caps()),
 		}
 	}

@@ -5,10 +5,12 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"net"
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 func TestPublicKeyEncoding(t *testing.T) {
@@ -91,14 +93,14 @@ func testCryptoHandshake(prv0, prv1 *ecdsa.PrivateKey, sessionToken []byte, t *t
 	if err != nil {
 		t.Errorf("%v", err)
 	}
-	t.Logf("-> %v", hexkey(auth))
+	// t.Logf("-> %v", hexkey(auth))
 
 	// receiver reads auth and responds with response
 	response, remoteRecNonce, remoteInitNonce, _, remoteRandomPrivKey, remoteInitRandomPubKey, err := authResp(auth, sessionToken, prv1)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
-	t.Logf("<- %v\n", hexkey(response))
+	// t.Logf("<- %v\n", hexkey(response))
 
 	// initiator reads receiver's response and the key exchange completes
 	recNonce, remoteRandomPubKey, _, err := completeHandshake(response, prv0)
@@ -132,7 +134,7 @@ func testCryptoHandshake(prv0, prv1 *ecdsa.PrivateKey, sessionToken []byte, t *t
 	}
 }
 
-func TestHandshake(t *testing.T) {
+func TestEncHandshake(t *testing.T) {
 	defer testlog(t).detach()
 
 	prv0, _ := crypto.GenerateKey()
@@ -164,4 +166,59 @@ func TestHandshake(t *testing.T) {
 	if !bytes.Equal(t1, t2) {
 		t.Error("session token mismatch")
 	}
+}
+
+func TestSetupConn(t *testing.T) {
+	prv0, _ := crypto.GenerateKey()
+	prv1, _ := crypto.GenerateKey()
+	node0 := &discover.Node{
+		ID:      discover.PubkeyID(&prv0.PublicKey),
+		IP:      net.IP{1, 2, 3, 4},
+		TCPPort: 33,
+	}
+	node1 := &discover.Node{
+		ID:      discover.PubkeyID(&prv1.PublicKey),
+		IP:      net.IP{5, 6, 7, 8},
+		TCPPort: 44,
+	}
+	hs0 := &protoHandshake{
+		Version: baseProtocolVersion,
+		ID:      node0.ID,
+		Caps:    []Cap{{"a", 0}, {"b", 2}},
+	}
+	hs1 := &protoHandshake{
+		Version: baseProtocolVersion,
+		ID:      node1.ID,
+		Caps:    []Cap{{"c", 1}, {"d", 3}},
+	}
+	fd0, fd1 := net.Pipe()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		conn0, err := setupConn(fd0, prv0, hs0, node1)
+		if err != nil {
+			t.Errorf("outbound side error: %v", err)
+			return
+		}
+		if conn0.ID != node1.ID {
+			t.Errorf("outbound conn id mismatch: got %v, want %v", conn0.ID, node1.ID)
+		}
+		if !reflect.DeepEqual(conn0.Caps, hs1.Caps) {
+			t.Errorf("outbound caps mismatch: got %v, want %v", conn0.Caps, hs1.Caps)
+		}
+	}()
+
+	conn1, err := setupConn(fd1, prv1, hs1, nil)
+	if err != nil {
+		t.Fatalf("inbound side error: %v", err)
+	}
+	if conn1.ID != node0.ID {
+		t.Errorf("inbound conn id mismatch: got %v, want %v", conn1.ID, node0.ID)
+	}
+	if !reflect.DeepEqual(conn1.Caps, hs0.Caps) {
+		t.Errorf("inbound caps mismatch: got %v, want %v", conn1.Caps, hs0.Caps)
+	}
+
+	<-done
 }

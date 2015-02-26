@@ -37,7 +37,7 @@ import (
 
 const (
 	ClientIdentifier = "Ethereum(G)"
-	Version          = "0.8.3"
+	Version          = "0.8.6"
 )
 
 var clilogger = logger.NewLogger("CLI")
@@ -67,11 +67,12 @@ func main() {
 		DataDir:   Datadir,
 		LogFile:   LogFile,
 		LogLevel:  LogLevel,
+		LogFormat: LogFormat,
 		MaxPeers:  MaxPeer,
 		Port:      OutboundPort,
 		NAT:       NAT,
 		KeyRing:   KeyRing,
-		Shh:       SHH,
+		Shh:       true,
 		Dial:      Dial,
 		BootNodes: BootNodes,
 		NodeKey:   NodeKey,

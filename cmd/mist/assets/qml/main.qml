@@ -131,7 +131,11 @@ ApplicationWindow {
                 var existingDomain = matches && matches[1];
                 if (requestedDomain == existingDomain) {
                     domainAlreadyOpen = true;
-                    mainSplit.views[i].view.url = url;
+                    
+                    if (mainSplit.views[i].view.url != url){
+                        mainSplit.views[i].view.url = url;
+                    }
+                    
                     activeView(mainSplit.views[i].view, mainSplit.views[i].menuItem);
                 }
             }
@@ -246,6 +250,7 @@ ApplicationWindow {
                 }
             }
         }
+
     }
 
     property var blockModel: ListModel {
@@ -927,7 +932,8 @@ ApplicationWindow {
                      model: peerModel
                      TableViewColumn{width: 180; role: "addr" ; title: "Remote Address" }
                      TableViewColumn{width: 280; role: "nodeID" ; title: "Node ID" }
-                     TableViewColumn{width: 180; role: "caps" ; title: "Capabilities" }
+                     TableViewColumn{width: 100; role: "name" ; title: "Name" }
+                     TableViewColumn{width: 40; role: "caps" ; title: "Capabilities" }
                  }
              }
          }
@@ -958,7 +964,7 @@ ApplicationWindow {
                  anchors.top: parent.top
                  anchors.topMargin: 30
                  font.pointSize: 12
-                 text: "<h2>Mist (0.7.10)</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Viktor Trón<br>Felix Lange<br>Taylor Gerring<br>Daniel Nagy<br><h3>UX</h3>Alex van de Sande<br>"
+                 text: "<h2>Mist (0.8.6)</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Viktor Trón<br>Felix Lange<br>Taylor Gerring<br>Daniel Nagy<br>Gustav Simonsson<br><h3>UX/UI</h3>Alex van de Sande<br>Fabian Vogelsteller"
              }
          }
 

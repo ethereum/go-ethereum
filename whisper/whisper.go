@@ -127,6 +127,10 @@ func (self *Whisper) Watch(opts Filter) int {
 	})
 }
 
+func (self *Whisper) Unwatch(id int) {
+	self.filters.Uninstall(id)
+}
+
 func (self *Whisper) Messages(id int) (messages []*Message) {
 	filter := self.filters.Get(id)
 	if filter != nil {

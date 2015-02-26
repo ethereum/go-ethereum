@@ -21,8 +21,12 @@ func startTestServer(t *testing.T, pf newPeerHook) *Server {
 		ListenAddr:  "127.0.0.1:0",
 		PrivateKey:  newkey(),
 		newPeerHook: pf,
-		handshakeFunc: func(io.ReadWriter, *ecdsa.PrivateKey, *discover.Node) (id discover.NodeID, st []byte, err error) {
-			return randomID(), nil, err
+		setupFunc: func(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, dial *discover.Node) (*conn, error) {
+			id := randomID()
+			return &conn{
+				frameRW:        newFrameRW(fd, msgWriteTimeout),
+				protoHandshake: &protoHandshake{ID: id, Version: baseProtocolVersion},
+			}, nil
 		},
 	}
 	if err := server.Start(); err != nil {
@@ -116,9 +120,7 @@ func TestServerBroadcast(t *testing.T) {
 
 	var connected sync.WaitGroup
 	srv := startTestServer(t, func(p *Peer) {
-		p.protocols = []Protocol{discard}
-		p.startSubprotocols([]Cap{discard.cap()})
-		p.noHandshake = true
+		p.running = matchProtocols([]Protocol{discard}, []Cap{discard.cap()}, p.rw)
 		connected.Done()
 	})
 	defer srv.Stop()
