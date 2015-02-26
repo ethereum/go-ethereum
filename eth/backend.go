@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/ethash"
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/blockpool"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -117,6 +118,7 @@ type Ethereum struct {
 	txPool         *core.TxPool
 	chainManager   *core.ChainManager
 	blockPool      *blockpool.BlockPool
+	accountManager *accounts.AccountManager
 	whisper        *whisper.Whisper
 
 	net      *p2p.Server
@@ -176,9 +178,13 @@ func New(config *Config) (*Ethereum, error) {
 		DataDir:      config.DataDir,
 	}
 
+	// TODO: add config flag and case on plain/protected key store
+	ks := crypto.NewKeyStorePlain(ethutil.DefaultDataDir())
+	am := accounts.NewAccountManager(ks, 300000) // keys unlocked for 300s
+	eth.accountManager = &am
+
 	eth.chainManager = core.NewChainManager(db, eth.EventMux())
 	pow := ethash.New(eth.chainManager)
-
 	eth.txPool = core.NewTxPool(eth.EventMux())
 	eth.blockProcessor = core.NewBlockProcessor(db, pow, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
@@ -215,22 +221,23 @@ func New(config *Config) (*Ethereum, error) {
 	return eth, nil
 }
 
-func (s *Ethereum) KeyManager() *crypto.KeyManager       { return s.keyManager }
-func (s *Ethereum) Logger() logger.LogSystem             { return s.logger }
-func (s *Ethereum) Name() string                         { return s.net.Name }
-func (s *Ethereum) ChainManager() *core.ChainManager     { return s.chainManager }
-func (s *Ethereum) BlockProcessor() *core.BlockProcessor { return s.blockProcessor }
-func (s *Ethereum) TxPool() *core.TxPool                 { return s.txPool }
-func (s *Ethereum) BlockPool() *blockpool.BlockPool      { return s.blockPool }
-func (s *Ethereum) Whisper() *whisper.Whisper            { return s.whisper }
-func (s *Ethereum) EventMux() *event.TypeMux             { return s.eventMux }
-func (s *Ethereum) Db() ethutil.Database                 { return s.db }
-func (s *Ethereum) Miner() *miner.Miner                  { return s.miner }
-func (s *Ethereum) IsListening() bool                    { return true } // Always listening
-func (s *Ethereum) PeerCount() int                       { return s.net.PeerCount() }
-func (s *Ethereum) Peers() []*p2p.Peer                   { return s.net.Peers() }
-func (s *Ethereum) MaxPeers() int                        { return s.net.MaxPeers }
-func (s *Ethereum) Coinbase() []byte                     { return nil } // TODO
+func (s *Ethereum) KeyManager() *crypto.KeyManager           { return s.keyManager }
+func (s *Ethereum) Logger() logger.LogSystem                 { return s.logger }
+func (s *Ethereum) Name() string                             { return s.net.Name }
+func (s *Ethereum) AccountManager() *accounts.AccountManager { return s.accountManager }
+func (s *Ethereum) ChainManager() *core.ChainManager         { return s.chainManager }
+func (s *Ethereum) BlockProcessor() *core.BlockProcessor     { return s.blockProcessor }
+func (s *Ethereum) TxPool() *core.TxPool                     { return s.txPool }
+func (s *Ethereum) BlockPool() *blockpool.BlockPool          { return s.blockPool }
+func (s *Ethereum) Whisper() *whisper.Whisper                { return s.whisper }
+func (s *Ethereum) EventMux() *event.TypeMux                 { return s.eventMux }
+func (s *Ethereum) Db() ethutil.Database                     { return s.db }
+func (s *Ethereum) Miner() *miner.Miner                      { return s.miner }
+func (s *Ethereum) IsListening() bool                        { return true } // Always listening
+func (s *Ethereum) PeerCount() int                           { return s.net.PeerCount() }
+func (s *Ethereum) Peers() []*p2p.Peer                       { return s.net.Peers() }
+func (s *Ethereum) MaxPeers() int                            { return s.net.MaxPeers }
+func (s *Ethereum) Coinbase() []byte                         { return nil } // TODO
 
 // Start the ethereum
 func (s *Ethereum) Start() error {

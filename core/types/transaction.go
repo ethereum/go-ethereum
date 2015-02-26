@@ -129,6 +129,7 @@ func (tx *Transaction) sender() []byte {
 	return crypto.Sha3(pubkey[1:])[12:]
 }
 
+// TODO: deprecate after new accounts & key stores are integrated
 func (tx *Transaction) Sign(privk []byte) error {
 
 	sig := tx.Signature(privk)
@@ -137,6 +138,13 @@ func (tx *Transaction) Sign(privk []byte) error {
 	tx.S = sig[32:64]
 	tx.V = uint64(sig[64] + 27)
 
+	return nil
+}
+
+func (tx *Transaction) SetSignatureValues(sig []byte) error {
+	tx.R = sig[:32]
+	tx.S = sig[32:64]
+	tx.V = uint64(sig[64] + 27)
 	return nil
 }
 

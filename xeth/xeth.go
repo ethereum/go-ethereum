@@ -7,8 +7,8 @@ package xeth
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -27,6 +27,7 @@ var pipelogger = logger.NewLogger("XETH")
 type Backend interface {
 	BlockProcessor() *core.BlockProcessor
 	ChainManager() *core.ChainManager
+	AccountManager() *accounts.AccountManager
 	TxPool() *core.TxPool
 	PeerCount() int
 	IsListening() bool
@@ -42,6 +43,7 @@ type XEth struct {
 	eth            Backend
 	blockProcessor *core.BlockProcessor
 	chainManager   *core.ChainManager
+	accountManager *accounts.AccountManager
 	state          *State
 	whisper        *Whisper
 	miner          *miner.Miner
@@ -52,6 +54,7 @@ func New(eth Backend) *XEth {
 		eth:            eth,
 		blockProcessor: eth.BlockProcessor(),
 		chainManager:   eth.ChainManager(),
+		accountManager: eth.AccountManager(),
 		whisper:        NewWhisper(eth.Whisper()),
 		miner:          eth.Miner(),
 	}
@@ -106,7 +109,13 @@ func (self *XEth) Block(v interface{}) *Block {
 }
 
 func (self *XEth) Accounts() []string {
-	return []string{toHex(self.eth.KeyManager().Address())}
+	// TODO: check err?
+	accounts, _ := self.eth.AccountManager().Accounts()
+	accountAddresses := make([]string, len(accounts))
+	for i, ac := range accounts {
+		accountAddresses[i] = toHex(ac.Address)
+	}
+	return accountAddresses
 }
 
 func (self *XEth) PeerCount() int {
@@ -266,17 +275,19 @@ func (self *XEth) Call(toStr, valueStr, gasStr, gasPriceStr, dataStr string) (st
 	return toHex(res), nil
 }
 
-func (self *XEth) Transact(toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
+func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
+
 	var (
+		from             []byte
 		to               []byte
 		value            = ethutil.NewValue(valueStr)
 		gas              = ethutil.NewValue(gasStr)
 		price            = ethutil.NewValue(gasPriceStr)
 		data             []byte
-		key              = self.eth.KeyManager().KeyPair()
 		contractCreation bool
 	)
 
+	from = fromHex(fromStr)
 	data = fromHex(codeStr)
 	to = fromHex(toStr)
 	if len(to) == 0 {
@@ -290,21 +301,26 @@ func (self *XEth) Transact(toStr, valueStr, gasStr, gasPriceStr, codeStr string)
 		tx = types.NewTransactionMessage(to, value.BigInt(), gas.BigInt(), price.BigInt(), data)
 	}
 
-	var err error
-	state := self.eth.ChainManager().TxState()
-	if balance := state.GetBalance(key.Address()); balance.Cmp(tx.Value()) < 0 {
-		return "", fmt.Errorf("insufficient balance. balance=%v tx=%v", balance, tx.Value())
-	}
-	nonce := state.GetNonce(key.Address())
+	state := self.chainManager.TransState()
+	nonce := state.GetNonce(from)
 
 	tx.SetNonce(nonce)
-	tx.Sign(key.PrivateKey)
+	sig, err := self.accountManager.Sign(&accounts.Account{Address: from}, tx.Hash())
+	if err != nil {
+		return "", err
+	}
+	tx.SetSignatureValues(sig)
 
 	err = self.eth.TxPool().Add(tx)
 	if err != nil {
 		return "", err
 	}
-	state.SetNonce(key.Address(), nonce+1)
+	state.SetNonce(from, nonce+1)
+
+	if contractCreation {
+		addr := core.AddressFromMessage(tx)
+		pipelogger.Infof("Contract addr %x\n", addr)
+	}
 
 	if types.IsContractAddr(to) {
 		return toHex(core.AddressFromMessage(tx)), nil

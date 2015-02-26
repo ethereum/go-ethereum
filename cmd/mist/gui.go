@@ -175,6 +175,13 @@ func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
 func (gui *Gui) ImportKey(filePath string) {
 }
 
+func (gui *Gui) GenerateKey() {
+	_, err := gui.eth.AccountManager().NewAccount("hurr")
+	if err != nil {
+		// TODO: UI feedback?
+	}
+}
+
 func (gui *Gui) showKeyImport(context *qml.Context) (*qml.Window, error) {
 	context.SetVar("lib", gui)
 	component, err := gui.engine.LoadFile(gui.uiLib.AssetPath("qml/first_run.qml"))

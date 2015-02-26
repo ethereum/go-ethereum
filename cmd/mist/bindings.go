@@ -49,7 +49,7 @@ func (gui *Gui) LogPrint(level logger.LogLevel, msg string) {
 		}
 	*/
 }
-func (gui *Gui) Transact(recipient, value, gas, gasPrice, d string) (string, error) {
+func (gui *Gui) Transact(from, recipient, value, gas, gasPrice, d string) (string, error) {
 	var data string
 	if len(recipient) == 0 {
 		code, err := ethutil.Compile(d, false)
@@ -61,7 +61,7 @@ func (gui *Gui) Transact(recipient, value, gas, gasPrice, d string) (string, err
 		data = ethutil.Bytes2Hex(utils.FormatTransactionData(d))
 	}
 
-	return gui.xeth.Transact(recipient, value, gas, gasPrice, data)
+	return gui.xeth.Transact(from, recipient, value, gas, gasPrice, data)
 }
 
 // functions that allow Gui to implement interface guilogger.LogSystem
