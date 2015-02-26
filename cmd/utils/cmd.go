@@ -41,7 +41,6 @@ import (
 	rpcws "github.com/ethereum/go-ethereum/rpc/ws"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
-	"github.com/kardianos/osext"
 )
 
 var clilogger = logger.NewLogger("CLI")
@@ -130,31 +129,6 @@ func StartEthereum(ethereum *eth.Ethereum) {
 		ethereum.Stop()
 		logger.Flush()
 	})
-}
-
-func DefaultAssetPath() string {
-	var assetPath string
-	// If the current working directory is the go-ethereum dir
-	// assume a debug build and use the source directory as
-	// asset directory.
-	pwd, _ := os.Getwd()
-	if pwd == path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist") {
-		assetPath = path.Join(pwd, "assets")
-	} else {
-		switch runtime.GOOS {
-		case "darwin":
-			// Get Binary Directory
-			exedir, _ := osext.ExecutableFolder()
-			assetPath = filepath.Join(exedir, "../Resources")
-		case "linux":
-			assetPath = "/usr/share/mist"
-		case "windows":
-			assetPath = "./assets"
-		default:
-			assetPath = "."
-		}
-	}
-	return assetPath
 }
 
 func KeyTasks(keyManager *crypto.KeyManager, KeyRing string, GenAddr bool, SecretFile string, ExportDir string, NonInteractive bool) {
