@@ -15,11 +15,13 @@ import (
 
 func DefaultAssetPath() string {
 	var assetPath string
+	pwd, _ := os.Getwd()
+	srcdir := path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist")
+
 	// If the current working directory is the go-ethereum dir
 	// assume a debug build and use the source directory as
 	// asset directory.
-	pwd, _ := os.Getwd()
-	if pwd == path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist") {
+	if pwd == srcdir {
 		assetPath = path.Join(pwd, "assets")
 	} else {
 		switch runtime.GOOS {
@@ -33,6 +35,12 @@ func DefaultAssetPath() string {
 			assetPath = "./assets"
 		default:
 			assetPath = "."
+		}
+
+		// Check if the assetPath exists. If not, try the source directory
+		// This happens when binary is run from outside cmd/mist directory
+		if _, err := os.Stat(assetPath); os.IsNotExist(err) {
+			assetPath = path.Join(srcdir, "assets")
 		}
 	}
 	return assetPath
