@@ -30,12 +30,12 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"bitbucket.org/kardianos/osext"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/vm"
+	"github.com/kardianos/osext"
 )
 
 var (

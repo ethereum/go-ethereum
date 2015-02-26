@@ -30,7 +30,6 @@ import (
 	"regexp"
 	"runtime"
 
-	"bitbucket.org/kardianos/osext"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -42,6 +41,7 @@ import (
 	rpcws "github.com/ethereum/go-ethereum/rpc/ws"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/kardianos/osext"
 )
 
 var clilogger = logger.NewLogger("CLI")
