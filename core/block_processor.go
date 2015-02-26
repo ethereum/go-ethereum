@@ -62,7 +62,7 @@ func NewBlockProcessor(db ethutil.Database, txpool *TxPool, chainManager *ChainM
 
 func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block *types.Block, transientProcess bool) (receipts types.Receipts, err error) {
 	coinbase := statedb.GetOrNewStateObject(block.Header().Coinbase)
-	coinbase.SetGasPool(CalcGasLimit(parent, block))
+	coinbase.SetGasPool(block.Header().GasLimit)
 
 	// Process the transactions on to parent state
 	receipts, _, _, _, err = sm.ApplyTransactions(coinbase, statedb, block, block.Transactions(), transientProcess)
@@ -245,6 +245,11 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 	expd := CalcDifficulty(block, parent)
 	if expd.Cmp(block.Header().Difficulty) != 0 {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Header().Difficulty, expd)
+	}
+
+	expl := CalcGasLimit(parent, block)
+	if expl.Cmp(block.Header().GasLimit) != 0 {
+		return fmt.Errorf("GasLimit check failed for block %v, %v", block.Header().GasLimit, expl)
 	}
 
 	if block.Time() < parent.Time() {

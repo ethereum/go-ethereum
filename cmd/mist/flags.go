@@ -27,10 +27,8 @@ import (
 	"log"
 	"os"
 	"path"
-	"path/filepath"
 	"runtime"
 
-	"bitbucket.org/kardianos/osext"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
@@ -68,33 +66,6 @@ var (
 
 // flags specific to gui client
 var AssetPath string
-
-//TODO: If we re-use the one defined in cmd.go the binary osx image crashes. If somebody finds out why we can dry this up.
-func defaultAssetPath() string {
-	var assetPath string
-	// If the current working directory is the go-ethereum dir
-	// assume a debug build and use the source directory as
-	// asset directory.
-	pwd, _ := os.Getwd()
-	if pwd == path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist") {
-		assetPath = path.Join(pwd, "assets")
-	} else {
-		switch runtime.GOOS {
-		case "darwin":
-			// Get Binary Directory
-			exedir, _ := osext.ExecutableFolder()
-			assetPath = filepath.Join(exedir, "../Resources")
-		case "linux":
-			assetPath = "/usr/share/mist"
-		case "windows":
-			assetPath = "./assets"
-		default:
-			assetPath = "."
-		}
-	}
-	return assetPath
-}
-
 var defaultConfigFile = path.Join(ethutil.DefaultDataDir(), "conf.ini")
 
 func Init() {
@@ -122,7 +93,7 @@ func Init() {
 	flag.StringVar(&DebugFile, "debug", "", "debug file (no debugging if not set)")
 	flag.IntVar(&LogLevel, "loglevel", int(logger.InfoLevel), "loglevel: 0-5: silent,error,warn,info,debug,debug detail)")
 
-	flag.StringVar(&AssetPath, "asset_path", defaultAssetPath(), "absolute path to GUI assets directory")
+	flag.StringVar(&AssetPath, "asset_path", ethutil.DefaultAssetPath(), "absolute path to GUI assets directory")
 
 	// Network stuff
 	var (

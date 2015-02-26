@@ -51,6 +51,8 @@ type EthereumApi struct {
 	register map[string][]*NewTxArgs
 
 	db ethutil.Database
+
+	defaultBlockAge int
 }
 
 func NewEthereumApi(eth *xeth.XEth) *EthereumApi {
@@ -80,11 +82,9 @@ done:
 		case ev := <-events.Chan():
 			switch ev.(type) {
 			case core.ChainEvent:
-				// fixme
-				const something = 1337
-				if something < 0 {
+				if self.defaultBlockAge < 0 {
 					chain := self.xeth().Backend().ChainManager()
-					block := chain.GetBlockByNumber(chain.CurrentBlock().Number().Uint64() - something)
+					block := chain.GetBlockByNumber(chain.CurrentBlock().Number().Uint64() - uint64(self.defaultBlockAge))
 					if block != nil {
 						statedb := state.New(block.Root(), self.db)
 						self.useState(statedb)
@@ -373,6 +373,17 @@ func (p *EthereumApi) SetMining(shouldmine bool, reply *interface{}) error {
 	return nil
 }
 
+func (p *EthereumApi) GetDefaultBlockAge(reply *interface{}) error {
+	*reply = p.defaultBlockAge
+	return nil
+}
+
+func (p *EthereumApi) SetDefaultBlockAge(defaultBlockAge int, reply *interface{}) error {
+	p.defaultBlockAge = defaultBlockAge
+	*reply = true
+	return nil
+}
+
 func (p *EthereumApi) BlockNumber(reply *interface{}) error {
 	*reply = p.xeth().Backend().ChainManager().CurrentBlock().Number()
 	return nil
@@ -513,6 +524,14 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.SetMining(args, reply)
+	case "eth_defaultBlock":
+		return p.GetDefaultBlockAge(reply)
+	case "eth_setDefaultBlock":
+		args, err := req.ToIntArgs()
+		if err != nil {
+			return err
+		}
+		return p.SetDefaultBlockAge(args, reply)
 	case "eth_peerCount":
 		return p.GetPeerCount(reply)
 	case "eth_number":
