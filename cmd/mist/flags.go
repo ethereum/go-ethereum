@@ -27,7 +27,6 @@ import (
 	"log"
 	"os"
 	"path"
-	"path/filepath"
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -35,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/vm"
-	"github.com/kardianos/osext"
 )
 
 var (

@@ -2,12 +2,15 @@ package ethutil
 
 import (
 	"fmt"
-	"github.com/kardianos/osext"
 	"math/big"
+	"os"
 	"os/user"
 	"path"
+	"path/filepath"
 	"runtime"
 	"time"
+
+	"github.com/kardianos/osext"
 )
 
 func DefaultAssetPath() string {

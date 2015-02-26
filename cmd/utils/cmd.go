@@ -25,10 +25,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path"
-	"path/filepath"
 	"regexp"
-	"runtime"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
