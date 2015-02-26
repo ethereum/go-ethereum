@@ -48,9 +48,8 @@ type BlockProcessor struct {
 
 func NewBlockProcessor(db ethutil.Database, txpool *TxPool, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
 	sm := &BlockProcessor{
-		db:  db,
-		mem: make(map[string]*big.Int),
-		//Pow:      &ethash.Ethash{},
+		db:       db,
+		mem:      make(map[string]*big.Int),
 		Pow:      ezp.New(),
 		bc:       chainManager,
 		eventMux: eventMux,
@@ -100,7 +99,8 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 	// Notify all subscribers
 	if !transientProcess {
 		go self.eventMux.Post(TxPostEvent{tx})
-		go self.eventMux.Post(statedb.Logs())
+		logs := statedb.Logs()
+		go self.eventMux.Post(logs)
 	}
 
 	return receipt, txGas, err
@@ -205,6 +205,8 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 	receiptSha := types.DeriveSha(receipts)
 	if bytes.Compare(receiptSha, header.ReceiptHash) != 0 {
 		fmt.Println("receipts", receipts)
+		state.Sync()
+		chainlogger.Infof("%s\n", state.Dump())
 		err = fmt.Errorf("validating receipt root. received=%x got=%x", header.ReceiptHash, receiptSha)
 		return
 	}

@@ -35,7 +35,7 @@ func (self *StateDB) Dump() []byte {
 
 		storageIt := stateObject.State.trie.Iterator()
 		for storageIt.Next() {
-			account.Storage[ethutil.Bytes2Hex(it.Key)] = ethutil.Bytes2Hex(it.Value)
+			account.Storage[ethutil.Bytes2Hex(storageIt.Key)] = ethutil.Bytes2Hex(storageIt.Value)
 		}
 		world.Accounts[ethutil.Bytes2Hex(it.Key)] = account
 	}
