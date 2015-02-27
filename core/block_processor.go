@@ -255,6 +255,10 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 		return fmt.Errorf("GasLimit check failed for block %v, %v", block.Header().GasLimit, expl)
 	}
 
+	if len(block.Uncles()) > 1 {
+		return ValidationError("Block can only contain one uncle (contained %v)", len(block.Uncles()))
+	}
+
 	if block.Time() < parent.Time() {
 		return ValidationError("Block timestamp not after prev block (%v - %v)", block.Header().Time, parent.Header().Time)
 	}
