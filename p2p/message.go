@@ -119,6 +119,25 @@ func EncodeMsg(w MsgWriter, code uint64, data ...interface{}) error {
 	return w.WriteMsg(NewMsg(code, data...))
 }
 
+// lockedRW wraps a MsgReadWriter with locks around
+// ReadMsg and WriteMsg.
+type lockedRW struct {
+	rmu, wmu sync.Mutex
+	wrapped  MsgReadWriter
+}
+
+func (rw *lockedRW) ReadMsg() (Msg, error) {
+	rw.rmu.Lock()
+	defer rw.rmu.Unlock()
+	return rw.wrapped.ReadMsg()
+}
+
+func (rw *lockedRW) WriteMsg(msg Msg) error {
+	rw.wmu.Lock()
+	defer rw.wmu.Unlock()
+	return rw.wrapped.WriteMsg(msg)
+}
+
 // frameRW is a MsgReadWriter that reads and writes devp2p message frames.
 // As required by the interface, ReadMsg and WriteMsg can be called from
 // multiple goroutines.

@@ -3,6 +3,7 @@ package p2p
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"reflect"
@@ -29,8 +30,8 @@ var discard = Protocol{
 	},
 }
 
-func testPeer(protos []Protocol) (*conn, *Peer, <-chan DiscReason) {
-	fd1, fd2 := net.Pipe()
+func testPeer(protos []Protocol) (io.Closer, *conn, *Peer, <-chan DiscReason) {
+	fd1, _ := net.Pipe()
 	hs1 := &protoHandshake{ID: randomID(), Version: baseProtocolVersion}
 	hs2 := &protoHandshake{ID: randomID(), Version: baseProtocolVersion}
 	for _, p := range protos {
@@ -38,11 +39,12 @@ func testPeer(protos []Protocol) (*conn, *Peer, <-chan DiscReason) {
 		hs2.Caps = append(hs2.Caps, p.cap())
 	}
 
-	peer := newPeer(newConn(fd1, hs1), protos)
+	p1, p2 := MsgPipe()
+	peer := newPeer(fd1, &conn{p1, hs1}, protos)
 	errc := make(chan DiscReason, 1)
 	go func() { errc <- peer.run() }()
 
-	return newConn(fd2, hs2), peer, errc
+	return p1, &conn{p2, hs2}, peer, errc
 }
 
 func TestPeerProtoReadMsg(t *testing.T) {
@@ -67,8 +69,8 @@ func TestPeerProtoReadMsg(t *testing.T) {
 		},
 	}
 
-	rw, _, errc := testPeer([]Protocol{proto})
-	defer rw.Close()
+	closer, rw, _, errc := testPeer([]Protocol{proto})
+	defer closer.Close()
 
 	EncodeMsg(rw, baseProtocolLength+2, 1)
 	EncodeMsg(rw, baseProtocolLength+3, 2)
@@ -105,8 +107,8 @@ func TestPeerProtoReadLargeMsg(t *testing.T) {
 		},
 	}
 
-	rw, _, errc := testPeer([]Protocol{proto})
-	defer rw.Close()
+	closer, rw, _, errc := testPeer([]Protocol{proto})
+	defer closer.Close()
 
 	EncodeMsg(rw, 18, make([]byte, msgsize))
 	select {
@@ -134,8 +136,8 @@ func TestPeerProtoEncodeMsg(t *testing.T) {
 			return nil
 		},
 	}
-	rw, _, _ := testPeer([]Protocol{proto})
-	defer rw.Close()
+	closer, rw, _, _ := testPeer([]Protocol{proto})
+	defer closer.Close()
 
 	if err := expectMsg(rw, 17, []string{"foo", "bar"}); err != nil {
 		t.Error(err)
@@ -145,8 +147,8 @@ func TestPeerProtoEncodeMsg(t *testing.T) {
 func TestPeerWriteForBroadcast(t *testing.T) {
 	defer testlog(t).detach()
 
-	rw, peer, peerErr := testPeer([]Protocol{discard})
-	defer rw.Close()
+	closer, rw, peer, peerErr := testPeer([]Protocol{discard})
+	defer closer.Close()
 
 	// test write errors
 	if err := peer.writeProtoMsg("b", NewMsg(3)); err == nil {
@@ -181,8 +183,8 @@ func TestPeerWriteForBroadcast(t *testing.T) {
 func TestPeerPing(t *testing.T) {
 	defer testlog(t).detach()
 
-	rw, _, _ := testPeer(nil)
-	defer rw.Close()
+	closer, rw, _, _ := testPeer(nil)
+	defer closer.Close()
 	if err := EncodeMsg(rw, pingMsg); err != nil {
 		t.Fatal(err)
 	}
@@ -194,15 +196,15 @@ func TestPeerPing(t *testing.T) {
 func TestPeerDisconnect(t *testing.T) {
 	defer testlog(t).detach()
 
-	rw, _, disc := testPeer(nil)
-	defer rw.Close()
+	closer, rw, _, disc := testPeer(nil)
+	defer closer.Close()
 	if err := EncodeMsg(rw, discMsg, DiscQuitting); err != nil {
 		t.Fatal(err)
 	}
 	if err := expectMsg(rw, discMsg, []interface{}{DiscRequested}); err != nil {
 		t.Error(err)
 	}
-	rw.Close() // make test end faster
+	closer.Close() // make test end faster
 	if reason := <-disc; reason != DiscRequested {
 		t.Errorf("run returned wrong reason: got %v, want %v", reason, DiscRequested)
 	}

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
@@ -23,8 +24,14 @@ func startTestServer(t *testing.T, pf newPeerHook) *Server {
 		newPeerHook: pf,
 		setupFunc: func(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, dial *discover.Node) (*conn, error) {
 			id := randomID()
+			rw := newRlpxFrameRW(fd, secrets{
+				MAC:        zero16,
+				AES:        zero16,
+				IngressMAC: sha3.NewKeccak256(),
+				EgressMAC:  sha3.NewKeccak256(),
+			})
 			return &conn{
-				frameRW:        newFrameRW(fd, msgWriteTimeout),
+				MsgReadWriter:  rw,
 				protoHandshake: &protoHandshake{ID: id, Version: baseProtocolVersion},
 			}, nil
 		},
@@ -143,9 +150,7 @@ func TestServerBroadcast(t *testing.T) {
 
 	// broadcast one message
 	srv.Broadcast("discard", 0, "foo")
-	goldbuf := new(bytes.Buffer)
-	writeMsg(goldbuf, NewMsg(16, "foo"))
-	golden := goldbuf.Bytes()
+	golden := unhex("66e94e166f0a2c3b884cfa59ca34")
 
 	// check that the message has been written everywhere
 	for i, conn := range conns {

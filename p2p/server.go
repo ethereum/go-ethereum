@@ -358,14 +358,15 @@ func (srv *Server) findPeers() {
 
 func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	// TODO: handle/store session token
-	fd.SetDeadline(time.Now().Add(handshakeTimeout))
+	// TODO: reenable deadlines
+	// fd.SetDeadline(time.Now().Add(handshakeTimeout))
 	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest)
 	if err != nil {
 		fd.Close()
 		srvlog.Debugf("Handshake with %v failed: %v", fd.RemoteAddr(), err)
 		return
 	}
-	p := newPeer(conn, srv.Protocols)
+	p := newPeer(fd, conn, srv.Protocols)
 	if ok, reason := srv.addPeer(conn.ID, p); !ok {
 		srvlog.DebugDetailf("Not adding %v (%v)\n", p, reason)
 		p.politeDisconnect(reason)
@@ -375,7 +376,7 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	srvlog.Debugf("Added %v\n", p)
 	srvjslog.LogJson(&logger.P2PConnected{
 		RemoteId:            fmt.Sprintf("%x", conn.ID[:]),
-		RemoteAddress:       conn.RemoteAddr().String(),
+		RemoteAddress:       fd.RemoteAddr().String(),
 		RemoteVersionString: conn.Name,
 		NumConnections:      srv.PeerCount(),
 	})
