@@ -111,14 +111,14 @@ func (self *Filter) Find() state.Logs {
 		// current parameters
 		if self.bloomFilter(block) {
 			// Get the logs of the block
-			logs, err := self.eth.BlockProcessor().GetLogs(block)
+			unfiltered, err := self.eth.BlockProcessor().GetLogs(block)
 			if err != nil {
 				chainlogger.Warnln("err: filter get logs ", err)
 
 				break
 			}
 
-			logs = append(logs, self.FilterLogs(logs)...)
+			logs = append(logs, self.FilterLogs(unfiltered)...)
 		}
 
 		block = self.eth.ChainManager().GetBlock(block.ParentHash())
@@ -146,7 +146,6 @@ func (self *Filter) FilterLogs(logs state.Logs) state.Logs {
 Logs:
 	for _, log := range logs {
 		if !includes(self.address, log.Address()) {
-			//if !bytes.Equal(self.address, log.Address()) {
 			continue
 		}
 

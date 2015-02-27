@@ -82,8 +82,9 @@ type RpcServer interface {
 
 type Log struct {
 	Address string   `json:"address"`
-	Topic   []string `json:"topics"`
+	Topic   []string `json:"topic"`
 	Data    string   `json:"data"`
+	Number  uint64   `json:"number"`
 }
 
 func toLogs(logs state.Logs) (ls []Log) {
@@ -94,6 +95,7 @@ func toLogs(logs state.Logs) (ls []Log) {
 		l.Topic = make([]string, len(log.Topics()))
 		l.Address = toHex(log.Address())
 		l.Data = toHex(log.Data())
+		l.Number = log.Number()
 		for j, topic := range log.Topics() {
 			l.Topic[j] = toHex(topic)
 		}
@@ -106,6 +108,7 @@ func toLogs(logs state.Logs) (ls []Log) {
 type whisperFilter struct {
 	messages []xeth.WhisperMessage
 	timeout  time.Time
+	id       int
 }
 
 func (w *whisperFilter) add(msgs ...xeth.WhisperMessage) {
@@ -121,6 +124,7 @@ func (w *whisperFilter) get() []xeth.WhisperMessage {
 type logFilter struct {
 	logs    state.Logs
 	timeout time.Time
+	id      int
 }
 
 func (l *logFilter) add(logs ...state.Log) {

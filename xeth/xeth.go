@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
@@ -54,13 +55,26 @@ func New(eth Backend) *XEth {
 		whisper:        NewWhisper(eth.Whisper()),
 		miner:          eth.Miner(),
 	}
-	xeth.state = NewState(xeth)
+	xeth.state = NewState(xeth, xeth.chainManager.TransState())
 
 	return xeth
 }
 
-func (self *XEth) Backend() Backend    { return self.eth }
-func (self *XEth) State() *State       { return self.state }
+func (self *XEth) Backend() Backend { return self.eth }
+func (self *XEth) UseState(statedb *state.StateDB) *XEth {
+	xeth := &XEth{
+		eth:            self.eth,
+		blockProcessor: self.blockProcessor,
+		chainManager:   self.chainManager,
+		whisper:        self.whisper,
+		miner:          self.miner,
+	}
+
+	xeth.state = NewState(xeth, statedb)
+	return xeth
+}
+func (self *XEth) State() *State { return self.state }
+
 func (self *XEth) Whisper() *Whisper   { return self.whisper }
 func (self *XEth) Miner() *miner.Miner { return self.miner }
 
@@ -229,7 +243,7 @@ func (self *XEth) Call(toStr, valueStr, gasStr, gasPriceStr, dataStr string) (st
 	}
 
 	var (
-		statedb = self.chainManager.TransState()
+		statedb = self.State().State() //self.chainManager.TransState()
 		key     = self.eth.KeyManager().KeyPair()
 		from    = statedb.GetOrNewStateObject(key.Address())
 		block   = self.chainManager.CurrentBlock()
@@ -277,7 +291,7 @@ func (self *XEth) Transact(toStr, valueStr, gasStr, gasPriceStr, codeStr string)
 	}
 
 	var err error
-	state := self.eth.ChainManager().TransState()
+	state := self.eth.ChainManager().TxState()
 	if balance := state.GetBalance(key.Address()); balance.Cmp(tx.Value()) < 0 {
 		return "", fmt.Errorf("insufficient balance. balance=%v tx=%v", balance, tx.Value())
 	}
@@ -288,13 +302,11 @@ func (self *XEth) Transact(toStr, valueStr, gasStr, gasPriceStr, codeStr string)
 
 	//fmt.Printf("create tx: %x %v\n", tx.Hash()[:4], tx.Nonce())
 
-	/*
-		// Do some pre processing for our "pre" events  and hooks
-		block := self.chainManager.NewBlock(key.Address())
-		coinbase := state.GetOrNewStateObject(key.Address())
-		coinbase.SetGasPool(block.GasLimit())
-		self.blockProcessor.ApplyTransactions(coinbase, state, block, types.Transactions{tx}, true)
-	*/
+	// Do some pre processing for our "pre" events  and hooks
+	//block := self.chainManager.NewBlock(key.Address())
+	//coinbase := state.GetOrNewStateObject(key.Address())
+	//coinbase.SetGasPool(block.GasLimit())
+	//self.blockProcessor.ApplyTransactions(coinbase, state, block, types.Transactions{tx}, true)
 
 	err = self.eth.TxPool().Add(tx)
 	if err != nil {

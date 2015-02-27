@@ -3,6 +3,8 @@ package eth
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"io/ioutil"
+	"path"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -25,7 +27,10 @@ var (
 	jsonlogger = ethlogger.NewJsonLogger()
 
 	defaultBootNodes = []*discover.Node{
+		// ETH/DEV cmd/bootnode
 		discover.MustParseNode("enode://6cdd090303f394a1cac34ecc9f7cda18127eafa2a3a06de39f6d920b0e583e062a7362097c7c65ee490a758b442acd5c80c6fce4b148c6a391e946b45131365b@54.169.166.226:30303"),
+		// ETH/DEV cpp-ethereum (poc-8.ethdev.com)
+		discover.MustParseNode("enode://4a44599974518ea5b0f14c31c4463692ac0329cb84851f3435e6d1b18ee4eae4aa495f846a0fa1219bd58035671881d44423876e57db2abd57254d0197da0ebe@5.1.83.226:30303"),
 	}
 )
 
@@ -77,6 +82,27 @@ func (cfg *Config) parseBootNodes() []*discover.Node {
 	return ns
 }
 
+func (cfg *Config) nodeKey() (*ecdsa.PrivateKey, error) {
+	// use explicit key from command line args if set
+	if cfg.NodeKey != nil {
+		return cfg.NodeKey, nil
+	}
+	// use persistent key if present
+	keyfile := path.Join(cfg.DataDir, "nodekey")
+	key, err := crypto.LoadECDSA(keyfile)
+	if err == nil {
+		return key, nil
+	}
+	// no persistent key, generate and store a new one
+	if key, err = crypto.GenerateKey(); err != nil {
+		return nil, fmt.Errorf("could not generate server key: %v", err)
+	}
+	if err := ioutil.WriteFile(keyfile, crypto.FromECDSA(key), 0600); err != nil {
+		logger.Errorln("could not persist nodekey: ", err)
+	}
+	return key, nil
+}
+
 type Ethereum struct {
 	// Channel for shutting down the ethereum
 	shutdownChan chan bool
@@ -121,7 +147,8 @@ func New(config *Config) (*Ethereum, error) {
 	d, _ := db.Get([]byte("ProtocolVersion"))
 	protov := ethutil.NewValue(d).Uint()
 	if protov != ProtocolVersion && protov != 0 {
-		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, ProtocolVersion, ethutil.Config.ExecPath+"/database")
+		path := path.Join(config.DataDir, "database")
+		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, ProtocolVersion, path)
 	}
 
 	// Create new keymanager
@@ -161,18 +188,16 @@ func New(config *Config) (*Ethereum, error) {
 	insertChain := eth.chainManager.InsertChain
 	eth.blockPool = NewBlockPool(hasBlock, insertChain, ezp.Verify)
 
+	netprv, err := config.nodeKey()
+	if err != nil {
+		return nil, err
+	}
 	ethProto := EthProtocol(eth.txPool, eth.chainManager, eth.blockPool)
 	protocols := []p2p.Protocol{ethProto}
 	if config.Shh {
 		protocols = append(protocols, eth.whisper.Protocol())
 	}
 
-	netprv := config.NodeKey
-	if netprv == nil {
-		if netprv, err = crypto.GenerateKey(); err != nil {
-			return nil, fmt.Errorf("could not generate server key: %v", err)
-		}
-	}
 	eth.net = &p2p.Server{
 		PrivateKey:     netprv,
 		Name:           config.Name,

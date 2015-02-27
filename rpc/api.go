@@ -20,18 +20,24 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/ui"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
-const (
-	defaultGasPrice = "10000000000000"
-	defaultGas      = "10000"
+var (
+	defaultGasPrice  = big.NewInt(10000000000000)
+	defaultGas       = big.NewInt(10000)
+	filterTickerTime = 15 * time.Second
 )
 
 type EthereumApi struct {
-	xeth          *xeth.XEth
+	eth    *xeth.XEth
+	xethMu sync.RWMutex
+	mux    *event.TypeMux
+
 	quit          chan struct{}
 	filterManager *filter.FilterManager
 
@@ -45,22 +51,84 @@ type EthereumApi struct {
 	register map[string][]*NewTxArgs
 
 	db ethutil.Database
+
+	defaultBlockAge int64
 }
 
 func NewEthereumApi(eth *xeth.XEth) *EthereumApi {
 	db, _ := ethdb.NewLDBDatabase("dapps")
 	api := &EthereumApi{
-		xeth:          eth,
-		quit:          make(chan struct{}),
-		filterManager: filter.NewFilterManager(eth.Backend().EventMux()),
-		logs:          make(map[int]*logFilter),
-		messages:      make(map[int]*whisperFilter),
-		db:            db,
+		eth:             eth,
+		mux:             eth.Backend().EventMux(),
+		quit:            make(chan struct{}),
+		filterManager:   filter.NewFilterManager(eth.Backend().EventMux()),
+		logs:            make(map[int]*logFilter),
+		messages:        make(map[int]*whisperFilter),
+		db:              db,
+		defaultBlockAge: -1,
 	}
 	go api.filterManager.Start()
 	go api.start()
 
 	return api
+}
+
+func (self *EthereumApi) setStateByBlockNumber(num int64) {
+	chain := self.xeth().Backend().ChainManager()
+	var block *types.Block
+
+	if self.defaultBlockAge < 0 {
+		num = chain.CurrentBlock().Number().Int64() + num + 1
+	}
+	block = chain.GetBlockByNumber(uint64(num))
+
+	if block != nil {
+		self.useState(state.New(block.Root(), self.xeth().Backend().Db()))
+	} else {
+		self.useState(chain.State())
+	}
+}
+
+func (self *EthereumApi) start() {
+	timer := time.NewTicker(filterTickerTime)
+	events := self.mux.Subscribe(core.ChainEvent{})
+
+done:
+	for {
+		select {
+		case ev := <-events.Chan():
+			switch ev.(type) {
+			case core.ChainEvent:
+				if self.defaultBlockAge < 0 {
+					self.setStateByBlockNumber(self.defaultBlockAge)
+				}
+			}
+		case <-timer.C:
+			self.logMut.Lock()
+			self.messagesMut.Lock()
+			for id, filter := range self.logs {
+				if time.Since(filter.timeout) > 20*time.Second {
+					self.filterManager.UninstallFilter(id)
+					delete(self.logs, id)
+				}
+			}
+
+			for id, filter := range self.messages {
+				if time.Since(filter.timeout) > 20*time.Second {
+					self.xeth().Whisper().Unwatch(id)
+					delete(self.messages, id)
+				}
+			}
+			self.logMut.Unlock()
+			self.messagesMut.Unlock()
+		case <-self.quit:
+			break done
+		}
+	}
+}
+
+func (self *EthereumApi) stop() {
+	close(self.quit)
 }
 
 func (self *EthereumApi) Register(args string, reply *interface{}) error {
@@ -95,7 +163,7 @@ func (self *EthereumApi) WatchTx(args string, reply *interface{}) error {
 
 func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) error {
 	var id int
-	filter := core.NewFilter(self.xeth.Backend())
+	filter := core.NewFilter(self.xeth().Backend())
 	filter.SetOptions(toFilterOptions(args))
 	filter.LogsCallback = func(logs state.Logs) {
 		self.logMut.Lock()
@@ -120,15 +188,11 @@ func (self *EthereumApi) UninstallFilter(id int, reply *interface{}) error {
 
 func (self *EthereumApi) NewFilterString(args string, reply *interface{}) error {
 	var id int
-	filter := core.NewFilter(self.xeth.Backend())
+	filter := core.NewFilter(self.xeth().Backend())
 
 	callback := func(block *types.Block) {
 		self.logMut.Lock()
 		defer self.logMut.Unlock()
-
-		if self.logs[id] == nil {
-			self.logs[id] = &logFilter{timeout: time.Now()}
-		}
 
 		self.logs[id].add(&state.StateLog{})
 	}
@@ -139,6 +203,7 @@ func (self *EthereumApi) NewFilterString(args string, reply *interface{}) error 
 	}
 
 	id = self.filterManager.InstallFilter(filter)
+	self.logs[id] = &logFilter{timeout: time.Now()}
 	*reply = id
 
 	return nil
@@ -167,42 +232,64 @@ func (self *EthereumApi) Logs(id int, reply *interface{}) error {
 	return nil
 }
 
-func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *interface{}) error {
-	err := args.requirements()
-	if err != nil {
-		return err
-	}
+func (self *EthereumApi) AllLogs(args *FilterOptions, reply *interface{}) error {
+	filter := core.NewFilter(self.xeth().Backend())
+	filter.SetOptions(toFilterOptions(args))
 
-	if args.BlockNumber > 0 {
-		*reply = p.xeth.BlockByNumber(args.BlockNumber)
+	*reply = toLogs(filter.Find())
+
+	return nil
+}
+
+func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *interface{}) error {
+	// This seems a bit precarious Maybe worth splitting to discrete functions
+	if len(args.Hash) > 0 {
+		*reply = p.xeth().BlockByHash(args.Hash)
 	} else {
-		*reply = p.xeth.BlockByHash(args.Hash)
+		*reply = p.xeth().BlockByNumber(args.BlockNumber)
 	}
 	return nil
 }
 
 func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
 	if len(args.Gas) == 0 {
-		args.Gas = defaultGas
+		args.Gas = defaultGas.String()
 	}
 
 	if len(args.GasPrice) == 0 {
-		args.GasPrice = defaultGasPrice
+		args.GasPrice = defaultGasPrice.String()
 	}
 
 	// TODO if no_private_key then
-	if _, exists := p.register[args.From]; exists {
-		p.register[args.From] = append(p.register[args.From], args)
-	} else {
-		result, _ := p.xeth.Transact( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
-		*reply = result
-	}
+	//if _, exists := p.register[args.From]; exists {
+	//	p.register[args.From] = append(p.register[args.From], args)
+	//} else {
+	/*
+		account := accounts.Get(fromHex(args.From))
+		if account != nil {
+			if account.Unlocked() {
+				if !unlockAccount(account) {
+					return
+				}
+			}
+
+			result, _ := account.Transact(fromHex(args.To), fromHex(args.Value), fromHex(args.Gas), fromHex(args.GasPrice), fromHex(args.Data))
+			if len(result) > 0 {
+				*reply = toHex(result)
+			}
+		} else if _, exists := p.register[args.From]; exists {
+			p.register[ags.From] = append(p.register[args.From], args)
+		}
+	*/
+	result, _ := p.xeth().Transact( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
+	*reply = result
+	//}
 
 	return nil
 }
 
 func (p *EthereumApi) Call(args *NewTxArgs, reply *interface{}) error {
-	result, err := p.xeth.Call( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
+	result, err := p.xeth().Call( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
 	if err != nil {
 		return err
 	}
@@ -216,7 +303,7 @@ func (p *EthereumApi) PushTx(args *PushTxArgs, reply *interface{}) error {
 	if err != nil {
 		return err
 	}
-	result, _ := p.xeth.PushTx(args.Tx)
+	result, _ := p.xeth().PushTx(args.Tx)
 	*reply = result
 	return nil
 }
@@ -227,7 +314,7 @@ func (p *EthereumApi) GetStateAt(args *GetStateArgs, reply *interface{}) error {
 		return err
 	}
 
-	state := p.xeth.State().SafeGet(args.Address)
+	state := p.xeth().State().SafeGet(args.Address)
 
 	value := state.StorageString(args.Key)
 	var hx string
@@ -249,42 +336,55 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *interface{}) err
 		return err
 	}
 
-	*reply = p.xeth.State().SafeGet(args.Address).Storage()
+	*reply = p.xeth().State().SafeGet(args.Address).Storage()
 	return nil
 }
 
 func (p *EthereumApi) GetPeerCount(reply *interface{}) error {
-	*reply = p.xeth.PeerCount()
+	*reply = p.xeth().PeerCount()
 	return nil
 }
 
 func (p *EthereumApi) GetIsListening(reply *interface{}) error {
-	*reply = p.xeth.IsListening()
+	*reply = p.xeth().IsListening()
 	return nil
 }
 
 func (p *EthereumApi) GetCoinbase(reply *interface{}) error {
-	*reply = p.xeth.Coinbase()
+	*reply = p.xeth().Coinbase()
 	return nil
 }
 
 func (p *EthereumApi) Accounts(reply *interface{}) error {
-	*reply = p.xeth.Accounts()
+	*reply = p.xeth().Accounts()
 	return nil
 }
 
 func (p *EthereumApi) GetIsMining(reply *interface{}) error {
-	*reply = p.xeth.IsMining()
+	*reply = p.xeth().IsMining()
 	return nil
 }
 
 func (p *EthereumApi) SetMining(shouldmine bool, reply *interface{}) error {
-	*reply = p.xeth.SetMining(shouldmine)
+	*reply = p.xeth().SetMining(shouldmine)
+	return nil
+}
+
+func (p *EthereumApi) GetDefaultBlockAge(reply *interface{}) error {
+	*reply = p.defaultBlockAge
+	return nil
+}
+
+func (p *EthereumApi) SetDefaultBlockAge(defaultBlockAge int64, reply *interface{}) error {
+	p.defaultBlockAge = defaultBlockAge
+	p.setStateByBlockNumber(p.defaultBlockAge)
+
+	*reply = true
 	return nil
 }
 
 func (p *EthereumApi) BlockNumber(reply *interface{}) error {
-	*reply = p.xeth.Backend().ChainManager().CurrentBlock().Number()
+	*reply = p.xeth().Backend().ChainManager().CurrentBlock().Number()
 	return nil
 }
 
@@ -293,7 +393,7 @@ func (p *EthereumApi) GetTxCountAt(args *GetTxCountArgs, reply *interface{}) err
 	if err != nil {
 		return err
 	}
-	*reply = p.xeth.TxCountAt(args.Address)
+	*reply = p.xeth().TxCountAt(args.Address)
 	return nil
 }
 
@@ -302,7 +402,7 @@ func (p *EthereumApi) GetBalanceAt(args *GetBalanceArgs, reply *interface{}) err
 	if err != nil {
 		return err
 	}
-	state := p.xeth.State().SafeGet(args.Address)
+	state := p.xeth().State().SafeGet(args.Address)
 	*reply = toHex(state.Balance().Bytes())
 	return nil
 }
@@ -312,7 +412,7 @@ func (p *EthereumApi) GetCodeAt(args *GetCodeAtArgs, reply *interface{}) error {
 	if err != nil {
 		return err
 	}
-	*reply = p.xeth.CodeAt(args.Address)
+	*reply = p.xeth().CodeAt(args.Address)
 	return nil
 }
 
@@ -359,7 +459,7 @@ func (p *EthereumApi) DbGet(args *DbArgs, reply *interface{}) error {
 }
 
 func (p *EthereumApi) NewWhisperIdentity(reply *interface{}) error {
-	*reply = p.xeth.Whisper().NewIdentity()
+	*reply = p.xeth().Whisper().NewIdentity()
 	return nil
 }
 
@@ -368,12 +468,10 @@ func (p *EthereumApi) NewWhisperFilter(args *xeth.Options, reply *interface{}) e
 	args.Fn = func(msg xeth.WhisperMessage) {
 		p.messagesMut.Lock()
 		defer p.messagesMut.Unlock()
-		if p.messages[id] == nil {
-			p.messages[id] = &whisperFilter{timeout: time.Now()}
-		}
 		p.messages[id].add(msg) // = append(p.messages[id], msg)
 	}
-	id = p.xeth.Whisper().Watch(args)
+	id = p.xeth().Whisper().Watch(args)
+	p.messages[id] = &whisperFilter{timeout: time.Now()}
 	*reply = id
 	return nil
 }
@@ -390,7 +488,7 @@ func (self *EthereumApi) MessagesChanged(id int, reply *interface{}) error {
 }
 
 func (p *EthereumApi) WhisperPost(args *WhisperMessageArgs, reply *interface{}) error {
-	err := p.xeth.Whisper().Post(args.Payload, args.To, args.From, args.Topic, args.Priority, args.Ttl)
+	err := p.xeth().Whisper().Post(args.Payload, args.To, args.From, args.Topic, args.Priority, args.Ttl)
 	if err != nil {
 		return err
 	}
@@ -400,17 +498,17 @@ func (p *EthereumApi) WhisperPost(args *WhisperMessageArgs, reply *interface{}) 
 }
 
 func (p *EthereumApi) HasWhisperIdentity(args string, reply *interface{}) error {
-	*reply = p.xeth.Whisper().HasIdentity(args)
+	*reply = p.xeth().Whisper().HasIdentity(args)
 	return nil
 }
 
 func (p *EthereumApi) WhisperMessages(id int, reply *interface{}) error {
-	*reply = p.xeth.Whisper().Messages(id)
+	*reply = p.xeth().Whisper().Messages(id)
 	return nil
 }
 
 func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
-	// Spec at https://github.com/ethereum/wiki/wiki/Generic-ON-RPC
+	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
 	rpclogger.DebugDetailf("%T %s", req.Params, req.Params)
 	switch req.Method {
 	case "eth_coinbase":
@@ -425,6 +523,14 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.SetMining(args, reply)
+	case "eth_defaultBlock":
+		return p.GetDefaultBlockAge(reply)
+	case "eth_setDefaultBlock":
+		args, err := req.ToIntArgs()
+		if err != nil {
+			return err
+		}
+		return p.SetDefaultBlockAge(int64(args), reply)
 	case "eth_peerCount":
 		return p.GetPeerCount(reply)
 	case "eth_number":
@@ -509,8 +615,14 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.Logs(args, reply)
+	case "eth_logs":
+		args, err := req.ToFilterArgs()
+		if err != nil {
+			return err
+		}
+		return p.AllLogs(args, reply)
 	case "eth_gasPrice":
-		*reply = defaultGasPrice
+		*reply = toHex(defaultGasPrice.Bytes())
 		return nil
 	case "eth_register":
 		args, err := req.ToRegisterArgs()
@@ -589,42 +701,34 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		return p.WhisperMessages(args, reply)
 	default:
-		return NewErrorResponse(fmt.Sprintf("%v %s", ErrorNotImplemented, req.Method))
+		return NewErrorWithMessage(errNotImplemented, req.Method)
 	}
 
 	rpclogger.DebugDetailf("Reply: %T %s", reply, reply)
 	return nil
 }
 
-var filterTickerTime = 15 * time.Second
+func (self *EthereumApi) xeth() *xeth.XEth {
+	self.xethMu.RLock()
+	defer self.xethMu.RUnlock()
 
-func (self *EthereumApi) start() {
-	timer := time.NewTicker(filterTickerTime)
-done:
-	for {
-		select {
-		case <-timer.C:
-			self.logMut.Lock()
-			self.messagesMut.Lock()
-			for id, filter := range self.logs {
-				if time.Since(filter.timeout) > 20*time.Second {
-					delete(self.logs, id)
-				}
-			}
-
-			for id, filter := range self.messages {
-				if time.Since(filter.timeout) > 20*time.Second {
-					delete(self.messages, id)
-				}
-			}
-			self.logMut.Unlock()
-			self.messagesMut.Unlock()
-		case <-self.quit:
-			break done
-		}
-	}
+	return self.eth
 }
 
-func (self *EthereumApi) stop() {
-	close(self.quit)
+func (self *EthereumApi) useState(statedb *state.StateDB) {
+	self.xethMu.Lock()
+	defer self.xethMu.Unlock()
+
+	self.eth = self.eth.UseState(statedb)
+}
+
+func t(f ui.Frontend) {
+	// Call the password dialog
+	ret, err := f.Call("PasswordDialog")
+	if err != nil {
+		fmt.Println(err)
+	}
+	// Get the first argument
+	t, _ := ret.Get(0)
+	fmt.Println("return:", t)
 }

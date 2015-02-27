@@ -48,9 +48,8 @@ type BlockProcessor struct {
 
 func NewBlockProcessor(db ethutil.Database, txpool *TxPool, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
 	sm := &BlockProcessor{
-		db:  db,
-		mem: make(map[string]*big.Int),
-		//Pow:      &ethash.Ethash{},
+		db:       db,
+		mem:      make(map[string]*big.Int),
 		Pow:      ezp.New(),
 		bc:       chainManager,
 		eventMux: eventMux,
@@ -60,12 +59,12 @@ func NewBlockProcessor(db ethutil.Database, txpool *TxPool, chainManager *ChainM
 	return sm
 }
 
-func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block *types.Block) (receipts types.Receipts, err error) {
+func (sm *BlockProcessor) TransitionState(statedb *state.StateDB, parent, block *types.Block, transientProcess bool) (receipts types.Receipts, err error) {
 	coinbase := statedb.GetOrNewStateObject(block.Header().Coinbase)
-	coinbase.SetGasPool(CalcGasLimit(parent, block))
+	coinbase.SetGasPool(block.Header().GasLimit)
 
 	// Process the transactions on to parent state
-	receipts, _, _, _, err = sm.ApplyTransactions(coinbase, statedb, block, block.Transactions(), false)
+	receipts, _, _, _, err = sm.ApplyTransactions(coinbase, statedb, block, block.Transactions(), transientProcess)
 	if err != nil {
 		return nil, err
 	}
@@ -100,9 +99,9 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 	// Notify all subscribers
 	if !transientProcess {
 		go self.eventMux.Post(TxPostEvent{tx})
+		logs := statedb.Logs()
+		go self.eventMux.Post(logs)
 	}
-
-	go self.eventMux.Post(statedb.Logs())
 
 	return receipt, txGas, err
 }
@@ -179,7 +178,7 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 		return
 	}
 
-	receipts, err := sm.TransitionState(state, parent, block)
+	receipts, err := sm.TransitionState(state, parent, block, false)
 	if err != nil {
 		return
 	}
@@ -246,6 +245,11 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 	expd := CalcDifficulty(block, parent)
 	if expd.Cmp(block.Header().Difficulty) != 0 {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Header().Difficulty, expd)
+	}
+
+	expl := CalcGasLimit(parent, block)
+	if expl.Cmp(block.Header().GasLimit) != 0 {
+		return fmt.Errorf("GasLimit check failed for block %v, %v", block.Header().GasLimit, expl)
 	}
 
 	if block.Time() < parent.Time() {
@@ -316,13 +320,10 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 
 	var (
 		parent = sm.bc.GetBlock(block.Header().ParentHash)
-		//state  = state.New(parent.Trie().Copy())
-		state = state.New(parent.Root(), sm.db)
+		state  = state.New(parent.Root(), sm.db)
 	)
 
-	defer state.Reset()
-
-	sm.TransitionState(state, parent, block)
+	sm.TransitionState(state, parent, block, true)
 	sm.AccumulateRewards(state, block, parent)
 
 	return state.Logs(), nil

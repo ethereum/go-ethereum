@@ -197,7 +197,7 @@ gasLimit:
 	}
 	self.eth.TxPool().RemoveSet(remove)
 
-	self.current.coinbase.AddAmount(core.BlockReward)
+	self.current.coinbase.AddBalance(core.BlockReward)
 
 	self.current.state.Update(ethutil.Big0)
 	self.push()
@@ -225,7 +225,7 @@ func (self *worker) commitUncle(uncle *types.Header) error {
 	}
 
 	uncleAccount := self.current.state.GetAccount(uncle.Coinbase)
-	uncleAccount.AddAmount(uncleReward)
+	uncleAccount.AddBalance(uncleReward)
 
 	self.current.coinbase.AddBalance(uncleReward)
 

@@ -117,8 +117,13 @@ func (self *TxPool) add(tx *types.Transaction) error {
 	} else {
 		to = "[NEW_CONTRACT]"
 	}
-
-	txplogger.Debugf("(t) %x => %s (%v) %x\n", tx.From()[:4], to, tx.Value, tx.Hash())
+	var from string
+	if len(tx.From()) > 0 {
+		from = ethutil.Bytes2Hex(tx.From()[:4])
+	} else {
+		from = "INVALID"
+	}
+	txplogger.Debugf("(t) %x => %s (%v) %x\n", from, to, tx.Value, tx.Hash())
 
 	// Notify the subscribers
 	go self.eventMux.Post(TxPreEvent{tx})
