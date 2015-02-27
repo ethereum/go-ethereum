@@ -41,12 +41,16 @@ type Header struct {
 	Extra string
 	// Block Nonce for verification
 	Nonce ethutil.Bytes
+	// Mix digest for quick checking to prevent DOS
+	MixDigest ethutil.Bytes
+	// SeedHash used for light client verification
+	SeedHash ethutil.Bytes
 }
 
 func (self *Header) rlpData(withNonce bool) []interface{} {
 	fields := []interface{}{self.ParentHash, self.UncleHash, self.Coinbase, self.Root, self.TxHash, self.ReceiptHash, self.Bloom, self.Difficulty, self.Number, self.GasLimit, self.GasUsed, self.Time, self.Extra}
 	if withNonce {
-		fields = append(fields, self.Nonce)
+		fields = append(fields, self.Nonce, self.MixDigest, self.SeedHash)
 	}
 
 	return fields
@@ -176,6 +180,8 @@ func (self *Block) RlpDataForStorage() interface{} {
 // Header accessors (add as you need them)
 func (self *Block) Number() *big.Int          { return self.header.Number }
 func (self *Block) NumberU64() uint64         { return self.header.Number.Uint64() }
+func (self *Block) MixDigest() []byte         { return self.header.MixDigest }
+func (self *Block) SeedHash() []byte          { return self.header.SeedHash }
 func (self *Block) Nonce() []byte             { return self.header.Nonce }
 func (self *Block) Bloom() []byte             { return self.header.Bloom }
 func (self *Block) Coinbase() []byte          { return self.header.Coinbase }
@@ -200,7 +206,6 @@ func (self *Block) GetUncle(i int) *Header {
 
 // Implement pow.Block
 func (self *Block) Difficulty() *big.Int { return self.header.Difficulty }
-func (self *Block) N() []byte            { return self.header.Nonce }
 func (self *Block) HashNoNonce() []byte  { return self.header.HashNoNonce() }
 
 func (self *Block) Hash() []byte {

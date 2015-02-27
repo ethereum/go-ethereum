@@ -96,5 +96,5 @@ func verify(hash []byte, diff *big.Int, nonce []byte) bool {
 }
 
 func Verify(block pow.Block) bool {
-	return verify(block.HashNoNonce(), block.Difficulty(), block.N())
+	return verify(block.HashNoNonce(), block.Difficulty(), block.Nonce())
 }
