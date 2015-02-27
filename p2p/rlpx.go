@@ -13,24 +13,44 @@ import (
 )
 
 var (
+	// this is used in place of actual frame header data.
+	// TODO: replace this when Msg contains the protocol type code.
 	zeroHeader = []byte{0xC2, 0x80, 0x80}
-	zero16     = make([]byte, 16)
+
+	// sixteen zero bytes
+	zero16 = make([]byte, 16)
 )
 
 type rlpxFrameRW struct {
 	conn io.ReadWriter
+	enc  cipher.Stream
+	dec  cipher.Stream
 
 	macCipher  cipher.Block
 	egressMAC  hash.Hash
 	ingressMAC hash.Hash
 }
 
-func newRlpxFrameRW(conn io.ReadWriter, macSecret []byte, egressMAC, ingressMAC hash.Hash) *rlpxFrameRW {
-	cipher, err := aes.NewCipher(macSecret)
+func newRlpxFrameRW(conn io.ReadWriter, s secrets) *rlpxFrameRW {
+	macc, err := aes.NewCipher(s.MAC)
 	if err != nil {
-		panic("invalid macSecret: " + err.Error())
+		panic("invalid MAC secret: " + err.Error())
 	}
-	return &rlpxFrameRW{conn: conn, macCipher: cipher, egressMAC: egressMAC, ingressMAC: ingressMAC}
+	encc, err := aes.NewCipher(s.AES)
+	if err != nil {
+		panic("invalid AES secret: " + err.Error())
+	}
+	// we use an all-zeroes IV for AES because the key used
+	// for encryption is ephemeral.
+	iv := make([]byte, encc.BlockSize())
+	return &rlpxFrameRW{
+		conn:       conn,
+		enc:        cipher.NewCTR(encc, iv),
+		dec:        cipher.NewCTR(encc, iv),
+		macCipher:  macc,
+		egressMAC:  s.EgressMAC,
+		ingressMAC: s.IngressMAC,
+	}
 }
 
 func (rw *rlpxFrameRW) WriteMsg(msg Msg) error {
@@ -41,13 +61,14 @@ func (rw *rlpxFrameRW) WriteMsg(msg Msg) error {
 	fsize := uint32(len(ptype)) + msg.Size
 	putInt24(fsize, headbuf) // TODO: check overflow
 	copy(headbuf[3:], zeroHeader)
+	rw.enc.XORKeyStream(headbuf[:16], headbuf[:16]) // first half is now encrypted
 	copy(headbuf[16:], updateHeaderMAC(rw.egressMAC, rw.macCipher, headbuf[:16]))
 	if _, err := rw.conn.Write(headbuf); err != nil {
 		return err
 	}
 
-	// write frame, updating the egress MAC while writing to conn.
-	tee := io.MultiWriter(rw.conn, rw.egressMAC)
+	// write encrypted frame, updating the egress MAC while writing to conn.
+	tee := cipher.StreamWriter{S: rw.enc, W: io.MultiWriter(rw.conn, rw.egressMAC)}
 	if _, err := tee.Write(ptype); err != nil {
 		return err
 	}
@@ -62,7 +83,8 @@ func (rw *rlpxFrameRW) WriteMsg(msg Msg) error {
 
 	// write packet-mac. egress MAC is up to date because
 	// frame content was written to it as well.
-	_, err := rw.conn.Write(rw.egressMAC.Sum(nil))
+	mac := updateHeaderMAC(rw.egressMAC, rw.macCipher, rw.egressMAC.Sum(nil))
+	_, err := rw.conn.Write(mac)
 	return err
 }
 
@@ -72,34 +94,40 @@ func (rw *rlpxFrameRW) ReadMsg() (msg Msg, err error) {
 	if _, err := io.ReadFull(rw.conn, headbuf); err != nil {
 		return msg, err
 	}
-	fsize := readInt24(headbuf)
-	// ignore protocol type for now
+	// verify header mac
 	shouldMAC := updateHeaderMAC(rw.ingressMAC, rw.macCipher, headbuf[:16])
 	if !hmac.Equal(shouldMAC[:16], headbuf[16:]) {
 		return msg, errors.New("bad header MAC")
 	}
+	rw.dec.XORKeyStream(headbuf[:16], headbuf[:16]) // first half is now decrypted
+	fsize := readInt24(headbuf)
+	// ignore protocol type for now
 
 	// read the frame content
-	framebuf := make([]byte, fsize)
+	var rsize = fsize // frame size rounded up to 16 byte boundary
+	if padding := fsize % 16; padding > 0 {
+		rsize += 16 - padding
+	}
+	framebuf := make([]byte, rsize)
 	if _, err := io.ReadFull(rw.conn, framebuf); err != nil {
 		return msg, err
 	}
-	rw.ingressMAC.Write(framebuf)
-	if padding := fsize % 16; padding > 0 {
-		if _, err := io.CopyN(rw.ingressMAC, rw.conn, int64(16-padding)); err != nil {
-			return msg, err
-		}
-	}
+
 	// read and validate frame MAC. we can re-use headbuf for that.
+	rw.ingressMAC.Write(framebuf)
 	if _, err := io.ReadFull(rw.conn, headbuf); err != nil {
 		return msg, err
 	}
-	if !hmac.Equal(rw.ingressMAC.Sum(nil), headbuf) {
+	shouldMAC = updateHeaderMAC(rw.ingressMAC, rw.macCipher, rw.ingressMAC.Sum(nil))
+	if !hmac.Equal(shouldMAC, headbuf) {
 		return msg, errors.New("bad frame MAC")
 	}
 
+	// decrypt frame content
+	rw.dec.XORKeyStream(framebuf, framebuf)
+
 	// decode message code
-	content := bytes.NewReader(framebuf)
+	content := bytes.NewReader(framebuf[:fsize])
 	if err := rlp.Decode(content, &msg.Code); err != nil {
 		return msg, err
 	}

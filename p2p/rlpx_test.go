@@ -16,14 +16,18 @@ import (
 
 func TestRlpxFrameFake(t *testing.T) {
 	buf := new(bytes.Buffer)
-	secret := crypto.Sha3()
 	hash := fakeHash([]byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1})
-	rw := newRlpxFrameRW(buf, secret, hash, hash)
+	rw := newRlpxFrameRW(buf, secrets{
+		AES:        crypto.Sha3(),
+		MAC:        crypto.Sha3(),
+		IngressMAC: hash,
+		EgressMAC:  hash,
+	})
 
 	golden := unhex(`
-000006C2808000000000000000000000
+00828ddae471818bb0bfa6b551d1cb42
 01010101010101010101010101010101
-08C40102030400000000000000000000
+ba628a4ba590cb43f7848f41c4382885
 01010101010101010101010101010101
 01010101010101010101010101010101
 `)
@@ -75,27 +79,35 @@ func unhex(str string) []byte {
 
 func TestRlpxFrameRW(t *testing.T) {
 	var (
+		aesSecret      = make([]byte, 16)
 		macSecret      = make([]byte, 16)
 		egressMACinit  = make([]byte, 32)
 		ingressMACinit = make([]byte, 32)
 	)
-	for _, s := range [][]byte{macSecret, egressMACinit, ingressMACinit} {
+	for _, s := range [][]byte{aesSecret, macSecret, egressMACinit, ingressMACinit} {
 		rand.Read(s)
 	}
-
 	conn := new(bytes.Buffer)
 
-	em1 := sha3.NewKeccak256()
-	em1.Write(egressMACinit)
-	im1 := sha3.NewKeccak256()
-	im1.Write(ingressMACinit)
-	rw1 := newRlpxFrameRW(conn, macSecret, em1, im1)
+	s1 := secrets{
+		AES:        aesSecret,
+		MAC:        macSecret,
+		EgressMAC:  sha3.NewKeccak256(),
+		IngressMAC: sha3.NewKeccak256(),
+	}
+	s1.EgressMAC.Write(egressMACinit)
+	s1.IngressMAC.Write(ingressMACinit)
+	rw1 := newRlpxFrameRW(conn, s1)
 
-	em2 := sha3.NewKeccak256()
-	em2.Write(ingressMACinit)
-	im2 := sha3.NewKeccak256()
-	im2.Write(egressMACinit)
-	rw2 := newRlpxFrameRW(conn, macSecret, em2, im2)
+	s2 := secrets{
+		AES:        aesSecret,
+		MAC:        macSecret,
+		EgressMAC:  sha3.NewKeccak256(),
+		IngressMAC: sha3.NewKeccak256(),
+	}
+	s2.EgressMAC.Write(ingressMACinit)
+	s2.IngressMAC.Write(egressMACinit)
+	rw2 := newRlpxFrameRW(conn, s2)
 
 	// send some messages
 	for i := 0; i < 10; i++ {

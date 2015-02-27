@@ -2,8 +2,6 @@ package p2p
 
 import (
 	"bytes"
-	"crypto/ecdsa"
-	"crypto/rand"
 	"net"
 	"reflect"
 	"testing"
@@ -69,102 +67,46 @@ func TestSharedSecret(t *testing.T) {
 	}
 }
 
-func TestCryptoHandshake(t *testing.T) {
-	testCryptoHandshake(newkey(), newkey(), nil, t)
-}
-
-func TestCryptoHandshakeWithToken(t *testing.T) {
-	sessionToken := make([]byte, shaLen)
-	rand.Read(sessionToken)
-	testCryptoHandshake(newkey(), newkey(), sessionToken, t)
-}
-
-func testCryptoHandshake(prv0, prv1 *ecdsa.PrivateKey, sessionToken []byte, t *testing.T) {
-	var err error
-	// pub0 := &prv0.PublicKey
-	pub1 := &prv1.PublicKey
-
-	// pub0s := crypto.FromECDSAPub(pub0)
-	pub1s := crypto.FromECDSAPub(pub1)
-
-	// simulate handshake by feeding output to input
-	// initiator sends handshake 'auth'
-	auth, initNonce, randomPrivKey, err := authMsg(prv0, pub1s, sessionToken)
-	if err != nil {
-		t.Errorf("%v", err)
-	}
-	// t.Logf("-> %v", hexkey(auth))
-
-	// receiver reads auth and responds with response
-	response, remoteRecNonce, remoteInitNonce, _, remoteRandomPrivKey, remoteInitRandomPubKey, err := authResp(auth, sessionToken, prv1)
-	if err != nil {
-		t.Errorf("%v", err)
-	}
-	// t.Logf("<- %v\n", hexkey(response))
-
-	// initiator reads receiver's response and the key exchange completes
-	recNonce, remoteRandomPubKey, _, err := completeHandshake(response, prv0)
-	if err != nil {
-		t.Errorf("completeHandshake error: %v", err)
-	}
-
-	// now both parties should have the same session parameters
-	initSessionToken, err := newSession(initNonce, recNonce, randomPrivKey, remoteRandomPubKey)
-	if err != nil {
-		t.Errorf("newSession error: %v", err)
-	}
-
-	recSessionToken, err := newSession(remoteInitNonce, remoteRecNonce, remoteRandomPrivKey, remoteInitRandomPubKey)
-	if err != nil {
-		t.Errorf("newSession error: %v", err)
-	}
-
-	// fmt.Printf("\nauth (%v) %x\n\nresp (%v) %x\n\n", len(auth), auth, len(response), response)
-
-	// fmt.Printf("\nauth %x\ninitNonce %x\nresponse%x\nremoteRecNonce %x\nremoteInitNonce %x\nremoteRandomPubKey %x\nrecNonce %x\nremoteInitRandomPubKey %x\ninitSessionToken %x\n\n", auth, initNonce, response, remoteRecNonce, remoteInitNonce, remoteRandomPubKey, recNonce, remoteInitRandomPubKey, initSessionToken)
-
-	if !bytes.Equal(initNonce, remoteInitNonce) {
-		t.Errorf("nonces do not match")
-	}
-	if !bytes.Equal(recNonce, remoteRecNonce) {
-		t.Errorf("receiver nonces do not match")
-	}
-	if !bytes.Equal(initSessionToken, recSessionToken) {
-		t.Errorf("session tokens do not match")
-	}
-}
-
 func TestEncHandshake(t *testing.T) {
 	defer testlog(t).detach()
 
 	prv0, _ := crypto.GenerateKey()
 	prv1, _ := crypto.GenerateKey()
-	pub0s, _ := exportPublicKey(&prv0.PublicKey)
-	pub1s, _ := exportPublicKey(&prv1.PublicKey)
 	rw0, rw1 := net.Pipe()
-	tokens := make(chan []byte)
+	secrets := make(chan secrets)
 
 	go func() {
-		token, err := outboundEncHandshake(rw0, prv0, pub1s, nil)
+		pub1s, _ := exportPublicKey(&prv1.PublicKey)
+		s, err := outboundEncHandshake(rw0, prv0, pub1s, nil)
 		if err != nil {
 			t.Errorf("outbound side error: %v", err)
 		}
-		tokens <- token
+		id1 := discover.PubkeyID(&prv1.PublicKey)
+		if s.RemoteID != id1 {
+			t.Errorf("outbound side remote ID mismatch")
+		}
+		secrets <- s
 	}()
 	go func() {
-		token, remotePubkey, err := inboundEncHandshake(rw1, prv1, nil)
+		s, err := inboundEncHandshake(rw1, prv1, nil)
 		if err != nil {
 			t.Errorf("inbound side error: %v", err)
 		}
-		if !bytes.Equal(remotePubkey, pub0s) {
-			t.Errorf("inbound side returned wrong remote pubkey\n  got:  %x\n  want: %x", remotePubkey, pub0s)
+		id0 := discover.PubkeyID(&prv0.PublicKey)
+		if s.RemoteID != id0 {
+			t.Errorf("inbound side remote ID mismatch")
 		}
-		tokens <- token
+		secrets <- s
 	}()
 
-	t1, t2 := <-tokens, <-tokens
-	if !bytes.Equal(t1, t2) {
-		t.Error("session token mismatch")
+	// get computed secrets from both sides
+	t1, t2 := <-secrets, <-secrets
+	// don't compare remote node IDs
+	t1.RemoteID, t2.RemoteID = discover.NodeID{}, discover.NodeID{}
+	// flip MACs on one of them so they compare equal
+	t1.EgressMAC, t1.IngressMAC = t1.IngressMAC, t1.EgressMAC
+	if !reflect.DeepEqual(t1, t2) {
+		t.Errorf("secrets mismatch:\n t1: %#v\n t2: %#v", t1, t2)
 	}
 }
 
