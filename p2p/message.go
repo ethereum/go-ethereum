@@ -197,7 +197,7 @@ func (rw *frameRW) ReadMsg() (msg Msg, err error) {
 		return msg, err
 	}
 	if !bytes.HasPrefix(start, magicToken) {
-		return msg, fmt.Errorf("bad magic token %x", start[:4], magicToken)
+		return msg, fmt.Errorf("bad magic token %x", start[:4])
 	}
 	size := binary.BigEndian.Uint32(start[4:])
 

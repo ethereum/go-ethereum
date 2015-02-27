@@ -3,7 +3,7 @@ import QtQuick.Controls 1.0;
 import QtQuick.Controls.Styles 1.0
 import QtQuick.Layouts 1.0;
 import QtWebEngine 1.0
-//import QtWebEngine.experimental 1.0
+import QtWebEngine.experimental 1.0
 import QtQuick.Window 2.0;
 
 
@@ -20,8 +20,6 @@ Rectangle {
 	property alias url: webview.url
 	property alias windowTitle: webview.title
 	property alias webView: webview
-
-
 
 	property var cleanPath: false
 	property var open: function(url) {
@@ -66,9 +64,6 @@ Rectangle {
 		}
 	}
 
-	Component.onCompleted: {
-	}
-
 	Item {
 		objectName: "root"
 		id: root
@@ -85,7 +80,7 @@ Rectangle {
 			property var domain: "ethereum-dapp-catalog.meteor.com"
 			url: protocol + domain
 
-			//experimental.settings.javascriptCanAccessClipboard: true
+			experimental.settings.javascriptCanAccessClipboard: true
 
 
 			onJavaScriptConsoleMessage: {
@@ -112,11 +107,11 @@ Rectangle {
                 	
                 }
             }
-			// onLoadingChanged: {
-			// 	if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
-   //                  webview.runJavaScript(eth.readFile("mist.js"));
-			// 	}
-			// }
+			onLoadingChanged: {
+				if (loadRequest.status == WebEngineView.LoadSucceededStatus) {
+                    webview.runJavaScript(eth.readFile("mist.js"));
+				}
+			}
 		}
 
 

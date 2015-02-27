@@ -20,13 +20,13 @@ type Miner struct {
 	mining   bool
 }
 
-func New(coinbase []byte, eth core.Backend) *Miner {
+func New(coinbase []byte, eth core.Backend, minerThreads int) *Miner {
 	miner := &Miner{
 		Coinbase: coinbase,
 		worker:   newWorker(coinbase, eth),
 	}
 
-	for i := 0; i < 4; i++ {
+	for i := 0; i < minerThreads; i++ {
 		miner.worker.register(NewCpuMiner(i, ezp.New()))
 	}
 

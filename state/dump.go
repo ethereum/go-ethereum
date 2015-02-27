@@ -30,12 +30,12 @@ func (self *StateDB) Dump() []byte {
 	for it.Next() {
 		stateObject := NewStateObjectFromBytes(it.Key, it.Value, self.db)
 
-		account := Account{Balance: stateObject.balance.String(), Nonce: stateObject.Nonce, Root: ethutil.Bytes2Hex(stateObject.Root()), CodeHash: ethutil.Bytes2Hex(stateObject.codeHash)}
+		account := Account{Balance: stateObject.balance.String(), Nonce: stateObject.nonce, Root: ethutil.Bytes2Hex(stateObject.Root()), CodeHash: ethutil.Bytes2Hex(stateObject.codeHash)}
 		account.Storage = make(map[string]string)
 
 		storageIt := stateObject.State.trie.Iterator()
 		for storageIt.Next() {
-			account.Storage[ethutil.Bytes2Hex(it.Key)] = ethutil.Bytes2Hex(it.Value)
+			account.Storage[ethutil.Bytes2Hex(storageIt.Key)] = ethutil.Bytes2Hex(storageIt.Value)
 		}
 		world.Accounts[ethutil.Bytes2Hex(it.Key)] = account
 	}
@@ -50,7 +50,7 @@ func (self *StateDB) Dump() []byte {
 
 // Debug stuff
 func (self *StateObject) CreateOutputForDiff() {
-	fmt.Printf("%x %x %x %x\n", self.Address(), self.State.Root(), self.balance.Bytes(), self.Nonce)
+	fmt.Printf("%x %x %x %x\n", self.Address(), self.State.Root(), self.balance.Bytes(), self.nonce)
 	it := self.State.trie.Iterator()
 	for it.Next() {
 		fmt.Printf("%x %x\n", it.Key, it.Value)

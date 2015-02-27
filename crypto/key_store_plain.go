@@ -30,7 +30,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/user"
 	"path"
 )
 
@@ -46,12 +45,6 @@ type KeyStore2 interface {
 
 type keyStorePlain struct {
 	keysDirPath string
-}
-
-// TODO: copied from cmd/ethereum/flags.go
-func DefaultDataDir() string {
-	usr, _ := user.Current()
-	return path.Join(usr.HomeDir, ".ethereum")
 }
 
 func NewKeyStorePlain(path string) KeyStore2 {
@@ -126,8 +119,11 @@ func GetKeyAddresses(keysDirPath string) (addresses [][]byte, err error) {
 	}
 	addresses = make([][]byte, len(fileInfos))
 	for i, fileInfo := range fileInfos {
-		addresses[i] = make([]byte, 40)
-		addresses[i] = []byte(fileInfo.Name())
+		address, err := hex.DecodeString(fileInfo.Name())
+		if err != nil {
+			continue
+		}
+		addresses[i] = address
 	}
 	return addresses, err
 }
