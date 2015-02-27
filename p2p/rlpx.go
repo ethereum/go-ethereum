@@ -62,12 +62,15 @@ func (rw *rlpxFrameRW) WriteMsg(msg Msg) error {
 	putInt24(fsize, headbuf) // TODO: check overflow
 	copy(headbuf[3:], zeroHeader)
 	rw.enc.XORKeyStream(headbuf[:16], headbuf[:16]) // first half is now encrypted
-	copy(headbuf[16:], updateHeaderMAC(rw.egressMAC, rw.macCipher, headbuf[:16]))
+
+	// write header MAC
+	copy(headbuf[16:], updateMAC(rw.egressMAC, rw.macCipher, headbuf[:16]))
 	if _, err := rw.conn.Write(headbuf); err != nil {
 		return err
 	}
 
-	// write encrypted frame, updating the egress MAC while writing to conn.
+	// write encrypted frame, updating the egress MAC hash with
+	// the data written to conn.
 	tee := cipher.StreamWriter{S: rw.enc, W: io.MultiWriter(rw.conn, rw.egressMAC)}
 	if _, err := tee.Write(ptype); err != nil {
 		return err
@@ -81,9 +84,10 @@ func (rw *rlpxFrameRW) WriteMsg(msg Msg) error {
 		}
 	}
 
-	// write packet-mac. egress MAC is up to date because
+	// write frame MAC. egress MAC hash is up to date because
 	// frame content was written to it as well.
-	mac := updateHeaderMAC(rw.egressMAC, rw.macCipher, rw.egressMAC.Sum(nil))
+	fmacseed := rw.egressMAC.Sum(nil)
+	mac := updateMAC(rw.egressMAC, rw.macCipher, fmacseed)
 	_, err := rw.conn.Write(mac)
 	return err
 }
@@ -95,8 +99,8 @@ func (rw *rlpxFrameRW) ReadMsg() (msg Msg, err error) {
 		return msg, err
 	}
 	// verify header mac
-	shouldMAC := updateHeaderMAC(rw.ingressMAC, rw.macCipher, headbuf[:16])
-	if !hmac.Equal(shouldMAC[:16], headbuf[16:]) {
+	shouldMAC := updateMAC(rw.ingressMAC, rw.macCipher, headbuf[:16])
+	if !hmac.Equal(shouldMAC, headbuf[16:]) {
 		return msg, errors.New("bad header MAC")
 	}
 	rw.dec.XORKeyStream(headbuf[:16], headbuf[:16]) // first half is now decrypted
@@ -115,11 +119,12 @@ func (rw *rlpxFrameRW) ReadMsg() (msg Msg, err error) {
 
 	// read and validate frame MAC. we can re-use headbuf for that.
 	rw.ingressMAC.Write(framebuf)
-	if _, err := io.ReadFull(rw.conn, headbuf); err != nil {
+	fmacseed := rw.ingressMAC.Sum(nil)
+	if _, err := io.ReadFull(rw.conn, headbuf[:16]); err != nil {
 		return msg, err
 	}
-	shouldMAC = updateHeaderMAC(rw.ingressMAC, rw.macCipher, rw.ingressMAC.Sum(nil))
-	if !hmac.Equal(shouldMAC, headbuf) {
+	shouldMAC = updateMAC(rw.ingressMAC, rw.macCipher, fmacseed)
+	if !hmac.Equal(shouldMAC, headbuf[:16]) {
 		return msg, errors.New("bad frame MAC")
 	}
 
@@ -136,14 +141,16 @@ func (rw *rlpxFrameRW) ReadMsg() (msg Msg, err error) {
 	return msg, nil
 }
 
-func updateHeaderMAC(mac hash.Hash, block cipher.Block, header []byte) []byte {
+// updateMAC reseeds the given hash with encrypted seed.
+// it returns the first 16 bytes of the hash sum after seeding.
+func updateMAC(mac hash.Hash, block cipher.Block, seed []byte) []byte {
 	aesbuf := make([]byte, aes.BlockSize)
 	block.Encrypt(aesbuf, mac.Sum(nil))
 	for i := range aesbuf {
-		aesbuf[i] ^= header[i]
+		aesbuf[i] ^= seed[i]
 	}
 	mac.Write(aesbuf)
-	return mac.Sum(nil)
+	return mac.Sum(nil)[:16]
 }
 
 func readInt24(b []byte) uint32 {
