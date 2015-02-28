@@ -69,8 +69,8 @@ done:
 
 func (self *CpuMiner) mine(block *types.Block) {
 	minerlogger.Infof("(re)started agent[%d]. mining...\n", self.index)
-	nonce := self.pow.Search(block, self.quitCurrentOp)
+	nonce, mixDigest, seedHash := self.pow.Search(block, self.quitCurrentOp)
 	if nonce != nil {
-		self.returnCh <- Work{block.Number().Uint64(), nonce}
+		self.returnCh <- Work{block.Number().Uint64(), nonce, mixDigest, seedHash}
 	}
 }

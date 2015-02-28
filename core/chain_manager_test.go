@@ -24,12 +24,6 @@ func init() {
 
 // Test fork of length N starting from block i
 func testFork(t *testing.T, bman *BlockProcessor, i, N int, f func(td1, td2 *big.Int)) {
-	fmt.Println("Testing Fork!")
-	var b *types.Block = nil
-	if i > 0 {
-		b = bman.bc.GetBlockByNumber(uint64(i))
-	}
-	_ = b
 	// switch databases to process the new chain
 	db, err := ethdb.NewMemDatabase()
 	if err != nil {
@@ -40,13 +34,25 @@ func testFork(t *testing.T, bman *BlockProcessor, i, N int, f func(td1, td2 *big
 	if err != nil {
 		t.Fatal("could not make new canonical in testFork", err)
 	}
+	// asert the bmans have the same block at i
+	bi1 := bman.bc.GetBlockByNumber(uint64(i)).Hash()
+	bi2 := bman2.bc.GetBlockByNumber(uint64(i)).Hash()
+	if bytes.Compare(bi1, bi2) != 0 {
+		t.Fatal("chains do not have the same hash at height", i)
+	}
+
 	bman2.bc.SetProcessor(bman2)
 
+	// extend the fork
 	parent := bman2.bc.CurrentBlock()
-	chainB := makeChain(bman2, parent, N, db)
-	bman2.bc.InsertChain(chainB)
+	chainB := makeChain(bman2, parent, N, db, ForkSeed)
+	err = bman2.bc.InsertChain(chainB)
+	if err != nil {
+		t.Fatal("Insert chain error for fork:", err)
+	}
 
 	tdpre := bman.bc.Td()
+	// Test the fork's blocks on the original chain
 	td, err := testChain(chainB, bman)
 	if err != nil {
 		t.Fatal("expected chainB not to give errors:", err)
@@ -55,6 +61,14 @@ func testFork(t *testing.T, bman *BlockProcessor, i, N int, f func(td1, td2 *big
 	f(tdpre, td)
 }
 
+func printChain(bc *ChainManager) {
+	for i := bc.CurrentBlock().Number().Uint64(); i > 0; i-- {
+		b := bc.GetBlockByNumber(uint64(i))
+		fmt.Printf("\t%x\n", b.Hash())
+	}
+}
+
+// process blocks against a chain
 func testChain(chainB types.Blocks, bman *BlockProcessor) (*big.Int, error) {
 	td := new(big.Int)
 	for _, block := range chainB {
@@ -102,12 +116,13 @@ func insertChain(done chan bool, chainMan *ChainManager, chain types.Blocks, t *
 }
 
 func TestExtendCanonical(t *testing.T) {
+	CanonicalLength := 5
 	db, err := ethdb.NewMemDatabase()
 	if err != nil {
 		t.Fatal("Failed to create db:", err)
 	}
 	// make first chain starting from genesis
-	bman, err := newCanonical(5, db)
+	bman, err := newCanonical(CanonicalLength, db)
 	if err != nil {
 		t.Fatal("Could not make new canonical chain:", err)
 	}
@@ -116,11 +131,11 @@ func TestExtendCanonical(t *testing.T) {
 			t.Error("expected chainB to have higher difficulty. Got", td2, "expected more than", td1)
 		}
 	}
-	// Start fork from current height (5)
-	testFork(t, bman, 5, 1, f)
-	testFork(t, bman, 5, 2, f)
-	testFork(t, bman, 5, 5, f)
-	testFork(t, bman, 5, 10, f)
+	// Start fork from current height (CanonicalLength)
+	testFork(t, bman, CanonicalLength, 1, f)
+	testFork(t, bman, CanonicalLength, 2, f)
+	testFork(t, bman, CanonicalLength, 5, f)
+	testFork(t, bman, CanonicalLength, 10, f)
 }
 
 func TestShorterFork(t *testing.T) {
@@ -189,6 +204,7 @@ func TestEqualFork(t *testing.T) {
 	}
 	// Sum of numbers must be equal to 10
 	// for this to be an equal fork
+	testFork(t, bman, 0, 10, f)
 	testFork(t, bman, 1, 9, f)
 	testFork(t, bman, 2, 8, f)
 	testFork(t, bman, 5, 5, f)
@@ -215,7 +231,7 @@ func TestBrokenChain(t *testing.T) {
 	}
 	bman2.bc.SetProcessor(bman2)
 	parent := bman2.bc.CurrentBlock()
-	chainB := makeChain(bman2, parent, 5, db2)
+	chainB := makeChain(bman2, parent, 5, db2, ForkSeed)
 	chainB = chainB[1:]
 	_, err = testChain(chainB, bman)
 	if err == nil {
