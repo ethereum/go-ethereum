@@ -65,7 +65,6 @@ func main() {
 	statedb := state.New(nil, db)
 	sender := statedb.NewStateObject([]byte("sender"))
 	receiver := statedb.NewStateObject([]byte("receiver"))
-	//receiver.SetCode([]byte(*code))
 	receiver.SetCode(ethutil.Hex2Bytes(*code))
 
 	vmenv := NewEnv(statedb, []byte("evmuser"), ethutil.Big(*value))

@@ -274,7 +274,6 @@ func TestLargeData(t *testing.T) {
 		trie.Update(value2.k, value2.v)
 		vals[string(value.k)] = value
 		vals[string(value2.k)] = value2
-		fmt.Println(value, "\n", value2)
 	}
 
 	it := trie.Iterator()
