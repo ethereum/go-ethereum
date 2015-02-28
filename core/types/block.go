@@ -48,7 +48,20 @@ type Header struct {
 }
 
 func (self *Header) rlpData(withNonce bool) []interface{} {
-	fields := []interface{}{self.ParentHash, self.UncleHash, self.Coinbase, self.Root, self.TxHash, self.ReceiptHash, self.Bloom, self.Difficulty, self.Number, self.GasLimit, self.GasUsed, self.Time, self.Extra}
+	fields := []interface{}{
+		self.ParentHash,
+		self.UncleHash,
+		self.Coinbase,
+		self.Root,
+		self.TxHash,
+		self.ReceiptHash,
+		self.Bloom,
+		self.Difficulty,
+		self.Number,
+		self.GasLimit,
+		self.GasUsed,
+		self.Time,
+		self.Extra}
 	if withNonce {
 		fields = append(fields, self.Nonce, self.MixDigest, self.SeedHash)
 	}

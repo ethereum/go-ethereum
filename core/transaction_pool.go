@@ -121,7 +121,7 @@ func (self *TxPool) add(tx *types.Transaction) error {
 	if len(tx.From()) > 0 {
 		from = ethutil.Bytes2Hex(tx.From()[:4])
 	} else {
-		from = "INVALID"
+		return errors.New(fmt.Sprintf("FROM ADDRESS MUST BE POSITIVE (was %v)", tx.From()))
 	}
 	txplogger.Debugf("(t) %x => %s (%v) %x\n", from, to, tx.Value, tx.Hash())
 

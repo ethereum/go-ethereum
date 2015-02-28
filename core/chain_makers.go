@@ -13,21 +13,31 @@ import (
 // So we can generate blocks easily
 type FakePow struct{}
 
-func (f FakePow) Search(block pow.Block, stop <-chan struct{}) []byte { return nil }
-func (f FakePow) Verify(block pow.Block) bool                         { return true }
-func (f FakePow) GetHashrate() int64                                  { return 0 }
-func (f FakePow) Turbo(bool)                                          {}
+func (f FakePow) Search(block pow.Block, stop <-chan struct{}) ([]byte, []byte, []byte) {
+	return nil, nil, nil
+}
+func (f FakePow) Verify(block pow.Block) bool { return true }
+func (f FakePow) GetHashrate() int64          { return 0 }
+func (f FakePow) Turbo(bool)                  {}
 
+// So we can deterministically seed different blockchains
+var (
+	CanonicalSeed = 1
+	ForkSeed      = 2
+)
+
+// Utility functions for making chains on the fly
+// Exposed for sake of testing from other packages (eg. go-ethash)
 func NewBlockFromParent(addr []byte, parent *types.Block) *types.Block {
 	return newBlockFromParent(addr, parent)
 }
 
-func MakeBlock(bman *BlockProcessor, parent *types.Block, i int, db ethutil.Database) *types.Block {
-	return makeBlock(bman, parent, i, db)
+func MakeBlock(bman *BlockProcessor, parent *types.Block, i int, db ethutil.Database, seed int) *types.Block {
+	return makeBlock(bman, parent, i, db, seed)
 }
 
-func MakeChain(bman *BlockProcessor, parent *types.Block, max int, db ethutil.Database) types.Blocks {
-	return makeChain(bman, parent, max, db)
+func MakeChain(bman *BlockProcessor, parent *types.Block, max int, db ethutil.Database, seed int) types.Blocks {
+	return makeChain(bman, parent, max, db, seed)
 }
 
 func NewChainMan(block *types.Block, eventMux *event.TypeMux, db ethutil.Database) *ChainManager {
@@ -42,9 +52,9 @@ func NewCanonical(n int, db ethutil.Database) (*BlockProcessor, error) {
 	return newCanonical(n, db)
 }
 
+// block time is fixed at 10 seconds
 func newBlockFromParent(addr []byte, parent *types.Block) *types.Block {
 	block := types.NewBlock(parent.Hash(), addr, parent.Root(), ethutil.BigPow(2, 32), nil, "")
-
 	block.SetUncles(nil)
 	block.SetTransactions(nil)
 	block.SetReceipts(nil)
@@ -52,6 +62,7 @@ func newBlockFromParent(addr []byte, parent *types.Block) *types.Block {
 	header := block.Header()
 	header.Difficulty = CalcDifficulty(block, parent)
 	header.Number = new(big.Int).Add(parent.Header().Number, ethutil.Big1)
+	header.Time = parent.Header().Time + 10
 	header.GasLimit = CalcGasLimit(parent, block)
 
 	block.Td = parent.Td
@@ -60,8 +71,10 @@ func newBlockFromParent(addr []byte, parent *types.Block) *types.Block {
 }
 
 // Actually make a block by simulating what miner would do
-func makeBlock(bman *BlockProcessor, parent *types.Block, i int, db ethutil.Database) *types.Block {
+// we seed chains by the first byte of the coinbase
+func makeBlock(bman *BlockProcessor, parent *types.Block, i int, db ethutil.Database, seed int) *types.Block {
 	addr := ethutil.LeftPadBytes([]byte{byte(i)}, 20)
+	addr[0] = byte(seed)
 	block := newBlockFromParent(addr, parent)
 	state := state.New(block.Root(), db)
 	cbase := state.GetOrNewStateObject(addr)
@@ -74,11 +87,11 @@ func makeBlock(bman *BlockProcessor, parent *types.Block, i int, db ethutil.Data
 
 // Make a chain with real blocks
 // Runs ProcessWithParent to get proper state roots
-func makeChain(bman *BlockProcessor, parent *types.Block, max int, db ethutil.Database) types.Blocks {
+func makeChain(bman *BlockProcessor, parent *types.Block, max int, db ethutil.Database, seed int) types.Blocks {
 	bman.bc.currentBlock = parent
 	blocks := make(types.Blocks, max)
 	for i := 0; i < max; i++ {
-		block := makeBlock(bman, parent, i, db)
+		block := makeBlock(bman, parent, i, db, seed)
 		td, err := bman.processWithParent(block, parent)
 		if err != nil {
 			fmt.Println("process with parent failed", err)
@@ -87,9 +100,7 @@ func makeChain(bman *BlockProcessor, parent *types.Block, max int, db ethutil.Da
 		block.Td = td
 		blocks[i] = block
 		parent = block
-		fmt.Printf("New Block: %x\n", block.Hash())
 	}
-	fmt.Println("Done making chain")
 	return blocks
 }
 
@@ -113,7 +124,7 @@ func newBlockProcessor(db ethutil.Database, txpool *TxPool, cman *ChainManager, 
 	return bman
 }
 
-// Make a new canonical chain by running InsertChain
+// Make a new, deterministic canonical chain by running InsertChain
 // on result of makeChain
 func newCanonical(n int, db ethutil.Database) (*BlockProcessor, error) {
 	eventMux := &event.TypeMux{}
@@ -125,7 +136,7 @@ func newCanonical(n int, db ethutil.Database) (*BlockProcessor, error) {
 	if n == 0 {
 		return bman, nil
 	}
-	lchain := makeChain(bman, parent, n, db)
-	bman.bc.InsertChain(lchain)
-	return bman, nil
+	lchain := makeChain(bman, parent, n, db, CanonicalSeed)
+	err := bman.bc.InsertChain(lchain)
+	return bman, err
 }

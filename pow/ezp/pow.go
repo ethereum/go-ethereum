@@ -32,7 +32,7 @@ func (pow *EasyPow) Turbo(on bool) {
 	pow.turbo = on
 }
 
-func (pow *EasyPow) Search(block pow.Block, stop <-chan struct{}) []byte {
+func (pow *EasyPow) Search(block pow.Block, stop <-chan struct{}) ([]byte, []byte, []byte) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	hash := block.HashNoNonce()
 	diff := block.Difficulty()
@@ -57,7 +57,7 @@ empty:
 	for {
 		select {
 		case <-stop:
-			return nil
+			return nil, nil, nil
 		default:
 			i++
 
@@ -67,7 +67,7 @@ empty:
 
 			sha := crypto.Sha3(big.NewInt(r.Int63()).Bytes())
 			if verify(hash, diff, sha) {
-				return sha
+				return sha, nil, nil
 			}
 		}
 
@@ -75,8 +75,6 @@ empty:
 			time.Sleep(20 * time.Microsecond)
 		}
 	}
-
-	return nil
 }
 
 func (pow *EasyPow) Verify(block pow.Block) bool {

@@ -44,7 +44,7 @@ func (dag *Dagger) Find(obj *big.Int, resChan chan int64) {
 	resChan <- 0
 }
 
-func (dag *Dagger) Search(hash, diff *big.Int) *big.Int {
+func (dag *Dagger) Search(hash, diff *big.Int) ([]byte, []byte, []byte) {
 	// TODO fix multi threading. Somehow it results in the wrong nonce
 	amountOfRoutines := 1
 
@@ -69,7 +69,7 @@ func (dag *Dagger) Search(hash, diff *big.Int) *big.Int {
 		}
 	}
 
-	return big.NewInt(res)
+	return big.NewInt(res).Bytes(), nil, nil
 }
 
 func (dag *Dagger) Verify(hash, diff, nonce *big.Int) bool {

@@ -42,8 +42,10 @@ func env(block *types.Block, eth core.Backend) *environment {
 }
 
 type Work struct {
-	Number uint64
-	Nonce  []byte
+	Number    uint64
+	Nonce     []byte
+	MixDigest []byte
+	SeedHash  []byte
 }
 
 type Agent interface {
@@ -138,9 +140,12 @@ out:
 func (self *worker) wait() {
 	for {
 		for work := range self.recv {
+			// Someone Successfully Mined!
 			block := self.current.block
 			if block.Number().Uint64() == work.Number && block.Nonce() == nil {
 				self.current.block.Header().Nonce = work.Nonce
+				self.current.block.Header().MixDigest = work.MixDigest
+				self.current.block.Header().SeedHash = work.SeedHash
 
 				if err := self.chain.InsertChain(types.Blocks{self.current.block}); err == nil {
 					self.mux.Post(core.NewMinedBlockEvent{self.current.block})
