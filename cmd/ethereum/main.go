@@ -128,7 +128,7 @@ func main() {
 	}
 
 	if StartRpc {
-		utils.StartRpc(ethereum, RpcPort)
+		utils.StartRpc(ethereum, RpcListenAddress, RpcPort)
 	}
 
 	if StartWebSockets {
