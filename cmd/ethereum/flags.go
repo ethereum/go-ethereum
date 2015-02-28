@@ -27,6 +27,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"runtime"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -71,6 +72,7 @@ var (
 	SHH              bool
 	Dial             bool
 	PrintVersion     bool
+	MinerThreads     int
 )
 
 // flags specific to cli client
@@ -121,6 +123,7 @@ func Init() {
 	flag.BoolVar(&StartMining, "mine", false, "start dagger mining")
 	flag.BoolVar(&StartJsConsole, "js", false, "launches javascript console")
 	flag.BoolVar(&PrintVersion, "version", false, "prints version number")
+	flag.IntVar(&MinerThreads, "minerthreads", runtime.NumCPU(), "number of miner threads")
 
 	// Network stuff
 	var (
