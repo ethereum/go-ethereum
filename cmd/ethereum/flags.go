@@ -135,6 +135,12 @@ func Init() {
 
 	flag.Parse()
 
+	// When the javascript console is started log to a file instead
+	// of stdout
+	if StartJsConsole {
+		LogFile = path.Join(Datadir, "ethereum.log")
+	}
+
 	var err error
 	if NAT, err = nat.Parse(*natstr); err != nil {
 		log.Fatalf("-nat: %v", err)

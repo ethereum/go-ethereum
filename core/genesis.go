@@ -51,8 +51,6 @@ func GenesisBlock(db ethutil.Database) *types.Block {
 	statedb.Sync()
 	genesis.Header().Root = statedb.Root()
 
-	fmt.Printf("+++ genesis +++\nRoot: %x\nHash: %x\n", genesis.Header().Root, genesis.Hash())
-
 	return genesis
 }
 
