@@ -7,4 +7,6 @@ type Block interface {
 	HashNoNonce() []byte
 	Nonce() []byte
 	Number() *big.Int
+	MixDigest() []byte
+	SeedHash() []byte
 }

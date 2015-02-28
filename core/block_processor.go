@@ -105,6 +105,9 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 
 	return receipt, txGas, err
 }
+func (self *BlockProcessor) ChainManager() *ChainManager {
+	return self.bc
+}
 
 func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, statedb *state.StateDB, block *types.Block, txs types.Transactions, transientProcess bool) (types.Receipts, types.Transactions, types.Transactions, types.Transactions, error) {
 	var (
