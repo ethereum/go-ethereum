@@ -137,7 +137,6 @@ func main() {
 
 	utils.StartEthereum(ethereum)
 
-	latestBlock := ethereum.ChainManager().CurrentBlock()
 	fmt.Printf("Welcome to the FRONTIER\n")
 
 	if StartJsConsole {
