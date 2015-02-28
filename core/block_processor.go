@@ -205,6 +205,8 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 	receiptSha := types.DeriveSha(receipts)
 	if bytes.Compare(receiptSha, header.ReceiptHash) != 0 {
 		fmt.Println("receipts", receipts)
+		state.Sync()
+		chainlogger.Infof("%s\n", state.Dump())
 		err = fmt.Errorf("validating receipt root. received=%x got=%x", header.ReceiptHash, receiptSha)
 		return
 	}

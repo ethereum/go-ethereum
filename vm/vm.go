@@ -56,6 +56,8 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 
 				err = fmt.Errorf("%v", r)
 
+			} else {
+				fmt.Println(me.(*state.StateObject).Storage())
 			}
 		}()
 	}
