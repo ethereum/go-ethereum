@@ -131,10 +131,6 @@ func main() {
 		utils.StartRpc(ethereum, RpcPort)
 	}
 
-	if StartWebSockets {
-		utils.StartWebSockets(ethereum, WsPort)
-	}
-
 	utils.StartEthereum(ethereum)
 
 	if StartJsConsole {

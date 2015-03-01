@@ -76,10 +76,6 @@ func run() error {
 		utils.StartRpc(ethereum, RpcPort)
 	}
 
-	if StartWebSockets {
-		utils.StartWebSockets(ethereum, WsPort)
-	}
-
 	gui := NewWindow(ethereum, config, KeyRing, LogLevel)
 
 	utils.RegisterInterrupt(func(os.Signal) {

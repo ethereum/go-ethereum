@@ -127,7 +127,6 @@ type Ethereum struct {
 	miner    *miner.Miner
 
 	RpcServer  rpc.RpcServer
-	WsServer   rpc.RpcServer
 	keyManager *crypto.KeyManager
 
 	logger ethlogger.LogSystem
@@ -285,9 +284,7 @@ func (s *Ethereum) Stop() {
 	if s.RpcServer != nil {
 		s.RpcServer.Stop()
 	}
-	if s.WsServer != nil {
-		s.WsServer.Stop()
-	}
+
 	s.txPool.Stop()
 	s.eventMux.Stop()
 	s.blockPool.Stop()
