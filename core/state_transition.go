@@ -12,6 +12,12 @@ import (
 
 const tryJit = false
 
+var (
+	GasTx            = big.NewInt(21000)
+	GasTxNonZeroByte = big.NewInt(37)
+	GasTxZeroByte    = big.NewInt(2)
+)
+
 /*
  * The State transitioning model
  *
@@ -170,7 +176,7 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 	//sender.Nonce += 1
 
 	// Transaction gas
-	if err = self.UseGas(vm.GasTx); err != nil {
+	if err = self.UseGas(GasTx); err != nil {
 		return
 	}
 
@@ -178,9 +184,9 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 	var dgas int64
 	for _, byt := range self.data {
 		if byt != 0 {
-			dgas += vm.GasData.Int64()
+			dgas += GasTxNonZeroByte.Int64()
 		} else {
-			dgas += 1 // This is 1/5. If GasData changes this fails
+			dgas += GasTxZeroByte.Int64()
 		}
 	}
 	if err = self.UseGas(big.NewInt(dgas)); err != nil {

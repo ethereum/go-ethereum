@@ -769,27 +769,97 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 	}
 }
 
-func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCode, statedb *state.StateDB, mem *Memory, stack *Stack) (*big.Int, *big.Int) {
-	gas := new(big.Int)
-	addStepGasUsage := func(amount *big.Int) {
-		if amount.Cmp(ethutil.Big0) >= 0 {
-			gas.Add(gas, amount)
-		}
+type req struct {
+	stack int
+	gas   *big.Int
+}
+
+var _baseCheck = map[OpCode]req{
+	//       Req Stack  Gas price
+	ADD:          {2, GasFastestStep},
+	LT:           {2, GasFastestStep},
+	GT:           {2, GasFastestStep},
+	SLT:          {2, GasFastestStep},
+	SGT:          {2, GasFastestStep},
+	EQ:           {2, GasFastestStep},
+	ISZERO:       {1, GasFastestStep},
+	SUB:          {2, GasFastestStep},
+	AND:          {2, GasFastestStep},
+	OR:           {2, GasFastestStep},
+	XOR:          {2, GasFastestStep},
+	NOT:          {1, GasFastestStep},
+	BYTE:         {2, GasFastestStep},
+	CALLDATALOAD: {1, GasFastestStep},
+	CALLDATACOPY: {3, GasFastestStep},
+	MLOAD:        {1, GasFastestStep},
+	MSTORE:       {2, GasFastestStep},
+	MSTORE8:      {2, GasFastestStep},
+	CODECOPY:     {3, GasFastestStep},
+	MUL:          {2, GasFastStep},
+	DIV:          {2, GasFastStep},
+	SDIV:         {2, GasFastStep},
+	MOD:          {2, GasFastStep},
+	SMOD:         {2, GasFastStep},
+	SIGNEXTEND:   {2, GasFastStep},
+	ADDMOD:       {3, GasMidStep},
+	MULMOD:       {3, GasMidStep},
+	JUMP:         {1, GasMidStep},
+	JUMPI:        {2, GasSlowStep},
+	EXP:          {2, GasSlowStep},
+	ADDRESS:      {0, GasQuickStep},
+	ORIGIN:       {0, GasQuickStep},
+	CALLER:       {0, GasQuickStep},
+	CALLVALUE:    {0, GasQuickStep},
+	CODESIZE:     {0, GasQuickStep},
+	GASPRICE:     {0, GasQuickStep},
+	COINBASE:     {0, GasQuickStep},
+	TIMESTAMP:    {0, GasQuickStep},
+	NUMBER:       {0, GasQuickStep},
+	DIFFICULTY:   {0, GasQuickStep},
+	GASLIMIT:     {0, GasQuickStep},
+	POP:          {0, GasQuickStep},
+	PC:           {0, GasQuickStep},
+	MSIZE:        {0, GasQuickStep},
+	GAS:          {0, GasQuickStep},
+	BLOCKHASH:    {1, GasExtStep},
+	BALANCE:      {0, GasExtStep},
+	EXTCODESIZE:  {1, GasExtStep},
+	EXTCODECOPY:  {4, GasExtStep},
+	SLOAD:        {1, GasStorageGet},
+	SSTORE:       {2, Zero},
+	SHA3:         {1, GasSha3Base},
+	CREATE:       {3, GasCreate},
+	CALL:         {7, GasCall},
+	CALLCODE:     {7, GasCall},
+	JUMPDEST:     {0, GasJumpDest},
+	SUICIDE:      {1, Zero},
+	RETURN:       {2, Zero},
+}
+
+func baseCheck(op OpCode, stack *Stack, gas *big.Int) {
+	if r, ok := _baseCheck[op]; ok {
+		stack.require(r.stack)
+
+		gas.Add(gas, r.gas)
 	}
+}
 
-	addStepGasUsage(GasStep)
+func toWordSize(size *big.Int) *big.Int {
+	tmp := new(big.Int)
+	tmp.Add(tmp, u256(31))
+	tmp.Div(tmp, u256(32))
+	return tmp
+}
 
-	var newMemSize *big.Int = ethutil.Big0
-	var additionalGas *big.Int = new(big.Int)
+func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCode, statedb *state.StateDB, mem *Memory, stack *Stack) (*big.Int, *big.Int) {
+	var (
+		gas                 = new(big.Int)
+		newMemSize *big.Int = new(big.Int)
+	)
+	baseCheck(op, stack, gas)
+
 	// Stack Check, memory resize & gas phase
 	switch op {
-	// Stack checks only
-	case ISZERO, CALLDATALOAD, POP, JUMP, NOT, EXTCODESIZE, BLOCKHASH: // 1
-		stack.require(1)
-	case JUMPI, ADD, SUB, DIV, MUL, SDIV, MOD, SMOD, LT, GT, SLT, SGT, EQ, AND, OR, XOR, BYTE, SIGNEXTEND: // 2
-		stack.require(2)
-	case ADDMOD, MULMOD: // 3
-		stack.require(3)
 	case SWAP1, SWAP2, SWAP3, SWAP4, SWAP5, SWAP6, SWAP7, SWAP8, SWAP9, SWAP10, SWAP11, SWAP12, SWAP13, SWAP14, SWAP15, SWAP16:
 		n := int(op - SWAP1 + 2)
 		stack.require(n)
@@ -800,110 +870,81 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 		n := int(op - LOG0)
 		stack.require(n + 2)
 
-		gas.Set(GasLog)
-		addStepGasUsage(new(big.Int).Mul(big.NewInt(int64(n)), GasLog))
-
 		mSize, mStart := stack.Peekn()
-		addStepGasUsage(mSize)
+
+		gas.Add(gas, GasLogBase)
+		gas.Add(gas, new(big.Int).Mul(big.NewInt(int64(n)), GasLogTopic))
+		gas.Add(gas, new(big.Int).Mul(mSize, GasLogData))
 
 		newMemSize = calcMemSize(mStart, mSize)
 	case EXP:
-		stack.require(2)
-
-		gas.Set(big.NewInt(int64(len(stack.data[stack.Len()-2].Bytes()) + 1)))
-	// Gas only
-	case STOP:
-		gas.Set(ethutil.Big0)
-	case SUICIDE:
-		stack.require(1)
-
-		gas.Set(ethutil.Big0)
-	case SLOAD:
-		stack.require(1)
-
-		gas.Set(GasSLoad)
-	// Memory resize & Gas
+		gas.Add(gas, big.NewInt(int64(len(stack.data[stack.Len()-2].Bytes())+1)))
 	case SSTORE:
 		stack.require(2)
 
-		var mult *big.Int
+		var g *big.Int
 		y, x := stack.Peekn()
 		val := statedb.GetState(context.Address(), x.Bytes())
 		if len(val) == 0 && len(y.Bytes()) > 0 {
 			// 0 => non 0
-			mult = ethutil.Big3
+			g = GasStorageAdd
 		} else if len(val) > 0 && len(y.Bytes()) == 0 {
-			statedb.Refund(self.env.Origin(), GasSStoreRefund)
+			statedb.Refund(self.env.Origin(), RefundStorage)
 
-			mult = ethutil.Big0
+			g = GasStorageMod
 		} else {
 			// non 0 => non 0 (or 0 => 0)
-			mult = ethutil.Big1
+			g = GasStorageMod
 		}
-		gas.Set(new(big.Int).Mul(mult, GasSStore))
-	case BALANCE:
-		stack.require(1)
-		gas.Set(GasBalance)
-	case MSTORE:
-		stack.require(2)
+		gas.Set(g)
 		newMemSize = calcMemSize(stack.Peek(), u256(32))
 	case MLOAD:
-		stack.require(1)
-
 		newMemSize = calcMemSize(stack.Peek(), u256(32))
 	case MSTORE8:
-		stack.require(2)
 		newMemSize = calcMemSize(stack.Peek(), u256(1))
 	case RETURN:
-		stack.require(2)
-
 		newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-2])
 	case SHA3:
-		stack.require(2)
-		gas.Set(GasSha)
 		newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-2])
-		additionalGas.Set(stack.data[stack.Len()-2])
+
+		words := toWordSize(stack.data[stack.Len()-2])
+		gas.Add(gas, words.Mul(words, GasSha3Word))
 	case CALLDATACOPY:
-		stack.require(3)
-
 		newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-3])
-		additionalGas.Set(stack.data[stack.Len()-3])
+
+		words := toWordSize(stack.data[stack.Len()-3])
+		gas.Add(gas, words.Mul(words, GasCopyWord))
 	case CODECOPY:
-		stack.require(3)
-
 		newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-3])
-		additionalGas.Set(stack.data[stack.Len()-3])
-	case EXTCODECOPY:
-		stack.require(4)
 
+		words := toWordSize(stack.data[stack.Len()-3])
+		gas.Add(gas, words.Mul(words, GasCopyWord))
+	case EXTCODECOPY:
 		newMemSize = calcMemSize(stack.data[stack.Len()-2], stack.data[stack.Len()-4])
-		additionalGas.Set(stack.data[stack.Len()-4])
+
+		words := toWordSize(stack.data[stack.Len()-4])
+		gas.Add(gas, words.Mul(words, GasCopyWord))
+	case CREATE:
+		size := new(big.Int).Set(stack.data[stack.Len()-2])
+		gas.Add(gas, size.Mul(size, GasCreateByte))
 	case CALL, CALLCODE:
-		stack.require(7)
-		gas.Set(GasCall)
-		addStepGasUsage(stack.data[stack.Len()-1])
+		gas.Add(gas, stack.data[stack.Len()-1])
+
+		if op == CALL {
+			if self.env.State().GetStateObject(stack.data[stack.Len()-2].Bytes()) == nil {
+				gas.Add(gas, GasCallNewAccount)
+			}
+
+			if len(stack.data[stack.Len()].Bytes()) > 0 {
+				gas.Add(gas, GasCallValueTransfer)
+			}
+		}
 
 		x := calcMemSize(stack.data[stack.Len()-6], stack.data[stack.Len()-7])
 		y := calcMemSize(stack.data[stack.Len()-4], stack.data[stack.Len()-5])
 
 		newMemSize = ethutil.BigMax(x, y)
-	case CREATE:
-		stack.require(3)
-		gas.Set(GasCreate)
-
 		newMemSize = calcMemSize(stack.data[stack.Len()-2], stack.data[stack.Len()-3])
-	}
-
-	switch op {
-	case CALLDATACOPY, CODECOPY, EXTCODECOPY:
-		additionalGas.Add(additionalGas, u256(31))
-		additionalGas.Div(additionalGas, u256(32))
-		addStepGasUsage(additionalGas)
-	case SHA3:
-		additionalGas.Add(additionalGas, u256(31))
-		additionalGas.Div(additionalGas, u256(32))
-		additionalGas.Mul(additionalGas, GasSha3Byte)
-		addStepGasUsage(additionalGas)
 	}
 
 	if newMemSize.Cmp(ethutil.Big0) > 0 {
@@ -913,10 +954,10 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 
 		if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
 			memGasUsage := new(big.Int).Sub(newMemSize, u256(int64(mem.Len())))
-			memGasUsage.Mul(GasMemory, memGasUsage)
+			memGasUsage.Mul(GasMemWord, memGasUsage)
 			memGasUsage.Div(memGasUsage, u256(32))
 
-			addStepGasUsage(memGasUsage)
+			gas.Add(gas, memGasUsage)
 		}
 
 	}
