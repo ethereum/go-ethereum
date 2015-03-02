@@ -28,8 +28,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/ui/qt/webengine"
 	"github.com/obscuren/qml"
 )
@@ -52,7 +52,7 @@ func run() error {
 	config := utils.InitConfig(VmType, ConfigFile, Datadir, "ETH")
 
 	ethereum, err := eth.New(&eth.Config{
-		Name:         p2p.MakeName(ClientIdentifier, Version),
+		Name:         ethutil.MakeVersion(ClientIdentifier, Version),
 		KeyStore:     KeyStore,
 		DataDir:      Datadir,
 		LogFile:      LogFile,
