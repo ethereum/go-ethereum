@@ -46,12 +46,13 @@ ApplicationWindow {
         walletWeb.view.url = "http://ethereum-dapp-wallet.meteor.com/";
         walletWeb.menuItem.title = "Wallet";
 
-        addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "ethereum", active: false});
+        addPlugin("./views/miner.qml", {noAdd: true, close: false, section: "legacy", active: false});
+        addPlugin("./views/network.qml", {noAdd: true, close: false, section: "ethereum", active: false});
 
-        var whisperTab = addPlugin("./views/browser.qml", {noAdd: true, close: true, section: "ethereum", active: false});
+       /* var whisperTab = addPlugin("./views/browser.qml", {noAdd: true, close: true, section: "ethereum", active: false});
         whisperTab.view.url = "http://ethereum-dapp-whisper-client.meteor.com/";
         whisperTab.menuItem.title = "Whisper Chat";
-
+*/
         addPlugin("./views/wallet.qml", {noAdd: true, close: false, section: "legacy"});        
         addPlugin("./views/transaction.qml", {noAdd: true, close: false, section: "legacy"});
         addPlugin("./views/whisper.qml", {noAdd: true, close: false, section: "legacy"});
@@ -536,6 +537,8 @@ ApplicationWindow {
 
                      Text {
                          id: secondary
+                         //only shows secondary title if there's no badge
+                         visible: (badgeContent == "icon" || badgeContent == "number" )? false : true
                          font.family: sourceSansPro.name 
                          font.weight: Font.Light
                          anchors {
@@ -730,18 +733,14 @@ ApplicationWindow {
                  Rectangle {
                      height: 19
                      color: "#00ff00"
+                     visible: (menuApps.children.length > 0)
+
                      Text {
                          text: "APPS"
                          font.family: sourceSansPro.name 
                          font.weight: Font.Regular
                          anchors.fill: parent
                          anchors.leftMargin: 16
-
-                         // anchors {
-                         //     left: parent.left
-                         //     top: parent.top
-                         //     leftMargin: 16
-                         // }
                          color: "#AAA0A0"
                      }
                  }
@@ -749,6 +748,8 @@ ApplicationWindow {
                  ColumnLayout {
                      id: menuApps
                      spacing: 3
+
+
                      anchors {
                          left: parent.left
                          right: parent.right
@@ -775,7 +776,7 @@ ApplicationWindow {
 
                  ColumnLayout {
                      id: menuLegacy
-                     visible: false
+                     visible: true
                      spacing: 3
                      anchors {
                          left: parent.left
