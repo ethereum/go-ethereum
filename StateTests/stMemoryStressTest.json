@@ -3,7 +3,7 @@
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "256",
-            "currentGasLimit" : "17592320524892",
+            "currentGasLimit" : "175923205248920",
             "currentNumber" : "0",
             "currentTimestamp" : "1",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
@@ -14,20 +14,21 @@
         "post" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
                 "balance" : "1000000000000000010",
-                "code" : "0x64010000000051600155",
+                "code" : "0x602a6401000000005264010000000051600155",
                 "nonce" : "0",
                 "storage" : {
+                    "0x01" : "0x2a"
                 }
             },
             "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
-                "balance" : "17592320524892",
+                "balance" : "17592320525095",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "158330884724018",
+                "balance" : "158330884723825",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
@@ -37,13 +38,13 @@
         "pre" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
                 "balance" : "1000000000000000000",
-                "code" : "0x64010000000051600155",
+                "code" : "0x602a6401000000005264010000000051600155",
                 "nonce" : "0",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "175923205248920",
+                "balance" : "175923205248930",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
@@ -52,7 +53,7 @@
         },
         "transaction" : {
             "data" : "",
-            "gasLimit" : "17592320524892",
+            "gasLimit" : "175923205248920",
             "gasPrice" : "1",
             "nonce" : "0",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
@@ -64,7 +65,7 @@
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "256",
-            "currentGasLimit" : "37791080412587",
+            "currentGasLimit" : "377910804125870",
             "currentNumber" : "0",
             "currentTimestamp" : "1",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
@@ -75,20 +76,21 @@
         "post" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
                 "balance" : "1000000000000000010",
-                "code" : "0x64017735940051600155",
+                "code" : "0x602a6401773594005264017735940051600155",
                 "nonce" : "0",
                 "storage" : {
+                    "0x01" : "0x2a"
                 }
             },
             "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
-                "balance" : "37791080412587",
+                "balance" : "37791080412790",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "340119723807253",
+                "balance" : "340119723807050",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
@@ -98,7 +100,7 @@
         "pre" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
                 "balance" : "1000000000000000000",
-                "code" : "0x64017735940051600155",
+                "code" : "0x602a6401773594005264017735940051600155",
                 "nonce" : "0",
                 "storage" : {
                 }
@@ -113,7 +115,7 @@
         },
         "transaction" : {
             "data" : "",
-            "gasLimit" : "37791080412587",
+            "gasLimit" : "377910804125870",
             "gasPrice" : "1",
             "nonce" : "0",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
