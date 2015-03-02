@@ -60,6 +60,7 @@ func (self *JSRepl) Start() {
 	if !self.running {
 		self.running = true
 		repllogger.Infoln("init JS Console")
+
 		reader := bufio.NewReader(self.history)
 		for {
 			line, err := reader.ReadString('\n')

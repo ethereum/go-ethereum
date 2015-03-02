@@ -52,10 +52,5 @@ func (self *Miner) Stop() {
 }
 
 func (self *Miner) HashRate() int64 {
-	var tot int64
-	for _, agent := range self.worker.agents {
-		tot += agent.Pow().GetHashrate()
-	}
-
-	return tot
+	return self.worker.HashRate()
 }
