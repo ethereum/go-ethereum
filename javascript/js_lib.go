@@ -16,7 +16,7 @@ function pp(object) {
         str += " ]";
     } else if(typeof(object) === "object") {
         str += "{ ";
-        var last = Object.keys(object).sort().pop()
+        var last = Object.keys(object).pop()
         for(var k in object) {
             str += k + ": " + pp(object[k]);
 

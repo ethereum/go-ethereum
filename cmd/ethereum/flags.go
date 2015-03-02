@@ -27,6 +27,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"runtime"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -36,40 +37,42 @@ import (
 )
 
 var (
-	Identifier      string
-	KeyRing         string
-	DiffTool        bool
-	DiffType        string
-	KeyStore        string
-	StartRpc        bool
-	StartWebSockets bool
-	RpcPort         int
-	WsPort          int
-	OutboundPort    string
-	ShowGenesis     bool
-	AddPeer         string
-	MaxPeer         int
-	GenAddr         bool
-	BootNodes       string
-	NodeKey         *ecdsa.PrivateKey
-	NAT             nat.Interface
-	SecretFile      string
-	ExportDir       string
-	NonInteractive  bool
-	Datadir         string
-	LogFile         string
-	ConfigFile      string
-	DebugFile       string
-	LogLevel        int
-	LogFormat       string
-	Dump            bool
-	DumpHash        string
-	DumpNumber      int
-	VmType          int
-	ImportChain     string
-	SHH             bool
-	Dial            bool
-	PrintVersion    bool
+	Identifier       string
+	KeyRing          string
+	DiffTool         bool
+	DiffType         string
+	KeyStore         string
+	StartRpc         bool
+	StartWebSockets  bool
+	RpcListenAddress string
+	RpcPort          int
+	WsPort           int
+	OutboundPort     string
+	ShowGenesis      bool
+	AddPeer          string
+	MaxPeer          int
+	GenAddr          bool
+	BootNodes        string
+	NodeKey          *ecdsa.PrivateKey
+	NAT              nat.Interface
+	SecretFile       string
+	ExportDir        string
+	NonInteractive   bool
+	Datadir          string
+	LogFile          string
+	ConfigFile       string
+	DebugFile        string
+	LogLevel         int
+	LogFormat        string
+	Dump             bool
+	DumpHash         string
+	DumpNumber       int
+	VmType           int
+	ImportChain      string
+	SHH              bool
+	Dial             bool
+	PrintVersion     bool
+	MinerThreads     int
 )
 
 // flags specific to cli client
@@ -93,6 +96,7 @@ func Init() {
 	flag.StringVar(&KeyRing, "keyring", "", "identifier for keyring to use")
 	flag.StringVar(&KeyStore, "keystore", "db", "system to store keyrings: db|file (db)")
 
+	flag.StringVar(&RpcListenAddress, "rpcaddr", "127.0.0.1", "address for json-rpc server to listen on")
 	flag.IntVar(&RpcPort, "rpcport", 8545, "port to start json-rpc server on")
 	flag.IntVar(&WsPort, "wsport", 40404, "port to start websocket rpc server on")
 	flag.BoolVar(&StartRpc, "rpc", false, "start rpc server")
@@ -119,6 +123,7 @@ func Init() {
 	flag.BoolVar(&StartMining, "mine", false, "start dagger mining")
 	flag.BoolVar(&StartJsConsole, "js", false, "launches javascript console")
 	flag.BoolVar(&PrintVersion, "version", false, "prints version number")
+	flag.IntVar(&MinerThreads, "minerthreads", runtime.NumCPU(), "number of miner threads")
 
 	// Network stuff
 	var (
@@ -134,6 +139,12 @@ func Init() {
 	flag.IntVar(&MaxPeer, "maxpeer", 30, "maximum desired peers")
 
 	flag.Parse()
+
+	// When the javascript console is started log to a file instead
+	// of stdout
+	if StartJsConsole {
+		LogFile = path.Join(Datadir, "ethereum.log")
+	}
 
 	var err error
 	if NAT, err = nat.Parse(*natstr); err != nil {

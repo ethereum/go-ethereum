@@ -19,6 +19,14 @@ func (self Code) String() string {
 
 type Storage map[string]*ethutil.Value
 
+func (self Storage) String() (str string) {
+	for key, value := range self {
+		str += fmt.Sprintf("%X : %X\n", key, value.Bytes())
+	}
+
+	return
+}
+
 func (self Storage) Copy() Storage {
 	cpy := make(Storage)
 	for key, value := range self {
@@ -119,10 +127,9 @@ func (self *StateObject) GetStorage(key *big.Int) *ethutil.Value {
 }
 func (self *StateObject) SetStorage(key *big.Int, value *ethutil.Value) {
 	self.SetState(key.Bytes(), value)
-	self.dirty = true
 }
 
-func (self *StateObject) Storage() map[string]*ethutil.Value {
+func (self *StateObject) Storage() Storage {
 	return self.storage
 }
 
@@ -172,18 +179,20 @@ func (c *StateObject) AddBalance(amount *big.Int) {
 
 	statelogger.Debugf("%x: #%d %v (+ %v)\n", c.Address(), c.nonce, c.balance, amount)
 }
-func (c *StateObject) AddAmount(amount *big.Int) { c.AddBalance(amount) }
 
 func (c *StateObject) SubBalance(amount *big.Int) {
 	c.SetBalance(new(big.Int).Sub(c.balance, amount))
 
 	statelogger.Debugf("%x: #%d %v (- %v)\n", c.Address(), c.nonce, c.balance, amount)
 }
-func (c *StateObject) SubAmount(amount *big.Int) { c.SubBalance(amount) }
 
 func (c *StateObject) SetBalance(amount *big.Int) {
 	c.balance = amount
 	c.dirty = true
+}
+
+func (c *StateObject) St() Storage {
+	return c.storage
 }
 
 //
@@ -198,7 +207,7 @@ func (c *StateObject) ConvertGas(gas, price *big.Int) error {
 		return fmt.Errorf("insufficient amount: %v, %v", c.balance, total)
 	}
 
-	c.SubAmount(total)
+	c.SubBalance(total)
 
 	c.dirty = true
 
@@ -221,7 +230,7 @@ func (self *StateObject) BuyGas(gas, price *big.Int) error {
 	rGas := new(big.Int).Set(gas)
 	rGas.Mul(rGas, price)
 
-	self.AddAmount(rGas)
+	self.AddBalance(rGas)
 
 	self.dirty = true
 
