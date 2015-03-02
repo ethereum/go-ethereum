@@ -12,25 +12,10 @@
         ],
         "out" : "0x",
         "post" : {
-            "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
-                "balance" : "1000000000000100000",
-                "code" : "0x6001600101600055",
-                "nonce" : "0",
-                "storage" : {
-                    "0x" : "0x02"
-                }
-            },
-            "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
-                "balance" : "804",
-                "code" : "0x",
-                "nonce" : "0",
-                "storage" : {
-                }
-            },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "999999999999899196",
+                "balance" : "1000000000000000000",
                 "code" : "0x",
-                "nonce" : "1",
+                "nonce" : "0",
                 "storage" : {
                 }
             }

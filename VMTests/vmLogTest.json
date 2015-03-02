@@ -20,7 +20,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9966",
+        "gas" : "7986",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -129,7 +129,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9962",
+        "gas" : "7968",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -180,7 +180,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9930",
+        "gas" : "7712",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -231,7 +231,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9961",
+        "gas" : "7960",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -282,7 +282,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9961",
+        "gas" : "7960",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -333,7 +333,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9897",
+        "gas" : "5708",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -385,7 +385,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9897",
+        "gas" : "5707",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -437,7 +437,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9933",
+        "gas" : "5981",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -547,7 +547,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9929",
+        "gas" : "5963",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -599,7 +599,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9897",
+        "gas" : "5707",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -651,7 +651,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9928",
+        "gas" : "5955",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -703,7 +703,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9928",
+        "gas" : "5955",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -755,7 +755,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9864",
+        "gas" : "3703",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -808,7 +808,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9864",
+        "gas" : "3702",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -861,7 +861,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9900",
+        "gas" : "3976",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -972,7 +972,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9896",
+        "gas" : "3958",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -1025,7 +1025,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9864",
+        "gas" : "3702",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -1078,7 +1078,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9895",
+        "gas" : "3950",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -1131,7 +1131,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9895",
+        "gas" : "3950",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -1184,7 +1184,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9831",
+        "gas" : "1698",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -1238,7 +1238,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9831",
+        "gas" : "1697",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -1292,7 +1292,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9831",
+        "gas" : "1700",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -1346,7 +1346,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9867",
+        "gas" : "1971",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -1458,7 +1458,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9863",
+        "gas" : "1953",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -1512,7 +1512,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9831",
+        "gas" : "1697",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -1566,7 +1566,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9862",
+        "gas" : "1945",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -1620,7 +1620,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9862",
+        "gas" : "1945",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
@@ -1674,7 +1674,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "10000",
+        "gas" : "9998",
         "logs" : [
         ],
         "out" : "0x",
@@ -1698,8 +1698,6 @@
         }
     },
     "log4_MaxTopic" : {
-        "callcreates" : [
-        ],
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "256",
@@ -1717,30 +1715,6 @@
             "gasPrice" : "100000000000000",
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
-        },
-        "gas" : "9798",
-        "logs" : [
-            {
-                "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
-                "bloom" : "00000000000000200000800000000000000000000000000000000880000000000000000000000000000000000000000000000010000000000000000000000020",
-                "data" : "0xaabbffffffffffffffffffffffffffffffffffffffffffffffffffffffffccdd",
-                "topics" : [
-                    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-                    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-                    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-                    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-                ]
-            }
-        ],
-        "out" : "0x",
-        "post" : {
-            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
-                "balance" : "1000000000000000000",
-                "code" : "0x7faabbffffffffffffffffffffffffffffffffffffffffffffffffffffffffccdd6000527fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60206000a4",
-                "nonce" : "0",
-                "storage" : {
-                }
-            }
         },
         "pre" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
@@ -1773,7 +1747,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "10000",
+        "gas" : "9998",
         "logs" : [
         ],
         "out" : "0x",
@@ -1797,8 +1771,6 @@
         }
     },
     "log4_emptyMem" : {
-        "callcreates" : [
-        ],
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "256",
@@ -1816,30 +1788,6 @@
             "gasPrice" : "100000000000000",
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
-        },
-        "gas" : "9834",
-        "logs" : [
-            {
-                "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
-                "bloom" : "00000000000000000000800000000000000000000000000000000880000020000000000002000000000000000000080000000000000000000000000000000000",
-                "data" : "0x",
-                "topics" : [
-                    "0000000000000000000000000000000000000000000000000000000000000000",
-                    "0000000000000000000000000000000000000000000000000000000000000000",
-                    "0000000000000000000000000000000000000000000000000000000000000000",
-                    "0000000000000000000000000000000000000000000000000000000000000000"
-                ]
-            }
-        ],
-        "out" : "0x",
-        "post" : {
-            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
-                "balance" : "1000000000000000000",
-                "code" : "0x600060006000600060006000a4",
-                "nonce" : "0",
-                "storage" : {
-                }
-            }
         },
         "pre" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
@@ -1910,8 +1858,6 @@
         }
     },
     "log4_logMemsizeZero" : {
-        "callcreates" : [
-        ],
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "256",
@@ -1930,30 +1876,6 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9830",
-        "logs" : [
-            {
-                "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
-                "bloom" : "00000000000000000000800000000000000000000000000000000880000020000000000002000000000000000000080000000000000000000000000000000000",
-                "data" : "0x",
-                "topics" : [
-                    "0000000000000000000000000000000000000000000000000000000000000000",
-                    "0000000000000000000000000000000000000000000000000000000000000000",
-                    "0000000000000000000000000000000000000000000000000000000000000000",
-                    "0000000000000000000000000000000000000000000000000000000000000000"
-                ]
-            }
-        ],
-        "out" : "0x",
-        "post" : {
-            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
-                "balance" : "1000000000000000000",
-                "code" : "0x7faabbffffffffffffffffffffffffffffffffffffffffffffffffffffffffccdd600052600060006000600060006001a4",
-                "nonce" : "0",
-                "storage" : {
-                }
-            }
-        },
         "pre" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
                 "balance" : "1000000000000000000",
@@ -1965,8 +1887,6 @@
         }
     },
     "log4_nonEmptyMem" : {
-        "callcreates" : [
-        ],
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "256",
@@ -1985,30 +1905,6 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9798",
-        "logs" : [
-            {
-                "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
-                "bloom" : "00000000000000000000800000000000000000000000000000000880000020000000000002000000000000000000080000000000000000000000000000000000",
-                "data" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-                "topics" : [
-                    "0000000000000000000000000000000000000000000000000000000000000000",
-                    "0000000000000000000000000000000000000000000000000000000000000000",
-                    "0000000000000000000000000000000000000000000000000000000000000000",
-                    "0000000000000000000000000000000000000000000000000000000000000000"
-                ]
-            }
-        ],
-        "out" : "0x",
-        "post" : {
-            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
-                "balance" : "1000000000000000000",
-                "code" : "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff600052600060006000600060206000a4",
-                "nonce" : "0",
-                "storage" : {
-                }
-            }
-        },
         "pre" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
                 "balance" : "1000000000000000000",
@@ -2020,8 +1916,6 @@
         }
     },
     "log4_nonEmptyMem_logMemSize1" : {
-        "callcreates" : [
-        ],
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "256",
@@ -2040,30 +1934,6 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9829",
-        "logs" : [
-            {
-                "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
-                "bloom" : "00000000000000000000800000000000000000000000000000000880000020000000000002000000000000000000080000000000000000000000000000000000",
-                "data" : "0xaa",
-                "topics" : [
-                    "0000000000000000000000000000000000000000000000000000000000000000",
-                    "0000000000000000000000000000000000000000000000000000000000000000",
-                    "0000000000000000000000000000000000000000000000000000000000000000",
-                    "0000000000000000000000000000000000000000000000000000000000000000"
-                ]
-            }
-        ],
-        "out" : "0x",
-        "post" : {
-            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
-                "balance" : "1000000000000000000",
-                "code" : "0x7faabbffffffffffffffffffffffffffffffffffffffffffffffffffffffffccdd600052600060006000600060016000a4",
-                "nonce" : "0",
-                "storage" : {
-                }
-            }
-        },
         "pre" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
                 "balance" : "1000000000000000000",
@@ -2075,8 +1945,6 @@
         }
     },
     "log4_nonEmptyMem_logMemSize1_logMemStart31" : {
-        "callcreates" : [
-        ],
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "256",
@@ -2094,30 +1962,6 @@
             "gasPrice" : "100000000000000",
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
-        },
-        "gas" : "9829",
-        "logs" : [
-            {
-                "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
-                "bloom" : "00000000000000000000800000000000000000000000000000000880000020000000000002000000000000000000080000000000000000000000000000000000",
-                "data" : "0xdd",
-                "topics" : [
-                    "0000000000000000000000000000000000000000000000000000000000000000",
-                    "0000000000000000000000000000000000000000000000000000000000000000",
-                    "0000000000000000000000000000000000000000000000000000000000000000",
-                    "0000000000000000000000000000000000000000000000000000000000000000"
-                ]
-            }
-        ],
-        "out" : "0x",
-        "post" : {
-            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
-                "balance" : "1000000000000000000",
-                "code" : "0x7faabbffffffffffffffffffffffffffffffffffffffffffffffffffffffffccdd60005260006000600060006001601fa4",
-                "nonce" : "0",
-                "storage" : {
-                }
-            }
         },
         "pre" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
@@ -2150,7 +1994,7 @@
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "1000000000000000000"
         },
-        "gas" : "9880",
+        "gas" : "5572",
         "logs" : [
             {
                 "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
