@@ -1,0 +1,5 @@
+venv/
+*~
+*.sw?
+.vagrant/
+*.pem
