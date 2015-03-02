@@ -357,7 +357,7 @@ func env_log(_vm unsafe.Pointer, dataPtr unsafe.Pointer, dataLen uint64, _topic1
 		topics = append(topics, llvm2hash((*i256)(_topic4)))
 	}
 
-	vm.Env().AddLog(state.NewLog(vm.me.Address(), topics, data))
+	vm.Env().AddLog(state.NewLog(vm.me.Address(), topics, data, vm.env.BlockNumber().Uint64()))
 }
 
 //export env_extcode
