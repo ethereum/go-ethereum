@@ -12,11 +12,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
-	ethlogger "github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
 )
 
-var poolLogger = ethlogger.NewLogger("Blockpool")
+var poolLogger = logger.NewLogger("Blockpool")
 
 const (
 	blockHashesBatchSize       = 256
