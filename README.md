@@ -96,34 +96,3 @@ To make life easier try [git flow](http://nvie.com/posts/a-successful-git-branch
 
 See [Developers' Guide](https://github.com/ethereum/go-ethereum/wiki/Developers'-Guide)
 
-Coding standards
-================
-
-Sources should be formatted according to the [Go Formatting
-Style](http://golang.org/doc/effective_go.html#formatting).
-
-Unless structs fields are supposed to be directly accesible, provide
-Getters and hide the fields through Go's exporting facility.
-
-When you comment put meaningful comments. Describe in detail what you
-want to achieve.
-
-*wrong*
-
-```go
-// Check if the value at x is greater than y
-if x > y {
-    // It's greater!
-}
-```
-
-Everyone reading the source probably know what you wanted to achieve
-with above code. Those are **not** meaningful comments.
-
-While the project isn't 100% tested I want you to write tests non the
-less. I haven't got time to evaluate everyone's code in detail so I
-expect you to write tests for me so I don't have to test your code
-manually. (If you want to contribute by just writing tests that's fine
-too!)
-
-
