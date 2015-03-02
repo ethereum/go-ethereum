@@ -79,10 +79,12 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
-		helper.Logger.SetLogLevel(4)
-		if name != "TransactionNonceCheck2" {
-			continue
-		}
+		/*
+			helper.Logger.SetLogLevel(4)
+			if name != "log1_nonEmptyMem_logMemSize1_logMemStart31" {
+				continue
+			}
+		*/
 		db, _ := ethdb.NewMemDatabase()
 		statedb := state.New(nil, db)
 		for addr, account := range test.Pre {
@@ -159,10 +161,14 @@ func RunVmTest(p string, t *testing.T) {
 		}
 
 		if len(test.Logs) > 0 {
-			for i, log := range test.Logs {
-				genBloom := ethutil.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 64)
-				if !bytes.Equal(genBloom, ethutil.Hex2Bytes(log.BloomF)) {
-					t.Errorf("bloom mismatch")
+			if len(test.Logs) != len(logs) {
+				t.Errorf("log length mismatch. Expected %d, got %d", len(test.Logs), len(logs))
+			} else {
+				for i, log := range test.Logs {
+					genBloom := ethutil.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 64)
+					if !bytes.Equal(genBloom, ethutil.Hex2Bytes(log.BloomF)) {
+						t.Errorf("bloom mismatch")
+					}
 				}
 			}
 		}
@@ -173,11 +179,6 @@ func RunVmTest(p string, t *testing.T) {
 // I've created a new function for each tests so it's easier to identify where the problem lies if any of them fail.
 func TestVMArithmetic(t *testing.T) {
 	const fn = "../files/VMTests/vmArithmeticTest.json"
-	RunVmTest(fn, t)
-}
-
-func TestSystemOperations(t *testing.T) {
-	const fn = "../files/VMTests/vmSystemOperationsTest.json"
 	RunVmTest(fn, t)
 }
 
@@ -198,6 +199,17 @@ func TestEnvironmentalInfo(t *testing.T) {
 
 func TestFlowOperation(t *testing.T) {
 	const fn = "../files/VMTests/vmIOandFlowOperationsTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestLogTest(t *testing.T) {
+	const fn = "../files/VMTests/vmLogTest.json"
+	RunVmTest(fn, t)
+}
+
+func TestPerformance(t *testing.T) {
+	t.Skip()
+	const fn = "../files/VMTests/vmPerformance.json"
 	RunVmTest(fn, t)
 }
 

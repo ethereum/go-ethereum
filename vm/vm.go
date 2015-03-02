@@ -34,7 +34,7 @@ func New(env Environment) *Vm {
 		lt = LogTyDiff
 	}
 
-	return &Vm{debug: false, env: env, logTy: lt, Recoverable: true}
+	return &Vm{debug: true, env: env, logTy: lt, Recoverable: true}
 }
 
 func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
@@ -56,8 +56,6 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 
 				err = fmt.Errorf("%v", r)
 
-			} else {
-				fmt.Println(me.(*state.StateObject).Storage())
 			}
 		}()
 	}
@@ -668,7 +666,6 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 				}
 				addr = ref.Address()
 
-				fmt.Printf("CREATE %X\n", addr)
 				stack.Push(ethutil.BigD(addr))
 
 			}
@@ -860,6 +857,8 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 
 	// Stack Check, memory resize & gas phase
 	switch op {
+	case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
+		gas.Set(GasFastestStep)
 	case SWAP1, SWAP2, SWAP3, SWAP4, SWAP5, SWAP6, SWAP7, SWAP8, SWAP9, SWAP10, SWAP11, SWAP12, SWAP13, SWAP14, SWAP15, SWAP16:
 		n := int(op - SWAP1 + 2)
 		stack.require(n)
@@ -897,11 +896,12 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 			g = GasStorageMod
 		}
 		gas.Set(g)
-		newMemSize = calcMemSize(stack.Peek(), u256(32))
 	case MLOAD:
 		newMemSize = calcMemSize(stack.Peek(), u256(32))
 	case MSTORE8:
 		newMemSize = calcMemSize(stack.Peek(), u256(1))
+	case MSTORE:
+		newMemSize = calcMemSize(stack.Peek(), u256(32))
 	case RETURN:
 		newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-2])
 	case SHA3:
