@@ -503,7 +503,7 @@ LOOP:
 
 		// quitting on timeout
 		case <-self.suicide:
-			self.peerError(self.bp.peers.errors.New(ErrInsufficientChainInfo, "timed out without providing block hashes or head block", currentBlockHash))
+			self.peerError(self.bp.peers.errors.New(ErrInsufficientChainInfo, "timed out without providing block hashes or head block %x", currentBlockHash))
 
 			self.bp.status.lock.Lock()
 			self.bp.status.badPeers[self.id]++
