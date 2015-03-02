@@ -62,20 +62,21 @@ func main() {
 	utils.InitConfig(VmType, ConfigFile, Datadir, "ETH")
 
 	ethereum, err := eth.New(&eth.Config{
-		Name:      p2p.MakeName(ClientIdentifier, Version),
-		KeyStore:  KeyStore,
-		DataDir:   Datadir,
-		LogFile:   LogFile,
-		LogLevel:  LogLevel,
-		LogFormat: LogFormat,
-		MaxPeers:  MaxPeer,
-		Port:      OutboundPort,
-		NAT:       NAT,
-		KeyRing:   KeyRing,
-		Shh:       true,
-		Dial:      Dial,
-		BootNodes: BootNodes,
-		NodeKey:   NodeKey,
+		Name:         p2p.MakeName(ClientIdentifier, Version),
+		KeyStore:     KeyStore,
+		DataDir:      Datadir,
+		LogFile:      LogFile,
+		LogLevel:     LogLevel,
+		LogFormat:    LogFormat,
+		MaxPeers:     MaxPeer,
+		Port:         OutboundPort,
+		NAT:          NAT,
+		KeyRing:      KeyRing,
+		Shh:          true,
+		Dial:         Dial,
+		BootNodes:    BootNodes,
+		NodeKey:      NodeKey,
+		MinerThreads: MinerThreads,
 	})
 
 	if err != nil {
@@ -113,10 +114,6 @@ func main() {
 		return
 	}
 
-	if StartMining {
-		utils.StartMining(ethereum)
-	}
-
 	if len(ImportChain) > 0 {
 		start := time.Now()
 		err := utils.ImportChain(ethereum, ImportChain)
@@ -128,10 +125,16 @@ func main() {
 	}
 
 	if StartRpc {
-		utils.StartRpc(ethereum, RpcPort)
+		utils.StartRpc(ethereum, RpcListenAddress, RpcPort)
 	}
 
 	utils.StartEthereum(ethereum)
+
+	fmt.Printf("Welcome to the FRONTIER\n")
+
+	if StartMining {
+		ethereum.Miner().Start()
+	}
 
 	if StartJsConsole {
 		InitJsConsole(ethereum)

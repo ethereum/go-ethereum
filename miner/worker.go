@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -111,6 +112,8 @@ func (self *worker) register(agent Agent) {
 func (self *worker) update() {
 	events := self.mux.Subscribe(core.ChainEvent{}, core.NewMinedBlockEvent{})
 
+	timer := time.NewTicker(2 * time.Second)
+
 out:
 	for {
 		select {
@@ -129,6 +132,8 @@ out:
 				agent.Stop()
 			}
 			break out
+		case <-timer.C:
+			minerlogger.Debugln("Hash rate:", self.HashRate(), "Khash")
 		}
 	}
 
@@ -243,4 +248,13 @@ func (self *worker) commitTransaction(tx *types.Transaction) error {
 	self.current.block.AddReceipt(receipt)
 
 	return nil
+}
+
+func (self *worker) HashRate() int64 {
+	var tot int64
+	for _, agent := range self.agents {
+		tot += agent.Pow().GetHashrate()
+	}
+
+	return tot
 }

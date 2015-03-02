@@ -29,8 +29,8 @@ import (
 var rpchttplogger = logger.NewLogger("RPC-HTTP")
 var JSON rpc.JsonWrapper
 
-func NewRpcHttpServer(pipe *xeth.XEth, port int) (*RpcHttpServer, error) {
-	sport := fmt.Sprintf("127.0.0.1:%d", port)
+func NewRpcHttpServer(pipe *xeth.XEth, address string, port int) (*RpcHttpServer, error) {
+	sport := fmt.Sprintf("%s:%d", address, port)
 	l, err := net.Listen("tcp", sport)
 	if err != nil {
 		return nil, err
@@ -41,6 +41,7 @@ func NewRpcHttpServer(pipe *xeth.XEth, port int) (*RpcHttpServer, error) {
 		quit:     make(chan bool),
 		pipe:     pipe,
 		port:     port,
+		addr:     address,
 	}, nil
 }
 
@@ -49,6 +50,7 @@ type RpcHttpServer struct {
 	listener net.Listener
 	pipe     *xeth.XEth
 	port     int
+	addr     string
 }
 
 func (s *RpcHttpServer) exitHandler() {
@@ -69,7 +71,7 @@ func (s *RpcHttpServer) Stop() {
 }
 
 func (s *RpcHttpServer) Start() {
-	rpchttplogger.Infof("Starting RPC-HTTP server on port %d", s.port)
+	rpchttplogger.Infof("Starting RPC-HTTP server on %s:%d", s.addr, s.port)
 	go s.exitHandler()
 
 	api := rpc.NewEthereumApi(s.pipe)

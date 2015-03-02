@@ -24,7 +24,7 @@ var jsrelogger = logger.NewLogger("JSRE")
 type JSRE struct {
 	ethereum *eth.Ethereum
 	Vm       *otto.Otto
-	pipe     *xeth.XEth
+	xeth     *xeth.XEth
 
 	events event.Subscription
 
@@ -67,7 +67,7 @@ func NewJSRE(ethereum *eth.Ethereum) *JSRE {
 	// We have to make sure that, whoever calls this, calls "Stop"
 	go re.mainLoop()
 
-	re.Bind("eth", &JSEthereum{re.pipe, re.Vm, ethereum})
+	re.Bind("eth", &JSEthereum{re.xeth, re.Vm, ethereum})
 
 	re.initStdFuncs()
 
@@ -113,12 +113,10 @@ func (self *JSRE) mainLoop() {
 func (self *JSRE) initStdFuncs() {
 	t, _ := self.Vm.Get("eth")
 	eth := t.Object()
-	eth.Set("watch", self.watch)
-	eth.Set("addPeer", self.addPeer)
+	eth.Set("connect", self.connect)
 	eth.Set("require", self.require)
 	eth.Set("stopMining", self.stopMining)
 	eth.Set("startMining", self.startMining)
-	eth.Set("execBlock", self.execBlock)
 	eth.Set("dump", self.dump)
 	eth.Set("export", self.export)
 }
@@ -152,7 +150,8 @@ func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
 	}
 
 	statedb := state.New(block.Root(), self.ethereum.Db())
-	v, _ := self.Vm.ToValue(statedb.Dump())
+
+	v, _ := self.Vm.ToValue(statedb.RawDump())
 
 	return v
 }
@@ -167,36 +166,7 @@ func (self *JSRE) startMining(call otto.FunctionCall) otto.Value {
 	return v
 }
 
-// eth.watch
-func (self *JSRE) watch(call otto.FunctionCall) otto.Value {
-	addr, _ := call.Argument(0).ToString()
-	var storageAddr string
-	var cb otto.Value
-	var storageCallback bool
-	if len(call.ArgumentList) > 2 {
-		storageCallback = true
-		storageAddr, _ = call.Argument(1).ToString()
-		cb = call.Argument(2)
-	} else {
-		cb = call.Argument(1)
-	}
-
-	if storageCallback {
-		self.objectCb[addr+storageAddr] = append(self.objectCb[addr+storageAddr], cb)
-
-		// event := "storage:" + string(ethutil.Hex2Bytes(addr)) + ":" + string(ethutil.Hex2Bytes(storageAddr))
-		// self.ethereum.EventMux().Subscribe(event, self.changeChan)
-	} else {
-		self.objectCb[addr] = append(self.objectCb[addr], cb)
-
-		// event := "object:" + string(ethutil.Hex2Bytes(addr))
-		// self.ethereum.EventMux().Subscribe(event, self.changeChan)
-	}
-
-	return otto.UndefinedValue()
-}
-
-func (self *JSRE) addPeer(call otto.FunctionCall) otto.Value {
+func (self *JSRE) connect(call otto.FunctionCall) otto.Value {
 	nodeURL, err := call.Argument(0).ToString()
 	if err != nil {
 		return otto.FalseValue()
@@ -222,22 +192,12 @@ func (self *JSRE) require(call otto.FunctionCall) otto.Value {
 	return t
 }
 
-func (self *JSRE) execBlock(call otto.FunctionCall) otto.Value {
-	hash, err := call.Argument(0).ToString()
-	if err != nil {
-		return otto.UndefinedValue()
-	}
-
-	err = utils.BlockDo(self.ethereum, ethutil.Hex2Bytes(hash))
-	if err != nil {
-		fmt.Println(err)
+func (self *JSRE) export(call otto.FunctionCall) otto.Value {
+	if len(call.ArgumentList) == 0 {
+		fmt.Println("err: require file name")
 		return otto.FalseValue()
 	}
 
-	return otto.TrueValue()
-}
-
-func (self *JSRE) export(call otto.FunctionCall) otto.Value {
 	fn, err := call.Argument(0).ToString()
 	if err != nil {
 		fmt.Println(err)
