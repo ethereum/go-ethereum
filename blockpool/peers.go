@@ -214,6 +214,7 @@ func (self *peers) addPeer(
 	// check peer current head
 	if self.bp.hasBlock(currentBlockHash) {
 		// peer not ahead
+		plog.Debugf("addPeer: peer <%v> with td %v and current block %s is behind", id, td, hex(currentBlockHash))
 		return false
 	}
 
