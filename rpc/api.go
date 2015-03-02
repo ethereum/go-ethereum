@@ -513,8 +513,6 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 	switch req.Method {
 	case "eth_coinbase":
 		return p.GetCoinbase(reply)
-	case "eth_listening":
-		return p.GetIsListening(reply)
 	case "eth_mining":
 		return p.GetIsMining(reply)
 	case "eth_setMining":
@@ -531,8 +529,6 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.SetDefaultBlockAge(int64(args), reply)
-	case "eth_peerCount":
-		return p.GetPeerCount(reply)
 	case "eth_number":
 		return p.BlockNumber(reply)
 	case "eth_accounts":
@@ -668,6 +664,10 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.DbGet(args, reply)
+	case "net_listening":
+		return p.GetIsListening(reply)
+	case "net_peerCount":
+		return p.GetPeerCount(reply)
 	case "shh_newIdentity":
 		return p.NewWhisperIdentity(reply)
 	case "shh_newFilter":
