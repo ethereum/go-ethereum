@@ -159,9 +159,9 @@ func KeyTasks(keyManager *crypto.KeyManager, KeyRing string, GenAddr bool, Secre
 	clilogger.Infof("Main address %x\n", keyManager.Address())
 }
 
-func StartRpc(ethereum *eth.Ethereum, RpcPort int) {
+func StartRpc(ethereum *eth.Ethereum, RpcListenAddress string, RpcPort int) {
 	var err error
-	ethereum.RpcServer, err = rpchttp.NewRpcHttpServer(xeth.New(ethereum), RpcPort)
+	ethereum.RpcServer, err = rpchttp.NewRpcHttpServer(xeth.New(ethereum), RpcListenAddress, RpcPort)
 	if err != nil {
 		clilogger.Errorf("Could not start RPC interface (port %v): %v", RpcPort, err)
 	} else {
