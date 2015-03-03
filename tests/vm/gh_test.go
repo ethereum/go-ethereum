@@ -80,7 +80,7 @@ func RunVmTest(p string, t *testing.T) {
 
 	for name, test := range tests {
 		helper.Logger.SetLogLevel(4)
-		if name != "env1" {
+		if name != "mul7" {
 			continue
 		}
 		db, _ := ethdb.NewMemDatabase()

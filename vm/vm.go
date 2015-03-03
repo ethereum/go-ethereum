@@ -844,7 +844,7 @@ func baseCheck(op OpCode, stack *Stack, gas *big.Int) {
 
 func toWordSize(size *big.Int) *big.Int {
 	tmp := new(big.Int)
-	tmp.Add(tmp, u256(31))
+	tmp.Add(size, u256(31))
 	tmp.Div(tmp, u256(32))
 	return tmp
 }
@@ -951,9 +951,7 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 	}
 
 	if newMemSize.Cmp(ethutil.Big0) > 0 {
-		newMemSize.Add(newMemSize, u256(31))
-		newMemSize.Div(newMemSize, u256(32))
-		newMemSize.Mul(newMemSize, u256(32))
+		newMemSize = toWordSize(newMemSize)
 
 		if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
 			//memGasUsage := new(big.Int).Sub(newMemSize, u256(int64(mem.Len())))
@@ -961,15 +959,14 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 			//memGasUsage.Div(memGasUsage, u256(32))
 
 			//Old: full_memory_gas_cost = W + floor(W*W / 1024), W = words in memory
+			pow := new(big.Int).Exp(oldSize, ethutil.Big2, Zero)
 			oldSize := toWordSize(big.NewInt(int64(mem.Len())))
 			linCoef := new(big.Int).Mul(oldSize, GasMemWord)
-			pow := new(big.Int)
-			pow.Exp(oldSize, ethutil.Big2, Zero)
 			quadCoef := new(big.Int).Div(pow, GasQuadCoeffDenom)
 			oldTotalFee := new(big.Int).Add(linCoef, quadCoef)
 
-			linCoef = new(big.Int).Mul(newMemSize, GasMemWord)
 			pow.Exp(newMemSize, ethutil.Big2, Zero)
+			linCoef = new(big.Int).Mul(newMemSize, GasMemWord)
 			quadCoef = new(big.Int).Div(pow, GasQuadCoeffDenom)
 			newTotalFee := new(big.Int).Add(linCoef, quadCoef)
 
