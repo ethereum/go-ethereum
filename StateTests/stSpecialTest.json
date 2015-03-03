@@ -20,7 +20,7 @@
                 }
             }
         },
-        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
+        "postStateRoot" : "cbd79e0e2afd7daf7f8600093018490915777ad3ecc80c19de232f10d7e88106",
         "pre" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "1000",
@@ -75,7 +75,7 @@
                 }
             }
         },
-        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
+        "postStateRoot" : "d42e1fe030221b083f7bd3d30c03bb9ea7cdfbde89b5f20310aeba8ac6a0d03b",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "1000000000000000000",
