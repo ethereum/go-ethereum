@@ -1983,21 +1983,21 @@
                 }
             },
             "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
-                "balance" : "41213",
+                "balance" : "45437",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "999999999999858787",
+                "balance" : "999999999999854563",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
                 }
             }
         },
-        "postStateRoot" : "00b5e6f78bcf85df7fff53841514168c5c9019073be499759df837fe89d53f25",
+        "postStateRoot" : "7de450860583de14b4f6267804f4e4575fa4e3a53ce740637da55907fa3bc424",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "1000000000000000000",
