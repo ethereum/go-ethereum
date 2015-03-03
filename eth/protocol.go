@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -136,6 +137,12 @@ func (self *ethProtocol) handle() error {
 		var txs []*types.Transaction
 		if err := msg.Decode(&txs); err != nil {
 			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
+		}
+		for _, tx := range txs {
+			jsonlogger.LogJson(&logger.EthTxReceived{
+				TxHash:   ethutil.Bytes2Hex(tx.Hash()),
+				RemoteId: self.peer.ID().String(),
+			})
 		}
 		self.txPool.AddTransactions(txs)
 
