@@ -199,7 +199,7 @@ func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *bi
 			receiverAddr := llvm2hashRef(bswap(&self.data.address))
 			receiver := state.GetOrNewStateObject(receiverAddr)
 			balance := state.GetBalance(me.Address())
-			receiver.AddAmount(balance)
+			receiver.AddBalance(balance)
 			state.Delete(me.Address())
 		}
 	}
