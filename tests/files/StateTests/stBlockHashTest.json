@@ -12,6 +12,13 @@
         ],
         "out" : "0x",
         "post" : {
+            "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "1000000000000000000",
+                "code" : "0x600040600055600540600155600440600255",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "100000",
                 "code" : "0x",
@@ -20,6 +27,7 @@
                 }
             }
         },
+        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "1000000000000000000",
@@ -59,6 +67,13 @@
         ],
         "out" : "0x",
         "post" : {
+            "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "1000000000000000000",
+                "code" : "0x60014060005560024060015561010040600255",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "100000",
                 "code" : "0x",
@@ -67,6 +82,7 @@
                 }
             }
         },
+        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "1000000000000000000",
@@ -106,6 +122,13 @@
         ],
         "out" : "0x",
         "post" : {
+            "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "1000000000000000000",
+                "code" : "0x600040600055610101406001557fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff40600255",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "100000",
                 "code" : "0x",
@@ -114,6 +137,7 @@
                 }
             }
         },
+        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "1000000000000000000",
