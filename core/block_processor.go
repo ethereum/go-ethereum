@@ -253,7 +253,7 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 	a := new(big.Int).Sub(block.Header().GasLimit, parent.Header().GasLimit)
 	b := new(big.Int).Div(parent.Header().GasLimit, big.NewInt(1024))
 	if a.Cmp(b) > 0 {
-		return fmt.Errorf("GasLimit check failed for block %v", block.Header().GasLimit)
+		return fmt.Errorf("GasLimit check failed for block %v (%v > %v)", block.Header().GasLimit, a, b)
 	}
 
 	if block.Time() < parent.Time() {
