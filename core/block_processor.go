@@ -204,9 +204,6 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 	// Tre receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, R1]]))
 	receiptSha := types.DeriveSha(receipts)
 	if bytes.Compare(receiptSha, header.ReceiptHash) != 0 {
-		fmt.Println("receipts", receipts)
-		state.Sync()
-		chainlogger.Infof("%s\n", state.Dump())
 		err = fmt.Errorf("validating receipt root. received=%x got=%x", header.ReceiptHash, receiptSha)
 		return
 	}
@@ -249,9 +246,14 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Header().Difficulty, expd)
 	}
 
-	expl := CalcGasLimit(parent, block)
-	if expl.Cmp(block.Header().GasLimit) != 0 {
-		return fmt.Errorf("GasLimit check failed for block %v, %v", block.Header().GasLimit, expl)
+	//expl := CalcGasLimit(parent, block)
+	//if expl.Cmp(block.Header().GasLimit) != 0 {
+
+	// block.gasLimit - parent.gasLimit <= parent.gasLimit / 1024
+	a := new(big.Int).Sub(block.Header().GasLimit, parent.Header().GasLimit)
+	b := new(big.Int).Div(parent.Header().GasLimit, big.NewInt(1024))
+	if a.Cmp(b) > 0 {
+		return fmt.Errorf("GasLimit check failed for block %v", block.Header().GasLimit)
 	}
 
 	if block.Time() < parent.Time() {

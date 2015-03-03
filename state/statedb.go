@@ -239,6 +239,10 @@ func (s *StateDB) Root() []byte {
 	return s.trie.Root()
 }
 
+func (s *StateDB) Trie() *trie.SecureTrie {
+	return s.trie
+}
+
 // Resets the trie and all siblings
 func (s *StateDB) Reset() {
 	s.trie.Reset()
