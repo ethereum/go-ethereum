@@ -931,9 +931,9 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 
 		words := toWordSize(stack.data[stack.Len()-4])
 		gas.Add(gas, words.Mul(words, GasCopyWord))
+
 	case CREATE:
-		size := new(big.Int).Set(stack.data[stack.Len()-2])
-		gas.Add(gas, size.Mul(size, GasCreateByte))
+		newMemSize = calcMemSize(stack.data[stack.Len()-2], stack.data[stack.Len()-3])
 	case CALL, CALLCODE:
 		gas.Add(gas, stack.data[stack.Len()-1])
 
@@ -941,17 +941,16 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 			if self.env.State().GetStateObject(stack.data[stack.Len()-2].Bytes()) == nil {
 				gas.Add(gas, GasCallNewAccount)
 			}
+		}
 
-			if len(stack.data[stack.Len()-3].Bytes()) > 0 {
-				gas.Add(gas, GasCallValueTransfer)
-			}
+		if len(stack.data[stack.Len()-3].Bytes()) > 0 {
+			gas.Add(gas, GasCallValueTransfer)
 		}
 
 		x := calcMemSize(stack.data[stack.Len()-6], stack.data[stack.Len()-7])
 		y := calcMemSize(stack.data[stack.Len()-4], stack.data[stack.Len()-5])
 
 		newMemSize = ethutil.BigMax(x, y)
-		newMemSize = calcMemSize(stack.data[stack.Len()-2], stack.data[stack.Len()-3])
 	}
 
 	if newMemSize.Cmp(ethutil.Big0) > 0 {
@@ -959,11 +958,6 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 		newMemSize.Mul(newMemSizeWords, u256(32))
 
 		if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
-			//memGasUsage := new(big.Int).Sub(newMemSize, u256(int64(mem.Len())))
-			//memGasUsage.Mul(GasMemWord, memGasUsage)
-			//memGasUsage.Div(memGasUsage, u256(32))
-
-			//Old: full_memory_gas_cost = W + floor(W*W / 1024), W = words in memory
 			oldSize := toWordSize(big.NewInt(int64(mem.Len())))
 			pow := new(big.Int).Exp(oldSize, ethutil.Big2, Zero)
 			linCoef := new(big.Int).Mul(oldSize, GasMemWord)
