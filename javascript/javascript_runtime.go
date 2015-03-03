@@ -7,7 +7,6 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
@@ -157,13 +156,14 @@ func (self *JSRE) dump(call otto.FunctionCall) otto.Value {
 }
 
 func (self *JSRE) stopMining(call otto.FunctionCall) otto.Value {
-	v, _ := self.Vm.ToValue(utils.StopMining(self.ethereum))
-	return v
+	self.xeth.Miner().Stop()
+
+	return otto.TrueValue()
 }
 
 func (self *JSRE) startMining(call otto.FunctionCall) otto.Value {
-	v, _ := self.Vm.ToValue(utils.StartMining(self.ethereum))
-	return v
+	self.xeth.Miner().Start()
+	return otto.TrueValue()
 }
 
 func (self *JSRE) connect(call otto.FunctionCall) otto.Value {

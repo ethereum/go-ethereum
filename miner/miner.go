@@ -5,7 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/pow/ezp"
+	"github.com/ethereum/go-ethereum/pow"
 )
 
 var minerlogger = logger.NewLogger("MINER")
@@ -18,16 +18,19 @@ type Miner struct {
 
 	Coinbase []byte
 	mining   bool
+
+	pow pow.PoW
 }
 
-func New(coinbase []byte, eth core.Backend, minerThreads int) *Miner {
+func New(coinbase []byte, eth core.Backend, pow pow.PoW, minerThreads int) *Miner {
 	miner := &Miner{
 		Coinbase: coinbase,
 		worker:   newWorker(coinbase, eth),
+		pow:      pow,
 	}
 
 	for i := 0; i < minerThreads; i++ {
-		miner.worker.register(NewCpuMiner(i, ezp.New()))
+		miner.worker.register(NewCpuMiner(i, miner.pow))
 	}
 
 	return miner

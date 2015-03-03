@@ -7,6 +7,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/blockpool"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -179,11 +180,13 @@ func New(config *Config) (*Ethereum, error) {
 	}
 
 	eth.chainManager = core.NewChainManager(db, eth.EventMux())
+	pow := ethash.New(eth.chainManager)
+
 	eth.txPool = core.NewTxPool(eth.EventMux())
-	eth.blockProcessor = core.NewBlockProcessor(db, eth.txPool, eth.chainManager, eth.EventMux())
+	eth.blockProcessor = core.NewBlockProcessor(db, pow, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
 	eth.whisper = whisper.New()
-	eth.miner = miner.New(keyManager.Address(), eth, config.MinerThreads)
+	eth.miner = miner.New(keyManager.Address(), eth, pow, config.MinerThreads)
 
 	hasBlock := eth.chainManager.HasBlock
 	insertChain := eth.chainManager.InsertChain

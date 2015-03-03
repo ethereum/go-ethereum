@@ -114,7 +114,7 @@ func main() {
 	}
 
 	if StartMining {
-		utils.StartMining(ethereum)
+		ethereum.Miner().Start()
 	}
 
 	if len(ImportChain) > 0 {

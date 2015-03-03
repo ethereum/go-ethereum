@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
-	"github.com/ethereum/go-ethereum/pow/ezp"
 	"github.com/ethereum/go-ethereum/state"
 	"gopkg.in/fatih/set.v0"
 )
@@ -46,11 +45,11 @@ type BlockProcessor struct {
 	eventMux *event.TypeMux
 }
 
-func NewBlockProcessor(db ethutil.Database, txpool *TxPool, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
+func NewBlockProcessor(db ethutil.Database, pow pow.PoW, txpool *TxPool, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
 	sm := &BlockProcessor{
 		db:       db,
 		mem:      make(map[string]*big.Int),
-		Pow:      ezp.New(),
+		Pow:      pow,
 		bc:       chainManager,
 		eventMux: eventMux,
 		txpool:   txpool,
@@ -104,6 +103,9 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 	}
 
 	return receipt, txGas, err
+}
+func (self *BlockProcessor) ChainManager() *ChainManager {
+	return self.bc
 }
 
 func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, statedb *state.StateDB, block *types.Block, txs types.Transactions, transientProcess bool) (types.Receipts, types.Transactions, types.Transactions, types.Transactions, error) {
@@ -254,6 +256,11 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 	b := new(big.Int).Div(parent.Header().GasLimit, big.NewInt(1024))
 	if a.Cmp(b) > 0 {
 		return fmt.Errorf("GasLimit check failed for block %v (%v > %v)", block.Header().GasLimit, a, b)
+	}
+
+	// There can be at most one uncle
+	if len(block.Uncles()) > 1 {
+		return ValidationError("Block can only contain one uncle (contained %v)", len(block.Uncles()))
 	}
 
 	if block.Time() < parent.Time() {
