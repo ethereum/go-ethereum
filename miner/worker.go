@@ -11,10 +11,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/state"
 	"gopkg.in/fatih/set.v0"
 )
+
+var jsonlogger = logger.NewJsonLogger()
 
 type environment struct {
 	totalUsedGas *big.Int
@@ -146,7 +149,12 @@ func (self *worker) wait() {
 			block := self.current.block
 			if block.Number().Uint64() == work.Number && block.Nonce() == nil {
 				self.current.block.Header().Nonce = work.Nonce
-
+				jsonlogger.LogJson(&logger.EthMinerNewBlock{
+					BlockHash:     ethutil.Bytes2Hex(block.Hash()),
+					BlockNumber:   block.Number(),
+					ChainHeadHash: ethutil.Bytes2Hex(block.ParentHeaderHash),
+					BlockPrevHash: ethutil.Bytes2Hex(block.ParentHeaderHash),
+				})
 				if err := self.chain.InsertChain(types.Blocks{self.current.block}); err == nil {
 					self.mux.Post(core.NewMinedBlockEvent{self.current.block})
 				} else {
