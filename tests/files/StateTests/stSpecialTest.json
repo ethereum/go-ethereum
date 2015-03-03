@@ -20,7 +20,7 @@
                 }
             }
         },
-        "postStateRoot" : "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+        "postStateRoot" : "a60566e0ecd43f9224e59c41de05e376869357327052aba6a61614fbcccf32ac",
         "pre" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "1000",
@@ -30,6 +30,7 @@
                 }
             }
         },
+        "preStateRoot" : "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
         "transaction" : {
             "data" : "",
             "gasLimit" : "115792089237316195423570985008687907853269984665640564039457584007913129639435",
@@ -75,7 +76,7 @@
                 }
             }
         },
-        "postStateRoot" : "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+        "postStateRoot" : "45a2a0c2ccdbef34e6b9c9514025624c7de68630fb4b654abcc0c25052fea8e0",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "1000000000000000000",
@@ -99,6 +100,7 @@
                 }
             }
         },
+        "preStateRoot" : "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
         "transaction" : {
             "data" : "",
             "gasLimit" : "850",
