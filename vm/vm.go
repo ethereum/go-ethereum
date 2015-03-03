@@ -399,7 +399,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 
 			stack.Push(ethutil.BigD(data))
 
-			self.Printf(" => %x", data)
+			self.Printf(" => (%v) %x", size, data)
 			// 0x30 range
 		case ADDRESS:
 			stack.Push(ethutil.BigD(context.Address()))
@@ -690,6 +690,10 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
 
+			if len(value.Bytes()) > 0 {
+				gas.Add(gas, GasStipend)
+			}
+
 			var (
 				ret []byte
 				err error
@@ -938,7 +942,7 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 				gas.Add(gas, GasCallNewAccount)
 			}
 
-			if len(stack.data[stack.Len()-1].Bytes()) > 0 {
+			if len(stack.data[stack.Len()-3].Bytes()) > 0 {
 				gas.Add(gas, GasCallValueTransfer)
 			}
 		}
@@ -951,7 +955,8 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 	}
 
 	if newMemSize.Cmp(ethutil.Big0) > 0 {
-		newMemSize = toWordSize(newMemSize)
+		newMemSizeWords := toWordSize(newMemSize)
+		newMemSize.Mul(newMemSizeWords, u256(32))
 
 		if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
 			//memGasUsage := new(big.Int).Sub(newMemSize, u256(int64(mem.Len())))
@@ -959,20 +964,19 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 			//memGasUsage.Div(memGasUsage, u256(32))
 
 			//Old: full_memory_gas_cost = W + floor(W*W / 1024), W = words in memory
-			pow := new(big.Int).Exp(oldSize, ethutil.Big2, Zero)
 			oldSize := toWordSize(big.NewInt(int64(mem.Len())))
+			pow := new(big.Int).Exp(oldSize, ethutil.Big2, Zero)
 			linCoef := new(big.Int).Mul(oldSize, GasMemWord)
 			quadCoef := new(big.Int).Div(pow, GasQuadCoeffDenom)
 			oldTotalFee := new(big.Int).Add(linCoef, quadCoef)
 
-			pow.Exp(newMemSize, ethutil.Big2, Zero)
-			linCoef = new(big.Int).Mul(newMemSize, GasMemWord)
+			pow.Exp(newMemSizeWords, ethutil.Big2, Zero)
+			linCoef = new(big.Int).Mul(newMemSizeWords, GasMemWord)
 			quadCoef = new(big.Int).Div(pow, GasQuadCoeffDenom)
 			newTotalFee := new(big.Int).Add(linCoef, quadCoef)
 
 			gas.Add(gas, new(big.Int).Sub(newTotalFee, oldTotalFee))
 		}
-
 	}
 
 	return newMemSize, gas
