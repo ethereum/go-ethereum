@@ -27,6 +27,6 @@ func (self *SecureTrie) GetString(key string) []byte {
 func (self *SecureTrie) Delete(key []byte) Node {
 	return self.Trie.Delete(crypto.Sha3(key))
 }
-func (self *SecureTrie) DeletString(key string) Node {
+func (self *SecureTrie) DeleteString(key string) Node {
 	return self.Delete([]byte(key))
 }
