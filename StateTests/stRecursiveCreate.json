@@ -125,7 +125,7 @@
                 }
             }
         },
-        "postStateRoot" : "d2ca7d50e06e917cd5d2f5628a32777ed7c3bf454aaf2dce1c999ee91a80e5ef",
+        "postStateRoot" : "155b249b9ed4a0fdbb9041f1edb3ab5a8951a02f0b458777076b6bec751fd3f9",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "20000000",
