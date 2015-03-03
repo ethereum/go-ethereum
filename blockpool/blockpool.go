@@ -17,7 +17,7 @@ var plog = ethlogger.NewLogger("Blockpool")
 
 var (
 	// max number of block hashes sent in one request
-	blockHashesBatchSize = 512
+	blockHashesBatchSize = 256
 	// max number of blocks sent in one request
 	blockBatchSize = 64
 	// interval between two consecutive block checks (and requests)
@@ -27,11 +27,13 @@ var (
 	// interval between two consecutive block hash checks (and requests)
 	blockHashesRequestInterval = 3 * time.Second
 	// max number of idle iterations, ie., check through a section without new blocks coming in
-	blocksRequestMaxIdleRounds = 100
+	blocksRequestMaxIdleRounds = 20
 	// timeout interval: max time allowed for peer without sending a block hash
 	blockHashesTimeout = 60 * time.Second
 	// timeout interval: max time allowed for peer without sending a block
-	blocksTimeout = 120 * time.Second
+	blocksTimeout = 60 * time.Second
+	//
+	idleBestPeerTimeout = 60 * time.Second
 )
 
 // config embedded in components, by default fall back to constants
@@ -45,6 +47,7 @@ type Config struct {
 	BlocksRequestInterval      time.Duration
 	BlockHashesTimeout         time.Duration
 	BlocksTimeout              time.Duration
+	IdleBestPeerTimeout        time.Duration
 }
 
 // blockpool errors
@@ -53,6 +56,7 @@ const (
 	ErrInvalidPoW
 	ErrUnrequestedBlock
 	ErrInsufficientChainInfo
+	ErrIdleTooLong
 )
 
 var errorToString = map[int]string{
@@ -60,6 +64,7 @@ var errorToString = map[int]string{
 	ErrInvalidPoW:            "Invalid PoW",
 	ErrUnrequestedBlock:      "Unrequested block",
 	ErrInsufficientChainInfo: "Insufficient chain info",
+	ErrIdleTooLong:           "Idle too long",
 }
 
 // init initialises all your laundry
@@ -87,6 +92,9 @@ func (self *Config) init() {
 	}
 	if self.BlocksTimeout == 0 {
 		self.BlocksTimeout = blocksTimeout
+	}
+	if self.IdleBestPeerTimeout == 0 {
+		self.IdleBestPeerTimeout = idleBestPeerTimeout
 	}
 }
 
@@ -149,6 +157,15 @@ func New(
 	}
 }
 
+func severity(code int) ethlogger.LogLevel {
+	switch code {
+	case ErrUnrequestedBlock:
+		return ethlogger.WarnLevel
+	default:
+		return ethlogger.ErrorLevel
+	}
+}
+
 // allows restart
 func (self *BlockPool) Start() {
 	self.lock.Lock()
@@ -169,6 +186,7 @@ func (self *BlockPool) Start() {
 		errors: &errs.Errors{
 			Package: "Blockpool",
 			Errors:  errorToString,
+			Level:   severity,
 		},
 		peers:  make(map[string]*peer),
 		status: self.status,
@@ -363,6 +381,8 @@ LOOP:
 			// check if known block connecting the downloaded chain to our blockchain
 			plog.DebugDetailf("AddBlockHashes: peer <%s> (head: %s) found block %s in the blockchain", peerId, hex(bestpeer.currentBlockHash), hex(hash))
 			if len(nodes) == 1 {
+				plog.DebugDetailf("AddBlockHashes: singleton section pushed to blockchain peer <%s> (head: %s) found block %s in the blockchain", peerId, hex(bestpeer.currentBlockHash), hex(hash))
+
 				// create new section if needed and push it to the blockchain
 				sec = self.newSection(nodes)
 				sec.addSectionToBlockChain(bestpeer)
@@ -379,6 +399,8 @@ LOOP:
 					and td together with blockBy are recorded on the node
 				*/
 				if len(nodes) == 0 && child != nil {
+					plog.DebugDetailf("AddBlockHashes: child section [%s] pushed to blockchain peer <%s> (head: %s) found block %s in the blockchain", sectionhex(child), peerId, hex(bestpeer.currentBlockHash), hex(hash))
+
 					child.addSectionToBlockChain(bestpeer)
 				}
 			}
@@ -446,10 +468,12 @@ LOOP:
 	*/
 	sec = self.linkSections(nodes, parent, child)
 
-	self.status.lock.Lock()
-	self.status.values.BlockHashes += len(nodes)
-	self.status.lock.Unlock()
-	plog.DebugDetailf("AddBlockHashes: peer <%s> (head: %s): section [%s] created", peerId, hex(bestpeer.currentBlockHash), sectionhex(sec))
+	if sec != nil {
+		self.status.lock.Lock()
+		self.status.values.BlockHashes += len(nodes)
+		self.status.lock.Unlock()
+		plog.DebugDetailf("AddBlockHashes: peer <%s> (head: %s): section [%s] created", peerId, hex(bestpeer.currentBlockHash), sectionhex(sec))
+	}
 
 	self.chainLock.Unlock()
 
@@ -549,6 +573,7 @@ func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
 			self.status.lock.Unlock()
 		} else {
 			plog.DebugDetailf("AddBlock: head block %s for peer <%s> (head: %s) already known", hex(hash), peerId, hex(sender.currentBlockHash))
+			sender.currentBlockC <- block
 		}
 	} else {
 
@@ -644,11 +669,15 @@ LOOP:
 		  we need to relink both complete and incomplete sections
 		  the latter could have been blockHashesRequestsComplete before being delinked from its parent
 		*/
-		if parent == nil && sec.bottom.block != nil {
-			if entry := self.get(sec.bottom.block.ParentHash()); entry != nil {
-				parent = entry.section
-				plog.DebugDetailf("activateChain: [%s]-[%s] relink", sectionhex(parent), sectionhex(sec))
-				link(parent, sec)
+		if parent == nil {
+			if sec.bottom.block != nil {
+				if entry := self.get(sec.bottom.block.ParentHash()); entry != nil {
+					parent = entry.section
+					plog.DebugDetailf("activateChain: [%s]-[%s] link", sectionhex(parent), sectionhex(sec))
+					link(parent, sec)
+				}
+			} else {
+				plog.DebugDetailf("activateChain: section [%s] activated by peer <%s> has missing root block", sectionhex(sec), p.id)
 			}
 		}
 		sec = parent
@@ -704,8 +733,14 @@ func (self *BlockPool) remove(sec *section) {
 	// delete node entries from pool index under pool lock
 	self.lock.Lock()
 	defer self.lock.Unlock()
+
 	for _, node := range sec.nodes {
 		delete(self.pool, string(node.hash))
+	}
+	if sec.initialised && sec.poolRootIndex != 0 {
+		self.status.lock.Lock()
+		self.status.values.BlocksInPool -= len(sec.nodes) - sec.missing
+		self.status.lock.Unlock()
 	}
 }
 

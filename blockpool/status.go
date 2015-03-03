@@ -51,7 +51,6 @@ type Status struct {
 func (self *BlockPool) Status() *Status {
 	self.status.lock.Lock()
 	defer self.status.lock.Unlock()
-	self.status.values.BlockHashesInPool = len(self.pool)
 	self.status.values.ActivePeers = len(self.status.activePeers)
 	self.status.values.BestPeers = len(self.status.bestPeers)
 	self.status.values.BadPeers = len(self.status.badPeers)

@@ -138,7 +138,7 @@ func (self *section) addSectionToBlockChain(p *peer) {
 			plog.Warnf("penalise peers %v (hash), %v (block)", node.hashBy, node.blockBy)
 
 			// or invalid block and the entire chain needs to be removed
-			self.removeInvalidChain()
+			self.removeChain()
 		} else {
 			// if all blocks inserted in this section
 			// then need to try to insert blocks in child section
@@ -235,16 +235,14 @@ LOOP:
 
 		// timebomb - if section is not complete in time, nuke the entire chain
 		case <-self.suicideTimer:
-			self.suicide()
+			self.removeChain()
 			plog.Debugf("[%s] timeout. (%v total attempts): missing %v/%v/%v...suicide", sectionhex(self), self.blocksRequests, self.missing, self.lastMissing, self.depth)
 			self.suicideTimer = nil
+			break LOOP
 
 		// closing suicideC triggers section suicide: removes section nodes from pool and terminates section process
 		case <-self.suicideC:
-			plog.DebugDetailf("[%s] suicide", sectionhex(self))
-			self.unlink()
-			self.bp.remove(self)
-			plog.DebugDetailf("[%s] done", sectionhex(self))
+			plog.DebugDetailf("[%s] quit", sectionhex(self))
 			break LOOP
 
 		// alarm for checking blocks in the section
@@ -283,7 +281,7 @@ LOOP:
 				checking = false
 				break
 			}
-			plog.DebugDetailf("[%s] section proc step %v: missing %v/%v/%v", sectionhex(self), self.step, self.missing, self.lastMissing, self.depth)
+			// plog.DebugDetailf("[%s] section proc step %v: missing %v/%v/%v", sectionhex(self), self.step, self.missing, self.lastMissing, self.depth)
 			if !checking {
 				self.step = 0
 				self.missing = 0
@@ -522,7 +520,7 @@ func (self *section) checkRound() {
 				// too many idle rounds
 				if self.idle >= self.bp.Config.BlocksRequestMaxIdleRounds {
 					plog.DebugDetailf("[%s] block requests had %v idle rounds (%v total attempts): missing %v/%v/%v\ngiving up...", sectionhex(self), self.idle, self.blocksRequests, self.missing, self.lastMissing, self.depth)
-					self.suicide()
+					self.removeChain()
 				}
 			} else {
 				self.idle = 0
@@ -602,10 +600,12 @@ func (self *BlockPool) linkSections(nodes []*node, parent, child *section) (sec 
 		link(parent, sec)
 		link(sec, child)
 	} else {
-		// now this can only happen if we allow response to hash request to include <from> hash
-		// in this case we just link parent and child (without needing root block of child section)
-		plog.Debugf("[%s]->[%s] connecting known sections", sectionhex(parent), sectionhex(child))
-		link(parent, child)
+		if parent != nil && child != nil {
+			// now this can only happen if we allow response to hash request to include <from> hash
+			// in this case we just link parent and child (without needing root block of child section)
+			plog.Debugf("[%s]->[%s] connecting known sections", sectionhex(parent), sectionhex(child))
+			link(parent, child)
+		}
 	}
 	return
 }
@@ -614,6 +614,7 @@ func (self *section) activate(p *peer) {
 	self.bp.wg.Add(1)
 	select {
 	case <-self.offC:
+		plog.DebugDetailf("[%s] completed section process. cannot activate for peer <%s>", sectionhex(self), p.id)
 		self.bp.wg.Done()
 	case self.controlC <- p:
 		plog.DebugDetailf("[%s] activate section process for peer <%s>", sectionhex(self), p.id)
@@ -625,22 +626,10 @@ func (self *section) deactivate() {
 	self.controlC <- nil
 }
 
-func (self *section) suicide() {
-	select {
-	case <-self.suicideC:
-		return
-	default:
-	}
-	close(self.suicideC)
-}
-
 // removes this section exacly
 func (self *section) remove() {
 	select {
 	case <-self.offC:
-		// section is complete, no process
-		self.unlink()
-		self.bp.remove(self)
 		close(self.suicideC)
 		plog.DebugDetailf("[%s] remove: suicide", sectionhex(self))
 	case <-self.suicideC:
@@ -649,21 +638,23 @@ func (self *section) remove() {
 		plog.DebugDetailf("[%s] remove: suicide", sectionhex(self))
 		close(self.suicideC)
 	}
+	self.unlink()
+	self.bp.remove(self)
 	plog.DebugDetailf("[%s] removed section.", sectionhex(self))
 
 }
 
 // remove a section and all its descendents from the pool
-func (self *section) removeInvalidChain() {
+func (self *section) removeChain() {
 	// need to get the child before removeSection delinks the section
 	self.bp.chainLock.RLock()
 	child := self.child
 	self.bp.chainLock.RUnlock()
 
-	plog.DebugDetailf("[%s] remove invalid chain", sectionhex(self))
+	plog.DebugDetailf("[%s] remove chain", sectionhex(self))
 	self.remove()
 	if child != nil {
-		child.removeInvalidChain()
+		child.removeChain()
 	}
 }
 
