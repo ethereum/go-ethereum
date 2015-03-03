@@ -167,6 +167,7 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.
 	// Set pre compiled contracts
 	vm.Precompiled = vm.PrecompiledContracts()
 
+	snapshot := statedb.Copy()
 	coinbase := statedb.GetOrNewStateObject(caddr)
 	coinbase.SetGasPool(ethutil.Big(env["currentGasLimit"]))
 
@@ -175,6 +176,9 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.
 	st := core.NewStateTransition(vmenv, message, coinbase)
 	vmenv.origin = keyPair.Address()
 	ret, err := st.TransitionState()
+	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) {
+		statedb.Set(snapshot)
+	}
 	statedb.Update(vmenv.Gas)
 
 	return ret, vmenv.logs, vmenv.Gas, err

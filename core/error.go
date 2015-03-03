@@ -87,6 +87,24 @@ func IsNonceErr(err error) bool {
 	return ok
 }
 
+type InvalidTxErr struct {
+	Message string
+}
+
+func (err *InvalidTxErr) Error() string {
+	return err.Message
+}
+
+func InvalidTxError(err error) *InvalidTxErr {
+	return &InvalidTxErr{fmt.Sprintf("%v", err)}
+}
+
+func IsInvalidTxErr(err error) bool {
+	_, ok := err.(*InvalidTxErr)
+
+	return ok
+}
+
 type OutOfGasErr struct {
 	Message string
 }

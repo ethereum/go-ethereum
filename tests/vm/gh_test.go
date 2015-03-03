@@ -79,10 +79,6 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
-		helper.Logger.SetLogLevel(4)
-		if name != "callcodeToNameRegistratorAddresTooBigRight" {
-			continue
-		}
 		db, _ := ethdb.NewMemDatabase()
 		statedb := state.New(nil, db)
 		for addr, account := range test.Pre {
@@ -161,7 +157,7 @@ func RunVmTest(p string, t *testing.T) {
 
 		if !isVmTest {
 			if !bytes.Equal(ethutil.Hex2Bytes(test.PostStateRoot), statedb.Root()) {
-				//t.Errorf("%s's : Post state root error. Expected %s, got %x", name, test.PostStateRoot, statedb.Root())
+				t.Errorf("%s's : Post state root error. Expected %s, got %x", name, test.PostStateRoot, statedb.Root())
 			}
 		}
 

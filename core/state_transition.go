@@ -3,7 +3,6 @@ package core
 import (
 	"fmt"
 	"math/big"
-
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
@@ -146,7 +145,7 @@ func (self *StateTransition) preCheck() (err error) {
 
 	// Pre-pay gas / Buy gas of the coinbase account
 	if err = self.BuyGas(); err != nil {
-		return err
+		return InvalidTxError(err)
 	}
 
 	return nil
@@ -167,14 +166,14 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 
 	defer self.RefundGas()
 
+	// Transaction gas
+	if err = self.UseGas(vm.GasTx); err != nil {
+		return nil, InvalidTxError(err)
+	}
+
 	// Increment the nonce for the next transaction
 	self.state.SetNonce(sender.Address(), sender.Nonce()+1)
 	//sender.Nonce += 1
-
-	// Transaction gas
-	if err = self.UseGas(vm.GasTx); err != nil {
-		return
-	}
 
 	// Pay data gas
 	var dgas int64
