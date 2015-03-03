@@ -120,7 +120,6 @@ func Init() {
 	flag.BoolVar(&StartMining, "mine", false, "start mining")
 	flag.BoolVar(&StartJsConsole, "js", false, "launches javascript console")
 	flag.BoolVar(&PrintVersion, "version", false, "prints version number")
-	flag.IntVar(&MinerThreads, "minerthreads", runtime.NumCPU(), "number of miner threads")
 
 	// Network stuff
 	var (
