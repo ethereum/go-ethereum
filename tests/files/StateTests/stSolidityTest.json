@@ -27,7 +27,7 @@
                 }
             }
         },
-        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
+        "postStateRoot" : "5fe44b5f7d00d06ddc76a4107b12e6e990e61b3ecaaf51aeefc6553ec9946848",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "100000",
@@ -83,7 +83,7 @@
                 }
             }
         },
-        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
+        "postStateRoot" : "0d4906088abccdd5640a01c0b04c222d0d572cd90b30000529e5846c5659958c",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "100000",
@@ -139,7 +139,7 @@
                 }
             }
         },
-        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
+        "postStateRoot" : "d24ee35c93e51fa54ae2b021628ace493efd20df4aadef944b3e70aae7c669fe",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "100000",
@@ -195,7 +195,7 @@
                 }
             }
         },
-        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
+        "postStateRoot" : "24f4dc37e45b1340f98b88a6c8742947a6d194f60863a8bad7286b9ead234065",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "100000",
@@ -314,7 +314,7 @@
                 }
             }
         },
-        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
+        "postStateRoot" : "91f571bd00073ca4bc66731941f05a49be053395c958f566e31f474be133b14d",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "1000000",
