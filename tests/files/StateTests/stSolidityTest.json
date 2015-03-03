@@ -27,7 +27,7 @@
                 }
             }
         },
-        "postStateRoot" : "5fe44b5f7d00d06ddc76a4107b12e6e990e61b3ecaaf51aeefc6553ec9946848",
+        "postStateRoot" : "fb10f5e6bb91ac2c2bdd99645a174f653efd54a27e3fcac8edcfc43e25a27fe5",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "100000",
@@ -83,7 +83,7 @@
                 }
             }
         },
-        "postStateRoot" : "0d4906088abccdd5640a01c0b04c222d0d572cd90b30000529e5846c5659958c",
+        "postStateRoot" : "c0007603bf1d9314327a2b028513ddfcadacefa4a4f987d8dd3211db25836d51",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "100000",
@@ -139,7 +139,7 @@
                 }
             }
         },
-        "postStateRoot" : "d24ee35c93e51fa54ae2b021628ace493efd20df4aadef944b3e70aae7c669fe",
+        "postStateRoot" : "067b39d9a7a9860f1eb3ac1651eb797b573ff2c00b53acc6d6cdbc817e1cc31e",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "100000",
@@ -195,7 +195,7 @@
                 }
             }
         },
-        "postStateRoot" : "24f4dc37e45b1340f98b88a6c8742947a6d194f60863a8bad7286b9ead234065",
+        "postStateRoot" : "0e28dbdfe5e9fc9e2edbdb90849fc7a3982d21d400c59304aa791193d5e6e3da",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "100000",
@@ -258,7 +258,7 @@
                 }
             }
         },
-        "postStateRoot" : "0f97c5e002fa472857c499ad434bc7f8031df0e535c8832c24118c9b7378a8d0",
+        "postStateRoot" : "7d5742aed246f2483ad573d595588c4b032fb2bfd596ebe7e746274925bba18e",
         "pre" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "10000000",
@@ -314,7 +314,7 @@
                 }
             }
         },
-        "postStateRoot" : "91f571bd00073ca4bc66731941f05a49be053395c958f566e31f474be133b14d",
+        "postStateRoot" : "ec9eadbedfa101ee02b24666825027434d3f8f1dc1c356270b60dbad8f342714",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "1000000",
@@ -377,7 +377,7 @@
                 }
             }
         },
-        "postStateRoot" : "4273ac184f3c131e890efc5874717a4dbc9c11120168fa6de09a9e5f32925646",
+        "postStateRoot" : "cd8428d43b8b08e7ff22bdd2aecab32789c75aa9fd75d5d5b9e9742a7a79b72f",
         "pre" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "10000000000000000",
