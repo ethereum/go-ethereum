@@ -759,7 +759,7 @@ ApplicationWindow {
                  Rectangle {
                      height: 55
                      color: "transparent"
-                     visible:false
+                     visible: true
                      Text {
                          text: "DEBUG"
                          font.family: sourceSansPro.name 

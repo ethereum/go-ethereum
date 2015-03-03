@@ -92,16 +92,17 @@ Rectangle {
 
 	         			// Check if it's mining and set it accordingly       				
          				if (miningSliderValue > 0 && !eth.miner().mining()) {
+							// If the 
 							eth.setGasPrice("10000000000000");
-							
 	         				eth.miner().start();
 	         			} else if (miningSliderValue == 0 && eth.miner().mining()) {
 	         				eth.miner().stop();
 	         			} else if (eth.miner().mining()) {
 	         				
-	         				webview.runJavaScript('console.log(localStorage.timeSpent); Miner.timeSpentMining++; Miner.hashrate = ' + eth.miner().hashRate() );
+	         				webview.runJavaScript('var miningData = MiningData.findOne(); MiningData.update(miningData._id, {$inc: {totalTimeSpent: 1}}); Miner.hashrate = ' + eth.miner().hashRate() );
 
-
+	         				//var miningData = MiningData.findOne(); MiningData.update(miningData._id, {$inc: {totalTimeSpent: 1}});
+	         				
 	         			} else if (miningSliderValue == "undefined") {
 	         				
 	         				webview.runJavaScript('Miner.mining = 0' );
