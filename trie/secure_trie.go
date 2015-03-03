@@ -30,3 +30,7 @@ func (self *SecureTrie) Delete(key []byte) Node {
 func (self *SecureTrie) DeleteString(key string) Node {
 	return self.Delete([]byte(key))
 }
+
+func (self *SecureTrie) Copy() *SecureTrie {
+	return &SecureTrie{self.Trie.Copy()}
+}

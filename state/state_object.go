@@ -290,7 +290,7 @@ func (c *StateObject) Init() Code {
 	return c.initCode
 }
 
-func (self *StateObject) Trie() *trie.Trie {
+func (self *StateObject) Trie() *trie.SecureTrie {
 	return self.State.trie
 }
 
