@@ -197,7 +197,7 @@ func (bc *ChainManager) NewBlock(coinbase []byte) *types.Block {
 		coinbase,
 		root,
 		ethutil.BigPow(2, 32),
-		nil,
+		0,
 		"")
 	block.SetUncles(nil)
 	block.SetTransactions(nil)

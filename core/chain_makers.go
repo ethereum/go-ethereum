@@ -14,8 +14,8 @@ import (
 // So we can generate blocks easily
 type FakePow struct{}
 
-func (f FakePow) Search(block pow.Block, stop <-chan struct{}) ([]byte, []byte, []byte) {
-	return nil, nil, nil
+func (f FakePow) Search(block pow.Block, stop <-chan struct{}) (uint64, []byte, []byte) {
+	return 0, nil, nil
 }
 func (f FakePow) Verify(block pow.Block) bool { return true }
 func (f FakePow) GetHashrate() int64          { return 0 }
@@ -55,7 +55,7 @@ func NewCanonical(n int, db ethutil.Database) (*BlockProcessor, error) {
 
 // block time is fixed at 10 seconds
 func newBlockFromParent(addr []byte, parent *types.Block) *types.Block {
-	block := types.NewBlock(parent.Hash(), addr, parent.Root(), ethutil.BigPow(2, 32), nil, "")
+	block := types.NewBlock(parent.Hash(), addr, parent.Root(), ethutil.BigPow(2, 32), 0, "")
 	block.SetUncles(nil)
 	block.SetTransactions(nil)
 	block.SetReceipts(nil)

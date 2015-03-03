@@ -1,14 +1,15 @@
 package pow
 
 import (
-	"github.com/ethereum/go-ethereum/core/types"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 type Block interface {
 	Difficulty() *big.Int
 	HashNoNonce() []byte
-	Nonce() []byte
+	Nonce() uint64
 	MixDigest() []byte
 	SeedHash() []byte
 	NumberU64() uint64
