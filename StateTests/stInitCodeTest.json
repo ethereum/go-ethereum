@@ -12,7 +12,38 @@
         ],
         "out" : "0x",
         "post" : {
+            "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "998",
+                "code" : "0x74600c60005566602060406000f060205260076039f36000526015600b6001f0600055600060006000600060016000546000f1",
+                "nonce" : "1",
+                "storage" : {
+                    "0x" : "0xd2571607e241ecf590ed94b12d87c94babe36db6"
+                }
+            },
+            "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                "balance" : "101299",
+                "code" : "0x",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "99898701",
+                "code" : "0x",
+                "nonce" : "1",
+                "storage" : {
+                }
+            },
+            "d2571607e241ecf590ed94b12d87c94babe36db6" : {
+                "balance" : "2",
+                "code" : "0x602060406000f0",
+                "nonce" : "0",
+                "storage" : {
+                    "0x" : "0x0c"
+                }
+            }
         },
+        "postStateRoot" : "05b27b6fc036371bb5c2f27dacb1d852207822aac204fcd8e2d5478a7bfa3bdc",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "1000",
@@ -52,7 +83,29 @@
         ],
         "out" : "0x",
         "post" : {
+            "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "1000",
+                "code" : "0x74600c60005566602060406000f060205260076039f36000526015600b6103e9f0600055",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                "balance" : "58061",
+                "code" : "0x",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "99941939",
+                "code" : "0x",
+                "nonce" : "1",
+                "storage" : {
+                }
+            }
         },
+        "postStateRoot" : "faec4d1b313e7186f96b035d3350009ff96f42b8f50cc3b9ec945bd32ee93d3b",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "1000",
@@ -92,7 +145,36 @@
         ],
         "out" : "0x",
         "post" : {
+            "0000000000000000000000000000000000000000" : {
+                "balance" : "0",
+                "code" : "0x",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "0",
+                "code" : "0x74600c60005566602060406000f060205260076039f36000526015600b6001f0600055600060006000600060006000546000f1",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                "balance" : "83172",
+                "code" : "0x",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "99916828",
+                "code" : "0x",
+                "nonce" : "1",
+                "storage" : {
+                }
+            }
         },
+        "postStateRoot" : "06f60d5ab5fa6ba2d28cb3bf3f43bd2c3a443cf3d42588348594b23b3c8082d8",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "0",
@@ -132,7 +214,38 @@
         ],
         "out" : "0x",
         "post" : {
+            "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "998",
+                "code" : "0x74600c60005566602060406000f060205260076039f36000526015600b6001f0600055600060006000600060016000546101f4f1",
+                "nonce" : "1",
+                "storage" : {
+                    "0x" : "0xd2571607e241ecf590ed94b12d87c94babe36db6"
+                }
+            },
+            "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                "balance" : "101799",
+                "code" : "0x",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "99898201",
+                "code" : "0x",
+                "nonce" : "1",
+                "storage" : {
+                }
+            },
+            "d2571607e241ecf590ed94b12d87c94babe36db6" : {
+                "balance" : "2",
+                "code" : "0x602060406000f0",
+                "nonce" : "0",
+                "storage" : {
+                    "0x" : "0x0c"
+                }
+            }
         },
+        "postStateRoot" : "ead39f1f4a1a065258dfb482b9478c33570effa3d8912125f27354b3f9dc552b",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "1000",
@@ -172,7 +285,44 @@
         ],
         "out" : "0x",
         "post" : {
+            "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "1",
+                "code" : "0x6b600c600055602060406000f0600052600c60146000f0",
+                "nonce" : "1",
+                "storage" : {
+                }
+            },
+            "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                "balance" : "105082",
+                "code" : "0x",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "62c01474f089b07dae603491675dc5b5748f7049" : {
+                "balance" : "0",
+                "code" : "0x",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "99894918",
+                "code" : "0x",
+                "nonce" : "1",
+                "storage" : {
+                }
+            },
+            "d2571607e241ecf590ed94b12d87c94babe36db6" : {
+                "balance" : "0",
+                "code" : "0x",
+                "nonce" : "1",
+                "storage" : {
+                    "0x" : "0x0c"
+                }
+            }
         },
+        "postStateRoot" : "17bd33175f11032f092b51c2252fc9d2380e647bc5db52616ea9bbae92849970",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "1",
@@ -212,6 +362,13 @@
         ],
         "out" : "0x",
         "post" : {
+            "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "0",
+                "code" : "0x3060025560206000600039602060006000f0",
+                "nonce" : "40",
+                "storage" : {
+                }
+            },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "100000",
                 "code" : "0x",
@@ -220,6 +377,7 @@
                 }
             }
         },
+        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "0",
@@ -259,6 +417,13 @@
         ],
         "out" : "0x",
         "post" : {
+            "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "0",
+                "code" : "0x602060006000f0",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "100000",
                 "code" : "0x",
@@ -267,6 +432,7 @@
                 }
             }
         },
+        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "0",
@@ -314,6 +480,7 @@
                 }
             }
         },
+        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
         "pre" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "2",
@@ -354,6 +521,7 @@
                 }
             }
         },
+        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
         "pre" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "10000",
@@ -392,8 +560,16 @@
                 "nonce" : "0",
                 "storage" : {
                 }
+            },
+            "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "100000",
+                "code" : "0x60156000526001601ff3",
+                "nonce" : "0",
+                "storage" : {
+                }
             }
         },
+        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
         "pre" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "100000",
@@ -439,8 +615,16 @@
                 "nonce" : "0",
                 "storage" : {
                 }
+            },
+            "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "100000",
+                "code" : "0x60003560030260005260206000f3",
+                "nonce" : "0",
+                "storage" : {
+                }
             }
         },
+        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
         "pre" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "100000",
@@ -488,6 +672,7 @@
                 }
             }
         },
+        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
         "pre" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "10000",
@@ -528,6 +713,7 @@
                 }
             }
         },
+        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
         "pre" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "100000",
@@ -568,6 +754,7 @@
                 }
             }
         },
+        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
         "pre" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "10000",
@@ -608,6 +795,7 @@
                 }
             }
         },
+        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
         "pre" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "10000",
@@ -648,6 +836,7 @@
                 }
             }
         },
+        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
         "pre" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "10000",

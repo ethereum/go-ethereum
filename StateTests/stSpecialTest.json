@@ -20,6 +20,7 @@
                 }
             }
         },
+        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
         "pre" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "1000",
@@ -52,14 +53,29 @@
         ],
         "out" : "0x",
         "post" : {
+            "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "1000000000000000000",
+                "code" : "0x7b601080600c6000396000f200600035541560095700602035600035556000526000600060006000601773aaaaaaaaace5edbc8e2a8697c15331677e6ebf0b7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffecf1",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "1000",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
                 }
+            },
+            "aaaaaaaaace5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000000000000000",
+                "code" : "0x600160015532600255",
+                "nonce" : "0",
+                "storage" : {
+                }
             }
         },
+        "postStateRoot" : "255f005689b4eb8d7a0144473577eb02bfaf25970cda9323a734bb8f18f34252",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "1000000000000000000",
