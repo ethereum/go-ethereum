@@ -2558,21 +2558,21 @@
                 }
             },
             "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
-                "balance" : "21229",
+                "balance" : "26410",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "429496708361",
+                "balance" : "429496703180",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
                 }
             }
         },
-        "postStateRoot" : "17ccab00553d478d9a2691a2a04c818f3800af6ef3cbd5d03056ee8289be44da",
+        "postStateRoot" : "66bdfa21e3bfd0031fe3c36504646e129568bf07ad463d73057689edf7044f36",
         "pre" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
                 "balance" : "1000000000000000000",
