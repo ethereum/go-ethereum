@@ -79,12 +79,10 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
-		/*
-			helper.Logger.SetLogLevel(4)
-			if name != "log1_nonEmptyMem_logMemSize1_logMemStart31" {
-				continue
-			}
-		*/
+		helper.Logger.SetLogLevel(4)
+		if name != "env1" {
+			continue
+		}
 		db, _ := ethdb.NewMemDatabase()
 		statedb := state.New(nil, db)
 		for addr, account := range test.Pre {

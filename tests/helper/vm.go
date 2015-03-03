@@ -28,6 +28,8 @@ type Env struct {
 	gasLimit   *big.Int
 
 	logs state.Logs
+
+	vmTest bool
 }
 
 func NewEnv(state *state.StateDB) *Env {
@@ -92,20 +94,38 @@ func (self *Env) vm(addr, data []byte, gas, price, value *big.Int) *core.Executi
 }
 
 func (self *Env) Call(caller vm.ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error) {
+	if self.vmTest && self.depth > 0 {
+		caller.ReturnGas(gas, price)
+
+		return nil, nil
+	}
 	exe := self.vm(addr, data, gas, price, value)
 	ret, err := exe.Call(addr, caller)
 	self.Gas = exe.Gas
 
 	return ret, err
+
 }
 func (self *Env) CallCode(caller vm.ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error) {
+	if self.vmTest && self.depth > 0 {
+		caller.ReturnGas(gas, price)
+	}
 	exe := self.vm(caller.Address(), data, gas, price, value)
 	return exe.Call(addr, caller)
 }
 
 func (self *Env) Create(caller vm.ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error, vm.ContextRef) {
 	exe := self.vm(addr, data, gas, price, value)
-	return exe.Create(caller)
+	if self.vmTest {
+		caller.ReturnGas(gas, price)
+
+		nonce := self.state.GetNonce(caller.Address())
+		obj := self.state.GetOrNewStateObject(crypto.CreateAddress(caller.Address(), nonce))
+
+		return nil, nil, obj
+	} else {
+		return exe.Create(caller)
+	}
 }
 
 func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, state.Logs, *big.Int, error) {
@@ -123,6 +143,7 @@ func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, state.Log
 	caller := state.GetOrNewStateObject(from)
 
 	vmenv := NewEnvFromMap(state, env, exec)
+	vmenv.vmTest = true
 	vmenv.skipTransfer = true
 	vmenv.initial = true
 	ret, err := vmenv.Call(caller, to, data, gas, price, value)

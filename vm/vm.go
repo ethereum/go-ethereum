@@ -812,6 +812,7 @@ var _baseCheck = map[OpCode]req{
 	COINBASE:     {0, GasQuickStep},
 	TIMESTAMP:    {0, GasQuickStep},
 	NUMBER:       {0, GasQuickStep},
+	CALLDATASIZE: {0, GasQuickStep},
 	DIFFICULTY:   {0, GasQuickStep},
 	GASLIMIT:     {0, GasQuickStep},
 	POP:          {0, GasQuickStep},
@@ -862,9 +863,11 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 	case SWAP1, SWAP2, SWAP3, SWAP4, SWAP5, SWAP6, SWAP7, SWAP8, SWAP9, SWAP10, SWAP11, SWAP12, SWAP13, SWAP14, SWAP15, SWAP16:
 		n := int(op - SWAP1 + 2)
 		stack.require(n)
+		gas.Set(GasFastestStep)
 	case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:
 		n := int(op - DUP1 + 1)
 		stack.require(n)
+		gas.Set(GasFastestStep)
 	case LOG0, LOG1, LOG2, LOG3, LOG4:
 		n := int(op - LOG0)
 		stack.require(n + 2)
@@ -873,11 +876,11 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 
 		gas.Add(gas, GasLogBase)
 		gas.Add(gas, new(big.Int).Mul(big.NewInt(int64(n)), GasLogTopic))
-		gas.Add(gas, new(big.Int).Mul(mSize, GasLogData))
+		gas.Add(gas, new(big.Int).Mul(mSize, GasLogByte))
 
 		newMemSize = calcMemSize(mStart, mSize)
 	case EXP:
-		gas.Add(gas, big.NewInt(int64(len(stack.data[stack.Len()-2].Bytes())+1)))
+		gas.Add(gas, new(big.Int).Mul(big.NewInt(int64(len(stack.data[stack.Len()-2].Bytes()))), GasExpByte))
 	case SSTORE:
 		stack.require(2)
 
@@ -935,7 +938,7 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 				gas.Add(gas, GasCallNewAccount)
 			}
 
-			if len(stack.data[stack.Len()].Bytes()) > 0 {
+			if len(stack.data[stack.Len()-1].Bytes()) > 0 {
 				gas.Add(gas, GasCallValueTransfer)
 			}
 		}
@@ -953,11 +956,24 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 		newMemSize.Mul(newMemSize, u256(32))
 
 		if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
-			memGasUsage := new(big.Int).Sub(newMemSize, u256(int64(mem.Len())))
-			memGasUsage.Mul(GasMemWord, memGasUsage)
-			memGasUsage.Div(memGasUsage, u256(32))
+			//memGasUsage := new(big.Int).Sub(newMemSize, u256(int64(mem.Len())))
+			//memGasUsage.Mul(GasMemWord, memGasUsage)
+			//memGasUsage.Div(memGasUsage, u256(32))
 
-			gas.Add(gas, memGasUsage)
+			//Old: full_memory_gas_cost = W + floor(W*W / 1024), W = words in memory
+			oldSize := toWordSize(big.NewInt(int64(mem.Len())))
+			linCoef := new(big.Int).Mul(oldSize, GasMemWord)
+			pow := new(big.Int)
+			pow.Exp(oldSize, ethutil.Big2, Zero)
+			quadCoef := new(big.Int).Div(pow, GasQuadCoeffDenom)
+			oldTotalFee := new(big.Int).Add(linCoef, quadCoef)
+
+			linCoef = new(big.Int).Mul(newMemSize, GasMemWord)
+			pow.Exp(newMemSize, ethutil.Big2, Zero)
+			quadCoef = new(big.Int).Div(pow, GasQuadCoeffDenom)
+			newTotalFee := new(big.Int).Add(linCoef, quadCoef)
+
+			gas.Add(gas, new(big.Int).Sub(newTotalFee, oldTotalFee))
 		}
 
 	}

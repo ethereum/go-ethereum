@@ -43,7 +43,7 @@ var (
 	GasStorageMod        = big.NewInt(5000)
 	GasLogBase           = big.NewInt(2000)
 	GasLogTopic          = big.NewInt(2000)
-	GasLogData           = big.NewInt(8)
+	GasLogByte           = big.NewInt(8)
 	GasCreate            = big.NewInt(32000)
 	GasCreateByte        = big.NewInt(300)
 	GasCall              = big.NewInt(40)
@@ -57,11 +57,13 @@ var (
 	RefundSuicide = big.NewInt(24000)
 
 	GasMemWord           = big.NewInt(3)
-	GasQuadCoeffWord     = big.NewInt(1)
+	GasQuadCoeffDenom    = big.NewInt(512)
 	GasContractByte      = big.NewInt(200)
 	GasTransaction       = big.NewInt(21000)
 	GasTxDataNonzeroByte = big.NewInt(37)
 	GasTxZeroByte        = big.NewInt(2)
+	GasExp               = big.NewInt(10)
+	GasExpByte           = big.NewInt(10)
 
 	GasSha3Base     = big.NewInt(30)
 	GasSha3Word     = big.NewInt(6)
