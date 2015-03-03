@@ -129,7 +129,6 @@ type Ethereum struct {
 	miner    *miner.Miner
 
 	RpcServer  rpc.RpcServer
-	WsServer   rpc.RpcServer
 	keyManager *crypto.KeyManager
 
 	logger logger.LogSystem
@@ -149,7 +148,7 @@ func New(config *Config) (*Ethereum, error) {
 	d, _ := db.Get([]byte("ProtocolVersion"))
 	protov := ethutil.NewValue(d).Uint()
 	if protov != ProtocolVersion && protov != 0 {
-		path := path.Join(config.DataDir, "database")
+		path := path.Join(config.DataDir, "blockchain")
 		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, ProtocolVersion, path)
 	}
 
@@ -289,9 +288,7 @@ func (s *Ethereum) Stop() {
 	if s.RpcServer != nil {
 		s.RpcServer.Stop()
 	}
-	if s.WsServer != nil {
-		s.WsServer.Stop()
-	}
+
 	s.txPool.Stop()
 	s.eventMux.Stop()
 	s.blockPool.Stop()

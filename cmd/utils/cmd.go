@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/rlp"
 	rpchttp "github.com/ethereum/go-ethereum/rpc/http"
-	rpcws "github.com/ethereum/go-ethereum/rpc/ws"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
 )
@@ -166,18 +165,6 @@ func StartRpc(ethereum *eth.Ethereum, RpcListenAddress string, RpcPort int) {
 		clilogger.Errorf("Could not start RPC interface (port %v): %v", RpcPort, err)
 	} else {
 		go ethereum.RpcServer.Start()
-	}
-}
-
-func StartWebSockets(eth *eth.Ethereum, wsPort int) {
-	clilogger.Infoln("Starting WebSockets")
-
-	var err error
-	eth.WsServer, err = rpcws.NewWebSocketServer(xeth.New(eth), wsPort)
-	if err != nil {
-		clilogger.Errorf("Could not start RPC interface (port %v): %v", wsPort, err)
-	} else {
-		go eth.WsServer.Start()
 	}
 }
 

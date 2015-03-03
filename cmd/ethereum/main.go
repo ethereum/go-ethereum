@@ -128,10 +128,6 @@ func main() {
 		utils.StartRpc(ethereum, RpcListenAddress, RpcPort)
 	}
 
-	if StartWebSockets {
-		utils.StartWebSockets(ethereum, WsPort)
-	}
-
 	utils.StartEthereum(ethereum)
 
 	fmt.Printf("Welcome to the FRONTIER\n")
