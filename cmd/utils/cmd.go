@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/rlp"
 	rpchttp "github.com/ethereum/go-ethereum/rpc/http"
 	rpcws "github.com/ethereum/go-ethereum/rpc/ws"
@@ -182,32 +181,6 @@ func StartWebSockets(eth *eth.Ethereum, wsPort int) {
 	}
 }
 
-var gminer *miner.Miner
-
-func GetMiner() *miner.Miner {
-	return gminer
-}
-
-func StartMining(ethereum *eth.Ethereum) bool {
-	if !ethereum.Mining {
-		ethereum.Mining = true
-		addr := ethereum.KeyManager().Address()
-
-		go func() {
-			clilogger.Infoln("Start mining")
-			if gminer == nil {
-				gminer = miner.New(addr, ethereum, 4)
-			}
-			gminer.Start()
-		}()
-		RegisterInterrupt(func(os.Signal) {
-			StopMining(ethereum)
-		})
-		return true
-	}
-	return false
-}
-
 func FormatTransactionData(data string) []byte {
 	d := ethutil.StringToByteFunc(data, func(s string) (ret []byte) {
 		slice := regexp.MustCompile("\\n|\\s").Split(s, 1000000000)
@@ -219,18 +192,6 @@ func FormatTransactionData(data string) []byte {
 	})
 
 	return d
-}
-
-func StopMining(ethereum *eth.Ethereum) bool {
-	if ethereum.Mining && gminer != nil {
-		gminer.Stop()
-		clilogger.Infoln("Stopped mining")
-		ethereum.Mining = false
-
-		return true
-	}
-
-	return false
 }
 
 // Replay block

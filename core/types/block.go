@@ -268,7 +268,10 @@ func (self *Header) String() string {
 	Time:		    %v
 	Extra:		    %v
 	Nonce:		    %x
-`, self.ParentHash, self.UncleHash, self.Coinbase, self.Root, self.TxHash, self.ReceiptHash, self.Bloom, self.Difficulty, self.Number, self.GasLimit, self.GasUsed, self.Time, self.Extra, self.Nonce)
+	MixDigest:          %x
+	SeedHash:           %x
+
+`, self.ParentHash, self.UncleHash, self.Coinbase, self.Root, self.TxHash, self.ReceiptHash, self.Bloom, self.Difficulty, self.Number, self.GasLimit, self.GasUsed, self.Time, self.Extra, self.Nonce, self.MixDigest, self.SeedHash)
 }
 
 type Blocks []*Block

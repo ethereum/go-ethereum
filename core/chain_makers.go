@@ -2,12 +2,13 @@ package core
 
 import (
 	"fmt"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/state"
-	"math/big"
 )
 
 // So we can generate blocks easily
@@ -119,8 +120,7 @@ func newChainManager(block *types.Block, eventMux *event.TypeMux, db ethutil.Dat
 
 // block processor with fake pow
 func newBlockProcessor(db ethutil.Database, txpool *TxPool, cman *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
-	bman := NewBlockProcessor(db, txpool, newChainManager(nil, eventMux, db), eventMux)
-	bman.Pow = FakePow{}
+	bman := NewBlockProcessor(db, FakePow{}, txpool, newChainManager(nil, eventMux, db), eventMux)
 	return bman
 }
 
