@@ -64,14 +64,15 @@ type Env struct {
 type VmTest struct {
 	Callcreates interface{}
 	//Env         map[string]string
-	Env         Env
-	Exec        map[string]string
-	Transaction map[string]string
-	Logs        []Log
-	Gas         string
-	Out         string
-	Post        map[string]Account
-	Pre         map[string]Account
+	Env           Env
+	Exec          map[string]string
+	Transaction   map[string]string
+	Logs          []Log
+	Gas           string
+	Out           string
+	Post          map[string]Account
+	Pre           map[string]Account
+	PostStateRoot string
 }
 
 func RunVmTest(p string, t *testing.T) {
@@ -151,6 +152,12 @@ func RunVmTest(p string, t *testing.T) {
 				if bytes.Compare(v, vexp) != 0 {
 					t.Errorf("%s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address()[0:4], addr, vexp, v, ethutil.BigD(vexp), ethutil.BigD(v))
 				}
+			}
+		}
+
+		if !isVmTest {
+			if !bytes.Equal(ethutil.Hex2Bytes(test.PostStateRoot), statedb.Root()) {
+				t.Errorf("Post state root error. Expected %s, got %x", test.PostStateRoot, statedb.Root())
 			}
 		}
 
