@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 	"sort"
@@ -40,7 +41,7 @@ type Header struct {
 	// Extra data
 	Extra string
 	// Nonce
-	Nonce uint64
+	Nonce []byte
 	// Mix digest for quick checking to prevent DOS
 	MixDigest ethutil.Bytes
 	// SeedHash used for light client verification
@@ -63,7 +64,7 @@ func (self *Header) rlpData(withNonce bool) []interface{} {
 		self.Time,
 		self.Extra}
 	if withNonce {
-		fields = append(fields, self.Nonce, self.MixDigest, self.SeedHash)
+		fields = append(fields, self.SeedHash, self.MixDigest, self.Nonce)
 	}
 
 	return fields
@@ -100,16 +101,21 @@ func NewBlock(parentHash []byte, coinbase []byte, root []byte, difficulty *big.I
 		ParentHash: parentHash,
 		Coinbase:   coinbase,
 		Difficulty: difficulty,
-		Nonce:      nonce,
 		Time:       uint64(time.Now().Unix()),
 		Extra:      extra,
 		GasUsed:    new(big.Int),
 		GasLimit:   new(big.Int),
 	}
+	header.setNonce(nonce)
 
 	block := &Block{header: header, Reward: new(big.Int)}
 
 	return block
+}
+
+func (self *Header) setNonce(nonce uint64) {
+	self.Nonce = make([]byte, 8)
+	binary.BigEndian.PutUint64(self.Nonce, nonce)
 }
 
 func NewBlockWithHeader(header *Header) *Block {
@@ -191,11 +197,17 @@ func (self *Block) RlpDataForStorage() interface{} {
 }
 
 // Header accessors (add as you need them)
-func (self *Block) Number() *big.Int          { return self.header.Number }
-func (self *Block) NumberU64() uint64         { return self.header.Number.Uint64() }
-func (self *Block) MixDigest() []byte         { return self.header.MixDigest }
-func (self *Block) SeedHash() []byte          { return self.header.SeedHash }
-func (self *Block) Nonce() uint64             { return self.header.Nonce }
+func (self *Block) Number() *big.Int  { return self.header.Number }
+func (self *Block) NumberU64() uint64 { return self.header.Number.Uint64() }
+func (self *Block) MixDigest() []byte { return self.header.MixDigest }
+func (self *Block) SeedHash() []byte  { return self.header.SeedHash }
+func (self *Block) Nonce() uint64 {
+	return binary.BigEndian.Uint64(self.header.Nonce)
+}
+func (self *Block) SetNonce(nonce uint64) {
+	self.header.setNonce(nonce)
+}
+
 func (self *Block) Bloom() []byte             { return self.header.Bloom }
 func (self *Block) Coinbase() []byte          { return self.header.Coinbase }
 func (self *Block) Time() int64               { return int64(self.header.Time) }
@@ -267,11 +279,10 @@ func (self *Header) String() string {
 	GasUsed:	    %v
 	Time:		    %v
 	Extra:		    %v
-	Nonce:		    %d
-	MixDigest:          %x
 	SeedHash:           %x
-
-`, self.ParentHash, self.UncleHash, self.Coinbase, self.Root, self.TxHash, self.ReceiptHash, self.Bloom, self.Difficulty, self.Number, self.GasLimit, self.GasUsed, self.Time, self.Extra, self.Nonce, self.MixDigest, self.SeedHash)
+	MixDigest:          %x
+	Nonce:		    %x`,
+		self.ParentHash, self.UncleHash, self.Coinbase, self.Root, self.TxHash, self.ReceiptHash, self.Bloom, self.Difficulty, self.Number, self.GasLimit, self.GasUsed, self.Time, self.Extra, self.SeedHash, self.MixDigest, self.Nonce)
 }
 
 type Blocks []*Block

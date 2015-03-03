@@ -151,7 +151,7 @@ func (self *worker) wait() {
 			// Someone Successfully Mined!
 			block := self.current.block
 			if block.Number().Uint64() == work.Number && block.Nonce() == 0 {
-				self.current.block.Header().Nonce = work.Nonce
+				self.current.block.SetNonce(work.Nonce)
 				self.current.block.Header().MixDigest = work.MixDigest
 				self.current.block.Header().SeedHash = work.SeedHash
 
