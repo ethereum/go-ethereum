@@ -37,7 +37,7 @@ type peer struct {
 	currentBlockC chan *types.Block
 	headSectionC  chan *section
 
-	// channels to signal peers witch and peer quit
+	// channels to signal peer switch and peer quit to section processes
 	idleC   chan bool
 	switchC chan bool
 
@@ -47,7 +47,7 @@ type peer struct {
 	// timers for head section process
 	blockHashesRequestTimer <-chan time.Time
 	blocksRequestTimer      <-chan time.Time
-	suicide                 <-chan time.Time
+	suicideC                <-chan time.Time
 
 	idle bool
 }
@@ -286,8 +286,7 @@ func (self *peers) removePeer(id string) {
 	}
 }
 
-// switchPeer launches section processes based on information about
-// shared interest and legacy of peers
+// switchPeer launches section processes
 func (self *BlockPool) switchPeer(oldp, newp *peer) {
 
 	// first quit AddBlockHashes, requestHeadSection and activateChain
@@ -372,16 +371,16 @@ func (self *peer) handleSection(sec *section) {
 			self.bp.syncing()
 		}
 
-		self.suicide = time.After(self.bp.Config.BlockHashesTimeout)
+		self.suicideC = time.After(self.bp.Config.BlockHashesTimeout)
 
 		plog.DebugDetailf("HeadSection: <%s> head block hash changed (mined block received). New head %s", self.id, hex(self.currentBlockHash))
 	} else {
 		if !self.idle {
 			self.idle = true
-			self.suicide = nil
 			self.bp.wg.Done()
 		}
 		plog.DebugDetailf("HeadSection: <%s> head section [%s] created", self.id, sectionhex(sec))
+		self.suicideC = time.After(self.bp.Config.IdleBestPeerTimeout)
 	}
 }
 
@@ -451,7 +450,7 @@ func (self *peer) getBlockHashes() {
 	self.blockHashesRequestTimer = nil
 	if !self.idle {
 		self.idle = true
-		self.suicide = nil
+		self.suicideC = time.After(self.bp.Config.IdleBestPeerTimeout)
 		self.bp.wg.Done()
 	}
 }
@@ -467,7 +466,7 @@ func (self *peer) run() {
 	self.blockHashesRequestTimer = nil
 
 	self.blocksRequestTimer = time.After(0)
-	self.suicide = time.After(self.bp.Config.BlockHashesTimeout)
+	self.suicideC = time.After(self.bp.Config.BlockHashesTimeout)
 
 	var quit chan bool
 
@@ -476,8 +475,19 @@ func (self *peer) run() {
 LOOP:
 	for {
 		select {
+		// to minitor section process behaviou
 		case <-ping.C:
 			plog.Debugf("HeadSection: <%s> section with head %s, idle: %v", self.id, hex(self.currentBlockHash), self.idle)
+
+		// idle timer started when process goes idle
+		case <-self.idleC:
+			if self.idle {
+				self.peerError(self.bp.peers.errors.New(ErrIdleTooLong, "timed out without providing new blocks...quitting", currentBlockHash))
+
+				self.bp.status.lock.Lock()
+				self.bp.status.badPeers[self.id]++
+				self.bp.status.lock.Unlock()
+			}
 
 		// signal from AddBlockHashes that head section for current best peer is created
 		// if sec == nil, it signals that chain info has updated (new block message)
@@ -503,7 +513,7 @@ LOOP:
 			self.getCurrentBlock(nil)
 
 		// quitting on timeout
-		case <-self.suicide:
+		case <-self.suicideC:
 			self.peerError(self.bp.peers.errors.New(ErrInsufficientChainInfo, "timed out without providing block hashes or head block %x", currentBlockHash))
 
 			self.bp.status.lock.Lock()

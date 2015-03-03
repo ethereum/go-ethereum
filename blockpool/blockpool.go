@@ -17,7 +17,7 @@ var plog = ethlogger.NewLogger("Blockpool")
 
 var (
 	// max number of block hashes sent in one request
-	blockHashesBatchSize = 512
+	blockHashesBatchSize = 256
 	// max number of blocks sent in one request
 	blockBatchSize = 64
 	// interval between two consecutive block checks (and requests)
@@ -27,11 +27,13 @@ var (
 	// interval between two consecutive block hash checks (and requests)
 	blockHashesRequestInterval = 3 * time.Second
 	// max number of idle iterations, ie., check through a section without new blocks coming in
-	blocksRequestMaxIdleRounds = 100
+	blocksRequestMaxIdleRounds = 20
 	// timeout interval: max time allowed for peer without sending a block hash
 	blockHashesTimeout = 60 * time.Second
 	// timeout interval: max time allowed for peer without sending a block
-	blocksTimeout = 120 * time.Second
+	blocksTimeout = 60 * time.Second
+	//
+	idleBestPeerTimeout = 60 * time.Second
 )
 
 // config embedded in components, by default fall back to constants
@@ -45,6 +47,7 @@ type Config struct {
 	BlocksRequestInterval      time.Duration
 	BlockHashesTimeout         time.Duration
 	BlocksTimeout              time.Duration
+	IdleBestPeerTimeout        time.Duration
 }
 
 // blockpool errors
@@ -53,6 +56,7 @@ const (
 	ErrInvalidPoW
 	ErrUnrequestedBlock
 	ErrInsufficientChainInfo
+	ErrIdleTooLong
 )
 
 var errorToString = map[int]string{
@@ -60,6 +64,7 @@ var errorToString = map[int]string{
 	ErrInvalidPoW:            "Invalid PoW",
 	ErrUnrequestedBlock:      "Unrequested block",
 	ErrInsufficientChainInfo: "Insufficient chain info",
+	ErrIdleTooLong:           "Idle too long",
 }
 
 // init initialises all your laundry
@@ -87,6 +92,9 @@ func (self *Config) init() {
 	}
 	if self.BlocksTimeout == 0 {
 		self.BlocksTimeout = blocksTimeout
+	}
+	if self.IdleBestPeerTimeout == 0 {
+		self.IdleBestPeerTimeout = idleBestPeerTimeout
 	}
 }
 
