@@ -146,7 +146,7 @@ func New(config *Config) (*Ethereum, error) {
 	d, _ := db.Get([]byte("ProtocolVersion"))
 	protov := ethutil.NewValue(d).Uint()
 	if protov != ProtocolVersion && protov != 0 {
-		path := path.Join(config.DataDir, "database")
+		path := path.Join(config.DataDir, "blockchain")
 		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, ProtocolVersion, path)
 	}
 

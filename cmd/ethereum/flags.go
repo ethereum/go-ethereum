@@ -93,7 +93,7 @@ func Init() {
 	flag.IntVar(&VmType, "vm", 0, "Virtual Machine type: 0-1: standard, debug")
 	flag.StringVar(&Identifier, "id", "", "Custom client identifier")
 	flag.StringVar(&KeyRing, "keyring", "", "identifier for keyring to use")
-	flag.StringVar(&KeyStore, "keystore", "db", "system to store keyrings: db|file (db)")
+	flag.StringVar(&KeyStore, "keystore", "db", "system to store keyrings: db|file")
 
 	flag.StringVar(&RpcListenAddress, "rpcaddr", "127.0.0.1", "address for json-rpc server to listen on")
 	flag.IntVar(&RpcPort, "rpcport", 8545, "port to start json-rpc server on")
@@ -106,8 +106,8 @@ func Init() {
 	flag.StringVar(&Datadir, "datadir", ethutil.DefaultDataDir(), "specifies the datadir to use")
 	flag.StringVar(&ConfigFile, "conf", defaultConfigFile, "config file")
 	flag.StringVar(&DebugFile, "debug", "", "debug file (no debugging if not set)")
-	flag.IntVar(&LogLevel, "loglevel", int(logger.InfoLevel), "loglevel: 0-5: silent,error,warn,info,debug,debug detail)")
-	flag.StringVar(&LogFormat, "logformat", "std", "logformat: std,raw)")
+	flag.IntVar(&LogLevel, "loglevel", int(logger.InfoLevel), "loglevel: 0-5 (= silent,error,warn,info,debug,debug detail)")
+	flag.StringVar(&LogFormat, "logformat", "std", "logformat: std,raw")
 	flag.BoolVar(&DiffTool, "difftool", false, "creates output for diff'ing. Sets LogLevel=0")
 	flag.StringVar(&DiffType, "diff", "all", "sets the level of diff output [vm, all]. Has no effect if difftool=false")
 	flag.BoolVar(&ShowGenesis, "genesis", false, "Dump the genesis block")
@@ -117,7 +117,7 @@ func Init() {
 	flag.StringVar(&DumpHash, "hash", "", "specify arg in hex")
 	flag.IntVar(&DumpNumber, "number", -1, "specify arg in number")
 
-	flag.BoolVar(&StartMining, "mine", false, "start dagger mining")
+	flag.BoolVar(&StartMining, "mine", false, "start mining")
 	flag.BoolVar(&StartJsConsole, "js", false, "launches javascript console")
 	flag.BoolVar(&PrintVersion, "version", false, "prints version number")
 	flag.IntVar(&MinerThreads, "minerthreads", runtime.NumCPU(), "number of miner threads")
@@ -134,6 +134,7 @@ func Init() {
 
 	flag.StringVar(&BootNodes, "bootnodes", "", "space-separated node URLs for discovery bootstrap")
 	flag.IntVar(&MaxPeer, "maxpeer", 30, "maximum desired peers")
+	flag.IntVar(&MinerThreads, "minerthreads", runtime.NumCPU(), "number of miner threads")
 
 	flag.Parse()
 

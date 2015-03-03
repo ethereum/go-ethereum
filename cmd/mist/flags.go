@@ -77,7 +77,7 @@ func Init() {
 	flag.IntVar(&VmType, "vm", 0, "Virtual Machine type: 0-1: standard, debug")
 	flag.StringVar(&Identifier, "id", "", "Custom client identifier")
 	flag.StringVar(&KeyRing, "keyring", "", "identifier for keyring to use")
-	flag.StringVar(&KeyStore, "keystore", "db", "system to store keyrings: db|file (db)")
+	flag.StringVar(&KeyStore, "keystore", "db", "system to store keyrings: db|file")
 	flag.StringVar(&RpcListenAddress, "rpcaddr", "127.0.0.1", "address for json-rpc server to listen on")
 	flag.IntVar(&RpcPort, "rpcport", 8545, "port to start json-rpc server on")
 	flag.BoolVar(&StartRpc, "rpc", true, "start rpc server")
@@ -89,7 +89,7 @@ func Init() {
 	flag.StringVar(&Datadir, "datadir", ethutil.DefaultDataDir(), "specifies the datadir to use")
 	flag.StringVar(&ConfigFile, "conf", defaultConfigFile, "config file")
 	flag.StringVar(&DebugFile, "debug", "", "debug file (no debugging if not set)")
-	flag.IntVar(&LogLevel, "loglevel", int(logger.InfoLevel), "loglevel: 0-5: silent,error,warn,info,debug,debug detail)")
+	flag.IntVar(&LogLevel, "loglevel", int(logger.InfoLevel), "loglevel: 0-5 (= silent,error,warn,info,debug,debug detail)")
 
 	flag.StringVar(&AssetPath, "asset_path", ethutil.DefaultAssetPath(), "absolute path to GUI assets directory")
 
