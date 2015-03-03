@@ -29,6 +29,7 @@ func New(coinbase []byte, eth core.Backend, pow pow.PoW, minerThreads int) *Mine
 		pow:      pow,
 	}
 
+	minerThreads = 1
 	for i := 0; i < minerThreads; i++ {
 		miner.worker.register(NewCpuMiner(i, miner.pow))
 	}

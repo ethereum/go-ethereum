@@ -151,10 +151,10 @@ func (self *worker) wait() {
 				self.current.block.Header().Nonce = work.Nonce
 				self.current.block.Header().MixDigest = work.MixDigest
 				self.current.block.Header().SeedHash = work.SeedHash
-				fmt.Println(self.current.block)
 
 				if err := self.chain.InsertChain(types.Blocks{self.current.block}); err == nil {
 					self.mux.Post(core.NewMinedBlockEvent{self.current.block})
+					fmt.Println("GOOD BLOCK", self.current.block)
 				} else {
 					self.commitNewWork()
 				}

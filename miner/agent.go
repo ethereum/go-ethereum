@@ -42,11 +42,16 @@ func (self *CpuMiner) Start() {
 }
 
 func (self *CpuMiner) update() {
+	justStarted := true
 out:
 	for {
 		select {
 		case block := <-self.c:
-			self.quitCurrentOp <- struct{}{}
+			if justStarted {
+				justStarted = true
+			} else {
+				self.quitCurrentOp <- struct{}{}
+			}
 
 			go self.mine(block)
 		case <-self.quit:

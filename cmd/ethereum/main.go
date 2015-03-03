@@ -114,10 +114,6 @@ func main() {
 		return
 	}
 
-	if StartMining {
-		ethereum.Miner().Start()
-	}
-
 	if len(ImportChain) > 0 {
 		start := time.Now()
 		err := utils.ImportChain(ethereum, ImportChain)
