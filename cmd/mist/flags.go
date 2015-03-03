@@ -41,10 +41,8 @@ var (
 	KeyRing          string
 	KeyStore         string
 	StartRpc         bool
-	StartWebSockets  bool
 	RpcListenAddress string
 	RpcPort          int
-	WsPort           int
 	OutboundPort     string
 	ShowGenesis      bool
 	AddPeer          string
@@ -82,9 +80,7 @@ func Init() {
 	flag.StringVar(&KeyStore, "keystore", "db", "system to store keyrings: db|file (db)")
 	flag.StringVar(&RpcListenAddress, "rpcaddr", "127.0.0.1", "address for json-rpc server to listen on")
 	flag.IntVar(&RpcPort, "rpcport", 8545, "port to start json-rpc server on")
-	flag.IntVar(&WsPort, "wsport", 40404, "port to start websocket rpc server on")
 	flag.BoolVar(&StartRpc, "rpc", true, "start rpc server")
-	flag.BoolVar(&StartWebSockets, "ws", false, "start websocket server")
 	flag.BoolVar(&NonInteractive, "y", false, "non-interactive mode (say yes to confirmations)")
 	flag.BoolVar(&GenAddr, "genaddr", false, "create a new priv/pub key")
 	flag.StringVar(&SecretFile, "import", "", "imports the file given (hex or mnemonic formats)")
