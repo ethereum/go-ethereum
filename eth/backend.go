@@ -14,7 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
-	ethlogger "github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -25,8 +25,8 @@ import (
 )
 
 var (
-	logger     = ethlogger.NewLogger("SERV")
-	jsonlogger = ethlogger.NewJsonLogger()
+	ethlogger  = logger.NewLogger("SERV")
+	jsonlogger = logger.NewJsonLogger()
 
 	defaultBootNodes = []*discover.Node{
 		// ETH/DEV cmd/bootnode
@@ -76,7 +76,7 @@ func (cfg *Config) parseBootNodes() []*discover.Node {
 		}
 		n, err := discover.ParseNode(url)
 		if err != nil {
-			logger.Errorf("Bootstrap URL %s: %v\n", url, err)
+			ethlogger.Errorf("Bootstrap URL %s: %v\n", url, err)
 			continue
 		}
 		ns = append(ns, n)
@@ -100,7 +100,7 @@ func (cfg *Config) nodeKey() (*ecdsa.PrivateKey, error) {
 		return nil, fmt.Errorf("could not generate server key: %v", err)
 	}
 	if err := ioutil.WriteFile(keyfile, crypto.FromECDSA(key), 0600); err != nil {
-		logger.Errorln("could not persist nodekey: ", err)
+		ethlogger.Errorln("could not persist nodekey: ", err)
 	}
 	return key, nil
 }
@@ -132,14 +132,14 @@ type Ethereum struct {
 	WsServer   rpc.RpcServer
 	keyManager *crypto.KeyManager
 
-	logger ethlogger.LogSystem
+	logger logger.LogSystem
 
 	Mining bool
 }
 
 func New(config *Config) (*Ethereum, error) {
 	// Boostrap database
-	logger := ethlogger.New(config.DataDir, config.LogFile, config.LogLevel, config.LogFormat)
+	ethlogger := logger.New(config.DataDir, config.LogFile, config.LogLevel, config.LogFormat)
 	db, err := ethdb.NewLDBDatabase("blockchain")
 	if err != nil {
 		return nil, err
@@ -176,7 +176,7 @@ func New(config *Config) (*Ethereum, error) {
 		keyManager:   keyManager,
 		blacklist:    p2p.NewBlacklist(),
 		eventMux:     &event.TypeMux{},
-		logger:       logger,
+		logger:       ethlogger,
 	}
 
 	eth.chainManager = core.NewChainManager(db, eth.EventMux())
@@ -220,7 +220,7 @@ func New(config *Config) (*Ethereum, error) {
 }
 
 func (s *Ethereum) KeyManager() *crypto.KeyManager       { return s.keyManager }
-func (s *Ethereum) Logger() ethlogger.LogSystem          { return s.logger }
+func (s *Ethereum) Logger() logger.LogSystem             { return s.logger }
 func (s *Ethereum) Name() string                         { return s.net.Name }
 func (s *Ethereum) ChainManager() *core.ChainManager     { return s.chainManager }
 func (s *Ethereum) BlockProcessor() *core.BlockProcessor { return s.blockProcessor }
@@ -238,7 +238,7 @@ func (s *Ethereum) Coinbase() []byte                     { return nil } // TODO
 
 // Start the ethereum
 func (s *Ethereum) Start() error {
-	jsonlogger.LogJson(&ethlogger.LogStarting{
+	jsonlogger.LogJson(&logger.LogStarting{
 		ClientString:    s.net.Name,
 		ProtocolVersion: ProtocolVersion,
 	})
@@ -264,7 +264,7 @@ func (s *Ethereum) Start() error {
 	s.blockSub = s.eventMux.Subscribe(core.NewMinedBlockEvent{})
 	go s.blockBroadcastLoop()
 
-	logger.Infoln("Server started")
+	ethlogger.Infoln("Server started")
 	return nil
 }
 
@@ -299,7 +299,7 @@ func (s *Ethereum) Stop() {
 		s.whisper.Stop()
 	}
 
-	logger.Infoln("Server stopped")
+	ethlogger.Infoln("Server stopped")
 	close(s.shutdownChan)
 }
 

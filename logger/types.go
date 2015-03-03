@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"math/big"
 	"time"
 )
 
@@ -53,10 +54,10 @@ func (l *P2PDisconnected) EventName() string {
 }
 
 type EthMinerNewBlock struct {
-	BlockHash     string `json:"block_hash"`
-	BlockNumber   int    `json:"block_number"`
-	ChainHeadHash string `json:"chain_head_hash"`
-	BlockPrevHash string `json:"block_prev_hash"`
+	BlockHash     string   `json:"block_hash"`
+	BlockNumber   *big.Int `json:"block_number"`
+	ChainHeadHash string   `json:"chain_head_hash"`
+	BlockPrevHash string   `json:"block_prev_hash"`
 	LogEvent
 }
 
@@ -65,11 +66,11 @@ func (l *EthMinerNewBlock) EventName() string {
 }
 
 type EthChainReceivedNewBlock struct {
-	BlockHash     string `json:"block_hash"`
-	BlockNumber   int    `json:"block_number"`
-	ChainHeadHash string `json:"chain_head_hash"`
-	BlockPrevHash string `json:"block_prev_hash"`
-	RemoteId      int    `json:"remote_id"`
+	BlockHash     string   `json:"block_hash"`
+	BlockNumber   *big.Int `json:"block_number"`
+	ChainHeadHash string   `json:"chain_head_hash"`
+	BlockPrevHash string   `json:"block_prev_hash"`
+	RemoteId      string   `json:"remote_id"`
 	LogEvent
 }
 
@@ -78,10 +79,10 @@ func (l *EthChainReceivedNewBlock) EventName() string {
 }
 
 type EthChainNewHead struct {
-	BlockHash     string `json:"block_hash"`
-	BlockNumber   int    `json:"block_number"`
-	ChainHeadHash string `json:"chain_head_hash"`
-	BlockPrevHash string `json:"block_prev_hash"`
+	BlockHash     string   `json:"block_hash"`
+	BlockNumber   *big.Int `json:"block_number"`
+	ChainHeadHash string   `json:"chain_head_hash"`
+	BlockPrevHash string   `json:"block_prev_hash"`
 	LogEvent
 }
 
