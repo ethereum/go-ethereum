@@ -79,10 +79,6 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
-		helper.Logger.SetLogLevel(4)
-		if name != "mul7" {
-			continue
-		}
 		db, _ := ethdb.NewMemDatabase()
 		statedb := state.New(nil, db)
 		for addr, account := range test.Pre {
@@ -231,6 +227,7 @@ func TestVmLog(t *testing.T) {
 	RunVmTest(fn, t)
 }
 
+/*
 func TestStateSystemOperations(t *testing.T) {
 	const fn = "../files/StateTests/stSystemOperationsTest.json"
 	RunVmTest(fn, t)
@@ -276,3 +273,4 @@ func TestStateTransaction(t *testing.T) {
 	const fn = "../files/StateTests/stTransactionTest.json"
 	RunVmTest(fn, t)
 }
+*/

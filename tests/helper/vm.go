@@ -109,6 +109,8 @@ func (self *Env) Call(caller vm.ContextRef, addr, data []byte, gas, price, value
 func (self *Env) CallCode(caller vm.ContextRef, addr, data []byte, gas, price, value *big.Int) ([]byte, error) {
 	if self.vmTest && self.depth > 0 {
 		caller.ReturnGas(gas, price)
+
+		return nil, nil
 	}
 	exe := self.vm(caller.Address(), data, gas, price, value)
 	return exe.Call(addr, caller)
