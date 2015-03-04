@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
@@ -135,7 +136,7 @@ func (srv *Server) SuggestPeer(n *discover.Node) {
 func (srv *Server) Broadcast(protocol string, code uint64, data ...interface{}) {
 	var payload []byte
 	if data != nil {
-		payload = encodePayload(data...)
+		payload = ethutil.Encode(data)
 	}
 	srv.lock.RLock()
 	defer srv.lock.RUnlock()
@@ -358,14 +359,15 @@ func (srv *Server) findPeers() {
 
 func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	// TODO: handle/store session token
-	fd.SetDeadline(time.Now().Add(handshakeTimeout))
+	// TODO: reenable deadlines
+	// fd.SetDeadline(time.Now().Add(handshakeTimeout))
 	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest)
 	if err != nil {
 		fd.Close()
 		srvlog.Debugf("Handshake with %v failed: %v", fd.RemoteAddr(), err)
 		return
 	}
-	p := newPeer(conn, srv.Protocols)
+	p := newPeer(fd, conn, srv.Protocols)
 	if ok, reason := srv.addPeer(conn.ID, p); !ok {
 		srvlog.DebugDetailf("Not adding %v (%v)\n", p, reason)
 		p.politeDisconnect(reason)
@@ -375,7 +377,7 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	srvlog.Debugf("Added %v\n", p)
 	srvjslog.LogJson(&logger.P2PConnected{
 		RemoteId:            fmt.Sprintf("%x", conn.ID[:]),
-		RemoteAddress:       conn.RemoteAddr().String(),
+		RemoteAddress:       fd.RemoteAddr().String(),
 		RemoteVersionString: conn.Name,
 		NumConnections:      srv.PeerCount(),
 	})

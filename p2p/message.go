@@ -1,15 +1,11 @@
 package p2p
 
 import (
-	"bufio"
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math/big"
-	"net"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -55,19 +51,8 @@ type Msg struct {
 
 // NewMsg creates an RLP-encoded message with the given code.
 func NewMsg(code uint64, params ...interface{}) Msg {
-	buf := new(bytes.Buffer)
-	for _, p := range params {
-		buf.Write(ethutil.Encode(p))
-	}
-	return Msg{Code: code, Size: uint32(buf.Len()), Payload: buf}
-}
-
-func encodePayload(params ...interface{}) []byte {
-	buf := new(bytes.Buffer)
-	for _, p := range params {
-		buf.Write(ethutil.Encode(p))
-	}
-	return buf.Bytes()
+	p := bytes.NewReader(ethutil.Encode(params))
+	return Msg{Code: code, Size: uint32(p.Len()), Payload: p}
 }
 
 // Decode parse the RLP content of a message into
@@ -75,8 +60,7 @@ func encodePayload(params ...interface{}) []byte {
 //
 // For the decoding rules, please see package rlp.
 func (msg Msg) Decode(val interface{}) error {
-	s := rlp.NewListStream(msg.Payload, uint64(msg.Size))
-	if err := s.Decode(val); err != nil {
+	if err := rlp.Decode(msg.Payload, val); err != nil {
 		return newPeerError(errInvalidMsg, "(code %#x) (size %d) %v", msg.Code, msg.Size, err)
 	}
 	return nil
@@ -119,138 +103,23 @@ func EncodeMsg(w MsgWriter, code uint64, data ...interface{}) error {
 	return w.WriteMsg(NewMsg(code, data...))
 }
 
-// frameRW is a MsgReadWriter that reads and writes devp2p message frames.
-// As required by the interface, ReadMsg and WriteMsg can be called from
-// multiple goroutines.
-type frameRW struct {
-	net.Conn // make Conn methods available. be careful.
-	bufconn  *bufio.ReadWriter
-
-	// this channel is used to 'lend' bufconn to a caller of ReadMsg
-	// until the message payload has been consumed. the channel
-	// receives a value when EOF is reached on the payload, unblocking
-	// a pending call to ReadMsg.
-	rsync chan struct{}
-
-	// this mutex guards writes to bufconn.
-	writeMu sync.Mutex
+// lockedRW wraps a MsgReadWriter with locks around
+// ReadMsg and WriteMsg.
+type lockedRW struct {
+	rmu, wmu sync.Mutex
+	wrapped  MsgReadWriter
 }
 
-func newFrameRW(conn net.Conn, timeout time.Duration) *frameRW {
-	rsync := make(chan struct{}, 1)
-	rsync <- struct{}{}
-	return &frameRW{
-		Conn:    conn,
-		bufconn: bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn)),
-		rsync:   rsync,
-	}
+func (rw *lockedRW) ReadMsg() (Msg, error) {
+	rw.rmu.Lock()
+	defer rw.rmu.Unlock()
+	return rw.wrapped.ReadMsg()
 }
 
-var magicToken = []byte{34, 64, 8, 145}
-
-func (rw *frameRW) WriteMsg(msg Msg) error {
-	rw.writeMu.Lock()
-	defer rw.writeMu.Unlock()
-	rw.SetWriteDeadline(time.Now().Add(msgWriteTimeout))
-	if err := writeMsg(rw.bufconn, msg); err != nil {
-		return err
-	}
-	return rw.bufconn.Flush()
-}
-
-func writeMsg(w io.Writer, msg Msg) error {
-	// TODO: handle case when Size + len(code) + len(listhdr) overflows uint32
-	code := ethutil.Encode(uint32(msg.Code))
-	listhdr := makeListHeader(msg.Size + uint32(len(code)))
-	payloadLen := uint32(len(listhdr)) + uint32(len(code)) + msg.Size
-
-	start := make([]byte, 8)
-	copy(start, magicToken)
-	binary.BigEndian.PutUint32(start[4:], payloadLen)
-
-	for _, b := range [][]byte{start, listhdr, code} {
-		if _, err := w.Write(b); err != nil {
-			return err
-		}
-	}
-	_, err := io.CopyN(w, msg.Payload, int64(msg.Size))
-	return err
-}
-
-func makeListHeader(length uint32) []byte {
-	if length < 56 {
-		return []byte{byte(length + 0xc0)}
-	}
-	enc := big.NewInt(int64(length)).Bytes()
-	lenb := byte(len(enc)) + 0xf7
-	return append([]byte{lenb}, enc...)
-}
-
-func (rw *frameRW) ReadMsg() (msg Msg, err error) {
-	<-rw.rsync // wait until bufconn is ours
-
-	rw.SetReadDeadline(time.Now().Add(frameReadTimeout))
-
-	// read magic and payload size
-	start := make([]byte, 8)
-	if _, err = io.ReadFull(rw.bufconn, start); err != nil {
-		return msg, err
-	}
-	if !bytes.HasPrefix(start, magicToken) {
-		return msg, fmt.Errorf("bad magic token %x", start[:4])
-	}
-	size := binary.BigEndian.Uint32(start[4:])
-
-	// decode start of RLP message to get the message code
-	posr := &postrack{rw.bufconn, 0}
-	s := rlp.NewStream(posr)
-	if _, err := s.List(); err != nil {
-		return msg, err
-	}
-	msg.Code, err = s.Uint()
-	if err != nil {
-		return msg, err
-	}
-	msg.Size = size - posr.p
-
-	rw.SetReadDeadline(time.Now().Add(payloadReadTimeout))
-
-	if msg.Size <= wholePayloadSize {
-		// msg is small, read all of it and move on to the next message.
-		pbuf := make([]byte, msg.Size)
-		if _, err := io.ReadFull(rw.bufconn, pbuf); err != nil {
-			return msg, err
-		}
-		rw.rsync <- struct{}{} // bufconn is available again
-		msg.Payload = bytes.NewReader(pbuf)
-	} else {
-		// lend bufconn to the caller until it has
-		// consumed the payload. eofSignal will send a value
-		// on rw.rsync when EOF is reached.
-		pr := &eofSignal{rw.bufconn, msg.Size, rw.rsync}
-		msg.Payload = pr
-	}
-	return msg, nil
-}
-
-// postrack wraps an rlp.ByteReader with a position counter.
-type postrack struct {
-	r rlp.ByteReader
-	p uint32
-}
-
-func (r *postrack) Read(buf []byte) (int, error) {
-	n, err := r.r.Read(buf)
-	r.p += uint32(n)
-	return n, err
-}
-
-func (r *postrack) ReadByte() (byte, error) {
-	b, err := r.r.ReadByte()
-	if err == nil {
-		r.p++
-	}
-	return b, err
+func (rw *lockedRW) WriteMsg(msg Msg) error {
+	rw.wmu.Lock()
+	defer rw.wmu.Unlock()
+	return rw.wrapped.WriteMsg(msg)
 }
 
 // eofSignal wraps a reader with eof signaling. the eof channel is

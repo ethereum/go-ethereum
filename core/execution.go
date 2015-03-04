@@ -61,10 +61,10 @@ func (self *Execution) exec(code, contextAddr []byte, caller vm.ContextRef) (ret
 	snapshot := env.State().Copy()
 	start := time.Now()
 	ret, err = evm.Run(to, caller, code, self.value, self.Gas, self.price, self.input)
+	chainlogger.Debugf("vm took %v\n", time.Since(start))
 	if err != nil {
 		env.State().Set(snapshot)
 	}
-	chainlogger.Debugf("vm took %v\n", time.Since(start))
 
 	return
 }

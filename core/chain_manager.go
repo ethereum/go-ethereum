@@ -14,7 +14,10 @@ import (
 	"github.com/ethereum/go-ethereum/state"
 )
 
-var chainlogger = logger.NewLogger("CHAIN")
+var (
+	chainlogger = logger.NewLogger("CHAIN")
+	jsonlogger  = logger.NewJsonLogger()
+)
 
 type ChainEvent struct {
 	Block *types.Block
@@ -25,14 +28,16 @@ type StateQuery interface {
 	GetAccount(addr []byte) *state.StateObject
 }
 
-func CalcDifficulty(block, parent *types.Block) *big.Int {
+func CalcDifficulty(block, parent *types.Header) *big.Int {
 	diff := new(big.Int)
 
-	adjust := new(big.Int).Rsh(parent.Difficulty(), 10)
-	if block.Time() >= parent.Time()+8 {
-		diff.Sub(parent.Difficulty(), adjust)
+	//adjust := new(big.Int).Rsh(parent.Difficulty(), 10)
+	//if block.Time() >= parent.Time()+8 {
+	adjust := new(big.Int).Div(parent.Difficulty, big.NewInt(2048))
+	if (block.Time - parent.Time) < 8 {
+		diff.Add(parent.Difficulty, adjust)
 	} else {
-		diff.Add(parent.Difficulty(), adjust)
+		diff.Sub(parent.Difficulty, adjust)
 	}
 
 	return diff
@@ -122,7 +127,7 @@ func (self *ChainManager) Status() (td *big.Int, currentBlock []byte, genesisBlo
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
-	return self.td, self.currentBlock.Hash(), self.Genesis().Hash()
+	return self.td, self.currentBlock.Hash(), self.genesisBlock.Hash()
 }
 
 func (self *ChainManager) SetProcessor(proc types.BlockProcessor) {
@@ -192,7 +197,7 @@ func (bc *ChainManager) NewBlock(coinbase []byte) *types.Block {
 		coinbase,
 		root,
 		ethutil.BigPow(2, 32),
-		nil,
+		0,
 		"")
 	block.SetUncles(nil)
 	block.SetTransactions(nil)
@@ -201,7 +206,7 @@ func (bc *ChainManager) NewBlock(coinbase []byte) *types.Block {
 	parent := bc.currentBlock
 	if parent != nil {
 		header := block.Header()
-		header.Difficulty = CalcDifficulty(block, parent)
+		header.Difficulty = CalcDifficulty(block.Header(), parent.Header())
 		header.Number = new(big.Int).Add(parent.Header().Number, ethutil.Big1)
 		header.GasLimit = CalcGasLimit(parent, block)
 
@@ -395,11 +400,11 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 
 		var canonical, split bool
 		self.mu.Lock()
+		cblock := self.currentBlock
 		{
 			// Write block to database. Eventually we'll have to improve on this and throw away blocks that are
 			// not in the canonical chain.
 			self.write(block)
-			cblock := self.currentBlock
 			// Compare the TD of the last known block in the canonical chain to make sure it's greater.
 			// At this point it's possible that a different chain (fork) becomes the new canonical chain.
 			if td.Cmp(self.td) > 0 {
@@ -417,6 +422,12 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 		self.mu.Unlock()
 
 		if canonical {
+			jsonlogger.LogJson(&logger.EthChainNewHead{
+				BlockHash:     ethutil.Bytes2Hex(block.Hash()),
+				BlockNumber:   block.Number(),
+				ChainHeadHash: ethutil.Bytes2Hex(cblock.Hash()),
+				BlockPrevHash: ethutil.Bytes2Hex(block.ParentHash()),
+			})
 			self.setTransState(state.New(block.Root(), self.db))
 			self.eventMux.Post(ChainEvent{block, td})
 		}
