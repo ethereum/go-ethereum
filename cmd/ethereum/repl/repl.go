@@ -24,10 +24,14 @@ import (
 	"os"
 	"path"
 
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/state"
+	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/obscuren/otto"
 )
 
 var repllogger = logger.NewLogger("REPL")
@@ -38,7 +42,9 @@ type Repl interface {
 }
 
 type JSRepl struct {
-	re *javascript.JSRE
+	re       *javascript.JSRE
+	ethereum *eth.Ethereum
+	xeth     *xeth.XEth
 
 	prompt string
 
@@ -53,7 +59,11 @@ func NewJSRepl(ethereum *eth.Ethereum) *JSRepl {
 		panic(err)
 	}
 
-	return &JSRepl{re: javascript.NewJSRE(ethereum), prompt: "> ", history: hist}
+	xeth := xeth.New(ethereum)
+	repl := &JSRepl{re: javascript.NewJSRE(xeth), xeth: xeth, ethereum: ethereum, prompt: "> ", history: hist}
+	repl.initStdFuncs()
+
+	return repl
 }
 
 func (self *JSRepl) Start() {
@@ -80,7 +90,6 @@ func (self *JSRepl) Start() {
 func (self *JSRepl) Stop() {
 	if self.running {
 		self.running = false
-		self.re.Stop()
 		repllogger.Infoln("exit JS Console")
 		self.history.Close()
 	}
@@ -100,4 +109,93 @@ func (self *JSRepl) parseInput(code string) {
 	}
 
 	self.PrintValue(value)
+}
+
+func (self *JSRepl) initStdFuncs() {
+	t, _ := self.re.Vm.Get("eth")
+	eth := t.Object()
+	eth.Set("connect", self.connect)
+	eth.Set("stopMining", self.stopMining)
+	eth.Set("startMining", self.startMining)
+	eth.Set("dump", self.dump)
+	eth.Set("export", self.export)
+}
+
+/*
+ * The following methods are natively implemented javascript functions
+ */
+
+func (self *JSRepl) dump(call otto.FunctionCall) otto.Value {
+	var block *types.Block
+
+	if len(call.ArgumentList) > 0 {
+		if call.Argument(0).IsNumber() {
+			num, _ := call.Argument(0).ToInteger()
+			block = self.ethereum.ChainManager().GetBlockByNumber(uint64(num))
+		} else if call.Argument(0).IsString() {
+			hash, _ := call.Argument(0).ToString()
+			block = self.ethereum.ChainManager().GetBlock(ethutil.Hex2Bytes(hash))
+		} else {
+			fmt.Println("invalid argument for dump. Either hex string or number")
+		}
+
+		if block == nil {
+			fmt.Println("block not found")
+
+			return otto.UndefinedValue()
+		}
+
+	} else {
+		block = self.ethereum.ChainManager().CurrentBlock()
+	}
+
+	statedb := state.New(block.Root(), self.ethereum.Db())
+
+	v, _ := self.re.Vm.ToValue(statedb.RawDump())
+
+	return v
+}
+
+func (self *JSRepl) stopMining(call otto.FunctionCall) otto.Value {
+	self.xeth.Miner().Stop()
+
+	return otto.TrueValue()
+}
+
+func (self *JSRepl) startMining(call otto.FunctionCall) otto.Value {
+	self.xeth.Miner().Start()
+	return otto.TrueValue()
+}
+
+func (self *JSRepl) connect(call otto.FunctionCall) otto.Value {
+	nodeURL, err := call.Argument(0).ToString()
+	if err != nil {
+		return otto.FalseValue()
+	}
+	if err := self.ethereum.SuggestPeer(nodeURL); err != nil {
+		return otto.FalseValue()
+	}
+	return otto.TrueValue()
+}
+
+func (self *JSRepl) export(call otto.FunctionCall) otto.Value {
+	if len(call.ArgumentList) == 0 {
+		fmt.Println("err: require file name")
+		return otto.FalseValue()
+	}
+
+	fn, err := call.Argument(0).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.FalseValue()
+	}
+
+	data := self.ethereum.ChainManager().Export()
+
+	if err := ethutil.WriteFile(fn, data); err != nil {
+		fmt.Println(err)
+		return otto.FalseValue()
+	}
+
+	return otto.TrueValue()
 }

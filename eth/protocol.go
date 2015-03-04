@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	ProtocolVersion    = 55
+	ProtocolVersion    = 56
 	NetworkId          = 0
 	ProtocolLength     = uint64(8)
 	ProtocolMaxMsgSize = 10 * 1024 * 1024
@@ -250,6 +250,7 @@ func (self *ethProtocol) handle() error {
 			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 		}
 		hash := request.Block.Hash()
+		fmt.Println("received block: %x", hash)
 		_, chainHead, _ := self.chainManager.Status()
 
 		jsonlogger.LogJson(&logger.EthChainReceivedNewBlock{
