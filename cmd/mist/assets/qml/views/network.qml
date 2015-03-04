@@ -119,6 +119,7 @@ Rectangle {
 			anchors.fill: parent
 
 			url: "network-health/index.html"
+			//url: "http://localhost:3000/"
 
 			experimental.settings.javascriptCanAccessClipboard: true
 
