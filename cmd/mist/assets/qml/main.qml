@@ -13,9 +13,10 @@ import "../ext/http.js" as Http
 ApplicationWindow {
     id: root
     
-    flags: Qt.FramelessWindowHint
+    flags: Qt.FramelessWindowHint | Qt.Window
+    //flags: Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowSystemMenuHint
     // Use this to make the window frameless. But then you'll need to do move and resize by hand
-
+    color: "transparent"
 
     property var ethx : Eth.ethx
     property var catalog;
@@ -262,13 +263,118 @@ ApplicationWindow {
         id: blockModel
     }
 
+    Rectangle {
+        id: windowChrome
+        color: "#EBE8E8"
+        anchors.fill: parent
+        radius: 3
+
+        /************************/
+        /*                      */
+        /*  Resizeable Borders  */
+        /*                      */
+        /************************/
+
+        MouseArea { 
+            id: rightResizableBar
+            anchors {
+                top: parent.top
+                bottom: parent.bottom
+                right: parent.right
+            }
+            width: 5
+            cursorShape: Qt.SizeHorCursor; 
+
+            property real lastMouseX: 0
+            onPressed: {
+                lastMouseX = mouseX
+            }
+            onPositionChanged: {
+                if (!(root.width + mouseX - lastMouseX < root.minimumWidth)) {
+                     root.width += (mouseX - lastMouseX)
+                }
+            }
+        }        
+
+        MouseArea { 
+            id: leftResizableBar
+            anchors {
+                top: parent.top
+                bottom: parent.bottom
+                left: parent.left
+            }
+            width: 5
+            cursorShape: Qt.SizeHorCursor; 
+
+            property real lastMouseX: 0
+            property real lastRight: root.x + root.width
+            onPressed: {
+                lastMouseX = mouseX
+                lastRight = root.x + root.width
+            }
+            onPositionChanged: {            
+                if (!(root.width - mouseX + lastMouseX < root.minimumWidth)) {
+                    //root.x += (mouseX - lastMouseX)
+                    root.width -= (mouseX - lastMouseX)
+                    root.x = lastRight - root.width
+                }
+            }
+        }
+
+        MouseArea { 
+            id: bottomResizableBar
+            anchors {
+                bottom: parent.bottom
+                right: parent.right
+                left: parent.left
+            }
+            height: 5
+            cursorShape: Qt.SizeVerCursor; 
+
+            property real lastMouseY: 0
+            onPressed: {
+                lastMouseY = mouseY
+            }
+            onPositionChanged: {
+                if (!(root.height + mouseY - lastMouseY < root.minimumHeight)) {
+                     root.height += (mouseY - lastMouseY)
+                }
+            }
+        }        
+
+        MouseArea { 
+            id: topResizableBar
+            anchors {
+                top: parent.top
+                right: parent.right
+                left: parent.left
+            }
+            height: 5
+            cursorShape: Qt.SizeVerCursor; 
+
+            property real lastMouseY: 0
+            property real lastTop: root.y + root.height
+            onPressed: {
+                lastMouseY = mouseY
+                lastTop = root.y + root.height
+            }
+            onPositionChanged: {            
+                if (!(root.height - mouseY + lastMouseY < root.minimumHeight)) {
+                    root.height -= (mouseY - lastMouseY)
+                    root.y = lastTop - root.height
+                }
+            }
+        }
+    }
+
     SplitView {
         property var views: [];
 
         id: mainSplit
-        anchors.fill: parent
+        anchors.fill: windowChrome
         anchors.margins: 2
-        // radius: 3
+        //color: "brown"
+        //radius: 5
 
         //resizing: false  // this is NOT where we remove that damning resizing handle..
         handleDelegate: Item {
@@ -689,56 +795,61 @@ ApplicationWindow {
                  anchors.right: parent.right
                  spacing: 3
                 
+
+
+
+                /************************/
+                /*   Semafor Buttons    */
+                /************************/
+
                 RowLayout {
-                    id: semaphorButtons
+                    id: semaforButtons
                     anchors {
                         top: parent.top 
                         left: parent.left
                         right: parent.right
                         leftMargin: 8
+                        bottomMargin: 8
                     }
-                    height: 16
-
+                    height: 37
                     spacing: 6
                     
                     Rectangle {
                         color: 'red'
-                        width: 14
-                        height: 14
+                        width: 11
+                        height: 11
                         radius: 7
                         MouseArea {
                             anchors.fill: parent
                             onClicked: {
-                                console.log("quit");
-                                Qt.quit();
+                                console.log("stop");
+                                //gui.stop();
                             }
                         }   
                     }
                                         
                     Rectangle {
                         color: 'yellow'
-                        width: 14
-                        height: 14
+                        width: 11
+                        height: 11
                         radius: 7
                         MouseArea {
                             anchors.fill: parent
                             onClicked: {
-                                console.log("quit");
-                                Qt.quit();
+                                console.log("minimize window");
                             }
                         }   
                     }
                     
                     Rectangle {
                         color: 'green'
-                        width: 14
-                        height: 14
+                        width: 11
+                        height: 11
                         radius: 7
                         MouseArea {
                             anchors.fill: parent
                             onClicked: {
-                                console.log("quit");
-                                Qt.quit();
+                                console.log("maximize window");
                             }
                         }   
                     }
@@ -909,104 +1020,6 @@ ApplicationWindow {
                       return view;
                   }
               }
-
-            /************************/
-            /*                      */
-            /*  Resizeable Borders  */
-            /*                      */
-            /************************/
-
-
-            MouseArea { 
-                id: rightResizableBar
-                anchors {
-                    top: parent.top
-                    bottom: parent.bottom
-                    right: parent.right
-                }
-                width: 5
-                cursorShape: Qt.SizeHorCursor; 
-
-                property real lastMouseX: 0
-                onPressed: {
-                    lastMouseX = mouseX
-                }
-                onPositionChanged: {
-                    if (!(root.width + mouseX - lastMouseX < root.minimumWidth)) {
-                         root.width += (mouseX - lastMouseX)
-                    }
-                }
-            }        
-
-            MouseArea { 
-                id: leftResizableBar
-                anchors {
-                    top: parent.top
-                    bottom: parent.bottom
-                    left: parent.left
-                }
-                width: 5
-                cursorShape: Qt.SizeHorCursor; 
-
-                property real lastMouseX: 0
-                property real lastRight: root.x + root.width
-                onPressed: {
-                    lastMouseX = mouseX
-                    lastRight = root.x + root.width
-                }
-                onPositionChanged: {            
-                    if (!(root.width - mouseX + lastMouseX < root.minimumWidth)) {
-                        //root.x += (mouseX - lastMouseX)
-                        root.width -= (mouseX - lastMouseX)
-                        root.x = lastRight - root.width
-                    }
-                }
-            }
-
-            MouseArea { 
-                id: bottomResizableBar
-                anchors {
-                    bottom: parent.bottom
-                    right: parent.right
-                    left: parent.left
-                }
-                height: 5
-                cursorShape: Qt.SizeVerCursor; 
-
-                property real lastMouseY: 0
-                onPressed: {
-                    lastMouseY = mouseY
-                }
-                onPositionChanged: {
-                    if (!(root.height + mouseY - lastMouseY < root.minimumHeight)) {
-                         root.height += (mouseY - lastMouseY)
-                    }
-                }
-            }        
-
-            MouseArea { 
-                id: topResizableBar
-                anchors {
-                    top: parent.top
-                    right: parent.right
-                    left: parent.left
-                }
-                height: 5
-                cursorShape: Qt.SizeVerCursor; 
-
-                property real lastMouseY: 0
-                property real lastTop: root.y + root.height
-                onPressed: {
-                    lastMouseY = mouseY
-                    lastTop = root.y + root.height
-                }
-                onPositionChanged: {            
-                    if (!(root.height - mouseY + lastMouseY < root.minimumHeight)) {
-                        root.height -= (mouseY - lastMouseY)
-                        root.y = lastTop - root.height
-                    }
-                }
-            }
         }
       }
 
