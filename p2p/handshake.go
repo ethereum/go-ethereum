@@ -37,7 +37,7 @@ const (
 //
 // The MsgReadWriter is usually layered as follows:
 //
-//     lockedRW         (thread-safety for ReadMsg, WriteMsg)
+//     netWrapper       (I/O timeouts, thread-safe ReadMsg, WriteMsg)
 //     rlpxFrameRW      (message encoding, encryption, authentication)
 //     bufio.ReadWriter (buffering)
 //     net.Conn         (network I/O)
@@ -83,7 +83,6 @@ func setupInboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake) (
 	}
 
 	// Run the protocol handshake using authenticated messages.
-	// TODO: move buffering setup here (out of newFrameRW)
 	rw := newRlpxFrameRW(fd, secrets)
 	rhs, err := readProtocolHandshake(rw, our)
 	if err != nil {
@@ -96,7 +95,7 @@ func setupInboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake) (
 	if err := writeProtocolHandshake(rw, our); err != nil {
 		return nil, fmt.Errorf("protocol write error: %v", err)
 	}
-	return &conn{&lockedRW{wrapped: rw}, rhs}, nil
+	return &conn{rw, rhs}, nil
 }
 
 func setupOutboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, dial *discover.Node) (*conn, error) {
@@ -106,7 +105,6 @@ func setupOutboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, 
 	}
 
 	// Run the protocol handshake using authenticated messages.
-	// TODO: move buffering setup here (out of newFrameRW)
 	rw := newRlpxFrameRW(fd, secrets)
 	if err := writeProtocolHandshake(rw, our); err != nil {
 		return nil, fmt.Errorf("protocol write error: %v", err)
@@ -118,7 +116,7 @@ func setupOutboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake, 
 	if rhs.ID != dial.ID {
 		return nil, errors.New("dialed node id mismatch")
 	}
-	return &conn{&lockedRW{wrapped: rw}, rhs}, nil
+	return &conn{rw, rhs}, nil
 }
 
 // encHandshake contains the state of the encryption handshake.

@@ -21,6 +21,11 @@ var (
 	zero16 = make([]byte, 16)
 )
 
+// rlpxFrameRW implements a simplified version of RLPx framing.
+// chunked messages are not supported and all headers are equal to
+// zeroHeader.
+//
+// rlpxFrameRW is not safe for concurrent use from multiple goroutines.
 type rlpxFrameRW struct {
 	conn io.ReadWriter
 	enc  cipher.Stream

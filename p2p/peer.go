@@ -20,8 +20,8 @@ const (
 	baseProtocolLength     = uint64(16)
 	baseProtocolMaxMsgSize = 10 * 1024 * 1024
 
-	disconnectGracePeriod = 2 * time.Second
 	pingInterval          = 15 * time.Second
+	disconnectGracePeriod = 2 * time.Second
 )
 
 const (
@@ -176,6 +176,7 @@ func (p *Peer) politeDisconnect(reason DiscReason) {
 
 func (p *Peer) readLoop() error {
 	for {
+		p.conn.SetDeadline(time.Now().Add(frameReadTimeout))
 		msg, err := p.rw.ReadMsg()
 		if err != nil {
 			return err

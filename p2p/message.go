@@ -6,34 +6,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/rlp"
-)
-
-// parameters for frameRW
-const (
-	// maximum time allowed for reading a message header.
-	// this is effectively the amount of time a connection can be idle.
-	frameReadTimeout = 1 * time.Minute
-
-	// maximum time allowed for reading the payload data of a message.
-	// this is shorter than (and distinct from) frameReadTimeout because
-	// the connection is not considered idle while a message is transferred.
-	// this also limits the payload size of messages to how much the connection
-	// can transfer within the timeout.
-	payloadReadTimeout = 5 * time.Second
-
-	// maximum amount of time allowed for writing a complete message.
-	msgWriteTimeout = 5 * time.Second
-
-	// messages smaller than this many bytes will be read at
-	// once before passing them to a protocol. this increases
-	// concurrency in the processing.
-	wholePayloadSize = 64 * 1024
 )
 
 // Msg defines the structure of a p2p message.
@@ -103,22 +82,27 @@ func EncodeMsg(w MsgWriter, code uint64, data ...interface{}) error {
 	return w.WriteMsg(NewMsg(code, data...))
 }
 
-// lockedRW wraps a MsgReadWriter with locks around
-// ReadMsg and WriteMsg.
-type lockedRW struct {
+// netWrapper wrapsa MsgReadWriter with locks around
+// ReadMsg/WriteMsg and applies read/write deadlines.
+type netWrapper struct {
 	rmu, wmu sync.Mutex
-	wrapped  MsgReadWriter
+
+	rtimeout, wtimeout time.Duration
+	conn               net.Conn
+	wrapped            MsgReadWriter
 }
 
-func (rw *lockedRW) ReadMsg() (Msg, error) {
+func (rw *netWrapper) ReadMsg() (Msg, error) {
 	rw.rmu.Lock()
 	defer rw.rmu.Unlock()
+	rw.conn.SetReadDeadline(time.Now().Add(rw.rtimeout))
 	return rw.wrapped.ReadMsg()
 }
 
-func (rw *lockedRW) WriteMsg(msg Msg) error {
+func (rw *netWrapper) WriteMsg(msg Msg) error {
 	rw.wmu.Lock()
 	defer rw.wmu.Unlock()
+	rw.conn.SetWriteDeadline(time.Now().Add(rw.wtimeout))
 	return rw.wrapped.WriteMsg(msg)
 }
 

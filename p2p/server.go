@@ -17,9 +17,17 @@ import (
 )
 
 const (
-	handshakeTimeout     = 5 * time.Second
 	defaultDialTimeout   = 10 * time.Second
 	refreshPeersInterval = 30 * time.Second
+
+	// total timeout for encryption handshake and protocol
+	// handshake in both directions.
+	handshakeTimeout = 5 * time.Second
+	// maximum time allowed for reading a complete message.
+	// this is effectively the amount of time a connection can be idle.
+	frameReadTimeout = 1 * time.Minute
+	// maximum amount of time allowed for writing a complete message.
+	frameWriteTimeout = 5 * time.Second
 )
 
 var srvlog = logger.NewLogger("P2P Server")
@@ -359,13 +367,17 @@ func (srv *Server) findPeers() {
 
 func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	// TODO: handle/store session token
-	// TODO: reenable deadlines
-	// fd.SetDeadline(time.Now().Add(handshakeTimeout))
+	fd.SetDeadline(time.Now().Add(handshakeTimeout))
 	conn, err := srv.setupFunc(fd, srv.PrivateKey, srv.ourHandshake, dest)
 	if err != nil {
 		fd.Close()
 		srvlog.Debugf("Handshake with %v failed: %v", fd.RemoteAddr(), err)
 		return
+	}
+
+	conn.MsgReadWriter = &netWrapper{
+		wrapped: conn.MsgReadWriter,
+		conn:    fd, rtimeout: frameReadTimeout, wtimeout: frameWriteTimeout,
 	}
 	p := newPeer(fd, conn, srv.Protocols)
 	if ok, reason := srv.addPeer(conn.ID, p); !ok {
