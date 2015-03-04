@@ -13,8 +13,9 @@ import "../ext/http.js" as Http
 ApplicationWindow {
     id: root
     
-    //flags: Qt.FramelessWindowHint
+    flags: Qt.FramelessWindowHint
     // Use this to make the window frameless. But then you'll need to do move and resize by hand
+
 
     property var ethx : Eth.ethx
     property var catalog;
@@ -23,6 +24,10 @@ ApplicationWindow {
     height: 820
     minimumHeight: 600
     minimumWidth: 800
+    x: 50 
+    y: 50 
+
+    // You can use (Screen.desktopAvailableHeight - height)/2 but that would keep
 
     title: "Mist"
 
@@ -262,6 +267,9 @@ ApplicationWindow {
 
         id: mainSplit
         anchors.fill: parent
+        anchors.margins: 2
+        // radius: 3
+
         //resizing: false  // this is NOT where we remove that damning resizing handle..
         handleDelegate: Item {
             //This handle is a way to remove the line between the split views
@@ -307,6 +315,7 @@ ApplicationWindow {
              id: menu
              Layout.minimumWidth: 192
              Layout.maximumWidth: 192
+             anchors.top: parent.top
 
             FontLoader { 
                id: sourceSansPro
@@ -332,8 +341,10 @@ ApplicationWindow {
                source: "fonts/Simple-Line-Icons.ttf" 
             }
 
+
+
             Rectangle {
-                color: "steelblue"
+                id: sideMenuInteractions
                 anchors.fill: parent
 
                 MouseArea {
@@ -357,7 +368,6 @@ ApplicationWindow {
 
 
 
-             anchors.top: parent.top
              Rectangle {
                      width: parent.height
                      height: parent.width
@@ -679,7 +689,63 @@ ApplicationWindow {
                  anchors.right: parent.right
                  spacing: 3
                 
+                RowLayout {
+                    id: semaphorButtons
+                    anchors {
+                        top: parent.top 
+                        left: parent.left
+                        right: parent.right
+                        leftMargin: 8
+                    }
+                    height: 16
 
+                    spacing: 6
+                    
+                    Rectangle {
+                        color: 'red'
+                        width: 14
+                        height: 14
+                        radius: 7
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: {
+                                console.log("quit");
+                                Qt.quit();
+                            }
+                        }   
+                    }
+                                        
+                    Rectangle {
+                        color: 'yellow'
+                        width: 14
+                        height: 14
+                        radius: 7
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: {
+                                console.log("quit");
+                                Qt.quit();
+                            }
+                        }   
+                    }
+                    
+                    Rectangle {
+                        color: 'green'
+                        width: 14
+                        height: 14
+                        radius: 7
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: {
+                                console.log("quit");
+                                Qt.quit();
+                            }
+                        }   
+                    }
+                   
+                }
+
+                
 
                 ColumnLayout {
                      id: menuBegin
@@ -843,7 +909,105 @@ ApplicationWindow {
                       return view;
                   }
               }
-          }
+
+            /************************/
+            /*                      */
+            /*  Resizeable Borders  */
+            /*                      */
+            /************************/
+
+
+            MouseArea { 
+                id: rightResizableBar
+                anchors {
+                    top: parent.top
+                    bottom: parent.bottom
+                    right: parent.right
+                }
+                width: 5
+                cursorShape: Qt.SizeHorCursor; 
+
+                property real lastMouseX: 0
+                onPressed: {
+                    lastMouseX = mouseX
+                }
+                onPositionChanged: {
+                    if (!(root.width + mouseX - lastMouseX < root.minimumWidth)) {
+                         root.width += (mouseX - lastMouseX)
+                    }
+                }
+            }        
+
+            MouseArea { 
+                id: leftResizableBar
+                anchors {
+                    top: parent.top
+                    bottom: parent.bottom
+                    left: parent.left
+                }
+                width: 5
+                cursorShape: Qt.SizeHorCursor; 
+
+                property real lastMouseX: 0
+                property real lastRight: root.x + root.width
+                onPressed: {
+                    lastMouseX = mouseX
+                    lastRight = root.x + root.width
+                }
+                onPositionChanged: {            
+                    if (!(root.width - mouseX + lastMouseX < root.minimumWidth)) {
+                        //root.x += (mouseX - lastMouseX)
+                        root.width -= (mouseX - lastMouseX)
+                        root.x = lastRight - root.width
+                    }
+                }
+            }
+
+            MouseArea { 
+                id: bottomResizableBar
+                anchors {
+                    bottom: parent.bottom
+                    right: parent.right
+                    left: parent.left
+                }
+                height: 5
+                cursorShape: Qt.SizeVerCursor; 
+
+                property real lastMouseY: 0
+                onPressed: {
+                    lastMouseY = mouseY
+                }
+                onPositionChanged: {
+                    if (!(root.height + mouseY - lastMouseY < root.minimumHeight)) {
+                         root.height += (mouseY - lastMouseY)
+                    }
+                }
+            }        
+
+            MouseArea { 
+                id: topResizableBar
+                anchors {
+                    top: parent.top
+                    right: parent.right
+                    left: parent.left
+                }
+                height: 5
+                cursorShape: Qt.SizeVerCursor; 
+
+                property real lastMouseY: 0
+                property real lastTop: root.y + root.height
+                onPressed: {
+                    lastMouseY = mouseY
+                    lastTop = root.y + root.height
+                }
+                onPositionChanged: {            
+                    if (!(root.height - mouseY + lastMouseY < root.minimumHeight)) {
+                        root.height -= (mouseY - lastMouseY)
+                        root.y = lastTop - root.height
+                    }
+                }
+            }
+        }
       }
 
 
