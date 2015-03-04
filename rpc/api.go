@@ -344,7 +344,8 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *interface{}) err
 }
 
 func (p *EthereumApi) GetPeerCount(reply *interface{}) error {
-	*reply = p.xeth().PeerCount()
+	c := p.xeth().PeerCount()
+	*reply = toHex(big.NewInt(int64(c)).Bytes())
 	return nil
 }
 
