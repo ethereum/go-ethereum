@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"math/big"
 	"time"
 )
 
@@ -53,10 +54,10 @@ func (l *P2PDisconnected) EventName() string {
 }
 
 type EthMinerNewBlock struct {
-	BlockHash     string `json:"block_hash"`
-	BlockNumber   int    `json:"block_number"`
-	ChainHeadHash string `json:"chain_head_hash"`
-	BlockPrevHash string `json:"block_prev_hash"`
+	BlockHash     string   `json:"block_hash"`
+	BlockNumber   *big.Int `json:"block_number"`
+	ChainHeadHash string   `json:"chain_head_hash"`
+	BlockPrevHash string   `json:"block_prev_hash"`
 	LogEvent
 }
 

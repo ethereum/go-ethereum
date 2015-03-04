@@ -17,7 +17,7 @@ type FilterOptions struct {
 	Latest   int64
 
 	Address [][]byte
-	Topics  [][]byte
+	Topics  [][][]byte
 
 	Skip int
 	Max  int
@@ -31,7 +31,7 @@ type Filter struct {
 	skip     int
 	address  [][]byte
 	max      int
-	topics   [][]byte
+	topics   [][][]byte
 
 	BlockCallback   func(*types.Block)
 	PendingCallback func(*types.Block)
@@ -44,6 +44,8 @@ func NewFilter(eth Backend) *Filter {
 	return &Filter{eth: eth}
 }
 
+// SetOptions copies the filter options to the filter it self. The reason for this "silly" copy
+// is simply because named arguments in this case is extremely nice and readable.
 func (self *Filter) SetOptions(options FilterOptions) {
 	self.earliest = options.Earliest
 	self.latest = options.Latest
@@ -69,7 +71,7 @@ func (self *Filter) SetAddress(addr [][]byte) {
 	self.address = addr
 }
 
-func (self *Filter) SetTopics(topics [][]byte) {
+func (self *Filter) SetTopics(topics [][][]byte) {
 	self.topics = topics
 }
 
@@ -149,10 +151,18 @@ Logs:
 			continue
 		}
 
-		max := int(math.Min(float64(len(self.topics)), float64(len(log.Topics()))))
-		for i := 0; i < max; i++ {
-			if !bytes.Equal(log.Topics()[i], self.topics[i]) {
-				continue Logs
+		logTopics := make([][]byte, len(self.topics))
+		copy(logTopics, log.Topics())
+
+		for i, topics := range self.topics {
+			for _, topic := range topics {
+				var match bool
+				if bytes.Equal(log.Topics()[i], topic) {
+					match = true
+				}
+				if !match {
+					continue Logs
+				}
 			}
 		}
 
@@ -177,8 +187,15 @@ func (self *Filter) bloomFilter(block *types.Block) bool {
 		}
 	}
 
-	for _, topic := range self.topics {
-		if !types.BloomLookup(block.Bloom(), topic) {
+	for _, sub := range self.topics {
+		var included bool
+		for _, topic := range sub {
+			if types.BloomLookup(block.Bloom(), topic) {
+				included = true
+				break
+			}
+		}
+		if !included {
 			return false
 		}
 	}

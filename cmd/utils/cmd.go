@@ -25,12 +25,8 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path"
-	"path/filepath"
 	"regexp"
-	"runtime"
 
-	"bitbucket.org/kardianos/osext"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -39,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/rlp"
 	rpchttp "github.com/ethereum/go-ethereum/rpc/http"
-	rpcws "github.com/ethereum/go-ethereum/rpc/ws"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
 )
@@ -132,31 +127,6 @@ func StartEthereum(ethereum *eth.Ethereum) {
 	})
 }
 
-func DefaultAssetPath() string {
-	var assetPath string
-	// If the current working directory is the go-ethereum dir
-	// assume a debug build and use the source directory as
-	// asset directory.
-	pwd, _ := os.Getwd()
-	if pwd == path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist") {
-		assetPath = path.Join(pwd, "assets")
-	} else {
-		switch runtime.GOOS {
-		case "darwin":
-			// Get Binary Directory
-			exedir, _ := osext.ExecutableFolder()
-			assetPath = filepath.Join(exedir, "../Resources")
-		case "linux":
-			assetPath = "/usr/share/mist"
-		case "windows":
-			assetPath = "./assets"
-		default:
-			assetPath = "."
-		}
-	}
-	return assetPath
-}
-
 func KeyTasks(keyManager *crypto.KeyManager, KeyRing string, GenAddr bool, SecretFile string, ExportDir string, NonInteractive bool) {
 
 	var err error
@@ -189,25 +159,13 @@ func KeyTasks(keyManager *crypto.KeyManager, KeyRing string, GenAddr bool, Secre
 	clilogger.Infof("Main address %x\n", keyManager.Address())
 }
 
-func StartRpc(ethereum *eth.Ethereum, RpcPort int) {
+func StartRpc(ethereum *eth.Ethereum, RpcListenAddress string, RpcPort int) {
 	var err error
-	ethereum.RpcServer, err = rpchttp.NewRpcHttpServer(xeth.New(ethereum), RpcPort)
+	ethereum.RpcServer, err = rpchttp.NewRpcHttpServer(xeth.New(ethereum), RpcListenAddress, RpcPort)
 	if err != nil {
 		clilogger.Errorf("Could not start RPC interface (port %v): %v", RpcPort, err)
 	} else {
 		go ethereum.RpcServer.Start()
-	}
-}
-
-func StartWebSockets(eth *eth.Ethereum, wsPort int) {
-	clilogger.Infoln("Starting WebSockets")
-
-	var err error
-	eth.WsServer, err = rpcws.NewWebSocketServer(xeth.New(eth), wsPort)
-	if err != nil {
-		clilogger.Errorf("Could not start RPC interface (port %v): %v", wsPort, err)
-	} else {
-		go eth.WsServer.Start()
 	}
 }
 
