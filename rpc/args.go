@@ -1,8 +1,12 @@
 package rpc
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"math/big"
 
-import "github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/ethutil"
+)
 
 type GetBlockArgs struct {
 	BlockNumber int32
@@ -23,12 +27,12 @@ func (obj *GetBlockArgs) UnmarshalJSON(b []byte) (err error) {
 }
 
 type NewTxArgs struct {
-	From     string `json:"from"`
-	To       string `json:"to"`
-	Value    string `json:"value"`
-	Gas      string `json:"gas"`
-	GasPrice string `json:"gasPrice"`
-	Data     string `json:"data"`
+	From     string   `json:"from"`
+	To       string   `json:"to"`
+	Value    *big.Int `json:"value"`
+	Gas      *big.Int `json:"gas"`
+	GasPrice *big.Int `json:"gasPrice"`
+	Data     string   `json:"data"`
 }
 
 func (obj *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
@@ -40,18 +44,18 @@ func (obj *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 		Gas      string
 		GasPrice string
 		Data     string
-		Code     string
+		// Code     string
 	}
 
 	if err = json.Unmarshal(b, &ext); err == nil {
-		if len(ext.Data) == 0 {
-			ext.Data = ext.Code
-		}
+		// if len(ext.Data) == 0 {
+		// 	ext.Data = ext.Code
+		// }
 		obj.From = ext.From
 		obj.To = ext.To
-		obj.Value = ext.Value
-		obj.Gas = ext.Gas
-		obj.GasPrice = ext.GasPrice
+		obj.Value = ethutil.Big(ext.Value)
+		obj.Gas = ethutil.Big(ext.Gas)
+		obj.GasPrice = ethutil.Big(ext.GasPrice)
 		obj.Data = ext.Data
 
 		return

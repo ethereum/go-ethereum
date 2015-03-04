@@ -252,12 +252,12 @@ func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *interface{}) error {
 }
 
 func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
-	if len(args.Gas) == 0 {
-		args.Gas = defaultGas.String()
+	if args.Gas == ethutil.Big0 {
+		args.Gas = defaultGas
 	}
 
-	if len(args.GasPrice) == 0 {
-		args.GasPrice = defaultGasPrice.String()
+	if args.GasPrice == ethutil.Big0 {
+		args.GasPrice = defaultGasPrice
 	}
 
 	// TODO if no_private_key then
@@ -281,7 +281,10 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
 			p.register[ags.From] = append(p.register[args.From], args)
 		}
 	*/
-	result, _ := p.xeth().Transact( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
+	result, err := p.xeth().Transact( /* TODO specify account */ args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
+	if err != nil {
+		return err
+	}
 	*reply = result
 	//}
 
@@ -289,7 +292,7 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
 }
 
 func (p *EthereumApi) Call(args *NewTxArgs, reply *interface{}) error {
-	result, err := p.xeth().Call( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
+	result, err := p.xeth().Call( /* TODO specify account */ args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
 	if err != nil {
 		return err
 	}
