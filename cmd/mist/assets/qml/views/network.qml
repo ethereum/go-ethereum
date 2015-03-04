@@ -135,11 +135,6 @@ Rectangle {
 			}
 		}
 
-
-
-
-
-
 		WebEngineView {
 			id: inspector
 			visible: false
