@@ -369,7 +369,7 @@ func (p *EthereumApi) GetIsMining(reply *interface{}) error {
 }
 
 func (p *EthereumApi) BlockNumber(reply *interface{}) error {
-	*reply = p.xeth().Backend().ChainManager().CurrentBlock().Number()
+	*reply = toHex(p.xeth().Backend().ChainManager().CurrentBlock().Number().Bytes())
 	return nil
 }
 
