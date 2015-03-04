@@ -26,6 +26,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/ethereum/go-ethereum/cmd/ethereum/repl"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
@@ -137,7 +138,12 @@ func main() {
 	}
 
 	if StartJsConsole {
-		InitJsConsole(ethereum)
+		repl := ethrepl.NewJSRepl(ethereum)
+		repl.Start()
+		utils.RegisterInterrupt(func(os.Signal) {
+			repl.Stop()
+		})
+
 	} else if len(InputFile) > 0 {
 		ExecJsFile(ethereum, InputFile)
 	}

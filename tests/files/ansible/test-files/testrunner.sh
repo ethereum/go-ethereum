@@ -1,23 +1,24 @@
 #!/bin/bash
 
 # create random virtual machine test
-#cd ~/software/Ethereum/pyethereum (python has local dependencies so only works from within the directory)
-cd ~
+
+mkdir --parents ~/testout
+cd ~/testout
 while [ 1 ]
 do	
-	TEST="$(docker run --rm --entrypoint="/cpp-ethereum/build/test/createRandomTest" cppjit)"
+	TEST="$(docker run --rm --entrypoint=\"/cpp-ethereum/build/test/createRandomTest\" ethereum/cppjit-testrunner)"
 	# echo "$TEST"
 	
 	# test pyethereum
-	#OUTPUT_PYTHON="$(python ./tests/test_vm.py "$TEST")"
-	#RESULT_PYTHON=$?
+	OUTPUT_PYTHON="$(docker run --rm ethereum/python-testrunner "$TEST")"
+	RESULT_PYTHON=$?
 
 	# test go
-	OUTPUT_GO="$(docker run --rm go "$TEST")"
+	OUTPUT_GO="$(docker run --rm ethereum/go-testrunner "$TEST")"
 	RESULT_GO=$?
 	
 	# test cpp-jit
-	OUTPUT_CPPJIT="$(docker run --rm cppjit "$TEST")"
+	OUTPUT_CPPJIT="$(docker run --rm ethereum/cppjit-testrunner "$TEST")"
 	RESULT_CPPJIT=$?
 
 	# go fails
@@ -32,15 +33,15 @@ do
 	fi
 
 	# python fails
-	#if [ "$RESULT_PYTHON" -ne 0 ]; then
-	#	echo Failed:
-	#	echo Output_PYTHON:
-	#	echo $OUTPUT_PYTHON
-	#	echo Test:
-	#	echo "$TEST"
-	#	echo "$TEST" > FailedTest.json
-	#	mv FailedTest.json $(date -d "today" +"%Y%m%d%H%M")PYTHON.json
-	#fi
+	if [ "$RESULT_PYTHON" -ne 0 ]; then
+		echo Failed:
+		echo Output_PYTHON:
+		echo $OUTPUT_PYTHON
+		echo Test:
+		echo "$TEST"
+		echo "$TEST" > FailedTest.json
+		mv FailedTest.json $(date -d "today" +"%Y%m%d%H%M")PYTHON.json
+	fi
 
 	# cppjit fails
 	if [ "$RESULT_CPPJIT" -ne 0 ]; then

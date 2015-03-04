@@ -18,7 +18,7 @@ var statelogger = logger.NewLogger("STATE")
 // * Accounts
 type StateDB struct {
 	db   ethutil.Database
-	trie *trie.Trie
+	trie *trie.SecureTrie
 
 	stateObjects map[string]*StateObject
 
@@ -29,7 +29,7 @@ type StateDB struct {
 
 // Create a new state from a given trie
 func New(root []byte, db ethutil.Database) *StateDB {
-	trie := trie.New(ethutil.CopyBytes(root), db)
+	trie := trie.NewSecure(ethutil.CopyBytes(root), db)
 	return &StateDB{db: db, trie: trie, stateObjects: make(map[string]*StateObject), refund: make(map[string]*big.Int)}
 }
 
@@ -237,6 +237,10 @@ func (self *StateDB) Set(state *StateDB) {
 
 func (s *StateDB) Root() []byte {
 	return s.trie.Root()
+}
+
+func (s *StateDB) Trie() *trie.SecureTrie {
+	return s.trie
 }
 
 // Resets the trie and all siblings

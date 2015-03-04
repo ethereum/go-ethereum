@@ -7,6 +7,8 @@ import (
 	"path"
 	"strings"
 
+	"github.com/ethereum/ethash"
+	"github.com/ethereum/go-ethereum/blockpool"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -117,7 +119,7 @@ type Ethereum struct {
 	blockProcessor *core.BlockProcessor
 	txPool         *core.TxPool
 	chainManager   *core.ChainManager
-	blockPool      *BlockPool
+	blockPool      *blockpool.BlockPool
 	whisper        *whisper.Whisper
 
 	net      *p2p.Server
@@ -177,15 +179,17 @@ func New(config *Config) (*Ethereum, error) {
 	}
 
 	eth.chainManager = core.NewChainManager(db, eth.EventMux())
+	pow := ethash.New(eth.chainManager)
+
 	eth.txPool = core.NewTxPool(eth.EventMux())
-	eth.blockProcessor = core.NewBlockProcessor(db, eth.txPool, eth.chainManager, eth.EventMux())
+	eth.blockProcessor = core.NewBlockProcessor(db, pow, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
 	eth.whisper = whisper.New()
-	eth.miner = miner.New(keyManager.Address(), eth, config.MinerThreads)
+	eth.miner = miner.New(keyManager.Address(), eth, pow, config.MinerThreads)
 
 	hasBlock := eth.chainManager.HasBlock
 	insertChain := eth.chainManager.InsertChain
-	eth.blockPool = NewBlockPool(hasBlock, insertChain, ezp.Verify)
+	eth.blockPool = blockpool.New(hasBlock, insertChain, ezp.Verify)
 
 	netprv, err := config.nodeKey()
 	if err != nil {
@@ -220,7 +224,7 @@ func (s *Ethereum) Name() string                         { return s.net.Name }
 func (s *Ethereum) ChainManager() *core.ChainManager     { return s.chainManager }
 func (s *Ethereum) BlockProcessor() *core.BlockProcessor { return s.blockProcessor }
 func (s *Ethereum) TxPool() *core.TxPool                 { return s.txPool }
-func (s *Ethereum) BlockPool() *BlockPool                { return s.blockPool }
+func (s *Ethereum) BlockPool() *blockpool.BlockPool      { return s.blockPool }
 func (s *Ethereum) Whisper() *whisper.Whisper            { return s.whisper }
 func (s *Ethereum) EventMux() *event.TypeMux             { return s.eventMux }
 func (s *Ethereum) Db() ethutil.Database                 { return s.db }

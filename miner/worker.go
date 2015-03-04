@@ -46,8 +46,10 @@ func env(block *types.Block, eth core.Backend) *environment {
 }
 
 type Work struct {
-	Number uint64
-	Nonce  []byte
+	Number    uint64
+	Nonce     uint64
+	MixDigest []byte
+	SeedHash  []byte
 }
 
 type Agent interface {
@@ -146,17 +148,23 @@ out:
 func (self *worker) wait() {
 	for {
 		for work := range self.recv {
+			// Someone Successfully Mined!
 			block := self.current.block
-			if block.Number().Uint64() == work.Number && block.Nonce() == nil {
-				self.current.block.Header().Nonce = work.Nonce
+			if block.Number().Uint64() == work.Number && block.Nonce() == 0 {
+				self.current.block.SetNonce(work.Nonce)
+				self.current.block.Header().MixDigest = work.MixDigest
+				self.current.block.Header().SeedHash = work.SeedHash
+
 				jsonlogger.LogJson(&logger.EthMinerNewBlock{
 					BlockHash:     ethutil.Bytes2Hex(block.Hash()),
 					BlockNumber:   block.Number(),
 					ChainHeadHash: ethutil.Bytes2Hex(block.ParentHeaderHash),
 					BlockPrevHash: ethutil.Bytes2Hex(block.ParentHeaderHash),
 				})
+
 				if err := self.chain.InsertChain(types.Blocks{self.current.block}); err == nil {
 					self.mux.Post(core.NewMinedBlockEvent{self.current.block})
+					fmt.Println("GOOD BLOCK", self.current.block)
 				} else {
 					self.commitNewWork()
 				}
@@ -234,7 +242,7 @@ func (self *worker) commitUncle(uncle *types.Header) error {
 	}
 
 	if !self.pow.Verify(types.NewBlockWithHeader(uncle)) {
-		return core.ValidationError("Uncle's nonce is invalid (= %v)", ethutil.Bytes2Hex(uncle.Nonce))
+		return core.ValidationError("Uncle's nonce is invalid (= %x)", uncle.Nonce)
 	}
 
 	uncleAccount := self.current.state.GetAccount(uncle.Coinbase)
