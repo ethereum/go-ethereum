@@ -668,6 +668,8 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.WhisperMessages(args, reply)
+	case "client_version":
+		*reply = p.eth.GetClientVersion()
 	default:
 		return NewErrorWithMessage(errNotImplemented, req.Method)
 	}

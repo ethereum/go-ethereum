@@ -132,7 +132,8 @@ type Ethereum struct {
 
 	logger ethlogger.LogSystem
 
-	Mining bool
+	Mining  bool
+	version string
 }
 
 func New(config *Config) (*Ethereum, error) {
@@ -175,6 +176,7 @@ func New(config *Config) (*Ethereum, error) {
 		blacklist:    p2p.NewBlacklist(),
 		eventMux:     &event.TypeMux{},
 		logger:       logger,
+		version:      config.Name,
 	}
 
 	eth.chainManager = core.NewChainManager(db, eth.EventMux())
@@ -231,6 +233,7 @@ func (s *Ethereum) PeerCount() int                       { return s.net.PeerCoun
 func (s *Ethereum) Peers() []*p2p.Peer                   { return s.net.Peers() }
 func (s *Ethereum) MaxPeers() int                        { return s.net.MaxPeers }
 func (s *Ethereum) Coinbase() []byte                     { return nil } // TODO
+func (s *Ethereum) ClientVersion() string                { return s.version }
 
 // Start the ethereum
 func (s *Ethereum) Start() error {
