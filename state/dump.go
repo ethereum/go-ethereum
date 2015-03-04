@@ -20,7 +20,7 @@ type World struct {
 	Accounts map[string]Account `json:"accounts"`
 }
 
-func (self *StateDB) Dump() []byte {
+func (self *StateDB) RawDump() World {
 	world := World{
 		Root:     ethutil.Bytes2Hex(self.trie.Root()),
 		Accounts: make(map[string]Account),
@@ -39,8 +39,11 @@ func (self *StateDB) Dump() []byte {
 		}
 		world.Accounts[ethutil.Bytes2Hex(it.Key)] = account
 	}
+	return world
+}
 
-	json, err := json.MarshalIndent(world, "", "    ")
+func (self *StateDB) Dump() []byte {
+	json, err := json.MarshalIndent(self.RawDump(), "", "    ")
 	if err != nil {
 		fmt.Println("dump err", err)
 	}

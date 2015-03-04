@@ -73,11 +73,7 @@ func run() error {
 	utils.KeyTasks(ethereum.KeyManager(), KeyRing, GenAddr, SecretFile, ExportDir, NonInteractive)
 
 	if StartRpc {
-		utils.StartRpc(ethereum, RpcPort)
-	}
-
-	if StartWebSockets {
-		utils.StartWebSockets(ethereum, WsPort)
+		utils.StartRpc(ethereum, RpcListenAddress, RpcPort)
 	}
 
 	gui := NewWindow(ethereum, config, KeyRing, LogLevel)

@@ -5,15 +5,19 @@ import (
 	"math/big"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/state"
 	"gopkg.in/fatih/set.v0"
 )
+
+var jsonlogger = logger.NewJsonLogger()
 
 type environment struct {
 	totalUsedGas *big.Int
@@ -113,6 +117,8 @@ func (self *worker) register(agent Agent) {
 func (self *worker) update() {
 	events := self.mux.Subscribe(core.ChainEvent{}, core.NewMinedBlockEvent{})
 
+	timer := time.NewTicker(2 * time.Second)
+
 out:
 	for {
 		select {
@@ -131,6 +137,8 @@ out:
 				agent.Stop()
 			}
 			break out
+		case <-timer.C:
+			minerlogger.Debugln("Hash rate:", self.HashRate(), "Khash")
 		}
 	}
 
@@ -146,7 +154,12 @@ func (self *worker) wait() {
 				self.current.block.Header().Nonce = work.Nonce
 				self.current.block.Header().MixDigest = work.MixDigest
 				self.current.block.Header().SeedHash = work.SeedHash
-
+				jsonlogger.LogJson(&logger.EthMinerNewBlock{
+					BlockHash:     ethutil.Bytes2Hex(block.Hash()),
+					BlockNumber:   block.Number(),
+					ChainHeadHash: ethutil.Bytes2Hex(block.ParentHeaderHash),
+					BlockPrevHash: ethutil.Bytes2Hex(block.ParentHeaderHash),
+				})
 				if err := self.chain.InsertChain(types.Blocks{self.current.block}); err == nil {
 					self.mux.Post(core.NewMinedBlockEvent{self.current.block})
 				} else {
@@ -248,4 +261,13 @@ func (self *worker) commitTransaction(tx *types.Transaction) error {
 	self.current.block.AddReceipt(receipt)
 
 	return nil
+}
+
+func (self *worker) HashRate() int64 {
+	var tot int64
+	for _, agent := range self.agents {
+		tot += agent.Pow().GetHashrate()
+	}
+
+	return tot
 }

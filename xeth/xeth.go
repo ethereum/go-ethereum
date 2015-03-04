@@ -300,14 +300,6 @@ func (self *XEth) Transact(toStr, valueStr, gasStr, gasPriceStr, codeStr string)
 	tx.SetNonce(nonce)
 	tx.Sign(key.PrivateKey)
 
-	//fmt.Printf("create tx: %x %v\n", tx.Hash()[:4], tx.Nonce())
-
-	// Do some pre processing for our "pre" events  and hooks
-	//block := self.chainManager.NewBlock(key.Address())
-	//coinbase := state.GetOrNewStateObject(key.Address())
-	//coinbase.SetGasPool(block.GasLimit())
-	//self.blockProcessor.ApplyTransactions(coinbase, state, block, types.Transactions{tx}, true)
-
 	err = self.eth.TxPool().Add(tx)
 	if err != nil {
 		return "", err
