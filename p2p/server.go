@@ -66,10 +66,6 @@ type Server struct {
 	// each peer.
 	Protocols []Protocol
 
-	// If Blacklist is set to a non-nil value, the given Blacklist
-	// is used to verify peer connections.
-	Blacklist Blacklist
-
 	// If ListenAddr is set to a non-nil address, the server
 	// will listen for incoming connections.
 	//
@@ -182,9 +178,6 @@ func (srv *Server) Start() (err error) {
 	srv.peerConnect = make(chan *discover.Node)
 	if srv.setupFunc == nil {
 		srv.setupFunc = setupConn
-	}
-	if srv.Blacklist == nil {
-		srv.Blacklist = NewBlacklist()
 	}
 
 	// node table
@@ -417,8 +410,6 @@ func (srv *Server) addPeer(id discover.NodeID, p *Peer) (bool, DiscReason) {
 		return false, DiscTooManyPeers
 	case srv.peers[id] != nil:
 		return false, DiscAlreadyConnected
-	case srv.Blacklist.Exists(id[:]):
-		return false, DiscUselessPeer
 	case id == srv.ntab.Self():
 		return false, DiscSelf
 	}
@@ -431,54 +422,4 @@ func (srv *Server) removePeer(p *Peer) {
 	delete(srv.peers, p.ID())
 	srv.lock.Unlock()
 	srv.peerWG.Done()
-}
-
-type Blacklist interface {
-	Get([]byte) (bool, error)
-	Put([]byte) error
-	Delete([]byte) error
-	Exists(pubkey []byte) (ok bool)
-}
-
-type BlacklistMap struct {
-	blacklist map[string]bool
-	lock      sync.RWMutex
-}
-
-func NewBlacklist() *BlacklistMap {
-	return &BlacklistMap{
-		blacklist: make(map[string]bool),
-	}
-}
-
-func (self *BlacklistMap) Get(pubkey []byte) (bool, error) {
-	self.lock.RLock()
-	defer self.lock.RUnlock()
-	v, ok := self.blacklist[string(pubkey)]
-	var err error
-	if !ok {
-		err = fmt.Errorf("not found")
-	}
-	return v, err
-}
-
-func (self *BlacklistMap) Exists(pubkey []byte) (ok bool) {
-	self.lock.RLock()
-	defer self.lock.RUnlock()
-	_, ok = self.blacklist[string(pubkey)]
-	return
-}
-
-func (self *BlacklistMap) Put(pubkey []byte) error {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	self.blacklist[string(pubkey)] = true
-	return nil
-}
-
-func (self *BlacklistMap) Delete(pubkey []byte) error {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	delete(self.blacklist, string(pubkey))
-	return nil
 }
