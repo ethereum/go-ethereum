@@ -51,19 +51,8 @@ type Msg struct {
 
 // NewMsg creates an RLP-encoded message with the given code.
 func NewMsg(code uint64, params ...interface{}) Msg {
-	buf := new(bytes.Buffer)
-	for _, p := range params {
-		buf.Write(ethutil.Encode(p))
-	}
-	return Msg{Code: code, Size: uint32(buf.Len()), Payload: buf}
-}
-
-func encodePayload(params ...interface{}) []byte {
-	buf := new(bytes.Buffer)
-	for _, p := range params {
-		buf.Write(ethutil.Encode(p))
-	}
-	return buf.Bytes()
+	p := bytes.NewReader(ethutil.Encode(params))
+	return Msg{Code: code, Size: uint32(p.Len()), Payload: p}
 }
 
 // Decode parse the RLP content of a message into
@@ -71,8 +60,7 @@ func encodePayload(params ...interface{}) []byte {
 //
 // For the decoding rules, please see package rlp.
 func (msg Msg) Decode(val interface{}) error {
-	s := rlp.NewListStream(msg.Payload, uint64(msg.Size))
-	if err := s.Decode(val); err != nil {
+	if err := rlp.Decode(msg.Payload, val); err != nil {
 		return newPeerError(errInvalidMsg, "(code %#x) (size %d) %v", msg.Code, msg.Size, err)
 	}
 	return nil

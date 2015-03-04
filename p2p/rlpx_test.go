@@ -3,8 +3,6 @@ package p2p
 import (
 	"bytes"
 	"crypto/rand"
-	"encoding/hex"
-	"fmt"
 	"io/ioutil"
 	"strings"
 	"testing"
@@ -32,7 +30,7 @@ ba628a4ba590cb43f7848f41c4382885
 `)
 
 	// Check WriteMsg. This puts a message into the buffer.
-	if err := EncodeMsg(rw, 8, []interface{}{1, 2, 3, 4}); err != nil {
+	if err := EncodeMsg(rw, 8, 1, 2, 3, 4); err != nil {
 		t.Fatalf("WriteMsg error: %v", err)
 	}
 	written := buf.Bytes()
@@ -67,14 +65,6 @@ func (fakeHash) BlockSize() int              { return 0 }
 
 func (h fakeHash) Size() int           { return len(h) }
 func (h fakeHash) Sum(b []byte) []byte { return append(b, h...) }
-
-func unhex(str string) []byte {
-	b, err := hex.DecodeString(strings.Replace(str, "\n", "", -1))
-	if err != nil {
-		panic(fmt.Sprintf("invalid hex string: %q", str))
-	}
-	return b
-}
 
 func TestRlpxFrameRW(t *testing.T) {
 	var (
@@ -112,7 +102,7 @@ func TestRlpxFrameRW(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		// write message into conn buffer
 		wmsg := []interface{}{"foo", "bar", strings.Repeat("test", i)}
-		err := EncodeMsg(rw1, uint64(i), wmsg)
+		err := EncodeMsg(rw1, uint64(i), wmsg...)
 		if err != nil {
 			t.Fatalf("WriteMsg error (i=%d): %v", i, err)
 		}

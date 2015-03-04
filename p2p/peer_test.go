@@ -85,41 +85,6 @@ func TestPeerProtoReadMsg(t *testing.T) {
 	}
 }
 
-func TestPeerProtoReadLargeMsg(t *testing.T) {
-	defer testlog(t).detach()
-
-	msgsize := uint32(10 * 1024 * 1024)
-	done := make(chan struct{})
-	proto := Protocol{
-		Name:   "a",
-		Length: 5,
-		Run: func(peer *Peer, rw MsgReadWriter) error {
-			msg, err := rw.ReadMsg()
-			if err != nil {
-				t.Errorf("read error: %v", err)
-			}
-			if msg.Size != msgsize+4 {
-				t.Errorf("incorrect msg.Size, got %d, expected %d", msg.Size, msgsize)
-			}
-			msg.Discard()
-			close(done)
-			return nil
-		},
-	}
-
-	closer, rw, _, errc := testPeer([]Protocol{proto})
-	defer closer.Close()
-
-	EncodeMsg(rw, 18, make([]byte, msgsize))
-	select {
-	case <-done:
-	case err := <-errc:
-		t.Errorf("peer returned: %v", err)
-	case <-time.After(2 * time.Second):
-		t.Errorf("receive timeout")
-	}
-}
-
 func TestPeerProtoEncodeMsg(t *testing.T) {
 	defer testlog(t).detach()
 
@@ -246,13 +211,9 @@ func expectMsg(r MsgReader, code uint64, content interface{}) error {
 		if err != nil {
 			panic("content encode error: " + err.Error())
 		}
-		// skip over list header in encoded value. this is temporary.
-		contentEncR := bytes.NewReader(contentEnc)
-		if k, _, err := rlp.NewStream(contentEncR).Kind(); k != rlp.List || err != nil {
-			panic("content must encode as RLP list")
+		if int(msg.Size) != len(contentEnc) {
+			return fmt.Errorf("message size mismatch: got %d, want %d", msg.Size, len(contentEnc))
 		}
-		contentEnc = contentEnc[len(contentEnc)-contentEncR.Len():]
-
 		actualContent, err := ioutil.ReadAll(msg.Payload)
 		if err != nil {
 			return err

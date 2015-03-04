@@ -193,12 +193,12 @@ func (p *Peer) handle(msg Msg) error {
 		msg.Discard()
 		go EncodeMsg(p.rw, pongMsg)
 	case msg.Code == discMsg:
-		var reason DiscReason
+		var reason [1]DiscReason
 		// no need to discard or for error checking, we'll close the
 		// connection after this.
 		rlp.Decode(msg.Payload, &reason)
 		p.Disconnect(DiscRequested)
-		return discRequestedError(reason)
+		return discRequestedError(reason[0])
 	case msg.Code < baseProtocolLength:
 		// ignore other base protocol messages
 		return msg.Discard()

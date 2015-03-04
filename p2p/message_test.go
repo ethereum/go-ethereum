@@ -2,10 +2,12 @@ package p2p
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -15,11 +17,11 @@ func TestNewMsg(t *testing.T) {
 	if msg.Code != 3 {
 		t.Errorf("incorrect code %d, want %d", msg.Code)
 	}
-	if msg.Size != 5 {
-		t.Errorf("incorrect size %d, want %d", msg.Size, 5)
+	expect := unhex("c50183303030")
+	if msg.Size != uint32(len(expect)) {
+		t.Errorf("incorrect size %d, want %d", msg.Size, len(expect))
 	}
 	pl, _ := ioutil.ReadAll(msg.Payload)
-	expect := []byte{0x01, 0x83, 0x30, 0x30, 0x30}
 	if !bytes.Equal(pl, expect) {
 		t.Errorf("incorrect payload content, got %x, want %x", pl, expect)
 	}
@@ -138,4 +140,12 @@ func TestEOFSignal(t *testing.T) {
 		t.Error("unexpected EOF signal")
 	default:
 	}
+}
+
+func unhex(str string) []byte {
+	b, err := hex.DecodeString(strings.Replace(str, "\n", "", -1))
+	if err != nil {
+		panic(fmt.Sprintf("invalid hex string: %q", str))
+	}
+	return b
 }

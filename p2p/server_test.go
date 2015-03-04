@@ -150,7 +150,7 @@ func TestServerBroadcast(t *testing.T) {
 
 	// broadcast one message
 	srv.Broadcast("discard", 0, "foo")
-	golden := unhex("66e94e166f0a2c3b884cfa59ca34")
+	golden := unhex("66e94d166f0a2c3b884cfa59ca34")
 
 	// check that the message has been written everywhere
 	for i, conn := range conns {

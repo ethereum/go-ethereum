@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
@@ -135,7 +136,7 @@ func (srv *Server) SuggestPeer(n *discover.Node) {
 func (srv *Server) Broadcast(protocol string, code uint64, data ...interface{}) {
 	var payload []byte
 	if data != nil {
-		payload = encodePayload(data...)
+		payload = ethutil.Encode(data)
 	}
 	srv.lock.RLock()
 	defer srv.lock.RUnlock()
