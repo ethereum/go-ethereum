@@ -19,6 +19,8 @@ var (
 
 	// sixteen zero bytes
 	zero16 = make([]byte, 16)
+
+	maxUint24 = ^uint32(0) >> 8
 )
 
 // rlpxFrameRW implements a simplified version of RLPx framing.
@@ -64,6 +66,9 @@ func (rw *rlpxFrameRW) WriteMsg(msg Msg) error {
 	// write header
 	headbuf := make([]byte, 32)
 	fsize := uint32(len(ptype)) + msg.Size
+	if fsize > maxUint24 {
+		return errors.New("message size overflows uint24")
+	}
 	putInt24(fsize, headbuf) // TODO: check overflow
 	copy(headbuf[3:], zeroHeader)
 	rw.enc.XORKeyStream(headbuf[:16], headbuf[:16]) // first half is now encrypted
