@@ -63,7 +63,12 @@ func (self JsonWrapper) ParseRequestBody(req *http.Request) (RpcRequest, error) 
 }
 
 func toHex(b []byte) string {
-	return "0x" + ethutil.Bytes2Hex(b)
+	hex := ethutil.Bytes2Hex(b)
+	// Prefer output of "0x0" instead of "0x"
+	if len(hex) == 0 {
+		hex = "0"
+	}
+	return "0x" + hex
 }
 func fromHex(s string) []byte {
 	if len(s) > 1 {
