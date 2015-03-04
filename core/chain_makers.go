@@ -61,7 +61,7 @@ func newBlockFromParent(addr []byte, parent *types.Block) *types.Block {
 	block.SetReceipts(nil)
 
 	header := block.Header()
-	header.Difficulty = CalcDifficulty(block, parent)
+	header.Difficulty = CalcDifficulty(block.Header(), parent.Header())
 	header.Number = new(big.Int).Add(parent.Header().Number, ethutil.Big1)
 	header.Time = parent.Header().Time + 10
 	header.GasLimit = CalcGasLimit(parent, block)
