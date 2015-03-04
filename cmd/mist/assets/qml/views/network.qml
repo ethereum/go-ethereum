@@ -118,7 +118,7 @@ Rectangle {
 			id: webview
 			anchors.fill: parent
 
-			url: "http://localhost:3000/"
+			url: "network-health/index.html"
 
 			experimental.settings.javascriptCanAccessClipboard: true
 
