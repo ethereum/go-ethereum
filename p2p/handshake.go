@@ -89,6 +89,9 @@ func setupInboundConn(fd net.Conn, prv *ecdsa.PrivateKey, our *protoHandshake) (
 	if err != nil {
 		return nil, err
 	}
+	if rhs.ID != secrets.RemoteID {
+		return nil, errors.New("node ID in protocol handshake does not match encryption handshake")
+	}
 	// TODO: validate that handshake node ID matches
 	if err := writeProtocolHandshake(rw, our); err != nil {
 		return nil, fmt.Errorf("protocol write error: %v", err)
