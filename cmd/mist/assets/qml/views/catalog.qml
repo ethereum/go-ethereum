@@ -70,6 +70,8 @@ Rectangle {
 		anchors.fill: parent
 		state: "inspectorShown"
 
+        
+
 		WebEngineView {
 			objectName: "webView"
 			id: webview

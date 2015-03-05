@@ -321,7 +321,6 @@ ApplicationWindow {
             }
             onPositionChanged: {            
                 if (!(root.width - mouseX + lastMouseX < root.minimumWidth)) {
-                    //root.x += (mouseX - lastMouseX)
                     root.width -= (mouseX - lastMouseX)
                     root.x = lastRight - root.width
                 }
@@ -518,8 +517,6 @@ ApplicationWindow {
                source: "fonts/Simple-Line-Icons.ttf" 
             }
 
-
-
             Rectangle {
                 id: sideMenuInteractions
                 anchors.fill: parent
@@ -536,14 +533,8 @@ ApplicationWindow {
                         root.x += (mouseX - lastMouseX)
                         root.y += (mouseY - lastMouseY)
                     }
-                    /*onDoubleClicked: {
-                        //!maximized ? view.set_max() : view.set_normal()}
-                        visibility = "Minimized"
-                    }*/
                 }
             }
-
-
 
              Rectangle {
                      width: parent.height
@@ -1068,54 +1059,31 @@ ApplicationWindow {
               anchors.top: parent.top
               color: "#00000000"             
 
-              /*Rectangle {
-                  id: urlPane
-                  height: 40
-                  color: "#00000000"
-                  anchors {
-                      left: parent.left
-                      right: parent.right
-                      leftMargin: 5
-                      rightMargin: 5
-                      top: parent.top
-                      topMargin: 5
-                  }
-                  TextField {
-                      id: url
-                      objectName: "url"
-                      placeholderText: "DApp URL"
-                      anchors {
-                          left: parent.left
-                          right: parent.right
-                          top: parent.top
-                          topMargin: 5
-                          rightMargin: 5
-                          leftMargin: 5
-                      }
+                Rectangle {
+                    id: topMovingHandle
+                    anchors {
+                        top: parent.top
+                        left: parent.left
+                        right: parent.right
+                    }
+                    height: 37
+                    color: "transparent"
+                    z: 100
 
-                      Keys.onReturnPressed: {
-                          if(/^https?/.test(this.text)) {
-                              newBrowserTab(this.text);
-                          } else {
-                              addPlugin(this.text, {close: true, section: "apps"})
-                          }
-                      }
-                  }
-
-              }
-
-              // Border
-              Rectangle {
-                  id: divider
-                  anchors {
-                      left: parent.left
-                      right: parent.right
-                      top: urlPane.bottom
-                  }
-                  z: -1
-                  height: 1
-                  color: "#CCCCCC"
-              }*/
+                    MouseArea {
+                        anchors.fill: parent
+                        property real lastMouseX: 0
+                        property real lastMouseY: 0
+                        onPressed: {
+                            lastMouseX = mouseX
+                            lastMouseY = mouseY
+                        }
+                        onPositionChanged: {
+                            root.x += (mouseX - lastMouseX)
+                            root.y += (mouseY - lastMouseY)
+                        }
+                    }
+                }
 
               Rectangle {
                   id: mainView
