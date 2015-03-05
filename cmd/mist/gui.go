@@ -159,8 +159,6 @@ func (gui *Gui) Stop() {
 		gui.win.Hide()
 	}
 
-	gui.uiLib.jsEngine.Stop()
-
 	guilogger.Infoln("Stopped")
 }
 

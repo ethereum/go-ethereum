@@ -22,8 +22,10 @@ var ZeroHash512 = make([]byte, 64)
 var EmptyShaList = crypto.Sha3(ethutil.Encode([]interface{}{}))
 var EmptyListRoot = crypto.Sha3(ethutil.Encode(""))
 
+var GenesisDiff = big.NewInt(131072)
+
 func GenesisBlock(db ethutil.Database) *types.Block {
-	genesis := types.NewBlock(ZeroHash256, ZeroHash160, nil, big.NewInt(2048), 42, "")
+	genesis := types.NewBlock(ZeroHash256, ZeroHash160, nil, GenesisDiff, 42, "")
 	genesis.Header().Number = ethutil.Big0
 	genesis.Header().GasLimit = big.NewInt(1000000)
 	genesis.Header().GasUsed = ethutil.Big0
@@ -53,7 +55,6 @@ func GenesisBlock(db ethutil.Database) *types.Block {
 	}
 	statedb.Sync()
 	genesis.Header().Root = statedb.Root()
-	fmt.Println(genesis)
 
 	return genesis
 }
