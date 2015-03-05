@@ -571,7 +571,8 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		return p.Call(args, reply)
 	case "eth_flush":
 		return errNotImplemented
-	case "eth_getBlockByNumber", "eth_getBlockByHash":
+	case "eth_getBlockByNumber":
+	case "eth_getBlockByHash":
 		// TODO handle second param for "include transaction objects"
 		args, err := req.ToGetBlockArgs()
 		if err != nil {
@@ -601,12 +602,12 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.NewFilter(args, reply)
-	// case "eth_newFilterString":
-	// 	args, err := req.ToFilterStringArgs()
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	return p.NewFilterString(args, reply)
+	case "eth_newBlockFilter":
+		args, err := req.ToFilterStringArgs()
+		if err != nil {
+			return err
+		}
+		return p.NewFilterString(args, reply)
 	case "eth_newBlockFilter":
 		return errNotImplemented
 	case "eth_uninstallFilter":
@@ -691,7 +692,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		return p.NewWhisperFilter(args, reply)
 	case "shh_uninstallFilter":
 		return errNotImplemented
-	case "shh_changed":
+	case "shh_getFilterChanges":
 		args, err := req.ToIdArgs()
 		if err != nil {
 			return err
