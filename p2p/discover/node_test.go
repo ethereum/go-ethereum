@@ -133,6 +133,24 @@ func TestNodeID_recover(t *testing.T) {
 	if pub != recpub {
 		t.Errorf("recovered wrong pubkey:\ngot:  %v\nwant: %v", recpub, pub)
 	}
+
+	ecdsa, err := pub.Pubkey()
+	if err != nil {
+		t.Errorf("Pubkey error: %v", err)
+	}
+	if !reflect.DeepEqual(ecdsa, &prv.PublicKey) {
+		t.Errorf("Pubkey mismatch:\n  got:  %#v\n  want: %#v", ecdsa, &prv.PublicKey)
+	}
+}
+
+func TestNodeID_pubkeyBad(t *testing.T) {
+	ecdsa, err := NodeID{}.Pubkey()
+	if err == nil {
+		t.Error("expected error for zero ID")
+	}
+	if ecdsa != nil {
+		t.Error("expected nil result")
+	}
 }
 
 func TestNodeID_distcmp(t *testing.T) {
