@@ -14,7 +14,7 @@ ApplicationWindow {
     id: root
     
     flags: Qt.FramelessWindowHint | Qt.Window
-    //flags: Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowSystemMenuHint
+    //flags: Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowCloseButtonHint | Qt.WindowMinimizeButtonHint
     // Use this to make the window frameless. But then you'll need to do move and resize by hand
     color: "transparent"
 
@@ -794,9 +794,6 @@ ApplicationWindow {
                  anchors.left: parent.left
                  anchors.right: parent.right
                  spacing: 3
-                
-
-
 
                 /************************/
                 /*   Semafor Buttons    */
@@ -810,49 +807,77 @@ ApplicationWindow {
                         right: parent.right
                         leftMargin: 8
                         bottomMargin: 8
+                        topMargin: 0
                     }
+
                     height: 37
                     spacing: 6
-                    
+
                     Rectangle {
-                        color: 'red'
-                        width: 11
-                        height: 11
-                        radius: 7
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: {
-                                console.log("stop");
-                                //gui.stop();
+                        color: "transparent"
+                        anchors.fill: parent
+                    }
+
+                    Rectangle {
+                        color: 'transparent'
+                        width: 13
+                        height: 20
+                        
+                        Image {
+                             height: 13
+                             width: 13
+                             source: toolbarCloseButton.containsMouse ?  "../window-control/window-close.png" :  "../window-control/window-close-hover.png"
+                             anchors.centerIn: parent
+                             
+                             MouseArea {
+                                id: toolbarCloseButton
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: Qt.quit() //gui.stop();
                             }
-                        }   
+                         }  
+                    }
+                    Rectangle {
+                        color: 'transparent'
+                        width: 13
+                        height: 20
+                        
+                        Image {
+                             height: 13
+                             width: 13
+                             source: toolbarminimizeButton.containsMouse ?  "../window-control/window-minimize.png" :  "../window-control/window-minimize-hover.png"
+                             anchors.centerIn: parent
+                             
+                             MouseArea {
+                                id: toolbarminimizeButton
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: Qt.quit() //gui.stop();
+                            }
+                         }  
+                    }
+
+                    Rectangle {
+                        color: 'transparent'
+                        width: 13
+                        height: 20
+                        
+                        Image {
+                             height: 13
+                             width: 13
+                             source: toolbarzoomButton.containsMouse ?  "../window-control/window-zoom.png" :  "../window-control/window-zoom-hover.png"
+                             anchors.centerIn: parent
+                             
+                             MouseArea {
+                                id: toolbarzoomButton
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: Qt.quit() //gui.stop();
+                            }
+                         }  
                     }
                                         
-                    Rectangle {
-                        color: 'yellow'
-                        width: 11
-                        height: 11
-                        radius: 7
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: {
-                                console.log("minimize window");
-                            }
-                        }   
-                    }
                     
-                    Rectangle {
-                        color: 'green'
-                        width: 11
-                        height: 11
-                        radius: 7
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: {
-                                console.log("maximize window");
-                            }
-                        }   
-                    }
                    
                 }
 
