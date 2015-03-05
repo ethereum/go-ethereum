@@ -344,8 +344,7 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *interface{}) err
 }
 
 func (p *EthereumApi) GetPeerCount(reply *interface{}) error {
-	c := p.xeth().PeerCount()
-	*reply = toHex(big.NewInt(int64(c)).Bytes())
+	*reply = p.xeth().PeerCount()
 	return nil
 }
 
@@ -370,7 +369,7 @@ func (p *EthereumApi) GetIsMining(reply *interface{}) error {
 }
 
 func (p *EthereumApi) BlockNumber(reply *interface{}) error {
-	*reply = toHex(p.xeth().Backend().ChainManager().CurrentBlock().Number().Bytes())
+	*reply = p.xeth().Backend().ChainManager().CurrentBlock().Number()
 	return nil
 }
 
@@ -497,51 +496,68 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
 	rpclogger.DebugDetailf("%T %s", req.Params, req.Params)
 	switch req.Method {
+	case "web3_sha3":
+		args, err := req.ToSha3Args()
+		if err != nil {
+			return err
+		}
+		return p.Sha3(args, reply)
+	case "net_listening":
+		return p.GetIsListening(reply)
+	case "net_peerCount":
+		return p.GetPeerCount(reply)
 	case "eth_coinbase":
 		return p.GetCoinbase(reply)
 	case "eth_mining":
 		return p.GetIsMining(reply)
-	case "eth_number":
-		return p.BlockNumber(reply)
+	case "eth_gasPrice":
+		*reply = toHex(defaultGasPrice.Bytes())
+		return nil
 	case "eth_accounts":
 		return p.Accounts(reply)
-	case "eth_countAt":
-		args, err := req.ToGetTxCountArgs()
-		if err != nil {
-			return err
-		}
-		return p.GetTxCountAt(args, reply)
-	case "eth_codeAt":
-		args, err := req.ToGetCodeAtArgs()
-		if err != nil {
-			return err
-		}
-		return p.GetCodeAt(args, reply)
-	case "eth_balanceAt":
+	case "eth_blockNumber":
+		return p.BlockNumber(reply)
+	case "eth_getBalance":
+		// TODO handle defaultBlock
 		args, err := req.ToGetBalanceArgs()
 		if err != nil {
 			return err
 		}
 		return p.GetBalanceAt(args, reply)
-	case "eth_stateAt":
+	case "eth_getStorage":
+		// TODO handle defaultBlock
 		args, err := req.ToGetStateArgs()
 		if err != nil {
 			return err
 		}
 		return p.GetStateAt(args, reply)
-	case "eth_storageAt":
+	case "eth_getStorageAt":
+		// TODO handle defaultBlock
 		args, err := req.ToStorageAtArgs()
 		if err != nil {
 			return err
 		}
 		return p.GetStorageAt(args, reply)
-	case "eth_blockByNumber", "eth_blockByHash":
-		args, err := req.ToGetBlockArgs()
+	case "eth_getTransactionCount":
+		// TODO handle defaultBlock
+		args, err := req.ToGetTxCountArgs()
 		if err != nil {
 			return err
 		}
-		return p.GetBlock(args, reply)
-	case "eth_transact":
+		return p.GetTxCountAt(args, reply)
+	case "eth_getBlockTransactionCountByHash":
+	case "eth_getBlockTransactionCountByNumber":
+	case "eth_getUncleCountByBlockHash":
+	case "eth_getUncleCountByBlockNumber":
+		return errNotImplemented
+	case "eth_getData":
+		// TODO handle defaultBlock
+		args, err := req.ToGetCodeAtArgs()
+		if err != nil {
+			return err
+		}
+		return p.GetCodeAt(args, reply)
+	case "eth_sendTransaction":
 		args, err := req.ToNewTxArgs()
 		if err != nil {
 			return err
@@ -553,77 +569,91 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.Call(args, reply)
+	case "eth_flush":
+		return errNotImplemented
+	case "eth_getBlockByNumber", "eth_getBlockByHash":
+		// TODO handle second param for "include transaction objects"
+		args, err := req.ToGetBlockArgs()
+		if err != nil {
+			return err
+		}
+		return p.GetBlock(args, reply)
+	case "eth_getTransactionByHash":
+	case "eth_getTransactionByBlockHashAndIndex":
+	case "eth_getTransactionByBlockNumberAndIndex":
+	case "eth_getUncleByBlockHashAndIndex":
+	case "eth_getUncleByBlockNumberAndIndex":
+		return errNotImplemented
+	case "eth_getCompilers":
+		return p.GetCompilers(reply)
+	case "eth_compileSolidity":
+	case "eth_compileLLL":
+		return errNotImplemented
+	case "eth_compileSerpent":
+		args, err := req.ToCompileArgs()
+		if err != nil {
+			return err
+		}
+		return p.CompileSerpent(args, reply)
 	case "eth_newFilter":
 		args, err := req.ToFilterArgs()
 		if err != nil {
 			return err
 		}
 		return p.NewFilter(args, reply)
-	case "eth_newFilterString":
-		args, err := req.ToFilterStringArgs()
-		if err != nil {
-			return err
-		}
-		return p.NewFilterString(args, reply)
+	// case "eth_newFilterString":
+	// 	args, err := req.ToFilterStringArgs()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	return p.NewFilterString(args, reply)
+	case "eth_newBlockFilter":
+		return errNotImplemented
 	case "eth_uninstallFilter":
 		args, err := req.ToUninstallFilterArgs()
 		if err != nil {
 			return err
 		}
 		return p.UninstallFilter(args, reply)
-	case "eth_changed":
+	case "eth_getFilterChanges":
 		args, err := req.ToIdArgs()
 		if err != nil {
 			return err
 		}
 		return p.FilterChanged(args, reply)
-	case "eth_filterLogs":
+	case "eth_getFilterLogs":
 		args, err := req.ToIdArgs()
 		if err != nil {
 			return err
 		}
 		return p.Logs(args, reply)
-	case "eth_logs":
+	case "eth_getLogs":
 		args, err := req.ToFilterArgs()
 		if err != nil {
 			return err
 		}
 		return p.AllLogs(args, reply)
-	case "eth_gasPrice":
-		*reply = toHex(defaultGasPrice.Bytes())
-		return nil
-	case "eth_register":
-		args, err := req.ToRegisterArgs()
-		if err != nil {
-			return err
-		}
-		return p.Register(args, reply)
-	case "eth_unregister":
-		args, err := req.ToRegisterArgs()
-		if err != nil {
-			return err
-		}
-		return p.Unregister(args, reply)
-	case "eth_watchTx":
-		args, err := req.ToWatchTxArgs()
-		if err != nil {
-			return err
-		}
-		return p.WatchTx(args, reply)
-	case "eth_compilers":
-		return p.GetCompilers(reply)
-	case "eth_serpent":
-		args, err := req.ToCompileArgs()
-		if err != nil {
-			return err
-		}
-		return p.CompileSerpent(args, reply)
-	case "web3_sha3":
-		args, err := req.ToSha3Args()
-		if err != nil {
-			return err
-		}
-		return p.Sha3(args, reply)
+	case "eth_getWork":
+	case "eth_submitWork":
+		return errNotImplemented
+	// case "eth_register":
+	// 	args, err := req.ToRegisterArgs()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	return p.Register(args, reply)
+	// case "eth_unregister":
+	// 	args, err := req.ToRegisterArgs()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	return p.Unregister(args, reply)
+	// case "eth_watchTx":
+	// 	args, err := req.ToWatchTxArgs()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	return p.WatchTx(args, reply)
 	case "db_put":
 		args, err := req.ToDbPutArgs()
 		if err != nil {
@@ -636,36 +666,37 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.DbGet(args, reply)
-	case "net_listening":
-		return p.GetIsListening(reply)
-	case "net_peerCount":
-		return p.GetPeerCount(reply)
-	case "shh_newIdentity":
-		return p.NewWhisperIdentity(reply)
-	case "shh_newFilter":
-		args, err := req.ToWhisperFilterArgs()
-		if err != nil {
-			return err
-		}
-		return p.NewWhisperFilter(args, reply)
-	case "shh_changed":
-		args, err := req.ToIdArgs()
-		if err != nil {
-			return err
-		}
-		return p.MessagesChanged(args, reply)
 	case "shh_post":
 		args, err := req.ToWhisperPostArgs()
 		if err != nil {
 			return err
 		}
 		return p.WhisperPost(args, reply)
-	case "shh_haveIdentity":
+	case "shh_newIdentity":
+		return p.NewWhisperIdentity(reply)
+	case "shh_hasIdentity":
 		args, err := req.ToWhisperHasIdentityArgs()
 		if err != nil {
 			return err
 		}
 		return p.HasWhisperIdentity(args, reply)
+	case "shh_newGroup":
+	case "shh_addToGroup":
+		return errNotImplemented
+	case "shh_newFilter":
+		args, err := req.ToWhisperFilterArgs()
+		if err != nil {
+			return err
+		}
+		return p.NewWhisperFilter(args, reply)
+	case "shh_uninstallFilter":
+		return errNotImplemented
+	case "shh_changed":
+		args, err := req.ToIdArgs()
+		if err != nil {
+			return err
+		}
+		return p.MessagesChanged(args, reply)
 	case "shh_getMessages":
 		args, err := req.ToIdArgs()
 		if err != nil {
