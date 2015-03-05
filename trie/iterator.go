@@ -1,6 +1,8 @@
 package trie
 
-import "bytes"
+import (
+	"bytes"
+)
 
 type Iterator struct {
 	trie *Trie
@@ -10,22 +12,28 @@ type Iterator struct {
 }
 
 func NewIterator(trie *Trie) *Iterator {
-	return &Iterator{trie: trie, Key: make([]byte, 32)}
+	return &Iterator{trie: trie, Key: nil}
 }
 
 func (self *Iterator) Next() bool {
 	self.trie.mu.Lock()
 	defer self.trie.mu.Unlock()
 
+	isIterStart := false
+	if self.Key == nil {
+		isIterStart = true
+		self.Key = make([]byte, 32)
+	}
+
 	key := RemTerm(CompactHexDecode(string(self.Key)))
-	k := self.next(self.trie.root, key)
+	k := self.next(self.trie.root, key, isIterStart)
 
 	self.Key = []byte(DecodeCompact(k))
 
 	return len(k) > 0
 }
 
-func (self *Iterator) next(node Node, key []byte) []byte {
+func (self *Iterator) next(node Node, key []byte, isIterStart bool) []byte {
 	if node == nil {
 		return nil
 	}
@@ -33,7 +41,7 @@ func (self *Iterator) next(node Node, key []byte) []byte {
 	switch node := node.(type) {
 	case *FullNode:
 		if len(key) > 0 {
-			k := self.next(node.branch(key[0]), key[1:])
+			k := self.next(node.branch(key[0]), key[1:], isIterStart)
 			if k != nil {
 				return append([]byte{key[0]}, k...)
 			}
@@ -54,7 +62,13 @@ func (self *Iterator) next(node Node, key []byte) []byte {
 	case *ShortNode:
 		k := RemTerm(node.Key())
 		if vnode, ok := node.Value().(*ValueNode); ok {
-			if bytes.Compare([]byte(k), key) > 0 {
+			switch bytes.Compare([]byte(k), key) {
+			case 0:
+				if isIterStart {
+					self.Value = vnode.Val()
+					return k
+				}
+			case 1:
 				self.Value = vnode.Val()
 				return k
 			}
@@ -64,7 +78,7 @@ func (self *Iterator) next(node Node, key []byte) []byte {
 			var ret []byte
 			skey := key[len(k):]
 			if BeginsWith(key, k) {
-				ret = self.next(cnode, skey)
+				ret = self.next(cnode, skey, isIterStart)
 			} else if bytes.Compare(k, key[:len(k)]) > 0 {
 				return self.key(node)
 			}
