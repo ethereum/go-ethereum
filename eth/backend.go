@@ -19,7 +19,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/pow/ezp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/whisper"
 )
@@ -189,7 +188,7 @@ func New(config *Config) (*Ethereum, error) {
 
 	hasBlock := eth.chainManager.HasBlock
 	insertChain := eth.chainManager.InsertChain
-	eth.blockPool = blockpool.New(hasBlock, insertChain, ezp.Verify)
+	eth.blockPool = blockpool.New(hasBlock, insertChain, pow.Verify)
 
 	netprv, err := config.nodeKey()
 	if err != nil {

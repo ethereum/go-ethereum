@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -138,7 +139,7 @@ out:
 			}
 			break out
 		case <-timer.C:
-			minerlogger.Debugln("Hash rate:", self.HashRate(), "Khash")
+			minerlogger.Infoln("Hash rate:", self.HashRate(), "Khash")
 		}
 	}
 
@@ -164,7 +165,6 @@ func (self *worker) wait() {
 
 				if err := self.chain.InsertChain(types.Blocks{self.current.block}); err == nil {
 					self.mux.Post(core.NewMinedBlockEvent{self.current.block})
-					fmt.Println("GOOD BLOCK", self.current.block)
 				} else {
 					self.commitNewWork()
 				}
@@ -190,7 +190,11 @@ func (self *worker) commitNewWork() {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
-	self.current = env(self.chain.NewBlock(self.coinbase), self.eth)
+	block := self.chain.NewBlock(self.coinbase)
+	seednum := ethash.GetSeedBlockNum(block.NumberU64())
+	block.Header().SeedHash = self.chain.GetBlockByNumber(seednum).SeedHash()
+
+	self.current = env(block, self.eth)
 	parent := self.chain.GetBlock(self.current.block.ParentHash())
 	self.current.coinbase.SetGasPool(core.CalcGasLimit(parent, self.current.block))
 

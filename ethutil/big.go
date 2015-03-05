@@ -25,12 +25,13 @@ func Big(num string) *big.Int {
 // BigD
 //
 // Shortcut for new(big.Int).SetBytes(...)
-func BigD(data []byte) *big.Int {
+func Bytes2Big(data []byte) *big.Int {
 	n := new(big.Int)
 	n.SetBytes(data)
 
 	return n
 }
+func BigD(data []byte) *big.Int { return Bytes2Big(data) }
 
 func BitTest(num *big.Int, i int) bool {
 	return num.Bit(i) > 0

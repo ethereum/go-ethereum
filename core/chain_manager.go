@@ -31,13 +31,16 @@ type StateQuery interface {
 func CalcDifficulty(block, parent *types.Header) *big.Int {
 	diff := new(big.Int)
 
-	//adjust := new(big.Int).Rsh(parent.Difficulty(), 10)
-	//if block.Time() >= parent.Time()+8 {
-	adjust := new(big.Int).Div(parent.Difficulty, big.NewInt(2048))
+	min := big.NewInt(2048)
+	adjust := new(big.Int).Div(parent.Difficulty, min)
 	if (block.Time - parent.Time) < 8 {
 		diff.Add(parent.Difficulty, adjust)
 	} else {
 		diff.Sub(parent.Difficulty, adjust)
+	}
+
+	if diff.Cmp(GenesisDiff) < 0 {
+		return GenesisDiff
 	}
 
 	return diff
@@ -378,8 +381,11 @@ func (bc *ChainManager) Stop() {
 }
 
 func (self *ChainManager) InsertChain(chain types.Blocks) error {
+	println("insert chain start")
 	self.tsmu.Lock()
 	defer self.tsmu.Unlock()
+
+	defer println("insert chain end")
 
 	for _, block := range chain {
 		// Call in to the block processor and check for errors. It's likely that if one block fails
@@ -422,14 +428,18 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 		self.mu.Unlock()
 
 		if canonical {
-			jsonlogger.LogJson(&logger.EthChainNewHead{
-				BlockHash:     ethutil.Bytes2Hex(block.Hash()),
-				BlockNumber:   block.Number(),
-				ChainHeadHash: ethutil.Bytes2Hex(cblock.Hash()),
-				BlockPrevHash: ethutil.Bytes2Hex(block.ParentHash()),
-			})
+			/*
+				jsonlogger.LogJson(&logger.EthChainNewHead{
+					BlockHash:     ethutil.Bytes2Hex(block.Hash()),
+					BlockNumber:   block.Number(),
+					ChainHeadHash: ethutil.Bytes2Hex(cblock.Hash()),
+					BlockPrevHash: ethutil.Bytes2Hex(block.ParentHash()),
+				})
+			*/
 			self.setTransState(state.New(block.Root(), self.db))
 			self.eventMux.Post(ChainEvent{block, td})
+		} else {
+			//self.eventMux.
 		}
 
 		if split {

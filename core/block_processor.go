@@ -253,9 +253,6 @@ func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header) error {
 		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Difficulty, expd)
 	}
 
-	//expl := CalcGasLimit(parent, block)
-	//if expl.Cmp(block.Header().GasLimit) != 0 {
-
 	// block.gasLimit - parent.gasLimit <= parent.gasLimit / 1024
 	a := new(big.Int).Sub(block.GasLimit, parent.GasLimit)
 	b := new(big.Int).Div(parent.GasLimit, big.NewInt(1024))
@@ -263,8 +260,8 @@ func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header) error {
 		return fmt.Errorf("GasLimit check failed for block %v (%v > %v)", block.GasLimit, a, b)
 	}
 
-	if block.Time < parent.Time {
-		return ValidationError("Block timestamp not after prev block (%v - %v)", block.Time, parent.Time)
+	if block.Time <= parent.Time {
+		return ValidationError("Block timestamp not after or equal to prev block (%v - %v)", block.Time, parent.Time)
 	}
 
 	if int64(block.Time) > time.Now().Unix() {

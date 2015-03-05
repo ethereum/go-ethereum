@@ -40,12 +40,12 @@ type Header struct {
 	Time uint64
 	// Extra data
 	Extra string
-	// Nonce
-	Nonce []byte
-	// Mix digest for quick checking to prevent DOS
-	MixDigest ethutil.Bytes
 	// SeedHash used for light client verification
 	SeedHash ethutil.Bytes
+	// Mix digest for quick checking to prevent DOS
+	MixDigest ethutil.Bytes
+	// Nonce
+	Nonce []byte
 }
 
 func (self *Header) rlpData(withNonce bool) []interface{} {
@@ -62,9 +62,11 @@ func (self *Header) rlpData(withNonce bool) []interface{} {
 		self.GasLimit,
 		self.GasUsed,
 		self.Time,
-		self.Extra}
+		self.Extra,
+		self.SeedHash,
+	}
 	if withNonce {
-		fields = append(fields, self.SeedHash, self.MixDigest, self.Nonce)
+		fields = append(fields, self.MixDigest, self.Nonce)
 	}
 
 	return fields
