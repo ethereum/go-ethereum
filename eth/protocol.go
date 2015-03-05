@@ -3,7 +3,6 @@ package eth
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -188,33 +187,37 @@ func (self *ethProtocol) handle() error {
 
 	case BlockHashesMsg:
 		msgStream := rlp.NewStream(msg.Payload)
-		var err error
-		var i int
-
-		iter := func() (hash []byte, ok bool) {
-			hash, err = msgStream.Bytes()
-			if err == nil {
-				i++
-				ok = true
-			} else {
-				if err != io.EOF {
-					self.protoError(ErrDecode, "msg %v: after %v hashes : %v", msg, i, err)
-				}
-			}
-			return
+		if _, err := msgStream.List(); err != nil {
+			return err
 		}
 
+		var i int
+		iter := func() (hash []byte, ok bool) {
+			hash, err := msgStream.Bytes()
+			if err == rlp.EOL {
+				return nil, false
+			} else if err != nil {
+				self.protoError(ErrDecode, "msg %v: after %v hashes : %v", msg, i, err)
+				return nil, false
+			}
+			i++
+			return hash, true
+		}
 		self.blockPool.AddBlockHashes(iter, self.id)
 
 	case GetBlocksMsg:
 		msgStream := rlp.NewStream(msg.Payload)
+		if _, err := msgStream.List(); err != nil {
+			return err
+		}
+
 		var blocks []interface{}
 		var i int
 		for {
 			i++
 			var hash []byte
 			if err := msgStream.Decode(&hash); err != nil {
-				if err == io.EOF {
+				if err == rlp.EOL {
 					break
 				} else {
 					return self.protoError(ErrDecode, "msg %v: %v", msg, err)
@@ -232,10 +235,13 @@ func (self *ethProtocol) handle() error {
 
 	case BlocksMsg:
 		msgStream := rlp.NewStream(msg.Payload)
+		if _, err := msgStream.List(); err != nil {
+			return err
+		}
 		for {
 			var block types.Block
 			if err := msgStream.Decode(&block); err != nil {
-				if err == io.EOF {
+				if err == rlp.EOL {
 					break
 				} else {
 					return self.protoError(ErrDecode, "msg %v: %v", msg, err)

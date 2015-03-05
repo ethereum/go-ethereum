@@ -107,11 +107,9 @@ func (cfg *Config) nodeKey() (*ecdsa.PrivateKey, error) {
 type Ethereum struct {
 	// Channel for shutting down the ethereum
 	shutdownChan chan bool
-	quit         chan bool
 
 	// DB interface
-	db        ethutil.Database
-	blacklist p2p.Blacklist
+	db ethutil.Database
 
 	//*** SERVICES ***
 	// State manager for processing new blocks and managing the over all states
@@ -169,10 +167,8 @@ func New(config *Config) (*Ethereum, error) {
 
 	eth := &Ethereum{
 		shutdownChan: make(chan bool),
-		quit:         make(chan bool),
 		db:           db,
 		keyManager:   keyManager,
-		blacklist:    p2p.NewBlacklist(),
 		eventMux:     &event.TypeMux{},
 		logger:       ethlogger,
 	}
@@ -205,7 +201,6 @@ func New(config *Config) (*Ethereum, error) {
 		Name:           config.Name,
 		MaxPeers:       config.MaxPeers,
 		Protocols:      protocols,
-		Blacklist:      eth.blacklist,
 		NAT:            config.NAT,
 		NoDial:         !config.Dial,
 		BootstrapNodes: config.parseBootNodes(),
@@ -278,8 +273,6 @@ func (self *Ethereum) SuggestPeer(nodeURL string) error {
 func (s *Ethereum) Stop() {
 	// Close the database
 	defer s.db.Close()
-
-	close(s.quit)
 
 	s.txSub.Unsubscribe()    // quits txBroadcastLoop
 	s.blockSub.Unsubscribe() // quits blockBroadcastLoop

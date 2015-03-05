@@ -10,15 +10,24 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 )
 
 const (
-	handshakeTimeout     = 5 * time.Second
 	defaultDialTimeout   = 10 * time.Second
 	refreshPeersInterval = 30 * time.Second
+
+	// total timeout for encryption handshake and protocol
+	// handshake in both directions.
+	handshakeTimeout = 5 * time.Second
+	// maximum time allowed for reading a complete message.
+	// this is effectively the amount of time a connection can be idle.
+	frameReadTimeout = 1 * time.Minute
+	// maximum amount of time allowed for writing a complete message.
+	frameWriteTimeout = 5 * time.Second
 )
 
 var srvlog = logger.NewLogger("P2P Server")
@@ -56,10 +65,6 @@ type Server struct {
 	// by the server. Matching protocols are launched for
 	// each peer.
 	Protocols []Protocol
-
-	// If Blacklist is set to a non-nil value, the given Blacklist
-	// is used to verify peer connections.
-	Blacklist Blacklist
 
 	// If ListenAddr is set to a non-nil address, the server
 	// will listen for incoming connections.
@@ -135,7 +140,7 @@ func (srv *Server) SuggestPeer(n *discover.Node) {
 func (srv *Server) Broadcast(protocol string, code uint64, data ...interface{}) {
 	var payload []byte
 	if data != nil {
-		payload = encodePayload(data...)
+		payload = ethutil.Encode(data)
 	}
 	srv.lock.RLock()
 	defer srv.lock.RUnlock()
@@ -173,9 +178,6 @@ func (srv *Server) Start() (err error) {
 	srv.peerConnect = make(chan *discover.Node)
 	if srv.setupFunc == nil {
 		srv.setupFunc = setupConn
-	}
-	if srv.Blacklist == nil {
-		srv.Blacklist = NewBlacklist()
 	}
 
 	// node table
@@ -365,7 +367,12 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 		srvlog.Debugf("Handshake with %v failed: %v", fd.RemoteAddr(), err)
 		return
 	}
-	p := newPeer(conn, srv.Protocols)
+
+	conn.MsgReadWriter = &netWrapper{
+		wrapped: conn.MsgReadWriter,
+		conn:    fd, rtimeout: frameReadTimeout, wtimeout: frameWriteTimeout,
+	}
+	p := newPeer(fd, conn, srv.Protocols)
 	if ok, reason := srv.addPeer(conn.ID, p); !ok {
 		srvlog.DebugDetailf("Not adding %v (%v)\n", p, reason)
 		p.politeDisconnect(reason)
@@ -375,7 +382,7 @@ func (srv *Server) startPeer(fd net.Conn, dest *discover.Node) {
 	srvlog.Debugf("Added %v\n", p)
 	srvjslog.LogJson(&logger.P2PConnected{
 		RemoteId:            fmt.Sprintf("%x", conn.ID[:]),
-		RemoteAddress:       conn.RemoteAddr().String(),
+		RemoteAddress:       fd.RemoteAddr().String(),
 		RemoteVersionString: conn.Name,
 		NumConnections:      srv.PeerCount(),
 	})
@@ -403,8 +410,6 @@ func (srv *Server) addPeer(id discover.NodeID, p *Peer) (bool, DiscReason) {
 		return false, DiscTooManyPeers
 	case srv.peers[id] != nil:
 		return false, DiscAlreadyConnected
-	case srv.Blacklist.Exists(id[:]):
-		return false, DiscUselessPeer
 	case id == srv.ntab.Self():
 		return false, DiscSelf
 	}
@@ -417,54 +422,4 @@ func (srv *Server) removePeer(p *Peer) {
 	delete(srv.peers, p.ID())
 	srv.lock.Unlock()
 	srv.peerWG.Done()
-}
-
-type Blacklist interface {
-	Get([]byte) (bool, error)
-	Put([]byte) error
-	Delete([]byte) error
-	Exists(pubkey []byte) (ok bool)
-}
-
-type BlacklistMap struct {
-	blacklist map[string]bool
-	lock      sync.RWMutex
-}
-
-func NewBlacklist() *BlacklistMap {
-	return &BlacklistMap{
-		blacklist: make(map[string]bool),
-	}
-}
-
-func (self *BlacklistMap) Get(pubkey []byte) (bool, error) {
-	self.lock.RLock()
-	defer self.lock.RUnlock()
-	v, ok := self.blacklist[string(pubkey)]
-	var err error
-	if !ok {
-		err = fmt.Errorf("not found")
-	}
-	return v, err
-}
-
-func (self *BlacklistMap) Exists(pubkey []byte) (ok bool) {
-	self.lock.RLock()
-	defer self.lock.RUnlock()
-	_, ok = self.blacklist[string(pubkey)]
-	return
-}
-
-func (self *BlacklistMap) Put(pubkey []byte) error {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	self.blacklist[string(pubkey)] = true
-	return nil
-}
-
-func (self *BlacklistMap) Delete(pubkey []byte) error {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	delete(self.blacklist, string(pubkey))
-	return nil
 }
