@@ -32,7 +32,6 @@ import (
 	"path"
 	"runtime"
 	"sort"
-	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -386,7 +385,7 @@ func (gui *Gui) update() {
 	statsUpdateTicker := time.NewTicker(5 * time.Second)
 
 	lastBlockLabel := gui.getObjectByName("lastBlockLabel")
-	miningLabel := gui.getObjectByName("miningLabel")
+	//miningLabel := gui.getObjectByName("miningLabel")
 
 	events := gui.eth.EventMux().Subscribe(
 		core.ChainEvent{},
@@ -417,8 +416,7 @@ func (gui *Gui) update() {
 		case <-generalUpdateTicker.C:
 			statusText := "#" + gui.eth.ChainManager().CurrentBlock().Number().String()
 			lastBlockLabel.Set("text", statusText)
-			miningLabel.Set("text", "Mining @ "+strconv.FormatInt(gui.uiLib.Miner().HashRate(), 10)+"/Khash")
-
+			//miningLabel.Set("text", strconv.FormatInt(gui.uiLib.Miner().HashRate(), 10))
 		case <-statsUpdateTicker.C:
 			gui.setStatsPane()
 		}
