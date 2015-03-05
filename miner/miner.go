@@ -58,3 +58,18 @@ func (self *Miner) Stop() {
 func (self *Miner) HashRate() int64 {
 	return self.worker.HashRate()
 }
+
+func (self *Miner) AddThreads(minerThreads int) int {
+	if minerThreads > 0 {
+		for i := 0; i < minerThreads; i++ {
+			self.worker.register(NewCpuMiner(i, self.pow))
+		}
+	}
+
+	return len(self.worker.agents)
+}
+
+func (self *Miner) RemoveThreads(num int) int {
+	self.worker.unregister(num)
+	return len(self.worker.agents)
+}
