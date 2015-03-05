@@ -22,7 +22,7 @@ func (err *ParentErr) Error() string {
 }
 
 func ParentError(hash []byte) error {
-	return &ParentErr{Message: fmt.Sprintf("Block's parent unkown %x", hash)}
+	return &ParentErr{Message: fmt.Sprintf("Block's parent unknown %x", hash)}
 }
 
 func IsParentErr(err error) bool {
