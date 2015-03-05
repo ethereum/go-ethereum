@@ -1,11 +1,11 @@
 package ezp
 
 import (
+	"encoding/binary"
 	"math/big"
 	"math/rand"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
@@ -32,7 +32,7 @@ func (pow *EasyPow) Turbo(on bool) {
 	pow.turbo = on
 }
 
-func (pow *EasyPow) Search(block pow.Block, stop <-chan struct{}) ([]byte, []byte, []byte) {
+func (pow *EasyPow) Search(block pow.Block, stop <-chan struct{}) (uint64, []byte, []byte) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	hash := block.HashNoNonce()
 	diff := block.Difficulty()
@@ -57,7 +57,7 @@ empty:
 	for {
 		select {
 		case <-stop:
-			return nil, nil, nil
+			return 0, nil, nil
 		default:
 			i++
 
@@ -65,9 +65,9 @@ empty:
 			hashes := ((float64(1e9) / float64(elapsed)) * float64(i-starti)) / 1000
 			pow.HashRate = int64(hashes)
 
-			sha := crypto.Sha3(big.NewInt(r.Int63()).Bytes())
-			if verify(hash, diff, sha) {
-				return sha, nil, nil
+			nonce := uint64(r.Int63())
+			if verify(hash, diff, nonce) {
+				return nonce, nil, nil
 			}
 		}
 
@@ -81,10 +81,12 @@ func (pow *EasyPow) Verify(block pow.Block) bool {
 	return Verify(block)
 }
 
-func verify(hash []byte, diff *big.Int, nonce []byte) bool {
+func verify(hash []byte, diff *big.Int, nonce uint64) bool {
 	sha := sha3.NewKeccak256()
 
-	d := append(hash, nonce...)
+	nonce_buf := make([]byte, 8)
+	binary.PutUvarint(nonce_buf, nonce)
+	d := append(hash, nonce_buf...)
 	sha.Write(d)
 
 	verification := new(big.Int).Div(ethutil.BigPow(2, 256), diff)

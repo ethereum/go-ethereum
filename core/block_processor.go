@@ -274,7 +274,7 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 
 	// Verify the nonce of the block. Return an error if it's not valid
 	if !sm.Pow.Verify(block) {
-		return ValidationError("Block's nonce is invalid (= %v)", ethutil.Bytes2Hex(block.Header().Nonce))
+		return ValidationError("Block's nonce is invalid (= %v)", block.Header().Nonce)
 	}
 
 	return nil
@@ -302,7 +302,7 @@ func (sm *BlockProcessor) AccumulateRewards(statedb *state.StateDB, block, paren
 		}
 
 		if !sm.Pow.Verify(types.NewBlockWithHeader(uncle)) {
-			return ValidationError("Uncle's nonce is invalid (= %v)", ethutil.Bytes2Hex(uncle.Nonce))
+			return ValidationError("Uncle's nonce is invalid (= %v)", uncle.Nonce)
 		}
 
 		r := new(big.Int)

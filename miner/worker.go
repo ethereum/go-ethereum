@@ -47,7 +47,7 @@ func env(block *types.Block, eth core.Backend) *environment {
 
 type Work struct {
 	Number    uint64
-	Nonce     []byte
+	Nonce     uint64
 	MixDigest []byte
 	SeedHash  []byte
 }
@@ -150,7 +150,7 @@ func (self *worker) wait() {
 		for work := range self.recv {
 			// Someone Successfully Mined!
 			block := self.current.block
-			if block.Number().Uint64() == work.Number && block.Nonce() == nil {
+			if block.Number().Uint64() == work.Number && block.MixDigest() == nil {
 				self.current.block.Header().Nonce = work.Nonce
 				self.current.block.Header().MixDigest = work.MixDigest
 				self.current.block.Header().SeedHash = work.SeedHash
@@ -239,7 +239,7 @@ func (self *worker) commitUncle(uncle *types.Header) error {
 	}
 
 	if !self.pow.Verify(types.NewBlockWithHeader(uncle)) {
-		return core.ValidationError("Uncle's nonce is invalid (= %v)", ethutil.Bytes2Hex(uncle.Nonce))
+		return core.ValidationError("Invalid Uncle: {\"nonce\" : %v, \"MixDigest\" : %v, \"SeedHash\" : %v}", uncle.Nonce, ethutil.Bytes2Hex(uncle.MixDigest), ethutil.Bytes2Hex(uncle.SeedHash))
 	}
 
 	uncleAccount := self.current.state.GetAccount(uncle.Coinbase)

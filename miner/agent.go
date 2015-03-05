@@ -70,7 +70,7 @@ done:
 func (self *CpuMiner) mine(block *types.Block) {
 	minerlogger.Infof("(re)started agent[%d]. mining...\n", self.index)
 	nonce, mixDigest, seedHash := self.pow.Search(block, self.quitCurrentOp)
-	if nonce != nil {
+	if mixDigest != nil {
 		self.returnCh <- Work{block.Number().Uint64(), nonce, mixDigest, seedHash}
 	}
 }

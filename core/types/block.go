@@ -40,7 +40,7 @@ type Header struct {
 	// Extra data
 	Extra string
 	// Block Nonce for verification
-	Nonce ethutil.Bytes
+	Nonce uint64
 	// Mix digest for quick checking to prevent DOS
 	MixDigest ethutil.Bytes
 	// SeedHash used for light client verification
@@ -94,13 +94,15 @@ type Block struct {
 	Reward   *big.Int
 }
 
-func NewBlock(parentHash []byte, coinbase []byte, root []byte, difficulty *big.Int, nonce []byte, extra string) *Block {
+func NewBlock(parentHash []byte, coinbase []byte, root []byte, difficulty *big.Int, extra string, nonce uint64, mixDigest []byte, seedHash []byte) *Block {
 	header := &Header{
 		Root:       root,
 		ParentHash: parentHash,
 		Coinbase:   coinbase,
 		Difficulty: difficulty,
 		Nonce:      nonce,
+		MixDigest:  mixDigest,
+		SeedHash:   seedHash,
 		Time:       uint64(time.Now().Unix()),
 		Extra:      extra,
 		GasUsed:    new(big.Int),
@@ -195,7 +197,7 @@ func (self *Block) Number() *big.Int          { return self.header.Number }
 func (self *Block) NumberU64() uint64         { return self.header.Number.Uint64() }
 func (self *Block) MixDigest() []byte         { return self.header.MixDigest }
 func (self *Block) SeedHash() []byte          { return self.header.SeedHash }
-func (self *Block) Nonce() []byte             { return self.header.Nonce }
+func (self *Block) Nonce() uint64             { return self.header.Nonce }
 func (self *Block) Bloom() []byte             { return self.header.Bloom }
 func (self *Block) Coinbase() []byte          { return self.header.Coinbase }
 func (self *Block) Time() int64               { return int64(self.header.Time) }
@@ -267,7 +269,7 @@ func (self *Header) String() string {
 	GasUsed:	    %v
 	Time:		    %v
 	Extra:		    %v
-	Nonce:		    %x
+	Nonce:		    %v
 `, self.ParentHash, self.UncleHash, self.Coinbase, self.Root, self.TxHash, self.ReceiptHash, self.Bloom, self.Difficulty, self.Number, self.GasLimit, self.GasUsed, self.Time, self.Extra, self.Nonce)
 }
 
