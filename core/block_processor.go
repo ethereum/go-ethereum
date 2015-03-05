@@ -7,12 +7,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
-	"github.com/ethereum/go-ethereum/pow/ezp"
 	"github.com/ethereum/go-ethereum/state"
 	"gopkg.in/fatih/set.v0"
 )
@@ -50,7 +50,7 @@ func NewBlockProcessor(db ethutil.Database, txpool *TxPool, chainManager *ChainM
 	sm := &BlockProcessor{
 		db:       db,
 		mem:      make(map[string]*big.Int),
-		Pow:      ezp.New(),
+		Pow:      ethash.New(chainManager),
 		bc:       chainManager,
 		eventMux: eventMux,
 		txpool:   txpool,
@@ -104,6 +104,9 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 	}
 
 	return receipt, txGas, err
+}
+func (self *BlockProcessor) ChainManager() *ChainManager {
+	return self.bc
 }
 
 func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, statedb *state.StateDB, block *types.Block, txs types.Transactions, transientProcess bool) (types.Receipts, types.Transactions, types.Transactions, types.Transactions, error) {
@@ -252,6 +255,11 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 		return fmt.Errorf("GasLimit check failed for block %v, %v", block.Header().GasLimit, expl)
 	}
 
+	// There can be at most one uncle
+	if len(block.Uncles()) > 1 {
+		return ValidationError("Block can only contain one uncle (contained %v)", len(block.Uncles()))
+	}
+
 	if block.Time() < parent.Time() {
 		return ValidationError("Block timestamp not after prev block (%v - %v)", block.Header().Time, parent.Header().Time)
 	}
@@ -266,7 +274,7 @@ func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
 
 	// Verify the nonce of the block. Return an error if it's not valid
 	if !sm.Pow.Verify(block) {
-		return ValidationError("Block's nonce is invalid (= %v)", ethutil.Bytes2Hex(block.Header().Nonce))
+		return ValidationError("Block's nonce is invalid (= %v)", block.Header().Nonce)
 	}
 
 	return nil
@@ -294,7 +302,7 @@ func (sm *BlockProcessor) AccumulateRewards(statedb *state.StateDB, block, paren
 		}
 
 		if !sm.Pow.Verify(types.NewBlockWithHeader(uncle)) {
-			return ValidationError("Uncle's nonce is invalid (= %v)", ethutil.Bytes2Hex(uncle.Nonce))
+			return ValidationError("Uncle's nonce is invalid (= %v)", uncle.Nonce)
 		}
 
 		r := new(big.Int)
