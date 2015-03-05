@@ -33,6 +33,12 @@ func Bytes2Big(data []byte) *big.Int {
 }
 func BigD(data []byte) *big.Int { return Bytes2Big(data) }
 
+func String2Big(num string) *big.Int {
+	n := new(big.Int)
+	n.SetString(num, 0)
+	return n
+}
+
 func BitTest(num *big.Int, i int) bool {
 	return num.Bit(i) > 0
 }
