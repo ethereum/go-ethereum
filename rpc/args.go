@@ -102,12 +102,12 @@ func (a *GetStorageArgs) requirements() error {
 	return nil
 }
 
-type GetStateArgs struct {
+type GetStorageAtArgs struct {
 	Address string
 	Key     string
 }
 
-func (obj *GetStateArgs) UnmarshalJSON(b []byte) (err error) {
+func (obj *GetStorageAtArgs) UnmarshalJSON(b []byte) (err error) {
 	arg0 := ""
 	if err = json.Unmarshal(b, &arg0); err == nil {
 		obj.Address = arg0
@@ -116,7 +116,7 @@ func (obj *GetStateArgs) UnmarshalJSON(b []byte) (err error) {
 	return errDecodeArgs
 }
 
-func (a *GetStateArgs) requirements() error {
+func (a *GetStorageAtArgs) requirements() error {
 	if a.Address == "" {
 		return NewErrorWithMessage(errArguments, "GetStorageAt requires an 'address' value as argument")
 	}

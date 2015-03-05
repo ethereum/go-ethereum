@@ -120,23 +120,31 @@ func (req *RpcRequest) ToPushTxArgs() (*PushTxArgs, error) {
 	return args, nil
 }
 
-func (req *RpcRequest) ToGetStateArgs() (*GetStateArgs, error) {
-	if len(req.Params) < 1 {
+func (req *RpcRequest) ToGetStorageAtArgs() (*GetStorageAtArgs, error) {
+	if len(req.Params) < 2 {
 		return nil, errArguments
 	}
 
-	args := new(GetStateArgs)
-	// TODO need to pass both arguments
-	r := bytes.NewReader(req.Params[0])
-	err := json.NewDecoder(r).Decode(args)
-	if err != nil {
+	args := new(GetStorageAtArgs)
+	var arg0, arg1 string
+
+	r0 := bytes.NewReader(req.Params[0])
+	if err := json.NewDecoder(r0).Decode(arg0); err != nil {
 		return nil, errDecodeArgs
 	}
+
+	r1 := bytes.NewReader(req.Params[1])
+	if err := json.NewDecoder(r1).Decode(arg1); err != nil {
+		return nil, errDecodeArgs
+	}
+
+	args.Address = arg0
+	args.Key = arg1
 
 	return args, nil
 }
 
-func (req *RpcRequest) ToStorageAtArgs() (*GetStorageArgs, error) {
+func (req *RpcRequest) ToStorageArgs() (*GetStorageArgs, error) {
 	if len(req.Params) < 1 {
 		return nil, errArguments
 	}

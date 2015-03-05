@@ -311,7 +311,7 @@ func (p *EthereumApi) PushTx(args *PushTxArgs, reply *interface{}) error {
 	return nil
 }
 
-func (p *EthereumApi) GetStateAt(args *GetStateArgs, reply *interface{}) error {
+func (p *EthereumApi) GetStorageAt(args *GetStorageAtArgs, reply *interface{}) error {
 	err := args.requirements()
 	if err != nil {
 		return err
@@ -333,7 +333,7 @@ func (p *EthereumApi) GetStateAt(args *GetStateArgs, reply *interface{}) error {
 	return nil
 }
 
-func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *interface{}) error {
+func (p *EthereumApi) GetStorage(args *GetStorageArgs, reply *interface{}) error {
 	err := args.requirements()
 	if err != nil {
 		return err
@@ -527,14 +527,14 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		return p.GetBalanceAt(args, reply)
 	case "eth_getStorage":
 		// TODO handle defaultBlock
-		args, err := req.ToGetStateArgs()
+		args, err := req.ToStorageArgs()
 		if err != nil {
 			return err
 		}
-		return p.GetStateAt(args, reply)
+		return p.GetStorage(args, reply)
 	case "eth_getStorageAt":
 		// TODO handle defaultBlock
-		args, err := req.ToStorageAtArgs()
+		args, err := req.ToGetStorageAtArgs()
 		if err != nil {
 			return err
 		}
