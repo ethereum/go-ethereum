@@ -33,7 +33,7 @@ var (
 	// timeout interval: max time allowed for peer without sending a block
 	blocksTimeout = 60 * time.Second
 	//
-	idleBestPeerTimeout = 60 * time.Second
+	idleBestPeerTimeout = 120 * time.Second
 )
 
 // config embedded in components, by default fall back to constants
@@ -568,6 +568,7 @@ func (self *BlockPool) AddBlock(block *types.Block, peerId string) {
 			// sender.currentBlockC <- block
 
 			self.status.lock.Lock()
+			self.status.values.BlockHashes++
 			self.status.values.Blocks++
 			self.status.values.BlocksInPool++
 			self.status.lock.Unlock()
