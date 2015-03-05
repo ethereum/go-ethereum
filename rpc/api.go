@@ -344,7 +344,8 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *interface{}) err
 }
 
 func (p *EthereumApi) GetPeerCount(reply *interface{}) error {
-	*reply = p.xeth().PeerCount()
+	c := p.xeth().PeerCount()
+	*reply = toHex(big.NewInt(int64(c)).Bytes())
 	return nil
 }
 
@@ -369,7 +370,7 @@ func (p *EthereumApi) GetIsMining(reply *interface{}) error {
 }
 
 func (p *EthereumApi) BlockNumber(reply *interface{}) error {
-	*reply = p.xeth().Backend().ChainManager().CurrentBlock().Number()
+	*reply = toHex(p.xeth().Backend().ChainManager().CurrentBlock().Number().Bytes())
 	return nil
 }
 
@@ -608,8 +609,6 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.NewFilterString(args, reply)
-	case "eth_newBlockFilter":
-		return errNotImplemented
 	case "eth_uninstallFilter":
 		args, err := req.ToUninstallFilterArgs()
 		if err != nil {
