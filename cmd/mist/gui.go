@@ -32,7 +32,6 @@ import (
 	"path"
 	"runtime"
 	"sort"
-	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -388,7 +387,7 @@ func (gui *Gui) update() {
 	statsUpdateTicker := time.NewTicker(5 * time.Second)
 
 	lastBlockLabel := gui.getObjectByName("lastBlockLabel")
-	miningLabel := gui.getObjectByName("miningLabel")
+	//miningLabel := gui.getObjectByName("miningLabel")
 
 	events := gui.eth.EventMux().Subscribe(
 		core.ChainEvent{},
