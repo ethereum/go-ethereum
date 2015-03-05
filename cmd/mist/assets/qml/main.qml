@@ -787,41 +787,26 @@ ApplicationWindow {
                  return comp
              }
 
-             ColumnLayout {
-                 id: menuColumn
-                 y: 10
-                 width: parent.width
-                 anchors.left: parent.left
-                 anchors.right: parent.right
-                 spacing: 3
+            /************************/
+            /*   Semafor Buttons    */
+            /************************/
 
-                /************************/
-                /*   Semafor Buttons    */
-                /************************/
+             Rectangle {
+                id: semaforButtons
+                color: "transparent"
+                height: 32
+                
+                anchors {
+                    top: parent.top
+                    left: parent.left
+                    right: parent.right
+                }
 
-                RowLayout {
-                    id: semaforButtons
-                    anchors {
-                        top: parent.top 
-                        left: parent.left
-                        right: parent.right
-                        leftMargin: 8
-                        bottomMargin: 8
-                        topMargin: 0
-                    }
-
-                    height: 37
-                    spacing: 6
-
-                    Rectangle {
-                        color: "transparent"
-                        anchors.fill: parent
-                    }
-
-                    Rectangle {
+                Rectangle {
                         color: 'transparent'
                         width: 13
                         height: 20
+                        x: 3
                         
                         Image {
                              height: 13
@@ -841,6 +826,7 @@ ApplicationWindow {
                         color: 'transparent'
                         width: 13
                         height: 20
+                        x: 21
                         
                         Image {
                              height: 13
@@ -861,7 +847,8 @@ ApplicationWindow {
                         color: 'transparent'
                         width: 13
                         height: 20
-                        
+                        x: 40
+
                         Image {
                              height: 13
                              width: 13
@@ -876,12 +863,21 @@ ApplicationWindow {
                             }
                          }  
                     }
-                                        
-                    
-                   
-                }
 
+
+             }
+
+             ColumnLayout {
+                id: menuColumn
+                y: 10
+                width: parent.width
+                anchors.left: parent.left
+                anchors.right: parent.right
+                spacing: 3
                 
+                Rectangle {
+                    height: 18.4
+                }
 
                 ColumnLayout {
                      id: menuBegin
