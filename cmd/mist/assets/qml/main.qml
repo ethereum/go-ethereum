@@ -13,7 +13,7 @@ import "../ext/http.js" as Http
 ApplicationWindow {
     id: root
     
-    flags: Qt.FramelessWindowHint | Qt.Window
+    flags: Qt.FramelessWindowHint
     //flags: Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowCloseButtonHint | Qt.WindowMinimizeButtonHint
     // Use this to make the window frameless. But then you'll need to do move and resize by hand
     color: "transparent"
@@ -372,6 +372,70 @@ ApplicationWindow {
                 }
             }
         }
+
+        MouseArea { 
+            id: bottomRightResizableHandle
+            anchors {
+                bottom: parent.bottom
+                right: parent.right
+            }
+            width: 5
+            height: 5
+            cursorShape: Qt.SizeFDiagCursor; 
+
+            property real lastMouseX: 0
+            property real lastMouseY: 0
+            onPressed: {
+                lastMouseX = mouseX
+                lastMouseY = mouseY
+            }
+            onPositionChanged: {
+                if (!(root.width + mouseX - lastMouseX < root.minimumWidth)) {
+                     root.width += (mouseX - lastMouseX)
+                }
+
+                if (!(root.height + mouseY - lastMouseY < root.minimumHeight)) {
+                     root.height += (mouseY - lastMouseY)
+                }
+            }
+        }
+
+        // Commenting this out because it's causing too many crashes
+        // MouseArea { 
+        //     id: bottomLeftResizableHandle
+        //     anchors {
+        //         bottom: parent.bottom
+        //         left: parent.left
+        //     }
+        //     width: 5
+        //     height: 5
+        //     cursorShape: Qt.SizeBDiagCursor; 
+
+        //     Rectangle {
+        //         anchors.fill: parent
+        //         color: "red"
+        //     }
+
+        //     property real lastMouseX: 0
+        //     property real lastMouseY: 0
+        //     property real lastRight: root.x + root.width
+
+        //     onPressed: {
+        //         lastMouseX = mouseX
+        //         lastMouseY = mouseY
+        //         lastRight = root.x + root.width                
+        //     }
+        //     onPositionChanged: {
+        //         if (!(root.width + mouseX - lastMouseX < root.minimumWidth)) {
+        //              root.width += (mouseX - lastMouseX)
+        //         }
+
+        //         if (!(root.height - mouseY + lastMouseY < root.minimumHeight)) {
+        //             root.height -= (mouseY - lastMouseY)
+        //             root.y = lastTop - root.height
+        //         }
+        //     }
+        // } 
     }
 
     SplitView {
@@ -847,7 +911,12 @@ ApplicationWindow {
                                 id: toolbarminimizeButton
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                onClicked: Qt.quit() //gui.stop();
+                                onClicked: {
+                                    console.log("Minimize");
+                                    // Neither works..
+                                    //root.visibility = QWindow.minimized;
+                                    // root.showMinimized();
+                                }
                             }
                          }  
                     }
@@ -868,8 +937,12 @@ ApplicationWindow {
                                 id: toolbarzoomButton
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                onClicked: Qt.quit() //gui.stop();
-                            }
+                                onClicked: {
+                                    console.log("Maximize");
+                                    // Neither works..
+                                    //root.visibility = QWindow.maximized;
+                                    //root.showMaximized();
+                                }                            }
                          }  
                     }
 
