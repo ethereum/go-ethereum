@@ -271,7 +271,7 @@ func TestLargeData(t *testing.T) {
 	trie := NewEmpty()
 	vals := make(map[string]*kv)
 
-	for i := byte(1); i < 255; i++ {
+	for i := byte(0); i < 255; i++ {
 		value := &kv{ethutil.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
 		value2 := &kv{ethutil.LeftPadBytes([]byte{10, i}, 32), []byte{i}, false}
 		trie.Update(value.k, value.v)
