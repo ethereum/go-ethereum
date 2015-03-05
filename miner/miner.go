@@ -61,7 +61,8 @@ func (self *Miner) HashRate() int64 {
 
 func (self *Miner) AddThreads(minerThreads int) int {
 	if minerThreads > 0 {
-		for i := 0; i < minerThreads; i++ {
+
+		for i := len(self.worker.agents); i < minerThreads+i; i++ {
 			self.worker.register(NewCpuMiner(i, self.pow))
 		}
 	}
