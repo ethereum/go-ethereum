@@ -2,4 +2,9 @@
 .DS_Store
 */**/*un~
 .vagrant/
-cpp-build/
+*.pyc
+build/
+pyethash.egg-info/
+*.so
+*~
+*.swp

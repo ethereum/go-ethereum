@@ -27,6 +27,7 @@ import (
 	"os/signal"
 	"regexp"
 
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -108,11 +109,18 @@ func InitConfig(vmType int, ConfigFile string, Datadir string, EnvPrefix string)
 func exit(err error) {
 	status := 0
 	if err != nil {
-		clilogger.Errorln("Fatal: ", err)
+		fmt.Fprintln(os.Stderr, "Fatal: ", err)
 		status = 1
 	}
 	logger.Flush()
 	os.Exit(status)
+}
+
+// Fatalf formats a message to standard output and exits the program.
+func Fatalf(format string, args ...interface{}) {
+	fmt.Fprintf(os.Stderr, "Fatal: "+format+"\n", args...)
+	logger.Flush()
+	os.Exit(1)
 }
 
 func StartEthereum(ethereum *eth.Ethereum) {
@@ -127,7 +135,6 @@ func StartEthereum(ethereum *eth.Ethereum) {
 }
 
 func KeyTasks(keyManager *crypto.KeyManager, KeyRing string, GenAddr bool, SecretFile string, ExportDir string, NonInteractive bool) {
-
 	var err error
 	switch {
 	case GenAddr:
@@ -200,24 +207,24 @@ func BlockDo(ethereum *eth.Ethereum, hash []byte) error {
 
 }
 
-func ImportChain(ethereum *eth.Ethereum, fn string) error {
-	clilogger.Infof("importing chain '%s'\n", fn)
+func ImportChain(chain *core.ChainManager, fn string) error {
+	fmt.Printf("importing chain '%s'\n", fn)
 	fh, err := os.OpenFile(fn, os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		return err
 	}
 	defer fh.Close()
 
-	var chain types.Blocks
-	if err := rlp.Decode(fh, &chain); err != nil {
+	var blocks types.Blocks
+	if err := rlp.Decode(fh, &blocks); err != nil {
 		return err
 	}
 
-	ethereum.ChainManager().Reset()
-	if err := ethereum.ChainManager().InsertChain(chain); err != nil {
+	chain.Reset()
+	if err := chain.InsertChain(blocks); err != nil {
 		return err
 	}
-	clilogger.Infof("imported %d blocks\n", len(chain))
+	fmt.Printf("imported %d blocks\n", len(blocks))
 
 	return nil
 }

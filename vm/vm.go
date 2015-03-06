@@ -30,10 +30,7 @@ type Vm struct {
 
 func New(env Environment) *Vm {
 	lt := LogTyPretty
-	if ethutil.Config.Diff {
-		lt = LogTyDiff
-	}
-
+	// lt = LogTyDiff
 	return &Vm{debug: true, env: env, logTy: lt, Recoverable: true}
 }
 
