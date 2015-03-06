@@ -98,10 +98,6 @@
 			"Rev": "4ed45ec682102c643324fae5dff8dab085b6c300"
 		},
 		{
-			"ImportPath": "golang.org/x/net/websocket",
-			"Rev": "59b0df9b1f7abda5aab0495ee54f408daf182ce7"
-		},
-		{
 			"ImportPath": "gopkg.in/check.v1",
 			"Rev": "64131543e7896d5bcc6bd5a76287eb75ea96c673"
 		},
