@@ -1067,7 +1067,6 @@ ApplicationWindow {
                         right: parent.right
                     }
                     height: 37
-                    color: "transparent"
                     z: 100
 
                     MouseArea {
@@ -1083,6 +1082,11 @@ ApplicationWindow {
                             root.y += (mouseY - lastMouseY)
                         }
                     }
+
+                    gradient: Gradient {
+                         GradientStop { position: 0.0; color: "#FFFFFFFF" }
+                         GradientStop { position: 1.0; color: "#00FFFFFF" }
+                     }
                 }
 
               Rectangle {
