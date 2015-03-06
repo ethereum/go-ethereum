@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
-	"github.com/ethereum/go-ethereum/cmd/ethereum/repl"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
@@ -145,9 +144,9 @@ func runjs(ctx *cli.Context) {
 	eth := utils.GetEthereum(ClientIdentifier, Version, ctx)
 	startEth(ctx, eth)
 	if len(ctx.Args()) == 0 {
-		repl := ethrepl.NewJSRepl(eth)
-		repl.Start()
+		repl := newREPL(eth)
 		utils.RegisterInterrupt(func(os.Signal) { repl.Stop() })
+		repl.Start()
 		eth.WaitForShutdown()
 	} else if len(ctx.Args()) == 1 {
 		execJsFile(eth, ctx.Args()[0])
