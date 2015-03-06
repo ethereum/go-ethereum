@@ -75,7 +75,8 @@ func CalcGasLimit(parent, block *types.Block) *big.Int {
 
 type ChainManager struct {
 	//eth          EthManager
-	db           ethutil.Database
+	blockDb      ethutil.Database
+	stateDb      ethutil.Database
 	processor    types.BlockProcessor
 	eventMux     *event.TypeMux
 	genesisBlock *types.Block
@@ -92,8 +93,8 @@ type ChainManager struct {
 	quit chan struct{}
 }
 
-func NewChainManager(db ethutil.Database, mux *event.TypeMux) *ChainManager {
-	bc := &ChainManager{db: db, genesisBlock: GenesisBlock(db), eventMux: mux, quit: make(chan struct{})}
+func NewChainManager(blockDb, stateDb ethutil.Database, mux *event.TypeMux) *ChainManager {
+	bc := &ChainManager{blockDb: blockDb, stateDb: stateDb, genesisBlock: GenesisBlock(stateDb), eventMux: mux, quit: make(chan struct{})}
 	bc.setLastBlock()
 	bc.transState = bc.State().Copy()
 	bc.txState = bc.State().Copy()
@@ -135,7 +136,7 @@ func (self *ChainManager) SetProcessor(proc types.BlockProcessor) {
 }
 
 func (self *ChainManager) State() *state.StateDB {
-	return state.New(self.CurrentBlock().Root(), self.db)
+	return state.New(self.CurrentBlock().Root(), self.stateDb)
 }
 
 func (self *ChainManager) TransState() *state.StateDB {
@@ -163,7 +164,7 @@ func (self *ChainManager) setTransState(statedb *state.StateDB) {
 }
 
 func (bc *ChainManager) setLastBlock() {
-	data, _ := bc.db.Get([]byte("LastBlock"))
+	data, _ := bc.blockDb.Get([]byte("LastBlock"))
 	if len(data) != 0 {
 		var block types.Block
 		rlp.Decode(bytes.NewReader(data), &block)
@@ -171,7 +172,7 @@ func (bc *ChainManager) setLastBlock() {
 		bc.lastBlockHash = block.Hash()
 
 		// Set the last know difficulty (might be 0x0 as initial value, Genesis)
-		bc.td = ethutil.BigD(bc.db.LastKnownTD())
+		bc.td = ethutil.BigD(bc.blockDb.LastKnownTD())
 	} else {
 		bc.Reset()
 	}
@@ -220,7 +221,7 @@ func (bc *ChainManager) Reset() {
 	defer bc.mu.Unlock()
 
 	for block := bc.currentBlock; block != nil; block = bc.GetBlock(block.Header().ParentHash) {
-		bc.db.Delete(block.Hash())
+		bc.blockDb.Delete(block.Hash())
 	}
 
 	// Prepare the genesis block
@@ -236,7 +237,7 @@ func (bc *ChainManager) ResetWithGenesisBlock(gb *types.Block) {
 	defer bc.mu.Unlock()
 
 	for block := bc.currentBlock; block != nil; block = bc.GetBlock(block.Header().ParentHash) {
-		bc.db.Delete(block.Hash())
+		bc.blockDb.Delete(block.Hash())
 	}
 
 	// Prepare the genesis block
@@ -262,14 +263,14 @@ func (self *ChainManager) Export() []byte {
 
 func (bc *ChainManager) insert(block *types.Block) {
 	encodedBlock := ethutil.Encode(block)
-	bc.db.Put([]byte("LastBlock"), encodedBlock)
+	bc.blockDb.Put([]byte("LastBlock"), encodedBlock)
 	bc.currentBlock = block
 	bc.lastBlockHash = block.Hash()
 }
 
 func (bc *ChainManager) write(block *types.Block) {
 	encodedBlock := ethutil.Encode(block.RlpDataForStorage())
-	bc.db.Put(block.Hash(), encodedBlock)
+	bc.blockDb.Put(block.Hash(), encodedBlock)
 }
 
 // Accessors
@@ -279,7 +280,7 @@ func (bc *ChainManager) Genesis() *types.Block {
 
 // Block fetching methods
 func (bc *ChainManager) HasBlock(hash []byte) bool {
-	data, _ := bc.db.Get(hash)
+	data, _ := bc.blockDb.Get(hash)
 	return len(data) != 0
 }
 
@@ -307,7 +308,7 @@ func (self *ChainManager) GetBlockHashesFromHash(hash []byte, max uint64) (chain
 }
 
 func (self *ChainManager) GetBlock(hash []byte) *types.Block {
-	data, _ := self.db.Get(hash)
+	data, _ := self.blockDb.Get(hash)
 	if len(data) == 0 {
 		return nil
 	}
@@ -361,7 +362,7 @@ func (self *ChainManager) GetBlockByNumber(num uint64) *types.Block {
 }
 
 func (bc *ChainManager) setTotalDifficulty(td *big.Int) {
-	bc.db.Put([]byte("LTD"), td.Bytes())
+	bc.blockDb.Put([]byte("LTD"), td.Bytes())
 	bc.td = td
 }
 
@@ -448,7 +449,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 					})
 				*/
 
-				self.setTransState(state.New(block.Root(), self.db))
+				self.setTransState(state.New(block.Root(), self.stateDb))
 				queue[i] = ChainEvent{block}
 				queueEvent.canonicalCount++
 			} else {
@@ -487,7 +488,7 @@ out:
 						// On chain splits we need to reset the transaction state. We can't be sure whether the actual
 						// state of the accounts are still valid.
 						if i == ev.splitCount {
-							self.setTxState(state.New(event.Block.Root(), self.db))
+							self.setTxState(state.New(event.Block.Root(), self.stateDb))
 						}
 					}
 

@@ -197,7 +197,7 @@ func BlockDo(ethereum *eth.Ethereum, hash []byte) error {
 
 	parent := ethereum.ChainManager().GetBlock(block.ParentHash())
 
-	statedb := state.New(parent.Root(), ethereum.Db())
+	statedb := state.New(parent.Root(), ethereum.StateDb())
 	_, err := ethereum.BlockProcessor().TransitionState(statedb, parent, block, true)
 	if err != nil {
 		return err

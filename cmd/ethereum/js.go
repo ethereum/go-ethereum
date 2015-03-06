@@ -229,7 +229,7 @@ func (self *repl) dump(call otto.FunctionCall) otto.Value {
 		block = self.ethereum.ChainManager().CurrentBlock()
 	}
 
-	statedb := state.New(block.Root(), self.ethereum.Db())
+	statedb := state.New(block.Root(), self.ethereum.StateDb())
 
 	v, _ := self.re.Vm.ToValue(statedb.RawDump())
 

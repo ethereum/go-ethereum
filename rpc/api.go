@@ -83,7 +83,7 @@ func (self *EthereumApi) setStateByBlockNumber(num int64) {
 	block = chain.GetBlockByNumber(uint64(num))
 
 	if block != nil {
-		self.useState(state.New(block.Root(), self.xeth().Backend().Db()))
+		self.useState(state.New(block.Root(), self.xeth().Backend().StateDb()))
 	} else {
 		self.useState(chain.State())
 	}

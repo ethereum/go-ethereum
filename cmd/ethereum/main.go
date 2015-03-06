@@ -171,7 +171,7 @@ func importchain(ctx *cli.Context) {
 	if len(ctx.Args()) != 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	chain, _ := utils.GetChain(ctx)
+	chain, _, _ := utils.GetChain(ctx)
 	start := time.Now()
 	err := utils.ImportChain(chain, ctx.Args().First())
 	if err != nil {
@@ -182,7 +182,7 @@ func importchain(ctx *cli.Context) {
 }
 
 func dump(ctx *cli.Context) {
-	chain, db := utils.GetChain(ctx)
+	chain, _, stateDb := utils.GetChain(ctx)
 	for _, arg := range ctx.Args() {
 		var block *types.Block
 		if hashish(arg) {
@@ -195,7 +195,7 @@ func dump(ctx *cli.Context) {
 			fmt.Println("{}")
 			utils.Fatalf("block not found")
 		} else {
-			statedb := state.New(block.Root(), db)
+			statedb := state.New(block.Root(), stateDb)
 			fmt.Printf("%s\n", statedb.Dump())
 			// fmt.Println(block)
 		}

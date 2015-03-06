@@ -175,11 +175,16 @@ func GetEthereum(clientID, version string, ctx *cli.Context) *eth.Ethereum {
 	return ethereum
 }
 
-func GetChain(ctx *cli.Context) (*core.ChainManager, ethutil.Database) {
+func GetChain(ctx *cli.Context) (*core.ChainManager, ethutil.Database, ethutil.Database) {
 	dataDir := ctx.GlobalString(DataDirFlag.Name)
-	db, err := ethdb.NewLDBDatabase(path.Join(dataDir, "blockchain"))
+	blockDb, err := ethdb.NewLDBDatabase(path.Join(dataDir, "blockchain"))
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
-	return core.NewChainManager(db, new(event.TypeMux)), db
+
+	stateDb, err := ethdb.NewLDBDatabase(path.Join(dataDir, "state"))
+	if err != nil {
+		Fatalf("Could not open database: %v", err)
+	}
+	return core.NewChainManager(blockDb, stateDb, new(event.TypeMux)), blockDb, stateDb
 }

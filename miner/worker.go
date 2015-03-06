@@ -30,7 +30,7 @@ type environment struct {
 }
 
 func env(block *types.Block, eth core.Backend) *environment {
-	state := state.New(block.Root(), eth.Db())
+	state := state.New(block.Root(), eth.StateDb())
 	env := &environment{
 		totalUsedGas: new(big.Int),
 		state:        state,
