@@ -1,66 +1,62 @@
 package natspec
 
 import (
-	// "encoding/json"
-	// "fmt"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/javascript"
+	"github.com/obscuren/otto"
 	"io/ioutil"
 )
 
 type NatSpec struct {
-	jsre *javascript.JSRE
+	jsvm *otto.Otto
 }
 
-func NewNATSpec(ethereum *eth.Ethereum, transaction string) (self *NatSpec, err error) {
+func NewNATSpec(transaction string) (self *NatSpec, err error) {
 
 	self = new(NatSpec)
-	self.jsre = javascript.NewJSRE(ethereum)
-	//self.jsre.LoadExtFile("/home/fefe/go-ethereum/ethutil/natspec/natspec.js")
+	self.jsvm = otto.New()
 	code, err := ioutil.ReadFile("natspec.js")
 	if err != nil {
 		return
 	}
 
-	_, err = self.jsre.Run(string(code))
+	_, err = self.jsvm.Run(string(code))
 	if err != nil {
 		return
 	}
-	_, err = self.jsre.Run("var natspec = require('natspec');")
+	_, err = self.jsvm.Run("var natspec = require('natspec');")
 	if err != nil {
 		return
 	}
 
-	self.jsre.Run("var transaction = " + transaction + ";")
+	self.jsvm.Run("var transaction = " + transaction + ";")
 
 	return
 }
 
 func (self *NatSpec) SetDescription(desc string) (err error) {
 
-	_, err = self.jsre.Run("var expression = \"" + desc + "\";")
+	_, err = self.jsvm.Run("var expression = \"" + desc + "\";")
 	return
 
 }
 
 func (self *NatSpec) SetABI(abi string) (err error) {
 
-	_, err = self.jsre.Run("var abi = " + abi + ";")
+	_, err = self.jsvm.Run("var abi = " + abi + ";")
 	return
 
 }
 
 func (self *NatSpec) SetMethod(method string) (err error) {
 
-	_, err = self.jsre.Run("var method = '" + method + "';")
+	_, err = self.jsvm.Run("var method = '" + method + "';")
 	return
 
 }
 
 func (self *NatSpec) Parse() string {
 
-	self.jsre.Run("var call = {method: method,abi: abi,transaction: transaction};")
-	value, err := self.jsre.Run("natspec.evaluateExpression(expression, call);")
+	self.jsvm.Run("var call = {method: method,abi: abi,transaction: transaction};")
+	value, err := self.jsvm.Run("natspec.evaluateExpression(expression, call);")
 	if err != nil {
 		return err.Error()
 	}

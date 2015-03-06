@@ -1824,10 +1824,6 @@ module.exports = {
 
 
         // Handle values that fail the validity test in BigNumber.
-		
-		// Zsolt Felfoldi 15/03/06
-		// modified regexps in order to compile with go JSRE  
-		
         parseNumeric = (function () {
 //            var basePrefix = /^(-?)0([xbo])(?=\w[\w.]*$)/i,
             var basePrefix = /^(-?)0([xbo])/i,
@@ -1838,7 +1834,6 @@ module.exports = {
                 whitespaceOrPlus = /^\s*\+[\w.]|^\s+|\s+$/g;
 
             return function ( x, str, num, b ) {
-				
                 var base,
                     s = num ? str : str.replace( whitespaceOrPlus, '' );
 
@@ -3387,7 +3382,6 @@ module.exports = {
 })(this);
 
 },{"crypto":1}],"natspec":[function(require,module,exports){
-(function (global){
 /*
     This file is part of natspec.js.
 
@@ -3418,31 +3412,18 @@ var abi = require('./node_modules/ethereum.js/lib/abi.js');
  */
 var natspec = (function () {
     /// Helper method
-    /// Modifications by Zsolt Felfoldi, 15/03/06
-	///  eval() under go JSRE is unable to reach variables that
-	///  are added to the global context runtime, so now we
-	///  create a variable assignment code for each param
-	///  and run in an isolated function(context)
-	///  variable assignment code is returned by copyToContext
-	
+    /// Should be called to copy values from object to global context
     var copyToContext = function (obj, context) {
-		var code = "";
-        var keys = Object.keys(obj);
-        keys.forEach(function (key) {
+        Object.keys(obj).forEach(function (key) {
             context[key] = obj[key];
-			code = code + "var "+key+" = context['"+key+"'];\n";
         });
-		return code;
     }
-
-    /// this function will not be used in 'production' natspec evaluation
-    /// it's only used to enable tests in node environment
-    /// it copies all functions from current context to nodejs global context
-    var copyToNodeGlobal = function (obj) {
-        if (typeof global === 'undefined') {
-            return;
-        }
-        copyToContext(obj, global);
+    
+    /// generate codes, which will be evaluated
+    var generateCode = function (obj) {
+        return Object.keys(obj).reduce(function (acc, key) {
+            return acc + "var " + key + " = context['" + key + "'];\n";
+        }, "");
     };
 
     /// Helper method
@@ -3455,52 +3436,20 @@ var natspec = (function () {
         })[0];
     };
 
-    /// Function called to get all contract's storage values
-    /// @returns hashmap with contract properties which are used
-    /// TODO: check if this function will be used
-    var getContractProperties = function (address, abi) {
-        return {};
-    };
-
     /// Function called to get all contract method input variables
     /// @returns hashmap with all contract's method input variables
     var getMethodInputParams = function (method, transaction) {
         // do it with output formatter (cause we have to decode)
-
         var params = abi.formatOutput(method.inputs, '0x' + transaction.params[0].data.slice(10)); 
-		
+
         return method.inputs.reduce(function (acc, current, index) {
             acc[current.name] = params[index];
             return acc;
         }, {});
-		
     };
     
-    /// Should be called to evaluate single expression
-    /// Is internally using javascript's 'eval' method
-    /// @param expression which should be evaluated
-    /// @param [call] object containing contract abi, transaction, called method
-    /// TODO: separate evaluation from getting input params, so as not to spoil 'evaluateExpression' function
-    var evaluateExpression = function (expression, call) {
-
-        var self = this;
-		var code = "";
-		var context = [];
-        
-        if (!!call) {
-            try {
-                var method = getMethodWithName(call.abi, call.method);
-                var params = getMethodInputParams(method, call.transaction); 
-				code = copyToContext(params, context);  // see copyToContext comments
-            }
-            catch (err) {
-                return "Natspec evaluation failed, wrong input params";
-            }
-        }
-
-        // used only for tests
-        copyToNodeGlobal(context);
-
+    /// Should be called to evaluate expression
+    var mapExpressionsToEvaluate = function (expression, cb) {
         var evaluatedExpression = "";
 
         // match everything in `` quotes
@@ -3509,27 +3458,50 @@ var natspec = (function () {
         var lastIndex = 0;
         while ((match = pattern.exec(expression)) !== null) {
             var startIndex = pattern.lastIndex - match[0].length;
-
             var toEval = match[0].slice(1, match[0].length - 1);
-
             evaluatedExpression += expression.slice(lastIndex, startIndex);
-
-            var evaluatedPart;
-            try {
-				var fn = new Function("context", code + "return "+toEval+";");
-             	evaluatedPart = fn(context).toString();   // see copyToContext comments
-//             	evaluatedPart = eval(toEval).toString(); 
-            }
-            catch (err) {
-                evaluatedPart = 'undefined'; 
-            }
-
+            var evaluatedPart = cb(toEval);
             evaluatedExpression += evaluatedPart;
             lastIndex = pattern.lastIndex;
         }
-
-        evaluatedExpression += expression.slice(lastIndex);
         
+        evaluatedExpression += expression.slice(lastIndex);
+    
+        return evaluatedExpression;
+    };
+
+    /// Should be called to evaluate single expression
+    /// Is internally using javascript's 'eval' method
+    /// @param expression which should be evaluated
+    /// @param [call] object containing contract abi, transaction, called method
+    /// TODO: separate evaluation from getting input params, so as not to spoil 'evaluateExpression' function
+    var evaluateExpression = function (expression, call) {
+        //var self = this;
+        var context = {};
+        
+        if (!!call) {
+            try {
+                var method = getMethodWithName(call.abi, call.method);
+                var params = getMethodInputParams(method, call.transaction); 
+                copyToContext(params, context);
+            }
+            catch (err) {
+                return "Natspec evaluation failed, wrong input params";
+            }
+        }
+
+        var code = generateCode(context);
+
+        var evaluatedExpression = mapExpressionsToEvaluate(expression, function (toEval) {
+            try {
+                var fn = new Function("context", code + "return " + toEval + ";");
+                return fn(context).toString();
+            }
+            catch (err) {
+                return 'undefined'; 
+            }
+        });
+
         return evaluatedExpression;
     };
 
@@ -3542,5 +3514,4 @@ var natspec = (function () {
 module.exports = natspec; 
 
 
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"./node_modules/ethereum.js/lib/abi.js":3}]},{},[]);
