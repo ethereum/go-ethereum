@@ -1,4 +1,10 @@
 set(LIBRARY ethash)
+
+if (CPPETHEREUM)
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
+#else ()
+endif ()
+
 set(CMAKE_BUILD_TYPE Release)
 
 if (NOT MSVC)

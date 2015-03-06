@@ -4,7 +4,7 @@ ENDIF()
 
 IF( Boost_FOUND )
     include_directories( ${Boost_INCLUDE_DIR} )
-    include_directories(..)
+    include_directories(../../src)
 
     link_directories ( ${Boost_LIBRARY_DIRS} )
     file(GLOB HEADERS "*.h")

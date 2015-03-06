@@ -13,7 +13,6 @@
 #define BOOST_TEST_MAIN
 
 #include <boost/test/unit_test.hpp>
-#include <libethash/ethash.h>
 #include <iostream>
 
 std::string bytesToHexString(const uint8_t *str, const size_t s) {
@@ -88,24 +87,6 @@ BOOST_AUTO_TEST_CASE(ethash_params_init_genesis_calcifide_check) {
     BOOST_REQUIRE_MESSAGE(params.cache_size  == expected_cache_size,
             "\nexpected: " << expected_cache_size << "\n"
                     << "actual: " << params.cache_size << "\n");
-}
-
-BOOST_AUTO_TEST_CASE(ethash_params_init_check) {
-    ethash_params params;
-    ethash_params_init(&params, 1971000);
-    const uint64_t nine_month_size = (uint64_t) 8*DAGSIZE_BYTES_INIT;
-    BOOST_REQUIRE_MESSAGE(params.full_size  < nine_month_size,
-            "\nfull size: " << params.full_size << "\n"
-                    << "should be less than or equal to: " << nine_month_size << "\n");
-    BOOST_REQUIRE_MESSAGE(params.full_size + DAGSIZE_BYTES_INIT / 4 > nine_month_size,
-            "\nfull size + DAGSIZE_BYTES_INIT / 4: " << params.full_size + DAGSIZE_BYTES_INIT / 4 << "\n"
-                    << "should be greater than or equal to: " << nine_month_size << "\n");
-    BOOST_REQUIRE_MESSAGE(params.cache_size < nine_month_size / 1024,
-            "\nactual cache size: " << params.cache_size << "\n"
-                    << "expected: " << nine_month_size / 1024 << "\n");
-    BOOST_REQUIRE_MESSAGE(params.cache_size + DAGSIZE_BYTES_INIT / 4 / 1024 > nine_month_size / 1024 ,
-            "\ncache size + DAGSIZE_BYTES_INIT / 4 / 1024: " << params.cache_size + DAGSIZE_BYTES_INIT / 4 / 1024 << "\n"
-                    << "actual: " << nine_month_size / 32 << "\n");
 }
 
 BOOST_AUTO_TEST_CASE(light_and_full_client_checks) {
