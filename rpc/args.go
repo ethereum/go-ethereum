@@ -47,7 +47,7 @@ func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 	if len(obj) < 1 {
 		return errArguments
 	}
-	args.BlockNumber = ethutil.BytesToNumber(fromHex(obj[0].(string)))
+	args.BlockNumber = uint64(ethutil.Big(obj[0].(string)).Int64())
 
 	if len(obj) > 1 {
 		args.Transactions = obj[1].(bool)
@@ -110,7 +110,7 @@ func (args *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Address = obj[0].(string)
 
 	if len(obj) > 1 {
-		args.BlockNumber = ethutil.BytesToNumber(fromHex(obj[1].(string)))
+		args.BlockNumber = uint64(ethutil.Big(obj[1].(string)).Int64())
 	}
 
 	return nil
@@ -179,7 +179,7 @@ func (args *GetTxCountArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Address = obj[0].(string)
 
 	if len(obj) > 1 {
-		args.BlockNumber = ethutil.BytesToNumber(fromHex(obj[1].(string)))
+		args.BlockNumber = uint64(ethutil.Big(obj[1].(string)).Int64())
 	}
 
 	return nil
@@ -210,7 +210,7 @@ func (args *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Address = obj[0].(string)
 
 	if len(obj) > 1 {
-		args.BlockNumber = ethutil.BytesToNumber(fromHex(obj[1].(string)))
+		args.BlockNumber = uint64(ethutil.Big(obj[1].(string)).Int64())
 	}
 
 	return nil
@@ -241,7 +241,7 @@ func (args *GetDataArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Address = obj[0].(string)
 
 	if len(obj) > 1 {
-		args.BlockNumber = ethutil.BytesToNumber(fromHex(obj[1].(string)))
+		args.BlockNumber = uint64(ethutil.Big(obj[1].(string)).Int64())
 	}
 
 	return nil
@@ -299,10 +299,10 @@ func (args *FilterArgs) UnmarshalJSON(b []byte) (err error) {
 	if len(obj) < 1 {
 		return errArguments
 	}
-	args.FromBlock = ethutil.BytesToNumber(fromHex(obj[0].FromBlock))
-	args.ToBlock = ethutil.BytesToNumber(fromHex(obj[0].ToBlock))
-	args.Limit = ethutil.BytesToNumber(fromHex(obj[0].Limit))
-	args.Offset = ethutil.BytesToNumber(fromHex(obj[0].Offset))
+	args.FromBlock = uint64(ethutil.Big(obj[0].FromBlock).Int64())
+	args.ToBlock = uint64(ethutil.Big(obj[0].ToBlock).Int64())
+	args.Limit = uint64(ethutil.Big(obj[0].Limit).Int64())
+	args.Offset = uint64(ethutil.Big(obj[0].Offset).Int64())
 	args.Address = obj[0].Address
 	args.Topics = obj[0].Topics
 
@@ -335,10 +335,10 @@ func (args *FilterOptions) UnmarshalJSON(b []byte) (err error) {
 	if len(obj) < 1 {
 		return errArguments
 	}
-	args.Earliest = int64(ethutil.BytesToNumber(fromHex(obj[0].FromBlock)))
-	args.Latest = int64(ethutil.BytesToNumber(fromHex(obj[0].ToBlock)))
-	args.Max = int(ethutil.BytesToNumber(fromHex(obj[0].Limit)))
-	args.Skip = int(ethutil.BytesToNumber(fromHex(obj[0].Offset)))
+	args.Earliest = int64(ethutil.Big(obj[0].FromBlock).Int64())
+	args.Latest = int64(ethutil.Big(obj[0].ToBlock).Int64())
+	args.Max = int(ethutil.Big(obj[0].Limit).Int64())
+	args.Skip = int(ethutil.Big(obj[0].Offset).Int64())
 	args.Address = obj[0].Address
 	args.Topic = obj[0].Topics
 
