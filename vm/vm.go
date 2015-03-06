@@ -30,8 +30,8 @@ type Vm struct {
 
 func New(env Environment) *Vm {
 	lt := LogTyPretty
-	// lt = LogTyDiff
-	return &Vm{debug: true, env: env, logTy: lt, Recoverable: true}
+
+	return &Vm{debug: Debug, env: env, logTy: lt, Recoverable: true}
 }
 
 func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {

@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/vm"
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
@@ -43,6 +44,7 @@ type Config struct {
 	LogLevel  int
 	KeyRing   string
 	LogFormat string
+	VmDebug   bool
 
 	MaxPeers int
 	Port     string
@@ -211,6 +213,8 @@ func New(config *Config) (*Ethereum, error) {
 	if len(config.Port) > 0 {
 		eth.net.ListenAddr = ":" + config.Port
 	}
+
+	vm.Debug = config.VmDebug
 
 	return eth, nil
 }

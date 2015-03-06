@@ -108,7 +108,8 @@ runtime will execute the file and exit.
 		utils.RPCEnabledFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
-		utils.VMTypeFlag,
+		utils.VMDebugFlag,
+		//utils.VMTypeFlag,
 	}
 
 	// missing:

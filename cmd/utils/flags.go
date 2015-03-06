@@ -26,9 +26,15 @@ import (
 
 var (
 	// General settings
-	VMTypeFlag = cli.IntFlag{
-		Name:  "vm",
-		Usage: "Virtual Machine type: 0 is standard VM, 1 is debug VM",
+	/*
+		VMTypeFlag = cli.IntFlag{
+			Name:  "vm",
+			Usage: "Virtual Machine type: 0 is standard VM, 1 is debug VM",
+		}
+	*/
+	VMDebugFlag = cli.BoolFlag{
+		Name:  "vmdebug",
+		Usage: "Virtual Machine debug output",
 	}
 	KeyRingFlag = cli.StringFlag{
 		Name:  "keyring",
@@ -152,6 +158,7 @@ func GetEthereum(clientID, version string, ctx *cli.Context) *eth.Ethereum {
 		LogLevel:     ctx.GlobalInt(LogLevelFlag.Name),
 		LogFormat:    ctx.GlobalString(LogFormatFlag.Name),
 		MinerThreads: ctx.GlobalInt(MinerThreadsFlag.Name),
+		VmDebug:      ctx.GlobalBool(VMDebugFlag.Name),
 
 		MaxPeers:  ctx.GlobalInt(MaxPeersFlag.Name),
 		Port:      ctx.GlobalString(ListenPortFlag.Name),
