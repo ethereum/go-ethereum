@@ -257,9 +257,9 @@ func TestChainInsertions(t *testing.T) {
 	}
 
 	var eventMux event.TypeMux
-	chainMan := NewChainManager(db, &eventMux)
+	chainMan := NewChainManager(db, db, &eventMux)
 	txPool := NewTxPool(&eventMux)
-	blockMan := NewBlockProcessor(db, txPool, chainMan, &eventMux)
+	blockMan := NewBlockProcessor(db, nil, txPool, chainMan, &eventMux)
 	chainMan.SetProcessor(blockMan)
 
 	const max = 2
@@ -303,9 +303,9 @@ func TestChainMultipleInsertions(t *testing.T) {
 		}
 	}
 	var eventMux event.TypeMux
-	chainMan := NewChainManager(db, &eventMux)
+	chainMan := NewChainManager(db, db, &eventMux)
 	txPool := NewTxPool(&eventMux)
-	blockMan := NewBlockProcessor(db, txPool, chainMan, &eventMux)
+	blockMan := NewBlockProcessor(db, nil, txPool, chainMan, &eventMux)
 	chainMan.SetProcessor(blockMan)
 	done := make(chan bool, max)
 	for i, chain := range chains {
@@ -332,7 +332,7 @@ func TestGetAncestors(t *testing.T) {
 
 	db, _ := ethdb.NewMemDatabase()
 	var eventMux event.TypeMux
-	chainMan := NewChainManager(db, &eventMux)
+	chainMan := NewChainManager(db, db, &eventMux)
 	chain, err := loadChain("valid1", t)
 	if err != nil {
 		fmt.Println(err)
