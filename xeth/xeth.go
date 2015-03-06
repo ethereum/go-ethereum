@@ -86,21 +86,17 @@ func (self *XEth) BlockByHash(strHash string) *Block {
 	return NewBlock(block)
 }
 
-func (self *XEth) BlockByNumber(num int32) *Block {
-	if num == -1 {
-		return NewBlock(self.chainManager.CurrentBlock())
-	}
-
-	return NewBlock(self.chainManager.GetBlockByNumber(uint64(num)))
+func (self *XEth) BlockByNumber(num uint64) *Block {
+	return NewBlock(self.chainManager.GetBlockByNumber(num))
 }
 
 func (self *XEth) Block(v interface{}) *Block {
 	if n, ok := v.(int32); ok {
-		return self.BlockByNumber(n)
+		return self.BlockByNumber(uint64(n))
 	} else if str, ok := v.(string); ok {
 		return self.BlockByHash(str)
 	} else if f, ok := v.(float64); ok { // Don't ask ...
-		return self.BlockByNumber(int32(f))
+		return self.BlockByNumber(uint64(f))
 	}
 
 	return nil
