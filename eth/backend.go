@@ -130,13 +130,15 @@ type Ethereum struct {
 
 	logger logger.LogSystem
 
-	Mining bool
+	Mining  bool
+	DataDir string
 }
 
 func New(config *Config) (*Ethereum, error) {
 	// Boostrap database
 	ethlogger := logger.New(config.DataDir, config.LogFile, config.LogLevel, config.LogFormat)
-	db, err := ethdb.NewLDBDatabase("blockchain")
+
+	db, err := ethdb.NewLDBDatabase(path.Join(config.DataDir, "blockchain"))
 	if err != nil {
 		return nil, err
 	}
@@ -171,6 +173,7 @@ func New(config *Config) (*Ethereum, error) {
 		keyManager:   keyManager,
 		eventMux:     &event.TypeMux{},
 		logger:       ethlogger,
+		DataDir:      config.DataDir,
 	}
 
 	eth.chainManager = core.NewChainManager(db, eth.EventMux())
