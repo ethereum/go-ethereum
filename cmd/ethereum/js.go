@@ -21,20 +21,23 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
-func ExecJsFile(ethereum *eth.Ethereum, InputFile string) {
-	file, err := os.Open(InputFile)
+func execJsFile(ethereum *eth.Ethereum, filename string) {
+	file, err := os.Open(filename)
 	if err != nil {
-		clilogger.Fatalln(err)
+		utils.Fatalf("%v", err)
 	}
 	content, err := ioutil.ReadAll(file)
 	if err != nil {
-		clilogger.Fatalln(err)
+		utils.Fatalf("%v", err)
 	}
 	re := javascript.NewJSRE(xeth.New(ethereum))
-	re.Run(string(content))
+	if _, err := re.Run(string(content)); err != nil {
+		utils.Fatalf("Javascript Error: %v", err)
+	}
 }
