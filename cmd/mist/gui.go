@@ -100,7 +100,7 @@ func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, session st
 		plugins:       make(map[string]plugin),
 		serviceEvents: make(chan ServEv, 1),
 	}
-	data, _ := ethutil.ReadAllFile(path.Join(ethutil.Config.ExecPath, "plugins.json"))
+	data, _ := ethutil.ReadAllFile(path.Join(ethereum.DataDir, "plugins.json"))
 	json.Unmarshal([]byte(data), &gui.plugins)
 
 	return gui
