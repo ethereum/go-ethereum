@@ -55,6 +55,10 @@
 			"Rev": "c288002b52e905973b131089a8a7c761d4a2c36a"
 		},
 		{
+			"ImportPath": "github.com/peterh/liner",
+			"Rev": "29f6a646557d83e2b6e9ba05c45fbea9c006dbe8"
+		},
+		{
 			"ImportPath": "github.com/rakyll/globalconf",
 			"Rev": "415abc325023f1a00cd2d9fa512e0e71745791a2"
 		},
