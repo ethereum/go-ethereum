@@ -3,6 +3,7 @@ package miner
 import (
 	"math/big"
 
+	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
@@ -29,7 +30,6 @@ func New(coinbase []byte, eth core.Backend, pow pow.PoW, minerThreads int) *Mine
 		pow:      pow,
 	}
 
-	minerThreads = 1
 	for i := 0; i < minerThreads; i++ {
 		miner.worker.register(NewCpuMiner(i, miner.pow))
 	}
@@ -44,6 +44,8 @@ func (self *Miner) Mining() bool {
 func (self *Miner) Start() {
 	self.mining = true
 
+	self.pow.(*ethash.Ethash).UpdateDAG()
+
 	self.worker.start()
 
 	self.worker.commitNewWork()
@@ -53,6 +55,8 @@ func (self *Miner) Stop() {
 	self.mining = false
 
 	self.worker.stop()
+
+	//self.pow.(*ethash.Ethash).Stop()
 }
 
 func (self *Miner) HashRate() int64 {

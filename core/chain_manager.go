@@ -66,7 +66,6 @@ func CalcGasLimit(parent, block *types.Block) *big.Int {
 	}
 
 	// ((1024-1) * parent.gasLimit + (gasUsed * 6 / 5)) / 1024
-
 	previous := new(big.Int).Mul(big.NewInt(1024-1), parent.GasLimit())
 	current := new(big.Rat).Mul(new(big.Rat).SetInt(parent.GasUsed()), big.NewRat(6, 5))
 	curInt := new(big.Int).Div(current.Num(), current.Denom())
@@ -291,7 +290,6 @@ func (self *ChainManager) GetBlockHashesFromHash(hash []byte, max uint64) (chain
 	if block == nil {
 		return
 	}
-
 	// XXX Could be optimised by using a different database which only holds hashes (i.e., linked list)
 	for i := uint64(0); i < max; i++ {
 		parentHash := block.Header().ParentHash
@@ -396,11 +394,8 @@ func (bc *ChainManager) Stop() {
 }
 
 func (self *ChainManager) InsertChain(chain types.Blocks) error {
-	println("insert chain start")
 	self.tsmu.Lock()
 	defer self.tsmu.Unlock()
-
-	defer println("insert chain end")
 
 	for _, block := range chain {
 		// Call in to the block processor and check for errors. It's likely that if one block fails
