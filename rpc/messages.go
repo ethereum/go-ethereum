@@ -20,8 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
-	"github.com/ethereum/go-ethereum/xeth"
 )
 
 var (

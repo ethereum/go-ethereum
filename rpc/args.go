@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ethutil"
 )
 
@@ -346,32 +345,6 @@ func (args *FilterOptions) UnmarshalJSON(b []byte) (err error) {
 	return nil
 }
 
-func toFilterOptions(options *FilterOptions) core.FilterOptions {
-	var opts core.FilterOptions
-
-	// Convert optional address slice/string to byte slice
-	if str, ok := options.Address.(string); ok {
-		opts.Address = [][]byte{fromHex(str)}
-	} else if slice, ok := options.Address.([]interface{}); ok {
-		bslice := make([][]byte, len(slice))
-		for i, addr := range slice {
-			if saddr, ok := addr.(string); ok {
-				bslice[i] = fromHex(saddr)
-			}
-		}
-		opts.Address = bslice
-	}
-
-	opts.Earliest = options.Earliest
-	opts.Latest = options.Latest
-	opts.Topics = make([][]byte, len(options.Topic))
-	for i, topic := range options.Topic {
-		opts.Topics[i] = fromHex(topic)
-	}
-
-	return opts
-}
-
 // type FilterChangedArgs struct {
 // 	n int
 // }
@@ -530,7 +503,6 @@ type WhisperFilterArgs struct {
 	To     string
 	From   string
 	Topics []string
-	Fn     func()
 }
 
 func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {

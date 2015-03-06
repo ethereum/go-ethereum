@@ -124,24 +124,24 @@ func (self *EthereumApi) stop() {
 	close(self.quit)
 }
 
-func (self *EthereumApi) Register(args string, reply *interface{}) error {
-	self.regmut.Lock()
-	defer self.regmut.Unlock()
+// func (self *EthereumApi) Register(args string, reply *interface{}) error {
+// 	self.regmut.Lock()
+// 	defer self.regmut.Unlock()
 
-	if _, ok := self.register[args]; ok {
-		self.register[args] = nil // register with empty
-	}
-	return nil
-}
+// 	if _, ok := self.register[args]; ok {
+// 		self.register[args] = nil // register with empty
+// 	}
+// 	return nil
+// }
 
-func (self *EthereumApi) Unregister(args string, reply *interface{}) error {
-	self.regmut.Lock()
-	defer self.regmut.Unlock()
+// func (self *EthereumApi) Unregister(args string, reply *interface{}) error {
+// 	self.regmut.Lock()
+// 	defer self.regmut.Unlock()
 
-	delete(self.register, args)
+// 	delete(self.register, args)
 
-	return nil
-}
+// 	return nil
+// }
 
 // func (self *EthereumApi) WatchTx(args string, reply *interface{}) error {
 // 	self.regmut.Lock()
@@ -574,24 +574,6 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 	case "eth_getWork":
 	case "eth_submitWork":
 		return errNotImplemented
-	// case "eth_register":
-	// 	args, err := req.ToRegisterArgs()
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	return p.Register(args, reply)
-	// case "eth_unregister":
-	// 	args, err := req.ToRegisterArgs()
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	return p.Unregister(args, reply)
-	// case "eth_watchTx":
-	// 	args, err := req.ToWatchTxArgs()
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	return p.WatchTx(args, reply)
 	case "db_put":
 		args := new(DbArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -643,6 +625,24 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		return p.WhisperMessages(args.Id, reply)
 	case "client_version":
 		*reply = p.eth.GetClientVersion()
+	// case "eth_register":
+	// 	args, err := req.ToRegisterArgs()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	return p.Register(args, reply)
+	// case "eth_unregister":
+	// 	args, err := req.ToRegisterArgs()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	return p.Unregister(args, reply)
+	// case "eth_watchTx":
+	// 	args, err := req.ToWatchTxArgs()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	return p.WatchTx(args, reply)
 	default:
 		return NewErrorWithMessage(errNotImplemented, req.Method)
 	}
@@ -674,4 +674,30 @@ func t(f ui.Frontend) {
 	// Get the first argument
 	t, _ := ret.Get(0)
 	fmt.Println("return:", t)
+}
+
+func toFilterOptions(options *FilterOptions) core.FilterOptions {
+	var opts core.FilterOptions
+
+	// Convert optional address slice/string to byte slice
+	if str, ok := options.Address.(string); ok {
+		opts.Address = [][]byte{fromHex(str)}
+	} else if slice, ok := options.Address.([]interface{}); ok {
+		bslice := make([][]byte, len(slice))
+		for i, addr := range slice {
+			if saddr, ok := addr.(string); ok {
+				bslice[i] = fromHex(saddr)
+			}
+		}
+		opts.Address = bslice
+	}
+
+	opts.Earliest = options.Earliest
+	opts.Latest = options.Latest
+	opts.Topics = make([][]byte, len(options.Topic))
+	for i, topic := range options.Topic {
+		opts.Topics[i] = fromHex(topic)
+	}
+
+	return opts
 }
