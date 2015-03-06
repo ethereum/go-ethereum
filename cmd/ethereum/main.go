@@ -125,7 +125,6 @@ runtime will execute the file and exit.
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	defer logger.Flush()
-	utils.HandleInterrupt()
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -134,6 +133,7 @@ func main() {
 
 func run(ctx *cli.Context) {
 	fmt.Printf("Welcome to the FRONTIER\n")
+	utils.HandleInterrupt()
 	eth := utils.GetEthereum(ClientIdentifier, Version, ctx)
 	startEth(ctx, eth)
 	// this blocks the thread
@@ -144,9 +144,8 @@ func runjs(ctx *cli.Context) {
 	eth := utils.GetEthereum(ClientIdentifier, Version, ctx)
 	startEth(ctx, eth)
 	if len(ctx.Args()) == 0 {
-		repl := newREPL(eth)
-		utils.RegisterInterrupt(func(os.Signal) { repl.Stop() })
-		repl.Start()
+		runREPL(eth)
+		eth.Stop()
 		eth.WaitForShutdown()
 	} else if len(ctx.Args()) == 1 {
 		execJsFile(eth, ctx.Args()[0])

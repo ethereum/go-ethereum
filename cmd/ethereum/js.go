@@ -18,9 +18,11 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/signal"
 	"path"
 	"strings"
 
@@ -55,44 +57,38 @@ type repl struct {
 	ethereum *eth.Ethereum
 	xeth     *xeth.XEth
 	prompt   string
-	histfile *os.File
 	lr       *liner.State
-	running  bool
 }
 
-func newREPL(ethereum *eth.Ethereum) *repl {
-	hist, err := os.OpenFile(path.Join(ethereum.DataDir, "history"), os.O_RDWR|os.O_CREATE, os.ModePerm)
-	if err != nil {
-		panic(err)
-	}
+func runREPL(ethereum *eth.Ethereum) {
 	xeth := xeth.New(ethereum)
 	repl := &repl{
 		re:       javascript.NewJSRE(xeth),
 		xeth:     xeth,
 		ethereum: ethereum,
 		prompt:   "> ",
-		histfile: hist,
-		lr:       liner.NewLiner(),
 	}
 	repl.initStdFuncs()
-	return repl
-}
-
-func (self *repl) Start() {
-	if !self.running {
-		self.running = true
-		self.lr.ReadHistory(self.histfile)
-		go self.read()
+	if !liner.TerminalSupported() {
+		repl.dumbRead()
+	} else {
+		lr := liner.NewLiner()
+		defer lr.Close()
+		lr.SetCtrlCAborts(true)
+		repl.withHistory(func(hist *os.File) { lr.ReadHistory(hist) })
+		repl.read(lr)
+		repl.withHistory(func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
 	}
 }
 
-func (self *repl) Stop() {
-	if self.running {
-		self.running = false
-		self.histfile.Truncate(0)
-		self.lr.WriteHistory(self.histfile)
-		self.histfile.Close()
+func (self *repl) withHistory(op func(*os.File)) {
+	hist, err := os.OpenFile(path.Join(self.ethereum.DataDir, "history"), os.O_RDWR|os.O_CREATE, os.ModePerm)
+	if err != nil {
+		fmt.Printf("unable to open history file: %v\n", err)
+		return
 	}
+	op(hist)
+	hist.Close()
 }
 
 func (self *repl) parseInput(code string) {
@@ -126,9 +122,9 @@ func (self *repl) setIndent() {
 	}
 }
 
-func (self *repl) read() {
+func (self *repl) read(lr *liner.State) {
 	for {
-		input, err := self.lr.Prompt(self.prompt)
+		input, err := lr.Prompt(self.prompt)
 		if err != nil {
 			return
 		}
@@ -139,14 +135,48 @@ func (self *repl) read() {
 		self.setIndent()
 		if indentCount <= 0 {
 			if input == "exit" {
-				self.Stop()
 				return
 			}
 			hist := str[:len(str)-1]
-			self.lr.AppendHistory(hist)
+			lr.AppendHistory(hist)
 			self.parseInput(str)
 			str = ""
 		}
+	}
+}
+
+func (self *repl) dumbRead() {
+	fmt.Println("Unsupported terminal, line editing will not work.")
+
+	// process lines
+	readDone := make(chan struct{})
+	go func() {
+		r := bufio.NewReader(os.Stdin)
+	loop:
+		for {
+			fmt.Print(self.prompt)
+			line, err := r.ReadString('\n')
+			switch {
+			case err != nil || line == "exit":
+				break loop
+			case line == "":
+				continue
+			default:
+				self.parseInput(line + "\n")
+			}
+		}
+		close(readDone)
+	}()
+
+	// wait for Ctrl-C
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, os.Interrupt, os.Kill)
+	defer signal.Stop(sigc)
+
+	select {
+	case <-readDone:
+	case <-sigc:
+		os.Stdin.Close() // terminate read
 	}
 }
 
