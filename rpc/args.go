@@ -33,7 +33,7 @@ func (args *GetBlockByHashArgs) UnmarshalJSON(b []byte) (err error) {
 }
 
 type GetBlockByNumberArgs struct {
-	BlockNumber  uint64
+	BlockNumber  int64
 	Transactions bool
 }
 
@@ -47,7 +47,7 @@ func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 	if len(obj) < 1 {
 		return errArguments
 	}
-	args.BlockNumber = uint64(ethutil.Big(obj[0].(string)).Int64())
+	args.BlockNumber = ethutil.Big(obj[0].(string)).Int64()
 
 	if len(obj) > 1 {
 		args.Transactions = obj[1].(bool)
@@ -94,7 +94,7 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 
 type GetStorageArgs struct {
 	Address     string
-	BlockNumber uint64
+	BlockNumber int64
 }
 
 func (args *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
@@ -110,7 +110,11 @@ func (args *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Address = obj[0].(string)
 
 	if len(obj) > 1 {
-		args.BlockNumber = uint64(ethutil.Big(obj[1].(string)).Int64())
+		if obj[1].(string) == "latest" {
+			args.BlockNumber = -1
+		} else {
+			args.BlockNumber = ethutil.Big(obj[1].(string)).Int64()
+		}
 	}
 
 	return nil
@@ -126,7 +130,7 @@ func (args *GetStorageArgs) requirements() error {
 type GetStorageAtArgs struct {
 	Address     string
 	Key         string
-	BlockNumber uint64
+	BlockNumber int64
 }
 
 func (args *GetStorageAtArgs) UnmarshalJSON(b []byte) (err error) {
@@ -143,7 +147,11 @@ func (args *GetStorageAtArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Key = obj[1].(string)
 
 	if len(obj) > 2 {
-		args.BlockNumber = ethutil.BytesToNumber(fromHex(obj[2].(string)))
+		if obj[2].(string) == "latest" {
+			args.BlockNumber = -1
+		} else {
+			args.BlockNumber = ethutil.Big(obj[2].(string)).Int64()
+		}
 	}
 
 	return nil
@@ -162,7 +170,7 @@ func (args *GetStorageAtArgs) requirements() error {
 
 type GetTxCountArgs struct {
 	Address     string
-	BlockNumber uint64
+	BlockNumber int64
 }
 
 func (args *GetTxCountArgs) UnmarshalJSON(b []byte) (err error) {
@@ -179,7 +187,11 @@ func (args *GetTxCountArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Address = obj[0].(string)
 
 	if len(obj) > 1 {
-		args.BlockNumber = uint64(ethutil.Big(obj[1].(string)).Int64())
+		if obj[1].(string) == "latest" {
+			args.BlockNumber = -1
+		} else {
+			args.BlockNumber = ethutil.Big(obj[1].(string)).Int64()
+		}
 	}
 
 	return nil
@@ -194,7 +206,7 @@ func (args *GetTxCountArgs) requirements() error {
 
 type GetBalanceArgs struct {
 	Address     string
-	BlockNumber uint64
+	BlockNumber int64
 }
 
 func (args *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
@@ -210,7 +222,11 @@ func (args *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Address = obj[0].(string)
 
 	if len(obj) > 1 {
-		args.BlockNumber = uint64(ethutil.Big(obj[1].(string)).Int64())
+		if obj[1].(string) == "latest" {
+			args.BlockNumber = -1
+		} else {
+			args.BlockNumber = ethutil.Big(obj[1].(string)).Int64()
+		}
 	}
 
 	return nil
@@ -225,7 +241,7 @@ func (args *GetBalanceArgs) requirements() error {
 
 type GetDataArgs struct {
 	Address     string
-	BlockNumber uint64
+	BlockNumber int64
 }
 
 func (args *GetDataArgs) UnmarshalJSON(b []byte) (err error) {
@@ -241,7 +257,11 @@ func (args *GetDataArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Address = obj[0].(string)
 
 	if len(obj) > 1 {
-		args.BlockNumber = uint64(ethutil.Big(obj[1].(string)).Int64())
+		if obj[1].(string) == "latest" {
+			args.BlockNumber = -1
+		} else {
+			args.BlockNumber = ethutil.Big(obj[1].(string)).Int64()
+		}
 	}
 
 	return nil
@@ -273,41 +293,41 @@ func (args *Sha3Args) UnmarshalJSON(b []byte) (err error) {
 	return nil
 }
 
-type FilterArgs struct {
-	FromBlock uint64
-	ToBlock   uint64
-	Limit     uint64
-	Offset    uint64
-	Address   string
-	Topics    []string
-}
+// type FilterArgs struct {
+// 	FromBlock uint64
+// 	ToBlock   uint64
+// 	Limit     uint64
+// 	Offset    uint64
+// 	Address   string
+// 	Topics    []string
+// }
 
-func (args *FilterArgs) UnmarshalJSON(b []byte) (err error) {
-	var obj []struct {
-		FromBlock string   `json:"fromBlock"`
-		ToBlock   string   `json:"toBlock"`
-		Limit     string   `json:"limit"`
-		Offset    string   `json:"offset"`
-		Address   string   `json:"address"`
-		Topics    []string `json:"topics"`
-	}
+// func (args *FilterArgs) UnmarshalJSON(b []byte) (err error) {
+// 	var obj []struct {
+// 		FromBlock string   `json:"fromBlock"`
+// 		ToBlock   string   `json:"toBlock"`
+// 		Limit     string   `json:"limit"`
+// 		Offset    string   `json:"offset"`
+// 		Address   string   `json:"address"`
+// 		Topics    []string `json:"topics"`
+// 	}
 
-	if err = json.Unmarshal(b, &obj); err != nil {
-		return errDecodeArgs
-	}
+// 	if err = json.Unmarshal(b, &obj); err != nil {
+// 		return errDecodeArgs
+// 	}
 
-	if len(obj) < 1 {
-		return errArguments
-	}
-	args.FromBlock = uint64(ethutil.Big(obj[0].FromBlock).Int64())
-	args.ToBlock = uint64(ethutil.Big(obj[0].ToBlock).Int64())
-	args.Limit = uint64(ethutil.Big(obj[0].Limit).Int64())
-	args.Offset = uint64(ethutil.Big(obj[0].Offset).Int64())
-	args.Address = obj[0].Address
-	args.Topics = obj[0].Topics
+// 	if len(obj) < 1 {
+// 		return errArguments
+// 	}
+// 	args.FromBlock = uint64(ethutil.Big(obj[0].FromBlock).Int64())
+// 	args.ToBlock = uint64(ethutil.Big(obj[0].ToBlock).Int64())
+// 	args.Limit = uint64(ethutil.Big(obj[0].Limit).Int64())
+// 	args.Offset = uint64(ethutil.Big(obj[0].Offset).Int64())
+// 	args.Address = obj[0].Address
+// 	args.Topics = obj[0].Topics
 
-	return nil
-}
+// 	return nil
+// }
 
 type FilterOptions struct {
 	Earliest int64
@@ -415,8 +435,8 @@ func (args *WhisperMessageArgs) UnmarshalJSON(b []byte) (err error) {
 	args.To = obj[0].To
 	args.From = obj[0].From
 	args.Topic = obj[0].Topic
-	args.Priority = uint32(ethutil.BytesToNumber(fromHex(obj[0].Priority)))
-	args.Ttl = uint32(ethutil.BytesToNumber(fromHex(obj[0].Ttl)))
+	args.Priority = uint32(ethutil.Big(obj[0].Priority).Int64())
+	args.Ttl = uint32(ethutil.Big(obj[0].Ttl).Int64())
 
 	return nil
 }
@@ -474,7 +494,7 @@ func (args *FilterIdArgs) UnmarshalJSON(b []byte) (err error) {
 		return errDecodeArgs
 	}
 
-	args.Id = int(ethutil.BytesToNumber(fromHex(obj[0])))
+	args.Id = int(ethutil.Big(obj[0]).Int64())
 
 	return nil
 }
@@ -500,13 +520,17 @@ func (args *WhisperIdentityArgs) UnmarshalJSON(b []byte) (err error) {
 }
 
 type WhisperFilterArgs struct {
-	To     string
+	To     string `json:"to"`
 	From   string
 	Topics []string
 }
 
 func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
-	var obj []WhisperFilterArgs
+	var obj []struct {
+		To     string
+		From   string
+		Topics []string
+	}
 
 	if err = json.Unmarshal(b, &obj); err != nil {
 		return errDecodeArgs
