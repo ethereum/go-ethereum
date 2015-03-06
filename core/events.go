@@ -16,3 +16,13 @@ type NewMinedBlockEvent struct{ Block *types.Block }
 
 // ChainSplit is posted when a new head is detected
 type ChainSplitEvent struct{ Block *types.Block }
+
+type ChainEvent struct{ Block *types.Block }
+
+type ChainSideEvent struct{ Block *types.Block }
+
+type ChainHeadEvent struct{ Block *types.Block }
+
+// Mining operation events
+type StartMining struct{}
+type TopMining struct{}
