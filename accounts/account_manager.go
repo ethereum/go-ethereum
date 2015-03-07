@@ -111,9 +111,9 @@ func (am *AccountManager) SignLocked(a Account, keyAuth string, toSign []byte) (
 	if err != nil {
 		return nil, err
 	}
-	am.mutex.RLock()
+	am.mutex.Lock()
 	am.unlockedKeys[string(a.Address)] = *key
-	am.mutex.RUnlock()
+	am.mutex.Unlock()
 	go unlockLater(am, a.Address)
 	signature, err = crypto.Sign(toSign, key.PrivateKey)
 	return signature, err
@@ -147,8 +147,10 @@ func unlockLater(am *AccountManager, addr []byte) {
 	select {
 	case <-time.After(am.unlockTime):
 	}
-	am.mutex.RLock()
+	am.mutex.Lock()
 	// TODO: how do we know the key is actually gone from memory?
 	delete(am.unlockedKeys, string(addr))
-	am.mutex.RUnlock()
+	am.mutex.Unlock()
+}
+
 }
