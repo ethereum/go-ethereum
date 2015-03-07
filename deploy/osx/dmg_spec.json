@@ -1,0 +1,10 @@
+{
+  "title": "Mist Installer",
+  "icon": "Mist.icns",
+  "background": "background.png",
+  "icon-size": 144,
+  "contents": [
+    { "x": 900, "y": 244, "type": "link", "path": "/Applications" },
+    { "x": 140, "y": 244, "type": "file", "path": "Mist.app" }
+  ]
+}
