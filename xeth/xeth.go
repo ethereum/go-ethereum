@@ -32,7 +32,6 @@ type Backend interface {
 	PeerCount() int
 	IsListening() bool
 	Peers() []*p2p.Peer
-	KeyManager() *crypto.KeyManager
 	Db() ethutil.Database
 	EventMux() *event.TypeMux
 	Whisper() *whisper.Whisper
@@ -142,7 +141,8 @@ func (self *XEth) IsListening() bool {
 }
 
 func (self *XEth) Coinbase() string {
-	return toHex(self.eth.KeyManager().Address())
+	cb, _ := self.eth.AccountManager().Coinbase()
+	return toHex(cb)
 }
 
 func (self *XEth) NumberToHuman(balance string) string {
@@ -251,10 +251,13 @@ func (self *XEth) Call(toStr, valueStr, gasStr, gasPriceStr, dataStr string) (st
 		gasPriceStr = "1"
 	}
 
+	acct, err := self.accountManager.Default()
+	if err != nil {
+		return "", err
+	}
 	var (
 		statedb = self.State().State() //self.chainManager.TransState()
-		key     = self.eth.KeyManager().KeyPair()
-		from    = statedb.GetOrNewStateObject(key.Address())
+		from    = statedb.GetOrNewStateObject(acct.Address)
 		block   = self.chainManager.CurrentBlock()
 		to      = statedb.GetOrNewStateObject(fromHex(toStr))
 		data    = fromHex(dataStr)
@@ -264,9 +267,12 @@ func (self *XEth) Call(toStr, valueStr, gasStr, gasPriceStr, dataStr string) (st
 	)
 
 	msg := types.NewTransactionMessage(fromHex(toStr), value, gas, price, data)
-	msg.Sign(key.PrivateKey)
+	sig, err := self.accountManager.Sign(acct, msg.Hash())
+	if err != nil {
+		return "", err
+	}
+	msg.SetSignatureValues(sig)
 	vmenv := core.NewEnv(statedb, self.chainManager, msg, block)
-
 	res, err := vmenv.Call(from, to.Address(), data, gas, price, value)
 	if err != nil {
 		return "", err

@@ -42,7 +42,10 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-var ErrLocked = errors.New("account is locked; please request passphrase")
+var (
+	ErrLocked = errors.New("account is locked")
+	ErrNoKeys = errors.New("no keys in store")
+)
 
 // TODO: better name for this struct?
 type Account struct {
@@ -56,17 +59,39 @@ type AccountManager struct {
 	mutex              sync.RWMutex
 }
 
-func NewAccountManager(keyStore crypto.KeyStore2, unlockMilliseconds time.Duration) AccountManager {
-	keysMap := make(map[string]crypto.Key)
-	am := &AccountManager{
+func NewAccountManager(keyStore crypto.KeyStore2, unlockMilliseconds time.Duration) *AccountManager {
+	return &AccountManager{
 		keyStore:           keyStore,
-		unlockedKeys:       keysMap,
+		unlockedKeys:       make(map[string]crypto.Key),
 		unlockMilliseconds: unlockMilliseconds,
 	}
-	return *am
 }
 
-func (am AccountManager) DeleteAccount(address []byte, auth string) error {
+// Coinbase returns the account address that mining rewards are sent to.
+func (am *AccountManager) Coinbase() (addr []byte, err error) {
+	// TODO: persist coinbase address on disk
+	return am.firstAddr()
+}
+
+// MainAccount returns the primary account used for transactions.
+func (am *AccountManager) Default() (*Account, error) {
+	// TODO: persist main account address on disk
+	addr, err := am.firstAddr()
+	return &Account{Address: addr}, err
+}
+
+func (am *AccountManager) firstAddr() ([]byte, error) {
+	addrs, err := am.keyStore.GetKeyAddresses()
+	if err != nil {
+		return nil, err
+	}
+	if len(addrs) == 0 {
+		return nil, ErrNoKeys
+	}
+	return addrs[0], nil
+}
+
+func (am *AccountManager) DeleteAccount(address []byte, auth string) error {
 	return am.keyStore.DeleteKey(address, auth)
 }
 

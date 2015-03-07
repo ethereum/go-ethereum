@@ -38,11 +38,9 @@ var (
 
 type Config struct {
 	Name      string
-	KeyStore  string
 	DataDir   string
 	LogFile   string
 	LogLevel  int
-	KeyRing   string
 	LogFormat string
 
 	MaxPeers int
@@ -60,9 +58,8 @@ type Config struct {
 	Shh  bool
 	Dial bool
 
-	MinerThreads int
-
-	KeyManager *crypto.KeyManager
+	MinerThreads   int
+	AccountManager *accounts.AccountManager
 }
 
 func (cfg *Config) parseBootNodes() []*discover.Node {
@@ -127,8 +124,7 @@ type Ethereum struct {
 	blockSub event.Subscription
 	miner    *miner.Miner
 
-	RpcServer  rpc.RpcServer
-	keyManager *crypto.KeyManager
+	RpcServer rpc.RpcServer
 
 	logger logger.LogSystem
 
@@ -153,35 +149,22 @@ func New(config *Config) (*Ethereum, error) {
 		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, ProtocolVersion, path)
 	}
 
-	// Create new keymanager
-	var keyManager *crypto.KeyManager
-	switch config.KeyStore {
-	case "db":
-		keyManager = crypto.NewDBKeyManager(db)
-	case "file":
-		keyManager = crypto.NewFileKeyManager(config.DataDir)
-	default:
-		return nil, fmt.Errorf("unknown keystore type: %s", config.KeyStore)
-	}
-	// Initialise the keyring
-	keyManager.Init(config.KeyRing, 0, false)
-
 	saveProtocolVersion(db)
 	//ethutil.Config.Db = db
 
 	eth := &Ethereum{
-		shutdownChan: make(chan bool),
-		db:           db,
-		keyManager:   keyManager,
-		eventMux:     &event.TypeMux{},
-		logger:       ethlogger,
-		DataDir:      config.DataDir,
+		shutdownChan:   make(chan bool),
+		db:             db,
+		eventMux:       &event.TypeMux{},
+		logger:         ethlogger,
+		accountManager: config.AccountManager,
+		DataDir:        config.DataDir,
 	}
 
-	// TODO: add config flag and case on plain/protected key store
-	ks := crypto.NewKeyStorePlain(ethutil.DefaultDataDir())
-	am := accounts.NewAccountManager(ks, 300000) // keys unlocked for 300s
-	eth.accountManager = &am
+	cb, err := eth.accountManager.Coinbase()
+	if err != nil {
+		return nil, fmt.Errorf("no coinbase: %v", err)
+	}
 
 	eth.chainManager = core.NewChainManager(db, eth.EventMux())
 	pow := ethash.New(eth.chainManager)
@@ -189,7 +172,7 @@ func New(config *Config) (*Ethereum, error) {
 	eth.blockProcessor = core.NewBlockProcessor(db, pow, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
 	eth.whisper = whisper.New()
-	eth.miner = miner.New(keyManager.Address(), eth, pow, config.MinerThreads)
+	eth.miner = miner.New(cb, eth, pow, config.MinerThreads)
 
 	hasBlock := eth.chainManager.HasBlock
 	insertChain := eth.chainManager.InsertChain
@@ -221,7 +204,6 @@ func New(config *Config) (*Ethereum, error) {
 	return eth, nil
 }
 
-func (s *Ethereum) KeyManager() *crypto.KeyManager           { return s.keyManager }
 func (s *Ethereum) Logger() logger.LogSystem                 { return s.logger }
 func (s *Ethereum) Name() string                             { return s.net.Name }
 func (s *Ethereum) AccountManager() *accounts.AccountManager { return s.accountManager }
@@ -237,7 +219,6 @@ func (s *Ethereum) IsListening() bool                        { return true } // 
 func (s *Ethereum) PeerCount() int                           { return s.net.PeerCount() }
 func (s *Ethereum) Peers() []*p2p.Peer                       { return s.net.Peers() }
 func (s *Ethereum) MaxPeers() int                            { return s.net.MaxPeers }
-func (s *Ethereum) Coinbase() []byte                         { return nil } // TODO
 
 // Start the ethereum
 func (s *Ethereum) Start() error {
