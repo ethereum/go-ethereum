@@ -311,7 +311,7 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 	nonce := state.GetNonce(from)
 
 	tx.SetNonce(nonce)
-	sig, err := self.accountManager.Sign(&accounts.Account{Address: from}, tx.Hash())
+	sig, err := self.accountManager.Sign(accounts.Account{Address: from}, tx.Hash())
 	if err != nil {
 		return "", err
 	}

@@ -47,7 +47,6 @@ var (
 	ErrNoKeys = errors.New("no keys in store")
 )
 
-// TODO: better name for this struct?
 type Account struct {
 	Address []byte
 }
@@ -74,10 +73,10 @@ func (am *AccountManager) Coinbase() (addr []byte, err error) {
 }
 
 // MainAccount returns the primary account used for transactions.
-func (am *AccountManager) Default() (*Account, error) {
+func (am *AccountManager) Default() (Account, error) {
 	// TODO: persist main account address on disk
 	addr, err := am.firstAddr()
-	return &Account{Address: addr}, err
+	return Account{Address: addr}, err
 }
 
 func (am *AccountManager) firstAddr() ([]byte, error) {
@@ -95,9 +94,9 @@ func (am *AccountManager) DeleteAccount(address []byte, auth string) error {
 	return am.keyStore.DeleteKey(address, auth)
 }
 
-func (am *AccountManager) Sign(fromAccount *Account, toSign []byte) (signature []byte, err error) {
+func (am *AccountManager) Sign(a Account, toSign []byte) (signature []byte, err error) {
 	am.mutex.RLock()
-	unlockedKey := am.unlockedKeys[string(fromAccount.Address)]
+	unlockedKey := am.unlockedKeys[string(a.Address)]
 	am.mutex.RUnlock()
 	if unlockedKey.Address == nil {
 		return nil, ErrLocked
@@ -106,28 +105,25 @@ func (am *AccountManager) Sign(fromAccount *Account, toSign []byte) (signature [
 	return signature, err
 }
 
-func (am *AccountManager) SignLocked(fromAccount *Account, keyAuth string, toSign []byte) (signature []byte, err error) {
-	key, err := am.keyStore.GetKey(fromAccount.Address, keyAuth)
+func (am *AccountManager) SignLocked(a Account, keyAuth string, toSign []byte) (signature []byte, err error) {
+	key, err := am.keyStore.GetKey(a.Address, keyAuth)
 	if err != nil {
 		return nil, err
 	}
 	am.mutex.RLock()
-	am.unlockedKeys[string(fromAccount.Address)] = *key
+	am.unlockedKeys[string(a.Address)] = *key
 	am.mutex.RUnlock()
-	go unlockLater(am, fromAccount.Address)
+	go unlockLater(am, a.Address)
 	signature, err = crypto.Sign(toSign, key.PrivateKey)
 	return signature, err
 }
 
-func (am AccountManager) NewAccount(auth string) (*Account, error) {
+func (am *AccountManager) NewAccount(auth string) (Account, error) {
 	key, err := am.keyStore.GenerateNewKey(crand.Reader, auth)
 	if err != nil {
-		return nil, err
+		return Account{}, err
 	}
-	ua := &Account{
-		Address: key.Address,
-	}
-	return ua, err
+	return Account{Address: key.Address}, nil
 }
 
 func (am *AccountManager) Accounts() ([]Account, error) {
