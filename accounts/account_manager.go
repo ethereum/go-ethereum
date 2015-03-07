@@ -33,6 +33,7 @@ and accounts persistence is derived from stored keys' addresses
 package accounts
 
 import (
+	"crypto/ecdsa"
 	crand "crypto/rand"
 
 	"errors"
@@ -52,17 +53,17 @@ type Account struct {
 }
 
 type AccountManager struct {
-	keyStore           crypto.KeyStore2
-	unlockedKeys       map[string]crypto.Key
-	unlockMilliseconds time.Duration
-	mutex              sync.RWMutex
+	keyStore     crypto.KeyStore2
+	unlockedKeys map[string]crypto.Key
+	unlockTime   time.Duration
+	mutex        sync.RWMutex
 }
 
-func NewAccountManager(keyStore crypto.KeyStore2, unlockMilliseconds time.Duration) *AccountManager {
+func NewAccountManager(keyStore crypto.KeyStore2, unlockTime time.Duration) *AccountManager {
 	return &AccountManager{
-		keyStore:           keyStore,
-		unlockedKeys:       make(map[string]crypto.Key),
-		unlockMilliseconds: unlockMilliseconds,
+		keyStore:     keyStore,
+		unlockedKeys: make(map[string]crypto.Key),
+		unlockTime:   unlockTime,
 	}
 }
 
@@ -144,7 +145,7 @@ func (am *AccountManager) Accounts() ([]Account, error) {
 
 func unlockLater(am *AccountManager, addr []byte) {
 	select {
-	case <-time.After(time.Millisecond * am.unlockMilliseconds):
+	case <-time.After(am.unlockTime):
 	}
 	am.mutex.RLock()
 	// TODO: how do we know the key is actually gone from memory?
