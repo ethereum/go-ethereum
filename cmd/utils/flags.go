@@ -4,8 +4,10 @@ import (
 	"crypto/ecdsa"
 	"path"
 	"runtime"
+	"time"
 
 	"github.com/codegangsta/cli"
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -29,16 +31,6 @@ var (
 	VMTypeFlag = cli.IntFlag{
 		Name:  "vm",
 		Usage: "Virtual Machine type: 0 is standard VM, 1 is debug VM",
-	}
-	KeyRingFlag = cli.StringFlag{
-		Name:  "keyring",
-		Usage: "Name of keyring to be used",
-		Value: "",
-	}
-	KeyStoreFlag = cli.StringFlag{
-		Name:  "keystore",
-		Usage: `Where to store keyrings: "db" or "file"`,
-		Value: "db",
 	}
 	DataDirFlag = cli.StringFlag{
 		Name:  "datadir",
@@ -145,22 +137,20 @@ func GetNodeKey(ctx *cli.Context) (key *ecdsa.PrivateKey) {
 
 func GetEthereum(clientID, version string, ctx *cli.Context) *eth.Ethereum {
 	ethereum, err := eth.New(&eth.Config{
-		Name:         p2p.MakeName(clientID, version),
-		KeyStore:     ctx.GlobalString(KeyStoreFlag.Name),
-		DataDir:      ctx.GlobalString(DataDirFlag.Name),
-		LogFile:      ctx.GlobalString(LogFileFlag.Name),
-		LogLevel:     ctx.GlobalInt(LogLevelFlag.Name),
-		LogFormat:    ctx.GlobalString(LogFormatFlag.Name),
-		MinerThreads: ctx.GlobalInt(MinerThreadsFlag.Name),
-
-		MaxPeers:  ctx.GlobalInt(MaxPeersFlag.Name),
-		Port:      ctx.GlobalString(ListenPortFlag.Name),
-		NAT:       GetNAT(ctx),
-		NodeKey:   GetNodeKey(ctx),
-		KeyRing:   ctx.GlobalString(KeyRingFlag.Name),
-		Shh:       true,
-		Dial:      true,
-		BootNodes: ctx.GlobalString(BootnodesFlag.Name),
+		Name:           p2p.MakeName(clientID, version),
+		DataDir:        ctx.GlobalString(DataDirFlag.Name),
+		LogFile:        ctx.GlobalString(LogFileFlag.Name),
+		LogLevel:       ctx.GlobalInt(LogLevelFlag.Name),
+		LogFormat:      ctx.GlobalString(LogFormatFlag.Name),
+		MinerThreads:   ctx.GlobalInt(MinerThreadsFlag.Name),
+		AccountManager: GetAccountManager(ctx),
+		MaxPeers:       ctx.GlobalInt(MaxPeersFlag.Name),
+		Port:           ctx.GlobalString(ListenPortFlag.Name),
+		NAT:            GetNAT(ctx),
+		NodeKey:        GetNodeKey(ctx),
+		Shh:            true,
+		Dial:           true,
+		BootNodes:      ctx.GlobalString(BootnodesFlag.Name),
 	})
 	if err != nil {
 		exit(err)
@@ -175,4 +165,10 @@ func GetChain(ctx *cli.Context) (*core.ChainManager, ethutil.Database) {
 		Fatalf("Could not open database: %v", err)
 	}
 	return core.NewChainManager(db, new(event.TypeMux)), db
+}
+
+func GetAccountManager(ctx *cli.Context) *accounts.AccountManager {
+	dataDir := ctx.GlobalString(DataDirFlag.Name)
+	ks := crypto.NewKeyStorePassphrase(path.Join(dataDir, "keys"))
+	return accounts.NewAccountManager(ks, 300*time.Second)
 }

@@ -21,6 +21,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"runtime"
@@ -34,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
+	"github.com/peterh/liner"
 )
 
 const (
@@ -59,6 +61,23 @@ func init() {
 			Description: `
 The output of this command is supposed to be machine-readable.
 `,
+		},
+		{
+			Action: accountList,
+			Name:   "account",
+			Usage:  "manage accounts",
+			Subcommands: []cli.Command{
+				{
+					Action: accountList,
+					Name:   "list",
+					Usage:  "print account addresses",
+				},
+				{
+					Action: accountCreate,
+					Name:   "new",
+					Usage:  "create a new account",
+				},
+			},
 		},
 		{
 			Action: dump,
@@ -93,8 +112,6 @@ runtime will execute the file and exit.
 	app.Flags = []cli.Flag{
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
-		utils.KeyRingFlag,
-		utils.KeyStoreFlag,
 		utils.ListenPortFlag,
 		utils.LogFileFlag,
 		utils.LogFormatFlag,
@@ -166,6 +183,37 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	}
 }
 
+func accountList(ctx *cli.Context) {
+	am := utils.GetAccountManager(ctx)
+	accts, err := am.Accounts()
+	if err != nil {
+		utils.Fatalf("Could not list accounts: %v", err)
+	}
+	for _, acct := range accts {
+		fmt.Printf("Address: %#x\n", acct)
+	}
+}
+
+func accountCreate(ctx *cli.Context) {
+	am := utils.GetAccountManager(ctx)
+	auth, err := readPassword("Passphrase: ", true)
+	if err != nil {
+		utils.Fatalf("%v", err)
+	}
+	confirm, err := readPassword("Repeat Passphrase: ", false)
+	if err != nil {
+		utils.Fatalf("%v", err)
+	}
+	if auth != confirm {
+		utils.Fatalf("Passphrases did not match.")
+	}
+	acct, err := am.NewAccount(auth)
+	if err != nil {
+		utils.Fatalf("Could not create the account: %v", err)
+	}
+	fmt.Printf("Address: %#x\n", acct.Address)
+}
+
 func importchain(ctx *cli.Context) {
 	if len(ctx.Args()) != 1 {
 		utils.Fatalf("This command requires an argument.")
@@ -201,12 +249,6 @@ func dump(ctx *cli.Context) {
 	}
 }
 
-// hashish returns true for strings that look like hashes.
-func hashish(x string) bool {
-	_, err := strconv.Atoi(x)
-	return err != nil
-}
-
 func version(c *cli.Context) {
 	fmt.Printf(`%v %v
 PV=%d
@@ -215,4 +257,25 @@ GO=%s
 GOPATH=%s
 GOROOT=%s
 `, ClientIdentifier, Version, eth.ProtocolVersion, runtime.GOOS, runtime.Version(), os.Getenv("GOPATH"), runtime.GOROOT())
+}
+
+// hashish returns true for strings that look like hashes.
+func hashish(x string) bool {
+	_, err := strconv.Atoi(x)
+	return err != nil
+}
+
+func readPassword(prompt string, warnTerm bool) (string, error) {
+	if liner.TerminalSupported() {
+		lr := liner.NewLiner()
+		defer lr.Close()
+		return lr.PasswordPrompt(prompt)
+	}
+	if warnTerm {
+		fmt.Println("!! Unsupported terminal, password will be echoed.")
+	}
+	fmt.Print(prompt)
+	input, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	fmt.Println()
+	return input, err
 }
