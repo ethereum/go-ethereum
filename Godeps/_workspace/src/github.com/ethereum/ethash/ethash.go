@@ -11,7 +11,6 @@ import "C"
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"math/big"
@@ -293,7 +292,6 @@ func (pow *Ethash) Verify(block pow.Block) bool {
 }
 
 func (pow *Ethash) verify(hash []byte, mixDigest []byte, difficulty *big.Int, blockNum uint64, nonce uint64) bool {
-	fmt.Printf("%x\n%d\n%x\n%x\n", hash, nonce, mixDigest, difficulty.Bytes())
 	// First check: make sure header, mixDigest, nonce are correct without hitting the DAG
 	// This is to prevent DOS attacks
 	chash := (*C.uint8_t)(unsafe.Pointer(&hash[0]))
