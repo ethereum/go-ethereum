@@ -21,5 +21,8 @@
 
 cmd/ethereum/ethereum
 cmd/mist/mist
+cmd/mist/tx_database
+cmd/mist/dapps
+cmd/ethereum/dapss
 deploy/osx/Mist.app
 deploy/osx/Mist\ Installer.dmg
