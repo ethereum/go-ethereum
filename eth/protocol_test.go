@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	ethlogger "github.com/ethereum/go-ethereu/logger"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/errs"
 	"github.com/ethereum/go-ethereum/ethutil"
+	ethlogger "github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
