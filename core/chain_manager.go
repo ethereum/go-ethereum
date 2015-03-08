@@ -440,14 +440,12 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 				self.setTotalDifficulty(td)
 				self.insert(block)
 
-				/*
-					jsonlogger.LogJson(&logger.EthChainNewHead{
-						BlockHash:     ethutil.Bytes2Hex(block.Hash()),
-						BlockNumber:   block.Number(),
-						ChainHeadHash: ethutil.Bytes2Hex(cblock.Hash()),
-						BlockPrevHash: ethutil.Bytes2Hex(block.ParentHash()),
-					})
-				*/
+				jsonlogger.LogJson(&logger.EthChainNewHead{
+					BlockHash:     ethutil.Bytes2Hex(block.Hash()),
+					BlockNumber:   block.Number(),
+					ChainHeadHash: ethutil.Bytes2Hex(cblock.Hash()),
+					BlockPrevHash: ethutil.Bytes2Hex(block.ParentHash()),
+				})
 
 				self.setTransState(state.New(block.Root(), self.stateDb))
 				queue[i] = ChainEvent{block}
