@@ -228,11 +228,13 @@ func hashish(x string) bool {
 }
 
 func version(c *cli.Context) {
-	fmt.Printf(`%v %v
-PV=%d
-GOOS=%s
-GO=%s
+	fmt.Printf(`%v
+Version: %v
+Protocol Version: %d
+Network Id: %d
+GO: %s
+OS: %s
 GOPATH=%s
 GOROOT=%s
-`, ClientIdentifier, Version, eth.ProtocolVersion, runtime.GOOS, runtime.Version(), os.Getenv("GOPATH"), runtime.GOROOT())
+`, ClientIdentifier, Version, eth.ProtocolVersion, eth.NetworkId, runtime.Version(), runtime.GOOS, os.Getenv("GOPATH"), runtime.GOROOT())
 }
