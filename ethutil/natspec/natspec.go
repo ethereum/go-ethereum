@@ -10,7 +10,7 @@ type NatSpec struct {
 }
 
 // TODO: should initialise with abi and userdoc jsons
-func NewNATSpec() (self *NatSpec, err error) {
+func New() (self *NatSpec, err error) {
 
 	self = new(NatSpec)
 	self.jsvm = otto.New()

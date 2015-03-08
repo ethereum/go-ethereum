@@ -38,7 +38,7 @@ func TestNotice(t *testing.T) {
 
 	method := "multiply"
 
-	ns, err := NewNATSpec()
+	ns, err := New()
 	if err != nil {
 		t.Errorf("NewNATSpec error %v", err)
 	}
@@ -68,6 +68,7 @@ func TestNotice(t *testing.T) {
 		}
 	}
 
+	// https://github.com/ethereum/natspec.js/issues/1
 	// badDesc := "Will multiply `e` by 7 and return `a * 7`."
 	// notice, err = ns.Notice(tx, abi, method, badDesc)
 
