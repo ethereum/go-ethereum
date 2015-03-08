@@ -53,17 +53,24 @@ type Account struct {
 }
 
 type AccountManager struct {
-	keyStore     crypto.KeyStore2
-	unlockedKeys map[string]crypto.Key
-	unlockTime   time.Duration
-	mutex        sync.RWMutex
+	keyStore   crypto.KeyStore2
+	unlocked   map[string]*unlocked
+	unlockTime time.Duration
+	mutex      sync.RWMutex
+}
+
+type unlocked struct {
+	addr  []byte
+	abort chan struct{}
+
+	*crypto.Key
 }
 
 func NewAccountManager(keyStore crypto.KeyStore2, unlockTime time.Duration) *AccountManager {
 	return &AccountManager{
-		keyStore:     keyStore,
-		unlockedKeys: make(map[string]crypto.Key),
-		unlockTime:   unlockTime,
+		keyStore:   keyStore,
+		unlocked:   make(map[string]*unlocked),
+		unlockTime: unlockTime,
 	}
 }
 
@@ -97,9 +104,9 @@ func (am *AccountManager) DeleteAccount(address []byte, auth string) error {
 
 func (am *AccountManager) Sign(a Account, toSign []byte) (signature []byte, err error) {
 	am.mutex.RLock()
-	unlockedKey := am.unlockedKeys[string(a.Address)]
+	unlockedKey, found := am.unlocked[string(a.Address)]
 	am.mutex.RUnlock()
-	if unlockedKey.Address == nil {
+	if !found {
 		return nil, ErrLocked
 	}
 	signature, err = crypto.Sign(toSign, unlockedKey.PrivateKey)
@@ -111,10 +118,8 @@ func (am *AccountManager) SignLocked(a Account, keyAuth string, toSign []byte) (
 	if err != nil {
 		return nil, err
 	}
-	am.mutex.Lock()
-	am.unlockedKeys[string(a.Address)] = *key
-	am.mutex.Unlock()
-	go unlockLater(am, a.Address)
+	u := am.addUnlocked(a.Address, key)
+	go am.dropLater(u)
 	signature, err = crypto.Sign(toSign, key.PrivateKey)
 	return signature, err
 }
@@ -143,14 +148,40 @@ func (am *AccountManager) Accounts() ([]Account, error) {
 	return accounts, err
 }
 
-func unlockLater(am *AccountManager, addr []byte) {
-	select {
-	case <-time.After(am.unlockTime):
-	}
+func (am *AccountManager) addUnlocked(addr []byte, key *crypto.Key) *unlocked {
+	u := &unlocked{addr: addr, abort: make(chan struct{}), Key: key}
 	am.mutex.Lock()
-	// TODO: how do we know the key is actually gone from memory?
-	delete(am.unlockedKeys, string(addr))
+	prev, found := am.unlocked[string(addr)]
+	if found {
+		// terminate dropLater for this key to avoid unexpected drops.
+		close(prev.abort)
+		zeroKey(prev.PrivateKey)
+	}
+	am.unlocked[string(addr)] = u
 	am.mutex.Unlock()
+	return u
 }
 
+func (am *AccountManager) dropLater(u *unlocked) {
+	t := time.NewTimer(am.unlockTime)
+	defer t.Stop()
+	select {
+	case <-u.abort:
+		// just quit
+	case <-t.C:
+		am.mutex.Lock()
+		if am.unlocked[string(u.addr)] == u {
+			zeroKey(u.PrivateKey)
+			delete(am.unlocked, string(u.addr))
+		}
+		am.mutex.Unlock()
+	}
+}
+
+// zeroKey zeroes a private key in memory.
+func zeroKey(k *ecdsa.PrivateKey) {
+	b := k.D.Bits()
+	for i := range b {
+		b[i] = 0
+	}
 }
