@@ -12,7 +12,7 @@ import (
 
 func TestAccountManager(t *testing.T) {
 	ks := crypto.NewKeyStorePlain(ethutil.DefaultDataDir() + "/testaccounts")
-	am := NewAccountManager(ks, 100*time.Millisecond)
+	am := NewManager(ks, 100*time.Millisecond)
 	pass := "" // not used but required by API
 	a1, err := am.NewAccount(pass)
 	toSign := randentropy.GetEntropyCSPRNG(32)
@@ -38,7 +38,7 @@ func TestAccountManager(t *testing.T) {
 
 func TestAccountManagerLocking(t *testing.T) {
 	ks := crypto.NewKeyStorePassphrase(ethutil.DefaultDataDir() + "/testaccounts")
-	am := NewAccountManager(ks, 200*time.Millisecond)
+	am := NewManager(ks, 200*time.Millisecond)
 	pass := "foo"
 	a1, err := am.NewAccount(pass)
 	toSign := randentropy.GetEntropyCSPRNG(32)

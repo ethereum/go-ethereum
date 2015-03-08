@@ -27,7 +27,7 @@ var pipelogger = logger.NewLogger("XETH")
 type Backend interface {
 	BlockProcessor() *core.BlockProcessor
 	ChainManager() *core.ChainManager
-	AccountManager() *accounts.AccountManager
+	AccountManager() *accounts.Manager
 	TxPool() *core.TxPool
 	PeerCount() int
 	IsListening() bool
@@ -42,7 +42,7 @@ type XEth struct {
 	eth            Backend
 	blockProcessor *core.BlockProcessor
 	chainManager   *core.ChainManager
-	accountManager *accounts.AccountManager
+	accountManager *accounts.Manager
 	state          *State
 	whisper        *Whisper
 	miner          *miner.Miner

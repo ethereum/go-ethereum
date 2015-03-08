@@ -167,8 +167,8 @@ func GetChain(ctx *cli.Context) (*core.ChainManager, ethutil.Database) {
 	return core.NewChainManager(db, new(event.TypeMux)), db
 }
 
-func GetAccountManager(ctx *cli.Context) *accounts.AccountManager {
+func GetAccountManager(ctx *cli.Context) *accounts.Manager {
 	dataDir := ctx.GlobalString(DataDirFlag.Name)
 	ks := crypto.NewKeyStorePassphrase(path.Join(dataDir, "keys"))
-	return accounts.NewAccountManager(ks, 300*time.Second)
+	return accounts.NewManager(ks, 300*time.Second)
 }

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/obscuren/otto"

@@ -52,7 +52,7 @@ type Account struct {
 	Address []byte
 }
 
-type AccountManager struct {
+type Manager struct {
 	keyStore   crypto.KeyStore2
 	unlocked   map[string]*unlocked
 	unlockTime time.Duration
@@ -66,8 +66,8 @@ type unlocked struct {
 	*crypto.Key
 }
 
-func NewAccountManager(keyStore crypto.KeyStore2, unlockTime time.Duration) *AccountManager {
-	return &AccountManager{
+func NewManager(keyStore crypto.KeyStore2, unlockTime time.Duration) *Manager {
+	return &Manager{
 		keyStore:   keyStore,
 		unlocked:   make(map[string]*unlocked),
 		unlockTime: unlockTime,
@@ -75,19 +75,19 @@ func NewAccountManager(keyStore crypto.KeyStore2, unlockTime time.Duration) *Acc
 }
 
 // Coinbase returns the account address that mining rewards are sent to.
-func (am *AccountManager) Coinbase() (addr []byte, err error) {
+func (am *Manager) Coinbase() (addr []byte, err error) {
 	// TODO: persist coinbase address on disk
 	return am.firstAddr()
 }
 
 // MainAccount returns the primary account used for transactions.
-func (am *AccountManager) Default() (Account, error) {
+func (am *Manager) Default() (Account, error) {
 	// TODO: persist main account address on disk
 	addr, err := am.firstAddr()
 	return Account{Address: addr}, err
 }
 
-func (am *AccountManager) firstAddr() ([]byte, error) {
+func (am *Manager) firstAddr() ([]byte, error) {
 	addrs, err := am.keyStore.GetKeyAddresses()
 	if err != nil {
 		return nil, err
@@ -98,11 +98,11 @@ func (am *AccountManager) firstAddr() ([]byte, error) {
 	return addrs[0], nil
 }
 
-func (am *AccountManager) DeleteAccount(address []byte, auth string) error {
+func (am *Manager) DeleteAccount(address []byte, auth string) error {
 	return am.keyStore.DeleteKey(address, auth)
 }
 
-func (am *AccountManager) Sign(a Account, toSign []byte) (signature []byte, err error) {
+func (am *Manager) Sign(a Account, toSign []byte) (signature []byte, err error) {
 	am.mutex.RLock()
 	unlockedKey, found := am.unlocked[string(a.Address)]
 	am.mutex.RUnlock()
@@ -113,7 +113,7 @@ func (am *AccountManager) Sign(a Account, toSign []byte) (signature []byte, err 
 	return signature, err
 }
 
-func (am *AccountManager) SignLocked(a Account, keyAuth string, toSign []byte) (signature []byte, err error) {
+func (am *Manager) SignLocked(a Account, keyAuth string, toSign []byte) (signature []byte, err error) {
 	key, err := am.keyStore.GetKey(a.Address, keyAuth)
 	if err != nil {
 		return nil, err
@@ -124,7 +124,7 @@ func (am *AccountManager) SignLocked(a Account, keyAuth string, toSign []byte) (
 	return signature, err
 }
 
-func (am *AccountManager) NewAccount(auth string) (Account, error) {
+func (am *Manager) NewAccount(auth string) (Account, error) {
 	key, err := am.keyStore.GenerateNewKey(crand.Reader, auth)
 	if err != nil {
 		return Account{}, err
@@ -132,7 +132,7 @@ func (am *AccountManager) NewAccount(auth string) (Account, error) {
 	return Account{Address: key.Address}, nil
 }
 
-func (am *AccountManager) Accounts() ([]Account, error) {
+func (am *Manager) Accounts() ([]Account, error) {
 	addresses, err := am.keyStore.GetKeyAddresses()
 	if err != nil {
 		return nil, err
@@ -148,7 +148,7 @@ func (am *AccountManager) Accounts() ([]Account, error) {
 	return accounts, err
 }
 
-func (am *AccountManager) addUnlocked(addr []byte, key *crypto.Key) *unlocked {
+func (am *Manager) addUnlocked(addr []byte, key *crypto.Key) *unlocked {
 	u := &unlocked{addr: addr, abort: make(chan struct{}), Key: key}
 	am.mutex.Lock()
 	prev, found := am.unlocked[string(addr)]
@@ -162,7 +162,7 @@ func (am *AccountManager) addUnlocked(addr []byte, key *crypto.Key) *unlocked {
 	return u
 }
 
-func (am *AccountManager) dropLater(u *unlocked) {
+func (am *Manager) dropLater(u *unlocked) {
 	t := time.NewTimer(am.unlockTime)
 	defer t.Stop()
 	select {
