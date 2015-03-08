@@ -1,24 +1,21 @@
 package natspec
 
 import (
+	"fmt"
 	"github.com/obscuren/otto"
-	"io/ioutil"
 )
 
 type NatSpec struct {
 	jsvm *otto.Otto
 }
 
-func NewNATSpec(transaction string) (self *NatSpec, err error) {
+// TODO: should initialise with abi and userdoc jsons
+func NewNATSpec() (self *NatSpec, err error) {
 
 	self = new(NatSpec)
 	self.jsvm = otto.New()
-	code, err := ioutil.ReadFile("natspec.js")
-	if err != nil {
-		return
-	}
 
-	_, err = self.jsvm.Run(string(code))
+	_, err = self.jsvm.Run(natspecJS)
 	if err != nil {
 		return
 	}
@@ -27,39 +24,40 @@ func NewNATSpec(transaction string) (self *NatSpec, err error) {
 		return
 	}
 
-	self.jsvm.Run("var transaction = " + transaction + ";")
-
 	return
 }
 
-func (self *NatSpec) SetDescription(desc string) (err error) {
+func (self *NatSpec) Notice(transaction, abi, method, expression string) (string, error) {
+	var err error
+	if _, err = self.jsvm.Run("var transaction = " + transaction + ";"); err != nil {
+		return "", fmt.Errorf("natspec.js error setting transaction: %v", err)
+	}
 
-	_, err = self.jsvm.Run("var expression = \"" + desc + "\";")
-	return
+	if _, err = self.jsvm.Run("var abi = " + abi + ";"); err != nil {
+		return "", fmt.Errorf("natspec.js error setting abi: %v", err)
+	}
 
-}
+	if _, err = self.jsvm.Run("var method = '" + method + "';"); err != nil {
+		return "", fmt.Errorf("natspec.js error setting method: %v", err)
+	}
 
-func (self *NatSpec) SetABI(abi string) (err error) {
-
-	_, err = self.jsvm.Run("var abi = " + abi + ";")
-	return
-
-}
-
-func (self *NatSpec) SetMethod(method string) (err error) {
-
-	_, err = self.jsvm.Run("var method = '" + method + "';")
-	return
-
-}
-
-func (self *NatSpec) Parse() string {
+	if _, err = self.jsvm.Run("var expression = \"" + expression + "\";"); err != nil {
+		return "", fmt.Errorf("natspec.js error setting expression: %v", err)
+	}
 
 	self.jsvm.Run("var call = {method: method,abi: abi,transaction: transaction};")
 	value, err := self.jsvm.Run("natspec.evaluateExpression(expression, call);")
 	if err != nil {
-		return err.Error()
+		return "", fmt.Errorf("natspec.js error evaluating expression: %v", err)
 	}
-	return value.String()
+	evalError := "Natspec evaluation failed, wrong input params"
+	if value.String() == evalError {
+		return "", fmt.Errorf("natspec.js error evaluating expression: wrong input params in expression '%s'", expression)
+	}
+	if len(value.String()) == 0 {
+		return "", fmt.Errorf("natspec.js error evaluating expression")
+	}
+
+	return value.String(), nil
 
 }

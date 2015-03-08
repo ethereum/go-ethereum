@@ -1,4 +1,6 @@
-require=(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+package natspec
+
+const natspecJS = `require=(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 
 },{}],2:[function(require,module,exports){
 // shim for using process in browser
@@ -291,26 +293,26 @@ if (process.env.NODE_ENV !== 'build') {
     var BigNumber = require('bignumber.js'); // jshint ignore:line
 }
 
-var ETH_UNITS = [ 
-    'wei', 
-    'Kwei', 
-    'Mwei', 
-    'Gwei', 
-    'szabo', 
-    'finney', 
-    'ether', 
-    'grand', 
-    'Mether', 
-    'Gether', 
-    'Tether', 
-    'Pether', 
-    'Eether', 
-    'Zether', 
-    'Yether', 
-    'Nether', 
-    'Dether', 
-    'Vether', 
-    'Uether' 
+var ETH_UNITS = [
+    'wei',
+    'Kwei',
+    'Mwei',
+    'Gwei',
+    'szabo',
+    'finney',
+    'ether',
+    'grand',
+    'Mether',
+    'Gether',
+    'Tether',
+    'Pether',
+    'Eether',
+    'Zether',
+    'Yether',
+    'Nether',
+    'Dether',
+    'Vether',
+    'Uether'
 ];
 
 module.exports = {
@@ -375,7 +377,7 @@ var formatInputInt = function (value) {
         BigNumber.config(c.ETH_BIGNUMBER_ROUNDING_MODE);
         value = value.round();
 
-        if (value.lessThan(0)) 
+        if (value.lessThan(0))
             value = new BigNumber("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16).plus(value).plus(1);
         value = value.toString(16);
     }
@@ -404,7 +406,7 @@ var formatInputBool = function (value) {
 /// Values are multiplied by 2^m and encoded as integers
 /// @returns byte representation of real
 var formatInputReal = function (value) {
-    return formatInputInt(new BigNumber(value).times(new BigNumber(2).pow(128))); 
+    return formatInputInt(new BigNumber(value).times(new BigNumber(2).pow(128)));
 };
 
 
@@ -436,12 +438,12 @@ var formatOutputUInt = function (value) {
 
 /// @returns input bytes formatted to real
 var formatOutputReal = function (value) {
-    return formatOutputInt(value).dividedBy(new BigNumber(2).pow(128)); 
+    return formatOutputInt(value).dividedBy(new BigNumber(2).pow(128));
 };
 
 /// @returns input bytes formatted to ureal
 var formatOutputUReal = function (value) {
-    return formatOutputUInt(value).dividedBy(new BigNumber(2).pow(128)); 
+    return formatOutputUInt(value).dividedBy(new BigNumber(2).pow(128));
 };
 
 /// @returns right-aligned input bytes formatted to hex
@@ -524,14 +526,14 @@ var namedType = function (name) {
 };
 
 /// Setups input formatters for solidity types
-/// @returns an array of input formatters 
+/// @returns an array of input formatters
 var inputTypes = function () {
-    
+
     return [
         { type: prefixedType('uint'), format: f.formatInputInt },
         { type: prefixedType('int'), format: f.formatInputInt },
         { type: prefixedType('hash'), format: f.formatInputInt },
-        { type: prefixedType('string'), format: f.formatInputString }, 
+        { type: prefixedType('string'), format: f.formatInputString },
         { type: prefixedType('real'), format: f.formatInputReal },
         { type: prefixedType('ureal'), format: f.formatInputReal },
         { type: namedType('address'), format: f.formatInputInt },
@@ -620,7 +622,7 @@ var toAscii = function(hex) {
 
     return str;
 };
-    
+
 var toHex = function(str) {
     var hex = "";
     for(var i = 0; i < str.length; i++) {
@@ -642,7 +644,7 @@ var fromAscii = function(str, pad) {
 
 /// @returns display name for function/event eg. multiply(uint256) -> multiply
 var extractDisplayName = function (name) {
-    var length = name.indexOf('('); 
+    var length = name.indexOf('(');
     return length !== -1 ? name.substr(0, length) : name;
 };
 
@@ -657,8 +659,8 @@ var extractTypeName = function (name) {
 /// @returns abi array with filtered objects of type 'function'
 var filterFunctions = function (json) {
     return json.filter(function (current) {
-        return current.type === 'function'; 
-    }); 
+        return current.type === 'function';
+    });
 };
 
 /// Filters all events form input abi
@@ -3404,7 +3406,7 @@ module.exports = {
  * @date 2015
  */
 
-var abi = require('./node_modules/ethereum.js/lib/abi.js'); 
+var abi = require('./node_modules/ethereum.js/lib/abi.js');
 
 /**
  * This object should be used to evaluate natspec expression
@@ -3418,7 +3420,7 @@ var natspec = (function () {
             context[key] = obj[key];
         });
     }
-    
+
     /// generate codes, which will be evaluated
     var generateCode = function (obj) {
         return Object.keys(obj).reduce(function (acc, key) {
@@ -3440,20 +3442,20 @@ var natspec = (function () {
     /// @returns hashmap with all contract's method input variables
     var getMethodInputParams = function (method, transaction) {
         // do it with output formatter (cause we have to decode)
-        var params = abi.formatOutput(method.inputs, '0x' + transaction.params[0].data.slice(10)); 
+        var params = abi.formatOutput(method.inputs, '0x' + transaction.params[0].data.slice(10));
 
         return method.inputs.reduce(function (acc, current, index) {
             acc[current.name] = params[index];
             return acc;
         }, {});
     };
-    
+
     /// Should be called to evaluate expression
     var mapExpressionsToEvaluate = function (expression, cb) {
         var evaluatedExpression = "";
 
-        // match everything in `` quotes
-        var pattern = /\`(?:\\.|[^`\\])*\`/gim
+        // match everything in backtick
+        var pattern = /\` + "`" + `(?:\\.|[^` + "`" + `\\])*\` + "`" + `/gim
         var match;
         var lastIndex = 0;
         while ((match = pattern.exec(expression)) !== null) {
@@ -3464,9 +3466,9 @@ var natspec = (function () {
             evaluatedExpression += evaluatedPart;
             lastIndex = pattern.lastIndex;
         }
-        
+
         evaluatedExpression += expression.slice(lastIndex);
-    
+
         return evaluatedExpression;
     };
 
@@ -3478,11 +3480,11 @@ var natspec = (function () {
     var evaluateExpression = function (expression, call) {
         //var self = this;
         var context = {};
-        
+
         if (!!call) {
             try {
                 var method = getMethodWithName(call.abi, call.method);
-                var params = getMethodInputParams(method, call.transaction); 
+                var params = getMethodInputParams(method, call.transaction);
                 copyToContext(params, context);
             }
             catch (err) {
@@ -3498,7 +3500,7 @@ var natspec = (function () {
                 return fn(context).toString();
             }
             catch (err) {
-                return 'undefined'; 
+                return 'undefined';
             }
         });
 
@@ -3511,7 +3513,8 @@ var natspec = (function () {
 
 })();
 
-module.exports = natspec; 
+module.exports = natspec;
 
 
 },{"./node_modules/ethereum.js/lib/abi.js":3}]},{},[]);
+`
