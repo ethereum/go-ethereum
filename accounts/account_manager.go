@@ -60,10 +60,8 @@ type Manager struct {
 }
 
 type unlocked struct {
-	addr  []byte
-	abort chan struct{}
-
 	*crypto.Key
+	abort chan struct{}
 }
 
 func NewManager(keyStore crypto.KeyStore2, unlockTime time.Duration) *Manager {
@@ -119,7 +117,7 @@ func (am *Manager) SignLocked(a Account, keyAuth string, toSign []byte) (signatu
 		return nil, err
 	}
 	u := am.addUnlocked(a.Address, key)
-	go am.dropLater(u)
+	go am.dropLater(a.Address, u)
 	signature, err = crypto.Sign(toSign, key.PrivateKey)
 	return signature, err
 }
@@ -149,7 +147,7 @@ func (am *Manager) Accounts() ([]Account, error) {
 }
 
 func (am *Manager) addUnlocked(addr []byte, key *crypto.Key) *unlocked {
-	u := &unlocked{addr: addr, abort: make(chan struct{}), Key: key}
+	u := &unlocked{Key: key, abort: make(chan struct{})}
 	am.mutex.Lock()
 	prev, found := am.unlocked[string(addr)]
 	if found {
@@ -162,7 +160,7 @@ func (am *Manager) addUnlocked(addr []byte, key *crypto.Key) *unlocked {
 	return u
 }
 
-func (am *Manager) dropLater(u *unlocked) {
+func (am *Manager) dropLater(addr []byte, u *unlocked) {
 	t := time.NewTimer(am.unlockTime)
 	defer t.Stop()
 	select {
@@ -170,9 +168,13 @@ func (am *Manager) dropLater(u *unlocked) {
 		// just quit
 	case <-t.C:
 		am.mutex.Lock()
-		if am.unlocked[string(u.addr)] == u {
+		// only drop if it's still the same key instance that dropLater
+		// was launched with. we can check that using pointer equality
+		// because the map stores a new pointer every time the key is
+		// unlocked.
+		if am.unlocked[string(addr)] == u {
 			zeroKey(u.PrivateKey)
-			delete(am.unlocked, string(u.addr))
+			delete(am.unlocked, string(addr))
 		}
 		am.mutex.Unlock()
 	}
