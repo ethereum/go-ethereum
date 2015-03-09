@@ -1,8 +1,11 @@
 package javascript
 
 import (
+	"fmt"
+	"github.com/obscuren/otto"
 	"os"
 	"path"
+	// "reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/eth"
@@ -10,8 +13,14 @@ import (
 )
 
 func TestJEthRE(t *testing.T) {
-
+	os.RemoveAll("/tmp/eth/")
 	err := os.MkdirAll("/tmp/eth/data/", os.ModePerm)
+	if err != nil {
+		t.Errorf("%v", err)
+		return
+	}
+
+	err = ethutil.WriteFile("/tmp/eth/default.prv", []byte("946d0fe6dd95ef5476dd1fd204626b59c973bd72ffac4a108827ef488465cc68"))
 	if err != nil {
 		t.Errorf("%v", err)
 		return
@@ -26,12 +35,6 @@ func TestJEthRE(t *testing.T) {
 		return
 	}
 
-	err = ethutil.WriteFile("/tmp/eth/default.prv", []byte("946d0fe6dd95ef5476dd1fd204626b59c973bd72ffac4a108827ef488465cc68"))
-	if err != nil {
-		t.Errorf("%v", err)
-		return
-	}
-	t.Logf("ethereum %#v", ethereum)
 	assetPath := path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist", "assets", "ext")
 	jethre := NewJEthRE(ethereum, assetPath)
 
@@ -54,11 +57,44 @@ func TestJEthRE(t *testing.T) {
 		t.Errorf("incorrect result, expected %s, got %v", expected, strVal)
 	}
 
+	// no block 1, error
+	val, err = jethre.Run("eth.block(10)")
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	pp, err = jethre.PrettyPrint(val)
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+	// t.Logf("block is %v", pp)
+
+	if val != otto.UndefinedValue() {
+		t.Errorf("expected undefined value, got %v", pp)
+	}
+
+	val, err = jethre.Run(`eth.block("b5d6d8402156c5c1dfadaa4b87c676b5bcadb17ef9bc8e939606daaa0d35f55d")`)
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	pp, err = jethre.PrettyPrint(val)
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+	// t.Logf("block is %v", pp)
+
+	if val == otto.UndefinedValue() {
+		t.Errorf("undefined value")
+	}
+
+	var val0 otto.Value
 	// should get current block
-	// val, err = jethre.Run("eth.getBlock()")
-	// if err != nil {
-	// 	t.Errorf("expected no error, got %v", err)
-	// }
+	val0, err = jethre.Run("eth.block()")
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if !val.IsObject() {
+		t.Errorf("expected object")
+	}
 
 	fn := "/tmp/eth/data/blockchain.0"
 	val, err = jethre.Run("eth.export(\"" + fn + "\")")
@@ -78,17 +114,20 @@ func TestJEthRE(t *testing.T) {
 		t.Errorf("expected no error, got %v", err)
 	}
 
-	// var val0 otto.Value
+	var val1 otto.Value
 
 	// should get current block
-	// val0, err = jethre.Run("eth.getBlock()")
-	// if err != nil {
-	// 	t.Errorf("expected no error, got %v", err)
-	// }
+	val1, err = jethre.Run("eth.block()")
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
 
-	// if v0 != v1 {
-	// 	t.Errorf("expected same head after export-import, got %v (!=%v)", v1, v0)
-	// }
+	// FIXME: neither != , nor reflect.DeepEqual works, doing string comparison
+	v0 := fmt.Sprintf("%v", val0)
+	v1 := fmt.Sprintf("%v", val1)
+	if v0 != v1 {
+		t.Errorf("expected same head after export-import, got %v (!=%v)", v1, v0)
+	}
 
 	ethereum.Start()
 	// FIXME:
@@ -147,4 +186,5 @@ func TestJEthRE(t *testing.T) {
 	if mining {
 		t.Errorf("expected false (not mining), got true")
 	}
+
 }

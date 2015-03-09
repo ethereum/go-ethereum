@@ -3,6 +3,8 @@ package javascript
 import (
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/obscuren/otto"
 )
@@ -155,36 +157,45 @@ func (self *jeth) Export(call otto.FunctionCall) otto.Value {
 // 	return self.eth.toVal(self.Block.GetTransaction(hash))
 // }
 
-// type JSLog struct {
-// 	Address string   `json:address`
-// 	Topics  []string `json:topics`
-// 	Number  int32    `json:number`
-// 	Data    string   `json:data`
-// }
+type JSLog struct {
+	Address string   `json:address`
+	Topics  []string `json:topics`
+	Number  int32    `json:number`
+	Data    string   `json:data`
+}
 
-// func NewJSLog(log state.Log) JSLog {
-// 	return JSLog{
-// 		Address: ethutil.Bytes2Hex(log.Address()),
-// 		Topics:  nil, //ethutil.Bytes2Hex(log.Address()),
-// 		Number:  0,
-// 		Data:    ethutil.Bytes2Hex(log.Data()),
-// 	}
-// }
+func NewJSLog(log state.Log) JSLog {
+	return JSLog{
+		Address: ethutil.Bytes2Hex(log.Address()),
+		Topics:  nil, //ethutil.Bytes2Hex(log.Address()),
+		Number:  0,
+		Data:    ethutil.Bytes2Hex(log.Data()),
+	}
+}
 
-// type JSEthereum struct {
-// 	*xeth.XEth
-// 	vm *otto.Otto
-// }
+func (self *jeth) Block(call otto.FunctionCall) otto.Value {
+	var block *xeth.Block
+	if len(call.ArgumentList) > 0 {
+		if call.Argument(0).IsNumber() {
+			num, _ := call.Argument(0).ToInteger()
+			block = self.xeth.BlockByNumber(int32(num))
+		} else if call.Argument(0).IsString() {
+			hash, _ := call.Argument(0).ToString()
+			block = self.xeth.BlockByHash(hash)
+		} else {
+			fmt.Println("invalid argument for dump. Either hex string or number")
+			return otto.UndefinedValue()
+		}
+	} else {
+		block = self.xeth.BlockByNumber(-1)
+	}
+	if block == nil {
+		fmt.Println("block not found")
+		return otto.UndefinedValue()
+	}
 
-// func (self *JSEthereum) Block(v interface{}) otto.Value {
-// 	if number, ok := v.(int64); ok {
-// 		return self.toVal(&JSBlock{self.XEth.BlockByNumber(int32(number)), self})
-// 	} else if hash, ok := v.(string); ok {
-// 		return self.toVal(&JSBlock{self.XEth.BlockByHash(hash), self})
-// 	}
-
-// 	return otto.UndefinedValue()
-// }
+	return self.toVal(block)
+}
 
 // func (self *JSEthereum) GetStateObject(addr string) otto.Value {
 // 	return self.toVal(&JSStateObject{self.XEth.State().SafeGet(addr), self})
@@ -199,16 +210,4 @@ func (self *jeth) Export(call otto.FunctionCall) otto.Value {
 // 	}
 
 // 	return self.toVal(r)
-// }
-
-// func (self *JSEthereum) toVal(v interface{}) otto.Value {
-// 	result, err := self.vm.ToValue(v)
-
-// 	if err != nil {
-// 		fmt.Println("Value unknown:", err)
-
-// 		return otto.UndefinedValue()
-// 	}
-
-// 	return result
 // }

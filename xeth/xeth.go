@@ -82,19 +82,24 @@ func (self *XEth) State() *State { return self.state }
 func (self *XEth) Whisper() *Whisper   { return self.whisper }
 func (self *XEth) Miner() *miner.Miner { return self.miner }
 
-func (self *XEth) BlockByHash(strHash string) *Block {
+func (self *XEth) BlockByHash(strHash string) (block *Block) {
 	hash := fromHex(strHash)
-	block := self.chainManager.GetBlock(hash)
-
-	return NewBlock(block)
+	b := self.chainManager.GetBlock(hash)
+	if b != nil {
+		block = NewBlock(b)
+	}
+	return
 }
 
-func (self *XEth) BlockByNumber(num int32) *Block {
+func (self *XEth) BlockByNumber(num int32) (block *Block) {
 	if num == -1 {
 		return NewBlock(self.chainManager.CurrentBlock())
 	}
-
-	return NewBlock(self.chainManager.GetBlockByNumber(uint64(num)))
+	b := self.chainManager.GetBlockByNumber(uint64(num))
+	if b != nil {
+		block = NewBlock(b)
+	}
+	return
 }
 
 // func (self *XEth) DumpBlockByHash(strHash string) (state.World, error) {
