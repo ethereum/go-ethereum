@@ -29,7 +29,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
@@ -96,14 +95,6 @@ func initDataDir(Datadir string) {
 	}
 }
 
-func InitConfig(vmType int, ConfigFile string, Datadir string, EnvPrefix string) *ethutil.ConfigManager {
-	initDataDir(Datadir)
-	cfg := ethutil.ReadConfig(ConfigFile, Datadir, EnvPrefix)
-	cfg.VmType = vmType
-
-	return cfg
-}
-
 func exit(err error) {
 	status := 0
 	if err != nil {
@@ -130,37 +121,6 @@ func StartEthereum(ethereum *eth.Ethereum) {
 		ethereum.Stop()
 		logger.Flush()
 	})
-}
-
-func KeyTasks(keyManager *crypto.KeyManager, KeyRing string, GenAddr bool, SecretFile string, ExportDir string, NonInteractive bool) {
-	var err error
-	switch {
-	case GenAddr:
-		if NonInteractive || confirm("This action overwrites your old private key.") {
-			err = keyManager.Init(KeyRing, 0, true)
-		}
-		exit(err)
-	case len(SecretFile) > 0:
-		SecretFile = ethutil.ExpandHomePath(SecretFile)
-
-		if NonInteractive || confirm("This action overwrites your old private key.") {
-			err = keyManager.InitFromSecretsFile(KeyRing, 0, SecretFile)
-		}
-		exit(err)
-	case len(ExportDir) > 0:
-		err = keyManager.Init(KeyRing, 0, false)
-		if err == nil {
-			err = keyManager.Export(ExportDir)
-		}
-		exit(err)
-	default:
-		// Creates a keypair if none exists
-		err = keyManager.Init(KeyRing, 0, false)
-		if err != nil {
-			exit(err)
-		}
-	}
-	clilogger.Infof("Main address %x\n", keyManager.Address())
 }
 
 func FormatTransactionData(data string) []byte {
