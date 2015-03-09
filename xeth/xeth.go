@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -17,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/whisper"
 )
@@ -30,6 +32,7 @@ type Backend interface {
 	TxPool() *core.TxPool
 	PeerCount() int
 	IsListening() bool
+	SuggestPeer(nodeURL string) error
 	Peers() []*p2p.Peer
 	KeyManager() *crypto.KeyManager
 	BlockDb() ethutil.Database
@@ -93,6 +96,23 @@ func (self *XEth) BlockByNumber(num int32) *Block {
 
 	return NewBlock(self.chainManager.GetBlockByNumber(uint64(num)))
 }
+
+// func (self *XEth) DumpBlockByHash(strHash string) (state.World, error) {
+// 	block := self.chainManager.GetBlock(ethutil.Hex2Bytes(hash))
+// 	if block == nil {
+// 		return fmt.Errorf("block %x not found", strHash[:4])
+// 	}
+// 	statedb := state.New(block.Root(), self.eth.StateDb())
+// 	return statedb.RawDump()
+// }
+
+// func (self *XEth) DumpBlockByNumber(num int32) *Block {
+// 	if num == -1 {
+// 		return NewBlock(self.chainManager.CurrentBlock())
+// 	}
+
+// 	return NewBlock(self.chainManager.GetBlockByNumber(uint64(num)))
+// }
 
 func (self *XEth) Block(v interface{}) *Block {
 	if n, ok := v.(int32); ok {
@@ -312,4 +332,33 @@ func (self *XEth) Transact(toStr, valueStr, gasStr, gasPriceStr, codeStr string)
 	}
 
 	return toHex(tx.Hash()), nil
+}
+
+func (self *XEth) SuggestPeer(nodeURL string) error {
+	return self.eth.SuggestPeer(nodeURL)
+}
+
+func (self *XEth) Export(fn string) error {
+	data := self.chainManager.Export()
+	return ethutil.WriteFile(fn, data)
+}
+
+func (self *XEth) Import(fn string) (err error) {
+	var fh *os.File
+	fh, err = os.OpenFile(fn, os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		return
+	}
+	defer fh.Close()
+
+	var blocks types.Blocks
+	if err = rlp.Decode(fh, &blocks); err != nil {
+		return
+	}
+
+	self.chainManager.Reset()
+	if err = self.chainManager.InsertChain(blocks); err != nil {
+		return
+	}
+	return
 }
