@@ -270,11 +270,21 @@ ApplicationWindow {
         id: blockModel
     }
 
+    
+
+            
+
     Rectangle {
         id: windowChrome
         color: "#EBE8E8"
         anchors.fill: parent
         radius: 3
+
+
+        
+
+
+
 
         /************************/
         /*                      */
@@ -349,30 +359,6 @@ ApplicationWindow {
         }        
 
         MouseArea { 
-            id: topResizableBar
-            anchors {
-                top: parent.top
-                right: parent.right
-                left: parent.left
-            }
-            height: 5
-            cursorShape: Qt.SizeVerCursor; 
-
-            property real lastMouseY: 0
-            property real lastTop: root.y + root.height
-            onPressed: {
-                lastMouseY = mouseY
-                lastTop = root.y + root.height
-            }
-            onPositionChanged: {            
-                if (!(root.height - mouseY + lastMouseY < root.minimumHeight)) {
-                    root.height -= (mouseY - lastMouseY)
-                    root.y = lastTop - root.height
-                }
-            }
-        }
-
-        MouseArea { 
             id: bottomRightResizableHandle
             anchors {
                 bottom: parent.bottom
@@ -397,45 +383,203 @@ ApplicationWindow {
                      root.height += (mouseY - lastMouseY)
                 }
             }
+        } 
+    }
+
+    Rectangle {
+        id: topBar
+        anchors {
+            top: parent.top
+            left: parent.left
+            right: parent.right
+        }
+        height: 18.4
+        z: 100
+        color: "transparent"
+
+        MouseArea {
+            id: menuMouseArea
+            anchors.fill: parent
+            property real lastMouseX: 0
+            property real lastMouseY: 0
+            hoverEnabled: true
+            onPressed: {
+                lastMouseX = mouseX
+                lastMouseY = mouseY
+            }
+            onPositionChanged: {
+                if (menuMouseArea.pressed){
+                    root.x += (mouseX - lastMouseX)
+                    root.y += (mouseY - lastMouseY)    
+                }
+                
+            }
+            onEntered: {
+                topBar.state = "hovered"
+            }
+            onExited: {
+                topBar.state = "normal"
+            }
         }
 
-        // Commenting this out because it's causing too many crashes
-        // MouseArea { 
-        //     id: bottomLeftResizableHandle
-        //     anchors {
-        //         bottom: parent.bottom
-        //         left: parent.left
-        //     }
-        //     width: 5
-        //     height: 5
-        //     cursorShape: Qt.SizeBDiagCursor; 
+        // gradient: Gradient {
+        //      GradientStop { position: 0.0; color: "#FFFFFFFF" }
+        //      GradientStop { position: 1.0; color: "#00FFFFFF" }
+        // }
 
-        //     Rectangle {
-        //         anchors.fill: parent
-        //         color: "red"
-        //     }
+ 
 
-        //     property real lastMouseX: 0
-        //     property real lastMouseY: 0
-        //     property real lastRight: root.x + root.width
+        Rectangle {
+            anchors {
+                top: parent.top
+                right: parent.right
+                bottom: parent.bottom
+                left: parent.left
+                leftMargin: 194
+            }
+            radius: 3
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: "#FFFFFFFF" }
+                GradientStop { position: 1.0; color: "#00FFFFFF" }
+            }
+        }
 
-        //     onPressed: {
-        //         lastMouseX = mouseX
-        //         lastMouseY = mouseY
-        //         lastRight = root.x + root.width                
-        //     }
-        //     onPositionChanged: {
-        //         if (!(root.width + mouseX - lastMouseX < root.minimumWidth)) {
-        //              root.width += (mouseX - lastMouseX)
-        //         }
+        Rectangle {
+            id: topbarBackground
+            anchors.fill: parent
+            opacity: 0.0
+            radius: 3
+            color: "#AAA0A0"
+        }
+        
 
-        //         if (!(root.height - mouseY + lastMouseY < root.minimumHeight)) {
-        //             root.height -= (mouseY - lastMouseY)
-        //             root.y = lastTop - root.height
-        //         }
-        //     }
-        // } 
+        states: [
+        State {
+            name: "normal"
+            when: menuMouseArea.hovered
+            PropertyChanges { 
+                target: topbarBackground
+                opacity: 0
+            }
+        },
+        State {
+            name: "hovered"
+            when: menuMouseArea.hovered
+            PropertyChanges { 
+                target: topbarBackground
+                opacity: 1
+            }
+        }]
+
+
+        transitions: Transition {
+            NumberAnimation { 
+                properties: "opacity"
+                duration: 250
+                easing.type: Easing.InOutQuad 
+            }
+        }
+
+        /************************/
+        /*   Semafor Buttons    */
+        /************************/
+
+         Rectangle {
+            id: semaforButtons
+            color: "transparent"
+            height: 32
+            
+            anchors {
+                top: parent.top
+                left: parent.left
+                right: parent.right
+            }
+
+            Rectangle {
+                    color: 'transparent'
+                    width: 13
+                    height: 20
+                    x: 3
+                    
+                    Image {
+                         height: 13
+                         width: 13
+                         source: toolbarCloseButton.containsMouse ?  "../window-control/window-close.png" :  "../window-control/window-close-hover.png"
+                         anchors.centerIn: parent
+                         
+                         MouseArea {
+                            id: toolbarCloseButton
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: Qt.quit() //gui.stop();
+
+                            onEntered: {
+                                topBar.state = "hovered"
+                            }
+                        }
+                     }  
+                }
+                Rectangle {
+                    color: 'transparent'
+                    width: 13
+                    height: 20
+                    x: 21
+                    
+                    Image {
+                         height: 13
+                         width: 13
+                         source: toolbarminimizeButton.containsMouse ?  "../window-control/window-minimize.png" :  "../window-control/window-minimize-hover.png"
+                         anchors.centerIn: parent
+                         
+                         MouseArea {
+                            id: toolbarminimizeButton
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                console.log("Minimize");
+                                // Neither works..
+                                //root.visibility = QWindow.minimized;
+                                // root.showMinimized();
+                            }
+                            onEntered: {
+                                topBar.state = "hovered"
+                                console.log(topBar.state )
+                            }
+                        }
+                     }  
+                }
+
+                Rectangle {
+                    color: 'transparent'
+                    width: 13
+                    height: 20
+                    x: 40
+
+                    Image {
+                         height: 13
+                         width: 13
+                         source: toolbarzoomButton.containsMouse ?  "../window-control/window-zoom.png" :  "../window-control/window-zoom-hover.png"
+                         anchors.centerIn: parent
+                         
+                         MouseArea {
+                            id: toolbarzoomButton
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                console.log("Maximize");
+                                // Neither works..
+                                //root.visibility = QWindow.maximized;
+                                //root.showMaximized();
+                            } 
+                            onEntered: {
+                                topBar.state = "hovered"
+                            }                           
+                        }
+                    }  
+            }
+        }
     }
+
 
     SplitView {
         property var views: [];
@@ -443,6 +587,7 @@ ApplicationWindow {
         id: mainSplit
         anchors.fill: windowChrome
         anchors.margins: 2
+        z: 50
         //color: "brown"
         //radius: 5
 
@@ -483,6 +628,8 @@ ApplicationWindow {
 
             return {view: view, menuItem: menuItem}
         }
+
+
 
         /*********************
          * Main menu.
@@ -851,94 +998,6 @@ ApplicationWindow {
                  return comp
              }
 
-            /************************/
-            /*   Semafor Buttons    */
-            /************************/
-
-             Rectangle {
-                id: semaforButtons
-                color: "transparent"
-                height: 32
-                
-                anchors {
-                    top: parent.top
-                    left: parent.left
-                    right: parent.right
-                }
-
-                Rectangle {
-                        color: 'transparent'
-                        width: 13
-                        height: 20
-                        x: 3
-                        
-                        Image {
-                             height: 13
-                             width: 13
-                             source: toolbarCloseButton.containsMouse ?  "../window-control/window-close.png" :  "../window-control/window-close-hover.png"
-                             anchors.centerIn: parent
-                             
-                             MouseArea {
-                                id: toolbarCloseButton
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: Qt.quit() //gui.stop();
-                            }
-                         }  
-                    }
-                    Rectangle {
-                        color: 'transparent'
-                        width: 13
-                        height: 20
-                        x: 21
-                        
-                        Image {
-                             height: 13
-                             width: 13
-                             source: toolbarminimizeButton.containsMouse ?  "../window-control/window-minimize.png" :  "../window-control/window-minimize-hover.png"
-                             anchors.centerIn: parent
-                             
-                             MouseArea {
-                                id: toolbarminimizeButton
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: {
-                                    console.log("Minimize");
-                                    // Neither works..
-                                    //root.visibility = QWindow.minimized;
-                                    // root.showMinimized();
-                                }
-                            }
-                         }  
-                    }
-
-                    Rectangle {
-                        color: 'transparent'
-                        width: 13
-                        height: 20
-                        x: 40
-
-                        Image {
-                             height: 13
-                             width: 13
-                             source: toolbarzoomButton.containsMouse ?  "../window-control/window-zoom.png" :  "../window-control/window-zoom-hover.png"
-                             anchors.centerIn: parent
-                             
-                             MouseArea {
-                                id: toolbarzoomButton
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: {
-                                    console.log("Maximize");
-                                    // Neither works..
-                                    //root.visibility = QWindow.maximized;
-                                    //root.showMaximized();
-                                }                            }
-                         }  
-                    }
-
-
-             }
 
              ColumnLayout {
                 id: menuColumn
@@ -1059,36 +1118,6 @@ ApplicationWindow {
               anchors.top: parent.top
               color: "#00000000"             
 
-                Rectangle {
-                    id: topMovingHandle
-                    anchors {
-                        top: parent.top
-                        left: parent.left
-                        right: parent.right
-                    }
-                    height: 37
-                    z: 100
-
-                    MouseArea {
-                        anchors.fill: parent
-                        property real lastMouseX: 0
-                        property real lastMouseY: 0
-                        onPressed: {
-                            lastMouseX = mouseX
-                            lastMouseY = mouseY
-                        }
-                        onPositionChanged: {
-                            root.x += (mouseX - lastMouseX)
-                            root.y += (mouseY - lastMouseY)
-                        }
-                    }
-
-                    gradient: Gradient {
-                         GradientStop { position: 0.0; color: "#FFFFFFFF" }
-                         GradientStop { position: 1.0; color: "#00FFFFFF" }
-                     }
-                }
-
               Rectangle {
                   id: mainView
                   color: "#00000000"
@@ -1102,7 +1131,7 @@ ApplicationWindow {
 
                       return view;
                   }
-              }
+            }
         }
       }
 
