@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/vm"
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
@@ -41,6 +42,7 @@ type Config struct {
 	LogFile   string
 	LogLevel  int
 	LogFormat string
+	VmDebug   bool
 
 	MaxPeers int
 	Port     string
@@ -106,7 +108,8 @@ type Ethereum struct {
 	shutdownChan chan bool
 
 	// DB interface
-	db ethutil.Database
+	blockDb ethutil.Database
+	stateDb ethutil.Database
 
 	//*** SERVICES ***
 	// State manager for processing new blocks and managing the over all states
@@ -133,25 +136,30 @@ func New(config *Config) (*Ethereum, error) {
 	// Boostrap database
 	ethlogger := logger.New(config.DataDir, config.LogFile, config.LogLevel, config.LogFormat)
 
-	db, err := ethdb.NewLDBDatabase(path.Join(config.DataDir, "blockchain"))
+	blockDb, err := ethdb.NewLDBDatabase(path.Join(config.DataDir, "blockchain"))
+	if err != nil {
+		return nil, err
+	}
+	stateDb, err := ethdb.NewLDBDatabase(path.Join(config.DataDir, "state"))
 	if err != nil {
 		return nil, err
 	}
 
 	// Perform database sanity checks
-	d, _ := db.Get([]byte("ProtocolVersion"))
+	d, _ := blockDb.Get([]byte("ProtocolVersion"))
 	protov := ethutil.NewValue(d).Uint()
 	if protov != ProtocolVersion && protov != 0 {
 		path := path.Join(config.DataDir, "blockchain")
 		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, ProtocolVersion, path)
 	}
 
-	saveProtocolVersion(db)
+	saveProtocolVersion(blockDb)
 	//ethutil.Config.Db = db
 
 	eth := &Ethereum{
 		shutdownChan:   make(chan bool),
-		db:             db,
+		blockDb:        blockDb,
+		stateDb:        stateDb,
 		eventMux:       &event.TypeMux{},
 		logger:         ethlogger,
 		accountManager: config.AccountManager,
@@ -163,10 +171,10 @@ func New(config *Config) (*Ethereum, error) {
 		return nil, fmt.Errorf("no coinbase: %v", err)
 	}
 
-	eth.chainManager = core.NewChainManager(db, eth.EventMux())
+	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.EventMux())
 	pow := ethash.New(eth.chainManager)
 	eth.txPool = core.NewTxPool(eth.EventMux())
-	eth.blockProcessor = core.NewBlockProcessor(db, pow, eth.txPool, eth.chainManager, eth.EventMux())
+	eth.blockProcessor = core.NewBlockProcessor(stateDb, pow, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
 	eth.whisper = whisper.New()
 	eth.miner = miner.New(cb, eth, pow, config.MinerThreads)
@@ -198,6 +206,8 @@ func New(config *Config) (*Ethereum, error) {
 		eth.net.ListenAddr = ":" + config.Port
 	}
 
+	vm.Debug = config.VmDebug
+
 	return eth, nil
 }
 
@@ -210,7 +220,8 @@ func (s *Ethereum) TxPool() *core.TxPool                 { return s.txPool }
 func (s *Ethereum) BlockPool() *blockpool.BlockPool      { return s.blockPool }
 func (s *Ethereum) Whisper() *whisper.Whisper            { return s.whisper }
 func (s *Ethereum) EventMux() *event.TypeMux             { return s.eventMux }
-func (s *Ethereum) Db() ethutil.Database                 { return s.db }
+func (s *Ethereum) BlockDb() ethutil.Database            { return s.blockDb }
+func (s *Ethereum) StateDb() ethutil.Database            { return s.stateDb }
 func (s *Ethereum) Miner() *miner.Miner                  { return s.miner }
 func (s *Ethereum) IsListening() bool                    { return true } // Always listening
 func (s *Ethereum) PeerCount() int                       { return s.net.PeerCount() }
@@ -260,7 +271,8 @@ func (self *Ethereum) SuggestPeer(nodeURL string) error {
 
 func (s *Ethereum) Stop() {
 	// Close the database
-	defer s.db.Close()
+	defer s.blockDb.Close()
+	defer s.stateDb.Close()
 
 	s.txSub.Unsubscribe()    // quits txBroadcastLoop
 	s.blockSub.Unsubscribe() // quits blockBroadcastLoop

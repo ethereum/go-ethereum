@@ -9,7 +9,6 @@ For each request type, define the following:
 package rpc
 
 import (
-	"fmt"
 	"math/big"
 	"path"
 	"strings"
@@ -24,7 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/state"
-	"github.com/ethereum/go-ethereum/ui"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -84,7 +82,7 @@ func (self *EthereumApi) setStateByBlockNumber(num int64) {
 	block = chain.GetBlockByNumber(uint64(num))
 
 	if block != nil {
-		self.useState(state.New(block.Root(), self.xeth().Backend().Db()))
+		self.useState(state.New(block.Root(), self.xeth().Backend().StateDb()))
 	} else {
 		self.useState(chain.State())
 	}
@@ -701,15 +699,4 @@ func (self *EthereumApi) useState(statedb *state.StateDB) {
 	defer self.xethMu.Unlock()
 
 	self.eth = self.eth.UseState(statedb)
-}
-
-func t(f ui.Frontend) {
-	// Call the password dialog
-	ret, err := f.Call("PasswordDialog")
-	if err != nil {
-		fmt.Println(err)
-	}
-	// Get the first argument
-	t, _ := ret.Get(0)
-	fmt.Println("return:", t)
 }

@@ -46,7 +46,7 @@ func execJsFile(ethereum *eth.Ethereum, filename string) {
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
-	re := javascript.NewJSRE(xeth.New(ethereum))
+	re := javascript.NewJSRE(xeth.New(ethereum, nil))
 	if _, err := re.Run(string(content)); err != nil {
 		utils.Fatalf("Javascript Error: %v", err)
 	}
@@ -61,7 +61,7 @@ type repl struct {
 }
 
 func runREPL(ethereum *eth.Ethereum) {
-	xeth := xeth.New(ethereum)
+	xeth := xeth.New(ethereum, nil)
 	repl := &repl{
 		re:       javascript.NewJSRE(xeth),
 		xeth:     xeth,
@@ -229,7 +229,7 @@ func (self *repl) dump(call otto.FunctionCall) otto.Value {
 		block = self.ethereum.ChainManager().CurrentBlock()
 	}
 
-	statedb := state.New(block.Root(), self.ethereum.Db())
+	statedb := state.New(block.Root(), self.ethereum.StateDb())
 
 	v, _ := self.re.Vm.ToValue(statedb.RawDump())
 

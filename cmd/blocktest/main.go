@@ -125,11 +125,15 @@ func main() {
 }
 
 func memchain() *core.ChainManager {
-	db, err := ethdb.NewMemDatabase()
+	blockdb, err := ethdb.NewMemDatabase()
 	if err != nil {
 		utils.Fatalf("Could not create in-memory database: %v", err)
 	}
-	return core.NewChainManager(db, new(event.TypeMux))
+	statedb, err := ethdb.NewMemDatabase()
+	if err != nil {
+		utils.Fatalf("Could not create in-memory database: %v", err)
+	}
+	return core.NewChainManager(blockdb, statedb, new(event.TypeMux))
 }
 
 func loadBlocksFromTestFile(filePath string) (blocks types.Blocks, err error) {

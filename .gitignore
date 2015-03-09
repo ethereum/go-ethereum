@@ -11,6 +11,8 @@
 .DS_Store
 */**/.DS_Store
 .ethtest
+*/**/*tx_database*
+*/**/*dapps*
 
 #*
 .#*
@@ -21,3 +23,5 @@
 
 cmd/ethereum/ethereum
 cmd/mist/mist
+deploy/osx/Mist.app
+deploy/osx/Mist\ Installer.dmg

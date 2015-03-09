@@ -9,6 +9,9 @@ import (
 
 var vmlogger = logger.NewLogger("VM")
 
+// Global Debug flag indicating Debug VM (full logging)
+var Debug bool
+
 type Type byte
 
 const (

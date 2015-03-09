@@ -45,9 +45,15 @@ func NewApp(version, usage string) *cli.App {
 
 var (
 	// General settings
-	VMTypeFlag = cli.IntFlag{
-		Name:  "vm",
-		Usage: "Virtual Machine type: 0 is standard VM, 1 is debug VM",
+	/*
+		VMTypeFlag = cli.IntFlag{
+			Name:  "vm",
+			Usage: "Virtual Machine type: 0 is standard VM, 1 is debug VM",
+		}
+	*/
+	VMDebugFlag = cli.BoolFlag{
+		Name:  "vmdebug",
+		Usage: "Virtual Machine debug output",
 	}
 	DataDirFlag = cli.StringFlag{
 		Name:  "datadir",
@@ -161,6 +167,7 @@ func GetEthereum(clientID, version string, ctx *cli.Context) *eth.Ethereum {
 		LogFormat:      ctx.GlobalString(LogFormatFlag.Name),
 		MinerThreads:   ctx.GlobalInt(MinerThreadsFlag.Name),
 		AccountManager: GetAccountManager(ctx),
+		VmDebug:        ctx.GlobalBool(VMDebugFlag.Name),
 		MaxPeers:       ctx.GlobalInt(MaxPeersFlag.Name),
 		Port:           ctx.GlobalString(ListenPortFlag.Name),
 		NAT:            GetNAT(ctx),
@@ -175,13 +182,18 @@ func GetEthereum(clientID, version string, ctx *cli.Context) *eth.Ethereum {
 	return ethereum
 }
 
-func GetChain(ctx *cli.Context) (*core.ChainManager, ethutil.Database) {
+func GetChain(ctx *cli.Context) (*core.ChainManager, ethutil.Database, ethutil.Database) {
 	dataDir := ctx.GlobalString(DataDirFlag.Name)
-	db, err := ethdb.NewLDBDatabase(path.Join(dataDir, "blockchain"))
+	blockDb, err := ethdb.NewLDBDatabase(path.Join(dataDir, "blockchain"))
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
-	return core.NewChainManager(db, new(event.TypeMux)), db
+
+	stateDb, err := ethdb.NewLDBDatabase(path.Join(dataDir, "state"))
+	if err != nil {
+		Fatalf("Could not open database: %v", err)
+	}
+	return core.NewChainManager(blockDb, stateDb, new(event.TypeMux)), blockDb, stateDb
 }
 
 func GetAccountManager(ctx *cli.Context) *accounts.Manager {
@@ -199,5 +211,5 @@ func StartRPC(eth *eth.Ethereum, ctx *cli.Context) {
 	if err != nil {
 		Fatalf("Can't listen on %s:%d: %v", addr, port, err)
 	}
-	go http.Serve(l, rpc.JSONRPC(xeth.New(eth), dataDir))
+	go http.Serve(l, rpc.JSONRPC(xeth.New(eth, nil), dataDir))
 }

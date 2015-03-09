@@ -13,6 +13,7 @@ type Backend interface {
 	PeerCount() int
 	IsListening() bool
 	Peers() []*p2p.Peer
-	Db() ethutil.Database
+	BlockDb() ethutil.Database
+	StateDb() ethutil.Database
 	EventMux() *event.TypeMux
 }

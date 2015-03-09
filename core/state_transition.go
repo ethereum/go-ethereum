@@ -184,7 +184,7 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 		}
 	}
 	if err = self.UseGas(big.NewInt(dgas)); err != nil {
-		return
+		return nil, InvalidTxError(err)
 	}
 
 	//stateCopy := self.env.State().Copy()
@@ -230,9 +230,15 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 		*/
 	}
 
-	if err != nil {
-		self.UseGas(self.gas)
+	if err != nil && IsValueTransferErr(err) {
+		return nil, InvalidTxError(err)
 	}
+
+	/*
+		if err != nil {
+			self.UseGas(self.gas)
+		}
+	*/
 
 	return
 }

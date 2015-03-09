@@ -30,7 +30,6 @@
                 }
             }
         },
-        "preStateRoot" : "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
         "transaction" : {
             "data" : "",
             "gasLimit" : "115792089237316195423570985008687907853269984665640564039457584007913129639435",
@@ -55,16 +54,23 @@
         "out" : "0x",
         "post" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
-                "balance" : "1000000000000000000",
+                "balance" : "1000000000000000010",
                 "code" : "0x7b601080600c6000396000f200600035541560095700602035600035556000526000600060006000601773aaaaaaaaace5edbc8e2a8697c15331677e6ebf0b7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffecf1",
                 "nonce" : "0",
                 "storage" : {
                 }
             },
-            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "1000",
+            "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                "balance" : "22850",
                 "code" : "0x",
                 "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "77140",
+                "code" : "0x",
+                "nonce" : "1",
                 "storage" : {
                 }
             },
@@ -76,7 +82,7 @@
                 }
             }
         },
-        "postStateRoot" : "45a2a0c2ccdbef34e6b9c9514025624c7de68630fb4b654abcc0c25052fea8e0",
+        "postStateRoot" : "942d1aa0569204aa9cef7c5cc98d75c3a19c04575dfa6033170e578b383200b4",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "1000000000000000000",
@@ -86,7 +92,7 @@
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "1000",
+                "balance" : "100000",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
@@ -100,10 +106,9 @@
                 }
             }
         },
-        "preStateRoot" : "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
         "transaction" : {
             "data" : "",
-            "gasLimit" : "850",
+            "gasLimit" : "22850",
             "gasPrice" : "1",
             "nonce" : "0",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",

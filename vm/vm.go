@@ -30,8 +30,8 @@ type Vm struct {
 
 func New(env Environment) *Vm {
 	lt := LogTyPretty
-	// lt = LogTyDiff
-	return &Vm{debug: true, env: env, logTy: lt, Recoverable: true}
+
+	return &Vm{debug: Debug, env: env, logTy: lt, Recoverable: true}
 }
 
 func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
@@ -405,7 +405,12 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 		case BALANCE:
 
 			addr := stack.Pop().Bytes()
-			balance := statedb.GetBalance(addr)
+			var balance *big.Int
+			if statedb.GetStateObject(addr) != nil {
+				balance = statedb.GetBalance(addr)
+			} else {
+				balance = base
+			}
 
 			stack.Push(balance)
 
@@ -731,6 +736,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			self.Printf(" => (%x) %v", receiver.Address()[:4], balance)
 
 			receiver.AddBalance(balance)
+
 			statedb.Delete(context.Address())
 
 			fallthrough
@@ -900,6 +906,10 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 			g = GasStorageMod
 		}
 		gas.Set(g)
+	case SUICIDE:
+		if !statedb.IsDeleted(context.Address()) {
+			statedb.Refund(self.env.Origin(), RefundSuicide)
+		}
 	case MLOAD:
 		newMemSize = calcMemSize(stack.Peek(), u256(32))
 	case MSTORE8:

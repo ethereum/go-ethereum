@@ -30,7 +30,7 @@ type environment struct {
 }
 
 func env(block *types.Block, eth core.Backend) *environment {
-	state := state.New(block.Root(), eth.Db())
+	state := state.New(block.Root(), eth.StateDb())
 	env := &environment{
 		totalUsedGas: new(big.Int),
 		state:        state,
@@ -116,7 +116,7 @@ func (self *worker) register(agent Agent) {
 }
 
 func (self *worker) update() {
-	events := self.mux.Subscribe(core.ChainEvent{}, core.NewMinedBlockEvent{})
+	events := self.mux.Subscribe(core.ChainHeadEvent{}, core.NewMinedBlockEvent{})
 
 	timer := time.NewTicker(2 * time.Second)
 
@@ -125,7 +125,7 @@ out:
 		select {
 		case event := <-events.Chan():
 			switch ev := event.(type) {
-			case core.ChainEvent:
+			case core.ChainHeadEvent:
 				if self.current.block != ev.Block {
 					self.commitNewWork()
 				}

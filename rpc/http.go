@@ -9,16 +9,26 @@ import (
 
 var rpchttplogger = logger.NewLogger("RPC-HTTP")
 
+const (
+	jsonrpcver       = "2.0"
+	maxSizeReqLength = 1024 * 1024 // 1MB
+)
+
 // JSONRPC returns a handler that implements the Ethereum JSON-RPC API.
 func JSONRPC(pipe *xeth.XEth, dataDir string) http.Handler {
 	var json JsonWrapper
-	const jsonrpcver = "2.0"
 	api := NewEthereumApi(pipe, dataDir)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
 		rpchttplogger.DebugDetailln("Handling request")
+
+		if req.ContentLength > maxSizeReqLength {
+			jsonerr := &RpcErrorObject{-32700, "Error: Request too large"}
+			json.Send(w, &RpcErrorResponse{JsonRpc: jsonrpcver, ID: nil, Error: jsonerr})
+			return
+		}
 
 		reqParsed, reqerr := json.ParseRequestBody(req)
 		if reqerr != nil {

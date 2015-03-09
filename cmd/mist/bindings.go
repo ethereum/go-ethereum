@@ -84,7 +84,7 @@ func (self *Gui) DumpState(hash, path string) {
 			return
 		}
 
-		stateDump = state.New(block.Root(), self.eth.Db()).Dump()
+		stateDump = state.New(block.Root(), self.eth.StateDb()).Dump()
 	}
 
 	file, err := os.OpenFile(path[7:], os.O_CREATE|os.O_RDWR, os.ModePerm)

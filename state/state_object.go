@@ -111,7 +111,7 @@ func NewStateObjectFromBytes(address, data []byte, db ethutil.Database) *StateOb
 func (self *StateObject) MarkForDeletion() {
 	self.remove = true
 	self.dirty = true
-	statelogger.DebugDetailf("%x: #%d %v (deletion)\n", self.Address(), self.nonce, self.balance)
+	statelogger.Debugf("%x: #%d %v X\n", self.Address(), self.nonce, self.balance)
 }
 
 func (c *StateObject) getAddr(addr []byte) *ethutil.Value {

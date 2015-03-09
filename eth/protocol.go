@@ -253,10 +253,9 @@ func (self *ethProtocol) handle() error {
 	case NewBlockMsg:
 		var request newBlockMsgData
 		if err := msg.Decode(&request); err != nil {
-			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
+			return self.protoError(ErrDecode, "%v: %v", msg, err)
 		}
 		hash := request.Block.Hash()
-		fmt.Printf("received block: %x\n", hash)
 		_, chainHead, _ := self.chainManager.Status()
 
 		jsonlogger.LogJson(&logger.EthChainReceivedNewBlock{

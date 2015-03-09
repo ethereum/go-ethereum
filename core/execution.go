@@ -1,7 +1,6 @@
 package core
 
 import (
-	"fmt"
 	"math/big"
 	"time"
 
@@ -26,7 +25,10 @@ func (self *Execution) Addr() []byte {
 
 func (self *Execution) Call(codeAddr []byte, caller vm.ContextRef) ([]byte, error) {
 	// Retrieve the executing code
-	code := self.env.State().GetCode(codeAddr)
+	var code []byte
+	if self.env.State().GetStateObject(codeAddr) != nil {
+		code = self.env.State().GetCode(codeAddr)
+	}
 
 	return self.exec(code, codeAddr, caller)
 }
@@ -55,7 +57,7 @@ func (self *Execution) exec(code, contextAddr []byte, caller vm.ContextRef) (ret
 
 		caller.ReturnGas(self.Gas, self.price)
 
-		return nil, fmt.Errorf("insufficient funds to transfer value. Req %v, has %v", self.value, from.Balance())
+		return nil, ValueTransferErr("insufficient funds to transfer value. Req %v, has %v", self.value, from.Balance())
 	}
 
 	snapshot := env.State().Copy()
