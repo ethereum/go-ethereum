@@ -45,12 +45,10 @@ const (
 
 var (
 	clilogger = logger.NewLogger("CLI")
-	app       = cli.NewApp()
+	app       = utils.NewApp(Version, "the go-ethereum command line interface")
 )
 
 func init() {
-	app.Version = Version
-	app.Usage = "the go-ethereum command-line client"
 	app.Action = run
 	app.HideVersion = true // we have a command to print the version
 	app.Commands = []cli.Command{
@@ -107,8 +105,6 @@ runtime will execute the file and exit.
 			Usage:  `import a blockchain file`,
 		},
 	}
-	app.Author = ""
-	app.Email = ""
 	app.Flags = []cli.Flag{
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
