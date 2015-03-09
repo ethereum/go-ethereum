@@ -269,7 +269,7 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
 }
 
 func (p *EthereumApi) Call(args *NewTxArgs, reply *interface{}) error {
-	result, err := p.xeth().Call( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
+	result, err := p.xeth().Call(args.From, args.To, args.Value, args.Gas, args.GasPrice, args.Data)
 	if err != nil {
 		return err
 	}

@@ -7,6 +7,7 @@ package xeth
 import (
 	"bytes"
 	"encoding/json"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/core"
@@ -243,7 +244,7 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 	return toHex(tx.Hash()), nil
 }
 
-func (self *XEth) Call(toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
+func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
 	if len(gasStr) == 0 {
 		gasStr = "100000"
 	}
@@ -251,34 +252,20 @@ func (self *XEth) Call(toStr, valueStr, gasStr, gasPriceStr, dataStr string) (st
 		gasPriceStr = "1"
 	}
 
-	acct, err := self.accountManager.Default()
-	if err != nil {
-		return "", err
+	statedb := self.State().State() //self.chainManager.TransState()
+	msg := callmsg{
+		from:     statedb.GetOrNewStateObject(fromHex(fromStr)),
+		to:       fromHex(toStr),
+		gas:      ethutil.Big(gasStr),
+		gasPrice: ethutil.Big(gasPriceStr),
+		value:    ethutil.Big(valueStr),
+		data:     fromHex(dataStr),
 	}
-	var (
-		statedb = self.State().State() //self.chainManager.TransState()
-		from    = statedb.GetOrNewStateObject(acct.Address)
-		block   = self.chainManager.CurrentBlock()
-		to      = statedb.GetOrNewStateObject(fromHex(toStr))
-		data    = fromHex(dataStr)
-		gas     = ethutil.Big(gasStr)
-		price   = ethutil.Big(gasPriceStr)
-		value   = ethutil.Big(valueStr)
-	)
-
-	msg := types.NewTransactionMessage(fromHex(toStr), value, gas, price, data)
-	sig, err := self.accountManager.Sign(acct, msg.Hash())
-	if err != nil {
-		return "", err
-	}
-	msg.SetSignatureValues(sig)
+	block := self.chainManager.CurrentBlock()
 	vmenv := core.NewEnv(statedb, self.chainManager, msg, block)
-	res, err := vmenv.Call(from, to.Address(), data, gas, price, value)
-	if err != nil {
-		return "", err
-	}
 
-	return toHex(res), nil
+	res, err := vmenv.Call(msg.from, msg.to, msg.data, msg.gas, msg.gasPrice, msg.value)
+	return toHex(res), err
 }
 
 func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
@@ -334,3 +321,21 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 
 	return toHex(tx.Hash()), nil
 }
+
+// callmsg is the message type used for call transations.
+type callmsg struct {
+	from          *state.StateObject
+	to            []byte
+	gas, gasPrice *big.Int
+	value         *big.Int
+	data          []byte
+}
+
+// accessor boilerplate to implement core.Message
+func (m callmsg) From() []byte       { return m.from.Address() }
+func (m callmsg) Nonce() uint64      { return m.from.Nonce() }
+func (m callmsg) To() []byte         { return m.to }
+func (m callmsg) GasPrice() *big.Int { return m.gasPrice }
+func (m callmsg) Gas() *big.Int      { return m.gas }
+func (m callmsg) Value() *big.Int    { return m.value }
+func (m callmsg) Data() []byte       { return m.data }
