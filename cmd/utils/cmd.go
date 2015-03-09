@@ -34,9 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/rlp"
-	rpchttp "github.com/ethereum/go-ethereum/rpc/http"
 	"github.com/ethereum/go-ethereum/state"
-	"github.com/ethereum/go-ethereum/xeth"
 )
 
 var clilogger = logger.NewLogger("CLI")
@@ -163,16 +161,6 @@ func KeyTasks(keyManager *crypto.KeyManager, KeyRing string, GenAddr bool, Secre
 		}
 	}
 	clilogger.Infof("Main address %x\n", keyManager.Address())
-}
-
-func StartRpc(ethereum *eth.Ethereum, RpcListenAddress string, RpcPort int) {
-	var err error
-	ethereum.RpcServer, err = rpchttp.NewRpcHttpServer(xeth.New(ethereum), RpcListenAddress, RpcPort)
-	if err != nil {
-		clilogger.Errorf("Could not start RPC interface (port %v): %v", RpcPort, err)
-	} else {
-		go ethereum.RpcServer.Start()
-	}
 }
 
 func FormatTransactionData(data string) []byte {

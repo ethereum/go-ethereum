@@ -2,6 +2,10 @@ package utils
 
 import (
 	"crypto/ecdsa"
+	"fmt"
+	"net"
+	"net/http"
+	"os"
 	"path"
 	"runtime"
 	"time"
@@ -17,6 +21,8 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/xeth"
 )
 
 // NewApp creates an app with sane defaults.
@@ -182,4 +188,16 @@ func GetAccountManager(ctx *cli.Context) *accounts.Manager {
 	dataDir := ctx.GlobalString(DataDirFlag.Name)
 	ks := crypto.NewKeyStorePassphrase(path.Join(dataDir, "keys"))
 	return accounts.NewManager(ks, 300*time.Second)
+}
+
+func StartRPC(eth *eth.Ethereum, ctx *cli.Context) {
+	addr := ctx.GlobalString(RPCListenAddrFlag.Name)
+	port := ctx.GlobalInt(RPCPortFlag.Name)
+	dataDir := ctx.GlobalString(DataDirFlag.Name)
+
+	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", addr, port))
+	if err != nil {
+		Fatalf("Can't listen on %s:%d: %v", addr, port, err)
+	}
+	go http.Serve(l, rpc.JSONRPC(xeth.New(eth), dataDir))
 }

@@ -11,6 +11,7 @@ package rpc
 import (
 	"fmt"
 	"math/big"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -55,8 +56,8 @@ type EthereumApi struct {
 	defaultBlockAge int64
 }
 
-func NewEthereumApi(eth *xeth.XEth) *EthereumApi {
-	db, _ := ethdb.NewLDBDatabase("dapps")
+func NewEthereumApi(eth *xeth.XEth, dataDir string) *EthereumApi {
+	db, _ := ethdb.NewLDBDatabase(path.Join(dataDir, "dapps"))
 	api := &EthereumApi{
 		eth:             eth,
 		mux:             eth.Backend().EventMux(),

@@ -170,9 +170,7 @@ func runjs(ctx *cli.Context) {
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	utils.StartEthereum(eth)
 	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
-		addr := ctx.GlobalString(utils.RPCListenAddrFlag.Name)
-		port := ctx.GlobalInt(utils.RPCPortFlag.Name)
-		utils.StartRpc(eth, addr, port)
+		utils.StartRPC(eth, ctx)
 	}
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
 		eth.Miner().Start()
