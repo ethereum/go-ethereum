@@ -36,7 +36,6 @@ type Backend interface {
 	EventMux() *event.TypeMux
 	Whisper() *whisper.Whisper
 	Miner() *miner.Miner
-	ClientVersion() string
 }
 
 type XEth struct {
@@ -163,10 +162,6 @@ func (self *XEth) CodeAt(address string) string {
 
 func (self *XEth) IsContract(address string) bool {
 	return len(self.State().SafeGet(address).Code()) > 0
-}
-
-func (self *XEth) GetClientVersion() string {
-	return self.eth.ClientVersion()
 }
 
 func (self *XEth) SecretToAddress(key string) string {

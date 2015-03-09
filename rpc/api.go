@@ -609,8 +609,6 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.WhisperMessages(args.Id, reply)
-	case "client_version":
-		*reply = p.eth.GetClientVersion()
 	// case "eth_register":
 	// 	args, err := req.ToRegisterArgs()
 	// 	if err != nil {
