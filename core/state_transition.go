@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"math/big"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
@@ -44,8 +45,6 @@ type StateTransition struct {
 }
 
 type Message interface {
-	Hash() []byte
-
 	From() []byte
 	To() []byte
 
@@ -152,7 +151,7 @@ func (self *StateTransition) preCheck() (err error) {
 }
 
 func (self *StateTransition) TransitionState() (ret []byte, err error) {
-	statelogger.Debugf("(~) %x\n", self.msg.Hash())
+	// statelogger.Debugf("(~) %x\n", self.msg.Hash())
 
 	// XXX Transactions after this point are considered valid.
 	if err = self.preCheck(); err != nil {
