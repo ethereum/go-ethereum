@@ -215,7 +215,7 @@
             "value" : "100"
         }
     },
-    "CreateTransactionReverted" : {
+    "CreateMessageSuccess" : {
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "45678256",
@@ -229,28 +229,84 @@
         "out" : "0x",
         "post" : {
             "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
-                "balance" : "23710",
-                "code" : "0x",
-                "nonce" : "0",
-                "storage" : {
-                }
-            },
-            "6295ee1b4f6dd65047762f924ecd367c17eabf8f" : {
-                "balance" : "0",
+                "balance" : "73027",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "108290",
+                "balance" : "326873",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
                 }
+            },
+            "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "100",
+                "code" : "0x64600c6000556000526005601b6000f0",
+                "nonce" : "1",
+                "storage" : {
+                }
+            },
+            "f1ecf98489fa9ed60a664fc4998db699cfa39d40" : {
+                "balance" : "0",
+                "code" : "0x",
+                "nonce" : "0",
+                "storage" : {
+                    "0x" : "0x0c"
+                }
             }
         },
-        "postStateRoot" : "5ef3fc854264db70e5e41c1104f96ed2c900c48cae5131a4d72bf488fa6e2fab",
+        "postStateRoot" : "558f7514aaadbe5e4b69005a110606c5bf1f764279c780141c1f1ecf8f53c382",
+        "pre" : {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "400000",
+                "code" : "0x",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0",
+                "code" : "0x64600c6000556000526005601b6000f0",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : "",
+            "gasLimit" : "131882",
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "b94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "value" : "100"
+        }
+    },
+    "CreateTransactionReverted" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "45678256",
+            "currentGasLimit" : "1000000000000",
+            "currentNumber" : "0",
+            "currentTimestamp" : 1,
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "logs" : [
+        ],
+        "out" : "0x",
+        "post" : {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "132000",
+                "code" : "0x",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "postStateRoot" : "9b14f6a3389ec380ae31529f0b6c4ba09010cd9553c900c7c0bb47207ff47177",
         "pre" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "132000",
@@ -262,7 +318,7 @@
         },
         "transaction" : {
             "data" : "0x602280600c6000396000f30060e060020a600035048063f8a8fd6d14601457005b601a6020565b60006000f35b56",
-            "gasLimit" : "25000",
+            "gasLimit" : "23679",
             "gasPrice" : "1",
             "nonce" : "0",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
@@ -270,7 +326,7 @@
             "value" : ""
         }
     },
-    "CreateTransactionWorking" : {
+    "CreateTransactionSuccess" : {
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "45678256",
@@ -359,6 +415,61 @@
         "transaction" : {
             "data" : "",
             "gasLimit" : "",
+            "gasPrice" : "",
+            "nonce" : "",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "",
+            "value" : ""
+        }
+    },
+    "EmptyTransaction2" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "45678256",
+            "currentGasLimit" : "1000000",
+            "currentNumber" : "0",
+            "currentTimestamp" : 1,
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "logs" : [
+        ],
+        "out" : "0x",
+        "post" : {
+            "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                "balance" : "0",
+                "code" : "0x",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "6295ee1b4f6dd65047762f924ecd367c17eabf8f" : {
+                "balance" : "0",
+                "code" : "0x",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "100000",
+                "code" : "0x",
+                "nonce" : "1",
+                "storage" : {
+                }
+            }
+        },
+        "postStateRoot" : "7c9b70b846a70a1731baf76adc6ffc016628cdabb8b5e9b4ab84f5134dc6ac89",
+        "pre" : {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "100000",
+                "code" : "0x",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : "",
+            "gasLimit" : "22000",
             "gasPrice" : "",
             "nonce" : "",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
@@ -490,6 +601,159 @@
         "transaction" : {
             "data" : "",
             "gasLimit" : "21100",
+            "gasPrice" : "1",
+            "nonce" : "",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "b94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "value" : "10"
+        }
+    },
+    "InternalCallHittingGasLimit2" : {
+        "env" : {
+            "currentCoinbase" : "2adf5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "currentDifficulty" : "45678256",
+            "currentGasLimit" : "47766",
+            "currentNumber" : "0",
+            "currentTimestamp" : 1,
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "logs" : [
+        ],
+        "out" : "0x",
+        "post" : {
+            "2adf5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "47766",
+                "code" : "0x",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "952224",
+                "code" : "0x",
+                "nonce" : "1",
+                "storage" : {
+                }
+            },
+            "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "10",
+                "code" : "0x6000600060006000600173c94f5374fce5edbc8e2a8697c15331677e6ebf0b6161a8f1",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0",
+                "code" : "0x6037600155",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "postStateRoot" : "2f140afe872c497a8a06b4665c4ddea5a8041ba3dcb024bea9689a7bf875e7ca",
+        "pre" : {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000",
+                "code" : "0x",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0",
+                "code" : "0x6000600060006000600173c94f5374fce5edbc8e2a8697c15331677e6ebf0b6161a8f1",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0",
+                "code" : "0x6037600155",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : "",
+            "gasLimit" : "47766",
+            "gasPrice" : "1",
+            "nonce" : "",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "b94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "value" : "10"
+        }
+    },
+    "InternalCallHittingGasLimitSuccess" : {
+        "env" : {
+            "currentCoinbase" : "2adf5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "currentDifficulty" : "45678256",
+            "currentGasLimit" : "220000",
+            "currentNumber" : "0",
+            "currentTimestamp" : 1,
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "logs" : [
+        ],
+        "out" : "0x",
+        "post" : {
+            "2adf5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "47767",
+                "code" : "0x",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "952223",
+                "code" : "0x",
+                "nonce" : "1",
+                "storage" : {
+                }
+            },
+            "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "9",
+                "code" : "0x6000600060006000600173c94f5374fce5edbc8e2a8697c15331677e6ebf0b6161a8f1",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1",
+                "code" : "0x6037600155",
+                "nonce" : "0",
+                "storage" : {
+                    "0x01" : "0x37"
+                }
+            }
+        },
+        "postStateRoot" : "679ac548468089b4ada3dab4ada7c97b8ea6c6bf46bdaf117b7cf0ad1c7c2a83",
+        "pre" : {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000",
+                "code" : "0x",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0",
+                "code" : "0x6000600060006000600173c94f5374fce5edbc8e2a8697c15331677e6ebf0b6161a8f1",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0",
+                "code" : "0x6037600155",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : "",
+            "gasLimit" : "150000",
             "gasPrice" : "1",
             "nonce" : "",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
@@ -794,29 +1058,36 @@
         ],
         "out" : "0x",
         "post" : {
-            "0000000000000000000000000000000000000001" : {
-                "balance" : "1",
-                "code" : "0x",
+            "0000000000000000000000000000000000000000" : {
+                "balance" : "0",
+                "code" : "0x6001ff",
                 "nonce" : "0",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "166105",
+                "balance" : "949990",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
                 }
             },
             "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "13885",
+                "balance" : "50000",
                 "code" : "0x",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1010",
+                "code" : "0x6000600060006000600160006155f0f1506000ff",
                 "nonce" : "0",
                 "storage" : {
                 }
             }
         },
-        "postStateRoot" : "15e7cb19df513ea5c978fb4930bdf7d48af5b87e67243e7d753627bb4e6b95b4",
+        "postStateRoot" : "0447330f6167e10f97f872b8f9fa9360b0b63030629b416e4dce4fe8a91d924e",
         "pre" : {
             "0000000000000000000000000000000000000000" : {
                 "balance" : "0",
@@ -826,7 +1097,7 @@
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "180000",
+                "balance" : "1000000",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
@@ -842,7 +1113,7 @@
         },
         "transaction" : {
             "data" : "",
-            "gasLimit" : "150000",
+            "gasLimit" : "50000",
             "gasPrice" : "1",
             "nonce" : "",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
@@ -1105,7 +1376,7 @@
             "value" : "10"
         }
     },
-    "TransactionCosts555" : {
+    "TransactionDataCosts652" : {
         "env" : {
             "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
             "currentDifficulty" : "45678256",
@@ -1735,18 +2006,32 @@
         ],
         "out" : "0x",
         "post" : {
+            "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                "balance" : "0",
+                "code" : "0x",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "33000",
+                "balance" : "132100",
+                "code" : "0x",
+                "nonce" : "1",
+                "storage" : {
+                }
+            },
+            "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "900",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
                 }
             }
         },
-        "postStateRoot" : "5bbf78f4da91159120044b2cee74ebd400cc5a2b5f54e7d9833afa156ad35d6c",
+        "postStateRoot" : "3a5e8a1cf1708fdf3de65990a78901893ff686d889e78b387e039206bb41b1ba",
         "pre" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "33000",
+                "balance" : "133000",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
@@ -1756,7 +2041,7 @@
         "transaction" : {
             "data" : "0x3240349548983454",
             "gasLimit" : "32600",
-            "gasPrice" : "1",
+            "gasPrice" : "0",
             "nonce" : "0",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
             "to" : "b94f5374fce5edbc8e2a8697c15331677e6ebf0b",
