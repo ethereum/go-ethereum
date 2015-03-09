@@ -88,7 +88,7 @@ func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, session st
 		panic(err)
 	}
 
-	xeth := xeth.New(ethereum)
+	xeth := xeth.New(ethereum, nil)
 	gui := &Gui{eth: ethereum,
 		txDb:          db,
 		xeth:          xeth,
