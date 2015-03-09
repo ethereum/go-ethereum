@@ -23,6 +23,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path"
 	"runtime"
 	"strconv"
 	"time"
@@ -143,13 +144,14 @@ func run(ctx *cli.Context) {
 
 func runjs(ctx *cli.Context) {
 	eth := utils.GetEthereum(ClientIdentifier, Version, ctx)
+	assetPath := path.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist", "assets", "ext")
 	startEth(ctx, eth)
 	if len(ctx.Args()) == 0 {
-		runREPL(eth)
+		runREPL(eth, assetPath)
 		eth.Stop()
 		eth.WaitForShutdown()
 	} else if len(ctx.Args()) == 1 {
-		execJsFile(eth, ctx.Args()[0])
+		execJsFile(eth, assetPath, ctx.Args()[0])
 	} else {
 		utils.Fatalf("This command can handle at most one argument.")
 	}
