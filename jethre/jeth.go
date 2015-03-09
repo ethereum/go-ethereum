@@ -15,6 +15,22 @@ type jeth struct {
 	toVal func(v interface{}) otto.Value
 }
 
+func (self *jeth) IsMining(call otto.FunctionCall) otto.Value {
+	return self.toVal(self.xeth.IsMining())
+}
+
+func (self *jeth) IsListening(call otto.FunctionCall) otto.Value {
+	return self.toVal(self.xeth.IsListening())
+}
+
+func (self *jeth) IsContract(call otto.FunctionCall) otto.Value {
+	address, err := call.Argument(0).ToString()
+	if err != nil {
+		return otto.UndefinedValue()
+	}
+	return self.toVal(self.xeth.IsContract(address))
+}
+
 func (self *jeth) GetCoinbase(call otto.FunctionCall) otto.Value {
 	return self.toVal(self.xeth.Coinbase())
 }
