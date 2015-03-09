@@ -159,13 +159,13 @@ func runjs(ctx *cli.Context) {
 	startEth(ctx, eth)
 	if len(ctx.Args()) == 0 {
 		runREPL(eth)
-		eth.Stop()
-		eth.WaitForShutdown()
-	} else if len(ctx.Args()) == 1 {
-		execJsFile(eth, ctx.Args()[0])
 	} else {
-		utils.Fatalf("This command can handle at most one argument.")
+		for _, file := range ctx.Args() {
+			execJsFile(eth, file)
+		}
 	}
+	eth.Stop()
+	eth.WaitForShutdown()
 }
 
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {
