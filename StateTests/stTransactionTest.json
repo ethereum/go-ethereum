@@ -794,36 +794,29 @@
         ],
         "out" : "0x",
         "post" : {
-            "0000000000000000000000000000000000000000" : {
-                "balance" : "0",
-                "code" : "0x6001ff",
+            "0000000000000000000000000000000000000001" : {
+                "balance" : "1",
+                "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "49990",
+                "balance" : "166105",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
                 }
             },
             "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "50000",
+                "balance" : "13885",
                 "code" : "0x",
-                "nonce" : "0",
-                "storage" : {
-                }
-            },
-            "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "1010",
-                "code" : "0x6000600060006000600160006155f0f1506000ff",
                 "nonce" : "0",
                 "storage" : {
                 }
             }
         },
-        "postStateRoot" : "1495df97dede8467662d4167bef3e8504e88d3e7fde3db2696bae6abcfe23156",
+        "postStateRoot" : "15e7cb19df513ea5c978fb4930bdf7d48af5b87e67243e7d753627bb4e6b95b4",
         "pre" : {
             "0000000000000000000000000000000000000000" : {
                 "balance" : "0",
@@ -833,7 +826,7 @@
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "100000",
+                "balance" : "180000",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
@@ -849,7 +842,7 @@
         },
         "transaction" : {
             "data" : "",
-            "gasLimit" : "50000",
+            "gasLimit" : "150000",
             "gasPrice" : "1",
             "nonce" : "",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
@@ -947,21 +940,21 @@
         "out" : "0x",
         "post" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "100987",
+                "balance" : "111488",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
                 }
             },
             "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "21003",
+                "balance" : "10502",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
                 }
             }
         },
-        "postStateRoot" : "8a779af715888c47fac2bc1bc62af5ddf4ae4f658d20f0eb5208258d05fc9506",
+        "postStateRoot" : "6dd22dec58b209e1234c1fbfab5251329a95e1a708723ea9a5aad999967be8cd",
         "pre" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "122000",
@@ -1002,7 +995,7 @@
         "out" : "0x",
         "post" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "987",
+                "balance" : "11488",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
@@ -1016,7 +1009,7 @@
                 }
             }
         },
-        "postStateRoot" : "92f31f0ec86798c2d00af8ad0fac2a75628c72343d054b45412dabf70742192a",
+        "postStateRoot" : "f351e25d15fe2b6344de1944c6980b6f60f2820b103d569210419c60c7e56646",
         "pre" : {
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
                 "balance" : "22000",
@@ -1064,21 +1057,21 @@
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "100987",
+                "balance" : "111488",
                 "code" : "0x",
                 "nonce" : "1",
                 "storage" : {
                 }
             },
             "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "21003",
+                "balance" : "10502",
                 "code" : "0x",
                 "nonce" : "0",
                 "storage" : {
                 }
             }
         },
-        "postStateRoot" : "81e198cfc22e92b3af9db2c808c551c266522d0f764c1c5619c7e3e5546df9ca",
+        "postStateRoot" : "dc9bf412e9770d2c1500b0be40f27b91d966320ea211c96f34faba0d4d7fb2c0",
         "pre" : {
             "0000000000000000000000000000000000000000" : {
                 "balance" : "1110",
