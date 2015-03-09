@@ -42,11 +42,16 @@ func (self *CpuMiner) Start() {
 }
 
 func (self *CpuMiner) update() {
+	justStarted := true
 out:
 	for {
 		select {
 		case block := <-self.c:
-			self.quitCurrentOp <- struct{}{}
+			if justStarted {
+				justStarted = true
+			} else {
+				self.quitCurrentOp <- struct{}{}
+			}
 
 			go self.mine(block)
 		case <-self.quit:
@@ -69,8 +74,8 @@ done:
 
 func (self *CpuMiner) mine(block *types.Block) {
 	minerlogger.Infof("(re)started agent[%d]. mining...\n", self.index)
-	nonce := self.pow.Search(block, self.quitCurrentOp)
-	if nonce != nil {
-		self.returnCh <- Work{block.Number().Uint64(), nonce}
+	nonce, mixDigest, seedHash := self.pow.Search(block, self.quitCurrentOp)
+	if nonce != 0 {
+		self.returnCh <- Work{block.Number().Uint64(), nonce, mixDigest, seedHash}
 	}
 }

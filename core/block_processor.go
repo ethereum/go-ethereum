@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
-	"github.com/ethereum/go-ethereum/pow/ezp"
 	"github.com/ethereum/go-ethereum/state"
 	"gopkg.in/fatih/set.v0"
 )
@@ -46,11 +45,11 @@ type BlockProcessor struct {
 	eventMux *event.TypeMux
 }
 
-func NewBlockProcessor(db ethutil.Database, txpool *TxPool, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
+func NewBlockProcessor(db ethutil.Database, pow pow.PoW, txpool *TxPool, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
 	sm := &BlockProcessor{
 		db:       db,
 		mem:      make(map[string]*big.Int),
-		Pow:      ezp.New(),
+		Pow:      pow,
 		bc:       chainManager,
 		eventMux: eventMux,
 		txpool:   txpool,
@@ -104,6 +103,9 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 	}
 
 	return receipt, txGas, err
+}
+func (self *BlockProcessor) ChainManager() *ChainManager {
+	return self.bc
 }
 
 func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, statedb *state.StateDB, block *types.Block, txs types.Transactions, transientProcess bool) (types.Receipts, types.Transactions, types.Transactions, types.Transactions, error) {
@@ -174,8 +176,13 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 	state := state.New(parent.Root(), sm.db)
 
 	// Block validation
-	if err = sm.ValidateBlock(block, parent); err != nil {
+	if err = sm.ValidateHeader(block.Header(), parent.Header()); err != nil {
 		return
+	}
+
+	// There can be at most two uncles
+	if len(block.Uncles()) > 2 {
+		return nil, ValidationError("Block can only contain one uncle (contained %v)", len(block.Uncles()))
 	}
 
 	receipts, err := sm.TransitionState(state, parent, block, false)
@@ -204,7 +211,6 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 	// Tre receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, R1]]))
 	receiptSha := types.DeriveSha(receipts)
 	if bytes.Compare(receiptSha, header.ReceiptHash) != 0 {
-		fmt.Println("receipts", receipts)
 		err = fmt.Errorf("validating receipt root. received=%x got=%x", header.ReceiptHash, receiptSha)
 		return
 	}
@@ -237,36 +243,38 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 // Validates the current block. Returns an error if the block was invalid,
 // an uncle or anything that isn't on the current block chain.
 // Validation validates easy over difficult (dagger takes longer time = difficult)
-func (sm *BlockProcessor) ValidateBlock(block, parent *types.Block) error {
-	if len(block.Header().Extra) > 1024 {
-		return fmt.Errorf("Block extra data too long (%d)", len(block.Header().Extra))
+func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header) error {
+	if len(block.Extra) > 1024 {
+		return fmt.Errorf("Block extra data too long (%d)", len(block.Extra))
 	}
 
 	expd := CalcDifficulty(block, parent)
-	if expd.Cmp(block.Header().Difficulty) != 0 {
-		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Header().Difficulty, expd)
+	if expd.Cmp(block.Difficulty) != 0 {
+		return fmt.Errorf("Difficulty check failed for block %v, %v", block.Difficulty, expd)
 	}
 
-	expl := CalcGasLimit(parent, block)
-	if expl.Cmp(block.Header().GasLimit) != 0 {
-		return fmt.Errorf("GasLimit check failed for block %v, %v", block.Header().GasLimit, expl)
+	// block.gasLimit - parent.gasLimit <= parent.gasLimit / 1024
+	a := new(big.Int).Sub(block.GasLimit, parent.GasLimit)
+	b := new(big.Int).Div(parent.GasLimit, big.NewInt(1024))
+	if a.Cmp(b) > 0 {
+		return fmt.Errorf("GasLimit check failed for block %v (%v > %v)", block.GasLimit, a, b)
 	}
 
-	if block.Time() < parent.Time() {
-		return ValidationError("Block timestamp not after prev block (%v - %v)", block.Header().Time, parent.Header().Time)
+	if block.Time <= parent.Time {
+		return ValidationError("Block timestamp not after or equal to prev block (%v - %v)", block.Time, parent.Time)
 	}
 
-	if block.Time() > time.Now().Unix() {
+	if int64(block.Time) > time.Now().Unix() {
 		return BlockFutureErr
 	}
 
-	if new(big.Int).Sub(block.Number(), parent.Number()).Cmp(big.NewInt(1)) != 0 {
+	if new(big.Int).Sub(block.Number, parent.Number).Cmp(big.NewInt(1)) != 0 {
 		return BlockNumberErr
 	}
 
 	// Verify the nonce of the block. Return an error if it's not valid
-	if !sm.Pow.Verify(block) {
-		return ValidationError("Block's nonce is invalid (= %v)", ethutil.Bytes2Hex(block.Header().Nonce))
+	if !sm.Pow.Verify(types.NewBlockWithHeader(block)) {
+		return ValidationError("Block's nonce is invalid (= %x)", block.Nonce)
 	}
 
 	return nil
@@ -276,25 +284,41 @@ func (sm *BlockProcessor) AccumulateRewards(statedb *state.StateDB, block, paren
 	reward := new(big.Int).Set(BlockReward)
 
 	ancestors := set.New()
+	uncles := set.New()
+	ancestorHeaders := make(map[string]*types.Header)
 	for _, ancestor := range sm.bc.GetAncestors(block, 7) {
-		ancestors.Add(string(ancestor.Hash()))
+		hash := string(ancestor.Hash())
+		ancestorHeaders[hash] = ancestor.Header()
+		ancestors.Add(hash)
+		// Include ancestors uncles in the uncle set. Uncles must be unique.
+		for _, uncle := range ancestor.Uncles() {
+			uncles.Add(string(uncle.Hash()))
+		}
 	}
 
-	uncles := set.New()
 	uncles.Add(string(block.Hash()))
 	for _, uncle := range block.Uncles() {
 		if uncles.Has(string(uncle.Hash())) {
 			// Error not unique
 			return UncleError("Uncle not unique")
 		}
+
 		uncles.Add(string(uncle.Hash()))
+
+		if ancestors.Has(string(uncle.Hash())) {
+			return UncleError("Uncle is ancestor")
+		}
 
 		if !ancestors.Has(string(uncle.ParentHash)) {
 			return UncleError(fmt.Sprintf("Uncle's parent unknown (%x)", uncle.ParentHash[0:4]))
 		}
 
+		if err := sm.ValidateHeader(uncle, ancestorHeaders[string(uncle.ParentHash)]); err != nil {
+			return ValidationError(fmt.Sprintf("%v", err))
+		}
+
 		if !sm.Pow.Verify(types.NewBlockWithHeader(uncle)) {
-			return ValidationError("Uncle's nonce is invalid (= %v)", ethutil.Bytes2Hex(uncle.Nonce))
+			return ValidationError("Uncle's nonce is invalid (= %x)", uncle.Nonce)
 		}
 
 		r := new(big.Int)

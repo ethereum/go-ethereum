@@ -79,14 +79,14 @@ func (self *Gui) AddPlugin(pluginPath string) {
 	self.plugins[pluginPath] = plugin{Name: pluginPath, Path: pluginPath}
 
 	json, _ := json.MarshalIndent(self.plugins, "", "    ")
-	ethutil.WriteFile(ethutil.Config.ExecPath+"/plugins.json", json)
+	ethutil.WriteFile(self.eth.DataDir+"/plugins.json", json)
 }
 
 func (self *Gui) RemovePlugin(pluginPath string) {
 	delete(self.plugins, pluginPath)
 
 	json, _ := json.MarshalIndent(self.plugins, "", "    ")
-	ethutil.WriteFile(ethutil.Config.ExecPath+"/plugins.json", json)
+	ethutil.WriteFile(self.eth.DataDir+"/plugins.json", json)
 }
 
 // this extra function needed to give int typecast value to gui widget
@@ -113,7 +113,7 @@ func (self *Gui) DumpState(hash, path string) {
 			return
 		}
 
-		stateDump = state.New(block.Root(), self.eth.Db()).Dump()
+		stateDump = state.New(block.Root(), self.eth.StateDb()).Dump()
 	}
 
 	file, err := os.OpenFile(path[7:], os.O_CREATE|os.O_RDWR, os.ModePerm)

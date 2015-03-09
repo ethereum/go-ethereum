@@ -36,7 +36,7 @@ import (
 
 const (
 	ClientIdentifier = "Mist"
-	Version          = "0.8.6"
+	Version          = "0.9.0"
 )
 
 var ethereum *eth.Ethereum
@@ -74,10 +74,6 @@ func run() error {
 
 	if StartRpc {
 		utils.StartRpc(ethereum, RpcListenAddress, RpcPort)
-	}
-
-	if StartWebSockets {
-		utils.StartWebSockets(ethereum, WsPort)
 	}
 
 	gui := NewWindow(ethereum, config, KeyRing, LogLevel)

@@ -18,7 +18,7 @@ var statelogger = logger.NewLogger("STATE")
 // * Accounts
 type StateDB struct {
 	db   ethutil.Database
-	trie *trie.Trie
+	trie *trie.SecureTrie
 
 	stateObjects map[string]*StateObject
 
@@ -29,7 +29,7 @@ type StateDB struct {
 
 // Create a new state from a given trie
 func New(root []byte, db ethutil.Database) *StateDB {
-	trie := trie.New(ethutil.CopyBytes(root), db)
+	trie := trie.NewSecure(ethutil.CopyBytes(root), db)
 	return &StateDB{db: db, trie: trie, stateObjects: make(map[string]*StateObject), refund: make(map[string]*big.Int)}
 }
 
@@ -54,7 +54,7 @@ func (self *StateDB) Refund(addr []byte, gas *big.Int) {
 
 // Retrieve the balance from the given address or 0 if object not found
 func (self *StateDB) GetBalance(addr []byte) *big.Int {
-	stateObject := self.GetStateObject(addr)
+	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		return stateObject.balance
 	}
@@ -63,14 +63,14 @@ func (self *StateDB) GetBalance(addr []byte) *big.Int {
 }
 
 func (self *StateDB) AddBalance(addr []byte, amount *big.Int) {
-	stateObject := self.GetStateObject(addr)
+	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.AddBalance(amount)
 	}
 }
 
 func (self *StateDB) GetNonce(addr []byte) uint64 {
-	stateObject := self.GetStateObject(addr)
+	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		return stateObject.nonce
 	}
@@ -79,7 +79,7 @@ func (self *StateDB) GetNonce(addr []byte) uint64 {
 }
 
 func (self *StateDB) GetCode(addr []byte) []byte {
-	stateObject := self.GetStateObject(addr)
+	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		return stateObject.code
 	}
@@ -88,7 +88,7 @@ func (self *StateDB) GetCode(addr []byte) []byte {
 }
 
 func (self *StateDB) GetState(a, b []byte) []byte {
-	stateObject := self.GetStateObject(a)
+	stateObject := self.GetOrNewStateObject(a)
 	if stateObject != nil {
 		return stateObject.GetState(b).Bytes()
 	}
@@ -97,34 +97,43 @@ func (self *StateDB) GetState(a, b []byte) []byte {
 }
 
 func (self *StateDB) SetNonce(addr []byte, nonce uint64) {
-	stateObject := self.GetStateObject(addr)
+	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetNonce(nonce)
 	}
 }
 
 func (self *StateDB) SetCode(addr, code []byte) {
-	stateObject := self.GetStateObject(addr)
+	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetCode(code)
 	}
 }
 
 func (self *StateDB) SetState(addr, key []byte, value interface{}) {
-	stateObject := self.GetStateObject(addr)
+	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetState(key, ethutil.NewValue(value))
 	}
 }
 
 func (self *StateDB) Delete(addr []byte) bool {
-	stateObject := self.GetStateObject(addr)
+	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.MarkForDeletion()
+		stateObject.balance = new(big.Int)
 
 		return true
 	}
 
+	return false
+}
+
+func (self *StateDB) IsDeleted(addr []byte) bool {
+	stateObject := self.GetStateObject(addr)
+	if stateObject != nil {
+		return stateObject.remove
+	}
 	return false
 }
 
@@ -237,6 +246,10 @@ func (self *StateDB) Set(state *StateDB) {
 
 func (s *StateDB) Root() []byte {
 	return s.trie.Root()
+}
+
+func (s *StateDB) Trie() *trie.SecureTrie {
+	return s.trie
 }
 
 // Resets the trie and all siblings

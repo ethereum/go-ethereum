@@ -27,15 +27,14 @@ import (
 	"os/signal"
 	"regexp"
 
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/rlp"
 	rpchttp "github.com/ethereum/go-ethereum/rpc/http"
-	rpcws "github.com/ethereum/go-ethereum/rpc/ws"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
 )
@@ -110,11 +109,18 @@ func InitConfig(vmType int, ConfigFile string, Datadir string, EnvPrefix string)
 func exit(err error) {
 	status := 0
 	if err != nil {
-		clilogger.Errorln("Fatal: ", err)
+		fmt.Fprintln(os.Stderr, "Fatal: ", err)
 		status = 1
 	}
 	logger.Flush()
 	os.Exit(status)
+}
+
+// Fatalf formats a message to standard output and exits the program.
+func Fatalf(format string, args ...interface{}) {
+	fmt.Fprintf(os.Stderr, "Fatal: "+format+"\n", args...)
+	logger.Flush()
+	os.Exit(1)
 }
 
 func StartEthereum(ethereum *eth.Ethereum) {
@@ -129,7 +135,6 @@ func StartEthereum(ethereum *eth.Ethereum) {
 }
 
 func KeyTasks(keyManager *crypto.KeyManager, KeyRing string, GenAddr bool, SecretFile string, ExportDir string, NonInteractive bool) {
-
 	var err error
 	switch {
 	case GenAddr:
@@ -162,50 +167,12 @@ func KeyTasks(keyManager *crypto.KeyManager, KeyRing string, GenAddr bool, Secre
 
 func StartRpc(ethereum *eth.Ethereum, RpcListenAddress string, RpcPort int) {
 	var err error
-	ethereum.RpcServer, err = rpchttp.NewRpcHttpServer(xeth.New(ethereum), RpcListenAddress, RpcPort)
+	ethereum.RpcServer, err = rpchttp.NewRpcHttpServer(xeth.New(ethereum, nil), RpcListenAddress, RpcPort)
 	if err != nil {
 		clilogger.Errorf("Could not start RPC interface (port %v): %v", RpcPort, err)
 	} else {
 		go ethereum.RpcServer.Start()
 	}
-}
-
-func StartWebSockets(eth *eth.Ethereum, wsPort int) {
-	clilogger.Infoln("Starting WebSockets")
-
-	var err error
-	eth.WsServer, err = rpcws.NewWebSocketServer(xeth.New(eth), wsPort)
-	if err != nil {
-		clilogger.Errorf("Could not start RPC interface (port %v): %v", wsPort, err)
-	} else {
-		go eth.WsServer.Start()
-	}
-}
-
-var gminer *miner.Miner
-
-func GetMiner() *miner.Miner {
-	return gminer
-}
-
-func StartMining(ethereum *eth.Ethereum) bool {
-	if !ethereum.Mining {
-		ethereum.Mining = true
-		addr := ethereum.KeyManager().Address()
-
-		go func() {
-			clilogger.Infoln("Start mining")
-			if gminer == nil {
-				gminer = miner.New(addr, ethereum, 4)
-			}
-			gminer.Start()
-		}()
-		RegisterInterrupt(func(os.Signal) {
-			StopMining(ethereum)
-		})
-		return true
-	}
-	return false
 }
 
 func FormatTransactionData(data string) []byte {
@@ -221,18 +188,6 @@ func FormatTransactionData(data string) []byte {
 	return d
 }
 
-func StopMining(ethereum *eth.Ethereum) bool {
-	if ethereum.Mining && gminer != nil {
-		gminer.Stop()
-		clilogger.Infoln("Stopped mining")
-		ethereum.Mining = false
-
-		return true
-	}
-
-	return false
-}
-
 // Replay block
 func BlockDo(ethereum *eth.Ethereum, hash []byte) error {
 	block := ethereum.ChainManager().GetBlock(hash)
@@ -242,7 +197,7 @@ func BlockDo(ethereum *eth.Ethereum, hash []byte) error {
 
 	parent := ethereum.ChainManager().GetBlock(block.ParentHash())
 
-	statedb := state.New(parent.Root(), ethereum.Db())
+	statedb := state.New(parent.Root(), ethereum.StateDb())
 	_, err := ethereum.BlockProcessor().TransitionState(statedb, parent, block, true)
 	if err != nil {
 		return err
@@ -252,24 +207,24 @@ func BlockDo(ethereum *eth.Ethereum, hash []byte) error {
 
 }
 
-func ImportChain(ethereum *eth.Ethereum, fn string) error {
-	clilogger.Infof("importing chain '%s'\n", fn)
+func ImportChain(chain *core.ChainManager, fn string) error {
+	fmt.Printf("importing chain '%s'\n", fn)
 	fh, err := os.OpenFile(fn, os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		return err
 	}
 	defer fh.Close()
 
-	var chain types.Blocks
-	if err := rlp.Decode(fh, &chain); err != nil {
+	var blocks types.Blocks
+	if err := rlp.Decode(fh, &blocks); err != nil {
 		return err
 	}
 
-	ethereum.ChainManager().Reset()
-	if err := ethereum.ChainManager().InsertChain(chain); err != nil {
+	chain.Reset()
+	if err := chain.InsertChain(blocks); err != nil {
 		return err
 	}
-	clilogger.Infof("imported %d blocks\n", len(chain))
+	fmt.Printf("imported %d blocks\n", len(blocks))
 
 	return nil
 }

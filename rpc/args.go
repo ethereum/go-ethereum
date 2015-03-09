@@ -333,19 +333,19 @@ type FilterOptions struct {
 	Earliest int64
 	Latest   int64
 	Address  interface{}
-	Topic    []string
+	Topic    []interface{}
 	Skip     int
 	Max      int
 }
 
 func (args *FilterOptions) UnmarshalJSON(b []byte) (err error) {
 	var obj []struct {
-		FromBlock string   `json:"fromBlock"`
-		ToBlock   string   `json:"toBlock"`
-		Limit     string   `json:"limit"`
-		Offset    string   `json:"offset"`
-		Address   string   `json:"address"`
-		Topics    []string `json:"topics"`
+		FromBlock string        `json:"fromBlock"`
+		ToBlock   string        `json:"toBlock"`
+		Limit     string        `json:"limit"`
+		Offset    string        `json:"offset"`
+		Address   string        `json:"address"`
+		Topics    []interface{} `json:"topics"`
 	}
 
 	if err = json.Unmarshal(b, &obj); err != nil {
@@ -360,7 +360,20 @@ func (args *FilterOptions) UnmarshalJSON(b []byte) (err error) {
 	args.Max = int(ethutil.Big(obj[0].Limit).Int64())
 	args.Skip = int(ethutil.Big(obj[0].Offset).Int64())
 	args.Address = obj[0].Address
-	args.Topic = obj[0].Topics
+
+	topics := make([][][]byte, len(obj[0].Topics))
+	for i, topicDat := range obj[0].Topics {
+		if slice, ok := topicDat.([]interface{}); ok {
+			topics[i] = make([][]byte, len(slice))
+			for j, topic := range slice {
+				topics[i][j] = fromHex(topic.(string))
+			}
+		} else if str, ok := topicDat.(string); ok {
+			topics[i] = make([][]byte, 1)
+			topics[i][0] = fromHex(str)
+		}
+	}
+	args.Topics = topics
 
 	return nil
 }

@@ -24,132 +24,191 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strconv"
 	"time"
 
+	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/state"
 )
 
 const (
 	ClientIdentifier = "Ethereum(G)"
-	Version          = "0.8.6"
+	Version          = "0.9.0"
 )
 
-var clilogger = logger.NewLogger("CLI")
+var (
+	clilogger = logger.NewLogger("CLI")
+	app       = cli.NewApp()
+)
+
+func init() {
+	app.Version = Version
+	app.Usage = "the go-ethereum command-line client"
+	app.Action = run
+	app.HideVersion = true // we have a command to print the version
+	app.Commands = []cli.Command{
+		{
+			Action: version,
+			Name:   "version",
+			Usage:  "print ethereum version numbers",
+			Description: `
+The output of this command is supposed to be machine-readable.
+`,
+		},
+		{
+			Action: dump,
+			Name:   "dump",
+			Usage:  `dump a specific block from storage`,
+			Description: `
+The arguments are interpreted as block numbers or hashes.
+Use "ethereum dump 0" to dump the genesis block.
+`,
+		},
+		{
+			Action: runjs,
+			Name:   "js",
+			Usage:  `interactive JavaScript console`,
+			Description: `
+In the console, you can use the eth object to interact
+with the running ethereum stack. The API does not match
+ethereum.js.
+
+A JavaScript file can be provided as the argument. The
+runtime will execute the file and exit.
+`,
+		},
+		{
+			Action: importchain,
+			Name:   "import",
+			Usage:  `import a blockchain file`,
+		},
+	}
+	app.Author = ""
+	app.Email = ""
+	app.Flags = []cli.Flag{
+		utils.BootnodesFlag,
+		utils.DataDirFlag,
+		utils.KeyRingFlag,
+		utils.KeyStoreFlag,
+		utils.ListenPortFlag,
+		utils.LogFileFlag,
+		utils.LogFormatFlag,
+		utils.LogLevelFlag,
+		utils.MaxPeersFlag,
+		utils.MinerThreadsFlag,
+		utils.MiningEnabledFlag,
+		utils.NATFlag,
+		utils.NodeKeyFileFlag,
+		utils.NodeKeyHexFlag,
+		utils.RPCEnabledFlag,
+		utils.RPCListenAddrFlag,
+		utils.RPCPortFlag,
+		utils.VMDebugFlag,
+		//utils.VMTypeFlag,
+	}
+
+	// missing:
+	// flag.StringVar(&ConfigFile, "conf", defaultConfigFile, "config file")
+	// flag.BoolVar(&DiffTool, "difftool", false, "creates output for diff'ing. Sets LogLevel=0")
+	// flag.StringVar(&DiffType, "diff", "all", "sets the level of diff output [vm, all]. Has no effect if difftool=false")
+
+	// potential subcommands:
+	// flag.StringVar(&SecretFile, "import", "", "imports the file given (hex or mnemonic formats)")
+	// flag.StringVar(&ExportDir, "export", "", "exports the session keyring to files in the directory given")
+	// flag.BoolVar(&GenAddr, "genaddr", false, "create a new priv/pub key")
+}
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-
-	defer func() {
-		logger.Flush()
-	}()
-
-	utils.HandleInterrupt()
-
-	// precedence: code-internal flag default < config file < environment variables < command line
-	Init() // parsing command line
-
-	if PrintVersion {
-		printVersion()
-		return
+	defer logger.Flush()
+	if err := app.Run(os.Args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
-
-	utils.InitConfig(VmType, ConfigFile, Datadir, "ETH")
-
-	ethereum, err := eth.New(&eth.Config{
-		Name:         p2p.MakeName(ClientIdentifier, Version),
-		KeyStore:     KeyStore,
-		DataDir:      Datadir,
-		LogFile:      LogFile,
-		LogLevel:     LogLevel,
-		LogFormat:    LogFormat,
-		MaxPeers:     MaxPeer,
-		Port:         OutboundPort,
-		NAT:          NAT,
-		KeyRing:      KeyRing,
-		Shh:          true,
-		Dial:         Dial,
-		BootNodes:    BootNodes,
-		NodeKey:      NodeKey,
-		MinerThreads: MinerThreads,
-	})
-
-	if err != nil {
-		clilogger.Fatalln(err)
-	}
-
-	utils.KeyTasks(ethereum.KeyManager(), KeyRing, GenAddr, SecretFile, ExportDir, NonInteractive)
-
-	if Dump {
-		var block *types.Block
-
-		if len(DumpHash) == 0 && DumpNumber == -1 {
-			block = ethereum.ChainManager().CurrentBlock()
-		} else if len(DumpHash) > 0 {
-			block = ethereum.ChainManager().GetBlock(ethutil.Hex2Bytes(DumpHash))
-		} else {
-			block = ethereum.ChainManager().GetBlockByNumber(uint64(DumpNumber))
-		}
-
-		if block == nil {
-			fmt.Fprintln(os.Stderr, "block not found")
-
-			// We want to output valid JSON
-			fmt.Println("{}")
-
-			os.Exit(1)
-		}
-
-		// Leave the Println. This needs clean output for piping
-		statedb := state.New(block.Root(), ethereum.Db())
-		fmt.Printf("%s\n", statedb.Dump())
-
-		fmt.Println(block)
-
-		return
-	}
-
-	if len(ImportChain) > 0 {
-		start := time.Now()
-		err := utils.ImportChain(ethereum, ImportChain)
-		if err != nil {
-			clilogger.Infoln(err)
-		}
-		clilogger.Infoln("import done in", time.Since(start))
-		return
-	}
-
-	if StartRpc {
-		utils.StartRpc(ethereum, RpcListenAddress, RpcPort)
-	}
-
-	if StartWebSockets {
-		utils.StartWebSockets(ethereum, WsPort)
-	}
-
-	utils.StartEthereum(ethereum)
-
-	fmt.Printf("Welcome to the FRONTIER\n")
-
-	if StartMining {
-		ethereum.Miner().Start()
-	}
-
-	if StartJsConsole {
-		InitJsConsole(ethereum)
-	} else if len(InputFile) > 0 {
-		ExecJsFile(ethereum, InputFile)
-	}
-	// this blocks the thread
-	ethereum.WaitForShutdown()
 }
 
-func printVersion() {
+func run(ctx *cli.Context) {
+	fmt.Printf("Welcome to the FRONTIER\n")
+	utils.HandleInterrupt()
+	eth := utils.GetEthereum(ClientIdentifier, Version, ctx)
+	startEth(ctx, eth)
+	// this blocks the thread
+	eth.WaitForShutdown()
+}
+
+func runjs(ctx *cli.Context) {
+	eth := utils.GetEthereum(ClientIdentifier, Version, ctx)
+	startEth(ctx, eth)
+	if len(ctx.Args()) == 0 {
+		runREPL(eth)
+		eth.Stop()
+		eth.WaitForShutdown()
+	} else if len(ctx.Args()) == 1 {
+		execJsFile(eth, ctx.Args()[0])
+	} else {
+		utils.Fatalf("This command can handle at most one argument.")
+	}
+}
+
+func startEth(ctx *cli.Context, eth *eth.Ethereum) {
+	utils.StartEthereum(eth)
+	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
+		addr := ctx.GlobalString(utils.RPCListenAddrFlag.Name)
+		port := ctx.GlobalInt(utils.RPCPortFlag.Name)
+		utils.StartRpc(eth, addr, port)
+	}
+	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
+		eth.Miner().Start()
+	}
+}
+
+func importchain(ctx *cli.Context) {
+	if len(ctx.Args()) != 1 {
+		utils.Fatalf("This command requires an argument.")
+	}
+	chain, _, _ := utils.GetChain(ctx)
+	start := time.Now()
+	err := utils.ImportChain(chain, ctx.Args().First())
+	if err != nil {
+		utils.Fatalf("Import error: %v\n", err)
+	}
+	fmt.Printf("Import done in", time.Since(start))
+	return
+}
+
+func dump(ctx *cli.Context) {
+	chain, _, stateDb := utils.GetChain(ctx)
+	for _, arg := range ctx.Args() {
+		var block *types.Block
+		if hashish(arg) {
+			block = chain.GetBlock(ethutil.Hex2Bytes(arg))
+		} else {
+			num, _ := strconv.Atoi(arg)
+			block = chain.GetBlockByNumber(uint64(num))
+		}
+		if block == nil {
+			fmt.Println("{}")
+			utils.Fatalf("block not found")
+		} else {
+			statedb := state.New(block.Root(), stateDb)
+			fmt.Printf("%s\n", statedb.Dump())
+			// fmt.Println(block)
+		}
+	}
+}
+
+// hashish returns true for strings that look like hashes.
+func hashish(x string) bool {
+	_, err := strconv.Atoi(x)
+	return err != nil
+}
+
+func version(c *cli.Context) {
 	fmt.Printf(`%v %v
 PV=%d
 GOOS=%s

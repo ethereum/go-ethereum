@@ -2,11 +2,8 @@ package javascript
 
 import (
 	"fmt"
-
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
-	"github.com/ethereum/go-ethereum/ui"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/obscuren/otto"
 )
@@ -56,8 +53,7 @@ func NewJSLog(log state.Log) JSLog {
 
 type JSEthereum struct {
 	*xeth.XEth
-	vm       *otto.Otto
-	ethereum *eth.Ethereum
+	vm *otto.Otto
 }
 
 func (self *JSEthereum) Block(v interface{}) otto.Value {
@@ -95,18 +91,4 @@ func (self *JSEthereum) toVal(v interface{}) otto.Value {
 	}
 
 	return result
-}
-
-func (self *JSEthereum) Messages(object map[string]interface{}) otto.Value {
-	filter := ui.NewFilterFromMap(object, self.ethereum)
-
-	logs := filter.Find()
-	var jslogs []JSLog
-	for _, m := range logs {
-		jslogs = append(jslogs, NewJSLog(m))
-	}
-
-	v, _ := self.vm.ToValue(jslogs)
-
-	return v
 }
