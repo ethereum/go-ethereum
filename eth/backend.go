@@ -20,7 +20,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
@@ -123,8 +122,6 @@ type Ethereum struct {
 	txSub    event.Subscription
 	blockSub event.Subscription
 	miner    *miner.Miner
-
-	RpcServer rpc.RpcServer
 
 	logger logger.LogSystem
 
@@ -267,10 +264,6 @@ func (s *Ethereum) Stop() {
 
 	s.txSub.Unsubscribe()    // quits txBroadcastLoop
 	s.blockSub.Unsubscribe() // quits blockBroadcastLoop
-
-	if s.RpcServer != nil {
-		s.RpcServer.Stop()
-	}
 
 	s.txPool.Stop()
 	s.eventMux.Stop()
