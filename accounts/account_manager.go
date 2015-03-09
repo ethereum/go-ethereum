@@ -54,10 +54,9 @@ type Account struct {
 }
 
 type Manager struct {
-	keyStore   crypto.KeyStore2
-	unlocked   map[string]*unlocked
-	unlockTime time.Duration
-	mutex      sync.RWMutex
+	keyStore crypto.KeyStore2
+	unlocked map[string]*unlocked
+	mutex    sync.RWMutex
 }
 
 type unlocked struct {
@@ -65,11 +64,10 @@ type unlocked struct {
 	abort chan struct{}
 }
 
-func NewManager(keyStore crypto.KeyStore2, unlockTime time.Duration) *Manager {
+func NewManager(keyStore crypto.KeyStore2) *Manager {
 	return &Manager{
-		keyStore:   keyStore,
-		unlocked:   make(map[string]*unlocked),
-		unlockTime: unlockTime,
+		keyStore: keyStore,
+		unlocked: make(map[string]*unlocked),
 	}
 }
 
@@ -115,15 +113,28 @@ func (am *Manager) Sign(a Account, toSign []byte) (signature []byte, err error) 
 	return signature, err
 }
 
-func (am *Manager) SignLocked(a Account, keyAuth string, toSign []byte) (signature []byte, err error) {
-	key, err := am.keyStore.GetKey(a.Address, keyAuth)
+// TimedUnlock unlocks the account with the given address.
+// When timeout has passed, the account will be locked again.
+func (am *Manager) TimedUnlock(addr []byte, keyAuth string, timeout time.Duration) error {
+	key, err := am.keyStore.GetKey(addr, keyAuth)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	u := am.addUnlocked(a.Address, key)
-	go am.dropLater(a.Address, u)
-	signature, err = crypto.Sign(toSign, key.PrivateKey)
-	return signature, err
+	u := am.addUnlocked(addr, key)
+	go am.dropLater(addr, u, timeout)
+	return nil
+}
+
+// Unlock unlocks the account with the given address. The account
+// stays unlocked until the program exits or until a TimedUnlock
+// timeout (started after the call to Unlock) expires.
+func (am *Manager) Unlock(addr []byte, keyAuth string) error {
+	key, err := am.keyStore.GetKey(addr, keyAuth)
+	if err != nil {
+		return err
+	}
+	am.addUnlocked(addr, key)
+	return nil
 }
 
 func (am *Manager) NewAccount(auth string) (Account, error) {
@@ -155,6 +166,9 @@ func (am *Manager) addUnlocked(addr []byte, key *crypto.Key) *unlocked {
 	if found {
 		// terminate dropLater for this key to avoid unexpected drops.
 		close(prev.abort)
+		// the key is zeroed here instead of in dropLater because
+		// there might not actually be a dropLater running for this
+		// key, i.e. when Unlock was used.
 		zeroKey(prev.PrivateKey)
 	}
 	am.unlocked[string(addr)] = u
@@ -162,8 +176,8 @@ func (am *Manager) addUnlocked(addr []byte, key *crypto.Key) *unlocked {
 	return u
 }
 
-func (am *Manager) dropLater(addr []byte, u *unlocked) {
-	t := time.NewTimer(am.unlockTime)
+func (am *Manager) dropLater(addr []byte, u *unlocked, timeout time.Duration) {
+	t := time.NewTimer(timeout)
 	defer t.Stop()
 	select {
 	case <-u.abort:

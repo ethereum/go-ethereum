@@ -8,7 +8,6 @@ import (
 	"os"
 	"path"
 	"runtime"
-	"time"
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -199,7 +198,7 @@ func GetChain(ctx *cli.Context) (*core.ChainManager, ethutil.Database, ethutil.D
 func GetAccountManager(ctx *cli.Context) *accounts.Manager {
 	dataDir := ctx.GlobalString(DataDirFlag.Name)
 	ks := crypto.NewKeyStorePassphrase(path.Join(dataDir, "keys"))
-	return accounts.NewManager(ks, 300*time.Second)
+	return accounts.NewManager(ks)
 }
 
 func StartRPC(eth *eth.Ethereum, ctx *cli.Context) {
