@@ -736,6 +736,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			self.Printf(" => (%x) %v", receiver.Address()[:4], balance)
 
 			receiver.AddBalance(balance)
+
 			statedb.Delete(context.Address())
 
 			fallthrough
@@ -905,6 +906,10 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 			g = GasStorageMod
 		}
 		gas.Set(g)
+	case SUICIDE:
+		if !statedb.IsDeleted(context.Address()) {
+			statedb.Refund(self.env.Origin(), RefundSuicide)
+		}
 	case MLOAD:
 		newMemSize = calcMemSize(stack.Peek(), u256(32))
 	case MSTORE8:

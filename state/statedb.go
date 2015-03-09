@@ -121,10 +121,19 @@ func (self *StateDB) Delete(addr []byte) bool {
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.MarkForDeletion()
+		stateObject.balance = new(big.Int)
 
 		return true
 	}
 
+	return false
+}
+
+func (self *StateDB) IsDeleted(addr []byte) bool {
+	stateObject := self.GetStateObject(addr)
+	if stateObject != nil {
+		return stateObject.remove
+	}
 	return false
 }
 
