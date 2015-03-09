@@ -33,6 +33,7 @@ and accounts persistence is derived from stored keys' addresses
 package accounts
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	crand "crypto/rand"
 
@@ -72,17 +73,20 @@ func NewManager(keyStore crypto.KeyStore2, unlockTime time.Duration) *Manager {
 	}
 }
 
+func (am *Manager) HasAccount(addr []byte) bool {
+	accounts, _ := am.Accounts()
+	for _, acct := range accounts {
+		if bytes.Compare(acct.Address, addr) == 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // Coinbase returns the account address that mining rewards are sent to.
 func (am *Manager) Coinbase() (addr []byte, err error) {
 	// TODO: persist coinbase address on disk
 	return am.firstAddr()
-}
-
-// MainAccount returns the primary account used for transactions.
-func (am *Manager) Default() (Account, error) {
-	// TODO: persist main account address on disk
-	addr, err := am.firstAddr()
-	return Account{Address: addr}, err
 }
 
 func (am *Manager) firstAddr() ([]byte, error) {
@@ -135,9 +139,7 @@ func (am *Manager) Accounts() ([]Account, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	accounts := make([]Account, len(addresses))
-
 	for i, addr := range addresses {
 		accounts[i] = Account{
 			Address: addr,
