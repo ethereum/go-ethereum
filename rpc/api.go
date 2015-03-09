@@ -665,10 +665,20 @@ func toFilterOptions(options *FilterOptions) core.FilterOptions {
 
 	opts.Earliest = options.Earliest
 	opts.Latest = options.Latest
-	opts.Topics = make([][][]byte, len(options.Topic))
-	for i, topic := range options.Topic {
-		opts.Topics[i] = fromHex(topic)
+
+	topics := make([][][]byte, len(options.Topics))
+	for i, topicDat := range options.Topics {
+		if slice, ok := topicDat.([]interface{}); ok {
+			topics[i] = make([][]byte, len(slice))
+			for j, topic := range slice {
+				topics[i][j] = fromHex(topic.(string))
+			}
+		} else if str, ok := topicDat.(string); ok {
+			topics[i] = make([][]byte, 1)
+			topics[i][0] = fromHex(str)
+		}
 	}
+	opts.Topics = topics
 
 	return opts
 }

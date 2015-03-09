@@ -333,7 +333,7 @@ type FilterOptions struct {
 	Earliest int64
 	Latest   int64
 	Address  interface{}
-	Topic    []interface{}
+	Topics   []interface{}
 	Skip     int
 	Max      int
 }
@@ -360,20 +360,7 @@ func (args *FilterOptions) UnmarshalJSON(b []byte) (err error) {
 	args.Max = int(ethutil.Big(obj[0].Limit).Int64())
 	args.Skip = int(ethutil.Big(obj[0].Offset).Int64())
 	args.Address = obj[0].Address
-
-	topics := make([][][]byte, len(obj[0].Topics))
-	for i, topicDat := range obj[0].Topics {
-		if slice, ok := topicDat.([]interface{}); ok {
-			topics[i] = make([][]byte, len(slice))
-			for j, topic := range slice {
-				topics[i][j] = fromHex(topic.(string))
-			}
-		} else if str, ok := topicDat.(string); ok {
-			topics[i] = make([][]byte, 1)
-			topics[i][0] = fromHex(str)
-		}
-	}
-	args.Topics = topics
+	args.Topics = obj[0].Topics
 
 	return nil
 }
