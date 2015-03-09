@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
-	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -37,18 +36,6 @@ type plugin struct {
 	Path string `json:"path"`
 }
 
-// LogPrint writes to the GUI log.
-func (gui *Gui) LogPrint(level logger.LogLevel, msg string) {
-	/*
-		str := strings.TrimRight(s, "\n")
-		lines := strings.Split(str, "\n")
-
-		view := gui.getObjectByName("infoView")
-		for _, line := range lines {
-			view.Call("addLog", line)
-		}
-	*/
-}
 func (gui *Gui) Transact(from, recipient, value, gas, gasPrice, d string) (string, error) {
 	var data string
 	if len(recipient) == 0 {
@@ -62,17 +49,6 @@ func (gui *Gui) Transact(from, recipient, value, gas, gasPrice, d string) (strin
 	}
 
 	return gui.xeth.Transact(from, recipient, value, gas, gasPrice, data)
-}
-
-// functions that allow Gui to implement interface guilogger.LogSystem
-func (gui *Gui) SetLogLevel(level logger.LogLevel) {
-	gui.logLevel = level
-	gui.eth.Logger().SetLogLevel(level)
-	gui.config.Save("loglevel", level)
-}
-
-func (gui *Gui) GetLogLevel() logger.LogLevel {
-	return gui.logLevel
 }
 
 func (self *Gui) AddPlugin(pluginPath string) {
@@ -89,11 +65,6 @@ func (self *Gui) RemovePlugin(pluginPath string) {
 	ethutil.WriteFile(self.eth.DataDir+"/plugins.json", json)
 }
 
-// this extra function needed to give int typecast value to gui widget
-// that sets initial loglevel to default
-func (gui *Gui) GetLogLevelInt() int {
-	return int(gui.logLevel)
-}
 func (self *Gui) DumpState(hash, path string) {
 	var stateDump []byte
 

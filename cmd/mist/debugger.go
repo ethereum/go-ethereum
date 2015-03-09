@@ -137,16 +137,18 @@ func (self *DebuggerWindow) Debug(valueStr, gasStr, gasPriceStr, scriptStr, data
 		return
 	}
 
+	// TODO: improve this
+	allAccounts, _ := self.lib.eth.AccountManager().Accounts()
+
 	var (
 		gas      = ethutil.Big(gasStr)
 		gasPrice = ethutil.Big(gasPriceStr)
 		value    = ethutil.Big(valueStr)
-		// Contract addr as test address
-		keyPair = self.lib.eth.KeyManager().KeyPair()
+		acc      = allAccounts[0]
 	)
 
 	statedb := self.lib.eth.ChainManager().TransState()
-	account := self.lib.eth.ChainManager().TransState().GetAccount(keyPair.Address())
+	account := self.lib.eth.ChainManager().TransState().GetAccount(acc.Address)
 	contract := statedb.NewStateObject([]byte{0})
 	contract.SetCode(script)
 	contract.SetBalance(value)
