@@ -339,17 +339,8 @@ func (p *EthereumApi) GetData(args *GetDataArgs, reply *interface{}) error {
 }
 
 func (p *EthereumApi) GetCompilers(reply *interface{}) error {
-	c := []string{"serpent"}
+	c := []string{""}
 	*reply = c
-	return nil
-}
-
-func (p *EthereumApi) CompileSerpent(args *CompileArgs, reply *interface{}) error {
-	res, err := ethutil.Compile(args.Source, false)
-	if err != nil {
-		return err
-	}
-	*reply = res
 	return nil
 }
 
@@ -528,13 +519,8 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		return p.GetCompilers(reply)
 	case "eth_compileSolidity":
 	case "eth_compileLLL":
-		return errNotImplemented
 	case "eth_compileSerpent":
-		args := new(CompileArgs)
-		if err := json.Unmarshal(req.Params, &args); err != nil {
-			return err
-		}
-		return p.CompileSerpent(args, reply)
+		return errNotImplemented
 	case "eth_newFilter":
 		args := new(FilterOptions)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
