@@ -62,6 +62,8 @@
 
     web3.setProvider(new web3.providers.HttpSyncProvider('http://localhost:8545'));
 
+    eth.defaultBlock = -2
+
     document.querySelector("#number").innerHTML = eth.number;
     document.querySelector("#coinbase").innerHTML = eth.coinbase
     document.querySelector("#peer_count").innerHTML = eth.peerCount;
@@ -72,8 +74,9 @@
     document.querySelector("#mining").innerHTML = eth.mining;
     document.querySelector("#listening").innerHTML = eth.listening;
     eth.watch('chain').changed(function() {
-		    document.querySelector("#number").innerHTML = eth.number;
-		     });
+        document.querySelector("#number").innerHTML = eth.number;
+    });
+
 
 </script>
 

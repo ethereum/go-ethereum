@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/ui/qt"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/obscuren/qml"
 )
@@ -115,8 +114,4 @@ func (app *ExtApplication) mainLoop() {
 			*/
 		}
 	}
-}
-
-func (self *ExtApplication) Watch(filterOptions map[string]interface{}, identifier string) {
-	self.filters[identifier] = qt.NewFilterFromMap(filterOptions, self.eth)
 }

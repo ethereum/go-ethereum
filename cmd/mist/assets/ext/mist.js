@@ -17,7 +17,6 @@
 
 // this function is included locally, but you can also include separately via a header definition
 
-console.log("loaded?");
 
 document.onkeydown = function(evt) {
     // This functions keeps track of keyboard inputs in order to allow copy, paste and other features

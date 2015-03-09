@@ -5,15 +5,19 @@ import (
 	"math/big"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/state"
 	"gopkg.in/fatih/set.v0"
 )
+
+var jsonlogger = logger.NewJsonLogger()
 
 type environment struct {
 	totalUsedGas *big.Int
@@ -111,6 +115,8 @@ func (self *worker) register(agent Agent) {
 func (self *worker) update() {
 	events := self.mux.Subscribe(core.ChainEvent{}, core.NewMinedBlockEvent{})
 
+	timer := time.NewTicker(2 * time.Second)
+
 out:
 	for {
 		select {
@@ -129,6 +135,8 @@ out:
 				agent.Stop()
 			}
 			break out
+		case <-timer.C:
+			minerlogger.Debugln("Hash rate:", self.HashRate(), "Khash")
 		}
 	}
 
@@ -141,7 +149,12 @@ func (self *worker) wait() {
 			block := self.current.block
 			if block.Number().Uint64() == work.Number && block.Nonce() == nil {
 				self.current.block.Header().Nonce = work.Nonce
-
+				jsonlogger.LogJson(&logger.EthMinerNewBlock{
+					BlockHash:     ethutil.Bytes2Hex(block.Hash()),
+					BlockNumber:   block.Number(),
+					ChainHeadHash: ethutil.Bytes2Hex(block.ParentHeaderHash),
+					BlockPrevHash: ethutil.Bytes2Hex(block.ParentHeaderHash),
+				})
 				if err := self.chain.InsertChain(types.Blocks{self.current.block}); err == nil {
 					self.mux.Post(core.NewMinedBlockEvent{self.current.block})
 				} else {
@@ -197,7 +210,7 @@ gasLimit:
 	}
 	self.eth.TxPool().RemoveSet(remove)
 
-	self.current.coinbase.AddAmount(core.BlockReward)
+	self.current.coinbase.AddBalance(core.BlockReward)
 
 	self.current.state.Update(ethutil.Big0)
 	self.push()
@@ -225,7 +238,7 @@ func (self *worker) commitUncle(uncle *types.Header) error {
 	}
 
 	uncleAccount := self.current.state.GetAccount(uncle.Coinbase)
-	uncleAccount.AddAmount(uncleReward)
+	uncleAccount.AddBalance(uncleReward)
 
 	self.current.coinbase.AddBalance(uncleReward)
 
@@ -243,4 +256,13 @@ func (self *worker) commitTransaction(tx *types.Transaction) error {
 	self.current.block.AddReceipt(receipt)
 
 	return nil
+}
+
+func (self *worker) HashRate() int64 {
+	var tot int64
+	for _, agent := range self.agents {
+		tot += agent.Pow().GetHashrate()
+	}
+
+	return tot
 }

@@ -210,6 +210,19 @@ func (req *RpcRequest) ToBoolArgs() (bool, error) {
 	return args, nil
 }
 
+func (req *RpcRequest) ToIntArgs() (int, error) {
+	if len(req.Params) < 1 {
+		return 0, errArguments
+	}
+
+	var args int
+	if err := json.Unmarshal(req.Params[0], &args); err != nil {
+		return 0, errArguments
+	}
+
+	return args, nil
+}
+
 func (req *RpcRequest) ToCompileArgs() (string, error) {
 	if len(req.Params) < 1 {
 		return "", errArguments

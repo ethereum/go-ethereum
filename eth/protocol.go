@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -137,6 +138,12 @@ func (self *ethProtocol) handle() error {
 		if err := msg.Decode(&txs); err != nil {
 			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 		}
+		for _, tx := range txs {
+			jsonlogger.LogJson(&logger.EthTxReceived{
+				TxHash:   ethutil.Bytes2Hex(tx.Hash()),
+				RemoteId: self.peer.ID().String(),
+			})
+		}
 		self.txPool.AddTransactions(txs)
 
 	case GetBlockHashesMsg:
@@ -217,6 +224,14 @@ func (self *ethProtocol) handle() error {
 			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 		}
 		hash := request.Block.Hash()
+		_, chainHead, _ := self.chainManager.Status()
+		jsonlogger.LogJson(&logger.EthChainReceivedNewBlock{
+			BlockHash:     ethutil.Bytes2Hex(hash),
+			BlockNumber:   request.Block.Number(), // this surely must be zero
+			ChainHeadHash: ethutil.Bytes2Hex(chainHead),
+			BlockPrevHash: ethutil.Bytes2Hex(request.Block.ParentHash()),
+			RemoteId:      self.peer.ID().String(),
+		})
 		// to simplify backend interface adding a new block
 		// uses AddPeer followed by AddHashes, AddBlock only if peer is the best peer
 		// (or selected as new best peer)

@@ -19,20 +19,9 @@ Rectangle {
             id: lastBlockLabel
             objectName: "lastBlockLabel"
             text: "---"
-	    onTextChanged: {
-		//menuItem.secondaryTitle = text
-	    }
-        }
-
-        Label {
-            objectName: "miningLabel"
-            visible: false
-            font.pixelSize: 10
-            anchors.right: lastBlockLabel.left
-            anchors.rightMargin: 5
-	    onTextChanged: {
-		menuItem.secondaryTitle = text
-	    }
+	   	 	onTextChanged: {
+			//menuItem.secondaryTitle = text
+	    	}
         }
 
 	ColumnLayout {
