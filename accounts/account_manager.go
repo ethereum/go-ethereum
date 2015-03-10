@@ -36,6 +36,7 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	crand "crypto/rand"
+	"os"
 
 	"errors"
 	"sync"
@@ -89,7 +90,9 @@ func (am *Manager) Coinbase() (addr []byte, err error) {
 
 func (am *Manager) firstAddr() ([]byte, error) {
 	addrs, err := am.keyStore.GetKeyAddresses()
-	if err != nil {
+	if os.IsNotExist(err) {
+		return nil, ErrNoKeys
+	} else if err != nil {
 		return nil, err
 	}
 	if len(addrs) == 0 {
@@ -147,7 +150,9 @@ func (am *Manager) NewAccount(auth string) (Account, error) {
 
 func (am *Manager) Accounts() ([]Account, error) {
 	addresses, err := am.keyStore.GetKeyAddresses()
-	if err != nil {
+	if os.IsNotExist(err) {
+		return nil, ErrNoKeys
+	} else if err != nil {
 		return nil, err
 	}
 	accounts := make([]Account, len(addresses))
