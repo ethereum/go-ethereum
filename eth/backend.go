@@ -260,6 +260,17 @@ func (s *Ethereum) Start() error {
 	return nil
 }
 
+func (s *Ethereum) StartForTest() {
+		jsonlogger.LogJson(&logger.LogStarting{
+		ClientString:    s.net.Name,
+		ProtocolVersion: ProtocolVersion,
+	})
+
+	// Start services
+	s.txPool.Start()
+	s.blockPool.Start()
+}
+
 func (self *Ethereum) SuggestPeer(nodeURL string) error {
 	n, err := discover.ParseNode(nodeURL)
 	if err != nil {

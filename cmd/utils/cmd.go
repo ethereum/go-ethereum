@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/state"
 )
 
 var clilogger = logger.NewLogger("CLI")
@@ -123,6 +122,15 @@ func StartEthereum(ethereum *eth.Ethereum) {
 	})
 }
 
+func StartEthereumForTest(ethereum *eth.Ethereum) {
+	clilogger.Infoln("Starting ", ethereum.Name())
+	ethereum.StartForTest()
+	RegisterInterrupt(func(sig os.Signal) {
+		ethereum.Stop()
+		logger.Flush()
+	})
+}
+
 func FormatTransactionData(data string) []byte {
 	d := ethutil.StringToByteFunc(data, func(s string) (ret []byte) {
 		slice := regexp.MustCompile("\\n|\\s").Split(s, 1000000000)
@@ -136,27 +144,8 @@ func FormatTransactionData(data string) []byte {
 	return d
 }
 
-// Replay block
-func BlockDo(ethereum *eth.Ethereum, hash []byte) error {
-	block := ethereum.ChainManager().GetBlock(hash)
-	if block == nil {
-		return fmt.Errorf("unknown block %x", hash)
-	}
-
-	parent := ethereum.ChainManager().GetBlock(block.ParentHash())
-
-	statedb := state.New(parent.Root(), ethereum.StateDb())
-	_, err := ethereum.BlockProcessor().TransitionState(statedb, parent, block, true)
-	if err != nil {
-		return err
-	}
-
-	return nil
-
-}
-
-func ImportChain(chain *core.ChainManager, fn string) error {
-	fmt.Printf("importing chain '%s'\n", fn)
+func ImportChain(chainmgr *core.ChainManager, fn string) error {
+	fmt.Printf("importing blockchain '%s'\n", fn)
 	fh, err := os.OpenFile(fn, os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		return err
@@ -168,11 +157,24 @@ func ImportChain(chain *core.ChainManager, fn string) error {
 		return err
 	}
 
-	chain.Reset()
-	if err := chain.InsertChain(blocks); err != nil {
+	chainmgr.Reset()
+	if err := chainmgr.InsertChain(blocks); err != nil {
 		return err
 	}
 	fmt.Printf("imported %d blocks\n", len(blocks))
+
+	return nil
+}
+
+func ExportChain(chainmgr *core.ChainManager, fn string) error {
+	fmt.Printf("exporting blockchain '%s'\n", fn)
+
+	data := chainmgr.Export()
+
+	if err := ethutil.WriteFile(fn, data); err != nil {
+		return err
+	}
+	fmt.Printf("exported blockchain\n")
 
 	return nil
 }

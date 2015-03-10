@@ -187,6 +187,9 @@ func loadBlocksFromTestFile(filePath string) (blocks types.Blocks, err error) {
 	}
 
 	gb := types.NewBlockWithHeader(gbh)
+	//gb.uncles = *new([]*types.Header)
+	//gb.transactions = *new(types.Transactions)
+	gb.Td = new(big.Int)
 	gb.Reward = new(big.Int)
 
 	testBlock := new(types.Block)
