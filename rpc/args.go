@@ -8,6 +8,30 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 )
 
+// Unmarshal state is a helper method which has the ability to decode messsages
+// that use the `defaultBlock` (https://github.com/ethereum/wiki/wiki/JSON-RPC#the-default-block-parameter)
+// For example a `call`: [{to: "0x....", data:"0x..."}, "latest"]. The first argument is the transaction
+// message and the second one refers to the block height (or state) to which to apply this `call`.
+func unmarshalState(b []byte, iface interface{}, str *string) (err error) {
+	var data []json.RawMessage
+	if err = json.Unmarshal(b, &data); err != nil && len(data) == 0 {
+		return errDecodeArgs
+	}
+
+	if err = json.Unmarshal(data[0], iface); err != nil {
+		return errDecodeArgs
+	}
+
+	// Second argument is optional (transact doesn't require it)
+	if len(data) > 1 {
+		if err = json.Unmarshal(data[1], str); err != nil {
+			return errDecodeArgs
+		}
+	}
+
+	return nil
+}
+
 type GetBlockByHashArgs struct {
 	BlockHash    string
 	Transactions bool
@@ -68,10 +92,12 @@ type NewTxArgs struct {
 	Gas      *big.Int
 	GasPrice *big.Int
 	Data     string
+
+	BlockHeight string
 }
 
 func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
-	var obj []struct {
+	var obj struct {
 		From     string `json:"from"`
 		To       string `json:"to"`
 		Value    string `json:"value"`
@@ -79,20 +105,18 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 		GasPrice string `json:"gasPrice"`
 		Data     string `json:"data"`
 	}
-
-	if err = json.Unmarshal(b, &obj); err != nil {
-		return errDecodeArgs
+	var height string
+	if err = unmarshalState(b, &obj, &height); err != nil {
+		return err
 	}
 
-	if len(obj) < 1 {
-		return errArguments
-	}
-	args.From = obj[0].From
-	args.To = obj[0].To
-	args.Value = ethutil.Big(obj[0].Value)
-	args.Gas = ethutil.Big(obj[0].Gas)
-	args.GasPrice = ethutil.Big(obj[0].GasPrice)
-	args.Data = obj[0].Data
+	args.From = obj.From
+	args.To = obj.To
+	args.Value = ethutil.Big(obj.Value)
+	args.Gas = ethutil.Big(obj.Gas)
+	args.GasPrice = ethutil.Big(obj.GasPrice)
+	args.Data = obj.Data
+	args.BlockHeight = height
 
 	return nil
 }
