@@ -119,7 +119,7 @@ func (c Command) Run(ctx *Context) error {
 
 // Returns true if Command.Name or Command.ShortName matches given name
 func (c Command) HasName(name string) bool {
-	return c.Name == name || c.ShortName == name
+	return c.Name == name || (c.ShortName != "" && c.ShortName == name)
 }
 
 func (c Command) startApp(ctx *Context) error {

@@ -12,11 +12,10 @@ USAGE:
    {{.Name}} {{if .Flags}}[global options] {{end}}command{{if .Flags}} [command options]{{end}} [arguments...]
 
 VERSION:
-   {{.Version}}{{if or .Author .Email}}
+   {{.Version}}
 
-AUTHOR:{{if .Author}}
-  {{.Author}}{{if .Email}} - <{{.Email}}>{{end}}{{else}}
-  {{.Email}}{{end}}{{end}}
+AUTHOR(S): 
+	{{range .Authors}}{{ . }} {{end}}
 
 COMMANDS:
    {{range .Commands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
@@ -112,6 +111,12 @@ func DefaultAppComplete(c *Context) {
 
 // Prints help for the given command
 func ShowCommandHelp(c *Context, command string) {
+	// show the subcommand help for a command with subcommands
+	if command == "" {
+		HelpPrinter(SubcommandHelpTemplate, c.App)
+		return
+	}
+
 	for _, c := range c.App.Commands {
 		if c.HasName(command) {
 			HelpPrinter(CommandHelpTemplate, c)
