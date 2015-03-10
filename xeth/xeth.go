@@ -360,7 +360,7 @@ func (self *XEth) sign(tx *types.Transaction, from []byte, didUnlock bool) error
 			return fmt.Errorf("could not unlock sender account")
 		}
 		// retry signing, the account should now be unlocked.
-		self.sign(tx, from, true)
+		return self.sign(tx, from, true)
 	} else if err != nil {
 		return err
 	}
