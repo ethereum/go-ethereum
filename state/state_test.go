@@ -57,7 +57,6 @@ func (s *StateSuite) TestDump(c *checker.C) {
 }
 
 func (s *StateSuite) SetUpTest(c *checker.C) {
-	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")
 	db, _ := ethdb.NewMemDatabase()
 	s.state = New(nil, db)
 }
