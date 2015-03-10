@@ -24,11 +24,38 @@ import (
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
+func init() {
+	cli.AppHelpTemplate = `{{.Name}} {{if .Flags}}[global options] {{end}}command{{if .Flags}} [command options]{{end}} [arguments...]
+
+VERSION:
+   {{.Version}}
+
+COMMANDS:
+   {{range .Commands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
+   {{end}}{{if .Flags}}
+GLOBAL OPTIONS:
+   {{range .Flags}}{{.}}
+   {{end}}{{end}}
+`
+
+	cli.CommandHelpTemplate = `{{.Name}}{{if .Subcommands}} command{{end}}{{if .Flags}} [command options]{{end}} [arguments...]
+{{if .Description}}{{.Description}}
+{{end}}{{if .Subcommands}}
+SUBCOMMANDS:
+	{{range .Subcommands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
+	{{end}}{{end}}{{if .Flags}}
+OPTIONS:
+	{{range .Flags}}{{.}}
+	{{end}}{{end}}
+`
+}
+
 // NewApp creates an app with sane defaults.
 func NewApp(version, usage string) *cli.App {
 	app := cli.NewApp()
 	app.Name = path.Base(os.Args[0])
 	app.Author = ""
+	app.Authors = nil
 	app.Email = ""
 	app.Version = version
 	app.Usage = usage
