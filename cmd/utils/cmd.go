@@ -98,7 +98,7 @@ func initDataDir(Datadir string) {
 func exit(err error) {
 	status := 0
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Fatal: ", err)
+		fmt.Fprintln(os.Stderr, "Fatal:", err)
 		status = 1
 	}
 	logger.Flush()
