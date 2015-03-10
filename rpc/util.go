@@ -132,6 +132,9 @@ func fromHex(s string) []byte {
 		if s[0:2] == "0x" {
 			s = s[2:]
 		}
+		if len(s)%2 == 1 {
+			s = "0" + s
+		}
 		return ethutil.Hex2Bytes(s)
 	}
 	return nil
