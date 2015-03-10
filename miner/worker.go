@@ -115,6 +115,17 @@ func (self *worker) register(agent Agent) {
 	agent.SetWorkCh(self.recv)
 }
 
+func (self *worker) unregister(numremove int) {
+	totagents := len(self.agents)
+	if totagents == 0 || numremove < 1 {
+		return
+	}
+	if numremove > totagents {
+		numremove = totagents
+	}
+	self.agents = self.agents[0 : totagents-numremove]
+}
+
 func (self *worker) update() {
 	events := self.mux.Subscribe(core.ChainHeadEvent{}, core.NewMinedBlockEvent{})
 
