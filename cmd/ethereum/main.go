@@ -87,6 +87,11 @@ runtime will execute the file and exit.
 			Name:   "import",
 			Usage:  `import a blockchain file`,
 		},
+		{
+			Action: exportchain,
+			Name:   "export",
+			Usage:  `export blockchain into file`,
+		},
 	}
 	app.Author = ""
 	app.Email = ""
@@ -171,25 +176,39 @@ func importchain(ctx *cli.Context) {
 	if len(ctx.Args()) != 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	chain, _, _ := utils.GetChain(ctx)
+	chainmgr, _, _ := utils.GetChain(ctx)
 	start := time.Now()
-	err := utils.ImportChain(chain, ctx.Args().First())
+	err := utils.ImportChain(chainmgr, ctx.Args().First())
 	if err != nil {
 		utils.Fatalf("Import error: %v\n", err)
 	}
-	fmt.Printf("Import done in", time.Since(start))
+	fmt.Printf("Import done in %v", time.Since(start))
+	return
+}
+
+func exportchain(ctx *cli.Context) {
+	if len(ctx.Args()) != 1 {
+		utils.Fatalf("This command requires an argument.")
+	}
+	chainmgr, _, _ := utils.GetChain(ctx)
+	start := time.Now()
+	err := utils.ExportChain(chainmgr, ctx.Args().First())
+	if err != nil {
+		utils.Fatalf("Export error: %v\n", err)
+	}
+	fmt.Printf("Export done in %v", time.Since(start))
 	return
 }
 
 func dump(ctx *cli.Context) {
-	chain, _, stateDb := utils.GetChain(ctx)
+	chainmgr, _, stateDb := utils.GetChain(ctx)
 	for _, arg := range ctx.Args() {
 		var block *types.Block
 		if hashish(arg) {
-			block = chain.GetBlock(ethutil.Hex2Bytes(arg))
+			block = chainmgr.GetBlock(ethutil.Hex2Bytes(arg))
 		} else {
 			num, _ := strconv.Atoi(arg)
-			block = chain.GetBlockByNumber(uint64(num))
+			block = chainmgr.GetBlockByNumber(uint64(num))
 		}
 		if block == nil {
 			fmt.Println("{}")
@@ -209,11 +228,13 @@ func hashish(x string) bool {
 }
 
 func version(c *cli.Context) {
-	fmt.Printf(`%v %v
-PV=%d
-GOOS=%s
-GO=%s
+	fmt.Printf(`%v
+Version: %v
+Protocol Version: %d
+Network Id: %d
+GO: %s
+OS: %s
 GOPATH=%s
 GOROOT=%s
-`, ClientIdentifier, Version, eth.ProtocolVersion, runtime.GOOS, runtime.Version(), os.Getenv("GOPATH"), runtime.GOROOT())
+`, ClientIdentifier, Version, eth.ProtocolVersion, eth.NetworkId, runtime.Version(), runtime.GOOS, os.Getenv("GOPATH"), runtime.GOROOT())
 }
