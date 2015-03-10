@@ -21,6 +21,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"runtime"
@@ -28,12 +29,14 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
+	"github.com/peterh/liner"
 )
 
 const (
@@ -43,12 +46,10 @@ const (
 
 var (
 	clilogger = logger.NewLogger("CLI")
-	app       = cli.NewApp()
+	app       = utils.NewApp(Version, "the go-ethereum command line interface")
 )
 
 func init() {
-	app.Version = Version
-	app.Usage = "the go-ethereum command-line client"
 	app.Action = run
 	app.HideVersion = true // we have a command to print the version
 	app.Commands = []cli.Command{
@@ -59,6 +60,23 @@ func init() {
 			Description: `
 The output of this command is supposed to be machine-readable.
 `,
+		},
+		{
+			Action: accountList,
+			Name:   "account",
+			Usage:  "manage accounts",
+			Subcommands: []cli.Command{
+				{
+					Action: accountList,
+					Name:   "list",
+					Usage:  "print account addresses",
+				},
+				{
+					Action: accountCreate,
+					Name:   "new",
+					Usage:  "create a new account",
+				},
+			},
 		},
 		{
 			Action: dump,
@@ -93,13 +111,9 @@ runtime will execute the file and exit.
 			Usage:  `export blockchain into file`,
 		},
 	}
-	app.Author = ""
-	app.Email = ""
 	app.Flags = []cli.Flag{
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
-		utils.KeyRingFlag,
-		utils.KeyStoreFlag,
 		utils.ListenPortFlag,
 		utils.LogFileFlag,
 		utils.LogFormatFlag,
@@ -140,36 +154,83 @@ func main() {
 func run(ctx *cli.Context) {
 	fmt.Printf("Welcome to the FRONTIER\n")
 	utils.HandleInterrupt()
-	eth := utils.GetEthereum(ClientIdentifier, Version, ctx)
+	eth, err := utils.GetEthereum(ClientIdentifier, Version, ctx)
+	if err == accounts.ErrNoKeys {
+		utils.Fatalf(`No accounts configured.
+Please run 'ethereum account new' to create a new account.`)
+	} else if err != nil {
+		utils.Fatalf("%v", err)
+	}
+
 	startEth(ctx, eth)
 	// this blocks the thread
 	eth.WaitForShutdown()
 }
 
 func runjs(ctx *cli.Context) {
-	eth := utils.GetEthereum(ClientIdentifier, Version, ctx)
-	startEth(ctx, eth)
-	if len(ctx.Args()) == 0 {
-		runREPL(eth)
-		eth.Stop()
-		eth.WaitForShutdown()
-	} else if len(ctx.Args()) == 1 {
-		execJsFile(eth, ctx.Args()[0])
-	} else {
-		utils.Fatalf("This command can handle at most one argument.")
+	eth, err := utils.GetEthereum(ClientIdentifier, Version, ctx)
+	if err == accounts.ErrNoKeys {
+		utils.Fatalf(`No accounts configured.
+Please run 'ethereum account new' to create a new account.`)
+	} else if err != nil {
+		utils.Fatalf("%v", err)
 	}
+
+	startEth(ctx, eth)
+	repl := newJSRE(eth)
+	if len(ctx.Args()) == 0 {
+		repl.interactive()
+	} else {
+		for _, file := range ctx.Args() {
+			repl.exec(file)
+		}
+	}
+	eth.Stop()
+	eth.WaitForShutdown()
 }
 
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	utils.StartEthereum(eth)
+	// Start auxiliary services if enabled.
 	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
-		addr := ctx.GlobalString(utils.RPCListenAddrFlag.Name)
-		port := ctx.GlobalInt(utils.RPCPortFlag.Name)
-		utils.StartRpc(eth, addr, port)
+		utils.StartRPC(eth, ctx)
 	}
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
 		eth.Miner().Start()
 	}
+}
+
+func accountList(ctx *cli.Context) {
+	am := utils.GetAccountManager(ctx)
+	accts, err := am.Accounts()
+	if err != nil {
+		utils.Fatalf("Could not list accounts: %v", err)
+	}
+	for _, acct := range accts {
+		fmt.Printf("Address: %#x\n", acct)
+	}
+}
+
+func accountCreate(ctx *cli.Context) {
+	am := utils.GetAccountManager(ctx)
+	fmt.Println("The new account will be encrypted with a passphrase.")
+	fmt.Println("Please enter a passphrase now.")
+	auth, err := readPassword("Passphrase: ", true)
+	if err != nil {
+		utils.Fatalf("%v", err)
+	}
+	confirm, err := readPassword("Repeat Passphrase: ", false)
+	if err != nil {
+		utils.Fatalf("%v", err)
+	}
+	if auth != confirm {
+		utils.Fatalf("Passphrases did not match.")
+	}
+	acct, err := am.NewAccount(auth)
+	if err != nil {
+		utils.Fatalf("Could not create the account: %v", err)
+	}
+	fmt.Printf("Address: %#x\n", acct.Address)
 }
 
 func importchain(ctx *cli.Context) {
@@ -221,12 +282,6 @@ func dump(ctx *cli.Context) {
 	}
 }
 
-// hashish returns true for strings that look like hashes.
-func hashish(x string) bool {
-	_, err := strconv.Atoi(x)
-	return err != nil
-}
-
 func version(c *cli.Context) {
 	fmt.Printf(`%v
 Version: %v
@@ -237,4 +292,25 @@ OS: %s
 GOPATH=%s
 GOROOT=%s
 `, ClientIdentifier, Version, eth.ProtocolVersion, eth.NetworkId, runtime.Version(), runtime.GOOS, os.Getenv("GOPATH"), runtime.GOROOT())
+}
+
+// hashish returns true for strings that look like hashes.
+func hashish(x string) bool {
+	_, err := strconv.Atoi(x)
+	return err != nil
+}
+
+func readPassword(prompt string, warnTerm bool) (string, error) {
+	if liner.TerminalSupported() {
+		lr := liner.NewLiner()
+		defer lr.Close()
+		return lr.PasswordPrompt(prompt)
+	}
+	if warnTerm {
+		fmt.Println("!! Unsupported terminal, password will be echoed.")
+	}
+	fmt.Print(prompt)
+	input, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	fmt.Println()
+	return input, err
 }

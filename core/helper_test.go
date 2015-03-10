@@ -62,8 +62,6 @@ func (tm *TestManager) Db() ethutil.Database {
 }
 
 func NewTestManager() *TestManager {
-	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "ETH")
-
 	db, err := ethdb.NewMemDatabase()
 	if err != nil {
 		fmt.Println("Could not create mem-db, failing")

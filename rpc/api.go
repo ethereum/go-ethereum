@@ -10,6 +10,7 @@ package rpc
 
 import (
 	"math/big"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -53,8 +54,8 @@ type EthereumApi struct {
 	defaultBlockAge int64
 }
 
-func NewEthereumApi(eth *xeth.XEth) *EthereumApi {
-	db, _ := ethdb.NewLDBDatabase("dapps")
+func NewEthereumApi(eth *xeth.XEth, dataDir string) *EthereumApi {
+	db, _ := ethdb.NewLDBDatabase(path.Join(dataDir, "dapps"))
 	api := &EthereumApi{
 		eth:             eth,
 		mux:             eth.Backend().EventMux(),
@@ -250,44 +251,24 @@ func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *interface{}) error {
 }
 
 func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
-	if len(args.Gas) == 0 {
+	// TODO: align default values to have the same type, e.g. not depend on
+	// ethutil.Value conversions later on
+	if ethutil.Big(args.Gas).Cmp(big.NewInt(0)) == 0 {
 		args.Gas = defaultGas.String()
 	}
 
-	if len(args.GasPrice) == 0 {
+	if ethutil.Big(args.GasPrice).Cmp(big.NewInt(0)) == 0 {
 		args.GasPrice = defaultGasPrice.String()
 	}
 
-	// TODO if no_private_key then
-	//if _, exists := p.register[args.From]; exists {
-	//	p.register[args.From] = append(p.register[args.From], args)
-	//} else {
-	/*
-		account := accounts.Get(fromHex(args.From))
-		if account != nil {
-			if account.Unlocked() {
-				if !unlockAccount(account) {
-					return
-				}
-			}
-
-			result, _ := account.Transact(fromHex(args.To), fromHex(args.Value), fromHex(args.Gas), fromHex(args.GasPrice), fromHex(args.Data))
-			if len(result) > 0 {
-				*reply = toHex(result)
-			}
-		} else if _, exists := p.register[args.From]; exists {
-			p.register[ags.From] = append(p.register[args.From], args)
-		}
-	*/
-	result, _ := p.xeth().Transact( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
+	result, _ := p.xeth().Transact(args.From, args.To, args.Value, args.Gas, args.GasPrice, args.Data)
 	*reply = result
-	//}
 
 	return nil
 }
 
 func (p *EthereumApi) Call(args *NewTxArgs, reply *interface{}) error {
-	result, err := p.xeth().Call( /* TODO specify account */ args.To, args.Value, args.Gas, args.GasPrice, args.Data)
+	result, err := p.xeth().Call(args.From, args.To, args.Value, args.Gas, args.GasPrice, args.Data)
 	if err != nil {
 		return err
 	}

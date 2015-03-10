@@ -24,6 +24,7 @@ func (obj *GetBlockArgs) UnmarshalJSON(b []byte) (err error) {
 
 type NewTxArgs struct {
 	From     string `json:"from"`
+	Pass     string `json:"pass"`
 	To       string `json:"to"`
 	Value    string `json:"value"`
 	Gas      string `json:"gas"`
