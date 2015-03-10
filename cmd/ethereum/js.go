@@ -41,14 +41,14 @@ type prompter interface {
 	PasswordPrompt(p string) (string, error)
 }
 
-type dumbPrompter struct{ r *bufio.Reader }
+type dumbterm struct{ r *bufio.Reader }
 
-func (r dumbPrompter) Prompt(p string) (string, error) {
+func (r dumbterm) Prompt(p string) (string, error) {
 	fmt.Print(p)
 	return r.r.ReadString('\n')
 }
 
-func (r dumbPrompter) PasswordPrompt(p string) (string, error) {
+func (r dumbterm) PasswordPrompt(p string) (string, error) {
 	fmt.Println("!! Unsupported terminal, password will echo.")
 	fmt.Print(p)
 	input, err := bufio.NewReader(os.Stdin).ReadString('\n')
@@ -56,13 +56,14 @@ func (r dumbPrompter) PasswordPrompt(p string) (string, error) {
 	return input, err
 }
 
-func (r dumbPrompter) AppendHistory(string) {}
+func (r dumbterm) AppendHistory(string) {}
 
 type jsre struct {
 	re       *javascript.JSRE
 	ethereum *eth.Ethereum
 	xeth     *xeth.XEth
 	ps1      string
+
 	prompter
 }
 
@@ -73,7 +74,7 @@ func newJSRE(ethereum *eth.Ethereum) *jsre {
 	js.initStdFuncs()
 
 	if !liner.TerminalSupported() {
-		js.prompter = dumbPrompter{bufio.NewReader(os.Stdin)}
+		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
 	} else {
 		lr := liner.NewLiner()
 		lr.SetCtrlCAborts(true)
@@ -87,13 +88,13 @@ func newJSRE(ethereum *eth.Ethereum) *jsre {
 
 func (self *jsre) ConfirmTransaction(tx *types.Transaction) bool {
 	p := fmt.Sprintf("Confirm Transaction %v\n[y/n] ", tx)
-	answer, _ := self.prompter.Prompt(p)
+	answer, _ := self.Prompt(p)
 	return strings.HasPrefix(strings.Trim(answer, " "), "y")
 }
 
 func (self *jsre) UnlockAccount(addr []byte) bool {
 	fmt.Printf("Please unlock account %x.\n", addr)
-	pass, err := self.prompter.PasswordPrompt("Passphrase: ")
+	pass, err := self.PasswordPrompt("Passphrase: ")
 	if err != nil {
 		return false
 	}
@@ -124,7 +125,7 @@ func (self *jsre) exec(filename string) error {
 
 func (self *jsre) interactive() {
 	for {
-		input, err := self.prompter.Prompt(self.ps1)
+		input, err := self.Prompt(self.ps1)
 		if err != nil {
 			return
 		}
@@ -138,7 +139,7 @@ func (self *jsre) interactive() {
 				return
 			}
 			hist := str[:len(str)-1]
-			self.prompter.AppendHistory(hist)
+			self.AppendHistory(hist)
 			self.parseInput(str)
 			str = ""
 		}
