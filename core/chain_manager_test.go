@@ -12,14 +12,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	ethutil.ReadConfig("/tmp/ethtest", "/tmp/ethtest", "ETH")
 }
 
 // Test fork of length N starting from block i

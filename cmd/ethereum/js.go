@@ -22,11 +22,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/signal"
 	"path"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -37,51 +35,118 @@ import (
 	"github.com/peterh/liner"
 )
 
-func execJsFile(ethereum *eth.Ethereum, filename string) {
-	file, err := os.Open(filename)
-	if err != nil {
-		utils.Fatalf("%v", err)
-	}
-	content, err := ioutil.ReadAll(file)
-	if err != nil {
-		utils.Fatalf("%v", err)
-	}
-	re := javascript.NewJSRE(xeth.New(ethereum, nil))
-	if _, err := re.Run(string(content)); err != nil {
-		utils.Fatalf("Javascript Error: %v", err)
-	}
+type prompter interface {
+	AppendHistory(string)
+	Prompt(p string) (string, error)
+	PasswordPrompt(p string) (string, error)
 }
 
-type repl struct {
+type dumbterm struct{ r *bufio.Reader }
+
+func (r dumbterm) Prompt(p string) (string, error) {
+	fmt.Print(p)
+	return r.r.ReadString('\n')
+}
+
+func (r dumbterm) PasswordPrompt(p string) (string, error) {
+	fmt.Println("!! Unsupported terminal, password will echo.")
+	fmt.Print(p)
+	input, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	fmt.Println()
+	return input, err
+}
+
+func (r dumbterm) AppendHistory(string) {}
+
+type jsre struct {
 	re       *javascript.JSRE
 	ethereum *eth.Ethereum
 	xeth     *xeth.XEth
-	prompt   string
-	lr       *liner.State
+	ps1      string
+
+	prompter
 }
 
-func runREPL(ethereum *eth.Ethereum) {
-	xeth := xeth.New(ethereum, nil)
-	repl := &repl{
-		re:       javascript.NewJSRE(xeth),
-		xeth:     xeth,
-		ethereum: ethereum,
-		prompt:   "> ",
-	}
-	repl.initStdFuncs()
+func newJSRE(ethereum *eth.Ethereum) *jsre {
+	js := &jsre{ethereum: ethereum, ps1: "> "}
+	js.xeth = xeth.New(ethereum, js)
+	js.re = javascript.NewJSRE(js.xeth)
+	js.initStdFuncs()
+
 	if !liner.TerminalSupported() {
-		repl.dumbRead()
+		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
 	} else {
 		lr := liner.NewLiner()
-		defer lr.Close()
 		lr.SetCtrlCAborts(true)
-		repl.withHistory(func(hist *os.File) { lr.ReadHistory(hist) })
-		repl.read(lr)
-		repl.withHistory(func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
+		defer lr.Close()
+		js.withHistory(func(hist *os.File) { lr.ReadHistory(hist) })
+		defer js.withHistory(func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
+		js.prompter = lr
+	}
+	return js
+}
+
+func (self *jsre) ConfirmTransaction(tx *types.Transaction) bool {
+	p := fmt.Sprintf("Confirm Transaction %v\n[y/n] ", tx)
+	answer, _ := self.Prompt(p)
+	return strings.HasPrefix(strings.Trim(answer, " "), "y")
+}
+
+func (self *jsre) UnlockAccount(addr []byte) bool {
+	fmt.Printf("Please unlock account %x.\n", addr)
+	pass, err := self.PasswordPrompt("Passphrase: ")
+	if err != nil {
+		return false
+	}
+	// TODO: allow retry
+	if err := self.ethereum.AccountManager().Unlock(addr, pass); err != nil {
+		fmt.Println("Unlocking failed: ", err)
+		return false
+	} else {
+		fmt.Println("Account is now unlocked for this session.")
+		return true
 	}
 }
 
-func (self *repl) withHistory(op func(*os.File)) {
+func (self *jsre) exec(filename string) error {
+	file, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	content, err := ioutil.ReadAll(file)
+	if err != nil {
+		return err
+	}
+	if _, err := self.re.Run(string(content)); err != nil {
+		return fmt.Errorf("Javascript Error: %v", err)
+	}
+	return nil
+}
+
+func (self *jsre) interactive() {
+	for {
+		input, err := self.Prompt(self.ps1)
+		if err != nil {
+			return
+		}
+		if input == "" {
+			continue
+		}
+		str += input + "\n"
+		self.setIndent()
+		if indentCount <= 0 {
+			if input == "exit" {
+				return
+			}
+			hist := str[:len(str)-1]
+			self.AppendHistory(hist)
+			self.parseInput(str)
+			str = ""
+		}
+	}
+}
+
+func (self *jsre) withHistory(op func(*os.File)) {
 	hist, err := os.OpenFile(path.Join(self.ethereum.DataDir, "history"), os.O_RDWR|os.O_CREATE, os.ModePerm)
 	if err != nil {
 		fmt.Printf("unable to open history file: %v\n", err)
@@ -91,7 +156,7 @@ func (self *repl) withHistory(op func(*os.File)) {
 	hist.Close()
 }
 
-func (self *repl) parseInput(code string) {
+func (self *jsre) parseInput(code string) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println("[native] error", r)
@@ -108,79 +173,21 @@ func (self *repl) parseInput(code string) {
 var indentCount = 0
 var str = ""
 
-func (self *repl) setIndent() {
+func (self *jsre) setIndent() {
 	open := strings.Count(str, "{")
 	open += strings.Count(str, "(")
 	closed := strings.Count(str, "}")
 	closed += strings.Count(str, ")")
 	indentCount = open - closed
 	if indentCount <= 0 {
-		self.prompt = "> "
+		self.ps1 = "> "
 	} else {
-		self.prompt = strings.Join(make([]string, indentCount*2), "..")
-		self.prompt += " "
+		self.ps1 = strings.Join(make([]string, indentCount*2), "..")
+		self.ps1 += " "
 	}
 }
 
-func (self *repl) read(lr *liner.State) {
-	for {
-		input, err := lr.Prompt(self.prompt)
-		if err != nil {
-			return
-		}
-		if input == "" {
-			continue
-		}
-		str += input + "\n"
-		self.setIndent()
-		if indentCount <= 0 {
-			if input == "exit" {
-				return
-			}
-			hist := str[:len(str)-1]
-			lr.AppendHistory(hist)
-			self.parseInput(str)
-			str = ""
-		}
-	}
-}
-
-func (self *repl) dumbRead() {
-	fmt.Println("Unsupported terminal, line editing will not work.")
-
-	// process lines
-	readDone := make(chan struct{})
-	go func() {
-		r := bufio.NewReader(os.Stdin)
-	loop:
-		for {
-			fmt.Print(self.prompt)
-			line, err := r.ReadString('\n')
-			switch {
-			case err != nil || line == "exit":
-				break loop
-			case line == "":
-				continue
-			default:
-				self.parseInput(line + "\n")
-			}
-		}
-		close(readDone)
-	}()
-
-	// wait for Ctrl-C
-	sigc := make(chan os.Signal, 1)
-	signal.Notify(sigc, os.Interrupt, os.Kill)
-	defer signal.Stop(sigc)
-
-	select {
-	case <-readDone:
-	case <-sigc:
-		os.Stdin.Close() // terminate read
-	}
-}
-
-func (self *repl) printValue(v interface{}) {
+func (self *jsre) printValue(v interface{}) {
 	method, _ := self.re.Vm.Get("prettyPrint")
 	v, err := self.re.Vm.ToValue(v)
 	if err == nil {
@@ -191,7 +198,7 @@ func (self *repl) printValue(v interface{}) {
 	}
 }
 
-func (self *repl) initStdFuncs() {
+func (self *jsre) initStdFuncs() {
 	t, _ := self.re.Vm.Get("eth")
 	eth := t.Object()
 	eth.Set("connect", self.connect)
@@ -205,7 +212,7 @@ func (self *repl) initStdFuncs() {
  * The following methods are natively implemented javascript functions.
  */
 
-func (self *repl) dump(call otto.FunctionCall) otto.Value {
+func (self *jsre) dump(call otto.FunctionCall) otto.Value {
 	var block *types.Block
 
 	if len(call.ArgumentList) > 0 {
@@ -236,17 +243,17 @@ func (self *repl) dump(call otto.FunctionCall) otto.Value {
 	return v
 }
 
-func (self *repl) stopMining(call otto.FunctionCall) otto.Value {
+func (self *jsre) stopMining(call otto.FunctionCall) otto.Value {
 	self.xeth.Miner().Stop()
 	return otto.TrueValue()
 }
 
-func (self *repl) startMining(call otto.FunctionCall) otto.Value {
+func (self *jsre) startMining(call otto.FunctionCall) otto.Value {
 	self.xeth.Miner().Start()
 	return otto.TrueValue()
 }
 
-func (self *repl) connect(call otto.FunctionCall) otto.Value {
+func (self *jsre) connect(call otto.FunctionCall) otto.Value {
 	nodeURL, err := call.Argument(0).ToString()
 	if err != nil {
 		return otto.FalseValue()
@@ -257,7 +264,7 @@ func (self *repl) connect(call otto.FunctionCall) otto.Value {
 	return otto.TrueValue()
 }
 
-func (self *repl) export(call otto.FunctionCall) otto.Value {
+func (self *jsre) export(call otto.FunctionCall) otto.Value {
 	if len(call.ArgumentList) == 0 {
 		fmt.Println("err: require file name")
 		return otto.FalseValue()

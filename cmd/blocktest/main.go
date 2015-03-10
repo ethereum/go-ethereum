@@ -25,32 +25,24 @@ package main
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"math/big"
-	"path"
+	"os"
 	"runtime"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/core"
 	types "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rlp"
-)
-
-const (
-	ClientIdentifier = "Ethereum(G)"
-	Version          = "0.8.6"
 )
 
 type Account struct {
@@ -78,6 +70,7 @@ type BlockHeader struct {
 	TransactionsTrie string
 	UncleHash        string
 }
+
 type Tx struct {
 	Data     string
 	GasLimit string
@@ -103,103 +96,44 @@ type Test struct {
 	Pre                map[string]Account
 }
 
-var (
-	Identifier       string
-	KeyRing          string
-	DiffTool         bool
-	DiffType         string
-	KeyStore         string
-	StartRpc         bool
-	StartWebSockets  bool
-	RpcListenAddress string
-	RpcPort          int
-	WsPort           int
-	OutboundPort     string
-	ShowGenesis      bool
-	AddPeer          string
-	MaxPeer          int
-	GenAddr          bool
-	BootNodes        string
-	NodeKey          *ecdsa.PrivateKey
-	NAT              nat.Interface
-	SecretFile       string
-	ExportDir        string
-	NonInteractive   bool
-	Datadir          string
-	LogFile          string
-	ConfigFile       string
-	DebugFile        string
-	LogLevel         int
-	LogFormat        string
-	Dump             bool
-	DumpHash         string
-	DumpNumber       int
-	VmType           int
-	ImportChain      string
-	SHH              bool
-	Dial             bool
-	PrintVersion     bool
-	MinerThreads     int
-)
-
-// flags specific to cli client
-var (
-	StartMining    bool
-	StartJsConsole bool
-	InputFile      string
-)
-
 func main() {
-	init_vars()
-
-	Init()
-
-	if len(TestFile) < 1 {
-		log.Fatal("Please specify test file")
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "%s <testfile>\n", os.Args[0])
+		flag.PrintDefaults()
 	}
-	blocks, err := loadBlocksFromTestFile(TestFile)
-	if err != nil {
-		panic(err)
-	}
+	flag.Parse()
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
+	logger.AddLogSystem(logger.NewStdLogSystem(os.Stderr, log.LstdFlags, logger.DebugDetailLevel))
+	defer func() { logger.Flush() }()
 
-	defer func() {
-		logger.Flush()
-	}()
+	if len(os.Args) < 2 {
+		utils.Fatalf("Please specify a test file as the first argument.")
+	}
+	blocks, err := loadBlocksFromTestFile(os.Args[1])
+	if err != nil {
+		utils.Fatalf("Could not load blocks: %v", err)
+	}
 
-	utils.HandleInterrupt()
+	chain := memchain()
+	chain.ResetWithGenesisBlock(blocks[0])
+	if err = chain.InsertChain(types.Blocks{blocks[1]}); err != nil {
+		utils.Fatalf("Error: %v", err)
+	} else {
+		fmt.Println("PASS")
+	}
+}
 
-	utils.InitConfig(VmType, ConfigFile, Datadir, "ethblocktest")
-
-	ethereum, err := eth.New(&eth.Config{
-		Name:         p2p.MakeName(ClientIdentifier, Version),
-		KeyStore:     KeyStore,
-		DataDir:      Datadir,
-		LogFile:      LogFile,
-		LogLevel:     LogLevel,
-		LogFormat:    LogFormat,
-		MaxPeers:     MaxPeer,
-		Port:         OutboundPort,
-		NAT:          NAT,
-		KeyRing:      KeyRing,
-		Shh:          true,
-		Dial:         Dial,
-		BootNodes:    BootNodes,
-		NodeKey:      NodeKey,
-		MinerThreads: MinerThreads,
-	})
-
-	utils.StartRpc(ethereum, RpcListenAddress, RpcPort)
-	utils.StartEthereum(ethereum)
-
-	ethereum.ChainManager().ResetWithGenesisBlock(blocks[0])
-
-	// fmt.Println("HURR: ", hex.EncodeToString(ethutil.Encode(blocks[0].RlpData())))
-
-	go ethereum.ChainManager().InsertChain(types.Blocks{blocks[1]})
-	fmt.Println("OK! ")
-	ethereum.WaitForShutdown()
+func memchain() *core.ChainManager {
+	blockdb, err := ethdb.NewMemDatabase()
+	if err != nil {
+		utils.Fatalf("Could not create in-memory database: %v", err)
+	}
+	statedb, err := ethdb.NewMemDatabase()
+	if err != nil {
+		utils.Fatalf("Could not create in-memory database: %v", err)
+	}
+	return core.NewChainManager(blockdb, statedb, new(event.TypeMux))
 }
 
 func loadBlocksFromTestFile(filePath string) (blocks types.Blocks, err error) {
@@ -207,9 +141,8 @@ func loadBlocksFromTestFile(filePath string) (blocks types.Blocks, err error) {
 	if err != nil {
 		return
 	}
-	bt := *new(map[string]Test)
-	err = json.Unmarshal(fileContent, &bt)
-	if err != nil {
+	bt := make(map[string]Test)
+	if err = json.Unmarshal(fileContent, &bt); err != nil {
 		return
 	}
 
@@ -270,49 +203,6 @@ func loadBlocksFromTestFile(filePath string) (blocks types.Blocks, err error) {
 	}
 
 	return
-}
-
-func init_vars() {
-	VmType = 0
-	Identifier = ""
-	KeyRing = ""
-	KeyStore = "db"
-	RpcListenAddress = "127.0.0.1"
-	RpcPort = 8545
-	WsPort = 40404
-	StartRpc = true
-	StartWebSockets = false
-	NonInteractive = false
-	GenAddr = false
-	SecretFile = ""
-	ExportDir = ""
-	LogFile = ""
-
-	timeStr := strconv.FormatInt(time.Now().UnixNano(), 10)
-
-	Datadir = path.Join(ethutil.DefaultDataDir(), timeStr)
-	ConfigFile = path.Join(ethutil.DefaultDataDir(), timeStr, "conf.ini")
-
-	DebugFile = ""
-	LogLevel = 5
-	LogFormat = "std"
-	DiffTool = false
-	DiffType = "all"
-	ShowGenesis = false
-	ImportChain = ""
-	Dump = false
-	DumpHash = ""
-	DumpNumber = -1
-	StartMining = false
-	StartJsConsole = false
-	PrintVersion = false
-	MinerThreads = runtime.NumCPU()
-
-	Dial = false
-	OutboundPort = "30303"
-	BootNodes = ""
-	MaxPeer = 1
-
 }
 
 func hex_decode(s string) (res []byte, err error) {

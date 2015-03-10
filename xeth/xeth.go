@@ -1,14 +1,13 @@
+// eXtended ETHereum
 package xeth
-
-/*
- * eXtended ETHereum
- */
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math/big"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -18,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/state"
-	"github.com/ethereum/go-ethereum/ui"
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
@@ -28,11 +26,11 @@ var pipelogger = logger.NewLogger("XETH")
 type Backend interface {
 	BlockProcessor() *core.BlockProcessor
 	ChainManager() *core.ChainManager
+	AccountManager() *accounts.Manager
 	TxPool() *core.TxPool
 	PeerCount() int
 	IsListening() bool
 	Peers() []*p2p.Peer
-	KeyManager() *crypto.KeyManager
 	BlockDb() ethutil.Database
 	StateDb() ethutil.Database
 	EventMux() *event.TypeMux
@@ -40,37 +38,62 @@ type Backend interface {
 	Miner() *miner.Miner
 }
 
+// Frontend should be implemented by users of XEth. Its methods are
+// called whenever XEth makes a decision that requires user input.
+type Frontend interface {
+	// UnlockAccount is called when a transaction needs to be signed
+	// but the key corresponding to the transaction's sender is
+	// locked.
+	//
+	// It should unlock the account with the given address and return
+	// true if unlocking succeeded.
+	UnlockAccount(address []byte) bool
+
+	// This is called for all transactions inititated through
+	// Transact. It should prompt the user to confirm the transaction
+	// and return true if the transaction was acknowledged.
+	//
+	// ConfirmTransaction is not used for Call transactions
+	// because they cannot change any state.
+	ConfirmTransaction(tx *types.Transaction) bool
+}
+
 type XEth struct {
 	eth            Backend
 	blockProcessor *core.BlockProcessor
 	chainManager   *core.ChainManager
+	accountManager *accounts.Manager
 	state          *State
 	whisper        *Whisper
 	miner          *miner.Miner
 
-	frontend ui.Interface
+	frontend Frontend
 }
 
-type TmpFrontend struct{}
+// dummyFrontend is a non-interactive frontend that allows all
+// transactions but cannot not unlock any keys.
+type dummyFrontend struct{}
 
-func (TmpFrontend) UnlockAccount([]byte) bool                  { panic("UNLOCK ACCOUNT") }
-func (TmpFrontend) ConfirmTransaction(*types.Transaction) bool { panic("CONFIRM TRANSACTION") }
+func (dummyFrontend) UnlockAccount([]byte) bool                  { return false }
+func (dummyFrontend) ConfirmTransaction(*types.Transaction) bool { return true }
 
-func New(eth Backend, frontend ui.Interface) *XEth {
+// New creates an XEth that uses the given frontend.
+// If a nil Frontend is provided, a default frontend which
+// confirms all transactions will be used.
+func New(eth Backend, frontend Frontend) *XEth {
 	xeth := &XEth{
 		eth:            eth,
 		blockProcessor: eth.BlockProcessor(),
 		chainManager:   eth.ChainManager(),
+		accountManager: eth.AccountManager(),
 		whisper:        NewWhisper(eth.Whisper()),
 		miner:          eth.Miner(),
+		frontend:       frontend,
 	}
-
 	if frontend == nil {
-		xeth.frontend = TmpFrontend{}
+		xeth.frontend = dummyFrontend{}
 	}
-
 	xeth.state = NewState(xeth, xeth.chainManager.TransState())
-
 	return xeth
 }
 
@@ -120,7 +143,13 @@ func (self *XEth) Block(v interface{}) *Block {
 }
 
 func (self *XEth) Accounts() []string {
-	return []string{toHex(self.eth.KeyManager().Address())}
+	// TODO: check err?
+	accounts, _ := self.eth.AccountManager().Accounts()
+	accountAddresses := make([]string, len(accounts))
+	for i, ac := range accounts {
+		accountAddresses[i] = toHex(ac.Address)
+	}
+	return accountAddresses
 }
 
 func (self *XEth) PeerCount() int {
@@ -147,7 +176,8 @@ func (self *XEth) IsListening() bool {
 }
 
 func (self *XEth) Coinbase() string {
-	return toHex(self.eth.KeyManager().Address())
+	cb, _ := self.eth.AccountManager().Coinbase()
+	return toHex(cb)
 }
 
 func (self *XEth) NumberToHuman(balance string) string {
@@ -248,7 +278,7 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 	return toHex(tx.Hash()), nil
 }
 
-func (self *XEth) Call(toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
+func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
 	if len(gasStr) == 0 {
 		gasStr = "100000"
 	}
@@ -256,41 +286,34 @@ func (self *XEth) Call(toStr, valueStr, gasStr, gasPriceStr, dataStr string) (st
 		gasPriceStr = "1"
 	}
 
-	var (
-		statedb = self.State().State() //self.chainManager.TransState()
-		key     = self.eth.KeyManager().KeyPair()
-		from    = statedb.GetOrNewStateObject(key.Address())
-		block   = self.chainManager.CurrentBlock()
-		to      = statedb.GetOrNewStateObject(fromHex(toStr))
-		data    = fromHex(dataStr)
-		gas     = ethutil.Big(gasStr)
-		price   = ethutil.Big(gasPriceStr)
-		value   = ethutil.Big(valueStr)
-	)
-
-	msg := types.NewTransactionMessage(fromHex(toStr), value, gas, price, data)
-	msg.Sign(key.PrivateKey)
+	statedb := self.State().State() //self.chainManager.TransState()
+	msg := callmsg{
+		from:     statedb.GetOrNewStateObject(fromHex(fromStr)),
+		to:       fromHex(toStr),
+		gas:      ethutil.Big(gasStr),
+		gasPrice: ethutil.Big(gasPriceStr),
+		value:    ethutil.Big(valueStr),
+		data:     fromHex(dataStr),
+	}
+	block := self.chainManager.CurrentBlock()
 	vmenv := core.NewEnv(statedb, self.chainManager, msg, block)
 
-	res, err := vmenv.Call(from, to.Address(), data, gas, price, value)
-	if err != nil {
-		return "", err
-	}
-
-	return toHex(res), nil
+	res, err := vmenv.Call(msg.from, msg.to, msg.data, msg.gas, msg.gasPrice, msg.value)
+	return toHex(res), err
 }
 
-func (self *XEth) Transact(toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
+func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
 	var (
+		from             []byte
 		to               []byte
 		value            = ethutil.NewValue(valueStr)
 		gas              = ethutil.NewValue(gasStr)
 		price            = ethutil.NewValue(gasPriceStr)
 		data             []byte
-		key              = self.eth.KeyManager().KeyPair()
 		contractCreation bool
 	)
 
+	from = fromHex(fromStr)
 	data = fromHex(codeStr)
 	to = fromHex(toStr)
 	if len(to) == 0 {
@@ -304,25 +327,61 @@ func (self *XEth) Transact(toStr, valueStr, gasStr, gasPriceStr, codeStr string)
 		tx = types.NewTransactionMessage(to, value.BigInt(), gas.BigInt(), price.BigInt(), data)
 	}
 
-	var err error
-	state := self.eth.ChainManager().TxState()
-	if balance := state.GetBalance(key.Address()); balance.Cmp(tx.Value()) < 0 {
-		return "", fmt.Errorf("insufficient balance. balance=%v tx=%v", balance, tx.Value())
-	}
-	nonce := state.GetNonce(key.Address())
-
+	state := self.chainManager.TransState()
+	nonce := state.GetNonce(from)
 	tx.SetNonce(nonce)
-	tx.Sign(key.PrivateKey)
 
-	err = self.eth.TxPool().Add(tx)
-	if err != nil {
+	if err := self.sign(tx, from, false); err != nil {
 		return "", err
 	}
-	state.SetNonce(key.Address(), nonce+1)
+	if err := self.eth.TxPool().Add(tx); err != nil {
+		return "", err
+	}
+	state.SetNonce(from, nonce+1)
+
+	if contractCreation {
+		addr := core.AddressFromMessage(tx)
+		pipelogger.Infof("Contract addr %x\n", addr)
+	}
 
 	if types.IsContractAddr(to) {
 		return toHex(core.AddressFromMessage(tx)), nil
 	}
-
 	return toHex(tx.Hash()), nil
 }
+
+func (self *XEth) sign(tx *types.Transaction, from []byte, didUnlock bool) error {
+	sig, err := self.accountManager.Sign(accounts.Account{Address: from}, tx.Hash())
+	if err == accounts.ErrLocked {
+		if didUnlock {
+			return fmt.Errorf("sender account still locked after successful unlock")
+		}
+		if !self.frontend.UnlockAccount(from) {
+			return fmt.Errorf("could not unlock sender account")
+		}
+		// retry signing, the account should now be unlocked.
+		self.sign(tx, from, true)
+	} else if err != nil {
+		return err
+	}
+	tx.SetSignatureValues(sig)
+	return nil
+}
+
+// callmsg is the message type used for call transations.
+type callmsg struct {
+	from          *state.StateObject
+	to            []byte
+	gas, gasPrice *big.Int
+	value         *big.Int
+	data          []byte
+}
+
+// accessor boilerplate to implement core.Message
+func (m callmsg) From() []byte       { return m.from.Address() }
+func (m callmsg) Nonce() uint64      { return m.from.Nonce() }
+func (m callmsg) To() []byte         { return m.to }
+func (m callmsg) GasPrice() *big.Int { return m.gasPrice }
+func (m callmsg) Gas() *big.Int      { return m.gas }
+func (m callmsg) Value() *big.Int    { return m.value }
+func (m callmsg) Data() []byte       { return m.data }

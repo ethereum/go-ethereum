@@ -33,16 +33,16 @@ func (s *StateSuite) TestDump(c *checker.C) {
 	// check that dump contains the state objects that are in trie
 	got := string(s.state.Dump())
 	want := `{
-    "root": "4e3a59299745ba6752247c8b91d0f716dac9ec235861c91f5ac1894a361d87ba",
+    "root": "6e277ae8357d013e50f74eedb66a991f6922f93ae03714de58b3d0c5e9eee53f",
     "accounts": {
-        "0000000000000000000000000000000000000001": {
+        "1468288056310c82aa4c01a7e12a10f8111a0560e72b700555479031b86c357d": {
             "balance": "22",
             "nonce": 0,
             "root": "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
             "codeHash": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
             "storage": {}
         },
-        "0000000000000000000000000000000000000102": {
+        "a17eacbc25cda025e81db9c5c62868822c73ce097cee2a63e33a2e41268358a1": {
             "balance": "0",
             "nonce": 0,
             "root": "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
@@ -57,7 +57,6 @@ func (s *StateSuite) TestDump(c *checker.C) {
 }
 
 func (s *StateSuite) SetUpTest(c *checker.C) {
-	ethutil.ReadConfig(".ethtest", "/tmp/ethtest", "")
 	db, _ := ethdb.NewMemDatabase()
 	s.state = New(nil, db)
 }

@@ -33,6 +33,8 @@ and accounts persistence is derived from stored keys' addresses
 package accounts
 
 import (
+	"bytes"
+	"crypto/ecdsa"
 	crand "crypto/rand"
 
 	"errors"
@@ -42,77 +44,113 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-var ErrLocked = errors.New("account is locked; please request passphrase")
+var (
+	ErrLocked = errors.New("account is locked")
+	ErrNoKeys = errors.New("no keys in store")
+)
 
-// TODO: better name for this struct?
 type Account struct {
 	Address []byte
 }
 
-type AccountManager struct {
-	keyStore           crypto.KeyStore2
-	unlockedKeys       map[string]crypto.Key
-	unlockMilliseconds time.Duration
-	mutex              sync.RWMutex
+type Manager struct {
+	keyStore crypto.KeyStore2
+	unlocked map[string]*unlocked
+	mutex    sync.RWMutex
 }
 
-func NewAccountManager(keyStore crypto.KeyStore2, unlockMilliseconds time.Duration) AccountManager {
-	keysMap := make(map[string]crypto.Key)
-	am := &AccountManager{
-		keyStore:           keyStore,
-		unlockedKeys:       keysMap,
-		unlockMilliseconds: unlockMilliseconds,
+type unlocked struct {
+	*crypto.Key
+	abort chan struct{}
+}
+
+func NewManager(keyStore crypto.KeyStore2) *Manager {
+	return &Manager{
+		keyStore: keyStore,
+		unlocked: make(map[string]*unlocked),
 	}
-	return *am
 }
 
-func (am AccountManager) DeleteAccount(address []byte, auth string) error {
+func (am *Manager) HasAccount(addr []byte) bool {
+	accounts, _ := am.Accounts()
+	for _, acct := range accounts {
+		if bytes.Compare(acct.Address, addr) == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// Coinbase returns the account address that mining rewards are sent to.
+func (am *Manager) Coinbase() (addr []byte, err error) {
+	// TODO: persist coinbase address on disk
+	return am.firstAddr()
+}
+
+func (am *Manager) firstAddr() ([]byte, error) {
+	addrs, err := am.keyStore.GetKeyAddresses()
+	if err != nil {
+		return nil, err
+	}
+	if len(addrs) == 0 {
+		return nil, ErrNoKeys
+	}
+	return addrs[0], nil
+}
+
+func (am *Manager) DeleteAccount(address []byte, auth string) error {
 	return am.keyStore.DeleteKey(address, auth)
 }
 
-func (am *AccountManager) Sign(fromAccount *Account, toSign []byte) (signature []byte, err error) {
+func (am *Manager) Sign(a Account, toSign []byte) (signature []byte, err error) {
 	am.mutex.RLock()
-	unlockedKey := am.unlockedKeys[string(fromAccount.Address)]
+	unlockedKey, found := am.unlocked[string(a.Address)]
 	am.mutex.RUnlock()
-	if unlockedKey.Address == nil {
+	if !found {
 		return nil, ErrLocked
 	}
 	signature, err = crypto.Sign(toSign, unlockedKey.PrivateKey)
 	return signature, err
 }
 
-func (am *AccountManager) SignLocked(fromAccount *Account, keyAuth string, toSign []byte) (signature []byte, err error) {
-	key, err := am.keyStore.GetKey(fromAccount.Address, keyAuth)
+// TimedUnlock unlocks the account with the given address.
+// When timeout has passed, the account will be locked again.
+func (am *Manager) TimedUnlock(addr []byte, keyAuth string, timeout time.Duration) error {
+	key, err := am.keyStore.GetKey(addr, keyAuth)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	am.mutex.RLock()
-	am.unlockedKeys[string(fromAccount.Address)] = *key
-	am.mutex.RUnlock()
-	go unlockLater(am, fromAccount.Address)
-	signature, err = crypto.Sign(toSign, key.PrivateKey)
-	return signature, err
+	u := am.addUnlocked(addr, key)
+	go am.dropLater(addr, u, timeout)
+	return nil
 }
 
-func (am AccountManager) NewAccount(auth string) (*Account, error) {
+// Unlock unlocks the account with the given address. The account
+// stays unlocked until the program exits or until a TimedUnlock
+// timeout (started after the call to Unlock) expires.
+func (am *Manager) Unlock(addr []byte, keyAuth string) error {
+	key, err := am.keyStore.GetKey(addr, keyAuth)
+	if err != nil {
+		return err
+	}
+	am.addUnlocked(addr, key)
+	return nil
+}
+
+func (am *Manager) NewAccount(auth string) (Account, error) {
 	key, err := am.keyStore.GenerateNewKey(crand.Reader, auth)
 	if err != nil {
-		return nil, err
+		return Account{}, err
 	}
-	ua := &Account{
-		Address: key.Address,
-	}
-	return ua, err
+	return Account{Address: key.Address}, nil
 }
 
-func (am *AccountManager) Accounts() ([]Account, error) {
+func (am *Manager) Accounts() ([]Account, error) {
 	addresses, err := am.keyStore.GetKeyAddresses()
 	if err != nil {
 		return nil, err
 	}
-
 	accounts := make([]Account, len(addresses))
-
 	for i, addr := range addresses {
 		accounts[i] = Account{
 			Address: addr,
@@ -121,12 +159,47 @@ func (am *AccountManager) Accounts() ([]Account, error) {
 	return accounts, err
 }
 
-func unlockLater(am *AccountManager, addr []byte) {
-	select {
-	case <-time.After(time.Millisecond * am.unlockMilliseconds):
+func (am *Manager) addUnlocked(addr []byte, key *crypto.Key) *unlocked {
+	u := &unlocked{Key: key, abort: make(chan struct{})}
+	am.mutex.Lock()
+	prev, found := am.unlocked[string(addr)]
+	if found {
+		// terminate dropLater for this key to avoid unexpected drops.
+		close(prev.abort)
+		// the key is zeroed here instead of in dropLater because
+		// there might not actually be a dropLater running for this
+		// key, i.e. when Unlock was used.
+		zeroKey(prev.PrivateKey)
 	}
-	am.mutex.RLock()
-	// TODO: how do we know the key is actually gone from memory?
-	delete(am.unlockedKeys, string(addr))
-	am.mutex.RUnlock()
+	am.unlocked[string(addr)] = u
+	am.mutex.Unlock()
+	return u
+}
+
+func (am *Manager) dropLater(addr []byte, u *unlocked, timeout time.Duration) {
+	t := time.NewTimer(timeout)
+	defer t.Stop()
+	select {
+	case <-u.abort:
+		// just quit
+	case <-t.C:
+		am.mutex.Lock()
+		// only drop if it's still the same key instance that dropLater
+		// was launched with. we can check that using pointer equality
+		// because the map stores a new pointer every time the key is
+		// unlocked.
+		if am.unlocked[string(addr)] == u {
+			zeroKey(u.PrivateKey)
+			delete(am.unlocked, string(addr))
+		}
+		am.mutex.Unlock()
+	}
+}
+
+// zeroKey zeroes a private key in memory.
+func zeroKey(k *ecdsa.PrivateKey) {
+	b := k.D.Bits()
+	for i := range b {
+		b[i] = 0
+	}
 }

@@ -2,10 +2,15 @@ package utils
 
 import (
 	"crypto/ecdsa"
+	"fmt"
+	"net"
+	"net/http"
+	"os"
 	"path"
 	"runtime"
 
 	"github.com/codegangsta/cli"
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -15,7 +20,20 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/xeth"
 )
+
+// NewApp creates an app with sane defaults.
+func NewApp(version, usage string) *cli.App {
+	app := cli.NewApp()
+	app.Name = path.Base(os.Args[0])
+	app.Author = ""
+	app.Email = ""
+	app.Version = version
+	app.Usage = usage
+	return app
+}
 
 // These are all the command line flags we support.
 // If you add to this list, please remember to include the
@@ -35,16 +53,6 @@ var (
 	VMDebugFlag = cli.BoolFlag{
 		Name:  "vmdebug",
 		Usage: "Virtual Machine debug output",
-	}
-	KeyRingFlag = cli.StringFlag{
-		Name:  "keyring",
-		Usage: "Name of keyring to be used",
-		Value: "",
-	}
-	KeyStoreFlag = cli.StringFlag{
-		Name:  "keystore",
-		Usage: `Where to store keyrings: "db" or "file"`,
-		Value: "db",
 	}
 	DataDirFlag = cli.StringFlag{
 		Name:  "datadir",
@@ -151,23 +159,21 @@ func GetNodeKey(ctx *cli.Context) (key *ecdsa.PrivateKey) {
 
 func GetEthereum(clientID, version string, ctx *cli.Context) *eth.Ethereum {
 	ethereum, err := eth.New(&eth.Config{
-		Name:         p2p.MakeName(clientID, version),
-		KeyStore:     ctx.GlobalString(KeyStoreFlag.Name),
-		DataDir:      ctx.GlobalString(DataDirFlag.Name),
-		LogFile:      ctx.GlobalString(LogFileFlag.Name),
-		LogLevel:     ctx.GlobalInt(LogLevelFlag.Name),
-		LogFormat:    ctx.GlobalString(LogFormatFlag.Name),
-		MinerThreads: ctx.GlobalInt(MinerThreadsFlag.Name),
-		VmDebug:      ctx.GlobalBool(VMDebugFlag.Name),
-
-		MaxPeers:  ctx.GlobalInt(MaxPeersFlag.Name),
-		Port:      ctx.GlobalString(ListenPortFlag.Name),
-		NAT:       GetNAT(ctx),
-		NodeKey:   GetNodeKey(ctx),
-		KeyRing:   ctx.GlobalString(KeyRingFlag.Name),
-		Shh:       true,
-		Dial:      true,
-		BootNodes: ctx.GlobalString(BootnodesFlag.Name),
+		Name:           p2p.MakeName(clientID, version),
+		DataDir:        ctx.GlobalString(DataDirFlag.Name),
+		LogFile:        ctx.GlobalString(LogFileFlag.Name),
+		LogLevel:       ctx.GlobalInt(LogLevelFlag.Name),
+		LogFormat:      ctx.GlobalString(LogFormatFlag.Name),
+		MinerThreads:   ctx.GlobalInt(MinerThreadsFlag.Name),
+		AccountManager: GetAccountManager(ctx),
+		VmDebug:        ctx.GlobalBool(VMDebugFlag.Name),
+		MaxPeers:       ctx.GlobalInt(MaxPeersFlag.Name),
+		Port:           ctx.GlobalString(ListenPortFlag.Name),
+		NAT:            GetNAT(ctx),
+		NodeKey:        GetNodeKey(ctx),
+		Shh:            true,
+		Dial:           true,
+		BootNodes:      ctx.GlobalString(BootnodesFlag.Name),
 	})
 	if err != nil {
 		exit(err)
@@ -187,4 +193,22 @@ func GetChain(ctx *cli.Context) (*core.ChainManager, ethutil.Database, ethutil.D
 		Fatalf("Could not open database: %v", err)
 	}
 	return core.NewChainManager(blockDb, stateDb, new(event.TypeMux)), blockDb, stateDb
+}
+
+func GetAccountManager(ctx *cli.Context) *accounts.Manager {
+	dataDir := ctx.GlobalString(DataDirFlag.Name)
+	ks := crypto.NewKeyStorePassphrase(path.Join(dataDir, "keys"))
+	return accounts.NewManager(ks)
+}
+
+func StartRPC(eth *eth.Ethereum, ctx *cli.Context) {
+	addr := ctx.GlobalString(RPCListenAddrFlag.Name)
+	port := ctx.GlobalInt(RPCPortFlag.Name)
+	dataDir := ctx.GlobalString(DataDirFlag.Name)
+
+	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", addr, port))
+	if err != nil {
+		Fatalf("Can't listen on %s:%d: %v", addr, port, err)
+	}
+	go http.Serve(l, rpc.JSONRPC(xeth.New(eth, nil), dataDir))
 }
