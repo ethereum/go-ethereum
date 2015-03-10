@@ -168,7 +168,7 @@ func New(config *Config) (*Ethereum, error) {
 
 	cb, err := eth.accountManager.Coinbase()
 	if err != nil {
-		return nil, fmt.Errorf("no coinbase: %v", err)
+		return nil, err
 	}
 
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.EventMux())
