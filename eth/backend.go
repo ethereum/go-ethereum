@@ -25,7 +25,7 @@ import (
 )
 
 var (
-	ethlogger  = logger.NewLogger("SERV")
+	servlogger = logger.NewLogger("SERV")
 	jsonlogger = logger.NewJsonLogger()
 
 	defaultBootNodes = []*discover.Node{
@@ -74,7 +74,7 @@ func (cfg *Config) parseBootNodes() []*discover.Node {
 		}
 		n, err := discover.ParseNode(url)
 		if err != nil {
-			ethlogger.Errorf("Bootstrap URL %s: %v\n", url, err)
+			servlogger.Errorf("Bootstrap URL %s: %v\n", url, err)
 			continue
 		}
 		ns = append(ns, n)
@@ -98,7 +98,7 @@ func (cfg *Config) nodeKey() (*ecdsa.PrivateKey, error) {
 		return nil, fmt.Errorf("could not generate server key: %v", err)
 	}
 	if err := ioutil.WriteFile(keyfile, crypto.FromECDSA(key), 0600); err != nil {
-		ethlogger.Errorln("could not persist nodekey: ", err)
+		servlogger.Errorln("could not persist nodekey: ", err)
 	}
 	return key, nil
 }
@@ -134,7 +134,7 @@ type Ethereum struct {
 
 func New(config *Config) (*Ethereum, error) {
 	// Boostrap database
-	ethlogger := logger.New(config.DataDir, config.LogFile, config.LogLevel, config.LogFormat)
+	servlogger := logger.New(config.DataDir, config.LogFile, config.LogLevel, config.LogFormat)
 
 	blockDb, err := ethdb.NewLDBDatabase(path.Join(config.DataDir, "blockchain"))
 	if err != nil {
@@ -161,7 +161,7 @@ func New(config *Config) (*Ethereum, error) {
 		blockDb:        blockDb,
 		stateDb:        stateDb,
 		eventMux:       &event.TypeMux{},
-		logger:         ethlogger,
+		logger:         servlogger,
 		accountManager: config.AccountManager,
 		DataDir:        config.DataDir,
 	}
@@ -256,7 +256,7 @@ func (s *Ethereum) Start() error {
 	s.blockSub = s.eventMux.Subscribe(core.NewMinedBlockEvent{})
 	go s.blockBroadcastLoop()
 
-	ethlogger.Infoln("Server started")
+	servlogger.Infoln("Server started")
 	return nil
 }
 
@@ -284,7 +284,7 @@ func (s *Ethereum) Stop() {
 		s.whisper.Stop()
 	}
 
-	ethlogger.Infoln("Server stopped")
+	servlogger.Infoln("Server stopped")
 	close(s.shutdownChan)
 }
 
