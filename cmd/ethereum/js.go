@@ -63,6 +63,7 @@ type jsre struct {
 	ethereum *eth.Ethereum
 	xeth     *xeth.XEth
 	ps1      string
+	atexit   func()
 
 	prompter
 }
@@ -77,11 +78,13 @@ func newJSRE(ethereum *eth.Ethereum) *jsre {
 		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
 	} else {
 		lr := liner.NewLiner()
-		lr.SetCtrlCAborts(true)
-		defer lr.Close()
 		js.withHistory(func(hist *os.File) { lr.ReadHistory(hist) })
-		defer js.withHistory(func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
+		lr.SetCtrlCAborts(true)
 		js.prompter = lr
+		js.atexit = func() {
+			js.withHistory(func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
+			lr.Close()
+		}
 	}
 	return js
 }
@@ -100,7 +103,6 @@ func (self *jsre) UnlockAccount(addr []byte) bool {
 	}
 	// TODO: allow retry
 	if err := self.ethereum.AccountManager().Unlock(addr, pass); err != nil {
-		fmt.Println("Unlocking failed: ", err)
 		return false
 	} else {
 		fmt.Println("Account is now unlocked for this session.")
@@ -127,7 +129,7 @@ func (self *jsre) interactive() {
 	for {
 		input, err := self.Prompt(self.ps1)
 		if err != nil {
-			return
+			break
 		}
 		if input == "" {
 			continue
@@ -136,13 +138,16 @@ func (self *jsre) interactive() {
 		self.setIndent()
 		if indentCount <= 0 {
 			if input == "exit" {
-				return
+				break
 			}
 			hist := str[:len(str)-1]
 			self.AppendHistory(hist)
 			self.parseInput(str)
 			str = ""
 		}
+	}
+	if self.atexit != nil {
+		self.atexit()
 	}
 }
 
