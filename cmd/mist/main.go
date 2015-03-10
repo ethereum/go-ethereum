@@ -95,7 +95,10 @@ func run(ctx *cli.Context) {
 	tstart := time.Now()
 
 	// TODO: show qml popup instead of exiting if initialization fails.
-	ethereum := utils.GetEthereum(ClientIdentifier, Version, ctx)
+	ethereum, err := utils.GetEthereum(ClientIdentifier, Version, ctx)
+	if err != nil {
+		utils.Fatalf("%v", err)
+	}
 	utils.StartRPC(ethereum, ctx)
 	go utils.StartEthereum(ethereum)
 	fmt.Println("initializing eth stack took", time.Since(tstart))
