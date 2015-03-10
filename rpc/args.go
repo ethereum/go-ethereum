@@ -47,7 +47,12 @@ func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 	if len(obj) < 1 {
 		return errArguments
 	}
-	args.BlockNumber = ethutil.Big(obj[0].(string)).Int64()
+
+	if v, ok := obj[0].(float64); ok {
+		args.BlockNumber = int64(v)
+	} else {
+		args.BlockNumber = ethutil.Big(obj[0].(string)).Int64()
+	}
 
 	if len(obj) > 1 {
 		args.Transactions = obj[1].(bool)
@@ -110,7 +115,9 @@ func (args *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Address = obj[0].(string)
 
 	if len(obj) > 1 {
-		if obj[1].(string) == "latest" {
+		if v, ok := obj[1].(float64); ok {
+			args.BlockNumber = int64(v)
+		} else if obj[1].(string) == "latest" {
 			args.BlockNumber = -1
 		} else {
 			args.BlockNumber = ethutil.Big(obj[1].(string)).Int64()
@@ -147,7 +154,9 @@ func (args *GetStorageAtArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Key = obj[1].(string)
 
 	if len(obj) > 2 {
-		if obj[2].(string) == "latest" {
+		if v, ok := obj[2].(float64); ok {
+			args.BlockNumber = int64(v)
+		} else if obj[2].(string) == "latest" {
 			args.BlockNumber = -1
 		} else {
 			args.BlockNumber = ethutil.Big(obj[2].(string)).Int64()
@@ -187,7 +196,9 @@ func (args *GetTxCountArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Address = obj[0].(string)
 
 	if len(obj) > 1 {
-		if obj[1].(string) == "latest" {
+		if v, ok := obj[1].(float64); ok {
+			args.BlockNumber = int64(v)
+		} else if obj[1].(string) == "latest" {
 			args.BlockNumber = -1
 		} else {
 			args.BlockNumber = ethutil.Big(obj[1].(string)).Int64()
@@ -222,7 +233,9 @@ func (args *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Address = obj[0].(string)
 
 	if len(obj) > 1 {
-		if obj[1].(string) == "latest" {
+		if v, ok := obj[1].(float64); ok {
+			args.BlockNumber = int64(v)
+		} else if obj[1].(string) == "latest" {
 			args.BlockNumber = -1
 		} else {
 			args.BlockNumber = ethutil.Big(obj[1].(string)).Int64()
@@ -257,7 +270,9 @@ func (args *GetDataArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Address = obj[0].(string)
 
 	if len(obj) > 1 {
-		if obj[1].(string) == "latest" {
+		if v, ok := obj[1].(float64); ok {
+			args.BlockNumber = int64(v)
+		} else if obj[1].(string) == "latest" {
 			args.BlockNumber = -1
 		} else {
 			args.BlockNumber = ethutil.Big(obj[1].(string)).Int64()
