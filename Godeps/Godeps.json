@@ -16,6 +16,16 @@
 			"Rev": "12e4b4183793ac4b061921e7980845e750679fd0"
 		},
 		{
+			"ImportPath": "github.com/codegangsta/cli",
+			"Comment": "1.2.0-74-g50c77ec",
+			"Rev": "50c77ecec0068c9aef9d90ae0fd0fdf410041da3"
+		},
+		{
+			"ImportPath": "github.com/ethereum/ethash",
+			"Comment": "v17-64-ga323708",
+			"Rev": "a323708b8c4d253b8567bf6c72727d1aec302225"
+		},
+		{
 			"ImportPath": "github.com/ethereum/serpent-go",
 			"Rev": "5767a0dbd759d313df3f404dadb7f98d7ab51443"
 		},
@@ -43,6 +53,10 @@
 		{
 			"ImportPath": "github.com/obscuren/qml",
 			"Rev": "c288002b52e905973b131089a8a7c761d4a2c36a"
+		},
+		{
+			"ImportPath": "github.com/peterh/liner",
+			"Rev": "29f6a646557d83e2b6e9ba05c45fbea9c006dbe8"
 		},
 		{
 			"ImportPath": "github.com/rakyll/globalconf",
@@ -91,10 +105,6 @@
 		{
 			"ImportPath": "golang.org/x/crypto/scrypt",
 			"Rev": "4ed45ec682102c643324fae5dff8dab085b6c300"
-		},
-		{
-			"ImportPath": "golang.org/x/net/websocket",
-			"Rev": "59b0df9b1f7abda5aab0495ee54f408daf182ce7"
 		},
 		{
 			"ImportPath": "gopkg.in/check.v1",

@@ -12,6 +12,8 @@ import (
 
 const tryJit = false
 
+var ()
+
 /*
  * The State transitioning model
  *
@@ -144,7 +146,7 @@ func (self *StateTransition) preCheck() (err error) {
 
 	// Pre-pay gas / Buy gas of the coinbase account
 	if err = self.BuyGas(); err != nil {
-		return err
+		return InvalidTxError(err)
 	}
 
 	return nil
@@ -165,26 +167,26 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 
 	defer self.RefundGas()
 
+	// Transaction gas
+	if err = self.UseGas(vm.GasTx); err != nil {
+		return nil, InvalidTxError(err)
+	}
+
 	// Increment the nonce for the next transaction
 	self.state.SetNonce(sender.Address(), sender.Nonce()+1)
 	//sender.Nonce += 1
-
-	// Transaction gas
-	if err = self.UseGas(vm.GasTx); err != nil {
-		return
-	}
 
 	// Pay data gas
 	var dgas int64
 	for _, byt := range self.data {
 		if byt != 0 {
-			dgas += vm.GasData.Int64()
+			dgas += vm.GasTxDataNonzeroByte.Int64()
 		} else {
-			dgas += 1 // This is 1/5. If GasData changes this fails
+			dgas += vm.GasTxDataZeroByte.Int64()
 		}
 	}
 	if err = self.UseGas(big.NewInt(dgas)); err != nil {
-		return
+		return nil, InvalidTxError(err)
 	}
 
 	//stateCopy := self.env.State().Copy()
@@ -230,9 +232,15 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 		*/
 	}
 
-	if err != nil {
-		self.UseGas(self.gas)
+	if err != nil && IsValueTransferErr(err) {
+		return nil, InvalidTxError(err)
 	}
+
+	/*
+		if err != nil {
+			self.UseGas(self.gas)
+		}
+	*/
 
 	return
 }

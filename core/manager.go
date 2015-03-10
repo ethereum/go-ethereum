@@ -15,6 +15,7 @@ type Backend interface {
 	IsListening() bool
 	Peers() []*p2p.Peer
 	KeyManager() *crypto.KeyManager
-	Db() ethutil.Database
+	BlockDb() ethutil.Database
+	StateDb() ethutil.Database
 	EventMux() *event.TypeMux
 }

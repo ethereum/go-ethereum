@@ -22,7 +22,7 @@ func (err *ParentErr) Error() string {
 }
 
 func ParentError(hash []byte) error {
-	return &ParentErr{Message: fmt.Sprintf("Block's parent unkown %x", hash)}
+	return &ParentErr{Message: fmt.Sprintf("Block's parent unknown %x", hash)}
 }
 
 func IsParentErr(err error) bool {
@@ -87,6 +87,24 @@ func IsNonceErr(err error) bool {
 	return ok
 }
 
+type InvalidTxErr struct {
+	Message string
+}
+
+func (err *InvalidTxErr) Error() string {
+	return err.Message
+}
+
+func InvalidTxError(err error) *InvalidTxErr {
+	return &InvalidTxErr{fmt.Sprintf("%v", err)}
+}
+
+func IsInvalidTxErr(err error) bool {
+	_, ok := err.(*InvalidTxErr)
+
+	return ok
+}
+
 type OutOfGasErr struct {
 	Message string
 }
@@ -126,5 +144,21 @@ func (self *KnownBlockError) Error() string {
 }
 func IsKnownBlockErr(e error) bool {
 	_, ok := e.(*KnownBlockError)
+	return ok
+}
+
+type ValueTransferError struct {
+	message string
+}
+
+func ValueTransferErr(str string, v ...interface{}) *ValueTransferError {
+	return &ValueTransferError{fmt.Sprintf(str, v...)}
+}
+
+func (self *ValueTransferError) Error() string {
+	return self.message
+}
+func IsValueTransferErr(e error) bool {
+	_, ok := e.(*ValueTransferError)
 	return ok
 }

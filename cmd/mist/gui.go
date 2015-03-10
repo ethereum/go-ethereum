@@ -88,7 +88,7 @@ func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, session st
 		panic(err)
 	}
 
-	xeth := xeth.New(ethereum)
+	xeth := xeth.New(ethereum, nil)
 	gui := &Gui{eth: ethereum,
 		txDb:          db,
 		xeth:          xeth,
@@ -99,7 +99,7 @@ func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, session st
 		plugins:       make(map[string]plugin),
 		serviceEvents: make(chan ServEv, 1),
 	}
-	data, _ := ethutil.ReadAllFile(path.Join(ethutil.Config.ExecPath, "plugins.json"))
+	data, _ := ethutil.ReadAllFile(path.Join(ethereum.DataDir, "plugins.json"))
 	json.Unmarshal([]byte(data), &gui.plugins)
 
 	return gui
@@ -157,8 +157,6 @@ func (gui *Gui) Stop() {
 		gui.open = false
 		gui.win.Hide()
 	}
-
-	gui.uiLib.jsEngine.Stop()
 
 	guilogger.Infoln("Stopped")
 }

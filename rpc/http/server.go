@@ -29,6 +29,8 @@ import (
 var rpchttplogger = logger.NewLogger("RPC-HTTP")
 var JSON rpc.JsonWrapper
 
+const maxSizeReqLength = 1024 * 1024 // 1MB
+
 func NewRpcHttpServer(pipe *xeth.XEth, address string, port int) (*RpcHttpServer, error) {
 	sport := fmt.Sprintf("%s:%d", address, port)
 	l, err := net.Listen("tcp", sport)
@@ -91,6 +93,12 @@ func (s *RpcHttpServer) apiHandler(api *rpc.EthereumApi) http.Handler {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
 		rpchttplogger.DebugDetailln("Handling request")
+
+		if req.ContentLength > maxSizeReqLength {
+			jsonerr := &rpc.RpcErrorObject{-32700, "Error: Request too large"}
+			JSON.Send(w, &rpc.RpcErrorResponse{JsonRpc: jsonrpcver, ID: nil, Error: jsonerr})
+			return
+		}
 
 		reqParsed, reqerr := JSON.ParseRequestBody(req)
 		if reqerr != nil {

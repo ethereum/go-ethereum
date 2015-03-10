@@ -2,8 +2,6 @@ package javascript
 
 import (
 	"fmt"
-
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/xeth"
@@ -55,8 +53,7 @@ func NewJSLog(log state.Log) JSLog {
 
 type JSEthereum struct {
 	*xeth.XEth
-	vm       *otto.Otto
-	ethereum *eth.Ethereum
+	vm *otto.Otto
 }
 
 func (self *JSEthereum) Block(v interface{}) otto.Value {
