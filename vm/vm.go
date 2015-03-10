@@ -19,8 +19,6 @@ type Vm struct {
 	// For logging
 	debug bool
 
-	Dbg Debugger
-
 	BreakPoints []int64
 	Stepping    bool
 	Fn          string
@@ -30,11 +28,8 @@ type Vm struct {
 
 func New(env Environment) *Vm {
 	lt := LogTyPretty
-	if ethutil.Config.Diff {
-		lt = LogTyDiff
-	}
 
-	return &Vm{debug: false, env: env, logTy: lt, Recoverable: true}
+	return &Vm{debug: Debug, env: env, logTy: lt, Recoverable: true}
 }
 
 func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
@@ -69,10 +64,9 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 
 		destinations        = analyseJumpDests(context.Code)
 		mem                 = NewMemory()
-		stack               = NewStack()
+		stack               = newStack()
 		pc           uint64 = 0
 		step                = 0
-		prevStep            = 0
 		statedb             = self.env.State()
 
 		jump = func(from uint64, to *big.Int) {
@@ -96,7 +90,6 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 	}
 
 	for {
-		prevStep = step
 		// The base for all big integer arithmetic
 		base := new(big.Int)
 
@@ -104,11 +97,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 		// Get the memory location of pc
 		op = context.GetOp(pc)
 
-		self.Printf("(pc) %-3d -o- %-14s (m) %-4d (s) %-4d ", pc, op.String(), mem.Len(), stack.Len())
-		if self.Dbg != nil {
-			//self.Dbg.Step(self, op, mem, stack, context)
-		}
-
+		self.Printf("(pc) %-3d -o- %-14s (m) %-4d (s) %-4d ", pc, op.String(), mem.Len(), stack.len())
 		newMemSize, gas := self.calculateGasAndSize(context, caller, op, statedb, mem, stack)
 
 		self.Printf("(g) %-3v (%v)", gas, context.Gas)
@@ -128,40 +117,40 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 		switch op {
 		// 0x20 range
 		case ADD:
-			x, y := stack.Popn()
+			x, y := stack.pop(), stack.pop()
 			self.Printf(" %v + %v", y, x)
 
-			base.Add(y, x)
+			base.Add(x, y)
 
 			U256(base)
 
 			self.Printf(" = %v", base)
-			// Pop result back on the stack
-			stack.Push(base)
+			// pop result back on the stack
+			stack.push(base)
 		case SUB:
-			x, y := stack.Popn()
+			x, y := stack.pop(), stack.pop()
 			self.Printf(" %v - %v", y, x)
 
-			base.Sub(y, x)
+			base.Sub(x, y)
 
 			U256(base)
 
 			self.Printf(" = %v", base)
-			// Pop result back on the stack
-			stack.Push(base)
+			// pop result back on the stack
+			stack.push(base)
 		case MUL:
-			x, y := stack.Popn()
+			x, y := stack.pop(), stack.pop()
 			self.Printf(" %v * %v", y, x)
 
-			base.Mul(y, x)
+			base.Mul(x, y)
 
 			U256(base)
 
 			self.Printf(" = %v", base)
-			// Pop result back on the stack
-			stack.Push(base)
+			// pop result back on the stack
+			stack.push(base)
 		case DIV:
-			x, y := stack.Pop(), stack.Pop()
+			x, y := stack.pop(), stack.pop()
 			self.Printf(" %v / %v", x, y)
 
 			if y.Cmp(ethutil.Big0) != 0 {
@@ -171,10 +160,10 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			U256(base)
 
 			self.Printf(" = %v", base)
-			// Pop result back on the stack
-			stack.Push(base)
+			// pop result back on the stack
+			stack.push(base)
 		case SDIV:
-			x, y := S256(stack.Pop()), S256(stack.Pop())
+			x, y := S256(stack.pop()), S256(stack.pop())
 
 			self.Printf(" %v / %v", x, y)
 
@@ -194,9 +183,9 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			}
 
 			self.Printf(" = %v", base)
-			stack.Push(base)
+			stack.push(base)
 		case MOD:
-			x, y := stack.Pop(), stack.Pop()
+			x, y := stack.pop(), stack.pop()
 
 			self.Printf(" %v %% %v", x, y)
 
@@ -209,9 +198,9 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			U256(base)
 
 			self.Printf(" = %v", base)
-			stack.Push(base)
+			stack.push(base)
 		case SMOD:
-			x, y := S256(stack.Pop()), S256(stack.Pop())
+			x, y := S256(stack.pop()), S256(stack.pop())
 
 			self.Printf(" %v %% %v", x, y)
 
@@ -231,25 +220,25 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			}
 
 			self.Printf(" = %v", base)
-			stack.Push(base)
+			stack.push(base)
 
 		case EXP:
-			x, y := stack.Popn()
+			x, y := stack.pop(), stack.pop()
 
-			self.Printf(" %v ** %v", y, x)
+			self.Printf(" %v ** %v", x, y)
 
-			base.Exp(y, x, Pow256)
+			base.Exp(x, y, Pow256)
 
 			U256(base)
 
 			self.Printf(" = %v", base)
 
-			stack.Push(base)
+			stack.push(base)
 		case SIGNEXTEND:
-			back := stack.Pop().Uint64()
+			back := stack.pop().Uint64()
 			if back < 31 {
 				bit := uint(back*8 + 7)
-				num := stack.Pop()
+				num := stack.pop()
 				mask := new(big.Int).Lsh(ethutil.Big1, bit)
 				mask.Sub(mask, ethutil.Big1)
 				if ethutil.BitTest(num, int(bit)) {
@@ -262,91 +251,91 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 
 				self.Printf(" = %v", num)
 
-				stack.Push(num)
+				stack.push(num)
 			}
 		case NOT:
-			base.Sub(Pow256, stack.Pop()).Sub(base, ethutil.Big1)
+			base.Sub(Pow256, stack.pop()).Sub(base, ethutil.Big1)
 
 			// Not needed
 			base = U256(base)
 
-			stack.Push(base)
+			stack.push(base)
 		case LT:
-			x, y := stack.Popn()
-			self.Printf(" %v < %v", y, x)
+			x, y := stack.pop(), stack.pop()
+			self.Printf(" %v < %v", x, y)
 			// x < y
-			if y.Cmp(x) < 0 {
-				stack.Push(ethutil.BigTrue)
+			if x.Cmp(y) < 0 {
+				stack.push(ethutil.BigTrue)
 			} else {
-				stack.Push(ethutil.BigFalse)
+				stack.push(ethutil.BigFalse)
 			}
 		case GT:
-			x, y := stack.Popn()
-			self.Printf(" %v > %v", y, x)
+			x, y := stack.pop(), stack.pop()
+			self.Printf(" %v > %v", x, y)
 
 			// x > y
-			if y.Cmp(x) > 0 {
-				stack.Push(ethutil.BigTrue)
+			if x.Cmp(y) > 0 {
+				stack.push(ethutil.BigTrue)
 			} else {
-				stack.Push(ethutil.BigFalse)
+				stack.push(ethutil.BigFalse)
 			}
 
 		case SLT:
-			y, x := S256(stack.Pop()), S256(stack.Pop())
-			self.Printf(" %v < %v", y, x)
+			x, y := S256(stack.pop()), S256(stack.pop())
+			self.Printf(" %v < %v", x, y)
 			// x < y
-			if y.Cmp(S256(x)) < 0 {
-				stack.Push(ethutil.BigTrue)
+			if x.Cmp(S256(y)) < 0 {
+				stack.push(ethutil.BigTrue)
 			} else {
-				stack.Push(ethutil.BigFalse)
+				stack.push(ethutil.BigFalse)
 			}
 		case SGT:
-			y, x := S256(stack.Pop()), S256(stack.Pop())
-			self.Printf(" %v > %v", y, x)
+			x, y := S256(stack.pop()), S256(stack.pop())
+			self.Printf(" %v > %v", x, y)
 
 			// x > y
-			if y.Cmp(x) > 0 {
-				stack.Push(ethutil.BigTrue)
+			if x.Cmp(y) > 0 {
+				stack.push(ethutil.BigTrue)
 			} else {
-				stack.Push(ethutil.BigFalse)
+				stack.push(ethutil.BigFalse)
 			}
 
 		case EQ:
-			x, y := stack.Popn()
+			x, y := stack.pop(), stack.pop()
 			self.Printf(" %v == %v", y, x)
 
 			// x == y
 			if x.Cmp(y) == 0 {
-				stack.Push(ethutil.BigTrue)
+				stack.push(ethutil.BigTrue)
 			} else {
-				stack.Push(ethutil.BigFalse)
+				stack.push(ethutil.BigFalse)
 			}
 		case ISZERO:
-			x := stack.Pop()
+			x := stack.pop()
 			if x.Cmp(ethutil.BigFalse) > 0 {
-				stack.Push(ethutil.BigFalse)
+				stack.push(ethutil.BigFalse)
 			} else {
-				stack.Push(ethutil.BigTrue)
+				stack.push(ethutil.BigTrue)
 			}
 
 			// 0x10 range
 		case AND:
-			x, y := stack.Popn()
+			x, y := stack.pop(), stack.pop()
 			self.Printf(" %v & %v", y, x)
 
-			stack.Push(base.And(y, x))
+			stack.push(base.And(x, y))
 		case OR:
-			x, y := stack.Popn()
-			self.Printf(" %v | %v", y, x)
+			x, y := stack.pop(), stack.pop()
+			self.Printf(" %v | %v", x, y)
 
-			stack.Push(base.Or(y, x))
+			stack.push(base.Or(x, y))
 		case XOR:
-			x, y := stack.Popn()
-			self.Printf(" %v ^ %v", y, x)
+			x, y := stack.pop(), stack.pop()
+			self.Printf(" %v ^ %v", x, y)
 
-			stack.Push(base.Xor(y, x))
+			stack.push(base.Xor(x, y))
 		case BYTE:
-			val, th := stack.Popn()
+			th, val := stack.pop(), stack.pop()
 
 			if th.Cmp(big.NewInt(32)) < 0 {
 				byt := big.NewInt(int64(ethutil.LeftPadBytes(val.Bytes(), 32)[th.Int64()]))
@@ -358,12 +347,12 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 
 			self.Printf(" => 0x%x", base.Bytes())
 
-			stack.Push(base)
+			stack.push(base)
 		case ADDMOD:
 
-			x := stack.Pop()
-			y := stack.Pop()
-			z := stack.Pop()
+			x := stack.pop()
+			y := stack.pop()
+			z := stack.pop()
 
 			add := new(big.Int).Add(x, y)
 			if len(z.Bytes()) > 0 { // NOT 0x0
@@ -374,12 +363,12 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 
 			self.Printf(" %v + %v %% %v = %v", x, y, z, base)
 
-			stack.Push(base)
+			stack.push(base)
 		case MULMOD:
 
-			x := stack.Pop()
-			y := stack.Pop()
-			z := stack.Pop()
+			x := stack.pop()
+			y := stack.pop()
+			z := stack.pop()
 
 			mul := new(big.Int).Mul(x, y)
 			if len(z.Bytes()) > 0 { // NOT 0x0
@@ -390,47 +379,52 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 
 			self.Printf(" %v + %v %% %v = %v", x, y, z, base)
 
-			stack.Push(base)
+			stack.push(base)
 
 			// 0x20 range
 		case SHA3:
-			size, offset := stack.Popn()
+			size, offset := stack.pop(), stack.pop()
 			data := crypto.Sha3(mem.Get(offset.Int64(), size.Int64()))
 
-			stack.Push(ethutil.BigD(data))
+			stack.push(ethutil.BigD(data))
 
-			self.Printf(" => %x", data)
+			self.Printf(" => (%v) %x", size, data)
 			// 0x30 range
 		case ADDRESS:
-			stack.Push(ethutil.BigD(context.Address()))
+			stack.push(ethutil.BigD(context.Address()))
 
 			self.Printf(" => %x", context.Address())
 		case BALANCE:
 
-			addr := stack.Pop().Bytes()
-			balance := statedb.GetBalance(addr)
+			addr := stack.pop().Bytes()
+			var balance *big.Int
+			if statedb.GetStateObject(addr) != nil {
+				balance = statedb.GetBalance(addr)
+			} else {
+				balance = base
+			}
 
-			stack.Push(balance)
+			stack.push(balance)
 
 			self.Printf(" => %v (%x)", balance, addr)
 		case ORIGIN:
 			origin := self.env.Origin()
 
-			stack.Push(ethutil.BigD(origin))
+			stack.push(ethutil.BigD(origin))
 
 			self.Printf(" => %x", origin)
 		case CALLER:
 			caller := context.caller.Address()
-			stack.Push(ethutil.BigD(caller))
+			stack.push(ethutil.BigD(caller))
 
 			self.Printf(" => %x", caller)
 		case CALLVALUE:
-			stack.Push(value)
+			stack.push(value)
 
 			self.Printf(" => %v", value)
 		case CALLDATALOAD:
 			var (
-				offset  = stack.Pop()
+				offset  = stack.pop()
 				data    = make([]byte, 32)
 				lenData = big.NewInt(int64(len(callData)))
 			)
@@ -444,18 +438,18 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 
 			self.Printf(" => 0x%x", data)
 
-			stack.Push(ethutil.BigD(data))
+			stack.push(ethutil.BigD(data))
 		case CALLDATASIZE:
 			l := int64(len(callData))
-			stack.Push(big.NewInt(l))
+			stack.push(big.NewInt(l))
 
 			self.Printf(" => %d", l)
 		case CALLDATACOPY:
 			var (
 				size = uint64(len(callData))
-				mOff = stack.Pop().Uint64()
-				cOff = stack.Pop().Uint64()
-				l    = stack.Pop().Uint64()
+				mOff = stack.pop().Uint64()
+				cOff = stack.pop().Uint64()
+				l    = stack.pop().Uint64()
 			)
 
 			if cOff > size {
@@ -473,7 +467,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 		case CODESIZE, EXTCODESIZE:
 			var code []byte
 			if op == EXTCODESIZE {
-				addr := stack.Pop().Bytes()
+				addr := stack.pop().Bytes()
 
 				code = statedb.GetCode(addr)
 			} else {
@@ -481,21 +475,21 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			}
 
 			l := big.NewInt(int64(len(code)))
-			stack.Push(l)
+			stack.push(l)
 
 			self.Printf(" => %d", l)
 		case CODECOPY, EXTCODECOPY:
 			var code []byte
 			if op == EXTCODECOPY {
-				code = statedb.GetCode(stack.Pop().Bytes())
+				code = statedb.GetCode(stack.pop().Bytes())
 			} else {
 				code = context.Code
 			}
 			context := NewContext(nil, nil, code, ethutil.Big0, ethutil.Big0)
 			var (
-				mOff = stack.Pop().Uint64()
-				cOff = stack.Pop().Uint64()
-				l    = stack.Pop().Uint64()
+				mOff = stack.pop().Uint64()
+				cOff = stack.pop().Uint64()
+				l    = stack.pop().Uint64()
 			)
 			codeCopy := context.GetCode(cOff, l)
 
@@ -503,80 +497,80 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 
 			self.Printf(" => [%v, %v, %v] %x", mOff, cOff, l, codeCopy)
 		case GASPRICE:
-			stack.Push(context.Price)
+			stack.push(context.Price)
 
 			self.Printf(" => %x", context.Price)
 
 			// 0x40 range
 		case BLOCKHASH:
-			num := stack.Pop()
+			num := stack.pop()
 
 			n := new(big.Int).Sub(self.env.BlockNumber(), ethutil.Big257)
 			if num.Cmp(n) > 0 && num.Cmp(self.env.BlockNumber()) < 0 {
-				stack.Push(ethutil.BigD(self.env.GetHash(num.Uint64())))
+				stack.push(ethutil.BigD(self.env.GetHash(num.Uint64())))
 			} else {
-				stack.Push(ethutil.Big0)
+				stack.push(ethutil.Big0)
 			}
 
-			self.Printf(" => 0x%x", stack.Peek().Bytes())
+			self.Printf(" => 0x%x", stack.peek().Bytes())
 		case COINBASE:
 			coinbase := self.env.Coinbase()
 
-			stack.Push(ethutil.BigD(coinbase))
+			stack.push(ethutil.BigD(coinbase))
 
 			self.Printf(" => 0x%x", coinbase)
 		case TIMESTAMP:
 			time := self.env.Time()
 
-			stack.Push(big.NewInt(time))
+			stack.push(big.NewInt(time))
 
 			self.Printf(" => 0x%x", time)
 		case NUMBER:
 			number := self.env.BlockNumber()
 
-			stack.Push(U256(number))
+			stack.push(U256(number))
 
 			self.Printf(" => 0x%x", number.Bytes())
 		case DIFFICULTY:
 			difficulty := self.env.Difficulty()
 
-			stack.Push(difficulty)
+			stack.push(difficulty)
 
 			self.Printf(" => 0x%x", difficulty.Bytes())
 		case GASLIMIT:
 			self.Printf(" => %v", self.env.GasLimit())
 
-			stack.Push(self.env.GasLimit())
+			stack.push(self.env.GasLimit())
 
 			// 0x50 range
 		case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
 			a := uint64(op - PUSH1 + 1)
 			byts := context.GetRangeValue(pc+1, a)
-			// Push value to stack
-			stack.Push(ethutil.BigD(byts))
+			// push value to stack
+			stack.push(ethutil.BigD(byts))
 			pc += a
 
 			step += int(op) - int(PUSH1) + 1
 
 			self.Printf(" => 0x%x", byts)
 		case POP:
-			stack.Pop()
+			stack.pop()
 		case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:
 			n := int(op - DUP1 + 1)
-			stack.Dupn(n)
+			stack.dup(n)
 
-			self.Printf(" => [%d] 0x%x", n, stack.Peek().Bytes())
+			self.Printf(" => [%d] 0x%x", n, stack.peek().Bytes())
 		case SWAP1, SWAP2, SWAP3, SWAP4, SWAP5, SWAP6, SWAP7, SWAP8, SWAP9, SWAP10, SWAP11, SWAP12, SWAP13, SWAP14, SWAP15, SWAP16:
 			n := int(op - SWAP1 + 2)
-			x, y := stack.Swapn(n)
+			stack.swap(n)
 
-			self.Printf(" => [%d] %x [0] %x", n, x.Bytes(), y.Bytes())
+			self.Printf(" => [%d]", n)
 		case LOG0, LOG1, LOG2, LOG3, LOG4:
 			n := int(op - LOG0)
 			topics := make([][]byte, n)
-			mSize, mStart := stack.Popn()
+			mStart, mSize := stack.pop(), stack.pop()
 			for i := 0; i < n; i++ {
-				topics[i] = ethutil.LeftPadBytes(stack.Pop().Bytes(), 32)
+				topics[i] = ethutil.LeftPadBytes(stack.pop().Bytes(), 32)
 			}
 
 			data := mem.Get(mStart.Int64(), mSize.Int64())
@@ -585,41 +579,40 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 
 			self.Printf(" => %v", log)
 		case MLOAD:
-			offset := stack.Pop()
+			offset := stack.pop()
 			val := ethutil.BigD(mem.Get(offset.Int64(), 32))
-			stack.Push(val)
+			stack.push(val)
 
 			self.Printf(" => 0x%x", val.Bytes())
 		case MSTORE: // Store the value at stack top-1 in to memory at location stack top
-			// Pop value of the stack
-			val, mStart := stack.Popn()
+			// pop value of the stack
+			mStart, val := stack.pop(), stack.pop()
 			mem.Set(mStart.Uint64(), 32, ethutil.BigToBytes(val, 256))
 
 			self.Printf(" => 0x%x", val)
 		case MSTORE8:
-			off := stack.Pop()
-			val := stack.Pop()
+			off, val := stack.pop(), stack.pop()
 
 			mem.store[off.Int64()] = byte(val.Int64() & 0xff)
 
 			self.Printf(" => [%v] 0x%x", off, val)
 		case SLOAD:
-			loc := stack.Pop()
+			loc := stack.pop()
 			val := ethutil.BigD(statedb.GetState(context.Address(), loc.Bytes()))
-			stack.Push(val)
+			stack.push(val)
 
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case SSTORE:
-			val, loc := stack.Popn()
+			loc, val := stack.pop(), stack.pop()
 			statedb.SetState(context.Address(), loc.Bytes(), val)
 
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
 		case JUMP:
-			jump(pc, stack.Pop())
+			jump(pc, stack.pop())
 
 			continue
 		case JUMPI:
-			cond, pos := stack.Popn()
+			pos, cond := stack.pop(), stack.pop()
 
 			if cond.Cmp(ethutil.BigTrue) >= 0 {
 				jump(pc, pos)
@@ -631,19 +624,19 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 
 		case JUMPDEST:
 		case PC:
-			stack.Push(big.NewInt(int64(pc)))
+			stack.push(big.NewInt(int64(pc)))
 		case MSIZE:
-			stack.Push(big.NewInt(int64(mem.Len())))
+			stack.push(big.NewInt(int64(mem.Len())))
 		case GAS:
-			stack.Push(context.Gas)
+			stack.push(context.Gas)
 
 			self.Printf(" => %x", context.Gas)
 			// 0x60 range
 		case CREATE:
 
 			var (
-				value        = stack.Pop()
-				size, offset = stack.Popn()
+				value        = stack.pop()
+				offset, size = stack.pop(), stack.pop()
 				input        = mem.Get(offset.Int64(), size.Int64())
 				gas          = new(big.Int).Set(context.Gas)
 				addr         []byte
@@ -653,7 +646,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			context.UseGas(context.Gas)
 			ret, suberr, ref := self.env.Create(context, nil, input, gas, price, value)
 			if suberr != nil {
-				stack.Push(ethutil.BigFalse)
+				stack.push(ethutil.BigFalse)
 
 				self.Printf(" (*) 0x0 %v", suberr)
 			} else {
@@ -666,30 +659,29 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 				}
 				addr = ref.Address()
 
-				fmt.Printf("CREATE %X\n", addr)
-				stack.Push(ethutil.BigD(addr))
+				stack.push(ethutil.BigD(addr))
 
 			}
 
-			// Debug hook
-			if self.Dbg != nil {
-				self.Dbg.SetCode(context.Code)
-			}
 		case CALL, CALLCODE:
-			gas := stack.Pop()
-			// Pop gas and value of the stack.
-			value, addr := stack.Popn()
+			gas := stack.pop()
+			// pop gas and value of the stack.
+			addr, value := stack.pop(), stack.pop()
 			value = U256(value)
-			// Pop input size and offset
-			inSize, inOffset := stack.Popn()
-			// Pop return size and offset
-			retSize, retOffset := stack.Popn()
+			// pop input size and offset
+			inOffset, inSize := stack.pop(), stack.pop()
+			// pop return size and offset
+			retOffset, retSize := stack.pop(), stack.pop()
 
 			address := ethutil.Address(addr.Bytes())
 			self.Printf(" => %x", address).Endl()
 
 			// Get the arguments from the memory
 			args := mem.Get(inOffset.Int64(), inSize.Int64())
+
+			if len(value.Bytes()) > 0 {
+				gas.Add(gas, GasStipend)
+			}
 
 			var (
 				ret []byte
@@ -702,35 +694,30 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			}
 
 			if err != nil {
-				stack.Push(ethutil.BigFalse)
+				stack.push(ethutil.BigFalse)
 
 				vmlogger.Debugln(err)
 			} else {
-				stack.Push(ethutil.BigTrue)
+				stack.push(ethutil.BigTrue)
 
 				mem.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 			}
 			self.Printf("resume %x (%v)", context.Address(), context.Gas)
-
-			// Debug hook
-			if self.Dbg != nil {
-				self.Dbg.SetCode(context.Code)
-			}
-
 		case RETURN:
-			size, offset := stack.Popn()
+			offset, size := stack.pop(), stack.pop()
 			ret := mem.Get(offset.Int64(), size.Int64())
 
 			self.Printf(" => [%v, %v] (%d) 0x%x", offset, size, len(ret), ret).Endl()
 
 			return context.Return(ret), nil
 		case SUICIDE:
-			receiver := statedb.GetOrNewStateObject(stack.Pop().Bytes())
+			receiver := statedb.GetOrNewStateObject(stack.pop().Bytes())
 			balance := statedb.GetBalance(context.Address())
 
 			self.Printf(" => (%x) %v", receiver.Address()[:4], balance)
 
 			receiver.AddBalance(balance)
+
 			statedb.Delete(context.Address())
 
 			fallthrough
@@ -747,176 +734,131 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 		pc++
 
 		self.Endl()
-
-		if self.Dbg != nil {
-			for _, instrNo := range self.Dbg.BreakPoints() {
-				if pc == uint64(instrNo) {
-					self.Stepping = true
-
-					if !self.Dbg.BreakHook(prevStep, op, mem, stack, statedb.GetStateObject(context.Address())) {
-						return nil, nil
-					}
-				} else if self.Stepping {
-					if !self.Dbg.StepHook(prevStep, op, mem, stack, statedb.GetStateObject(context.Address())) {
-						return nil, nil
-					}
-				}
-			}
-		}
-
 	}
 }
 
-func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCode, statedb *state.StateDB, mem *Memory, stack *Stack) (*big.Int, *big.Int) {
-	gas := new(big.Int)
-	addStepGasUsage := func(amount *big.Int) {
-		if amount.Cmp(ethutil.Big0) >= 0 {
-			gas.Add(gas, amount)
-		}
-	}
+func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCode, statedb *state.StateDB, mem *Memory, stack *stack) (*big.Int, *big.Int) {
+	var (
+		gas                 = new(big.Int)
+		newMemSize *big.Int = new(big.Int)
+	)
+	baseCheck(op, stack, gas)
 
-	addStepGasUsage(GasStep)
-
-	var newMemSize *big.Int = ethutil.Big0
-	var additionalGas *big.Int = new(big.Int)
-	// Stack Check, memory resize & gas phase
+	// stack Check, memory resize & gas phase
 	switch op {
-	// Stack checks only
-	case ISZERO, CALLDATALOAD, POP, JUMP, NOT, EXTCODESIZE, BLOCKHASH: // 1
-		stack.require(1)
-	case JUMPI, ADD, SUB, DIV, MUL, SDIV, MOD, SMOD, LT, GT, SLT, SGT, EQ, AND, OR, XOR, BYTE, SIGNEXTEND: // 2
-		stack.require(2)
-	case ADDMOD, MULMOD: // 3
-		stack.require(3)
+	case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
+		gas.Set(GasFastestStep)
 	case SWAP1, SWAP2, SWAP3, SWAP4, SWAP5, SWAP6, SWAP7, SWAP8, SWAP9, SWAP10, SWAP11, SWAP12, SWAP13, SWAP14, SWAP15, SWAP16:
 		n := int(op - SWAP1 + 2)
 		stack.require(n)
+		gas.Set(GasFastestStep)
 	case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:
 		n := int(op - DUP1 + 1)
 		stack.require(n)
+		gas.Set(GasFastestStep)
 	case LOG0, LOG1, LOG2, LOG3, LOG4:
 		n := int(op - LOG0)
 		stack.require(n + 2)
 
-		gas.Set(GasLog)
-		addStepGasUsage(new(big.Int).Mul(big.NewInt(int64(n)), GasLog))
+		mSize, mStart := stack.data[stack.len()-2], stack.data[stack.len()-1]
 
-		mSize, mStart := stack.Peekn()
-		addStepGasUsage(mSize)
+		gas.Add(gas, GasLogBase)
+		gas.Add(gas, new(big.Int).Mul(big.NewInt(int64(n)), GasLogTopic))
+		gas.Add(gas, new(big.Int).Mul(mSize, GasLogByte))
 
 		newMemSize = calcMemSize(mStart, mSize)
 	case EXP:
-		stack.require(2)
-
-		gas.Set(big.NewInt(int64(len(stack.data[stack.Len()-2].Bytes()) + 1)))
-	// Gas only
-	case STOP:
-		gas.Set(ethutil.Big0)
-	case SUICIDE:
-		stack.require(1)
-
-		gas.Set(ethutil.Big0)
-	case SLOAD:
-		stack.require(1)
-
-		gas.Set(GasSLoad)
-	// Memory resize & Gas
+		gas.Add(gas, new(big.Int).Mul(big.NewInt(int64(len(stack.data[stack.len()-2].Bytes()))), GasExpByte))
 	case SSTORE:
 		stack.require(2)
 
-		var mult *big.Int
-		y, x := stack.Peekn()
+		var g *big.Int
+		y, x := stack.data[stack.len()-2], stack.data[stack.len()-1]
 		val := statedb.GetState(context.Address(), x.Bytes())
 		if len(val) == 0 && len(y.Bytes()) > 0 {
 			// 0 => non 0
-			mult = ethutil.Big3
+			g = GasStorageAdd
 		} else if len(val) > 0 && len(y.Bytes()) == 0 {
-			statedb.Refund(self.env.Origin(), GasSStoreRefund)
+			statedb.Refund(self.env.Origin(), RefundStorage)
 
-			mult = ethutil.Big0
+			g = GasStorageMod
 		} else {
 			// non 0 => non 0 (or 0 => 0)
-			mult = ethutil.Big1
+			g = GasStorageMod
 		}
-		gas.Set(new(big.Int).Mul(mult, GasSStore))
-	case BALANCE:
-		stack.require(1)
-		gas.Set(GasBalance)
-	case MSTORE:
-		stack.require(2)
-		newMemSize = calcMemSize(stack.Peek(), u256(32))
+		gas.Set(g)
+	case SUICIDE:
+		if !statedb.IsDeleted(context.Address()) {
+			statedb.Refund(self.env.Origin(), RefundSuicide)
+		}
 	case MLOAD:
-		stack.require(1)
-
-		newMemSize = calcMemSize(stack.Peek(), u256(32))
+		newMemSize = calcMemSize(stack.peek(), u256(32))
 	case MSTORE8:
-		stack.require(2)
-		newMemSize = calcMemSize(stack.Peek(), u256(1))
+		newMemSize = calcMemSize(stack.peek(), u256(1))
+	case MSTORE:
+		newMemSize = calcMemSize(stack.peek(), u256(32))
 	case RETURN:
-		stack.require(2)
-
-		newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-2])
+		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-2])
 	case SHA3:
-		stack.require(2)
-		gas.Set(GasSha)
-		newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-2])
-		additionalGas.Set(stack.data[stack.Len()-2])
+		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-2])
+
+		words := toWordSize(stack.data[stack.len()-2])
+		gas.Add(gas, words.Mul(words, GasSha3Word))
 	case CALLDATACOPY:
-		stack.require(3)
+		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-3])
 
-		newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-3])
-		additionalGas.Set(stack.data[stack.Len()-3])
+		words := toWordSize(stack.data[stack.len()-3])
+		gas.Add(gas, words.Mul(words, GasCopyWord))
 	case CODECOPY:
-		stack.require(3)
+		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-3])
 
-		newMemSize = calcMemSize(stack.Peek(), stack.data[stack.Len()-3])
-		additionalGas.Set(stack.data[stack.Len()-3])
+		words := toWordSize(stack.data[stack.len()-3])
+		gas.Add(gas, words.Mul(words, GasCopyWord))
 	case EXTCODECOPY:
-		stack.require(4)
+		newMemSize = calcMemSize(stack.data[stack.len()-2], stack.data[stack.len()-4])
 
-		newMemSize = calcMemSize(stack.data[stack.Len()-2], stack.data[stack.Len()-4])
-		additionalGas.Set(stack.data[stack.Len()-4])
+		words := toWordSize(stack.data[stack.len()-4])
+		gas.Add(gas, words.Mul(words, GasCopyWord))
+
+	case CREATE:
+		newMemSize = calcMemSize(stack.data[stack.len()-2], stack.data[stack.len()-3])
 	case CALL, CALLCODE:
-		stack.require(7)
-		gas.Set(GasCall)
-		addStepGasUsage(stack.data[stack.Len()-1])
+		gas.Add(gas, stack.data[stack.len()-1])
 
-		x := calcMemSize(stack.data[stack.Len()-6], stack.data[stack.Len()-7])
-		y := calcMemSize(stack.data[stack.Len()-4], stack.data[stack.Len()-5])
+		if op == CALL {
+			if self.env.State().GetStateObject(stack.data[stack.len()-2].Bytes()) == nil {
+				gas.Add(gas, GasCallNewAccount)
+			}
+		}
+
+		if len(stack.data[stack.len()-3].Bytes()) > 0 {
+			gas.Add(gas, GasCallValueTransfer)
+		}
+
+		x := calcMemSize(stack.data[stack.len()-6], stack.data[stack.len()-7])
+		y := calcMemSize(stack.data[stack.len()-4], stack.data[stack.len()-5])
 
 		newMemSize = ethutil.BigMax(x, y)
-	case CREATE:
-		stack.require(3)
-		gas.Set(GasCreate)
-
-		newMemSize = calcMemSize(stack.data[stack.Len()-2], stack.data[stack.Len()-3])
-	}
-
-	switch op {
-	case CALLDATACOPY, CODECOPY, EXTCODECOPY:
-		additionalGas.Add(additionalGas, u256(31))
-		additionalGas.Div(additionalGas, u256(32))
-		addStepGasUsage(additionalGas)
-	case SHA3:
-		additionalGas.Add(additionalGas, u256(31))
-		additionalGas.Div(additionalGas, u256(32))
-		additionalGas.Mul(additionalGas, GasSha3Byte)
-		addStepGasUsage(additionalGas)
 	}
 
 	if newMemSize.Cmp(ethutil.Big0) > 0 {
-		newMemSize.Add(newMemSize, u256(31))
-		newMemSize.Div(newMemSize, u256(32))
-		newMemSize.Mul(newMemSize, u256(32))
+		newMemSizeWords := toWordSize(newMemSize)
+		newMemSize.Mul(newMemSizeWords, u256(32))
 
 		if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
-			memGasUsage := new(big.Int).Sub(newMemSize, u256(int64(mem.Len())))
-			memGasUsage.Mul(GasMemory, memGasUsage)
-			memGasUsage.Div(memGasUsage, u256(32))
+			oldSize := toWordSize(big.NewInt(int64(mem.Len())))
+			pow := new(big.Int).Exp(oldSize, ethutil.Big2, Zero)
+			linCoef := new(big.Int).Mul(oldSize, GasMemWord)
+			quadCoef := new(big.Int).Div(pow, GasQuadCoeffDenom)
+			oldTotalFee := new(big.Int).Add(linCoef, quadCoef)
 
-			addStepGasUsage(memGasUsage)
+			pow.Exp(newMemSizeWords, ethutil.Big2, Zero)
+			linCoef = new(big.Int).Mul(newMemSizeWords, GasMemWord)
+			quadCoef = new(big.Int).Div(pow, GasQuadCoeffDenom)
+			newTotalFee := new(big.Int).Add(linCoef, quadCoef)
+
+			gas.Add(gas, new(big.Int).Sub(newTotalFee, oldTotalFee))
 		}
-
 	}
 
 	return newMemSize, gas

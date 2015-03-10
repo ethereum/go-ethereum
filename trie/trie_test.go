@@ -19,6 +19,10 @@ func NewEmpty() *Trie {
 	return New(nil, make(Db))
 }
 
+func NewEmptySecure() *SecureTrie {
+	return NewSecure(nil, make(Db))
+}
+
 func TestEmptyTrie(t *testing.T) {
 	trie := NewEmpty()
 	res := trie.Hash()
@@ -293,5 +297,33 @@ func TestLargeData(t *testing.T) {
 		for _, value := range untouched {
 			t.Error(value)
 		}
+	}
+}
+
+func TestSecureDelete(t *testing.T) {
+	trie := NewEmptySecure()
+
+	vals := []struct{ k, v string }{
+		{"do", "verb"},
+		{"ether", "wookiedoo"},
+		{"horse", "stallion"},
+		{"shaman", "horse"},
+		{"doge", "coin"},
+		{"ether", ""},
+		{"dog", "puppy"},
+		{"shaman", ""},
+	}
+	for _, val := range vals {
+		if val.v != "" {
+			trie.UpdateString(val.k, val.v)
+		} else {
+			trie.DeleteString(val.k)
+		}
+	}
+
+	hash := trie.Hash()
+	exp := ethutil.Hex2Bytes("29b235a58c3c25ab83010c327d5932bcf05324b7d6b1185e650798034783ca9d")
+	if !bytes.Equal(hash, exp) {
+		t.Errorf("expected %x got %x", exp, hash)
 	}
 }

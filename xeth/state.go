@@ -26,7 +26,7 @@ func (self *State) SafeGet(addr string) *Object {
 func (self *State) safeGet(addr string) *state.StateObject {
 	object := self.state.GetStateObject(fromHex(addr))
 	if object == nil {
-		object = state.NewStateObject(fromHex(addr), self.xeth.eth.Db())
+		object = state.NewStateObject(fromHex(addr), self.xeth.eth.StateDb())
 	}
 
 	return object
