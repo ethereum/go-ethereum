@@ -38,11 +38,11 @@ func (self *peer) init() error {
 
 func (self *peer) start() {
 	go self.update()
-	self.peer.Infoln("whisper started")
+	self.peer.Debugln("whisper started")
 }
 
 func (self *peer) stop() {
-	self.peer.Infoln("whisper stopped")
+	self.peer.Debugln("whisper stopped")
 
 	close(self.quit)
 }
