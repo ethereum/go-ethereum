@@ -186,6 +186,7 @@ Please run 'ethereum account new' to create a new account.`)
 
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	utils.StartEthereum(eth)
+	// Start auxiliary services if enabled.
 	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
 		utils.StartRPC(eth, ctx)
 	}
@@ -207,6 +208,8 @@ func accountList(ctx *cli.Context) {
 
 func accountCreate(ctx *cli.Context) {
 	am := utils.GetAccountManager(ctx)
+	fmt.Println("The new account will be encrypted with a passphrase.")
+	fmt.Println("Please enter a passphrase now.")
 	auth, err := readPassword("Passphrase: ", true)
 	if err != nil {
 		utils.Fatalf("%v", err)
