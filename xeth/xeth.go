@@ -1,12 +1,10 @@
+// eXtended ETHereum
 package xeth
-
-/*
- * eXtended ETHereum
- */
 
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -19,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/state"
-	"github.com/ethereum/go-ethereum/ui"
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
@@ -41,6 +38,26 @@ type Backend interface {
 	Miner() *miner.Miner
 }
 
+// Frontend should be implemented by users of XEth. Its methods are
+// called whenever XEth makes a decision that requires user input.
+type Frontend interface {
+	// UnlockAccount is called when a transaction needs to be signed
+	// but the key corresponding to the transaction's sender is
+	// locked.
+	//
+	// It should unlock the account with the given address and return
+	// true if unlocking succeeded.
+	UnlockAccount(address []byte) bool
+
+	// This is called for all transactions inititated through
+	// Transact. It should prompt the user to confirm the transaction
+	// and return true if the transaction was acknowledged.
+	//
+	// ConfirmTransaction is not used for Call transactions
+	// because they cannot change any state.
+	ConfirmTransaction(tx *types.Transaction) bool
+}
+
 type XEth struct {
 	eth            Backend
 	blockProcessor *core.BlockProcessor
@@ -50,15 +67,20 @@ type XEth struct {
 	whisper        *Whisper
 	miner          *miner.Miner
 
-	frontend ui.Interface
+	frontend Frontend
 }
 
-type TmpFrontend struct{}
+// dummyFrontend is a non-interactive frontend that allows all
+// transactions but cannot not unlock any keys.
+type dummyFrontend struct{}
 
-func (TmpFrontend) UnlockAccount([]byte) bool                  { panic("UNLOCK ACCOUNT") }
-func (TmpFrontend) ConfirmTransaction(*types.Transaction) bool { panic("CONFIRM TRANSACTION") }
+func (dummyFrontend) UnlockAccount([]byte) bool                  { return false }
+func (dummyFrontend) ConfirmTransaction(*types.Transaction) bool { return true }
 
-func New(eth Backend, frontend ui.Interface) *XEth {
+// New creates an XEth that uses the given frontend.
+// If a nil Frontend is provided, a default frontend which
+// confirms all transactions will be used.
+func New(eth Backend, frontend Frontend) *XEth {
 	xeth := &XEth{
 		eth:            eth,
 		blockProcessor: eth.BlockProcessor(),
@@ -66,14 +88,12 @@ func New(eth Backend, frontend ui.Interface) *XEth {
 		accountManager: eth.AccountManager(),
 		whisper:        NewWhisper(eth.Whisper()),
 		miner:          eth.Miner(),
+		frontend:       frontend,
 	}
-
 	if frontend == nil {
-		xeth.frontend = TmpFrontend{}
+		xeth.frontend = dummyFrontend{}
 	}
-
 	xeth.state = NewState(xeth, xeth.chainManager.TransState())
-
 	return xeth
 }
 
@@ -283,7 +303,6 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 }
 
 func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
-
 	var (
 		from             []byte
 		to               []byte
@@ -310,16 +329,12 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 
 	state := self.chainManager.TransState()
 	nonce := state.GetNonce(from)
-
 	tx.SetNonce(nonce)
-	sig, err := self.accountManager.Sign(accounts.Account{Address: from}, tx.Hash())
-	if err != nil {
+
+	if err := self.sign(tx, from, false); err != nil {
 		return "", err
 	}
-	tx.SetSignatureValues(sig)
-
-	err = self.eth.TxPool().Add(tx)
-	if err != nil {
+	if err := self.eth.TxPool().Add(tx); err != nil {
 		return "", err
 	}
 	state.SetNonce(from, nonce+1)
@@ -332,8 +347,25 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 	if types.IsContractAddr(to) {
 		return toHex(core.AddressFromMessage(tx)), nil
 	}
-
 	return toHex(tx.Hash()), nil
+}
+
+func (self *XEth) sign(tx *types.Transaction, from []byte, didUnlock bool) error {
+	sig, err := self.accountManager.Sign(accounts.Account{Address: from}, tx.Hash())
+	if err == accounts.ErrLocked {
+		if didUnlock {
+			return fmt.Errorf("sender account still locked after successful unlock")
+		}
+		if !self.frontend.UnlockAccount(from) {
+			return fmt.Errorf("could not unlock sender account")
+		}
+		// retry signing, the account should now be unlocked.
+		self.sign(tx, from, true)
+	} else if err != nil {
+		return err
+	}
+	tx.SetSignatureValues(sig)
+	return nil
 }
 
 // callmsg is the message type used for call transations.
