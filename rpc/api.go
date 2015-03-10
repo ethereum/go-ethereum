@@ -415,6 +415,44 @@ func (p *EthereumApi) WhisperMessages(id int, reply *interface{}) error {
 	return nil
 }
 
+func (p *EthereumApi) GetBlockByHash(blockhash string, includetx bool) (*BlockRes, error) {
+	block := p.xeth().EthBlockByHash(blockhash)
+	br := NewBlockRes(block)
+	br.fullTx = includetx
+	return br, nil
+}
+
+func (p *EthereumApi) GetBlockByNumber(blocknum int64, includetx bool) (*BlockRes, error) {
+	block := p.xeth().EthBlockByNumber(blocknum)
+	br := NewBlockRes(block)
+	br.fullTx = includetx
+	return br, nil
+}
+
+func (p *EthereumApi) GetBlockTransactionCountByHash(blockhash string) (int64, error) {
+	block := p.xeth().EthBlockByHash(blockhash)
+	br := NewBlockRes(block)
+	return int64(len(br.Transactions)), nil
+}
+
+func (p *EthereumApi) GetBlockTransactionCountByNumber(blocknum int64) (int64, error) {
+	block := p.xeth().EthBlockByNumber(blocknum)
+	br := NewBlockRes(block)
+	return int64(len(br.Transactions)), nil
+}
+
+func (p *EthereumApi) GetBlockUncleCountByHash(blockhash string) (int64, error) {
+	block := p.xeth().EthBlockByHash(blockhash)
+	br := NewBlockRes(block)
+	return int64(len(br.Uncles)), nil
+}
+
+func (p *EthereumApi) GetBlockUncleCountByNumber(blocknum int64) (int64, error) {
+	block := p.xeth().EthBlockByNumber(blocknum)
+	br := NewBlockRes(block)
+	return int64(len(br.Uncles)), nil
+}
+
 func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
 	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
 	rpclogger.DebugDetailf("%T %s", req.Params, req.Params)
@@ -468,10 +506,49 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		return p.GetTxCountAt(args, reply)
 	case "eth_getBlockTransactionCountByHash":
+		args := new(GetBlockByHashArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		v, err := p.GetBlockTransactionCountByHash(args.BlockHash)
+		if err != nil {
+			return err
+		}
+		*reply = toHex(big.NewInt(v).Bytes())
 	case "eth_getBlockTransactionCountByNumber":
+		args := new(GetBlockByNumberArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		v, err := p.GetBlockTransactionCountByNumber(args.BlockNumber)
+		if err != nil {
+			return err
+		}
+		*reply = toHex(big.NewInt(v).Bytes())
 	case "eth_getUncleCountByBlockHash":
+		args := new(GetBlockByHashArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		v, err := p.GetBlockUncleCountByHash(args.BlockHash)
+		if err != nil {
+			return err
+		}
+		*reply = toHex(big.NewInt(v).Bytes())
 	case "eth_getUncleCountByBlockNumber":
-		return errNotImplemented
+		args := new(GetBlockByNumberArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		v, err := p.GetBlockUncleCountByNumber(args.BlockNumber)
+		if err != nil {
+			return err
+		}
+		*reply = toHex(big.NewInt(v).Bytes())
 	case "eth_getData":
 		// TODO handle BlockNumber
 		args := new(GetDataArgs)
@@ -494,19 +571,27 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 	case "eth_flush":
 		return errNotImplemented
 	case "eth_getBlockByHash":
-		// TODO handle second param for "include transaction objects"
 		args := new(GetBlockByHashArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		*reply = p.xeth().BlockByHash(args.BlockHash)
+
+		v, err := p.GetBlockByHash(args.BlockHash, args.Transactions)
+		if err != nil {
+			return err
+		}
+		*reply = v
 	case "eth_getBlockByNumber":
-		// TODO handle second param for "include transaction objects"
 		args := new(GetBlockByNumberArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		*reply = p.xeth().BlockByNumber(args.BlockNumber)
+
+		v, err := p.GetBlockByNumber(args.BlockNumber, args.Transactions)
+		if err != nil {
+			return err
+		}
+		*reply = v
 	case "eth_getTransactionByHash":
 	case "eth_getTransactionByBlockHashAndIndex":
 	case "eth_getTransactionByBlockNumberAndIndex":
