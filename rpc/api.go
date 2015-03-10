@@ -165,7 +165,7 @@ func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) erro
 	id = self.filterManager.InstallFilter(filter)
 	self.logs[id] = &logFilter{timeout: time.Now()}
 
-	*reply = id
+	*reply = i2hex(id)
 
 	return nil
 }
@@ -417,7 +417,7 @@ func (p *EthereumApi) WhisperMessages(id int, reply *interface{}) error {
 
 func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
 	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
-	rpclogger.DebugDetailf("%T %s", req.Params, req.Params)
+	rpclogger.Infof("%s %s", req.Method, req.Params)
 	switch req.Method {
 	case "web3_sha3":
 		args := new(Sha3Args)
@@ -446,7 +446,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.GetBalance(args, reply)
-	case "eth_getStorage":
+	case "eth_getStorage", "eth_storageAt":
 		// TODO handle BlockNumber
 		args := new(GetStorageArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {

@@ -1684,7 +1684,7 @@ var methods = [
         inputFormatter: [utils.toHex, function(param){ return (!param) ? false : true; }]},
     { name: 'getUncle', call: uncleCall,
         outputFormatter: formatters.outputBlockFormatter,
-        inputFormatter: [utils.toHex, function(param){ return (!param) ? false : true; }]},
+        inputFormatter: [utils.toHex, utils.toHex, function(param){ return (!param) ? false : true; }]},
     { name: 'getCompilers', call: 'eth_getCompilers' },
     { name: 'getBlockTransactionCount', call: getBlockTransactionCountCall,
         outputFormatter: utils.toDecimal,
@@ -1703,9 +1703,9 @@ var methods = [
         inputFormatter: formatters.inputTransactionFormatter },
     { name: 'call', call: 'eth_call', addDefaultblock: 2,
         inputFormatter: formatters.inputCallFormatter },
-    { name: 'compile.solidity', call: 'eth_compileSolidity' },
-    { name: 'compile.lll', call: 'eth_compileLLL' },
-    { name: 'compile.serpent', call: 'eth_compileSerpent' },
+    { name: 'compile.solidity', call: 'eth_compileSolidity', inputFormatter: utils.toHex },
+    { name: 'compile.lll', call: 'eth_compileLLL', inputFormatter: utils.toHex },
+    { name: 'compile.serpent', call: 'eth_compileSerpent', inputFormatter: utils.toHex },
     { name: 'flush', call: 'eth_flush' },
 
     // deprecated methods
@@ -1939,12 +1939,34 @@ var getOptions = function (options) {
 
     options = options || {};
 
-    if (options.topics)
-        console.warn('"topics" is deprecated, is "topic" instead');
+    if (options.topic) {
+        console.warn('"topic" is deprecated, is "topics" instead');
+        options.topics = options.topic;
+    }
+
+    if (options.earliest) {
+        console.warn('"earliest" is deprecated, is "fromBlock" instead');
+        options.fromBlock = options.earliest;
+    }
+
+    if (options.latest) {
+        console.warn('"latest" is deprecated, is "toBlock" instead');
+        options.toBlock = options.latest;
+    }
+
+    if (options.skip) {
+        console.warn('"skip" is deprecated, is "offset" instead');
+        options.offset = options.skip;
+    }
+
+    if (options.max) {
+        console.warn('"max" is deprecated, is "limit" instead');
+        options.limit = options.max;
+    }
 
     // make sure topics, get converted to hex
-    if(options.topic instanceof Array) {
-        options.topic = options.topic.map(function(topic){
+    if(options.topics instanceof Array) {
+        options.topics = options.topics.map(function(topic){
             return utils.toHex(topic);
         });
     }
@@ -1952,13 +1974,13 @@ var getOptions = function (options) {
 
     // evaluate lazy properties
     return {
+        fromBlock: utils.toHex(options.fromBlock),
+        toBlock: utils.toHex(options.toBlock),
+        limit: utils.toHex(options.limit),
+        offset: utils.toHex(options.offset),
         to: options.to,
-        topic: options.topic,
-        earliest: options.earliest,
-        latest: options.latest,
-        max: options.max,
-        skip: options.skip,
-        address: options.address
+        address: options.address,
+        topics: options.topics
     };
 };
 
@@ -2269,6 +2291,7 @@ if ("build" !== 'build') {/*
 */}
 
 var HttpProvider = function (host) {
+    this.name  = 'HTTP';
     this.handlers = [];
     this.host = host || 'http://localhost:8080';
 };
@@ -2280,8 +2303,14 @@ HttpProvider.prototype.send = function (payload, callback) {
     // ASYNC
     if(typeof callback === 'function') {
         request.onreadystatechange = function() {
-            if(request.readyState === 4 && request.status === 200) {
-                callback(JSON.parse(request.responseText));
+            if(request.readyState === 4) {
+                var result = '';
+                try {
+                    result = JSON.parse(request.responseText)
+                } catch(error) {
+                    result = error;
+                }
+                callback(result, request.status);
             }
         };
 
@@ -2518,19 +2547,26 @@ var requestManager = function() {
             return null;
         }
 
-        // ASYNC (only when callback is given, and it a HttpProvidor)
-        if(typeof callback === 'function' && provider.host){
-            provider.send(payload, function(result){
+        // HTTP ASYNC (only when callback is given, and it a HttpProvidor)
+        if(typeof callback === 'function' && provider.name === 'HTTP'){
+            provider.send(payload, function(result, status){
 
                 if (!jsonrpc.isValidResponse(result)) {
-                    console.log(result);
-                    if(typeof result === 'object' && result.error && result.error.message)
+                    if(typeof result === 'object' && result.error && result.error.message) {
                         console.error(result.error.message);
+                        callback(result.error);
+                    } else {
+                        callback(new Error({
+                            status: status,
+                            error: result,
+                            message: 'Bad Request'
+                        }));
+                    }
                     return null;
                 }
 
                 // format the output
-                callback((typeof data.outputFormatter === 'function') ? data.outputFormatter(result.result) : result.result);
+                callback(null, (typeof data.outputFormatter === 'function') ? data.outputFormatter(result.result) : result.result);
             });
 
         // SYNC

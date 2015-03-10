@@ -77,7 +77,8 @@
 	}
 	document.querySelector("#contract_addr").innerHTML = address;
 
-	var contract = web3.eth.contract(address, desc);
+	var Contract = web3.eth.contract(desc);
+	contract = new Contract(address);
 	contract.Changed({from: eth.coinbase}).changed(function() {
 		refresh();
 	});
@@ -88,7 +89,7 @@
 		var table = document.querySelector("#table_body");
 		table.innerHTML = ""; // clear
 
-		var storage = eth.storageAt(address);
+		var storage = eth.getStorage(address);
 		table.innerHTML = "";
 		for( var item in storage ) {
 			table.innerHTML += "<tr><td>"+item+"</td><td>"+web3.toDecimal(storage[item])+"</td></tr>";

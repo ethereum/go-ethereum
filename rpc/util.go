@@ -18,8 +18,11 @@ package rpc
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
+	"math/big"
 	"net/http"
+	"reflect"
 	"time"
 
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -31,6 +34,60 @@ import (
 var rpclogger = logger.NewLogger("RPC")
 
 type JsonWrapper struct{}
+
+// Unmarshal state is a helper method which has the ability to decode messsages
+// that use the `defaultBlock` (https://github.com/ethereum/wiki/wiki/JSON-RPC#the-default-block-parameter)
+// For example a `call`: [{to: "0x....", data:"0x..."}, "latest"]. The first argument is the transaction
+// message and the second one refers to the block height (or state) to which to apply this `call`.
+func UnmarshalRawMessages(b []byte, iface interface{}, number *int64) (err error) {
+	var data []json.RawMessage
+	if err = json.Unmarshal(b, &data); err != nil && len(data) == 0 {
+		return errDecodeArgs
+	}
+
+	// Number index determines the index in the array for a possible block number
+	numberIndex := 0
+
+	value := reflect.ValueOf(iface)
+	rvalue := reflect.Indirect(value)
+
+	switch rvalue.Kind() {
+	case reflect.Slice:
+		// This is a bit of a cheat, but `data` is expected to be larger than 2 if iface is a slice
+		if number != nil {
+			numberIndex = len(data) - 1
+		} else {
+			numberIndex = len(data)
+		}
+
+		slice := reflect.MakeSlice(rvalue.Type(), numberIndex, numberIndex)
+		for i, raw := range data[0:numberIndex] {
+			v := slice.Index(i).Interface()
+			if err = json.Unmarshal(raw, &v); err != nil {
+				fmt.Println(err, v)
+				return err
+			}
+			slice.Index(i).Set(reflect.ValueOf(v))
+		}
+		reflect.Indirect(rvalue).Set(slice) //value.Set(slice)
+	case reflect.Struct:
+		fallthrough
+	default:
+		if err = json.Unmarshal(data[0], iface); err != nil {
+			return errDecodeArgs
+		}
+		numberIndex = 1
+	}
+
+	// <0 index means out of bound for block number
+	if numberIndex >= 0 && len(data) > numberIndex {
+		if err = blockNumber(data[numberIndex], number); err != nil {
+			return errDecodeArgs
+		}
+	}
+
+	return nil
+}
 
 func (self JsonWrapper) Send(writer io.Writer, v interface{}) (n int, err error) {
 	var payload []byte
@@ -78,6 +135,10 @@ func fromHex(s string) []byte {
 		return ethutil.Hex2Bytes(s)
 	}
 	return nil
+}
+
+func i2hex(n int) string {
+	return toHex(big.NewInt(int64(n)).Bytes())
 }
 
 type RpcServer interface {

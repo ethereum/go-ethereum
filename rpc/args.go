@@ -3,32 +3,26 @@ package rpc
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/ethutil"
 )
 
-// Unmarshal state is a helper method which has the ability to decode messsages
-// that use the `defaultBlock` (https://github.com/ethereum/wiki/wiki/JSON-RPC#the-default-block-parameter)
-// For example a `call`: [{to: "0x....", data:"0x..."}, "latest"]. The first argument is the transaction
-// message and the second one refers to the block height (or state) to which to apply this `call`.
-func unmarshalState(b []byte, iface interface{}, str *string) (err error) {
-	var data []json.RawMessage
-	if err = json.Unmarshal(b, &data); err != nil && len(data) == 0 {
+func blockNumber(raw json.RawMessage, number *int64) (err error) {
+	var str string
+	if err = json.Unmarshal(raw, &str); err != nil {
 		return errDecodeArgs
 	}
 
-	if err = json.Unmarshal(data[0], iface); err != nil {
-		return errDecodeArgs
+	switch str {
+	case "latest":
+		*number = -1
+	case "pending":
+		*number = 0
+	default:
+		*number = ethutil.String2Big(str).Int64()
 	}
-
-	// Second argument is optional (transact doesn't require it)
-	if len(data) > 1 {
-		if err = json.Unmarshal(data[1], str); err != nil {
-			return errDecodeArgs
-		}
-	}
-
 	return nil
 }
 
@@ -88,20 +82,12 @@ type NewTxArgs struct {
 	GasPrice *big.Int
 	Data     string
 
-	BlockHeight string
+	BlockNumber int64
 }
 
 func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
-	var obj struct {
-		From     string `json:"from"`
-		To       string `json:"to"`
-		Value    string `json:"value"`
-		Gas      string `json:"gas"`
-		GasPrice string `json:"gasPrice"`
-		Data     string `json:"data"`
-	}
-	var height string
-	if err = unmarshalState(b, &obj, &height); err != nil {
+	var obj struct{ From, To, Value, Gas, GasPrice, Data string }
+	if err = UnmarshalRawMessages(b, &obj, &args.BlockNumber); err != nil {
 		return err
 	}
 
@@ -111,7 +97,6 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Gas = ethutil.Big(obj.Gas)
 	args.GasPrice = ethutil.Big(obj.GasPrice)
 	args.Data = obj.Data
-	args.BlockHeight = height
 
 	return nil
 }
@@ -122,24 +107,10 @@ type GetStorageArgs struct {
 }
 
 func (args *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
-	var obj []interface{}
-	r := bytes.NewReader(b)
-	if err := json.NewDecoder(r).Decode(&obj); err != nil {
+	if err = UnmarshalRawMessages(b, &args.Address, &args.BlockNumber); err != nil {
 		return errDecodeArgs
 	}
-
-	if len(obj) < 1 {
-		return errArguments
-	}
-	args.Address = obj[0].(string)
-
-	if len(obj) > 1 {
-		if obj[1].(string) == "latest" {
-			args.BlockNumber = -1
-		} else {
-			args.BlockNumber = ethutil.Big(obj[1].(string)).Int64()
-		}
-	}
+	fmt.Println(args)
 
 	return nil
 }
@@ -158,25 +129,18 @@ type GetStorageAtArgs struct {
 }
 
 func (args *GetStorageAtArgs) UnmarshalJSON(b []byte) (err error) {
-	var obj []interface{}
-	r := bytes.NewReader(b)
-	if err := json.NewDecoder(r).Decode(&obj); err != nil {
+	var obj []string
+	if err = UnmarshalRawMessages(b, &obj, &args.BlockNumber); err != nil {
+		return errDecodeArgs
+	}
+	if len(obj) < 2 {
 		return errDecodeArgs
 	}
 
-	if len(obj) < 2 {
-		return errArguments
-	}
-	args.Address = obj[0].(string)
-	args.Key = obj[1].(string)
+	args.Address = obj[0]
+	args.Key = obj[1]
 
-	if len(obj) > 2 {
-		if obj[2].(string) == "latest" {
-			args.BlockNumber = -1
-		} else {
-			args.BlockNumber = ethutil.Big(obj[2].(string)).Int64()
-		}
-	}
+	fmt.Println(args)
 
 	return nil
 }
@@ -198,24 +162,8 @@ type GetTxCountArgs struct {
 }
 
 func (args *GetTxCountArgs) UnmarshalJSON(b []byte) (err error) {
-	var obj []interface{}
-	r := bytes.NewReader(b)
-	if err := json.NewDecoder(r).Decode(&obj); err != nil {
+	if err = UnmarshalRawMessages(b, &args.Address, &args.BlockNumber); err != nil {
 		return errDecodeArgs
-	}
-
-	if len(obj) < 1 {
-		return errArguments
-
-	}
-	args.Address = obj[0].(string)
-
-	if len(obj) > 1 {
-		if obj[1].(string) == "latest" {
-			args.BlockNumber = -1
-		} else {
-			args.BlockNumber = ethutil.Big(obj[1].(string)).Int64()
-		}
 	}
 
 	return nil
@@ -234,23 +182,8 @@ type GetBalanceArgs struct {
 }
 
 func (args *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
-	var obj []interface{}
-	r := bytes.NewReader(b)
-	if err := json.NewDecoder(r).Decode(&obj); err != nil {
+	if err = UnmarshalRawMessages(b, &args.Address, &args.BlockNumber); err != nil {
 		return errDecodeArgs
-	}
-
-	if len(obj) < 1 {
-		return errArguments
-	}
-	args.Address = obj[0].(string)
-
-	if len(obj) > 1 {
-		if obj[1].(string) == "latest" {
-			args.BlockNumber = -1
-		} else {
-			args.BlockNumber = ethutil.Big(obj[1].(string)).Int64()
-		}
 	}
 
 	return nil
@@ -269,23 +202,8 @@ type GetDataArgs struct {
 }
 
 func (args *GetDataArgs) UnmarshalJSON(b []byte) (err error) {
-	var obj []interface{}
-	r := bytes.NewReader(b)
-	if err := json.NewDecoder(r).Decode(&obj); err != nil {
+	if err = UnmarshalRawMessages(b, &args.Address, &args.BlockNumber); err != nil {
 		return errDecodeArgs
-	}
-
-	if len(obj) < 1 {
-		return errArguments
-	}
-	args.Address = obj[0].(string)
-
-	if len(obj) > 1 {
-		if obj[1].(string) == "latest" {
-			args.BlockNumber = -1
-		} else {
-			args.BlockNumber = ethutil.Big(obj[1].(string)).Int64()
-		}
 	}
 
 	return nil
