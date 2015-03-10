@@ -3,7 +3,6 @@ package rpc
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -65,7 +64,12 @@ func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 	if len(obj) < 1 {
 		return errArguments
 	}
-	args.BlockNumber = ethutil.Big(obj[0].(string)).Int64()
+
+	if v, ok := obj[0].(float64); ok {
+		args.BlockNumber = int64(v)
+	} else {
+		args.BlockNumber = ethutil.Big(obj[0].(string)).Int64()
+	}
 
 	if len(obj) > 1 {
 		args.Transactions = obj[1].(bool)
@@ -110,7 +114,6 @@ func (args *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
 	if err = UnmarshalRawMessages(b, &args.Address, &args.BlockNumber); err != nil {
 		return errDecodeArgs
 	}
-	fmt.Println(args)
 
 	return nil
 }
@@ -139,8 +142,6 @@ func (args *GetStorageAtArgs) UnmarshalJSON(b []byte) (err error) {
 
 	args.Address = obj[0]
 	args.Key = obj[1]
-
-	fmt.Println(args)
 
 	return nil
 }

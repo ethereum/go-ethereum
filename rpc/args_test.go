@@ -243,7 +243,7 @@ func TestFilterOptions(t *testing.T) {
 	expected.Max = 3
 	expected.Skip = 0
 	expected.Address = "0xd5677cf67b5aa051bb40496e68ad359eb97cfbf8"
-	expected.Topic = []string{"0x12341234"}
+	// expected.Topics = []string{"0x12341234"}
 
 	args := new(FilterOptions)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {

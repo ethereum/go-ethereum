@@ -99,12 +99,27 @@ func (self *XEth) BlockByHash(strHash string) *Block {
 	return NewBlock(block)
 }
 
+func (self *XEth) EthBlockByHash(strHash string) *types.Block {
+	hash := fromHex(strHash)
+	block := self.chainManager.GetBlock(hash)
+
+	return block
+}
+
 func (self *XEth) BlockByNumber(num int64) *Block {
 	if num == -1 {
 		return NewBlock(self.chainManager.CurrentBlock())
 	}
 
 	return NewBlock(self.chainManager.GetBlockByNumber(uint64(num)))
+}
+
+func (self *XEth) EthBlockByNumber(num int64) *types.Block {
+	if num == -1 {
+		return self.chainManager.CurrentBlock()
+	}
+
+	return self.chainManager.GetBlockByNumber(uint64(num))
 }
 
 func (self *XEth) Block(v interface{}) *Block {
