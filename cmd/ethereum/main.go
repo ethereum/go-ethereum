@@ -157,11 +157,12 @@ func run(ctx *cli.Context) {
 func runjs(ctx *cli.Context) {
 	eth := utils.GetEthereum(ClientIdentifier, Version, ctx)
 	startEth(ctx, eth)
+	repl := newJSRE(eth)
 	if len(ctx.Args()) == 0 {
-		runREPL(eth)
+		repl.interactive()
 	} else {
 		for _, file := range ctx.Args() {
-			execJsFile(eth, file)
+			repl.exec(file)
 		}
 	}
 	eth.Stop()
