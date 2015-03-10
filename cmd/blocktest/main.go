@@ -168,7 +168,7 @@ func main() {
 		logger.Flush()
 	}()
 
-	utils.HandleInterrupt()
+	//utils.HandleInterrupt()
 
 	utils.InitConfig(VmType, ConfigFile, Datadir, "ethblocktest")
 
@@ -190,12 +190,17 @@ func main() {
 		MinerThreads: MinerThreads,
 	})
 
+	utils.StartEthereumForTest(ethereum)
 	utils.StartRpc(ethereum, RpcListenAddress, RpcPort)
-	utils.StartEthereum(ethereum)
 
 	ethereum.ChainManager().ResetWithGenesisBlock(blocks[0])
+	// bph := ethereum.ChainManager().GetBlock(blocks[1].Header().ParentHash)
+	// fmt.Println("bph: ", bph)
 
-	// fmt.Println("HURR: ", hex.EncodeToString(ethutil.Encode(blocks[0].RlpData())))
+	//fmt.Println("b0: ", hex.EncodeToString(ethutil.Encode(blocks[0].RlpData())))
+	//fmt.Println("b0: ", hex.EncodeToString(blocks[0].Hash()))
+	//fmt.Println("b1: ", hex.EncodeToString(ethutil.Encode(blocks[1].RlpData())))
+	//fmt.Println("b1: ", hex.EncodeToString(blocks[1].Hash()))
 
 	go ethereum.ChainManager().InsertChain(types.Blocks{blocks[1]})
 	fmt.Println("OK! ")
@@ -254,6 +259,9 @@ func loadBlocksFromTestFile(filePath string) (blocks types.Blocks, err error) {
 	}
 
 	gb := types.NewBlockWithHeader(gbh)
+	//gb.uncles = *new([]*types.Header)
+	//gb.transactions = *new(types.Transactions)
+	gb.Td = new(big.Int)
 	gb.Reward = new(big.Int)
 
 	testBlock := new(types.Block)

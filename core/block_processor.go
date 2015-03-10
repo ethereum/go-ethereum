@@ -261,7 +261,7 @@ func (sm *BlockProcessor) ValidateHeader(block, parent *types.Header) error {
 	}
 
 	if block.Time <= parent.Time {
-		return ValidationError("Block timestamp not after or equal to prev block (%v - %v)", block.Time, parent.Time)
+		return ValidationError("Block timestamp equal or less than previous block (%v - %v)", block.Time, parent.Time)
 	}
 
 	if int64(block.Time) > time.Now().Unix() {
