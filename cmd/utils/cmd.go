@@ -133,6 +133,15 @@ func StartEthereum(ethereum *eth.Ethereum) {
 	})
 }
 
+func StartEthereumForTest(ethereum *eth.Ethereum) {
+	clilogger.Infoln("Starting ", ethereum.Name())
+	ethereum.StartForTest()
+	RegisterInterrupt(func(sig os.Signal) {
+		ethereum.Stop()
+		logger.Flush()
+	})
+}
+
 func KeyTasks(keyManager *crypto.KeyManager, KeyRing string, GenAddr bool, SecretFile string, ExportDir string, NonInteractive bool) {
 	var err error
 	switch {
