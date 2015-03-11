@@ -55,8 +55,8 @@ Rectangle {
 					Button {
 						text: "Start"
 						onClicked: {
-							eth.setGasPrice(minGasPrice.text || "10000000000000");
-							eth.setExtra(blockExtra.text)
+							// eth.setGasPrice(minGasPrice.text || "10000000000000");
+							// eth.setExtra(blockExtra.text)
 							if (eth.toggleMining()) {
 								this.text = "Stop";
 							} else {
@@ -65,35 +65,35 @@ Rectangle {
 						}
 					}
 
-					Rectangle {
-						id: minGasPriceRect
-						anchors.top: parent.top
-						anchors.topMargin: 2
-						width: 200
-						TextField {
-							id: minGasPrice
-							placeholderText: "Min Gas: 10000000000000"
-							width: 200
-							validator: RegExpValidator { regExp: /\d*/ }
-						}
-					}
+					// Rectangle {
+					// 	id: minGasPriceRect
+					// 	anchors.top: parent.top
+					// 	anchors.topMargin: 2
+					// 	width: 200
+					// 	TextField {
+					// 		id: minGasPrice
+					// 		placeholderText: "Min Gas: 10000000000000"
+					// 		width: 200
+					// 		validator: RegExpValidator { regExp: /\d*/ }
+					// 	}
+					// }
 
-					Rectangle {
-						width: 300
-						anchors {
-							left: minGasPriceRect.right
-							leftMargin: 5
-							top: parent.top
-							topMargin: 2
-						}
+					// Rectangle {
+					// 	width: 300
+					// 	anchors {
+					// 		left: minGasPriceRect.right
+					// 		leftMargin: 5
+					// 		top: parent.top
+					// 		topMargin: 2
+					// 	}
 
-						TextField {
-							id: blockExtra
-							placeholderText: "Extra"
-							width: parent.width
-							maximumLength: 1024
-						}
-					}
+					// 	TextField {
+					// 		id: blockExtra
+					// 		placeholderText: "Extra"
+					// 		width: parent.width
+					// 		maximumLength: 1024
+					// 	}
+					// }
 				}
 			}
 

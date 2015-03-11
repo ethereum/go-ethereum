@@ -249,12 +249,14 @@ func (self *jsre) dump(call otto.FunctionCall) otto.Value {
 }
 
 func (self *jsre) stopMining(call otto.FunctionCall) otto.Value {
-	self.xeth.Miner().Stop()
+	self.ethereum.StopMining()
 	return otto.TrueValue()
 }
 
 func (self *jsre) startMining(call otto.FunctionCall) otto.Value {
-	self.xeth.Miner().Start()
+	if err := self.ethereum.StartMining(); err != nil {
+		return otto.FalseValue()
+	}
 	return otto.TrueValue()
 }
 

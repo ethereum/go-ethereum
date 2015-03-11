@@ -93,7 +93,6 @@ Rectangle {
 	         			// Check if it's mining and set it accordingly       				
          				if (miningSliderValue > 0 && !eth.miner().mining()) {
 							// If the 
-							eth.setGasPrice("10000000000000");
 	         				eth.miner().start();
 	         			} else if (miningSliderValue == 0 && eth.miner().mining()) {
 	         				eth.miner().stop();

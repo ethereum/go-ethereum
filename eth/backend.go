@@ -166,18 +166,13 @@ func New(config *Config) (*Ethereum, error) {
 		DataDir:        config.DataDir,
 	}
 
-	cb, err := eth.accountManager.Coinbase()
-	if err != nil {
-		return nil, err
-	}
-
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.EventMux())
 	pow := ethash.New(eth.chainManager)
 	eth.txPool = core.NewTxPool(eth.EventMux())
 	eth.blockProcessor = core.NewBlockProcessor(stateDb, pow, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
 	eth.whisper = whisper.New()
-	eth.miner = miner.New(cb, eth, pow, config.MinerThreads)
+	eth.miner = miner.New(eth, pow, config.MinerThreads)
 
 	hasBlock := eth.chainManager.HasBlock
 	insertChain := eth.chainManager.InsertChain
@@ -211,6 +206,19 @@ func New(config *Config) (*Ethereum, error) {
 	return eth, nil
 }
 
+func (s *Ethereum) StartMining() error {
+	cb, err := s.accountManager.Coinbase()
+	if err != nil {
+		servlogger.Errorf("Cannot start mining without coinbase: %v\n", err)
+		return fmt.Errorf("no coinbase: %v", err)
+	}
+	s.miner.Start(cb)
+	return nil
+}
+
+func (s *Ethereum) StopMining()    { s.miner.Stop() }
+func (s *Ethereum) IsMining() bool { return s.miner.Mining() }
+
 func (s *Ethereum) Logger() logger.LogSystem             { return s.logger }
 func (s *Ethereum) Name() string                         { return s.net.Name }
 func (s *Ethereum) AccountManager() *accounts.Manager    { return s.accountManager }
@@ -222,7 +230,6 @@ func (s *Ethereum) Whisper() *whisper.Whisper            { return s.whisper }
 func (s *Ethereum) EventMux() *event.TypeMux             { return s.eventMux }
 func (s *Ethereum) BlockDb() ethutil.Database            { return s.blockDb }
 func (s *Ethereum) StateDb() ethutil.Database            { return s.stateDb }
-func (s *Ethereum) Miner() *miner.Miner                  { return s.miner }
 func (s *Ethereum) IsListening() bool                    { return true } // Always listening
 func (s *Ethereum) PeerCount() int                       { return s.net.PeerCount() }
 func (s *Ethereum) Peers() []*p2p.Peer                   { return s.net.Peers() }
@@ -261,7 +268,7 @@ func (s *Ethereum) Start() error {
 }
 
 func (s *Ethereum) StartForTest() {
-		jsonlogger.LogJson(&logger.LogStarting{
+	jsonlogger.LogJson(&logger.LogStarting{
 		ClientString:    s.net.Name,
 		ProtocolVersion: ProtocolVersion,
 	})

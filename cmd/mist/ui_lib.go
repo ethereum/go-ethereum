@@ -175,22 +175,12 @@ func (self *UiLib) RemoveLocalTransaction(id int) {
 	//self.miner.RemoveLocalTx(id)
 }
 
-func (self *UiLib) SetGasPrice(price string) {
-	self.Miner().MinAcceptedGasPrice = ethutil.Big(price)
-}
-
-func (self *UiLib) SetExtra(extra string) {
-	self.Miner().Extra = extra
-}
-
 func (self *UiLib) ToggleMining() bool {
-	if !self.Miner().Mining() {
-		self.Miner().Start()
-
-		return true
+	if !self.eth.IsMining() {
+		err := self.eth.StartMining()
+		return err == nil
 	} else {
-		self.Miner().Stop()
-
+		self.eth.StopMining()
 		return false
 	}
 }
