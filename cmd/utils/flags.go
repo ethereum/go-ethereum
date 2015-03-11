@@ -222,15 +222,10 @@ func GetChain(ctx *cli.Context) (*core.ChainManager, ethutil.Database, ethutil.D
 	return core.NewChainManager(blockDb, stateDb, new(event.TypeMux)), blockDb, stateDb
 }
 
-// Global account manager
-var km *accounts.Manager
-
 func GetAccountManager(ctx *cli.Context) *accounts.Manager {
 	dataDir := ctx.GlobalString(DataDirFlag.Name)
-	if km == nil {
-		ks := crypto.NewKeyStorePassphrase(path.Join(dataDir, "keys"))
-		km = accounts.NewManager(ks)
-	}
+	ks := crypto.NewKeyStorePassphrase(path.Join(dataDir, "keys"))
+	km := accounts.NewManager(ks)
 	return km
 }
 

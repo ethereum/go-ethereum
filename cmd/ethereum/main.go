@@ -201,7 +201,7 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 		if len(split) != 2 {
 			utils.Fatalf("Illegal 'unlock' format (address:password)")
 		}
-		am := utils.GetAccountManager(ctx)
+		am := eth.AccountManager()
 		// Attempt to unlock the account
 		err := am.Unlock(ethutil.Hex2Bytes(split[0]), split[1])
 		if err != nil {
