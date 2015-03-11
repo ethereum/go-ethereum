@@ -77,6 +77,10 @@ var (
 			Usage: "Virtual Machine type: 0 is standard VM, 1 is debug VM",
 		}
 	*/
+	UnlockedAccountFlag = cli.StringFlag{
+		Name:  "unlock",
+		Usage: "Unlock a given account untill this programs exits (address:password)",
+	}
 	VMDebugFlag = cli.BoolFlag{
 		Name:  "vmdebug",
 		Usage: "Virtual Machine debug output",
@@ -221,7 +225,8 @@ func GetChain(ctx *cli.Context) (*core.ChainManager, ethutil.Database, ethutil.D
 func GetAccountManager(ctx *cli.Context) *accounts.Manager {
 	dataDir := ctx.GlobalString(DataDirFlag.Name)
 	ks := crypto.NewKeyStorePassphrase(path.Join(dataDir, "keys"))
-	return accounts.NewManager(ks)
+	km := accounts.NewManager(ks)
+	return km
 }
 
 func StartRPC(eth *eth.Ethereum, ctx *cli.Context) {

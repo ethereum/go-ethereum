@@ -98,7 +98,7 @@ func New(eth Backend, frontend Frontend) *XEth {
 }
 
 func (self *XEth) Backend() Backend { return self.eth }
-func (self *XEth) UseState(statedb *state.StateDB) *XEth {
+func (self *XEth) WithState(statedb *state.StateDB) *XEth {
 	xeth := &XEth{
 		eth:            self.eth,
 		blockProcessor: self.blockProcessor,
@@ -122,7 +122,14 @@ func (self *XEth) BlockByHash(strHash string) *Block {
 	return NewBlock(block)
 }
 
-func (self *XEth) BlockByNumber(num int32) *Block {
+func (self *XEth) EthBlockByHash(strHash string) *types.Block {
+	hash := fromHex(strHash)
+	block := self.chainManager.GetBlock(hash)
+
+	return block
+}
+
+func (self *XEth) BlockByNumber(num int64) *Block {
 	if num == -1 {
 		return NewBlock(self.chainManager.CurrentBlock())
 	}
@@ -130,13 +137,21 @@ func (self *XEth) BlockByNumber(num int32) *Block {
 	return NewBlock(self.chainManager.GetBlockByNumber(uint64(num)))
 }
 
+func (self *XEth) EthBlockByNumber(num int64) *types.Block {
+	if num == -1 {
+		return self.chainManager.CurrentBlock()
+	}
+
+	return self.chainManager.GetBlockByNumber(uint64(num))
+}
+
 func (self *XEth) Block(v interface{}) *Block {
 	if n, ok := v.(int32); ok {
-		return self.BlockByNumber(n)
+		return self.BlockByNumber(int64(n))
 	} else if str, ok := v.(string); ok {
 		return self.BlockByHash(str)
 	} else if f, ok := v.(float64); ok { // Don't ask ...
-		return self.BlockByNumber(int32(f))
+		return self.BlockByNumber(int64(f))
 	}
 
 	return nil
@@ -278,14 +293,12 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 	return toHex(tx.Hash()), nil
 }
 
-func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
-	if len(gasStr) == 0 {
-		gasStr = "100000"
-	}
-	if len(gasPriceStr) == 0 {
-		gasPriceStr = "1"
-	}
+var (
+	defaultGasPrice = big.NewInt(10000000000000)
+	defaultGas      = big.NewInt(90000)
+)
 
+func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
 	statedb := self.State().State() //self.chainManager.TransState()
 	msg := callmsg{
 		from:     statedb.GetOrNewStateObject(fromHex(fromStr)),
@@ -295,6 +308,14 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 		value:    ethutil.Big(valueStr),
 		data:     fromHex(dataStr),
 	}
+	if msg.gas.Cmp(big.NewInt(0)) == 0 {
+		msg.gas = defaultGas
+	}
+
+	if msg.gasPrice.Cmp(big.NewInt(0)) == 0 {
+		msg.gasPrice = defaultGasPrice
+	}
+
 	block := self.chainManager.CurrentBlock()
 	vmenv := core.NewEnv(statedb, self.chainManager, msg, block)
 
@@ -327,7 +348,7 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 		tx = types.NewTransactionMessage(to, value.BigInt(), gas.BigInt(), price.BigInt(), data)
 	}
 
-	state := self.chainManager.TransState()
+	state := self.chainManager.TxState()
 	nonce := state.GetNonce(from)
 	tx.SetNonce(nonce)
 

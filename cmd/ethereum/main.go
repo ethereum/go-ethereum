@@ -26,6 +26,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/codegangsta/cli"
@@ -112,6 +113,7 @@ runtime will execute the file and exit.
 		},
 	}
 	app.Flags = []cli.Flag{
+		utils.UnlockedAccountFlag,
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
 		utils.ListenPortFlag,
@@ -191,6 +193,21 @@ Please run 'ethereum account new' to create a new account.`)
 
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	utils.StartEthereum(eth)
+
+	// Load startup keys. XXX we are going to need a different format
+	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
+	if len(account) > 0 {
+		split := strings.Split(account, ":")
+		if len(split) != 2 {
+			utils.Fatalf("Illegal 'unlock' format (address:password)")
+		}
+		am := eth.AccountManager()
+		// Attempt to unlock the account
+		err := am.Unlock(ethutil.Hex2Bytes(split[0]), split[1])
+		if err != nil {
+			utils.Fatalf("Unlock account failed '%v'", err)
+		}
+	}
 	// Start auxiliary services if enabled.
 	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
 		utils.StartRPC(eth, ctx)

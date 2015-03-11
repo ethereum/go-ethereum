@@ -80,7 +80,7 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 	cb := statedb.GetStateObject(coinbase.Address())
 	st := NewStateTransition(NewEnv(statedb, self.bc, tx, block), tx, cb)
 	_, err := st.TransitionState()
-	if err != nil && (IsNonceErr(err) || state.IsGasLimitErr(err)) {
+	if err != nil && (IsNonceErr(err) || state.IsGasLimitErr(err) || IsInvalidTxErr(err)) {
 		return nil, nil, err
 	}
 
@@ -120,17 +120,12 @@ func (self *BlockProcessor) ApplyTransactions(coinbase *state.StateObject, state
 
 	for _, tx := range txs {
 		receipt, txGas, err := self.ApplyTransaction(coinbase, statedb, block, tx, totalUsedGas, transientProcess)
+		if err != nil && (IsNonceErr(err) || state.IsGasLimitErr(err) || IsInvalidTxErr(err)) {
+			return nil, nil, nil, nil, err
+		}
+
 		if err != nil {
-			switch {
-			case IsNonceErr(err):
-				return nil, nil, nil, nil, err
-			case state.IsGasLimitErr(err):
-				return nil, nil, nil, nil, err
-			default:
-				statelogger.Infoln(err)
-				erroneous = append(erroneous, tx)
-				err = nil
-			}
+			statelogger.Infoln("TX err:", err)
 		}
 		receipts = append(receipts, receipt)
 		handled = append(handled, tx)

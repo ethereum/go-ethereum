@@ -58,7 +58,7 @@ type JSEthereum struct {
 
 func (self *JSEthereum) Block(v interface{}) otto.Value {
 	if number, ok := v.(int64); ok {
-		return self.toVal(&JSBlock{self.XEth.BlockByNumber(int32(number)), self})
+		return self.toVal(&JSBlock{self.XEth.BlockByNumber(number), self})
 	} else if hash, ok := v.(string); ok {
 		return self.toVal(&JSBlock{self.XEth.BlockByHash(hash), self})
 	}

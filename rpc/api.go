@@ -1,14 +1,8 @@
-/*
-For each request type, define the following:
-
-1. RpcRequest "To" method [message.go], which does basic validation and conversion to "Args" type via json.Decoder()
-2. json.Decoder() calls "UnmarshalON" defined on each "Args" struct
-3. EthereumApi method, taking the "Args" type and replying with an interface to be marshalled to ON
-
-*/
 package rpc
 
 import (
+	"encoding/json"
+	"fmt"
 	"math/big"
 	"path"
 	"strings"
@@ -27,8 +21,8 @@ import (
 )
 
 var (
-	defaultGasPrice  = big.NewInt(10000000000000)
-	defaultGas       = big.NewInt(10000)
+	defaultGasPrice  = big.NewInt(150000000000)
+	defaultGas       = big.NewInt(500000)
 	filterTickerTime = 15 * time.Second
 )
 
@@ -50,21 +44,18 @@ type EthereumApi struct {
 	register map[string][]*NewTxArgs
 
 	db ethutil.Database
-
-	defaultBlockAge int64
 }
 
 func NewEthereumApi(eth *xeth.XEth, dataDir string) *EthereumApi {
 	db, _ := ethdb.NewLDBDatabase(path.Join(dataDir, "dapps"))
 	api := &EthereumApi{
-		eth:             eth,
-		mux:             eth.Backend().EventMux(),
-		quit:            make(chan struct{}),
-		filterManager:   filter.NewFilterManager(eth.Backend().EventMux()),
-		logs:            make(map[int]*logFilter),
-		messages:        make(map[int]*whisperFilter),
-		db:              db,
-		defaultBlockAge: -1,
+		eth:           eth,
+		mux:           eth.Backend().EventMux(),
+		quit:          make(chan struct{}),
+		filterManager: filter.NewFilterManager(eth.Backend().EventMux()),
+		logs:          make(map[int]*logFilter),
+		messages:      make(map[int]*whisperFilter),
+		db:            db,
 	}
 	go api.filterManager.Start()
 	go api.start()
@@ -72,36 +63,33 @@ func NewEthereumApi(eth *xeth.XEth, dataDir string) *EthereumApi {
 	return api
 }
 
-func (self *EthereumApi) setStateByBlockNumber(num int64) {
+func (self *EthereumApi) xethWithStateNum(num int64) *xeth.XEth {
 	chain := self.xeth().Backend().ChainManager()
 	var block *types.Block
 
-	if self.defaultBlockAge < 0 {
+	if num < 0 {
 		num = chain.CurrentBlock().Number().Int64() + num + 1
 	}
 	block = chain.GetBlockByNumber(uint64(num))
 
+	var st *state.StateDB
 	if block != nil {
-		self.useState(state.New(block.Root(), self.xeth().Backend().StateDb()))
+		st = state.New(block.Root(), self.xeth().Backend().StateDb())
 	} else {
-		self.useState(chain.State())
+		st = chain.State()
 	}
+	return self.xeth().WithState(st)
+}
+
+func (self *EthereumApi) getStateWithNum(num int64) *xeth.State {
+	return self.xethWithStateNum(num).State()
 }
 
 func (self *EthereumApi) start() {
 	timer := time.NewTicker(filterTickerTime)
-	events := self.mux.Subscribe(core.ChainEvent{})
-
 done:
 	for {
 		select {
-		case ev := <-events.Chan():
-			switch ev.(type) {
-			case core.ChainEvent:
-				if self.defaultBlockAge < 0 {
-					self.setStateByBlockNumber(self.defaultBlockAge)
-				}
-			}
 		case <-timer.C:
 			self.logMut.Lock()
 			self.messagesMut.Lock()
@@ -130,35 +118,35 @@ func (self *EthereumApi) stop() {
 	close(self.quit)
 }
 
-func (self *EthereumApi) Register(args string, reply *interface{}) error {
-	self.regmut.Lock()
-	defer self.regmut.Unlock()
+// func (self *EthereumApi) Register(args string, reply *interface{}) error {
+// 	self.regmut.Lock()
+// 	defer self.regmut.Unlock()
 
-	if _, ok := self.register[args]; ok {
-		self.register[args] = nil // register with empty
-	}
-	return nil
-}
+// 	if _, ok := self.register[args]; ok {
+// 		self.register[args] = nil // register with empty
+// 	}
+// 	return nil
+// }
 
-func (self *EthereumApi) Unregister(args string, reply *interface{}) error {
-	self.regmut.Lock()
-	defer self.regmut.Unlock()
+// func (self *EthereumApi) Unregister(args string, reply *interface{}) error {
+// 	self.regmut.Lock()
+// 	defer self.regmut.Unlock()
 
-	delete(self.register, args)
+// 	delete(self.register, args)
 
-	return nil
-}
+// 	return nil
+// }
 
-func (self *EthereumApi) WatchTx(args string, reply *interface{}) error {
-	self.regmut.Lock()
-	defer self.regmut.Unlock()
+// func (self *EthereumApi) WatchTx(args string, reply *interface{}) error {
+// 	self.regmut.Lock()
+// 	defer self.regmut.Unlock()
 
-	txs := self.register[args]
-	self.register[args] = nil
+// 	txs := self.register[args]
+// 	self.register[args] = nil
 
-	*reply = txs
-	return nil
-}
+// 	*reply = txs
+// 	return nil
+// }
 
 func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) error {
 	var id int
@@ -173,7 +161,7 @@ func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) erro
 	id = self.filterManager.InstallFilter(filter)
 	self.logs[id] = &logFilter{timeout: time.Now()}
 
-	*reply = id
+	*reply = i2hex(id)
 
 	return nil
 }
@@ -203,7 +191,7 @@ func (self *EthereumApi) NewFilterString(args string, reply *interface{}) error 
 
 	id = self.filterManager.InstallFilter(filter)
 	self.logs[id] = &logFilter{timeout: time.Now()}
-	*reply = id
+	*reply = i2hex(id)
 
 	return nil
 }
@@ -240,35 +228,49 @@ func (self *EthereumApi) AllLogs(args *FilterOptions, reply *interface{}) error 
 	return nil
 }
 
-func (p *EthereumApi) GetBlock(args *GetBlockArgs, reply *interface{}) error {
-	// This seems a bit precarious Maybe worth splitting to discrete functions
-	if len(args.Hash) > 0 {
-		*reply = p.xeth().BlockByHash(args.Hash)
-	} else {
-		*reply = p.xeth().BlockByNumber(args.BlockNumber)
-	}
-	return nil
-}
+func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) (err error) {
+	// TODO if no_private_key then
+	//if _, exists := p.register[args.From]; exists {
+	//	p.register[args.From] = append(p.register[args.From], args)
+	//} else {
+	/*
+		account := accounts.Get(fromHex(args.From))
+		if account != nil {
+			if account.Unlocked() {
+				if !unlockAccount(account) {
+					return
+				}
+			}
 
-func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
+			result, _ := account.Transact(fromHex(args.To), fromHex(args.Value), fromHex(args.Gas), fromHex(args.GasPrice), fromHex(args.Data))
+			if len(result) > 0 {
+				*reply = toHex(result)
+			}
+		} else if _, exists := p.register[args.From]; exists {
+			p.register[ags.From] = append(p.register[args.From], args)
+		}
+	*/
 	// TODO: align default values to have the same type, e.g. not depend on
 	// ethutil.Value conversions later on
-	if ethutil.Big(args.Gas).Cmp(big.NewInt(0)) == 0 {
-		args.Gas = defaultGas.String()
+	if args.Gas.Cmp(big.NewInt(0)) == 0 {
+		args.Gas = defaultGas
 	}
 
-	if ethutil.Big(args.GasPrice).Cmp(big.NewInt(0)) == 0 {
-		args.GasPrice = defaultGasPrice.String()
+	if args.GasPrice.Cmp(big.NewInt(0)) == 0 {
+		args.GasPrice = defaultGasPrice
 	}
 
-	result, _ := p.xeth().Transact(args.From, args.To, args.Value, args.Gas, args.GasPrice, args.Data)
-	*reply = result
+	*reply, err = p.xeth().Transact(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
+	if err != nil {
+		fmt.Println("err:", err)
+		return err
+	}
 
 	return nil
 }
 
 func (p *EthereumApi) Call(args *NewTxArgs, reply *interface{}) error {
-	result, err := p.xeth().Call(args.From, args.To, args.Value, args.Gas, args.GasPrice, args.Data)
+	result, err := p.xethWithStateNum(args.BlockNumber).Call(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
 	if err != nil {
 		return err
 	}
@@ -277,23 +279,28 @@ func (p *EthereumApi) Call(args *NewTxArgs, reply *interface{}) error {
 	return nil
 }
 
-func (p *EthereumApi) PushTx(args *PushTxArgs, reply *interface{}) error {
-	err := args.requirementsPushTx()
-	if err != nil {
+func (p *EthereumApi) GetBalance(args *GetBalanceArgs, reply *interface{}) error {
+	if err := args.requirements(); err != nil {
 		return err
 	}
-	result, _ := p.xeth().PushTx(args.Tx)
-	*reply = result
+	state := p.getStateWithNum(args.BlockNumber).SafeGet(args.Address)
+	*reply = toHex(state.Balance().Bytes())
 	return nil
 }
 
-func (p *EthereumApi) GetStateAt(args *GetStateArgs, reply *interface{}) error {
-	err := args.requirements()
-	if err != nil {
+func (p *EthereumApi) GetStorage(args *GetStorageArgs, reply *interface{}) error {
+	if err := args.requirements(); err != nil {
 		return err
 	}
+	*reply = p.getStateWithNum(args.BlockNumber).SafeGet(args.Address).Storage()
+	return nil
+}
 
-	state := p.xeth().State().SafeGet(args.Address)
+func (p *EthereumApi) GetStorageAt(args *GetStorageAtArgs, reply *interface{}) error {
+	if err := args.requirements(); err != nil {
+		return err
+	}
+	state := p.getStateWithNum(args.BlockNumber).SafeGet(args.Address)
 
 	value := state.StorageString(args.Key)
 	var hx string
@@ -309,115 +316,31 @@ func (p *EthereumApi) GetStateAt(args *GetStateArgs, reply *interface{}) error {
 	return nil
 }
 
-func (p *EthereumApi) GetStorageAt(args *GetStorageArgs, reply *interface{}) error {
-	err := args.requirements()
-	if err != nil {
-		return err
-	}
-
-	*reply = p.xeth().State().SafeGet(args.Address).Storage()
-	return nil
-}
-
-func (p *EthereumApi) GetPeerCount(reply *interface{}) error {
-	*reply = p.xeth().PeerCount()
-	return nil
-}
-
-func (p *EthereumApi) GetIsListening(reply *interface{}) error {
-	*reply = p.xeth().IsListening()
-	return nil
-}
-
-func (p *EthereumApi) GetCoinbase(reply *interface{}) error {
-	*reply = p.xeth().Coinbase()
-	return nil
-}
-
-func (p *EthereumApi) Accounts(reply *interface{}) error {
-	*reply = p.xeth().Accounts()
-	return nil
-}
-
-func (p *EthereumApi) GetIsMining(reply *interface{}) error {
-	*reply = p.xeth().IsMining()
-	return nil
-}
-
-func (p *EthereumApi) SetMining(shouldmine bool, reply *interface{}) error {
-	*reply = p.xeth().SetMining(shouldmine)
-	return nil
-}
-
-func (p *EthereumApi) GetDefaultBlockAge(reply *interface{}) error {
-	*reply = p.defaultBlockAge
-	return nil
-}
-
-func (p *EthereumApi) SetDefaultBlockAge(defaultBlockAge int64, reply *interface{}) error {
-	p.defaultBlockAge = defaultBlockAge
-	p.setStateByBlockNumber(p.defaultBlockAge)
-
-	*reply = true
-	return nil
-}
-
-func (p *EthereumApi) BlockNumber(reply *interface{}) error {
-	*reply = p.xeth().Backend().ChainManager().CurrentBlock().Number()
-	return nil
-}
-
 func (p *EthereumApi) GetTxCountAt(args *GetTxCountArgs, reply *interface{}) error {
 	err := args.requirements()
 	if err != nil {
 		return err
 	}
-	*reply = p.xeth().TxCountAt(args.Address)
+	*reply = p.xethWithStateNum(args.BlockNumber).TxCountAt(args.Address)
 	return nil
 }
 
-func (p *EthereumApi) GetBalanceAt(args *GetBalanceArgs, reply *interface{}) error {
-	err := args.requirements()
-	if err != nil {
+func (p *EthereumApi) GetData(args *GetDataArgs, reply *interface{}) error {
+	if err := args.requirements(); err != nil {
 		return err
 	}
-	state := p.xeth().State().SafeGet(args.Address)
-	*reply = toHex(state.Balance().Bytes())
-	return nil
-}
-
-func (p *EthereumApi) GetCodeAt(args *GetCodeAtArgs, reply *interface{}) error {
-	err := args.requirements()
-	if err != nil {
-		return err
-	}
-	*reply = p.xeth().CodeAt(args.Address)
+	*reply = p.xethWithStateNum(args.BlockNumber).CodeAt(args.Address)
 	return nil
 }
 
 func (p *EthereumApi) GetCompilers(reply *interface{}) error {
-	c := []string{"serpent"}
+	c := []string{""}
 	*reply = c
 	return nil
 }
 
-func (p *EthereumApi) CompileSerpent(script string, reply *interface{}) error {
-	res, err := ethutil.Compile(script, false)
-	if err != nil {
-		return err
-	}
-	*reply = res
-	return nil
-}
-
-func (p *EthereumApi) Sha3(args *Sha3Args, reply *interface{}) error {
-	*reply = toHex(crypto.Sha3(fromHex(args.Data)))
-	return nil
-}
-
 func (p *EthereumApi) DbPut(args *DbArgs, reply *interface{}) error {
-	err := args.requirements()
-	if err != nil {
+	if err := args.requirements(); err != nil {
 		return err
 	}
 
@@ -427,8 +350,7 @@ func (p *EthereumApi) DbPut(args *DbArgs, reply *interface{}) error {
 }
 
 func (p *EthereumApi) DbGet(args *DbArgs, reply *interface{}) error {
-	err := args.requirements()
-	if err != nil {
+	if err := args.requirements(); err != nil {
 		return err
 	}
 
@@ -442,14 +364,18 @@ func (p *EthereumApi) NewWhisperIdentity(reply *interface{}) error {
 	return nil
 }
 
-func (p *EthereumApi) NewWhisperFilter(args *xeth.Options, reply *interface{}) error {
+func (p *EthereumApi) NewWhisperFilter(args *WhisperFilterArgs, reply *interface{}) error {
 	var id int
-	args.Fn = func(msg xeth.WhisperMessage) {
+	opts := new(xeth.Options)
+	opts.From = args.From
+	opts.To = args.To
+	opts.Topics = args.Topics
+	opts.Fn = func(msg xeth.WhisperMessage) {
 		p.messagesMut.Lock()
 		defer p.messagesMut.Unlock()
 		p.messages[id].add(msg) // = append(p.messages[id], msg)
 	}
-	id = p.xeth().Whisper().Watch(args)
+	id = p.xeth().Whisper().Watch(opts)
 	p.messages[id] = &whisperFilter{timeout: time.Now()}
 	*reply = id
 	return nil
@@ -467,7 +393,7 @@ func (self *EthereumApi) MessagesChanged(id int, reply *interface{}) error {
 }
 
 func (p *EthereumApi) WhisperPost(args *WhisperMessageArgs, reply *interface{}) error {
-	err := p.xeth().Whisper().Post(args.Payload, args.To, args.From, args.Topic, args.Priority, args.Ttl)
+	err := p.xeth().Whisper().Post(args.Payload, args.To, args.From, args.Topics, args.Priority, args.Ttl)
 	if err != nil {
 		return err
 	}
@@ -486,199 +412,358 @@ func (p *EthereumApi) WhisperMessages(id int, reply *interface{}) error {
 	return nil
 }
 
+func (p *EthereumApi) GetBlockByHash(blockhash string, includetx bool) (*BlockRes, error) {
+	block := p.xeth().EthBlockByHash(blockhash)
+	br := NewBlockRes(block)
+	br.fullTx = includetx
+	return br, nil
+}
+
+func (p *EthereumApi) GetBlockByNumber(blocknum int64, includetx bool) (*BlockRes, error) {
+	block := p.xeth().EthBlockByNumber(blocknum)
+	br := NewBlockRes(block)
+	br.fullTx = includetx
+	return br, nil
+}
+
+func (p *EthereumApi) GetBlockTransactionCountByHash(blockhash string) (int64, error) {
+	block := p.xeth().EthBlockByHash(blockhash)
+	br := NewBlockRes(block)
+	return int64(len(br.Transactions)), nil
+}
+
+func (p *EthereumApi) GetBlockTransactionCountByNumber(blocknum int64) (int64, error) {
+	block := p.xeth().EthBlockByNumber(blocknum)
+	br := NewBlockRes(block)
+	return int64(len(br.Transactions)), nil
+}
+
+func (p *EthereumApi) GetBlockUncleCountByHash(blockhash string) (int64, error) {
+	block := p.xeth().EthBlockByHash(blockhash)
+	br := NewBlockRes(block)
+	return int64(len(br.Uncles)), nil
+}
+
+func (p *EthereumApi) GetBlockUncleCountByNumber(blocknum int64) (int64, error) {
+	block := p.xeth().EthBlockByNumber(blocknum)
+	br := NewBlockRes(block)
+	return int64(len(br.Uncles)), nil
+}
+
 func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
 	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
-	rpclogger.DebugDetailf("%T %s", req.Params, req.Params)
+	rpclogger.Debugf("%s %s", req.Method, req.Params)
 	switch req.Method {
+	case "web3_sha3":
+		args := new(Sha3Args)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+		*reply = toHex(crypto.Sha3(fromHex(args.Data)))
+	case "net_listening":
+		*reply = p.xeth().IsListening()
+	case "net_peerCount":
+		*reply = toHex(big.NewInt(int64(p.xeth().PeerCount())).Bytes())
 	case "eth_coinbase":
-		return p.GetCoinbase(reply)
-	case "eth_listening":
-		return p.GetIsListening(reply)
+		*reply = p.xeth().Coinbase()
 	case "eth_mining":
-		return p.GetIsMining(reply)
-	case "eth_setMining":
-		args, err := req.ToBoolArgs()
-		if err != nil {
-			return err
-		}
-		return p.SetMining(args, reply)
-	case "eth_defaultBlock":
-		return p.GetDefaultBlockAge(reply)
-	case "eth_setDefaultBlock":
-		args, err := req.ToIntArgs()
-		if err != nil {
-			return err
-		}
-		return p.SetDefaultBlockAge(int64(args), reply)
-	case "eth_peerCount":
-		return p.GetPeerCount(reply)
-	case "eth_number":
-		return p.BlockNumber(reply)
+		*reply = p.xeth().IsMining()
+	case "eth_gasPrice":
+		*reply = toHex(defaultGasPrice.Bytes())
 	case "eth_accounts":
-		return p.Accounts(reply)
-	case "eth_countAt":
-		args, err := req.ToGetTxCountArgs()
-		if err != nil {
+		*reply = p.xeth().Accounts()
+	case "eth_blockNumber":
+		*reply = toHex(p.xeth().Backend().ChainManager().CurrentBlock().Number().Bytes())
+	case "eth_getBalance":
+		args := new(GetBalanceArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.GetTxCountAt(args, reply)
-	case "eth_codeAt":
-		args, err := req.ToGetCodeAtArgs()
-		if err != nil {
+		return p.GetBalance(args, reply)
+	case "eth_getStorage", "eth_storageAt":
+		args := new(GetStorageArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.GetCodeAt(args, reply)
-	case "eth_balanceAt":
-		args, err := req.ToGetBalanceArgs()
-		if err != nil {
-			return err
-		}
-		return p.GetBalanceAt(args, reply)
-	case "eth_stateAt":
-		args, err := req.ToGetStateArgs()
-		if err != nil {
-			return err
-		}
-		return p.GetStateAt(args, reply)
-	case "eth_storageAt":
-		args, err := req.ToStorageAtArgs()
-		if err != nil {
+		return p.GetStorage(args, reply)
+	case "eth_getStorageAt":
+		args := new(GetStorageAtArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		return p.GetStorageAt(args, reply)
-	case "eth_blockByNumber", "eth_blockByHash":
-		args, err := req.ToGetBlockArgs()
+	case "eth_getTransactionCount":
+		args := new(GetTxCountArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+		return p.GetTxCountAt(args, reply)
+	case "eth_getBlockTransactionCountByHash":
+		args := new(GetBlockByHashArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		v, err := p.GetBlockTransactionCountByHash(args.BlockHash)
 		if err != nil {
 			return err
 		}
-		return p.GetBlock(args, reply)
-	case "eth_transact":
-		args, err := req.ToNewTxArgs()
+		*reply = toHex(big.NewInt(v).Bytes())
+	case "eth_getBlockTransactionCountByNumber":
+		args := new(GetBlockByNumberArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		v, err := p.GetBlockTransactionCountByNumber(args.BlockNumber)
 		if err != nil {
+			return err
+		}
+		*reply = toHex(big.NewInt(v).Bytes())
+	case "eth_getUncleCountByBlockHash":
+		args := new(GetBlockByHashArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		v, err := p.GetBlockUncleCountByHash(args.BlockHash)
+		if err != nil {
+			return err
+		}
+		*reply = toHex(big.NewInt(v).Bytes())
+	case "eth_getUncleCountByBlockNumber":
+		args := new(GetBlockByNumberArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		v, err := p.GetBlockUncleCountByNumber(args.BlockNumber)
+		if err != nil {
+			return err
+		}
+		*reply = toHex(big.NewInt(v).Bytes())
+	case "eth_getData":
+		args := new(GetDataArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+		return p.GetData(args, reply)
+	case "eth_sendTransaction", "eth_transact":
+		args := new(NewTxArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		return p.Transact(args, reply)
 	case "eth_call":
-		args, err := req.ToNewTxArgs()
-		if err != nil {
+		args := new(NewTxArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		return p.Call(args, reply)
-	case "eth_newFilter":
-		args, err := req.ToFilterArgs()
+	case "eth_flush":
+		return errNotImplemented
+	case "eth_getBlockByHash":
+		args := new(GetBlockByHashArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		v, err := p.GetBlockByHash(args.BlockHash, args.Transactions)
 		if err != nil {
+			return err
+		}
+		*reply = v
+	case "eth_getBlockByNumber":
+		args := new(GetBlockByNumberArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		v, err := p.GetBlockByNumber(args.BlockNumber, args.Transactions)
+		if err != nil {
+			return err
+		}
+		*reply = v
+	case "eth_getTransactionByHash":
+		return errNotImplemented
+	case "eth_getTransactionByBlockHashAndIndex":
+		args := new(HashIndexArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		v, err := p.GetBlockByHash(args.BlockHash, true)
+		if err != nil {
+			return err
+		}
+		if args.Index > int64(len(v.Transactions)) || args.Index < 0 {
+			return NewErrorWithMessage(errDecodeArgs, "Transaction index does not exist")
+		}
+		*reply = v.Transactions[args.Index]
+	case "eth_getTransactionByBlockNumberAndIndex":
+		args := new(BlockNumIndexArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		v, err := p.GetBlockByNumber(args.BlockNumber, true)
+		if err != nil {
+			return err
+		}
+		if args.Index > int64(len(v.Transactions)) || args.Index < 0 {
+			return NewErrorWithMessage(errDecodeArgs, "Transaction index does not exist")
+		}
+		*reply = v.Transactions[args.Index]
+	case "eth_getUncleByBlockHashAndIndex":
+		args := new(HashIndexArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		v, err := p.GetBlockByHash(args.BlockHash, false)
+		if err != nil {
+			return err
+		}
+		if args.Index > int64(len(v.Uncles)) || args.Index < 0 {
+			return NewErrorWithMessage(errDecodeArgs, "Uncle index does not exist")
+		}
+
+		uncle, err := p.GetBlockByHash(toHex(v.Uncles[args.Index]), false)
+		if err != nil {
+			return err
+		}
+		*reply = uncle
+	case "eth_getUncleByBlockNumberAndIndex":
+		args := new(BlockNumIndexArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		v, err := p.GetBlockByNumber(args.BlockNumber, true)
+		if err != nil {
+			return err
+		}
+		if args.Index > int64(len(v.Uncles)) || args.Index < 0 {
+			return NewErrorWithMessage(errDecodeArgs, "Uncle index does not exist")
+		}
+
+		uncle, err := p.GetBlockByHash(toHex(v.Uncles[args.Index]), false)
+		if err != nil {
+			return err
+		}
+		*reply = uncle
+	case "eth_getCompilers":
+		return p.GetCompilers(reply)
+	case "eth_compileSolidity":
+	case "eth_compileLLL":
+	case "eth_compileSerpent":
+		return errNotImplemented
+	case "eth_newFilter":
+		args := new(FilterOptions)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		return p.NewFilter(args, reply)
-	case "eth_newFilterString":
-		args, err := req.ToFilterStringArgs()
-		if err != nil {
+	case "eth_newBlockFilter":
+		args := new(FilterStringArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.NewFilterString(args, reply)
+		return p.NewFilterString(args.Word, reply)
 	case "eth_uninstallFilter":
-		args, err := req.ToUninstallFilterArgs()
-		if err != nil {
+		args := new(FilterIdArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.UninstallFilter(args, reply)
-	case "eth_changed":
-		args, err := req.ToIdArgs()
-		if err != nil {
+		return p.UninstallFilter(args.Id, reply)
+	case "eth_getFilterChanges":
+		args := new(FilterIdArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.FilterChanged(args, reply)
-	case "eth_filterLogs":
-		args, err := req.ToIdArgs()
-		if err != nil {
+		return p.FilterChanged(args.Id, reply)
+	case "eth_getFilterLogs":
+		args := new(FilterIdArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.Logs(args, reply)
-	case "eth_logs":
-		args, err := req.ToFilterArgs()
-		if err != nil {
+		return p.Logs(args.Id, reply)
+	case "eth_getLogs":
+		args := new(FilterOptions)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		return p.AllLogs(args, reply)
-	case "eth_gasPrice":
-		*reply = toHex(defaultGasPrice.Bytes())
-		return nil
-	case "eth_register":
-		args, err := req.ToRegisterArgs()
-		if err != nil {
-			return err
-		}
-		return p.Register(args, reply)
-	case "eth_unregister":
-		args, err := req.ToRegisterArgs()
-		if err != nil {
-			return err
-		}
-		return p.Unregister(args, reply)
-	case "eth_watchTx":
-		args, err := req.ToWatchTxArgs()
-		if err != nil {
-			return err
-		}
-		return p.WatchTx(args, reply)
-	case "eth_compilers":
-		return p.GetCompilers(reply)
-	case "eth_serpent":
-		args, err := req.ToCompileArgs()
-		if err != nil {
-			return err
-		}
-		return p.CompileSerpent(args, reply)
-	case "web3_sha3":
-		args, err := req.ToSha3Args()
-		if err != nil {
-			return err
-		}
-		return p.Sha3(args, reply)
+	case "eth_getWork":
+	case "eth_submitWork":
+		return errNotImplemented
 	case "db_put":
-		args, err := req.ToDbPutArgs()
-		if err != nil {
+		args := new(DbArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		return p.DbPut(args, reply)
 	case "db_get":
-		args, err := req.ToDbGetArgs()
-		if err != nil {
+		args := new(DbArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		return p.DbGet(args, reply)
-	case "shh_newIdentity":
-		return p.NewWhisperIdentity(reply)
-	case "shh_newFilter":
-		args, err := req.ToWhisperFilterArgs()
-		if err != nil {
-			return err
-		}
-		return p.NewWhisperFilter(args, reply)
-	case "shh_changed":
-		args, err := req.ToIdArgs()
-		if err != nil {
-			return err
-		}
-		return p.MessagesChanged(args, reply)
 	case "shh_post":
-		args, err := req.ToWhisperPostArgs()
-		if err != nil {
+		args := new(WhisperMessageArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		return p.WhisperPost(args, reply)
-	case "shh_haveIdentity":
-		args, err := req.ToWhisperHasIdentityArgs()
-		if err != nil {
+	case "shh_newIdentity":
+		return p.NewWhisperIdentity(reply)
+	case "shh_hasIdentity":
+		args := new(WhisperIdentityArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.HasWhisperIdentity(args, reply)
+		return p.HasWhisperIdentity(args.Identity, reply)
+	case "shh_newGroup":
+	case "shh_addToGroup":
+		return errNotImplemented
+	case "shh_newFilter":
+		args := new(WhisperFilterArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+		return p.NewWhisperFilter(args, reply)
+	case "shh_uninstallFilter":
+		return errNotImplemented
+	case "shh_getFilterChanges":
+		args := new(FilterIdArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+		return p.MessagesChanged(args.Id, reply)
 	case "shh_getMessages":
-		args, err := req.ToIdArgs()
-		if err != nil {
+		args := new(FilterIdArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.WhisperMessages(args, reply)
+		return p.WhisperMessages(args.Id, reply)
+	// case "eth_register":
+	// 	args, err := req.ToRegisterArgs()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	return p.Register(args, reply)
+	// case "eth_unregister":
+	// 	args, err := req.ToRegisterArgs()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	return p.Unregister(args, reply)
+	// case "eth_watchTx":
+	// 	args, err := req.ToWatchTxArgs()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	return p.WatchTx(args, reply)
 	default:
 		return NewErrorWithMessage(errNotImplemented, req.Method)
 	}
@@ -694,9 +779,38 @@ func (self *EthereumApi) xeth() *xeth.XEth {
 	return self.eth
 }
 
-func (self *EthereumApi) useState(statedb *state.StateDB) {
-	self.xethMu.Lock()
-	defer self.xethMu.Unlock()
+func toFilterOptions(options *FilterOptions) core.FilterOptions {
+	var opts core.FilterOptions
 
-	self.eth = self.eth.UseState(statedb)
+	// Convert optional address slice/string to byte slice
+	if str, ok := options.Address.(string); ok {
+		opts.Address = [][]byte{fromHex(str)}
+	} else if slice, ok := options.Address.([]interface{}); ok {
+		bslice := make([][]byte, len(slice))
+		for i, addr := range slice {
+			if saddr, ok := addr.(string); ok {
+				bslice[i] = fromHex(saddr)
+			}
+		}
+		opts.Address = bslice
+	}
+
+	opts.Earliest = options.Earliest
+	opts.Latest = options.Latest
+
+	topics := make([][][]byte, len(options.Topics))
+	for i, topicDat := range options.Topics {
+		if slice, ok := topicDat.([]interface{}); ok {
+			topics[i] = make([][]byte, len(slice))
+			for j, topic := range slice {
+				topics[i][j] = fromHex(topic.(string))
+			}
+		} else if str, ok := topicDat.(string); ok {
+			topics[i] = make([][]byte, 1)
+			topics[i][0] = fromHex(str)
+		}
+	}
+	opts.Topics = topics
+
+	return opts
 }
