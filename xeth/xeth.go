@@ -293,14 +293,12 @@ func (self *XEth) PushTx(encodedTx string) (string, error) {
 	return toHex(tx.Hash()), nil
 }
 
-func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
-	if len(gasStr) == 0 {
-		gasStr = "100000"
-	}
-	if len(gasPriceStr) == 0 {
-		gasPriceStr = "1"
-	}
+var (
+	defaultGasPrice = big.NewInt(10000000000000)
+	defaultGas      = big.NewInt(90000)
+)
 
+func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
 	statedb := self.State().State() //self.chainManager.TransState()
 	msg := callmsg{
 		from:     statedb.GetOrNewStateObject(fromHex(fromStr)),
@@ -310,6 +308,14 @@ func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr st
 		value:    ethutil.Big(valueStr),
 		data:     fromHex(dataStr),
 	}
+	if msg.gas.Cmp(big.NewInt(0)) == 0 {
+		msg.gas = defaultGas
+	}
+
+	if msg.gasPrice.Cmp(big.NewInt(0)) == 0 {
+		msg.gasPrice = defaultGasPrice
+	}
+
 	block := self.chainManager.CurrentBlock()
 	vmenv := core.NewEnv(statedb, self.chainManager, msg, block)
 

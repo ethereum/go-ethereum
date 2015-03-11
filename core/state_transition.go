@@ -199,6 +199,8 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 			dataGas.Mul(dataGas, vm.GasCreateByte)
 			if err := self.UseGas(dataGas); err == nil {
 				ref.SetCode(ret)
+			} else {
+				statelogger.Infoln("Insufficient gas for creating code. Require", dataGas, "and have", self.gas)
 			}
 		}
 	} else {

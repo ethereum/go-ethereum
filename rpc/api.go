@@ -21,8 +21,8 @@ import (
 )
 
 var (
-	defaultGasPrice  = big.NewInt(10000000000000)
-	defaultGas       = big.NewInt(50000)
+	defaultGasPrice  = big.NewInt(150000000000)
+	defaultGas       = big.NewInt(500000)
 	filterTickerTime = 15 * time.Second
 )
 
@@ -252,7 +252,6 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) (err error) 
 	*/
 	// TODO: align default values to have the same type, e.g. not depend on
 	// ethutil.Value conversions later on
-	fmt.Println("gas", args.Gas)
 	if args.Gas.Cmp(big.NewInt(0)) == 0 {
 		args.Gas = defaultGas
 	}
