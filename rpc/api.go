@@ -627,8 +627,43 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		*reply = v.Transactions[args.Index]
 	case "eth_getUncleByBlockHashAndIndex":
+		args := new(HashIndexArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		v, err := p.GetBlockByHash(args.BlockHash, false)
+		if err != nil {
+			return err
+		}
+		if args.Index > int64(len(v.Uncles)) || args.Index < 0 {
+			return NewErrorWithMessage(errDecodeArgs, "Uncle index does not exist")
+		}
+
+		uncle, err := p.GetBlockByHash(toHex(v.Uncles[args.Index]), false)
+		if err != nil {
+			return err
+		}
+		*reply = uncle
 	case "eth_getUncleByBlockNumberAndIndex":
-		return errNotImplemented
+		args := new(BlockNumIndexArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		v, err := p.GetBlockByNumber(args.BlockNumber, true)
+		if err != nil {
+			return err
+		}
+		if args.Index > int64(len(v.Uncles)) || args.Index < 0 {
+			return NewErrorWithMessage(errDecodeArgs, "Uncle index does not exist")
+		}
+
+		uncle, err := p.GetBlockByHash(toHex(v.Uncles[args.Index]), false)
+		if err != nil {
+			return err
+		}
+		*reply = uncle
 	case "eth_getCompilers":
 		return p.GetCompilers(reply)
 	case "eth_compileSolidity":
