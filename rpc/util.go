@@ -91,7 +91,7 @@ func UnmarshalRawMessages(b []byte, iface interface{}, number *int64) (err error
 
 func (self JsonWrapper) Send(writer io.Writer, v interface{}) (n int, err error) {
 	var payload []byte
-	payload, err = json.Marshal(v)
+	payload, err = json.MarshalIndent(v, "", "\t")
 	if err != nil {
 		rpclogger.Fatalln("Error marshalling JSON", err)
 		return 0, err
@@ -127,6 +127,7 @@ func toHex(b []byte) string {
 	}
 	return "0x" + hex
 }
+
 func fromHex(s string) []byte {
 	if len(s) > 1 {
 		if s[0:2] == "0x" {
