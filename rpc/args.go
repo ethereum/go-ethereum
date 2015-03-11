@@ -227,9 +227,65 @@ type BlockNumIndexArgs struct {
 	Index       int64
 }
 
+func (args *BlockNumIndexArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	r := bytes.NewReader(b)
+	if err := json.NewDecoder(r).Decode(&obj); err != nil {
+		return errDecodeArgs
+	}
+
+	if len(obj) < 1 {
+		return errArguments
+	}
+
+	arg0, ok := obj[0].(string)
+	if !ok {
+		return errDecodeArgs
+	}
+	args.BlockNumber = ethutil.Big(arg0).Int64()
+
+	if len(obj) > 1 {
+		arg1, ok := obj[1].(string)
+		if !ok {
+			return errDecodeArgs
+		}
+		args.Index = ethutil.Big(arg1).Int64()
+	}
+
+	return nil
+}
+
 type HashIndexArgs struct {
 	BlockHash string
 	Index     int64
+}
+
+func (args *HashIndexArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	r := bytes.NewReader(b)
+	if err := json.NewDecoder(r).Decode(&obj); err != nil {
+		return errDecodeArgs
+	}
+
+	if len(obj) < 1 {
+		return errArguments
+	}
+
+	arg0, ok := obj[0].(string)
+	if !ok {
+		return errDecodeArgs
+	}
+	args.BlockHash = arg0
+
+	if len(obj) > 1 {
+		arg1, ok := obj[1].(string)
+		if !ok {
+			return errDecodeArgs
+		}
+		args.Index = ethutil.Big(arg1).Int64()
+	}
+
+	return nil
 }
 
 type Sha3Args struct {
