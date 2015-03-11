@@ -270,7 +270,7 @@ func TestFilterOptions(t *testing.T) {
 		t.Errorf("Address shoud be %#v but is %#v", expected.Address, args.Address)
 	}
 
-	// if expected.Topic != args.Topic {
+	// if expected.Topics != args.Topics {
 	// 	t.Errorf("Topic shoud be %#v but is %#v", expected.Topic, args.Topic)
 	// }
 }
@@ -316,7 +316,7 @@ func TestWhisperMessageArgs(t *testing.T) {
 	expected.Payload = "0x68656c6c6f20776f726c64"
 	expected.Priority = 100
 	expected.Ttl = 100
-	expected.Topic = []string{"0x68656c6c6f20776f726c64"}
+	expected.Topics = []string{"0x68656c6c6f20776f726c64"}
 
 	args := new(WhisperMessageArgs)
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
@@ -343,7 +343,7 @@ func TestWhisperMessageArgs(t *testing.T) {
 		t.Errorf("Priority shoud be %#v but is %#v", expected.Priority, args.Priority)
 	}
 
-	// if expected.Topic != args.Topic {
+	// if expected.Topics != args.Topics {
 	// 	t.Errorf("Topic shoud be %#v but is %#v", expected.Topic, args.Topic)
 	// }
 }

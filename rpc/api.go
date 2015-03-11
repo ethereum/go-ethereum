@@ -400,7 +400,7 @@ func (self *EthereumApi) MessagesChanged(id int, reply *interface{}) error {
 }
 
 func (p *EthereumApi) WhisperPost(args *WhisperMessageArgs, reply *interface{}) error {
-	err := p.xeth().Whisper().Post(args.Payload, args.To, args.From, args.Topic, args.Priority, args.Ttl)
+	err := p.xeth().Whisper().Post(args.Payload, args.To, args.From, args.Topics, args.Priority, args.Ttl)
 	if err != nil {
 		return err
 	}
