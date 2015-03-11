@@ -219,12 +219,12 @@ func (args *GetDataArgs) requirements() error {
 
 type BlockNumIndexArgs struct {
 	BlockNumber int64
-	TxIndex     int64
+	Index       int64
 }
 
 type HashIndexArgs struct {
 	BlockHash string
-	TxIndex   int64
+	Index     int64
 }
 
 type Sha3Args struct {
