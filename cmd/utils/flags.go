@@ -95,6 +95,10 @@ var (
 		Name:  "mine",
 		Usage: "Enable mining",
 	}
+	UnencryptedKeysFlag = cli.BoolFlag{
+		Name:  "unencrypted-keys",
+		Usage: "disable private key disk encryption (for testing)",
+	}
 
 	LogFileFlag = cli.StringFlag{
 		Name:  "logfile",
@@ -220,7 +224,12 @@ func GetChain(ctx *cli.Context) (*core.ChainManager, ethutil.Database, ethutil.D
 
 func GetAccountManager(ctx *cli.Context) *accounts.Manager {
 	dataDir := ctx.GlobalString(DataDirFlag.Name)
-	ks := crypto.NewKeyStorePassphrase(path.Join(dataDir, "keys"))
+	var ks crypto.KeyStore2
+	if ctx.GlobalBool(UnencryptedKeysFlag.Name) {
+		ks = crypto.NewKeyStorePlain(path.Join(dataDir, "plainkeys"))
+	} else {
+		ks = crypto.NewKeyStorePassphrase(path.Join(dataDir, "keys"))
+	}
 	return accounts.NewManager(ks)
 }
 
