@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
@@ -158,10 +157,7 @@ func run(ctx *cli.Context) {
 	fmt.Printf("Welcome to the FRONTIER\n")
 	utils.HandleInterrupt()
 	eth, err := utils.GetEthereum(ClientIdentifier, Version, ctx)
-	if err == accounts.ErrNoKeys {
-		utils.Fatalf(`No accounts configured.
-Please run 'ethereum account new' to create a new account.`)
-	} else if err != nil {
+	if err != nil {
 		utils.Fatalf("%v", err)
 	}
 
@@ -172,10 +168,7 @@ Please run 'ethereum account new' to create a new account.`)
 
 func runjs(ctx *cli.Context) {
 	eth, err := utils.GetEthereum(ClientIdentifier, Version, ctx)
-	if err == accounts.ErrNoKeys {
-		utils.Fatalf(`No accounts configured.
-Please run 'ethereum account new' to create a new account.`)
-	} else if err != nil {
+	if err != nil {
 		utils.Fatalf("%v", err)
 	}
 
