@@ -91,6 +91,10 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 }
 
 func NewBlockRes(block *types.Block) *BlockRes {
+	if block == nil {
+		return &BlockRes{}
+	}
+
 	res := new(BlockRes)
 	res.BlockNumber = block.Number().Int64()
 	res.BlockHash = block.Hash()
