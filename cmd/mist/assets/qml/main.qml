@@ -190,17 +190,15 @@ ApplicationWindow {
                 }
             }
 
+            MenuItem {
+                text: "Generate key"
+                shortcut: "Ctrl+k"
+                onTriggered: gui.generateKey()
+            }
         }
 
         Menu {
             title: "Developer"
-            MenuItem {
-                iconSource: "../icecream.png"
-                text: "Debugger"
-                shortcut: "Ctrl+d"
-                onTriggered: eth.startDebugger()
-            }
-
             MenuItem {
                 text: "Import Tx"
                 onTriggered: {
@@ -755,24 +753,6 @@ ApplicationWindow {
                          right: parent.right
                      }
                  }
-
-                 Rectangle {
-                     height: 55
-                     color: "transparent"
-                     visible: true
-                     Text {
-                         text: "DEBUG"
-                         font.family: sourceSansPro.name 
-                         font.weight: Font.DemiBold
-                         anchors {
-                             left: parent.left
-                             top: parent.verticalCenter
-                             leftMargin: 16
-                         }
-                         color: "#AAA0A0"
-                     }
-                 }
-
 
                  ColumnLayout {
                      id: menuLegacy

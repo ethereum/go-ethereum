@@ -17,8 +17,8 @@
 		},
 		{
 			"ImportPath": "github.com/codegangsta/cli",
-			"Comment": "1.2.0-74-g50c77ec",
-			"Rev": "50c77ecec0068c9aef9d90ae0fd0fdf410041da3"
+			"Comment": "1.2.0-81-g3e09053",
+			"Rev": "3e0905345cd2c5366530dbcdce62457f2ce16e7c"
 		},
 		{
 			"ImportPath": "github.com/ethereum/ethash",

@@ -58,7 +58,7 @@ type JSEthereum struct {
 
 func (self *JSEthereum) Block(v interface{}) otto.Value {
 	if number, ok := v.(int64); ok {
-		return self.toVal(&JSBlock{self.XEth.BlockByNumber(int32(number)), self})
+		return self.toVal(&JSBlock{self.XEth.BlockByNumber(number), self})
 	} else if hash, ok := v.(string); ok {
 		return self.toVal(&JSBlock{self.XEth.BlockByHash(hash), self})
 	}
@@ -70,8 +70,8 @@ func (self *JSEthereum) GetStateObject(addr string) otto.Value {
 	return self.toVal(&JSStateObject{self.XEth.State().SafeGet(addr), self})
 }
 
-func (self *JSEthereum) Transact(key, recipient, valueStr, gasStr, gasPriceStr, dataStr string) otto.Value {
-	r, err := self.XEth.Transact(recipient, valueStr, gasStr, gasPriceStr, dataStr)
+func (self *JSEthereum) Transact(fromStr, recipient, valueStr, gasStr, gasPriceStr, dataStr string) otto.Value {
+	r, err := self.XEth.Transact(fromStr, recipient, valueStr, gasStr, gasPriceStr, dataStr)
 	if err != nil {
 		fmt.Println(err)
 

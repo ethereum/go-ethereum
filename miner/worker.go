@@ -209,6 +209,8 @@ gasLimit:
 		err := self.commitTransaction(tx)
 		switch {
 		case core.IsNonceErr(err):
+			fallthrough
+		case core.IsInvalidTxErr(err):
 			// Remove invalid transactions
 			remove = append(remove, tx)
 		case state.IsGasLimitErr(err):
@@ -222,7 +224,7 @@ gasLimit:
 	}
 	self.eth.TxPool().RemoveSet(remove)
 
-	self.current.coinbase.AddBalance(core.BlockReward)
+	self.current.state.AddBalance(self.coinbase, core.BlockReward)
 
 	self.current.state.Update(ethutil.Big0)
 	self.push()
@@ -258,9 +260,11 @@ func (self *worker) commitUncle(uncle *types.Header) error {
 }
 
 func (self *worker) commitTransaction(tx *types.Transaction) error {
+	snap := self.current.state.Copy()
 	//fmt.Printf("proc %x %v\n", tx.Hash()[:3], tx.Nonce())
 	receipt, _, err := self.proc.ApplyTransaction(self.current.coinbase, self.current.state, self.current.block, tx, self.current.totalUsedGas, true)
-	if err != nil && (core.IsNonceErr(err) || state.IsGasLimitErr(err)) {
+	if err != nil && (core.IsNonceErr(err) || state.IsGasLimitErr(err) || core.IsInvalidTxErr(err)) {
+		self.current.state.Set(snap)
 		return err
 	}
 

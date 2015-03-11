@@ -178,7 +178,6 @@ Rectangle {
 		}
 
 		function showContractData(tx) {
-			txDetailsDebugButton.tx = tx
 			if(tx.createsContract) {
 				contractData.text = tx.data
 				contractLabel.text = "<h4> Transaction created contract " + tx.address + "</h4>"
@@ -201,22 +200,6 @@ Rectangle {
 				anchors.left: parent.left
 				id: contractLabel
 				anchors.leftMargin: 10
-			}
-			Button {
-				property var tx
-				id: txDetailsDebugButton
-				anchors.right: parent.right
-				anchors.rightMargin: 10
-				anchors.top: parent.top
-				anchors.topMargin: 10
-				text: "Debug contract"
-				onClicked: {
-					if(tx && tx.createsContract){
-						eth.startDbWithCode(tx.rawData)
-					}else {
-						eth.startDbWithContractAndData(tx.address, tx.rawData)
-					}
-				}
 			}
 			TextArea {
 				id: contractData
