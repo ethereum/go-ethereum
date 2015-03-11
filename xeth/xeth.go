@@ -98,7 +98,7 @@ func New(eth Backend, frontend Frontend) *XEth {
 }
 
 func (self *XEth) Backend() Backend { return self.eth }
-func (self *XEth) UseState(statedb *state.StateDB) *XEth {
+func (self *XEth) WithState(statedb *state.StateDB) *XEth {
 	xeth := &XEth{
 		eth:            self.eth,
 		blockProcessor: self.blockProcessor,

@@ -22,7 +22,7 @@ import (
 
 var (
 	defaultGasPrice  = big.NewInt(10000000000000)
-	defaultGas       = big.NewInt(10000)
+	defaultGas       = big.NewInt(50000)
 	filterTickerTime = 15 * time.Second
 )
 
@@ -44,8 +44,6 @@ type EthereumApi struct {
 	register map[string][]*NewTxArgs
 
 	db ethutil.Database
-
-	// defaultBlockAge int64
 }
 
 func NewEthereumApi(eth *xeth.XEth, dataDir string) *EthereumApi {
@@ -58,7 +56,6 @@ func NewEthereumApi(eth *xeth.XEth, dataDir string) *EthereumApi {
 		logs:          make(map[int]*logFilter),
 		messages:      make(map[int]*whisperFilter),
 		db:            db,
-		// defaultBlockAge: -1,
 	}
 	go api.filterManager.Start()
 	go api.start()
@@ -66,36 +63,33 @@ func NewEthereumApi(eth *xeth.XEth, dataDir string) *EthereumApi {
 	return api
 }
 
-// func (self *EthereumApi) setStateByBlockNumber(num int64) {
-// 	chain := self.xeth().Backend().ChainManager()
-// 	var block *types.Block
+func (self *EthereumApi) xethWithStateNum(num int64) *xeth.XEth {
+	chain := self.xeth().Backend().ChainManager()
+	var block *types.Block
 
-// 	if self.defaultBlockAge < 0 {
-// 		num = chain.CurrentBlock().Number().Int64() + num + 1
-// 	}
-// 	block = chain.GetBlockByNumber(uint64(num))
+	if num < 0 {
+		num = chain.CurrentBlock().Number().Int64() + num + 1
+	}
+	block = chain.GetBlockByNumber(uint64(num))
 
-// 	if block != nil {
-// 		self.useState(state.New(block.Root(), self.xeth().Backend().StateDb()))
-// 	} else {
-// 		self.useState(chain.State())
-// 	}
-// }
+	var st *state.StateDB
+	if block != nil {
+		st = state.New(block.Root(), self.xeth().Backend().StateDb())
+	} else {
+		st = chain.State()
+	}
+	return self.xeth().WithState(st)
+}
+
+func (self *EthereumApi) getStateWithNum(num int64) *xeth.State {
+	return self.xethWithStateNum(num).State()
+}
 
 func (self *EthereumApi) start() {
 	timer := time.NewTicker(filterTickerTime)
-	// events := self.mux.Subscribe(core.ChainEvent{})
-
 done:
 	for {
 		select {
-		// case ev := <-events.Chan():
-		// 	switch ev.(type) {
-		// 	case core.ChainEvent:
-		// 		if self.defaultBlockAge < 0 {
-		// 			self.setStateByBlockNumber(self.defaultBlockAge)
-		// 		}
-		// 	}
 		case <-timer.C:
 			self.logMut.Lock()
 			self.messagesMut.Lock()
@@ -277,7 +271,7 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) (err error) 
 }
 
 func (p *EthereumApi) Call(args *NewTxArgs, reply *interface{}) error {
-	result, err := p.xeth().Call(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
+	result, err := p.xethWithStateNum(args.BlockNumber).Call(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
 	if err != nil {
 		return err
 	}
@@ -290,7 +284,7 @@ func (p *EthereumApi) GetBalance(args *GetBalanceArgs, reply *interface{}) error
 	if err := args.requirements(); err != nil {
 		return err
 	}
-	state := p.xeth().State().SafeGet(args.Address)
+	state := p.getStateWithNum(args.BlockNumber).SafeGet(args.Address)
 	*reply = toHex(state.Balance().Bytes())
 	return nil
 }
@@ -299,7 +293,7 @@ func (p *EthereumApi) GetStorage(args *GetStorageArgs, reply *interface{}) error
 	if err := args.requirements(); err != nil {
 		return err
 	}
-	*reply = p.xeth().State().SafeGet(args.Address).Storage()
+	*reply = p.getStateWithNum(args.BlockNumber).SafeGet(args.Address).Storage()
 	return nil
 }
 
@@ -307,7 +301,7 @@ func (p *EthereumApi) GetStorageAt(args *GetStorageAtArgs, reply *interface{}) e
 	if err := args.requirements(); err != nil {
 		return err
 	}
-	state := p.xeth().State().SafeGet(args.Address)
+	state := p.getStateWithNum(args.BlockNumber).SafeGet(args.Address)
 
 	value := state.StorageString(args.Key)
 	var hx string
@@ -328,7 +322,7 @@ func (p *EthereumApi) GetTxCountAt(args *GetTxCountArgs, reply *interface{}) err
 	if err != nil {
 		return err
 	}
-	*reply = p.xeth().TxCountAt(args.Address)
+	*reply = p.xethWithStateNum(args.BlockNumber).TxCountAt(args.Address)
 	return nil
 }
 
@@ -336,7 +330,7 @@ func (p *EthereumApi) GetData(args *GetDataArgs, reply *interface{}) error {
 	if err := args.requirements(); err != nil {
 		return err
 	}
-	*reply = p.xeth().CodeAt(args.Address)
+	*reply = p.xethWithStateNum(args.BlockNumber).CodeAt(args.Address)
 	return nil
 }
 
@@ -482,28 +476,24 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 	case "eth_blockNumber":
 		*reply = toHex(p.xeth().Backend().ChainManager().CurrentBlock().Number().Bytes())
 	case "eth_getBalance":
-		// TODO handle BlockNumber
 		args := new(GetBalanceArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		return p.GetBalance(args, reply)
 	case "eth_getStorage", "eth_storageAt":
-		// TODO handle BlockNumber
 		args := new(GetStorageArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		return p.GetStorage(args, reply)
 	case "eth_getStorageAt":
-		// TODO handle BlockNumber
 		args := new(GetStorageAtArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		return p.GetStorageAt(args, reply)
 	case "eth_getTransactionCount":
-		// TODO handle BlockNumber
 		args := new(GetTxCountArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
@@ -554,7 +544,6 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		*reply = toHex(big.NewInt(v).Bytes())
 	case "eth_getData":
-		// TODO handle BlockNumber
 		args := new(GetDataArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
@@ -754,13 +743,6 @@ func (self *EthereumApi) xeth() *xeth.XEth {
 	defer self.xethMu.RUnlock()
 
 	return self.eth
-}
-
-func (self *EthereumApi) useState(statedb *state.StateDB) {
-	self.xethMu.Lock()
-	defer self.xethMu.Unlock()
-
-	self.eth = self.eth.UseState(statedb)
 }
 
 func toFilterOptions(options *FilterOptions) core.FilterOptions {
