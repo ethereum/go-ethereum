@@ -5,7 +5,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethutil"
 )
 
 type BlockRes struct {
@@ -56,23 +55,23 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 	}
 
 	// convert strict types to hexified strings
-	ext.BlockNumber = ethutil.Bytes2Hex(big.NewInt(b.BlockNumber).Bytes())
-	ext.BlockHash = ethutil.Bytes2Hex(b.BlockHash)
-	ext.ParentHash = ethutil.Bytes2Hex(b.ParentHash)
-	ext.Nonce = ethutil.Bytes2Hex(b.Nonce)
-	ext.Sha3Uncles = ethutil.Bytes2Hex(b.Sha3Uncles)
-	ext.LogsBloom = ethutil.Bytes2Hex(b.LogsBloom)
-	ext.TransactionRoot = ethutil.Bytes2Hex(b.TransactionRoot)
-	ext.StateRoot = ethutil.Bytes2Hex(b.StateRoot)
-	ext.Miner = ethutil.Bytes2Hex(b.Miner)
-	ext.Difficulty = ethutil.Bytes2Hex(big.NewInt(b.Difficulty).Bytes())
-	ext.TotalDifficulty = ethutil.Bytes2Hex(big.NewInt(b.TotalDifficulty).Bytes())
-	ext.Size = ethutil.Bytes2Hex(big.NewInt(b.Size).Bytes())
-	ext.ExtraData = ethutil.Bytes2Hex(b.ExtraData)
-	ext.GasLimit = ethutil.Bytes2Hex(big.NewInt(b.GasLimit).Bytes())
-	ext.MinGasPrice = ethutil.Bytes2Hex(big.NewInt(b.MinGasPrice).Bytes())
-	ext.GasUsed = ethutil.Bytes2Hex(big.NewInt(b.GasUsed).Bytes())
-	ext.UnixTimestamp = ethutil.Bytes2Hex(big.NewInt(b.UnixTimestamp).Bytes())
+	ext.BlockNumber = toHex(big.NewInt(b.BlockNumber).Bytes())
+	ext.BlockHash = toHex(b.BlockHash)
+	ext.ParentHash = toHex(b.ParentHash)
+	ext.Nonce = toHex(b.Nonce)
+	ext.Sha3Uncles = toHex(b.Sha3Uncles)
+	ext.LogsBloom = toHex(b.LogsBloom)
+	ext.TransactionRoot = toHex(b.TransactionRoot)
+	ext.StateRoot = toHex(b.StateRoot)
+	ext.Miner = toHex(b.Miner)
+	ext.Difficulty = toHex(big.NewInt(b.Difficulty).Bytes())
+	ext.TotalDifficulty = toHex(big.NewInt(b.TotalDifficulty).Bytes())
+	ext.Size = toHex(big.NewInt(b.Size).Bytes())
+	// ext.ExtraData = toHex(b.ExtraData)
+	ext.GasLimit = toHex(big.NewInt(b.GasLimit).Bytes())
+	// ext.MinGasPrice = toHex(big.NewInt(b.MinGasPrice).Bytes())
+	ext.GasUsed = toHex(big.NewInt(b.GasUsed).Bytes())
+	ext.UnixTimestamp = toHex(big.NewInt(b.UnixTimestamp).Bytes())
 	ext.Transactions = make([]interface{}, len(b.Transactions))
 	if b.fullTx {
 		for i, tx := range b.Transactions {
@@ -80,12 +79,12 @@ func (b *BlockRes) MarshalJSON() ([]byte, error) {
 		}
 	} else {
 		for i, tx := range b.Transactions {
-			ext.Transactions[i] = ethutil.Bytes2Hex(tx.Hash)
+			ext.Transactions[i] = toHex(tx.Hash)
 		}
 	}
 	ext.Uncles = make([]string, len(b.Uncles))
 	for i, v := range b.Uncles {
-		ext.Uncles[i] = ethutil.Bytes2Hex(v)
+		ext.Uncles[i] = toHex(v)
 	}
 
 	return json.Marshal(ext)
@@ -103,7 +102,9 @@ func NewBlockRes(block *types.Block) *BlockRes {
 	res.StateRoot = block.Root()
 	res.Miner = block.Header().Coinbase
 	res.Difficulty = block.Difficulty().Int64()
-	res.TotalDifficulty = block.Td.Int64()
+	if block.Td != nil {
+		res.TotalDifficulty = block.Td.Int64()
+	}
 	res.Size = int64(block.Size())
 	// res.ExtraData =
 	res.GasLimit = block.GasLimit().Int64()
@@ -154,17 +155,17 @@ func (t *TransactionRes) MarshalJSON() ([]byte, error) {
 		Input       string `json:"input"`
 	}
 
-	ext.Hash = ethutil.Bytes2Hex(t.Hash)
-	ext.Nonce = ethutil.Bytes2Hex(big.NewInt(t.Nonce).Bytes())
-	ext.BlockHash = ethutil.Bytes2Hex(t.BlockHash)
-	ext.BlockNumber = ethutil.Bytes2Hex(big.NewInt(t.BlockNumber).Bytes())
-	ext.TxIndex = ethutil.Bytes2Hex(big.NewInt(t.TxIndex).Bytes())
-	ext.From = ethutil.Bytes2Hex(t.From)
-	ext.To = ethutil.Bytes2Hex(t.To)
-	ext.Value = ethutil.Bytes2Hex(big.NewInt(t.Value).Bytes())
-	ext.Gas = ethutil.Bytes2Hex(big.NewInt(t.Gas).Bytes())
-	ext.GasPrice = ethutil.Bytes2Hex(big.NewInt(t.GasPrice).Bytes())
-	ext.Input = ethutil.Bytes2Hex(t.Input)
+	ext.Hash = toHex(t.Hash)
+	ext.Nonce = toHex(big.NewInt(t.Nonce).Bytes())
+	ext.BlockHash = toHex(t.BlockHash)
+	ext.BlockNumber = toHex(big.NewInt(t.BlockNumber).Bytes())
+	ext.TxIndex = toHex(big.NewInt(t.TxIndex).Bytes())
+	ext.From = toHex(t.From)
+	ext.To = toHex(t.To)
+	ext.Value = toHex(big.NewInt(t.Value).Bytes())
+	ext.Gas = toHex(big.NewInt(t.Gas).Bytes())
+	ext.GasPrice = toHex(big.NewInt(t.GasPrice).Bytes())
+	ext.Input = toHex(t.Input)
 
 	return json.Marshal(ext)
 }

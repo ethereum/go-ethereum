@@ -459,7 +459,7 @@ func (p *EthereumApi) GetBlockUncleCountByNumber(blocknum int64) (int64, error) 
 
 func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error {
 	// Spec at https://github.com/ethereum/wiki/wiki/Generic-JSON-RPC
-	rpclogger.Infof("%s %s", req.Method, req.Params)
+	rpclogger.Debugf("%s %s", req.Method, req.Params)
 	switch req.Method {
 	case "web3_sha3":
 		args := new(Sha3Args)
