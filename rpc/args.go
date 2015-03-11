@@ -40,7 +40,12 @@ func (args *GetBlockByHashArgs) UnmarshalJSON(b []byte) (err error) {
 	if len(obj) < 1 {
 		return errArguments
 	}
-	args.BlockHash = obj[0].(string)
+
+	argstr, ok := obj[0].(string)
+	if !ok {
+		return errDecodeArgs
+	}
+	args.BlockHash = argstr
 
 	if len(obj) > 1 {
 		args.Transactions = obj[1].(bool)
