@@ -21,6 +21,9 @@ func ExampleApp() {
 	app.Action = func(c *cli.Context) {
 		fmt.Printf("Hello %v\n", c.String("name"))
 	}
+	app.Author = "Harrison"
+	app.Email = "harrison@lolwut.com"
+	app.Authors = []cli.Author{{"Oliver Allen", "oliver@toyshop.com"}}
 	app.Run(os.Args)
 	// Output:
 	// Hello Jeremy

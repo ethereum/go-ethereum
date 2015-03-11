@@ -54,7 +54,6 @@ Rectangle {
 			height: 200
 			anchors {
 				left: parent.left
-				right: logLevelSlider.left
 				bottom: parent.bottom
 				top: parent.top
 			}
@@ -105,46 +104,6 @@ Rectangle {
 						copyToClipboard(addressModel.get(this.row).address)
 					}
 				}
-			}
-		}
-
-		/*
-		TableView {
-			id: logView
-			headerVisible: false
-			anchors {
-				right: logLevelSlider.left
-				left: parent.left
-				bottom: parent.bottom
-				top: parent.top
-			}
-
-			TableViewColumn{ role: "description" ; title: "log" }
-
-			model: logModel
-		}
-		*/
-
-		Slider {
-			id: logLevelSlider
-			value: gui.getLogLevelInt()
-			anchors {
-				right: parent.right
-				top: parent.top
-				bottom: parent.bottom
-
-				rightMargin: 5
-				leftMargin: 5
-				topMargin: 5
-				bottomMargin: 5
-			}
-
-			orientation: Qt.Vertical
-			maximumValue: 5
-			stepSize: 1
-
-			onValueChanged: {
-				gui.setLogLevel(value)
 			}
 		}
 	}

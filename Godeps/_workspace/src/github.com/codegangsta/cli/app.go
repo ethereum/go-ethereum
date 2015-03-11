@@ -43,9 +43,11 @@ type App struct {
 	CommandNotFound func(context *Context, command string)
 	// Compilation date
 	Compiled time.Time
-	// Author
+	// List of all authors who contributed
+	Authors []Author
+	// Name of Author (Note: Use App.Authors, this is deprecated)
 	Author string
-	// Author e-mail
+	// Email of Author (Note: Use App.Authors, this is deprecated)
 	Email string
 	// Writer writer to write output to
 	Writer io.Writer
@@ -70,14 +72,19 @@ func NewApp() *App {
 		BashComplete: DefaultAppComplete,
 		Action:       helpCommand.Action,
 		Compiled:     compileTime(),
-		Author:       "Author",
-		Email:        "unknown@email",
+		Author:       "Dr. James",
+		Email:        "who@gmail.com",
+		Authors:      []Author{{"Jim", "jim@corporate.com"}, {"Hank", "hank@indiepalace.com"}},
 		Writer:       os.Stdout,
 	}
 }
 
 // Entry point to the cli app. Parses the arguments slice and routes to the proper flag/args combination
 func (a *App) Run(arguments []string) (err error) {
+	if a.Author != "" && a.Author != "" {
+		a.Authors = append(a.Authors, Author{a.Author, a.Email})
+	}
+
 	if HelpPrinter == nil {
 		defer func() {
 			HelpPrinter = nil
@@ -293,4 +300,20 @@ func (a *App) appendFlag(flag Flag) {
 	if !a.hasFlag(flag) {
 		a.Flags = append(a.Flags, flag)
 	}
+}
+
+// Author represents someone who has contributed to a cli project.
+type Author struct {
+	Name  string // The Authors name
+	Email string // The Authors email
+}
+
+// String makes Author comply to the Stringer interface, to allow an easy print in the templating process
+func (a Author) String() string {
+	e := ""
+	if a.Email != "" {
+		e = "<" + a.Email + "> "
+	}
+
+	return fmt.Sprintf("%v %v", a.Name, e)
 }

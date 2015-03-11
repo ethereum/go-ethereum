@@ -26,10 +26,10 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/ui/qt/webengine"
 	"github.com/obscuren/qml"
 )
@@ -39,56 +39,32 @@ const (
 	Version          = "0.9.0"
 )
 
-var ethereum *eth.Ethereum
-var mainlogger = logger.NewLogger("MAIN")
-
-func run() error {
-	webengine.Initialize()
-
-	// precedence: code-internal flag default < config file < environment variables < command line
-	Init() // parsing command line
-
-	tstart := time.Now()
-	config := utils.InitConfig(VmType, ConfigFile, Datadir, "ETH")
-
-	ethereum, err := eth.New(&eth.Config{
-		Name:         p2p.MakeName(ClientIdentifier, Version),
-		KeyStore:     KeyStore,
-		DataDir:      Datadir,
-		LogFile:      LogFile,
-		LogLevel:     LogLevel,
-		MaxPeers:     MaxPeer,
-		Port:         OutboundPort,
-		NAT:          NAT,
-		Shh:          true,
-		BootNodes:    BootNodes,
-		NodeKey:      NodeKey,
-		KeyRing:      KeyRing,
-		Dial:         true,
-		MinerThreads: MinerThreads,
-	})
-	if err != nil {
-		mainlogger.Fatalln(err)
+var (
+	app           = utils.NewApp(Version, "the ether browser")
+	assetPathFlag = cli.StringFlag{
+		Name:  "asset_path",
+		Usage: "absolute path to GUI assets directory",
+		Value: ethutil.DefaultAssetPath(),
 	}
-	utils.KeyTasks(ethereum.KeyManager(), KeyRing, GenAddr, SecretFile, ExportDir, NonInteractive)
+)
 
-	if StartRpc {
-		utils.StartRpc(ethereum, RpcListenAddress, RpcPort)
+func init() {
+	app.Action = run
+	app.Flags = []cli.Flag{
+		assetPathFlag,
+
+		utils.BootnodesFlag,
+		utils.DataDirFlag,
+		utils.ListenPortFlag,
+		utils.LogFileFlag,
+		utils.LogLevelFlag,
+		utils.MaxPeersFlag,
+		utils.MinerThreadsFlag,
+		utils.NATFlag,
+		utils.NodeKeyFileFlag,
+		utils.RPCListenAddrFlag,
+		utils.RPCPortFlag,
 	}
-
-	gui := NewWindow(ethereum, config, KeyRing, LogLevel)
-
-	utils.RegisterInterrupt(func(os.Signal) {
-		gui.Stop()
-	})
-	go utils.StartEthereum(ethereum)
-
-	fmt.Println("ETH stack took", time.Since(tstart))
-
-	// gui blocks the main thread
-	gui.Start(AssetPath)
-
-	return nil
 }
 
 func main() {
@@ -97,14 +73,15 @@ func main() {
 	// This is a bit of a cheat, but ey!
 	os.Setenv("QTWEBKIT_INSPECTOR_SERVER", "127.0.0.1:99999")
 
-	qml.Run(run)
-
 	var interrupted = false
 	utils.RegisterInterrupt(func(os.Signal) {
 		interrupted = true
 	})
-
 	utils.HandleInterrupt()
+
+	if err := app.Run(os.Args); err != nil {
+		fmt.Fprintln(os.Stderr, "Error: ", err)
+	}
 
 	// we need to run the interrupt callbacks in case gui is closed
 	// this skips if we got here by actual interrupt stopping the GUI
@@ -112,4 +89,27 @@ func main() {
 		utils.RunInterruptCallbacks(os.Interrupt)
 	}
 	logger.Flush()
+}
+
+func run(ctx *cli.Context) {
+	tstart := time.Now()
+
+	// TODO: show qml popup instead of exiting if initialization fails.
+	ethereum, err := utils.GetEthereum(ClientIdentifier, Version, ctx)
+	if err != nil {
+		utils.Fatalf("%v", err)
+	}
+	utils.StartRPC(ethereum, ctx)
+	go utils.StartEthereum(ethereum)
+	fmt.Println("initializing eth stack took", time.Since(tstart))
+
+	// Open the window
+	qml.Run(func() error {
+		webengine.Initialize()
+		gui := NewWindow(ethereum)
+		utils.RegisterInterrupt(func(os.Signal) { gui.Stop() })
+		// gui blocks the main thread
+		gui.Start(ctx.GlobalString(assetPathFlag.Name))
+		return nil
+	})
 }
