@@ -381,6 +381,12 @@ func (p *EthereumApi) NewWhisperFilter(args *WhisperFilterArgs, reply *interface
 	return nil
 }
 
+func (p *EthereumApi) UninstallWhisperFilter(id int, reply *interface{}) error {
+	delete(p.messages, id)
+	*reply = true
+	return nil
+}
+
 func (self *EthereumApi) MessagesChanged(id int, reply *interface{}) error {
 	self.messagesMut.Lock()
 	defer self.messagesMut.Unlock()
@@ -733,7 +739,11 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		return p.NewWhisperFilter(args, reply)
 	case "shh_uninstallFilter":
-		return errNotImplemented
+		args := new(FilterIdArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+		return p.UninstallWhisperFilter(args.Id, reply)
 	case "shh_getFilterChanges":
 		args := new(FilterIdArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
