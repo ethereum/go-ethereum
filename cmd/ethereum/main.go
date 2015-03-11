@@ -214,7 +214,7 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 		utils.StartRPC(eth, ctx)
 	}
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
-		eth.Miner().Start()
+		eth.StartMining()
 	}
 }
 
