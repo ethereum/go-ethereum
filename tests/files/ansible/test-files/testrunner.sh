@@ -4,13 +4,14 @@
 
 mkdir --parents ~/testout
 cd ~/testout
+export EVMJIT="-cache=0"
 while [ 1 ]
 do	
 	TEST="$(docker run --rm --entrypoint=\"/cpp-ethereum/build/test/createRandomTest\" ethereum/cppjit-testrunner)"
 	# echo "$TEST"
 	
 	# test pyethereum
-	OUTPUT_PYTHON="$(docker run --rm ethereum/python-testrunner "$TEST")"
+	OUTPUT_PYTHON="$(docker run --rm ethereum/python-testrunner --notrace <<< "$TEST")"
 	RESULT_PYTHON=$?
 
 	# test go
