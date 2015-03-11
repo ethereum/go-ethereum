@@ -129,6 +129,7 @@ runtime will execute the file and exit.
 		utils.RPCEnabledFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
+		utils.UnencryptedKeysFlag,
 		utils.VMDebugFlag,
 		//utils.VMTypeFlag,
 	}
@@ -230,20 +231,24 @@ func accountList(ctx *cli.Context) {
 
 func accountCreate(ctx *cli.Context) {
 	am := utils.GetAccountManager(ctx)
-	fmt.Println("The new account will be encrypted with a passphrase.")
-	fmt.Println("Please enter a passphrase now.")
-	auth, err := readPassword("Passphrase: ", true)
-	if err != nil {
-		utils.Fatalf("%v", err)
+	passphrase := ""
+	if !ctx.GlobalBool(utils.UnencryptedKeysFlag.Name) {
+		fmt.Println("The new account will be encrypted with a passphrase.")
+		fmt.Println("Please enter a passphrase now.")
+		auth, err := readPassword("Passphrase: ", true)
+		if err != nil {
+			utils.Fatalf("%v", err)
+		}
+		confirm, err := readPassword("Repeat Passphrase: ", false)
+		if err != nil {
+			utils.Fatalf("%v", err)
+		}
+		if auth != confirm {
+			utils.Fatalf("Passphrases did not match.")
+		}
+		passphrase = auth
 	}
-	confirm, err := readPassword("Repeat Passphrase: ", false)
-	if err != nil {
-		utils.Fatalf("%v", err)
-	}
-	if auth != confirm {
-		utils.Fatalf("Passphrases did not match.")
-	}
-	acct, err := am.NewAccount(auth)
+	acct, err := am.NewAccount(passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}
