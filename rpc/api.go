@@ -2,7 +2,9 @@ package rpc
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/big"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -46,8 +48,8 @@ type EthereumApi struct {
 	// defaultBlockAge int64
 }
 
-func NewEthereumApi(eth *xeth.XEth) *EthereumApi {
-	db, _ := ethdb.NewLDBDatabase("dapps")
+func NewEthereumApi(eth *xeth.XEth, dataDir string) *EthereumApi {
+	db, _ := ethdb.NewLDBDatabase(path.Join(dataDir, "dapps"))
 	api := &EthereumApi{
 		eth:           eth,
 		mux:           eth.Backend().EventMux(),
@@ -232,15 +234,7 @@ func (self *EthereumApi) AllLogs(args *FilterOptions, reply *interface{}) error 
 	return nil
 }
 
-func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
-	if args.Gas == ethutil.Big0 {
-		args.Gas = defaultGas
-	}
-
-	if args.GasPrice == ethutil.Big0 {
-		args.GasPrice = defaultGasPrice
-	}
-
+func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) (err error) {
 	// TODO if no_private_key then
 	//if _, exists := p.register[args.From]; exists {
 	//	p.register[args.From] = append(p.register[args.From], args)
@@ -262,18 +256,28 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) error {
 			p.register[ags.From] = append(p.register[args.From], args)
 		}
 	*/
-	result, err := p.xeth().Transact( /* TODO specify account */ args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
+	// TODO: align default values to have the same type, e.g. not depend on
+	// ethutil.Value conversions later on
+	fmt.Println("gas", args.Gas)
+	if args.Gas.Cmp(big.NewInt(0)) == 0 {
+		args.Gas = defaultGas
+	}
+
+	if args.GasPrice.Cmp(big.NewInt(0)) == 0 {
+		args.GasPrice = defaultGasPrice
+	}
+
+	*reply, err = p.xeth().Transact(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
 	if err != nil {
+		fmt.Println("err:", err)
 		return err
 	}
-	*reply = result
-	//}
 
 	return nil
 }
 
 func (p *EthereumApi) Call(args *NewTxArgs, reply *interface{}) error {
-	result, err := p.xeth().Call( /* TODO specify account */ args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
+	result, err := p.xeth().Call(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)
 	if err != nil {
 		return err
 	}
@@ -556,7 +560,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.GetData(args, reply)
-	case "eth_sendTransaction":
+	case "eth_sendTransaction", "eth_transact":
 		args := new(NewTxArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err

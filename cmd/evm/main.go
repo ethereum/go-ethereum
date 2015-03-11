@@ -59,8 +59,6 @@ func main() {
 
 	logger.AddLogSystem(logger.NewStdLogSystem(os.Stdout, log.LstdFlags, logger.LogLevel(*loglevel)))
 
-	ethutil.ReadConfig("/tmp/evmtest", "/tmp/evm", "")
-
 	db, _ := ethdb.NewMemDatabase()
 	statedb := state.New(nil, db)
 	sender := statedb.NewStateObject([]byte("sender"))
