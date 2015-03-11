@@ -217,6 +217,16 @@ func (args *GetDataArgs) requirements() error {
 	return nil
 }
 
+type BlockNumIndexArgs struct {
+	BlockNumber int64
+	TxIndex     int64
+}
+
+type HashIndexArgs struct {
+	BlockHash string
+	TxIndex   int64
+}
+
 type Sha3Args struct {
 	Data string
 }

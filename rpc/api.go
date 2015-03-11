@@ -593,8 +593,35 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		*reply = v
 	case "eth_getTransactionByHash":
+		return errNotImplemented
 	case "eth_getTransactionByBlockHashAndIndex":
+		args := new(HashIndexArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		v, err := p.GetBlockByHash(args.BlockHash, true)
+		if err != nil {
+			return err
+		}
+		if args.TxIndex > int64(len(v.Transactions)) || args.TxIndex < 0 {
+			return NewErrorWithMessage(errDecodeArgs, "Transaction index does not exist")
+		}
+		*reply = v.Transactions[args.TxIndex]
 	case "eth_getTransactionByBlockNumberAndIndex":
+		args := new(BlockNumIndexArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		v, err := p.GetBlockByNumber(args.BlockNumber, true)
+		if err != nil {
+			return err
+		}
+		if args.TxIndex > int64(len(v.Transactions)) || args.TxIndex < 0 {
+			return NewErrorWithMessage(errDecodeArgs, "Transaction index does not exist")
+		}
+		*reply = v.Transactions[args.TxIndex]
 	case "eth_getUncleByBlockHashAndIndex":
 	case "eth_getUncleByBlockNumberAndIndex":
 		return errNotImplemented
