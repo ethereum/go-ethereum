@@ -37,7 +37,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 
 	context := NewContext(caller, me, code, gas, price)
 
-	vmlogger.Debugf("(%d) (%x) %x (code=%d) gas: %v (d) %x\n", self.env.Depth(), caller.Address()[:4], context.Address(), len(code), context.Gas, callData)
+	self.Printf("(%d) (%x) %x (code=%d) gas: %v (d) %x", self.env.Depth(), caller.Address()[:4], context.Address(), len(code), context.Gas, callData).Endl()
 
 	if self.Recoverable {
 		// Recover from any require exception
@@ -696,7 +696,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			if err != nil {
 				stack.push(ethutil.BigFalse)
 
-				vmlogger.Debugln(err)
+				self.Printf("%v").Endl()
 			} else {
 				stack.push(ethutil.BigTrue)
 
@@ -726,7 +726,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 
 			return context.Return(nil), nil
 		default:
-			vmlogger.Debugf("(pc) %-3v Invalid opcode %x\n", pc, op)
+			self.Printf("(pc) %-3v Invalid opcode %x\n", pc, op).Endl()
 
 			panic(fmt.Errorf("Invalid opcode %x", op))
 		}
@@ -894,7 +894,7 @@ func (self *Vm) Printf(format string, v ...interface{}) VirtualMachine {
 func (self *Vm) Endl() VirtualMachine {
 	if self.debug {
 		if self.logTy == LogTyPretty {
-			vmlogger.Debugln(self.logStr)
+			vmlogger.Infoln(self.logStr)
 			self.logStr = ""
 		}
 	}
