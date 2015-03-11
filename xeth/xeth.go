@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/whisper"
@@ -35,7 +34,10 @@ type Backend interface {
 	StateDb() ethutil.Database
 	EventMux() *event.TypeMux
 	Whisper() *whisper.Whisper
-	Miner() *miner.Miner
+
+	IsMining() bool
+	StartMining() error
+	StopMining()
 }
 
 // Frontend should be implemented by users of XEth. Its methods are
@@ -65,7 +67,6 @@ type XEth struct {
 	accountManager *accounts.Manager
 	state          *State
 	whisper        *Whisper
-	miner          *miner.Miner
 
 	frontend Frontend
 }
@@ -87,7 +88,6 @@ func New(eth Backend, frontend Frontend) *XEth {
 		chainManager:   eth.ChainManager(),
 		accountManager: eth.AccountManager(),
 		whisper:        NewWhisper(eth.Whisper()),
-		miner:          eth.Miner(),
 		frontend:       frontend,
 	}
 	if frontend == nil {
@@ -104,7 +104,6 @@ func (self *XEth) WithState(statedb *state.StateDB) *XEth {
 		blockProcessor: self.blockProcessor,
 		chainManager:   self.chainManager,
 		whisper:        self.whisper,
-		miner:          self.miner,
 	}
 
 	xeth.state = NewState(xeth, statedb)
@@ -112,8 +111,7 @@ func (self *XEth) WithState(statedb *state.StateDB) *XEth {
 }
 func (self *XEth) State() *State { return self.state }
 
-func (self *XEth) Whisper() *Whisper   { return self.whisper }
-func (self *XEth) Miner() *miner.Miner { return self.miner }
+func (self *XEth) Whisper() *Whisper { return self.whisper }
 
 func (self *XEth) BlockByHash(strHash string) *Block {
 	hash := fromHex(strHash)
@@ -172,18 +170,19 @@ func (self *XEth) PeerCount() int {
 }
 
 func (self *XEth) IsMining() bool {
-	return self.miner.Mining()
+	return self.eth.IsMining()
 }
 
 func (self *XEth) SetMining(shouldmine bool) bool {
-	ismining := self.miner.Mining()
+	ismining := self.eth.IsMining()
 	if shouldmine && !ismining {
-		self.miner.Start()
+		err := self.eth.StartMining()
+		return err == nil
 	}
 	if ismining && !shouldmine {
-		self.miner.Stop()
+		self.eth.StopMining()
 	}
-	return self.miner.Mining()
+	return self.eth.IsMining()
 }
 
 func (self *XEth) IsListening() bool {

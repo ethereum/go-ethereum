@@ -17,44 +17,34 @@ type Miner struct {
 	MinAcceptedGasPrice *big.Int
 	Extra               string
 
-	Coinbase []byte
-	mining   bool
-
-	pow pow.PoW
+	mining bool
+	eth    core.Backend
+	pow    pow.PoW
 }
 
-func New(coinbase []byte, eth core.Backend, pow pow.PoW, minerThreads int) *Miner {
-	miner := &Miner{
-		Coinbase: coinbase,
-		worker:   newWorker(coinbase, eth),
-		pow:      pow,
-	}
-
-	minerThreads = 1
-	for i := 0; i < minerThreads; i++ {
-		miner.worker.register(NewCpuMiner(i, miner.pow))
-	}
-
-	return miner
+func New(eth core.Backend, pow pow.PoW, minerThreads int) *Miner {
+	// note: minerThreads is currently ignored because
+	// ethash is not thread safe.
+	return &Miner{eth: eth, pow: pow}
 }
 
 func (self *Miner) Mining() bool {
 	return self.mining
 }
 
-func (self *Miner) Start() {
+func (self *Miner) Start(coinbase []byte) {
 	self.mining = true
+	self.worker = newWorker(coinbase, self.eth)
+	self.worker.register(NewCpuMiner(0, self.pow))
 
 	self.pow.(*ethash.Ethash).UpdateDAG()
 
 	self.worker.start()
-
 	self.worker.commitNewWork()
 }
 
 func (self *Miner) Stop() {
 	self.mining = false
-
 	self.worker.stop()
 
 	//self.pow.(*ethash.Ethash).Stop()
