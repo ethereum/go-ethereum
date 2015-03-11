@@ -394,7 +394,7 @@ func (self *EthereumApi) MessagesChanged(id int, reply *interface{}) error {
 }
 
 func (p *EthereumApi) WhisperPost(args *WhisperMessageArgs, reply *interface{}) error {
-	err := p.xeth().Whisper().Post(args.Payload, args.To, args.From, args.Topic, args.Priority, args.Ttl)
+	err := p.xeth().Whisper().Post(args.Payload, args.To, args.From, args.Topics, args.Priority, args.Ttl)
 	if err != nil {
 		return err
 	}
@@ -597,10 +597,10 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err != nil {
 			return err
 		}
-		if args.TxIndex > int64(len(v.Transactions)) || args.TxIndex < 0 {
+		if args.Index > int64(len(v.Transactions)) || args.Index < 0 {
 			return NewErrorWithMessage(errDecodeArgs, "Transaction index does not exist")
 		}
-		*reply = v.Transactions[args.TxIndex]
+		*reply = v.Transactions[args.Index]
 	case "eth_getTransactionByBlockNumberAndIndex":
 		args := new(BlockNumIndexArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -611,13 +611,48 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err != nil {
 			return err
 		}
-		if args.TxIndex > int64(len(v.Transactions)) || args.TxIndex < 0 {
+		if args.Index > int64(len(v.Transactions)) || args.Index < 0 {
 			return NewErrorWithMessage(errDecodeArgs, "Transaction index does not exist")
 		}
-		*reply = v.Transactions[args.TxIndex]
+		*reply = v.Transactions[args.Index]
 	case "eth_getUncleByBlockHashAndIndex":
+		args := new(HashIndexArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		v, err := p.GetBlockByHash(args.BlockHash, false)
+		if err != nil {
+			return err
+		}
+		if args.Index > int64(len(v.Uncles)) || args.Index < 0 {
+			return NewErrorWithMessage(errDecodeArgs, "Uncle index does not exist")
+		}
+
+		uncle, err := p.GetBlockByHash(toHex(v.Uncles[args.Index]), false)
+		if err != nil {
+			return err
+		}
+		*reply = uncle
 	case "eth_getUncleByBlockNumberAndIndex":
-		return errNotImplemented
+		args := new(BlockNumIndexArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+			return err
+		}
+
+		v, err := p.GetBlockByNumber(args.BlockNumber, true)
+		if err != nil {
+			return err
+		}
+		if args.Index > int64(len(v.Uncles)) || args.Index < 0 {
+			return NewErrorWithMessage(errDecodeArgs, "Uncle index does not exist")
+		}
+
+		uncle, err := p.GetBlockByHash(toHex(v.Uncles[args.Index]), false)
+		if err != nil {
+			return err
+		}
+		*reply = uncle
 	case "eth_getCompilers":
 		return p.GetCompilers(reply)
 	case "eth_compileSolidity":

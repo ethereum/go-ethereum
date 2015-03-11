@@ -40,7 +40,12 @@ func (args *GetBlockByHashArgs) UnmarshalJSON(b []byte) (err error) {
 	if len(obj) < 1 {
 		return errArguments
 	}
-	args.BlockHash = obj[0].(string)
+
+	argstr, ok := obj[0].(string)
+	if !ok {
+		return errDecodeArgs
+	}
+	args.BlockHash = argstr
 
 	if len(obj) > 1 {
 		args.Transactions = obj[1].(bool)
@@ -219,12 +224,12 @@ func (args *GetDataArgs) requirements() error {
 
 type BlockNumIndexArgs struct {
 	BlockNumber int64
-	TxIndex     int64
+	Index       int64
 }
 
 type HashIndexArgs struct {
 	BlockHash string
-	TxIndex   int64
+	Index     int64
 }
 
 type Sha3Args struct {
@@ -362,7 +367,7 @@ type WhisperMessageArgs struct {
 	Payload  string
 	To       string
 	From     string
-	Topic    []string
+	Topics   []string
 	Priority uint32
 	Ttl      uint32
 }
@@ -372,7 +377,7 @@ func (args *WhisperMessageArgs) UnmarshalJSON(b []byte) (err error) {
 		Payload  string
 		To       string
 		From     string
-		Topic    []string
+		Topics   []string
 		Priority string
 		Ttl      string
 	}
@@ -387,7 +392,7 @@ func (args *WhisperMessageArgs) UnmarshalJSON(b []byte) (err error) {
 	args.Payload = obj[0].Payload
 	args.To = obj[0].To
 	args.From = obj[0].From
-	args.Topic = obj[0].Topic
+	args.Topics = obj[0].Topics
 	args.Priority = uint32(ethutil.Big(obj[0].Priority).Int64())
 	args.Ttl = uint32(ethutil.Big(obj[0].Ttl).Int64())
 
