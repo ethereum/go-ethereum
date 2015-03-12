@@ -136,7 +136,7 @@ func RunVmTest(r io.Reader) (failed int) {
 
 		rexp := helper.FromHex(test.Out)
 		if bytes.Compare(rexp, ret) != 0 {
-			fmt.Printf("%s's return failed. Expected %x, got %x\n", name, rexp, ret)
+			fmt.Printf("FAIL: %s's return failed. Expected %x, got %x\n", name, rexp, ret)
 			failed = 1
 		}
 
@@ -148,7 +148,7 @@ func RunVmTest(r io.Reader) (failed int) {
 
 			if len(test.Exec) == 0 {
 				if obj.Balance().Cmp(ethutil.Big(account.Balance)) != 0 {
-					fmt.Printf("%s's : (%x) balance failed. Expected %v, got %v => %v\n", name, obj.Address()[:4], account.Balance, obj.Balance(), new(big.Int).Sub(ethutil.Big(account.Balance), obj.Balance()))
+					fmt.Printf("FAIL: %s's : (%x) balance failed. Expected %v, got %v => %v\n", name, obj.Address()[:4], account.Balance, obj.Balance(), new(big.Int).Sub(ethutil.Big(account.Balance), obj.Balance()))
 					failed = 1
 				}
 			}
@@ -158,20 +158,20 @@ func RunVmTest(r io.Reader) (failed int) {
 				vexp := helper.FromHex(value)
 
 				if bytes.Compare(v, vexp) != 0 {
-					fmt.Printf("%s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address()[0:4], addr, vexp, v, ethutil.BigD(vexp), ethutil.BigD(v))
+					fmt.Printf("FAIL: %s's : (%x: %s) storage failed. Expected %x, got %x (%v %v)\n", name, obj.Address()[0:4], addr, vexp, v, ethutil.BigD(vexp), ethutil.BigD(v))
 					failed = 1
 				}
 			}
 		}
 
 		if !bytes.Equal(ethutil.Hex2Bytes(test.PostStateRoot), statedb.Root()) {
-			fmt.Printf("%s's : Post state root error. Expected %s, got %x\n", name, test.PostStateRoot, statedb.Root())
+			fmt.Printf("FAIL: %s's : Post state root error. Expected %s, got %x\n", name, test.PostStateRoot, statedb.Root())
 			failed = 1
 		}
 
 		if len(test.Logs) > 0 {
 			if len(test.Logs) != len(logs) {
-				fmt.Printf("log length mismatch. Expected %d, got %d", len(test.Logs), len(logs))
+				fmt.Printf("FAIL: log length mismatch. Expected %d, got %d", len(test.Logs), len(logs))
 				failed = 1
 			} else {
 				/*

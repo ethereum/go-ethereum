@@ -36,10 +36,12 @@ type Account interface {
 	SubBalance(amount *big.Int)
 	AddBalance(amount *big.Int)
 	Balance() *big.Int
+	Address() []byte
 }
 
 // generic transfer method
 func Transfer(from, to Account, amount *big.Int) error {
+	//fmt.Printf(":::%x::: %v < %v\n", from.Address(), from.Balance(), amount)
 	if from.Balance().Cmp(amount) < 0 {
 		return errors.New("Insufficient balance in account")
 	}

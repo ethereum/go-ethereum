@@ -25,10 +25,7 @@ func (self *Execution) Addr() []byte {
 
 func (self *Execution) Call(codeAddr []byte, caller vm.ContextRef) ([]byte, error) {
 	// Retrieve the executing code
-	var code []byte
-	if self.env.State().GetStateObject(codeAddr) != nil {
-		code = self.env.State().GetCode(codeAddr)
-	}
+	code := self.env.State().GetCode(codeAddr)
 
 	return self.exec(code, codeAddr, caller)
 }
