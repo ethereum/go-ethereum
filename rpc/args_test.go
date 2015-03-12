@@ -477,7 +477,7 @@ func TestBlockNumIndexArgs(t *testing.T) {
 func TestHashIndexArgs(t *testing.T) {
 	input := `["0xc6ef2fc5426d6ad6fd9e2a26abeab0aa2411b7ab17f30a99d3cb96aed1d1055b", "0x1"]`
 	expected := new(HashIndexArgs)
-	expected.BlockHash = "0xc6ef2fc5426d6ad6fd9e2a26abeab0aa2411b7ab17f30a99d3cb96aed1d1055b"
+	expected.Hash = "0xc6ef2fc5426d6ad6fd9e2a26abeab0aa2411b7ab17f30a99d3cb96aed1d1055b"
 	expected.Index = 1
 
 	args := new(HashIndexArgs)
@@ -485,8 +485,8 @@ func TestHashIndexArgs(t *testing.T) {
 		t.Error(err)
 	}
 
-	if expected.BlockHash != args.BlockHash {
-		t.Errorf("BlockHash shoud be %#v but is %#v", expected.BlockHash, args.BlockHash)
+	if expected.Hash != args.Hash {
+		t.Errorf("Hash shoud be %#v but is %#v", expected.Hash, args.Hash)
 	}
 
 	if expected.Index != args.Index {

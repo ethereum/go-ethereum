@@ -149,7 +149,8 @@ func (self *UiLib) Compile(code string) (string, error) {
 func (self *UiLib) Call(params map[string]interface{}) (string, error) {
 	object := mapToTxParams(params)
 
-	return self.XEth.Execute(
+	return self.XEth.Call(
+		object["from"],
 		object["to"],
 		object["value"],
 		object["gas"],
