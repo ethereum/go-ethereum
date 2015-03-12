@@ -14,7 +14,7 @@ func proc() (*BlockProcessor, *ChainManager) {
 	var mux event.TypeMux
 
 	chainMan := NewChainManager(db, db, &mux)
-	return NewBlockProcessor(db, ezp.New(), nil, chainMan, &mux), chainMan
+	return NewBlockProcessor(db, db, ezp.New(), nil, chainMan, &mux), chainMan
 }
 
 func TestNumber(t *testing.T) {

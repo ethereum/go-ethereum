@@ -107,9 +107,10 @@ type Ethereum struct {
 	// Channel for shutting down the ethereum
 	shutdownChan chan bool
 
-	// DB interface
-	blockDb ethutil.Database
-	stateDb ethutil.Database
+	// DB interfaces
+	blockDb ethutil.Database // Block chain database
+	stateDb ethutil.Database // State changes database
+	extraDb ethutil.Database // Extra database (txs, etc)
 
 	//*** SERVICES ***
 	// State manager for processing new blocks and managing the over all states
@@ -144,6 +145,7 @@ func New(config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
+	extraDb, err := ethdb.NewLDBDatabase(path.Join(config.DataDir, "extra"))
 
 	// Perform database sanity checks
 	d, _ := blockDb.Get([]byte("ProtocolVersion"))
@@ -152,14 +154,13 @@ func New(config *Config) (*Ethereum, error) {
 		path := path.Join(config.DataDir, "blockchain")
 		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, ProtocolVersion, path)
 	}
-
-	saveProtocolVersion(blockDb)
-	//ethutil.Config.Db = db
+	saveProtocolVersion(extraDb)
 
 	eth := &Ethereum{
 		shutdownChan:   make(chan bool),
 		blockDb:        blockDb,
 		stateDb:        stateDb,
+		extraDb:        extraDb,
 		eventMux:       &event.TypeMux{},
 		logger:         servlogger,
 		accountManager: config.AccountManager,
@@ -169,7 +170,7 @@ func New(config *Config) (*Ethereum, error) {
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.EventMux())
 	pow := ethash.New(eth.chainManager)
 	eth.txPool = core.NewTxPool(eth.EventMux())
-	eth.blockProcessor = core.NewBlockProcessor(stateDb, pow, eth.txPool, eth.chainManager, eth.EventMux())
+	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, pow, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
 	eth.whisper = whisper.New()
 	eth.miner = miner.New(eth, pow, config.MinerThreads)
@@ -230,6 +231,7 @@ func (s *Ethereum) Whisper() *whisper.Whisper            { return s.whisper }
 func (s *Ethereum) EventMux() *event.TypeMux             { return s.eventMux }
 func (s *Ethereum) BlockDb() ethutil.Database            { return s.blockDb }
 func (s *Ethereum) StateDb() ethutil.Database            { return s.stateDb }
+func (s *Ethereum) ExtraDb() ethutil.Database            { return s.extraDb }
 func (s *Ethereum) IsListening() bool                    { return true } // Always listening
 func (s *Ethereum) PeerCount() int                       { return s.net.PeerCount() }
 func (s *Ethereum) Peers() []*p2p.Peer                   { return s.net.Peers() }

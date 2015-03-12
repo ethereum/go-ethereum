@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"runtime"
 	"sync"
 	"time"
 
@@ -33,13 +32,6 @@ const (
 var srvlog = logger.NewLogger("P2P Server")
 var srvjslog = logger.NewJsonLogger()
 
-// MakeName creates a node name that follows the ethereum convention
-// for such names. It adds the operation system name and Go runtime version
-// the name.
-func MakeName(name, version string) string {
-	return fmt.Sprintf("%s/v%s/%s/%s", name, version, runtime.GOOS, runtime.Version())
-}
-
 // Server manages all peer connections.
 //
 // The fields of Server are used as configuration parameters.
@@ -54,7 +46,7 @@ type Server struct {
 	MaxPeers int
 
 	// Name sets the node name of this server.
-	// Use MakeName to create a name that follows existing conventions.
+	// Use ethutil.MakeName to create a name that follows existing conventions.
 	Name string
 
 	// Bootstrap nodes are used to establish connectivity

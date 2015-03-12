@@ -120,7 +120,7 @@ func newChainManager(block *types.Block, eventMux *event.TypeMux, db ethutil.Dat
 
 // block processor with fake pow
 func newBlockProcessor(db ethutil.Database, txpool *TxPool, cman *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
-	bman := NewBlockProcessor(db, FakePow{}, txpool, newChainManager(nil, eventMux, db), eventMux)
+	bman := NewBlockProcessor(db, db, FakePow{}, txpool, newChainManager(nil, eventMux, db), eventMux)
 	return bman
 }
 
