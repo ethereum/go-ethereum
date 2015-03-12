@@ -18,7 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/xeth"
@@ -194,7 +193,7 @@ func GetNodeKey(ctx *cli.Context) (key *ecdsa.PrivateKey) {
 
 func GetEthereum(clientID, version string, ctx *cli.Context) (*eth.Ethereum, error) {
 	return eth.New(&eth.Config{
-		Name:           p2p.MakeName(clientID, version),
+		Name:           ethutil.MakeName(clientID, version),
 		DataDir:        ctx.GlobalString(DataDirFlag.Name),
 		LogFile:        ctx.GlobalString(LogFileFlag.Name),
 		LogLevel:       ctx.GlobalInt(LogLevelFlag.Name),

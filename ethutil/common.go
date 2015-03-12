@@ -13,6 +13,13 @@ import (
 	"github.com/kardianos/osext"
 )
 
+// MakeName creates a node name that follows the ethereum convention
+// for such names. It adds the operation system name and Go runtime version
+// the name.
+func MakeName(name, version string) string {
+	return fmt.Sprintf("%s/v%s/%s/%s", name, version, runtime.GOOS, runtime.Version())
+}
+
 func DefaultAssetPath() string {
 	var assetPath string
 	pwd, _ := os.Getwd()
