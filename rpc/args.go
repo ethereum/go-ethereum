@@ -188,9 +188,33 @@ type GetBalanceArgs struct {
 }
 
 func (args *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
-	if err = UnmarshalRawMessages(b, &args.Address, &args.BlockNumber); err != nil {
+	var obj []interface{}
+	r := bytes.NewReader(b)
+	if err := json.NewDecoder(r).Decode(&obj); err != nil {
 		return errDecodeArgs
 	}
+
+	if len(obj) < 1 {
+		return errArguments
+	}
+
+	addstr, ok := obj[0].(string)
+	if !ok {
+		return errDecodeArgs
+	}
+	args.Address = addstr
+
+	if len(obj) > 1 {
+		if obj[1].(string) == "latest" {
+			args.BlockNumber = -1
+		} else {
+			args.BlockNumber = ethutil.Big(obj[1].(string)).Int64()
+		}
+	}
+
+	// if err = UnmarshalRawMessages(b, &args.Address, &args.BlockNumber); err != nil {
+	// 	return errDecodeArgs
+	// }
 
 	return nil
 }

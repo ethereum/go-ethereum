@@ -43,6 +43,17 @@ func TestGetBalanceArgs(t *testing.T) {
 	}
 }
 
+func TestGetBalanceEmptyArgs(t *testing.T) {
+	input := `[]`
+
+	args := new(GetBalanceArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
+	}
+
+}
+
 func TestGetBlockByHashArgs(t *testing.T) {
 	input := `["0xe670ec64341771606e55d6b4ca35a1a6b75ee3d5145a99d05921026d1527331", true]`
 	expected := new(GetBlockByHashArgs)
@@ -415,6 +426,16 @@ func TestFilterStringArgs(t *testing.T) {
 
 	if expected.Word != args.Word {
 		t.Errorf("Word shoud be %#v but is %#v", expected.Word, args.Word)
+	}
+}
+
+func TestFilterStringEmptyArgs(t *testing.T) {
+	input := `[]`
+
+	args := new(FilterStringArgs)
+	err := json.Unmarshal([]byte(input), &args)
+	if err == nil {
+		t.Error("Expected error but didn't get one")
 	}
 }
 
