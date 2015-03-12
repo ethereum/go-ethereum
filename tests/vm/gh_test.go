@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/tests/helper"
-	"github.com/ethereum/go-ethereum/vm"
 )
 
 type Account struct {
@@ -81,11 +80,6 @@ func RunVmTest(p string, t *testing.T) {
 	helper.CreateFileTests(t, p, &tests)
 
 	for name, test := range tests {
-		vm.Debug = true
-		helper.Logger.SetLogLevel(4)
-		if name != "signextend_Overflow_dj42" {
-			continue
-		}
 		db, _ := ethdb.NewMemDatabase()
 		statedb := state.New(nil, db)
 		for addr, account := range test.Pre {
