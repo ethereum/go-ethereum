@@ -254,12 +254,10 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 				stack.push(num)
 			}
 		case NOT:
-			base.Sub(Pow256, stack.pop()).Sub(base, ethutil.Big1)
-
-			// Not needed
-			base = U256(base)
-
-			stack.push(base)
+			stack.push(U256(new(big.Int).Not(stack.pop())))
+			//base.Sub(Pow256, stack.pop()).Sub(base, ethutil.Big1)
+			//base = U256(base)
+			//stack.push(base)
 		case LT:
 			x, y := stack.pop(), stack.pop()
 			self.Printf(" %v < %v", x, y)
@@ -349,16 +347,15 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 
 			stack.push(base)
 		case ADDMOD:
-
 			x := stack.pop()
 			y := stack.pop()
 			z := stack.pop()
 
-			add := new(big.Int).Add(x, y)
-			if len(z.Bytes()) > 0 { // NOT 0x0
+			if z.Cmp(Zero) > 0 {
+				add := U256(new(big.Int).Add(x, y))
 				base.Mod(add, z)
 
-				U256(base)
+				base = U256(base)
 			}
 
 			self.Printf(" %v + %v %% %v = %v", x, y, z, base)
