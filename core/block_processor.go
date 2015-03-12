@@ -78,21 +78,20 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 	// If we are mining this block and validating we want to set the logs back to 0
 	statedb.EmptyLogs()
 
-	txGas := new(big.Int).Set(tx.Gas())
-
 	cb := statedb.GetStateObject(coinbase.Address())
-	st := NewStateTransition(NewEnv(statedb, self.bc, tx, block), tx, cb)
-	_, err := st.TransitionState()
+	/*
+		st := NewStateTransition(NewEnv(statedb, self.bc, tx, block), tx, cb)
+		_, err := st.TransitionState()
+	*/
+	_, gas, err := ApplyMessage(NewEnv(statedb, self.bc, tx, block), tx, cb)
 	if err != nil && (IsNonceErr(err) || state.IsGasLimitErr(err) || IsInvalidTxErr(err)) {
 		return nil, nil, err
 	}
 
-	txGas.Sub(txGas, st.gas)
-
 	// Update the state with pending changes
-	statedb.Update(txGas)
+	statedb.Update(nil)
 
-	cumulative := new(big.Int).Set(usedGas.Add(usedGas, txGas))
+	cumulative := new(big.Int).Set(usedGas.Add(usedGas, gas))
 	receipt := types.NewReceipt(statedb.Root(), cumulative)
 	receipt.SetLogs(statedb.Logs())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
@@ -105,7 +104,7 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 		go self.eventMux.Post(logs)
 	}
 
-	return receipt, txGas, err
+	return receipt, gas, err
 }
 func (self *BlockProcessor) ChainManager() *ChainManager {
 	return self.bc

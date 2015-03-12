@@ -261,7 +261,6 @@ func (self *worker) commitUncle(uncle *types.Header) error {
 
 func (self *worker) commitTransaction(tx *types.Transaction) error {
 	snap := self.current.state.Copy()
-	//fmt.Printf("proc %x %v\n", tx.Hash()[:3], tx.Nonce())
 	receipt, _, err := self.proc.ApplyTransaction(self.current.coinbase, self.current.state, self.current.block, tx, self.current.totalUsedGas, true)
 	if err != nil && (core.IsNonceErr(err) || state.IsGasLimitErr(err) || core.IsInvalidTxErr(err)) {
 		self.current.state.Set(snap)

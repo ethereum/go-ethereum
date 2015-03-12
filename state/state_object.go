@@ -38,19 +38,27 @@ func (self Storage) Copy() Storage {
 }
 
 type StateObject struct {
+	// State database for storing state changes
 	db ethutil.Database
-	// Address of the object
-	address []byte
-	// Shared attributes
-	balance  *big.Int
-	codeHash []byte
-	nonce    uint64
-	// Contract related attributes
-	State    *StateDB
-	code     Code
-	initCode Code
+	// The state object
+	State *StateDB
 
+	// Address belonging to this account
+	address []byte
+	// The balance of the account
+	balance *big.Int
+	// The nonce of the account
+	nonce uint64
+	// The code hash if code is present (i.e. a contract)
+	codeHash []byte
+	// The code for this account
+	code Code
+	// Temporarily initialisation code
+	initCode Code
+	// Cached storage (flushed when updated)
 	storage Storage
+	// Temporary prepaid gas, reward after transition
+	prepaid *big.Int
 
 	// Total gas pool is the total amount of gas currently
 	// left if this object is the coinbase. Gas is directly
@@ -77,6 +85,7 @@ func NewStateObject(addr []byte, db ethutil.Database) *StateObject {
 	object.State = New(nil, db) //New(trie.New(ethutil.Config.Db, ""))
 	object.storage = make(Storage)
 	object.gasPool = new(big.Int)
+	object.prepaid = new(big.Int)
 
 	return object
 }
@@ -103,6 +112,7 @@ func NewStateObjectFromBytes(address, data []byte, db ethutil.Database) *StateOb
 	object.State = New(extobject.Root, db)
 	object.storage = make(map[string]*ethutil.Value)
 	object.gasPool = new(big.Int)
+	object.prepaid = new(big.Int)
 	object.code, _ = db.Get(extobject.CodeHash)
 
 	return object
@@ -230,8 +240,6 @@ func (self *StateObject) BuyGas(gas, price *big.Int) error {
 	rGas := new(big.Int).Set(gas)
 	rGas.Mul(rGas, price)
 
-	self.AddBalance(rGas)
-
 	self.dirty = true
 
 	return nil
@@ -239,11 +247,6 @@ func (self *StateObject) BuyGas(gas, price *big.Int) error {
 
 func (self *StateObject) RefundGas(gas, price *big.Int) {
 	self.gasPool.Add(self.gasPool, gas)
-
-	rGas := new(big.Int).Set(gas)
-	rGas.Mul(rGas, price)
-
-	self.balance.Sub(self.balance, rGas)
 }
 
 func (self *StateObject) Copy() *StateObject {

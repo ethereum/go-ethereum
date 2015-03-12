@@ -173,9 +173,8 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.
 
 	message := NewMessage(keyPair.Address(), to, data, value, gas, price)
 	vmenv := NewEnvFromMap(statedb, env, tx)
-	st := core.NewStateTransition(vmenv, message, coinbase)
 	vmenv.origin = keyPair.Address()
-	ret, err := st.TransitionState()
+	ret, _, err := core.ApplyMessage(vmenv, message, coinbase)
 	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) {
 		statedb.Set(snapshot)
 	}

@@ -392,14 +392,8 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 
 			self.Printf(" => %x", context.Address())
 		case BALANCE:
-
 			addr := stack.pop().Bytes()
-			var balance *big.Int
-			if statedb.GetStateObject(addr) != nil {
-				balance = statedb.GetBalance(addr)
-			} else {
-				balance = base
-			}
+			balance := statedb.GetBalance(addr)
 
 			stack.push(balance)
 
