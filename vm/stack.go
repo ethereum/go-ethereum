@@ -15,10 +15,11 @@ type stack struct {
 }
 
 func (st *stack) push(d *big.Int) {
+	stackItem := new(big.Int).Set(d)
 	if len(st.data) > st.ptr {
-		st.data[st.ptr] = d
+		st.data[st.ptr] = stackItem
 	} else {
-		st.data = append(st.data, d)
+		st.data = append(st.data, stackItem)
 	}
 	st.ptr++
 }
