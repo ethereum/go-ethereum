@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/tests/helper"
+	"github.com/ethereum/go-ethereum/vm"
 )
 
 type Log struct {
@@ -164,7 +165,7 @@ func RunVmTest(r io.Reader) (failed int) {
 		}
 
 		if !bytes.Equal(ethutil.Hex2Bytes(test.PostStateRoot), statedb.Root()) {
-			fmt.Printf("%s's : Post state root error. Expected %s, got %x", name, test.PostStateRoot, statedb.Root())
+			fmt.Printf("%s's : Post state root error. Expected %s, got %x\n", name, test.PostStateRoot, statedb.Root())
 			failed = 1
 		}
 
@@ -194,6 +195,7 @@ func RunVmTest(r io.Reader) (failed int) {
 
 func main() {
 	helper.Logger.SetLogLevel(5)
+	vm.Debug = true
 
 	if len(os.Args) > 1 {
 		os.Exit(RunVmTest(strings.NewReader(os.Args[1])))

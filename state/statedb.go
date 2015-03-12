@@ -54,7 +54,7 @@ func (self *StateDB) Refund(addr []byte, gas *big.Int) {
 
 // Retrieve the balance from the given address or 0 if object not found
 func (self *StateDB) GetBalance(addr []byte) *big.Int {
-	stateObject := self.GetOrNewStateObject(addr)
+	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		return stateObject.balance
 	}
@@ -63,14 +63,14 @@ func (self *StateDB) GetBalance(addr []byte) *big.Int {
 }
 
 func (self *StateDB) AddBalance(addr []byte, amount *big.Int) {
-	stateObject := self.GetOrNewStateObject(addr)
+	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		stateObject.AddBalance(amount)
 	}
 }
 
 func (self *StateDB) GetNonce(addr []byte) uint64 {
-	stateObject := self.GetOrNewStateObject(addr)
+	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		return stateObject.nonce
 	}
@@ -79,7 +79,7 @@ func (self *StateDB) GetNonce(addr []byte) uint64 {
 }
 
 func (self *StateDB) GetCode(addr []byte) []byte {
-	stateObject := self.GetOrNewStateObject(addr)
+	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		return stateObject.code
 	}
@@ -88,7 +88,7 @@ func (self *StateDB) GetCode(addr []byte) []byte {
 }
 
 func (self *StateDB) GetState(a, b []byte) []byte {
-	stateObject := self.GetOrNewStateObject(a)
+	stateObject := self.GetStateObject(a)
 	if stateObject != nil {
 		return stateObject.GetState(b).Bytes()
 	}
@@ -97,28 +97,28 @@ func (self *StateDB) GetState(a, b []byte) []byte {
 }
 
 func (self *StateDB) SetNonce(addr []byte, nonce uint64) {
-	stateObject := self.GetOrNewStateObject(addr)
+	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetNonce(nonce)
 	}
 }
 
 func (self *StateDB) SetCode(addr, code []byte) {
-	stateObject := self.GetOrNewStateObject(addr)
+	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetCode(code)
 	}
 }
 
 func (self *StateDB) SetState(addr, key []byte, value interface{}) {
-	stateObject := self.GetOrNewStateObject(addr)
+	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetState(key, ethutil.NewValue(value))
 	}
 }
 
 func (self *StateDB) Delete(addr []byte) bool {
-	stateObject := self.GetOrNewStateObject(addr)
+	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		stateObject.MarkForDeletion()
 		stateObject.balance = new(big.Int)

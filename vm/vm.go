@@ -235,9 +235,9 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 
 			stack.push(base)
 		case SIGNEXTEND:
-			back := stack.pop().Uint64()
-			if back < 31 {
-				bit := uint(back*8 + 7)
+			back := stack.pop()
+			if back.Cmp(big.NewInt(31)) < 0 {
+				bit := uint(back.Uint64()*8 + 7)
 				num := stack.pop()
 				mask := new(big.Int).Lsh(ethutil.Big1, bit)
 				mask.Sub(mask, ethutil.Big1)
