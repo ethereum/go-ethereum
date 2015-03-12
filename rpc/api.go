@@ -380,7 +380,7 @@ func (p *EthereumApi) NewWhisperFilter(args *WhisperFilterArgs, reply *interface
 	}
 	id = p.xeth().Whisper().Watch(opts)
 	p.messages[id] = &whisperFilter{timeout: time.Now()}
-	*reply = id
+	*reply = toHex(big.NewInt(int64(id)).Bytes())
 	return nil
 }
 
