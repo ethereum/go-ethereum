@@ -1,0 +1,6 @@
+before_install:
+        - sudo apt-get update -qq
+        - sudo apt-get install -qq wget cmake gcc bash libboost-test-dev nodejs python-pip python-dev
+        - sudo pip install virtualenv -q
+
+script: "./test/test.sh"

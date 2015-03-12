@@ -23,7 +23,6 @@ package main
 import "C"
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -70,36 +69,31 @@ type Gui struct {
 
 	txDb *ethdb.LDBDatabase
 
-	logLevel logger.LogLevel
-	open     bool
+	open bool
 
 	xeth *xeth.XEth
 
 	Session string
-	config  *ethutil.ConfigManager
 
 	plugins map[string]plugin
 }
 
 // Create GUI, but doesn't start it
-func NewWindow(ethereum *eth.Ethereum, config *ethutil.ConfigManager, session string, logLevel int) *Gui {
-	db, err := ethdb.NewLDBDatabase("tx_database")
+func NewWindow(ethereum *eth.Ethereum) *Gui {
+	db, err := ethdb.NewLDBDatabase(path.Join(ethereum.DataDir, "tx_database"))
 	if err != nil {
 		panic(err)
 	}
 
-	xeth := xeth.New(ethereum)
+	xeth := xeth.New(ethereum, nil)
 	gui := &Gui{eth: ethereum,
 		txDb:          db,
 		xeth:          xeth,
-		logLevel:      logger.LogLevel(logLevel),
-		Session:       session,
 		open:          false,
-		config:        config,
 		plugins:       make(map[string]plugin),
 		serviceEvents: make(chan ServEv, 1),
 	}
-	data, _ := ethutil.ReadAllFile(path.Join(ethutil.Config.ExecPath, "plugins.json"))
+	data, _ := ethutil.ReadAllFile(path.Join(ethereum.DataDir, "plugins.json"))
 	json.Unmarshal([]byte(data), &gui.plugins)
 
 	return gui
@@ -142,23 +136,15 @@ func (gui *Gui) Start(assetPath string) {
 	gui.open = true
 	win.Show()
 
-	// only add the gui guilogger after window is shown otherwise slider wont be shown
-	logger.AddLogSystem(gui)
 	win.Wait()
-
-	// need to silence gui guilogger after window closed otherwise logsystem hangs (but do not save loglevel)
-	gui.logLevel = logger.Silence
 	gui.open = false
 }
 
 func (gui *Gui) Stop() {
 	if gui.open {
-		gui.logLevel = logger.Silence
 		gui.open = false
 		gui.win.Hide()
 	}
-
-	gui.uiLib.jsEngine.Stop()
 
 	guilogger.Infoln("Stopped")
 }
@@ -174,7 +160,11 @@ func (gui *Gui) showWallet(context *qml.Context) (*qml.Window, error) {
 	return gui.win, nil
 }
 
-func (gui *Gui) ImportKey(filePath string) {
+func (gui *Gui) GenerateKey() {
+	_, err := gui.eth.AccountManager().NewAccount("hurr")
+	if err != nil {
+		// TODO: UI feedback?
+	}
 }
 
 func (gui *Gui) showKeyImport(context *qml.Context) (*qml.Window, error) {
@@ -193,31 +183,11 @@ func (gui *Gui) createWindow(comp qml.Object) *qml.Window {
 	return gui.win
 }
 
-func (gui *Gui) ImportAndSetPrivKey(secret string) bool {
-	err := gui.eth.KeyManager().InitFromString(gui.Session, 0, secret)
-	if err != nil {
-		guilogger.Errorln("unable to import: ", err)
-		return false
-	}
-	guilogger.Errorln("successfully imported: ", err)
-	return true
-}
-
-func (gui *Gui) CreateAndSetPrivKey() (string, string, string, string) {
-	err := gui.eth.KeyManager().Init(gui.Session, 0, true)
-	if err != nil {
-		guilogger.Errorln("unable to create key: ", err)
-		return "", "", "", ""
-	}
-	return gui.eth.KeyManager().KeyPair().AsStrings()
-}
-
 func (gui *Gui) setInitialChain(ancientBlocks bool) {
 	sBlk := gui.eth.ChainManager().LastBlockHash()
 	blk := gui.eth.ChainManager().GetBlock(sBlk)
 	for ; blk != nil; blk = gui.eth.ChainManager().GetBlock(sBlk) {
 		sBlk = blk.ParentHash()
-
 		gui.processBlock(blk, true)
 	}
 }
@@ -261,10 +231,8 @@ func (self *Gui) loadMergedMiningOptions() {
 }
 
 func (gui *Gui) insertTransaction(window string, tx *types.Transaction) {
-	addr := gui.address()
-
 	var inout string
-	if bytes.Compare(tx.From(), addr) == 0 {
+	if gui.eth.AccountManager().HasAccount(tx.From()) {
 		inout = "send"
 	} else {
 		inout = "recv"
@@ -480,14 +448,6 @@ func (gui *Gui) setPeerInfo() {
 	for _, p := range qpeers {
 		gui.win.Root().Call("addPeer", p)
 	}
-}
-
-func (gui *Gui) privateKey() string {
-	return ethutil.Bytes2Hex(gui.eth.KeyManager().PrivateKey())
-}
-
-func (gui *Gui) address() []byte {
-	return gui.eth.KeyManager().Address()
 }
 
 /*

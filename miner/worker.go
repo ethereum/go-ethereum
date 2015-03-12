@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -29,7 +30,7 @@ type environment struct {
 }
 
 func env(block *types.Block, eth core.Backend) *environment {
-	state := state.New(block.Root(), eth.Db())
+	state := state.New(block.Root(), eth.StateDb())
 	env := &environment{
 		totalUsedGas: new(big.Int),
 		state:        state,
@@ -46,8 +47,10 @@ func env(block *types.Block, eth core.Backend) *environment {
 }
 
 type Work struct {
-	Number uint64
-	Nonce  []byte
+	Number    uint64
+	Nonce     uint64
+	MixDigest []byte
+	SeedHash  []byte
 }
 
 type Agent interface {
@@ -113,7 +116,7 @@ func (self *worker) register(agent Agent) {
 }
 
 func (self *worker) update() {
-	events := self.mux.Subscribe(core.ChainEvent{}, core.NewMinedBlockEvent{})
+	events := self.mux.Subscribe(core.ChainHeadEvent{}, core.NewMinedBlockEvent{})
 
 	timer := time.NewTicker(2 * time.Second)
 
@@ -122,7 +125,7 @@ out:
 		select {
 		case event := <-events.Chan():
 			switch ev := event.(type) {
-			case core.ChainEvent:
+			case core.ChainHeadEvent:
 				if self.current.block != ev.Block {
 					self.commitNewWork()
 				}
@@ -136,7 +139,7 @@ out:
 			}
 			break out
 		case <-timer.C:
-			minerlogger.Debugln("Hash rate:", self.HashRate(), "Khash")
+			minerlogger.Infoln("Hash rate:", self.HashRate(), "Khash")
 		}
 	}
 
@@ -146,15 +149,20 @@ out:
 func (self *worker) wait() {
 	for {
 		for work := range self.recv {
+			// Someone Successfully Mined!
 			block := self.current.block
-			if block.Number().Uint64() == work.Number && block.Nonce() == nil {
-				self.current.block.Header().Nonce = work.Nonce
+			if block.Number().Uint64() == work.Number && block.Nonce() == 0 {
+				self.current.block.SetNonce(work.Nonce)
+				self.current.block.Header().MixDigest = work.MixDigest
+				self.current.block.Header().SeedHash = work.SeedHash
+
 				jsonlogger.LogJson(&logger.EthMinerNewBlock{
 					BlockHash:     ethutil.Bytes2Hex(block.Hash()),
 					BlockNumber:   block.Number(),
 					ChainHeadHash: ethutil.Bytes2Hex(block.ParentHeaderHash),
 					BlockPrevHash: ethutil.Bytes2Hex(block.ParentHeaderHash),
 				})
+
 				if err := self.chain.InsertChain(types.Blocks{self.current.block}); err == nil {
 					self.mux.Post(core.NewMinedBlockEvent{self.current.block})
 				} else {
@@ -182,7 +190,11 @@ func (self *worker) commitNewWork() {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
-	self.current = env(self.chain.NewBlock(self.coinbase), self.eth)
+	block := self.chain.NewBlock(self.coinbase)
+	seednum := ethash.GetSeedBlockNum(block.NumberU64())
+	block.Header().SeedHash = self.chain.GetBlockByNumber(seednum).SeedHash()
+
+	self.current = env(block, self.eth)
 	parent := self.chain.GetBlock(self.current.block.ParentHash())
 	self.current.coinbase.SetGasPool(core.CalcGasLimit(parent, self.current.block))
 
@@ -197,6 +209,8 @@ gasLimit:
 		err := self.commitTransaction(tx)
 		switch {
 		case core.IsNonceErr(err):
+			fallthrough
+		case core.IsInvalidTxErr(err):
 			// Remove invalid transactions
 			remove = append(remove, tx)
 		case state.IsGasLimitErr(err):
@@ -210,7 +224,7 @@ gasLimit:
 	}
 	self.eth.TxPool().RemoveSet(remove)
 
-	self.current.coinbase.AddBalance(core.BlockReward)
+	self.current.state.AddBalance(self.coinbase, core.BlockReward)
 
 	self.current.state.Update(ethutil.Big0)
 	self.push()
@@ -234,7 +248,7 @@ func (self *worker) commitUncle(uncle *types.Header) error {
 	}
 
 	if !self.pow.Verify(types.NewBlockWithHeader(uncle)) {
-		return core.ValidationError("Uncle's nonce is invalid (= %v)", ethutil.Bytes2Hex(uncle.Nonce))
+		return core.ValidationError("Uncle's nonce is invalid (= %x)", uncle.Nonce)
 	}
 
 	uncleAccount := self.current.state.GetAccount(uncle.Coinbase)
@@ -246,9 +260,11 @@ func (self *worker) commitUncle(uncle *types.Header) error {
 }
 
 func (self *worker) commitTransaction(tx *types.Transaction) error {
+	snap := self.current.state.Copy()
 	//fmt.Printf("proc %x %v\n", tx.Hash()[:3], tx.Nonce())
 	receipt, _, err := self.proc.ApplyTransaction(self.current.coinbase, self.current.state, self.current.block, tx, self.current.totalUsedGas, true)
-	if err != nil && (core.IsNonceErr(err) || state.IsGasLimitErr(err)) {
+	if err != nil && (core.IsNonceErr(err) || state.IsGasLimitErr(err) || core.IsInvalidTxErr(err)) {
+		self.current.state.Set(snap)
 		return err
 	}
 

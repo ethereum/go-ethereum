@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 	"sort"
@@ -39,14 +40,33 @@ type Header struct {
 	Time uint64
 	// Extra data
 	Extra string
-	// Block Nonce for verification
-	Nonce ethutil.Bytes
+	// SeedHash used for light client verification
+	SeedHash ethutil.Bytes
+	// Mix digest for quick checking to prevent DOS
+	MixDigest ethutil.Bytes
+	// Nonce
+	Nonce []byte
 }
 
 func (self *Header) rlpData(withNonce bool) []interface{} {
-	fields := []interface{}{self.ParentHash, self.UncleHash, self.Coinbase, self.Root, self.TxHash, self.ReceiptHash, self.Bloom, self.Difficulty, self.Number, self.GasLimit, self.GasUsed, self.Time, self.Extra}
+	fields := []interface{}{
+		self.ParentHash,
+		self.UncleHash,
+		self.Coinbase,
+		self.Root,
+		self.TxHash,
+		self.ReceiptHash,
+		self.Bloom,
+		self.Difficulty,
+		self.Number,
+		self.GasLimit,
+		self.GasUsed,
+		self.Time,
+		self.Extra,
+		self.SeedHash,
+	}
 	if withNonce {
-		fields = append(fields, self.Nonce)
+		fields = append(fields, self.MixDigest, self.Nonce)
 	}
 
 	return fields
@@ -77,22 +97,27 @@ type Block struct {
 	Reward   *big.Int
 }
 
-func NewBlock(parentHash []byte, coinbase []byte, root []byte, difficulty *big.Int, nonce []byte, extra string) *Block {
+func NewBlock(parentHash []byte, coinbase []byte, root []byte, difficulty *big.Int, nonce uint64, extra string) *Block {
 	header := &Header{
 		Root:       root,
 		ParentHash: parentHash,
 		Coinbase:   coinbase,
 		Difficulty: difficulty,
-		Nonce:      nonce,
 		Time:       uint64(time.Now().Unix()),
 		Extra:      extra,
 		GasUsed:    new(big.Int),
 		GasLimit:   new(big.Int),
 	}
+	header.setNonce(nonce)
 
 	block := &Block{header: header, Reward: new(big.Int)}
 
 	return block
+}
+
+func (self *Header) setNonce(nonce uint64) {
+	self.Nonce = make([]byte, 8)
+	binary.BigEndian.PutUint64(self.Nonce, nonce)
 }
 
 func NewBlockWithHeader(header *Header) *Block {
@@ -174,9 +199,17 @@ func (self *Block) RlpDataForStorage() interface{} {
 }
 
 // Header accessors (add as you need them)
-func (self *Block) Number() *big.Int          { return self.header.Number }
-func (self *Block) NumberU64() uint64         { return self.header.Number.Uint64() }
-func (self *Block) Nonce() []byte             { return self.header.Nonce }
+func (self *Block) Number() *big.Int  { return self.header.Number }
+func (self *Block) NumberU64() uint64 { return self.header.Number.Uint64() }
+func (self *Block) MixDigest() []byte { return self.header.MixDigest }
+func (self *Block) SeedHash() []byte  { return self.header.SeedHash }
+func (self *Block) Nonce() uint64 {
+	return binary.BigEndian.Uint64(self.header.Nonce)
+}
+func (self *Block) SetNonce(nonce uint64) {
+	self.header.setNonce(nonce)
+}
+
 func (self *Block) Bloom() []byte             { return self.header.Bloom }
 func (self *Block) Coinbase() []byte          { return self.header.Coinbase }
 func (self *Block) Time() int64               { return int64(self.header.Time) }
@@ -200,7 +233,6 @@ func (self *Block) GetUncle(i int) *Header {
 
 // Implement pow.Block
 func (self *Block) Difficulty() *big.Int { return self.header.Difficulty }
-func (self *Block) N() []byte            { return self.header.Nonce }
 func (self *Block) HashNoNonce() []byte  { return self.header.HashNoNonce() }
 
 func (self *Block) Hash() []byte {
@@ -249,8 +281,10 @@ func (self *Header) String() string {
 	GasUsed:	    %v
 	Time:		    %v
 	Extra:		    %v
-	Nonce:		    %x
-`, self.ParentHash, self.UncleHash, self.Coinbase, self.Root, self.TxHash, self.ReceiptHash, self.Bloom, self.Difficulty, self.Number, self.GasLimit, self.GasUsed, self.Time, self.Extra, self.Nonce)
+	SeedHash:           %x
+	MixDigest:          %x
+	Nonce:		    %x`,
+		self.ParentHash, self.UncleHash, self.Coinbase, self.Root, self.TxHash, self.ReceiptHash, self.Bloom, self.Difficulty, self.Number, self.GasLimit, self.GasUsed, self.Time, self.Extra, self.SeedHash, self.MixDigest, self.Nonce)
 }
 
 type Blocks []*Block

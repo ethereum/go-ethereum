@@ -12,6 +12,8 @@ import (
 
 const tryJit = false
 
+var ()
+
 /*
  * The State transitioning model
  *
@@ -43,8 +45,6 @@ type StateTransition struct {
 }
 
 type Message interface {
-	Hash() []byte
-
 	From() []byte
 	To() []byte
 
@@ -144,14 +144,14 @@ func (self *StateTransition) preCheck() (err error) {
 
 	// Pre-pay gas / Buy gas of the coinbase account
 	if err = self.BuyGas(); err != nil {
-		return err
+		return InvalidTxError(err)
 	}
 
 	return nil
 }
 
 func (self *StateTransition) TransitionState() (ret []byte, err error) {
-	statelogger.Debugf("(~) %x\n", self.msg.Hash())
+	// statelogger.Debugf("(~) %x\n", self.msg.Hash())
 
 	// XXX Transactions after this point are considered valid.
 	if err = self.preCheck(); err != nil {
@@ -165,26 +165,27 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 
 	defer self.RefundGas()
 
+	// Transaction gas
+	if err = self.UseGas(vm.GasTx); err != nil {
+		return nil, InvalidTxError(err)
+	}
+
 	// Increment the nonce for the next transaction
 	self.state.SetNonce(sender.Address(), sender.Nonce()+1)
 	//sender.Nonce += 1
-
-	// Transaction gas
-	if err = self.UseGas(vm.GasTx); err != nil {
-		return
-	}
 
 	// Pay data gas
 	var dgas int64
 	for _, byt := range self.data {
 		if byt != 0 {
-			dgas += vm.GasData.Int64()
+			dgas += vm.GasTxDataNonzeroByte.Int64()
 		} else {
-			dgas += 1 // This is 1/5. If GasData changes this fails
+			dgas += vm.GasTxDataZeroByte.Int64()
 		}
 	}
 	if err = self.UseGas(big.NewInt(dgas)); err != nil {
-		return
+		println("2")
+		return nil, InvalidTxError(err)
 	}
 
 	//stateCopy := self.env.State().Copy()
@@ -198,40 +199,16 @@ func (self *StateTransition) TransitionState() (ret []byte, err error) {
 			dataGas.Mul(dataGas, vm.GasCreateByte)
 			if err := self.UseGas(dataGas); err == nil {
 				ref.SetCode(ret)
+			} else {
+				statelogger.Infoln("Insufficient gas for creating code. Require", dataGas, "and have", self.gas)
 			}
 		}
-
-		/*
-			if vmenv, ok := vmenv.(*VMEnv); ok && tryJit {
-				statelogger.Infof("CREATE: re-running using JIT (PH=%x)\n", stateCopy.Root()[:4])
-				// re-run using the JIT (validation for the JIT)
-				goodState := vmenv.State().Copy()
-				vmenv.state = stateCopy
-				vmenv.SetVmType(vm.JitVmTy)
-				vmenv.Create(sender, contract.Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
-				statelogger.Infof("DONE PH=%x STD_H=%x JIT_H=%x\n", stateCopy.Root()[:4], goodState.Root()[:4], vmenv.State().Root()[:4])
-				self.state.Set(goodState)
-			}
-		*/
 	} else {
 		ret, err = vmenv.Call(self.From(), self.To().Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
-
-		/*
-			if vmenv, ok := vmenv.(*VMEnv); ok && tryJit {
-				statelogger.Infof("CALL: re-running using JIT (PH=%x)\n", stateCopy.Root()[:4])
-				// re-run using the JIT (validation for the JIT)
-				goodState := vmenv.State().Copy()
-				vmenv.state = stateCopy
-				vmenv.SetVmType(vm.JitVmTy)
-				vmenv.Call(self.From(), self.To().Address(), self.msg.Data(), self.gas, self.gasPrice, self.value)
-				statelogger.Infof("DONE PH=%x STD_H=%x JIT_H=%x\n", stateCopy.Root()[:4], goodState.Root()[:4], vmenv.State().Root()[:4])
-				self.state.Set(goodState)
-			}
-		*/
 	}
 
-	if err != nil {
-		self.UseGas(self.gas)
+	if err != nil && IsValueTransferErr(err) {
+		return nil, InvalidTxError(err)
 	}
 
 	return

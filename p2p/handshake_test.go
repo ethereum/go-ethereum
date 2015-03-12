@@ -2,52 +2,17 @@ package p2p
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"crypto/rand"
+	"fmt"
 	"net"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
-
-func TestPublicKeyEncoding(t *testing.T) {
-	prv0, _ := crypto.GenerateKey() // = ecdsa.GenerateKey(crypto.S256(), rand.Reader)
-	pub0 := &prv0.PublicKey
-	pub0s := crypto.FromECDSAPub(pub0)
-	pub1, err := importPublicKey(pub0s)
-	if err != nil {
-		t.Errorf("%v", err)
-	}
-	eciesPub1 := ecies.ImportECDSAPublic(pub1)
-	if eciesPub1 == nil {
-		t.Errorf("invalid ecdsa public key")
-	}
-	pub1s, err := exportPublicKey(pub1)
-	if err != nil {
-		t.Errorf("%v", err)
-	}
-	if len(pub1s) != 64 {
-		t.Errorf("wrong length expect 64, got", len(pub1s))
-	}
-	pub2, err := importPublicKey(pub1s)
-	if err != nil {
-		t.Errorf("%v", err)
-	}
-	pub2s, err := exportPublicKey(pub2)
-	if err != nil {
-		t.Errorf("%v", err)
-	}
-	if !bytes.Equal(pub1s, pub2s) {
-		t.Errorf("exports dont match")
-	}
-	pub2sEC := crypto.FromECDSAPub(pub2)
-	if !bytes.Equal(pub0s, pub2sEC) {
-		t.Errorf("exports dont match")
-	}
-}
 
 func TestSharedSecret(t *testing.T) {
 	prv0, _ := crypto.GenerateKey() // = ecdsa.GenerateKey(crypto.S256(), rand.Reader)
@@ -69,103 +34,85 @@ func TestSharedSecret(t *testing.T) {
 	}
 }
 
-func TestCryptoHandshake(t *testing.T) {
-	testCryptoHandshake(newkey(), newkey(), nil, t)
-}
-
-func TestCryptoHandshakeWithToken(t *testing.T) {
-	sessionToken := make([]byte, shaLen)
-	rand.Read(sessionToken)
-	testCryptoHandshake(newkey(), newkey(), sessionToken, t)
-}
-
-func testCryptoHandshake(prv0, prv1 *ecdsa.PrivateKey, sessionToken []byte, t *testing.T) {
-	var err error
-	// pub0 := &prv0.PublicKey
-	pub1 := &prv1.PublicKey
-
-	// pub0s := crypto.FromECDSAPub(pub0)
-	pub1s := crypto.FromECDSAPub(pub1)
-
-	// simulate handshake by feeding output to input
-	// initiator sends handshake 'auth'
-	auth, initNonce, randomPrivKey, err := authMsg(prv0, pub1s, sessionToken)
-	if err != nil {
-		t.Errorf("%v", err)
-	}
-	// t.Logf("-> %v", hexkey(auth))
-
-	// receiver reads auth and responds with response
-	response, remoteRecNonce, remoteInitNonce, _, remoteRandomPrivKey, remoteInitRandomPubKey, err := authResp(auth, sessionToken, prv1)
-	if err != nil {
-		t.Errorf("%v", err)
-	}
-	// t.Logf("<- %v\n", hexkey(response))
-
-	// initiator reads receiver's response and the key exchange completes
-	recNonce, remoteRandomPubKey, _, err := completeHandshake(response, prv0)
-	if err != nil {
-		t.Errorf("completeHandshake error: %v", err)
-	}
-
-	// now both parties should have the same session parameters
-	initSessionToken, err := newSession(initNonce, recNonce, randomPrivKey, remoteRandomPubKey)
-	if err != nil {
-		t.Errorf("newSession error: %v", err)
-	}
-
-	recSessionToken, err := newSession(remoteInitNonce, remoteRecNonce, remoteRandomPrivKey, remoteInitRandomPubKey)
-	if err != nil {
-		t.Errorf("newSession error: %v", err)
-	}
-
-	// fmt.Printf("\nauth (%v) %x\n\nresp (%v) %x\n\n", len(auth), auth, len(response), response)
-
-	// fmt.Printf("\nauth %x\ninitNonce %x\nresponse%x\nremoteRecNonce %x\nremoteInitNonce %x\nremoteRandomPubKey %x\nrecNonce %x\nremoteInitRandomPubKey %x\ninitSessionToken %x\n\n", auth, initNonce, response, remoteRecNonce, remoteInitNonce, remoteRandomPubKey, recNonce, remoteInitRandomPubKey, initSessionToken)
-
-	if !bytes.Equal(initNonce, remoteInitNonce) {
-		t.Errorf("nonces do not match")
-	}
-	if !bytes.Equal(recNonce, remoteRecNonce) {
-		t.Errorf("receiver nonces do not match")
-	}
-	if !bytes.Equal(initSessionToken, recSessionToken) {
-		t.Errorf("session tokens do not match")
-	}
-}
-
 func TestEncHandshake(t *testing.T) {
-	defer testlog(t).detach()
-
-	prv0, _ := crypto.GenerateKey()
-	prv1, _ := crypto.GenerateKey()
-	pub0s, _ := exportPublicKey(&prv0.PublicKey)
-	pub1s, _ := exportPublicKey(&prv1.PublicKey)
-	rw0, rw1 := net.Pipe()
-	tokens := make(chan []byte)
-
-	go func() {
-		token, err := outboundEncHandshake(rw0, prv0, pub1s, nil)
-		if err != nil {
-			t.Errorf("outbound side error: %v", err)
+	for i := 0; i < 20; i++ {
+		start := time.Now()
+		if err := testEncHandshake(nil); err != nil {
+			t.Fatalf("i=%d %v", i, err)
 		}
-		tokens <- token
-	}()
-	go func() {
-		token, remotePubkey, err := inboundEncHandshake(rw1, prv1, nil)
-		if err != nil {
-			t.Errorf("inbound side error: %v", err)
-		}
-		if !bytes.Equal(remotePubkey, pub0s) {
-			t.Errorf("inbound side returned wrong remote pubkey\n  got:  %x\n  want: %x", remotePubkey, pub0s)
-		}
-		tokens <- token
-	}()
-
-	t1, t2 := <-tokens, <-tokens
-	if !bytes.Equal(t1, t2) {
-		t.Error("session token mismatch")
+		t.Logf("(without token) %d %v\n", i+1, time.Since(start))
 	}
+
+	for i := 0; i < 20; i++ {
+		tok := make([]byte, shaLen)
+		rand.Reader.Read(tok)
+		start := time.Now()
+		if err := testEncHandshake(tok); err != nil {
+			t.Fatalf("i=%d %v", i, err)
+		}
+		t.Logf("(with token) %d %v\n", i+1, time.Since(start))
+	}
+}
+
+func testEncHandshake(token []byte) error {
+	type result struct {
+		side string
+		s    secrets
+		err  error
+	}
+	var (
+		prv0, _  = crypto.GenerateKey()
+		prv1, _  = crypto.GenerateKey()
+		rw0, rw1 = net.Pipe()
+		output   = make(chan result)
+	)
+
+	go func() {
+		r := result{side: "initiator"}
+		defer func() { output <- r }()
+
+		pub1s := discover.PubkeyID(&prv1.PublicKey)
+		r.s, r.err = initiatorEncHandshake(rw0, prv0, pub1s, token)
+		if r.err != nil {
+			return
+		}
+		id1 := discover.PubkeyID(&prv1.PublicKey)
+		if r.s.RemoteID != id1 {
+			r.err = fmt.Errorf("remote ID mismatch: got %v, want: %v", r.s.RemoteID, id1)
+		}
+	}()
+	go func() {
+		r := result{side: "receiver"}
+		defer func() { output <- r }()
+
+		r.s, r.err = receiverEncHandshake(rw1, prv1, token)
+		if r.err != nil {
+			return
+		}
+		id0 := discover.PubkeyID(&prv0.PublicKey)
+		if r.s.RemoteID != id0 {
+			r.err = fmt.Errorf("remote ID mismatch: got %v, want: %v", r.s.RemoteID, id0)
+		}
+	}()
+
+	// wait for results from both sides
+	r1, r2 := <-output, <-output
+
+	if r1.err != nil {
+		return fmt.Errorf("%s side error: %v", r1.side, r1.err)
+	}
+	if r2.err != nil {
+		return fmt.Errorf("%s side error: %v", r2.side, r2.err)
+	}
+
+	// don't compare remote node IDs
+	r1.s.RemoteID, r2.s.RemoteID = discover.NodeID{}, discover.NodeID{}
+	// flip MACs on one of them so they compare equal
+	r1.s.EgressMAC, r1.s.IngressMAC = r1.s.IngressMAC, r1.s.EgressMAC
+	if !reflect.DeepEqual(r1.s, r2.s) {
+		return fmt.Errorf("secrets mismatch:\n t1: %#v\n t2: %#v", r1.s, r2.s)
+	}
+	return nil
 }
 
 func TestSetupConn(t *testing.T) {

@@ -1,43 +1,36 @@
 package accounts
 
 import (
+	"io/ioutil"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
-	"github.com/ethereum/go-ethereum/ethutil"
-	"time"
 )
 
-func TestAccountManager(t *testing.T) {
-	ks := crypto.NewKeyStorePlain(ethutil.DefaultDataDir() + "/testaccounts")
-	am := NewAccountManager(ks, 100)
+func TestSign(t *testing.T) {
+	dir, ks := tmpKeyStore(t, crypto.NewKeyStorePlain)
+	defer os.RemoveAll(dir)
+
+	am := NewManager(ks)
 	pass := "" // not used but required by API
 	a1, err := am.NewAccount(pass)
 	toSign := randentropy.GetEntropyCSPRNG(32)
-	_, err = am.SignLocked(a1, pass, toSign)
+	am.Unlock(a1.Address, "")
+
+	_, err = am.Sign(a1, toSign)
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	// Cleanup
-	time.Sleep(time.Millisecond * 150) // wait for locking
-
-	accounts, err := am.Accounts()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, account := range accounts {
-		err := am.DeleteAccount(account.Address, pass)
-		if err != nil {
-			t.Fatal(err)
-		}
 	}
 }
 
-func TestAccountManagerLocking(t *testing.T) {
-	ks := crypto.NewKeyStorePassphrase(ethutil.DefaultDataDir() + "/testaccounts")
-	am := NewAccountManager(ks, 200)
+func TestTimedUnlock(t *testing.T) {
+	dir, ks := tmpKeyStore(t, crypto.NewKeyStorePassphrase)
+	defer os.RemoveAll(dir)
+
+	am := NewManager(ks)
 	pass := "foo"
 	a1, err := am.NewAccount(pass)
 	toSign := randentropy.GetEntropyCSPRNG(32)
@@ -45,38 +38,32 @@ func TestAccountManagerLocking(t *testing.T) {
 	// Signing without passphrase fails because account is locked
 	_, err = am.Sign(a1, toSign)
 	if err != ErrLocked {
-		t.Fatal(err)
+		t.Fatal("Signing should've failed with ErrLocked before unlocking, got ", err)
 	}
 
 	// Signing with passphrase works
-	_, err = am.SignLocked(a1, pass, toSign)
-	if err != nil {
+	if err = am.TimedUnlock(a1.Address, pass, 100*time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
 
 	// Signing without passphrase works because account is temp unlocked
 	_, err = am.Sign(a1, toSign)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("Signing shouldn't return an error after unlocking, got ", err)
 	}
 
-	// Signing without passphrase fails after automatic locking
-	time.Sleep(time.Millisecond * time.Duration(250))
-
+	// Signing fails again after automatic locking
+	time.Sleep(150 * time.Millisecond)
 	_, err = am.Sign(a1, toSign)
 	if err != ErrLocked {
-		t.Fatal(err)
+		t.Fatal("Signing should've failed with ErrLocked timeout expired, got ", err)
 	}
+}
 
-	// Cleanup
-	accounts, err := am.Accounts()
+func tmpKeyStore(t *testing.T, new func(string) crypto.KeyStore2) (string, crypto.KeyStore2) {
+	d, err := ioutil.TempDir("", "eth-keystore-test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, account := range accounts {
-		err := am.DeleteAccount(account.Address, pass)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
+	return d, new(d)
 }

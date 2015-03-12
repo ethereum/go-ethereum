@@ -2,10 +2,10 @@ package whisper
 
 import (
 	"fmt"
-	"io/ioutil"
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -38,11 +38,11 @@ func (self *peer) init() error {
 
 func (self *peer) start() {
 	go self.update()
-	self.peer.Infoln("whisper started")
+	self.peer.Debugln("whisper started")
 }
 
 func (self *peer) stop() {
-	self.peer.Infoln("whisper stopped")
+	self.peer.Debugln("whisper stopped")
 
 	close(self.quit)
 }
@@ -77,8 +77,7 @@ func (self *peer) broadcast(envelopes []*Envelope) error {
 	}
 
 	if i > 0 {
-		msg := p2p.NewMsg(envelopesMsg, envs[:i]...)
-		if err := self.ws.WriteMsg(msg); err != nil {
+		if err := p2p.EncodeMsg(self.ws, envelopesMsg, envs[:i]...); err != nil {
 			return err
 		}
 		self.peer.DebugDetailln("broadcasted", i, "message(s)")
@@ -93,34 +92,28 @@ func (self *peer) addKnown(envelope *Envelope) {
 
 func (self *peer) handleStatus() error {
 	ws := self.ws
-
 	if err := ws.WriteMsg(self.statusMsg()); err != nil {
 		return err
 	}
-
 	msg, err := ws.ReadMsg()
 	if err != nil {
 		return err
 	}
-
 	if msg.Code != statusMsg {
 		return fmt.Errorf("peer send %x before status msg", msg.Code)
 	}
-
-	data, err := ioutil.ReadAll(msg.Payload)
+	s := rlp.NewStream(msg.Payload)
+	if _, err := s.List(); err != nil {
+		return fmt.Errorf("bad status message: %v", err)
+	}
+	pv, err := s.Uint()
 	if err != nil {
-		return err
+		return fmt.Errorf("bad status message: %v", err)
 	}
-
-	if len(data) == 0 {
-		return fmt.Errorf("malformed status. data len = 0")
-	}
-
-	if pv := data[0]; pv != protocolVersion {
+	if pv != protocolVersion {
 		return fmt.Errorf("protocol version mismatch %d != %d", pv, protocolVersion)
 	}
-
-	return nil
+	return msg.Discard() // ignore anything after protocol version
 }
 
 func (self *peer) statusMsg() p2p.Msg {

@@ -1,10 +1,28 @@
 package rpc
 
 import (
+	"encoding/json"
 	"sync"
 	"testing"
 	"time"
 )
+
+func TestWeb3Sha3(t *testing.T) {
+	jsonstr := `{"jsonrpc":"2.0","method":"web3_sha3","params":["0x68656c6c6f20776f726c64"],"id":64}`
+	expected := "0x47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad"
+
+	api := &EthereumApi{}
+
+	var req RpcRequest
+	json.Unmarshal([]byte(jsonstr), &req)
+
+	var response interface{}
+	_ = api.GetRequestReply(&req, &response)
+
+	if response.(string) != expected {
+		t.Errorf("Expected %s got %s", expected, response)
+	}
+}
 
 func TestFilterClose(t *testing.T) {
 	t.Skip()

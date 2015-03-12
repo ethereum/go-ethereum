@@ -32,23 +32,23 @@ func PrecompiledContracts() map[string]*PrecompiledAccount {
 
 		// SHA256
 		string(ethutil.LeftPadBytes([]byte{2}, 20)): &PrecompiledAccount{func(l int) *big.Int {
-			n := big.NewInt(int64(l+31)/32 + 1)
-			n.Mul(n, GasSha256)
-			return n
+			n := big.NewInt(int64(l+31) / 32)
+			n.Mul(n, GasSha256Word)
+			return n.Add(n, GasSha256Base)
 		}, sha256Func},
 
 		// RIPEMD160
 		string(ethutil.LeftPadBytes([]byte{3}, 20)): &PrecompiledAccount{func(l int) *big.Int {
-			n := big.NewInt(int64(l+31)/32 + 1)
-			n.Mul(n, GasRipemd)
-			return n
+			n := big.NewInt(int64(l+31) / 32)
+			n.Mul(n, GasRipemdWord)
+			return n.Add(n, GasRipemdBase)
 		}, ripemd160Func},
 
 		string(ethutil.LeftPadBytes([]byte{4}, 20)): &PrecompiledAccount{func(l int) *big.Int {
-			n := big.NewInt(int64(l+31)/32 + 1)
-			n.Mul(n, GasMemCpy)
+			n := big.NewInt(int64(l+31) / 32)
+			n.Mul(n, GasIdentityWord)
 
-			return n
+			return n.Add(n, GasIdentityBase)
 		}, memCpy},
 	}
 }

@@ -47,9 +47,7 @@ type UiLib struct {
 	connected bool
 	assetPath string
 	// The main application window
-	win      *qml.Window
-	Db       *Debugger
-	DbWindow *DebuggerWindow
+	win *qml.Window
 
 	jsEngine *javascript.JSRE
 
@@ -58,7 +56,8 @@ type UiLib struct {
 }
 
 func NewUiLib(engine *qml.Engine, eth *eth.Ethereum, assetPath string) *UiLib {
-	lib := &UiLib{XEth: xeth.New(eth), engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(eth), filterCallbacks: make(map[int][]int)} //, filters: make(map[int]*xeth.JSFilter)}
+	x := xeth.New(eth, nil)
+	lib := &UiLib{XEth: x, engine: engine, eth: eth, assetPath: assetPath, jsEngine: javascript.NewJSRE(x), filterCallbacks: make(map[int][]int)} //, filters: make(map[int]*xeth.JSFilter)}
 	lib.filterManager = filter.NewFilterManager(eth.EventMux())
 	go lib.filterManager.Start()
 
@@ -88,24 +87,6 @@ func (self *UiLib) EvalJavascriptString(str string) string {
 	}
 
 	return fmt.Sprintf("%v", value)
-}
-
-func (ui *UiLib) OpenQml(path string) {
-	container := NewQmlApplication(path[7:], ui)
-	app := NewExtApplication(container, ui)
-
-	go app.run()
-}
-
-func (ui *UiLib) OpenHtml(path string) {
-	container := NewHtmlApplication(path, ui)
-	app := NewExtApplication(container, ui)
-
-	go app.run()
-}
-
-func (ui *UiLib) OpenBrowser() {
-	ui.OpenHtml("file://" + ui.AssetPath("ext/home.html"))
 }
 
 func (ui *UiLib) Muted(content string) {
@@ -143,33 +124,11 @@ func (ui *UiLib) AssetPath(p string) string {
 	return path.Join(ui.assetPath, p)
 }
 
-func (self *UiLib) StartDbWithContractAndData(contractHash, data string) {
-	dbWindow := NewDebuggerWindow(self)
-	object := self.eth.ChainManager().State().GetStateObject(ethutil.Hex2Bytes(contractHash))
-	if len(object.Code()) > 0 {
-		dbWindow.SetCode(ethutil.Bytes2Hex(object.Code()))
-	}
-	dbWindow.SetData(data)
-
-	dbWindow.Show()
-}
-
-func (self *UiLib) StartDbWithCode(code string) {
-	dbWindow := NewDebuggerWindow(self)
-	dbWindow.SetCode(code)
-	dbWindow.Show()
-}
-
-func (self *UiLib) StartDebugger() {
-	dbWindow := NewDebuggerWindow(self)
-
-	dbWindow.Show()
-}
-
 func (self *UiLib) Transact(params map[string]interface{}) (string, error) {
 	object := mapToTxParams(params)
 
 	return self.XEth.Transact(
+		object["from"],
 		object["to"],
 		object["value"],
 		object["gas"],
@@ -216,22 +175,12 @@ func (self *UiLib) RemoveLocalTransaction(id int) {
 	//self.miner.RemoveLocalTx(id)
 }
 
-func (self *UiLib) SetGasPrice(price string) {
-	self.Miner().MinAcceptedGasPrice = ethutil.Big(price)
-}
-
-func (self *UiLib) SetExtra(extra string) {
-	self.Miner().Extra = extra
-}
-
 func (self *UiLib) ToggleMining() bool {
-	if !self.Miner().Mining() {
-		self.Miner().Start()
-
-		return true
+	if !self.eth.IsMining() {
+		err := self.eth.StartMining()
+		return err == nil
 	} else {
-		self.Miner().Stop()
-
+		self.eth.StopMining()
 		return false
 	}
 }

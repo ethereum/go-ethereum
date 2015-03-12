@@ -23,7 +23,7 @@ type Transaction struct {
 	Recipient    []byte
 	Amount       *big.Int
 	Payload      []byte
-	V            uint64
+	V            byte
 	R, S         []byte
 }
 
@@ -129,14 +129,22 @@ func (tx *Transaction) sender() []byte {
 	return crypto.Sha3(pubkey[1:])[12:]
 }
 
+// TODO: deprecate after new accounts & key stores are integrated
 func (tx *Transaction) Sign(privk []byte) error {
 
 	sig := tx.Signature(privk)
 
 	tx.R = sig[:32]
 	tx.S = sig[32:64]
-	tx.V = uint64(sig[64] + 27)
+	tx.V = sig[64] + 27
 
+	return nil
+}
+
+func (tx *Transaction) SetSignatureValues(sig []byte) error {
+	tx.R = sig[:32]
+	tx.S = sig[32:64]
+	tx.V = sig[64] + 27
 	return nil
 }
 
@@ -165,7 +173,7 @@ func (tx *Transaction) RlpValueDecode(decoder *ethutil.Value) {
 	tx.Recipient = decoder.Get(3).Bytes()
 	tx.Amount = decoder.Get(4).BigInt()
 	tx.Payload = decoder.Get(5).Bytes()
-	tx.V = decoder.Get(6).Uint()
+	tx.V = decoder.Get(6).Byte()
 	tx.R = decoder.Get(7).Bytes()
 	tx.S = decoder.Get(8).Bytes()
 }

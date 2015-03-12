@@ -20,30 +20,27 @@ type ConfigManager struct {
 	conf *globalconf.GlobalConf
 }
 
-var Config *ConfigManager
-
 // Read config
 //
 // Initialize Config from Config File
 func ReadConfig(ConfigFile string, Datadir string, EnvPrefix string) *ConfigManager {
-	if Config == nil {
-		// create ConfigFile if does not exist, otherwise globalconf panic when trying to persist flags
-		if !FileExist(ConfigFile) {
-			fmt.Printf("config file '%s' doesn't exist, creating it\n", ConfigFile)
-			os.Create(ConfigFile)
-		}
-		g, err := globalconf.NewWithOptions(&globalconf.Options{
-			Filename:  ConfigFile,
-			EnvPrefix: EnvPrefix,
-		})
-		if err != nil {
-			fmt.Println(err)
-		} else {
-			g.ParseAll()
-		}
-		Config = &ConfigManager{ExecPath: Datadir, Debug: true, conf: g, Paranoia: true}
+	if !FileExist(ConfigFile) {
+		// create ConfigFile if it does not exist, otherwise
+		// globalconf will panic when trying to persist flags.
+		fmt.Printf("config file '%s' doesn't exist, creating it\n", ConfigFile)
+		os.Create(ConfigFile)
 	}
-	return Config
+	g, err := globalconf.NewWithOptions(&globalconf.Options{
+		Filename:  ConfigFile,
+		EnvPrefix: EnvPrefix,
+	})
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		g.ParseAll()
+	}
+	cfg := &ConfigManager{ExecPath: Datadir, Debug: true, conf: g, Paranoia: true}
+	return cfg
 }
 
 // provides persistence for flags

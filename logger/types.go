@@ -8,7 +8,12 @@ import (
 type utctime8601 struct{}
 
 func (utctime8601) MarshalJSON() ([]byte, error) {
-	return []byte(`"` + time.Now().UTC().Format(time.RFC3339Nano)[:26] + `Z"`), nil
+	timestr := time.Now().UTC().Format(time.RFC3339Nano)
+	// Bounds check
+	if len(timestr) > 26 {
+		timestr = timestr[:26]
+	}
+	return []byte(`"` + timestr + `Z"`), nil
 }
 
 type JsonLog interface {

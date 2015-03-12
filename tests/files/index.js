@@ -13,6 +13,9 @@ Object.defineProperties(tests, {
   stateTests: {
     get: require('require-all').bind(this, __dirname + '/StateTests/')
   },
+  transactionTests:{
+    get: require('require-all').bind(this, __dirname + '/TransactionTests/')
+  },
   vmTests: {
     get: require('require-all').bind(this, __dirname + '/VMTests')
   }

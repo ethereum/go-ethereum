@@ -20,8 +20,8 @@ const (
 	baseProtocolLength     = uint64(16)
 	baseProtocolMaxMsgSize = 10 * 1024 * 1024
 
-	disconnectGracePeriod = 2 * time.Second
 	pingInterval          = 15 * time.Second
+	disconnectGracePeriod = 2 * time.Second
 )
 
 const (
@@ -40,6 +40,7 @@ type Peer struct {
 	// Use them to display messages related to the peer.
 	*logger.Logger
 
+	conn    net.Conn
 	rw      *conn
 	running map[string]*protoRW
 
@@ -52,8 +53,9 @@ type Peer struct {
 // NewPeer returns a peer for testing purposes.
 func NewPeer(id discover.NodeID, name string, caps []Cap) *Peer {
 	pipe, _ := net.Pipe()
-	conn := newConn(pipe, &protoHandshake{ID: id, Name: name, Caps: caps})
-	peer := newPeer(conn, nil)
+	msgpipe, _ := MsgPipe()
+	conn := &conn{msgpipe, &protoHandshake{ID: id, Name: name, Caps: caps}}
+	peer := newPeer(pipe, conn, nil)
 	close(peer.closed) // ensures Disconnect doesn't block
 	return peer
 }
@@ -76,12 +78,12 @@ func (p *Peer) Caps() []Cap {
 
 // RemoteAddr returns the remote address of the network connection.
 func (p *Peer) RemoteAddr() net.Addr {
-	return p.rw.RemoteAddr()
+	return p.conn.RemoteAddr()
 }
 
 // LocalAddr returns the local address of the network connection.
 func (p *Peer) LocalAddr() net.Addr {
-	return p.rw.LocalAddr()
+	return p.conn.LocalAddr()
 }
 
 // Disconnect terminates the peer connection with the given reason.
@@ -98,10 +100,11 @@ func (p *Peer) String() string {
 	return fmt.Sprintf("Peer %.8x %v", p.rw.ID[:], p.RemoteAddr())
 }
 
-func newPeer(conn *conn, protocols []Protocol) *Peer {
-	logtag := fmt.Sprintf("Peer %.8x %v", conn.ID[:], conn.RemoteAddr())
+func newPeer(fd net.Conn, conn *conn, protocols []Protocol) *Peer {
+	logtag := fmt.Sprintf("Peer %.8x %v", conn.ID[:], fd.RemoteAddr())
 	p := &Peer{
 		Logger:   logger.NewLogger(logtag),
+		conn:     fd,
 		rw:       conn,
 		running:  matchProtocols(protocols, conn.Caps, conn),
 		disc:     make(chan DiscReason),
@@ -138,7 +141,7 @@ loop:
 			// We rely on protocols to abort if there is a write error. It
 			// might be more robust to handle them here as well.
 			p.DebugDetailf("Read error: %v\n", err)
-			p.rw.Close()
+			p.conn.Close()
 			return DiscNetworkError
 		case err := <-p.protoErr:
 			reason = discReasonForError(err)
@@ -161,18 +164,19 @@ func (p *Peer) politeDisconnect(reason DiscReason) {
 		EncodeMsg(p.rw, discMsg, uint(reason))
 		// Wait for the other side to close the connection.
 		// Discard any data that they send until then.
-		io.Copy(ioutil.Discard, p.rw)
+		io.Copy(ioutil.Discard, p.conn)
 		close(done)
 	}()
 	select {
 	case <-done:
 	case <-time.After(disconnectGracePeriod):
 	}
-	p.rw.Close()
+	p.conn.Close()
 }
 
 func (p *Peer) readLoop() error {
 	for {
+		p.conn.SetDeadline(time.Now().Add(frameReadTimeout))
 		msg, err := p.rw.ReadMsg()
 		if err != nil {
 			return err
@@ -190,12 +194,12 @@ func (p *Peer) handle(msg Msg) error {
 		msg.Discard()
 		go EncodeMsg(p.rw, pongMsg)
 	case msg.Code == discMsg:
-		var reason DiscReason
+		var reason [1]DiscReason
 		// no need to discard or for error checking, we'll close the
 		// connection after this.
 		rlp.Decode(msg.Payload, &reason)
 		p.Disconnect(DiscRequested)
-		return discRequestedError(reason)
+		return discRequestedError(reason[0])
 	case msg.Code < baseProtocolLength:
 		// ignore other base protocol messages
 		return msg.Discard()

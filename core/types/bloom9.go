@@ -14,7 +14,7 @@ func CreateBloom(receipts Receipts) []byte {
 		bin.Or(bin, LogsBloom(receipt.logs))
 	}
 
-	return ethutil.LeftPadBytes(bin.Bytes(), 64)
+	return ethutil.LeftPadBytes(bin.Bytes(), 256)
 }
 
 func LogsBloom(logs state.Logs) *big.Int {
@@ -37,9 +37,10 @@ func LogsBloom(logs state.Logs) *big.Int {
 
 func bloom9(b []byte) *big.Int {
 	r := new(big.Int)
-	for _, i := range []int{0, 2, 4} {
+
+	for i := 0; i < 16; i += 2 {
 		t := big.NewInt(1)
-		b := uint(b[i+1]) + 256*(uint(b[i])&1)
+		b := uint(b[i+1]) + 1024*(uint(b[i])&1)
 		r.Or(r, t.Lsh(t, b))
 	}
 

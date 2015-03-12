@@ -58,7 +58,7 @@ func (c *Context) GetRangeValue(x, size uint64) []byte {
 	x = uint64(math.Min(float64(x), float64(len(c.Code))))
 	y := uint64(math.Min(float64(x+size), float64(len(c.Code))))
 
-	return ethutil.LeftPadBytes(c.Code[x:y], int(size))
+	return ethutil.RightPadBytes(c.Code[x:y], int(size))
 }
 
 func (c *Context) GetCode(x, size uint64) []byte {

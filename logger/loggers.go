@@ -42,74 +42,74 @@ func NewLogger(tag string) *Logger {
 	return &Logger{"[" + tag + "] "}
 }
 
-func (logger *Logger) sendln(level LogLevel, v ...interface{}) {
+func (logger *Logger) Sendln(level LogLevel, v ...interface{}) {
 	logMessageC <- message{level, logger.tag + fmt.Sprintln(v...)}
 }
 
-func (logger *Logger) sendf(level LogLevel, format string, v ...interface{}) {
+func (logger *Logger) Sendf(level LogLevel, format string, v ...interface{}) {
 	logMessageC <- message{level, logger.tag + fmt.Sprintf(format, v...)}
 }
 
 // Errorln writes a message with ErrorLevel.
 func (logger *Logger) Errorln(v ...interface{}) {
-	logger.sendln(ErrorLevel, v...)
+	logger.Sendln(ErrorLevel, v...)
 }
 
 // Warnln writes a message with WarnLevel.
 func (logger *Logger) Warnln(v ...interface{}) {
-	logger.sendln(WarnLevel, v...)
+	logger.Sendln(WarnLevel, v...)
 }
 
 // Infoln writes a message with InfoLevel.
 func (logger *Logger) Infoln(v ...interface{}) {
-	logger.sendln(InfoLevel, v...)
+	logger.Sendln(InfoLevel, v...)
 }
 
 // Debugln writes a message with DebugLevel.
 func (logger *Logger) Debugln(v ...interface{}) {
-	logger.sendln(DebugLevel, v...)
+	logger.Sendln(DebugLevel, v...)
 }
 
 // DebugDetailln writes a message with DebugDetailLevel.
 func (logger *Logger) DebugDetailln(v ...interface{}) {
-	logger.sendln(DebugDetailLevel, v...)
+	logger.Sendln(DebugDetailLevel, v...)
 }
 
 // Errorf writes a message with ErrorLevel.
 func (logger *Logger) Errorf(format string, v ...interface{}) {
-	logger.sendf(ErrorLevel, format, v...)
+	logger.Sendf(ErrorLevel, format, v...)
 }
 
 // Warnf writes a message with WarnLevel.
 func (logger *Logger) Warnf(format string, v ...interface{}) {
-	logger.sendf(WarnLevel, format, v...)
+	logger.Sendf(WarnLevel, format, v...)
 }
 
 // Infof writes a message with InfoLevel.
 func (logger *Logger) Infof(format string, v ...interface{}) {
-	logger.sendf(InfoLevel, format, v...)
+	logger.Sendf(InfoLevel, format, v...)
 }
 
 // Debugf writes a message with DebugLevel.
 func (logger *Logger) Debugf(format string, v ...interface{}) {
-	logger.sendf(DebugLevel, format, v...)
+	logger.Sendf(DebugLevel, format, v...)
 }
 
 // DebugDetailf writes a message with DebugDetailLevel.
 func (logger *Logger) DebugDetailf(format string, v ...interface{}) {
-	logger.sendf(DebugDetailLevel, format, v...)
+	logger.Sendf(DebugDetailLevel, format, v...)
 }
 
 // Fatalln writes a message with ErrorLevel and exits the program.
 func (logger *Logger) Fatalln(v ...interface{}) {
-	logger.sendln(ErrorLevel, v...)
+	logger.Sendln(ErrorLevel, v...)
 	Flush()
 	os.Exit(0)
 }
 
 // Fatalf writes a message with ErrorLevel and exits the program.
 func (logger *Logger) Fatalf(format string, v ...interface{}) {
-	logger.sendf(ErrorLevel, format, v...)
+	logger.Sendf(ErrorLevel, format, v...)
 	Flush()
 	os.Exit(0)
 }

@@ -190,17 +190,15 @@ ApplicationWindow {
                 }
             }
 
+            MenuItem {
+                text: "Generate key"
+                shortcut: "Ctrl+k"
+                onTriggered: gui.generateKey()
+            }
         }
 
         Menu {
             title: "Developer"
-            MenuItem {
-                iconSource: "../icecream.png"
-                text: "Debugger"
-                shortcut: "Ctrl+d"
-                onTriggered: eth.startDebugger()
-            }
-
             MenuItem {
                 text: "Import Tx"
                 onTriggered: {
@@ -756,24 +754,6 @@ ApplicationWindow {
                      }
                  }
 
-                 Rectangle {
-                     height: 55
-                     color: "transparent"
-                     visible: true
-                     Text {
-                         text: "DEBUG"
-                         font.family: sourceSansPro.name 
-                         font.weight: Font.DemiBold
-                         anchors {
-                             left: parent.left
-                             top: parent.verticalCenter
-                             leftMargin: 16
-                         }
-                         color: "#AAA0A0"
-                     }
-                 }
-
-
                  ColumnLayout {
                      id: menuLegacy
                      visible: true
@@ -981,7 +961,7 @@ ApplicationWindow {
                  anchors.top: parent.top
                  anchors.topMargin: 30
                  font.pointSize: 12
-                 text: "<h2>Mist (0.8.6)</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Viktor Trón<br>Felix Lange<br>Taylor Gerring<br>Daniel Nagy<br>Gustav Simonsson<br><h3>UX/UI</h3>Alex van de Sande<br>Fabian Vogelsteller"
+                 text: "<h2>Mist (0.9.0)</h2><br><h3>Development</h3>Jeffrey Wilcke<br>Viktor Trón<br>Felix Lange<br>Taylor Gerring<br>Daniel Nagy<br>Gustav Simonsson<br><h3>UX/UI</h3>Alex van de Sande<br>Fabian Vogelsteller"
              }
          }
 
