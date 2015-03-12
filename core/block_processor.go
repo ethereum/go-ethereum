@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/state"
 	"gopkg.in/fatih/set.v0"
 )
@@ -23,7 +24,8 @@ type PendingBlockEvent struct {
 var statelogger = logger.NewLogger("BLOCK")
 
 type BlockProcessor struct {
-	db ethutil.Database
+	db      ethutil.Database
+	extraDb ethutil.Database
 	// Mutex for locking the block processor. Blocks can only be handled one at a time
 	mutex sync.Mutex
 	// Canonical block chain
@@ -45,9 +47,10 @@ type BlockProcessor struct {
 	eventMux *event.TypeMux
 }
 
-func NewBlockProcessor(db ethutil.Database, pow pow.PoW, txpool *TxPool, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
+func NewBlockProcessor(db, extra ethutil.Database, pow pow.PoW, txpool *TxPool, chainManager *ChainManager, eventMux *event.TypeMux) *BlockProcessor {
 	sm := &BlockProcessor{
 		db:       db,
+		extraDb:  extra,
 		mem:      make(map[string]*big.Int),
 		Pow:      pow,
 		bc:       chainManager,
@@ -230,6 +233,10 @@ func (sm *BlockProcessor) processWithParent(block, parent *types.Block) (td *big
 	// Remove transactions from the pool
 	sm.txpool.RemoveSet(block.Transactions())
 
+	for _, tx := range block.Transactions() {
+		putTx(sm.extraDb, tx)
+	}
+
 	chainlogger.Infof("processed block #%d (%x...)\n", header.Number, block.Hash()[0:4])
 
 	return td, nil
@@ -346,4 +353,13 @@ func (sm *BlockProcessor) GetLogs(block *types.Block) (logs state.Logs, err erro
 	sm.AccumulateRewards(state, block, parent)
 
 	return state.Logs(), nil
+}
+
+func putTx(db ethutil.Database, tx *types.Transaction) {
+	rlpEnc, err := rlp.EncodeToBytes(tx)
+	if err != nil {
+		statelogger.Infoln("Failed encoding tx", err)
+		return
+	}
+	db.Put(tx.Hash(), rlpEnc)
 }
