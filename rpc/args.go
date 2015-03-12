@@ -280,8 +280,8 @@ func (args *BlockNumIndexArgs) UnmarshalJSON(b []byte) (err error) {
 }
 
 type HashIndexArgs struct {
-	BlockHash string
-	Index     int64
+	Hash  string
+	Index int64
 }
 
 func (args *HashIndexArgs) UnmarshalJSON(b []byte) (err error) {
@@ -299,7 +299,7 @@ func (args *HashIndexArgs) UnmarshalJSON(b []byte) (err error) {
 	if !ok {
 		return errDecodeArgs
 	}
-	args.BlockHash = arg0
+	args.Hash = arg0
 
 	if len(obj) > 1 {
 		arg1, ok := obj[1].(string)

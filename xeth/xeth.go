@@ -32,6 +32,7 @@ type Backend interface {
 	Peers() []*p2p.Peer
 	BlockDb() ethutil.Database
 	StateDb() ethutil.Database
+	ExtraDb() ethutil.Database
 	EventMux() *event.TypeMux
 	Whisper() *whisper.Whisper
 
@@ -125,6 +126,14 @@ func (self *XEth) EthBlockByHash(strHash string) *types.Block {
 	block := self.chainManager.GetBlock(hash)
 
 	return block
+}
+
+func (self *XEth) EthTransactionByHash(hash string) *types.Transaction {
+	data, _ := self.eth.ExtraDb().Get(fromHex(hash))
+	if len(data) != 0 {
+		return types.NewTransactionFromBytes(data)
+	}
+	return nil
 }
 
 func (self *XEth) BlockByNumber(num int64) *Block {
@@ -229,10 +238,6 @@ func (self *XEth) SecretToAddress(key string) string {
 	}
 
 	return toHex(pair.Address())
-}
-
-func (self *XEth) Execute(addr, value, gas, price, data string) (string, error) {
-	return "", nil
 }
 
 type KeyVal struct {

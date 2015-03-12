@@ -421,6 +421,14 @@ func (p *EthereumApi) WhisperMessages(id int, reply *interface{}) error {
 	return nil
 }
 
+func (p *EthereumApi) GetTransactionByHash(hash string, reply *interface{}) error {
+	tx := p.xeth().EthTransactionByHash(hash)
+	if tx != nil {
+		*reply = NewTransactionRes(tx)
+	}
+	return nil
+}
+
 func (p *EthereumApi) GetBlockByHash(blockhash string, includetx bool) (*BlockRes, error) {
 	block := p.xeth().EthBlockByHash(blockhash)
 	br := NewBlockRes(block)
@@ -594,14 +602,18 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		*reply = v
 	case "eth_getTransactionByHash":
-		return errNotImplemented
+		// HashIndexArgs used, but only the "Hash" part we need.
+		args := new(HashIndexArgs)
+		if err := json.Unmarshal(req.Params, &args); err != nil {
+		}
+		return p.GetTransactionByHash(args.Hash, reply)
 	case "eth_getTransactionByBlockHashAndIndex":
 		args := new(HashIndexArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 
-		v, err := p.GetBlockByHash(args.BlockHash, true)
+		v, err := p.GetBlockByHash(args.Hash, true)
 		if err != nil {
 			return err
 		}
@@ -629,7 +641,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 
-		v, err := p.GetBlockByHash(args.BlockHash, false)
+		v, err := p.GetBlockByHash(args.Hash, false)
 		if err != nil {
 			return err
 		}
