@@ -167,7 +167,10 @@ func (self *EthereumApi) NewFilter(args *FilterOptions, reply *interface{}) erro
 }
 
 func (self *EthereumApi) UninstallFilter(id int, reply *interface{}) error {
-	delete(self.logs, id)
+	if _, ok := self.logs[id]; ok {
+		delete(self.logs, id)
+	}
+
 	self.filterManager.UninstallFilter(id)
 	*reply = true
 	return nil
