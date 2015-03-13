@@ -490,7 +490,13 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 	case "net_peerCount":
 		*reply = toHex(big.NewInt(int64(p.xeth().PeerCount())).Bytes())
 	case "eth_coinbase":
-		*reply = p.xeth().Coinbase()
+		// TODO handling of empty coinbase due to lack of accounts
+		res := p.xeth().Coinbase()
+		if res == "0x" || res == "0x0" {
+			*reply = nil
+		} else {
+			*reply = res
+		}
 	case "eth_mining":
 		*reply = p.xeth().IsMining()
 	case "eth_gasPrice":
