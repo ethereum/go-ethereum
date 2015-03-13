@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func blockNumber(raw json.RawMessage, number *int64) (err error) {
@@ -20,7 +20,7 @@ func blockNumber(raw json.RawMessage, number *int64) (err error) {
 	case "pending":
 		*number = 0
 	default:
-		*number = ethutil.String2Big(str).Int64()
+		*number = common.String2Big(str).Int64()
 	}
 	return nil
 }
@@ -73,7 +73,7 @@ func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 	if v, ok := obj[0].(float64); ok {
 		args.BlockNumber = int64(v)
 	} else {
-		args.BlockNumber = ethutil.Big(obj[0].(string)).Int64()
+		args.BlockNumber = common.Big(obj[0].(string)).Int64()
 	}
 
 	if len(obj) > 1 {
@@ -102,9 +102,9 @@ func (args *NewTxArgs) UnmarshalJSON(b []byte) (err error) {
 
 	args.From = obj.From
 	args.To = obj.To
-	args.Value = ethutil.Big(obj.Value)
-	args.Gas = ethutil.Big(obj.Gas)
-	args.GasPrice = ethutil.Big(obj.GasPrice)
+	args.Value = common.Big(obj.Value)
+	args.Gas = common.Big(obj.Gas)
+	args.GasPrice = common.Big(obj.GasPrice)
 	args.Data = obj.Data
 
 	return nil
@@ -208,7 +208,7 @@ func (args *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
 		if obj[1].(string) == "latest" {
 			args.BlockNumber = -1
 		} else {
-			args.BlockNumber = ethutil.Big(obj[1].(string)).Int64()
+			args.BlockNumber = common.Big(obj[1].(string)).Int64()
 		}
 	}
 
@@ -266,14 +266,14 @@ func (args *BlockNumIndexArgs) UnmarshalJSON(b []byte) (err error) {
 	if !ok {
 		return NewDecodeParamError("BlockNumber is not string")
 	}
-	args.BlockNumber = ethutil.Big(arg0).Int64()
+	args.BlockNumber = common.Big(arg0).Int64()
 
 	if len(obj) > 1 {
 		arg1, ok := obj[1].(string)
 		if !ok {
 			return NewDecodeParamError("Index not a string")
 		}
-		args.Index = ethutil.Big(arg1).Int64()
+		args.Index = common.Big(arg1).Int64()
 	}
 
 	return nil
@@ -306,7 +306,7 @@ func (args *HashIndexArgs) UnmarshalJSON(b []byte) (err error) {
 		if !ok {
 			return NewDecodeParamError("Index not a string")
 		}
-		args.Index = ethutil.Big(arg1).Int64()
+		args.Index = common.Big(arg1).Int64()
 	}
 
 	return nil
@@ -357,10 +357,10 @@ func (args *Sha3Args) UnmarshalJSON(b []byte) (err error) {
 // 	if len(obj) < 1 {
 // 		return errArguments
 // 	}
-// 	args.FromBlock = uint64(ethutil.Big(obj[0].FromBlock).Int64())
-// 	args.ToBlock = uint64(ethutil.Big(obj[0].ToBlock).Int64())
-// 	args.Limit = uint64(ethutil.Big(obj[0].Limit).Int64())
-// 	args.Offset = uint64(ethutil.Big(obj[0].Offset).Int64())
+// 	args.FromBlock = uint64(common.Big(obj[0].FromBlock).Int64())
+// 	args.ToBlock = uint64(common.Big(obj[0].ToBlock).Int64())
+// 	args.Limit = uint64(common.Big(obj[0].Limit).Int64())
+// 	args.Offset = uint64(common.Big(obj[0].Offset).Int64())
 // 	args.Address = obj[0].Address
 // 	args.Topics = obj[0].Topics
 
@@ -394,10 +394,10 @@ func (args *FilterOptions) UnmarshalJSON(b []byte) (err error) {
 		return NewInsufficientParamsError(len(obj), 1)
 	}
 
-	args.Earliest = int64(ethutil.Big(obj[0].FromBlock).Int64())
-	args.Latest = int64(ethutil.Big(obj[0].ToBlock).Int64())
-	args.Max = int(ethutil.Big(obj[0].Limit).Int64())
-	args.Skip = int(ethutil.Big(obj[0].Offset).Int64())
+	args.Earliest = int64(common.Big(obj[0].FromBlock).Int64())
+	args.Latest = int64(common.Big(obj[0].ToBlock).Int64())
+	args.Max = int(common.Big(obj[0].Limit).Int64())
+	args.Skip = int(common.Big(obj[0].Offset).Int64())
 	args.Address = obj[0].Address
 	args.Topics = obj[0].Topics
 
@@ -474,8 +474,8 @@ func (args *WhisperMessageArgs) UnmarshalJSON(b []byte) (err error) {
 	args.To = obj[0].To
 	args.From = obj[0].From
 	args.Topics = obj[0].Topics
-	args.Priority = uint32(ethutil.Big(obj[0].Priority).Int64())
-	args.Ttl = uint32(ethutil.Big(obj[0].Ttl).Int64())
+	args.Priority = uint32(common.Big(obj[0].Priority).Int64())
+	args.Ttl = uint32(common.Big(obj[0].Ttl).Int64())
 
 	return nil
 }
@@ -538,7 +538,7 @@ func (args *FilterIdArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewInsufficientParamsError(len(obj), 1)
 	}
 
-	args.Id = int(ethutil.Big(obj[0]).Int64())
+	args.Id = int(common.Big(obj[0]).Int64())
 
 	return nil
 }

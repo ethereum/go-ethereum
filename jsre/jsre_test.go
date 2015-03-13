@@ -4,7 +4,7 @@ import (
 	"github.com/obscuren/otto"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type testNativeObjectBinding struct {
@@ -26,7 +26,7 @@ func (no *testNativeObjectBinding) TestMethod(call otto.FunctionCall) otto.Value
 func TestExec(t *testing.T) {
 	jsre := New("/tmp")
 
-	ethutil.WriteFile("/tmp/test.js", []byte(`msg = "testMsg"`))
+	common.WriteFile("/tmp/test.js", []byte(`msg = "testMsg"`))
 	err := jsre.Exec("test.js")
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
@@ -64,7 +64,7 @@ func TestBind(t *testing.T) {
 func TestLoadScript(t *testing.T) {
 	jsre := New("/tmp")
 
-	ethutil.WriteFile("/tmp/test.js", []byte(`msg = "testMsg"`))
+	common.WriteFile("/tmp/test.js", []byte(`msg = "testMsg"`))
 	_, err := jsre.Run(`loadScript("test.js")`)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)

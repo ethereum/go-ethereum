@@ -1,4 +1,4 @@
-package ethutil
+package common
 
 import (
 	checker "gopkg.in/check.v1"

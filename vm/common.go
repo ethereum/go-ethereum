@@ -4,7 +4,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 )
 
@@ -82,22 +82,22 @@ var (
 	GasIdentityWord = big.NewInt(3)
 	GasCopyWord     = big.NewInt(3)
 
-	Pow256 = ethutil.BigPow(2, 256)
+	Pow256 = common.BigPow(2, 256)
 
 	LogTyPretty byte = 0x1
 	LogTyDiff   byte = 0x2
 
-	U256 = ethutil.U256
-	S256 = ethutil.S256
+	U256 = common.U256
+	S256 = common.S256
 
-	Zero = ethutil.Big0
+	Zero = common.Big0
 )
 
 const MaxCallDepth = 1025
 
 func calcMemSize(off, l *big.Int) *big.Int {
-	if l.Cmp(ethutil.Big0) == 0 {
-		return ethutil.Big0
+	if l.Cmp(common.Big0) == 0 {
+		return common.Big0
 	}
 
 	return new(big.Int).Add(off, l)
@@ -123,5 +123,5 @@ func getCode(code []byte, start, size uint64) []byte {
 	x := uint64(math.Min(float64(start), float64(len(code))))
 	y := uint64(math.Min(float64(x+size), float64(len(code))))
 
-	return ethutil.RightPadBytes(code[x:y], int(size))
+	return common.RightPadBytes(code[x:y], int(size))
 }

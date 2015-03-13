@@ -5,7 +5,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -160,7 +160,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			x, y := stack.pop(), stack.pop()
 			self.Printf(" %v / %v", x, y)
 
-			if y.Cmp(ethutil.Big0) != 0 {
+			if y.Cmp(common.Big0) != 0 {
 				base.Div(x, y)
 			}
 
@@ -174,11 +174,11 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			self.Printf(" %v / %v", x, y)
 
-			if y.Cmp(ethutil.Big0) == 0 {
-				base.Set(ethutil.Big0)
+			if y.Cmp(common.Big0) == 0 {
+				base.Set(common.Big0)
 			} else {
 				n := new(big.Int)
-				if new(big.Int).Mul(x, y).Cmp(ethutil.Big0) < 0 {
+				if new(big.Int).Mul(x, y).Cmp(common.Big0) < 0 {
 					n.SetInt64(-1)
 				} else {
 					n.SetInt64(1)
@@ -196,8 +196,8 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			self.Printf(" %v %% %v", x, y)
 
-			if y.Cmp(ethutil.Big0) == 0 {
-				base.Set(ethutil.Big0)
+			if y.Cmp(common.Big0) == 0 {
+				base.Set(common.Big0)
 			} else {
 				base.Mod(x, y)
 			}
@@ -211,11 +211,11 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			self.Printf(" %v %% %v", x, y)
 
-			if y.Cmp(ethutil.Big0) == 0 {
-				base.Set(ethutil.Big0)
+			if y.Cmp(common.Big0) == 0 {
+				base.Set(common.Big0)
 			} else {
 				n := new(big.Int)
-				if x.Cmp(ethutil.Big0) < 0 {
+				if x.Cmp(common.Big0) < 0 {
 					n.SetInt64(-1)
 				} else {
 					n.SetInt64(1)
@@ -246,9 +246,9 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			if back.Cmp(big.NewInt(31)) < 0 {
 				bit := uint(back.Uint64()*8 + 7)
 				num := stack.pop()
-				mask := new(big.Int).Lsh(ethutil.Big1, bit)
-				mask.Sub(mask, ethutil.Big1)
-				if ethutil.BitTest(num, int(bit)) {
+				mask := new(big.Int).Lsh(common.Big1, bit)
+				mask.Sub(mask, common.Big1)
+				if common.BitTest(num, int(bit)) {
 					num.Or(num, mask.Not(mask))
 				} else {
 					num.And(num, mask)
@@ -262,7 +262,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			}
 		case NOT:
 			stack.push(U256(new(big.Int).Not(stack.pop())))
-			//base.Sub(Pow256, stack.pop()).Sub(base, ethutil.Big1)
+			//base.Sub(Pow256, stack.pop()).Sub(base, common.Big1)
 			//base = U256(base)
 			//stack.push(base)
 		case LT:
@@ -270,9 +270,9 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			self.Printf(" %v < %v", x, y)
 			// x < y
 			if x.Cmp(y) < 0 {
-				stack.push(ethutil.BigTrue)
+				stack.push(common.BigTrue)
 			} else {
-				stack.push(ethutil.BigFalse)
+				stack.push(common.BigFalse)
 			}
 		case GT:
 			x, y := stack.pop(), stack.pop()
@@ -280,9 +280,9 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			// x > y
 			if x.Cmp(y) > 0 {
-				stack.push(ethutil.BigTrue)
+				stack.push(common.BigTrue)
 			} else {
-				stack.push(ethutil.BigFalse)
+				stack.push(common.BigFalse)
 			}
 
 		case SLT:
@@ -290,9 +290,9 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			self.Printf(" %v < %v", x, y)
 			// x < y
 			if x.Cmp(S256(y)) < 0 {
-				stack.push(ethutil.BigTrue)
+				stack.push(common.BigTrue)
 			} else {
-				stack.push(ethutil.BigFalse)
+				stack.push(common.BigFalse)
 			}
 		case SGT:
 			x, y := S256(stack.pop()), S256(stack.pop())
@@ -300,9 +300,9 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			// x > y
 			if x.Cmp(y) > 0 {
-				stack.push(ethutil.BigTrue)
+				stack.push(common.BigTrue)
 			} else {
-				stack.push(ethutil.BigFalse)
+				stack.push(common.BigFalse)
 			}
 
 		case EQ:
@@ -311,16 +311,16 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 
 			// x == y
 			if x.Cmp(y) == 0 {
-				stack.push(ethutil.BigTrue)
+				stack.push(common.BigTrue)
 			} else {
-				stack.push(ethutil.BigFalse)
+				stack.push(common.BigFalse)
 			}
 		case ISZERO:
 			x := stack.pop()
-			if x.Cmp(ethutil.BigFalse) > 0 {
-				stack.push(ethutil.BigFalse)
+			if x.Cmp(common.BigFalse) > 0 {
+				stack.push(common.BigFalse)
 			} else {
-				stack.push(ethutil.BigTrue)
+				stack.push(common.BigTrue)
 			}
 
 			// 0x10 range
@@ -343,11 +343,11 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			th, val := stack.pop(), stack.pop()
 
 			if th.Cmp(big.NewInt(32)) < 0 {
-				byt := big.NewInt(int64(ethutil.LeftPadBytes(val.Bytes(), 32)[th.Int64()]))
+				byt := big.NewInt(int64(common.LeftPadBytes(val.Bytes(), 32)[th.Int64()]))
 
 				base.Set(byt)
 			} else {
-				base.Set(ethutil.BigFalse)
+				base.Set(common.BigFalse)
 			}
 
 			self.Printf(" => 0x%x", base.Bytes())
@@ -389,12 +389,12 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			offset, size := stack.pop(), stack.pop()
 			data := crypto.Sha3(mem.Get(offset.Int64(), size.Int64()))
 
-			stack.push(ethutil.BigD(data))
+			stack.push(common.BigD(data))
 
 			self.Printf(" => (%v) %x", size, data)
 			// 0x30 range
 		case ADDRESS:
-			stack.push(ethutil.BigD(context.Address()))
+			stack.push(common.BigD(context.Address()))
 
 			self.Printf(" => %x", context.Address())
 		case BALANCE:
@@ -407,12 +407,12 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		case ORIGIN:
 			origin := self.env.Origin()
 
-			stack.push(ethutil.BigD(origin))
+			stack.push(common.BigD(origin))
 
 			self.Printf(" => %x", origin)
 		case CALLER:
 			caller := context.caller.Address()
-			stack.push(ethutil.BigD(caller))
+			stack.push(common.BigD(caller))
 
 			self.Printf(" => %x", caller)
 		case CALLVALUE:
@@ -427,15 +427,15 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			)
 
 			if lenData.Cmp(offset) >= 0 {
-				length := new(big.Int).Add(offset, ethutil.Big32)
-				length = ethutil.BigMin(length, lenData)
+				length := new(big.Int).Add(offset, common.Big32)
+				length = common.BigMin(length, lenData)
 
 				copy(data, callData[offset.Int64():length.Int64()])
 			}
 
 			self.Printf(" => 0x%x", data)
 
-			stack.push(ethutil.BigD(data))
+			stack.push(common.BigD(data))
 		case CALLDATASIZE:
 			l := int64(len(callData))
 			stack.push(big.NewInt(l))
@@ -501,18 +501,18 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		case BLOCKHASH:
 			num := stack.pop()
 
-			n := new(big.Int).Sub(self.env.BlockNumber(), ethutil.Big257)
+			n := new(big.Int).Sub(self.env.BlockNumber(), common.Big257)
 			if num.Cmp(n) > 0 && num.Cmp(self.env.BlockNumber()) < 0 {
-				stack.push(ethutil.BigD(self.env.GetHash(num.Uint64())))
+				stack.push(common.BigD(self.env.GetHash(num.Uint64())))
 			} else {
-				stack.push(ethutil.Big0)
+				stack.push(common.Big0)
 			}
 
 			self.Printf(" => 0x%x", stack.peek().Bytes())
 		case COINBASE:
 			coinbase := self.env.Coinbase()
 
-			stack.push(ethutil.BigD(coinbase))
+			stack.push(common.BigD(coinbase))
 
 			self.Printf(" => 0x%x", coinbase)
 		case TIMESTAMP:
@@ -543,7 +543,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			a := uint64(op - PUSH1 + 1)
 			byts := context.GetRangeValue(pc+1, a)
 			// push value to stack
-			stack.push(ethutil.BigD(byts))
+			stack.push(common.BigD(byts))
 			pc += a
 
 			step += int(op) - int(PUSH1) + 1
@@ -566,7 +566,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			topics := make([][]byte, n)
 			mStart, mSize := stack.pop(), stack.pop()
 			for i := 0; i < n; i++ {
-				topics[i] = ethutil.LeftPadBytes(stack.pop().Bytes(), 32)
+				topics[i] = common.LeftPadBytes(stack.pop().Bytes(), 32)
 			}
 
 			data := mem.Get(mStart.Int64(), mSize.Int64())
@@ -576,14 +576,14 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			self.Printf(" => %v", log)
 		case MLOAD:
 			offset := stack.pop()
-			val := ethutil.BigD(mem.Get(offset.Int64(), 32))
+			val := common.BigD(mem.Get(offset.Int64(), 32))
 			stack.push(val)
 
 			self.Printf(" => 0x%x", val.Bytes())
 		case MSTORE: // Store the value at stack top-1 in to memory at location stack top
 			// pop value of the stack
 			mStart, val := stack.pop(), stack.pop()
-			mem.Set(mStart.Uint64(), 32, ethutil.BigToBytes(val, 256))
+			mem.Set(mStart.Uint64(), 32, common.BigToBytes(val, 256))
 
 			self.Printf(" => 0x%x", val)
 		case MSTORE8:
@@ -594,7 +594,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			self.Printf(" => [%v] 0x%x", off, val)
 		case SLOAD:
 			loc := stack.pop()
-			val := ethutil.BigD(statedb.GetState(context.Address(), loc.Bytes()))
+			val := common.BigD(statedb.GetState(context.Address(), loc.Bytes()))
 			stack.push(val)
 
 			self.Printf(" {0x%x : 0x%x}", loc.Bytes(), val.Bytes())
@@ -610,7 +610,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 		case JUMPI:
 			pos, cond := stack.pop(), stack.pop()
 
-			if cond.Cmp(ethutil.BigTrue) >= 0 {
+			if cond.Cmp(common.BigTrue) >= 0 {
 				jump(pc, pos)
 
 				continue
@@ -642,7 +642,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			context.UseGas(context.Gas)
 			ret, suberr, ref := self.env.Create(context, nil, input, gas, price, value)
 			if suberr != nil {
-				stack.push(ethutil.BigFalse)
+				stack.push(common.BigFalse)
 
 				self.Printf(" (*) 0x0 %v", suberr)
 			} else {
@@ -655,7 +655,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 				}
 				addr = ref.Address()
 
-				stack.push(ethutil.BigD(addr))
+				stack.push(common.BigD(addr))
 
 			}
 
@@ -669,7 +669,7 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			// pop return size and offset
 			retOffset, retSize := stack.pop(), stack.pop()
 
-			address := ethutil.Address(addr.Bytes())
+			address := common.Address(addr.Bytes())
 			self.Printf(" => %x", address).Endl()
 
 			// Get the arguments from the memory
@@ -690,11 +690,11 @@ func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
 			}
 
 			if err != nil {
-				stack.push(ethutil.BigFalse)
+				stack.push(common.BigFalse)
 
 				self.Printf("%v").Endl()
 			} else {
-				stack.push(ethutil.BigTrue)
+				stack.push(common.BigTrue)
 
 				mem.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 			}
@@ -834,21 +834,21 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 		x := calcMemSize(stack.data[stack.len()-6], stack.data[stack.len()-7])
 		y := calcMemSize(stack.data[stack.len()-4], stack.data[stack.len()-5])
 
-		newMemSize = ethutil.BigMax(x, y)
+		newMemSize = common.BigMax(x, y)
 	}
 
-	if newMemSize.Cmp(ethutil.Big0) > 0 {
+	if newMemSize.Cmp(common.Big0) > 0 {
 		newMemSizeWords := toWordSize(newMemSize)
 		newMemSize.Mul(newMemSizeWords, u256(32))
 
 		if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
 			oldSize := toWordSize(big.NewInt(int64(mem.Len())))
-			pow := new(big.Int).Exp(oldSize, ethutil.Big2, Zero)
+			pow := new(big.Int).Exp(oldSize, common.Big2, Zero)
 			linCoef := new(big.Int).Mul(oldSize, GasMemWord)
 			quadCoef := new(big.Int).Div(pow, GasQuadCoeffDenom)
 			oldTotalFee := new(big.Int).Add(linCoef, quadCoef)
 
-			pow.Exp(newMemSizeWords, ethutil.Big2, Zero)
+			pow.Exp(newMemSizeWords, common.Big2, Zero)
 			linCoef = new(big.Int).Mul(newMemSizeWords, GasMemWord)
 			quadCoef = new(big.Int).Div(pow, GasQuadCoeffDenom)
 			newTotalFee := new(big.Int).Add(linCoef, quadCoef)

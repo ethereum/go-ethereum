@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/tests"
 )
 
@@ -41,7 +41,7 @@ func runblocktest(ctx *cli.Context) {
 	}
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
-	cfg.NewDB = func(path string) (ethutil.Database, error) { return ethdb.NewMemDatabase() }
+	cfg.NewDB = func(path string) (common.Database, error) { return ethdb.NewMemDatabase() }
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)

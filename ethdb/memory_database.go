@@ -3,7 +3,7 @@ package ethdb
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 /*
@@ -32,10 +32,10 @@ func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 }
 
 /*
-func (db *MemDatabase) GetKeys() []*ethutil.Key {
+func (db *MemDatabase) GetKeys() []*common.Key {
 	data, _ := db.Get([]byte("KeyRing"))
 
-	return []*ethutil.Key{ethutil.NewKeyFromBytes(data)}
+	return []*common.Key{common.NewKeyFromBytes(data)}
 }
 */
 
@@ -48,7 +48,7 @@ func (db *MemDatabase) Delete(key []byte) error {
 func (db *MemDatabase) Print() {
 	for key, val := range db.db {
 		fmt.Printf("%x(%d): ", key, len(key))
-		node := ethutil.NewValueFromBytes(val)
+		node := common.NewValueFromBytes(val)
 		fmt.Printf("%q\n", node.Interface())
 	}
 }

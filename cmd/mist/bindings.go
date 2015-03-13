@@ -26,8 +26,8 @@ import (
 	"strconv"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -37,32 +37,23 @@ type plugin struct {
 }
 
 func (gui *Gui) Transact(from, recipient, value, gas, gasPrice, d string) (string, error) {
-	var data string
-	if len(recipient) == 0 {
-		code, err := ethutil.Compile(d, false)
-		if err != nil {
-			return "", err
-		}
-		data = ethutil.Bytes2Hex(code)
-	} else {
-		data = ethutil.Bytes2Hex(utils.FormatTransactionData(d))
-	}
+	d = common.Bytes2Hex(utils.FormatTransactionData(d))
 
-	return gui.xeth.Transact(from, recipient, value, gas, gasPrice, data)
+	return gui.xeth.Transact(from, recipient, value, gas, gasPrice, d)
 }
 
 func (self *Gui) AddPlugin(pluginPath string) {
 	self.plugins[pluginPath] = plugin{Name: pluginPath, Path: pluginPath}
 
 	json, _ := json.MarshalIndent(self.plugins, "", "    ")
-	ethutil.WriteFile(self.eth.DataDir+"/plugins.json", json)
+	common.WriteFile(self.eth.DataDir+"/plugins.json", json)
 }
 
 func (self *Gui) RemovePlugin(pluginPath string) {
 	delete(self.plugins, pluginPath)
 
 	json, _ := json.MarshalIndent(self.plugins, "", "    ")
-	ethutil.WriteFile(self.eth.DataDir+"/plugins.json", json)
+	common.WriteFile(self.eth.DataDir+"/plugins.json", json)
 }
 
 func (self *Gui) DumpState(hash, path string) {
@@ -76,7 +67,7 @@ func (self *Gui) DumpState(hash, path string) {
 			i, _ := strconv.Atoi(hash[1:])
 			block = self.eth.ChainManager().GetBlockByNumber(uint64(i))
 		} else {
-			block = self.eth.ChainManager().GetBlock(ethutil.Hex2Bytes(hash))
+			block = self.eth.ChainManager().GetBlock(common.Hex2Bytes(hash))
 		}
 
 		if block == nil {

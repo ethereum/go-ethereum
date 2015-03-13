@@ -6,7 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/ethereum/go-ethereum/vm"
 )
@@ -41,13 +41,13 @@ func NewEnv(state *state.StateDB) *Env {
 func NewEnvFromMap(state *state.StateDB, envValues map[string]string, exeValues map[string]string) *Env {
 	env := NewEnv(state)
 
-	env.origin = ethutil.Hex2Bytes(exeValues["caller"])
-	env.parent = ethutil.Hex2Bytes(envValues["previousHash"])
-	env.coinbase = ethutil.Hex2Bytes(envValues["currentCoinbase"])
-	env.number = ethutil.Big(envValues["currentNumber"])
-	env.time = ethutil.Big(envValues["currentTimestamp"]).Int64()
-	env.difficulty = ethutil.Big(envValues["currentDifficulty"])
-	env.gasLimit = ethutil.Big(envValues["currentGasLimit"])
+	env.origin = common.Hex2Bytes(exeValues["caller"])
+	env.parent = common.Hex2Bytes(envValues["previousHash"])
+	env.coinbase = common.Hex2Bytes(envValues["currentCoinbase"])
+	env.number = common.Big(envValues["currentNumber"])
+	env.time = common.Big(envValues["currentTimestamp"]).Int64()
+	env.difficulty = common.Big(envValues["currentDifficulty"])
+	env.gasLimit = common.Big(envValues["currentGasLimit"])
 	env.Gas = new(big.Int)
 
 	return env
@@ -135,9 +135,9 @@ func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, state.Log
 		to    = FromHex(exec["address"])
 		from  = FromHex(exec["caller"])
 		data  = FromHex(exec["data"])
-		gas   = ethutil.Big(exec["gas"])
-		price = ethutil.Big(exec["gasPrice"])
-		value = ethutil.Big(exec["value"])
+		gas   = common.Big(exec["gas"])
+		price = common.Big(exec["gasPrice"])
+		value = common.Big(exec["value"])
 	)
 	// Reset the pre-compiled contracts for VM tests.
 	vm.Precompiled = make(map[string]*vm.PrecompiledAccount)
@@ -155,12 +155,12 @@ func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, state.Log
 
 func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.Logs, *big.Int, error) {
 	var (
-		keyPair, _ = crypto.NewKeyPairFromSec([]byte(ethutil.Hex2Bytes(tx["secretKey"])))
+		keyPair, _ = crypto.NewKeyPairFromSec([]byte(common.Hex2Bytes(tx["secretKey"])))
 		to         = FromHex(tx["to"])
 		data       = FromHex(tx["data"])
-		gas        = ethutil.Big(tx["gasLimit"])
-		price      = ethutil.Big(tx["gasPrice"])
-		value      = ethutil.Big(tx["value"])
+		gas        = common.Big(tx["gasLimit"])
+		price      = common.Big(tx["gasPrice"])
+		value      = common.Big(tx["value"])
 		caddr      = FromHex(env["currentCoinbase"])
 	)
 
@@ -169,7 +169,7 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, state.
 
 	snapshot := statedb.Copy()
 	coinbase := statedb.GetOrNewStateObject(caddr)
-	coinbase.SetGasPool(ethutil.Big(env["currentGasLimit"]))
+	coinbase.SetGasPool(common.Big(env["currentGasLimit"]))
 
 	message := NewMessage(keyPair.Address(), to, data, value, gas, price)
 	vmenv := NewEnvFromMap(statedb, env, tx)

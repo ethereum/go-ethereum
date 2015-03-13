@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -74,11 +74,11 @@ func (self *Header) RlpData() interface{} {
 }
 
 func (self *Header) Hash() []byte {
-	return crypto.Sha3(ethutil.Encode(self.rlpData(true)))
+	return crypto.Sha3(common.Encode(self.rlpData(true)))
 }
 
 func (self *Header) HashNoNonce() []byte {
-	return crypto.Sha3(ethutil.Encode(self.rlpData(false)))
+	return crypto.Sha3(common.Encode(self.rlpData(false)))
 }
 
 type Block struct {
@@ -148,7 +148,7 @@ func (self *Block) Uncles() []*Header {
 
 func (self *Block) SetUncles(uncleHeaders []*Header) {
 	self.uncles = uncleHeaders
-	self.header.UncleHash = crypto.Sha3(ethutil.Encode(uncleHeaders))
+	self.header.UncleHash = crypto.Sha3(common.Encode(uncleHeaders))
 }
 
 func (self *Block) Transactions() Transactions {
@@ -213,7 +213,7 @@ func (self *Block) GasLimit() *big.Int        { return self.header.GasLimit }
 func (self *Block) GasUsed() *big.Int         { return self.header.GasUsed }
 func (self *Block) Root() []byte              { return self.header.Root }
 func (self *Block) SetRoot(root []byte)       { self.header.Root = root }
-func (self *Block) Size() ethutil.StorageSize { return ethutil.StorageSize(len(ethutil.Encode(self))) }
+func (self *Block) Size() common.StorageSize { return common.StorageSize(len(common.Encode(self))) }
 func (self *Block) GetTransaction(i int) *Transaction {
 	if len(self.transactions) > i {
 		return self.transactions[i]

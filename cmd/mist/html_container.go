@@ -30,7 +30,7 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/howeyc/fsnotify"
 	"github.com/obscuren/qml"
@@ -62,7 +62,7 @@ func (app *HtmlApplication) Create() error {
 		return errors.New("Ethereum package not yet supported")
 
 		// TODO
-		//ethutil.OpenPackage(app.path)
+		//common.OpenPackage(app.path)
 	}
 
 	win := component.CreateWindow(nil)
@@ -80,7 +80,7 @@ func (app *HtmlApplication) RootFolder() string {
 	if err != nil {
 		return ""
 	}
-	return path.Dir(ethutil.WindonizePath(folder.RequestURI()))
+	return path.Dir(common.WindonizePath(folder.RequestURI()))
 }
 func (app *HtmlApplication) RecursiveFolders() []os.FileInfo {
 	files, _ := ioutil.ReadDir(app.RootFolder())
@@ -139,7 +139,7 @@ func (app *HtmlApplication) Window() *qml.Window {
 }
 
 func (app *HtmlApplication) NewBlock(block *types.Block) {
-	b := &xeth.Block{Number: int(block.NumberU64()), Hash: ethutil.Bytes2Hex(block.Hash())}
+	b := &xeth.Block{Number: int(block.NumberU64()), Hash: common.Bytes2Hex(block.Hash())}
 	app.webView.Call("onNewBlockCb", b)
 }
 

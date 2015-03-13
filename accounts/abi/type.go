@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 const (
@@ -157,7 +157,7 @@ func (t Type) pack(v interface{}) ([]byte, error) {
 		if t.Size > -1 && value.Len() > t.Size {
 			return nil, fmt.Errorf("%v out of bound. %d for %d", value.Kind(), value.Len(), t.Size)
 		}
-		return []byte(ethutil.LeftPadString(t.String(), 32)), nil
+		return []byte(common.LeftPadString(t.String(), 32)), nil
 	case reflect.Slice:
 		if t.Size > -1 && value.Len() > t.Size {
 			return nil, fmt.Errorf("%v out of bound. %d for %d", value.Kind(), value.Len(), t.Size)
@@ -165,7 +165,7 @@ func (t Type) pack(v interface{}) ([]byte, error) {
 
 		// Address is a special slice. The slice acts as one rather than a list of elements.
 		if t.T == AddressTy {
-			return ethutil.LeftPadBytes(v.([]byte), 32), nil
+			return common.LeftPadBytes(v.([]byte), 32), nil
 		}
 
 		// Signed / Unsigned check
@@ -180,9 +180,9 @@ func (t Type) pack(v interface{}) ([]byte, error) {
 		return packed, nil
 	case reflect.Bool:
 		if value.Bool() {
-			return ethutil.LeftPadBytes(ethutil.Big1.Bytes(), 32), nil
+			return common.LeftPadBytes(common.Big1.Bytes(), 32), nil
 		} else {
-			return ethutil.LeftPadBytes(ethutil.Big0.Bytes(), 32), nil
+			return common.LeftPadBytes(common.Big0.Bytes(), 32), nil
 		}
 	}
 

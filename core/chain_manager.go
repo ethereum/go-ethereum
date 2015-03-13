@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -60,7 +60,7 @@ func CalculateTD(block, parent *types.Block) *big.Int {
 
 func CalcGasLimit(parent, block *types.Block) *big.Int {
 	if block.Number().Cmp(big.NewInt(0)) == 0 {
-		return ethutil.BigPow(10, 6)
+		return common.BigPow(10, 6)
 	}
 
 	// ((1024-1) * parent.gasLimit + (gasUsed * 6 / 5)) / 1024
@@ -71,13 +71,13 @@ func CalcGasLimit(parent, block *types.Block) *big.Int {
 	result := new(big.Int).Add(previous, curInt)
 	result.Div(result, big.NewInt(1024))
 
-	return ethutil.BigMax(GenesisGasLimit, result)
+	return common.BigMax(GenesisGasLimit, result)
 }
 
 type ChainManager struct {
 	//eth          EthManager
-	blockDb      ethutil.Database
-	stateDb      ethutil.Database
+	blockDb      common.Database
+	stateDb      common.Database
 	processor    types.BlockProcessor
 	eventMux     *event.TypeMux
 	genesisBlock *types.Block
@@ -94,7 +94,7 @@ type ChainManager struct {
 	quit chan struct{}
 }
 
-func NewChainManager(blockDb, stateDb ethutil.Database, mux *event.TypeMux) *ChainManager {
+func NewChainManager(blockDb, stateDb common.Database, mux *event.TypeMux) *ChainManager {
 	bc := &ChainManager{blockDb: blockDb, stateDb: stateDb, genesisBlock: GenesisBlock(stateDb), eventMux: mux, quit: make(chan struct{})}
 	bc.setLastBlock()
 	bc.transState = bc.State().Copy()
@@ -173,7 +173,7 @@ func (bc *ChainManager) setLastBlock() {
 		bc.lastBlockHash = block.Hash()
 
 		// Set the last know difficulty (might be 0x0 as initial value, Genesis)
-		bc.td = ethutil.BigD(bc.blockDb.LastKnownTD())
+		bc.td = common.BigD(bc.blockDb.LastKnownTD())
 	} else {
 		bc.Reset()
 	}
@@ -198,7 +198,7 @@ func (bc *ChainManager) NewBlock(coinbase []byte) *types.Block {
 		parentHash,
 		coinbase,
 		root,
-		ethutil.BigPow(2, 32),
+		common.BigPow(2, 32),
 		0,
 		"")
 	block.SetUncles(nil)
@@ -209,7 +209,7 @@ func (bc *ChainManager) NewBlock(coinbase []byte) *types.Block {
 	if parent != nil {
 		header := block.Header()
 		header.Difficulty = CalcDifficulty(block.Header(), parent.Header())
-		header.Number = new(big.Int).Add(parent.Header().Number, ethutil.Big1)
+		header.Number = new(big.Int).Add(parent.Header().Number, common.Big1)
 		header.GasLimit = CalcGasLimit(parent, block)
 
 	}
@@ -230,7 +230,7 @@ func (bc *ChainManager) Reset() {
 	bc.insert(bc.genesisBlock)
 	bc.currentBlock = bc.genesisBlock
 
-	bc.setTotalDifficulty(ethutil.Big("0"))
+	bc.setTotalDifficulty(common.Big("0"))
 }
 
 func (bc *ChainManager) removeBlock(block *types.Block) {
@@ -263,11 +263,11 @@ func (self *ChainManager) Export() []byte {
 		blocks[block.NumberU64()] = block
 	}
 
-	return ethutil.Encode(blocks)
+	return common.Encode(blocks)
 }
 
 func (bc *ChainManager) insert(block *types.Block) {
-	//encodedBlock := ethutil.Encode(block)
+	//encodedBlock := common.Encode(block)
 	bc.blockDb.Put([]byte("LastBlock"), block.Hash())
 	bc.currentBlock = block
 	bc.lastBlockHash = block.Hash()
@@ -277,7 +277,7 @@ func (bc *ChainManager) insert(block *types.Block) {
 }
 
 func (bc *ChainManager) write(block *types.Block) {
-	encodedBlock := ethutil.Encode(block.RlpDataForStorage())
+	encodedBlock := common.Encode(block.RlpDataForStorage())
 
 	key := append(blockHashPre, block.Hash()...)
 	bc.blockDb.Put(key, encodedBlock)
@@ -309,7 +309,7 @@ func (self *ChainManager) GetBlockHashesFromHash(hash []byte, max uint64) (chain
 		}
 
 		chain = append(chain, block.Hash())
-		if block.Header().Number.Cmp(ethutil.Big0) <= 0 {
+		if block.Header().Number.Cmp(common.Big0) <= 0 {
 			break
 		}
 	}
@@ -434,7 +434,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			// Compare the TD of the last known block in the canonical chain to make sure it's greater.
 			// At this point it's possible that a different chain (fork) becomes the new canonical chain.
 			if td.Cmp(self.td) > 0 {
-				if block.Header().Number.Cmp(new(big.Int).Add(cblock.Header().Number, ethutil.Big1)) < 0 {
+				if block.Header().Number.Cmp(new(big.Int).Add(cblock.Header().Number, common.Big1)) < 0 {
 					chainlogger.Infof("Split detected. New head #%v (%x) TD=%v, was #%v (%x) TD=%v\n", block.Header().Number, block.Hash()[:4], td, cblock.Header().Number, cblock.Hash()[:4], self.td)
 
 					queue[i] = ChainSplitEvent{block}
@@ -446,10 +446,10 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 
 				/* XXX crashes
 				jsonlogger.LogJson(&logger.EthChainNewHead{
-					BlockHash:     ethutil.Bytes2Hex(block.Hash()),
+					BlockHash:     common.Bytes2Hex(block.Hash()),
 					BlockNumber:   block.Number(),
-					ChainHeadHash: ethutil.Bytes2Hex(cblock.Hash()),
-					BlockPrevHash: ethutil.Bytes2Hex(block.ParentHash()),
+					ChainHeadHash: common.Bytes2Hex(cblock.Hash()),
+					BlockPrevHash: common.Bytes2Hex(block.ParentHash()),
 				})
 				*/
 

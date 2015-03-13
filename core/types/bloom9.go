@@ -4,7 +4,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -14,7 +14,7 @@ func CreateBloom(receipts Receipts) []byte {
 		bin.Or(bin, LogsBloom(receipt.logs))
 	}
 
-	return ethutil.LeftPadBytes(bin.Bytes(), 256)
+	return common.LeftPadBytes(bin.Bytes(), 256)
 }
 
 func LogsBloom(logs state.Logs) *big.Int {
@@ -28,7 +28,7 @@ func LogsBloom(logs state.Logs) *big.Int {
 		}
 
 		for _, b := range data {
-			bin.Or(bin, ethutil.BigD(bloom9(crypto.Sha3(b)).Bytes()))
+			bin.Or(bin, common.BigD(bloom9(crypto.Sha3(b)).Bytes()))
 		}
 	}
 
@@ -48,7 +48,7 @@ func bloom9(b []byte) *big.Int {
 }
 
 func BloomLookup(bin, topic []byte) bool {
-	bloom := ethutil.BigD(bin)
+	bloom := common.BigD(bin)
 	cmp := bloom9(crypto.Sha3(topic))
 
 	return bloom.And(bloom, cmp).Cmp(cmp) == 0

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
 )
@@ -91,8 +91,8 @@ func verify(hash []byte, diff *big.Int, nonce uint64) bool {
 	d := append(hash, n...)
 	sha.Write(d)
 
-	verification := new(big.Int).Div(ethutil.BigPow(2, 256), diff)
-	res := ethutil.BigD(sha.Sum(nil))
+	verification := new(big.Int).Div(common.BigPow(2, 256), diff)
+	res := common.BigD(sha.Sum(nil))
 
 	return res.Cmp(verification) <= 0
 }

@@ -8,7 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -28,7 +28,7 @@ type Envelope struct {
 
 func (self *Envelope) Hash() Hash {
 	if self.hash == EmptyHash {
-		self.hash = H(crypto.Sha3(ethutil.Encode(self)))
+		self.hash = H(crypto.Sha3(common.Encode(self)))
 	}
 
 	return self.hash
@@ -76,14 +76,14 @@ func (self *Envelope) Open(prv *ecdsa.PrivateKey) (msg *Message, err error) {
 func (self *Envelope) proveWork(dura time.Duration) {
 	var bestBit int
 	d := make([]byte, 64)
-	copy(d[:32], ethutil.Encode(self.withoutNonce()))
+	copy(d[:32], common.Encode(self.withoutNonce()))
 
 	then := time.Now().Add(dura).UnixNano()
 	for n := uint32(0); time.Now().UnixNano() < then; {
 		for i := 0; i < 1024; i++ {
 			binary.BigEndian.PutUint32(d[60:], n)
 
-			fbs := ethutil.FirstBitSet(ethutil.BigD(crypto.Sha3(d)))
+			fbs := common.FirstBitSet(common.BigD(crypto.Sha3(d)))
 			if fbs > bestBit {
 				bestBit = fbs
 				self.Nonce = n
@@ -96,17 +96,17 @@ func (self *Envelope) proveWork(dura time.Duration) {
 
 func (self *Envelope) valid() bool {
 	d := make([]byte, 64)
-	copy(d[:32], ethutil.Encode(self.withoutNonce()))
+	copy(d[:32], common.Encode(self.withoutNonce()))
 	binary.BigEndian.PutUint32(d[60:], self.Nonce)
-	return ethutil.FirstBitSet(ethutil.BigD(crypto.Sha3(d))) > 0
+	return common.FirstBitSet(common.BigD(crypto.Sha3(d))) > 0
 }
 
 func (self *Envelope) withoutNonce() interface{} {
-	return []interface{}{self.Expiry, self.Ttl, ethutil.ByteSliceToInterface(self.Topics), self.Data}
+	return []interface{}{self.Expiry, self.Ttl, common.ByteSliceToInterface(self.Topics), self.Data}
 }
 
 func (self *Envelope) RlpData() interface{} {
-	return []interface{}{self.Expiry, self.Ttl, ethutil.ByteSliceToInterface(self.Topics), self.Data, self.Nonce}
+	return []interface{}{self.Expiry, self.Ttl, common.ByteSliceToInterface(self.Topics), self.Data, self.Nonce}
 }
 
 func (self *Envelope) DecodeRLP(s *rlp.Stream) error {
@@ -128,7 +128,7 @@ func (self *Envelope) DecodeRLP(s *rlp.Stream) error {
 	self.Nonce = extenv.Nonce
 
 	// TODO We should use the stream directly here.
-	self.hash = H(crypto.Sha3(ethutil.Encode(self)))
+	self.hash = H(crypto.Sha3(common.Encode(self)))
 
 	return nil
 }

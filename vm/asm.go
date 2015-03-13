@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func Disassemble(script []byte) (asm []string) {
@@ -23,7 +23,7 @@ func Disassemble(script []byte) (asm []string) {
 
 		switch op {
 		case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
-			pc.Add(pc, ethutil.Big1)
+			pc.Add(pc, common.Big1)
 			a := int64(op) - int64(PUSH1) + 1
 			if int(pc.Int64()+a) > len(script) {
 				return nil
@@ -38,7 +38,7 @@ func Disassemble(script []byte) (asm []string) {
 			pc.Add(pc, big.NewInt(a-1))
 		}
 
-		pc.Add(pc, ethutil.Big1)
+		pc.Add(pc, common.Big1)
 	}
 
 	return

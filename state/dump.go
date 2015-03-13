@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/ethutil"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type Account struct {
@@ -22,7 +22,7 @@ type World struct {
 
 func (self *StateDB) RawDump() World {
 	world := World{
-		Root:     ethutil.Bytes2Hex(self.trie.Root()),
+		Root:     common.Bytes2Hex(self.trie.Root()),
 		Accounts: make(map[string]Account),
 	}
 
@@ -30,14 +30,14 @@ func (self *StateDB) RawDump() World {
 	for it.Next() {
 		stateObject := NewStateObjectFromBytes(it.Key, it.Value, self.db)
 
-		account := Account{Balance: stateObject.balance.String(), Nonce: stateObject.nonce, Root: ethutil.Bytes2Hex(stateObject.Root()), CodeHash: ethutil.Bytes2Hex(stateObject.codeHash)}
+		account := Account{Balance: stateObject.balance.String(), Nonce: stateObject.nonce, Root: common.Bytes2Hex(stateObject.Root()), CodeHash: common.Bytes2Hex(stateObject.codeHash)}
 		account.Storage = make(map[string]string)
 
 		storageIt := stateObject.State.trie.Iterator()
 		for storageIt.Next() {
-			account.Storage[ethutil.Bytes2Hex(storageIt.Key)] = ethutil.Bytes2Hex(storageIt.Value)
+			account.Storage[common.Bytes2Hex(storageIt.Key)] = common.Bytes2Hex(storageIt.Value)
 		}
-		world.Accounts[ethutil.Bytes2Hex(it.Key)] = account
+		world.Accounts[common.Bytes2Hex(it.Key)] = account
 	}
 	return world
 }

@@ -199,7 +199,7 @@ func (self *BlockPool) Start() {
 			case <-self.quit:
 				return
 			case <-timer.C:
-				plog.Debugf("status:\n%v", self.Status())
+				plog.DebugDetailf("status:\n%v", self.Status())
 			}
 		}
 	}()

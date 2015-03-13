@@ -1,4 +1,4 @@
-package ethutil
+package common
 
 // Database interface
 type Database interface {

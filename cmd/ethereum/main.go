@@ -31,9 +31,9 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/state"
 	"github.com/peterh/liner"
@@ -91,9 +91,9 @@ Use "ethereum dump 0" to dump the genesis block.
 		{
 			Action: console,
 			Name:   "console",
-			Usage:  `Ethereum Frontier Console: interactive JavaScript environment`,
+			Usage:  `Ethereum Console: interactive JavaScript environment`,
 			Description: `
-Frontier Console is an interactive shell for the Ethereum Frontier JavaScript runtime environment which exposes a node admin interface as well as the DAPP JavaScript API.
+Console is an interactive shell for the Ethereum JavaScript runtime environment which exposes a node admin interface as well as the DAPP JavaScript API.
 See https://github.com/ethereum/go-ethereum/wiki/Frontier-Console
 `,
 		},
@@ -102,7 +102,7 @@ See https://github.com/ethereum/go-ethereum/wiki/Frontier-Console
 			Name:   "js",
 			Usage:  `executes the given JavaScript files in the Ethereum Frontier JavaScript VM`,
 			Description: `
-The Ethereum Frontier JavaScript VM exposes a node admin interface as well as the DAPP JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Frontier-Console
+The Ethereum JavaScript VM exposes a node admin interface as well as the DAPP JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Frontier-Console
 `,
 		},
 		{
@@ -218,7 +218,7 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 		}
 		am := eth.AccountManager()
 		// Attempt to unlock the account
-		err := am.Unlock(ethutil.FromHex(split[0]), split[1])
+		err := am.Unlock(common.FromHex(split[0]), split[1])
 		if err != nil {
 			utils.Fatalf("Unlock account failed '%v'", err)
 		}
@@ -302,7 +302,7 @@ func dump(ctx *cli.Context) {
 	for _, arg := range ctx.Args() {
 		var block *types.Block
 		if hashish(arg) {
-			block = chainmgr.GetBlock(ethutil.Hex2Bytes(arg))
+			block = chainmgr.GetBlock(common.Hex2Bytes(arg))
 		} else {
 			num, _ := strconv.Atoi(arg)
 			block = chainmgr.GetBlockByNumber(uint64(num))
