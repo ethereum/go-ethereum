@@ -53,6 +53,7 @@ func init() {
 	app.Action = run
 	app.HideVersion = true // we have a command to print the version
 	app.Commands = []cli.Command{
+		blocktestCmd,
 		{
 			Action: version,
 			Name:   "version",
