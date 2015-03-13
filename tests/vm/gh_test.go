@@ -116,7 +116,6 @@ func RunVmTest(p string, t *testing.T) {
 		} else {
 			ret, logs, gas, err = helper.RunState(statedb, env, test.Transaction)
 		}
-		statedb.Sync()
 
 		rexp := helper.FromHex(test.Out)
 		if bytes.Compare(rexp, ret) != 0 {
@@ -157,6 +156,7 @@ func RunVmTest(p string, t *testing.T) {
 		}
 
 		if !isVmTest {
+			statedb.Sync()
 			if !bytes.Equal(ethutil.Hex2Bytes(test.PostStateRoot), statedb.Root()) {
 				t.Errorf("%s's : Post state root error. Expected %s, got %x", name, test.PostStateRoot, statedb.Root())
 			}

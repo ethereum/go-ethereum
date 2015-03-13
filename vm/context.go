@@ -15,21 +15,24 @@ type ContextRef interface {
 
 type Context struct {
 	caller ContextRef
-	object ContextRef
-	Code   []byte
+	self   ContextRef
 
-	Gas, UsedGas, Price *big.Int
+	Code     []byte
+	CodeAddr []byte
+
+	value, Gas, UsedGas, Price *big.Int
 
 	Args []byte
 }
 
 // Create a new context for the given data items
-func NewContext(caller ContextRef, object ContextRef, code []byte, gas, price *big.Int) *Context {
-	c := &Context{caller: caller, object: object, Code: code, Args: nil}
+func NewContext(caller ContextRef, object ContextRef, value, gas, price *big.Int) *Context {
+	c := &Context{caller: caller, self: object, Args: nil}
 
 	// Gas should be a pointer so it can safely be reduced through the run
 	// This pointer will be off the state transition
 	c.Gas = gas //new(big.Int).Set(gas)
+	c.value = new(big.Int).Set(value)
 	// In most cases price and value are pointers to transaction objects
 	// and we don't want the transaction's values to change.
 	c.Price = new(big.Int).Set(price)
@@ -62,10 +65,7 @@ func (c *Context) GetRangeValue(x, size uint64) []byte {
 }
 
 func (c *Context) GetCode(x, size uint64) []byte {
-	x = uint64(math.Min(float64(x), float64(len(c.Code))))
-	y := uint64(math.Min(float64(x+size), float64(len(c.Code))))
-
-	return ethutil.RightPadBytes(c.Code[x:y], int(size))
+	return getCode(c.Code, x, size)
 }
 
 func (c *Context) Return(ret []byte) []byte {
@@ -101,9 +101,14 @@ func (c *Context) ReturnGas(gas, price *big.Int) {
  * Set / Get
  */
 func (c *Context) Address() []byte {
-	return c.object.Address()
+	return c.self.Address()
 }
 
 func (self *Context) SetCode(code []byte) {
 	self.Code = code
+}
+
+func (self *Context) SetCallCode(addr, code []byte) {
+	self.Code = code
+	self.CodeAddr = addr
 }

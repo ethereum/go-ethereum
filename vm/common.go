@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -116,4 +117,11 @@ func toValue(val *big.Int) interface{} {
 	}
 
 	return val
+}
+
+func getCode(code []byte, start, size uint64) []byte {
+	x := uint64(math.Min(float64(start), float64(len(code))))
+	y := uint64(math.Min(float64(x+size), float64(len(code))))
+
+	return ethutil.RightPadBytes(code[x:y], int(size))
 }

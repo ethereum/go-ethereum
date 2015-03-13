@@ -32,10 +32,17 @@ func New(env Environment) *Vm {
 	return &Vm{debug: Debug, env: env, logTy: lt, Recoverable: true}
 }
 
-func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
+func (self *Vm) Run(context *Context, callData []byte) (ret []byte, err error) {
+	//func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
 	self.env.SetDepth(self.env.Depth() + 1)
 
-	context := NewContext(caller, me, code, gas, price)
+	//context := NewContext(caller, me, code, gas, price)
+	var (
+		caller = context.caller
+		code   = context.Code
+		value  = context.value
+		price  = context.Price
+	)
 
 	self.Printf("(%d) (%x) %x (code=%d) gas: %v (d) %x", self.env.Depth(), caller.Address()[:4], context.Address(), len(code), context.Gas, callData).Endl()
 
@@ -55,7 +62,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 		}()
 	}
 
-	if p := Precompiled[string(me.Address())]; p != nil {
+	if p := Precompiled[string(context.CodeAddr)]; p != nil {
 		return self.RunPrecompiled(p, callData, context)
 	}
 
@@ -352,7 +359,7 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			z := stack.pop()
 
 			if z.Cmp(Zero) > 0 {
-				add := U256(new(big.Int).Add(x, y))
+				add := new(big.Int).Add(x, y)
 				base.Mod(add, z)
 
 				base = U256(base)
@@ -362,13 +369,12 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 
 			stack.push(base)
 		case MULMOD:
-
 			x := stack.pop()
 			y := stack.pop()
 			z := stack.pop()
 
-			mul := new(big.Int).Mul(x, y)
-			if len(z.Bytes()) > 0 { // NOT 0x0
+			if z.Cmp(Zero) > 0 {
+				mul := new(big.Int).Mul(x, y)
 				base.Mod(mul, z)
 
 				U256(base)
@@ -476,13 +482,12 @@ func (self *Vm) Run(me, caller ContextRef, code []byte, value, gas, price *big.I
 			} else {
 				code = context.Code
 			}
-			context := NewContext(nil, nil, code, ethutil.Big0, ethutil.Big0)
 			var (
 				mOff = stack.pop().Uint64()
 				cOff = stack.pop().Uint64()
 				l    = stack.pop().Uint64()
 			)
-			codeCopy := context.GetCode(cOff, l)
+			codeCopy := getCode(code, cOff, l)
 
 			mem.Set(mOff, l, codeCopy)
 

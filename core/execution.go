@@ -59,7 +59,11 @@ func (self *Execution) exec(code, contextAddr []byte, caller vm.ContextRef) (ret
 
 	snapshot := env.State().Copy()
 	start := time.Now()
-	ret, err = evm.Run(to, caller, code, self.value, self.Gas, self.price, self.input)
+
+	context := vm.NewContext(caller, to, self.value, self.Gas, self.price)
+	context.SetCallCode(contextAddr, code)
+
+	ret, err = evm.Run(context, self.input) //self.value, self.Gas, self.price, self.input)
 	chainlogger.Debugf("vm took %v\n", time.Since(start))
 	if err != nil {
 		env.State().Set(snapshot)
