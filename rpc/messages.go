@@ -18,16 +18,69 @@ package rpc
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 )
 
-var (
-	errArguments      = errors.New("Error: Insufficient arguments")
-	errNotImplemented = errors.New("Error: Method not implemented")
-	errUnknown        = errors.New("Error: Unknown error")
-	errDecodeArgs     = errors.New("Error: Could not decode arguments")
-)
+type InsufficientParamsError struct {
+	have int
+	want int
+}
+
+func (e *InsufficientParamsError) Error() string {
+	return fmt.Sprintf("insufficient params, want %d have %d", e.want, e.have)
+}
+
+func NewInsufficientParamsError(have int, want int) *InsufficientParamsError {
+	return &InsufficientParamsError{
+		have: have,
+		want: want,
+	}
+}
+
+type NotImplementedError struct {
+	Method string
+}
+
+func (e *NotImplementedError) Error() string {
+	return fmt.Sprintf("%s method not implemented", e.Method)
+}
+
+func NewNotImplementedError(method string) *NotImplementedError {
+	return &NotImplementedError{
+		Method: method,
+	}
+}
+
+type DecodeParamError struct {
+	err string
+}
+
+func (e *DecodeParamError) Error() string {
+	return fmt.Sprintf("could not decode, %s", e.err)
+
+}
+
+func NewDecodeParamError(errstr string) error {
+	return &DecodeParamError{
+		err: errstr,
+	}
+}
+
+type ValidationError struct {
+	ParamName string
+	msg       string
+}
+
+func (e *ValidationError) Error() string {
+	return fmt.Sprintf("%s not valid, %s", e.ParamName, e.msg)
+}
+
+func NewValidationError(param string, msg string) error {
+	return &ValidationError{
+		ParamName: param,
+		msg:       msg,
+	}
+}
 
 type RpcRequest struct {
 	ID      interface{}     `json:"id"`
@@ -53,35 +106,3 @@ type RpcErrorObject struct {
 	Message string `json:"message"`
 	// Data    interface{} `json:"data"`
 }
-
-func NewErrorWithMessage(err error, msg string) error {
-	return fmt.Errorf("%s: %s", err.Error(), msg)
-}
-
-// func (req *RpcRequest) ToRegisterArgs() (string, error) {
-// 	if len(req.Params) < 1 {
-// 		return "", errArguments
-// 	}
-
-// 	var args string
-// 	err := json.Unmarshal(req.Params, &args)
-// 	if err != nil {
-// 		return "", err
-// 	}
-
-// 	return args, nil
-// }
-
-// func (req *RpcRequest) ToWatchTxArgs() (string, error) {
-// 	if len(req.Params) < 1 {
-// 		return "", errArguments
-// 	}
-
-// 	var args string
-// 	err := json.Unmarshal(req.Params, &args)
-// 	if err != nil {
-// 		return "", err
-// 	}
-
-// 	return args, nil
-// }

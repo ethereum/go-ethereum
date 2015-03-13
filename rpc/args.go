@@ -11,7 +11,7 @@ import (
 func blockNumber(raw json.RawMessage, number *int64) (err error) {
 	var str string
 	if err = json.Unmarshal(raw, &str); err != nil {
-		return errDecodeArgs
+		return NewDecodeParamError(err.Error())
 	}
 
 	switch str {
@@ -34,16 +34,16 @@ func (args *GetBlockByHashArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []interface{}
 	r := bytes.NewReader(b)
 	if err := json.NewDecoder(r).Decode(&obj); err != nil {
-		return errDecodeArgs
+		return NewDecodeParamError(err.Error())
 	}
 
 	if len(obj) < 1 {
-		return errArguments
+		return NewInsufficientParamsError(len(obj), 1)
 	}
 
 	argstr, ok := obj[0].(string)
 	if !ok {
-		return errDecodeArgs
+		return NewDecodeParamError("BlockHash not a string")
 	}
 	args.BlockHash = argstr
 
@@ -63,11 +63,11 @@ func (args *GetBlockByNumberArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []interface{}
 	r := bytes.NewReader(b)
 	if err := json.NewDecoder(r).Decode(&obj); err != nil {
-		return errDecodeArgs
+		return NewDecodeParamError(err.Error())
 	}
 
 	if len(obj) < 1 {
-		return errArguments
+		return NewInsufficientParamsError(len(obj), 1)
 	}
 
 	if v, ok := obj[0].(float64); ok {
@@ -117,7 +117,7 @@ type GetStorageArgs struct {
 
 func (args *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
 	if err = UnmarshalRawMessages(b, &args.Address, &args.BlockNumber); err != nil {
-		return errDecodeArgs
+		return NewDecodeParamError(err.Error())
 	}
 
 	return nil
@@ -125,7 +125,7 @@ func (args *GetStorageArgs) UnmarshalJSON(b []byte) (err error) {
 
 func (args *GetStorageArgs) requirements() error {
 	if len(args.Address) == 0 {
-		return NewErrorWithMessage(errArguments, "Address cannot be blank")
+		return NewValidationError("Address", "cannot be blank")
 	}
 	return nil
 }
@@ -139,10 +139,10 @@ type GetStorageAtArgs struct {
 func (args *GetStorageAtArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []string
 	if err = UnmarshalRawMessages(b, &obj, &args.BlockNumber); err != nil {
-		return errDecodeArgs
+		return NewDecodeParamError(err.Error())
 	}
 	if len(obj) < 2 {
-		return errDecodeArgs
+		return NewInsufficientParamsError(len(obj), 2)
 	}
 
 	args.Address = obj[0]
@@ -153,11 +153,11 @@ func (args *GetStorageAtArgs) UnmarshalJSON(b []byte) (err error) {
 
 func (args *GetStorageAtArgs) requirements() error {
 	if len(args.Address) == 0 {
-		return NewErrorWithMessage(errArguments, "Address cannot be blank")
+		return NewValidationError("Address", "cannot be blank")
 	}
 
 	if len(args.Key) == 0 {
-		return NewErrorWithMessage(errArguments, "Key cannot be blank")
+		return NewValidationError("Key", "cannot be blank")
 	}
 	return nil
 }
@@ -169,7 +169,7 @@ type GetTxCountArgs struct {
 
 func (args *GetTxCountArgs) UnmarshalJSON(b []byte) (err error) {
 	if err = UnmarshalRawMessages(b, &args.Address, &args.BlockNumber); err != nil {
-		return errDecodeArgs
+		return NewDecodeParamError(err.Error())
 	}
 
 	return nil
@@ -177,7 +177,7 @@ func (args *GetTxCountArgs) UnmarshalJSON(b []byte) (err error) {
 
 func (args *GetTxCountArgs) requirements() error {
 	if len(args.Address) == 0 {
-		return NewErrorWithMessage(errArguments, "Address cannot be blank")
+		return NewValidationError("Address", "cannot be blank")
 	}
 	return nil
 }
@@ -191,16 +191,16 @@ func (args *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []interface{}
 	r := bytes.NewReader(b)
 	if err := json.NewDecoder(r).Decode(&obj); err != nil {
-		return errDecodeArgs
+		return NewDecodeParamError(err.Error())
 	}
 
 	if len(obj) < 1 {
-		return errArguments
+		return NewInsufficientParamsError(len(obj), 1)
 	}
 
 	addstr, ok := obj[0].(string)
 	if !ok {
-		return errDecodeArgs
+		return NewDecodeParamError("Address is not a string")
 	}
 	args.Address = addstr
 
@@ -213,7 +213,7 @@ func (args *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	// if err = UnmarshalRawMessages(b, &args.Address, &args.BlockNumber); err != nil {
-	// 	return errDecodeArgs
+	// 	return NewDecodeParamError(err.Error())
 	// }
 
 	return nil
@@ -221,7 +221,7 @@ func (args *GetBalanceArgs) UnmarshalJSON(b []byte) (err error) {
 
 func (args *GetBalanceArgs) requirements() error {
 	if len(args.Address) == 0 {
-		return NewErrorWithMessage(errArguments, "Address cannot be blank")
+		return NewValidationError("Address", "cannot be blank")
 	}
 	return nil
 }
@@ -233,7 +233,7 @@ type GetDataArgs struct {
 
 func (args *GetDataArgs) UnmarshalJSON(b []byte) (err error) {
 	if err = UnmarshalRawMessages(b, &args.Address, &args.BlockNumber); err != nil {
-		return errDecodeArgs
+		return NewDecodeParamError(err.Error())
 	}
 
 	return nil
@@ -241,7 +241,7 @@ func (args *GetDataArgs) UnmarshalJSON(b []byte) (err error) {
 
 func (args *GetDataArgs) requirements() error {
 	if len(args.Address) == 0 {
-		return NewErrorWithMessage(errArguments, "Address cannot be blank")
+		return NewValidationError("Address", "cannot be blank")
 	}
 	return nil
 }
@@ -255,23 +255,23 @@ func (args *BlockNumIndexArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []interface{}
 	r := bytes.NewReader(b)
 	if err := json.NewDecoder(r).Decode(&obj); err != nil {
-		return errDecodeArgs
+		return NewDecodeParamError(err.Error())
 	}
 
 	if len(obj) < 1 {
-		return errArguments
+		return NewInsufficientParamsError(len(obj), 1)
 	}
 
 	arg0, ok := obj[0].(string)
 	if !ok {
-		return errDecodeArgs
+		return NewDecodeParamError("BlockNumber is not string")
 	}
 	args.BlockNumber = ethutil.Big(arg0).Int64()
 
 	if len(obj) > 1 {
 		arg1, ok := obj[1].(string)
 		if !ok {
-			return errDecodeArgs
+			return NewDecodeParamError("Index not a string")
 		}
 		args.Index = ethutil.Big(arg1).Int64()
 	}
@@ -288,23 +288,23 @@ func (args *HashIndexArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []interface{}
 	r := bytes.NewReader(b)
 	if err := json.NewDecoder(r).Decode(&obj); err != nil {
-		return errDecodeArgs
+		return NewDecodeParamError(err.Error())
 	}
 
 	if len(obj) < 1 {
-		return errArguments
+		return NewInsufficientParamsError(len(obj), 1)
 	}
 
 	arg0, ok := obj[0].(string)
 	if !ok {
-		return errDecodeArgs
+		return NewDecodeParamError("Hash not a string")
 	}
 	args.Hash = arg0
 
 	if len(obj) > 1 {
 		arg1, ok := obj[1].(string)
 		if !ok {
-			return errDecodeArgs
+			return NewDecodeParamError("Index not a string")
 		}
 		args.Index = ethutil.Big(arg1).Int64()
 	}
@@ -320,11 +320,11 @@ func (args *Sha3Args) UnmarshalJSON(b []byte) (err error) {
 	var obj []interface{}
 	r := bytes.NewReader(b)
 	if err := json.NewDecoder(r).Decode(&obj); err != nil {
-		return NewErrorWithMessage(errDecodeArgs, err.Error())
+		return NewDecodeParamError(err.Error())
 	}
 
 	if len(obj) < 1 {
-		return errArguments
+		return NewInsufficientParamsError(len(obj), 1)
 	}
 	args.Data = obj[0].(string)
 
@@ -387,12 +387,13 @@ func (args *FilterOptions) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	if err = json.Unmarshal(b, &obj); err != nil {
-		return errDecodeArgs
+		return NewDecodeParamError(err.Error())
 	}
 
 	if len(obj) < 1 {
-		return errArguments
+		return NewInsufficientParamsError(len(obj), 1)
 	}
+
 	args.Earliest = int64(ethutil.Big(obj[0].FromBlock).Int64())
 	args.Latest = int64(ethutil.Big(obj[0].ToBlock).Int64())
 	args.Max = int(ethutil.Big(obj[0].Limit).Int64())
@@ -417,11 +418,11 @@ func (args *DbArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []interface{}
 	r := bytes.NewReader(b)
 	if err := json.NewDecoder(r).Decode(&obj); err != nil {
-		return errDecodeArgs
+		return NewDecodeParamError(err.Error())
 	}
 
 	if len(obj) < 2 {
-		return errArguments
+		return NewInsufficientParamsError(len(obj), 2)
 	}
 	args.Database = obj[0].(string)
 	args.Key = obj[1].(string)
@@ -435,10 +436,10 @@ func (args *DbArgs) UnmarshalJSON(b []byte) (err error) {
 
 func (a *DbArgs) requirements() error {
 	if len(a.Database) == 0 {
-		return NewErrorWithMessage(errArguments, "Database cannot be blank")
+		return NewValidationError("Database", "cannot be blank")
 	}
 	if len(a.Key) == 0 {
-		return NewErrorWithMessage(errArguments, "Key cannot be blank")
+		return NewValidationError("Key", "cannot be blank")
 	}
 	return nil
 }
@@ -463,11 +464,11 @@ func (args *WhisperMessageArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	if err = json.Unmarshal(b, &obj); err != nil {
-		return errDecodeArgs
+		return NewDecodeParamError(err.Error())
 	}
 
 	if len(obj) < 1 {
-		return errArguments
+		return NewInsufficientParamsError(len(obj), 1)
 	}
 	args.Payload = obj[0].Payload
 	args.To = obj[0].To
@@ -487,7 +488,7 @@ func (args *CompileArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []interface{}
 	r := bytes.NewReader(b)
 	if err := json.NewDecoder(r).Decode(&obj); err != nil {
-		return errDecodeArgs
+		return NewDecodeParamError(err.Error())
 	}
 
 	if len(obj) > 0 {
@@ -505,11 +506,11 @@ func (args *FilterStringArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []string
 	r := bytes.NewReader(b)
 	if err := json.NewDecoder(r).Decode(&obj); err != nil {
-		return errDecodeArgs
+		return NewDecodeParamError(err.Error())
 	}
 
 	if len(obj) < 1 {
-		return errDecodeArgs
+		return NewInsufficientParamsError(len(obj), 1)
 	}
 
 	args.Word = obj[0]
@@ -525,11 +526,11 @@ func (args *FilterIdArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []string
 	r := bytes.NewReader(b)
 	if err := json.NewDecoder(r).Decode(&obj); err != nil {
-		return errDecodeArgs
+		return NewDecodeParamError(err.Error())
 	}
 
 	if len(obj) < 1 {
-		return errDecodeArgs
+		return NewInsufficientParamsError(len(obj), 1)
 	}
 
 	args.Id = int(ethutil.Big(obj[0]).Int64())
@@ -545,11 +546,11 @@ func (args *WhisperIdentityArgs) UnmarshalJSON(b []byte) (err error) {
 	var obj []string
 	r := bytes.NewReader(b)
 	if err := json.NewDecoder(r).Decode(&obj); err != nil {
-		return errDecodeArgs
+		return NewDecodeParamError(err.Error())
 	}
 
 	if len(obj) < 1 {
-		return errDecodeArgs
+		return NewInsufficientParamsError(len(obj), 1)
 	}
 
 	args.Identity = obj[0]
@@ -571,11 +572,11 @@ func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	if err = json.Unmarshal(b, &obj); err != nil {
-		return errDecodeArgs
+		return NewDecodeParamError(err.Error())
 	}
 
 	if len(obj) < 1 {
-		return errArguments
+		return NewInsufficientParamsError(len(obj), 1)
 	}
 
 	args.To = obj[0].To
@@ -584,3 +585,31 @@ func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
 
 	return nil
 }
+
+// func (req *RpcRequest) ToRegisterArgs() (string, error) {
+// 	if len(req.Params) < 1 {
+// 		return "", errArguments
+// 	}
+
+// 	var args string
+// 	err := json.Unmarshal(req.Params, &args)
+// 	if err != nil {
+// 		return "", err
+// 	}
+
+// 	return args, nil
+// }
+
+// func (req *RpcRequest) ToWatchTxArgs() (string, error) {
+// 	if len(req.Params) < 1 {
+// 		return "", errArguments
+// 	}
+
+// 	var args string
+// 	err := json.Unmarshal(req.Params, &args)
+// 	if err != nil {
+// 		return "", err
+// 	}
+
+// 	return args, nil
+// }

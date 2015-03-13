@@ -25,22 +25,51 @@ func JSONRPC(pipe *xeth.XEth, dataDir string) http.Handler {
 		rpchttplogger.DebugDetailln("Handling request")
 
 		if req.ContentLength > maxSizeReqLength {
-			jsonerr := &RpcErrorObject{-32700, "Error: Request too large"}
+			jsonerr := &RpcErrorObject{-32700, "Request too large"}
 			json.Send(w, &RpcErrorResponse{JsonRpc: jsonrpcver, ID: nil, Error: jsonerr})
 			return
 		}
 
 		reqParsed, reqerr := json.ParseRequestBody(req)
-		if reqerr != nil {
-			jsonerr := &RpcErrorObject{-32700, "Error: Could not parse request"}
+		switch reqerr.(type) {
+		case nil:
+			break
+		case *DecodeParamError:
+			jsonerr := &RpcErrorObject{-32602, reqerr.Error()}
+			json.Send(w, &RpcErrorResponse{JsonRpc: jsonrpcver, ID: nil, Error: jsonerr})
+			return
+		case *InsufficientParamsError:
+			jsonerr := &RpcErrorObject{-32602, reqerr.Error()}
+			json.Send(w, &RpcErrorResponse{JsonRpc: jsonrpcver, ID: nil, Error: jsonerr})
+			return
+		case *ValidationError:
+			jsonerr := &RpcErrorObject{-32602, reqerr.Error()}
+			json.Send(w, &RpcErrorResponse{JsonRpc: jsonrpcver, ID: nil, Error: jsonerr})
+			return
+		default:
+			jsonerr := &RpcErrorObject{-32700, "Could not parse request"}
 			json.Send(w, &RpcErrorResponse{JsonRpc: jsonrpcver, ID: nil, Error: jsonerr})
 			return
 		}
 
 		var response interface{}
 		reserr := api.GetRequestReply(&reqParsed, &response)
-		if reserr != nil {
-			rpchttplogger.Warnln(reserr)
+		switch reserr.(type) {
+		case nil:
+			break
+		case *NotImplementedError:
+			jsonerr := &RpcErrorObject{-32601, reserr.Error()}
+			json.Send(w, &RpcErrorResponse{JsonRpc: jsonrpcver, ID: reqParsed.ID, Error: jsonerr})
+			return
+		case *InsufficientParamsError:
+			jsonerr := &RpcErrorObject{-32602, reserr.Error()}
+			json.Send(w, &RpcErrorResponse{JsonRpc: jsonrpcver, ID: reqParsed.ID, Error: jsonerr})
+			return
+		case *ValidationError:
+			jsonerr := &RpcErrorObject{-32602, reserr.Error()}
+			json.Send(w, &RpcErrorResponse{JsonRpc: jsonrpcver, ID: reqParsed.ID, Error: jsonerr})
+			return
+		default:
 			jsonerr := &RpcErrorObject{-32603, reserr.Error()}
 			json.Send(w, &RpcErrorResponse{JsonRpc: jsonrpcver, ID: reqParsed.ID, Error: jsonerr})
 			return
