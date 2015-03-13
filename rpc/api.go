@@ -176,7 +176,7 @@ func (self *EthereumApi) UninstallFilter(id int, reply *interface{}) error {
 	return nil
 }
 
-func (self *EthereumApi) NewFilterString(args string, reply *interface{}) error {
+func (self *EthereumApi) NewFilterString(args *FilterStringArgs, reply *interface{}) error {
 	var id int
 	filter := core.NewFilter(self.xeth().Backend())
 
@@ -186,10 +186,14 @@ func (self *EthereumApi) NewFilterString(args string, reply *interface{}) error 
 
 		self.logs[id].add(&state.StateLog{})
 	}
-	if args == "pending" {
+
+	switch args.Word {
+	case "pending":
 		filter.PendingCallback = callback
-	} else if args == "chain" {
+	case "latest":
 		filter.BlockCallback = callback
+	default:
+		return NewValidationError("Word", "Must be `latest` or `pending`")
 	}
 
 	id = self.filterManager.InstallFilter(filter)
@@ -477,6 +481,10 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		*reply = toHex(crypto.Sha3(fromHex(args.Data)))
+	case "web3_clientVersion":
+		*reply = p.xeth().Backend().Version()
+	case "net_version":
+		return NewNotImplementedError(req.Method)
 	case "net_listening":
 		*reply = p.xeth().IsListening()
 	case "net_peerCount":
@@ -578,7 +586,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		}
 		return p.Call(args, reply)
 	case "eth_flush":
-		return errNotImplemented
+		return NewNotImplementedError(req.Method)
 	case "eth_getBlockByHash":
 		args := new(GetBlockByHashArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -618,7 +626,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		if args.Index > int64(len(v.Transactions)) || args.Index < 0 {
-			return NewErrorWithMessage(errDecodeArgs, "Transaction index does not exist")
+			return NewValidationError("Index", "does not exist")
 		}
 		*reply = v.Transactions[args.Index]
 	case "eth_getTransactionByBlockNumberAndIndex":
@@ -632,7 +640,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		if args.Index > int64(len(v.Transactions)) || args.Index < 0 {
-			return NewErrorWithMessage(errDecodeArgs, "Transaction index does not exist")
+			return NewValidationError("Index", "does not exist")
 		}
 		*reply = v.Transactions[args.Index]
 	case "eth_getUncleByBlockHashAndIndex":
@@ -646,7 +654,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		if args.Index > int64(len(v.Uncles)) || args.Index < 0 {
-			return NewErrorWithMessage(errDecodeArgs, "Uncle index does not exist")
+			return NewValidationError("Index", "does not exist")
 		}
 
 		uncle, err := p.GetBlockByHash(toHex(v.Uncles[args.Index]), false)
@@ -665,7 +673,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		if args.Index > int64(len(v.Uncles)) || args.Index < 0 {
-			return NewErrorWithMessage(errDecodeArgs, "Uncle index does not exist")
+			return NewValidationError("Index", "does not exist")
 		}
 
 		uncle, err := p.GetBlockByHash(toHex(v.Uncles[args.Index]), false)
@@ -675,10 +683,8 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		*reply = uncle
 	case "eth_getCompilers":
 		return p.GetCompilers(reply)
-	case "eth_compileSolidity":
-	case "eth_compileLLL":
-	case "eth_compileSerpent":
-		return errNotImplemented
+	case "eth_compileSolidity", "eth_compileLLL", "eth_compileSerpent":
+		return NewNotImplementedError(req.Method)
 	case "eth_newFilter":
 		args := new(FilterOptions)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -690,7 +696,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.NewFilterString(args.Word, reply)
+		return p.NewFilterString(args, reply)
 	case "eth_uninstallFilter":
 		args := new(FilterIdArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -715,21 +721,22 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.AllLogs(args, reply)
-	case "eth_getWork":
-	case "eth_submitWork":
-		return errNotImplemented
-	case "db_put":
+	case "eth_getWork", "eth_submitWork":
+		return NewNotImplementedError(req.Method)
+	case "db_putString":
 		args := new(DbArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		return p.DbPut(args, reply)
-	case "db_get":
+	case "db_getString":
 		args := new(DbArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		return p.DbGet(args, reply)
+	case "db_putHex", "db_getHex":
+		return NewNotImplementedError(req.Method)
 	case "shh_post":
 		args := new(WhisperMessageArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -744,9 +751,8 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.HasWhisperIdentity(args.Identity, reply)
-	case "shh_newGroup":
-	case "shh_addToGroup":
-		return errNotImplemented
+	case "shh_newGroup", "shh_addToGroup":
+		return NewNotImplementedError(req.Method)
 	case "shh_newFilter":
 		args := new(WhisperFilterArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
@@ -790,7 +796,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 	// 	}
 	// 	return p.WatchTx(args, reply)
 	default:
-		return NewErrorWithMessage(errNotImplemented, req.Method)
+		return NewNotImplementedError(req.Method)
 	}
 
 	rpclogger.DebugDetailf("Reply: %T %s", reply, reply)

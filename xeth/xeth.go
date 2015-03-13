@@ -39,6 +39,7 @@ type Backend interface {
 	IsMining() bool
 	StartMining() error
 	StopMining()
+	Version() string
 }
 
 // Frontend should be implemented by users of XEth. Its methods are

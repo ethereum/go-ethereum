@@ -42,7 +42,7 @@ type JsonWrapper struct{}
 func UnmarshalRawMessages(b []byte, iface interface{}, number *int64) (err error) {
 	var data []json.RawMessage
 	if err = json.Unmarshal(b, &data); err != nil && len(data) == 0 {
-		return errDecodeArgs
+		return NewDecodeParamError(err.Error())
 	}
 
 	// Number index determines the index in the array for a possible block number
@@ -74,7 +74,7 @@ func UnmarshalRawMessages(b []byte, iface interface{}, number *int64) (err error
 		fallthrough
 	default:
 		if err = json.Unmarshal(data[0], iface); err != nil {
-			return errDecodeArgs
+			return NewDecodeParamError(err.Error())
 		}
 		numberIndex = 1
 	}
@@ -82,7 +82,7 @@ func UnmarshalRawMessages(b []byte, iface interface{}, number *int64) (err error
 	// <0 index means out of bound for block number
 	if numberIndex >= 0 && len(data) > numberIndex {
 		if err = blockNumber(data[numberIndex], number); err != nil {
-			return errDecodeArgs
+			return NewDecodeParamError(err.Error())
 		}
 	}
 
