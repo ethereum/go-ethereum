@@ -176,7 +176,7 @@ func (self *EthereumApi) UninstallFilter(id int, reply *interface{}) error {
 	return nil
 }
 
-func (self *EthereumApi) NewFilterString(args string, reply *interface{}) error {
+func (self *EthereumApi) NewFilterString(args *FilterStringArgs, reply *interface{}) error {
 	var id int
 	filter := core.NewFilter(self.xeth().Backend())
 
@@ -186,10 +186,14 @@ func (self *EthereumApi) NewFilterString(args string, reply *interface{}) error 
 
 		self.logs[id].add(&state.StateLog{})
 	}
-	if args == "pending" {
+
+	switch args.Word {
+	case "pending":
 		filter.PendingCallback = callback
-	} else if args == "chain" {
+	case "latest":
 		filter.BlockCallback = callback
+	default:
+		return NewValidationError("Word", "Must be `latest` or `pending`")
 	}
 
 	id = self.filterManager.InstallFilter(filter)
@@ -692,7 +696,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		return p.NewFilterString(args.Word, reply)
+		return p.NewFilterString(args, reply)
 	case "eth_uninstallFilter":
 		args := new(FilterIdArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {

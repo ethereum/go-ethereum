@@ -503,7 +503,7 @@ type FilterStringArgs struct {
 }
 
 func (args *FilterStringArgs) UnmarshalJSON(b []byte) (err error) {
-	var obj []string
+	var obj []interface{}
 	r := bytes.NewReader(b)
 	if err := json.NewDecoder(r).Decode(&obj); err != nil {
 		return NewDecodeParamError(err.Error())
@@ -513,7 +513,12 @@ func (args *FilterStringArgs) UnmarshalJSON(b []byte) (err error) {
 		return NewInsufficientParamsError(len(obj), 1)
 	}
 
-	args.Word = obj[0]
+	var argstr string
+	argstr, ok := obj[0].(string)
+	if !ok {
+		return NewDecodeParamError("Filter is not a string")
+	}
+	args.Word = argstr
 
 	return nil
 }
