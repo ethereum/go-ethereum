@@ -79,12 +79,10 @@ func (self *BlockProcessor) ApplyTransaction(coinbase *state.StateObject, stated
 	statedb.EmptyLogs()
 
 	cb := statedb.GetStateObject(coinbase.Address())
-	/*
-		st := NewStateTransition(NewEnv(statedb, self.bc, tx, block), tx, cb)
-		_, err := st.TransitionState()
-	*/
 	_, gas, err := ApplyMessage(NewEnv(statedb, self.bc, tx, block), tx, cb)
 	if err != nil && (IsNonceErr(err) || state.IsGasLimitErr(err) || IsInvalidTxErr(err)) {
+		// If the account is managed, remove the invalid nonce.
+		self.bc.TxState().RemoveNonce(tx.From(), tx.Nonce())
 		return nil, nil, err
 	}
 

@@ -353,7 +353,7 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 	}
 
 	state := self.chainManager.TxState()
-	nonce := state.GetNonce(from)
+	nonce := state.NewNonce(from) //state.GetNonce(from)
 	tx.SetNonce(nonce)
 
 	if err := self.sign(tx, from, false); err != nil {
@@ -362,7 +362,7 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 	if err := self.eth.TxPool().Add(tx); err != nil {
 		return "", err
 	}
-	state.IncrementNonce(from)
+	//state.IncrementNonce(from)
 
 	if contractCreation {
 		addr := core.AddressFromMessage(tx)
