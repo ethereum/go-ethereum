@@ -34,15 +34,7 @@ func JSONRPC(pipe *xeth.XEth, dataDir string) http.Handler {
 		switch reqerr.(type) {
 		case nil:
 			break
-		case *DecodeParamError:
-			jsonerr := &RpcErrorObject{-32602, reqerr.Error()}
-			json.Send(w, &RpcErrorResponse{JsonRpc: jsonrpcver, ID: nil, Error: jsonerr})
-			return
-		case *InsufficientParamsError:
-			jsonerr := &RpcErrorObject{-32602, reqerr.Error()}
-			json.Send(w, &RpcErrorResponse{JsonRpc: jsonrpcver, ID: nil, Error: jsonerr})
-			return
-		case *ValidationError:
+		case *DecodeParamError, *InsufficientParamsError, *ValidationError:
 			jsonerr := &RpcErrorObject{-32602, reqerr.Error()}
 			json.Send(w, &RpcErrorResponse{JsonRpc: jsonrpcver, ID: nil, Error: jsonerr})
 			return
@@ -61,11 +53,7 @@ func JSONRPC(pipe *xeth.XEth, dataDir string) http.Handler {
 			jsonerr := &RpcErrorObject{-32601, reserr.Error()}
 			json.Send(w, &RpcErrorResponse{JsonRpc: jsonrpcver, ID: reqParsed.ID, Error: jsonerr})
 			return
-		case *InsufficientParamsError:
-			jsonerr := &RpcErrorObject{-32602, reserr.Error()}
-			json.Send(w, &RpcErrorResponse{JsonRpc: jsonrpcver, ID: reqParsed.ID, Error: jsonerr})
-			return
-		case *ValidationError:
+		case *DecodeParamError, *InsufficientParamsError, *ValidationError:
 			jsonerr := &RpcErrorObject{-32602, reserr.Error()}
 			json.Send(w, &RpcErrorResponse{JsonRpc: jsonrpcver, ID: reqParsed.ID, Error: jsonerr})
 			return
