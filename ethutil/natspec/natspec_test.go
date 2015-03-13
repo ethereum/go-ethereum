@@ -69,22 +69,22 @@ func TestNotice(t *testing.T) {
 	}
 
 	// https://github.com/ethereum/natspec.js/issues/1
-	// badDesc := "Will multiply `e` by 7 and return `a * 7`."
-	// notice, err = ns.Notice(tx, abi, method, badDesc)
+	badDesc := "Will multiply `e` by 7 and return `a * 7`."
+	notice, err = ns.Notice(tx, abi, method, badDesc)
 
-	// expected = "natspec.js error evaluating expression: wrong input param in expression ''"
+	expected = "natspec.js error evaluating expression: Error: Natspec evaluation failed, wrong input params"
 
-	// if err == nil {
-	// 	t.Errorf("expected error, got nothing (notice: '%v')", notice)
-	// } else {
-	// 	if err.Error() != expected {
-	// 		t.Errorf("expected error '%s' got '%v' (notice: '%v')", expected, err, notice)
-	// 	}
-	// }
+	if err == nil {
+		t.Errorf("expected error, got nothing (notice: '%v')", notice)
+	} else {
+		if err.Error() != expected {
+			t.Errorf("expected error '%s' got '%v' (notice: '%v')", expected, err, notice)
+		}
+	}
 
 	notice, err = ns.Notice(tx, abi, "missing_method", desc)
 
-	expected = "natspec.js error evaluating expression: wrong input params in expression 'Will multiply `a` by 7 and return `a * 7`.'"
+	expected = "natspec.js error evaluating expression: Error: Natspec evaluation failed, method does not exist"
 
 	if err == nil {
 		t.Errorf("expected error, got nothing (notice: '%v')", notice)
