@@ -61,6 +61,10 @@ type Config struct {
 
 	MinerThreads   int
 	AccountManager *accounts.Manager
+
+	// NewDB is used to create databases.
+	// If nil, the default is to create leveldb databases on disk.
+	NewDB func(path string) (ethutil.Database, error)
 }
 
 func (cfg *Config) parseBootNodes() []*discover.Node {
@@ -136,11 +140,15 @@ func New(config *Config) (*Ethereum, error) {
 	// Boostrap database
 	servlogger := logger.New(config.DataDir, config.LogFile, config.LogLevel, config.LogFormat)
 
-	blockDb, err := ethdb.NewLDBDatabase(path.Join(config.DataDir, "blockchain"))
+	newdb := config.NewDB
+	if newdb == nil {
+		newdb = func(path string) (ethutil.Database, error) { return ethdb.NewLDBDatabase(path) }
+	}
+	blockDb, err := newdb(path.Join(config.DataDir, "blockchain"))
 	if err != nil {
 		return nil, err
 	}
-	stateDb, err := ethdb.NewLDBDatabase(path.Join(config.DataDir, "state"))
+	stateDb, err := newdb(path.Join(config.DataDir, "state"))
 	if err != nil {
 		return nil, err
 	}
