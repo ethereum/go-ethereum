@@ -78,4 +78,12 @@ func TestRemoteNonceChange(t *testing.T) {
 	if nonce != 200 {
 		t.Error("expected nonce after remote update to be", 201, "got", nonce)
 	}
+	ms.NewNonce(addr)
+	ms.NewNonce(addr)
+	ms.NewNonce(addr)
+	ms.StateDB.stateObjects[string(addr)].nonce = 200
+	nonce = ms.NewNonce(addr)
+	if nonce != 204 {
+		t.Error("expected nonce after remote update to be", 201, "got", nonce)
+	}
 }
