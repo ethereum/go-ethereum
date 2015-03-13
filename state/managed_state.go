@@ -23,13 +23,19 @@ func ManageState(statedb *StateDB) *ManagedState {
 	}
 }
 
+func (ms *ManagedState) SetState(statedb *StateDB) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	ms.StateDB = statedb
+}
+
 func (ms *ManagedState) RemoveNonce(addr []byte, n uint64) {
 	if ms.hasAccount(addr) {
 		ms.mu.Lock()
 		defer ms.mu.Unlock()
 
 		account := ms.getAccount(addr)
-		if n-account.nstart < uint64(len(account.nonces)) {
+		if n-account.nstart <= uint64(len(account.nonces)) {
 			reslice := make([]bool, n-account.nstart)
 			copy(reslice, account.nonces[:n-account.nstart])
 			account.nonces = reslice
@@ -47,7 +53,7 @@ func (ms *ManagedState) NewNonce(addr []byte) uint64 {
 			return account.nstart + uint64(i)
 		}
 	}
-	account.nonces = append(account.nonces, false)
+	account.nonces = append(account.nonces, true)
 	return uint64(len(account.nonces)) + account.nstart
 }
 
@@ -57,9 +63,17 @@ func (ms *ManagedState) hasAccount(addr []byte) bool {
 }
 
 func (ms *ManagedState) getAccount(addr []byte) *account {
-	if _, ok := ms.accounts[string(addr)]; !ok {
+	if account, ok := ms.accounts[string(addr)]; !ok {
 		so := ms.GetOrNewStateObject(addr)
 		ms.accounts[string(addr)] = newAccount(so)
+	} else {
+		// Always make sure the state account nonce isn't actually higher
+		// than the tracked one.
+		so := ms.StateDB.GetStateObject(addr)
+		if so != nil && uint64(len(account.nonces))+account.nstart < so.nonce {
+			ms.accounts[string(addr)] = newAccount(so)
+		}
+
 	}
 
 	return ms.accounts[string(addr)]
