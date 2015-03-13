@@ -131,6 +131,7 @@ type Ethereum struct {
 
 	Mining  bool
 	DataDir string
+	version string
 }
 
 func New(config *Config) (*Ethereum, error) {
@@ -165,6 +166,7 @@ func New(config *Config) (*Ethereum, error) {
 		logger:         servlogger,
 		accountManager: config.AccountManager,
 		DataDir:        config.DataDir,
+		version:        config.Name, // TODO should separate from Name
 	}
 
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.EventMux())
@@ -236,6 +238,7 @@ func (s *Ethereum) IsListening() bool                    { return true } // Alwa
 func (s *Ethereum) PeerCount() int                       { return s.net.PeerCount() }
 func (s *Ethereum) Peers() []*p2p.Peer                   { return s.net.Peers() }
 func (s *Ethereum) MaxPeers() int                        { return s.net.MaxPeers }
+func (s *Ethereum) Version() string                      { return s.version }
 
 // Start the ethereum
 func (s *Ethereum) Start() error {

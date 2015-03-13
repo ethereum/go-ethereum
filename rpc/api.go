@@ -477,6 +477,10 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		*reply = toHex(crypto.Sha3(fromHex(args.Data)))
+	case "web3_clientVersion":
+		*reply = p.xeth().Backend().Version()
+	case "net_version":
+		return NewNotImplementedError(req.Method)
 	case "net_listening":
 		*reply = p.xeth().IsListening()
 	case "net_peerCount":
@@ -675,9 +679,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		*reply = uncle
 	case "eth_getCompilers":
 		return p.GetCompilers(reply)
-	case "eth_compileSolidity":
-	case "eth_compileLLL":
-	case "eth_compileSerpent":
+	case "eth_compileSolidity", "eth_compileLLL", "eth_compileSerpent":
 		return NewNotImplementedError(req.Method)
 	case "eth_newFilter":
 		args := new(FilterOptions)
@@ -715,8 +717,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.AllLogs(args, reply)
-	case "eth_getWork":
-	case "eth_submitWork":
+	case "eth_getWork", "eth_submitWork":
 		return NewNotImplementedError(req.Method)
 	case "db_put":
 		args := new(DbArgs)
@@ -744,8 +745,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		return p.HasWhisperIdentity(args.Identity, reply)
-	case "shh_newGroup":
-	case "shh_addToGroup":
+	case "shh_newGroup", "shh_addToGroup":
 		return NewNotImplementedError(req.Method)
 	case "shh_newFilter":
 		args := new(WhisperFilterArgs)
