@@ -148,6 +148,9 @@ func (self *StateTransition) preCheck() (err error) {
 
 	// Pre-pay gas / Buy gas of the coinbase account
 	if err = self.BuyGas(); err != nil {
+		if state.IsGasLimitErr(err) {
+			return err
+		}
 		return InvalidTxError(err)
 	}
 

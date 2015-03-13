@@ -449,6 +449,8 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 				*/
 
 				self.setTransState(state.New(block.Root(), self.stateDb))
+				self.setTxState(state.New(block.Root(), self.stateDb))
+
 				queue[i] = ChainEvent{block}
 				queueEvent.canonicalCount++
 			} else {

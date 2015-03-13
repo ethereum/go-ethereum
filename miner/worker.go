@@ -212,6 +212,7 @@ gasLimit:
 			fallthrough
 		case core.IsInvalidTxErr(err):
 			// Remove invalid transactions
+			self.chain.TxState().RemoveNonce(tx.From(), tx.Nonce())
 			remove = append(remove, tx)
 		case state.IsGasLimitErr(err):
 			// Break on gas limit
