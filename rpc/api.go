@@ -723,18 +723,20 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		return p.AllLogs(args, reply)
 	case "eth_getWork", "eth_submitWork":
 		return NewNotImplementedError(req.Method)
-	case "db_put":
+	case "db_putString":
 		args := new(DbArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		return p.DbPut(args, reply)
-	case "db_get":
+	case "db_getString":
 		args := new(DbArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
 		return p.DbGet(args, reply)
+	case "db_putHex", "db_getHex":
+		return NewNotImplementedError(req.Method)
 	case "shh_post":
 		args := new(WhisperMessageArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
