@@ -17,6 +17,9 @@ import (
 var (
 	chainlogger = logger.NewLogger("CHAIN")
 	jsonlogger  = logger.NewJsonLogger()
+
+	blockHashPre = []byte("block-hash-")
+	blockNumPre  = []byte("block-num-")
 )
 
 type StateQuery interface {
@@ -165,9 +168,8 @@ func (self *ChainManager) setTransState(statedb *state.StateDB) {
 func (bc *ChainManager) setLastBlock() {
 	data, _ := bc.blockDb.Get([]byte("LastBlock"))
 	if len(data) != 0 {
-		var block types.Block
-		rlp.Decode(bytes.NewReader(data), &block)
-		bc.currentBlock = &block
+		block := bc.GetBlock(data)
+		bc.currentBlock = block
 		bc.lastBlockHash = block.Hash()
 
 		// Set the last know difficulty (might be 0x0 as initial value, Genesis)
@@ -220,7 +222,7 @@ func (bc *ChainManager) Reset() {
 	defer bc.mu.Unlock()
 
 	for block := bc.currentBlock; block != nil; block = bc.GetBlock(block.Header().ParentHash) {
-		bc.blockDb.Delete(block.Hash())
+		bc.removeBlock(block)
 	}
 
 	// Prepare the genesis block
@@ -231,12 +233,16 @@ func (bc *ChainManager) Reset() {
 	bc.setTotalDifficulty(ethutil.Big("0"))
 }
 
+func (bc *ChainManager) removeBlock(block *types.Block) {
+	bc.blockDb.Delete(append(blockHashPre, block.Hash()...))
+}
+
 func (bc *ChainManager) ResetWithGenesisBlock(gb *types.Block) {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
 	for block := bc.currentBlock; block != nil; block = bc.GetBlock(block.Header().ParentHash) {
-		bc.blockDb.Delete(block.Hash())
+		bc.removeBlock(block)
 	}
 
 	// Prepare the genesis block
@@ -261,15 +267,20 @@ func (self *ChainManager) Export() []byte {
 }
 
 func (bc *ChainManager) insert(block *types.Block) {
-	encodedBlock := ethutil.Encode(block)
-	bc.blockDb.Put([]byte("LastBlock"), encodedBlock)
+	//encodedBlock := ethutil.Encode(block)
+	bc.blockDb.Put([]byte("LastBlock"), block.Hash())
 	bc.currentBlock = block
 	bc.lastBlockHash = block.Hash()
+
+	key := append(blockNumPre, block.Number().Bytes()...)
+	bc.blockDb.Put(key, bc.lastBlockHash)
 }
 
 func (bc *ChainManager) write(block *types.Block) {
 	encodedBlock := ethutil.Encode(block.RlpDataForStorage())
-	bc.blockDb.Put(block.Hash(), encodedBlock)
+
+	key := append(blockHashPre, block.Hash()...)
+	bc.blockDb.Put(key, encodedBlock)
 }
 
 // Accessors
@@ -279,7 +290,7 @@ func (bc *ChainManager) Genesis() *types.Block {
 
 // Block fetching methods
 func (bc *ChainManager) HasBlock(hash []byte) bool {
-	data, _ := bc.blockDb.Get(hash)
+	data, _ := bc.blockDb.Get(append(blockHashPre, hash...))
 	return len(data) != 0
 }
 
@@ -307,7 +318,7 @@ func (self *ChainManager) GetBlockHashesFromHash(hash []byte, max uint64) (chain
 }
 
 func (self *ChainManager) GetBlock(hash []byte) *types.Block {
-	data, _ := self.blockDb.Get(hash)
+	data, _ := self.blockDb.Get(append(blockHashPre, hash...))
 	if len(data) == 0 {
 		return nil
 	}
@@ -318,6 +329,18 @@ func (self *ChainManager) GetBlock(hash []byte) *types.Block {
 	}
 
 	return &block
+}
+
+func (self *ChainManager) GetBlockByNumber(num uint64) *types.Block {
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+
+	key, _ := self.blockDb.Get(append(blockNumPre, big.NewInt(int64(num)).Bytes()...))
+	if len(key) == 0 {
+		return nil
+	}
+
+	return self.GetBlock(key)
 }
 
 func (self *ChainManager) GetUnclesInChain(block *types.Block, length int) (uncles []*types.Header) {
@@ -340,24 +363,6 @@ func (self *ChainManager) GetAncestors(block *types.Block, length int) (blocks [
 	}
 
 	return
-}
-
-func (self *ChainManager) GetBlockByNumber(num uint64) *types.Block {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-
-	var block *types.Block
-
-	if num <= self.currentBlock.Number().Uint64() {
-		block = self.currentBlock
-		for ; block != nil; block = self.GetBlock(block.Header().ParentHash) {
-			if block.Header().Number.Uint64() == num {
-				break
-			}
-		}
-	}
-
-	return block
 }
 
 func (bc *ChainManager) setTotalDifficulty(td *big.Int) {
