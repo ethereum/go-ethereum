@@ -362,7 +362,7 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 	if err := self.eth.TxPool().Add(tx); err != nil {
 		return "", err
 	}
-	state.SetNonce(from, nonce+1)
+	state.IncrementNonce(from)
 
 	if contractCreation {
 		addr := core.AddressFromMessage(tx)

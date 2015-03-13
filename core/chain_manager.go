@@ -86,7 +86,7 @@ type ChainManager struct {
 	lastBlockHash []byte
 
 	transState *state.StateDB
-	txState    *state.StateDB
+	txState    *state.ManagedState
 
 	quit chan struct{}
 }
@@ -95,7 +95,8 @@ func NewChainManager(blockDb, stateDb ethutil.Database, mux *event.TypeMux) *Cha
 	bc := &ChainManager{blockDb: blockDb, stateDb: stateDb, genesisBlock: GenesisBlock(stateDb), eventMux: mux, quit: make(chan struct{})}
 	bc.setLastBlock()
 	bc.transState = bc.State().Copy()
-	bc.txState = bc.State().Copy()
+	// Take ownership of this particular state
+	bc.txState = state.ManageState(bc.State().Copy())
 	go bc.update()
 
 	return bc
@@ -144,17 +145,17 @@ func (self *ChainManager) TransState() *state.StateDB {
 	return self.transState
 }
 
-func (self *ChainManager) TxState() *state.StateDB {
+func (self *ChainManager) TxState() *state.ManagedState {
 	self.tsmu.RLock()
 	defer self.tsmu.RUnlock()
 
 	return self.txState
 }
 
-func (self *ChainManager) setTxState(state *state.StateDB) {
+func (self *ChainManager) setTxState(statedb *state.StateDB) {
 	self.tsmu.Lock()
 	defer self.tsmu.Unlock()
-	self.txState = state
+	self.txState = state.ManageState(statedb)
 }
 
 func (self *ChainManager) setTransState(statedb *state.StateDB) {
