@@ -23,11 +23,12 @@ var EmptyShaList = crypto.Sha3(ethutil.Encode([]interface{}{}))
 var EmptyListRoot = crypto.Sha3(ethutil.Encode(""))
 
 var GenesisDiff = big.NewInt(131072)
+var GenesisGasLimit = big.NewInt(3141592)
 
 func GenesisBlock(db ethutil.Database) *types.Block {
 	genesis := types.NewBlock(ZeroHash256, ZeroHash160, nil, GenesisDiff, 42, "")
 	genesis.Header().Number = ethutil.Big0
-	genesis.Header().GasLimit = big.NewInt(1000000)
+	genesis.Header().GasLimit = GenesisGasLimit
 	genesis.Header().GasUsed = ethutil.Big0
 	genesis.Header().Time = 0
 	genesis.Header().SeedHash = make([]byte, 32)

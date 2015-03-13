@@ -68,9 +68,7 @@ func CalcGasLimit(parent, block *types.Block) *big.Int {
 	result := new(big.Int).Add(previous, curInt)
 	result.Div(result, big.NewInt(1024))
 
-	min := big.NewInt(125000)
-
-	return ethutil.BigMax(min, result)
+	return ethutil.BigMax(GenesisGasLimit, result)
 }
 
 type ChainManager struct {
