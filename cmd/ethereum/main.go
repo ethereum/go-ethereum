@@ -156,24 +156,26 @@ func main() {
 func run(ctx *cli.Context) {
 	fmt.Printf("Welcome to the FRONTIER\n")
 	utils.HandleInterrupt()
-	eth, err := utils.GetEthereum(ClientIdentifier, Version, ctx)
+	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
+	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
 
-	startEth(ctx, eth)
+	startEth(ctx, ethereum)
 	// this blocks the thread
-	eth.WaitForShutdown()
+	ethereum.WaitForShutdown()
 }
 
 func runjs(ctx *cli.Context) {
-	eth, err := utils.GetEthereum(ClientIdentifier, Version, ctx)
+	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
+	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
 
-	startEth(ctx, eth)
-	repl := newJSRE(eth)
+	startEth(ctx, ethereum)
+	repl := newJSRE(ethereum)
 	if len(ctx.Args()) == 0 {
 		repl.interactive()
 	} else {
@@ -181,8 +183,8 @@ func runjs(ctx *cli.Context) {
 			repl.exec(file)
 		}
 	}
-	eth.Stop()
-	eth.WaitForShutdown()
+	ethereum.Stop()
+	ethereum.WaitForShutdown()
 }
 
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {

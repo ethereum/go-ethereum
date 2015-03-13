@@ -192,8 +192,8 @@ func GetNodeKey(ctx *cli.Context) (key *ecdsa.PrivateKey) {
 	return key
 }
 
-func GetEthereum(clientID, version string, ctx *cli.Context) (*eth.Ethereum, error) {
-	return eth.New(&eth.Config{
+func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
+	return &eth.Config{
 		Name:           p2p.MakeName(clientID, version),
 		DataDir:        ctx.GlobalString(DataDirFlag.Name),
 		LogFile:        ctx.GlobalString(LogFileFlag.Name),
@@ -209,7 +209,7 @@ func GetEthereum(clientID, version string, ctx *cli.Context) (*eth.Ethereum, err
 		Shh:            true,
 		Dial:           true,
 		BootNodes:      ctx.GlobalString(BootnodesFlag.Name),
-	})
+	}
 }
 
 func GetChain(ctx *cli.Context) (*core.ChainManager, ethutil.Database, ethutil.Database) {
