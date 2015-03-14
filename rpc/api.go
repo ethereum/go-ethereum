@@ -23,7 +23,7 @@ import (
 var (
 	defaultGasPrice  = big.NewInt(150000000000)
 	defaultGas       = big.NewInt(500000)
-	filterTickerTime = 15 * time.Second
+	filterTickerTime = 5 * time.Minute
 )
 
 type EthereumApi struct {
@@ -573,7 +573,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 			return err
 		}
 		*reply = toHex(big.NewInt(v).Bytes())
-	case "eth_getData":
+	case "eth_getData", "eth_getCode":
 		args := new(GetDataArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
