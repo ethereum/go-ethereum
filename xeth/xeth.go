@@ -116,21 +116,21 @@ func (self *XEth) State() *State { return self.state }
 func (self *XEth) Whisper() *Whisper { return self.whisper }
 
 func (self *XEth) BlockByHash(strHash string) *Block {
-	hash := fromHex(strHash)
+	hash := ethutil.FromHex(strHash)
 	block := self.chainManager.GetBlock(hash)
 
 	return NewBlock(block)
 }
 
 func (self *XEth) EthBlockByHash(strHash string) *types.Block {
-	hash := fromHex(strHash)
+	hash := ethutil.FromHex(strHash)
 	block := self.chainManager.GetBlock(hash)
 
 	return block
 }
 
 func (self *XEth) EthTransactionByHash(hash string) *types.Transaction {
-	data, _ := self.eth.ExtraDb().Get(fromHex(hash))
+	data, _ := self.eth.ExtraDb().Get(ethutil.FromHex(hash))
 	if len(data) != 0 {
 		return types.NewTransactionFromBytes(data)
 	}
@@ -233,7 +233,7 @@ func (self *XEth) IsContract(address string) bool {
 }
 
 func (self *XEth) SecretToAddress(key string) string {
-	pair, err := crypto.NewKeyPairFromSec(fromHex(key))
+	pair, err := crypto.NewKeyPairFromSec(ethutil.FromHex(key))
 	if err != nil {
 		return ""
 	}
@@ -273,7 +273,7 @@ func (self *XEth) FromAscii(str string) string {
 		str = str[2:]
 	}
 
-	return string(bytes.Trim(fromHex(str), "\x00"))
+	return string(bytes.Trim(ethutil.FromHex(str), "\x00"))
 }
 
 func (self *XEth) FromNumber(str string) string {
@@ -281,11 +281,11 @@ func (self *XEth) FromNumber(str string) string {
 		str = str[2:]
 	}
 
-	return ethutil.BigD(fromHex(str)).String()
+	return ethutil.BigD(ethutil.FromHex(str)).String()
 }
 
 func (self *XEth) PushTx(encodedTx string) (string, error) {
-	tx := types.NewTransactionFromBytes(fromHex(encodedTx))
+	tx := types.NewTransactionFromBytes(ethutil.FromHex(encodedTx))
 	err := self.eth.TxPool().Add(tx)
 	if err != nil {
 		return "", err
@@ -306,12 +306,12 @@ var (
 func (self *XEth) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, dataStr string) (string, error) {
 	statedb := self.State().State() //self.chainManager.TransState()
 	msg := callmsg{
-		from:     statedb.GetOrNewStateObject(fromHex(fromStr)),
-		to:       fromHex(toStr),
+		from:     statedb.GetOrNewStateObject(ethutil.FromHex(fromStr)),
+		to:       ethutil.FromHex(toStr),
 		gas:      ethutil.Big(gasStr),
 		gasPrice: ethutil.Big(gasPriceStr),
 		value:    ethutil.Big(valueStr),
-		data:     fromHex(dataStr),
+		data:     ethutil.FromHex(dataStr),
 	}
 	if msg.gas.Cmp(big.NewInt(0)) == 0 {
 		msg.gas = defaultGas
@@ -339,9 +339,9 @@ func (self *XEth) Transact(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 		contractCreation bool
 	)
 
-	from = fromHex(fromStr)
-	data = fromHex(codeStr)
-	to = fromHex(toStr)
+	from = ethutil.FromHex(fromStr)
+	data = ethutil.FromHex(codeStr)
+	to = ethutil.FromHex(toStr)
 	if len(to) == 0 {
 		contractCreation = true
 	}

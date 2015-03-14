@@ -128,19 +128,6 @@ func toHex(b []byte) string {
 	return "0x" + hex
 }
 
-func fromHex(s string) []byte {
-	if len(s) > 1 {
-		if s[0:2] == "0x" {
-			s = s[2:]
-		}
-		if len(s)%2 == 1 {
-			s = "0" + s
-		}
-		return ethutil.Hex2Bytes(s)
-	}
-	return nil
-}
-
 func i2hex(n int) string {
 	return toHex(big.NewInt(int64(n)).Bytes())
 }

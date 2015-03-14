@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/whisper"
 )
@@ -28,12 +29,12 @@ func (self *Whisper) Post(payload string, to, from string, topics []string, prio
 		ttl = 100
 	}
 
-	pk := crypto.ToECDSAPub(fromHex(from))
+	pk := crypto.ToECDSAPub(ethutil.FromHex(from))
 	if key := self.Whisper.GetIdentity(pk); key != nil || len(from) == 0 {
-		msg := whisper.NewMessage(fromHex(payload))
+		msg := whisper.NewMessage(ethutil.FromHex(payload))
 		envelope, err := msg.Seal(time.Duration(priority*100000), whisper.Opts{
 			Ttl:    time.Duration(ttl) * time.Second,
-			To:     crypto.ToECDSAPub(fromHex(to)),
+			To:     crypto.ToECDSAPub(ethutil.FromHex(to)),
 			From:   key,
 			Topics: whisper.TopicsFromString(topics...),
 		})
@@ -59,13 +60,13 @@ func (self *Whisper) NewIdentity() string {
 }
 
 func (self *Whisper) HasIdentity(key string) bool {
-	return self.Whisper.HasIdentity(crypto.ToECDSAPub(fromHex(key)))
+	return self.Whisper.HasIdentity(crypto.ToECDSAPub(ethutil.FromHex(key)))
 }
 
 func (self *Whisper) Watch(opts *Options) int {
 	filter := whisper.Filter{
-		To:     crypto.ToECDSAPub(fromHex(opts.To)),
-		From:   crypto.ToECDSAPub(fromHex(opts.From)),
+		To:     crypto.ToECDSAPub(ethutil.FromHex(opts.To)),
+		From:   crypto.ToECDSAPub(ethutil.FromHex(opts.From)),
 		Topics: whisper.TopicsFromString(opts.Topics...),
 	}
 

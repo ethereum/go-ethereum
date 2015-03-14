@@ -241,7 +241,7 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) (err error) 
 	//	p.register[args.From] = append(p.register[args.From], args)
 	//} else {
 	/*
-		account := accounts.Get(fromHex(args.From))
+		account := accounts.Get(ethutil.FromHex(args.From))
 		if account != nil {
 			if account.Unlocked() {
 				if !unlockAccount(account) {
@@ -249,7 +249,7 @@ func (p *EthereumApi) Transact(args *NewTxArgs, reply *interface{}) (err error) 
 				}
 			}
 
-			result, _ := account.Transact(fromHex(args.To), fromHex(args.Value), fromHex(args.Gas), fromHex(args.GasPrice), fromHex(args.Data))
+			result, _ := account.Transact(ethutil.FromHex(args.To), ethutil.FromHex(args.Value), ethutil.FromHex(args.Gas), ethutil.FromHex(args.GasPrice), ethutil.FromHex(args.Data))
 			if len(result) > 0 {
 				*reply = toHex(result)
 			}
@@ -480,7 +480,7 @@ func (p *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) error
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
 		}
-		*reply = toHex(crypto.Sha3(fromHex(args.Data)))
+		*reply = toHex(crypto.Sha3(ethutil.FromHex(args.Data)))
 	case "web3_clientVersion":
 		*reply = p.xeth().Backend().Version()
 	case "net_version":
@@ -815,12 +815,12 @@ func toFilterOptions(options *FilterOptions) core.FilterOptions {
 
 	// Convert optional address slice/string to byte slice
 	if str, ok := options.Address.(string); ok {
-		opts.Address = [][]byte{fromHex(str)}
+		opts.Address = [][]byte{ethutil.FromHex(str)}
 	} else if slice, ok := options.Address.([]interface{}); ok {
 		bslice := make([][]byte, len(slice))
 		for i, addr := range slice {
 			if saddr, ok := addr.(string); ok {
-				bslice[i] = fromHex(saddr)
+				bslice[i] = ethutil.FromHex(saddr)
 			}
 		}
 		opts.Address = bslice
@@ -834,11 +834,11 @@ func toFilterOptions(options *FilterOptions) core.FilterOptions {
 		if slice, ok := topicDat.([]interface{}); ok {
 			topics[i] = make([][]byte, len(slice))
 			for j, topic := range slice {
-				topics[i][j] = fromHex(topic.(string))
+				topics[i][j] = ethutil.FromHex(topic.(string))
 			}
 		} else if str, ok := topicDat.(string); ok {
 			topics[i] = make([][]byte, 1)
-			topics[i][0] = fromHex(str)
+			topics[i][0] = ethutil.FromHex(str)
 		}
 	}
 	opts.Topics = topics
