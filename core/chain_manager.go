@@ -420,7 +420,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			h := block.Header()
 			chainlogger.Infof("INVALID block #%v (%x)\n", h.Number, h.Hash()[:4])
 			chainlogger.Infoln(err)
-			chainlogger.Debufln(block)
+			chainlogger.Debugln(block)
 			return err
 		}
 		block.Td = td
