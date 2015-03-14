@@ -205,7 +205,7 @@ func (self *worker) commitNewWork() {
 	// Keep track of transactions which return errors so they can be removed
 	var remove types.Transactions
 gasLimit:
-	for _, tx := range transactions {
+	for i, tx := range transactions {
 		err := self.commitTransaction(tx)
 		switch {
 		case core.IsNonceErr(err):
@@ -214,13 +214,11 @@ gasLimit:
 			// Remove invalid transactions
 			self.chain.TxState().RemoveNonce(tx.From(), tx.Nonce())
 			remove = append(remove, tx)
+			minerlogger.Infof("TX (%x) failed. Transaction will be removed\n", tx.Hash()[:4])
 		case state.IsGasLimitErr(err):
+			minerlogger.Infof("Gas limit reached for block. %d TXs included in this block\n", i)
 			// Break on gas limit
 			break gasLimit
-		}
-
-		if err != nil {
-			minerlogger.Infoln(err)
 		}
 	}
 	self.eth.TxPool().RemoveSet(remove)

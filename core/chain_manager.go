@@ -418,9 +418,9 @@ func (self *ChainManager) InsertChain(chain types.Blocks) error {
 			}
 
 			h := block.Header()
-			chainlogger.Infof("block #%v process failed (%x)\n", h.Number, h.Hash()[:4])
-			chainlogger.Infoln(block)
+			chainlogger.Infof("INVALID block #%v (%x)\n", h.Number, h.Hash()[:4])
 			chainlogger.Infoln(err)
+			chainlogger.Debufln(block)
 			return err
 		}
 		block.Td = td
