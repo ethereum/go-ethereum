@@ -3,7 +3,7 @@
 #include "endian.h"
 #include "ethash.h"
 
-#define ENABLE_SSE 1
+#define ENABLE_SSE 0
 
 #if defined(_M_X64) && ENABLE_SSE
 #include <smmintrin.h>

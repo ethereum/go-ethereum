@@ -31,7 +31,7 @@
 #include <algorithm>
 
 #ifdef WITH_CRYPTOPP
-#include <libethash/SHA3_cryptopp.h>
+#include <libethash/sha3_cryptopp.h>
 #include <string>
 
 #else

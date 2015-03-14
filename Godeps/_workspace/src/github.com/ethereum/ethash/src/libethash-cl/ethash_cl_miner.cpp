@@ -24,14 +24,21 @@
 
 #include <assert.h>
 #include <queue>
+#include <vector>
 #include "ethash_cl_miner.h"
 #include "ethash_cl_miner_kernel.h"
 #include <libethash/util.h>
 
+#define ETHASH_BYTES 32
+
+// workaround lame platforms
+#if !CL_VERSION_1_2
+#define CL_MAP_WRITE_INVALIDATE_REGION CL_MAP_WRITE
+#define CL_MEM_HOST_READ_ONLY 0
+#endif
+
 #undef min
 #undef max
-
-#define HASH_BYTES 32
 
 static void add_definition(std::string& source, char const* id, unsigned value)
 {
@@ -41,6 +48,7 @@ static void add_definition(std::string& source, char const* id, unsigned value)
 }
 
 ethash_cl_miner::ethash_cl_miner()
+:	m_opencl_1_1()
 {
 }
 
@@ -71,11 +79,23 @@ bool ethash_cl_miner::init(ethash_params const& params, const uint8_t seed[32], 
 	}
 
 	// use default device
-	cl::Device& device = devices[0];
-	debugf("Using device: %s\n", device.getInfo<CL_DEVICE_NAME>().c_str());
+	unsigned device_num = 0;
+	cl::Device& device = devices[device_num];
+	std::string device_version = device.getInfo<CL_DEVICE_VERSION>();
+	debugf("Using device: %s (%s)\n", device.getInfo<CL_DEVICE_NAME>().c_str(),device_version.c_str());
+
+	if (strncmp("OpenCL 1.0", device_version.c_str(), 10) == 0)
+	{
+		debugf("OpenCL 1.0 is not supported.\n");
+		return false;
+	}
+	if (strncmp("OpenCL 1.1", device_version.c_str(), 10) == 0)
+	{
+		m_opencl_1_1 = true;
+	}
 
 	// create context
-	m_context = cl::Context({device});
+	m_context = cl::Context(std::vector<cl::Device>(&device, &device+1));
 	m_queue = cl::CommandQueue(m_context, device);
 
 	// use requested workgroup size, but we require multiple of 8
@@ -120,7 +140,7 @@ bool ethash_cl_miner::init(ethash_params const& params, const uint8_t seed[32], 
 		ethash_mkcache(&cache, &params, seed);
 
 		// if this throws then it's because we probably need to subdivide the dag uploads for compatibility
-		void* dag_ptr = m_queue.enqueueMapBuffer(m_dag, true, CL_MAP_WRITE_INVALIDATE_REGION, 0, params.full_size);
+		void* dag_ptr = m_queue.enqueueMapBuffer(m_dag, true, m_opencl_1_1 ? CL_MAP_WRITE : CL_MAP_WRITE_INVALIDATE_REGION, 0, params.full_size);
 		ethash_compute_full_data(dag_ptr, &params, &cache);
 		m_queue.enqueueUnmapMemObject(m_dag, dag_ptr);
 
@@ -130,7 +150,7 @@ bool ethash_cl_miner::init(ethash_params const& params, const uint8_t seed[32], 
 	// create mining buffers
 	for (unsigned i = 0; i != c_num_buffers; ++i)
 	{
-		m_hash_buf[i] = cl::Buffer(m_context, CL_MEM_WRITE_ONLY | CL_MEM_HOST_READ_ONLY, 32*c_hash_batch_size);
+		m_hash_buf[i] = cl::Buffer(m_context, CL_MEM_WRITE_ONLY | (!m_opencl_1_1 ? CL_MEM_HOST_READ_ONLY : 0), 32*c_hash_batch_size);
 		m_search_buf[i] = cl::Buffer(m_context, CL_MEM_WRITE_ONLY, (c_max_search_results + 1) * sizeof(uint32_t));
 	}
 	return true;
@@ -176,7 +196,6 @@ void ethash_cl_miner::hash(uint8_t* ret, uint8_t const* header, uint64_t nonce, 
 			m_hash_kernel.setArg(0, m_hash_buf[buf]);
 
 			// execute it!
-			clock_t start_time = clock();
 			m_queue.enqueueNDRangeKernel(
 				m_hash_kernel,
 				cl::NullRange,
@@ -196,8 +215,8 @@ void ethash_cl_miner::hash(uint8_t* ret, uint8_t const* header, uint64_t nonce, 
 			pending_batch const& batch = pending.front();
 
 			// could use pinned host pointer instead, but this path isn't that important.
-			uint8_t* hashes = (uint8_t*)m_queue.enqueueMapBuffer(m_hash_buf[batch.buf], true, CL_MAP_READ, 0, batch.count * HASH_BYTES);
-			memcpy(ret + batch.base*HASH_BYTES, hashes, batch.count*HASH_BYTES);
+			uint8_t* hashes = (uint8_t*)m_queue.enqueueMapBuffer(m_hash_buf[batch.buf], true, CL_MAP_READ, 0, batch.count * ETHASH_BYTES);
+			memcpy(ret + batch.base*ETHASH_BYTES, hashes, batch.count*ETHASH_BYTES);
 			m_queue.enqueueUnmapMemObject(m_hash_buf[batch.buf], hashes);
 
 			pending.pop();
@@ -223,8 +242,19 @@ void ethash_cl_miner::search(uint8_t const* header, uint64_t target, search_hook
 	{
 		m_queue.enqueueWriteBuffer(m_search_buf[i], false, 0, 4, &c_zero);
 	}
+
+#if CL_VERSION_1_2
 	cl::Event pre_return_event;
-	m_queue.enqueueBarrierWithWaitList(NULL, &pre_return_event);
+	if (!m_opencl_1_1)
+	{
+		m_queue.enqueueBarrierWithWaitList(NULL, &pre_return_event);
+	}
+	else
+#else
+	{
+		m_queue.finish();
+	}
+#endif
 
 	/*
 	__kernel void ethash_combined_search(
@@ -284,6 +314,11 @@ void ethash_cl_miner::search(uint8_t const* header, uint64_t target, search_hook
 	}
 
 	// not safe to return until this is ready
-	pre_return_event.wait();
+#if CL_VERSION_1_2
+	if (!m_opencl_1_1)
+	{
+		pre_return_event.wait();
+	}
+#endif
 }
 

@@ -1,3 +1,13 @@
+/*
+###################################################################################
+###################################################################################
+####################                                           ####################
+####################  EDIT AND YOU SHALL FEEL MY WRATH - jeff  ####################
+####################                                           ####################
+###################################################################################
+###################################################################################
+*/
+
 package ethash
 
 /*
@@ -11,8 +21,8 @@ import "C"
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io/ioutil"
-	"log"
 	"math/big"
 	"math/rand"
 	"os"
@@ -21,25 +31,26 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/pow"
 )
 
-var tt256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
+var minDifficulty = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
 
 var powlogger = logger.NewLogger("POW")
 
-type DAG struct {
-	SeedBlockNum uint64
-	dag          unsafe.Pointer // full GB of memory for dag
-	file         bool
+type ParamsAndCache struct {
+	params *C.ethash_params
+	cache  *C.ethash_cache
+	Epoch  uint64
 }
 
-type ParamsAndCache struct {
-	params       *C.ethash_params
-	cache        *C.ethash_cache
-	SeedBlockNum uint64
+type DAG struct {
+	dag            unsafe.Pointer // full GB of memory for dag
+	file           bool
+	paramsAndCache *ParamsAndCache
 }
 
 type Ethash struct {
@@ -48,10 +59,9 @@ type Ethash struct {
 	chainManager   pow.ChainManager
 	dag            *DAG
 	paramsAndCache *ParamsAndCache
-	nextdag        unsafe.Pointer
 	ret            *C.ethash_return_value
-	dagMutex       *sync.Mutex
-	cacheMutex     *sync.Mutex
+	dagMutex       *sync.RWMutex
+	cacheMutex     *sync.RWMutex
 }
 
 func parseNonce(nonce []byte) (uint64, error) {
@@ -65,151 +75,212 @@ func parseNonce(nonce []byte) (uint64, error) {
 
 const epochLength uint64 = 30000
 
-func GetSeedBlockNum(blockNum uint64) uint64 {
-	var seedBlockNum uint64 = 0
-	if blockNum > epochLength {
-		seedBlockNum = ((blockNum - 1) / epochLength) * epochLength
+func makeParamsAndCache(chainManager pow.ChainManager, blockNum uint64) (*ParamsAndCache, error) {
+	if blockNum >= epochLength*2048 {
+		return nil, fmt.Errorf("block number is out of bounds (value %v, limit is %v)", blockNum, epochLength*2048)
 	}
-	return seedBlockNum
-}
-
-/*
-XXX THIS DOESN'T WORK!! NEEDS FIXING
-blockEpoch will underflow and wrap around causing massive issues
-func GetSeedBlockNum(blockNum uint64) uint64 {
-	var seedBlockNum uint64 = 0
-	if blockNum > epochLength {
-		seedBlockNum = ((blockNum - 1) / epochLength) * epochLength
-	}
-	return seedBlockNum
-}
-*/
-
-func makeParamsAndCache(chainManager pow.ChainManager, blockNum uint64) *ParamsAndCache {
-	seedBlockNum := GetSeedBlockNum(blockNum)
 	paramsAndCache := &ParamsAndCache{
-		params:       new(C.ethash_params),
-		cache:        new(C.ethash_cache),
-		SeedBlockNum: seedBlockNum,
+		params: new(C.ethash_params),
+		cache:  new(C.ethash_cache),
+		Epoch:  blockNum / epochLength,
 	}
-	C.ethash_params_init(paramsAndCache.params, C.uint32_t(seedBlockNum))
+	C.ethash_params_init(paramsAndCache.params, C.uint32_t(uint32(blockNum)))
 	paramsAndCache.cache.mem = C.malloc(paramsAndCache.params.cache_size)
-	seedHash := chainManager.GetBlockByNumber(seedBlockNum).SeedHash()
 
-	log.Println("Making Cache")
+	seedHash, err := GetSeedHash(blockNum)
+	if err != nil {
+		return nil, err
+	}
+
+	powlogger.Infoln("Making Cache")
 	start := time.Now()
 	C.ethash_mkcache(paramsAndCache.cache, paramsAndCache.params, (*C.uint8_t)(unsafe.Pointer(&seedHash[0])))
-	log.Println("Took:", time.Since(start))
+	powlogger.Infoln("Took:", time.Since(start))
 
-	return paramsAndCache
+	return paramsAndCache, nil
 }
 
-func (pow *Ethash) updateCache() {
+func (pow *Ethash) UpdateCache(force bool) error {
 	pow.cacheMutex.Lock()
-	seedNum := GetSeedBlockNum(pow.chainManager.CurrentBlock().NumberU64())
-	if pow.paramsAndCache.SeedBlockNum != seedNum {
-		pow.paramsAndCache = makeParamsAndCache(pow.chainManager, pow.chainManager.CurrentBlock().NumberU64())
+	thisEpoch := pow.chainManager.CurrentBlock().NumberU64()
+	if force || pow.paramsAndCache.Epoch != thisEpoch {
+		var err error
+		pow.paramsAndCache, err = makeParamsAndCache(pow.chainManager, pow.chainManager.CurrentBlock().NumberU64())
+		if err != nil {
+			panic(err)
+		}
 	}
 	pow.cacheMutex.Unlock()
+	return nil
 }
 
 func makeDAG(p *ParamsAndCache) *DAG {
 	d := &DAG{
-		dag:          C.malloc(p.params.full_size),
-		SeedBlockNum: p.SeedBlockNum,
+		dag:            C.malloc(p.params.full_size),
+		file:           false,
+		paramsAndCache: p,
 	}
+
+	donech := make(chan string)
+	go func() {
+		t := time.NewTicker(5 * time.Second)
+		tstart := time.Now()
+	done:
+		for {
+			select {
+			case <-t.C:
+				powlogger.Infof("... still generating DAG (%v) ...\n", time.Since(tstart).Seconds())
+			case str := <-donech:
+				powlogger.Infof("... %s ...\n", str)
+				break done
+			}
+		}
+	}()
 	C.ethash_compute_full_data(d.dag, p.params, p.cache)
+	donech <- "DAG generation completed"
 	return d
 }
 
-func (pow *Ethash) writeDagToDisk(dag *DAG, seedNum uint64) *os.File {
-	data := C.GoBytes(unsafe.Pointer(dag.dag), C.int(pow.paramsAndCache.params.full_size))
+func (pow *Ethash) writeDagToDisk(dag *DAG, epoch uint64) *os.File {
+	if epoch > 2048 {
+		panic(fmt.Errorf("Epoch must be less than 2048 (is %v)", epoch))
+	}
+	data := C.GoBytes(unsafe.Pointer(dag.dag), C.int(dag.paramsAndCache.params.full_size))
 	file, err := os.Create("/tmp/dag")
 	if err != nil {
 		panic(err)
 	}
 
-	num := make([]byte, 8)
-	binary.BigEndian.PutUint64(num, seedNum)
+	dataEpoch := make([]byte, 8)
+	binary.BigEndian.PutUint64(dataEpoch, epoch)
 
-	file.Write(num)
+	file.Write(dataEpoch)
 	file.Write(data)
 
 	return file
 }
 
 func (pow *Ethash) UpdateDAG() {
-	pow.cacheMutex.Lock()
-	pow.dagMutex.Lock()
+	blockNum := pow.chainManager.CurrentBlock().NumberU64()
+	if blockNum >= epochLength*2048 {
+		// This will crash in the 2030s or 2040s
+		panic(fmt.Errorf("Current block number is out of bounds (value %v, limit is %v)", blockNum, epochLength*2048))
+	}
 
-	seedNum := GetSeedBlockNum(pow.chainManager.CurrentBlock().NumberU64())
-	if pow.dag == nil || pow.dag.SeedBlockNum != seedNum {
+	pow.dagMutex.Lock()
+	defer pow.dagMutex.Unlock()
+	thisEpoch := blockNum / epochLength
+	if pow.dag == nil || pow.dag.paramsAndCache.Epoch != thisEpoch {
 		if pow.dag != nil && pow.dag.dag != nil {
 			C.free(pow.dag.dag)
 			pow.dag.dag = nil
 		}
 
+		if pow.dag != nil && pow.dag.paramsAndCache.cache.mem != nil {
+			C.free(pow.dag.paramsAndCache.cache.mem)
+			pow.dag.paramsAndCache.cache.mem = nil
+		}
+
+		// Make the params and cache for the DAG
+		paramsAndCache, err := makeParamsAndCache(pow.chainManager, blockNum)
+		if err != nil {
+			panic(err)
+		}
+
+		// TODO: On non-SSD disks, loading the DAG from disk takes longer than generating it in memory
+		pow.paramsAndCache = paramsAndCache
 		path := path.Join("/", "tmp", "dag")
 		pow.dag = nil
-		log.Println("Generating dag")
+		powlogger.Infoln("Retrieving DAG")
 		start := time.Now()
 
 		file, err := os.Open(path)
 		if err != nil {
-			log.Printf("No dag found in '%s'. Generating new dago(takes a while)...", path)
-			pow.dag = makeDAG(pow.paramsAndCache)
-			file = pow.writeDagToDisk(pow.dag, seedNum)
+			powlogger.Infof("No DAG found. Generating new DAG in '%s' (this takes a while)...\n", path)
+			pow.dag = makeDAG(paramsAndCache)
+			file = pow.writeDagToDisk(pow.dag, thisEpoch)
+			pow.dag.file = true
 		} else {
 			data, err := ioutil.ReadAll(file)
 			if err != nil {
-				panic(err)
+				powlogger.Infof("DAG load err: %v\n", err)
 			}
 
-			num := binary.BigEndian.Uint64(data[0:8])
-			if num < seedNum {
-				log.Printf("Old found. Generating new dag (takes a while)...")
-				pow.dag = makeDAG(pow.paramsAndCache)
-				file = pow.writeDagToDisk(pow.dag, seedNum)
+			if len(data) < 8 {
+				powlogger.Infof("DAG in '%s' is less than 8 bytes, it must be corrupted. Generating new DAG (this takes a while)...\n", path)
+				pow.dag = makeDAG(paramsAndCache)
+				file = pow.writeDagToDisk(pow.dag, thisEpoch)
+				pow.dag.file = true
 			} else {
-				data = data[8:]
-				pow.dag = &DAG{
-					dag:          unsafe.Pointer(&data[0]),
-					file:         true,
-					SeedBlockNum: pow.paramsAndCache.SeedBlockNum,
+				dataEpoch := binary.BigEndian.Uint64(data[0:8])
+				if dataEpoch < thisEpoch {
+					powlogger.Infof("DAG in '%s' is stale. Generating new DAG (this takes a while)...\n", path)
+					pow.dag = makeDAG(paramsAndCache)
+					file = pow.writeDagToDisk(pow.dag, thisEpoch)
+					pow.dag.file = true
+				} else if dataEpoch > thisEpoch {
+					// FIXME
+					panic(fmt.Errorf("Saved DAG in '%s' reports to be from future epoch %v (current epoch is %v)\n", path, dataEpoch, thisEpoch))
+				} else if len(data) != (int(paramsAndCache.params.full_size) + 8) {
+					powlogger.Infof("DAG in '%s' is corrupted. Generating new DAG (this takes a while)...\n", path)
+					pow.dag = makeDAG(paramsAndCache)
+					file = pow.writeDagToDisk(pow.dag, thisEpoch)
+					pow.dag.file = true
+				} else {
+					data = data[8:]
+					pow.dag = &DAG{
+						dag:            unsafe.Pointer(&data[0]),
+						file:           true,
+						paramsAndCache: paramsAndCache,
+					}
 				}
 			}
 		}
-		log.Println("Took:", time.Since(start))
+		powlogger.Infoln("Took:", time.Since(start))
 
 		file.Close()
 	}
-
-	pow.dagMutex.Unlock()
-	pow.cacheMutex.Unlock()
 }
 
 func New(chainManager pow.ChainManager) *Ethash {
+	paramsAndCache, err := makeParamsAndCache(chainManager, chainManager.CurrentBlock().NumberU64())
+	if err != nil {
+		panic(err)
+	}
+
 	return &Ethash{
 		turbo:          true,
-		paramsAndCache: makeParamsAndCache(chainManager, chainManager.CurrentBlock().NumberU64()),
+		paramsAndCache: paramsAndCache,
 		chainManager:   chainManager,
 		dag:            nil,
-		cacheMutex:     new(sync.Mutex),
-		dagMutex:       new(sync.Mutex),
+		cacheMutex:     new(sync.RWMutex),
+		dagMutex:       new(sync.RWMutex),
 	}
 }
 
 func (pow *Ethash) DAGSize() uint64 {
-	return uint64(pow.paramsAndCache.params.full_size)
+	return uint64(pow.dag.paramsAndCache.params.full_size)
 }
 
 func (pow *Ethash) CacheSize() uint64 {
 	return uint64(pow.paramsAndCache.params.cache_size)
 }
 
-func (pow *Ethash) GetSeedHash(blockNum uint64) []byte {
-	seednum := GetSeedBlockNum(blockNum)
-	return pow.chainManager.GetBlockByNumber(seednum).SeedHash()
+func GetSeedHash(blockNum uint64) ([]byte, error) {
+	if blockNum >= epochLength*2048 {
+		return nil, fmt.Errorf("block number is out of bounds (value %v, limit is %v)", blockNum, epochLength*2048)
+	}
+
+	epoch := blockNum / epochLength
+	seedHash := make([]byte, 32)
+	var i uint64
+	for i = 0; i < 32; i++ {
+		seedHash[i] = 0
+	}
+	for i = 0; i < epoch; i++ {
+		seedHash = crypto.Sha3(seedHash)
+	}
+	return seedHash, nil
 }
 
 func (pow *Ethash) Stop() {
@@ -224,17 +295,18 @@ func (pow *Ethash) Stop() {
 	if pow.dag.dag != nil && !pow.dag.file {
 		C.free(pow.dag.dag)
 	}
+	if pow.dag != nil && pow.dag.paramsAndCache != nil && pow.dag.paramsAndCache.cache.mem != nil {
+		C.free(pow.dag.paramsAndCache.cache.mem)
+		pow.dag.paramsAndCache.cache.mem = nil
+	}
 	pow.dag.dag = nil
 }
 
 func (pow *Ethash) Search(block pow.Block, stop <-chan struct{}) (uint64, []byte, []byte) {
-	//pow.UpdateDAG()
+	pow.UpdateDAG()
 
-	// Not very elegant, multiple mining instances are not supported
-	//pow.dagMutex.Lock()
-	//pow.cacheMutex.Lock()
-	//defer pow.cacheMutex.Unlock()
-	//defer pow.dagMutex.Unlock()
+	pow.dagMutex.RLock()
+	defer pow.dagMutex.RUnlock()
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	miningHash := block.HashNoNonce()
@@ -246,7 +318,7 @@ func (pow *Ethash) Search(block pow.Block, stop <-chan struct{}) (uint64, []byte
 
 	nonce := uint64(r.Int63())
 	cMiningHash := (*C.uint8_t)(unsafe.Pointer(&miningHash[0]))
-	target := new(big.Int).Div(tt256, diff)
+	target := new(big.Int).Div(minDifficulty, diff)
 
 	var ret C.ethash_return_value
 	for {
@@ -262,14 +334,17 @@ func (pow *Ethash) Search(block pow.Block, stop <-chan struct{}) (uint64, []byte
 			hashes := ((float64(1e9) / float64(elapsed)) * float64(i-starti)) / 1000
 			pow.HashRate = int64(hashes)
 
-			C.ethash_full(&ret, pow.dag.dag, pow.paramsAndCache.params, cMiningHash, C.uint64_t(nonce))
+			C.ethash_full(&ret, pow.dag.dag, pow.dag.paramsAndCache.params, cMiningHash, C.uint64_t(nonce))
 			result := ethutil.Bytes2Big(C.GoBytes(unsafe.Pointer(&ret.result[0]), C.int(32)))
 
+			// TODO: disagrees with the spec https://github.com/ethereum/wiki/wiki/Ethash#mining
 			if result.Cmp(target) <= 0 {
 				mixDigest := C.GoBytes(unsafe.Pointer(&ret.mix_hash[0]), C.int(32))
-
-				return nonce, mixDigest, pow.GetSeedHash(block.NumberU64())
-
+				seedHash, err := GetSeedHash(block.NumberU64()) // This seedhash is useless
+				if err != nil {
+					panic(err)
+				}
+				return nonce, mixDigest, seedHash
 			}
 
 			nonce += 1
@@ -283,32 +358,41 @@ func (pow *Ethash) Search(block pow.Block, stop <-chan struct{}) (uint64, []byte
 }
 
 func (pow *Ethash) Verify(block pow.Block) bool {
-	// Make sure the SeedHash is set correctly
-	if bytes.Compare(block.SeedHash(), pow.GetSeedHash(block.NumberU64())) != 0 {
-		return false
-	}
 
 	return pow.verify(block.HashNoNonce(), block.MixDigest(), block.Difficulty(), block.NumberU64(), block.Nonce())
 }
 
 func (pow *Ethash) verify(hash []byte, mixDigest []byte, difficulty *big.Int, blockNum uint64, nonce uint64) bool {
-	// First check: make sure header, mixDigest, nonce are correct without hitting the DAG
+	// Make sure the block num is valid
+	if blockNum >= epochLength*2048 {
+		powlogger.Infoln(fmt.Sprintf("Block number exceeds limit, invalid (value is %v, limit is %v)",
+			blockNum, epochLength*2048))
+		return false
+	}
+
+	// First check: make sure header, mixDigest, nonce are correct without hitting the cache
 	// This is to prevent DOS attacks
 	chash := (*C.uint8_t)(unsafe.Pointer(&hash[0]))
 	cnonce := C.uint64_t(nonce)
-	target := new(big.Int).Div(tt256, difficulty)
+	target := new(big.Int).Div(minDifficulty, difficulty)
 
 	var pAc *ParamsAndCache
 	// If its an old block (doesn't use the current cache)
 	// get the cache for it but don't update (so we don't need the mutex)
-	// Otherwise, it's the current block or a future.
+	// Otherwise, it's the current block or a future block.
 	// If current, updateCache will do nothing.
-	if GetSeedBlockNum(blockNum) < pow.paramsAndCache.SeedBlockNum {
-		pAc = makeParamsAndCache(pow.chainManager, blockNum)
+	if blockNum/epochLength < pow.paramsAndCache.Epoch {
+		var err error
+		// If we can't make the params for some reason, this block is invalid
+		pAc, err = makeParamsAndCache(pow.chainManager, blockNum)
+		if err != nil {
+			powlogger.Infoln(err)
+			return false
+		}
 	} else {
-		pow.updateCache()
-		pow.cacheMutex.Lock()
-		defer pow.cacheMutex.Unlock()
+		pow.UpdateCache(false)
+		pow.cacheMutex.RLock()
+		defer pow.cacheMutex.RUnlock()
 		pAc = pow.paramsAndCache
 	}
 

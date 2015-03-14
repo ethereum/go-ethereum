@@ -8,3 +8,5 @@ pyethash.egg-info/
 *.so
 *~
 *.swp
+MANIFEST
+dist/
