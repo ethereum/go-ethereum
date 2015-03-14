@@ -159,7 +159,7 @@ func loadBlocksFromTestFile(filePath string) (blocks types.Blocks, err error) {
 	gbh.Bloom, err = hex_decode(bt["SimpleTx"].GenesisBlockHeader.Bloom)
 
 	gbh.MixDigest, err = hex_decode(bt["SimpleTx"].GenesisBlockHeader.MixHash)
-	gbh.SeedHash, err = hex_decode(bt["SimpleTx"].GenesisBlockHeader.SeedHash)
+	//gbh.SeedHash, err = hex_decode(bt["SimpleTx"].GenesisBlockHeader.SeedHash)
 
 	d, _ := new(big.Int).SetString(bt["SimpleTx"].GenesisBlockHeader.Difficulty, 10)
 	gbh.Difficulty = d
