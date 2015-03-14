@@ -31,7 +31,6 @@ func GenesisBlock(db ethutil.Database) *types.Block {
 	genesis.Header().GasLimit = GenesisGasLimit
 	genesis.Header().GasUsed = ethutil.Big0
 	genesis.Header().Time = 0
-	genesis.Header().SeedHash = make([]byte, 32)
 	genesis.Header().MixDigest = make([]byte, 32)
 
 	genesis.Td = ethutil.Big0

@@ -40,8 +40,6 @@ type Header struct {
 	Time uint64
 	// Extra data
 	Extra string
-	// SeedHash used for light client verification
-	SeedHash ethutil.Bytes
 	// Mix digest for quick checking to prevent DOS
 	MixDigest ethutil.Bytes
 	// Nonce
@@ -63,7 +61,6 @@ func (self *Header) rlpData(withNonce bool) []interface{} {
 		self.GasUsed,
 		self.Time,
 		self.Extra,
-		self.SeedHash,
 	}
 	if withNonce {
 		fields = append(fields, self.MixDigest, self.Nonce)
@@ -202,7 +199,6 @@ func (self *Block) RlpDataForStorage() interface{} {
 func (self *Block) Number() *big.Int  { return self.header.Number }
 func (self *Block) NumberU64() uint64 { return self.header.Number.Uint64() }
 func (self *Block) MixDigest() []byte { return self.header.MixDigest }
-func (self *Block) SeedHash() []byte  { return self.header.SeedHash }
 func (self *Block) Nonce() uint64 {
 	return binary.BigEndian.Uint64(self.header.Nonce)
 }
@@ -281,10 +277,9 @@ func (self *Header) String() string {
 	GasUsed:	    %v
 	Time:		    %v
 	Extra:		    %v
-	SeedHash:           %x
 	MixDigest:          %x
 	Nonce:		    %x`,
-		self.ParentHash, self.UncleHash, self.Coinbase, self.Root, self.TxHash, self.ReceiptHash, self.Bloom, self.Difficulty, self.Number, self.GasLimit, self.GasUsed, self.Time, self.Extra, self.SeedHash, self.MixDigest, self.Nonce)
+		self.ParentHash, self.UncleHash, self.Coinbase, self.Root, self.TxHash, self.ReceiptHash, self.Bloom, self.Difficulty, self.Number, self.GasLimit, self.GasUsed, self.Time, self.Extra, self.MixDigest, self.Nonce)
 }
 
 type Blocks []*Block

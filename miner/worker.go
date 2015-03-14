@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -154,7 +153,6 @@ func (self *worker) wait() {
 			if block.Number().Uint64() == work.Number && block.Nonce() == 0 {
 				self.current.block.SetNonce(work.Nonce)
 				self.current.block.Header().MixDigest = work.MixDigest
-				self.current.block.Header().SeedHash = work.SeedHash
 
 				jsonlogger.LogJson(&logger.EthMinerNewBlock{
 					BlockHash:     ethutil.Bytes2Hex(block.Hash()),
@@ -191,8 +189,6 @@ func (self *worker) commitNewWork() {
 	defer self.mu.Unlock()
 
 	block := self.chain.NewBlock(self.coinbase)
-	seednum := ethash.GetSeedBlockNum(block.NumberU64())
-	block.Header().SeedHash = self.chain.GetBlockByNumber(seednum).SeedHash()
 
 	self.current = env(block, self.eth)
 	parent := self.chain.GetBlock(self.current.block.ParentHash())

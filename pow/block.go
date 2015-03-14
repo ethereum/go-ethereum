@@ -11,7 +11,6 @@ type Block interface {
 	HashNoNonce() []byte
 	Nonce() uint64
 	MixDigest() []byte
-	SeedHash() []byte
 	NumberU64() uint64
 }
 
