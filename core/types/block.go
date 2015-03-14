@@ -15,7 +15,7 @@ import (
 
 type Header struct {
 	// Hash to the previous block
-	ParentHash ethutil.Bytes
+	ParentHash []byte
 	// Uncles of this block
 	UncleHash []byte
 	// The coin base address
@@ -41,7 +41,7 @@ type Header struct {
 	// Extra data
 	Extra string
 	// Mix digest for quick checking to prevent DOS
-	MixDigest ethutil.Bytes
+	MixDigest []byte
 	// Nonce
 	Nonce []byte
 }

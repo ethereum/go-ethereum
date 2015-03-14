@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/blockpool"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethutil"
@@ -61,6 +62,10 @@ type Config struct {
 
 	MinerThreads   int
 	AccountManager *accounts.Manager
+
+	// NewDB is used to create databases.
+	// If nil, the default is to create leveldb databases on disk.
+	NewDB func(path string) (ethutil.Database, error)
 }
 
 func (cfg *Config) parseBootNodes() []*discover.Node {
@@ -120,6 +125,7 @@ type Ethereum struct {
 	blockPool      *blockpool.BlockPool
 	accountManager *accounts.Manager
 	whisper        *whisper.Whisper
+	pow            *ethash.Ethash
 
 	net      *p2p.Server
 	eventMux *event.TypeMux
@@ -138,11 +144,15 @@ func New(config *Config) (*Ethereum, error) {
 	// Boostrap database
 	servlogger := logger.New(config.DataDir, config.LogFile, config.LogLevel, config.LogFormat)
 
-	blockDb, err := ethdb.NewLDBDatabase(path.Join(config.DataDir, "blockchain"))
+	newdb := config.NewDB
+	if newdb == nil {
+		newdb = func(path string) (ethutil.Database, error) { return ethdb.NewLDBDatabase(path) }
+	}
+	blockDb, err := newdb(path.Join(config.DataDir, "blockchain"))
 	if err != nil {
 		return nil, err
 	}
-	stateDb, err := ethdb.NewLDBDatabase(path.Join(config.DataDir, "state"))
+	stateDb, err := newdb(path.Join(config.DataDir, "state"))
 	if err != nil {
 		return nil, err
 	}
@@ -170,16 +180,16 @@ func New(config *Config) (*Ethereum, error) {
 	}
 
 	eth.chainManager = core.NewChainManager(blockDb, stateDb, eth.EventMux())
-	pow := ethash.New(eth.chainManager)
+	eth.pow = ethash.New(eth.chainManager)
 	eth.txPool = core.NewTxPool(eth.EventMux())
-	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, pow, eth.txPool, eth.chainManager, eth.EventMux())
+	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.txPool, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
 	eth.whisper = whisper.New()
-	eth.miner = miner.New(eth, pow, config.MinerThreads)
+	eth.miner = miner.New(eth, eth.pow, config.MinerThreads)
 
 	hasBlock := eth.chainManager.HasBlock
 	insertChain := eth.chainManager.InsertChain
-	eth.blockPool = blockpool.New(hasBlock, insertChain, pow.Verify)
+	eth.blockPool = blockpool.New(hasBlock, insertChain, eth.pow.Verify)
 
 	netprv, err := config.nodeKey()
 	if err != nil {
@@ -207,6 +217,11 @@ func New(config *Config) (*Ethereum, error) {
 	vm.Debug = config.VmDebug
 
 	return eth, nil
+}
+
+func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
+	s.chainManager.ResetWithGenesisBlock(gb)
+	s.pow.UpdateCache(true)
 }
 
 func (s *Ethereum) StartMining() error {

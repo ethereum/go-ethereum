@@ -28,6 +28,7 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethutil"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/ui/qt/webengine"
@@ -95,7 +96,8 @@ func run(ctx *cli.Context) {
 	tstart := time.Now()
 
 	// TODO: show qml popup instead of exiting if initialization fails.
-	ethereum, err := utils.GetEthereum(ClientIdentifier, Version, ctx)
+	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
+	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
