@@ -13,12 +13,6 @@ import (
 
 var qlogger = logger.NewLogger("QSHH")
 
-func fromHex(s string) []byte {
-	if len(s) > 1 {
-		return ethutil.Hex2Bytes(s[2:])
-	}
-	return nil
-}
 func toHex(b []byte) string { return "0x" + ethutil.Bytes2Hex(b) }
 
 type Whisper struct {
@@ -39,15 +33,15 @@ func (self *Whisper) SetView(view qml.Object) {
 func (self *Whisper) Post(payload []string, to, from string, topics []string, priority, ttl uint32) {
 	var data []byte
 	for _, d := range payload {
-		data = append(data, fromHex(d)...)
+		data = append(data, ethutil.FromHex(d)...)
 	}
 
-	pk := crypto.ToECDSAPub(fromHex(from))
+	pk := crypto.ToECDSAPub(ethutil.FromHex(from))
 	if key := self.Whisper.GetIdentity(pk); key != nil {
 		msg := whisper.NewMessage(data)
 		envelope, err := msg.Seal(time.Duration(priority*100000), whisper.Opts{
 			Ttl:    time.Duration(ttl) * time.Second,
-			To:     crypto.ToECDSAPub(fromHex(to)),
+			To:     crypto.ToECDSAPub(ethutil.FromHex(to)),
 			From:   key,
 			Topics: whisper.TopicsFromString(topics...),
 		})
@@ -76,7 +70,7 @@ func (self *Whisper) NewIdentity() string {
 }
 
 func (self *Whisper) HasIdentity(key string) bool {
-	return self.Whisper.HasIdentity(crypto.ToECDSAPub(fromHex(key)))
+	return self.Whisper.HasIdentity(crypto.ToECDSAPub(ethutil.FromHex(key)))
 }
 
 func (self *Whisper) Watch(opts map[string]interface{}, view *qml.Common) int {
@@ -106,10 +100,10 @@ func (self *Whisper) Messages(id int) (messages *ethutil.List) {
 
 func filterFromMap(opts map[string]interface{}) (f whisper.Filter) {
 	if to, ok := opts["to"].(string); ok {
-		f.To = crypto.ToECDSAPub(fromHex(to))
+		f.To = crypto.ToECDSAPub(ethutil.FromHex(to))
 	}
 	if from, ok := opts["from"].(string); ok {
-		f.From = crypto.ToECDSAPub(fromHex(from))
+		f.From = crypto.ToECDSAPub(ethutil.FromHex(from))
 	}
 	if topicList, ok := opts["topics"].(*qml.List); ok {
 		var topics []string

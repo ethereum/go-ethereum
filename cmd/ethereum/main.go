@@ -197,7 +197,7 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 		}
 		am := eth.AccountManager()
 		// Attempt to unlock the account
-		err := am.Unlock(ethutil.Hex2Bytes(split[0]), split[1])
+		err := am.Unlock(ethutil.FromHex(split[0]), split[1])
 		if err != nil {
 			utils.Fatalf("Unlock account failed '%v'", err)
 		}

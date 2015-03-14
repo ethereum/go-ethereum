@@ -64,6 +64,19 @@ func DefaultDataDir() string {
 		return path.Join(usr.HomeDir, ".ethereum")
 	}
 }
+
+func FromHex(s string) []byte {
+	if len(s) > 1 {
+		if s[0:2] == "0x" {
+			s = s[2:]
+		}
+		if len(s)%2 == 1 {
+			s = "0" + s
+		}
+		return Hex2Bytes(s)
+	}
+	return nil
+}
 func IsWindows() bool {
 	return runtime.GOOS == "windows"
 }
