@@ -71,6 +71,7 @@ func newJSRE(ethereum *eth.Ethereum, libPath string) *jsre {
 	js.xeth = xeth.New(ethereum, js)
 	js.re = re.New(libPath)
 	js.apiBindings()
+	js.adminBindings()
 
 	if !liner.TerminalSupported() {
 		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
