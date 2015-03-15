@@ -47,10 +47,12 @@ If you intend to develop on go-ethereum, check the [Developers' Guide](https://g
 Automated (dev) builds
 ======================
 
-* [[Docker](https://registry.hub.docker.com/u/ethereum/client-go/)]
-* [[OS X](http://build.ethdev.com/builds/OSX%20Go%20develop%20branch/Mist-OSX-latest.dmg)]
+* [Docker](https://registry.hub.docker.com/u/ethereum/client-go/)
+* [OS X](http://build.ethdev.com/builds/OSX%20Go%20develop%20branch/Mist-OSX-latest.dmg)
+* Ubuntu
+  [Trusty](https://build.ethdev.com/builds/Linux%20Go%20develop%20deb%20i386-trusty/latest/ethereum-cli_0.9.0%2B192SNAPSHOT20150314224122trusty-0ubuntu1_i386.deb)
+  [utopic](https://build.ethdev.com/builds/Linux%20Go%20develop%20deb%20i386-utopic/latest/ethereum-cli_0.9.0%2B194SNAPSHOT20150314224124utopic-0ubuntu1_i386.deb)
 * [Windows] Coming soon&trade;
-* [Linux] Coming soon&trade;
 
 Executables
 ===========
