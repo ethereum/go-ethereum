@@ -157,7 +157,96 @@ ApplicationWindow {
     }
 
 
+    menuBar: MenuBar {
+        Menu {
+            title: "File"
+            MenuItem {
+                text: "New tab"
+                shortcut: "Ctrl+t"
+                onTriggered: {
+                activeView(catalog.view, catalog.menuItem);
+                }
+            }
 
+            MenuSeparator {}
+
+            MenuItem {
+                text: "Import key"
+                shortcut: "Ctrl+i"
+                onTriggered: {
+                    generalFileDialog.show(true, function(path) {
+                        gui.importKey(path)
+                    })
+                }
+            }
+
+            MenuItem {
+                text: "Export keys"
+                shortcut: "Ctrl+e"
+                onTriggered: {
+                    generalFileDialog.show(false, function(path) {
+                    })
+                }
+            }
+
+            MenuItem {
+                text: "Generate key"
+                shortcut: "Ctrl+k"
+                onTriggered: gui.generateKey()
+            }
+        }
+
+        Menu {
+            title: "Developer"
+            MenuItem {
+                text: "Import Tx"
+                onTriggered: {
+                    txImportDialog.visible = true
+                }
+            }
+
+            MenuItem {
+                text: "Dump state"
+                onTriggered: {
+                    generalFileDialog.show(false, function(path) {
+                        // Empty hash for latest
+                        gui.dumpState("", path)
+                    })
+                }
+            }
+
+            MenuSeparator {}
+        }
+
+        Menu {
+            title: "Network"
+            MenuItem {
+                text: "Add Peer"
+                shortcut: "Ctrl+p"
+                onTriggered: {
+                    addPeerWin.visible = true
+                }
+            }
+            MenuItem {
+                text: "Show Peers"
+                shortcut: "Ctrl+e"
+                onTriggered: {
+                    peerWindow.visible = true
+                }
+            }
+        }
+
+        Menu {
+            title: "Help"
+            MenuItem {
+                text: "About"
+                onTriggered: {
+                    aboutWin.visible = true
+                }
+            }
+        }
+
+    }
 
     property var blockModel: ListModel {
         id: blockModel
