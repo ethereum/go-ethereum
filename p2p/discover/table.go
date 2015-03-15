@@ -51,9 +51,9 @@ func newTable(t transport, ourID NodeID, ourAddr *net.UDPAddr) *Table {
 	return tab
 }
 
-// Self returns the local node ID.
-func (tab *Table) Self() NodeID {
-	return tab.self.ID
+// Self returns the local node.
+func (tab *Table) Self() *Node {
+	return tab.self
 }
 
 // Close terminates the network listener.
