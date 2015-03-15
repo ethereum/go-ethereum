@@ -65,6 +65,7 @@ func init() {
 		utils.NodeKeyFileFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
+		utils.JSpathFlag,
 	}
 }
 
@@ -111,7 +112,7 @@ func run(ctx *cli.Context) {
 		gui := NewWindow(ethereum)
 		utils.RegisterInterrupt(func(os.Signal) { gui.Stop() })
 		// gui blocks the main thread
-		gui.Start(ctx.GlobalString(assetPathFlag.Name))
+		gui.Start(ctx.GlobalString(assetPathFlag.Name), ctx.GlobalString(utils.JSpathFlag.Name))
 		return nil
 	})
 }

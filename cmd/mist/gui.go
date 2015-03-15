@@ -25,9 +25,7 @@ import "C"
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/big"
-	"os"
 	"path"
 	"runtime"
 	"sort"
@@ -99,7 +97,7 @@ func NewWindow(ethereum *eth.Ethereum) *Gui {
 	return gui
 }
 
-func (gui *Gui) Start(assetPath string) {
+func (gui *Gui) Start(assetPath, libPath string) {
 	defer gui.txDb.Close()
 
 	guilogger.Infoln("Starting GUI")
@@ -117,7 +115,7 @@ func (gui *Gui) Start(assetPath string) {
 	// Create a new QML engine
 	gui.engine = qml.NewEngine()
 	context := gui.engine.Context()
-	gui.uiLib = NewUiLib(gui.engine, gui.eth, assetPath)
+	gui.uiLib = NewUiLib(gui.engine, gui.eth, assetPath, libPath)
 	gui.whisper = qwhisper.New(gui.eth.Whisper())
 
 	// Expose the eth library and the ui library to QML
@@ -290,25 +288,6 @@ func (gui *Gui) setWalletValue(amount, unconfirmedFunds *big.Int) {
 
 func (self *Gui) getObjectByName(objectName string) qml.Object {
 	return self.win.Root().ObjectByName(objectName)
-}
-
-func loadJavascriptAssets(gui *Gui) (jsfiles string) {
-	for _, fn := range []string{"ext/q.js", "ext/eth.js/main.js", "ext/eth.js/qt.js", "ext/setup.js"} {
-		f, err := os.Open(gui.uiLib.AssetPath(fn))
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-
-		content, err := ioutil.ReadAll(f)
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-		jsfiles += string(content)
-	}
-
-	return
 }
 
 func (gui *Gui) SendCommand(cmd ServEv) {
