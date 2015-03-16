@@ -24,19 +24,22 @@ func (h Hash) SetBytes(b []byte) {
 	}
 }
 
+func (h Hash) SetString(s string) { h.SetBytes([]byte(s)) }
+
 // Get the string representation of the underlying address
 func (a Address) Str() string {
 	return string(a[:])
 }
 
 // Sets the address to the value of b. If b is larger than len(a) it will panic
-func (h Address) SetBytes(b []byte) {
-	if len(b) > len(h) {
+func (a Address) SetBytes(b []byte) {
+	if len(b) > len(a) {
 		panic("unable to set bytes. too big")
 	}
 
 	// reverse loop
 	for i := len(b); i >= 0; i-- {
-		h[i] = b[i]
+		a[i] = b[i]
 	}
 }
+func (a Address) SetString(s string) { h.SetBytes([]byte(a)) }
