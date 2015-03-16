@@ -1,7 +1,6 @@
 package types
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math/big"
@@ -156,9 +155,9 @@ func (self *Block) Transactions() Transactions {
 	return self.transactions
 }
 
-func (self *Block) Transaction(hash []byte) *Transaction {
+func (self *Block) Transaction(hash common.Hash) *Transaction {
 	for _, transaction := range self.transactions {
-		if bytes.Equal(hash, transaction.Hash()) {
+		if transaction.Hash() == hash {
 			return transaction
 		}
 	}
