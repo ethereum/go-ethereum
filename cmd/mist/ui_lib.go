@@ -25,9 +25,9 @@ import (
 	"io/ioutil"
 	"path"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/javascript"
 	"github.com/ethereum/go-ethereum/xeth"
@@ -135,15 +135,6 @@ func (self *UiLib) Transact(params map[string]interface{}) (string, error) {
 		object["gasPrice"],
 		object["data"],
 	)
-}
-
-func (self *UiLib) Compile(code string) (string, error) {
-	bcode, err := common.Compile(code, false)
-	if err != nil {
-		return err.Error(), err
-	}
-
-	return common.Bytes2Hex(bcode), err
 }
 
 func (self *UiLib) Call(params map[string]interface{}) (string, error) {
