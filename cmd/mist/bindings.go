@@ -26,8 +26,8 @@ import (
 	"strconv"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/state"
 )
 
@@ -39,11 +39,7 @@ type plugin struct {
 func (gui *Gui) Transact(from, recipient, value, gas, gasPrice, d string) (string, error) {
 	var data string
 	if len(recipient) == 0 {
-		code, err := common.Compile(d, false)
-		if err != nil {
-			return "", err
-		}
-		data = common.Bytes2Hex(code)
+		data = d
 	} else {
 		data = common.Bytes2Hex(utils.FormatTransactionData(d))
 	}
